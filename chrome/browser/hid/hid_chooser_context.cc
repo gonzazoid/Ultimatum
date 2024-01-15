@@ -4,20 +4,23 @@
 
 #include "chrome/browser/hid/hid_chooser_context.h"
 
+#include <set>
 #include <utility>
 
 #include "base/containers/contains.h"
+#include "base/containers/map_util.h"
 #include "base/observer_list.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/browser_process.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/hid/hid_policy_allowed_devices.h"
+#include "chrome/browser/hid/hid_policy_allowed_devices_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/content_settings/core/common/content_settings_types.h"
@@ -44,75 +47,50 @@ constexpr char kHidVendorIdKey[] = "vendor-id";
 constexpr char kHidProductIdKey[] = "product-id";
 constexpr char kHidSerialNumberKey[] = "serial-number";
 
-bool IsPolicyGrantedObject(const base::Value& object) {
-  return object.is_dict() && object.DictSize() == 1 &&
-         object.FindStringKey(kHidDeviceNameKey);
+bool IsPolicyGrantedObject(const base::Value::Dict& object) {
+  return object.size() == 1 && object.FindString(kHidDeviceNameKey);
 }
 
-base::Value DeviceInfoToValue(const device::mojom::HidDeviceInfo& device) {
-  base::Value value(base::Value::Type::DICTIONARY);
-  value.SetStringKey(
-      kHidDeviceNameKey,
-      base::UTF16ToUTF8(HidChooserContext::DisplayNameFromDeviceInfo(device)));
-  value.SetIntKey(kHidVendorIdKey, device.vendor_id);
-  value.SetIntKey(kHidProductIdKey, device.product_id);
-  if (HidChooserContext::CanStorePersistentEntry(device)) {
-    // Use the USB serial number as a persistent identifier. If it is
-    // unavailable, only ephemeral permissions may be granted.
-    value.SetStringKey(kHidSerialNumberKey, device.serial_number);
-  } else {
-    // The GUID is a temporary ID created on connection that remains valid until
-    // the device is disconnected. Ephemeral permissions are keyed by this ID
-    // and must be granted again each time the device is connected.
-    value.SetStringKey(kHidGuidKey, device.guid);
-  }
-  DCHECK(!IsPolicyGrantedObject(value));
-  return value;
-}
-
-base::Value VendorAndProductIdsToValue(uint16_t vendor_id,
-                                       uint16_t product_id) {
-  base::Value object(base::Value::Type::DICTIONARY);
-  object.SetStringKey(
-      kHidDeviceNameKey,
-      l10n_util::GetStringFUTF16(
-          IDS_HID_POLICY_DESCRIPTION_FOR_VENDOR_ID_AND_PRODUCT_ID,
-          base::ASCIIToUTF16(base::StringPrintf("%04X", vendor_id)),
-          base::ASCIIToUTF16(base::StringPrintf("%04X", product_id))));
+base::Value::Dict VendorAndProductIdsToValue(uint16_t vendor_id,
+                                             uint16_t product_id) {
+  base::Value::Dict object;
+  object.Set(kHidDeviceNameKey,
+             l10n_util::GetStringFUTF16(
+                 IDS_HID_POLICY_DESCRIPTION_FOR_VENDOR_ID_AND_PRODUCT_ID,
+                 base::ASCIIToUTF16(base::StringPrintf("%04X", vendor_id)),
+                 base::ASCIIToUTF16(base::StringPrintf("%04X", product_id))));
   DCHECK(IsPolicyGrantedObject(object));
   return object;
 }
 
-base::Value VendorIdToValue(uint16_t vendor_id) {
-  base::Value object(base::Value::Type::DICTIONARY);
-  object.SetStringKey(
-      kHidDeviceNameKey,
-      l10n_util::GetStringFUTF16(
-          IDS_HID_POLICY_DESCRIPTION_FOR_VENDOR_ID,
-          base::ASCIIToUTF16(base::StringPrintf("%04X", vendor_id))));
+base::Value::Dict VendorIdToValue(uint16_t vendor_id) {
+  base::Value::Dict object;
+  object.Set(kHidDeviceNameKey,
+             l10n_util::GetStringFUTF16(
+                 IDS_HID_POLICY_DESCRIPTION_FOR_VENDOR_ID,
+                 base::ASCIIToUTF16(base::StringPrintf("%04X", vendor_id))));
   DCHECK(IsPolicyGrantedObject(object));
   return object;
 }
 
-base::Value UsagePageAndUsageToValue(uint16_t usage_page, uint16_t usage) {
-  base::Value object(base::Value::Type::DICTIONARY);
-  object.SetStringKey(
-      kHidDeviceNameKey,
-      l10n_util::GetStringFUTF16(
-          IDS_HID_POLICY_DESCRIPTION_FOR_USAGE_AND_USAGE_PAGE,
-          base::ASCIIToUTF16(base::StringPrintf("%04X", usage)),
-          base::ASCIIToUTF16(base::StringPrintf("%04X", usage_page))));
+base::Value::Dict UsagePageAndUsageToValue(uint16_t usage_page,
+                                           uint16_t usage) {
+  base::Value::Dict object;
+  object.Set(kHidDeviceNameKey,
+             l10n_util::GetStringFUTF16(
+                 IDS_HID_POLICY_DESCRIPTION_FOR_USAGE_AND_USAGE_PAGE,
+                 base::ASCIIToUTF16(base::StringPrintf("%04X", usage)),
+                 base::ASCIIToUTF16(base::StringPrintf("%04X", usage_page))));
   DCHECK(IsPolicyGrantedObject(object));
   return object;
 }
 
-base::Value UsagePageToValue(uint16_t usage_page) {
-  base::Value object(base::Value::Type::DICTIONARY);
-  object.SetStringKey(
-      kHidDeviceNameKey,
-      l10n_util::GetStringFUTF16(
-          IDS_HID_POLICY_DESCRIPTION_FOR_USAGE_PAGE,
-          base::ASCIIToUTF16(base::StringPrintf("%04X", usage_page))));
+base::Value::Dict UsagePageToValue(uint16_t usage_page) {
+  base::Value::Dict object;
+  object.Set(kHidDeviceNameKey,
+             l10n_util::GetStringFUTF16(
+                 IDS_HID_POLICY_DESCRIPTION_FOR_USAGE_PAGE,
+                 base::ASCIIToUTF16(base::StringPrintf("%04X", usage_page))));
   DCHECK(IsPolicyGrantedObject(object));
   return object;
 }
@@ -150,6 +128,29 @@ HidChooserContext::~HidChooserContext() {
 }
 
 // static
+base::Value::Dict HidChooserContext::DeviceInfoToValue(
+    const device::mojom::HidDeviceInfo& device) {
+  base::Value::Dict value;
+  value.Set(
+      kHidDeviceNameKey,
+      base::UTF16ToUTF8(HidChooserContext::DisplayNameFromDeviceInfo(device)));
+  value.Set(kHidVendorIdKey, device.vendor_id);
+  value.Set(kHidProductIdKey, device.product_id);
+  if (HidChooserContext::CanStorePersistentEntry(device)) {
+    // Use the USB serial number as a persistent identifier. If it is
+    // unavailable, only ephemeral permissions may be granted.
+    value.Set(kHidSerialNumberKey, device.serial_number);
+  } else {
+    // The GUID is a temporary ID created on connection that remains valid until
+    // the device is disconnected. Ephemeral permissions are keyed by this ID
+    // and must be granted again each time the device is connected.
+    value.Set(kHidGuidKey, device.guid);
+  }
+  DCHECK(!IsPolicyGrantedObject(value));
+  return value;
+}
+
+// static
 std::u16string HidChooserContext::DisplayNameFromDeviceInfo(
     const device::mojom::HidDeviceInfo& device) {
   if (device.product_name.empty()) {
@@ -168,40 +169,44 @@ bool HidChooserContext::CanStorePersistentEntry(
 }
 
 std::u16string HidChooserContext::GetObjectDisplayName(
-    const base::Value& object) {
-  const std::string* name = object.FindStringKey(kHidDeviceNameKey);
+    const base::Value::Dict& object) {
+  const std::string* name = object.FindString(kHidDeviceNameKey);
   DCHECK(name);
   return base::UTF8ToUTF16(*name);
 }
 
-std::string HidChooserContext::GetKeyForObject(const base::Value& object) {
+std::string HidChooserContext::GetKeyForObject(
+    const base::Value::Dict& object) {
   if (!IsValidObject(object))
     return std::string();
+
+  if (IsPolicyGrantedObject(object)) {
+    return *object.FindString(kHidDeviceNameKey);
+  }
+
   return base::JoinString(
-      {base::NumberToString(*(object.FindIntKey(kHidVendorIdKey))),
-       base::NumberToString(*(object.FindIntKey(kHidProductIdKey))),
-       *(object.FindStringKey(kHidSerialNumberKey))},
+      {base::NumberToString(*(object.FindInt(kHidVendorIdKey))),
+       base::NumberToString(*(object.FindInt(kHidProductIdKey))),
+       *(object.FindString(kHidSerialNumberKey))},
       "|");
 }
 
-bool HidChooserContext::IsValidObject(const base::Value& object) {
+bool HidChooserContext::IsValidObject(const base::Value::Dict& object) {
   if (IsPolicyGrantedObject(object))
     return true;
 
   // Other objects must have name, vendor, product, and either a GUID or a
   // serial number.
-  if (!object.is_dict() || object.DictSize() != 4 ||
-      !object.FindStringKey(kHidDeviceNameKey) ||
-      !object.FindIntKey(kHidProductIdKey) ||
-      !object.FindIntKey(kHidVendorIdKey)) {
+  if (object.size() != 4 || !object.FindString(kHidDeviceNameKey) ||
+      !object.FindInt(kHidProductIdKey) || !object.FindInt(kHidVendorIdKey)) {
     return false;
   }
 
-  const std::string* guid = object.FindStringKey(kHidGuidKey);
+  const std::string* guid = object.FindString(kHidGuidKey);
   if (guid && !guid->empty())
     return true;
 
-  const std::string* serial_number = object.FindStringKey(kHidSerialNumberKey);
+  const std::string* serial_number = object.FindString(kHidSerialNumberKey);
   return serial_number && !serial_number->empty();
 }
 
@@ -230,7 +235,7 @@ HidChooserContext::GetGrantedObjects(const url::Origin& origin) {
   }
 
   if (CanApplyPolicy()) {
-    auto* policy = g_browser_process->hid_policy_allowed_devices();
+    auto* policy = HidPolicyAllowedDevicesFactory::GetForProfile(profile_);
     for (const auto& entry : policy->device_policy()) {
       if (!base::Contains(entry.second, origin))
         continue;
@@ -274,8 +279,8 @@ HidChooserContext::GetGrantedObjects(const url::Origin& origin) {
     }
 
     if (base::Contains(policy->all_devices_policy(), origin)) {
-      base::Value object(base::Value::Type::DICTIONARY);
-      object.SetStringKey(
+      base::Value::Dict object;
+      object.Set(
           kHidDeviceNameKey,
           l10n_util::GetStringUTF16(IDS_HID_POLICY_DESCRIPTION_FOR_ANY_DEVICE));
       objects.push_back(std::make_unique<ObjectPermissionContextBase::Object>(
@@ -308,7 +313,7 @@ HidChooserContext::GetAllGrantedObjects() {
   }
 
   if (CanApplyPolicy()) {
-    auto* policy = g_browser_process->hid_policy_allowed_devices();
+    auto* policy = HidPolicyAllowedDevicesFactory::GetForProfile(profile_);
     for (const auto& entry : policy->device_policy()) {
       auto object =
           VendorAndProductIdsToValue(entry.first.first, entry.first.second);
@@ -347,8 +352,8 @@ HidChooserContext::GetAllGrantedObjects() {
       }
     }
 
-    base::Value object(base::Value::Type::DICTIONARY);
-    object.SetStringKey(
+    base::Value::Dict object;
+    object.Set(
         kHidDeviceNameKey,
         l10n_util::GetStringUTF16(IDS_HID_POLICY_DESCRIPTION_FOR_ANY_DEVICE));
     for (const auto& origin : policy->all_devices_policy()) {
@@ -361,9 +366,10 @@ HidChooserContext::GetAllGrantedObjects() {
   return objects;
 }
 
-void HidChooserContext::RevokeObjectPermission(const url::Origin& origin,
-                                               const base::Value& object) {
-  const std::string* guid = object.FindStringKey(kHidGuidKey);
+void HidChooserContext::RevokeObjectPermission(
+    const url::Origin& origin,
+    const base::Value::Dict& object) {
+  const std::string* guid = object.FindString(kHidGuidKey);
 
   if (!guid) {
     ObjectPermissionContextBase::RevokeObjectPermission(origin, object);
@@ -411,12 +417,12 @@ void HidChooserContext::RevokePersistentDevicePermission(
     const device::mojom::HidDeviceInfo& device) {
   std::vector<std::unique_ptr<Object>> object_list = GetGrantedObjects(origin);
   for (const auto& object : object_list) {
-    const base::Value& device_value = object->value;
+    const base::Value::Dict& device_value = object->value;
     DCHECK(IsValidObject(device_value));
 
-    const auto* serial_number = device_value.FindStringKey(kHidSerialNumberKey);
-    if (device.vendor_id == *device_value.FindIntKey(kHidVendorIdKey) &&
-        device.product_id == *device_value.FindIntKey(kHidProductIdKey) &&
+    const auto* serial_number = device_value.FindString(kHidSerialNumberKey);
+    if (device.vendor_id == *device_value.FindInt(kHidVendorIdKey) &&
+        device.product_id == *device_value.FindInt(kHidProductIdKey) &&
         serial_number && device.serial_number == *serial_number) {
       RevokeObjectPermission(origin, device_value);
     }
@@ -427,23 +433,24 @@ void HidChooserContext::RevokeEphemeralDevicePermission(
     const url::Origin& origin,
     const device::mojom::HidDeviceInfo& device) {
   auto it = ephemeral_devices_.find(origin);
-  if (it != ephemeral_devices_.end()) {
-    std::set<std::string>& devices = it->second;
-    for (auto guid = devices.begin(); guid != devices.end();) {
-      auto device_it = devices_.find(*guid);
-      if (device_it == devices_.end()) {
-        continue;
-      }
-      if (device_it->second->physical_device_id != device.physical_device_id) {
-        ++guid;
-        continue;
-      }
+  if (it == ephemeral_devices_.end()) {
+    return;
+  }
 
-      guid = devices.erase(guid);
-      if (devices.empty())
-        ephemeral_devices_.erase(it);
-      NotifyPermissionRevoked(origin);
-    }
+  std::set<std::string>& device_guids = it->second;
+  bool revoked_permission =
+      std::erase_if(device_guids, [&](const auto& guid) {
+        auto* device_ptr = base::FindPtrOrNull(devices_, guid);
+        return device_ptr &&
+               device_ptr->physical_device_id == device.physical_device_id;
+      }) > 0;
+
+  if (device_guids.empty()) {
+    ephemeral_devices_.erase(it);
+  }
+
+  if (revoked_permission) {
+    NotifyPermissionRevoked(origin);
   }
 }
 
@@ -459,8 +466,8 @@ bool HidChooserContext::HasDevicePermission(
   }
 
   if (CanApplyPolicy() &&
-      g_browser_process->hid_policy_allowed_devices()->HasDevicePermission(
-          origin, device)) {
+      HidPolicyAllowedDevicesFactory::GetForProfile(profile_)
+          ->HasDevicePermission(origin, device)) {
     return true;
   }
 
@@ -475,17 +482,17 @@ bool HidChooserContext::HasDevicePermission(
 
   for (const auto& object :
        ObjectPermissionContextBase::GetGrantedObjects(origin)) {
-    const base::Value& device_value = object->value;
+    const base::Value::Dict& device_value = object->value;
 
     // Objects provided by the parent class can be assumed valid.
     DCHECK(IsValidObject(device_value));
 
-    if (device.vendor_id != *device_value.FindIntKey(kHidVendorIdKey) ||
-        device.product_id != *device_value.FindIntKey(kHidProductIdKey)) {
+    if (device.vendor_id != *device_value.FindInt(kHidVendorIdKey) ||
+        device.product_id != *device_value.FindInt(kHidProductIdKey)) {
       continue;
     }
 
-    const auto* serial_number = device_value.FindStringKey(kHidSerialNumberKey);
+    const auto* serial_number = device_value.FindString(kHidSerialNumberKey);
     if (serial_number && device.serial_number == *serial_number)
       return true;
   }
@@ -530,7 +537,7 @@ void HidChooserContext::GetDevices(
   device_list.reserve(devices_.size());
   for (const auto& pair : devices_)
     device_list.push_back(pair.second->Clone());
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(device_list)));
 }
 
@@ -697,11 +704,10 @@ void HidChooserContext::OnHidManagerConnectionError() {
 
 bool HidChooserContext::CanApplyPolicy() {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  auto* profile_helper = chromeos::ProfileHelper::Get();
+  auto* profile_helper = ash::ProfileHelper::Get();
   DCHECK(profile_helper);
   user_manager::User* user = profile_helper->GetUserByProfile(profile_);
-  DCHECK(user);
-  return user->IsAffiliated();
+  return !user || user->IsAffiliated();
 #else
   return true;
 #endif

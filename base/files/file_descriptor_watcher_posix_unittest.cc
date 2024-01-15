@@ -8,9 +8,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/containers/span.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/posix/eintr_wrapper.h"
@@ -20,7 +20,6 @@
 #include "base/threading/platform_thread.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_checker_impl.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -128,7 +127,7 @@ class FileDescriptorWatcherTest
   void WriteByte() {
     constexpr char kByte = '!';
     ASSERT_TRUE(WriteFileDescriptor(write_file_descriptor(),
-                                    as_bytes(make_span(&kByte, 1))));
+                                    as_bytes(make_span(&kByte, 1u))));
   }
 
   void ReadByte() {
@@ -137,7 +136,7 @@ class FileDescriptorWatcherTest
     EXPECT_TRUE(thread_checker_.CalledOnValidThread());
 
     char buffer;
-    ASSERT_TRUE(ReadFromFD(read_file_descriptor(), &buffer, sizeof(buffer)));
+    ASSERT_TRUE(ReadFromFD(read_file_descriptor(), make_span(&buffer, 1u)));
   }
 
   // Mock on wich callbacks are invoked.

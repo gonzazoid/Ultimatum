@@ -8,7 +8,7 @@
 #import <Foundation/Foundation.h>
 
 #include "base/base64.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #import "base/memory/ptr_util.h"
 #include "base/strings/stringprintf.h"
 #import "ios/web/common/uikit_ui_util.h"
@@ -18,10 +18,6 @@
 #include "net/test/embedded_test_server/http_request.h"
 #include "net/test/embedded_test_server/http_response.h"
 #include "testing/gtest/include/gtest/gtest.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 

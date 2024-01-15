@@ -10,10 +10,10 @@
 #include "base/location.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/app/chrome_command_ids.h"
+#include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_manager.h"
 #include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
 #include "chrome/browser/ui/views/exclusive_access_bubble_views_context.h"
@@ -30,6 +30,7 @@
 #include "ui/strings/grit/ui_strings.h"
 #include "ui/views/controls/link.h"
 #include "ui/views/view.h"
+#include "ui/views/view_class_properties.h"
 #include "ui/views/widget/widget.h"
 #include "url/gurl.h"
 
@@ -41,10 +42,12 @@ ExclusiveAccessBubbleViews::ExclusiveAccessBubbleViews(
     ExclusiveAccessBubbleViewsContext* context,
     const GURL& url,
     ExclusiveAccessBubbleType bubble_type,
+    bool notify_download,
     ExclusiveAccessBubbleHideCallback bubble_first_hide_callback)
     : ExclusiveAccessBubble(context->GetExclusiveAccessManager(),
                             url,
-                            bubble_type),
+                            bubble_type,
+                            notify_download),
       bubble_view_context_(context),
       popup_(nullptr),
       bubble_first_hide_callback_(std::move(bubble_first_hide_callback)),
@@ -52,6 +55,8 @@ ExclusiveAccessBubbleViews::ExclusiveAccessBubbleViews(
   // Create the contents view.
   auto content_view = std::make_unique<SubtleNotificationView>();
   view_ = content_view.get();
+  view_->SetProperty(views::kElementIdentifierKey,
+                     kExclusiveAccessBubbleViewElementId);
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // Technically the exit fullscreen key on ChromeOS is F11 and the
@@ -121,7 +126,8 @@ ExclusiveAccessBubbleViews::~ExclusiveAccessBubbleViews() {
   // the popup to synchronously hide, and then asynchronously close and delete
   // itself.
   popup_->Close();
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, popup_.get());
+  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                popup_.get());
   CHECK(!views::WidgetObserver::IsInObserverList());
 }
 
@@ -139,7 +145,8 @@ void ExclusiveAccessBubbleViews::UpdateContent(
   // notification, a notification was visible earlier, and the earlier
   // notification was either a non-download one, or was one about an override
   // itself.
-  notify_overridden_ = notify_download && IsVisible() &&
+  notify_overridden_ = notify_download &&
+                       (IsVisible() || animation_->IsShowing()) &&
                        (!notify_download_ || notify_overridden_);
   notify_download_ = notify_download;
 
@@ -213,25 +220,26 @@ void ExclusiveAccessBubbleViews::UpdateBounds() {
 
 void ExclusiveAccessBubbleViews::UpdateViewContent(
     ExclusiveAccessBubbleType bubble_type) {
-  DCHECK_NE(EXCLUSIVE_ACCESS_BUBBLE_TYPE_NONE, bubble_type);
+  DCHECK(notify_download_ || EXCLUSIVE_ACCESS_BUBBLE_TYPE_NONE != bubble_type);
 
   std::u16string accelerator;
-  if (exclusive_access_bubble::IsExclusiveAccessModeBrowserFullscreen(
+  if ((notify_download_ && bubble_type == EXCLUSIVE_ACCESS_BUBBLE_TYPE_NONE) ||
+      exclusive_access_bubble::IsExclusiveAccessModeBrowserFullscreen(
           bubble_type)) {
     accelerator = browser_fullscreen_exit_accelerator_;
   } else {
     accelerator = l10n_util::GetStringUTF16(IDS_APP_ESC_KEY);
-  }
 #if BUILDFLAG(IS_MAC)
-  // Mac keyboards use lowercase for everything except function keys, which are
-  // typically reserved for system use. Since |accelerator| is placed in a box
-  // to make it look like a keyboard key it looks weird to not follow suit.
-  accelerator = base::i18n::ToLower(accelerator);
+    // Mac keyboards use lowercase for the non-letter keys, and since the key is
+    // placed in a box to make it look like a keyboard key it looks weird to not
+    // follow suit.
+    accelerator = base::i18n::ToLower(accelerator);
 #endif
+  }
   view_->UpdateContent(GetInstructionText(accelerator));
 }
 
-bool ExclusiveAccessBubbleViews::IsVisible() {
+bool ExclusiveAccessBubbleViews::IsVisible() const {
 #if BUILDFLAG(IS_MAC)
   // Due to a quirk on the Mac, the popup will not be visible for a short period
   // of time after it is shown (it's asynchronous) so if we don't check the
@@ -272,8 +280,9 @@ gfx::Rect ExclusiveAccessBubbleViews::GetPopupRect() const {
   int x = widget_bounds.x() + (widget_bounds.width() - size.width()) / 2;
 
   int top_container_bottom = widget_bounds.y();
+#if !BUILDFLAG(IS_MAC)
   if (bubble_view_context_->IsImmersiveModeEnabled()) {
-    // Skip querying the top container height in non-immersive fullscreen
+    // Skip querying the top container height in CrOS non-immersive fullscreen
     // because:
     // - The top container height is always zero in non-immersive fullscreen.
     // - Querying the top container height may return the height before entering
@@ -285,6 +294,7 @@ gfx::Rect ExclusiveAccessBubbleViews::GetPopupRect() const {
     top_container_bottom =
         bubble_view_context_->GetTopContainerBoundsInScreen().bottom();
   }
+#endif
   // |desired_top| is the top of the bubble area including the shadow.
   const int desired_top = kSimplifiedPopupTopPx - view_->GetInsets().top();
   const int y = top_container_bottom + desired_top;

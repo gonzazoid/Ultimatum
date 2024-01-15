@@ -7,10 +7,9 @@
 #include <map>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
-#include "chrome/browser/ash/app_mode/app_session_ash.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_data_base.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_manager_observer.h"
 #include "chrome/browser/ash/app_mode/kiosk_cryptohome_remover.h"
@@ -59,13 +58,15 @@ void KioskAppManagerBase::GetKioskAppIconCacheDir(base::FilePath* cache_dir) {
 }
 
 void KioskAppManagerBase::OnKioskAppDataChanged(const std::string& app_id) {
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.OnKioskAppDataChanged(app_id);
+  }
 }
 
 void KioskAppManagerBase::OnKioskAppDataLoadFailure(const std::string& app_id) {
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.OnKioskAppDataLoadFailure(app_id);
+  }
 }
 
 void KioskAppManagerBase::OnExternalCacheDamaged(const std::string& app_id) {
@@ -84,13 +85,15 @@ bool KioskAppManagerBase::GetDisableBailoutShortcut() const {
 }
 
 void KioskAppManagerBase::NotifyKioskAppsChanged() const {
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.OnKioskAppsSettingsChanged();
+  }
 }
 
 void KioskAppManagerBase::NotifySessionInitialized() const {
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.OnKioskSessionInitialized();
+  }
 }
 
 void KioskAppManagerBase::AddObserver(KioskAppManagerObserver* observer) {

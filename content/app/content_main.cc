@@ -4,15 +4,17 @@
 
 #include "content/public/app/content_main.h"
 
-#include "base/allocator/buildflags.h"
+#include <optional>
+
 #include "base/allocator/partition_alloc_support.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_buildflags.h"
 #include "base/at_exit.h"
 #include "base/base_switches.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
-#include "base/debug/activity_tracker.h"
 #include "base/debug/debugger.h"
 #include "base/debug/stack_trace.h"
+#include "base/feature_list.h"
 #include "base/i18n/icu_util.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_type.h"
@@ -34,7 +36,6 @@
 #include "content/app/content_main_runner_impl.h"
 #include "content/common/mojo_core_library_support.h"
 #include "content/common/set_process_title.h"
-#include "content/common/shared_file_util.h"
 #include "content/public/app/content_main_delegate.h"
 #include "content/public/common/content_switches.h"
 #include "mojo/core/embedder/configuration.h"
@@ -43,7 +44,6 @@
 #include "mojo/public/cpp/platform/platform_channel.h"
 #include "mojo/public/cpp/system/dynamic_library_support.h"
 #include "sandbox/policy/sandbox_type.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/ui_base_paths.h"
 #include "ui/base/ui_base_switches.h"
 
@@ -54,14 +54,14 @@
 #include "base/win/win_util.h"
 #include "base/win/windows_version.h"
 #include "ui/base/win/atl_module.h"
+#include "ui/gfx/switches.h"
 #endif
 
 #if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID)
 #include <locale.h>
 #include <signal.h>
 
-#include "base/file_descriptor_store.h"
-#include "base/posix/global_descriptors.h"
+#include "content/common/shared_file_util.h"
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
@@ -69,11 +69,13 @@
 #endif
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/scoped_nsautorelease_pool.h"
+#include "base/apple/scoped_nsautorelease_pool.h"
 #include "content/app/mac_init.h"
+#endif
 
+#if BUILDFLAG(IS_APPLE)
 #if BUILDFLAG(USE_ALLOCATOR_SHIM)
-#include "base/allocator/partition_allocator/shim/allocator_shim.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/shim/allocator_shim.h"
 #endif
 #endif  // BUILDFLAG(IS_MAC)
 
@@ -108,27 +110,6 @@ void SetupSignalHandlers() {
                                          SIGTERM, SIGCHLD, SIGBUS,  SIGTRAP};
   for (int signal_to_reset : signals_to_reset)
     CHECK_EQ(0, sigaction(signal_to_reset, &sigact, nullptr));
-}
-
-void PopulateFDsFromCommandLine() {
-  const std::string& shared_file_param =
-      base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
-          switches::kSharedFiles);
-  if (shared_file_param.empty())
-    return;
-
-  absl::optional<std::map<int, std::string>> shared_file_descriptors =
-      ParseSharedFileSwitchValue(shared_file_param);
-  if (!shared_file_descriptors)
-    return;
-
-  for (const auto& descriptor : *shared_file_descriptors) {
-    base::MemoryMappedFile::Region region;
-    const std::string& key = descriptor.second;
-    base::ScopedFD fd = base::GlobalDescriptors::GetInstance()->TakeFD(
-        descriptor.first, &region);
-    base::FileDescriptorStore::GetInstance().Set(key, std::move(fd), region);
-  }
 }
 
 #endif  // BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID)
@@ -199,15 +180,15 @@ ContentMainParams& ContentMainParams::operator=(ContentMainParams&&) = default;
 int NO_STACK_PROTECTOR
 RunContentProcess(ContentMainParams params,
                   ContentMainRunner* content_main_runner) {
+  base::FeatureList::FailOnFeatureAccessWithoutFeatureList();
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   // Lacros is launched with inherited priority. Revert to normal priority
   // before spawning more processes.
   base::PlatformThread::SetCurrentThreadType(base::ThreadType::kDefault);
 #endif
   int exit_code = -1;
-  base::debug::GlobalActivityTracker* tracker = nullptr;
 #if BUILDFLAG(IS_MAC)
-  std::unique_ptr<base::mac::ScopedNSAutoreleasePool> autorelease_pool;
+  base::apple::ScopedNSAutoreleasePool autorelease_pool;
 #endif
 
   // A flag to indicate whether Main() has been called before. On Android, we
@@ -221,7 +202,7 @@ RunContentProcess(ContentMainParams params,
     content_main_runner->ReInitializeParams(std::move(params));
   } else {
     is_initialized = true;
-#if BUILDFLAG(IS_MAC) && BUILDFLAG(USE_ALLOCATOR_SHIM)
+#if BUILDFLAG(IS_APPLE) && BUILDFLAG(USE_ALLOCATOR_SHIM)
     allocator_shim::InitializeAllocatorShim();
 #endif
     base::EnableTerminationOnOutOfMemory();
@@ -259,7 +240,7 @@ RunContentProcess(ContentMainParams params,
     base::CommandLine::Init(argc, argv);
 
 #if BUILDFLAG(IS_POSIX)
-    PopulateFDsFromCommandLine();
+    PopulateFileDescriptorStoreFromFdTable();
 #endif
 
     base::EnableTerminationOnHeapCorruption();
@@ -297,10 +278,23 @@ RunContentProcess(ContentMainParams params,
     // We need this pool for all the objects created before we get to the event
     // loop, but we don't want to leave them hanging around until the app quits.
     // Each "main" needs to flush this pool right before it goes into its main
-    // event loop to get rid of the cruft.
-    autorelease_pool = std::make_unique<base::mac::ScopedNSAutoreleasePool>();
-    params.autorelease_pool = autorelease_pool.get();
+    // event loop to get rid of the cruft. TODO(https://crbug.com/1424190): This
+    // is not safe. Each main loop should create and destroy its own pool; it
+    // should not be flushing the pool at the base of the autorelease pool
+    // stack.
+    params.autorelease_pool = &autorelease_pool;
     InitializeMac();
+#endif
+
+#if BUILDFLAG(IS_IOS)
+    // TODO(crbug.com/1412835): Remove this initialization on iOS. Everything
+    // runs in process for now as we have no fork.
+    base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+#if !TARGET_OS_SIMULATOR
+    command_line->AppendSwitch(switches::kSingleProcess);
+#endif
+    command_line->AppendSwitch(switches::kEnableViewport);
+    command_line->AppendSwitch(switches::kUseMobileUserAgent);
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
@@ -308,15 +302,9 @@ RunContentProcess(ContentMainParams params,
 #endif
 
     ui::RegisterPathProvider();
-    tracker = base::debug::GlobalActivityTracker::Get();
     exit_code = content_main_runner->Initialize(std::move(params));
 
     if (exit_code >= 0) {
-      if (tracker) {
-        tracker->SetProcessPhase(
-            base::debug::GlobalActivityTracker::PROCESS_LAUNCH_FAILED);
-        tracker->process_data().SetInt("exit-code", exit_code);
-      }
       return exit_code;
     }
 
@@ -324,7 +312,12 @@ RunContentProcess(ContentMainParams params,
     // Route stdio to parent console (if any) or create one.
     if (base::CommandLine::ForCurrentProcess()->HasSwitch(
             switches::kEnableLogging)) {
-      base::RouteStdioToConsole(true);
+      base::RouteStdioToConsole(/*create_console_if_not_found*/ true);
+    } else if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+                   switches::kHeadless)) {
+      // When running in headless mode we want stdio routed however if
+      // console does not exist we should not create one.
+      base::RouteStdioToConsole(/*create_console_if_not_found*/ false);
     }
 #endif
 
@@ -341,22 +334,7 @@ RunContentProcess(ContentMainParams params,
     CommonSubprocessInit();
   exit_code = content_main_runner->Run();
 
-  if (tracker) {
-    if (exit_code == 0) {
-      tracker->SetProcessPhaseIfEnabled(
-          base::debug::GlobalActivityTracker::PROCESS_EXITED_CLEANLY);
-    } else {
-      tracker->SetProcessPhaseIfEnabled(
-          base::debug::GlobalActivityTracker::PROCESS_EXITED_WITH_CODE);
-      tracker->process_data().SetInt("exit-code", exit_code);
-    }
-  }
-
-#if BUILDFLAG(IS_MAC)
-  autorelease_pool.reset();
-#endif
-
-#if !BUILDFLAG(IS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
   content_main_runner->Shutdown();
 #endif
 

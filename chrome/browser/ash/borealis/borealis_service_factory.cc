@@ -22,13 +22,22 @@ BorealisServiceFactory* BorealisServiceFactory::GetInstance() {
 
 // This service does not depend on any other services.
 BorealisServiceFactory::BorealisServiceFactory()
-    : ProfileKeyedServiceFactory("BorealisService") {}
+    : ProfileKeyedServiceFactory(
+          "BorealisService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              .WithGuest(ProfileSelection::kNone)
+              .WithAshInternals(ProfileSelection::kNone)
+              .WithSystem(ProfileSelection::kNone)
+              .Build()) {}
 
 BorealisServiceFactory::~BorealisServiceFactory() = default;
 
-KeyedService* BorealisServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+BorealisServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new BorealisServiceImpl(Profile::FromBrowserContext(context));
+  return std::make_unique<BorealisServiceImpl>(
+      Profile::FromBrowserContext(context));
 }
 
 bool BorealisServiceFactory::ServiceIsCreatedWithBrowserContext() const {

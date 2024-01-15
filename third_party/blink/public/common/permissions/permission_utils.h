@@ -11,6 +11,7 @@
 #include "third_party/blink/public/common/common_export.h"
 #include "third_party/blink/public/mojom/permissions/permission.mojom-forward.h"
 #include "third_party/blink/public/mojom/permissions/permission_status.mojom-shared.h"
+#include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom-forward.h"
 
 namespace blink {
 
@@ -53,6 +54,10 @@ enum class PermissionType {
   LOCAL_FONTS = 30,
   DISPLAY_CAPTURE = 31,
   // FILE_HANDLING = 32,  // Removed in M98.
+  TOP_LEVEL_STORAGE_ACCESS = 33,
+  CAPTURED_SURFACE_CONTROL = 34,
+  SMART_CARD = 35,
+  WEB_PRINTING = 36,
 
   // Always keep this at the end.
   NUM,
@@ -87,6 +92,11 @@ PermissionDescriptorInfoToPermissionType(mojom::PermissionName name,
                                          bool camera_ptz,
                                          bool clipboard_will_be_sanitized,
                                          bool clipboard_has_user_gesture);
+
+// Converts `permission` type into the corresponding permission policy feature.
+// If there is no, returns nullopt.
+BLINK_COMMON_EXPORT absl::optional<mojom::PermissionsPolicyFeature>
+PermissionTypeToPermissionsPolicyFeature(PermissionType permission);
 
 }  // namespace blink
 

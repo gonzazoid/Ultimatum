@@ -6,13 +6,27 @@
 #define CONTENT_COMMON_SHARED_FILE_UTIL_H_
 
 #include <map>
+#include <optional>
 #include <string>
 
 #include "base/command_line.h"
 #include "base/component_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
+
+// Populates the global instance of base::FileDescriptorStore using the
+// information from the command line, assuming base::GlobalDescriptors has been
+// initialized to hold the dynamically-generated descriptors (e.g. as happens in
+// the zygote).
+void PopulateFileDescriptorStoreFromGlobalDescriptors();
+
+// Similar to PopulateFileDescriptorStoreFromGlobalDescriptors(), this will
+// populate the global instance of base::FileDescriptorStore, but takes the FDs
+// directly from the FD table, using the default FD numbers (i.e. descriptor_id
+// + base::GlobalDescriptors::kBaseDescriptor). On Posix systems, exec'd
+// processes should use this instead of
+// PopulateFileDescriptorStoreFromGlobalDescriptors().
+void PopulateFileDescriptorStoreFromFdTable();
 
 class SharedFileSwitchValueBuilder final {
  public:
@@ -23,7 +37,7 @@ class SharedFileSwitchValueBuilder final {
   std::string switch_value_;
 };
 
-absl::optional<std::map<int, std::string>> ParseSharedFileSwitchValue(
+std::optional<std::map<int, std::string>> ParseSharedFileSwitchValue(
     const std::string& value);
 
 }  // namespace content

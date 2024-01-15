@@ -4,8 +4,8 @@
 
 #include "ui/base/ime/mock_input_method.h"
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/observer_list.h"
 #include "build/build_config.h"
 #include "ui/base/ime/ime_key_event_dispatcher.h"
@@ -20,8 +20,7 @@ namespace ui {
 
 MockInputMethod::MockInputMethod(
     ImeKeyEventDispatcher* ime_key_event_dispatcher)
-    : text_input_client_(nullptr),
-      ime_key_event_dispatcher_(ime_key_event_dispatcher) {}
+    : ime_key_event_dispatcher_(ime_key_event_dispatcher) {}
 
 MockInputMethod::~MockInputMethod() {
   for (InputMethodObserver& observer : observer_list_)
@@ -65,8 +64,6 @@ void MockInputMethod::OnFocus() {
   for (InputMethodObserver& observer : observer_list_)
     observer.OnFocus();
 }
-
-void MockInputMethod::OnTouch(ui::EventPointerType pointerType) {}
 
 void MockInputMethod::OnBlur() {
   for (InputMethodObserver& observer : observer_list_)

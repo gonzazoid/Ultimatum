@@ -66,25 +66,25 @@ public class FreUMADialogTest {
     public static BaseActivityTestRule<BlankUiTestActivity> activityTestRule =
             new BaseActivityTestRule<>(BlankUiTestActivity.class);
 
-    @Rule
-    public final MockitoRule mMockitoRule = MockitoJUnit.rule();
+    @Rule public final MockitoRule mMockitoRule = MockitoJUnit.rule();
 
     @Rule
     public final ChromeRenderTestRule mRenderTestRule =
             ChromeRenderTestRule.Builder.withPublicCorpus()
                     .setBugComponent(ChromeRenderTestRule.Component.UI_BROWSER_FIRST_RUN)
+                    .setRevision(1)
                     .build();
 
-    @Mock
-    private Listener mListenerMock;
+    @Mock private Listener mListenerMock;
 
     private FreUMADialogCoordinator mCoordinator;
 
     @ParameterAnnotations.UseMethodParameterBefore(NightModeTestUtils.NightModeParams.class)
     public void setupNightMode(boolean nightModeEnabled) {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            ChromeNightModeTestUtils.setUpNightModeForChromeActivity(nightModeEnabled);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    ChromeNightModeTestUtils.setUpNightModeForChromeActivity(nightModeEnabled);
+                });
         mRenderTestRule.setNightModeEnabled(nightModeEnabled);
     }
 
@@ -111,13 +111,13 @@ public class FreUMADialogTest {
     @Test
     @MediumTest
     public void testTurningOnAllowCrashUploadWhenCrashUploadByNotAllowedDefault() {
-        showFreUMADialog(/*allowMetricsAndCrashUploading=*/false);
+        showFreUMADialog(/* allowMetricsAndCrashUploading= */ false);
 
         onView(withId(R.id.fre_uma_dialog_switch))
                 .inRoot(isDialog())
                 .check(matches(not(isChecked())))
                 .perform(click());
-        onView(withText(org.chromium.chrome.R.string.done)).inRoot(isDialog()).perform(click());
+        onView(withText(R.string.done)).inRoot(isDialog()).perform(click());
 
         onView(withText(R.string.signin_fre_uma_dialog_title)).check(doesNotExist());
         verify(mListenerMock).onAllowMetricsAndCrashUploadingChecked(true);
@@ -126,11 +126,11 @@ public class FreUMADialogTest {
     @Test
     @MediumTest
     public void testTurningOffAllowCrashUploadWhenCrashUploadAllowedByDefault() {
-        showFreUMADialog(/*allowMetricsAndCrashUploading=*/true);
+        showFreUMADialog(/* allowMetricsAndCrashUploading= */ true);
 
         onView(withId(R.id.fre_uma_dialog_switch)).perform(click());
 
-        onView(withText(org.chromium.chrome.R.string.done)).perform(click());
+        onView(withText(R.string.done)).perform(click());
         onView(withText(R.string.signin_fre_uma_dialog_title)).check(doesNotExist());
         verify(mListenerMock).onAllowMetricsAndCrashUploadingChecked(false);
     }
@@ -138,10 +138,10 @@ public class FreUMADialogTest {
     @Test
     @MediumTest
     public void testLeavingAllowCrashUploadOn() {
-        showFreUMADialog(/*allowMetricsAndCrashUploading=*/true);
+        showFreUMADialog(/* allowMetricsAndCrashUploading= */ true);
         onView(withId(R.id.fre_uma_dialog_switch)).check(matches(isChecked()));
 
-        onView(withText(org.chromium.chrome.R.string.done)).perform(click());
+        onView(withText(R.string.done)).perform(click());
 
         onView(withText(R.string.signin_fre_uma_dialog_title)).check(doesNotExist());
         verify(mListenerMock, never()).onAllowMetricsAndCrashUploadingChecked(anyBoolean());
@@ -152,22 +152,29 @@ public class FreUMADialogTest {
     @Feature("RenderTest")
     @ParameterAnnotations.UseMethodParameter(NightModeTestUtils.NightModeParams.class)
     public void testFreUMADialogView(boolean nightModeEnabled) throws IOException {
-        showFreUMADialog(/*allowMetricsAndCrashUploading=*/true);
+        showFreUMADialog(/* allowMetricsAndCrashUploading= */ true);
 
-        CriteriaHelper.pollUiThread(() -> {
-            return mCoordinator.getDialogViewForTesting()
-                    .findViewById(R.id.fre_uma_dialog_dismiss_button)
-                    .isShown();
-        });
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    return mCoordinator
+                            .getDialogViewForTesting()
+                            .findViewById(R.id.fre_uma_dialog_dismiss_button)
+                            .isShown();
+                });
         mRenderTestRule.render(mCoordinator.getDialogViewForTesting(), "fre_uma_dialog");
     }
 
     private void showFreUMADialog(boolean allowMetricsAndCrashUploading) {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            final Activity activity = activityTestRule.getActivity();
-            mCoordinator = new FreUMADialogCoordinator(activity,
-                    new ModalDialogManager(new AppModalPresenter(activity), ModalDialogType.APP),
-                    mListenerMock, allowMetricsAndCrashUploading);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    final Activity activity = activityTestRule.getActivity();
+                    mCoordinator =
+                            new FreUMADialogCoordinator(
+                                    activity,
+                                    new ModalDialogManager(
+                                            new AppModalPresenter(activity), ModalDialogType.APP),
+                                    mListenerMock,
+                                    allowMetricsAndCrashUploading);
+                });
     }
 }

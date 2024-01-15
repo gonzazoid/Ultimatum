@@ -2,15 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "chrome/updater/external_constants_override.h"
+
 #include <utility>
 #include <vector>
 
 #include "base/memory/scoped_refptr.h"
+#include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/updater/constants.h"
 #include "chrome/updater/external_constants.h"
 #include "chrome/updater/external_constants_default.h"
-#include "chrome/updater/external_constants_override.h"
 #include "chrome/updater/updater_branding.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
@@ -30,9 +32,16 @@ TEST_F(ExternalConstantsOverriderTest, TestEmptyDictValue) {
   EXPECT_EQ(urls[0], GURL(UPDATE_CHECK_URL));
   EXPECT_TRUE(urls[0].is_valid());
 
+  EXPECT_EQ(overrider->CrashUploadURL(), GURL(CRASH_UPLOAD_URL));
+  EXPECT_TRUE(overrider->CrashUploadURL().is_valid());
+  EXPECT_EQ(overrider->DeviceManagementURL(),
+            GURL(DEVICE_MANAGEMENT_SERVER_URL));
+  EXPECT_TRUE(overrider->DeviceManagementURL().is_valid());
+
   EXPECT_EQ(overrider->InitialDelay(), kInitialDelay);
-  EXPECT_EQ(overrider->ServerKeepAliveSeconds(), kServerKeepAliveSeconds);
+  EXPECT_EQ(overrider->ServerKeepAliveTime(), kServerKeepAliveTime);
   EXPECT_EQ(overrider->GroupPolicies().size(), 0U);
+  EXPECT_FALSE(overrider->EnableDiffUpdates());
 }
 
 TEST_F(ExternalConstantsOverriderTest, TestFullOverrides) {
@@ -46,9 +55,14 @@ TEST_F(ExternalConstantsOverriderTest, TestFullOverrides) {
 
   overrides.Set(kDevOverrideKeyUseCUP, false);
   overrides.Set(kDevOverrideKeyUrl, std::move(url_list));
+  overrides.Set(kDevOverrideKeyCrashUploadUrl, "https://crash_test.google.com");
+  overrides.Set(kDevOverrideKeyDeviceManagementUrl, "https://dm.google.com");
   overrides.Set(kDevOverrideKeyInitialDelay, 137.1);
   overrides.Set(kDevOverrideKeyServerKeepAliveSeconds, 1);
   overrides.Set(kDevOverrideKeyGroupPolicies, std::move(group_policies));
+  overrides.Set(kDevOverrideKeyOverinstallTimeout, 3);
+  overrides.Set(kDevOverrideKeyIdleCheckPeriodSeconds, 4);
+  overrides.Set(kDevOverrideKeyEnableDiffUpdates, true);
   auto overrider = base::MakeRefCounted<ExternalConstantsOverrider>(
       std::move(overrides), CreateDefaultExternalConstants());
 
@@ -61,9 +75,17 @@ TEST_F(ExternalConstantsOverriderTest, TestFullOverrides) {
   EXPECT_EQ(urls[1], GURL("https://www.google.com"));
   EXPECT_TRUE(urls[1].is_valid());
 
-  EXPECT_EQ(overrider->InitialDelay(), 137.1);
-  EXPECT_EQ(overrider->ServerKeepAliveSeconds(), 1);
+  EXPECT_EQ(overrider->CrashUploadURL(), GURL("https://crash_test.google.com"));
+  EXPECT_TRUE(overrider->CrashUploadURL().is_valid());
+  EXPECT_EQ(overrider->DeviceManagementURL(), GURL("https://dm.google.com"));
+  EXPECT_TRUE(overrider->DeviceManagementURL().is_valid());
+
+  EXPECT_EQ(overrider->InitialDelay(), base::Seconds(137.1));
+  EXPECT_EQ(overrider->ServerKeepAliveTime(), base::Seconds(1));
   EXPECT_EQ(overrider->GroupPolicies().size(), 2U);
+  EXPECT_EQ(overrider->OverinstallTimeout(), base::Seconds(3));
+  EXPECT_EQ(overrider->IdleCheckPeriod(), base::Seconds(4));
+  EXPECT_TRUE(overrider->EnableDiffUpdates());
 }
 
 TEST_F(ExternalConstantsOverriderTest, TestOverrideUnwrappedURL) {
@@ -80,7 +102,7 @@ TEST_F(ExternalConstantsOverriderTest, TestOverrideUnwrappedURL) {
   // Non-overridden items should fall back to defaults
   EXPECT_TRUE(overrider->UseCUP());
   EXPECT_EQ(overrider->InitialDelay(), kInitialDelay);
-  EXPECT_EQ(overrider->ServerKeepAliveSeconds(), kServerKeepAliveSeconds);
+  EXPECT_EQ(overrider->ServerKeepAliveTime(), kServerKeepAliveTime);
   EXPECT_EQ(overrider->GroupPolicies().size(), 0U);
 }
 

@@ -8,19 +8,13 @@
 #include "base/scoped_observation.h"
 #include "chrome/browser/ash/arc/optin/arc_terms_of_service_negotiator.h"
 #include "chrome/browser/ash/login/screens/consolidated_consent_screen.h"
-#include "chrome/browser/ui/webui/ash/login/arc_terms_of_service_screen_handler.h"
-
-namespace chromeos {
-class ArcTermsOfServiceScreenView;
-}
 
 namespace arc {
 
 // Handles the Terms-of-service agreement user action via OOBE OptIn UI.
 class ArcTermsOfServiceOobeNegotiator
     : public ArcTermsOfServiceNegotiator,
-      public chromeos::ArcTermsOfServiceScreenViewObserver,
-      public chromeos::ConsolidatedConsentScreen::Observer {
+      public ash::ConsolidatedConsentScreen::Observer {
  public:
   ArcTermsOfServiceOobeNegotiator();
 
@@ -31,40 +25,22 @@ class ArcTermsOfServiceOobeNegotiator
 
   ~ArcTermsOfServiceOobeNegotiator() override;
 
-  // Injects ARC OOBE screen handler in unit tests, where OOBE UI is not
-  // available.
-  static void SetArcTermsOfServiceScreenViewForTesting(
-      chromeos::ArcTermsOfServiceScreenView* view);
-
  private:
-  // Helper to handle callbacks from
-  // chromeos::ArcTermsOfServiceScreenViewObserver. It removes observer from
-  // |screen_view_|, resets it, and then dispatches |accepted|. It is expected
-  // that this method is called exactly once for each instance of
+  // Helper to handle callbacks from ash::ConsolidatedConsentScreen::Observer.
+  // It resets the observer and then dispatches `accepted`. It is expected that
+  // this method is called exactly once for each instance of
   // ArcTermsOfServiceOobeNegotiator.
   void HandleTermsAccepted(bool accepted);
 
-  // chromeos::ArcTermsOfServiceScreenViewObserver:
-  void OnAccept(bool review_arc_settings) override;
-  void OnViewDestroyed(chromeos::ArcTermsOfServiceScreenView* view) override;
-
-  // chromeos::ConsolidatedConsentScreen::Observer:
+  // ash::ConsolidatedConsentScreen::Observer:
   void OnConsolidatedConsentAccept() override;
   void OnConsolidatedConsentScreenDestroyed() override;
 
   // ArcTermsOfServiceNegotiator:
   void StartNegotiationImpl() override;
 
-  // Unowned pointer. If a user signs out while ARC OOBE opt-in is active,
-  // LoginDisplayHost is detached first then OnViewDestroyed is called.
-  // It means, in OnSkip() and OnAccept(), the View needs to be obtained via
-  // LoginDisplayHost, but in OnViewDestroyed(), the argument needs to be used.
-  // In order to use the same way to access the View, remember the pointer in
-  // StartNegotiationImpl(), and reset in HandleTermsAccepted().
-  chromeos::ArcTermsOfServiceScreenView* screen_view_ = nullptr;
-
-  base::ScopedObservation<chromeos::ConsolidatedConsentScreen,
-                          chromeos::ConsolidatedConsentScreen::Observer>
+  base::ScopedObservation<ash::ConsolidatedConsentScreen,
+                          ash::ConsolidatedConsentScreen::Observer>
       consolidated_consent_observation_{this};
 };
 

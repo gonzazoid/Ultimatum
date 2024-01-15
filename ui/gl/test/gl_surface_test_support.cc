@@ -10,6 +10,7 @@
 #include "base/command_line.h"
 #include "build/build_config.h"
 #include "ui/gl/gl_context.h"
+#include "ui/gl/gl_features.h"
 #include "ui/gl/gl_implementation.h"
 #include "ui/gl/gl_switches.h"
 #include "ui/gl/init/gl_factory.h"
@@ -18,8 +19,12 @@
 #include "ui/platform_window/common/platform_window_defaults.h"  // nogncheck
 #endif
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/ozone/public/ozone_platform.h"
+
+#if BUILDFLAG(IS_CHROMEOS)
+#include "ui/gfx/linux/gbm_util.h"  // nogncheck
+#endif
 #endif
 
 namespace gl {
@@ -29,7 +34,13 @@ namespace {
 GLDisplay* InitializeOneOffHelper(bool init_extensions) {
   DCHECK_EQ(kGLImplementationNone, GetGLImplementation());
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
+#if BUILDFLAG(IS_CHROMEOS)
+  // TODO(b/271455200): is the process single-threaded at this point and has
+  // the FeatureList been initialized? Those are requirements of
+  // ui::EnsureIntelMediaCompressionEnvVarIsSet().
+  ui::EnsureIntelMediaCompressionEnvVarIsSet();
+#endif
   ui::OzonePlatform::InitParams params;
   params.single_process = true;
   ui::OzonePlatform::InitializeForGPU(params);
@@ -48,8 +59,8 @@ GLDisplay* InitializeOneOffHelper(bool init_extensions) {
     use_software_gl = false;
   }
 
-#if BUILDFLAG(IS_ANDROID)
-  // On Android we always use hardware GL.
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
+  // On Android and iOS we always use hardware GL.
   use_software_gl = false;
 #endif
 
@@ -72,7 +83,7 @@ GLDisplay* InitializeOneOffHelper(bool init_extensions) {
       impl, fallback_to_software_gl));
   GLDisplay* display = gl::init::InitializeGLOneOffPlatformImplementation(
       fallback_to_software_gl, disable_gl_drawing, init_extensions,
-      /*system_device_id=*/0);
+      /*gpu_preference=*/gl::GpuPreference::kDefault);
   CHECK(display);
   return display;
 }
@@ -102,14 +113,14 @@ GLDisplay* GLSurfaceTestSupport::InitializeOneOffImplementation(
       impl, fallback_to_software_gl));
   GLDisplay* display = gl::init::InitializeGLOneOffPlatformImplementation(
       fallback_to_software_gl, disable_gl_drawing, init_extensions,
-      /*system_device_id=*/0);
+      /*gpu_preference=*/gl::GpuPreference::kDefault);
   CHECK(display);
   return display;
 }
 
 // static
 GLDisplay* GLSurfaceTestSupport::InitializeOneOffWithMockBindings() {
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   ui::OzonePlatform::InitParams params;
   params.single_process = true;
   ui::OzonePlatform::InitializeForGPU(params);
@@ -121,14 +132,27 @@ GLDisplay* GLSurfaceTestSupport::InitializeOneOffWithMockBindings() {
 
 // static
 GLDisplay* GLSurfaceTestSupport::InitializeOneOffWithStubBindings() {
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   ui::OzonePlatform::InitParams params;
   params.single_process = true;
   ui::OzonePlatform::InitializeForGPU(params);
 #endif
-
   return InitializeOneOffImplementation(
       GLImplementationParts(kGLImplementationStubGL), false);
+}
+
+// static
+GLDisplay* GLSurfaceTestSupport::InitializeOneOffWithNullAngleBindings() {
+#if BUILDFLAG(IS_OZONE)
+  ui::OzonePlatform::InitParams params;
+  params.single_process = true;
+  ui::OzonePlatform::InitializeForGPU(params);
+#endif
+  auto* display = InitializeOneOffImplementation(
+      GLImplementationParts(gl::ANGLEImplementation::kNull), false);
+
+  DCHECK_EQ(gl::GetANGLEImplementation(), gl::ANGLEImplementation::kNull);
+  return display;
 }
 
 // static

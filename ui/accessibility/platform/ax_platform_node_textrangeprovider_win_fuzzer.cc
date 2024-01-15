@@ -17,7 +17,6 @@
 #include "base/test/scoped_feature_list.h"
 #include "base/win/atl.h"
 #include "base/win/scoped_bstr.h"
-#include "base/win/scoped_safearray.h"
 #include "base/win/scoped_variant.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node.h"
@@ -35,7 +34,6 @@
 #include "ui/accessibility/platform/ax_fragment_root_win.h"
 #include "ui/accessibility/platform/ax_platform_node_textrangeprovider_win.h"
 #include "ui/accessibility/platform/test_ax_node_wrapper.h"
-#include "ui/accessibility/test_ax_tree_manager.h"
 
 using Microsoft::WRL::ComPtr;
 

@@ -4,25 +4,33 @@
 
 #include "chrome/updater/crash_client.h"
 
+#include <optional>
 #include <vector>
 
 #include "base/check.h"
+#include "base/debug/dump_without_crashing.h"
+#include "base/environment.h"
 #include "base/files/file_path.h"
+#include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
 #include "base/strings/string_util.h"
 #include "build/build_config.h"
+#include "chrome/updater/constants.h"
 #include "chrome/updater/tag.h"
+#include "chrome/updater/update_usage_stats_task.h"
+#include "chrome/updater/updater_branding.h"
 #include "chrome/updater/updater_scope.h"
-#include "chrome/updater/util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chrome/updater/util/util.h"
 #include "third_party/crashpad/crashpad/client/crash_report_database.h"
 #include "third_party/crashpad/crashpad/client/crashpad_client.h"
 #include "third_party/crashpad/crashpad/client/prune_crash_reports.h"
 #include "third_party/crashpad/crashpad/client/settings.h"
+#include "third_party/crashpad/crashpad/client/simulate_crash.h"
 
 #if BUILDFLAG(IS_WIN)
 #include <windows.h>
+
 #include "base/win/wrapped_window_proc.h"
 
 namespace {
@@ -50,8 +58,8 @@ CrashClient* CrashClient::GetInstance() {
 bool CrashClient::InitializeDatabaseOnly(UpdaterScope updater_scope) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  const absl::optional<base::FilePath> database_path =
-      GetVersionedDataDirectory(updater_scope);
+  const std::optional<base::FilePath> database_path =
+      EnsureCrashDatabasePath(updater_scope);
   if (!database_path) {
     LOG(ERROR) << "Failed to get the database path.";
     return false;
@@ -70,11 +78,15 @@ bool CrashClient::InitializeCrashReporting(UpdaterScope updater_scope) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   static bool initialized = false;
-  DCHECK(!initialized);
+  CHECK(!initialized);
   initialized = true;
 
-  if (!InitializeDatabaseOnly(updater_scope))
+  if (!InitializeDatabaseOnly(updater_scope)) {
     return false;
+  }
+
+  base::debug::SetDumpWithoutCrashingFunction(
+      [] { CRASHPAD_SIMULATE_CRASH(); });
 
 #if BUILDFLAG(IS_WIN)
   // Catch exceptions thrown from a window procedure.
@@ -116,11 +128,17 @@ bool CrashClient::InitializeCrashReporting(UpdaterScope updater_scope) {
     LOG(ERROR) << "Failed to fetch pending crash reports: " << status_pending;
   }
 
-  absl::optional<tagging::TagArgs> tag_args = GetTagArgs().tag_args;
-  if (tag_args && tag_args->usage_stats_enable &&
-      *tag_args->usage_stats_enable) {
+  std::optional<tagging::TagArgs> tag_args = GetTagArgs().tag_args;
+  std::string env_usage_stats;
+  if ((tag_args && tag_args->usage_stats_enable &&
+       *tag_args->usage_stats_enable) ||
+      (base::Environment::Create()->GetVar(kUsageStatsEnabled,
+                                           &env_usage_stats) &&
+       env_usage_stats == kUsageStatsEnabledValueEnabled) ||
+      (OtherAppUsageStatsAllowed({UPDATER_APPID, LEGACY_GOOGLE_UPDATE_APPID},
+                                 updater_scope))) {
     crashpad::Settings* crashpad_settings = database_->GetSettings();
-    DCHECK(crashpad_settings);
+    CHECK(crashpad_settings);
     crashpad_settings->SetUploadsEnabled(true);
   }
 

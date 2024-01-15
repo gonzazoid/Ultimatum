@@ -13,6 +13,7 @@ from page_sets.login_helpers import google_login
 from page_sets.helpers import override_online
 
 from telemetry.util import js_template
+from telemetry.util import wpr_modes
 
 
 class _LoadingStory(system_health_story.SystemHealthStory):
@@ -103,6 +104,12 @@ class LoadEbayStory2018(_LoadingStory):
   URL = 'https://www.ebay.com/sch/i.html?_nkw=headphones'
   TAGS = [story_tags.YEAR_2018]
 
+
+class LoadNaverStory2023(_LoadingStory):
+  NAME = 'load:search:naver:2023'
+  URL = 'https://m.naver.com/'
+  TAGS = [story_tags.INTERNATIONAL, story_tags.YEAR_2023]
+  SUPPORTED_PLATFORMS = platforms.MOBILE_ONLY
 
 ################################################################################
 # Social networks.
@@ -488,20 +495,24 @@ class LoadGmailStory2019(_LoadingStory):
   URL = 'http://mail.google.com/'
   TAGS = [story_tags.HEALTH_CHECK, story_tags.YEAR_2019]
   SKIP_LOGIN = False
+  EXTRA_BROWSER_ARGUMENTS = ['--allow-browser-signin=false']
 
   def _Login(self, action_runner):
-    google_login.NewLoginGoogleAccount(action_runner, 'googletest')
+    if self.wpr_mode in [wpr_modes.WPR_OFF, wpr_modes.WPR_RECORD]:
+      google_login.LoginWithLoginUrl(action_runner, self.URL)
+    else:
+      google_login.NewLoginGoogleAccount(action_runner, 'googletest')
 
-    # Navigating to http://mail.google.com immediately leads to an infinite
-    # redirection loop due to a bug in WPR (see
-    # https://bugs.chromium.org/p/chromium/issues/detail?id=1036791). We
-    # therefore first navigate to a dummy sub-URL to set up the session and
-    # hit the resulting redirection loop. Afterwards, we can safely navigate
-    # to http://mail.google.com.
-    action_runner.tab.WaitForDocumentReadyStateToBeComplete()
-    action_runner.Navigate(
-        'https://mail.google.com/mail/mu/mp/872/trigger_redirection_loop')
-    action_runner.tab.WaitForDocumentReadyStateToBeComplete()
+      # Navigating to http://mail.google.com immediately leads to an infinite
+      # redirection loop due to a bug in WPR (see
+      # https://bugs.chromium.org/p/chromium/issues/detail?id=1036791). We
+      # therefore first navigate to a dummy sub-URL to set up the session and
+      # hit the resulting redirection loop. Afterwards, we can safely navigate
+      # to http://mail.google.com.
+      action_runner.tab.WaitForDocumentReadyStateToBeComplete()
+      action_runner.Navigate(
+          'https://mail.google.com/mail/mu/mp/872/trigger_redirection_loop')
+      action_runner.tab.WaitForDocumentReadyStateToBeComplete()
 
 
 class LoadChatStory2020(_LoadingStory):
@@ -511,9 +522,14 @@ class LoadChatStory2020(_LoadingStory):
   TAGS = [story_tags.YEAR_2020]
   SUPPORTED_PLATFORMS = platforms.DESKTOP_ONLY
   SKIP_LOGIN = False
+  EXTRA_BROWSER_ARGUMENTS = ['--allow-browser-signin=false']
 
   def _Login(self, action_runner):
-    google_login.NewLoginGoogleAccount(action_runner, 'chatfeature')
+    if self.wpr_mode in [wpr_modes.WPR_OFF, wpr_modes.WPR_RECORD]:
+      google_login.LoginWithLoginUrl(action_runner, self.URL)
+    else:
+      google_login.NewLoginGoogleAccount(action_runner, 'chatfeature')
+
     action_runner.tab.WaitForDocumentReadyStateToBeComplete()
 
 
@@ -550,9 +566,13 @@ class LoadDriveStory2019(_LoadingStory):
   NAME = 'load:tools:drive:2019'
   URL = 'https://drive.google.com/drive/my-drive'
   TAGS = [story_tags.JAVASCRIPT_HEAVY, story_tags.YEAR_2019]
+  EXTRA_BROWSER_ARGUMENTS = ['--allow-browser-signin=false']
 
   def _Login(self, action_runner):
-    google_login.NewLoginGoogleAccount(action_runner, 'googletest')
+    if self.wpr_mode in [wpr_modes.WPR_OFF, wpr_modes.WPR_RECORD]:
+      google_login.LoginWithLoginUrl(action_runner, self.URL)
+    else:
+      google_login.NewLoginGoogleAccount(action_runner, 'googletest')
 
 
 ################################################################################

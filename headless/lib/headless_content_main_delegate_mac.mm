@@ -4,11 +4,13 @@
 
 #include "headless/lib/headless_content_main_delegate.h"
 
+#import <Cocoa/Cocoa.h>
+
 #include "headless/lib/browser/headless_shell_application_mac.h"
 
 namespace headless {
 
-absl::optional<int> HeadlessContentMainDelegate::PreBrowserMain() {
+void HeadlessContentMainDelegate::PlatformPreBrowserMain() {
   // Force the NSApplication subclass to be used.
   [HeadlessShellCrApplication sharedApplication];
 
@@ -18,7 +20,8 @@ absl::optional<int> HeadlessContentMainDelegate::PreBrowserMain() {
   // happen.
   CHECK([NSApp isKindOfClass:[HeadlessShellCrApplication class]]);
 
-  return absl::nullopt;
+  // Force hide dock and menu bar.
+  NSApp.activationPolicy = NSApplicationActivationPolicyAccessory;
 }
 
 }  // namespace headless

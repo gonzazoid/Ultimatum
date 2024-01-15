@@ -12,19 +12,20 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/callback_list.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
+#include "base/logging.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "components/policy/core/common/cloud/cloud_external_data_store.h"
 #include "components/policy/core/common/cloud/cloud_policy_store.h"
@@ -46,7 +47,7 @@ const int kMaxParallelFetches = 2;
 // external data even if no |max_size| was specified in policy_templates.json.
 int g_max_external_data_size_for_testing = 0;
 
-// Keys for 'DictionaryValue' objects
+// Keys for 'Value::Dict' objects
 const char kUrlKey[] = "url";
 const char kHashKey[] = "hash";
 const char kCustomIconKey[] = "custom_icon";
@@ -206,6 +207,9 @@ void CloudExternalDataManagerBase::Backend::Disconnect() {
 void CloudExternalDataManagerBase::Backend::OnMetadataUpdated(
     std::unique_ptr<Metadata> metadata) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  // TODO(b/282186756): temporary log
+  LOG(WARNING) << "External data references updated";
+
   metadata_set_ = true;
   Metadata old_metadata;
   metadata_.swap(old_metadata);
@@ -260,6 +264,8 @@ void CloudExternalDataManagerBase::Backend::Fetch(
     const MetadataKey& key,
     ExternalDataFetcher::FetchCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  // TODO(b/282186756): temporary log
+  LOG(WARNING) << "Start fetching external data for policy " << key.policy;
 
   Metadata::const_iterator metadata = metadata_.find(key);
   if (metadata == metadata_.end()) {
@@ -348,6 +354,8 @@ void CloudExternalDataManagerBase::Backend::RunCallback(
     std::unique_ptr<std::string> data,
     const base::FilePath& file_path) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  // TODO(b/282186756): temporary log
+  LOG(WARNING) << "Posting a task to run the callback with external data";
   callback_task_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), std::move(data), file_path));
@@ -377,11 +385,10 @@ void CloudExternalDataManagerBase::Backend::PruneDataStore() {
   // Extract the list of (key, hash) pairs from the Metadata map to tell the
   // store which data should be kept.
   CloudExternalDataStore::PruningData key_hash_pairs;
-  std::transform(metadata_.begin(), metadata_.end(),
-                 std::back_inserter(key_hash_pairs),
-                 [](const std::pair<MetadataKey, MetadataEntry>& p) {
-                   return make_pair(p.first.ToString(), p.second.hash);
-                 });
+  base::ranges::transform(metadata_, std::back_inserter(key_hash_pairs),
+                          [](const std::pair<MetadataKey, MetadataEntry>& p) {
+                            return make_pair(p.first.ToString(), p.second.hash);
+                          });
   external_data_store_->Prune(key_hash_pairs);
 }
 
@@ -391,7 +398,8 @@ CloudExternalDataManagerBase::CloudExternalDataManagerBase(
     : backend_task_runner_(std::move(backend_task_runner)),
       backend_(new Backend(get_policy_details,
                            backend_task_runner_,
-                           base::ThreadTaskRunnerHandle::Get())) {}
+                           base::SingleThreadTaskRunner::GetCurrentDefault())) {
+}
 
 CloudExternalDataManagerBase::~CloudExternalDataManagerBase() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -503,6 +511,9 @@ void CloudExternalDataManagerBase::Fetch(
     const std::string& field_name,
     ExternalDataFetcher::FetchCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  // TODO(b/282186756): temporary log
+  LOG(WARNING) << "Posting a task to start fetching external data for policy "
+               << policy;
   backend_task_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(&Backend::Fetch, base::Unretained(backend_.get()),

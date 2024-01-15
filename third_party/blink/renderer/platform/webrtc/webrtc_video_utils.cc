@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/platform/webrtc/webrtc_video_utils.h"
 
+#include "base/logging.h"
 #include "third_party/webrtc/api/video_codecs/h264_profile_level_id.h"
 #include "third_party/webrtc/api/video_codecs/video_codec.h"
 #include "third_party/webrtc/api/video_codecs/vp9_profile.h"
@@ -92,135 +93,134 @@ media::VideoCodecProfile WebRtcVideoFormatToMediaVideoCodecProfile(
   }
 }
 
-media::VideoColorSpace WebRtcToMediaVideoColorSpace(
-    const webrtc::ColorSpace& color_space) {
-  media::VideoColorSpace::PrimaryID primaries =
-      media::VideoColorSpace::PrimaryID::INVALID;
+gfx::ColorSpace WebRtcToGfxColorSpace(const webrtc::ColorSpace& color_space) {
+  gfx::ColorSpace::PrimaryID primaries = gfx::ColorSpace::PrimaryID::INVALID;
   switch (color_space.primaries()) {
     case webrtc::ColorSpace::PrimaryID::kBT709:
-      primaries = media::VideoColorSpace::PrimaryID::BT709;
+    case webrtc::ColorSpace::PrimaryID::kUnspecified:
+      primaries = gfx::ColorSpace::PrimaryID::BT709;
       break;
     case webrtc::ColorSpace::PrimaryID::kBT470M:
-      primaries = media::VideoColorSpace::PrimaryID::BT470M;
+      primaries = gfx::ColorSpace::PrimaryID::BT470M;
       break;
     case webrtc::ColorSpace::PrimaryID::kBT470BG:
-      primaries = media::VideoColorSpace::PrimaryID::BT470BG;
+      primaries = gfx::ColorSpace::PrimaryID::BT470BG;
       break;
     case webrtc::ColorSpace::PrimaryID::kSMPTE170M:
-      primaries = media::VideoColorSpace::PrimaryID::SMPTE170M;
+      primaries = gfx::ColorSpace::PrimaryID::SMPTE170M;
       break;
     case webrtc::ColorSpace::PrimaryID::kSMPTE240M:
-      primaries = media::VideoColorSpace::PrimaryID::SMPTE240M;
+      primaries = gfx::ColorSpace::PrimaryID::SMPTE240M;
       break;
     case webrtc::ColorSpace::PrimaryID::kFILM:
-      primaries = media::VideoColorSpace::PrimaryID::FILM;
+      primaries = gfx::ColorSpace::PrimaryID::FILM;
       break;
     case webrtc::ColorSpace::PrimaryID::kBT2020:
-      primaries = media::VideoColorSpace::PrimaryID::BT2020;
+      primaries = gfx::ColorSpace::PrimaryID::BT2020;
       break;
     case webrtc::ColorSpace::PrimaryID::kSMPTEST428:
-      primaries = media::VideoColorSpace::PrimaryID::SMPTEST428_1;
+      primaries = gfx::ColorSpace::PrimaryID::SMPTEST428_1;
       break;
     case webrtc::ColorSpace::PrimaryID::kSMPTEST431:
-      primaries = media::VideoColorSpace::PrimaryID::SMPTEST431_2;
+      primaries = gfx::ColorSpace::PrimaryID::SMPTEST431_2;
       break;
     case webrtc::ColorSpace::PrimaryID::kSMPTEST432:
-      primaries = media::VideoColorSpace::PrimaryID::SMPTEST432_1;
+      primaries = gfx::ColorSpace::PrimaryID::P3;
       break;
     case webrtc::ColorSpace::PrimaryID::kJEDECP22:
-      primaries = media::VideoColorSpace::PrimaryID::EBU_3213_E;
+      primaries = gfx::ColorSpace::PrimaryID::INVALID;
       break;
     default:
       break;
   }
 
-  media::VideoColorSpace::TransferID transfer =
-      media::VideoColorSpace::TransferID::INVALID;
+  gfx::ColorSpace::TransferID transfer = gfx::ColorSpace::TransferID::INVALID;
   switch (color_space.transfer()) {
     case webrtc::ColorSpace::TransferID::kBT709:
-      transfer = media::VideoColorSpace::TransferID::BT709;
+    case webrtc::ColorSpace::TransferID::kUnspecified:
+      transfer = gfx::ColorSpace::TransferID::BT709;
       break;
     case webrtc::ColorSpace::TransferID::kGAMMA22:
-      transfer = media::VideoColorSpace::TransferID::GAMMA22;
+      transfer = gfx::ColorSpace::TransferID::GAMMA22;
       break;
     case webrtc::ColorSpace::TransferID::kGAMMA28:
-      transfer = media::VideoColorSpace::TransferID::GAMMA28;
+      transfer = gfx::ColorSpace::TransferID::GAMMA28;
       break;
     case webrtc::ColorSpace::TransferID::kSMPTE170M:
-      transfer = media::VideoColorSpace::TransferID::SMPTE170M;
+      transfer = gfx::ColorSpace::TransferID::SMPTE170M;
       break;
     case webrtc::ColorSpace::TransferID::kSMPTE240M:
-      transfer = media::VideoColorSpace::TransferID::SMPTE240M;
+      transfer = gfx::ColorSpace::TransferID::SMPTE240M;
       break;
     case webrtc::ColorSpace::TransferID::kLINEAR:
-      transfer = media::VideoColorSpace::TransferID::LINEAR;
+      transfer = gfx::ColorSpace::TransferID::LINEAR;
       break;
     case webrtc::ColorSpace::TransferID::kLOG:
-      transfer = media::VideoColorSpace::TransferID::LOG;
+      transfer = gfx::ColorSpace::TransferID::LOG;
       break;
     case webrtc::ColorSpace::TransferID::kLOG_SQRT:
-      transfer = media::VideoColorSpace::TransferID::LOG_SQRT;
+      transfer = gfx::ColorSpace::TransferID::LOG_SQRT;
       break;
     case webrtc::ColorSpace::TransferID::kIEC61966_2_4:
-      transfer = media::VideoColorSpace::TransferID::IEC61966_2_4;
+      transfer = gfx::ColorSpace::TransferID::IEC61966_2_4;
       break;
     case webrtc::ColorSpace::TransferID::kBT1361_ECG:
-      transfer = media::VideoColorSpace::TransferID::BT1361_ECG;
+      transfer = gfx::ColorSpace::TransferID::BT1361_ECG;
       break;
     case webrtc::ColorSpace::TransferID::kIEC61966_2_1:
-      transfer = media::VideoColorSpace::TransferID::IEC61966_2_1;
+      transfer = gfx::ColorSpace::TransferID::SRGB;
       break;
     case webrtc::ColorSpace::TransferID::kBT2020_10:
-      transfer = media::VideoColorSpace::TransferID::BT2020_10;
+      transfer = gfx::ColorSpace::TransferID::BT2020_10;
       break;
     case webrtc::ColorSpace::TransferID::kBT2020_12:
-      transfer = media::VideoColorSpace::TransferID::BT2020_12;
+      transfer = gfx::ColorSpace::TransferID::BT2020_12;
       break;
     case webrtc::ColorSpace::TransferID::kSMPTEST2084:
-      transfer = media::VideoColorSpace::TransferID::SMPTEST2084;
+      transfer = gfx::ColorSpace::TransferID::PQ;
       break;
     case webrtc::ColorSpace::TransferID::kSMPTEST428:
-      transfer = media::VideoColorSpace::TransferID::SMPTEST428_1;
+      transfer = gfx::ColorSpace::TransferID::SMPTEST428_1;
       break;
     case webrtc::ColorSpace::TransferID::kARIB_STD_B67:
-      transfer = media::VideoColorSpace::TransferID::ARIB_STD_B67;
+      transfer = gfx::ColorSpace::TransferID::HLG;
       break;
     default:
       break;
   }
 
-  media::VideoColorSpace::MatrixID matrix =
-      media::VideoColorSpace::MatrixID::INVALID;
+  gfx::ColorSpace::MatrixID matrix = gfx::ColorSpace::MatrixID::INVALID;
   switch (color_space.matrix()) {
     case webrtc::ColorSpace::MatrixID::kRGB:
-      matrix = media::VideoColorSpace::MatrixID::RGB;
+      matrix = gfx::ColorSpace::MatrixID::RGB;
       break;
     case webrtc::ColorSpace::MatrixID::kBT709:
-      matrix = media::VideoColorSpace::MatrixID::BT709;
+    case webrtc::ColorSpace::MatrixID::kUnspecified:
+      matrix = gfx::ColorSpace::MatrixID::BT709;
       break;
     case webrtc::ColorSpace::MatrixID::kFCC:
-      matrix = media::VideoColorSpace::MatrixID::FCC;
+      matrix = gfx::ColorSpace::MatrixID::FCC;
       break;
     case webrtc::ColorSpace::MatrixID::kBT470BG:
-      matrix = media::VideoColorSpace::MatrixID::BT470BG;
+      matrix = gfx::ColorSpace::MatrixID::BT470BG;
       break;
     case webrtc::ColorSpace::MatrixID::kSMPTE170M:
-      matrix = media::VideoColorSpace::MatrixID::SMPTE170M;
+      matrix = gfx::ColorSpace::MatrixID::SMPTE170M;
       break;
     case webrtc::ColorSpace::MatrixID::kSMPTE240M:
-      matrix = media::VideoColorSpace::MatrixID::SMPTE240M;
+      matrix = gfx::ColorSpace::MatrixID::SMPTE240M;
       break;
     case webrtc::ColorSpace::MatrixID::kYCOCG:
-      matrix = media::VideoColorSpace::MatrixID::YCOCG;
+      matrix = gfx::ColorSpace::MatrixID::YCOCG;
       break;
     case webrtc::ColorSpace::MatrixID::kBT2020_NCL:
-      matrix = media::VideoColorSpace::MatrixID::BT2020_NCL;
+      matrix = gfx::ColorSpace::MatrixID::BT2020_NCL;
       break;
     case webrtc::ColorSpace::MatrixID::kBT2020_CL:
-      matrix = media::VideoColorSpace::MatrixID::BT2020_CL;
+      matrix = gfx::ColorSpace::MatrixID::BT2020_CL;
       break;
     case webrtc::ColorSpace::MatrixID::kSMPTE2085:
-      matrix = media::VideoColorSpace::MatrixID::YDZDX;
+      matrix = gfx::ColorSpace::MatrixID::YDZDX;
       break;
     default:
       break;
@@ -238,7 +238,159 @@ media::VideoColorSpace WebRtcToMediaVideoColorSpace(
       break;
   }
 
-  return media::VideoColorSpace(primaries, transfer, matrix, range);
+  return gfx::ColorSpace(primaries, transfer, matrix, range);
+}
+
+webrtc::ColorSpace GfxToWebRtcColorSpace(const gfx::ColorSpace& color_space) {
+  webrtc::ColorSpace::PrimaryID primaries =
+      webrtc::ColorSpace::PrimaryID::kUnspecified;
+  switch (color_space.GetPrimaryID()) {
+    case gfx::ColorSpace::PrimaryID::BT709:
+      primaries = webrtc::ColorSpace::PrimaryID::kBT709;
+      break;
+    case gfx::ColorSpace::PrimaryID::BT470M:
+      primaries = webrtc::ColorSpace::PrimaryID::kBT470M;
+      break;
+    case gfx::ColorSpace::PrimaryID::BT470BG:
+      primaries = webrtc::ColorSpace::PrimaryID::kBT470BG;
+      break;
+    case gfx::ColorSpace::PrimaryID::SMPTE170M:
+      primaries = webrtc::ColorSpace::PrimaryID::kSMPTE170M;
+      break;
+    case gfx::ColorSpace::PrimaryID::SMPTE240M:
+      primaries = webrtc::ColorSpace::PrimaryID::kSMPTE240M;
+      break;
+    case gfx::ColorSpace::PrimaryID::FILM:
+      primaries = webrtc::ColorSpace::PrimaryID::kFILM;
+      break;
+    case gfx::ColorSpace::PrimaryID::BT2020:
+      primaries = webrtc::ColorSpace::PrimaryID::kBT2020;
+      break;
+    case gfx::ColorSpace::PrimaryID::SMPTEST428_1:
+      primaries = webrtc::ColorSpace::PrimaryID::kSMPTEST428;
+      break;
+    case gfx::ColorSpace::PrimaryID::SMPTEST431_2:
+      primaries = webrtc::ColorSpace::PrimaryID::kSMPTEST431;
+      break;
+    case gfx::ColorSpace::PrimaryID::P3:
+      primaries = webrtc::ColorSpace::PrimaryID::kSMPTEST432;
+      break;
+    default:
+      DVLOG(1) << "Unsupported color primaries.";
+      break;
+  }
+
+  webrtc::ColorSpace::TransferID transfer =
+      webrtc::ColorSpace::TransferID::kUnspecified;
+  switch (color_space.GetTransferID()) {
+    case gfx::ColorSpace::TransferID::BT709:
+      transfer = webrtc::ColorSpace::TransferID::kBT709;
+      break;
+    case gfx::ColorSpace::TransferID::GAMMA22:
+      transfer = webrtc::ColorSpace::TransferID::kGAMMA22;
+      break;
+    case gfx::ColorSpace::TransferID::GAMMA28:
+      transfer = webrtc::ColorSpace::TransferID::kGAMMA28;
+      break;
+    case gfx::ColorSpace::TransferID::SMPTE170M:
+      transfer = webrtc::ColorSpace::TransferID::kSMPTE170M;
+      break;
+    case gfx::ColorSpace::TransferID::SMPTE240M:
+      transfer = webrtc::ColorSpace::TransferID::kSMPTE240M;
+      break;
+    case gfx::ColorSpace::TransferID::LINEAR:
+      transfer = webrtc::ColorSpace::TransferID::kLINEAR;
+      break;
+    case gfx::ColorSpace::TransferID::LOG:
+      transfer = webrtc::ColorSpace::TransferID::kLOG;
+      break;
+    case gfx::ColorSpace::TransferID::LOG_SQRT:
+      transfer = webrtc::ColorSpace::TransferID::kLOG_SQRT;
+      break;
+    case gfx::ColorSpace::TransferID::IEC61966_2_4:
+      transfer = webrtc::ColorSpace::TransferID::kIEC61966_2_4;
+      break;
+    case gfx::ColorSpace::TransferID::BT1361_ECG:
+      transfer = webrtc::ColorSpace::TransferID::kBT1361_ECG;
+      break;
+    case gfx::ColorSpace::TransferID::SRGB:
+      transfer = webrtc::ColorSpace::TransferID::kIEC61966_2_1;
+      break;
+    case gfx::ColorSpace::TransferID::BT2020_10:
+      transfer = webrtc::ColorSpace::TransferID::kBT2020_10;
+      break;
+    case gfx::ColorSpace::TransferID::BT2020_12:
+      transfer = webrtc::ColorSpace::TransferID::kBT2020_12;
+      break;
+    case gfx::ColorSpace::TransferID::PQ:
+      transfer = webrtc::ColorSpace::TransferID::kSMPTEST2084;
+      break;
+    case gfx::ColorSpace::TransferID::SMPTEST428_1:
+      transfer = webrtc::ColorSpace::TransferID::kSMPTEST428;
+      break;
+    case gfx::ColorSpace::TransferID::HLG:
+      transfer = webrtc::ColorSpace::TransferID::kARIB_STD_B67;
+      break;
+    default:
+      DVLOG(1) << "Unsupported transfer.";
+      break;
+  }
+
+  webrtc::ColorSpace::MatrixID matrix =
+      webrtc::ColorSpace::MatrixID::kUnspecified;
+  switch (color_space.GetMatrixID()) {
+    case gfx::ColorSpace::MatrixID::RGB:
+      matrix = webrtc::ColorSpace::MatrixID::kRGB;
+      break;
+    case gfx::ColorSpace::MatrixID::BT709:
+      matrix = webrtc::ColorSpace::MatrixID::kBT709;
+      break;
+    case gfx::ColorSpace::MatrixID::FCC:
+      matrix = webrtc::ColorSpace::MatrixID::kFCC;
+      break;
+    case gfx::ColorSpace::MatrixID::BT470BG:
+      matrix = webrtc::ColorSpace::MatrixID::kBT470BG;
+      break;
+    case gfx::ColorSpace::MatrixID::SMPTE170M:
+      matrix = webrtc::ColorSpace::MatrixID::kSMPTE170M;
+      break;
+    case gfx::ColorSpace::MatrixID::SMPTE240M:
+      matrix = webrtc::ColorSpace::MatrixID::kSMPTE240M;
+      break;
+    case gfx::ColorSpace::MatrixID::YCOCG:
+      matrix = webrtc::ColorSpace::MatrixID::kYCOCG;
+      break;
+    case gfx::ColorSpace::MatrixID::BT2020_NCL:
+      matrix = webrtc::ColorSpace::MatrixID::kBT2020_NCL;
+      break;
+    case gfx::ColorSpace::MatrixID::BT2020_CL:
+      matrix = webrtc::ColorSpace::MatrixID::kBT2020_CL;
+      break;
+    case gfx::ColorSpace::MatrixID::YDZDX:
+      matrix = webrtc::ColorSpace::MatrixID::kSMPTE2085;
+      break;
+    default:
+      DVLOG(1) << "Unsupported color matrix.";
+      break;
+  }
+
+  webrtc::ColorSpace::RangeID range = webrtc::ColorSpace::RangeID::kInvalid;
+  switch (color_space.GetRangeID()) {
+    case gfx::ColorSpace::RangeID::LIMITED:
+      range = webrtc::ColorSpace::RangeID::kLimited;
+      break;
+    case gfx::ColorSpace::RangeID::FULL:
+      range = webrtc::ColorSpace::RangeID::kFull;
+      break;
+    case gfx::ColorSpace::RangeID::DERIVED:
+      range = webrtc::ColorSpace::RangeID::kDerived;
+      break;
+    default:
+      DVLOG(1) << "Unsupported color range.";
+      break;
+  }
+
+  return webrtc::ColorSpace(primaries, transfer, matrix, range);
 }
 
 }  // namespace blink

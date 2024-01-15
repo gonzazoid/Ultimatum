@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/number_formatting.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/input_method/assistive_window_properties.h"
@@ -105,12 +105,16 @@ void SuggestionWindowView::ShowMultipleCandidates(
     Orientation orientation) {
   const std::vector<std::u16string>& candidates = properties.candidates;
   completion_view_->SetVisible(false);
-  Reorient(orientation);
+  Reorient(orientation, /*extra_padding_on_right=*/
+           properties.type !=
+               ash::ime::AssistiveWindowType::kLongpressDiacriticsSuggestion);
   ResizeCandidateArea(
       candidates,
       properties.type == ash::ime::AssistiveWindowType::kEmojiSuggestion);
   learn_more_button_->SetVisible(properties.show_setting_link);
-
+  type_ = properties.type;
+  // Ensure colours are correct.
+  OnThemeChanged();
   MakeVisible();
 }
 
@@ -150,17 +154,30 @@ void SuggestionWindowView::OnThemeChanged() {
   BubbleDialogDelegateView::OnThemeChanged();
 
   const auto* const color_provider = GetColorProvider();
-  learn_more_button_->SetBorder(views::CreatePaddedBorder(
-      views::CreateSolidSidedBorder(
-          gfx::Insets::TLBR(1, 0, 0, 0),
-          color_provider->GetColor(ui::kColorBubbleFooterBorder)),
-      views::LayoutProvider::Get()->GetInsetsMetric(
-          views::INSETS_VECTOR_IMAGE_BUTTON)));
-
+  if (type_ == ash::ime::AssistiveWindowType::kLongpressDiacriticsSuggestion) {
+    const int inset = views::LayoutProvider::Get()->GetDistanceMetric(
+        views::DistanceMetric::DISTANCE_VECTOR_ICON_PADDING);
+    learn_more_button_->SetBorder(views::CreatePaddedBorder(
+        views::CreateSolidSidedBorder(
+            gfx::Insets::TLBR(inset, 0, inset, inset),
+            color_provider->GetColor(ui::kColorButtonBackground)),
+        views::LayoutProvider::Get()->GetInsetsMetric(
+            views::INSETS_VECTOR_IMAGE_BUTTON)));
+  } else {
+    learn_more_button_->SetBorder(views::CreatePaddedBorder(
+        views::CreateSolidSidedBorder(
+            gfx::Insets::TLBR(
+                views::LayoutProvider::Get()->GetShadowElevationMetric(
+                    views::Emphasis::kLow),
+                0, 0, 0),
+            color_provider->GetColor(ui::kColorBubbleFooterBorder)),
+        views::LayoutProvider::Get()->GetInsetsMetric(
+            views::INSETS_VECTOR_IMAGE_BUTTON)));
+  }
   // TODO(crbug.com/1099044): Update and use cros colors.
   learn_more_button_->SetImageModel(
       views::Button::ButtonState::STATE_NORMAL,
-      ui::ImageModel::FromVectorIcon(vector_icons::kHelpOutlineIcon,
+      ui::ImageModel::FromVectorIcon(vector_icons::kSettingsOutlineIcon,
                                      ui::kColorIconSecondary));
 }
 
@@ -172,11 +189,12 @@ SuggestionWindowView::SuggestionWindowView(gfx::NativeView parent,
   // AccessibleRole determines whether the content is announced on pop-up.
   // Inner content should not be announced when the window appears since this
   // is handled by AssistiveAccessibilityView to announce a custom string.
-  SetAccessibleRole(ax::mojom::Role::kNone);
+  SetAccessibleWindowRole(ax::mojom::Role::kNone);
   SetButtons(ui::DIALOG_BUTTON_NONE);
   SetCanActivate(false);
   set_parent_window(parent);
   set_margins(gfx::Insets());
+  set_adjust_if_offscreen(true);
 
   completion_view_ = AddChildView(
       std::make_unique<CompletionSuggestionView>(base::BindRepeating(
@@ -209,12 +227,7 @@ SuggestionWindowView::SuggestionWindowView(gfx::NativeView parent,
 
   learn_more_button_ =
       AddChildView(std::make_unique<views::ImageButton>(base::BindRepeating(
-          &AssistiveDelegate::AssistiveWindowButtonClicked,
-          base::Unretained(delegate_),
-          AssistiveWindowButton{
-              .id = ui::ime::ButtonId::kLearnMore,
-              .window_type =
-                  ash::ime::AssistiveWindowType::kEmojiSuggestion})));
+          &SuggestionWindowView::LearnMoreClicked, base::Unretained(this))));
   learn_more_button_->SetImageHorizontalAlignment(
       views::ImageButton::ALIGN_CENTER);
   learn_more_button_->SetImageVerticalAlignment(
@@ -231,6 +244,15 @@ SuggestionWindowView::SuggestionWindowView(gfx::NativeView parent,
 }
 
 SuggestionWindowView::~SuggestionWindowView() = default;
+
+void SuggestionWindowView::LearnMoreClicked() {
+  delegate_->AssistiveWindowButtonClicked(AssistiveWindowButton{
+      .id = ui::ime::ButtonId::kLearnMore, .window_type = type_});
+}
+
+raw_ptr<views::ImageButton> SuggestionWindowView::getLearnMoreButton() {
+  return learn_more_button_;
+}
 
 void SuggestionWindowView::ResizeCandidateArea(
     const std::vector<std::u16string>& new_candidates,
@@ -264,7 +286,8 @@ void SuggestionWindowView::ResizeCandidateArea(
   }
 }
 
-void SuggestionWindowView::Reorient(Orientation orientation) {
+void SuggestionWindowView::Reorient(Orientation orientation,
+                                    bool extra_padding_on_right) {
   views::BoxLayout::Orientation layout_orientation =
       views::BoxLayout::Orientation::kVertical;
   int multiple_candidate_area_padding = 0;
@@ -283,21 +306,27 @@ void SuggestionWindowView::Reorient(Orientation orientation) {
   }
 
   SetLayoutManager(std::make_unique<views::BoxLayout>(layout_orientation));
+  gfx::Insets inset(multiple_candidate_area_padding);
+  if (!extra_padding_on_right) {
+    inset.set_right(0);
+  }
   multiple_candidate_area_->SetLayoutManager(std::make_unique<views::BoxLayout>(
-      layout_orientation, gfx::Insets(multiple_candidate_area_padding),
+      layout_orientation, inset,
       /* between_child_spacing=*/multiple_candidate_area_padding));
 }
 
 void SuggestionWindowView::MakeVisible() {
   multiple_candidate_area_->SetVisible(true);
   SizeToContents();
+  // Docs can put the cursor offscreen - force it onscreen.
+  GetWidget()->SetBoundsConstrained(GetBubbleBounds());
 }
 
 void SuggestionWindowView::SetCandidateHighlighted(
     IndexedSuggestionCandidateButton* view,
     bool highlighted) {
   // Clear all highlights if any exists.
-  for (auto* candidate_button : multiple_candidate_area_->children()) {
+  for (views::View* candidate_button : multiple_candidate_area_->children()) {
     static_cast<IndexedSuggestionCandidateButton*>(candidate_button)
         ->SetHighlight(false);
   }

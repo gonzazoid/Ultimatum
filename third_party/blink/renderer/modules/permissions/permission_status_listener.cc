@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/modules/permissions/permission_status_listener.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/modules/permissions/permission_utils.h"
@@ -55,6 +56,18 @@ void PermissionStatusListener::StopListening() {
   receiver_.reset();
 }
 
+void PermissionStatusListener::NotifyEventListener(
+    const AtomicString& event_type,
+    bool is_added) {
+  scoped_refptr<base::SingleThreadTaskRunner> task_runner =
+      GetExecutionContext()->GetTaskRunner(TaskType::kPermission);
+
+  mojo::Remote<mojom::blink::PermissionService> service;
+  ConnectToPermissionService(GetExecutionContext(),
+                             service.BindNewPipeAndPassReceiver(task_runner));
+  service->NotifyEventListener(descriptor_->Clone(), event_type, is_added);
+}
+
 void PermissionStatusListener::OnPermissionStatusChange(
     MojoPermissionStatus status) {
   if (status_ == status)
@@ -92,6 +105,22 @@ void PermissionStatusListener::RemoveObserver(Observer* observer) {
 
   if (observers_.empty())
     StopListening();
+}
+
+void PermissionStatusListener::AddedEventListener(
+    const AtomicString& event_type) {
+  if (observers_.empty())
+    StartListening();
+
+  NotifyEventListener(event_type, /*is_added=*/true);
+}
+
+void PermissionStatusListener::RemovedEventListener(
+    const AtomicString& event_type) {
+  if (observers_.empty())
+    StartListening();
+
+  NotifyEventListener(event_type, /*is_added=*/false);
 }
 
 bool PermissionStatusListener::HasPendingActivity() {

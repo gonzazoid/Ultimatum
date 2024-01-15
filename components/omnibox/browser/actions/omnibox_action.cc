@@ -8,22 +8,34 @@
 #include "base/trace_event/memory_usage_estimator.h"
 #include "build/build_config.h"
 #include "components/omnibox/browser/omnibox_client.h"
-#include "components/omnibox/browser/omnibox_edit_controller.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
 #include "ui/base/l10n/l10n_util.h"
 
 #if defined(SUPPORT_PEDALS_VECTOR_ICONS)
 #include "components/omnibox/browser/vector_icons.h"  // nogncheck
 #endif
+#if BUILDFLAG(IS_ANDROID)
+#include "base/android/jni_android.h"
+#include "components/omnibox/browser/jni_headers/OmniboxAction_jni.h"
+#endif
 
 OmniboxAction::LabelStrings::LabelStrings(int id_hint,
                                           int id_suggestion_contents,
                                           int id_accessibility_suffix,
                                           int id_accessibility_hint)
-    : hint(l10n_util::GetStringUTF16(id_hint)),
-      suggestion_contents(l10n_util::GetStringUTF16(id_suggestion_contents)),
-      accessibility_suffix(l10n_util::GetStringUTF16(id_accessibility_suffix)),
-      accessibility_hint(l10n_util::GetStringUTF16(id_accessibility_hint)) {}
+    : LabelStrings(l10n_util::GetStringUTF16(id_hint),
+                   l10n_util::GetStringUTF16(id_suggestion_contents),
+                   l10n_util::GetStringUTF16(id_accessibility_suffix),
+                   l10n_util::GetStringUTF16(id_accessibility_hint)) {}
+
+OmniboxAction::LabelStrings::LabelStrings(std::u16string hint,
+                                          std::u16string suggestion_contents,
+                                          std::u16string accessibility_suffix,
+                                          std::u16string accessibility_hint)
+    : hint{std::move(hint)},
+      suggestion_contents{std::move(suggestion_contents)},
+      accessibility_suffix{std::move(accessibility_suffix)},
+      accessibility_hint{std::move(accessibility_hint)} {}
 
 OmniboxAction::LabelStrings::LabelStrings() = default;
 
@@ -31,8 +43,7 @@ OmniboxAction::LabelStrings::LabelStrings(const LabelStrings&) = default;
 
 OmniboxAction::LabelStrings::~LabelStrings() = default;
 
-namespace base {
-namespace trace_event {
+namespace base::trace_event {
 size_t EstimateMemoryUsage(const OmniboxAction::LabelStrings& self) {
   size_t total = 0;
   total += base::trace_event::EstimateMemoryUsage(self.hint);
@@ -41,8 +52,7 @@ size_t EstimateMemoryUsage(const OmniboxAction::LabelStrings& self) {
   total += base::trace_event::EstimateMemoryUsage(self.accessibility_hint);
   return total;
 }
-}  // namespace trace_event
-}  // namespace base
+}  // namespace base::trace_event
 
 // =============================================================================
 
@@ -69,7 +79,15 @@ OmniboxAction::ExecutionContext::~ExecutionContext() = default;
 OmniboxAction::OmniboxAction(LabelStrings strings, GURL url)
     : strings_(strings), url_(url) {}
 
-OmniboxAction::~OmniboxAction() = default;
+OmniboxAction::~OmniboxAction() {
+#if BUILDFLAG(IS_ANDROID)
+  if (j_omnibox_action_) {
+    Java_OmniboxAction_destroy(base::android::AttachCurrentThread(),
+                               j_omnibox_action_);
+    j_omnibox_action_.Reset();
+  }
+#endif
+}
 
 const OmniboxAction::LabelStrings& OmniboxAction::GetLabelStrings() const {
   return strings_;
@@ -89,7 +107,9 @@ bool OmniboxAction::IsReadyToTrigger(
 #if defined(SUPPORT_PEDALS_VECTOR_ICONS)
 const gfx::VectorIcon& OmniboxAction::GetVectorIcon() const {
   // TODO(tommycli): Replace with real icon.
-  return omnibox::kPedalIcon;
+  return OmniboxFieldTrial::IsChromeRefreshActionChipIconsEnabled()
+             ? omnibox::kProductChromeRefreshIcon
+             : omnibox::kPedalIcon;
 }
 #endif
 
@@ -100,14 +120,15 @@ size_t OmniboxAction::EstimateMemoryUsage() const {
   return total;
 }
 
-int32_t OmniboxAction::GetID() const {
-  return 0;
+OmniboxActionId OmniboxAction::ActionId() const {
+  return OmniboxActionId::UNKNOWN;
 }
 
 #if BUILDFLAG(IS_ANDROID)
-base::android::ScopedJavaGlobalRef<jobject> OmniboxAction::GetJavaObject()
-    const {
-  return base::android::ScopedJavaGlobalRef<jobject>();
+base::android::ScopedJavaLocalRef<jobject> OmniboxAction::GetOrCreateJavaObject(
+    JNIEnv* env) const {
+  NOTREACHED() << "This implementation does not have a java counterpart";
+  return {};
 }
 #endif
 
@@ -122,7 +143,8 @@ void OmniboxAction::OpenURL(OmniboxAction::ExecutionContext& context,
       .Run(url, nullptr, context.disposition_, ui::PAGE_TRANSITION_GENERATED,
            /*match_type=*/AutocompleteMatchType::URL_WHAT_YOU_TYPED,
            context.match_selection_timestamp_,
-           /*destination_url_entered_without_scheme=*/false, u"",
+           /*destination_url_entered_without_scheme=*/false,
+           /*destination_url_entered_with_http_scheme=*/false, u"",
            AutocompleteMatch(), AutocompleteMatch(),
            IDNA2008DeviationCharacter::kNone);
 }

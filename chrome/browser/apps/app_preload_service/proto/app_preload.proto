@@ -1,0 +1,104 @@
+// Copyright 2023 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+syntax = "proto2";
+
+option optimize_for = LITE_RUNTIME;
+
+package apps.proto;
+
+import "chrome/browser/apps/almanac_api_client/proto/client_context.proto";
+
+// This file is a mirror of the proto file maintained in the server code base at
+// go/app-preload-service-proto. Changes should be made by updating the
+// server code base and then copying the result to Chromium.
+
+message AppPreloadListRequest {
+  // Context information about the device making this request.
+  optional ClientDeviceContext device_context = 1;
+
+  // Context information about the user making this request.
+  optional ClientUserContext user_context = 2;
+}
+
+message AppPreloadListResponse {
+  // A list of zero or more apps for APS to install.
+  repeated App apps_to_install = 1;
+
+  enum InstallReason {
+    // Default for deserialization when an unexpected value is encountered.
+    // Indicates to the client that the server has a new reason and needs
+    // the proto file updated.
+    INSTALL_REASON_UNKNOWN = 0;
+
+    // A Default App.
+    INSTALL_REASON_DEFAULT = 1;
+
+    // An app installed for an OEM.
+    INSTALL_REASON_OEM = 2;
+
+    // An app which is being returned by the server for testing purposes.
+    // This generally will be ignored by the client unless it is configured
+    // in some sort of test mode.
+    INSTALL_REASON_TEST = 3;
+  }
+
+  message Icon {
+    // Url to query to get the icon. This will always be from the host
+    // meltingpot.googleusercontent.com.
+    optional string url = 1;
+
+    // Width of the icon in pixels. While App icons are typically square
+    // note there is no guarantee the image provided will be.
+    optional uint32 width_in_pixels = 2;
+
+    // Mime type of the icon.
+    optional string mime_type = 3;
+
+    // Whether or not we have permission from the platform to mask the icon.
+    optional bool is_masking_allowed = 4;
+  }
+
+  // For Android-only metadata.
+  message AndroidExtras {}
+
+  // For Web-only metadata.
+  message WebExtras {
+    // A URL to the web app's manifest in json format. This will always be from
+    // the host meltingpot.googleusercontent.com.
+    optional string manifest_url = 1;
+
+    // The URL for the original source used to retrieve the contents of the
+    // manifest above. This is needed to resolve the file on the client-side.
+    optional string original_manifest_url = 2;
+  }
+
+  message App {
+    // The primary key for the installer. This will always be of the format
+    // "platform:primary_key". For now we support "android:package_name" and
+    // "web:http://manifest/id".
+    optional string package_id = 1;
+
+    // The identifier for the App Group that Fondue used to derive this app
+    // instance in the response.
+    // Note: this may not be unique in the apps_to_install collection.
+    optional string app_group_uuid = 2;
+
+    // The App's UTF-8 encoded name in the requested language (or next best).
+    optional string name = 3;
+
+    // One or more Icons for this App for the requested language (or next best).
+    repeated Icon icons = 4;
+
+    // The reason why this app is in the list.
+    optional InstallReason install_reason = 5;
+
+    // Every platform has its own [Platform]Extras message to store platform
+    // specific metadata.
+    oneof extras {
+      AndroidExtras android_extras = 6;
+      WebExtras web_extras = 7;
+    }
+  }
+}

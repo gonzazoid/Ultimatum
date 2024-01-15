@@ -2,12 +2,15 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/apple/tweak_info_plist.gni")
 import("//build/config/chrome_build.gni")
+import("//build/config/features.gni")
 import("//build/config/ios/asset_catalog.gni")
 import("//build/config/ios/rules.gni")
 import("//build/config/locales.gni")
 import("//ios/build/chrome_build.gni")
 import("//ios/chrome/app/resources/ios_chrome_repack.gni")
+import("//ios/chrome/features.gni")
 import("//ios/chrome/tools/strings/generate_localizable_strings.gni")
 import("//ios/public/provider/chrome/browser/build_config.gni")
 import("//tools/grit/grit_rule.gni")
@@ -29,8 +32,6 @@ grit("ios_resources") {
     "grit/ios_resources.h",
     "ios_resources.pak",
   ]
-
-  deps = [ "//components/ukm/debug:build_ts" ]
 }
 
 group("packed_resources") {
@@ -59,30 +60,70 @@ ios_chrome_repack_scalables("repack_scalable_resources") {
 repack("repack_unscaled_resources") {
   visibility = [ ":packed_resources" ]
   sources = [
+    "$root_gen_dir/components/commerce_internals_resources.pak",
     "$root_gen_dir/components/components_resources.pak",
     "$root_gen_dir/components/dev_ui_components_resources.pak",
     "$root_gen_dir/components/download_internals_resources.pak",
+    "$root_gen_dir/components/flags_ui_resources.pak",
     "$root_gen_dir/components/optimization_guide_internals_resources.pak",
-    "$root_gen_dir/components/sync_driver_sync_internals_resources.pak",
+    "$root_gen_dir/components/policy_resources.pak",
+    "$root_gen_dir/components/sync_service_sync_internals_resources.pak",
+    "$root_gen_dir/components/ukm_resources.pak",
+    "$root_gen_dir/components/version_ui_resources.pak",
     "$root_gen_dir/ios/chrome/ios_resources.pak",
     "$root_gen_dir/ios/web/ios_web_resources.pak",
     "$root_gen_dir/mojo/public/js/mojo_bindings_resources.pak",
     "$root_gen_dir/net/net_resources.pak",
-    "$root_gen_dir/ui/resources/webui_generated_resources.pak",
+    "$root_gen_dir/ui/resources/webui_resources.pak",
   ]
   deps = [
     ":ios_resources",
+    "//components/commerce/core/internals/resources",
     "//components/download/resources/download_internals:resources",
     "//components/optimization_guide/optimization_guide_internals/resources",
+    "//components/policy/resources/webui:resources",
     "//components/resources",
-    "//components/sync/driver/resources",
+    "//components/sync/service/resources",
+    "//components/ukm/debug:resources",
     "//ios/web:resources",
     "//mojo/public/js:resources",
     "//net:net_resources",
     "//ui/resources",
   ]
+
   output = "$target_gen_dir/resources.pak"
   copy_data_to_bundle = true
+
+  if (use_blink) {
+    sources += [
+      "$root_gen_dir/base/tracing/protos/tracing_proto_resources.pak",
+      "$root_gen_dir/content/attribution_internals_resources.pak",
+      "$root_gen_dir/content/browser/resources/media/media_internals_resources.pak",
+      "$root_gen_dir/content/browser/webrtc/resources/webrtc_internals_resources.pak",
+      "$root_gen_dir/content/content_resources.pak",
+      "$root_gen_dir/content/private_aggregation_internals_resources.pak",
+      "$root_gen_dir/content/quota_internals_resources.pak",
+      "$root_gen_dir/third_party/blink/public/resources/blink_resources.pak",
+      "$root_gen_dir/third_party/blink/public/resources/blink_scaled_resources_100_percent.pak",
+      "$root_gen_dir/third_party/blink/public/resources/inspector_overlay_resources.pak",
+      "$root_gen_dir/third_party/blink/public/strings/blink_accessibility_strings_en-US.pak",
+      "$root_gen_dir/third_party/blink/public/strings/blink_strings_en-US.pak",
+      "$root_gen_dir/ui/resources/ui_resources_100_percent.pak",
+    ]
+    deps += [
+      "//base/tracing/protos:chrome_track_event_resources",
+      "//content:content_resources",
+      "//content/browser/resources:resources",
+      "//content/browser/resources/media:resources",
+      "//content/browser/webrtc/resources",
+      "//third_party/blink/public:devtools_inspector_resources",
+      "//third_party/blink/public:resources",
+      "//third_party/blink/public:scaled_resources_100_percent",
+      "//third_party/blink/public/strings",
+      "//third_party/blink/public/strings:accessibility_strings",
+      "//ui/resources:ui_resources_grd_grit",
+    ]
+  }
 }
 
 appiconset("chromium_icons") {
@@ -152,43 +193,47 @@ generate_localizable_strings("system_strings") {
   deps = [ "//ios/chrome/app/resources:packed_resources" ]
 }
 
-imageset("quick_action_incognito_search") {
+symbolset("quick_action_incognito") {
   sources = [
-    "quick_action_incognito_search.imageset/Contents.json",
-    "quick_action_incognito_search.imageset/quick_action_incognito_search@2x.png",
-    "quick_action_incognito_search.imageset/quick_action_incognito_search@3x.png",
-  ]
-}
-
-imageset("quick_action_new_search") {
-  sources = [
-    "quick_action_new_search.imageset/Contents.json",
-    "quick_action_new_search.imageset/quick_action_new_search@2x.png",
-    "quick_action_new_search.imageset/quick_action_new_search@3x.png",
-  ]
-}
-
-imageset("quick_action_qr_scanner") {
-  sources = [
-    "quick_action_qr_scanner.imageset/Contents.json",
-    "quick_action_qr_scanner.imageset/quick_action_qr_scanner@2x.png",
-    "quick_action_qr_scanner.imageset/quick_action_qr_scanner@3x.png",
-  ]
-}
-
-imageset("quick_action_voice_search") {
-  sources = [
-    "quick_action_voice_search.imageset/Contents.json",
-    "quick_action_voice_search.imageset/quick_action_voice_search@2x.png",
-    "quick_action_voice_search.imageset/quick_action_voice_search@3x.png",
+    "quick_action_incognito.symbolset/Contents.json",
+    "quick_action_incognito.symbolset/incognito.cr.svg",
   ]
 }
 
 group("quick_action_icons") {
+  public_deps = [ ":quick_action_incognito" ]
+}
+
+tweak_info_plist("experimental_info_plist") {
+  info_plists = [ "Settings.bundle/Experimental.plist" ]
+  if (ios_enable_sandbox_dump) {
+    info_plists += [ "Settings.bundle/ExperimentalSandboxDump.plist" ]
+  }
+  info_plists += [ "Settings.bundle/ExperimentalFlags.plist" ]
+}
+
+bundle_data("settings_experimental_feed_refresh_plist") {
+  sources = [ "Settings.bundle/ExperimentalFeedRefresh.plist" ]
+  outputs = [ "{{bundle_resources_dir}}/Settings.bundle/{{source_file_part}}" ]
+}
+
+bundle_data("settings_experimental_synctypeslist_plist") {
+  sources = [ "Settings.bundle/ExperimentalSyncTypesListDisabled.plist" ]
+  outputs = [ "{{bundle_resources_dir}}/Settings.bundle/{{source_file_part}}" ]
+}
+
+bundle_data("settings_resources_experimental_plist") {
   public_deps = [
-    ":quick_action_incognito_search",
-    ":quick_action_new_search",
-    ":quick_action_qr_scanner",
-    ":quick_action_voice_search",
+    ":experimental_info_plist",
+    ":settings_experimental_feed_refresh_plist",
+    ":settings_experimental_synctypeslist_plist",
   ]
+  sources = get_target_outputs(":experimental_info_plist")
+  outputs = [ "{{bundle_resources_dir}}/Settings.bundle/Experimental.plist" ]
+}
+
+bundle_data("settings_resources") {
+  public_deps = [ ":settings_resources_experimental_plist" ]
+  sources = [ "Settings.bundle/Root.plist" ]
+  outputs = [ "{{bundle_resources_dir}}/Settings.bundle/{{source_file_part}}" ]
 }

@@ -3,9 +3,7 @@
 # found in the LICENSE file.
 
 source_set("scoped_ui_blocker") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
-    "scoped_ui_blocker.h",
     "scoped_ui_blocker.h",
     "scoped_ui_blocker.mm",
     "ui_blocker_manager.h",

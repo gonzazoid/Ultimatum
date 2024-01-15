@@ -32,6 +32,7 @@ export class TestBrowserService extends TestBrowserProxy implements
       'recordHistogram',
       'recordLongTime',
       'removeVisits',
+      'setLastSelectedTab',
       'startTurnOnSyncFlow',
     ]);
 
@@ -76,6 +77,10 @@ export class TestBrowserService extends TestBrowserProxy implements
     return Promise.resolve();
   }
 
+  setLastSelectedTab(lastSelectedTab: number) {
+    this.methodCalled('setLastSelectedTab', lastSelectedTab);
+  }
+
   // Resolves the removeVisits promise. delayRemove() must be called first.
   finishRemoveVisits() {
     this.delayedRemove_!.resolve();
@@ -101,11 +106,9 @@ export class TestBrowserService extends TestBrowserProxy implements
 
   openForeignSessionAllTabs() {}
 
-  openForeignSessionTab(
-      sessionTag: string, windowId: number, tabId: number, e: MouseEvent) {
+  openForeignSessionTab(sessionTag: string, tabId: number, e: MouseEvent) {
     this.methodCalled('openForeignSessionTab', {
       sessionTag: sessionTag,
-      windowId: windowId,
       tabId: tabId,
       e: e,
     });

@@ -43,6 +43,7 @@ public class HomeScreenViewBinder {
         final LinearLayout mSelectedAddressView;
         final LinearLayout mSelectedCreditCardView;
         final ButtonCompat mAcceptButton;
+        final ImageView mGPayImageView;
 
         ViewHolder(Context context, View contentView) {
             mContext = context;
@@ -62,6 +63,7 @@ public class HomeScreenViewBinder {
             mSelectedAddressView = contentView.findViewById(R.id.selected_address_profile_view);
             mSelectedCreditCardView = contentView.findViewById(R.id.selected_credit_card_view);
             mAcceptButton = contentView.findViewById(R.id.fast_checkout_button_accept);
+            mGPayImageView = contentView.findViewById(R.id.fast_checkout_gpay_icon);
         }
     }
 
@@ -73,11 +75,16 @@ public class HomeScreenViewBinder {
 
             view.mSelectedCreditCardView.setOnClickListener((v) -> delegate.onShowCreditCardList());
 
-            view.mAcceptButton.setOnClickListener((v) -> {
-                view.mAcceptButton.announceForAccessibility(view.mContext.getResources().getString(
-                        R.string.fast_checkout_home_sheet_accept_button_clicked_description));
-                delegate.onOptionsAccepted();
-            });
+            view.mAcceptButton.setOnClickListener(
+                    (v) -> {
+                        view.mAcceptButton.announceForAccessibility(
+                                view.mContext
+                                        .getResources()
+                                        .getString(
+                                                R.string
+                                                        .fast_checkout_home_sheet_accept_button_clicked_description));
+                        delegate.onOptionsAccepted();
+                    });
         } else if (propertyKey == SELECTED_PROFILE) {
             updateProfile(model, view);
         } else if (propertyKey == SELECTED_CREDIT_CARD) {
@@ -118,10 +125,16 @@ public class HomeScreenViewBinder {
         FastCheckoutCreditCard creditCard = model.get(SELECTED_CREDIT_CARD);
         view.mCreditCardHeaderTextView.setText(creditCard.getObfuscatedNumber());
         try {
-            view.mCreditCardImageView.setImageDrawable(AppCompatResources.getDrawable(
-                    view.mContext, creditCard.getIssuerIconDrawableId()));
+            view.mCreditCardImageView.setImageDrawable(
+                    AppCompatResources.getDrawable(
+                            view.mContext, creditCard.getIssuerIconDrawableId()));
         } catch (Resources.NotFoundException e) {
             view.mCreditCardImageView.setImageDrawable(null);
+        }
+        if (creditCard.getIsLocal()) {
+            view.mGPayImageView.setVisibility(View.GONE);
+        } else {
+            view.mGPayImageView.setVisibility(View.VISIBLE);
         }
     }
 

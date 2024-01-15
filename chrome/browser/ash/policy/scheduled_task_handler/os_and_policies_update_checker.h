@@ -5,14 +5,18 @@
 #ifndef CHROME_BROWSER_ASH_POLICY_SCHEDULED_TASK_HANDLER_OS_AND_POLICIES_UPDATE_CHECKER_H_
 #define CHROME_BROWSER_ASH_POLICY_SCHEDULED_TASK_HANDLER_OS_AND_POLICIES_UPDATE_CHECKER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/policy/scheduled_task_handler/task_executor_with_retries.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
-#include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
+
+namespace ash {
+class NetworkStateHandler;
+}  // namespace ash
 
 namespace policy {
 
@@ -116,7 +120,7 @@ class OsAndPoliciesUpdateChecker : public ash::UpdateEngineClient::Observer,
   UpdateCheckCompletionCallback update_check_completion_cb_;
 
   // Not owned.
-  ash::NetworkStateHandler* const network_state_handler_;
+  const raw_ptr<ash::NetworkStateHandler> network_state_handler_;
   base::ScopedObservation<ash::NetworkStateHandler,
                           ash::NetworkStateHandlerObserver>
       network_state_handler_observer_{this};
@@ -132,7 +136,7 @@ class OsAndPoliciesUpdateChecker : public ash::UpdateEngineClient::Observer,
   base::OneShotTimer timeout_timer_;
 
   // Not owned.
-  ash::UpdateEngineClient* const update_engine_client_;
+  const raw_ptr<ash::UpdateEngineClient> update_engine_client_;
 
   base::WeakPtrFactory<OsAndPoliciesUpdateChecker> weak_factory_{this};
 };

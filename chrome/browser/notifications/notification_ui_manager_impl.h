@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "base/gtest_prod_util.h"
-#include "base/memory/weak_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "chrome/browser/notifications/notification_system_observer.h"
 #include "chrome/browser/notifications/notification_ui_manager.h"
@@ -56,6 +55,9 @@ class NotificationUIManagerImpl : public NotificationUIManager,
                   ProfileNotification::ProfileID profile_id) override;
   std::set<std::string> GetAllIdsByProfile(
       ProfileNotification::ProfileID profile_id) override;
+  std::set<std::string> GetAllIdsByProfileAndOrigin(
+      ProfileNotification::ProfileID profile_id,
+      const GURL& origin) override;
   bool CancelAllBySourceOrigin(const GURL& source_origin) override;
   void CancelAll() override;
   void StartShutdown() override;

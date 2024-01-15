@@ -8,6 +8,7 @@ static_library("policy_engine") {
     "policy_engine.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
   deps = [
     "//base:base",
     "//components/prefs",
@@ -27,6 +28,8 @@ static_library("url_lookup_service") {
     "url_lookup_service.cc",
     "url_lookup_service.h",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   deps = [
     ":policy_engine",
@@ -55,6 +58,8 @@ static_library("url_lookup_service_base") {
     "url_lookup_service_base.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
     "//base:base",
     "//build:chromeos_buildflags",
@@ -64,6 +69,7 @@ static_library("url_lookup_service_base") {
     "//components/safe_browsing/core/browser:referrer_chain_provider",
     "//components/safe_browsing/core/browser:verdict_cache_manager",
     "//components/safe_browsing/core/browser/db:v4_protocol_manager_util",
+    "//components/safe_browsing/core/browser/utils",
     "//components/safe_browsing/core/common:common",
     "//components/safe_browsing/core/common:safe_browsing_prefs",
     "//components/safe_browsing/core/common/proto:csd_proto",
@@ -101,4 +107,7 @@ source_set("unit_tests") {
     "//testing/gtest",
     "//third_party/googletest:gmock",
   ]
+  if (is_ios) {
+    deps += [ "//components/test:safe_browsing_test_bundle_data" ]
+  }
 }

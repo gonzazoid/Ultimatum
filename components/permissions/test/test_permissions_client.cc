@@ -6,6 +6,7 @@
 
 #include "components/content_settings/core/browser/cookie_settings.h"
 #include "components/permissions/permission_actions_history.h"
+#include "components/privacy_sandbox/tracking_protection_settings.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "content/public/browser/web_contents.h"
 
@@ -40,6 +41,12 @@ HostContentSettingsMap* TestPermissionsClient::GetSettingsMap(
 
 scoped_refptr<content_settings::CookieSettings>
 TestPermissionsClient::GetCookieSettings(
+    content::BrowserContext* browser_context) {
+  return nullptr;
+}
+
+privacy_sandbox::TrackingProtectionSettings*
+TestPermissionsClient::GetTrackingProtectionSettings(
     content::BrowserContext* browser_context) {
   return nullptr;
 }
@@ -85,6 +92,25 @@ void TestPermissionsClient::GetUkmSourceId(
   } else {
     std::move(callback).Run(absl::nullopt);
   }
+}
+
+bool TestPermissionsClient::HasDevicePermission(
+    ContentSettingsType type) const {
+  return has_device_permission_;
+}
+
+bool TestPermissionsClient::CanRequestDevicePermission(
+    ContentSettingsType type) const {
+  return can_request_device_permission_;
+}
+
+void TestPermissionsClient::SetHasDevicePermission(bool has_device_permission) {
+  has_device_permission_ = has_device_permission;
+}
+
+void TestPermissionsClient::SetCanRequestDevicePermission(
+    bool can_request_device_permission) {
+  can_request_device_permission_ = can_request_device_permission;
 }
 
 }  // namespace permissions

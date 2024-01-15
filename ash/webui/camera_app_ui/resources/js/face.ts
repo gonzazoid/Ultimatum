@@ -3,15 +3,14 @@
 // found in the LICENSE file.
 
 import {assertInstanceof, assertNotReached} from './assert.js';
+import {queuedAsyncCallback} from './async_job_queue.js';
 import * as dom from './dom.js';
+import {DeviceOperator} from './mojo/device_operator.js';
 import {Resolution} from './type.js';
-
-// G-yellow-600 with alpha = 0.8
-const RECT_COLOR = 'rgba(249, 171, 0, 0.8)';
 
 /**
  * Rotates the given coordinates in [0, 1] square space by the given
- * orientation.
+ * clockwise orientation.
  *
  * @return The rotated [x, y].
  */
@@ -20,11 +19,11 @@ function rotate(x: number, y: number, orientation: number): [number, number] {
     case 0:
       return [x, y];
     case 90:
-      return [y, 1.0 - x];
+      return [1 - y, x];
     case 180:
-      return [1.0 - x, 1.0 - y];
+      return [1 - x, 1 - y];
     case 270:
-      return [1.0 - y, x];
+      return [y, 1 - x];
     default:
       assertNotReached('Unexpected orientation');
   }
@@ -38,16 +37,34 @@ export class FaceOverlay {
 
   private readonly ctx: CanvasRenderingContext2D;
 
+  private readonly orientationListener =
+      queuedAsyncCallback('keepLatest', async () => {
+        await this.updateOrientation();
+      });
+
   /**
    * @param activeArraySize The active array size of the device.
-   * @param orientation Counter-clockwise angles to apply rotation to
+   * @param orientation Clockwise angles to apply rotation to
    *     the face rectangles.
    */
   constructor(
-      private readonly activeArraySize: Resolution,
-      private readonly orientation: number) {
+      private readonly activeArraySize: Resolution, private orientation: number,
+      private readonly deviceId: string) {
     this.ctx = assertInstanceof(
         this.canvas.getContext('2d'), CanvasRenderingContext2D);
+    window.screen.orientation.addEventListener(
+        'change', this.orientationListener);
+  }
+
+  /**
+   * Updates orientation.
+   */
+  async updateOrientation(): Promise<void> {
+    const deviceOperator = DeviceOperator.getInstance();
+    if (deviceOperator !== null) {
+      this.orientation =
+          await deviceOperator.getCameraFrameRotation(this.deviceId);
+    }
   }
 
   /**
@@ -61,9 +78,14 @@ export class FaceOverlay {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     // TODO(b/178344897): Handle zoomed preview.
-    // TODO(b/178344897): Handle screen orientation dynamically.
 
-    this.ctx.strokeStyle = RECT_COLOR;
+    // TODO(pihsun): This currently doesn't change dynamically when the color
+    // is changed, although the "warning" color is fixed in the current color
+    // token design. It's still better to change drawing face overlay with SVG
+    // instead of canvas for easier styling.
+    const rectColor = getComputedStyle(document.documentElement)
+                          .getPropertyValue('--cros-sys-warning');
+    this.ctx.strokeStyle = rectColor;
     for (let i = 0; i < rects.length; i += 4) {
       let [x1, y1, x2, y2] = rects.slice(i, i + 4);
       x1 /= this.activeArraySize.width;
@@ -75,6 +97,8 @@ export class FaceOverlay {
 
       const canvasAspectRatio = this.canvas.width / this.canvas.height;
       const sensorAspectRatio =
+          this.orientation === 90 || this.orientation === 270 ?
+          this.activeArraySize.height / this.activeArraySize.width :
           this.activeArraySize.width / this.activeArraySize.height;
       if (canvasAspectRatio > sensorAspectRatio) {
         // Canvas has wider aspect than the sensor, e.g. when we're showing a
@@ -110,7 +134,17 @@ export class FaceOverlay {
   /**
    * Clears all rectangles.
    */
-  clear(): void {
+  clearRects(): void {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+
+  /**
+   * Removes updateOrientation from the event listener and clears all
+   * rectangles.
+   */
+  clear(): void {
+    this.clearRects();
+    window.screen.orientation.removeEventListener(
+        'change', this.orientationListener);
   }
 }

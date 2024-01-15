@@ -7,15 +7,16 @@
 #include <memory>
 
 #include "ash/components/arc/mojom/app.mojom.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/time/time.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_test.h"
 #include "chrome/browser/ash/child_accounts/child_status_reporting_service.h"
 #include "chrome/browser/ash/child_accounts/child_status_reporting_service_factory.h"
 #include "chrome/browser/ash/child_accounts/screen_time_controller.h"
 #include "chrome/browser/ash/child_accounts/screen_time_controller_factory.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_test.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/dbus/system_clock/system_clock_client.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
@@ -173,9 +174,10 @@ class EventBasedStatusReportingServiceTest : public testing::Test {
   content::BrowserTaskEnvironment task_environment_;
   ArcAppTest arc_test_;
   std::unique_ptr<TestingProfile> profile_;
-  TestingConsumerStatusReportingService*
+  raw_ptr<TestingConsumerStatusReportingService, DanglingUntriaged>
       test_consumer_status_reporting_service_;
-  TestingScreenTimeController* test_screen_time_controller_;
+  raw_ptr<TestingScreenTimeController, DanglingUntriaged>
+      test_screen_time_controller_;
   session_manager::SessionManager session_manager_;
   std::unique_ptr<EventBasedStatusReportingService> service_;
 };

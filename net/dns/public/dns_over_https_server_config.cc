@@ -8,6 +8,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "base/containers/contains.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/strings/string_piece.h"
@@ -29,10 +30,9 @@ absl::optional<std::string> GetHttpsHost(const std::string& url) {
   std::string canonical;
   url::StdStringCanonOutput output(&canonical);
   url::Parsed canonical_parsed;
-  bool is_valid =
-      url::CanonicalizeStandardURL(url.data(), url.size(), parsed,
-                                   url::SchemeType::SCHEME_WITH_HOST_AND_PORT,
-                                   nullptr, &output, &canonical_parsed);
+  bool is_valid = url::CanonicalizeStandardURL(
+      url.data(), parsed, url::SchemeType::SCHEME_WITH_HOST_AND_PORT, nullptr,
+      &output, &canonical_parsed);
   if (!is_valid)
     return absl::nullopt;
   const url::Component& scheme_range = canonical_parsed.scheme;
@@ -66,7 +66,7 @@ bool IsValidDohTemplate(const std::string& server_template, bool* use_post) {
     return false;
   }
   // If the template contains a dns variable, use GET, otherwise use POST.
-  *use_post = vars_found.find("dns") == vars_found.end();
+  *use_post = !base::Contains(vars_found, "dns");
   return true;
 }
 

@@ -5,7 +5,11 @@
 #ifndef IOS_CHROME_BROWSER_UI_AUTHENTICATION_SIGNIN_ADVANCED_SETTINGS_SIGNIN_ADVANCED_SETTINGS_SIGNIN_NAVIGATION_CONTROLLER_H_
 #define IOS_CHROME_BROWSER_UI_AUTHENTICATION_SIGNIN_ADVANCED_SETTINGS_SIGNIN_ADVANCED_SETTINGS_SIGNIN_NAVIGATION_CONTROLLER_H_
 
+#import "ios/chrome/browser/ui/settings/settings_navigation_controller.h"
+
 #import <UIKit/UIKit.h>
+
+@class AdvancedSettingsSigninNavigationController;
 
 // Delegate for AdvancedSettingsSigninNavigationController to receive navigation
 // button events.
@@ -13,12 +17,17 @@
     AdvancedSettingsSigninNavigationControllerNavigationDelegate <NSObject>
 
 // Called when the navigation done button was tapped.
-- (void)navigationDoneButtonWasTapped;
+- (void)navigationDoneButtonWasTapped:
+    (AdvancedSettingsSigninNavigationController*)controller;
 
 @end
 
-// View controller to present the Google services settings.
-@interface AdvancedSettingsSigninNavigationController : UINavigationController
+// View controller to present the Google services settings. The super class
+// needs to be `SettingsNavigationController`, since it can present
+// `SyncEncryptionPassphraseTableViewController`.
+// See crbug.com/1424870.
+@interface AdvancedSettingsSigninNavigationController
+    : SettingsNavigationController
 
 @property(nonatomic, weak)
     id<AdvancedSettingsSigninNavigationControllerNavigationDelegate>

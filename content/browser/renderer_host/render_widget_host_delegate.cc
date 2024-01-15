@@ -17,11 +17,6 @@ KeyboardEventProcessingResult RenderWidgetHostDelegate::PreHandleKeyboardEvent(
   return KeyboardEventProcessingResult::NOT_HANDLED;
 }
 
-bool RenderWidgetHostDelegate::PreHandleMouseEvent(
-    const blink::WebMouseEvent& event) {
-  return false;
-}
-
 bool RenderWidgetHostDelegate::HandleMouseEvent(
     const blink::WebMouseEvent& event) {
   return false;
@@ -91,6 +86,18 @@ blink::mojom::DisplayMode RenderWidgetHostDelegate::GetDisplayMode() const {
   return blink::mojom::DisplayMode::kBrowser;
 }
 
+ui::WindowShowState RenderWidgetHostDelegate::GetWindowShowState() {
+  return ui::WindowShowState::SHOW_STATE_DEFAULT;
+}
+
+bool RenderWidgetHostDelegate::GetResizable() {
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
+  return false;
+#else
+  return true;
+#endif
+}
+
 gfx::Rect RenderWidgetHostDelegate::GetWindowsControlsOverlayRect() const {
   return gfx::Rect();
 }
@@ -132,11 +139,6 @@ bool RenderWidgetHostDelegate::IsWidgetForPrimaryMainFrame(
   return false;
 }
 
-VisibleTimeRequestTrigger*
-RenderWidgetHostDelegate::GetVisibleTimeRequestTrigger() {
-  return nullptr;
-}
-
 ukm::SourceId RenderWidgetHostDelegate::GetCurrentPageUkmSourceId() {
   return ukm::kInvalidSourceId;
 }
@@ -147,6 +149,10 @@ bool RenderWidgetHostDelegate::IsShowingContextMenuOnPage() const {
 
 bool RenderWidgetHostDelegate::IsPortal() {
   return false;
+}
+
+int RenderWidgetHostDelegate::GetVirtualKeyboardResizeHeight() {
+  return 0;
 }
 
 }  // namespace content

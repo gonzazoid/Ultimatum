@@ -4,6 +4,7 @@
 
 #include "chromeos/ash/services/libassistant/speaker_id_enrollment_controller.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "chromeos/ash/services/libassistant/grpc/assistant_client.h"
 #include "chromeos/ash/services/libassistant/grpc/external_services/grpc_services_observer.h"
@@ -47,8 +48,8 @@ class SpeakerIdEnrollmentController::GetStatusWaiter : public AbortableTask {
     }
 
     ::assistant::api::GetSpeakerIdEnrollmentInfoRequest request;
-    auto* cloud_request = request.mutable_cloud_enrollment_status_request();
-    cloud_request->set_user_id(user_gaia_id);
+    auto* user_model_request = request.mutable_user_model_status_request();
+    user_model_request->set_user_id(user_gaia_id);
     assistant_client->GetSpeakerIdEnrollmentInfo(
         request, base::BindOnce(&GetStatusWaiter::SendResponse,
                                 weak_ptr_factory_.GetWeakPtr()));
@@ -57,6 +58,10 @@ class SpeakerIdEnrollmentController::GetStatusWaiter : public AbortableTask {
   // AbortableTask implementation:
   bool IsFinished() override { return callback_.is_null(); }
   void Abort() override { SendErrorResponse(); }
+
+  void SendResponseForTesting(bool user_model_exists) {
+    SendResponse(user_model_exists);
+  }
 
  private:
   void SendErrorResponse() { SendResponse(false); }
@@ -89,7 +94,7 @@ class SpeakerIdEnrollmentController::EnrollmentSession
       AssistantClient* assistant_client)
       : client_(std::move(client)), assistant_client_(assistant_client) {
     DCHECK(assistant_client_);
-    scoped_assistant_client_observation_.Observe(assistant_client_);
+    scoped_assistant_client_observation_.Observe(assistant_client_.get());
   }
   EnrollmentSession(const EnrollmentSession&) = delete;
   EnrollmentSession& operator=(const EnrollmentSession&) = delete;
@@ -148,13 +153,11 @@ class SpeakerIdEnrollmentController::EnrollmentSession
 
  private:
   ::mojo::Remote<mojom::SpeakerIdEnrollmentClient> client_;
-  AssistantClient* const assistant_client_;
+  const raw_ptr<AssistantClient> assistant_client_;
   bool done_ = false;
   base::ScopedObservation<
       AssistantClient,
-      GrpcServicesObserver<OnSpeakerIdEnrollmentEventRequest>,
-      &AssistantClient::AddSpeakerIdEnrollmentEventObserver,
-      &AssistantClient::RemoveSpeakerIdEnrollmentEventObserver>
+      GrpcServicesObserver<OnSpeakerIdEnrollmentEventRequest>>
       scoped_assistant_client_observation_{this};
   base::WeakPtrFactory<EnrollmentSession> weak_factory_{this};
 };
@@ -225,6 +228,19 @@ void SpeakerIdEnrollmentController::OnDestroyingAssistantClient(
   active_enrollment_session_ = nullptr;
   assistant_client_ = nullptr;
   pending_response_waiters_.AbortAll();
+}
+
+void SpeakerIdEnrollmentController::OnGrpcMessageForTesting(
+    const ::assistant::api::OnSpeakerIdEnrollmentEventRequest& request) {
+  active_enrollment_session_->OnGrpcMessage(std::move(request));
+}
+
+void SpeakerIdEnrollmentController::SendGetStatusResponseForTesting(
+    bool user_model_exists) {
+  auto* waiter =
+      reinterpret_cast<SpeakerIdEnrollmentController::GetStatusWaiter*>(
+          pending_response_waiters_.GetFirstTaskForTesting());
+  waiter->SendResponseForTesting(user_model_exists);
 }
 
 }  // namespace ash::libassistant

@@ -7,10 +7,10 @@
 #include <iterator>
 #include <string>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
@@ -42,9 +42,8 @@ class QuarantineTest : public testing::Test {
     ASSERT_TRUE(com_initializer_.Succeeded());
 #endif
     ASSERT_TRUE(test_dir_.CreateUniqueTempDir());
-    ASSERT_EQ(
-        static_cast<int>(std::size(kTestData)),
-        base::WriteFile(GetTestFilePath(), kTestData, std::size(kTestData)));
+    ASSERT_TRUE(
+        base::WriteFile(GetTestFilePath(), {kTestData, std::size(kTestData)}));
   }
 
  protected:

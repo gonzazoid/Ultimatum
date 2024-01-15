@@ -5,12 +5,8 @@
 #import "ios/chrome/browser/ui/autofill/manual_fill/full_card_requester.h"
 
 #import "components/autofill/core/browser/browser_autofill_manager.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
 #import "ios/chrome/browser/ui/autofill/create_card_unmask_prompt_view_bridge.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 FullCardRequester::FullCardRequester(UIViewController* base_view_controller,
                                      ChromeBrowserState* browser_state)
@@ -25,22 +21,23 @@ void FullCardRequester::GetFullCard(
   DCHECK(autofill_manager);
   DCHECK(result_delegate);
 
-  autofill::CreditCardCVCAuthenticator* cvc_authenticator =
-      autofill_manager->client()->GetCVCAuthenticator();
+  autofill::CreditCardCvcAuthenticator* cvc_authenticator =
+      autofill_manager->client().GetCvcAuthenticator();
   cvc_authenticator->GetFullCardRequest()->GetFullCard(
       card, autofill::AutofillClient::UnmaskCardReason::kPaymentRequest,
-      result_delegate, AsWeakPtr());
+      result_delegate, AsWeakPtr(),
+      autofill_manager->client().GetLastCommittedPrimaryMainFrameOrigin());
 }
 
 void FullCardRequester::ShowUnmaskPrompt(
     const autofill::CreditCard& card,
-    autofill::AutofillClient::UnmaskCardReason reason,
+    const autofill::CardUnmaskPromptOptions& card_unmask_prompt_options,
     base::WeakPtr<autofill::CardUnmaskDelegate> delegate) {
   unmask_controller_.ShowPrompt(
       base::BindOnce(&autofill::CreateCardUnmaskPromptViewBridge,
                      base::Unretained(&unmask_controller_),
                      base::Unretained(base_view_controller_)),
-      card, reason, delegate);
+      card, card_unmask_prompt_options, delegate);
 }
 
 void FullCardRequester::OnUnmaskVerificationResult(

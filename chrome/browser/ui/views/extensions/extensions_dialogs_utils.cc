@@ -11,7 +11,7 @@
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/toolbar_button_provider.h"
 #include "components/constrained_window/constrained_window_views.h"
-#include "components/url_formatter/url_formatter.h"
+#include "components/url_formatter/elide_url.h"
 #include "extensions/common/constants.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/views/controls/image_view.h"
@@ -65,9 +65,9 @@ ExtensionsToolbarContainer* GetExtensionsToolbarContainer(
 // "action" action based on the web contents.
 ui::ImageModel GetIcon(ToolbarActionViewController* action,
                        content::WebContents* web_contents) {
-  return ui::ImageModel::FromImage(action->GetIcon(
-      web_contents, gfx::Size(extension_misc::EXTENSION_ICON_SMALLISH,
-                              extension_misc::EXTENSION_ICON_SMALLISH)));
+  return action->GetIcon(web_contents,
+                         gfx::Size(extension_misc::EXTENSION_ICON_SMALLISH,
+                                   extension_misc::EXTENSION_ICON_SMALLISH));
 }
 
 std::u16string GetCurrentHost(content::WebContents* web_contents) {
@@ -75,13 +75,8 @@ std::u16string GetCurrentHost(content::WebContents* web_contents) {
   auto url = web_contents->GetLastCommittedURL();
   // Hide the scheme when necessary (e.g hide "https://" but don't
   // "chrome://").
-  return url_formatter::FormatUrl(
-      url,
-      url_formatter::kFormatUrlOmitDefaults |
-          url_formatter::kFormatUrlOmitHTTPS |
-          url_formatter::kFormatUrlOmitTrivialSubdomains |
-          url_formatter::kFormatUrlTrimAfterHost,
-      base::UnescapeRule::NORMAL, nullptr, nullptr, nullptr);
+  return url_formatter::FormatUrlForDisplayOmitSchemePathAndTrivialSubdomains(
+      url);
 }
 
 void ShowDialog(gfx::NativeWindow parent,

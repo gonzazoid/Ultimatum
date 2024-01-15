@@ -4,9 +4,9 @@
 
 #include "chrome/browser/ash/crostini/crostini_package_service.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -38,7 +38,14 @@ class CrostiniPackageServiceFactory : public ProfileKeyedServiceFactory {
   friend class base::NoDestructor<CrostiniPackageServiceFactory>;
 
   CrostiniPackageServiceFactory()
-      : ProfileKeyedServiceFactory("CrostiniPackageService") {
+      : ProfileKeyedServiceFactory(
+            "CrostiniPackageService",
+            ProfileSelections::Builder()
+                .WithRegular(ProfileSelection::kOriginalOnly)
+                // TODO(crbug.com/1418376): Check if this service is needed in
+                // Guest mode.
+                .WithGuest(ProfileSelection::kOriginalOnly)
+                .Build()) {
     DependsOn(CrostiniManagerFactory::GetInstance());
   }
 
@@ -253,8 +260,9 @@ void CrostiniPackageService::OnInstallLinuxPackageProgress(
   // map to a single progess percentage amount by dividing the range in half --
   // 0-50% for the downloading phase, 51-100% for the installing phase.
   int display_progress = progress_percent / 2;
-  if (status == InstallLinuxPackageProgressStatus::INSTALLING)
+  if (status == InstallLinuxPackageProgressStatus::INSTALLING) {
     display_progress += 50;  // Second phase
+  }
 
   UpdatePackageOperationStatus(container_id,
                                InstallStatusToOperationStatus(status),
@@ -606,6 +614,11 @@ std::string CrostiniPackageService::GetUniqueNotificationId() {
 
 CrostiniManager::RestartId CrostiniPackageService::GetRestartIdForTesting() {
   return restart_id_for_testing_;
+}
+
+// static
+void CrostiniPackageService::EnsureFactoryBuilt() {
+  CrostiniPackageServiceFactory::GetInstance();
 }
 
 }  // namespace crostini

@@ -2,30 +2,26 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {SourcesTestRunner} from 'sources_test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+import * as Bindings from 'devtools/models/bindings/bindings.js';
+import * as TextUtils from 'devtools/models/text_utils/text_utils.js';
+import * as Workspace from 'devtools/models/workspace/workspace.js';
+
 (async function() {
   TestRunner.addResult(`Bindings should only generate locations for an inline script (style) if the location is inside of the inline script (style).\n`);
-  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
   await TestRunner.showPanel('sources');
 
   await TestRunner.navigatePromise('../bindings/resources/inline-style.html');
-  const source = await TestRunner.waitForUISourceCode('inline-style.html', Workspace.projectTypes.Network);
+  const source = await TestRunner.waitForUISourceCode('inline-style.html', Workspace.Workspace.projectTypes.Network);
   const { content } = await source.requestContent();
   TestRunner.addResult(`Content:\n${content}`);
-  const sourceText = new TextUtils.Text(content);
+  const sourceText = new TextUtils.Text.Text(content);
 
   await dumpLocations("css", sourceText.lineCount(), source);
   await dumpLocations("script", sourceText.lineCount(), source);
-
-  TestRunner.addResult("\n\nFormatting source now...\n\n");
-
-  const formatData = await Formatter.SourceFormatter.instance().format(source);
-  const formattedSource = formatData.formattedSourceCode;
-  var formattedContent = (await formatData.formattedSourceCode.requestContent()).content;
-  TestRunner.addResult(`Formatted Content:\n${formattedContent}`);
-  const formattedSourceText = new TextUtils.Text(formattedContent);
-  await dumpLocations("css", formattedSourceText.lineCount(), formattedSource);
-  await dumpLocations("script", formattedSourceText.lineCount(), formattedSource);
-
 
   async function dumpLocations(type, lineCount, source) {
     TestRunner.addResult(`Scanning ${lineCount} lines for ${type} locations. Note that location line/column numbers are zero-based.`);
@@ -39,13 +35,13 @@
     }
     async function getLocations(line) {
       if (type === "css")
-        return Bindings.cssWorkspaceBinding.uiLocationToRawLocations(source.uiLocation(line, 0));
+        return Bindings.CSSWorkspaceBinding.CSSWorkspaceBinding.instance().uiLocationToRawLocations(source.uiLocation(line, 0));
       if (type === "script")
-        return await Bindings.debuggerWorkspaceBinding.uiLocationToRawLocations(source, line, 0);
+        return await Bindings.DebuggerWorkspaceBinding.DebuggerWorkspaceBinding.instance().uiLocationToRawLocations(source, line, 0);
       return null;
     }
     async function checkValidity(location) {
-      if (location instanceof SDK.CSSLocation) {
+      if (location instanceof SDK.CSSModel.CSSLocation) {
         const h = location.header();
         if (!h) return "invalid css header";
         if (!h.containsLocation(location.lineNumber, location.columnNumber))

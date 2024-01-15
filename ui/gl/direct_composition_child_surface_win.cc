@@ -16,14 +16,13 @@
 #include "base/synchronization/waitable_event.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
-#include "base/win/windows_version.h"
 #include "ui/gfx/color_space_win.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/gl/direct_composition_support.h"
 #include "ui/gl/egl_util.h"
-#include "ui/gl/gl_angle_util_win.h"
 #include "ui/gl/gl_bindings.h"
 #include "ui/gl/gl_context.h"
+#include "ui/gl/gl_features.h"
 #include "ui/gl/gl_surface_egl.h"
 #include "ui/gl/gl_switches.h"
 #include "ui/gl/gl_utils.h"
@@ -46,28 +45,14 @@ IDCompositionSurface* g_current_surface = nullptr;
 const char* kDirectCompositionChildSurfaceLabel =
     "DirectCompositionChildSurface";
 
-bool IsVerifyDrawOffsetEnabled() {
-  return base::FeatureList::IsEnabled(
-      features::kDirectCompositionVerifyDrawOffset);
-}
-
-bool IsWaitableSwapChainEnabled() {
-  // Waitable swap chains were first enabled in Win 8.1/DXGI 1.3
-  return (base::win::GetVersion() >= base::win::Version::WIN8_1) &&
-         base::FeatureList::IsEnabled(features::kDXGIWaitableSwapChain);
-}
-
-UINT GetMaxWaitableQueuedFrames() {
-  return static_cast<UINT>(
-      features::kDXGIWaitableSwapChainMaxQueuedFrames.Get());
-}
-
 }  // namespace
 
 DirectCompositionChildSurfaceWin::DirectCompositionChildSurfaceWin(
     GLDisplayEGL* display,
+    Microsoft::WRL::ComPtr<ID3D11Device> d3d11_device,
     bool use_angle_texture_offset)
     : GLSurfaceEGL(display),
+      d3d11_device_(std::move(d3d11_device)),
       use_angle_texture_offset_(use_angle_texture_offset) {}
 
 DirectCompositionChildSurfaceWin::~DirectCompositionChildSurfaceWin() {
@@ -75,7 +60,6 @@ DirectCompositionChildSurfaceWin::~DirectCompositionChildSurfaceWin() {
 }
 
 bool DirectCompositionChildSurfaceWin::Initialize(GLSurfaceFormat format) {
-  d3d11_device_ = QueryD3D11DeviceObjectFromANGLE();
   dcomp_device_ = GetDirectCompositionDevice();
   if (!dcomp_device_)
     return false;
@@ -118,7 +102,6 @@ bool DirectCompositionChildSurfaceWin::ReleaseDrawTexture(bool will_discard) {
 
   HRESULT hr, device_removed_reason;
   if (draw_texture_) {
-    CopyOffscreenTextureToDrawTexture();
     draw_texture_.Reset();
     if (dcomp_surface_) {
       TRACE_EVENT0("gpu", "DirectCompositionChildSurfaceWin::EndDraw");
@@ -131,8 +114,12 @@ bool DirectCompositionChildSurfaceWin::ReleaseDrawTexture(bool will_discard) {
     } else if (!will_discard) {
       const bool use_swap_chain_tearing =
           DirectCompositionSwapChainTearingEnabled();
-      UINT interval =
-          first_swap_ || !vsync_enabled_ || use_swap_chain_tearing ? 0 : 1;
+      const bool force_present_interval_0 = base::FeatureList::IsEnabled(
+          features::kDXGISwapChainPresentInterval0);
+      UINT interval = first_swap_ || !vsync_enabled_ ||
+                              use_swap_chain_tearing || force_present_interval_0
+                          ? 0
+                          : 1;
       UINT flags = use_swap_chain_tearing ? DXGI_PRESENT_ALLOW_TEARING : 0;
 
       TRACE_EVENT2("gpu", "DirectCompositionChildSurfaceWin::PresentSwapChain",
@@ -193,14 +180,12 @@ void DirectCompositionChildSurfaceWin::Destroy() {
     real_surface_ = nullptr;
   }
   if (dcomp_surface_ && (dcomp_surface_.Get() == g_current_surface)) {
-    CopyOffscreenTextureToDrawTexture();
     HRESULT hr = dcomp_surface_->EndDraw();
     if (FAILED(hr))
       DLOG(ERROR) << "EndDraw failed with error " << std::hex << hr;
     g_current_surface = nullptr;
   }
   draw_texture_.Reset();
-  offscreen_texture_.Reset();
   dcomp_surface_.Reset();
 }
 
@@ -218,7 +203,7 @@ void* DirectCompositionChildSurfaceWin::GetHandle() {
 
 gfx::SwapResult DirectCompositionChildSurfaceWin::SwapBuffers(
     PresentationCallback callback,
-    FrameData data) {
+    gfx::FrameData data) {
   NOTREACHED();
   return gfx::SwapResult::SWAP_FAILED;
 }
@@ -334,7 +319,6 @@ bool DirectCompositionChildSurfaceWin::SetDrawRectangle(
               dxgi_format == DXGI_FORMAT::DXGI_FORMAT_R10G10B10A2_UNORM)) {
     TRACE_EVENT2("gpu", "DirectCompositionChildSurfaceWin::CreateSwapChain",
                  "width", size_.width(), "height", size_.height());
-    offscreen_texture_.Reset();
     dcomp_surface_.Reset();
 
     Microsoft::WRL::ComPtr<IDXGIDevice> dxgi_device;
@@ -360,10 +344,12 @@ bool DirectCompositionChildSurfaceWin::SetDrawRectangle(
     desc.AlphaMode =
         has_alpha_ ? DXGI_ALPHA_MODE_PREMULTIPLIED : DXGI_ALPHA_MODE_IGNORE;
     desc.Flags = 0;
-    if (DirectCompositionSwapChainTearingEnabled())
+    if (DirectCompositionSwapChainTearingEnabled()) {
       desc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
-    if (IsWaitableSwapChainEnabled())
+    }
+    if (DXGIWaitableSwapChainEnabled()) {
       desc.Flags |= DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+    }
 
     HRESULT hr = dxgi_factory->CreateSwapChainForComposition(
         d3d11_device_.Get(), &desc, nullptr, &swap_chain_);
@@ -393,34 +379,29 @@ bool DirectCompositionChildSurfaceWin::SetDrawRectangle(
           gfx::ColorSpaceWin::GetDXGIColorSpace(color_space_));
       DCHECK(SUCCEEDED(hr))
           << "SetColorSpace1 failed with error " << std::hex << hr;
-      if (IsWaitableSwapChainEnabled()) {
-        hr = swap_chain->SetMaximumFrameLatency(GetMaxWaitableQueuedFrames());
-        DCHECK(SUCCEEDED(hr))
-            << "SetMaximumFrameLatency failed with error " << std::hex << hr;
+      if (DXGIWaitableSwapChainEnabled()) {
+        hr = swap_chain->SetMaximumFrameLatency(
+            GetDXGIWaitableSwapChainMaxQueuedFrames());
+        DCHECK(SUCCEEDED(hr)) << "SetMaximumFrameLatency failed with error "
+                              << logging::SystemErrorCodeToString(hr);
       }
     }
   }
 
   swap_rect_ = rectangle;
   draw_offset_ = gfx::Vector2d();
-  const bool verify_draw_offset = dcomp_surface_ && IsVerifyDrawOffsetEnabled();
 
   if (dcomp_surface_) {
     TRACE_EVENT0("gpu", "DirectCompositionChildSurfaceWin::BeginDraw");
+    POINT update_offset;
     const RECT rect = rectangle.ToRECT();
-    dcomp_update_offset_ = {};
     HRESULT hr = dcomp_surface_->BeginDraw(&rect, IID_PPV_ARGS(&draw_texture_),
-                                           &dcomp_update_offset_);
+                                           &update_offset);
     if (FAILED(hr)) {
       DLOG(ERROR) << "BeginDraw failed with error " << std::hex << hr;
       return false;
     }
-    if (verify_draw_offset) {
-      draw_offset_ = {features::kVerifyDrawOffsetX.Get(),
-                      features::kVerifyDrawOffsetY.Get()};
-    } else {
-      draw_offset_ = gfx::Point(dcomp_update_offset_) - rectangle.origin();
-    }
+    draw_offset_ = gfx::Point(update_offset) - rectangle.origin();
   } else {
     TRACE_EVENT0("gpu", "DirectCompositionChildSurfaceWin::GetBuffer");
     swap_chain_->GetBuffer(0, IID_PPV_ARGS(&draw_texture_));
@@ -444,11 +425,6 @@ bool DirectCompositionChildSurfaceWin::SetDrawRectangle(
 
   EGLClientBuffer buffer =
       reinterpret_cast<EGLClientBuffer>(draw_texture_.Get());
-
-  if (verify_draw_offset) {
-    buffer = reinterpret_cast<EGLClientBuffer>(GetOffscreenTexture().Get());
-  }
-
   real_surface_ = eglCreatePbufferFromClientBuffer(
       display_->GetDisplay(), EGL_D3D_TEXTURE_ANGLE, buffer, GetConfig(),
       pbuffer_attribs.data());
@@ -470,7 +446,6 @@ bool DirectCompositionChildSurfaceWin::SetDrawRectangle(
 
 void DirectCompositionChildSurfaceWin::SetDCompSurfaceForTesting(
     Microsoft::WRL::ComPtr<IDCompositionSurface> surface) {
-  offscreen_texture_.Reset();
   dcomp_surface_ = std::move(surface);
 }
 
@@ -506,10 +481,12 @@ bool DirectCompositionChildSurfaceWin::Resize(
     UINT buffer_count = gl::DirectCompositionRootSurfaceBufferCount();
     DXGI_FORMAT format = gfx::ColorSpaceWin::GetDXGIFormat(color_space_);
     UINT flags = 0;
-    if (DirectCompositionSwapChainTearingEnabled())
+    if (DirectCompositionSwapChainTearingEnabled()) {
       flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
-    if (IsWaitableSwapChainEnabled())
+    }
+    if (DXGIWaitableSwapChainEnabled()) {
       flags |= DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+    }
     HRESULT hr = swap_chain_->ResizeBuffers(buffer_count, size.width(),
                                             size.height(), format, flags);
     UMA_HISTOGRAM_BOOLEAN("GPU.DirectComposition.SwapChainResizeResult",
@@ -526,7 +503,6 @@ bool DirectCompositionChildSurfaceWin::Resize(
   }
   // Next SetDrawRectangle call will recreate the swap chain or surface.
   swap_chain_.Reset();
-  offscreen_texture_.Reset();
   dcomp_surface_.Reset();
   return true;
 }
@@ -539,50 +515,8 @@ bool DirectCompositionChildSurfaceWin::SetEnableDCLayers(bool enable) {
     return false;
   // Next SetDrawRectangle call will recreate the swap chain or surface.
   swap_chain_.Reset();
-  offscreen_texture_.Reset();
   dcomp_surface_.Reset();
   return true;
-}
-
-Microsoft::WRL::ComPtr<ID3D11Texture2D>
-DirectCompositionChildSurfaceWin::GetOffscreenTexture() {
-  if (!dcomp_surface_) {
-    return offscreen_texture_ = nullptr;
-  }
-  if (offscreen_texture_) {
-    return offscreen_texture_;
-  }
-
-  D3D11_TEXTURE2D_DESC desc = {};
-  desc.Width = size_.width() + features::kVerifyDrawOffsetX.Get();
-  desc.Height = size_.height() + features::kVerifyDrawOffsetY.Get();
-  desc.MipLevels = 1;
-  desc.ArraySize = 1;
-  desc.Format = gfx::ColorSpaceWin::GetDXGIFormat(color_space_);
-  desc.SampleDesc.Count = 1;
-  desc.BindFlags = D3D11_BIND_RENDER_TARGET;
-  d3d11_device_->CreateTexture2D(&desc, nullptr, &offscreen_texture_);
-  return offscreen_texture_;
-}
-
-void DirectCompositionChildSurfaceWin::CopyOffscreenTextureToDrawTexture() {
-  if (!offscreen_texture_ || !draw_texture_ || !dcomp_surface_) {
-    return;
-  }
-
-  D3D11_BOX box = {};
-  box.left = swap_rect_.origin().x() + features::kVerifyDrawOffsetX.Get();
-  box.top = swap_rect_.origin().y() + features::kVerifyDrawOffsetY.Get();
-  box.right = box.left + swap_rect_.width();
-  box.bottom = box.top + swap_rect_.height();
-  box.front = 0;
-  box.back = 1;
-
-  Microsoft::WRL::ComPtr<ID3D11DeviceContext> context;
-  d3d11_device_->GetImmediateContext(&context);
-  context->CopySubresourceRegion(draw_texture_.Get(), 0, dcomp_update_offset_.x,
-                                 dcomp_update_offset_.y, 0,
-                                 offscreen_texture_.Get(), 0, &box);
 }
 
 }  // namespace gl

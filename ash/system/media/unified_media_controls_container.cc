@@ -5,14 +5,15 @@
 #include "ash/system/media/unified_media_controls_container.h"
 
 #include "ash/system/tray/tray_constants.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
 #include "ui/views/border.h"
 
 namespace ash {
 
 namespace {
-constexpr int kContainerHeight = 72;
-constexpr auto kContainerInsets = gfx::Insets::TLBR(0, 16, 16, 16);
+constexpr int kContainerHeight = 80;
+constexpr auto kContainerInsets = gfx::Insets::TLBR(8, 16, 16, 16);
 }  // namespace
 
 UnifiedMediaControlsContainer::UnifiedMediaControlsContainer()
@@ -37,8 +38,9 @@ bool UnifiedMediaControlsContainer::MaybeShowMediaControls() {
 void UnifiedMediaControlsContainer::SetExpandedAmount(double expanded_amount) {
   SetVisible(expanded_amount > 0 && should_show_media_controls_);
   expanded_amount_ = expanded_amount;
-  for (auto* child : children())
+  for (views::View* child : children()) {
     child->layer()->SetOpacity(expanded_amount);
+  }
   InvalidateLayout();
 }
 
@@ -47,13 +49,17 @@ int UnifiedMediaControlsContainer::GetExpandedHeight() const {
 }
 
 void UnifiedMediaControlsContainer::Layout() {
-  for (auto* child : children())
+  for (views::View* child : children()) {
     child->SetBoundsRect(GetContentsBounds());
+  }
   views::View::Layout();
 }
 
 gfx::Size UnifiedMediaControlsContainer::CalculatePreferredSize() const {
   return gfx::Size(kTrayMenuWidth, GetExpandedHeight() * expanded_amount_);
 }
+
+BEGIN_METADATA(UnifiedMediaControlsContainer)
+END_METADATA
 
 }  // namespace ash

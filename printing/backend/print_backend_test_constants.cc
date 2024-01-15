@@ -4,8 +4,8 @@
 
 #include "printing/backend/print_backend_test_constants.h"
 
+#include <optional>
 #include "printing/backend/print_backend.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace printing {
 
@@ -54,6 +54,8 @@ PrinterSemanticCapsAndDefaults GenerateSamplePrinterSemanticCapsAndDefaults(
   caps.default_paper = kPaperLetter;
   caps.dpis = kDpis;
   caps.default_dpi = kDefaultDpi;
+  caps.media_types = kMediaTypes;
+  caps.default_media_type = kDefaultMediaType;
 #if BUILDFLAG(IS_CHROMEOS)
   caps.pin_supported = sample_capabilities.pin_supported;
   caps.advanced_capabilities = sample_capabilities.advanced_capabilities;

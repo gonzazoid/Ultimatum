@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 
 import {Cdd} from './data/cdd.js';
 import {PrinterType} from './data/destination.js';
@@ -162,7 +162,7 @@ export interface NativeLayer {
    * @return Promise that will resolve when the print request is
    *     finished or rejected.
    */
-  print(printTicket: string): Promise<string|undefined>;
+  doPrint(printTicket: string): Promise<string|undefined>;
 
   /** Requests that the current pending print request be cancelled. */
   cancelPendingPrintRequest(): void;
@@ -197,6 +197,13 @@ export interface NativeLayer {
    * @param maxBucket The maximum bucket value in the histogram.
    */
   recordInHistogram(histogram: string, bucket: number, maxBucket: number): void;
+
+  /**
+   * Notifies the metrics handler to record a boolean histogram value.
+   * @param histogram The name of the histogram to record.
+   * @param value The boolean value to record.
+   */
+  recordBooleanHistogram(histogram: string, value: boolean): void;
 }
 
 export class NativeLayerImpl implements NativeLayer {
@@ -220,8 +227,8 @@ export class NativeLayerImpl implements NativeLayer {
     chrome.send('managePrinters');
   }
 
-  print(printTicket: string) {
-    return sendWithPromise('print', printTicket);
+  doPrint(printTicket: string) {
+    return sendWithPromise('doPrint', printTicket);
   }
 
   cancelPendingPrintRequest() {
@@ -252,6 +259,10 @@ export class NativeLayerImpl implements NativeLayer {
   recordInHistogram(histogram: string, bucket: number, maxBucket: number) {
     chrome.send(
         'metricsHandler:recordInHistogram', [histogram, bucket, maxBucket]);
+  }
+
+  recordBooleanHistogram(histogram: string, value: boolean) {
+    chrome.send('metricsHandler:recordBooleanHistogram', [histogram, value]);
   }
 
   static getInstance(): NativeLayer {

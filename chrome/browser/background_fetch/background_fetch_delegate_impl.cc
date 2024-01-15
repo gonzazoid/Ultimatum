@@ -6,13 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "base/strings/string_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "chrome/browser/download/background_download_service_factory.h"
 #include "chrome/browser/metrics/ukm_background_recorder_service.h"
@@ -142,8 +142,7 @@ void BackgroundFetchDelegateImpl::PauseDownload(
 }
 
 void BackgroundFetchDelegateImpl::ResumeDownload(
-    const offline_items_collection::ContentId& id,
-    bool has_user_gesture) {
+    const offline_items_collection::ContentId& id) {
   UpdateOfflineItem(id.id);
   BackgroundFetchDelegateBase::ResumeDownload(id.id);
 }
@@ -155,7 +154,7 @@ void BackgroundFetchDelegateImpl::GetItemById(
   absl::optional<offline_items_collection::OfflineItem> offline_item;
   if (iter != ui_state_map_.end())
     offline_item = iter->second.offline_item;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), offline_item));
 }
 
@@ -163,7 +162,7 @@ void BackgroundFetchDelegateImpl::GetAllItems(MultipleItemCallback callback) {
   OfflineItemList item_list;
   for (auto& entry : ui_state_map_)
     item_list.push_back(entry.second.offline_item);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), item_list));
 }
 
@@ -172,7 +171,7 @@ void BackgroundFetchDelegateImpl::GetVisualsForItem(
     GetVisualsOptions options,
     VisualsCallback callback) {
   if (!options.get_icon) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), id, nullptr));
     return;
   }
@@ -192,7 +191,7 @@ void BackgroundFetchDelegateImpl::GetVisualsForItem(
     }
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), id, std::move(visuals)));
 }
 
@@ -200,7 +199,7 @@ void BackgroundFetchDelegateImpl::GetShareInfoForItem(
     const offline_items_collection::ContentId& id,
     ShareCallback callback) {
   // TODO(xingliu): Provide OfflineItemShareInfo to |callback|.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), id,
                                 nullptr /* OfflineItemShareInfo */));
 }
@@ -224,6 +223,7 @@ void BackgroundFetchDelegateImpl::OnJobDetailsCreated(
   UiState& ui_state = ui_state_map_[job_id];
   offline_items_collection::OfflineItem offline_item(
       offline_items_collection::ContentId(provider_namespace_, job_id));
+  offline_item.creation_time = base::Time::Now();
   offline_item.is_off_the_record = profile_->IsOffTheRecord();
 #if BUILDFLAG(IS_ANDROID)
   if (profile_->IsOffTheRecord())

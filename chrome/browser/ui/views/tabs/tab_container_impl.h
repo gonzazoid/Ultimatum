@@ -37,9 +37,9 @@ class TabContainerImpl : public TabContainer,
                          public views::ViewTargeterDelegate,
                          public views::MouseWatcherListener,
                          public views::BoundsAnimatorObserver {
- public:
-  METADATA_HEADER(TabContainerImpl);
+  METADATA_HEADER(TabContainerImpl, TabContainer)
 
+ public:
   TabContainerImpl(TabContainerController& controller,
                    TabHoverCardController* hover_card_controller,
                    TabDragContextBase* drag_context,
@@ -57,11 +57,12 @@ class TabContainerImpl : public TabContainer,
   void MoveTab(int from_model_index, int to_model_index) override;
   void RemoveTab(int index, bool was_active) override;
   void SetTabPinned(int model_index, TabPinned pinned) override;
-  void SetActiveTab(absl::optional<size_t> prev_active_index,
-                    absl::optional<size_t> new_active_index) override;
+  void SetActiveTab(std::optional<size_t> prev_active_index,
+                    std::optional<size_t> new_active_index) override;
 
-  std::unique_ptr<Tab> TransferTabOut(int model_index) override;
-  void StoppedDraggingView(TabSlotView* view) override;
+  Tab* RemoveTabFromViewModel(int model_index) override;
+  Tab* AddTabToViewModel(Tab* tab, int model_index, TabPinned pinned) override;
+  void ReturnTabSlotView(TabSlotView* view) override;
 
   void ScrollTabToVisible(int model_index) override;
 
@@ -74,15 +75,19 @@ class TabContainerImpl : public TabContainer,
       const tab_groups::TabGroupId& group,
       const tab_groups::TabGroupVisualData* old_visuals,
       const tab_groups::TabGroupVisualData* new_visuals) override;
+  void ToggleTabGroup(const tab_groups::TabGroupId& group,
+                      bool is_collapsing,
+                      ToggleTabGroupCollapsedStateOrigin origin) override;
   void OnGroupClosed(const tab_groups::TabGroupId& group) override;
   void UpdateTabGroupVisuals(tab_groups::TabGroupId group_id) override;
   void NotifyTabGroupEditorBubbleOpened() override;
   void NotifyTabGroupEditorBubbleClosed() override;
 
-  int GetModelIndexOf(const TabSlotView* slot_view) const override;
+  std::optional<int> GetModelIndexOf(
+      const TabSlotView* slot_view) const override;
   Tab* GetTabAtModelIndex(int index) const override;
   int GetTabCount() const override;
-  int GetModelIndexOfFirstNonClosingTab(Tab* tab) const override;
+  std::optional<int> GetModelIndexOfFirstNonClosingTab(Tab* tab) const override;
 
   void UpdateHoverCard(
       Tab* tab,
@@ -92,18 +97,24 @@ class TabContainerImpl : public TabContainer,
 
   bool IsRectInContentArea(const gfx::Rect& rect) override;
 
+  std::optional<ZOrderableTabContainerElement> GetLeadingElementForZOrdering()
+      const override;
+  std::optional<ZOrderableTabContainerElement> GetTrailingElementForZOrdering()
+      const override;
+
   void OnTabSlotAnimationProgressed(TabSlotView* view) override;
 
   void OnTabCloseAnimationCompleted(Tab* tab) override;
 
   void InvalidateIdealBounds() override;
+  void AnimateToIdealBounds() override;
   bool IsAnimating() const override;
   void CancelAnimation() override;
   void CompleteAnimationAndLayout() override;
 
   int GetAvailableWidthForTabContainer() const override;
 
-  void EnterTabClosingMode(absl::optional<int> override_width,
+  void EnterTabClosingMode(std::optional<int> override_width,
                            CloseTabSource source) override;
   void ExitTabClosingMode() override;
 
@@ -135,7 +146,7 @@ class TabContainerImpl : public TabContainer,
       gfx::Point loc_in_local_coords) override;
   views::View* GetViewForDrop() override;
   void HandleDragUpdate(
-      const absl::optional<BrowserRootView::DropIndex>& index) override;
+      const std::optional<BrowserRootView::DropIndex>& index) override;
   void HandleDragExited() override;
 
   // views::ViewTargeterDelegate:
@@ -145,7 +156,7 @@ class TabContainerImpl : public TabContainer,
   void MouseMovedOutOfHost() override;
 
   // views::BoundsAnimatorObserver:
-  void OnBoundsAnimatorProgressed(views::BoundsAnimator* animator) override {}
+  void OnBoundsAnimatorProgressed(views::BoundsAnimator* animator) override;
   void OnBoundsAnimatorDone(views::BoundsAnimator* animator) override;
 
  private:
@@ -181,9 +192,9 @@ class TabContainerImpl : public TabContainer,
     bool point_down_ = false;
 
     // Renders the drop indicator.
-    raw_ptr<views::Widget> arrow_window_ = nullptr;
+    raw_ptr<views::Widget, DanglingUntriaged> arrow_window_ = nullptr;
 
-    raw_ptr<views::ImageView> arrow_view_ = nullptr;
+    raw_ptr<views::ImageView, DanglingUntriaged> arrow_view_ = nullptr;
 
     base::ScopedObservation<views::Widget, views::WidgetObserver>
         scoped_observation_{this};
@@ -193,28 +204,22 @@ class TabContainerImpl : public TabContainer,
 
   views::ViewModelT<Tab>* GetTabsViewModel();
 
-  // Generates and sets the ideal bounds for each of the tabs as well as the new
-  // tab button. Note: Does not animate the tabs to those bounds so callers can
-  // use this information for other purposes - see AnimateToIdealBounds.
-  void UpdateIdealBounds();
-
   // Private getter to retrieve the visible rect of the scroll container.
-  absl::optional<gfx::Rect> GetVisibleContentRect();
+  std::optional<gfx::Rect> GetVisibleContentRect();
 
   // Animates and scrolls the tab container from the start_edge to the
   // target_edge. If the target_edge is beyond the tab strip it will be clamped
   // bounds of the tabstrip.
   void AnimateScrollToShowXCoordinate(const int start_edge,
                                       const int target_edge);
-
-  // Animates all the views to their ideal bounds.
-  // NOTE: this does *not* invoke UpdateIdealBounds, it uses the bounds
-  // currently set in ideal_bounds.
-  void AnimateToIdealBounds();
-
   // Animates |tab_slot_view| to |target_bounds|
   void AnimateTabSlotViewTo(TabSlotView* tab_slot_view,
                             const gfx::Rect& target_bounds);
+
+  // Generates and sets the ideal bounds for each of the tabs. Note: Does not
+  // animate the tabs to those bounds so callers can use this information for
+  // other purposes - see AnimateToIdealBounds.
+  void UpdateIdealBounds();
 
   // Teleports the tabs to their ideal bounds.
   // NOTE: this does *not* invoke UpdateIdealBounds, it uses the bounds
@@ -226,12 +231,6 @@ class TabContainerImpl : public TabContainer,
   // mode.
   int CalculateAvailableWidthForTabs() const;
 
-  // Animates tabs and group views from where they are to where they should be.
-  // Callers that want to do fancier things can manipulate starting bounds
-  // before calling this and/or replace the animation for some tabs or group
-  // views after calling this.
-  void StartBasicAnimation();
-
   // Invoked from |AddTab| after the newly created tab has been inserted.
   void StartInsertTabAnimation(int model_index);
 
@@ -241,9 +240,18 @@ class TabContainerImpl : public TabContainer,
   gfx::Rect GetTargetBoundsForClosingTab(Tab* tab,
                                          int former_model_index) const;
 
-  // Remove the tab from |tabs_view_model_|, but *not* from the View hierarchy,
-  // so it can be animated closed.
-  void RemoveTabFromViewModel(int index);
+  // Returns the largest x-value this TabContainer should contain, based on the
+  // ideal (i.e. post-animation) bounds of its contents.
+  int GetIdealTrailingX() const;
+
+  std::optional<int> GetMidAnimationTrailingX() const;
+
+  // Update `layout_helper_` and remove the tab from `tabs_view_model_` (but
+  // *not* from the View hierarchy) so it can be animated closed.
+  void CloseTabInViewModel(int index);
+
+  // Call when `tab` is going away to remove the tab from data structures.
+  void OnTabRemoved(Tab* tab);
 
   // Updates |override_available_width_for_tabs_|, if necessary, to account for
   // the removal of the tab at |model_index|.
@@ -289,6 +297,10 @@ class TabContainerImpl : public TabContainer,
   // to clip).
   bool ShouldTabBeVisible(const Tab* tab) const;
 
+  // Returns true iff `tab` is a member of a collapsed group and the collapse
+  // animation is finished.
+  bool IsTabCollapsed(const Tab* tab) const;
+
   // -- Link Drag & Drop ------------------------------------------------------
 
   // Returns the bounds to render the drop at, in screen coordinates. Sets
@@ -301,7 +313,7 @@ class TabContainerImpl : public TabContainer,
 
   // Show drop arrow with passed |tab_data_index| and |drop_before|.
   // If |tab_data_index| is negative, the arrow will disappear.
-  void SetDropArrow(const absl::optional<BrowserRootView::DropIndex>& index);
+  void SetDropArrow(const std::optional<BrowserRootView::DropIndex>& index);
 
   // Updates the indexes and count for AX data on all tabs. Used by some screen
   // readers (e.g. ChromeVox).
@@ -323,7 +335,7 @@ class TabContainerImpl : public TabContainer,
 
   const raw_ref<TabContainerController, DanglingUntriaged> controller_;
 
-  const raw_ptr<TabHoverCardController, DanglingUntriaged>
+  const raw_ptr<TabHoverCardController, AcrossTasksDanglingUntriaged>
       hover_card_controller_;
 
   // May be nullptr in tests.
@@ -334,6 +346,11 @@ class TabContainerImpl : public TabContainer,
   // The View that is to be scrolled by |tab_scrolling_animation_|. May be
   // nullptr in tests.
   const raw_ptr<views::View> scroll_contents_view_;
+
+  // This view is animated by `bounds_animator_` to guarantee that this
+  // container's bounds change smoothly when tabs are animated into or out of
+  // this container.
+  const raw_ref<views::View, AcrossTasksDanglingUntriaged> overall_bounds_view_;
 
   // Responsible for animating tabs in response to model changes.
   views::BoundsAnimator bounds_animator_;
@@ -363,7 +380,7 @@ class TabContainerImpl : public TabContainer,
   // (instead of GetAvailableWidthForTabStrip()). It is defined when closing
   // tabs with the mouse, and is used to control which tab will end up under the
   // cursor after the close animation completes.
-  absl::optional<int> override_available_width_for_tabs_;
+  std::optional<int> override_available_width_for_tabs_;
 
   // The TabContainer enters tab closing mode when a tab is closed or a tab
   // group is collapsed with the mouse/touch. When in tab closing mode, remove
@@ -374,4 +391,4 @@ class TabContainerImpl : public TabContainer,
   base::RepeatingCallback<int()> available_width_callback_;
 };
 
-#endif  // CHROME_BROWSER_UI_VIEWS_TABS_TAB_CONTAINER_H_
+#endif  // CHROME_BROWSER_UI_VIEWS_TABS_TAB_CONTAINER_IMPL_H_

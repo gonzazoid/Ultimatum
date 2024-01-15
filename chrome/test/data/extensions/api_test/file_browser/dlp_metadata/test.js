@@ -114,7 +114,12 @@ chrome.test.getConfig(config => {
           chrome.fileManagerPrivate.getDlpMetadata(
               [file], chrome.test.callbackPass(dlpMetadata => {
                 chrome.test.assertEq(
-                    [{isDlpRestricted: false, sourceUrl: ''}], dlpMetadata);
+                    [{
+                      isDlpRestricted: false,
+                      isRestrictedForDestination: false,
+                      sourceUrl: ''
+                    }],
+                    dlpMetadata);
               }))
         },
         async function getDlpMetadata_EmptyList() {
@@ -160,6 +165,67 @@ chrome.test.getConfig(config => {
             }));
       }]);
       break;
+    case 'dismissIOTask':
+      chrome.test.runTests([
+        async function dismissIOTask() {
+          // Valid task id - succeeds and notifies FPNM.
+          chrome.fileManagerPrivate.dismissIOTask(
+            1,
+            chrome.test.callbackPass());
+          // Invalid task id - succeeds but won't notify FPNM.
+          chrome.fileManagerPrivate.dismissIOTask(
+            -5,
+            chrome.test.callbackFail('Invalid task id'));
+
+          chrome.test.succeed();
+        }
+      ]);
+      break;
+      case 'progressPausedTasks':
+        chrome.test.runTests([
+          async function progressPausedTasks() {
+            // Succeeds and notifies FPNM.
+            chrome.fileManagerPrivate.progressPausedTasks(
+              chrome.test.callbackPass());
+
+            chrome.test.succeed();
+          }
+        ]);
+        break;
+    case 'showPolicyDialog':
+      chrome.test.runTests([
+        async function showPolicyDialog() {
+          // Invalid task id throws an error.
+          chrome.fileManagerPrivate.showPolicyDialog(
+            -5,
+            chrome.fileManagerPrivate.PolicyDialogType.WARNING,
+            chrome.test.callbackFail('Invalid task id'));
+          // Valid calls: succeed and notify FPNM.
+          chrome.fileManagerPrivate.showPolicyDialog(
+            1,
+            chrome.fileManagerPrivate.PolicyDialogType.WARNING,
+            chrome.test.callbackPass());
+          chrome.fileManagerPrivate.showPolicyDialog(
+            2,
+            chrome.fileManagerPrivate.PolicyDialogType.ERROR,
+            chrome.test.callbackPass());
+
+          chrome.test.succeed();
+        }
+      ]);
+    break;
+    case 'getDialogCaller':
+      chrome.test.runTests([
+        async function getDialogCaller() {
+          chrome.fileManagerPrivate.getDialogCaller(
+            chrome.test.callbackPass(
+              caller => {
+                chrome.test.assertEq({url: 'https://example.com/'},
+                caller)})
+            );
+        }
+      ]);
+      break;
     case 'default':
       chrome.test.runTests([
         async function getDlpMetadata() {
@@ -173,13 +239,19 @@ chrome.test.getConfig(config => {
                     [
                       {
                         isDlpRestricted: true,
+                        isRestrictedForDestination: false,
                         sourceUrl: 'https://example1.com'
                       },
                       {
                         isDlpRestricted: false,
+                        isRestrictedForDestination: false,
                         sourceUrl: 'https://example2.com'
                       },
-                      {isDlpRestricted: false, sourceUrl: ''}
+                      {
+                        isDlpRestricted: false,
+                        isRestrictedForDestination: false,
+                        sourceUrl: ''
+                      }
                     ],
                     dlpMetadata);
               }))

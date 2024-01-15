@@ -19,19 +19,62 @@ const char kBackgroundTracingFieldTrial[] = "BackgroundTracing";
 
 }  // namespace
 
-void SetupBackgroundTracingFieldTrial() {
-  if (tracing::GetBackgroundTracingSetupMode() ==
-      BackgroundTracingSetupMode::kDisabledInvalidCommandLine)
-    return;
+bool MaybeSetupSystemTracingFromFieldTrial() {
+  if (tracing::GetBackgroundTracingSetupMode() !=
+      BackgroundTracingSetupMode::kFromFieldTrial) {
+    return false;
+  }
 
-  if (tracing::SetupBackgroundTracingFromCommandLine(
-          kBackgroundTracingFieldTrial))
-    return;
+  if (tracing::IsFieldTracingEnabled()) {
+    return false;
+  }
+  auto& manager = BackgroundTracingManager::GetInstance();
+  std::unique_ptr<BackgroundTracingConfig> config =
+      manager.GetBackgroundTracingConfig(kBackgroundTracingFieldTrial);
+  if (!config || config->tracing_mode() != BackgroundTracingConfig::SYSTEM) {
+    return false;
+  }
+
+  BackgroundTracingManager::DataFiltering data_filtering =
+      BackgroundTracingManager::ANONYMIZE_DATA;
+  if (tracing::HasBackgroundTracingOutputFile()) {
+    data_filtering = BackgroundTracingManager::NO_DATA_FILTERING;
+    if (!tracing::SetBackgroundTracingOutputFile()) {
+      return false;
+    }
+  }
+
+  return manager.SetActiveScenario(std::move(config), data_filtering);
+}
+
+bool MaybeSetupBackgroundTracingFromFieldTrial() {
+  if (tracing::GetBackgroundTracingSetupMode() !=
+      BackgroundTracingSetupMode::kFromFieldTrial) {
+    return false;
+  }
+
+  BackgroundTracingManager::DataFiltering data_filtering =
+      BackgroundTracingManager::ANONYMIZE_DATA;
+  if (tracing::HasBackgroundTracingOutputFile()) {
+    data_filtering = BackgroundTracingManager::NO_DATA_FILTERING;
+    if (!tracing::SetBackgroundTracingOutputFile()) {
+      return false;
+    }
+  }
 
   auto& manager = BackgroundTracingManager::GetInstance();
-  manager.SetActiveScenario(
-      manager.GetBackgroundTracingConfig(kBackgroundTracingFieldTrial),
-      BackgroundTracingManager::ANONYMIZE_DATA);
+  auto field_tracing_config = tracing::GetFieldTracingConfig();
+  if (field_tracing_config) {
+    return manager.InitializeScenarios(std::move(*field_tracing_config),
+                                       data_filtering);
+  }
+
+  std::unique_ptr<BackgroundTracingConfig> config =
+      manager.GetBackgroundTracingConfig(kBackgroundTracingFieldTrial);
+  if (config && config->tracing_mode() == BackgroundTracingConfig::SYSTEM) {
+    return false;
+  }
+  return manager.SetActiveScenario(std::move(config), data_filtering);
 }
 
 }  // namespace tracing

@@ -32,7 +32,7 @@ class MODULES_EXPORT MediaControlInputElement : public HTMLInputElement,
   void Trace(Visitor*) const override;
 
   MediaControlInputElement* OverflowElementForTests() const {
-    return overflow_element_;
+    return overflow_element_.Get();
   }
 
   // Get the size of the element in pixels or the default if we cannot get the
@@ -69,18 +69,20 @@ class MODULES_EXPORT MediaControlInputElement : public HTMLInputElement,
   bool IsOverflowElement() const;
 
   // Sets/removes a CSS class from this element based on |should_have_class|.
-  void SetClass(const AtomicString& class_name, bool should_have_class);
+  void SetClass(const String& class_name, bool should_have_class);
 
   virtual void UpdateDisplayType();
 
   // Returns whether element is a button on the control panel.
   virtual bool IsControlPanelButton() const { return false; }
 
+  // Updates the |aria_label_|.
+  void UpdateAriaLabel(const String& new_aria_label);
+
  private:
   friend class MediaControlInputElementTest;
   friend class MediaControlPopupMenuElementTest;
 
-  bool IsMouseFocusable() const override;
   bool IsMediaControlElement() const final;
 
   // Returns a string representation of the media control element. Used for

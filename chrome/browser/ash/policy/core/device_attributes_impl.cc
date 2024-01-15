@@ -9,7 +9,7 @@
 #include "chrome/browser/ash/policy/handlers/device_name_policy_handler.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part_ash.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 
 namespace policy {
@@ -35,12 +35,6 @@ std::string DeviceAttributesImpl::GetSSOProfile() const {
       ->GetSSOProfile();
 }
 
-std::string DeviceAttributesImpl::GetRealm() const {
-  return g_browser_process->platform_part()
-      ->browser_policy_connector_ash()
-      ->GetRealm();
-}
-
 std::string DeviceAttributesImpl::GetDeviceAssetID() const {
   return g_browser_process->platform_part()
       ->browser_policy_connector_ash()
@@ -48,8 +42,9 @@ std::string DeviceAttributesImpl::GetDeviceAssetID() const {
 }
 
 std::string DeviceAttributesImpl::GetDeviceSerialNumber() const {
-  return chromeos::system::StatisticsProvider::GetInstance()
-      ->GetEnterpriseMachineID();
+  return std::string(
+      ash::system::StatisticsProvider::GetInstance()->GetMachineID().value_or(
+          ""));
 }
 
 std::string DeviceAttributesImpl::GetMachineName() const {
@@ -64,7 +59,7 @@ std::string DeviceAttributesImpl::GetDeviceAnnotatedLocation() const {
       ->GetDeviceAnnotatedLocation();
 }
 
-absl::optional<std::string> DeviceAttributesImpl::GetDeviceHostname() const {
+std::optional<std::string> DeviceAttributesImpl::GetDeviceHostname() const {
   return g_browser_process->platform_part()
       ->browser_policy_connector_ash()
       ->GetDeviceNamePolicyHandler()

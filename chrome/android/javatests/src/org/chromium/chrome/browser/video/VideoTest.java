@@ -4,8 +4,7 @@
 
 package org.chromium.chrome.browser.video;
 
-import android.support.test.InstrumentationRegistry;
-
+import androidx.test.core.app.ApplicationProvider;
 import androidx.test.filters.LargeTest;
 
 import org.junit.Assert;
@@ -15,7 +14,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import org.chromium.base.test.util.CommandLineFlags;
-import org.chromium.base.test.util.DisableIf;
 import org.chromium.base.test.util.Feature;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.tab.Tab;
@@ -28,9 +26,7 @@ import org.chromium.net.test.EmbeddedTestServer;
 
 import java.util.concurrent.TimeoutException;
 
-/**
- *  Simple tests of html5 video.
- */
+/** Simple tests of html5 video. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 public class VideoTest {
@@ -38,29 +34,24 @@ public class VideoTest {
     public ChromeTabbedActivityTestRule mActivityTestRule = new ChromeTabbedActivityTestRule();
 
     @Test
-    @DisableIf.Build(sdk_is_less_than = 19, message = "crbug.com/582067")
     @Feature({"Media", "Media-Video", "Main"})
     @LargeTest
     public void testLoadMediaUrl() throws TimeoutException {
         EmbeddedTestServer testServer =
-                EmbeddedTestServer.createAndStartServer(InstrumentationRegistry.getContext());
-        try {
-            Tab tab = mActivityTestRule.getActivity().getActivityTab();
-            TabTitleObserver titleObserver = new TabTitleObserver(tab, "ready_to_play");
-            mActivityTestRule.loadUrl(
-                    testServer.getURL("/chrome/test/data/android/media/video-play.html"));
-            titleObserver.waitForTitleUpdate(5);
-            Assert.assertEquals("ready_to_play", ChromeTabUtils.getTitleOnUiThread(tab));
-
-            titleObserver = new TabTitleObserver(tab, "ended");
-            DOMUtils.clickNode(tab.getWebContents(), "button1");
-            // Now the video will play for 5 secs.
-            // Makes sure that the video ends and title was changed.
-            titleObserver.waitForTitleUpdate(15);
-            Assert.assertEquals("ended", ChromeTabUtils.getTitleOnUiThread(tab));
-        } finally {
-            testServer.stopAndDestroyServer();
-        }
+                EmbeddedTestServer.createAndStartServer(
+                        ApplicationProvider.getApplicationContext());
+        Tab tab = mActivityTestRule.getActivity().getActivityTab();
+        TabTitleObserver titleObserver = new TabTitleObserver(tab, "ready_to_play");
+        mActivityTestRule.loadUrl(
+                testServer.getURL("/chrome/test/data/android/media/video-play.html"));
+        titleObserver.waitForTitleUpdate(5);
+        Assert.assertEquals("ready_to_play", ChromeTabUtils.getTitleOnUiThread(tab));
+        titleObserver = new TabTitleObserver(tab, "ended");
+        DOMUtils.clickNode(tab.getWebContents(), "button1");
+        // Now the video will play for 5 secs.
+        // Makes sure that the video ends and title was changed.
+        titleObserver.waitForTitleUpdate(15);
+        Assert.assertEquals("ended", ChromeTabUtils.getTitleOnUiThread(tab));
     }
 
     @Before

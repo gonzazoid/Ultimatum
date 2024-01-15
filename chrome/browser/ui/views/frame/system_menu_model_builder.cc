@@ -40,7 +40,7 @@
 #include "chrome/browser/ui/ash/multi_user/multi_user_window_manager_helper.h"
 #endif
 
-#if defined(USE_OZONE) && !BUILDFLAG(IS_CHROMEOS)
+#if BUILDFLAG(IS_OZONE) && !BUILDFLAG(IS_CHROMEOS)
 #include "ui/ozone/public/ozone_platform.h"
 #endif
 
@@ -69,7 +69,6 @@ void SystemMenuModelBuilder::BuildMenu(ui::SimpleMenuModel* model) {
     BuildSystemMenuForBrowserWindow(model);
   else
     BuildSystemMenuForAppOrPopupWindow(model);
-  AddFrameToggleItems(model);
 }
 
 void SystemMenuModelBuilder::BuildSystemMenuForBrowserWindow(
@@ -95,7 +94,7 @@ void SystemMenuModelBuilder::BuildSystemMenuForBrowserWindow(
 #if BUILDFLAG(IS_LINUX) && !BUILDFLAG(IS_CHROMEOS_LACROS)
   model->AddSeparator(ui::NORMAL_SEPARATOR);
   bool supports_server_side_decorations = true;
-#if defined(USE_OZONE) && !BUILDFLAG(IS_CHROMEOS)
+#if BUILDFLAG(IS_OZONE) && !BUILDFLAG(IS_CHROMEOS)
   supports_server_side_decorations =
       ui::OzonePlatform::GetInstance()
           ->GetPlatformRuntimeProperties()
@@ -135,7 +134,11 @@ void SystemMenuModelBuilder::BuildSystemMenuForAppOrPopupWindow(
     model->AddSeparator(ui::NORMAL_SEPARATOR);
     model->AddItemWithStringId(IDC_FIND, IDS_FIND);
     model->AddItemWithStringId(IDC_PRINT, IDS_PRINT);
-    zoom_menu_contents_ = std::make_unique<ZoomMenuModel>(&menu_delegate_);
+    zoom_menu_contents_ =
+        std::make_unique<ui::SimpleMenuModel>(&menu_delegate_);
+    zoom_menu_contents_->AddItemWithStringId(IDC_ZOOM_PLUS, IDS_ZOOM_PLUS);
+    zoom_menu_contents_->AddItemWithStringId(IDC_ZOOM_NORMAL, IDS_ZOOM_NORMAL);
+    zoom_menu_contents_->AddItemWithStringId(IDC_ZOOM_MINUS, IDS_ZOOM_MINUS);
     model->AddSubMenuWithStringId(IDC_ZOOM_MENU, IDS_ZOOM_MENU,
                                   zoom_menu_contents_.get());
   }
@@ -152,14 +155,6 @@ void SystemMenuModelBuilder::BuildSystemMenuForAppOrPopupWindow(
   AppendMoveToDesksMenu(model);
 #endif
   AppendTeleportMenu(model);
-}
-
-void SystemMenuModelBuilder::AddFrameToggleItems(ui::SimpleMenuModel* model) {
-  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kDebugEnableFrameToggle)) {
-    model->AddSeparator(ui::NORMAL_SEPARATOR);
-    model->AddItem(IDC_DEBUG_FRAME_TOGGLE, u"Toggle Frame Type");
-  }
 }
 
 #if BUILDFLAG(IS_CHROMEOS)

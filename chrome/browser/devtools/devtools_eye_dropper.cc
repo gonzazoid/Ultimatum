@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "build/build_config.h"
 #include "cc/paint/skia_paint_canvas.h"
@@ -78,8 +78,7 @@ void DevToolsEyeDropper::AttachToHost(content::RenderFrameHost* frame_host) {
 
 void DevToolsEyeDropper::DetachFromHost() {
   host_->RemoveMouseEventCallback(mouse_event_callback_);
-  ui::Cursor cursor(ui::mojom::CursorType::kPointer);
-  host_->SetCursor(cursor);
+  host_->SetCursor(ui::mojom::CursorType::kPointer);
   video_capturer_.reset();
   host_ = nullptr;
 }
@@ -180,19 +179,18 @@ void DevToolsEyeDropper::UpdateCursor() {
     return;
   }
 
-// Due to platform limitations, we are using two different cursors
-// depending on the platform. Mac and Win have large cursors with two circles
-// for original spot and its magnified projection; Linux gets smaller (64 px)
-// magnified projection only with centered hotspot.
-// Mac Retina requires cursor to be > 120px in order to render smoothly.
-
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  // Due to platform limitations, we are using two different cursors depending
+  // on the platform. Linux, Mac and Win have large cursors with two circles for
+  // original spot and its magnified projection; Ash gets smaller (64 px)
+  // magnified projection only with centered hotspot.
+#if BUILDFLAG(IS_CHROMEOS_ASH)
   const float kCursorSize = 63;
   const float kDiameter = 63;
   const float kHotspotOffset = 32;
   const float kHotspotRadius = 0;
   const float kPixelSize = 9;
 #else
+  // Mac Retina requires cursor to be > 120px in order to render smoothly.
   const float kCursorSize = 150;
   const float kDiameter = 110;
   const float kHotspotOffset = 25;
@@ -276,12 +274,12 @@ void DevToolsEyeDropper::UpdateCursor() {
   paint.setAntiAlias(true);
   canvas.drawCircle(kCursorSize / 2, kCursorSize / 2, kDiameter / 2, paint);
 
-  ui::Cursor cursor(ui::mojom::CursorType::kCustom);
-  cursor.set_image_scale_factor(device_scale_factor);
-  cursor.set_custom_bitmap(result);
-  cursor.set_custom_hotspot(gfx::Point(kHotspotOffset * device_scale_factor,
-                                       kHotspotOffset * device_scale_factor));
-  host_->SetCursor(cursor);
+  ui::Cursor cursor =
+      ui::Cursor::NewCustom(std::move(result),
+                            gfx::Point(kHotspotOffset * device_scale_factor,
+                                       kHotspotOffset * device_scale_factor),
+                            device_scale_factor);
+  host_->SetCursor(std::move(cursor));
 }
 
 void DevToolsEyeDropper::OnFrameCaptured(
@@ -321,10 +319,6 @@ void DevToolsEyeDropper::OnFrameCaptured(
     DLOG(ERROR) << "Shared memory size was less than expected.";
     return;
   }
-  if (!info->color_space) {
-    DLOG(ERROR) << "Missing mandatory color space info.";
-    return;
-  }
 
   // The SkBitmap's pixels will be marked as immutable, but the installPixels()
   // API requires a non-const pointer. So, cast away the const.
@@ -344,7 +338,7 @@ void DevToolsEyeDropper::OnFrameCaptured(
   frame_.installPixels(
       SkImageInfo::MakeN32(content_rect.width(), content_rect.height(),
                            kPremul_SkAlphaType,
-                           info->color_space->ToSkColorSpace()),
+                           info->color_space.ToSkColorSpace()),
       pixels,
       media::VideoFrame::RowBytes(media::VideoFrame::kARGBPlane,
                                   info->pixel_format, info->coded_size.width()),
@@ -357,7 +351,8 @@ void DevToolsEyeDropper::OnFrameCaptured(
   UpdateCursor();
 }
 
-void DevToolsEyeDropper::OnNewCropVersion(uint32_t crop_version) {}
+void DevToolsEyeDropper::OnNewSubCaptureTargetVersion(
+    uint32_t sub_capture_target_version) {}
 
 void DevToolsEyeDropper::OnFrameWithEmptyRegionCapture() {}
 

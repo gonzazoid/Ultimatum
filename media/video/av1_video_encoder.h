@@ -27,10 +27,11 @@ class MEDIA_EXPORT Av1VideoEncoder : public VideoEncoder {
   // VideoDecoder implementation.
   void Initialize(VideoCodecProfile profile,
                   const Options& options,
+                  EncoderInfoCB info_cb,
                   OutputCB output_cb,
                   EncoderStatusCB done_cb) override;
   void Encode(scoped_refptr<VideoFrame> frame,
-              bool key_frame,
+              const EncodeOptions& encode_options,
               EncoderStatusCB done_cb) override;
   void ChangeOptions(const Options& options,
                      OutputCB output_cb,
@@ -43,6 +44,7 @@ class MEDIA_EXPORT Av1VideoEncoder : public VideoEncoder {
                     base::TimeDelta ts,
                     gfx::ColorSpace color_space);
   EncoderStatus::Or<int> AssignNextTemporalId(bool key_frame);
+  void UpdateEncoderColorSpace();
 
   using aom_codec_unique_ptr =
       std::unique_ptr<aom_codec_ctx_t, void (*)(aom_codec_ctx_t*)>;
@@ -60,7 +62,7 @@ class MEDIA_EXPORT Av1VideoEncoder : public VideoEncoder {
   gfx::Size originally_configured_size_;
   base::TimeDelta last_frame_timestamp_;
   gfx::ColorSpace last_frame_color_space_;
-  int temporal_svc_frame_index_ = 0;
+  unsigned int temporal_svc_frame_index_ = 0;
 
   VideoCodecProfile profile_ = VIDEO_CODEC_PROFILE_UNKNOWN;
   VideoFramePool frame_pool_;

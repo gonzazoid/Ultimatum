@@ -7,11 +7,13 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/ranges/algorithm.h"
 #include "chrome/browser/media/router/providers/cast/cast_activity_manager.h"
 #include "chrome/browser/media/router/providers/cast/cast_session_client.h"
+#include "components/media_router/common/providers/cast/channel/cast_message_handler.h"
+#include "components/media_router/common/providers/cast/channel/cast_message_util.h"
 #include "components/media_router/common/providers/cast/channel/enum_table.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/origin.h"
@@ -20,6 +22,15 @@ using blink::mojom::PresentationConnectionCloseReason;
 using blink::mojom::PresentationConnectionMessagePtr;
 
 namespace media_router {
+
+namespace {
+
+bool IsMediaStatusMessage(const cast_channel::InternalMessage& message) {
+  return message.message_namespace == cast_channel::kMediaNamespace &&
+         message.type == cast_channel::CastMessageType::kMediaStatus;
+}
+
+}  // namespace
 
 AppActivity::AppActivity(const MediaRoute& route,
                          const std::string& app_id,
@@ -102,11 +113,14 @@ void AppActivity::SendMediaStatusToClients(
     media_controller_->SetMediaStatus(media_status);
 }
 
-void AppActivity::CreateMediaController(
+void AppActivity::BindMediaController(
     mojo::PendingReceiver<mojom::MediaController> media_controller,
     mojo::PendingRemote<mojom::MediaStatusObserver> observer) {
-  media_controller_ = std::make_unique<CastMediaController>(
-      this, std::move(media_controller), std::move(observer));
+  if (!media_controller_) {
+    media_controller_ = std::make_unique<CastMediaController>(this);
+  }
+  media_controller_->AddMediaController(std::move(media_controller),
+                                        std::move(observer));
 
   if (session_id_) {
     CastSession* session = GetSession();
@@ -143,17 +157,26 @@ void AppActivity::OnAppMessage(const cast::channel::CastMessage& message) {
 }
 
 void AppActivity::OnInternalMessage(
-    const cast_channel::InternalMessage& message) {}
+    const cast_channel::InternalMessage& message) {
+  // Forward messages in the media namespace other than media statuses to the
+  // client. Media status messages are handled by SendMediaStatusToClients().
+  if (message.message_namespace == cast_channel::kMediaNamespace &&
+      !IsMediaStatusMessage(message)) {
+    absl::optional<int> request_id =
+        cast_channel::GetRequestIdFromResponse(message.message);
+    auto client_it = connected_clients_.find(message.destination_id);
+    // Okay to drop messages for clients that have gone away.
+    if (client_it != connected_clients_.end()) {
+      client_it->second->SendMediaMessageToClient(message.message, request_id);
+    }
+  }
+}
 
-bool AppActivity::CanJoinSession(const CastMediaSource& cast_source,
-                                 bool off_the_record) const {
+bool AppActivity::CanJoinSession(const CastMediaSource& cast_source) const {
   if (!cast_source.ContainsApp(app_id()))
     return false;
 
   if (base::Contains(connected_clients_, cast_source.client_id()))
-    return false;
-
-  if (route().is_off_the_record() != off_the_record)
     return false;
 
   return true;

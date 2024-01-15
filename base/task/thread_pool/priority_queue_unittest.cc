@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/task/task_traits.h"
@@ -43,7 +43,9 @@ class PriorityQueueWithSequencesTest : public testing::Test {
     task_environment.FastForwardBy(Microseconds(1));
     scoped_refptr<Sequence> sequence = MakeRefCounted<Sequence>(
         traits, nullptr, TaskSourceExecutionMode::kParallel);
-    sequence->BeginTransaction().PushImmediateTask(
+    auto transaction = sequence->BeginTransaction();
+    transaction.WillPushImmediateTask();
+    transaction.PushImmediateTask(
         Task(FROM_HERE, DoNothing(), TimeTicks::Now(), TimeDelta()));
     return sequence;
   }

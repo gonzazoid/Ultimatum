@@ -10,12 +10,6 @@
 #include "base/check.h"
 #include "ui/ozone/platform/wayland/common/wayland.h"
 
-#define CHROME_WAYLAND_CHECK_VERSION(x, y, z)                   \
-  (WAYLAND_VERSION_MAJOR > x ||                                 \
-   (WAYLAND_VERSION_MAJOR == x && WAYLAND_VERSION_MINOR > y) || \
-   (WAYLAND_VERSION_MAJOR == x && WAYLAND_VERSION_MINOR == y && \
-    WAYLAND_VERSION_MICRO >= z))
-
 struct wl_proxy;
 
 namespace ui {
@@ -147,10 +141,13 @@ DECLARE_WAYLAND_OBJECT_TRAITS(wl_surface)
 DECLARE_WAYLAND_OBJECT_TRAITS(wl_touch)
 DECLARE_WAYLAND_OBJECT_TRAITS(wp_presentation)
 DECLARE_WAYLAND_OBJECT_TRAITS(wp_presentation_feedback)
+DECLARE_WAYLAND_OBJECT_TRAITS(wp_single_pixel_buffer_manager_v1)
 DECLARE_WAYLAND_OBJECT_TRAITS(wp_viewport)
 DECLARE_WAYLAND_OBJECT_TRAITS(wp_viewporter)
 DECLARE_WAYLAND_OBJECT_TRAITS(wp_content_type_manager_v1)
 DECLARE_WAYLAND_OBJECT_TRAITS(wp_content_type_v1)
+DECLARE_WAYLAND_OBJECT_TRAITS(wp_fractional_scale_manager_v1)
+DECLARE_WAYLAND_OBJECT_TRAITS(wp_fractional_scale_v1)
 DECLARE_WAYLAND_OBJECT_TRAITS(xdg_activation_v1)
 DECLARE_WAYLAND_OBJECT_TRAITS(xdg_activation_token_v1)
 DECLARE_WAYLAND_OBJECT_TRAITS(xdg_popup)
@@ -159,6 +156,7 @@ DECLARE_WAYLAND_OBJECT_TRAITS(xdg_surface)
 DECLARE_WAYLAND_OBJECT_TRAITS(xdg_toplevel)
 DECLARE_WAYLAND_OBJECT_TRAITS(xdg_wm_base)
 DECLARE_WAYLAND_OBJECT_TRAITS(zaura_output)
+DECLARE_WAYLAND_OBJECT_TRAITS(zaura_output_manager)
 DECLARE_WAYLAND_OBJECT_TRAITS(zaura_shell)
 DECLARE_WAYLAND_OBJECT_TRAITS(zaura_surface)
 DECLARE_WAYLAND_OBJECT_TRAITS(zaura_toplevel)
@@ -194,6 +192,7 @@ DECLARE_WAYLAND_OBJECT_TRAITS(zwp_linux_surface_synchronization_v1)
 DECLARE_WAYLAND_OBJECT_TRAITS(zwp_locked_pointer_v1)
 DECLARE_WAYLAND_OBJECT_TRAITS(zwp_pointer_constraints_v1)
 DECLARE_WAYLAND_OBJECT_TRAITS(zwp_pointer_gesture_pinch_v1)
+DECLARE_WAYLAND_OBJECT_TRAITS(zwp_pointer_gesture_hold_v1)
 DECLARE_WAYLAND_OBJECT_TRAITS(zwp_pointer_gestures_v1)
 DECLARE_WAYLAND_OBJECT_TRAITS(zwp_primary_selection_device_v1)
 DECLARE_WAYLAND_OBJECT_TRAITS(zwp_primary_selection_device_manager_v1)
@@ -210,11 +209,6 @@ DECLARE_WAYLAND_OBJECT_TRAITS(zxdg_exporter_v2)
 DECLARE_WAYLAND_OBJECT_TRAITS(zxdg_exported_v2)
 DECLARE_WAYLAND_OBJECT_TRAITS(zxdg_output_manager_v1)
 DECLARE_WAYLAND_OBJECT_TRAITS(zxdg_output_v1)
-DECLARE_WAYLAND_OBJECT_TRAITS(zxdg_popup_v6)
-DECLARE_WAYLAND_OBJECT_TRAITS(zxdg_positioner_v6)
-DECLARE_WAYLAND_OBJECT_TRAITS(zxdg_shell_v6)
-DECLARE_WAYLAND_OBJECT_TRAITS(zxdg_surface_v6)
-DECLARE_WAYLAND_OBJECT_TRAITS(zxdg_toplevel_v6)
 DECLARE_WAYLAND_OBJECT_TRAITS(zxdg_toplevel_decoration_v1)
 
 #endif  // UI_OZONE_PLATFORM_WAYLAND_COMMON_WAYLAND_OBJECT_H_

@@ -6,11 +6,12 @@
 #include <list>
 #include <memory>
 #include <string>
+#include <string_view>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
-#include "base/strings/string_piece.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/task_environment.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "mojo/public/cpp/system/data_pipe_producer.h"
@@ -32,7 +33,7 @@ class DataPipeReader {
         on_read_done_(std::move(on_read_done)),
         watcher_(FROM_HERE,
                  SimpleWatcher::ArmingPolicy::AUTOMATIC,
-                 base::SequencedTaskRunnerHandle::Get()) {
+                 base::SequencedTaskRunner::GetCurrentDefault()) {
     watcher_.Watch(consumer_handle_.get(), MOJO_HANDLE_SIGNAL_READABLE,
                    MOJO_WATCH_CONDITION_SATISFIED,
                    base::BindRepeating(&DataPipeReader::OnDataAvailable,
@@ -100,7 +101,7 @@ class StringDataSourceTest : public testing::Test {
 
   static void WriteStringThenCloseProducer(
       std::unique_ptr<DataPipeProducer> producer,
-      const base::StringPiece& str,
+      const std::string_view& str,
       StringDataSource::AsyncWritingMode mode) {
     DataPipeProducer* raw_producer = producer.get();
     raw_producer->Write(
@@ -112,16 +113,16 @@ class StringDataSourceTest : public testing::Test {
 
   static void WriteStringsThenCloseProducer(
       std::unique_ptr<DataPipeProducer> producer,
-      std::list<base::StringPiece> strings,
+      std::list<std::string_view> strings,
       StringDataSource::AsyncWritingMode mode) {
     DataPipeProducer* raw_producer = producer.get();
-    base::StringPiece str = strings.front();
+    std::string_view str = strings.front();
     strings.pop_front();
     raw_producer->Write(
         std::make_unique<mojo::StringDataSource>(str, mode),
         base::BindOnce(
             [](std::unique_ptr<DataPipeProducer> producer,
-               std::list<base::StringPiece> strings,
+               std::list<std::string_view> strings,
                StringDataSource::AsyncWritingMode mode, MojoResult result) {
               if (!strings.empty())
                 WriteStringsThenCloseProducer(std::move(producer),

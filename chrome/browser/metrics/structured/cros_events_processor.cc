@@ -4,22 +4,45 @@
 
 #include "chrome/browser/metrics/structured/cros_events_processor.h"
 
+#include "base/files/file_util.h"
+#include "base/logging.h"
+#include "cros_events_processor.h"
+
 namespace metrics::structured::cros_event {
 
+// The path to where the reset counter is stored by platform2.
+// This path must remain the same as |kResetCounterPath| in
+// platform2/metrics/structured/reset_counter_updater.cc
+const char* kResetCounterPath = "/var/lib/metrics/structured/reset-counter";
+
+CrOSEventsProcessor::CrOSEventsProcessor(const char* reset_counter_path) {
+  std::string content;
+  if (base::ReadFileToString(base::FilePath(reset_counter_path), &content)) {
+    std::stringstream ss(content);
+    ss >> current_reset_counter_;
+  } else {
+    LOG(ERROR) << "Failed to read reset_counter file: " << reset_counter_path;
+  }
+}
 CrOSEventsProcessor::~CrOSEventsProcessor() = default;
 
 // static
-void CrOSEventsProcessor::RegisterLocalStatePrefs(
-    PrefRegistrySimple* registry) {}
-
-// static
-void CrOSEventsProcessor::RegisterUserProfilePrefs(
-    PrefRegistrySimple* registry) {}
+void CrOSEventsProcessor::RegisterLocalStatePrefs(PrefRegistrySimple*) {}
 
 bool CrOSEventsProcessor::ShouldProcessOnEventRecord(const Event& event) {
-  return event.IsCrOSEvent();
+  return event.IsEventSequenceType();
 }
 
-void CrOSEventsProcessor::OnEventsRecord(Event* event) {}
+void CrOSEventsProcessor::OnEventsRecord(Event* event) {
+  event->SetEventSequenceMetadata(
+      Event::EventSequenceMetadata(current_reset_counter_));
+}
+
+void CrOSEventsProcessor::OnEventRecorded(StructuredEventProto* event) {}
+
+void CrOSEventsProcessor::OnProvideIndependentMetrics(
+    ChromeUserMetricsExtension* uma_proto) {
+  // no-op.
+}
 
 }  // namespace metrics::structured::cros_event

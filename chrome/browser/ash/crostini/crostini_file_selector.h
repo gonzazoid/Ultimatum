@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_ASH_CROSTINI_CROSTINI_FILE_SELECTOR_H_
 #define CHROME_BROWSER_ASH_CROSTINI_CROSTINI_FILE_SELECTOR_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "content/public/browser/web_ui.h"
 #include "ui/gfx/native_widget_types.h"
@@ -32,7 +32,7 @@ class CrostiniFileSelector : public ui::SelectFileDialog::Listener {
   // Returns handle to browser window or NULL if it can't be found
   gfx::NativeWindow GetBrowserWindow();
 
-  void FileSelected(const base::FilePath& path,
+  void FileSelected(const ui::SelectedFileInfo& file,
                     int index,
                     void* params) override;
 

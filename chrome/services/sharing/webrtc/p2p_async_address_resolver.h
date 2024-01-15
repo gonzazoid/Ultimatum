@@ -8,13 +8,12 @@
 #include <stdint.h>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/threading/thread_checker.h"
 #include "mojo/public/cpp/bindings/shared_remote.h"
 #include "net/base/ip_address.h"
 #include "services/network/public/mojom/p2p.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/webrtc/rtc_base/async_resolver_interface.h"
 
 namespace sharing {
 

@@ -6,7 +6,6 @@
 
 #include <algorithm>
 
-#include "components/viz/common/resources/resource_format_utils.h"
 #include "components/viz/common/resources/resource_sizes.h"
 #include "gpu/command_buffer/common/mailbox.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
@@ -21,6 +20,20 @@
 #include "ui/gl/shared_gl_fence_egl.h"
 
 namespace gpu {
+namespace {
+
+constexpr uint32_t kSupportedUsage =
+    SHARED_IMAGE_USAGE_GLES2_READ | SHARED_IMAGE_USAGE_GLES2_WRITE |
+    SHARED_IMAGE_USAGE_GLES2_FRAMEBUFFER_HINT |
+    SHARED_IMAGE_USAGE_DISPLAY_WRITE | SHARED_IMAGE_USAGE_DISPLAY_READ |
+    SHARED_IMAGE_USAGE_RASTER | SHARED_IMAGE_USAGE_OOP_RASTERIZATION |
+    SHARED_IMAGE_USAGE_WEBGPU | SHARED_IMAGE_USAGE_CONCURRENT_READ_WRITE |
+    SHARED_IMAGE_USAGE_WEBGPU_SWAP_CHAIN_TEXTURE |
+    SHARED_IMAGE_USAGE_MACOS_VIDEO_TOOLBOX |
+    SHARED_IMAGE_USAGE_HIGH_PERFORMANCE_GPU |
+    SHARED_IMAGE_USAGE_WEBGPU_STORAGE_TEXTURE;
+
+}  // namespace
 
 ///////////////////////////////////////////////////////////////////////////////
 // EGLImageBackingFactory
@@ -29,7 +42,8 @@ EGLImageBackingFactory::EGLImageBackingFactory(
     const GpuPreferences& gpu_preferences,
     const GpuDriverBugWorkarounds& workarounds,
     const gles2::FeatureInfo* feature_info)
-    : GLCommonImageBackingFactory(gpu_preferences,
+    : GLCommonImageBackingFactory(kSupportedUsage,
+                                  gpu_preferences,
                                   workarounds,
                                   feature_info,
                                   /*progress_reporter=*/nullptr) {}
@@ -45,6 +59,7 @@ std::unique_ptr<SharedImageBacking> EGLImageBackingFactory::CreateSharedImage(
     GrSurfaceOrigin surface_origin,
     SkAlphaType alpha_type,
     uint32_t usage,
+    std::string debug_label,
     bool is_thread_safe) {
   return MakeEglImageBacking(mailbox, format, size, color_space, surface_origin,
                              alpha_type, usage, base::span<const uint8_t>());
@@ -58,6 +73,7 @@ std::unique_ptr<SharedImageBacking> EGLImageBackingFactory::CreateSharedImage(
     GrSurfaceOrigin surface_origin,
     SkAlphaType alpha_type,
     uint32_t usage,
+    std::string debug_label,
     base::span<const uint8_t> pixel_data) {
   return MakeEglImageBacking(mailbox, format, size, color_space, surface_origin,
                              alpha_type, usage, pixel_data);
@@ -65,16 +81,28 @@ std::unique_ptr<SharedImageBacking> EGLImageBackingFactory::CreateSharedImage(
 
 std::unique_ptr<SharedImageBacking> EGLImageBackingFactory::CreateSharedImage(
     const Mailbox& mailbox,
-    int client_id,
-    gfx::GpuMemoryBufferHandle handle,
-    gfx::BufferFormat buffer_format,
-    gfx::BufferPlane plane,
-    SurfaceHandle surface_handle,
+    viz::SharedImageFormat format,
     const gfx::Size& size,
     const gfx::ColorSpace& color_space,
     GrSurfaceOrigin surface_origin,
     SkAlphaType alpha_type,
-    uint32_t usage) {
+    uint32_t usage,
+    std::string debug_label,
+    gfx::GpuMemoryBufferHandle handle) {
+  NOTREACHED_NORETURN();
+}
+
+std::unique_ptr<SharedImageBacking> EGLImageBackingFactory::CreateSharedImage(
+    const Mailbox& mailbox,
+    gfx::GpuMemoryBufferHandle handle,
+    gfx::BufferFormat buffer_format,
+    gfx::BufferPlane plane,
+    const gfx::Size& size,
+    const gfx::ColorSpace& color_space,
+    GrSurfaceOrigin surface_origin,
+    SkAlphaType alpha_type,
+    uint32_t usage,
+    std::string debug_label) {
   NOTIMPLEMENTED_LOG_ONCE();
   return nullptr;
 }
@@ -86,6 +114,10 @@ bool EGLImageBackingFactory::IsSupported(uint32_t usage,
                                          gfx::GpuMemoryBufferType gmb_type,
                                          GrContextType gr_context_type,
                                          base::span<const uint8_t> pixel_data) {
+  if (format.is_multi_plane()) {
+    return false;
+  }
+
   if (!pixel_data.empty() && gr_context_type != GrContextType::kGL) {
     return false;
   }
@@ -102,15 +134,31 @@ bool EGLImageBackingFactory::IsSupported(uint32_t usage,
        (usage & SHARED_IMAGE_USAGE_RASTER))) {
     return false;
   }
-  constexpr uint32_t kInvalidUsage =
-      SHARED_IMAGE_USAGE_WEBGPU | SHARED_IMAGE_USAGE_VIDEO_DECODE |
-      SHARED_IMAGE_USAGE_SCANOUT | SHARED_IMAGE_USAGE_CPU_UPLOAD;
+  constexpr uint32_t kInvalidUsage = SHARED_IMAGE_USAGE_VIDEO_DECODE |
+                                     SHARED_IMAGE_USAGE_SCANOUT |
+                                     SHARED_IMAGE_USAGE_CPU_UPLOAD;
   if (usage & kInvalidUsage) {
     return false;
   }
 
-  return CanCreateSharedImage(size, pixel_data, GetFormatInfo(format),
-                              GL_TEXTURE_2D);
+  if ((usage & SHARED_IMAGE_USAGE_WEBGPU) &&
+      (use_webgpu_adapter_ != WebGPUAdapterName::kOpenGLES)) {
+    return false;
+  }
+
+  if (gl::GetGLImplementation() == gl::kGLImplementationEGLANGLE &&
+      gl::GetANGLEImplementation() == gl::ANGLEImplementation::kMetal) {
+    constexpr uint32_t kMetalInvalidUsages =
+        SHARED_IMAGE_USAGE_DISPLAY_READ | SHARED_IMAGE_USAGE_SCANOUT |
+        SHARED_IMAGE_USAGE_VIDEO_DECODE | SHARED_IMAGE_USAGE_GLES2_READ |
+        SHARED_IMAGE_USAGE_GLES2_WRITE |
+        SHARED_IMAGE_USAGE_GLES2_FRAMEBUFFER_HINT | SHARED_IMAGE_USAGE_WEBGPU;
+    if (usage & kMetalInvalidUsages) {
+      return false;
+    }
+  }
+
+  return CanCreateTexture(format, size, pixel_data, GL_TEXTURE_2D);
 }
 
 std::unique_ptr<SharedImageBacking> EGLImageBackingFactory::MakeEglImageBacking(
@@ -125,15 +173,19 @@ std::unique_ptr<SharedImageBacking> EGLImageBackingFactory::MakeEglImageBacking(
   DCHECK(!(usage & SHARED_IMAGE_USAGE_SCANOUT));
 
   // Calculate SharedImage size in bytes.
-  size_t estimated_size;
-  if (!viz::ResourceSizes::MaybeSizeInBytes(size, format, &estimated_size)) {
+  auto estimated_size = format.MaybeEstimatedSizeInBytes(size);
+  if (!estimated_size) {
     DLOG(ERROR) << "MakeEglImageBacking: Failed to calculate SharedImage size";
     return nullptr;
   }
 
+  // EGLImageBacking only supports single-planar textures (so far).
+  auto format_info = GetFormatInfo(format);
+  DCHECK_EQ(format_info.size(), 1u);
+
   return std::make_unique<EGLImageBacking>(
       mailbox, format, size, color_space, surface_origin, alpha_type, usage,
-      estimated_size, GetFormatInfo(format), workarounds_, use_passthrough_,
+      estimated_size.value(), format_info[0], workarounds_, use_passthrough_,
       pixel_data);
 }
 

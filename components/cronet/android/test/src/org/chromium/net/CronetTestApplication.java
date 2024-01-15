@@ -6,8 +6,5 @@ package org.chromium.net;
 
 import android.app.Application;
 
-/**
- * Application for managing the Cronet Test.
- */
-public class CronetTestApplication extends Application {
-}
+/** Application for managing the Cronet Test. */
+public class CronetTestApplication extends Application {}

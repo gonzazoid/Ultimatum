@@ -5,8 +5,8 @@
 #ifndef GOOGLE_APIS_COMMON_TASK_UTIL_H_
 #define GOOGLE_APIS_COMMON_TASK_UTIL_H_
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace google_apis {
 
@@ -72,13 +72,12 @@ base::RepeatingCallback<void(Args...)> CreateComposedCallback(
 //
 // TODO(tzik): Take FROM_HERE from the caller, and propagate it to the runner.
 //
-// TODO(tzik): Move media::BindToCurrentLoop to base namespace, and replace
-// CreateRelayCallback with it.
+// TODO(crbug.com/1411753): Replace with base::BindPostTaskToCurrentDefault.
 template <typename Sig>
 base::OnceCallback<Sig> CreateRelayCallback(base::OnceCallback<Sig> callback) {
   return CreateComposedCallback(
       base::BindOnce(&RunTaskWithTaskRunner,
-                     base::ThreadTaskRunnerHandle::Get()),
+                     base::SingleThreadTaskRunner::GetCurrentDefault()),
       std::move(callback));
 }
 
@@ -87,7 +86,7 @@ base::RepeatingCallback<Sig> CreateRelayCallback(
     base::RepeatingCallback<Sig> callback) {
   return CreateComposedCallback(
       base::BindRepeating(&RunTaskWithTaskRunner,
-                          base::ThreadTaskRunnerHandle::Get()),
+                          base::SingleThreadTaskRunner::GetCurrentDefault()),
       std::move(callback));
 }
 

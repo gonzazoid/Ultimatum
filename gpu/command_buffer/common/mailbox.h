@@ -17,7 +17,28 @@
 #define GL_MAILBOX_SIZE_CHROMIUM 16
 #endif
 
+namespace content {
+class PPB_Graphics3D_Impl;
+}
+
+namespace media {
+class GLES2DecoderHelperImpl;
+}
+
 namespace gpu {
+
+namespace gles2 {
+class GLES2Implementation;
+}
+
+// Importance to use in tracing. Higher values get the memory cost attributed,
+// and equal values share the cost. We want the client to "win" over the
+// service, since the service is acting on its behalf.
+enum class TracingImportance : int {
+  kNotOwner = 0,
+  kServiceOwner = 1,
+  kClientOwner = 2,
+};
 
 // A mailbox is an unguessable name that references texture image data.
 // This name can be passed across processes permitting one context to share
@@ -43,12 +64,15 @@ struct COMPONENT_EXPORT(GPU_MAILBOX) Mailbox {
   // Indicates whether this mailbox is used with the SharedImage system.
   bool IsSharedImage() const;
 
-  // Generate a unique unguessable mailbox name.
-  static Mailbox Generate();
-
   // Generate a unique unguessable mailbox name for use with the SharedImage
   // system.
   static Mailbox GenerateForSharedImage();
+
+  // A temporary solution until when kSharedBitmapToSharedImage is enabled by
+  // default and the legacy ShareBitmap path is removed.
+  static Mailbox GenerateLegacyMailboxForSharedBitmap() {
+    return GenerateLegacyMailbox();
+  }
 
   // Verify that the mailbox was created through Mailbox::Generate. This only
   // works in Debug (always returns true in Release). This is not a secure
@@ -67,6 +91,25 @@ struct COMPONENT_EXPORT(GPU_MAILBOX) Mailbox {
   }
   bool operator!=(const Mailbox& other) const {
     return !operator==(other);
+  }
+
+ private:
+  // Generate a unique unguessable mailbox name for use with the legacy mailbox
+  // system.
+  // NOTE: We are in the process of eliminating this method. DO NOT ADD ANY NEW
+  // USAGES - instead, reach out to shared-image-team@ with your use case. See
+  // crbug.com/1273084.
+  static Mailbox GenerateLegacyMailbox();
+
+  friend class content::PPB_Graphics3D_Impl;
+  friend class gles2::GLES2Implementation;
+  friend class media::GLES2DecoderHelperImpl;
+
+ public:
+  // Generate a legacy mailbox for usage in tests of production code that
+  // still interacts with the legacy mailbox system.
+  static Mailbox GenerateLegacyMailboxForTesting() {
+    return GenerateLegacyMailbox();
   }
 };
 

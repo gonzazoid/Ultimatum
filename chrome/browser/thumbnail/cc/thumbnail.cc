@@ -4,16 +4,17 @@
 
 #include "chrome/browser/thumbnail/cc/thumbnail.h"
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "ui/android/resources/ui_resource_provider.h"
 #include "ui/gfx/geometry/size_conversions.h"
 
+namespace thumbnail {
 namespace {
 
 SkBitmap CreateSmallHolderBitmap() {
@@ -32,7 +33,7 @@ std::unique_ptr<Thumbnail> Thumbnail::Create(
     TabId tab_id,
     const base::Time& time_stamp,
     float scale,
-    ui::UIResourceProvider* ui_resource_provider,
+    base::WeakPtr<ui::UIResourceProvider> ui_resource_provider,
     ThumbnailDelegate* thumbnail_delegate) {
   return base::WrapUnique(new Thumbnail(
       tab_id, time_stamp, scale, ui_resource_provider, thumbnail_delegate));
@@ -41,7 +42,7 @@ std::unique_ptr<Thumbnail> Thumbnail::Create(
 Thumbnail::Thumbnail(TabId tab_id,
                      const base::Time& time_stamp,
                      float scale,
-                     ui::UIResourceProvider* ui_resource_provider,
+                     base::WeakPtr<ui::UIResourceProvider> ui_resource_provider,
                      ThumbnailDelegate* thumbnail_delegate)
     : tab_id_(tab_id),
       time_stamp_(time_stamp),
@@ -63,6 +64,7 @@ void Thumbnail::SetBitmap(const SkBitmap& bitmap) {
   scaled_content_size_ =
       gfx::ScaleSize(gfx::SizeF(bitmap.width(), bitmap.height()), 1.f / scale_);
   scaled_data_size_ = scaled_content_size_;
+  size_in_bytes_ = bitmap.height() * bitmap.rowBytes();
   bitmap_ = cc::UIResourceBitmap(bitmap);
 }
 
@@ -75,13 +77,15 @@ void Thumbnail::SetCompressedBitmap(sk_sp<SkPixelRef> compressed_bitmap,
   gfx::Size data_size(compressed_bitmap->width(), compressed_bitmap->height());
   scaled_content_size_ = gfx::ScaleSize(gfx::SizeF(content_size), 1.f / scale_);
   scaled_data_size_ = gfx::ScaleSize(gfx::SizeF(data_size), 1.f / scale_);
+  size_in_bytes_ = compressed_bitmap->height() * compressed_bitmap->rowBytes();
   bitmap_ = cc::UIResourceBitmap(std::move(compressed_bitmap), data_size);
 }
 
 void Thumbnail::CreateUIResource() {
   DCHECK(ui_resource_provider_);
-  if (!ui_resource_id_)
+  if (!ui_resource_id_) {
     ui_resource_id_ = ui_resource_provider_->CreateUIResource(this);
+  }
 }
 
 cc::UIResourceBitmap Thumbnail::GetBitmap(cc::UIResourceId uid,
@@ -90,7 +94,7 @@ cc::UIResourceBitmap Thumbnail::GetBitmap(cc::UIResourceId uid,
     // InvalidateCachedThumbnail() causes |this| to be deleted, so
     // don't delete the resource while LayerTeeHost calls into |this|
     // to avoid reentry there.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&Thumbnail::DoInvalidate, weak_factory_.GetWeakPtr()));
     return bitmap_;
@@ -105,12 +109,16 @@ cc::UIResourceBitmap Thumbnail::GetBitmap(cc::UIResourceId uid,
 }
 
 void Thumbnail::DoInvalidate() {
-  if (thumbnail_delegate_)
+  if (thumbnail_delegate_) {
     thumbnail_delegate_->InvalidateCachedThumbnail(this);
+  }
 }
 
 void Thumbnail::ClearUIResourceId() {
-  if (ui_resource_id_ && ui_resource_provider_)
+  if (ui_resource_id_ && ui_resource_provider_) {
     ui_resource_provider_->DeleteUIResource(ui_resource_id_);
+  }
   ui_resource_id_ = 0;
 }
+
+}  // namespace thumbnail

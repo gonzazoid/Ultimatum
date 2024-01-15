@@ -6,22 +6,23 @@
 
 #include <iostream>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/time/time.h"
 #include "components/services/storage/public/cpp/big_io_buffer.h"
-#include "content/public/common/content_features.h"
+#include "content/common/features.h"
 #include "content/public/common/url_constants.h"
 #include "crypto/sha2.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/features.h"
 #include "net/base/network_isolation_key.h"
 #include "net/base/url_util.h"
+#include "net/http/http_cache.h"
 #include "url/gurl.h"
 
 using storage::BigIOBuffer;
@@ -106,8 +107,9 @@ std::string GetCacheKey(const GURL& resource_url,
   if (origin_lock.is_valid())
     key.append(net::SimplifyUrlForRequest(origin_lock).spec());
 
-  if (base::FeatureList::IsEnabled(
-          net::features::kSplitCacheByNetworkIsolationKey)) {
+  if (net::HttpCache::IsSplitCacheEnabled() &&
+      base::FeatureList::IsEnabled(
+          net::features::kSplitCodeCacheByNetworkIsolationKey)) {
     // TODO(https://crbug.com/1346188):  Transient NIKs return nullopt when
     // their ToCacheKeyString() method is invoked, as they generally shouldn't
     // be written to disk. This code is currently reached for transient NIKs,
@@ -231,8 +233,12 @@ void GeneratedCodeCache::CollectStatistics(
     GeneratedCodeCache::CacheEntryStatus status) {
   switch (cache_type_) {
     case GeneratedCodeCache::CodeCacheType::kJavaScript:
+      UMA_HISTOGRAM_ENUMERATION("SiteIsolatedCodeCache.JS.Behaviour", status);
+      break;
     case GeneratedCodeCache::CodeCacheType::kWebUIJavaScript:
       UMA_HISTOGRAM_ENUMERATION("SiteIsolatedCodeCache.JS.Behaviour", status);
+      UMA_HISTOGRAM_ENUMERATION("SiteIsolatedCodeCache.JS.WebUI.Behaviour",
+                                status);
       break;
     case GeneratedCodeCache::CodeCacheType::kWebAssembly:
       UMA_HISTOGRAM_ENUMERATION("SiteIsolatedCodeCache.WASM.Behaviour", status);

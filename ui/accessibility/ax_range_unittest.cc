@@ -19,7 +19,8 @@
 #include "ui/accessibility/ax_tree_id.h"
 #include "ui/accessibility/ax_tree_update.h"
 #include "ui/accessibility/test_ax_node_helper.h"
-#include "ui/accessibility/test_ax_tree_manager.h"
+#include "ui/accessibility/test_ax_tree_update.h"
+#include "ui/accessibility/test_single_ax_tree_manager.h"
 
 namespace ui {
 
@@ -51,7 +52,7 @@ constexpr AXNodeID EMPTY_PARAGRAPH_ID = 19;
 
 class TestAXRangeScreenRectDelegate : public AXRangeRectDelegate {
  public:
-  explicit TestAXRangeScreenRectDelegate(TestAXTreeManager* tree_manager)
+  explicit TestAXRangeScreenRectDelegate(TestSingleAXTreeManager* tree_manager)
       : tree_manager_(tree_manager) {}
   virtual ~TestAXRangeScreenRectDelegate() = default;
   TestAXRangeScreenRectDelegate(const TestAXRangeScreenRectDelegate& delegate) =
@@ -98,10 +99,10 @@ class TestAXRangeScreenRectDelegate : public AXRangeRectDelegate {
   }
 
  private:
-  const raw_ptr<TestAXTreeManager> tree_manager_;
+  const raw_ptr<TestSingleAXTreeManager> tree_manager_;
 };
 
-class AXRangeTest : public ::testing::Test, public TestAXTreeManager {
+class AXRangeTest : public ::testing::Test, public TestSingleAXTreeManager {
  public:
   const std::u16string EMPTY = u"";
   const std::u16string NEWLINE = u"\n";
@@ -822,6 +823,73 @@ TEST_F(AXRangeTest, LeafTextRangeIteration) {
   TestRangeIterator(entire_test_backward_range);
 }
 
+TEST_F(AXRangeTest, GetTextWithContainersInsideListItems) {
+  // Testing 3 scenarios for list item accessible name:
+  // 1. <div> inside list item
+  // 2. Nested <div> inside list item
+  // 3. Forced line break inside list item.
+  TestAXTreeUpdate initial_state(std::string(R"HTML(
+    ++1 kRootWebArea
+    ++++2 kList boolAttribute=kIsLineBreakingObject,true
+    ++++++3 kListItem boolAttribute=kIsLineBreakingObject,true
+    ++++++++4 kListMarker intAttribute=kNameFrom,4
+    ++++++++++5 kStaticText state=kIgnored
+    ++++++++6 kGenericContainer boolAttribute=kIsLineBreakingObject,true
+    ++++++++++7 kStaticText name="hello"
+    ++++++++++++8 kInlineTextBox name="hello"
+    ++++++9 kListItem boolAttribute=kIsLineBreakingObject,true
+    ++++++++10 kListMarker intAttribute=kNameFrom,4
+    ++++++++++11 kStaticText state=kIgnored
+    ++++++++12 kGenericContainer boolAttribute=kIsLineBreakingObject,true
+    ++++++++++13 kGenericContainer boolAttribute=kIsLineBreakingObject,true
+    ++++++++++++14 kStaticText name="world"
+    ++++++++++++++15 kInlineTextBox name="world"
+     ++++++16 kListItem boolAttribute=kIsLineBreakingObject,true
+    ++++++++17 kListMarker intAttribute=kNameFrom,4
+    ++++++++++18 kStaticText state=kIgnored
+    ++++++++19 kLineBreak intAttribute=kNameFrom,4 boolAttribute=kIsLineBreakingObject,true
+    ++++++++++20 kInlineTextBox intAttribute=kNameFrom,4 boolAttribute=kIsLineBreakingObject,true
+    ++++++++21 kStaticText name="good"
+    ++++++++++22 kInlineTextBox name="good"
+  )HTML"));
+
+  initial_state.nodes[3].SetName("1. ");
+  initial_state.nodes[4].SetName("1. ");
+
+  initial_state.nodes[9].SetName("2. ");
+  initial_state.nodes[10].SetName("2. ");
+
+  initial_state.nodes[16].SetName("3. ");
+  initial_state.nodes[17].SetName("3. ");
+
+  SetTree(std::make_unique<AXTree>(initial_state));
+
+  AXNode* list_marker = ax_tree()->GetFromId(4);
+  AXNode* inline_tb = ax_tree()->GetFromId(22);
+
+  TestPositionInstance start =
+      CreateTextPosition(list_marker->data(), 0 /* text_offset */,
+                         ax::mojom::TextAffinity::kDownstream);
+  TestPositionInstance end =
+      CreateTextPosition(inline_tb->data(), 4 /* text_offset */,
+                         ax::mojom::TextAffinity::kDownstream);
+  TestPositionRange forward_range(start->Clone(), end->Clone());
+  std::u16string part1 = u"1. hello";
+  std::u16string part2 = u"2. world";
+  std::u16string part3 = u"3. ";
+  std::u16string part4 = u"good";
+  std::u16string text = part1.substr()
+                            .append(NEWLINE)
+                            .append(part2)
+                            .append(NEWLINE)
+                            .append(part3)
+                            .append(NEWLINE)
+                            .append(part4);
+  EXPECT_EQ(text, forward_range.GetText(
+                      AXTextConcatenationBehavior::kWithParagraphBreaks,
+                      AXEmbeddedObjectBehavior::kExposeCharacterForHypertext));
+}
+
 TEST_F(AXRangeTest, GetTextWithWholeObjects) {
   // Create a range starting from the button object and ending at the last
   // character of the root, i.e. at the last character of the second line in the
@@ -1092,19 +1160,22 @@ TEST_F(AXRangeTest, GetTextAddingNewlineBetweenParagraphs) {
                                          range_end->Clone());
     TestPositionRange backward_test_range(std::move(range_end),
                                           std::move(range_start));
-    size_t appended_newlines_count = 0;
+    std::vector<size_t> appended_newlines_indices;
     EXPECT_EQ(expected_text,
               forward_test_range.GetText(
                   AXTextConcatenationBehavior::kWithParagraphBreaks,
                   g_ax_embedded_object_behavior, -1, false,
-                  &appended_newlines_count));
-    EXPECT_EQ(expected_appended_newlines_count, appended_newlines_count);
+                  &appended_newlines_indices));
+    EXPECT_EQ(expected_appended_newlines_count,
+              appended_newlines_indices.size());
+    appended_newlines_indices.clear();
     EXPECT_EQ(expected_text,
               backward_test_range.GetText(
                   AXTextConcatenationBehavior::kWithParagraphBreaks,
                   g_ax_embedded_object_behavior, -1, false,
-                  &appended_newlines_count));
-    EXPECT_EQ(expected_appended_newlines_count, appended_newlines_count);
+                  &appended_newlines_indices));
+    EXPECT_EQ(expected_appended_newlines_count,
+              appended_newlines_indices.size());
   };
 
   std::u16string button_start_to_line1_end =

@@ -4,13 +4,9 @@
 
 #import "ios/web/test/fakes/fake_native_task_bridge.h"
 
-#import "base/callback.h"
+#import "base/functional/callback.h"
 #import "base/strings/sys_string_conversions.h"
 #import "net/base/net_errors.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @implementation FakeNativeTaskBridge {
   void (^_startDownloadBlock)(NSURL*);
@@ -60,7 +56,7 @@
 
 #pragma mark - Private methods
 
-- (void)downloadInitialized API_AVAILABLE(ios(15)) {
+- (void)downloadInitialized {
   // Instantiates _startDownloadBlock, so when we call
   // startDownload:progressionHandler:completionHandler method, the block is
   // initialized.
@@ -78,7 +74,7 @@
   }
 }
 
-- (void)destinationDecided:(NSURL*)url API_AVAILABLE(ios(15)) {
+- (void)destinationDecided:(NSURL*)url {
   _calledStartDownloadBlock = YES;
   [self downloadDidFinish:_download];
 }
@@ -104,7 +100,7 @@
   }
 }
 
-- (void)downloadDidFinish:(WKDownload*)download API_AVAILABLE(ios(15)) {
+- (void)downloadDidFinish:(WKDownload*)download {
   [self stopObservingDownloadProgress];
   if (!_completeCallback.is_null()) {
     web::DownloadResult download_result(net::OK);

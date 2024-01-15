@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "base/memory/ptr_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/tick_clock.h"
 #include "cc/debug/rendering_stats_instrumentation.h"
 
@@ -141,15 +142,13 @@ TestScheduler::TestScheduler(
     int layer_tree_host_id,
     base::SingleThreadTaskRunner* task_runner,
     std::unique_ptr<CompositorTimingHistory> compositor_timing_history,
-    CompositorFrameReportingController* compositor_frame_reporting_controller,
-    power_scheduler::PowerModeArbiter* power_mode_arbiter)
+    CompositorFrameReportingController* compositor_frame_reporting_controller)
     : Scheduler(client,
                 scheduler_settings,
                 layer_tree_host_id,
                 task_runner,
                 std::move(compositor_timing_history),
-                compositor_frame_reporting_controller,
-                power_mode_arbiter),
+                compositor_frame_reporting_controller),
       now_src_(now_src) {}
 
 base::TimeTicks TestScheduler::Now() const {

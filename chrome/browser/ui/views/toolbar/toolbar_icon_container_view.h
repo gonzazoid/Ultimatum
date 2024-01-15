@@ -20,9 +20,9 @@
 // A general view container for any type of toolbar icons.
 class ToolbarIconContainerView : public views::View,
                                  public views::ViewObserver {
- public:
-  METADATA_HEADER(ToolbarIconContainerView);
+  METADATA_HEADER(ToolbarIconContainerView, views::View)
 
+ public:
   class Observer : public base::CheckedObserver {
    public:
     virtual void OnHighlightChanged() = 0;
@@ -48,9 +48,6 @@ class ToolbarIconContainerView : public views::View,
 
   views::View* main_item() { return main_item_; }
 
-  void SetIconColor(SkColor icon_color);
-  SkColor GetIconColor() const;
-
   bool GetHighlighted() const;
 
   // views::View:
@@ -73,8 +70,6 @@ class ToolbarIconContainerView : public views::View,
   void OnBoundsChanged(const gfx::Rect& previous_bounds) override;
 
  private:
-  friend class ToolbarAccountIconContainerViewBrowserTest;
-
   // Responsible for painting a roundrect border for the owning view.
   class RoundRectBorder : public ui::LayerDelegate {
    public:
@@ -109,15 +104,9 @@ class ToolbarIconContainerView : public views::View,
   // Determine whether the container shows its highlight border.
   const bool uses_highlight_;
 
-  // Hacky; see comments in UpdateHighlight().
-  bool ever_painted_highlight_ = false;
-
   // The main view is nominally always present and is last child in the view
   // hierarchy.
-  raw_ptr<views::View, DanglingUntriaged> main_item_ = nullptr;
-
-  // Override for the icon color. If not set, |kColorToolbarButtonIcon| is used.
-  absl::optional<SkColor> icon_color_;
+  raw_ptr<views::View, AcrossTasksDanglingUntriaged> main_item_ = nullptr;
 
   // Points to the child buttons that we know are currently highlighted.
   // TODO(pbos): Consider observing buttons leaving our hierarchy and removing

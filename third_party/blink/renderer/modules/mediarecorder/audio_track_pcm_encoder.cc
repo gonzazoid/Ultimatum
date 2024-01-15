@@ -7,6 +7,7 @@
 #include "base/logging.h"
 #include "media/base/audio_sample_types.h"
 #include "media/base/audio_timestamp_helper.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace blink {
 
@@ -17,7 +18,6 @@ void AudioTrackPcmEncoder::OnSetFormat(
     const media::AudioParameters& input_params) {
   DVLOG(1) << __func__
            << ", |input_params_|: " << input_params_.AsHumanReadableString();
-  DCHECK_CALLED_ON_VALID_THREAD(encoder_thread_checker_);
 
   if (!input_params.IsValid()) {
     DLOG(ERROR) << "Invalid params: " << input_params.AsHumanReadableString();
@@ -30,7 +30,6 @@ void AudioTrackPcmEncoder::EncodeAudio(
     std::unique_ptr<media::AudioBus> input_bus,
     base::TimeTicks capture_time) {
   DVLOG(3) << __func__ << ", #frames " << input_bus->frames();
-  DCHECK_CALLED_ON_VALID_THREAD(encoder_thread_checker_);
   DCHECK_EQ(input_bus->channels(), input_params_.channels());
   DCHECK(!capture_time.is_null());
 
@@ -48,7 +47,7 @@ void AudioTrackPcmEncoder::EncodeAudio(
       capture_time - media::AudioTimestampHelper::FramesToTime(
                          input_bus->frames(), input_params_.sample_rate());
   on_encoded_audio_cb_.Run(input_params_, std::move(encoded_data_string),
-                           capture_time_of_first_sample);
+                           absl::nullopt, capture_time_of_first_sample);
 }
 
 }  // namespace blink

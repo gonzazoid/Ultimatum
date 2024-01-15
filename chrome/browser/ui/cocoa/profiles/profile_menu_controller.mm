@@ -6,8 +6,10 @@
 
 #include <stddef.h>
 
+#include <memory>
+#include <optional>
+
 #include "base/feature_list.h"
-#include "base/mac/scoped_nsobject.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/sys_string_conversions.h"
 #include "chrome/browser/browser_process.h"
@@ -26,7 +28,6 @@
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/prefs/pref_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util_mac.h"
 #include "ui/gfx/image/image.h"
 
@@ -46,7 +47,8 @@ namespace ProfileMenuControllerInternal {
 
 class Observer : public BrowserListObserver, public AvatarMenuObserver {
  public:
-  Observer(ProfileMenuController* controller) : controller_(controller) {
+  explicit Observer(ProfileMenuController* controller)
+      : controller_(controller) {
     BrowserList::AddObserver(this);
   }
 
@@ -74,14 +76,23 @@ class Observer : public BrowserListObserver, public AvatarMenuObserver {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-@implementation ProfileMenuController
+@implementation ProfileMenuController {
+  // The controller for the profile submenu.
+  std::unique_ptr<AvatarMenu> _avatarMenu;
+
+  // An observer to be notified when the active browser changes and when the
+  // menu model changes.
+  std::unique_ptr<ProfileMenuControllerInternal::Observer> _observer;
+
+  // The main menu item to which the profile menu is attached.
+  NSMenuItem* _mainMenuItem;  // weak
+}
 
 - (instancetype)initWithMainMenuItem:(NSMenuItem*)item {
   if ((self = [super init])) {
     _mainMenuItem = item;
 
-    base::scoped_nsobject<NSMenu> menu(
-        [[NSMenu alloc] initWithTitle:GetProfileMenuTitle()]);
+    NSMenu* menu = [[NSMenu alloc] initWithTitle:GetProfileMenuTitle()];
     [_mainMenuItem setSubmenu:menu];
 
     // This object will be constructed as part of nib loading, which happens
@@ -105,7 +116,7 @@ class Observer : public BrowserListObserver, public AvatarMenuObserver {
 }
 
 - (IBAction)editProfile:(id)sender {
-  absl::optional<size_t> active_profile_index =
+  std::optional<size_t> active_profile_index =
       _avatarMenu->GetActiveProfileIndex();
   DCHECK(active_profile_index);
   _avatarMenu->EditProfile(*active_profile_index);
@@ -126,10 +137,9 @@ class Observer : public BrowserListObserver, public AvatarMenuObserver {
     return NO;
 
   if (dock) {
-    base::scoped_nsobject<NSMenuItem> header([[NSMenuItem alloc]
-        initWithTitle:GetProfileMenuTitle()
-               action:NULL
-        keyEquivalent:@""]);
+    NSMenuItem* header = [[NSMenuItem alloc] initWithTitle:GetProfileMenuTitle()
+                                                    action:nil
+                                             keyEquivalent:@""];
     [header setEnabled:NO];
     [menu insertItem:header atIndex:offset++];
   }
@@ -148,7 +158,8 @@ class Observer : public BrowserListObserver, public AvatarMenuObserver {
       gfx::Image itemIcon =
           profiles::GetAvatarIconForNSMenu(itemData.profile_path);
       [item setImage:itemIcon.ToNSImage()];
-      [item setState:itemData.active ? NSOnState : NSOffState];
+      [item setState:itemData.active ? NSControlStateValueOn
+                                     : NSControlStateValueOff];
     }
     [menu insertItem:item atIndex:i + offset];
   }
@@ -229,7 +240,8 @@ class Observer : public BrowserListObserver, public AvatarMenuObserver {
   for (size_t i = 0; i < _avatarMenu->GetNumberOfItems(); ++i) {
     const AvatarMenu::Item& itemData = _avatarMenu->GetItemAt(i);
     [[[self menu] itemWithTag:itemData.menu_index]
-        setState:itemData.active ? NSOnState : NSOffState];
+        setState:itemData.active ? NSControlStateValueOn
+                                 : NSControlStateValueOff];
   }
 }
 
@@ -248,10 +260,11 @@ class Observer : public BrowserListObserver, public AvatarMenuObserver {
 }
 
 - (NSMenuItem*)createItemWithTitle:(NSString*)title action:(SEL)sel {
-  base::scoped_nsobject<NSMenuItem> item(
-      [[NSMenuItem alloc] initWithTitle:title action:sel keyEquivalent:@""]);
+  NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:title
+                                                action:sel
+                                         keyEquivalent:@""];
   [item setTarget:self];
-  return [item.release() autorelease];
+  return item;
 }
 
 @end

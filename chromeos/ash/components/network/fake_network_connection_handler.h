@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "chromeos/ash/components/network/network_connection_handler.h"
 #include "chromeos/ash/components/network/network_handler_callbacks.h"
 
@@ -62,8 +62,8 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) FakeNetworkConnectionHandler
     std::string service_path_;
     base::OnceClosure success_callback_;
     network_handler::ErrorCallback error_callback_;
-    absl::optional<bool> check_error_state_;
-    absl::optional<ConnectCallbackMode> connect_callback_mode_;
+    std::optional<bool> check_error_state_;
+    std::optional<ConnectCallbackMode> connect_callback_mode_;
   };
 
   std::vector<ConnectionParams>& connect_calls() { return connect_calls_; }

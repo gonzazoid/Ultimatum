@@ -68,6 +68,7 @@ android_resources("java_resources") {
 }
 
 robolectric_library("junit") {
+  resources_package = "org.chromium.chrome.browser.multiwindow"
   sources = [
     "java/src/org/chromium/chrome/browser/multiwindow/MultiInstanceStateUnitTest.java",
     "java/src/org/chromium/chrome/browser/multiwindow/UiUtilsUnitTest.java",
@@ -75,15 +76,14 @@ robolectric_library("junit") {
 
   deps = [
     ":java",
+    ":java_resources",
     "//base:base_java",
     "//base:base_java_test_support",
     "//base:base_junit_test_support",
     "//chrome/browser/profiles/android:java",
     "//chrome/browser/util:java",
     "//components/favicon/android:java",
-    "//third_party/android_support_test_runner:runner_java",
     "//third_party/androidx:androidx_test_core_java",
-    "//third_party/androidx:androidx_test_runner_java",
     "//third_party/hamcrest:hamcrest_library_java",
     "//third_party/junit",
     "//third_party/mockito:mockito_java",
@@ -92,6 +92,7 @@ robolectric_library("junit") {
 
 android_library("javatests") {
   testonly = true
+  resources_package = "org.chromium.chrome.browser.multiwindow"
 
   sources = [
     "java/src/org/chromium/chrome/browser/multiwindow/InstanceSwitcherCoordinatorTest.java",
@@ -100,6 +101,8 @@ android_library("javatests") {
 
   deps = [
     ":java",
+    ":java_resources",
+    "//base:base_java",
     "//base:base_java_test_support",
     "//chrome/browser/flags:java",
     "//chrome/browser/preferences:java",
@@ -117,5 +120,6 @@ android_library("javatests") {
     "//third_party/mockito:mockito_java",
     "//ui/android:ui_full_java",
     "//ui/android:ui_java_test_support",
+    "//url:gurl_java",
   ]
 }

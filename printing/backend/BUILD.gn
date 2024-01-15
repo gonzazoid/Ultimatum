@@ -33,6 +33,7 @@ component("backend") {
   ]
 
   public_configs = []
+  configs += [ "//printing/:strict" ]
   cflags = []
   defines = [ "IS_PRINT_BACKEND_IMPL" ]
 
@@ -62,11 +63,14 @@ component("backend") {
       "print_backend_win.cc",
       "printing_info_win.cc",
       "printing_info_win.h",
+      "spooler_win.cc",
+      "spooler_win.h",
       "win_helper.cc",
       "win_helper.h",
       "xps_utils_win.cc",
       "xps_utils_win.h",
     ]
+    public_deps += [ "//printing/mojom" ]
     deps += [ "//services/data_decoder/public/cpp:safe_xml_parser" ]
   }
 
@@ -100,8 +104,6 @@ component("backend") {
         "cups_ipp_constants.h",
         "cups_ipp_helper.cc",
         "cups_ipp_helper.h",
-        "cups_ipp_utils.cc",
-        "cups_ipp_utils.h",
         "cups_jobs.cc",
         "cups_jobs.h",
         "cups_printer.cc",
@@ -155,11 +157,19 @@ source_set("test_support") {
     "test_print_backend.h",
   ]
 
+  if (use_cups) {
+    sources += [
+      "mock_cups_printer.cc",
+      "mock_cups_printer.h",
+    ]
+  }
+
   deps = [
     ":backend",
     "//base",
     "//printing/backend/mojom",
     "//printing/mojom",
+    "//testing/gmock",
     "//ui/gfx/geometry",
   ]
 }

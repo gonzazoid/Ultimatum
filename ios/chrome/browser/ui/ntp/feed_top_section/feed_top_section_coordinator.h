@@ -7,20 +7,22 @@
 
 #import <Foundation/Foundation.h>
 
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
+#import "ios/chrome/browser/ui/push_notification/notifications_alert_presenter.h"
 
 @protocol NewTabPageDelegate;
 
 // The top-level owner of the feed top section.
-@interface FeedTopSectionCoordinator : ChromeCoordinator
+@interface FeedTopSectionCoordinator
+    : ChromeCoordinator <NotificationsAlertPresenter>
 
 @property(nonatomic, readonly, strong) UIViewController* viewController;
 
 // Delegate for NTP related actions.
-@property(nonatomic, weak) id<NewTabPageDelegate> ntpDelegate;
+@property(nonatomic, weak) id<NewTabPageDelegate> NTPDelegate;
 
-// Handles the feed top section changing visibility in the NTP.
-- (void)feedTopSectionHasChangedVisibility:(BOOL)visible;
+// Handles the feed top section's signin promo changing visibility.
+- (void)signinPromoHasChangedVisibility:(BOOL)visible;
 
 @end
 

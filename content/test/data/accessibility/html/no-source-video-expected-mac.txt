@@ -14,4 +14,4 @@ AXWebArea
 ++++++++++++++AXGroup
 ++++++++++++AXPopUpButton AXDescription='show more media controls'
 ++++++++++++++AXGroup
-++++++++++AXSlider AXCustomContent='total time: 0:00' AXDescription='video time scrubber' AXValue=0
+++++++++++AXSlider AXDescription='video time scrubber' AXValue=0

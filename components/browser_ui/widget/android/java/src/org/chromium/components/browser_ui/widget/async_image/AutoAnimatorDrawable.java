@@ -11,12 +11,10 @@ import android.graphics.drawable.InsetDrawable;
 import android.graphics.drawable.LayerDrawable;
 import android.graphics.drawable.RotateDrawable;
 import android.graphics.drawable.ScaleDrawable;
-import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 
 import androidx.annotation.Nullable;
-import androidx.annotation.RequiresApi;
 import androidx.appcompat.graphics.drawable.DrawableWrapperCompat;
 import androidx.vectordrawable.graphics.drawable.Animatable2Compat;
 
@@ -80,17 +78,17 @@ public class AutoAnimatorDrawable extends DrawableWrapperCompat {
         return found.get();
     }
 
-    @RequiresApi(Build.VERSION_CODES.M)
     private static void attachRestartListeners(@Nullable Drawable drawable) {
-        AutoAnimatorDrawable.animatedDrawableHelper(drawable, animatable -> {
-            if (animatable instanceof Animatable2Compat) {
-                ((Animatable2Compat) animatable)
-                        .registerAnimationCallback(LazyHolderCompat.INSTANCE);
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                    && animatable instanceof Animatable2) {
-                ((Animatable2) animatable).registerAnimationCallback(LazyHolder.INSTANCE);
-            }
-        });
+        AutoAnimatorDrawable.animatedDrawableHelper(
+                drawable,
+                animatable -> {
+                    if (animatable instanceof Animatable2Compat) {
+                        ((Animatable2Compat) animatable)
+                                .registerAnimationCallback(LazyHolderCompat.INSTANCE);
+                    } else if (animatable instanceof Animatable2) {
+                        ((Animatable2) animatable).registerAnimationCallback(LazyHolder.INSTANCE);
+                    }
+                });
     }
 
     private static void animatedDrawableHelper(
@@ -110,8 +108,7 @@ public class AutoAnimatorDrawable extends DrawableWrapperCompat {
             AutoAnimatorDrawable.animatedDrawableHelper(drawable.getCurrent(), consumer);
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                && drawable instanceof android.graphics.drawable.DrawableWrapper) {
+        if (drawable instanceof android.graphics.drawable.DrawableWrapper) {
             // Support all modern versions of drawables that wrap other ones.  This won't cover old
             // versions of Android (see below for other if/else blocks).
             AutoAnimatorDrawable.animatedDrawableHelper(
@@ -156,13 +153,13 @@ public class AutoAnimatorDrawable extends DrawableWrapperCompat {
         @Override
         public void onAnimationEnd(Drawable drawable) {
             if (!(drawable instanceof Animatable)) return;
-            mHandler.post(() -> {
-                if (drawable.isVisible()) ((Animatable) drawable).start();
-            });
+            mHandler.post(
+                    () -> {
+                        if (drawable.isVisible()) ((Animatable) drawable).start();
+                    });
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.M)
     private static final class AutoRestarter extends Animatable2.AnimationCallback {
         // Animatable2.AnimationCallback implementation.
         @Override

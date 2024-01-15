@@ -8,15 +8,16 @@
 
 #include "base/feature_list.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "content/public/common/content_features.h"
 #include "content/public/common/origin_util.h"
 #include "content/public/renderer/render_frame_observer.h"
 #include "content/renderer/render_frame_impl.h"
 #include "content/renderer/render_thread_impl.h"
 #include "content/renderer/service_worker/service_worker_provider_context.h"
+#include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
-#include "third_party/blink/public/platform/web_back_forward_cache_loader_helper.h"
-#include "third_party/blink/public/platform/web_url_loader.h"
+#include "third_party/blink/public/mojom/service_worker/service_worker_fetch_handler_bypass_option.mojom-shared.h"
 #include "third_party/blink/public/web/web_local_frame.h"
 
 namespace content {
@@ -57,7 +58,7 @@ class ServiceWorkerNetworkProviderForFrame::NewDocumentObserver
   }
 
  private:
-  ServiceWorkerNetworkProviderForFrame* owner_;
+  raw_ptr<ServiceWorkerNetworkProviderForFrame, ExperimentalRenderer> owner_;
 };
 
 // static
@@ -104,23 +105,12 @@ void ServiceWorkerNetworkProviderForFrame::WillSendRequest(
     request.SetFetchWindowId(context()->fetch_request_window_id());
 }
 
-std::unique_ptr<blink::WebURLLoader>
-ServiceWorkerNetworkProviderForFrame::CreateURLLoader(
-    const blink::WebURLRequest& request,
-    std::unique_ptr<blink::scheduler::WebResourceLoadingTaskRunnerHandle>
-        freezable_task_runner_handle,
-    std::unique_ptr<blink::scheduler::WebResourceLoadingTaskRunnerHandle>
-        unfreezable_task_runner_handle,
-    blink::CrossVariantMojoRemote<blink::mojom::KeepAliveHandleInterfaceBase>
-        keep_alive_handle,
-    blink::WebBackForwardCacheLoaderHelper back_forward_cache_loader_helper) {
+scoped_refptr<network::SharedURLLoaderFactory>
+ServiceWorkerNetworkProviderForFrame::GetSubresourceLoaderFactory(
+    const network::ResourceRequest& network_request,
+    bool is_from_origin_dirty_style_sheet) {
   // RenderThreadImpl is nullptr in some tests.
   if (!RenderThreadImpl::current())
-    return nullptr;
-
-  // We need SubresourceLoaderFactory populated in order to create our own
-  // URLLoader for subresource loading.
-  if (!context() || !context()->GetSubresourceLoaderFactory())
     return nullptr;
 
   // If the URL is not http(s) or otherwise allowed, do not intercept the
@@ -129,40 +119,31 @@ ServiceWorkerNetworkProviderForFrame::CreateURLLoader(
   // TODO(falken): Let ServiceWorkerSubresourceLoaderFactory handle the request
   // and move this check there (i.e., for such URLs, it should use its fallback
   // factory).
-  const GURL gurl(request.Url());
-  if (!gurl.SchemeIsHTTPOrHTTPS() && !OriginCanAccessServiceWorkers(gurl))
+  if (!network_request.url.SchemeIsHTTPOrHTTPS() &&
+      !OriginCanAccessServiceWorkers(network_request.url)) {
     return nullptr;
+  }
+  // If skip_service_worker is true, do not intercept the request.
+  if (network_request.skip_service_worker) {
+    return nullptr;
+  }
 
-  // If GetSkipServiceWorker() returns true, do not intercept the request.
-  if (request.GetSkipServiceWorker())
+  // We need SubresourceLoaderFactory populated.
+  if (!context() || !context()->GetSubresourceLoaderFactory()) {
     return nullptr;
+  }
 
   // Record use counter for intercepting requests from opaque stylesheets.
   // TODO(crbug.com/898497): Remove this feature usage once we have enough data.
-  if (observer_ && request.IsFromOriginDirtyStyleSheet()) {
+  if (observer_ && is_from_origin_dirty_style_sheet) {
     observer_->ReportFeatureUsage(
         blink::mojom::WebFeature::
             kServiceWorkerInterceptedRequestFromOriginDirtyStyleSheet);
   }
 
-  std::vector<std::string> cors_exempt_header_list =
-      RenderThreadImpl::current()->cors_exempt_header_list();
-  blink::WebVector<blink::WebString> web_cors_exempt_header_list(
-      cors_exempt_header_list.size());
-  std::transform(cors_exempt_header_list.begin(), cors_exempt_header_list.end(),
-                 web_cors_exempt_header_list.begin(), [](const std::string& h) {
-                   return blink::WebString::FromLatin1(h);
-                 });
-
-  // Create our own SubresourceLoader to route the request to the controller
+  // Returns our own SubresourceLoader to route the request to the controller
   // ServiceWorker.
-  return std::make_unique<blink::WebURLLoader>(
-      web_cors_exempt_header_list,
-      /*terminate_sync_load_event=*/nullptr,
-      std::move(freezable_task_runner_handle),
-      std::move(unfreezable_task_runner_handle),
-      context()->GetSubresourceLoaderFactory(), std::move(keep_alive_handle),
-      back_forward_cache_loader_helper);
+  return context()->GetSubresourceLoaderFactory();
 }
 
 blink::mojom::ControllerServiceWorkerMode
@@ -177,6 +158,14 @@ ServiceWorkerNetworkProviderForFrame::GetFetchHandlerType() {
   if (!context())
     return blink::mojom::ServiceWorkerFetchHandlerType::kNotSkippable;
   return context()->GetFetchHandlerType();
+}
+
+blink::mojom::ServiceWorkerFetchHandlerBypassOption
+ServiceWorkerNetworkProviderForFrame::GetFetchHandlerBypassOption() {
+  if (!context()) {
+    return blink::mojom::ServiceWorkerFetchHandlerBypassOption::kDefault;
+  }
+  return context()->GetFetchHandlerBypassOption();
 }
 
 int64_t ServiceWorkerNetworkProviderForFrame::ControllerServiceWorkerID() {

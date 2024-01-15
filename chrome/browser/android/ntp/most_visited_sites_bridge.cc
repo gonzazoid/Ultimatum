@@ -14,7 +14,7 @@
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/android/chrome_jni_headers/MostVisitedSitesBridge_jni.h"
@@ -85,14 +85,14 @@ void JavaHomepageClient::QueryHomepageTitle(TitleCallback title_callback) {
   DCHECK(!title_callback.is_null());
   GURL url = GetHomepageUrl();
   if (url.is_empty()) {
-    std::move(title_callback).Run(absl::nullopt);
+    std::move(title_callback).Run(std::nullopt);
     return;
   }
   history::HistoryService* const history_service =
       HistoryServiceFactory::GetForProfileIfExists(
           profile_, ServiceAccessType::EXPLICIT_ACCESS);
   if (!history_service) {
-    std::move(title_callback).Run(absl::nullopt);
+    std::move(title_callback).Run(std::nullopt);
     return;
   }
   // If the client is destroyed, the tracker will cancel this task automatically
@@ -108,7 +108,7 @@ void JavaHomepageClient::QueryHomepageTitle(TitleCallback title_callback) {
 void JavaHomepageClient::OnTitleEntryFound(TitleCallback title_callback,
                                            history::QueryURLResult result) {
   if (!result.success) {
-    std::move(title_callback).Run(absl::nullopt);
+    std::move(title_callback).Run(std::nullopt);
     return;
   }
   std::move(title_callback).Run(result.row.title());

@@ -34,16 +34,19 @@ export class BridgeHelper {
         resolve => chrome.runtime.sendMessage({target, action, args}, resolve));
   }
 
+  /** @param {BridgeTarget|string} target */
+  static clearAllHandlersForTarget(target) {
+    BridgeHelper.handlers_[target] = {};
+  }
+
   /**
    * @param {BridgeTarget|string} target The name of the class that is
    *     registering the handler.
    * @param {BridgeAction|string} action The name of the intended function or,
    *     if not a direct method of the class, a pseudo-function name.
    * @param {Function} handler A function that performs the indicated action. It
-   *     may optionally take a single parameter, and may have an optional return
-   *         value that will be forwarded to the requestor.
-   *     If the method takes multiple parameters, they are passed as named
-   * members of an object literal.
+   *     may optionally take parameters, and may have an optional return value
+   *         that will be forwarded to the requestor.
    */
   static registerHandler(target, action, handler) {
     if (!target || !action) {
@@ -54,8 +57,8 @@ export class BridgeHelper {
     }
 
     if (BridgeHelper.handlers_[target][action]) {
-      throw 'Error: Re-assigning handlers for a specific target/action (' +
-          target + '.' + action + ') is not permitted';
+      throw new Error(
+          `Re-assigning handlers for ${target}.${action} is not permitted`);
     }
 
     BridgeHelper.handlers_[target][action] = handler;

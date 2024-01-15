@@ -6,13 +6,14 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/i18n/time_formatting.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "remoting/protocol/connection_to_client.h"
 #include "remoting/protocol/file_transfer_helpers.h"
@@ -91,7 +92,7 @@ RtcLogFileReader::~RtcLogFileReader() = default;
 
 void RtcLogFileReader::Open(OpenCallback callback) {
   state_ = FileOperations::kBusy;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&RtcLogFileReader::DoOpen, weak_factory_.GetWeakPtr(),
                      std::move(callback)));
@@ -99,7 +100,7 @@ void RtcLogFileReader::Open(OpenCallback callback) {
 
 void RtcLogFileReader::ReadChunk(std::size_t size, ReadCallback callback) {
   state_ = FileOperations::kBusy;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&RtcLogFileReader::DoReadChunk, weak_factory_.GetWeakPtr(),
                      size, std::move(callback)));
@@ -132,12 +133,9 @@ void RtcLogFileReader::DoOpen(OpenCallback callback) {
     return;
   }
 
-  base::Time::Exploded exploded;
-  base::Time::NowFromSystemTime().LocalExplode(&exploded);
-  std::string filename = base::StringPrintf(
-      "host-rtc-log-%d-%d-%d_%d-%d-%d", exploded.year, exploded.month,
-      exploded.day_of_month, exploded.hour, exploded.minute, exploded.second);
-  filename_ = base::FilePath::FromUTF8Unsafe(filename);
+  filename_ =
+      base::FilePath::FromUTF8Unsafe(base::UnlocalizedTimeFormatWithPattern(
+          base::Time::NowFromSystemTime(), "'host-rtc-log'-y-M-d_H-m-s"));
 
   data_ = rtc_log->TakeLogData();
   current_log_section_ = data_.begin();
@@ -195,7 +193,7 @@ int RtcLogFileReader::ReadPartially(int maximum_to_read,
 }
 
 void RtcLogFileWriter::Open(const base::FilePath& filename, Callback callback) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           std::move(callback),

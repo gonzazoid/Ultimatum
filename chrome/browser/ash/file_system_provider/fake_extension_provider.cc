@@ -14,8 +14,7 @@
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/permissions/permissions_data.h"
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
 // static
 std::unique_ptr<ProviderInterface> FakeExtensionProvider::Create(
@@ -52,7 +51,14 @@ const IconSet& FakeExtensionProvider::GetIconSet() const {
   return icon_set_;
 }
 
-bool FakeExtensionProvider::RequestMount(Profile* profile) {
+RequestManager* FakeExtensionProvider::GetRequestManager() {
+  NOTREACHED();
+  return nullptr;
+}
+
+bool FakeExtensionProvider::RequestMount(Profile* profile,
+                                         RequestMountCallback callback) {
+  std::move(callback).Run(base::File::Error::FILE_OK);
   return true;
 }
 
@@ -63,5 +69,4 @@ FakeExtensionProvider::FakeExtensionProvider(
       capabilities_(capabilities),
       name_("Fake Extension Provider") {}
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider

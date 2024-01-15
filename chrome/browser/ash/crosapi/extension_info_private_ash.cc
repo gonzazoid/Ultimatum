@@ -7,10 +7,10 @@
 #include "ash/components/arc/arc_util.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/public/cpp/stylus_utils.h"
-#include "ash/public/cpp/tablet_mode.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/values.h"
 #include "build/config/chromebox_for_meetings/buildflags.h"
 #include "chrome/browser/app_mode/app_mode_utils.h"
@@ -29,14 +29,15 @@
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/settings/cros_settings_names.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "chromeos/constants/devicetype.h"
-#include "chromeos/system/statistics_provider.h"
 #include "components/metrics/metrics_service.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user_manager.h"
 #include "extensions/browser/extensions_browser_client.h"
 #include "extensions/common/error_utils.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
+#include "ui/display/screen.h"
 
 using ash::NetworkHandler;
 
@@ -244,10 +245,10 @@ std::string GetClientId() {
 }
 
 const char* GetBoolPrefNameForApiProperty(const char* api_name) {
-  for (size_t i = 0; i < (sizeof(kPreferencesMap) / sizeof(*kPreferencesMap));
-       i++) {
-    if (strcmp(kPreferencesMap[i].api_name, api_name) == 0)
-      return kPreferencesMap[i].preference_name;
+  for (const auto& item : kPreferencesMap) {
+    if (strcmp(item.api_name, api_name) == 0) {
+      return item.preference_name;
+    }
   }
 
   return nullptr;
@@ -255,29 +256,27 @@ const char* GetBoolPrefNameForApiProperty(const char* api_name) {
 
 std::unique_ptr<base::Value> GetValue(const std::string& property_name) {
   if (property_name == kPropertyHWID) {
-    std::string hwid;
-    chromeos::system::StatisticsProvider* provider =
-        chromeos::system::StatisticsProvider::GetInstance();
-    provider->GetMachineStatistic(chromeos::system::kHardwareClassKey, &hwid);
-    return std::make_unique<base::Value>(hwid);
+    ash::system::StatisticsProvider* provider =
+        ash::system::StatisticsProvider::GetInstance();
+    const std::optional<base::StringPiece> hwid =
+        provider->GetMachineStatistic(ash::system::kHardwareClassKey);
+    return std::make_unique<base::Value>(hwid.value_or(""));
   }
 
   if (property_name == kPropertyCustomizationID) {
-    std::string customization_id;
-    chromeos::system::StatisticsProvider* provider =
-        chromeos::system::StatisticsProvider::GetInstance();
-    provider->GetMachineStatistic(chromeos::system::kCustomizationIdKey,
-                                  &customization_id);
-    return std::make_unique<base::Value>(customization_id);
+    ash::system::StatisticsProvider* provider =
+        ash::system::StatisticsProvider::GetInstance();
+    const std::optional<base::StringPiece> customization_id =
+        provider->GetMachineStatistic(ash::system::kCustomizationIdKey);
+    return std::make_unique<base::Value>(customization_id.value_or(""));
   }
 
   if (property_name == kPropertyDeviceRequisition) {
-    std::string device_requisition;
-    chromeos::system::StatisticsProvider* provider =
-        chromeos::system::StatisticsProvider::GetInstance();
-    provider->GetMachineStatistic(chromeos::system::kOemDeviceRequisitionKey,
-                                  &device_requisition);
-    return std::make_unique<base::Value>(device_requisition);
+    ash::system::StatisticsProvider* provider =
+        ash::system::StatisticsProvider::GetInstance();
+    const std::optional<base::StringPiece> device_requisition =
+        provider->GetMachineStatistic(ash::system::kOemDeviceRequisitionKey);
+    return std::make_unique<base::Value>(device_requisition.value_or(""));
   }
 
   if (property_name == kPropertyMeetDevice) {
@@ -418,16 +417,17 @@ void ExtensionInfoPrivateAsh::BindReceiver(
 void ExtensionInfoPrivateAsh::GetSystemProperties(
     const std::vector<std::string>& property_names,
     GetSystemPropertiesCallback callback) {
-  base::Value result(base::Value::Type::DICTIONARY);
+  base::Value::Dict result;
   for (const std::string& property_name : property_names) {
     std::unique_ptr<base::Value> value = GetValue(property_name);
     if (value) {
-      result.SetKey(property_name,
-                    base::Value::FromUniquePtrValue(std::move(value)));
+      result.Set(property_name,
+                 base::Value::FromUniquePtrValue(std::move(value)));
     }
   }
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), std::move(result)));
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(std::move(callback), base::Value(std::move(result))));
 }
 
 void ExtensionInfoPrivateAsh::SetTimezone(const std::string& value) {
@@ -454,16 +454,15 @@ void ExtensionInfoPrivateAsh::SetBool(const std::string& property_name,
     found = true;
   }
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(found)));
 }
 
 void ExtensionInfoPrivateAsh::IsTabletModeEnabled(
     IsTabletModeEnabledCallback callback) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE,
-      base::BindOnce(std::move(callback),
-                     std::move(ash::TabletMode::Get()->InTabletMode())));
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback),
+                                display::Screen::GetScreen()->InTabletMode()));
 }
 
 }  // namespace crosapi

@@ -6,16 +6,22 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/containers/fixed_flat_map.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/strings/string_piece.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/color/chrome_color_mixer.h"
+#include "chrome/browser/ui/color/material_chrome_color_mixer.h"
+#include "chrome/browser/ui/color/material_new_tab_page_color_mixer.h"
+#include "chrome/browser/ui/color/material_omnibox_color_mixer.h"
+#include "chrome/browser/ui/color/material_side_panel_color_mixer.h"
+#include "chrome/browser/ui/color/material_tab_strip_color_mixer.h"
 #include "chrome/browser/ui/color/native_chrome_color_mixer.h"
 #include "chrome/browser/ui/color/new_tab_page_color_mixer.h"
 #include "chrome/browser/ui/color/omnibox_color_mixer.h"
 #include "chrome/browser/ui/color/tab_strip_color_mixer.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/color/color_provider_utils.h"
 
 namespace {
@@ -49,7 +55,7 @@ bool ChromeColorProviderUtilsCallbacks::ColorIdName(
 }  // namespace
 
 void AddChromeColorMixers(ui::ColorProvider* provider,
-                          const ui::ColorProviderManager::Key& key) {
+                          const ui::ColorProviderKey& key) {
   static base::NoDestructor<ChromeColorProviderUtilsCallbacks>
       chrome_color_provider_utils_callbacks;
   ui::SetColorProviderUtilsCallbacks(
@@ -58,6 +64,14 @@ void AddChromeColorMixers(ui::ColorProvider* provider,
   AddOmniboxColorMixer(provider, key);
   AddTabStripColorMixer(provider, key);
   AddNewTabPageColorMixer(provider, key);
+
+  if (features::IsChromeRefresh2023()) {
+    AddMaterialChromeColorMixer(provider, key);
+    AddMaterialNewTabPageColorMixer(provider, key);
+    AddMaterialOmniboxColorMixer(provider, key);
+    AddMaterialSidePanelColorMixer(provider, key);
+    AddMaterialTabStripColorMixer(provider, key);
+  }
 
   // Must be the last one in order to override other mixer colors.
   AddNativeChromeColorMixer(provider, key);

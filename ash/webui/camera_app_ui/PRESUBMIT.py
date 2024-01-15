@@ -3,10 +3,6 @@
 # found in the LICENSE file.
 
 import os
-import subprocess
-
-
-USE_PYTHON3 = True
 
 
 def CheckChangeOnUpload(input_api, output_api):
@@ -33,6 +29,13 @@ def _CommonChecks(input_api, output_api):
     results += _CheckHtml(input_api, output_api)
   if any(f for f in affected if f.LocalPath() in STRING_RESOURCE_FILES):
     results += _CheckStringResouce(input_api, output_api)
+  if any(f
+         for f in affected
+         if f.LocalPath().endswith('.css') or f.LocalPath().endswith('.svg')):
+    results += _CheckColorTokens(input_api, output_api)
+  if any(f for f in affected if f.LocalPath().endswith('metrics.ts')):
+    results += _CheckModifyMetrics(input_api, output_api)
+
   return results
 
 
@@ -42,7 +45,10 @@ def _CheckHtml(input_api, output_api):
 
 
 def _CheckStringResouce(input_api, output_api):
-  rv = subprocess.call(['./resources/utils/cca.py', 'check-strings'])
+  rv = input_api.subprocess.call([
+      input_api.python3_executable, './resources/utils/cca.py',
+      'check-strings'
+  ])
 
   if rv:
     return [
@@ -52,3 +58,34 @@ def _CheckStringResouce(input_api, output_api):
     ]
 
   return []
+
+
+def _CheckColorTokens(input_api, output_api):
+  rv = input_api.subprocess.call([
+      input_api.python3_executable, './resources/utils/cca.py',
+      'check-color-tokens'
+  ])
+
+  if rv:
+    return [
+        output_api.PresubmitPromptWarning(
+            'Color token check failed, ' +
+            'please only use new dynamic color tokens in new CSS rules.')
+    ]
+
+  return []
+
+
+def _CheckModifyMetrics(input_api, output_api):
+  if input_api.no_diffs or input_api.change.METRICS_DOCUMENTATION_UPDATED:
+    return []
+  return [
+    output_api.PresubmitPromptWarning(
+        'Metrics are modified but `METRICS_DOCUMENTATION_UPDATED=true` is ' +
+        'not found in the commit messages.\n' +
+        'The CL author should confirm CCA metrics are still synced in ' +
+        'PDD (go/cca-metrics-pdd) and Schema (go/cca-metrics-schema).\n' +
+        'Once done, the CL author should explicitly claim it by including ' +
+        '`METRICS_DOCUMENTATION_UPDATED=true` in the commit messages.'
+    )
+  ]

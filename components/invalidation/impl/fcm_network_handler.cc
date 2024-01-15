@@ -8,9 +8,9 @@
 #include <string>
 
 #include "base/base64url.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/i18n/time_formatting.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
@@ -46,16 +46,6 @@ const int kTokenValidationPeriodMinutesDefault = 60 * 24;
 // Returns the TTL (time-to-live) for the Instance ID token, or 0 if no TTL
 // should be specified.
 base::TimeDelta GetTimeToLive(const std::string& sender_id) {
-  // This magic value is identical to kInvalidationGCMSenderId, i.e. the value
-  // that Sync uses for its invalidations.
-  if (sender_id == "8181035976") {
-    if (!base::FeatureList::IsEnabled(switches::kSyncInstanceIDTokenTTL)) {
-      return base::TimeDelta();
-    }
-
-    return base::Seconds(switches::kSyncInstanceIDTokenTTLSeconds.Get());
-  }
-
   // This magic value is identical to kPolicyFCMInvalidationSenderID, i.e. the
   // value that ChromeOS policy uses for its invalidations.
   if (sender_id == "1013309121859") {
@@ -135,6 +125,7 @@ void RecordFCMMessageStatus(InvalidationParsingStatus status,
   // Also split the histogram by a few well-known senders. The actual constants
   // aren't accessible here (they're defined in higher layers), so we simply
   // duplicate them here, strictly only for the purpose of metrics.
+  // TODO(crbug.com/1404927): clean up sync-related metrics.
   constexpr char kInvalidationGCMSenderId[] = "8181035976";
   constexpr char kDriveFcmSenderId[] = "947318989803";
   constexpr char kPolicyFCMInvalidationSenderID[] = "1013309121859";
@@ -327,60 +318,7 @@ void FCMNetworkHandler::SetTokenValidationTimerForTesting(
   token_validation_timer_ = std::move(token_validation_timer);
 }
 
-void FCMNetworkHandler::RequestDetailedStatus(
-    const base::RepeatingCallback<void(base::Value::Dict)>& callback) {
-  callback.Run(diagnostic_info_.CollectDebugData());
-}
-
 FCMNetworkHandler::FCMNetworkHandlerDiagnostic::FCMNetworkHandlerDiagnostic() =
     default;
-
-base::Value::Dict
-FCMNetworkHandler::FCMNetworkHandlerDiagnostic::CollectDebugData() const {
-  base::Value::Dict status;
-  status.SetByDottedPath("NetworkHandler.Registration-result-code",
-                         RegistrationResultToString(registration_result));
-  status.SetByDottedPath("NetworkHandler.Token", token);
-  status.SetByDottedPath(
-      "NetworkHandler.Token-was-requested",
-      base::TimeFormatShortDateAndTime(instance_id_token_requested));
-  status.SetByDottedPath(
-      "NetworkHandler.Token-was-received",
-      base::TimeFormatShortDateAndTime(instance_id_token_was_received));
-  status.SetByDottedPath("NetworkHandler.Token-verification-started",
-                         base::TimeFormatShortDateAndTime(
-                             instance_id_token_verification_requested));
-  status.SetByDottedPath(
-      "NetworkHandler.Token-was-verified",
-      base::TimeFormatShortDateAndTime(instance_id_token_verified));
-  status.SetByDottedPath("NetworkHandler.Verification-result-code",
-                         RegistrationResultToString(token_verification_result));
-  status.SetByDottedPath("NetworkHandler.Token-changed-when-verified",
-                         token_changed);
-  status.SetByDottedPath("NetworkHandler.Token-validation-requests",
-                         token_validation_requested_num);
-  return status;
-}
-
-std::string
-FCMNetworkHandler::FCMNetworkHandlerDiagnostic::RegistrationResultToString(
-    const instance_id::InstanceID::Result result) const {
-  switch (registration_result) {
-    case instance_id::InstanceID::SUCCESS:
-      return "InstanceID::SUCCESS";
-    case instance_id::InstanceID::INVALID_PARAMETER:
-      return "InstanceID::INVALID_PARAMETER";
-    case instance_id::InstanceID::DISABLED:
-      return "InstanceID::DISABLED";
-    case instance_id::InstanceID::ASYNC_OPERATION_PENDING:
-      return "InstanceID::ASYNC_OPERATION_PENDING";
-    case instance_id::InstanceID::SERVER_ERROR:
-      return "InstanceID::SERVER_ERROR";
-    case instance_id::InstanceID::UNKNOWN_ERROR:
-      return "InstanceID::UNKNOWN_ERROR";
-    case instance_id::InstanceID::NETWORK_ERROR:
-      return "InstanceID::NETWORK_ERROR";
-  }
-}
 
 }  // namespace invalidation

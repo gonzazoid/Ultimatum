@@ -6,7 +6,7 @@
 #define CHROME_BROWSER_WEB_APPLICATIONS_TEST_MOCK_DATA_RETRIEVER_H_
 
 #include "base/containers/flat_set.h"
-#include "chrome/browser/web_applications/web_app_data_retriever.h"
+#include "chrome/browser/web_applications/web_contents/web_app_data_retriever.h"
 #include "components/webapps/browser/installable/installable_params.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -33,15 +33,15 @@ class MockDataRetriever : public WebAppDataRetriever {
   MOCK_METHOD(void,
               CheckInstallabilityAndRetrieveManifest,
               (content::WebContents * web_contents,
-               bool bypass_service_worker_check,
                CheckInstallabilityCallback callback,
                absl::optional<webapps::InstallableParams> params),
               (override));
   MOCK_METHOD(void,
               GetIcons,
               (content::WebContents * web_contents,
-               base::flat_set<GURL> icon_urls,
+               const base::flat_set<GURL>& icon_urls,
                bool skip_page_favicons,
+               bool fail_all_if_any_fail,
                GetIconsCallback callback),
               (override));
 };

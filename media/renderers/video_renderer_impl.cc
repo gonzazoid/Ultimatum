@@ -8,18 +8,19 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_util.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/default_tick_clock.h"
 #include "base/trace_event/trace_event.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/media_log.h"
 #include "media/base/media_switches.h"
 #include "media/base/pipeline_status.h"
@@ -122,6 +123,7 @@ void VideoRendererImpl::Flush(base::OnceClosure callback) {
   if (gpu_memory_buffer_pool_)
     gpu_memory_buffer_pool_->Abort();
   cancel_on_flush_weak_factory_.InvalidateWeakPtrs();
+  paint_first_frame_cb_.Cancel();
   video_decoder_stream_->Reset(
       base::BindOnce(&VideoRendererImpl::OnVideoDecoderStreamResetDone,
                      weak_factory_.GetWeakPtr()));
@@ -203,7 +205,7 @@ void VideoRendererImpl::Initialize(
 
   // Always post |init_cb_| because |this| could be destroyed if initialization
   // failed.
-  init_cb_ = BindToCurrentLoop(std::move(init_cb));
+  init_cb_ = base::BindPostTaskToCurrentDefault(std::move(init_cb));
 
   client_ = client;
   wall_clock_time_cb_ = wall_clock_time_cb;
@@ -605,6 +607,9 @@ void VideoRendererImpl::FrameReady(VideoDecoderStream::ReadResult result) {
   const bool is_eos = frame->metadata().end_of_stream;
   const bool is_before_start_time = !is_eos && IsBeforeStartTime(*frame);
   const bool cant_read = !video_decoder_stream_->CanReadWithoutStalling();
+  const bool has_best_first_frame = !is_eos && HasBestFirstFrame(*frame);
+  const auto format = frame->format();
+  const auto natural_size = frame->natural_size();
 
   if (is_eos) {
     DCHECK(!received_end_of_stream_);
@@ -652,20 +657,26 @@ void VideoRendererImpl::FrameReady(VideoDecoderStream::ReadResult result) {
   // enough frames to know it's definitely the first frame or (2) there may be
   // no more frames coming (sometimes unless we paint one of them).
   //
-  // We have to check both effective_frames_queued() and |is_before_start_time|
+  // We have to check both effective_frames_queued() and |has_best_first_frame|
   // since prior to the clock starting effective_frames_queued() is a guess.
   //
   // NOTE: Do this before using algorithm_->average_frame_duration(). This
   // initial render will update the duration to be non-zero when provided by
   // frame metadata.
-  if (!sink_started_ && !painted_first_frame_ && algorithm_->frames_queued() &&
-      (received_end_of_stream_ || cant_read ||
-       (algorithm_->effective_frames_queued() && !is_before_start_time))) {
-    scoped_refptr<VideoFrame> first_frame =
-        algorithm_->Render(base::TimeTicks(), base::TimeTicks(), nullptr);
-    CheckForMetadataChanges(first_frame->format(), first_frame->natural_size());
-    sink_->PaintSingleFrame(first_frame);
-    painted_first_frame_ = true;
+  if (!sink_started_ && !painted_first_frame_ && algorithm_->frames_queued()) {
+    if (received_end_of_stream_ ||
+        (algorithm_->effective_frames_queued() && has_best_first_frame)) {
+      PaintFirstFrame();
+    } else if (cant_read) {
+      // `cant_read` isn't always reliable, so only paint after 250ms if we
+      // haven't gotten anything better. This resets for each frame received. We
+      // still kick off any metadata changes to avoid any layout shift though.
+      CheckForMetadataChanges(format, natural_size);
+      paint_first_frame_cb_.Reset(base::BindOnce(
+          &VideoRendererImpl::PaintFirstFrame, base::Unretained(this)));
+      task_runner_->PostDelayedTask(FROM_HERE, paint_first_frame_cb_.callback(),
+                                    base::Milliseconds(250));
+    }
   }
 
   // Update average frame duration.
@@ -898,7 +909,7 @@ void VideoRendererImpl::MaybeFireEndedCallback_Locked(bool time_progressing) {
     return;
 
   const bool have_frames_after_start_time =
-      algorithm_->frames_queued() &&
+      algorithm_->frames_queued() > 1 &&
       !IsBeforeStartTime(algorithm_->last_frame());
 
   // Don't fire ended if time isn't moving and we have frames.
@@ -911,18 +922,21 @@ void VideoRendererImpl::MaybeFireEndedCallback_Locked(bool time_progressing) {
   base::TimeDelta ended_event_delay;
   bool should_render_end_of_stream = false;
   if (!algorithm_->effective_frames_queued()) {
+    // The best frame doesn't exist or was already rendered; end immediately.
     should_render_end_of_stream = true;
   } else if (algorithm_->frames_queued() == 1u &&
-             algorithm_->average_frame_duration().is_zero()) {
+             (algorithm_->average_frame_duration().is_zero() ||
+              algorithm_->render_interval().is_zero() || !time_progressing)) {
+    // We'll end up here if playback never started or there was only one frame.
     should_render_end_of_stream = true;
   } else if (algorithm_->frames_queued() == 1u &&
-             algorithm_->render_interval().is_zero()) {
-    should_render_end_of_stream = true;
-  } else if (algorithm_->frames_queued() == 1u &&
-             algorithm_->effective_frames_queued() == 1) {
+             algorithm_->effective_frames_queued() == 1 && time_progressing) {
     const auto end_delay =
         std::max(base::TimeDelta(),
                  algorithm_->last_frame_end_time() - tick_clock_->NowTicks());
+
+    // We should only be here if time is progressing, so only fire the ended
+    // event now if we have less than one render interval before our next check.
     if (end_delay < algorithm_->render_interval()) {
       should_render_end_of_stream = true;
       ended_event_delay = end_delay;
@@ -962,6 +976,15 @@ bool VideoRendererImpl::IsBeforeStartTime(const VideoFrame& frame) {
          start_timestamp_;
 }
 
+bool VideoRendererImpl::HasBestFirstFrame(const VideoFrame& frame) {
+  // We have the best first frame in the queue if our current frame has a
+  // timestamp after `start_timestamp_` or straddles `start_timestamp_`.
+  return frame.timestamp() >= start_timestamp_ ||
+         frame.timestamp() + frame.metadata().frame_duration.value_or(
+                                 last_decoder_stream_avg_duration_) >
+             start_timestamp_;
+}
+
 void VideoRendererImpl::RemoveFramesForUnderflowOrBackgroundRendering() {
   // Nothing to do if frame dropping is disabled for testing or we have nothing.
   if (!drop_frames_ || !algorithm_->frames_queued())
@@ -991,6 +1014,7 @@ void VideoRendererImpl::RemoveFramesForUnderflowOrBackgroundRendering() {
     algorithm_->Reset(
         VideoRendererAlgorithm::ResetFlag::kPreserveNextFrameEstimates);
     painted_first_frame_ = false;
+    paint_first_frame_cb_.Cancel();
 
     // It's possible in the background rendering case for us to expire enough
     // frames that we need to transition from HAVE_ENOUGH => HAVE_NOTHING. Just
@@ -1040,6 +1064,23 @@ void VideoRendererImpl::AttemptReadAndCheckForMetadataChanges(
   base::AutoLock auto_lock(lock_);
   CheckForMetadataChanges(pixel_format, natural_size);
   AttemptRead_Locked();
+}
+
+void VideoRendererImpl::PaintFirstFrame() {
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
+  if (painted_first_frame_ || sink_started_) {
+    return;
+  }
+
+  DCHECK(algorithm_->frames_queued());
+
+  auto first_frame =
+      algorithm_->Render(base::TimeTicks(), base::TimeTicks(), nullptr);
+  DCHECK(first_frame);
+  CheckForMetadataChanges(first_frame->format(), first_frame->natural_size());
+  sink_->PaintSingleFrame(first_frame);
+  painted_first_frame_ = true;
+  paint_first_frame_cb_.Cancel();
 }
 
 }  // namespace media

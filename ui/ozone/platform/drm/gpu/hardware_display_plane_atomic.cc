@@ -6,14 +6,16 @@
 
 #include <drm_fourcc.h>
 
-#include "base/command_line.h"
 #include "base/logging.h"
 #include "build/chromeos_buildflags.h"
 #include "media/media_buildflags.h"
+#include "ui/gfx/geometry/rect.h"
+#include "ui/ozone/platform/drm/common/scoped_drm_types.h"
 #include "ui/ozone/platform/drm/gpu/drm_device.h"
 #include "ui/ozone/platform/drm/gpu/drm_gpu_util.h"
 
 namespace ui {
+
 namespace {
 
 uint32_t OverlayTransformToDrmRotationPropertyValue(
@@ -28,11 +30,11 @@ uint32_t OverlayTransformToDrmRotationPropertyValue(
     // Driver code swaps 90 and 270 to be compliant with how xrandr uses these
     // values, so we need to invert them here as well to get them back to the
     // proper value.
-    case gfx::OVERLAY_TRANSFORM_ROTATE_90:
+    case gfx::OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_90:
       return DRM_MODE_ROTATE_270;
-    case gfx::OVERLAY_TRANSFORM_ROTATE_180:
+    case gfx::OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_180:
       return DRM_MODE_ROTATE_180;
-    case gfx::OVERLAY_TRANSFORM_ROTATE_270:
+    case gfx::OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_270:
       return DRM_MODE_ROTATE_90;
     default:
       NOTREACHED();
@@ -51,8 +53,8 @@ uint32_t OverlayTransformToDrmRotationPropertyValue(
 bool IsRotationTransformSupported(gfx::OverlayTransform transform,
                                   uint32_t format_fourcc,
                                   bool is_original_buffer) {
-  if ((transform == gfx::OVERLAY_TRANSFORM_ROTATE_90) ||
-      (transform == gfx::OVERLAY_TRANSFORM_ROTATE_270) ||
+  if ((transform == gfx::OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_90) ||
+      (transform == gfx::OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_270) ||
       (transform == gfx::OVERLAY_TRANSFORM_FLIP_HORIZONTAL)) {
     if (is_original_buffer && (format_fourcc == DRM_FORMAT_NV12 ||
                                format_fourcc == DRM_FORMAT_P010)) {
@@ -93,10 +95,12 @@ bool HardwareDisplayPlaneAtomic::Initialize(DrmDevice* drm) {
 }
 
 bool HardwareDisplayPlaneAtomic::AssignPlaneProps(
+    DrmDevice* drm,
     uint32_t crtc_id,
     uint32_t framebuffer,
     const gfx::Rect& crtc_rect,
     const gfx::Rect& src_rect,
+    const gfx::Rect& damage_rect,
     const gfx::OverlayTransform transform,
     int in_fence_fd,
     uint32_t format_fourcc,
@@ -128,6 +132,18 @@ bool HardwareDisplayPlaneAtomic::AssignPlaneProps(
         OverlayTransformToDrmRotationPropertyValue(transform);
   }
 
+  const bool clip_in_bounds = src_rect.Contains(damage_rect);
+  if (!clip_in_bounds) {
+    LOG(ERROR) << "Damage clip not contained inside source plane";
+  }
+  if (drm && assigned_props_.plane_fb_damage_clips.id && clip_in_bounds) {
+    ScopedDrmModeRectPtr dmg_clip_blob_data = CreateDCBlob(damage_rect);
+    // dmg_clip_blob needs to live long enough to be committed.
+    static ScopedDrmPropertyBlob dmg_clip_blob = drm->CreatePropertyBlob(
+        dmg_clip_blob_data.get(), sizeof(drm_mode_rect));
+    assigned_props_.plane_fb_damage_clips.value = dmg_clip_blob->id();
+  }
+
   if (assigned_props_.in_fence_fd.id)
     assigned_props_.in_fence_fd.value = static_cast<uint64_t>(in_fence_fd);
 
@@ -150,6 +166,11 @@ bool HardwareDisplayPlaneAtomic::SetPlaneProps(drmModeAtomicReq* property_set) {
   if (assigned_props_.rotation.id) {
     plane_set_succeeded &=
         AddPropertyIfValid(property_set, id_, assigned_props_.rotation);
+  }
+
+  if (assigned_props_.plane_fb_damage_clips.id) {
+    plane_set_succeeded &= AddPropertyIfValid(
+        property_set, id_, assigned_props_.plane_fb_damage_clips);
   }
 
   if (assigned_props_.in_fence_fd.id) {
@@ -177,15 +198,6 @@ bool HardwareDisplayPlaneAtomic::SetPlaneProps(drmModeAtomicReq* property_set) {
   // Update properties_ if the setting the props succeeded.
   properties_ = assigned_props_;
   return true;
-}
-
-bool HardwareDisplayPlaneAtomic::SetPlaneCtm(drmModeAtomicReq* property_set,
-                                             uint32_t ctm_blob_id) {
-  if (!properties_.plane_ctm.id)
-    return false;
-
-  properties_.plane_ctm.value = ctm_blob_id;
-  return AddPropertyIfValid(property_set, id_, properties_.plane_ctm);
 }
 
 uint32_t HardwareDisplayPlaneAtomic::AssignedCrtcId() const {

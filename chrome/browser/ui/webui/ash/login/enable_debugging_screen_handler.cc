@@ -11,13 +11,13 @@
 #include "chrome/browser/ash/login/screens/enable_debugging_screen.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/common/pref_names.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/login/localized_values_builder.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/strings/grit/components_strings.h"
 
-namespace chromeos {
+namespace ash {
 
 EnableDebuggingScreenHandler::EnableDebuggingScreenHandler()
     : BaseScreenHandler(kScreenId) {}
@@ -75,4 +75,4 @@ void EnableDebuggingScreenHandler::UpdateUIState(UIState state) {
   CallExternalAPI("updateState", static_cast<int>(state));
 }
 
-}  // namespace chromeos
+}  // namespace ash

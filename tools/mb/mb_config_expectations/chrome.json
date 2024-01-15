@@ -10,7 +10,7 @@
       "ozone_platform_headless": true,
       "symbol_level": 2,
       "use_cfi_cast": true,
-      "use_goma": true,
+      "use_remoteexec": true,
       "use_thin_lto": true
     }
   },
@@ -25,7 +25,7 @@
       "ozone_platform_headless": true,
       "symbol_level": 2,
       "use_cfi_cast": true,
-      "use_goma": true,
+      "use_remoteexec": true,
       "use_thin_lto": true
     }
   },
@@ -39,8 +39,8 @@
       "is_chromeos_device": true,
       "is_official_build": true,
       "ozone_platform_headless": true,
-      "use_goma": true,
-      "use_real_dbus_clients": false
+      "use_real_dbus_clients": false,
+      "use_remoteexec": true
     }
   },
   "chromeos-betty-pi-arc-cfi-thin-lto-chrome": {
@@ -55,7 +55,7 @@
       "ozone_platform_headless": true,
       "symbol_level": 1,
       "use_cfi_cast": true,
-      "use_goma": true,
+      "use_remoteexec": true,
       "use_thin_lto": true
     }
   },
@@ -69,8 +69,22 @@
       "is_chromeos_device": true,
       "is_official_build": true,
       "ozone_platform_headless": true,
-      "use_goma": true,
-      "use_real_dbus_clients": false
+      "use_real_dbus_clients": false,
+      "use_remoteexec": true
+    }
+  },
+  "chromeos-brya-chrome-skylab": {
+    "args_file": "//build/args/chromeos/brya.gni",
+    "gn_args": {
+      "also_build_lacros_chrome_for_architecture": "amd64",
+      "dcheck_always_on": false,
+      "exclude_unwind_tables": false,
+      "is_chrome_branded": true,
+      "is_chromeos_device": true,
+      "is_official_build": true,
+      "is_skylab": true,
+      "ozone_platform_headless": true,
+      "use_remoteexec": true
     }
   },
   "chromeos-eve-arc-r-chrome": {
@@ -82,59 +96,35 @@
       "is_chromeos_device": true,
       "is_official_build": true,
       "ozone_platform_headless": true,
-      "use_goma": true
+      "use_remoteexec": true
     }
   },
-  "chromeos-eve-chrome": {
-    "args_file": "//build/args/chromeos/eve.gni",
-    "gn_args": {
-      "also_build_lacros_chrome_for_architecture": "amd64",
-      "dcheck_always_on": true,
-      "exclude_unwind_tables": false,
-      "is_chrome_branded": true,
-      "is_chromeos_device": true,
-      "is_official_build": true,
-      "ozone_platform_headless": true,
-      "use_goma": true
-    }
-  },
-  "chromeos-jacuzzi-chrome": {
+  "chromeos-jacuzzi-chrome-skylab": {
     "args_file": "//build/args/chromeos/jacuzzi.gni",
     "gn_args": {
-      "also_build_lacros_chrome_for_architecture": "arm",
+      "also_build_lacros_chrome_for_architecture": "arm64",
       "dcheck_always_on": false,
       "exclude_unwind_tables": false,
       "is_chrome_branded": true,
       "is_chromeos_device": true,
       "is_official_build": true,
-      "ozone_platform_headless": true,
-      "use_goma": true
+      "is_skylab": true,
+      "symbol_level": 0,
+      "use_remoteexec": true
     }
   },
-  "chromeos-kevin-chrome": {
-    "args_file": "//build/args/chromeos/kevin.gni",
-    "gn_args": {
-      "also_build_lacros_chrome_for_architecture": "arm",
-      "dcheck_always_on": true,
-      "exclude_unwind_tables": false,
-      "is_chrome_branded": true,
-      "is_chromeos_device": true,
-      "is_official_build": true,
-      "ozone_platform_headless": true,
-      "use_goma": true
-    }
-  },
-  "chromeos-octopus-chrome": {
+  "chromeos-octopus-chrome-skylab": {
     "args_file": "//build/args/chromeos/octopus.gni",
     "gn_args": {
       "also_build_lacros_chrome_for_architecture": "amd64",
-      "dcheck_always_on": true,
+      "dcheck_always_on": false,
       "exclude_unwind_tables": false,
       "is_chrome_branded": true,
       "is_chromeos_device": true,
       "is_official_build": true,
+      "is_skylab": true,
       "ozone_platform_headless": true,
-      "use_goma": true
+      "use_remoteexec": true
     }
   },
   "chromeos-reven-chrome": {
@@ -147,36 +137,21 @@
       "is_chromeos_device": true,
       "is_official_build": true,
       "ozone_platform_headless": true,
-      "use_goma": true
+      "use_remoteexec": true
     }
   },
-  "chromeos-trogdor64-chrome-skylab": {
-    "args_file": "//build/args/chromeos/trogdor64.gni",
+  "chromeos-volteer-chrome-skylab": {
+    "args_file": "//build/args/chromeos/volteer.gni",
     "gn_args": {
-      "dcheck_always_on": true,
+      "also_build_lacros_chrome_for_architecture": "amd64",
+      "dcheck_always_on": false,
       "exclude_unwind_tables": false,
       "is_chrome_branded": true,
       "is_chromeos_device": true,
       "is_official_build": true,
       "is_skylab": true,
       "ozone_platform_headless": true,
-      "use_goma": true
-    }
-  },
-  "lacros-amd64-generic-chrome": {
-    "args_file": "//build/args/chromeos/amd64-generic-crostoolchain.gni",
-    "gn_args": {
-      "chromeos_is_browser_only": true,
-      "dcheck_always_on": false,
-      "is_cfi": true,
-      "is_chrome_branded": true,
-      "is_chromeos_device": true,
-      "is_official_build": true,
-      "ozone_platform_headless": true,
-      "symbol_level": 0,
-      "target_os": "chromeos",
-      "use_goma": true,
-      "use_thin_lto": true
+      "use_remoteexec": true
     }
   },
   "lacros-amd64-generic-chrome-skylab": {
@@ -192,7 +167,7 @@
       "ozone_platform_headless": true,
       "symbol_level": 1,
       "target_os": "chromeos",
-      "use_goma": true,
+      "use_remoteexec": true,
       "use_thin_lto": true
     }
   },
@@ -208,7 +183,7 @@
       "ozone_platform_headless": true,
       "symbol_level": 1,
       "target_os": "chromeos",
-      "use_goma": true,
+      "use_remoteexec": true,
       "use_thin_lto": true
     }
   },
@@ -225,7 +200,7 @@
       "ozone_platform_headless": true,
       "symbol_level": 1,
       "target_os": "chromeos",
-      "use_goma": true,
+      "use_remoteexec": true,
       "use_thin_lto": true
     }
   },
@@ -241,7 +216,7 @@
       "ozone_platform_headless": true,
       "symbol_level": 1,
       "target_os": "chromeos",
-      "use_goma": true,
+      "use_remoteexec": true,
       "use_thin_lto": true
     }
   },
@@ -258,7 +233,7 @@
       "ozone_platform_headless": true,
       "symbol_level": 1,
       "target_os": "chromeos",
-      "use_goma": true,
+      "use_remoteexec": true,
       "use_thin_lto": true
     }
   },
@@ -266,7 +241,7 @@
     "gn_args": {
       "is_chrome_branded": true,
       "is_official_build": true,
-      "use_goma": true
+      "use_remoteexec": true
     }
   },
   "linux-chromeos-chrome": {
@@ -276,7 +251,7 @@
       "is_official_build": true,
       "symbol_level": 1,
       "target_os": "chromeos",
-      "use_goma": true
+      "use_remoteexec": true
     }
   },
   "mac-chrome": {
@@ -284,7 +259,17 @@
       "ignore_missing_widevine_signing_cert": true,
       "is_chrome_branded": true,
       "is_official_build": true,
-      "use_goma": true
+      "use_remoteexec": true
+    }
+  },
+  "win-branded-rel": {
+    "gn_args": {
+      "dcheck_always_on": false,
+      "is_chrome_branded": true,
+      "is_component_build": false,
+      "is_debug": false,
+      "symbol_level": 1,
+      "use_remoteexec": true
     }
   },
   "win-chrome": {
@@ -292,7 +277,7 @@
       "is_chrome_branded": true,
       "is_official_build": true,
       "target_cpu": "x86",
-      "use_goma": true
+      "use_remoteexec": true
     }
   },
   "win64-chrome": {
@@ -300,7 +285,7 @@
       "is_chrome_branded": true,
       "is_official_build": true,
       "target_cpu": "x64",
-      "use_goma": true
+      "use_remoteexec": true
     }
   }
 }

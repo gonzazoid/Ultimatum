@@ -6,36 +6,35 @@
 #define COMPONENTS_AUTOFILL_CORE_BROWSER_DATA_MODEL_AUTOFILL_PROFILE_COMPARATOR_H_
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 
 #include "base/containers/flat_map.h"
 #include "base/strings/string_piece.h"
 #include "components/autofill/core/browser/data_model/address.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
-#include "components/autofill/core/browser/data_model/borrowed_transliterator.h"
 #include "components/autofill/core/browser/data_model/contact_info.h"
-#include "components/autofill/core/common/autofill_l10n_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace autofill {
 
 struct ProfileValueDifference {
   // The type of the field that is different.
-  ServerFieldType type;
+  FieldType type;
   // The original value.
   std::u16string first_value;
   // The new value.
   std::u16string second_value;
-  bool operator==(const ProfileValueDifference& right) const;
+  bool operator==(const ProfileValueDifference& right) const = default;
 };
 
-ServerFieldTypeSet GetUserVisibleTypes();
+FieldTypeSet GetUserVisibleTypes();
 
 // A utility class to assist in the comparison of AutofillProfile data.
 class AutofillProfileComparator {
  public:
-  explicit AutofillProfileComparator(const base::StringPiece& app_locale);
+  explicit AutofillProfileComparator(const std::string_view& app_locale);
 
   AutofillProfileComparator(const AutofillProfileComparator&) = delete;
   AutofillProfileComparator& operator=(const AutofillProfileComparator&) =
@@ -63,14 +62,6 @@ class AutofillProfileComparator {
                base::StringPiece16 text2,
                WhitespaceSpec whitespace_spec = DISCARD_WHITESPACE) const;
 
-  // Returns the first merge candidate from |existing_profiles| for
-  // |new_profile| as an optional. If no merge candidate exists |absl::nullopt|
-  // is returned.
-  static absl::optional<AutofillProfile> GetAutofillProfileMergeCandidate(
-      const AutofillProfile& new_profile,
-      const std::vector<AutofillProfile*>& existing_profiles,
-      const std::string& app_locale);
-
   // Returns true if |existing_profile| is a merge candidate for |new_profile|.
   // A profile is a merge candidate if it is mergeable with |new_profile| and if
   // at least one settings-visible value is changed.
@@ -94,17 +85,16 @@ class AutofillProfileComparator {
   static std::vector<ProfileValueDifference> GetProfileDifference(
       const AutofillProfile& first_profile,
       const AutofillProfile& second_profile,
-      ServerFieldTypeSet types,
+      FieldTypeSet types,
       const std::string& app_locale);
 
   // Same as `GetProfileDifference()` but returns a map that maps the type to a
   // pair of strings that contain the corresponding value from the first and
   // second profile.
-  static base::flat_map<ServerFieldType,
-                        std::pair<std::u16string, std::u16string>>
+  static base::flat_map<FieldType, std::pair<std::u16string, std::u16string>>
   GetProfileDifferenceMap(const AutofillProfile& first_profile,
                           const AutofillProfile& second_profile,
-                          ServerFieldTypeSet types,
+                          FieldTypeSet types,
                           const std::string& app_locale);
 
   // Get the difference of two profiles for settings-visible values.
@@ -117,8 +107,7 @@ class AutofillProfileComparator {
   // Same as `GetSettingsVisibleProfileDifference()` but returns a map that maps
   // the type to a pair of strings that contain the corresponding value from the
   // first and second profile.
-  static base::flat_map<ServerFieldType,
-                        std::pair<std::u16string, std::u16string>>
+  static base::flat_map<FieldType, std::pair<std::u16string, std::u16string>>
   GetSettingsVisibleProfileDifferenceMap(const AutofillProfile& first_profile,
                                          const AutofillProfile& second_profile,
                                          const std::string& app_locale);
@@ -221,16 +210,6 @@ class AutofillProfileComparator {
 
   // App locale used when this comparator instance was created.
   const std::string app_locale() const { return app_locale_; }
-
-  // Merges |new_profile| into one of the |existing_profiles| if possible;
-  // otherwise appends |new_profile| to the end of that list. Fills
-  // |merged_profiles| with the result. Returns the |guid| of the new or updated
-  // profile.
-  static std::string MergeProfile(
-      const AutofillProfile& new_profile,
-      const std::vector<std::unique_ptr<AutofillProfile>>& existing_profiles,
-      const std::string& app_locale,
-      std::vector<AutofillProfile>* merged_profiles);
 
  protected:
   // The result type returned by CompareTokens.
@@ -337,7 +316,6 @@ class AutofillProfileComparator {
                      NameInfo& info) const;
 
  private:
-  l10n::CaseInsensitiveCompare case_insensitive_compare_;
   const std::string app_locale_;
 };
 

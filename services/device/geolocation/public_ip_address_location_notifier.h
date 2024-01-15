@@ -7,9 +7,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/callback_list.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
@@ -46,7 +46,7 @@ class PublicIpAddressLocationNotifier
   ~PublicIpAddressLocationNotifier() override;
 
   using QueryNextPositionCallback =
-      base::OnceCallback<void(const mojom::Geoposition&)>;
+      base::OnceCallback<void(mojom::GeopositionResultPtr)>;
 
   // Requests a callback with the next Geoposition obtained later than
   // |time_of_prev_position|.
@@ -79,9 +79,11 @@ class PublicIpAddressLocationNotifier
   void MakeNetworkLocationRequest();
 
   // Completion callback for network_location_request_.
-  void OnNetworkLocationResponse(const mojom::Geoposition& position,
-                                 bool server_error,
-                                 const WifiData& wifi_data);
+  void OnNetworkLocationResponse(
+      mojom::GeopositionResultPtr result,
+      bool server_error,
+      const WifiData& wifi_data,
+      mojom::NetworkLocationResponsePtr response_data);
 
   // Cancelable closure to absorb overlapping delayed calls to
   // ReactToNetworkChange.
@@ -92,7 +94,7 @@ class PublicIpAddressLocationNotifier
   bool network_changed_since_last_request_;
 
   // The geoposition as of the latest network change, if it has been obtained.
-  absl::optional<mojom::Geoposition> latest_geoposition_;
+  mojom::GeopositionResultPtr latest_result_;
 
   // Google API key for network geolocation requests.
   const std::string api_key_;

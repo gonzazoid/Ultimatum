@@ -5,7 +5,8 @@
 #include "components/tracing/common/background_tracing_state_manager.h"
 
 #include "base/json/values_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/values.h"
 #include "components/tracing/common/pref_names.h"
 #include "content/public/browser/background_tracing_config.h"
 #include "content/public/browser/browser_thread.h"
@@ -13,18 +14,6 @@
 namespace {
 
 constexpr char kTracingStateKey[] = "state";
-constexpr char kUploadTimesKey[] = "upload_times";
-constexpr char kScenarioKey[] = "scenario";
-constexpr char kUploadTimestampKey[] = "time";
-
-const int kMinDaysUntilNextUpload = 7;
-
-// Removes any version numbers from the scenario name.
-std::string StripScenarioName(const std::string& scenario_name) {
-  std::string stripped_scenario_name;
-  base::RemoveChars(scenario_name, "1234567890", &stripped_scenario_name);
-  return stripped_scenario_name;
-}
 
 }  // namespace
 
@@ -69,30 +58,6 @@ void BackgroundTracingStateManager::Initialize(PrefService* local_state) {
     }
   }
 
-  const base::Value::List* upload_times = dict.FindList(kUploadTimesKey);
-  if (upload_times) {
-    for (const auto& scenario_dict : *upload_times) {
-      DCHECK(scenario_dict.is_dict());
-      const std::string* scenario = scenario_dict.FindStringKey(kScenarioKey);
-      const base::Value* timestamp_val =
-          scenario_dict.FindKey(kUploadTimestampKey);
-      if (!scenario || !timestamp_val) {
-        continue;
-      }
-
-      absl::optional<base::Time> upload_time = base::ValueToTime(timestamp_val);
-      if (!upload_time) {
-        continue;
-      }
-
-      if ((base::Time::Now() - *upload_time) >
-          base::Days(kMinDaysUntilNextUpload)) {
-        continue;
-      }
-      scenario_last_upload_timestamp_[*scenario] = *upload_time;
-    }
-  }
-
   // Save state to update the current session state, replacing the previous
   // session state.
   SaveState();
@@ -101,26 +66,15 @@ void BackgroundTracingStateManager::Initialize(PrefService* local_state) {
 void BackgroundTracingStateManager::SaveState() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   DCHECK(initialized_);
-  SaveState(scenario_last_upload_timestamp_, state_);
+  SaveState(state_);
 }
 
-void BackgroundTracingStateManager::SaveState(
-    const ScenarioUploadTimestampMap& scenario_upload_times,
-    BackgroundTracingState state) {
+void BackgroundTracingStateManager::SaveState(BackgroundTracingState state) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetIntKey(kTracingStateKey, static_cast<int>(state));
-  base::Value upload_times(base::Value::Type::LIST);
-  for (const auto& it : scenario_upload_times) {
-    base::Value scenario(base::Value::Type::DICTIONARY);
-    scenario.SetStringKey(kScenarioKey, StripScenarioName(it.first));
-    scenario.SetKey(kUploadTimestampKey, base::TimeToValue(it.second));
-    upload_times.Append(std::move(scenario));
-  }
+  base::Value::Dict dict;
+  dict.Set(kTracingStateKey, static_cast<int>(state));
 
-  dict.SetKey(kUploadTimesKey, std::move(upload_times));
-
-  local_state_->Set(kBackgroundTracingSessionState, std::move(dict));
+  local_state_->SetDict(kBackgroundTracingSessionState, std::move(dict));
   local_state_->CommitPendingWrite();
 }
 
@@ -148,24 +102,10 @@ bool BackgroundTracingStateManager::DidLastSessionEndUnexpectedly() const {
   }
 }
 
-bool BackgroundTracingStateManager::DidRecentlyUploadForScenario(
-    const content::BackgroundTracingConfig& config) const {
-  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  DCHECK(initialized_);
-  std::string stripped_scenario_name =
-      StripScenarioName(config.scenario_name());
-  auto it = scenario_last_upload_timestamp_.find(stripped_scenario_name);
-  if (it != scenario_last_upload_timestamp_.end()) {
-    return (base::Time::Now() - it->second) <=
-           base::Days(kMinDaysUntilNextUpload);
-  }
-  return false;
-}
-
-void BackgroundTracingStateManager::NotifyTracingStarted() {
+void BackgroundTracingStateManager::OnTracingStarted() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   SetState(BackgroundTracingState::STARTED);
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, base::BindOnce([]() {
         BackgroundTracingStateManager::GetInstance().SetState(
             BackgroundTracingState::RAN_30_SECONDS);
@@ -173,7 +113,7 @@ void BackgroundTracingStateManager::NotifyTracingStarted() {
       base::Seconds(30));
 }
 
-void BackgroundTracingStateManager::NotifyFinalizationStarted() {
+void BackgroundTracingStateManager::OnTracingStopped() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   SetState(BackgroundTracingState::FINALIZATION_STARTED);
 }
@@ -193,22 +133,11 @@ void BackgroundTracingStateManager::SetState(BackgroundTracingState new_state) {
   SaveState();
 }
 
-void BackgroundTracingStateManager::OnScenarioUploaded(
-    const std::string& scenario_name) {
-  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  DCHECK(initialized_);
-
-  scenario_last_upload_timestamp_[StripScenarioName(scenario_name)] =
-      base::Time::Now();
-  SaveState();
-}
-
-void BackgroundTracingStateManager::Reset() {
+void BackgroundTracingStateManager::ResetForTesting() {
   initialized_ = false;
   local_state_ = nullptr;
   state_ = BackgroundTracingState::NOT_ACTIVATED;
   last_session_end_state_ = BackgroundTracingState::NOT_ACTIVATED;
-  scenario_last_upload_timestamp_.clear();
 }
 
 }  // namespace tracing

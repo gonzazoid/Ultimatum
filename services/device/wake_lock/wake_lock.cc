@@ -6,10 +6,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
+
+#if BUILDFLAG(IS_ANDROID)
 #include "services/device/wake_lock/wake_lock_context.h"
+#include "ui/gfx/native_widget_types.h"
+#endif
 
 namespace device {
 
@@ -29,7 +33,7 @@ WakeLock::WakeLock(mojo::PendingReceiver<mojom::WakeLock> receiver,
       context_id_(context_id),
       native_view_getter_(native_view_getter),
 #endif
-      main_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      main_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       file_task_runner_(std::move(file_task_runner)),
       observer_(observer) {
   DCHECK(observer_);
@@ -38,7 +42,7 @@ WakeLock::WakeLock(mojo::PendingReceiver<mojom::WakeLock> receiver,
       &WakeLock::OnConnectionError, base::Unretained(this)));
 }
 
-WakeLock::~WakeLock() {}
+WakeLock::~WakeLock() = default;
 
 void WakeLock::AddClient(mojo::PendingReceiver<mojom::WakeLock> receiver) {
   DCHECK(main_task_runner_->RunsTasksInCurrentSequence());

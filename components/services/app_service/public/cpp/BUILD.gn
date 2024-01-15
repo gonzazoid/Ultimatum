@@ -4,6 +4,112 @@
 
 import("//build/config/chromeos/ui_mode.gni")
 
+# Component for the core data structures and types used by App Service. Large
+# parts of the codebase are dependent on this target (via
+# //chromeos/crosapi/mojom), so this must have minimal deps to avoid circular
+# chains.
+component("app_types") {
+  output_name = "APP_TYPES"
+  sources = [
+    "app_launch_util.cc",
+    "app_launch_util.h",
+    "app_types.cc",
+    "app_types.h",
+    "capability_access.cc",
+    "capability_access.h",
+    "features.cc",
+    "features.h",
+    "icon_effects.h",
+    "icon_types.cc",
+    "icon_types.h",
+    "intent_filter.cc",
+    "intent_filter.h",
+    "menu.cc",
+    "menu.h",
+    "package_id.cc",
+    "package_id.h",
+    "permission.cc",
+    "permission.h",
+    "preferred_app.cc",
+    "preferred_app.h",
+    "run_on_os_login_types.cc",
+    "run_on_os_login_types.h",
+    "types_util.cc",
+    "types_util.h",
+  ]
+
+  defines = [ "IS_APP_TYPES_IMPL" ]
+
+  public_deps = [
+    "//base",
+    "//components/services/app_service/public/protos",
+  ]
+
+  deps = [
+    ":macros",
+    "//third_party/abseil-cpp:absl",
+    "//ui/gfx",
+    "//url",
+  ]
+
+  if (is_chromeos) {
+    sources += [
+      "browser_app_instance_update.cc",
+      "browser_app_instance_update.h",
+      "browser_window_instance_update.h",
+    ]
+  }
+}
+
+# This target is separate from //components/services/app_service because not all
+# clients of App Service are allowed to have a dependency on //content.
+if (is_chromeos_ash) {
+  source_set("instance_update") {
+    sources = [
+      "instance.cc",
+      "instance.h",
+      "instance_registry.cc",
+      "instance_registry.h",
+      "instance_update.cc",
+      "instance_update.h",
+    ]
+    deps = [
+      ":macros",
+      "//ash/public/cpp",
+      "//content/public/browser",
+      "//skia",
+      "//ui/aura",
+      "//ui/compositor",
+    ]
+  }
+}
+
+source_set("test_support") {
+  testonly = true
+
+  sources = [
+    "intent_test_util.cc",
+    "intent_test_util.h",
+    "stub_icon_loader.cc",
+    "stub_icon_loader.h",
+  ]
+
+  deps = [
+    ":app_types",
+    ":icon_loader",
+    ":intents",
+    "//skia",
+    "//third_party/abseil-cpp:absl",
+    "//ui/gfx",
+  ]
+}
+
+# The following targets are used for internal code organization, and are not
+# exposed publicly. Clients should depend on "//components/services/app_service"
+# instead of individual targets. New targets added below should also be added to
+# public_deps on "//components/services/app_service" to make them available to
+# clients.
+
 source_set("app_file_handling") {
   sources = [
     "file_handler.cc",
@@ -18,6 +124,8 @@ source_set("app_file_handling") {
     "//base",
     "//url",
   ]
+
+  visibility = [ "//components/services/app_service/*" ]
 }
 
 source_set("app_icon_info") {
@@ -30,6 +138,8 @@ source_set("app_icon_info") {
     "//base",
     "//url",
   ]
+
+  visibility = [ "//components/services/app_service/*" ]
 }
 
 source_set("app_share_target") {
@@ -42,40 +152,19 @@ source_set("app_share_target") {
     "//base",
     "//url",
   ]
+
+  visibility = [ "//components/services/app_service/*" ]
 }
 
-component("app_types") {
-  output_name = "APP_TYPES"
-  sources = [
-    "app_launch_util.cc",
-    "app_launch_util.h",
-    "app_types.cc",
-    "app_types.h",
-    "capability_access.cc",
-    "capability_access.h",
-    "features.cc",
-    "features.h",
-    "intent_filter.cc",
-    "intent_filter.h",
-    "macros.h",
-    "menu.cc",
-    "menu.h",
-    "permission.cc",
-    "permission.h",
-    "shortcut.cc",
-    "shortcut.h",
-  ]
+source_set("macros") {
+  sources = [ "macros.h" ]
+  public_deps = [ "//base" ]
 
-  defines = [ "IS_APP_TYPES_IMPL" ]
-
-  public_deps = [
-    "//components/services/app_service/public/mojom",
-    "//components/services/app_service/public/protos",
-  ]
-
-  deps = [
-    ":icon_types",
-    ":run_on_os_login",
+  # Not exported through //components/services/app_service, and only exposed to
+  # App Service code.
+  visibility = [
+    "//chrome/browser/apps/app_service/*",
+    "//components/services/app_service/*",
   ]
 }
 
@@ -90,27 +179,28 @@ component("app_update") {
     "app_registry_cache.h",
     "app_registry_cache_wrapper.cc",
     "app_registry_cache_wrapper.h",
+    "app_storage/app_storage.cc",
+    "app_storage/app_storage.h",
+    "app_storage/app_storage_file_handler.cc",
+    "app_storage/app_storage_file_handler.h",
     "app_update.cc",
     "app_update.h",
     "capability_access_update.cc",
     "capability_access_update.h",
-    "macros.h",
   ]
 
   defines = [ "IS_APP_UPDATE_IMPL" ]
 
-  public_deps = [
-    "//components/account_id:account_id",
-    "//components/services/app_service/public/mojom",
-  ]
+  public_deps = [ "//components/account_id:account_id" ]
 
   deps = [
     ":app_types",
-    ":icon_types",
     ":intents",
-    ":run_on_os_login",
+    ":macros",
     "//ui/gfx",
   ]
+
+  visibility = [ "//components/services/app_service/*" ]
 }
 
 source_set("app_url_handling") {
@@ -120,39 +210,8 @@ source_set("app_url_handling") {
   ]
 
   deps = [ "//url" ]
-}
 
-if (is_chromeos) {
-  source_set("browser_app_instance_registry_update") {
-    sources = [
-      "browser_app_instance_update.cc",
-      "browser_app_instance_update.h",
-      "browser_window_instance_update.h",
-    ]
-
-    deps = [ "//base" ]
-  }
-}
-
-if (is_chromeos_ash) {
-  source_set("instance_update") {
-    sources = [
-      "instance.cc",
-      "instance.h",
-      "instance_registry.cc",
-      "instance_registry.h",
-      "instance_update.cc",
-      "instance_update.h",
-      "macros.h",
-    ]
-    deps = [
-      "//ash/public/cpp:cpp",
-      "//content/public/browser",
-      "//skia",
-      "//ui/aura",
-      "//ui/compositor",
-    ]
-  }
+  visibility = [ "//components/services/app_service/*" ]
 }
 
 source_set("icon_loader") {
@@ -165,48 +224,12 @@ source_set("icon_loader") {
     "icon_loader.h",
   ]
 
-  public_deps = [ "//components/services/app_service/public/mojom" ]
-
   deps = [
     ":app_types",
-    ":icon_types",
-  ]
-}
-
-source_set("icon_loader_test_support") {
-  sources = [
-    "stub_icon_loader.cc",
-    "stub_icon_loader.h",
+    "//ui/gfx:gfx",
   ]
 
-  deps = [ ":icon_loader" ]
-}
-
-component("icon_types") {
-  output_name = "ICON_TYPES"
-  sources = [
-    "icon_types.cc",
-    "icon_types.h",
-  ]
-
-  defines = [ "IS_ICON_TYPES_IMPL" ]
-
-  public_deps = [ "//components/services/app_service/public/mojom" ]
-
-  deps = [ "//ui/gfx" ]
-}
-
-component("run_on_os_login") {
-  output_name = "LOGIN_MODE"
-  sources = [
-    "macros.h",
-    "run_on_os_login_types.cc",
-    "run_on_os_login_types.h",
-  ]
-
-  defines = [ "IS_LOGIN_MODE_IMPL" ]
-
-  public_deps = [ "//components/services/app_service/public/mojom" ]
+  visibility = [ "//components/services/app_service/*" ]
 }
 
 source_set("intents") {
@@ -222,10 +245,11 @@ source_set("intents") {
   deps = [
     ":app_types",
     "//base",
-    "//components/services/app_service/public/mojom",
     "//third_party/blink/public/common",
     "//url",
   ]
+
+  visibility = [ "//components/services/app_service/*" ]
 }
 
 source_set("protocol_handling") {
@@ -235,18 +259,8 @@ source_set("protocol_handling") {
   ]
 
   deps = [ "//url" ]
-}
 
-source_set("preferred_app") {
-  sources = [
-    "preferred_app.cc",
-    "preferred_app.h",
-  ]
-
-  deps = [
-    ":app_types",
-    "//components/services/app_service/public/mojom",
-  ]
+  visibility = [ "//components/services/app_service/*" ]
 }
 
 source_set("preferred_apps") {
@@ -264,85 +278,35 @@ source_set("preferred_apps") {
   deps = [
     ":app_types",
     ":intents",
-    ":preferred_app",
     "//base",
-    "//components/services/app_service/public/mojom",
-    "//content/public/browser",
     "//url",
   ]
-}
 
-source_set("publisher") {
-  sources = [
-    "publisher_base.cc",
-    "publisher_base.h",
-  ]
-
-  deps = [
-    ":app_types",
-    "//components/services/app_service/public/mojom",
-  ]
-}
-
-source_set("test_support") {
-  testonly = true
-
-  sources = [
-    "intent_test_util.cc",
-    "intent_test_util.h",
-  ]
-
-  deps = [
-    ":app_types",
-    ":intents",
-    "//components/services/app_service/public/mojom",
-  ]
-}
-
-source_set("types") {
-  sources = [
-    "types_util.cc",
-    "types_util.h",
-  ]
-
-  deps = [
-    ":app_types",
-    "//components/services/app_service/public/mojom",
-  ]
+  visibility = [ "//components/services/app_service/*" ]
 }
 
 source_set("crosapi_utils") {
   sources = [ "crosapi_utils.h" ]
 
-  deps = [ "//components/services/app_service/public/mojom" ]
-}
-
-source_set("permission_utils") {
-  sources = [
-    "permission_utils.cc",
-    "permission_utils.h",
-  ]
-  deps = [ "//components/services/app_service/public/mojom" ]
+  visibility = [ "//components/services/app_service/*" ]
 }
 
 source_set("unit_tests") {
   testonly = true
 
   sources = [
-    "app_capability_access_cache_mojom_unittest.cc",
     "app_capability_access_cache_unittest.cc",
     "app_capability_access_cache_wrapper_unittest.cc",
-    "app_launch_util_unittest.cc",
     "app_registry_cache_unittest.cc",
     "app_registry_cache_wrapper_unittest.cc",
+    "app_types_unittest.cc",
     "app_update_unittest.cc",
-    "capability_access_update_mojom_unittest.cc",
     "capability_access_update_unittest.cc",
     "icon_cache_unittest.cc",
     "icon_coalescer_unittest.cc",
     "intent_filter_util_unittest.cc",
     "intent_util_unittest.cc",
-    "menu_unittest.cc",
+    "package_id_unittest.cc",
     "preferred_apps_converter_unittest.cc",
     "preferred_apps_list_unittest.cc",
   ]
@@ -351,28 +315,33 @@ source_set("unit_tests") {
     ":app_types",
     ":app_update",
     ":icon_loader",
-    ":icon_types",
     ":intents",
-    ":preferred_app",
     ":preferred_apps",
-    ":publisher",
-    ":run_on_os_login",
     ":test_support",
-    ":types",
     "//content/test:test_support",
     "//testing/gtest",
   ]
 
   if (is_chromeos_ash) {
     sources += [
+      "app_storage/app_storage_file_handler_unittest.cc",
+      "app_storage/app_storage_unittest.cc",
+      "icon_types_unittest.cc",
       "instance_registry_unittest.cc",
       "instance_unittest.cc",
       "instance_update_unittest.cc",
+      "permission_unittest.cc",
+      "run_on_os_login_types_unittest.cc",
     ]
 
     deps += [
       ":instance_update",
       "//chrome/test:test_support",
     ]
+  }
+
+  if (is_chromeos) {
+    deps +=
+        [ "//components/services/app_service/public/cpp/shortcut:unit_tests" ]
   }
 }

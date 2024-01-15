@@ -9,7 +9,7 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "device/bluetooth/bluetooth_device.h"
 #include "extensions/browser/api/bluetooth/bluetooth_extension_function.h"
 #include "extensions/browser/browser_context_keyed_api_factory.h"
@@ -100,7 +100,7 @@ class BluetoothGetDevicesFunction : public BluetoothExtensionFunction {
   void DoWork(scoped_refptr<device::BluetoothAdapter> adapter) override;
 
  private:
-  std::unique_ptr<bluetooth::GetDevices::Params> params_;
+  std::optional<bluetooth::GetDevices::Params> params_;
 };
 
 class BluetoothGetDeviceFunction : public BluetoothExtensionFunction {
@@ -121,7 +121,7 @@ class BluetoothGetDeviceFunction : public BluetoothExtensionFunction {
   ~BluetoothGetDeviceFunction() override;
 
  private:
-  std::unique_ptr<extensions::api::bluetooth::GetDevice::Params> params_;
+  std::optional<extensions::api::bluetooth::GetDevice::Params> params_;
 };
 
 class BluetoothStartDiscoveryFunction : public BluetoothExtensionFunction {

@@ -11,7 +11,8 @@
 #include "third_party/blink/renderer/core/geometry/dom_point_read_only.h"
 #include "third_party/blink/renderer/modules/xr/xr_utils.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/transforms/transformation_matrix.h"
+#include "ui/gfx/geometry/decomposed_transform.h"
+#include "ui/gfx/geometry/transform.h"
 
 namespace blink {
 
@@ -25,25 +26,22 @@ bool IsComponentValid(DOMPointInit* point) {
 }  // anonymous namespace
 
 // makes a deep copy of transformationMatrix
-XRRigidTransform::XRRigidTransform(
-    const TransformationMatrix& transformationMatrix)
-    : matrix_(std::make_unique<TransformationMatrix>(transformationMatrix)) {
+XRRigidTransform::XRRigidTransform(const gfx::Transform& transformationMatrix)
+    : matrix_(std::make_unique<gfx::Transform>(transformationMatrix)) {
   DecomposeMatrix();
 }
 
 void XRRigidTransform::DecomposeMatrix() {
   // decompose matrix to position and orientation
-  TransformationMatrix::DecomposedType decomposed;
-  bool succeeded = matrix_->Decompose(decomposed);
-  DCHECK(succeeded) << "Matrix decompose failed for " << matrix_->ToString();
+  absl::optional<gfx::DecomposedTransform> decomp = matrix_->Decompose();
+  DCHECK(decomp) << "Matrix decompose failed for " << matrix_->ToString();
 
-  position_ =
-      DOMPointReadOnly::Create(decomposed.translate_x, decomposed.translate_y,
-                               decomposed.translate_z, 1.0);
+  position_ = DOMPointReadOnly::Create(
+      decomp->translate[0], decomp->translate[1], decomp->translate[2], 1.0);
 
-  orientation_ = makeNormalizedQuaternion(
-      decomposed.quaternion_x, decomposed.quaternion_y, decomposed.quaternion_z,
-      decomposed.quaternion_w);
+  orientation_ =
+      makeNormalizedQuaternion(decomp->quaternion.x(), decomp->quaternion.y(),
+                               decomp->quaternion.z(), decomp->quaternion.w());
 }
 
 XRRigidTransform::XRRigidTransform(DOMPointInit* position,
@@ -121,44 +119,36 @@ DOMFloat32Array* XRRigidTransform::matrix() {
     return nullptr;
   }
 
-  return matrix_array_;
+  return matrix_array_.Get();
 }
 
 XRRigidTransform* XRRigidTransform::inverse() {
   EnsureInverse();
-  return inverse_;
+  return inverse_.Get();
 }
 
-TransformationMatrix XRRigidTransform::InverseTransformMatrix() {
+gfx::Transform XRRigidTransform::InverseTransformMatrix() {
   EnsureInverse();
   return inverse_->TransformMatrix();
 }
 
-TransformationMatrix XRRigidTransform::TransformMatrix() {
+gfx::Transform XRRigidTransform::TransformMatrix() {
   EnsureMatrix();
   return *matrix_;
 }
 
 void XRRigidTransform::EnsureMatrix() {
   if (!matrix_) {
-    matrix_ = std::make_unique<TransformationMatrix>();
-    TransformationMatrix::DecomposedType decomp;
-    memset(&decomp, 0, sizeof(decomp));
-    decomp.perspective_w = 1;
-    decomp.scale_x = 1;
-    decomp.scale_y = 1;
-    decomp.scale_z = 1;
+    gfx::DecomposedTransform decomp;
 
-    decomp.quaternion_x = orientation_->x();
-    decomp.quaternion_y = orientation_->y();
-    decomp.quaternion_z = orientation_->z();
-    decomp.quaternion_w = orientation_->w();
+    decomp.quaternion = gfx::Quaternion(orientation_->x(), orientation_->y(),
+                                        orientation_->z(), orientation_->w());
 
-    decomp.translate_x = position_->x();
-    decomp.translate_y = position_->y();
-    decomp.translate_z = position_->z();
+    decomp.translate[0] = position_->x();
+    decomp.translate[1] = position_->y();
+    decomp.translate[2] = position_->z();
 
-    matrix_->Recompose(decomp);
+    matrix_ = std::make_unique<gfx::Transform>(gfx::Transform::Compose(decomp));
   }
 }
 
@@ -168,7 +158,7 @@ void XRRigidTransform::EnsureInverse() {
   // the caching is safe.
   if (!inverse_) {
     EnsureMatrix();
-    TransformationMatrix inverse;
+    gfx::Transform inverse;
     if (!matrix_->GetInverse(&inverse)) {
       DLOG(ERROR) << "Matrix was not invertible: " << matrix_->ToString();
       // TODO(https://crbug.com/1258611): Define behavior for non-invertible

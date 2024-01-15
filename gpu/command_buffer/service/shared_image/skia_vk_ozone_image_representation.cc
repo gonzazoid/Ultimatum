@@ -7,11 +7,12 @@
 #include <utility>
 
 #include "components/viz/common/gpu/vulkan_context_provider.h"
-#include "components/viz/common/resources/resource_sizes.h"
+#include "components/viz/common/resources/shared_image_format_utils.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
 #include "gpu/command_buffer/service/external_semaphore_pool.h"
 #include "gpu/command_buffer/service/memory_tracking.h"
 #include "gpu/command_buffer/service/shared_context_state.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_format_service_utils.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_representation.h"
 #include "gpu/command_buffer/service/skia_utils.h"
 #include "gpu/command_buffer/service/texture_manager.h"
@@ -22,8 +23,15 @@
 #include "gpu/vulkan/vulkan_implementation.h"
 #include "gpu/vulkan/vulkan_util.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
-#include "third_party/skia/include/core/SkPromiseImageTexture.h"
+#include "third_party/skia/include/core/SkColorType.h"
+#include "third_party/skia/include/core/SkSurface.h"
 #include "third_party/skia/include/gpu/GrBackendSemaphore.h"
+#include "third_party/skia/include/gpu/GrBackendSurface.h"
+#include "third_party/skia/include/gpu/MutableTextureState.h"
+#include "third_party/skia/include/gpu/ganesh/SkSurfaceGanesh.h"
+#include "third_party/skia/include/gpu/ganesh/vk/GrVkBackendSemaphore.h"
+#include "third_party/skia/include/gpu/ganesh/vk/GrVkBackendSurface.h"
+#include "third_party/skia/include/private/chromium/GrPromiseImageTexture.h"
 
 namespace gpu {
 
@@ -32,31 +40,42 @@ SkiaVkOzoneImageRepresentation::SkiaVkOzoneImageRepresentation(
     SharedImageManager* manager,
     OzoneImageBacking* backing,
     scoped_refptr<SharedContextState> context_state,
-    std::unique_ptr<VulkanImage> vulkan_image,
+    std::vector<std::unique_ptr<VulkanImage>> vulkan_images,
     MemoryTypeTracker* tracker)
-    : SkiaImageRepresentation(manager, backing, tracker),
-      vulkan_image_(std::move(vulkan_image)),
+    : SkiaGaneshImageRepresentation(context_state->gr_context(),
+                                    manager,
+                                    backing,
+                                    tracker),
+      vulkan_images_(std::move(vulkan_images)),
       context_state_(std::move(context_state)) {
   DCHECK(backing);
   DCHECK(context_state_);
   DCHECK(context_state_->vk_context_provider());
-  DCHECK(vulkan_image_);
+  CHECK(!vulkan_images_.empty());
 
-  promise_texture_ = SkPromiseImageTexture::Make(
-      GrBackendTexture(size().width(), size().height(),
-                       CreateGrVkImageInfo(vulkan_image_.get())));
-  DCHECK(promise_texture_);
+  for (const auto& vulkan_image : vulkan_images_) {
+    CHECK(vulkan_image);
+    auto promise_texture =
+        GrPromiseImageTexture::Make(GrBackendTextures::MakeVk(
+            vulkan_image->size().width(), vulkan_image->size().height(),
+            CreateGrVkImageInfo(vulkan_image.get(), color_space())));
+    if (!promise_texture) {
+      LOG(ERROR) << "Unable to create GrPromiseImageTexture";
+      promise_textures_.clear();
+      break;
+    }
+    promise_textures_.push_back(std::move(promise_texture));
+  }
 }
 
 SkiaVkOzoneImageRepresentation::~SkiaVkOzoneImageRepresentation() {
   DCHECK_EQ(mode_, RepresentationAccessMode::kNone);
-  surface_.reset();
-  if (vulkan_image_) {
-    VulkanFenceHelper* fence_helper = context_state_->vk_context_provider()
-                                          ->GetDeviceQueue()
-                                          ->GetFenceHelper();
+  surfaces_.clear();
+  VulkanFenceHelper* fence_helper =
+      context_state_->vk_context_provider()->GetDeviceQueue()->GetFenceHelper();
+  for (auto& vulkan_image : vulkan_images_) {
     fence_helper->EnqueueVulkanObjectCleanupForSubmittedWork(
-        std::move(vulkan_image_));
+        std::move(vulkan_image));
   }
 }
 
@@ -66,9 +85,8 @@ std::vector<sk_sp<SkSurface>> SkiaVkOzoneImageRepresentation::BeginWriteAccess(
     const gfx::Rect& update_rect,
     std::vector<GrBackendSemaphore>* begin_semaphores,
     std::vector<GrBackendSemaphore>* end_semaphores,
-    std::unique_ptr<GrBackendSurfaceMutableState>* end_state) {
+    std::unique_ptr<skgpu::MutableTextureState>* end_state) {
   DCHECK_EQ(mode_, RepresentationAccessMode::kNone);
-  DCHECK(promise_texture_);
 
   if (!BeginAccess(/*readonly=*/false, begin_semaphores, end_semaphores))
     return {};
@@ -82,80 +100,83 @@ std::vector<sk_sp<SkSurface>> SkiaVkOzoneImageRepresentation::BeginWriteAccess(
     return {};
   }
 
-  if (!surface_ || final_msaa_count != surface_msaa_count_ ||
-      surface_props != surface_->props()) {
-    SkColorType sk_color_type = viz::ResourceFormatToClosestSkColorType(
-        /*gpu_compositing=*/true, format());
-    surface_ = SkSurface::MakeFromBackendTexture(
-        gr_context, promise_texture_->backendTexture(), surface_origin(),
-        final_msaa_count, sk_color_type, color_space().ToSkColorSpace(),
-        &surface_props);
-    if (!surface_) {
-      LOG(ERROR) << "MakeFromBackendTexture() failed.";
-      ozone_backing()->EndAccess(/*readonly=*/false,
-                                 OzoneImageBacking::AccessStream::kVulkan,
-                                 gfx::GpuFenceHandle());
-      return {};
+  if (surfaces_.empty() || final_msaa_count != surface_msaa_count_ ||
+      surface_props != surfaces_.front()->props()) {
+    surfaces_.clear();
+    for (int plane = 0; plane < format().NumberOfPlanes(); plane++) {
+      const auto& promise_texture = promise_textures_[plane];
+      DCHECK(promise_texture);
+      // External sampler is not supported with WriteAccess.
+      SkColorType sk_color_type = viz::ToClosestSkColorType(
+          /*gpu_compositing=*/true, format(), plane);
+      auto surface = SkSurfaces::WrapBackendTexture(
+          gr_context, promise_texture->backendTexture(), surface_origin(),
+          final_msaa_count, sk_color_type, color_space().ToSkColorSpace(),
+          &surface_props);
+      if (!surface) {
+        LOG(ERROR) << "MakeFromBackendTexture() failed.";
+        ozone_backing()->EndAccess(/*readonly=*/false,
+                                   OzoneImageBacking::AccessStream::kVulkan,
+                                   gfx::GpuFenceHandle());
+        return {};
+      }
+      surfaces_.push_back(std::move(surface));
     }
     surface_msaa_count_ = final_msaa_count;
   }
 
   *end_state = GetEndAccessState();
 
-  if (!surface_)
-    return {};
-  return {surface_};
+  return surfaces_;
 }
 
-std::vector<sk_sp<SkPromiseImageTexture>>
+std::vector<sk_sp<GrPromiseImageTexture>>
 SkiaVkOzoneImageRepresentation::BeginWriteAccess(
     std::vector<GrBackendSemaphore>* begin_semaphores,
     std::vector<GrBackendSemaphore>* end_semaphores,
-    std::unique_ptr<GrBackendSurfaceMutableState>* end_state) {
+    std::unique_ptr<skgpu::MutableTextureState>* end_state) {
   DCHECK_EQ(mode_, RepresentationAccessMode::kNone);
-  DCHECK(promise_texture_);
 
-  if (!BeginAccess(false /* readonly */, begin_semaphores, end_semaphores))
+  if (!BeginAccess(/*readonly=*/false, begin_semaphores, end_semaphores)) {
     return {};
+  }
 
   *end_state = GetEndAccessState();
 
-  if (!promise_texture_)
-    return {};
-  return {promise_texture_};
+  return promise_textures_;
 }
 
 void SkiaVkOzoneImageRepresentation::EndWriteAccess() {
   DCHECK_EQ(mode_, RepresentationAccessMode::kWrite);
-  if (surface_)
-    DCHECK(surface_->unique());
-  EndAccess(false /* readonly */);
+  for (const auto& surface : surfaces_) {
+    DCHECK(surface->unique());
+  }
+  EndAccess(/*readonly=*/false);
+  surfaces_.clear();
 }
 
-std::vector<sk_sp<SkPromiseImageTexture>>
+std::vector<sk_sp<GrPromiseImageTexture>>
 SkiaVkOzoneImageRepresentation::BeginReadAccess(
     std::vector<GrBackendSemaphore>* begin_semaphores,
     std::vector<GrBackendSemaphore>* end_semaphores,
-    std::unique_ptr<GrBackendSurfaceMutableState>* end_state) {
+    std::unique_ptr<skgpu::MutableTextureState>* end_state) {
   DCHECK_EQ(mode_, RepresentationAccessMode::kNone);
-  DCHECK(!surface_);
-  DCHECK(promise_texture_);
+  DCHECK(surfaces_.empty());
 
-  if (!BeginAccess(true /* readonly */, begin_semaphores, end_semaphores))
+  if (!BeginAccess(/*readonly=*/true, begin_semaphores, end_semaphores)) {
     return {};
+  }
 
   *end_state = GetEndAccessState();
 
-  if (!promise_texture_)
-    return {};
-  return {promise_texture_};
+  return promise_textures_;
 }
 
 void SkiaVkOzoneImageRepresentation::EndReadAccess() {
   DCHECK_EQ(mode_, RepresentationAccessMode::kRead);
-  DCHECK(!surface_);
+  DCHECK(surfaces_.empty());
 
-  EndAccess(true /* readonly */);
+  EndAccess(/*readonly=*/true);
 }
 
 gpu::VulkanImplementation* SkiaVkOzoneImageRepresentation::vk_implementation() {
@@ -189,8 +210,7 @@ bool SkiaVkOzoneImageRepresentation::BeginAccess(
         device, SemaphoreHandle(std::move(fence)));
 
     begin_access_semaphores_.emplace_back(vk_semaphore);
-    begin_semaphores->emplace_back();
-    begin_semaphores->back().initVulkan(vk_semaphore);
+    begin_semaphores->emplace_back(GrBackendSemaphores::MakeVk(vk_semaphore));
   }
 
   if (end_semaphores && need_end_fence_) {
@@ -205,8 +225,8 @@ bool SkiaVkOzoneImageRepresentation::BeginAccess(
       return false;
     }
 
-    end_semaphores->emplace_back();
-    end_semaphores->back().initVulkan(end_access_semaphore_);
+    end_semaphores->emplace_back(
+        GrBackendSemaphores::MakeVk(end_access_semaphore_));
   }
 
   mode_ = readonly ? RepresentationAccessMode::kRead
@@ -220,7 +240,7 @@ void SkiaVkOzoneImageRepresentation::EndAccess(bool readonly) {
     SemaphoreHandle semaphore_handle = vk_implementation()->GetSemaphoreHandle(
         vk_device(), end_access_semaphore_);
     fence = std::move(semaphore_handle).ToGpuFenceHandle();
-    DCHECK(!fence.is_null());
+    DLOG_IF(ERROR, fence.is_null()) << "Failed to convert the external semaphore to fence.";
   }
 
   ozone_backing()->EndAccess(readonly, OzoneImageBacking::AccessStream::kVulkan,
@@ -243,12 +263,8 @@ void SkiaVkOzoneImageRepresentation::EndAccess(bool readonly) {
   mode_ = RepresentationAccessMode::kNone;
 }
 
-std::unique_ptr<GrBackendSurfaceMutableState>
+std::unique_ptr<skgpu::MutableTextureState>
 SkiaVkOzoneImageRepresentation::GetEndAccessState() {
-  // There is no layout to change if there is no image.
-  if (!vulkan_image_)
-    return nullptr;
-
   const uint32_t kSingleDeviceUsage =
       SHARED_IMAGE_USAGE_DISPLAY_READ | SHARED_IMAGE_USAGE_DISPLAY_WRITE |
       SHARED_IMAGE_USAGE_RASTER | SHARED_IMAGE_USAGE_OOP_RASTERIZATION;
@@ -260,10 +276,17 @@ SkiaVkOzoneImageRepresentation::GetEndAccessState() {
   // create new vkImage each time.
   if ((ozone_backing()->usage() & ~kSingleDeviceUsage) ||
       ozone_backing()->is_thread_safe()) {
-    DCHECK_NE(vulkan_image_->queue_family_index(), VK_QUEUE_FAMILY_IGNORED);
+    uint32_t queue_family_index = vulkan_images_.front()->queue_family_index();
+    // All VkImages must be allocated for the same queue family.
+    for (const auto& vulkan_image : vulkan_images_) {
+      if (vulkan_image->queue_family_index() != queue_family_index) {
+        return nullptr;
+      }
+    }
+    DCHECK_NE(queue_family_index, VK_QUEUE_FAMILY_IGNORED);
 
-    return std::make_unique<GrBackendSurfaceMutableState>(
-        VK_IMAGE_LAYOUT_UNDEFINED, vulkan_image_->queue_family_index());
+    return std::make_unique<skgpu::MutableTextureState>(
+        VK_IMAGE_LAYOUT_UNDEFINED, queue_family_index);
   }
   return nullptr;
 }

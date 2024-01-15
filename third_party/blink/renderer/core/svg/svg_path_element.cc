@@ -21,7 +21,6 @@
 #include "third_party/blink/renderer/core/svg/svg_path_element.h"
 
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
-#include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/svg/svg_animated_path.h"
 #include "third_party/blink/renderer/core/svg/svg_mpath_element.h"
 #include "third_party/blink/renderer/core/svg/svg_path_query.h"
@@ -35,9 +34,7 @@ SVGPathElement::SVGPathElement(Document& document)
     : SVGGeometryElement(svg_names::kPathTag, document),
       path_(MakeGarbageCollected<SVGAnimatedPath>(this,
                                                   svg_names::kDAttr,
-                                                  CSSPropertyID::kD)) {
-  AddToPropertyMap(path_);
-}
+                                                  CSSPropertyID::kD)) {}
 
 void SVGPathElement::Trace(Visitor* visitor) const {
   visitor->Trace(path_);
@@ -124,7 +121,7 @@ void SVGPathElement::CollectStyleForPresentationAttribute(
     // geometry sharing.
     if (const SVGElement* element = CorrespondingElement())
       path = To<SVGPathElement>(element)->GetPath();
-    AddPropertyToPresentationAttributeStyle(style, property->CssPropertyId(),
+    AddPropertyToPresentationAttributeStyle(style, CSSPropertyID::kD,
                                             path->CssValue());
     return;
   }
@@ -158,6 +155,31 @@ void SVGPathElement::RemovedFrom(ContainerNode& root_parent) {
 gfx::RectF SVGPathElement::GetBBox() {
   // We want the exact bounds.
   return SVGPathElement::AsPath().TightBoundingRect();
+}
+
+SVGAnimatedPropertyBase* SVGPathElement::PropertyFromAttribute(
+    const QualifiedName& attribute_name) const {
+  if (attribute_name == svg_names::kDAttr) {
+    return path_.Get();
+  } else {
+    return SVGGeometryElement::PropertyFromAttribute(attribute_name);
+  }
+}
+
+void SVGPathElement::SynchronizeAllSVGAttributes() const {
+  SVGAnimatedPropertyBase* attrs[]{path_.Get()};
+  SynchronizeListOfSVGAttributes(attrs);
+  SVGGeometryElement::SynchronizeAllSVGAttributes();
+}
+
+void SVGPathElement::CollectExtraStyleForPresentationAttribute(
+    MutableCSSPropertyValueSet* style) {
+  DCHECK(path_->HasPresentationAttributeMapping());
+  if (path_->IsAnimating()) {
+    CollectStyleForPresentationAttribute(svg_names::kDAttr, g_empty_atom,
+                                         style);
+  }
+  SVGGeometryElement::CollectExtraStyleForPresentationAttribute(style);
 }
 
 }  // namespace blink

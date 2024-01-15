@@ -28,8 +28,8 @@
 #include "content/public/browser/download_manager_delegate.h"
 #include "content/public/browser/save_page_type.h"
 #include "content/public/common/referrer.h"
+#include "net/base/isolation_info.h"
 #include "net/base/net_errors.h"
-#include "services/data_decoder/public/mojom/web_bundler.mojom.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "third_party/blink/public/mojom/frame/frame.mojom-forward.h"
 #include "url/gurl.h"
@@ -178,13 +178,8 @@ class CONTENT_EXPORT SavePackage
       SavePackageDownloadCreatedCallback download_created_callback,
       download::DownloadItemImpl* item);
 
-  // Callback for WebContents::GenerateMHTML() and
-  // WebContents::GenerateWebBundle().
-  void OnMHTMLOrWebBundleGenerated(int64_t size);
-
-  // Callback for WebContents::GenerateWebBundle().
-  void OnWebBundleGenerated(uint64_t size,
-                            data_decoder::mojom::WebBundlerError error);
+  // Callback for WebContents::GenerateMHTML().
+  void OnMHTMLGenerated(int64_t size);
 
   // Notes from Init() above applies here as well.
   void InternalInit();
@@ -391,7 +386,7 @@ class CONTENT_EXPORT SavePackage
   // Note that |frame_tree_node_id_to_contained_save_items_| does NOT own
   // SaveItems - they remain owned by waiting_item_queue_, in_progress_items_,
   // etc.
-  std::unordered_map<int, std::vector<SaveItem*>>
+  std::unordered_map<int, std::vector<raw_ptr<SaveItem, VectorExperimental>>>
       frame_tree_node_id_to_contained_save_items_;
 
   // Number of frames that we still need to get a response from.
@@ -401,16 +396,28 @@ class CONTENT_EXPORT SavePackage
   SaveItemIdMap saved_success_items_;
 
   // Non-owning pointer for handling file writing on the download sequence.
-  raw_ptr<SaveFileManager> file_manager_ = nullptr;
+  // This dangling raw_ptr occurred in:
+  // content_browsertests: SavePackageBrowserTest.Reload
+  // https://ci.chromium.org/ui/p/chromium/builders/try/linux-rel/1378285/test-results?q=ExactID%3Aninja%3A%2F%2Fcontent%2Ftest%3Acontent_browsertests%2FSavePackageBrowserTest.Reload+VHash%3Ad83661216aa0a42d
+  raw_ptr<SaveFileManager, FlakyDanglingUntriaged> file_manager_ = nullptr;
 
   // DownloadManager owns the download::DownloadItem and handles history and UI.
-  raw_ptr<DownloadManagerImpl> download_manager_ = nullptr;
-  raw_ptr<download::DownloadItemImpl> download_ = nullptr;
+  // These dangling raw_ptrs occurred in:
+  // content_browsertests: SavePackageBrowserTest.Reload
+  // chttps://ci.chromium.org/ui/p/chromium/builders/try/linux-rel/1430369/test-results?q=ExactID%3Aninja%3A%2F%2Fcontent%2Ftest%3Acontent_browsertests%2FSavePackageBrowserTest.Reload+VHash%3Ad83661216aa0a42d
+  raw_ptr<DownloadManagerImpl, FlakyDanglingUntriaged> download_manager_ =
+      nullptr;
+  raw_ptr<download::DownloadItemImpl, FlakyDanglingUntriaged> download_ =
+      nullptr;
 
   // The URL of the page the user wants to save.
   const GURL page_url_;
   base::FilePath saved_main_file_path_;
   base::FilePath saved_main_directory_path_;
+
+  // Isolation info for network state partitioning.
+  const net::IsolationInfo page_isolation_info_;
+  bool page_is_outermost_main_frame_;
 
   // The title of the page the user wants to save.
   const std::u16string title_;

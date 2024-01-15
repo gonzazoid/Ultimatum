@@ -4,19 +4,36 @@
 
 #include "chrome/browser/chromeos/reporting/metric_reporting_manager_delegate_base.h"
 
+#include <memory>
+
+#include "base/logging.h"
+#include "base/time/time.h"
 #include "chrome/browser/chromeos/reporting/metric_default_utils.h"
 #include "chrome/browser/enterprise/util/affiliation.h"
 #include "components/reporting/client/report_queue_factory.h"
-#include "components/reporting/metrics/event_driven_telemetry_sampler_pool.h"
+#include "components/reporting/metrics/collector_base.h"
+#include "components/reporting/metrics/event_driven_telemetry_collector_pool.h"
+#include "components/reporting/metrics/manual_collector.h"
+#include "components/reporting/metrics/metric_event_observer.h"
 #include "components/reporting/metrics/metric_report_queue.h"
+#include "components/reporting/metrics/one_shot_collector.h"
+#include "components/reporting/metrics/periodic_collector.h"
+#include "components/reporting/util/rate_limiter_interface.h"
+#include "components/reporting/util/rate_limiter_slide_window.h"
 
 namespace reporting::metrics {
 namespace {
 
 std::unique_ptr<::reporting::ReportQueue, base::OnTaskRunnerDeleter>
-CreateReportQueue(EventType event_type, Destination destination) {
-  return ReportQueueFactory::CreateSpeculativeReportQueue(event_type,
-                                                          destination);
+CreateReportQueue(EventType event_type,
+                  Destination destination,
+                  std::unique_ptr<RateLimiterInterface> rate_limiter,
+                  absl::optional<SourceInfo> source_info) {
+  return ReportQueueFactory::CreateSpeculativeReportQueue(
+      ReportQueueConfiguration::Create(
+          {.event_type = event_type, .destination = destination})
+          .SetRateLimiter(std::move(rate_limiter))
+          .SetSourceInfo(std::move(source_info)));
 }
 
 }  // namespace
@@ -25,9 +42,12 @@ std::unique_ptr<MetricReportQueue>
 MetricReportingManagerDelegateBase::CreateMetricReportQueue(
     EventType event_type,
     Destination destination,
-    Priority priority) {
+    Priority priority,
+    std::unique_ptr<RateLimiterInterface> rate_limiter,
+    absl::optional<SourceInfo> source_info) {
   std::unique_ptr<MetricReportQueue> metric_report_queue;
-  auto report_queue = CreateReportQueue(event_type, destination);
+  auto report_queue = CreateReportQueue(
+      event_type, destination, std::move(rate_limiter), std::move(source_info));
   if (report_queue) {
     metric_report_queue =
         std::make_unique<MetricReportQueue>(std::move(report_queue), priority);
@@ -45,9 +65,12 @@ MetricReportingManagerDelegateBase::CreatePeriodicUploadReportQueue(
     ReportingSettings* reporting_settings,
     const std::string& rate_setting_path,
     base::TimeDelta default_rate,
-    int rate_unit_to_ms) {
+    int rate_unit_to_ms,
+    absl::optional<SourceInfo> source_info) {
   std::unique_ptr<MetricReportQueue> metric_report_queue;
-  auto report_queue = CreateReportQueue(event_type, destination);
+  auto report_queue =
+      CreateReportQueue(event_type, destination, /*rate_limiter=*/nullptr,
+                        std::move(source_info));
   if (report_queue) {
     metric_report_queue = std::make_unique<MetricReportQueue>(
         std::move(report_queue), priority, reporting_settings,
@@ -68,11 +91,12 @@ MetricReportingManagerDelegateBase::CreatePeriodicCollector(
     bool setting_enabled_default_value,
     const std::string& rate_setting_path,
     base::TimeDelta default_rate,
-    int rate_unit_to_ms) {
+    int rate_unit_to_ms,
+    base::TimeDelta init_delay) {
   return std::make_unique<PeriodicCollector>(
       sampler, metric_report_queue, reporting_settings, enable_setting_path,
       setting_enabled_default_value, rate_setting_path, default_rate,
-      rate_unit_to_ms);
+      rate_unit_to_ms, init_delay);
 }
 
 std::unique_ptr<CollectorBase>
@@ -81,28 +105,23 @@ MetricReportingManagerDelegateBase::CreateOneShotCollector(
     MetricReportQueue* metric_report_queue,
     ReportingSettings* reporting_settings,
     const std::string& enable_setting_path,
-    bool setting_enabled_default_value) {
+    bool setting_enabled_default_value,
+    base::TimeDelta init_delay) {
   return std::make_unique<OneShotCollector>(
       sampler, metric_report_queue, reporting_settings, enable_setting_path,
-      setting_enabled_default_value);
+      setting_enabled_default_value, init_delay);
 }
 
 std::unique_ptr<CollectorBase>
-MetricReportingManagerDelegateBase::CreatePeriodicEventCollector(
+MetricReportingManagerDelegateBase::CreateManualCollector(
     Sampler* sampler,
-    std::unique_ptr<EventDetector> event_detector,
-    EventDrivenTelemetrySamplerPool* sampler_pool,
     MetricReportQueue* metric_report_queue,
     ReportingSettings* reporting_settings,
     const std::string& enable_setting_path,
-    bool setting_enabled_default_value,
-    const std::string& rate_setting_path,
-    base::TimeDelta default_rate,
-    int rate_unit_to_ms) {
-  return std::make_unique<PeriodicEventCollector>(
-      sampler, std::move(event_detector), sampler_pool, metric_report_queue,
-      reporting_settings, enable_setting_path, setting_enabled_default_value,
-      rate_setting_path, default_rate, rate_unit_to_ms);
+    bool setting_enabled_default_value) {
+  return std::make_unique<ManualCollector>(
+      sampler, metric_report_queue, reporting_settings, enable_setting_path,
+      setting_enabled_default_value);
 }
 
 std::unique_ptr<MetricEventObserverManager>
@@ -112,18 +131,30 @@ MetricReportingManagerDelegateBase::CreateEventObserverManager(
     ReportingSettings* reporting_settings,
     const std::string& enable_setting_path,
     bool setting_enabled_default_value,
-    EventDrivenTelemetrySamplerPool* sampler_pool) {
+    EventDrivenTelemetryCollectorPool* collector_pool,
+    base::TimeDelta init_delay) {
   return std::make_unique<MetricEventObserverManager>(
       std::move(event_observer), metric_report_queue, reporting_settings,
-      enable_setting_path, setting_enabled_default_value, sampler_pool);
+      enable_setting_path, setting_enabled_default_value, collector_pool,
+      init_delay);
 }
 
-bool MetricReportingManagerDelegateBase::IsAffiliated(Profile* profile) const {
-  return ::chrome::enterprise_util::IsProfileAffiliated(profile);
+std::unique_ptr<RateLimiterSlideWindow>
+MetricReportingManagerDelegateBase::CreateSlidingWindowRateLimiter(
+    size_t total_size,
+    base::TimeDelta time_window,
+    size_t bucket_count) {
+  return std::make_unique<RateLimiterSlideWindow>(total_size, time_window,
+                                                  bucket_count);
+}
+
+bool MetricReportingManagerDelegateBase::IsUserAffiliated(
+    Profile& profile) const {
+  return ::chrome::enterprise_util::IsProfileAffiliated(&profile);
 }
 
 base::TimeDelta MetricReportingManagerDelegateBase::GetInitDelay() const {
-  return InitDelayParam::Get();
+  return kInitialCollectionDelay;
 }
 
 base::TimeDelta MetricReportingManagerDelegateBase::GetInitialUploadDelay()

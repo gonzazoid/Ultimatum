@@ -13,7 +13,6 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/simple_test_tick_clock.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/timer/timer.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/aura/env.h"
@@ -149,6 +148,7 @@ class GestureEventConsumeDelegate : public TestWindowDelegate {
     scroll_y_hint_ = 0;
     tap_count_ = 0;
     scale_ = 0;
+    angle_ = 0;
     flags_ = 0;
   }
 
@@ -196,6 +196,7 @@ class GestureEventConsumeDelegate : public TestWindowDelegate {
   float scroll_x_hint() const { return scroll_x_hint_; }
   float scroll_y_hint() const { return scroll_y_hint_; }
   float scale() const { return scale_; }
+  float angle() const { return angle_; }
   const gfx::Rect& bounding_box() const { return bounding_box_; }
   int tap_count() const { return tap_count_; }
   int flags() const { return flags_; }
@@ -250,6 +251,7 @@ class GestureEventConsumeDelegate : public TestWindowDelegate {
       case ui::ET_GESTURE_PINCH_UPDATE:
         pinch_update_ = true;
         scale_ = gesture->details().scale();
+        angle_ = gesture->details().pinch_angle();
         break;
       case ui::ET_GESTURE_PINCH_END:
         pinch_end_ = true;
@@ -331,6 +333,7 @@ class GestureEventConsumeDelegate : public TestWindowDelegate {
   float scroll_x_hint_;
   float scroll_y_hint_;
   float scale_;
+  float angle_;
   gfx::Rect bounding_box_;
   int tap_count_;
   int flags_;
@@ -363,6 +366,13 @@ class QueueTouchEventDelegate : public GestureEventConsumeDelegate {
     } else {
       sent_events_ids_.push_back(event->unique_event_id());
     }
+  }
+
+  void OnWindowDestroyed(Window* window) override {
+    if (window == window_) {
+      window_ = nullptr;
+    }
+    GestureEventConsumeDelegate::OnWindowDestroyed(window);
   }
 
   void ReceivedAck() {
@@ -617,7 +627,7 @@ class RemoveOnTouchCancelHandler : public TestEventHandler {
 void DelayByLongPressTimeout() {
   ui::GestureProvider::Config config;
   base::RunLoop run_loop;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(),
       config.gesture_detector_config.longpress_timeout * 2);
   run_loop.Run();
@@ -626,7 +636,7 @@ void DelayByLongPressTimeout() {
 void DelayByShowPressTimeout() {
   ui::GestureProvider::Config config;
   base::RunLoop run_loop;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(),
       config.gesture_detector_config.showpress_timeout * 2);
   run_loop.Run();
@@ -1779,10 +1789,8 @@ TEST_F(GestureRecognizerTest, DestroyGestureProviderAuraBeforeAck) {
   // Verify that the gesture provider for `window1` is created.
   auto* gesture_recognizer = static_cast<ui::GestureRecognizerImpl*>(
       aura::Env::GetInstance()->gesture_recognizer());
-  const auto& consumer_provider_mappings =
-      gesture_recognizer->consumer_gesture_provider_;
-  EXPECT_NE(consumer_provider_mappings.cend(),
-            consumer_provider_mappings.find(window1.get()));
+  const auto& consumers = gesture_recognizer->consumers_;
+  EXPECT_NE(consumers.cend(), consumers.find(window1.get()));
 
   // Create a second window for handling touch events.
   std::unique_ptr<QueueTouchEventDelegate> delegate2(
@@ -1800,8 +1808,7 @@ TEST_F(GestureRecognizerTest, DestroyGestureProviderAuraBeforeAck) {
       /*time_stamp=*/tes.Now(),
       ui::PointerDetails(ui::EventPointerType::kTouch, kTouchId2));
   DispatchEventUsingWindowDispatcher(&press2);
-  EXPECT_NE(consumer_provider_mappings.cend(),
-            consumer_provider_mappings.find(window2.get()));
+  EXPECT_NE(consumers.cend(), consumers.find(window2.get()));
 
   // Verify that `press2` is associated with a gesture provider raw pointer.
   const auto& event_provider_mappings =
@@ -4295,6 +4302,20 @@ TEST_F(GestureRecognizerTest, PinchAlternatelyConsumedTest) {
     EXPECT_FALSE(delegate->pinch_end());
     delegate->Reset();
   }
+
+  const float delta_y[] = {-550, 550};
+  const float expected_angles[] = {45, -45};
+
+  for (int i = 0; i < 2; ++i) {
+    y += delta_y[i];
+    ui::TouchEvent move4(
+        ui::ET_TOUCH_MOVED, gfx::Point(x, y), tes.Now(),
+        ui::PointerDetails(ui::EventPointerType::kTouch, kTouchId2));
+    DispatchEventUsingWindowDispatcher(&move4);
+    delegate->ReceivedAck();
+    EXPECT_EQ(expected_angles[i], delegate->angle());
+    delegate->Reset();
+  }
 }
 
 // Test that touch event flags are passed through to the gesture event.
@@ -4322,7 +4343,7 @@ TEST_F(GestureRecognizerTest, GestureEventFlagsPassedFromTouchEvent) {
   ui::TouchEvent move1(
       ui::ET_TOUCH_MOVED, gfx::Point(397, 149), tes.LeapForward(50),
       ui::PointerDetails(ui::EventPointerType::kTouch, kTouchId));
-  move1.set_flags(992);
+  move1.SetFlags(992);
 
   DispatchEventUsingWindowDispatcher(&move1);
   EXPECT_NE(default_flags, delegate->flags());
@@ -4331,12 +4352,14 @@ TEST_F(GestureRecognizerTest, GestureEventFlagsPassedFromTouchEvent) {
 // A delegate that deletes a window on long press.
 class GestureEventDeleteWindowOnLongPress : public GestureEventConsumeDelegate {
  public:
-  GestureEventDeleteWindowOnLongPress() : window_(nullptr) {}
+  GestureEventDeleteWindowOnLongPress() = default;
 
   GestureEventDeleteWindowOnLongPress(
       const GestureEventDeleteWindowOnLongPress&) = delete;
   GestureEventDeleteWindowOnLongPress& operator=(
       const GestureEventDeleteWindowOnLongPress&) = delete;
+
+  ~GestureEventDeleteWindowOnLongPress() override { DCHECK(!window_); }
 
   void set_window(aura::Window** window) { window_ = window; }
 
@@ -4349,7 +4372,7 @@ class GestureEventDeleteWindowOnLongPress : public GestureEventConsumeDelegate {
   }
 
  private:
-  raw_ptr<aura::Window*> window_;
+  raw_ptr<aura::Window*> window_ = nullptr;
 };
 
 // Check that deleting the window in response to a long press gesture doesn't
@@ -4373,6 +4396,8 @@ TEST_F(GestureRecognizerTest, GestureEventLongPressDeletingWindow) {
   // Wait until the timer runs out.
   delegate.WaitUntilReceivedGesture(ui::ET_GESTURE_LONG_PRESS);
   EXPECT_EQ(nullptr, window);
+
+  delegate.set_window(nullptr);
 }
 
 TEST_F(GestureRecognizerWithSwitchTest, GestureEventSmallPinchDisabled) {
@@ -4836,7 +4861,7 @@ TEST_F(GestureRecognizerTest, ResetGestureRecognizerWithGestureProvider) {
   // Check that the gesture recognizer owns one gesture provider.
   EXPECT_EQ(1u, static_cast<ui::GestureRecognizerImpl*>(
                     aura::Env::GetInstance()->gesture_recognizer())
-                    ->consumer_gesture_provider_.size());
+                    ->consumers_.size());
 
   // Destroy the current gesture recognizer.
   aura::Env::GetInstance()->SetGestureRecognizer(

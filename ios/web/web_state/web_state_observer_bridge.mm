@@ -4,10 +4,6 @@
 
 #import "ios/web/public/web_state_observer_bridge.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace web {
 
 enum Permission : NSUInteger;
@@ -131,24 +127,6 @@ void WebStateObserverBridge::PermissionStateChanged(
   SEL selector = @selector(webState:didChangeStateForPermission:);
   if ([observer_ respondsToSelector:selector]) {
     [observer_ webState:web_state didChangeStateForPermission:permission];
-  }
-}
-
-void WebStateObserverBridge::WebFrameDidBecomeAvailable(
-    web::WebState* web_state,
-    web::WebFrame* web_frame) {
-  SEL selector = @selector(webState:frameDidBecomeAvailable:);
-  if ([observer_ respondsToSelector:selector]) {
-    [observer_ webState:web_state frameDidBecomeAvailable:web_frame];
-  }
-}
-
-void WebStateObserverBridge::WebFrameWillBecomeUnavailable(
-    web::WebState* web_state,
-    web::WebFrame* web_frame) {
-  SEL selector = @selector(webState:frameWillBecomeUnavailable:);
-  if ([observer_ respondsToSelector:selector]) {
-    [observer_ webState:web_state frameWillBecomeUnavailable:web_frame];
   }
 }
 

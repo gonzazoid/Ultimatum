@@ -38,6 +38,12 @@ struct NoOkStatusTypeTraits {
   static constexpr StatusGroupType Group() { return "NoDefaultNoOkType"; }
 };
 
+struct CustomDefaultValue {
+  enum class Codes : StatusCodeType { kFoo = 0, kBar = 1, kBaz = 2 };
+  static constexpr StatusGroupType Group() { return "CustomOkCode"; }
+  static constexpr Codes OkEnumValue() { return Codes::kFoo; }
+};
+
 struct ZeroValueOkTypeTraits {
   enum class Codes : StatusCodeType { kOk = 0, kFoo = 1, kBar = 2, kBaz = 3 };
   static constexpr StatusGroupType Group() { return "ZeroValueOkTypeTraits"; }
@@ -62,7 +68,7 @@ struct TraitsWithCustomUKMSerializer {
   enum class Codes { kFoo, kBar };
   static constexpr StatusGroupType Group() { return "UKMSerializerCode"; }
   static uint32_t PackExtraData(const internal::StatusData& info) {
-    auto maybe_key = info.data.FindIntKey("might_exist_key");
+    auto maybe_key = info.data.GetDict().FindInt("might_exist_key");
     if (maybe_key.has_value())
       return *maybe_key * 77;
     return 0;
@@ -195,44 +201,44 @@ TEST_F(StatusTest, DifferentModesOfConstruction) {
   ASSERT_EQ(packed.message(), "");
   // Keep serialized around, accessing |data| from it inline causes it
   // to be destructed and |unpacked| to be used after being freed.
-  auto serialized = MediaSerialize(packed);
-  auto* unpacked = serialized.FindDictPath("data");
+  auto serialized = MediaSerialize(packed).TakeDict();
+  auto* unpacked = serialized.FindDict("data");
   ASSERT_NE(unpacked, nullptr);
-  ASSERT_EQ(unpacked->DictSize(), 3ul);
-  ASSERT_EQ(unpacked->FindIntPath("DataA"), 7);
-  ASSERT_EQ(unpacked->FindIntPath("DataB"), 3);
-  ASSERT_EQ(*unpacked->FindStringPath("DataC"), "apple pie");
+  ASSERT_EQ(unpacked->size(), 3ul);
+  ASSERT_EQ(unpacked->FindInt("DataA"), 7);
+  ASSERT_EQ(unpacked->FindInt("DataB"), 3);
+  ASSERT_EQ(*unpacked->FindString("DataC"), "apple pie");
 
   // Can construct implicitly from a {code, "message", data} for a type with
   // OnCreateFrom in it's traits
   PackingStatus packed2 = {PackingStatus::Codes::kFail, "*explosion*", data};
   ASSERT_EQ(packed2.code(), PackingStatus::Codes::kFail);
   ASSERT_EQ(packed2.message(), "*explosion*");
-  serialized = MediaSerialize(packed);
-  unpacked = serialized.FindDictPath("data");
+  serialized = MediaSerialize(packed).TakeDict();
+  unpacked = serialized.FindDict("data");
   ASSERT_NE(unpacked, nullptr);
-  ASSERT_EQ(unpacked->DictSize(), 3ul);
-  ASSERT_EQ(unpacked->FindIntPath("DataA"), 7);
-  ASSERT_EQ(unpacked->FindIntPath("DataB"), 3);
-  ASSERT_EQ(*unpacked->FindStringPath("DataC"), "apple pie");
+  ASSERT_EQ(unpacked->size(), 3ul);
+  ASSERT_EQ(unpacked->FindInt("DataA"), 7);
+  ASSERT_EQ(unpacked->FindInt("DataB"), 3);
+  ASSERT_EQ(*unpacked->FindString("DataC"), "apple pie");
 
   NormalStatus root = NormalStatus::Codes::kFoo;
   PackingStatus derrived = {PackingStatus::Codes::kFail, std::move(root)};
-  serialized = MediaSerialize(derrived);
-  unpacked = serialized.FindDictPath("cause");
+  serialized = MediaSerialize(derrived).TakeDict();
+  unpacked = serialized.FindDict("cause");
   ASSERT_NE(unpacked, nullptr);
-  ASSERT_EQ(unpacked->DictSize(), 5ul);
-  ASSERT_EQ(unpacked->FindIntPath("code").value_or(0),
+  ASSERT_EQ(unpacked->size(), 5ul);
+  ASSERT_EQ(unpacked->FindInt("code").value_or(0),
             static_cast<int>(NormalStatus::Codes::kFoo));
 
   root = NormalStatus::Codes::kFoo;
   derrived = {PackingStatus::Codes::kFail, "blah", std::move(root)};
-  serialized = MediaSerialize(derrived);
-  unpacked = serialized.FindDictPath("cause");
-  ASSERT_EQ(*serialized.FindStringPath("message"), "blah");
+  serialized = MediaSerialize(derrived).TakeDict();
+  unpacked = serialized.FindDict("cause");
+  ASSERT_EQ(*serialized.FindString("message"), "blah");
   ASSERT_NE(unpacked, nullptr);
-  ASSERT_EQ(unpacked->DictSize(), 5ul);
-  ASSERT_EQ(unpacked->FindIntPath("code").value_or(0),
+  ASSERT_EQ(unpacked->size(), 5ul);
+  ASSERT_EQ(unpacked->FindInt("code").value_or(0),
             static_cast<int>(NormalStatus::Codes::kFoo));
 }
 
@@ -254,85 +260,92 @@ TEST_F(StatusTest, StaticOKMethodGivesCorrectSerialization) {
 TEST_F(StatusTest, SingleLayerError) {
   NormalStatus failed = FailEasily();
   base::Value actual = MediaSerialize(failed);
+  const base::Value::Dict& actual_dict = actual.GetDict();
+  ASSERT_EQ(actual_dict.size(), 5ul);
+  ASSERT_EQ(*actual_dict.FindString("message"), "Message");
+  ASSERT_EQ(actual_dict.FindList("stack")->size(), 1ul);
+  ASSERT_EQ(actual_dict.Find("cause"), nullptr);
+  ASSERT_EQ(actual_dict.FindDict("data")->size(), 0ul);
 
-  ASSERT_EQ(actual.DictSize(), 5ul);
-  ASSERT_EQ(*actual.FindStringPath("message"), "Message");
-  ASSERT_EQ(actual.FindListPath("stack")->GetListDeprecated().size(), 1ul);
-  ASSERT_EQ(actual.FindKey("cause"), nullptr);
-  ASSERT_EQ(actual.FindDictPath("data")->DictSize(), 0ul);
-
-  const auto& stack = actual.FindListPath("stack")->GetListDeprecated();
-  ASSERT_EQ(stack[0].DictSize(), 2ul);  // line and file
+  const auto& stack = *actual_dict.FindList("stack");
+  ASSERT_EQ(stack[0].GetDict().size(), 2ul);  // line and file
 
   // This is a bit fragile, since it's dependent on the file layout.  Just check
   // that it's somewhere in the `FailEasily`` function.
-  int line = stack[0].FindIntPath("line").value_or(-1);
+  int line = stack[0].GetDict().FindInt("line").value_or(-1);
   ASSERT_GT(line, lower_line_limit_);
   ASSERT_LT(line, upper_line_limit_);
-  ASSERT_THAT(*stack[0].FindStringPath("file"),
+  ASSERT_THAT(*stack[0].GetDict().FindString("file"),
               HasSubstr("status_unittest.cc"));
 }
 
 TEST_F(StatusTest, MultipleErrorLayer) {
   NormalStatus failed = FailRecursively(3);
   base::Value actual = MediaSerialize(failed);
-  ASSERT_EQ(actual.DictSize(), 5ul);
-  ASSERT_EQ(*actual.FindStringPath("message"), "Message");
-  ASSERT_EQ(actual.FindListPath("stack")->GetListDeprecated().size(), 4ul);
-  ASSERT_EQ(actual.FindKey("cause"), nullptr);
-  ASSERT_EQ(actual.FindDictPath("data")->DictSize(), 0ul);
+  const base::Value::Dict& actual_dict = actual.GetDict();
+  ASSERT_EQ(actual_dict.size(), 5ul);
+  ASSERT_EQ(*actual_dict.FindString("message"), "Message");
+  ASSERT_EQ(actual_dict.FindList("stack")->size(), 4ul);
+  ASSERT_EQ(actual_dict.Find("cause"), nullptr);
+  ASSERT_EQ(actual_dict.FindDict("data")->size(), 0ul);
 
-  const auto& stack = actual.FindListPath("stack")->GetListDeprecated();
-  ASSERT_EQ(stack[0].DictSize(), 2ul);  // line and file
+  const auto& stack = *actual_dict.FindList("stack");
+  ;
+  ASSERT_EQ(stack[0].GetDict().size(), 2ul);  // line and file
 }
 
 TEST_F(StatusTest, CanHaveData) {
   NormalStatus failed = FailWithData("example", "data");
   base::Value actual = MediaSerialize(failed);
-  ASSERT_EQ(actual.DictSize(), 5ul);
-  ASSERT_EQ(*actual.FindStringPath("message"), "Message");
-  ASSERT_EQ(actual.FindListPath("stack")->GetListDeprecated().size(), 1ul);
-  ASSERT_EQ(actual.FindKey("cause"), nullptr);
-  ASSERT_EQ(actual.FindDictPath("data")->DictSize(), 1ul);
+  const base::Value::Dict& actual_dict = actual.GetDict();
+  ASSERT_EQ(actual_dict.size(), 5ul);
+  ASSERT_EQ(*actual_dict.FindString("message"), "Message");
+  ASSERT_EQ(actual_dict.FindList("stack")->size(), 1ul);
+  ASSERT_EQ(actual_dict.Find("cause"), nullptr);
+  ASSERT_EQ(actual_dict.FindDict("data")->size(), 1ul);
 
-  const auto& stack = actual.FindListPath("stack")->GetListDeprecated();
-  ASSERT_EQ(stack[0].DictSize(), 2ul);  // line and file
+  const auto& stack = *actual_dict.FindList("stack");
+  ;
+  ASSERT_EQ(stack[0].GetDict().size(), 2ul);  // line and file
 
-  ASSERT_EQ(*actual.FindDictPath("data")->FindStringPath("example"), "data");
+  ASSERT_EQ(*actual_dict.FindDict("data")->FindString("example"), "data");
 }
 
 TEST_F(StatusTest, CanUseCustomSerializer) {
   NormalStatus failed =
       FailWithData("example", UselessThingToBeSerialized("F"));
   base::Value actual = MediaSerialize(failed);
-  ASSERT_EQ(actual.DictSize(), 5ul);
-  ASSERT_EQ(*actual.FindStringPath("message"), "Message");
-  ASSERT_EQ(actual.FindListPath("stack")->GetListDeprecated().size(), 1ul);
-  ASSERT_EQ(actual.FindKey("cause"), nullptr);
-  ASSERT_EQ(actual.FindDictPath("data")->DictSize(), 1ul);
+  const base::Value::Dict& actual_dict = actual.GetDict();
+  ASSERT_EQ(actual_dict.size(), 5ul);
+  ASSERT_EQ(*actual_dict.FindString("message"), "Message");
+  ASSERT_EQ(actual_dict.FindList("stack")->size(), 1ul);
+  ASSERT_EQ(actual_dict.Find("cause"), nullptr);
+  ASSERT_EQ(actual_dict.FindDict("data")->size(), 1ul);
 
-  const auto& stack = actual.FindListPath("stack")->GetListDeprecated();
-  ASSERT_EQ(stack[0].DictSize(), 2ul);  // line and file
+  const auto& stack = *actual_dict.FindList("stack");
+  ;
+  ASSERT_EQ(stack[0].GetDict().size(), 2ul);  // line and file
 
-  ASSERT_EQ(*actual.FindDictPath("data")->FindStringPath("example"), "F");
+  ASSERT_EQ(*actual_dict.FindDict("data")->FindString("example"), "F");
 }
 
 TEST_F(StatusTest, CausedByHasVector) {
   NormalStatus causal = FailWithCause();
   base::Value actual = MediaSerialize(causal);
-  ASSERT_EQ(actual.DictSize(), 6ul);
-  ASSERT_EQ(*actual.FindStringPath("message"), "Message");
-  ASSERT_EQ(actual.FindListPath("stack")->GetListDeprecated().size(), 1ul);
-  ASSERT_EQ(actual.FindDictPath("data")->DictSize(), 0ul);
-  ASSERT_NE(actual.FindKey("cause"), nullptr);
+  const base::Value::Dict& actual_dict = actual.GetDict();
+  ASSERT_EQ(actual_dict.size(), 6ul);
+  ASSERT_EQ(*actual_dict.FindString("message"), "Message");
+  ASSERT_EQ(actual_dict.FindList("stack")->size(), 1ul);
+  ASSERT_EQ(actual_dict.FindDict("data")->size(), 0ul);
+  ASSERT_NE(actual_dict.Find("cause"), nullptr);
 
-  base::Value* nested = actual.FindDictPath("cause");
+  const base::Value::Dict* nested = actual_dict.FindDict("cause");
   ASSERT_NE(nested, nullptr);
-  ASSERT_EQ(nested->DictSize(), 5ul);
-  ASSERT_EQ(*nested->FindStringPath("message"), "Message");
-  ASSERT_EQ(nested->FindListPath("stack")->GetListDeprecated().size(), 1ul);
-  ASSERT_EQ(nested->FindKey("cause"), nullptr);
-  ASSERT_EQ(nested->FindDictPath("data")->DictSize(), 0ul);
+  ASSERT_EQ(nested->size(), 5ul);
+  ASSERT_EQ(*nested->FindString("message"), "Message");
+  ASSERT_EQ(nested->FindList("stack")->size(), 1ul);
+  ASSERT_EQ(nested->Find("cause"), nullptr);
+  ASSERT_EQ(nested->FindDict("data")->size(), 0ul);
 }
 
 TEST_F(StatusTest, CausedByCanAssignCopy) {
@@ -341,19 +354,20 @@ TEST_F(StatusTest, CausedByCanAssignCopy) {
   base::Value causal_serialized = MediaSerialize(causal);
   base::Value copy_causal_serialized = MediaSerialize(copy_causal);
 
-  base::Value* original = causal_serialized.FindDictPath("cause");
-  ASSERT_EQ(original->DictSize(), 5ul);
-  ASSERT_EQ(*original->FindStringPath("message"), "Message");
-  ASSERT_EQ(original->FindListPath("stack")->GetListDeprecated().size(), 1ul);
-  ASSERT_EQ(original->FindKey("cause"), nullptr);
-  ASSERT_EQ(original->FindDictPath("data")->DictSize(), 0ul);
+  base::Value::Dict* original = causal_serialized.GetDict().FindDict("cause");
+  ASSERT_EQ(original->size(), 5ul);
+  ASSERT_EQ(*original->FindString("message"), "Message");
+  ASSERT_EQ(original->FindList("stack")->size(), 1ul);
+  ASSERT_EQ(original->Find("cause"), nullptr);
+  ASSERT_EQ(original->FindDict("data")->size(), 0ul);
 
-  base::Value* copied = copy_causal_serialized.FindDictPath("cause");
-  ASSERT_EQ(copied->DictSize(), 5ul);
-  ASSERT_EQ(*copied->FindStringPath("message"), "Message");
-  ASSERT_EQ(copied->FindListPath("stack")->GetListDeprecated().size(), 1ul);
-  ASSERT_EQ(copied->FindKey("cause"), nullptr);
-  ASSERT_EQ(copied->FindDictPath("data")->DictSize(), 0ul);
+  base::Value::Dict* copied =
+      copy_causal_serialized.GetDict().FindDict("cause");
+  ASSERT_EQ(copied->size(), 5ul);
+  ASSERT_EQ(*copied->FindString("message"), "Message");
+  ASSERT_EQ(copied->FindList("stack")->size(), 1ul);
+  ASSERT_EQ(copied->Find("cause"), nullptr);
+  ASSERT_EQ(copied->FindDict("data")->size(), 0ul);
 }
 
 TEST_F(StatusTest, CanCopyEasily) {
@@ -361,18 +375,19 @@ TEST_F(StatusTest, CanCopyEasily) {
   NormalStatus withData = DoSomethingGiveItBack(failed);
 
   base::Value actual = MediaSerialize(failed);
-  ASSERT_EQ(actual.DictSize(), 5ul);
-  ASSERT_EQ(*actual.FindStringPath("message"), "Message");
-  ASSERT_EQ(actual.FindListPath("stack")->GetListDeprecated().size(), 1ul);
-  ASSERT_EQ(actual.FindKey("cause"), nullptr);
-  ASSERT_EQ(actual.FindDictPath("data")->DictSize(), 0ul);
+  const base::Value::Dict& actual_dict = actual.GetDict();
+  ASSERT_EQ(actual_dict.size(), 5ul);
+  ASSERT_EQ(*actual_dict.FindString("message"), "Message");
+  ASSERT_EQ(actual_dict.FindList("stack")->size(), 1ul);
+  ASSERT_EQ(actual_dict.Find("cause"), nullptr);
+  ASSERT_EQ(actual_dict.FindDict("data")->size(), 0ul);
 
   actual = MediaSerialize(withData);
-  ASSERT_EQ(actual.DictSize(), 5ul);
-  ASSERT_EQ(*actual.FindStringPath("message"), "Message");
-  ASSERT_EQ(actual.FindListPath("stack")->GetListDeprecated().size(), 1ul);
-  ASSERT_EQ(actual.FindKey("cause"), nullptr);
-  ASSERT_EQ(actual.FindDictPath("data")->DictSize(), 1ul);
+  ASSERT_EQ(actual_dict.size(), 5ul);
+  ASSERT_EQ(*actual_dict.FindString("message"), "Message");
+  ASSERT_EQ(actual_dict.FindList("stack")->size(), 1ul);
+  ASSERT_EQ(actual_dict.Find("cause"), nullptr);
+  ASSERT_EQ(actual_dict.FindDict("data")->size(), 1ul);
 }
 
 TEST_F(StatusTest, StatusOrTypicalUsage) {
@@ -444,8 +459,8 @@ TEST_F(StatusTest, TypedStatusWithNoDefaultAndNoOk) {
   EXPECT_TRUE(ok.has_value());
   // One cannot call ok.code() without an okay type.
 
-  base::Value actual = MediaSerialize(bar);
-  EXPECT_EQ(*actual.FindIntPath("code"), static_cast<int>(bar.code()));
+  base::Value::Dict actual = MediaSerialize(bar).TakeDict();
+  EXPECT_EQ(*actual.FindInt("code"), static_cast<int>(bar.code()));
 }
 
 TEST_F(StatusTest, TypedStatusWithNoDefaultHasOk) {
@@ -472,8 +487,8 @@ TEST_F(StatusTest, TypedStatusWithNoDefaultHasOk) {
   EXPECT_TRUE(ok.has_value());
   EXPECT_EQ(ok.code(), NDStatus::Codes::kOk);
 
-  base::Value actual = MediaSerialize(bar);
-  EXPECT_EQ(*actual.FindIntPath("code"), static_cast<int>(bar.code()));
+  base::Value::Dict actual = MediaSerialize(bar).TakeDict();
+  EXPECT_EQ(*actual.FindInt("code"), static_cast<int>(bar.code()));
 }
 
 TEST_F(StatusTest, Okayness) {
@@ -495,10 +510,20 @@ TEST_F(StatusTest, Okayness) {
                   .is_ok());
 }
 
-TEST_F(StatusTest, CanConvertOkToCode) {
-  // OkStatus() should also be convertible to the enum directly.
-  ZeroValueOkTypeTraits::Codes code = OkStatus();
-  EXPECT_EQ(code, ZeroValueOkTypeTraits::Codes::kOk);
+TEST_F(StatusTest, MustHaveOkOrHelperMethod) {
+  static_assert(internal::StatusTraitsHelper<CustomDefaultValue>::has_default,
+                "WOW");
+
+  auto nook = internal::StatusTraitsHelper<NoOkStatusTypeTraits>::OkEnumValue();
+  ASSERT_FALSE(nook.has_value());
+
+  auto kok = internal::StatusTraitsHelper<ZeroValueOkTypeTraits>::OkEnumValue();
+  ASSERT_TRUE(kok.has_value());
+  ASSERT_EQ(*kok, ZeroValueOkTypeTraits::Codes::kOk);
+
+  auto custom = internal::StatusTraitsHelper<CustomDefaultValue>::OkEnumValue();
+  ASSERT_TRUE(custom.has_value());
+  ASSERT_EQ(*custom, CustomDefaultValue::Codes::kFoo);
 }
 
 TEST_F(StatusTest, OkStatusInitializesToOk) {

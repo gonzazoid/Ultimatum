@@ -5,8 +5,11 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 
 #include "third_party/blink/public/platform/task_type.h"
+#include "third_party/blink/renderer/bindings/core/v8/capture_source_location.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
+#include "third_party/blink/renderer/platform/bindings/source_location.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 #if DCHECK_IS_ON()
@@ -23,10 +26,7 @@ class ScriptPromiseResolver::ExceptionStateScope final : public ExceptionState {
   explicit ExceptionStateScope(ScriptPromiseResolver* resolver)
       : ExceptionState(resolver->script_state_->GetIsolate(),
                        resolver->exception_context_),
-        resolver_(resolver) {
-    CHECK_NE(resolver->exception_context_.GetContext(),
-             ExceptionContext::Context::kEmpty);
-  }
+        resolver_(resolver) {}
   ~ExceptionStateScope() {
     DCHECK(HadException());
     resolver_->Reject(GetException());
@@ -38,21 +38,23 @@ class ScriptPromiseResolver::ExceptionStateScope final : public ExceptionState {
 };
 
 ScriptPromiseResolver::ScriptPromiseResolver(ScriptState* script_state)
-    : ExecutionContextLifecycleObserver(ExecutionContext::From(script_state)),
-      state_(kPending),
-      script_state_(script_state),
-      resolver_(script_state) {
-  if (GetExecutionContext()->IsContextDestroyed()) {
-    state_ = kDetached;
-    resolver_.Clear();
-  }
-}
+    : ScriptPromiseResolver(
+          script_state,
+          ExceptionContext(ExceptionContextType::kUnknown, nullptr, nullptr)) {}
 
 ScriptPromiseResolver::ScriptPromiseResolver(
     ScriptState* script_state,
     const ExceptionContext& exception_context)
-    : ScriptPromiseResolver(script_state) {
-  exception_context_ = exception_context;
+    : ExecutionContextLifecycleObserver(ExecutionContext::From(script_state)),
+      state_(kPending),
+      script_state_(script_state),
+      resolver_(script_state),
+      exception_context_(exception_context) {
+  if (GetExecutionContext()->IsContextDestroyed()) {
+    state_ = kDetached;
+    resolver_.Clear();
+  }
+  script_url_ = GetCurrentScriptUrl(script_state->GetIsolate());
 }
 
 ScriptPromiseResolver::~ScriptPromiseResolver() = default;
@@ -139,13 +141,16 @@ void ScriptPromiseResolver::KeepAliveWhilePending() {
 void ScriptPromiseResolver::ResolveOrRejectImmediately() {
   DCHECK(!GetExecutionContext()->IsContextDestroyed());
   DCHECK(!GetExecutionContext()->IsContextPaused());
-  {
-    if (state_ == kResolving) {
-      resolver_.Resolve(value_.Get(script_state_->GetIsolate()));
-    } else {
-      DCHECK_EQ(state_, kRejecting);
-      resolver_.Reject(value_.Get(script_state_->GetIsolate()));
-    }
+
+  probe::WillHandlePromise(GetExecutionContext(), script_state_,
+                           state_ == kResolving,
+                           exception_context_.GetClassName(),
+                           exception_context_.GetPropertyName(), script_url_);
+  if (state_ == kResolving) {
+    resolver_.Resolve(value_.Get(script_state_->GetIsolate()));
+  } else {
+    DCHECK_EQ(state_, kRejecting);
+    resolver_.Reject(value_.Get(script_state_->GetIsolate()));
   }
   Detach();
 }
@@ -164,7 +169,7 @@ void ScriptPromiseResolver::ResolveOrRejectDeferred() {
     return;
   }
 
-  ScriptState::Scope scope(script_state_);
+  ScriptState::Scope scope(script_state_.Get());
   ResolveOrRejectImmediately();
 }
 

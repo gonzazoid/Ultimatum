@@ -5,14 +5,15 @@
 #include "third_party/blink/renderer/modules/presentation/presentation_connection.h"
 
 #include <memory>
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/mojom/frame/lifecycle.mojom-blink.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
 #include "third_party/blink/renderer/core/events/message_event.h"
 #include "third_party/blink/renderer/core/fileapi/file_error.h"
+#include "third_party/blink/renderer/core/fileapi/file_reader_client.h"
 #include "third_party/blink/renderer/core/fileapi/file_reader_loader.h"
-#include "third_party/blink/renderer/core/fileapi/file_reader_loader_client.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer_view.h"
@@ -117,40 +118,40 @@ class PresentationConnection::Message final
 
 class PresentationConnection::BlobLoader final
     : public GarbageCollected<PresentationConnection::BlobLoader>,
-      public FileReaderLoaderClient {
+      public FileReaderAccumulator {
  public:
   BlobLoader(scoped_refptr<BlobDataHandle> blob_data_handle,
              PresentationConnection* presentation_connection,
              scoped_refptr<base::SingleThreadTaskRunner> task_runner)
       : presentation_connection_(presentation_connection),
-        loader_(std::make_unique<FileReaderLoader>(
-            FileReaderLoader::kReadAsArrayBuffer,
-            this,
-            std::move(task_runner))) {
+        loader_(
+            MakeGarbageCollected<FileReaderLoader>(this,
+                                                   std::move(task_runner))) {
     loader_->Start(std::move(blob_data_handle));
   }
   ~BlobLoader() override = default;
 
-  // FileReaderLoaderClient functions.
-  void DidStartLoading() override {}
-  void DidReceiveData() override {}
-  void DidFinishLoading() override {
-    presentation_connection_->DidFinishLoadingBlob(
-        loader_->ArrayBufferResult());
+  // FileReaderAccumulator functions.
+  void DidFinishLoading(FileReaderData contents) override {
+    auto* buffer = std::move(contents).AsDOMArrayBuffer();
+    presentation_connection_->DidFinishLoadingBlob(buffer);
   }
   void DidFail(FileErrorCode error_code) override {
+    FileReaderAccumulator::DidFail(error_code);
     presentation_connection_->DidFailLoadingBlob(error_code);
   }
 
   void Cancel() { loader_->Cancel(); }
 
-  void Trace(Visitor* visitor) const {
+  void Trace(Visitor* visitor) const override {
+    FileReaderAccumulator::Trace(visitor);
     visitor->Trace(presentation_connection_);
+    visitor->Trace(loader_);
   }
 
  private:
   Member<PresentationConnection> presentation_connection_;
-  std::unique_ptr<FileReaderLoader> loader_;
+  Member<FileReaderLoader> loader_;
 };
 
 PresentationConnection::PresentationConnection(LocalDOMWindow& window,
@@ -388,8 +389,7 @@ ExecutionContext* PresentationConnection::GetExecutionContext() const {
 void PresentationConnection::AddedEventListener(
     const AtomicString& event_type,
     RegisteredEventListener& registered_listener) {
-  EventTargetWithInlineData::AddedEventListener(event_type,
-                                                registered_listener);
+  EventTarget::AddedEventListener(event_type, registered_listener);
   if (event_type == event_type_names::kConnect) {
     UseCounter::Count(GetExecutionContext(),
                       WebFeature::kPresentationConnectionConnectEventListener);
@@ -429,7 +429,7 @@ void PresentationConnection::Trace(Visitor* visitor) const {
   visitor->Trace(target_connection_);
   visitor->Trace(blob_loader_);
   visitor->Trace(messages_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContextLifecycleStateObserver::Trace(visitor);
 }
 

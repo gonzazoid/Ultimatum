@@ -11,6 +11,7 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "cc/metrics/compositor_timing_history.h"
 #include "cc/metrics/dropped_frame_counter.h"
@@ -87,8 +88,8 @@ class TestScheduler : public Scheduler {
       int layer_tree_host_id,
       base::SingleThreadTaskRunner* task_runner,
       std::unique_ptr<CompositorTimingHistory> compositor_timing_history,
-      CompositorFrameReportingController* compositor_frame_reporting_controller,
-      power_scheduler::PowerModeArbiter* arbiter);
+      CompositorFrameReportingController*
+          compositor_frame_reporting_controller);
   TestScheduler(const TestScheduler&) = delete;
 
   TestScheduler& operator=(const TestScheduler&) = delete;

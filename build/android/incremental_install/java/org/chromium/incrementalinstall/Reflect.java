@@ -4,15 +4,18 @@
 
 package org.chromium.incrementalinstall;
 
+import android.os.Build;
+
+import org.lsposed.hiddenapibypass.HiddenApiBypass;
+
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.List;
 
-/**
- * Reflection helper methods.
- */
+/** Reflection helper methods. */
 final class Reflect {
     /**
      * Sets the value of an object's field (even if it's not visible).
@@ -47,8 +50,10 @@ final class Reflect {
      * type.
      */
     static Object[] concatArrays(Object[] arrType, Object[] left, Object[] right) {
-        Object[] result = (Object[]) Array.newInstance(
-                arrType.getClass().getComponentType(), left.length + right.length);
+        Object[] result =
+                (Object[])
+                        Array.newInstance(
+                                arrType.getClass().getComponentType(), left.length + right.length);
         System.arraycopy(left, 0, result, 0, left.length);
         System.arraycopy(right, 0, result, left.length, right.length);
         return result;
@@ -61,15 +66,13 @@ final class Reflect {
     static Object invokeMethod(Object instance, String name, Object... params)
             throws ReflectiveOperationException {
         boolean isStatic = instance instanceof Class;
-        Class<?> clazz = isStatic ? (Class<?>) instance :  instance.getClass();
+        Class<?> clazz = isStatic ? (Class<?>) instance : instance.getClass();
         Method method = findMethod(clazz, name, params);
         method.setAccessible(true);
         return method.invoke(instance, params);
     }
 
-    /**
-     * Calls a constructor with zero or more parameters.
-     */
+    /** Calls a constructor with zero or more parameters. */
     static Object newInstance(Class<?> clazz, Object... params)
             throws ReflectiveOperationException {
         Constructor<?> constructor = findConstructor(clazz, params);
@@ -79,12 +82,24 @@ final class Reflect {
 
     private static Field findField(Object instance, String name) throws NoSuchFieldException {
         boolean isStatic = instance instanceof Class;
-        Class<?> clazz = isStatic ? (Class<?>) instance :  instance.getClass();
+        Class<?> clazz = isStatic ? (Class<?>) instance : instance.getClass();
         for (; clazz != null; clazz = clazz.getSuperclass()) {
-            try {
-                return clazz.getDeclaredField(name);
-            } catch (NoSuchFieldException e) {
-                // Need to look in the super class.
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+                try {
+                    return clazz.getDeclaredField(name);
+                } catch (NoSuchFieldException e) {
+                    // Need to look in the super class.
+                }
+            } else {
+                List<Field> fields =
+                        isStatic
+                                ? HiddenApiBypass.getStaticFields(clazz)
+                                : HiddenApiBypass.getInstanceFields(clazz);
+                for (Field field : fields) {
+                    if (field.getName().equals(name)) {
+                        return field;
+                    }
+                }
             }
         }
         throw new NoSuchFieldException("Field " + name + " not found in " + instance.getClass());
@@ -100,8 +115,13 @@ final class Reflect {
                 }
             }
         }
-        throw new NoSuchMethodException("Method " + name + " with parameters "
-                + Arrays.asList(params) + " not found in " + clazz);
+        throw new NoSuchMethodException(
+                "Method "
+                        + name
+                        + " with parameters "
+                        + Arrays.asList(params)
+                        + " not found in "
+                        + clazz);
     }
 
     private static Constructor<?> findConstructor(Class<?> clazz, Object... params)
@@ -111,8 +131,8 @@ final class Reflect {
                 return constructor;
             }
         }
-        throw new NoSuchMethodException("Constructor with parameters " + Arrays.asList(params)
-                + " not found in " + clazz);
+        throw new NoSuchMethodException(
+                "Constructor with parameters " + Arrays.asList(params) + " not found in " + clazz);
     }
 
     private static boolean areParametersCompatible(Class<?>[] paramTypes, Object... params) {
@@ -135,7 +155,7 @@ final class Reflect {
         if (left.isPrimitive()) {
             // TODO(agrieve): Fill in the rest as needed.
             return left == boolean.class && rightClazz == Boolean.class
-                   || left == int.class && rightClazz == Integer.class;
+                    || left == int.class && rightClazz == Integer.class;
         }
         return left.isAssignableFrom(rightClazz);
     }

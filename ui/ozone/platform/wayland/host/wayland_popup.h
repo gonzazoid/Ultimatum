@@ -7,6 +7,10 @@
 
 #include "ui/ozone/platform/wayland/host/wayland_window.h"
 
+namespace views::corewm {
+enum class TooltipTrigger;
+}  // namespace views::corewm
+
 namespace ui {
 
 class WaylandConnection;
@@ -25,6 +29,36 @@ class WaylandPopup : public WaylandWindow {
 
   ShellPopupWrapper* shell_popup() const { return shell_popup_.get(); }
 
+  // WaylandWindow overrides:
+  void TooltipShown(const char* text,
+                    int32_t x,
+                    int32_t y,
+                    int32_t width,
+                    int32_t height) override;
+  void TooltipHidden() override;
+
+  // Configure related:
+  void HandleSurfaceConfigure(uint32_t serial) override;
+  void HandlePopupConfigure(const gfx::Rect& bounds) override;
+  void OnSequencePoint(int64_t seq) override;
+  bool IsSurfaceConfigured() override;
+  void AckConfigure(uint32_t serial) override;
+
+  void OnCloseRequest() override;
+  bool OnInitialize(PlatformWindowInitProperties properties,
+                    PlatformWindowDelegate::State* state) override;
+  WaylandPopup* AsWaylandPopup() override;
+  void SetWindowGeometry(gfx::Size size_dip) override;
+  void UpdateWindowMask() override;
+  void PropagateBufferScale(float new_scale) override;
+  void ShowTooltip(const std::u16string& text,
+                   const gfx::Point& position,
+                   const PlatformWindowTooltipTrigger trigger,
+                   const base::TimeDelta show_delay,
+                   const base::TimeDelta hide_delay) override;
+  void HideTooltip() override;
+  bool IsScreenCoordinatesEnabled() const override;
+
   // PlatformWindow
   void Show(bool inactive) override;
   void Hide() override;
@@ -32,19 +66,6 @@ class WaylandPopup : public WaylandWindow {
   void SetBoundsInDIP(const gfx::Rect& bounds) override;
 
  private:
-  // WaylandWindow overrides:
-  void HandlePopupConfigure(const gfx::Rect& bounds) override;
-  void HandleSurfaceConfigure(uint32_t serial) override;
-  void OnCloseRequest() override;
-  bool OnInitialize(PlatformWindowInitProperties properties) override;
-  WaylandPopup* AsWaylandPopup() override;
-  bool IsSurfaceConfigured() override;
-  void SetWindowGeometry(gfx::Rect bounds) override;
-  void AckConfigure(uint32_t serial) override;
-  void UpdateVisualSize(const gfx::Size& size_px) override;
-  void ApplyPendingBounds() override;
-  void UpdateWindowMask() override;
-
   // Creates a popup window, which is visible as a menu window.
   bool CreateShellPopup();
 
@@ -62,20 +83,15 @@ class WaylandPopup : public WaylandWindow {
   // extension to xdg_popup.
   bool decorated_via_aura_popup_ = false;
 
-  // Exists only if the frame is decorated via aura_surface. This is the
-  // deprecated path and can be removed once Ash is >= M105.
-  wl::Object<zaura_surface> aura_surface_;
-
   PlatformWindowShadowType shadow_type_ = PlatformWindowShadowType::kNone;
-
-  // Helps to avoid reposition itself if HandlePopupConfigure was called, which
-  // resulted in calling SetBounds.
-  bool wayland_sets_bounds_ = false;
 
   // If WaylandPopup has been moved, schedule redraw as the client of the
   // Ozone/Wayland may not do so. Otherwise, a new state (if bounds has been
   // changed) won't be applied.
   bool schedule_redraw_ = false;
+
+  // The last buffer scale sent to the wayland server.
+  absl::optional<float> last_sent_buffer_scale_;
 };
 
 }  // namespace ui

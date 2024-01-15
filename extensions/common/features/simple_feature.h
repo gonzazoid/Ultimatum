@@ -9,20 +9,23 @@
 
 #include <initializer_list>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/lazy_instance.h"
-#include "components/version_info/version_info.h"
+#include "components/version_info/channel.h"
+#include "extensions/common/context_data.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/features/feature.h"
 #include "extensions/common/manifest.h"
+#include "extensions/common/mojom/context_type.mojom-forward.h"
 #include "extensions/common/mojom/feature_session_type.mojom.h"
 #include "extensions/common/mojom/manifest.mojom-shared.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace extensions {
 
@@ -57,31 +60,37 @@ class SimpleFeature : public Feature {
   ~SimpleFeature() override;
 
   Availability IsAvailableToContext(const Extension* extension,
-                                    Context context,
-                                    int context_id) const {
-    return IsAvailableToContext(extension, context, GURL(), context_id);
+                                    mojom::ContextType context,
+                                    int context_id,
+                                    const ContextData& context_data) const {
+    return IsAvailableToContext(extension, context, GURL(), context_id,
+                                context_data);
   }
   Availability IsAvailableToContext(const Extension* extension,
-                                    Context context,
+                                    mojom::ContextType context,
                                     Platform platform,
-                                    int context_id) const {
+                                    int context_id,
+                                    const ContextData& context_data) const {
     return IsAvailableToContextImpl(extension, context, GURL(), platform,
-                                    context_id, true);
+                                    context_id, true, context_data);
   }
   Availability IsAvailableToContext(const Extension* extension,
-                                    Context context,
+                                    mojom::ContextType context,
                                     const GURL& url,
-                                    int context_id) const {
+                                    int context_id,
+                                    const ContextData& context_data) const {
     return IsAvailableToContextImpl(extension, context, url,
-                                    GetCurrentPlatform(), context_id, true);
+                                    GetCurrentPlatform(), context_id, true,
+                                    context_data);
   }
   Availability IsAvailableToContext(const Extension* extension,
-                                    Context context,
+                                    mojom::ContextType context,
                                     const GURL& url,
                                     Platform platform,
-                                    int context_id) const {
+                                    int context_id,
+                                    const ContextData& context_data) const {
     return IsAvailableToContextImpl(extension, context, url, platform,
-                                    context_id, true);
+                                    context_id, true, context_data);
   }
 
   // extension::Feature:
@@ -95,6 +104,10 @@ class SimpleFeature : public Feature {
   bool IsInternal() const override;
   bool IsIdInBlocklist(const HashedExtensionId& hashed_id) const override;
   bool IsIdInAllowlist(const HashedExtensionId& hashed_id) const override;
+  bool RequiresDelegatedAvailabilityCheck() const override;
+  void SetDelegatedAvailabilityCheckHandler(
+      DelegatedAvailabilityCheckHandler handler) override;
+  bool HasDelegatedAvailabilityCheckHandler() const override;
 
   static bool IsIdInArray(const std::string& extension_id,
                           const char* const array[],
@@ -111,27 +124,34 @@ class SimpleFeature : public Feature {
   };
 
   // Setters used by generated code to create the feature.
-  // NOTE: These setters use base::StringPiece and std::initalizer_list rather
+  // NOTE: These setters use std::string_view and std::initalizer_list rather
   // than std::string and std::vector for binary size reasons. Using STL types
   // directly in the header means that code that doesn't already have that exact
   // type ends up triggering many implicit conversions which are all inlined.
   void set_blocklist(std::initializer_list<const char* const> blocklist);
   void set_channel(version_info::Channel channel) { channel_ = channel; }
-  void set_command_line_switch(base::StringPiece command_line_switch);
+  void set_command_line_switch(std::string_view command_line_switch);
   void set_component_extensions_auto_granted(bool granted) {
     component_extensions_auto_granted_ = granted;
   }
-  void set_contexts(std::initializer_list<Context> contexts);
+  void set_contexts(std::initializer_list<mojom::ContextType> contexts);
   void set_dependencies(std::initializer_list<const char* const> dependencies);
   void set_extension_types(std::initializer_list<Manifest::Type> types);
-  void set_feature_flag(base::StringPiece feature_flag);
+  void set_feature_flag(std::string_view feature_flag);
   void set_session_types(
       std::initializer_list<mojom::FeatureSessionType> types);
   void set_internal(bool is_internal) { is_internal_ = is_internal; }
+  void set_requires_delegated_availability_check(
+      bool requires_delegated_availability_check) {
+    requires_delegated_availability_check_ =
+        requires_delegated_availability_check;
+  }
   void set_developer_mode_only(bool is_developer_mode_only) {
     developer_mode_only_ = is_developer_mode_only;
   }
-  void set_disallow_for_service_workers(bool disallow);
+  void set_disallow_for_service_workers(bool disallow) {
+    disallow_for_service_workers_ = disallow;
+  }
   void set_location(Location location) { location_ = location; }
   // set_matches() is an exception to pass-by-value since we construct an
   // URLPatternSet from the vector of strings.
@@ -155,21 +175,21 @@ class SimpleFeature : public Feature {
     return extension_types_;
   }
   const std::vector<Platform>& platforms() const { return platforms_; }
-  const absl::optional<std::vector<Context>>& contexts() const {
+  const std::optional<std::vector<mojom::ContextType>>& contexts() const {
     return contexts_;
   }
   const std::vector<std::string>& dependencies() const { return dependencies_; }
-  const absl::optional<version_info::Channel> channel() const {
+  const std::optional<version_info::Channel> channel() const {
     return channel_;
   }
-  const absl::optional<Location> location() const { return location_; }
-  const absl::optional<int> min_manifest_version() const {
+  const std::optional<Location> location() const { return location_; }
+  const std::optional<int> min_manifest_version() const {
     return min_manifest_version_;
   }
-  const absl::optional<int> max_manifest_version() const {
+  const std::optional<int> max_manifest_version() const {
     return max_manifest_version_;
   }
-  const absl::optional<std::string>& command_line_switch() const {
+  const std::optional<std::string>& command_line_switch() const {
     return command_line_switch_;
   }
   bool component_extensions_auto_granted() const {
@@ -181,7 +201,7 @@ class SimpleFeature : public Feature {
       AvailabilityResult result,
       Manifest::Type type,
       const GURL& url,
-      Context context,
+      mojom::ContextType context,
       version_info::Channel channel,
       mojom::FeatureSessionType session_type) const;
 
@@ -192,7 +212,7 @@ class SimpleFeature : public Feature {
   Availability CreateAvailability(AvailabilityResult result,
                                   const GURL& url) const;
   Availability CreateAvailability(AvailabilityResult result,
-                                  Context context) const;
+                                  mojom::ContextType context) const;
   Availability CreateAvailability(AvailabilityResult result,
                                   version_info::Channel channel) const;
   Availability CreateAvailability(AvailabilityResult result,
@@ -200,11 +220,12 @@ class SimpleFeature : public Feature {
 
   Availability IsAvailableToContextImpl(
       const Extension* extension,
-      Context context,
+      mojom::ContextType context,
       const GURL& url,
       Platform platform,
       int context_id,
-      bool check_developer_mode) const override;
+      bool check_developer_mode,
+      const ContextData& context_data) const override;
 
  private:
   friend struct FeatureComparator;
@@ -218,10 +239,11 @@ class SimpleFeature : public Feature {
 
   static Feature::Availability IsAvailableToContextForBind(
       const Extension* extension,
-      Feature::Context context,
+      mojom::ContextType context,
       const GURL& url,
       Feature::Platform platform,
       int context_id,
+      const ContextData* context_data,
       const Feature* feature);
 
   static bool IsIdInList(const HashedExtensionId& hashed_id,
@@ -257,9 +279,20 @@ class SimpleFeature : public Feature {
                                        int manifest_version) const;
 
   // Returns the availability of the feature with respect to a given context.
-  Availability GetContextAvailability(Context context,
+  Availability GetContextAvailability(mojom::ContextType context,
                                       const GURL& url,
                                       bool is_for_service_worker) const;
+
+  // Returns the result of running the installed delegated availability check
+  // handler.
+  Availability RunDelegatedAvailabilityCheck(
+      const Extension* extension,
+      mojom::ContextType context,
+      const GURL& url,
+      Platform platform,
+      int context_id,
+      bool check_developer_mode,
+      const ContextData& context_data) const;
 
   // For clarity and consistency, we handle the default value of each of these
   // members the same way: it matches everything. It is up to the higher level
@@ -270,23 +303,28 @@ class SimpleFeature : public Feature {
   std::vector<std::string> dependencies_;
   std::vector<Manifest::Type> extension_types_;
   std::vector<mojom::FeatureSessionType> session_types_;
-  absl::optional<std::vector<Context>> contexts_;
+  std::optional<std::vector<mojom::ContextType>> contexts_;
   std::vector<Platform> platforms_;
   URLPatternSet matches_;
 
-  absl::optional<Location> location_;
-  absl::optional<int> min_manifest_version_;
-  absl::optional<int> max_manifest_version_;
-  absl::optional<std::string> command_line_switch_;
-  absl::optional<std::string> feature_flag_;
-  absl::optional<version_info::Channel> channel_;
+  std::optional<Location> location_;
+  std::optional<int> min_manifest_version_;
+  std::optional<int> max_manifest_version_;
+  std::optional<std::string> command_line_switch_;
+  std::optional<std::string> feature_flag_;
+  std::optional<version_info::Channel> channel_;
   // Whether to ignore channel-based restrictions (such as because the user has
   // enabled experimental extension APIs). Note: this is lazily calculated, and
   // then cached.
-  mutable absl::optional<bool> ignore_channel_;
+  mutable std::optional<bool> ignore_channel_;
 
-  bool component_extensions_auto_granted_;
+  // If set and the feature needs to be overridden, this is the handler used
+  // to perform the override availability check.
+  DelegatedAvailabilityCheckHandler delegated_availability_check_handler_;
+
+  bool component_extensions_auto_granted_{false};
   bool is_internal_;
+  bool requires_delegated_availability_check_{false};
   bool developer_mode_only_{false};
   bool disallow_for_service_workers_;
 };

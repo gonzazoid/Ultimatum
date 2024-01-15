@@ -11,9 +11,10 @@
 namespace message_center {
 
 float MessagePopupView::GetOpacity() const {
-  if (!IsWidgetValid())
+  if (!IsWidgetValid()) {
     return 0.f;
-  return [GetWidget()->GetNativeWindow().GetNativeNSWindow() alphaValue];
+  }
+  return GetWidget()->GetNativeWindow().GetNativeNSWindow().alphaValue;
 }
 
 }  // namespace message_center

@@ -20,4 +20,20 @@ int64_t DataSource::GetMemoryUsage() {
   return GetSize(&temp) ? temp : 0;
 }
 
+void DataSource::SetPreload(media::DataSource::Preload preload) {}
+
+GURL DataSource::GetUrlAfterRedirects() const {
+  return GURL();
+}
+
+void DataSource::OnBufferingHaveEnough(bool must_cancel_netops) {}
+
+void DataSource::OnMediaPlaybackRateChanged(double playback_rate) {}
+
+void DataSource::OnMediaIsPlaying() {}
+
+CrossOriginDataSource* DataSource::GetAsCrossOriginDataSource() {
+  return nullptr;
+}
+
 }  // namespace media

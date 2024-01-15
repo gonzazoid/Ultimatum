@@ -5,10 +5,12 @@
 #ifndef SERVICES_VIZ_PUBLIC_CPP_COMPOSITING_SHARED_QUAD_STATE_MOJOM_TRAITS_H_
 #define SERVICES_VIZ_PUBLIC_CPP_COMPOSITING_SHARED_QUAD_STATE_MOJOM_TRAITS_H_
 
+#include "base/check_op.h"
 #include "base/memory/raw_ptr.h"
 #include "components/viz/common/quads/shared_quad_state.h"
 #include "services/viz/public/mojom/compositing/shared_quad_state.mojom-shared.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/gfx/geometry/mask_filter_info.h"
 #include "ui/gfx/mojom/mask_filter_info_mojom_traits.h"
 #include "ui/gfx/mojom/rrect_f_mojom_traits.h"
 
@@ -38,9 +40,12 @@ struct StructTraits<viz::mojom::SharedQuadStateDataView, OptSharedQuadState> {
     return input.sqs->visible_quad_layer_rect;
   }
 
-  static const gfx::MaskFilterInfo& mask_filter_info(
+  static const absl::optional<gfx::MaskFilterInfo> mask_filter_info(
       const OptSharedQuadState& input) {
-    return input.sqs->mask_filter_info;
+    return input.sqs->mask_filter_info.IsEmpty()
+               ? absl::nullopt
+               : absl::optional<gfx::MaskFilterInfo>(
+                     input.sqs->mask_filter_info);
   }
 
   static const absl::optional<gfx::Rect>& clip_rect(
@@ -64,12 +69,12 @@ struct StructTraits<viz::mojom::SharedQuadStateDataView, OptSharedQuadState> {
     return input.sqs->sorting_context_id;
   }
 
-  static bool is_fast_rounded_corner(const OptSharedQuadState& input) {
-    return input.sqs->is_fast_rounded_corner;
+  static uint32_t layer_id(const OptSharedQuadState& input) {
+    return input.sqs->layer_id;
   }
 
-  static float de_jelly_delta_y(const OptSharedQuadState& input) {
-    return input.sqs->de_jelly_delta_y;
+  static bool is_fast_rounded_corner(const OptSharedQuadState& input) {
+    return input.sqs->is_fast_rounded_corner;
   }
 };
 
@@ -113,12 +118,12 @@ struct StructTraits<viz::mojom::SharedQuadStateDataView, viz::SharedQuadState> {
     return sqs.sorting_context_id;
   }
 
-  static bool is_fast_rounded_corner(const viz::SharedQuadState& sqs) {
-    return sqs.is_fast_rounded_corner;
+  static uint32_t layer_id(const viz::SharedQuadState& sqs) {
+    return sqs.layer_id;
   }
 
-  static float de_jelly_delta_y(const viz::SharedQuadState& sqs) {
-    return sqs.de_jelly_delta_y;
+  static bool is_fast_rounded_corner(const viz::SharedQuadState& sqs) {
+    return sqs.is_fast_rounded_corner;
   }
 
   static bool Read(viz::mojom::SharedQuadStateDataView data,
@@ -126,19 +131,26 @@ struct StructTraits<viz::mojom::SharedQuadStateDataView, viz::SharedQuadState> {
     if (!data.ReadQuadToTargetTransform(&out->quad_to_target_transform) ||
         !data.ReadQuadLayerRect(&out->quad_layer_rect) ||
         !data.ReadVisibleQuadLayerRect(&out->visible_quad_layer_rect) ||
-        !data.ReadMaskFilterInfo(&out->mask_filter_info) ||
         !data.ReadClipRect(&out->clip_rect)) {
       return false;
     }
 
+    absl::optional<gfx::MaskFilterInfo> mask_filter;
+    if (!data.ReadMaskFilterInfo(&mask_filter)) {
+      return false;
+    }
+
+    out->mask_filter_info = mask_filter.value_or(gfx::MaskFilterInfo());
+
     out->are_contents_opaque = data.are_contents_opaque();
     out->opacity = data.opacity();
-    if (data.blend_mode() > static_cast<int>(SkBlendMode::kLastMode))
+    if (data.blend_mode() > static_cast<int>(SkBlendMode::kLastMode)) {
       return false;
+    }
     out->blend_mode = static_cast<SkBlendMode>(data.blend_mode());
     out->sorting_context_id = data.sorting_context_id();
+    out->layer_id = data.layer_id();
     out->is_fast_rounded_corner = data.is_fast_rounded_corner();
-    out->de_jelly_delta_y = data.de_jelly_delta_y();
 
     return true;
   }

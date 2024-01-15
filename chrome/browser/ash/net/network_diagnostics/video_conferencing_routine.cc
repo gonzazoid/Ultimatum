@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ash/net/network_diagnostics/video_conferencing_routine.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -11,18 +12,16 @@
 #include "base/time/time.h"
 #include "chrome/browser/ash/net/network_diagnostics/network_diagnostics_util.h"
 #include "chrome/browser/ash/net/network_diagnostics/udp_prober.h"
-#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/profiles/profile.h"
 #include "content/public/browser/storage_partition.h"
 #include "net/base/net_errors.h"
 #include "services/network/public/mojom/network_context.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 namespace network_diagnostics {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
 
 const char kDefaultStunServer[] = "stun.l.google.com";
@@ -65,7 +64,7 @@ void VideoConferencingRoutine::Run() {
 }
 
 void VideoConferencingRoutine::AnalyzeResultsAndExecuteCallback() {
-  absl::optional<std::string> support_details = kSupportDetails;
+  std::optional<std::string> support_details = kSupportDetails;
   set_verdict(mojom::RoutineVerdict::kProblem);
   if (!open_udp_port_found_) {
     problems_.push_back(mojom::VideoConferencingProblem::kUdpFailure);
@@ -78,7 +77,7 @@ void VideoConferencingRoutine::AnalyzeResultsAndExecuteCallback() {
   }
   if (problems_.empty()) {
     set_verdict(mojom::RoutineVerdict::kNoProblem);
-    support_details = absl::nullopt;
+    support_details = std::nullopt;
   }
   set_problems(mojom::RoutineProblems::NewVideoConferencingProblems(problems_));
   ExecuteCallback();

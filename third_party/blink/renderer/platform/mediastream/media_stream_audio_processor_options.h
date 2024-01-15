@@ -24,6 +24,15 @@ struct PLATFORM_EXPORT AudioProcessingProperties {
     kEchoCancellationSystem
   };
 
+  enum class VoiceIsolationType {
+    // Voice isolation behavior selected by the system is used.
+    kVoiceIsolationDefault,
+    // Voice isolation is disabled.
+    kVoiceIsolationDisabled,
+    // Voice isolation is enabled.
+    kVoiceIsolationEnabled,
+  };
+
   // Disables properties that are enabled by default.
   void DisableDefaultProperties();
 
@@ -38,6 +47,9 @@ struct PLATFORM_EXPORT AudioProcessingProperties {
 
   bool HasSameNonReconfigurableSettings(
       const AudioProcessingProperties& other) const;
+
+  // Returns if AGC is enabled in either WebRTC or system.
+  bool GainControlEnabled() const;
 
   // Converts this struct to an equivalent media::AudioProcessingSettings.
   media::AudioProcessingSettings ToAudioProcessingSettings(
@@ -75,8 +87,8 @@ struct PLATFORM_EXPORT AudioProcessingProperties {
   // removal).
   bool goog_experimental_noise_suppression = true;
   bool goog_highpass_filter = true;
-  // TODO(bugs.webrtc.org/7494): Effectively a no-op, remove this flag.
-  bool goog_experimental_auto_gain_control = true;
+  VoiceIsolationType voice_isolation =
+      VoiceIsolationType::kVoiceIsolationDefault;
 };
 }  // namespace blink
 

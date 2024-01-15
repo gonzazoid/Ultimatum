@@ -7,17 +7,19 @@
  */
 
 import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
-import '../../components/oobe_icons.m.js';
-import '../../components/common_styles/common_styles.m.js';
-import '../../components/common_styles/oobe_dialog_host_styles.m.js';
-import '../../components/dialogs/oobe_adaptive_dialog.m.js';
+import '../../components/oobe_icons.html.js';
+import '../../components/common_styles/oobe_common_styles.css.js';
+import '../../components/common_styles/oobe_dialog_host_styles.css.js';
 
 import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.m.js';
-import {OobeDialogHostBehavior} from '../../components/behaviors/oobe_dialog_host_behavior.m.js';
-import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.m.js';
-import {OOBE_UI_STATE} from '../../components/display_manager_types.m.js';
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {OobeDialogHostBehavior} from '../../components/behaviors/oobe_dialog_host_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+import {OobeAdaptiveDialog} from '../../components/dialogs/oobe_adaptive_dialog.js';
+import {OOBE_UI_STATE} from '../../components/display_manager_types.js';
+
+import {getTemplate} from './device_disabled.html.js';
 
 
 /**
@@ -32,55 +34,75 @@ const DeviceDisabledElementBase = mixinBehaviors(
 
 /**
  * @typedef {{
- *   dialog:  OobeAdaptiveDialogElement,
+ *   dialog:  OobeAdaptiveDialog,
  * }}
  */
 DeviceDisabledElementBase.$;
 
+/**
+ * Data that is passed to the screen during onBeforeShow.
+ * @typedef {{
+ *   serial: string,
+ *   domain: string,
+ *   message: string,
+ *   isDisabledAdDevice: boolean,
+ * }}
+ */
+let DeviceDisabledScreenData;
+
+/** @polymer */
 class DeviceDisabled extends DeviceDisabledElementBase {
   static get is() {
     return 'device-disabled-element';
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
     return {
       /**
-       * Device serial number
        * The serial number of the device.
+       * @type {string}
        * @private
        */
       serial_: {
         type: String,
+        value: '',
       },
 
       /**
        * The domain that owns the device (can be empty).
+       * @type {string}
        * @private
        */
       enrollmentDomain_: {
         type: String,
+        value: '',
       },
 
       /**
        * Admin message (external data, non-html-safe).
+       * @type {string}
        * @private
        */
       message_: {
         type: String,
+        value: '',
+      },
+
+      /**
+       * Flag indicating if the device was disabled because it's in AD mode,
+       * which is no longer supported.
+       * @type {boolean}
+       * @private
+       */
+      isDisabledAdDevice_: {
+        type: Boolean,
+        value: false,
       },
     };
-  }
-
-  constructor() {
-    super();
-    // Properties:
-    this.serial_ = '';
-    this.enrollmentDomain_ = '';
-    this.message_ = '';
   }
 
   ready() {
@@ -102,12 +124,12 @@ class DeviceDisabled extends DeviceDisabledElementBase {
    * @override
    */
   get defaultControl() {
-    return this.$.dialog;
+    return /** @type {HTMLElement} */ (this.$.dialog);
   }
 
   /**
    * Event handler that is invoked just before the frame is shown.
-   * @param {Object} data Screen init payload
+   * @param {DeviceDisabledScreenData} data Screen init payload.
    */
   onBeforeShow(data) {
     if ('serial' in data) {
@@ -119,27 +141,44 @@ class DeviceDisabled extends DeviceDisabledElementBase {
     if ('message' in data) {
       this.message_ = data.message;
     }
+    if ('isDisabledAdDevice' in data) {
+      this.isDisabledAdDevice_ = data.isDisabledAdDevice;
+    }
   }
 
   /**
-   * Sets the message to show to the user.
-   * @param {string} message The message to show to the user.
+   * Sets the message to be shown to the user.
+   * @param {string} message The message to be shown to the user.
    */
   setMessage(message) {
     this.message_ = message;
   }
 
   /**
-   * Updates the explanation shown to the user. The explanation will indicate
-   * the device serial number and that it is owned by |domain|. If |domain| is
-   * null or empty, a generic explanation will be used instead that does not
-   * reference any domain.
+   * Updates the explanation shown to the user. The explanation contains the
+   * device serial number and may contain the domain the device is enrolled to,
+   * if that information is available. However, if `isDisabledAdDevice` is true,
+   * a custom explanation about Chromad disabling will be used.
+   * @param {string} locale The i18n locale.
+   * @param {string} serial The device serial number.
+   * @param {string} domain The enrollment domain.
+   * @param {boolean} isDisabledAdDevice Flag indicating if the device was
+   *     disabled because it's in AD mode.
+   * @return {string} The internationalized explanation.
    */
-  disabledText_(locale, serial, domain) {
-    if (domain) {
-      return this.i18n('deviceDisabledExplanationWithDomain', serial, domain);
+  disabledText_(locale, serial, domain, isDisabledAdDevice) {
+    if (isDisabledAdDevice) {
+      return this.i18nAdvancedDynamic(
+          locale, 'deviceDisabledAdModeExplanation', {substitutions: [serial]});
     }
-    return this.i18n('deviceDisabledExplanationWithoutDomain', serial);
+    if (domain) {
+      return this.i18nAdvancedDynamic(
+          locale, 'deviceDisabledExplanationWithDomain',
+          {substitutions: [serial, domain]});
+    }
+    return this.i18nAdvancedDynamic(
+        locale, 'deviceDisabledExplanationWithoutDomain',
+        {substitutions: [serial]});
   }
 }
 

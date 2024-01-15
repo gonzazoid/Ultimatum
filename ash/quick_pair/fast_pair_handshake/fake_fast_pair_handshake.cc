@@ -12,11 +12,10 @@
 #include "ash/quick_pair/common/pair_failure.h"
 #include "ash/quick_pair/fast_pair_handshake/fast_pair_data_encryptor.h"
 #include "ash/quick_pair/fast_pair_handshake/fast_pair_gatt_service_client.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 
-namespace ash {
-namespace quick_pair {
+namespace ash::quick_pair {
 
 FakeFastPairHandshake::FakeFastPairHandshake(
     scoped_refptr<device::BluetoothAdapter> adapter,
@@ -32,11 +31,17 @@ FakeFastPairHandshake::FakeFastPairHandshake(
 
 FakeFastPairHandshake::~FakeFastPairHandshake() = default;
 
-void FakeFastPairHandshake::InvokeCallback(
-    absl::optional<PairFailure> failure) {
+void FakeFastPairHandshake::SetUpHandshake(
+    OnFailureCallback on_failure_callback,
+    OnCompleteCallbackNew on_success_callback) {
+  completed_successfully_ = true;
+}
+
+void FakeFastPairHandshake::Reset() {}
+
+void FakeFastPairHandshake::InvokeCallback(std::optional<PairFailure> failure) {
   completed_successfully_ = !failure.has_value();
   std::move(on_complete_callback_).Run(device_, failure);
 }
 
-}  // namespace quick_pair
-}  // namespace ash
+}  // namespace ash::quick_pair

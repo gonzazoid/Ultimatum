@@ -50,7 +50,7 @@ class HistorySyncMetadataDatabaseTest : public testing::Test {
   void SetUp() override {
     EXPECT_TRUE(db_.OpenInMemory());
     metadata_db_.Init();
-    meta_table_.Init(&db_, 1, 1);
+    ASSERT_TRUE(meta_table_.Init(&db_, 1, 1));
   }
   void TearDown() override { db_.Close(); }
 
@@ -106,25 +106,27 @@ TEST_F(HistorySyncMetadataDatabaseTest, StoresAndReturnsMetadata) {
   EntityMetadata metadata1;
   metadata1.set_sequence_number(1);
   metadata1.set_client_tag_hash("client_hash1");
-  ASSERT_TRUE(metadata_db()->UpdateSyncMetadata(syncer::HISTORY, storage_key1,
-                                                metadata1));
+  ASSERT_TRUE(metadata_db()->UpdateEntityMetadata(syncer::HISTORY, storage_key1,
+                                                  metadata1));
 
   ModelTypeState model_type_state;
-  model_type_state.set_initial_sync_done(true);
+  model_type_state.set_initial_sync_state(
+      sync_pb::ModelTypeState_InitialSyncState_INITIAL_SYNC_DONE);
   ASSERT_TRUE(
       metadata_db()->UpdateModelTypeState(syncer::HISTORY, model_type_state));
 
   EntityMetadata metadata2;
   metadata2.set_sequence_number(2);
   metadata2.set_client_tag_hash("client_hash2");
-  ASSERT_TRUE(metadata_db()->UpdateSyncMetadata(syncer::HISTORY, storage_key2,
-                                                metadata2));
+  ASSERT_TRUE(metadata_db()->UpdateEntityMetadata(syncer::HISTORY, storage_key2,
+                                                  metadata2));
 
   // Read the metadata and make sure it matches what we wrote.
   MetadataBatch metadata_batch;
   EXPECT_TRUE(metadata_db()->GetAllSyncMetadata(&metadata_batch));
 
-  EXPECT_TRUE(metadata_batch.GetModelTypeState().initial_sync_done());
+  EXPECT_EQ(metadata_batch.GetModelTypeState().initial_sync_state(),
+            sync_pb::ModelTypeState_InitialSyncState_INITIAL_SYNC_DONE);
 
   EntityMetadataMap metadata_records = metadata_batch.TakeAllMetadata();
   EXPECT_EQ(metadata_records.size(), 2u);
@@ -136,15 +138,18 @@ TEST_F(HistorySyncMetadataDatabaseTest, StoresAndReturnsMetadata) {
   // Now check that an entity update and a model type state update replace the
   // old values.
   metadata1.set_sequence_number(2);
-  ASSERT_TRUE(metadata_db()->UpdateSyncMetadata(syncer::HISTORY, storage_key1,
-                                                metadata1));
-  model_type_state.set_initial_sync_done(false);
+  ASSERT_TRUE(metadata_db()->UpdateEntityMetadata(syncer::HISTORY, storage_key1,
+                                                  metadata1));
+  model_type_state.set_initial_sync_state(
+      sync_pb::ModelTypeState_InitialSyncState_INITIAL_SYNC_STATE_UNSPECIFIED);
   ASSERT_TRUE(
       metadata_db()->UpdateModelTypeState(syncer::HISTORY, model_type_state));
 
   MetadataBatch metadata_batch2;
   ASSERT_TRUE(metadata_db()->GetAllSyncMetadata(&metadata_batch2));
-  EXPECT_FALSE(metadata_batch2.GetModelTypeState().initial_sync_done());
+  EXPECT_EQ(
+      metadata_batch2.GetModelTypeState().initial_sync_state(),
+      sync_pb::ModelTypeState_InitialSyncState_INITIAL_SYNC_STATE_UNSPECIFIED);
 
   EntityMetadataMap metadata_records2 = metadata_batch2.TakeAllMetadata();
   EXPECT_EQ(metadata_records2.size(), 2u);
@@ -157,17 +162,18 @@ TEST_F(HistorySyncMetadataDatabaseTest, DeletesSyncMetadata) {
 
   // Write some data into the store.
   ModelTypeState model_type_state;
-  model_type_state.set_initial_sync_done(true);
+  model_type_state.set_initial_sync_state(
+      sync_pb::ModelTypeState_InitialSyncState_INITIAL_SYNC_DONE);
   ASSERT_TRUE(
       metadata_db()->UpdateModelTypeState(syncer::HISTORY, model_type_state));
 
   EntityMetadata metadata;
   metadata.set_client_tag_hash("client_hash");
-  ASSERT_TRUE(metadata_db()->UpdateSyncMetadata(syncer::HISTORY, storage_key,
-                                                metadata));
+  ASSERT_TRUE(metadata_db()->UpdateEntityMetadata(syncer::HISTORY, storage_key,
+                                                  metadata));
 
   // Delete the data we just wrote.
-  ASSERT_TRUE(metadata_db()->ClearSyncMetadata(syncer::HISTORY, storage_key));
+  ASSERT_TRUE(metadata_db()->ClearEntityMetadata(syncer::HISTORY, storage_key));
 
   // It shouldn't be there anymore.
   MetadataBatch metadata_batch;

@@ -32,12 +32,12 @@ class LargeIconService : public KeyedService {
   // Case 2. An icon exists whose size is >= |min_source_size_in_pixel| and <
   // |desired_size_in_pixel|:
   // - Same as 1 with the biggest icon.
-  // Case 4. An icon exists whose size is < |min_source_size_in_pixel|:
+  // Case 3. An icon exists whose size is < |min_source_size_in_pixel|:
   // - Extracts dominant color of smaller image, returns a fallback icon style
   //   that has a matching background.
-  // Case 5. No icon exists.
+  // Case 4. No icon exists.
   // - Returns the default fallback icon style.
-  // For cases 4 and 5, this function returns the style of the fallback icon
+  // For cases 3 and 4, this function returns the style of the fallback icon
   // instead of rendering an icon so clients can render the icon themselves.
   virtual base::CancelableTaskTracker::TaskId
   GetLargeIconRawBitmapOrFallbackStyleForPageUrl(
@@ -55,6 +55,18 @@ class LargeIconService : public KeyedService {
       int min_source_size_in_pixel,
       int desired_size_in_pixel,
       favicon_base::LargeIconImageCallback callback,
+      base::CancelableTaskTracker* tracker) = 0;
+
+  // Requests the best large icon raw bitmap for the page at |page_url|.
+  // If there are several icons cached in the favicon database for |page_url|
+  // which are > |minimum_size_in_pixels|, selects an icon to return based on an
+  // LargeIconService-hard-coded ordering of preference for certain
+  // IconTypes. If no icon is larger than |minimum_size_in_pixels|, the largest
+  // one will be returned.
+  virtual base::CancelableTaskTracker::TaskId GetLargeIconRawBitmapForPageUrl(
+      const GURL& page_url,
+      int min_source_size_in_pixel,
+      favicon_base::FaviconRawBitmapCallback callback,
       base::CancelableTaskTracker* tracker) = 0;
 
   // Behaves the same as GetLargeIconRawBitmapOrFallbackStyleForPageUrl, except
@@ -121,7 +133,6 @@ class LargeIconService : public KeyedService {
   // GetLargeIconOrFallbackStyleFromGoogleServerSkippingLocalCache()). This
   // postpones the automatic eviction of the favicon from the database.
   virtual void TouchIconFromGoogleServer(const GURL& icon_url) = 0;
-
  protected:
   LargeIconService() {}
 };

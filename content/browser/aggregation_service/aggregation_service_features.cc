@@ -6,15 +6,18 @@
 
 namespace content {
 
-// Enables the Aggregation Service. See crbug.com/1207974.
 BASE_FEATURE(kPrivacySandboxAggregationService,
              "PrivacySandboxAggregationService",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
 const base::FeatureParam<std::string>
-    kPrivacySandboxAggregationServiceTrustedServerUrlParam{
+    kPrivacySandboxAggregationServiceTrustedServerUrlAwsParam{
         &kPrivacySandboxAggregationService, "trusted_server_url",
         "https://publickeyservice.aws.privacysandboxservices.com/v1alpha/"
         "publicKeys"};
+
+BASE_FEATURE(kPrivacySandboxAggregationServiceReportPadding,
+             "PrivacySandboxAggregationServiceReportPadding",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 }  // namespace content

@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/core/workers/worklet_global_scope.h"
 
 #include <memory>
+#include "base/task/single_thread_task_runner.h"
 #include "services/metrics/public/cpp/mojo_ukm_recorder.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
@@ -21,6 +22,7 @@
 #include "third_party/blink/renderer/core/inspector/inspector_audits_issue.h"
 #include "third_party/blink/renderer/core/inspector/inspector_issue_storage.h"
 #include "third_party/blink/renderer/core/inspector/main_thread_debugger.h"
+#include "third_party/blink/renderer/core/inspector/worker_inspector_controller.h"
 #include "third_party/blink/renderer/core/inspector/worker_thread_debugger.h"
 #include "third_party/blink/renderer/core/loader/document_loader.h"
 #include "third_party/blink/renderer/core/origin_trials/origin_trial_context.h"
@@ -40,28 +42,24 @@ namespace blink {
 WorkletGlobalScope::WorkletGlobalScope(
     std::unique_ptr<GlobalScopeCreationParams> creation_params,
     WorkerReportingProxy& reporting_proxy,
-    LocalFrame* frame,
-    bool create_microtask_queue)
+    LocalFrame* frame)
     : WorkletGlobalScope(std::move(creation_params),
                          reporting_proxy,
                          ToIsolate(frame),
                          ThreadType::kMainThread,
                          frame,
-                         nullptr /* worker_thread */,
-                         create_microtask_queue) {}
+                         nullptr /* worker_thread */) {}
 
 WorkletGlobalScope::WorkletGlobalScope(
     std::unique_ptr<GlobalScopeCreationParams> creation_params,
     WorkerReportingProxy& reporting_proxy,
-    WorkerThread* worker_thread,
-    bool create_microtask_queue)
+    WorkerThread* worker_thread)
     : WorkletGlobalScope(std::move(creation_params),
                          reporting_proxy,
                          worker_thread->GetIsolate(),
                          ThreadType::kOffMainThread,
                          nullptr /* frame */,
-                         worker_thread,
-                         create_microtask_queue) {}
+                         worker_thread) {}
 
 // Partial implementation of the "set up a worklet environment settings object"
 // algorithm:
@@ -72,8 +70,7 @@ WorkletGlobalScope::WorkletGlobalScope(
     v8::Isolate* isolate,
     ThreadType thread_type,
     LocalFrame* frame,
-    WorkerThread* worker_thread,
-    bool create_microtask_queue)
+    WorkerThread* worker_thread)
     : WorkerOrWorkletGlobalScope(
           isolate,
           SecurityOrigin::CreateUniqueOpaque(),
@@ -81,17 +78,16 @@ WorkletGlobalScope::WorkletGlobalScope(
           MakeGarbageCollected<Agent>(
               isolate,
               creation_params->agent_cluster_id,
-              create_microtask_queue
-                  ? v8::MicrotaskQueue::New(isolate,
-                                            v8::MicrotasksPolicy::kScoped)
-                  : nullptr),
+              v8::MicrotaskQueue::New(isolate, v8::MicrotasksPolicy::kScoped)),
           creation_params->global_scope_name,
           creation_params->parent_devtools_token,
           creation_params->v8_cache_options,
           creation_params->worker_clients,
           std::move(creation_params->content_settings_client),
           std::move(creation_params->web_worker_fetch_context),
-          reporting_proxy),
+          reporting_proxy,
+          /*is_worker_loaded_from_data_url=*/false),
+      ActiveScriptWrappable<WorkletGlobalScope>({}),
       url_(creation_params->script_url),
       user_agent_(creation_params->user_agent),
       document_security_origin_(creation_params->starter_origin),
@@ -101,9 +97,12 @@ WorkletGlobalScope::WorkletGlobalScope(
       thread_type_(thread_type),
       frame_(frame),
       worker_thread_(worker_thread),
-      // Worklets should always have a parent LocalFrameToken.
+      // Worklets should often have a parent LocalFrameToken. Only shared
+      // storage worklet does not have it.
       frame_token_(
-          creation_params->parent_context_token->GetAs<LocalFrameToken>()),
+          creation_params->parent_context_token
+              ? creation_params->parent_context_token->GetAs<LocalFrameToken>()
+              : blink::LocalFrameToken()),
       parent_cross_origin_isolated_capability_(
           creation_params->parent_cross_origin_isolated_capability),
       parent_is_isolated_context_(creation_params->parent_is_isolated_context) {
@@ -112,7 +111,8 @@ WorkletGlobalScope::WorkletGlobalScope(
 
   // Worklet should be in the owner's agent cluster.
   // https://html.spec.whatwg.org/C/#obtain-a-worklet-agent
-  DCHECK(creation_params->agent_cluster_id);
+  DCHECK(creation_params->agent_cluster_id ||
+         !creation_params->parent_context_token);
 
   // Step 2: "Let inheritedAPIBaseURL be outsideSettings's API base URL."
   // |url_| is the inheritedAPIBaseURL passed from the parent Document.
@@ -137,8 +137,8 @@ WorkletGlobalScope::WorkletGlobalScope(
   DCHECK_EQ(creation_params->ukm_source_id, ukm::kInvalidSourceId);
 
   if (creation_params->code_cache_host_interface.is_valid()) {
-    code_cache_host_ =
-        std::make_unique<CodeCacheHost>(mojo::Remote<mojom::CodeCacheHost>(
+    code_cache_host_ = std::make_unique<CodeCacheHost>(
+        mojo::Remote<mojom::blink::CodeCacheHost>(
             std::move(creation_params->code_cache_host_interface)));
   }
 
@@ -149,7 +149,6 @@ WorkletGlobalScope::~WorkletGlobalScope() = default;
 
 const BrowserInterfaceBrokerProxy&
 WorkletGlobalScope::GetBrowserInterfaceBroker() const {
-  NOTIMPLEMENTED();
   return GetEmptyBrowserInterfaceBroker();
 }
 
@@ -178,20 +177,10 @@ void WorkletGlobalScope::AddConsoleMessageImpl(ConsoleMessage* console_message,
     return;
   }
   worker_thread_->GetWorkerReportingProxy().ReportConsoleMessage(
-      console_message->Source(), console_message->Level(),
+      console_message->GetSource(), console_message->GetLevel(),
       console_message->Message(), console_message->Location());
   worker_thread_->GetConsoleMessageStorage()->AddConsoleMessage(
       worker_thread_->GlobalScope(), console_message, discard_duplicates);
-}
-
-void WorkletGlobalScope::AddInspectorIssue(
-    mojom::blink::InspectorIssueInfoPtr info) {
-  if (IsMainThreadWorkletGlobalScope()) {
-    frame_->AddInspectorIssue(std::move(info));
-  } else {
-    worker_thread_->GetInspectorIssueStorage()->AddInspectorIssue(
-        this, std::move(info));
-  }
 }
 
 void WorkletGlobalScope::AddInspectorIssue(AuditsIssue issue) {
@@ -205,7 +194,8 @@ void WorkletGlobalScope::AddInspectorIssue(AuditsIssue issue) {
 
 void WorkletGlobalScope::ExceptionThrown(ErrorEvent* error_event) {
   if (IsMainThreadWorkletGlobalScope()) {
-    MainThreadDebugger::Instance()->ExceptionThrown(this, error_event);
+    MainThreadDebugger::Instance(GetIsolate())
+        ->ExceptionThrown(this, error_event);
     return;
   }
   if (WorkerThreadDebugger* debugger =
@@ -241,9 +231,14 @@ CodeCacheHost* WorkletGlobalScope::GetCodeCacheHost() {
 }
 
 CoreProbeSink* WorkletGlobalScope::GetProbeSink() {
-  if (IsMainThreadWorkletGlobalScope())
-    return probe::ToCoreProbeSink(frame_);
-  return nullptr;
+  switch (thread_type_) {
+    case ThreadType::kMainThread:
+      DCHECK(frame_);
+      return probe::ToCoreProbeSink(frame_);
+    case ThreadType::kOffMainThread:
+      DCHECK(worker_thread_);
+      return worker_thread_->GetWorkerInspectorController()->GetProbeSink();
+  }
 }
 
 scoped_refptr<base::SingleThreadTaskRunner> WorkletGlobalScope::GetTaskRunner(
@@ -262,7 +257,7 @@ FrameOrWorkerScheduler* WorkletGlobalScope::GetScheduler() {
 
 LocalFrame* WorkletGlobalScope::GetFrame() const {
   DCHECK(IsMainThreadWorkletGlobalScope());
-  return frame_;
+  return frame_.Get();
 }
 
 // Implementation of the first half of the "fetch and invoke a worklet script"
@@ -318,10 +313,10 @@ ukm::UkmRecorder* WorkletGlobalScope::UkmRecorder() {
   if (ukm_recorder_)
     return ukm_recorder_.get();
 
-  mojo::PendingRemote<ukm::mojom::UkmRecorderInterface> recorder;
+  mojo::Remote<ukm::mojom::UkmRecorderFactory> factory;
   GetBrowserInterfaceBroker().GetInterface(
-      recorder.InitWithNewPipeAndPassReceiver());
-  ukm_recorder_ = std::make_unique<ukm::MojoUkmRecorder>(std::move(recorder));
+      factory.BindNewPipeAndPassReceiver());
+  ukm_recorder_ = ukm::MojoUkmRecorder::Create(*factory);
 
   return ukm_recorder_.get();
 }
@@ -339,6 +334,10 @@ WorkletGlobalScope::TakeBlobUrlStorePendingRemote() {
 void WorkletGlobalScope::Trace(Visitor* visitor) const {
   visitor->Trace(frame_);
   WorkerOrWorkletGlobalScope::Trace(visitor);
+}
+
+bool WorkletGlobalScope::HasPendingActivity() const {
+  return !ExecutionContext::IsContextDestroyed();
 }
 
 }  // namespace blink

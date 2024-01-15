@@ -10,15 +10,16 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/apple/foundation_util.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
-#include "base/mac/foundation_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#import "base/task/single_thread_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "ios/net/chunked_data_stream_uploader.h"
 #import "ios/net/clients/crn_network_client_protocol.h"
@@ -38,10 +39,6 @@
 #include "net/url_request/url_request.h"
 #include "net/url_request/url_request_context.h"
 #include "net/url_request/url_request_context_getter.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace net {
 class HttpProtocolHandlerCore;
@@ -281,7 +278,7 @@ void HttpProtocolHandlerCore::HandleStreamEvent(NSStream* stream,
       // TODO(crbug.com/738025): Dynamically change the size of the read buffer
       // to improve the read (POST) performance, see AllocateReadBuffer(), &
       // avoid unnecessary data copy.
-      length = [base::mac::ObjCCastStrict<NSInputStream>(stream)
+      length = [base::apple::ObjCCastStrict<NSInputStream>(stream)
                read:reinterpret_cast<unsigned char*>(read_buffer_.get())
           maxLength:read_buffer_size_];
       if (length > 0) {
@@ -517,8 +514,8 @@ void HttpProtocolHandlerCore::AllocateReadBuffer(int last_read_data_size) {
     read_buffer_size_ = std::max(read_buffer_size_ / 2, kIOBufferMinSize);
   }
   read_buffer_.reset(static_cast<char*>(malloc(read_buffer_size_)));
-  read_buffer_wrapper_ = base::MakeRefCounted<WrappedIOBuffer>(
-      static_cast<const char*>(read_buffer_.get()));
+  read_buffer_wrapper_ = base::MakeRefCounted<WrappedIOBuffer>(base::make_span(
+      read_buffer_.get(), static_cast<size_t>(read_buffer_size_)));
 }
 
 HttpProtocolHandlerCore::~HttpProtocolHandlerCore() {
@@ -928,10 +925,9 @@ int HttpProtocolHandlerCore::OnRead(char* buffer, int buffer_length) {
     g_metrics_delegate->OnStartNetRequest(_task);
   }
 
-  // The closure passed to PostTask must to retain the _protocolProxy
-  // scoped_nsobject. A call to ensureProtocolHandlerProxyCreated before passing
-  // _protocolProxy ensure that _protocolProxy is instanciated before passing
-  // it.
+  // The closure passed to PostTask must retain the _protocolProxy. A call to
+  // ensureProtocolHandlerProxyCreated before passing _protocolProxy ensure that
+  // _protocolProxy is instantiated before passing it.
   [self ensureProtocolHandlerProxyCreated];
   DCHECK(_protocolProxy);
   g_protocol_handler_delegate->GetDefaultURLRequestContext()

@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "base/format_macros.h"
+#include "base/memory/raw_ref.h"
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
 #include "components/url_matcher/url_matcher_constants.h"
@@ -32,8 +33,7 @@ TEST(URLMatcherFactoryTest, CreateFromURLFilterDictionary) {
 
   // Invalid value type: {"hostSuffix": []}
   base::Value::Dict invalid_condition2;
-  invalid_condition2.Set(keys::kHostSuffixKey,
-                         base::Value(base::Value::Type::LIST));
+  invalid_condition2.Set(keys::kHostSuffixKey, base::Value::List());
 
   // Invalid regex value: {"urlMatches": "*"}
   base::Value::Dict invalid_condition3;
@@ -52,14 +52,14 @@ TEST(URLMatcherFactoryTest, CreateFromURLFilterDictionary) {
   // }
 
   // Port range: Allow 80;1000-1010.
-  base::Value port_range(base::Value::Type::LIST);
+  base::Value::List port_range;
   port_range.Append(1000);
   port_range.Append(1010);
-  base::Value port_ranges(base::Value::Type::LIST);
+  base::Value::List port_ranges;
   port_ranges.Append(80);
   port_ranges.Append(std::move(port_range));
 
-  base::Value scheme_list(base::Value::Type::LIST);
+  base::Value::List scheme_list;
   scheme_list.Append("http");
 
   base::Value::Dict valid_condition;
@@ -211,18 +211,18 @@ class UrlConditionCaseTest {
 
   const char* condition_key_;
   const bool use_list_of_strings_;
-  const std::string& expected_value_;
-  const std::string& incorrect_case_value_;
+  const raw_ref<const std::string> expected_value_;
+  const raw_ref<const std::string> incorrect_case_value_;
   const ResultType expected_result_for_wrong_case_;
-  const GURL& url_;
+  const raw_ref<const GURL> url_;
 
   // Allow implicit copy and assign, because a public copy constructor is
   // needed, but never used (!), for the definition of arrays of this class.
 };
 
 void UrlConditionCaseTest::Test() const {
-  CheckCondition(expected_value_, OK);
-  CheckCondition(incorrect_case_value_, expected_result_for_wrong_case_);
+  CheckCondition(*expected_value_, OK);
+  CheckCondition(*incorrect_case_value_, expected_result_for_wrong_case_);
 }
 
 void UrlConditionCaseTest::CheckCondition(
@@ -230,12 +230,11 @@ void UrlConditionCaseTest::CheckCondition(
     UrlConditionCaseTest::ResultType expected_result) const {
   base::Value::Dict condition;
   if (use_list_of_strings_) {
-    auto list = std::make_unique<base::ListValue>();
-    list->Append(value);
-    condition.Set(condition_key_,
-                  base::Value::FromUniquePtrValue(std::move(list)));
+    base::Value::List list;
+    list.Append(value);
+    condition.Set(condition_key_, std::move(list));
   } else {
-    condition.Set(condition_key_, base::Value(value));
+    condition.Set(condition_key_, value);
   }
 
   URLMatcher matcher;
@@ -255,9 +254,9 @@ void UrlConditionCaseTest::CheckCondition(
   URLMatcherConditionSet::Vector conditions;
   conditions.push_back(result);
   matcher.AddConditionSets(conditions);
-  EXPECT_EQ((expected_result == OK ? 1u : 0u), matcher.MatchURL(url_).size())
+  EXPECT_EQ((expected_result == OK ? 1u : 0u), matcher.MatchURL(*url_).size())
       << "while matching condition " << condition_key_ << " with value "
-      << value  << " against url " << url_;
+      << value << " against url " << *url_;
 }
 
 // This tests that the UrlFilter handles case sensitivity on various parts of

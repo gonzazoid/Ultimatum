@@ -50,6 +50,17 @@ export class LibLouis {
     this.loadOrReload_(opt_loadCallback);
   }
 
+  /**
+   * Convenience method to wait for the constructor to resolve its callback.
+   * @param {string} wasmPath Path to .wasm file for the module.
+   * @param {string=} opt_tablesDir Path to tables directory.
+   * @return {!Promise<LibLouis>}
+   */
+  static async create(wasmPath, opt_tablesDir) {
+    return new Promise(
+        resolve => new LibLouis(wasmPath, opt_tablesDir, resolve));
+  }
+
   isLoaded() {
     return this.isLoaded_;
   }
@@ -59,21 +70,24 @@ export class LibLouis {
    * This object must be attached to a document when requesting a translator.
    * @param {string} tableNames Comma separated list of braille table names for
    *     liblouis.
-   * @param {function(LibLouis.Translator)} callback
-   *     Callback which will receive the translator, or {@code null} on failure.
+   * @return {!Promise<LibLouis.Translator>} the translator, or {@code null}
+   *     on failure.
    */
-  getTranslator(tableNames, callback) {
-    if (!this.isLoaded_) {
-      // TODO: save last callback.
-      return;
-    }
-    this.rpc_('CheckTable', {'table_names': tableNames}, reply => {
-      if (reply['success']) {
-        const translator = new LibLouis.Translator(this, tableNames);
-        callback(translator);
-      } else {
-        callback(null /* translator */);
+  async getTranslator(tableNames) {
+    return new Promise(resolve => {
+      if (!this.isLoaded_) {
+        // TODO: save last callback.
+        resolve(null /* translator */);
+        return;
       }
+      this.rpc_('CheckTable', {'table_names': tableNames}, reply => {
+        if (reply['success']) {
+          const translator = new LibLouis.Translator(this, tableNames);
+          resolve(translator);
+        } else {
+          resolve(null /* translator */);
+        }
+      });
     });
   }
 
@@ -128,16 +142,16 @@ export class LibLouis {
     }
     const message = /** @type {!Object} */ (JSON.parse(e.data));
     const messageId = message['in_reply_to'];
-    if (!goog.isDef(messageId)) {
+    if (messageId === undefined) {
       globalThis.console.warn(
           'liblouis Web Assembly module sent message with no ID', message);
       return;
     }
-    if (goog.isDef(message['error'])) {
+    if (message['error'] !== undefined) {
       globalThis.console.error('liblouis Web Assembly error', message['error']);
     }
     const callback = this.pendingRpcCallbacks_[messageId];
-    if (goog.isDef(callback)) {
+    if (callback !== undefined) {
       delete this.pendingRpcCallbacks_[messageId];
       callback(message);
     }
@@ -234,10 +248,10 @@ LibLouis.Translator = class {
       let brailleToText = null;
       if (reply['success'] && goog.isString(reply['cells'])) {
         cells = LibLouis.Translator.decodeHexString_(reply['cells']);
-        if (goog.isDef(reply['text_to_braille'])) {
+        if (reply['text_to_braille'] !== undefined) {
           textToBraille = reply['text_to_braille'];
         }
-        if (goog.isDef(reply['braille_to_text'])) {
+        if (reply['braille_to_text'] !== undefined) {
           brailleToText = reply['braille_to_text'];
         }
       } else if (text.length > 0) {

@@ -71,11 +71,7 @@ class DownloadItemNotification : public ImageDecoder::ImageRequest,
 
   enum ImageDecodeStatus { NOT_STARTED, IN_PROGRESS, DONE, FAILED, NOT_IMAGE };
 
-  enum NotificationUpdateType {
-    ADD,
-    UPDATE,
-    UPDATE_AND_POPUP
-  };
+  enum NotificationUpdateType { ADD, UPDATE, UPDATE_AND_POPUP };
 
   std::string GetNotificationId() const;
 
@@ -116,6 +112,8 @@ class DownloadItemNotification : public ImageDecoder::ImageRequest,
   bool IsScanning() const;
   bool AllowedToOpenWhileScanning() const;
 
+  bool IsGalleryAppPdfEditNotificationEligible() const;
+
   Browser* GetBrowser() const;
   Profile* profile() const;
 
@@ -137,13 +135,6 @@ class DownloadItemNotification : public ImageDecoder::ImageRequest,
   // prevents updates after close.
   bool closed_ = false;
 
-  // Flag if the notification has been suppressed or not. A notification being
-  // suppressed means that there is some special restriction imposed which is
-  // preventing a notification that would otherwise display from doing so, e.g.
-  // holding space in-progress downloads integration causes suppression of most
-  // download in-progress notifications.
-  bool suppressed_ = false;
-
   // Flag to indicate that a review dialog is open for the user to accept or
   // bypass an enterprise warning on the download. If this is true, the "Review"
   // button should be removed from the notification.
@@ -152,7 +143,7 @@ class DownloadItemNotification : public ImageDecoder::ImageRequest,
   download::DownloadItem::DownloadState previous_download_state_ =
       download::DownloadItem::MAX_DOWNLOAD_STATE;  // As uninitialized state
   bool previous_dangerous_state_ = false;
-  bool previous_mixed_content_state_ = false;
+  bool previous_insecure_state_ = false;
   std::unique_ptr<message_center::Notification> notification_;
 
   DownloadUIModel::DownloadUIModelPtr item_;

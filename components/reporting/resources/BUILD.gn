@@ -4,22 +4,37 @@
 
 import("//build/config/features.gni")
 
-static_library("resource_interface") {
+static_library("resource_manager") {
   visibility = [
     "//chrome/browser/*",
     "//chrome/test/*",
     "//components/reporting/*",
   ]
   sources = [
-    "disk_resource_impl.cc",
-    "disk_resource_impl.h",
-    "memory_resource_impl.cc",
-    "memory_resource_impl.h",
-    "resource_interface.cc",
-    "resource_interface.h",
+    "resource_manager.cc",
+    "resource_manager.h",
   ]
 
   deps = [ "//base" ]
+}
+
+static_library("resource_managed_buffer") {
+  visibility = [
+    "//chrome/browser/*",
+    "//chrome/test/*",
+    "//components/reporting/*",
+  ]
+
+  sources = [
+    "resource_managed_buffer.cc",
+    "resource_managed_buffer.h",
+  ]
+
+  deps = [
+    ":resource_manager",
+    "//base",
+    "//components/reporting/util:status",
+  ]
 }
 
 # All unit tests are built as part of the //components:components_unittests
@@ -27,11 +42,17 @@ static_library("resource_interface") {
 # TODO(chromium:1169835) These tests can't be run on iOS until they are updated.
 source_set("unit_tests") {
   testonly = true
-  sources = [ "resource_interface_unittest.cc" ]
+  sources = [
+    "resource_managed_buffer_unittest.cc",
+    "resource_manager_unittest.cc",
+  ]
   deps = [
-    ":resource_interface",
+    ":resource_managed_buffer",
+    ":resource_manager",
     "//base",
     "//base/test:test_support",
+    "//components/reporting/util:status",
+    "//components/reporting/util:status_macros",
     "//components/reporting/util:test_callbacks_support",
     "//testing/gmock",
     "//testing/gtest",

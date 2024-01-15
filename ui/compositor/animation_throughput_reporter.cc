@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -134,7 +134,7 @@ class AnimationThroughputReporter::AnimationTracker
   // Whether this class should delete itself on animation ended.
   bool should_delete_ = false;
 
-  const raw_ptr<LayerAnimator> animator_;
+  const raw_ptr<LayerAnimator, DanglingUntriaged> animator_;
 
   absl::optional<ThroughputTracker> throughput_tracker_;
 

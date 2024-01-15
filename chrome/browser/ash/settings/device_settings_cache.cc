@@ -7,7 +7,7 @@
 #include <string>
 
 #include "base/base64.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "chrome/common/pref_names.h"
 #include "components/policy/proto/device_management_backend.pb.h"
@@ -50,9 +50,7 @@ bool Retrieve(em::PolicyData* policy, PrefService* local_state) {
 
 std::string PolicyDataToString(const em::PolicyData& policy) {
   const std::string policy_string = policy.SerializeAsString();
-  std::string encoded;
-  base::Base64Encode(policy_string, &encoded);
-  return encoded;
+  return base::Base64Encode(policy_string);
 }
 
 }  // namespace device_settings_cache

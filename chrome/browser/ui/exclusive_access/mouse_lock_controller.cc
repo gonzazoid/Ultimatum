@@ -4,10 +4,8 @@
 
 #include "chrome/browser/ui/exclusive_access/mouse_lock_controller.h"
 
-#include "base/bind.h"
-#include "base/metrics/histogram_macros.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
-#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_context.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_manager.h"
@@ -22,9 +20,6 @@ using content::RenderViewHost;
 using content::WebContents;
 
 namespace {
-
-const char kMouseLockBubbleReshowsHistogramName[] =
-    "ExclusiveAccess.BubbleReshowsPerSession.MouseLock";
 
 // The amount of time to disallow repeated pointer lock calls after the user
 // successfully escapes from one lock request.
@@ -62,10 +57,7 @@ void MouseLockController::RequestToLockMouse(WebContents* web_contents,
   // user successfully escaped from a previous lock.  Exceptions are when the
   // page has unlocked (i.e. not the user), or if we're in tab fullscreen (which
   // requires its own transient user activation).
-  if (!last_unlocked_by_target &&
-      !exclusive_access_manager()
-           ->fullscreen_controller()
-           ->IsFullscreenForTabOrPending(web_contents)) {
+  if (!last_unlocked_by_target && !web_contents->IsFullscreen()) {
     if (!user_gesture) {
       web_contents->GotResponseToLockMouseRequest(
           blink::mojom::PointerLockResult::kRequiresUserGesture);
@@ -124,12 +116,6 @@ void MouseLockController::NotifyTabExclusiveAccessLost() {
   }
 }
 
-void MouseLockController::RecordBubbleReshowsHistogram(
-    int bubble_reshow_count) {
-  UMA_HISTOGRAM_COUNTS_100(kMouseLockBubbleReshowsHistogramName,
-                           bubble_reshow_count);
-}
-
 bool MouseLockController::HandleUserPressedEscape() {
   if (IsMouseLocked()) {
     ExitExclusiveAccessIfNecessary();
@@ -148,7 +134,6 @@ void MouseLockController::LostMouseLock() {
   if (lock_state_callback_for_test_)
     std::move(lock_state_callback_for_test_).Run();
 
-  RecordExitingUMA();
   mouse_lock_state_ = MOUSELOCK_UNLOCKED;
   SetTabWithExclusiveAccess(nullptr);
 

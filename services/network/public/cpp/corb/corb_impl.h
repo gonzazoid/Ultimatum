@@ -7,12 +7,11 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/component_export.h"
 #include "base/gtest_prod_util.h"
-#include "base/memory/ref_counted.h"
-#include "base/strings/string_piece_forward.h"
 #include "services/network/public/cpp/corb/corb_api.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom-forward.h"
@@ -111,11 +110,13 @@ class COMPONENT_EXPORT(NETWORK_CPP) CrossOriginReadBlocking {
 
     // Implementation of the `corb::ResponseAnalyzer` abstract interface.
     ~CorbResponseAnalyzer() override;
-    Decision Init(const GURL& request_url,
-                  const absl::optional<url::Origin>& request_initiator,
-                  mojom::RequestMode request_mode,
-                  const network::mojom::URLResponseHead& response) override;
-    Decision Sniff(base::StringPiece data) override;
+    Decision Init(
+        const GURL& request_url,
+        const absl::optional<url::Origin>& request_initiator,
+        mojom::RequestMode request_mode,
+        mojom::RequestDestination /*request_destination_from_renderer*/,
+        const network::mojom::URLResponseHead& response) override;
+    Decision Sniff(std::string_view data) override;
     Decision HandleEndOfSniffableResponseBody() override;
     bool ShouldReportBlockedResponse() const override;
     BlockedResponseHandling ShouldHandleBlockedResponseAs() const override;
@@ -166,9 +167,6 @@ class COMPONENT_EXPORT(NETWORK_CPP) CrossOriginReadBlocking {
     // into corb::Decision.
     Decision GetCorbDecision();
 
-    void LogAllowedResponse();
-    void LogBlockedResponse();
-
     // Static because this method is called both during the actual decision, and
     // for the CORB protection logging decision.
     static Decision ShouldBlockBasedOnHeaders(
@@ -200,11 +198,6 @@ class COMPONENT_EXPORT(NETWORK_CPP) CrossOriginReadBlocking {
     static MimeTypeBucket GetMimeTypeBucket(
         const network::mojom::URLResponseHead& response);
 
-    // Translates a blocking decision into a protection decision for use by
-    // LogSensitiveResponseProtection.
-    static CrossOriginProtectionDecision BlockingDecisionToProtectionDecision(
-        Decision would_protect_based_on_headers);
-
     // Returns a protection decision (blocked after sniffing or allowed after
     // sniffing) depending on if the sniffers found blockable content.
     static CrossOriginProtectionDecision SniffingDecisionToProtectionDecision(
@@ -214,17 +207,10 @@ class COMPONENT_EXPORT(NETWORK_CPP) CrossOriginReadBlocking {
     // if ShouldBlockBasedOnHeaders returns kSniffMore
     void CreateSniffers();
 
-    // Reports potentially sensitive responses and whether CORB would have
-    // protected them, were they made cross origin. Also reports if the server
-    // supports range requests.
-    void LogSensitiveResponseProtection(
-        CrossOriginProtectionDecision protection_decision) const;
-
     // Outcome of ShouldBlockBasedOnHeaders recorded inside the Create method.
     Decision should_block_based_on_headers_ = Decision::kBlock;
 
-    // The following values store information about the response and are used by
-    // the CORB protection logging in LogSensitiveResponseProtection.
+    // The following values store information about the response.
     bool corb_protection_logging_needs_sniffing_ = false;
     // |mime_type_bucket_| is either kProtected (if it's a type we expect to
     // protect such as HTML), kPublic (for javascript etc.) or kOther.
@@ -257,11 +243,6 @@ class COMPONENT_EXPORT(NETWORK_CPP) CrossOriginReadBlocking {
 
     // Sniffing results.
     bool found_blockable_content_ = false;
-
-    // Whether the final allow/block decision has been logged to UMA.
-    // (This is only used in DCHECKs that verify that such UMA is only logged
-    // once.)
-    bool has_logged_final_decision_ = false;
   };
 
   // This enum backs a histogram, so do not change the order of entries or
@@ -301,22 +282,22 @@ class COMPONENT_EXPORT(NETWORK_CPP) CrossOriginReadBlocking {
 
   // Returns whether `mime_type` is a Javascript MIME type based on
   // https://mimesniff.spec.whatwg.org/#javascript-mime-type
-  static bool IsJavascriptMimeType(base::StringPiece mime_type);
+  static bool IsJavascriptMimeType(std::string_view mime_type);
 
   // Returns the representative mime type enum value of the mime type of
   // response. For example, this returns the same value for all text/xml mime
   // type families such as application/xml, application/rss+xml.
-  static MimeType GetCanonicalMimeType(base::StringPiece mime_type);
+  static MimeType GetCanonicalMimeType(std::string_view mime_type);
 
-  static SniffingResult SniffForHTML(base::StringPiece data);
-  static SniffingResult SniffForXML(base::StringPiece data);
-  static SniffingResult SniffForJSON(base::StringPiece data);
+  static SniffingResult SniffForHTML(std::string_view data);
+  static SniffingResult SniffForXML(std::string_view data);
+  static SniffingResult SniffForJSON(std::string_view data);
 
   // Sniff for patterns that indicate |data| only ought to be consumed by XHR()
   // or fetch(). This detects Javascript parser-breaker and particular JS
   // infinite-loop patterns, which are used conventionally as a defense against
   // JSON data exfiltration by means of a <script> tag.
-  static SniffingResult SniffForFetchOnlyResource(base::StringPiece data);
+  static SniffingResult SniffForFetchOnlyResource(std::string_view data);
 };
 
 inline std::ostream& operator<<(

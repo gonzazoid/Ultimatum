@@ -7,23 +7,21 @@
 #import "base/metrics/user_metrics.h"
 #import "base/metrics/user_metrics_action.h"
 #import "base/strings/sys_string_conversions.h"
-#import "ios/chrome/browser/overlays/public/infobar_modal/save_address_profile_infobar_modal_overlay_request_config.h"
-#import "ios/chrome/browser/overlays/public/infobar_modal/save_address_profile_infobar_modal_overlay_responses.h"
+#import "components/autofill/core/browser/data_model/autofill_profile.h"
+#import "ios/chrome/browser/overlays/model/public/infobar_modal/save_address_profile_infobar_modal_overlay_request_config.h"
+#import "ios/chrome/browser/overlays/model/public/infobar_modal/save_address_profile_infobar_modal_overlay_responses.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/infobars/modals/autofill_address_profile/infobar_edit_address_profile_modal_consumer.h"
 #import "ios/chrome/browser/ui/infobars/modals/autofill_address_profile/infobar_save_address_profile_modal_consumer.h"
 #import "ios/chrome/browser/ui/infobars/modals/infobar_modal_constants.h"
 #import "ios/chrome/browser/ui/overlays/infobar_modal/infobar_modal_overlay_coordinator+modal_configuration.h"
 #import "ios/chrome/browser/ui/overlays/overlay_request_mediator+subclassing.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using autofill_address_profile_infobar_overlays::
     SaveAddressProfileModalRequestConfig;
-using save_address_profile_infobar_modal_responses::EditedProfileSaveAction;
 using save_address_profile_infobar_modal_responses::CancelViewAction;
+using save_address_profile_infobar_modal_responses::EditedProfileSaveAction;
+using save_address_profile_infobar_modal_responses::NoThanksViewAction;
 
 @interface SaveAddressProfileInfobarModalOverlayMediator ()
 // The save address profile modal config from the request.
@@ -62,7 +60,14 @@ using save_address_profile_infobar_modal_responses::CancelViewAction;
     kIsUpdateModalPrefKey : @(config->IsUpdateModal()),
     kProfileDataDiffKey : config->profile_diff(),
     kUpdateModalDescriptionKey :
-        base::SysUTF16ToNSString(config->update_modal_description())
+        base::SysUTF16ToNSString(config->update_modal_description()),
+    kIsMigrationToAccountKey : @(config->is_migration_to_account()),
+    kUserEmailKey : config->user_email()
+        ? base::SysUTF16ToNSString(config->user_email().value())
+        : @"",
+    kIsProfileAnAccountProfileKey : @(config->is_profile_an_account_profile()),
+    kProfileDescriptionForMigrationPromptKey : base::SysUTF16ToNSString(
+        config->profile_description_for_migration_prompt())
   };
 
   [_consumer setupModalViewControllerWithPrefs:prefs];
@@ -80,6 +85,8 @@ using save_address_profile_infobar_modal_responses::CancelViewAction;
     return;
 
   [_editAddressConsumer setIsEditForUpdate:config->IsUpdateModal()];
+
+  [_editAddressConsumer setMigrationPrompt:config->is_migration_to_account()];
 
   [_editAddressConsumer
       setupModalViewControllerWithData:config->GetProfileInfo()];
@@ -102,22 +109,38 @@ using save_address_profile_infobar_modal_responses::CancelViewAction;
   [self.saveAddressProfileMediatorDelegate showEditView];
 }
 
-#pragma mark - InfobarEditAddressProfileModalDelegate
-
-- (void)saveEditedProfileWithData:(NSDictionary*)profileData {
-  [self
-      dispatchResponse:OverlayResponse::CreateWithInfo<EditedProfileSaveAction>(
-                           profileData)];
+- (void)noThanksButtonWasPressed {
+  [self dispatchResponse:OverlayResponse::CreateWithInfo<NoThanksViewAction>()];
   [self dismissOverlay];
 }
 
+#pragma mark - InfobarEditAddressProfileModalDelegate
+
 - (void)dismissInfobarModal:(id)infobarModal {
-  [self dispatchResponse:OverlayResponse::CreateWithInfo<CancelViewAction>(
-                             self.currentViewIsEditView)];
   base::RecordAction(base::UserMetricsAction(kInfobarModalCancelButtonTapped));
-  [self dismissOverlay];
+
+  // For migration prompt, the cancel from the edit view would result in removal
+  // of the modal.
+  if (self.config && self.config->is_migration_to_account() &&
+      self.currentViewIsEditView) {
+    [self noThanksButtonWasPressed];
+    self.currentViewIsEditView = NO;
+    return;
+  }
 
   self.currentViewIsEditView = NO;
+  [self dispatchResponse:OverlayResponse::CreateWithInfo<CancelViewAction>(
+                             self.currentViewIsEditView)];
+  [self dismissOverlay];
+}
+
+#pragma mark - Public
+
+- (void)saveEditedProfileWithProfileData:(autofill::AutofillProfile*)profile {
+  [self
+      dispatchResponse:OverlayResponse::CreateWithInfo<EditedProfileSaveAction>(
+                           profile)];
+  [self dismissOverlay];
 }
 
 @end

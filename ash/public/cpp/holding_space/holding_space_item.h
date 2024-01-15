@@ -6,22 +6,21 @@
 #define ASH_PUBLIC_CPP_HOLDING_SPACE_HOLDING_SPACE_ITEM_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "ash/public/cpp/ash_public_export.h"
 #include "ash/public/cpp/holding_space/holding_space_constants.h"
+#include "ash/public/cpp/holding_space/holding_space_file.h"
 #include "ash/public/cpp/holding_space/holding_space_progress.h"
-#include "base/callback_forward.h"
 #include "base/callback_list.h"
 #include "base/files/file_path.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
+#include "base/values.h"
+#include "ui/color/color_id.h"
 #include "ui/gfx/vector_icon_types.h"
-#include "url/gurl.h"
-
-namespace base {
-class DictionaryValue;
-}  // namespace base
 
 namespace cros_styles {
 enum class ColorName;
@@ -63,7 +62,7 @@ class ASH_PUBLIC_EXPORT HoldingSpaceItem {
     int label_id;
 
     // The icon to be displayed for the command.
-    const gfx::VectorIcon* icon;
+    raw_ptr<const gfx::VectorIcon> icon;
 
     // The handler to be invoked to perform command execution.
     Handler handler;
@@ -87,7 +86,14 @@ class ASH_PUBLIC_EXPORT HoldingSpaceItem {
     kPhoneHubCameraRoll = 10,
     kDriveSuggestion = 11,
     kLocalSuggestion = 12,
-    kMaxValue = kLocalSuggestion,
+    kScreenRecordingGif = 13,
+    kCameraAppPhoto = 14,
+    kCameraAppScanJpg = 15,
+    kCameraAppScanPdf = 16,
+    kCameraAppVideoGif = 17,
+    kCameraAppVideoMp4 = 18,
+    kPhotoshopWeb = 19,
+    kMaxValue = kPhotoshopWeb,
   };
 
   HoldingSpaceItem(const HoldingSpaceItem&) = delete;
@@ -100,47 +106,52 @@ class ASH_PUBLIC_EXPORT HoldingSpaceItem {
   using ImageResolver = base::OnceCallback<
       std::unique_ptr<HoldingSpaceImage>(Type, const base::FilePath&)>;
 
-  // Creates a HoldingSpaceItem that's backed by a file system URL.
-  // NOTE: `file_system_url` is expected to be non-empty.
+  // Creates a HoldingSpaceItem that's backed by a `file`.
+  // NOTE: `file` system URL is expected to be non-empty.
   static std::unique_ptr<HoldingSpaceItem> CreateFileBackedItem(
       Type type,
-      const base::FilePath& file_path,
-      const GURL& file_system_url,
+      const HoldingSpaceFile& file,
       ImageResolver image_resolver);
 
-  // Creates a HoldingSpaceItem that's backed by a file system URL.
-  // NOTE: `file_system_url` is expected to be non-empty.
+  // Creates a HoldingSpaceItem that's backed by a `file`.
+  // NOTE: `file` system URL is expected to be non-empty.
   static std::unique_ptr<HoldingSpaceItem> CreateFileBackedItem(
       Type type,
-      const base::FilePath& file_path,
-      const GURL& file_system_url,
+      const HoldingSpaceFile& file,
       const HoldingSpaceProgress& progress,
       ImageResolver image_resolver);
 
+  // Returns `true` if `type` is a Camera app type, `false` otherwise.
+  static bool IsCameraAppType(HoldingSpaceItem::Type type);
+
   // Returns `true` if `type` is a download type, `false` otherwise.
-  static bool IsDownload(HoldingSpaceItem::Type type);
+  static bool IsDownloadType(HoldingSpaceItem::Type type);
+
+  // Returns `true` if `type` is a screen capture type, `false` otherwise.
+  static bool IsScreenCaptureType(HoldingSpaceItem::Type type);
 
   // Returns `true` if `type` is a suggestion type, `false` otherwise.
-  static bool IsSuggestion(HoldingSpaceItem::Type type);
+  static bool IsSuggestionType(HoldingSpaceItem::Type type);
 
-  // Deserializes from `base::DictionaryValue` to `HoldingSpaceItem`.
+  // TODO(http://b/288471183): Update comment after removing file system URL.
+  // Deserializes from `base::Value::Dict` to `HoldingSpaceItem`.
   // This creates a partially initialized item with an empty file system URL.
   // The item should be fully initialized using `Initialize()`.
   static std::unique_ptr<HoldingSpaceItem> Deserialize(
-      const base::DictionaryValue& dict,
+      const base::Value::Dict& dict,
       ImageResolver image_resolver);
 
   // Deserializes `id_` from a serialized `HoldingSpaceItem`.
-  static const std::string& DeserializeId(const base::DictionaryValue& dict);
+  static const std::string& DeserializeId(const base::Value::Dict& dict);
 
-  // Deserializes `file_path_` from a serialized `HoldingSpaceItem`.
-  static base::FilePath DeserializeFilePath(const base::DictionaryValue& dict);
+  // Deserializes file path from a serialized `HoldingSpaceItem`.
+  static base::FilePath DeserializeFilePath(const base::Value::Dict& dict);
 
   // Deserializes `type_` from a serialized `HoldingSpaceItem`.
-  static Type DeserializeType(const base::DictionaryValue& dict);
+  static Type DeserializeType(const base::Value::Dict& dict);
 
-  // Serializes from `HoldingSpaceItem` to `base::DictionaryValue`.
-  base::DictionaryValue Serialize() const;
+  // Serializes from `HoldingSpaceItem` to `base::Value::Dict`.
+  base::Value::Dict Serialize() const;
 
   // Adds `callback` to be notified when `this` gets deleted.
   base::CallbackListSubscription AddDeletionCallback(
@@ -153,12 +164,11 @@ class ASH_PUBLIC_EXPORT HoldingSpaceItem {
 
   // Used to fully initialize partially initialized items created by
   // `Deserialize()`.
-  void Initialize(const GURL& file_system_url);
+  void Initialize(const HoldingSpaceFile& file);
 
-  // Sets the file backing the item to `file_path` and `file_system_url`,
-  // returning `true` if a change occurred or `false` to indicate no-op.
-  bool SetBackingFile(const base::FilePath& file_path,
-                      const GURL& file_system_url);
+  // Sets the `file` backing the item, returning `true` if a change occurred or
+  // `false` to indicate no-op.
+  bool SetBackingFile(const HoldingSpaceFile& file);
 
   // Returns `text_`, falling back to the lossy display name of the item's
   // backing file if absent.
@@ -167,17 +177,17 @@ class ASH_PUBLIC_EXPORT HoldingSpaceItem {
   // Sets the text that should be shown for the item, returning `true` if a
   // change occurred or `false` to indicate no-op. If absent, the lossy display
   // name of the item's backing file will be used.
-  bool SetText(const absl::optional<std::u16string>& text);
+  bool SetText(const std::optional<std::u16string>& text);
 
   // Sets the secondary text that should be shown for the item, returning `true`
   // if a change occurred or `false` to indicate no-op.
-  bool SetSecondaryText(const absl::optional<std::u16string>& secondary_text);
+  bool SetSecondaryText(const std::optional<std::u16string>& secondary_text);
 
-  // Sets the color for the secondary text that should be shown for the item,
+  // Sets the color id for the secondary text that should be shown for the item,
   // returning `true` if a change occurred or `false` to indicate no-op. If
-  // `absl::nullopt` is provided, secondary text color will fallback to default.
-  bool SetSecondaryTextColor(
-      const absl::optional<cros_styles::ColorName>& secondary_text_color);
+  // `std::nullopt` is provided, secondary text color will fallback to default.
+  bool SetSecondaryTextColorId(
+      const std::optional<ui::ColorId>& secondary_text_color_id);
 
   // Returns `accessible_name_`, falling back to a concatenation of primary
   // and secondary text if absent.
@@ -187,7 +197,7 @@ class ASH_PUBLIC_EXPORT HoldingSpaceItem {
   // if a change occurred or `false` to indicate no-op. Note that if the
   // accessible name is absent, `GetAccessibleName()` will fallback to a
   // concatenation of primary and secondary text.
-  bool SetAccessibleName(const absl::optional<std::u16string>& accessible_name);
+  bool SetAccessibleName(const std::optional<std::u16string>& accessible_name);
 
   // Sets the commands for an in-progress item which are shown in the item's
   // context menu and possibly, in the case of cancel/pause/resume, as primary/
@@ -204,26 +214,21 @@ class ASH_PUBLIC_EXPORT HoldingSpaceItem {
   // are loaded when the image is next needed.
   void InvalidateImage();
 
-  // Returns true if this item is a screen capture.
-  bool IsScreenCapture() const;
-
   const std::string& id() const { return id_; }
 
   Type type() const { return type_; }
 
-  const absl::optional<std::u16string>& secondary_text() const {
+  const std::optional<std::u16string>& secondary_text() const {
     return secondary_text_;
   }
 
-  const absl::optional<cros_styles::ColorName>& secondary_text_color() const {
-    return secondary_text_color_;
+  const std::optional<ui::ColorId>& secondary_text_color_id() const {
+    return secondary_text_color_id_;
   }
 
   const HoldingSpaceImage& image() const { return *image_; }
 
-  const base::FilePath& file_path() const { return file_path_; }
-
-  const GURL& file_system_url() const { return file_system_url_; }
+  const HoldingSpaceFile& file() const { return file_; }
 
   const HoldingSpaceProgress& progress() const { return progress_; }
 
@@ -237,8 +242,7 @@ class ASH_PUBLIC_EXPORT HoldingSpaceItem {
   // Constructor for file backed items.
   HoldingSpaceItem(Type type,
                    const std::string& id,
-                   const base::FilePath& file_path,
-                   const GURL& file_system_url,
+                   const HoldingSpaceFile& file,
                    std::unique_ptr<HoldingSpaceImage> image,
                    const HoldingSpaceProgress& progress);
 
@@ -247,23 +251,21 @@ class ASH_PUBLIC_EXPORT HoldingSpaceItem {
   // The holding space item ID assigned to the item.
   std::string id_;
 
-  // The file path by which the item is backed.
-  base::FilePath file_path_;
-
-  // The file system URL of the file that backs the item.
-  GURL file_system_url_;
+  // The file that backs the item.
+  HoldingSpaceFile file_;
 
   // If set, the text that should be shown for the item.
-  absl::optional<std::u16string> text_;
+  std::optional<std::u16string> text_;
 
   // If set, the secondary text that should be shown for the item.
-  absl::optional<std::u16string> secondary_text_;
+  std::optional<std::u16string> secondary_text_;
 
-  // If set, the color for the secondary text that should be shown for the item.
-  absl::optional<cros_styles::ColorName> secondary_text_color_;
+  // If set, the color resolved from the color id for the secondary text that
+  // should be shown for the item.
+  std::optional<ui::ColorId> secondary_text_color_id_;
 
   // If set, the accessible name that should be used for the item.
-  absl::optional<std::u16string> accessible_name_;
+  std::optional<std::u16string> accessible_name_;
 
   // The image representation of the item.
   std::unique_ptr<HoldingSpaceImage> image_;

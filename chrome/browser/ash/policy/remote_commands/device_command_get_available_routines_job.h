@@ -29,15 +29,11 @@ class DeviceCommandGetAvailableRoutinesJob : public RemoteCommandJob {
   enterprise_management::RemoteCommand_Type GetType() const override;
 
  private:
-  class Payload;
-
   // RemoteCommandJob:
-  void RunImpl(CallbackWithResult succeeded_callback,
-               CallbackWithResult failed_callback) override;
+  void RunImpl(CallbackWithResult result_callback) override;
 
   void OnCrosHealthdResponseReceived(
-      CallbackWithResult succeeded_callback,
-      CallbackWithResult failed_callback,
+      CallbackWithResult result_callback,
       const std::vector<ash::cros_healthd::mojom::DiagnosticRoutineEnum>&
           available_routines);
 

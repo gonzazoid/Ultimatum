@@ -9,14 +9,12 @@
 #include <string>
 #include <utility>
 
-#include "base/base_switches.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/scoped_native_library.h"
 #include "base/test/multiprocess_test.h"
 #include "base/test/test_timeouts.h"
 #include "base/win/scoped_handle.h"
-#include "base/win/windows_version.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/multiprocess_func_list.h"
@@ -27,25 +25,13 @@ namespace win {
 namespace {
 
 std::string FailureMessage(const std::string& msg) {
-#if !defined(DEBUG) && defined(OFFICIAL_BUILD)
+#if defined(NDEBUG) && defined(OFFICIAL_BUILD)
   // Official release builds strip all fatal messages for saving binary size,
   // see base/check.h.
   return "";
 #else
   return msg;
-#endif  // !defined(DEBUG) && defined(OFFICIAL_BUILD)
-}
-
-// Death tests don't seem to work on Windows 7 32-bit native with hooks enabled.
-bool DoDeathTestsWork() {
-#if defined(ARCH_CPU_32_BITS)
-    const auto* os_info = base::win::OSInfo::GetInstance();
-    if (os_info->version() <= base::win::Version::WIN7 &&
-        os_info->IsWowDisabled()) {
-      return false;
-    }
-#endif  // defined(ARCH_CPU_32_BITS)
-    return true;
+#endif  // defined(NDEBUG) && defined(OFFICIAL_BUILD)
 }
 
 }  // namespace
@@ -83,20 +69,13 @@ TEST_F(ScopedHandleTest, ScopedHandle) {
 }
 
 TEST_F(ScopedHandleDeathTest, HandleVerifierTrackedHasBeenClosed) {
-  // This test is only valid if hooks are enabled.
-  if (!DoDeathTestsWork())
-    return;
   HANDLE handle = ::CreateMutex(nullptr, false, nullptr);
   ASSERT_NE(HANDLE(nullptr), handle);
-  using NtCloseFunc = decltype(&::NtClose);
-  NtCloseFunc ntclose = reinterpret_cast<NtCloseFunc>(
-      GetProcAddress(GetModuleHandle(L"ntdll.dll"), "NtClose"));
-  ASSERT_NE(nullptr, ntclose);
 
   ASSERT_DEATH(
       {
         base::win::ScopedHandle handle_holder(handle);
-        ntclose(handle);
+        ::NtClose(handle);
         // Destructing a ScopedHandle with an illegally closed handle should
         // fail.
       },
@@ -104,10 +83,6 @@ TEST_F(ScopedHandleDeathTest, HandleVerifierTrackedHasBeenClosed) {
 }
 
 TEST_F(ScopedHandleDeathTest, HandleVerifierCloseTrackedHandle) {
-  // This test is only valid if hooks are enabled.
-  if (!DoDeathTestsWork())
-    return;
-
   ASSERT_DEATH(
       {
         HANDLE handle = ::CreateMutex(nullptr, false, nullptr);
@@ -130,9 +105,6 @@ TEST_F(ScopedHandleDeathTest, HandleVerifierCloseTrackedHandle) {
 }
 
 TEST_F(ScopedHandleDeathTest, HandleVerifierDoubleTracking) {
-  if (!DoDeathTestsWork())
-    return;
-
   HANDLE handle = ::CreateMutex(nullptr, false, nullptr);
   ASSERT_NE(HANDLE(nullptr), handle);
 
@@ -143,9 +115,6 @@ TEST_F(ScopedHandleDeathTest, HandleVerifierDoubleTracking) {
 }
 
 TEST_F(ScopedHandleDeathTest, HandleVerifierWrongOwner) {
-  if (!DoDeathTestsWork())
-    return;
-
   HANDLE handle = ::CreateMutex(nullptr, false, nullptr);
   ASSERT_NE(HANDLE(nullptr), handle);
 
@@ -161,9 +130,6 @@ TEST_F(ScopedHandleDeathTest, HandleVerifierWrongOwner) {
 }
 
 TEST_F(ScopedHandleDeathTest, HandleVerifierUntrackedHandle) {
-  if (!DoDeathTestsWork())
-    return;
-
   HANDLE handle = ::CreateMutex(nullptr, false, nullptr);
   ASSERT_NE(HANDLE(nullptr), handle);
 
@@ -186,11 +152,7 @@ TEST_F(ScopedHandleDeathTest, HandleVerifierUntrackedHandle) {
 #endif
 
 TEST_F(ScopedHandleTest, MAYBE_MultiProcess) {
-  // Initializing ICU in the child process causes a scoped handle to be created
-  // before the test gets a chance to test the race condition, so disable ICU
-  // for the child process here.
   CommandLine command_line(base::GetMultiProcessTestChildBaseCommandLine());
-  command_line.AppendSwitch(switches::kTestDoNotInitializeIcu);
 
   base::Process test_child_process = base::SpawnMultiProcessTestChild(
       "HandleVerifierChildProcess", command_line, LaunchOptions());

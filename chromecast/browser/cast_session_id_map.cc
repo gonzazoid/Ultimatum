@@ -4,12 +4,14 @@
 
 #include "chromecast/browser/cast_session_id_map.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
+#include "chromecast/base/bind_to_task_runner.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
 
@@ -134,6 +136,22 @@ bool CastSessionIdMap::IsGroup(const std::string& session_id) {
   if (it != group_info_mapping_.end())
     return it->second;
   return false;
+}
+
+void CastSessionIdMap::IsAudioOnlySessionAsync(
+    const std::string& session_id,
+    IsAudioOnlySessionAsyncCallback callback) {
+  if (!task_runner_->RunsTasksInCurrentSequence()) {
+    // Unretained is safe here, because the singleton CastSessionIdMap never
+    // gets destroyed.
+    task_runner_->PostTask(
+        FROM_HERE, base::BindOnce(&CastSessionIdMap::IsAudioOnlySessionAsync,
+                                  base::Unretained(this), session_id,
+                                  BindToCurrentSequence(std::move(callback))));
+    return;
+  }
+
+  std::move(callback).Run(IsAudioOnlySession(session_id));
 }
 
 void CastSessionIdMap::OnGroupDestroyed(base::UnguessableToken group_id) {

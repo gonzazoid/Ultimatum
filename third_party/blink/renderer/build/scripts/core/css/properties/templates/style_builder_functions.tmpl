@@ -26,18 +26,14 @@ void {{class_name}}::ApplyInherit(StyleResolverState& state) const {
   {% set class_name = property.name.to_upper_camel_case() %}
   {% if property.style_builder_declare %}
     {% if property.style_builder_generate_value %}
-void {{class_name}}::ApplyValue(StyleResolverState& state, const CSSValue& value) const {
+void {{class_name}}::ApplyValue(StyleResolverState& state, const CSSValue& value, ValueMode) const {
 {{(caller(property) ~ '}')}}
     {% endif %}
   {% endif %}
 {% endmacro %}
 
 {% macro style_access(property) %}
-  {%- if property.readonly %}
 state.StyleBuilder().
-  {%- else %}
-state.Style()->
-  {%- endif %}
 {% endmacro %}
 
 {% macro set_value(property) %}
@@ -50,7 +46,7 @@ state.GetFontBuilder().{{property.setter}}
 
 {% macro convert_and_set_value(property) %}
   {% if property.converter == 'CSSPrimitiveValue' %}
-{{set_value(property)}}(To<CSSPrimitiveValue>(value).ConvertTo<{{property.type_name}}>());
+{{set_value(property)}}(To<CSSPrimitiveValue>(value).ConvertTo<{{property.type_name}}>(state.CssToLengthConversionData()));
   {%- elif property.converter == 'CSSIdentifierValue' %}
 {{set_value(property)}}(To<CSSIdentifierValue>(value).ConvertTo<blink::{{property.type_name}}>());
   {%- elif property.converter %}
@@ -67,7 +63,7 @@ state.GetFontBuilder().{{property.setter}}
   {{set_value(property)}}(ComputedStyleInitialValues::{{property.initial}}());
       {% endif %}
       {% if property.independent %}
-  state.Style()->{{property.is_inherited_setter}}(false);
+  state.StyleBuilder().{{property.is_inherited_setter}}(false);
       {% endif %}
     {% endcall %}
     {% call(property) apply_inherit(property) %}
@@ -77,13 +73,13 @@ state.GetFontBuilder().{{property.setter}}
   {{set_value(property)}}(state.ParentStyle()->{{property.getter}}());
       {% endif %}
       {% if property.independent %}
-  state.Style()->{{property.is_inherited_setter}}(true);
+  state.StyleBuilder().{{property.is_inherited_setter}}(true);
       {% endif %}
     {% endcall %}
     {% call(property) apply_value(property) %}
   {{convert_and_set_value(property)}}
         {% if property.independent %}
-  state.Style()->{{property.is_inherited_setter}}(false);
+  state.StyleBuilder().{{property.is_inherited_setter}}(false);
         {% endif %}
     {% endcall %}
   {% elif property.style_builder_template == 'empty' %}
@@ -123,7 +119,7 @@ state.GetFontBuilder().{{property.setter}}
     {% set getter = 'MaskBoxImage' if is_mask_box else 'BorderImage' %}
     {% set setter = 'Set' + getter %}
     {% call(property) apply_initial(property) %}
-  const NinePieceImage& current_image = state.Style()->{{getter}}();
+  const NinePieceImage& current_image = state.StyleBuilder().{{getter}}();
   {# Check for equality in case we can bail out before creating a new NinePieceImage. #}
       {% if modifier_type == 'Outset' %}
   if (style_building_utils::BorderImageLengthMatchesAllSides(current_image.Outset(),
@@ -169,10 +165,10 @@ state.GetFontBuilder().{{property.setter}}
       {% elif modifier_type == 'Width' %}
   image.SetBorderSlices({{ 'Length::Auto()' if is_mask_box else '1.0' }});
       {% endif %}
-  state.Style()->{{setter}}(image);
+  state.StyleBuilder().{{setter}}(image);
     {% endcall %}
     {% call(property) apply_inherit(property) %}
-  NinePieceImage image(state.Style()->{{getter}}());
+  NinePieceImage image(state.StyleBuilder().{{getter}}());
       {% if modifier_type == 'Outset' %}
   image.CopyOutsetFrom(state.ParentStyle()->{{getter}}());
       {% elif modifier_type == 'Repeat' %}
@@ -182,10 +178,10 @@ state.GetFontBuilder().{{property.setter}}
       {% elif modifier_type == 'Width' %}
   image.CopyBorderSlicesFrom(state.ParentStyle()->{{getter}}());
       {% endif %}
-  state.Style()->{{setter}}(image);
+  state.StyleBuilder().{{setter}}(image);
     {% endcall %}
     {% call(property) apply_value(property) %}
-  NinePieceImage image(state.Style()->{{getter}}());
+  NinePieceImage image(state.StyleBuilder().{{getter}}());
       {% if modifier_type == 'Outset' %}
   image.SetOutset(CSSToStyleMap::MapNinePieceImageQuad(state, value));
       {% elif modifier_type == 'Repeat' %}
@@ -195,16 +191,16 @@ state.GetFontBuilder().{{property.setter}}
       {% elif modifier_type == 'Width' %}
   image.SetBorderSlices(CSSToStyleMap::MapNinePieceImageQuad(state, value));
       {% endif %}
-  state.Style()->{{setter}}(image);
+  state.StyleBuilder().{{setter}}(image);
     {% endcall %}
   {% elif property.style_builder_template in ['animation', 'transition'] %}
     {% set attribute = property.style_builder_template_args['attribute'] %}
     {% set animation = 'Animation' if property.style_builder_template == 'animation' else 'Transition' %}
     {% set vector = attribute + "List()" %}
     {% call(property) apply_initial(property) %}
-  if (!state.Style()->{{animation}}s())
+  if (!state.StyleBuilder().{{animation}}s())
     return;
-  CSS{{animation}}Data& data = state.Style()->Access{{animation}}s();
+  CSS{{animation}}Data& data = state.StyleBuilder().Access{{animation}}s();
   data.{{vector}}.clear();
   data.{{vector}}.push_back(CSS{{animation}}Data::Initial{{attribute}}());
     {% endcall %}
@@ -214,28 +210,30 @@ state.GetFontBuilder().{{property.setter}}
   if (!parent_data)
     ApplyInitial{{property_id}}(state);
   else
-    state.Style()->Access{{animation}}s().{{vector}} = parent_data->{{vector}};
+    state.StyleBuilder().Access{{animation}}s().{{vector}} = parent_data->{{vector}};
     {% endcall %}
 
     {% call(property) apply_value(property) %}
-  CSS{{animation}}Data& data = state.Style()->Access{{animation}}s();
+  CSS{{animation}}Data& data = state.StyleBuilder().Access{{animation}}s();
   data.{{vector}}.clear();
-  for (auto& listValue : To<CSSValueList>(value))
-    data.{{vector}}.push_back(CSSToStyleMap::MapAnimation{{attribute}}(*listValue));
+  for (const CSSValue* list_value : To<CSSValueList>(value)) {
+    const auto& item = *list_value;
+    data.{{vector}}.push_back(CSSToStyleMap::MapAnimation{{attribute}}(state, item));
+  }
     {% endcall %}
   {% elif property.style_builder_template in ['background_layer', 'mask_layer'] %}
     {% set layer_type = 'Background' if property.style_builder_template == 'background_layer' else 'Mask' %}
     {% set fill_type = property.style_builder_template_args['fill_type'] %}
     {% set fill_type_getter = property.style_builder_template_args['fill_type_getter'] or fill_type %}
     {% call(property) apply_initial(property) %}
-  FillLayer* curr_child = &state.Style()->Access{{layer_type}}Layers();
+  FillLayer* curr_child = &state.StyleBuilder().Access{{layer_type}}Layers();
   curr_child->Set{{fill_type}}(FillLayer::InitialFill{{fill_type}}(EFillLayerType::k{{layer_type}}));
   for (curr_child = curr_child->Next(); curr_child; curr_child = curr_child->Next())
     curr_child->Clear{{fill_type}}();
     {% endcall %}
 
     {% call(property) apply_inherit(property) %}
-  FillLayer* curr_child = &state.Style()->Access{{layer_type}}Layers();
+  FillLayer* curr_child = &state.StyleBuilder().Access{{layer_type}}Layers();
   FillLayer* prev_child = 0;
   const FillLayer* curr_parent = &state.ParentStyle()->{{layer_type}}Layers();
   while (curr_parent && curr_parent->Is{{fill_type}}Set()) {
@@ -263,7 +261,7 @@ state.GetFontBuilder().{{property.setter}}
     {% endcall %}
 
     {% call(property) apply_value(property) %}
-  FillLayer* curr_child = &state.Style()->Access{{layer_type}}Layers();
+  FillLayer* curr_child = &state.StyleBuilder().Access{{layer_type}}Layers();
   FillLayer* prev_child = 0;
   const auto* value_list = DynamicTo<CSSValueList>(value);
   if (value_list && !value.IsImageSetValue()) {
@@ -304,16 +302,16 @@ state.GetFontBuilder().{{property.setter}}
   {% elif property.style_builder_template == 'counter' %}
     {% set action = property.style_builder_template_args['action'] %}
     {% call(property) apply_initial(property) %}
-  state.Style()->Clear{{action}}Directives();
+  state.StyleBuilder().Clear{{action}}Directives();
     {% endcall %}
 
     {% call(property) apply_inherit(property) %}
-  state.Style()->Clear{{action}}Directives();
+  state.StyleBuilder().Clear{{action}}Directives();
   const CounterDirectiveMap* parent_map = state.ParentStyle()->GetCounterDirectives();
   if (!parent_map)
     return;
 
-  CounterDirectiveMap& map = state.Style()->AccessCounterDirectives();
+  CounterDirectiveMap& map = state.StyleBuilder().AccessCounterDirectives();
   DCHECK(!parent_map->empty());
 
   typedef CounterDirectiveMap::const_iterator Iterator;
@@ -325,7 +323,7 @@ state.GetFontBuilder().{{property.setter}}
     {% endcall %}
 
     {% call(property) apply_value(property) %}
-  state.Style()->Clear{{action}}Directives();
+  state.StyleBuilder().Clear{{action}}Directives();
 
   const auto* list = DynamicTo<CSSValueList>(value);
   if (!list) {
@@ -333,7 +331,7 @@ state.GetFontBuilder().{{property.setter}}
     return;
   }
 
-  CounterDirectiveMap& map = state.Style()->AccessCounterDirectives();
+  CounterDirectiveMap& map = state.StyleBuilder().AccessCounterDirectives();
 
   for (const CSSValue* item : *list) {
     const auto& pair = To<CSSValuePair>(*item);

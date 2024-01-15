@@ -4,7 +4,11 @@
 
 #include "cc/tiles/raster_tile_priority_queue_all.h"
 
+#include <memory>
+
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
+#include "cc/base/features.h"
 #include "cc/tiles/tiling_set_raster_queue_all.h"
 
 namespace cc {
@@ -58,12 +62,12 @@ class RasterOrderComparator {
 };
 
 void CreateTilingSetRasterQueues(
-    const std::vector<PictureLayerImpl*>& layers,
+    const std::vector<raw_ptr<PictureLayerImpl, VectorExperimental>>& layers,
     TreePriority tree_priority,
     std::vector<std::unique_ptr<TilingSetRasterQueueAll>>* queues) {
   DCHECK(queues->empty());
 
-  for (auto* layer : layers) {
+  for (PictureLayerImpl* layer : layers) {
     if (!layer->HasValidTilePriorities())
       continue;
 
@@ -84,12 +88,13 @@ void CreateTilingSetRasterQueues(
 }  // namespace
 
 RasterTilePriorityQueueAll::RasterTilePriorityQueueAll() = default;
-
 RasterTilePriorityQueueAll::~RasterTilePriorityQueueAll() = default;
 
 void RasterTilePriorityQueueAll::Build(
-    const std::vector<PictureLayerImpl*>& active_layers,
-    const std::vector<PictureLayerImpl*>& pending_layers,
+    const std::vector<raw_ptr<PictureLayerImpl, VectorExperimental>>&
+        active_layers,
+    const std::vector<raw_ptr<PictureLayerImpl, VectorExperimental>>&
+        pending_layers,
     TreePriority tree_priority) {
   tree_priority_ = tree_priority;
 
@@ -149,40 +154,35 @@ RasterTilePriorityQueueAll::GetNextQueues() const {
   const TilePriority& active_priority = active_tile.priority();
   const TilePriority& pending_priority = pending_tile.priority();
 
-  switch (tree_priority_) {
-    case SMOOTHNESS_TAKES_PRIORITY: {
-      // If we're down to soon bin tiles on the active tree and there
-      // is a pending tree, process the now tiles in the pending tree to allow
-      // tiles required for activation to be initialized when memory policy only
-      // allows prepaint. The soon/eventually bin tiles on the active tree are
-      // lowest priority since that work is likely to be thrown away when we
-      // activate.
-      if (active_priority.priority_bin >= TilePriority::SOON &&
-          pending_priority.priority_bin == TilePriority::NOW) {
-        return pending_queues_;
-      }
+  // Priority rule:
+  // - SMOOTHNESS_TAKES_PRIORITY: Active NOW before pending NOW; same as all
+  // mode for other bins.
+  // - NEW_CONTENT_TAKES_PRIORITY: Pending NOW before active NOW; same as all
+  // mode for other bins.
+  // - SAME_PRIORITY_FOR_BOTH_TREES (All): Calling IsHigherPriorityThan().
+  // Notes: This priority rule should not break
+  // TileManager::TilePriorityViolatesMemoryPolicy().
+
+  // Prioritize the highest priority_bin NOW out of either one of active or
+  // pending for smoothness and new content modes.
+  if (pending_priority.priority_bin == TilePriority::NOW &&
+      active_priority.priority_bin == TilePriority::NOW) {
+    if (tree_priority_ == SMOOTHNESS_TAKES_PRIORITY) {
       return active_queues_;
     }
-    case NEW_CONTENT_TAKES_PRIORITY: {
-      // If we're down to soon bin tiles on the pending tree, process the
-      // active tree to allow tiles required for activation to be initialized
-      // when memory policy only allows prepaint. Note that active required for
-      // activation tiles might come from either now or soon bins.
-      if (pending_priority.priority_bin >= TilePriority::SOON &&
-          active_priority.priority_bin <= TilePriority::SOON) {
-        return active_queues_;
-      }
+    if (tree_priority_ == NEW_CONTENT_TAKES_PRIORITY) {
       return pending_queues_;
     }
-    case SAME_PRIORITY_FOR_BOTH_TREES: {
-      if (active_priority.IsHigherPriorityThan(pending_priority))
-        return active_queues_;
-      return pending_queues_;
-    }
-    default:
-      NOTREACHED();
-      return active_queues_;
   }
+
+  // Then, use the IsHigherPriorityThan condition for
+  // SAME_PRIORITY_FOR_BOTH_TREES and the rest of the priority bins.
+  // TODO(crbug.com/1380831): For SAME_PRIORITY_FOR_BOTH_TREES mode and both
+  // being NOW, should we give the priority to Active NOW instead?
+  if (active_priority.IsHigherPriorityThan(pending_priority)) {
+    return active_queues_;
+  }
+  return pending_queues_;
 }
 
 }  // namespace cc

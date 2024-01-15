@@ -4,6 +4,7 @@
 
 #include "ash/app_list/app_list_presenter_impl.h"
 
+#include <optional>
 #include <utility>
 
 #include "ash/app_list/app_list_controller_impl.h"
@@ -16,36 +17,33 @@
 #include "ash/app_list/views/contents_view.h"
 #include "ash/app_list/views/search_box_view.h"
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
-#include "ash/public/cpp/app_list/app_list_features.h"
-#include "ash/public/cpp/app_list/app_list_switches.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/public/cpp/assistant/controller/assistant_ui_controller.h"
 #include "ash/public/cpp/metrics_util.h"
-#include "ash/public/cpp/pagination/pagination_model.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/wm/container_finder.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_enums.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/client/focus_client.h"
 #include "ui/aura/window.h"
 #include "ui/compositor/animation_throughput_reporter.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_element.h"
 #include "ui/compositor/layer_animation_observer.h"
+#include "ui/compositor/layer_observer.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/display/screen.h"
 #include "ui/display/types/display_constants.h"
 #include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/geometry/transform_util.h"
-#include "ui/gfx/presentation_feedback.h"
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/widget/widget.h"
 #include "ui/wm/core/transient_window_manager.h"
@@ -64,21 +62,17 @@ constexpr float kFullscreenLauncherFadeAnimationScale = 0.92f;
 constexpr base::TimeDelta kFullscreenLauncherTransitionDuration =
     base::Milliseconds(350);
 
-inline ui::Layer* GetLayer(views::Widget* widget) {
-  return widget->GetNativeView()->layer();
-}
-
 // Callback from the compositor when it presented a valid frame. Used to
 // record UMA of input latency.
 void DidPresentCompositorFrame(base::TimeTicks event_time_stamp,
                                bool is_showing,
-                               const gfx::PresentationFeedback& feedback) {
-  const base::TimeTicks present_time = feedback.timestamp;
-  if (present_time.is_null() || event_time_stamp.is_null() ||
-      present_time < event_time_stamp) {
+                               base::TimeTicks presentation_timestamp) {
+  if (presentation_timestamp.is_null() || event_time_stamp.is_null() ||
+      presentation_timestamp < event_time_stamp) {
     return;
   }
-  const base::TimeDelta input_latency = present_time - event_time_stamp;
+  const base::TimeDelta input_latency =
+      presentation_timestamp - event_time_stamp;
   if (is_showing) {
     UMA_HISTOGRAM_TIMES("Apps.AppListShow.InputLatency", input_latency);
   } else {
@@ -86,52 +80,30 @@ void DidPresentCompositorFrame(base::TimeTicks event_time_stamp,
   }
 }
 
-// Whether the shelf is oriented on the side, not on the bottom.
-bool IsSideShelf(Shelf* shelf) {
-  switch (shelf->alignment()) {
-    case ShelfAlignment::kBottom:
-    case ShelfAlignment::kBottomLocked:
-      return false;
-    case ShelfAlignment::kLeft:
-    case ShelfAlignment::kRight:
-      return true;
-  }
-  return false;
-}
-
-// Whether the shelf background type indicates that shelf has rounded corners.
-bool IsShelfBackgroundTypeWithRoundedCorners(
-    ShelfBackgroundType background_type) {
-  switch (background_type) {
-    case ShelfBackgroundType::kDefaultBg:
-    case ShelfBackgroundType::kOverview:
-      return true;
-    case ShelfBackgroundType::kMaximized:
-    case ShelfBackgroundType::kOobe:
-    case ShelfBackgroundType::kHomeLauncher:
-    case ShelfBackgroundType::kLogin:
-    case ShelfBackgroundType::kLoginNonBlurredWallpaper:
-    case ShelfBackgroundType::kInApp:
-      return false;
-  }
-}
-
 // Invokes `complete_callback_` at the end of animation.
 class FullscreenLauncherAnimationObserver
-    : public ui::ImplicitAnimationObserver {
+    : public ui::ImplicitAnimationObserver,
+      public ui::LayerObserver {
  public:
   // Invoked with `true` if animation was aborted.
   using AnimationCompleteCallback = base::OnceCallback<void(bool)>;
 
-  explicit FullscreenLauncherAnimationObserver(
+  FullscreenLauncherAnimationObserver(
+      ui::Layer* layer,
       AnimationCompleteCallback complete_callback)
-      : complete_callback_(std::move(complete_callback)) {}
+      : layer_(layer), complete_callback_(std::move(complete_callback)) {
+    DCHECK(layer_);
+    layer_->AddObserver(this);
+  }
+
   FullscreenLauncherAnimationObserver(
       const FullscreenLauncherAnimationObserver& other) = delete;
   FullscreenLauncherAnimationObserver& operator=(
       const FullscreenLauncherAnimationObserver& other) = delete;
+
   ~FullscreenLauncherAnimationObserver() override {
     StopObservingImplicitAnimations();
+    layer_->RemoveObserver(this);
   }
 
   // ui::ImplicitAnimationObserver:
@@ -145,7 +117,17 @@ class FullscreenLauncherAnimationObserver
     delete this;
   }
 
+  // ui::LayerObserver overrides:
+  void LayerDestroyed(ui::Layer* layer) override {
+    // Old `AppListView`'s layer can be cloned and then destroyed by
+    // `ScreenRotationAnimator`. In this case run `complete_callback_` and
+    // destroy `this`.
+    std::move(complete_callback_).Run(false);
+    delete this;
+  }
+
  private:
+  const raw_ptr<ui::Layer> layer_;
   AnimationCompleteCallback complete_callback_;
 };
 
@@ -182,7 +164,7 @@ class CallbackRunnerLayerAnimationObserver
 
 }  // namespace
 
-constexpr std::array<int, 7>
+constexpr std::array<int, 8>
     AppListPresenterImpl::kIdsOfContainersThatWontHideAppList;
 
 AppListPresenterImpl::AppListPresenterImpl(AppListControllerImpl* controller)
@@ -191,12 +173,8 @@ AppListPresenterImpl::AppListPresenterImpl(AppListControllerImpl* controller)
 }
 
 AppListPresenterImpl::~AppListPresenterImpl() {
-  // Ensures app list view goes before the controller since pagination model
-  // lives in the controller and app list view would access it on destruction.
-  if (view_) {
-    view_->GetAppsPaginationModel()->RemoveObserver(this);
-    if (view_->GetWidget())
-      view_->GetWidget()->CloseNow();
+  if (view_ && view_->GetWidget()) {
+    view_->GetWidget()->CloseNow();
   }
   CHECK(!views::WidgetObserver::IsInObserverList());
 }
@@ -210,15 +188,9 @@ aura::Window* AppListPresenterImpl::GetWindow() const {
 void AppListPresenterImpl::Show(AppListViewState preferred_state,
                                 int64_t display_id,
                                 base::TimeTicks event_time_stamp,
-                                absl::optional<AppListShowSource> show_source) {
-  if (is_target_visibility_show_) {
-    // Launcher is always visible on the internal display when home launcher is
-    // enabled in tablet mode.
-    if (Shell::Get()->IsInTabletMode() || display_id == GetDisplayId())
-      return;
-
-    Dismiss(event_time_stamp);
-  }
+                                std::optional<AppListShowSource> show_source) {
+  if (is_target_visibility_show_)
+    return;
 
   if (!Shell::Get()->GetRootWindowForDisplayId(display_id)) {
     LOG(ERROR) << "Root window does not exist for display: " << display_id;
@@ -250,7 +222,6 @@ void AppListPresenterImpl::Show(AppListViewState preferred_state,
       Shelf::ForWindow(view_->GetWidget()->GetNativeView()->GetRootWindow());
   shelf->shelf_layout_manager()->UpdateAutoHideState();
 
-  // Observe the shelf for changes to rounded corners.
   // If presenter is observing a shelf instance different than `shelf`, it's
   // because the app list view on the associated display is closing. It's safe
   // to remove this observation (given that shelf background changes should not
@@ -264,8 +235,6 @@ void AppListPresenterImpl::Show(AppListViewState preferred_state,
   // ScrollableShelfView are deleted. https://crbug.com/1163332
   view_->SetDragAndDropHostOfCurrentAppList(
       shelf->shelf_widget()->GetDragAndDropHostForAppList());
-  view_->SetShelfHasRoundedCorners(
-      IsShelfBackgroundTypeWithRoundedCorners(shelf->GetBackgroundType()));
   std::unique_ptr<AppListView::ScopedAccessibilityAnnouncementLock>
       scoped_accessibility_lock;
 
@@ -278,49 +247,40 @@ void AppListPresenterImpl::Show(AppListViewState preferred_state,
             view_);
   }
 
-  // Save data about how and when we opened the app list for metrics when we
-  // close it.
-  last_open_source_ = show_source;
-  last_open_time_ = base::Time::Now();
-
   auto* layer = view_->GetWidget()->GetNativeWindow()->layer();
 
-  float initial_opacity = 1.0f;
   bool has_aborted_animation = false;
-  if (app_list_features::IsAnimateScaleOnTabletModeTransitionEnabled()) {
-    if (layer->GetAnimator()->is_animating()) {
-      layer->GetAnimator()->AbortAllAnimations();
-      // Mark that animation was aborted in order to keep initial opacity and
-      // scale values in sync.
-      has_aborted_animation = true;
-    }
-    // `0.01f` prevents a DCHECK error (widgets cannot be shown when visible and
-    // fully transparent at the same time).
-    initial_opacity = layer->opacity() == 0.0f ? 0.01f : layer->opacity();
+  if (layer->GetAnimator()->is_animating()) {
+    layer->GetAnimator()->AbortAllAnimations();
+    // Mark that animation was aborted in order to keep initial opacity and
+    // scale values in sync.
+    has_aborted_animation = true;
   }
+  // `0.01f` prevents a DCHECK error (widgets cannot be shown when visible and
+  // fully transparent at the same time).
+  const float initial_opacity =
+      layer->opacity() == 0.0f ? 0.01f : layer->opacity();
   layer->SetOpacity(initial_opacity);
 
-  view_->Show(preferred_state, IsSideShelf(shelf));
+  view_->Show(preferred_state);
 
-  if (app_list_features::IsAnimateScaleOnTabletModeTransitionEnabled()) {
-    // If there was no aborted dismiss animation before - set the initial value,
-    // otherwise smoothly continue where it was aborted.
-    if (!has_aborted_animation) {
-      layer->SetTransform(
-          gfx::GetScaleTransform(gfx::Rect(layer->size()).CenterPoint(),
-                                 kFullscreenLauncherFadeAnimationScale));
-    }
-    FullscreenLauncherAnimationObserver::AnimationCompleteCallback
-        animation_complete_callback = base::BindOnce(
-            &AppListPresenterImpl::OnTabletToClamshellTransitionAnimationDone,
-            weak_ptr_factory_.GetWeakPtr(), /*target_visibility=*/true);
-    auto* animation_observer = new FullscreenLauncherAnimationObserver(
-        std::move(animation_complete_callback));
-    UpdateScaleAndOpacityForHomeLauncher(
-        1.0f, 1.0f, absl::nullopt,
-        base::BindRepeating(&UpdateTabletModeTransitionAnimationSettings,
-                            animation_observer));
+  // If there was no aborted dismiss animation before - set the initial value,
+  // otherwise smoothly continue where it was aborted.
+  if (!has_aborted_animation) {
+    layer->SetTransform(
+        gfx::GetScaleTransform(gfx::Rect(layer->size()).CenterPoint(),
+                               kFullscreenLauncherFadeAnimationScale));
   }
+  FullscreenLauncherAnimationObserver::AnimationCompleteCallback
+      animation_complete_callback = base::BindOnce(
+          &AppListPresenterImpl::OnTabletToClamshellTransitionAnimationDone,
+          weak_ptr_factory_.GetWeakPtr(), /*target_visibility=*/true);
+  auto* animation_observer = new FullscreenLauncherAnimationObserver(
+      layer, std::move(animation_complete_callback));
+  UpdateScaleAndOpacityForHomeLauncher(
+      1.0f, 1.0f, std::nullopt,
+      base::BindRepeating(&UpdateTabletModeTransitionAnimationSettings,
+                          animation_observer));
 
   SnapAppListBoundsToDisplayEdge();
 
@@ -390,33 +350,22 @@ void AppListPresenterImpl::Dismiss(base::TimeTicks event_time_stamp) {
   controller_->ViewClosing();
 
   OnVisibilityWillChange(GetTargetVisibility(), GetDisplayId());
-  if (!Shell::Get()->IsInTabletMode() && last_open_source_.has_value() &&
-      last_open_time_.has_value())
-    RecordAppListUserJourneyTime(last_open_source_.value(),
-                                 base::Time::Now() - last_open_time_.value());
-  last_open_source_.reset();
-  last_open_time_.reset();
 
   if (!view_->GetWidget()->GetNativeWindow()->is_destroying()) {
-    if (app_list_features::IsAnimateScaleOnTabletModeTransitionEnabled()) {
-      FullscreenLauncherAnimationObserver::AnimationCompleteCallback
-          animation_complete_callback = base::BindOnce(
-              &AppListPresenterImpl::OnTabletToClamshellTransitionAnimationDone,
-              weak_ptr_factory_.GetWeakPtr(), /*target_visibility=*/false);
-      auto* animation_observer = new FullscreenLauncherAnimationObserver(
-          std::move(animation_complete_callback));
-      // Aborts show animation (if it's running, noop otherwise). This helps to
-      // run dismiss animation smoothly from the aborted scale/opacity points.
-      view_->GetWidget()
-          ->GetNativeWindow()
-          ->layer()
-          ->GetAnimator()
-          ->AbortAllAnimations();
-      UpdateScaleAndOpacityForHomeLauncher(
-          kFullscreenLauncherFadeAnimationScale, 0.0f, absl::nullopt,
-          base::BindRepeating(&UpdateTabletModeTransitionAnimationSettings,
-                              animation_observer));
-    }
+    auto* const layer = view_->GetWidget()->GetNativeWindow()->layer();
+    FullscreenLauncherAnimationObserver::AnimationCompleteCallback
+        animation_complete_callback = base::BindOnce(
+            &AppListPresenterImpl::OnTabletToClamshellTransitionAnimationDone,
+            weak_ptr_factory_.GetWeakPtr(), /*target_visibility=*/false);
+    auto* animation_observer = new FullscreenLauncherAnimationObserver(
+        layer, std::move(animation_complete_callback));
+    // Aborts show animation (if it's running, noop otherwise). This helps to
+    // run dismiss animation smoothly from the aborted scale/opacity points.
+    layer->GetAnimator()->AbortAllAnimations();
+    UpdateScaleAndOpacityForHomeLauncher(
+        kFullscreenLauncherFadeAnimationScale, 0.0f, std::nullopt,
+        base::BindRepeating(&UpdateTabletModeTransitionAnimationSettings,
+                            animation_observer));
     view_->SetState(AppListViewState::kClosed);
   }
 
@@ -430,7 +379,6 @@ void AppListPresenterImpl::SetViewVisibility(bool visible) {
     return;
   view_->OnAppListVisibilityWillChange(visible);
   view_->SetVisible(visible);
-  view_->search_box_view()->SetVisible(visible);
 }
 
 bool AppListPresenterImpl::HandleCloseOpenFolder() {
@@ -438,7 +386,7 @@ bool AppListPresenterImpl::HandleCloseOpenFolder() {
 }
 
 void AppListPresenterImpl::UpdateForNewSortingOrder(
-    const absl::optional<AppListSortOrder>& new_order,
+    const std::optional<AppListSortOrder>& new_order,
     bool animate,
     base::OnceClosure update_position_closure) {
   if (!view_)
@@ -496,7 +444,7 @@ bool AppListPresenterImpl::GetTargetVisibility() const {
 void AppListPresenterImpl::UpdateScaleAndOpacityForHomeLauncher(
     float scale,
     float opacity,
-    absl::optional<TabletModeAnimationTransition> transition,
+    std::optional<TabletModeAnimationTransition> transition,
     UpdateHomeLauncherAnimationSettingsCallback callback) {
   // Exiting from overview in clamshell mode should not affect the hidden
   // fullscreen launcher.
@@ -512,7 +460,7 @@ void AppListPresenterImpl::UpdateScaleAndOpacityForHomeLauncher(
     view_->ResetTransitionMetricsReporter();
   }
 
-  absl::optional<ui::ScopedLayerAnimationSettings> settings;
+  std::optional<ui::ScopedLayerAnimationSettings> settings;
   if (!callback.is_null()) {
     settings.emplace(layer->GetAnimator());
     callback.Run(&settings.value());
@@ -523,11 +471,11 @@ void AppListPresenterImpl::UpdateScaleAndOpacityForHomeLauncher(
   // reported for transform animation only.
   layer->SetOpacity(opacity);
 
-  absl::optional<ui::AnimationThroughputReporter> reporter;
+  std::optional<ui::AnimationThroughputReporter> reporter;
   if (settings.has_value() && transition.has_value()) {
     view_->OnTabletModeAnimationTransitionNotified(*transition);
     reporter.emplace(settings->GetAnimator(),
-                     metrics_util::ForSmoothness(
+                     metrics_util::ForSmoothnessV3(
                          view_->GetStateTransitionMetricsReportCallback()));
   }
 
@@ -551,16 +499,6 @@ bool AppListPresenterImpl::IsShowingEmbeddedAssistantUI() const {
   return false;
 }
 
-void AppListPresenterImpl::OnTabletModeChanged(bool started) {
-  if (started) {
-    if (GetTargetVisibility())
-      view_->OnTabletModeChanged(true);
-  } else {
-    if (IsVisibleDeprecated())
-      view_->OnTabletModeChanged(false);
-  }
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 // AppListPresenterImpl, private:
 
@@ -572,7 +510,6 @@ void AppListPresenterImpl::SetView(AppListView* view) {
   views::Widget* widget = view_->GetWidget();
   widget->AddObserver(this);
   aura::client::GetFocusClient(widget->GetNativeView())->AddObserver(this);
-  view_->GetAppsPaginationModel()->AddObserver(this);
 
   // Sync the |onscreen_keyboard_shown_| in case |view_| is not initiated when
   // the on-screen is shown.
@@ -585,10 +522,7 @@ void AppListPresenterImpl::ResetView() {
 
   views::Widget* widget = view_->GetWidget();
   widget->RemoveObserver(this);
-  GetLayer(widget)->GetAnimator()->RemoveObserver(this);
   aura::client::GetFocusClient(widget->GetNativeView())->RemoveObserver(this);
-
-  view_->GetAppsPaginationModel()->RemoveObserver(this);
 
   view_ = nullptr;
 }
@@ -659,43 +593,20 @@ void AppListPresenterImpl::OnWindowFocused(aura::Window* gained_focus,
   const bool visible = app_list_gained_focus ||
                        (IsAtLeastPartiallyVisible() && !app_list_lost_focus);
 
-  if (Shell::Get()->IsInTabletMode()) {
-    if (visible != controller_->IsVisible(GetDisplayId())) {
-      if (app_list_gained_focus)
-        view_->OnHomeLauncherGainingFocusWithoutAnimation();
+  if (visible != controller_->IsVisible(GetDisplayId())) {
+    if (app_list_gained_focus)
+      view_->OnHomeLauncherGainingFocusWithoutAnimation();
 
-      OnVisibilityChanged(visible, GetDisplayId());
-    } else {
-      // In tablet mode, when Assistant UI lost focus after other new App window
-      // opened, we should reset the view.
-      if (app_list_lost_focus && IsShowingEmbeddedAssistantUI())
-        view_->Back();
-    }
+    OnVisibilityChanged(visible, GetDisplayId());
+  } else {
+    // In tablet mode, when Assistant UI lost focus after other new App window
+    // opened, we should reset the view.
+    if (app_list_lost_focus && IsShowingEmbeddedAssistantUI())
+      view_->Back();
   }
 
   if (app_list_gained_focus)
     base::RecordAction(base::UserMetricsAction("AppList_WindowFocused"));
-
-  if (app_list_lost_focus && !Shell::Get()->IsInTabletMode())
-    Dismiss(base::TimeTicks());
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// AppListPresenterImpl, ui::ImplicitAnimationObserver implementation:
-
-void AppListPresenterImpl::OnImplicitAnimationsCompleted() {
-  StopObservingImplicitAnimations();
-
-  // This class observes the closing animation only.
-  OnVisibilityChanged(GetTargetVisibility(), GetDisplayId());
-
-  if (is_target_visibility_show_) {
-    view_->GetWidget()->Activate();
-  } else {
-    // Hide the widget so it can be re-shown without re-creating it.
-    view_->GetWidget()->Hide();
-    OnClosed();
-  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -718,17 +629,6 @@ void AppListPresenterImpl::OnWidgetVisibilityChanged(views::Widget* widget,
   OnVisibilityChanged(visible, GetDisplayId());
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// AppListPresenterImpl, PaginationModelObserver implementation:
-
-void AppListPresenterImpl::TotalPagesChanged(int previous_page_count,
-                                             int new_page_count) {}
-
-void AppListPresenterImpl::SelectedPageChanged(int old_selected,
-                                               int new_selected) {
-  current_apps_page_ = new_selected;
-}
-
 void AppListPresenterImpl::RequestPresentationTime(
     int64_t display_id,
     base::TimeTicks event_time_stamp) {
@@ -741,7 +641,7 @@ void AppListPresenterImpl::RequestPresentationTime(
   ui::Compositor* compositor = root_window->layer()->GetCompositor();
   if (!compositor)
     return;
-  compositor->RequestPresentationTimeForNextFrame(
+  compositor->RequestSuccessfulPresentationTimeForNextFrame(
       base::BindOnce(&DidPresentCompositorFrame, event_time_stamp,
                      is_target_visibility_show_));
 }
@@ -763,13 +663,6 @@ void AppListPresenterImpl::OnShelfShuttingDown() {
   shelf_observer_.Reset();
   if (view_)
     view_->SetDragAndDropHostOfCurrentAppList(nullptr);
-}
-
-void AppListPresenterImpl::OnBackgroundTypeChanged(
-    ShelfBackgroundType background_type,
-    AnimationChangeType change_type) {
-  view_->SetShelfHasRoundedCorners(
-      IsShelfBackgroundTypeWithRoundedCorners(background_type));
 }
 
 void AppListPresenterImpl::SnapAppListBoundsToDisplayEdge() {
@@ -797,10 +690,12 @@ void AppListPresenterImpl::OnTabletToClamshellTransitionAnimationDone(
   auto* window = view_->GetWidget()->GetNativeWindow();
 
   if (!aborted) {
-    if (target_visibility)
+    if (target_visibility) {
       view_->Layout();
-    else if (!target_visibility && !window->is_destroying())
+    } else if (!target_visibility && !window->is_destroying()) {
       window->Hide();
+      OnClosed();
+    }
   }
 
   controller_->OnStateTransitionAnimationCompleted(view_->app_list_state(),

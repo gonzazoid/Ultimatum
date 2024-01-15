@@ -4,25 +4,33 @@
 
 #include "ash/app_list/views/app_drag_icon_proxy.h"
 
+#include <memory>
 #include <utility>
 
+#include "ash/constants/ash_features.h"
 #include "ash/drag_drop/drag_image_view.h"
 #include "ash/public/cpp/style/color_provider.h"
-#include "ash/style/system_shadow.h"
+#include "base/time/time.h"
 #include "ui/aura/window.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom-shared.h"
 #include "ui/compositor/layer.h"
+#include "ui/compositor/layer_owner.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/geometry/transform_util.h"
+#include "ui/gfx/image/image_skia_operations.h"
+#include "ui/views/animation/animation_builder.h"
 #include "ui/views/widget/widget.h"
 
 namespace ash {
 
 constexpr SystemShadow::Type kShadowType = SystemShadow::Type::kElevation12;
+
+constexpr base::TimeDelta kProxyAnimationDuration = base::Milliseconds(200);
 
 // For all app icons, there is an intended transparent ring around the visible
 // icon that makes the icon looks smaller than its actual size. The shadow is
@@ -34,27 +42,32 @@ constexpr float kShadowScaleFactor = 176.f / 192.f;
 AppDragIconProxy::AppDragIconProxy(
     aura::Window* root_window,
     const gfx::ImageSkia& icon,
+    const gfx::ImageSkia& badge_icon,
     const gfx::Point& pointer_location_in_screen,
     const gfx::Vector2d& pointer_offset_from_center,
     float scale_factor,
-    bool use_blurred_background) {
+    bool is_folder_icon,
+    const gfx::Size& shadow_size) {
   drag_image_widget_ =
       DragImageView::Create(root_window, ui::mojom::DragEventSource::kMouse);
 
   DragImageView* drag_image =
       static_cast<DragImageView*>(drag_image_widget_->GetContentsView());
-  drag_image->SetImage(icon);
 
+  if (badge_icon.isNull()) {
+    drag_image->SetImage(icon);
+  } else {
+    drag_image->SetImage(
+        gfx::ImageSkiaOperations::CreateIconWithBadge(icon, badge_icon));
+  }
   gfx::Size size = drag_image->GetPreferredSize();
 
-  size.set_width(std::round(size.width() * scale_factor));
-  size.set_height(std::round(size.height() * scale_factor));
-
+  // Create the drag image layer.
+  size = gfx::ScaleToRoundedSize(size, scale_factor);
   drag_image_offset_ = gfx::Vector2d(size.width() / 2, size.height() / 2) +
                        pointer_offset_from_center;
-
-  gfx::Rect drag_image_bounds(pointer_location_in_screen - drag_image_offset_,
-                              size);
+  const gfx::Rect drag_image_bounds(
+      pointer_location_in_screen - drag_image_offset_, size);
   drag_image->SetBoundsInScreen(drag_image_bounds);
 
   // Add a layer in order to ensure the icon properly animates when
@@ -64,24 +77,36 @@ AppDragIconProxy::AppDragIconProxy(
   drag_image->layer()->SetFillsBoundsOpaquely(false);
 
   // Create the shadow layer.
-  gfx::Size shadow_size = gfx::ScaleToFlooredSize(size, kShadowScaleFactor);
-  gfx::Point shadow_offset((size.width() - shadow_size.width()) / 2,
-                           (size.height() - shadow_size.height()) / 2);
+  const float shadow_scale_factor =
+      is_folder_icon ? scale_factor : scale_factor * kShadowScaleFactor;
+  const gfx::Size scaled_shadow_size =
+      gfx::ScaleToRoundedSize(shadow_size, shadow_scale_factor);
+  const gfx::Point shadow_offset(
+      (size.width() - scaled_shadow_size.width()) / 2,
+      (size.height() - scaled_shadow_size.height()) / 2);
   shadow_ = SystemShadow::CreateShadowOnTextureLayer(kShadowType);
-  shadow_->SetRoundedCornerRadius(shadow_size.width() / 2);
-  auto* shadow_layer = shadow_->GetLayer();
-  auto* image_layer = drag_image->layer();
+  shadow_->SetRoundedCornerRadius(scaled_shadow_size.width() / 2);
+  drag_image->AddLayerToRegion(shadow_->GetLayer(), views::LayerRegion::kBelow);
 
-  image_layer->Add(shadow_layer);
-  image_layer->StackAtBottom(shadow_layer);
-  shadow_->SetContentBounds(gfx::Rect(shadow_offset, shadow_size));
+  shadow_->SetContentBounds(gfx::Rect(shadow_offset, scaled_shadow_size));
+  shadow_->ObserveColorProviderSource(drag_image_widget_.get());
 
-  if (use_blurred_background) {
-    const float radius = size.width() / 2.0f;
-    drag_image->layer()->SetRoundedCornerRadius(
-        {radius, radius, radius, radius});
-    drag_image->layer()->SetBackgroundBlur(ColorProvider::kBackgroundBlurSigma);
-    drag_image->layer()->SetBackdropFilterQuality(
+  if (is_folder_icon) {
+    // The blur should be only added on the background circle, where none of
+    // any existing layer is bounded to that area.
+    // Therefore, the `blurred_background_layer_` is needed here to explicitly
+    // blur the background of the icon.
+    blurred_background_layer_ =
+        std::make_unique<ui::LayerOwner>(std::make_unique<ui::Layer>());
+    ui::Layer* const blurred_layer = blurred_background_layer_->layer();
+    drag_image->AddLayerToRegion(blurred_layer, views::LayerRegion::kBelow);
+    blurred_layer->SetBounds(shadow_->GetContentBounds());
+    const float corner_radius = shadow_->GetContentBounds().width() / 2.0f;
+
+    blurred_layer->SetRoundedCornerRadius(
+        {corner_radius, corner_radius, corner_radius, corner_radius});
+    blurred_layer->SetBackgroundBlur(ColorProvider::kBackgroundBlurSigma);
+    blurred_layer->SetBackdropFilterQuality(
         ColorProvider::kBackgroundBlurQuality);
   }
 
@@ -91,10 +116,10 @@ AppDragIconProxy::AppDragIconProxy(
 }
 
 AppDragIconProxy::~AppDragIconProxy() {
-  StopObservingImplicitAnimations();
-
-  if (animation_completion_callback_)
+  weak_ptr_factory_.InvalidateWeakPtrs();
+  if (animation_completion_callback_) {
     std::move(animation_completion_callback_).Run();
+  }
 }
 
 void AppDragIconProxy::UpdatePosition(
@@ -129,22 +154,20 @@ void AppDragIconProxy::AnimateToBoundsAndCloseWidget(
     return;
   }
 
-  ui::ScopedLayerAnimationSettings animation_settings(
-      target_layer->GetAnimator());
-  animation_settings.SetTweenType(gfx::Tween::FAST_OUT_LINEAR_IN);
-  animation_settings.SetPreemptionStrategy(
-      ui::LayerAnimator::IMMEDIATELY_SET_NEW_TARGET);
-  animation_settings.AddObserver(this);
+  const gfx::Transform transform = gfx::TransformBetweenRects(
+      gfx::RectF(GetBoundsInScreen()), gfx::RectF(bounds_in_screen));
 
-  target_layer->SetTransform(gfx::TransformBetweenRects(
-      gfx::RectF(GetBoundsInScreen()), gfx::RectF(bounds_in_screen)));
-}
-
-void AppDragIconProxy::OnImplicitAnimationsCompleted() {
-  StopObserving();
-  drag_image_widget_.reset();
-  if (animation_completion_callback_)
-    std::move(animation_completion_callback_).Run();
+  views::AnimationBuilder builder;
+  builder.SetPreemptionStrategy(ui::LayerAnimator::IMMEDIATELY_SET_NEW_TARGET)
+      .OnEnded(base::BindOnce(&AppDragIconProxy::OnProxyAnimationCompleted,
+                              weak_ptr_factory_.GetWeakPtr()))
+      .OnAborted(base::BindOnce(&AppDragIconProxy::OnProxyAnimationCompleted,
+                                weak_ptr_factory_.GetWeakPtr()))
+      .Once()
+      .SetDuration(kProxyAnimationDuration)
+      .SetTransform(shadow_->GetLayer(), transform,
+                    gfx::Tween::FAST_OUT_LINEAR_IN)
+      .SetTransform(target_layer, transform, gfx::Tween::FAST_OUT_LINEAR_IN);
 }
 
 gfx::Rect AppDragIconProxy::GetBoundsInScreen() const {
@@ -164,6 +187,17 @@ ui::Layer* AppDragIconProxy::GetImageLayerForTesting() {
 
 views::Widget* AppDragIconProxy::GetWidgetForTesting() {
   return drag_image_widget_.get();
+}
+
+ui::Layer* AppDragIconProxy::GetBlurredLayerForTesting() {
+  return blurred_background_layer_->layer();
+}
+
+void AppDragIconProxy::OnProxyAnimationCompleted() {
+  drag_image_widget_.reset();
+  if (animation_completion_callback_) {
+    std::move(animation_completion_callback_).Run();
+  }
 }
 
 }  // namespace ash

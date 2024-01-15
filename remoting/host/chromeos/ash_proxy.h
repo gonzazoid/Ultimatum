@@ -8,12 +8,8 @@
 #include <cstdint>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/display/display.h"
-
-class SkBitmap;
 
 namespace ash::curtain {
 class SecurityCurtainController;
@@ -21,6 +17,7 @@ class SecurityCurtainController;
 
 namespace aura {
 class ScopedWindowCaptureRequest;
+class Window;
 }  // namespace aura
 
 namespace viz {
@@ -47,7 +44,6 @@ class AshProxy {
 
   // Convert the scale factor to DPI.
   static int ScaleFactorToDpi(float scale_factor);
-  static int GetDpi(const display::Display& display);
 
   virtual ~AshProxy();
 
@@ -55,13 +51,10 @@ class AshProxy {
   virtual const std::vector<display::Display>& GetActiveDisplays() const = 0;
   virtual const display::Display* GetDisplayForId(
       DisplayId display_id) const = 0;
+  virtual aura::Window* GetSelectFileContainer() = 0;
 
   virtual ash::curtain::SecurityCurtainController&
   GetSecurityCurtainController() = 0;
-
-  using ScreenshotCallback = base::OnceCallback<void(absl::optional<SkBitmap>)>;
-  virtual void TakeScreenshotOfDisplay(DisplayId display_id,
-                                       ScreenshotCallback callback) = 0;
 
   virtual void CreateVideoCapturer(
       mojo::PendingReceiver<viz::mojom::FrameSinkVideoCapturer>
@@ -77,6 +70,9 @@ class AshProxy {
 
   // Requests signing out all users, ending the current session.
   virtual void RequestSignOut() = 0;
+
+  // Returns whether the accessibility screen reader is enabled.
+  virtual bool IsScreenReaderEnabled() const = 0;
 };
 
 }  // namespace remoting

@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_APPS_APP_SERVICE_PUBLISHERS_APP_PUBLISHER_H_
 #define CHROME_BROWSER_APPS_APP_SERVICE_PUBLISHERS_APP_PUBLISHER_H_
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -21,22 +22,34 @@
 #include "components/services/app_service/public/cpp/menu.h"
 #include "components/services/app_service/public/cpp/permission.h"
 #include "components/services/app_service/public/cpp/preferred_app.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/resource/resource_scale_factor.h"
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chrome/browser/apps/app_service/publishers/compressed_icon_getter.h"
+#endif
 
 namespace apps {
 
 struct AppLaunchParams;
+class PackageId;
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+struct PromiseApp;
+using PromiseAppPtr = std::unique_ptr<PromiseApp>;
+#endif
 
 // AppPublisher parent class (in the App Service sense) for all app publishers.
 // See components/services/app_service/README.md.
-//
-// TODO(crbug.com/1253250): Add other mojom publisher functions.
-class AppPublisher {
+class AppPublisher
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+    : public CompressedIconGetter
+#endif
+{
  public:
   explicit AppPublisher(AppServiceProxy* proxy);
   AppPublisher(const AppPublisher&) = delete;
   AppPublisher& operator=(const AppPublisher&) = delete;
-  ~AppPublisher();
+  virtual ~AppPublisher();
 
   // Returns an app object from the provided parameters
   static AppPtr MakeApp(AppType app_type,
@@ -71,12 +84,28 @@ class AppPublisher {
   //    is true and when no icon is available for the app (or an icon for the
   //    app cannot be efficiently provided). Otherwise, a null icon should be
   //    returned.
+  //
+  // NOTE: On Ash, App Service will not call this method, and instead will call
+  // `GetCompressedIconData()` to load raw icon data from the Publisher.
+  // TODO(crbug.com/1380608): Clean up/simplify remaining usages of LoadIcon.
   virtual void LoadIcon(const std::string& app_id,
                         const IconKey& icon_key,
                         apps::IconType icon_type,
                         int32_t size_hint_in_dip,
                         bool allow_placeholder_icon,
-                        LoadIconCallback callback) = 0;
+                        LoadIconCallback callback);
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Returns the default icon if a valid icon can't be loaded, e.g. because an
+  // app didn't supply an icon.
+  virtual int DefaultIconResourceId() const;
+
+  // CompressedIconGetter override.
+  void GetCompressedIconData(const std::string& app_id,
+                             int32_t size_in_dip,
+                             ui::ResourceScaleFactor scale_factor,
+                             LoadIconCallback callback) override;
+#endif
 
   // Launches an app identified by `app_id`. `event_flags` contains launch
   // options (e.g. window disposition). `launch_source` contains the source
@@ -160,6 +189,12 @@ class AppPublisher {
                             int64_t display_id,
                             base::OnceCallback<void(MenuItems)> callback);
 
+  // Requests the size of an app with |app_id|. Publishers are expected to
+  // calculate and update the size of the app and publish this to App Service.
+  // This allows app sizes to be requested on-demand and ensure up-to-date
+  // values.
+  virtual void UpdateAppSize(const std::string& app_id);
+
   // Executes the menu item command for an app with |app_id|.
   virtual void ExecuteContextMenuCommand(const std::string& app_id,
                                          int command_id,
@@ -174,17 +209,6 @@ class AppPublisher {
   // should only be used in cases where settings must be accessed that are not
   // available in App Management.
   virtual void OpenNativeSettings(const std::string& app_id);
-
-  // Indicates that the app identified by |app_id| has been set as a preferred
-  // app for |intent_filter|, and the |replaced_app_preferences| is the apps
-  // that are no longer preferred apps for their corresponding |intent_filters|.
-  // This method is used by the App Service to sync the change to publishers.
-  // |intent| is needed to set the preferred app in ARC.
-  virtual void OnPreferredAppSet(
-      const std::string& app_id,
-      IntentFilterPtr intent_filter,
-      IntentPtr intent,
-      ReplacedAppPreferences replaced_app_preferences) {}
 
   // Indicates that the app identified by |app_id| has had its supported links
   // preference changed, so that all supported link filters are either preferred
@@ -204,6 +228,20 @@ class AppPublisher {
   // if the publisher supports changing the window mode of apps, and otherwise
   // should do nothing.
   virtual void SetWindowMode(const std::string& app_id, WindowMode window_mode);
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Set the locale for the app identified by `app_id`. Implemented if the
+  // publisher supports changing app-specific locale, and otherwise should do
+  // nothing.
+  virtual void SetAppLocale(const std::string& app_id,
+                            const std::string& locale_tag);
+
+  // Creates and returns a promise app object.
+  static PromiseAppPtr MakePromiseApp(const PackageId& package_id);
+
+  // Publishes a single promise app delta to the Promise App Registry Cache.
+  void PublishPromiseApp(PromiseAppPtr delta);
+#endif
 
  protected:
 #if !BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -229,14 +267,18 @@ class AppPublisher {
 
   // Modifies CapabilityAccess for `app_id`.
   void ModifyCapabilityAccess(const std::string& app_id,
-                              absl::optional<bool> accessing_camera,
-                              absl::optional<bool> accessing_microphone);
+                              std::optional<bool> accessing_camera,
+                              std::optional<bool> accessing_microphone);
+
+  // Resets all tracked capabilities for apps of type `app_type`. Should be
+  // called when the publisher stops running apps (e.g. when a VM shuts down).
+  void ResetCapabilityAccess(AppType app_type);
 #endif
 
   AppServiceProxy* proxy() { return proxy_; }
 
  private:
-  const raw_ptr<AppServiceProxy> proxy_;
+  const raw_ptr<AppServiceProxy, DanglingUntriaged> proxy_;
 };
 
 }  // namespace apps

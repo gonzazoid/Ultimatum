@@ -5,10 +5,12 @@
 #ifndef COMPONENTS_LANGUAGE_IOS_BROWSER_IOS_LANGUAGE_DETECTION_TAB_HELPER_H_
 #define COMPONENTS_LANGUAGE_IOS_BROWSER_IOS_LANGUAGE_DETECTION_TAB_HELPER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "components/prefs/pref_member.h"
+#import "ios/web/public/js_messaging/web_frames_manager.h"
 #import "ios/web/public/web_state_observer.h"
 #import "ios/web/public/web_state_user_data.h"
 
@@ -31,7 +33,8 @@ class UrlLanguageHistogram;
 
 // Dispatches language detection messages to language and translate components.
 class IOSLanguageDetectionTabHelper
-    : public web::WebStateObserver,
+    : public web::WebFramesManager::Observer,
+      public web::WebStateObserver,
       public web::WebStateUserData<IOSLanguageDetectionTabHelper> {
  public:
   class Observer {
@@ -57,8 +60,15 @@ class IOSLanguageDetectionTabHelper
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);
 
-  // Called on page language detection.
-  void OnLanguageDetermined(const translate::LanguageDetectionDetails& details);
+  base::WeakPtr<IOSLanguageDetectionTabHelper> GetWeakPtr();
+
+  // Completion handler used to retrieve the buffered text from the language
+  // detection JavaScript in LanguageDetectionJavaScriptFeature.
+  void OnTextRetrieved(const bool has_notranslate,
+                       const std::string& http_content_language,
+                       const std::string& html_lang,
+                       const GURL& url,
+                       const base::Value* text_content);
 
  private:
   friend class web::WebStateUserData<IOSLanguageDetectionTabHelper>;
@@ -71,10 +81,16 @@ class IOSLanguageDetectionTabHelper
       translate::LanguageDetectionModel* language_detection_model,
       PrefService* prefs);
 
+  // web::WebFramesManager::Observer
+  void WebFrameBecameAvailable(web::WebFramesManager* web_frames_manager,
+                               web::WebFrame* web_frame) override;
+
   // web::WebStateObserver implementation:
   void PageLoaded(
       web::WebState* web_state,
       web::PageLoadCompletionStatus load_completion_status) override;
+  void DidStartNavigation(web::WebState* web_state,
+                          web::NavigationContext* navigation_context) override;
   void DidFinishNavigation(web::WebState* web_state,
                            web::NavigationContext* navigation_context) override;
   void WebStateDestroyed(web::WebState* web_state) override;
@@ -82,19 +98,8 @@ class IOSLanguageDetectionTabHelper
   // Starts the page language detection and initiates the translation process.
   void StartLanguageDetection();
 
-  // Handles the "languageDetection.textCaptured" javascript command.
-  // |interacting| is true if the user is currently interacting with the page.
-  void OnTextCaptured(const base::Value& value,
-                      const GURL& url,
-                      bool user_is_interacting,
-                      web::WebFrame* sender_frame);
-
-  // Completion handler used to retrieve the buffered text.
-  void OnTextRetrieved(const bool has_notranslate,
-                       const std::string& http_content_language,
-                       const std::string& html_lang,
-                       const GURL& url,
-                       const base::Value* text_content);
+  // Called on page language detection.
+  void OnLanguageDetermined(const translate::LanguageDetectionDetails& details);
 
   // Extracts "content-language" header into content_language_header_ variable.
   void ExtractContentLanguageHeader(net::HttpResponseHeaders* headers);
@@ -113,11 +118,10 @@ class IOSLanguageDetectionTabHelper
   web::WebState* web_state_ = nullptr;
   UrlLanguageHistogram* const url_language_histogram_;
   translate::LanguageDetectionModel* language_detection_model_ = nullptr;
-  // Subscription for JS message.
-  base::CallbackListSubscription subscription_;
   BooleanPrefMember translate_enabled_;
   std::string content_language_header_;
   base::ObserverList<Observer, true>::Unchecked observer_list_;
+  bool waiting_for_main_frame_ = false;
 
   base::WeakPtrFactory<IOSLanguageDetectionTabHelper> weak_method_factory_;
 

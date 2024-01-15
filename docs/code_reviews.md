@@ -10,14 +10,18 @@ and OWNERS policy changes launched on March 24, 2021, see
 
 # Code review policies
 
-Ideally the reviewer is someone who is familiar with the area of code you are
-touching. Any committer can review code, but an owner must provide a review
-for each directory you are touching. If you have doubts, look at the `git blame`
-for the file and the `OWNERS` files ([more info](#owners-files)).
+Any [committer](https://www.chromium.org/getting-involved/become-a-committer/#what-is-a-committer) can review code, but
+an owner must provide a review for each directory you are touching. Ideally you should choose
+reviewers who are familiar with the area of code you are touching. If you have doubts, look
+at the `git blame` for the file and the `OWNERS` files ([more info](#owners-files)).
 
 To indicate a positive review, the reviewer provides a `Code-Review +1` in
 Gerrit, also known as an LGTM ("Looks Good To Me"). A score of "-1" indicates
 the change should not be submitted as-is.
+
+Submissions to the chromium/src repository by a change contributor who is not a Chromium
+committer require two committers to Code-Review+1 the submission. If the owner of the CL
+is already a committer, then only one other committer is needed to review.
 
 If you have multiple reviewers, provide a message indicating what you expect
 from each reviewer. Otherwise people might assume their input is not required
@@ -25,6 +29,9 @@ or waste time with redundant reviews.
 
 Please also read [Respectful Changes](cl_respect.md) and
 [Respectful Code Reviews](cr_respect.md).
+
+There are also a [collection of tips](cl_tips.md) for productive reviews, though
+these are advisory and not policy.
 
 #### Expectations for all reviewers
 
@@ -120,7 +127,7 @@ the following process:
       be escalated to the owners of the parent directory (or directories)
       as necessary to provide enough of votes.
     * If there are objections, then the decision should be escalated to
-      the [../CHROME_ENG_REVIEW](//CHROME_ENG_REVIEW) for resolution.
+      the [../ATL_OWNERS](../ATL_OWNERS) for resolution.
 
 Note: For the purpose of not slowing down code review, Chromium removes
 inactive owners (e.g., those who made no contributions for multiple quarters)
@@ -129,6 +136,7 @@ like a long leave. If you were inactive only for a certain period of time
 while you were on a long leave and have been meeting the above owner's
 expectations in other times, you can create a CL to re-add yourself and land
 after getting local owner's approval (you can refer to this policy in the CL).
+The removal script will cc the removed owner and one other owner to avoid spam.
 
 ### OWNERS file details
 
@@ -152,20 +160,20 @@ A `*` indicates that all committers are owners:
 
 The text `set noparent` will stop owner propagation from parent directories.
 This should be rarely used. If you want to use `set noparent` except for IPC
-related files, please first reach out to chrome-eng-review@google.com.
+related files, please first reach out to chrome-atls@google.com.
 
 You have to use `set noparent` together with a reference to a file that lists
 the owners for the given use case. Approved use cases are listed in
 `//build/OWNERS.setnoparent`. Owners listed in those files are expected to
-execute special governance functions such as eng review or ipc security review.
+execute special governance functions such as ATL reviews or ipc security review.
 Every set of owners should implement their own means of auditing membership. The
 minimum expectation is that membership in those files is reevaluated on
 project, or affiliation changes.
 
-In this example, only the eng reviewers are owners:
+In this example, only the ATLs are owners:
 ```
 set noparent
-file://ENG_REVIEW_OWNERS
+file://ATL_OWNERS
 ```
 
 The `per-file` directive allows owners to be added that apply only to files
@@ -185,10 +193,11 @@ file with `file://...`. This example indicates that only the people listed in
 ```
 per-file *_messages*.h=set noparent
 per-file *_messages*.h=file://ipc/SECURITY_OWNERS
+```
 
 File globbing is supported using the
-[simple path expression format](https://github.com/GerritCodeReview/plugins_code-owners/blob/master/resources/Documentation/path-expressions.md#simplePathExpressions)
-```
+[simple path expression](https://github.com/GerritCodeReview/plugins_code-owners/blob/master/resources/Documentation/path-expressions.md#simple-path-expressions)
+format.
 
 ### Owners-Override
 
@@ -196,7 +205,7 @@ Setting the `Owners-Override +1` label will bypass OWNERS enforcement. Active
 [sheriffs](sheriffs.md), Release Program Managers,
 [Large Scale Changes](#large-scale-changes),
 [Global Approvers](#global-approvals) reviewers,
-[Chrome Eng Review members](https://chromium.googlesource.com/chromium/src/+/HEAD/ENG_REVIEW_OWNERS)
+[Chrome ATLs](../ATL_OWNERS)
 have this capability. The power to use Owners-Override should be restricted
 as follows:
 
@@ -209,10 +218,10 @@ as follows:
     mechanical CLs associated with their API changes. For example,
     //base/OWNERS can set Owners-Override on mechanical CLs associated with
     //base/ API changes.
-  * Chrome Eng Review members can set Owners-Override on any changes to help
-    with cases that cannot be handled by the above groups and expedite CLs
-    when LSC is too heavyweight.. However, please use one of the above groups
-    before asking Chrome Eng Review members.
+  * Chrome ATLs can set Owners-Override on any changes to help with cases that
+    cannot be handled by the above groups and expedite CLs when LSC is too
+    heavyweight. However, please use one of the above groups before asking
+    Chrome ATLs.
 
 When you need Owners-Override on sheriffing CLs, please reach out to the
 Active Sheriffs and Release Program Managers first. If none of them is
@@ -227,13 +236,13 @@ either another committer to LGTM the CL or, for clean reverts, a `Bot-Commit:
 ## Mechanical changes
 
 ### Global Approvals
-For one-off CLs, API owners of `base`, `build`, `content`, `third_party/blink`
-and `url` can `Owners-Override +1` a change to their APIs to avoid waiting for
-rubberstamp +1s from affected directories' owners. This should only be used for
-mechanical updates to the affected directories.
+For one-off CLs, API owners of `base`, `build`, `content`,
+`third_party/blink/public` and `url` can `Owners-Override +1` a change to their
+APIs to avoid waiting for rubberstamp +1s from affected directories' owners.
+This should only be used for mechanical updates to the affected directories.
 
 If you are making one-off CLs that touch many directories and cannot be
-handled by the global approvers, you can ask one of Chrome Eng Review members.
+handled by the global approvers, you can ask one of Chrome ATLs.
 
 ### Large Scale Changes
 You can use the [Large Scale Changes](process/lsc/large_scale_changes.md)

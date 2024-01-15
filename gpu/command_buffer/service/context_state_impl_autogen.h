@@ -67,7 +67,6 @@ void ContextState::Initialize() {
   cached_color_mask_blue = true;
   color_mask_alpha = true;
   cached_color_mask_alpha = true;
-  coverage_modulation = GL_NONE;
   cull_mode = GL_BACK;
   depth_func = GL_LESS;
   depth_mask = true;
@@ -77,7 +76,6 @@ void ContextState::Initialize() {
   front_face = GL_CCW;
   hint_generate_mipmap = GL_DONT_CARE;
   hint_fragment_shader_derivative = GL_DONT_CARE;
-  hint_texture_filtering = GL_NICEST;
   line_width = 1.0f;
   pack_alignment = 4;
   unpack_alignment = 4;
@@ -246,9 +244,6 @@ void ContextState::InitState(const ContextState* prev_state) const {
         (cached_color_mask_alpha != prev_state->cached_color_mask_alpha))
       api()->glColorMaskFn(cached_color_mask_red, cached_color_mask_green,
                            cached_color_mask_blue, cached_color_mask_alpha);
-    if (feature_info_->feature_flags().chromium_framebuffer_mixed_samples)
-      if ((coverage_modulation != prev_state->coverage_modulation))
-        api()->glCoverageModulationNVFn(coverage_modulation);
     if ((cull_mode != prev_state->cull_mode))
       api()->glCullFaceFn(cull_mode);
     if ((depth_func != prev_state->depth_func))
@@ -269,12 +264,6 @@ void ContextState::InitState(const ContextState* prev_state) const {
           hint_fragment_shader_derivative) {
         api()->glHintFn(GL_FRAGMENT_SHADER_DERIVATIVE_HINT_OES,
                         hint_fragment_shader_derivative);
-      }
-    }
-    if (feature_info_->feature_flags().chromium_texture_filtering_hint) {
-      if (prev_state->hint_texture_filtering != hint_texture_filtering) {
-        api()->glHintFn(GL_TEXTURE_FILTERING_HINT_CHROMIUM,
-                        hint_texture_filtering);
       }
     }
     if ((line_width != prev_state->line_width))
@@ -342,8 +331,6 @@ void ContextState::InitState(const ContextState* prev_state) const {
     api()->glClearStencilFn(stencil_clear);
     api()->glColorMaskFn(cached_color_mask_red, cached_color_mask_green,
                          cached_color_mask_blue, cached_color_mask_alpha);
-    if (feature_info_->feature_flags().chromium_framebuffer_mixed_samples)
-      api()->glCoverageModulationNVFn(coverage_modulation);
     api()->glCullFaceFn(cull_mode);
     api()->glDepthFuncFn(depth_func);
     api()->glDepthMaskFn(cached_depth_mask);
@@ -355,10 +342,6 @@ void ContextState::InitState(const ContextState* prev_state) const {
     if (feature_info_->feature_flags().oes_standard_derivatives) {
       api()->glHintFn(GL_FRAGMENT_SHADER_DERIVATIVE_HINT_OES,
                       hint_fragment_shader_derivative);
-    }
-    if (feature_info_->feature_flags().chromium_texture_filtering_hint) {
-      api()->glHintFn(GL_TEXTURE_FILTERING_HINT_CHROMIUM,
-                      hint_texture_filtering);
     }
     DoLineWidth(line_width);
     api()->glPixelStoreiFn(GL_PACK_ALIGNMENT, pack_alignment);
@@ -498,12 +481,6 @@ bool ContextState::GetStateAsGLint(GLenum pname,
         params[3] = static_cast<GLint>(color_mask_alpha);
       }
       return true;
-    case GL_COVERAGE_MODULATION_CHROMIUM:
-      *num_written = 1;
-      if (params) {
-        params[0] = static_cast<GLint>(coverage_modulation);
-      }
-      return true;
     case GL_CULL_FACE_MODE:
       *num_written = 1;
       if (params) {
@@ -545,12 +522,6 @@ bool ContextState::GetStateAsGLint(GLenum pname,
       *num_written = 1;
       if (params) {
         params[0] = static_cast<GLint>(hint_fragment_shader_derivative);
-      }
-      return true;
-    case GL_TEXTURE_FILTERING_HINT_CHROMIUM:
-      *num_written = 1;
-      if (params) {
-        params[0] = static_cast<GLint>(hint_texture_filtering);
       }
       return true;
     case GL_LINE_WIDTH:
@@ -926,12 +897,6 @@ bool ContextState::GetStateAsGLfloat(GLenum pname,
         params[3] = static_cast<GLfloat>(color_mask_alpha);
       }
       return true;
-    case GL_COVERAGE_MODULATION_CHROMIUM:
-      *num_written = 1;
-      if (params) {
-        params[0] = static_cast<GLfloat>(coverage_modulation);
-      }
-      return true;
     case GL_CULL_FACE_MODE:
       *num_written = 1;
       if (params) {
@@ -973,12 +938,6 @@ bool ContextState::GetStateAsGLfloat(GLenum pname,
       *num_written = 1;
       if (params) {
         params[0] = static_cast<GLfloat>(hint_fragment_shader_derivative);
-      }
-      return true;
-    case GL_TEXTURE_FILTERING_HINT_CHROMIUM:
-      *num_written = 1;
-      if (params) {
-        params[0] = static_cast<GLfloat>(hint_texture_filtering);
       }
       return true;
     case GL_LINE_WIDTH:

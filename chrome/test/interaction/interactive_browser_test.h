@@ -5,7 +5,8 @@
 #ifndef CHROME_TEST_INTERACTION_INTERACTIVE_BROWSER_TEST_H_
 #define CHROME_TEST_INTERACTION_INTERACTIVE_BROWSER_TEST_H_
 
-#include <map>
+#include <concepts>
+#include <functional>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -15,11 +16,11 @@
 #include "base/strings/string_piece.h"
 #include "base/test/rectify_callback.h"
 #include "build/build_config.h"
-#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/interaction/interaction_test_util_browser.h"
-#include "chrome/test/interaction/interaction_test_util_mouse.h"
+#include "chrome/test/interaction/interactive_browser_test_internal.h"
 #include "chrome/test/interaction/webcontents_interaction_test_util.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -34,6 +35,7 @@
 #include "ui/base/test/ui_controls.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/views/interaction/element_tracker_views.h"
+#include "ui/views/interaction/interactive_views_test.h"
 #include "ui/views/view.h"
 #include "ui/views/view_utils.h"
 #include "url/gurl.h"
@@ -42,197 +44,119 @@ namespace ui {
 class TrackedElement;
 }
 
-namespace views {
-class ViewsDelegate;
-}
-
 class Browser;
 
-// Base class for tests that supports common InteractionSequence-related testing
-// utils.
-class InteractiveBrowserTest : public InProcessBrowserTest {
+// Provides interactive test functionality for Views.
+//
+// Interactive tests use InteractionSequence, ElementTracker, and
+// InteractionTestUtil to provide a common library of concise test methods. This
+// convenience API is nicknamed "Kombucha" (see README.md for more information).
+//
+// This class is not a test fixture; it is a mixin that can be added to an
+// existing browser test class using `InteractiveBrowserTestT<T>` - or just use
+// `InteractiveBrowserTest`, which *is* a test fixture (preferred; see below).
+class InteractiveBrowserTestApi : public views::test::InteractiveViewsTestApi {
  public:
-  InteractiveBrowserTest();
-  ~InteractiveBrowserTest() override;
+  InteractiveBrowserTestApi();
+  ~InteractiveBrowserTestApi() override;
 
-#if defined(TOOLKIT_VIEWS)
-  // |views_delegate| is used for tests that want to use a derived class of
-  // ViewsDelegate to observe or modify things like window placement and Widget
-  // params.
-  explicit InteractiveBrowserTest(
-      std::unique_ptr<views::ViewsDelegate> views_delegate);
-#endif
-
-  // InProcessBrowserTest:
-  void SetUpOnMainThread() override;
-  void TearDownOnMainThread() override;
-
- protected:
   using DeepQuery = WebContentsInteractionTestUtil::DeepQuery;
-  using InputType = ui::test::InteractionTestUtil::InputType;
-  using MultiStep = std::vector<ui::InteractionSequence::StepBuilder>;
   using StateChange = WebContentsInteractionTestUtil::StateChange;
-  using StepBuilder = ui::InteractionSequence::StepBuilder;
-
-  // Construct a MultiStep from one or more StepBuilders and/or MultiSteps.
-  template <typename... Args>
-  static MultiStep Steps(Args&&... args);
-
-  // Returns an interaction simulator for things like clicking buttons.
-  // Generally, prefer to use functions like PressButton() to directly using the
-  // InteractionTestUtil.
-  ui::test::InteractionTestUtil& test_util() { return test_util_; }
-
-  // Returns an object that can be used to inject mouse inputs. Generally,
-  // prefer to use methods like MoveMouseTo, MouseClick, and DragMouseTo.
-  InteractionTestUtilMouse& mouse_util() { return *mouse_util_.get(); }
-
-  // Runs a test InteractionSequence from a series of Steps or StepBuilders with
-  // RunSynchronouslyForTesting(). Hooks both the completed and aborted
-  // callbacks to ensure completion, and prints an error on failure. The context
-  // will be pulled from `browser()`.
-  template <typename... Args>
-  bool RunTestSequence(Args&&... steps);
-
-  // Runs a test InteractionSequence in `context` from a series of Steps or
-  // StepBuilders with RunSynchronouslyForTesting(). Hooks both the completed
-  // and aborted callbacks to ensure completion, and prints an error on failure.
-  template <typename... Args>
-  bool RunTestSequenceInContext(ui::ElementContext context, Args&&... steps);
-
-  // Shorthand to convert a tracked element into a View. The element should be
-  // a views::TrackedElementViews and of type `T`.
-  template <typename T = views::View>
-  static T* AsView(ui::TrackedElement* el);
 
   // Shorthand to convert a tracked element into a instrumented WebContents.
   // The element should be a TrackedElementWebContents.
   static WebContentsInteractionTestUtil* AsInstrumentedWebContents(
       ui::TrackedElement* el);
 
-  // Retrieves an instrumented WebContents with identifier `id`, or null if the
-  // contents has not been instrumented.
-  WebContentsInteractionTestUtil* GetInstrumentedWebContents(
-      ui::ElementIdentifier id);
-
-  // Instruments an existing tab in `browser`. If `tab_index` is not specified,
-  // the active tab is instrumented.
-  WebContentsInteractionTestUtil* InstrumentTab(
-      Browser* browser,
-      ui::ElementIdentifier id,
-      absl::optional<int> tab_index = absl::nullopt);
-
-  // Instruments the next tab to open in `browser`, or if not specified, in any
-  // browser.
-  WebContentsInteractionTestUtil* InstrumentNextTab(
-      absl::optional<Browser*> browser,
-      ui::ElementIdentifier id);
-
-  // Instruments a non-tab `web_view`.
-  WebContentsInteractionTestUtil* InstrumentNonTabWebView(
-      views::WebView* web_view,
-      ui::ElementIdentifier id);
-
-  // Specifies an element either by ID or by name.
-  using ElementSpecifier =
-      absl::variant<ui::ElementIdentifier, base::StringPiece>;
-
-  // Naming views:
+  // Manually enable WebUI code coverage (slightly experimental). Call during
+  // `SetUpOnMainThread()` or in your test body before `RunTestSequence()`.
   //
-  // The following methods name a view (to be referred to later in the test
-  // sequence by name) based on some kind of rule or relationship. The View need
-  // not have an ElementIdentifier assigned ahead of time, so this is useful for
-  // finding random or dynamically-created views.
+  // Has no effect if the `--devtools-code-coverage` command line flag isn't
+  // set. This will cause tests to run longer (possibly timing out) and is not
+  // compatible with all WebUI pages. Use liberally, but at your own risk.
   //
-  // For example:
+  // TODO(b/273545898, b/273290598): when coverage is more robust, make this
+  // automatic for all tests that touch WebUI.
+  void EnableWebUICodeCoverage();
+
+  // Takes a screenshot of the specified element, with name `screenshot_name`
+  // (may be empty for tests that take only one screenshot) and `baseline`,
+  // which should be set to match the CL number when a screenshot should change.
   //
-  //   RunTestSequence(
-  //     ...
-  //     NameView(kThirdTabName,
-  //              base::BindLambdaForTesting([&](){
-  //                return browser_view->tabstrip()->tab_at(3);
-  //              }))
-  //     WithElement(kThirdTabName, ...)
-  //     ...
-  //   );
-  //
-  // How the view is named will depend on which version of the method you use;
-  // the
-
-  // Determines if a view matches some predicate.
-  using ViewMatcher = base::RepeatingCallback<bool(const views::View*)>;
-
-  // Specifies a View not relative to any particular other View.
-  using AbsoluteViewSpecifier = absl::variant<
-      // Specify a view that is known at the time the sequence is created. The
-      // View must persist until the step executes.
-      views::View*,
-      // Specify a view that will be valid by the time the step executes (i.e.
-      // is set in a previous step callback) but not at the time the test
-      // sequence is built. The view will be read from the target variable,
-      // which must point to a valid view.
-      views::View**,
-      // Find and return a view based on an arbitrary rule.
-      base::OnceCallback<views::View*()>>;
-
-  // Specifies a view relative to its parent.
-  using ChildViewSpecifier = absl::variant<
-      // The index of the child in the parent view. An out of bounds index will
-      // generate an error.
-      size_t,
-      // Specifies a filter that is applied to the children; the first child
-      // view to satisfy the filter (i.e. return true) is named.
-      ViewMatcher>;
-
-  // Specifies a view relative to another view `relative_to` based on an
-  // arbitrary rule. The resulting view does not need to be a descendant (or
-  // even an ancestor) of `relative_to`.
-  using FindViewCallback =
-      base::OnceCallback<views::View*(views::View* relative_to)>;
-
-  // Methods that name views.
-  [[nodiscard]] static StepBuilder NameView(base::StringPiece name,
-                                            AbsoluteViewSpecifier spec);
-  [[nodiscard]] static StepBuilder NameViewRelative(
-      ElementSpecifier relative_to,
-      base::StringPiece name,
-      FindViewCallback find_callback);
-  [[nodiscard]] static StepBuilder NameChildView(ElementSpecifier parent,
-                                                 base::StringPiece name,
-                                                 ChildViewSpecifier spec);
-  [[nodiscard]] static StepBuilder NameDescendantView(ElementSpecifier ancestor,
-                                                      base::StringPiece name,
-                                                      ViewMatcher matcher);
-
-  // Convenience methods for creating interaction steps of type kShown. The
-  // resulting step's start callback is already set; therefore, do not try to
-  // add additional logic. However, any other parameter on the step may be set,
-  // such as SetMustBeVisibleAtStart(), SetFindElementInAnyContext(),
-  // SetTransitionOnlyOnEvent(), etc.
-  //
-  // TODO(dfried): in the future, these will be supplanted/supplemented by more
-  // flexible primitives that allow multiple actions in the same step in the
-  // future.
-  [[nodiscard]] StepBuilder PressButton(
-      ElementSpecifier button,
-      InputType input_type = InputType::kDontCare);
-  [[nodiscard]] StepBuilder SelectMenuItem(
-      ElementSpecifier menu_item,
-      InputType input_type = InputType::kDontCare);
-  [[nodiscard]] StepBuilder DoDefaultAction(
-      ElementSpecifier element,
-      InputType input_type = InputType::kDontCare);
-  [[nodiscard]] StepBuilder SelectTab(
-      ElementSpecifier tab_collection,
-      size_t tab_index,
-      InputType input_type = InputType::kDontCare);
+  // Currently, is somewhat unreliable for WebUI embedded in bubbles or dialogs
+  // (e.g. Tab Search dropdown) but should work fairly well in most other cases.
   [[nodiscard]] StepBuilder Screenshot(ElementSpecifier element,
                                        const std::string& screenshot_name,
                                        const std::string& baseline);
 
+  struct CurrentBrowser {};
+  struct AnyBrowser {};
+
+  // Specifies which browser to use when instrumenting a tab.
+  using BrowserSpecifier = absl::variant<
+      // Use the browser associated with the context of the current test step;
+      // if unspecified use the default context for the sequence.
+      CurrentBrowser,
+      // Find a tab in any browser.
+      AnyBrowser,
+      // Specify a browser that is known at the time the sequence is created.
+      // The browser must persist until the step executes.
+      Browser*,
+      // Specify a browser pointer that will be valid by the time the step
+      // executes. Use std::ref() to wrap the pointer that will receive the
+      // value.
+      std::reference_wrapper<Browser*>>;
+
+  // Instruments tab `tab_index` in `in_browser` as `id`. If `tab_index` is
+  // unspecified, the active tab is used.
+  //
+  // Does not support AnyBrowser; you must specify a browser.
+  //
+  // If `wait_for_ready` is true (default), the step will not complete until the
+  // current page in the WebContents is fully loaded.
+  [[nodiscard]] MultiStep InstrumentTab(
+      ui::ElementIdentifier id,
+      absl::optional<int> tab_index = absl::nullopt,
+      BrowserSpecifier in_browser = CurrentBrowser(),
+      bool wait_for_ready = true);
+
+  // Instruments the next tab in `in_browser` as `id`.
+  [[nodiscard]] StepBuilder InstrumentNextTab(
+      ui::ElementIdentifier id,
+      BrowserSpecifier in_browser = CurrentBrowser());
+
+  // Opens a new tab for `url` and instruments it as `id`. The tab is inserted
+  // at `at_index` if specified, otherwise the browser decides.
+  //
+  // Does not support AnyBrowser; you must specify a browser.
+  [[nodiscard]] MultiStep AddInstrumentedTab(
+      ui::ElementIdentifier id,
+      GURL url,
+      absl::optional<int> tab_index = absl::nullopt,
+      BrowserSpecifier in_browser = CurrentBrowser());
+
+  // Instruments the WebContents held by `web_view` as `id`. Will wait for the
+  // WebView to become visible if it is not.
+  //
+  // If `wait_for_ready` is true (default), the step will not complete until the
+  // current page in the WebContents is fully loaded. (Note that this may not
+  // cover dynamic loading of data; you may need to do a WaitForStateChange() to
+  // be sure dynamic content is loaded).
+  [[nodiscard]] MultiStep InstrumentNonTabWebView(ui::ElementIdentifier id,
+                                                  ElementSpecifier web_view,
+                                                  bool wait_for_ready = true);
+  [[nodiscard]] MultiStep InstrumentNonTabWebView(
+      ui::ElementIdentifier id,
+      AbsoluteViewSpecifier web_view,
+      bool wait_for_ready = true);
+
   // These convenience methods wait for page navigation/ready. If you specify
   // `expected_url`, the test will fail if that is not the loaded page. If you
   // do not, there is no step start callback and you can add your own logic.
+  //
+  // Note that because `webcontents_id` is expected to be globally unique, these
+  // actions have SetFindElementInAnyContext(true) by default (otherwise it's
+  // really easy to forget to add InAnyContext() and have your test not work.
   [[nodiscard]] static StepBuilder WaitForWebContentsReady(
       ui::ElementIdentifier webcontents_id,
       absl::optional<GURL> expected_url = absl::nullopt);
@@ -248,495 +172,259 @@ class InteractiveBrowserTest : public InProcessBrowserTest {
       ui::ElementIdentifier webcontents_id,
       GURL new_url);
 
+  // Raises the surface containing `webcontents_id` and focuses the WebContents
+  // as if a user had interacted directly with it. This is useful if you want
+  // the WebContents to e.g. respond to accelerators.
+  [[nodiscard]] StepBuilder FocusWebContents(
+      ui::ElementIdentifier webcontents_id);
+
   // Waits for the given `state_change` in `webcontents_id`. The sequence will
   // fail if the change times out, unless `expect_timeout` is true, in which
   // case the StateChange *must* timeout, and |state_change.timeout_event| must
   // be set.
   [[nodiscard]] static MultiStep WaitForStateChange(
       ui::ElementIdentifier webcontents_id,
-      StateChange state_change,
+      const StateChange& state_change,
       bool expect_timeout = false);
 
-  // Indicates that the center point of the target element should be used for a
-  // mouse move.
-  struct CenterPoint {};
+  // Required to keep from hiding inherited versions of these methods.
+  using InteractiveViewsTestApi::EnsureNotPresent;
+  using InteractiveViewsTestApi::EnsurePresent;
 
-  // Function that returns a destination for a move or drag.
-  using AbsolutePositionCallback = base::OnceCallback<gfx::Point()>;
+  // Ensures that there is an element at path `where` in `webcontents_id`.
+  // Unlike InteractiveTestApi::EnsurePresent, this verb can be inside an
+  // InAnyContext() block.
+  [[nodiscard]] static StepBuilder EnsurePresent(
+      ui::ElementIdentifier webcontents_id,
+      const DeepQuery& where);
 
-  // Specifies an absolute position for a mouse move or drag that does not need
-  // a reference element.
-  using AbsolutePositionSpecifier = absl::variant<
-      // Use this specific position. This value is stored when the sequence is
-      // created; use gfx::Point* if you want to capture a point during sequence
-      // execution.
-      gfx::Point,
-      // As above, but the position is read from the memory address on execution
-      // instead of copied when the test sequence is constructed. Use this when
-      // you want to calculate and cache a point during test execution for later
-      // use. The pointer must remain valid through the end of the test.
-      gfx::Point*,
-      // Use the return value of the supplied callback
-      AbsolutePositionCallback>;
+  // Ensures that there is no element at path `where` in `webcontents_id`.
+  // Unlike InteractiveTestApi::EnsurePresent, this verb can be inside an
+  // InAnyContext() block.
+  [[nodiscard]] static StepBuilder EnsureNotPresent(
+      ui::ElementIdentifier webcontents_id,
+      const DeepQuery& where);
 
-  // Specifies how the `reference_element` should be used (or not) to generate a
-  // target point for a mouse move.
-  using RelativePositionCallback =
-      base::OnceCallback<gfx::Point(ui::TrackedElement* reference_element)>;
+  // How to execute JavaScript when calling ExecuteJs() and ExecuteJsAt().
+  enum class ExecuteJsMode {
+    // Ensures that the code sent to the renderer completes without error before
+    // the next step can proceed. If an error occurs, the test fails.
+    //
+    // This is the default.
+    kWaitForCompletion,
+    // Sends the code to the renderer for execution, but does not wait for a
+    // response. If an error occurs, it may appear in the log, but the test
+    // will not detect it and will not fail.
+    //
+    // Use this mode if the code you are injecting will prevent the renderer
+    // from communicating the result back to the browser process.
+    kFireAndForget,
+  };
 
-  // Specifies how the target position of a mouse operation (in screen
-  // coordinates) will be determined.
-  using RelativePositionSpecifier = absl::variant<
-      // Default to the centerpoint of the reference element, which should be a
-      // views::View.
-      CenterPoint,
-      // Use the return value of the supplied callback.
-      RelativePositionCallback,
-      // Find the DOM element at the given path in the reference element, which
-      // should be an instrumented WebContents; see Instrument*(). The exact
-      // position used is the element's center point in screen coordinates.
-      DeepQuery>;
-
-  // Move the mouse to the specified `position` in screen coordinates. The
-  // `reference` element will be used based on how `position` is specified.
-  [[nodiscard]] MultiStep MoveMouseTo(AbsolutePositionSpecifier position);
-  [[nodiscard]] MultiStep MoveMouseTo(
-      ElementSpecifier reference,
-      RelativePositionSpecifier position = CenterPoint());
-
-  // Clicks mouse button `button` at the current cursor position.
-  [[nodiscard]] MultiStep ClickMouse(
-      ui_controls::MouseButton button = ui_controls::LEFT,
-      bool release = true);
-
-  // Depresses the left mouse button at the current cursor position and drags to
-  // the target `position`. The `reference` element will be used based on how
-  // `position` is specified.
-  [[nodiscard]] MultiStep DragMouseTo(AbsolutePositionSpecifier position,
-                                      bool release = true);
-  [[nodiscard]] MultiStep DragMouseTo(
-      ElementSpecifier reference,
-      RelativePositionSpecifier position = CenterPoint(),
-      bool release = true);
-
-  // Releases the specified mouse button. Use when you previously called
-  // ClickMouse() or DragMouseTo() with `release` = false.
-  [[nodiscard]] MultiStep ReleaseMouse(
-      ui_controls::MouseButton button = ui_controls::LEFT);
-
-  // Specifies a test action that is not tied to any one UI element.
-  // Returns true on success, false on failure (which will fail the test).
-  using CheckCallback = base::OnceCallback<bool()>;
-
-  // Does an action at this point in the test sequence.
-  [[nodiscard]] static StepBuilder Do(base::OnceClosure action);
-
-  // Performs a check and fails the test if `check_callback` returns false.
-  [[nodiscard]] static StepBuilder Check(CheckCallback check_callback);
-
-  // Calls `function` and applies `matcher` to the result. If the matcher does
-  // not match, an appropriate error message is printed and the test fails.
-  template <template <typename...> class C, typename T, typename U>
-  [[nodiscard]] static StepBuilder CheckResult(C<T()> function, U&& matcher);
-
-  // Checks that `check` returns true for element `element`. will fail the test
-  // sequence if `check` returns false - the callback should log any specific
-  // error before returning.
+  // Execute javascript `function`, which should take no arguments, in
+  // WebContents `webcontents_id`.
   //
-  // Note that unless you add .SetMustBeVisibleAtStart(true), this test step
-  // will wait for `element` to be shown before proceeding.
-  [[nodiscard]] static StepBuilder CheckElement(
-      ElementSpecifier element,
-      base::OnceCallback<bool(ui::TrackedElement* el)> check);
+  // You can use this method to call an existing function with no arguments in
+  // the global scope; to do that, specify only the name of the method (e.g.
+  // `myMethod` rather than `myMethod()`).
+  [[nodiscard]] static StepBuilder ExecuteJs(
+      ui::ElementIdentifier webcontents_id,
+      const std::string& function,
+      ExecuteJsMode mode = ExecuteJsMode::kWaitForCompletion);
 
-  // As CheckElement(), but checks that the result of calling `function` on
-  // `element` matches `matcher`. If not, the mismatch is printed and the test
-  // fails.
-  template <template <typename...> class C, typename T, typename U>
-  [[nodiscard]] static StepBuilder CheckElement(
-      ElementSpecifier element,
-      C<T(ui::TrackedElement*)> function,
-      U&& matcher);
+  // Execute javascript `function`, which should take a single DOM element as an
+  // argument, with the element at `where`, in WebContents `webcontents_id`.
+  [[nodiscard]] static StepBuilder ExecuteJsAt(
+      ui::ElementIdentifier webcontents_id,
+      const DeepQuery& where,
+      const std::string& function,
+      ExecuteJsMode mode = ExecuteJsMode::kWaitForCompletion);
 
-  // As CheckElement(), but `view` should resolve to a TrackedElementViews
-  // wrapping a view of type `V`.
-  template <class V>
-  [[nodiscard]] static StepBuilder CheckView(
-      ElementSpecifier view,
-      base::OnceCallback<bool(V* view)> check);
-
-  // As CheckView(), but checks that the result of calling `function` on `view`
-  // matches `matcher`. If not, the mismatch is printed and the test fails.
-  template <template <typename...> class C, class V, typename T, typename U>
-  [[nodiscard]] static StepBuilder CheckView(ElementSpecifier view,
-                                             C<T(V*)> function,
-                                             U&& matcher);
-
-  // As CheckView() but checks that `matcher` matches the value returned by
-  // calling `property` on `view`. On failure, logs the matcher error and fails
-  // the test.
-  template <class V, typename T, typename U>
-  [[nodiscard]] static StepBuilder CheckViewProperty(ElementSpecifier view,
-                                                     T (V::*property)() const,
-                                                     U&& matcher);
-
-  // Shorthand methods for working with basic ElementTracker events. The element
-  // will have `step_callback` called on it. You may specify additional
-  // constraints such as SetMustBeVisibleAtStart(),
-  // SetFindElementInAnyContext(), SetTransitionOnlyOnEvent(), etc.
-  template <class T>
-  [[nodiscard]] static StepBuilder AfterShow(ElementSpecifier element,
-                                             T&& step_callback);
-  template <class T>
-  [[nodiscard]] static StepBuilder AfterActivate(ElementSpecifier element,
-                                                 T&& step_callback);
-  template <class T>
-  [[nodiscard]] static StepBuilder AfterEvent(
-      ElementSpecifier element,
-      ui::CustomElementEventType event_type,
-      T&& step_callback);
-  template <class T>
-  [[nodiscard]] static StepBuilder AfterHide(ElementSpecifier element,
-                                             T&& step_callback);
-
-  // Versions of the above that have no step callback; included for clarity and
-  // brevity.
-  [[nodiscard]] static StepBuilder WaitForShow(
-      ElementSpecifier element,
-      bool transition_only_on_event = false);
-  [[nodiscard]] static StepBuilder WaitForHide(
-      ElementSpecifier element,
-      bool transition_only_on_event = false);
-  [[nodiscard]] static StepBuilder WaitForActivate(ElementSpecifier element);
-  [[nodiscard]] static StepBuilder WaitForEvent(
-      ElementSpecifier element,
-      ui::CustomElementEventType event);
-
-  // Equivalent to AfterShow() but the element must already be present.
-  template <class T>
-  [[nodiscard]] static StepBuilder WithElement(ElementSpecifier element,
-                                               T&& step_callback);
-
-  // Adds steps to the sequence that ensure that `element_to_check` is not
-  // present. Flushes the current message queue to ensure that if e.g. the
-  // previous step was responding to elements being added, the
-  // `element_to_check` may not have had its shown event called yet.
-  [[nodiscard]] static MultiStep EnsureNotPresent(
-      ui::ElementIdentifier element_to_check,
-      bool in_any_context = false);
-
-  // Provides syntactic sugar so you can put "in any context" before an action
-  // or test step rather than after. For example the following are equivalent:
+  // Executes javascript `function`, which should take no arguments and return a
+  // value, in WebContents `webcontents_id`, and fails if the result is not
+  // truthy.
   //
-  //    PressButton(kElementIdentifier)
-  //        .SetFindElementInAnyContext(true)
+  // If `function` instead returns a promise, the result of the promise is
+  // evaluated for truthiness. If the promise rejects, CheckJsResult() fails.
+  [[nodiscard]] static StepBuilder CheckJsResult(
+      ui::ElementIdentifier webcontents_id,
+      const std::string& function);
+
+  // Executes javascript `function`, which should take no arguments and return a
+  // value, in WebContents `webcontents_id`, and fails if the result does not
+  // match `matcher`, which can be a literal or a testing::Matcher.
   //
-  //    InAnyContext(PressButton(kElementIdentifier))
+  // Note that only the following types are supported:
+  //  - string (for literals, you may pass a const char*)
+  //  - bool
+  //  - int
+  //  - double (will also match integer return values)
+  //  - base::Value (required if you want to match a list or dictionary)
   //
-  // Note: does not work with EnsureNotPresent; use the `in_any_context`
-  // parameter.
+  // You must pass a literal or Matcher that matches the type returned by the
+  // javascript function. If your function could return either an integer or a
+  // floating-point value, you *must* use a double.
   //
-  // TODO(dfried): consider if we should have a version that takes variadic
-  // arguments and applies "in any context" to all of them?
-  [[nodiscard]] static MultiStep InAnyContext(MultiStep steps);
+  // If `function` instead returns a promise, the result of the promise is
+  // evaluated against `matcher`. If the promise rejects, CheckJsResult() fails.
   template <typename T>
-  static StepBuilder InAnyContext(T&& step);
+  [[nodiscard]] static StepBuilder CheckJsResult(
+      ui::ElementIdentifier webcontents_id,
+      const std::string& function,
+      T&& matcher);
+
+  // Executes javascript `function`, which should take a single DOM element as
+  // an argument and returns a value, in WebContents `webcontents_id` on the
+  // element specified by `where`, and fails if the result is not truthy.
+  //
+  // If `function` instead returns a promise, the result of the promise is
+  // evaluated for truthiness. If the promise rejects, CheckJsResultAt() fails.
+  [[nodiscard]] static StepBuilder CheckJsResultAt(
+      ui::ElementIdentifier webcontents_id,
+      const DeepQuery& where,
+      const std::string& function);
+
+  // Executes javascript `function`, which should take a single DOM element as
+  // an argument and returns a value, in WebContents `webcontents_id` on the
+  // element specified by `where`, and fails if the result does not match
+  // `matcher`, which can be a literal or a testing::Matcher.
+  //
+  // If `function` instead returns a promise, the result of the promise is
+  // evaluated against `matcher`. If the promise rejects, CheckJsResultAt()
+  // fails.
+  //
+  // See notes on CheckJsResult() for what values and Matchers are supported.
+  template <typename T>
+  [[nodiscard]] static StepBuilder CheckJsResultAt(
+      ui::ElementIdentifier webcontents_id,
+      const DeepQuery& where,
+      const std::string& function,
+      T&& matcher);
+
+  // These are required so the following overloads don't hide the base class
+  // variations.
+  using InteractiveViewsTestApi::DragMouseTo;
+  using InteractiveViewsTestApi::MoveMouseTo;
+
+  // Find the DOM element at the given path in the reference element, which
+  // should be an instrumented WebContents; see Instrument*(). Move the mouse to
+  // the element's center point in screen coordinates.
+  //
+  // If the DOM element may be scrolled outside of the current viewport,
+  // consider using ScrollIntoView(web_contents, where) before this verb.
+  [[nodiscard]] StepBuilder MoveMouseTo(ElementSpecifier web_contents,
+                                        const DeepQuery& where);
+
+  // Find the DOM element at the given path in the reference element, which
+  // should be an instrumented WebContents; see Instrument*(). Perform a drag
+  // from the mouse's current location to the element's center point in screen
+  // coordinates, and then if `release` is true, releases the mouse button.
+  //
+  // If the DOM element may be scrolled outside of the current viewport,
+  // consider using ScrollIntoView(web_contents, where) before this verb.
+  [[nodiscard]] StepBuilder DragMouseTo(ElementSpecifier web_contents,
+                                        const DeepQuery& where,
+                                        bool release = true);
+
+  using InteractiveViewsTestApi::ScrollIntoView;
+
+  // Scrolls the DOM element at `where` in instrumented WebContents
+  // `web_contents` into view; see Instrument*(). The scrolling happens
+  // instantaneously, without animation, and should be available on the next
+  // render frame or call into the renderer.
+  [[nodiscard]] StepBuilder ScrollIntoView(ui::ElementIdentifier web_contents,
+                                           const DeepQuery& where);
+
+ protected:
+  explicit InteractiveBrowserTestApi(
+      std::unique_ptr<internal::InteractiveBrowserTestPrivate>
+          private_test_impl);
 
  private:
-  // Helper method to add a step or steps to a sequence builder.
-  static void AddStep(ui::InteractionSequence::Builder& builder,
-                      MultiStep steps);
-  template <typename T>
-  static void AddStep(ui::InteractionSequence::Builder& builder, T&& step);
+  static RelativePositionCallback DeepQueryToRelativePosition(
+      const DeepQuery& query);
 
-  static void AddStep(MultiStep& dest, StepBuilder src);
-  static void AddStep(MultiStep& dest, MultiStep src);
+  Browser* GetBrowserFor(ui::ElementContext current_context,
+                         BrowserSpecifier spec);
 
-  // Applies `matcher` to `value` and returns the result; on failure a useful
-  // error message is printed using `test_name`, `value`, and `matcher`.
-  //
-  // Steps which use this method will fail if it returns false, printing out the
-  // details of the step in the usual way.
-  template <typename T>
-  static bool MatchAndExplain(const base::StringPiece& test_name,
-                              testing::Matcher<T>& matcher,
-                              T&& value);
-
-  // Converts an ElementSpecifier to an element ID or name and sets it onto
-  // `builder`.
-  static void SpecifyElement(StepBuilder& builder, ElementSpecifier element);
-
-  // Converts a *PositionSpecifier to an appropriate *PositionCallback.
-  static RelativePositionCallback GetPositionCallback(
-      AbsolutePositionSpecifier spec);
-  static RelativePositionCallback GetPositionCallback(
-      RelativePositionSpecifier spec);
-
-  static FindViewCallback GetFindViewCallback(AbsoluteViewSpecifier spec);
-  static FindViewCallback GetFindViewCallback(ChildViewSpecifier spec);
-
-  // Recursively finds an element that matches `matcher` starting with (but
-  // not including) `from`. If `recursive` is true, searches all descendants,
-  // otherwise searches children.
-  static views::View* FindMatchingView(const views::View* from,
-                                       ViewMatcher& matcher,
-                                       bool recursive);
-
-  // Creates the follow-up step for a mouse action.
-  StepBuilder CreateMouseFollowUpStep();
-
-  // Implementation for RunTestSequence*().
-  bool RunTestSequenceImpl(ui::ElementContext context,
-                           ui::InteractionSequence::Builder builder);
-  void OnSequenceComplete();
-  void OnSequenceAborted(int active_step,
-                         ui::TrackedElement* last_element,
-                         ui::ElementIdentifier last_id,
-                         ui::InteractionSequence::StepType last_step_type,
-                         ui::InteractionSequence::AbortedReason aborted_reason);
-
-  // Tracks whether a sequence succeeded or failed.
-  bool success_ = false;
-
-  // Provides simulated interaction with UI elements as well as screenshots.
-  InteractionTestUtilBrowser test_util_;
-
-  // Provides mouse interaction.
-  std::unique_ptr<InteractionTestUtilMouse> mouse_util_;
-
-  // Tracks failures when a mouse operation fails.
-  std::string mouse_error_message_;
-
-  // Provides instrumentation for WebContents and WebUI.
-  std::map<ui::ElementIdentifier,
-           std::unique_ptr<WebContentsInteractionTestUtil>>
-      instrumented_web_contents_;
-
-  // Provides an element to bounce events off of during tests.
-  std::unique_ptr<ui::TrackedElement> pivot_element_;
+  internal::InteractiveBrowserTestPrivate& test_impl() {
+    return static_cast<internal::InteractiveBrowserTestPrivate&>(
+        private_test_impl());
+  }
 };
 
-// Template definitions.
+// Template for adding InteractiveBrowserTestApi to any test fixture which is
+// derived from InProcessBrowserTest.
+//
+// If you don't need to derive from some existing test class, prefer to use
+// InteractiveBrowserTest.
+//
+// Note that this test fixture attempts to set the context widget from the
+// created `browser()` during `SetUpOnMainThread()`. If your derived test
+// fixture does not create a browser during set up, you will need to manually
+// `SetContextWidget()` before calling `RunTestSequence()`, or use
+// `RunTestTestSequenceInContext()` instead.
+//
+// See README.md for usage.
+template <typename T>
+  requires std::derived_from<T, InProcessBrowserTest>
+class InteractiveBrowserTestT : public T, public InteractiveBrowserTestApi {
+ public:
+  template <typename... Args>
+  explicit InteractiveBrowserTestT(Args&&... args)
+      : T(std::forward<Args>(args)...) {}
+
+  ~InteractiveBrowserTestT() override = default;
+
+ protected:
+  void SetUpOnMainThread() override {
+    T::SetUpOnMainThread();
+    private_test_impl().DoTestSetUp();
+    if (Browser* browser = T::browser()) {
+      SetContextWidget(
+          BrowserView::GetBrowserViewForBrowser(browser)->GetWidget());
+    }
+  }
+
+  void TearDownOnMainThread() override {
+    private_test_impl().DoTestTearDown();
+    T::TearDownOnMainThread();
+  }
+};
+
+// Convenience test fixture for interactive browser tests. This is the preferred
+// base class for Kombucha tests unless you specifically need something else.
+//
+// Note that this test fixture attempts to set the context widget from the
+// created `browser()` during `SetUpOnMainThread()`. If your derived test
+// fixture does not create a browser during set up, you will need to manually
+// `SetContextWidget()` before calling `RunTestSequence()`, or use
+// `RunTestTestSequenceInContext()` instead.
+//
+// See README.md for usage.
+using InteractiveBrowserTest = InteractiveBrowserTestT<InProcessBrowserTest>;
+
+// Template definitions:
 
 // static
-template <typename... Args>
-InteractiveBrowserTest::MultiStep InteractiveBrowserTest::Steps(
-    Args&&... args) {
-  MultiStep result;
-  (AddStep(result, std::forward<Args>(args)), ...);
-  return result;
-}
-
-// static
-template <class T>
-T* InteractiveBrowserTest::AsView(ui::TrackedElement* el) {
-  auto* const views_el = el->AsA<views::TrackedElementViews>();
-  CHECK(views_el);
-  T* const view = views::AsViewClass<T>(views_el->view());
-  CHECK(view);
-  return view;
-}
-
-template <typename... Args>
-bool InteractiveBrowserTest::RunTestSequence(Args&&... steps) {
-  return RunTestSequenceInContext(browser()->window()->GetElementContext(),
-                                  std::forward<Args>(steps)...);
-}
-
-template <typename... Args>
-bool InteractiveBrowserTest::RunTestSequenceInContext(
-    ui::ElementContext context,
-    Args&&... steps) {
-  // TODO(dfried): is there any additional automation we need to do in order to
-  // get proper error scoping, RunLoop timeout handling, etc.? We may have to
-  // inject information directly into the steps or step callbacks; it's unclear.
-  ui::InteractionSequence::Builder builder;
-  (AddStep(builder, std::move(steps)), ...);
-  return RunTestSequenceImpl(context, std::move(builder));
+template <typename T>
+ui::InteractionSequence::StepBuilder InteractiveBrowserTestApi::CheckJsResult(
+    ui::ElementIdentifier webcontents_id,
+    const std::string& function,
+    T&& matcher) {
+  return internal::JsResultChecker<T>::CheckJsResult(webcontents_id, function,
+                                                     std::move(matcher));
 }
 
 // static
 template <typename T>
-void InteractiveBrowserTest::AddStep(ui::InteractionSequence::Builder& builder,
-                                     T&& step) {
-  builder.AddStep(std::move(step));
-}
-
-// static
-template <typename T>
-bool InteractiveBrowserTest::MatchAndExplain(const base::StringPiece& test_name,
-                                             testing::Matcher<T>& matcher,
-                                             T&& value) {
-  if (matcher.Matches(value))
-    return true;
-  std::ostringstream oss;
-  oss << test_name << "failed.\nExpected: ";
-  matcher.DescribeTo(&oss);
-  oss << "\nActual: " << testing::PrintToString(value);
-  LOG(ERROR) << oss.str();
-  return false;
-}
-
-// static
-template <class T>
-ui::InteractionSequence::StepBuilder InteractiveBrowserTest::AfterShow(
-    ElementSpecifier element,
-    T&& step_callback) {
-  StepBuilder builder;
-  SpecifyElement(builder, element);
-  builder.SetStartCallback(
-      base::RectifyCallback<ui::InteractionSequence::StepStartCallback>(
-          std::forward<T>(step_callback)));
-  return builder;
-}
-
-// static
-template <class T>
-ui::InteractionSequence::StepBuilder InteractiveBrowserTest::AfterActivate(
-    ElementSpecifier element,
-    T&& step_callback) {
-  StepBuilder builder;
-  SpecifyElement(builder, element);
-  builder.SetType(ui::InteractionSequence::StepType::kActivated);
-  builder.SetStartCallback(
-      base::RectifyCallback<ui::InteractionSequence::StepStartCallback>(
-          std::forward<T>(step_callback)));
-  return builder;
-}
-
-// static
-template <class T>
-ui::InteractionSequence::StepBuilder InteractiveBrowserTest::AfterEvent(
-    ElementSpecifier element,
-    ui::CustomElementEventType event_type,
-    T&& step_callback) {
-  StepBuilder builder;
-  SpecifyElement(builder, element);
-  builder.SetType(ui::InteractionSequence::StepType::kCustomEvent, event_type);
-  builder.SetStartCallback(
-      base::RectifyCallback<ui::InteractionSequence::StepStartCallback>(
-          std::forward<T>(step_callback)));
-  return builder;
-}
-
-// static
-template <class T>
-ui::InteractionSequence::StepBuilder InteractiveBrowserTest::AfterHide(
-    ElementSpecifier element,
-    T&& step_callback) {
-  StepBuilder builder;
-  SpecifyElement(builder, element);
-  builder.SetType(ui::InteractionSequence::StepType::kHidden);
-  builder.SetStartCallback(
-      base::RectifyCallback<ui::InteractionSequence::StepStartCallback>(
-          std::forward<T>(step_callback)));
-  return builder;
-}
-
-// static
-template <class T>
-ui::InteractionSequence::StepBuilder InteractiveBrowserTest::WithElement(
-    ElementSpecifier element,
-    T&& step_callback) {
-  StepBuilder builder;
-  SpecifyElement(builder, element);
-  builder.SetStartCallback(
-      base::RectifyCallback<ui::InteractionSequence::StepStartCallback>(
-          std::forward<T>(step_callback)));
-  builder.SetMustBeVisibleAtStart(true);
-  return builder;
-}
-
-// static
-template <typename T>
-ui::InteractionSequence::StepBuilder InteractiveBrowserTest::InAnyContext(
-    T&& step) {
-  return std::move(step.SetFindElementInAnyContext(true));
-}
-
-// static
-template <template <typename...> typename C, typename T, typename U>
-ui::InteractionSequence::StepBuilder InteractiveBrowserTest::CheckResult(
-    C<T()> function,
-    U&& matcher) {
-  return Check(base::BindOnce(
-      [](base::OnceCallback<T()> function, testing::Matcher<T> matcher) {
-        return MatchAndExplain("CheckResult()", matcher,
-                               std::move(function).Run());
-      },
-      base::OnceCallback<T()>(std::move(function)),
-      testing::Matcher<T>(std::forward<U>(matcher))));
-}
-
-// static
-template <template <typename...> typename C, typename T, typename U>
-ui::InteractionSequence::StepBuilder InteractiveBrowserTest::CheckElement(
-    ElementSpecifier element,
-    C<T(ui::TrackedElement*)> function,
-    U&& matcher) {
-  StepBuilder builder;
-  SpecifyElement(builder, element);
-  builder.SetStartCallback(base::BindOnce(
-      [](base::OnceCallback<T(ui::TrackedElement*)> function,
-         testing::Matcher<T> matcher, ui::InteractionSequence* seq,
-         ui::TrackedElement* el) {
-        if (!MatchAndExplain("CheckElement()", matcher,
-                             std::move(function).Run(el))) {
-          seq->FailForTesting();
-        }
-      },
-      base::OnceCallback<T(ui::TrackedElement*)>(std::move(function)),
-      testing::Matcher<T>(std::forward<U>(matcher))));
-  return builder;
-}
-
-// static
-template <typename V>
-ui::InteractionSequence::StepBuilder InteractiveBrowserTest::CheckView(
-    ElementSpecifier view,
-    base::OnceCallback<bool(V* view)> check) {
-  return CheckView(view, std::move(check), true);
-}
-
-// static
-template <template <typename...> typename C, class V, typename T, typename U>
-ui::InteractionSequence::StepBuilder InteractiveBrowserTest::CheckView(
-    ElementSpecifier view,
-    C<T(V*)> function,
-    U&& matcher) {
-  StepBuilder builder;
-  SpecifyElement(builder, view);
-  builder.SetStartCallback(base::BindOnce(
-      [](base::OnceCallback<T(V*)> function, testing::Matcher<T> matcher,
-         ui::InteractionSequence* seq, ui::TrackedElement* el) {
-        if (!MatchAndExplain("CheckView()", matcher,
-                             std::move(function).Run(AsView<V>(el)))) {
-          seq->FailForTesting();
-        }
-      },
-      base::OnceCallback<T(V*)>(std::move(function)),
-      testing::Matcher<T>(std::forward<U>(matcher))));
-  return builder;
-}
-
-// static
-template <class V, typename T, typename U>
-ui::InteractionSequence::StepBuilder InteractiveBrowserTest::CheckViewProperty(
-    ElementSpecifier view,
-    T (V::*property)() const,
-    U&& matcher) {
-  StepBuilder builder;
-  SpecifyElement(builder, view);
-  builder.SetStartCallback(base::BindOnce(
-      [](T (V::*property)() const, testing::Matcher<T> matcher,
-         ui::InteractionSequence* seq, ui::TrackedElement* el) {
-        if (!MatchAndExplain("CheckViewProperty()", matcher,
-                             (AsView<V>(el)->*property)())) {
-          seq->FailForTesting();
-        }
-      },
-      property, testing::Matcher<T>(std::forward<U>(matcher))));
-  return builder;
+ui::InteractionSequence::StepBuilder InteractiveBrowserTestApi::CheckJsResultAt(
+    ui::ElementIdentifier webcontents_id,
+    const DeepQuery& where,
+    const std::string& function,
+    T&& matcher) {
+  return internal::JsResultChecker<T>::CheckJsResultAt(
+      webcontents_id, where, function, std::move(matcher));
 }
 
 #endif  // CHROME_TEST_INTERACTION_INTERACTIVE_BROWSER_TEST_H_

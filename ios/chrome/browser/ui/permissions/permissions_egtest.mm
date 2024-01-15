@@ -4,47 +4,58 @@
 
 #import <XCTest/XCTest.h>
 
+#import "base/ios/ios_util.h"
 #import "base/logging.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/strings/utf_string_conversions.h"
 #import "base/test/ios/wait_util.h"
+#import "components/supervised_user/core/common/features.h"
+#import "ios/chrome/browser/overlays/model/public/web_content_area/alert_constants.h"
+#import "ios/chrome/browser/signin/model/fake_system_identity.h"
+#import "ios/chrome/browser/ui/authentication/signin_earl_grey.h"
+#import "ios/chrome/browser/ui/authentication/signin_earl_grey_ui_test_util.h"
 #import "ios/chrome/browser/ui/badges/badge_constants.h"
 #import "ios/chrome/browser/ui/infobars/banners/infobar_banner_constants.h"
+#import "ios/chrome/browser/ui/infobars/infobar_earl_grey_ui_test_util.h"
 #import "ios/chrome/browser/ui/infobars/modals/infobar_modal_constants.h"
 #import "ios/chrome/browser/ui/permissions/permissions_app_interface.h"
 #import "ios/chrome/browser/ui/permissions/permissions_constants.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_actions.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
+#import "ios/chrome/test/earl_grey/chrome_earl_grey_app_interface.h"
+#import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
+#import "ios/chrome/test/scoped_eg_synchronization_disabler.h"
 #import "ios/testing/earl_grey/disabled_test_macros.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
-#import "ios/web/common/features.h"
 #import "ios/web/public/permissions/permissions.h"
 #import "net/test/embedded_test_server/embedded_test_server.h"
 #import "ui/base/l10n/l10n_util.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 // TODO(crbug.com/1316705): Re-enable tests on devices once
-// "https://openradar.appspot.com/radar?id=5520542106910720" is fixed.
+// https://openradar.appspot.com/FB9858932 is fixed.
 #if TARGET_OS_SIMULATOR
 
 namespace {
 
+using ::base::test::ios::kWaitForUIElementTimeout;
+using ::base::test::ios::WaitUntilConditionOrTimeout;
+
 // Matcher for banner shown when camera permission is enabled.
 id<GREYMatcher> InfobarBannerCameraOnly() {
-  return grey_allOf(grey_accessibilityID(kInfobarBannerViewIdentifier),
-                    grey_accessibilityLabel(l10n_util::GetNSString(
-                        IDS_IOS_PERMISSIONS_INFOBAR_BANNER_CAMERA_ACCESSIBLE)),
-                    nil);
+  return grey_allOf(
+      grey_accessibilityID(kInfobarBannerLabelsStackViewIdentifier),
+      grey_accessibilityLabel(l10n_util::GetNSString(
+          IDS_IOS_PERMISSIONS_INFOBAR_BANNER_CAMERA_ACCESSIBLE)),
+      nil);
 }
 
 // Matcher for banner shown when microphone permission is enabled.
 id<GREYMatcher> InfobarBannerMicrophoneOnly() {
   return grey_allOf(
-      grey_accessibilityID(kInfobarBannerViewIdentifier),
+      grey_accessibilityID(kInfobarBannerLabelsStackViewIdentifier),
       grey_accessibilityLabel(l10n_util::GetNSString(
           IDS_IOS_PERMISSIONS_INFOBAR_BANNER_MICROPHONE_ACCESSIBLE)),
       nil);
@@ -54,7 +65,7 @@ id<GREYMatcher> InfobarBannerMicrophoneOnly() {
 // enabled.
 id<GREYMatcher> InfobarBannerCameraAndMicrophone() {
   return grey_allOf(
-      grey_accessibilityID(kInfobarBannerViewIdentifier),
+      grey_accessibilityID(kInfobarBannerLabelsStackViewIdentifier),
       grey_accessibilityLabel(l10n_util::GetNSString(
           IDS_IOS_PERMISSIONS_INFOBAR_BANNER_CAMERA_AND_MICROPHONE_ACCESSIBLE)),
       nil);
@@ -112,18 +123,18 @@ void TapDoneButtonOnInfobarModal() {
 
 - (AppLaunchConfiguration)appConfigurationForTestCase {
   AppLaunchConfiguration config;
-  if (@available(iOS 15.0, *)) {
-    config.features_enabled.push_back(web::features::kMediaPermissionsControl);
-  }
+  config.features_enabled.push_back(
+      supervised_user::kFilterWebsitesForSupervisedUsersOnDesktopAndIOS);
   return config;
 }
 
 #pragma mark - Helper functions
 
-// Checks that if the alert for site permissions pops up, and allow it.
-- (void)checkAndDismissPermissionAlerts:(BOOL)allow {
-  XCUIApplication* app = [[XCUIApplication alloc] init];
-  // Allow system permission if shown.
+// Checks that if the alert for site permissions pops up with
+// `permissionsString` that shows permissions requested, and allow or deny it.
+- (void)checkAndTapAlertContainingPermissions:(NSString*)permissionsString
+                                  shouldAllow:(BOOL)allow {
+  //  Allow system permission if shown.
   NSError* systemAlertFoundError = nil;
   [[EarlGrey selectElementWithMatcher:grey_systemAlertViewShown()]
       assertWithMatcher:grey_nil()
@@ -134,46 +145,43 @@ void TapDoneButtonOnInfobarModal() {
     GREYAssertNil(acceptAlertError, @"Error accepting system alert.\n%@",
                   acceptAlertError);
   }
-  // Allow site permission.
-  XCUIElement* alert =
-      [[app descendantsMatchingType:XCUIElementTypeAlert] firstMatch];
-  NSString* buttonText = allow ? @"Allow" : @"Don’t Allow";
-  XCUIElement* button = alert.buttons[buttonText];
-  GREYAssertNotNil(button, @"Cannot find \"%@\" button in system alert.",
-                   buttonText);
-  [button tap];
-}
+  // Click button on site permissions dialog.
+  id<GREYMatcher> dialogMatcher =
+      grey_accessibilityID(kPermissionsDialogAccessibilityIdentifier);
+  ConditionBlock condition = ^{
+    NSError* error = nil;
+    [[EarlGrey selectElementWithMatcher:dialogMatcher]
+        assertWithMatcher:grey_sufficientlyVisible()
+                    error:&error];
+    return !error;
+  };
+  GREYAssert(WaitUntilConditionOrTimeout(kWaitForUIElementTimeout, condition),
+             @"Permissions dialog was not shown.");
+  NSString* alertText = l10n_util::GetNSStringF(
+      IDS_IOS_PERMISSIONS_ALERT_DIALOG_MESSAGE,
+      base::UTF8ToUTF16(self.testServer->base_url().host()),
+      base::SysNSStringToUTF16(permissionsString));
+  id<GREYMatcher> textMatcher = grey_allOf(
+      grey_ancestor(dialogMatcher), grey_accessibilityLabel(alertText), nil);
+  [[EarlGrey selectElementWithMatcher:textMatcher]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  NSString* buttonText = l10n_util::GetNSString(
+      allow ? IDS_IOS_PERMISSIONS_ALERT_DIALOG_BUTTON_TEXT_GRANT
+            : IDS_IOS_PERMISSIONS_ALERT_DIALOG_BUTTON_TEXT_DENY);
 
-// Checks that the visibility of the infobar matches `shouldShow`.
-- (void)waitUntilInfobarBannerVisibleOrTimeout:(BOOL)shouldShow {
-  GREYCondition* infobarShown = [GREYCondition
-      conditionWithName:@"Infobar shown"
-                  block:^BOOL {
-                    NSError* error;
-                    [[EarlGrey
-                        selectElementWithMatcher:
-                            grey_accessibilityID(kInfobarBannerViewIdentifier)]
-                        assertWithMatcher:grey_notNil()
-                                    error:&error];
-                    return error == nil;
-                  }];
-  // Wait for infobar to be shown or timeout after kWaitForUIElementTimeout.
-  BOOL success = [infobarShown
-      waitWithTimeout:base::test::ios::kWaitForUIElementTimeout.InSecondsF()];
-  if (shouldShow) {
-    GREYAssertTrue(success, @"Infobar does not appear.");
-  } else {
-    GREYAssertFalse(success,
-                    @"Infobar appears despite that no permission is allowed.");
-  }
+  id<GREYMatcher> buttonMatcher = grey_allOf(
+      grey_ancestor(dialogMatcher), grey_accessibilityLabel(buttonText),
+      grey_accessibilityTrait(UIAccessibilityTraitStaticText), nil);
+
+  [[[EarlGrey selectElementWithMatcher:buttonMatcher]
+      assertWithMatcher:grey_sufficientlyVisible()] performAction:grey_tap()];
 }
 
 // Checks `expectedStatesForPermissions` matches the actual states for
 // permissions of the active web state; checks will fail if there is no active
 // web state.
 - (void)checkStatesForPermissions:
-    (NSDictionary<NSNumber*, NSNumber*>*)expectedStatesForPermissions
-    API_AVAILABLE(ios(15.0)) {
+    (NSDictionary<NSNumber*, NSNumber*>*)expectedStatesForPermissions {
   NSDictionary<NSNumber*, NSNumber*>* actualStatesForPermissions =
       [PermissionsAppInterface statesForAllPermissions];
   GREYAssertEqualObjects(
@@ -196,12 +204,21 @@ void TapDoneButtonOnInfobarModal() {
 // notification and then toggle camera permission through the infobar modal
 // through pressing the "Edit" button on the banner.
 - (void)testAllowAndBlockCameraPermission {
-  if (@available(iOS 15.0, *)) {
-    GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
-    [ChromeEarlGrey
-        loadURL:self.testServer->GetURL("/permissions/camera_only.html")];
-    [self checkAndDismissPermissionAlerts:YES];
-    [self waitUntilInfobarBannerVisibleOrTimeout:YES];
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  [ChromeEarlGrey
+      loadURL:self.testServer->GetURL("/permissions/camera_only.html")];
+  {
+    // It is suspected that the video element in the test page performs some
+    // fast repetitive animations that, combined with the EarlGrey
+    // synchronization, delays the invocation of the infobar appearance
+    // animation completion block. As a workaround, we disables EarlGrey
+    // synchronization whenever the test is showing the video element.
+    ScopedSynchronizationDisabler disabler;
+    [self checkAndTapAlertContainingPermissions:
+              l10n_util::GetNSString(
+                  IDS_IOS_PERMISSIONS_ALERT_DIALOG_PERMISSION_CAMERA)
+                                    shouldAllow:YES];
+    [InfobarEarlGreyUI waitUntilInfobarBannerVisibleOrTimeout:YES];
     [[EarlGrey selectElementWithMatcher:InfobarBannerCameraOnly()]
         assertWithMatcher:grey_sufficientlyVisible()];
     // Tap "Edit" to show infobar modal.
@@ -228,48 +245,60 @@ void TapDoneButtonOnInfobarModal() {
 // notification and then toggle microphone permission through the infobar modal
 // through the location bar badge.
 - (void)testAllowAndBlockMicrophonePermission {
-  if (@available(iOS 15.0, *)) {
-    GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
-    [ChromeEarlGrey
-        loadURL:self.testServer->GetURL("/permissions/microphone_only.html")];
-    [self checkAndDismissPermissionAlerts:YES];
-    [self waitUntilInfobarBannerVisibleOrTimeout:YES];
-    [[EarlGrey selectElementWithMatcher:InfobarBannerMicrophoneOnly()]
-        assertWithMatcher:grey_sufficientlyVisible()];
-    // Swipe up to dismiss.
-    [[[EarlGrey selectElementWithMatcher:InfobarBannerMicrophoneOnly()]
-        performAction:grey_swipeFastInDirection(kGREYDirectionUp)]
-        assertWithMatcher:grey_notVisible()];
-    // Tap badges button to show modal.
-    [[EarlGrey selectElementWithMatcher:MicrophoneBadge(/*accepted=*/YES)]
-        performAction:grey_tap()];
-    [self checkStatesForPermissions:@{
-      @(web::PermissionCamera) : @(web::PermissionStateNotAccessible),
-      @(web::PermissionMicrophone) : @(web::PermissionStateAllowed)
-    }];
-    [[EarlGrey
-        selectElementWithMatcher:InfobarModalMicrophonePermissionsSwitch(YES)]
-        performAction:chrome_test_util::TurnTableViewSwitchOn(NO)];
-    [self checkStatesForPermissions:@{
-      @(web::PermissionCamera) : @(web::PermissionStateNotAccessible),
-      @(web::PermissionMicrophone) : @(web::PermissionStateBlocked)
-    }];
-    TapDoneButtonOnInfobarModal();
-    [[EarlGrey selectElementWithMatcher:MicrophoneBadge(/*accepted=*/NO)]
-        assertWithMatcher:grey_sufficientlyVisible()];
-  }
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  [ChromeEarlGrey
+      loadURL:self.testServer->GetURL("/permissions/microphone_only.html")];
+  [self checkAndTapAlertContainingPermissions:
+            l10n_util::GetNSString(
+                IDS_IOS_PERMISSIONS_ALERT_DIALOG_PERMISSION_MICROPHONE)
+                                  shouldAllow:YES];
+  [InfobarEarlGreyUI waitUntilInfobarBannerVisibleOrTimeout:YES];
+  [[EarlGrey selectElementWithMatcher:InfobarBannerMicrophoneOnly()]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  // Swipe up to dismiss.
+  [[[EarlGrey selectElementWithMatcher:InfobarBannerMicrophoneOnly()]
+      performAction:grey_swipeFastInDirection(kGREYDirectionUp)]
+      assertWithMatcher:grey_notVisible()];
+  // Tap badges button to show modal.
+  [[EarlGrey selectElementWithMatcher:MicrophoneBadge(/*accepted=*/YES)]
+      performAction:grey_tap()];
+  [self checkStatesForPermissions:@{
+    @(web::PermissionCamera) : @(web::PermissionStateNotAccessible),
+    @(web::PermissionMicrophone) : @(web::PermissionStateAllowed)
+  }];
+  [[EarlGrey
+      selectElementWithMatcher:InfobarModalMicrophonePermissionsSwitch(YES)]
+      performAction:chrome_test_util::TurnTableViewSwitchOn(NO)];
+  [self checkStatesForPermissions:@{
+    @(web::PermissionCamera) : @(web::PermissionStateNotAccessible),
+    @(web::PermissionMicrophone) : @(web::PermissionStateBlocked)
+  }];
+  TapDoneButtonOnInfobarModal();
+  [[EarlGrey selectElementWithMatcher:MicrophoneBadge(/*accepted=*/NO)]
+      assertWithMatcher:grey_sufficientlyVisible()];
 }
 
 // Tests that when both camera and microphone permissions are granted, the user
 // could see a banner notification and then toggle the permissions through both
 // the infobar modal and the location bar badge.
 - (void)testAllowAndBlockCameraAndMicrophonePermissions {
-  if (@available(iOS 15.0, *)) {
-    GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
-    [ChromeEarlGrey loadURL:self.testServer->GetURL(
-                                "/permissions/camera_and_microphone.html")];
-    [self checkAndDismissPermissionAlerts:YES];
-    [self waitUntilInfobarBannerVisibleOrTimeout:YES];
+  // TODO(crbug.com/1462372): Failing on iOS17.
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  [ChromeEarlGrey loadURL:self.testServer->GetURL(
+                              "/permissions/camera_and_microphone.html")];
+  {
+    // It is suspected that the video element in the test page performs some
+    // fast repetitive animations that, combined with the EarlGrey
+    // synchronization, delays the invocation of the infobar appearance
+    // animation completion block. As a workaround, we disables EarlGrey
+    // synchronization whenever the test is showing the video element.
+    ScopedSynchronizationDisabler disabler;
+    [self
+        checkAndTapAlertContainingPermissions:
+            l10n_util::GetNSString(
+                IDS_IOS_PERMISSIONS_ALERT_DIALOG_PERMISSION_CAMERA_AND_MICROPHONE)
+                                  shouldAllow:YES];
+    [InfobarEarlGreyUI waitUntilInfobarBannerVisibleOrTimeout:YES];
     [[EarlGrey selectElementWithMatcher:InfobarBannerCameraAndMicrophone()]
         assertWithMatcher:grey_sufficientlyVisible()];
     // Tap "Edit" to show infobar modal.
@@ -287,7 +316,8 @@ void TapDoneButtonOnInfobarModal() {
     TapDoneButtonOnInfobarModal();
     [[EarlGrey selectElementWithMatcher:MicrophoneBadge(/*accepted=*/YES)]
         performAction:grey_tap()];
-    // Check current permission states and block microphone permission as well.
+    // Check current permission states and block microphone permission as
+    // well.
     [self checkStatesForPermissions:@{
       @(web::PermissionCamera) : @(web::PermissionStateBlocked),
       @(web::PermissionMicrophone) : @(web::PermissionStateAllowed)
@@ -318,12 +348,22 @@ void TapDoneButtonOnInfobarModal() {
 
 // Tests that when permissions are denied, there will not be a banner or badge.
 - (void)testDenyPermissions {
-  if (@available(iOS 15.0, *)) {
-    GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
-    [ChromeEarlGrey loadURL:self.testServer->GetURL(
-                                "/permissions/camera_and_microphone.html")];
-    [self checkAndDismissPermissionAlerts:NO];
-    [self waitUntilInfobarBannerVisibleOrTimeout:NO];
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  [ChromeEarlGrey loadURL:self.testServer->GetURL(
+                              "/permissions/camera_and_microphone.html")];
+  {
+    // It is suspected that the video element in the test page performs some
+    // fast repetitive animations that, combined with the EarlGrey
+    // synchronization, delays the invocation of the infobar appearance
+    // animation completion block. As a workaround, we disables EarlGrey
+    // synchronization whenever the test is showing the video element.
+    ScopedSynchronizationDisabler disabler;
+    [self
+        checkAndTapAlertContainingPermissions:
+            l10n_util::GetNSString(
+                IDS_IOS_PERMISSIONS_ALERT_DIALOG_PERMISSION_CAMERA_AND_MICROPHONE)
+                                  shouldAllow:NO];
+    [InfobarEarlGreyUI waitUntilInfobarBannerVisibleOrTimeout:NO];
     id<GREYMatcher> anyPermissionBadge =
         grey_anyOf(CameraBadge(/*accepted=*/YES), CameraBadge(NO),
                    MicrophoneBadge(YES), MicrophoneBadge(NO), nil);
@@ -339,13 +379,22 @@ void TapDoneButtonOnInfobarModal() {
 // Tests that permissions infobar banner, modal and badge works the same way in
 // incognito by toggling camera access.
 - (void)testTogglePermissionsInIncognito {
-  if (@available(iOS 15.0, *)) {
-    GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
-    [ChromeEarlGrey openNewIncognitoTab];
-    [ChromeEarlGrey
-        loadURL:self.testServer->GetURL("/permissions/camera_only.html")];
-    [self checkAndDismissPermissionAlerts:YES];
-    [self waitUntilInfobarBannerVisibleOrTimeout:YES];
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  [ChromeEarlGrey openNewIncognitoTab];
+  [ChromeEarlGrey
+      loadURL:self.testServer->GetURL("/permissions/camera_only.html")];
+  {
+    // It is suspected that the video element in the test page performs some
+    // fast repetitive animations that, combined with the EarlGrey
+    // synchronization, delays the invocation of the infobar appearance
+    // animation completion block. As a workaround, we disables EarlGrey
+    // synchronization whenever the test is showing the video element.
+    ScopedSynchronizationDisabler disabler;
+    [self checkAndTapAlertContainingPermissions:
+              l10n_util::GetNSString(
+                  IDS_IOS_PERMISSIONS_ALERT_DIALOG_PERMISSION_CAMERA)
+                                    shouldAllow:YES];
+    [InfobarEarlGreyUI waitUntilInfobarBannerVisibleOrTimeout:YES];
     [[EarlGrey selectElementWithMatcher:InfobarBannerCameraOnly()]
         assertWithMatcher:grey_sufficientlyVisible()];
     // Tap "Edit" to show infobar modal.
@@ -368,120 +417,192 @@ void TapDoneButtonOnInfobarModal() {
   }
 }
 
+// Tests that permissions infobar banner is correctly dismissed when the
+// incognito browser is killed.
+- (void)testDismissPermissionsWhenIncognitoKilled {
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  [ChromeEarlGrey openNewIncognitoTab];
+  [ChromeEarlGrey
+      loadURL:self.testServer->GetURL("/permissions/camera_only.html")];
+  {
+    // It is suspected that the video element in the test page performs some
+    // fast repetitive animations that, combined with the EarlGrey
+    // synchronization, delays the invocation of the infobar appearance
+    // animation completion block. As a workaround, we disables EarlGrey
+    // synchronization whenever the test is showing the video element.
+    ScopedSynchronizationDisabler disabler;
+    [self checkAndTapAlertContainingPermissions:
+              l10n_util::GetNSString(
+                  IDS_IOS_PERMISSIONS_ALERT_DIALOG_PERMISSION_CAMERA)
+                                    shouldAllow:YES];
+    [InfobarEarlGreyUI waitUntilInfobarBannerVisibleOrTimeout:YES];
+
+    // Kill the incognito browser while the banner is still presented.
+    [ChromeEarlGreyUI openTabGrid];
+  }
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::
+                                          TabGridCloseButtonForCellAtIndex(0)]
+      performAction:grey_tap()];
+}
+
 // Tests that permissions are reset after user navigation.
 - (void)testPermissionsAfterNavigation {
-  if (@available(iOS 15.0, *)) {
-    GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
-    [ChromeEarlGrey
-        loadURL:self.testServer->GetURL("/permissions/microphone_only.html")];
-    [self checkAndDismissPermissionAlerts:YES];
-    [self waitUntilInfobarBannerVisibleOrTimeout:YES];
-    [[EarlGrey selectElementWithMatcher:InfobarBannerEditButton()]
-        performAction:grey_tap()];
-    [[EarlGrey
-        selectElementWithMatcher:InfobarModalMicrophonePermissionsSwitch(YES)]
-        performAction:chrome_test_util::TurnTableViewSwitchOn(NO)];
-    TapDoneButtonOnInfobarModal();
-    [[EarlGrey selectElementWithMatcher:MicrophoneBadge(/*accepted=*/NO)]
-        assertWithMatcher:grey_sufficientlyVisible()];
-
-    // Navigate away and go back.
-    [ChromeEarlGrey loadURL:self.testServer->GetURL("/pony.html")];
-    [ChromeEarlGrey goBack];
-
-    // Note: There's currently an existing WebKit bug that WKUIDelegate method
-    // `requestMediaCapturePermissionForOrigin:` would not be invoked when the
-    // user hits backward/forward; therefore, the alert and banner would not
-    // show again, and the checks for the alert and the infobar banner are
-    // commented out. Once this issue is fixed, these checks should be
-    // uncommented.
-
-    //[self checkAndDismissPermissionAlerts:YES];
-    //[self waitUntilInfobarBannerVisibleOrTimeout:YES];
-    [self checkStatesForPermissions:@{
-      @(web::PermissionCamera) : @(web::PermissionStateNotAccessible),
-      @(web::PermissionMicrophone) : @(web::PermissionStateNotAccessible)
-    }];
+  // TODO(crbug.com/1462372): Failing on iOS17.
+  if (@available(iOS 17.0, *)) {
+    XCTSkip(@"Failing on iOS17");
   }
+
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  [ChromeEarlGrey
+      loadURL:self.testServer->GetURL("/permissions/microphone_only.html")];
+  [self checkAndTapAlertContainingPermissions:
+            l10n_util::GetNSString(
+                IDS_IOS_PERMISSIONS_ALERT_DIALOG_PERMISSION_MICROPHONE)
+                                  shouldAllow:YES];
+  [InfobarEarlGreyUI waitUntilInfobarBannerVisibleOrTimeout:YES];
+  [[EarlGrey selectElementWithMatcher:InfobarBannerEditButton()]
+      performAction:grey_tap()];
+  [[EarlGrey
+      selectElementWithMatcher:InfobarModalMicrophonePermissionsSwitch(YES)]
+      performAction:chrome_test_util::TurnTableViewSwitchOn(NO)];
+  TapDoneButtonOnInfobarModal();
+  [[EarlGrey selectElementWithMatcher:MicrophoneBadge(/*accepted=*/NO)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+
+  // Navigate away and go back.
+  [ChromeEarlGrey loadURL:self.testServer->GetURL("/pony.html")];
+  [ChromeEarlGrey goBack];
+
+  // Note: There's currently an existing WebKit bug that WKUIDelegate method
+  // `requestMediaCapturePermissionForOrigin:` would not be invoked when the
+  // user hits backward/forward; therefore, the alert and banner would not
+  // show again, and the checks for the alert and the infobar banner are
+  // commented out. Once this issue is fixed, these checks should be
+  // uncommented.
+
+  /*[self checkAndTapAlertContainingPermissions:
+            l10n_util::GetNSString(
+                IDS_IOS_PERMISSIONS_ALERT_DIALOG_PERMISSION_MICROPHONE)
+                                  shouldAllow:YES];
+  [InfobarEarlGreyUI waitUntilInfobarBannerVisibleOrTimeout:YES];*/
+  [self checkStatesForPermissions:@{
+    @(web::PermissionCamera) : @(web::PermissionStateNotAccessible),
+    @(web::PermissionMicrophone) : @(web::PermissionStateNotAccessible)
+  }];
 }
 
 // Tests that permissions stay the same after user switches to another tab then
 // comes back.
 - (void)testPermissionsAfterTabSwitch {
-  if (@available(iOS 15.0, *)) {
-    GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
-    // Opens a page that requests both camera and microphone permissions, and
-    // block microphone permission.
-    [ChromeEarlGrey loadURL:self.testServer->GetURL(
-                                "/permissions/camera_and_microphone.html")];
-    [self checkAndDismissPermissionAlerts:YES];
-    [self waitUntilInfobarBannerVisibleOrTimeout:YES];
+  // TODO(crbug.com/1462372): Failing on iOS17.
+  if (@available(iOS 17.0, *)) {
+    XCTSkip(@"Failing on iOS17");
+  }
+
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  // Opens a page that requests both camera and microphone permissions, and
+  // block microphone permission.
+  [ChromeEarlGrey loadURL:self.testServer->GetURL(
+                              "/permissions/camera_and_microphone.html")];
+  {
+    // It is suspected that the video element in the test page performs some
+    // fast repetitive animations that, combined with the EarlGrey
+    // synchronization, delays the invocation of the infobar appearance
+    // animation completion block. As a workaround, we disables EarlGrey
+    // synchronization whenever the test is showing the video element.
+    ScopedSynchronizationDisabler disabler;
+    [self
+        checkAndTapAlertContainingPermissions:
+            l10n_util::GetNSString(
+                IDS_IOS_PERMISSIONS_ALERT_DIALOG_PERMISSION_CAMERA_AND_MICROPHONE)
+                                  shouldAllow:YES];
+    [InfobarEarlGreyUI waitUntilInfobarBannerVisibleOrTimeout:YES];
     [[EarlGrey selectElementWithMatcher:InfobarBannerEditButton()]
         performAction:grey_tap()];
     [[EarlGrey
         selectElementWithMatcher:InfobarModalCameraPermissionsSwitch(YES)]
         performAction:chrome_test_util::TurnTableViewSwitchOn(NO)];
-    TapDoneButtonOnInfobarModal();
-    [[EarlGrey selectElementWithMatcher:MicrophoneBadge(/*accepted=*/YES)]
-        assertWithMatcher:grey_sufficientlyVisible()];
-    // Switches tab and go back.
-    [ChromeEarlGrey openNewTab];
-    [ChromeEarlGrey loadURL:self.testServer->GetURL("/pony.html")];
-    [ChromeEarlGrey selectTabAtIndex:0];
-    // Check if permission states stay the same. Wrap this in a GREYCondition
-    // since it takes a small timeout for the web state to retrieve its state.
-    GREYCondition* microphoneAcceptedBadgeShown = [GREYCondition
-        conditionWithName:@"Microphone accepted badge visible"
-                    block:^BOOL {
-                      NSError* error;
-                      [[EarlGrey selectElementWithMatcher:MicrophoneBadge(
-                                                              /*accepted=*/YES)]
-                          assertWithMatcher:grey_sufficientlyVisible()
-                                      error:&error];
-                      return error == nil;
-                    }];
-    // Wait for infobar to be shown or timeout after kWaitForUIElementTimeout.
-    BOOL success = [microphoneAcceptedBadgeShown
-        waitWithTimeout:base::test::ios::kWaitForUIElementTimeout.InSecondsF()];
-    GREYAssertTrue(success, @"Did not find accepted microphone badge.");
-    [self checkStatesForPermissions:@{
-      @(web::PermissionCamera) : @(web::PermissionStateBlocked),
-      @(web::PermissionMicrophone) : @(web::PermissionStateAllowed)
-    }];
   }
+  TapDoneButtonOnInfobarModal();
+  [[EarlGrey selectElementWithMatcher:MicrophoneBadge(/*accepted=*/YES)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  // Switches tab and go back.
+  [ChromeEarlGrey openNewTab];
+  [ChromeEarlGrey loadURL:self.testServer->GetURL("/pony.html")];
+  [ChromeEarlGrey selectTabAtIndex:0];
+  // Check if permission states stay the same. Wrap this in a GREYCondition
+  // since it takes a small timeout for the web state to retrieve its state.
+  GREYCondition* microphoneAcceptedBadgeShown = [GREYCondition
+      conditionWithName:@"Microphone accepted badge visible"
+                  block:^BOOL {
+                    NSError* error;
+                    [[EarlGrey selectElementWithMatcher:MicrophoneBadge(
+                                                            /*accepted=*/YES)]
+                        assertWithMatcher:grey_sufficientlyVisible()
+                                    error:&error];
+                    return error == nil;
+                  }];
+  // Wait for infobar to be shown or timeout after kWaitForUIElementTimeout.
+  BOOL success = [microphoneAcceptedBadgeShown
+      waitWithTimeout:base::test::ios::kWaitForUIElementTimeout.InSecondsF()];
+  GREYAssertTrue(success, @"Did not find accepted microphone badge.");
+  [self checkStatesForPermissions:@{
+    @(web::PermissionCamera) : @(web::PermissionStateBlocked),
+    @(web::PermissionMicrophone) : @(web::PermissionStateAllowed)
+  }];
 }
 
 // Tests that permissions are reset after reload.
 - (void)testPermissionsAfterReload {
-  if (@available(iOS 15.0, *)) {
-    GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
-    // Opens a page that requests camera permission.
-    [ChromeEarlGrey
-        loadURL:self.testServer->GetURL("/permissions/camera_only.html")];
-    [self checkAndDismissPermissionAlerts:YES];
-    [self waitUntilInfobarBannerVisibleOrTimeout:YES];
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  // Opens a page that requests camera permission.
+  [ChromeEarlGrey
+      loadURL:self.testServer->GetURL("/permissions/camera_only.html")];
+
+  {
+    // It is suspected that the video element in the test page performs some
+    // fast repetitive animations that, combined with the EarlGrey
+    // synchronization, delays the invocation of the infobar appearance
+    // animation completion block. As a workaround, we disables EarlGrey
+    // synchronization whenever the test is showing the video element.
+    ScopedSynchronizationDisabler disabler;
+    [self checkAndTapAlertContainingPermissions:
+              l10n_util::GetNSString(
+                  IDS_IOS_PERMISSIONS_ALERT_DIALOG_PERMISSION_CAMERA)
+                                    shouldAllow:YES];
+    [InfobarEarlGreyUI waitUntilInfobarBannerVisibleOrTimeout:YES];
     [[EarlGrey selectElementWithMatcher:InfobarBannerCameraOnly()]
         assertWithMatcher:grey_sufficientlyVisible()];
+  }
 
-    // Reload and allow again and check if things work as expected. Wait until
-    // permissions are reset to validate behaviors.
-    [ChromeEarlGrey reload];
-    GREYCondition* permissionReset = [GREYCondition
-        conditionWithName:@"Permission is reset"
-                    block:^BOOL {
-                      NSDictionary<NSNumber*, NSNumber*>*
-                          actualStatesForPermissions =
-                              [PermissionsAppInterface statesForAllPermissions];
-                      return [actualStatesForPermissions[
-                          @(web::PermissionCamera)]
-                          isEqualToNumber:@(web::PermissionStateNotAccessible)];
-                    }];
-    BOOL success = [permissionReset
-        waitWithTimeout:base::test::ios::kWaitForPageLoadTimeout.InSecondsF()];
-    GREYAssertTrue(success,
-                   @"Camera permission state is not reset after reload.");
-    [self checkAndDismissPermissionAlerts:YES];
-    [self waitUntilInfobarBannerVisibleOrTimeout:YES];
+  // Reload and allow again and check if things work as expected. Wait until
+  // permissions are reset to validate behaviors.
+  [ChromeEarlGrey reload];
+  GREYCondition* permissionReset = [GREYCondition
+      conditionWithName:@"Permission is reset"
+                  block:^BOOL {
+                    NSDictionary<NSNumber*, NSNumber*>*
+                        actualStatesForPermissions =
+                            [PermissionsAppInterface statesForAllPermissions];
+                    return [actualStatesForPermissions[@(web::PermissionCamera)]
+                        isEqualToNumber:@(web::PermissionStateNotAccessible)];
+                  }];
+  BOOL success = [permissionReset
+      waitWithTimeout:base::test::ios::kWaitForPageLoadTimeout.InSecondsF()];
+  GREYAssertTrue(success,
+                 @"Camera permission state is not reset after reload.");
+  {
+    // It is suspected that the video element in the test page performs some
+    // fast repetitive animations that, combined with the EarlGrey
+    // synchronization, delays the invocation of the infobar appearance
+    // animation completion block. As a workaround, we disables EarlGrey
+    // synchronization whenever the test is showing the video element.
+    ScopedSynchronizationDisabler disabler;
+    [self checkAndTapAlertContainingPermissions:
+              l10n_util::GetNSString(
+                  IDS_IOS_PERMISSIONS_ALERT_DIALOG_PERMISSION_CAMERA)
+                                    shouldAllow:YES];
+    [InfobarEarlGreyUI waitUntilInfobarBannerVisibleOrTimeout:YES];
     [[EarlGrey selectElementWithMatcher:InfobarBannerCameraOnly()]
         performAction:grey_swipeFastInDirection(kGREYDirectionUp)];
     [[EarlGrey selectElementWithMatcher:CameraBadge(/*accepted=*/YES)]
@@ -498,17 +619,56 @@ void TapDoneButtonOnInfobarModal() {
       @(web::PermissionCamera) : @(web::PermissionStateBlocked),
       @(web::PermissionMicrophone) : @(web::PermissionStateNotAccessible)
     }];
-
-    // Reload and deny to check if permissions are no longer accessible.
-    [ChromeEarlGrey reload];
-    [self checkAndDismissPermissionAlerts:NO];
-    [self waitUntilInfobarBannerVisibleOrTimeout:NO];
-    id<GREYMatcher> anyPermissionBadge =
-        grey_anyOf(CameraBadge(/*accepted=*/YES), CameraBadge(NO),
-                   MicrophoneBadge(YES), MicrophoneBadge(NO), nil);
-    [[EarlGrey selectElementWithMatcher:anyPermissionBadge]
-        assertWithMatcher:grey_nil()];
   }
+
+  // Reload and deny to check if permissions are no longer accessible.
+  [ChromeEarlGrey reload];
+  [self checkAndTapAlertContainingPermissions:
+            l10n_util::GetNSString(
+                IDS_IOS_PERMISSIONS_ALERT_DIALOG_PERMISSION_CAMERA)
+                                  shouldAllow:NO];
+  [InfobarEarlGreyUI waitUntilInfobarBannerVisibleOrTimeout:NO];
+  id<GREYMatcher> anyPermissionBadge =
+      grey_anyOf(CameraBadge(/*accepted=*/YES), CameraBadge(NO),
+                 MicrophoneBadge(YES), MicrophoneBadge(NO), nil);
+  [[EarlGrey selectElementWithMatcher:anyPermissionBadge]
+      assertWithMatcher:grey_nil()];
+}
+
+// Tests that a supervised user account with parental controls enabled does not
+// have access to modify camera or microphone site permissions.
+- (void)testSupervisedUserPermissionsNoCameraOrMicAccess {
+  // TODO(crbug.com/1462372): Failing on iOS17.
+  if (@available(iOS 17.0, *)) {
+    XCTSkip(@"Failing on iOS17");
+  }
+
+  // These settings are controlled in Family Link and would be updated through
+  // Sync content settings.
+  [ChromeEarlGreyAppInterface
+           setContentSetting:ContentSetting::CONTENT_SETTING_BLOCK
+      forContentSettingsType:ContentSettingsType::MEDIASTREAM_CAMERA];
+  [ChromeEarlGreyAppInterface
+           setContentSetting:ContentSetting::CONTENT_SETTING_BLOCK
+      forContentSettingsType:ContentSettingsType::MEDIASTREAM_MIC];
+
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGrey addFakeIdentity:fakeIdentity];
+  [SigninEarlGrey setIsSubjectToParentalControls:YES forIdentity:fakeIdentity];
+
+  [SigninEarlGreyUI signinWithFakeIdentity:fakeIdentity];
+
+  GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
+  [ChromeEarlGrey loadURL:self.testServer->GetURL(
+                              "/permissions/camera_and_microphone.html")];
+
+  [[EarlGrey selectElementWithMatcher:grey_systemAlertViewShown()]
+      assertWithMatcher:grey_nil()];
+  [InfobarEarlGreyUI waitUntilInfobarBannerVisibleOrTimeout:NO];
+  [self checkStatesForPermissions:@{
+    @(web::PermissionCamera) : @(web::PermissionStateNotAccessible),
+    @(web::PermissionMicrophone) : @(web::PermissionStateNotAccessible)
+  }];
 }
 
 @end

@@ -257,7 +257,7 @@ bool IsCaseSensitiveMatch(base::StringPiece url_pattern,
       return false;
     text.remove_prefix(subpattern.size());
   } else if (anchor_left == proto::ANCHOR_TYPE_SUBDOMAIN) {
-    if (!url_host.is_nonempty())
+    if (url_host.is_empty())
       return false;
     const size_t match_begin =
         FindSubdomainAnchoredSubpattern(url_spec, url_host, subpattern);
@@ -312,7 +312,7 @@ base::StringPiece UrlPattern::UrlInfo::GetLowerCaseSpec() const {
 }
 
 base::StringPiece UrlPattern::UrlInfo::GetStringHost() const {
-  if (host().len <= 0)
+  if (host().is_empty())
     return base::StringPiece();
   return base::StringPiece(&spec_[host().begin], host().len);
 }

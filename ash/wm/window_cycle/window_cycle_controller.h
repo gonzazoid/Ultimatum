@@ -12,6 +12,7 @@
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/wm/desks/desks_controller.h"
 #include "ash/wm/mru_window_tracker.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_registry_simple.h"
@@ -39,7 +40,7 @@ class WindowCycleList;
 class ASH_EXPORT WindowCycleController : public SessionObserver,
                                          public DesksController::Observer {
  public:
-  using WindowList = std::vector<aura::Window*>;
+  using WindowList = std::vector<raw_ptr<aura::Window, VectorExperimental>>;
 
   enum class WindowCyclingDirection { kForward, kBackward };
   enum class KeyboardNavDirection { kUp, kDown, kLeft, kRight, kInvalid };
@@ -69,8 +70,11 @@ class ASH_EXPORT WindowCycleController : public SessionObserver,
   }
 
   // Cycles between windows in the given |direction|. This moves the focus ring
-  // to the window in the given |direction| and also scrolls the list.
-  void HandleCycleWindow(WindowCyclingDirection direction);
+  // to the window in the given |direction| and also scrolls the list. If
+  // same_app_only is provided whether or not to cycle exclusively between
+  // windows of the same app from now on will be updated.
+  void HandleCycleWindow(WindowCyclingDirection direction,
+                         bool same_app_only = false);
 
   // Navigates between cycle windows and tab slider if the move is valid.
   // This moves the focus ring to the active button or the last focused window
@@ -88,7 +92,7 @@ class ASH_EXPORT WindowCycleController : public SessionObserver,
 
   // Call to start cycling windows. This function adds a pre-target handler to
   // listen to the alt key release.
-  void StartCycling();
+  void StartCycling(bool same_app_only);
 
   // Both of these functions stop the current window cycle and removes the event
   // filter. The former indicates success (i.e. the new window should be
@@ -106,7 +110,7 @@ class ASH_EXPORT WindowCycleController : public SessionObserver,
   void SetFocusedWindow(aura::Window* window);
 
   // Checks whether |event| occurs within the cycle view.
-  bool IsEventInCycleView(const ui::LocatedEvent* event);
+  bool IsEventInCycleView(const ui::LocatedEvent* event) const;
 
   // Gets the window for the preview item located at |event|. Returns nullptr if
   // |event| is not on the cycle view or a preview item, or |window_cycle_list_|
@@ -114,48 +118,57 @@ class ASH_EXPORT WindowCycleController : public SessionObserver,
   aura::Window* GetWindowAtPoint(const ui::LocatedEvent* event);
 
   // Returns whether or not the event is located in tab slider container.
-  bool IsEventInTabSliderContainer(const ui::LocatedEvent* event);
+  bool IsEventInTabSliderContainer(const ui::LocatedEvent* event) const;
 
   // Returns whether or not the window cycle view is visible.
-  bool IsWindowListVisible();
+  bool IsWindowListVisible() const;
 
   // Checks if switching between alt-tab mode via the tab slider is allowed.
   // Returns true if Bento flag is enabled and users have multiple desks.
-  bool IsInteractiveAltTabModeAllowed();
+  bool IsInteractiveAltTabModeAllowed() const;
 
   // Checks if alt-tab should be per active desk. If
   // `IsInteractiveAltTabModeAllowed()`, alt-tab mode depends on users'
   // |prefs::kAltTabPerDesk| selection. Otherwise, it'll default to all desk
   // unless LimitAltTabToActiveDesk flag is explicitly enabled.
-  bool IsAltTabPerActiveDesk();
+  bool IsAltTabPerActiveDesk() const;
 
   // Returns true while switching the alt-tab mode and Bento flag is enabled.
   // This helps `Scroll()` and `Step()` distinguish between pressing tabs and
-  // switching mode, so they refresh |current_index_| and the highlighted
-  // window correctly.
-  bool IsSwitchingMode();
+  // switching mode, so they refresh `current_index_` and the focused window
+  // correctly.
+  bool IsSwitchingMode() const;
 
   // Returns if the tab slider is currently focused instead of the window cycle
   // during keyboard navigation.
-  bool IsTabSliderFocused();
+  bool IsTabSliderFocused() const;
 
-  // SessionObserver:
-  void OnActiveUserPrefServiceChanged(PrefService* pref_service) override;
-
-  // Saves |per_desk| in the user prefs and announces changes of alt-tab mode
+  // Saves `per_desk` in the user prefs and announces changes of alt-tab mode
   // and the window selection via ChromeVox. This function is called when the
   // user switches the alt-tab mode via keyboard navigation or button clicking.
   void OnModeChanged(bool per_desk, ModeSwitchSource source);
 
+  // SessionObserver:
+  void OnActiveUserPrefServiceChanged(PrefService* pref_service) override;
+
   // DesksController::Observer:
-  void OnDeskAdded(const Desk* desk) override;
+  void OnDeskAdded(const Desk* desk, bool from_undo) override;
   void OnDeskRemoved(const Desk* desk) override;
 
  private:
+  friend class WindowCycleList;
+
   // Gets a list of windows from the currently open windows, removing windows
   // with transient roots already in the list. The returned list of windows
   // is used to populate the window cycle list.
   WindowList CreateWindowList();
+
+  // Builds the window list for window cycling, `desks_mru_type` determines
+  // whether to include or exclude windows from the inactive desks. The list is
+  // built based on `BuildWindowForCycleWithPipList()` and revised so that
+  // windows in a snap group are put together with primary window comes before
+  // secondary snapped window.
+  WindowList BuildWindowListForWindowCycling(DesksMruType desks_mru_type);
 
   // Populates |active_desk_container_id_before_cycle_| and
   // |active_window_before_window_cycle_| when the window cycle list is
@@ -164,9 +177,9 @@ class ASH_EXPORT WindowCycleController : public SessionObserver,
 
   // Cycles to the next or previous window based on |direction| or to the
   // default position if |starting_alt_tab_or_switching_mode| is true.
-  // This updates the highlight to the window to the right if |direction|
+  // This updates the focus ring to the window to the right if |direction|
   // is forward or left if backward. If |starting_alt_tab_or_switching_mode| is
-  // true and |direction| is forward, the highlight moves to the first
+  // true and |direction| is forward, the focus ring moves to the first
   // non-active window in MRU list: the second window by default or the first
   // window if it is not active.
   void Step(WindowCyclingDirection direction,
@@ -183,7 +196,7 @@ class ASH_EXPORT WindowCycleController : public SessionObserver,
   // Returns true if the direction is valid regarding the component that the
   // focus is currently on. For example, moving the focus on the top most
   // component, the tab slider button, further up is invalid.
-  bool IsValidKeyboardNavigation(KeyboardNavDirection direction);
+  bool IsValidKeyboardNavigation(KeyboardNavDirection direction) const;
 
   std::unique_ptr<WindowCycleList> window_cycle_list_;
 
@@ -193,7 +206,8 @@ class ASH_EXPORT WindowCycleController : public SessionObserver,
 
   // Tracks what Window was active when starting to cycle and used to determine
   // if the active Window changed in when ending cycling.
-  aura::Window* active_window_before_window_cycle_ = nullptr;
+  raw_ptr<aura::Window, DanglingUntriaged> active_window_before_window_cycle_ =
+      nullptr;
 
   // Non-null while actively cycling.
   std::unique_ptr<WindowCycleEventFilter> event_filter_;
@@ -203,7 +217,7 @@ class ASH_EXPORT WindowCycleController : public SessionObserver,
 
   // The pref service of the currently active user. Can be null in
   // ash_unittests.
-  PrefService* active_user_pref_service_ = nullptr;
+  raw_ptr<PrefService> active_user_pref_service_ = nullptr;
 
   // The pref change registrar to observe changes in prefs value.
   std::unique_ptr<PrefChangeRegistrar> pref_change_registrar_;

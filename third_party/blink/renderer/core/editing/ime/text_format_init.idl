@@ -5,14 +5,11 @@
 // The initial parameters for TextFormat.
 
 // Spec draft:
-// https://w3c.github.io/editing/docs/EditContext/index.html#textformatupdateevent
+// https://w3c.github.io/edit-context/#textformatupdateevent
 
 dictionary TextFormatInit {
     unsigned long rangeStart;
     unsigned long rangeEnd;
-    DOMString textColor;
-    DOMString backgroundColor;
-    DOMString underlineColor;
     DOMString underlineStyle;
     DOMString underlineThickness;
 };

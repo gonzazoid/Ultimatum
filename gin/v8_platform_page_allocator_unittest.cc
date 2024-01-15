@@ -4,6 +4,7 @@
 
 #include "gin/v8_platform_page_allocator.h"
 
+#include "base/check_op.h"
 #include "base/cpu.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -12,8 +13,8 @@
 #if defined(ARCH_CPU_ARM64) && (OS_LINUX || OS_ANDROID)
 // BTI is only available for AArch64, relevant platform are Android and Linux
 
-#include "base/allocator/partition_allocator/arm_bti_test_functions.h"
-#include "base/allocator/partition_allocator/page_allocator_constants.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/arm_bti_test_functions.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/page_allocator_constants.h"
 #if BUILDFLAG(IS_POSIX)
 #include <signal.h>
 #include "testing/gtest/include/gtest/gtest-death-test.h"
@@ -51,7 +52,8 @@ TEST(V8PlatformPageAllocatorTest, VerifyGetPageConfig) {
 
   CHECK_EQ(sut.GetPageConfigPermissionsForTesting(
                v8::PageAllocator::kNoAccessWillJitLater),
-           partition_alloc::PageAccessibilityConfiguration::kInaccessible);
+           partition_alloc::PageAccessibilityConfiguration::
+               kInaccessibleWillJitLater);
 }
 
 #if defined(ARCH_CPU_ARM64) && (OS_LINUX || OS_ANDROID)

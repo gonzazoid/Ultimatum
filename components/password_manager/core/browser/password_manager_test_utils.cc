@@ -13,7 +13,7 @@
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "components/password_manager/core/browser/android_affiliation/affiliation_utils.h"
+#include "components/password_manager/core/browser/affiliation/affiliation_utils.h"
 #include "components/password_manager/core/browser/hash_password_manager.h"
 #include "components/password_manager/core/browser/password_form.h"
 
@@ -23,8 +23,10 @@ std::unique_ptr<PasswordForm> PasswordFormFromData(
     const PasswordFormData& form_data) {
   auto form = std::make_unique<PasswordForm>();
   form->scheme = form_data.scheme;
-  form->date_last_used = base::Time::FromDoubleT(form_data.last_usage_time);
-  form->date_created = base::Time::FromDoubleT(form_data.creation_time);
+  form->date_last_used =
+      base::Time::FromSecondsSinceUnixEpoch(form_data.last_usage_time);
+  form->date_created =
+      base::Time::FromSecondsSinceUnixEpoch(form_data.creation_time);
   if (form_data.signon_realm)
     form->signon_realm = std::string(form_data.signon_realm);
   if (form_data.origin)
@@ -71,14 +73,13 @@ std::unique_ptr<PasswordForm> FillPasswordFormWithData(
 std::unique_ptr<PasswordForm> CreateEntry(const std::string& username,
                                           const std::string& password,
                                           const GURL& origin_url,
-                                          bool is_psl_match,
-                                          bool is_affiliation_based_match) {
+                                          PasswordForm::MatchType match_type) {
   auto form = std::make_unique<PasswordForm>();
   form->username_value = base::ASCIIToUTF16(username);
   form->password_value = base::ASCIIToUTF16(password);
   form->url = origin_url;
-  form->is_public_suffix_match = is_psl_match;
-  form->is_affiliation_based_match = is_affiliation_based_match;
+  form->signon_realm = origin_url.GetWithEmptyPath().spec();
+  form->match_type = match_type;
   return form;
 }
 
@@ -87,9 +88,8 @@ bool ContainsEqualPasswordFormsUnordered(
     const std::vector<std::unique_ptr<PasswordForm>>& actual_values,
     std::ostream* mismatch_output) {
   std::vector<PasswordForm*> remaining_expectations(expectations.size());
-  std::transform(
-      expectations.begin(), expectations.end(), remaining_expectations.begin(),
-      [](const std::unique_ptr<PasswordForm>& form) { return form.get(); });
+  base::ranges::transform(expectations, remaining_expectations.begin(),
+                          &std::unique_ptr<PasswordForm>::get);
 
   bool had_mismatched_actual_form = false;
   for (const auto& actual : actual_values) {
@@ -131,20 +131,27 @@ MockPasswordReuseDetectorConsumer::MockPasswordReuseDetectorConsumer() =
 MockPasswordReuseDetectorConsumer::~MockPasswordReuseDetectorConsumer() =
     default;
 
+base::WeakPtr<PasswordReuseDetectorConsumer>
+MockPasswordReuseDetectorConsumer::AsWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
+}
+
 PasswordHashDataMatcher::PasswordHashDataMatcher(
-    absl::optional<PasswordHashData> expected)
+    std::optional<PasswordHashData> expected)
     : expected_(expected) {}
 
 PasswordHashDataMatcher::~PasswordHashDataMatcher() = default;
 
 bool PasswordHashDataMatcher::MatchAndExplain(
-    absl::optional<PasswordHashData> hash_data,
+    std::optional<PasswordHashData> hash_data,
     ::testing::MatchResultListener* listener) const {
-  if (expected_ == absl::nullopt)
-    return hash_data == absl::nullopt;
+  if (expected_ == std::nullopt) {
+    return hash_data == std::nullopt;
+  }
 
-  if (hash_data == absl::nullopt)
+  if (hash_data == std::nullopt) {
     return false;
+  }
 
   return expected_->username == hash_data->username &&
          expected_->length == hash_data->length &&
@@ -159,8 +166,8 @@ void PasswordHashDataMatcher::DescribeNegationTo(::std::ostream* os) const {
   *os << "doesn't match password hash data for " << expected_->username;
 }
 
-::testing::Matcher<absl::optional<PasswordHashData>> Matches(
-    absl::optional<PasswordHashData> expected) {
+::testing::Matcher<std::optional<PasswordHashData>> Matches(
+    std::optional<PasswordHashData> expected) {
   return ::testing::MakeMatcher(new PasswordHashDataMatcher(expected));
 }
 

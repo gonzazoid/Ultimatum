@@ -11,22 +11,43 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
+#include "ash/constants/ash_features.h"
+#include "base/check.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
+#include "base/time/time.h"
+#include "base/timer/timer.h"
 #include "base/values.h"
 #include "chromeos/ash/components/dbus/shill/modem_messaging_client.h"
 #include "chromeos/ash/components/dbus/shill/shill_device_client.h"
 #include "chromeos/ash/components/dbus/shill/shill_manager_client.h"
 #include "chromeos/ash/components/dbus/shill/sms_client.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
+#include "chromeos/ash/components/network/network_type_pattern.h"
 #include "components/device_event_log/device_event_log.h"
 #include "dbus/object_path.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
+#include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
 namespace {
 
+// Key for the device GUID in message data received from the
+// NetworkSmsDeviceHandler.
+const char kNetworkGuidKey[] = "GUID";
+
 // Maximum number of messages stored for RequestUpdate(true).
 const size_t kMaxReceivedMessages = 100;
+
+std::optional<const std::string> GetStringOptional(
+    const base::Value::Dict& dict,
+    const std::string& key) {
+  if (!dict.FindString(key)) {
+    return std::nullopt;
+  }
+  return *dict.FindString(key);
+}
 
 }  // namespace
 
@@ -36,11 +57,36 @@ namespace ash {
 const char NetworkSmsHandler::kNumberKey[] = "number";
 const char NetworkSmsHandler::kTextKey[] = "text";
 const char NetworkSmsHandler::kTimestampKey[] = "timestamp";
+const base::TimeDelta NetworkSmsHandler::kFetchSmsDetailsTimeout =
+    base::Seconds(60);
+
+TextMessageData::TextMessageData(std::optional<const std::string> number,
+                                 std::optional<const std::string> text,
+                                 std::optional<const std::string> timestamp)
+    : number(number), text(text), timestamp(timestamp) {}
+
+TextMessageData::~TextMessageData() = default;
+
+TextMessageData::TextMessageData(TextMessageData&& other) {
+  number = std::move(other.number);
+  text = std::move(other.text);
+  timestamp = std::move(other.timestamp);
+}
+
+TextMessageData& TextMessageData::operator=(TextMessageData&& other) {
+  number = std::move(other.number);
+  text = std::move(other.text);
+  timestamp = std::move(other.timestamp);
+  return *this;
+}
 
 class NetworkSmsHandler::NetworkSmsDeviceHandler {
  public:
   NetworkSmsDeviceHandler() = default;
   virtual ~NetworkSmsDeviceHandler() = default;
+
+  // Updates the last active network's GUID for the current device handler.
+  virtual void SetLastActiveNetwork(const NetworkState* state) {}
 };
 
 class NetworkSmsHandler::ModemManager1NetworkSmsDeviceHandler
@@ -58,21 +104,26 @@ class NetworkSmsHandler::ModemManager1NetworkSmsDeviceHandler
   ~ModemManager1NetworkSmsDeviceHandler() override;
 
  private:
-  void ListCallback(absl::optional<std::vector<dbus::ObjectPath>> paths);
+  void ListCallback(std::optional<std::vector<dbus::ObjectPath>> paths);
   void SmsReceivedCallback(const dbus::ObjectPath& path, bool complete);
-  void GetCallback(const base::Value& dictionary);
+  void GetCallback(const dbus::ObjectPath& sms_path,
+                   const base::Value::Dict& dictionary);
   void DeleteMessages();
-  void DeleteCallback(bool success);
+  void DeleteCallback(const dbus::ObjectPath& sms_path, bool success);
   void GetMessages();
-  void MessageReceived(const base::Value& dictionary);
+  void MessageReceived(const base::Value::Dict& dictionary);
+  void OnFetchSmsDetailsTimeout(const dbus::ObjectPath& sms_path);
+  void SetLastActiveNetwork(const NetworkState* state) override;
 
-  NetworkSmsHandler* host_;
+  raw_ptr<NetworkSmsHandler> host_;
   std::string service_name_;
   dbus::ObjectPath object_path_;
-  bool deleting_messages_;
-  bool retrieving_messages_;
+  base::OneShotTimer fetch_sms_details_timer_;
+  bool deleting_messages_ = false;
+  bool retrieving_messages_ = false;
   std::vector<dbus::ObjectPath> delete_queue_;
   base::circular_deque<dbus::ObjectPath> retrieval_queue_;
+  std::string last_active_network_guid_;
   base::WeakPtrFactory<ModemManager1NetworkSmsDeviceHandler> weak_ptr_factory_{
       this};
 };
@@ -81,12 +132,12 @@ NetworkSmsHandler::ModemManager1NetworkSmsDeviceHandler::
     ModemManager1NetworkSmsDeviceHandler(NetworkSmsHandler* host,
                                          const std::string& service_name,
                                          const dbus::ObjectPath& object_path)
-    : host_(host),
-      service_name_(service_name),
-      object_path_(object_path),
-      deleting_messages_(false),
-      retrieving_messages_(false) {
-  // Set the handler for received Sms messaages.
+    : host_(host), service_name_(service_name), object_path_(object_path) {
+  NET_LOG(DEBUG)
+      << "SMS handler for " << object_path.value()
+      << " created, setting SMS receive handler and fetching existing messages";
+
+  // Set the handler for received Sms messages.
   ModemMessagingClient::Get()->SetSmsReceivedHandler(
       service_name_, object_path_,
       base::BindRepeating(
@@ -109,19 +160,26 @@ NetworkSmsHandler::ModemManager1NetworkSmsDeviceHandler::
 }
 
 void NetworkSmsHandler::ModemManager1NetworkSmsDeviceHandler::ListCallback(
-    absl::optional<std::vector<dbus::ObjectPath>> paths) {
+    std::optional<std::vector<dbus::ObjectPath>> paths) {
   // This receives all messages, so clear any pending gets and deletes.
   retrieval_queue_.clear();
   delete_queue_.clear();
 
-  if (!paths.has_value())
+  if (!paths.has_value()) {
+    NET_LOG(DEBUG) << "No paths returned";
     return;
+  }
 
+  NET_LOG(EVENT) << "Bulk fetched [" << paths->size() << "] message(s)";
   retrieval_queue_.reserve(paths->size());
   retrieval_queue_.assign(std::make_move_iterator(paths->begin()),
                           std::make_move_iterator(paths->end()));
-  if (!retrieving_messages_)
-    GetMessages();
+  if (retrieving_messages_) {
+    NET_LOG(DEBUG) << "Already retrieving messages, not starting queue";
+    return;
+  }
+
+  GetMessages();
 }
 
 // Messages must be deleted one at a time, since we can not guarantee
@@ -129,23 +187,41 @@ void NetworkSmsHandler::ModemManager1NetworkSmsDeviceHandler::ListCallback(
 // the back of the list so that the indices are valid.
 void NetworkSmsHandler::ModemManager1NetworkSmsDeviceHandler::DeleteMessages() {
   if (delete_queue_.empty()) {
+    NET_LOG(DEBUG) << "Delete queue is empty, finished deleting messages";
     deleting_messages_ = false;
     return;
   }
   deleting_messages_ = true;
   dbus::ObjectPath sms_path = std::move(delete_queue_.back());
   delete_queue_.pop_back();
+  NET_LOG(EVENT) << "Deleting " << sms_path.value() << ", ["
+                 << delete_queue_.size()
+                 << "] message(s) left in the deletion queue";
   ModemMessagingClient::Get()->Delete(
       service_name_, object_path_, sms_path,
       base::BindOnce(&NetworkSmsHandler::ModemManager1NetworkSmsDeviceHandler::
                          DeleteCallback,
-                     weak_ptr_factory_.GetWeakPtr()));
+                     weak_ptr_factory_.GetWeakPtr(), sms_path));
 }
 
 void NetworkSmsHandler::ModemManager1NetworkSmsDeviceHandler::DeleteCallback(
+    const dbus::ObjectPath& sms_path,
     bool success) {
-  if (!success)
+  if (!success) {
+    // Add the SMS to the queue so that it can eventually get retried.
+    delete_queue_.insert(delete_queue_.begin(), sms_path);
+    NET_LOG(ERROR) << "Delete failed for " << sms_path.value()
+                   << ", inserted message back into the deletion queue, ["
+                   << delete_queue_.size()
+                   << "] message(s) left in the deletion queue";
+
+    // Set the flag back to false so that new deletion attempts can occur the
+    // next time a message is received.
+    deleting_messages_ = false;
     return;
+  }
+
+  NET_LOG(EVENT) << "Delete succeeded for " << sms_path.value();
   DeleteMessages();
 }
 
@@ -153,6 +229,7 @@ void NetworkSmsHandler::ModemManager1NetworkSmsDeviceHandler::DeleteCallback(
 // many requests to a single threaded server.
 void NetworkSmsHandler::ModemManager1NetworkSmsDeviceHandler::GetMessages() {
   if (retrieval_queue_.empty()) {
+    NET_LOG(DEBUG) << "Retrieval queue is empty, finished retrieving messages";
     retrieving_messages_ = false;
     if (!deleting_messages_)
       DeleteMessages();
@@ -161,55 +238,100 @@ void NetworkSmsHandler::ModemManager1NetworkSmsDeviceHandler::GetMessages() {
   retrieving_messages_ = true;
   dbus::ObjectPath sms_path = retrieval_queue_.front();
   retrieval_queue_.pop_front();
+  NET_LOG(EVENT) << "Fetching details for " << sms_path.value() << ", ["
+                 << retrieval_queue_.size()
+                 << "] message(s) left in the retrieval queue";
+  fetch_sms_details_timer_.Start(
+      FROM_HERE, kFetchSmsDetailsTimeout,
+      base::BindOnce(&NetworkSmsHandler::ModemManager1NetworkSmsDeviceHandler::
+                         OnFetchSmsDetailsTimeout,
+                     weak_ptr_factory_.GetWeakPtr(), sms_path));
   SMSClient::Get()->GetAll(
       service_name_, sms_path,
       base::BindOnce(
           &NetworkSmsHandler::ModemManager1NetworkSmsDeviceHandler::GetCallback,
-          weak_ptr_factory_.GetWeakPtr()));
+          weak_ptr_factory_.GetWeakPtr(), sms_path));
   delete_queue_.push_back(sms_path);
 }
 
 void NetworkSmsHandler::ModemManager1NetworkSmsDeviceHandler::
     SmsReceivedCallback(const dbus::ObjectPath& sms_path, bool complete) {
+  NET_LOG(EVENT) << "Message received: " << sms_path.value();
   // Only handle complete messages.
-  if (!complete)
+  if (!complete) {
+    NET_LOG(DEBUG) << "Message is not complete, not handling: "
+                   << sms_path.value();
     return;
+  }
+
   retrieval_queue_.push_back(sms_path);
-  if (!retrieving_messages_)
-    GetMessages();
+  if (retrieving_messages_) {
+    NET_LOG(DEBUG)
+        << "SMS received but already retrieving messages, not starting queue";
+    return;
+  }
+
+  GetMessages();
 }
 
 void NetworkSmsHandler::ModemManager1NetworkSmsDeviceHandler::GetCallback(
-    const base::Value& dictionary) {
+    const dbus::ObjectPath& sms_path,
+    const base::Value::Dict& dictionary) {
+  NET_LOG(EVENT) << "Message details fetched for: " << sms_path.value();
+  fetch_sms_details_timer_.Stop();
   MessageReceived(dictionary);
   GetMessages();
 }
 
 void NetworkSmsHandler::ModemManager1NetworkSmsDeviceHandler::MessageReceived(
-    const base::Value& dictionary) {
-  // The keys of the ModemManager1.SMS interface do not match the
-  // exported keys, so a new dictionary is created with the expected
-  // key namaes.
-  base::Value new_dictionary(base::Value::Type::DICTIONARY);
+    const base::Value::Dict& dictionary) {
+  // The keys of the ModemManager1.SMS interface do not match the exported keys,
+  // so a new dictionary is created with the expected key names.
+  base::Value::Dict new_dictionary;
   const std::string* number =
-      dictionary.FindStringKey(SMSClient::kSMSPropertyNumber);
-  if (number)
-    new_dictionary.SetStringKey(kNumberKey, *number);
-  const std::string* text =
-      dictionary.FindStringKey(SMSClient::kSMSPropertyText);
-  if (text)
-    new_dictionary.SetStringKey(kTextKey, *text);
+      dictionary.FindString(SMSClient::kSMSPropertyNumber);
+  if (number) {
+    new_dictionary.Set(kNumberKey, *number);
+  }
+  const std::string* text = dictionary.FindString(SMSClient::kSMSPropertyText);
+  if (text) {
+    new_dictionary.Set(kTextKey, *text);
+  }
   const std::string* timestamp =
-      dictionary.FindStringKey(SMSClient::kSMSPropertyTimestamp);
-  if (timestamp)
-    new_dictionary.SetStringKey(kTimestampKey, *timestamp);
+      dictionary.FindString(SMSClient::kSMSPropertyTimestamp);
+  if (timestamp) {
+    new_dictionary.Set(kTimestampKey, *timestamp);
+  }
+
+  if (features::IsSuppressTextMessagesEnabled()) {
+    new_dictionary.Set(kNetworkGuidKey, last_active_network_guid_);
+  }
+
   host_->MessageReceived(new_dictionary);
+}
+
+void NetworkSmsHandler::ModemManager1NetworkSmsDeviceHandler::
+    OnFetchSmsDetailsTimeout(const dbus::ObjectPath& sms_path) {
+  NET_LOG(ERROR) << "SMSClient::GetAll() timed out for " << sms_path.value()
+                 << ", moving to next message.";
+  GetMessages();
+}
+
+void NetworkSmsHandler::ModemManager1NetworkSmsDeviceHandler::
+    SetLastActiveNetwork(const NetworkState* network_state) {
+  CHECK(features::IsSuppressTextMessagesEnabled());
+  if (!network_state) {
+    return;
+  }
+  NET_LOG(DEBUG) << "Updating last seen network to network with GUID: "
+                 << network_state->guid();
+  last_active_network_guid_ = network_state->guid();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // NetworkSmsHandler
 
-NetworkSmsHandler::NetworkSmsHandler() {}
+NetworkSmsHandler::NetworkSmsHandler() = default;
 
 NetworkSmsHandler::~NetworkSmsHandler() {
   ShillManagerClient::Get()->RemovePropertyChangedObserver(this);
@@ -227,6 +349,13 @@ void NetworkSmsHandler::Init() {
   ShillManagerClient::Get()->GetProperties(
       base::BindOnce(&NetworkSmsHandler::ManagerPropertiesCallback,
                      weak_ptr_factory_.GetWeakPtr()));
+}
+
+void NetworkSmsHandler::Init(NetworkStateHandler* network_state_handler) {
+  CHECK(features::IsSuppressTextMessagesEnabled());
+  network_state_handler_ = network_state_handler;
+  network_state_handler_observation_.Observe(network_state_handler_);
+  Init();
 }
 
 void NetworkSmsHandler::RequestUpdate() {
@@ -253,35 +382,91 @@ void NetworkSmsHandler::OnPropertyChanged(const std::string& name,
 
   // Manager property change
   if (name == shill::kDevicesProperty && value.is_list()) {
-    UpdateDevices(value);
+    UpdateDevices(value.GetList());
+  }
+
+  if (name == shill::kIccidProperty && value.is_string() &&
+      features::IsSuppressTextMessagesEnabled()) {
+    OnActiveDeviceIccidChanged(value.GetString());
+  }
+}
+
+void NetworkSmsHandler::OnActiveDeviceIccidChanged(const std::string& iccid) {
+  CHECK(features::IsSuppressTextMessagesEnabled());
+  if (!device_handler_ || iccid.empty()) {
+    return;
+  }
+  NetworkStateHandler::NetworkStateList active_networks;
+  // We also look at non-active networks, to account for networks that are
+  // disconnected as you can receive text messages on active devices with
+  // disconnected networks.
+  network_state_handler_->GetNetworkListByType(
+      NetworkTypePattern::Cellular(), /*configured_only=*/false,
+      /*visible_only=*/false, /*limit=*/0, &active_networks);
+  for (auto* network : active_networks) {
+    if (network->iccid() == iccid) {
+      device_handler_->SetLastActiveNetwork(network);
+      return;
+    }
+  }
+}
+
+void NetworkSmsHandler::ActiveNetworksChanged(
+    const std::vector<const NetworkState*>& active_networks) {
+  CHECK(features::IsSuppressTextMessagesEnabled());
+  for (const NetworkState* network : active_networks) {
+    if (network->type() == shill::kTypeCellular && device_handler_) {
+      device_handler_->SetLastActiveNetwork(network);
+      break;
+    }
   }
 }
 
 // Private methods
 
-void NetworkSmsHandler::AddReceivedMessage(const base::Value& message) {
+void NetworkSmsHandler::AddReceivedMessage(const base::Value::Dict& message) {
   if (received_messages_.size() >= kMaxReceivedMessages)
     received_messages_.erase(received_messages_.begin());
   received_messages_.push_back(message.Clone());
 }
 
-void NetworkSmsHandler::NotifyMessageReceived(const base::Value& message) {
-  for (auto& observer : observers_)
-    observer.MessageReceived(message);
+void NetworkSmsHandler::NotifyMessageReceived(
+    const base::Value::Dict& message) {
+  if (!ash::features::IsSuppressTextMessagesEnabled()) {
+    for (auto& observer : observers_) {
+      observer.MessageReceived(message);
+    }
+    return;
+  }
+
+  TextMessageData message_data{GetStringOptional(message, kNumberKey),
+                               GetStringOptional(message, kTextKey),
+                               GetStringOptional(message, kTimestampKey)};
+
+  const std::string network_guid =
+      GetStringOptional(message, kNetworkGuidKey).value_or(std::string());
+  if (network_guid.empty()) {
+    NET_LOG(ERROR) << "Message received with an empty GUID";
+  }
+
+  for (auto& observer : observers_) {
+    observer.MessageReceivedFromNetwork(network_guid, message_data);
+  }
 }
 
-void NetworkSmsHandler::MessageReceived(const base::Value& message) {
+void NetworkSmsHandler::MessageReceived(const base::Value::Dict& message) {
   AddReceivedMessage(message);
   NotifyMessageReceived(message);
 }
 
 void NetworkSmsHandler::ManagerPropertiesCallback(
-    absl::optional<base::Value> properties) {
+    std::optional<base::Value::Dict> properties) {
   if (!properties) {
     NET_LOG(ERROR) << "NetworkSmsHandler: Failed to get manager properties.";
     return;
   }
-  const base::Value* value = properties->FindListKey(shill::kDevicesProperty);
+  const base::Value::List* value =
+      properties->FindList(shill::kDevicesProperty);
   if (!value) {
     NET_LOG(EVENT) << "NetworkSmsHandler: No list value for: "
                    << shill::kDevicesProperty;
@@ -290,8 +475,8 @@ void NetworkSmsHandler::ManagerPropertiesCallback(
   UpdateDevices(*value);
 }
 
-void NetworkSmsHandler::UpdateDevices(const base::Value& devices) {
-  for (const auto& item : devices.GetList()) {
+void NetworkSmsHandler::UpdateDevices(const base::Value::List& devices) {
+  for (const auto& item : devices) {
     if (!item.is_string())
       continue;
 
@@ -309,14 +494,13 @@ void NetworkSmsHandler::UpdateDevices(const base::Value& devices) {
 
 void NetworkSmsHandler::DevicePropertiesCallback(
     const std::string& device_path,
-    absl::optional<base::Value> properties) {
+    std::optional<base::Value::Dict> properties) {
   if (!properties) {
     NET_LOG(ERROR) << "NetworkSmsHandler error for: " << device_path;
     return;
   }
 
-  const std::string* device_type =
-      properties->FindStringKey(shill::kTypeProperty);
+  const std::string* device_type = properties->FindString(shill::kTypeProperty);
   if (!device_type) {
     NET_LOG(ERROR) << "NetworkSmsHandler: No type for: " << device_path;
     return;
@@ -325,7 +509,7 @@ void NetworkSmsHandler::DevicePropertiesCallback(
     return;
 
   const std::string* service_name =
-      properties->FindStringKey(shill::kDBusServiceProperty);
+      properties->FindString(shill::kDBusServiceProperty);
   if (!service_name) {
     NET_LOG(ERROR) << "Device has no DBusService Property: " << device_path;
     return;
@@ -335,7 +519,7 @@ void NetworkSmsHandler::DevicePropertiesCallback(
     return;
 
   const std::string* object_path_string =
-      properties->FindStringKey(shill::kDBusObjectProperty);
+      properties->FindString(shill::kDBusObjectProperty);
   if (!object_path_string || object_path_string->empty()) {
     NET_LOG(ERROR) << "Device has no or empty DBusObject Property: "
                    << device_path;
@@ -346,9 +530,18 @@ void NetworkSmsHandler::DevicePropertiesCallback(
   // Destroy |device_handler_| first to reset the current SmsReceivedHandler.
   // Only one active handler is supported. TODO(crbug.com/1239418): Fix.
   device_handler_.reset();
+
   device_handler_ = std::make_unique<ModemManager1NetworkSmsDeviceHandler>(
       this, *service_name, object_path);
 
+  if (features::IsSuppressTextMessagesEnabled()) {
+    OnActiveDeviceIccidChanged(
+        GetStringOptional(*properties, shill::kIccidProperty)
+            .value_or(std::string()));
+    device_handler_->SetLastActiveNetwork(
+        network_state_handler_->ConnectedNetworkByType(
+            NetworkTypePattern::Cellular()));
+  }
   if (!cellular_device_path_.empty()) {
     ShillDeviceClient::Get()->RemovePropertyChangedObserver(
         dbus::ObjectPath(cellular_device_path_), this);

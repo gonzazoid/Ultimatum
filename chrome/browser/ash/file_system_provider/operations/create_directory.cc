@@ -9,23 +9,20 @@
 #include "chrome/common/extensions/api/file_system_provider.h"
 #include "chrome/common/extensions/api/file_system_provider_internal.h"
 
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 
 CreateDirectory::CreateDirectory(
-    extensions::EventRouter* event_router,
+    RequestDispatcher* dispatcher,
     const ProvidedFileSystemInfo& file_system_info,
     const base::FilePath& directory_path,
     bool recursive,
     storage::AsyncFileUtil::StatusCallback callback)
-    : Operation(event_router, file_system_info),
+    : Operation(dispatcher, file_system_info),
       directory_path_(directory_path),
       recursive_(recursive),
       callback_(std::move(callback)) {}
 
-CreateDirectory::~CreateDirectory() {
-}
+CreateDirectory::~CreateDirectory() = default;
 
 bool CreateDirectory::Execute(int request_id) {
   using extensions::api::file_system_provider::CreateDirectoryRequestedOptions;
@@ -49,19 +46,17 @@ bool CreateDirectory::Execute(int request_id) {
 }
 
 void CreateDirectory::OnSuccess(int /* request_id */,
-                                std::unique_ptr<RequestValue> /* result */,
+                                const RequestValue& /* result */,
                                 bool has_more) {
   DCHECK(callback_);
   std::move(callback_).Run(base::File::FILE_OK);
 }
 
 void CreateDirectory::OnError(int /* request_id */,
-                              std::unique_ptr<RequestValue> /* result */,
+                              const RequestValue& /* result */,
                               base::File::Error error) {
   DCHECK(callback_);
   std::move(callback_).Run(error);
 }
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations

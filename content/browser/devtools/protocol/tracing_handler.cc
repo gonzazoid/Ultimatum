@@ -7,13 +7,14 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/numerics/safe_conversions.h"
@@ -34,6 +35,7 @@
 #include "content/browser/devtools/devtools_stream_file.h"
 #include "content/browser/devtools/devtools_traceable_screenshot.h"
 #include "content/browser/devtools/devtools_video_consumer.h"
+#include "content/browser/devtools/tracing_process_set_monitor.h"
 #include "content/browser/gpu/gpu_process_host.h"
 #include "content/browser/renderer_host/frame_tree.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
@@ -44,21 +46,21 @@
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/tracing_service.h"
+#include "content/public/browser/web_contents.h"
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/memory_instrumentation.h"
 #include "services/tracing/public/cpp/perfetto/perfetto_config.h"
 #include "services/tracing/public/cpp/perfetto/perfetto_session.h"
 #include "services/tracing/public/cpp/perfetto/trace_packet_tokenizer.h"
 #include "services/tracing/public/cpp/tracing_features.h"
 #include "services/tracing/public/mojom/constants.mojom-forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/abseil-cpp/absl/strings/ascii.h"
 #include "third_party/inspector_protocol/crdtp/json.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "content/browser/renderer_host/compositor_impl_android.h"
 #endif
 
-namespace content {
-namespace protocol {
+namespace content::protocol {
 
 namespace {
 
@@ -66,6 +68,10 @@ const double kMinimumReportingInterval = 250.0;
 
 const char kRecordModeParam[] = "record_mode";
 const char kTraceBufferSizeInKb[] = "trace_buffer_size_in_kb";
+
+#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
+const char kTrackEventDataSourceName[] = "track_event";
+#endif
 
 // Frames need to be at least 1x1, otherwise nothing would be captured.
 constexpr gfx::Size kMinFrameSize = gfx::Size(1, 1);
@@ -77,10 +83,10 @@ constexpr gfx::Size kMaxFrameSize = gfx::Size(500, 500);
 std::string ConvertFromCamelCase(const std::string& in_str, char separator) {
   std::string out_str;
   out_str.reserve(in_str.size());
-  for (const char& c : in_str) {
-    if (isupper(c)) {
+  for (char c : in_str) {
+    if (absl::ascii_isupper(static_cast<unsigned char>(c))) {
       out_str.push_back(separator);
-      out_str.push_back(tolower(c));
+      out_str.push_back(absl::ascii_tolower(static_cast<unsigned char>(c)));
     } else {
       out_str.push_back(c);
     }
@@ -89,20 +95,23 @@ std::string ConvertFromCamelCase(const std::string& in_str, char separator) {
 }
 
 base::Value ConvertDictKeyStyle(const base::Value& value) {
-  if (value.is_dict()) {
-    base::Value out(base::Value::Type::DICTIONARY);
-    for (auto kv : value.DictItems()) {
-      out.SetKey(ConvertFromCamelCase(kv.first, '_'),
-                 ConvertDictKeyStyle(kv.second));
+  const base::Value::Dict* dict = value.GetIfDict();
+  if (dict) {
+    base::Value::Dict out;
+    for (auto kv : *dict) {
+      out.Set(ConvertFromCamelCase(kv.first, '_'),
+              ConvertDictKeyStyle(kv.second));
     }
-    return out;
+    return base::Value(std::move(out));
   }
 
-  if (value.is_list()) {
-    base::Value out(base::Value::Type::LIST);
-    for (const auto& v : value.GetList())
+  const base::Value::List* list = value.GetIfList();
+  if (list) {
+    base::Value::List out;
+    for (const auto& v : *list) {
       out.Append(ConvertDictKeyStyle(v));
-    return out;
+    }
+    return base::Value(std::move(out));
   }
 
   return value.Clone();
@@ -182,50 +191,54 @@ void SendProcessReadyInBrowserEvent(const base::UnguessableToken& frame_token,
 }
 
 void FillFrameData(base::trace_event::TracedValue* data,
-                   FrameTreeNode* node,
                    RenderFrameHostImpl* frame_host,
                    const GURL& url) {
+  CHECK(frame_host);
   GURL::Replacements strip_fragment;
   strip_fragment.ClearRef();
-  data->SetString("frame", node->devtools_frame_token().ToString());
-  data->SetString("url", url.ReplaceComponents(strip_fragment).spec());
-  data->SetString("name", node->frame_name());
-  if (node->parent()) {
-    data->SetString("parent",
-                    node->parent()->GetDevToolsFrameToken().ToString());
+  std::string trimmed_url = url.ReplaceComponents(strip_fragment).spec();
+  data->SetString("frame", frame_host->devtools_frame_token().ToString());
+  data->SetString("url", std::move(trimmed_url));
+  data->SetString("name", frame_host->GetFrameName());
+  if (frame_host->GetParent()) {
+    data->SetString(
+        "parent", frame_host->GetParent()->GetDevToolsFrameToken().ToString());
   }
-  if (frame_host) {
-    RenderProcessHost* process_host = frame_host->GetProcess();
-    const base::Process& process_handle = process_host->GetProcess();
-    if (!process_handle.IsValid()) {
-      data->SetString("processPseudoId", GetProcessHostHex(process_host));
-      frame_host->GetProcess()->PostTaskWhenProcessIsReady(
-          base::BindOnce(&SendProcessReadyInBrowserEvent,
-                         node->devtools_frame_token(), process_host));
-    } else {
-      // Cast process id to int to be compatible with tracing.
-      data->SetInteger("processId", static_cast<int>(process_handle.Pid()));
-    }
+  RenderProcessHost* process_host = frame_host->GetProcess();
+  const base::Process& process_handle = process_host->GetProcess();
+  if (!process_handle.IsValid()) {
+    data->SetString("processPseudoId", GetProcessHostHex(process_host));
+    frame_host->GetProcess()->PostTaskWhenProcessIsReady(
+        base::BindOnce(&SendProcessReadyInBrowserEvent,
+                       frame_host->devtools_frame_token(), process_host));
+  } else {
+    // Cast process id to int to be compatible with tracing.
+    data->SetInteger("processId", static_cast<int>(process_handle.Pid()));
   }
 }
 
-absl::optional<base::trace_event::MemoryDumpLevelOfDetail>
+std::optional<base::trace_event::MemoryDumpLevelOfDetail>
 StringToMemoryDumpLevelOfDetail(const std::string& str) {
   if (str == Tracing::MemoryDumpLevelOfDetailEnum::Detailed)
-    return {base::trace_event::MemoryDumpLevelOfDetail::DETAILED};
+    return {base::trace_event::MemoryDumpLevelOfDetail::kDetailed};
   if (str == Tracing::MemoryDumpLevelOfDetailEnum::Background)
-    return {base::trace_event::MemoryDumpLevelOfDetail::BACKGROUND};
+    return {base::trace_event::MemoryDumpLevelOfDetail::kBackground};
   if (str == Tracing::MemoryDumpLevelOfDetailEnum::Light)
-    return {base::trace_event::MemoryDumpLevelOfDetail::LIGHT};
+    return {base::trace_event::MemoryDumpLevelOfDetail::kLight};
   return {};
 }
 
 void AddPidsToProcessFilter(
     const std::unordered_set<base::ProcessId>& included_process_ids,
     perfetto::TraceConfig& trace_config) {
+#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
+  const std::string kDataSourceName = kTrackEventDataSourceName;
+#else
+  const std::string kDataSourceName = tracing::mojom::kTraceEventDataSourceName;
+#endif
   for (auto& data_source : *(trace_config.mutable_data_sources())) {
     auto* source_config = data_source.mutable_config();
-    if (source_config->name() == tracing::mojom::kTraceEventDataSourceName) {
+    if (source_config->name() == kDataSourceName) {
       for (auto& enabled_pid : included_process_ids) {
         *data_source.add_producer_name_filter() = base::StrCat(
             {tracing::mojom::kPerfettoProducerNamePrefix,
@@ -241,7 +254,7 @@ bool IsChromeDataSource(const std::string& data_source_name) {
          data_source_name == "track_event";
 }
 
-absl::optional<perfetto::BackendType> GetBackendTypeFromParameters(
+std::optional<perfetto::BackendType> GetBackendTypeFromParameters(
     const std::string& tracing_backend,
     perfetto::TraceConfig& perfetto_config) {
   if (tracing_backend == Tracing::TracingBackendEnum::Chrome)
@@ -258,7 +271,7 @@ absl::optional<perfetto::BackendType> GetBackendTypeFromParameters(
     }
     return perfetto::BackendType::kCustomBackend;
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 // Perfetto SDK build expects track_event data source to be configured via
@@ -276,7 +289,7 @@ void ConvertToTrackEventConfigIfNeeded(perfetto::TraceConfig& trace_config) {
     if (data_source.config().name() ==
             tracing::mojom::kTraceEventDataSourceName &&
         data_source.config().has_chrome_config()) {
-      data_source.mutable_config()->set_name("track_event");
+      data_source.mutable_config()->set_name(kTrackEventDataSourceName);
       base::trace_event::TraceConfig base_config(
           data_source.config().chrome_config().trace_config());
       bool privacy_filtering_enabled =
@@ -542,9 +555,13 @@ class TracingHandler::PerfettoTracingSession {
   base::WeakPtrFactory<PerfettoTracingSession> weak_factory_{this};
 };
 
-TracingHandler::TracingHandler(DevToolsIOContext* io_context)
+TracingHandler::TracingHandler(DevToolsAgentHostImpl* host,
+                               DevToolsIOContext* io_context,
+                               DevToolsSession* root_session)
     : DevToolsDomainHandler(Tracing::Metainfo::domainName),
       io_context_(io_context),
+      host_(host),
+      session_for_process_filter_(root_session),
       did_initiate_recording_(false),
       return_as_stream_(false),
       gzip_compression_(false),
@@ -559,15 +576,6 @@ TracingHandler::~TracingHandler() = default;
 std::vector<TracingHandler*> TracingHandler::ForAgentHost(
     DevToolsAgentHostImpl* host) {
   return host->HandlersByName<TracingHandler>(Tracing::Metainfo::domainName);
-}
-
-void TracingHandler::SetRenderer(int process_host_id,
-                                 RenderFrameHostImpl* frame_host) {
-  frame_host_ = frame_host;
-  if (!frame_host)
-    return;
-  video_consumer_->SetFrameSinkId(
-      frame_host->GetRenderWidgetHost()->GetFrameSinkId());
 }
 
 void TracingHandler::Wire(UberDispatcher* dispatcher) {
@@ -630,6 +638,7 @@ void TracingHandler::OnTraceComplete() {
   DCHECK(!trace_data_buffer_state_.slashed);
 
   bool data_loss = session_->HasDataLossOccurred();
+  process_set_monitor_.reset();
   session_.reset();
   frontend_->TracingComplete(data_loss);
 }
@@ -694,6 +703,7 @@ std::string TracingHandler::UpdateTraceDataBuffer(
 
 void TracingHandler::OnTraceToStreamComplete(const std::string& stream_handle) {
   bool data_loss = session_->HasDataLossOccurred();
+  process_set_monitor_.reset();
   session_.reset();
   std::string stream_format = (proto_format_ ? Tracing::StreamFormatEnum::Proto
                                              : Tracing::StreamFormatEnum::Json);
@@ -714,17 +724,17 @@ void TracingHandler::Start(Maybe<std::string> categories,
                            Maybe<Binary> perfetto_config,
                            Maybe<std::string> tracing_backend,
                            std::unique_ptr<StartCallback> callback) {
-  bool return_as_stream = transfer_mode.fromMaybe("") ==
+  bool return_as_stream = transfer_mode.value_or("") ==
                           Tracing::Start::TransferModeEnum::ReturnAsStream;
-  bool gzip_compression = transfer_compression.fromMaybe("") ==
-                          Tracing::StreamCompressionEnum::Gzip;
+  bool gzip_compression =
+      transfer_compression.value_or("") == Tracing::StreamCompressionEnum::Gzip;
   bool proto_format =
-      transfer_format.fromMaybe("") == Tracing::StreamFormatEnum::Proto;
+      transfer_format.value_or("") == Tracing::StreamFormatEnum::Proto;
 
   perfetto::TraceConfig trace_config;
-  if (perfetto_config.isJust()) {
-    bool parsed = trace_config.ParseFromArray(
-        perfetto_config.fromJust().data(), perfetto_config.fromJust().size());
+  if (perfetto_config.has_value()) {
+    bool parsed = trace_config.ParseFromArray(perfetto_config.value().data(),
+                                              perfetto_config.value().size());
     if (!parsed) {
       callback->sendFailure(Response::InvalidParams(
           "Couldn't parse the supplied perfettoConfig."));
@@ -752,21 +762,21 @@ void TracingHandler::Start(Maybe<std::string> categories,
   } else {
     base::trace_event::TraceConfig browser_config =
         base::trace_event::TraceConfig();
-    if (config.isJust()) {
+    if (config.has_value()) {
       base::Value::Dict dict;
-      CHECK(crdtp::ConvertProtocolValue(*config.fromJust(), &dict));
+      CHECK(crdtp::ConvertProtocolValue(config.value(), &dict));
       browser_config =
           GetTraceConfigFromDevToolsConfig(base::Value(std::move(dict)));
-    } else if (categories.isJust() || options.isJust()) {
-      browser_config = base::trace_event::TraceConfig(categories.fromMaybe(""),
-                                                      options.fromMaybe(""));
+    } else if (categories.has_value() || options.has_value()) {
+      browser_config = base::trace_event::TraceConfig(categories.value_or(""),
+                                                      options.value_or(""));
     }
     trace_config = CreatePerfettoConfiguration(browser_config, return_as_stream,
                                                proto_format);
   }
 
-  absl::optional<perfetto::BackendType> backend = GetBackendTypeFromParameters(
-      tracing_backend.fromMaybe(Tracing::TracingBackendEnum::Auto),
+  std::optional<perfetto::BackendType> backend = GetBackendTypeFromParameters(
+      tracing_backend.value_or(Tracing::TracingBackendEnum::Auto),
       trace_config);
 
   if (!backend) {
@@ -793,7 +803,7 @@ void TracingHandler::Start(Maybe<std::string> categories,
     return;
   }
 
-  if (config.isJust() && (categories.isJust() || options.isJust())) {
+  if (config.has_value() && (categories.has_value() || options.has_value())) {
     callback->sendFailure(Response::InvalidParams(
         "Either trace config (preferred), or categories+options should be "
         "specified, but not both."));
@@ -810,17 +820,29 @@ void TracingHandler::Start(Maybe<std::string> categories,
   gzip_compression_ = gzip_compression;
   proto_format_ = proto_format;
   buffer_usage_reporting_interval_ =
-      buffer_usage_reporting_interval.fromMaybe(0);
+      buffer_usage_reporting_interval.value_or(0);
   did_initiate_recording_ = true;
   trace_config_ = std::move(trace_config);
-  pids_being_traced_.clear();
 
-  GpuProcessHost* gpu_process_host =
-      GpuProcessHost::Get(GPU_PROCESS_KIND_SANDBOXED,
-                          /* force_create */ false);
-  base::ProcessId gpu_pid =
-      gpu_process_host ? gpu_process_host->process_id() : base::kNullProcessId;
-  SetupProcessFilter(gpu_pid, nullptr);
+  if (session_for_process_filter_) {
+    process_set_monitor_ = TracingProcessSetMonitor::Start(
+        *session_for_process_filter_,
+        base::BindRepeating(&TracingHandler::AddProcessToFilter,
+                            base::Unretained(this)));
+    std::unordered_set<base::ProcessId> pids = process_set_monitor_->GetPids();
+
+    base::ProcessId browser_pid = base::Process::Current().Pid();
+    pids.insert(browser_pid);
+    if (auto* gpu_process_host =
+            GpuProcessHost::Get(GPU_PROCESS_KIND_SANDBOXED,
+                                /* force_create */ false)) {
+      base::ProcessId gpu_pid = gpu_process_host->process_id();
+      if (gpu_pid != base::kNullProcessId) {
+        pids.insert(gpu_pid);
+      }
+    }
+    AddPidsToProcessFilter(pids, trace_config_);
+  }
 
   session_ = std::make_unique<PerfettoTracingSession>(proto_format_, *backend);
   session_->EnableTracing(
@@ -844,55 +866,11 @@ perfetto::TraceConfig TracingHandler::CreatePerfettoConfiguration(
           : tracing::mojom::kChromeTraceEventLabel);
 }
 
-void TracingHandler::SetupProcessFilter(
-    base::ProcessId gpu_pid,
-    RenderFrameHost* new_render_frame_host) {
-  if (!frame_host_)
-    return;
-
-  base::ProcessId browser_pid = base::Process::Current().Pid();
-  pids_being_traced_.insert(browser_pid);
-
-  if (gpu_pid != base::kNullProcessId)
-    pids_being_traced_.insert(gpu_pid);
-
-  if (new_render_frame_host)
-    AppendProcessId(new_render_frame_host, &pids_being_traced_);
-
-  DCHECK(!frame_host_->GetParent());
-  for (FrameTreeNode* node : frame_host_->frame_tree()->Nodes()) {
-    if (RenderFrameHost* frame_host = node->current_frame_host())
-      AppendProcessId(frame_host, &pids_being_traced_);
-  }
-
-  AddPidsToProcessFilter(pids_being_traced_, trace_config_);
-}
-
-void TracingHandler::AppendProcessId(
-    RenderFrameHost* render_frame_host,
-    std::unordered_set<base::ProcessId>* process_set) {
-  RenderProcessHost* process_host = render_frame_host->GetProcess();
-  if (process_host->GetProcess().IsValid()) {
-    process_set->insert(process_host->GetProcess().Pid());
-  } else {
-    process_host->PostTaskWhenProcessIsReady(
-        base::BindOnce(&TracingHandler::OnProcessReady,
-                       weak_factory_.GetWeakPtr(), process_host));
-  }
-}
-
-void TracingHandler::OnProcessReady(RenderProcessHost* process_host) {
-  AddProcess(process_host->GetProcess().Pid());
-}
-
-void TracingHandler::AddProcess(base::ProcessId pid) {
-  if (!did_initiate_recording_)
-    return;
-  if (!pids_being_traced_.insert(pid).second)
-    return;
+void TracingHandler::AddProcessToFilter(base::ProcessId pid) {
+  CHECK(did_initiate_recording_);
+  CHECK(session_);
   AddPidsToProcessFilter({pid}, trace_config_);
-  if (session_)
-    session_->ChangeTraceConfig(trace_config_);
+  session_->ChangeTraceConfig(trace_config_);
 }
 
 void TracingHandler::AttemptAdoptStartupSession(
@@ -900,8 +878,10 @@ void TracingHandler::AttemptAdoptStartupSession(
     bool gzip_compression,
     bool proto_format,
     perfetto::BackendType tracing_backend) {
-  if (frame_host_ != nullptr)
+  // Only adopt startup session for browser-level sessions.
+  if (session_for_process_filter_) {
     return;
+  }
   auto* startup_config = tracing::TraceStartupConfig::GetInstance();
   if (!startup_config->AttemptAdoptBySessionOwner(
           tracing::TraceStartupConfig::SessionOwner::kDevToolsTracingHandler)) {
@@ -984,6 +964,12 @@ void TracingHandler::OnRecordingEnabled(std::unique_ptr<StartCallback> callback,
   if (screenshot_enabled) {
     // Reset number of screenshots received, each time tracing begins.
     number_of_screenshots_from_video_consumer_ = 0;
+    if (WebContents* wc = host_ ? host_->GetWebContents() : nullptr) {
+      auto* frame_host =
+          static_cast<RenderFrameHostImpl*>(wc->GetPrimaryMainFrame());
+      video_consumer_->SetFrameSinkId(
+          frame_host->GetRenderWidgetHost()->GetFrameSinkId());
+    }
     video_consumer_->SetMinAndMaxFrameSize(kMinFrameSize, kMaxFrameSize);
     video_consumer_->StartCapture();
   }
@@ -1020,8 +1006,8 @@ void TracingHandler::RequestMemoryDump(
     return;
   }
 
-  absl::optional<base::trace_event::MemoryDumpLevelOfDetail> memory_detail =
-      StringToMemoryDumpLevelOfDetail(level_of_detail.fromMaybe(
+  std::optional<base::trace_event::MemoryDumpLevelOfDetail> memory_detail =
+      StringToMemoryDumpLevelOfDetail(level_of_detail.value_or(
           Tracing::MemoryDumpLevelOfDetailEnum::Detailed));
 
   if (!memory_detail) {
@@ -1030,9 +1016,9 @@ void TracingHandler::RequestMemoryDump(
     return;
   }
 
-  auto determinism = deterministic.fromMaybe(false)
-                         ? base::trace_event::MemoryDumpDeterminism::FORCE_GC
-                         : base::trace_event::MemoryDumpDeterminism::NONE;
+  auto determinism = deterministic.value_or(false)
+                         ? base::trace_event::MemoryDumpDeterminism::kForceGc
+                         : base::trace_event::MemoryDumpDeterminism::kNone;
 
   auto on_memory_dump_finished =
       base::BindOnce(&TracingHandler::OnMemoryDumpFinished,
@@ -1040,7 +1026,7 @@ void TracingHandler::RequestMemoryDump(
 
   memory_instrumentation::MemoryInstrumentation::GetInstance()
       ->RequestGlobalDumpAndAppendToTrace(
-          base::trace_event::MemoryDumpType::EXPLICITLY_TRIGGERED,
+          base::trace_event::MemoryDumpType::kExplicitlyTriggered,
           *memory_detail, determinism, std::move(on_memory_dump_finished));
 }
 
@@ -1053,13 +1039,21 @@ void TracingHandler::OnMemoryDumpFinished(
 
 void TracingHandler::OnFrameFromVideoConsumer(
     scoped_refptr<media::VideoFrame> frame) {
+  if (!IsTracing()) {
+    return;
+  }
   const SkBitmap skbitmap = DevToolsVideoConsumer::GetSkBitmapFromFrame(frame);
+  uint64_t frame_sequence = *frame->metadata().frame_sequence;
 
-  base::TimeTicks reference_time = *frame->metadata().reference_time;
+  // This reference_time is an ESTIMATE. It is set by the compositor frame sink
+  // from the `expected_display_time`, which is based on a previously known
+  // frame start PLUS the vsync interval (eg 16.6ms)
+  base::TimeTicks expected_display_time = *frame->metadata().reference_time;
 
   TRACE_EVENT_OBJECT_SNAPSHOT_WITH_ID_AND_TIMESTAMP(
-      TRACE_DISABLED_BY_DEFAULT("devtools.screenshot"), "Screenshot", 1,
-      reference_time, std::make_unique<DevToolsTraceableScreenshot>(skbitmap));
+      TRACE_DISABLED_BY_DEFAULT("devtools.screenshot"), "Screenshot",
+      frame_sequence, expected_display_time,
+      std::make_unique<DevToolsTraceableScreenshot>(skbitmap));
 
   ++number_of_screenshots_from_video_consumer_;
   DCHECK(video_consumer_);
@@ -1101,6 +1095,7 @@ void TracingHandler::StopTracing(
     const scoped_refptr<TracingController::TraceDataEndpoint>& endpoint) {
   DCHECK(session_);
   buffer_usage_poll_timer_.reset();
+  process_set_monitor_.reset();
   if (endpoint) {
     // Will delete |session_|.
     session_->DisableTracing(std::move(endpoint));
@@ -1117,22 +1112,36 @@ bool TracingHandler::IsTracing() const {
 
 void TracingHandler::EmitFrameTree() {
   auto data = std::make_unique<base::trace_event::TracedValue>();
-  if (frame_host_) {
-    DCHECK(!frame_host_->GetParent());
+  if (WebContents* wc = host_ ? host_->GetWebContents() : nullptr) {
+    auto* frame_host =
+        static_cast<RenderFrameHostImpl*>(wc->GetPrimaryMainFrame());
+    CHECK(frame_host);
     data->SetInteger("frameTreeNodeId",
-                     frame_host_->frame_tree_node()->frame_tree_node_id());
+                     frame_host->frame_tree_node()->frame_tree_node_id());
     data->SetBoolean("persistentIds", true);
     data->BeginArray("frames");
-    for (FrameTreeNode* node : frame_host_->frame_tree()->Nodes()) {
+    wc->ForEachRenderFrameHost([&data](RenderFrameHost* rfh) {
       data->BeginDictionary();
-      FillFrameData(data.get(), node, node->current_frame_host(),
-                    node->current_url());
+      FillFrameData(data.get(), static_cast<RenderFrameHostImpl*>(rfh),
+                    rfh->GetLastCommittedURL());
       data->EndDictionary();
-    }
+    });
     data->EndArray();
   }
   TRACE_EVENT_INSTANT1(TRACE_DISABLED_BY_DEFAULT("devtools.timeline"),
                        "TracingStartedInBrowser", TRACE_EVENT_SCOPE_THREAD,
+                       "data", std::move(data));
+}
+
+void TracingHandler::WillInitiatePrerender(FrameTreeNode* frame_tree_node) {
+  if (!did_initiate_recording_) {
+    return;
+  }
+  auto data = std::make_unique<base::trace_event::TracedValue>();
+  FillFrameData(data.get(), frame_tree_node->current_frame_host(),
+                frame_tree_node->current_url());
+  TRACE_EVENT_INSTANT1(TRACE_DISABLED_BY_DEFAULT("devtools.timeline"),
+                       "FrameCommittedInBrowser", TRACE_EVENT_SCOPE_THREAD,
                        "data", std::move(data));
 }
 
@@ -1141,16 +1150,16 @@ void TracingHandler::ReadyToCommitNavigation(
   if (!did_initiate_recording_)
     return;
   auto data = std::make_unique<base::trace_event::TracedValue>();
-  FillFrameData(data.get(), navigation_request->frame_tree_node(),
-                navigation_request->GetRenderFrameHost(),
-                navigation_request->GetURL());
+  RenderFrameHostImpl* frame_host = navigation_request->GetRenderFrameHost();
+  FillFrameData(data.get(), frame_host, navigation_request->GetURL());
   TRACE_EVENT_INSTANT1(TRACE_DISABLED_BY_DEFAULT("devtools.timeline"),
                        "FrameCommittedInBrowser", TRACE_EVENT_SCOPE_THREAD,
                        "data", std::move(data));
-
-  SetupProcessFilter(base::kNullProcessId,
-                     navigation_request->GetRenderFrameHost());
-  session_->ChangeTraceConfig(trace_config_);
+  if (frame_host->IsOutermostMainFrame()) {
+    video_consumer_->SetFrameSinkId(navigation_request->GetRenderFrameHost()
+                                        ->GetRenderWidgetHost()
+                                        ->GetFrameSinkId());
+  }
 }
 
 void TracingHandler::FrameDeleted(int frame_tree_node_id) {
@@ -1158,8 +1167,14 @@ void TracingHandler::FrameDeleted(int frame_tree_node_id) {
     return;
   FrameTreeNode* node = FrameTreeNode::GloballyFindByID(frame_tree_node_id);
 
+  if (!node->current_frame_host()) {
+    // This might happen on prerendering activation when the prerender tree is
+    // shutting how and the RFH is migrated to a different frame tree.
+    return;
+  }
   auto data = std::make_unique<base::trace_event::TracedValue>();
-  data->SetString("frame", node->devtools_frame_token().ToString());
+  data->SetString(
+      "frame", node->current_frame_host()->devtools_frame_token().ToString());
   TRACE_EVENT_INSTANT1(TRACE_DISABLED_BY_DEFAULT("devtools.timeline"),
                        "FrameDeletedInBrowser", TRACE_EVENT_SCOPE_THREAD,
                        "data", std::move(data));
@@ -1174,15 +1189,17 @@ bool TracingHandler::IsStartupTracingActive() {
 base::trace_event::TraceConfig TracingHandler::GetTraceConfigFromDevToolsConfig(
     const base::Value& devtools_config) {
   base::Value config = ConvertDictKeyStyle(devtools_config);
-  if (std::string* mode = config.FindStringPath(kRecordModeParam))
-    config.SetStringPath(kRecordModeParam, ConvertFromCamelCase(*mode, '-'));
-  if (absl::optional<double> buffer_size =
-          config.FindDoublePath(kTraceBufferSizeInKb)) {
-    config.SetIntKey(kTraceBufferSizeInKb,
-                     base::saturated_cast<size_t>(buffer_size.value()));
+  base::Value::Dict& config_dict = config.GetDict();
+  if (std::string* mode = config_dict.FindString(kRecordModeParam)) {
+    config_dict.Set(kRecordModeParam, ConvertFromCamelCase(*mode, '-'));
   }
-  return base::trace_event::TraceConfig(config);
+  if (std::optional<double> buffer_size =
+          config_dict.FindDouble(kTraceBufferSizeInKb)) {
+    config_dict.Set(
+        kTraceBufferSizeInKb,
+        static_cast<int>(base::saturated_cast<size_t>(buffer_size.value())));
+  }
+  return base::trace_event::TraceConfig(config_dict);
 }
 
-}  // namespace protocol
-}  // namespace content
+}  // namespace content::protocol

@@ -8,9 +8,10 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/threading/sequence_bound.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -26,6 +27,7 @@
 #include "services/device/public/mojom/geolocation_config.mojom.h"
 #include "services/device/public/mojom/geolocation_context.mojom.h"
 #include "services/device/public/mojom/geolocation_control.mojom.h"
+#include "services/device/public/mojom/geolocation_internals.mojom.h"
 #include "services/device/public/mojom/power_monitor.mojom.h"
 #include "services/device/public/mojom/pressure_manager.mojom.h"
 #include "services/device/public/mojom/screen_orientation.mojom.h"
@@ -73,13 +75,9 @@ class HidManagerImpl;
 class SerialPortManagerImpl;
 #endif
 
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_WIN)
 class DevicePostureProviderImpl;
-#endif
-
 class DeviceService;
 class GeolocationManager;
-class PlatformSensorProvider;
 class PowerMonitorMessageBroadcaster;
 class PressureManagerImpl;
 class PublicIpAddressLocationNotifier;
@@ -125,8 +123,8 @@ class DeviceService : public mojom::DeviceService {
 
   void AddReceiver(mojo::PendingReceiver<mojom::DeviceService> receiver);
 
-  void SetPlatformSensorProviderForTesting(
-      std::unique_ptr<PlatformSensorProvider> provider);
+  void SetSensorProviderImplForTesting(
+      std::unique_ptr<SensorProviderImpl> sensor_provider);
 
   // Supports global override of GeolocationContext binding within the service.
   using GeolocationContextBinder = base::RepeatingCallback<void(
@@ -157,6 +155,8 @@ class DeviceService : public mojom::DeviceService {
       mojo::PendingReceiver<mojom::GeolocationContext> receiver) override;
   void BindGeolocationControl(
       mojo::PendingReceiver<mojom::GeolocationControl> receiver) override;
+  void BindGeolocationInternals(
+      mojo::PendingReceiver<mojom::GeolocationInternals> receiver) override;
 
 #if (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)) && defined(USE_UDEV)
   void BindInputDeviceManager(
@@ -201,10 +201,8 @@ class DeviceService : public mojom::DeviceService {
   void BindSensorProvider(
       mojo::PendingReceiver<mojom::SensorProvider> receiver) override;
 
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_WIN)
   void BindDevicePostureProvider(
       mojo::PendingReceiver<mojom::DevicePostureProvider> receiver) override;
-#endif
 
   void BindSerialPortManager(
       mojo::PendingReceiver<mojom::SerialPortManager> receiver) override;
@@ -247,7 +245,7 @@ class DeviceService : public mojom::DeviceService {
 
   // InterfaceProvider that is bound to the Java-side interface registry.
   service_manager::InterfaceProvider java_interface_provider_{
-      base::ThreadTaskRunnerHandle::Get()};
+      base::SingleThreadTaskRunner::GetCurrentDefault()};
 
   bool java_interface_provider_initialized_ = false;
 
@@ -257,16 +255,10 @@ class DeviceService : public mojom::DeviceService {
 #endif
 
 #if defined(IS_SERIAL_ENABLED_PLATFORM)
-  // Requests for the SerialPortManager interface must be bound to
-  // |serial_port_manager_| on |serial_port_manager_task_runner_| and it will
-  // be destroyed on that sequence.
-  std::unique_ptr<SerialPortManagerImpl> serial_port_manager_;
-  scoped_refptr<base::SequencedTaskRunner> serial_port_manager_task_runner_;
+  base::SequenceBound<SerialPortManagerImpl> serial_port_manager_;
 #endif  // defined(IS_SERIAL_ENABLED_PLATFORM)
 
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_WIN)
   std::unique_ptr<DevicePostureProviderImpl> device_posture_provider_;
-#endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   std::unique_ptr<MtpDeviceManager> mtp_device_manager_;

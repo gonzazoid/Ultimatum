@@ -29,43 +29,30 @@ class CONTENT_EXPORT MediaSessionUmaHelper {
     kMaxValue = kSystemTransientDuck,
   };
 
-  // Extended enum to media_session::mojom::MediaSessionAction, distinguishing
-  // default action handling.
-  enum class MediaSessionUserAction {
-    kPlay = 0,
-    kPlayDefault = 1,
-    kPause = 2,
-    kPauseDefault = 3,
-    kStopDefault = 4,
-    kPreviousTrack = 5,
-    kNextTrack = 6,
-    kSeekBackward = 7,
-    kSeekForward = 8,
-    kSkipAd = 9,
-    kStop = 10,
-    kSeekTo = 11,
-    kScrubTo = 12,
-    kEnterPictureInPicture = 13,
-    kExitPictureInPicture = 14,
-    kSwitchAudioDevice = 15,
-    kToggleMicrophone = 16,
-    kToggleCamera = 17,
-    kHangUp = 18,
-    kRaise = 19,
-    kSetMute = 20,
-    kMaxValue = kSetMute,
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
+  enum class EnterPictureInPictureType {
+    // EnterPictureInPicture was called for the default handler provided by
+    // MediaSessionImpl.
+    kDefaultHandler = 0,
+
+    // EnterPictureInPicture was called for an enterpictureinpicture handler
+    // provided by the website.
+    kRegisteredManual = 1,
+
+    // EnterAutoPictureInPicture was called for an enterpictureinpicture handler
+    // provided by the website.
+    kRegisteredAutomatic = 2,
+
+    kMaxValue = kRegisteredAutomatic,
   };
 
   MediaSessionUmaHelper();
   ~MediaSessionUmaHelper();
 
-  static void RecordMediaSessionUserAction(MediaSessionUserAction action,
-                                           bool focused);
-
   void RecordSessionSuspended(MediaSessionSuspendedSource source) const;
 
-  // Record the result of calling the native requestAudioFocus().
-  void RecordRequestAudioFocusResult(bool result) const;
+  void RecordEnterPictureInPicture(EnterPictureInPictureType type) const;
 
   void OnSessionActive();
   void OnSessionSuspended();

@@ -4,16 +4,12 @@
 # found in the LICENSE file.
 '''Unit tests for grit.pseudolocales'''
 
-from __future__ import print_function
-
 import sys
 import os.path
-if __name__ == '__main__':
-  sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-
 import unittest
 
-import six
+if __name__ == '__main__':
+  sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 import grit.pseudolocales as pl
 
@@ -181,8 +177,8 @@ class TclibUnittest(unittest.TestCase):
         '{ATTEMPTS_LEFT, plural,\n  =1 {hello}\nother {world}\n}')
 
   def testBuildAndUnbuildTree(self):
-    p1 = tclib.Placeholder(u'USERNAME', '%s', 'foo')
-    p2 = tclib.Placeholder(u'EMAIL', '%s', 'bar')
+    p1 = tclib.Placeholder('USERNAME', '%s', 'foo')
+    p2 = tclib.Placeholder('EMAIL', '%s', 'bar')
 
     msg = tclib.Message()
     msg.AppendText('hello')
@@ -203,8 +199,8 @@ class TclibUnittest(unittest.TestCase):
     self.assertEqual(transl.GetContent(), ['hello', p1, p2, 'world'])
 
   def testPseudolocales(self):
-    p1 = tclib.Placeholder(u'USERNAME', '%s', 'foo')
-    p2 = tclib.Placeholder(u'EMAIL', '%s', 'bar')
+    p1 = tclib.Placeholder('USERNAME', '%s', 'foo')
+    p2 = tclib.Placeholder('EMAIL', '%s', 'bar')
     msg = tclib.Message()
     msg.AppendText('h_')
     msg.AppendPlaceholder(p1)
@@ -213,23 +209,23 @@ class TclibUnittest(unittest.TestCase):
 
     self.assertEqual(
         pl.PseudoLongStringMessage(msg).GetContent(),
-        [u'\u0125_', p1, p2, u'\u0175', ' - one two three four'])
+        ['\u0125_', p1, p2, '\u0175', ' - one two three four'])
 
     msg.AppendText('hello world')
     self.assertEqual(
         pl.PseudoRTLMessage(msg).GetContent(),
-        [u'\u202eh\u202c_', p1, p2, u'\u202ewhello\u202c \u202eworld\u202c'])
+        ['\u202eh\u202c_', p1, p2, '\u202ewhello\u202c \u202eworld\u202c'])
 
   # If it fails to translate with prod messages, add the failure to here to
   # make sure it doesn't happen again.
   def testProdFailures(self):
-    p1 = tclib.Placeholder(u'USERNAME', '%s', 'foo')
+    p1 = tclib.Placeholder('USERNAME', '%s', 'foo')
 
     msg = tclib.Message()
-    msg.AppendText(u'{LINE_COUNT, plural,\n      =1 {<1 line not shown>}\n'
+    msg.AppendText('{LINE_COUNT, plural,\n      =1 {<1 line not shown>}\n'
                    '      other {<')
     msg.AppendPlaceholder(p1)
-    msg.AppendText(u' lines not shown>}\n}')
+    msg.AppendText(' lines not shown>}\n}')
     tree, _ = pl.BuildTreeFromMessage(msg)
     self.assertTreesEqual(
         tree,
@@ -242,11 +238,11 @@ class TclibUnittest(unittest.TestCase):
         ]))
 
     msg = tclib.Message()
-    msg.AppendText(u'{1, plural,\n   \n             =1 {Rated ')
+    msg.AppendText('{1, plural,\n   \n             =1 {Rated ')
     msg.AppendPlaceholder(p1)
-    msg.AppendText(u' by one user.}\n      other{Rated ')
+    msg.AppendText(' by one user.}\n      other{Rated ')
     msg.AppendPlaceholder(p1)
-    msg.AppendText(u' by # users.}}')
+    msg.AppendText(' by # users.}}')
     tree, _ = pl.BuildTreeFromMessage(msg)
     self.assertTreesEqual(
         tree,

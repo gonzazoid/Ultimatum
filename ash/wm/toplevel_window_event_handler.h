@@ -9,7 +9,9 @@
 
 #include "ash/ash_export.h"
 #include "ash/display/window_tree_host_manager.h"
-#include "base/callback.h"
+#include "ash/wm/pip/pip_double_tap_handler.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/aura/window_observer.h"
 #include "ui/display/display_observer.h"
@@ -96,6 +98,13 @@ class ASH_EXPORT ToplevelWindowEventHandler
                           bool update_gesture_target,
                           bool grab_capture = true);
 
+  // Attempts to start a pinch if one is not already in progress. Returns true
+  // if successful.
+  bool AttemptToStartPinch(aura::Window* window,
+                           const gfx::PointF& point_in_parent,
+                           int window_component,
+                           bool update_gesture_target);
+
   // If there is a drag in progress it is reverted, otherwise does nothing.
   void RevertDrag();
 
@@ -118,6 +127,10 @@ class ASH_EXPORT ToplevelWindowEventHandler
   // Returns true if there is a drag in progress.
   bool is_drag_in_progress() const { return window_resizer_.get() != nullptr; }
 
+  bool in_pinch() const { return in_pinch_; }
+
+  void CompleteDragForTesting(DragResult result) { CompleteDrag(result); }
+
  private:
   class ScopedWindowResizer;
 
@@ -130,15 +143,28 @@ class ASH_EXPORT ToplevelWindowEventHandler
                       ::wm::WindowMoveSource source,
                       bool grab_capture);
 
+  // Called from `AttemptToStartPinch()` to create the WindowResizer. This also
+  // returns true on success and false if resize cannot be initiated.
+  bool PrepareForPinch(aura::Window* window,
+                       const gfx::PointF& point_in_parent,
+                       int window_component);
+
   // Completes or reverts the drag if one is in progress. Returns true if a
   // drag was completed or reverted.
   bool CompleteDrag(DragResult result);
+
+  // Completes pinch but not drag. `CompleteDrag()` should be called even
+  // after `CompletePinch()` is called to handle revert, snap, etc.
+  bool CompletePinch();
 
   void HandleMousePressed(aura::Window* target, ui::MouseEvent* event);
   void HandleMouseReleased(aura::Window* target, ui::MouseEvent* event);
 
   // Called during a drag to resize/position the window.
   void HandleDrag(aura::Window* target, ui::LocatedEvent* event);
+
+  // Called during a pinch to resize/position the window.
+  void HandlePinch(aura::Window* target, ui::GestureEvent* event);
 
   // Called during mouse moves to update window resize shadows.
   void HandleMouseMoved(aura::Window* target, ui::LocatedEvent* event);
@@ -173,11 +199,29 @@ class ASH_EXPORT ToplevelWindowEventHandler
   // screen.
   gfx::PointF first_finger_touch_point_;
 
+  // True while a drag from the caption area to move the floated window is in
+  // progress. If true, stops propagation to avoid showing the tab strip.
+  bool is_moving_floated_window_ = false;
+
   // Is a window move/resize in progress because of gesture events?
   bool in_gesture_drag_ = false;
 
-  aura::Window* gesture_target_ = nullptr;
+  // True if the bounds need to be reinitialized in the next gesture update.
+  // This is necessary because during the transition from pinch gesture to
+  // drag gesture the ET_GESTURE_SCROLL_BEGIN event is never called, and
+  // therefore `window_resizer_` must be initiated with the next
+  // ET_GESTURE_SCROLL_UPDATE event.
+  bool requires_reinitialization_ = false;
+
+  raw_ptr<aura::Window> gesture_target_ = nullptr;
   gfx::PointF event_location_in_gesture_target_;
+
+  // True if `this` is receiving pinch events. There is a delay from
+  // when `this` first receives a gesture begin event to when the client
+  // asks the gesture to be initiated, during which time the gesture type
+  // may have changed. To start the appropriate gesture, `this` keeps track
+  // of if the current gesture is a drag or a pinch.
+  bool in_pinch_ = false;
 
   std::unique_ptr<ScopedWindowResizer> window_resizer_;
 
@@ -187,6 +231,9 @@ class ASH_EXPORT ToplevelWindowEventHandler
 
   // Are we running a nested run loop from RunMoveLoop().
   bool in_move_loop_ = false;
+
+  // Event handler for double tap/click events on CrOS PiP windows.
+  std::unique_ptr<PipDoubleTapHandler> pip_double_tap_;
 
   base::WeakPtrFactory<ToplevelWindowEventHandler> weak_factory_{this};
 };

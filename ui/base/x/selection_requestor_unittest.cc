@@ -7,27 +7,25 @@
 #include <stddef.h>
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/x/selection_utils.h"
 #include "ui/base/x/x11_clipboard_helper.h"
 #include "ui/base/x/x11_util.h"
+#include "ui/gfx/x/atom_cache.h"
 #include "ui/gfx/x/connection.h"
 #include "ui/gfx/x/event.h"
-#include "ui/gfx/x/x11_atom_cache.h"
 #include "ui/gfx/x/xproto.h"
-#include "ui/gfx/x/xproto_util.h"
 
 namespace ui {
 
 class SelectionRequestorTest : public testing::Test {
  public:
-  explicit SelectionRequestorTest() : connection_(x11::Connection::Get()) {}
+  explicit SelectionRequestorTest() : connection_(*x11::Connection::Get()) {}
 
   SelectionRequestorTest(const SelectionRequestorTest&) = delete;
   SelectionRequestorTest& operator=(const SelectionRequestorTest&) = delete;
@@ -41,8 +39,8 @@ class SelectionRequestorTest : public testing::Test {
   void SendSelectionNotify(x11::Atom selection,
                            x11::Atom target,
                            const std::string& value) {
-    x11::SetStringProperty(x_window_, requestor_->x_property_,
-                           x11::Atom::STRING, value);
+    connection_->SetStringProperty(x_window_, requestor_->x_property_,
+                                   x11::Atom::STRING, value);
 
     requestor_->OnSelectionNotify({
         .requestor = x_window_,
@@ -55,7 +53,7 @@ class SelectionRequestorTest : public testing::Test {
  protected:
   void SetUp() override {
     // Create a window for the selection requestor to use.
-    x_window_ = x11::CreateDummyWindow();
+    x_window_ = connection_->CreateDummyWindow();
     helper_ = std::make_unique<XClipboardHelper>(
         base::BindRepeating([](ClipboardBuffer buffer) {}));
     requestor_ = helper_->GetSelectionRequestorForTest();
@@ -67,7 +65,7 @@ class SelectionRequestorTest : public testing::Test {
     connection_->DestroyWindow({x_window_});
   }
 
-  raw_ptr<x11::Connection> connection_;
+  raw_ref<x11::Connection> connection_;
 
   // |requestor_|'s window.
   x11::Window x_window_ = x11::Window::None;
@@ -110,15 +108,15 @@ TEST_F(SelectionRequestorTest, DISABLED_NestedRequests) {
   x11::Atom target1 = x11::GetAtom("TARGET1");
   x11::Atom target2 = x11::GetAtom("TARGET2");
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&PerformBlockingConvertSelection,
                                 base::Unretained(requestor_), selection,
                                 target2, "Data2"));
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&SelectionRequestorTest::SendSelectionNotify,
                      base::Unretained(this), selection, target1, "Data1"));
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&SelectionRequestorTest::SendSelectionNotify,
                      base::Unretained(this), selection, target2, "Data2"));

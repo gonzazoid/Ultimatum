@@ -11,7 +11,7 @@
 #include "chrome/browser/extensions/site_permissions_helper.h"
 #include "chrome/browser/ui/extensions/extension_popup_types.h"
 #include "chrome/browser/ui/toolbar/toolbar_action_hover_card_types.h"
-#include "ui/gfx/image/image.h"
+#include "ui/base/models/image_model.h"
 
 namespace content {
 class WebContents;
@@ -104,8 +104,8 @@ class ToolbarActionViewController {
   virtual void SetDelegate(ToolbarActionViewDelegate* delegate) = 0;
 
   // Returns the icon to use for the given |web_contents| and |size|.
-  virtual gfx::Image GetIcon(content::WebContents* web_contents,
-                             const gfx::Size& size) = 0;
+  virtual ui::ImageModel GetIcon(content::WebContents* web_contents,
+                                 const gfx::Size& size) = 0;
 
   // Returns the name of the action, which can be separate from the accessible
   // name or name for the tooltip.
@@ -131,8 +131,9 @@ class ToolbarActionViewController {
   // Returns whether there is currently a popup visible.
   virtual bool IsShowingPopup() const = 0;
 
-  // Returns whether the action is requesting site access to `web_contents`.
-  virtual bool IsRequestingSiteAccess(
+  // Returns whether the action should show site access requests in the toolbar
+  // for `web_contents`;
+  virtual bool ShouldShowSiteAccessRequestInToolbar(
       content::WebContents* web_contents) const = 0;
 
   // Hides the current popup, if one is visible.
@@ -146,13 +147,15 @@ class ToolbarActionViewController {
       extensions::ExtensionContextMenuModel::ContextMenuSource
           context_menu_source) = 0;
 
-  // Called when a context menu is shown so the controller can perform any
-  // necessary setup.
-  virtual void OnContextMenuShown() {}
+  // Called when a context menu is shown from `source` so the controller can
+  // perform any necessary setup.
+  virtual void OnContextMenuShown(
+      extensions::ExtensionContextMenuModel::ContextMenuSource source) {}
 
-  // Called when a context menu has closed so the controller can perform any
-  // necessary cleanup.
-  virtual void OnContextMenuClosed() {}
+  // Called when a context menu has closed from `source` so the controller can
+  // perform any necessary cleanup.
+  virtual void OnContextMenuClosed(
+      extensions::ExtensionContextMenuModel::ContextMenuSource source) {}
 
   // Executes the default behavior associated with the action. This should only
   // be called as a result of a user action.

@@ -35,29 +35,10 @@ enum class SmbMountResult {
   kMaxValue = kInvalidUsername  // Max enum value for use in metrics.
 };
 
-// Translates an smbprovider::ErrorType to a base::File::Error. Since
-// smbprovider::ErrorType is a superset of base::File::Error, errors that do not
-// map directly are logged and mapped to the generic failed error.
-base::File::Error TranslateToFileError(smbprovider::ErrorType error);
-
-// Translates a base::File::Error to an smbprovider::ErrorType. There is an
-// explicit smbprovider::ErrorType for each base::File::Error.
-smbprovider::ErrorType TranslateToErrorType(base::File::Error error);
-
 // Translates an smbprovider::ErrorType to an SmbMountResult.
 SmbMountResult TranslateErrorToMountResult(smbprovider::ErrorType error);
 
-// Translates a base::File::Error to an SmbMountResult.
-SmbMountResult TranslateErrorToMountResult(base::File::Error error);
-
 }  // namespace smb_client
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-namespace smb_client {
-using ::ash::smb_client::SmbMountResult;
-}  // namespace smb_client
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_SMB_CLIENT_SMB_ERRORS_H_

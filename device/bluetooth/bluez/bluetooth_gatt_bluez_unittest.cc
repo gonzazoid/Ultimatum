@@ -9,8 +9,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
@@ -35,6 +35,7 @@
 #include "device/bluetooth/dbus/fake_bluetooth_gatt_descriptor_client.h"
 #include "device/bluetooth/dbus/fake_bluetooth_gatt_service_client.h"
 #include "device/bluetooth/dbus/fake_bluetooth_input_client.h"
+#include "device/bluetooth/floss/floss_features.h"
 #include "device/bluetooth/public/cpp/bluetooth_uuid.h"
 #include "device/bluetooth/test/test_bluetooth_adapter_observer.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -104,6 +105,10 @@ class BluetoothGattBlueZTest : public testing::Test {
         error_callback_count_(0) {}
 
   void SetUp() override {
+    // TODO(b/266989920) Remove when Floss fake implementation is completed.
+    if (floss::features::IsFlossEnabled()) {
+      GTEST_SKIP();
+    }
     std::unique_ptr<bluez::BluezDBusManagerSetter> dbus_setter =
         bluez::BluezDBusManager::GetSetterForTesting();
 
@@ -146,6 +151,9 @@ class BluetoothGattBlueZTest : public testing::Test {
   }
 
   void TearDown() override {
+    if (floss::features::IsFlossEnabled()) {
+      return;
+    }
     adapter_.reset();
     update_sessions_.clear();
     gatt_conn_.reset();
@@ -313,12 +321,13 @@ class BluetoothGattBlueZTest : public testing::Test {
 
   base::test::SingleThreadTaskEnvironment task_environment_;
 
-  raw_ptr<bluez::FakeBluetoothDeviceClient> fake_bluetooth_device_client_;
-  raw_ptr<bluez::FakeBluetoothGattServiceClient>
+  raw_ptr<bluez::FakeBluetoothDeviceClient, DanglingUntriaged>
+      fake_bluetooth_device_client_;
+  raw_ptr<bluez::FakeBluetoothGattServiceClient, DanglingUntriaged>
       fake_bluetooth_gatt_service_client_;
-  raw_ptr<bluez::FakeBluetoothGattCharacteristicClient>
+  raw_ptr<bluez::FakeBluetoothGattCharacteristicClient, DanglingUntriaged>
       fake_bluetooth_gatt_characteristic_client_;
-  raw_ptr<bluez::FakeBluetoothGattDescriptorClient>
+  raw_ptr<bluez::FakeBluetoothGattDescriptorClient, DanglingUntriaged>
       fake_bluetooth_gatt_descriptor_client_;
   std::unique_ptr<device::BluetoothGattConnection> gatt_conn_;
   std::vector<std::unique_ptr<BluetoothGattNotifySession>> update_sessions_;

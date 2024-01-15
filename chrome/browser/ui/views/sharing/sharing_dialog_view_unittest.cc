@@ -10,17 +10,18 @@
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
+#include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/sharing/fake_device_info.h"
 #include "chrome/browser/sharing/sharing_app.h"
 #include "chrome/browser/sharing/sharing_metrics.h"
+#include "chrome/browser/sharing/sharing_target_device_info.h"
+#include "chrome/browser/ui/views/controls/hover_button.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/test_with_browser_view.h"
-#include "chrome/browser/ui/views/hover_button.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
 #include "components/sync_device_info/device_info.h"
 #include "components/url_formatter/elide_url.h"
-#include "components/vector_icons/vector_icons.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -59,12 +60,16 @@ class SharingDialogViewTest : public TestWithBrowserView {
     TestWithBrowserView::TearDown();
   }
 
-  std::vector<std::unique_ptr<syncer::DeviceInfo>> CreateDevices(int count) {
-    std::vector<std::unique_ptr<syncer::DeviceInfo>> devices;
+  std::vector<std::unique_ptr<SharingTargetDeviceInfo>> CreateDevices(
+      int count) {
+    std::vector<std::unique_ptr<SharingTargetDeviceInfo>> devices;
     for (int i = 0; i < count; ++i) {
-      devices.push_back(
-          CreateFakeDeviceInfo("guid_" + base::NumberToString(i),
-                               "name_" + base::NumberToString(i)));
+      devices.push_back(std::make_unique<SharingTargetDeviceInfo>(
+          "guid_" + base::NumberToString(i), "name_" + base::NumberToString(i),
+          SharingDevicePlatform::kUnknown,
+          /*pulse_interval=*/base::TimeDelta(),
+          syncer::DeviceInfo::FormFactor::kUnknown,
+          /*last_updated_timestamp=*/base::Time()));
     }
     return devices;
   }
@@ -72,7 +77,7 @@ class SharingDialogViewTest : public TestWithBrowserView {
   std::vector<SharingApp> CreateApps(int count) {
     std::vector<SharingApp> apps;
     for (int i = 0; i < count; ++i) {
-      apps.emplace_back(&vector_icons::kOpenInNewIcon, gfx::Image(),
+      apps.emplace_back(&kOpenInNewIcon, gfx::Image(),
                         base::UTF8ToUTF16("app" + base::NumberToString(i)),
                         "app_id_" + base::NumberToString(i));
     }
@@ -107,7 +112,7 @@ class SharingDialogViewTest : public TestWithBrowserView {
         IDS_BROWSER_SHARING_CLICK_TO_CALL_DIALOG_INITIATING_ORIGIN;
 
     data.device_callback =
-        base::BindLambdaForTesting([&](const syncer::DeviceInfo& device) {
+        base::BindLambdaForTesting([&](const SharingTargetDeviceInfo& device) {
           device_callback_.Call(device);
         });
     data.app_callback = base::BindLambdaForTesting(
@@ -118,12 +123,12 @@ class SharingDialogViewTest : public TestWithBrowserView {
 
   SharingDialogView* dialog() { return dialog_; }
 
-  testing::MockFunction<void(const syncer::DeviceInfo&)> device_callback_;
+  testing::MockFunction<void(const SharingTargetDeviceInfo&)> device_callback_;
   testing::MockFunction<void(const SharingApp&)> app_callback_;
 
  private:
-  raw_ptr<content::WebContents> web_contents_ = nullptr;
-  raw_ptr<SharingDialogView> dialog_ = nullptr;
+  raw_ptr<content::WebContents, DanglingUntriaged> web_contents_ = nullptr;
+  raw_ptr<SharingDialogView, DanglingUntriaged> dialog_ = nullptr;
 };
 
 TEST_F(SharingDialogViewTest, PopulateDialogView) {
@@ -135,7 +140,7 @@ TEST_F(SharingDialogViewTest, PopulateDialogView) {
 
 TEST_F(SharingDialogViewTest, DevicePressed) {
   EXPECT_CALL(device_callback_,
-              Call(Property(&syncer::DeviceInfo::guid, "guid_1")));
+              Call(Property(&SharingTargetDeviceInfo::guid, "guid_1")));
 
   auto dialog_data = CreateDialogData(/*devices=*/3, /*apps=*/2);
   CreateDialogView(std::move(dialog_data));
@@ -149,8 +154,7 @@ TEST_F(SharingDialogViewTest, DevicePressed) {
 }
 
 TEST_F(SharingDialogViewTest, AppPressed) {
-  SharingApp app(&vector_icons::kOpenInNewIcon, gfx::Image(), u"app0",
-                 std::string());
+  SharingApp app(&kOpenInNewIcon, gfx::Image(), u"app0", std::string());
   EXPECT_CALL(app_callback_, Call(AppEquals(&app)));
 
   auto dialog_data = CreateDialogData(/*devices=*/3, /*apps=*/2);

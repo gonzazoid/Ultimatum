@@ -6,9 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/autocomplete/autocomplete_classifier_factory.h"
@@ -37,14 +36,14 @@
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/input_method/input_method_configuration.h"
-#include "chrome/browser/ash/input_method/mock_input_method_manager_impl.h"
+#include "ui/base/ime/ash/mock_input_method_manager_impl.h"
 #endif
 
 namespace {
 
 std::unique_ptr<KeyedService> CreateTemplateURLService(
     content::BrowserContext* context) {
-  Profile* profile = static_cast<Profile*>(context);
+  Profile* profile = Profile::FromBrowserContext(context);
   return std::make_unique<TemplateURLService>(
       profile->GetPrefs(), std::make_unique<UIThreadSearchTermsData>(),
       WebDataServiceFactory::GetKeywordWebDataForProfile(
@@ -52,12 +51,16 @@ std::unique_ptr<KeyedService> CreateTemplateURLService(
       std::make_unique<ChromeTemplateURLServiceClient>(
           HistoryServiceFactory::GetForProfile(
               profile, ServiceAccessType::EXPLICIT_ACCESS)),
-      base::RepeatingClosure());
+      base::RepeatingClosure()
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+      , profile->IsMainProfile()
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+  );
 }
 
 std::unique_ptr<KeyedService> CreateAutocompleteClassifier(
     content::BrowserContext* context) {
-  Profile* profile = static_cast<Profile*>(context);
+  Profile* profile = Profile::FromBrowserContext(context);
   return std::make_unique<AutocompleteClassifier>(
       std::make_unique<AutocompleteController>(
           std::make_unique<ChromeAutocompleteProviderClient>(profile),
@@ -87,8 +90,7 @@ void TestWithBrowserView::TearDown() {
   browser_view_->browser()->tab_strip_model()->CloseAllTabs();
   // Ensure the Browser is reset before BrowserWithTestWindowTest cleans up
   // the Profile.
-  browser_view_->GetWidget()->CloseNow();
-  browser_view_ = nullptr;
+  browser_view_.ExtractAsDangling()->GetWidget()->CloseNow();
   content::RunAllTasksUntilIdle();
   BrowserWithTestWindowTest::TearDown();
 #if BUILDFLAG(IS_CHROMEOS_ASH)

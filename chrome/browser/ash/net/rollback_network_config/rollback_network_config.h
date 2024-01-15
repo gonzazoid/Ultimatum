@@ -7,12 +7,7 @@
 
 #include <memory>
 #include <string>
-#include <vector>
 
-#include "base/memory/weak_ptr.h"
-#include "base/values.h"
-#include "chrome/browser/ash/settings/device_settings_service.h"
-#include "chromeos/ash/components/network/network_policy_observer.h"
 #include "chromeos/ash/services/rollback_network_config/public/mojom/rollback_network_config.mojom.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 
@@ -26,7 +21,7 @@ namespace ash {
 // the device settings that were imported remain, the rest is deleted.
 // Note: Import expects ONC dictionaries to be valid, do not use with
 // non validated input.
-// If implot or export are called multiple times, all but the latest request
+// If import or export are called multiple times, all but the latest request
 // will be cancelled.
 class RollbackNetworkConfig
     : public rollback_network_config::mojom::RollbackNetworkConfig {
@@ -54,6 +49,7 @@ class RollbackNetworkConfig
  private:
   class Importer;
   class Exporter;
+
   std::unique_ptr<Importer> importer_;
   std::unique_ptr<Exporter> exporter_;
 

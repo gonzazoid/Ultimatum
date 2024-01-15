@@ -9,11 +9,12 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "remoting/base/auto_thread_task_runner.h"
@@ -41,9 +42,9 @@ using ::remoting::protocol::MockSession;
 It2MeStandaloneHost::It2MeStandaloneHost()
     : task_environment_(
           base::test::SingleThreadTaskEnvironment::MainThreadType::UI),
-      context_(ChromotingHostContext::Create(
-          new AutoThreadTaskRunner(base::ThreadTaskRunnerHandle::Get(),
-                                   run_loop_.QuitClosure()))),
+      context_(ChromotingHostContext::Create(new AutoThreadTaskRunner(
+          base::SingleThreadTaskRunner::GetCurrentDefault(),
+          run_loop_.QuitClosure()))),
       main_task_runner_(context_->file_task_runner()),
       factory_(main_task_runner_,
                context_->video_capture_task_runner(),
@@ -93,7 +94,7 @@ void It2MeStandaloneHost::Connect() {
       &handler_, std::unique_ptr<protocol::ConnectionToClient>(&connection_),
       &factory_, options, base::TimeDelta(),
       scoped_refptr<protocol::PairingRegistry>(),
-      std::vector<HostExtension*>());
+      std::vector<raw_ptr<HostExtension, VectorExperimental>>());
   session_->OnConnectionAuthenticated();
   session_->OnConnectionChannelsConnected();
   session_->CreateMediaStreams();

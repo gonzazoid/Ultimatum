@@ -39,7 +39,7 @@ Task::Task(internal::PostedTask posted_task,
   // and it may wrap around to a negative number during the static cast, hence,
   // TaskQueueImpl::DelayedIncomingQueue is especially sensitive to a potential
   // change of |PendingTask::sequence_num|'s type.
-  static_assert(std::is_same<decltype(sequence_num), int>::value, "");
+  static_assert(std::is_same_v<decltype(sequence_num), int>, "");
   sequence_num = static_cast<int>(sequence_order);
   this->is_high_res = resolution == WakeUpResolution::kHigh;
 }
@@ -86,11 +86,14 @@ bool Task::IsCanceled() const {
   return delayed_task_handle_delegate_.WasInvalidated();
 }
 
-void Task::WillRunTask() {
-  if (!delayed_task_handle_delegate_)
-    return;
-
-  delayed_task_handle_delegate_->WillRunTask();
+bool Task::WillRunTask() {
+  if (delayed_task_handle_delegate_.WasInvalidated()) {
+    return false;
+  }
+  if (delayed_task_handle_delegate_) {
+    delayed_task_handle_delegate_->WillRunTask();
+  }
+  return true;
 }
 
 TimeTicks WakeUp::earliest_time() const {

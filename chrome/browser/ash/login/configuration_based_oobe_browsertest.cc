@@ -5,38 +5,32 @@
 #include "ash/constants/ash_switches.h"
 #include "base/test/scoped_chromeos_version_info.h"
 #include "build/build_config.h"
-#include "chrome/browser/ash/login/test/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/ash/login/test/enrollment_helper_mixin.h"
 #include "chrome/browser/ash/login/test/enrollment_ui_mixin.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/test/hid_controller_mixin.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
 #include "chrome/browser/ash/login/test/oobe_configuration_waiter.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
+#include "chrome/browser/ash/login/test/oobe_screens_utils.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/policy/enrollment/enrollment_requisition_manager.h"
+#include "chrome/browser/ash/policy/test_support/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
-#include "chrome/browser/chrome_notification_types.h"
-#include "chrome/browser/ui/webui/ash/login/eula_screen_handler.h"
 #include "chrome/browser/ui/webui/ash/login/hid_detection_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/network_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/update_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/welcome_screen_handler.h"
-#include "chromeos/ash/components/attestation/attestation_flow_utils.h"
-#include "chromeos/ash/components/dbus/attestation/fake_attestation_client.h"
+#include "chrome/browser/ui/webui/ash/login/network_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/update_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/welcome_screen_handler.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "chromeos/ash/components/dbus/shill/shill_manager_client.h"
 #include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
 #include "chromeos/ash/components/install_attributes/stub_install_attributes.h"
-#include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/dbus/constants/dbus_switches.h"
 #include "chromeos/test/chromeos_test_utils.h"
 #include "components/language/core/browser/pref_names.h"
 #include "components/prefs/pref_service.h"
-#include "content/public/browser/notification_registrar.h"
 #include "content/public/test/browser_test.h"
-#include "content/public/test/mock_notification_observer.h"
 #include "ui/base/ime/ash/input_method_util.h"
 
 namespace ash {
@@ -107,9 +101,6 @@ class OobeConfigurationTest : public OobeBaseTest {
     // Make sure that OOBE is run as an "official" build.
     LoginDisplayHost::default_host()->GetWizardContext()->is_branded_build =
         true;
-
-    // Clear portal list (as it is by default in OOBE).
-    NetworkHandler::Get()->network_state_handler()->SetCheckPortalList("");
   }
 
  protected:
@@ -164,20 +155,20 @@ IN_PROC_BROWSER_TEST_F(OobeConfigurationTest, TestSwitchLanguageIME) {
 // Check that configuration lets correctly select a network by GUID.
 IN_PROC_BROWSER_TEST_F(OobeConfigurationTest, TestSelectNetwork) {
   LoadConfiguration();
-  OobeScreenWaiter(OobeBaseTest::GetScreenAfterNetworkScreen()).Wait();
+  OobeScreenWaiter(UpdateView::kScreenId).Wait();
 }
 
 // Check that configuration would proceed if there is a connected network.
 IN_PROC_BROWSER_TEST_F(OobeConfigurationTest, TestSelectConnectedNetwork) {
   LoadConfiguration();
-  OobeScreenWaiter(OobeBaseTest::GetScreenAfterNetworkScreen()).Wait();
+  OobeScreenWaiter(UpdateView::kScreenId).Wait();
 }
 
 // Check that configuration would not proceed with connected network if
 // welcome screen is not automated.
 IN_PROC_BROWSER_TEST_F(OobeConfigurationTest, TestConnectedNetworkNoWelcome) {
   LoadConfiguration();
-  OobeScreenWaiter(WelcomeView::kScreenId).Wait();
+  test::WaitForWelcomeScreen();
 }
 
 // Check that when configuration has ONC and EULA, we get to update screen.
@@ -195,7 +186,7 @@ IN_PROC_BROWSER_TEST_F(OobeConfigurationTest, TestAcceptEula) {
 // beginning.
 IN_PROC_BROWSER_TEST_F(OobeConfigurationTest, TestDeviceRequisition) {
   LoadConfiguration();
-  OobeScreenWaiter(OobeBaseTest::GetScreenAfterNetworkScreen()).Wait();
+  OobeScreenWaiter(UpdateView::kScreenId).Wait();
 
   EXPECT_EQ(policy::EnrollmentRequisitionManager::GetDeviceRequisition(),
             "some_requisition");

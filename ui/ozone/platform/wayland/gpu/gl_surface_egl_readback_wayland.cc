@@ -86,17 +86,13 @@ bool GLSurfaceEglReadbackWayland::Resize(const gfx::Size& size,
   return true;
 }
 
-bool GLSurfaceEglReadbackWayland::IsOffscreen() {
-  return false;
-}
-
 bool GLSurfaceEglReadbackWayland::SupportsAsyncSwap() {
   return true;
 }
 
 gfx::SwapResult GLSurfaceEglReadbackWayland::SwapBuffers(
     PresentationCallback callback,
-    gl::FrameData data) {
+    gfx::FrameData data) {
   NOTREACHED();
   return gfx::SwapResult::SWAP_FAILED;
 }
@@ -104,7 +100,7 @@ gfx::SwapResult GLSurfaceEglReadbackWayland::SwapBuffers(
 void GLSurfaceEglReadbackWayland::SwapBuffersAsync(
     SwapCompletionCallback completion_callback,
     PresentationCallback presentation_callback,
-    gl::FrameData data) {
+    gfx::FrameData data) {
   DCHECK(pending_frames_ < kMaxBuffers);
 
   // Increase pending frames number.
@@ -123,9 +119,9 @@ void GLSurfaceEglReadbackWayland::SwapBuffersAsync(
 
   const auto bounds = gfx::Rect(GetSize());
   buffer_manager_->CommitBuffer(widget_, next_buffer->buffer_id_,
-                                /*frame_id*/ next_buffer->buffer_id_, bounds,
-                                gfx::RoundedCornersF(), surface_scale_factor_,
-                                bounds);
+                                /*frame_id*/ next_buffer->buffer_id_, data,
+                                bounds, gfx::RoundedCornersF(),
+                                surface_scale_factor_, bounds);
 }
 
 gfx::SurfaceOrigin GLSurfaceEglReadbackWayland::GetOrigin() const {

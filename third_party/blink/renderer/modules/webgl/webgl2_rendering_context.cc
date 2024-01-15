@@ -15,18 +15,29 @@
 #include "third_party/blink/renderer/core/frame/local_frame_client.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/loader/frame_loader.h"
+#include "third_party/blink/renderer/modules/webgl/ext_blend_func_extended.h"
+#include "third_party/blink/renderer/modules/webgl/ext_clip_control.h"
 #include "third_party/blink/renderer/modules/webgl/ext_color_buffer_float.h"
 #include "third_party/blink/renderer/modules/webgl/ext_color_buffer_half_float.h"
+#include "third_party/blink/renderer/modules/webgl/ext_conservative_depth.h"
+#include "third_party/blink/renderer/modules/webgl/ext_depth_clamp.h"
 #include "third_party/blink/renderer/modules/webgl/ext_disjoint_timer_query_webgl2.h"
 #include "third_party/blink/renderer/modules/webgl/ext_float_blend.h"
+#include "third_party/blink/renderer/modules/webgl/ext_polygon_offset_clamp.h"
+#include "third_party/blink/renderer/modules/webgl/ext_render_snorm.h"
 #include "third_party/blink/renderer/modules/webgl/ext_texture_compression_bptc.h"
 #include "third_party/blink/renderer/modules/webgl/ext_texture_compression_rgtc.h"
 #include "third_party/blink/renderer/modules/webgl/ext_texture_filter_anisotropic.h"
+#include "third_party/blink/renderer/modules/webgl/ext_texture_mirror_clamp_to_edge.h"
 #include "third_party/blink/renderer/modules/webgl/ext_texture_norm_16.h"
 #include "third_party/blink/renderer/modules/webgl/khr_parallel_shader_compile.h"
+#include "third_party/blink/renderer/modules/webgl/nv_shader_noperspective_interpolation.h"
 #include "third_party/blink/renderer/modules/webgl/oes_draw_buffers_indexed.h"
+#include "third_party/blink/renderer/modules/webgl/oes_sample_variables.h"
+#include "third_party/blink/renderer/modules/webgl/oes_shader_multisample_interpolation.h"
 #include "third_party/blink/renderer/modules/webgl/oes_texture_float_linear.h"
 #include "third_party/blink/renderer/modules/webgl/ovr_multiview_2.h"
+#include "third_party/blink/renderer/modules/webgl/webgl_clip_cull_distance.h"
 #include "third_party/blink/renderer/modules/webgl/webgl_compressed_texture_astc.h"
 #include "third_party/blink/renderer/modules/webgl/webgl_compressed_texture_etc.h"
 #include "third_party/blink/renderer/modules/webgl/webgl_compressed_texture_etc1.h"
@@ -41,11 +52,16 @@
 #include "third_party/blink/renderer/modules/webgl/webgl_lose_context.h"
 #include "third_party/blink/renderer/modules/webgl/webgl_multi_draw.h"
 #include "third_party/blink/renderer/modules/webgl/webgl_multi_draw_instanced_base_vertex_base_instance.h"
-#include "third_party/blink/renderer/modules/webgl/webgl_video_texture.h"
-#include "third_party/blink/renderer/modules/webgl/webgl_webcodecs_video_frame.h"
+#include "third_party/blink/renderer/modules/webgl/webgl_polygon_mode.h"
+#include "third_party/blink/renderer/modules/webgl/webgl_provoking_vertex.h"
+#include "third_party/blink/renderer/modules/webgl/webgl_render_shared_exponent.h"
+#include "third_party/blink/renderer/modules/webgl/webgl_shader_pixel_local_storage.h"
+#include "third_party/blink/renderer/modules/webgl/webgl_stencil_texturing.h"
 #include "third_party/blink/renderer/platform/graphics/gpu/drawing_buffer.h"
 
 namespace blink {
+
+class ExceptionState;
 
 // An helper function for the two create() methods. The return value is an
 // indicate of whether the create() should return nullptr or not.
@@ -143,25 +159,38 @@ WebGL2RenderingContext::AsV8OffscreenRenderingContext() {
 }
 
 ImageBitmap* WebGL2RenderingContext::TransferToImageBitmap(
-    ScriptState* script_state) {
+    ScriptState* script_state,
+    ExceptionState& exception_state) {
   return TransferToImageBitmapBase(script_state);
 }
 
 void WebGL2RenderingContext::RegisterContextExtensions() {
   // Register extensions.
+  RegisterExtension(ext_blend_func_extended_, kDraftExtension);
+  RegisterExtension(ext_clip_control_, kDraftExtension);
   RegisterExtension(ext_color_buffer_float_);
   RegisterExtension(ext_color_buffer_half_float_);
+  RegisterExtension(ext_conservative_depth_, kDraftExtension);
+  RegisterExtension(ext_depth_clamp_);
   RegisterExtension(
       ext_disjoint_timer_query_web_gl2_,
       TimerQueryExtensionsEnabled() ? kApprovedExtension : kDeveloperExtension);
   RegisterExtension(ext_float_blend_);
+  RegisterExtension(ext_polygon_offset_clamp_, kDraftExtension);
+  RegisterExtension(ext_render_snorm_, kDraftExtension);
   RegisterExtension(ext_texture_compression_bptc_);
   RegisterExtension(ext_texture_compression_rgtc_);
   RegisterExtension(ext_texture_filter_anisotropic_);
+  RegisterExtension(ext_texture_mirror_clamp_to_edge_, kDraftExtension);
   RegisterExtension(ext_texture_norm16_);
   RegisterExtension(khr_parallel_shader_compile_);
+  RegisterExtension(nv_shader_noperspective_interpolation_, kDraftExtension);
   RegisterExtension(oes_draw_buffers_indexed_);
+  RegisterExtension(oes_sample_variables_, kDraftExtension);
+  RegisterExtension(oes_shader_multisample_interpolation_, kDraftExtension);
   RegisterExtension(oes_texture_float_linear_);
+  RegisterExtension(ovr_multiview2_);
+  RegisterExtension(webgl_clip_cull_distance_);
   RegisterExtension(webgl_compressed_texture_astc_);
   RegisterExtension(webgl_compressed_texture_etc_);
   RegisterExtension(webgl_compressed_texture_etc1_);
@@ -176,24 +205,37 @@ void WebGL2RenderingContext::RegisterContextExtensions() {
   RegisterExtension(webgl_multi_draw_);
   RegisterExtension(webgl_multi_draw_instanced_base_vertex_base_instance_,
                     kDraftExtension);
-  RegisterExtension(webgl_video_texture_, kDraftExtension);
-  RegisterExtension(webgl_webcodecs_video_frame_, kDraftExtension);
-  RegisterExtension(ovr_multiview2_);
+  RegisterExtension(webgl_polygon_mode_);
+  RegisterExtension(webgl_provoking_vertex_);
+  RegisterExtension(webgl_render_shared_exponent_, kDraftExtension);
+  RegisterExtension(webgl_shader_pixel_local_storage_, kDraftExtension);
+  RegisterExtension(webgl_stencil_texturing_, kDraftExtension);
 }
 
 void WebGL2RenderingContext::Trace(Visitor* visitor) const {
+  visitor->Trace(ext_blend_func_extended_);
+  visitor->Trace(ext_clip_control_);
   visitor->Trace(ext_color_buffer_float_);
   visitor->Trace(ext_color_buffer_half_float_);
+  visitor->Trace(ext_conservative_depth_);
+  visitor->Trace(ext_depth_clamp_);
   visitor->Trace(ext_disjoint_timer_query_web_gl2_);
   visitor->Trace(ext_float_blend_);
+  visitor->Trace(ext_polygon_offset_clamp_);
+  visitor->Trace(ext_render_snorm_);
   visitor->Trace(ext_texture_compression_bptc_);
   visitor->Trace(ext_texture_compression_rgtc_);
   visitor->Trace(ext_texture_filter_anisotropic_);
+  visitor->Trace(ext_texture_mirror_clamp_to_edge_);
   visitor->Trace(ext_texture_norm16_);
   visitor->Trace(khr_parallel_shader_compile_);
+  visitor->Trace(nv_shader_noperspective_interpolation_);
   visitor->Trace(oes_draw_buffers_indexed_);
+  visitor->Trace(oes_sample_variables_);
+  visitor->Trace(oes_shader_multisample_interpolation_);
   visitor->Trace(oes_texture_float_linear_);
   visitor->Trace(ovr_multiview2_);
+  visitor->Trace(webgl_clip_cull_distance_);
   visitor->Trace(webgl_compressed_texture_astc_);
   visitor->Trace(webgl_compressed_texture_etc_);
   visitor->Trace(webgl_compressed_texture_etc1_);
@@ -206,8 +248,11 @@ void WebGL2RenderingContext::Trace(Visitor* visitor) const {
   visitor->Trace(webgl_lose_context_);
   visitor->Trace(webgl_multi_draw_);
   visitor->Trace(webgl_multi_draw_instanced_base_vertex_base_instance_);
-  visitor->Trace(webgl_video_texture_);
-  visitor->Trace(webgl_webcodecs_video_frame_);
+  visitor->Trace(webgl_polygon_mode_);
+  visitor->Trace(webgl_provoking_vertex_);
+  visitor->Trace(webgl_render_shared_exponent_);
+  visitor->Trace(webgl_shader_pixel_local_storage_);
+  visitor->Trace(webgl_stencil_texturing_);
   WebGL2RenderingContextBase::Trace(visitor);
 }
 

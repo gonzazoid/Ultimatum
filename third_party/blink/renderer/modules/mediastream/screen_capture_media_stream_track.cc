@@ -1,6 +1,6 @@
 #include "third_party/blink/renderer/modules/mediastream/screen_capture_media_stream_track.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
@@ -9,8 +9,8 @@
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/modules/mediastream/user_media_request.h"
-#include "third_party/blink/renderer/modules/screen_enumeration/screen_detailed.h"
-#include "third_party/blink/renderer/modules/screen_enumeration/screen_details.h"
+#include "third_party/blink/renderer/modules/screen_details/screen_detailed.h"
+#include "third_party/blink/renderer/modules/screen_details/screen_details.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 
@@ -45,7 +45,7 @@ ScreenDetailed* ScreenCaptureMediaStreamTrack::screenDetailed(
         DOMExceptionCode::kInvalidStateError,
         "The ScreenDetailed object could not be created.");
   }
-  return screen_detailed_;
+  return screen_detailed_.Get();
 }
 
 void ScreenCaptureMediaStreamTrack::Trace(Visitor* visitor) const {

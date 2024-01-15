@@ -14,10 +14,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/circular_deque.h"
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/posix/eintr_wrapper.h"
@@ -30,7 +31,7 @@
 #include "chrome/browser/media_galleries/chromeos/mtp_device_task_helper_map_service.h"
 #include "chrome/browser/media_galleries/chromeos/snapshot_file_details.h"
 #include "components/services/filesystem/public/mojom/types.mojom.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "net/base/io_buffer.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
@@ -447,8 +448,8 @@ class MTPDeviceDelegateImplLinux::MTPFileNode {
   const std::string file_name_;
 
   ChildNodes children_;
-  MTPFileNode* const parent_;
-  FileIdToMTPFileNodeMap* file_id_to_node_map_;
+  const raw_ptr<MTPFileNode> parent_;
+  raw_ptr<FileIdToMTPFileNodeMap> file_id_to_node_map_;
 };
 
 MTPDeviceDelegateImplLinux::MTPFileNode::MTPFileNode(

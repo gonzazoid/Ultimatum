@@ -8,13 +8,14 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/no_destructor.h"
 #include "build/build_config.h"
 #include "ui/base/dragdrop/drag_drop_types.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
+#include "ui/compositor/layer_tree_owner.h"
 #include "ui/views/view.h"
 #include "ui/views/widget/widget.h"
 
@@ -32,8 +33,7 @@ base::RepeatingClosure* GetDragEnteredCallback() {
 
 }  // namespace
 
-DropHelper::DropHelper(View* root_view)
-    : root_view_(root_view), target_view_(nullptr), deepest_view_(nullptr) {}
+DropHelper::DropHelper(View* root_view) : root_view_(root_view) {}
 
 DropHelper::~DropHelper() = default;
 
@@ -103,7 +103,8 @@ DragOperation DropHelper::OnDrop(const OSExchangeData& data,
                                  gfx::PointF(view_location), drag_operation);
   auto output_drag_op = ui::mojom::DragOperation::kNone;
   auto drop_cb = drop_view->GetDropCallback(drop_event);
-  std::move(drop_cb).Run(drop_event, output_drag_op);
+  std::move(drop_cb).Run(drop_event, output_drag_op,
+                         /*drag_image_layer_owner=*/nullptr);
   return output_drag_op;
 }
 
@@ -134,11 +135,13 @@ DropHelper::DropCallback DropHelper::GetDropCallback(
   return base::BindOnce(
       [](const ui::DropTargetEvent& drop_event, View::DropCallback drop_cb,
          std::unique_ptr<ui::OSExchangeData> data,
-         ui::mojom::DragOperation& output_drag_op) {
+         ui::mojom::DragOperation& output_drag_op,
+         std::unique_ptr<ui::LayerTreeOwner> drag_image_layer_owner) {
         // Bind the drop_event here instead of using the one that the callback
         // is invoked with as that event is in window coordinates and callbacks
         // expect View coordinates.
-        std::move(drop_cb).Run(drop_event, output_drag_op);
+        std::move(drop_cb).Run(drop_event, output_drag_op,
+                               std::move(drag_image_layer_owner));
       },
       drop_event, std::move(drop_view_cb));
 }
@@ -153,7 +156,7 @@ View* DropHelper::CalculateTargetView(const gfx::Point& root_view_location,
 View* DropHelper::CalculateTargetViewImpl(const gfx::Point& root_view_location,
                                           const OSExchangeData& data,
                                           bool check_can_drop,
-                                          View** deepest_view) {
+                                          raw_ptr<View>* deepest_view) {
   View* view = root_view_->GetEventHandlerForPoint(root_view_location);
   if (view == deepest_view_) {
     // The view the mouse is over hasn't changed; reuse the target.

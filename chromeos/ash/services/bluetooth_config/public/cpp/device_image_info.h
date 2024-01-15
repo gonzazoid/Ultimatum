@@ -5,10 +5,10 @@
 #ifndef CHROMEOS_ASH_SERVICES_BLUETOOTH_CONFIG_PUBLIC_CPP_DEVICE_IMAGE_INFO_H_
 #define CHROMEOS_ASH_SERVICES_BLUETOOTH_CONFIG_PUBLIC_CPP_DEVICE_IMAGE_INFO_H_
 
+#include <optional>
 #include <string>
 
 #include "base/values.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash::quick_pair {
 class DeviceImageStore;
@@ -24,8 +24,8 @@ class DeviceImageInfo {
   // Returns null if the provided value does not have the required dictionary
   // properties. Should be provided a dictionary created via
   // ToDictionaryValue().
-  static absl::optional<DeviceImageInfo> FromDictionaryValue(
-      const base::Value& value);
+  static std::optional<DeviceImageInfo> FromDictionaryValue(
+      const base::Value::Dict& value);
 
   DeviceImageInfo(const std::string& default_image,
                   const std::string& left_bud_image,
@@ -36,7 +36,7 @@ class DeviceImageInfo {
   DeviceImageInfo& operator=(const DeviceImageInfo&);
   ~DeviceImageInfo();
 
-  base::Value ToDictionaryValue() const;
+  base::Value::Dict ToDictionaryValue() const;
 
   const std::string& default_image() const { return default_image_; }
   const std::string& left_bud_image() const { return left_bud_image_; }

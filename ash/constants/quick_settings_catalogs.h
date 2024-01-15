@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,9 @@ enum class QsButtonCatalogName {
   kPowerSignoutMenuButton = 14,
   kPowerLockMenuButton = 15,
   kSupervisedButton = 16,
-  kMaxValue = kSupervisedButton
+  kEolNoticeButton = 17,
+  kPowerEmailMenuButton = 18,
+  kMaxValue = kPowerEmailMenuButton
 };
 
 // A catalog that registers all the features on the Quick Settings page. This
@@ -54,9 +56,11 @@ enum class QsFeatureCatalogName {
   kIME = 12,
   kLocale = 13,
   kDarkMode = 14,
-  kShelfParty = 15,
+  kShelfParty_DEPRECATED = 15,
   kAutozoom = 16,
-  kMaxValue = kAutozoom
+  kHotspot = 17,
+  kFocusMode = 18,
+  kMaxValue = kFocusMode
 };
 
 // A catalog that registers all the sliders on the Quick Settings page (also

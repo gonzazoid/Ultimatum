@@ -7,28 +7,15 @@
 #include <cstdint>
 
 #include "base/time/time.h"
+#include "third_party/blink/public/mojom/webauthn/authenticator.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_arraybuffer_arraybufferview.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_authentication_extensions_client_inputs.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_payment_credential_instrument.h"
 #include "third_party/blink/renderer/modules/credentialmanagement/credential_manager_type_converters.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace mojo {
-
-template <>
-struct TypeConverter<Vector<Vector<uint8_t>>,
-                     blink::HeapVector<blink::Member<
-                         blink::V8UnionArrayBufferOrArrayBufferView>>> {
-  static Vector<Vector<uint8_t>> Convert(
-      const blink::HeapVector<
-          blink::Member<blink::V8UnionArrayBufferOrArrayBufferView>>& input) {
-    Vector<Vector<uint8_t>> result;
-    for (const auto& item : input) {
-      result.push_back(mojo::ConvertTo<Vector<uint8_t>>(item.Get()));
-    }
-    return result;
-  }
-};
 
 payments::mojom::blink::SecurePaymentConfirmationRequestPtr
 TypeConverter<payments::mojom::blink::SecurePaymentConfirmationRequestPtr,
@@ -57,6 +44,12 @@ TypeConverter<payments::mojom::blink::SecurePaymentConfirmationRequestPtr,
   output->rp_id = input->rpId();
   if (input->hasPayeeName())
     output->payee_name = input->payeeName();
+
+  if (input->hasExtensions()) {
+    output->extensions =
+        ConvertTo<blink::mojom::blink::AuthenticationExtensionsClientInputsPtr>(
+            *input->extensions());
+  }
 
   output->show_opt_out = input->getShowOptOutOr(false);
 

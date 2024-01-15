@@ -4,12 +4,13 @@
 
 #include "sandbox/win/src/service_resolver.h"
 
+#include <windows.h>
+
+#include <ntstatus.h>
 #include <stddef.h>
+#include <winternl.h>
 
 #include <memory>
-
-#include "sandbox/win/src/sandbox_nt_util.h"
-#include "sandbox/win/src/win_utils.h"
 
 namespace {
 #if defined(_M_X64)
@@ -45,7 +46,7 @@ struct ServiceEntry {
   USHORT xchg_ax_ax2;         // = 66 90
 };
 
-// Service code for 64 bit Windows 8.
+// Service code for 64 bit Windows 8 and Windows 10 1507 (build 10240).
 struct ServiceEntryW8 {
   // This struct contains the following code:
   // 00 48894c2408      mov     [rsp+8], rcx
@@ -68,7 +69,7 @@ struct ServiceEntryW8 {
   BYTE nop;                   // = 90
 };
 
-// Service code for 64 bit systems with int 2e fallback.
+// Service code for 64 bit systems with int 2e fallback. Windows 10 1511+
 struct ServiceEntryWithInt2E {
   // This struct contains roughly the following code:
   // 00 4c8bd1           mov     r10,rcx
@@ -253,7 +254,6 @@ NTSTATUS ServiceResolverThunk::PerformPatch(void* local_thunk,
                                             void* remote_thunk) {
   // Patch the original code.
   ServiceEntry local_service;
-  DCHECK_NT(GetInternalThunkSize() <= sizeof(local_service));
   if (!SetInternalThunk(&local_service, sizeof(local_service), nullptr,
                         interceptor_))
     return STATUS_UNSUCCESSFUL;
@@ -282,9 +282,8 @@ NTSTATUS ServiceResolverThunk::PerformPatch(void* local_thunk,
   return STATUS_SUCCESS;
 }
 
-bool Wow64ResolverThunk::IsFunctionAService(void* local_thunk) const {
-  NOTREACHED_NT();
-  return false;
+bool ServiceResolverThunk::VerifyJumpTargetForTesting(void*) const {
+  return true;
 }
 
 }  // namespace sandbox

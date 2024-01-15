@@ -8,7 +8,6 @@
 #include <string>
 
 #include "components/optimization_guide/proto/hints.pb.h"
-#include "net/nqe/effective_connection_type.h"
 
 class GURL;
 
@@ -23,17 +22,13 @@ const proto::PageHint* FindPageHintForURL(const GURL& gurl,
                                           const proto::Hint* hint);
 
 // The host is hashed and returned as a string because
-// base::Value(base::Value::Type::DICTIONARY) only accepts strings as keys.
+// base::Value(base::Value::Type::DICT) only accepts strings as keys.
 // Note, some hash collisions could occur on hosts. For querying the blocklist,
 // collisions are acceptable as they would only block additional hosts. For
 // updating the blocklist, a collision would enable a site that should remain on
 // the blocklist. However, the likelihood of a collision for the number of hosts
 // allowed in the blocklist is practically zero.
 std::string HashHostForDictionary(const std::string& host);
-
-// Converts |proto_ect| into a net::EffectiveConnectionType.
-net::EffectiveConnectionType ConvertProtoEffectiveConnectionType(
-    proto::EffectiveConnectionType proto_ect);
 
 // Validates a URL used for URL-keyed hints.
 bool IsValidURLForURLKeyedHint(const GURL& url);

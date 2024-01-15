@@ -28,11 +28,17 @@ class DEVICE_BLUETOOTH_EXPORT FakeFlossSocketManager
   // Fake overrides.
   void Init(dbus::Bus* bus,
             const std::string& service_name,
-            const int adapter_index) override;
+            const int adapter_index,
+            base::Version version,
+            base::OnceClosure on_ready) override;
   void ListenUsingL2cap(const Security security_level,
                         ResponseCallback<BtifStatus> callback,
                         ConnectionStateChanged ready_cb,
                         ConnectionAccepted new_connection_cb) override;
+  void ListenUsingL2capLe(const Security security_level,
+                          ResponseCallback<BtifStatus> callback,
+                          ConnectionStateChanged ready_cb,
+                          ConnectionAccepted new_connection_cb) override;
   void ListenUsingRfcomm(const std::string& name,
                          const device::BluetoothUUID& uuid,
                          const Security security_level,
@@ -43,6 +49,10 @@ class DEVICE_BLUETOOTH_EXPORT FakeFlossSocketManager
                          const int psm,
                          const Security security_level,
                          ConnectionCompleted callback) override;
+  void ConnectUsingL2capLe(const FlossDeviceId& remote_device,
+                           const int psm,
+                           const Security security_level,
+                           ConnectionCompleted callback) override;
   void ConnectUsingRfcomm(const FlossDeviceId& remote_device,
                           const device::BluetoothUUID& uuid,
                           const Security security_level,

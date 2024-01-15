@@ -7,8 +7,6 @@
 
 #include <stdint.h>
 
-#include <memory>
-
 #include "base/files/file.h"
 #include "base/memory/ref_counted.h"
 #include "chrome/browser/ash/file_system_provider/operations/operation.h"
@@ -18,19 +16,13 @@
 #include "net/base/io_buffer.h"
 #include "storage/browser/file_system/async_file_util.h"
 
-namespace extensions {
-class EventRouter;
-}  // namespace extensions
-
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 
 // Bridge between fileapi read file and providing extension's read fil request.
 // Created per request.
 class ReadFile : public Operation {
  public:
-  ReadFile(extensions::EventRouter* event_router,
+  ReadFile(RequestDispatcher* dispatcher,
            const ProvidedFileSystemInfo& file_system_info,
            int file_handle,
            scoped_refptr<net::IOBuffer> buffer,
@@ -46,10 +38,10 @@ class ReadFile : public Operation {
   // Operation overrides.
   bool Execute(int request_id) override;
   void OnSuccess(int request_id,
-                 std::unique_ptr<RequestValue> result,
+                 const RequestValue& result,
                  bool has_more) override;
   void OnError(int request_id,
-               std::unique_ptr<RequestValue> result,
+               const RequestValue& result,
                base::File::Error error) override;
 
  private:
@@ -61,8 +53,6 @@ class ReadFile : public Operation {
   ProvidedFileSystemInterface::ReadChunkReceivedCallback callback_;
 };
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_OPERATIONS_READ_FILE_H_

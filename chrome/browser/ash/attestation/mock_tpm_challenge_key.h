@@ -8,6 +8,7 @@
 #include <string>
 
 #include "chrome/browser/ash/attestation/tpm_challenge_key.h"
+#include "chromeos/ash/components/dbus/attestation/attestation_ca.pb.h"
 #include "chromeos/ash/components/dbus/constants/attestation_constants.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
@@ -25,14 +26,14 @@ class MockTpmChallengeKey : public TpmChallengeKey {
 
   MOCK_METHOD(void,
               BuildResponse,
-              (AttestationKeyType key_type,
+              (::attestation::VerifiedAccessFlow flow_type,
                Profile* profile,
                TpmChallengeKeyCallback callback,
                const std::string& challenge,
                bool register_key,
                ::attestation::KeyType key_crypto_type,
                const std::string& key_name_for_spkac,
-               const absl::optional<std::string>& signals),
+               const std::optional<std::string>& signals),
               (override));
 
   void FakeBuildResponseSuccess(TpmChallengeKeyCallback callback);

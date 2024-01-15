@@ -59,6 +59,45 @@ TEST_F(PrintBackendTest, MANUAL_EnumeratePrintersNoneInstalled) {
   EXPECT_TRUE(printer_list.empty());
 }
 
+TEST_F(PrintBackendTest, PaperSupportsCustomSize) {
+  PrinterSemanticCapsAndDefaults::Paper paper("FEED", "feed", {100, 200},
+                                              {100, 200}, 500);
+
+  EXPECT_TRUE(paper.SupportsCustomSize());
+}
+
+TEST_F(PrintBackendTest, PaperDoesNotSupportCustomSize) {
+  PrinterSemanticCapsAndDefaults::Paper paper("FEED", "feed", {100, 200});
+
+  EXPECT_FALSE(paper.SupportsCustomSize());
+}
+
+TEST_F(PrintBackendTest, PaperSizeWithinBoundsDistinctSize) {
+  PrinterSemanticCapsAndDefaults::Paper paper("FEED", "feed", {100, 200});
+
+  // For paper that does not support custom sizes, the size has to match
+  // exactly.
+  EXPECT_TRUE(paper.IsSizeWithinBounds({100, 200}));
+  EXPECT_FALSE(paper.IsSizeWithinBounds({90, 200}));
+  EXPECT_FALSE(paper.IsSizeWithinBounds({100, 210}));
+}
+
+TEST_F(PrintBackendTest, PaperSizeWithinBoundsCustomSize) {
+  PrinterSemanticCapsAndDefaults::Paper paper("FEED", "feed", {100, 200},
+                                              {100, 200}, 500);
+
+  // For paper that supports custom sizes, the size has to match exactly or fall
+  // within the custom size range.
+  EXPECT_TRUE(paper.IsSizeWithinBounds({100, 200}));
+  EXPECT_TRUE(paper.IsSizeWithinBounds({100, 300}));
+  EXPECT_TRUE(paper.IsSizeWithinBounds({100, 500}));
+
+  EXPECT_FALSE(paper.IsSizeWithinBounds({101, 200}));
+  EXPECT_FALSE(paper.IsSizeWithinBounds({99, 200}));
+  EXPECT_FALSE(paper.IsSizeWithinBounds({100, 199}));
+  EXPECT_FALSE(paper.IsSizeWithinBounds({100, 501}));
+}
+
 #if BUILDFLAG(IS_WIN)
 
 // This test is for the XPS API that read the XML capabilities of a
@@ -68,10 +107,15 @@ TEST_F(PrintBackendTest, MANUAL_GetXmlPrinterCapabilitiesForXpsDriver) {
   EXPECT_EQ(GetPrintBackend()->EnumeratePrinters(printer_list),
             mojom::ResultCode::kSuccess);
   for (const auto& printer : printer_list) {
-    base::expected<std::string, mojom::ResultCode> result =
-        GetPrintBackend()->GetXmlPrinterCapabilitiesForXpsDriver(
-            printer.printer_name);
-    EXPECT_TRUE(result.has_value());
+    auto caps = GetPrintBackend()->GetXmlPrinterCapabilitiesForXpsDriver(
+        printer.printer_name);
+    DLOG(WARNING) << "Capabilities for printer " << printer.printer_name;
+    // Do not fail with assert on lack of value, so that entire list of
+    // printers can be checked.
+    EXPECT_TRUE(caps.has_value());
+    if (caps.has_value()) {
+      DLOG(WARNING) << caps.value();
+    }
   }
 }
 

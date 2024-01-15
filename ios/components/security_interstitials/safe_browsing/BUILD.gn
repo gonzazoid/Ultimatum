@@ -41,7 +41,6 @@ source_set("safe_browsing") {
     "//components/safe_browsing/ios/browser:allow_list",
     "//components/safe_browsing/ios/browser/password_protection",
     "//components/security_interstitials/core:unsafe_resource",
-    "//components/security_interstitials/core:unsafe_resource",
     "//ios/components/cookie_util",
     "//ios/components/security_interstitials/safe_browsing:util",
     "//ios/net",
@@ -49,8 +48,6 @@ source_set("safe_browsing") {
     "//ios/web/public",
     "//services/network:network_service",
   ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("util") {
@@ -67,8 +64,6 @@ source_set("util") {
     "//components/security_interstitials/core:unsafe_resource",
     "//ios/web/public",
   ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("test_support") {
@@ -89,8 +84,6 @@ source_set("test_support") {
     "//services/network/public/cpp",
     "//services/network/public/mojom",
   ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("unit_tests") {
@@ -138,6 +131,4 @@ source_set("unit_tests") {
     "//testing/gmock",
     "//testing/gtest",
   ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }

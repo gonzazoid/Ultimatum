@@ -19,7 +19,6 @@ class StubWebView : public WebView {
   bool IsServiceWorker() const override;
   std::string GetId() override;
   bool WasCrashed() override;
-  Status ConnectIfNecessary() override;
   Status HandleEventsUntil(const ConditionalFunc& conditional_func,
                            const Timeout& timeout) override;
   Status HandleReceivedEvents() override;
@@ -28,7 +27,8 @@ class StubWebView : public WebView {
   Status Reload(const Timeout* timeout) override;
   Status Freeze(const Timeout* timeout) override;
   Status Resume(const Timeout* timeout) override;
-  Status StartBidiServer(std::string bidi_mapper_script) override;
+  Status StartBidiServer(std::string bidi_mapper_script,
+                         const base::Value::Dict& mapper_options) override;
   Status PostBidiCommand(base::Value::Dict command) override;
   Status SendCommand(const std::string& cmd,
                      const base::Value::Dict& params) override;
@@ -41,17 +41,12 @@ class StubWebView : public WebView {
   Status TraverseHistory(int delta, const Timeout* timeout) override;
   Status EvaluateScript(const std::string& frame,
                         const std::string& function,
-                        const bool awaitPromise,
+                        const bool await_promise,
                         std::unique_ptr<base::Value>* result) override;
   Status CallFunction(const std::string& frame,
                       const std::string& function,
                       const base::Value::List& args,
                       std::unique_ptr<base::Value>* result) override;
-  Status CallAsyncFunction(const std::string& frame,
-                           const std::string& function,
-                           const base::Value::List& args,
-                           const base::TimeDelta& timeout,
-                           std::unique_ptr<base::Value>* result) override;
   Status CallUserAsyncFunction(const std::string& frame,
                                const std::string& function,
                                const base::Value::List& args,
@@ -89,9 +84,9 @@ class StubWebView : public WebView {
                    const std::string& value,
                    const std::string& domain,
                    const std::string& path,
-                   const std::string& sameSite,
+                   const std::string& same_site,
                    bool secure,
-                   bool httpOnly,
+                   bool http_only,
                    double expiry) override;
   Status WaitForPendingNavigations(const std::string& frame_id,
                                    const Timeout& timeout,
@@ -126,6 +121,7 @@ class StubWebView : public WebView {
                                  int yoffset) override;
   bool IsNonBlocking() const override;
   FrameTracker* GetFrameTracker() const override;
+  Status GetFedCmTracker(FedCmTracker** out_tracker) override;
   std::unique_ptr<base::Value> GetCastSinks() override;
   std::unique_ptr<base::Value> GetCastIssueMessage() override;
   void SetFrame(const std::string& new_frame_id) override;

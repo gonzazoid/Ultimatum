@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ui/webui/flags/flags_ui_handler.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/about_flags.h"
@@ -21,6 +21,23 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #endif
+
+namespace {
+bool ExtractKeyValue(const base::Value::List& args,
+                     std::string& key,
+                     std::string& value) {
+  if (args.size() != 2) {
+    return false;
+  }
+
+  if (!args[0].is_string() || !args[1].is_string()) {
+    return false;
+  }
+  key = args[0].GetString();
+  value = args[1].GetString();
+  return !key.empty();
+}
+}  // namespace
 
 FlagsUIHandler::FlagsUIHandler()
     : access_(flags_ui::kGeneralAccessFlagsOnly),
@@ -44,6 +61,10 @@ void FlagsUIHandler::RegisterMessages() {
       base::BindRepeating(&FlagsUIHandler::HandleSetOriginListFlagMessage,
                           base::Unretained(this)));
   web_ui()->RegisterMessageCallback(
+      flags_ui::kSetStringFlag,
+      base::BindRepeating(&FlagsUIHandler::HandleSetStringFlagMessage,
+                          base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
       flags_ui::kRestartBrowser,
       base::BindRepeating(&FlagsUIHandler::HandleRestartBrowser,
                           base::Unretained(this)));
@@ -59,9 +80,9 @@ void FlagsUIHandler::RegisterMessages() {
 #endif
 }
 
-void FlagsUIHandler::Init(flags_ui::FlagsStorage* flags_storage,
+void FlagsUIHandler::Init(std::unique_ptr<flags_ui::FlagsStorage> flags_storage,
                           flags_ui::FlagAccess access) {
-  flags_storage_.reset(flags_storage);
+  flags_storage_ = std::move(flags_storage);
   access_ = access;
 
   if (!experimental_features_callback_id_.empty())
@@ -155,24 +176,26 @@ void FlagsUIHandler::HandleEnableExperimentalFeatureMessage(
 void FlagsUIHandler::HandleSetOriginListFlagMessage(
     const base::Value::List& args) {
   DCHECK(flags_storage_);
-  if (args.size() != 2) {
-    NOTREACHED();
-    return;
-  }
-
-  if (!args[0].is_string() || !args[1].is_string()) {
-    NOTREACHED();
-    return;
-  }
-  const std::string& entry_internal_name = args[0].GetString();
-  const std::string& value_str = args[1].GetString();
-  if (entry_internal_name.empty()) {
+  std::string entry_internal_name, value_str;
+  if (!ExtractKeyValue(args, entry_internal_name, value_str)) {
     NOTREACHED();
     return;
   }
 
   about_flags::SetOriginListFlag(entry_internal_name, value_str,
                                  flags_storage_.get());
+}
+
+void FlagsUIHandler::HandleSetStringFlagMessage(const base::Value::List& args) {
+  DCHECK(flags_storage_);
+  std::string entry_internal_name, value_str;
+  if (!ExtractKeyValue(args, entry_internal_name, value_str)) {
+    NOTREACHED();
+    return;
+  }
+
+  about_flags::SetStringFlag(entry_internal_name, value_str,
+                             flags_storage_.get());
 }
 
 void FlagsUIHandler::HandleRestartBrowser(const base::Value::List& args) {

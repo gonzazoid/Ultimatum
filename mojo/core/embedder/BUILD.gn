@@ -16,17 +16,20 @@ component("embedder") {
     "scoped_ipc_support.cc",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   defines = [ "IS_MOJO_CORE_EMBEDDER_IMPL" ]
 
   public_deps = [
     "//base",
+    "//mojo:buildflags",
+    "//mojo/core:embedder_internal",
     "//mojo/public/cpp/platform",
     "//third_party/ipcz/src:ipcz_chromium",
   ]
 
   deps = [
     ":features",
-    "//mojo/core:embedder_internal",
     "//mojo/public/c/system",
   ]
 }
@@ -34,10 +37,15 @@ component("embedder") {
 component("features") {
   output_name = "mojo_core_embedder_features"
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   defines = [ "IS_MOJO_CORE_EMBEDDER_FEATURES_IMPL" ]
 
   public = [ "features.h" ]
   sources = [ "features.cc" ]
 
-  public_deps = [ "//base" ]
+  public_deps = [
+    "//base",
+    "//mojo:buildflags",
+  ]
 }

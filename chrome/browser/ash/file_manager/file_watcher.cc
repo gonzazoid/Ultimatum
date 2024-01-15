@@ -7,9 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
@@ -34,8 +33,9 @@ base::FilePathWatcher* CreateAndStartFilePathWatcher(
 
   std::unique_ptr<base::FilePathWatcher> watcher(new base::FilePathWatcher);
   if (!watcher->Watch(watch_path, base::FilePathWatcher::Type::kNonRecursive,
-                      callback))
+                      callback)) {
     return nullptr;
+  }
 
   return watcher.release();
 }
@@ -83,7 +83,7 @@ FileWatcher::FileWatcher(const base::FilePath& virtual_path)
 FileWatcher::~FileWatcher() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  sequenced_task_runner_->DeleteSoon(FROM_HERE, local_file_watcher_);
+  sequenced_task_runner_->DeleteSoon(FROM_HERE, local_file_watcher_.get());
 }
 
 void FileWatcher::AddListener(const url::Origin& listener) {
@@ -103,8 +103,9 @@ void FileWatcher::RemoveListener(const url::Origin& listener) {
 
   // If entry found - decrease it's count and remove if necessary
   --it->second;
-  if (it->second == 0)
+  if (it->second == 0) {
     origins_.erase(it);
+  }
 }
 
 std::vector<url::Origin> FileWatcher::GetListeners() const {
@@ -132,8 +133,8 @@ void FileWatcher::WatchLocalFile(
     return;
   }
 
-  base::PostTaskAndReplyWithResult(
-      sequenced_task_runner_.get(), FROM_HERE,
+  sequenced_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&CreateAndStartFilePathWatcher, local_path,
                      google_apis::CreateRelayCallback(file_watcher_callback)),
       base::BindOnce(&FileWatcher::OnWatcherStarted,

@@ -5,15 +5,17 @@
 #include "ui/gfx/geometry/transform_util.h"
 
 #include <stddef.h>
+
+#include <algorithm>
 #include <limits>
 
-#include "base/cxx17_backports.h"
 #include "base/numerics/math_constants.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/point3_f.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rect_f.h"
+#include "ui/gfx/geometry/test/geometry_util.h"
 
 namespace gfx {
 namespace {
@@ -67,6 +69,23 @@ TEST(TransformUtilTest, BlendOppositeQuaternions) {
   EXPECT_FALSE(std::isnan(result.quaternion.y()));
   EXPECT_FALSE(std::isnan(result.quaternion.z()));
   EXPECT_FALSE(std::isnan(result.quaternion.w()));
+}
+
+TEST(TransformUtilTest, AccumulateDecomposedTransforms) {
+  DecomposedTransform a{{2.5, -3.25, 4.75},
+                        {4.5, -5.25, 6.75},
+                        {1.25, -2.5, 3.75},
+                        {5, -4, 3, -2},
+                        {-5, 6, -7, 8}};
+  DecomposedTransform b{
+      {-2, 3, 4}, {-4, 5, 6}, {-1, 2, 3}, {6, 7, -8, -9}, {5, 4, -3, -2}};
+  DecomposedTransform expected{{0.5, -0.25, 8.75},
+                               {-0.5, -1.25, 11.75},
+                               {0.25, -0.5, 6.75},
+                               {11, 3, -5, -12},
+                               {+60, -30, -60, -36}};
+  EXPECT_DECOMPOSED_TRANSFORM_EQ(expected,
+                                 AccumulateDecomposedTransforms(a, b));
 }
 
 TEST(TransformUtilTest, TransformBetweenRects) {
@@ -162,6 +181,19 @@ TEST(TransformUtilTest, Transform2dScaleComponents) {
                            0, 0, 11, 47,
                            0, 0, -0.5, 1),
        Vector2dF(3, 7)},
+      // The result is always non-negative.
+      {Transform::RowMajor(3, 0, 0, -23,
+                           0, -7, 0, 31,
+                           0, 0, 11, 47,
+                           0, 0, -0.5, 1),
+       Vector2dF(3, 7)},
+      // Values are clamped.
+      {Transform::RowMajor(std::numeric_limits<double>::max(), 0, 0, -23,
+                           0, std::numeric_limits<double>::lowest(), 0, 31,
+                           0, 0, 11, 47,
+                           0, 0, -0.5f, 1),
+       Vector2dF(FloatGeometrySaturationHandler<float>::max(),
+                 FloatGeometrySaturationHandler<float>::max())},
       {Transform::RowMajor(3, 0, 0, -23,
                            0, 7, 0, 31,
                            0, 0, 11, 47,
@@ -233,6 +265,7 @@ TEST(TransformUtilTest, Transform2dScaleComponents) {
   for (const auto& test : tests) {
     absl::optional<Vector2dF> try_result =
         TryComputeTransform2dScaleComponents(test.transform);
+    SCOPED_TRACE(test.transform.ToString());
     EXPECT_EQ(try_result, test.expected_scale);
     Vector2dF result =
         ComputeTransform2dScaleComponents(test.transform, fallback);

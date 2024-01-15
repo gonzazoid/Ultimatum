@@ -33,7 +33,7 @@
 
 #include <stdint.h>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/types/pass_key.h"
 #include "components/viz/common/surfaces/frame_sink_id.h"
 #include "third_party/blink/public/common/page/drag_operation.h"
@@ -47,6 +47,10 @@
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom-shared.h"
 #include "ui/gfx/ca_layer_result.h"
 #include "ui/gfx/geometry/rect.h"
+
+namespace base {
+class SingleThreadTaskRunner;
+}
 
 namespace cc {
 struct ApplyViewportChangesArgs;
@@ -74,6 +78,14 @@ class WebFrameWidget : public WebWidget {
   virtual void InitializeNonCompositing(
       WebNonCompositedWidgetClient* client) = 0;
 
+  // Similar to `WebWidget::InitializeCompositing()` but for cases where there
+  // is a `previous_widget` whose compositing setup should be reused instead of
+  // initializing a new compositor.
+  virtual void InitializeCompositingFromPreviousWidget(
+      const display::ScreenInfos& screen_info,
+      const cc::LayerTreeSettings* settings,
+      WebFrameWidget& previous_widget) = 0;
+
   // Returns the local root of this WebFrameWidget.
   virtual WebLocalFrame* LocalRoot() const = 0;
 
@@ -97,13 +109,13 @@ class WebFrameWidget : public WebWidget {
       const gfx::PointF& screen_point,
       DragOperationsMask operations_allowed,
       uint32_t key_modifiers,
-      base::OnceCallback<void(ui::mojom::DragOperation)> callback) = 0;
+      base::OnceCallback<void(ui::mojom::DragOperation, bool)> callback) = 0;
   virtual void DragTargetDragOver(
       const gfx::PointF& point_in_viewport,
       const gfx::PointF& screen_point,
       DragOperationsMask operations_allowed,
       uint32_t key_modifiers,
-      base::OnceCallback<void(ui::mojom::DragOperation)> callback) = 0;
+      base::OnceCallback<void(ui::mojom::DragOperation, bool)> callback) = 0;
   virtual void DragTargetDragLeave(const gfx::PointF& point_in_viewport,
                                    const gfx::PointF& screen_point) = 0;
   virtual void DragTargetDrop(const WebDragData&,
@@ -151,7 +163,7 @@ class WebFrameWidget : public WebWidget {
   virtual void NotifyPresentationTime(
       base::OnceCallback<void(base::TimeTicks)> callback) = 0;
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   virtual void NotifyCoreAnimationErrorCode(
       base::OnceCallback<void(gfx::CALayerResult)> callback) = 0;
 #endif

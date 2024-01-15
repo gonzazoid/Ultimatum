@@ -11,6 +11,7 @@
 #include "build/build_config.h"
 #include "chrome/browser/media/router/discovery/access_code/access_code_cast_constants.h"
 #include "chrome/browser/media/router/media_router_feature.h"
+#include "chrome/browser/profiles/profile.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_prefs/user_prefs.h"
@@ -24,6 +25,19 @@ namespace features {
 BASE_FEATURE(kAccessCodeCastRememberDevices,
              "AccessCodeCastRememberDevices",
              base::FEATURE_ENABLED_BY_DEFAULT);
+
+// Provide a tab switching UI bar while casting (mirroring) when AccessCodeCast
+// is enabled.
+BASE_FEATURE(kAccessCodeCastTabSwitchingUI,
+             "AccessCodeCastTabSwitchingUI",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// Provide functionality to freeze the casting session when AccessCodeCast is
+// enabled.
+BASE_FEATURE(kAccessCodeCastFreezeUI,
+             "AccessCodeCastFreezeUI",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
 }  // namespace features
 
 namespace media_router {
@@ -53,6 +67,16 @@ base::TimeDelta GetAccessCodeDeviceDurationPref(Profile* profile) {
   // Return the value set by the policy pref.
   return base::Seconds(
       profile->GetPrefs()->GetInteger(prefs::kAccessCodeCastDeviceDuration));
+}
+
+bool IsAccessCodeCastTabSwitchingUiEnabled(Profile* profile) {
+  return profile && GetAccessCodeCastEnabledPref(profile) &&
+         base::FeatureList::IsEnabled(features::kAccessCodeCastTabSwitchingUI);
+}
+
+bool IsAccessCodeCastFreezeUiEnabled(Profile* profile) {
+  return profile && GetAccessCodeCastEnabledPref(profile) &&
+         base::FeatureList::IsEnabled(features::kAccessCodeCastFreezeUI);
 }
 
 #endif  // !BUILDFLAG(IS_ANDROID)

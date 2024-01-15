@@ -11,9 +11,10 @@
 #include <sstream>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "media/base/audio_bus.h"
@@ -89,7 +90,7 @@ class TestEncodedAudioFrameReceiver {
 };
 
 struct TestScenario {
-  const int64_t* durations_in_ms;
+  raw_ptr<const int64_t, AllowPtrArithmetic> durations_in_ms;
   size_t num_durations;
 
   TestScenario(const int64_t* d, size_t n)
@@ -151,7 +152,7 @@ class AudioEncoderTest : public ::testing::TestWithParam<TestScenario> {
         testing_clock_.Advance(duration);
       }
 
-      if (codec == CODEC_AUDIO_OPUS) {
+      if (codec == Codec::kAudioOpus) {
         const int bitrate = audio_encoder_->GetBitrate();
         EXPECT_GT(bitrate, 0);
         // Typically Opus has a max of 120000, but this may change if the
@@ -194,16 +195,16 @@ class AudioEncoderTest : public ::testing::TestWithParam<TestScenario> {
 };
 
 TEST_P(AudioEncoderTest, EncodeOpus) {
-  RunTestForCodec(CODEC_AUDIO_OPUS);
+  RunTestForCodec(Codec::kAudioOpus);
 }
 
 TEST_P(AudioEncoderTest, EncodePcm16) {
-  RunTestForCodec(CODEC_AUDIO_PCM16);
+  RunTestForCodec(Codec::kAudioPcm16);
 }
 
 #if BUILDFLAG(IS_MAC)
 TEST_P(AudioEncoderTest, EncodeAac) {
-  RunTestForCodec(CODEC_AUDIO_AAC);
+  RunTestForCodec(Codec::kAudioAac);
 }
 #endif
 

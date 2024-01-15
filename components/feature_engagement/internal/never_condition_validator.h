@@ -14,6 +14,7 @@ namespace feature_engagement {
 class AvailabilityModel;
 class DisplayLockController;
 class EventModel;
+class TimeProvider;
 
 // An ConditionValidator that never acknowledges that a feature has met its
 // conditions.
@@ -30,11 +31,12 @@ class NeverConditionValidator : public ConditionValidator {
   ConditionValidator::Result MeetsConditions(
       const base::Feature& feature,
       const FeatureConfig& config,
+      const std::vector<GroupConfig>& group_configs,
       const EventModel& event_model,
       const AvailabilityModel& availability_model,
       const DisplayLockController& display_lock_controller,
       const Configuration* configuration,
-      uint32_t current_day) const override;
+      const TimeProvider& time_provider) const override;
   void NotifyIsShowing(
       const base::Feature& feature,
       const FeatureConfig& config,

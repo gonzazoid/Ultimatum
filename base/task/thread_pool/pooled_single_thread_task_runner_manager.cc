@@ -8,16 +8,18 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/check.h"
+#include "base/debug/leak_annotations.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/message_loop/message_pump.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/stringprintf.h"
 #include "base/synchronization/atomic_flag.h"
 #include "base/task/default_delayed_task_handle_delegate.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/task/task_features.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool/delayed_task_manager.h"
 #include "base/task/thread_pool/priority_queue.h"
@@ -25,7 +27,7 @@
 #include "base/task/thread_pool/task.h"
 #include "base/task/thread_pool/task_source.h"
 #include "base/task/thread_pool/task_tracker.h"
-#include "base/task/thread_pool/worker_thread.h"
+#include "base/task/thread_pool/worker_thread_waitable_event.h"
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -57,14 +59,23 @@ namespace {
 // thread pool.
 bool g_manager_is_alive = false;
 
+bool g_use_utility_thread_group = false;
+
 size_t GetEnvironmentIndexForTraits(const TaskTraits& traits) {
   const bool is_background =
       traits.priority() == TaskPriority::BEST_EFFORT &&
       traits.thread_policy() == ThreadPolicy::PREFER_BACKGROUND &&
       CanUseBackgroundThreadTypeForWorkerThread();
-  if (traits.may_block() || traits.with_base_sync_primitives())
-    return is_background ? BACKGROUND_BLOCKING : FOREGROUND_BLOCKING;
-  return is_background ? BACKGROUND : FOREGROUND;
+  const bool is_utility =
+      !is_background && traits.priority() <= TaskPriority::USER_VISIBLE &&
+      traits.thread_policy() == ThreadPolicy::PREFER_BACKGROUND &&
+      g_use_utility_thread_group;
+  if (traits.may_block() || traits.with_base_sync_primitives()) {
+    return is_background ? BACKGROUND_BLOCKING
+           : is_utility  ? UTILITY_BLOCKING
+                         : FOREGROUND_BLOCKING;
+  }
+  return is_background ? BACKGROUND : is_utility ? UTILITY : FOREGROUND;
 }
 
 // Allows for checking the PlatformThread::CurrentRef() against a set
@@ -90,7 +101,7 @@ class AtomicThreadRefChecker {
   PlatformThreadRef thread_ref_;
 };
 
-class WorkerThreadDelegate : public WorkerThread::Delegate {
+class WorkerThreadDelegate : public WorkerThreadWaitableEvent::Delegate {
  public:
   WorkerThreadDelegate(const std::string& thread_name,
                        WorkerThread::ThreadLabel thread_label,
@@ -101,7 +112,7 @@ class WorkerThreadDelegate : public WorkerThread::Delegate {
   WorkerThreadDelegate(const WorkerThreadDelegate&) = delete;
   WorkerThreadDelegate& operator=(const WorkerThreadDelegate&) = delete;
 
-  void set_worker(WorkerThread* worker) {
+  void set_worker(WorkerThreadWaitableEvent* worker) {
     DCHECK(!worker_);
     worker_ = worker;
   }
@@ -130,25 +141,52 @@ class WorkerThreadDelegate : public WorkerThread::Delegate {
     return task_source;
   }
 
-  void DidProcessTask(RegisteredTaskSource task_source) override {
+  RegisteredTaskSource SwapProcessedTask(RegisteredTaskSource task_source,
+                                         WorkerThread* worker) override {
+    std::optional<RegisteredTaskSourceAndTransaction>
+        task_source_with_transaction;
     if (task_source) {
-      auto task_source_with_transaction =
-          TransactionWithRegisteredTaskSource::FromTaskSource(
-              std::move(task_source));
-      task_source_with_transaction.task_source.WillReEnqueue(
-          TimeTicks::Now(), &task_source_with_transaction.transaction);
-      EnqueueTaskSource(std::move(task_source_with_transaction));
+      task_source_with_transaction.emplace(
+          RegisteredTaskSourceAndTransaction::FromTaskSource(
+              std::move(task_source)));
+      task_source_with_transaction->task_source.WillReEnqueue(
+          TimeTicks::Now(), &task_source_with_transaction->transaction);
     }
+    CheckedAutoLock auto_lock(lock_);
+    if (task_source_with_transaction.has_value()) {
+      EnqueueTaskSourceLockRequired(std::move(*task_source_with_transaction));
+    }
+
+    // Calling WakeUp() guarantees that this WorkerThread will run Tasks from
+    // TaskSources returned by the GetWork() method of |delegate_| until it
+    // returns nullptr. Resetting |wake_up_event_| here doesn't break this
+    // invariant and avoids a useless loop iteration before going to sleep if
+    // WakeUp() is called while this WorkerThread is awake.
+    wake_up_event_.Reset();
+
+    auto new_task_source = GetWorkLockRequired(worker);
+    if (!new_task_source) {
+      // The worker will sleep after this returns nullptr.
+      worker_awake_ = false;
+      return nullptr;
+    }
+    auto run_status = new_task_source.WillRunTask();
+    DCHECK_NE(run_status, TaskSource::RunStatus::kDisallowed);
+    return new_task_source;
   }
 
   TimeDelta GetSleepTimeout() override { return TimeDelta::Max(); }
 
-  bool PostTaskNow(scoped_refptr<Sequence> sequence, Task task) {
+  // `task_runner` isn't used but is forwarded to keep the task runner
+  // alive while the task is pending.
+  bool PostTaskNow(scoped_refptr<Sequence> sequence,
+                   scoped_refptr<SingleThreadTaskRunner> task_runner,
+                   Task task) {
     auto transaction = sequence->BeginTransaction();
 
     // |task| will be pushed to |sequence|, and |sequence| will be queued
     // to |priority_queue_| iff |sequence_should_be_queued| is true.
-    const bool sequence_should_be_queued = transaction.ShouldBeQueued();
+    const bool sequence_should_be_queued = transaction.WillPushImmediateTask();
     RegisteredTaskSource task_source;
     if (sequence_should_be_queued) {
       task_source = task_tracker_->RegisterTaskSource(sequence);
@@ -160,10 +198,15 @@ class WorkerThreadDelegate : public WorkerThread::Delegate {
       return false;
     transaction.PushImmediateTask(std::move(task));
     if (task_source) {
-      bool should_wakeup =
-          EnqueueTaskSource({std::move(task_source), std::move(transaction)});
-      if (should_wakeup)
+      bool should_wakeup;
+      {
+        CheckedAutoLock auto_lock(lock_);
+        should_wakeup = EnqueueTaskSourceLockRequired(
+            {std::move(task_source), std::move(transaction)});
+      }
+      if (should_wakeup) {
         worker_->WakeUp();
+      }
     }
     return true;
   }
@@ -214,10 +257,15 @@ class WorkerThreadDelegate : public WorkerThread::Delegate {
   // Enqueues a task source in this single-threaded worker's priority queue.
   // Returns true iff the worker must wakeup, i.e. task source is allowed to run
   // and the worker was not awake.
-  bool EnqueueTaskSource(
-      TransactionWithRegisteredTaskSource transaction_with_task_source) {
-    CheckedAutoLock auto_lock(lock_);
+  bool EnqueueTaskSourceLockRequired(
+      RegisteredTaskSourceAndTransaction transaction_with_task_source)
+      EXCLUSIVE_LOCKS_REQUIRED(lock_) {
     auto sort_key = transaction_with_task_source.task_source->GetSortKey();
+    // When moving |task_source| into |priority_queue_|, it may be destroyed
+    // on another thread as soon as |lock_| is released, since we're no longer
+    // holding a reference to it. To prevent UAF, release |transaction| before
+    // moving |task_source|. Ref. crbug.com/1412008
+    transaction_with_task_source.transaction.Release();
     priority_queue_.Push(std::move(transaction_with_task_source.task_source),
                          sort_key);
     if (!worker_awake_ && CanRunNextTaskSource()) {
@@ -239,7 +287,7 @@ class WorkerThreadDelegate : public WorkerThread::Delegate {
   // The WorkerThread that has |this| as a delegate. Must be set before
   // starting or posting a task to the WorkerThread, because it's used in
   // OnMainEntry() and PostTaskNow().
-  raw_ptr<WorkerThread> worker_ = nullptr;
+  raw_ptr<WorkerThreadWaitableEvent> worker_ = nullptr;
 
   PriorityQueue priority_queue_ GUARDED_BY(lock_);
 
@@ -261,11 +309,14 @@ class WorkerThreadCOMDelegate : public WorkerThreadDelegate {
   WorkerThreadCOMDelegate& operator=(const WorkerThreadCOMDelegate&) = delete;
   ~WorkerThreadCOMDelegate() override { DCHECK(!scoped_com_initializer_); }
 
-  // WorkerThread::Delegate:
+  // WorkerThreadWaitableEvent::Delegate:
   void OnMainEntry(WorkerThread* worker) override {
     WorkerThreadDelegate::OnMainEntry(worker);
 
     scoped_com_initializer_ = std::make_unique<win::ScopedCOMInitializer>();
+
+    // CHECK to make sure this COM thread is initialized correctly in an STA.
+    CHECK(scoped_com_initializer_->Succeeded());
   }
 
   RegisteredTaskSource GetWork(WorkerThread* worker) override {
@@ -334,12 +385,11 @@ class WorkerThreadCOMDelegate : public WorkerThreadDelegate {
     scoped_com_initializer_.reset();
   }
 
-  void WaitForWork(WaitableEvent* wake_up_event) override {
-    DCHECK(wake_up_event);
+  void WaitForWork() override {
     const TimeDelta sleep_time = GetSleepTimeout();
     const DWORD milliseconds_wait = checked_cast<DWORD>(
         sleep_time.is_max() ? INFINITE : sleep_time.InMilliseconds());
-    const HANDLE wake_up_event_handle = wake_up_event->handle();
+    const HANDLE wake_up_event_handle = wake_up_event_.handle();
     MsgWaitForMultipleObjectsEx(1, &wake_up_event_handle, milliseconds_wait,
                                 QS_ALLINPUT, 0);
   }
@@ -359,7 +409,8 @@ class WorkerThreadCOMDelegate : public WorkerThreadDelegate {
       if (task_tracker()->WillPostTask(
               &pump_message_task, TaskShutdownBehavior::SKIP_ON_SHUTDOWN)) {
         auto transaction = message_pump_sequence_->BeginTransaction();
-        const bool sequence_should_be_queued = transaction.ShouldBeQueued();
+        const bool sequence_should_be_queued =
+            transaction.WillPushImmediateTask();
         DCHECK(sequence_should_be_queued)
             << "GetWorkFromWindowsMessageQueue() does not expect "
                "queueing of pump tasks.";
@@ -369,6 +420,12 @@ class WorkerThreadCOMDelegate : public WorkerThreadDelegate {
           return nullptr;
         transaction.PushImmediateTask(std::move(pump_message_task));
         return registered_task_source;
+      } else {
+        // `pump_message_task`'s destructor may run sequence-affine code, so it
+        // must be leaked when `WillPostTask` returns false.
+        auto leak = std::make_unique<Task>(std::move(pump_message_task));
+        ANNOTATE_LEAKING_OBJECT_PTR(leak.get());
+        leak.release();
       }
     }
     return nullptr;
@@ -393,7 +450,7 @@ class PooledSingleThreadTaskRunnerManager::PooledSingleThreadTaskRunner
   // lifetime of a dedicated |worker| for |traits|.
   PooledSingleThreadTaskRunner(PooledSingleThreadTaskRunnerManager* const outer,
                                const TaskTraits& traits,
-                               WorkerThread* worker,
+                               WorkerThreadWaitableEvent* worker,
                                SingleThreadTaskRunnerThreadMode thread_mode)
       : outer_(outer),
         worker_(worker),
@@ -417,7 +474,7 @@ class PooledSingleThreadTaskRunnerManager::PooledSingleThreadTaskRunner
       return false;
 
     Task task(from_here, std::move(closure), TimeTicks::Now(), delay,
-              base::GetTaskLeeway());
+              MessagePump::GetLeewayIgnoringThreadOverride());
     return PostTask(std::move(task));
   }
 
@@ -430,7 +487,7 @@ class PooledSingleThreadTaskRunnerManager::PooledSingleThreadTaskRunner
       return false;
 
     Task task(from_here, std::move(closure), TimeTicks::Now(), delayed_run_time,
-              base::GetTaskLeeway(), delay_policy);
+              MessagePump::GetLeewayIgnoringThreadOverride(), delay_policy);
     return PostTask(std::move(task));
   }
 
@@ -476,19 +533,24 @@ class PooledSingleThreadTaskRunnerManager::PooledSingleThreadTaskRunner
   bool PostTask(Task task) {
     if (!outer_->task_tracker_->WillPostTask(&task,
                                              sequence_->shutdown_behavior())) {
+      // `task`'s destructor may run sequence-affine code, so it must be leaked
+      // when `WillPostTask` returns false.
+      auto leak = std::make_unique<Task>(std::move(task));
+      ANNOTATE_LEAKING_OBJECT_PTR(leak.get());
+      leak.release();
       return false;
     }
 
     if (task.delayed_run_time.is_null())
-      return GetDelegate()->PostTaskNow(sequence_, std::move(task));
+      return GetDelegate()->PostTaskNow(sequence_, nullptr, std::move(task));
 
     // Unretained(GetDelegate()) is safe because this TaskRunner and its
     // worker are kept alive as long as there are pending Tasks.
     outer_->delayed_task_manager_->AddDelayedTask(
         std::move(task),
         BindOnce(IgnoreResult(&WorkerThreadDelegate::PostTaskNow),
-                 Unretained(GetDelegate()), sequence_),
-        this);
+                 Unretained(GetDelegate()), sequence_,
+                 base::WrapRefCounted(this)));
     return true;
   }
 
@@ -496,8 +558,13 @@ class PooledSingleThreadTaskRunnerManager::PooledSingleThreadTaskRunner
     return static_cast<WorkerThreadDelegate*>(worker_->delegate());
   }
 
-  const raw_ptr<PooledSingleThreadTaskRunnerManager> outer_;
-  const raw_ptr<WorkerThread, DanglingUntriaged> worker_;
+  // Dangling but safe since use is controlled by `g_manager_is_alive`.
+  const raw_ptr<PooledSingleThreadTaskRunnerManager,
+                DisableDanglingPtrDetection>
+      outer_;
+
+  const raw_ptr<WorkerThreadWaitableEvent, AcrossTasksDanglingUntriaged>
+      worker_;
   const SingleThreadTaskRunnerThreadMode thread_mode_;
   const scoped_refptr<Sequence> sequence_;
 };
@@ -529,6 +596,7 @@ PooledSingleThreadTaskRunnerManager::PooledSingleThreadTaskRunnerManager(
 PooledSingleThreadTaskRunnerManager::~PooledSingleThreadTaskRunnerManager() {
   DCHECK(g_manager_is_alive);
   g_manager_is_alive = false;
+  g_use_utility_thread_group = false;
 }
 
 void PooledSingleThreadTaskRunnerManager::Start(
@@ -540,6 +608,9 @@ void PooledSingleThreadTaskRunnerManager::Start(
   DCHECK(io_thread_task_runner);
   io_thread_task_runner_ = std::move(io_thread_task_runner);
 #endif  // (BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)) || BUILDFLAG(IS_FUCHSIA)
+
+  g_use_utility_thread_group = CanUseUtilityThreadTypeForWorkerThread() &&
+                               FeatureList::IsEnabled(kUseUtilityThreadGroup);
 
   decltype(workers_) workers_to_start;
   {
@@ -553,7 +624,7 @@ void PooledSingleThreadTaskRunnerManager::Start(
   // PooledSingleThreadTaskRunner::PostTaskNow(). As a result, it's
   // unnecessary to call WakeUp() for each worker (in fact, an extraneous
   // WakeUp() would be racy and wrong - see https://crbug.com/862582).
-  for (scoped_refptr<WorkerThread> worker : workers_to_start) {
+  for (scoped_refptr<WorkerThreadWaitableEvent> worker : workers_to_start) {
     worker->Start(io_thread_task_runner_, worker_thread_observer_);
   }
 }
@@ -617,8 +688,8 @@ PooledSingleThreadTaskRunnerManager::CreateTaskRunnerImpl(
   // SingleThreadTaskRunnerThreadMode. In DEDICATED, the scoped_refptr is backed
   // by a local variable and in SHARED, the scoped_refptr is backed by a member
   // variable.
-  WorkerThread* dedicated_worker = nullptr;
-  WorkerThread*& worker =
+  WorkerThreadWaitableEvent* dedicated_worker = nullptr;
+  WorkerThreadWaitableEvent*& worker =
       thread_mode == SingleThreadTaskRunnerThreadMode::DEDICATED
           ? dedicated_worker
           : GetSharedWorkerThreadForTraits<DelegateType>(traits);
@@ -634,10 +705,7 @@ PooledSingleThreadTaskRunnerManager::CreateTaskRunnerImpl(
         worker_name += "Shared";
       worker_name += environment_params.name_suffix;
       worker = CreateAndRegisterWorkerThread<DelegateType>(
-          worker_name, thread_mode,
-          CanUseBackgroundThreadTypeForWorkerThread()
-              ? environment_params.thread_type_hint
-              : ThreadType::kDefault);
+          worker_name, thread_mode, environment_params.thread_type_hint);
       new_worker = true;
     }
     started = started_;
@@ -707,7 +775,7 @@ PooledSingleThreadTaskRunnerManager::CreateWorkerThreadDelegate<
 #endif  // BUILDFLAG(IS_WIN)
 
 template <typename DelegateType>
-WorkerThread*
+WorkerThreadWaitableEvent*
 PooledSingleThreadTaskRunnerManager::CreateAndRegisterWorkerThread(
     const std::string& name,
     SingleThreadTaskRunnerThreadMode thread_mode,
@@ -716,15 +784,17 @@ PooledSingleThreadTaskRunnerManager::CreateAndRegisterWorkerThread(
   std::unique_ptr<WorkerThreadDelegate> delegate =
       CreateWorkerThreadDelegate<DelegateType>(name, id, thread_mode);
   WorkerThreadDelegate* delegate_raw = delegate.get();
-  scoped_refptr<WorkerThread> worker = MakeRefCounted<WorkerThread>(
-      thread_type_hint, std::move(delegate), task_tracker_);
+  scoped_refptr<WorkerThreadWaitableEvent> worker =
+      MakeRefCounted<WorkerThreadWaitableEvent>(thread_type_hint,
+                                                std::move(delegate),
+                                                task_tracker_, workers_.size());
   delegate_raw->set_worker(worker.get());
   workers_.emplace_back(std::move(worker));
   return workers_.back().get();
 }
 
 template <>
-WorkerThread*&
+WorkerThreadWaitableEvent*&
 PooledSingleThreadTaskRunnerManager::GetSharedWorkerThreadForTraits<
     WorkerThreadDelegate>(const TaskTraits& traits) {
   return shared_worker_threads_[GetEnvironmentIndexForTraits(traits)]
@@ -733,7 +803,7 @@ PooledSingleThreadTaskRunnerManager::GetSharedWorkerThreadForTraits<
 
 #if BUILDFLAG(IS_WIN)
 template <>
-WorkerThread*&
+WorkerThreadWaitableEvent*&
 PooledSingleThreadTaskRunnerManager::GetSharedWorkerThreadForTraits<
     WorkerThreadCOMDelegate>(const TaskTraits& traits) {
   return shared_com_worker_threads_[GetEnvironmentIndexForTraits(traits)]
@@ -742,9 +812,9 @@ PooledSingleThreadTaskRunnerManager::GetSharedWorkerThreadForTraits<
 #endif  // BUILDFLAG(IS_WIN)
 
 void PooledSingleThreadTaskRunnerManager::UnregisterWorkerThread(
-    WorkerThread* worker) {
+    WorkerThreadWaitableEvent* worker) {
   // Cleanup uses a CheckedLock, so call Cleanup() after releasing |lock_|.
-  scoped_refptr<WorkerThread> worker_to_destroy;
+  scoped_refptr<WorkerThreadWaitableEvent> worker_to_destroy;
   {
     CheckedAutoLock auto_lock(lock_);
 

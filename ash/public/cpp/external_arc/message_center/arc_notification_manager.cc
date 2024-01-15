@@ -16,11 +16,12 @@
 #include "ash/public/cpp/external_arc/message_center/metrics_utils.h"
 #include "ash/public/cpp/message_center/arc_notification_constants.h"
 #include "ash/public/cpp/message_center/arc_notification_manager_delegate.h"
-#include "ash/system/message_center/message_view_factory.h"
-#include "ash/system/message_center/metrics_utils.h"
-#include "base/bind.h"
+#include "ash/system/notification_center/message_view_factory.h"
+#include "ash/system/notification_center/metrics_utils.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/message_center/lock_screen/lock_screen_controller.h"
 #include "ui/message_center/message_center_impl.h"
@@ -75,7 +76,7 @@ class DoNotDisturbManager : public message_center::MessageCenterObserver {
   }
 
  private:
-  ArcNotificationManager* const manager_;
+  const raw_ptr<ArcNotificationManager> manager_;
 };
 
 class VisibilityManager : public message_center::MessageCenterObserver {
@@ -102,7 +103,7 @@ class VisibilityManager : public message_center::MessageCenterObserver {
     return MessageCenterVisibility::VISIBILITY_TRANSIENT;
   }
 
-  ArcNotificationManager* const manager_;
+  const raw_ptr<ArcNotificationManager> manager_;
 };
 
 }  // namespace
@@ -212,6 +213,17 @@ void ArcNotificationManager::OnNotificationPosted(ArcNotificationDataPtr data) {
     return;
   }
 
+  const bool render_on_chrome =
+      features::IsRenderArcNotificationsByChromeEnabled() &&
+      data->render_on_chrome;
+  if (render_on_chrome && data->children_data) {
+    const auto& children = *data->children_data;
+    for (size_t i = 0; i < children.size(); ++i) {
+      OnNotificationPosted(children[i]->Clone());
+    }
+    return;
+  }
+
   const std::string& key = data->key;
   auto it = items_.find(key);
   if (it == items_.end()) {
@@ -232,6 +244,8 @@ void ArcNotificationManager::OnNotificationPosted(ArcNotificationDataPtr data) {
         data->expand_state == ArcNotificationExpandState::FIXED_SIZE
             ? metrics_utils::ArcNotificationExpandState::kFixedSize
             : metrics_utils::ArcNotificationExpandState::kExpandable);
+    metrics_utils::LogArcNotificationIsCustomNotification(
+        data->is_custom_notification);
   }
 
   std::string app_id =
@@ -286,10 +300,28 @@ void ArcNotificationManager::OnNotificationUpdated(
       data->package_name
           ? ArcAppIdProvider::Get()->GetAppIdByPackageName(*data->package_name)
           : std::string();
-  it->second->OnUpdatedFromAndroid(std::move(data), app_id);
+  it->second->OnUpdatedFromAndroid(data->Clone(), app_id);
 
   for (auto& observer : observers_)
     observer.OnNotificationUpdated(it->second->GetNotificationId(), app_id);
+
+  const bool render_on_chrome =
+      features::IsRenderArcNotificationsByChromeEnabled() &&
+      data->render_on_chrome;
+  if (render_on_chrome && data->children_data) {
+    const auto& children = *data->children_data;
+    for (size_t i = 0; i < children.size(); ++i) {
+      const auto& child = children[i];
+      const std::string& child_key = child->key;
+      auto child_it = items_.find(child_key);
+      if (child_it == items_.end()) {
+        OnNotificationPosted(child->Clone());
+      } else {
+        OnNotificationUpdated(child->Clone());
+      }
+    }
+    return;
+  }
 }
 
 void ArcNotificationManager::OpenMessageCenter() {
@@ -464,6 +496,29 @@ void ArcNotificationManager::SendNotificationActivatedInChrome(
                      : ArcNotificationEvent::DEACTIVATED);
 }
 
+void ArcNotificationManager::SendNotificationButtonClickedOnChrome(
+    const std::string& key,
+    const int button_index,
+    const std::string& input) {
+  if (!base::Contains(items_, key)) {
+    VLOG(3) << "Chrome requests to fire a click event on notification (key: "
+            << key << "), but it is gone.";
+    return;
+  }
+  auto* notifications_instance = ARC_GET_INSTANCE_FOR_METHOD(
+      instance_owner_->holder(), SendNotificationButtonClickToAndroid);
+
+  // On shutdown, the ARC channel may quit earlier than notifications.
+  if (!notifications_instance) {
+    VLOG(2) << "ARC Notification (key: " << key
+            << ")'s button is clicked, but the ARC channel has already gone.";
+    return;
+  }
+
+  notifications_instance->SendNotificationButtonClickToAndroid(
+      key, button_index, input);
+}
+
 void ArcNotificationManager::CreateNotificationWindow(const std::string& key) {
   if (!base::Contains(items_, key)) {
     VLOG(3) << "Chrome requests to create window on notification (key: " << key
@@ -562,11 +617,12 @@ bool ArcNotificationManager::ShouldIgnoreNotification(
   if (data->priority == ArcNotificationPriority::NONE)
     return true;
 
-  // Notifications from Play Store are ignored in Public Session and Kiosk mode.
+  // Notifications from Play Store are ignored in Managed Guest Session and
+  // Kiosk mode.
   // TODO (sarakato): Use centralized const for Play Store package.
   if (data->package_name.has_value() &&
       *data->package_name == kPlayStorePackageName &&
-      delegate_->IsPublicSessionOrKiosk()) {
+      delegate_->IsManagedGuestSessionOrKiosk()) {
     return true;
   }
 

@@ -11,12 +11,16 @@ component("views_examples_lib") {
   testonly = true
 
   sources = [
+    "actions_example.cc",
+    "actions_example.h",
     "animated_image_view_example.cc",
     "animated_image_view_example.h",
     "animation_example.cc",
     "animation_example.h",
     "ax_example.cc",
     "ax_example.h",
+    "badge_example.cc",
+    "badge_example.h",
     "box_layout_example.cc",
     "box_layout_example.h",
     "bubble_example.cc",
@@ -43,6 +47,7 @@ component("views_examples_lib") {
     "example_base.h",
     "example_combobox_model.cc",
     "example_combobox_model.h",
+    "examples_action_id.h",
     "examples_color_id.h",
     "examples_color_mixer.cc",
     "examples_color_mixer.h",
@@ -98,6 +103,8 @@ component("views_examples_lib") {
     "toggle_button_example.h",
     "tree_view_example.cc",
     "tree_view_example.h",
+    "typography_example.cc",
+    "typography_example.h",
     "vector_example.cc",
     "vector_example.h",
     "views_examples_export.h",
@@ -124,10 +131,12 @@ component("views_examples_lib") {
     "//cc/paint",
     "//skia",
     "//third_party/icu",
+    "//ui/actions",
     "//ui/base",
     "//ui/color",
     "//ui/events",
     "//ui/gfx",
+    "//ui/gfx:test_support",
     "//ui/gfx/geometry",
     "//ui/lottie",
     "//ui/message_center",
@@ -166,6 +175,7 @@ source_set("views_examples_proc") {
     "//components/viz/service",
     "//mojo/core/embedder",
     "//skia",
+    "//ui/accessibility:test_support",
     "//ui/base",
     "//ui/color:mixers",
     "//ui/compositor",
@@ -332,6 +342,9 @@ test("views_examples_unittests") {
       "//ui/aura",
       "//ui/wm",
     ]
+  }
+  if (is_win) {
+    deps += [ "//ui/native_theme:native_theme_browser" ]
   }
 
   if (is_fuchsia) {

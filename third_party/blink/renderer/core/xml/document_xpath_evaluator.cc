@@ -51,17 +51,17 @@ DocumentXPathEvaluator& DocumentXPathEvaluator::From(Document& document) {
 XPathExpression* DocumentXPathEvaluator::createExpression(
     Document& document,
     const String& expression,
-    XPathNSResolver* resolver,
+    V8XPathNSResolver* resolver,
     ExceptionState& exception_state) {
   DocumentXPathEvaluator& suplement = From(document);
   if (!suplement.xpath_evaluator_)
     suplement.xpath_evaluator_ = XPathEvaluator::Create();
-  return suplement.xpath_evaluator_->createExpression(expression, resolver,
-                                                      exception_state);
+  return suplement.xpath_evaluator_->createExpression(
+      document.GetExecutionContext(), expression, resolver, exception_state);
 }
 
-XPathNSResolver* DocumentXPathEvaluator::createNSResolver(Document& document,
-                                                          Node* node_resolver) {
+Node* DocumentXPathEvaluator::createNSResolver(Document& document,
+                                               Node* node_resolver) {
   DocumentXPathEvaluator& suplement = From(document);
   if (!suplement.xpath_evaluator_)
     suplement.xpath_evaluator_ = XPathEvaluator::Create();
@@ -71,7 +71,7 @@ XPathNSResolver* DocumentXPathEvaluator::createNSResolver(Document& document,
 XPathResult* DocumentXPathEvaluator::evaluate(Document& document,
                                               const String& expression,
                                               Node* context_node,
-                                              XPathNSResolver* resolver,
+                                              V8XPathNSResolver* resolver,
                                               uint16_t type,
                                               const ScriptValue&,
                                               ExceptionState& exception_state) {
@@ -79,7 +79,8 @@ XPathResult* DocumentXPathEvaluator::evaluate(Document& document,
   if (!suplement.xpath_evaluator_)
     suplement.xpath_evaluator_ = XPathEvaluator::Create();
   return suplement.xpath_evaluator_->evaluate(
-      expression, context_node, resolver, type, ScriptValue(), exception_state);
+      document.GetExecutionContext(), expression, context_node, resolver, type,
+      ScriptValue(), exception_state);
 }
 
 void DocumentXPathEvaluator::Trace(Visitor* visitor) const {

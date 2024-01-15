@@ -8,3 +8,6 @@ Extensions:
   - ExtensionAllowedTypes
   - ExtensionAllowInsecureUpdates
   - ExtensionSettings
+  - ExtensionManifestV2Availability
+  - ExtensionUnpublishedAvailability
+  - ExtensionExtendedBackgroundLifetimeForPortConnectionsToUrls

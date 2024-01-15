@@ -7,7 +7,6 @@
 #include <cstring>
 #include <memory>
 
-#include "ash/services/device_sync/proto/cryptauth_api.pb.h"
 #include "base/containers/contains.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
@@ -18,6 +17,7 @@
 #include "chromeos/ash/components/multidevice/beacon_seed.h"
 #include "chromeos/ash/components/multidevice/logging/logging.h"
 #include "chromeos/ash/components/multidevice/remote_device_ref.h"
+#include "chromeos/ash/services/device_sync/proto/cryptauth_api.pb.h"
 #include "chromeos/ash/services/secure_channel/data_with_timestamp.h"
 #include "chromeos/ash/services/secure_channel/raw_eid_generator.h"
 #include "chromeos/ash/services/secure_channel/raw_eid_generator_impl.h"
@@ -62,7 +62,7 @@ BackgroundEidGenerator::BackgroundEidGenerator(
 
 std::vector<DataWithTimestamp> BackgroundEidGenerator::GenerateNearestEids(
     const std::vector<cryptauth::BeaconSeed>& beacon_seeds) const {
-  int64_t now_timestamp_ms = clock_->Now().ToJavaTime();
+  int64_t now_timestamp_ms = clock_->Now().InMillisecondsSinceUnixEpoch();
   std::vector<DataWithTimestamp> eids;
 
   for (int i = -kEidLookAhead; i <= kEidLookAhead; ++i) {

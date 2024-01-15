@@ -46,7 +46,7 @@ message HashedHostInfos {
 // Request to return a set of hints that guide what optimizations to perform
 // on those hosts.
 message GetHintsRequest {
-  reserved 6;
+  reserved 6, 10;
 
   // Information about the set of hosts to retrieve hints for.
   repeated HostInfo hosts = 1;
@@ -110,10 +110,11 @@ message GetHintsResponse {
   repeated MatchedHintInfo hints_to_remove = 3;
 }
 
-// Must sync with enum OptimizationType in enums.xml for metric recording.
+// Must sync with enum OptimizationType in enums.xml and
+// optimization/histograms.xml for metric recording.
 enum OptimizationType {
   // Values for obsolete optimizations.
-  reserved 11, 12;
+  reserved 11, 12, 16, 29;
 
   TYPE_UNSPECIFIED = 0;
   // This optimization blocks JavaScript on the page.
@@ -153,9 +154,6 @@ enum OptimizationType {
   // increased to reduce the number of non-shopping page predictions for
   // shopping pages.
   SHOPPING_PAGE_PREDICTOR = 15;
-  // This optimization provides information about hosts that are identified as
-  // commonly logged-in.
-  LOGIN_DETECTION = 16;
   // Provides key information about the merchant represented by the current
   // host.
   MERCHANT_TRUST_SIGNALS = 17;
@@ -178,6 +176,51 @@ enum OptimizationType {
   // This optimization provides information about hosts that are blocked for
   // IBAN autofill.
   IBAN_AUTOFILL_BLOCKED = 25;
+  // This optimization provides information about images for a URL.
+  SALIENT_IMAGE = 26;
+  // This optimization provides information about a sampling rate of Autofill
+  // UKM metrics per origin based on origin popularity.
+  AUTOFILL_SAMPLING_RATE = 27;
+  // This optimization provides information about whether a merchant is
+  // opted-out of Visa virtual cards for a URL.
+  VCN_MERCHANT_OPT_OUT_VISA = 28;
+  // Provides price insights data including the typical price range and the
+  // price history.
+  PRICE_INSIGHTS = 30;
+  // Information about which JavaScript functions should be eager compiled.
+  V8_COMPILE_HINTS = 31;
+  // Provides Page Insights features for a URL.
+  PAGE_INSIGHTS = 32;
+  // This optimization provides information about shoppinge page types of this
+  // page.
+  SHOPPING_PAGE_TYPES = 33;
+  // This optimization provides information about shopping discounts for a URL.
+  SHOPPING_DISCOUNTS = 34;
+  // This optimization helps determine if this page is a good candidate for
+  // compose.
+  COMPOSE = 35;
+  // This optimization provides information about whether a merchant can be
+  // triggered with PIX bottom sheet.
+  PIX_PAYMENT_MERCHANT_ALLOWLIST = 36;
+  // The below optimizations provide information for merchant URLs that are
+  // eligible for credit card category benefits. These URLs are shared and apply
+  // to all card issuers that support showing benefits on Chrome.
+  SHARED_CREDIT_CARD_FLIGHT_BENEFITS = 37;
+  SHARED_CREDIT_CARD_DINING_BENEFITS = 38;
+  SHARED_CREDIT_CARD_GROCERY_BENEFITS = 39;
+  SHARED_CREDIT_CARD_ENTERTAINMENT_BENEFITS = 40;
+  SHARED_CREDIT_CARD_STREAMING_BENEFITS = 41;
+  SHARED_CREDIT_CARD_SUBSCRIPTION_BENEFITS = 42;
+  // The below optimizations provide information about merchant URLs that only
+  // Capital One supports for credit card category benefits.
+  CAPITAL_ONE_CREDIT_CARD_DINING_BENEFITS = 43;
+  CAPITAL_ONE_CREDIT_CARD_GROCERY_BENEFITS = 44;
+  CAPITAL_ONE_CREDIT_CARD_ENTERTAINMENT_BENEFITS = 45;
+  CAPITAL_ONE_CREDIT_CARD_STREAMING_BENEFITS = 46;
+  // The below optimizations provide information about merchant URLs that only
+  // American Express supports for credit card category benefits.
+  AMERICAN_EXPRESS_CREDIT_CARD_FLIGHT_BENEFITS = 47;
+  AMERICAN_EXPRESS_CREDIT_CARD_SUBSCRIPTION_BENEFITS = 48;
 }
 
 // Presents semantics for how page load URLs should be matched.
@@ -284,9 +327,16 @@ message BloomFilter {
   optional bytes data = 3;
 }
 
+// The format for input to the bloom filter.
+enum BloomFilterFormat {
+  BLOOM_FILTER_FORMAT_UNKNOWN = 0;
+  BLOOM_FILTER_FORMAT_PLAINTEXT = 1;
+  BLOOM_FILTER_FORMAT_SHA256 = 2;
+}
+
 // A scalable filter for an optimization type.
 //
-// Next ID: 6
+// Next ID: 7
 message OptimizationFilter {
   // The type of optimization this filter applies to.
   optional OptimizationType optimization_type = 1;
@@ -304,6 +354,9 @@ message OptimizationFilter {
   // Whether additional host suffixes (other than the host) should be checked
   // against the filter.
   optional bool skip_host_suffix_checking = 4;
+  // The format to check against the bloom filter. Note this only applies
+  // to checks in the bloom_filter and not regexps.
+  optional BloomFilterFormat bloom_filter_format = 6;
 }
 
 message Configuration {
@@ -350,4 +403,13 @@ message Version {
   optional Timestamp generation_timestamp = 1;
   // The source from which the hint was served from.
   optional HintSource hint_source = 3;
+}
+
+// The theme the user is using.
+enum ThemeKey {
+  THEME_KEY_UNKNOWN = 0;
+  // User is using light mode.
+  THEME_KEY_LIGHT = 1;
+  // User is using dark mode.
+  THEME_KEY_DARK = 2;
 }

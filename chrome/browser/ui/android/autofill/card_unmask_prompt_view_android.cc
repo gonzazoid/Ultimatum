@@ -7,11 +7,13 @@
 #include "chrome/android/chrome_jni_headers/CardUnmaskBridge_jni.h"
 #include "chrome/browser/android/resource_mapper.h"
 #include "chrome/browser/ui/autofill/payments/create_card_unmask_prompt_view.h"
+#include "components/autofill/core/browser/ui/autofill_resource_utils.h"
 #include "components/autofill/core/browser/ui/payments/card_unmask_prompt_controller.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/android/view_android.h"
 #include "ui/android/window_android.h"
+#include "url/android/gurl_android.h"
 
 using base::android::JavaParamRef;
 using base::android::ScopedJavaLocalRef;
@@ -69,11 +71,13 @@ void CardUnmaskPromptViewAndroid::OnUserInput(
     const JavaParamRef<jstring>& cvc,
     const JavaParamRef<jstring>& month,
     const JavaParamRef<jstring>& year,
-    jboolean enable_fido_auth) {
+    jboolean enable_fido_auth,
+    jboolean was_checkbox_visible) {
   controller_->OnUnmaskPromptAccepted(
       base::android::ConvertJavaStringToUTF16(env, cvc),
       base::android::ConvertJavaStringToUTF16(env, month),
-      base::android::ConvertJavaStringToUTF16(env, year), enable_fido_auth);
+      base::android::ConvertJavaStringToUTF16(env, year), enable_fido_auth,
+      was_checkbox_visible);
 }
 
 void CardUnmaskPromptViewAndroid::OnNewCardLinkClicked(
@@ -149,18 +153,34 @@ CardUnmaskPromptViewAndroid::GetOrCreateJavaObject() {
   ScopedJavaLocalRef<jstring> instructions =
       base::android::ConvertUTF16ToJavaString(
           env, controller_->GetInstructionsMessage());
+  ScopedJavaLocalRef<jstring> card_name =
+      base::android::ConvertUTF16ToJavaString(env, controller_->GetCardName());
+  ScopedJavaLocalRef<jstring> card_last_four_digits =
+      base::android::ConvertUTF16ToJavaString(
+          env, controller_->GetCardLastFourDigits());
+  ScopedJavaLocalRef<jstring> card_expiration =
+      base::android::ConvertUTF16ToJavaString(env,
+                                              controller_->GetCardExpiration());
+  ScopedJavaLocalRef<jobject> card_art_url =
+      url::GURLAndroid::FromNativeGURL(env, controller_->GetCardArtUrl());
   ScopedJavaLocalRef<jstring> confirm = base::android::ConvertUTF16ToJavaString(
       env, controller_->GetOkButtonLabel());
+  ScopedJavaLocalRef<jstring> cvc_image_announcement =
+      base::android::ConvertUTF16ToJavaString(
+          env, controller_->GetCvcImageAnnouncement());
 
   return java_object_internal_ = Java_CardUnmaskBridge_create(
              env, reinterpret_cast<intptr_t>(this), dialog_title, instructions,
+             ResourceMapper::MapToJavaDrawableId(
+                 GetIconResourceID(controller_->GetCardIcon())),
+             card_name, card_last_four_digits, card_expiration, card_art_url,
              confirm,
              ResourceMapper::MapToJavaDrawableId(controller_->GetCvcImageRid()),
+             cvc_image_announcement,
              ResourceMapper::MapToJavaDrawableId(
                  controller_->GetGooglePayImageRid()),
-             controller_->IsCardLocal(),
+             controller_->IsVirtualCard(),
              controller_->ShouldRequestExpirationDate(),
-             controller_->GetStoreLocallyStartState(),
              controller_->ShouldOfferWebauthn(),
              controller_->GetWebauthnOfferStartState(),
              controller_->GetSuccessMessageDuration().InMilliseconds(),

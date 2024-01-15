@@ -6,69 +6,52 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
+#include "base/functional/callback_helpers.h"
 #include "base/test/mock_callback.h"
-#include "base/test/scoped_feature_list.h"
-#include "chrome/browser/flags/android/chrome_feature_list.h"
 #include "chrome/browser/ui/tab_helpers.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
-#include "components/autofill/content/browser/content_autofill_driver.h"
-#include "components/autofill/content/browser/content_autofill_driver_factory_test_api.h"
-#include "components/autofill/content/browser/content_autofill_driver_test_api.h"
 #include "components/autofill/core/browser/autofill_manager.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/test_autofill_client.h"
 #include "components/autofill/core/browser/test_autofill_driver.h"
 #include "components/autofill/core/browser/test_browser_autofill_manager.h"
-#include "components/autofill/core/common/autofill_tick_clock.h"
-#include "content/public/browser/browser_task_traits.h"
-#include "content/public/browser/browser_thread.h"
+#include "components/autofill/core/common/form_data.h"
+#include "components/autofill/core/common/unique_ids.h"
+#include "content/public/browser/navigation_entry.h"
+#include "content/public/browser/render_frame_host.h"
 #include "content/public/test/navigation_simulator.h"
 #include "content/public/test/web_contents_tester.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-using autofill::AutofillManager;
-using testing::_;
-using testing::NiceMock;
-using AutofillObsever = AutofillManager::Observer;
-
 namespace customtabs {
 
 namespace {
-class MockAutofillClient : public autofill::TestAutofillClient {
- public:
-  MockAutofillClient() = default;
-  MockAutofillClient(const MockAutofillClient&) = delete;
-  MockAutofillClient& operator=(const MockAutofillClient&) = delete;
-  ~MockAutofillClient() override = default;
-};
 
-class MockAutofillDriver : public autofill::TestAutofillDriver {
- public:
-  MockAutofillDriver() = default;
-  MockAutofillDriver(const MockAutofillDriver&) = delete;
-  MockAutofillDriver& operator=(const MockAutofillDriver&) = delete;
-  ~MockAutofillDriver() override = default;
-};
+using ::autofill::AutofillManager;
+using ::autofill::FormData;
+using ::autofill::TestAutofillClient;
+using ::autofill::TestAutofillDriver;
+using ::autofill::TestBrowserAutofillManager;
+using ::autofill::test::CreateTestAddressFormData;
+using ::testing::_;
+using ::testing::NiceMock;
 
-class MockAutofillManager : public autofill::TestBrowserAutofillManager {
- public:
-  MockAutofillManager(autofill::TestAutofillDriver* driver,
-                      autofill::TestAutofillClient* client)
-      : autofill::TestBrowserAutofillManager(driver, client) {}
-  MockAutofillManager(const MockAutofillManager&) = delete;
-  MockAutofillManager& operator=(const MockAutofillManager&) = delete;
-  ~MockAutofillManager() override = default;
-};
+void OnTextFieldDidChangeForAutofillManager(AutofillManager& autofill_manager) {
+  FormData form = CreateTestAddressFormData();
+  autofill_manager.OnTextFieldDidChange(form, form.fields.front(), gfx::RectF(),
+                                        base::TimeTicks::Now());
+}
 
-void OnTextFieldDidChangeForAutofillManager(AutofillManager* autofill_manager) {
-  autofill::FormData form;
-  autofill::test::CreateTestAddressFormData(&form);
-  autofill::FormFieldData field = form.fields.front();
-
-  autofill_manager->OnTextFieldDidChange(
-      form, field, gfx::RectF(), autofill::AutofillTickClock::NowTicks());
+void OnFormsSeenForAutofillManager(AutofillManager& autofill_manager,
+                                   content::RenderFrameHost* rfh) {
+  FormData form = CreateTestAddressFormData();
+  if (rfh) {
+    form.host_frame = autofill::LocalFrameToken(rfh->GetFrameToken().value());
+  }
+  autofill_manager.OnFormsSeen({form}, {});
 }
 }  // namespace
 
@@ -78,52 +61,59 @@ class AutofillObserverImplTest : public testing::Test {
 
   void SetUp() override {
     client_.SetPrefs(autofill::test::PrefServiceForTesting());
-    driver_ = std::make_unique<NiceMock<MockAutofillDriver>>();
-    manager_ = std::make_unique<MockAutofillManager>(driver_.get(), &client_);
+    driver_ = std::make_unique<TestAutofillDriver>();
+    driver_->set_autofill_manager(
+        std::make_unique<TestBrowserAutofillManager>(driver_.get(), &client_));
   }
 
-  void TearDown() override { driver_.reset(); }
-
-  MockAutofillManager* autofill_manager() { return manager_.get(); }
-
-  void DestroyManager() { manager_.release(); }
-
  protected:
+  void DestroyDriver() { driver_.reset(); }
+
+  TestBrowserAutofillManager& autofill_manager() {
+    return static_cast<TestBrowserAutofillManager&>(
+        driver_->GetAutofillManager());
+  }
+
+ private:
   base::test::TaskEnvironment task_environment_;
-  autofill::test::AutofillEnvironment autofill_environment_;
-  NiceMock<MockAutofillClient> client_;
-  std::unique_ptr<MockAutofillDriver> driver_;
-  std::unique_ptr<MockAutofillManager> manager_;
+  autofill::test::AutofillUnitTestEnvironment autofill_test_environment_;
+  TestAutofillClient client_;
+  std::unique_ptr<TestAutofillDriver> driver_;
 };
 
 TEST_F(AutofillObserverImplTest, TestFormInteraction) {
-  base::MockOnceCallback<void()> callback;
-  AutofillObserverImpl obsever(autofill_manager(), callback.Get());
+  base::MockOnceCallback<void(content::GlobalRenderFrameHostId)> callback;
+  content::GlobalRenderFrameHostId id = content::GlobalRenderFrameHostId();
+  AutofillObserverImpl observer(id, &autofill_manager(), callback.Get());
 
-  EXPECT_CALL(callback, Run()).Times(1);
+  EXPECT_CALL(callback, Run(id));
   OnTextFieldDidChangeForAutofillManager(autofill_manager());
 
   // Observer should no longer get notified after the first interaction.
-  EXPECT_CALL(callback, Run()).Times(0);
+  EXPECT_CALL(callback, Run(id)).Times(0);
   OnTextFieldDidChangeForAutofillManager(autofill_manager());
 }
 
 TEST_F(AutofillObserverImplTest, TestNoFormInteraction) {
-  base::MockOnceCallback<void()> callback;
-  auto* observer = new AutofillObserverImpl(autofill_manager(), callback.Get());
+  content::GlobalRenderFrameHostId id = content::GlobalRenderFrameHostId();
+  base::MockOnceCallback<void(content::GlobalRenderFrameHostId)> callback;
+  auto observer = std::make_unique<AutofillObserverImpl>(
+      id, &autofill_manager(), callback.Get());
 
-  EXPECT_CALL(callback, Run()).Times(0);
-  delete observer;
+  EXPECT_CALL(callback, Run(id)).Times(0);
+  observer.reset();
 }
 
 TEST_F(AutofillObserverImplTest, TestAutofillManagerDestroy) {
-  base::MockOnceCallback<void()> callback;
-  auto* observer = new AutofillObserverImpl(autofill_manager(), callback.Get());
+  content::GlobalRenderFrameHostId id = content::GlobalRenderFrameHostId();
+  base::MockOnceCallback<void(content::GlobalRenderFrameHostId)> callback;
+  auto observer = std::make_unique<AutofillObserverImpl>(
+      id, &autofill_manager(), callback.Get());
 
-  DestroyManager();
+  DestroyDriver();
 
-  EXPECT_CALL(callback, Run()).Times(0);
-  delete observer;
+  EXPECT_CALL(callback, Run(id)).Times(0);
+  observer.reset();
 }
 
 // === TabInteractionRecorderAndroidTest ===
@@ -137,14 +127,9 @@ class TabInteractionRecorderAndroidTest
     ChromeRenderViewHostTestHarness::SetUp();
 
     client_.SetPrefs(autofill::test::PrefServiceForTesting());
-    driver_ = std::make_unique<NiceMock<MockAutofillDriver>>();
-    manager_ = std::make_unique<MockAutofillManager>(driver_.get(), &client_);
-  }
-
-  void TearDown() override {
-    manager_.reset();
-    driver_.reset();
-    ChromeRenderViewHostTestHarness::TearDown();
+    driver_ = std::make_unique<TestAutofillDriver>();
+    driver_->set_autofill_manager(
+        std::make_unique<TestBrowserAutofillManager>(driver_.get(), &client_));
   }
 
   std::unique_ptr<content::WebContents> CreateTestWebContents() {
@@ -153,7 +138,7 @@ class TabInteractionRecorderAndroidTest
     TabInteractionRecorderAndroid::CreateForWebContents(contents.get());
     auto* helper =
         TabInteractionRecorderAndroid::FromWebContents(contents.get());
-    helper->SetAutofillManagerForTest(autofill_manager());
+    helper->SetAutofillManagerForTest(&autofill_manager());
 
     // Simulate a navigation event to force the initialization of the main
     // frame.
@@ -163,29 +148,59 @@ class TabInteractionRecorderAndroidTest
     return contents;
   }
 
-  MockAutofillManager* autofill_manager() { return manager_.get(); }
-
  protected:
-  base::test::ScopedFeatureList test_feature_list_;
-  autofill::test::AutofillEnvironment autofill_environment_;
-  NiceMock<MockAutofillClient> client_;
-  std::unique_ptr<MockAutofillDriver> driver_;
-  std::unique_ptr<MockAutofillManager> manager_;
+  TestBrowserAutofillManager& autofill_manager() {
+    return static_cast<TestBrowserAutofillManager&>(
+        driver_->GetAutofillManager());
+  }
+
+ private:
+  autofill::test::AutofillUnitTestEnvironment autofill_test_environment_;
+  TestAutofillClient client_;
+  std::unique_ptr<TestAutofillDriver> driver_;
 };
 
 TEST_F(TabInteractionRecorderAndroidTest, HadFormInteraction) {
-  test_feature_list_.InitAndEnableFeature(chrome::android::kCCTRetainingState);
-
   std::unique_ptr<content::WebContents> contents = CreateTestWebContents();
   auto* helper = TabInteractionRecorderAndroid::FromWebContents(contents.get());
 
-  EXPECT_FALSE(helper->has_form_interactions());
+  EXPECT_FALSE(helper->has_form_interactions_in_session());
+  EXPECT_EQ(nullptr, FormInteractionData::GetForCurrentDocument(
+                   contents->GetPrimaryMainFrame()));
   OnTextFieldDidChangeForAutofillManager(autofill_manager());
-  EXPECT_TRUE(helper->has_form_interactions());
+  EXPECT_TRUE(helper->has_form_interactions_in_session());
+  EXPECT_TRUE(FormInteractionData::GetForCurrentDocument(
+                  contents->GetPrimaryMainFrame())
+                  ->FormInteractionData::GetHasFormInteractionData());
+
+  JNIEnv* env = base::android::AttachCurrentThread();
+  EXPECT_TRUE(helper->HadFormInteractionInSession(env));
+  EXPECT_TRUE(helper->HadFormInteractionInActivePage(env));
+}
+
+TEST_F(TabInteractionRecorderAndroidTest, HadFormInteractionThenNavigation) {
+  std::unique_ptr<content::WebContents> contents = CreateTestWebContents();
+  auto* helper = TabInteractionRecorderAndroid::FromWebContents(contents.get());
+
+  EXPECT_FALSE(helper->has_form_interactions_in_session());
+  EXPECT_EQ(nullptr, FormInteractionData::GetForCurrentDocument(
+                         contents->GetPrimaryMainFrame()));
+  OnTextFieldDidChangeForAutofillManager(autofill_manager());
+  EXPECT_TRUE(helper->has_form_interactions_in_session());
+  EXPECT_TRUE(FormInteractionData::GetForCurrentDocument(
+                  contents->GetPrimaryMainFrame())
+                  ->FormInteractionData::GetHasFormInteractionData());
+
+  content::WebContentsTester::For(contents.get())
+      ->NavigateAndCommit(GURL("https://bar.com"));
+  task_environment()->RunUntilIdle();
+
+  JNIEnv* env = base::android::AttachCurrentThread();
+  EXPECT_TRUE(helper->HadFormInteractionInSession(env));
+  EXPECT_FALSE(helper->HadFormInteractionInActivePage(env));
 }
 
 TEST_F(TabInteractionRecorderAndroidTest, HasNavigatedFromFirstPage) {
-  test_feature_list_.InitAndEnableFeature(chrome::android::kCCTRetainingState);
   std::unique_ptr<content::WebContents> contents = CreateTestWebContents();
   auto* helper = TabInteractionRecorderAndroid::FromWebContents(contents.get());
 
@@ -195,6 +210,10 @@ TEST_F(TabInteractionRecorderAndroidTest, HasNavigatedFromFirstPage) {
       ->NavigateAndCommit(GURL("https://bar.com"));
   task_environment()->RunUntilIdle();
   EXPECT_TRUE(helper->HasNavigatedFromFirstPage());
+
+  JNIEnv* env = base::android::AttachCurrentThread();
+  // no navigation interaction if did not get user interaction.
+  EXPECT_FALSE(helper->HadNavigationInteraction(env));
 }
 
 TEST_F(TabInteractionRecorderAndroidTest, DidGetUserInteraction) {
@@ -204,6 +223,76 @@ TEST_F(TabInteractionRecorderAndroidTest, DidGetUserInteraction) {
   EXPECT_FALSE(helper->did_get_user_interaction());
   helper->DidGetUserInteraction(blink::WebTouchEvent());
   EXPECT_TRUE(helper->did_get_user_interaction());
+
+  JNIEnv* env = base::android::AttachCurrentThread();
+  EXPECT_TRUE(helper->DidGetUserInteraction(env));
+  // no navigation interaction if no navigation from first page is performed.
+  EXPECT_FALSE(helper->HadNavigationInteraction(env));
 }
 
+TEST_F(TabInteractionRecorderAndroidTest,
+       GetUserInteractionAndNavigateFromFirstPage) {
+  std::unique_ptr<content::WebContents> contents = CreateTestWebContents();
+  auto* helper = TabInteractionRecorderAndroid::FromWebContents(contents.get());
+
+  helper->DidGetUserInteraction(blink::WebTouchEvent());
+  content::WebContentsTester::For(contents.get())
+      ->NavigateAndCommit(GURL("https://bar.com"));
+  task_environment()->RunUntilIdle();
+
+  JNIEnv* env = base::android::AttachCurrentThread();
+  EXPECT_TRUE(helper->DidGetUserInteraction(env));
+  EXPECT_TRUE(helper->HadNavigationInteraction(env));
+}
+
+TEST_F(TabInteractionRecorderAndroidTest, ResetInteractions) {
+  std::unique_ptr<content::WebContents> contents = CreateTestWebContents();
+  auto* helper = TabInteractionRecorderAndroid::FromWebContents(contents.get());
+
+  // Simulate touch, text input, and navigation events.
+  helper->DidGetUserInteraction(blink::WebTouchEvent());
+  EXPECT_EQ(nullptr, FormInteractionData::GetForCurrentDocument(
+                   contents->GetPrimaryMainFrame()));
+  OnTextFieldDidChangeForAutofillManager(autofill_manager());
+  EXPECT_TRUE(FormInteractionData::GetForCurrentDocument(
+                  contents->GetPrimaryMainFrame())
+                  ->FormInteractionData::GetHasFormInteractionData());
+
+  content::WebContentsTester::For(contents.get())
+      ->NavigateAndCommit(GURL("https://bar.com"));
+  task_environment()->RunUntilIdle();
+  EXPECT_TRUE(helper->has_form_interactions_in_session());
+  EXPECT_TRUE(helper->did_get_user_interaction());
+  EXPECT_TRUE(helper->HasNavigatedFromFirstPage());
+
+  // Assuming the record resets from Android.
+  JNIEnv* env = base::android::AttachCurrentThread();
+  helper->Reset(env);
+  EXPECT_FALSE(helper->HadFormInteractionInSession(env));
+  EXPECT_FALSE(helper->DidGetUserInteraction(env));
+  EXPECT_FALSE(helper->HadNavigationInteraction(env));
+  EXPECT_FALSE(helper->HadFormInteractionInActivePage(env));
+}
+
+TEST_F(TabInteractionRecorderAndroidTest, TestFormSeen) {
+  std::unique_ptr<content::WebContents> contents = CreateTestWebContents();
+  OnFormsSeenForAutofillManager(autofill_manager(),
+                                contents->GetPrimaryMainFrame());
+
+  EXPECT_NE(FormInteractionData::GetForCurrentDocument(
+                contents->GetPrimaryMainFrame()),
+            nullptr);
+  EXPECT_FALSE(FormInteractionData::GetForCurrentDocument(
+                   contents->GetPrimaryMainFrame())
+                   ->GetHasFormInteractionData());
+}
+
+TEST_F(TabInteractionRecorderAndroidTest, TestFormSeenInDifferentFrame) {
+  std::unique_ptr<content::WebContents> contents = CreateTestWebContents();
+  OnFormsSeenForAutofillManager(autofill_manager(), nullptr);
+
+  EXPECT_EQ(FormInteractionData::GetForCurrentDocument(
+                contents->GetPrimaryMainFrame()),
+            nullptr);
+}
 }  // namespace customtabs

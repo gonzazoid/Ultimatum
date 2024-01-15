@@ -6,8 +6,8 @@
 
 #include <stddef.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/rtl.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
@@ -161,7 +161,7 @@ void CustomHomePagesTableModel::SetToCurrentlyOpenPages(
 
   // Add tabs from appropriate browser windows.
   size_t add_index = 0;
-  for (auto* browser : *BrowserList::GetInstance()) {
+  for (Browser* browser : *BrowserList::GetInstance()) {
     if (!ShouldIncludeBrowser(browser))
       continue;
 

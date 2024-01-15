@@ -5,6 +5,7 @@
 module viz.mojom;
 
 import "gpu/ipc/common/context_result.mojom";
+import "gpu/ipc/common/surface_handle.mojom";
 import "mojo/public/mojom/base/time.mojom";
 import "ui/gfx/mojom/ca_layer_params.mojom";
 import "ui/gfx/mojom/delegated_ink_point_renderer.mojom";
@@ -37,6 +38,10 @@ interface DisplayPrivate {
   // effect when using GPU compositing.
   SetDisplayColorSpaces(gfx.mojom.DisplayColorSpaces display_color_spaces);
   SetOutputIsSecure(bool secure);
+
+  // Sets CGDirectDisplayID for GPU begin frame source.
+  [EnableIf=is_mac]
+  SetVSyncDisplayID(int64 display_id);
 
   // Updates vsync parameters used to generate BeginFrames for this display.
   // This will do nothing if the display is using an external BeginFrame source.
@@ -94,10 +99,17 @@ interface DisplayPrivate {
   // not just observe begin frames requested by other observers. This only a
   // single observer at a time; calling this will replace any existing observer.
   SetStandaloneBeginFrameObserver(pending_remote<BeginFrameObserver> observer);
+
+  // Sets the maximum vsync interval supported by the display for use with
+  // variable refresh rates. An absent value indicates that VRR is not enabled
+  // on the display.
+  SetMaxVrrInterval(mojo_base.mojom.TimeDelta? max_vrr_interval);
 };
 
+// DisplayClient allows privileged clients to receive events from the Display.
 interface DisplayClient {
-  [EnableIf=is_mac]
+  // Called when new Core Animation Layer params are received.
+  [EnableIf=is_apple]
   OnDisplayReceivedCALayerParams(gfx.mojom.CALayerParams ca_layer_params);
 
   // Creates a LayeredWindowUpdater implementation to draw into a layered
@@ -105,13 +117,18 @@ interface DisplayClient {
   [EnableIf=is_win]
   CreateLayeredWindowUpdater(pending_receiver<LayeredWindowUpdater> receiver);
 
+  // Sends the created child window to the browser process so that it can be
+  // parented to the browser process window
+  [EnableIf=is_win]
+  AddChildWindowToBrowser(gpu.mojom.SurfaceHandle child_window);
+
   // Notifies that a swap has occurred and provides information about the pixel
   // size of the swapped frame.
   [EnableIf=is_android]
   DidCompleteSwapWithSize(gfx.mojom.Size size);
 
   // Notifies that a swap has occurred with a new size.
-  [EnableIf=is_linux]
+  [EnableIf=linux_x11]
   DidCompleteSwapWithNewSize(gfx.mojom.Size size);
 
   // Notifies the client of the result of context creation attempt. On Android we can't

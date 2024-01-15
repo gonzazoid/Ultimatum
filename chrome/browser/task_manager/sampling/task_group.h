@@ -11,8 +11,10 @@
 #include <map>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/process/process_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -94,7 +96,9 @@ class TaskGroup {
   const base::ProcessHandle& process_handle() const { return process_handle_; }
   const base::ProcessId& process_id() const { return process_id_; }
 
-  const std::vector<Task*>& tasks() const { return tasks_; }
+  const std::vector<raw_ptr<Task, VectorExperimental>>& tasks() const {
+    return tasks_;
+  }
   size_t num_tasks() const { return tasks().size(); }
   bool empty() const { return tasks().empty(); }
 
@@ -174,7 +178,7 @@ class TaskGroup {
 
   void OnCpuRefreshDone(double cpu_usage);
   void OnSwappedMemRefreshDone(int64_t swapped_mem_bytes);
-  void OnProcessPriorityDone(bool is_backgrounded);
+  void OnProcessPriorityDone(base::Process::Priority priority);
   void OnIdleWakeupsRefreshDone(int idle_wakeups_per_second);
 
   void OnSamplerRefreshDone(
@@ -201,13 +205,13 @@ class TaskGroup {
   scoped_refptr<SharedSampler> shared_sampler_;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // Shared sampler that retrieves memory footprint for all ARC processes.
-  ArcSharedSampler* arc_shared_sampler_;           // Not owned
-  CrosapiTaskProviderAsh* crosapi_task_provider_;  // Not owned
+  raw_ptr<ArcSharedSampler> arc_shared_sampler_;           // Not owned
+  raw_ptr<CrosapiTaskProviderAsh> crosapi_task_provider_;  // Not owned
 #endif                                             // BUILDFLAG(IS_CHROMEOS_ASH)
 
   // Lists the Tasks in this TaskGroup.
   // Tasks are not owned by the TaskGroup. They're owned by the TaskProviders.
-  std::vector<Task*> tasks_;
+  std::vector<raw_ptr<Task, VectorExperimental>> tasks_;
 
   // Flags will be used to determine when the background calculations has
   // completed for the enabled refresh types for this TaskGroup.

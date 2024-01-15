@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "base/json/json_writer.h"
+#include "base/strings/string_util.h"
 #include "components/sync/test/fake_server.h"
 
 using base::JSONWriter;
@@ -23,20 +24,10 @@ namespace fake_server {
 
 namespace {
 
-AssertionResult DictionaryCreationAssertionFailure() {
-  return AssertionFailure() << "FakeServer failed to create an entities "
-                            << "dictionary.";
-}
-
 AssertionResult VerificationCountAssertionFailure(size_t actual_count,
                                                   size_t expected_count) {
   return AssertionFailure() << "Actual count: " << actual_count << "; "
                             << "Expected count: " << expected_count;
-}
-
-AssertionResult UnknownTypeAssertionFailure(const string& model_type) {
-  return AssertionFailure()
-         << "Verification not attempted. Unknown ModelType: " << model_type;
 }
 
 AssertionResult VerifySessionsHierarchyEquality(
@@ -50,9 +41,7 @@ AssertionResult VerifySessionsHierarchyEquality(
                             << "; Expected contents: " << expected.ToString();
 }
 
-// Caller maintains ownership of |entities|.
-string ConvertFakeServerContentsToString(
-    const base::DictionaryValue& entities) {
+string ConvertFakeServerContentsToString(const base::Value::Dict& entities) {
   string entities_str;
   if (!JSONWriter::WriteWithOptions(entities, JSONWriter::OPTIONS_PRETTY_PRINT,
                                     &entities_str)) {
@@ -71,21 +60,16 @@ FakeServerVerifier::~FakeServerVerifier() = default;
 AssertionResult FakeServerVerifier::VerifyEntityCountByType(
     size_t expected_count,
     syncer::ModelType model_type) const {
-  std::unique_ptr<base::DictionaryValue> entities =
-      fake_server_->GetEntitiesAsDictionaryValue();
-  if (!entities) {
-    return DictionaryCreationAssertionFailure();
-  }
-  base::DictAdapterForMigration entities_dict =
-      base::DictAdapterForMigration(*entities);
+  base::Value::Dict entities = fake_server_->GetEntitiesAsDictForTesting();
+
   string model_type_string = ModelTypeToDebugString(model_type);
-  const base::Value::List* entity_list;
-  entity_list = entities_dict.FindList(model_type_string);
+  const base::Value::List* entity_list = entities.FindList(model_type_string);
+  DCHECK(entity_list);
   if (expected_count != entity_list->size()) {
     return VerificationCountAssertionFailure(entity_list->size(),
                                              expected_count)
            << "\n\n"
-           << ConvertFakeServerContentsToString(*entities);
+           << ConvertFakeServerContentsToString(entities);
   }
 
   return AssertionSuccess();
@@ -95,24 +79,14 @@ AssertionResult FakeServerVerifier::VerifyEntityCountByTypeAndName(
     size_t expected_count,
     syncer::ModelType model_type,
     const string& name) const {
-  std::unique_ptr<base::DictionaryValue> entities =
-      fake_server_->GetEntitiesAsDictionaryValue();
-  if (!entities) {
-    return DictionaryCreationAssertionFailure();
-  }
-
-  base::DictAdapterForMigration entities_dict =
-      base::DictAdapterForMigration(*entities);
+  base::Value::Dict entities = fake_server_->GetEntitiesAsDictForTesting();
 
   string model_type_string = ModelTypeToDebugString(model_type);
-  const base::Value::List* entity_list;
-  entity_list = entities_dict.FindList(model_type_string);
+  const base::Value::List* entity_list = entities.FindList(model_type_string);
+  DCHECK(entity_list);
+
   size_t actual_count = 0;
   base::Value name_value(name);
-
-  if (!entity_list) {
-    return UnknownTypeAssertionFailure(model_type_string);
-  }
 
   for (auto& entity : *entity_list) {
     if (name_value == entity)
@@ -122,7 +96,7 @@ AssertionResult FakeServerVerifier::VerifyEntityCountByTypeAndName(
   if (actual_count != expected_count) {
     return VerificationCountAssertionFailure(actual_count, expected_count)
            << "; Name: " << name << "\n\n"
-           << ConvertFakeServerContentsToString(*entities);
+           << ConvertFakeServerContentsToString(entities);
   }
 
   return AssertionSuccess();
@@ -185,6 +159,36 @@ AssertionResult FakeServerVerifier::VerifySessions(
     actual_sessions.AddWindow(tab_urls);
   }
   return VerifySessionsHierarchyEquality(expected_sessions, actual_sessions);
+}
+
+AssertionResult FakeServerVerifier::VerifyHistory(
+    const std::multiset<GURL>& expected_urls) {
+  std::vector<sync_pb::SyncEntity> history =
+      fake_server_->GetSyncEntitiesByModelType(syncer::HISTORY);
+  std::multiset<GURL> actual_urls;
+  for (const sync_pb::SyncEntity& entity : history) {
+    sync_pb::HistorySpecifics history_specifics = entity.specifics().history();
+    for (int i = 0; i < history_specifics.redirect_entries_size(); i++) {
+      actual_urls.emplace(history_specifics.redirect_entries(i).url());
+    }
+  }
+
+  if (expected_urls == actual_urls) {
+    return AssertionSuccess();
+  }
+
+  std::vector<std::string> actual;
+  for (const GURL& url : actual_urls) {
+    actual.push_back(url.spec());
+  }
+  std::vector<std::string> expected;
+  for (const GURL& url : expected_urls) {
+    expected.push_back(url.spec());
+  }
+  return AssertionFailure()
+         << "Server history does not match! "
+         << "FakeServer contents: " << base::JoinString(actual, ", ")
+         << "; Expected contents: " << base::JoinString(expected, ", ");
 }
 
 }  // namespace fake_server

@@ -8,8 +8,15 @@ var watch_id = 0;
 var position_initialized = false;
 var position_updated = false;
 
-function sendString(string) {
-  window.domAutomationController.send(string);
+const callbackStatuses = new ResultQueue();
+const geopositionUpdates = new ResultQueue();
+
+function resetState() {
+  last_position = 0;
+  last_error = 0;
+  watch_id = 0;
+  position_initialized = false;
+  position_updated = false;
 }
 function geoSuccessCallback(position) {
   last_position = position;
@@ -20,37 +27,41 @@ function geoErrorCallback(error) {
 function geoSuccessCallbackWithResponse(position) {
   last_position = position;
 
+  callbackStatuses.push('request-callback-success');
   if (!position_initialized) {  // First time callback invoked.
     position_initialized = true;
-    sendString('request-callback-success');
     return;
   }
 
   if (!position_updated) {  // Second time callback invoked.
     position_updated = true;
-    sendString('geoposition-updated');
+    geopositionUpdates.push('geoposition-updated');
   }
 }
 function geoErrorCallbackWithResponse(error) {
   last_error = error;
-  sendString('request-callback-error');
+  callbackStatuses.push('request-callback-error');
 }
 function geoStart() {
+  resetState();
   watch_id = navigator.geolocation.watchPosition(
       geoSuccessCallback, geoErrorCallback,
       {maximumAge:600000, timeout:100000, enableHighAccuracy:true});
   return watch_id;
 }
 function geoStartWithAsyncResponse() {
+  resetState();
   navigator.geolocation.watchPosition(
-            geoSuccessCallbackWithResponse, geoErrorCallbackWithResponse,
-            {maximumAge:600000, timeout:100000, enableHighAccuracy:true});
+    geoSuccessCallbackWithResponse, geoErrorCallbackWithResponse,
+      {maximumAge:600000, timeout:100000, enableHighAccuracy:true});
+  return callbackStatuses.pop();
 }
 function geoStartWithSyncResponse() {
+  resetState();
   navigator.geolocation.watchPosition(
             geoSuccessCallback, geoErrorCallback,
             {maximumAge:600000, timeout:100000, enableHighAccuracy:true});
-  sendString('requested');
+  return 'requested';
 }
 function geoGetLastPositionLatitude() {
   return "" + last_position.coords.latitude;

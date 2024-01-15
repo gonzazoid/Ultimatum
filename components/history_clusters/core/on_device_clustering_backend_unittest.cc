@@ -6,14 +6,17 @@
 
 #include "base/containers/flat_set.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
+#include "components/history/core/browser/history_types.h"
 #include "components/history_clusters/core/clustering_test_utils.h"
 #include "components/history_clusters/core/config.h"
+#include "components/history_clusters/core/history_clusters_util.h"
 #include "components/history_clusters/core/on_device_clustering_features.h"
 #include "components/optimization_guide/core/entity_metadata_provider.h"
-#include "components/optimization_guide/core/new_optimization_guide_decider.h"
+#include "components/optimization_guide/core/test_optimization_guide_decider.h"
 #include "components/site_engagement/core/site_engagement_score_provider.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -29,7 +32,7 @@ class TestSiteEngagementScoreProvider
     : public site_engagement::SiteEngagementScoreProvider {
  public:
   TestSiteEngagementScoreProvider() = default;
-  ~TestSiteEngagementScoreProvider() = default;
+  ~TestSiteEngagementScoreProvider() override = default;
 
   double GetScore(const GURL& url) const override {
     ++count_get_score_invocations_;
@@ -86,7 +89,7 @@ class TestEntityMetadataProvider
 };
 
 class TestOptimizationGuideDecider
-    : public optimization_guide::NewOptimizationGuideDecider {
+    : public optimization_guide::TestOptimizationGuideDecider {
  public:
   TestOptimizationGuideDecider() = default;
   ~TestOptimizationGuideDecider() override = default;
@@ -99,13 +102,6 @@ class TestOptimizationGuideDecider
               optimization_types[0]);
   }
 
-  void CanApplyOptimization(
-      const GURL& url,
-      optimization_guide::proto::OptimizationType optimization_type,
-      optimization_guide::OptimizationGuideDecisionCallback callback) override {
-    NOTREACHED();
-  }
-
   optimization_guide::OptimizationGuideDecision CanApplyOptimization(
       const GURL& url,
       optimization_guide::proto::OptimizationType optimization_type,
@@ -116,26 +112,17 @@ class TestOptimizationGuideDecider
                ? optimization_guide::OptimizationGuideDecision::kFalse
                : optimization_guide::OptimizationGuideDecision::kTrue;
   }
-
-  void CanApplyOptimizationOnDemand(
-      const std::vector<GURL>& urls,
-      const base::flat_set<optimization_guide::proto::OptimizationType>&
-          optimization_types,
-      optimization_guide::proto::RequestContext request_context,
-      optimization_guide::OnDemandOptimizationGuideDecisionRepeatingCallback
-          callback) override {}
 };
 
 class OnDeviceClusteringWithoutContentBackendTest : public ::testing::Test {
  public:
   OnDeviceClusteringWithoutContentBackendTest() {
-    config_.content_clustering_enabled = false;
     config_.keyword_filter_on_noisy_visits = true;
     config_.keyword_filter_on_entity_aliases = true;
     config_.max_entity_aliases_in_keywords = 100;
-    config_.should_label_clusters = false;
     config_.entity_relevance_threshold = 60;
     config_.should_check_hosts_to_skip_clustering_for = true;
+    config_.use_host_for_visit_deduping = false;
     SetConfigForTesting(config_);
   }
 
@@ -150,7 +137,8 @@ class OnDeviceClusteringWithoutContentBackendTest : public ::testing::Test {
 
   std::vector<history::Cluster> ClusterVisits(
       ClusteringRequestSource clustering_request_source,
-      const std::vector<history::AnnotatedVisit>& visits) {
+      const std::vector<history::AnnotatedVisit>& visits,
+      bool requires_ui_and_triggerability = true) {
     std::vector<history::Cluster> clusters;
 
     base::RunLoop run_loop;
@@ -164,7 +152,52 @@ class OnDeviceClusteringWithoutContentBackendTest : public ::testing::Test {
               run_loop->Quit();
             },
             &run_loop, &clusters),
-        visits);
+        visits, requires_ui_and_triggerability);
+    run_loop.Run();
+
+    // Sort clusters here for easier verification.
+    SortClusters(&clusters);
+    return clusters;
+  }
+
+  std::vector<history::Cluster> GetClustersForUI(
+      ClusteringRequestSource clustering_request_source,
+      QueryClustersFilterParams filter_params,
+      const std::vector<history::Cluster>& in_clusters) {
+    std::vector<history::Cluster> clusters;
+
+    base::RunLoop run_loop;
+    clustering_backend_->GetClustersForUI(
+        clustering_request_source, std::move(filter_params),
+        base::BindOnce(
+            [](base::RunLoop* run_loop,
+               std::vector<history::Cluster>* out_clusters,
+               std::vector<history::Cluster> clusters) {
+              *out_clusters = std::move(clusters);
+              run_loop->Quit();
+            },
+            &run_loop, &clusters),
+        in_clusters);
+    run_loop.Run();
+
+    return clusters;
+  }
+
+  std::vector<history::Cluster> GetClusterTriggerability(
+      const std::vector<history::Cluster>& in_clusters) {
+    std::vector<history::Cluster> clusters;
+
+    base::RunLoop run_loop;
+    clustering_backend_->GetClusterTriggerability(
+        base::BindOnce(
+            [](base::RunLoop* run_loop,
+               std::vector<history::Cluster>* out_clusters,
+               std::vector<history::Cluster> clusters) {
+              *out_clusters = std::move(clusters);
+              run_loop->Quit();
+            },
+            &run_loop, &clusters),
+        in_clusters);
     run_loop.Run();
 
     return clusters;
@@ -188,6 +221,24 @@ TEST_F(OnDeviceClusteringWithoutContentBackendTest, ClusterNoVisits) {
       ClusterVisits(ClusteringRequestSource::kJourneysPage, {}).empty());
 }
 
+TEST_F(OnDeviceClusteringWithoutContentBackendTest,
+       ClusterOneVisitNoRequiresUiAndTriggerability) {
+  std::vector<history::AnnotatedVisit> visits;
+
+  // Fill in the visits vector with 1 visit.
+  history::AnnotatedVisit visit =
+      testing::CreateDefaultAnnotatedVisit(1, GURL("https://google.com/"));
+  visits.push_back(visit);
+
+  std::vector<history::Cluster> result_clusters =
+      ClusterVisits(ClusteringRequestSource::kJourneysPage, visits,
+                    /*requires_ui_and_triggerability=*/false);
+  EXPECT_THAT(testing::ToVisitResults(result_clusters),
+              ElementsAre(ElementsAre(testing::VisitResult(1, 1.0))));
+  // Make sure triggerability was not calculated.
+  EXPECT_FALSE(result_clusters[0].triggerability_calculated);
+}
+
 TEST_F(OnDeviceClusteringWithoutContentBackendTest, ClusterOneVisit) {
   std::vector<history::AnnotatedVisit> visits;
 
@@ -200,6 +251,8 @@ TEST_F(OnDeviceClusteringWithoutContentBackendTest, ClusterOneVisit) {
       ClusterVisits(ClusteringRequestSource::kJourneysPage, visits);
   EXPECT_THAT(testing::ToVisitResults(result_clusters),
               ElementsAre(ElementsAre(testing::VisitResult(1, 1.0))));
+  // Make sure triggerability was calculated.
+  EXPECT_TRUE(result_clusters[0].triggerability_calculated);
 }
 
 TEST_F(OnDeviceClusteringWithoutContentBackendTest,
@@ -227,11 +280,6 @@ TEST_F(OnDeviceClusteringWithoutContentBackendTest,
               ElementsAre(ElementsAre(testing::VisitResult(2, 1.0),
                                       testing::VisitResult(1, 1.0))));
   ASSERT_EQ(result_clusters.size(), 1u);
-  EXPECT_FALSE(result_clusters[0].label.has_value());
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.ClusterSize.Min", 2, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.ClusterSize.Max", 2, 1);
 }
 
 TEST_F(OnDeviceClusteringWithoutContentBackendTest,
@@ -254,14 +302,6 @@ TEST_F(OnDeviceClusteringWithoutContentBackendTest,
   EXPECT_THAT(testing::ToVisitResults(result_clusters),
               ElementsAre(ElementsAre(testing::VisitResult(2, 1.0),
                                       testing::VisitResult(1, 1.0))));
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.ClusterSize.Min", 2, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.ClusterSize.Max", 2, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.NumKeywordsPerCluster.Min", 0, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.NumKeywordsPerCluster.Max", 0, 1);
 }
 
 TEST_F(OnDeviceClusteringWithoutContentBackendTest, ClusterTwoVisitsTiedByURL) {
@@ -282,14 +322,118 @@ TEST_F(OnDeviceClusteringWithoutContentBackendTest, ClusterTwoVisitsTiedByURL) {
   EXPECT_THAT(testing::ToVisitResults(result_clusters),
               ElementsAre(ElementsAre(testing::VisitResult(
                   2, 1.0, {history::DuplicateClusterVisit{1}}))));
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.ClusterSize.Min", 1, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.ClusterSize.Max", 1, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.NumKeywordsPerCluster.Min", 0, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.NumKeywordsPerCluster.Max", 0, 1);
+}
+
+TEST_F(OnDeviceClusteringWithoutContentBackendTest,
+       GetClustersForUISimpleCase) {
+  std::vector<history::Cluster> clusters;
+
+  // Cluster processors and finalizers should be run.
+
+  // The below clusters contain the exact same visit so should be merged and
+  // then deduped. No max is applied so clusters should be returned as is.
+
+  history::Cluster cluster1;
+  cluster1.visits.emplace_back(
+      testing::CreateClusterVisit(testing::CreateDefaultAnnotatedVisit(
+          1, GURL("https://google.com/"), base::Time::FromTimeT(1))));
+  clusters.push_back(cluster1);
+
+  history::Cluster cluster2;
+  cluster2.visits.emplace_back(
+      testing::CreateClusterVisit(testing::CreateDefaultAnnotatedVisit(
+          2, GURL("https://google.com/"), base::Time::FromTimeT(2))));
+  clusters.push_back(cluster2);
+
+  history::Cluster cluster3;
+  cluster3.visits.emplace_back(
+      testing::CreateClusterVisit(testing::CreateDefaultAnnotatedVisit(
+          3, GURL("https://othercluster.com/"), base::Time::FromTimeT(4))));
+  clusters.push_back(cluster3);
+
+  std::vector<history::Cluster> result_clusters =
+      GetClustersForUI(ClusteringRequestSource::kJourneysPage,
+                       QueryClustersFilterParams(), clusters);
+  EXPECT_THAT(testing::ToVisitResults(result_clusters),
+              ElementsAre(ElementsAre(testing::VisitResult(
+                              2, 1.0, {history::DuplicateClusterVisit{1}})),
+                          ElementsAre(testing::VisitResult(3, 1.0))));
+  EXPECT_FALSE(result_clusters[0].label->empty());
+}
+
+TEST_F(OnDeviceClusteringWithoutContentBackendTest,
+       GetClustersForUIFilterApplied) {
+  std::vector<history::Cluster> clusters;
+
+  QueryClustersFilterParams params;
+  params.has_related_searches = true;
+
+  // Cluster processors and finalizers should be run.
+
+  history::Cluster cluster1;
+  cluster1.visits.emplace_back(
+      testing::CreateClusterVisit(testing::CreateDefaultAnnotatedVisit(
+          1, GURL("https://google.com/"), base::Time::FromTimeT(1))));
+  clusters.push_back(cluster1);
+
+  history::Cluster cluster2;
+  cluster2.visits.emplace_back(
+      testing::CreateClusterVisit(testing::CreateDefaultAnnotatedVisit(
+          2, GURL("https://google.com/"), base::Time::FromTimeT(2))));
+  clusters.push_back(cluster2);
+
+  history::Cluster cluster3;
+  cluster3.visits.emplace_back(
+      testing::CreateClusterVisit(testing::CreateDefaultAnnotatedVisit(
+          3, GURL("https://othercluster.com/"), base::Time::FromTimeT(4))));
+  clusters.push_back(cluster3);
+
+  std::vector<history::Cluster> result_clusters =
+      GetClustersForUI(ClusteringRequestSource::kJourneysPage,
+                       std::move(params), std::move(clusters));
+  EXPECT_TRUE(result_clusters.empty());
+}
+
+TEST_F(OnDeviceClusteringWithoutContentBackendTest,
+       GetClusterTriggerabilitySimpleCase) {
+  std::vector<history::Cluster> clusters;
+
+  // Cluster finalizers should be run.
+
+  history::Cluster cluster1;
+  cluster1.cluster_id = 1;
+  cluster1.should_show_on_prominent_ui_surfaces = false;
+  cluster1.visits.emplace_back(
+      testing::CreateClusterVisit(testing::CreateDefaultAnnotatedVisit(
+          1, GURL("https://google.com/"), base::Time::FromTimeT(1))));
+  clusters.push_back(cluster1);
+
+  history::Cluster cluster2;
+  cluster2.cluster_id = 2;
+  cluster2.should_show_on_prominent_ui_surfaces = false;
+  cluster2.visits.emplace_back(
+      testing::CreateClusterVisit(testing::CreateDefaultAnnotatedVisit(
+          3, GURL("https://google.com/2"), base::Time::FromTimeT(3))));
+  cluster2.visits.emplace_back(
+      testing::CreateClusterVisit(testing::CreateDefaultAnnotatedVisit(
+          4, GURL("https://google.com/3"), base::Time::FromTimeT(4))));
+  clusters.push_back(cluster2);
+
+  std::vector<history::Cluster> result_clusters =
+      GetClusterTriggerability(clusters);
+  EXPECT_EQ(result_clusters.size(), 2u);
+  history::Cluster out_cluster1 = result_clusters[0];
+  EXPECT_EQ(out_cluster1.cluster_id, 1);
+  EXPECT_TRUE(out_cluster1.triggerability_calculated);
+  // Single visit cluster.
+  EXPECT_FALSE(out_cluster1.should_show_on_prominent_ui_surfaces);
+  EXPECT_TRUE(out_cluster1.label.has_value());
+
+  history::Cluster out_cluster2 = result_clusters[1];
+  EXPECT_EQ(out_cluster2.cluster_id, 2);
+  EXPECT_TRUE(out_cluster2.triggerability_calculated);
+  EXPECT_TRUE(out_cluster2.should_show_on_prominent_ui_surfaces);
+  EXPECT_TRUE(out_cluster2.label.has_value());
 }
 
 TEST_F(OnDeviceClusteringWithoutContentBackendTest, DedupeClusters) {
@@ -378,23 +522,6 @@ TEST_F(OnDeviceClusteringWithoutContentBackendTest, MultipleClusters) {
                                   4, 1.0, {history::DuplicateClusterVisit{1}}),
                               testing::VisitResult(2, 1.0)),
                   ElementsAre(testing::VisitResult(3, 1.0))));
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.ClusterSize.Min", 1, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.ClusterSize.Max", 2, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.NumKeywordsPerCluster.Min", 0, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.NumKeywordsPerCluster.Max", 0, 1);
-
-  // This is coming from the Journeys page so expect that the per-cluster
-  // metrics are not collected.
-  histogram_tester.ExpectTotalCount(
-      "History.Clusters.Backend.ClusterContainsSearch", 0);
-  histogram_tester.ExpectTotalCount(
-      "History.Clusters.Backend.NumKeywordsPerCluster", 0);
-  histogram_tester.ExpectTotalCount(
-      "History.Clusters.Backend.NumVisitsPerCluster", 0);
 }
 
 TEST_F(OnDeviceClusteringWithoutContentBackendTest,
@@ -423,39 +550,17 @@ TEST_F(OnDeviceClusteringWithoutContentBackendTest,
   visits.push_back(visit3);
 
   std::vector<history::Cluster> result_clusters =
-      ClusterVisits(ClusteringRequestSource::kKeywordCacheGeneration, visits);
+      ClusterVisits(ClusteringRequestSource::kJourneysPage, visits);
   EXPECT_THAT(testing::ToVisitResults(result_clusters),
               ElementsAre(ElementsAre(testing::VisitResult(3, 1.0)),
                           ElementsAre(testing::VisitResult(2, 1.0),
                                       testing::VisitResult(1, 1.0))));
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.ClusterSize.Min", 1, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.ClusterSize.Max", 2, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.NumKeywordsPerCluster.Min", 0, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.NumKeywordsPerCluster.Max", 0, 1);
-
-  // This is coming from the keyword cache generation so expect that the
-  // per-cluster metrics are collected.
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.ClusterContainsSearch", false, 2);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.NumKeywordsPerCluster", 0, 2);
-  histogram_tester.ExpectTotalCount(
-      "History.Clusters.Backend.NumVisitsPerCluster", 2);
-  histogram_tester.ExpectBucketCount(
-      "History.Clusters.Backend.NumVisitsPerCluster", 1, 1);
-  histogram_tester.ExpectBucketCount(
-      "History.Clusters.Backend.NumVisitsPerCluster", 2, 1);
 }
 
 class OnDeviceClusteringWithContentBackendTest
     : public OnDeviceClusteringWithoutContentBackendTest {
  public:
   OnDeviceClusteringWithContentBackendTest() {
-    config_.content_clustering_enabled = true;
     config_.exclude_entities_that_have_no_collections_from_content_clustering =
         false;
     config_.collections_to_block_from_content_clustering = {};
@@ -481,18 +586,14 @@ class OnDeviceClusteringWithContentBackendTest
   Config config_;
 };
 
-TEST_F(OnDeviceClusteringWithContentBackendTest, ClusterOnContent) {
-  std::vector<history::AnnotatedVisit> visits;
+TEST_F(OnDeviceClusteringWithContentBackendTest, GetClustersForUIWithContent) {
+  std::vector<history::Cluster> clusters;
 
-  // Visit2's referrer is visit 1 and visit 4 is a back navigation from visit 2.
-  // Visit 3 is a different journey altogether. Visit 10 is referring to a
-  // missing visit and should be considered as in its own cluster.
-  // Also, make sure these aren't sorted so we test that we are sorting the
-  // visits by visit ID.
+  history::Cluster cluster1;
   history::AnnotatedVisit visit = testing::CreateDefaultAnnotatedVisit(
       1, GURL("https://github.com/"), base::Time::FromTimeT(1));
   visit.content_annotations.model_annotations.entities = {{"github", 100}};
-  visits.push_back(visit);
+  cluster1.visits.push_back(testing::CreateClusterVisit(visit));
 
   history::AnnotatedVisit visit2 = testing::CreateDefaultAnnotatedVisit(
       2, GURL("https://google.com/"), base::Time::FromTimeT(2));
@@ -501,16 +602,18 @@ TEST_F(OnDeviceClusteringWithContentBackendTest, ClusterOnContent) {
   // Set the visit duration to be 2x the default so it has the same duration
   // after |visit| and |visit4| are deduped.
   visit2.visit_row.visit_duration = base::Seconds(20);
-  visits.push_back(visit2);
+  cluster1.visits.push_back(testing::CreateClusterVisit(visit2));
 
   history::AnnotatedVisit visit4 = testing::CreateDefaultAnnotatedVisit(
       4, GURL("https://github.com/"), base::Time::FromTimeT(4));
   visit4.content_annotations.model_annotations.entities = {{"github", 100}};
-  visits.push_back(visit4);
+  cluster1.visits.push_back(testing::CreateClusterVisit(visit4));
+  clusters.push_back(cluster1);
 
   // After the context clustering, visit5 will not be in the same cluster as
   // visit, visit2, and visit4 but all of the visits have the same entities
   // so they will be clustered in the content pass.
+  history::Cluster cluster2;
   history::AnnotatedVisit visit5 = testing::CreateDefaultAnnotatedVisit(
       10,
       GURL("https://shouldskip.com/butnotsincehostcheckingisfalse/"
@@ -518,69 +621,22 @@ TEST_F(OnDeviceClusteringWithContentBackendTest, ClusterOnContent) {
       base::Time::FromTimeT(10));
   visit5.content_annotations.model_annotations.entities = {{"github", 100}};
   visit5.referring_visit_of_redirect_chain_start = 6;
-  visits.push_back(visit5);
+  cluster2.visits.push_back(testing::CreateClusterVisit(visit5));
+  clusters.push_back(cluster2);
 
-  std::vector<history::Cluster> result_clusters =
-      ClusterVisits(ClusteringRequestSource::kJourneysPage, visits);
+  QueryClustersFilterParams params;
+  params.group_clusters_by_content = true;
+  std::vector<history::Cluster> result_clusters = GetClustersForUI(
+      ClusteringRequestSource::kJourneysPage, params, clusters);
   EXPECT_THAT(
       testing::ToVisitResults(result_clusters),
       ElementsAre(ElementsAre(
+          testing::VisitResult(2, 1.0),
           testing::VisitResult(4, 1.0, {history::DuplicateClusterVisit{1}}),
-          testing::VisitResult(2, 1.0), testing::VisitResult(10, 0.5))));
-}
-
-TEST_F(OnDeviceClusteringWithContentBackendTest,
-       ClusterOnContentBelowThreshold) {
-  base::HistogramTester histogram_tester;
-  std::vector<history::AnnotatedVisit> visits;
-
-  // Visit2's referrer is visit 1 and visit 4 is a back navigation from visit 2.
-  // Visit 3 is a different journey altogether. Visit 10 is referring to a
-  // missing visit and should be considered as in its own cluster.
-  // Also, make sure these aren't sorted so we test that we are sorting the
-  // visits by visit ID.
-  history::AnnotatedVisit visit = testing::CreateDefaultAnnotatedVisit(
-      1, GURL("https://github.com/"), base::Time::FromTimeT(1));
-  visit.content_annotations.model_annotations.entities = {{"github", 100}};
-  visit.content_annotations.model_annotations.categories = {{"category", 100}};
-  visits.push_back(visit);
-
-  history::AnnotatedVisit visit2 = testing::CreateDefaultAnnotatedVisit(
-      2, GURL("https://google.com/"), base::Time::FromTimeT(2));
-  visit2.referring_visit_of_redirect_chain_start = 1;
-  // Set the visit duration to be 2x the default so it has the same duration
-  // after |visit| and |visit4| are deduped.
-  visit2.visit_row.visit_duration = base::Seconds(20);
-  visits.push_back(visit2);
-
-  // After the context clustering, visit4 will not be in the same cluster as
-  // visit and visit2 but should be clustered together since they have the same
-  // title.
-  history::AnnotatedVisit visit4 = testing::CreateDefaultAnnotatedVisit(
-      4, GURL("https://github.com/"), base::Time::FromTimeT(4));
-  visit4.content_annotations.model_annotations.entities = {{"github", 100}};
-  visit4.content_annotations.model_annotations.categories = {{"category", 100}};
-  visits.push_back(visit4);
-
-  // This visit has a different title and shouldn't be grouped with the others.
-  history::AnnotatedVisit visit5 = testing::CreateDefaultAnnotatedVisit(
-      10, GURL("https://nonexistentreferrer.com/"), base::Time::FromTimeT(10));
-  visit5.referring_visit_of_redirect_chain_start = 6;
-  visit5.content_annotations.model_annotations.entities = {{"irrelevant", 100}};
-  visits.push_back(visit5);
-
-  std::vector<history::Cluster> result_clusters =
-      ClusterVisits(ClusteringRequestSource::kJourneysPage, visits);
-  EXPECT_THAT(
-      testing::ToVisitResults(result_clusters),
-      ElementsAre(ElementsAre(testing::VisitResult(10, 1.0)),
-                  ElementsAre(testing::VisitResult(
-                                  4, 1.0, {history::DuplicateClusterVisit{1}}),
-                              testing::VisitResult(2, 1.0))));
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.ClusterSize.Min", 1, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.ClusterSize.Max", 2, 1);
+          testing::VisitResult(10, 0.5))));
+  EXPECT_THAT(result_clusters.size(), 1u);
+  EXPECT_THAT(result_clusters[0].GetKeywords(),
+              UnorderedElementsAre(u"alias-github", u"rewritten-github"));
 }
 
 class OnDeviceClusteringWithAllTheBackendsTest
@@ -625,23 +681,13 @@ TEST_F(OnDeviceClusteringWithAllTheBackendsTest, EntityOnMidBlocklist) {
   visit2.visit_row.visit_duration = base::Seconds(20);
   visits.push_back(visit2);
 
-  history::AnnotatedVisit visit3 = testing::CreateDefaultAnnotatedVisit(
-      10, GURL("https://nonexistentreferrer.com/"));
-  visit3.referring_visit_of_redirect_chain_start = 6;
-  visit3.content_annotations.model_annotations.entities = {{"irrelevant", 100}};
-  visits.push_back(visit3);
-
   std::vector<history::Cluster> result_clusters =
       ClusterVisits(ClusteringRequestSource::kJourneysPage, visits);
+  EXPECT_EQ(result_clusters.size(), 1u);
 
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.ClusterSize.Min", 1, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.ClusterSize.Max", 2, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.NumKeywordsPerCluster.Min", 2, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.NumKeywordsPerCluster.Max", 2, 1);
+  // Cluster 1 should have 1 keyword with the "blockedentity" being blocked.
+  EXPECT_THAT(result_clusters[0].GetKeywords(),
+              UnorderedElementsAre(u"alias-unblocked", u"rewritten-unblocked"));
 }
 
 TEST_F(OnDeviceClusteringWithAllTheBackendsTest,
@@ -710,7 +756,8 @@ TEST_F(OnDeviceClusteringWithAllTheBackendsTest,
                   .model_annotations.entities.empty());
   EXPECT_TRUE(third_result_visit.annotated_visit.content_annotations
                   .model_annotations.categories.empty());
-  EXPECT_TRUE(cluster.keyword_to_data_map.empty());
+  // Search query terms are keywords.
+  EXPECT_THAT(cluster.GetKeywords(), UnorderedElementsAre(u"nometadata"));
 
   history::Cluster cluster2 = result_clusters.at(1);
   ASSERT_EQ(cluster2.visits.size(), 1u);
@@ -733,18 +780,10 @@ TEST_F(OnDeviceClusteringWithAllTheBackendsTest,
   // The second visit should have a URL.
   EXPECT_EQ(cluster2.visits.at(0).duplicate_visits.at(0).url,
             GURL("http://default-engine.com/?q=foo&otherstuff"));
-  // Cluster should have 2 keywords.
+  // Cluster should have 3 keywords with the search term "foo" included.
   EXPECT_THAT(cluster2.GetKeywords(),
-              UnorderedElementsAre(u"rewritten-foo", u"alias-foo"));
+              UnorderedElementsAre(u"rewritten-foo", u"alias-foo", u"foo"));
 
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.ClusterSize.Min", 1, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.ClusterSize.Max", 1, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.NumKeywordsPerCluster.Min", 0, 1);
-  histogram_tester.ExpectUniqueSample(
-      "History.Clusters.Backend.NumKeywordsPerCluster.Max", 2, 1);
   histogram_tester.ExpectTotalCount(
       "History.Clusters.Backend.BatchEntityLookupLatency2", 1);
   histogram_tester.ExpectUniqueSample(

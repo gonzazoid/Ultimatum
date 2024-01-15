@@ -8,10 +8,6 @@ See http://dev.chromium.org/developers/how-tos/depottools/presubmit-scripts
 for more details on the presubmit API built into depot_tools.
 """
 
-
-USE_PYTHON3 = True
-
-
 def CheckChangeLintsClean(input_api, output_api):
   """Makes sure that the code is cpplint clean."""
   # lint_filters=[] stops the OFF_BY_DEFAULT_LINT_FILTERS from being disabled,
@@ -40,7 +36,7 @@ def _CheckNoInterfacesInBase(input_api, output_api):
         not "/test/" in f.LocalPath() and
         not f.LocalPath().endswith('.java') and
         not f.LocalPath().endswith('_unittest.mm') and
-        not f.LocalPath().endswith('mac/sdk_forward_declarations.h')):
+        not f.LocalPath().endswith('_spi.h')):
       contents = input_api.ReadFile(f)
       if pattern.search(contents):
         files.append(f)

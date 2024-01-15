@@ -5,9 +5,10 @@
 #include <stdint.h>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/test/bind.h"
 #include "chrome/browser/extensions/extension_apitest.h"
 #include "chrome/browser/sync_file_system/file_status_observer.h"
 #include "chrome/browser/sync_file_system/local_change_processor.h"
@@ -44,24 +45,34 @@ class SyncFileSystemApiTest : public extensions::ExtensionApiTest {
     // TODO(calvinlo): Update test code after default quota is made const
     // (http://crbug.com/155488).
     real_default_quota_ =
-        storage::QuotaManager::kSyncableStorageDefaultHostQuota;
-    storage::QuotaManager::kSyncableStorageDefaultHostQuota = 123456;
+        storage::QuotaManager::kSyncableStorageDefaultStorageKeyQuota;
+    storage::QuotaManager::kSyncableStorageDefaultStorageKeyQuota = 123456;
   }
 
   void TearDownInProcessBrowserTestFixture() override {
-    storage::QuotaManager::kSyncableStorageDefaultHostQuota =
+    storage::QuotaManager::kSyncableStorageDefaultStorageKeyQuota =
         real_default_quota_;
     extensions::ExtensionApiTest::TearDownInProcessBrowserTestFixture();
   }
 
   void SetUpOnMainThread() override {
+    extensions::ExtensionApiTest::SetUpOnMainThread();
+
+    // Override factory to inject a mock RemoteFileSyncService.
     // Must happen after the browser process is created because instantiating
     // the factory will instantiate ExtensionSystemFactory which depends on
     // ExtensionsBrowserClient setup in BrowserProcessImpl.
-    mock_remote_service_ = new ::testing::NiceMock<MockRemoteFileSyncService>;
-    SyncFileSystemServiceFactory::GetInstance()->set_mock_remote_file_service(
-        std::unique_ptr<RemoteFileSyncService>(mock_remote_service_));
-    extensions::ExtensionApiTest::SetUpOnMainThread();
+    SyncFileSystemServiceFactory::GetInstance()->SetTestingFactoryAndUse(
+        profile(),
+        base::BindLambdaForTesting([this](content::BrowserContext* context)
+                                       -> std::unique_ptr<KeyedService> {
+          auto remote_service = std::make_unique<
+              ::testing::NiceMock<MockRemoteFileSyncService>>();
+          mock_remote_service_ = remote_service.get();
+          return SyncFileSystemServiceFactory::
+              BuildWithRemoteFileSyncServiceForTest(context,
+                                                    std::move(remote_service));
+        }));
   }
 
   ::testing::NiceMock<MockRemoteFileSyncService>* mock_remote_service() {
@@ -101,7 +112,7 @@ struct ReturnWithFakeFileAddedStatusFunctor {
     FileSystemURL mock_url = sync_file_system::CreateSyncableFileSystemURL(
         *origin_, base::FilePath(FILE_PATH_LITERAL("foo.txt")));
     mock_remote_service_->NotifyRemoteChangeQueueUpdated(0);
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback),
                                   sync_file_system::SYNC_STATUS_OK, mock_url));
     mock_remote_service_->NotifyFileStatusChanged(
@@ -110,8 +121,8 @@ struct ReturnWithFakeFileAddedStatusFunctor {
   }
 
  private:
-  GURL* origin_;
-  MockRemoteFileSyncService* mock_remote_service_;
+  raw_ptr<GURL> origin_;
+  raw_ptr<MockRemoteFileSyncService, DanglingUntriaged> mock_remote_service_;
   sync_file_system::SyncFileType file_type_;
   sync_file_system::SyncFileStatus sync_file_status_;
   sync_file_system::SyncAction sync_action_taken_;
@@ -188,7 +199,7 @@ IN_PROC_BROWSER_TEST_F(SyncFileSystemApiTest, OnServiceStatusChanged) {
                        sync_file_system::SyncStatusCallback callback) {
         mock_remote_service()->NotifyRemoteServiceStateUpdated(
             sync_file_system::REMOTE_SERVICE_OK, "Test event description.");
-        base::ThreadTaskRunnerHandle::Get()->PostTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE, base::BindOnce(std::move(callback),
                                       sync_file_system::SYNC_STATUS_OK));
       });

@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "device/vr/orientation/orientation_device.h"
 #include "services/device/public/mojom/sensor_provider.mojom.h"
 
@@ -19,7 +19,9 @@ VROrientationDeviceProvider::VROrientationDeviceProvider(
 
 VROrientationDeviceProvider::~VROrientationDeviceProvider() = default;
 
-void VROrientationDeviceProvider::Initialize(VRDeviceProviderClient* client) {
+void VROrientationDeviceProvider::Initialize(
+    VRDeviceProviderClient* client,
+    content::WebContents* initializing_web_contents) {
   if (device_ && device_->IsAvailable()) {
     client->AddRuntime(device_->GetId(), device_->GetDeviceData(),
                        device_->BindXRRuntime());

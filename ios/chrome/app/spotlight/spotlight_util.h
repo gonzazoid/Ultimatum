@@ -22,7 +22,9 @@ enum Domain {
   DOMAIN_BOOKMARKS = 1,
   DOMAIN_TOPSITES = 2,
   DOMAIN_ACTIONS = 3,
-  DOMAIN_COUNT
+  DOMAIN_READING_LIST = 4,
+  DOMAIN_OPEN_TABS = 5,
+  kMaxValue = DOMAIN_OPEN_TABS
 };
 
 // The key of a custom attribute containing the item ID so the item is
@@ -42,11 +44,8 @@ extern const int kCurrentSpotlightIndexVersion;
 // indexing.
 extern const char kSpotlightLastIndexingVersionKey[];
 
-// Utility methods deleting nodes in Spotlight index. Will be retried in case of
-// failure as required by Apple documentation.
-void DeleteSearchableDomainItems(Domain domain, BlockWithError callback);
-void DeleteItemsWithIdentifiers(NSArray* items, BlockWithError callback);
-void ClearAllSpotlightEntries(BlockWithError callback);
+// Maximum retry attempts to delete/index a set of items.
+const NSUInteger kMaxAttempts = 5;
 
 // Converts the spotlight::Domain enum to Spotlight domain string
 NSString* StringFromSpotlightDomain(Domain domain);
@@ -54,22 +53,17 @@ NSString* StringFromSpotlightDomain(Domain domain);
 // Converts the Spotlight domain string to spotlight::Domain enum.
 Domain SpotlightDomainFromString(NSString* domain);
 
+// Return the source label for an item from the spotlight::Domain
+NSString* SpotlightItemSourceLabelFromDomain(Domain domain);
+
 // Returns whether Spotlight is available on the device. Must be tested before
 // calling other methods of this class.
 bool IsSpotlightAvailable();
 
-// Clears the current Spotlight index of the device. Method is static to allow
-// clearing the index without instantiating SpotlightManager.
-// This method must not be called if `isSpotlightAvailable` returns NO.
-// This method is asynchronous and can fail. Completion is called with a
-// parameter indicating if the deletion was a success.
-void ClearSpotlightIndexWithCompletion(BlockWithError completion);
-
 // Finds the Spoglight itemID and calls `completion` with the corresponding URL.
 // Calls `completion` with nil if none was found.
 // `completion` is called on the Spotlight Thread.
-void GetURLForSpotlightItemID(NSString* itemID, BlockWithNSURL completion)
-    API_AVAILABLE(ios(10.0));
+void GetURLForSpotlightItemID(NSString* itemID, BlockWithNSURL completion);
 
 }  // namespace spotlight
 

@@ -32,7 +32,6 @@
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/install_flag.h"
 #include "extensions/common/extension_builder.h"
-#include "extensions/common/value_builder.h"
 #include "ppapi/buildflags/buildflags.h"
 
 #if BUILDFLAG(ENABLE_PLUGINS)
@@ -99,18 +98,18 @@ class ExtensionGarbageCollectorChromeOSUnitTest
 
     base::Value::Dict* extension_info_weak = shared_extensions->EnsureDict(id);
 
-    base::Value version_info(base::Value::Type::DICTIONARY);
-    version_info.SetStringKey(
-        ExtensionAssetsManagerChromeOS::kSharedExtensionPath, path.value());
+    base::Value::Dict version_info;
+    version_info.Set(ExtensionAssetsManagerChromeOS::kSharedExtensionPath,
+                     path.value());
 
-    base::Value users(base::Value::Type::LIST);
+    base::Value::List users;
     for (const std::string& user :
          base::SplitString(users_string, ",", base::KEEP_WHITESPACE,
                            base::SPLIT_WANT_NONEMPTY)) {
       users.Append(user);
     }
-    version_info.SetKey(ExtensionAssetsManagerChromeOS::kSharedExtensionUsers,
-                        std::move(users));
+    version_info.Set(ExtensionAssetsManagerChromeOS::kSharedExtensionUsers,
+                     std::move(users));
     extension_info_weak->Set(version, std::move(version_info));
   }
 

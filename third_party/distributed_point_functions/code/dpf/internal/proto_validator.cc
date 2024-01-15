@@ -14,10 +14,26 @@
 
 #include "dpf/internal/proto_validator.h"
 
+#include <algorithm>
+#include <cmath>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "absl/container/flat_hash_map.h"
+#include "absl/log/absl_check.h"
+#include "absl/memory/memory.h"
+#include "absl/numeric/int128.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
+#include "absl/types/span.h"
+#include "dpf/distributed_point_function.pb.h"
 #include "dpf/internal/value_type_helpers.h"
 #include "dpf/status_macros.h"
+#include "google/protobuf/repeated_field.h"
 
 namespace distributed_point_functions {
 namespace dpf_internal {
@@ -156,6 +172,9 @@ absl::Status ProtoValidator::ValidateParameters(
       return absl::InvalidArgumentError(
           "`log_domain_size` must be non-negative");
     }
+    if (log_domain_size > 128) {
+      return absl::InvalidArgumentError("`log_domain_size` must be <= 128");
+    }
     if (i > 0 && log_domain_size <= previous_log_domain_size) {
       return absl::InvalidArgumentError(
           "`log_domain_size` fields must be in ascending order in "
@@ -204,6 +223,7 @@ absl::Status ProtoValidator::ValidateDpfKey(const DpfKey& key) const {
       // last_level_output_correction.
       continue;
     }
+    ABSL_DCHECK(hierarchy_to_tree_[i] < key.correction_words_size());
     if (key.correction_words(hierarchy_to_tree_[i])
             .value_correction()
             .empty()) {
@@ -238,10 +258,10 @@ absl::Status ProtoValidator::ValidateEvaluationContext(
         "This context has already been fully evaluated");
   }
   if (!ctx.partial_evaluations().empty() &&
-      ctx.partial_evaluations_level() >= ctx.previous_hierarchy_level()) {
+      ctx.partial_evaluations_level() > ctx.previous_hierarchy_level()) {
     return absl::InvalidArgumentError(
-        "ctx.previous_hierarchy_level must be less than "
-        "ctx.partial_evaluations_level");
+        "ctx.partial_evaluations_level must be less than or equal to "
+        "ctx.previous_hierarchy_level");
   }
   return absl::OkStatus();
 }

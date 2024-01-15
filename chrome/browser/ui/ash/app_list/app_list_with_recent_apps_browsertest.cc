@@ -4,9 +4,9 @@
 
 #include "ash/public/cpp/test/app_list_test_api.h"
 #include "ash/public/cpp/test/shell_test_api.h"
+#include "chrome/browser/ash/app_list/app_list_client_impl.h"
+#include "chrome/browser/ash/app_list/search/search_controller.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
-#include "chrome/browser/ui/app_list/app_list_client_impl.h"
-#include "chrome/browser/ui/app_list/search/search_controller.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "content/public/test/browser_test.h"
 #include "ui/aura/window.h"
@@ -34,13 +34,6 @@ class AppListWithRecentAppBrowserTest
     // Ensure async callbacks are run.
     base::RunLoop().RunUntilIdle();
 
-    // In release builds (without DCHECKs) this test sometimes fails because the
-    // search ranking subsystem filters out all the recent app items due to a
-    // race between zero state search request and initialization of the ranker
-    // for removed results. Work around this by disabling ranking.
-    // https://crbug.com/1371600
-    client->search_controller()->disable_ranking_for_test();
-
     // Install enough apps to show the recent apps view.
     LoadExtension(test_data_dir_.AppendASCII("app1"));
     LoadExtension(test_data_dir_.AppendASCII("app2"));
@@ -48,6 +41,14 @@ class AppListWithRecentAppBrowserTest
     event_generator_ = std::make_unique<ui::test::EventGenerator>(
         browser()->window()->GetNativeWindow()->GetRootWindow());
     app_list_test_api_.ShowBubbleAppListAndWait();
+  }
+
+  void EnsureZeroStateSearchDone() {
+    base::RunLoop run_loop;
+    AppListClientImpl::GetInstance()
+        ->search_controller()
+        ->WaitForZeroStateCompletionForTest(run_loop.QuitClosure());
+    run_loop.Run();
   }
 
   ash::AppListTestApi app_list_test_api_;
@@ -87,7 +88,60 @@ IN_PROC_BROWSER_TEST_F(AppListWithRecentAppBrowserTest,
   // clearing search.
   ash::ShellTestApi().SetTabletModeEnabledForTest(true);
   app_list_test_api_.WaitForAppListShowAnimation(/*is_bubble_window =*/false);
+  EnsureZeroStateSearchDone();
 
   recent_app = app_list_test_api_.GetRecentAppAt(0);
   ASSERT_TRUE(recent_app);
+}
+
+// Tests that recent apps remaiin stable after exiting launcher search, even
+// after uninstalling a shown recent apps (which forces recent apps view
+// refresh).
+IN_PROC_BROWSER_TEST_F(AppListWithRecentAppBrowserTest,
+                       DISABLED_RecentAppsNotUpdatedAfterShowingSearch) {
+  std::vector<std::string> initial_recent_apps =
+      app_list_test_api_.GetRecentAppIds();
+  ASSERT_EQ(4u, initial_recent_apps.size());
+
+  // Install another app, and verify it shows up in recent apps once launcher is
+  // reshown.
+  const extensions::Extension* app_to_remove =
+      LoadExtension(test_data_dir_.AppendASCII("app3"));
+  ASSERT_TRUE(app_to_remove);
+
+  std::vector<std::string> recent_apps_after_reshow = {
+      app_to_remove->id(), initial_recent_apps[0], initial_recent_apps[1],
+      initial_recent_apps[2], initial_recent_apps[3]};
+
+  AppListClientImpl::GetInstance()->DismissView();
+  app_list_test_api_.ShowBubbleAppListAndWait();
+  EXPECT_EQ(recent_apps_after_reshow, app_list_test_api_.GetRecentAppIds());
+
+  // Verify that newly installed apps do no pop in into recent apps while
+  // launcher is shown.
+  const extensions::Extension* most_recent_app =
+      LoadExtension(test_data_dir_.AppendASCII("app4"));
+  ASSERT_TRUE(most_recent_app);
+  EXPECT_EQ(recent_apps_after_reshow, app_list_test_api_.GetRecentAppIds());
+
+  // Go to search and back - verify there is still no pop-in in recent apps.
+  app_list_test_api_.SimulateSearch(u"foo");
+  event_generator_->PressAndReleaseKey(ui::KeyboardCode::VKEY_ESCAPE);
+  // Toggling search should not trigger zero state search, but if it does, make
+  // sure the results are flushed, which will fail the test later on.
+  EnsureZeroStateSearchDone();
+
+  EXPECT_EQ(recent_apps_after_reshow, app_list_test_api_.GetRecentAppIds());
+
+  // Uninstall an app shown in recent apps. Verify that the app is removed from
+  // recent apps, but new app does not pop-in.
+  UninstallExtension(app_to_remove->id());
+  EXPECT_EQ(initial_recent_apps, app_list_test_api_.GetRecentAppIds());
+
+  // Most recent apps should show up in recent apps after launcher is reshown.
+  AppListClientImpl::GetInstance()->DismissView();
+  app_list_test_api_.ShowBubbleAppListAndWait();
+
+  recent_apps_after_reshow[0] = most_recent_app->id();
+  EXPECT_EQ(recent_apps_after_reshow, app_list_test_api_.GetRecentAppIds());
 }

@@ -1,742 +1,782 @@
-// Copyright 2018 The Chromium Authors
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "fuchsia_web/webinstance_host/web_instance_host.h"
 
-#include <fuchsia/sys/cpp/fidl.h>
-#include <lib/async/default.h>
-#include <lib/fdio/directory.h>
-#include <lib/fdio/fd.h>
-#include <lib/fdio/io.h>
+#include <fuchsia/component/decl/cpp/fidl.h>
+#include <fuchsia/io/cpp/fidl.h>
+#include <lib/fit/function.h>
 #include <lib/sys/cpp/component_context.h>
+#include <lib/sys/cpp/outgoing_directory.h>
 #include <lib/sys/cpp/service_directory.h>
-#include <stdio.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <zircon/processargs.h>
+#include <lib/vfs/cpp/pseudo_dir.h>
+#include <lib/vfs/cpp/pseudo_file.h>
+#include <lib/vfs/cpp/remote_dir.h>
 
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/base_switches.h"
-#include "base/bind.h"
-#include "base/command_line.h"
-#include "base/files/file_path.h"
-#include "base/fuchsia/file_utils.h"
+#include "base/check.h"
+#include "base/containers/fixed_flat_map.h"
 #include "base/fuchsia/fuchsia_logging.h"
 #include "base/fuchsia/process_context.h"
 #include "base/logging.h"
-#include "base/process/process.h"
+#include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
-#include "build/build_config.h"
-#include "build/chromecast_buildflags.h"
-#include "components/fuchsia_component_support/feedback_registration.h"
-#include "fuchsia_web/common/string_util.h"
-#include "fuchsia_web/webengine/features.h"
+#include "base/types/expected.h"
+#include "base/types/expected_macros.h"
+#include "components/fuchsia_component_support/serialize_arguments.h"
 #include "fuchsia_web/webengine/switches.h"
-#include "fuchsia_web/webinstance_host/fuchsia_web_debug_proxy.h"
-#include "gpu/command_buffer/service/gpu_switches.h"
-#include "gpu/config/gpu_finch_features.h"
-#include "net/http/http_util.h"
-#include "services/network/public/cpp/features.h"
-#include "services/network/public/cpp/network_switches.h"
-#include "third_party/widevine/cdm/widevine_cdm_common.h"
-#include "ui/gfx/switches.h"
-#include "ui/gl/gl_switches.h"
-#include "ui/ozone/public/ozone_switches.h"
+#include "fuchsia_web/webinstance_host/web_instance_host_constants.h"
+#include "fuchsia_web/webinstance_host/web_instance_host_internal.h"
 
 namespace {
 
-// Production URL for web hosting Component instances.
-// TODO(fxbug.dev/51490): Use a programmatic mechanism to obtain this.
-const char kWebInstanceComponentUrl[] =
-    "fuchsia-pkg://fuchsia.com/web_engine#meta/web_instance.cmx";
+namespace fcdecl = ::fuchsia::component::decl;
 
-// Test-only URL for web hosting Component instances with WebUI resources.
-const char kWebInstanceWithWebUiComponentUrl[] =
-    "fuchsia-pkg://fuchsia.com/web_engine_with_webui#meta/web_instance.cmx";
+// The name of the component collection hosting the instances.
+constexpr char kCollectionName[] = "web_instances";
 
-#if BUILDFLAG(ENABLE_CAST_RECEIVER)
-// Use a constexpr instead of the existing base::Feature, because of the
-// additional dependencies required.
-constexpr char kMixedContentAutoupgradeFeatureName[] =
-    "AutoupgradeMixedContent";
-constexpr char kDisableMixedContentAutoupgradeOrigin[] =
-    "disable-mixed-content-autoupgrade";
-#endif
-
-// Use a constexpr instead of the existing switch, because of the additional
-// dependencies required.
-
-// Content switches:
-constexpr char kRemoteDebuggingPortSwitch[] = "remote-debugging-port";
-constexpr char kDisableAcceleratedVideoDecodeSwitch[] =
-    "disable-accelerated-video-decode";
-constexpr char kDisableAudioInputSwitch[] = "disable-audio-input";
-constexpr char kDisableAudioOutputSwitch[] = "disable-audio-output";
-
-// Media switches:
-constexpr char kDisableGpuSwitch[] = "disable-gpu";
-constexpr char kDisableSoftwareRasterizerSwitch[] =
-    "disable-software-rasterizer";
-
-// Use a constexpr instead of the media::IsClearKey() helper, because of the
-// additional dependencies required.
-constexpr char kClearKeyKeySystem[] = "org.w3.clearkey";
-
-// Registers product data for the web_instance Component, ensuring it is
-// registered regardless of how the Component is launched and without requiring
-// all of its clients to provide the required services (until a better solution
-// is available - see crbug.com/1211174). This should only be called once per
-// process, and the calling thread must have an async_dispatcher.
-void RegisterWebInstanceProductData() {
-  constexpr char kCrashProductName[] = "FuchsiaWebEngine";
-  constexpr char kFeedbackAnnotationsNamespace[] = "web-engine";
-
-  fuchsia_component_support::RegisterProductDataForCrashReporting(
-      kWebInstanceComponentUrl, kCrashProductName);
-
-  fuchsia_component_support::RegisterProductDataForFeedback(
-      kFeedbackAnnotationsNamespace);
+// Returns the default package URL for WebEngine.
+// It is possible that this is not the actual URL for the current package.
+// The package URL for the current component cannot be obtained programmatically
+// (see fxbug.dev/51490), and this should always work in production, which is
+// when this is needed.
+// TODO(crbug.com/1211174): Remove when a different mechanism is available.
+// TODO(crbug.com/1395054): Replace with constant once `with_webui` is removed.
+std::string GetAbsoluteWebEnginePackageUrl(bool with_webui) {
+  return base::StrCat({"fuchsia-pkg://fuchsia.com/",
+                       (with_webui ? "web_engine_with_webui" : "web_engine")});
 }
 
-// Appends |value| to the value of |switch_name| in the |command_line|.
-// The switch is assumed to consist of comma-separated values. If |switch_name|
-// is already set in |command_line| then a comma will be appended, followed by
-// |value|, otherwise the switch will be set to |value|.
-void AppendToSwitch(base::StringPiece switch_name,
-                    base::StringPiece value,
-                    base::CommandLine* command_line) {
-  if (!command_line->HasSwitch(switch_name)) {
-    command_line->AppendSwitchNative(switch_name, value);
+// Returns the URL of the WebInstance component to be launched.
+// `with_webui` is a test-only feature for `web_engine_shell` that causes
+// `web_instance.cm` to be run from the `web_engine_with_webui` package rather
+// than the production `web_engine` package.
+std::string MakeWebInstanceComponentUrl(bool use_relative_url,
+                                        bool with_webui,
+                                        base::StringPiece component_name) {
+  return base::StrCat(
+      {(use_relative_url ? "" : GetAbsoluteWebEnginePackageUrl(with_webui)),
+       "#meta/", component_name});
+}
+
+// Returns the "/web_instances" dir from the component's outgoing directory,
+// creating it if necessary.
+vfs::PseudoDir* GetWebInstancesCollectionDir(
+    sys::OutgoingDirectory& outgoing_directory) {
+  return outgoing_directory.GetOrCreateDirectory(kCollectionName);
+}
+
+// Returns an instance's name given its unique id.
+std::string InstanceNameFromId(const base::Uuid& id) {
+  return base::StrCat({kCollectionName, "_", id.AsLowercaseString()});
+}
+
+void DestroyInstance(fuchsia::component::Realm& realm,
+                     const std::string& name) {
+  realm.DestroyChild(
+      fcdecl::ChildRef{.name = name, .collection = kCollectionName},
+      [](::fuchsia::component::Realm_DestroyChild_Result destroy_result) {
+        DCHECK(!destroy_result.is_err())
+            << static_cast<uint32_t>(destroy_result.err());
+      });
+}
+
+void DestroyInstanceDirectory(vfs::PseudoDir* instances_dir,
+                              const std::string& name) {
+  zx_status_t status = instances_dir->RemoveEntry(name);
+  ZX_DCHECK(status == ZX_OK, status);
+}
+
+struct Instance {
+  base::Uuid id;
+  fuchsia::component::BinderPtr binder_ptr;
+
+  Instance(base::Uuid id, fuchsia::component::BinderPtr binder_ptr)
+      : id(std::move(id)), binder_ptr(std::move(binder_ptr)) {}
+};
+
+// A helper class for building a web_instance as a dynamic child of the
+// component that hosts WebInstanceHost.
+class InstanceBuilder {
+ public:
+  static base::expected<std::unique_ptr<InstanceBuilder>, zx_status_t> Create(
+      sys::OutgoingDirectory& outgoing_directory,
+      fuchsia::component::Realm& realm,
+      const base::CommandLine& launch_args);
+  ~InstanceBuilder();
+
+  base::CommandLine& args() { return args_; }
+
+  // Offers the services named in `services` to the instance as dynamic
+  // protocol offers.
+  void AppendOffersForServices(const std::vector<std::string>& services);
+
+  // Serves `service_directory` to the instance as the 'svc' read-write
+  // directory.
+  void ServeServiceDirectory(
+      fidl::InterfaceHandle<fuchsia::io::Directory> service_directory);
+
+  // Offers the read-only root-ssl-certificates directory from the parent.
+  void ServeRootSslCertificates();
+
+  // Serves `data_directory` to the instance as the `data` read-write
+  // directory.
+  void ServeDataDirectory(
+      fidl::InterfaceHandle<fuchsia::io::Directory> data_directory);
+
+  // Serves the directories in `providers` under the `content-directories`
+  // read-only directory.
+  zx_status_t ServeContentDirectories(
+      std::vector<fuchsia::web::ContentDirectoryProvider> providers);
+
+  // Serves `cdm_data_directory` to the instance as the `cdm_data` read-write
+  // directory.
+  void ServeCdmDataDirectory(
+      fidl::InterfaceHandle<fuchsia::io::Directory> cdm_data_directory);
+
+  // Serves `tmp_dir` to the instance as the `tmp` read-write directory.
+  void ServeTmpDirectory(fuchsia::io::DirectoryHandle tmp_dir);
+
+  // Sets an optional request to connect to the instance's `fuchsia.web/Debug`
+  // protocol upon `Build()`.
+  void SetDebugRequest(
+      fidl::InterfaceRequest<fuchsia::web::Debug> debug_request);
+
+  // Builds and returns the instance, or an error status value.
+  // `fuchsia.web/Debug` will be published in `outgoing_services_request` if
+  // `SetDebugRequest()` has been called.
+  Instance Build(
+      base::StringPiece instance_component_url,
+      fidl::InterfaceRequest<fuchsia::io::Directory> outgoing_services_request);
+
+ private:
+  InstanceBuilder(sys::OutgoingDirectory& outgoing_directory,
+                  fuchsia::component::Realm& realm,
+                  base::Uuid id,
+                  std::string name,
+                  vfs::PseudoDir* instance_dir,
+                  const base::CommandLine& launch_args);
+
+  // Serves the arguments from the builder's `args()` command line in a file
+  // named `argv.json` via the instance's `command-line-config` read-only
+  // directory.
+  void ServeCommandLine();
+
+  // Adds offers from `void` for any optionally-offered directories that are not
+  // being served for the invoker.
+  void OfferMissingDirectoriesFromVoid();
+
+  // The directories that are optionally offered to `web_instance.cm` based on
+  // the invoker's configuration.
+  enum class OptionalDirectory {
+    kFirst = 0,
+    kCdmData = kFirst,
+    kCommandLineConfig,
+    kContentDirectories,
+    kData,
+    kTmp,
+    kCount,
+  };
+
+  // Returns a bitmask for `directory` for use with the `served_directories_`
+  // bitfield.
+  static uint32_t directory_bitmask(OptionalDirectory directory) {
+    return 1u << static_cast<int>(directory);
+  }
+
+  // Returns true if the host will serve `directory` to the instance.
+  bool is_directory_served(OptionalDirectory directory) const {
+    return served_directories_ & directory_bitmask(directory);
+  }
+
+  // Records that `directory` will be served to the instance.
+  void set_directory_served(OptionalDirectory directory) {
+    served_directories_ |= directory_bitmask(directory);
+  }
+
+  // Returns the capability and directory name for `directory`.
+  static base::StringPiece GetDirectoryName(OptionalDirectory directory);
+
+  // Serves `fs_directory` as `directory`. `fs_directory` may be specific to
+  // this instance (e.g., persistent data storage) or required only in
+  // particular configurations (e.g., CDM data storage), to the instance. Most
+  // common read-only directories (e.g., "root-ssl-certificates") should instead
+  // be offered statically to the `web_instances` collection.
+  void ServeOptionalDirectory(
+      OptionalDirectory directory,
+      std::unique_ptr<vfs::internal::Directory> fs_directory,
+      fuchsia::io::Operations rights);
+
+  // Offers the directory `directory` from `void`.
+  void OfferOptionalDirectoryFromVoid(OptionalDirectory directory);
+
+  // Serves the directory `name` as `offer` in the instance's subtree as a
+  // read-only or a read-write (if `writeable`) directory.
+  void ServeDirectory(base::StringPiece name,
+                      std::unique_ptr<vfs::internal::Directory> fs_directory,
+                      fuchsia::io::Operations rights);
+
+  const raw_ref<sys::OutgoingDirectory> outgoing_directory_;
+  const raw_ref<fuchsia::component::Realm> realm_;
+  const base::Uuid id_;
+  const std::string name_;
+  raw_ptr<vfs::PseudoDir> instance_dir_;
+  base::CommandLine args_;
+
+  // A bitfield of `directory_bitmask()` values indicating which optional
+  // directories are being served to the instance.
+  uint32_t served_directories_ = 0;
+  std::vector<fuchsia::component::decl::Offer> dynamic_offers_;
+  fidl::InterfaceRequest<fuchsia::web::Debug> debug_request_;
+};
+
+// static
+base::expected<std::unique_ptr<InstanceBuilder>, zx_status_t>
+InstanceBuilder::Create(sys::OutgoingDirectory& outgoing_directory,
+                        fuchsia::component::Realm& realm,
+                        const base::CommandLine& launch_args) {
+  // Pick a unique identifier for the new instance.
+  base::Uuid instance_id = base::Uuid::GenerateRandomV4();
+  auto instance_name = InstanceNameFromId(instance_id);
+
+  // Create a pseudo-directory to contain the various directory capabilities
+  // routed to this instance; i.e., `cdm_data`, `command-line-config`,
+  // `content-directories`, `data`, and `tmp`. The builder is responsible for
+  // removing it in case of error until `Build()` succeeds, at which point it is
+  // the caller's responsibility to remove it when the instance goes away.
+  auto instance_dir = std::make_unique<vfs::PseudoDir>();
+  auto* const instance_dir_ptr = instance_dir.get();
+  if (zx_status_t status =
+          GetWebInstancesCollectionDir(outgoing_directory)
+              ->AddEntry(instance_name, std::move(instance_dir));
+      status != ZX_OK) {
+    ZX_DLOG(ERROR, status) << "AddEntry(name)";
+    return base::unexpected(status);
+  }
+
+  return base::WrapUnique(new InstanceBuilder(
+      outgoing_directory, realm, std::move(instance_id),
+      std::move(instance_name), instance_dir_ptr, launch_args));
+}
+
+InstanceBuilder::InstanceBuilder(sys::OutgoingDirectory& outgoing_directory,
+                                 fuchsia::component::Realm& realm,
+                                 base::Uuid id,
+                                 std::string name,
+                                 vfs::PseudoDir* instance_dir,
+                                 const base::CommandLine& launch_args)
+    : outgoing_directory_(outgoing_directory),
+      realm_(realm),
+      id_(std::move(id)),
+      name_(std::move(name)),
+      instance_dir_(instance_dir),
+      args_(launch_args) {}
+
+InstanceBuilder::~InstanceBuilder() {
+  if (instance_dir_) {
+    DestroyInstanceDirectory(GetWebInstancesCollectionDir(*outgoing_directory_),
+                             name_);
+  }
+}
+
+void InstanceBuilder::AppendOffersForServices(
+    const std::vector<std::string>& services) {
+  for (const auto& service_name : services) {
+    dynamic_offers_.push_back(fcdecl::Offer::WithProtocol(std::move(
+        fcdecl::OfferProtocol()
+            .set_source(fcdecl::Ref::WithParent({}))
+            .set_source_name(service_name)
+            .set_target_name(service_name)
+            .set_dependency_type(fcdecl::DependencyType::STRONG)
+            .set_availability(fcdecl::Availability::SAME_AS_TARGET))));
+  }
+}
+
+void InstanceBuilder::ServeServiceDirectory(
+    fidl::InterfaceHandle<fuchsia::io::Directory> service_directory) {
+  DCHECK(instance_dir_);
+  ServeDirectory(
+      "svc", std::make_unique<vfs::RemoteDir>(std::move(service_directory)),
+      fuchsia::io::Operations::CONNECT | fuchsia::io::Operations::ENUMERATE |
+          fuchsia::io::Operations::TRAVERSE);
+}
+
+void InstanceBuilder::ServeDataDirectory(
+    fidl::InterfaceHandle<fuchsia::io::Directory> data_directory) {
+  DCHECK(instance_dir_);
+  ServeOptionalDirectory(
+      OptionalDirectory::kData,
+      std::make_unique<vfs::RemoteDir>(std::move(data_directory)),
+      fuchsia::io::RW_STAR_DIR);
+}
+
+zx_status_t InstanceBuilder::ServeContentDirectories(
+    std::vector<fuchsia::web::ContentDirectoryProvider> providers) {
+  DCHECK(instance_dir_);
+
+  auto content_dirs = std::make_unique<vfs::PseudoDir>();
+
+  for (auto& provider : providers) {
+    zx_status_t status = content_dirs->AddEntry(
+        provider.name(), std::make_unique<vfs::RemoteDir>(
+                             std::move(*provider.mutable_directory())));
+    if (status != ZX_OK) {
+      ZX_LOG(ERROR, status)
+          << "Conflicting content directory name \"" << provider.name() << "\"";
+      return status;
+    }
+  }
+
+  ServeOptionalDirectory(OptionalDirectory::kContentDirectories,
+                         std::move(content_dirs), fuchsia::io::R_STAR_DIR);
+  return ZX_OK;
+}
+
+void InstanceBuilder::ServeCdmDataDirectory(
+    fidl::InterfaceHandle<fuchsia::io::Directory> cdm_data_directory) {
+  DCHECK(instance_dir_);
+  ServeOptionalDirectory(
+      OptionalDirectory::kCdmData,
+      std::make_unique<vfs::RemoteDir>(std::move(cdm_data_directory)),
+      fuchsia::io::RW_STAR_DIR);
+}
+
+void InstanceBuilder::ServeTmpDirectory(fuchsia::io::DirectoryHandle tmp_dir) {
+  ServeOptionalDirectory(OptionalDirectory::kTmp,
+                         std::make_unique<vfs::RemoteDir>(std::move(tmp_dir)),
+                         fuchsia::io::RW_STAR_DIR);
+}
+
+void InstanceBuilder::SetDebugRequest(
+    fidl::InterfaceRequest<fuchsia::web::Debug> debug_request) {
+  debug_request_ = std::move(debug_request);
+}
+
+Instance InstanceBuilder::Build(
+    base::StringPiece instance_component_url,
+    fidl::InterfaceRequest<fuchsia::io::Directory> outgoing_services_request) {
+  ServeCommandLine();
+
+  // Create dynamic offers from `void` for any optional directories
+  // expected by web_instance.cm that are not being provided by the invoker.
+  OfferMissingDirectoriesFromVoid();
+
+  fcdecl::Child child_decl;
+  child_decl.set_name(name_);
+  child_decl.set_url(std::string(instance_component_url));
+  child_decl.set_startup(fcdecl::StartupMode::LAZY);
+
+  ::fuchsia::component::CreateChildArgs create_child_args;
+  create_child_args.set_dynamic_offers(std::move(dynamic_offers_));
+
+  realm_->CreateChild(
+      fcdecl::CollectionRef{.name = kCollectionName}, std::move(child_decl),
+      std::move(create_child_args),
+      [](::fuchsia::component::Realm_CreateChild_Result create_result) {
+        LOG_IF(ERROR, create_result.is_err())
+            << "CreateChild error: "
+            << static_cast<uint32_t>(create_result.err());
+      });
+
+  fidl::InterfaceHandle<fuchsia::io::Directory> instance_services_handle;
+  realm_->OpenExposedDir(
+      fcdecl::ChildRef{.name = name_, .collection = kCollectionName},
+      instance_services_handle.NewRequest(),
+      [](::fuchsia::component::Realm_OpenExposedDir_Result open_result) {
+        LOG_IF(ERROR, open_result.is_err())
+            << "OpenExposedDir error: "
+            << static_cast<uint32_t>(open_result.err());
+      });
+
+  sys::ServiceDirectory instance_services(std::move(instance_services_handle));
+  fuchsia::component::BinderPtr binder_ptr;
+  instance_services.Connect(binder_ptr.NewRequest());
+  if (debug_request_) {
+    instance_services.Connect(std::move(debug_request_));
+  }
+  instance_services.CloneChannel(std::move(outgoing_services_request));
+
+  // Ownership of the child and `instance_dir_` are now passed to the caller.
+  instance_dir_ = nullptr;
+  return Instance(id_, std::move(binder_ptr));
+}
+
+void InstanceBuilder::ServeCommandLine() {
+  DCHECK(instance_dir_);
+
+  if (args_.argv().size() < 2) {
     return;
   }
 
-  std::string new_value = base::StrCat(
-      {command_line->GetSwitchValueASCII(switch_name), ",", value});
-  command_line->RemoveSwitch(switch_name);
-  command_line->AppendSwitchNative(switch_name, new_value);
+  auto config_dir = std::make_unique<vfs::PseudoDir>();
+
+  std::vector<uint8_t> data(
+      fuchsia_component_support::SerializeArguments(args_));
+  const auto data_size = data.size();
+  zx_status_t status = config_dir->AddEntry(
+      "argv.json",
+      std::make_unique<vfs::PseudoFile>(
+          data_size, [data = std::move(data)](std::vector<uint8_t>* output,
+                                              size_t max_bytes) {
+            DCHECK_EQ(max_bytes, data.size());
+            *output = data;
+            return ZX_OK;
+          }));
+  ZX_DCHECK(status == ZX_OK, status);
+
+  ServeOptionalDirectory(OptionalDirectory::kCommandLineConfig,
+                         std::move(config_dir), fuchsia::io::R_STAR_DIR);
 }
 
-// File names must not contain directory separators, nor match the special
-// current- nor parent-directory filenames.
-bool IsValidContentDirectoryName(base::StringPiece file_name) {
-  if (file_name.find_first_of(base::FilePath::kSeparators, 0,
-                              base::FilePath::kSeparatorsLength - 1) !=
-      base::StringPiece::npos) {
-    return false;
+void InstanceBuilder::OfferMissingDirectoriesFromVoid() {
+  for (auto directory = OptionalDirectory::kFirst;
+       directory != OptionalDirectory::kCount;
+       directory =
+           static_cast<OptionalDirectory>(static_cast<int>(directory) + 1)) {
+    if (!is_directory_served(directory)) {
+      OfferOptionalDirectoryFromVoid(directory);
+    }
   }
-  if (file_name == base::FilePath::kCurrentDirectory ||
-      file_name == base::FilePath::kParentDirectory) {
-    return false;
-  }
-  return true;
 }
 
-bool HandleDataDirectoryParam(fuchsia::web::CreateContextParams* params,
-                              base::CommandLine* launch_args,
-                              fuchsia::sys::LaunchInfo* launch_info) {
-  if (!params->has_data_directory()) {
-    // Caller requested a web instance without any peristence.
-    launch_args->AppendSwitch(switches::kIncognito);
-    return true;
-  }
-
-  launch_info->flat_namespace->paths.push_back(
-      base::kPersistedDataDirectoryPath);
-  launch_info->flat_namespace->directories.push_back(
-      std::move(*params->mutable_data_directory()));
-  if (params->has_data_quota_bytes()) {
-    launch_args->AppendSwitchNative(
-        switches::kDataQuotaBytes,
-        base::NumberToString(params->data_quota_bytes()));
-  }
-
-  return true;
+// static
+base::StringPiece InstanceBuilder::GetDirectoryName(
+    OptionalDirectory directory) {
+  static constexpr auto kNames =
+      base::MakeFixedFlatMap<OptionalDirectory, base::StringPiece>({
+          {OptionalDirectory::kCdmData, "cdm_data"},
+          {OptionalDirectory::kCommandLineConfig, "command-line-config"},
+          {OptionalDirectory::kContentDirectories, "content-directories"},
+          {OptionalDirectory::kData, "data"},
+          {OptionalDirectory::kTmp, "tmp"},
+      });
+  static_assert(kNames.size() == static_cast<int>(OptionalDirectory::kCount));
+  return kNames.at(directory);
 }
 
-bool HandleCdmDataDirectoryParam(fuchsia::web::CreateContextParams* params,
-                                 base::CommandLine* launch_args,
-                                 fuchsia::sys::LaunchInfo* launch_info) {
-  if (!params->has_cdm_data_directory())
-    return true;
+void InstanceBuilder::ServeOptionalDirectory(
+    OptionalDirectory directory,
+    std::unique_ptr<vfs::internal::Directory> fs_directory,
+    fuchsia::io::Operations rights) {
+  DCHECK(instance_dir_);
+  DCHECK(!is_directory_served(directory));
 
-  const char kCdmDataPath[] = "/cdm_data";
+  set_directory_served(directory);
+  ServeDirectory(GetDirectoryName(directory), std::move(fs_directory), rights);
+}
 
-  launch_args->AppendSwitchNative(switches::kCdmDataDirectory, kCdmDataPath);
-  launch_info->flat_namespace->paths.push_back(kCdmDataPath);
-  launch_info->flat_namespace->directories.push_back(
-      std::move(*params->mutable_cdm_data_directory()));
-  if (params->has_cdm_data_quota_bytes()) {
-    launch_args->AppendSwitchNative(
+void InstanceBuilder::OfferOptionalDirectoryFromVoid(
+    OptionalDirectory directory) {
+  DCHECK(!is_directory_served(directory));
+
+  const auto name = GetDirectoryName(directory);
+  dynamic_offers_.push_back(fcdecl::Offer::WithDirectory(
+      std::move(fcdecl::OfferDirectory()
+                    .set_source(fcdecl::Ref::WithVoidType({}))
+                    .set_source_name(std::string(name))
+                    .set_target_name(std::string(name))
+                    .set_dependency_type(fcdecl::DependencyType::STRONG)
+                    .set_availability(fcdecl::Availability::OPTIONAL))));
+}
+
+void InstanceBuilder::ServeDirectory(
+    base::StringPiece name,
+    std::unique_ptr<vfs::internal::Directory> fs_directory,
+    fuchsia::io::Operations rights) {
+  DCHECK(instance_dir_);
+  zx_status_t status =
+      instance_dir_->AddEntry(std::string(name), std::move(fs_directory));
+  ZX_DCHECK(status == ZX_OK, status);
+
+  dynamic_offers_.push_back(fcdecl::Offer::WithDirectory(
+      std::move(fcdecl::OfferDirectory()
+                    .set_source(fcdecl::Ref::WithSelf({}))
+                    .set_source_name(kCollectionName)
+                    .set_target_name(std::string(name))
+                    .set_rights(rights)
+                    .set_subdir(base::StrCat({name_, "/", name}))
+                    .set_dependency_type(fcdecl::DependencyType::STRONG)
+                    .set_availability(fcdecl::Availability::REQUIRED))));
+}
+
+void HandleCdmDataDirectoryParam(InstanceBuilder& builder,
+                                 fuchsia::web::CreateContextParams& params) {
+  if (!params.has_cdm_data_directory()) {
+    return;
+  }
+
+  static constexpr char kCdmDataPath[] = "/cdm_data";
+
+  builder.args().AppendSwitchNative(switches::kCdmDataDirectory, kCdmDataPath);
+  builder.ServeCdmDataDirectory(
+      std::move(*params.mutable_cdm_data_directory()));
+  if (params.has_cdm_data_quota_bytes()) {
+    builder.args().AppendSwitchNative(
         switches::kCdmDataQuotaBytes,
-        base::NumberToString(params->cdm_data_quota_bytes()));
+        base::NumberToString(params.cdm_data_quota_bytes()));
   }
-
-  return true;
 }
 
-bool HandleUserAgentParams(fuchsia::web::CreateContextParams* params,
-                           base::CommandLine* launch_args) {
-  if (!params->has_user_agent_product()) {
-    if (params->has_user_agent_version()) {
-      LOG(ERROR) << "Embedder version without product.";
-      return false;
-    }
+void HandleDataDirectoryParam(InstanceBuilder& builder,
+                              fuchsia::web::CreateContextParams& params) {
+  if (!params.has_data_directory()) {
+    // Caller requested a web instance without any peristence.
+    builder.args().AppendSwitch(switches::kIncognito);
+    return;
+  }
+
+  builder.ServeDataDirectory(std::move(*params.mutable_data_directory()));
+
+  if (params.has_data_quota_bytes()) {
+    builder.args().AppendSwitchNative(
+        switches::kDataQuotaBytes,
+        base::NumberToString(params.data_quota_bytes()));
+  }
+}
+
+bool HandleContentDirectoriesParam(InstanceBuilder& builder,
+                                   fuchsia::web::CreateContextParams& params) {
+  if (!params.has_content_directories()) {
     return true;
   }
 
-  if (!net::HttpUtil::IsToken(params->user_agent_product())) {
-    LOG(ERROR) << "Invalid embedder product.";
-    return false;
-  }
-
-  std::string product_and_version(params->user_agent_product());
-  if (params->has_user_agent_version()) {
-    if (!net::HttpUtil::IsToken(params->user_agent_version())) {
-      LOG(ERROR) << "Invalid embedder version.";
-      return false;
-    }
-    base::StrAppend(&product_and_version, {"/", params->user_agent_version()});
-  }
-  launch_args->AppendSwitchNative(switches::kUserAgentProductAndVersion,
-                                  std::move(product_and_version));
-  return true;
-}
-
-void HandleUnsafelyTreatInsecureOriginsAsSecureParam(
-    fuchsia::web::CreateContextParams* params,
-    base::CommandLine* launch_args) {
-  if (!params->has_unsafely_treat_insecure_origins_as_secure())
-    return;
-
-  const std::vector<std::string>& insecure_origins =
-      params->unsafely_treat_insecure_origins_as_secure();
-  for (auto origin : insecure_origins) {
-#if BUILDFLAG(ENABLE_CAST_RECEIVER)
-    if (origin == switches::kAllowRunningInsecureContent) {
-      launch_args->AppendSwitch(switches::kAllowRunningInsecureContent);
-      continue;
-    }
-    if (origin == kDisableMixedContentAutoupgradeOrigin) {
-      AppendToSwitch(switches::kDisableFeatures,
-                     kMixedContentAutoupgradeFeatureName, launch_args);
-      continue;
-    }
-#endif
-
-    // Pass the list to the Context process.
-    AppendToSwitch(network::switches::kUnsafelyTreatInsecureOriginAsSecure,
-                   origin, launch_args);
-  }
-}
-
-void HandleCorsExemptHeadersParam(fuchsia::web::CreateContextParams* params,
-                                  base::CommandLine* launch_args) {
-  if (!params->has_cors_exempt_headers())
-    return;
-
-  std::vector<base::StringPiece> cors_exempt_headers;
-  cors_exempt_headers.reserve(params->cors_exempt_headers().size());
-  for (const auto& header : params->cors_exempt_headers()) {
-    cors_exempt_headers.push_back(BytesAsString(header));
-  }
-
-  launch_args->AppendSwitchNative(switches::kCorsExemptHeaders,
-                                  base::JoinString(cors_exempt_headers, ","));
-}
-
-bool HandleContentDirectoriesParam(fuchsia::web::CreateContextParams* params,
-                                   base::CommandLine* launch_args,
-                                   fuchsia::sys::LaunchInfo* launch_info) {
-  DCHECK(launch_info);
-  DCHECK(launch_info->flat_namespace);
-
-  if (!params->has_content_directories())
-    return true;
-
-  auto* directories = params->mutable_content_directories();
-  for (size_t i = 0; i < directories->size(); ++i) {
-    fuchsia::web::ContentDirectoryProvider& directory = directories->at(i);
-
+  for (const auto& directory : params.content_directories()) {
     if (!IsValidContentDirectoryName(directory.name())) {
       DLOG(ERROR) << "Invalid directory name: " << directory.name();
       return false;
     }
-
-    const base::FilePath kContentDirectories("/content-directories");
-    launch_info->flat_namespace->paths.push_back(
-        kContentDirectories.Append(directory.name()).value());
-    launch_info->flat_namespace->directories.push_back(
-        std::move(*directory.mutable_directory()));
   }
 
-  launch_args->AppendSwitch(switches::kEnableContentDirectories);
-
-  return true;
-}
-
-bool HandleKeyboardFeatureFlags(fuchsia::web::ContextFeatureFlags features,
-                                base::CommandLine* launch_args) {
-  const bool enable_keyboard =
-      (features & fuchsia::web::ContextFeatureFlags::KEYBOARD) ==
-      fuchsia::web::ContextFeatureFlags::KEYBOARD;
-  const bool enable_virtual_keyboard =
-      (features & fuchsia::web::ContextFeatureFlags::VIRTUAL_KEYBOARD) ==
-      fuchsia::web::ContextFeatureFlags::VIRTUAL_KEYBOARD;
-
-  if (enable_keyboard) {
-    AppendToSwitch(switches::kEnableFeatures, features::kKeyboardInput.name,
-                   launch_args);
-
-    if (enable_virtual_keyboard) {
-      AppendToSwitch(switches::kEnableFeatures, features::kVirtualKeyboard.name,
-                     launch_args);
-    }
-  } else if (enable_virtual_keyboard) {
-    LOG(ERROR) << "VIRTUAL_KEYBOARD feature requires KEYBOARD.";
-    return false;
-  }
-
-  return true;
-}
-
-// Returns true if DRM is supported in current configuration. Currently we
-// assume that it is supported on ARM64, but not on x64.
-//
-// TODO(crbug.com/1013412): Detect support for all features required for
-// FuchsiaCdm. Specifically we need to verify that protected memory is supported
-// and that mediacodec API provides hardware video decoders.
-bool IsFuchsiaCdmSupported() {
-#if defined(ARCH_CPU_ARM64)
-  return true;
-#else
-  return false;
-#endif
-}
-
-// Returns the names of all services required by a web_instance.cmx component
-// instance configured with the specified set of feature flags. The caller is
-// responsible for verifying that |params| specifies a valid combination of
-// settings, before calling this function.
-std::vector<std::string> GetRequiredServicesForConfig(
-    const fuchsia::web::CreateContextParams& params) {
-  // All web_instance.cmx instances require a common set of services, described
-  // at:
-  //   https://fuchsia.dev/reference/fidl/fuchsia.web#CreateContextParams.service_directory
-  std::vector<std::string> services{
-      "fuchsia.buildinfo.Provider",    "fuchsia.device.NameProvider",
-      "fuchsia.fonts.Provider",        "fuchsia.hwinfo.Product",
-      "fuchsia.intl.PropertyProvider", "fuchsia.kernel.VmexResource",
-      "fuchsia.logger.LogSink",        "fuchsia.memorypressure.Provider",
-      "fuchsia.process.Launcher",
-      "fuchsia.settings.Display",  // Used if preferred theme is DEFAULT.
-      "fuchsia.sysmem.Allocator",
-      "fuchsia.tracing.perfetto.ProducerConnector",
-      "fuchsia.tracing.provider.Registry",
-      "fuchsia.ui.scenic.Scenic"};
-
-  // TODO(crbug.com/1209031): Provide these conditionally, once corresponding
-  // ContextFeatureFlags have been defined.
-  services.insert(services.end(), {"fuchsia.camera3.DeviceWatcher",
-                                   "fuchsia.media.ProfileProvider"});
-
-  // Additional services are required depending on particular configuration
-  // parameters.
-  if (params.has_playready_key_system()) {
-    services.emplace_back("fuchsia.media.drm.PlayReady");
-  }
-
-  // Additional services are required dependent on the set of features specified
-  // for the instance, as described at:
-  //   https://fuchsia.dev/reference/fidl/fuchsia.web#ContextFeatureFlags
-  // Features are listed here in order of their enum value.
-  fuchsia::web::ContextFeatureFlags features = {};
-  if (params.has_features())
-    features = params.features();
-
-  if ((features & fuchsia::web::ContextFeatureFlags::NETWORK) ==
-      fuchsia::web::ContextFeatureFlags::NETWORK) {
-    services.insert(services.end(), {
-                                        "fuchsia.net.interfaces.State",
-                                        "fuchsia.net.name.Lookup",
-                                        "fuchsia.posix.socket.Provider",
-                                    });
-  }
-
-  if ((features & fuchsia::web::ContextFeatureFlags::AUDIO) ==
-      fuchsia::web::ContextFeatureFlags::AUDIO) {
-    services.insert(services.end(),
-                    {
-                        "fuchsia.media.Audio",
-                        "fuchsia.media.AudioDeviceEnumerator",
-                        "fuchsia.media.SessionAudioConsumerFactory",
-                    });
-  }
-
-  if ((features & fuchsia::web::ContextFeatureFlags::VULKAN) ==
-      fuchsia::web::ContextFeatureFlags::VULKAN) {
-    services.emplace_back("fuchsia.vulkan.loader.Loader");
-  }
-
-  if ((features & fuchsia::web::ContextFeatureFlags::HARDWARE_VIDEO_DECODER) ==
-      fuchsia::web::ContextFeatureFlags::HARDWARE_VIDEO_DECODER) {
-    services.emplace_back("fuchsia.mediacodec.CodecFactory");
-  }
-
-  // HARDWARE_VIDEO_DECODER_ONLY does not require any additional services.
-
-  if ((features & fuchsia::web::ContextFeatureFlags::WIDEVINE_CDM) ==
-      fuchsia::web::ContextFeatureFlags::WIDEVINE_CDM) {
-    services.emplace_back("fuchsia.media.drm.Widevine");
-  }
-
-  // HEADLESS instances cannot create Views and therefore do not require access
-  // to any View-based services.
-  if ((features & fuchsia::web::ContextFeatureFlags::HEADLESS) !=
-      fuchsia::web::ContextFeatureFlags::HEADLESS) {
-    services.insert(services.end(),
-                    {
-                        "fuchsia.accessibility.semantics.SemanticsManager",
-                        "fuchsia.ui.composition.Allocator",
-                        "fuchsia.ui.composition.Flatland",
-                        "fuchsia.ui.scenic.Scenic",
-                    });
-  }
-
-#if BUILDFLAG(ENABLE_CAST_RECEIVER)
-  if ((features & fuchsia::web::ContextFeatureFlags::LEGACYMETRICS) ==
-      fuchsia::web::ContextFeatureFlags::LEGACYMETRICS) {
-    services.emplace_back("fuchsia.legacymetrics.MetricsRecorder");
-  }
-#endif
-
-  if ((features & fuchsia::web::ContextFeatureFlags::KEYBOARD) ==
-      fuchsia::web::ContextFeatureFlags::KEYBOARD) {
-    services.emplace_back("fuchsia.ui.input3.Keyboard");
-  }
-
-  if ((features & fuchsia::web::ContextFeatureFlags::VIRTUAL_KEYBOARD) ==
-      fuchsia::web::ContextFeatureFlags::VIRTUAL_KEYBOARD) {
-    services.emplace_back("fuchsia.input.virtualkeyboard.ControllerCreator");
-  }
-
-  return services;
+  builder.args().AppendSwitch(switches::kEnableContentDirectories);
+  return builder.ServeContentDirectories(
+             std::move(*params.mutable_content_directories())) == ZX_OK;
 }
 
 }  // namespace
 
-WebInstanceHost::WebInstanceHost() {
-  // Ensure WebInstance is registered before launching it.
-  // TODO(crbug.com/1211174): Replace with a different mechanism when available.
-  RegisterWebInstanceProductData();
+WebInstanceHost::WebInstanceHost(sys::OutgoingDirectory& outgoing_directory,
+                                 bool is_web_instance_component_in_same_package)
+    : outgoing_directory_(outgoing_directory),
+      is_web_instance_component_in_same_package_(
+          is_web_instance_component_in_same_package) {}
+
+WebInstanceHost::~WebInstanceHost() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  Uninitialize();
 }
 
-WebInstanceHost::~WebInstanceHost() = default;
-
-zx_status_t WebInstanceHost::CreateInstanceForContextWithCopiedArgs(
+zx_status_t WebInstanceHost::CreateInstanceForContextWithCopiedArgsAndUrl(
     fuchsia::web::CreateContextParams params,
-    fidl::InterfaceRequest<fuchsia::io::Directory> services_request,
-    base::CommandLine extra_args) {
-  DCHECK(services_request);
+    fidl::InterfaceRequest<fuchsia::io::Directory> outgoing_services_request,
+    base::CommandLine extra_args,
+    base::StringPiece component_name,
+    std::vector<std::string> services_to_offer) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (!params.has_service_directory()) {
-    DLOG(ERROR)
-        << "Missing argument |service_directory| in CreateContextParams.";
-    return ZX_ERR_INVALID_ARGS;
+  if (!is_initialized()) {
+    Initialize();
   }
 
-  fidl::InterfaceHandle<::fuchsia::io::Directory> service_directory =
-      std::move(*params.mutable_service_directory());
-  if (!service_directory) {
-    DLOG(ERROR) << "Invalid |service_directory| in CreateContextParams.";
-    return ZX_ERR_INVALID_ARGS;
+  ASSIGN_OR_RETURN(auto builder,
+                   InstanceBuilder::Create(*outgoing_directory_, *realm_,
+                                           std::move(extra_args)));
+
+  if (zx_status_t status = AppendLaunchArgs(params, builder->args());
+      status != ZX_OK) {
+    return status;
   }
 
-  // Initialize with preliminary arguments.
-  base::CommandLine launch_args(std::move(extra_args));
-
-  // Remove this argument, if it's provided.
-  launch_args.RemoveSwitch(switches::kContextProvider);
-  launch_args.RemoveSwitch(switches::kEnableCfv2);
-
-  fuchsia::sys::LaunchInfo launch_info;
-  // TODO(1010222): Make kWebInstanceComponentUrl a relative component URL, and
-  // remove this workaround.
-  launch_info.url =
-      base::CommandLine::ForCurrentProcess()->HasSwitch("with-webui")
-          ? kWebInstanceWithWebUiComponentUrl
-          : kWebInstanceComponentUrl;
-  launch_info.flat_namespace = fuchsia::sys::FlatNamespace::New();
-
-  fuchsia::web::ContextFeatureFlags features = {};
-  if (params.has_features())
-    features = params.features();
-
-  if (params.has_remote_debugging_port()) {
-    if ((features & fuchsia::web::ContextFeatureFlags::NETWORK) !=
-        fuchsia::web::ContextFeatureFlags::NETWORK) {
-      LOG(ERROR) << "Enabling remote debugging port requires NETWORK feature.";
-      return ZX_ERR_INVALID_ARGS;
-    }
-    launch_args.AppendSwitchNative(
-        kRemoteDebuggingPortSwitch,
-        base::NumberToString(params.remote_debugging_port()));
-  }
-
-  const bool is_headless =
-      (features & fuchsia::web::ContextFeatureFlags::HEADLESS) ==
-      fuchsia::web::ContextFeatureFlags::HEADLESS;
-  if (is_headless) {
-    launch_args.AppendSwitchNative(switches::kOzonePlatform,
-                                   switches::kHeadless);
-    launch_args.AppendSwitch(switches::kHeadless);
-  }
-
-  if ((features & fuchsia::web::ContextFeatureFlags::LEGACYMETRICS) ==
-      fuchsia::web::ContextFeatureFlags::LEGACYMETRICS) {
-#if BUILDFLAG(ENABLE_CAST_RECEIVER)
-    launch_args.AppendSwitch(switches::kUseLegacyMetricsService);
-#else
-    LOG(WARNING) << "LEGACYMETRICS is not supported.";
-#endif
-  }
-
-  const bool enable_vulkan =
-      (features & fuchsia::web::ContextFeatureFlags::VULKAN) ==
-      fuchsia::web::ContextFeatureFlags::VULKAN;
-  bool enable_widevine =
-      (features & fuchsia::web::ContextFeatureFlags::WIDEVINE_CDM) ==
-      fuchsia::web::ContextFeatureFlags::WIDEVINE_CDM;
-  bool enable_playready = params.has_playready_key_system();
-
-  // Verify that the configuration is compatible with DRM, if requested.
-  if (enable_widevine || enable_playready) {
-    // VULKAN is required for DRM-protected video playback. Allow DRM to also be
-    // enabled for HEADLESS Contexts, since Vulkan is never required for audio.
-    if (!enable_vulkan && !is_headless) {
-      LOG(ERROR) << "WIDEVINE_CDM and PLAYREADY_CDM features require VULKAN "
-                    " or HEADLESS.";
-      return ZX_ERR_NOT_SUPPORTED;
-    }
-    if (!params.has_cdm_data_directory()) {
-      LOG(ERROR) << "WIDEVINE_CDM and PLAYREADY_CDM features require a "
-                    "|cdm_data_directory|.";
-      return ZX_ERR_NOT_SUPPORTED;
-    }
-    // |cdm_data_directory| will be handled later.
-  }
-
-  // If the system doesn't actually support DRM then disable it. This may result
-  // in the Context being able to run without using protected buffers.
-  if (enable_playready && !IsFuchsiaCdmSupported()) {
-    LOG(WARNING) << "PlayReady is not supported on this device.";
-    enable_playready = false;
-  }
-  if (enable_widevine && !IsFuchsiaCdmSupported()) {
-    LOG(WARNING) << "Widevine is not supported on this device.";
-    enable_widevine = false;
-  }
-
-  if (enable_vulkan) {
-    if (is_headless) {
-      DLOG(ERROR) << "VULKAN and HEADLESS features cannot be used together.";
-      return ZX_ERR_NOT_SUPPORTED;
-    }
-
-    VLOG(1) << "Enabling Vulkan GPU acceleration.";
-
-    // Vulkan requires use of SkiaRenderer, configured to a use Vulkan context.
-    launch_args.AppendSwitch(switches::kUseVulkan);
-    AppendToSwitch(switches::kEnableFeatures, features::kVulkan.name,
-                   &launch_args);
-    launch_args.AppendSwitchASCII(switches::kUseGL,
-                                  gl::kGLImplementationANGLEName);
+  // Only one method of providing services should be used.
+  CHECK_NE(!services_to_offer.empty(), params.has_service_directory());
+  if (!services_to_offer.empty()) {
+    builder->AppendOffersForServices(services_to_offer);
   } else {
-    VLOG(1) << "Disabling GPU acceleration.";
-    // Disable use of Vulkan GPU, and use of the software-GL rasterizer. The
-    // Context will still run a GPU process, but will not support WebGL.
-    launch_args.AppendSwitch(kDisableGpuSwitch);
-    launch_args.AppendSwitch(kDisableSoftwareRasterizerSwitch);
+    builder->ServeServiceDirectory(
+        std::move(*params.mutable_service_directory()));
   }
 
-  if (enable_widevine) {
-    launch_args.AppendSwitch(switches::kEnableWidevine);
-  }
+  // The `config-data` directory is statically offered to all instances.
+  // The `root-ssl-certificates` directory is statically offered to all
+  // instances regardless of whether networking is requested.
 
-  if (enable_playready) {
-    const std::string& key_system = params.playready_key_system();
-    if (key_system == kWidevineKeySystem || key_system == kClearKeyKeySystem) {
-      LOG(ERROR)
-          << "Invalid value for CreateContextParams/playready_key_system: "
-          << key_system;
-      return ZX_ERR_INVALID_ARGS;
-    }
-    launch_args.AppendSwitchNative(switches::kPlayreadyKeySystem, key_system);
-  }
+  HandleCdmDataDirectoryParam(*builder, params);
 
-  bool enable_audio = (features & fuchsia::web::ContextFeatureFlags::AUDIO) ==
-                      fuchsia::web::ContextFeatureFlags::AUDIO;
-  if (!enable_audio) {
-    // TODO(fxbug.dev/58902): Split up audio input and output in
-    // ContextFeatureFlags.
-    launch_args.AppendSwitch(kDisableAudioOutputSwitch);
-    launch_args.AppendSwitch(kDisableAudioInputSwitch);
-  }
+  HandleDataDirectoryParam(*builder, params);
 
-  bool enable_hardware_video_decoder =
-      (features & fuchsia::web::ContextFeatureFlags::HARDWARE_VIDEO_DECODER) ==
-      fuchsia::web::ContextFeatureFlags::HARDWARE_VIDEO_DECODER;
-  if (!enable_hardware_video_decoder)
-    launch_args.AppendSwitch(kDisableAcceleratedVideoDecodeSwitch);
-
-  if (enable_hardware_video_decoder && !enable_vulkan) {
-    DLOG(ERROR) << "HARDWARE_VIDEO_DECODER requires VULKAN.";
-    return ZX_ERR_NOT_SUPPORTED;
-  }
-
-  bool disable_software_video_decoder =
-      (features &
-       fuchsia::web::ContextFeatureFlags::HARDWARE_VIDEO_DECODER_ONLY) ==
-      fuchsia::web::ContextFeatureFlags::HARDWARE_VIDEO_DECODER_ONLY;
-  if (disable_software_video_decoder) {
-    if (!enable_hardware_video_decoder) {
-      LOG(ERROR) << "Software video decoding may only be disabled if hardware "
-                    "video decoding is enabled.";
-      return ZX_ERR_INVALID_ARGS;
-    }
-
-    AppendToSwitch(switches::kDisableFeatures,
-                   features::kEnableSoftwareOnlyVideoCodecs.name, &launch_args);
-  }
-
-  if (!HandleCdmDataDirectoryParam(&params, &launch_args, &launch_info)) {
-    return ZX_ERR_INVALID_ARGS;
-  }
-  if (!HandleDataDirectoryParam(&params, &launch_args, &launch_info)) {
-    return ZX_ERR_INVALID_ARGS;
-  }
-  if (!HandleContentDirectoriesParam(&params, &launch_args, &launch_info)) {
-    return ZX_ERR_INVALID_ARGS;
-  }
-  if (!HandleUserAgentParams(&params, &launch_args)) {
-    return ZX_ERR_INVALID_ARGS;
-  }
-  if (!HandleKeyboardFeatureFlags(features, &launch_args)) {
+  if (!HandleContentDirectoriesParam(*builder, params)) {
     return ZX_ERR_INVALID_ARGS;
   }
 
-  HandleUnsafelyTreatInsecureOriginsAsSecureParam(&params, &launch_args);
-  HandleCorsExemptHeadersParam(&params, &launch_args);
-
-  // In tests the ContextProvider is configured to log to stderr, so clone the
-  // handle to allow web instances to also log there.
-  if (base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
-          "enable-logging") == "stderr") {
-    launch_info.err = fuchsia::sys::FileDescriptor::New();
-    launch_info.err->type0 = PA_FD;
-    zx_status_t status = fdio_fd_clone(
-        STDERR_FILENO, launch_info.err->handle0.reset_and_get_address());
-    ZX_CHECK(status == ZX_OK, status);
-  }
-
+  // TODO(crbug.com/1395774): Replace this with normal routing of tmp from
+  // web_engine_shell's parent down to web_instance.
   if (tmp_dir_.is_valid()) {
-    launch_info.flat_namespace->paths.push_back("/tmp");
-    launch_info.flat_namespace->directories.push_back(std::move(tmp_dir_));
+    builder->ServeTmpDirectory(std::move(tmp_dir_));
   }
-
-  // Create a request for the new instance's service-directory.
-  fidl::InterfaceHandle<fuchsia::io::Directory> instance_services_handle;
-  launch_info.directory_request = instance_services_handle.NewRequest();
-  sys::ServiceDirectory instance_services(std::move(instance_services_handle));
 
   // If one or more Debug protocol clients are active then enable debugging,
   // and connect the instance to the fuchsia.web.Debug proxy.
   if (debug_proxy_.has_clients()) {
-    launch_args.AppendSwitch(switches::kEnableRemoteDebugMode);
+    builder->args().AppendSwitch(switches::kEnableRemoteDebugMode);
     fidl::InterfaceHandle<fuchsia::web::Debug> debug_handle;
-    instance_services.Connect(debug_handle.NewRequest());
+    builder->SetDebugRequest(debug_handle.NewRequest());
     debug_proxy_.RegisterInstance(std::move(debug_handle));
   }
 
-  // Pass on the caller's service-directory request.
-  instance_services.CloneChannel(std::move(services_request));
+  const bool with_webui =
+      base::CommandLine::ForCurrentProcess()->HasSwitch(switches::kWithWebui);
 
-  // Set |additional_services| to redirect requests for only those services
-  // required for the specified |params|, to be satisfied by the caller-
-  // supplied service directory. This reduces the risk of an instance being
-  // able to somehow exploit services other than those that it should be using.
-  launch_info.additional_services = fuchsia::sys::ServiceList::New();
-  launch_info.additional_services->names = GetRequiredServicesForConfig(params);
-  launch_info.additional_services->host_directory =
-      std::move(service_directory);
+  auto component_url_to_launch = MakeWebInstanceComponentUrl(
+      is_web_instance_component_in_same_package_, with_webui, component_name);
 
-  // Take the accumulated command line arguments, omitting the program name in
-  // argv[0], and set them in |launch_info|.
-  launch_info.arguments = std::vector<std::string>(
-      launch_args.argv().begin() + 1, launch_args.argv().end());
+  auto component_url_to_register = component_url_to_launch;
 
-  // Launch the component with the accumulated settings.  The Component will
-  // self-terminate when the fuchsia.web.Context client disconnects.
-  IsolatedEnvironmentLauncher()->CreateComponent(std::move(launch_info),
-                                                 nullptr /* controller */);
+  if (is_web_instance_component_in_same_package_) {
+    // RegisterWebInstanceProductData() requires an absolute component URL, but
+    // the package URL for the current component cannot be obtained
+    // programmatically (see fxbug.dev/51490). Use the default absolute package
+    // URL for WebEngine; this should always work in production, which is
+    // when registration is needed.
+    // TODO(crbug.com/1211174): Remove when a different mechanism is available.
+    component_url_to_register =
+        MakeWebInstanceComponentUrl(false, with_webui, component_name);
+  }
+
+  // Ensure WebInstance is registered before launching it.
+  RegisterWebInstanceProductData(component_url_to_register);
+
+  auto instance = builder->Build(component_url_to_launch,
+                                 std::move(outgoing_services_request));
+
+  // Monitor the instance's Binder to track its destruction.
+  instance.binder_ptr.set_error_handler(
+      [this, id = instance.id](zx_status_t status) {
+        this->OnComponentBinderClosed(id, status);
+      });
+  instances_.emplace(std::move(instance.id), std::move(instance.binder_ptr));
 
   return ZX_OK;
 }
 
-fuchsia::web::Debug* WebInstanceHost::debug_api() {
-  return &debug_proxy_;
+void WebInstanceHost::Initialize() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK(!realm_);
+
+  zx_status_t status =
+      base::ComponentContextForProcess()->svc()->Connect(realm_.NewRequest());
+  ZX_CHECK(status == ZX_OK, status) << "Connect(fuchsia.component/Realm)";
+  realm_.set_error_handler(
+      fit::bind_member(this, &WebInstanceHost::OnRealmError));
 }
 
-fuchsia::sys::Launcher* WebInstanceHost::IsolatedEnvironmentLauncher() {
-  if (isolated_environment_launcher_)
-    return isolated_environment_launcher_.get();
+void WebInstanceHost::Uninitialize() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  // Create the nested isolated Environment. This environment provides only the
-  // fuchsia.sys.Loader service, which is required to allow the Launcher to
-  // resolve the web instance package. All other services are provided
-  // explicitly to each web instance, from those passed to |CreateContext()|.
-  auto environment = base::ComponentContextForProcess()
-                         ->svc()
-                         ->Connect<fuchsia::sys::Environment>();
+  // Destroy all child instances and each one's outgoing directory subtree.
+  auto* const instances_dir =
+      GetWebInstancesCollectionDir(*outgoing_directory_);
+  for (auto& [id, binder_ptr] : instances_) {
+    const std::string name(InstanceNameFromId(id));
+    if (realm_) {
+      DestroyInstance(*realm_, name);
+    }
+    DestroyInstanceDirectory(instances_dir, name);
+    binder_ptr.Unbind();
+  }
+  instances_.clear();
 
-  // Populate a ServiceList providing only the Loader service.
-  auto services = fuchsia::sys::ServiceList::New();
-  services->names.push_back(fuchsia::sys::Loader::Name_);
-  fidl::InterfaceHandle<::fuchsia::io::Directory> services_channel;
-  environment->GetDirectory(services_channel.NewRequest());
-  services->host_directory = std::move(services_channel);
+  realm_.Unbind();
 
-  // Instantiate the isolated environment. This ContextProvider instance's PID
-  // is included in the label to ensure that concurrent service instances
-  // launched in the same Environment (e.g. during tests) do not clash.
-  fuchsia::sys::EnvironmentPtr isolated_environment;
-  environment->CreateNestedEnvironment(
-      isolated_environment.NewRequest(),
-      isolated_environment_controller_.NewRequest(),
-      base::StringPrintf("web_instances:%lu", base::Process::Current().Pid()),
-      std::move(services),
-      {.inherit_parent_services = false,
-       .use_parent_runners = false,
-       .delete_storage_on_death = true});
+  // Note: the entry in the outgoing directory for the top-level instances dir
+  // is leaked in support of having multiple hosts active in a single process.
+}
 
-  // The ContextProvider only needs to retain the EnvironmentController and
-  // a connection to the Launcher service for the isolated environment.
-  isolated_environment->GetLauncher(
-      isolated_environment_launcher_.NewRequest());
-  isolated_environment_launcher_.set_error_handler([](zx_status_t status) {
-    ZX_LOG(ERROR, status) << "Launcher disconnected.";
-  });
-  isolated_environment_controller_.set_error_handler([](zx_status_t status) {
-    ZX_LOG(ERROR, status) << "EnvironmentController disconnected.";
-  });
+void WebInstanceHost::OnRealmError(zx_status_t status) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  return isolated_environment_launcher_.get();
+  ZX_LOG(ERROR, status) << "RealmBuilder channel error";
+  Uninitialize();
+}
+
+void WebInstanceHost::OnComponentBinderClosed(const base::Uuid& id,
+                                              zx_status_t status) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  // Destroy the child instance.
+  const std::string name(InstanceNameFromId(id));
+  DestroyInstance(*realm_, name);
+
+  // Drop the directory subtree for the child instance.
+  DestroyInstanceDirectory(GetWebInstancesCollectionDir(*outgoing_directory_),
+                           name);
+
+  // Drop the hold on the instance's Binder. Note: destroying the InterfacePtr
+  // here also deletes the lambda into which `id` was bound, so `id` must not
+  // be touched after this next statement.
+  auto count = instances_.erase(id);
+  DCHECK_EQ(count, 1UL);
+
+  if (instances_.empty()) {
+    Uninitialize();
+  }
+}
+
+WebInstanceHostWithServicesFromThisComponent::
+    WebInstanceHostWithServicesFromThisComponent(
+        sys::OutgoingDirectory& outgoing_directory,
+        bool is_web_instance_component_in_same_package)
+    : WebInstanceHost(outgoing_directory,
+                      is_web_instance_component_in_same_package) {}
+
+zx_status_t WebInstanceHostWithServicesFromThisComponent::
+    CreateInstanceForContextWithCopiedArgs(
+        fuchsia::web::CreateContextParams params,
+        fidl::InterfaceRequest<fuchsia::io::Directory>
+            outgoing_services_request,
+        const base::CommandLine& extra_args) {
+  // Services are offered from this Component, so they should not be provided.
+  CHECK(!params.has_service_directory());
+
+  std::vector<std::string> services;
+  const auto features = params.has_features()
+                            ? params.features()
+                            : fuchsia::web::ContextFeatureFlags();
+  AppendDynamicServices(features, params.has_playready_key_system(), services);
+
+  return CreateInstanceForContextWithCopiedArgsAndUrl(
+      std::move(params), std::move(outgoing_services_request), extra_args,
+      "web_instance.cm", services);
+}
+
+WebInstanceHostWithoutServices::WebInstanceHostWithoutServices(
+    sys::OutgoingDirectory& outgoing_directory,
+    bool is_web_instance_component_in_same_package)
+    : WebInstanceHost(outgoing_directory,
+                      is_web_instance_component_in_same_package) {}
+
+zx_status_t
+WebInstanceHostWithoutServices::CreateInstanceForContextWithCopiedArgs(
+    fuchsia::web::CreateContextParams params,
+    fidl::InterfaceRequest<fuchsia::io::Directory> outgoing_services_request,
+    const base::CommandLine& extra_args) {
+  // Services are not offered from this Component, so they must be provided.
+  CHECK(params.has_service_directory());
+
+  // Web UI resources are not supported with a service directory.
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(switches::kWithWebui)) {
+    return ZX_ERR_INVALID_ARGS;
+  }
+
+  return CreateInstanceForContextWithCopiedArgsAndUrl(
+      std::move(params), std::move(outgoing_services_request), extra_args,
+      "web_instance_with_svc_directory.cm", {});
 }

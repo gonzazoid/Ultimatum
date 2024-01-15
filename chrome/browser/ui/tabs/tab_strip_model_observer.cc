@@ -7,17 +7,17 @@
 #include <utility>
 
 #include "base/check_op.h"
+#include "base/trace_event/trace_event.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "content/public/browser/web_contents.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value.h"
 
 using content::WebContents;
 
-TabStripModelChange::RemovedTab::RemovedTab(
-    content::WebContents* contents,
-    int index,
-    RemoveReason remove_reason,
-    absl::optional<SessionID> session_id)
+TabStripModelChange::RemovedTab::RemovedTab(content::WebContents* contents,
+                                            int index,
+                                            RemoveReason remove_reason,
+                                            std::optional<SessionID> session_id)
     : contents(contents),
       index(index),
       remove_reason(remove_reason),
@@ -218,12 +218,15 @@ void TabStripModelObserver::TabBlockedStateChanged(WebContents* contents,
 }
 
 void TabStripModelObserver::TabGroupedStateChanged(
-    absl::optional<tab_groups::TabGroupId> group,
+    std::optional<tab_groups::TabGroupId> group,
     content::WebContents* contents,
     int index) {}
 
 void TabStripModelObserver::TabStripEmpty() {
 }
+
+void TabStripModelObserver::TabCloseCancelled(
+    const content::WebContents* contents) {}
 
 void TabStripModelObserver::WillCloseAllTabs(TabStripModel* tab_strip_model) {}
 

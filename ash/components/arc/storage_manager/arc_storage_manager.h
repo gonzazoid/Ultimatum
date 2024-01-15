@@ -6,7 +6,8 @@
 #define ASH_COMPONENTS_ARC_STORAGE_MANAGER_ARC_STORAGE_MANAGER_H_
 
 #include "ash/components/arc/mojom/storage_manager.mojom.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 namespace content {
@@ -44,8 +45,10 @@ class ArcStorageManager : public KeyedService {
       base::OnceCallback<void(bool succeeded, mojom::ApplicationsSizePtr)>;
   bool GetApplicationsSize(GetApplicationsSizeCallback callback);
 
+  static void EnsureFactoryBuilt();
+
  private:
-  ArcBridgeService* const arc_bridge_service_;
+  const raw_ptr<ArcBridgeService> arc_bridge_service_;
 };
 
 }  // namespace arc

@@ -78,12 +78,18 @@ class VIZ_HOST_EXPORT HostFrameSinkManager
   // on |frame_sink_manager_remote_| is lost.
   void SetConnectionLostCallback(base::RepeatingClosure callback);
 
-  // Registers |frame_sink_id| so that a client can submit CompositorFrames
+  // Registers `frame_sink_id` so that a client can submit CompositorFrames
   // using it. This must be called before creating a CompositorFrameSink or
   // registering FrameSinkId hierarchy.
   //
-  // When the client is done submitting CompositorFrames to |frame_sink_id| then
-  // InvalidateFrameSink() should be called.
+  // A subsequent call with a new `client` for the same `frame_sink_id` will
+  // bind the id to the new `client` immediately. InvalidateFrameSinkId must
+  // only be called for the new bound `client`. All callbacks, including
+  // existing pending ones, are dispatched to the new `client`.
+  //
+  // When the `client` is done submitting CompositorFrames to `frame_sink_id`
+  // InvalidateFrameSink() should be called. It is invalid to register this
+  // `frame_sink_id` with another client after invalidation.
   void RegisterFrameSinkId(const FrameSinkId& frame_sink_id,
                            HostFrameSinkClient* client,
                            ReportFirstSurfaceActivation report_activation);
@@ -92,16 +98,12 @@ class VIZ_HOST_EXPORT HostFrameSinkManager
   // InvalidateFrameSinkId() has not been called.
   bool IsFrameSinkIdRegistered(const FrameSinkId& frame_sink_id) const;
 
-  // Invalidates |frame_sink_id| when the client is done submitting
-  // CompositorFrames. If there is a CompositorFrameSink for |frame_sink_id|
+  // Invalidates `frame_sink_id` when the client is done submitting
+  // CompositorFrames. If there is a CompositorFrameSink for `frame_sink_id`
   // then it will be destroyed and the message pipe to the client will be
   // closed.
-  //
-  // It's expected, but not enforced, that RegisterFrameSinkId() will never be
-  // called for |frame_sink_id| again. This is to avoid problems with re-entrant
-  // code. If the same client wants to submit CompositorFrames later a new
-  // FrameSinkId should be allocated.
-  void InvalidateFrameSinkId(const FrameSinkId& frame_sink_id);
+  void InvalidateFrameSinkId(const FrameSinkId& frame_sink_id,
+                             HostFrameSinkClient* client);
 
   // |debug_label| is used when printing out the surface hierarchy so we know
   // which clients are contributing which surfaces.
@@ -115,8 +117,13 @@ class VIZ_HOST_EXPORT HostFrameSinkManager
   //
   // If there is already a CompositorFrameSink for |frame_sink_id| then calling
   // this will destroy the existing CompositorFrameSink and create a new one.
+  //
+  // |maybe_wait_on_destruction| is for the caller to request that the browser
+  // should wait on frame sync destruction before destroying the platform
+  // window.
   void CreateRootCompositorFrameSink(
-      mojom::RootCompositorFrameSinkParamsPtr params);
+      mojom::RootCompositorFrameSinkParamsPtr params,
+      bool maybe_wait_on_destruction = true);
 
   // Creates a connection from a client to viz, using |request| and |client|,
   // that allows the client to submit CompositorFrames. When no longer needed,
@@ -190,8 +197,13 @@ class VIZ_HOST_EXPORT HostFrameSinkManager
   // least the given LocalSurfaceId (|surface_id.local_frame_id()|). If the
   // LocalSurfaceId is lower than the given id, then the request is queued up to
   // be executed later.
+  //
+  // When `capture_exact_surface_id` is true, the snapshot will only be
+  // taken for the surface whose ID is an exact match to `surface_id`. This is
+  // useful to take a snapshot of an old `Surface` post-navigation.
   void RequestCopyOfOutput(const SurfaceId& surface_id,
-                           std::unique_ptr<CopyOutputRequest> request);
+                           std::unique_ptr<CopyOutputRequest> request,
+                           bool capture_exact_surface_id = false);
 
   void Throttle(const std::vector<FrameSinkId>& ids, base::TimeDelta interval);
   void StartThrottlingAllFrameSinks(base::TimeDelta interval);
@@ -218,6 +230,14 @@ class VIZ_HOST_EXPORT HostFrameSinkManager
       const FrameSinkId& frame_sink_id);
 
   void UpdateDebugRendererSettings(const DebugRendererSettings& debug_settings);
+
+  // Starts the frame counting in Viz.
+  void StartFrameCountingForTest(base::TimeTicks start_time,
+                                 base::TimeDelta bucket_size);
+
+  // Ends the frame counting in Viz thread and returns data to the client.
+  void StopFrameCountingForTest(
+      mojom::FrameSinkManager::StopFrameCountingForTestCallback callback);
 
   const DebugRendererSettings& debug_renderer_settings() const {
     return debug_renderer_settings_;
@@ -292,8 +312,11 @@ class VIZ_HOST_EXPORT HostFrameSinkManager
   void OnAggregatedHitTestRegionListUpdated(
       const FrameSinkId& frame_sink_id,
       const std::vector<AggregatedHitTestRegion>& hit_test_data) override;
-
-  const bool enable_sync_window_destruction_;
+#if BUILDFLAG(IS_ANDROID)
+  void VerifyThreadIdsDoNotBelongToHost(
+      const std::vector<int32_t>& thread_ids,
+      VerifyThreadIdsDoNotBelongToHostCallback callback) override;
+#endif
 
   // Connections to/from FrameSinkManagerImpl.
   mojo::Remote<mojom::FrameSinkManager> frame_sink_manager_remote_;

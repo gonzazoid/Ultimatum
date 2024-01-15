@@ -26,8 +26,9 @@ class MenuRunner;
 class InfoBarView : public infobars::InfoBar,
                     public views::View,
                     public views::ExternalFocusTracker {
+  METADATA_HEADER(InfoBarView, views::View)
+
  public:
-  METADATA_HEADER(InfoBarView);
   explicit InfoBarView(std::unique_ptr<infobars::InfoBarDelegate> delegate);
   InfoBarView(const InfoBarView&) = delete;
   InfoBarView& operator=(const InfoBarView&) = delete;
@@ -42,7 +43,6 @@ class InfoBarView : public infobars::InfoBar,
   gfx::Size CalculatePreferredSize() const override;
   void ViewHierarchyChanged(
       const views::ViewHierarchyChangedDetails& details) override;
-  void OnPaint(gfx::Canvas* canvas) override;
   void OnThemeChanged() override;
 
   // views::ExternalFocusTracker:

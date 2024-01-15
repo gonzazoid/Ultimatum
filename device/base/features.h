@@ -8,7 +8,6 @@
 #include "base/feature_list.h"
 #include "build/build_config.h"
 #include "device/base/device_base_export.h"
-#include "device/vr/buildflags/buildflags.h"
 
 namespace device {
 
@@ -17,31 +16,15 @@ DEVICE_BASE_EXPORT BASE_DECLARE_FEATURE(kNewUsbBackend);
 #endif  // BUILDFLAG(IS_MAC)
 
 #if BUILDFLAG(IS_WIN)
-DEVICE_BASE_EXPORT BASE_DECLARE_FEATURE(kNewBLEWinImplementation);
 DEVICE_BASE_EXPORT BASE_DECLARE_FEATURE(kNewBLEGattSessionHandling);
 #endif  // BUILDFLAG(IS_WIN)
-
-#if BUILDFLAG(ENABLE_VR)
-DEVICE_BASE_EXPORT BASE_DECLARE_FEATURE(kWebXrOrientationSensorDevice);
-#endif  // BUILDFLAG(ENABLE_VR)
 
 // New features should be added to the device::features namespace.
 
 namespace features {
-#if BUILDFLAG(ENABLE_OPENXR)
-DEVICE_BASE_EXPORT BASE_DECLARE_FEATURE(kOpenXR);
-DEVICE_BASE_EXPORT BASE_DECLARE_FEATURE(kOpenXrExtendedFeatureSupport);
-DEVICE_BASE_EXPORT BASE_DECLARE_FEATURE(kOpenXRSharedImages);
-#endif  // ENABLE_OPENXR
-
-DEVICE_BASE_EXPORT BASE_DECLARE_FEATURE(kWebXrHandInput);
-DEVICE_BASE_EXPORT BASE_DECLARE_FEATURE(kWebXrHitTest);
-DEVICE_BASE_EXPORT BASE_DECLARE_FEATURE(kWebXrIncubations);
-
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
 DEVICE_BASE_EXPORT BASE_DECLARE_FEATURE(kWebBluetoothConfirmPairingSupport);
 #endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
-
 }  // namespace features
 }  // namespace device
 

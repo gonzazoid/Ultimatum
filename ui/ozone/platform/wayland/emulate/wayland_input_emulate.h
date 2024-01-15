@@ -1,111 +1,111 @@
-// Copyright 2021 The Chromium Authors
+// Copyright 2023 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_OZONE_PLATFORM_WAYLAND_EMULATE_WAYLAND_INPUT_EMULATE_H_
 #define UI_OZONE_PLATFORM_WAYLAND_EMULATE_WAYLAND_INPUT_EMULATE_H_
 
-#include <memory>
-
 #include <wayland-util.h>
 
-#include "base/component_export.h"
+#include <memory>
+
 #include "base/containers/circular_deque.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/observer_list.h"
+#include "ui/base/test/ui_controls.h"
 #include "ui/events/keycodes/dom/dom_code.h"
-#include "ui/events/types/event_type.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/ozone/platform/wayland/host/proxy/wayland_proxy.h"
 
 struct wl_buffer;
 struct wl_registry;
-struct weston_test;
+struct zcr_ui_controls_v1;
 struct wl_callback;
 
 namespace wl {
 
-// Emulates Keyboard, Pointer, and Touch events that ui_interactive_tests test
-// suite sends. Mustn't be used in production code.
+// Uses the ui_controls protocol extension to emulate Keyboard, Pointer, and
+// Touch events that the interactive_ui_tests test suite sends. Mustn't be
+// linked in production code.
 class WaylandInputEmulate : public wl::WaylandProxy::Delegate {
  public:
-  // Notifies the observer about events sent by Wayland compositor.
-  class Observer : public base::CheckedObserver {
-   public:
-    virtual void OnPointerMotionGlobal(const gfx::Point& screen_position) = 0;
-
-    // Notifies Wayland compositor has sent |button| event that corresponds to
-    // event codes in Linux's input-event-codes.h.
-    virtual void OnPointerButtonGlobal(int32_t button, bool pressed) = 0;
-
-    // Notifies Wayland compositor has sent |key| event that corresponds to
-    // event codes in Linux's input-event-codes.h.
-    virtual void OnKeyboardKey(int32_t key, bool pressed) = 0;
-
-    // Notifies that the Wayland compositor has sent a touch event to
-    // |screen_position|.
-    virtual void OnTouchReceived(const gfx::Point& screen_position) = 0;
-
-   protected:
-    ~Observer() override = default;
-  };
-
-  WaylandInputEmulate();
+  explicit WaylandInputEmulate(base::RepeatingCallback<void(uint32_t)>);
   ~WaylandInputEmulate() override;
 
-  void AddObserver(Observer* obs);
-  void RemoveObserver(Observer* obs);
-  void EmulatePointerMotion(gfx::AcceleratedWidget widget,
-                            const gfx::Point& mouse_surface_loc,
-                            const gfx::Point& mouse_screen_loc_in_px);
+  // |key_state| is a bit-mask of ui_controls::KeyEventType.
+  // |accelerator_state| is a bit-mask of ui_controls::AcceleratorState.
+  void EmulateKeyboardKey(ui::DomCode dom_code,
+                          int key_state,
+                          int accelerator_state,
+                          uint32_t request_id);
 
-  // |widget| is only needed to queue up the event if the widget is not yet
-  // configured. If the event is being dequeued then |widget| will be 0.
-  void EmulatePointerButton(gfx::AcceleratedWidget widget,
-                            ui::EventType event_type,
-                            uint32_t changed_button);
-  void EmulateKeyboardKey(gfx::AcceleratedWidget widget,
-                          ui::EventType event_type,
-                          ui::DomCode dom_code);
-  void EmulateTouch(gfx::AcceleratedWidget widget,
-                    ui::EventType event_type,
-                    int id,
-                    const gfx::Point& touch_screen_loc);
+  // Both |mouse_surface_location| and |mouse_screen_location| are in DIP.
+  void EmulatePointerMotion(gfx::AcceleratedWidget widget,
+                            const gfx::Point& mouse_surface_location,
+                            const gfx::Point& mouse_screen_location,
+                            uint32_t request_id);
+
+  // |button_state| is a bit-mask of ui_controls::MouseButtonState.
+  // |accelerator_state| is a bit-mask of ui_controls::AcceleratorState.
+  void EmulatePointerButton(ui_controls::MouseButton button,
+                            int button_state,
+                            int accelerator_state,
+                            uint32_t request_id);
+
+  // |touch_screen_location| is in DIP.
+  void EmulateTouch(int action,
+                    const gfx::Point& touch_screen_location,
+                    int touch_id,
+                    uint32_t request_id);
+
+#if BUILDFLAG(IS_LINUX)
+  void ForceUseScreenCoordinatesOnce();
+#endif
 
  private:
-  struct TestWindow;
+  enum PendingRequestType {
+    KeyPress,
+    MouseMove,
+    MouseButton,
+    Touch,
+  };
 
-  // Pending emulated events. Can be ET_MOUSE_MOVED,
-  // ET_MOUSE_PRESSED/ET_MOUSE_RELEASED, ET_KEY_PRESSED/ET_KEY_RELEASED, or
-  // ET_TOUCH_PRESSED/ET_TOUCH_MOVED/ET_TOUCH_RELEASED.
-  struct PendingEvent {
-    PendingEvent(ui::EventType event_type,
-                 gfx::AcceleratedWidget target_widget,
-                 WaylandInputEmulate*);
-    ~PendingEvent();
+  // Pending emulation request.
+  struct PendingRequest {
+    PendingRequest(PendingRequestType request_type, uint32_t request_id);
+    ~PendingRequest();
 
-    ui::EventType type;
-    gfx::AcceleratedWidget widget;
-    base::WeakPtr<TestWindow> test_window;
+    PendingRequestType type;
+    uint32_t request_id;
 
-    // Set for type == ET_MOUSE_MOVED. Locations are
-    // in surface local, and pixel screen coordinates respectively.
-    gfx::Point pointer_surface_location;
-    gfx::Point pointer_screen_location_in_px;
+    // Set for type == KeyPress || type == MouseButton. A bit-mask of
+    // ui_controls::AcceleratorState.
+    int accelerator_state;
 
-    // Set for type == ET_TOUCH_*. Location is in dip screen coordinates.
-    gfx::Point touch_screen_location;
-
-    // Set for type == ET_MOUSE_PRESSED || type == ET_MOUSE_RELEASED.
-    uint32_t mouse_button = 0;
-
-    // Set for type == ET_KEY_PRESSED || type == ET_KEY_RELEASED.
+    // Set for type == KeyPress. |key_state| is a bit-mask of
+    // ui_controls::KeyEventType.
     ui::DomCode key_dom_code = ui::DomCode::NONE;
+    int key_state;
 
-    // Set for type == ET_TOUCH_*.
+    // Set for type == MouseMove. We hold on to |widget| because we only decide
+    // whether to use screen or surface-local coordinates after the window has
+    // been configured.
+    gfx::AcceleratedWidget widget;
+    gfx::Point mouse_surface_location;
+    gfx::Point mouse_screen_location;
+
+    // Set for type == MouseButton. |button_state| is a bit-mask of
+    // ui_controls::MouseButtonState.
+    ui_controls::MouseButton button;
+    int button_state;
+
+    // Set for type == Touch. |action| is a bit-mask of ui_controls::TouchType.
+    // |touch_screen_location| is in DIP screen coordinates.
+    int action = 0;
+    gfx::Point touch_screen_location;
     int touch_id = 0;
   };
 
@@ -124,7 +124,7 @@ class WaylandInputEmulate : public wl::WaylandProxy::Delegate {
     bool buffer_attached_and_configured = false;
 
     // Frame callback that invokes WaylandInputEmulate::FrameCallbackHandler.
-    raw_ptr<struct wl_callback, DanglingUntriaged> frame_callback = nullptr;
+    raw_ptr<wl_callback, DanglingUntriaged> frame_callback = nullptr;
 
     // The attached buffer.
     raw_ptr<wl_buffer, DanglingUntriaged> buffer = nullptr;
@@ -136,49 +136,34 @@ class WaylandInputEmulate : public wl::WaylandProxy::Delegate {
     base::WeakPtrFactory<TestWindow> weak_factory{this};
   };
 
-  // WaylandProxy::Delegate.
+  // WaylandProxy::Delegate:
   void OnWindowAdded(gfx::AcceleratedWidget widget) override;
   void OnWindowRemoved(gfx::AcceleratedWidget widget) override;
   void OnWindowConfigured(gfx::AcceleratedWidget widget,
                           bool is_configured) override;
   void OnWindowRoleAssigned(gfx::AcceleratedWidget widget) override;
 
-  // weston_test_listener.
-  static void HandlePointerPosition(void* data,
-                                    struct weston_test* weston_test,
-                                    wl_fixed_t x,
-                                    wl_fixed_t y);
-  static void HandlePointerButton(void* data,
-                                  struct weston_test* weston_test,
-                                  int32_t button,
-                                  uint32_t state);
-  static void HandleKeyboardKey(void* data,
-                                struct weston_test* weston_test,
-                                uint32_t key,
-                                uint32_t state);
-  static void HandleTouchReceived(void* data,
-                                  struct weston_test* weston_test,
-                                  wl_fixed_t x,
-                                  wl_fixed_t y);
+  // zcr_ui_controls_v1_listener callbacks:
+  static void OnRequestProcessed(void* data,
+                                 zcr_ui_controls_v1* ui_controls,
+                                 uint32_t id);
 
-  // wl_registry_listener.
-  static void Global(void* data,
-                     wl_registry* registry,
-                     uint32_t name,
-                     const char* interface,
-                     uint32_t version);
+  // wl_registry_listener callbacks:
+  static void OnGlobal(void* data,
+                       wl_registry* registry,
+                       uint32_t name,
+                       const char* interface,
+                       uint32_t version);
 
-  // wl_callback_listener.
-  static void FrameCallbackHandler(void* data,
-                                   struct wl_callback* callback,
-                                   uint32_t time);
+  // wl_callback_listener callbacks:
+  static void OnFrameDone(void* data, wl_callback* callback, uint32_t time);
 
   // Returns true if there is at least one window that has been created but that
   // does not yet have a buffer committed.
   bool AnyWindowWaitingForBufferCommit();
 
-  // Dispatches all pending events.
-  void DispatchPendingEvents();
+  // Dispatches all pending requests.
+  void DispatchPendingRequests();
 
   // Window creation is asynchronous in wayland. First we create the window,
   // then we must attach and commit a buffer before the server will treat it
@@ -188,18 +173,26 @@ class WaylandInputEmulate : public wl::WaylandProxy::Delegate {
                  std::unique_ptr<WaylandInputEmulate::TestWindow>>
       windows_;
 
-  // Stores pending events in a global queue. We will not dispatch any pending
-  // events while there are windows that are still in the process of being
+  // Stores pending requests in a global queue. We will not dispatch any pending
+  // requests while there are windows that are still in the process of being
   // created.
-  base::circular_deque<std::unique_ptr<PendingEvent>> pending_events_;
+  base::circular_deque<std::unique_ptr<PendingRequest>> pending_requests_;
 
-  base::ObserverList<WaylandInputEmulate::Observer> observers_;
+  base::RepeatingCallback<void(uint32_t)> request_processed_callback_;
+
+  // If true, the next `EmulatePointerMotion` call will use global screen
+  // coordinates, i.e. send zcr_ui_controls_v1.mouse_move with the `surface`
+  // parameter set to NULL.
+  // Note: this does not affect whether `EmulatePointerMotion` uses the
+  // coordinates from its `mouse_surface_location` or `mouse_screen_location`
+  // parameter. See the comment in that method's definition for more details.
+  bool force_use_screen_coordinates_once_ = false;
 
   // Owned raw pointers. wl::Object is not used because the component this
   // class belongs to cannot depend on the "wayland" target in the
   // //ui/ozone/platform/wayland/BUILD.gn
-  raw_ptr<struct wl_registry> registry_ = nullptr;
-  raw_ptr<struct weston_test> weston_test_ = nullptr;
+  raw_ptr<wl_registry> registry_ = nullptr;
+  raw_ptr<zcr_ui_controls_v1> ui_controls_ = nullptr;
 };
 
 }  // namespace wl

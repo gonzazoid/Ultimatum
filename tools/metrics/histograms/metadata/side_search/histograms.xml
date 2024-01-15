@@ -24,7 +24,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="SideSearch.AutoTrigger.NavigationCommittedWithinSideSearchCountPerJourney"
-    units="navigations" expires_after="2023-04-16">
+    units="navigations" expires_after="2023-12-13">
   <owner>yuhengh@chromium.org</owner>
   <owner>tluk@chromium.org</owner>
   <summary>
@@ -36,7 +36,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="SideSearch.AutoTrigger.RedirectionToTabCountPerJourney"
-    units="navigations" expires_after="2023-04-16">
+    units="navigations" expires_after="2023-12-13">
   <owner>yuhengh@chromium.org</owner>
   <owner>tluk@chromium.org</owner>
   <summary>
@@ -48,7 +48,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="SideSearch.AvailabilityChanged"
-    enum="SideSearchAvailabilityChangeType" expires_after="2023-04-16">
+    enum="SideSearchAvailabilityChangeType" expires_after="2023-12-13">
   <owner>yuhengh@chromium.org</owner>
   <owner>tluk@chromium.org</owner>
   <owner>romanarora@chromium.org</owner>
@@ -59,19 +59,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="SideSearch.CloseAction" enum="SideSearchCloseActionType"
-    expires_after="2023-04-16">
-  <owner>yuhengh@chromium.org</owner>
-  <owner>tluk@chromium.org</owner>
-  <owner>romanarora@chromium.org</owner>
-  <summary>
-    The type of action taken to close Side Search. Recorded when side search
-    panel is closed.
-  </summary>
-</histogram>
-
 <histogram name="SideSearch.LoadCompletedTime" units="ms"
-    expires_after="2023-04-16">
+    expires_after="2024-04-28">
   <owner>yuhengh@chromium.org</owner>
   <owner>tluk@chromium.org</owner>
   <owner>romanarora@chromium.org</owner>
@@ -83,7 +72,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="SideSearch.LoadDocumentTime" units="ms"
-    expires_after="2023-04-16">
+    expires_after="2024-05-05">
   <owner>yuhengh@chromium.org</owner>
   <owner>tluk@chromium.org</owner>
   <owner>romanarora@chromium.org</owner>
@@ -95,7 +84,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="SideSearch.Navigation" enum="SideSearchNavigationType"
-    expires_after="2023-04-16">
+    expires_after="2024-04-28">
   <owner>yuhengh@chromium.org</owner>
   <owner>tluk@chromium.org</owner>
   <owner>romanarora@chromium.org</owner>
@@ -106,24 +95,9 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="SideSearch.NavigationCommittedWithinSideSearchCountPerJourney"
-    units="navigations" expires_after="2023-02-05">
-  <obsolete>
-    Removed in M107
-  </obsolete>
-  <owner>yuhengh@chromium.org</owner>
-  <owner>tluk@chromium.org</owner>
-  <owner>romanarora@chromium.org</owner>
-  <summary>
-    Number of navigations committed within the side search panel in the same
-    side panel web contents for a given search journey. Recorded when the
-    current search journey ends.
-  </summary>
-</histogram>
-
 <histogram
     name="SideSearch.NavigationCommittedWithinSideSearchCountPerJourney2"
-    units="navigations" expires_after="2023-04-09">
+    units="navigations" expires_after="2023-12-13">
   <owner>yuhengh@chromium.org</owner>
   <owner>tluk@chromium.org</owner>
   <owner>romanarora@chromium.org</owner>
@@ -136,7 +110,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="SideSearch.NavigationCommittedWithinSideSearchCountPerJourneyFromMenuOption"
-    units="navigations" expires_after="2023-02-05">
+    units="navigations" expires_after="2024-02-11">
   <owner>pengchaocai@chromium.org</owner>
   <owner>yuhengh@chromium.org</owner>
   <owner>tluk@chromium.org</owner>
@@ -148,19 +122,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="SideSearch.OpenAction" enum="SideSearchOpenActionType"
-    expires_after="2023-04-09">
-  <owner>yuhengh@chromium.org</owner>
-  <owner>tluk@chromium.org</owner>
-  <owner>romanarora@chromium.org</owner>
-  <summary>
-    The type of action taken to open Side Search. Recorded when side search
-    panel is open.
-  </summary>
-</histogram>
-
 <histogram name="SideSearch.PageActionIcon.LabelVisibleWhenToggled"
-    enum="SideSearchPageActionLabelVisibility" expires_after="2023-02-12">
+    enum="SideSearchPageActionLabelVisibility" expires_after="2023-12-13">
   <owner>yuhengh@chromium.org</owner>
   <owner>tluk@chromium.org</owner>
   <summary>
@@ -171,7 +134,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="SideSearch.RedirectionToTabCountPerJourney2"
-    units="navigations" expires_after="2023-02-05">
+    units="navigations" expires_after="2023-12-13">
   <owner>yuhengh@chromium.org</owner>
   <owner>tluk@chromium.org</owner>
   <owner>romanarora@chromium.org</owner>
@@ -183,7 +146,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="SideSearch.RedirectionToTabCountPerJourneyFromMenuOption"
-    units="navigations" expires_after="2023-02-05">
+    units="navigations" expires_after="2023-12-13">
   <owner>pengchaocai@chromium.org</owner>
   <owner>yuhengh@chromium.org</owner>
   <owner>tluk@chromium.org</owner>
@@ -195,23 +158,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="SideSearch.SidePanel.TimeShownOpenedVia{OpenAction}"
-    units="ms" expires_after="2023-02-12">
-  <owner>tluk@chromium.org</owner>
-  <owner>yuhengh@chromium.org</owner>
-  <summary>
-    Tracks the duration that a given tab's side search side panel was open for
-    when opened via a {OpenAction} action. This metric is emitted when the tab's
-    side search side panel is hidden.
-  </summary>
-  <token key="OpenAction">
-    <variant name="Entrypoint"/>
-    <variant name="TabSwitch"/>
-  </token>
-</histogram>
-
 <histogram name="SideSearch.TimeSinceSidePanelAvailableToFirstOpen" units="ms"
-    expires_after="2023-04-23">
+    expires_after="2024-04-28">
   <owner>yuhengh@chromium.org</owner>
   <owner>tluk@chromium.org</owner>
   <summary>
@@ -222,7 +170,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="SideSearch.TimesReturnedBackToSRP" units="navigations"
-    expires_after="2023-04-23">
+    expires_after="2024-06-30">
   <owner>yuhengh@chromium.org</owner>
   <owner>tluk@chromium.org</owner>
   <summary>

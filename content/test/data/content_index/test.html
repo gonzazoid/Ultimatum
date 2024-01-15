@@ -2,7 +2,7 @@
 <html>
  <head>
   <title>Content Index API Test</title>
-  <script src="../result_queue.js"></script>
+  <script src="../format_error.js"></script>
  </head>
  <body>
   <h1>Content Index Test</h1>
@@ -20,9 +20,9 @@
           icons,
           url,
         });
-        sendResultToTest('ok');
+        return 'ok';
       } catch (e) {
-        sendErrorToTest(e);
+        return formatError(e);
       }
     }
 

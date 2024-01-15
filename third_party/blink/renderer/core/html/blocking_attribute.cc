@@ -8,20 +8,16 @@
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/space_split_string.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
-#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string_hash.h"
 
 namespace blink {
 
 // static
-const char BlockingAttribute::kRenderToken[] = "render";
-
-// static
 HashSet<AtomicString>& BlockingAttribute::SupportedTokens() {
   DEFINE_STATIC_LOCAL(HashSet<AtomicString>, tokens,
                       ({
-                          kRenderToken,
+                          keywords::kRender,
                       }));
 
   return tokens;
@@ -29,21 +25,21 @@ HashSet<AtomicString>& BlockingAttribute::SupportedTokens() {
 
 // static
 bool BlockingAttribute::HasRenderToken(const String& attribute_value) {
-  if (!RuntimeEnabledFeatures::BlockingAttributeEnabled())
-    return false;
   if (attribute_value.empty())
     return false;
-  return SpaceSplitString(AtomicString(attribute_value)).Contains(kRenderToken);
+  return SpaceSplitString(AtomicString(attribute_value))
+      .Contains(keywords::kRender);
 }
 
 bool BlockingAttribute::ValidateTokenValue(const AtomicString& token_value,
                                            ExceptionState&) const {
-  DCHECK(RuntimeEnabledFeatures::BlockingAttributeEnabled());
   return SupportedTokens().Contains(token_value);
 }
 
-void BlockingAttribute::CountTokenUsage() {
-  if (contains(kRenderToken)) {
+void BlockingAttribute::OnAttributeValueChanged(const AtomicString& old_value,
+                                                const AtomicString& new_value) {
+  DidUpdateAttributeValue(old_value, new_value);
+  if (contains(keywords::kRender)) {
     GetElement().GetDocument().CountUse(
         WebFeature::kBlockingAttributeRenderToken);
   }

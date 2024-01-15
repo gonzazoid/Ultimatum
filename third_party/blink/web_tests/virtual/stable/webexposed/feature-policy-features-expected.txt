@@ -10,11 +10,13 @@ ch-dpr
 ch-ect
 ch-prefers-color-scheme
 ch-prefers-reduced-motion
+ch-prefers-reduced-transparency
 ch-rtt
 ch-save-data
 ch-ua
 ch-ua-arch
 ch-ua-bitness
+ch-ua-form-factor
 ch-ua-full-version
 ch-ua-full-version-list
 ch-ua-mobile
@@ -29,13 +31,13 @@ clipboard-read
 clipboard-write
 cross-origin-isolated
 display-capture
-document-domain
 encrypted-media
 fullscreen
 gamepad
 geolocation
 gyroscope
 hid
+identity-credentials-get
 idle-detection
 keyboard-map
 local-fonts
@@ -45,11 +47,15 @@ midi
 otp-credentials
 payment
 picture-in-picture
+private-state-token-issuance
+private-state-token-redemption
 publickey-credentials-get
 screen-wake-lock
 serial
+storage-access
 sync-xhr
+unload
 usb
-window-placement
+window-management
 xr-spatial-tracking
 

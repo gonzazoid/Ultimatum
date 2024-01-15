@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/containers/queue.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/borealis/borealis_context.h"
@@ -42,8 +43,8 @@ class BorealisContextManagerImpl : public BorealisContextManager,
   virtual base::queue<std::unique_ptr<BorealisTask>> GetTasks();
 
  private:
-  // TODO(b/): remove this once the context manager impl is a
-  // BorealisStateManager.
+  // Empty marker struct used to distinguish running (which is a
+  // BorealisContext) from not running.
   struct NotRunning {};
 
   // The startup transition is used to move the context manager from
@@ -67,7 +68,7 @@ class BorealisContextManagerImpl : public BorealisContextManager,
     // Transition overrides.
     void Start(std::unique_ptr<NotRunning> current_state) override;
 
-    Profile* const profile_;
+    const raw_ptr<Profile> profile_;
     base::TimeTicks start_tick_;
     std::unique_ptr<BorealisContext> context_;
     base::queue<std::unique_ptr<BorealisTask>> task_queue_;
@@ -96,7 +97,7 @@ class BorealisContextManagerImpl : public BorealisContextManager,
 
   void ShutDownBorealisIfRunning();
 
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
 
   std::unique_ptr<Startup> in_progress_startup_;
   std::unique_ptr<BorealisContext> context_;

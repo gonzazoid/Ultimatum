@@ -4,6 +4,7 @@
 
 source_set("menu") {
   sources = [
+    "action_factory+protected.h",
     "action_factory.h",
     "action_factory.mm",
     "browser_action_factory.h",
@@ -12,63 +13,40 @@ source_set("menu") {
     "menu_histograms.h",
     "menu_histograms.mm",
   ]
-  configs += [ "//build/config/compiler:enable_arc" ]
   deps = [
-    "resources:bookmark",
-    "resources:close",
-    "resources:copy",
-    "resources:copy_link_url",
-    "resources:delete",
-    "resources:download",
-    "resources:edit",
-    "resources:lens_icon",
-    "resources:mark_read",
-    "resources:move_folder",
-    "resources:offline",
-    "resources:open",
-    "resources:open_image_in_new_tab",
-    "resources:open_in_incognito",
-    "resources:open_in_new_tab",
-    "resources:open_new_window",
-    "resources:read_later",
-    "resources:remove",
-    "resources:search_image",
-    "resources:select",
-    "resources:share",
     "//base",
     "//components/open_from_clipboard",
     "//components/prefs",
     "//components/search_engines",
-    "//components/url_param_filter/core",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/policy:policy_util",
-    "//ios/chrome/browser/prefs:pref_names",
-    "//ios/chrome/browser/search_engines",
-    "//ios/chrome/browser/ui:feature_flags",
-    "//ios/chrome/browser/ui/commands",
-    "//ios/chrome/browser/ui/icons:symbols",
+    "//ios/chrome/browser/net/model:crurl",
+    "//ios/chrome/browser/policy/model:policy_util",
+    "//ios/chrome/browser/search_engines/model",
+    "//ios/chrome/browser/shared/coordinator/scene:scene_state_header",
+    "//ios/chrome/browser/shared/model/browser_state",
+    "//ios/chrome/browser/shared/model/prefs:pref_names",
+    "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/shared/public/features",
+    "//ios/chrome/browser/shared/ui/symbols",
+    "//ios/chrome/browser/shared/ui/util",
     "//ios/chrome/browser/ui/incognito_reauth:incognito_reauth_scene_agent",
-    "//ios/chrome/browser/ui/main:scene_state_header",
-    "//ios/chrome/browser/ui/util",
-    "//ios/chrome/browser/url_loading",
-    "//ios/chrome/browser/window_activities",
+    "//ios/chrome/browser/ui/lens:lens_entrypoint",
+    "//ios/chrome/browser/url_loading/model",
+    "//ios/chrome/browser/window_activities/model",
+    "//ios/public/provider/chrome/browser/lens:lens_api",
     "//net",
     "//ui/base",
     "//url",
   ]
 }
 
-source_set("context_menu_delegate") {
-  configs += [ "//build/config/compiler:enable_arc" ]
-
+source_set("tab_context_menu_delegate") {
   sources = [ "tab_context_menu_delegate.h" ]
 
-  deps = [ "//ios/chrome/browser/ui/activity_services" ]
+  deps = [ "//ios/chrome/browser/ui/sharing" ]
 }
 
 source_set("unit_tests") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   sources = [
     "action_factory_unittest.mm",
@@ -76,42 +54,22 @@ source_set("unit_tests") {
   ]
   deps = [
     ":menu",
-    "resources:bookmark",
-    "resources:close",
-    "resources:copy",
-    "resources:copy_link_url",
-    "resources:delete",
-    "resources:download",
-    "resources:edit",
-    "resources:lens_icon",
-    "resources:mark_read",
-    "resources:move_folder",
-    "resources:offline",
-    "resources:open",
-    "resources:open_image_in_new_tab",
-    "resources:open_in_incognito",
-    "resources:open_in_new_tab",
-    "resources:open_new_window",
-    "resources:read_later",
-    "resources:remove",
-    "resources:search_image",
-    "resources:select",
-    "resources:share",
     "//base",
     "//base/test:test_support",
+    "//components/policy/core/common:common_constants",
     "//components/sync_preferences:test_support",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/browser_state:test_support",
-    "//ios/chrome/browser/main:test_support",
-    "//ios/chrome/browser/policy:policy_util",
-    "//ios/chrome/browser/prefs:pref_names",
+    "//ios/chrome/browser/net/model:crurl",
+    "//ios/chrome/browser/policy/model:policy_util",
     "//ios/chrome/browser/sessions:test_support",
-    "//ios/chrome/browser/ui:feature_flags",
-    "//ios/chrome/browser/ui/commands",
-    "//ios/chrome/browser/ui/icons:symbols",
-    "//ios/chrome/browser/ui/main:scene_state_header",
-    "//ios/chrome/browser/url_loading",
-    "//ios/chrome/browser/window_activities",
+    "//ios/chrome/browser/shared/model/browser/test:test_support",
+    "//ios/chrome/browser/shared/model/browser_state:test_support",
+    "//ios/chrome/browser/shared/model/prefs:pref_names",
+    "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/shared/public/features",
+    "//ios/chrome/browser/shared/ui/symbols",
+    "//ios/chrome/browser/url_loading/model",
+    "//ios/chrome/browser/window_activities/model",
     "//ios/web/public/test",
     "//testing/gtest",
     "//third_party/ocmock",

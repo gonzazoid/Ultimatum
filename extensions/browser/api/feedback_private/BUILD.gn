@@ -17,14 +17,16 @@ source_set("feedback_private") {
     "feedback_service.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
     "//base",
     "//build:chromeos_buildflags",
     "//components/feedback",
     "//components/feedback/content",
+    "//components/feedback/redaction_tool",
     "//content/public/browser",
     "//extensions/browser:browser_sources",
-    "//extensions/browser/api",
     "//extensions/common",
     "//extensions/common/api",
     "//google_apis",

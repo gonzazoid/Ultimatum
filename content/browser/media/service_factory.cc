@@ -8,8 +8,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/threading/sequence_local_storage_slot.h"
 #include "base/time/time.h"
@@ -250,6 +250,7 @@ T& GetService(const media::CdmType& cdm_type,
   if (!remote) {
     ServiceProcessHost::Options options;
     options.WithDisplayName(display_name);
+    options.WithSite(site);
     ServiceProcessHost::Launch(broker_remote.BindNewPipeAndPassReceiver(),
                                options.Pass());
 

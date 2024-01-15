@@ -15,7 +15,11 @@ pybind_extension(
         "pywrap_tflite_registerer.cc",
     ],
     additional_exported_symbols = ["TFLite_RaggedTensorToTensorRegisterer"],
+    enable_stub_generation = True,
     module_name = "pywrap_tflite_registerer",
+    pytype_srcs = [
+        "pywrap_tflite_registerer.pyi",
+    ],
     srcs_version = "PY3ONLY",
     deps = [
         "//tensorflow_lite_support/custom_ops/kernel/ragged:py_tflite_registerer",

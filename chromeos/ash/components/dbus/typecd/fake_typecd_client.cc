@@ -19,4 +19,10 @@ void FakeTypecdClient::EmitCableWarningSignal(typecd::CableWarningType type) {
   NotifyOnCableWarning(type);
 }
 
+void FakeTypecdClient::SetPeripheralDataAccessPermissionState(bool permitted) {
+}
+
+void FakeTypecdClient::SetTypeCPortsUsingDisplays(
+    const std::vector<uint32_t>& port_nums) {}
+
 }  // namespace ash

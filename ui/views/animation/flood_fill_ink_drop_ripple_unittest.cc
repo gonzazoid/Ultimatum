@@ -14,8 +14,7 @@
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/animation/test/flood_fill_ink_drop_ripple_test_api.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 TEST(FloodFillInkDropRippleTest, TransformedCenterPointForIrregularClipBounds) {
   const gfx::Size host_size(48, 50);
@@ -28,8 +27,8 @@ TEST(FloodFillInkDropRippleTest, TransformedCenterPointForIrregularClipBounds) {
       requested_center_point.x() - clip_insets.left(),
       requested_center_point.y() - clip_insets.top());
 
-  FloodFillInkDropRipple ripple(host_size, clip_insets, requested_center_point,
-                                SK_ColorWHITE, 0.175f);
+  FloodFillInkDropRipple ripple(nullptr, host_size, clip_insets,
+                                requested_center_point, SK_ColorWHITE, 0.175f);
   FloodFillInkDropRippleTestApi test_api(&ripple);
 
   gfx::Point3F actual_center = test_api.MapPoint(
@@ -46,7 +45,7 @@ TEST(FloodFillInkDropRippleTest, MaxDistanceToCorners) {
   // (10, 30), (60, 30), (10, 100), (60, 100)
   const auto clip_insets = gfx::Insets::VH(30, 10);
 
-  FloodFillInkDropRipple ripple(host_size, clip_insets, gfx::Point(),
+  FloodFillInkDropRipple ripple(nullptr, host_size, clip_insets, gfx::Point(),
                                 SK_ColorWHITE, 0.175f);
   FloodFillInkDropRippleTestApi test_api(&ripple);
 
@@ -82,7 +81,7 @@ TEST(FloodFillInkDropRippleTest, ActivatedFinalState) {
   const SkColor color = SK_ColorWHITE;
   const float visible_opacity = 0.7f;
 
-  FloodFillInkDropRipple ripple(host_size, center_point, color,
+  FloodFillInkDropRipple ripple(nullptr, host_size, center_point, color,
                                 visible_opacity);
   FloodFillInkDropRippleTestApi test_api(&ripple);
 
@@ -121,7 +120,7 @@ TEST(FloodFillInkDropRippleTest, TransformIsPixelAligned) {
   const SkColor color = SK_ColorYELLOW;
   const float visible_opacity = 0.3f;
 
-  FloodFillInkDropRipple ripple(host_size, center_point, color,
+  FloodFillInkDropRipple ripple(nullptr, host_size, center_point, color,
                                 visible_opacity);
   FloodFillInkDropRippleTestApi test_api(&ripple);
 
@@ -143,5 +142,4 @@ TEST(FloodFillInkDropRippleTest, TransformIsPixelAligned) {
   }
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

@@ -8,10 +8,6 @@
 #import "components/lookalikes/core/lookalike_url_util.h"
 #import "ios/web/public/web_state.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 WEB_STATE_USER_DATA_KEY_IMPL(LookalikeUrlContainer)
 
 LookalikeUrlContainer::LookalikeUrlContainer(web::WebState* web_state) {}
@@ -34,7 +30,7 @@ LookalikeUrlContainer::InterstitialParams::InterstitialParams(
 LookalikeUrlContainer::LookalikeUrlInfo::LookalikeUrlInfo(
     const GURL& safe_url,
     const GURL& request_url,
-    LookalikeUrlMatchType match_type)
+    lookalikes::LookalikeUrlMatchType match_type)
     : safe_url(safe_url), request_url(request_url), match_type(match_type) {}
 
 LookalikeUrlContainer::LookalikeUrlInfo::~LookalikeUrlInfo() {}
@@ -54,7 +50,7 @@ void LookalikeUrlContainer::RecordLookalikeBlockingPageParams(
 void LookalikeUrlContainer::SetLookalikeUrlInfo(
     const GURL& safe_url,
     const GURL& request_url,
-    LookalikeUrlMatchType match_type) {
+    lookalikes::LookalikeUrlMatchType match_type) {
   lookalike_info_ =
       std::make_unique<LookalikeUrlInfo>(safe_url, request_url, match_type);
 }

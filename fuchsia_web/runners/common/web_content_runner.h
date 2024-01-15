@@ -6,21 +6,23 @@
 #define FUCHSIA_WEB_RUNNERS_COMMON_WEB_CONTENT_RUNNER_H_
 
 #include <fuchsia/io/cpp/fidl.h>
-#include <fuchsia/sys/cpp/fidl.h>
 #include <fuchsia/web/cpp/fidl.h>
+#include <lib/fidl/cpp/interface_ptr_set.h>
+
 #include <memory>
 #include <set>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/functional/callback.h"
+#include "base/time/time.h"
 
 class WebComponent;
-class WebInstanceHost;
 
-// sys::Runner that instantiates components hosting standard web content.
-class WebContentRunner : public fuchsia::sys::Runner {
+// Manages creation of a `fuchsia.web.Context` used to host content for one or
+// more `WebComponent`s.
+class WebContentRunner {
  public:
   struct WebInstanceConfig {
     WebInstanceConfig();
@@ -33,25 +35,32 @@ class WebContentRunner : public fuchsia::sys::Runner {
     base::CommandLine extra_args;
   };
 
+  using CreateWebInstanceAndContextCallback =
+      base::RepeatingCallback<zx_status_t(
+          fuchsia::web::CreateContextParams params,
+          fidl::InterfaceRequest<fuchsia::io::Directory> services_request,
+          const base::CommandLine& extra_args)>;
+
   using GetWebInstanceConfigCallback =
       base::RepeatingCallback<WebInstanceConfig()>;
 
   // Creates a Runner which will (re-)create the Context, if not already
   // running, when StartComponent() is called.
-  // |web_instance_host|: Used to create a web_instance Component in which to
-  //     host the fuchsia.web.Context.
+  // |create_web_instance_callback|: Used to create a web_instance Component in
+  //     which to host the fuchsia.web.Context.
   // |get_web_instance_config_callback|: Returns parameters for the Runner's
   //     fuchsia.web.Context.
   WebContentRunner(
-      WebInstanceHost* web_instance_host,
+      CreateWebInstanceAndContextCallback create_web_instance_callback,
       GetWebInstanceConfigCallback get_web_instance_config_callback);
 
   // Creates a Runner using a Context configured with `web_instance_config`.
   // The Runner becomes non-functional if the Context terminates.
-  WebContentRunner(WebInstanceHost* web_instance_host,
-                   WebInstanceConfig web_instance_config);
+  WebContentRunner(
+      CreateWebInstanceAndContextCallback create_web_instance_callback,
+      WebInstanceConfig web_instance_config);
 
-  ~WebContentRunner() override;
+  ~WebContentRunner();
 
   WebContentRunner(const WebContentRunner&) = delete;
   WebContentRunner& operator=(const WebContentRunner&) = delete;
@@ -76,12 +85,6 @@ class WebContentRunner : public fuchsia::sys::Runner {
   // channel was dropped, and therefore the component should be destroyed.
   void DestroyComponent(WebComponent* component);
 
-  // fuchsia::sys::Runner implementation.
-  void StartComponent(fuchsia::sys::Package package,
-                      fuchsia::sys::StartupInfo startup_info,
-                      fidl::InterfaceRequest<fuchsia::sys::ComponentController>
-                          controller_request) override;
-
   // Registers a WebComponent, or specialization, with this Runner.
   void RegisterComponent(std::unique_ptr<WebComponent> component);
 
@@ -92,11 +95,10 @@ class WebContentRunner : public fuchsia::sys::Runner {
   // to be asynchronously torn-down.
   void DestroyWebContext();
 
-  // TODO(https://crbug.com/1065707): Remove this once capability routing for
-  // the fuchsia.legacymetrics.Provider service is properly set up.
-  // Returns a pointer to any currently running component, or nullptr if no
-  // components are currently running.
-  WebComponent* GetAnyComponent();
+  // Signals to the `Frame` to close the page within the specified `timeout`,
+  // retaining the channel until it closes itself.
+  void CloseFrameWithTimeout(fuchsia::web::FramePtr frame,
+                             base::TimeDelta timeout);
 
  private:
   // Ensures that there is a web_instance Component running, and connects
@@ -106,7 +108,7 @@ class WebContentRunner : public fuchsia::sys::Runner {
   // Starts the web_instance and connects |context_| to it.
   void CreateWebInstanceAndContext(WebInstanceConfig web_instance_config);
 
-  WebInstanceHost* const web_instance_host_;
+  const CreateWebInstanceAndContextCallback create_web_instance_callback_;
   const GetWebInstanceConfigCallback get_web_instance_config_callback_;
 
   // If set, invoked whenever a WebComponent is created.
@@ -117,6 +119,10 @@ class WebContentRunner : public fuchsia::sys::Runner {
   fuchsia::io::DirectoryHandle web_instance_services_;
   std::set<std::unique_ptr<WebComponent>, base::UniquePtrComparator>
       components_;
+
+  // Retains `Frame`s belonging to components for which `CloseFrameWithTimeout`
+  // was called, to allow them to out-live their owning component.
+  fidl::InterfacePtrSet<fuchsia::web::Frame> closing_frames_;
 
   base::OnceClosure on_empty_callback_;
 };

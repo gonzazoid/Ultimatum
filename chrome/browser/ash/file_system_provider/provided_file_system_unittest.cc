@@ -9,12 +9,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "chrome/browser/ash/file_system_provider/icon_set.h"
 #include "chrome/browser/ash/file_system_provider/mount_path_util.h"
@@ -29,13 +30,13 @@
 #include "chrome/common/extensions/api/file_system_provider_internal.h"
 #include "chrome/test/base/testing_profile.h"
 #include "content/public/test/browser_task_environment.h"
+#include "content/public/test/mock_render_process_host.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/common/extension_id.h"
 #include "storage/browser/file_system/watcher_manager.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 namespace {
 
 const char kOrigin[] =
@@ -63,7 +64,7 @@ class FakeEventRouter : public extensions::EventRouter {
   FakeEventRouter(const FakeEventRouter&) = delete;
   FakeEventRouter& operator=(const FakeEventRouter&) = delete;
 
-  ~FakeEventRouter() override {}
+  ~FakeEventRouter() override = default;
 
   // Handles an event which would normally be routed to an extension. Instead
   // replies with a hard coded response.
@@ -73,10 +74,11 @@ class FakeEventRouter : public extensions::EventRouter {
     ASSERT_TRUE(file_system_);
     const base::Value* dict = &event->event_args[0];
     ASSERT_TRUE(dict->is_dict());
-    const std::string* file_system_id = dict->FindStringKey("fileSystemId");
+    const std::string* file_system_id =
+        dict->GetDict().FindString("fileSystemId");
     EXPECT_NE(file_system_id, nullptr);
     EXPECT_EQ(kFileSystemId, *file_system_id);
-    absl::optional<int> id = dict->FindIntKey("requestId");
+    std::optional<int> id = dict->GetDict().FindInt("requestId");
     EXPECT_TRUE(id);
     int request_id = *id;
     EXPECT_TRUE(event->event_name == extensions::api::file_system_provider::
@@ -96,22 +98,24 @@ class FakeEventRouter : public extensions::EventRouter {
 
       using extensions::api::file_system_provider_internal::
           OperationRequestedSuccess::Params;
-      std::unique_ptr<Params> params(Params::Create(list));
-      ASSERT_TRUE(params.get());
+      std::optional<Params> params(Params::Create(list));
+      ASSERT_TRUE(params.has_value());
       file_system_->GetRequestManager()->FulfillRequest(
           request_id,
-          RequestValue::CreateForOperationSuccess(std::move(params)),
+          RequestValue::CreateForOperationSuccess(std::move(*params)),
           false /* has_more */);
     } else {
       file_system_->GetRequestManager()->RejectRequest(
-          request_id, std::make_unique<RequestValue>(), reply_result_);
+          request_id, RequestValue(), reply_result_);
     }
   }
 
   void set_reply_result(base::File::Error result) { reply_result_ = result; }
 
  private:
-  ProvidedFileSystemInterface* const file_system_;  // Not owned.
+  const raw_ptr<ProvidedFileSystemInterface,
+                DanglingUntriaged>
+      file_system_;  // Not owned.
   base::File::Error reply_result_;
 };
 
@@ -127,7 +131,7 @@ class Observer : public ProvidedFileSystemObserver {
     ChangeEvent(const ChangeEvent&) = delete;
     ChangeEvent& operator=(const ChangeEvent&) = delete;
 
-    virtual ~ChangeEvent() {}
+    virtual ~ChangeEvent() = default;
 
     storage::WatcherManager::ChangeType change_type() const {
       return change_type_;
@@ -173,7 +177,7 @@ class Observer : public ProvidedFileSystemObserver {
   // Completes handling the OnWatcherChanged event.
   void CompleteOnWatcherChanged() {
     DCHECK(!complete_callback_.is_null());
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, std::move(complete_callback_));
   }
 
@@ -193,12 +197,12 @@ class Observer : public ProvidedFileSystemObserver {
 // Stub notification manager, which works in unit tests.
 class StubNotificationManager : public NotificationManagerInterface {
  public:
-  StubNotificationManager() {}
+  StubNotificationManager() = default;
 
   StubNotificationManager(const StubNotificationManager&) = delete;
   StubNotificationManager& operator=(const StubNotificationManager&) = delete;
 
-  ~StubNotificationManager() override {}
+  ~StubNotificationManager() override = default;
 
   // NotificationManagerInterface overrides.
   void ShowUnresponsiveNotification(int id,
@@ -232,11 +236,13 @@ void LogOpenFile(OpenFileLog* open_file_log,
 
 class FileSystemProviderProvidedFileSystemTest : public testing::Test {
  protected:
-  FileSystemProviderProvidedFileSystemTest() {}
-  ~FileSystemProviderProvidedFileSystemTest() override {}
+  FileSystemProviderProvidedFileSystemTest() = default;
+  ~FileSystemProviderProvidedFileSystemTest() override = default;
 
   void SetUp() override {
     profile_ = std::make_unique<TestingProfile>();
+    render_process_host_ =
+        std::make_unique<content::MockRenderProcessHost>(profile_.get());
     const base::FilePath mount_path = util::GetMountPath(
         profile_.get(), ProviderId::CreateFromExtensionId(kExtensionId),
         kFileSystemId);
@@ -254,23 +260,29 @@ class FileSystemProviderProvidedFileSystemTest : public testing::Test {
         profile_.get(), provided_file_system_.get());
     event_router_->AddEventListener(extensions::api::file_system_provider::
                                         OnAddWatcherRequested::kEventName,
-                                    nullptr, kExtensionId);
+                                    render_process_host_.get(), kExtensionId);
     event_router_->AddEventListener(extensions::api::file_system_provider::
                                         OnRemoveWatcherRequested::kEventName,
-                                    nullptr, kExtensionId);
+                                    render_process_host_.get(), kExtensionId);
     event_router_->AddEventListener(
         extensions::api::file_system_provider::OnOpenFileRequested::kEventName,
-        nullptr, kExtensionId);
+        render_process_host_.get(), kExtensionId);
     event_router_->AddEventListener(
         extensions::api::file_system_provider::OnCloseFileRequested::kEventName,
-        nullptr, kExtensionId);
+        render_process_host_.get(), kExtensionId);
     provided_file_system_->SetEventRouterForTesting(event_router_.get());
     provided_file_system_->SetNotificationManagerForTesting(
         base::WrapUnique(new StubNotificationManager));
   }
 
+  void TearDown() override {
+    render_process_host_.reset();
+    Test::TearDown();
+  }
+
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfile> profile_;
+  std::unique_ptr<content::RenderProcessHost> render_process_host_;
   std::unique_ptr<FakeEventRouter> event_router_;
   std::unique_ptr<ProvidedFileSystemInfo> file_system_info_;
   std::unique_ptr<ProvidedFileSystem> provided_file_system_;
@@ -294,13 +306,13 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, AutoUpdater) {
   // callbacks.
   EXPECT_EQ(0u, log.size());
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                std::move(first_callback));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, std::move(first_callback));
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(0u, log.size());
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                std::move(second_callback));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, std::move(second_callback));
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(1u, log.size());
 }
@@ -945,5 +957,4 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, OpenedFile_ClosingFailure) {
   provided_file_system_->RemoveObserver(&observer);
 }
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider

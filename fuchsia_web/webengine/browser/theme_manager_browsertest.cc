@@ -4,6 +4,7 @@
 
 #include <fuchsia/settings/cpp/fidl_test_base.h>
 
+#include <optional>
 #include "base/fuchsia/scoped_service_binding.h"
 #include "base/fuchsia/test_component_context_for_process.h"
 #include "base/json/json_writer.h"
@@ -11,15 +12,14 @@
 #include "base/strings/stringprintf.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
+#include "fuchsia_web/common/test/frame_for_test.h"
 #include "fuchsia_web/common/test/frame_test_util.h"
 #include "fuchsia_web/common/test/test_navigation_listener.h"
 #include "fuchsia_web/webengine/browser/context_impl.h"
 #include "fuchsia_web/webengine/browser/frame_impl.h"
-#include "fuchsia_web/webengine/test/frame_for_test.h"
 #include "fuchsia_web/webengine/test/test_data.h"
 #include "fuchsia_web/webengine/test/web_engine_browser_test.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
@@ -59,6 +59,11 @@ class ThemeManagerTest : public WebEngineBrowserTest,
     frame_.navigation_listener().RunUntilNavigationStateMatches(state);
   }
 
+  void TearDownOnMainThread() override {
+    frame_ = {};
+    WebEngineBrowserTest::TearDownOnMainThread();
+  }
+
   // Reports the system |theme_type| via the Display FIDL service.
   void ReportSystemTheme(fuchsia::settings::ThemeType theme_type) {
     if (!watch_callback_) {
@@ -75,7 +80,7 @@ class ThemeManagerTest : public WebEngineBrowserTest,
     theme.set_theme_type(theme_type);
     settings.set_theme(std::move(theme));
     (*watch_callback_)(std::move(settings));
-    watch_callback_ = absl::nullopt;
+    watch_callback_ = std::nullopt;
     base::RunLoop().RunUntilIdle();
   }
 
@@ -87,14 +92,12 @@ class ThemeManagerTest : public WebEngineBrowserTest,
             ->web_contents_for_test();
 
     for (const char* scheme : {kCssDark, kCssLight}) {
-      bool matches;
-      EXPECT_TRUE(ExecuteScriptAndExtractBool(
-          web_contents,
-          base::StringPrintf(
-              "window.domAutomationController.send(window."
-              "matchMedia('(prefers-color-scheme: %s)').matches)",
-              scheme),
-          &matches));
+      bool matches =
+          EvalJs(web_contents,
+                 base::StringPrintf(
+                     "window.matchMedia('(prefers-color-scheme: %s)').matches",
+                     scheme))
+              .ExtractBool();
 
       if (matches)
         return scheme;
@@ -124,13 +127,13 @@ class ThemeManagerTest : public WebEngineBrowserTest,
     ADD_FAILURE() << "Unexpected call: " << name;
   }
 
-  absl::optional<base::TestComponentContextForProcess> component_context_;
-  absl::optional<base::ScopedServiceBinding<fuchsia::settings::Display>>
+  std::optional<base::TestComponentContextForProcess> component_context_;
+  std::optional<base::ScopedServiceBinding<fuchsia::settings::Display>>
       display_binding_;
   FrameForTest frame_;
 
   base::OnceClosure on_watch_closure_;
-  absl::optional<WatchCallback> watch_callback_;
+  std::optional<WatchCallback> watch_callback_;
 };
 
 IN_PROC_BROWSER_TEST_F(ThemeManagerTest, Default) {
@@ -146,7 +149,7 @@ IN_PROC_BROWSER_TEST_F(ThemeManagerTest, LightAndDarkRequested) {
 }
 
 IN_PROC_BROWSER_TEST_F(ThemeManagerTest, UseDisplayService) {
-  frame_->SetPreferredTheme(fuchsia::settings::ThemeType::DEFAULT);
+  SetTheme(fuchsia::settings::ThemeType::DEFAULT);
   base::RunLoop().RunUntilIdle();
 
   ReportSystemTheme(fuchsia::settings::ThemeType::DARK);
@@ -158,12 +161,12 @@ IN_PROC_BROWSER_TEST_F(ThemeManagerTest, UseDisplayService) {
 // TODO(crbug.com/1148454): Re-enable this test once the service availability
 // validation is back in place.
 IN_PROC_BROWSER_TEST_F(ThemeManagerTest, DISABLED_DefaultWithMissingService) {
-  frame_->SetPreferredTheme(fuchsia::settings::ThemeType::DEFAULT);
+  SetTheme(fuchsia::settings::ThemeType::DEFAULT);
   base::RunLoop().RunUntilIdle();
 
   ASSERT_TRUE(display_binding_->has_clients());
 
-  display_binding_ = absl::nullopt;
+  display_binding_ = std::nullopt;
   base::RunLoop().RunUntilIdle();
 
   ASSERT_FALSE(display_binding_);
@@ -173,7 +176,7 @@ IN_PROC_BROWSER_TEST_F(ThemeManagerTest, DISABLED_DefaultWithMissingService) {
 // Verify that invalid values from the Display service, such as DEFAULT,
 // are discarded in lieu of the fallback light theme.
 IN_PROC_BROWSER_TEST_F(ThemeManagerTest, HandleBadInputFromDisplayService) {
-  frame_->SetPreferredTheme(fuchsia::settings::ThemeType::DEFAULT);
+  SetTheme(fuchsia::settings::ThemeType::DEFAULT);
   ReportSystemTheme(fuchsia::settings::ThemeType::DEFAULT);
 
   EXPECT_TRUE(SetTheme(fuchsia::settings::ThemeType::DEFAULT));

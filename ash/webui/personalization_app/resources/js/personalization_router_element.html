@@ -10,15 +10,18 @@
     display: grid;
     grid-template-areas:
       '. . breadcrumb . .';
-    grid-template-columns: 1fr 16px minmax(568px, 920px) 16px 1fr;
-    grid-template-rows: 56px;
+    grid-template-columns: 1fr 10px minmax(568px, 920px) 10px 1fr;
+    grid-template-rows: var(--personalization-app-breadcrumb-height);
     position: sticky;
     top: 0;
     width: 100%;
-    /* z-index for breadcrumb should be higher than other elements 
-    (such as preview-image-border) so that it won't be overlapped 
+    /* z-index for breadcrumb should be higher than other elements
+    (such as preview-image-border) so that it won't be overlapped
     during scrolling in hub subpages */
     z-index: 3;
+  }
+  :host-context(body.jelly-enabled) #breadcrumbArea {
+    background-color: var(--cros-sys-app_base_shaded);
   }
   personalization-breadcrumb {
     grid-area: breadcrumb;
@@ -37,9 +40,6 @@
     position: absolute;
     width: 100%;
   }
-  wallpaper-subpage {
-    flex-grow: 1;
-  }
 </style>
 <div id="container">
   <!-- dwell-time is set to 200ms to populate history state more quickly while
@@ -54,7 +54,8 @@
       <personalization-breadcrumb path="[[path_]]"
           collection-id="[[queryParams_.id]]"
           google-photos-album-id="[[queryParams_.googlePhotosAlbumId]]"
-          topic-source="[[queryParams_.topicSource]]">
+          topic-source="[[queryParams_.topicSource]]"
+          sea-pen-template-id="[[queryParams_.seaPenTemplateId]]">
       </personalization-breadcrumb>
     </div>
   </template>
@@ -71,6 +72,9 @@
   <template is="dom-if" if="[[shouldShowWallpaperSubpage_(path_)]]" restamp>
     <wallpaper-subpage path="[[path_]]" query-params="[[queryParams_]]">
     </wallpaper-subpage>
+  </template>
+  <template is="dom-if" if="[[shouldShowSeaPen_(path_)]]" restamp>
+    <sea-pen-router base-path="[[seaPenBasePath_]]"></sea-pen-router>
   </template>
   <personalization-toast></personalization-toast>
 </div>

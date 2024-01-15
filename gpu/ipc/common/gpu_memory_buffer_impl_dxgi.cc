@@ -5,9 +5,9 @@
 #include <dxgi1_2.h>
 #include <wrl.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/unguessable_token.h"
@@ -182,6 +182,10 @@ gfx::GpuMemoryBufferHandle GpuMemoryBufferImplDXGI::CloneHandle() const {
 
 HANDLE GpuMemoryBufferImplDXGI::GetHandle() const {
   return dxgi_handle_.Get();
+}
+
+const gfx::DXGIHandleToken& GpuMemoryBufferImplDXGI::GetToken() const {
+  return dxgi_token_;
 }
 
 GpuMemoryBufferImplDXGI::GpuMemoryBufferImplDXGI(

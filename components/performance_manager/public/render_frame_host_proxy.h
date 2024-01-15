@@ -16,7 +16,7 @@ namespace performance_manager {
 class FrameNodeImpl;
 
 // A RenderFrameHostProxy is used to post messages out of the performance
-// manager sequence that are bound for a RenderFrameHostProxy running on the UI
+// manager sequence that are bound for a RenderFrameHost running on the UI
 // thread. The object is bound to the UI thread. A RenderFrameHostProxy is
 // conceptually equivalent to a WeakPtr<RenderFrameHost>. Copy and assignment
 // are explicitly allowed for this object.
@@ -31,6 +31,10 @@ class RenderFrameHostProxy {
   // only be called on the UI thread. Returns nullptr if the RenderFrameHost
   // no longer exists.
   content::RenderFrameHost* Get() const;
+
+  // Returns true iff the proxy has a valid GlobalRenderFrameHostId (whose
+  // operator::bool returns true).
+  bool is_valid() const { return static_cast<bool>(global_frame_routing_id_); }
 
   // Returns the global routing ID.
   const content::GlobalRenderFrameHostId& global_frame_routing_id() const {

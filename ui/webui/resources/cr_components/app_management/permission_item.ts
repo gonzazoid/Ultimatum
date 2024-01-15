@@ -4,10 +4,10 @@
 import './app_management_shared_style.css.js';
 import './toggle_row.js';
 
-import {assert, assertNotReached} from '//resources/js/assert_ts.js';
+import {assert, assertNotReached} from '//resources/js/assert.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {App, Permission, PermissionType, TriState} from './app_management.mojom-webui.js';
+import {App, InstallReason, Permission, PermissionType, TriState} from './app_management.mojom-webui.js';
 import {BrowserProxy} from './browser_proxy.js';
 import {AppManagementUserAction} from './constants.js';
 import {PermissionTypeIndex} from './permission_constants.js';
@@ -36,7 +36,10 @@ export class AppManagementPermissionItemElement extends PolymerElement {
        * A string version of the permission type. Must be a value of the
        * permission type enum in appManagement.mojom.PermissionType.
        */
-      permissionType: String,
+      permissionType: {
+        type: String,
+        reflectToAttribute: true,
+      },
 
       icon: String,
 
@@ -58,9 +61,12 @@ export class AppManagementPermissionItemElement extends PolymerElement {
         reflectToAttribute: true,
       },
 
+      /**
+       * True if the app is managed or is a sub app.
+       */
       disabled_: {
         type: Boolean,
-        computed: 'isManaged_(app, permissionType)',
+        computed: 'isDisabled_(app, permissionType)',
         reflectToAttribute: true,
       },
     };
@@ -99,7 +105,21 @@ export class AppManagementPermissionItemElement extends PolymerElement {
     }
 
     const permission = getPermission(app, permissionType);
+    assert(permission);
     return permission.isManaged;
+  }
+
+  private isDisabled_(app: App|undefined, permissionType: PermissionTypeIndex):
+      boolean {
+    if (app === undefined || permissionType === undefined) {
+      return false;
+    }
+
+    if (app.installReason === InstallReason.kSubApp) {
+      return true;
+    }
+
+    return this.isManaged_(app, permissionType);
   }
 
   private getValue_(
@@ -136,15 +156,17 @@ export class AppManagementPermissionItemElement extends PolymerElement {
   syncPermission() {
     let newPermission: Permission|undefined = undefined;
 
-    let newBoolState = false;  // to keep the closure compiler happy.
-    const permissionValue = getPermission(this.app, this.permissionType).value;
+    let newBoolState = false;
+    const permission = getPermission(this.app, this.permissionType);
+    assert(permission);
+    const permissionValue = permission.value;
     if (isBoolValue(permissionValue)) {
       newPermission =
-          this.getUIPermissionBoolean_(this.app, this.permissionType);
+          this.getUiPermissionBoolean_(this.app, this.permissionType);
       newBoolState = getBoolPermissionValue(newPermission.value);
     } else if (isTriStateValue(permissionValue)) {
       newPermission =
-          this.getUIPermissionTriState_(this.app, this.permissionType);
+          this.getUiPermissionTriState_(this.app, this.permissionType);
 
       newBoolState =
           getTriStatePermissionValue(newPermission.value) === TriState.kAllow;
@@ -164,9 +186,10 @@ export class AppManagementPermissionItemElement extends PolymerElement {
   /**
    * Gets the permission boolean based on the toggle's UI state.
    */
-  private getUIPermissionBoolean_(
+  private getUiPermissionBoolean_(
       app: App, permissionType: PermissionTypeIndex): Permission {
     const currentPermission = getPermission(app, permissionType);
+    assert(currentPermission);
 
     assert(isBoolValue(currentPermission.value));
 
@@ -180,10 +203,11 @@ export class AppManagementPermissionItemElement extends PolymerElement {
   /**
    * Gets the permission tristate based on the toggle's UI state.
    */
-  private getUIPermissionTriState_(
+  private getUiPermissionTriState_(
       app: App, permissionType: PermissionTypeIndex): Permission {
     let newPermissionValue;
     const currentPermission = getPermission(app, permissionType);
+    assert(currentPermission);
 
     assert(isTriStateValue(currentPermission.value));
 

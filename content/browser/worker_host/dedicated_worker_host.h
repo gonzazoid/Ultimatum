@@ -6,13 +6,17 @@
 #define CONTENT_BROWSER_WORKER_HOST_DEDICATED_WORKER_HOST_H_
 
 #include <memory>
+#include <optional>
 
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "build/build_config.h"
 #include "content/browser/browser_interface_broker_impl.h"
 #include "content/browser/buckets/bucket_context.h"
+#include "content/browser/compute_pressure/pressure_service_for_worker.h"
 #include "content/browser/renderer_host/code_cache_host_impl.h"
+#include "content/common/content_export.h"
+#include "content/public/browser/dedicated_worker_creator.h"
 #include "content/public/browser/global_routing_id.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_process_host_observer.h"
@@ -22,9 +26,9 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/unique_receiver_set.h"
 #include "net/base/isolation_info.h"
+#include "services/device/public/mojom/pressure_manager.mojom.h"
 #include "services/network/public/cpp/url_loader_completion_status.h"
 #include "services/network/public/mojom/client_security_state.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/scheduler/web_scheduler_tracked_feature.h"
 #include "third_party/blink/public/common/service_worker/service_worker_status_code.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -45,11 +49,8 @@
 #include "url/origin.h"
 
 #if !BUILDFLAG(IS_ANDROID)
+#include "third_party/blink/public/mojom/direct_sockets/direct_sockets.mojom-forward.h"
 #include "third_party/blink/public/mojom/serial/serial.mojom-forward.h"
-#endif
-
-#if BUILDFLAG(IS_FUCHSIA)
-#include "media/fuchsia/mojom/fuchsia_media_resource_provider.mojom.h"
 #endif
 
 namespace network {
@@ -71,9 +72,9 @@ class CrossOriginEmbedderPolicyReporter;
 // A host for a single dedicated worker. It deletes itself upon Mojo
 // disconnection from the worker in the renderer or when the RenderProcessHost
 // of the worker is destroyed. This lives on the UI thread.
-// TODO(crbug.com/1177652): Align this class's lifetime with the associated
+// TODO(crbug.com/1273717): Align this class's lifetime with the associated
 // frame.
-class DedicatedWorkerHost final
+class CONTENT_EXPORT DedicatedWorkerHost final
     : public blink::mojom::DedicatedWorkerHost,
       public blink::mojom::BackForwardCacheControllerHost,
       public RenderProcessHostObserver,
@@ -95,8 +96,7 @@ class DedicatedWorkerHost final
       DedicatedWorkerServiceImpl* service,
       const blink::DedicatedWorkerToken& token,
       RenderProcessHost* worker_process_host,
-      absl::optional<GlobalRenderFrameHostId> creator_render_frame_host_id,
-      absl::optional<blink::DedicatedWorkerToken> creator_worker_token,
+      DedicatedWorkerCreator creator,
       GlobalRenderFrameHostId ancestor_render_frame_host_id,
       const blink::StorageKey& creator_storage_key,
       const net::IsolationInfo& isolation_info,
@@ -119,7 +119,8 @@ class DedicatedWorkerHost final
   const GlobalRenderFrameHostId& GetAncestorRenderFrameHostId() const {
     return ancestor_render_frame_host_id_;
   }
-  const absl::optional<GURL>& GetFinalResponseURL() const {
+  DedicatedWorkerCreator GetCreator() const { return creator_; }
+  const std::optional<GURL>& GetFinalResponseURL() const {
     return final_response_url_;
   }
 
@@ -129,6 +130,10 @@ class DedicatedWorkerHost final
       mojo::PendingReceiver<blink::mojom::IdleManager> receiver);
   void CreateNestedDedicatedWorker(
       mojo::PendingReceiver<blink::mojom::DedicatedWorkerHostFactory> receiver);
+#if !BUILDFLAG(IS_ANDROID)
+  void CreateDirectSocketsService(
+      mojo::PendingReceiver<blink::mojom::DirectSocketsService> receiver);
+#endif
   void CreateWebUsbService(
       mojo::PendingReceiver<blink::mojom::WebUsbService> receiver);
   void CreateWebSocketConnector(
@@ -150,15 +155,14 @@ class DedicatedWorkerHost final
       mojo::PendingReceiver<blink::mojom::BlobURLStore> receiver);
   void CreateBucketManagerHost(
       mojo::PendingReceiver<blink::mojom::BucketManagerHost> receiver);
+  void GetFileSystemAccessManager(
+      mojo::PendingReceiver<blink::mojom::FileSystemAccessManager> receiver);
+  void BindPressureService(
+      mojo::PendingReceiver<device::mojom::PressureManager> receiver);
 
 #if !BUILDFLAG(IS_ANDROID)
   void BindSerialService(
       mojo::PendingReceiver<blink::mojom::SerialService> receiver);
-#endif
-#if BUILDFLAG(IS_FUCHSIA)
-  void BindFuchsiaMediaResourceProvider(
-      mojo::PendingReceiver<media::mojom::FuchsiaMediaResourceProvider>
-          receiver);
 #endif
 
   // PlzDedicatedWorker:
@@ -212,11 +216,23 @@ class DedicatedWorkerHost final
     return service_worker_handle_.get();
   }
 
+  PressureServiceForWorker<DedicatedWorkerHost>* pressure_service() {
+    return pressure_service_.get();
+  }
+
+  // Exposed so that tests can swap the implementation and intercept calls.
+  mojo::Receiver<blink::mojom::BrowserInterfaceBroker>&
+  browser_interface_broker_receiver_for_testing() {
+    return broker_receiver_;
+  }
+
   // blink::mojom::BackForwardCacheControllerHost:
   void EvictFromBackForwardCache(
       blink::mojom::RendererEvictionReason reason) override;
+  using BackForwardCacheBlockingDetails =
+      std::vector<blink::mojom::BlockingDetailsPtr>;
   void DidChangeBackForwardCacheDisablingFeatures(
-      uint64_t features_mask) override;
+      BackForwardCacheBlockingDetails details) override;
 
   // BucketContext:
   blink::StorageKey GetBucketStorageKey() override;
@@ -225,10 +241,18 @@ class DedicatedWorkerHost final
   void BindCacheStorageForBucket(
       const storage::BucketInfo& bucket,
       mojo::PendingReceiver<blink::mojom::CacheStorage> receiver) override;
+  void GetSandboxedFileSystemForBucket(
+      const storage::BucketInfo& bucket,
+      blink::mojom::FileSystemAccessManager::GetSandboxedFileSystemCallback
+          callback) override;
+  GlobalRenderFrameHostId GetAssociatedRenderFrameHostId() const override;
 
   // Returns the features set that disable back-forward cache.
   blink::scheduler::WebSchedulerTrackedFeatures
   GetBackForwardCacheDisablingFeatures() const;
+
+  const BackForwardCacheBlockingDetails& GetBackForwardCacheBlockingDetails()
+      const;
 
   base::WeakPtr<ServiceWorkerContainerHost> GetServiceWorkerContainerHost();
 
@@ -243,6 +267,7 @@ class DedicatedWorkerHost final
   // RenderProcessHostObserver:
   void RenderProcessExited(RenderProcessHost* render_process_host,
                            const ChildProcessTerminationInfo& info) override;
+  void InProcessRendererExiting(RenderProcessHost* host) override;
   void RenderProcessHostDestroyed(RenderProcessHost* host) override;
 
   // Called from `WorkerScriptFetcher`. Continues starting the dedicated worker
@@ -317,13 +342,10 @@ class DedicatedWorkerHost final
   base::ScopedObservation<RenderProcessHost, RenderProcessHostObserver>
       scoped_process_host_observation_{this};
 
-  // The ID of the frame that directly starts this worker. This is absl::nullopt
-  // when this worker is nested.
-  const absl::optional<GlobalRenderFrameHostId> creator_render_frame_host_id_;
-
-  // The token of the dedicated worker that directly starts this worker. This is
-  // absl::nullopt when this worker is created from a frame.
-  const absl::optional<blink::DedicatedWorkerToken> creator_worker_token_;
+  // The creator of this worker. Holds a GlobalRenderFrameHostId if this worker
+  // was created by a frame, or holds a blink::DedicatedWorkerToken if this
+  // worker is nested.
+  const DedicatedWorkerCreator creator_;
 
   // The ID of the frame that owns this worker, either directly, or (in the case
   // of nested workers) indirectly via a tree of dedicated workers.
@@ -370,6 +392,9 @@ class DedicatedWorkerHost final
 
   std::unique_ptr<ServiceWorkerMainResourceHandle> service_worker_handle_;
 
+  std::unique_ptr<PressureServiceForWorker<DedicatedWorkerHost>>
+      pressure_service_;
+
   // BrowserInterfaceBroker implementation through which this
   // DedicatedWorkerHost exposes worker-scoped Mojo services to the
   // corresponding worker in the renderer.
@@ -409,13 +434,13 @@ class DedicatedWorkerHost final
   base::WeakPtr<CrossOriginEmbedderPolicyReporter> ancestor_coep_reporter_;
 
   // Will be set once the worker script started loading.
-  absl::optional<GURL> final_response_url_;
+  std::optional<GURL> final_response_url_;
 
   // CodeCacheHost processes requests to fetch / write generated code for
   // JavaScript / WebAssembly resources.
   CodeCacheHostImpl::ReceiverSet code_cache_host_receivers_;
 
-  blink::scheduler::WebSchedulerTrackedFeatures bfcache_disabling_features_;
+  BackForwardCacheBlockingDetails bfcache_blocking_details_;
 
   base::WeakPtrFactory<DedicatedWorkerHost> weak_factory_{this};
 };

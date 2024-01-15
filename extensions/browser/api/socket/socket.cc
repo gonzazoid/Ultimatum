@@ -4,7 +4,7 @@
 
 #include "extensions/browser/api/socket/socket.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "extensions/browser/api/api_resource_manager.h"
 #include "net/base/address_list.h"
@@ -24,7 +24,7 @@ static base::LazyInstance<
 
 // static
 template <>
-BrowserContextKeyedAPIFactory<ApiResourceManager<Socket> >*
+BrowserContextKeyedAPIFactory<ApiResourceManager<Socket>>*
 ApiResourceManager<Socket>::GetFactoryInstance() {
   return g_factory.Pointer();
 }
@@ -54,9 +54,11 @@ void Socket::WriteData() {
 
   DCHECK(request.byte_count >= request.bytes_written);
   io_buffer_write_ = base::MakeRefCounted<net::WrappedIOBuffer>(
-      request.io_buffer->data() + request.bytes_written);
+      base::make_span(request.io_buffer->data(),
+                      static_cast<size_t>(request.byte_count))
+          .subspan(request.bytes_written));
   int result = WriteImpl(
-      io_buffer_write_.get(), request.byte_count - request.bytes_written,
+      io_buffer_write_.get(), io_buffer_write_->size(),
       base::BindOnce(&Socket::OnWriteComplete, base::Unretained(this)));
 
   if (result != net::ERR_IO_PENDING)
@@ -104,7 +106,7 @@ void Socket::Listen(const std::string& address,
 
 void Socket::Accept(AcceptCompletionCallback callback) {
   std::move(callback).Run(net::ERR_FAILED, mojo::NullRemote() /* socket */,
-                          absl::nullopt, mojo::ScopedDataPipeConsumerHandle(),
+                          std::nullopt, mojo::ScopedDataPipeConsumerHandle(),
                           mojo::ScopedDataPipeProducerHandle());
 }
 
@@ -144,7 +146,7 @@ Socket::WriteRequest::WriteRequest(scoped_refptr<net::IOBuffer> io_buffer,
 
 Socket::WriteRequest::WriteRequest(WriteRequest&& other) = default;
 
-Socket::WriteRequest::~WriteRequest() {}
+Socket::WriteRequest::~WriteRequest() = default;
 
 // static
 net::NetworkTrafficAnnotationTag Socket::GetNetworkTrafficAnnotationTag() {

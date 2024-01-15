@@ -9,22 +9,22 @@
 #include <utility>
 
 #include "base/allocator/buildflags.h"
-#include "base/bind.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_buildflags.h"
 #include "base/compiler_specific.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/process/process_metrics.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/memory_dump_request_args.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/metrics/tab_footprint_aggregator.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "components/metrics/metrics_data_validation.h"
-#include "components/metrics/system_memory_stats_recorder.h"
 #include "components/performance_manager/public/graph/frame_node.h"
 #include "components/performance_manager/public/graph/graph.h"
 #include "components/performance_manager/public/graph/graph_operations.h"
@@ -36,8 +36,10 @@
 #include "content/public/browser/render_process_host.h"
 #include "content/public/common/content_switches.h"
 #include "extensions/buildflags/buildflags.h"
+#include "media/mojo/mojom/cdm_service.mojom.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
+#include "services/metrics/public/cpp/ukm_source_id.h"
 #include "services/network/public/mojom/network_service.mojom.h"
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/browser_metrics.h"
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/memory_instrumentation.h"
@@ -45,6 +47,11 @@
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/child_process_binding_types.h"
+#include "base/android/meminfo_dump_provider.h"
+#endif
+
+#if BUILDFLAG(IS_WIN)
+#include "media/mojo/mojom/media_foundation_service.mojom.h"
 #endif
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
@@ -114,6 +121,13 @@ struct Metric {
 };
 
 const Metric kAllocatorDumpNamesForMetrics[] = {
+    {"accessibility/ax_platform_node",
+     "AXPlatformNodeCount",
+     MetricSize::kCustom,
+     MemoryAllocatorDump::kNameObjectCount,
+     EmitTo::kSizeInUmaOnly,
+     /*ukm_setter=*/nullptr,
+     {1, 1000000}},
     {"blink_gc", "BlinkGC", MetricSize::kLarge, kEffectiveSize,
      EmitTo::kSizeInUkmAndUma, &Memory_Experimental::SetBlinkGC},
     {"blink_gc", "BlinkGC.AllocatedObjects", MetricSize::kLarge,
@@ -182,6 +196,10 @@ const Metric kAllocatorDumpNamesForMetrics[] = {
     {"canvas/ResourceProvider/SkSurface", "CanvasResourceProvider.SkSurface",
      MetricSize::kSmall, kSize, EmitTo::kCountsInUkmOnly,
      &Memory_Experimental::SetCanvasResourceProvider_SkSurface},
+    {"canvas/hibernated", "HibernatedCanvas.Size", MetricSize::kSmall, kSize,
+     EmitTo::kSizeInUmaOnly, nullptr},
+    {"canvas/hibernated", "HibernatedCanvas.OriginalSize", MetricSize::kSmall,
+     "original_size", EmitTo::kSizeInUmaOnly, nullptr},
     {"cc/tile_memory", "TileMemory", MetricSize::kSmall, kSize,
      EmitTo::kSizeInUmaOnly, nullptr},
     {"components/download", "DownloadService", MetricSize::kSmall,
@@ -217,17 +235,32 @@ const Metric kAllocatorDumpNamesForMetrics[] = {
     // of it being claimed by renderers.
     {"gpu/shared_images", "SharedImages", MetricSize::kLarge, kSize,
      EmitTo::kSizeInUmaOnly, nullptr},
+    {"gpu/shared_images", "SharedImages.Purgeable", MetricSize::kLarge,
+     "purgeable_size", EmitTo::kSizeInUmaOnly, nullptr},
     {"gpu/transfer_cache", "ServiceTransferCache", MetricSize::kCustom, kSize,
      EmitTo::kSizeInUmaOnly, nullptr, ImageSizeMetricRange},
     {"gpu/transfer_cache", "ServiceTransferCache.AvgImageSize",
      MetricSize::kCustom, "average_size", EmitTo::kSizeInUmaOnly, nullptr,
      ImageSizeMetricRange},
+    // For the Vulkan Memory Allocator, "allocated_size" is the amount of GPU
+    // memory used by the allocator, not the amount allocated by clients, which
+    // is "used_size".
+    {"gpu/vulkan", "Vulkan", MetricSize::kLarge, "allocated_size",
+     EmitTo::kSizeInUmaOnly, nullptr},
+    {"gpu/vulkan", "Vulkan.AllocatedObjects", MetricSize::kLarge, "used_size",
+     EmitTo::kSizeInUmaOnly, nullptr},
+    {"gpu/vulkan", "Vulkan.Fragmentation", MetricSize::kLarge,
+     "fragmentation_size", EmitTo::kSizeInUmaOnly, nullptr},
     {"history", "History", MetricSize::kSmall, kEffectiveSize,
      EmitTo::kSizeInUkmAndUma, &Memory_Experimental::SetHistory},
 #if BUILDFLAG(IS_MAC)
     {"iosurface", "IOSurface", MetricSize::kLarge, kSize,
      EmitTo::kSizeInUmaOnly, nullptr},
     {"iosurface", "IOSurface.DirtyMemory", MetricSize::kLarge,
+     "resident_swapped", EmitTo::kSizeInUmaOnly, nullptr},
+    {"ioaccelerator", "IOAccelerator", MetricSize::kLarge, kSize,
+     EmitTo::kSizeInUmaOnly, nullptr},
+    {"ioaccelerator", "IOAccelerator.DirtyMemory", MetricSize::kLarge,
      "resident_swapped", EmitTo::kSizeInUmaOnly, nullptr},
 #endif
     {"java_heap", "JavaHeap", MetricSize::kLarge, kEffectiveSize,
@@ -251,14 +284,37 @@ const Metric kAllocatorDumpNamesForMetrics[] = {
     {"malloc/partitions/allocator", "Malloc.Allocator.ObjectCount",
      MetricSize::kTiny, MemoryAllocatorDump::kNameObjectCount,
      EmitTo::kSizeInUmaOnly, nullptr},
-#if BUILDFLAG(USE_BACKUP_REF_PTR)
-    // TODO(keishi): Add brp_quarantined metrics for the Blink partitions.
+#if BUILDFLAG(ENABLE_BACKUP_REF_PTR_SUPPORT)
     {"malloc/partitions/allocator", "Malloc.BRPQuarantined", MetricSize::kSmall,
      "brp_quarantined_size", EmitTo::kSizeInUmaOnly, nullptr},
     {"malloc/partitions/allocator", "Malloc.BRPQuarantinedCount",
      MetricSize::kTiny, "brp_quarantined_count", EmitTo::kSizeInUmaOnly,
      nullptr},
-#endif
+    {"partition_alloc/partitions", "PartitionAlloc.BRPQuarantined",
+     MetricSize::kSmall, "brp_quarantined_size", EmitTo::kSizeInUmaOnly,
+     nullptr},
+    {"partition_alloc/partitions", "PartitionAlloc.BRPQuarantinedCount",
+     MetricSize::kTiny, "brp_quarantined_count", EmitTo::kSizeInUmaOnly,
+     nullptr},
+    {"partition_alloc/partitions/fast_malloc",
+     "PartitionAlloc.BRPQuarantined.FastMalloc", MetricSize::kSmall,
+     "brp_quarantined_size", EmitTo::kSizeInUmaOnly, nullptr},
+    {"partition_alloc/partitions/fast_malloc",
+     "PartitionAlloc.BRPQuarantinedCount.FastMalloc", MetricSize::kTiny,
+     "brp_quarantined_count", EmitTo::kSizeInUmaOnly, nullptr},
+    {"partition_alloc/partitions/buffer",
+     "PartitionAlloc.BRPQuarantined.Buffer", MetricSize::kSmall,
+     "brp_quarantined_size", EmitTo::kSizeInUmaOnly, nullptr},
+    {"partition_alloc/partitions/buffer",
+     "PartitionAlloc.BRPQuarantinedCount.Buffer", MetricSize::kTiny,
+     "brp_quarantined_count", EmitTo::kSizeInUmaOnly, nullptr},
+    {"partition_alloc/partitions/array_buffer",
+     "PartitionAlloc.BRPQuarantined.ArrayBuffer", MetricSize::kSmall,
+     "brp_quarantined_size", EmitTo::kSizeInUmaOnly, nullptr},
+    {"partition_alloc/partitions/array_buffer",
+     "PartitionAlloc.BRPQuarantinedCount.ArrayBuffer", MetricSize::kTiny,
+     "brp_quarantined_count", EmitTo::kSizeInUmaOnly, nullptr},
+#endif  // BUILDFLAG(ENABLE_BACKUP_REF_PTR_SUPPORT)
     {"malloc/partitions", "Malloc.BRPQuarantinedBytesPerMinute",
      MetricSize::kSmall, "brp_quarantined_bytes_per_minute",
      EmitTo::kSizeInUmaOnly, nullptr},
@@ -496,6 +552,20 @@ const Metric kAllocatorDumpNamesForMetrics[] = {
      "V8.Main.Heap.ReadOnlySpace.AllocatedObjects", MetricSize::kLarge,
      kAllocatedObjectsSize, EmitTo::kSizeInUkmAndUma,
      &Memory_Experimental::SetV8_Main_Heap_ReadOnlySpace_AllocatedObjects},
+    {"v8/main/heap/large_object_space", "V8.Main.Heap.SharedLargeObjectSpace",
+     MetricSize::kLarge, kEffectiveSize, EmitTo::kSizeInUkmAndUma,
+     &Memory_Experimental::SetV8_Main_Heap_SharedLargeObjectSpace},
+    {"v8/main/heap/large_object_space",
+     "V8.Main.Heap.SharedLargeObjectSpace.AllocatedObjects", MetricSize::kLarge,
+     kAllocatedObjectsSize, EmitTo::kSizeInUkmAndUma,
+     &Memory_Experimental::
+         SetV8_Main_Heap_SharedLargeObjectSpace_AllocatedObjects},
+    {"v8/main/heap/shared_space", "V8.Main.Heap.SharedSpace",
+     MetricSize::kLarge, kEffectiveSize, EmitTo::kSizeInUkmAndUma,
+     &Memory_Experimental::SetV8_Main_Heap_SharedSpace},
+    {"v8/main/heap/shared_space", "V8.Main.Heap.SharedSpace.AllocatedObjects",
+     MetricSize::kLarge, kAllocatedObjectsSize, EmitTo::kSizeInUkmAndUma,
+     &Memory_Experimental::SetV8_Main_Heap_SharedSpace_AllocatedObjects},
     {"v8/main/malloc", "V8.Main.Malloc", MetricSize::kLarge, kEffectiveSize,
      EmitTo::kSizeInUkmAndUma, &Memory_Experimental::SetV8_Main_Malloc},
     {"v8/workers", "V8.Workers", MetricSize::kLarge, kEffectiveSize,
@@ -530,6 +600,15 @@ const Metric kAllocatorDumpNamesForMetrics[] = {
     {"web_cache/Other_resources", "WebCache.OtherResources", MetricSize::kSmall,
      kEffectiveSize, EmitTo::kSizeInUkmAndUma,
      &Memory_Experimental::SetWebCache_OtherResources},
+#if BUILDFLAG(IS_ANDROID)
+    {base::android::MeminfoDumpProvider::kDumpName, "AndroidOtherPss",
+     MetricSize::kLarge, base::android::MeminfoDumpProvider::kPssMetricName,
+     EmitTo::kSizeInUmaOnly, nullptr},
+    {base::android::MeminfoDumpProvider::kDumpName, "AndroidOtherPrivateDirty",
+     MetricSize::kLarge,
+     base::android::MeminfoDumpProvider::kPrivateDirtyMetricName,
+     EmitTo::kSizeInUmaOnly, nullptr},
+#endif
 };
 
 #if BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
@@ -581,8 +660,23 @@ const Metric kPartitionAllocAddressSpaceMetrics[] = {
         .metric_size = MetricSize::kLarge,
         .metric = "configurable_pool_usage",
     },
+    Metric{
+        .uma_name = "PartitionAlloc.AddressSpace."
+                    "ThreadIsolatedPoolLargestAvailableReservation",
+        .metric_size = MetricSize::kLarge,
+        .metric = "thread_isolated_pool_largest_reservation",
+    },
+    Metric{
+        .uma_name = "PartitionAlloc.AddressSpace.ThreadIsolatedPoolUsage",
+        .metric_size = MetricSize::kLarge,
+        .metric = "thread_isolated_pool_usage",
+    },
 };
 #endif  // BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
+
+// Record a memory size in megabytes, over a potential interval up to 32 GB.
+#define UMA_HISTOGRAM_LARGE_MEMORY_MB(name, sample) \
+  UMA_HISTOGRAM_CUSTOM_COUNTS(name, sample, 1, 32768, 50)
 
 #define EXPERIMENTAL_UMA_PREFIX "Memory.Experimental."
 #define VERSION_SUFFIX_PERCENT "2."
@@ -907,8 +1001,11 @@ void EmitRendererMemoryMetrics(
     int number_of_extensions,
     const absl::optional<base::TimeDelta>& uptime,
     bool record_uma) {
+  // If the renderer doesn't host a single page, no page_info will be passed in,
+  // and there's no single URL to associate its memory with.
   ukm::SourceId ukm_source_id =
-      page_info ? page_info->ukm_source_id : ukm::UkmRecorder::GetNewSourceID();
+      page_info ? page_info->ukm_source_id : ukm::NoURLSourceId();
+
   Memory_Experimental builder(ukm_source_id);
   builder.SetProcessType(static_cast<int64_t>(
       memory_instrumentation::mojom::ProcessType::RENDERER));
@@ -1031,7 +1128,7 @@ void ProcessMemoryMetricsEmitter::FetchAndEmitProcessMemoryMetrics() {
             base::BindOnce(&ProcessMemoryMetricsEmitter::ReceivedProcessInfos,
                            pmme, std::move(process_infos)));
       },
-      base::SequencedTaskRunnerHandle::Get(),
+      base::SequencedTaskRunner::GetCurrentDefault(),
       scoped_refptr<ProcessMemoryMetricsEmitter>(this));
 
   performance_manager::PerformanceManager::CallOnGraph(
@@ -1112,6 +1209,9 @@ int ProcessMemoryMetricsEmitter::GetNumberOfExtensions(base::ProcessId pid) {
     extensions::ProcessMap* process_map = extensions::ProcessMap::Get(profile);
     extensions::ExtensionRegistry* registry =
         extensions::ExtensionRegistry::Get(profile);
+    if (!process_map || !registry)
+      continue;
+
     std::set<std::string> extension_ids =
         process_map->GetExtensionsInProcess(rph_id);
     for (const std::string& extension_id : extension_ids) {
@@ -1159,9 +1259,13 @@ void ProcessMemoryMetricsEmitter::CollateResults() {
 #endif  // BUILDFLAG(IS_ANDROID)
   uint32_t renderer_private_footprint_total_kb = 0;
   uint32_t renderer_malloc_total_kb = 0;
+  uint32_t renderer_blink_gc_total_kb = 0;
+  uint32_t renderer_blink_gc_fragmentation_total_kb = 0;
   uint32_t shared_footprint_total_kb = 0;
   uint32_t resident_set_total_kb = 0;
   uint64_t tiles_total_memory = 0;
+  uint64_t hibernated_canvas_total_memory = 0;
+  uint64_t hibernated_canvas_total_original_memory = 0;
   bool emit_metrics_for_all_processes = pid_scope_ == base::kNullProcessId;
 
   TabFootprintAggregator per_tab_metrics;
@@ -1209,6 +1313,10 @@ void ProcessMemoryMetricsEmitter::CollateResults() {
         renderer_private_footprint_visible_or_higher_total_kb +=
             is_less_than_visible_renderer ? 0 : process_pmf_kb;
 #endif  // BUILDFLAG(IS_ANDROID)
+        hibernated_canvas_total_memory +=
+            pmd.GetMetric("canvas/hibernated", kSize).value_or(0);
+        hibernated_canvas_total_original_memory +=
+            pmd.GetMetric("canvas/hibernated", "original_size").value_or(0);
         const PageInfo* single_page_info = nullptr;
         auto iter = process_infos_.find(pmd.pid());
         if (iter != process_infos_.end()) {
@@ -1237,8 +1345,19 @@ void ProcessMemoryMetricsEmitter::CollateResults() {
             single_page_info = &process_info.page_infos[0];
           }
         }
+
+        // Sum malloc memory from all renderers.
         renderer_malloc_total_kb +=
             pmd.GetMetric("malloc", "effective_size").value_or(0) / kKiB;
+
+        // Sum Blink memory from all renderers.
+        const uint64_t blink_gc_bytes =
+            pmd.GetMetric("blink_gc", kEffectiveSize).value_or(0);
+        const uint64_t blink_gc_allocated_objects_bytes =
+            pmd.GetMetric("blink_gc", kAllocatedObjectsSize).value_or(0);
+        renderer_blink_gc_total_kb += blink_gc_bytes / kKiB;
+        renderer_blink_gc_fragmentation_total_kb +=
+            (blink_gc_bytes - blink_gc_allocated_objects_bytes) / kKiB;
 
         int number_of_extensions = GetNumberOfExtensions(pmd.pid());
         EmitRendererMemoryMetrics(
@@ -1256,6 +1375,14 @@ void ProcessMemoryMetricsEmitter::CollateResults() {
         HistogramProcessType ptype;
         if (pmd.pid() == content::GetProcessIdForAudioService()) {
           ptype = HistogramProcessType::kAudioService;
+        } else if (pmd.service_name() ==
+                   media::mojom::CdmServiceBroker::Name_) {
+          ptype = HistogramProcessType::kCdmService;
+#if BUILDFLAG(IS_WIN)
+        } else if (pmd.service_name() ==
+                   media::mojom::MediaFoundationServiceBroker::Name_) {
+          ptype = HistogramProcessType::kMediaFoundationService;
+#endif
         } else if (pmd.service_name() ==
                    network::mojom::NetworkService::Name_) {
           ptype = HistogramProcessType::kNetworkService;
@@ -1335,6 +1462,11 @@ void ProcessMemoryMetricsEmitter::CollateResults() {
                                   renderer_private_footprint_total_kb / kKiB);
     UMA_HISTOGRAM_MEMORY_LARGE_MB("Memory.Total.RendererMalloc",
                                   renderer_malloc_total_kb / kKiB);
+    UMA_HISTOGRAM_MEMORY_LARGE_MB("Memory.Total.RendererBlinkGC",
+                                  renderer_blink_gc_total_kb / kKiB);
+    UMA_HISTOGRAM_MEMORY_LARGE_MB(
+        "Memory.Total.RendererBlinkGC.Fragmentation",
+        renderer_blink_gc_fragmentation_total_kb / kKiB);
     UMA_HISTOGRAM_MEMORY_LARGE_MB("Memory.Total.SharedMemoryFootprint",
                                   shared_footprint_total_kb / kKiB);
     UMA_HISTOGRAM_MEMORY_MEDIUM_MB("Memory.Total.TileMemory",
@@ -1353,6 +1485,12 @@ void ProcessMemoryMetricsEmitter::CollateResults() {
         "Memory.Total.RendererPrivateMemoryFootprintVisibleOrHigherPriority",
         renderer_private_footprint_visible_or_higher_total_kb / kKiB);
 #endif
+
+    UMA_HISTOGRAM_MEMORY_MEDIUM_MB("Memory.Total.HibernatedCanvas.Size",
+                                   hibernated_canvas_total_memory / kMiB);
+    UMA_HISTOGRAM_MEMORY_MEDIUM_MB(
+        "Memory.Total.HibernatedCanvas.OriginalSize",
+        hibernated_canvas_total_original_memory / kMiB);
 
     Memory_Experimental(ukm::UkmRecorder::GetNewSourceID())
         .SetTotal2_PrivateMemoryFootprint(private_footprint_total_kb / kKiB)
@@ -1407,9 +1545,16 @@ void ProcessMemoryMetricsEmitter::GetProcessToPageInfoMap(
     if (process_node->GetProcessId() == base::kNullProcessId)
       continue;
 
-    ProcessInfo process_info;
+    // First add all processes and their basic information.
+    ProcessInfo& process_info = process_infos.emplace_back();
     process_info.pid = process_node->GetProcessId();
     process_info.launch_time = process_node->GetLaunchTime();
+
+    // Then add information about their associated page nodes. Only renderers
+    // are associated with page nodes.
+    if (process_node->GetProcessType() != content::PROCESS_TYPE_RENDERER) {
+      continue;
+    }
 
     base::flat_set<const performance_manager::PageNode*> page_nodes =
         performance_manager::GraphOperations::GetAssociatedPageNodes(
@@ -1421,7 +1566,7 @@ void ProcessMemoryMetricsEmitter::GetProcessToPageInfoMap(
       if (page_id_map.find(page_node) == page_id_map.end())
         page_id_map.insert(std::make_pair(page_node, page_id_map.size() + 1));
 
-      PageInfo page_info;
+      PageInfo& page_info = process_info.page_infos.emplace_back();
       page_info.ukm_source_id = page_node->GetUkmSourceID();
 
       DCHECK(page_id_map.find(page_node) != page_id_map.end());
@@ -1432,9 +1577,7 @@ void ProcessMemoryMetricsEmitter::GetProcessToPageInfoMap(
           page_node->GetTimeSinceLastVisibilityChange();
       page_info.time_since_last_navigation =
           page_node->GetTimeSinceLastNavigation();
-      process_info.page_infos.push_back(std::move(page_info));
     }
-    process_infos.push_back(std::move(process_info));
   }
   std::move(callback).Run(std::move(process_infos));
 }

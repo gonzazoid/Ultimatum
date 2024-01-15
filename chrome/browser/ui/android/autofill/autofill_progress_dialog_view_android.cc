@@ -65,6 +65,10 @@ void AutofillProgressDialogViewAndroid::Dismiss(
   }
 }
 
+void AutofillProgressDialogViewAndroid::InvalidateControllerForCallbacks() {
+  controller_ = nullptr;
+}
+
 void AutofillProgressDialogViewAndroid::OnDismissed(JNIEnv* env) {
   if (controller_) {
     controller_->OnDismissed(/*is_canceled_by_user=*/true);
@@ -86,7 +90,8 @@ void AutofillProgressDialogViewAndroid::ShowDialog() {
       env, reinterpret_cast<intptr_t>(this), window_android->GetJavaObject()));
 
   Java_AutofillProgressDialogBridge_showDialog(
-      env, java_object_, ConvertUTF16ToJavaString(env, controller_->GetTitle()),
+      env, java_object_,
+      ConvertUTF16ToJavaString(env, controller_->GetLoadingTitle()),
       ConvertUTF16ToJavaString(env, controller_->GetLoadingMessage()),
       ConvertUTF16ToJavaString(env, controller_->GetCancelButtonLabel()),
       ResourceMapper::MapToJavaDrawableId(

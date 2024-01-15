@@ -44,6 +44,21 @@ struct WebTransportCloseInfo {
   string reason;
 };
 
+// Stats for a WebTransport session.
+// https://w3c.github.io/webtransport/#web-transport-stats
+struct WebTransportStats {
+  mojo_base.mojom.Time timestamp;
+  mojo_base.mojom.TimeDelta min_rtt;
+  mojo_base.mojom.TimeDelta smoothed_rtt;
+  mojo_base.mojom.TimeDelta rtt_variation;
+  uint64 estimated_send_rate_bps;
+
+  // We only ever return WebTransportDatagramStats as a part of
+  // WebTransportStats; thus those two structs are merged here.
+  uint64 datagrams_expired_outgoing;
+  uint64 datagrams_lost_outgoing;
+};
+
 // A mojo interface for https://w3c.github.io/web-transport/#web-transport.
 // This is typically implemented in the network service, and used by renderer.
 // WebTransport represents a WebTransport over HTTP/3 session, which has
@@ -112,6 +127,9 @@ interface WebTransport {
   // use an implementation-defined default.
   SetOutgoingDatagramExpirationDuration(mojo_base.mojom.TimeDelta duration);
 
+  // Provides the latest stats for the session.
+  GetStats() => (WebTransportStats? stats);
+
   // https://w3c.github.io/webtransport/#session-terminate
   // This is the last message and it is not allowed to call methods after
   // calling this.
@@ -136,15 +154,15 @@ interface WebTransportClient {
 
   // Called when an outgoing or bidirectional stream gets a STOP_SENDING signal.
   // https://w3c.github.io/webtransport/#stream-signal-stop_sending
-  // `code` is an error code as described at
+  // `stream_error_code` is an error code as described at
   // https://ietf-wg-webtrans.github.io/draft-ietf-webtrans-http3/draft-ietf-webtrans-http3.html#name-resetting-data-streams.
-  OnReceivedStopSending(uint32 stream_id, uint8 code);
+  OnReceivedStopSending(uint32 stream_id, uint32 stream_error_code);
 
   // Called when an incoming or bidirectional stream gets a RESET_STREAM signal.
   // https://w3c.github.io/webtransport/#stream-signal-reset
-  // `code` is an error code as described at
+  // `stream_error_code` is an error code as described at
   // https://ietf-wg-webtrans.github.io/draft-ietf-webtrans-http3/draft-ietf-webtrans-http3.html#name-resetting-data-streams.
-  OnReceivedResetStream(uint32 stream_id, uint8 code);
+  OnReceivedResetStream(uint32 stream_id, uint32 stream_error_code);
 
   // Called when the session is terminated cleanly.
   // https://w3c.github.io/webtransport/#session-terminated

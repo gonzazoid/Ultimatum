@@ -10,12 +10,12 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
-#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/pickle.h"
 #include "base/strings/stringprintf.h"
@@ -48,7 +48,7 @@ std::string EncodeStorageKey(const std::string& session_tag, int tab_node_id) {
   base::Pickle pickle;
   pickle.WriteString(session_tag);
   pickle.WriteInt(tab_node_id);
-  return std::string(static_cast<const char*>(pickle.data()), pickle.size());
+  return std::string(pickle.data_as_char(), pickle.size());
 }
 
 bool DecodeStorageKey(const std::string& storage_key,
@@ -108,6 +108,7 @@ absl::optional<syncer::ModelError> ParseInitialDataOnBackendSequence(
     std::map<std::string, sync_pb::SessionSpecifics>* initial_data,
     std::string* session_name,
     std::unique_ptr<ModelTypeStore::RecordList> record_list) {
+  TRACE_EVENT0("sync", "sync_sessions::ParseInitialDataOnBackendSequence");
   DCHECK(initial_data);
   DCHECK(initial_data->empty());
   DCHECK(record_list);
@@ -131,7 +132,7 @@ absl::optional<syncer::ModelError> ParseInitialDataOnBackendSequence(
 }  // namespace
 
 struct SessionStore::Builder {
-  raw_ptr<SyncSessionsClient, DanglingUntriaged> sessions_client = nullptr;
+  base::WeakPtr<SyncSessionsClient> sessions_client;
   OpenCallback callback;
   SessionInfo local_session_info;
   std::unique_ptr<syncer::ModelTypeStore> underlying_store;
@@ -148,10 +149,12 @@ void SessionStore::Open(const std::string& cache_guid,
   DVLOG(1) << "Opening session store";
 
   auto builder = std::make_unique<Builder>();
-  builder->sessions_client = sessions_client;
+  builder->sessions_client = sessions_client->AsWeakPtr();
   builder->callback = std::move(callback);
 
   builder->local_session_info.device_type = syncer::GetLocalDeviceType();
+  builder->local_session_info.device_form_factor =
+      syncer::GetLocalDeviceFormFactor();
   builder->local_session_info.session_tag = GetSessionTagWithPrefs(
       cache_guid, sessions_client->GetSessionSyncPrefs());
 
@@ -348,6 +351,7 @@ void SessionStore::OnReadAllMetadata(
     std::unique_ptr<Builder> builder,
     const absl::optional<syncer::ModelError>& error,
     std::unique_ptr<syncer::MetadataBatch> metadata_batch) {
+  TRACE_EVENT0("sync", "sync_sessions::SessionStore::OnReadAllMetadata");
   DCHECK(builder);
 
   if (error) {
@@ -373,6 +377,7 @@ void SessionStore::OnReadAllMetadata(
 void SessionStore::OnReadAllData(
     std::unique_ptr<Builder> builder,
     const absl::optional<syncer::ModelError>& error) {
+  TRACE_EVENT0("sync", "sync_sessions::SessionStore::OnReadAllData");
   DCHECK(builder);
 
   if (error) {
@@ -393,7 +398,8 @@ void SessionStore::OnReadAllData(
   auto session_store = base::WrapUnique(new SessionStore(
       builder->local_session_info, std::move(builder->underlying_store),
       std::move(builder->initial_data),
-      builder->metadata_batch->GetAllMetadata(), builder->sessions_client));
+      builder->metadata_batch->GetAllMetadata(),
+      builder->sessions_client.get()));
 
   std::move(builder->callback)
       .Run(/*error=*/absl::nullopt, std::move(session_store),
@@ -410,11 +416,12 @@ SessionStore::SessionStore(
       store_(std::move(underlying_store)),
       sessions_client_(sessions_client),
       session_tracker_(sessions_client) {
-  session_tracker_.InitLocalSession(local_session_info_.session_tag,
-                                    local_session_info_.client_name,
-                                    local_session_info_.device_type);
+  session_tracker_.InitLocalSession(
+      local_session_info_.session_tag, local_session_info_.client_name,
+      local_session_info_.device_type, local_session_info_.device_form_factor);
 
   DCHECK(store_);
+  DCHECK(sessions_client_);
 
   DVLOG(1) << "Initializing session store with " << initial_data.size()
            << " restored entities and " << initial_metadata.size()
@@ -476,7 +483,7 @@ SessionStore::SessionStore(
   // the header.
   for (const SyncedSession* session :
        session_tracker_.LookupAllForeignSessions(SyncedSessionTracker::RAW)) {
-    session_tracker_.CleanupSession(session->session_tag);
+    session_tracker_.CleanupSession(session->GetSessionTag());
   }
 }
 
@@ -543,9 +550,9 @@ void SessionStore::DeleteAllDataAndMetadata() {
   sessions_client_->GetSessionSyncPrefs()->ClearLegacySyncSessionsGUID();
 
   // At all times, the local session must be tracked.
-  session_tracker_.InitLocalSession(local_session_info_.session_tag,
-                                    local_session_info_.client_name,
-                                    local_session_info_.device_type);
+  session_tracker_.InitLocalSession(
+      local_session_info_.session_tag, local_session_info_.client_name,
+      local_session_info_.device_type, local_session_info_.device_form_factor);
 }
 
 }  // namespace sync_sessions

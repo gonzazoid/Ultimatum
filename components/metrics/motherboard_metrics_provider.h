@@ -6,7 +6,7 @@
 #define COMPONENTS_METRICS_MOTHERBOARD_METRICS_PROVIDER_H_
 
 #include <memory>
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "components/metrics/metrics_provider.h"
 #include "components/metrics/motherboard.h"
@@ -25,7 +25,7 @@ class MotherboardMetricsProvider : public MetricsProvider {
   MotherboardMetricsProvider& operator=(const MotherboardMetricsProvider&) =
       delete;
 
-  // metricsMetricsProvider:
+  // metrics::MetricsProvider:
   void AsyncInit(base::OnceClosure done_callback) override;
   void ProvideSystemProfileMetrics(
       SystemProfileProto* system_profile_proto) override;

@@ -19,15 +19,13 @@ found in the LICENSE file.
         <item name="android:minHeight">0dp</item>
         <item name="android:textAppearance">@style/TextAppearance.TextMedium.Primary</item>
     </style>
-    <style name="Widget.BrowserUI.Switch" parent="Widget.MaterialComponents.CompoundButton.Switch">
-        <item name="thumbTint">@color/switch_thumb_tint_list</item>
-        <item name="trackTint">@color/switch_track_tint</item>
-        <item name="trackTintMode">src_in</item>
+    <style name="Widget.BrowserUI.Switch" parent="Widget.Material3.CompoundButton.MaterialSwitch">
+        <item name="android:scaleX">@fraction/material_switch_scale_fraction</item>
+        <item name="android:scaleY">@fraction/material_switch_scale_fraction</item>
+        <item name="android:minHeight">@dimen/switch_pre_scale_min_height</item>
     </style>
-    <style name="Widget.BrowserUI.Switch.Incognito" parent="Widget.MaterialComponents.CompoundButton.Switch">
-        <item name="thumbTint">@color/switch_thumb_tint_incognito_baseline_list</item>
-        <item name="trackTint">@color/switch_track_tint_incognito_baseline_list</item>
-
+    <style name="Widget.BrowserUI.Switch.Incognito">
+        <item name="materialThemeOverlay">@style/ThemeOverlay.BrowserUI.Switch.Incognito</item>
     </style>
     <!-- TextInputLayout style -->
     <style name="Widget.BrowserUI.TextInputLayout" parent="Widget.Design.TextInputLayout">
@@ -68,27 +66,16 @@ found in the LICENSE file.
         <item name="android:paddingEnd">@dimen/dialog_padding_sides</item>
         <item name="android:paddingTop">@dimen/dialog_padding_top</item>
     </style>
-    <style name="AlertDialogSummaryViewItem" parent="@android:style/TextAppearance.Small">
+    <style name="AlertDialogSummaryViewItem">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:textAlignment">viewStart</item>
         <item name="android:paddingTop">10dp</item>
+        <item name="android:textAppearance">@style/TextAppearance.TextMedium.Secondary</item>
     </style>
 
     <style name="ProgressBarStyle" parent="Widget.AppCompat.ProgressBar">
         <item name="android:indeterminateTint">@macro/default_icon_color_accent1</item>
-    </style>
-
-    <!-- Switch styling for dark theme -->
-    <!-- TODO(sinansahin): See if we can pass the baseline dark theme to the incognito NTP instead.
-         -->
-    <style name="SwitchMaterialDark">
-        <!-- TODO(sinansahin): When we migrate the switch style to Material3, we should override
-             colorOnSurface and colorPrimary instead of these attributes because they are what
-             m3_selection_control_ripple_color_selector uses. -->
-        <item name="colorControlActivated">@color/default_control_color_active_dark</item>
-        <item name="colorControlHighlight">@color/default_control_color_highlight_dark</item>
-        <item name="switchStyle">@style/Widget.BrowserUI.Switch.Incognito</item>
     </style>
 
     <!-- Styling for an app menu item row. -->
@@ -104,11 +91,14 @@ found in the LICENSE file.
         <item name="android:paddingStart">16dp</item>
     </style>
 
-    <style name="ModernToolbar" parent="Widget.MaterialComponents.Toolbar">
+    <style name="ModernToolbar" parent="Base.ModernToolbar">
+    <item name="android:background">@macro/default_bg_color</item>
+    </style>
+
+    <style name="Base.ModernToolbar" parent="Widget.MaterialComponents.Toolbar">
         <item name="titleTextAppearance">@style/TextAppearance.Headline.Primary</item>
         <item name="titleTextColor">@macro/default_text_color</item>
         <item name="windowActionBarOverlay">true</item>
-        <item name="android:background">@macro/default_bg_color</item>
     </style>
 
     <style name="TextButton.OnAccent1" tools:ignore="UnusedResources">
@@ -120,6 +110,10 @@ found in the LICENSE file.
     <!-- Text styles -->
     <!-- Primary text styles -->
     <style name="TextAppearance.Headline.Primary">
+        <item name="android:textColor">@color/default_text_color_list</item>
+    </style>
+
+    <style name="TextAppearance.Headline2Thick.Primary">
         <item name="android:textColor">@color/default_text_color_list</item>
     </style>
 
@@ -140,6 +134,10 @@ found in the LICENSE file.
     </style>
 
     <!-- Secondary text styles -->
+    <style name="TextAppearance.Headline2Thick.Secondary" >
+        <item name="android:textColor">@color/default_text_color_secondary_list</item>
+    </style>
+
     <style name="TextAppearance.TextLarge.Secondary">
         <item name="android:textColor">@color/default_text_color_secondary_list</item>
     </style>
@@ -161,9 +159,6 @@ found in the LICENSE file.
     </style>
 
     <!-- Accent1 text styles -->
-    <style name="TextAppearance.TextLarge.Accent1">
-        <item name="android:textColor">@color/default_text_color_accent1_tint_list</item>
-    </style>
     <style name="TextAppearance.TextMedium.Accent1">
         <item name="android:textColor">@color/default_text_color_accent1_tint_list</item>
     </style>
@@ -224,6 +219,10 @@ found in the LICENSE file.
     </style>
 
     <!-- Disabled text styles -->
+    <style name="TextAppearance.Headline.Disabled" tools:ignore="UnusedResources">
+        <item name="android:textColor">@color/default_text_color_disabled_list</item>
+    </style>
+
     <style name="TextAppearance.TextLarge.Disabled" tools:ignore="UnusedResources">
         <item name="android:textColor">@color/default_text_color_disabled_list</item>
     </style>

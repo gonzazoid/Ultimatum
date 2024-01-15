@@ -4,7 +4,7 @@
 
 import '../strings.m.js';
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {assert} from 'chrome://resources/js/assert.js';
 
 // <if expr="is_chromeos">
 import {NativeLayerCrosImpl} from '../native_layer_cros.js';
@@ -210,6 +210,12 @@ export class Destination {
   private eulaUrl_: string = '';
 
   /**
+   * True if the user opened the print preview dropdown and selected a different
+   * printer than the original destination.
+   */
+  private printerManuallySelected_: boolean = false;
+
+  /**
    * Stores the printer status reason for a local Chrome OS printer.
    */
   private printerStatusReason_: PrinterStatusReason|null = null;
@@ -333,11 +339,23 @@ export class Destination {
     this.eulaUrl_ = eulaUrl;
   }
 
+  get printerManuallySelected(): boolean {
+    return this.printerManuallySelected_;
+  }
+
+  set printerManuallySelected(printerManuallySelected: boolean) {
+    this.printerManuallySelected_ = printerManuallySelected;
+  }
+
   /**
    * @return The printer status reason for a local Chrome OS printer.
    */
   get printerStatusReason(): PrinterStatusReason|null {
     return this.printerStatusReason_;
+  }
+
+  set printerStatusReason(printerStatusReason: PrinterStatusReason) {
+    this.printerStatusReason_ = printerStatusReason;
   }
 
   setPrinterStatusRetryTimeoutForTesting(timeoutMs: number) {

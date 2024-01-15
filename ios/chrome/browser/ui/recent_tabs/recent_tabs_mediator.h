@@ -7,35 +7,71 @@
 
 #import <Foundation/Foundation.h>
 
+#import "ios/chrome/browser/shared/ui/table_view/table_view_favicon_data_source.h"
+#import "ios/chrome/browser/synced_sessions/model/synced_sessions_bridge.h"
 #import "ios/chrome/browser/ui/recent_tabs/closed_tabs_observer_bridge.h"
 #import "ios/chrome/browser/ui/recent_tabs/recent_tabs_table_view_controller_delegate.h"
-#import "ios/chrome/browser/ui/recent_tabs/synced_sessions_bridge.h"
-#import "ios/chrome/browser/ui/table_view/table_view_favicon_data_source.h"
+#import "ios/chrome/browser/ui/tab_switcher/tab_grid/tab_grid_activity_observer.h"
+#import "ios/chrome/browser/ui/tab_switcher/tab_grid/tab_grid_page_mutator.h"
 
-class ChromeBrowserState;
-class WebStateList;
-
+class BrowserList;
+class FaviconLoader;
+@protocol GridConsumer;
+@protocol GridToolbarsMutator;
 @protocol RecentTabsConsumer;
+@class SceneState;
+@protocol TabGridToolbarsMainTabGridDelegate;
 
-// RecentTabsMediator controls the RecentTabsConsumer,
-// based on the user's signed-in and chrome-sync states.
+namespace signin {
+class IdentityManager;
+}  // namespace signin
+
+namespace sync_sessions {
+class SessionSyncService;
+}  // namespace sync_sessions
+
+namespace syncer {
+class SyncService;
+}  // namespace syncer
+
+namespace sessions {
+class TabRestoreService;
+}  // namespace sessions
+
+// RecentTabsMediator controls the RecentTabsConsumer, based on the user's
+// signed-in and chrome-sync states.
 //
-// RecentTabsMediator listens for notifications about Chrome Sync
-// and ChromeToDevice and changes/updates the RecentTabsConsumer
-// accordingly.
-@interface RecentTabsMediator : NSObject<ClosedTabsObserving,
-                                         RecentTabsTableViewControllerDelegate,
-                                         TableViewFaviconDataSource>
+// RecentTabsMediator listens for notifications about Chrome Sync and
+// ChromeToDevice and changes/updates the RecentTabsConsumer accordingly.
+@interface RecentTabsMediator : NSObject <ClosedTabsObserving,
+                                          RecentTabsTableViewControllerDelegate,
+                                          TabGridActivityObserver,
+                                          TabGridPageMutator,
+                                          TableViewFaviconDataSource>
 
 // The consumer for this object. This can change during the lifetime of this
 // object and may be nil.
 @property(nonatomic, strong) id<RecentTabsConsumer> consumer;
+// Mutator to handle toolbars modification.
+@property(nonatomic, weak) id<GridToolbarsMutator> toolbarsMutator;
+// Grid consumer.
+@property(nonatomic, weak) id<GridConsumer> gridConsumer;
+// Delegate handling the Tab Grid modifications.
+@property(nonatomic, weak) id<TabGridToolbarsMainTabGridDelegate>
+    toolbarTabGridDelegate;
 
-// The coordinator's BrowserState.
-@property(nonatomic, assign) ChromeBrowserState* browserState;
+- (instancetype)
+    initWithSessionSyncService:
+        (sync_sessions::SessionSyncService*)sessionSyncService
+               identityManager:(signin::IdentityManager*)identityManager
+                restoreService:(sessions::TabRestoreService*)restoreService
+                 faviconLoader:(FaviconLoader*)faviconLoader
+                   syncService:(syncer::SyncService*)syncService
+                   browserList:(BrowserList*)browserList
+                    sceneState:(SceneState*)sceneState
+              disabledByPolicy:(BOOL)disabled NS_DESIGNATED_INITIALIZER;
 
-// The WebStateList that this mediator listens for.
-@property(nonatomic, assign) WebStateList* webStateList;
+- (instancetype)init NS_UNAVAILABLE;
 
 // Starts observing the he user's signed-in and chrome-sync states.
 - (void)initObservers;

@@ -2,26 +2,27 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'chrome://os-settings/os_settings.js';
+import 'chrome://os-settings/lazy_load.js';
+
+import {SettingsRadioGroupElement} from 'chrome://os-settings/lazy_load.js';
+import {CrButtonElement, SettingsGoogleDriveSubpageElement, SettingsToggleButtonElement} from 'chrome://os-settings/os_settings.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {assertTrue} from 'chrome://webui-test/chai_assert.js';
 
-import {LockScreenSettingsInterface, LockScreenSettingsReceiver, LockScreenSettingsRemote, OSSettingsBrowserProcess, OSSettingsDriverInterface, OSSettingsDriverReceiver} from './test_api.test-mojom-webui.js';
-import {assertAsync, assertForDuration, hasBooleanProperty, hasProperty, hasStringProperty, Lazy, querySelectorShadow, retry, retryUntilSome, sleep} from './utils.js';
+import {PasswordSettingsApi} from './os_people_page/password_settings_api.js';
+import {PinSettingsApi} from './os_people_page/pin_settings_api.js';
+import {PasswordSettingsApiRemote} from './password_settings_api.test-mojom-webui.js';
+import {PinSettingsApiRemote} from './pin_settings_api.test-mojom-webui.js';
+import {GoogleDriveSettingsInterface, GoogleDriveSettingsReceiver, GoogleDriveSettingsRemote, LockScreenSettings_RecoveryDialogAction as RecoveryDialogAction, LockScreenSettingsInterface, LockScreenSettingsReceiver, LockScreenSettingsRemote, OSSettingsBrowserProcess, OSSettingsDriverInterface, OSSettingsDriverReceiver} from './test_api.test-mojom-webui.js';
+import {assertAsync, assertForDuration, hasBooleanProperty, hasProperty, Lazy, querySelectorShadow, retry, retryUntilSome} from './utils.js';
 
-enum PinDialogType {
-  SETUP,
-  AUTOSUBMIT,
-}
-
-// A dialog that asks for a pin. Used for both the "setup pin" dialog and the
-// "pin autosubmit" dialog.
-class PinDialog {
+class RecoveryDialog {
   private element: HTMLElement;
-  private dialogType: PinDialogType;
 
-  constructor(element: HTMLElement, dialogType: PinDialogType) {
+  constructor(element: HTMLElement) {
     this.element = element;
     assertTrue(this.element.shadowRoot !== null);
-    this.dialogType = dialogType;
   }
 
   private shadowRoot(): ShadowRoot {
@@ -30,48 +31,28 @@ class PinDialog {
     return shadowRoot;
   }
 
-  private pinInput(): HTMLElement&{value: string} {
-    const pinKeyboard = this.shadowRoot().getElementById('pinKeyboard');
-    assertTrue(pinKeyboard instanceof HTMLElement);
-    assertTrue(pinKeyboard.shadowRoot !== null);
-
-    switch (this.dialogType) {
-      case PinDialogType.SETUP: {
-        const pinInput = pinKeyboard.shadowRoot.getElementById('pinKeyboard');
-        assertTrue(pinInput instanceof HTMLElement);
-        assertTrue(hasStringProperty(pinInput, 'value'));
-        return pinInput;
-      }
-      case PinDialogType.AUTOSUBMIT: {
-        assertTrue(hasStringProperty(pinKeyboard, 'value'));
-        return pinKeyboard;
-      }
-    }
-  }
-
   private cancelButton(): HTMLElement {
-    const button = this.shadowRoot().querySelector('.cancel-button');
-    assertTrue(button instanceof HTMLElement);
-    return button;
+    const cancelButton =
+        this.shadowRoot().getElementById('cancelRecoveryDialogButton');
+    assertTrue(cancelButton !== null);
+    assertTrue(cancelButton instanceof HTMLElement);
+    return cancelButton;
   }
 
-  private submitButton(): HTMLElement {
-    const button = this.shadowRoot().querySelector('.action-button');
-    assertTrue(button instanceof HTMLElement);
-    return button;
+  private disableButton(): HTMLElement {
+    const disableButton =
+        this.shadowRoot().getElementById('disableRecoveryDialogButton');
+    assertTrue(disableButton !== null);
+    assertTrue(disableButton instanceof HTMLElement);
+    return disableButton;
   }
 
-  async enterPin(pin: string): Promise<void> {
-    (await retry(() => this.pinInput())).value = pin;
-  }
-
-  async submit(): Promise<void> {
-    await sleep(2000);
-    (await retry(() => this.submitButton())).click();
-  }
-
-  async cancel(): Promise<void> {
+  async clickCancel(): Promise<void> {
     (await retry(() => this.cancelButton())).click();
+  }
+
+  async clickDisable(): Promise<void> {
+    (await retry(() => this.disableButton())).click();
   }
 }
 
@@ -150,6 +131,35 @@ export class LockScreenSettings implements LockScreenSettingsInterface {
     await this.authenticate(password, false);
   }
 
+  private queryPasswordSettings(): PasswordSettingsApi|null {
+    const el = this.shadowRoot().getElementById('passwordSettings');
+    if (!(el instanceof HTMLElement)) {
+      return null;
+    }
+    if (el.hidden) {
+      return null;
+    }
+
+    return new PasswordSettingsApi(el);
+  }
+
+  async assertPasswordControlVisibility(isVisible: boolean): Promise<void> {
+    const property = () => {
+      const settings = this.queryPasswordSettings();
+      return (settings !== null) === isVisible;
+    };
+
+    await assertAsync(property);
+    await assertForDuration(property);
+  }
+
+  async goToPasswordSettings():
+      Promise<{passwordSettings: PasswordSettingsApiRemote}> {
+    const passwordSettings =
+        await retryUntilSome(() => this.queryPasswordSettings());
+    return {passwordSettings: passwordSettings.newRemote()};
+  }
+
   private recoveryToggle(): HTMLElement&{checked: boolean}|null {
     const toggle = this.shadowRoot().getElementById('recoveryToggle');
     if (toggle === null) {
@@ -157,6 +167,21 @@ export class LockScreenSettings implements LockScreenSettingsInterface {
     }
     assertTrue(hasBooleanProperty(toggle, 'checked'));
     return toggle;
+  }
+
+  async assertRecoveryControlAvailability(isAvailable: boolean): Promise<void> {
+    const property = () => {
+      const toggle = this.recoveryToggle();
+      if (toggle === null) {
+        return !isAvailable;
+      }
+      // Check for presence of "learn more" link
+      return toggle.outerHTML.includes('https://support.google.com/chrome') ===
+          !isAvailable;
+    };
+
+    await assertAsync(property);
+    await assertForDuration(property);
   }
 
   async assertRecoveryControlVisibility(isVisible: boolean): Promise<void> {
@@ -172,6 +197,13 @@ export class LockScreenSettings implements LockScreenSettingsInterface {
     await assertForDuration(property);
   }
 
+  async assertRecoveryControlFocused(): Promise<void> {
+    const toggle = await retryUntilSome(() => this.recoveryToggle());
+    const isFocused = () => toggle.contains(this.shadowRoot().activeElement);
+    await assertAsync(isFocused);
+    await assertForDuration(isFocused);
+  }
+
   async assertRecoveryConfigured(isConfigured: boolean): Promise<void> {
     const property = () => {
       const toggle = this.recoveryToggle();
@@ -185,212 +217,282 @@ export class LockScreenSettings implements LockScreenSettingsInterface {
     await assertForDuration(property);
   }
 
-  async toggleRecoveryConfiguration(): Promise<void> {
-    const toggle = await retryUntilSome(() => this.recoveryToggle());
-    assertTrue(toggle !== null);
-    const previousChecked = toggle.checked;
-    const toggleIsFlipped = () => toggle.checked === previousChecked;
+  private recoveryDisableDialog(): RecoveryDialog|null {
+    const element = this.shadowRoot().getElementById('localDataRecoveryDialog');
+    if (element === null) {
+      return null;
+    }
+    assertTrue(element instanceof HTMLElement);
+    return new RecoveryDialog(element);
+  }
 
+  async enableRecoveryConfiguration(): Promise<void> {
+    const toggle = await retryUntilSome(() => this.recoveryToggle());
+    assertTrue(!toggle.checked);
     toggle.click();
 
     // If the toggle flips immediately, that's OK. Otherwise we need to wait
     // until it flips.
-    if (!toggleIsFlipped()) {
+    if (toggle.checked) {
       return;
     }
-
     assertTrue(hasBooleanProperty(toggle, 'disabled') && toggle.disabled);
     // Click again to see whether something weird happens.
     toggle.click();
-
-    await assertAsync(toggleIsFlipped);
+    await assertAsync(() => toggle.checked);
   }
 
-  private passwordOnlyToggle(): HTMLElement&{checked: boolean} {
-    const toggle =
-        this.shadowRoot().querySelector('cr-radio-button[name="password"]');
-    assertTrue(toggle instanceof HTMLElement);
-    assertTrue(hasBooleanProperty(toggle, 'checked'));
+  async tryEnableRecoveryConfiguration(): Promise<void> {
+    const toggle = await retryUntilSome(() => this.recoveryToggle());
+    assertTrue(!toggle.checked);
+    toggle.click();
+  }
+
+  async tryDisableRecoveryConfiguration(): Promise<void> {
+    const toggle = await retryUntilSome(() => this.recoveryToggle());
+    assertTrue(toggle.checked);
+    toggle.click();
+  }
+
+  async disableRecoveryConfiguration(dialogAction: RecoveryDialogAction):
+      Promise<void> {
+    assertTrue(this.recoveryDisableDialog() === null);
+    const toggle = await retryUntilSome(() => this.recoveryToggle());
+    assertTrue(toggle !== null);
+    assertTrue(toggle.checked);
+    toggle.click();
+    // After click on the toggle, the toggle has to be disabled.
+    assertTrue(hasBooleanProperty(toggle, 'disabled') && toggle.disabled);
+    // RecoveryDialog has to be visible.
+    const recoveryDialog =
+        await retryUntilSome(() => this.recoveryDisableDialog());
+    switch (dialogAction) {
+      case RecoveryDialogAction.CancelDialog:
+        recoveryDialog.clickCancel();
+        await assertAsync(() => toggle.checked);
+        break;
+      case RecoveryDialogAction.ConfirmDisabling:
+        recoveryDialog.clickDisable();
+        await assertAsync(() => !toggle.checked);
+        break;
+      default:
+        assertTrue(false);
+    }
+    await assertAsync(() => this.recoveryDisableDialog() === null);
+  }
+
+  async pinSettingsApi(): Promise<PinSettingsApi> {
+    const element = await retryUntilSome(
+        () => this.shadowRoot().getElementById('pinSettings'));
+    return new PinSettingsApi(element);
+  }
+
+  async goToPinSettings(): Promise<{pinSettings: PinSettingsApiRemote}> {
+    return {pinSettings: (await this.pinSettingsApi()).newRemote()};
+  }
+
+
+  private queryAutoLockScreenToggle(): SettingsToggleButtonElement {
+    const toggle = this.shadowRoot().getElementById('enableLockScreen');
+    assertTrue(toggle instanceof SettingsToggleButtonElement);
     return toggle;
   }
 
-  private pinAndPasswordToggle(): HTMLElement&{checked: boolean}|null {
-    const toggle =
-        this.shadowRoot().querySelector('cr-radio-button[name="pin+password"]');
-    assertTrue(toggle instanceof HTMLElement);
-    assertTrue(hasBooleanProperty(toggle, 'checked'));
-    return toggle;
+  private queryLockScreenNotificationSettings(): SettingsRadioGroupElement {
+    const notificationSettings =
+        this.shadowRoot().getElementById('notificationSettings');
+    assertTrue(notificationSettings instanceof SettingsRadioGroupElement);
+    return notificationSettings;
   }
 
-  private setupPinButton(): HTMLElement|null {
-    return this.shadowRoot().getElementById('setupPinButton');
-  }
-
-  private setupPinDialog(): PinDialog|null {
-    const element = this.shadowRoot().getElementById('setupPin');
-    if (element === null) {
-      return null;
-    }
-    assertTrue(element instanceof HTMLElement);
-    return new PinDialog(element, PinDialogType.SETUP);
-  }
-
-  private pinAutosubmitDialog(): PinDialog|null {
-    const element = this.shadowRoot().getElementById('pinAutosubmitDialog');
-    if (element === null) {
-      return null;
-    }
-    assertTrue(element instanceof HTMLElement);
-    return new PinDialog(element, PinDialogType.AUTOSUBMIT);
-  }
-
-  async assertIsUsingPin(isUsing: boolean): Promise<void> {
-    const property = () => {
-      const toggle = this.pinAndPasswordToggle();
-      return toggle !== null && toggle.checked === isUsing;
+  async assertAutoLockScreenEnabled(isEnabled: boolean): Promise<void> {
+    const isAutoLockScreenEnabled = () => {
+      const toggle = this.queryAutoLockScreenToggle();
+      return toggle.checked === isEnabled;
     };
-    await assertAsync(property);
-    await assertForDuration(property);
+
+    await assertAsync(isAutoLockScreenEnabled);
+    await assertForDuration(isAutoLockScreenEnabled);
   }
 
-  async removePin(): Promise<void> {
-    (await retry(() => this.passwordOnlyToggle())).click();
-    await assertAsync(() => this.passwordOnlyToggle().checked === true);
+  async enableAutoLockScreen(): Promise<void> {
+    const toggle = await retryUntilSome(() => this.queryAutoLockScreenToggle());
+    await assertAsync(() => !toggle.checked);
+    toggle.click();
+    await assertAsync(() => toggle.checked);
   }
 
-  async setPin(pin: string): Promise<void> {
-    // Click the "pin and password" toggle button.
-    (await retryUntilSome(() => this.pinAndPasswordToggle())).click();
-    // The toggle button should be checked.
+  async disableAutoLockScreen(): Promise<void> {
+    const toggle = await retryUntilSome(() => this.queryAutoLockScreenToggle());
+    await assertAsync(() => toggle.checked);
+    toggle.click();
+    await assertAsync(() => !toggle.checked);
+  }
+
+  async assertAutoLockScreenFocused(): Promise<void> {
+    const isFocused = () =>
+        this.shadowRoot().activeElement === this.queryAutoLockScreenToggle();
+    await assertAsync(isFocused);
+    await assertForDuration(isFocused);
+  }
+
+  async assertLockScreenNotificationFocused(): Promise<void> {
+    const isFocused = () => this.queryLockScreenNotificationSettings().contains(
+        this.shadowRoot().activeElement);
+    await assertAsync(isFocused);
+    await assertForDuration(isFocused);
+  }
+}
+
+// Page object that implements the Mojo remote to interact with the Google drive
+// subpage.
+export class GoogleDriveSettings implements GoogleDriveSettingsInterface {
+  constructor(private googleDriveSubpage_: SettingsGoogleDriveSubpageElement) {}
+
+  // Ensure the string supplied matched the value that are stored on the google
+  // drive subpage element.
+  assertRequiredSpace(requiredSpace: string) {
+    assertTrue(this.googleDriveSubpage_?.requiredSpace === requiredSpace);
+  }
+
+  assertRemainingSpace(freeSpace: string) {
+    assertTrue(this.googleDriveSubpage_?.freeSpace === freeSpace);
+  }
+
+  async assertBulkPinningSpace(requiredSpace: string, freeSpace: string):
+      Promise<void> {
+    this.assertRequiredSpace(requiredSpace);
+    this.assertRemainingSpace(freeSpace);
+  }
+
+  async assertContentCacheSize(contentCacheSize: string): Promise<void> {
+    assertTrue(this.googleDriveSubpage_?.contentCacheSize === contentCacheSize);
+  }
+
+  async clickClearOfflineFilesAndAssertNewSize(newSize: string): Promise<void> {
+    const offlineStorageButton =
+        this.googleDriveSubpage_.shadowRoot!.querySelector<CrButtonElement>(
+            '#drive-offline-storage-row cr-button')!;
+    offlineStorageButton.click();
+
+    // Click the confirm button on the confirmation dialog.
+    const getConfirmationButton = () =>
+        querySelectorShadow(
+            this.googleDriveSubpage_.shadowRoot!,
+            [
+              'settings-drive-confirmation-dialog',
+              '.action-button',
+            ])! as CrButtonElement |
+        null;
+    await assertAsync(() => getConfirmationButton() !== null, 10000000);
+    getConfirmationButton()!.click();
+
+    // Wait for the total pinned size to be updated.
     await assertAsync(() => {
-      const toggle = this.pinAndPasswordToggle();
-      return toggle !== null && toggle.checked;
+      return this.googleDriveSubpage_?.contentCacheSize === newSize;
     });
-
-    // Click the pin setup button.
-    (await retryUntilSome(() => this.setupPinButton())).click();
-    // The pin dialog should be shown.
-    const pinDialog = await retryUntilSome(() => this.setupPinDialog());
-
-    // Enter pin twice and submit each time.
-    await pinDialog.enterPin(pin);
-    await pinDialog.submit();
-    await pinDialog.enterPin(pin);
-    await pinDialog.submit();
-
-    // The setup pin dialog should disappear.
-    await assertAsync(() => this.setupPinDialog() === null);
-
-    // The "pin or password" toggle should still be checked.
-    await assertAsync(() => {
-      const toggle = this.pinAndPasswordToggle();
-      return toggle !== null && toggle.checked;
-    });
-  }
-
-  private autosubmitToggle(): HTMLElement&{checked: boolean}|null {
-    const toggle = this.shadowRoot().getElementById('enablePinAutoSubmit');
-    if (toggle === null) {
-      return null;
-    }
-
-    assertTrue(toggle instanceof HTMLElement);
-    assertTrue(hasBooleanProperty(toggle, 'checked'));
-    return toggle;
-  }
-
-  isPinAutosubmitEnabled(): boolean {
-    const toggle = this.autosubmitToggle();
-    return toggle !== null && toggle.checked;
-  }
-
-  async assertPinAutosubmitEnabled(isEnabled: boolean): Promise<void> {
-    const check = () => this.isPinAutosubmitEnabled() === isEnabled;
-    await assertAsync(check);
-    await assertForDuration(check);
-  }
-
-  async enablePinAutosubmit(pin: string): Promise<void> {
-    // Initially, autosubmit must be disabled.
-    await assertAsync(() => this.isPinAutosubmitEnabled() === false);
-
-    // Click the toggle.
-    (await retryUntilSome(() => this.autosubmitToggle())).click();
-
-    // Wait for the confirmation dialog to appear and enter pin.
-    const dialog = await retryUntilSome(() => this.pinAutosubmitDialog());
-    await dialog.enterPin(pin);
-    await dialog.submit();
-
-    // The dialog should disappear, and the toggle must be checked.
-    await assertAsync(() => this.pinAutosubmitDialog() === null);
-    await assertAsync(() => this.isPinAutosubmitEnabled() === true);
-  }
-
-  async enablePinAutosubmitIncorrectly(incorrectPin: string): Promise<void> {
-    // Initially, autosubmit must be disabled.
-    await assertAsync(() => this.isPinAutosubmitEnabled() === false);
-
-    // Click the toggle.
-    (await retryUntilSome(() => this.autosubmitToggle())).click();
-
-    // Wait for the confirmation dialog to appear and enter pin.
-    const dialog = await retryUntilSome(() => this.pinAutosubmitDialog());
-    await dialog.enterPin(incorrectPin);
-    await dialog.submit();
-
-    // The dialog should not disappear. Dismiss it.
-    await assertForDuration(() => this.pinAutosubmitDialog() !== null);
-    await dialog.cancel();
-    await assertAsync(() => this.pinAutosubmitDialog() === null);
-  }
-
-  async disablePinAutosubmit(): Promise<void> {
-    await assertAsync(() => this.isPinAutosubmitEnabled() === true);
-    (await retryUntilSome(() => this.autosubmitToggle())).click();
-    await assertAsync(() => this.isPinAutosubmitEnabled() === false);
   }
 }
 
 class OsSettingsDriver implements OSSettingsDriverInterface {
-  async goToLockScreenSettings():
-      Promise<{lockScreenSettings: LockScreenSettingsRemote}> {
-    const privacyPage =
-        await retryUntilSome(() => querySelectorShadow(document.body, [
-                               'os-settings-ui',
-                               'os-settings-main',
-                               'os-settings-page',
-                               'os-settings-privacy-page',
-                             ]));
+  private privacyPage(): HTMLElement {
+    const privacyPage = querySelectorShadow(document.body, [
+      'os-settings-ui',
+      'os-settings-main',
+      'main-page-container',
+      'os-settings-privacy-page',
+    ]);
     assertTrue(privacyPage instanceof HTMLElement);
+    return privacyPage;
+  }
+
+  // Finds the lock screen settings element. Throws an assertion error if it is
+  // not found immediately.
+  private lockScreenSettings(): LockScreenSettings {
+    const privacyPage = this.privacyPage();
     assertTrue(privacyPage.shadowRoot !== null);
-
-
-    // Click on button to go to lock screen settings.
-    const trigger =
-        privacyPage.shadowRoot.getElementById('lockScreenSubpageTrigger');
-    assertTrue(trigger !== null);
-    trigger.click();
 
     const lockScreen: Lazy<HTMLElement> = () => {
       assertTrue(privacyPage.shadowRoot !== null);
       const lockScreen =
-          privacyPage.shadowRoot.querySelector('settings-lock-screen');
+          privacyPage.shadowRoot.querySelector('settings-lock-screen-subpage');
       assertTrue(lockScreen instanceof HTMLElement);
       return lockScreen;
     };
+
+    // Get the lock screen element once to ensure that it's there, i.e., throw
+    // an assertion otherwise.
+    lockScreen();
 
     const passwordDialog: Lazy<HTMLElement|null> = () => {
       assertTrue(privacyPage.shadowRoot !== null);
       return privacyPage.shadowRoot.getElementById('passwordDialog');
     };
 
-    const lockScreenSettings =
-        new LockScreenSettings({lockScreen, passwordDialog});
+    return new LockScreenSettings({lockScreen, passwordDialog});
+  }
+
+  async assertOnLockScreenSettings():
+      Promise<{lockScreenSettings: LockScreenSettingsRemote}> {
+    const lockScreenSettings = await retry(() => this.lockScreenSettings());
     const receiver = new LockScreenSettingsReceiver(lockScreenSettings);
     const remote = receiver.$.bindNewPipeAndPassRemote();
 
     return {lockScreenSettings: remote};
+  }
+
+  async goToLockScreenSettings():
+      Promise<{lockScreenSettings: LockScreenSettingsRemote}> {
+    const privacyPage = await retry(() => this.privacyPage());
+    assertTrue(privacyPage.shadowRoot !== null);
+
+    // Click on button to go to lock screen settings.
+    const trigger = privacyPage.shadowRoot.getElementById('lockScreenRow');
+    assertTrue(trigger !== null);
+    trigger.click();
+
+    return await this.assertOnLockScreenSettings();
+  }
+
+  private googleDriveSubpage(): SettingsGoogleDriveSubpageElement {
+    const isRevampWayfindingEnabled =
+        loadTimeData.getBoolean('isRevampWayfindingEnabled');
+
+    const elementPath = isRevampWayfindingEnabled ?
+        [
+          'os-settings-ui',
+          'os-settings-main',
+          'main-page-container',
+          'settings-system-preferences-page',
+          'settings-google-drive-subpage',
+        ] :
+        [
+          'os-settings-ui',
+          'os-settings-main',
+          'main-page-container',
+          'os-settings-files-page',
+          'settings-google-drive-subpage',
+        ];
+
+    const googleDriveSubpage = querySelectorShadow(document.body, elementPath);
+    assertTrue(googleDriveSubpage instanceof HTMLElement);
+    return googleDriveSubpage as SettingsGoogleDriveSubpageElement;
+  }
+
+  // Finds the google drive settings subpage element.
+  private googleDriveSettings(): GoogleDriveSettings {
+    const googleDriveSubpage = this.googleDriveSubpage();
+    assertTrue(googleDriveSubpage.shadowRoot !== null);
+    return new GoogleDriveSettings(googleDriveSubpage);
+  }
+
+  // Ensures the page is navigated to the google drive settings.
+  async assertOnGoogleDriveSettings():
+      Promise<{googleDriveSettings: GoogleDriveSettingsRemote}> {
+    const googleDriveSettings = await retry(() => this.googleDriveSettings());
+    const receiver = new GoogleDriveSettingsReceiver(googleDriveSettings);
+    const remote = receiver.$.bindNewPipeAndPassRemote();
+    return {googleDriveSettings: remote};
   }
 }
 

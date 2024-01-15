@@ -3,26 +3,27 @@
 // found in the LICENSE file.
 
 import 'chrome://diagnostics/routine_result_entry.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
 import {RoutineGroup} from 'chrome://diagnostics/routine_group.js';
 import {ExecutionProgress, ResultStatusItem} from 'chrome://diagnostics/routine_list_executor.js';
 import {RoutineResultEntryElement} from 'chrome://diagnostics/routine_result_entry.js';
 import {RoutineResult, RoutineType, StandardRoutineResult} from 'chrome://diagnostics/system_routine_controller.mojom-webui.js';
 import {BadgeType, TextBadgeElement} from 'chrome://diagnostics/text_badge.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
-import {isVisible} from '../../test_util.js';
+import {isVisible} from '../test_util.js';
 
 import * as dx_utils from './diagnostics_test_utils.js';
 
-export function routineResultEntryTestSuite() {
+suite('routineResultEntryTestSuite', function() {
   /** @type {?RoutineResultEntryElement} */
   let routineResultEntryElement = null;
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes.emptyHTML;
   });
 
   teardown(function() {
@@ -86,7 +87,7 @@ export function routineResultEntryTestSuite() {
   function getAnnoucedText() {
     assertTrue(!!routineResultEntryElement);
 
-    return routineResultEntryElement.announcedText_;
+    return routineResultEntryElement.announcedText;
   }
 
   /**
@@ -320,4 +321,4 @@ export function routineResultEntryTestSuite() {
           assertEquals(expectedAnnounceText, getAnnoucedText());
         });
   });
-}
+});

@@ -2,12 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert, assertString} from '../assert.js';
+import {assert, assertI18nString} from '../assert.js';
 import * as dom from '../dom.js';
 import {I18nString} from '../i18n_string.js';
 import * as loadTimeData from '../models/load_time_data.js';
 import {ViewName} from '../type.js';
-import {assertEnumVariant} from '../util.js';
 
 import {EnterOptions, LeaveCondition, View} from './view.js';
 
@@ -24,18 +23,10 @@ export const WarningType = {
 /* eslint-enable @typescript-eslint/naming-convention */
 
 /**
- * Asserts that the argument is an I18nString, throws error otherwise.
- */
-function assertI18nString(value: unknown): I18nString {
-  const stringValue = assertString(value);
-  return assertEnumVariant(I18nString, stringValue);
-}
-
-/**
  * Creates the warning-view controller.
  */
 export class Warning extends View {
-  private readonly errorNames: I18nString[] = [];
+  private errorNames: I18nString[] = [];
 
   constructor() {
     super(ViewName.WARNING);
@@ -63,21 +54,27 @@ export class Warning extends View {
     this.updateMessage();
   }
 
+  // If `value` is not specified in the `condition`, all the error will be
+  // cleared.
   override leaving(condition: LeaveCondition): boolean {
     assert(condition.kind === 'CLOSED');
 
-    // Recovered error-name for leaving the view.
-    const name = assertI18nString(condition.val);
+    if (condition.val === undefined) {
+      this.errorNames = [];
+    } else {
+      // Recovered error-name for leaving the view.
+      const name = assertI18nString(condition.val);
 
-    // Remove the recovered error from the stack but don't leave the view until
-    // there is no error left in the stack.
-    const index = this.errorNames.indexOf(name);
-    if (index !== -1) {
-      this.errorNames.splice(index, 1);
-    }
-    if (this.errorNames.length) {
-      this.updateMessage();
-      return false;
+      // Remove the recovered error from the stack but don't leave the view
+      // until there is no error left in the stack.
+      const index = this.errorNames.indexOf(name);
+      if (index !== -1) {
+        this.errorNames.splice(index, 1);
+      }
+      if (this.errorNames.length > 0) {
+        this.updateMessage();
+        return false;
+      }
     }
     dom.get('#error-msg', HTMLElement).textContent = '';
     return true;

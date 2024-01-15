@@ -11,6 +11,7 @@
 #include "ash/assistant/assistant_notification_expiry_monitor.h"
 #include "ash/assistant/util/deep_link_util.h"
 #include "ash/constants/notifier_catalogs.h"
+#include "ash/public/cpp/assistant/assistant_state.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller.h"
 #include "ash/public/cpp/notification_utils.h"
 #include "ash/shell.h"
@@ -46,7 +47,7 @@ std::unique_ptr<message_center::Notification> CreateSystemNotification(
     data.buttons.emplace_back(base::UTF8ToUTF16(button.label));
 
   std::unique_ptr<message_center::Notification> system_notification =
-      ash::CreateSystemNotification(
+      ash::CreateSystemNotificationPtr(
           message_center::NOTIFICATION_TYPE_SIMPLE, notification.client_id,
           title, message, display_source, GURL(), notifier_id, data,
           /*delegate=*/nullptr, chromeos::kNotificationAssistantIcon,
@@ -168,8 +169,10 @@ void AssistantNotificationControllerImpl::OnNotificationRemoved(
       notification.client_id, /*by_user=*/false);
 
   // Dismiss the notification on the server to sync across devices.
-  if (!from_server)
+  if (!from_server && AssistantState::Get()->assistant_status() ==
+                          assistant::AssistantStatus::READY) {
     assistant_->DismissNotification(notification);
+  }
 }
 
 void AssistantNotificationControllerImpl::OnAllNotificationsRemoved(
@@ -182,8 +185,8 @@ void AssistantNotificationControllerImpl::OnAllNotificationsRemoved(
 
 void AssistantNotificationControllerImpl::OnNotificationClicked(
     const std::string& id,
-    const absl::optional<int>& button_index,
-    const absl::optional<std::u16string>& reply) {
+    const std::optional<int>& button_index,
+    const std::optional<std::u16string>& reply) {
   const AssistantNotification* notification = model_.GetNotificationById(id);
   if (!notification)
     return;
@@ -219,7 +222,10 @@ void AssistantNotificationControllerImpl::OnNotificationClicked(
   // -------------------------------------------------
   // Action: | Top Level | Button 1 | Button 2 | ...
   const int action_index = button_index.value_or(-1) + 1;
-  assistant_->RetrieveNotification(*notification, action_index);
+  if (AssistantState::Get()->assistant_status() ==
+      assistant::AssistantStatus::READY) {
+    assistant_->RetrieveNotification(*notification, action_index);
+  }
 }
 
 void AssistantNotificationControllerImpl::OnNotificationRemoved(

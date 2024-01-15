@@ -9,7 +9,6 @@
 #include "base/logging.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/chrome_typography.h"
-#include "chrome/browser/ui/views/md_text_button_with_down_arrow.h"
 #include "chrome/browser/ui/views/webauthn/authenticator_request_sheet_view.h"
 #include "chrome/browser/ui/views/webauthn/sheet_view_factory.h"
 #include "chrome/browser/ui/webauthn/authenticator_request_sheet_model.h"
@@ -18,16 +17,11 @@
 #include "components/strings/grit/components_strings.h"
 #include "components/web_modal/web_contents_modal_dialog_manager.h"
 #include "components/web_modal/web_contents_modal_dialog_manager_delegate.h"
-#include "device/fido/features.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
-#include "ui/gfx/color_utils.h"
-#include "ui/gfx/geometry/insets.h"
-#include "ui/gfx/paint_vector_icon.h"
-#include "ui/views/border.h"
-#include "ui/views/layout/box_layout.h"
+#include "ui/views/controls/button/label_button.h"
+#include "ui/views/controls/button/md_text_button.h"
 #include "ui/views/layout/fill_layout.h"
-#include "ui/views/vector_icons.h"
 
 // static
 void ShowAuthenticatorRequestDialog(content::WebContents* web_contents,
@@ -44,8 +38,9 @@ void ShowAuthenticatorRequestDialog(content::WebContents* web_contents,
   // should audit this.
   auto* manager = web_modal::WebContentsModalDialogManager::FromWebContents(
       constrained_window::GetTopLevelWebContents(web_contents));
-  if (!manager)
+  if (!manager) {
     return;
+  }
 
   new AuthenticatorRequestDialogView(web_contents, model);
 }
@@ -90,10 +85,12 @@ void AuthenticatorRequestDialogView::UpdateUIForCurrentSheet() {
   sheet_->ReInitChildViews();
 
   int buttons = ui::DIALOG_BUTTON_NONE;
-  if (sheet()->model()->IsAcceptButtonVisible())
+  if (sheet()->model()->IsAcceptButtonVisible()) {
     buttons |= ui::DIALOG_BUTTON_OK;
-  if (sheet()->model()->IsCancelButtonVisible())
+  }
+  if (sheet()->model()->IsCancelButtonVisible()) {
     buttons |= ui::DIALOG_BUTTON_CANCEL;
+  }
   SetButtons(buttons);
   SetDefaultButton((buttons & ui::DIALOG_BUTTON_OK) ? ui::DIALOG_BUTTON_OK
                                                     : ui::DIALOG_BUTTON_NONE);
@@ -101,18 +98,29 @@ void AuthenticatorRequestDialogView::UpdateUIForCurrentSheet() {
   SetButtonLabel(ui::DIALOG_BUTTON_CANCEL,
                  sheet_->model()->GetCancelButtonLabel());
 
-  // Whether to show the `Choose another option` button, or other dialog
-  // configuration is delegated to the |sheet_|, and the new sheet likely wants
-  // to provide a new configuration.
-  other_mechanisms_button_->SetVisible(ShouldOtherMechanismsButtonBeVisible());
-  manage_devices_button_->SetVisible(
-      sheet_->model()->IsManageDevicesButtonVisible());
+  if (ShouldOtherMechanismsButtonBeVisible()) {
+    SetExtraView(std::make_unique<views::MdTextButton>(
+        base::BindRepeating(
+            &AuthenticatorRequestDialogView::OtherMechanismsButtonPressed,
+            base::Unretained(this)),
+        sheet_->model()->GetOtherMechanismButtonLabel()));
+  } else if (sheet_->model()->IsManageDevicesButtonVisible()) {
+    SetExtraView(std::make_unique<views::MdTextButton>(
+        base::BindRepeating(
+            &AuthenticatorRequestDialogView::ManageDevicesButtonPressed,
+            base::Unretained(this)),
+        l10n_util::GetStringUTF16(IDS_WEBAUTHN_MANAGE_DEVICES)));
+  } else {
+    SetExtraView(std::make_unique<views::View>());
+  }
+
   DialogModelChanged();
 
   // If the widget is not yet shown or already being torn down, we are done. In
   // the former case, sizing/layout will happen once the dialog is visible.
-  if (!GetWidget())
+  if (!GetWidget()) {
     return;
+  }
 
   // Force re-layout of the entire dialog client view, which includes the sheet
   // content as well as the button row on the bottom.
@@ -125,16 +133,18 @@ void AuthenticatorRequestDialogView::UpdateUIForCurrentSheet() {
   // TODO(https://crbug.com/849323): Investigate how a web-modal dialog's
   // lifetime compares to that of the parent WebContents. Take a conservative
   // approach for now.
-  if (!web_contents())
+  if (!web_contents()) {
     return;
+  }
 
   // The |dialog_manager| might temporarily be unavailable while the tab is
   // being dragged from one browser window to the other.
   auto* dialog_manager =
       web_modal::WebContentsModalDialogManager::FromWebContents(
           constrained_window::GetTopLevelWebContents(web_contents()));
-  if (!dialog_manager)
+  if (!dialog_manager) {
     return;
+  }
 
   // Update the dialog size and position, as the preferred size of the sheet
   // might have changed.
@@ -142,18 +152,14 @@ void AuthenticatorRequestDialogView::UpdateUIForCurrentSheet() {
       GetWidget(), dialog_manager->delegate()->GetWebContentsModalDialogHost());
 
   // Reset focus to the highest priority control on the new/updated sheet.
-  if (GetInitiallyFocusedView())
+  if (GetInitiallyFocusedView()) {
     GetInitiallyFocusedView()->RequestFocus();
+  }
 }
 
 bool AuthenticatorRequestDialogView::ShouldOtherMechanismsButtonBeVisible()
     const {
-  if (base::FeatureList::IsEnabled(
-          device::kWebAuthnNewDiscoverableCredentialsUi)) {
-    return sheet_->model()->IsOtherMechanismButtonVisible();
-  }
-  return sheet_->model()->GetOtherMechanismsMenuModel() &&
-         sheet_->model()->GetOtherMechanismsMenuModel()->GetItemCount();
+  return sheet_->model()->IsOtherMechanismButtonVisible();
 }
 
 bool AuthenticatorRequestDialogView::Accept() {
@@ -176,8 +182,7 @@ bool AuthenticatorRequestDialogView::IsDialogButtonEnabled(
     case ui::DIALOG_BUTTON_CANCEL:
       return true;  // Cancel is always enabled if visible.
   }
-  NOTREACHED();
-  return false;
+  NOTREACHED_NORETURN();
 }
 
 views::View* AuthenticatorRequestDialogView::GetInitiallyFocusedView() {
@@ -190,19 +195,22 @@ views::View* AuthenticatorRequestDialogView::GetInitiallyFocusedView() {
 
   views::View* intially_focused_sheet_control =
       sheet()->GetInitiallyFocusedView();
-  if (intially_focused_sheet_control)
+  if (intially_focused_sheet_control) {
     return intially_focused_sheet_control;
+  }
 
   if (sheet()->model()->IsAcceptButtonVisible() &&
       sheet()->model()->IsAcceptButtonEnabled()) {
     return GetOkButton();
   }
 
-  if (ShouldOtherMechanismsButtonBeVisible())
-    return other_mechanisms_button_;
+  if (ShouldOtherMechanismsButtonBeVisible()) {
+    return GetExtraView();
+  }
 
-  if (sheet()->model()->IsCancelButtonVisible())
+  if (sheet()->model()->IsCancelButtonVisible()) {
     return GetCancelButton();
+  }
 
   return nullptr;
 }
@@ -263,38 +271,6 @@ AuthenticatorRequestDialogView::AuthenticatorRequestDialogView(
   DCHECK(!model_->should_dialog_be_closed());
   model_->AddObserver(this);
 
-  // This View contains buttons that can appear at the bottom left of the
-  // dialog. Only a single button is expected to be visible at a time so the
-  // padding between them is zero.
-  auto hbox = std::make_unique<views::View>();
-  hbox->SetLayoutManager(std::make_unique<views::BoxLayout>(
-      views::BoxLayout::Orientation::kHorizontal, gfx::Insets(), 0));
-
-  if (base::FeatureList::IsEnabled(
-          device::kWebAuthnNewDiscoverableCredentialsUi)) {
-    other_mechanisms_button_ = new views::MdTextButton(
-        base::BindRepeating(
-            &AuthenticatorRequestDialogView::OtherMechanismsButtonPressed,
-            base::Unretained(this)),
-        l10n_util::GetStringUTF16(IDS_WEBAUTHN_TRY_ANOTHER_WAY));
-  } else {
-    other_mechanisms_button_ = new views::MdTextButtonWithDownArrow(
-        base::BindRepeating(
-            &AuthenticatorRequestDialogView::OtherMechanismsButtonPressed,
-            base::Unretained(this)),
-        l10n_util::GetStringUTF16(IDS_WEBAUTHN_TRANSPORT_POPUP_LABEL));
-  }
-  hbox->AddChildView(other_mechanisms_button_.get());
-
-  manage_devices_button_ = new views::MdTextButton(
-      base::BindRepeating(
-          &AuthenticatorRequestDialogView::ManageDevicesButtonPressed,
-          base::Unretained(this)),
-      l10n_util::GetStringUTF16(IDS_WEBAUTHN_MANAGE_DEVICES));
-  hbox->AddChildView(manage_devices_button_.get());
-
-  SetExtraView(std::move(hbox));
-
   SetCloseCallback(
       base::BindOnce(&AuthenticatorRequestDialogView::OnDialogClosing,
                      base::Unretained(this)));
@@ -331,25 +307,7 @@ void AuthenticatorRequestDialogView::Show() {
 }
 
 void AuthenticatorRequestDialogView::OtherMechanismsButtonPressed() {
-  if (base::FeatureList::IsEnabled(
-          device::kWebAuthnNewDiscoverableCredentialsUi)) {
-    sheet_->model()->OnBack();
-    return;
-  }
-
-  auto* other_mechanisms_menu_model =
-      sheet_->model()->GetOtherMechanismsMenuModel();
-  DCHECK(other_mechanisms_menu_model);
-  DCHECK_GE(other_mechanisms_menu_model->GetItemCount(), 1u);
-
-  other_mechanisms_menu_runner_ = std::make_unique<views::MenuRunner>(
-      other_mechanisms_menu_model, views::MenuRunner::COMBOBOX);
-
-  gfx::Rect anchor_bounds = other_mechanisms_button_->GetBoundsInScreen();
-  other_mechanisms_menu_runner_->RunMenuAt(
-      other_mechanisms_button_->GetWidget(), nullptr /* MenuButtonController */,
-      anchor_bounds, views::MenuAnchorPosition::kTopLeft,
-      ui::MENU_SOURCE_MOUSE);
+  sheet_->model()->OnBack();
 }
 
 void AuthenticatorRequestDialogView::ManageDevicesButtonPressed() {
@@ -382,9 +340,10 @@ void AuthenticatorRequestDialogView::OnDialogClosing() {
   // This should not be a problem as the native widget will never synchronously
   // close and hence not synchronously destroy the model while it's iterating
   // over observers in SetCurrentStep().
-  if (model_ && !model_->should_dialog_be_closed())
+  if (model_ && !model_->should_dialog_be_closed()) {
     Cancel();
+  }
 }
 
-BEGIN_METADATA(AuthenticatorRequestDialogView, views::DialogDelegateView)
+BEGIN_METADATA(AuthenticatorRequestDialogView)
 END_METADATA

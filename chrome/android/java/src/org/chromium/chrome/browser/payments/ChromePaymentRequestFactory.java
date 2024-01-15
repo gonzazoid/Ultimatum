@@ -30,14 +30,11 @@ import org.chromium.content_public.browser.WebContentsStatics;
 import org.chromium.payments.mojom.PaymentRequest;
 import org.chromium.services.service_manager.InterfaceFactory;
 
-/**
- * Creates an instance of PaymentRequest for use in Chrome.
- */
+/** Creates an instance of PaymentRequest for use in Chrome. */
 public class ChromePaymentRequestFactory implements InterfaceFactory<PaymentRequest> {
     // Tests can inject behaviour on future PaymentRequests via these objects.
     public static ChromePaymentRequestService.Delegate sDelegateForTest;
-    @Nullable
-    private static ChromePaymentRequestDelegateImplObserverForTest sObserverForTest;
+    @Nullable private static ChromePaymentRequestDelegateImplObserverForTest sObserverForTest;
     private final RenderFrameHost mRenderFrameHost;
 
     /** Observes the {@link ChromePaymentRequestDelegateImpl} for testing. */
@@ -87,7 +84,7 @@ public class ChromePaymentRequestFactory implements InterfaceFactory<PaymentRequ
                     PaymentRequestServiceUtil.getLiveWebContents(mRenderFrameHost);
             if (liveWebContents == null) return null;
             if (!OriginSecurityChecker.isSchemeCryptographic(
-                        liveWebContents.getLastCommittedUrl())) {
+                    liveWebContents.getLastCommittedUrl())) {
                 return null;
             }
             return SslValidityChecker.getInvalidSslCertificateErrorMessage(liveWebContents);
@@ -99,12 +96,11 @@ public class ChromePaymentRequestFactory implements InterfaceFactory<PaymentRequ
                     PaymentRequestServiceUtil.getLiveWebContents(mRenderFrameHost);
             return liveWebContents != null
                     && UserPrefs.get(Profile.fromWebContents(liveWebContents))
-                               .getBoolean(Pref.CAN_MAKE_PAYMENT_ENABLED);
+                            .getBoolean(Pref.CAN_MAKE_PAYMENT_ENABLED);
         }
 
         @Override
-        @Nullable
-        public String getTwaPackageName() {
+        public @Nullable String getTwaPackageName() {
             WebContents liveWebContents =
                     PaymentRequestServiceUtil.getLiveWebContents(mRenderFrameHost);
             if (liveWebContents == null) return null;
@@ -127,7 +123,6 @@ public class ChromePaymentRequestFactory implements InterfaceFactory<PaymentRequ
     }
 
     /** Set an observer for the payment request service, cannot be null. */
-    @VisibleForTesting
     public static void setChromePaymentRequestDelegateImplObserverForTest(
             ChromePaymentRequestDelegateImplObserverForTest observer) {
         assert observer != null;
@@ -153,8 +148,8 @@ public class ChromePaymentRequestFactory implements InterfaceFactory<PaymentRequ
             ChromePaymentRequestDelegateImpl delegateImpl =
                     new ChromePaymentRequestDelegateImpl(mRenderFrameHost);
             if (sObserverForTest != null) {
-                sObserverForTest.onCreatedChromePaymentRequestDelegateImpl(/*delegateImpl=*/
-                        delegateImpl);
+                sObserverForTest.onCreatedChromePaymentRequestDelegateImpl(
+                        /* delegateImpl= */ delegateImpl);
             }
             delegate = delegateImpl;
         }
@@ -163,8 +158,12 @@ public class ChromePaymentRequestFactory implements InterfaceFactory<PaymentRequ
         if (webContents == null || webContents.isDestroyed()) return new InvalidPaymentRequest();
 
         return new MojoPaymentRequestGateKeeper(
-                (client, onClosed)
-                        -> new PaymentRequestService(mRenderFrameHost, client, onClosed, delegate,
+                (client, onClosed) ->
+                        new PaymentRequestService(
+                                mRenderFrameHost,
+                                client,
+                                onClosed,
+                                delegate,
                                 PaymentAppServiceBridge::new));
     }
 }

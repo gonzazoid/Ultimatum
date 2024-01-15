@@ -4,11 +4,12 @@
 
 #include "chrome/browser/enterprise/connectors/analysis/file_transfer_analysis_delegate.h"
 
+#include <numeric>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ptr_util.h"
 #include "base/no_destructor.h"
 #include "chrome/browser/ash/file_manager/volume_manager.h"
@@ -81,7 +82,7 @@ class GetFileURLsDelegate : public storage::RecursiveOperationDelegate {
     }
 
     file_system_context()->operation_runner()->GetMetadata(
-        url, storage::FileSystemOperation::GET_METADATA_FIELD_IS_DIRECTORY,
+        url, {storage::FileSystemOperation::GetMetadataField::kIsDirectory},
         base::BindOnce(&GetFileURLsDelegate::OnGetMetadata,
                        weak_ptr_factory_.GetWeakPtr(), url,
                        std::move(callback)));
@@ -130,8 +131,9 @@ bool IsInSameFileSystem(Profile* profile,
                         storage::FileSystemURL source_url,
                         storage::FileSystemURL destination_url) {
   // Cheap check: source file system url.
-  if (!source_url.IsInSameFileSystem(destination_url))
+  if (!source_url.IsInSameFileSystem(destination_url)) {
     return false;
+  }
 
   // For some URLs FileSystemURL's IsInSameFileSystem function returns false
   // positives. Which `volume_manager` is able to properly determine.
@@ -154,6 +156,69 @@ bool IsInSameFileSystem(Profile* profile,
 }  // namespace
 
 namespace enterprise_connectors {
+
+// static
+FileTransferAnalysisDelegate::FileTransferAnalysisResult
+FileTransferAnalysisDelegate::FileTransferAnalysisResult::Allowed() {
+  return FileTransferAnalysisResult(
+      Verdict::ALLOWED, /*final_result=*/absl::nullopt, /*tag=*/std::string());
+}
+
+// static
+FileTransferAnalysisDelegate::FileTransferAnalysisResult
+FileTransferAnalysisDelegate::FileTransferAnalysisResult::Blocked(
+    FinalContentAnalysisResult final_result,
+    const std::string& tag) {
+  return FileTransferAnalysisResult(Verdict::BLOCKED, final_result, tag);
+}
+
+// static
+FileTransferAnalysisDelegate::FileTransferAnalysisResult
+FileTransferAnalysisDelegate::FileTransferAnalysisResult::Unknown() {
+  return FileTransferAnalysisResult(
+      Verdict::UNKNOWN, /*final_result=*/absl::nullopt, /*tag=*/std::string());
+}
+
+const std::string&
+FileTransferAnalysisDelegate::FileTransferAnalysisResult::tag() const {
+  return tag_;
+}
+
+const absl::optional<FinalContentAnalysisResult>
+FileTransferAnalysisDelegate::FileTransferAnalysisResult::final_result() const {
+  return final_result_;
+}
+
+FileTransferAnalysisDelegate::FileTransferAnalysisResult::
+    FileTransferAnalysisResult(
+        Verdict verdict,
+        absl::optional<FinalContentAnalysisResult> final_result,
+        const std::string& tag)
+    : verdict_(verdict), final_result_(final_result), tag_(tag) {}
+
+FileTransferAnalysisDelegate::FileTransferAnalysisResult::
+    ~FileTransferAnalysisResult() = default;
+
+FileTransferAnalysisDelegate::FileTransferAnalysisResult::
+    FileTransferAnalysisResult(const FileTransferAnalysisResult& other) =
+        default;
+
+FileTransferAnalysisDelegate::FileTransferAnalysisResult&
+FileTransferAnalysisDelegate::FileTransferAnalysisResult::operator=(
+    FileTransferAnalysisResult&& other) = default;
+
+bool FileTransferAnalysisDelegate::FileTransferAnalysisResult::IsAllowed()
+    const {
+  return verdict_ == Verdict::ALLOWED;
+}
+bool FileTransferAnalysisDelegate::FileTransferAnalysisResult::IsBlocked()
+    const {
+  return verdict_ == Verdict::BLOCKED;
+}
+bool FileTransferAnalysisDelegate::FileTransferAnalysisResult::IsUnknown()
+    const {
+  return verdict_ == Verdict::UNKNOWN;
+}
 
 // static
 std::unique_ptr<FileTransferAnalysisDelegate>
@@ -230,14 +295,36 @@ FileTransferAnalysisDelegate::GetAnalysisResultAfterScan(
     storage::FileSystemURL url) {
   // Should only be called for blocking scans.
   DCHECK_EQ(settings_.block_until_verdict, BlockUntilVerdict::kBlock);
+  DCHECK_EQ(results_.size(), scanning_urls_.size());
+
   for (size_t i = 0; i < scanning_urls_.size(); ++i) {
     if (scanning_urls_[i] == url) {
-      // TODO(crbug.com/1340312): Support warning mode.
-      return results_[i].complies ? FileTransferAnalysisResult::RESULT_ALLOWED
-                                  : FileTransferAnalysisResult::RESULT_BLOCKED;
+      if (results_[i].complies ||
+          (warning_is_bypassed_ &&
+           results_[i].final_result == FinalContentAnalysisResult::WARNING)) {
+        return FileTransferAnalysisResult::Allowed();
+      }
+      return FileTransferAnalysisResult::Blocked(results_[i].final_result,
+                                                 results_[i].tag);
     }
   }
-  return FileTransferAnalysisResult::RESULT_UNKNOWN;
+  return FileTransferAnalysisResult::Unknown();
+}
+
+std::vector<storage::FileSystemURL>
+FileTransferAnalysisDelegate::GetWarnedFiles() const {
+  // Should only be called for blocking scans.
+  DCHECK_EQ(settings_.block_until_verdict, BlockUntilVerdict::kBlock);
+  DCHECK_EQ(results_.size(), scanning_urls_.size());
+
+  std::vector<storage::FileSystemURL> warned_files;
+  for (size_t i = 0; i < scanning_urls_.size(); ++i) {
+    if (!results_[i].complies &&
+        results_[i].final_result == FinalContentAnalysisResult::WARNING) {
+      warned_files.push_back(scanning_urls_[i]);
+    }
+  }
+  return warned_files;
 }
 
 void FileTransferAnalysisDelegate::UploadData(
@@ -285,34 +372,49 @@ FileTransferAnalysisDelegate::FileTransferAnalysisDelegate(
 
 void FileTransferAnalysisDelegate::BypassWarnings(
     absl::optional<std::u16string> user_justification) {
-  // TODO(crbug.com/1340312)
+  if (!warned_file_indices_.empty()) {
+    request_handler_->ReportWarningBypass(user_justification);
+    warning_is_bypassed_ = true;
+  }
 }
+
 void FileTransferAnalysisDelegate::Cancel(bool warning) {
   // TODO(crbug.com/1340313)
 }
-absl::optional<std::u16string> FileTransferAnalysisDelegate::GetCustomMessage()
-    const {
-  // TODO(crbug.com/1340312)
-  return absl::nullopt;
+
+absl::optional<std::u16string> FileTransferAnalysisDelegate::GetCustomMessage(
+    const std::string& tag) const {
+  auto it = settings_.tags.find(tag);
+  if (it == settings_.tags.end()) {
+    return absl::nullopt;
+  }
+  const std::u16string& message = it->second.custom_message.message;
+  if (message.empty()) {
+    return absl::nullopt;
+  }
+  return message;
 }
-absl::optional<GURL> FileTransferAnalysisDelegate::GetCustomLearnMoreUrl()
-    const {
-  // TODO(crbug.com/1340312)
-  return absl::nullopt;
+
+absl::optional<GURL> FileTransferAnalysisDelegate::GetCustomLearnMoreUrl(
+    const std::string& tag) const {
+  auto it = settings_.tags.find(tag);
+  if (it == settings_.tags.end()) {
+    return absl::nullopt;
+  }
+  const GURL& learn_more_url = it->second.custom_message.learn_more_url;
+  if (!learn_more_url.is_valid()) {
+    return absl::nullopt;
+  }
+  return learn_more_url;
 }
-bool FileTransferAnalysisDelegate::BypassRequiresJustification() const {
-  // TODO(crbug.com/1340312)
-  return false;
-}
-std::u16string FileTransferAnalysisDelegate::GetBypassJustificationLabel()
-    const {
-  // TODO(crbug.com/1340312)
-  return u"";
-}
-absl::optional<std::u16string>
-FileTransferAnalysisDelegate::OverrideCancelButtonText() const {
-  // TODO(crbug.com/1340313)
-  return absl::nullopt;
+
+bool FileTransferAnalysisDelegate::BypassRequiresJustification(
+    const std::string& tag) const {
+  auto it = settings_.tags.find(tag);
+  if (it == settings_.tags.end()) {
+    return false;
+  }
+  return it->second.requires_justification;
 }
 
 FilesRequestHandler*
@@ -342,9 +444,10 @@ void FileTransferAnalysisDelegate::OnGotFileURLs(
           profile_, source_url_.path()),
       SourceDestinationMatcherAsh::GetVolumeDescriptionFromPath(
           profile_, destination_url_.path()),
-      // User action id is only needed for local content analysis, leave it
-      // empty here.
-      /*user_action_id=*/std::string(), access_point_, std::move(paths),
+      // User action id and tab title are only needed for local content
+      // analysis, leave them empty here.
+      /*user_action_id=*/std::string(), /*tab_title=*/std::string(),
+      access_point_, ContentAnalysisRequest::UNKNOWN, std::move(paths),
       base::BindOnce(&FileTransferAnalysisDelegate::ContentAnalysisCompleted,
                      weak_ptr_factory_.GetWeakPtr()));
   request_handler_->UploadData();
@@ -370,6 +473,16 @@ void FileTransferAnalysisDelegate::ContentAnalysisCompleted(
     std::vector<RequestHandlerResult> results) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   results_ = std::move(results);
+
+  // Don't show warning here, as we use multiple FileTransferAnalysisDelegate's
+  // and only want to show one warning.
+  for (size_t index = 0; index < results_.size(); ++index) {
+    FinalContentAnalysisResult result = results_[index].final_result;
+    if (result == FinalContentAnalysisResult::WARNING) {
+      warned_file_indices_.push_back(index);
+    }
+  }
+
   DCHECK(!callback_.is_null());
   std::move(callback_).Run();
 }

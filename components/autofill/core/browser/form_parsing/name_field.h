@@ -10,21 +10,19 @@
 #include "base/compiler_specific.h"
 #include "base/gtest_prod_util.h"
 #include "components/autofill/core/browser/autofill_field.h"
+#include "components/autofill/core/browser/country_type.h"
 #include "components/autofill/core/browser/form_parsing/form_field.h"
 #include "components/autofill/core/common/language_code.h"
 
 namespace autofill {
 
 class AutofillScanner;
-class LogManager;
 
 // A form field that can parse either a FullNameField or a FirstLastNameField.
 class NameField : public FormField {
  public:
-  static std::unique_ptr<FormField> Parse(AutofillScanner* scanner,
-                                          const LanguageCode& page_language,
-                                          PatternSource pattern_source,
-                                          LogManager* log_manager);
+  static std::unique_ptr<FormField> Parse(ParsingContext& context,
+                                          AutofillScanner* scanner);
 
   NameField(const NameField&) = delete;
   NameField& operator=(const NameField&) = delete;

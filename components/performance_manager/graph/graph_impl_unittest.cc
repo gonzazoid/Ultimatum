@@ -22,6 +22,8 @@ namespace performance_manager {
 
 using GraphImplTest = GraphTestHarness;
 
+using ::testing::UnorderedElementsAreArray;
+
 TEST_F(GraphImplTest, SafeCasting) {
   const Graph* graph_base = graph();
   EXPECT_EQ(graph(), GraphImpl::FromGraph(graph_base));
@@ -33,24 +35,23 @@ TEST_F(GraphImplTest, GetSystemNodeImpl) {
 }
 
 TEST_F(GraphImplTest, GetProcessNodeByPid) {
-  TestNodeWrapper<ProcessNodeImpl> process =
-      TestNodeWrapper<ProcessNodeImpl>::Create(graph());
-  EXPECT_EQ(base::kNullProcessId, process->process_id());
-  EXPECT_FALSE(process->process().IsValid());
+  TestNodeWrapper<ProcessNodeImpl> process = CreateNode<ProcessNodeImpl>();
+  EXPECT_EQ(base::kNullProcessId, process->GetProcessId());
+  EXPECT_FALSE(process->GetProcess().IsValid());
 
   const base::Process self = base::Process::Current();
 
   EXPECT_EQ(nullptr, graph()->GetProcessNodeByPid(self.Pid()));
   process->SetProcess(self.Duplicate(),
                       /* launch_time=*/base::TimeTicks::Now());
-  EXPECT_TRUE(process->process().IsValid());
-  EXPECT_EQ(self.Pid(), process->process_id());
+  EXPECT_TRUE(process->GetProcess().IsValid());
+  EXPECT_EQ(self.Pid(), process->GetProcessId());
   EXPECT_EQ(process.get(), graph()->GetProcessNodeByPid(self.Pid()));
 
   // Validate that an exited process isn't removed (yet).
   process->SetProcessExitStatus(0xCAFE);
-  EXPECT_FALSE(process->process().IsValid());
-  EXPECT_EQ(self.Pid(), process->process_id());
+  EXPECT_FALSE(process->GetProcess().IsValid());
+  EXPECT_EQ(self.Pid(), process->GetProcessId());
   EXPECT_EQ(process.get(), graph()->GetProcessNodeByPid(self.Pid()));
 
   process.reset();
@@ -64,10 +65,8 @@ TEST_F(GraphImplTest, PIDReuse) {
   // PID has been reused for a new process.
   static base::Process self = base::Process::Current();
 
-  TestNodeWrapper<ProcessNodeImpl> process1 =
-      TestNodeWrapper<ProcessNodeImpl>::Create(graph());
-  TestNodeWrapper<ProcessNodeImpl> process2 =
-      TestNodeWrapper<ProcessNodeImpl>::Create(graph());
+  TestNodeWrapper<ProcessNodeImpl> process1 = CreateNode<ProcessNodeImpl>();
+  TestNodeWrapper<ProcessNodeImpl> process2 = CreateNode<ProcessNodeImpl>();
 
   process1->SetProcess(self.Duplicate(),
                        /* launch_time=*/base::TimeTicks::Now());
@@ -92,8 +91,11 @@ TEST_F(GraphImplTest, GetAllCUsByType) {
   MockMultiplePagesInSingleProcessGraph mock_graph(graph());
 
   std::vector<ProcessNodeImpl*> processes = graph()->GetAllProcessNodeImpls();
-  ASSERT_EQ(1u, processes.size());
+
+  // Graph contains a browser process and 1 renderer process.
+  ASSERT_EQ(2u, processes.size());
   EXPECT_NE(nullptr, processes[0]);
+  EXPECT_NE(nullptr, processes[1]);
 
   std::vector<FrameNodeImpl*> frames = graph()->GetAllFrameNodeImpls();
   ASSERT_EQ(2u, frames.size());
@@ -104,6 +106,120 @@ TEST_F(GraphImplTest, GetAllCUsByType) {
   ASSERT_EQ(2u, pages.size());
   EXPECT_NE(nullptr, pages[0]);
   EXPECT_NE(nullptr, pages[1]);
+}
+
+TEST_F(GraphImplTest, Visitors) {
+  MockMultiplePagesInSingleProcessGraph mock_graph(graph());
+
+  std::vector<const FrameNode*> visited_frame_nodes;
+  EXPECT_EQ(true, graph()->VisitAllFrameNodes([&](const FrameNode* node) {
+    visited_frame_nodes.push_back(node);
+    return true;
+  }));
+  EXPECT_THAT(visited_frame_nodes,
+              UnorderedElementsAreArray(graph()->GetAllFrameNodes()));
+
+  std::vector<const PageNode*> visited_page_nodes;
+  EXPECT_EQ(true, graph()->VisitAllPageNodes([&](const PageNode* node) {
+    visited_page_nodes.push_back(node);
+    return true;
+  }));
+  EXPECT_THAT(visited_page_nodes,
+              UnorderedElementsAreArray(graph()->GetAllPageNodes()));
+
+  std::vector<const ProcessNode*> visited_process_nodes;
+  EXPECT_EQ(true, graph()->VisitAllProcessNodes([&](const ProcessNode* node) {
+    visited_process_nodes.push_back(node);
+    return true;
+  }));
+  EXPECT_THAT(visited_process_nodes,
+              UnorderedElementsAreArray(graph()->GetAllProcessNodes()));
+
+  std::vector<const WorkerNode*> visited_worker_nodes;
+  EXPECT_EQ(true, graph()->VisitAllWorkerNodes([&](const WorkerNode* node) {
+    visited_worker_nodes.push_back(node);
+    return true;
+  }));
+  EXPECT_THAT(visited_worker_nodes,
+              UnorderedElementsAreArray(graph()->GetAllWorkerNodes()));
+
+  size_t visited_nodes = 0;
+  EXPECT_EQ(false, graph()->VisitAllFrameNodes([&](const FrameNode*) {
+    ++visited_nodes;
+    return false;
+  }));
+  EXPECT_EQ(false, graph()->VisitAllPageNodes([&](const PageNode*) {
+    ++visited_nodes;
+    return false;
+  }));
+  EXPECT_EQ(false, graph()->VisitAllProcessNodes([&](const ProcessNode*) {
+    ++visited_nodes;
+    return false;
+  }));
+  // There are no worker nodes, so the visitor never runs.
+  EXPECT_EQ(true, graph()->VisitAllWorkerNodes([&](const WorkerNode*) {
+    ++visited_nodes;
+    return false;
+  }));
+  // Visited one node of each type except workers.
+  EXPECT_EQ(visited_nodes, 3u);
+}
+
+TEST_F(GraphImplTest, ImplVisitors) {
+  MockMultiplePagesInSingleProcessGraph mock_graph(graph());
+
+  std::vector<FrameNodeImpl*> visited_frame_nodes;
+  EXPECT_EQ(true, graph()->VisitAllFrameNodeImpls([&](FrameNodeImpl* node) {
+    visited_frame_nodes.push_back(node);
+    return true;
+  }));
+  EXPECT_THAT(visited_frame_nodes,
+              UnorderedElementsAreArray(graph()->GetAllFrameNodeImpls()));
+
+  std::vector<PageNodeImpl*> visited_page_nodes;
+  EXPECT_EQ(true, graph()->VisitAllPageNodeImpls([&](PageNodeImpl* node) {
+    visited_page_nodes.push_back(node);
+    return true;
+  }));
+  EXPECT_THAT(visited_page_nodes,
+              UnorderedElementsAreArray(graph()->GetAllPageNodeImpls()));
+
+  std::vector<ProcessNodeImpl*> visited_process_nodes;
+  EXPECT_EQ(true, graph()->VisitAllProcessNodeImpls([&](ProcessNodeImpl* node) {
+    visited_process_nodes.push_back(node);
+    return true;
+  }));
+  EXPECT_THAT(visited_process_nodes,
+              UnorderedElementsAreArray(graph()->GetAllProcessNodeImpls()));
+
+  std::vector<WorkerNodeImpl*> visited_worker_nodes;
+  EXPECT_EQ(true, graph()->VisitAllWorkerNodeImpls([&](WorkerNodeImpl* node) {
+    visited_worker_nodes.push_back(node);
+    return true;
+  }));
+  EXPECT_THAT(visited_worker_nodes,
+              UnorderedElementsAreArray(graph()->GetAllWorkerNodeImpls()));
+
+  size_t visited_nodes = 0;
+  EXPECT_EQ(false, graph()->VisitAllFrameNodeImpls([&](FrameNodeImpl*) {
+    ++visited_nodes;
+    return false;
+  }));
+  EXPECT_EQ(false, graph()->VisitAllPageNodeImpls([&](PageNodeImpl*) {
+    ++visited_nodes;
+    return false;
+  }));
+  EXPECT_EQ(false, graph()->VisitAllProcessNodeImpls([&](ProcessNodeImpl*) {
+    ++visited_nodes;
+    return false;
+  }));
+  // There are no worker nodes, so the visitor never runs.
+  EXPECT_EQ(true, graph()->VisitAllWorkerNodeImpls([&](WorkerNodeImpl*) {
+    ++visited_nodes;
+    return false;
+  }));
+  // Visited one node of each type except workers.
+  EXPECT_EQ(visited_nodes, 3u);
 }
 
 namespace {
@@ -125,6 +241,7 @@ using testing::Invoke;
 
 TEST_F(GraphImplTest, ObserverWorks) {
   std::unique_ptr<GraphImpl> graph = std::make_unique<GraphImpl>();
+  graph->SetUp();
   Graph* raw_graph = graph.get();
 
   MockObserver obs;
@@ -174,6 +291,7 @@ TEST_F(GraphImplTest, GraphOwned) {
 
   // Pass both objects to the graph.
   std::unique_ptr<GraphImpl> graph = std::make_unique<GraphImpl>();
+  graph->SetUp();
   EXPECT_EQ(0u, graph->GraphOwnedCountForTesting());
   EXPECT_FALSE(raw1->passed_to_called());
   graph->PassToGraph(std::move(foo1));
@@ -208,57 +326,59 @@ class TestNodeDataDescriber : public NodeDataDescriber {
  public:
   explicit TestNodeDataDescriber(base::StringPiece name) : name_(name) {}
 
-  base::Value DescribeFrameNodeData(const FrameNode* node) const override {
-    base::Value list(base::Value::Type::LIST);
-    list.Append(name_);
-    list.Append("FrameNode");
-    return list;
+  base::Value::Dict DescribeFrameNodeData(
+      const FrameNode* node) const override {
+    base::Value::Dict dict;
+    dict.Set("name", name_);
+    dict.Set("type", "FrameNode");
+    return dict;
   }
 
-  base::Value DescribePageNodeData(const PageNode* node) const override {
-    base::Value list(base::Value::Type::LIST);
-    list.Append(name_);
-    list.Append("PageNode");
-    return list;
+  base::Value::Dict DescribePageNodeData(const PageNode* node) const override {
+    base::Value::Dict dict;
+    dict.Set("name", name_);
+    dict.Set("type", "PageNode");
+    return dict;
   }
 
-  base::Value DescribeProcessNodeData(const ProcessNode* node) const override {
-    base::Value list(base::Value::Type::LIST);
-    list.Append(name_);
-    list.Append("ProcessNode");
-    return list;
+  base::Value::Dict DescribeProcessNodeData(
+      const ProcessNode* node) const override {
+    base::Value::Dict dict;
+    dict.Set("name", name_);
+    dict.Set("type", "ProcessNode");
+    return dict;
   }
 
-  base::Value DescribeSystemNodeData(const SystemNode* node) const override {
-    base::Value list(base::Value::Type::LIST);
-    list.Append(name_);
-    list.Append("SystemNode");
-    return list;
+  base::Value::Dict DescribeSystemNodeData(
+      const SystemNode* node) const override {
+    base::Value::Dict dict;
+    dict.Set("name", name_);
+    dict.Set("type", "SystemNode");
+    return dict;
   }
 
-  base::Value DescribeWorkerNodeData(const WorkerNode* node) const override {
-    base::Value list(base::Value::Type::LIST);
-    list.Append(name_);
-    list.Append("WorkerNode");
-    return list;
+  base::Value::Dict DescribeWorkerNodeData(
+      const WorkerNode* node) const override {
+    base::Value::Dict dict;
+    dict.Set("name", name_);
+    dict.Set("type", "WorkerNode");
+    return dict;
   }
 
  private:
   const std::string name_;
 };
 
-void AssertDictValueContainsListKey(const base::Value& descr,
+void AssertDictValueContainsListKey(const base::Value::Dict& descr,
                                     const char* key,
-                                    const char* s1,
-                                    const char* s2) {
-  ASSERT_TRUE(descr.is_dict());
-  const base::Value* v = descr.FindListKey(key);
-  ASSERT_NE(nullptr, v);
+                                    const std::string s1,
+                                    const std::string s2) {
+  const base::Value::Dict* dict = descr.FindDict(key);
+  ASSERT_NE(nullptr, dict);
 
-  const auto& list = v->GetList();
-  ASSERT_EQ(2u, list.size());
-  ASSERT_EQ(list[0], base::Value(s1));
-  ASSERT_EQ(list[1], base::Value(s2));
+  ASSERT_EQ(2u, dict->size());
+  ASSERT_EQ(*(dict->FindString("name")), s1);
+  ASSERT_EQ(*(dict->FindString("type")), s2);
 }
 
 }  // namespace
@@ -268,8 +388,8 @@ TEST_F(GraphImplTest, NodeDataDescribers) {
   NodeDataDescriberRegistry* registry = graph()->GetNodeDataDescriberRegistry();
 
   // No describers->no description.
-  base::Value descr = registry->DescribeNodeData(mock_graph.frame.get());
-  EXPECT_EQ(0u, descr.DictSize());
+  base::Value::Dict descr = registry->DescribeNodeData(mock_graph.frame.get());
+  EXPECT_EQ(0u, descr.size());
 
   // Test that the default impl does nothing.
   NodeDataDescriberDefaultImpl default_impl;
@@ -281,25 +401,25 @@ TEST_F(GraphImplTest, NodeDataDescribers) {
 
   descr = registry->DescribeNodeData(mock_graph.frame.get());
   AssertDictValueContainsListKey(descr, "d1", "d1", "FrameNode");
-  EXPECT_EQ(1u, descr.DictSize());
+  EXPECT_EQ(1u, descr.size());
 
   descr = registry->DescribeNodeData(mock_graph.page.get());
   AssertDictValueContainsListKey(descr, "d1", "d1", "PageNode");
-  EXPECT_EQ(1u, descr.DictSize());
+  EXPECT_EQ(1u, descr.size());
 
   descr = registry->DescribeNodeData(mock_graph.process.get());
   AssertDictValueContainsListKey(descr, "d1", "d1", "ProcessNode");
-  EXPECT_EQ(1u, descr.DictSize());
+  EXPECT_EQ(1u, descr.size());
 
   descr = registry->DescribeNodeData(graph()->GetSystemNode());
   AssertDictValueContainsListKey(descr, "d1", "d1", "SystemNode");
-  EXPECT_EQ(1u, descr.DictSize());
+  EXPECT_EQ(1u, descr.size());
 
   auto worker = CreateNode<WorkerNodeImpl>(WorkerNode::WorkerType::kDedicated,
                                            mock_graph.process.get());
   descr = registry->DescribeNodeData(worker.get());
   AssertDictValueContainsListKey(descr, "d1", "d1", "WorkerNode");
-  EXPECT_EQ(1u, descr.DictSize());
+  EXPECT_EQ(1u, descr.size());
 
   // Unregister the default impl now that it's been verified to say nothing
   // about all node types.
@@ -310,7 +430,7 @@ TEST_F(GraphImplTest, NodeDataDescribers) {
   registry->RegisterDescriber(&d2, "d2");
 
   descr = registry->DescribeNodeData(mock_graph.frame.get());
-  EXPECT_EQ(2u, descr.DictSize());
+  EXPECT_EQ(2u, descr.size());
   AssertDictValueContainsListKey(descr, "d1", "d1", "FrameNode");
   AssertDictValueContainsListKey(descr, "d2", "d2", "FrameNode");
 
@@ -319,7 +439,7 @@ TEST_F(GraphImplTest, NodeDataDescribers) {
 
   // No describers after unregistration->no description.
   descr = registry->DescribeNodeData(mock_graph.frame.get());
-  EXPECT_EQ(0u, descr.DictSize());
+  EXPECT_EQ(0u, descr.size());
 }
 
 TEST_F(GraphImplTest, OpenersAndEmbeddersClearedOnTeardown) {

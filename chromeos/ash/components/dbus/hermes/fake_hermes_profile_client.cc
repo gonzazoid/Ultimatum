@@ -4,9 +4,11 @@
 
 #include "chromeos/ash/components/dbus/hermes/fake_hermes_profile_client.h"
 
-#include "base/bind.h"
+#include <optional>
+
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "chromeos/ash/components/dbus/hermes/hermes_profile_client.h"
 #include "chromeos/ash/components/dbus/shill/shill_device_client.h"
@@ -66,21 +68,35 @@ void FakeHermesProfileClient::SetEnableProfileBehavior(
   enable_profile_behavior_ = enable_profile_behavior;
 }
 
+void FakeHermesProfileClient::SetNextEnableCarrierProfileResult(
+    HermesResponseStatus status) {
+  CHECK(status != HermesResponseStatus::kSuccess);
+  next_enable_carrier_profile_result_ = status;
+}
+
 void FakeHermesProfileClient::EnableCarrierProfile(
     const dbus::ObjectPath& object_path,
     HermesResponseCallback callback) {
   DVLOG(1) << "Enabling Carrier Profile path=" << object_path.value();
 
+  if (next_enable_carrier_profile_result_.has_value()) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback),
+                                  next_enable_carrier_profile_result_.value()));
+    next_enable_carrier_profile_result_ = std::nullopt;
+    return;
+  }
+
   // Update carrier profile states.
   HermesProfileClient::Properties* properties = GetProperties(object_path);
   if (!properties) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback),
                                   HermesResponseStatus::kErrorUnknown));
     return;
   }
   if (properties->state().value() == hermes::profile::State::kActive) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback),
                                   HermesResponseStatus::kErrorAlreadyEnabled));
     return;
@@ -99,7 +115,7 @@ void FakeHermesProfileClient::EnableCarrierProfile(
       enable_profile_behavior_ != EnableProfileBehavior::kNotConnectable;
   UpdateCellularServices(properties->iccid().value(), connectable);
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), HermesResponseStatus::kSuccess));
 }
@@ -110,13 +126,13 @@ void FakeHermesProfileClient::DisableCarrierProfile(
   DVLOG(1) << "Disabling Carrier Profile path=" << object_path.value();
   HermesProfileClient::Properties* properties = GetProperties(object_path);
   if (!properties) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback),
                                   HermesResponseStatus::kErrorUnknown));
     return;
   }
   if (properties->state().value() == hermes::profile::State::kInactive) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback),
                                   HermesResponseStatus::kErrorAlreadyDisabled));
     return;
@@ -126,7 +142,7 @@ void FakeHermesProfileClient::DisableCarrierProfile(
   // The newly disabled profile should have connectable set to false.
   UpdateCellularServices(properties->iccid().value(), /*connectable=*/false);
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), HermesResponseStatus::kSuccess));
 }
@@ -138,14 +154,14 @@ void FakeHermesProfileClient::RenameProfile(const dbus::ObjectPath& object_path,
            << " on path: " << object_path.value();
   HermesProfileClient::Properties* properties = GetProperties(object_path);
   if (!properties) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback),
                                   HermesResponseStatus::kErrorUnknown));
     return;
   }
   properties->nick_name().ReplaceValue(new_name);
   NotifyPropertyChanged(object_path, hermes::profile::kNicknameProperty);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), HermesResponseStatus::kSuccess));
 }
@@ -181,14 +197,14 @@ void FakeHermesProfileClient::UpdateCellularDevice(
 
   // Update the cellular device properties so that they match the carrier
   // profile that was just enabled.
-  base::DictionaryValue home_provider;
-  home_provider.SetKey(shill::kNameProperty,
-                       base::Value(properties->service_provider().value()));
-  home_provider.SetKey(shill::kCountryProperty, base::Value(kDefaultCountry));
-  home_provider.SetKey(shill::kNetworkIdProperty,
-                       base::Value(properties->mcc_mnc().value()));
-  device_test->SetDeviceProperty(
-      kCellularDevicePath, shill::kHomeProviderProperty, home_provider, true);
+  base::Value::Dict home_provider;
+  home_provider.Set(shill::kNameProperty,
+                    properties->service_provider().value());
+  home_provider.Set(shill::kCountryProperty, kDefaultCountry);
+  home_provider.Set(shill::kNetworkIdProperty, properties->mcc_mnc().value());
+  device_test->SetDeviceProperty(kCellularDevicePath,
+                                 shill::kHomeProviderProperty,
+                                 base::Value(std::move(home_provider)), true);
 }
 
 void FakeHermesProfileClient::UpdateCellularServices(const std::string& iccid,
@@ -198,13 +214,13 @@ void FakeHermesProfileClient::UpdateCellularServices(const std::string& iccid,
   ShillServiceClient::TestInterface* service_test =
       ShillServiceClient::Get()->GetTestInterface();
 
-  base::Value service_list = manager_test->GetEnabledServiceList();
-  for (const base::Value& service_path : service_list.GetList()) {
-    const base::Value* properties =
+  base::Value::List service_list = manager_test->GetEnabledServiceList();
+  for (const base::Value& service_path : service_list) {
+    const base::Value::Dict* properties =
         service_test->GetServiceProperties(service_path.GetString());
-    const std::string* type = properties->FindStringKey(shill::kTypeProperty);
+    const std::string* type = properties->FindString(shill::kTypeProperty);
     const std::string* service_iccid =
-        properties->FindStringKey(shill::kIccidProperty);
+        properties->FindString(shill::kIccidProperty);
     if (!service_iccid || !type || *type != shill::kTypeCellular)
       continue;
 
@@ -230,7 +246,7 @@ void FakeHermesProfileClient::UpdateCellularServices(const std::string& iccid,
 void FakeHermesProfileClient::CallNotifyPropertyChanged(
     const dbus::ObjectPath& object_path,
     const std::string& property_name) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeHermesProfileClient::NotifyPropertyChanged,
                      base::Unretained(this), object_path, property_name));

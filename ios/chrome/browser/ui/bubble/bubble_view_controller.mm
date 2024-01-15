@@ -5,61 +5,58 @@
 #import "ios/chrome/browser/ui/bubble/bubble_view_controller.h"
 
 #import "base/notreached.h"
-#import "ios/chrome/browser/ui/util/animation_util.h"
+#import "ios/chrome/browser/shared/ui/util/animation_util.h"
+#import "ios/chrome/browser/ui/bubble/bubble_constants.h"
+#import "ios/chrome/browser/ui/bubble/bubble_view.h"
 #import "ios/chrome/common/material_timing.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
-const CGFloat kAnimationDuration = kMaterialDuration3;
 // The vertical offset distance used in the sink-down animation.
 const CGFloat kVerticalOffset = 8.0f;
 
-BubbleView* BubbleViewWithType(BubbleViewType bubbleViewType,
+BubbleView* BubbleViewWithType(BubbleViewType bubble_view_type,
                                NSString* text,
                                NSString* title,
                                UIImage* image,
-                               BubbleArrowDirection arrowDirection,
+                               BubbleArrowDirection arrow_direction,
                                BubbleAlignment alignment,
                                id<BubbleViewDelegate> delegate) {
-  BOOL showTitle = NO;
-  BOOL showImage = NO;
-  BOOL showCloseButton = NO;
-  BOOL showSnoozeButton = NO;
-  NSTextAlignment textAlignment = NSTextAlignmentNatural;
+  BOOL show_title = NO;
+  BOOL show_image = NO;
+  BOOL show_close_button = NO;
+  BOOL show_snooze_button = NO;
+  NSTextAlignment text_alignment = NSTextAlignmentNatural;
 
-  switch (bubbleViewType) {
+  switch (bubble_view_type) {
     case BubbleViewTypeDefault:
-      textAlignment = NSTextAlignmentCenter;
+      text_alignment = NSTextAlignmentCenter;
       break;
     case BubbleViewTypeWithClose:
-      showCloseButton = YES;
+      show_close_button = YES;
       break;
     case BubbleViewTypeRich:
-      showCloseButton = YES;
-      showTitle = YES;
-      showImage = YES;
+      show_close_button = YES;
+      show_title = YES;
+      show_image = YES;
       break;
     case BubbleViewTypeRichWithSnooze:
-      showCloseButton = YES;
-      showTitle = YES;
-      showImage = YES;
-      showSnoozeButton = YES;
+      show_close_button = YES;
+      show_title = YES;
+      show_image = YES;
+      show_snooze_button = YES;
       break;
   }
-  BubbleView* bubbleView =
+  BubbleView* bubble_view =
       [[BubbleView alloc] initWithText:text
-                        arrowDirection:arrowDirection
+                        arrowDirection:arrow_direction
                              alignment:alignment
-                      showsCloseButton:showCloseButton
-                                 title:showTitle ? title : nil
-                                 image:showImage ? image : nil
-                     showsSnoozeButton:showSnoozeButton
-                         textAlignment:textAlignment
+                      showsCloseButton:show_close_button
+                                 title:show_title ? title : nil
+                                 image:show_image ? image : nil
+                     showsSnoozeButton:show_snooze_button
+                         textAlignment:text_alignment
                               delegate:delegate];
-  return bubbleView;
+  return bubble_view;
 }
 
 }  // namespace
@@ -120,7 +117,7 @@ BubbleView* BubbleViewWithType(BubbleViewType bubbleViewType,
 
   // Set the y-coordinate of `frame.origin` to its final value.
   frame.origin.y = frame.origin.y + kVerticalOffset;
-  [UIView animateWithDuration:kAnimationDuration
+  [UIView animateWithDuration:kMaterialDuration3
                         delay:0.0
                       options:UIViewAnimationOptionCurveEaseOut
                    animations:^{
@@ -131,7 +128,7 @@ BubbleView* BubbleViewWithType(BubbleViewType bubbleViewType,
 }
 
 - (void)dismissAnimated:(BOOL)animated {
-  NSTimeInterval duration = (animated ? kAnimationDuration : 0.0);
+  NSTimeInterval duration = (animated ? kMaterialDuration3 : 0.0);
   [UIView animateWithDuration:duration
       animations:^{
         [self.view setAlpha:0.0f];

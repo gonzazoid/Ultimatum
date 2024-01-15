@@ -4,9 +4,13 @@
 
 #include "ash/hud_display/legend.h"
 
+#include <string_view>
+
 #include "ash/hud_display/graph.h"
 #include "ash/hud_display/hud_constants.h"
 #include "ash/hud_display/solid_source_background.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "cc/paint/paint_flags.h"
 #include "third_party/skia/include/core/SkBlendMode.h"
 #include "third_party/skia/include/core/SkPaint.h"
@@ -45,18 +49,18 @@ class LegendEntry : public views::View {
 
  private:
   const SkColor color_;
-  const Graph& graph_;
+  const raw_ref<const Graph> graph_;
   size_t value_index_ = 0;
   Legend::Formatter formatter_;
-  views::Label* value_ = nullptr;
+  raw_ptr<views::Label> value_ = nullptr;
 };
 
 BEGIN_METADATA(LegendEntry, views::View)
 END_METADATA
 
 LegendEntry::LegendEntry(const Legend::Entry& data)
-    : color_(data.graph.color()),
-      graph_(data.graph),
+    : color_(data.graph->color()),
+      graph_(*data.graph),
       formatter_(data.formatter) {
   views::BoxLayout* layout_manager =
       SetLayoutManager(std::make_unique<views::BoxLayout>(
@@ -133,8 +137,8 @@ void LegendEntry::SetValueIndex(size_t index) {
 }
 
 void LegendEntry::RefreshValue() {
-  if (graph_.IsFilledIndex(value_index_)) {
-    value_->SetText(formatter_.Run(graph_.GetUnscaledValueAt(value_index_)));
+  if (graph_->IsFilledIndex(value_index_)) {
+    value_->SetText(formatter_.Run(graph_->GetUnscaledValueAt(value_index_)));
   } else {
     value_->SetText(std::u16string());
   }
@@ -178,18 +182,22 @@ void Legend::Layout() {
 
   gfx::Size max_size;
   bool updated = false;
-  for (auto* view : children()) {
-    if (view->GetClassName() != LegendEntry::kViewClassName)
+  for (views::View* view : children()) {
+    if (std::string_view(view->GetClassName()) !=
+        std::string_view(LegendEntry::kViewClassName)) {
       continue;
+    }
 
     views::View* value = static_cast<LegendEntry*>(view)->value();
     max_size.SetToMax(value->GetPreferredSize());
     updated |= max_size != value->GetPreferredSize();
   }
   if (updated) {
-    for (auto* view : children()) {
-      if (view->GetClassName() != LegendEntry::kViewClassName)
+    for (views::View* view : children()) {
+      if (std::string_view(view->GetClassName()) !=
+          std::string_view(LegendEntry::kViewClassName)) {
         continue;
+      }
 
       static_cast<LegendEntry*>(view)->value()->SetPreferredSize(max_size);
     }
@@ -198,18 +206,22 @@ void Legend::Layout() {
 }
 
 void Legend::SetValuesIndex(size_t index) {
-  for (auto* view : children()) {
-    if (view->GetClassName() != LegendEntry::kViewClassName)
+  for (views::View* view : children()) {
+    if (std::string_view(view->GetClassName()) !=
+        std::string_view(LegendEntry::kViewClassName)) {
       continue;
+    }
 
     static_cast<LegendEntry*>(view)->SetValueIndex(index);
   }
 }
 
 void Legend::RefreshValues() {
-  for (auto* view : children()) {
-    if (view->GetClassName() != LegendEntry::kViewClassName)
+  for (views::View* view : children()) {
+    if (std::string_view(view->GetClassName()) !=
+        std::string_view(LegendEntry::kViewClassName)) {
       continue;
+    }
 
     static_cast<LegendEntry*>(view)->RefreshValue();
   }

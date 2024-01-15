@@ -10,16 +10,19 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/contains.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/lazy_instance.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/safe_ref.h"
 #include "base/ranges/algorithm.h"
 #include "base/trace_event/optional_trace_event.h"
 #include "base/trace_event/typed_macros.h"
 #include "base/unguessable_token.h"
+#include "content/browser/renderer_host/batched_proxy_ipc_sender.h"
 #include "content/browser/renderer_host/navigation_controller_impl.h"
 #include "content/browser/renderer_host/navigation_entry_impl.h"
 #include "content/browser/renderer_host/navigation_request.h"
@@ -33,11 +36,14 @@
 #include "content/browser/renderer_host/render_view_host_delegate.h"
 #include "content/browser/renderer_host/render_view_host_factory.h"
 #include "content/browser/renderer_host/render_view_host_impl.h"
+#include "content/common/content_navigation_policy.h"
 #include "content/common/content_switches_internal.h"
+#include "content/common/features.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/frame/frame_owner_element_type.h"
 #include "third_party/blink/public/common/frame/frame_policy.h"
 #include "third_party/blink/public/common/loader/loader_constants.h"
+#include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/frame/frame_owner_properties.mojom.h"
 
 namespace content {
@@ -63,7 +69,7 @@ FrameTreeNode* GetInnerTreeMainFrameNode(FrameTreeNode* node) {
       node->current_frame_host()->inner_tree_main_frame_tree_node_id());
 
   if (inner_main_frame_tree_node) {
-    DCHECK_NE(node->frame_tree(), inner_main_frame_tree_node->frame_tree());
+    DCHECK_NE(&node->frame_tree(), &inner_main_frame_tree_node->frame_tree());
   }
 
   return inner_main_frame_tree_node;
@@ -132,7 +138,8 @@ void FrameTree::NodeIterator::AdvanceNode() {
 }
 
 FrameTree::NodeIterator::NodeIterator(
-    const std::vector<FrameTreeNode*>& starting_nodes,
+    const std::vector<raw_ptr<FrameTreeNode, VectorExperimental>>&
+        starting_nodes,
     const FrameTreeNode* root_of_subtree_to_skip,
     bool should_descend_into_inner_trees,
     bool include_delegate_nodes_for_inner_frame_trees)
@@ -167,7 +174,8 @@ FrameTree::NodeIterator FrameTree::NodeRange::end() {
 }
 
 FrameTree::NodeRange::NodeRange(
-    const std::vector<FrameTreeNode*>& starting_nodes,
+    const std::vector<raw_ptr<FrameTreeNode, VectorExperimental>>&
+        starting_nodes,
     const FrameTreeNode* root_of_subtree_to_skip,
     bool should_descend_into_inner_trees,
     bool include_delegate_nodes_for_inner_frame_trees)
@@ -190,8 +198,7 @@ FrameTree::FrameTree(
     RenderWidgetHostDelegate* render_widget_delegate,
     RenderFrameHostManager::Delegate* manager_delegate,
     PageDelegate* page_delegate,
-    Type type,
-    const base::UnguessableToken& devtools_frame_token)
+    Type type)
     : delegate_(delegate),
       render_frame_delegate_(render_frame_delegate),
       render_view_delegate_(render_view_delegate),
@@ -205,18 +212,12 @@ FrameTree::FrameTree(
       type_(type),
       focused_frame_tree_node_id_(FrameTreeNode::kFrameTreeNodeInvalidId),
       load_progress_(0.0),
-      fenced_frames_impl_(
-          blink::features::IsFencedFramesEnabled()
-              ? absl::optional<blink::features::FencedFramesImplementationType>(
-                    blink::features::kFencedFramesImplementationTypeParam.Get())
-              : absl::nullopt),
-      root_(this,
+      root_(*this,
             nullptr,
             // The top-level frame must always be in a
             // document scope.
             blink::mojom::TreeScopeType::kDocument,
             false,
-            devtools_frame_token,
             blink::mojom::FrameOwnerProperties(),
             blink::FrameOwnerElementType::kNone,
             blink::FramePolicy()) {}
@@ -226,6 +227,35 @@ FrameTree::~FrameTree() {
 #if DCHECK_IS_ON()
   DCHECK(was_shut_down_);
 #endif
+}
+
+void FrameTree::ForEachRenderViewHost(
+    base::FunctionRef<void(RenderViewHostImpl*)> on_host) {
+  if (speculative_render_view_host_) {
+    on_host(speculative_render_view_host_.get());
+  }
+
+  for (auto& rvh : render_view_host_map_) {
+    on_host(rvh.second);
+  }
+}
+
+void FrameTree::MakeSpeculativeRVHCurrent() {
+  CHECK(speculative_render_view_host_);
+
+  // The existing RenderViewHost needs to be unregistered first.
+  // Speculative RenderViewHosts are only used for same-SiteInstanceGroup
+  // navigations, so there should be a RenderViewHost of the same
+  // SiteInstanceGroup already in the tree.
+  RenderViewHostMapId speculative_id =
+      speculative_render_view_host_->rvh_map_id();
+  auto it = render_view_host_map_.find(speculative_id);
+  CHECK(it != render_view_host_map_.end());
+  UnregisterRenderViewHost(speculative_id, it->second);
+
+  speculative_render_view_host_->set_is_speculative(false);
+  RegisterRenderViewHost(speculative_id, speculative_render_view_host_.get());
+  speculative_render_view_host_.reset();
 }
 
 FrameTreeNode* FrameTree::FindByID(int frame_tree_node_id) {
@@ -241,7 +271,7 @@ FrameTreeNode* FrameTree::FindByRoutingID(int process_id, int routing_id) {
       RenderFrameHostImpl::FromID(process_id, routing_id);
   if (render_frame_host) {
     FrameTreeNode* result = render_frame_host->frame_tree_node();
-    if (this == result->frame_tree())
+    if (this == &result->frame_tree())
       return result;
   }
 
@@ -249,7 +279,7 @@ FrameTreeNode* FrameTree::FindByRoutingID(int process_id, int routing_id) {
       RenderFrameProxyHost::FromID(process_id, routing_id);
   if (render_frame_proxy_host) {
     FrameTreeNode* result = render_frame_proxy_host->frame_tree_node();
-    if (this == result->frame_tree())
+    if (this == &result->frame_tree())
       return result;
   }
 
@@ -290,11 +320,11 @@ std::vector<FrameTreeNode*> FrameTree::CollectNodesForIsLoading() {
   std::vector<FrameTreeNode*> nodes;
 
   DCHECK(node_iter != node_range.end());
-  FrameTree* root_loading_tree = root_.frame_tree()->LoadingTree();
+  FrameTree* root_loading_tree = root_.frame_tree().LoadingTree();
   while (node_iter != node_range.end()) {
     // Skip over frame trees and children which belong to inner web contents
     // i.e., when nodes doesn't point to the same loading frame tree.
-    if ((*node_iter)->frame_tree()->LoadingTree() != root_loading_tree) {
+    if ((*node_iter)->frame_tree().LoadingTree() != root_loading_tree) {
       node_iter.AdvanceSkippingChildren();
     } else {
       nodes.push_back(*node_iter);
@@ -307,7 +337,7 @@ std::vector<FrameTreeNode*> FrameTree::CollectNodesForIsLoading() {
 FrameTree::NodeRange FrameTree::SubtreeAndInnerTreeNodes(
     RenderFrameHostImpl* parent,
     bool include_delegate_nodes_for_inner_frame_trees) {
-  std::vector<FrameTreeNode*> starting_nodes;
+  std::vector<raw_ptr<FrameTreeNode, VectorExperimental>> starting_nodes;
   starting_nodes.reserve(parent->child_count());
   for (size_t i = 0; i < parent->child_count(); ++i) {
     FrameTreeNode* child = parent->child_at(i);
@@ -363,12 +393,12 @@ FrameTreeNode* FrameTree::AddFrame(
     blink::FrameOwnerElementType owner_type,
     bool is_dummy_frame_for_inner_tree) {
   CHECK_NE(new_routing_id, MSG_ROUTING_NONE);
-  // Normally this path is for blink adding a child local frame. But both
-  // portals and fenced frames add a dummy child frame that never gets a
-  // corresponding RenderFrameImpl in any renderer process, and therefore its
-  // `frame_remote` is invalid. Also its RenderFrameHostImpl is exempt from
-  // having `RenderFrameCreated()` called on it (see later in this method, as
-  // well as `WebContentsObserverConsistencyChecker::RenderFrameHostChanged()`).
+  // Normally this path is for blink adding a child local frame. But fenced
+  // frames add a dummy child frame that never gets a corresponding
+  // RenderFrameImpl in any renderer process, and therefore its `frame_remote`
+  // is invalid. Also its RenderFrameHostImpl is exempt from having
+  // `RenderFrameCreated()` called on it (see later in this method, as well as
+  // `WebContentsObserverConsistencyChecker::RenderFrameHostChanged()`).
   DCHECK_NE(frame_remote.is_valid(), is_dummy_frame_for_inner_tree);
   DCHECK_NE(browser_interface_broker_receiver.is_valid(),
             is_dummy_frame_for_inner_tree);
@@ -381,9 +411,9 @@ FrameTreeNode* FrameTree::AddFrame(
   // parent node.
   CHECK_EQ(parent->GetProcess()->GetID(), process_id);
 
-  std::unique_ptr<FrameTreeNode> new_node = base::WrapUnique(new FrameTreeNode(
-      this, parent, scope, is_created_by_script, devtools_frame_token,
-      frame_owner_properties, owner_type, frame_policy));
+  std::unique_ptr<FrameTreeNode> new_node = base::WrapUnique(
+      new FrameTreeNode(*this, parent, scope, is_created_by_script,
+                        frame_owner_properties, owner_type, frame_policy));
 
   // Set sandbox flags and container policy and make them effective immediately,
   // since initial sandbox flags and permissions policy should apply to the
@@ -401,7 +431,8 @@ FrameTreeNode* FrameTree::AddFrame(
   // Add the new node to the FrameTree, creating the RenderFrameHost.
   FrameTreeNode* added_node = parent->AddChild(
       std::move(new_node), new_routing_id, std::move(frame_remote), frame_token,
-      document_token, frame_policy, frame_name, frame_unique_name);
+      document_token, devtools_frame_token, frame_policy, frame_name,
+      frame_unique_name);
 
   added_node->SetFencedFramePropertiesIfNeeded();
 
@@ -437,8 +468,8 @@ FrameTreeNode* FrameTree::AddFrame(
   // For consistency with navigating to a new RenderFrameHost case, we dispatch
   // RenderFrameCreated before RenderFrameHostChanged.
   if (!is_dummy_frame_for_inner_tree) {
-    // The outer dummy FrameTreeNode for both portals and fenced frames does not
-    // have a live RenderFrame in the renderer process.
+    // The outer dummy FrameTreeNode for fenced frames does not have a live
+    // RenderFrame in the renderer process.
     added_node->current_frame_host()->RenderFrameCreated();
   }
 
@@ -462,12 +493,16 @@ void FrameTree::RemoveFrame(FrameTreeNode* child) {
 
 void FrameTree::CreateProxiesForSiteInstance(
     FrameTreeNode* source,
-    SiteInstance* site_instance,
+    SiteInstanceImpl* site_instance,
     const scoped_refptr<BrowsingContextState>&
         source_new_browsing_context_state) {
-  SiteInstanceGroup* group =
-      static_cast<SiteInstanceImpl*>(site_instance)->group();
-  // Create the RenderFrameProxyHost for the new SiteInstance.
+  SiteInstanceGroup* group = site_instance->group();
+
+  // Will be instantiated and passed to `CreateRenderFrameProxy()` when
+  // `kConsolidatedIPCForProxyCreation` is enabled to batch create proxies
+  // for child frames.
+  std::unique_ptr<BatchedProxyIPCSender> batched_proxy_ipc_sender;
+
   if (!source || !source->IsMainFrame()) {
     RenderViewHostImpl* render_view_host = GetRenderViewHost(group).get();
     if (render_view_host) {
@@ -483,22 +518,46 @@ void FrameTree::CreateProxiesForSiteInstance(
       // in the right SiteInstance if it doesn't exist, before creating the
       // other proxies; if the `blink::WebView` doesn't exist, the only way to
       // do this is to also create a proxy for the main frame as well.
-      root()->render_manager()->CreateRenderFrameProxy(
-          site_instance,
+      const scoped_refptr<BrowsingContextState>& root_browsing_context_state =
           source ? source->parent()->GetMainFrame()->browsing_context_state()
-                 : root()->current_frame_host()->browsing_context_state());
+                 : root()->current_frame_host()->browsing_context_state();
+
+      // TODO(https://crbug.com/1393697): Batch main frame proxy creation and
+      // pass an instance of `BatchedProxyIPCSender` here instead of nullptr.
+      root()->render_manager()->CreateRenderFrameProxy(
+          site_instance, root_browsing_context_state,
+          /*batched_proxy_ipc_sender=*/nullptr);
+
+      // We only need to use `BatchedProxyIPCSender` when navigating to a new
+      // `SiteInstance`. Proxies do not need to be created when navigating to a
+      // `SiteInstance` that has already been encountered, because site
+      // isolation would guarantee that all nodes already have either proxies
+      // or real frames. Due to the check above, the `render_view_host` does
+      // not exist here, which means we have not seen this `SiteInstance`
+      // before, so we instantiate `batched_proxy_ipc_sender` to consolidate
+      // IPCs for proxy creation.
+      bool should_consolidate_ipcs = base::FeatureList::IsEnabled(
+          features::kConsolidatedIPCForProxyCreation);
+      if (should_consolidate_ipcs) {
+        base::SafeRef<RenderFrameProxyHost> root_proxy =
+            root_browsing_context_state
+                ->GetRenderFrameProxyHost(site_instance->group())
+                ->GetSafeRef();
+        batched_proxy_ipc_sender =
+            std::make_unique<BatchedProxyIPCSender>(std::move(root_proxy));
+      }
     }
   }
 
-  // Check whether we're in an inner delegate and |site_instance| corresponds
-  // to the outer delegate.  Subframe proxies aren't needed if this is the
-  // case.
-  bool is_site_instance_for_outer_delegate = false;
+  // Check whether we're in an inner delegate and the group |site_instance| is
+  // in corresponds to the outer delegate.  Subframe proxies aren't needed if
+  // this is the case.
+  bool is_site_instance_group_for_outer_delegate = false;
   RenderFrameProxyHost* outer_delegate_proxy =
       root()->render_manager()->GetProxyToOuterDelegate();
   if (outer_delegate_proxy) {
-    is_site_instance_for_outer_delegate =
-        (site_instance == outer_delegate_proxy->GetSiteInstance());
+    is_site_instance_group_for_outer_delegate =
+        (site_instance->group() == outer_delegate_proxy->site_instance_group());
   }
 
   // Proxies are created in the FrameTree in response to a node navigating to a
@@ -518,7 +577,7 @@ void FrameTree::CreateProxiesForSiteInstance(
     // that SiteInstance don't need a proxy for the new frame.
     RenderFrameHostImpl* current_host =
         node->render_manager()->current_frame_host();
-    SiteInstance* current_instance = current_host->GetSiteInstance();
+    SiteInstanceImpl* current_instance = current_host->GetSiteInstance();
     if (current_instance != site_instance) {
       if (node == source && !current_host->IsRenderFrameLive()) {
         // We don't create a proxy at |source| when the current RenderFrameHost
@@ -536,11 +595,12 @@ void FrameTree::CreateProxiesForSiteInstance(
       }
 
       // Do not create proxies for subframes in the outer delegate's
-      // SiteInstance, since there is no need to expose these subframes to the
-      // outer delegate.  See also comments in CreateProxiesForChildFrame() and
-      // https://crbug.com/1013553.
-      if (!node->IsMainFrame() && is_site_instance_for_outer_delegate)
+      // SiteInstanceGroup, since there is no need to expose these subframes to
+      // the outer delegate.  See also comments in CreateProxiesForChildFrame()
+      // and https://crbug.com/1013553.
+      if (!node->IsMainFrame() && is_site_instance_group_for_outer_delegate) {
         continue;
+      }
 
       // If |node| is the FrameTreeNode being navigated, we use
       // |browsing_context_state| (as BrowsingContextState might change for
@@ -548,10 +608,14 @@ void FrameTree::CreateProxiesForSiteInstance(
       // |node|'s current BrowsingContextState.
       node->render_manager()->CreateRenderFrameProxy(
           site_instance,
-          node == source
-              ? source_new_browsing_context_state
-              : node->current_frame_host()->browsing_context_state());
+          node == source ? source_new_browsing_context_state
+                         : node->current_frame_host()->browsing_context_state(),
+          batched_proxy_ipc_sender.get());
     }
+  }
+
+  if (batched_proxy_ipc_sender) {
+    batched_proxy_ipc_sender->CreateAllProxies();
   }
 }
 
@@ -617,19 +681,32 @@ void FrameTree::SetFocusedFrame(FrameTreeNode* node,
 }
 
 scoped_refptr<RenderViewHostImpl> FrameTree::CreateRenderViewHost(
-    SiteInstance* site_instance,
+    SiteInstanceGroup* site_instance_group,
     int32_t main_frame_routing_id,
     bool renderer_initiated_creation,
-    scoped_refptr<BrowsingContextState> main_browsing_context_state) {
+    scoped_refptr<BrowsingContextState> main_browsing_context_state,
+    CreateRenderViewHostCase create_case,
+    std::optional<viz::FrameSinkId> frame_sink_id) {
   if (main_browsing_context_state) {
     DCHECK(main_browsing_context_state->is_main_frame());
   }
   RenderViewHostImpl* rvh =
       static_cast<RenderViewHostImpl*>(RenderViewHostFactory::Create(
-          this, static_cast<SiteInstanceImpl*>(site_instance)->group(),
-          site_instance->GetStoragePartitionConfig(), render_view_delegate_,
-          render_widget_delegate_, main_frame_routing_id,
-          renderer_initiated_creation, std::move(main_browsing_context_state)));
+          this, site_instance_group,
+          site_instance_group->GetStoragePartitionConfig(),
+          render_view_delegate_, render_widget_delegate_, main_frame_routing_id,
+          renderer_initiated_creation, std::move(main_browsing_context_state),
+          create_case, frame_sink_id));
+
+  if (ShouldCreateNewHostForAllFrames() &&
+      create_case == CreateRenderViewHostCase::kSpeculative) {
+    set_speculative_render_view_host(rvh->GetWeakPtr());
+  } else {
+    // Register non-speculative RenderViewHosts. If they are speculative, they
+    // will be registered when they become active.
+    RegisterRenderViewHost(rvh->rvh_map_id(), rvh);
+  }
+
   return base::WrapRefCounted(rvh);
 }
 
@@ -658,18 +735,22 @@ void FrameTree::RegisterRenderViewHost(RenderViewHostMapId id,
                                        RenderViewHostImpl* rvh) {
   TRACE_EVENT_INSTANT("navigation", "FrameTree::RegisterRenderViewHost",
                       ChromeTrackEvent::kRenderViewHost, *rvh);
+  CHECK(!rvh->is_speculative());
   CHECK(!base::Contains(render_view_host_map_, id));
   render_view_host_map_[id] = rvh;
+  rvh->set_is_registered_with_frame_tree(true);
 }
 
 void FrameTree::UnregisterRenderViewHost(RenderViewHostMapId id,
                                          RenderViewHostImpl* rvh) {
   TRACE_EVENT_INSTANT("navigation", "FrameTree::UnregisterRenderViewHost",
                       ChromeTrackEvent::kRenderViewHost, *rvh);
+  CHECK(!rvh->is_speculative());
   auto it = render_view_host_map_.find(id);
   CHECK(it != render_view_host_map_.end());
   CHECK_EQ(it->second, rvh);
   render_view_host_map_.erase(it);
+  rvh->set_is_registered_with_frame_tree(false);
 }
 
 void FrameTree::FrameUnloading(FrameTreeNode* frame) {
@@ -694,12 +775,26 @@ double FrameTree::GetLoadProgress() {
 }
 
 bool FrameTree::IsLoadingIncludingInnerFrameTrees() const {
-  for (const FrameTreeNode* node :
-       const_cast<FrameTree*>(this)->CollectNodesForIsLoading()) {
-    if (node->IsLoading())
-      return true;
+  return GetLoadingState() != LoadingState::NONE;
+}
+
+LoadingState FrameTree::GetLoadingState() const {
+  // The overall loading state for the FrameTree matches the root node's loading
+  // state if the root is loading.
+  if (root_.GetLoadingState() != LoadingState::NONE) {
+    return root_.GetLoadingState();
   }
-  return false;
+
+  // Otherwise, check if a subframe is loading without an associated navigation
+  // in the root frame. If so, we are loading, but we don't want to show
+  // loading UI.
+  for (const FrameTreeNode* node_to_check :
+       const_cast<FrameTree*>(this)->CollectNodesForIsLoading()) {
+    if (node_to_check->IsLoading()) {
+      return LoadingState::LOADING_WITHOUT_UI;
+    }
+  }
+  return LoadingState::NONE;
 }
 
 void FrameTree::ReplicatePageFocus(bool is_focused) {
@@ -720,15 +815,8 @@ void FrameTree::ReplicatePageFocus(bool is_focused) {
     SetPageFocus(group, is_focused);
 }
 
-bool FrameTree::IsPortal() {
-  return delegate_->IsPortal();
-}
-
 void FrameTree::SetPageFocus(SiteInstanceGroup* group, bool is_focused) {
   RenderFrameHostManager* root_manager = root_.render_manager();
-
-  // Portal frame tree should not get page focus.
-  DCHECK(!IsPortal() || !is_focused);
 
   // This is only used to set page-level focus in cross-process subframes, and
   // requests to set focus in main frame's SiteInstanceGroup are ignored.
@@ -747,7 +835,7 @@ void FrameTree::RegisterExistingOriginAsHavingDefaultIsolation(
   controller().RegisterExistingOriginAsHavingDefaultIsolation(
       previously_visited_origin);
 
-  std::unordered_set<SiteInstance*> matching_site_instances;
+  std::unordered_set<SiteInstanceImpl*> matching_site_instances;
 
   // Be sure to visit all RenderFrameHosts associated with this frame that might
   // have an origin that could script other frames. We skip RenderFrameHosts
@@ -781,28 +869,30 @@ void FrameTree::RegisterExistingOriginAsHavingDefaultIsolation(
 
   // Update any SiteInstances found to contain |origin|.
   for (auto* site_instance : matching_site_instances) {
-    static_cast<SiteInstanceImpl*>(site_instance)
-        ->RegisterAsDefaultOriginIsolation(previously_visited_origin);
+    site_instance->RegisterAsDefaultOriginIsolation(previously_visited_origin);
   }
 }
 
-void FrameTree::Init(SiteInstance* main_frame_site_instance,
+void FrameTree::Init(SiteInstanceImpl* main_frame_site_instance,
                      bool renderer_initiated_creation,
                      const std::string& main_frame_name,
                      RenderFrameHostImpl* opener_for_origin,
-                     const blink::FramePolicy& frame_policy) {
+                     const blink::FramePolicy& frame_policy,
+                     const base::UnguessableToken& devtools_frame_token) {
   // blink::FrameTree::SetName always keeps |unique_name| empty in case of a
   // main frame - let's do the same thing here.
   std::string unique_name;
   root_.render_manager()->InitRoot(main_frame_site_instance,
                                    renderer_initiated_creation, frame_policy,
-                                   main_frame_name);
+                                   main_frame_name, devtools_frame_token);
   root_.SetFencedFramePropertiesIfNeeded();
 
-  // The initial empty document should inherit the origin of its opener (the
-  // origin may change after the first commit), except when they are in
+  // The initial empty document should inherit the origin (the origin may
+  // change after the first commit) and other state (such as the
+  // RuntimeFeatureStateReadContext) from its opener, except when they are in
   // different browsing context groups (`renderer_initiated_creation` will be
-  // false), where it should use a new opaque origin.
+  // false), where it should use a new opaque origin and default values for the
+  // other state, respectively.
   // See also https://crbug.com/932067.
   //
   // Note that the origin of the new frame might depend on sandbox flags.
@@ -810,11 +900,9 @@ void FrameTree::Init(SiteInstance* main_frame_site_instance,
   // because the flags should be already inherited when creating the root node.
   DCHECK(!renderer_initiated_creation || opener_for_origin);
   root_.current_frame_host()->SetOriginDependentStateOfNewFrame(
-      renderer_initiated_creation ? opener_for_origin->GetLastCommittedOrigin()
-                                  : url::Origin());
+      renderer_initiated_creation ? opener_for_origin : nullptr);
 
-  if (blink::features::IsInitialNavigationEntryEnabled())
-    controller().CreateInitialEntry();
+  controller().CreateInitialEntry();
 }
 
 void FrameTree::DidAccessInitialMainDocument() {
@@ -823,22 +911,22 @@ void FrameTree::DidAccessInitialMainDocument() {
   controller().DidAccessInitialMainDocument();
 }
 
-void FrameTree::DidStartLoadingNode(FrameTreeNode& node,
-                                    bool should_show_loading_ui,
-                                    bool was_previously_loading) {
-  if (was_previously_loading)
+void FrameTree::NodeLoadingStateChanged(
+    FrameTreeNode& node,
+    LoadingState previous_frame_tree_loading_state) {
+  LoadingState new_frame_tree_loading_state = GetLoadingState();
+  if (previous_frame_tree_loading_state == new_frame_tree_loading_state) {
     return;
+  }
 
-  root()->render_manager()->SetIsLoading(IsLoadingIncludingInnerFrameTrees());
-  delegate_->DidStartLoading(&node, should_show_loading_ui);
-}
-
-void FrameTree::DidStopLoadingNode(FrameTreeNode& node) {
-  if (IsLoadingIncludingInnerFrameTrees())
-    return;
-
-  root()->render_manager()->SetIsLoading(false);
-  delegate_->DidStopLoading();
+  root()->render_manager()->SetIsLoading(new_frame_tree_loading_state !=
+                                         LoadingState::NONE);
+  delegate_->LoadingStateChanged(new_frame_tree_loading_state);
+  if (previous_frame_tree_loading_state == LoadingState::NONE) {
+    delegate_->DidStartLoading(&node);
+  } else if (new_frame_tree_loading_state == LoadingState::NONE) {
+    delegate_->DidStopLoading();
+  }
 }
 
 void FrameTree::DidCancelLoading() {
@@ -894,7 +982,8 @@ void FrameTree::Shutdown() {
   // destroyed.
 
   root_manager->current_frame_host()->RenderFrameDeleted();
-  root_manager->current_frame_host()->ResetNavigationRequests();
+  root_manager->current_frame_host()->ResetOwnedNavigationRequests(
+      NavigationDiscardReason::kWillRemoveFrame);
 
   // Do not update state as the FrameTree::Delegate (possibly a WebContents) is
   // being destroyed.
@@ -928,7 +1017,7 @@ void FrameTree::FocusOuterFrameTrees() {
       // Don't set focus on an inactive FrameTreeNode.
       return;
     }
-    outer_node->frame_tree()->SetFocusedFrame(outer_node, nullptr);
+    outer_node->frame_tree().SetFocusedFrame(outer_node, nullptr);
 
     // For a browser initiated focus change, let embedding renderer know of the
     // change. Otherwise, if the currently focused element is just across a
@@ -940,8 +1029,32 @@ void FrameTree::FocusOuterFrameTrees() {
                                             ->GetProxyToOuterDelegate()) {
       proxy_to_outer_delegate->SetFocusedFrame();
     }
-    frame_tree_to_focus = outer_node->frame_tree();
+    frame_tree_to_focus = &outer_node->frame_tree();
   }
+}
+
+void FrameTree::RegisterOriginForUnpartitionedSessionStorageAccess(
+    const url::Origin& origin) {
+  if (origin.opaque()) {
+    return;
+  }
+  unpartitioned_session_storage_origins_.insert(origin);
+}
+
+void FrameTree::UnregisterOriginForUnpartitionedSessionStorageAccess(
+    const url::Origin& origin) {
+  unpartitioned_session_storage_origins_.erase(origin);
+}
+
+const blink::StorageKey FrameTree::GetSessionStorageKey(
+    const blink::StorageKey& storage_key) {
+  if (unpartitioned_session_storage_origins_.find(storage_key.origin()) !=
+      unpartitioned_session_storage_origins_.end()) {
+    // If the storage key matches a participating origin we need to return the
+    // first-party version for use in binding session storage.
+    return blink::StorageKey::CreateFirstParty(storage_key.origin());
+  }
+  return storage_key;
 }
 
 }  // namespace content

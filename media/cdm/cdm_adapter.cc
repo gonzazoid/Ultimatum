@@ -9,14 +9,14 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "media/base/audio_decoder_config.h"
@@ -96,8 +96,7 @@ std::string CdmStatusToString(cdm::Status status) {
       return "kDeferredInitialization";
   }
 
-  NOTREACHED();
-  return "Invalid Status!";
+  NOTREACHED_NORETURN();
 }
 
 inline std::ostream& operator<<(std::ostream& out, cdm::Status status) {
@@ -135,11 +134,9 @@ void* GetCdmHost(int host_interface_version, void* user_data) {
       return static_cast<cdm::Host_10*>(cdm_adapter);
     case cdm::Host_11::kVersion:
       return static_cast<cdm::Host_11*>(cdm_adapter);
-    default:
-      NOTREACHED() << "Unexpected host interface version "
-                   << host_interface_version;
-      return nullptr;
   }
+  NOTREACHED_NORETURN() << "Unexpected host interface version "
+                        << host_interface_version;
 }
 
 void ReportSystemCodeUMA(const std::string& key_system, uint32_t system_code) {
@@ -211,7 +208,7 @@ CdmAdapter::CdmAdapter(
       session_expiration_update_cb_(session_expiration_update_cb),
       cdm_origin_(helper_->GetCdmOrigin().Serialize()),
       scoped_crash_key_(&g_origin_crash_key, cdm_origin_),
-      task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       pool_(new AudioBufferMemoryPool()) {
   DVLOG(1) << __func__;
 
@@ -270,7 +267,8 @@ void CdmAdapter::Initialize(std::unique_ptr<media::SimpleCdmPromise> promise) {
     return;
   }
 
-  init_promise_id_ = cdm_promise_adapter_.SavePromise(std::move(promise));
+  init_promise_id_ =
+      cdm_promise_adapter_.SavePromise(std::move(promise), __func__);
 
   if (!cdm_->Initialize(cdm_config_.allow_distinctive_identifier,
                         cdm_config_.allow_persistent_state,
@@ -302,7 +300,8 @@ void CdmAdapter::SetServerCertificate(
     return;
   }
 
-  uint32_t promise_id = cdm_promise_adapter_.SavePromise(std::move(promise));
+  uint32_t promise_id =
+      cdm_promise_adapter_.SavePromise(std::move(promise), __func__);
   cdm_->SetServerCertificate(promise_id, certificate.data(),
                              certificate.size());
 }
@@ -313,7 +312,8 @@ void CdmAdapter::GetStatusForPolicy(
   DCHECK(task_runner_->BelongsToCurrentThread());
   TRACE_EVENT0("media", "CdmAdapter::GetStatusForPolicy");
 
-  uint32_t promise_id = cdm_promise_adapter_.SavePromise(std::move(promise));
+  uint32_t promise_id =
+      cdm_promise_adapter_.SavePromise(std::move(promise), __func__);
   DVLOG(2) << __func__ << ": promise_id = " << promise_id;
   if (!cdm_->GetStatusForPolicy(promise_id,
                                 ToCdmHdcpVersion(min_hdcp_version))) {
@@ -332,7 +332,8 @@ void CdmAdapter::CreateSessionAndGenerateRequest(
   DCHECK(task_runner_->BelongsToCurrentThread());
   TRACE_EVENT0("media", "CdmAdapter::CreateSessionAndGenerateRequest");
 
-  uint32_t promise_id = cdm_promise_adapter_.SavePromise(std::move(promise));
+  uint32_t promise_id =
+      cdm_promise_adapter_.SavePromise(std::move(promise), __func__);
   DVLOG(2) << __func__ << ": promise_id = " << promise_id;
 
   cdm_->CreateSessionAndGenerateRequest(
@@ -346,7 +347,8 @@ void CdmAdapter::LoadSession(CdmSessionType session_type,
   DCHECK(task_runner_->BelongsToCurrentThread());
   TRACE_EVENT1("media", "CdmAdapter::LoadSession", "session_id", session_id);
 
-  uint32_t promise_id = cdm_promise_adapter_.SavePromise(std::move(promise));
+  uint32_t promise_id =
+      cdm_promise_adapter_.SavePromise(std::move(promise), __func__);
   DVLOG(2) << __func__ << ": session_id = " << session_id
            << ", promise_id = " << promise_id;
 
@@ -362,7 +364,8 @@ void CdmAdapter::UpdateSession(const std::string& session_id,
   DCHECK(!response.empty());
   TRACE_EVENT1("media", "CdmAdapter::UpdateSession", "session_id", session_id);
 
-  uint32_t promise_id = cdm_promise_adapter_.SavePromise(std::move(promise));
+  uint32_t promise_id =
+      cdm_promise_adapter_.SavePromise(std::move(promise), __func__);
   DVLOG(2) << __func__ << ": session_id = " << session_id
            << ", promise_id = " << promise_id;
 
@@ -376,7 +379,8 @@ void CdmAdapter::CloseSession(const std::string& session_id,
   DCHECK(!session_id.empty());
   TRACE_EVENT1("media", "CdmAdapter::CloseSession", "session_id", session_id);
 
-  uint32_t promise_id = cdm_promise_adapter_.SavePromise(std::move(promise));
+  uint32_t promise_id =
+      cdm_promise_adapter_.SavePromise(std::move(promise), __func__);
   DVLOG(2) << __func__ << ": session_id = " << session_id
            << ", promise_id = " << promise_id;
 
@@ -389,7 +393,8 @@ void CdmAdapter::RemoveSession(const std::string& session_id,
   DCHECK(!session_id.empty());
   TRACE_EVENT1("media", "CdmAdapter::RemoveSession", "session_id", session_id);
 
-  uint32_t promise_id = cdm_promise_adapter_.SavePromise(std::move(promise));
+  uint32_t promise_id =
+      cdm_promise_adapter_.SavePromise(std::move(promise), __func__);
   DVLOG(2) << __func__ << ": session_id = " << session_id
            << ", promise_id = " << promise_id;
 
@@ -676,7 +681,7 @@ void CdmAdapter::TimerExpired(void* context) {
 
 cdm::Time CdmAdapter::GetCurrentWallTime() {
   DCHECK(task_runner_->BelongsToCurrentThread());
-  return base::Time::Now().ToDoubleT();
+  return base::Time::Now().InSecondsFSinceUnixEpoch();
 }
 
 void CdmAdapter::OnInitialized(bool success) {
@@ -801,7 +806,8 @@ void CdmAdapter::OnExpirationChange(const char* session_id,
            << ", new_expiry_time = " << new_expiry_time;
   DCHECK(task_runner_->BelongsToCurrentThread());
 
-  base::Time expiration = base::Time::FromDoubleT(new_expiry_time);
+  base::Time expiration =
+      base::Time::FromSecondsSinceUnixEpoch(new_expiry_time);
   TRACE_EVENT2("media", "CdmAdapter::OnExpirationChange", "session_id",
                session_id_str, "new_expiry_time", expiration);
   session_expiration_update_cb_.Run(session_id_str, expiration);
@@ -982,7 +988,7 @@ void CdmAdapter::OnDeferredInitializationDone(cdm::StreamType stream_type,
       return;
   }
 
-  NOTREACHED() << "Unexpected cdm::StreamType " << stream_type;
+  NOTREACHED_NORETURN() << "Unexpected cdm::StreamType " << stream_type;
 }
 
 cdm::FileIO* CdmAdapter::CreateFileIO(cdm::FileIOClient* client) {

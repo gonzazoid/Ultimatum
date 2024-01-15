@@ -4,11 +4,12 @@
 
 #include "chrome/browser/devtools/devtools_window_testing.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/lazy_instance.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/browser_features.h"
 #include "chrome/browser/devtools/chrome_devtools_manager_delegate.h"
 #include "chrome/browser/devtools/devtools_window.h"
 #include "chrome/browser/ui/browser.h"
@@ -104,12 +105,24 @@ void DevToolsWindowTesting::WindowClosed(DevToolsWindow* window) {
 
 // static
 void DevToolsWindowTesting::WaitForDevToolsWindowLoad(DevToolsWindow* window) {
+  if (!window) {
+    return;
+  }
+  auto* main_web_contents = window->main_web_contents_;
   if (!window->ready_for_test_) {
     scoped_refptr<content::MessageLoopRunner> runner =
         new content::MessageLoopRunner;
     window->ready_for_test_callback_ = runner->QuitClosure();
     runner->Run();
   }
+
+  // The window might be removed upon creation.
+  // E.g. devtools windows may not be allowed in kiosk mode and killed upon
+  // creation..
+  if (!DevToolsWindow::IsDevToolsWindow(main_web_contents)) {
+    return;
+  }
+
   std::u16string harness = base::UTF8ToUTF16(
       content::DevToolsFrontendHost::GetFrontendResource(kHarnessScript));
   window->main_web_contents_->GetPrimaryMainFrame()->ExecuteJavaScript(
@@ -125,7 +138,10 @@ DevToolsWindow* DevToolsWindowTesting::OpenDevToolsWindowSync(
       "{\"isUnderTest\": true, \"currentDockState\":\"\\\"bottom\\\"\"}" :
       "{\"isUnderTest\": true, \"currentDockState\":\"\\\"undocked\\\"\"}";
   scoped_refptr<content::DevToolsAgentHost> agent(
-      content::DevToolsAgentHost::GetOrCreateFor(inspected_web_contents));
+      base::FeatureList::IsEnabled(::features::kDevToolsTabTarget)
+          ? content::DevToolsAgentHost::GetOrCreateForTab(
+                inspected_web_contents)
+          : content::DevToolsAgentHost::GetOrCreateFor(inspected_web_contents));
   DevToolsWindow::ToggleDevToolsWindow(inspected_web_contents, profile, true,
                                        DevToolsToggleAction::Show(), settings);
   DevToolsWindow* window = DevToolsWindow::FindDevToolsWindow(agent.get());
@@ -155,7 +171,8 @@ DevToolsWindow* DevToolsWindowTesting::OpenDevToolsWindowSync(
 DevToolsWindow* DevToolsWindowTesting::OpenDevToolsWindowSync(
     Profile* profile,
     scoped_refptr<content::DevToolsAgentHost> agent_host) {
-  DevToolsWindow::OpenDevToolsWindow(agent_host, profile);
+  DevToolsWindow::OpenDevToolsWindow(agent_host, profile,
+                                     DevToolsOpenedByAction::kUnknown);
   DevToolsWindow* window = DevToolsWindow::FindDevToolsWindow(agent_host.get());
   WaitForDevToolsWindowLoad(window);
   return window;
@@ -164,7 +181,8 @@ DevToolsWindow* DevToolsWindowTesting::OpenDevToolsWindowSync(
 // static
 DevToolsWindow* DevToolsWindowTesting::OpenDiscoveryDevToolsWindowSync(
     Profile* profile) {
-  DevToolsWindow* window = DevToolsWindow::OpenNodeFrontendWindow(profile);
+  DevToolsWindow* window = DevToolsWindow::OpenNodeFrontendWindow(
+      profile, DevToolsOpenedByAction::kUnknown);
   WaitForDevToolsWindowLoad(window);
   return window;
 }

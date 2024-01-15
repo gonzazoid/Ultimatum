@@ -13,6 +13,7 @@
 #include "components/content_settings/core/common/content_settings_pattern.h"
 #include "components/content_settings/core/common/content_settings_types.h"
 #include "components/performance_manager/public/decorators/page_live_state_decorator.h"
+#include "components/performance_manager/public/decorators/tab_connectedness_decorator.h"
 #include "components/performance_manager/public/performance_manager.h"
 #include "components/permissions/permissions_client.h"
 #include "content/public/browser/web_contents_observer.h"
@@ -38,7 +39,7 @@ class ActiveTabObserver : public TabStripModelObserver,
  public:
   ActiveTabObserver() {
     BrowserList::AddObserver(this);
-    for (auto* browser : *BrowserList::GetInstance()) {
+    for (Browser* browser : *BrowserList::GetInstance()) {
       AddBrowserTabStripObservation(browser);
     }
   }
@@ -57,6 +58,10 @@ class ActiveTabObserver : public TabStripModelObserver,
       const TabStripSelectionChange& selection) override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     if (selection.active_tab_changed() && !tab_strip_model->empty()) {
+      if (selection.old_contents && selection.new_contents) {
+        TabConnectednessDecorator::NotifyOfTabSwitch(selection.old_contents,
+                                                     selection.new_contents);
+      }
       if (selection.old_contents) {
         PageLiveStateDecorator::SetIsActiveTab(selection.old_contents, false);
       }
@@ -64,6 +69,24 @@ class ActiveTabObserver : public TabStripModelObserver,
         PageLiveStateDecorator::SetIsActiveTab(selection.new_contents, true);
       }
     }
+
+    if (change.type() == TabStripModelChange::kInserted) {
+      for (const TabStripModelChange::ContentsWithIndex& tab :
+           change.GetInsert()->contents) {
+        // Pinned tabs can be restored from previous session in pinned state
+        // and hence won't trigger a pinned state changed event
+        PageLiveStateDecorator::SetIsPinnedTab(
+            tab.contents, tab_strip_model->IsTabPinned(tab.index));
+      }
+    }
+  }
+
+  void TabPinnedStateChanged(TabStripModel* tab_strip_model,
+                             content::WebContents* contents,
+                             int index) override {
+    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+    PageLiveStateDecorator::SetIsPinnedTab(contents,
+                                           tab_strip_model->IsTabPinned(index));
   }
 
   // BrowserListObserver:
@@ -100,9 +123,13 @@ class PageLiveStateDecoratorHelper::WebContentsObserver
     }
     outer_->first_web_contents_observer_ = this;
 
-    content_settings_observation_.Observe(
-        permissions::PermissionsClient::Get()->GetSettingsMap(
-            web_contents->GetBrowserContext()));
+    // The service might not be constructed for irregular profiles, e.g. the
+    // System Profile.
+    if (HostContentSettingsMap* service =
+            permissions::PermissionsClient::Get()->GetSettingsMap(
+                web_contents->GetBrowserContext())) {
+      content_settings_observation_.Observe(service);
+    }
   }
 
   WebContentsObserver(const WebContentsObserver&) = delete;
@@ -193,10 +220,14 @@ PageLiveStateDecoratorHelper::PageLiveStateDecoratorHelper() {
 #if !BUILDFLAG(IS_ANDROID)
   active_tab_observer_ = std::make_unique<ActiveTabObserver>();
 #endif  // !BUILDFLAG(IS_ANDROID)
+
+  content::DevToolsAgentHost::AddObserver(this);
 }
 
 PageLiveStateDecoratorHelper::~PageLiveStateDecoratorHelper() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  content::DevToolsAgentHost::RemoveObserver(this);
 
   MediaCaptureDevicesDispatcher::GetInstance()
       ->GetMediaStreamCaptureIndicator()
@@ -247,6 +278,26 @@ void PageLiveStateDecoratorHelper::OnIsCapturingDisplayChanged(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   PageLiveStateDecorator::OnIsCapturingDisplayChanged(contents,
                                                       is_capturing_display);
+}
+
+void PageLiveStateDecoratorHelper::DevToolsAgentHostAttached(
+    content::DevToolsAgentHost* agent_host) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (agent_host->GetType() == content::DevToolsAgentHost::kTypePage &&
+      agent_host->GetWebContents() != nullptr) {
+    PageLiveStateDecorator::SetIsDevToolsOpen(agent_host->GetWebContents(),
+                                              true);
+  }
+}
+
+void PageLiveStateDecoratorHelper::DevToolsAgentHostDetached(
+    content::DevToolsAgentHost* agent_host) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (agent_host->GetType() == content::DevToolsAgentHost::kTypePage &&
+      agent_host->GetWebContents() != nullptr) {
+    PageLiveStateDecorator::SetIsDevToolsOpen(agent_host->GetWebContents(),
+                                              false);
+  }
 }
 
 void PageLiveStateDecoratorHelper::OnPageNodeCreatedForWebContents(

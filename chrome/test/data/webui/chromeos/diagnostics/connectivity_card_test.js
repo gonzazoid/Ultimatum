@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import 'chrome://diagnostics/connectivity_card.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
 import {ConnectivityCardElement} from 'chrome://diagnostics/connectivity_card.js';
 import {fakeCellularNetwork, fakeEthernetNetwork, fakeNetworkGuidInfoList, fakeWifiNetwork} from 'chrome://diagnostics/fake_data.js';
@@ -14,14 +15,14 @@ import {Network} from 'chrome://diagnostics/network_health_provider.mojom-webui.
 import {RoutineGroup} from 'chrome://diagnostics/routine_group.js';
 import {TestSuiteStatus} from 'chrome://diagnostics/routine_list_executor.js';
 import {RoutineType, StandardRoutineResult} from 'chrome://diagnostics/system_routine_controller.mojom-webui.js';
+import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
-import {isVisible} from '../../test_util.js';
+import {isVisible} from '../test_util.js';
 
 import * as dx_utils from './diagnostics_test_utils.js';
 
-export function connectivityCardTestSuite() {
+suite('connectivityCardTestSuite', function() {
   /** @type {?ConnectivityCardElement} */
   let connectivityCardElement = null;
 
@@ -41,7 +42,7 @@ export function connectivityCardTestSuite() {
   });
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes.emptyHTML;
     // Setup a fake routine controller.
     routineController = new FakeSystemRoutineController();
     routineController.setDelayTimeInMillisecondsForTesting(-1);
@@ -90,7 +91,7 @@ export function connectivityCardTestSuite() {
   function getRoutines() {
     assertTrue(!!connectivityCardElement);
     let routines = [];
-    for (const routineGroup of connectivityCardElement.routineGroups_) {
+    for (const routineGroup of connectivityCardElement.routineGroups) {
       routines = [...routines, ...routineGroup.routines];
     }
 
@@ -141,7 +142,7 @@ export function connectivityCardTestSuite() {
    * @return {!Promise}
    */
   function stopTests() {
-    connectivityCardElement.getRoutineSectionElem_().stopTests();
+    connectivityCardElement.getRoutineSectionElem().stopTests();
     return flushTasks();
   }
 
@@ -225,4 +226,4 @@ export function connectivityCardTestSuite() {
                 TestSuiteStatus.RUNNING,
                 connectivityCardElement.testSuiteStatus));
   });
-}
+});

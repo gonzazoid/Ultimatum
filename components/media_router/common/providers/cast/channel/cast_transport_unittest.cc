@@ -10,11 +10,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/queue.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/run_loop.h"
 #include "base/test/simple_test_clock.h"
 #include "base/test/task_environment.h"
@@ -173,9 +174,11 @@ class CastTransportTest : public testing::Test {
   }
 
   base::test::SingleThreadTaskEnvironment task_environment_;
-  raw_ptr<MockCastTransportDelegate> delegate_;
+  raw_ptr<MockCastTransportDelegate, DanglingUntriaged> delegate_;
   MockSocket mock_socket_;
-  Logger* logger_;
+  // This field is not a raw_ptr<> because templates made it difficult for the
+  // rewriter to see that |.get()| needs to be appended.
+  RAW_PTR_EXCLUSION Logger* logger_;
   std::unique_ptr<CastTransport> transport_;
 };
 

@@ -6,8 +6,8 @@
 
 #include <algorithm>
 
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/callback.h"
 
 namespace media {
 
@@ -61,5 +61,15 @@ bool MemoryDataSource::IsStreaming() {
 }
 
 void MemoryDataSource::SetBitrate(int bitrate) {}
+
+bool MemoryDataSource::PassedTimingAllowOriginCheck() {
+  // There are no HTTP responses, so this can safely return true.
+  return true;
+}
+
+bool MemoryDataSource::WouldTaintOrigin() {
+  // There are no HTTP responses, so this can safely return false.
+  return false;
+}
 
 }  // namespace media

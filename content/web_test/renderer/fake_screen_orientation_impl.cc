@@ -6,10 +6,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "content/public/renderer/render_frame.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
@@ -56,10 +55,10 @@ bool FakeScreenOrientationImpl::UpdateScreenOrientation(
   return false;
 }
 
-absl::optional<display::mojom::ScreenOrientation>
+std::optional<display::mojom::ScreenOrientation>
 FakeScreenOrientationImpl::CurrentOrientationType() const {
   if (is_disabled_)
-    return absl::nullopt;
+    return std::nullopt;
   return current_orientation_;
 }
 
@@ -133,14 +132,14 @@ void FakeScreenOrientationImpl::OverrideAssociatedInterfaceProviderForFrame(
 void FakeScreenOrientationImpl::LockOrientation(
     device::mojom::ScreenOrientationLockType orientation,
     LockOrientationCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeScreenOrientationImpl::UpdateLockSync,
                      base::Unretained(this), orientation, std::move(callback)));
 }
 
 void FakeScreenOrientationImpl::UnlockOrientation() {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&FakeScreenOrientationImpl::ResetLockSync,
                                 base::Unretained(this)));
 }

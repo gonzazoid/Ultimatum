@@ -4,9 +4,10 @@
 
 // clang-format off
 import {assert} from 'chrome://resources/js/assert.js';
-import {webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
-import {AppProtocolEntry, ChooserType, ContentSetting, ContentSettingsTypes, HandlerEntry, NotificationPermission, ProtocolEntry, RawChooserException, RawSiteException, RecentSitePermissions, SiteGroup, SiteSettingSource, SiteSettingsPrefsBrowserProxy, ZoomLevelEntry} from 'chrome://settings/lazy_load.js';
+import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
+import {StorageAccessSiteException, AppProtocolEntry, ChooserType, ContentSetting, ContentSettingsTypes, HandlerEntry, OriginFileSystemGrants, ProtocolEntry, RawChooserException, RawSiteException, RecentSitePermissions, SiteGroup, SiteSettingSource, SiteSettingsPrefsBrowserProxy, ZoomLevelEntry} from 'chrome://settings/lazy_load.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 
 import {createOriginInfo, createSiteGroup,createSiteSettingsPrefs, getContentSettingsTypeFromChooserType, SiteSettingsPref} from './test_util.js';
 // clang-format on
@@ -28,9 +29,9 @@ export class TestSiteSettingsPrefsBrowserProxy extends TestBrowserProxy
   private ignoredProtocols_: HandlerEntry[] = [];
   private isOriginValid_: boolean = true;
   private isPatternValidForType_: boolean = true;
-  private cookieSettingDesciption_: string = '';
   private recentSitePermissions_: RecentSitePermissions[] = [];
-  private reviewNotificationList_: NotificationPermission[] = [];
+  private fileSystemGrantsList_: OriginFileSystemGrants[] = [];
+  private storageAccessExceptionList_: StorageAccessSiteException[] = [];
 
   constructor() {
     super([
@@ -42,6 +43,7 @@ export class TestSiteSettingsPrefsBrowserProxy extends TestBrowserProxy
       'getDefaultValueForContentType',
       'getFormattedBytes',
       'getExceptionList',
+      'getStorageAccessExceptionList',
       'getOriginPermissions',
       'isOriginValid',
       'isPatternValidForType',
@@ -61,26 +63,24 @@ export class TestSiteSettingsPrefsBrowserProxy extends TestBrowserProxy
       'setProtocolDefault',
       'setProtocolHandlerDefault',
       'updateIncognitoStatus',
-      'clearEtldPlus1DataAndCookies',
+      'clearSiteGroupDataAndCookies',
       'clearUnpartitionedOriginDataAndCookies',
       'clearPartitionedOriginDataAndCookies',
       'recordAction',
-      'getCookieSettingDescription',
       'getRecentSitePermissions',
-      'getNotificationPermissionReview',
-      'blockNotificationPermissionForOrigins',
-      'ignoreNotificationPermissionForOrigins',
-      'resetNotificationPermissionForOrigins',
-      'allowNotificationPermissionForOrigins',
-      'undoIgnoreNotificationPermissionForOrigins',
       'getFpsMembershipLabel',
       'getNumCookiesString',
+      'getExtensionName',
+      'getFileSystemGrants',
+      'revokeFileSystemGrant',
+      'revokeFileSystemGrants',
     ]);
 
 
     this.categoryList_ = [
       ContentSettingsTypes.ADS,
       ContentSettingsTypes.AR,
+      ContentSettingsTypes.AUTO_PICTURE_IN_PICTURE,
       ContentSettingsTypes.AUTOMATIC_DOWNLOADS,
       ContentSettingsTypes.BACKGROUND_SYNC,
       ContentSettingsTypes.BLUETOOTH_DEVICES,
@@ -96,7 +96,6 @@ export class TestSiteSettingsPrefsBrowserProxy extends TestBrowserProxy
       ContentSettingsTypes.JAVASCRIPT,
       ContentSettingsTypes.LOCAL_FONTS,
       ContentSettingsTypes.MIC,
-      ContentSettingsTypes.MIDI_DEVICES,
       ContentSettingsTypes.MIXEDSCRIPT,
       ContentSettingsTypes.NOTIFICATIONS,
       ContentSettingsTypes.PAYMENT_HANDLER,
@@ -109,6 +108,16 @@ export class TestSiteSettingsPrefsBrowserProxy extends TestBrowserProxy
       ContentSettingsTypes.VR,
       ContentSettingsTypes.WINDOW_MANAGEMENT,
     ];
+
+    if (loadTimeData.getBoolean('blockMidiByDefault')) {
+      this.categoryList_.push(ContentSettingsTypes.MIDI);
+    } else {
+      this.categoryList_.push(ContentSettingsTypes.MIDI_DEVICES);
+    }
+
+    if (loadTimeData.getBoolean('enableWebPrintingContentSetting')) {
+      this.categoryList_.push(ContentSettingsTypes.WEB_PRINTING);
+    }
 
     this.prefs_ = createSiteSettingsPrefs([], [], []);
   }
@@ -292,7 +301,8 @@ export class TestSiteSettingsPrefsBrowserProxy extends TestBrowserProxy
         const originInfo = createOriginInfo(origin, {usage: mockUsage});
         existing.origins.push(originInfo);
       } else {
-        const entry = createSiteGroup(etldPlus1Name, [origin], mockUsage);
+        const entry =
+            createSiteGroup(etldPlus1Name, etldPlus1Name, [origin], mockUsage);
         result.push(entry);
       }
     });
@@ -325,6 +335,9 @@ export class TestSiteSettingsPrefsBrowserProxy extends TestBrowserProxy
     // Defer |methodCalled| call so that |then| callback for the promise
     // returned from this method runs before the one for the promise returned
     // from |whenCalled| calls in tests.
+    // TODO(b/297567461): Remove once the flaky test fixes in
+    // https://chromium-review.googlesource.com/c/chromium/src/+/4124308 are
+    // confirmed to no longer be needed.
     window.setTimeout(
         () => this.methodCalled('getExceptionList', contentType), 0);
     let pref = this.prefs_.exceptions[contentType];
@@ -357,26 +370,26 @@ export class TestSiteSettingsPrefsBrowserProxy extends TestBrowserProxy
     // Create a deep copy of the pref so that the chooser-exception-list element
     // is able update the UI appropriately when incognito mode is toggled.
     const pref = /** @type {!Array<!RawChooserException>} */ (
-        JSON.parse(JSON.stringify(this.prefs_.chooserExceptions[setting!])));
+        structuredClone(this.prefs_.chooserExceptions[setting!]));
     assert(pref !== undefined, 'Pref is missing for ' + chooserType);
 
     if (this.hasIncognito_) {
       for (let i = 0; i < pref.length; ++i) {
         const incognitoElements = [];
-        for (let j = 0; j < pref[i].sites.length; ++j) {
+        for (let j = 0; j < pref[i]!.sites.length; ++j) {
           // Skip preferences that are not controlled by policy since opening an
           // incognito session does not automatically grant permission to
           // chooser exceptions that have been granted in the main session.
-          if (pref[i].sites[j].source !== SiteSettingSource.POLICY) {
+          if (pref[i]!.sites[j]!.source !== SiteSettingSource.POLICY) {
             continue;
           }
 
           // Copy |sites[i]| to avoid changing the original |sites[i]|.
-          const incognitoSite = Object.assign({}, pref[i].sites[j]);
+          const incognitoSite = Object.assign({}, pref[i]!.sites[j]);
           incognitoElements.push(
               Object.assign(incognitoSite, {incognito: true}));
         }
-        pref[i].sites.push(...incognitoElements);
+        pref[i]!.sites.push(...incognitoElements);
       }
     }
 
@@ -424,11 +437,9 @@ export class TestSiteSettingsPrefsBrowserProxy extends TestBrowserProxy
 
   /** @override */
   resetChooserExceptionForSite(
-      chooserType: ChooserType, origin: string, embeddingOrigin: string,
-      exception: Object) {
+      chooserType: ChooserType, origin: string, exception: Object) {
     this.methodCalled(
-        'resetChooserExceptionForSite',
-        [chooserType, origin, embeddingOrigin, exception]);
+        'resetChooserExceptionForSite', [chooserType, origin, exception]);
   }
 
   /** @override */
@@ -557,8 +568,8 @@ export class TestSiteSettingsPrefsBrowserProxy extends TestBrowserProxy
   }
 
   /** @override */
-  clearEtldPlus1DataAndCookies() {
-    this.methodCalled('clearEtldPlus1DataAndCookies');
+  clearSiteGroupDataAndCookies() {
+    this.methodCalled('clearSiteGroupDataAndCookies');
   }
 
   /** @override */
@@ -567,24 +578,14 @@ export class TestSiteSettingsPrefsBrowserProxy extends TestBrowserProxy
   }
 
   /** @override */
-  clearPartitionedOriginDataAndCookies(origin: string, etldPlus1: string) {
+  clearPartitionedOriginDataAndCookies(origin: string, groupingKey: string) {
     this.methodCalled(
-        'clearPartitionedOriginDataAndCookies', [origin, etldPlus1]);
+        'clearPartitionedOriginDataAndCookies', [origin, groupingKey]);
   }
 
   /** @override */
   recordAction() {
     this.methodCalled('recordAction');
-  }
-
-  setCookieSettingDescription(label: string) {
-    this.cookieSettingDesciption_ = label;
-  }
-
-  /** @override */
-  getCookieSettingDescription() {
-    this.methodCalled('getCookieSettingDescription');
-    return Promise.resolve(this.cookieSettingDesciption_);
   }
 
   setRecentSitePermissions(permissions: RecentSitePermissions[]) {
@@ -608,36 +609,6 @@ export class TestSiteSettingsPrefsBrowserProxy extends TestBrowserProxy
     this.methodCalled('setProtocolHandlerDefault', value);
   }
 
-  getNotificationPermissionReview(): Promise<NotificationPermission[]> {
-    this.methodCalled('getNotificationPermissionReview');
-    return Promise.resolve(this.reviewNotificationList_.slice());
-  }
-
-  setNotificationPermissionReview(reviewNotificationList:
-                                      NotificationPermission[]) {
-    this.reviewNotificationList_ = reviewNotificationList;
-  }
-
-  blockNotificationPermissionForOrigins(origins: string[]): void {
-    this.methodCalled('blockNotificationPermissionForOrigins', origins);
-  }
-
-  ignoreNotificationPermissionForOrigins(origins: string[]): void {
-    this.methodCalled('ignoreNotificationPermissionForOrigins', origins);
-  }
-
-  resetNotificationPermissionForOrigins(origins: string[]): void {
-    this.methodCalled('resetNotificationPermissionForOrigins', origins);
-  }
-
-  allowNotificationPermissionForOrigins(origins: string[]): void {
-    this.methodCalled('allowNotificationPermissionForOrigins', origins);
-  }
-
-  undoIgnoreNotificationPermissionForOrigins(origins: string[]): void {
-    this.methodCalled('undoIgnoreNotificationPermissionForOrigins', origins);
-  }
-
   getFpsMembershipLabel(fpsNumMembers: number, fpsOwner: string) {
     this.methodCalled('getFpsMembershipLabel', fpsNumMembers, fpsOwner);
     return Promise.resolve([
@@ -651,5 +622,42 @@ export class TestSiteSettingsPrefsBrowserProxy extends TestBrowserProxy
     this.methodCalled('getNumCookiesString', numCookies);
     return Promise.resolve(
         `${numCookies} ` + (numCookies === 1 ? 'cookie' : 'cookies'));
+  }
+
+  getExtensionName(id: string) {
+    this.methodCalled('getExtensionName', id);
+    return Promise.resolve(`Test Extension ${id}`);
+  }
+
+  setFileSystemGrants(fileSystemGrantsForOriginList: OriginFileSystemGrants[]):
+      void {
+    this.fileSystemGrantsList_ = fileSystemGrantsForOriginList;
+  }
+
+  getFileSystemGrants(): Promise<OriginFileSystemGrants[]> {
+    this.methodCalled('getFileSystemGrants');
+    return Promise.resolve(this.fileSystemGrantsList_);
+  }
+
+  setStorageAccessExceptionList(storageAccessExceptionList:
+                                    StorageAccessSiteException[]) {
+    this.storageAccessExceptionList_ = storageAccessExceptionList;
+  }
+
+  /** @override */
+  getStorageAccessExceptionList(categorySubtype: ContentSetting):
+      Promise<StorageAccessSiteException[]> {
+    this.methodCalled('getStorageAccessExceptionList', categorySubtype);
+
+    return Promise.resolve(this.storageAccessExceptionList_.filter(
+        site => site.setting === categorySubtype));
+  }
+
+  revokeFileSystemGrant(origin: string, filePath: string): void {
+    this.methodCalled('revokeFileSystemGrant', [origin, filePath]);
+  }
+
+  revokeFileSystemGrants(origin: string): void {
+    this.methodCalled('revokeFileSystemGrants', origin);
   }
 }

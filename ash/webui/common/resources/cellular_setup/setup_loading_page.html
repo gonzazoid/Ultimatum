@@ -7,13 +7,17 @@
     margin-bottom: 54px;
   }
 
+  #simDetectError,
+  #simDetectErrorJelly {
+    height: 100%;
+    width: 100%;
+  }
+
   #simDetectError {
     background-image: url(chrome://resources/ash/common/cellular_setup/sim_detect_error.svg);
     background-position: center center;
     background-repeat: no-repeat;
     background-size: contain;
-    height: 100%;
-    width: 100%;
   }
 
   @media(prefers-color-scheme: dark) {
@@ -22,11 +26,19 @@
     }
   }
 
+  :host-context(body.jelly-enabled) #simDetectError {
+    display: none;
+  }
+
+  :host-context(body:not(.jelly-enabled)) #simDetectErrorJelly {
+    display: none;
+  }
+
   #pageBody {
     height: 222px;
   }
 
-  cr-lottie {
+  cros-lottie-renderer {
     height: 85%;
   }
 
@@ -41,13 +53,17 @@
     </iron-media-query>
     <template is="dom-if" if="[[!isSimDetectError]]" restamp>
       <div id="animationContainer">
-        <cr-lottie id="spinner"
-            animation-url="[[getAnimationUrl_(isDarkModeActive_)]]"
-            autoplay>
-        </cr-lottie>
+        <cros-lottie-renderer id="spinner"
+            asset-url="chrome://resources/ash/common/cellular_setup/spinner.json"
+            autoplay dynamic aria-hidden>
+        </cros-lottie-renderer>
       </div>
     </template>
     <div id="simDetectError" hidden$="[[!isSimDetectError]]">
     </div>
+    <iron-icon id="simDetectErrorJelly"
+        icon="cellular-setup-illo:sim-detect-error"
+        hidden$="[[!isSimDetectError]]">
+    </iron-icon>
   </div>
 </base-page>

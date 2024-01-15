@@ -85,7 +85,7 @@ void FindAndCheckResults(LinearMapSearch* index,
       base::BindOnce(
           [](bool* callback_done, ResponseStatus* status,
              std::vector<Result>* results, ResponseStatus status_callback,
-             const absl::optional<std::vector<Result>>& results_callback) {
+             const std::optional<std::vector<Result>>& results_callback) {
             *callback_done = true;
             *status = status_callback;
             if (results_callback.has_value())
@@ -185,7 +185,7 @@ TEST_F(LinearMapSearchTest, RelevanceThreshold) {
   }
   {
     SearchParams search_params;
-    search_params.relevance_threshold = 0.9;
+    search_params.relevance_threshold = 0.95;
     index_->SetSearchParams(search_params);
 
     FindAndCheckResults(index_.get(), "wifi",

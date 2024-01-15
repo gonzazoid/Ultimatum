@@ -21,19 +21,17 @@ class MethodCall;
 
 namespace ash {
 
-// This class processes bootstrap mojo connection requests for other processes.
-// Current it supports IIO Service and Sensor Clients, such as
-// iioservice_simpleclient and powerd.
+// Deprecated: CrOS daemons should use mojo service manager to bootstrap the
+// mojo network.
+//
+// This class processes bootstrap mojo connection requests for
+// other processes.
 //
 // The following methods are exported:
 //
 // Interface:
 // org.chromium.MojoConnectionService
 //    (mojo_connection_service::kMojoConnectionServiceInterfaceName)
-// Methods: BootstrapMojoConnectionForIioService
-//     (mojo_connection_service::kBootstrapMojoConnectionForIioServiceMethod),
-//          BootstrapMojoConnectionForSensorClients
-//     (mojo_connection_service::kBootstrapMojoConnectionForSensorClientsMethod)
 // Parameters: none
 //
 //   Returns an endpoint of a mojo pipe via an asynchronous response, containing
@@ -60,14 +58,6 @@ class MojoConnectionServiceProvider
                   const std::string& method_name,
                   bool success);
 
-  void BootstrapMojoConnectionForIioService(
-      dbus::MethodCall* method_call,
-      dbus::ExportedObject::ResponseSender response_sender);
-
-  void BootstrapMojoConnectionForSensorClients(
-      dbus::MethodCall* method_call,
-      dbus::ExportedObject::ResponseSender response_sender);
-
   void BootstrapMojoConnectionForRollbackNetworkConfig(
       dbus::MethodCall* method_call,
       dbus::ExportedObject::ResponseSender response_sender);
@@ -87,10 +77,5 @@ class MojoConnectionServiceProvider
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-using ::ash::MojoConnectionServiceProvider;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_DBUS_MOJO_CONNECTION_SERVICE_PROVIDER_H_

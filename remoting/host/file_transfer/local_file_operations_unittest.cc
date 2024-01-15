@@ -4,13 +4,15 @@
 
 #include "remoting/host/file_transfer/local_file_operations.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/queue.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/path_service.h"
 #include "base/test/scoped_path_override.h"
 #include "base/test/task_environment.h"
+#include "remoting/host/file_transfer/directory_helpers.h"
+#include "remoting/host/file_transfer/ensure_user.h"
 #include "remoting/host/file_transfer/fake_file_chooser.h"
 #include "remoting/host/file_transfer/test_byte_vector_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -81,7 +83,10 @@ LocalFileOperationsTest::LocalFileOperationsTest()
       file_operations_(std::make_unique<LocalFileOperations>(
           task_environment_.GetMainThreadTaskRunner())) {}
 
-void LocalFileOperationsTest::SetUp() {}
+void LocalFileOperationsTest::SetUp() {
+  DisableUserContextCheckForTesting();
+  SetFileUploadDirectoryForTesting(TestDir());
+}
 
 void LocalFileOperationsTest::TearDown() {}
 
@@ -234,16 +239,13 @@ TEST_F(LocalFileOperationsTest, OpensReader) {
   base::FilePath path = TestDir().Append(kTestFilename);
   std::vector<std::uint8_t> contents =
       ByteArrayFrom(kTestDataOne, kTestDataTwo, kTestDataThree);
-  ASSERT_EQ(
-      static_cast<int>(contents.size()),
-      base::WriteFile(path, reinterpret_cast<const char*>(contents.data()),
-                      contents.size()));
+  ASSERT_TRUE(base::WriteFile(path, contents));
 
   std::unique_ptr<FileOperations::Reader> reader =
       file_operations_->CreateReader();
 
   FakeFileChooser::SetResult(path);
-  absl::optional<FileOperations::Reader::OpenResult> open_result;
+  std::optional<FileOperations::Reader::OpenResult> open_result;
   ASSERT_EQ(FileOperations::kCreated, reader->state());
   reader->Open(BindLambda([&](FileOperations::Reader::OpenResult result) {
     open_result = std::move(result);
@@ -262,16 +264,13 @@ TEST_F(LocalFileOperationsTest, ReadsThreeChunks) {
   base::FilePath path = TestDir().Append(kTestFilename);
   std::vector<std::uint8_t> contents =
       ByteArrayFrom(kTestDataOne, kTestDataTwo, kTestDataThree);
-  ASSERT_EQ(
-      static_cast<int>(contents.size()),
-      base::WriteFile(path, reinterpret_cast<const char*>(contents.data()),
-                      contents.size()));
+  ASSERT_TRUE(base::WriteFile(path, contents));
 
   std::unique_ptr<FileOperations::Reader> reader =
       file_operations_->CreateReader();
 
   FakeFileChooser::SetResult(path);
-  absl::optional<FileOperations::Reader::OpenResult> open_result;
+  std::optional<FileOperations::Reader::OpenResult> open_result;
   reader->Open(BindLambda([&](FileOperations::Reader::OpenResult result) {
     open_result = std::move(result);
   }));
@@ -279,7 +278,7 @@ TEST_F(LocalFileOperationsTest, ReadsThreeChunks) {
   ASSERT_TRUE(open_result && *open_result);
 
   for (const auto& chunk : {kTestDataOne, kTestDataTwo, kTestDataThree}) {
-    absl::optional<FileOperations::Reader::ReadResult> read_result;
+    std::optional<FileOperations::Reader::ReadResult> read_result;
     reader->ReadChunk(
         chunk.size(),
         BindLambda([&](FileOperations::Reader::ReadResult result) {
@@ -299,23 +298,20 @@ TEST_F(LocalFileOperationsTest, ReaderHandlesEof) {
   base::FilePath path = TestDir().Append(kTestFilename);
   std::vector<std::uint8_t> contents =
       ByteArrayFrom(kTestDataOne, kTestDataTwo, kTestDataThree);
-  ASSERT_EQ(
-      static_cast<int>(contents.size()),
-      base::WriteFile(path, reinterpret_cast<const char*>(contents.data()),
-                      contents.size()));
+  ASSERT_TRUE(base::WriteFile(path, contents));
 
   std::unique_ptr<FileOperations::Reader> reader =
       file_operations_->CreateReader();
 
   FakeFileChooser::SetResult(path);
-  absl::optional<FileOperations::Reader::OpenResult> open_result;
+  std::optional<FileOperations::Reader::OpenResult> open_result;
   reader->Open(BindLambda([&](FileOperations::Reader::OpenResult result) {
     open_result = std::move(result);
   }));
   task_environment_.RunUntilIdle();
   ASSERT_TRUE(open_result && *open_result);
 
-  absl::optional<FileOperations::Reader::ReadResult> read_result;
+  std::optional<FileOperations::Reader::ReadResult> read_result;
   reader->ReadChunk(
       contents.size() + 5,  // Attempt to read more than is in file.
       BindLambda([&](FileOperations::Reader::ReadResult result) {
@@ -344,7 +340,7 @@ TEST_F(LocalFileOperationsTest, ReaderCancels) {
 
   FakeFileChooser::SetResult(protocol::MakeFileTransferError(
       FROM_HERE, protocol::FileTransfer_Error_Type_CANCELED));
-  absl::optional<FileOperations::Reader::OpenResult> open_result;
+  std::optional<FileOperations::Reader::OpenResult> open_result;
   reader->Open(BindLambda([&](FileOperations::Reader::OpenResult result) {
     open_result = std::move(result);
   }));
@@ -363,7 +359,7 @@ TEST_F(LocalFileOperationsTest, FileNotFound) {
 
   // Currently non-existent file.
   FakeFileChooser::SetResult(TestDir().Append(kTestFilename));
-  absl::optional<FileOperations::Reader::OpenResult> open_result;
+  std::optional<FileOperations::Reader::OpenResult> open_result;
   reader->Open(BindLambda([&](FileOperations::Reader::OpenResult result) {
     open_result = std::move(result);
   }));

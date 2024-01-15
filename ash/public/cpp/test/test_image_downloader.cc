@@ -5,9 +5,9 @@
 #include <utility>
 
 #include "ash/public/cpp/test/test_image_downloader.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/account_id/account_id.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_unittest_util.h"
@@ -21,20 +21,22 @@ TestImageDownloader::~TestImageDownloader() = default;
 void TestImageDownloader::Download(
     const GURL& url,
     const net::NetworkTrafficAnnotationTag& annotation_tag,
+    const AccountId& account_id,
     DownloadCallback callback) {
-  Download(url, annotation_tag, /*additional_headers=*/{},
-           /*credentials_account_id=*/absl::nullopt, std::move(callback));
+  Download(url, annotation_tag, account_id, /*additional_headers=*/{},
+           std::move(callback));
 }
 
 void TestImageDownloader::Download(
     const GURL& url,
     const net::NetworkTrafficAnnotationTag& annotation_tag,
+    const AccountId& account_id,
     const net::HttpRequestHeaders& additional_headers,
-    absl::optional<AccountId> credentials_account_id,
     DownloadCallback callback) {
+  DCHECK(account_id.is_valid());
   last_request_headers_ = additional_headers;
   // Pretend to respond asynchronously.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback),
                      should_fail_ ? gfx::ImageSkia()

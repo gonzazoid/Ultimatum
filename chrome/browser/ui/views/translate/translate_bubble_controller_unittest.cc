@@ -5,6 +5,7 @@
 #include "chrome/browser/ui/views/translate/translate_bubble_controller.h"
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
@@ -13,6 +14,7 @@
 #include "chrome/test/views/chrome_views_test_base.h"
 #include "components/translate/core/browser/mock_translate_metrics_logger.h"
 #include "components/translate/core/browser/translate_step.h"
+#include "components/translate/core/common/translate_constants.h"
 #include "components/translate/core/common/translate_errors.h"
 #include "components/translate/core/common/translate_util.h"
 #include "content/public/test/test_renderer_host.h"
@@ -194,10 +196,6 @@ class TranslateBubbleControllerTest : public ChromeViewsTestBase {
 
  protected:
   void SetUp() override {
-    scoped_feature_list_.InitAndEnableFeatureWithParameters(
-        translate::kDesktopPartialTranslate,
-        {{"DesktopPartialTranslateBubbleShowDelayMs", "50"}});
-
     ChromeViewsTestBase::SetUp();
 
     // Create an anchor for the bubble.
@@ -249,9 +247,10 @@ class TranslateBubbleControllerTest : public ChromeViewsTestBase {
   std::unique_ptr<translate::testing::MockTranslateMetricsLogger>
       mock_translate_metrics_logger_;
 
-  FakeTranslateBubbleModel* fake_translate_bubble_model_ = nullptr;
-  FakePartialTranslateBubbleModel* fake_partial_translate_bubble_model_ =
-      nullptr;
+  raw_ptr<FakeTranslateBubbleModel, DanglingUntriaged>
+      fake_translate_bubble_model_ = nullptr;
+  raw_ptr<FakePartialTranslateBubbleModel, DanglingUntriaged>
+      fake_partial_translate_bubble_model_ = nullptr;
 
   // Owned by WebContents.
   raw_ptr<TranslateBubbleController> controller_;
@@ -321,7 +320,8 @@ TEST_F(TranslateBubbleControllerTest, PartialTranslateTimerExpired) {
   EXPECT_FALSE(
       controller_->GetPartialTranslateBubble()->GetWidget()->IsVisible());
 
-  task_environment()->FastForwardBy(base::Milliseconds(100));
+  task_environment()->FastForwardBy(base::Milliseconds(
+      translate::kDesktopPartialTranslateBubbleShowDelayMs + 100));
   EXPECT_TRUE(
       controller_->GetPartialTranslateBubble()->GetWidget()->IsVisible());
   EXPECT_EQ(fake_partial_translate_bubble_model_->GetViewState(),
@@ -362,8 +362,7 @@ TEST_F(TranslateBubbleControllerTest, PartialTranslateError) {
 TEST_F(TranslateBubbleControllerTest, PartialTranslateSourceTextTruncatedTrue) {
   // Generate a string strictly larger than the text selection character limit.
   std::u16string string_to_truncate(
-      translate::kDesktopPartialTranslateTextSelectionMaxCharacters.Get() + 1,
-      '*');
+      translate::kDesktopPartialTranslateTextSelectionMaxCharacters + 1, '*');
   // Check that source_text_truncated_ is properly set for a new bubble.
   controller_->StartPartialTranslate(anchor_widget_->GetContentsView(), nullptr,
                                      "fr", "en", string_to_truncate);

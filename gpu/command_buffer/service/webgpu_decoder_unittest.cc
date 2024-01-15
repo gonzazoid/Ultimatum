@@ -32,27 +32,14 @@ class WebGPUDecoderTest : public ::testing::Test {
   WebGPUDecoderTest() {}
 
   void SetUp() override {
-    if (!WebGPUSupported()) {
-      GTEST_SKIP() << "Test skipped because WebGPU isn't supported";
-    }
     decoder_client_ = std::make_unique<FakeDecoderClient>();
     command_buffer_service_ = std::make_unique<FakeCommandBufferServiceBase>();
 
-    // Enable unsafe webgpu for unit testing.
-    // TODO(dawn:549) Remove this once caching can be enabled by default.
-    GpuPreferences preferences;
-    preferences.enable_unsafe_webgpu = true;
-
     decoder_.reset(WebGPUDecoder::Create(
         decoder_client_.get(), command_buffer_service_.get(), nullptr, nullptr,
-        &outputter_, preferences, nullptr, DawnCacheOptions(),
+        &outputter_, {}, nullptr, DawnCacheOptions(),
         &mock_isolation_key_provider_));
     ASSERT_EQ(decoder_->Initialize(GpuFeatureInfo()), ContextResult::kSuccess);
-  }
-
-  bool WebGPUSupported() const {
-    // WebGPU does not work on Win7 because there is no D3D12 on Win7
-    return !GPUTestBotConfig::CurrentConfigMatches("Win7");
   }
 
   template <typename T>
@@ -77,7 +64,7 @@ class WebGPUDecoderTest : public ::testing::Test {
 
 TEST_F(WebGPUDecoderTest, DawnCommands) {
   cmds::DawnCommands cmd;
-  cmd.Init(0, 0, 0);
+  cmd.Init(0, 0, 0, 0, 0);
   EXPECT_EQ(error::kOutOfBounds, ExecuteCmd(cmd));
 }
 

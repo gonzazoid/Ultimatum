@@ -13,12 +13,13 @@
 #include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/path_service.h"
+#include "base/sampling_heap_profiler/poisson_allocation_sampler.h"
 #include "base/trace_event/trace_event.h"
 #include "chrome/browser/android/chrome_startup_flags.h"
 #include "chrome/browser/android/metrics/uma_utils.h"
 #include "chrome/common/profiler/main_thread_stack_sampling_profiler.h"
 #include "components/policy/core/common/android/android_combined_policy_provider.h"
-#include "components/startup_metric_utils/browser/startup_metric_utils.h"
+#include "components/startup_metric_utils/common/startup_metric_utils.h"
 #include "content/public/browser/browser_main_runner.h"
 
 namespace {
@@ -44,6 +45,15 @@ absl::optional<int> ChromeMainDelegateAndroid::BasicStartupComplete() {
 
 void ChromeMainDelegateAndroid::PreSandboxStartup() {
   ChromeMainDelegate::PreSandboxStartup();
+
+  // PoissonAllocationSampler's TLS slots need to be set up before
+  // MainThreadStackSamplingProfiler, which can allocate TLS slots of its own.
+  // On some platforms pthreads can malloc internally to access higher-numbered
+  // TLS slots, which can cause reentry in the heap profiler. (See the comment
+  // on ReentryGuard::InitTLSSlot().)
+  // TODO(https://crbug.com/1411454): Clean up other paths that call this Init()
+  // function, which are now redundant.
+  base::PoissonAllocationSampler::Init();
 
   // Start the sampling profiler after crashpad initialization.
   sampling_profiler_ = std::make_unique<MainThreadStackSamplingProfiler>();
@@ -88,7 +98,7 @@ ChromeMainDelegateAndroid::RunProcess(
     base::TimeTicks application_start_time =
         chrome::android::GetApplicationStartTime();
     if (!process_start_time.is_null()) {
-      startup_metric_utils::RecordStartupProcessCreationTime(
+      startup_metric_utils::GetCommon().RecordStartupProcessCreationTime(
           process_start_time);
       // TODO(crbug.com/1127482): Perf bots should add support for measuring
       // Startup.LoadTime.ProcessCreateToApplicationStart, then the
@@ -96,7 +106,8 @@ ChromeMainDelegateAndroid::RunProcess(
       if (base::FeatureList::IsEnabled(kUseProcessStartTimeForMetrics))
         application_start_time = process_start_time;
     }
-    startup_metric_utils::RecordApplicationStartTime(application_start_time);
+    startup_metric_utils::GetCommon().RecordApplicationStartTime(
+        application_start_time);
     browser_runner_ = content::BrowserMainRunner::Create();
   }
 

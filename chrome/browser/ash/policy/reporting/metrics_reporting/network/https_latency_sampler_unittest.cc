@@ -6,26 +6,28 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/net/network_diagnostics/network_diagnostics.h"
+#include "chrome/browser/ash/policy/reporting/metrics_reporting/network/fake_network_diagnostics_util.h"
 #include "chromeos/ash/components/dbus/debug_daemon/fake_debug_daemon_client.h"
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "chromeos/services/network_health/public/mojom/network_diagnostics.mojom.h"
 #include "components/reporting/proto/synced/metric_data.pb.h"
 #include "components/reporting/util/test_support_callbacks.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
 using ::ash::network_diagnostics::NetworkDiagnostics;
@@ -82,69 +84,6 @@ void SetNetworkData(
   base::RunLoop().RunUntilIdle();
 }
 
-class FakeNetworkDiagnostics : public NetworkDiagnostics {
- public:
-  FakeNetworkDiagnostics() : NetworkDiagnostics(&fake_debug_daemon_client_) {}
-
-  FakeNetworkDiagnostics(const FakeNetworkDiagnostics&) = delete;
-  FakeNetworkDiagnostics& operator=(const FakeNetworkDiagnostics&) = delete;
-
-  ~FakeNetworkDiagnostics() override = default;
-
-  void RunHttpsLatency(RunHttpsLatencyCallback callback) override {
-    ASSERT_FALSE(callback_);
-    callback_ = std::move(callback);
-  }
-
-  void ExecuteCallback() {
-    // Block until all previously posted tasks are executed to make sure
-    // `RunHttpsLatency` is called and `callback_` is set.
-    base::RunLoop run_loop;
-    base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                     run_loop.QuitClosure());
-    run_loop.Run();
-    ASSERT_TRUE(callback_);
-    std::move(callback_).Run(routine_result_.Clone());
-  }
-
-  void SetReceiver(
-      mojo::PendingReceiver<NetworkDiagnosticsRoutines> pending_receiver) {
-    receiver_ = std::make_unique<mojo::Receiver<NetworkDiagnosticsRoutines>>(
-        this, std::move(pending_receiver));
-  }
-
-  void SetResultNoProblem(int latency_ms) {
-    routine_result_.result_value =
-        RoutineResultValue::NewHttpsLatencyResultValue(
-            HttpsLatencyResultValue::New(base::Milliseconds(latency_ms)));
-    routine_result_.verdict = RoutineVerdictMojom::kNoProblem;
-    routine_result_.problems = RoutineProblems::NewHttpsLatencyProblems({});
-  }
-
-  void SetResultProblem(HttpsLatencyProblemMojom problem) {
-    routine_result_.problems =
-        RoutineProblems::NewHttpsLatencyProblems({problem});
-    routine_result_.verdict = RoutineVerdictMojom::kProblem;
-  }
-
-  void SetResultProblemLatency(HttpsLatencyProblemMojom problem,
-                               int latency_ms) {
-    routine_result_.result_value =
-        RoutineResultValue::NewHttpsLatencyResultValue(
-            HttpsLatencyResultValue::New(base::Milliseconds(latency_ms)));
-    SetResultProblem(problem);
-  }
-
- private:
-  RoutineResult routine_result_;
-
-  std::unique_ptr<mojo::Receiver<NetworkDiagnosticsRoutines>> receiver_;
-
-  RunHttpsLatencyCallback callback_;
-
-  ash::FakeDebugDaemonClient fake_debug_daemon_client_;
-};
-
 class FakeHttpsLatencyDelegate : public HttpsLatencySampler::Delegate {
  public:
   explicit FakeHttpsLatencyDelegate(FakeNetworkDiagnostics* fake_diagnostics)
@@ -161,13 +100,13 @@ class FakeHttpsLatencyDelegate : public HttpsLatencySampler::Delegate {
   }
 
  private:
-  FakeNetworkDiagnostics* const fake_diagnostics_;
+  const raw_ptr<FakeNetworkDiagnostics> fake_diagnostics_;
 };
 
 TEST(HttpsLatencySamplerTest, NoProblem) {
   base::test::TaskEnvironment task_environment;
   ::ash::NetworkHandlerTestHelper network_handler_test_helper;
-  SetNetworkData({shill::kStateReady, shill::kStateOnline},
+  SetNetworkData({shill::kStateIdle, shill::kStateOnline},
                  &network_handler_test_helper);
 
   FakeNetworkDiagnostics diagnostics;
@@ -176,10 +115,10 @@ TEST(HttpsLatencySamplerTest, NoProblem) {
   HttpsLatencySampler sampler(
       std::make_unique<FakeHttpsLatencyDelegate>(&diagnostics));
 
-  test::TestEvent<absl::optional<MetricData>> metric_collect_event;
+  test::TestEvent<std::optional<MetricData>> metric_collect_event;
   sampler.MaybeCollect(metric_collect_event.cb());
   diagnostics.ExecuteCallback();
-  const absl::optional<MetricData> optional_result =
+  const std::optional<MetricData> optional_result =
       metric_collect_event.result();
 
   ASSERT_TRUE(optional_result.has_value());
@@ -205,7 +144,7 @@ TEST(HttpsLatencySamplerTest, NoProblem) {
 TEST(HttpsLatencySamplerTest, FailedRequests) {
   base::test::TaskEnvironment task_environment;
   ::ash::NetworkHandlerTestHelper network_handler_test_helper;
-  SetNetworkData({shill::kStateReady, shill::kStateOnline},
+  SetNetworkData({shill::kStateOnline, shill::kStateIdle},
                  &network_handler_test_helper);
 
   FakeNetworkDiagnostics diagnostics;
@@ -213,10 +152,10 @@ TEST(HttpsLatencySamplerTest, FailedRequests) {
   HttpsLatencySampler sampler(
       std::make_unique<FakeHttpsLatencyDelegate>(&diagnostics));
 
-  test::TestEvent<absl::optional<MetricData>> metric_collect_event;
+  test::TestEvent<std::optional<MetricData>> metric_collect_event;
   sampler.MaybeCollect(metric_collect_event.cb());
   diagnostics.ExecuteCallback();
-  const absl::optional<MetricData> optional_result =
+  const std::optional<MetricData> optional_result =
       metric_collect_event.result();
 
   ASSERT_TRUE(optional_result.has_value());
@@ -242,7 +181,7 @@ TEST(HttpsLatencySamplerTest, FailedRequests) {
 TEST(HttpsLatencySamplerTest, OverlappingCalls) {
   base::test::TaskEnvironment task_environment;
   ::ash::NetworkHandlerTestHelper network_handler_test_helper;
-  SetNetworkData({shill::kStateReady, shill::kStateOnline},
+  SetNetworkData({shill::kStateOnline, shill::kStateIdle},
                  &network_handler_test_helper);
 
   FakeNetworkDiagnostics diagnostics;
@@ -250,11 +189,11 @@ TEST(HttpsLatencySamplerTest, OverlappingCalls) {
   HttpsLatencySampler sampler(
       std::make_unique<FakeHttpsLatencyDelegate>(&diagnostics));
 
-  test::TestEvent<absl::optional<MetricData>> metric_collect_events[2];
+  test::TestEvent<std::optional<MetricData>> metric_collect_events[2];
   sampler.MaybeCollect(metric_collect_events[0].cb());
   sampler.MaybeCollect(metric_collect_events[1].cb());
   diagnostics.ExecuteCallback();
-  const absl::optional<MetricData> first_optional_result =
+  const std::optional<MetricData> first_optional_result =
       metric_collect_events[0].result();
 
   ASSERT_TRUE(first_optional_result.has_value());
@@ -276,7 +215,7 @@ TEST(HttpsLatencySamplerTest, OverlappingCalls) {
                 .problem(),
             HttpsLatencyProblem::FAILED_DNS_RESOLUTIONS);
 
-  const absl::optional<MetricData> second_optional_result =
+  const std::optional<MetricData> second_optional_result =
       metric_collect_events[1].result();
 
   ASSERT_TRUE(second_optional_result.has_value());
@@ -302,7 +241,7 @@ TEST(HttpsLatencySamplerTest, OverlappingCalls) {
 TEST(HttpsLatencySamplerTest, SuccessiveCalls) {
   base::test::TaskEnvironment task_environment;
   ::ash::NetworkHandlerTestHelper network_handler_test_helper;
-  SetNetworkData({shill::kStateReady, shill::kStateOnline},
+  SetNetworkData({shill::kStateIdle, shill::kStateOnline},
                  &network_handler_test_helper);
 
   FakeNetworkDiagnostics diagnostics;
@@ -313,10 +252,10 @@ TEST(HttpsLatencySamplerTest, SuccessiveCalls) {
     const int latency_ms = 1000;
     diagnostics.SetResultProblemLatency(HttpsLatencyProblemMojom::kHighLatency,
                                         latency_ms);
-    test::TestEvent<absl::optional<MetricData>> metric_collect_event;
+    test::TestEvent<std::optional<MetricData>> metric_collect_event;
     sampler.MaybeCollect(metric_collect_event.cb());
     diagnostics.ExecuteCallback();
-    const absl::optional<MetricData> first_optional_result =
+    const std::optional<MetricData> first_optional_result =
         metric_collect_event.result();
 
     ASSERT_TRUE(first_optional_result.has_value());
@@ -344,10 +283,10 @@ TEST(HttpsLatencySamplerTest, SuccessiveCalls) {
     const int latency_ms = 5000;
     diagnostics.SetResultProblemLatency(
         HttpsLatencyProblemMojom::kVeryHighLatency, latency_ms);
-    test::TestEvent<absl::optional<MetricData>> metric_collect_event;
+    test::TestEvent<std::optional<MetricData>> metric_collect_event;
     sampler.MaybeCollect(metric_collect_event.cb());
     diagnostics.ExecuteCallback();
-    const absl::optional<MetricData> second_optional_result =
+    const std::optional<MetricData> second_optional_result =
         metric_collect_event.result();
 
     ASSERT_TRUE(second_optional_result.has_value());
@@ -383,11 +322,11 @@ TEST(HttpsLatencySamplerTest, Offline) {
   HttpsLatencySampler sampler(
       std::make_unique<FakeHttpsLatencyDelegate>(&diagnostics));
   bool callback_called = false;
-  absl::optional<MetricData> metric_data_result;
+  std::optional<MetricData> metric_data_result;
 
   sampler.MaybeCollect(
       base::BindLambdaForTesting([&callback_called, &metric_data_result](
-                                     absl::optional<MetricData> metric_data) {
+                                     std::optional<MetricData> metric_data) {
         callback_called = true;
         metric_data_result = std::move(metric_data);
       }));
@@ -395,183 +334,5 @@ TEST(HttpsLatencySamplerTest, Offline) {
   ASSERT_TRUE(callback_called);
   EXPECT_FALSE(metric_data_result.has_value());
 }
-
-struct HttpsLatencyEventDetectorTestCase {
-  std::string test_name;
-  HttpsLatencyProblem problem;
-};
-
-class HttpsLatencyEventDetectorTest
-    : public ::testing::TestWithParam<HttpsLatencyEventDetectorTestCase> {
- protected:
-  base::test::TaskEnvironment task_environment_;
-
-  ::ash::NetworkHandlerTestHelper network_handler_test_helper_;
-};
-
-TEST(HttpsLatencyEventDetectorTest, NoEventDetected) {
-  MetricData previous_metric_data;
-  MetricData current_metric_data;
-
-  HttpsLatencyEventDetector detector;
-
-  auto event_type =
-      detector.DetectEvent(previous_metric_data, current_metric_data);
-
-  // No latency data in both current and previous collected data.
-  EXPECT_FALSE(event_type.has_value());
-
-  auto* const current_latency_data =
-      current_metric_data.mutable_telemetry_data()
-          ->mutable_networks_telemetry()
-          ->mutable_https_latency_data();
-  current_latency_data->set_verdict(RoutineVerdict::NO_PROBLEM);
-
-  event_type = detector.DetectEvent(previous_metric_data, current_metric_data);
-
-  // No latency data in previous collected data and no problems found in current
-  // latency data.
-  EXPECT_FALSE(event_type.has_value());
-
-  auto* const previous_latency_data =
-      previous_metric_data.mutable_telemetry_data()
-          ->mutable_networks_telemetry()
-          ->mutable_https_latency_data();
-  previous_latency_data->set_verdict(RoutineVerdict::NO_PROBLEM);
-  current_latency_data->set_verdict(RoutineVerdict::NO_PROBLEM);
-
-  event_type = detector.DetectEvent(previous_metric_data, current_metric_data);
-
-  // No problem found in both previous and current latency data.
-  EXPECT_FALSE(event_type.has_value());
-
-  previous_latency_data->set_verdict(RoutineVerdict::PROBLEM);
-  previous_latency_data->set_problem(HttpsLatencyProblem::HIGH_LATENCY);
-  current_latency_data->set_verdict(RoutineVerdict::PROBLEM);
-  current_latency_data->set_problem(HttpsLatencyProblem::HIGH_LATENCY);
-
-  event_type = detector.DetectEvent(previous_metric_data, current_metric_data);
-
-  // Same problem found in both previous and current latency data.
-  EXPECT_FALSE(event_type.has_value());
-}
-
-TEST(HttpsLatencyEventDetectorTest, EventDetected) {
-  MetricEventType expected_event_type =
-      MetricEventType::NETWORK_HTTPS_LATENCY_CHANGE;
-  MetricData previous_metric_data;
-  MetricData current_metric_data;
-
-  HttpsLatencyEventDetector detector;
-  auto* const current_latency_data =
-      current_metric_data.mutable_telemetry_data()
-          ->mutable_networks_telemetry()
-          ->mutable_https_latency_data();
-  current_latency_data->set_verdict(RoutineVerdict::NO_PROBLEM);
-
-  auto event_type =
-      detector.DetectEvent(previous_metric_data, current_metric_data);
-
-  // No event detected, no data previously collected, and current collected data
-  // has no problem.
-  ASSERT_FALSE(event_type.has_value());
-
-  current_latency_data->set_verdict(RoutineVerdict::PROBLEM);
-
-  event_type = detector.DetectEvent(previous_metric_data, current_metric_data);
-
-  // No data previously collected, and current collected data has problem.
-  ASSERT_TRUE(event_type.has_value());
-  EXPECT_EQ(event_type.value(), expected_event_type);
-
-  auto* const previous_latency_data =
-      previous_metric_data.mutable_telemetry_data()
-          ->mutable_networks_telemetry()
-          ->mutable_https_latency_data();
-  previous_latency_data->set_verdict(RoutineVerdict::PROBLEM);
-  current_latency_data->set_verdict(RoutineVerdict::NO_PROBLEM);
-
-  event_type = detector.DetectEvent(previous_metric_data, current_metric_data);
-
-  // Problem found in previous latency data and no problem found in current
-  // latency data.
-  ASSERT_TRUE(event_type.has_value());
-  EXPECT_EQ(event_type.value(), expected_event_type);
-
-  previous_latency_data->set_verdict(RoutineVerdict::NO_PROBLEM);
-  current_latency_data->set_verdict(RoutineVerdict::PROBLEM);
-
-  event_type = detector.DetectEvent(previous_metric_data, current_metric_data);
-
-  // No problem found in previous latency data and problem found in current
-  // latency data.
-  ASSERT_TRUE(event_type.has_value());
-  EXPECT_EQ(event_type.value(), expected_event_type);
-
-  previous_latency_data->set_verdict(RoutineVerdict::PROBLEM);
-  previous_latency_data->set_problem(HttpsLatencyProblem::HIGH_LATENCY);
-  current_latency_data->set_verdict(RoutineVerdict::PROBLEM);
-  current_latency_data->set_problem(HttpsLatencyProblem::VERY_HIGH_LATENCY);
-
-  event_type = detector.DetectEvent(previous_metric_data, current_metric_data);
-
-  // Previous and current latency data have different problems.
-  ASSERT_TRUE(event_type.has_value());
-  EXPECT_EQ(event_type.value(), expected_event_type);
-}
-
-TEST_P(HttpsLatencyEventDetectorTest, RequestError_Offline) {
-  MetricData previous_metric_data;
-  MetricData current_metric_data;
-
-  auto* const current_latency_data =
-      current_metric_data.mutable_telemetry_data()
-          ->mutable_networks_telemetry()
-          ->mutable_https_latency_data();
-  current_latency_data->set_verdict(RoutineVerdict::PROBLEM);
-  current_latency_data->set_problem(GetParam().problem);
-
-  HttpsLatencyEventDetector detector;
-
-  SetNetworkData({shill::kStateReady, shill::kStateConfiguration},
-                 &network_handler_test_helper_);
-  auto event_type =
-      detector.DetectEvent(previous_metric_data, current_metric_data);
-
-  // No latency data since the request problem is because that the device is not
-  // online.
-  EXPECT_FALSE(event_type.has_value());
-}
-
-TEST_P(HttpsLatencyEventDetectorTest, RequestError_Online) {
-  MetricData previous_metric_data;
-  MetricData current_metric_data;
-
-  auto* const current_latency_data =
-      current_metric_data.mutable_telemetry_data()
-          ->mutable_networks_telemetry()
-          ->mutable_https_latency_data();
-  current_latency_data->set_verdict(RoutineVerdict::PROBLEM);
-  current_latency_data->set_problem(GetParam().problem);
-
-  HttpsLatencyEventDetector detector;
-
-  SetNetworkData({shill::kStateReady, shill::kStateOnline},
-                 &network_handler_test_helper_);
-  auto event_type =
-      detector.DetectEvent(previous_metric_data, current_metric_data);
-
-  ASSERT_TRUE(event_type.has_value());
-  EXPECT_EQ(event_type.value(), MetricEventType::NETWORK_HTTPS_LATENCY_CHANGE);
-}
-
-INSTANTIATE_TEST_SUITE_P(
-    HttpsLatencyEventDetectorTests,
-    HttpsLatencyEventDetectorTest,
-    ::testing::ValuesIn<HttpsLatencyEventDetectorTestCase>(
-        {{"FailedDnsResolutions", HttpsLatencyProblem::FAILED_DNS_RESOLUTIONS},
-         {"FailedHttpsRequests", HttpsLatencyProblem::FAILED_HTTPS_REQUESTS}}),
-    [](const testing::TestParamInfo<HttpsLatencyEventDetectorTest::ParamType>&
-           info) { return info.param.test_name; });
 }  // namespace
 }  // namespace reporting

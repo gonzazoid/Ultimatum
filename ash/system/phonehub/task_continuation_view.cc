@@ -6,11 +6,15 @@
 
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
+#include "ash/style/typography.h"
 #include "ash/system/phonehub/continue_browsing_chip.h"
 #include "ash/system/phonehub/phone_hub_view_ids.h"
 #include "ash/system/phonehub/ui_constants.h"
 #include "ash/system/tray/tray_constants.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/text_constants.h"
 #include "ui/views/controls/label.h"
@@ -41,30 +45,38 @@ gfx::Size GetTaskContinuationChipSize() {
 }
 
 class HeaderView : public views::Label {
+  METADATA_HEADER(HeaderView, views::Label)
+
  public:
   HeaderView() {
     SetText(
         l10n_util::GetStringUTF16(IDS_ASH_PHONE_HUB_TASK_CONTINUATION_TITLE));
-    SetLineHeight(kHeaderLabelLineHeight);
-    SetFontList(font_list()
-                    .DeriveWithSizeDelta(kHeaderTextFontSizeDip -
-                                         font_list().GetFontSize())
-                    .DeriveWithWeight(gfx::Font::Weight::MEDIUM));
     SetHorizontalAlignment(gfx::HorizontalAlignment::ALIGN_LEFT);
     SetVerticalAlignment(gfx::VerticalAlignment::ALIGN_MIDDLE);
     SetAutoColorReadabilityEnabled(false);
     SetSubpixelRenderingEnabled(false);
     SetEnabledColor(AshColorProvider::Get()->GetContentLayerColor(
         AshColorProvider::ContentLayerType::kTextColorPrimary));
+
+    if (chromeos::features::IsJellyrollEnabled()) {
+      TypographyProvider::Get()->StyleLabel(ash::TypographyToken::kCrosButton1,
+                                            *this);
+    } else {
+      SetFontList(font_list()
+                      .DeriveWithSizeDelta(kHeaderTextFontSizeDip -
+                                           font_list().GetFontSize())
+                      .DeriveWithWeight(gfx::Font::Weight::MEDIUM));
+    }
+    SetLineHeight(kHeaderLabelLineHeight);
   }
 
   ~HeaderView() override = default;
   HeaderView(HeaderView&) = delete;
   HeaderView operator=(HeaderView&) = delete;
-
-  // views::View:
-  const char* GetClassName() const override { return "HeaderView"; }
 };
+
+BEGIN_METADATA(HeaderView)
+END_METADATA
 
 }  // namespace
 
@@ -93,10 +105,6 @@ TaskContinuationView::~TaskContinuationView() {
 
 void TaskContinuationView::OnModelChanged() {
   Update();
-}
-
-const char* TaskContinuationView::GetClassName() const {
-  return "TaskContinuationView";
 }
 
 TaskContinuationView::TaskChipsView::TaskChipsView() = default;
@@ -161,6 +169,9 @@ void TaskContinuationView::TaskChipsView::CalculateIdealBounds() {
   }
 }
 
+BEGIN_METADATA(TaskContinuationView, TaskChipsView, views::View)
+END_METADATA
+
 void TaskContinuationView::Update() {
   chips_view_->Reset();
 
@@ -190,5 +201,8 @@ void TaskContinuationView::Update() {
   PreferredSizeChanged();
   SetVisible(true);
 }
+
+BEGIN_METADATA(TaskContinuationView)
+END_METADATA
 
 }  // namespace ash

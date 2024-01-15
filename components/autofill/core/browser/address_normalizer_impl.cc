@@ -7,15 +7,15 @@
 #include <stddef.h>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/cancelable_callback.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "components/autofill/core/browser/autofill_data_util.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
@@ -25,6 +25,12 @@
 #include "third_party/libaddressinput/src/cpp/include/libaddressinput/address_data.h"
 #include "third_party/libaddressinput/src/cpp/include/libaddressinput/source.h"
 #include "third_party/libaddressinput/src/cpp/include/libaddressinput/storage.h"
+
+#if BUILDFLAG(IS_ANDROID)
+#include "base/android/jni_android.h"
+#include "base/android/jni_string.h"
+#include "components/autofill/android/main_autofill_jni_headers/AddressNormalizer_jni.h"
+#endif  // BUILDFLAG(IS_ANDROID)
 
 namespace autofill {
 
@@ -81,6 +87,22 @@ std::unique_ptr<AddressValidator> CreateAddressValidator(
       load_rules_listener);
 }
 
+#if BUILDFLAG(IS_ANDROID)
+void OnAddressNormalized(base::android::ScopedJavaGlobalRef<jobject> jdelegate,
+                         const std::string& app_locale,
+                         bool success,
+                         const AutofillProfile& profile) {
+  JNIEnv* env = base::android::AttachCurrentThread();
+  if (success) {
+    Java_NormalizedAddressRequestDelegate_onAddressNormalized(
+        env, jdelegate, profile.CreateJavaObject(app_locale));
+  } else {
+    Java_NormalizedAddressRequestDelegate_onCouldNotNormalize(
+        env, jdelegate, profile.CreateJavaObject(app_locale));
+  }
+}
+#endif  // BUILDFLAG(IS_ANDROID)
+
 }  // namespace
 
 class AddressNormalizerImpl::NormalizationRequest {
@@ -94,7 +116,7 @@ class AddressNormalizerImpl::NormalizationRequest {
         callback_(std::move(callback)) {
     // OnRulesLoaded will be called in |timeout_seconds| if the rules are not
     // loaded in time.
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&NormalizationRequest::OnRulesLoaded,
                        weak_ptr_factory_.GetWeakPtr(),
@@ -106,7 +128,7 @@ class AddressNormalizerImpl::NormalizationRequest {
   NormalizationRequest(const NormalizationRequest&) = delete;
   NormalizationRequest& operator=(const NormalizationRequest&) = delete;
 
-  ~NormalizationRequest() {}
+  ~NormalizationRequest() = default;
 
   void OnRulesLoaded(bool success, AddressValidator* address_validator) {
     // Check if the timeout happened before the rules were loaded.
@@ -158,12 +180,12 @@ AddressNormalizerImpl::AddressNormalizerImpl(std::unique_ptr<Source> source,
   // https://crbug.com/829122
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
-      base::BindOnce(
-          &CreateAddressValidator, std::move(source),
-          DeleteOnTaskRunnerStorageUniquePtr(
-              storage.release(), base::OnTaskRunnerDeleter(
-                                     base::SequencedTaskRunnerHandle::Get())),
-          this),
+      base::BindOnce(&CreateAddressValidator, std::move(source),
+                     DeleteOnTaskRunnerStorageUniquePtr(
+                         storage.release(),
+                         base::OnTaskRunnerDeleter(
+                             base::SequencedTaskRunner::GetCurrentDefault())),
+                     this),
       base::BindOnce(&AddressNormalizerImpl::OnAddressValidatorCreated,
                      weak_ptr_factory_.GetWeakPtr()));
 }
@@ -237,6 +259,41 @@ bool AddressNormalizerImpl::NormalizeAddressSync(AutofillProfile* profile) {
   return NormalizeProfileWithValidator(profile, app_locale_,
                                        address_validator_.get());
 }
+
+#if BUILDFLAG(IS_ANDROID)
+base::android::ScopedJavaLocalRef<jobject>
+AddressNormalizerImpl::GetJavaObject() {
+  if (!java_ref_) {
+    java_ref_.Reset(
+        Java_AddressNormalizer_Constructor(base::android::AttachCurrentThread(),
+                                           reinterpret_cast<intptr_t>(this)));
+  }
+  return base::android::ScopedJavaLocalRef<jobject>(java_ref_);
+}
+
+void AddressNormalizerImpl::LoadRulesForAddressNormalization(
+    JNIEnv* env,
+    const base::android::JavaParamRef<jstring>& jregion_code) {
+  LoadRulesForRegion(base::android::ConvertJavaStringToUTF8(env, jregion_code));
+}
+
+void AddressNormalizerImpl::StartAddressNormalization(
+    JNIEnv* env,
+    const base::android::JavaParamRef<jobject>& jprofile,
+    jint jtimeout_seconds,
+    const base::android::JavaParamRef<jobject>& jdelegate) {
+  // TODO(crbug.com/1484006): Check if existing profile needs to be passed.
+  AutofillProfile profile = AutofillProfile::CreateFromJavaObject(
+      jprofile, /*existing_profile=*/nullptr, app_locale_);
+
+  // Start the normalization.
+  NormalizeAddressAsync(
+      profile, jtimeout_seconds,
+      base::BindOnce(&OnAddressNormalized,
+                     base::android::ScopedJavaGlobalRef<jobject>(jdelegate),
+                     app_locale_));
+}
+#endif  // BUILDFLAG(IS_ANDROID)
 
 bool AddressNormalizerImpl::AreRulesLoadedForRegion(
     const std::string& region_code) {

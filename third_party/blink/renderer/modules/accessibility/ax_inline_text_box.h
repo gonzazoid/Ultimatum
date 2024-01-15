@@ -31,7 +31,7 @@
 
 #include "base/notreached.h"
 #include "third_party/blink/renderer/core/editing/markers/document_marker.h"
-#include "third_party/blink/renderer/core/layout/line/abstract_inline_text_box.h"
+#include "third_party/blink/renderer/core/layout/inline/abstract_inline_text_box.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_object.h"
 
 namespace blink {
@@ -43,7 +43,8 @@ class AXObjectCacheImpl;
 // accessibility tree.
 class AXInlineTextBox final : public AXObject {
  public:
-  AXInlineTextBox(scoped_refptr<AbstractInlineTextBox>, AXObjectCacheImpl&);
+  AXInlineTextBox(AbstractInlineTextBox*, AXObjectCacheImpl&);
+  void Trace(Visitor* visitor) const override;
 
   AXInlineTextBox(const AXInlineTextBox&) = delete;
   AXInlineTextBox& operator=(const AXInlineTextBox&) = delete;
@@ -72,6 +73,7 @@ class AXInlineTextBox final : public AXObject {
     return ax::mojom::blink::Role::kInlineTextBox;
   }
   void ClearChildren() const override;
+  AbstractInlineTextBox* GetInlineTextBox() const override;
 
  protected:
   void Init(AXObject* parent) override;
@@ -87,7 +89,7 @@ class AXInlineTextBox final : public AXObject {
  private:
   bool ComputeAccessibilityIsIgnored(IgnoredReasons* = nullptr) const override;
 
-  scoped_refptr<AbstractInlineTextBox> inline_text_box_;
+  Member<AbstractInlineTextBox> inline_text_box_;
 };
 
 }  // namespace blink

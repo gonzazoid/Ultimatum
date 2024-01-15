@@ -28,9 +28,6 @@ enum PhoneHubViewID {
   kOnboardingView,
   kOnboardingMainView,
   kOnboardingGetStartedButton,
-  kOnboardingDismissButton,
-  kOnboardingDismissPromptView,
-  kOnboardingDismissAckButton,
 
   // Phone disconnected view and its components.
   kDisconnectedView,
@@ -49,6 +46,7 @@ enum PhoneHubViewID {
 
   // Camera roll view and its components.
   kCameraRollView,
+  kAppStreamLauncherView,
 };
 
 }  // namespace ash

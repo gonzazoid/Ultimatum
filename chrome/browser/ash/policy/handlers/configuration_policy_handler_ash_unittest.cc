@@ -9,7 +9,7 @@
 
 #include "ash/components/arc/arc_prefs.h"
 #include "ash/constants/ash_pref_names.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/values.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_prefs.h"
@@ -68,8 +68,9 @@ void LoginScreenPowerManagementPolicyHandlerTest::SetUp() {
 
 base::Value GetPref(PrefValueMap* prefs, const std::string& name) {
   base::Value* pref_value = nullptr;
-  if (prefs->GetValue(name, &pref_value))
+  if (prefs->GetValue(name, &pref_value)) {
     return pref_value->Clone();
+  }
   return base::Value("Pref was not found");
 }
 
@@ -114,12 +115,12 @@ TEST(ExternalDataPolicyHandlerTest, WrongType) {
 }
 
 TEST(ExternalDataPolicyHandlerTest, MissingURL) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("hash", "1234567890123456789012345678901234567890");
+  auto dict = base::Value::Dict().Set(
+      "hash", "1234567890123456789012345678901234567890");
   PolicyMap policy_map;
   policy_map.Set(key::kUserAvatarImage, POLICY_LEVEL_MANDATORY,
-                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, std::move(dict),
-                 nullptr);
+                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD,
+                 base::Value(std::move(dict)), nullptr);
   PolicyErrorMap errors;
   EXPECT_FALSE(ExternalDataPolicyHandler(key::kUserAvatarImage)
                    .CheckPolicySettings(policy_map, &errors));
@@ -127,13 +128,13 @@ TEST(ExternalDataPolicyHandlerTest, MissingURL) {
 }
 
 TEST(ExternalDataPolicyHandlerTest, InvalidURL) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("url", "http://");
-  dict.SetStringKey("hash", "1234567890123456789012345678901234567890");
+  auto dict = base::Value::Dict()
+                  .Set("url", "http://")
+                  .Set("hash", "1234567890123456789012345678901234567890");
   PolicyMap policy_map;
   policy_map.Set(key::kUserAvatarImage, POLICY_LEVEL_MANDATORY,
-                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, std::move(dict),
-                 nullptr);
+                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD,
+                 base::Value(std::move(dict)), nullptr);
   PolicyErrorMap errors;
   EXPECT_FALSE(ExternalDataPolicyHandler(key::kUserAvatarImage)
                    .CheckPolicySettings(policy_map, &errors));
@@ -141,12 +142,11 @@ TEST(ExternalDataPolicyHandlerTest, InvalidURL) {
 }
 
 TEST(ExternalDataPolicyHandlerTest, MissingHash) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("url", "http://localhost/");
+  auto dict = base::Value::Dict().Set("url", "http://localhost/");
   PolicyMap policy_map;
   policy_map.Set(key::kUserAvatarImage, POLICY_LEVEL_MANDATORY,
-                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, std::move(dict),
-                 nullptr);
+                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD,
+                 base::Value(std::move(dict)), nullptr);
   PolicyErrorMap errors;
   EXPECT_FALSE(ExternalDataPolicyHandler(key::kUserAvatarImage)
                    .CheckPolicySettings(policy_map, &errors));
@@ -154,13 +154,12 @@ TEST(ExternalDataPolicyHandlerTest, MissingHash) {
 }
 
 TEST(ExternalDataPolicyHandlerTest, InvalidHash) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("url", "http://localhost/");
-  dict.SetStringKey("hash", "1234");
+  auto dict =
+      base::Value::Dict().Set("url", "http://localhost/").Set("hash", "1234");
   PolicyMap policy_map;
   policy_map.Set(key::kUserAvatarImage, POLICY_LEVEL_MANDATORY,
-                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, std::move(dict),
-                 nullptr);
+                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD,
+                 base::Value(std::move(dict)), nullptr);
   PolicyErrorMap errors;
   EXPECT_FALSE(ExternalDataPolicyHandler(key::kUserAvatarImage)
                    .CheckPolicySettings(policy_map, &errors));
@@ -168,17 +167,17 @@ TEST(ExternalDataPolicyHandlerTest, InvalidHash) {
 }
 
 TEST(ExternalDataPolicyHandlerTest, Valid) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("url", "http://localhost/");
-  dict.SetStringKey(
-      "hash",
-      "1234567890123456789012345678901234567890123456789012345678901234");
+  auto dict = base::Value::Dict()
+                  .Set("url", "http://localhost/")
+                  .Set("hash",
+                       "1234567890123456789012345678901234567890123456789012345"
+                       "678901234");
   PolicyMap policy_map;
   MockCloudExternalDataManager external_data_manager;
 
   policy_map.Set(
       key::kUserAvatarImage, POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
-      POLICY_SOURCE_CLOUD, std::move(dict),
+      POLICY_SOURCE_CLOUD, base::Value(std::move(dict)),
       external_data_manager.CreateExternalDataFetcher(key::kUserAvatarImage));
   PolicyErrorMap errors;
   EXPECT_TRUE(ExternalDataPolicyHandler(key::kUserAvatarImage)

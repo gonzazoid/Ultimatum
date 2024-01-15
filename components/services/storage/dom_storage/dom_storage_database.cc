@@ -11,8 +11,8 @@
 #include "base/memory/ptr_util.h"
 #include "base/no_destructor.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/trace_event/memory_allocator_dump.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/process_memory_dump.h"
@@ -111,49 +111,6 @@ DomStorageDatabase::Status ForEachWithPrefix(leveldb::DB* db,
   return iter->status();
 }
 
-template <typename... Args>
-void CreateSequenceBoundDomStorageDatabase(
-    scoped_refptr<base::SequencedTaskRunner> blocking_task_runner,
-    DomStorageDatabase::OpenCallback callback,
-    Args&&... args) {
-  auto database = std::make_unique<base::SequenceBound<DomStorageDatabase>>();
-
-  // Subtle: We bind `database` as an unmanaged pointer during the async opening
-  // operation so that it leaks in case the bound callback below never gets a
-  // chance to run (because scheduler shutdown happens first).
-  //
-  // This is because the callback below is posted to
-  // SequencedTaskRunnerHandle::Get(), which may not itself be
-  // shutdown-blocking; so if shutdown completes before the task runs, the
-  // callback below is destroyed along with any of its owned arguments.
-  // Meanwhile, SequenceBound destruction posts a task to its bound TaskRunner,
-  // which in this case is one which runs shutdown-blocking tasks.
-  //
-  // The net result of all of this is that if the SequenceBound were an owned
-  // argument, it might attempt to post a shutdown-blocking task after shutdown
-  // has completed, which is not allowed and will DCHECK. Leaving the object
-  // temporarily unmanaged during this window of potential failure avoids such a
-  // DCHECK, and if shutdown does not happen during that window, the object's
-  // ownership will finally be left to the caller's discretion.
-  //
-  // See https://crbug.com/1174179.
-  auto* database_ptr = database.release();
-  ANNOTATE_LEAKING_OBJECT_PTR(database_ptr);
-  *database_ptr = base::SequenceBound<DomStorageDatabase>(
-      blocking_task_runner, args..., base::SequencedTaskRunnerHandle::Get(),
-      base::BindOnce(
-          [](base::SequenceBound<DomStorageDatabase>* database_ptr,
-             DomStorageDatabase::OpenCallback callback,
-             leveldb::Status status) {
-            auto database = base::WrapUnique(database_ptr);
-            if (status.ok())
-              std::move(callback).Run(std::move(*database), status);
-            else
-              std::move(callback).Run({}, status);
-          },
-          database_ptr, std::move(callback)));
-}
-
 }  // namespace
 
 DomStorageDatabase::KeyValuePair::KeyValuePair() = default;
@@ -179,6 +136,7 @@ bool DomStorageDatabase::KeyValuePair::operator==(
 }
 
 DomStorageDatabase::DomStorageDatabase(
+    PassKey,
     const base::FilePath& directory,
     const std::string& name,
     const leveldb_env::Options& options,
@@ -186,7 +144,8 @@ DomStorageDatabase::DomStorageDatabase(
         memory_dump_id,
     scoped_refptr<base::SequencedTaskRunner> callback_task_runner,
     StatusCallback callback)
-    : DomStorageDatabase(MakeFullPersistentDBName(directory, name),
+    : DomStorageDatabase(PassKey(),
+                         MakeFullPersistentDBName(directory, name),
                          /*env=*/nullptr,
                          options,
                          memory_dump_id,
@@ -194,12 +153,14 @@ DomStorageDatabase::DomStorageDatabase(
                          std::move(callback)) {}
 
 DomStorageDatabase::DomStorageDatabase(
+    PassKey,
     const std::string& tracking_name,
     const absl::optional<base::trace_event::MemoryAllocatorDumpGuid>&
         memory_dump_id,
     scoped_refptr<base::SequencedTaskRunner> callback_task_runner,
     StatusCallback callback)
-    : DomStorageDatabase("",
+    : DomStorageDatabase(PassKey(),
+                         "",
                          leveldb_chrome::NewMemEnv(tracking_name),
                          CreateDefaultInMemoryOptions(),
                          memory_dump_id,
@@ -207,6 +168,7 @@ DomStorageDatabase::DomStorageDatabase(
                          std::move(callback)) {}
 
 DomStorageDatabase::DomStorageDatabase(
+    PassKey,
     const std::string& name,
     std::unique_ptr<leveldb::Env> env,
     const leveldb_env::Options& options,
@@ -225,8 +187,52 @@ DomStorageDatabase::DomStorageDatabase(
                     std::move(callback))) {
   base::trace_event::MemoryDumpManager::GetInstance()
       ->RegisterDumpProviderWithSequencedTaskRunner(
-          this, "MojoLevelDB", base::SequencedTaskRunnerHandle::Get(),
+          this, "MojoLevelDB", base::SequencedTaskRunner::GetCurrentDefault(),
           MemoryDumpProvider::Options());
+}
+
+template <typename... Args>
+void DomStorageDatabase::CreateSequenceBoundDomStorageDatabase(
+    scoped_refptr<base::SequencedTaskRunner> blocking_task_runner,
+    DomStorageDatabase::OpenCallback callback,
+    Args&&... args) {
+  auto database = std::make_unique<base::SequenceBound<DomStorageDatabase>>();
+
+  // Subtle: We bind `database` as an unmanaged pointer during the async opening
+  // operation so that it leaks in case the bound callback below never gets a
+  // chance to run (because scheduler shutdown happens first).
+  //
+  // This is because the callback below is posted to
+  // SequencedTaskRunner::GetCurrentDefault(), which may not itself be
+  // shutdown-blocking; so if shutdown completes before the task runs, the
+  // callback below is destroyed along with any of its owned arguments.
+  // Meanwhile, SequenceBound destruction posts a task to its bound TaskRunner,
+  // which in this case is one which runs shutdown-blocking tasks.
+  //
+  // The net result of all of this is that if the SequenceBound were an owned
+  // argument, it might attempt to post a shutdown-blocking task after shutdown
+  // has completed, which is not allowed and will DCHECK. Leaving the object
+  // temporarily unmanaged during this window of potential failure avoids such a
+  // DCHECK, and if shutdown does not happen during that window, the object's
+  // ownership will finally be left to the caller's discretion.
+  //
+  // See https://crbug.com/1174179.
+  auto* database_ptr = database.release();
+  ANNOTATE_LEAKING_OBJECT_PTR(database_ptr);
+  *database_ptr = base::SequenceBound<DomStorageDatabase>(
+      blocking_task_runner, PassKey(), args...,
+      base::SequencedTaskRunner::GetCurrentDefault(),
+      base::BindOnce(
+          [](base::SequenceBound<DomStorageDatabase>* database_ptr,
+             DomStorageDatabase::OpenCallback callback,
+             leveldb::Status status) {
+            auto database = base::WrapUnique(database_ptr);
+            if (status.ok())
+              std::move(callback).Run(std::move(*database), status);
+            else
+              std::move(callback).Run({}, status);
+          },
+          database_ptr, std::move(callback)));
 }
 
 DomStorageDatabase::~DomStorageDatabase() {
@@ -283,7 +289,7 @@ void DomStorageDatabase::Destroy(
                                leveldb::DestroyDB(db_name, options)));
           },
           MakeFullPersistentDBName(directory, name),
-          base::SequencedTaskRunnerHandle::Get(), std::move(callback)));
+          base::SequencedTaskRunner::GetCurrentDefault(), std::move(callback)));
 }
 
 DomStorageDatabase::Status DomStorageDatabase::Get(KeyView key,

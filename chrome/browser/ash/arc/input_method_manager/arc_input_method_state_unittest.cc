@@ -5,6 +5,7 @@
 #include "chrome/browser/ash/arc/input_method_manager/arc_input_method_state.h"
 
 #include <memory>
+#include <optional>
 
 #include "ash/components/arc/mojom/input_method_manager.mojom.h"
 #include "ash/public/cpp/tablet_mode.h"
@@ -38,7 +39,8 @@ class FakeDelegate : public ArcInputMethodState::Delegate {
   InputMethodDescriptor BuildInputMethodDescriptor(
       const mojom::ImeInfoPtr& info) const override {
     return InputMethodDescriptor(info->ime_id, "", "", {}, {}, false, GURL(),
-                                 GURL());
+                                 GURL(),
+                                 /*handwriting_language=*/std::nullopt);
   }
   bool allowed = false;
 };
@@ -106,26 +108,6 @@ TEST(ArcInputMethodState, AllowDisallowInputMethods) {
   delegate.allowed = false;
   EXPECT_EQ(1u, state.GetAvailableInputMethods().size());
   EXPECT_EQ("ime_a", state.GetAvailableInputMethods()[0].id());
-}
-
-TEST(ArcInputMethodState, Histogram) {
-  base::HistogramTester histogram_tester;
-  constexpr char kHistogramName[] = "Arc.ImeCount";
-
-  FakeDelegate delegate;
-
-  ArcInputMethodState state(&delegate);
-  std::vector<mojom::ImeInfoPtr> imes;
-  imes.push_back(GenerateImeInfo("ime_a", true, true));
-  imes.push_back(GenerateImeInfo("ime_b", true, false));
-  state.InitializeWithImeInfo("ime_id", imes);
-
-  histogram_tester.ExpectTotalCount(kHistogramName, 1);
-  histogram_tester.ExpectUniqueSample(kHistogramName, imes.size(), 1);
-
-  imes.clear();
-  state.InitializeWithImeInfo("ime_id", imes);
-  histogram_tester.ExpectTotalCount(kHistogramName, 2);
 }
 
 }  // namespace arc

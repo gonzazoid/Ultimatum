@@ -2,11 +2,13 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/config/c++/c++.gni")
+import("//build/config/cast.gni")
 import("//build/config/chrome_build.gni")
-import("//build/config/chromecast_build.gni")
 import("//build/config/chromeos/args.gni")
 import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/compiler/pgo/pgo.gni")
+import("//build/config/cronet/config.gni")
 import("//build/config/sanitizers/sanitizers.gni")
 import("//build/toolchain/cc_wrapper.gni")
 import("//build/toolchain/goma.gni")
@@ -29,16 +31,15 @@ if (is_ios) {
 }
 
 declare_args() {
-  # Set to true to use the android unwinder V2 implementation.
-  use_android_unwinder_v2 = true
-}
-
-declare_args() {
   # Set to true to use lld, the LLVM linker.
   # In late bring-up on macOS (see docs/mac_lld.md).
   # Tentatively used on iOS.
   # The default linker everywhere else.
   use_lld = is_clang && current_os != "zos"
+
+  # If true, optimize for size.
+  # Default to favoring speed over size for platforms not listed below.
+  optimize_for_size = !is_high_end_android && (is_android || is_castos)
 }
 
 declare_args() {
@@ -133,46 +134,57 @@ declare_args() {
   # https://chromium.googlesource.com/chromium/src/+/main/docs/design/sandbox.md#cet-shadow-stack
   enable_cet_shadow_stack = target_cpu == "x64"
 
-  # If true, optimize for size.
-  # Default to favoring speed over size for platforms not listed below.
-  optimize_for_size =
-      !is_high_end_android && (is_android || is_ios || is_castos)
-
   # Set to true to enable using the ML inliner in LLVM. This currently only
   # enables the ML inliner when targeting Android.
   # Currently the ML inliner is only supported on linux hosts
-  use_ml_inliner = host_os == "linux" && is_android
+  use_ml_inliner = host_os == "linux" && is_android &&
+                   !llvm_android_mainline  # https://crbug.com/1468680
+
+  # Set to true to use the android unwinder V2 implementation.
+  use_android_unwinder_v2 = true
+
+  # Whether we should consider the profile we're using to be accurate. Accurate
+  # profiles have the benefit of (potentially substantial) binary size
+  # reductions, by instructing the compiler to optimize cold and uncovered
+  # functions heavily for size. This often comes at the cost of performance.
+  sample_profile_is_accurate = optimize_for_size
+
+  # Use offsets rather than pointers in vtables in order to reduce the number of
+  # relocations. This is safe to enable only when all C++ code is built with the
+  # flag set to the same value.
+  use_relative_vtables_abi = is_android && current_cpu == "arm64" &&
+                             use_custom_libcxx && !is_component_build
 }
 
+# To try out this combination, delete this assert.
+assert(
+    !use_relative_vtables_abi || !is_cfi,
+    "is_cfi=true is known to conflict with use_relative_vtables_abi=true.\n" +
+        "See https://bugs.chromium.org/p/chromium/issues/detail?id=1375035#c53")
+
 assert(!is_cfi || use_thin_lto, "CFI requires ThinLTO")
+assert(!enable_profiling || !is_component_build,
+       "Cannot profile component builds (crbug.com/1199271).")
 
 if (use_thin_lto && is_debug) {
   print("WARNING: ThinLTO (use_thin_lto=true) doesn't work with debug" +
         " (is_debug=true) build.")
 }
 
-declare_args() {
-  # Whether we should consider the profile we're using to be accurate. Accurate
-  # profiles have the benefit of (potentially substantial) binary size
-  # reductions, by instructing the compiler to optimize cold and uncovered
-  # functions heavily for size. This often comes at the cost of performance.
-  sample_profile_is_accurate = optimize_for_size
-}
-
 # Determine whether to enable or disable frame pointers, based on the platform
 # and build arguments.
-# TODO(crbug.com/1052397): Consider changing is_chromeos_ash to is_chromeos after
-# lacros-chrome switches to target_os="chromeos".
 if (is_chromeos) {
   # ChromeOS generally prefers frame pointers, to support CWP.
   # However, Clang does not currently generate usable frame pointers in ARM
   # 32-bit builds (https://bugs.llvm.org/show_bug.cgi?id=18505) so disable them
   # there to avoid the unnecessary overhead.
   enable_frame_pointers = current_cpu != "arm"
-} else if (is_apple || is_linux || is_chromeos) {
+} else if (is_apple || is_linux) {
   enable_frame_pointers = true
 } else if (is_win) {
   # 64-bit Windows ABI doesn't support frame pointers.
+  # NOTE: This setting is actually not used in the BUILD.gn for Windows,
+  # but it still reflects correctly that we don't emit frame pointers on x64.
   if (current_cpu == "x64") {
     enable_frame_pointers = false
   } else {
@@ -237,7 +249,8 @@ declare_args() {
                 current_cpu == "arm" || current_cpu == "arm64" ||
                 current_cpu == "mipsel" || current_cpu == "mips64el")) ||
               (is_android && (current_cpu == "x86" || current_cpu == "x64" ||
-                              current_cpu == "arm" || current_cpu == "arm64")))
+                              current_cpu == "arm" || current_cpu == "arm64" ||
+                              current_cpu == "riscv64")))
 }
 
 # Use relative paths for debug info. This is important to make the build
@@ -311,15 +324,18 @@ if (symbol_level == -1) {
 use_debug_fission = use_debug_fission && symbol_level == 2
 
 # Non-component debug builds with symbol_level = 2 are an undesirable (very slow
-# build times) and unsupported (some test binaries will fail with > 4 GB PDBs)
-# combination. This is only checked when current_toolchain == default_toolchain
-# because the is_component_build flag is set to false in various components of
-# the build (like nacl) and we don't want to assert on those.
+# build times, almost two-minute link times) combination. This is only checked
+# when current_toolchain == default_toolchain because the is_component_build
+# flag is set to false in various components of the build (like nacl) and we
+# don't want to assert on those.
 # iOS does not support component builds so add an exception for this platform.
+# Windows supports huge PDBs so this combination is allowed for those who don't
+# mind long build times.
 if (forbid_non_component_debug_builds) {
   assert(
       symbol_level != 2 || current_toolchain != default_toolchain ||
-          is_component_build || !is_debug || is_ios || use_debug_fission,
+          is_component_build || !is_debug || is_ios || use_debug_fission ||
+          host_os == "win",
       "Can't do non-component debug builds at symbol_level=2 without use_debug_fission=true")
 }
 

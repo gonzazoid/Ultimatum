@@ -241,14 +241,14 @@ xsltDocumentFunction(xmlXPathParserContextPtr ctxt, int nargs)
         obj2 = valuePop(ctxt);
     }
 
-    if (ctxt->value->type == XPATH_NODESET) {
+    if ((ctxt->value != NULL) && (ctxt->value->type == XPATH_NODESET)) {
         int i;
         xmlXPathObjectPtr newobj, ret;
 
         obj = valuePop(ctxt);
         ret = xmlXPathNewNodeSet(NULL);
 
-        if ((obj != NULL) && obj->nodesetval) {
+        if ((obj != NULL) && (obj->nodesetval != NULL) && (ret != NULL)) {
             for (i = 0; i < obj->nodesetval->nodeNr; i++) {
                 valuePush(ctxt,
                           xmlXPathNewNodeSet(obj->nodesetval->nodeTab[i]));
@@ -260,11 +260,15 @@ xsltDocumentFunction(xmlXPathParserContextPtr ctxt, int nargs)
                               xmlXPathNewNodeSet(obj->nodesetval->
                                                  nodeTab[i]));
                 }
+                if (ctxt->error)
+                    break;
                 xsltDocumentFunction(ctxt, 2);
                 newobj = valuePop(ctxt);
-                ret->nodesetval = xmlXPathNodeSetMerge(ret->nodesetval,
-                                                       newobj->nodesetval);
-                xmlXPathFreeObject(newobj);
+                if (newobj != NULL) {
+                    ret->nodesetval = xmlXPathNodeSetMerge(ret->nodesetval,
+                                                           newobj->nodesetval);
+                    xmlXPathFreeObject(newobj);
+                }
             }
         }
 
@@ -279,7 +283,7 @@ xsltDocumentFunction(xmlXPathParserContextPtr ctxt, int nargs)
      * Make sure it's converted to a string
      */
     xmlXPathStringFunction(ctxt, 1);
-    if (ctxt->value->type != XPATH_STRING) {
+    if ((ctxt->value == NULL) || (ctxt->value->type != XPATH_STRING)) {
         xsltTransformError(xsltXPathGetTransformContext(ctxt), NULL, NULL,
                          "document() : invalid arg expecting a string\n");
         ctxt->error = XPATH_INVALID_TYPE;
@@ -378,6 +382,12 @@ xsltKeyFunction(xmlXPathParserContextPtr ctxt, int nargs){
 	xmlXPathObjectPtr newobj, ret;
 
 	ret = xmlXPathNewNodeSet(NULL);
+        if (ret == NULL) {
+            ctxt->error = XPATH_MEMORY_ERROR;
+            xmlXPathFreeObject(obj1);
+            xmlXPathFreeObject(obj2);
+            return;
+        }
 
 	if (obj2->nodesetval != NULL) {
 	    for (i = 0; i < obj2->nodesetval->nodeNr; i++) {
@@ -387,8 +397,9 @@ xsltKeyFunction(xmlXPathParserContextPtr ctxt, int nargs){
 		xmlXPathStringFunction(ctxt, 1);
 		xsltKeyFunction(ctxt, 2);
 		newobj = valuePop(ctxt);
-		ret->nodesetval = xmlXPathNodeSetMerge(ret->nodesetval,
-						       newobj->nodesetval);
+                if (newobj != NULL)
+		    ret->nodesetval = xmlXPathNodeSetMerge(ret->nodesetval,
+						           newobj->nodesetval);
 		xmlXPathFreeObject(newobj);
 	    }
 	}
@@ -445,13 +456,13 @@ xsltKeyFunction(xmlXPathParserContextPtr ctxt, int nargs){
 	 */
 	valuePush(ctxt, obj2);
 	xmlXPathStringFunction(ctxt, 1);
-	if ((ctxt->value == NULL) || (ctxt->value->type != XPATH_STRING)) {
+	obj2 = valuePop(ctxt);
+	if ((obj2 == NULL) || (obj2->type != XPATH_STRING)) {
 	    xsltTransformError(tctxt, NULL, tctxt->inst,
 		"key() : invalid arg expecting a string\n");
 	    ctxt->error = XPATH_INVALID_TYPE;
 	    goto error;
 	}
-	obj2 = valuePop(ctxt);
 	value = obj2->stringval;
 
 	/*
@@ -554,6 +565,10 @@ xsltUnparsedEntityURIFunction(xmlXPathParserContextPtr ctxt, int nargs){
     obj = valuePop(ctxt);
     if (obj->type != XPATH_STRING) {
 	obj = xmlXPathConvertString(obj);
+        if (obj == NULL) {
+            xmlXPathErr(ctxt, XPATH_MEMORY_ERROR);
+            return;
+        }
     }
 
     str = obj->stringval;
@@ -646,7 +661,8 @@ xsltFormatNumberFunction(xmlXPathParserContextPtr ctxt, int nargs)
         return;
     }
 
-    if (formatValues != NULL) {
+    if ((ctxt->error == 0) &&
+        (formatValues != NULL) && (formatObj != NULL) && (numberObj != NULL)) {
 	if (xsltFormatNumberConversion(formatValues,
 				       formatObj->stringval,
 				       numberObj->floatval,

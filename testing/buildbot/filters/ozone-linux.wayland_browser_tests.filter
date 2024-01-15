@@ -17,30 +17,26 @@
 -ProfileHelperTest.OpenNewWindowForProfile
 
 # Screen capture on Wayland is tricky.
--All/WebRtcScreenCaptureBrowserTestWithPicker.ScreenCaptureVideo/0
--All/WebRtcScreenCaptureBrowserTestWithPicker.ScreenCaptureVideoAndAudio/0
+-All/WebRtcScreenCaptureBrowserTestWithPicker.ScreenCaptureVideo/1
+-All/WebRtcScreenCaptureBrowserTestWithPicker.ScreenCaptureVideo/5
+-All/WebRtcScreenCaptureBrowserTestWithPicker.ScreenCaptureVideoAndAudio/1
+-All/WebRtcScreenCaptureBrowserTestWithPicker.ScreenCaptureVideoAndAudio/5
 -WebRtcDesktopCaptureBrowserTest.RunsScreenshareFromOneTabToAnother
 
 # Fail on the bot, pass locally.
 -BackForwardCachePageLoadMetricsObserverBrowserTest.CumulativeLayoutShiftAfterBackForwardCacheRestore
 -DesktopCaptureApiTest.ChooseDesktopMedia
 -IconLoaderBrowserTest.LoadGroup
+# crbug.com/1473417
+-All/OfferNotificationBubbleViewPixelBrowserTest.InvokeUi_show_notification_bubble/FreeListingOffer_default
+-All/OfferNotificationBubbleViewPixelBrowserTest.InvokeUi_show_notification_bubble/FreeListingOffer_on_navigation
 
 # TODO(https://crbug.com/1084469): fix these tests.
 
 # Failed:
 -BrowserViewTest.GetAccessibleTabModalDialogTree
--OmniboxPopupContentsViewTest.ClickOmnibox
--OmniboxPopupContentsViewTest.PopupMatchesLocationBarBackground
+-OmniboxPopupViewViewsTest.ClickOmnibox
+-OmniboxPopupViewViewsTest.PopupMatchesLocationBarBackground
 -PageInfoBubbleViewBrowserTest.FocusDoesNotReturnToContentsOnReloadPrompt
 -PageInfoBubbleViewBrowserTest.FocusReturnsToContentOnClose
 -PrintBrowserTest.PDFPluginNotKeyboardFocusable
-
-# #TODO (b/235882005): These tests fail due to a NOT_IMPLEMENTED_LOG_ONCE()
-# within the  wayland_surface.cc implementation. This causes our focused
-# dialog object to instantly close and causes these tests to fail. Until a
-# solution is introduced with wayland support or a workaround can be discovered
-# in the browser tests, simply disable them.
--AccessCodeCastDialogBrowserTest.*
--AccessCodeCastHandlerBrowserTest.*
--AccessCodeCastSinkServiceBrowserTest.*

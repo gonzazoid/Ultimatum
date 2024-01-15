@@ -15,6 +15,7 @@
 
 #include "base/containers/span.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/ranges/algorithm.h"
 #include "base/time/time.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/bindings/callback_function_base.h"
@@ -27,6 +28,7 @@
 #include "third_party/blink/renderer/platform/bindings/union_base.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
+#include "third_party/blink/renderer/platform/wtf/wtf_size_t.h"
 #include "v8/include/v8.h"
 
 namespace blink {
@@ -38,15 +40,7 @@ inline v8::Local<v8::Value> ToV8(ScriptWrappable* impl,
                                  v8::Isolate* isolate) {
   if (UNLIKELY(!impl))
     return v8::Null(isolate);
-  v8::Local<v8::Value> wrapper = DOMDataStore::GetWrapper(impl, isolate);
-  if (!wrapper.IsEmpty())
-    return wrapper;
-
-  ScriptState* script_state =
-      ScriptState::From(creation_context->GetCreationContextChecked());
-  wrapper = impl->Wrap(script_state).ToLocalChecked();
-  DCHECK(!wrapper.IsEmpty());
-  return wrapper;
+  return impl->ToV8(isolate, creation_context).ToLocalChecked();
 }
 
 // Dictionary
@@ -58,7 +52,7 @@ inline v8::Local<v8::Value> ToV8(const bindings::DictionaryBase* dictionary,
     return v8::Null(isolate);
   ScriptState* script_state =
       ScriptState::From(creation_context->GetCreationContextChecked());
-  return dictionary->ToV8Value(script_state).ToLocalChecked();
+  return dictionary->ToV8(script_state).ToLocalChecked();
 }
 
 // Callback function
@@ -106,8 +100,7 @@ inline v8::Local<v8::Value> ToV8(const bindings::UnionBase* union_value,
                                  v8::Local<v8::Object> creation_context,
                                  v8::Isolate* isolate) {
   return union_value
-      ->ToV8Value(
-          ScriptState::From(creation_context->GetCreationContextChecked()))
+      ->ToV8(ScriptState::From(creation_context->GetCreationContextChecked()))
       .ToLocalChecked();
 }
 
@@ -246,6 +239,13 @@ inline v8::Local<v8::Array> ToV8(base::span<T, Extent> value,
   return ToV8SequenceInternal(value, creation_context, isolate);
 }
 
+template <typename T>
+inline v8::Local<v8::Array> ToV8(v8::LocalVector<T> value,
+                                 v8::Local<v8::Object> creation_context,
+                                 v8::Isolate* isolate) {
+  return ToV8SequenceInternal(value, creation_context, isolate);
+}
+
 template <typename T, wtf_size_t inlineCapacity>
 inline v8::Local<v8::Array> ToV8(const Vector<T, inlineCapacity>& value,
                                  v8::Local<v8::Object> creation_context,
@@ -323,28 +323,20 @@ inline v8::Local<v8::Array> ToV8SequenceInternal(
     v8::Isolate* isolate) {
   RUNTIME_CALL_TIMER_SCOPE(isolate,
                            RuntimeCallStats::CounterId::kToV8SequenceInternal);
-  v8::Local<v8::Array> array;
-  {
-    v8::Context::Scope context_scope(
-        creation_context->GetCreationContextChecked());
-    array = v8::Array::New(isolate, base::checked_cast<int>(sequence.size()));
-  }
-  v8::Local<v8::Context> context = isolate->GetCurrentContext();
-  uint32_t index = 0;
-  typename Sequence::const_iterator end = sequence.end();
-  for (typename Sequence::const_iterator iter = sequence.begin(); iter != end;
-       ++iter) {
-    v8::Local<v8::Value> value = ToV8(*iter, array, isolate);
-    if (value.IsEmpty())
-      value = v8::Undefined(isolate);
-    bool created_property;
-    if (!array->CreateDataProperty(context, index++, value)
-             .To(&created_property) ||
-        !created_property) {
-      return v8::Local<v8::Array>();
-    }
-  }
-  return array;
+
+  v8::LocalVector<v8::Value> converted_sequence(
+      isolate, base::checked_cast<wtf_size_t>(sequence.size()));
+  base::ranges::transform(
+      sequence, converted_sequence.begin(), [&](const auto& item) {
+        v8::Local<v8::Value> value = ToV8(item, creation_context, isolate);
+        if (value.IsEmpty()) {
+          value = v8::Undefined(isolate);
+        }
+        return value;
+      });
+
+  return v8::Array::New(isolate, converted_sequence.data(),
+                        base::checked_cast<int>(converted_sequence.size()));
 }
 
 // Nullable
@@ -369,7 +361,8 @@ inline v8::Local<v8::Value> ToV8(T&& value, ScriptState* script_state) {
 
 // Date
 inline v8::Local<v8::Value> ToV8(base::Time date, ScriptState* script_state) {
-  return v8::Date::New(script_state->GetContext(), date.ToJsTimeIgnoringNull())
+  return v8::Date::New(script_state->GetContext(),
+                       date.InMillisecondsFSinceUnixEpochIgnoringNull())
       .ToLocalChecked();
 }
 

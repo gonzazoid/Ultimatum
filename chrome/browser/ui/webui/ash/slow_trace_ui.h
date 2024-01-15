@@ -7,9 +7,11 @@
 
 #include <string>
 
+#include "chrome/common/webui_url_constants.h"
 #include "content/public/browser/url_data_source.h"
 #include "content/public/browser/web_ui_controller.h"
-#include "ui/base/layout.h"
+#include "content/public/browser/webui_config.h"
+#include "content/public/common/url_constants.h"
 
 namespace base {
 class RefCountedString;
@@ -18,7 +20,7 @@ class RefCountedString;
 namespace ash {
 
 // This class provides the source for chrome://slow_trace/.  It needs to be a
-// separate handler that chrome://slow, because URLDataSource and
+// separate handler than chrome://slow, because URLDataSource and
 // WebUIDataSource are not descended from each other, and WebUIDataSource
 // doesn't allow the MimeType to be dynamically specified.
 class SlowTraceSource : public content::URLDataSource {
@@ -42,6 +44,17 @@ class SlowTraceSource : public content::URLDataSource {
  private:
   void OnGetTraceData(content::URLDataSource::GotDataCallback callback,
                       scoped_refptr<base::RefCountedString> trace_data);
+};
+
+class SlowTraceController;
+
+// WebUIConfig for chrome://slow_trace
+class SlowTraceControllerConfig
+    : public content::DefaultWebUIConfig<SlowTraceController> {
+ public:
+  SlowTraceControllerConfig()
+      : DefaultWebUIConfig(content::kChromeUIScheme,
+                           chrome::kChromeUISlowTraceHost) {}
 };
 
 class SlowTraceController : public content::WebUIController {

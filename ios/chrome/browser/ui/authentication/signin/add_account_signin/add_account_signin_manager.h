@@ -11,13 +11,8 @@
 #import "ios/chrome/browser/ui/authentication/signin/add_account_signin/add_account_signin_enums.h"
 #import "ios/chrome/browser/ui/authentication/signin/signin_constants.h"
 
-@class ChromeIdentityInteractionManager;
-class PrefService;
+@protocol SystemIdentityInteractionManager;
 @protocol SystemIdentity;
-
-namespace signin {
-class IdentityManager;
-}
 
 // Delegate that displays screens for the add account flows.
 @protocol AddAccountSigninManagerDelegate
@@ -43,21 +38,19 @@ class IdentityManager;
 @property(nonatomic, weak) id<AddAccountSigninManagerDelegate> delegate;
 
 - (instancetype)init NS_UNAVAILABLE;
+// Default initialiser.
 - (instancetype)initWithBaseViewController:(UIViewController*)baseViewController
-                identityInteractionManager:(ChromeIdentityInteractionManager*)
-                                               identityInteractionManager
-                               prefService:(PrefService*)prefService
-                           identityManager:
-                               (signin::IdentityManager*)identityManager
-    NS_DESIGNATED_INITIALIZER;
+                identityInteractionManager:
+                    (id<SystemIdentityInteractionManager>)
+                        identityInteractionManager NS_DESIGNATED_INITIALIZER;
 
 // Displays the add account sign-in flow.
-// `signinIntent` is the add account intent.
-- (void)showSigninWithIntent:(AddAccountSigninIntent)addAccountSigninIntent;
+// `defaultUserEmail`: preset in the add account dialog. This can be nil.
+- (void)showSigninWithDefaultUserEmail:(NSString*)defaultUserEmail;
 
 // Interrupts the add account view.
-- (void)interruptAddAccountAnimated:(BOOL)animated
-                         completion:(ProceduralBlock)completion;
+- (void)interruptWithAction:(SigninCoordinatorInterrupt)action
+                 completion:(ProceduralBlock)completion;
 
 @end
 

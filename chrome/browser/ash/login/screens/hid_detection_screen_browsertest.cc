@@ -4,8 +4,9 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
@@ -26,8 +27,8 @@
 #include "chrome/browser/ash/login/test/oobe_screens_utils.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ui/webui/ash/login/hid_detection_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/network_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/welcome_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/network_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/welcome_screen_handler.h"
 #include "chromeos/ash/components/hid_detection/bluetooth_hid_detector.h"
 #include "chromeos/ash/components/hid_detection/fake_hid_detection_manager.h"
 #include "chromeos/ash/components/hid_detection/hid_detection_manager.h"
@@ -39,14 +40,15 @@
 #include "services/device/public/mojom/input_service.mojom.h"
 
 namespace ash {
+
 namespace {
 
 using ::testing::_;
 using HidType = hid_detection::HidType;
 using HidsMissing = hid_detection::HidsMissing;
 using InputState = hid_detection::HidDetectionManager::InputState;
-using NiceMockDevice =
-    std::unique_ptr<testing::NiceMock<device::MockBluetoothDevice>>;
+using HidDetectionBluetoothPairingResult =
+    hid_detection::HidDetectionBluetoothPairingResult;
 
 const uint32_t kTestBluetoothClass = 1337u;
 const char kTestBluetoothName[] = "testName";
@@ -91,7 +93,7 @@ class HIDDetectionScreenChromeboxTest
   HIDDetectionScreenChromeboxTest() {
     if (GetParam()) {
       scoped_feature_list_.InitAndEnableFeature(
-          ash::features::kOobeHidDetectionRevamp);
+          features::kOobeHidDetectionRevamp);
 
       auto fake_hid_detection_manager =
           std::make_unique<hid_detection::FakeHidDetectionManager>();
@@ -102,7 +104,7 @@ class HIDDetectionScreenChromeboxTest
     }
 
     scoped_feature_list_.InitAndDisableFeature(
-        ash::features::kOobeHidDetectionRevamp);
+        features::kOobeHidDetectionRevamp);
   }
 
   HIDDetectionScreenChromeboxTest(const HIDDetectionScreenChromeboxTest&) =
@@ -138,11 +140,11 @@ class HIDDetectionScreenChromeboxTest
     // Simulate the user's click on "Continue" button.
     test::OobeJS().CreateVisibilityWaiter(true, kHidContinueButton)->Wait();
     test::OobeJS().TapOnPath(kHidContinueButton);
-    OobeScreenWaiter(WelcomeView::kScreenId).Wait();
+    test::WaitForWelcomeScreen();
   }
 
  protected:
-  const absl::optional<HIDDetectionScreen::Result>& GetExitResult() {
+  const std::optional<HIDDetectionScreen::Result>& GetExitResult() {
     return WizardController::default_controller()
         ->GetScreen<HIDDetectionScreen>()
         ->get_exit_result_for_testing();
@@ -173,7 +175,10 @@ class HIDDetectionScreenChromeboxTest
                       success ? "Success" : "Failure"}),
         count);
     histogram_tester_.ExpectBucketCount(
-        "OOBE.HidDetectionScreen.BluetoothPairing.Result", success, count);
+        "OOBE.HidDetectionScreen.BluetoothPairing.Result",
+        success ? HidDetectionBluetoothPairingResult::kPaired
+                : HidDetectionBluetoothPairingResult::kNotPaired,
+        count);
   }
 
   void AssertInitialHidsMissingCount(HidsMissing hids_missing, int count) {
@@ -191,7 +196,7 @@ class HIDDetectionScreenChromeboxTest
 
   void InvokePendingConnectCallback(bool success) {
     if (success) {
-      std::move(connect_callback_).Run(absl::nullopt);
+      std::move(connect_callback_).Run(std::nullopt);
     } else {
       std::move(connect_callback_)
           .Run(device::BluetoothDevice::ConnectErrorCode::ERROR_FAILED);
@@ -283,7 +288,7 @@ class HIDDetectionScreenChromeboxTest
       return;
 
     fake_hid_detection_manager_->SetPairingState(
-        /*pairing_state=*/absl::nullopt);
+        /*pairing_state=*/std::nullopt);
   }
 
   // HID detection must be stopped before HidDetectionManager is destroyed. This
@@ -319,10 +324,11 @@ class HIDDetectionScreenChromeboxTest
   device::BluetoothDevice::ConnectCallback connect_callback_;
 
  private:
-  HIDDetectionScreen* hid_detection_screen_;
+  raw_ptr<HIDDetectionScreen, DanglingUntriaged> hid_detection_screen_;
 
   test::HIDControllerMixin hid_controller_{&mixin_host_};
-  hid_detection::FakeHidDetectionManager* fake_hid_detection_manager_;
+  raw_ptr<hid_detection::FakeHidDetectionManager, DanglingUntriaged>
+      fake_hid_detection_manager_;
 
   // HID detection screen only appears for Chromebases, Chromebits, and
   // Chromeboxes.
@@ -675,7 +681,7 @@ IN_PROC_BROWSER_TEST_P(HIDDetectionScreenChromeboxTest, PRE_ResumableScreen) {
   test::OobeJS().TapOnPath(kHidContinueButton);
   EXPECT_EQ(GetExitResult(), HIDDetectionScreen::Result::NEXT);
 
-  OobeScreenWaiter(WelcomeView::kScreenId).Wait();
+  test::WaitForWelcomeScreen();
   test::TapWelcomeNext();
   OobeScreenWaiter(NetworkScreenView::kScreenId).Wait();
 }
@@ -723,7 +729,7 @@ class HIDDetectionSkipTest : public HIDDetectionScreenChromeboxTest {
 INSTANTIATE_TEST_SUITE_P(All, HIDDetectionSkipTest, testing::Bool());
 
 IN_PROC_BROWSER_TEST_P(HIDDetectionSkipTest, BothDevicesPreConnected) {
-  OobeScreenWaiter(WelcomeView::kScreenId).Wait();
+  test::WaitForWelcomeScreen();
   AssertInitialHidsMissingCount(HidsMissing::kNone, /*count=*/1);
   EXPECT_FALSE(GetExitResult().has_value());
   histogram_tester.ExpectTotalCount("OOBE.HidDetectionScreen.HidConnected", 0);
@@ -789,7 +795,7 @@ INSTANTIATE_TEST_SUITE_P(All,
 
 IN_PROC_BROWSER_TEST_P(HIDDetectionScreenDisabledAfterRestartTest,
                        PRE_SkipToUpdate) {
-  OobeScreenWaiter(chromeos::WelcomeView::kScreenId).Wait();
+  test::WaitForWelcomeScreen();
 
   EXPECT_TRUE(StartupUtils::IsHIDDetectionScreenDisabledForTests());
   EXPECT_FALSE(WizardController::default_controller()->HasScreen(
@@ -798,7 +804,7 @@ IN_PROC_BROWSER_TEST_P(HIDDetectionScreenDisabledAfterRestartTest,
 
 IN_PROC_BROWSER_TEST_P(HIDDetectionScreenDisabledAfterRestartTest,
                        SkipToUpdate) {
-  OobeScreenWaiter(chromeos::WelcomeView::kScreenId).Wait();
+  test::WaitForWelcomeScreen();
   // The pref should persist restart.
   EXPECT_TRUE(StartupUtils::IsHIDDetectionScreenDisabledForTests());
   EXPECT_FALSE(WizardController::default_controller()->HasScreen(
@@ -814,7 +820,7 @@ class HIDDetectionScreenChromebookTest : public OobeBaseTest {
 
 IN_PROC_BROWSER_TEST_F(HIDDetectionScreenChromebookTest,
                        HIDDetectionScreenNotAllowed) {
-  OobeScreenWaiter(WelcomeView::kScreenId).Wait();
+  test::WaitForWelcomeScreen();
   ASSERT_TRUE(WizardController::default_controller());
 
   EXPECT_FALSE(WizardController::default_controller()->HasScreen(
@@ -828,7 +834,7 @@ class HIDDetectionScreenChromebaseTest
   HIDDetectionScreenChromebaseTest() {
     if (GetParam()) {
       scoped_feature_list_.InitAndEnableFeature(
-          ash::features::kOobeHidDetectionRevamp);
+          features::kOobeHidDetectionRevamp);
 
       auto fake_hid_detection_manager =
           std::make_unique<hid_detection::FakeHidDetectionManager>();
@@ -841,7 +847,7 @@ class HIDDetectionScreenChromebaseTest
     }
 
     scoped_feature_list_.InitAndDisableFeature(
-        ash::features::kOobeHidDetectionRevamp);
+        features::kOobeHidDetectionRevamp);
 
     hid_controller_.set_wait_until_idle_after_device_update(false);
     hid_controller_.AddTouchscreen();
@@ -897,7 +903,8 @@ class HIDDetectionScreenChromebaseTest
 
  private:
   test::HIDControllerMixin hid_controller_{&mixin_host_};
-  hid_detection::FakeHidDetectionManager* fake_hid_detection_manager_;
+  raw_ptr<hid_detection::FakeHidDetectionManager, DanglingUntriaged>
+      fake_hid_detection_manager_;
 
   // Set device type to a Chromebase with a touch screen.
   // This should show the HIDDetectionScreen with the continue button

@@ -7,7 +7,6 @@
 
 #import <CoreBluetooth/CoreBluetooth.h>
 
-#include "base/memory/ref_counted.h"
 #include "build/build_config.h"
 
 #if !BUILDFLAG(IS_IOS)
@@ -15,7 +14,7 @@
 #endif
 
 namespace device {
-class BluetoothAdapterMac;
+class BluetoothLowEnergyAdapterApple;
 class BluetoothLowEnergyAdvertisementManagerMac;
 }  // namespace device
 
@@ -23,9 +22,10 @@ class BluetoothLowEnergyAdvertisementManagerMac;
     : NSObject<CBPeripheralManagerDelegate>
 
 - (instancetype)
-initWithAdvertisementManager:
-    (device::BluetoothLowEnergyAdvertisementManagerMac*)advertisementManager
-                  andAdapter:(device::BluetoothAdapterMac*)adapter;
+    initWithAdvertisementManager:
+        (device::BluetoothLowEnergyAdvertisementManagerMac*)advertisementManager
+                      andAdapter:
+                          (device::BluetoothLowEnergyAdapterApple*)adapter;
 
 @end
 

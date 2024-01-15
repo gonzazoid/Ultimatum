@@ -5,6 +5,7 @@
 if (is_android) {
   import("//build/config/android/config.gni")
   import("//build/config/android/rules.gni")
+  import("//third_party/jni_zero/jni_zero.gni")
 }
 
 static_library("core") {
@@ -56,10 +57,7 @@ static_library("core") {
       "android/offline_item_visuals_bridge.h",
     ]
 
-    deps += [
-      ":jni_headers",
-      "//url:gurl_android",
-    ]
+    deps += [ ":jni_headers" ]
   }
 }
 
@@ -106,15 +104,17 @@ if (is_android) {
       "android/java/src/org/chromium/components/offline_items_collection/bridges/OfflineItemShareInfoBridge.java",
       "android/java/src/org/chromium/components/offline_items_collection/bridges/OfflineItemVisualsBridge.java",
     ]
-    annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
 
-    srcjar_deps = [ ":jni_enums" ]
+    srcjar_deps = [
+      ":jni_enums",
+      ":jni_headers",
+    ]
 
     deps = [
       "//base:base_java",
-      "//base:jni_java",
       "//build/android:build_java",
       "//third_party/androidx:androidx_annotation_annotation_java",
+      "//third_party/jni_zero:jni_zero_java",
       "//url:gurl_java",
     ]
   }
@@ -148,13 +148,12 @@ if (is_android) {
     testonly = true
     deps = [
       ":core_java",
-      "//base:jni_java",
+      "//third_party/jni_zero:jni_zero_java",
       "//third_party/junit",
     ]
 
+    srcjar_deps = [ ":native_j_unittests_jni_headers" ]
     sources = [ "android/native_java_unittests/src/org/chromium/components/offline_items_collection/bridges/OfflineItemBridgeUnitTest.java" ]
-
-    annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
   }
 
   generate_jni("native_j_unittests_jni_headers") {

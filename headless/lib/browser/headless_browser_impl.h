@@ -5,32 +5,37 @@
 #ifndef HEADLESS_LIB_BROWSER_HEADLESS_BROWSER_IMPL_H_
 #define HEADLESS_LIB_BROWSER_HEADLESS_BROWSER_IMPL_H_
 
-#include "base/memory/raw_ptr.h"
-#include "headless/public/headless_browser.h"
-
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
-#include "headless/lib/browser/headless_devtools_manager_delegate.h"
-#include "headless/public/headless_devtools_target.h"
+#include "content/public/browser/devtools_agent_host.h"
+#include "headless/public/headless_browser.h"
 #include "headless/public/headless_export.h"
 
-#if defined(HEADLESS_USE_PREFS)
-class PrefService;
-#endif
-
 #if defined(HEADLESS_USE_POLICY)
+#include "headless/lib/browser/policy/headless_browser_policy_connector.h"
+
 namespace policy {
 class PolicyService;
 }  // namespace policy
 #endif
 
+#if defined(HEADLESS_USE_PREFS)
+class PrefService;
+#endif
+
 #if BUILDFLAG(IS_MAC)
 #include "ui/display/screen.h"
+
+namespace device {
+class GeolocationManager;
+}  // namespace device
 #endif
 
 namespace ui {
@@ -44,19 +49,16 @@ class Rect;
 namespace headless {
 
 class HeadlessBrowserContextImpl;
-class HeadlessBrowserMainParts;
 class HeadlessRequestContextManager;
 class HeadlessWebContentsImpl;
 
 extern const base::FilePath::CharType kDefaultProfileName[];
 
 // Exported for tests.
-class HEADLESS_EXPORT HeadlessBrowserImpl : public HeadlessBrowser,
-                                            public HeadlessDevToolsTarget {
+class HEADLESS_EXPORT HeadlessBrowserImpl : public HeadlessBrowser {
  public:
-  HeadlessBrowserImpl(
-      base::OnceCallback<void(HeadlessBrowser*)> on_start_callback,
-      HeadlessBrowser::Options options);
+  explicit HeadlessBrowserImpl(
+      base::OnceCallback<void(HeadlessBrowser*)> on_start_callback);
 
   HeadlessBrowserImpl(const HeadlessBrowserImpl&) = delete;
   HeadlessBrowserImpl& operator=(const HeadlessBrowserImpl&) = delete;
@@ -67,9 +69,7 @@ class HEADLESS_EXPORT HeadlessBrowserImpl : public HeadlessBrowser,
   HeadlessBrowserContext::Builder CreateBrowserContextBuilder() override;
   scoped_refptr<base::SingleThreadTaskRunner> BrowserMainThread()
       const override;
-
   void Shutdown() override;
-
   std::vector<HeadlessBrowserContext*> GetAllBrowserContexts() override;
   HeadlessWebContents* GetWebContentsForDevToolsAgentHostId(
       const std::string& devtools_agent_host_id) override;
@@ -78,20 +78,9 @@ class HEADLESS_EXPORT HeadlessBrowserImpl : public HeadlessBrowser,
   void SetDefaultBrowserContext(
       HeadlessBrowserContext* browser_context) override;
   HeadlessBrowserContext* GetDefaultBrowserContext() override;
-  HeadlessDevToolsTarget* GetDevToolsTarget() override;
-  std::unique_ptr<HeadlessDevToolsChannel> CreateDevToolsChannel() override;
 
-  // HeadlessDevToolsTarget implementation:
-  void AttachClient(HeadlessDevToolsClient* client) override;
-  void DetachClient(HeadlessDevToolsClient* client) override;
-  bool IsAttached() override;
-
-  void set_browser_main_parts(HeadlessBrowserMainParts* browser_main_parts);
-  HeadlessBrowserMainParts* browser_main_parts() const;
-
-  void RunOnStartCallback();
-
-  HeadlessBrowser::Options* options() { return &options_; }
+  void SetOptions(HeadlessBrowser::Options options);
+  HeadlessBrowser::Options* options() { return &options_.value(); }
 
   HeadlessBrowserContext* CreateBrowserContext(
       HeadlessBrowserContext::Builder* builder);
@@ -103,6 +92,12 @@ class HEADLESS_EXPORT HeadlessBrowserImpl : public HeadlessBrowser,
 
   base::WeakPtr<HeadlessBrowserImpl> GetWeakPtr();
 
+  bool ShouldStartDevToolsServer();
+
+  void PreMainMessageLoopRun();
+  void WillRunMainMessageLoop(base::RunLoop& run_loop);
+  void PostMainMessageLoopRun();
+
   // All the methods that begin with Platform need to be implemented by the
   // platform specific headless implementation.
   // Helper for one time initialization of application
@@ -113,6 +108,10 @@ class HEADLESS_EXPORT HeadlessBrowserImpl : public HeadlessBrowser,
                                     const gfx::Rect& bounds);
   ui::Compositor* PlatformGetCompositor(HeadlessWebContentsImpl* web_contents);
 
+  void ShutdownWithExitCode(int exit_code);
+
+  int exit_code() const { return exit_code_; }
+
 #if defined(HEADLESS_USE_PREFS)
   PrefService* GetPrefs();
 #endif
@@ -121,26 +120,44 @@ class HEADLESS_EXPORT HeadlessBrowserImpl : public HeadlessBrowser,
   policy::PolicyService* GetPolicyService();
 #endif
 
-  bool did_shutdown() const { return did_shutdown_; }
-
- protected:
 #if BUILDFLAG(IS_MAC)
-  std::unique_ptr<display::ScopedNativeScreen> screen_;
+  device::GeolocationManager* GetGeolocationManager();
+  void SetGeolocationManagerForTesting(
+      std::unique_ptr<device::GeolocationManager> geolocation_manager);
+#endif
+
+ private:
+#if defined(HEADLESS_USE_PREFS)
+  void CreatePrefService();
 #endif
 
   base::OnceCallback<void(HeadlessBrowser*)> on_start_callback_;
-  HeadlessBrowser::Options options_;
-  raw_ptr<HeadlessBrowserMainParts, DanglingUntriaged>
-      browser_main_parts_;  // Not owned.
+  std::optional<HeadlessBrowser::Options> options_;
+
+  int exit_code_ = 0;
 
   base::flat_map<std::string, std::unique_ptr<HeadlessBrowserContextImpl>>
       browser_contexts_;
-  raw_ptr<HeadlessBrowserContext, DanglingUntriaged>
-      default_browser_context_;  // Not owned.
-  bool did_shutdown_ = false;  // TODO(1342152): remove once the bug is fixed.
+  raw_ptr<HeadlessBrowserContext, AcrossTasksDanglingUntriaged>
+      default_browser_context_ = nullptr;
   scoped_refptr<content::DevToolsAgentHost> agent_host_;
   std::unique_ptr<HeadlessRequestContextManager>
       system_request_context_manager_;
+  base::OnceClosure quit_main_message_loop_;
+
+#if BUILDFLAG(IS_MAC)
+  std::unique_ptr<display::ScopedNativeScreen> screen_;
+  std::unique_ptr<device::GeolocationManager> geolocation_manager_;
+#endif
+
+#if defined(HEADLESS_USE_PREFS)
+  std::unique_ptr<PrefService> local_state_;
+#endif
+
+#if defined(HEADLESS_USE_POLICY)
+  std::unique_ptr<policy::HeadlessBrowserPolicyConnector> policy_connector_;
+#endif
+
   base::WeakPtrFactory<HeadlessBrowserImpl> weak_ptr_factory_{this};
 };
 

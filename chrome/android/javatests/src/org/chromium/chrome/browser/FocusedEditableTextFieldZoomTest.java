@@ -6,11 +6,12 @@ package org.chromium.chrome.browser;
 
 import static org.chromium.base.test.util.CriteriaHelper.DEFAULT_POLLING_INTERVAL;
 
-import android.support.test.InstrumentationRegistry;
 import android.view.KeyEvent;
 
+import androidx.test.core.app.ApplicationProvider;
+import androidx.test.platform.app.InstrumentationRegistry;
+
 import org.hamcrest.Matchers;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -30,12 +31,10 @@ import org.chromium.content_public.browser.test.util.DOMUtils;
 import org.chromium.content_public.browser.test.util.KeyUtils;
 import org.chromium.net.test.EmbeddedTestServer;
 
-/**
- * Tests for zooming into & out of a selected & deselected editable text field.
- */
+/** Tests for zooming into & out of a selected & deselected editable text field. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({
-        ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE,
+    ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE,
 })
 public class FocusedEditableTextFieldZoomTest {
     @Rule
@@ -51,16 +50,13 @@ public class FocusedEditableTextFieldZoomTest {
 
     @Before
     public void setUp() {
-        mTestServer = EmbeddedTestServer.createAndStartServer(InstrumentationRegistry.getContext());
+        mTestServer =
+                EmbeddedTestServer.createAndStartServer(
+                        ApplicationProvider.getApplicationContext());
         mActivityTestRule.startMainActivityWithURL(
                 mTestServer.getURL("/chrome/test/data/android/focused_editable_zoom.html"));
         mCoordinates = Coordinates.createFor(mActivityTestRule.getWebContents());
         waitForInitialZoom();
-    }
-
-    @After
-    public void tearDown() {
-        mTestServer.stopAndDestroyServer();
     }
 
     private void waitForInitialZoom() {
@@ -68,17 +64,25 @@ public class FocusedEditableTextFieldZoomTest {
         // the initial value problematic. We solve this by explicitly specifying the initial zoom
         // level via the viewport tag and waiting for the zoom level to reach that value before we
         // proceed with the rest of the test.
-        CriteriaHelper.pollInstrumentationThread(() -> {
-            Criteria.checkThat((double) mCoordinates.getPageScaleFactor(),
-                    Matchers.is(Matchers.closeTo(INITIAL_SCALE, FLOAT_DELTA)));
-        }, TEST_TIMEOUT, DEFAULT_POLLING_INTERVAL);
+        CriteriaHelper.pollInstrumentationThread(
+                () -> {
+                    Criteria.checkThat(
+                            (double) mCoordinates.getPageScaleFactor(),
+                            Matchers.is(Matchers.closeTo(INITIAL_SCALE, FLOAT_DELTA)));
+                },
+                TEST_TIMEOUT,
+                DEFAULT_POLLING_INTERVAL);
     }
 
     private void waitForZoomIn(final float initialZoomLevel) {
-        CriteriaHelper.pollInstrumentationThread(() -> {
-            Criteria.checkThat(
-                    mCoordinates.getPageScaleFactor(), Matchers.greaterThan(initialZoomLevel));
-        }, TEST_TIMEOUT, DEFAULT_POLLING_INTERVAL);
+        CriteriaHelper.pollInstrumentationThread(
+                () -> {
+                    Criteria.checkThat(
+                            mCoordinates.getPageScaleFactor(),
+                            Matchers.greaterThan(initialZoomLevel));
+                },
+                TEST_TIMEOUT,
+                DEFAULT_POLLING_INTERVAL);
     }
 
     /*
@@ -118,9 +122,13 @@ public class FocusedEditableTextFieldZoomTest {
                 InstrumentationRegistry.getInstrumentation(), tab.getView(), KeyEvent.KEYCODE_BACK);
 
         // We should zoom out to the previous zoom level.
-        CriteriaHelper.pollInstrumentationThread(() -> {
-            Criteria.checkThat((double) mCoordinates.getPageScaleFactor(),
-                    Matchers.is(Matchers.closeTo(initialZoomLevel, FLOAT_DELTA)));
-        }, TEST_TIMEOUT, DEFAULT_POLLING_INTERVAL);
+        CriteriaHelper.pollInstrumentationThread(
+                () -> {
+                    Criteria.checkThat(
+                            (double) mCoordinates.getPageScaleFactor(),
+                            Matchers.is(Matchers.closeTo(initialZoomLevel, FLOAT_DELTA)));
+                },
+                TEST_TIMEOUT,
+                DEFAULT_POLLING_INTERVAL);
     }
 }

@@ -4,7 +4,7 @@
 
 #include "ui/aura/window_occlusion_tracker.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
@@ -59,11 +59,12 @@ class MockWindowDelegate : public test::ColorTestWindowDelegate {
   }
 
   void OnWindowOcclusionChanged(
-      Window::OcclusionState occlusion_state) override {
+      Window::OcclusionState old_occlusion_state,
+      Window::OcclusionState new_occlusion_state) override {
     SCOPED_TRACE(window_->GetName());
     ASSERT_TRUE(window_);
-    EXPECT_NE(occlusion_state, Window::OcclusionState::UNKNOWN);
-    EXPECT_EQ(occlusion_state, expected_occlusion_state_);
+    EXPECT_NE(new_occlusion_state, Window::OcclusionState::UNKNOWN);
+    EXPECT_EQ(new_occlusion_state, expected_occlusion_state_);
     EXPECT_EQ(window_->occluded_region_in_root(), expected_occluded_region_);
     expected_occlusion_state_ = Window::OcclusionState::UNKNOWN;
     expected_occluded_region_ = SkRegion();
@@ -1435,7 +1436,7 @@ class ObserverDestroyingWindowOnAnimationEnded
       ui::LayerAnimationSequence* sequence) override {}
 
  private:
-  raw_ptr<Window> window_;
+  raw_ptr<Window, DanglingUntriaged> window_;
 };
 
 }  // namespace
@@ -1582,14 +1583,17 @@ class WindowDelegateHidingWindowIfOccluded : public MockWindowDelegate {
 
   // MockWindowDelegate:
   void OnWindowOcclusionChanged(
-      Window::OcclusionState occlusion_state) override {
-    MockWindowDelegate::OnWindowOcclusionChanged(occlusion_state);
-    if (occlusion_state == Window::OcclusionState::HIDDEN)
+      Window::OcclusionState old_occlusion_state,
+      Window::OcclusionState new_occlusion_state) override {
+    MockWindowDelegate::OnWindowOcclusionChanged(old_occlusion_state,
+                                                 new_occlusion_state);
+    if (new_occlusion_state == Window::OcclusionState::HIDDEN) {
       other_window_->Hide();
+    }
   }
 
  private:
-  raw_ptr<Window> other_window_;
+  raw_ptr<Window, DanglingUntriaged> other_window_;
 };
 
 class WindowDelegateWithQueuedExpectation : public MockWindowDelegate {
@@ -1609,8 +1613,10 @@ class WindowDelegateWithQueuedExpectation : public MockWindowDelegate {
 
   // MockWindowDelegate:
   void OnWindowOcclusionChanged(
-      Window::OcclusionState occlusion_state) override {
-    MockWindowDelegate::OnWindowOcclusionChanged(occlusion_state);
+      Window::OcclusionState old_occlusion_state,
+      Window::OcclusionState new_occlusion_state) override {
+    MockWindowDelegate::OnWindowOcclusionChanged(old_occlusion_state,
+                                                 new_occlusion_state);
     if (queued_expected_occlusion_state_ != Window::OcclusionState::UNKNOWN) {
       set_expectation(queued_expected_occlusion_state_,
                       queued_expected_occluded_region_);
@@ -1676,16 +1682,18 @@ class WindowDelegateDeletingWindow : public MockWindowDelegate {
 
   // MockWindowDelegate:
   void OnWindowOcclusionChanged(
-      Window::OcclusionState occlusion_state) override {
-    MockWindowDelegate::OnWindowOcclusionChanged(occlusion_state);
-    if (occlusion_state == Window::OcclusionState::OCCLUDED) {
+      Window::OcclusionState old_occlusion_state,
+      Window::OcclusionState new_occlusion_state) override {
+    MockWindowDelegate::OnWindowOcclusionChanged(old_occlusion_state,
+                                                 new_occlusion_state);
+    if (new_occlusion_state == Window::OcclusionState::OCCLUDED) {
       delete other_window_;
       other_window_ = nullptr;
     }
   }
 
  private:
-  raw_ptr<Window> other_window_ = nullptr;
+  raw_ptr<Window, DanglingUntriaged> other_window_ = nullptr;
 };
 
 }  // namespace
@@ -1749,8 +1757,10 @@ class WindowDelegateChangingWindowVisibility : public MockWindowDelegate {
 
   // MockWindowDelegate:
   void OnWindowOcclusionChanged(
-      Window::OcclusionState occlusion_state) override {
-    MockWindowDelegate::OnWindowOcclusionChanged(occlusion_state);
+      Window::OcclusionState old_occlusion_state,
+      Window::OcclusionState new_occlusion_state) override {
+    MockWindowDelegate::OnWindowOcclusionChanged(old_occlusion_state,
+                                                 new_occlusion_state);
     if (!window_to_update_)
       return;
 
@@ -1942,8 +1952,10 @@ class WindowDelegateHidingWindow : public MockWindowDelegate {
 
   // MockWindowDelegate:
   void OnWindowOcclusionChanged(
-      Window::OcclusionState occlusion_state) override {
-    MockWindowDelegate::OnWindowOcclusionChanged(occlusion_state);
+      Window::OcclusionState old_occlusion_state,
+      Window::OcclusionState new_occlusion_state) override {
+    MockWindowDelegate::OnWindowOcclusionChanged(old_occlusion_state,
+                                                 new_occlusion_state);
     if (!window_to_update_)
       return;
 
@@ -1951,7 +1963,7 @@ class WindowDelegateHidingWindow : public MockWindowDelegate {
   }
 
  private:
-  raw_ptr<Window> window_to_update_ = nullptr;
+  raw_ptr<Window, DanglingUntriaged> window_to_update_ = nullptr;
 };
 
 class WindowDelegateAddingAndHidingChild : public MockWindowDelegate {
@@ -1974,8 +1986,10 @@ class WindowDelegateAddingAndHidingChild : public MockWindowDelegate {
 
   // MockWindowDelegate:
   void OnWindowOcclusionChanged(
-      Window::OcclusionState occlusion_state) override {
-    MockWindowDelegate::OnWindowOcclusionChanged(occlusion_state);
+      Window::OcclusionState old_occlusion_state,
+      Window::OcclusionState new_occlusion_state) override {
+    MockWindowDelegate::OnWindowOcclusionChanged(old_occlusion_state,
+                                                 new_occlusion_state);
     if (queued_expected_occlusion_state_ != Window::OcclusionState::UNKNOWN) {
       set_expectation(queued_expected_occlusion_state_,
                       queued_expected_occluded_region_);
@@ -2853,6 +2867,66 @@ TEST_F(WindowOcclusionTrackerTest,
   // Removing the opaque layer should make the window_a visible.
   delegate_a->set_expectation(Window::OcclusionState::VISIBLE, SkRegion());
   delete window_c;
+  EXPECT_FALSE(delegate_a->is_expecting_call());
+}
+
+TEST_F(WindowOcclusionTrackerTest, OccludedFractionalWindow) {
+  // Test that a window which gets a fractional scale after a transform is
+  // treated as its floored size when being occluded i.e. a 6.875x6.875 window
+  // gets occluded by a 6x6 window. Read comment on
+  // |WindowOcclusionTracker::RecomputeOcclusionImpl()| to understand why we do
+  // this.
+  MockWindowDelegate* delegate_a = new MockWindowDelegate();
+  delegate_a->set_expectation(Window::OcclusionState::VISIBLE, SkRegion());
+  Window* window_a = CreateTrackedWindow(delegate_a, gfx::Rect(0, 0, 11, 11));
+  EXPECT_FALSE(delegate_a->is_expecting_call());
+
+  // 11 * 0.625 = 0.6875
+  window_a->SetTransform(gfx::Transform::MakeScale(0.625f));
+
+  // Since `window_a` is treated as a 6x6 window, it gets marked as occluded.
+  delegate_a->set_expectation(Window::OcclusionState::OCCLUDED, SkRegion());
+  CreateUntrackedWindow(gfx::Rect(0, 0, 6, 6));
+  EXPECT_FALSE(delegate_a->is_expecting_call());
+
+  // 12 * 0.625 = 7.5
+  // Now `window_a` is treated as 7x7 window and thus cannot be occluded by 6x6
+  // window.
+  delegate_a->set_expectation(Window::OcclusionState::VISIBLE,
+                              SkRegion(SkIRect::MakeXYWH(0, 0, 6, 6)));
+  window_a->SetBounds(gfx::Rect(0, 0, 12, 12));
+  EXPECT_FALSE(delegate_a->is_expecting_call());
+}
+
+TEST_F(WindowOcclusionTrackerTest, OccludingFractionalWindow) {
+  // Test that a window which gets a fractional scale after a transform is
+  // treated as its ceiled value when occluding other windows i.e.
+  // a 10.625x10.625 window occludes an 11x11 window. Read comment on
+  // |WindowOcclusionTracker::RecomputeOcclusionImpl()| to understand why we do
+  // this.
+  MockWindowDelegate* delegate_a = new MockWindowDelegate();
+  delegate_a->set_expectation(Window::OcclusionState::VISIBLE, SkRegion());
+  Window* window_a = CreateTrackedWindow(delegate_a, gfx::Rect(0, 0, 11, 11));
+  EXPECT_FALSE(delegate_a->is_expecting_call());
+
+  delegate_a->set_expectation(Window::OcclusionState::OCCLUDED, SkRegion());
+  Window* window_b = CreateUntrackedWindow(gfx::Rect(0, 0, 17, 17));
+  EXPECT_FALSE(delegate_a->is_expecting_call());
+
+  delegate_a->set_expectation(Window::OcclusionState::VISIBLE, SkRegion());
+  window_b->SetTransparent(true);
+  EXPECT_FALSE(delegate_a->is_expecting_call());
+
+  delegate_a->set_expectation(Window::OcclusionState::OCCLUDED, SkRegion());
+  // 17 * 0.625 = 10.625
+  // `window_b` occludes `window_a` of size 11x11.
+  window_b->SetTransform(gfx::Transform::MakeScale(0.625f));
+  window_b->SetOpaqueRegionsForOcclusion({gfx::Rect(0, 0, 17, 17)});
+  EXPECT_FALSE(delegate_a->is_expecting_call());
+
+  delegate_a->set_expectation(Window::OcclusionState::VISIBLE,
+                              SkRegion(SkIRect::MakeXYWH(0, 0, 11, 11)));
+  window_a->SetBounds(gfx::Rect(0, 0, 12, 12));
   EXPECT_FALSE(delegate_a->is_expecting_call());
 }
 

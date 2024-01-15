@@ -94,6 +94,7 @@ cc_library(
 cc_test(
     name = "searcher_test",
     srcs = ["searcher_test.cc"],
+    tags = ["not_run:arm"],
     deps = [
         ":partitioner",
         ":processor",

@@ -66,7 +66,8 @@ bool StructTraits<blink::mojom::NotificationDataDataView,
       !notification_data.ReadActions(&platform_notification_data->actions) ||
       !notification_data.ReadData(&data) ||
       !notification_data.ReadShowTriggerTimestamp(
-          &platform_notification_data->show_trigger_timestamp)) {
+          &platform_notification_data->show_trigger_timestamp) ||
+      !notification_data.ReadScenario(&platform_notification_data->scenario)) {
     return false;
   }
 
@@ -75,7 +76,7 @@ bool StructTraits<blink::mojom::NotificationDataDataView,
   platform_notification_data->data.assign(data.begin(), data.end());
 
   platform_notification_data->timestamp =
-      base::Time::FromJsTime(notification_data.timestamp());
+      base::Time::FromMillisecondsSinceUnixEpoch(notification_data.timestamp());
 
   platform_notification_data->renotify = notification_data.renotify();
 

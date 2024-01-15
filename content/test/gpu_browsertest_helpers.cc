@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "content/browser/browser_main_loop.h"
 #include "content/public/common/gpu_stream_constants.h"
@@ -49,25 +49,16 @@ GpuBrowsertestEstablishGpuChannelSyncRunLoop() {
 
 scoped_refptr<viz::ContextProviderCommandBuffer> GpuBrowsertestCreateContext(
     scoped_refptr<gpu::GpuChannelHost> gpu_channel_host) {
-  gpu::GpuChannelEstablishFactory* factory =
-      content::BrowserMainLoop::GetInstance()->gpu_channel_establish_factory();
-  // This is for an offscreen context, so the default framebuffer doesn't need
-  // any alpha, depth, stencil, antialiasing.
   gpu::ContextCreationAttribs attributes;
-  attributes.alpha_size = -1;
-  attributes.depth_size = 0;
-  attributes.stencil_size = 0;
-  attributes.samples = 0;
-  attributes.sample_buffers = 0;
   attributes.bind_generates_resource = false;
+  attributes.enable_grcontext = true;
+
   constexpr bool automatic_flushes = false;
   constexpr bool support_locking = false;
-  constexpr bool support_grcontext = true;
   return base::MakeRefCounted<viz::ContextProviderCommandBuffer>(
-      std::move(gpu_channel_host), factory->GetGpuMemoryBufferManager(),
-      content::kGpuStreamIdDefault, content::kGpuStreamPriorityDefault,
-      gpu::kNullSurfaceHandle, GURL(), automatic_flushes, support_locking,
-      support_grcontext, gpu::SharedMemoryLimits(), attributes,
+      std::move(gpu_channel_host), content::kGpuStreamIdDefault,
+      content::kGpuStreamPriorityDefault, gpu::kNullSurfaceHandle, GURL(),
+      automatic_flushes, support_locking, gpu::SharedMemoryLimits(), attributes,
       viz::command_buffer_metrics::ContextType::FOR_TESTING);
 }
 

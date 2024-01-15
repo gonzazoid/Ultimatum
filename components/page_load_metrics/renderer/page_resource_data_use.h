@@ -25,7 +25,10 @@ namespace page_load_metrics {
 // use is updated when resource size updates are called.
 class PageResourceDataUse {
  public:
-  PageResourceDataUse();
+  // Placeholder for a resource id that isn't known yet.
+  static constexpr int kUnknownResourceId = -1;
+
+  explicit PageResourceDataUse(int resource_id);
   PageResourceDataUse(const PageResourceDataUse& other);
 
   PageResourceDataUse& operator=(const PageResourceDataUse&) = delete;
@@ -35,7 +38,8 @@ class PageResourceDataUse {
   void DidStartResponse(const url::SchemeHostPort& final_response_url,
                         int resource_id,
                         const network::mojom::URLResponseHead& response_head,
-                        network::mojom::RequestDestination request_destination);
+                        network::mojom::RequestDestination request_destination,
+                        bool is_ad_resource);
 
   // Updates received bytes.
   void DidReceiveTransferSizeUpdate(int received_data_length);
@@ -50,7 +54,6 @@ class PageResourceDataUse {
   // Called when this resource was loaded from the memory cache. Resources
   // loaded from the memory cache only receive a single update.
   void DidLoadFromMemoryCache(const GURL& response_url,
-                              int request_id,
                               int64_t encoded_body_length,
                               const std::string& mime_type);
 
@@ -60,9 +63,7 @@ class PageResourceDataUse {
 
   int resource_id() const { return resource_id_; }
 
-  void SetReportedAsAdResource(bool reported_as_ad_resource);
   void SetIsMainFrameResource(bool is_main_frame_resource);
-  void SetCompletedBeforeFCP(bool completed_before_fcp);
 
   // Creates a ResourceDataUpdate mojo for this resource. This page resource
   // contains information since the last time update. Should be called at most
@@ -74,23 +75,22 @@ class PageResourceDataUse {
   // |last_update_bytes_|, returns it, and updates |last_update_bytes_|.
   int CalculateNewlyReceivedBytes();
 
-  int resource_id_;
+  int resource_id_ = kUnknownResourceId;
 
   uint64_t total_received_bytes_ = 0;
   uint64_t last_update_bytes_ = 0;
   uint64_t encoded_body_length_ = 0;
   uint64_t decoded_body_length_ = 0;
 
-  bool is_complete_;
-  bool is_canceled_;
-  bool reported_as_ad_resource_;
-  bool is_main_frame_resource_;
-  bool is_secure_scheme_;
-  bool proxy_used_;
-  bool is_primary_frame_resource_;
-  bool completed_before_fcp_;
+  bool is_complete_ = false;
+  bool is_canceled_ = false;
+  bool reported_as_ad_resource_ = false;
+  bool is_main_frame_resource_ = false;
+  bool is_secure_scheme_ = false;
+  bool proxy_used_ = false;
+  bool is_primary_frame_resource_ = false;
 
-  mojom::CacheType cache_type_;
+  mojom::CacheType cache_type_ = mojom::CacheType::kNotCached;
 
   std::string mime_type_;
 };

@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/browser/api/storage/storage_frontend.h"
@@ -72,8 +72,8 @@ scoped_refptr<const Extension> AddExtensionWithIdAndPermissions(
     const std::string& id,
     Manifest::Type type,
     const std::set<std::string>& permissions_set) {
-  base::Value::Dict manifest;
-  manifest.Set("name", std::string("Test extension ") + id);
+  auto manifest =
+      base::Value::Dict().Set("name", std::string("Test extension ") + id);
   manifest.Set("version", "1.0");
   manifest.Set("manifest_version", 2);
 

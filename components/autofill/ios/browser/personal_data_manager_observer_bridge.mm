@@ -6,10 +6,6 @@
 
 #include "base/check.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace autofill {
 
 PersonalDataManagerObserverBridge::PersonalDataManagerObserverBridge(
@@ -23,11 +19,6 @@ PersonalDataManagerObserverBridge::~PersonalDataManagerObserverBridge() {
 
 void PersonalDataManagerObserverBridge::OnPersonalDataChanged() {
   [delegate_ onPersonalDataChanged];
-}
-
-void PersonalDataManagerObserverBridge::OnInsufficientFormData() {
-  if ([delegate_ respondsToSelector:@selector(onInsufficientFormData)])
-    [delegate_ onInsufficientFormData];
 }
 
 }  // namespace autofill

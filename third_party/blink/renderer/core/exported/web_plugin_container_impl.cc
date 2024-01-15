@@ -49,6 +49,7 @@
 #include "third_party/blink/public/web/web_print_preset_options.h"
 #include "third_party/blink/public/web/web_view_client.h"
 #include "third_party/blink/renderer/bindings/core/v8/sanitize_script_errors.h"
+#include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_element.h"
 #include "third_party/blink/renderer/core/clipboard/clipboard_utilities.h"
@@ -176,7 +177,9 @@ void WebPluginContainerImpl::Paint(GraphicsContext& context,
 
   if (WantsWheelEvents()) {
     context.GetPaintController().RecordHitTestData(
-        *GetLayoutEmbeddedContent(), visual_rect, TouchAction::kAuto, true);
+        *GetLayoutEmbeddedContent(), visual_rect, TouchAction::kAuto,
+        /*blocking_wheel=*/true, cc::HitTestOpaqueness::kMixed,
+        DisplayItem::kWebPluginHitTest);
   }
 
   if (element_->GetRegionCaptureCropId()) {
@@ -261,18 +264,20 @@ void WebPluginContainerImpl::HandleEvent(Event& event) {
   //    http://devedge-temp.mozilla.org/library/manuals/2002/plugin/1.0/structures5.html#1000000
   // Don't take the documentation as truth, however.  There are many cases
   // where mozilla behaves differently than the spec.
-  if (auto* mouse_event = DynamicTo<MouseEvent>(event))
+  if (auto* mouse_event = DynamicTo<MouseEvent>(event)) {
     HandleMouseEvent(*mouse_event);
-  else if (auto* wheel_event = DynamicTo<WheelEvent>(event))
+  } else if (auto* wheel_event = DynamicTo<WheelEvent>(event)) {
     HandleWheelEvent(*wheel_event);
-  else if (auto* keyboard_event = DynamicTo<KeyboardEvent>(event))
+  } else if (auto* keyboard_event = DynamicTo<KeyboardEvent>(event)) {
     HandleKeyboardEvent(*keyboard_event);
-  else if (auto* touch_event = DynamicTo<TouchEvent>(event))
+  } else if (auto* touch_event = DynamicTo<TouchEvent>(event)) {
     HandleTouchEvent(*touch_event);
-  else if (auto* gesture_event = DynamicTo<GestureEvent>(event))
+  } else if (auto* gesture_event = DynamicTo<GestureEvent>(event)) {
     HandleGestureEvent(*gesture_event);
-  else if (IsA<DragEvent>(event) && web_plugin_->CanProcessDrag())
-    HandleDragEvent(To<DragEvent>(event));
+  } else if (auto* drag_event = DynamicTo<DragEvent>(event);
+             drag_event && web_plugin_->CanProcessDrag()) {
+    HandleDragEvent(*drag_event);
+  }
 
   // FIXME: it would be cleaner if EmbeddedContentView::HandleEvent returned
   // true/false and HTMLPluginElement called SetDefaultHandled or
@@ -447,6 +452,9 @@ void WebPluginContainerImpl::PrintEnd() {
 }
 
 void WebPluginContainerImpl::Copy() {
+  if (!web_plugin_->CanCopy())
+    return;
+
   if (!web_plugin_->HasSelection())
     return;
 
@@ -544,16 +552,16 @@ v8::Local<v8::Object> WebPluginContainerImpl::V8ObjectForElement() {
   if (!context || !context->CanExecuteScripts(kNotAboutToExecuteScript))
     return v8::Local<v8::Object>();
 
-  ScriptState* script_state =
-      ToScriptState(context, DOMWrapperWorld::MainWorld());
+  ScriptState* script_state = ToScriptStateForMainWorld(context);
   if (!script_state)
     return v8::Local<v8::Object>();
 
-  v8::Local<v8::Value> v8value =
-      ToV8(element_.Get(), script_state->GetContext()->Global(),
-           script_state->GetIsolate());
-  if (v8value.IsEmpty())
+  v8::MaybeLocal<v8::Value> maybe_v8value =
+      ToV8Traits<HTMLPlugInElement>::ToV8(script_state, element_.Get());
+  v8::Local<v8::Value> v8value;
+  if (!maybe_v8value.ToLocal(&v8value)) {
     return v8::Local<v8::Object>();
+  }
   DCHECK(v8value->IsObject());
 
   return v8::Local<v8::Object>::Cast(v8value);

@@ -6,8 +6,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
@@ -121,7 +121,7 @@ class VideoDecoderStreamTest
       // Decryptor can only decrypt (not decrypt-and-decode) so that
       // DecryptingDemuxerStream will be used.
       EXPECT_CALL(*decryptor_, InitializeVideoDecoder(_, _))
-          .WillRepeatedly(RunOnceCallback<1>(false));
+          .WillRepeatedly(base::test::RunOnceCallbackRepeatedly<1>(false));
       EXPECT_CALL(*decryptor_, Decrypt(_, _, _))
           .WillRepeatedly(Invoke(this, &VideoDecoderStreamTest::Decrypt));
     }
@@ -141,6 +141,8 @@ class VideoDecoderStreamTest
     EXPECT_MEDIA_LOG(HasSubstr("audio")).Times(AnyNumber());
     EXPECT_MEDIA_LOG(HasSubstr("Audio")).Times(AnyNumber());
     EXPECT_MEDIA_LOG(HasSubstr("decryptor")).Times(AnyNumber());
+    EXPECT_MEDIA_LOG(HasSubstr("clear to encrypted buffers"))
+        .Times(AnyNumber());
   }
 
   VideoDecoderStreamTest(const VideoDecoderStreamTest&) = delete;
@@ -546,7 +548,7 @@ class VideoDecoderStreamTest
   std::vector<int> platform_decoder_indices_;
 
   // The current decoder used by |video_decoder_stream_|.
-  raw_ptr<FakeVideoDecoder> decoder_ = nullptr;
+  raw_ptr<FakeVideoDecoder, AcrossTasksDanglingUntriaged> decoder_ = nullptr;
 
   bool is_initialized_;
   int num_decoded_frames_;

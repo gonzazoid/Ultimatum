@@ -4,10 +4,19 @@
 
 #include "chrome/browser/ui/views/download/bubble/download_bubble_security_view.h"
 
-#include "chrome/browser/download/bubble/download_bubble_controller.h"
+#include "base/test/scoped_feature_list.h"
+#include "chrome/browser/download/bubble/download_bubble_ui_controller.h"
+#include "chrome/browser/download/chrome_download_manager_delegate.h"
+#include "chrome/browser/download/download_core_service.h"
+#include "chrome/browser/download/download_core_service_factory.h"
 #include "chrome/browser/download/download_item_model.h"
+#include "chrome/browser/download/download_item_warning_data.h"
 #include "chrome/browser/download/download_ui_model.h"
+#include "chrome/browser/download/offline_item_utils.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/download/download_bubble_info.h"
+#include "chrome/browser/ui/views/chrome_layout_provider.h"
+#include "chrome/browser/ui/views/download/bubble/download_bubble_contents_view.h"
 #include "chrome/browser/ui/views/download/bubble/download_bubble_row_view.h"
 #include "chrome/browser/ui/views/download/bubble/download_toolbar_button_view.h"
 #include "chrome/common/chrome_switches.h"
@@ -16,37 +25,134 @@
 #include "chrome/test/base/testing_profile_manager.h"
 #include "chrome/test/views/chrome_views_test_base.h"
 #include "components/download/public/common/mock_download_item.h"
-#include "components/enterprise/common/download_item_reroute_info.h"
+#include "components/safe_browsing/core/common/features.h"
+#include "content/public/browser/download_item_utils.h"
 #include "content/public/test/mock_download_manager.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/color/color_id.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 #include "ui/views/vector_icons.h"
 #include "ui/views/view.h"
+#include "ui/views/window/dialog_client_view.h"
 
 namespace {
 
-class MockDownloadBubbleUIController : public DownloadBubbleUIController {
- public:
-  explicit MockDownloadBubbleUIController(Browser* browser)
-      : DownloadBubbleUIController(browser) {}
-  ~MockDownloadBubbleUIController() override = default;
-};
+using offline_items_collection::ContentId;
+using ::testing::Return;
+using ::testing::ReturnRefOfCopy;
+
+using WarningSurface = DownloadItemWarningData::WarningSurface;
+using WarningAction = DownloadItemWarningData::WarningAction;
+using WarningActionEvent = DownloadItemWarningData::WarningActionEvent;
 
 class MockDownloadBubbleNavigationHandler
     : public DownloadBubbleNavigationHandler {
  public:
   virtual ~MockDownloadBubbleNavigationHandler() = default;
-  void OpenPrimaryDialog() override {}
-  void OpenSecurityDialog(DownloadBubbleRowView*) override {}
-  void CloseDialog(views::Widget::ClosedReason) override {}
+  void OpenPrimaryDialog() override {
+    last_opened_page_ = DownloadBubbleContentsView::Page::kPrimary;
+  }
+  void OpenSecurityDialog(const offline_items_collection::ContentId&) override {
+    last_opened_page_ = DownloadBubbleContentsView::Page::kSecurity;
+  }
+  void CloseDialog(views::Widget::ClosedReason) override { was_closed_ = true; }
   void ResizeDialog() override {}
+  void OnDialogInteracted() override {}
+  std::unique_ptr<views::BubbleDialogDelegate::CloseOnDeactivatePin>
+  PreventDialogCloseOnDeactivate() override {
+    return nullptr;
+  }
+  base::WeakPtr<DownloadBubbleNavigationHandler> GetWeakPtr() override {
+    return weak_factory_.GetWeakPtr();
+  }
+
+  bool was_closed() const { return was_closed_; }
+  std::optional<DownloadBubbleContentsView::Page> last_opened_page() const {
+    return last_opened_page_;
+  }
+
+ private:
+  std::optional<DownloadBubbleContentsView::Page> last_opened_page_ =
+      std::nullopt;
+  bool was_closed_ = false;
+  base::WeakPtrFactory<MockDownloadBubbleNavigationHandler> weak_factory_{this};
 };
+
+class MockDownloadBubbleSecurityViewDelegate
+    : public DownloadBubbleSecurityView::Delegate {
+ public:
+  MockDownloadBubbleSecurityViewDelegate(download::DownloadItem* item1,
+                                         download::DownloadItem* item2)
+      : download_item1_(item1), download_item2_(item2) {}
+
+  virtual ~MockDownloadBubbleSecurityViewDelegate() = default;
+
+  void ProcessSecuritySubpageButtonPress(const ContentId&,
+                                         DownloadCommands::Command) override {}
+
+  void AddSecuritySubpageWarningActionEvent(
+      const ContentId& id,
+      DownloadItemWarningData::WarningAction action) override {
+    download::DownloadItem* item = nullptr;
+    if (id.id == "guid1") {
+      item = download_item1_;
+    } else {
+      item = download_item2_;
+    }
+    DownloadItemWarningData::AddWarningActionEvent(
+        item, WarningSurface::BUBBLE_SUBPAGE, action);
+  }
+
+  void ProcessDeepScanPress(const ContentId&,
+                            base::optional_ref<const std::string>) override {}
+  void ProcessLocalDecryptionPress(
+      const offline_items_collection::ContentId& id,
+      base::optional_ref<const std::string> password) override {}
+  void ProcessLocalPasswordInProgressClick(
+      const offline_items_collection::ContentId& id,
+      DownloadCommands::Command command) override {}
+  bool IsEncryptedArchive(const ContentId&) override { return false; }
+  bool HasPreviousIncorrectPassword(const ContentId&) override { return false; }
+
+ private:
+  const raw_ptr<download::DownloadItem> download_item1_;
+  const raw_ptr<download::DownloadItem> download_item2_;
+};
+
+class MockDownloadCoreService : public DownloadCoreService {
+ public:
+  MOCK_METHOD(ChromeDownloadManagerDelegate*, GetDownloadManagerDelegate, ());
+  MOCK_METHOD(DownloadUIController*, GetDownloadUIController, ());
+  MOCK_METHOD(DownloadHistory*, GetDownloadHistory, ());
+  MOCK_METHOD(extensions::ExtensionDownloadsEventRouter*,
+              GetExtensionEventRouter,
+              ());
+  MOCK_METHOD(bool, HasCreatedDownloadManager, ());
+  MOCK_METHOD(int, BlockingShutdownCount, (), (const));
+  MOCK_METHOD(void, CancelDownloads, ());
+  MOCK_METHOD(void,
+              SetDownloadManagerDelegateForTesting,
+              (std::unique_ptr<ChromeDownloadManagerDelegate> delegate));
+  MOCK_METHOD(bool, IsDownloadUiEnabled, ());
+  MOCK_METHOD(bool, IsDownloadObservedByExtension, ());
+};
+
+std::unique_ptr<KeyedService> BuildMockDownloadCoreService(
+    content::BrowserContext* browser_context) {
+  return std::make_unique<MockDownloadCoreService>();
+}
+
+}  // namespace
 
 class DownloadBubbleSecurityViewTest : public ChromeViewsTestBase {
  public:
   DownloadBubbleSecurityViewTest()
-      : manager_(std::make_unique<
+      : security_view_delegate_(
+            std::make_unique<MockDownloadBubbleSecurityViewDelegate>(
+                &download_item1_,
+                &download_item2_)),
+        manager_(std::make_unique<
                  testing::NiceMock<content::MockDownloadManager>>()),
         testing_profile_manager_(TestingBrowserProcess::GetGlobal()) {
     base::CommandLine::ForCurrentProcess()->AppendSwitch(switches::kNoFirstRun);
@@ -68,27 +174,66 @@ class DownloadBubbleSecurityViewTest : public ChromeViewsTestBase {
     auto bubble_delegate = std::make_unique<views::BubbleDialogDelegate>(
         anchor_widget_->GetContentsView(), views::BubbleBorder::TOP_RIGHT);
     bubble_delegate_ = bubble_delegate.get();
-    security_view_ = bubble_delegate_->SetContentsView(
-        std::make_unique<DownloadBubbleSecurityView>(bubble_controller_.get(),
-                                                     bubble_navigator_.get(),
-                                                     bubble_delegate_));
+    bubble_navigator_ = std::make_unique<MockDownloadBubbleNavigationHandler>();
     views::BubbleDialogDelegate::CreateBubble(std::move(bubble_delegate));
     bubble_delegate_->GetWidget()->Show();
-    bubble_navigator_ = std::make_unique<MockDownloadBubbleNavigationHandler>();
     bubble_controller_ =
-        std::make_unique<MockDownloadBubbleUIController>(browser_.get());
+        std::make_unique<DownloadBubbleUIController>(browser_.get());
+    security_view_ = bubble_delegate_->SetContentsView(
+        std::make_unique<DownloadBubbleSecurityView>(
+            security_view_delegate_.get(), bubble_navigator_->GetWeakPtr(),
+            bubble_delegate_));
 
-    ON_CALL(download_item_, GetRerouteInfo())
-        .WillByDefault(testing::ReturnRefOfCopy(
-            enterprise_connectors::DownloadItemRerouteInfo()));
+    DownloadCoreServiceFactory::GetInstance()->SetTestingFactory(
+        browser_->profile(),
+        base::BindRepeating(&BuildMockDownloadCoreService));
+    MockDownloadCoreService* mock_dcs = static_cast<MockDownloadCoreService*>(
+        DownloadCoreServiceFactory::GetForBrowserContext(browser_->profile()));
+    ON_CALL(*mock_dcs, IsDownloadUiEnabled()).WillByDefault(Return(true));
+    delegate_ =
+        std::make_unique<ChromeDownloadManagerDelegate>(browser_->profile());
+    ON_CALL(*mock_dcs, GetDownloadManagerDelegate())
+        .WillByDefault(Return(delegate_.get()));
+
+    // Needed to make the model not return an empty ContentId.
+    ON_CALL(download_item1_, GetGuid())
+        .WillByDefault(ReturnRefOfCopy(std::string("guid1")));
+    ON_CALL(download_item2_, GetGuid())
+        .WillByDefault(ReturnRefOfCopy(std::string("guid2")));
+
+    content::DownloadItemUtils::AttachInfoForTesting(&download_item1_, profile_,
+                                                     nullptr);
+    content::DownloadItemUtils::AttachInfoForTesting(&download_item2_, profile_,
+                                                     nullptr);
+
+    const int bubble_width = ChromeLayoutProvider::Get()->GetDistanceMetric(
+        views::DISTANCE_BUBBLE_PREFERRED_WIDTH);
+    std::vector<DownloadUIModel::DownloadUIModelPtr> models;
+    models.push_back(DownloadItemModel::Wrap(&download_item1_));
+    models.push_back(DownloadItemModel::Wrap(&download_item2_));
+    row1_model_ = models[0].get();
+    row2_model_ = models[1].get();
+    info_ = std::make_unique<DownloadBubbleRowListViewInfo>(std::move(models));
     row_list_view_ = std::make_unique<DownloadBubbleRowListView>(
-        /*is_partial_view=*/true, browser_.get());
-    row_view_ = std::make_unique<DownloadBubbleRowView>(
-        DownloadItemModel::Wrap(&download_item_), row_list_view_.get(),
-        bubble_controller_.get(), bubble_navigator_.get(), browser_.get());
+        browser_->AsWeakPtr(), bubble_controller_->GetWeakPtr(),
+        bubble_navigator_->GetWeakPtr(), bubble_width, *info_);
+
+    // Give both items a valid default security subpage
+    ON_CALL(download_item1_, GetDangerType())
+        .WillByDefault(Return(
+            download::DownloadDangerType::DOWNLOAD_DANGER_TYPE_DANGEROUS_FILE));
+    ON_CALL(download_item1_, GetURL())
+        .WillByDefault(ReturnRefOfCopy(GURL("https://example.com/a.exe")));
+
+    ON_CALL(download_item2_, GetDangerType())
+        .WillByDefault(Return(
+            download::DownloadDangerType::DOWNLOAD_DANGER_TYPE_DANGEROUS_FILE));
+    ON_CALL(download_item2_, GetURL())
+        .WillByDefault(ReturnRefOfCopy(GURL("https://example.com/a.exe")));
   }
 
   void TearDown() override {
+    delegate_.reset();
     // All windows need to be closed before tear down.
     anchor_widget_.reset();
     ChromeViewsTestBase::TearDown();
@@ -99,19 +244,27 @@ class DownloadBubbleSecurityViewTest : public ChromeViewsTestBase {
   DownloadBubbleSecurityViewTest& operator=(
       const DownloadBubbleSecurityViewTest&) = delete;
 
-  raw_ptr<views::BubbleDialogDelegate> bubble_delegate_;
-  std::unique_ptr<MockDownloadBubbleUIController> bubble_controller_;
+  std::unique_ptr<ChromeDownloadManagerDelegate> delegate_;
+  testing::NiceMock<download::MockDownloadItem> download_item1_;
+  testing::NiceMock<download::MockDownloadItem> download_item2_;
+  std::unique_ptr<MockDownloadBubbleSecurityViewDelegate>
+      security_view_delegate_;
+  raw_ptr<views::BubbleDialogDelegate, DanglingUntriaged> bubble_delegate_ =
+      nullptr;
+  std::unique_ptr<DownloadBubbleUIController> bubble_controller_;
   std::unique_ptr<MockDownloadBubbleNavigationHandler> bubble_navigator_;
-  raw_ptr<DownloadBubbleSecurityView> security_view_;
+  raw_ptr<DownloadBubbleSecurityView, DanglingUntriaged> security_view_ =
+      nullptr;
   std::unique_ptr<views::Widget> anchor_widget_;
 
-  testing::NiceMock<download::MockDownloadItem> download_item_;
+  std::unique_ptr<DownloadBubbleRowListViewInfo> info_;
   std::unique_ptr<DownloadBubbleRowListView> row_list_view_;
-  std::unique_ptr<DownloadBubbleRowView> row_view_;
+  raw_ptr<DownloadUIModel> row1_model_;
+  raw_ptr<DownloadUIModel> row2_model_;
 
   std::unique_ptr<testing::NiceMock<content::MockDownloadManager>> manager_;
   TestingProfileManager testing_profile_manager_;
-  raw_ptr<Profile> profile_;
+  raw_ptr<Profile> profile_ = nullptr;
   std::unique_ptr<TestBrowserWindow> window_;
   std::unique_ptr<Browser> browser_;
 };
@@ -119,60 +272,384 @@ class DownloadBubbleSecurityViewTest : public ChromeViewsTestBase {
 TEST_F(DownloadBubbleSecurityViewTest,
        UpdateSecurityView_WillHaveAppropriateDialogButtons) {
   // Two buttons, one prominent
-  row_view_->SetUIInfoForTesting(
-      DownloadUIModel::BubbleUIInfo(std::u16string())
+  security_view_->InitializeForDownload(*row1_model_);
+  security_view_->SetUIInfoForTesting(
+      DownloadUIModel::BubbleUIInfo()
+          .AddSubpageSummary(u"fake summary")
           .AddIconAndColor(views::kInfoIcon, ui::kColorAlertHighSeverity)
           .AddPrimaryButton(DownloadCommands::Command::KEEP)
           // OK button
-          .AddSubpageButton(std::u16string(),
-                            DownloadCommands::Command::DISCARD,
-                            /*is_prominent=*/true)
+          .AddPrimarySubpageButton(std::u16string(),
+                                   DownloadCommands::Command::DISCARD)
           // Cancel button
-          .AddSubpageButton(std::u16string(), DownloadCommands::Command::KEEP,
-                            /*is_prominent=*/false));
-  security_view_->UpdateSecurityView(row_view_.get());
+          .AddSecondarySubpageButton(std::u16string(),
+                                     DownloadCommands::Command::KEEP,
+                                     ui::kColorAlertHighSeverity));
   EXPECT_EQ(bubble_delegate_->GetDialogButtons(),
             ui::DIALOG_BUTTON_OK | ui::DIALOG_BUTTON_CANCEL);
   EXPECT_EQ(bubble_delegate_->GetDefaultDialogButton(), ui::DIALOG_BUTTON_OK);
 
   // Two buttons, none prominent
-  row_view_->SetUIInfoForTesting(
-      DownloadUIModel::BubbleUIInfo(std::u16string())
+  security_view_->Reset();
+  security_view_->InitializeForDownload(*row1_model_);
+  DownloadUIModel::BubbleUIInfo info =
+      DownloadUIModel::BubbleUIInfo()
+          .AddSubpageSummary(u"fake summary")
           .AddIconAndColor(views::kInfoIcon, ui::kColorAlertHighSeverity)
           .AddPrimaryButton(DownloadCommands::Command::KEEP)
           // OK button
-          .AddSubpageButton(std::u16string(),
-                            DownloadCommands::Command::DISCARD,
-                            /*is_prominent=*/false)
+          .AddPrimarySubpageButton(std::u16string(),
+                                   DownloadCommands::Command::DISCARD)
           // Cancel button
-          .AddSubpageButton(std::u16string(), DownloadCommands::Command::KEEP,
-                            /*is_prominent=*/false));
-  security_view_->UpdateSecurityView(row_view_.get());
+          .AddSecondarySubpageButton(std::u16string(),
+                                     DownloadCommands::Command::KEEP,
+                                     ui::kColorAlertHighSeverity);
+  info.subpage_buttons[0].is_prominent = false;  // Primary buttons are
+                                                 // prominent by default.
+  security_view_->SetUIInfoForTesting(std::move(info));
   EXPECT_EQ(bubble_delegate_->GetDialogButtons(),
             ui::DIALOG_BUTTON_OK | ui::DIALOG_BUTTON_CANCEL);
   EXPECT_EQ(bubble_delegate_->GetDefaultDialogButton(), ui::DIALOG_BUTTON_NONE);
 
   // One button, none prominent
-  row_view_->SetUIInfoForTesting(
-      DownloadUIModel::BubbleUIInfo(std::u16string())
-          .AddIconAndColor(views::kInfoIcon, ui::kColorAlertHighSeverity)
-          .AddPrimaryButton(DownloadCommands::Command::KEEP)
-          // OK button
-          .AddSubpageButton(std::u16string(),
-                            DownloadCommands::Command::DISCARD,
-                            /*is_prominent=*/false));
-  security_view_->UpdateSecurityView(row_view_.get());
+  security_view_->Reset();
+  security_view_->InitializeForDownload(*row1_model_);
+  info = DownloadUIModel::BubbleUIInfo()
+             .AddSubpageSummary(u"fake summary")
+             .AddIconAndColor(views::kInfoIcon, ui::kColorAlertHighSeverity)
+             .AddPrimaryButton(DownloadCommands::Command::KEEP)
+             // OK button
+             .AddPrimarySubpageButton(std::u16string(),
+                                      DownloadCommands::Command::DISCARD);
+  info.subpage_buttons[0].is_prominent = false;  // Primary buttons are
+                                                 // prominent by default.
+  security_view_->SetUIInfoForTesting(std::move(info));
   EXPECT_EQ(bubble_delegate_->GetDialogButtons(), ui::DIALOG_BUTTON_OK);
   EXPECT_EQ(bubble_delegate_->GetDefaultDialogButton(), ui::DIALOG_BUTTON_NONE);
 
   // No buttons, none prominent
-  row_view_->SetUIInfoForTesting(
-      DownloadUIModel::BubbleUIInfo(std::u16string())
+  security_view_->Reset();
+  security_view_->InitializeForDownload(*row1_model_);
+  security_view_->SetUIInfoForTesting(
+      DownloadUIModel::BubbleUIInfo()
+          .AddSubpageSummary(u"fake summary")
+
           .AddIconAndColor(views::kInfoIcon, ui::kColorAlertHighSeverity)
           .AddPrimaryButton(DownloadCommands::Command::KEEP));
-  security_view_->UpdateSecurityView(row_view_.get());
   EXPECT_EQ(bubble_delegate_->GetDialogButtons(), ui::DIALOG_BUTTON_NONE);
   EXPECT_EQ(bubble_delegate_->GetDefaultDialogButton(), ui::DIALOG_BUTTON_NONE);
 }
 
-}  // namespace
+TEST_F(DownloadBubbleSecurityViewTest, VerifyLogWarningActions) {
+  DownloadItemWarningData::AddWarningActionEvent(
+      &download_item1_, WarningSurface::BUBBLE_MAINPAGE, WarningAction::SHOWN);
+
+  size_t item1_actions_expected = 0u, item2_actions_expected = 0u;
+
+  // Back action logged.
+  {
+    auto security_view = std::make_unique<DownloadBubbleSecurityView>(
+        security_view_delegate_.get(), bubble_navigator_->GetWeakPtr(),
+        bubble_delegate_);
+    security_view->InitializeForDownload(*row1_model_);
+
+    security_view->BackButtonPressed();
+    ++item1_actions_expected;
+
+    // Delete early to ensure DISMISS is not logged if BACK is already logged.
+    security_view.reset();
+    std::vector<WarningActionEvent> events =
+        DownloadItemWarningData::GetWarningActionEvents(&download_item1_);
+    ASSERT_EQ(events.size(), item1_actions_expected);
+    EXPECT_EQ(events.back().action, WarningAction::BACK);
+  }
+
+  // Close action logged
+  {
+    auto security_view = std::make_unique<DownloadBubbleSecurityView>(
+        security_view_delegate_.get(), bubble_navigator_->GetWeakPtr(),
+        bubble_delegate_);
+    security_view->InitializeForDownload(*row1_model_);
+
+    security_view->CloseBubble();
+    ++item1_actions_expected;
+    EXPECT_TRUE(bubble_navigator_->was_closed());
+
+    security_view.reset();
+    std::vector<WarningActionEvent> events =
+        DownloadItemWarningData::GetWarningActionEvents(&download_item1_);
+    ASSERT_EQ(events.size(), item1_actions_expected);
+    EXPECT_EQ(events.back().action, WarningAction::CLOSE);
+  }
+
+  // Dismiss action logged
+  {
+    auto security_view = std::make_unique<DownloadBubbleSecurityView>(
+        security_view_delegate_.get(), bubble_navigator_->GetWeakPtr(),
+        bubble_delegate_);
+    security_view->InitializeForDownload(*row1_model_);
+
+    security_view.reset();
+    ++item1_actions_expected;
+
+    std::vector<WarningActionEvent> events =
+        DownloadItemWarningData::GetWarningActionEvents(&download_item1_);
+    ASSERT_EQ(events.size(), item1_actions_expected);
+    EXPECT_EQ(events.back().action, WarningAction::DISMISS);
+  }
+
+  // Dismiss action logged after update
+  {
+    auto security_view = std::make_unique<DownloadBubbleSecurityView>(
+        security_view_delegate_.get(), bubble_navigator_->GetWeakPtr(),
+        bubble_delegate_);
+    security_view->InitializeForDownload(*row1_model_);
+
+    security_view->BackButtonPressed();
+    ++item1_actions_expected;
+
+    std::vector<WarningActionEvent> events =
+        DownloadItemWarningData::GetWarningActionEvents(&download_item1_);
+    ASSERT_EQ(events.size(), item1_actions_expected);
+    EXPECT_EQ(events.back().action, WarningAction::BACK);
+
+    // The security view can be re-opened after back button is pressed.
+    security_view->InitializeForDownload(*row1_model_);
+
+    security_view.reset();
+    ++item1_actions_expected;
+
+    events = DownloadItemWarningData::GetWarningActionEvents(&download_item1_);
+    ASSERT_EQ(events.size(), item1_actions_expected);
+    EXPECT_EQ(events.back().action, WarningAction::DISMISS);
+  }
+
+  // Dismiss action not logged after update to a different download.
+  {
+    auto security_view = std::make_unique<DownloadBubbleSecurityView>(
+        security_view_delegate_.get(), bubble_navigator_->GetWeakPtr(),
+        bubble_delegate_);
+    security_view->InitializeForDownload(*row1_model_);
+
+    security_view->BackButtonPressed();
+    ++item1_actions_expected;
+
+    std::vector<WarningActionEvent> events =
+        DownloadItemWarningData::GetWarningActionEvents(&download_item1_);
+    ASSERT_EQ(events.size(), item1_actions_expected);
+    EXPECT_EQ(events.back().action, WarningAction::BACK);
+
+    // The security view can be re-opened for a different download after back
+    // button is pressed.
+    DownloadItemWarningData::AddWarningActionEvent(
+        &download_item2_, WarningSurface::BUBBLE_MAINPAGE,
+        WarningAction::SHOWN);
+    security_view->InitializeForDownload(*row2_model_);
+
+    // Since the reset occurs while we are showing download2, we don't log
+    // DISMISS for the first download.
+    security_view.reset();
+    ++item2_actions_expected;
+
+    events = DownloadItemWarningData::GetWarningActionEvents(&download_item1_);
+    EXPECT_EQ(events.size(), item1_actions_expected);
+
+    // Instead, DISMISS is logged for the second download.
+    events = DownloadItemWarningData::GetWarningActionEvents(&download_item2_);
+    ASSERT_EQ(events.size(), item2_actions_expected);
+    EXPECT_EQ(events[0].action, WarningAction::DISMISS);
+  }
+
+  // Dismiss action not logged when download is removed.
+  {
+    auto security_view = std::make_unique<DownloadBubbleSecurityView>(
+        security_view_delegate_.get(), bubble_navigator_->GetWeakPtr(),
+        bubble_delegate_);
+    security_view->InitializeForDownload(*row1_model_);
+
+    // No action is logged upon removal of download.
+    download_item1_.Remove();
+    download_item1_.NotifyObserversDownloadRemoved();
+
+    // No action is logged upon reset because we are no longer initialized.
+    security_view.reset();
+
+    std::vector<WarningActionEvent> events =
+        DownloadItemWarningData::GetWarningActionEvents(&download_item1_);
+    EXPECT_EQ(events.size(), item1_actions_expected);
+  }
+}
+
+TEST_F(DownloadBubbleSecurityViewTest, ResizesOnUpdate) {
+  // This test simulates the deep scanning flow. The prompt for scanning is
+  // wider than the scan in progress view. The bubble should be able to scale up
+  // and down in these transitions.
+  security_view_->InitializeForDownload(*row1_model_);
+  security_view_->SetUIInfoForTesting(
+      DownloadUIModel::BubbleUIInfo()
+          .AddIconAndColor(views::kInfoIcon, ui::kColorAlertHighSeverity)
+          .AddPrimarySubpageButton(std::u16string(),
+                                   DownloadCommands::Command::DISCARD)
+          .AddSubpageSummary(std::u16string(u"Subpage warning")));
+  int short_width =
+      bubble_delegate_->GetDialogClientView()->GetMinimumSize().width();
+
+  security_view_->Reset();
+  security_view_->InitializeForDownload(*row1_model_);
+  security_view_->SetUIInfoForTesting(
+      DownloadUIModel::BubbleUIInfo()
+          .AddIconAndColor(views::kInfoIcon, ui::kColorAlertHighSeverity)
+          .AddPrimarySubpageButton(
+              std::u16string(u"really really really really really really long "
+                             u"button text"),
+              DownloadCommands::Command::DISCARD)
+          .AddSubpageSummary(std::u16string(u"Subpage warning")));
+  int medium_width =
+      bubble_delegate_->GetDialogClientView()->GetMinimumSize().width();
+
+  ASSERT_LT(short_width, medium_width);
+
+  security_view_->Reset();
+  security_view_->InitializeForDownload(*row1_model_);
+  security_view_->SetUIInfoForTesting(
+      DownloadUIModel::BubbleUIInfo()
+          .AddIconAndColor(views::kInfoIcon, ui::kColorAlertHighSeverity)
+          .AddPrimarySubpageButton(std::u16string(),
+                                   DownloadCommands::Command::DISCARD)
+          .AddSubpageSummary(std::u16string(u"Subpage warning")));
+  EXPECT_EQ(short_width,
+            bubble_delegate_->GetDialogClientView()->GetMinimumSize().width());
+}
+
+TEST_F(DownloadBubbleSecurityViewTest, ProcessButtonClick) {
+  security_view_->InitializeForDownload(*row1_model_);
+  EXPECT_TRUE(
+      security_view_->ProcessButtonClick(DownloadCommands::Command::DISCARD,
+                                         /*is_secondary_button=*/false));
+
+    EXPECT_FALSE(
+        security_view_->ProcessButtonClick(DownloadCommands::Command::DEEP_SCAN,
+                                           /*is_secondary_button=*/false));
+}
+
+TEST_F(DownloadBubbleSecurityViewTest, InitializeAndReset) {
+  security_view_->InitializeForDownload(*row1_model_);
+  EXPECT_TRUE(security_view_->IsInitialized());
+  EXPECT_EQ(security_view_->content_id(),
+            OfflineItemUtils::GetContentIdForDownload(&download_item1_));
+
+  // Reset and initialize with the other download.
+  security_view_->Reset();
+  security_view_->InitializeForDownload(*row2_model_);
+  EXPECT_TRUE(security_view_->IsInitialized());
+  EXPECT_EQ(security_view_->content_id(),
+            OfflineItemUtils::GetContentIdForDownload(&download_item2_));
+
+  // Initialize directly to a different download without resetting.
+  security_view_->InitializeForDownload(*row1_model_);
+  EXPECT_TRUE(security_view_->IsInitialized());
+  EXPECT_EQ(security_view_->content_id(),
+            OfflineItemUtils::GetContentIdForDownload(&download_item1_));
+
+  // Initialize to the same download without resetting.
+  security_view_->InitializeForDownload(*row1_model_);
+  EXPECT_TRUE(security_view_->IsInitialized());
+  EXPECT_EQ(security_view_->content_id(),
+            OfflineItemUtils::GetContentIdForDownload(&download_item1_));
+}
+
+TEST_F(DownloadBubbleSecurityViewTest, ReturnToPrimaryDialog) {
+  ON_CALL(download_item2_, GetDangerType())
+      .WillByDefault(
+          Return(download::DOWNLOAD_DANGER_TYPE_DEEP_SCANNED_FAILED));
+  security_view_->InitializeForDownload(*row1_model_);
+  EXPECT_TRUE(security_view_->IsInitialized());
+  EXPECT_EQ(security_view_->content_id(),
+            OfflineItemUtils::GetContentIdForDownload(&download_item1_));
+
+  // Initialize to a different download without resetting.
+  security_view_->InitializeForDownload(*row2_model_);
+  EXPECT_TRUE(security_view_->IsInitialized());
+  EXPECT_EQ(security_view_->content_id(),
+            OfflineItemUtils::GetContentIdForDownload(&download_item2_));
+
+  // Because the new item's danger type is a terminal state of a deep scan,
+  // we should return to the primary dialog.
+  EXPECT_EQ(*bubble_navigator_->last_opened_page(),
+            DownloadBubbleContentsView::Page::kPrimary);
+}
+
+// Test that an update with an insecure download status does not cause us to
+// return to the primary dialog.
+TEST_F(DownloadBubbleSecurityViewTest, InsecureDontReturnToPrimaryDialog) {
+  ASSERT_TRUE(row1_model_->GetBubbleUIInfo().HasSubpage());
+  security_view_->InitializeForDownload(*row1_model_);
+  EXPECT_TRUE(security_view_->IsInitialized());
+  EXPECT_EQ(security_view_->content_id(),
+            OfflineItemUtils::GetContentIdForDownload(&download_item1_));
+
+  // Update the download to be insecure but not dangerous.
+  EXPECT_CALL(download_item1_, GetDangerType())
+      .WillRepeatedly(Return(
+          download::DownloadDangerType::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS));
+  EXPECT_CALL(download_item1_, GetInsecureDownloadStatus())
+      .WillRepeatedly(
+          Return(download::DownloadItem::InsecureDownloadStatus::BLOCK));
+  EXPECT_CALL(download_item1_, GetURL())
+      .WillRepeatedly(ReturnRefOfCopy(GURL("http://insecure.com/a.exe")));
+  download_item1_.NotifyObserversDownloadUpdated();
+
+  ASSERT_TRUE(row1_model_->GetBubbleUIInfo().HasSubpage());
+  EXPECT_TRUE(security_view_->IsInitialized());
+  EXPECT_EQ(security_view_->content_id(),
+            OfflineItemUtils::GetContentIdForDownload(&download_item1_));
+  // The update did not cause us to return to the primary page because there is
+  // a subpage.
+  EXPECT_FALSE(bubble_navigator_->last_opened_page());
+}
+
+// Test that an update where the new state does not have a subpage causes us to
+// return to the primary dialog.
+TEST_F(DownloadBubbleSecurityViewTest, ReturnToPrimaryDialogNoSubpage) {
+  ASSERT_TRUE(row1_model_->GetBubbleUIInfo().HasSubpage());
+  security_view_->InitializeForDownload(*row1_model_);
+  EXPECT_TRUE(security_view_->IsInitialized());
+  EXPECT_EQ(security_view_->content_id(),
+            OfflineItemUtils::GetContentIdForDownload(&download_item1_));
+
+  // Update the download.
+  EXPECT_CALL(download_item1_, GetDangerType())
+      .WillRepeatedly(Return(
+          download::DownloadDangerType::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS));
+  download_item1_.NotifyObserversDownloadUpdated();
+
+  ASSERT_FALSE(row1_model_->GetBubbleUIInfo().HasSubpage());
+  EXPECT_TRUE(security_view_->IsInitialized());
+  EXPECT_EQ(security_view_->content_id(),
+            OfflineItemUtils::GetContentIdForDownload(&download_item1_));
+  EXPECT_EQ(DownloadBubbleContentsView::Page::kPrimary,
+            *bubble_navigator_->last_opened_page());
+}
+
+// Test validating a dangerous download, such that it goes from having
+// a UI info subpage to not having one. See crbug.com/1478390.
+TEST_F(DownloadBubbleSecurityViewTest, ValidateDangerousDownload) {
+  ASSERT_TRUE(row1_model_->GetBubbleUIInfo().HasSubpage());
+  security_view_->InitializeForDownload(*row1_model_);
+  EXPECT_TRUE(security_view_->IsInitialized());
+  EXPECT_EQ(security_view_->content_id(),
+            OfflineItemUtils::GetContentIdForDownload(&download_item1_));
+
+  // "Validate" the download.
+  ON_CALL(download_item1_, GetDangerType())
+      .WillByDefault(Return(
+          download::DownloadDangerType::DOWNLOAD_DANGER_TYPE_USER_VALIDATED));
+  download_item1_.NotifyObserversDownloadUpdated();
+
+  ASSERT_FALSE(row1_model_->GetBubbleUIInfo().HasSubpage());
+  EXPECT_TRUE(security_view_->IsInitialized());
+  EXPECT_EQ(security_view_->content_id(),
+            OfflineItemUtils::GetContentIdForDownload(&download_item1_));
+  EXPECT_EQ(DownloadBubbleContentsView::Page::kPrimary,
+            *bubble_navigator_->last_opened_page());
+}

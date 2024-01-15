@@ -8,8 +8,10 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "ash/components/arc/mojom/app.mojom-forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/singleton.h"
 
 class Profile;
@@ -42,6 +44,8 @@ class SyncArcPackageHelper {
 
   void ClearPackages(Profile* profile);
 
+  bool HasOnlyTestPackages(Profile* profile, const std::vector<size_t>& ids);
+
   bool AllProfilesHaveSamePackages();
 
   bool AllProfilesHaveSamePackageDetails();
@@ -69,7 +73,7 @@ class SyncArcPackageHelper {
   // informaton as |profile2|.
   bool ArcPackageDetailsMatch(Profile* profile1, Profile* profile2);
 
-  SyncTest* test_ = nullptr;
+  raw_ptr<SyncTest, DanglingUntriaged> test_ = nullptr;
   bool setup_completed_ = false;
 
   std::unordered_map<Profile*, std::unique_ptr<FakeAppInstance>> instance_map_;

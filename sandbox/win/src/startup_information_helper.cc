@@ -68,8 +68,6 @@ void StartupInformationHelper::AddInheritedHandle(HANDLE handle) {
 
 void StartupInformationHelper::SetAppContainer(
     scoped_refptr<AppContainer> container) {
-  // Only supported for Windows 8+.
-  DCHECK(base::win::GetVersion() >= base::win::Version::WIN8);
   // LowPrivilegeAppContainer only supported for Windows 10+
   DCHECK(!container->GetEnableLowPrivilegeAppContainer() ||
          base::win::GetVersion() >= base::win::Version::WIN10_RS1);
@@ -82,8 +80,8 @@ void StartupInformationHelper::AddJobToAssociate(HANDLE job_handle) {
   job_handle_list_.push_back(job_handle);
 }
 
-int StartupInformationHelper::CountAttributes() {
-  int attribute_count = 0;
+DWORD StartupInformationHelper::CountAttributes() {
+  DWORD attribute_count = 0;
   if (mitigations_[0] || mitigations_[1])
     ++attribute_count;
 
@@ -194,6 +192,14 @@ bool StartupInformationHelper::BuildStartupInformation() {
 
   CHECK(expected_attributes == 0);
   return true;
+}
+
+void StartupInformationHelper::SetFilterEnvironment(bool filter) {
+  filter_environment_ = filter;
+}
+
+bool StartupInformationHelper::IsEnvironmentFiltered() {
+  return filter_environment_;
 }
 
 }  // namespace sandbox

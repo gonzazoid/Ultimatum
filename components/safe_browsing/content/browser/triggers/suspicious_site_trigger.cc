@@ -4,7 +4,7 @@
 
 #include "components/safe_browsing/content/browser/triggers/suspicious_site_trigger.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/histogram_macros_local.h"
@@ -13,8 +13,9 @@
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/content/browser/triggers/trigger_manager.h"
 #include "components/safe_browsing/content/browser/triggers/trigger_throttler.h"
+#include "components/safe_browsing/content/browser/unsafe_resource_util.h"
+#include "components/safe_browsing/content/browser/web_contents_key.h"
 #include "components/safe_browsing/core/browser/referrer_chain_provider.h"
-#include "components/security_interstitials/content/unsafe_resource_util.h"
 #include "components/security_interstitials/core/unsafe_resource.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -37,10 +38,10 @@ const char kSuspiciousSiteTriggerEventMetricName[] =
     "SafeBrowsing.Triggers.SuspiciousSite.Event";
 
 const char kSuspiciousSiteTriggerReportRejectionTestMetricName[] =
-    "SafeBrowsingTest.Triggers.SuspiciousSite.ReportRejectionReason";
+    "SafeBrowsing.Triggers.SuspiciousSite.ReportRejectionReason";
 
 const char kSuspiciousSiteTriggerReportDelayStateTestMetricName[] =
-    "SafeBrowsingTest.Triggers.SuspiciousSite.DelayTimerState";
+    "SafeBrowsing.Triggers.SuspiciousSite.DelayTimerState";
 
 void NotifySuspiciousSiteTriggerDetected(
     const base::RepeatingCallback<content::WebContents*()>&
@@ -94,7 +95,7 @@ bool SuspiciousSiteTrigger::MaybeStartReport() {
   resource.threat_type = SB_THREAT_TYPE_SUSPICIOUS_SITE;
   resource.url = primary_rfh.GetLastCommittedURL();
   resource.render_process_id = primary_rfh_id.child_id;
-  resource.render_frame_id = primary_rfh_id.frame_routing_id;
+  resource.render_frame_token = primary_rfh.GetFrameToken().value();
 
   TriggerManagerReason reason;
   if (!trigger_manager_->StartCollectingThreatDetailsWithReason(
@@ -103,7 +104,7 @@ bool SuspiciousSiteTrigger::MaybeStartReport() {
           error_options, &reason)) {
     UMA_HISTOGRAM_ENUMERATION(kSuspiciousSiteTriggerEventMetricName,
                               SuspiciousSiteTriggerEvent::REPORT_START_FAILED);
-    LOCAL_HISTOGRAM_ENUMERATION(
+    UMA_HISTOGRAM_ENUMERATION(
         kSuspiciousSiteTriggerReportRejectionTestMetricName, reason);
     return false;
   }
@@ -124,9 +125,11 @@ bool SuspiciousSiteTrigger::MaybeStartReport() {
 void SuspiciousSiteTrigger::FinishReport() {
   SBErrorOptions error_options =
       TriggerManager::GetSBErrorDisplayOptions(*prefs_, web_contents());
-  if (trigger_manager_->FinishCollectingThreatDetails(
-          TriggerType::SUSPICIOUS_SITE, web_contents(), base::TimeDelta(),
-          /*did_proceed=*/false, /*num_visits=*/0, error_options)) {
+  auto result = trigger_manager_->FinishCollectingThreatDetails(
+      TriggerType::SUSPICIOUS_SITE, GetWebContentsKey(web_contents()),
+      base::TimeDelta(),
+      /*did_proceed=*/false, /*num_visits=*/0, error_options);
+  if (result.IsReportSent()) {
     UMA_HISTOGRAM_ENUMERATION(kSuspiciousSiteTriggerEventMetricName,
                               SuspiciousSiteTriggerEvent::REPORT_FINISHED);
   } else {
@@ -265,7 +268,7 @@ void SuspiciousSiteTrigger::ReportDelayTimerFired() {
   UMA_HISTOGRAM_ENUMERATION(kSuspiciousSiteTriggerEventMetricName,
                             SuspiciousSiteTriggerEvent::REPORT_DELAY_TIMER);
   // This local histogram is used as a signal for testing.
-  LOCAL_HISTOGRAM_ENUMERATION(
+  UMA_HISTOGRAM_ENUMERATION(
       kSuspiciousSiteTriggerReportDelayStateTestMetricName, current_state_);
   switch (current_state_) {
     case TriggerState::IDLE:

@@ -7,7 +7,27 @@
  * voice match screen.
  */
 
-/* #js_imports_placeholder */
+import '//resources/cr_elements/cr_lottie/cr_lottie.js';
+import '//resources/cr_elements/icons.html.js';
+import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '../components/buttons/oobe_next_button.js';
+import '../components/buttons/oobe_text_button.js';
+import '../components/common_styles/oobe_dialog_host_styles.css.js';
+import '../components/dialogs/oobe_adaptive_dialog.js';
+import '../components/oobe_cr_lottie.js';
+import './assistant_common_styles.css.js';
+import './assistant_icons.html.js';
+import './voice_match_entry.js';
+
+import {loadTimeData} from '//resources/ash/common/load_time_data.m.js';
+import {announceAccessibleMessage} from '//resources/ash/common/util.js';
+import {afterNextRender, html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {MultiStepBehavior, MultiStepBehaviorInterface} from '../components/behaviors/multi_step_behavior.js';
+import {OobeI18nBehavior} from '../components/behaviors/oobe_i18n_behavior.js';
+
+import {BrowserProxy, BrowserProxyImpl} from './browser_proxy.js';
+
 
 /** Maximum recording index. */
 const MAX_INDEX = 4;
@@ -30,8 +50,8 @@ const VoiceMatchUIState = {
  * @extends {PolymerElement}
  * @implements {MultiStepBehaviorInterface}
  */
-const AssistantVoiceMatchBase = Polymer.mixinBehaviors(
-    [OobeI18nBehavior, MultiStepBehavior], Polymer.Element);
+const AssistantVoiceMatchBase =
+    mixinBehaviors([OobeI18nBehavior, MultiStepBehavior], PolymerElement);
 
 /**
  * @polymer
@@ -41,7 +61,9 @@ class AssistantVoiceMatch extends AssistantVoiceMatchBase {
     return 'assistant-voice-match';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
   static get properties() {
     return {
@@ -60,15 +82,6 @@ class AssistantVoiceMatch extends AssistantVoiceMatchBase {
       childName_: {
         type: String,
         value: '',
-      },
-
-      /**
-       * Whether the {prefers-color-scheme: dark}
-       * @private {boolean}
-       */
-      isDarkModeActive_: {
-        type: Boolean,
-        value: false,
       },
 
       /**
@@ -104,8 +117,8 @@ class AssistantVoiceMatch extends AssistantVoiceMatchBase {
      */
     this.doneActionDelayMs_ = 3000;
 
-    /** @private {?assistant.BrowserProxy} */
-    this.browserProxy_ = assistant.BrowserProxyImpl.getInstance();
+    /** @private {?BrowserProxy} */
+    this.browserProxy_ = BrowserProxyImpl.getInstance();
   }
 
   defaultUIStep() {
@@ -258,8 +271,7 @@ class AssistantVoiceMatch extends AssistantVoiceMatchBase {
 
     this.browserProxy_.screenShown(VOICE_MATCH_SCREEN_ID);
     this.$['voice-match-lottie'].playing = true;
-    Polymer.RenderStatus.afterNextRender(
-        this, () => this.$['agree-button'].focus());
+    afterNextRender(this, () => this.$['agree-button'].focus());
   }
 
   /**
@@ -277,6 +289,7 @@ class AssistantVoiceMatch extends AssistantVoiceMatchBase {
     } else if (uiStep === VoiceMatchUIState.COMPLETED) {
       return this.i18n('assistantVoiceMatchCompleted');
     }
+    return trustedTypes.emptyHTML;
   }
 
   /**
@@ -294,16 +307,12 @@ class AssistantVoiceMatch extends AssistantVoiceMatchBase {
       return this.i18nAdvanced(
           'assistantVoiceMatchFooterForChild', {substitutions: [childName]});
     }
+    return trustedTypes.emptyHTML;
   }
 
-  getReadyImgUrl_(isDarkMode) {
-    return './assistant_optin/assistant_ready_' + (isDarkMode ? 'dm' : 'lm') +
-        '.json';
-  }
-
-  getVoiceMatchAnimationUrl_(isDarkMode, isTabletMode) {
+  getVoiceMatchAnimationUrl_(isTabletMode) {
     return './assistant_optin/voice_' + (isTabletMode ? 'tablet' : 'laptop') +
-        '_' + (isDarkMode ? 'dm' : 'lm') + '.json';
+        '.json';
   }
 }
 

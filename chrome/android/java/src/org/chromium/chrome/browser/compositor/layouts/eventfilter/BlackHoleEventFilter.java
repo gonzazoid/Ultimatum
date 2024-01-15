@@ -9,14 +9,11 @@ import android.view.MotionEvent;
 
 import org.chromium.chrome.browser.layouts.EventFilter;
 
-/**
- * A {@link BlackHoleEventFilter} eats all the events coming its way with no side effects.
- */
+/** A {@link BlackHoleEventFilter} eats all the events coming its way with no side effects. */
 public class BlackHoleEventFilter extends EventFilter {
     /**
      * Creates a {@link BlackHoleEventFilter}.
      * @param context A {@link Context} instance.
-     * @param host    A {@link EventFilterHost} instance.
      */
     public BlackHoleEventFilter(Context context) {
         super(context);
@@ -29,6 +26,16 @@ public class BlackHoleEventFilter extends EventFilter {
 
     @Override
     public boolean onTouchEventInternal(MotionEvent e) {
+        return true;
+    }
+
+    @Override
+    public boolean onInterceptHoverEventInternal(MotionEvent e) {
+        return true;
+    }
+
+    @Override
+    public boolean onHoverEventInternal(MotionEvent e) {
         return true;
     }
 }

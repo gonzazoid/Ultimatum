@@ -4,7 +4,8 @@
 
 #include "third_party/blink/renderer/core/frame/remote_frame_view.h"
 
-#include "base/cxx17_backports.h"
+#include <algorithm>
+
 #include "components/paint_preview/common/paint_preview_tracker.h"
 #include "printing/buildflags/buildflags.h"
 #include "third_party/blink/public/common/frame/frame_owner_element_type.h"
@@ -46,8 +47,7 @@ LocalFrameView* RemoteFrameView::ParentFrameView() const {
     return nullptr;
 
   HTMLFrameOwnerElement* owner = remote_frame_->DeprecatedLocalOwner();
-  if (owner && (owner->OwnerType() == FrameOwnerElementType::kPortal ||
-                owner->OwnerType() == FrameOwnerElementType::kFencedframe)) {
+  if (owner && owner->OwnerType() == FrameOwnerElementType::kFencedframe) {
     return owner->GetDocument().GetFrame()->View();
   }
 
@@ -65,8 +65,7 @@ LocalFrameView* RemoteFrameView::ParentLocalRootFrameView() const {
     return nullptr;
 
   HTMLFrameOwnerElement* owner = remote_frame_->DeprecatedLocalOwner();
-  if (owner && (owner->OwnerType() == FrameOwnerElementType::kPortal ||
-                owner->OwnerType() == FrameOwnerElementType::kFencedframe)) {
+  if (owner && owner->OwnerType() == FrameOwnerElementType::kFencedframe) {
     return owner->GetDocument().GetFrame()->LocalFrameRoot().View();
   }
 
@@ -148,8 +147,8 @@ gfx::Rect RemoteFrameView::ComputeCompositingRect() const {
       owner_layout_object->PhysicalContentBoxOffset());
   owner_layout_object->MapLocalToAncestor(nullptr, local_root_transform_state,
                                           kTraverseDocumentBoundaries);
-  TransformationMatrix matrix =
-      local_root_transform_state.AccumulatedTransform().Inverse();
+  gfx::Transform matrix =
+      local_root_transform_state.AccumulatedTransform().InverseOrIdentity();
   PhysicalRect local_viewport_rect = PhysicalRect::EnclosingRect(
       matrix.ProjectQuad(gfx::QuadF(gfx::RectF(viewport_rect))).BoundingBox());
   gfx::Rect compositing_rect = ToEnclosingRect(local_viewport_rect);
@@ -225,7 +224,7 @@ void RemoteFrameView::UpdateCompositingScaleFactor() {
 
   float frame_to_local_root_scale_factor = 1.0f;
   gfx::Transform local_root_transform =
-      local_root_transform_state.AccumulatedTransform().ToTransform();
+      local_root_transform_state.AccumulatedTransform();
   absl::optional<gfx::Vector2dF> scale_components =
       gfx::TryComputeTransform2dScaleComponents(local_root_transform);
   if (!scale_components) {
@@ -251,8 +250,8 @@ void RemoteFrameView::UpdateCompositingScaleFactor() {
   constexpr float kMinCompositingScaleFactor = 0.25f;
   constexpr float kMaxCompositingScaleFactor = 5.0f;
   compositing_scale_factor_ =
-      base::clamp(compositing_scale_factor_, kMinCompositingScaleFactor,
-                  kMaxCompositingScaleFactor);
+      std::clamp(compositing_scale_factor_, kMinCompositingScaleFactor,
+                 kMaxCompositingScaleFactor);
 
   if (compositing_scale_factor_ != previous_scale_factor)
     remote_frame_->SynchronizeVisualProperties();

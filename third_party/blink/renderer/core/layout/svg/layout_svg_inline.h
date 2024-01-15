@@ -25,7 +25,7 @@
 
 namespace blink {
 
-class NGInlineCursor;
+class InlineCursor;
 
 class LayoutSVGInline : public LayoutInline {
  public:
@@ -39,16 +39,19 @@ class LayoutSVGInline : public LayoutInline {
     NOT_DESTROYED();
     return kNoPaintLayer;
   }
-  bool IsOfType(LayoutObjectType type) const override {
+  bool IsSVG() const final {
     NOT_DESTROYED();
-    return type == kLayoutObjectSVG || type == kLayoutObjectSVGInline ||
-           LayoutInline::IsOfType(type);
+    return true;
+  }
+  bool IsSVGInline() const final {
+    NOT_DESTROYED();
+    return true;
   }
 
   bool IsChildAllowed(LayoutObject*, const ComputedStyle&) const override;
 
   gfx::RectF ObjectBoundingBox() const final;
-  gfx::RectF StrokeBoundingBox() const final;
+  gfx::RectF DecoratedBoundingBox() const final;
   gfx::RectF VisualRectInLocalSVGCoordinates() const final;
 
   PhysicalRect VisualRectInDocument(
@@ -58,14 +61,12 @@ class LayoutSVGInline : public LayoutInline {
                           MapCoordinatesFlags) const final;
   void AbsoluteQuads(Vector<gfx::QuadF>&,
                      MapCoordinatesFlags mode = 0) const final;
-  void AddOutlineRects(Vector<PhysicalRect>&,
+  void AddOutlineRects(OutlineRectCollector&,
                        OutlineInfo*,
                        const PhysicalOffset& additional_offset,
-                       NGOutlineType) const final;
+                       OutlineType) const final;
 
  private:
-  InlineFlowBox* CreateInlineFlowBox() final;
-
   void WillBeDestroyed() final;
   void StyleDidChange(StyleDifference, const ComputedStyle* old_style) final;
 
@@ -78,7 +79,7 @@ class LayoutSVGInline : public LayoutInline {
 
   bool IsObjectBoundingBoxValid() const;
 
-  static void ObjectBoundingBoxForCursor(NGInlineCursor& cursor,
+  static void ObjectBoundingBoxForCursor(InlineCursor& cursor,
                                          gfx::RectF& bounds);
 };
 

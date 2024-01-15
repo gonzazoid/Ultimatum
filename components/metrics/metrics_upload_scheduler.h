@@ -5,8 +5,8 @@
 #ifndef COMPONENTS_METRICS_METRICS_UPLOAD_SCHEDULER_H_
 #define COMPONENTS_METRICS_METRICS_UPLOAD_SCHEDULER_H_
 
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "components/metrics/metrics_scheduler.h"
 
@@ -36,6 +36,14 @@ class MetricsUploadScheduler : public MetricsScheduler {
   // Callback from MetricsService when an upload is cancelled because it would
   // be over the allowed data usage cap.
   void UploadOverDataUsageCap();
+
+  // Time delay after a log is uploaded successfully before attempting another.
+  // On mobile, keeping the radio on is very expensive, so prefer to keep this
+  // short and send in bursts.
+  static base::TimeDelta GetUnsentLogsInterval();
+
+  // Initial time delay after a log uploaded fails before retrying it.
+  static base::TimeDelta GetInitialBackoffInterval();
 
  private:
   // Time to wait between uploads on success.

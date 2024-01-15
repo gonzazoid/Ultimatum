@@ -7,10 +7,10 @@
 #include <limits>
 #include <memory>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/gtest_util.h"
 #include "base/test/task_environment.h"
@@ -182,7 +182,7 @@ TEST_F(DebugRecordingFileProviderTest,
   const uint32_t invalid_stream_type = 7;
   const uint32_t id = 1;
   EXPECT_CALL(*this, OnFileCreated(true)).Times(0);
-  testing::GTEST_FLAG(death_test_style) = "threadsafe";
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
   EXPECT_DCHECK_DEATH(remote_file_provider_->CreateWavFile(
       static_cast<media::AudioDebugRecordingStreamType>(invalid_stream_type),
       id,

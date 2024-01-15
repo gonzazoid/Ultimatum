@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
 #include "base/unguessable_token.h"
@@ -61,10 +62,10 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_DRIVEFS) DriveFsSession
 
     virtual ~MountObserver() = default;
     virtual void OnMounted(const base::FilePath& mount_path) = 0;
-    virtual void OnUnmounted(absl::optional<base::TimeDelta> remount_delay) = 0;
+    virtual void OnUnmounted(std::optional<base::TimeDelta> remount_delay) = 0;
     virtual void OnMountFailed(
         MountFailure failure,
-        absl::optional<base::TimeDelta> remount_delay) = 0;
+        std::optional<base::TimeDelta> remount_delay) = 0;
   };
 
   DriveFsSession(base::OneShotTimer* timer,
@@ -91,8 +92,8 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_DRIVEFS) DriveFsSession
  private:
   // mojom::DriveFsDelegate:
   void OnMounted() final;
-  void OnMountFailed(absl::optional<base::TimeDelta> remount_delay) final;
-  void OnUnmounted(absl::optional<base::TimeDelta> remount_delay) final;
+  void OnMountFailed(std::optional<base::TimeDelta> remount_delay) final;
+  void OnUnmounted(std::optional<base::TimeDelta> remount_delay) final;
   void OnHeartbeat() final;
 
   void OnDiskMountCompleted(base::FilePath mount_path);
@@ -100,21 +101,21 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_DRIVEFS) DriveFsSession
   void OnMountTimedOut();
   void MaybeNotifyOnMounted();
   void NotifyFailed(MountObserver::MountFailure failure,
-                    absl::optional<base::TimeDelta> remount_delay);
-  void NotifyUnmounted(absl::optional<base::TimeDelta> remount_delay);
+                    std::optional<base::TimeDelta> remount_delay);
+  void NotifyUnmounted(std::optional<base::TimeDelta> remount_delay);
 
   SEQUENCE_CHECKER(sequence_checker_);
 
-  base::OneShotTimer* const timer_;
+  const raw_ptr<base::OneShotTimer> timer_;
   std::unique_ptr<DiskMounter> disk_mounter_;
   std::unique_ptr<DriveFsConnection> connection_;
-  MountObserver* const observer_;
+  const raw_ptr<MountObserver> observer_;
 
   // The path where DriveFS is mounted.
   base::FilePath mount_path_;
 
   // Mojo interface to the DriveFS process.
-  mojom::DriveFs* drivefs_ = nullptr;
+  raw_ptr<mojom::DriveFs, DanglingUntriaged> drivefs_ = nullptr;
 
   bool drivefs_has_started_ = false;
   bool drivefs_has_terminated_ = false;

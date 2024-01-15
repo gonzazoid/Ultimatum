@@ -4,8 +4,8 @@
 
 #import "ios/chrome/browser/ui/favicon/favicon_attributes_provider.h"
 
-#import "base/bind.h"
 #import "base/check.h"
+#import "base/functional/bind.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/strings/utf_string_conversions.h"
 #import "base/task/cancelable_task_tracker.h"
@@ -17,10 +17,6 @@
 #import "ios/chrome/browser/ui/favicon/favicon_attributes_with_payload.h"
 #import "skia/ext/skia_utils_ios.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface FaviconAttributesProvider () {
   // Used to cancel tasks for the LargeIconService.

@@ -298,16 +298,18 @@ void SourceUrlRecorderWebContentsObserver::MaybeRecordUrl(
   navigation_data.is_same_document_navigation =
       navigation_handle->IsSameDocument();
 
-  navigation_data.same_origin_status =
-      UkmSource::NavigationData::SameOriginStatus::UNSET;
+  navigation_data.same_origin_status = UkmSource::NavigationData::
+      SourceSameOriginStatus::SOURCE_SAME_ORIGIN_STATUS_UNSET;
   // Only set the same origin flag for committed non-error,
   // non-same-document navigations.
   if (navigation_handle->HasCommitted() && !navigation_handle->IsErrorPage() &&
       !navigation_handle->IsSameDocument()) {
     navigation_data.same_origin_status =
         navigation_handle->IsSameOrigin()
-            ? UkmSource::NavigationData::SameOriginStatus::SAME_ORIGIN
-            : UkmSource::NavigationData::SameOriginStatus::CROSS_ORIGIN;
+            ? UkmSource::NavigationData::SourceSameOriginStatus::
+                  SOURCE_SAME_ORIGIN
+            : UkmSource::NavigationData::SourceSameOriginStatus::
+                  SOURCE_CROSS_ORIGIN;
   }
   navigation_data.is_renderer_initiated =
       navigation_handle->IsRendererInitiated();

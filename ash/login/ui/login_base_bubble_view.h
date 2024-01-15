@@ -7,6 +7,9 @@
 
 #include "ash/ash_export.h"
 #include "ash/login/ui/login_button.h"
+#include "ash/style/system_shadow.h"
+#include "base/memory/weak_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/compositor/layer_animation_observer.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 #include "ui/views/view.h"
@@ -19,6 +22,8 @@ class LoginBubbleHandler;
 // Base bubble view for login screen bubbles.
 class ASH_EXPORT LoginBaseBubbleView : public views::View,
                                        public ui::LayerAnimationObserver {
+  METADATA_HEADER(LoginBaseBubbleView, views::View)
+
  public:
   enum class PositioningStrategy {
     // Try to show the bubble after the anchor (on the right side in LTR), if
@@ -35,8 +40,8 @@ class ASH_EXPORT LoginBaseBubbleView : public views::View,
 
   // Without specifying a parent_window, the bubble will default to being in the
   // same container as anchor_view.
-  explicit LoginBaseBubbleView(views::View* anchor_view);
-  explicit LoginBaseBubbleView(views::View* anchor_view,
+  explicit LoginBaseBubbleView(base::WeakPtr<views::View> anchor_view);
+  explicit LoginBaseBubbleView(base::WeakPtr<views::View> anchor_view,
                                gfx::NativeView parent_window);
   ~LoginBaseBubbleView() override;
   LoginBaseBubbleView(const LoginBaseBubbleView&) = delete;
@@ -53,8 +58,9 @@ class ASH_EXPORT LoginBaseBubbleView : public views::View,
   // Change the persistence of the bubble.
   void set_persistent(bool is_persistent) { is_persistent_ = is_persistent; }
 
-  void SetAnchorView(views::View* anchor_view);
-  views::View* GetAnchorView() const { return anchor_view_; }
+  void SetAnchorView(base::WeakPtr<views::View> anchor_view);
+  // Returns the anchor view. May be `nullptr`.
+  views::View* GetAnchorView() const;
 
   // ui::LayerAnimationObserver:
   void OnLayerAnimationEnded(ui::LayerAnimationSequence* sequence) override;
@@ -66,8 +72,6 @@ class ASH_EXPORT LoginBaseBubbleView : public views::View,
   gfx::Size CalculatePreferredSize() const override;
   void Layout() override;
   void OnBlur() override;
-  // Persistent bubbles need to react to theme changes.
-  void OnThemeChanged() override;
 
   void set_positioning_strategy(PositioningStrategy positioning_strategy) {
     positioning_strategy_ = positioning_strategy;
@@ -96,9 +100,12 @@ class ASH_EXPORT LoginBaseBubbleView : public views::View,
   // Determine the position of the bubble prior to showing.
   virtual gfx::Point CalculatePosition();
 
-  views::View* anchor_view_;
+  base::WeakPtr<views::View> anchor_view_;
 
   std::unique_ptr<LoginBubbleHandler> bubble_handler_;
+
+  // The dialog shadow.
+  std::unique_ptr<SystemShadow> shadow_;
 
   bool is_persistent_ = false;
 

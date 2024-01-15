@@ -24,6 +24,8 @@ class SharingMessageBridgeImpl : public SharingMessageBridge,
   SharingMessageBridgeImpl(const SharingMessageBridgeImpl&) = delete;
   SharingMessageBridgeImpl& operator=(const SharingMessageBridgeImpl&) = delete;
 
+  constexpr static base::TimeDelta kCommitTimeout = base::Seconds(8);
+
   // SharingMessageBridge implementation.
   void SendSharingMessage(
       std::unique_ptr<sync_pb::SharingMessageSpecifics> specifics,
@@ -34,10 +36,10 @@ class SharingMessageBridgeImpl : public SharingMessageBridge,
   // ModelTypeSyncBridge implementation.
   std::unique_ptr<syncer::MetadataChangeList> CreateMetadataChangeList()
       override;
-  absl::optional<syncer::ModelError> MergeSyncData(
+  absl::optional<syncer::ModelError> MergeFullSyncData(
       std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
       syncer::EntityChangeList entity_data) override;
-  absl::optional<syncer::ModelError> ApplySyncChanges(
+  absl::optional<syncer::ModelError> ApplyIncrementalSyncChanges(
       std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
       syncer::EntityChangeList entity_changes) override;
   void GetData(StorageKeyList storage_keys, DataCallback callback) override;
@@ -48,8 +50,9 @@ class SharingMessageBridgeImpl : public SharingMessageBridge,
       const syncer::FailedCommitResponseDataList& error_response_list) override;
   CommitAttemptFailedBehavior OnCommitAttemptFailed(
       syncer::SyncCommitError commit_error) override;
-  void ApplyStopSyncChanges(std::unique_ptr<syncer::MetadataChangeList>
-                                metadata_change_list) override;
+  void ApplyDisableSyncChanges(std::unique_ptr<syncer::MetadataChangeList>
+                                   metadata_change_list) override;
+  void OnSyncPaused() override;
 
   size_t GetCallbacksCountForTesting() const { return pending_commits_.size(); }
 

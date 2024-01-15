@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/no_destructor.h"
 #include "build/build_config.h"
@@ -25,14 +25,14 @@ namespace api {
 namespace {
 
 bool ShouldPauseOnReceiveError(serial::ReceiveError error) {
-  return error == serial::RECEIVE_ERROR_DEVICE_LOST ||
-         error == serial::RECEIVE_ERROR_SYSTEM_ERROR ||
-         error == serial::RECEIVE_ERROR_DISCONNECTED ||
-         error == serial::RECEIVE_ERROR_BREAK ||
-         error == serial::RECEIVE_ERROR_FRAME_ERROR ||
-         error == serial::RECEIVE_ERROR_OVERRUN ||
-         error == serial::RECEIVE_ERROR_BUFFER_OVERFLOW ||
-         error == serial::RECEIVE_ERROR_PARITY_ERROR;
+  return error == serial::ReceiveError::kDeviceLost ||
+         error == serial::ReceiveError::kSystemError ||
+         error == serial::ReceiveError::kDisconnected ||
+         error == serial::ReceiveError::kBreak ||
+         error == serial::ReceiveError::kFrameError ||
+         error == serial::ReceiveError::kOverrun ||
+         error == serial::ReceiveError::kBufferOverflow ||
+         error == serial::ReceiveError::kParityError;
 }
 
 SerialPortManager::Binder& GetBinderOverride() {
@@ -64,14 +64,14 @@ SerialPortManager::SerialPortManager(content::BrowserContext* context)
   connections_ = manager->data_;
 }
 
-SerialPortManager::~SerialPortManager() {}
+SerialPortManager::~SerialPortManager() = default;
 
-SerialPortManager::ReceiveParams::ReceiveParams() {}
+SerialPortManager::ReceiveParams::ReceiveParams() = default;
 
 SerialPortManager::ReceiveParams::ReceiveParams(const ReceiveParams& other) =
     default;
 
-SerialPortManager::ReceiveParams::~ReceiveParams() {}
+SerialPortManager::ReceiveParams::~ReceiveParams() = default;
 
 void SerialPortManager::GetDevices(
     device::mojom::SerialPortManager::GetDevicesCallback callback) {
@@ -132,7 +132,7 @@ void SerialPortManager::DispatchReceiveEvent(const ReceiveParams& params,
     DispatchEvent(params, std::move(event));
   }
 
-  if (error != serial::RECEIVE_ERROR_NONE) {
+  if (error != serial::ReceiveError::kNone) {
     if (ShouldPauseOnReceiveError(error)) {
       SerialConnection* connection =
           params.connections->Get(params.extension_id, params.connection_id);

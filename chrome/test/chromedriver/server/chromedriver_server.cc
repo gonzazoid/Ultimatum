@@ -13,14 +13,13 @@
 #include <vector>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
-#include "base/lazy_instance.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
@@ -33,11 +32,10 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_local.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/test/chromedriver/constants/version.h"
+#include "chrome/test/chromedriver/keycode_text_conversion.h"
 #include "chrome/test/chromedriver/logging.h"
 #include "chrome/test/chromedriver/server/http_handler.h"
 #include "chrome/test/chromedriver/server/http_server.h"
@@ -46,6 +44,7 @@
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_errors.h"
 #include "net/log/net_log_source.h"
+#include "third_party/abseil-cpp/absl/base/attributes.h"
 
 namespace {
 
@@ -107,26 +106,22 @@ void HandleRequestOnIOThread(
     const HttpResponseSenderFunc& send_response_func) {
   cmd_task_runner->PostTask(
       FROM_HERE,
-      base::BindOnce(handle_request_on_cmd_func, request,
-                     base::BindRepeating(&SendResponseOnCmdThread,
-                                         base::ThreadTaskRunnerHandle::Get(),
-                                         send_response_func)));
+      base::BindOnce(
+          handle_request_on_cmd_func, request,
+          base::BindRepeating(&SendResponseOnCmdThread,
+                              base::SingleThreadTaskRunner::GetCurrentDefault(),
+                              send_response_func)));
 }
 
-base::LazyInstance<base::ThreadLocalPointer<HttpServer>>::DestructorAtExit
-    lazy_tls_server_ipv4 = LAZY_INSTANCE_INITIALIZER;
-base::LazyInstance<base::ThreadLocalPointer<HttpServer>>::DestructorAtExit
-    lazy_tls_server_ipv6 = LAZY_INSTANCE_INITIALIZER;
+ABSL_CONST_INIT thread_local HttpServer* server_ipv4 = nullptr;
+ABSL_CONST_INIT thread_local HttpServer* server_ipv6 = nullptr;
 
 void StopServerOnIOThread() {
-  // Note, |server| may be NULL.
-  HttpServer* server = lazy_tls_server_ipv4.Pointer()->Get();
-  lazy_tls_server_ipv4.Pointer()->Set(nullptr);
-  delete server;
+  delete server_ipv4;
+  server_ipv4 = nullptr;
 
-  server = lazy_tls_server_ipv6.Pointer()->Get();
-  lazy_tls_server_ipv6.Pointer()->Set(nullptr);
-  delete server;
+  delete server_ipv6;
+  server_ipv4 = nullptr;
 }
 
 void StartServerOnIOThread(
@@ -157,7 +152,7 @@ void StartServerOnIOThread(
       cmd_task_runner);
   int ipv4_status = temp_server->Start(port, allow_remote, true);
   if (ipv4_status == net::OK) {
-    lazy_tls_server_ipv4.Pointer()->Set(temp_server.release());
+    server_ipv4 = temp_server.release();
   } else if (ipv4_status == net::ERR_ADDRESS_IN_USE) {
     // ERR_ADDRESS_IN_USE causes an immediate exit, since it indicates the port
     // is being used by another process. Other errors are assumed to indicate
@@ -175,7 +170,7 @@ void StartServerOnIOThread(
       cmd_task_runner);
   int ipv6_status = temp_server->Start(port, allow_remote, false);
   if (ipv6_status == net::OK) {
-    lazy_tls_server_ipv6.Pointer()->Set(temp_server.release());
+    server_ipv6 = temp_server.release();
   } else if (ipv6_status == net::ERR_ADDRESS_IN_USE) {
     printf("IPv6 port not available. Exiting...\n");
     exit(1);
@@ -227,7 +222,7 @@ void StartServerOnIOThread(
         cmd_task_runner);
     ipv4_status = temp_server->Start(port, allow_remote, true);
     if (ipv4_status == net::OK) {
-      lazy_tls_server_ipv4.Pointer()->Set(temp_server.release());
+      server_ipv4 = temp_server.release();
     } else if (ipv4_status == net::ERR_ADDRESS_IN_USE) {
       if (need_ipv4 == NeedIPv4::NEEDED) {
         printf("IPv4 port not available. Exiting...\n");
@@ -336,6 +331,8 @@ int main(int argc, char *argv[]) {
       "add readable timestamps to log",
       "enable-chrome-logs",
       "show logs from the browser (overrides other logging options)",
+      "bidi-mapper-path",
+      "custom bidi mapper path",
     // TODO(crbug.com/1052397): Revisit the macro expression once build flag
     // switch of lacros-chrome is complete.
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -467,6 +464,10 @@ int main(int argc, char *argv[]) {
 #endif
 
   mojo::core::Init();
+
+#if BUILDFLAG(IS_OZONE)
+  InitializeOzoneKeyboardEngineManager();
+#endif
 
   base::ThreadPoolInstance::CreateAndStartWithDefaultParams(
       kChromeDriverProductShortName);

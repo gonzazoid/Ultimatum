@@ -6,7 +6,9 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_WORKERS_DEDICATED_WORKER_H_
 
 #include <memory>
+
 #include "base/functional/function_ref.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/network/public/mojom/content_security_policy.mojom-blink-forward.h"
@@ -93,7 +95,7 @@ class CORE_EXPORT DedicatedWorker final
   void ContextDestroyed() override;
 
   // Implements ScriptWrappable
-  // (via AbstractWorker -> EventTargetWithInlineData -> EventTarget).
+  // (via AbstractWorker -> EventTarget -> EventTarget).
   bool HasPendingActivity() const final;
 
   // Implements WebDedicatedWorker.
@@ -124,6 +126,8 @@ class CORE_EXPORT DedicatedWorker final
   void Trace(Visitor*) const override;
 
  private:
+  FRIEND_TEST_ALL_PREFIXES(DedicatedWorkerTest, TopLevelFrameSecurityOrigin);
+
   // Starts the worker.
   void Start();
   void ContinueStart(
@@ -160,7 +164,7 @@ class CORE_EXPORT DedicatedWorker final
       mojo::PendingRemote<mojom::blink::BackForwardCacheControllerHost>
           back_forward_cache_controller_host);
 
-  // Implements EventTarget (via AbstractWorker -> EventTargetWithInlineData).
+  // Implements EventTarget (via AbstractWorker -> EventTarget).
   const AtomicString& InterfaceName() const final;
 
   // The unique identifier for this DedicatedWorker. This is created in the

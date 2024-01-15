@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/input_method/input_method_engine.h"
 #include "chrome/common/extensions/api/input_ime/input_components_handler.h"
 #include "extensions/browser/extension_function.h"
@@ -152,40 +153,6 @@ class InputMethodPrivateFinishComposingTextFunction : public ExtensionFunction {
                              INPUTMETHODPRIVATE_FINISHCOMPOSINGTEXT)
 };
 
-class InputMethodPrivateNotifyImeMenuItemActivatedFunction
-    : public ExtensionFunction {
- public:
-  InputMethodPrivateNotifyImeMenuItemActivatedFunction() = default;
-
-  InputMethodPrivateNotifyImeMenuItemActivatedFunction(
-      const InputMethodPrivateNotifyImeMenuItemActivatedFunction&) = delete;
-  InputMethodPrivateNotifyImeMenuItemActivatedFunction& operator=(
-      const InputMethodPrivateNotifyImeMenuItemActivatedFunction&) = delete;
-
- protected:
-  ~InputMethodPrivateNotifyImeMenuItemActivatedFunction() override = default;
-
-  // ExtensionFunction:
-  ResponseAction Run() override;
-
- private:
-  DECLARE_EXTENSION_FUNCTION("inputMethodPrivate.notifyImeMenuItemActivated",
-                             INPUTMETHODPRIVATE_NOTIFYIMEMENUITEMACTIVATED)
-};
-
-class InputMethodPrivateGetCompositionBoundsFunction
-    : public ExtensionFunction {
- public:
-  DECLARE_EXTENSION_FUNCTION("inputMethodPrivate.getCompositionBounds",
-                             INPUTMETHODPRIVATE_GETCOMPOSITIONBOUNDS)
-
- protected:
-  ~InputMethodPrivateGetCompositionBoundsFunction() override = default;
-
-  // ExtensionFunction:
-  ResponseAction Run() override;
-};
-
 class InputImeEventRouter {
  public:
   explicit InputImeEventRouter(Profile* profile);
@@ -225,7 +192,7 @@ class InputImeEventRouter {
   // The first party ime extension which is unloaded unexpectedly.
   std::string unloaded_component_extension_id_;
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 };
 
 }  // namespace extensions

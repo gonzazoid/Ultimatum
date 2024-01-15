@@ -59,7 +59,7 @@
 <translation id="2872353916818027657">切换主显示器</translation>
 <translation id="2914313326123580426">显示或隐藏开发者工具面板</translation>
 <translation id="292495055542441795">开启/关闭全屏模式</translation>
-<translation id="3020183492814296499">快捷键</translation>
+<translation id="3020183492814296499">快捷方式</translation>
 <translation id="3084301071537457911">突出显示任务栏中的下一项</translation>
 <translation id="309173601632226815">突出显示任务栏中的启动器按钮</translation>
 <translation id="3140353188828248647">将地址栏设为焦点</translation>
@@ -98,13 +98,14 @@
 <translation id="4141203561740478845">突出显示地址栏所在的行</translation>
 <translation id="4148761611071495477"><ph name="CTRL" /><ph name="SEPARATOR" /><ph name="G" /> 或 <ph name="ENTER" /> 键</translation>
 <translation id="4240486403425279990">概览模式</translation>
+<translation id="4275283744500212192">打开窗口布局选项</translation>
 <translation id="4382340674111381977">返回上一页</translation>
 <translation id="4458670250301149821">将某个应用图标移入或移出应用网格内的文件夹</translation>
 <translation id="4472417192667361414">系统设置和显示设置</translation>
 <translation id="449214506787633354">按 <ph name="CTRL" /> 键，然后按 <ph name="LEFT" /> 或 <ph name="RIGHT" /> 或 <ph name="UP" /> 或 <ph name="DOWN" /> 键</translation>
 <translation id="4556221320735744018">查看键盘快捷键助手</translation>
 <translation id="4609344656788228519"><ph name="CTRL1" /><ph name="SEPARATOR1" /><ph name="BACK1" /> 或 <ph name="CTRL2" /><ph name="SEPARATOR2" /><ph name="SHIFT" /><ph name="SEPARATOR3" /><ph name="BACK2" /></translation>
-<translation id="4628718545549558538">打开状态区（其中显示了您的帐号头像）</translation>
+<translation id="4628718545549558538">打开状态区（其中显示了您的账号头像）</translation>
 <translation id="4698850295812410683">显示触控笔工具</translation>
 <translation id="4801989101741319327">移到下一个字词的末尾</translation>
 <translation id="4866066940972151697">启用右侧桌面</translation>
@@ -141,7 +142,7 @@
 <translation id="6276708887952587684">查看网页源代码</translation>
 <translation id="6321940490215594447">打开“历史记录”页面</translation>
 <translation id="6340769215862220182">放大显示内容</translation>
-<translation id="634687982629734605">在以下元素之间切换焦点：状态区（其中显示了您的帐号头像）、启动器、地址栏、书签栏（若显示）、打开的网页、下载内容栏（若显示）。如果屏幕上显示了一个可聚焦的对话框，该命令会改为将焦点移至那里。</translation>
+<translation id="634687982629734605">在以下元素之间切换焦点：状态区（其中显示了您的账号头像）、启动器、地址栏、书签栏（若显示）、打开的网页、下载内容栏（若显示）。如果屏幕上显示了一个可聚焦的对话框，该命令会改为将焦点移至那里。</translation>
 <translation id="6359811074279051077"><ph name="MODIFIER" /><ph name="SEPARATOR" /><ph name="KEY" /></translation>
 <translation id="6395172954772765143">选择直到行尾的文字</translation>
 <translation id="6425378783626925378">点击任务栏中的第 1-8 个图标</translation>
@@ -193,6 +194,7 @@
 <translation id="8388247778047144397">将链接拖到标签栏的空白区域中</translation>
 <translation id="8389638407792712197">打开新窗口</translation>
 <translation id="8429696719963529183">使用键盘顶部的一系列功能键（F1 到 F12）</translation>
+<translation id="8539396513118402548">快捷键列表</translation>
 <translation id="85690795166292698">在新标签页中打开链接</translation>
 <translation id="8609384513243082612">打开新标签页</translation>
 <translation id="8644639153978066712">在“文件”应用中显示处于隐藏状态的文件</translation>

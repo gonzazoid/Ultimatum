@@ -4,7 +4,7 @@
 
 #include "components/invalidation/impl/per_user_topic_subscription_request.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
@@ -14,7 +14,6 @@
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "services/data_decoder/public/cpp/test_support/in_process_data_decoder.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
@@ -55,7 +54,7 @@ class PerUserTopicSubscriptionRequestTest : public testing::Test {
   }
 
  private:
-  base::test::SingleThreadTaskEnvironment task_environment_;
+  base::test::TaskEnvironment task_environment_;
   data_decoder::test::InProcessDataDecoder in_process_data_decoder_;
   network::TestURLLoaderFactory url_loader_factory_;
 };
@@ -100,8 +99,13 @@ TEST_F(PerUserTopicSubscriptionRequestTest, ShouldSubscribeWithoutErrors) {
       callback;
   Status status(StatusCode::FAILED, "initial");
   std::string private_topic;
+  base::RunLoop run_loop;
   EXPECT_CALL(callback, Run(_, _))
-      .WillOnce(DoAll(SaveArg<0>(&status), SaveArg<1>(&private_topic)));
+      .WillOnce([&](Status status_arg, std::string private_topic_arg) {
+        status = status_arg;
+        private_topic = private_topic_arg;
+        run_loop.Quit();
+      });
 
   PerUserTopicSubscriptionRequest::Builder builder;
   std::unique_ptr<PerUserTopicSubscriptionRequest> request =
@@ -124,7 +128,7 @@ TEST_F(PerUserTopicSubscriptionRequestTest, ShouldSubscribeWithoutErrors) {
                                     CreateHeadersForTest(net::HTTP_OK),
                                     response_body, response_status);
   request->Start(callback.Get(), url_loader_factory());
-  base::RunLoop().RunUntilIdle();
+  run_loop.Run();
 
   EXPECT_EQ(status.code, StatusCode::SUCCESS);
   EXPECT_EQ(private_topic, "test-pr");
@@ -143,8 +147,13 @@ TEST_F(PerUserTopicSubscriptionRequestTest,
       callback;
   Status status(StatusCode::FAILED, "initial");
   std::string private_topic;
+  base::RunLoop run_loop;
   EXPECT_CALL(callback, Run(_, _))
-      .WillOnce(DoAll(SaveArg<0>(&status), SaveArg<1>(&private_topic)));
+      .WillOnce([&](Status status_arg, std::string private_topic_arg) {
+        status = status_arg;
+        private_topic = private_topic_arg;
+        run_loop.Quit();
+      });
 
   PerUserTopicSubscriptionRequest::Builder builder;
   std::unique_ptr<PerUserTopicSubscriptionRequest> request =
@@ -167,7 +176,7 @@ TEST_F(PerUserTopicSubscriptionRequestTest,
                                     CreateHeadersForTest(net::HTTP_OK),
                                     response_body, response_status);
   request->Start(callback.Get(), url_loader_factory());
-  base::RunLoop().RunUntilIdle();
+  run_loop.Run();
 
   EXPECT_EQ(status.code, StatusCode::FAILED);
 }
@@ -186,8 +195,13 @@ TEST_F(PerUserTopicSubscriptionRequestTest,
   Status status(StatusCode::SUCCESS, "initial");
   std::string private_topic;
 
+  base::RunLoop run_loop;
   EXPECT_CALL(callback, Run(_, _))
-      .WillOnce(DoAll(SaveArg<0>(&status), SaveArg<1>(&private_topic)));
+      .WillOnce([&](Status status_arg, std::string private_topic_arg) {
+        status = status_arg;
+        private_topic = private_topic_arg;
+        run_loop.Quit();
+      });
 
   PerUserTopicSubscriptionRequest::Builder builder;
   std::unique_ptr<PerUserTopicSubscriptionRequest> request =
@@ -208,7 +222,7 @@ TEST_F(PerUserTopicSubscriptionRequestTest,
                                     CreateHeadersForTest(net::HTTP_OK),
                                     response_body, response_status);
   request->Start(callback.Get(), url_loader_factory());
-  base::RunLoop().RunUntilIdle();
+  run_loop.Run();
 
   EXPECT_EQ(status.code, StatusCode::FAILED);
   EXPECT_EQ(status.message, "Missing topic name");
@@ -226,9 +240,13 @@ TEST_F(PerUserTopicSubscriptionRequestTest, ShouldUnsubscribe) {
       callback;
   Status status(StatusCode::FAILED, "initial");
   std::string private_topic;
-
+  base::RunLoop run_loop;
   EXPECT_CALL(callback, Run(_, _))
-      .WillOnce(DoAll(SaveArg<0>(&status), SaveArg<1>(&private_topic)));
+      .WillOnce([&](Status status_arg, std::string private_topic_arg) {
+        status = status_arg;
+        private_topic = private_topic_arg;
+        run_loop.Quit();
+      });
 
   PerUserTopicSubscriptionRequest::Builder builder;
   std::unique_ptr<PerUserTopicSubscriptionRequest> request =
@@ -249,7 +267,7 @@ TEST_F(PerUserTopicSubscriptionRequestTest, ShouldUnsubscribe) {
                                     CreateHeadersForTest(net::HTTP_OK),
                                     response_body, response_status);
   request->Start(callback.Get(), url_loader_factory());
-  base::RunLoop().RunUntilIdle();
+  run_loop.Run();
 
   EXPECT_EQ(status.code, StatusCode::SUCCESS);
   EXPECT_EQ(status.message, std::string());
@@ -266,11 +284,13 @@ TEST_F(PerUserTopicSubscriptionRequestTest, ShouldDestroyOnFailure) {
       PerUserTopicSubscriptionRequest::SUBSCRIBE;
 
   std::unique_ptr<PerUserTopicSubscriptionRequest> request;
+  base::RunLoop run_loop;
   bool callback_called = false;
   auto completed_callback = base::BindLambdaForTesting(
       [&](const Status& status, const std::string& topic_name) {
         request.reset();
         callback_called = true;
+        run_loop.Quit();
       });
 
   PerUserTopicSubscriptionRequest::Builder builder;
@@ -293,7 +313,7 @@ TEST_F(PerUserTopicSubscriptionRequestTest, ShouldDestroyOnFailure) {
                                     CreateHeadersForTest(net::HTTP_OK),
                                     response_body, response_status);
   request->Start(std::move(completed_callback), url_loader_factory());
-  base::RunLoop().RunUntilIdle();
+  run_loop.Run();
 
   EXPECT_TRUE(callback_called);
   // The main expectation is that there is no crash.
@@ -326,8 +346,13 @@ TEST_P(PerUserTopicSubscriptionRequestParamTest,
       callback;
   Status status(StatusCode::FAILED, "initial");
   std::string private_topic;
+  base::RunLoop run_loop;
   EXPECT_CALL(callback, Run(_, _))
-      .WillOnce(DoAll(SaveArg<0>(&status), SaveArg<1>(&private_topic)));
+      .WillOnce([&](Status status_arg, std::string private_topic_arg) {
+        status = status_arg;
+        private_topic = private_topic_arg;
+        run_loop.Quit();
+      });
 
   PerUserTopicSubscriptionRequest::Builder builder;
   std::unique_ptr<PerUserTopicSubscriptionRequest> request =
@@ -343,7 +368,7 @@ TEST_P(PerUserTopicSubscriptionRequestParamTest,
       url(request.get()), CreateHeadersForTest(GetParam()),
       /* response_body */ std::string(), response_status);
   request->Start(callback.Get(), url_loader_factory());
-  base::RunLoop().RunUntilIdle();
+  run_loop.Run();
 
   EXPECT_EQ(status.code, StatusCode::FAILED_NON_RETRIABLE);
 }

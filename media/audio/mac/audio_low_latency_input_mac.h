@@ -25,7 +25,6 @@
 //
 // - It is recommended to first acquire the native sample rate of the default
 //   input device and then use the same rate when creating this object.
-//   Use AUAudioInputStream::HardwareSampleRate() to retrieve the sample rate.
 // - Calling Close() also leads to self destruction.
 // - The latency consists of two parts:
 //   1) Hardware latency, which includes Audio Unit latency, audio device
@@ -37,7 +36,6 @@
 #define MEDIA_AUDIO_MAC_AUDIO_LOW_LATENCY_INPUT_MAC_H_
 
 #include <AudioUnit/AudioUnit.h>
-#include <CoreAudio/CoreAudio.h>
 
 #include <memory>
 #include <vector>
@@ -50,12 +48,20 @@
 #include "base/timer/timer.h"
 #include "media/audio/agc_audio_stream.h"
 #include "media/audio/audio_io.h"
-#include "media/audio/mac/audio_manager_mac.h"
 #include "media/audio/system_glitch_reporter.h"
+#include "media/base/amplitude_peak_detector.h"
 #include "media/base/audio_block_fifo.h"
+#include "media/base/audio_glitch_info.h"
 #include "media/base/audio_parameters.h"
 
+#if BUILDFLAG(IS_MAC)
+#include "media/audio/mac/audio_manager_mac.h"
+#else
+#include "media/audio/ios/audio_manager_ios.h"
+#endif
+
 namespace media {
+class AudioManagerApple;
 
 class MEDIA_EXPORT AUAudioInputStream
     : public AgcAudioStream<AudioInputStream> {
@@ -63,7 +69,7 @@ class MEDIA_EXPORT AUAudioInputStream
   // The ctor takes all the usual parameters, plus |manager| which is the
   // the audio manager who is creating this object.
   AUAudioInputStream(
-      AudioManagerMac* manager,
+      AudioManagerApple* manager,
       const AudioParameters& input_params,
       AudioDeviceID audio_device_id,
       const AudioManager::LogCallback& log_callback,
@@ -86,9 +92,6 @@ class MEDIA_EXPORT AUAudioInputStream
   double GetVolume() override;
   bool IsMuted() override;
   void SetOutputDeviceForAec(const std::string& output_device_id) override;
-
-  // Returns the current hardware sample rate for the default input device.
-  static int HardwareSampleRate();
 
   // Returns true if the audio unit is active/running.
   // The result is based on the kAudioOutputUnitProperty_IsRunning property
@@ -131,15 +134,8 @@ class MEDIA_EXPORT AUAudioInputStream
   // Gets the current capture time.
   base::TimeTicks GetCaptureTime(const AudioTimeStamp* input_time_stamp);
 
-  // Gets the number of channels for a stream of audio data.
-  int GetNumberOfChannelsFromStream();
-
   // Issues the OnError() callback to the |sink_|.
-  void HandleError(OSStatus err);
-
-  // Helper function to check if the volume control is available on specific
-  // channel.
-  bool IsVolumeSettableOnChannel(int channel);
+  void HandleError(OSStatus err, const base::Location& location = FROM_HERE);
 
   // Helper methods to set and get atomic |input_callback_is_active_|.
   void SetInputCallbackIsActive(bool active);
@@ -171,7 +167,7 @@ class MEDIA_EXPORT AUAudioInputStream
   THREAD_CHECKER(thread_checker_);
 
   // Our creator, the audio manager needs to be notified when we close.
-  const raw_ptr<AudioManagerMac> manager_;
+  const raw_ptr<AudioManagerApple> manager_;
 
   // The audio parameters requested when creating the stream.
   const AudioParameters input_params_;
@@ -205,10 +201,6 @@ class MEDIA_EXPORT AUAudioInputStream
 
   // Fixed capture hardware latency.
   base::TimeDelta hardware_latency_;
-
-  // The number of channels in each frame of audio data, which is used
-  // when querying the volume of each channel.
-  int number_of_channels_in_frame_;
 
   // FIFO used to accumulates recorded data.
   media::AudioBlockFifo fifo_;
@@ -263,6 +255,11 @@ class MEDIA_EXPORT AUAudioInputStream
   // Used to aggregate and report glitch metrics to UMA (periodically) and to
   // text logs (when a stream ends).
   SystemGlitchReporter glitch_reporter_;
+
+  // Used to accumulate glitches to be passed to the AudioInputCallback.
+  AudioGlitchInfo::Accumulator glitch_accumulator_;
+
+  AmplitudePeakDetector peak_detector_;
 
   // Callback to send statistics info.
   AudioManager::LogCallback log_callback_;

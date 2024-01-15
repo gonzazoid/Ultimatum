@@ -9,8 +9,10 @@
 
 #include <memory>
 #include <set>
+#include <string>
 #include <utility>
 
+#include "base/test/bind.h"
 #include "build/build_config.h"
 #include "components/viz/test/fake_skia_output_surface.h"
 #include "gpu/command_buffer/common/mailbox.h"
@@ -19,8 +21,10 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 using ::testing::_;
+using ::testing::Contains;
 using ::testing::Expectation;
 using ::testing::Ne;
+using ::testing::Not;
 using ::testing::Return;
 
 namespace viz {
@@ -105,12 +109,13 @@ class BufferQueueTest : public ::testing::Test {
     return true;
   }
 
-  void SendDamagedFrame(const gfx::Rect& damage) {
+  gpu::Mailbox SendDamagedFrame(const gfx::Rect& damage) {
     // We don't care about the GL-level implementation here, just how it uses
     // damage rects.
-    buffer_queue_->GetCurrentBuffer();
+    auto mailbox = buffer_queue_->GetCurrentBuffer();
     buffer_queue_->SwapBuffers(damage);
     buffer_queue_->SwapBuffersComplete();
+    return mailbox;
   }
 
   void SendFullFrame() { SendDamagedFrame(gfx::Rect(buffer_queue_->size_)); }
@@ -138,11 +143,13 @@ const gfx::Rect overlapping_damage = gfx::Rect(gfx::Size(5, 20));
 class MockedSkiaOutputSurface : public FakeSkiaOutputSurface {
  public:
   MockedSkiaOutputSurface() : FakeSkiaOutputSurface(nullptr) {}
-  MOCK_METHOD5(CreateSharedImage,
-               gpu::Mailbox(ResourceFormat format,
+  MOCK_METHOD7(CreateSharedImage,
+               gpu::Mailbox(SharedImageFormat format,
                             const gfx::Size& size,
                             const gfx::ColorSpace& color_space,
+                            RenderPassAlphaType alpha_type,
                             uint32_t usage,
+                            base::StringPiece debug_label,
                             gpu::SurfaceHandle surface_handle));
   MOCK_METHOD1(DestroySharedImage, void(const gpu::Mailbox& mailbox));
 };
@@ -156,11 +163,11 @@ TEST(BufferQueueStandaloneTest, BufferCreationAndDestruction) {
   {
     testing::InSequence dummy;
     EXPECT_CALL(*mock_skia_output_surface,
-                CreateSharedImage(_, _, _,
+                CreateSharedImage(_, _, _, _,
                                   gpu::SHARED_IMAGE_USAGE_SCANOUT |
                                       gpu::SHARED_IMAGE_USAGE_DISPLAY_READ |
                                       gpu::SHARED_IMAGE_USAGE_DISPLAY_WRITE,
-                                  _))
+                                  _, _))
         .WillOnce(Return(expected_mailbox));
     EXPECT_CALL(*mock_skia_output_surface,
                 DestroySharedImage(expected_mailbox));
@@ -551,6 +558,161 @@ TEST_F(BufferQueueTest, GetLastSwappedBuffer) {
   EXPECT_EQ(buffer_queue_->GetLastSwappedBuffer(), mailbox3);
   buffer_queue_->SwapBuffersComplete();
   EXPECT_EQ(buffer_queue_->GetLastSwappedBuffer(), mailbox1);
+}
+
+TEST_F(BufferQueueTest, RecreateBuffers) {
+  EXPECT_TRUE(buffer_queue_->Reshape(screen_size, kBufferQueueColorSpace,
+                                     kBufferQueueFormat));
+  auto mb1 = SendDamagedFrame(small_damage);
+  auto mb2 = SendDamagedFrame(small_damage);
+  auto mb3 = SendDamagedFrame(small_damage);
+  std::vector<gpu::Mailbox> original_buffers = {mb1, mb2, mb3};
+
+  EXPECT_EQ(buffer_queue_->GetCurrentBuffer(), mb1);
+  buffer_queue_->SwapBuffers(small_damage);
+  EXPECT_EQ(buffer_queue_->GetCurrentBuffer(), mb2);
+  buffer_queue_->SwapBuffers(small_damage);
+
+  buffer_queue_->RecreateBuffers();
+  buffer_queue_->SwapBuffersComplete();  // mb1
+
+  auto mb4 = buffer_queue_->GetCurrentBuffer();
+  EXPECT_THAT(original_buffers, Not(Contains(mb4)));
+  buffer_queue_->SwapBuffers(small_damage);
+
+  buffer_queue_->SwapBuffersComplete();  // mb2
+
+  auto mb5 = buffer_queue_->GetCurrentBuffer();
+  EXPECT_THAT(original_buffers, Not(Contains(mb5)));
+  buffer_queue_->SwapBuffers(small_damage);
+  buffer_queue_->SwapBuffersComplete();  // mb4
+  buffer_queue_->SwapBuffersComplete();  // mb5
+
+  auto mb6 = SendDamagedFrame(small_damage);
+  EXPECT_THAT(original_buffers, Not(Contains(mb6)));
+
+  // New queue of buffers loops.
+  EXPECT_EQ(buffer_queue_->GetCurrentBuffer(), mb4);
+}
+
+TEST_F(BufferQueueTest, DestroyBuffers) {
+  EXPECT_TRUE(buffer_queue_->Reshape(screen_size, kBufferQueueColorSpace,
+                                     kBufferQueueFormat));
+  auto mb1 = SendDamagedFrame(small_damage);
+  auto mb2 = SendDamagedFrame(small_damage);
+  auto mb3 = SendDamagedFrame(small_damage);
+  std::vector<gpu::Mailbox> original_buffers = {mb1, mb2, mb3};
+
+  EXPECT_EQ(buffer_queue_->GetCurrentBuffer(), mb1);
+  buffer_queue_->SwapBuffers(small_damage);
+  EXPECT_EQ(buffer_queue_->GetCurrentBuffer(), mb2);
+  buffer_queue_->SwapBuffers(small_damage);
+
+  buffer_queue_->DestroyBuffers();
+
+  // All buffers are destroyed, and GetLastSwappedBuffer should not recreate
+  // them.
+  EXPECT_TRUE(buffer_queue_->GetLastSwappedBuffer().IsZero());
+  buffer_queue_->SwapBuffersComplete();  // mb1
+  EXPECT_TRUE(buffer_queue_->GetLastSwappedBuffer().IsZero());
+  // Reshape should not reallocate buffers.
+  EXPECT_TRUE(buffer_queue_->Reshape(gfx::Size(20, 20), kBufferQueueColorSpace,
+                                     kBufferQueueFormat));
+  EXPECT_TRUE(buffer_queue_->GetLastSwappedBuffer().IsZero());
+
+  // GetCurrentBuffer should create the new buffers.
+  auto mb4 = buffer_queue_->GetCurrentBuffer();
+  EXPECT_FALSE(mb4.IsZero());
+  EXPECT_THAT(original_buffers, Not(Contains(mb4)));
+  EXPECT_FALSE(buffer_queue_->GetLastSwappedBuffer().IsZero());
+}
+
+TEST_F(BufferQueueTest, SetPurgeable) {
+  testing::MockFunction<void(const gpu::Mailbox&, bool)> mock;
+  skia_output_surface_->SetSharedImagePurgeableCallback(
+      base::BindLambdaForTesting(mock.AsStdFunction()));
+
+  EXPECT_TRUE(buffer_queue_->Reshape(screen_size, kBufferQueueColorSpace,
+                                     kBufferQueueFormat));
+  auto mb1 = SendDamagedFrame(small_damage);
+  auto mb2 = SendDamagedFrame(small_damage);
+  auto mb3 = SendDamagedFrame(small_damage);
+  EXPECT_EQ(buffer_queue_->GetLastSwappedBuffer(), mb3);
+
+  // Queue up `mb1` and `mb2` so they are in flight. `mb3` is still the last
+  // swapped buffer.
+  EXPECT_EQ(buffer_queue_->GetCurrentBuffer(), mb1);
+  buffer_queue_->SwapBuffers(small_damage);
+  EXPECT_EQ(buffer_queue_->GetCurrentBuffer(), mb2);
+  buffer_queue_->SwapBuffers(small_damage);
+  EXPECT_EQ(buffer_queue_->GetLastSwappedBuffer(), mb3);
+
+  // Set buffers as purgeable.
+  buffer_queue_->SetBuffersPurgeable();
+
+  // When the next swap finishes `mb3` is available and gets marked purgeable.
+  EXPECT_CALL(mock, Call(mb3, true));
+  buffer_queue_->SwapBuffersComplete();
+  EXPECT_EQ(buffer_queue_->GetLastSwappedBuffer(), mb1);
+
+  // When the next swap finishes `mb1` is available and gets marked purgeable.
+  EXPECT_CALL(mock, Call(mb1, true));
+  buffer_queue_->SwapBuffersComplete();
+  EXPECT_EQ(buffer_queue_->GetLastSwappedBuffer(), mb2);
+
+  // `mb2` is last swapped buffer now and there are no pending swaps. Push an
+  // empty swap and complete that so `mb2` is available.
+  EXPECT_CALL(mock, Call(mb2, true));
+  buffer_queue_->SwapBuffers(small_damage);
+  buffer_queue_->SwapBuffersComplete();
+
+  // The next non-delegated draw will get a primary plane buffer. This will
+  // cause all three buffers to be marked as not purgeable anymore.
+  EXPECT_CALL(mock, Call(mb3, false));
+  EXPECT_CALL(mock, Call(mb1, false));
+  EXPECT_CALL(mock, Call(mb2, false));
+  EXPECT_EQ(buffer_queue_->GetCurrentBuffer(), mb3);
+
+  // Reset callback since it points to stack allocated mock.
+  skia_output_surface_->SetSharedImagePurgeableCallback({});
+}
+
+TEST_F(BufferQueueTest, SetPurgeableThenReshape) {
+  testing::MockFunction<void(const gpu::Mailbox&, bool)> mock;
+  skia_output_surface_->SetSharedImagePurgeableCallback(
+      base::BindLambdaForTesting(mock.AsStdFunction()));
+
+  // This test will reshape before any buffers can be marked as purgeable.
+  EXPECT_CALL(mock, Call(testing::_, testing::_)).Times(0);
+
+  EXPECT_TRUE(buffer_queue_->Reshape(screen_size, kBufferQueueColorSpace,
+                                     kBufferQueueFormat));
+
+  // Swap three buffers. First buffer swap completes so there is one displayed
+  // buffer and two in flight buffers.
+  buffer_queue_->GetCurrentBuffer();
+  buffer_queue_->SwapBuffers(small_damage);
+  buffer_queue_->GetCurrentBuffer();
+  buffer_queue_->SwapBuffers(small_damage);
+  buffer_queue_->SwapBuffersComplete();
+  buffer_queue_->GetCurrentBuffer();
+  buffer_queue_->SwapBuffers(small_damage);
+  EXPECT_FALSE(buffer_queue_->GetLastSwappedBuffer().IsZero());
+
+  // Set the buffers as purgeable before the next swap buffers complete and then
+  // immediately reshape. The reshape will cause buffers to be deleted but not
+  // recreated at the new size until they will be used.
+  buffer_queue_->SetBuffersPurgeable();
+  EXPECT_TRUE(buffer_queue_->Reshape(gfx::Size(1, 1), kBufferQueueColorSpace,
+                                     kBufferQueueFormat));
+
+  // Complete the last two swaps. Since the reshape deleted all the buffers
+  // they will not be marked as purgeable.
+  buffer_queue_->SwapBuffersComplete();
+  buffer_queue_->SwapBuffersComplete();
+
+  // Reset callback since it points to stack allocated mock.
+  skia_output_surface_->SetSharedImagePurgeableCallback({});
 }
 
 }  // namespace viz

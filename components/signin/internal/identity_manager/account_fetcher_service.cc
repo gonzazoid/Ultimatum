@@ -7,10 +7,12 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include "base/bind.h"
+
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/notreached.h"
 #include "base/trace_event/trace_event.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -256,16 +258,22 @@ bool AccountFetcherService::IsAccountCapabilitiesFetchingEnabled() {
 }
 
 void AccountFetcherService::StartFetchingAccountCapabilities(
-    const CoreAccountInfo& account_info) {
+    const CoreAccountInfo& core_account_info) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(network_fetches_enabled_);
 
   std::unique_ptr<AccountCapabilitiesFetcher>& request =
-      account_capabilities_requests_[account_info.account_id];
+      account_capabilities_requests_[core_account_info.account_id];
   if (!request) {
+    AccountInfo account_info =
+        account_tracker_service_->GetAccountInfo(core_account_info.account_id);
+
     request =
         account_capabilities_fetcher_factory_->CreateAccountCapabilitiesFetcher(
-            account_info,
+            core_account_info,
+            account_info.capabilities.AreAnyCapabilitiesKnown()
+                ? AccountCapabilitiesFetcher::FetchPriority::kBackground
+                : AccountCapabilitiesFetcher::FetchPriority::kForeground,
             base::BindOnce(
                 &AccountFetcherService::OnAccountCapabilitiesFetchComplete,
                 base::Unretained(this)));
@@ -276,7 +284,16 @@ void AccountFetcherService::StartFetchingAccountCapabilities(
 void AccountFetcherService::RefreshAccountInfo(const CoreAccountId& account_id,
                                                bool only_fetch_if_invalid) {
   DCHECK(network_fetches_enabled_);
+
+  // TODO(crbug.com/1488399): It seems quite suspect account tracker needs to start
+  // tracking the account when refreshing the account info. Understand why this
+  // is needed and ideally remove this call (it may have been added just for
+  // tests).
+  base::UmaHistogramBoolean(
+      "Signin.AccountTracker.RefreshAccountInfo.IsAlreadyTrackingAccount",
+      account_tracker_service_->IsTrackingAccount(account_id));
   account_tracker_service_->StartTrackingAccount(account_id);
+
   const AccountInfo& info =
       account_tracker_service_->GetAccountInfo(account_id);
 

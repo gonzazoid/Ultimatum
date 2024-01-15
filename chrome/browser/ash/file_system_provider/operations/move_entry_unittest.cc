@@ -4,13 +4,12 @@
 
 #include "chrome/browser/ash/file_system_provider/operations/move_entry.h"
 
-#include <memory>
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/file_system_provider/icon_set.h"
 #include "chrome/browser/ash/file_system_provider/operations/test_util.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_interface.h"
@@ -21,9 +20,7 @@
 #include "storage/browser/file_system/async_file_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 namespace {
 
 const char kExtensionId[] = "mbflcebpggnecokmikipoihdbecnjfoj";
@@ -38,8 +35,8 @@ const base::FilePath::CharType kTargetPath[] =
 
 class FileSystemProviderOperationsMoveEntryTest : public testing::Test {
  protected:
-  FileSystemProviderOperationsMoveEntryTest() {}
-  ~FileSystemProviderOperationsMoveEntryTest() override {}
+  FileSystemProviderOperationsMoveEntryTest() = default;
+  ~FileSystemProviderOperationsMoveEntryTest() override = default;
 
   void SetUp() override {
     MountOptions mount_options(kFileSystemId, "" /* display_name */);
@@ -58,12 +55,9 @@ TEST_F(FileSystemProviderOperationsMoveEntryTest, Execute) {
   util::LoggingDispatchEventImpl dispatcher(true /* dispatch_reply */);
   util::StatusCallbackLog callback_log;
 
-  MoveEntry move_entry(nullptr, file_system_info_, base::FilePath(kSourcePath),
-                       base::FilePath(kTargetPath),
+  MoveEntry move_entry(&dispatcher, file_system_info_,
+                       base::FilePath(kSourcePath), base::FilePath(kTargetPath),
                        base::BindOnce(&util::LogStatusCallback, &callback_log));
-  move_entry.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(move_entry.Execute(kRequestId));
 
@@ -78,24 +72,22 @@ TEST_F(FileSystemProviderOperationsMoveEntryTest, Execute) {
   const base::Value* options_as_value = &event_args[0];
   ASSERT_TRUE(options_as_value->is_dict());
 
-  MoveEntryRequestedOptions options;
-  ASSERT_TRUE(MoveEntryRequestedOptions::Populate(*options_as_value, &options));
-  EXPECT_EQ(kFileSystemId, options.file_system_id);
-  EXPECT_EQ(kRequestId, options.request_id);
-  EXPECT_EQ(kSourcePath, options.source_path);
-  EXPECT_EQ(kTargetPath, options.target_path);
+  auto options =
+      MoveEntryRequestedOptions::FromValue(options_as_value->GetDict());
+  ASSERT_TRUE(options);
+  EXPECT_EQ(kFileSystemId, options->file_system_id);
+  EXPECT_EQ(kRequestId, options->request_id);
+  EXPECT_EQ(kSourcePath, options->source_path);
+  EXPECT_EQ(kTargetPath, options->target_path);
 }
 
 TEST_F(FileSystemProviderOperationsMoveEntryTest, Execute_NoListener) {
   util::LoggingDispatchEventImpl dispatcher(false /* dispatch_reply */);
   util::StatusCallbackLog callback_log;
 
-  MoveEntry move_entry(nullptr, file_system_info_, base::FilePath(kSourcePath),
-                       base::FilePath(kTargetPath),
+  MoveEntry move_entry(&dispatcher, file_system_info_,
+                       base::FilePath(kSourcePath), base::FilePath(kTargetPath),
                        base::BindOnce(&util::LogStatusCallback, &callback_log));
-  move_entry.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_FALSE(move_entry.Execute(kRequestId));
 }
@@ -109,12 +101,9 @@ TEST_F(FileSystemProviderOperationsMoveEntryTest, Execute_ReadOnly) {
       base::FilePath() /* mount_path */, false /* configurable */,
       true /* watchable */, extensions::SOURCE_FILE, IconSet());
 
-  MoveEntry move_entry(nullptr, read_only_file_system_info,
+  MoveEntry move_entry(&dispatcher, read_only_file_system_info,
                        base::FilePath(kSourcePath), base::FilePath(kTargetPath),
                        base::BindOnce(&util::LogStatusCallback, &callback_log));
-  move_entry.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_FALSE(move_entry.Execute(kRequestId));
 }
@@ -123,17 +112,13 @@ TEST_F(FileSystemProviderOperationsMoveEntryTest, OnSuccess) {
   util::LoggingDispatchEventImpl dispatcher(true /* dispatch_reply */);
   util::StatusCallbackLog callback_log;
 
-  MoveEntry move_entry(nullptr, file_system_info_, base::FilePath(kSourcePath),
-                       base::FilePath(kTargetPath),
+  MoveEntry move_entry(&dispatcher, file_system_info_,
+                       base::FilePath(kSourcePath), base::FilePath(kTargetPath),
                        base::BindOnce(&util::LogStatusCallback, &callback_log));
-  move_entry.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(move_entry.Execute(kRequestId));
 
-  move_entry.OnSuccess(kRequestId, std::make_unique<RequestValue>(),
-                       false /* has_more */);
+  move_entry.OnSuccess(kRequestId, RequestValue(), false /* has_more */);
   ASSERT_EQ(1u, callback_log.size());
   EXPECT_EQ(base::File::FILE_OK, callback_log[0]);
 }
@@ -142,21 +127,16 @@ TEST_F(FileSystemProviderOperationsMoveEntryTest, OnError) {
   util::LoggingDispatchEventImpl dispatcher(true /* dispatch_reply */);
   util::StatusCallbackLog callback_log;
 
-  MoveEntry move_entry(nullptr, file_system_info_, base::FilePath(kSourcePath),
-                       base::FilePath(kTargetPath),
+  MoveEntry move_entry(&dispatcher, file_system_info_,
+                       base::FilePath(kSourcePath), base::FilePath(kTargetPath),
                        base::BindOnce(&util::LogStatusCallback, &callback_log));
-  move_entry.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(move_entry.Execute(kRequestId));
 
-  move_entry.OnError(kRequestId, std::make_unique<RequestValue>(),
+  move_entry.OnError(kRequestId, RequestValue(),
                      base::File::FILE_ERROR_TOO_MANY_OPENED);
   ASSERT_EQ(1u, callback_log.size());
   EXPECT_EQ(base::File::FILE_ERROR_TOO_MANY_OPENED, callback_log[0]);
 }
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations

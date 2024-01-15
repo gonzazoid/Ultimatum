@@ -7,39 +7,19 @@ package org.chromium.chrome.browser.bookmarks;
 import android.content.Context;
 
 import org.chromium.base.lifetime.DestroyChecker;
-import org.chromium.base.task.PostTask;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.bookmarks.BookmarkModel.BookmarkDeleteObserver;
 import org.chromium.chrome.browser.ui.messages.snackbar.Snackbar;
 import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
 import org.chromium.components.bookmarks.BookmarkItem;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
 
 import java.util.Locale;
 
-/**
- * Shows an undo bar when the user modifies bookmarks, allowing them to undo their changes.
- */
-public class BookmarkUndoController extends BookmarkModelObserver implements
-        SnackbarManager.SnackbarController, BookmarkDeleteObserver {
+/** Shows an undo bar when the user modifies bookmarks, allowing them to undo their changes. */
+// TODO(crbug.com/1428919): Write tests for this class.
+public class BookmarkUndoController extends BookmarkModelObserver
+        implements SnackbarManager.SnackbarController, BookmarkDeleteObserver {
     private static final int SNACKBAR_DURATION_MS = 3000;
-
-    /**
-     * Creates an instance of {@link BookmarkUndoController} which self-destructs after the first
-     * action. As a result, this should only be called directly before making an add/delete action
-     * to bookmarks.
-     * @param context The {@link Context} in which snackbar is shown.
-     * @param model The bookmark model.
-     * @param snackbarManager SnackManager passed from activity.
-     * @param destroyAfterFirstAction Destroy the controller after the first action.
-     */
-    public static void createOneshotBookmarkUndoController(
-            Context context, BookmarkModel model, SnackbarManager snackbarManager) {
-        BookmarkUndoController controller = new BookmarkUndoController(
-                context, model, snackbarManager, /*destroyAfterFirstAction=*/true);
-        PostTask.postDelayedTask(UiThreadTaskTraits.BEST_EFFORT,
-                () -> { controller.destroyIfNecessary(); }, SNACKBAR_DURATION_MS + 1000);
-    }
 
     private final BookmarkModel mBookmarkModel;
     private final SnackbarManager mSnackbarManager;
@@ -49,24 +29,29 @@ public class BookmarkUndoController extends BookmarkModelObserver implements
 
     /**
      * Creates an instance of {@link BookmarkUndoController}.
+     *
      * @param context The {@link Context} in which snackbar is shown.
      * @param model The bookmark model.
      * @param snackbarManager SnackManager passed from activity.
      */
-    public BookmarkUndoController(Context context, BookmarkModel model,
-            SnackbarManager snackbarManager) {
-        this(context, model, snackbarManager, /*destroyAfterFirstAction=*/false);
+    public BookmarkUndoController(
+            Context context, BookmarkModel model, SnackbarManager snackbarManager) {
+        this(context, model, snackbarManager, /* destroyAfterFirstAction= */ false);
     }
 
     /**
      * Internal constructor which specifies an additional parameter.
+     *
      * @param context The {@link Context} in which snackbar is shown.
      * @param model The bookmark model.
      * @param snackbarManager SnackManager passed from activity.
      * @param destroyAfterFirstAction Destroy the controller after the first action.
      */
-    private BookmarkUndoController(Context context, BookmarkModel model,
-            SnackbarManager snackbarManager, boolean destroyAfterFirstAction) {
+    private BookmarkUndoController(
+            Context context,
+            BookmarkModel model,
+            SnackbarManager snackbarManager,
+            boolean destroyAfterFirstAction) {
         mBookmarkModel = model;
         mBookmarkModel.addDeleteObserver(this);
         mSnackbarManager = snackbarManager;
@@ -80,15 +65,21 @@ public class BookmarkUndoController extends BookmarkModelObserver implements
         if (!mDestroyChecker.isDestroyed()) destroy();
     }
 
-    /**
-     * Cleans up this class, unregistering for application notifications from bookmark model.
-     */
+    /** Cleans up this class, unregistering for application notifications from bookmark model. */
     public void destroy() {
-        mDestroyChecker.checkNotDestroyed();
-
-        mDestroyChecker.destroy();
         mBookmarkModel.removeDeleteObserver(this);
         mSnackbarManager.dismissSnackbars(this);
+
+        mDestroyChecker.destroy();
+    }
+
+    public void setEnabled(boolean enabled) {
+        if (enabled) {
+            mBookmarkModel.addDeleteObserver(this);
+        } else {
+            mSnackbarManager.dismissSnackbars(this);
+            mBookmarkModel.removeDeleteObserver(this);
+        }
     }
 
     @Override
@@ -123,7 +114,7 @@ public class BookmarkUndoController extends BookmarkModelObserver implements
         // Adding a new bookmark should not affect undo.
     }
 
-    // BookmarkDeleteObserver implementation
+    // BookmarkDeleteObserver implementation.
 
     @Override
     public void onDeleteBookmarks(String[] titles, boolean isUndoable) {
@@ -131,14 +122,22 @@ public class BookmarkUndoController extends BookmarkModelObserver implements
 
         Snackbar snackbar;
         if (titles.length == 1) {
-            snackbar = Snackbar.make(titles[0], this, Snackbar.TYPE_ACTION,
-                                       Snackbar.UMA_BOOKMARK_DELETE_UNDO)
-                               .setTemplateText(mContext.getString(R.string.delete_message));
+            snackbar =
+                    Snackbar.make(
+                                    titles[0],
+                                    this,
+                                    Snackbar.TYPE_ACTION,
+                                    Snackbar.UMA_BOOKMARK_DELETE_UNDO)
+                            .setTemplateText(mContext.getString(R.string.delete_message));
         } else {
-            snackbar = Snackbar.make(String.format(Locale.getDefault(), "%d", titles.length), this,
-                                       Snackbar.TYPE_ACTION, Snackbar.UMA_BOOKMARK_DELETE_UNDO)
-                               .setTemplateText(mContext.getString(
-                                       R.string.undo_bar_multiple_delete_message));
+            snackbar =
+                    Snackbar.make(
+                                    String.format(Locale.getDefault(), "%d", titles.length),
+                                    this,
+                                    Snackbar.TYPE_ACTION,
+                                    Snackbar.UMA_BOOKMARK_DELETE_UNDO)
+                            .setTemplateText(
+                                    mContext.getString(R.string.undo_bar_multiple_delete_message));
         }
 
         if (isUndoable) {

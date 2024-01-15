@@ -271,8 +271,9 @@ void FuzzedCompositorFrameBuilder::TryAddTileDrawQuad(
   FuzzedBitmap* fuzzed_bitmap = AllocateFuzzedBitmap(
       tile_size, GetColorFromProtobuf(quad_spec.tile_quad().texture_color()));
   TransferableResource transferable_resource =
-      TransferableResource::MakeSoftware(fuzzed_bitmap->id, fuzzed_bitmap->size,
-                                         RGBA_8888);
+      TransferableResource::MakeSoftware(fuzzed_bitmap->id, gpu::SyncToken(),
+                                         fuzzed_bitmap->size,
+                                         SinglePlaneFormat::kRGBA_8888);
 
   auto* shared_quad_state = pass->CreateAndAppendSharedQuadState();
   ConfigureSharedQuadState(shared_quad_state, quad_spec);
@@ -360,7 +361,8 @@ void FuzzedCompositorFrameBuilder::ConfigureSharedQuadState(
         GetRectFromProtobuf(quad_spec.sqs().visible_rect()),
         gfx::MaskFilterInfo(), clip_rect, quad_spec.sqs().are_contents_opaque(),
         Normalize(quad_spec.sqs().opacity()), SkBlendMode::kSrcOver,
-        quad_spec.sqs().sorting_context_id());
+        quad_spec.sqs().sorting_context_id(), /*layer_id=*/0u,
+        /*fast_rounded_corner*/ false);
   } else {
     gfx::Transform transform;
 
@@ -377,15 +379,16 @@ void FuzzedCompositorFrameBuilder::ConfigureSharedQuadState(
         transform, GetRectFromProtobuf(quad_spec.rect()),
         GetRectFromProtobuf(quad_spec.visible_rect()), gfx::MaskFilterInfo(),
         /*clip_rect=*/absl::nullopt, /*are_contents_opaque=*/true,
-        /*opacity=*/1.0, SkBlendMode::kSrcOver, /*sorting_context_id=*/0);
+        /*opacity=*/1.0, SkBlendMode::kSrcOver, /*sorting_context_id=*/0,
+        /*layer_id=*/0u, /*fast_rounded_corner*/ false);
   }
 }
 
 bool FuzzedCompositorFrameBuilder::TryReserveBitmapBytes(
     const gfx::Size& size) {
   uint64_t bitmap_bytes;
-  if (!ResourceSizes::MaybeSizeInBytes<uint64_t>(size, RGBA_8888,
-                                                 &bitmap_bytes) ||
+  if (!ResourceSizes::MaybeSizeInBytes<uint64_t>(
+          size, SinglePlaneFormat::kRGBA_8888, &bitmap_bytes) ||
       bitmap_bytes > kMaxTextureMemory - reserved_bytes_) {
     return false;
   }
@@ -398,8 +401,8 @@ FuzzedBitmap* FuzzedCompositorFrameBuilder::AllocateFuzzedBitmap(
     const gfx::Size& size,
     SkColor4f color) {
   SharedBitmapId shared_bitmap_id = SharedBitmap::GenerateId();
-  base::MappedReadOnlyRegion shm =
-      bitmap_allocation::AllocateSharedBitmap(size, RGBA_8888);
+  base::MappedReadOnlyRegion shm = bitmap_allocation::AllocateSharedBitmap(
+      size, SinglePlaneFormat::kRGBA_8888);
 
   SkBitmap bitmap;
   SkImageInfo info = SkImageInfo::MakeN32Premul(size.width(), size.height());

@@ -4,7 +4,6 @@
 
 #include "chrome/browser/extensions/api/resources_private/resources_private_api.h"
 
-#include <memory>
 #include <string>
 #include <utility>
 
@@ -23,6 +22,7 @@
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/profiles/profile_types_ash.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
@@ -31,7 +31,7 @@
 // To add a new component to this API, simply:
 // 1. Add your component to the Component enum in
 //      chrome/common/extensions/api/resources_private.idl
-// 2. Create an AddStringsForMyComponent(base::DictionaryValue * dict) method.
+// 2. Create an AddStringsForMyComponent(base::Value::Dict * dict) method.
 // 3. Tie in that method to the switch statement in Run()
 
 namespace extensions {
@@ -66,25 +66,32 @@ ResourcesPrivateGetStringsFunction::ResourcesPrivateGetStringsFunction() {}
 ResourcesPrivateGetStringsFunction::~ResourcesPrivateGetStringsFunction() {}
 
 ExtensionFunction::ResponseAction ResourcesPrivateGetStringsFunction::Run() {
-  std::unique_ptr<get_strings::Params> params(
-      get_strings::Params::Create(args()));
+  absl::optional<get_strings::Params> params =
+      get_strings::Params::Create(args());
   base::Value::Dict dict;
 
   api::resources_private::Component component = params->component;
 
   switch (component) {
-    case api::resources_private::COMPONENT_IDENTITY:
+    case api::resources_private::Component::kIdentity:
       AddStringsForIdentity(&dict);
       break;
-    case api::resources_private::COMPONENT_PDF:
+    case api::resources_private::Component::kPdf: {
 #if BUILDFLAG(ENABLE_PDF)
       pdf_extension_util::AddStrings(pdf_extension_util::PdfViewerContext::kAll,
                                      &dict);
+      bool enable_printing = true;
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+      Profile* profile = Profile::FromBrowserContext(browser_context());
+      enable_printing = IsUserProfile(profile);
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
       pdf_extension_util::AddAdditionalData(
-          IsPdfAnnotationsEnabled(browser_context()), &dict);
+          enable_printing, IsPdfAnnotationsEnabled(browser_context()), &dict);
 #endif  // BUILDFLAG(ENABLE_PDF)
       break;
-    case api::resources_private::COMPONENT_NONE:
+    }
+    case api::resources_private::Component::kNone:
       NOTREACHED();
   }
 

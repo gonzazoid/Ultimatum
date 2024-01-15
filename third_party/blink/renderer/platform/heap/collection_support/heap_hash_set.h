@@ -12,19 +12,17 @@
 
 namespace blink {
 
-template <typename ValueArg,
-          typename HashArg = DefaultHash<ValueArg>,
-          typename TraitsArg = HashTraits<ValueArg>>
+template <typename ValueArg, typename TraitsArg = HashTraits<ValueArg>>
 class HeapHashSet final
-    : public GarbageCollected<HeapHashSet<ValueArg, HashArg, TraitsArg>>,
-      public HashSet<ValueArg, HashArg, TraitsArg, HeapAllocator> {
+    : public GarbageCollected<HeapHashSet<ValueArg, TraitsArg>>,
+      public HashSet<ValueArg, TraitsArg, HeapAllocator> {
   DISALLOW_NEW();
 
  public:
   HeapHashSet() { CheckType(); }
 
   void Trace(Visitor* visitor) const {
-    HashSet<ValueArg, HashArg, TraitsArg, HeapAllocator>::Trace(visitor);
+    HashSet<ValueArg, TraitsArg, HeapAllocator>::Trace(visitor);
   }
 
  private:

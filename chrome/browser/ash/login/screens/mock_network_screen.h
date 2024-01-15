@@ -6,7 +6,7 @@
 #define CHROME_BROWSER_ASH_LOGIN_SCREENS_MOCK_NETWORK_SCREEN_H_
 
 #include "chrome/browser/ash/login/screens/network_screen.h"
-#include "chrome/browser/ui/webui/chromeos/login/network_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/network_screen_handler.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace ash {
@@ -36,19 +36,13 @@ class MockNetworkScreenView : public NetworkScreenView {
 
   ~MockNetworkScreenView() override;
 
-  MOCK_METHOD(void, Show, ());
+  MOCK_METHOD(void, ShowScreenWithData, (base::Value::Dict data));
   MOCK_METHOD(void, ShowError, (const std::u16string& message));
   MOCK_METHOD(void, ClearErrors, ());
   MOCK_METHOD(void, SetOfflineDemoModeEnabled, (bool enabled));
+  MOCK_METHOD(void, SetQuickStartEnabled, ());
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::MockNetworkScreen;
-using ::ash::MockNetworkScreenView;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_MOCK_NETWORK_SCREEN_H_

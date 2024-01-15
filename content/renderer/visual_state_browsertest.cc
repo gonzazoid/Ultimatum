@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/task/current_thread.h"
 #include "content/public/browser/render_frame_host.h"
@@ -106,9 +106,8 @@ IN_PROC_BROWSER_TEST_F(VisualStateTest, DISABLED_CallbackDoesNotDeadlock) {
   // discouraged (see https://codereview.chromium.org/939673002).
   EXPECT_TRUE(NavigateToURL(shell(), GURL("about:blank")));
   CommitObserver observer(
-      RenderFrame::FromRoutingID(
-          shell()->web_contents()->GetPrimaryMainFrame()->GetRoutingID())
-          ->GetWebFrame()
+      blink::WebLocalFrame::FromFrameToken(
+          shell()->web_contents()->GetPrimaryMainFrame()->GetFrameToken())
           ->View());
 
   // Wait for the commit corresponding to the load.

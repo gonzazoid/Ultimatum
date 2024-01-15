@@ -7,8 +7,8 @@
 
 #include <string>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
@@ -68,9 +68,17 @@ class BLINK_COMMON_EXPORT AssociatedInterfaceProvider {
 
   template <typename Interface>
   void GetInterface(mojo::AssociatedRemote<Interface>* remote) {
-    GetInterface(remote->BindNewEndpointAndPassReceiver(task_runner_));
+    GetInterface(remote->BindNewEndpointAndPassReceiver(GetTaskRunner()));
   }
 
+  // Returns the task runner for this provider so callers can generate pending
+  // receivers if needed.
+  scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunner() {
+    return task_runner_;
+  }
+
+  // If there is an override for `name`, passing in a null `binder` removes the
+  // override.
   void OverrideBinderForTesting(
       const std::string& name,
       const base::RepeatingCallback<void(mojo::ScopedInterfaceEndpointHandle)>&

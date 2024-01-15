@@ -5,18 +5,16 @@
 package org.chromium.chrome.test.pagecontroller.utils;
 
 import android.content.res.Resources;
-import android.support.test.InstrumentationRegistry;
 
 import androidx.annotation.IdRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
+import androidx.test.core.app.ApplicationProvider;
 import androidx.test.uiautomator.By;
 
 import java.util.regex.Pattern;
 
-/**
- * Locators that find UIObject2 nodes.
- */
+/** Locators that find UIObject2 nodes. */
 public final class Ui2Locators {
     private static Resources sMockResources;
 
@@ -281,7 +279,7 @@ public final class Ui2Locators {
 
     private static Resources getTargetResources() {
         if (sMockResources == null) {
-            return InstrumentationRegistry.getTargetContext().getResources();
+            return ApplicationProvider.getApplicationContext().getResources();
         } else {
             return sMockResources;
         }

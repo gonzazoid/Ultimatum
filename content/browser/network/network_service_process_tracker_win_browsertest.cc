@@ -9,10 +9,11 @@
 #include "base/process/process_handle.h"
 #include "base/test/scoped_feature_list.h"
 #include "content/public/browser/network_service_instance.h"
+#include "content/public/browser/network_service_util.h"
 #include "content/public/common/content_features.h"
-#include "content/public/common/network_service_util.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/content_browser_test.h"
+#include "services/network/public/mojom/network_service.mojom.h"
 #include "services/network/public/mojom/network_service_test.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -26,7 +27,7 @@ IN_PROC_BROWSER_TEST_F(NetworkServiceProcessTrackerTest,
     return;
 
   mojo::Remote<network::mojom::NetworkServiceTest> network_service_test;
-  GetNetworkService()->BindTestInterface(
+  GetNetworkService()->BindTestInterfaceForTesting(
       network_service_test.BindNewPipeAndPassReceiver());
   // This ensures network service is fully running.
   network_service_test.FlushForTesting();
@@ -40,7 +41,7 @@ IN_PROC_BROWSER_TEST_F(NetworkServiceProcessTrackerTest,
   SimulateNetworkServiceCrash();
 
   mojo::Remote<network::mojom::NetworkServiceTest> network_service_test2;
-  GetNetworkService()->BindTestInterface(
+  GetNetworkService()->BindTestInterfaceForTesting(
       network_service_test2.BindNewPipeAndPassReceiver());
   // This ensures network service is fully running.
   network_service_test2.FlushForTesting();

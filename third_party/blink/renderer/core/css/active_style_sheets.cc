@@ -17,6 +17,7 @@ namespace blink {
 ActiveSheetsChange CompareActiveStyleSheets(
     const ActiveStyleSheetVector& old_style_sheets,
     const ActiveStyleSheetVector& new_style_sheets,
+    const HeapVector<Member<RuleSetDiff>>& diffs,
     HeapHashSet<Member<RuleSet>>& changed_rule_sets) {
   unsigned new_style_sheet_count = new_style_sheets.size();
   unsigned old_style_sheet_count = old_style_sheets.size();
@@ -29,13 +30,37 @@ ActiveSheetsChange CompareActiveStyleSheets(
   for (; index < min_count &&
          new_style_sheets[index].first == old_style_sheets[index].first;
        index++) {
-    if (new_style_sheets[index].second == old_style_sheets[index].second)
+    if (new_style_sheets[index].second == old_style_sheets[index].second) {
       continue;
+    }
 
-    if (new_style_sheets[index].second)
-      changed_rule_sets.insert(new_style_sheets[index].second);
-    if (old_style_sheets[index].second)
-      changed_rule_sets.insert(old_style_sheets[index].second);
+    // See if we can do better than inserting the entire old and the entire
+    // new ruleset; if we have a RuleSetDiff describing their diff better,
+    // we can use that instead, presumably with fewer rules (there will never
+    // be more, but there are also cases where there could be the same number).
+    // Note that CreateDiffRuleset() can fail, i.e., return nullptr, in which
+    // case we fall back to the non-diff path.)
+    RuleSet* diff_ruleset = nullptr;
+    if (new_style_sheets[index].second && old_style_sheets[index].second) {
+      for (const RuleSetDiff* diff : diffs) {
+        if (diff->Matches(old_style_sheets[index].second,
+                          new_style_sheets[index].second)) {
+          diff_ruleset = diff->CreateDiffRuleset();
+          break;
+        }
+      }
+    }
+
+    if (diff_ruleset) {
+      changed_rule_sets.insert(diff_ruleset);
+    } else {
+      if (new_style_sheets[index].second) {
+        changed_rule_sets.insert(new_style_sheets[index].second);
+      }
+      if (old_style_sheets[index].second) {
+        changed_rule_sets.insert(old_style_sheets[index].second);
+      }
+    }
   }
 
   // If we add a sheet for which the media attribute currently doesn't match, we
@@ -51,25 +76,29 @@ ActiveSheetsChange CompareActiveStyleSheets(
     // sheets to the ScopedStyleResolver (ActiveSheetsAppended).
     bool rule_sets_changed_in_common_prefix = !changed_rule_sets.empty();
     for (; index < new_style_sheet_count; index++) {
-      if (new_style_sheets[index].second)
+      if (new_style_sheets[index].second) {
         changed_rule_sets.insert(new_style_sheets[index].second);
-      else if (new_style_sheets[index].first->HasMediaQueryResults())
+      } else if (new_style_sheets[index].first->HasMediaQueryResults()) {
         adds_non_matching_mq = true;
+      }
     }
-    if (rule_sets_changed_in_common_prefix)
+    if (rule_sets_changed_in_common_prefix) {
       return kActiveSheetsChanged;
-    if (changed_rule_sets.empty() && !adds_non_matching_mq)
+    }
+    if (changed_rule_sets.empty() && !adds_non_matching_mq) {
       return kNoActiveSheetsChanged;
+    }
     return kActiveSheetsAppended;
   }
 
   if (index == new_style_sheet_count) {
     // Sheets removed from the end.
     for (; index < old_style_sheet_count; index++) {
-      if (old_style_sheets[index].second)
+      if (old_style_sheets[index].second) {
         changed_rule_sets.insert(old_style_sheets[index].second);
-      else if (old_style_sheets[index].first->HasMediaQueryResults())
+      } else if (old_style_sheets[index].first->HasMediaQueryResults()) {
         adds_non_matching_mq = true;
+      }
     }
     return changed_rule_sets.empty() && !adds_non_matching_mq
                ? kNoActiveSheetsChanged
@@ -99,25 +128,29 @@ ActiveSheetsChange CompareActiveStyleSheets(
     if (merged_iterator == merged_sorted.end() ||
         (*merged_iterator).first != sheet1.first) {
       // Sheet either removed or inserted.
-      if (sheet1.second)
+      if (sheet1.second) {
         changed_rule_sets.insert(sheet1.second);
-      else if (sheet1.first->HasMediaQueryResults())
+      } else if (sheet1.first->HasMediaQueryResults()) {
         adds_non_matching_mq = true;
+      }
       continue;
     }
 
     // Sheet present in both old and new.
     const auto& sheet2 = *merged_iterator++;
 
-    if (sheet1.second == sheet2.second)
+    if (sheet1.second == sheet2.second) {
       continue;
+    }
 
     // Active rules for the given stylesheet changed.
     // DOM, CSSOM, or media query changes.
-    if (sheet1.second)
+    if (sheet1.second) {
       changed_rule_sets.insert(sheet1.second);
-    if (sheet2.second)
+    }
+    if (sheet2.second) {
       changed_rule_sets.insert(sheet2.second);
+    }
   }
   return changed_rule_sets.empty() && !adds_non_matching_mq
              ? kNoActiveSheetsChanged
@@ -130,12 +163,14 @@ bool HasMediaQueries(const ActiveStyleSheetVector& active_style_sheets) {
   for (const auto& active_sheet : active_style_sheets) {
     if (const MediaQuerySet* media_queries =
             active_sheet.first->MediaQueries()) {
-      if (!media_queries->QueryVector().empty())
+      if (!media_queries->QueryVector().empty()) {
         return true;
+      }
     }
     StyleSheetContents* contents = active_sheet.first->Contents();
-    if (contents->HasMediaQueries())
+    if (contents->HasMediaQueries()) {
       return true;
+    }
   }
   return false;
 }
@@ -143,13 +178,16 @@ bool HasMediaQueries(const ActiveStyleSheetVector& active_style_sheets) {
 bool HasSizeDependentMediaQueries(
     const ActiveStyleSheetVector& active_style_sheets) {
   for (const auto& active_sheet : active_style_sheets) {
-    if (active_sheet.first->HasMediaQueryResults())
+    if (active_sheet.first->HasMediaQueryResults()) {
       return true;
+    }
     StyleSheetContents* contents = active_sheet.first->Contents();
-    if (!contents->HasRuleSet())
+    if (!contents->HasRuleSet()) {
       continue;
-    if (contents->GetRuleSet().Features().HasMediaQueryResults())
+    }
+    if (contents->GetRuleSet().Features().HasMediaQueryResults()) {
       return true;
+    }
   }
   return false;
 }
@@ -157,11 +195,13 @@ bool HasSizeDependentMediaQueries(
 bool HasDynamicViewportDependentMediaQueries(
     const ActiveStyleSheetVector& active_style_sheets) {
   for (const auto& active_sheet : active_style_sheets) {
-    if (active_sheet.first->HasDynamicViewportDependentMediaQueries())
+    if (active_sheet.first->HasDynamicViewportDependentMediaQueries()) {
       return true;
+    }
     StyleSheetContents* contents = active_sheet.first->Contents();
-    if (!contents->HasRuleSet())
+    if (!contents->HasRuleSet()) {
       continue;
+    }
     if (contents->GetRuleSet()
             .Features()
             .HasDynamicViewportDependentMediaQueries()) {
@@ -175,10 +215,12 @@ bool HasDynamicViewportDependentMediaQueries(
 
 bool AffectedByMediaValueChange(const ActiveStyleSheetVector& active_sheets,
                                 MediaValueChange change) {
-  if (change == MediaValueChange::kSize)
+  if (change == MediaValueChange::kSize) {
     return HasSizeDependentMediaQueries(active_sheets);
-  if (change == MediaValueChange::kDynamicViewport)
+  }
+  if (change == MediaValueChange::kDynamicViewport) {
     return HasDynamicViewportDependentMediaQueries(active_sheets);
+  }
 
   DCHECK(change == MediaValueChange::kOther);
   return HasMediaQueries(active_sheets);

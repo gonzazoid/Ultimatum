@@ -14,18 +14,10 @@ import os
 import re
 import sys
 
-sys.path.insert(
-    0,
-    os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, os.pardir,
-                 os.pardir, 'third_party', 'six', 'src'))
-
-import six
-
 import writer_configuration
 import policy_template_generator
 
 from writers import adm_writer, adml_writer, admx_writer, \
-                    chromeos_admx_writer, chromeos_adml_writer, \
                     google_admx_writer, google_adml_writer, \
                     android_policy_writer, reg_writer, doc_writer, \
                     doc_atomic_groups_writer , json_writer, plist_writer, \
@@ -63,8 +55,6 @@ _WRITER_DESCS = [
     WriterDesc('admx', False, 'utf-16', None, True),
     WriterDesc('google_adml', True, 'utf-8', None, True),
     WriterDesc('google_admx', False, 'utf-8', None, True),
-    WriterDesc('chromeos_adml', True, 'utf-8', None, True),
-    WriterDesc('chromeos_admx', False, 'utf-8', None, True),
     WriterDesc('android_policy', False, 'utf-8', None, False),
     WriterDesc('reg', False, 'utf-16', None, False),
     WriterDesc('doc', True, 'utf-8', None, False),
@@ -130,9 +120,7 @@ def _ParseVersionFile(version_path):
 
 
 def _JsonToUtf8Encoding(data, ignore_dicts=False):
-  if six.PY2 and isinstance(data, unicode):
-    return data.encode('utf-8')
-  elif isinstance(data, list):
+  if isinstance(data, list):
     return [_JsonToUtf8Encoding(item, False) for item in data]
   elif isinstance(data, dict):
     return {

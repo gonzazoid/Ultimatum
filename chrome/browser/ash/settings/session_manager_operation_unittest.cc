@@ -11,11 +11,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/ownership/owner_settings_service_ash.h"
 #include "chrome/browser/ash/ownership/owner_settings_service_ash_factory.h"
@@ -56,7 +58,7 @@ class ObservableFakeSessionManagerClient : public FakeSessionManagerClient {
 
     // Run the task just after the |callback| is invoked.
     if (!on_retrieve_device_policy_called_.is_null()) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, on_retrieve_device_policy_called_);
     }
   }
@@ -72,7 +74,7 @@ class SessionManagerOperationTest : public testing::Test {
   SessionManagerOperationTest()
       : owner_key_util_(new ownership::MockOwnerKeyUtil()),
         user_manager_(new FakeChromeUserManager()),
-        user_manager_enabler_(base::WrapUnique(user_manager_)),
+        user_manager_enabler_(base::WrapUnique(user_manager_.get())),
         validated_(false) {
     OwnerSettingsServiceAshFactory::GetInstance()->SetOwnerKeyUtilForTesting(
         owner_key_util_);
@@ -119,19 +121,18 @@ class SessionManagerOperationTest : public testing::Test {
   ObservableFakeSessionManagerClient session_manager_client_;
   scoped_refptr<ownership::MockOwnerKeyUtil> owner_key_util_;
 
-  FakeChromeUserManager* user_manager_;
+  raw_ptr<FakeChromeUserManager, DanglingUntriaged> user_manager_;
   user_manager::ScopedUserManager user_manager_enabler_;
 
   std::unique_ptr<TestingProfile> profile_;
-  OwnerSettingsServiceAsh* service_;
+  raw_ptr<OwnerSettingsServiceAsh> service_;
 
   bool validated_;
 };
 
 TEST_F(SessionManagerOperationTest, LoadNoPolicyNoKey) {
   LoadSettingsOperation op(
-      false /* force_key_load */, true /* cloud_validations */,
-      false /* force_immediate_load */,
+      false /* force_key_load */, false /* force_immediate_load */,
       base::BindOnce(&SessionManagerOperationTest::OnOperationCompleted,
                      base::Unretained(this)));
 
@@ -150,8 +151,7 @@ TEST_F(SessionManagerOperationTest, LoadNoPolicyNoKey) {
 TEST_F(SessionManagerOperationTest, LoadOwnerKey) {
   owner_key_util_->SetPublicKeyFromPrivateKey(*policy_.GetSigningKey());
   LoadSettingsOperation op(
-      false /* force_key_load */, true /* cloud_validations */,
-      false /* force_immediate_load */,
+      false /* force_key_load */, false /* force_immediate_load */,
       base::BindOnce(&SessionManagerOperationTest::OnOperationCompleted,
                      base::Unretained(this)));
 
@@ -168,8 +168,7 @@ TEST_F(SessionManagerOperationTest, LoadPolicy) {
   owner_key_util_->SetPublicKeyFromPrivateKey(*policy_.GetSigningKey());
   session_manager_client_.set_device_policy(policy_.GetBlob());
   LoadSettingsOperation op(
-      false /* force_key_load */, true /* cloud_validations */,
-      false /* force_immediate_load */,
+      false /* force_key_load */, false /* force_immediate_load */,
       base::BindOnce(&SessionManagerOperationTest::OnOperationCompleted,
                      base::Unretained(this)));
 
@@ -191,8 +190,7 @@ TEST_F(SessionManagerOperationTest, LoadImmediately) {
   owner_key_util_->SetPublicKeyFromPrivateKey(*policy_.GetSigningKey());
   session_manager_client_.set_device_policy(policy_.GetBlob());
   LoadSettingsOperation op(
-      false /* force_key_load */, true /* cloud_validations */,
-      true /* force_immediate_load */,
+      false /* force_key_load */, true /* force_immediate_load */,
       base::BindOnce(&SessionManagerOperationTest::OnOperationCompleted,
                      base::Unretained(this)));
 
@@ -214,8 +212,7 @@ TEST_F(SessionManagerOperationTest, RestartLoad) {
   owner_key_util_->ImportPrivateKeyAndSetPublicKey(policy_.GetSigningKey());
   session_manager_client_.set_device_policy(policy_.GetBlob());
   LoadSettingsOperation op(
-      false /* force_key_load */, true /* cloud_validations */,
-      false /* force_immediate_load */,
+      false /* force_key_load */, false /* force_immediate_load */,
       base::BindOnce(&SessionManagerOperationTest::OnOperationCompleted,
                      base::Unretained(this)));
 

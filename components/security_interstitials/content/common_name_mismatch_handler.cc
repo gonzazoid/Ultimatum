@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "components/ssl_errors/error_classification.h"
 #include "net/base/load_flags.h"
@@ -147,6 +147,7 @@ void CommonNameMismatchHandler::OnSimpleLoaderHandler(
 }
 
 void CommonNameMismatchHandler::OnSimpleLoaderRedirect(
+    const GURL& url_before_redirect,
     const net::RedirectInfo& redirect_info,
     const network::mojom::URLResponseHead& response_head,
     std::vector<std::string>* to_be_removed_headers) {

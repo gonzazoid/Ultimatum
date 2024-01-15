@@ -9,21 +9,24 @@
 #include "ash/controls/contextual_nudge.h"
 #include "ash/controls/contextual_tooltip.h"
 #include "ash/shelf/shelf.h"
-#include "ash/shell.h"
 #include "ash/shell_observer.h"
-#include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/overview/overview_observer.h"
 #include "ash/wm/splitview/split_view_controller.h"
 #include "ash/wm/splitview/split_view_observer.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/timer/timer.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/compositor/layer_animator.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/view_targeter_delegate.h"
 
 namespace ash {
+
+class OverviewController;
+class Shell;
 
 class ASH_EXPORT DragHandle : public views::Button,
                               public views::ViewTargeterDelegate,
@@ -33,6 +36,8 @@ class ASH_EXPORT DragHandle : public views::Button,
                               public ui::ImplicitAnimationObserver,
                               public SplitViewObserver,
                               public ShelfObserver {
+  METADATA_HEADER(DragHandle, views::Button)
+
  public:
   DragHandle(float drag_handle_corner_radius, Shelf* shelf);
   DragHandle(const DragHandle&) = delete;
@@ -59,7 +64,8 @@ class ASH_EXPORT DragHandle : public views::Button,
 
   // Immediately begins the animation to return the drag handle back to its
   // original position and hide the tooltip.
-  void HideDragHandleNudge(contextual_tooltip::DismissNudgeReason reason);
+  void HideDragHandleNudge(contextual_tooltip::DismissNudgeReason reason,
+                           bool animate);
 
   // Called when the window drag from shelf starts or ends. The drag handle
   // contextual nudge will remain visible while the gesture is in progress.
@@ -129,7 +135,7 @@ class ASH_EXPORT DragHandle : public views::Button,
 
   // Helper function to hide the drag handle nudge. Called by
   // |hide_drag_handle_nudge_timer_|.
-  void HideDragHandleNudgeHelper(bool hidden_by_tap);
+  void HideDragHandleNudgeHelper(bool hidden_by_tap, bool animate);
 
   // Helper function to animate the drag handle for the drag handle gesture
   // contextual nudge.
@@ -150,7 +156,7 @@ class ASH_EXPORT DragHandle : public views::Button,
   void StopDragHandleNudgeShowTimer();
 
   // Pointer to the shelf that owns the drag handle.
-  Shelf* const shelf_;
+  const raw_ptr<Shelf> shelf_;
 
   // Timer to hide drag handle nudge if it has a timed life.
   base::OneShotTimer hide_drag_handle_nudge_timer_;
@@ -173,7 +179,7 @@ class ASH_EXPORT DragHandle : public views::Button,
   bool window_drag_from_shelf_in_progress_ = false;
 
   // A label used to educate users about swipe gestures on the drag handle.
-  ContextualNudge* drag_handle_nudge_ = nullptr;
+  raw_ptr<ContextualNudge> drag_handle_nudge_ = nullptr;
 
   std::unique_ptr<Shelf::ScopedAutoHideLock> auto_hide_lock_;
 
@@ -185,11 +191,7 @@ class ASH_EXPORT DragHandle : public views::Button,
   base::ScopedObservation<OverviewController, OverviewObserver>
       overview_observation_{this};
 
-  base::ScopedObservation<Shell,
-                          ShellObserver,
-                          &Shell::AddShellObserver,
-                          &Shell::RemoveShellObserver>
-      shell_observation_{this};
+  base::ScopedObservation<Shell, ShellObserver> shell_observation_{this};
 
   base::WeakPtrFactory<DragHandle> weak_factory_{this};
 };

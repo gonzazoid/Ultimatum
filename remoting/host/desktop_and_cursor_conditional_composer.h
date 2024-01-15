@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "remoting/protocol/desktop_capturer.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_and_cursor_composer.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capture_metadata.h"
@@ -39,6 +39,8 @@ class DesktopAndCursorConditionalComposer : public DesktopCapturer {
   void SetMouseCursor(
       std::unique_ptr<webrtc::MouseCursor> mouse_cursor) override;
   void SetMouseCursorPosition(const webrtc::DesktopVector& position) override;
+  bool SupportsFrameCallbacks() override;
+  void SetMaxFrameRate(uint32_t max_frame_rate) override;
 #if defined(WEBRTC_USE_GIO)
   void GetMetadataAsync(base::OnceCallback<void(webrtc::DesktopCaptureMetadata)>
                             callback) override;

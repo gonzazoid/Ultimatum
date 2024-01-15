@@ -37,8 +37,7 @@ void DisableSystemServices() {
 RendererMainPlatformDelegate::RendererMainPlatformDelegate(
     const MainFunctionParams& parameters) {}
 
-RendererMainPlatformDelegate::~RendererMainPlatformDelegate() {
-}
+RendererMainPlatformDelegate::~RendererMainPlatformDelegate() = default;
 
 // TODO(mac-port): Any code needed to initialize a process for purposes of
 // running a renderer needs to also be reflected in chrome_main.cc for

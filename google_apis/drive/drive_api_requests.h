@@ -12,14 +12,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/time/time.h"
 #include "base/values.h"
+#include "google_apis/common/base_requests.h"
 #include "google_apis/drive/drive_api_parser.h"
 #include "google_apis/drive/drive_api_url_generator.h"
 #include "google_apis/drive/drive_base_requests.h"
@@ -170,8 +170,8 @@ class DriveApiDataRequest : public DriveApiPartialFieldRequest {
     switch (error) {
       case HTTP_SUCCESS:
       case HTTP_CREATED:
-        base::PostTaskAndReplyWithResult(
-            blocking_task_runner(), FROM_HERE,
+        blocking_task_runner()->PostTaskAndReplyWithResult(
+            FROM_HERE,
             base::BindOnce(&DriveApiDataRequest::Parse,
                            std::move(response_body)),
             base::BindOnce(&DriveApiDataRequest::OnDataParsed,
@@ -302,7 +302,7 @@ class FilesInsertRequest : public DriveApiDataRequest<FileResource> {
 
  protected:
   // Overridden from GetDataRequest.
-  std::string GetRequestType() const override;
+  HttpRequestMethod GetRequestType() const override;
   bool GetContentData(std::string* upload_content_type,
                       std::string* upload_content) override;
 
@@ -381,7 +381,7 @@ class FilesPatchRequest : public DriveApiDataRequest<FileResource> {
 
  protected:
   // Overridden from URLFetchRequestBase.
-  std::string GetRequestType() const override;
+  HttpRequestMethod GetRequestType() const override;
   std::vector<std::string> GetExtraRequestHeaders() const override;
   bool GetContentData(std::string* upload_content_type,
                       std::string* upload_content) override;
@@ -441,7 +441,7 @@ class FilesCopyRequest : public DriveApiDataRequest<FileResource> {
 
  protected:
   // Overridden from URLFetchRequestBase.
-  std::string GetRequestType() const override;
+  HttpRequestMethod GetRequestType() const override;
   bool GetContentData(std::string* upload_content_type,
                       std::string* upload_content) override;
 
@@ -630,7 +630,7 @@ class FilesDeleteRequest : public EntryActionRequest {
 
  protected:
   // Overridden from UrlFetchRequestBase.
-  std::string GetRequestType() const override;
+  HttpRequestMethod GetRequestType() const override;
   GURL GetURL() const override;
   std::vector<std::string> GetExtraRequestHeaders() const override;
 
@@ -662,7 +662,7 @@ class FilesTrashRequest : public DriveApiDataRequest<FileResource> {
 
  protected:
   // Overridden from UrlFetchRequestBase.
-  std::string GetRequestType() const override;
+  HttpRequestMethod GetRequestType() const override;
 
   // Overridden from DriveApiDataRequest.
   GURL GetURLInternal() const override;
@@ -806,7 +806,7 @@ class ChildrenInsertRequest : public EntryActionRequest {
 
  protected:
   // UrlFetchRequestBase overrides.
-  std::string GetRequestType() const override;
+  HttpRequestMethod GetRequestType() const override;
   GURL GetURL() const override;
   bool GetContentData(std::string* upload_content_type,
                       std::string* upload_content) override;
@@ -843,7 +843,7 @@ class ChildrenDeleteRequest : public EntryActionRequest {
 
  protected:
   // UrlFetchRequestBase overrides.
-  std::string GetRequestType() const override;
+  HttpRequestMethod GetRequestType() const override;
   GURL GetURL() const override;
 
  private:
@@ -894,7 +894,7 @@ class InitiateUploadNewFileRequest : public InitiateUploadRequestBase {
  protected:
   // UrlFetchRequestBase overrides.
   GURL GetURL() const override;
-  std::string GetRequestType() const override;
+  HttpRequestMethod GetRequestType() const override;
   bool GetContentData(std::string* upload_content_type,
                       std::string* upload_content) override;
 
@@ -959,7 +959,7 @@ class InitiateUploadExistingFileRequest : public InitiateUploadRequestBase {
  protected:
   // UrlFetchRequestBase overrides.
   GURL GetURL() const override;
-  std::string GetRequestType() const override;
+  HttpRequestMethod GetRequestType() const override;
   std::vector<std::string> GetExtraRequestHeaders() const override;
   bool GetContentData(std::string* upload_content_type,
                       std::string* upload_content) override;
@@ -1070,7 +1070,7 @@ class MultipartUploadNewFileDelegate : public MultipartUploadRequestBase {
  protected:
   // UrlFetchRequestBase overrides.
   GURL GetURL() const override;
-  std::string GetRequestType() const override;
+  HttpRequestMethod GetRequestType() const override;
 
  private:
   const bool has_modified_date_;
@@ -1112,7 +1112,7 @@ class MultipartUploadExistingFileDelegate : public MultipartUploadRequestBase {
   // UrlFetchRequestBase overrides.
   std::vector<std::string> GetExtraRequestHeaders() const override;
   GURL GetURL() const override;
-  std::string GetRequestType() const override;
+  HttpRequestMethod GetRequestType() const override;
 
  private:
   const std::string resource_id_;
@@ -1179,7 +1179,7 @@ class PermissionsInsertRequest : public EntryActionRequest {
 
   // UrlFetchRequestBase overrides.
   GURL GetURL() const override;
-  std::string GetRequestType() const override;
+  HttpRequestMethod GetRequestType() const override;
   bool GetContentData(std::string* upload_content_type,
                       std::string* upload_content) override;
 
@@ -1208,7 +1208,7 @@ class SingleBatchableDelegateRequest : public DriveUrlFetchRequestBase {
 
  private:
   GURL GetURL() const override;
-  std::string GetRequestType() const override;
+  HttpRequestMethod GetRequestType() const override;
   std::vector<std::string> GetExtraRequestHeaders() const override;
   void Prepare(PrepareCallback callback) override;
   bool GetContentData(std::string* upload_content_type,
@@ -1276,7 +1276,7 @@ class BatchUploadRequest : public DriveUrlFetchRequestBase {
   void Prepare(PrepareCallback callback) override;
   void Cancel() override;
   GURL GetURL() const override;
-  std::string GetRequestType() const override;
+  HttpRequestMethod GetRequestType() const override;
   std::vector<std::string> GetExtraRequestHeaders() const override;
   bool GetContentData(std::string* upload_content_type,
                       std::string* upload_content) override;

@@ -8,9 +8,13 @@
 #include <list>
 #include <map>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/browsing_data/content/local_storage_helper.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
+
+namespace content {
+class StoragePartition;
+}  // namespace content
 
 namespace browsing_data {
 
@@ -19,7 +23,7 @@ namespace browsing_data {
 // call Notify().
 class MockLocalStorageHelper : public browsing_data::LocalStorageHelper {
  public:
-  explicit MockLocalStorageHelper(content::BrowserContext* context);
+  explicit MockLocalStorageHelper(content::StoragePartition* storage_partition);
 
   MockLocalStorageHelper(const MockLocalStorageHelper&) = delete;
   MockLocalStorageHelper& operator=(const MockLocalStorageHelper&) = delete;

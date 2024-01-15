@@ -4,10 +4,10 @@
 
 #include "content/browser/renderer_host/page_lifecycle_state_manager.h"
 
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "content/browser/renderer_host/render_view_host_impl.h"
 #include "content/common/content_navigation_policy.h"
@@ -15,10 +15,18 @@
 #include "services/service_manager/public/cpp/interface_provider.h"
 
 namespace {
-constexpr base::TimeDelta kBackForwardCacheTimeoutInSeconds = base::Seconds(3);
+// ASAN builds are slow and we see flakes caused by reaching this timeout. 6s
+// was not enough to stop the flakes. Trying 12s just to ensure that there isn't
+// something else going on that we don't understand.
+// See https://crbug.com/1224355.
+#if defined(ADDRESS_SANITIZER)
+constexpr base::TimeDelta kBackForwardCacheTimeout = base::Seconds(12);
+#else
+constexpr base::TimeDelta kBackForwardCacheTimeout = base::Seconds(3);
+#endif
 base::TimeDelta GetBackForwardCacheEntryTimeout() {
   if (base::FeatureList::IsEnabled(features::kBackForwardCacheEntryTimeout)) {
-    return kBackForwardCacheTimeoutInSeconds;
+    return kBackForwardCacheTimeout;
   } else {
     return base::TimeDelta::Max();
   }
@@ -157,8 +165,8 @@ void PageLifecycleStateManager::SendUpdatesToRendererIfNeeded(
     // TODO(https://crbug.com/1153155): For some tests, |render_view_host_impl_|
     // does not have the associated page.
     if (done_cb) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                    std::move(done_cb));
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, std::move(done_cb));
     }
     return;
   }

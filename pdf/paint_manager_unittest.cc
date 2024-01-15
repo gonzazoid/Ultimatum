@@ -107,6 +107,7 @@ class PaintManagerTest : public testing::Test {
 
     // Check if snapshot has `overlapped_rect` painted red.
     snapshot = snapshot->makeSubset(
+        static_cast<GrDirectContext*>(nullptr),
         SkIRect::MakeWH(plugin_size.width(), plugin_size.height()));
     ASSERT_TRUE(snapshot);
 
@@ -123,9 +124,8 @@ class PaintManagerTest : public testing::Test {
     ASSERT_TRUE(expected_surface->makeImageSnapshot()->asLegacyBitmap(
         &expected_bitmap));
 
-    EXPECT_TRUE(
-        cc::MatchesBitmap(snapshot_bitmap, expected_bitmap,
-                          cc::ExactPixelComparator(/*discard_alpha=*/false)));
+    EXPECT_TRUE(cc::MatchesBitmap(snapshot_bitmap, expected_bitmap,
+                                  cc::ExactPixelComparator()));
   }
 
   void TestScroll(const gfx::Vector2d& scroll_amount,
@@ -161,6 +161,7 @@ class PaintManagerTest : public testing::Test {
 
     // Compare snapshot to `expected_png`.
     snapshot = snapshot->makeSubset(
+        static_cast<GrDirectContext*>(nullptr),
         SkIRect::MakeWH(plugin_size.width(), plugin_size.height()));
     ASSERT_TRUE(snapshot);
 

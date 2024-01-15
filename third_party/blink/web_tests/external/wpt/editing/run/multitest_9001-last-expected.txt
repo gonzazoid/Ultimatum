@@ -1,382 +1,96 @@
 This is a testharness.js-based test.
-Found 378 tests; 339 PASS, 39 FAIL, 0 TIMEOUT, 0 NOTRUN.
-PASS [["delete",""],["inserttext","a"]] "foo<font color=#0000FF>[bar</font>baz]" queryCommandIndeterm("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<font color=#0000FF>[bar</font>baz]" queryCommandState("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<font color=#0000FF>[bar</font>baz]" queryCommandValue("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<font color=#0000FF>[bar</font>baz]" queryCommandIndeterm("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<font color=#0000FF>[bar</font>baz]" queryCommandState("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<font color=#0000FF>[bar</font>baz]" queryCommandValue("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<span style=background-color:#00FFFF>[bar</span>baz]": execCommand("delete", false, "") return value
-PASS [["delete",""],["inserttext","a"]] "foo<span style=background-color:#00FFFF>[bar</span>baz]": execCommand("inserttext", false, "a") return value
-PASS [["delete",""],["inserttext","a"]] "foo<span style=background-color:#00FFFF>[bar</span>baz]" checks for modifications to non-editable content
-PASS [["delete",""],["inserttext","a"]] "foo<span style=background-color:#00FFFF>[bar</span>baz]" compare innerHTML
-PASS [["delete",""],["inserttext","a"]] "foo<span style=background-color:#00FFFF>[bar</span>baz]" queryCommandIndeterm("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<span style=background-color:#00FFFF>[bar</span>baz]" queryCommandState("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<span style=background-color:#00FFFF>[bar</span>baz]" queryCommandValue("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<span style=background-color:#00FFFF>[bar</span>baz]" queryCommandIndeterm("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<span style=background-color:#00FFFF>[bar</span>baz]" queryCommandState("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<span style=background-color:#00FFFF>[bar</span>baz]" queryCommandValue("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<span style=background-color:#00FFFF>[bar</span>baz]" queryCommandIndeterm("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<span style=background-color:#00FFFF>[bar</span>baz]" queryCommandState("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<span style=background-color:#00FFFF>[bar</span>baz]" queryCommandValue("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<span style=background-color:#00FFFF>[bar</span>baz]" queryCommandIndeterm("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<span style=background-color:#00FFFF>[bar</span>baz]" queryCommandState("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<span style=background-color:#00FFFF>[bar</span>baz]" queryCommandValue("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=blue>[bar</font></a>baz]": execCommand("delete", false, "") return value
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=blue>[bar</font></a>baz]": execCommand("inserttext", false, "a") return value
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=blue>[bar</font></a>baz]" checks for modifications to non-editable content
-FAIL [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=blue>[bar</font></a>baz]" compare innerHTML assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<a href=\"http://www.google.com\">a</a>" but got "fooa"
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=blue>[bar</font></a>baz]" queryCommandIndeterm("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=blue>[bar</font></a>baz]" queryCommandState("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=blue>[bar</font></a>baz]" queryCommandValue("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=blue>[bar</font></a>baz]" queryCommandIndeterm("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=blue>[bar</font></a>baz]" queryCommandState("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=blue>[bar</font></a>baz]" queryCommandValue("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=blue>[bar</font></a>baz]" queryCommandIndeterm("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=blue>[bar</font></a>baz]" queryCommandState("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=blue>[bar</font></a>baz]" queryCommandValue("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=blue>[bar</font></a>baz]" queryCommandIndeterm("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=blue>[bar</font></a>baz]" queryCommandState("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=blue>[bar</font></a>baz]" queryCommandValue("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<font color=blue><a href=http://www.google.com>[bar</a></font>baz]": execCommand("delete", false, "") return value
-PASS [["delete",""],["inserttext","a"]] "foo<font color=blue><a href=http://www.google.com>[bar</a></font>baz]": execCommand("inserttext", false, "a") return value
-PASS [["delete",""],["inserttext","a"]] "foo<font color=blue><a href=http://www.google.com>[bar</a></font>baz]" checks for modifications to non-editable content
-FAIL [["delete",""],["inserttext","a"]] "foo<font color=blue><a href=http://www.google.com>[bar</a></font>baz]" compare innerHTML assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<a href=\"http://www.google.com\">a</a>" but got "foo<span style=\"color:rgb(0, 0, 255)\">a</span>"
-PASS [["delete",""],["inserttext","a"]] "foo<font color=blue><a href=http://www.google.com>[bar</a></font>baz]" queryCommandIndeterm("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<font color=blue><a href=http://www.google.com>[bar</a></font>baz]" queryCommandState("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<font color=blue><a href=http://www.google.com>[bar</a></font>baz]" queryCommandValue("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<font color=blue><a href=http://www.google.com>[bar</a></font>baz]" queryCommandIndeterm("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<font color=blue><a href=http://www.google.com>[bar</a></font>baz]" queryCommandState("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<font color=blue><a href=http://www.google.com>[bar</a></font>baz]" queryCommandValue("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<font color=blue><a href=http://www.google.com>[bar</a></font>baz]" queryCommandIndeterm("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<font color=blue><a href=http://www.google.com>[bar</a></font>baz]" queryCommandState("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<font color=blue><a href=http://www.google.com>[bar</a></font>baz]" queryCommandValue("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<font color=blue><a href=http://www.google.com>[bar</a></font>baz]" queryCommandIndeterm("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<font color=blue><a href=http://www.google.com>[bar</a></font>baz]" queryCommandState("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<font color=blue><a href=http://www.google.com>[bar</a></font>baz]" queryCommandValue("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=brown>[bar</font></a>baz]": execCommand("delete", false, "") return value
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=brown>[bar</font></a>baz]": execCommand("inserttext", false, "a") return value
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=brown>[bar</font></a>baz]" checks for modifications to non-editable content
-FAIL [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=brown>[bar</font></a>baz]" compare innerHTML assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<a href=\"http://www.google.com\"><font color=\"#a52a2a\">a</font></a>" but got "foo<span style=\"color:rgb(165, 42, 42)\">a</span>"
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=brown>[bar</font></a>baz]" queryCommandIndeterm("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=brown>[bar</font></a>baz]" queryCommandState("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=brown>[bar</font></a>baz]" queryCommandValue("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=brown>[bar</font></a>baz]" queryCommandIndeterm("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=brown>[bar</font></a>baz]" queryCommandState("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=brown>[bar</font></a>baz]" queryCommandValue("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=brown>[bar</font></a>baz]" queryCommandIndeterm("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=brown>[bar</font></a>baz]" queryCommandState("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=brown>[bar</font></a>baz]" queryCommandValue("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=brown>[bar</font></a>baz]" queryCommandIndeterm("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=brown>[bar</font></a>baz]" queryCommandState("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=brown>[bar</font></a>baz]" queryCommandValue("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<font color=brown><a href=http://www.google.com>[bar</a></font>baz]": execCommand("delete", false, "") return value
-PASS [["delete",""],["inserttext","a"]] "foo<font color=brown><a href=http://www.google.com>[bar</a></font>baz]": execCommand("inserttext", false, "a") return value
-PASS [["delete",""],["inserttext","a"]] "foo<font color=brown><a href=http://www.google.com>[bar</a></font>baz]" checks for modifications to non-editable content
-FAIL [["delete",""],["inserttext","a"]] "foo<font color=brown><a href=http://www.google.com>[bar</a></font>baz]" compare innerHTML assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<a href=\"http://www.google.com\">a</a>" but got "fooa"
-PASS [["delete",""],["inserttext","a"]] "foo<font color=brown><a href=http://www.google.com>[bar</a></font>baz]" queryCommandIndeterm("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<font color=brown><a href=http://www.google.com>[bar</a></font>baz]" queryCommandState("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<font color=brown><a href=http://www.google.com>[bar</a></font>baz]" queryCommandValue("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<font color=brown><a href=http://www.google.com>[bar</a></font>baz]" queryCommandIndeterm("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<font color=brown><a href=http://www.google.com>[bar</a></font>baz]" queryCommandState("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<font color=brown><a href=http://www.google.com>[bar</a></font>baz]" queryCommandValue("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<font color=brown><a href=http://www.google.com>[bar</a></font>baz]" queryCommandIndeterm("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<font color=brown><a href=http://www.google.com>[bar</a></font>baz]" queryCommandState("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<font color=brown><a href=http://www.google.com>[bar</a></font>baz]" queryCommandValue("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<font color=brown><a href=http://www.google.com>[bar</a></font>baz]" queryCommandIndeterm("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<font color=brown><a href=http://www.google.com>[bar</a></font>baz]" queryCommandState("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<font color=brown><a href=http://www.google.com>[bar</a></font>baz]" queryCommandValue("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=black>[bar</font></a>baz]": execCommand("delete", false, "") return value
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=black>[bar</font></a>baz]": execCommand("inserttext", false, "a") return value
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=black>[bar</font></a>baz]" checks for modifications to non-editable content
-FAIL [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=black>[bar</font></a>baz]" compare innerHTML assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<a href=\"http://www.google.com\"><font color=\"#000000\">a</font></a>" but got "fooa"
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=black>[bar</font></a>baz]" queryCommandIndeterm("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=black>[bar</font></a>baz]" queryCommandState("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=black>[bar</font></a>baz]" queryCommandValue("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=black>[bar</font></a>baz]" queryCommandIndeterm("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=black>[bar</font></a>baz]" queryCommandState("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=black>[bar</font></a>baz]" queryCommandValue("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=black>[bar</font></a>baz]" queryCommandIndeterm("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=black>[bar</font></a>baz]" queryCommandState("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=black>[bar</font></a>baz]" queryCommandValue("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=black>[bar</font></a>baz]" queryCommandIndeterm("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=black>[bar</font></a>baz]" queryCommandState("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=black>[bar</font></a>baz]" queryCommandValue("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><u>[bar</u></a>baz]": execCommand("delete", false, "") return value
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><u>[bar</u></a>baz]": execCommand("inserttext", false, "a") return value
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><u>[bar</u></a>baz]" checks for modifications to non-editable content
-FAIL [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><u>[bar</u></a>baz]" compare innerHTML assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<a href=\"http://www.google.com\">a</a>" but got "fooa"
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><u>[bar</u></a>baz]" queryCommandIndeterm("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><u>[bar</u></a>baz]" queryCommandState("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><u>[bar</u></a>baz]" queryCommandValue("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><u>[bar</u></a>baz]" queryCommandIndeterm("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><u>[bar</u></a>baz]" queryCommandState("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><u>[bar</u></a>baz]" queryCommandValue("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><u>[bar</u></a>baz]" queryCommandIndeterm("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><u>[bar</u></a>baz]" queryCommandState("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><u>[bar</u></a>baz]" queryCommandValue("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><u>[bar</u></a>baz]" queryCommandIndeterm("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><u>[bar</u></a>baz]" queryCommandState("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><u>[bar</u></a>baz]" queryCommandValue("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<u><a href=http://www.google.com>[bar</a></u>baz]": execCommand("delete", false, "") return value
-PASS [["delete",""],["inserttext","a"]] "foo<u><a href=http://www.google.com>[bar</a></u>baz]": execCommand("inserttext", false, "a") return value
-PASS [["delete",""],["inserttext","a"]] "foo<u><a href=http://www.google.com>[bar</a></u>baz]" checks for modifications to non-editable content
-FAIL [["delete",""],["inserttext","a"]] "foo<u><a href=http://www.google.com>[bar</a></u>baz]" compare innerHTML assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<a href=\"http://www.google.com\">a</a>" but got "foo<span style=\"text-decoration-line:underline\">a</span>"
-PASS [["delete",""],["inserttext","a"]] "foo<u><a href=http://www.google.com>[bar</a></u>baz]" queryCommandIndeterm("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<u><a href=http://www.google.com>[bar</a></u>baz]" queryCommandState("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<u><a href=http://www.google.com>[bar</a></u>baz]" queryCommandValue("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<u><a href=http://www.google.com>[bar</a></u>baz]" queryCommandIndeterm("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<u><a href=http://www.google.com>[bar</a></u>baz]" queryCommandState("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<u><a href=http://www.google.com>[bar</a></u>baz]" queryCommandValue("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<u><a href=http://www.google.com>[bar</a></u>baz]" queryCommandIndeterm("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<u><a href=http://www.google.com>[bar</a></u>baz]" queryCommandState("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<u><a href=http://www.google.com>[bar</a></u>baz]" queryCommandValue("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<u><a href=http://www.google.com>[bar</a></u>baz]" queryCommandIndeterm("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<u><a href=http://www.google.com>[bar</a></u>baz]" queryCommandState("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<u><a href=http://www.google.com>[bar</a></u>baz]" queryCommandValue("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=2>[bar</font></sub>baz]": execCommand("delete", false, "") return value
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=2>[bar</font></sub>baz]": execCommand("inserttext", false, "a") return value
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=2>[bar</font></sub>baz]" checks for modifications to non-editable content
-FAIL [["delete",""],["inserttext","a"]] "foo<sub><font size=2>[bar</font></sub>baz]" compare innerHTML assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<sub>a</sub>" but got "foo<span style=\"font-size:small\">a</span>"
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=2>[bar</font></sub>baz]" queryCommandIndeterm("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=2>[bar</font></sub>baz]" queryCommandState("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=2>[bar</font></sub>baz]" queryCommandValue("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=2>[bar</font></sub>baz]" queryCommandIndeterm("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=2>[bar</font></sub>baz]" queryCommandState("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=2>[bar</font></sub>baz]" queryCommandValue("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=2>[bar</font></sub>baz]" queryCommandIndeterm("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=2>[bar</font></sub>baz]" queryCommandState("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=2>[bar</font></sub>baz]" queryCommandValue("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=2>[bar</font></sub>baz]" queryCommandIndeterm("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=2>[bar</font></sub>baz]" queryCommandState("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=2>[bar</font></sub>baz]" queryCommandValue("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<font size=2><sub>[bar</sub></font>baz]": execCommand("delete", false, "") return value
-PASS [["delete",""],["inserttext","a"]] "foo<font size=2><sub>[bar</sub></font>baz]": execCommand("inserttext", false, "a") return value
-PASS [["delete",""],["inserttext","a"]] "foo<font size=2><sub>[bar</sub></font>baz]" checks for modifications to non-editable content
-FAIL [["delete",""],["inserttext","a"]] "foo<font size=2><sub>[bar</sub></font>baz]" compare innerHTML assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<sub><font size=\"1\">a</font></sub>" but got "foo<span style=\"font-size:10.8333px\">a</span>"
-PASS [["delete",""],["inserttext","a"]] "foo<font size=2><sub>[bar</sub></font>baz]" queryCommandIndeterm("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<font size=2><sub>[bar</sub></font>baz]" queryCommandState("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<font size=2><sub>[bar</sub></font>baz]" queryCommandValue("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<font size=2><sub>[bar</sub></font>baz]" queryCommandIndeterm("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<font size=2><sub>[bar</sub></font>baz]" queryCommandState("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<font size=2><sub>[bar</sub></font>baz]" queryCommandValue("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<font size=2><sub>[bar</sub></font>baz]" queryCommandIndeterm("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<font size=2><sub>[bar</sub></font>baz]" queryCommandState("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<font size=2><sub>[bar</sub></font>baz]" queryCommandValue("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<font size=2><sub>[bar</sub></font>baz]" queryCommandIndeterm("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<font size=2><sub>[bar</sub></font>baz]" queryCommandState("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<font size=2><sub>[bar</sub></font>baz]" queryCommandValue("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=3>[bar</font></sub>baz]": execCommand("delete", false, "") return value
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=3>[bar</font></sub>baz]": execCommand("inserttext", false, "a") return value
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=3>[bar</font></sub>baz]" checks for modifications to non-editable content
-FAIL [["delete",""],["inserttext","a"]] "foo<sub><font size=3>[bar</font></sub>baz]" compare innerHTML assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<sub><font size=\"3\">a</font></sub>" but got "fooa"
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=3>[bar</font></sub>baz]" queryCommandIndeterm("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=3>[bar</font></sub>baz]" queryCommandState("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=3>[bar</font></sub>baz]" queryCommandValue("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=3>[bar</font></sub>baz]" queryCommandIndeterm("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=3>[bar</font></sub>baz]" queryCommandState("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=3>[bar</font></sub>baz]" queryCommandValue("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=3>[bar</font></sub>baz]" queryCommandIndeterm("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=3>[bar</font></sub>baz]" queryCommandState("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=3>[bar</font></sub>baz]" queryCommandValue("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=3>[bar</font></sub>baz]" queryCommandIndeterm("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=3>[bar</font></sub>baz]" queryCommandState("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<sub><font size=3>[bar</font></sub>baz]" queryCommandValue("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<font size=3><sub>[bar</sub></font>baz]": execCommand("delete", false, "") return value
-PASS [["delete",""],["inserttext","a"]] "foo<font size=3><sub>[bar</sub></font>baz]": execCommand("inserttext", false, "a") return value
-PASS [["delete",""],["inserttext","a"]] "foo<font size=3><sub>[bar</sub></font>baz]" checks for modifications to non-editable content
-FAIL [["delete",""],["inserttext","a"]] "foo<font size=3><sub>[bar</sub></font>baz]" compare innerHTML assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<sub>a</sub>" but got "foo<span style=\"font-size:13.3333px\">a</span>"
-PASS [["delete",""],["inserttext","a"]] "foo<font size=3><sub>[bar</sub></font>baz]" queryCommandIndeterm("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<font size=3><sub>[bar</sub></font>baz]" queryCommandState("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<font size=3><sub>[bar</sub></font>baz]" queryCommandValue("delete") before
-PASS [["delete",""],["inserttext","a"]] "foo<font size=3><sub>[bar</sub></font>baz]" queryCommandIndeterm("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<font size=3><sub>[bar</sub></font>baz]" queryCommandState("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<font size=3><sub>[bar</sub></font>baz]" queryCommandValue("delete") after
-PASS [["delete",""],["inserttext","a"]] "foo<font size=3><sub>[bar</sub></font>baz]" queryCommandIndeterm("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<font size=3><sub>[bar</sub></font>baz]" queryCommandState("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<font size=3><sub>[bar</sub></font>baz]" queryCommandValue("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "foo<font size=3><sub>[bar</sub></font>baz]" queryCommandIndeterm("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<font size=3><sub>[bar</sub></font>baz]" queryCommandState("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "foo<font size=3><sub>[bar</sub></font>baz]" queryCommandValue("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "<blockquote><font color=blue>[foo]</font></blockquote>": execCommand("delete", false, "") return value
-PASS [["delete",""],["inserttext","a"]] "<blockquote><font color=blue>[foo]</font></blockquote>": execCommand("inserttext", false, "a") return value
-PASS [["delete",""],["inserttext","a"]] "<blockquote><font color=blue>[foo]</font></blockquote>" checks for modifications to non-editable content
-FAIL [["delete",""],["inserttext","a"]] "<blockquote><font color=blue>[foo]</font></blockquote>" compare innerHTML assert_equals: Unexpected innerHTML (after normalizing inline style) expected "<blockquote><font color=\"blue\">a</font></blockquote>" but got "<blockquote><span style=\"color:rgb(0, 0, 255)\">a</span></blockquote>"
-PASS [["delete",""],["inserttext","a"]] "<blockquote><font color=blue>[foo]</font></blockquote>" queryCommandIndeterm("delete") before
-PASS [["delete",""],["inserttext","a"]] "<blockquote><font color=blue>[foo]</font></blockquote>" queryCommandState("delete") before
-PASS [["delete",""],["inserttext","a"]] "<blockquote><font color=blue>[foo]</font></blockquote>" queryCommandValue("delete") before
-PASS [["delete",""],["inserttext","a"]] "<blockquote><font color=blue>[foo]</font></blockquote>" queryCommandIndeterm("delete") after
-PASS [["delete",""],["inserttext","a"]] "<blockquote><font color=blue>[foo]</font></blockquote>" queryCommandState("delete") after
-PASS [["delete",""],["inserttext","a"]] "<blockquote><font color=blue>[foo]</font></blockquote>" queryCommandValue("delete") after
-PASS [["delete",""],["inserttext","a"]] "<blockquote><font color=blue>[foo]</font></blockquote>" queryCommandIndeterm("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "<blockquote><font color=blue>[foo]</font></blockquote>" queryCommandState("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "<blockquote><font color=blue>[foo]</font></blockquote>" queryCommandValue("inserttext") before
-PASS [["delete",""],["inserttext","a"]] "<blockquote><font color=blue>[foo]</font></blockquote>" queryCommandIndeterm("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "<blockquote><font color=blue>[foo]</font></blockquote>" queryCommandState("inserttext") after
-PASS [["delete",""],["inserttext","a"]] "<blockquote><font color=blue>[foo]</font></blockquote>" queryCommandValue("inserttext") after
-PASS [["styleWithCSS","false"],["delete",""],["inserttext","a"]] "<div><b>[abc]</b></div>": execCommand("styleWithCSS", false, "false") return value
-PASS [["styleWithCSS","false"],["delete",""],["inserttext","a"]] "<div><b>[abc]</b></div>": execCommand("delete", false, "") return value
-PASS [["styleWithCSS","false"],["delete",""],["inserttext","a"]] "<div><b>[abc]</b></div>": execCommand("inserttext", false, "a") return value
-PASS [["styleWithCSS","false"],["delete",""],["inserttext","a"]] "<div><b>[abc]</b></div>" checks for modifications to non-editable content
-PASS [["styleWithCSS","false"],["delete",""],["inserttext","a"]] "<div><b>[abc]</b></div>" compare innerHTML
-PASS [["styleWithCSS","false"],["delete",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandIndeterm("bold") before
-PASS [["styleWithCSS","false"],["delete",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandState("bold") before
-FAIL [["styleWithCSS","false"],["delete",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandValue("bold") before assert_equals: Wrong result returned expected "" but got "true"
-PASS [["styleWithCSS","false"],["delete",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandIndeterm("bold") after
-PASS [["styleWithCSS","false"],["delete",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandState("bold") after
-FAIL [["styleWithCSS","false"],["delete",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandValue("bold") after assert_equals: Wrong result returned expected "" but got "true"
-PASS [["styleWithCSS","false"],["delete",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>": execCommand("styleWithCSS", false, "false") return value
-PASS [["styleWithCSS","false"],["delete",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>": execCommand("delete", false, "") return value
-PASS [["styleWithCSS","false"],["delete",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>": execCommand("inserttext", false, "d") return value
-PASS [["styleWithCSS","false"],["delete",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" checks for modifications to non-editable content
-PASS [["styleWithCSS","false"],["delete",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" compare innerHTML
-PASS [["styleWithCSS","false"],["delete",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandIndeterm("bold") before
-PASS [["styleWithCSS","false"],["delete",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandState("bold") before
-FAIL [["styleWithCSS","false"],["delete",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandValue("bold") before assert_equals: Wrong result returned expected "" but got "true"
-PASS [["styleWithCSS","false"],["delete",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandIndeterm("bold") after
-PASS [["styleWithCSS","false"],["delete",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandState("bold") after
-FAIL [["styleWithCSS","false"],["delete",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandValue("bold") after assert_equals: Wrong result returned expected "" but got "true"
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>": execCommand("styleWithCSS", false, "false") return value
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>": execCommand("delete", false, "") return value
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>": execCommand("insertparagraph", false, "") return value
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>": execCommand("inserttext", false, "a") return value
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" checks for modifications to non-editable content
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" compare innerHTML
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandIndeterm("bold") before
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandState("bold") before
-FAIL [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandValue("bold") before assert_equals: Wrong result returned expected "" but got "true"
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandIndeterm("bold") after
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandState("bold") after
-FAIL [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandValue("bold") after assert_equals: Wrong result returned expected "" but got "true"
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>": execCommand("styleWithCSS", false, "false") return value
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>": execCommand("delete", false, "") return value
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>": execCommand("insertparagraph", false, "") return value
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>": execCommand("inserttext", false, "d") return value
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" checks for modifications to non-editable content
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" compare innerHTML
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandIndeterm("bold") before
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandState("bold") before
-FAIL [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandValue("bold") before assert_equals: Wrong result returned expected "" but got "true"
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandIndeterm("bold") after
-PASS [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandState("bold") after
-FAIL [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandValue("bold") after assert_equals: Wrong result returned expected "" but got "true"
-PASS [["styleWithCSS","false"],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>": execCommand("styleWithCSS", false, "false") return value
-PASS [["styleWithCSS","false"],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>": execCommand("insertparagraph", false, "") return value
-PASS [["styleWithCSS","false"],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>": execCommand("inserttext", false, "a") return value
-PASS [["styleWithCSS","false"],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" checks for modifications to non-editable content
-PASS [["styleWithCSS","false"],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" compare innerHTML
-PASS [["styleWithCSS","false"],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandIndeterm("bold") before
-PASS [["styleWithCSS","false"],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandState("bold") before
-FAIL [["styleWithCSS","false"],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandValue("bold") before assert_equals: Wrong result returned expected "" but got "true"
-PASS [["styleWithCSS","false"],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandIndeterm("bold") after
-PASS [["styleWithCSS","false"],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandState("bold") after
-FAIL [["styleWithCSS","false"],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandValue("bold") after assert_equals: Wrong result returned expected "" but got "true"
-PASS [["styleWithCSS","false"],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>": execCommand("styleWithCSS", false, "false") return value
-PASS [["styleWithCSS","false"],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>": execCommand("insertparagraph", false, "") return value
-PASS [["styleWithCSS","false"],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>": execCommand("inserttext", false, "d") return value
-PASS [["styleWithCSS","false"],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" checks for modifications to non-editable content
-PASS [["styleWithCSS","false"],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" compare innerHTML
-PASS [["styleWithCSS","false"],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandIndeterm("bold") before
-PASS [["styleWithCSS","false"],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandState("bold") before
-FAIL [["styleWithCSS","false"],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandValue("bold") before assert_equals: Wrong result returned expected "" but got "true"
-PASS [["styleWithCSS","false"],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandIndeterm("bold") after
-PASS [["styleWithCSS","false"],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandState("bold") after
-FAIL [["styleWithCSS","false"],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandValue("bold") after assert_equals: Wrong result returned expected "" but got "true"
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b>abc[]<br></b></div>": execCommand("styleWithCSS", false, "false") return value
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b>abc[]<br></b></div>": execCommand("bold", false, "") return value
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b>abc[]<br></b></div>": execCommand("inserttext", false, "d") return value
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b>abc[]<br></b></div>" checks for modifications to non-editable content
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b>abc[]<br></b></div>" compare innerHTML
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b>abc[]<br></b></div>" queryCommandIndeterm("bold") before
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b>abc[]<br></b></div>" queryCommandState("bold") before
-FAIL [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b>abc[]<br></b></div>" queryCommandValue("bold") before assert_equals: Wrong result returned expected "" but got "true"
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b>abc[]<br></b></div>" queryCommandIndeterm("bold") after
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b>abc[]<br></b></div>" queryCommandState("bold") after
-FAIL [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b>abc[]<br></b></div>" queryCommandValue("bold") after assert_equals: Wrong result returned expected "" but got "false"
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]<br></b></i></div>": execCommand("styleWithCSS", false, "false") return value
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]<br></b></i></div>": execCommand("bold", false, "") return value
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]<br></b></i></div>": execCommand("inserttext", false, "d") return value
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]<br></b></i></div>" checks for modifications to non-editable content
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]<br></b></i></div>" compare innerHTML
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]<br></b></i></div>" queryCommandIndeterm("bold") before
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]<br></b></i></div>" queryCommandState("bold") before
-FAIL [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]<br></b></i></div>" queryCommandValue("bold") before assert_equals: Wrong result returned expected "" but got "true"
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]<br></b></i></div>" queryCommandIndeterm("bold") after
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]<br></b></i></div>" queryCommandState("bold") after
-FAIL [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]<br></b></i></div>" queryCommandValue("bold") after assert_equals: Wrong result returned expected "" but got "false"
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]</b><br></i></div>": execCommand("styleWithCSS", false, "false") return value
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]</b><br></i></div>": execCommand("bold", false, "") return value
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]</b><br></i></div>": execCommand("inserttext", false, "d") return value
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]</b><br></i></div>" checks for modifications to non-editable content
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]</b><br></i></div>" compare innerHTML
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]</b><br></i></div>" queryCommandIndeterm("bold") before
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]</b><br></i></div>" queryCommandState("bold") before
-FAIL [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]</b><br></i></div>" queryCommandValue("bold") before assert_equals: Wrong result returned expected "" but got "true"
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]</b><br></i></div>" queryCommandIndeterm("bold") after
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]</b><br></i></div>" queryCommandState("bold") after
-FAIL [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]</b><br></i></div>" queryCommandValue("bold") after assert_equals: Wrong result returned expected "" but got "false"
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i></b></div>": execCommand("styleWithCSS", false, "false") return value
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i></b></div>": execCommand("bold", false, "") return value
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i></b></div>": execCommand("inserttext", false, "d") return value
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i></b></div>" checks for modifications to non-editable content
-FAIL [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i></b></div>" compare innerHTML assert_in_array: Unexpected innerHTML (after normalizing inline style) value "<div><i style=\"\"><b>abc</b>d<br></i></div>" not in array ["<div><b><i>abc</i></b><i>d</i></div>", "<div><b><i>abc</i></b><i>d<br></i></div>", "<div><b><i>abc</i></b><i>d</i><br></div>", "<div><i><b>abc</b>d</i></div>", "<div><i><b>abc</b>d<br></i></div>", "<div><i><b>abc</b>d</i><br></div>"]
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i></b></div>" queryCommandIndeterm("bold") before
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i></b></div>" queryCommandState("bold") before
-FAIL [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i></b></div>" queryCommandValue("bold") before assert_equals: Wrong result returned expected "" but got "true"
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i></b></div>" queryCommandIndeterm("bold") after
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i></b></div>" queryCommandState("bold") after
-FAIL [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i></b></div>" queryCommandValue("bold") after assert_equals: Wrong result returned expected "" but got "false"
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]</i><br></b></div>": execCommand("styleWithCSS", false, "false") return value
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]</i><br></b></div>": execCommand("bold", false, "") return value
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]</i><br></b></div>": execCommand("inserttext", false, "d") return value
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]</i><br></b></div>" checks for modifications to non-editable content
-FAIL [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]</i><br></b></div>" compare innerHTML assert_in_array: Unexpected innerHTML (after normalizing inline style) value "<div><i style=\"\"><b>abc</b>d</i><br></div>" not in array ["<div><b><i>abc</i></b><i>d</i></div>", "<div><b><i>abc</i></b><i>d<br></i></div>", "<div><b><i>abc</i></b><i>d</i><br></div>", "<div><i><b>abc</b>d</i></div>", "<div><i><b>abc</b>d<br></i></div>", "<div><i><b>abc</b>d</i><br></div>"]
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]</i><br></b></div>" queryCommandIndeterm("bold") before
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]</i><br></b></div>" queryCommandState("bold") before
-FAIL [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]</i><br></b></div>" queryCommandValue("bold") before assert_equals: Wrong result returned expected "" but got "true"
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]</i><br></b></div>" queryCommandIndeterm("bold") after
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]</i><br></b></div>" queryCommandState("bold") after
-FAIL [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]</i><br></b></div>" queryCommandValue("bold") after assert_equals: Wrong result returned expected "" but got "false"
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i><br></b></div>": execCommand("styleWithCSS", false, "false") return value
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i><br></b></div>": execCommand("bold", false, "") return value
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i><br></b></div>": execCommand("inserttext", false, "d") return value
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i><br></b></div>" checks for modifications to non-editable content
-FAIL [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i><br></b></div>" compare innerHTML assert_in_array: Unexpected innerHTML (after normalizing inline style) value "<div><i style=\"\"><b>abc</b>d<br></i><br></div>" not in array ["<div><b><i>abc</i></b><i>d<br></i><b><br></b></div>", "<div><i><b>abc</b>d<br></i><b><br></b></div>"]
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i><br></b></div>" queryCommandIndeterm("bold") before
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i><br></b></div>" queryCommandState("bold") before
-FAIL [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i><br></b></div>" queryCommandValue("bold") before assert_equals: Wrong result returned expected "" but got "true"
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i><br></b></div>" queryCommandIndeterm("bold") after
-PASS [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i><br></b></div>" queryCommandState("bold") after
-FAIL [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i><br></b></div>" queryCommandValue("bold") after assert_equals: Wrong result returned expected "" but got "false"
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc<b>[def</b>]ghi": execCommand("insertparagraph", false, "") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc<b>[def</b>]ghi": execCommand("inserttext", false, "d") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc<b>[def</b>]ghi": execCommand("inserttext", false, "e") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc<b>[def</b>]ghi": execCommand("inserttext", false, "f") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc<b>[def</b>]ghi" checks for modifications to non-editable content
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc<b>[def</b>]ghi" compare innerHTML
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc[<b>def]</b>ghi": execCommand("insertparagraph", false, "") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc[<b>def]</b>ghi": execCommand("inserttext", false, "d") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc[<b>def]</b>ghi": execCommand("inserttext", false, "e") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc[<b>def]</b>ghi": execCommand("inserttext", false, "f") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc[<b>def]</b>ghi" checks for modifications to non-editable content
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc[<b>def]</b>ghi" compare innerHTML
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc<b>[def]</b>ghi": execCommand("insertparagraph", false, "") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc<b>[def]</b>ghi": execCommand("inserttext", false, "d") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc<b>[def]</b>ghi": execCommand("inserttext", false, "e") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc<b>[def]</b>ghi": execCommand("inserttext", false, "f") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc<b>[def]</b>ghi" checks for modifications to non-editable content
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc<b>[def]</b>ghi" compare innerHTML
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc<b>{def}</b>ghi": execCommand("insertparagraph", false, "") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc<b>{def}</b>ghi": execCommand("inserttext", false, "d") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc<b>{def}</b>ghi": execCommand("inserttext", false, "e") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc<b>{def}</b>ghi": execCommand("inserttext", false, "f") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc<b>{def}</b>ghi" checks for modifications to non-editable content
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc<b>{def}</b>ghi" compare innerHTML
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc{<b>def</b>}ghi": execCommand("insertparagraph", false, "") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc{<b>def</b>}ghi": execCommand("inserttext", false, "d") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc{<b>def</b>}ghi": execCommand("inserttext", false, "e") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc{<b>def</b>}ghi": execCommand("inserttext", false, "f") return value
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc{<b>def</b>}ghi" checks for modifications to non-editable content
-PASS [["insertparagraph",""],["inserttext","d"],["inserttext","e"],["inserttext","f"]] "abc{<b>def</b>}ghi" compare innerHTML
+Found 46 FAIL, 0 TIMEOUT, 0 NOTRUN.
+[FAIL] [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=blue>[bar</font></a>baz]" compare innerHTML
+  assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<a href=\\"http://www.google.com\\">a</a>" but got "fooa"
+[FAIL] [["delete",""],["inserttext","a"]] "foo<font color=blue><a href=http://www.google.com>[bar</a></font>baz]" compare innerHTML
+  assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<a href=\\"http://www.google.com\\">a</a>" but got "foo<span style=\\"color:rgb(0, 0, 255)\\">a</span>"
+[FAIL] [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=brown>[bar</font></a>baz]" compare innerHTML
+  assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<a href=\\"http://www.google.com\\"><font color=\\"#a52a2a\\">a</font></a>" but got "foo<span style=\\"color:rgb(165, 42, 42)\\">a</span>"
+[FAIL] [["delete",""],["inserttext","a"]] "foo<font color=brown><a href=http://www.google.com>[bar</a></font>baz]" compare innerHTML
+  assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<a href=\\"http://www.google.com\\">a</a>" but got "fooa"
+[FAIL] [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><font color=black>[bar</font></a>baz]" compare innerHTML
+  assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<a href=\\"http://www.google.com\\"><font color=\\"#000000\\">a</font></a>" but got "fooa"
+[FAIL] [["delete",""],["inserttext","a"]] "foo<a href=http://www.google.com><u>[bar</u></a>baz]" compare innerHTML
+  assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<a href=\\"http://www.google.com\\">a</a>" but got "fooa"
+[FAIL] [["delete",""],["inserttext","a"]] "foo<u><a href=http://www.google.com>[bar</a></u>baz]" compare innerHTML
+  assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<a href=\\"http://www.google.com\\">a</a>" but got "foo<span style=\\"text-decoration-line:underline\\">a</span>"
+[FAIL] [["delete",""],["inserttext","a"]] "foo<sub><font size=2>[bar</font></sub>baz]" compare innerHTML
+  assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<sub>a</sub>" but got "foo<span style=\\"font-size:small\\">a</span>"
+[FAIL] [["delete",""],["inserttext","a"]] "foo<font size=2><sub>[bar</sub></font>baz]" compare innerHTML
+  assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<font size=\\"1\\"><sub>a</sub></font>" but got "foo<span style=\\"font-size:10.8333px\\">a</span>"
+[FAIL] [["delete",""],["inserttext","a"]] "foo<sub><font size=3>[bar</font></sub>baz]" compare innerHTML
+  assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<font size=\\"3\\"><sub>a</sub></font>" but got "fooa"
+[FAIL] [["delete",""],["inserttext","a"]] "foo<font size=3><sub>[bar</sub></font>baz]" compare innerHTML
+  assert_equals: Unexpected innerHTML (after normalizing inline style) expected "foo<sub>a</sub>" but got "foo<span style=\\"font-size:13.3333px\\">a</span>"
+[FAIL] [["delete",""],["inserttext","a"]] "<blockquote><font color=blue>[foo]</font></blockquote>" compare innerHTML
+  assert_equals: Unexpected innerHTML (after normalizing inline style) expected "<blockquote><font color=\\"blue\\">a</font></blockquote>" but got "<blockquote><span style=\\"color:rgb(0, 0, 255)\\">a</span></blockquote>"
+[FAIL] [["styleWithCSS","false"],["delete",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandValue("bold") before
+  assert_equals: Wrong result returned expected "" but got "true"
+[FAIL] [["styleWithCSS","false"],["delete",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandValue("bold") after
+  assert_equals: Wrong result returned expected "" but got "true"
+[FAIL] [["styleWithCSS","false"],["delete",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandValue("bold") before
+  assert_equals: Wrong result returned expected "" but got "true"
+[FAIL] [["styleWithCSS","false"],["delete",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandValue("bold") after
+  assert_equals: Wrong result returned expected "" but got "true"
+[FAIL] [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandValue("bold") before
+  assert_equals: Wrong result returned expected "" but got "true"
+[FAIL] [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandValue("bold") after
+  assert_equals: Wrong result returned expected "" but got "true"
+[FAIL] [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandValue("bold") before
+  assert_equals: Wrong result returned expected "" but got "true"
+[FAIL] [["styleWithCSS","false"],["delete",""],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandValue("bold") after
+  assert_equals: Wrong result returned expected "" but got "true"
+[FAIL] [["styleWithCSS","false"],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandValue("bold") before
+  assert_equals: Wrong result returned expected "" but got "true"
+[FAIL] [["styleWithCSS","false"],["insertparagraph",""],["inserttext","a"]] "<div><b>[abc]</b></div>" queryCommandValue("bold") after
+  assert_equals: Wrong result returned expected "" but got "true"
+[FAIL] [["styleWithCSS","false"],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandValue("bold") before
+  assert_equals: Wrong result returned expected "" but got "true"
+[FAIL] [["styleWithCSS","false"],["insertparagraph",""],["inserttext","d"]] "<div>abc<b>[def]</b></div>" queryCommandValue("bold") after
+  assert_equals: Wrong result returned expected "" but got "true"
+[FAIL] [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b>abc[]<br></b></div>" queryCommandValue("bold") before
+  assert_equals: Wrong result returned expected "" but got "true"
+[FAIL] [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b>abc[]<br></b></div>" queryCommandValue("bold") after
+  assert_equals: Wrong result returned expected "" but got "false"
+[FAIL] [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]<br></b></i></div>" queryCommandValue("bold") before
+  assert_equals: Wrong result returned expected "" but got "true"
+[FAIL] [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]<br></b></i></div>" queryCommandValue("bold") after
+  assert_equals: Wrong result returned expected "" but got "false"
+[FAIL] [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]</b><br></i></div>" queryCommandValue("bold") before
+  assert_equals: Wrong result returned expected "" but got "true"
+[FAIL] [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><i><b>abc[]</b><br></i></div>" queryCommandValue("bold") after
+  assert_equals: Wrong result returned expected "" but got "false"
+[FAIL] [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i></b></div>" compare innerHTML
+  assert_in_array: Unexpected innerHTML (after normalizing inline style) value "<div><i style=\\"\\"><b>abc</b>d<br></i></div>" not in array ["<div><b><i>abc</i></b><i>d</i></div>", "<div><b><i>abc</i></b><i>d<br></i></div>", "<div><b><i>abc</i></b><i>d</i><br></div>"]
+[FAIL] [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i></b></div>" queryCommandValue("bold") before
+  assert_equals: Wrong result returned expected "" but got "true"
+[FAIL] [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i></b></div>" queryCommandValue("bold") after
+  assert_equals: Wrong result returned expected "" but got "false"
+[FAIL] [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]</i><br></b></div>" compare innerHTML
+  assert_in_array: Unexpected innerHTML (after normalizing inline style) value "<div><i style=\\"\\"><b>abc</b>d</i><br></div>" not in array ["<div><b><i>abc</i></b><i>d</i></div>", "<div><b><i>abc</i></b><i>d<br></i></div>", "<div><b><i>abc</i></b><i>d</i><br></div>"]
+[FAIL] [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]</i><br></b></div>" queryCommandValue("bold") before
+  assert_equals: Wrong result returned expected "" but got "true"
+[FAIL] [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]</i><br></b></div>" queryCommandValue("bold") after
+  assert_equals: Wrong result returned expected "" but got "false"
+[FAIL] [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i><br></b></div>" compare innerHTML
+  assert_equals: Unexpected innerHTML (after normalizing inline style) expected "<div><b><i>abc</i></b><i>d<br></i><b><br></b></div>" but got "<div><i style=\\"\\"><b>abc</b>d<br></i><br></div>"
+[FAIL] [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i><br></b></div>" queryCommandValue("bold") before
+  assert_equals: Wrong result returned expected "" but got "true"
+[FAIL] [["styleWithCSS","false"],["bold",""],["inserttext","d"]] "<div><b><i>abc[]<br></i><br></b></div>" queryCommandValue("bold") after
+  assert_equals: Wrong result returned expected "" but got "false"
+[FAIL] [["insertparagraph",""],["inserttext","c"],["inserttext","d"],["inserttext","e"]] "<div>ab[c<b><i>de]f</i></b>ghi</div>" compare innerHTML
+  assert_equals: Unexpected innerHTML (after normalizing inline style) expected "<div>ab</div><div><b><i>cdef</i></b>ghi</div>" but got "<div>ab</div><div>cde<i style=\\"font-weight:bold\\">f</i>ghi</div>"
+[FAIL] [["insertlinebreak",""],["inserttext","c"],["inserttext","d"],["inserttext","e"]] "<div>ab[c<b><i>de]f</i></b>ghi</div>" compare innerHTML
+  assert_equals: Unexpected innerHTML (after normalizing inline style) expected "<div>ab<br><b><i>cdef</i></b>ghi</div>" but got "<div>ab<br>cde<i style=\\"font-weight:bold\\">f</i>ghi</div>"
+[FAIL] [["styleWithCSS","false"],["italic",""],["bold",""],["insertText","b"]] "a[]c" compare innerHTML
+  assert_equals: Unexpected innerHTML (after normalizing inline style) expected "a<i><b>b</b></i>c" but got "a<b><i>b</i></b>c"
+[FAIL] [["delete",""],["inserttext","g"],["inserttext","h"]] "<div>{abc</div><div>def</div>}" compare innerHTML
+  assert_in_array: Unexpected innerHTML (after normalizing inline style) value "gh" not in array ["<div>gh</div>", "<div>gh<br></div>"]
+[FAIL] [["delete",""],["inserttext","g"],["inserttext","h"]] "<div><b>{abc</b></div><div>def</div>}" compare innerHTML
+  assert_in_array: Unexpected innerHTML (after normalizing inline style) value "<b>gh</b>" not in array ["<div><b>gh</b></div>", "<div><b>gh<br></b></div>", "<div><b>gh</b><br></div>"]
+[FAIL] [["delete",""],["inserttext","Y"]] "<b>X[]<span contenteditable=false>abc</span></b><i>def</i>" compare innerHTML
+  assert_in_array: Unexpected innerHTML (after normalizing inline style) value "Y<b><span contenteditable=\\"false\\">abc</span></b><i>def</i>" not in array ["<b>Y<span contenteditable=\\"false\\">abc</span></b><i>def</i>", "<b>Y</b><b><span contenteditable=\\"false\\">abc</span></b><i>def</i>"]
+[FAIL] [["forwarddelete",""],["inserttext","Y"]] "<b>[]X<span contenteditable=false>abc</span></b><i>def</i>" compare innerHTML
+  assert_in_array: Unexpected innerHTML (after normalizing inline style) value "Y<b><span contenteditable=\\"false\\">abc</span></b><i>def</i>" not in array ["<b>Y<span contenteditable=\\"false\\">abc</span></b><i>def</i>", "<b>Y</b><b><span contenteditable=\\"false\\">abc</span></b><i>def</i>"]
 Harness: the test ran to completion.
 

@@ -4,12 +4,12 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/threading/platform_thread.h"
 #include "build/build_config.h"
-#include "content/browser/generic_sensor/sensor_provider_proxy_impl.h"
+#include "content/browser/generic_sensor/web_contents_sensor_provider_proxy.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
@@ -46,7 +46,7 @@ class GenericSensorBrowserTest : public ContentBrowserTest {
     scoped_feature_list_.InitWithFeatures(
         {features::kGenericSensorExtraClasses}, {});
 
-    SensorProviderProxyImpl::OverrideSensorProviderBinderForTesting(
+    WebContentsSensorProviderProxy::OverrideSensorProviderBinderForTesting(
         base::BindRepeating(
             &GenericSensorBrowserTest::BindSensorProviderReceiver,
             base::Unretained(this)));
@@ -56,7 +56,7 @@ class GenericSensorBrowserTest : public ContentBrowserTest {
   GenericSensorBrowserTest& operator=(const GenericSensorBrowserTest&) = delete;
 
   ~GenericSensorBrowserTest() override {
-    SensorProviderProxyImpl::OverrideSensorProviderBinderForTesting(
+    WebContentsSensorProviderProxy::OverrideSensorProviderBinderForTesting(
         base::NullCallback());
   }
 

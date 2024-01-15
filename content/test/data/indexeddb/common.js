@@ -132,13 +132,19 @@ function shouldBeEqualToString(a, b)
 }
 
 function indexedDBTest(upgradeCallback, optionalOpenCallback) {
+  indexedDBTestWithIdb(indexedDB, upgradeCallback, optionalOpenCallback);
+}
+
+// This version takes the indexeddb object as a parameter to support bucket
+// idbs.
+function indexedDBTestWithIdb(idb, upgradeCallback, optionalOpenCallback) {
   dbname = self.location.pathname.substring(
     1 + self.location.pathname.lastIndexOf("/"));
-  var deleteRequest = indexedDB.deleteDatabase(dbname);
+  var deleteRequest = idb.deleteDatabase(dbname);
   deleteRequest.onerror = unexpectedErrorCallback;
   deleteRequest.onblocked = unexpectedBlockedCallback;
   deleteRequest.onsuccess = function() {
-    var openRequest = indexedDB.open(dbname);
+    var openRequest = idb.open(dbname);
     openRequest.onerror = unexpectedErrorCallback;
     openRequest.onupgradeneeded = upgradeCallback;
     openRequest.onblocked = unexpectedBlockedCallback;
@@ -220,4 +226,13 @@ if (typeof String.prototype.startsWith !== 'function') {
   String.prototype.startsWith = function (str) {
     return this.indexOf(str) === 0;
   };
+}
+
+// Generates a pseudorandom string of the given length.
+function generateRandomString(sizeInKb) {
+  let output = '';
+  for (let i = 0; i < sizeInKb * 1024 / 8 + 1; i++) {
+    output += Math.random().toString(36).slice(2, 10);
+  }
+  return output;
 }

@@ -8,8 +8,9 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
+#include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/common/net/net_error_page_support.mojom.h"
 #include "chrome/common/network_diagnostics.mojom.h"
@@ -32,10 +33,6 @@ class GURL;
 
 namespace error_page {
 class Error;
-}
-
-namespace network {
-struct ResourceRequest;
 }
 
 // Listens for NetErrorInfo messages from the NetErrorTabHelper on the
@@ -82,10 +79,6 @@ class NetErrorHelper
                         std::string* error_html);
 
  private:
-  // Returns ResourceRequest filled with |url|. It has request_initiator from
-  // the frame origin and origin header with "null" for a unique origin.
-  std::unique_ptr<network::ResourceRequest> CreatePostRequest(
-      const GURL& url) const;
   chrome::mojom::NetworkDiagnostics* GetRemoteNetworkDiagnostics();
   chrome::mojom::NetworkEasterEgg* GetRemoteNetworkEasterEgg();
   chrome::mojom::NetErrorPageSupport* GetRemoteNetErrorPageSupport();
@@ -97,7 +90,7 @@ class NetErrorHelper
       bool can_use_local_diagnostics_service,
       content::mojom::AlternativeErrorPageOverrideInfoPtr
           alternative_error_page_info,
-      std::string* html) const override;
+      std::string* html) override;
 
   void EnablePageHelperFunctions() override;
   error_page::LocalizedError::PageState UpdateErrorPage(
@@ -108,6 +101,7 @@ class NetErrorHelper
   void RequestEasterEggHighScore() override;
   void ReloadFrame() override;
   void DiagnoseError(const GURL& page_url) override;
+  void PortalSignin() override;
   void DownloadPageLater() override;
   void SetIsShowingDownloadButton(bool show) override;
   void OfflineContentAvailable(
@@ -138,6 +132,8 @@ class NetErrorHelper
       remote_network_easter_egg_;
   mojo::AssociatedRemote<chrome::mojom::NetErrorPageSupport>
       remote_net_error_page_support_;
+
+  base::Value::Dict error_page_params_;
 
   // Weak factories for vending weak pointers to PageControllers. Weak
   // pointers are invalidated on each commit, to prevent getting messages from

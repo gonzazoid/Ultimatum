@@ -7,18 +7,21 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/lazy_instance.h"
 #include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "base/observer_list.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/typed_macros.h"
 #include "build/build_config.h"
 #include "content/browser/xr/service/xr_frame_sink_client_impl.h"
+#include "content/browser/xr/webxr_internals/mojom/webxr_internals.mojom.h"
+#include "content/browser/xr/webxr_internals/webxr_internals_handler_impl.h"
 #include "content/browser/xr/xr_utils.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -28,9 +31,9 @@
 #include "content/public/browser/xr_runtime_manager.h"
 #include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
-#include "device/base/features.h"
 #include "device/vr/buildflags/buildflags.h"
 #include "device/vr/orientation/orientation_device_provider.h"
+#include "device/vr/public/cpp/features.h"
 #include "device/vr/public/cpp/vr_device_provider.h"
 #include "gpu/config/gpu_info.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -43,11 +46,17 @@
 
 namespace content {
 
+using XrRuntimeManagerObservers =
+    base::ObserverList<XRRuntimeManager::Observer>;
+
 namespace {
 XRRuntimeManagerImpl* g_xr_runtime_manager = nullptr;
 
-base::LazyInstance<base::ObserverList<XRRuntimeManager::Observer>>::Leaky
-    g_xr_runtime_manager_observers;
+XrRuntimeManagerObservers& GetXrRuntimeManagerObservers() {
+  static base::NoDestructor<XrRuntimeManagerObservers>
+      xr_runtime_manager_observers;
+  return *xr_runtime_manager_observers;
+}
 
 #if !BUILDFLAG(IS_ANDROID)
 bool IsEnabled(const base::CommandLine* command_line,
@@ -83,11 +92,11 @@ XRRuntimeManager* XRRuntimeManager::GetInstanceIfCreated() {
 }
 
 void XRRuntimeManager::AddObserver(XRRuntimeManager::Observer* observer) {
-  g_xr_runtime_manager_observers.Get().AddObserver(observer);
+  GetXrRuntimeManagerObservers().AddObserver(observer);
 }
 
 void XRRuntimeManager::RemoveObserver(XRRuntimeManager::Observer* observer) {
-  g_xr_runtime_manager_observers.Get().RemoveObserver(observer);
+  GetXrRuntimeManagerObservers().RemoveObserver(observer);
 }
 
 void XRRuntimeManager::ExitImmersivePresentation() {
@@ -132,7 +141,7 @@ XRRuntimeManagerImpl::GetOrCreateInstance() {
 #if !BUILDFLAG(IS_ANDROID)
   const base::CommandLine* cmd_line = base::CommandLine::ForCurrentProcess();
   orientation_provider_enabled =
-      IsEnabled(cmd_line, device::kWebXrOrientationSensorDevice,
+      IsEnabled(cmd_line, device::features::kWebXrOrientationSensorDevice,
                 ::switches::kWebXrRuntimeOrientationSensors);
 #endif
 
@@ -167,7 +176,7 @@ void XRRuntimeManagerImpl::AddService(VRServiceImpl* service) {
   // Loop through any currently active runtimes and send Connected messages to
   // the service. Future runtimes that come online will send a Connected message
   // when they are created.
-  InitializeProviders();
+  InitializeProviders(service);
 
   if (AreAllProvidersInitialized())
     service->InitializationComplete();
@@ -192,6 +201,10 @@ BrowserXRRuntimeImpl* XRRuntimeManagerImpl::GetRuntime(
     return nullptr;
 
   return it->second.get();
+}
+
+content::WebXrLoggerManager& XRRuntimeManagerImpl::GetLoggerManager() {
+  return logger_manager_;
 }
 
 BrowserXRRuntimeImpl* XRRuntimeManagerImpl::GetRuntimeForOptions(
@@ -219,30 +232,30 @@ BrowserXRRuntimeImpl* XRRuntimeManagerImpl::GetRuntimeForOptions(
 }
 
 BrowserXRRuntimeImpl* XRRuntimeManagerImpl::GetImmersiveVrRuntime() {
-#if BUILDFLAG(IS_ANDROID)
-  auto* gvr = GetRuntime(device::mojom::XRDeviceId::GVR_DEVICE_ID);
-  if (gvr)
-    return gvr;
-#endif
-
+// OpenXR is the highest priority if it's available.
 #if BUILDFLAG(ENABLE_OPENXR)
   auto* openxr = GetRuntime(device::mojom::XRDeviceId::OPENXR_DEVICE_ID);
-  if (openxr)
+  if (openxr) {
     return openxr;
+  }
+#endif
+
+#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(ENABLE_CARDBOARD)
+  auto* cardboard = GetRuntime(device::mojom::XRDeviceId::CARDBOARD_DEVICE_ID);
+  if (cardboard) {
+    return cardboard;
+  }
+#endif
 #endif
 
   return nullptr;
 }
 
 BrowserXRRuntimeImpl* XRRuntimeManagerImpl::GetImmersiveArRuntime() {
-#if BUILDFLAG(IS_ANDROID)
-  auto* arcore_runtime =
-      GetRuntime(device::mojom::XRDeviceId::ARCORE_DEVICE_ID);
-  if (arcore_runtime && arcore_runtime->SupportsArBlendMode())
-    return arcore_runtime;
-#endif
-
 #if BUILDFLAG(ENABLE_OPENXR)
+  // If OpenXR is available and the runtime supports an AR blend mode, prefer
+  // it over ARCore to unify VR/AR rendering paths.
   if (base::FeatureList::IsEnabled(
           device::features::kOpenXrExtendedFeatureSupport)) {
     auto* openxr = GetRuntime(device::mojom::XRDeviceId::OPENXR_DEVICE_ID);
@@ -251,22 +264,36 @@ BrowserXRRuntimeImpl* XRRuntimeManagerImpl::GetImmersiveArRuntime() {
   }
 #endif
 
+#if BUILDFLAG(ENABLE_ARCORE)
+  auto* arcore_runtime =
+      GetRuntime(device::mojom::XRDeviceId::ARCORE_DEVICE_ID);
+  if (arcore_runtime && arcore_runtime->SupportsArBlendMode()) {
+    return arcore_runtime;
+  }
+#endif
+
   return nullptr;
 }
 
 BrowserXRRuntimeImpl*
 XRRuntimeManagerImpl::GetCurrentlyPresentingImmersiveRuntime() {
-  auto* vr_runtime = GetImmersiveVrRuntime();
-  if (vr_runtime && vr_runtime->GetServiceWithActiveImmersiveSession()) {
-    return vr_runtime;
-  }
+  auto it = base::ranges::find_if(
+      runtimes_, [](const DeviceRuntimeMap::value_type& val) {
+        return val.second->GetServiceWithActiveImmersiveSession() != nullptr;
+      });
 
-  auto* ar_runtime = GetImmersiveArRuntime();
-  if (ar_runtime && ar_runtime->GetServiceWithActiveImmersiveSession()) {
-    return ar_runtime;
+  if (it != runtimes_.end()) {
+    return it->second.get();
   }
 
   return nullptr;
+}
+
+bool XRRuntimeManagerImpl::HasPendingImmersiveRequest() {
+  return base::ranges::any_of(
+      runtimes_, [](const DeviceRuntimeMap::value_type& val) {
+        return val.second->HasPendingImmersiveSessionRequest();
+      });
 }
 
 bool XRRuntimeManagerImpl::IsOtherClientPresenting(VRServiceImpl* service) {
@@ -314,7 +341,7 @@ void XRRuntimeManagerImpl::MakeXrCompatible() {
 
   if (!IsInitializedOnCompatibleAdapter(runtime)) {
 #if BUILDFLAG(IS_WIN)
-    absl::optional<CHROME_LUID> luid = runtime->GetLuid();
+    std::optional<CHROME_LUID> luid = runtime->GetLuid();
     // IsInitializedOnCompatibleAdapter should have returned true if the
     // runtime doesn't specify a LUID.
     DCHECK(luid && (luid->HighPart != 0 || luid->LowPart != 0));
@@ -360,7 +387,7 @@ void XRRuntimeManagerImpl::MakeXrCompatible() {
 bool XRRuntimeManagerImpl::IsInitializedOnCompatibleAdapter(
     BrowserXRRuntimeImpl* runtime) {
 #if BUILDFLAG(IS_WIN)
-  absl::optional<CHROME_LUID> luid = runtime->GetLuid();
+  std::optional<CHROME_LUID> luid = runtime->GetLuid();
   if (luid && (luid->HighPart != 0 || luid->LowPart != 0)) {
     CHROME_LUID active_luid =
         content::GpuDataManager::GetInstance()->GetGPUInfo().active_gpu().luid;
@@ -451,7 +478,12 @@ size_t XRRuntimeManagerImpl::NumberOfConnectedServices() {
   return services_.size();
 }
 
-void XRRuntimeManagerImpl::InitializeProviders() {
+// The initializing service is available so that providers that need access to
+// some aspect of the service, such as the WebContents, to perform
+// initialization can do so, but the providers should be initialized in such a
+// way that they are not explicitly tied to this service.
+void XRRuntimeManagerImpl::InitializeProviders(
+    VRServiceImpl* initializing_service) {
   if (providers_initialized_)
     return;
 
@@ -464,8 +496,9 @@ void XRRuntimeManagerImpl::InitializeProviders() {
 
     // It is acceptable for the providers to potentially take/keep a reference
     // to ourselves here, since we own the providers and can guarantee that they
-    // will not outlive us.
-    provider->Initialize(this);
+    // will not outlive us. Providers should not take a long-term reference to
+    // the WebContents.
+    provider->Initialize(this, initializing_service->GetWebContents());
   }
 
   providers_initialized_ = true;
@@ -494,11 +527,20 @@ void XRRuntimeManagerImpl::AddRuntime(
 
   TRACE_EVENT_INSTANT1("xr", "AddRuntime", TRACE_EVENT_SCOPE_THREAD, "id", id);
 
+  webxr::mojom::RuntimeInfoPtr runtime_added_record =
+      webxr::mojom::RuntimeInfo::New();
+  runtime_added_record->device_id = id;
+  runtime_added_record->supported_features = device_data->supported_features;
+  runtime_added_record->is_ar_blend_mode_supported =
+      device_data->is_ar_blend_mode_supported;
+  GetLoggerManager().RecordRuntimeAdded(std::move(runtime_added_record));
+
   runtimes_[id] = std::make_unique<BrowserXRRuntimeImpl>(
       id, std::move(device_data), std::move(runtime));
 
-  for (Observer& obs : g_xr_runtime_manager_observers.Get())
+  for (Observer& obs : GetXrRuntimeManagerObservers()) {
     obs.OnRuntimeAdded(runtimes_[id].get());
+  }
 
   for (VRServiceImpl* service : services_) {
     // TODO(sumankancherla): Consider combining with XRRuntimeManager::Observer.
@@ -515,6 +557,8 @@ void XRRuntimeManagerImpl::RemoveRuntime(device::mojom::XRDeviceId id) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   auto it = runtimes_.find(id);
   DCHECK(it != runtimes_.end());
+
+  GetLoggerManager().RecordRuntimeRemoved(id);
 
   // Give the runtime a chance to clean itself up before notifying services
   // that it was removed.
@@ -534,11 +578,20 @@ XRRuntimeManagerImpl::GetXrFrameSinkClientFactory() {
   return base::BindRepeating(&FrameSinkClientFactory);
 }
 
-void XRRuntimeManagerImpl::ForEachRuntime(
-    base::RepeatingCallback<void(BrowserXRRuntime*)> fn) {
+std::vector<webxr::mojom::RuntimeInfoPtr>
+XRRuntimeManagerImpl::GetActiveRuntimes() {
+  std::vector<webxr::mojom::RuntimeInfoPtr> active_runtimes;
   for (auto& runtime : runtimes_) {
-    fn.Run(runtime.second.get());
+    webxr::mojom::RuntimeInfoPtr runtime_info =
+        webxr::mojom::RuntimeInfo::New();
+    runtime_info->device_id = runtime.first;
+    runtime_info->supported_features = runtime.second->GetSupportedFeatures();
+    runtime_info->is_ar_blend_mode_supported =
+        runtime.second->SupportsArBlendMode();
+
+    active_runtimes.push_back(std::move(runtime_info));
   }
+  return active_runtimes;
 }
 
 }  // namespace content

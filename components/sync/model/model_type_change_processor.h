@@ -46,10 +46,10 @@ class ModelTypeChangeProcessor {
 
   // Sets storage key for the new entity. This function only applies to
   // datatypes that can't generate storage key based on EntityData. Bridge
-  // should call this function when handling MergeSyncData/ApplySyncChanges to
-  // inform the processor about |storage_key| of an entity identified by
-  // |entity_data|. Metadata changes about new entity will be appended to
-  // |metadata_change_list|.
+  // should call this function when handling
+  // MergeFullSyncData/ApplyIncrementalSyncChanges to inform the processor about
+  // |storage_key| of an entity identified by |entity_data|. Metadata changes
+  // about new entity will be appended to |metadata_change_list|.
   virtual void UpdateStorageKey(const EntityData& entity_data,
                                 const std::string& storage_key,
                                 MetadataChangeList* metadata_change_list) = 0;
@@ -94,14 +94,15 @@ class ModelTypeChangeProcessor {
   // error. Ideally ModelReadyToSync() is called as soon as possible during
   // initialization, and must be called before invoking either Put() or
   // Delete(). The bridge needs to be able to synchronously handle
-  // MergeSyncData() and ApplySyncChanges() after calling ModelReadyToSync(). If
-  // an error is encountered, calling ReportError() instead is sufficient.
+  // MergeFullSyncData() and ApplyIncrementalSyncChanges() after calling
+  // ModelReadyToSync(). If an error is encountered, calling ReportError()
+  // instead is sufficient.
   virtual void ModelReadyToSync(std::unique_ptr<MetadataBatch> batch) = 0;
 
   // Returns a boolean representing whether the processor's metadata is
-  // currently up to date and accurately tracking the model type's data. If
-  // false, and ModelReadyToSync() has already been called, then Put and Delete
-  // will no-op and can be omitted by bridge.
+  // currently tracking the model type's data. This typically becomes true after
+  // ModelReadyToSync() was called (if the data type is enabled). If false,
+  // then Put() and Delete() will no-op and can be omitted by bridge.
   virtual bool IsTrackingMetadata() const = 0;
 
   // Returns the account ID for which metadata is being tracked, or empty if not
@@ -130,7 +131,7 @@ class ModelTypeChangeProcessor {
   // Returns the cached version of remote entity specifics for |storage_key| if
   // available. These specifics can be fully or partially trimmed (proto fields
   // cleared) according to the bridge's logic in
-  // TrimRemoteSpecificsForCaching().
+  // TrimAllSupportedFieldsFromRemoteSpecifics().
   // By default, empty EntitySpecifics is returned if the storage key is
   // unknown, or the storage key is known but trimmed specifics is not
   // available.

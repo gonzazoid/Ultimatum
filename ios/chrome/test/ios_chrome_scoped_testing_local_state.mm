@@ -4,13 +4,9 @@
 
 #import "ios/chrome/test/ios_chrome_scoped_testing_local_state.h"
 
-#import "ios/chrome/browser/prefs/browser_prefs.h"
+#import "ios/chrome/browser/shared/model/prefs/browser_prefs.h"
 #import "ios/chrome/test/testing_application_context.h"
 #import "testing/gtest/include/gtest/gtest.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 IOSChromeScopedTestingLocalState::IOSChromeScopedTestingLocalState() {
   RegisterLocalStatePrefs(local_state_.registry());

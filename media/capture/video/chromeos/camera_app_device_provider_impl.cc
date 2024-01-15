@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "media/base/bind_to_current_loop.h"
+#include "base/task/bind_post_task.h"
 
 namespace media {
 
@@ -32,7 +32,7 @@ void CameraAppDeviceProviderImpl::GetCameraAppDevice(
     GetCameraAppDeviceCallback callback) {
   mapping_callback_.Run(
       source_id,
-      media::BindToCurrentLoop(base::BindOnce(
+      base::BindPostTaskToCurrentDefault(base::BindOnce(
           &CameraAppDeviceProviderImpl::GetCameraAppDeviceWithDeviceId,
           weak_ptr_factory_.GetWeakPtr(), std::move(callback))));
 }
@@ -60,7 +60,7 @@ void CameraAppDeviceProviderImpl::SetVirtualDeviceEnabled(
     SetVirtualDeviceEnabledCallback callback) {
   mapping_callback_.Run(
       source_id,
-      media::BindToCurrentLoop(base::BindOnce(
+      base::BindPostTaskToCurrentDefault(base::BindOnce(
           &CameraAppDeviceProviderImpl::SetVirtualDeviceEnabledWithDeviceId,
           weak_ptr_factory_.GetWeakPtr(), enabled, std::move(callback))));
 }
@@ -75,6 +75,25 @@ void CameraAppDeviceProviderImpl::SetVirtualDeviceEnabledWithDeviceId(
   }
 
   bridge_->SetVirtualDeviceEnabled(*device_id, enabled, std::move(callback));
+}
+
+void CameraAppDeviceProviderImpl::IsDeviceInUse(
+    const std::string& source_id,
+    IsDeviceInUseCallback callback) {
+  mapping_callback_.Run(
+      source_id, base::BindPostTaskToCurrentDefault(base::BindOnce(
+                     &CameraAppDeviceProviderImpl::IsDeviceInUseWithDeviceId,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback))));
+}
+
+void CameraAppDeviceProviderImpl::IsDeviceInUseWithDeviceId(
+    IsDeviceInUseCallback callback,
+    const absl::optional<std::string>& device_id) {
+  if (!device_id.has_value()) {
+    std::move(callback).Run(false);
+    return;
+  }
+  bridge_->IsDeviceInUse(*device_id, std::move(callback));
 }
 
 }  // namespace media

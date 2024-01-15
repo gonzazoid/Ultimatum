@@ -14,14 +14,14 @@ import android.os.Environment;
 import android.provider.MediaStore.MediaColumns;
 import android.text.format.DateUtils;
 
-import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
+
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
 
 import org.chromium.base.ContentUriUtils;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
 
 import java.io.FileInputStream;
 import java.io.InputStream;
@@ -37,6 +37,7 @@ import java.lang.reflect.Method;
 @JNINamespace("offline_pages")
 public class OfflinePageArchivePublisherBridge {
     private static final String TAG = "OPArchivePublisher";
+
     /** Offline pages should not be scanned as for media content. */
     public static final boolean IS_MEDIA_SCANNER_SCANNABLE = false;
 
@@ -66,14 +67,14 @@ public class OfflinePageArchivePublisherBridge {
      */
     @CalledByNative
     @VisibleForTesting
-    public static long addCompletedDownload(String title, String description, String path,
-            long length, String uri, String referer) {
+    public static long addCompletedDownload(
+            String title,
+            String description,
+            String path,
+            long length,
+            String uri,
+            String referer) {
         try {
-            // Call the proper version of the pass through based on the supported API level.
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-                return callAddCompletedDownload(title, description, path, length);
-            }
-
             return callAddCompletedDownload(title, description, path, length, uri, referer);
         } catch (Exception e) {
             // In case of exception, we return a download id of 0.
@@ -82,25 +83,26 @@ public class OfflinePageArchivePublisherBridge {
         }
     }
 
-    // Use this pass through before API level 24.
     private static long callAddCompletedDownload(
-            String title, String description, String path, long length) {
+            String title,
+            String description,
+            String path,
+            long length,
+            String uri,
+            String referer) {
         DownloadManager downloadManager = getDownloadManager();
         if (downloadManager == null) return 0;
 
-        return downloadManager.addCompletedDownload(title, description, IS_MEDIA_SCANNER_SCANNABLE,
-                MIME_TYPE, path, length, SHOW_NOTIFICATION);
-    }
-
-    // Use this pass through for API levels 24 and higher.
-    @RequiresApi(Build.VERSION_CODES.N)
-    private static long callAddCompletedDownload(String title, String description, String path,
-            long length, String uri, String referer) {
-        DownloadManager downloadManager = getDownloadManager();
-        if (downloadManager == null) return 0;
-
-        return downloadManager.addCompletedDownload(title, description, IS_MEDIA_SCANNER_SCANNABLE,
-                MIME_TYPE, path, length, SHOW_NOTIFICATION, Uri.parse(uri), Uri.parse(referer));
+        return downloadManager.addCompletedDownload(
+                title,
+                description,
+                IS_MEDIA_SCANNER_SCANNABLE,
+                MIME_TYPE,
+                path,
+                length,
+                SHOW_NOTIFICATION,
+                Uri.parse(uri),
+                Uri.parse(referer));
     }
 
     /**
@@ -123,8 +125,8 @@ public class OfflinePageArchivePublisherBridge {
     }
 
     private static DownloadManager getDownloadManager() {
-        return (DownloadManager) ContextUtils.getApplicationContext().getSystemService(
-                Context.DOWNLOAD_SERVICE);
+        return (DownloadManager)
+                ContextUtils.getApplicationContext().getSystemService(Context.DOWNLOAD_SERVICE);
     }
 
     /**
@@ -194,10 +196,15 @@ public class OfflinePageArchivePublisherBridge {
             in.close();
             out.close();
         } catch (Exception e) {
-            Log.i(TAG,
+            Log.i(
+                    TAG,
                     "Unable to copy archive to pending URI (externalDownloadUri: "
-                            + externalDownloadUri + ", intermediateUri: " + intermediateUri
-                            + ", page.getFilePath(): " + page.getFilePath() + ")",
+                            + externalDownloadUri
+                            + ", intermediateUri: "
+                            + intermediateUri
+                            + ", page.getFilePath(): "
+                            + page.getFilePath()
+                            + ")",
                     e);
             return "";
         }
@@ -208,8 +215,11 @@ public class OfflinePageArchivePublisherBridge {
         publishValues.putNull("date_expires");
         publishValues.put(MediaColumns.DISPLAY_NAME, page.getTitle());
         publishValues.put(MediaColumns.MIME_TYPE, "multipart/related");
-        if (!updateContentResolver(contentResolver, intermediateUri, publishValues,
-                    "Failed to finish publishing archive.")) {
+        if (!updateContentResolver(
+                contentResolver,
+                intermediateUri,
+                publishValues,
+                "Failed to finish publishing archive.")) {
             return "";
         }
 
@@ -219,15 +229,18 @@ public class OfflinePageArchivePublisherBridge {
         // See crbug.com/1010829 for more details.
         final ContentValues mimeTypeValues = new ContentValues();
         mimeTypeValues.put(MediaColumns.MIME_TYPE, "multipart/related");
-        if (!updateContentResolver(contentResolver, intermediateUri, mimeTypeValues,
-                    "Failed to update mime type.")) {
+        if (!updateContentResolver(
+                contentResolver, intermediateUri, mimeTypeValues, "Failed to update mime type.")) {
             return "";
         }
         return intermediateUri.toString();
     }
 
-    private static boolean updateContentResolver(ContentResolver contentResolver, Uri uri,
-            ContentValues contentValues, String errorMessage) {
+    private static boolean updateContentResolver(
+            ContentResolver contentResolver,
+            Uri uri,
+            ContentValues contentValues,
+            String errorMessage) {
         /* Even though the documentation for ContentResolver.update doesn't mention it, an
          * IllegalStateException (and other RuntimeException's) may be thrown in some situations.
          * This is the case, for instance, when there is a long enough sequence of similarly named

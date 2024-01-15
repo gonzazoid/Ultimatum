@@ -6,18 +6,18 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
-#include "content/browser/loader/single_request_url_loader_factory.h"
+#include "base/functional/bind.h"
+#include "content/browser/loader/response_head_update_params.h"
 #include "content/browser/web_package/signed_exchange_devtools_proxy.h"
 #include "content/browser/web_package/signed_exchange_loader.h"
-#include "content/browser/web_package/signed_exchange_prefetch_metric_recorder.h"
 #include "content/browser/web_package/signed_exchange_reporter.h"
 #include "content/browser/web_package/signed_exchange_utils.h"
 #include "content/public/common/content_features.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "net/http/http_response_headers.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
+#include "services/network/public/cpp/single_request_url_loader_factory.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "third_party/blink/public/common/loader/throttling_url_loader.h"
@@ -37,14 +37,12 @@ SignedExchangeRequestHandler::SignedExchangeRequestHandler(
     const base::UnguessableToken& devtools_navigation_token,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     URLLoaderThrottlesGetter url_loader_throttles_getter,
-    scoped_refptr<SignedExchangePrefetchMetricRecorder> metric_recorder,
     std::string accept_langs)
     : url_loader_options_(url_loader_options),
       frame_tree_node_id_(frame_tree_node_id),
       devtools_navigation_token_(devtools_navigation_token),
       url_loader_factory_(url_loader_factory),
       url_loader_throttles_getter_(std::move(url_loader_throttles_getter)),
-      metric_recorder_(std::move(metric_recorder)),
       accept_langs_(std::move(accept_langs)) {}
 
 SignedExchangeRequestHandler::~SignedExchangeRequestHandler() = default;
@@ -64,26 +62,29 @@ void SignedExchangeRequestHandler::MaybeCreateLoader(
         *signed_exchange_loader_->fallback_url()));
     signed_exchange_loader_ = nullptr;
     std::move(fallback_callback)
-        .Run(false /* reset_subresource_loader_params */);
+        .Run(false /* reset_subresource_loader_params */,
+             // TODO(crbug.com/1441384) test workerStart in SXG scenarios
+             ResponseHeadUpdateParams());
     return;
   }
 
   DCHECK(tentative_resource_request.url.EqualsIgnoringRef(
       *signed_exchange_loader_->inner_request_url()));
-  std::move(callback).Run(base::MakeRefCounted<SingleRequestURLLoaderFactory>(
-      base::BindOnce(&SignedExchangeRequestHandler::StartResponse,
-                     weak_factory_.GetWeakPtr())));
+  std::move(callback).Run(
+      base::MakeRefCounted<network::SingleRequestURLLoaderFactory>(
+          base::BindOnce(&SignedExchangeRequestHandler::StartResponse,
+                         weak_factory_.GetWeakPtr())));
 }
 
 bool SignedExchangeRequestHandler::MaybeCreateLoaderForResponse(
+    const network::URLLoaderCompletionStatus& status,
     const network::ResourceRequest& request,
     network::mojom::URLResponseHeadPtr* response_head,
     mojo::ScopedDataPipeConsumerHandle* response_body,
     mojo::PendingRemote<network::mojom::URLLoader>* loader,
     mojo::PendingReceiver<network::mojom::URLLoaderClient>* client_receiver,
     blink::ThrottlingURLLoader* url_loader,
-    bool* skip_other_interceptors,
-    bool* will_return_unsafe_redirect) {
+    bool* skip_other_interceptors) {
   DCHECK(!signed_exchange_loader_);
 
   // Navigation ResourceRequests always have non-empty |trusted_params|.
@@ -115,8 +116,8 @@ bool SignedExchangeRequestHandler::MaybeCreateLoaderForResponse(
       std::move(client), url_loader->Unbind(), url_loader_options_,
       true /* should_redirect_to_fallback */, std::move(devtools_proxy),
       std::move(reporter), url_loader_factory_, url_loader_throttles_getter_,
-      network_anonymization_key, frame_tree_node_id_, metric_recorder_,
-      accept_langs_, false /* keep_entry_for_prefetch_cache */);
+      network_anonymization_key, frame_tree_node_id_, accept_langs_,
+      false /* keep_entry_for_prefetch_cache */);
 
   *skip_other_interceptors = true;
   return true;

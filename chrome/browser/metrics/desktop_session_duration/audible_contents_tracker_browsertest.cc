@@ -22,7 +22,7 @@ namespace {
 class MockAudibleContentsObserver
     : public metrics::AudibleContentsTracker::Observer {
  public:
-  MockAudibleContentsObserver() {}
+  MockAudibleContentsObserver() = default;
 
   MockAudibleContentsObserver(const MockAudibleContentsObserver&) = delete;
   MockAudibleContentsObserver& operator=(const MockAudibleContentsObserver&) =
@@ -42,7 +42,7 @@ class MockAudibleContentsObserver
 
 class AudibleContentsTrackerTest : public InProcessBrowserTest {
  public:
-  AudibleContentsTrackerTest() {}
+  AudibleContentsTrackerTest() = default;
 
   AudibleContentsTrackerTest(const AudibleContentsTrackerTest&) = delete;
   AudibleContentsTrackerTest& operator=(const AudibleContentsTrackerTest&) =
@@ -73,21 +73,14 @@ class AudibleContentsTrackerTest : public InProcessBrowserTest {
   std::unique_ptr<metrics::AudibleContentsTracker> tracker_;
 };
 
-// TODO(crbug.com/1124845): Flaky on Win7 32-bit.
-#if BUILDFLAG(IS_WIN) && defined(ARCH_CPU_X86_FAMILY) && \
-    defined(ARCH_CPU_32_BITS)
-#define MAYBE_TestAudioNotifications DISABLED_TestAudioNotifications
-#else
-#define MAYBE_TestAudioNotifications TestAudioNotifications
-#endif
-IN_PROC_BROWSER_TEST_F(AudibleContentsTrackerTest,
-                       MAYBE_TestAudioNotifications) {
+IN_PROC_BROWSER_TEST_F(AudibleContentsTrackerTest, TestAudioNotifications) {
   MockAudibleContentsObserver* audio_observer = observer();
   EXPECT_FALSE(audio_observer->is_audio_playing());
 
   // Add a request handler for serving audio.
   base::FilePath test_data_dir;
-  ASSERT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &test_data_dir));
+  ASSERT_TRUE(
+      base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &test_data_dir));
   embedded_test_server()->ServeFilesFromDirectory(
       test_data_dir.AppendASCII("chrome/test/data/"));
   // Start the test server after adding the request handler for thread safety.

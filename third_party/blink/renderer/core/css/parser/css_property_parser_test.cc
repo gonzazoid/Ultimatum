@@ -8,6 +8,8 @@
 #include "third_party/blink/renderer/core/css/css_color.h"
 #include "third_party/blink/renderer/core/css/css_grid_integer_repeat_value.h"
 #include "third_party/blink/renderer/core/css/css_identifier_value.h"
+#include "third_party/blink/renderer/core/css/css_image_set_value.h"
+#include "third_party/blink/renderer/core/css/css_repeat_style_value.h"
 #include "third_party/blink/renderer/core/css/css_value_list.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser.h"
 #include "third_party/blink/renderer/core/css/parser/css_tokenizer.h"
@@ -19,14 +21,16 @@
 #include "third_party/blink/renderer/core/testing/dummy_page_holder.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
 static int ComputeNumberOfTracks(const CSSValueList* value_list) {
   int number_of_tracks = 0;
   for (auto& value : *value_list) {
-    if (value->IsGridLineNamesValue())
+    if (value->IsGridLineNamesValue()) {
       continue;
+    }
     if (auto* repeat_value =
             DynamicTo<cssvalue::CSSGridIntegerRepeatValue>(*value)) {
       number_of_tracks +=
@@ -45,7 +49,7 @@ static bool IsValidPropertyValueForStyleRule(CSSPropertyID property_id,
   const CSSParserTokenRange range(tokens);
   HeapVector<CSSPropertyValue, 64> parsed_properties;
   return CSSPropertyParser::ParseValue(
-      property_id, false, range,
+      property_id, false, {range, value},
       StrictCSSParserContext(SecureContextMode::kSecureContext),
       parsed_properties, StyleRule::RuleType::kStyle);
 }
@@ -310,12 +314,12 @@ TEST(CSSPropertyParserTest, IncompleteColor) {
 }
 
 TEST(CSSPropertyParserTest, ClipPathEllipse) {
+  test::TaskEnvironment task_environment;
   auto dummy_holder = std::make_unique<DummyPageHolder>(gfx::Size(500, 500));
   Document* doc = &dummy_holder->GetDocument();
   Page::InsertOrdinaryPageForTesting(&dummy_holder->GetPage());
   auto* context = MakeGarbageCollected<CSSParserContext>(
-      kHTMLStandardMode, SecureContextMode::kSecureContext,
-      CSSParserContext::kLiveProfile, doc);
+      kHTMLStandardMode, SecureContextMode::kSecureContext, doc);
 
   CSSParser::ParseSingleValue(CSSPropertyID::kClipPath,
                               "ellipse(1px 2px at invalid)", context);
@@ -330,52 +334,8 @@ TEST(CSSPropertyParserTest, ClipPathEllipse) {
   EXPECT_TRUE(doc->IsUseCounted(WebFeature::kBasicShapeEllipseNoRadius));
 }
 
-TEST(CSSPropertyParserTest, ScrollCustomizationPropertySingleValue) {
-  ScopedScrollCustomizationForTest scoped_feature(true);
-  const CSSValue* value = CSSParser::ParseSingleValue(
-      CSSPropertyID::kScrollCustomization, "pan-down",
-      StrictCSSParserContext(SecureContextMode::kSecureContext));
-  const auto* list = To<CSSValueList>(value);
-  EXPECT_EQ(1U, list->length());
-  EXPECT_EQ(CSSValueID::kPanDown,
-            To<CSSIdentifierValue>(list->Item(0U)).GetValueID());
-}
-
-TEST(CSSPropertyParserTest, ScrollCustomizationPropertyTwoValuesCombined) {
-  ScopedScrollCustomizationForTest scoped_feature(true);
-  const CSSValue* value = CSSParser::ParseSingleValue(
-      CSSPropertyID::kScrollCustomization, "pan-left pan-y",
-      StrictCSSParserContext(SecureContextMode::kSecureContext));
-  const auto* list = To<CSSValueList>(value);
-  EXPECT_EQ(2U, list->length());
-  EXPECT_EQ(CSSValueID::kPanLeft,
-            To<CSSIdentifierValue>(list->Item(0U)).GetValueID());
-  EXPECT_EQ(CSSValueID::kPanY,
-            To<CSSIdentifierValue>(list->Item(1U)).GetValueID());
-}
-
-TEST(CSSPropertyParserTest, ScrollCustomizationPropertyInvalidEntries) {
-  // We expect exactly one property value per coordinate.
-  ScopedScrollCustomizationForTest scoped_feature(true);
-  const CSSValue* value = CSSParser::ParseSingleValue(
-      CSSPropertyID::kScrollCustomization, "pan-left pan-right",
-      StrictCSSParserContext(SecureContextMode::kSecureContext));
-  EXPECT_FALSE(value);
-  value = CSSParser::ParseSingleValue(
-      CSSPropertyID::kScrollCustomization, "pan-up pan-down",
-      StrictCSSParserContext(SecureContextMode::kSecureContext));
-  EXPECT_FALSE(value);
-  value = CSSParser::ParseSingleValue(
-      CSSPropertyID::kScrollCustomization, "pan-x pan-left",
-      StrictCSSParserContext(SecureContextMode::kSecureContext));
-  EXPECT_FALSE(value);
-  value = CSSParser::ParseSingleValue(
-      CSSPropertyID::kScrollCustomization, "pan-x pan-x",
-      StrictCSSParserContext(SecureContextMode::kSecureContext));
-  EXPECT_FALSE(value);
-}
-
 TEST(CSSPropertyParserTest, GradientUseCount) {
+  test::TaskEnvironment task_environment;
   auto dummy_page_holder =
       std::make_unique<DummyPageHolder>(gfx::Size(800, 600));
   Document& document = dummy_page_holder->GetDocument();
@@ -388,6 +348,7 @@ TEST(CSSPropertyParserTest, GradientUseCount) {
 }
 
 TEST(CSSPropertyParserTest, PaintUseCount) {
+  test::TaskEnvironment task_environment;
   auto dummy_page_holder =
       std::make_unique<DummyPageHolder>(gfx::Size(800, 600));
   dummy_page_holder->GetFrame().Loader().CommitNavigation(
@@ -404,6 +365,7 @@ TEST(CSSPropertyParserTest, PaintUseCount) {
 }
 
 TEST(CSSPropertyParserTest, CrossFadeUseCount) {
+  test::TaskEnvironment task_environment;
   auto dummy_page_holder =
       std::make_unique<DummyPageHolder>(gfx::Size(800, 600));
   Document& document = dummy_page_holder->GetDocument();
@@ -417,6 +379,7 @@ TEST(CSSPropertyParserTest, CrossFadeUseCount) {
 }
 
 TEST(CSSPropertyParserTest, TwoValueOverflowOverlayCount) {
+  test::TaskEnvironment task_environment;
   auto dummy_page_holder =
       std::make_unique<DummyPageHolder>(gfx::Size(800, 600));
   Document& document = dummy_page_holder->GetDocument();
@@ -433,6 +396,7 @@ TEST(CSSPropertyParserTest, TwoValueOverflowOverlayCount) {
 }
 
 TEST(CSSPropertyParserTest, OneValueOverflowOverlayCount) {
+  test::TaskEnvironment task_environment;
   auto dummy_page_holder =
       std::make_unique<DummyPageHolder>(gfx::Size(800, 600));
   Document& document = dummy_page_holder->GetDocument();
@@ -449,6 +413,7 @@ TEST(CSSPropertyParserTest, OneValueOverflowOverlayCount) {
 }
 
 TEST(CSSPropertyParserTest, OverflowXOverlayCount) {
+  test::TaskEnvironment task_environment;
   auto dummy_page_holder =
       std::make_unique<DummyPageHolder>(gfx::Size(800, 600));
   Document& document = dummy_page_holder->GetDocument();
@@ -465,6 +430,7 @@ TEST(CSSPropertyParserTest, OverflowXOverlayCount) {
 }
 
 TEST(CSSPropertyParserTest, OverflowYOverlayCount) {
+  test::TaskEnvironment task_environment;
   auto dummy_page_holder =
       std::make_unique<DummyPageHolder>(gfx::Size(800, 600));
   Document& document = dummy_page_holder->GetDocument();
@@ -481,6 +447,7 @@ TEST(CSSPropertyParserTest, OverflowYOverlayCount) {
 }
 
 TEST(CSSPropertyParserTest, OverflowFirstValueOverlayCount) {
+  test::TaskEnvironment task_environment;
   auto dummy_page_holder =
       std::make_unique<DummyPageHolder>(gfx::Size(800, 600));
   Document& document = dummy_page_holder->GetDocument();
@@ -497,6 +464,7 @@ TEST(CSSPropertyParserTest, OverflowFirstValueOverlayCount) {
 }
 
 TEST(CSSPropertyParserTest, OverflowSecondValueOverlayCount) {
+  test::TaskEnvironment task_environment;
   auto dummy_page_holder =
       std::make_unique<DummyPageHolder>(gfx::Size(800, 600));
   Document& document = dummy_page_holder->GetDocument();
@@ -513,6 +481,7 @@ TEST(CSSPropertyParserTest, OverflowSecondValueOverlayCount) {
 }
 
 TEST(CSSPropertyParserTest, DropFontfaceDescriptor) {
+  test::TaskEnvironment task_environment;
   EXPECT_FALSE(
       IsValidPropertyValueForStyleRule(CSSPropertyID::kSrc, "url(blah)"));
   EXPECT_FALSE(
@@ -545,6 +514,7 @@ class CSSPropertyUseCounterTest : public ::testing::Test {
   Document& GetDocument() { return dummy_page_holder_->GetDocument(); }
 
  private:
+  test::TaskEnvironment task_environment_;
   std::unique_ptr<DummyPageHolder> dummy_page_holder_;
 };
 
@@ -662,6 +632,270 @@ TEST_F(CSSPropertyUseCounterTest, CSSPropertyBackgroundImageWebkitImageSet) {
   EXPECT_TRUE(IsCounted(feature));
 }
 
+TEST_F(CSSPropertyUseCounterTest, CSSPropertyBackgroundImageImageSet) {
+  WebFeature feature = WebFeature::kImageSet;
+
+  ParseProperty(CSSPropertyID::kBackgroundImage, "none");
+  EXPECT_FALSE(IsCounted(feature));
+
+  ParseProperty(CSSPropertyID::kBackgroundImage, "image-set(url(foo) 2x)");
+  EXPECT_TRUE(IsCounted(feature));
+}
+
+void TestImageSetParsing(const String& testValue,
+                         const String& expectedCssText) {
+  const CSSValue* value = CSSParser::ParseSingleValue(
+      CSSPropertyID::kBackgroundImage, testValue,
+      StrictCSSParserContext(SecureContextMode::kSecureContext));
+  ASSERT_NE(value, nullptr);
+
+  const CSSValueList* val_list = To<CSSValueList>(value);
+  ASSERT_EQ(val_list->length(), 1U);
+
+  const CSSImageSetValue& image_set_value =
+      To<CSSImageSetValue>(val_list->First());
+  EXPECT_EQ(expectedCssText, image_set_value.CssText());
+}
+
+TEST(CSSPropertyParserTest, ImageSetDefaultResolution) {
+  TestImageSetParsing("image-set(url(foo))", "image-set(url(\"foo\") 1x)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetResolutionUnitX) {
+  TestImageSetParsing("image-set(url(foo) 3x)", "image-set(url(\"foo\") 3x)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetResolutionUnitDppx) {
+  TestImageSetParsing("image-set(url(foo) 3dppx)",
+                      "image-set(url(\"foo\") 3dppx)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetResolutionUnitDpi) {
+  TestImageSetParsing("image-set(url(foo) 96dpi)",
+                      "image-set(url(\"foo\") 96dpi)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetResolutionUnitDpcm) {
+  TestImageSetParsing("image-set(url(foo) 37dpcm)",
+                      "image-set(url(\"foo\") 37dpcm)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetZeroResolution) {
+  TestImageSetParsing("image-set(url(foo) 0x)", "image-set(url(\"foo\") 0x)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetCalcResolutionUnitX) {
+  TestImageSetParsing("image-set(url(foo) calc(1x))",
+                      "image-set(url(\"foo\") calc(1dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetCalcNegativerResolution) {
+  TestImageSetParsing("image-set(url(foo) calc(-1x))",
+                      "image-set(url(\"foo\") calc(-1dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetAddCalcResolutionUnitX) {
+  TestImageSetParsing("image-set(url(foo) calc(2x + 3x))",
+                      "image-set(url(\"foo\") calc(5dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetSubCalcResolutionUnitX) {
+  TestImageSetParsing("image-set(url(foo) calc(2x - 1x))",
+                      "image-set(url(\"foo\") calc(1dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetMultCalcResolutionUnitX) {
+  TestImageSetParsing("image-set(url(foo) calc(2x * 3))",
+                      "image-set(url(\"foo\") calc(6dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetMultCalcNegativeResolution) {
+  TestImageSetParsing("image-set(url(foo) calc(1 * -1x))",
+                      "image-set(url(\"foo\") calc(-1dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetMultCalcNegativeNumberResolution) {
+  TestImageSetParsing("image-set(url(foo) calc(-1 * 1x))",
+                      "image-set(url(\"foo\") calc(-1dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetDivCalcResolutionUnitX) {
+  TestImageSetParsing("image-set(url(foo) calc(6x / 3))",
+                      "image-set(url(\"foo\") calc(2dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetAddCalcResolutionUnitDpiWithX) {
+  TestImageSetParsing("image-set(url(foo) calc(96dpi + 2x))",
+                      "image-set(url(\"foo\") calc(3dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetAddCalcResolutionUnitDpiWithDpi) {
+  TestImageSetParsing("image-set(url(foo) calc(96dpi + 96dpi))",
+                      "image-set(url(\"foo\") calc(2dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetSubCalcResolutionUnitDpiFromX) {
+  TestImageSetParsing("image-set(url(foo) calc(2x - 96dpi))",
+                      "image-set(url(\"foo\") calc(1dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetCalcResolutionUnitDppx) {
+  TestImageSetParsing("image-set(url(foo) calc(2dppx * 3))",
+                      "image-set(url(\"foo\") calc(6dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetCalcResolutionUnitDpi) {
+  TestImageSetParsing("image-set(url(foo) calc(32dpi * 3))",
+                      "image-set(url(\"foo\") calc(1dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetCalcResolutionUnitDpcm) {
+  TestImageSetParsing("image-set(url(foo) calc(1dpcm * 37.79532))",
+                      "image-set(url(\"foo\") calc(1dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetCalcMaxInf) {
+  TestImageSetParsing("image-set(url(foo) calc(1 * max(INFinity * 3x, 0dpcm)))",
+                      "image-set(url(\"foo\") calc(infinity * 1dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetCalcMinInf) {
+  TestImageSetParsing("image-set(url(foo) calc(1 * min(inFInity * 4x, 0dpi)))",
+                      "image-set(url(\"foo\") calc(0dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetCalcMinMaxNan) {
+  TestImageSetParsing("image-set(url(foo) calc(1dppx * max(0, min(10, NaN))))",
+                      "image-set(url(\"foo\") calc(NaN * 1dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetCalcClamp) {
+  TestImageSetParsing(
+      "image-set(url(foo) calc(1dppx * clamp(-Infinity, 0, infinity)))",
+      "image-set(url(\"foo\") calc(0dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetCalcClampLeft) {
+  TestImageSetParsing(
+      "image-set(url(foo) calc(1dppx * clamp(0, -Infinity, infinity)))",
+      "image-set(url(\"foo\") calc(0dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetCalcClampRight) {
+  TestImageSetParsing(
+      "image-set(url(foo) calc(1dppx * clamp(-Infinity, infinity, 0)))",
+      "image-set(url(\"foo\") calc(0dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetCalcClampNan) {
+  TestImageSetParsing(
+      "image-set(url(foo) calc(1 * clamp(-INFINITY*0dppx, 0dppx, "
+      "infiniTY*0dppx)))",
+      "image-set(url(\"foo\") calc(NaN * 1dppx))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetUrlFunction) {
+  TestImageSetParsing("image-set(url('foo') 1x)", "image-set(url(\"foo\") 1x)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetUrlFunctionEmptyStrUrl) {
+  TestImageSetParsing("image-set(url('') 1x)", "image-set(url(\"\") 1x)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetUrlFunctionNoQuotationMarks) {
+  TestImageSetParsing("image-set(url(foo) 1x)", "image-set(url(\"foo\") 1x)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetNoUrlFunction) {
+  TestImageSetParsing("image-set('foo' 1x)", "image-set(url(\"foo\") 1x)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetEmptyStrUrl) {
+  TestImageSetParsing("image-set('' 1x)", "image-set(url(\"\") 1x)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetLinearGradient) {
+  TestImageSetParsing("image-set(linear-gradient(red, blue) 1x)",
+                      "image-set(linear-gradient(red, blue) 1x)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetRepeatingLinearGradient) {
+  TestImageSetParsing("image-set(repeating-linear-gradient(red, blue 25%) 1x)",
+                      "image-set(repeating-linear-gradient(red, blue 25%) 1x)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetRadialGradient) {
+  TestImageSetParsing("image-set(radial-gradient(red, blue) 1x)",
+                      "image-set(radial-gradient(red, blue) 1x)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetRepeatingRadialGradient) {
+  TestImageSetParsing("image-set(repeating-radial-gradient(red, blue 25%) 1x)",
+                      "image-set(repeating-radial-gradient(red, blue 25%) 1x)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetConicGradient) {
+  TestImageSetParsing("image-set(conic-gradient(red, blue) 1x)",
+                      "image-set(conic-gradient(red, blue) 1x)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetRepeatingConicGradient) {
+  TestImageSetParsing("image-set(repeating-conic-gradient(red, blue 25%) 1x)",
+                      "image-set(repeating-conic-gradient(red, blue 25%) 1x)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetType) {
+  TestImageSetParsing("image-set(url('foo') 1x type('image/png'))",
+                      "image-set(url(\"foo\") 1x type(\"image/png\"))");
+}
+
+void TestImageSetParsingFailure(const String& testValue) {
+  const CSSValue* value = CSSParser::ParseSingleValue(
+      CSSPropertyID::kBackgroundImage, testValue,
+      StrictCSSParserContext(SecureContextMode::kSecureContext));
+  ASSERT_EQ(value, nullptr);
+}
+
+TEST(CSSPropertyParserTest, ImageSetEmpty) {
+  TestImageSetParsingFailure("image-set()");
+}
+
+TEST(CSSPropertyParserTest, ImageSetMissingUrl) {
+  TestImageSetParsingFailure("image-set(1x)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetNegativeResolution) {
+  TestImageSetParsingFailure("image-set(url(foo) -1x)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetOnlyOneGradientColor) {
+  TestImageSetParsingFailure("image-set(linear-gradient(red) 1x)");
+}
+
+TEST(CSSPropertyParserTest, ImageSetAddCalcMissingUnit1) {
+  TestImageSetParsingFailure("image-set(url(foo) calc(2 + 3x))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetAddCalcMissingUnit2) {
+  TestImageSetParsingFailure("image-set(url(foo) calc(2x + 3))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetSubCalcMissingUnit1) {
+  TestImageSetParsingFailure("image-set(url(foo) calc(2 - 1x))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetSubCalcMissingUnit2) {
+  TestImageSetParsingFailure("image-set(url(foo) calc(2x - 1))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetMultCalcDoubleX) {
+  TestImageSetParsingFailure("image-set(url(foo) calc(2x * 3x))");
+}
+
+TEST(CSSPropertyParserTest, ImageSetDivCalcDoubleX) {
+  TestImageSetParsingFailure("image-set(url(foo) calc(6x / 3x))");
+}
+
 TEST(CSSPropertyParserTest, InternalLightDarkAuthor) {
   auto* context = MakeGarbageCollected<CSSParserContext>(
       kHTMLStandardMode, SecureContextMode::kInsecureContext);
@@ -694,6 +928,7 @@ TEST(CSSPropertyParserTest, UAInternalLightDarkColor) {
       {"-internal-light-dark(rgba(0, 0, 0, 0.5), hsla(180, 75%, 50%, "
        "0.7))",
        true},
+      {"-internal-light-dark(ff0000, green)", false},
   };
 
   for (const auto& test : tests) {
@@ -727,6 +962,7 @@ TEST(CSSPropertyParserTest, UAInternalLightDarkBackgroundImage) {
       {"-internal-light-dark(url(light.png), url(dark.png))", true},
       {"-internal-light-dark(url(light.png), none)", true},
       {"-internal-light-dark(none, -webkit-image-set(url(dark.png) 1x))", true},
+      {"-internal-light-dark(none, image-set(url(dark.png) 1x))", true},
       {"-internal-light-dark(  none  ,  none   )", true},
       {"-internal-light-dark(  url(light.png)  ,  url(dark.png)   )", true},
   };
@@ -748,8 +984,8 @@ bool ParseCSSValue(CSSPropertyID property_id,
   const auto tokens = tokenizer.TokenizeToEOF();
   const CSSParserTokenRange range(tokens);
   HeapVector<CSSPropertyValue, 64> parsed_properties;
-  return CSSPropertyParser::ParseValue(property_id, false, range, context,
-                                       parsed_properties,
+  return CSSPropertyParser::ParseValue(property_id, false, {range, value},
+                                       context, parsed_properties,
                                        StyleRule::RuleType::kStyle);
 }
 
@@ -770,6 +1006,7 @@ TEST(CSSPropertyParserTest, UAInternalLightDarkBackgroundShorthand) {
       {"-internal-light-dark(url(light.png), url(dark.png))", true},
       {"-internal-light-dark(url(light.png), none)", true},
       {"-internal-light-dark(none, -webkit-image-set(url(dark.png) 1x))", true},
+      {"-internal-light-dark(none, image-set(url(dark.png) 1x))", true},
       {"-internal-light-dark(  none  ,  none   )", true},
       {"-internal-light-dark(  url(light.png)  ,  url(dark.png)   )", true},
   };
@@ -812,7 +1049,8 @@ TEST(CSSPropertyParserTest, ParseRevertLayer) {
 
 // anchor() and anchor-size() shouldn't parse when the feature is disabled.
 TEST(CSSPropertyParserTest, AnchorPositioningDisabled) {
-  ScopedCSSAnchorPositioningForTest disabled_scope(false);
+  ScopedHTMLSelectListElementForTest select_list_disabled(false);
+  ScopedCSSAnchorPositioningForTest anchor_positioning_disabled(false);
 
   auto* context = MakeGarbageCollected<CSSParserContext>(
       kHTMLStandardMode, SecureContextMode::kInsecureContext);
@@ -825,6 +1063,235 @@ TEST(CSSPropertyParserTest, AnchorPositioningDisabled) {
                              context));
   EXPECT_FALSE(ParseCSSValue(CSSPropertyID::kHeight,
                              "anchor-size(--foo height)", context));
+}
+
+void TestRepeatStyleParsing(const String& testValue,
+                            const String& expectedCssText,
+                            const CSSPropertyID& propID) {
+  const CSSValue* value = CSSParser::ParseSingleValue(
+      propID, testValue,
+      StrictCSSParserContext(SecureContextMode::kSecureContext));
+  ASSERT_NE(value, nullptr);
+
+  const CSSValueList* val_list = To<CSSValueList>(value);
+  ASSERT_EQ(val_list->length(), 1U);
+
+  const CSSRepeatStyleValue& repeat_style_value =
+      To<CSSRepeatStyleValue>(val_list->First());
+  EXPECT_EQ(expectedCssText, repeat_style_value.CssText());
+}
+
+void TestRepeatStylesParsing(const String& testValue,
+                             const String& expectedCssText) {
+  TestRepeatStyleParsing(testValue, expectedCssText,
+                         CSSPropertyID::kBackgroundRepeat);
+  TestRepeatStyleParsing(testValue, expectedCssText,
+                         CSSPropertyID::kMaskRepeat);
+}
+
+TEST(CSSPropertyParserTest, RepeatStyleRepeatX1) {
+  TestRepeatStylesParsing("repeat-x", "repeat-x");
+}
+
+TEST(CSSPropertyParserTest, RepeatStyleRepeatX2) {
+  TestRepeatStylesParsing("repeat no-repeat", "repeat-x");
+}
+
+TEST(CSSPropertyParserTest, RepeatStyleRepeatY1) {
+  TestRepeatStylesParsing("repeat-y", "repeat-y");
+}
+
+TEST(CSSPropertyParserTest, RepeatStyleRepeatY2) {
+  TestRepeatStylesParsing("no-repeat repeat", "repeat-y");
+}
+
+TEST(CSSPropertyParserTest, RepeatStyleRepeat1) {
+  TestRepeatStylesParsing("repeat", "repeat");
+}
+
+TEST(CSSPropertyParserTest, RepeatStyleRepeat2) {
+  TestRepeatStylesParsing("repeat repeat", "repeat");
+}
+
+TEST(CSSPropertyParserTest, RepeatStyleNoRepeat1) {
+  TestRepeatStylesParsing("no-repeat", "no-repeat");
+}
+
+TEST(CSSPropertyParserTest, RepeatStyleNoRepeat2) {
+  TestRepeatStylesParsing("no-repeat no-repeat", "no-repeat");
+}
+
+TEST(CSSPropertyParserTest, RepeatStyleSpace1) {
+  TestRepeatStylesParsing("space", "space");
+}
+
+TEST(CSSPropertyParserTest, RepeatStyleSpace2) {
+  TestRepeatStylesParsing("space space", "space");
+}
+
+TEST(CSSPropertyParserTest, RepeatStyleRound1) {
+  TestRepeatStylesParsing("round", "round");
+}
+
+TEST(CSSPropertyParserTest, RepeatStyleRound2) {
+  TestRepeatStylesParsing("round round", "round");
+}
+
+TEST(CSSPropertyParserTest, RepeatStyle2Val) {
+  TestRepeatStylesParsing("round space", "round space");
+}
+
+void TestRepeatStyleViaShorthandParsing(const String& testValue,
+                                        const String& expectedCssText,
+                                        const CSSPropertyID& propID) {
+  auto* style =
+      MakeGarbageCollected<MutableCSSPropertyValueSet>(kHTMLStandardMode);
+  CSSParser::ParseValue(style, propID, testValue, false /* important */);
+  ASSERT_NE(style, nullptr);
+  EXPECT_TRUE(style->AsText().Contains(expectedCssText));
+}
+
+void TestRepeatStyleViaShorthandsParsing(const String& testValue,
+                                         const String& expectedCssText) {
+  TestRepeatStyleViaShorthandParsing(testValue, expectedCssText,
+                                     CSSPropertyID::kBackground);
+  TestRepeatStyleViaShorthandParsing(testValue, expectedCssText,
+                                     CSSPropertyID::kAlternativeMask);
+}
+
+TEST(CSSPropertyParserTest, RepeatStyleRepeatXViaShorthand) {
+  TestRepeatStyleViaShorthandsParsing("url(foo) repeat no-repeat", "repeat-x");
+}
+
+TEST(CSSPropertyParserTest, RepeatStyleRoundViaShorthand) {
+  TestRepeatStyleViaShorthandsParsing("url(foo) round round", "round");
+}
+
+TEST(CSSPropertyParserTest, RepeatStyle2ValViaShorthand) {
+  TestRepeatStyleViaShorthandsParsing("url(foo) space repeat", "space repeat");
+}
+
+void TestMaskPositionParsing(const String& testValue,
+                             const String& expectedCssText) {
+  auto* style =
+      MakeGarbageCollected<MutableCSSPropertyValueSet>(kHTMLStandardMode);
+  CSSParser::ParseValue(style, CSSPropertyID::kMaskPosition, testValue,
+                        false /* important */);
+  ASSERT_NE(style, nullptr);
+  EXPECT_TRUE(style->AsText().Contains(expectedCssText));
+}
+
+TEST(CSSPropertyParserTest, MaskPositionCenter) {
+  TestMaskPositionParsing("center", "center center");
+}
+
+TEST(CSSPropertyParserTest, MaskPositionTopRight) {
+  TestMaskPositionParsing("top right", "right top");
+}
+
+TEST(CSSPropertyParserTest, MaskPositionBottomLeft) {
+  TestMaskPositionParsing("bottom 10% left -13px", "left -13px bottom 10%");
+}
+
+void TestMaskModeParsing(const String& testValue,
+                         const String& expectedCssText) {
+  const CSSValue* value = CSSParser::ParseSingleValue(
+      CSSPropertyID::kMaskMode, testValue,
+      StrictCSSParserContext(SecureContextMode::kSecureContext));
+  ASSERT_NE(value, nullptr);
+  EXPECT_EQ(expectedCssText, value->CssText());
+}
+
+TEST(CSSPropertyParserTest, MaskModeAlpha) {
+  TestMaskModeParsing("alpha", "alpha");
+}
+
+TEST(CSSPropertyParserTest, MaskModeLuminance) {
+  TestMaskModeParsing("luminance", "luminance");
+}
+
+TEST(CSSPropertyParserTest, MaskModeMatchSource) {
+  TestMaskModeParsing("match-source", "match-source");
+}
+
+TEST(CSSPropertyParserTest, MaskModeMultipleValues) {
+  TestMaskModeParsing("alpha, luminance, match-source",
+                      "alpha, luminance, match-source");
+}
+
+void TestMaskParsing(const String& specifiedCssText,
+                     const CSSPropertyID property_id,
+                     const String& expectedPropValue) {
+  auto* style =
+      MakeGarbageCollected<MutableCSSPropertyValueSet>(kHTMLStandardMode);
+  ASSERT_NE(style, nullptr);
+
+  auto result = style->ParseAndSetProperty(
+      CSSPropertyID::kAlternativeMask, specifiedCssText, false /* important */,
+      SecureContextMode::kSecureContext, nullptr /* context_style_sheet */);
+  ASSERT_NE(result, MutableCSSPropertyValueSet::kParseError);
+
+  EXPECT_EQ(style->PropertyCount(), 9U);
+
+  EXPECT_EQ(style->GetPropertyValue(property_id), expectedPropValue);
+}
+
+TEST(CSSPropertyParserTest, MaskRepeatFromMaskNone) {
+  TestMaskParsing("none", CSSPropertyID::kMaskRepeat, "repeat");
+}
+
+TEST(CSSPropertyParserTest, MaskRepeatFromMaskNone2) {
+  TestMaskParsing("none, none", CSSPropertyID::kMaskRepeat, "repeat, repeat");
+}
+
+TEST(CSSPropertyParserTest, MaskRepeatFromMaskRepeatX) {
+  TestMaskParsing("repeat-x", CSSPropertyID::kMaskRepeat, "repeat-x");
+}
+
+TEST(CSSPropertyParserTest, MaskRepeatFromMaskRoundSpace) {
+  TestMaskParsing("round space", CSSPropertyID::kMaskRepeat, "round space");
+}
+
+TEST(CSSPropertyParserTest, MaskClipFromMaskNone) {
+  TestMaskParsing("none", CSSPropertyID::kMaskClip, "border-box");
+}
+
+TEST(CSSPropertyParserTest, MaskCompositeFromMaskNone) {
+  TestMaskParsing("none", CSSPropertyID::kMaskComposite, "add");
+}
+
+TEST(CSSPropertyParserTest, MaskModeFromMaskNone) {
+  TestMaskParsing("none", CSSPropertyID::kMaskMode, "match-source");
+}
+
+TEST(CSSPropertyParserTest, MaskOriginFromMaskNone) {
+  TestMaskParsing("none", CSSPropertyID::kMaskOrigin, "border-box");
+}
+
+TEST(CSSPropertyParserTest, MaskPositionFromMaskNone) {
+  TestMaskParsing("none", CSSPropertyID::kMaskPosition, "0% 0%");
+}
+
+TEST(CSSPropertyParserTest, MaskPositionFromMaskNone2) {
+  TestMaskParsing("none, none", CSSPropertyID::kMaskPosition, "0% 0%, 0% 0%");
+}
+
+TEST(CSSPropertyParserTest, MaskPositionLayered) {
+  TestMaskParsing("top right, bottom left", CSSPropertyID::kMaskPosition,
+                  "right top, left bottom");
+}
+
+TEST(CSSPropertyParserTest, MaskPositionLayered2) {
+  TestMaskParsing("top right, none, bottom left", CSSPropertyID::kMaskPosition,
+                  "right top, 0% 0%, left bottom");
+}
+
+TEST(CSSPropertyParserTest, MaskSizeFromMaskNone) {
+  TestMaskParsing("none", CSSPropertyID::kMaskSize, "auto");
+}
+
+TEST(CSSPropertyParserTest, MaskFromMaskNoneRepeatY) {
+  TestMaskParsing("none repeat-y", CSSPropertyID::kAlternativeMask, "repeat-y");
 }
 
 }  // namespace blink

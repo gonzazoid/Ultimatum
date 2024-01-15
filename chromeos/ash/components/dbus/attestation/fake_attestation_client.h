@@ -59,6 +59,8 @@ class COMPONENT_EXPORT(ASH_DBUS_ATTESTATION) FakeAttestationClient
   void GetEnrollmentPreparations(
       const ::attestation::GetEnrollmentPreparationsRequest& request,
       GetEnrollmentPreparationsCallback callback) override;
+  void GetFeatures(const ::attestation::GetFeaturesRequest& request,
+                   GetFeaturesCallback callback) override;
   void GetStatus(const ::attestation::GetStatusRequest& request,
                  GetStatusCallback callback) override;
   void Verify(const ::attestation::VerifyRequest& request,
@@ -95,6 +97,8 @@ class COMPONENT_EXPORT(ASH_DBUS_ATTESTATION) FakeAttestationClient
   void GetCertifiedNvIndex(
       const ::attestation::GetCertifiedNvIndexRequest& request,
       GetCertifiedNvIndexCallback callback) override;
+  void WaitForServiceToBeAvailable(
+      chromeos::WaitForServiceToBeAvailableCallback callback) override;
 
   // AttestationClient::TestInterface:
   void ConfigureEnrollmentPreparations(bool is_prepared) override;
@@ -102,6 +106,7 @@ class COMPONENT_EXPORT(ASH_DBUS_ATTESTATION) FakeAttestationClient
       std::deque<bool> sequence) override;
   void ConfigureEnrollmentPreparationsStatus(
       ::attestation::AttestationStatus status) override;
+  ::attestation::GetFeaturesReply* mutable_features_reply() override;
   ::attestation::GetStatusReply* mutable_status_reply() override;
   void AllowlistCertificateRequest(
       const ::attestation::GetCertificateRequest& request) override;
@@ -161,6 +166,7 @@ class COMPONENT_EXPORT(ASH_DBUS_ATTESTATION) FakeAttestationClient
   bool is_prepared_ = true;
   std::deque<bool> preparation_sequences_;
 
+  ::attestation::GetFeaturesReply features_reply_;
   ::attestation::GetStatusReply status_reply_;
 
   // Maintains the allowlisted certificate requests.
@@ -231,11 +237,13 @@ class COMPONENT_EXPORT(ASH_DBUS_ATTESTATION) FakeAttestationClient
       return std::forward_as_tuple(r1.username(), r1.key_label(),
                                    r1.key_name_for_spkac(), r1.domain(),
                                    r1.device_id(), r1.va_type(),
-                                   r1.include_customer_id()) <
+                                   r1.include_customer_id(), r1.flow_type(),
+                                   r1.include_certificate()) <
              std::forward_as_tuple(r2.username(), r2.key_label(),
                                    r2.key_name_for_spkac(), r2.domain(),
                                    r2.device_id(), r2.va_type(),
-                                   r2.include_customer_id());
+                                   r2.include_customer_id(), r2.flow_type(),
+                                   r2.include_certificate());
     }
   };
   // The table of `SignEnterpriseChallenge` which can sign enterprise

@@ -6,34 +6,26 @@
 
 #include <utility>
 
-#include "base/memory/ptr_util.h"
 #include "components/autofill/content/browser/content_autofill_driver.h"
 #include "components/autofill/content/browser/content_autofill_driver_factory.h"
-#include "components/autofill/core/common/form_data.h"
 #include "components/password_manager/content/browser/content_password_manager_driver.h"
 #include "components/password_manager/content/browser/form_submission_tracker_util.h"
 #include "components/password_manager/core/browser/password_manager_client.h"
-#include "components/password_manager/core/common/password_manager_features.h"
-#include "content/public/browser/browser_context.h"
-#include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_view_host.h"
-#include "content/public/browser/ssl_status.h"
 #include "content/public/browser/web_contents.h"
-#include "net/cert/cert_status_flags.h"
+#include "third_party/blink/public/common/features.h"
 
 namespace password_manager {
 
 ContentPasswordManagerDriverFactory::ContentPasswordManagerDriverFactory(
     content::WebContents* web_contents,
-    PasswordManagerClient* password_client,
-    autofill::AutofillClient* autofill_client)
+    PasswordManagerClient* password_client)
     : content::WebContentsObserver(web_contents),
       content::WebContentsUserData<ContentPasswordManagerDriverFactory>(
           *web_contents),
-      password_client_(password_client),
-      autofill_client_(autofill_client) {}
+      password_client_(password_client) {}
 
 ContentPasswordManagerDriverFactory::~ContentPasswordManagerDriverFactory() =
     default;
@@ -66,10 +58,8 @@ void ContentPasswordManagerDriverFactory::BindPasswordManagerDriver(
   if (!factory)
     return;
 
-  // TODO(crbug.com/1294378): Remove nullptr check once
-  // EnablePasswordManagerWithinFencedFrame is launched.
-  if (auto* driver = factory->GetDriverForFrame(render_frame_host))
-    driver->BindPendingReceiver(std::move(pending_receiver));
+  factory->GetDriverForFrame(render_frame_host)
+      ->BindPendingReceiver(std::move(pending_receiver));
 }
 
 ContentPasswordManagerDriver*
@@ -85,8 +75,7 @@ ContentPasswordManagerDriverFactory::GetDriverForFrame(
     return nullptr;
 
   if (render_frame_host->IsNestedWithinFencedFrame() &&
-      !base::FeatureList::IsEnabled(
-          features::kEnablePasswordManagerWithinFencedFrame)) {
+      !base::FeatureList::IsEnabled(blink::features::kFencedFramesAPIChanges)) {
     return nullptr;
   }
 
@@ -98,13 +87,8 @@ ContentPasswordManagerDriverFactory::GetDriverForFrame(
       // Args passed to the ContentPasswordManagerDriver
       // constructor if none exists for `render_frame_host`
       // yet.
-      render_frame_host, password_client_, autofill_client_);
+      render_frame_host, password_client_);
   return &it->second;
-}
-
-void ContentPasswordManagerDriverFactory::RenderFrameDeleted(
-    content::RenderFrameHost* render_frame_host) {
-  frame_driver_map_.erase(render_frame_host);
 }
 
 void ContentPasswordManagerDriverFactory::DidFinishNavigation(
@@ -117,7 +101,7 @@ void ContentPasswordManagerDriverFactory::DidFinishNavigation(
   // always iframes.
   if (!navigation->IsInPrimaryMainFrame()) {
     if (auto* driver = GetDriverForFrame(navigation->GetRenderFrameHost())) {
-      if (navigation->GetRenderFrameHost()->IsAnonymous()) {
+      if (navigation->GetRenderFrameHost()->IsCredentialless()) {
         driver->UnbindReceiver();
       }
     }
@@ -131,10 +115,19 @@ void ContentPasswordManagerDriverFactory::DidFinishNavigation(
                              password_client_->GetPasswordManager());
   // A committed navigation always has a live RenderFrameHost.
   CHECK(navigation->GetRenderFrameHost()->IsRenderFrameLive());
-  // TODO(crbug.com/1294378): Remove nullptr check once
-  // EnablePasswordManagerWithinFencedFrame is launched.
-  if (auto* driver = GetDriverForFrame(navigation->GetRenderFrameHost()))
-    driver->GetPasswordAutofillManager()->DidNavigateMainFrame();
+  GetDriverForFrame(navigation->GetRenderFrameHost())
+      ->GetPasswordAutofillManager()
+      ->DidNavigateMainFrame();
+}
+
+void ContentPasswordManagerDriverFactory::RenderFrameDeleted(
+    content::RenderFrameHost* render_frame_host) {
+  frame_driver_map_.erase(render_frame_host);
+}
+
+void ContentPasswordManagerDriverFactory::WebContentsDestroyed() {
+  web_contents()->RemoveUserData(UserDataKey());
+  // Do not add code - `this` is now destroyed.
 }
 
 void ContentPasswordManagerDriverFactory::RequestSendLoggingAvailability() {

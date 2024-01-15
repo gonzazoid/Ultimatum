@@ -5,7 +5,9 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_WORKER_NON_MAIN_THREAD_IMPL_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_WORKER_NON_MAIN_THREAD_IMPL_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
+#include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/sequence_manager/sequence_manager.h"
@@ -39,8 +41,6 @@ class PLATFORM_EXPORT NonMainThreadImpl : public NonMainThread {
   // Thread implementation.
   void Init() override;
   ThreadScheduler* Scheduler() override;
-  scoped_refptr<base::SingleThreadTaskRunner> GetDeprecatedTaskRunner()
-      const override;
 
   // NonMainThread implementation.
   scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunner() const override;
@@ -74,7 +74,8 @@ class PLATFORM_EXPORT NonMainThreadImpl : public NonMainThread {
     explicit SimpleThreadImpl(const WTF::String& name_prefix,
                               const base::SimpleThread::Options& options,
                               bool supports_gc,
-                              NonMainThreadImpl* worker_thread);
+                              NonMainThreadImpl* worker_thread,
+                              base::MessagePumpType message_pump_type);
 
     // Creates the thread's scheduler. Must be invoked before starting the
     // thread or accessing the default TaskRunner.
@@ -106,20 +107,22 @@ class PLATFORM_EXPORT NonMainThreadImpl : public NonMainThread {
    private:
     void Run() override;
 
+    const base::MessagePumpType message_pump_type_;
+
     // Internal queue not exposed externally nor to the scheduler used for
     // internal operations such as posting the task that will stop the run
     // loop.
     scoped_refptr<base::SingleThreadTaskRunner> internal_task_runner_;
 
-    NonMainThreadImpl* thread_;
+    raw_ptr<NonMainThreadImpl, ExperimentalRenderer> thread_;
 
     // The following variables are "owned" by the worker thread
     std::unique_ptr<base::sequence_manager::SequenceManager> sequence_manager_;
-    scoped_refptr<base::sequence_manager::TaskQueue> internal_task_queue_;
+    base::sequence_manager::TaskQueue::Handle internal_task_queue_;
     std::unique_ptr<scheduler::NonMainThreadSchedulerBase>
         non_main_thread_scheduler_;
     scoped_refptr<base::SingleThreadTaskRunner> default_task_runner_;
-    base::RunLoop* run_loop_;
+    raw_ptr<base::RunLoop, ExperimentalRenderer> run_loop_;
     bool supports_gc_;
     std::unique_ptr<GCSupport> gc_support_;
   };

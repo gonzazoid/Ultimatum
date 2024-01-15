@@ -6,18 +6,20 @@
 #define CHROMEOS_ASH_SERVICES_LIBASSISTANT_AUDIO_AUDIO_INPUT_IMPL_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
 #include "chromeos/ash/services/libassistant/public/mojom/audio_input_controller.mojom.h"
 #include "chromeos/ash/services/libassistant/public/mojom/platform_delegate.mojom.h"
 #include "chromeos/assistant/internal/libassistant/shared_headers.h"
 #include "media/base/audio_capturer_source.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash::libassistant {
 
@@ -30,7 +32,7 @@ class AudioCapturer;
 // AudioInputImpl.
 class AudioInputImpl : public assistant_client::AudioInput {
  public:
-  explicit AudioInputImpl(const absl::optional<std::string>& device_id);
+  explicit AudioInputImpl(const std::optional<std::string>& device_id);
   AudioInputImpl(const AudioInputImpl&) = delete;
   AudioInputImpl& operator=(const AudioInputImpl&) = delete;
   ~AudioInputImpl() override;
@@ -48,7 +50,7 @@ class AudioInputImpl : public assistant_client::AudioInput {
     virtual void RecreateAudioInputStream();
 
    protected:
-    AudioInputImpl* input_;
+    raw_ptr<AudioInputImpl> input_;
   };
 
   void Initialize(mojom::PlatformDelegate* platform_delegate);
@@ -69,8 +71,8 @@ class AudioInputImpl : public assistant_client::AudioInput {
   // Called when hotword enabled status changed.
   void OnHotwordEnabled(bool enable);
 
-  void SetDeviceId(const absl::optional<std::string>& device_id);
-  void SetHotwordDeviceId(const absl::optional<std::string>& device_id);
+  void SetDeviceId(const std::optional<std::string>& device_id);
+  void SetHotwordDeviceId(const std::optional<std::string>& device_id);
 
   // Called when the user opens/closes the lid.
   void OnLidStateChanged(mojom::LidState new_state);
@@ -88,10 +90,10 @@ class AudioInputImpl : public assistant_client::AudioInput {
   bool IsMicOpenForTesting() const;
   // Returns the id of the device that is currently recording audio.
   // Returns nullopt if no audio is being recorded.
-  absl::optional<std::string> GetOpenDeviceIdForTesting() const;
+  std::optional<std::string> GetOpenDeviceIdForTesting() const;
   // Returns if dead stream detection is being used for the current audio
   // recording. Returns nullopt if no audio is being recorded.
-  absl::optional<bool> IsUsingDeadStreamDetectionForTesting() const;
+  std::optional<bool> IsUsingDeadStreamDetectionForTesting() const;
   // Calls |OnCaptureDataArrived| to simulate audio input.
   void OnCaptureDataArrivedForTesting();
 
@@ -104,7 +106,7 @@ class AudioInputImpl : public assistant_client::AudioInput {
   void UpdateRecordingState();
 
   std::string GetDeviceId(bool use_dsp) const;
-  absl::optional<std::string> GetOpenDeviceId() const;
+  std::optional<std::string> GetOpenDeviceId() const;
   bool ShouldEnableDeadStreamDetection(bool use_dsp) const;
   bool HasOpenAudioStream() const;
 
@@ -125,12 +127,12 @@ class AudioInputImpl : public assistant_client::AudioInput {
   std::unique_ptr<AudioCapturer> audio_capturer_;
 
   // Owned by |LibassistantService|.
-  mojom::PlatformDelegate* platform_delegate_ = nullptr;
+  raw_ptr<mojom::PlatformDelegate> platform_delegate_ = nullptr;
 
   // Preferred audio input device which will be used for capture.
-  absl::optional<std::string> preferred_device_id_;
+  std::optional<std::string> preferred_device_id_;
   // Hotword input device used for hardware based hotword detection.
-  absl::optional<std::string> hotword_device_id_;
+  std::optional<std::string> hotword_device_id_;
 
   // Currently open audio stream. nullptr if no audio stream is open.
   std::unique_ptr<AudioInputStream> open_audio_stream_;
@@ -143,10 +145,5 @@ class AudioInputImpl : public assistant_client::AudioInput {
 };
 
 }  // namespace ash::libassistant
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos::libassistant {
-using ::ash::libassistant::AudioInputImpl;
-}
 
 #endif  // CHROMEOS_ASH_SERVICES_LIBASSISTANT_AUDIO_AUDIO_INPUT_IMPL_H_

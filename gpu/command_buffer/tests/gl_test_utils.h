@@ -18,10 +18,6 @@
 #include "ui/gl/gl_display.h"
 #include "ui/gl/gl_implementation.h"
 
-namespace gl {
-class GLImageNativePixmap;
-}
-
 namespace gpu {
 
 class GLTestHelper {
@@ -121,20 +117,6 @@ class GpuCommandBufferTestEGL {
   bool HasGLExtension(const base::StringPiece& extension) {
     return gfx::HasExtension(gl_extensions_, extension);
   }
-
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  // Create GLImageNativePixmap filled in with the given pixels.
-  scoped_refptr<gl::GLImageNativePixmap> CreateGLImageNativePixmap(
-      gfx::BufferFormat format,
-      gfx::Size size,
-      uint8_t* pixels) const;
-
-  // Get some real dmabuf fds for testing by exporting an EGLImage created from
-  // a GL texture.
-  gfx::NativePixmapHandle CreateNativePixmapHandle(gfx::BufferFormat format,
-                                                   gfx::Size size,
-                                                   uint8_t* pixels);
-#endif
 
  protected:
   bool gl_reinitialized_;

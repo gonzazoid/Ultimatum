@@ -14,8 +14,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 #include "device/bluetooth/bluetooth_discovery_session.h"
@@ -37,8 +39,6 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothAdapterWin
 
   BluetoothAdapterWin(const BluetoothAdapterWin&) = delete;
   BluetoothAdapterWin& operator=(const BluetoothAdapterWin&) = delete;
-
-  static bool UseNewBLEWinImplementation();
 
   // BluetoothAdapter:
   std::string GetAddress() const override;
@@ -126,7 +126,6 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothAdapterWin
   void InitForTest(
       base::OnceClosure init_callback,
       std::unique_ptr<win::BluetoothClassicWrapper> classic_wrapper,
-      std::unique_ptr<win::BluetoothLowEnergyWrapper> le_wrapper,
       scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner,
       scoped_refptr<base::SequencedTaskRunner> bluetooth_task_runner);
 
@@ -136,9 +135,9 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothAdapterWin
   base::OnceClosure init_callback_;
   std::string address_;
   std::string name_;
-  bool initialized_;
-  bool powered_;
-  DiscoveryStatus discovery_status_;
+  bool initialized_ = false;
+  bool powered_ = false;
+  DiscoveryStatus discovery_status_ = NOT_DISCOVERING;
   std::unordered_set<std::string> discovered_devices_;
 
   DiscoverySessionResultCallback discovery_changed_callback_;
@@ -149,7 +148,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothAdapterWin
   base::ThreadChecker thread_checker_;
 
   // Flag indicating a device update must be forced in DevicesPolled.
-  bool force_update_device_for_test_;
+  bool force_update_device_for_test_ = false;
 
   // NOTE: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.

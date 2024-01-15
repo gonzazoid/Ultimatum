@@ -12,7 +12,8 @@ import android.widget.TextView;
 import androidx.annotation.StringRes;
 import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
+
 import org.chromium.chrome.R;
 import org.chromium.components.infobars.InfoBar;
 import org.chromium.components.infobars.InfoBarCompactLayout;
@@ -49,8 +50,9 @@ public class FramebustBlockInfoBar extends InfoBar {
         InfoBarControlLayout control = layout.addControlLayout();
 
         ViewGroup ellipsizerView =
-                (ViewGroup) LayoutInflater.from(getContext())
-                        .inflate(R.layout.infobar_control_url_ellipsizer, control, false);
+                (ViewGroup)
+                        LayoutInflater.from(getContext())
+                                .inflate(R.layout.infobar_control_url_ellipsizer, control, false);
 
         // Formatting the URL and requesting to omit the scheme might still include it for some of
         // them (e.g. file, filesystem). We split the output of the formatting to make sure we don't
@@ -66,17 +68,15 @@ public class FramebustBlockInfoBar extends InfoBar {
             urlWithScheme = schemeSeparator + mBlockedUrl;
         }
 
-        String textToEllipsize = UrlFormatter
-                    .formatUrlForSecurityDisplay(urlWithScheme)
-                    .substring(scheme.length() + schemeSeparator.length());
+        String textToEllipsize =
+                UrlFormatter.formatUrlForSecurityDisplay(urlWithScheme)
+                        .substring(scheme.length() + schemeSeparator.length());
 
         TextView schemeView = ellipsizerView.findViewById(R.id.url_scheme);
         schemeView.setText(scheme);
 
         TextView urlView = ellipsizerView.findViewById(R.id.url_minus_scheme);
-        // Handle adjusting the text to workaround Android crashes when ellipsizing on old versions.
-        // TODO(donnd): remove this class when older versions of Android are no longer supported.
-        ((TextViewEllipsizerSafe) urlView).setTextSafely(textToEllipsize);
+        urlView.setText(textToEllipsize);
 
         ellipsizerView.setOnClickListener(view -> onLinkClicked());
 

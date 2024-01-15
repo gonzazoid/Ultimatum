@@ -15,7 +15,7 @@ class WifiConfigurationSyncService;
 
 namespace base {
 template <typename T>
-struct DefaultSingletonTraits;
+class NoDestructor;
 }  // namespace base
 
 class WifiConfigurationSyncServiceFactory : public ProfileKeyedServiceFactory {
@@ -33,14 +33,13 @@ class WifiConfigurationSyncServiceFactory : public ProfileKeyedServiceFactory {
   static bool ShouldRunInProfile(const Profile* profile);
 
  private:
-  friend struct base::DefaultSingletonTraits<
-      WifiConfigurationSyncServiceFactory>;
+  friend base::NoDestructor<WifiConfigurationSyncServiceFactory>;
 
   WifiConfigurationSyncServiceFactory();
   ~WifiConfigurationSyncServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   void RegisterProfilePrefs(
       user_prefs::PrefRegistrySyncable* registry) override;

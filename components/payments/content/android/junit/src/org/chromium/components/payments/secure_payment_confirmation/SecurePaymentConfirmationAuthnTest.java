@@ -4,10 +4,6 @@
 
 package org.chromium.components.payments.secure_payment_confirmation;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
-
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Color;
@@ -41,26 +37,30 @@ import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetControllerProvider;
 import org.chromium.components.payments.CurrencyFormatter;
 import org.chromium.components.payments.CurrencyFormatterJni;
-import org.chromium.components.url_formatter.SchemeDisplay;
-import org.chromium.components.url_formatter.UrlFormatter;
-import org.chromium.components.url_formatter.UrlFormatterJni;
+import org.chromium.components.payments.InputProtector;
+import org.chromium.components.payments.test_support.FakeClock;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.payments.mojom.PaymentCurrencyAmount;
 import org.chromium.payments.mojom.PaymentItem;
 import org.chromium.ui.base.WindowAndroid;
+import org.chromium.url.GURL;
 import org.chromium.url.Origin;
 
 import java.lang.ref.WeakReference;
 
 /** A test for SecurePaymentConfirmationAuthn. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE,
+@Config(
+        manifest = Config.NONE,
         shadows = {SecurePaymentConfirmationAuthnTest.ShadowBottomSheetControllerProvider.class})
 public class SecurePaymentConfirmationAuthnTest {
-    @Rule
-    public MockitoRule mMockitoRule = MockitoJUnit.rule().strictness(Strictness.WARN);
-    @Rule
-    public JniMocker mJniMocker = new JniMocker();
+    private static final long IGNORED_INPUT_DELAY =
+            InputProtector.POTENTIALLY_UNINTENDED_INPUT_THRESHOLD - 100;
+    private static final long SAFE_INPUT_DELAY =
+            InputProtector.POTENTIALLY_UNINTENDED_INPUT_THRESHOLD;
+
+    @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule().strictness(Strictness.WARN);
+    @Rule public JniMocker mJniMocker = new JniMocker();
 
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     private WebContents mWebContents;
@@ -76,6 +76,7 @@ public class SecurePaymentConfirmationAuthnTest {
     private PaymentItem mTotal;
     private Drawable mPaymentIcon;
     private SecurePaymentConfirmationAuthnController mAuthnController;
+    private FakeClock mClock = new FakeClock();
 
     /** The shadow of BottomSheetControllerProvider. Not to use outside the test. */
     @Implements(BottomSheetControllerProvider.class)
@@ -100,48 +101,46 @@ public class SecurePaymentConfirmationAuthnTest {
                 .when(windowAndroid)
                 .getContext();
 
-        UrlFormatter.Natives urlFormatterJniMock = Mockito.mock(UrlFormatter.Natives.class);
-        mJniMocker.mock(UrlFormatterJni.TEST_HOOKS, urlFormatterJniMock);
-        when(urlFormatterJniMock.formatOriginForSecurityDisplay(
-                     any(), eq(SchemeDisplay.OMIT_HTTP_AND_HTTPS)))
-                .then(inv -> ((Origin) (inv.getArgument(0))).getHost());
-
         CurrencyFormatter.Natives currencyFormatterJniMock =
                 Mockito.mock(CurrencyFormatter.Natives.class);
         mJniMocker.mock(CurrencyFormatterJni.TEST_HOOKS, currencyFormatterJniMock);
         Mockito.doReturn("$1.00")
                 .when(currencyFormatterJniMock)
-                .format(Mockito.anyLong(), Mockito.any(CurrencyFormatter.class),
+                .format(
+                        Mockito.anyLong(),
+                        Mockito.any(CurrencyFormatter.class),
                         Mockito.anyString());
 
         mPayeeName = "My Store";
-        org.chromium.url.internal.mojom.Origin origin =
-                new org.chromium.url.internal.mojom.Origin();
-        origin.scheme = "https";
-        origin.host = "store.example";
-        origin.port = 443;
-        mPayeeOrigin = new Origin(origin);
+        mPayeeOrigin = Origin.create(new GURL("https://store.example:443"));
         mTotal = new PaymentItem();
         mTotal.amount = new PaymentCurrencyAmount();
         mTotal.amount.currency = "USD";
         mTotal.amount.value = "1.00";
         // Our credit card 'icon' is just a red square.
-        mPaymentIcon = new BitmapDrawable(RuntimeEnvironment.application.getResources(),
-                Bitmap.createBitmap(new int[] {Color.RED}, 1 /* width */, 1 /* height */,
-                        Bitmap.Config.ARGB_8888));
-        mResponseCallback = (response) -> {
-            if (response) {
-                mIsPaymentConfirmed = true;
-            } else {
-                mIsPaymentCancelled = true;
-            }
-        };
-        mOptOutCallback = () -> {
-            mIsPaymentOptOut = true;
-        };
+        mPaymentIcon =
+                new BitmapDrawable(
+                        RuntimeEnvironment.application.getResources(),
+                        Bitmap.createBitmap(
+                                new int[] {Color.RED},
+                                /* width= */ 1,
+                                /* height= */ 1,
+                                Bitmap.Config.ARGB_8888));
+        mResponseCallback =
+                (response) -> {
+                    if (response) {
+                        mIsPaymentConfirmed = true;
+                    } else {
+                        mIsPaymentCancelled = true;
+                    }
+                };
+        mOptOutCallback =
+                () -> {
+                    mIsPaymentOptOut = true;
+                };
 
         ShadowBottomSheetControllerProvider.setBottomSheetController(
-                createBottomSheetController(/*requestShowContentResponse=*/true));
+                createBottomSheetController(/* requestShowContentResponse= */ true));
     }
 
     @After
@@ -151,6 +150,10 @@ public class SecurePaymentConfirmationAuthnTest {
 
     private void createAuthnController() {
         mAuthnController = SecurePaymentConfirmationAuthnController.create(mWebContents);
+        // Some tests expect a null controller, e.g. for a null web contents.
+        if (mAuthnController != null) {
+            mAuthnController.setInputProtectorForTesting(new InputProtector(mClock));
+        }
     }
 
     private BottomSheetController createBottomSheetController(boolean requestShowContentResponse) {
@@ -162,19 +165,19 @@ public class SecurePaymentConfirmationAuthnTest {
     }
 
     private boolean show() {
-        return show(mPayeeName, mPayeeOrigin, /*enableOptOut=*/false);
+        return show(mPayeeName, mPayeeOrigin, /* enableOptOut= */ false);
     }
 
     private boolean showWithPayeeName() {
-        return show(mPayeeName, null, /*enableOptOut=*/false);
+        return show(mPayeeName, null, /* enableOptOut= */ false);
     }
 
     private boolean showWithPayeeOrigin() {
-        return show(null, mPayeeOrigin, /*enableOptOut=*/false);
+        return show(null, mPayeeOrigin, /* enableOptOut= */ false);
     }
 
     private boolean showWithOptOut() {
-        return show(mPayeeName, mPayeeOrigin, /*enableOptOut=*/true);
+        return show(mPayeeName, mPayeeOrigin, /* enableOptOut= */ true);
     }
 
     private boolean show(String payeeName, Origin payeeOrigin, boolean enableOptOut) {
@@ -186,8 +189,16 @@ public class SecurePaymentConfirmationAuthnTest {
 
         String paymentInstrumentLabel = "My Card";
         String rpId = "rp.example";
-        return mAuthnController.show(mPaymentIcon, paymentInstrumentLabel, mTotal,
-                mResponseCallback, mOptOutCallback, payeeName, payeeOrigin, enableOptOut, rpId);
+        return mAuthnController.show(
+                mPaymentIcon,
+                paymentInstrumentLabel,
+                mTotal,
+                mResponseCallback,
+                mOptOutCallback,
+                payeeName,
+                payeeOrigin,
+                enableOptOut,
+                rpId);
     }
 
     private void setWindowAndroid(WindowAndroid windowAndroid, WebContents webContents) {
@@ -204,6 +215,7 @@ public class SecurePaymentConfirmationAuthnTest {
     public void testOnAuthnConfirmation() {
         createAuthnController();
         show();
+        mClock.advanceCurrentTimeMillis(SAFE_INPUT_DELAY);
         mAuthnController.getView().mContinueButton.performClick();
         Assert.assertTrue(mIsPaymentConfirmed);
         Assert.assertTrue(mAuthnController.isHidden());
@@ -214,6 +226,7 @@ public class SecurePaymentConfirmationAuthnTest {
     public void testOnAuthnCancellation() {
         createAuthnController();
         show();
+        mClock.advanceCurrentTimeMillis(SAFE_INPUT_DELAY);
         mAuthnController.getView().mCancelButton.performClick();
         Assert.assertTrue(mIsPaymentCancelled);
         Assert.assertTrue(mAuthnController.isHidden());
@@ -224,9 +237,52 @@ public class SecurePaymentConfirmationAuthnTest {
     public void testOnAuthnOptOut() {
         createAuthnController();
         showWithOptOut();
+        mClock.advanceCurrentTimeMillis(SAFE_INPUT_DELAY);
         SecurePaymentConfirmationAuthnView authnView = mAuthnController.getView();
         authnView.mOptOutText.getClickableSpans()[0].onClick(authnView.mOptOutText);
         Assert.assertTrue(mIsPaymentOptOut);
+        Assert.assertTrue(mAuthnController.isHidden());
+    }
+
+    @Test
+    @Feature({"Payments"})
+    public void testOnAuthnUnintentedInput() {
+        createAuthnController();
+        showWithOptOut();
+
+        // Clicking immediately is prevented.
+        mAuthnController.getView().mContinueButton.performClick();
+        Assert.assertFalse(mIsPaymentConfirmed);
+        Assert.assertFalse(mAuthnController.isHidden());
+
+        mAuthnController.getView().mCancelButton.performClick();
+        Assert.assertFalse(mIsPaymentCancelled);
+        Assert.assertFalse(mAuthnController.isHidden());
+
+        SecurePaymentConfirmationAuthnView authnView = mAuthnController.getView();
+        authnView.mOptOutText.getClickableSpans()[0].onClick(authnView.mOptOutText);
+        Assert.assertFalse(mIsPaymentOptOut);
+        Assert.assertFalse(mAuthnController.isHidden());
+
+        // Clicking after an interval less than the threshold is still prevented.
+        mClock.advanceCurrentTimeMillis(IGNORED_INPUT_DELAY);
+
+        mAuthnController.getView().mContinueButton.performClick();
+        Assert.assertFalse(mIsPaymentConfirmed);
+        Assert.assertFalse(mAuthnController.isHidden());
+
+        mAuthnController.getView().mCancelButton.performClick();
+        Assert.assertFalse(mIsPaymentCancelled);
+        Assert.assertFalse(mAuthnController.isHidden());
+
+        authnView.mOptOutText.getClickableSpans()[0].onClick(authnView.mOptOutText);
+        Assert.assertFalse(mIsPaymentOptOut);
+        Assert.assertFalse(mAuthnController.isHidden());
+
+        // Clicking confirm after the threshold is no longer prevented and confirms the dialog.
+        mClock.advanceCurrentTimeMillis(SAFE_INPUT_DELAY);
+        mAuthnController.getView().mContinueButton.performClick();
+        Assert.assertTrue(mIsPaymentConfirmed);
         Assert.assertTrue(mAuthnController.isHidden());
     }
 
@@ -244,7 +300,7 @@ public class SecurePaymentConfirmationAuthnTest {
     public void testRequestShowContentFalse() {
         createAuthnController();
         ShadowBottomSheetControllerProvider.setBottomSheetController(
-                createBottomSheetController(/*requestShowContentResponse=*/false));
+                createBottomSheetController(/* requestShowContentResponse= */ false));
         Assert.assertFalse(show());
         Assert.assertTrue(mAuthnController.isHidden());
     }

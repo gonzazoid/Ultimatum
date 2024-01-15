@@ -9,49 +9,48 @@
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
 #include "chrome/browser/ash/crostini/crostini_pref_names.h"
+#include "chrome/browser/ash/guest_os/guest_id.h"
 #include "chrome/browser/ash/guest_os/guest_os_registry_service.h"
 #include "chrome/browser/ash/guest_os/guest_os_registry_service_factory.h"
 #include "chrome/browser/ash/guest_os/public/guest_os_service.h"
-#include "chrome/browser/ash/guest_os/public/guest_os_wayland_server.h"
-#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/dbus/cicerone/cicerone_client.h"
-#include "chromeos/ash/components/dbus/vm_launch/launch.pb.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/scoped_user_manager.h"
+#include "third_party/skia/include/core/SkColor.h"
 
 using vm_tools::apps::App;
 using vm_tools::apps::ApplicationList;
 
 namespace crostini {
 
+constexpr SkColor kTestContainerBadgeColor = SK_ColorBLUE;
+
 CrostiniTestHelper::CrostiniTestHelper(TestingProfile* profile,
                                        bool enable_crostini)
-    : profile_(profile) {
+    : fake_user_manager_(std::make_unique<ash::FakeChromeUserManager>()),
+      profile_(profile) {
   scoped_feature_list_.InitAndEnableFeature(features::kCrostini);
 
   ash::ProfileHelper::SetAlwaysReturnPrimaryUserForTesting(true);
-  scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
-      std::make_unique<ash::FakeChromeUserManager>());
-  auto* fake_user_manager = static_cast<ash::FakeChromeUserManager*>(
-      user_manager::UserManager::Get());
   auto account = AccountId::FromUserEmailGaiaId("test@example.com", "12345");
-  fake_user_manager->AddUserWithAffiliationAndTypeAndProfile(
+  fake_user_manager_->AddUserWithAffiliationAndTypeAndProfile(
       account, false, user_manager::USER_TYPE_REGULAR, profile);
-  fake_user_manager->LoginUser(account);
+  fake_user_manager_->LoginUser(account);
 
-  if (enable_crostini)
+  if (enable_crostini) {
     EnableCrostini(profile);
+  }
 
   current_apps_.set_vm_name(kCrostiniDefaultVmName);
   current_apps_.set_container_name(kCrostiniDefaultContainerName);
 
-  guest_os::GuestOsService::GetForProfile(profile_)
-      ->WaylandServer()
-      ->OverrideServerForTesting(vm_tools::launch::TERMINA, nullptr, {});
+  guest_os::AddContainerToPrefs(profile_, DefaultContainerId(), {});
+  SetContainerBadgeColor(profile_, DefaultContainerId(),
+                         kTestContainerBadgeColor);
 }
 
 CrostiniTestHelper::~CrostiniTestHelper() {

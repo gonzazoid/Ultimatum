@@ -9,8 +9,7 @@
 #include "base/values.h"
 #include "components/onc/onc_constants.h"
 
-namespace chromeos {
-namespace onc {
+namespace chromeos::onc {
 
 CertificateScope::CertificateScope(const CertificateScope& other) = default;
 CertificateScope::CertificateScope(CertificateScope&& other) = default;
@@ -31,21 +30,21 @@ CertificateScope CertificateScope::Default() {
 }
 
 // static
-absl::optional<CertificateScope> CertificateScope::ParseFromOncValue(
-    const base::Value& scope_dict) {
+std::optional<CertificateScope> CertificateScope::ParseFromOncValue(
+    const base::Value::Dict& scope_dict) {
   const std::string* scope_type_str =
-      scope_dict.FindStringKey(::onc::scope::kType);
-  const std::string* scope_id_str = scope_dict.FindStringKey(::onc::scope::kId);
+      scope_dict.FindString(::onc::scope::kType);
+  const std::string* scope_id_str = scope_dict.FindString(::onc::scope::kId);
 
   if (!scope_type_str || !scope_id_str)
-    return absl::nullopt;
+    return std::nullopt;
 
   if (*scope_type_str == ::onc::scope::kDefault)
     return Default();
   if (*scope_type_str == ::onc::scope::kExtension)
     return ForExtension(*scope_id_str);
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 CertificateScope& CertificateScope::operator=(const CertificateScope& other) =
@@ -62,5 +61,4 @@ bool CertificateScope::operator!=(const CertificateScope& other) const {
   return !(*this == other);
 }
 
-}  // namespace onc
-}  // namespace chromeos
+}  // namespace chromeos::onc

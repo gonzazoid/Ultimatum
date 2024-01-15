@@ -7,13 +7,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "google_apis/common/dummy_auth_service.h"
 #include "google_apis/common/request_sender.h"
 #include "google_apis/drive/drive_base_requests.h"
@@ -158,14 +157,14 @@ class FilesListRequestRunnerTest : public testing::Test {
 
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::MainThreadType::IO};
-  std::unique_ptr<RequestSender> request_sender_;
   net::EmbeddedTestServer test_server_;
-  std::unique_ptr<FilesListRequestRunner> runner_;
   std::unique_ptr<network::mojom::NetworkService> network_service_;
   mojo::Remote<network::mojom::NetworkContext> network_context_;
   mojo::Remote<network::mojom::URLLoaderFactory> url_loader_factory_;
   scoped_refptr<network::WeakWrapperSharedURLLoaderFactory>
       test_shared_loader_factory_;
+  std::unique_ptr<RequestSender> request_sender_;
+  std::unique_ptr<FilesListRequestRunner> runner_;
   base::OnceClosure on_completed_callback_;
 
   // Response set by test cases to be returned from the HTTP server.

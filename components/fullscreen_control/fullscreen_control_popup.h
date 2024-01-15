@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "ui/gfx/animation/animation_delegate.h"
 #include "ui/gfx/animation/slide_animation.h"
@@ -71,8 +71,10 @@ class FullscreenControlPopup : public views::AnimationDelegateViews {
 
   void OnVisibilityChanged();
 
-  const raw_ptr<FullscreenControlView, DanglingUntriaged> control_view_;
+  // Must outlive `control_view_`.
   const std::unique_ptr<views::Widget> popup_;
+  const raw_ptr<FullscreenControlView> control_view_;
+
   const std::unique_ptr<gfx::SlideAnimation> animation_;
 
   // The bounds is empty when the popup is not showing.

@@ -6,18 +6,14 @@
 
 #import "base/feature_list.h"
 #import "components/safe_browsing/core/common/features.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list_observer_bridge.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
 #import "ios/chrome/browser/ui/settings/privacy/privacy_safe_browsing_coordinator.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
-#import "ios/chrome/browser/web_state_list/web_state_list_observer_bridge.h"
 #import "ios/components/security_interstitials/safe_browsing/safe_browsing_tab_helper.h"
 #import "ios/components/security_interstitials/safe_browsing/safe_browsing_tab_helper_delegate.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface SafeBrowsingCoordinator () <SafeBrowsingTabHelperDelegate,
                                        WebStateListObserving> {
@@ -34,7 +30,6 @@
 
 - (instancetype)initWithBaseViewController:(UIViewController*)viewController
                                    browser:(Browser*)browser {
-  DCHECK(base::FeatureList::IsEnabled(safe_browsing::kEnhancedProtection));
   self = [super initWithBaseViewController:viewController browser:browser];
   if (self) {
     _webStateList = browser->GetWebStateList();
@@ -59,7 +54,6 @@
 #pragma mark - SafeBrowsingTabHelperDelegate
 
 - (void)openSafeBrowsingSettings {
-  DCHECK(base::FeatureList::IsEnabled(safe_browsing::kEnhancedProtection));
   id<ApplicationCommands> applicationHandler = HandlerForProtocol(
       self.browser->GetCommandDispatcher(), ApplicationCommands);
   [applicationHandler showSafeBrowsingSettings];
@@ -67,27 +61,38 @@
 
 #pragma mark - WebStateListObserving
 
-- (void)webStateList:(WebStateList*)webStateList
-    didInsertWebState:(web::WebState*)webState
-              atIndex:(int)index
-           activating:(BOOL)activating {
-  DCHECK(base::FeatureList::IsEnabled(safe_browsing::kEnhancedProtection));
-  SafeBrowsingTabHelper::FromWebState(webState)->SetDelegate(self);
-}
-
-- (void)webStateList:(WebStateList*)webStateList
-    didReplaceWebState:(web::WebState*)oldWebState
-          withWebState:(web::WebState*)newWebState
-               atIndex:(int)atIndex {
-  DCHECK(base::FeatureList::IsEnabled(safe_browsing::kEnhancedProtection));
-  DCHECK(newWebState);
-  SafeBrowsingTabHelper::FromWebState(newWebState)->SetDelegate(self);
-}
-
-- (void)webStateList:(WebStateList*)webStateList
-    didDetachWebState:(web::WebState*)webState
-              atIndex:(int)atIndex {
-  SafeBrowsingTabHelper::FromWebState(webState)->RemoveDelegate();
+- (void)didChangeWebStateList:(WebStateList*)webStateList
+                       change:(const WebStateListChange&)change
+                       status:(const WebStateListStatus&)status {
+  switch (change.type()) {
+    case WebStateListChange::Type::kStatusOnly:
+      // Do nothing when a WebState is selected and its status is updated.
+      break;
+    case WebStateListChange::Type::kDetach: {
+      const WebStateListChangeDetach& detachChange =
+          change.As<WebStateListChangeDetach>();
+      SafeBrowsingTabHelper::FromWebState(detachChange.detached_web_state())
+          ->RemoveDelegate();
+      break;
+    }
+    case WebStateListChange::Type::kMove:
+      // Do nothing when a WebState is moved.
+      break;
+    case WebStateListChange::Type::kReplace: {
+      const WebStateListChangeReplace& replaceChange =
+          change.As<WebStateListChangeReplace>();
+      SafeBrowsingTabHelper::FromWebState(replaceChange.inserted_web_state())
+          ->SetDelegate(self);
+      break;
+    }
+    case WebStateListChange::Type::kInsert: {
+      const WebStateListChangeInsert& insertChange =
+          change.As<WebStateListChangeInsert>();
+      SafeBrowsingTabHelper::FromWebState(insertChange.inserted_web_state())
+          ->SetDelegate(self);
+      break;
+    }
+  }
 }
 
 @end

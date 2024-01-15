@@ -4,9 +4,11 @@
 
 #include "third_party/blink/renderer/modules/webusb/usb_device.h"
 
+#include <limits>
 #include <utility>
 
 #include "base/containers/span.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
@@ -43,6 +45,10 @@ namespace {
 
 const char kAccessDeniedError[] = "Access denied.";
 const char kBufferTooBig[] = "The data buffer exceeded its maximum size.";
+const char kPacketLengthsTooBig[] =
+    "The total packet length exceeded the maximum size.";
+const char kBufferSizeMismatch[] =
+    "The data buffer size must match the total packet length.";
 const char kDetachedBuffer[] = "The data buffer has been detached.";
 const char kDeviceStateChangeInProgress[] =
     "An operation that changes the device state is in progress.";
@@ -106,6 +112,20 @@ String ConvertTransferStatus(const UsbTransferStatus& status) {
   }
 }
 
+// Returns the sum of `packet_lengths`, or nullopt if the sum would overflow.
+absl::optional<uint32_t> TotalPacketLength(
+    const Vector<unsigned>& packet_lengths) {
+  uint32_t total_bytes = 0;
+  for (const auto packet_length : packet_lengths) {
+    // Check for overflow.
+    if (std::numeric_limits<uint32_t>::max() - total_bytes < packet_length) {
+      return absl::nullopt;
+    }
+    total_bytes += packet_length;
+  }
+  return total_bytes;
+}
+
 }  // namespace
 
 USBDevice::USBDevice(USB* parent,
@@ -157,7 +177,7 @@ USBConfiguration* USBDevice::configuration() const {
   if (configuration_index_ == kNotFound)
     return nullptr;
   DCHECK_LT(configuration_index_, configurations_.size());
-  return configurations_[configuration_index_];
+  return configurations_[configuration_index_].Get();
 }
 
 HeapVector<Member<USBConfiguration>> USBDevice::configurations() const {
@@ -414,39 +434,15 @@ ScriptPromise USBDevice::controlTransferOut(
     ScriptState* script_state,
     const USBControlTransferParameters* setup,
     ExceptionState& exception_state) {
-  EnsureNoDeviceOrInterfaceChangeInProgress(exception_state);
-  if (exception_state.HadException())
-    return ScriptPromise();
-
-  if (!opened_) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
-                                      kOpenRequired);
-    return ScriptPromise();
-  }
-
-  auto parameters = ConvertControlTransferParameters(setup, exception_state);
-  if (!parameters)
-    return ScriptPromise();
-
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
-      script_state, exception_state.GetContext());
-  ScriptPromise promise = resolver->Promise();
-
-  device_requests_.insert(resolver);
-  device_->ControlTransferOut(
-      std::move(parameters), Vector<uint8_t>(), 0,
-      resolver->WrapCallbackInScriptScope(WTF::BindOnce(
-          &USBDevice::AsyncControlTransferOut, WrapPersistent(this), 0)));
-  return promise;
+  return controlTransferOut(script_state, setup, DOMArrayPiece(),
+                            exception_state);
 }
 
 ScriptPromise USBDevice::controlTransferOut(
     ScriptState* script_state,
     const USBControlTransferParameters* setup,
-    const DOMArrayPiece& data,
+    const DOMArrayPiece& optional_data,
     ExceptionState& exception_state) {
-  DCHECK(!data.IsNull());
-
   EnsureNoDeviceOrInterfaceChangeInProgress(exception_state);
   if (exception_state.HadException())
     return ScriptPromise();
@@ -461,30 +457,32 @@ ScriptPromise USBDevice::controlTransferOut(
   if (!parameters)
     return ScriptPromise();
 
-  if (data.IsDetached()) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
-                                      kDetachedBuffer);
-    return ScriptPromise();
-  }
+  base::span<const uint8_t> data;
+  if (!optional_data.IsNull()) {
+    if (optional_data.IsDetached()) {
+      exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
+                                        kDetachedBuffer);
+      return ScriptPromise();
+    }
 
-  if (data.ByteLength() > std::numeric_limits<uint32_t>::max()) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kDataError,
-                                      kBufferTooBig);
-    return ScriptPromise();
+    if (optional_data.ByteLength() > std::numeric_limits<uint32_t>::max()) {
+      exception_state.ThrowDOMException(DOMExceptionCode::kDataError,
+                                        kBufferTooBig);
+      return ScriptPromise();
+    }
+
+    data = base::make_span(optional_data.Bytes(), optional_data.ByteLength());
   }
 
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
       script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
-
-  auto transfer_length = static_cast<uint32_t>(data.ByteLength());
   device_requests_.insert(resolver);
-  device_->ControlTransferOut(std::move(parameters),
-                              base::make_span(data.Bytes(), data.ByteLength()),
-                              0,
-                              resolver->WrapCallbackInScriptScope(WTF::BindOnce(
-                                  &USBDevice::AsyncControlTransferOut,
-                                  WrapPersistent(this), transfer_length)));
+  device_->ControlTransferOut(
+      std::move(parameters), data, 0,
+      resolver->WrapCallbackInScriptScope(WTF::BindOnce(
+          &USBDevice::AsyncControlTransferOut, WrapPersistent(this),
+          static_cast<uint32_t>(data.size()))));
   return promise;
 }
 
@@ -558,13 +556,12 @@ ScriptPromise USBDevice::transferOut(ScriptState* script_state,
       script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
-  auto transfer_length = static_cast<uint32_t>(data.ByteLength());
   device_requests_.insert(resolver);
   device_->GenericTransferOut(
       endpoint_number, base::make_span(data.Bytes(), data.ByteLength()), 0,
       resolver->WrapCallbackInScriptScope(
           WTF::BindOnce(&USBDevice::AsyncTransferOut, WrapPersistent(this),
-                        transfer_length)));
+                        static_cast<uint32_t>(data.ByteLength()))));
   return promise;
 }
 
@@ -577,6 +574,13 @@ ScriptPromise USBDevice::isochronousTransferIn(
                           exception_state);
   if (exception_state.HadException())
     return ScriptPromise();
+
+  absl::optional<uint32_t> total_bytes = TotalPacketLength(packet_lengths);
+  if (!total_bytes.has_value()) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kDataError,
+                                      kPacketLengthsTooBig);
+    return ScriptPromise();
+  }
 
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
       script_state, exception_state.GetContext());
@@ -609,9 +613,15 @@ ScriptPromise USBDevice::isochronousTransferOut(
     return ScriptPromise();
   }
 
-  if (data.ByteLength() > std::numeric_limits<wtf_size_t>::max()) {
+  absl::optional<uint32_t> total_bytes = TotalPacketLength(packet_lengths);
+  if (!total_bytes.has_value()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kDataError,
-                                      kBufferTooBig);
+                                      kPacketLengthsTooBig);
+    return ScriptPromise();
+  }
+  if (total_bytes.value() != data.ByteLength()) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kDataError,
+                                      kBufferSizeMismatch);
     return ScriptPromise();
   }
 
@@ -875,21 +885,26 @@ void USBDevice::SetEndpointsForInterface(wtf_size_t interface_index, bool set) {
 }
 
 void USBDevice::AsyncOpen(ScriptPromiseResolver* resolver,
-                          UsbOpenDeviceError error) {
+                          device::mojom::blink::UsbOpenDeviceResultPtr result) {
   MarkRequestComplete(resolver);
 
-  switch (error) {
-    case UsbOpenDeviceError::ALREADY_OPEN:
-      NOTREACHED();
-      [[fallthrough]];
-    case UsbOpenDeviceError::OK:
-      OnDeviceOpenedOrClosed(true /* opened */);
-      resolver->Resolve();
-      return;
+  if (result->is_success()) {
+    OnDeviceOpenedOrClosed(/*opened=*/true);
+    resolver->Resolve();
+    return;
+  }
+
+  DCHECK(result->is_error());
+  switch (result->get_error()) {
     case UsbOpenDeviceError::ACCESS_DENIED:
       OnDeviceOpenedOrClosed(false /* not opened */);
       resolver->RejectWithSecurityError(kAccessDeniedError, kAccessDeniedError);
-      return;
+      break;
+    case UsbOpenDeviceError::ALREADY_OPEN:
+      // This class keeps track of open state and won't try to open a device
+      // that is already open.
+      NOTREACHED();
+      break;
   }
 }
 

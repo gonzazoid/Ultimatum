@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "cc/cc_export.h"
 #include "cc/layers/layer.h"
@@ -31,7 +31,7 @@ class CC_EXPORT VideoLayer : public Layer {
 
   std::unique_ptr<LayerImpl> CreateLayerImpl(
       LayerTreeImpl* tree_impl) const override;
-
+  bool RequiresSetNeedsDisplayOnHdrHeadroomChange() const override;
   bool Update() override;
 
   // Clears |provider_| to ensure it is not used after destruction.

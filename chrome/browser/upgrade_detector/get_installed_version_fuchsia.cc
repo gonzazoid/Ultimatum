@@ -6,12 +6,12 @@
 
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/notreached.h"
 #include "components/version_info/version_info.h"
 
 void GetInstalledVersion(InstalledVersionCallback callback) {
-  // TODO(crbug.com/1235293): Check to see if a different version has been
+  // TODO(crbug.com/1318672): Check to see if a different version has been
   // installed on the device and is awaiting a restart. For the time being,
   // unconditionally return the currently-running version.
   NOTIMPLEMENTED_LOG_ONCE();

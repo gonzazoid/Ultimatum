@@ -8,14 +8,12 @@
     },
     {
       "name": "LayoutNGBlockFlow (positioned) DIV class='fixed'",
-      "bounds": [10, 10],
-      "contentsOpaqueForText": true
+      "bounds": [10, 10]
     },
     {
       "name": "LayoutNGBlockFlow HTML",
       "position": [8, 13],
       "bounds": [769, 1000],
-      "contentsOpaqueForText": true,
       "drawsContent": false
     },
     {

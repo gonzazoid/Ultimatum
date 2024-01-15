@@ -47,8 +47,10 @@ class AppListFeatureUsageMetricsTest : public NoSessionAshTestBase {
   void SimulateTabletModeSupport() {
     base::CommandLine::ForCurrentProcess()->AppendSwitch(
         switches::kAshEnableTabletMode);
-    Shell::Get()->tablet_mode_controller()->OnECLidAngleDriverStatusChanged(
+    auto* tablet_mode_controller = Shell::Get()->tablet_mode_controller();
+    tablet_mode_controller->OnECLidAngleDriverStatusChanged(
         /*is_supported=*/true);
+    tablet_mode_controller->OnDeviceListsComplete();
   }
 
   void FastForwardBy(base::TimeDelta delta) {
@@ -112,7 +114,8 @@ TEST_F(AppListFeatureUsageMetricsTest, NotEligibleInKioskMode) {
 
 TEST_F(AppListFeatureUsageMetricsTest, ShowAndHideLauncherInClamshell) {
   SimulateUserLogin("user@gmail.com");
-  Shell::Get()->app_list_controller()->ShowAppList();
+  Shell::Get()->app_list_controller()->ShowAppList(
+      AppListShowSource::kSearchKey);
   histograms_.ExpectBucketCount(kClamshellMetric, kUsedWithSuccess, 1);
 
   const base::TimeDelta kUsetime = base::Seconds(2);
@@ -149,7 +152,8 @@ TEST_F(AppListFeatureUsageMetricsTest,
   ASSERT_TRUE(Shell::Get()->tablet_mode_controller()->CanEnterTabletMode());
   SimulateUserLogin("user@gmail.com");
   std::unique_ptr<views::Widget> widget = CreateTestWidget();
-  Shell::Get()->app_list_controller()->ShowAppList();
+  Shell::Get()->app_list_controller()->ShowAppList(
+      AppListShowSource::kSearchKey);
 
   // Entering tablet mode with a window open does not show the launcher.
   Shell::Get()->tablet_mode_controller()->SetEnabledForTest(true);
@@ -169,7 +173,8 @@ TEST_F(AppListFeatureUsageMetricsTest, OpenClamshellThenTabletThenExit) {
   SimulateTabletModeSupport();
   SimulateUserLogin("user@gmail.com");
 
-  Shell::Get()->app_list_controller()->ShowAppList();
+  Shell::Get()->app_list_controller()->ShowAppList(
+      AppListShowSource::kSearchKey);
   histograms_.ExpectBucketCount(kClamshellMetric, kUsedWithSuccess, 1);
 
   // Switching from clamshell to tablet with the launcher open records usage

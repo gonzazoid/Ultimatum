@@ -8,20 +8,23 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/notreached.h"
 #include "base/path_service.h"
 #include "base/sequence_checker.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
+#include "base/task/sequenced_task_runner.h"
+#if BUILDFLAG(IS_WIN)
+#include "base/strings/utf_string_conversions.h"
+#endif
 #include "base/task/task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace update_client {
@@ -31,9 +34,16 @@ CrxCache::CrxCache(const CrxCache::Options& options)
 
 CrxCache::~CrxCache() = default;
 
+CrxCache::Options::Options(const base::FilePath& crx_cache_root_path)
+    : crx_cache_root_path(crx_cache_root_path) {}
+
 base::FilePath CrxCache::BuildCrxFilePath(const std::string& id,
                                           const std::string& fp) {
   return crx_cache_root_path_.AppendASCII(base::JoinString({id, fp}, "_"));
+}
+
+bool CrxCache::Contains(const std::string& id, const std::string& fp) {
+  return base::PathExists(BuildCrxFilePath(id, fp));
 }
 
 void CrxCache::Get(const std::string& id,
@@ -48,9 +58,7 @@ void CrxCache::Get(const std::string& id,
 CrxCache::Result CrxCache::ProcessGet(const std::string& id,
                                       const std::string& fp) {
   CrxCache::Result result;
-  absl::optional<base::FilePath> opt_file_path;
-  base::FilePath file_path = BuildCrxFilePath(id, fp);
-  if (!base::PathExists(file_path)) {
+  if (!Contains(id, fp)) {
     result.error = UnpackerError::kPuffinMissingPreviousCrx;
   } else {
     result.error = UnpackerError::kNone;
@@ -73,6 +81,10 @@ CrxCache::Result CrxCache::ProcessPut(const base::FilePath& crx_path,
                                       const std::string& id,
                                       const std::string& fp) {
   CrxCache::Result result;
+  if (id.empty() || fp.empty()) {
+    result.error = UnpackerError::kInvalidParams;
+    return result;
+  }
   base::FilePath dest_path = BuildCrxFilePath(id, fp);
   RemoveAll(id);
   result.error = MoveFileToCache(crx_path, dest_path);
@@ -84,9 +96,15 @@ CrxCache::Result CrxCache::ProcessPut(const base::FilePath& crx_path,
 
 void CrxCache::RemoveAll(const std::string& id) {
   if (base::PathExists(crx_cache_root_path_)) {
-    base::FileEnumerator file_enum(crx_cache_root_path_, false,
-                                   base::FileEnumerator::FILES,
-                                   FILE_PATH_LITERAL(base::StrCat({id, "*"})));
+    base::FileEnumerator file_enum(
+        crx_cache_root_path_, false, base::FileEnumerator::FILES, [&id] {
+          std::string result = base::StrCat({id, "*"});
+#if BUILDFLAG(IS_WIN)
+          return base::ASCIIToWide(result);
+#else
+            return result;
+#endif
+        }());
     for (base::FilePath file_path = file_enum.Next(); !file_path.empty();
          file_path = file_enum.Next()) {
       base::DeleteFile(file_path);
@@ -109,7 +127,7 @@ void CrxCache::EndRequest(
     base::OnceCallback<void(const Result& result)> callback,
     CrxCache::Result result) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(main_sequence_checker_);
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), result));
 }
 

@@ -4,6 +4,7 @@
 
 #include "base/strings/stringprintf.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
 #include "build/buildflag.h"
@@ -19,10 +20,11 @@
 #include "components/prefs/pref_service.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/identity_test_utils.h"
-#include "components/sync/driver/sync_service_impl.h"
-#include "components/sync/driver/sync_token_status.h"
+#include "components/sync/service/sync_service_impl.h"
+#include "components/sync/service/sync_token_status.h"
 #include "content/public/test/browser_test.h"
 #include "google_apis/gaia/google_service_auth_error.h"
+#include "net/base/features.h"
 #include "net/base/net_errors.h"
 #include "net/http/http_status_code.h"
 
@@ -63,19 +65,26 @@ bool HasUserPrefValue(const PrefService* pref_service,
 // Waits until local changes are committed or an auth error is encountered.
 class TestForAuthError : public UpdatedProgressMarkerChecker {
  public:
+  static bool HasAuthError(syncer::SyncService* service) {
+    // Note that depending on the nature of the auth error, sync may become
+    // paused (for persistent auth errors) or in some other cases transient
+    // errors may be surfaced via GetSyncTokenStatusForDebugging() (e.g. 401
+    // HTTP status codes returned by the Sync server when the access token has
+    // expired).
+    return service->GetTransportState() ==
+               syncer::SyncService::TransportState::PAUSED ||
+           service->GetSyncTokenStatusForDebugging()
+                   .last_get_token_error.state() !=
+               GoogleServiceAuthError::NONE;
+  }
+
   explicit TestForAuthError(syncer::SyncServiceImpl* service)
       : UpdatedProgressMarkerChecker(service) {}
 
   // StatusChangeChecker implementation.
   bool IsExitConditionSatisfied(std::ostream* os) override {
     *os << "Waiting for auth error";
-    // Note: This is quite fragile. It relies on Sync trying to fetch a new
-    // access token, even though it might already be in a persistent auth error
-    // state.
-    return (service()
-                ->GetSyncTokenStatusForDebugging()
-                .last_get_token_error.state() !=
-            GoogleServiceAuthError::NONE) ||
+    return HasAuthError(service()) ||
            UpdatedProgressMarkerChecker::IsExitConditionSatisfied(os);
   }
 };
@@ -113,12 +122,7 @@ class SyncAuthTest : public SyncTest {
 
     // Run until the bookmark is committed or an auth error is encountered.
     TestForAuthError(GetSyncService(0)).Wait();
-
-    GoogleServiceAuthError oauth_error = GetSyncService(0)
-                                             ->GetSyncTokenStatusForDebugging()
-                                             .last_get_token_error;
-
-    return oauth_error.state() != GoogleServiceAuthError::NONE;
+    return TestForAuthError::HasAuthError(GetSyncService(0));
   }
 
   void DisableTokenFetchRetries() {
@@ -137,6 +141,21 @@ class SyncAuthTest : public SyncTest {
   int GetNextBookmarkIndex() { return bookmark_index_++; }
 
   int bookmark_index_ = 0;
+};
+
+class SyncAuthTestOAuthTokens : public SyncAuthTest {
+ public:
+  SyncAuthTestOAuthTokens() {
+    // This test suite intercepts OAuth token requests, and IP Protection also
+    // requests OAuth tokens. Those requests race with the requests from the
+    // sync service, resulting in intermittent failures. Disabling IP Protection
+    // prevents these races.
+    feature_list_.InitAndDisableFeature(
+        net::features::kEnableIpProtectionProxy);
+  }
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
 };
 
 // Verify that sync works with a valid OAuth2 token.
@@ -220,15 +239,16 @@ IN_PROC_BROWSER_TEST_F(SyncAuthTest, InvalidGrant) {
                          net::OK);
   ASSERT_TRUE(AttemptToTriggerAuthError());
   EXPECT_EQ(GetSyncService(0)->GetTransportState(),
-            syncer::SyncService::TransportState::ACTIVE);
+            syncer::SyncService::TransportState::PAUSED);
   EXPECT_EQ(GoogleServiceAuthError::INVALID_GAIA_CREDENTIALS,
             GetSyncService(0)->GetAuthError().state());
+  EXPECT_FALSE(GetSyncService(0)->IsRetryingAccessTokenFetchForTest());
 }
 
-// Verify that SyncServiceImpl retries after SERVICE_ERROR auth error when
-// an invalid_client error is returned by the access token fetcher with an
+// Verify that SyncServiceImpl does not retry after SERVICE_ERROR auth error
+// when an invalid_client error is returned by the access token fetcher with an
 // HTTP_BAD_REQUEST (400) response code.
-IN_PROC_BROWSER_TEST_F(SyncAuthTest, RetryInvalidClient) {
+IN_PROC_BROWSER_TEST_F(SyncAuthTest, InvalidClient) {
   ASSERT_TRUE(SetupSync());
   ASSERT_FALSE(AttemptToTriggerAuthError());
   GetFakeServer()->SetHttpError(net::HTTP_UNAUTHORIZED);
@@ -237,8 +257,10 @@ IN_PROC_BROWSER_TEST_F(SyncAuthTest, RetryInvalidClient) {
                          net::OK);
   ASSERT_TRUE(AttemptToTriggerAuthError());
   EXPECT_EQ(GetSyncService(0)->GetTransportState(),
-            syncer::SyncService::TransportState::ACTIVE);
-  EXPECT_TRUE(GetSyncService(0)->IsRetryingAccessTokenFetchForTest());
+            syncer::SyncService::TransportState::PAUSED);
+  EXPECT_EQ(GoogleServiceAuthError::SERVICE_ERROR,
+            GetSyncService(0)->GetAuthError().state());
+  EXPECT_FALSE(GetSyncService(0)->IsRetryingAccessTokenFetchForTest());
 }
 
 // Verify that SyncServiceImpl retries after REQUEST_CANCELED auth error
@@ -270,7 +292,7 @@ IN_PROC_BROWSER_TEST_F(SyncAuthTest, FailInitialSetupWithPersistentError) {
   ASSERT_FALSE(GetClient(0)->SetupSync());
   EXPECT_FALSE(GetSyncService(0)->IsSyncFeatureActive());
   EXPECT_EQ(GetSyncService(0)->GetTransportState(),
-            syncer::SyncService::TransportState::INITIALIZING);
+            syncer::SyncService::TransportState::PAUSED);
   EXPECT_EQ(GoogleServiceAuthError::INVALID_GAIA_CREDENTIALS,
             GetSyncService(0)->GetAuthError().state());
 }
@@ -297,7 +319,7 @@ IN_PROC_BROWSER_TEST_F(SyncAuthTest, RetryInitialSetupWithTransientError) {
 #else
 #define MAYBE_TokenExpiry TokenExpiry
 #endif
-IN_PROC_BROWSER_TEST_F(SyncAuthTest, MAYBE_TokenExpiry) {
+IN_PROC_BROWSER_TEST_F(SyncAuthTestOAuthTokens, MAYBE_TokenExpiry) {
   // Initial sync succeeds with a short lived OAuth2 Token.
   ASSERT_TRUE(SetupClients());
   GetFakeServer()->ClearHttpError();
@@ -369,7 +391,7 @@ IN_PROC_BROWSER_TEST_F(SyncAuthTest, SyncPausedState) {
   ASSERT_FALSE(GetSyncService(0)->GetAuthError().IsPersistentError());
 
   // Once the auth error is gone, wait for Sync to start up again.
-  GetClient(0)->AwaitSyncSetupCompletion();
+  ASSERT_TRUE(GetClient(0)->AwaitSyncSetupCompletion());
 
   // Now the active data types should be back.
   EXPECT_TRUE(GetSyncService(0)->IsSyncFeatureActive());
@@ -433,7 +455,7 @@ IN_PROC_BROWSER_TEST_F(SyncAuthTest, ShouldTrackDeletionsInSyncPausedState) {
   NoAuthErrorChecker(GetSyncService(0)).Wait();
   ASSERT_FALSE(GetSyncService(0)->GetAuthError().IsPersistentError());
   // Once the auth error is gone, wait for Sync to start up again.
-  GetClient(0)->AwaitSyncSetupCompletion();
+  ASSERT_TRUE(GetClient(0)->AwaitSyncSetupCompletion());
 
   // Resuming sync could issue a reconfiguration, so wait until it finishes.
   SyncTransportActiveChecker(GetSyncService(0)).Wait();

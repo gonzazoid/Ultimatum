@@ -79,10 +79,6 @@ static_library("utility") {
     ]
   }
 
-  if (!is_ios && !is_android) {
-    deps += [ "//components/password_manager/services/password_strength:lib" ]
-  }
-
   if (is_mac) {
     deps += [ "//chrome/services/mac_notifications" ]
   }
@@ -97,8 +93,6 @@ static_library("utility") {
       "importer/external_process_importer_bridge.h",
       "importer/favicon_reencode.cc",
       "importer/favicon_reencode.h",
-      "importer/firefox_importer.cc",
-      "importer/firefox_importer.h",
       "importer/importer.cc",
       "importer/importer.h",
       "importer/importer_creator.cc",
@@ -106,15 +100,21 @@ static_library("utility") {
       "importer/profile_import_impl.cc",
       "importer/profile_import_impl.h",
     ]
+    if (!is_chromeos) {
+      sources += [
+        "importer/firefox_importer.cc",
+        "importer/firefox_importer.h",
+      ]
+    }
     if (is_mac) {
       sources += [
         "importer/safari_importer.h",
         "importer/safari_importer.mm",
       ]
     }
-    if (!is_mac && !is_fuchsia) {
-      # NSS decryptor depends on system NSS that is not available on MacOS or
-      # Fuchsia.
+    if (!is_mac && !is_fuchsia && !is_chromeos) {
+      # NSS decryptor is not needed on ChromeOS. Additionally, it depends on
+      # system NSS that is unavailable on MacOS/Fuchsia.
       sources += [
         "importer/nss_decryptor.cc",
         "importer/nss_decryptor.h",
@@ -192,8 +192,11 @@ static_library("utility") {
       "//chromeos/ash/services/ime:lib",
       "//chromeos/ash/services/ime/public/mojom",
       "//chromeos/ash/services/nearby/public/mojom:mojom",
+      "//chromeos/ash/services/orca",
+      "//chromeos/ash/services/orca/public/mojom",
       "//chromeos/ash/services/quick_pair",
       "//chromeos/ash/services/recording",
+      "//chromeos/constants:constants",
       "//chromeos/services/tts",
       "//chromeos/services/tts/public/mojom",
     ]
@@ -215,7 +218,8 @@ static_library("utility") {
     ]
   }
 
-  if (use_nss_certs) {
+  # NSS decryptor is not needed on ChromeOS.
+  if (!is_chromeos && use_nss_certs) {
     sources += [
       "importer/nss_decryptor_system_nss.cc",
       "importer/nss_decryptor_system_nss.h",
@@ -244,10 +248,10 @@ static_library("utility") {
   }
 
   if (safe_browsing_mode == 1) {
-    deps += [ "//chrome/services/file_util" ]
-    if (is_mac) {
-      deps += [ "//chrome/utility/safe_browsing/mac" ]
-    }
+    deps += [
+      "//chrome/services/file_util",
+      "//chrome/utility/safe_browsing",
+    ]
   }
 
   if (is_android || enable_extensions) {

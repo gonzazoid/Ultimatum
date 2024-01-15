@@ -268,8 +268,6 @@ const overlayUpdater = (() => {
 window.addEventListener('message', ({data}) => {
   if (data.type === 'updateAppearance') {
     oneGoogleBarApi.setForegroundLight(data.applyLightTheme);
-    document.body.toggleAttribute(
-        'apply-background-protection_', data.applyBackgroundProtection);
   }
 });
 
@@ -280,10 +278,10 @@ window.addEventListener('resize', () => {
 });
 
 // When the account overlay is shown, it does not close on blur. It does close
-// when clicking the body.
+// when focusing the body.
 window.addEventListener('blur', e => {
   if (e.target === window && document.activeElement === document.body) {
-    document.body.click();
+    document.body.focus();
   }
 });
 

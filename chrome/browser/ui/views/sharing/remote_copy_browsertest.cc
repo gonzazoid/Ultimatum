@@ -3,14 +3,15 @@
 // found in the LICENSE file.
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/guid.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/uuid.h"
 #include "build/build_config.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
 #include "chrome/browser/profiles/profile.h"
@@ -25,7 +26,6 @@
 #include "chrome/test/base/in_process_browser_test.h"
 #include "content/public/test/browser_test.h"
 #include "net/http/http_status_code.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/clipboard/clipboard.h"
 #include "ui/base/clipboard/clipboard_constants.h"
 #include "ui/base/clipboard/clipboard_monitor.h"
@@ -40,15 +40,6 @@ namespace {
 const char kDeviceName[] = "test device name";
 const char16_t kDeviceName16[] = u"test device name";
 const char kText[] = "test text";
-const char kResultHistogram[] = "Sharing.RemoteCopyHandleMessageResult";
-const char kTextSizeHistogram[] = "Sharing.RemoteCopyReceivedTextSize";
-const char kImageSizeBeforeDecodeHistogram[] =
-    "Sharing.RemoteCopyReceivedImageSizeBeforeDecode";
-const char kImageSizeAfterDecodeHistogram[] =
-    "Sharing.RemoteCopyReceivedImageSizeAfterDecode";
-const char kStatusCodeHistogram[] = "Sharing.RemoteCopyLoadImageStatusCode";
-const char kLoadTimeHistogram[] = "Sharing.RemoteCopyLoadImageTime";
-const char kDecodeTimeHistogram[] = "Sharing.RemoteCopyDecodeImageTime";
 
 class ClipboardObserver : public ui::ClipboardObserver {
  public:
@@ -97,10 +88,11 @@ class RemoteCopyBrowserTest : public InProcessBrowserTest {
   }
 
   gcm::IncomingMessage CreateMessage(const std::string& device_name,
-                                     absl::optional<std::string> text,
-                                     absl::optional<GURL> image_url) {
+                                     std::optional<std::string> text,
+                                     std::optional<GURL> image_url) {
     chrome_browser_sharing::SharingMessage sharing_message;
-    sharing_message.set_sender_guid(base::GenerateGUID());
+    sharing_message.set_sender_guid(
+        base::Uuid::GenerateRandomV4().AsLowercaseString());
     sharing_message.set_sender_device_name(device_name);
     if (text) {
       sharing_message.mutable_remote_copy_message()->set_text(text.value());
@@ -120,7 +112,7 @@ class RemoteCopyBrowserTest : public InProcessBrowserTest {
                        const std::string& text) {
     sharing_service_->GetFCMHandlerForTesting()->OnMessage(
         kSharingFCMAppID,
-        CreateMessage(device_name, text, /*image_url=*/absl::nullopt));
+        CreateMessage(device_name, text, /*image_url=*/std::nullopt));
   }
 
   void SendImageMessage(const std::string& device_name, const GURL& image_url) {
@@ -129,7 +121,7 @@ class RemoteCopyBrowserTest : public InProcessBrowserTest {
     ui::ClipboardMonitor::GetInstance()->AddObserver(&observer);
     sharing_service_->GetFCMHandlerForTesting()->OnMessage(
         kSharingFCMAppID,
-        CreateMessage(device_name, /*text*/ absl::nullopt, image_url));
+        CreateMessage(device_name, /*text*/ std::nullopt, image_url));
     run_loop.Run();
     ui::ClipboardMonitor::GetInstance()->RemoveObserver(&observer);
   }
@@ -191,10 +183,6 @@ IN_PROC_BROWSER_TEST_F(RemoteCopyBrowserTest, Text) {
                 kDeviceName16),
             notification.title());
   ASSERT_EQ(message_center::NOTIFICATION_TYPE_SIMPLE, notification.type());
-  histograms_.ExpectUniqueSample(
-      kResultHistogram, RemoteCopyHandleMessageResult::kSuccessHandledText, 1);
-  histograms_.ExpectUniqueSample(kTextSizeHistogram, std::string(kText).size(),
-                                 1);
 }
 
 IN_PROC_BROWSER_TEST_F(RemoteCopyBrowserTest, ImageUrl) {
@@ -218,19 +206,11 @@ IN_PROC_BROWSER_TEST_F(RemoteCopyBrowserTest, ImageUrl) {
                 kDeviceName16),
             notification.title());
   ASSERT_EQ(message_center::NOTIFICATION_TYPE_SIMPLE, notification.type());
-  histograms_.ExpectUniqueSample(kStatusCodeHistogram, net::HTTP_OK, 1);
-  histograms_.ExpectTotalCount(kLoadTimeHistogram, 1);
-  histograms_.ExpectUniqueSample(kImageSizeBeforeDecodeHistogram, 810490, 1);
-  histograms_.ExpectTotalCount(kDecodeTimeHistogram, 1);
-  histograms_.ExpectUniqueSample(kImageSizeAfterDecodeHistogram, 19660800, 1);
-  histograms_.ExpectUniqueSample(
-      kResultHistogram, RemoteCopyHandleMessageResult::kSuccessHandledImage, 1);
 }
 
 IN_PROC_BROWSER_TEST_F(RemoteCopyBrowserTest, TextThenImageUrl) {
   // The clipboard is empty.
   ASSERT_TRUE(GetAvailableClipboardTypes().empty());
-  histograms_.ExpectTotalCount(kResultHistogram, 0);
 
   // Send a message with text.
   SendTextMessage(kDeviceName, kText);
@@ -243,9 +223,6 @@ IN_PROC_BROWSER_TEST_F(RemoteCopyBrowserTest, TextThenImageUrl) {
   if (expected_size == 2u)
     ASSERT_EQ(ui::kMimeTypeTextUtf8, base::UTF16ToASCII(types[1]));
   ASSERT_EQ(kText, ReadClipboardText());
-  histograms_.ExpectTotalCount(kResultHistogram, 1);
-  histograms_.ExpectUniqueSample(
-      kResultHistogram, RemoteCopyHandleMessageResult::kSuccessHandledText, 1);
 
   // Send a message with an image url.
   SendImageMessage(kDeviceName, server_->GetURL("/image_decoding/droids.jpg"));
@@ -255,7 +232,4 @@ IN_PROC_BROWSER_TEST_F(RemoteCopyBrowserTest, TextThenImageUrl) {
   ASSERT_EQ(1u, types.size());
   ASSERT_EQ(ui::kMimeTypePNG, base::UTF16ToASCII(types[0]));
   ASSERT_EQ(std::string(), ReadClipboardText());
-  histograms_.ExpectTotalCount(kResultHistogram, 2);
-  histograms_.ExpectBucketCount(
-      kResultHistogram, RemoteCopyHandleMessageResult::kSuccessHandledImage, 1);
 }

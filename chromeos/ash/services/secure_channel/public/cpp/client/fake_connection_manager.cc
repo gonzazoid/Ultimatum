@@ -4,7 +4,7 @@
 
 #include "chromeos/ash/services/secure_channel/public/cpp/client/fake_connection_manager.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chromeos/ash/services/secure_channel/public/mojom/secure_channel_types.mojom.h"
 
 namespace ash::secure_channel {
@@ -26,10 +26,14 @@ ConnectionManager::Status FakeConnectionManager::GetStatus() const {
   return status_;
 }
 
-void FakeConnectionManager::AttemptNearbyConnection() {
+bool FakeConnectionManager::AttemptNearbyConnection() {
   ++num_attempt_connection_calls_;
-  if (status_ == Status::kDisconnected)
+  if (status_ == Status::kDisconnected) {
     SetStatus(Status::kConnecting);
+    return true;
+  }
+
+  return false;
 }
 
 void FakeConnectionManager::Disconnect() {
@@ -55,8 +59,8 @@ void FakeConnectionManager::RegisterPayloadFile(
 }
 
 void FakeConnectionManager::GetHostLastSeenTimestamp(
-    base::OnceCallback<void(absl::optional<base::Time>)> callback) {
-  std::move(callback).Run(absl::nullopt);
+    base::OnceCallback<void(std::optional<base::Time>)> callback) {
+  std::move(callback).Run(std::nullopt);
 }
 
 void FakeConnectionManager::SendFileTransferUpdate(

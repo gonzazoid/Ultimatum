@@ -4,9 +4,9 @@
 
 #include "chrome/browser/autofill/strike_database_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/autofill/core/browser/strike_database.h"
+#include "components/autofill/core/browser/strike_databases/strike_database.h"
 #include "content/public/browser/storage_partition.h"
 
 namespace autofill {
@@ -19,11 +19,19 @@ StrikeDatabase* StrikeDatabaseFactory::GetForProfile(Profile* profile) {
 
 // static
 StrikeDatabaseFactory* StrikeDatabaseFactory::GetInstance() {
-  return base::Singleton<StrikeDatabaseFactory>::get();
+  static base::NoDestructor<StrikeDatabaseFactory> instance;
+  return instance.get();
 }
 
 StrikeDatabaseFactory::StrikeDatabaseFactory()
-    : ProfileKeyedServiceFactory("AutofillStrikeDatabase") {}
+    : ProfileKeyedServiceFactory(
+          "AutofillStrikeDatabase",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 StrikeDatabaseFactory::~StrikeDatabaseFactory() = default;
 

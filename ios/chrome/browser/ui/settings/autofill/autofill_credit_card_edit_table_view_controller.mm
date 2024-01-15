@@ -4,9 +4,9 @@
 
 #import "ios/chrome/browser/ui/settings/autofill/autofill_credit_card_edit_table_view_controller.h"
 
+#import "base/apple/foundation_util.h"
 #import "base/format_macros.h"
 #import "base/ios/block_types.h"
-#import "base/mac/foundation_util.h"
 #import "base/strings/sys_string_conversions.h"
 #import "components/autofill/core/browser/autofill_data_util.h"
 #import "components/autofill/core/browser/data_model/credit_card.h"
@@ -16,28 +16,23 @@
 #import "components/autofill/core/common/autofill_payments_features.h"
 #import "components/autofill/ios/browser/credit_card_util.h"
 #import "components/strings/grit/components_strings.h"
-#import "ios/chrome/browser/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/open_new_tab_command.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_edit_item_delegate.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_utils.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/autofill/autofill_ui_type.h"
 #import "ios/chrome/browser/ui/autofill/autofill_ui_type_util.h"
 #import "ios/chrome/browser/ui/autofill/cells/autofill_edit_item.h"
-#import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/open_new_tab_command.h"
 #import "ios/chrome/browser/ui/settings/autofill/autofill_constants.h"
 #import "ios/chrome/browser/ui/settings/autofill/autofill_credit_card_util.h"
-#import "ios/chrome/browser/ui/settings/autofill/autofill_edit_table_view_controller+protected.h"
 #import "ios/chrome/browser/ui/settings/cells/copied_to_chrome_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_edit_item_delegate.h"
-#import "ios/chrome/browser/ui/table_view/table_view_utils.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
-#import "ios/chrome/grit/ios_chromium_strings.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 using ::AutofillTypeFromAutofillUIType;
@@ -98,12 +93,14 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
 - (void)editButtonPressed {
   // In the case of server cards, open the Payments editing page instead.
-  if (_creditCard.record_type() == autofill::CreditCard::FULL_SERVER_CARD ||
-      _creditCard.record_type() == autofill::CreditCard::MASKED_SERVER_CARD) {
+  if (_creditCard.record_type() ==
+          autofill::CreditCard::RecordType::kFullServerCard ||
+      _creditCard.record_type() ==
+          autofill::CreditCard::RecordType::kMaskedServerCard) {
     GURL paymentsURL = autofill::payments::GetManageInstrumentsUrl();
     OpenNewTabCommand* command =
         [OpenNewTabCommand commandWithURLFromChrome:paymentsURL];
-    [self.dispatcher closeSettingsUIAndOpenURL:command];
+    [self.applicationHandler closeSettingsUIAndOpenURL:command];
 
     // Don't call [super editButtonPressed] because edit mode is not actually
     // entered in this case.
@@ -125,7 +122,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
     for (NSInteger itemIndex = 0; itemIndex < itemCount; ++itemIndex) {
       NSIndexPath* path = [NSIndexPath indexPathForItem:itemIndex
                                               inSection:section];
-      AutofillEditItem* item = base::mac::ObjCCastStrict<AutofillEditItem>(
+      AutofillEditItem* item = base::apple::ObjCCastStrict<AutofillEditItem>(
           [model itemAtIndexPath:path]);
       if ([self.tableViewModel itemTypeForIndexPath:path] == ItemTypeNickname) {
         NSString* trimmedNickname = [item.textFieldValue
@@ -152,7 +149,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
                 itemsInSectionWithIdentifier:SectionIdentifierFields]];
 }
 
-#pragma mark - ChromeTableViewController
+#pragma mark - LegacyChromeTableViewController
 
 - (void)loadModel {
   [super loadModel];
@@ -173,7 +170,8 @@ typedef NS_ENUM(NSInteger, ItemType) {
     [model addItem:item toSectionWithIdentifier:SectionIdentifierFields];
   }
 
-  if (_creditCard.record_type() == autofill::CreditCard::FULL_SERVER_CARD) {
+  if (_creditCard.record_type() ==
+      autofill::CreditCard::RecordType::kFullServerCard) {
     // Add CopiedToChrome cell in its own section.
     [model addSectionWithIdentifier:SectionIdentifierCopiedToChrome];
     CopiedToChromeItem* copiedToChromeItem =
@@ -272,7 +270,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
   NSInteger itemType = [self.tableViewModel itemTypeForIndexPath:indexPath];
   TableViewTextEditCell* editCell =
-      base::mac::ObjCCast<TableViewTextEditCell>(cell);
+      base::apple::ObjCCast<TableViewTextEditCell>(cell);
   editCell.textField.delegate = self;
   switch (itemType) {
     case ItemTypeCardholderName:
@@ -283,7 +281,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
       break;
     case ItemTypeCopiedToChrome: {
       CopiedToChromeCell* copiedToChromeCell =
-          base::mac::ObjCCastStrict<CopiedToChromeCell>(cell);
+          base::apple::ObjCCastStrict<CopiedToChromeCell>(cell);
       [copiedToChromeCell.button addTarget:self
                                     action:@selector(buttonTapped:)
                           forControlEvents:UIControlEventTouchUpInside];
@@ -310,7 +308,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
   if (self.tableView.editing) {
     UITableViewCell* cell = [self.tableView cellForRowAtIndexPath:indexPath];
     TableViewTextEditCell* textFieldCell =
-        base::mac::ObjCCastStrict<TableViewTextEditCell>(cell);
+        base::apple::ObjCCastStrict<TableViewTextEditCell>(cell);
     [textFieldCell.textField becomeFirstResponder];
   }
 }
@@ -322,13 +320,31 @@ typedef NS_ENUM(NSInteger, ItemType) {
   return !self.tableView.editing;
 }
 
+#pragma mark - AutofillEditTableViewController
+
+- (BOOL)isItemAtIndexPathTextEditCell:(NSIndexPath*)cellPath {
+  NSInteger itemType = [self.tableViewModel itemTypeForIndexPath:cellPath];
+  switch (itemType) {
+    case ItemTypeCardholderName:
+    case ItemTypeCardNumber:
+    case ItemTypeExpirationMonth:
+    case ItemTypeExpirationYear:
+    case ItemTypeNickname:
+    case ItemTypeCopiedToChrome:
+      return YES;
+  }
+  NOTREACHED();
+  return NO;
+}
+
 #pragma mark - Actions
 
 - (void)buttonTapped:(UIButton*)button {
   _personalDataManager->ResetFullServerCard(_creditCard.guid());
 
   // Reset the copy of the card data used for display immediately.
-  _creditCard.set_record_type(autofill::CreditCard::MASKED_SERVER_CARD);
+  _creditCard.set_record_type(
+      autofill::CreditCard::RecordType::kMaskedServerCard);
   _creditCard.SetNumber(_creditCard.LastFourDigits());
   [self reloadData];
 }
@@ -349,7 +365,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (AutofillEditItem*)cardholderNameItem:(bool)isEditing {
   AutofillEditItem* cardholderNameItem =
       [[AutofillEditItem alloc] initWithType:ItemTypeCardholderName];
-  cardholderNameItem.textFieldName =
+  cardholderNameItem.fieldNameLabelText =
       l10n_util::GetNSString(IDS_IOS_AUTOFILL_CARDHOLDER);
   cardholderNameItem.textFieldValue = autofill::GetCreditCardName(
       _creditCard, GetApplicationContext()->GetApplicationLocale());
@@ -362,7 +378,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (AutofillEditItem*)cardNumberItem:(bool)isEditing {
   AutofillEditItem* cardNumberItem =
       [[AutofillEditItem alloc] initWithType:ItemTypeCardNumber];
-  cardNumberItem.textFieldName =
+  cardNumberItem.fieldNameLabelText =
       l10n_util::GetNSString(IDS_IOS_AUTOFILL_CARD_NUMBER);
   // Never show full card number for Wallet cards, even if copied locally.
   cardNumberItem.textFieldValue =
@@ -373,7 +389,6 @@ typedef NS_ENUM(NSInteger, ItemType) {
   cardNumberItem.autofillUIType = AutofillUITypeCreditCardNumber;
   cardNumberItem.keyboardType = UIKeyboardTypeNumberPad;
   cardNumberItem.hideIcon = !isEditing;
-  cardNumberItem.delegate = self;
   cardNumberItem.delegate = self;
   // Hide credit card icon when editing.
   if (!isEditing) {
@@ -386,7 +401,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (AutofillEditItem*)expirationMonthItem:(bool)isEditing {
   AutofillEditItem* expirationMonthItem =
       [[AutofillEditItem alloc] initWithType:ItemTypeExpirationMonth];
-  expirationMonthItem.textFieldName =
+  expirationMonthItem.fieldNameLabelText =
       l10n_util::GetNSString(IDS_IOS_AUTOFILL_EXP_MONTH);
   expirationMonthItem.textFieldValue =
       [NSString stringWithFormat:@"%02d", _creditCard.expiration_month()];
@@ -402,7 +417,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
   // Expiration year.
   AutofillEditItem* expirationYearItem =
       [[AutofillEditItem alloc] initWithType:ItemTypeExpirationYear];
-  expirationYearItem.textFieldName =
+  expirationYearItem.fieldNameLabelText =
       l10n_util::GetNSString(IDS_IOS_AUTOFILL_EXP_YEAR);
   expirationYearItem.textFieldValue =
       [NSString stringWithFormat:@"%04d", _creditCard.expiration_year()];
@@ -418,7 +433,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (AutofillEditItem*)nicknameItem:(bool)isEditing {
   AutofillEditItem* nicknameItem =
       [[AutofillEditItem alloc] initWithType:ItemTypeNickname];
-  nicknameItem.textFieldName =
+  nicknameItem.fieldNameLabelText =
       l10n_util::GetNSString(IDS_IOS_AUTOFILL_NICKNAME);
   nicknameItem.textFieldValue =
       autofill::GetCreditCardNicknameString(_creditCard);
@@ -452,7 +467,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
   NSIndexPath* indexPath =
       [self.tableViewModel indexPathForItemType:itemType
                               sectionIdentifier:SectionIdentifierFields];
-  AutofillEditItem* item = base::mac::ObjCCastStrict<AutofillEditItem>(
+  AutofillEditItem* item = base::apple::ObjCCastStrict<AutofillEditItem>(
       [self.tableViewModel itemAtIndexPath:indexPath]);
   return item.textFieldValue;
 }

@@ -4,12 +4,13 @@
 
 #include "components/password_manager/core/browser/http_credentials_cleaner.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_functions.h"
 #include "components/password_manager/core/browser/http_password_store_migrator.h"
 #include "components/password_manager/core/browser/password_manager_util.h"
+#include "components/password_manager/core/browser/password_store/password_store_interface.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "url/gurl.h"
@@ -28,7 +29,7 @@ HttpCredentialCleaner::HttpCredentialCleaner(
 HttpCredentialCleaner::~HttpCredentialCleaner() = default;
 
 bool HttpCredentialCleaner::NeedsCleaning() {
-  auto last = base::Time::FromDoubleT(prefs_->GetDouble(
+  auto last = base::Time::FromSecondsSinceUnixEpoch(prefs_->GetDouble(
       password_manager::prefs::kLastTimeObsoleteHttpCredentialsRemoved));
   return ((base::Time::Now() - last).InDays() >= kCleanUpDelayInDays);
 }
@@ -83,7 +84,7 @@ void HttpCredentialCleaner::OnHSTSQueryResult(
   if (user_it == https_credentials_map_.end()) {
     // Credentials are not migrated yet.
     base::UmaHistogramEnumeration(
-        "PasswordManager.HttpCredentials",
+        "PasswordManager.HttpCredentials2",
         is_hsts ? HttpCredentialType::kHasNoMatchingHttpsWithHsts
                 : HttpCredentialType::kHasNoMatchingHttpsWithoutHsts);
     if (is_hsts) {
@@ -99,7 +100,7 @@ void HttpCredentialCleaner::OnHSTSQueryResult(
     // The password store contains the same credentials (signon_realm, scheme,
     // username and password) on HTTPS version of the form.
     base::UmaHistogramEnumeration(
-        "PasswordManager.HttpCredentials",
+        "PasswordManager.HttpCredentials2",
         is_hsts ? HttpCredentialType::kHasEquivalentHttpsWithHsts
                 : HttpCredentialType::kHasEquivalentHttpsWithoutHsts);
     if (is_hsts) {
@@ -108,7 +109,7 @@ void HttpCredentialCleaner::OnHSTSQueryResult(
     }
   } else {
     base::UmaHistogramEnumeration(
-        "PasswordManager.HttpCredentials",
+        "PasswordManager.HttpCredentials2",
         is_hsts ? HttpCredentialType::kHasConflictingHttpsWithHsts
                 : HttpCredentialType::kHasConflictingHttpsWithoutHsts);
   }
@@ -119,7 +120,7 @@ void HttpCredentialCleaner::SetPrefIfDone() {
     return;
 
   prefs_->SetDouble(prefs::kLastTimeObsoleteHttpCredentialsRemoved,
-                    base::Time::Now().ToDoubleT());
+                    base::Time::Now().InSecondsFSinceUnixEpoch());
   observer_->CleaningCompleted();
 }
 

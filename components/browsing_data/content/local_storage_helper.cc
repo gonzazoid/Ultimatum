@@ -7,8 +7,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -16,12 +16,9 @@
 #include "content/public/browser/storage_partition.h"
 #include "content/public/browser/storage_usage_info.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
-#include "url/gurl.h"
 #include "url/origin.h"
-#include "url/url_constants.h"
 #include "url/url_util.h"
 
-using content::BrowserContext;
 using content::BrowserThread;
 
 namespace browsing_data {
@@ -50,9 +47,9 @@ void GetUsageInfoCallback(LocalStorageHelper::FetchCallback callback,
 
 }  // namespace
 
-LocalStorageHelper::LocalStorageHelper(BrowserContext* context)
-    : dom_storage_context_(
-          context->GetDefaultStoragePartition()->GetDOMStorageContext()) {
+LocalStorageHelper::LocalStorageHelper(
+    content::StoragePartition* storage_partition)
+    : dom_storage_context_(storage_partition->GetDOMStorageContext()) {
   DCHECK(dom_storage_context_);
 }
 
@@ -74,9 +71,9 @@ void LocalStorageHelper::DeleteStorageKey(const blink::StorageKey& storage_key,
 //---------------------------------------------------------
 
 CannedLocalStorageHelper::CannedLocalStorageHelper(
-    BrowserContext* context,
+    content::StoragePartition* storage_partition,
     bool update_ignored_empty_keys_on_fetch)
-    : LocalStorageHelper(context),
+    : LocalStorageHelper(storage_partition),
       update_ignored_empty_keys_on_fetch_(update_ignored_empty_keys_on_fetch) {}
 
 void CannedLocalStorageHelper::Add(const blink::StorageKey& storage_key) {
@@ -114,17 +111,17 @@ void CannedLocalStorageHelper::UpdateIgnoredEmptyKeysInternal(
     const std::list<content::StorageUsageInfo>& storage_usage_info) {
   non_empty_pending_storage_keys_.clear();
 
-  std::vector<url::Origin> non_empty_origins_list;
-  non_empty_origins_list.reserve(storage_usage_info.size());
-  // TODO(https://crbug.com/1199077): Use the real StorageKey once migrated.
+  std::vector<blink::StorageKey> non_empty_storage_keys_list;
+  non_empty_storage_keys_list.reserve(storage_usage_info.size());
   for (const auto& usage_info : storage_usage_info)
-    non_empty_origins_list.push_back(usage_info.storage_key.origin());
-  const base::flat_set<url::Origin> non_empty_origins(
-      std::move(non_empty_origins_list));
+    non_empty_storage_keys_list.push_back(usage_info.storage_key);
+  const base::flat_set<blink::StorageKey> non_empty_storage_keys(
+      std::move(non_empty_storage_keys_list));
 
   for (const auto& storage_key : pending_storage_keys_) {
-    if (non_empty_origins.contains(storage_key.origin()))
+    if (non_empty_storage_keys.contains(storage_key)) {
       non_empty_pending_storage_keys_.insert(storage_key);
+    }
   }
 
   std::move(done).Run();
@@ -141,8 +138,7 @@ void CannedLocalStorageHelper::StartFetchingInternal(FetchCallback callback) {
   for (const auto& storage_key : non_empty_pending_storage_keys_)
     result.emplace_back(storage_key, 0, base::Time());
 
-  content::GetUIThreadTaskRunner({})->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), result));
+  std::move(callback).Run(result);
 }
 
 void CannedLocalStorageHelper::StartFetching(FetchCallback callback) {

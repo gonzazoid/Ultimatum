@@ -14,6 +14,7 @@ import android.net.Uri;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestRule;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -27,12 +28,14 @@ import org.chromium.chrome.browser.feed.FeedServiceBridge;
 import org.chromium.chrome.browser.feed.FeedServiceBridgeJni;
 import org.chromium.chrome.browser.feed.StreamKind;
 import org.chromium.chrome.browser.feed.v2.FeedUserActionType;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.chrome.test.util.browser.Features;
+import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
 
-/**
- * Tests {@link FeedManagementMediator}.
- */
+/** Tests {@link FeedManagementMediator}. */
 @RunWith(BaseRobolectricTestRunner.class)
+@EnableFeatures(ChromeFeatureList.FEED_FOLLOW_UI_UPDATE)
 public class FeedManagementMediatorTest {
     private static final @StreamKind int TEST_STREAM_KIND = StreamKind.FOR_YOU;
     private Activity mActivity;
@@ -40,17 +43,13 @@ public class FeedManagementMediatorTest {
     private ModelList mModelList;
     private FeedManagementMediator mFeedManagementMediator;
 
-    @Rule
-    public JniMocker mocker = new JniMocker();
+    @Rule public JniMocker mocker = new JniMocker();
 
-    @Mock
-    private FeedServiceBridge.Natives mFeedServiceBridgeJniMock;
+    @Rule public TestRule mProcessor = new Features.JUnitProcessor();
 
-    @Mock
-    private FeedManagementMediator.FollowManagementLauncher mFollowManagementLauncher;
+    @Mock private FeedServiceBridge.Natives mFeedServiceBridgeJniMock;
 
-    @Mock
-    private FeedManagementMediator.AutoplayManagementLauncher mAutoplayManagementLauncher;
+    @Mock private FeedManagementMediator.FollowManagementLauncher mFollowManagementLauncher;
 
     @Before
     public void setUpTest() {
@@ -60,10 +59,9 @@ public class FeedManagementMediatorTest {
         MockitoAnnotations.initMocks(this);
         mocker.mock(FeedServiceBridgeJni.TEST_HOOKS, mFeedServiceBridgeJniMock);
 
-        mFeedManagementMediator = new FeedManagementMediator(mActivity, mModelList,
-                mFollowManagementLauncher, mAutoplayManagementLauncher, TEST_STREAM_KIND);
-
-        verify(mFeedServiceBridgeJniMock).isAutoplayEnabled();
+        mFeedManagementMediator =
+                new FeedManagementMediator(
+                        mActivity, mModelList, mFollowManagementLauncher, TEST_STREAM_KIND);
     }
 
     @Test
@@ -86,7 +84,8 @@ public class FeedManagementMediatorTest {
 
         // Assert
         Intent intent = mShadowActivity.peekNextStartedActivityForResult().intent;
-        assertEquals(intent.getData(),
+        assertEquals(
+                intent.getData(),
                 Uri.parse("https://www.google.com/preferences/interests/yourinterests?sh=n"));
         verify(mFeedServiceBridgeJniMock)
                 .reportOtherUserAction(
@@ -100,7 +99,8 @@ public class FeedManagementMediatorTest {
 
         // Assert
         Intent intent = mShadowActivity.peekNextStartedActivityForResult().intent;
-        assertEquals(intent.getData(),
+        assertEquals(
+                intent.getData(),
                 Uri.parse("https://www.google.com/preferences/interests/hidden?sh=n"));
         verify(mFeedServiceBridgeJniMock)
                 .reportOtherUserAction(
@@ -117,17 +117,5 @@ public class FeedManagementMediatorTest {
         verify(mFeedServiceBridgeJniMock)
                 .reportOtherUserAction(
                         TEST_STREAM_KIND, FeedUserActionType.TAPPED_MANAGE_FOLLOWING);
-    }
-
-    @Test
-    public void testHandleAutoplayClick() {
-        // Act
-        mFeedManagementMediator.handleAutoplayClick(null);
-
-        // Assert
-        verify(mAutoplayManagementLauncher).launchAutoplayManagement(mActivity);
-        verify(mFeedServiceBridgeJniMock)
-                .reportOtherUserAction(
-                        TEST_STREAM_KIND, FeedUserActionType.OPENED_AUTOPLAY_SETTINGS);
     }
 }

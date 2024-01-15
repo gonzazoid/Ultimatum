@@ -2,17 +2,27 @@ include_rules = [
   "+components/apdu",
   "+components/cbor",
   "+components/gcm_driver",
+  "+components/sync/protocol",
   "+crypto",
   "+dbus",
   "+net/base",
   "+net/cert",
   "+net/cookies",
   "+net/http",
+  "+net/proxy_resolution",
+  "+net/test",
   "+net/traffic_annotation",
+  "+net/url_request",
+  "+services/data_decoder",
   "+services/network",
   "+third_party/blink/public/mojom/webauthn",
   "+third_party/boringssl/src/include",
   "+third_party/cros_system_api",
   "+third_party/microsoft_webauthn",
   "+ui/base/l10n",
+
+  # TODO(https://crbug.com/1459620): Remove these when the enclave client
+  # utility is deleted.
+  "+mojo/core/embedder",
+  "+services/cert_verifier",
 ]

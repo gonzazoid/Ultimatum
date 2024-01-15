@@ -4,6 +4,8 @@
 
 #include "media/video/video_encoder_info.h"
 
+#include <tuple>
+
 namespace media {
 
 ResolutionBitrateLimit::ResolutionBitrateLimit() = default;
@@ -19,30 +21,31 @@ ResolutionBitrateLimit::ResolutionBitrateLimit(const gfx::Size& frame_size,
       max_bitrate_bps(max_bitrate_bps) {}
 ResolutionBitrateLimit::~ResolutionBitrateLimit() = default;
 
+bool operator==(const ResolutionBitrateLimit& lhs,
+                const ResolutionBitrateLimit& rhs) {
+  return std::tie(lhs.frame_size, lhs.min_start_bitrate_bps,
+                  lhs.min_bitrate_bps, lhs.max_bitrate_bps) ==
+         std::tie(rhs.frame_size, rhs.min_start_bitrate_bps,
+                  rhs.min_bitrate_bps, rhs.max_bitrate_bps);
+}
+
 VideoEncoderInfo::VideoEncoderInfo() = default;
 VideoEncoderInfo::VideoEncoderInfo(const VideoEncoderInfo&) = default;
 VideoEncoderInfo::~VideoEncoderInfo() = default;
 
-bool operator==(const ResolutionBitrateLimit& l,
-                const ResolutionBitrateLimit& r) {
-  return l.frame_size == r.frame_size &&
-         l.min_start_bitrate_bps == r.min_start_bitrate_bps &&
-         l.min_bitrate_bps == r.min_bitrate_bps &&
-         l.max_bitrate_bps == r.max_bitrate_bps;
+bool operator==(const VideoEncoderInfo& lhs, const VideoEncoderInfo& rhs) {
+  return std::tie(lhs.implementation_name, lhs.frame_delay, lhs.input_capacity,
+                  lhs.supports_native_handle, lhs.has_trusted_rate_controller,
+                  lhs.is_hardware_accelerated, lhs.supports_simulcast,
+                  lhs.reports_average_qp, lhs.requested_resolution_alignment,
+                  lhs.apply_alignment_to_all_simulcast_layers,
+                  lhs.fps_allocation, lhs.resolution_bitrate_limits) ==
+         std::tie(rhs.implementation_name, rhs.frame_delay, rhs.input_capacity,
+                  rhs.supports_native_handle, rhs.has_trusted_rate_controller,
+                  rhs.is_hardware_accelerated, rhs.supports_simulcast,
+                  rhs.reports_average_qp, rhs.requested_resolution_alignment,
+                  rhs.apply_alignment_to_all_simulcast_layers,
+                  rhs.fps_allocation, rhs.resolution_bitrate_limits);
 }
 
-bool operator==(const VideoEncoderInfo& l, const VideoEncoderInfo& r) {
-  for (size_t i = 0; i < VideoEncoderInfo::kMaxSpatialLayers; ++i) {
-    if (l.fps_allocation[i] != r.fps_allocation[i])
-      return false;
-  }
-
-  return l.implementation_name == r.implementation_name &&
-         l.supports_native_handle == r.supports_native_handle &&
-         l.has_trusted_rate_controller == r.has_trusted_rate_controller &&
-         l.is_hardware_accelerated == r.is_hardware_accelerated &&
-         l.supports_simulcast == r.supports_simulcast &&
-         l.reports_average_qp == r.reports_average_qp &&
-         l.resolution_bitrate_limits == r.resolution_bitrate_limits;
-}
 }  // namespace media

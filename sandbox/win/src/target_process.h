@@ -9,10 +9,14 @@
 #include <stdint.h>
 
 #include <memory>
-#include <vector>
+#include <string_view>
 
+#include "base/containers/span.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/free_deleter.h"
 #include "base/memory/raw_ptr.h"
+#include "base/strings/string_util.h"
+#include "base/win/access_token.h"
 #include "base/win/scoped_handle.h"
 #include "base/win/scoped_process_information.h"
 #include "base/win/sid.h"
@@ -23,7 +27,6 @@ namespace sandbox {
 
 class Dispatcher;
 class SharedMemIPCServer;
-class Sid;
 class ThreadPool;
 class StartupInformationHelper;
 
@@ -33,12 +36,10 @@ class TargetProcess {
  public:
   TargetProcess() = delete;
 
-  // The constructor takes ownership of |initial_token| and |lockdown_token|
-  TargetProcess(base::win::ScopedHandle initial_token,
-                base::win::ScopedHandle lockdown_token,
-                HANDLE job,
-                ThreadPool* thread_pool,
-                const std::vector<base::win::Sid>& impersonation_capabilities);
+  // The constructor takes ownership of `initial_token` and `lockdown_token`.
+  TargetProcess(base::win::AccessToken initial_token,
+                base::win::AccessToken lockdown_token,
+                ThreadPool* thread_pool);
 
   TargetProcess(const TargetProcess&) = delete;
   TargetProcess& operator=(const TargetProcess&) = delete;
@@ -52,27 +53,19 @@ class TargetProcess {
                     base::win::ScopedProcessInformation* target_info,
                     DWORD* win_error);
 
-  // Assign a new lowbox token to the process post creation. The process
-  // must still be in its initial suspended state, however this still
-  // might fail in the presence of third-party software.
-  ResultCode AssignLowBoxToken(const base::win::ScopedHandle& token);
-
   // Destroys the target process.
   void Terminate();
 
   // Creates the IPC objects such as the BrokerDispatcher and the
   // IPC server. The IPC server uses the services of the thread_pool.
   ResultCode Init(Dispatcher* ipc_dispatcher,
-                  void* policy,
+                  std::optional<base::span<const uint8_t>> policy,
+                  std::optional<base::span<const uint8_t>> delegate_data,
                   uint32_t shared_IPC_size,
-                  uint32_t shared_policy_size,
                   DWORD* win_error);
 
   // Returns the handle to the target process.
   HANDLE Process() const { return sandbox_process_info_.process_handle(); }
-
-  // Returns the handle to the job object that the target process belongs to.
-  HANDLE Job() const { return job_; }
 
   // Returns the address of the target main exe. This is used by the
   // interceptions framework.
@@ -100,22 +93,26 @@ class TargetProcess {
       HMODULE base_address);
 
  private:
+  FRIEND_TEST_ALL_PREFIXES(TargetProcessTest, FilterEnvironment);
   // Verify the target process looks the same as the broker process.
   ResultCode VerifySentinels();
+
+  // Filters an environment to only include those that have an entry in
+  // `to_keep`.
+  static std::wstring FilterEnvironment(
+      const wchar_t* env,
+      const base::span<const std::wstring_view> to_keep);
+
   // Details of the target process.
   base::win::ScopedProcessInformation sandbox_process_info_;
   // The token associated with the process. It provides the core of the
   // sbox security.
-  base::win::ScopedHandle lockdown_token_;
+  base::win::AccessToken lockdown_token_;
   // The token given to the initial thread so that the target process can
   // start. It has more powers than the lockdown_token.
-  base::win::ScopedHandle initial_token_;
+  base::win::AccessToken initial_token_;
   // Kernel handle to the shared memory used by the IPC server.
   base::win::ScopedHandle shared_section_;
-  // Job object containing the target process. This is used during
-  // process creation prior to Windows 10 and to identify the process in
-  // broker_services.cc.
-  HANDLE job_;
   // Reference to the IPC subsystem.
   std::unique_ptr<SharedMemIPCServer> ipc_server_;
   // Provides the threads used by the IPC. This class does not own this pointer.
@@ -128,8 +125,6 @@ class TargetProcess {
   RAW_PTR_EXCLUSION void* base_address_;
   // Full name of the target executable.
   std::unique_ptr<wchar_t, base::FreeDeleter> exe_name_;
-  /// List of capability sids for use when impersonating in an AC process.
-  std::vector<base::win::Sid> impersonation_capabilities_;
 };
 
 }  // namespace sandbox

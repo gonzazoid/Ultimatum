@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "components/update_client/component.h"
 #include "components/update_client/protocol_parser.h"
@@ -31,9 +31,9 @@ class UpdateChecker {
       int error,
       int retry_after_sec)>;
 
-  using Factory =
-      std::unique_ptr<UpdateChecker> (*)(scoped_refptr<Configurator> config,
-                                         PersistedData* persistent);
+  using Factory = base::RepeatingCallback<std::unique_ptr<UpdateChecker>(
+      scoped_refptr<Configurator> config,
+      PersistedData* persistent)>;
 
   UpdateChecker(const UpdateChecker&) = delete;
   UpdateChecker& operator=(const UpdateChecker&) = delete;

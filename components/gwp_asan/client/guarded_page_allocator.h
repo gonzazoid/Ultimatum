@@ -11,17 +11,17 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
+#include "build/build_config.h"
 #include "components/gwp_asan/client/export.h"
 #include "components/gwp_asan/common/allocator_state.h"
 
 namespace gwp_asan {
 namespace internal {
-
 // This class encompasses the allocation and deallocation logic on top of the
 // AllocatorState. Its members are not inspected or used by the crash handler.
 //
@@ -239,7 +239,7 @@ class GWP_ASAN_EXPORT GuardedPageAllocator {
   bool is_partition_alloc_ = false;
 
   friend class BaseGpaTest;
-  friend class CrashAnalyzerTest;
+  friend class BaseCrashAnalyzerTest;
   FRIEND_TEST_ALL_PREFIXES(CrashAnalyzerTest, InternalError);
   FRIEND_TEST_ALL_PREFIXES(CrashAnalyzerTest, StackTraceCollection);
 };

@@ -8,14 +8,12 @@ source_set("autofill_address_profile") {
     "save_address_profile_infobar_banner_overlay_mediator.mm",
   ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   deps = [
     "//base",
-    "//ios/chrome/browser/overlays",
-    "//ios/chrome/browser/overlays/public/infobar_banner",
-    "//ios/chrome/browser/overlays/public/infobar_modal",
-    "//ios/chrome/browser/ui/icons:symbols",
+    "//ios/chrome/browser/overlays/model",
+    "//ios/chrome/browser/overlays/model/public/infobar_banner",
+    "//ios/chrome/browser/overlays/model/public/infobar_modal",
+    "//ios/chrome/browser/shared/ui/symbols",
     "//ios/chrome/browser/ui/infobars/banners",
     "//ios/chrome/browser/ui/overlays:coordinators",
     "//ios/chrome/browser/ui/overlays/infobar_banner:mediators",
@@ -28,20 +26,19 @@ source_set("unit_tests") {
   sources =
       [ "save_address_profile_infobar_banner_overlay_mediator_unittest.mm" ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   deps = [
     ":autofill_address_profile",
     "//base/test:test_support",
     "//components/autofill/core/browser",
     "//components/autofill/core/browser:test_support",
     "//components/infobars/core",
-    "//ios/chrome/browser/infobars",
-    "//ios/chrome/browser/infobars/test",
-    "//ios/chrome/browser/overlays",
-    "//ios/chrome/browser/overlays/public/infobar_banner",
-    "//ios/chrome/browser/overlays/public/infobar_modal",
-    "//ios/chrome/browser/overlays/test",
+    "//ios/chrome/browser/infobars/model",
+    "//ios/chrome/browser/infobars/model/test",
+    "//ios/chrome/browser/overlays/model",
+    "//ios/chrome/browser/overlays/model/public/infobar_banner",
+    "//ios/chrome/browser/overlays/model/public/infobar_modal",
+    "//ios/chrome/browser/overlays/model/test",
+    "//ios/chrome/browser/shared/ui/symbols",
     "//ios/chrome/browser/ui/infobars/banners/test",
     "//ios/chrome/browser/ui/infobars/test",
     "//ios/chrome/browser/ui/overlays/test",

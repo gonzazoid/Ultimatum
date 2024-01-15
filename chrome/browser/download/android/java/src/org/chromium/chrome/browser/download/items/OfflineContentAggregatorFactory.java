@@ -5,9 +5,10 @@
 package org.chromium.chrome.browser.download.items;
 
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.NativeMethods;
+
+import org.chromium.base.ResettersForTesting;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.components.offline_items_collection.OfflineContentProvider;
 
@@ -26,10 +27,11 @@ public class OfflineContentAggregatorFactory {
      * pulled from a {@link Profile}.
      * @param provider The {@link OfflineContentProvider} to return.
      */
-    @VisibleForTesting
     public static void setOfflineContentProviderForTests(
             @Nullable OfflineContentProvider provider) {
+        var oldValue = sProvider;
         sProvider = provider;
+        ResettersForTesting.register(() -> sProvider = oldValue);
     }
 
     /**

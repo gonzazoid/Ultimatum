@@ -6,12 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/memory_dump_provider.h"
 #include "base/trace_event/memory_dump_request_args.h"
@@ -82,19 +81,20 @@ class MemoryTracingTest : public ContentBrowserTest {
     uint32_t request_index = next_request_index_++;
     auto callback = base::BindOnce(
         &MemoryTracingTest::OnGlobalMemoryDumpDone, base::Unretained(this),
-        base::ThreadTaskRunnerHandle::Get(), std::move(closure), request_index);
+        base::SingleThreadTaskRunner::GetCurrentDefault(), std::move(closure),
+        request_index);
     if (from_renderer_thread) {
       PostTaskToInProcessRendererAndWait(base::BindOnce(
           &memory_instrumentation::MemoryInstrumentation::
               RequestGlobalDumpAndAppendToTrace,
           base::Unretained(
               memory_instrumentation::MemoryInstrumentation::GetInstance()),
-          dump_type, level_of_detail, MemoryDumpDeterminism::NONE,
+          dump_type, level_of_detail, MemoryDumpDeterminism::kNone,
           std::move(callback)));
     } else {
       memory_instrumentation::MemoryInstrumentation::GetInstance()
           ->RequestGlobalDumpAndAppendToTrace(dump_type, level_of_detail,
-                                              MemoryDumpDeterminism::NONE,
+                                              MemoryDumpDeterminism::kNone,
                                               std::move(callback));
     }
   }
@@ -209,8 +209,8 @@ IN_PROC_BROWSER_TEST_F(SingleProcessMemoryTracingTest,
 
   EnableMemoryTracing();
   RequestGlobalDumpAndWait(false /* from_renderer_thread */,
-                           MemoryDumpType::EXPLICITLY_TRIGGERED,
-                           MemoryDumpLevelOfDetail::DETAILED);
+                           MemoryDumpType::kExplicitlyTriggered,
+                           MemoryDumpLevelOfDetail::kDetailed);
   DisableTracing();
 }
 
@@ -232,8 +232,8 @@ IN_PROC_BROWSER_TEST_F(SingleProcessMemoryTracingTest,
 
   EnableMemoryTracing();
   RequestGlobalDumpAndWait(true /* from_renderer_thread */,
-                           MemoryDumpType::EXPLICITLY_TRIGGERED,
-                           MemoryDumpLevelOfDetail::DETAILED);
+                           MemoryDumpType::kExplicitlyTriggered,
+                           MemoryDumpLevelOfDetail::kDetailed);
   DisableTracing();
 }
 
@@ -254,17 +254,17 @@ IN_PROC_BROWSER_TEST_F(SingleProcessMemoryTracingTest,
 
   EnableMemoryTracing();
   RequestGlobalDumpAndWait(true /* from_renderer_thread */,
-                           MemoryDumpType::EXPLICITLY_TRIGGERED,
-                           MemoryDumpLevelOfDetail::DETAILED);
+                           MemoryDumpType::kExplicitlyTriggered,
+                           MemoryDumpLevelOfDetail::kDetailed);
   RequestGlobalDumpAndWait(false /* from_renderer_thread */,
-                           MemoryDumpType::EXPLICITLY_TRIGGERED,
-                           MemoryDumpLevelOfDetail::DETAILED);
+                           MemoryDumpType::kExplicitlyTriggered,
+                           MemoryDumpLevelOfDetail::kDetailed);
   RequestGlobalDumpAndWait(false /* from_renderer_thread */,
-                           MemoryDumpType::EXPLICITLY_TRIGGERED,
-                           MemoryDumpLevelOfDetail::DETAILED);
+                           MemoryDumpType::kExplicitlyTriggered,
+                           MemoryDumpLevelOfDetail::kDetailed);
   RequestGlobalDumpAndWait(true /* from_renderer_thread */,
-                           MemoryDumpType::EXPLICITLY_TRIGGERED,
-                           MemoryDumpLevelOfDetail::DETAILED);
+                           MemoryDumpType::kExplicitlyTriggered,
+                           MemoryDumpLevelOfDetail::kDetailed);
   DisableTracing();
 }
 
@@ -288,7 +288,7 @@ IN_PROC_BROWSER_TEST_F(SingleProcessMemoryTracingTest, DISABLED_QueuedDumps) {
   //   5 (ED)                                        req--------->ok
   //   6 (PL)                                                        req->ok
   //
-  // where P=PERIODIC_INTERVAL, E=EXPLICITLY_TRIGGERED, D=DETAILED and L=LIGHT.
+  // where P=kPeriodicInterval, E=kExplicitlyTriggered, D=kDetailed and L=kLight.
 
   EXPECT_CALL(*mock_dump_provider_, OnMemoryDump(_, _))
       .Times(5)
@@ -296,42 +296,42 @@ IN_PROC_BROWSER_TEST_F(SingleProcessMemoryTracingTest, DISABLED_QueuedDumps) {
 
   EXPECT_CALL(*this, OnMemoryDumpDone(0, true /* success */));
   RequestGlobalDump(true /* from_renderer_thread */,
-                    MemoryDumpType::EXPLICITLY_TRIGGERED,
-                    MemoryDumpLevelOfDetail::DETAILED);
+                    MemoryDumpType::kExplicitlyTriggered,
+                    MemoryDumpLevelOfDetail::kDetailed);
 
   // This dump should fail immediately because there's already a detailed dump
   // request in the queue.
   EXPECT_CALL(*this, OnMemoryDumpDone(1, false /* success */));
   RequestGlobalDump(true /* from_renderer_thread */,
-                    MemoryDumpType::PERIODIC_INTERVAL,
-                    MemoryDumpLevelOfDetail::DETAILED);
+                    MemoryDumpType::kPeriodicInterval,
+                    MemoryDumpLevelOfDetail::kDetailed);
 
   EXPECT_CALL(*this, OnMemoryDumpDone(2, true /* success */));
   RequestGlobalDump(true /* from_renderer_thread */,
-                    MemoryDumpType::PERIODIC_INTERVAL,
-                    MemoryDumpLevelOfDetail::LIGHT);
+                    MemoryDumpType::kPeriodicInterval,
+                    MemoryDumpLevelOfDetail::kLight);
 
   // This dump should fail immediately because there's already a light dump
   // request in the queue.
   EXPECT_CALL(*this, OnMemoryDumpDone(3, false /* success */));
   RequestGlobalDump(true /* from_renderer_thread */,
-                    MemoryDumpType::PERIODIC_INTERVAL,
-                    MemoryDumpLevelOfDetail::LIGHT);
+                    MemoryDumpType::kPeriodicInterval,
+                    MemoryDumpLevelOfDetail::kLight);
 
   EXPECT_CALL(*this, OnMemoryDumpDone(4, true /* success */));
   RequestGlobalDump(true /* from_renderer_thread */,
-                    MemoryDumpType::EXPLICITLY_TRIGGERED,
-                    MemoryDumpLevelOfDetail::LIGHT);
+                    MemoryDumpType::kExplicitlyTriggered,
+                    MemoryDumpLevelOfDetail::kLight);
 
   EXPECT_CALL(*this, OnMemoryDumpDone(5, true /* success */));
   RequestGlobalDumpAndWait(true /* from_renderer_thread */,
-                           MemoryDumpType::EXPLICITLY_TRIGGERED,
-                           MemoryDumpLevelOfDetail::DETAILED);
+                           MemoryDumpType::kExplicitlyTriggered,
+                           MemoryDumpLevelOfDetail::kDetailed);
 
   EXPECT_CALL(*this, OnMemoryDumpDone(6, true /* success */));
   RequestGlobalDumpAndWait(true /* from_renderer_thread */,
-                           MemoryDumpType::PERIODIC_INTERVAL,
-                           MemoryDumpLevelOfDetail::LIGHT);
+                           MemoryDumpType::kPeriodicInterval,
+                           MemoryDumpLevelOfDetail::kLight);
 
   DisableTracing();
 }
@@ -366,8 +366,8 @@ IN_PROC_BROWSER_TEST_F(MemoryTracingTest, MAYBE_BrowserInitiatedDump) {
 
   EnableMemoryTracing();
   RequestGlobalDumpAndWait(false /* from_renderer_thread */,
-                           MemoryDumpType::EXPLICITLY_TRIGGERED,
-                           MemoryDumpLevelOfDetail::DETAILED);
+                           MemoryDumpType::kExplicitlyTriggered,
+                           MemoryDumpLevelOfDetail::kDetailed);
   DisableTracing();
 }
 

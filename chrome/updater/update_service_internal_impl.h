@@ -5,7 +5,7 @@
 #ifndef CHROME_UPDATER_UPDATE_SERVICE_INTERNAL_IMPL_H_
 #define CHROME_UPDATER_UPDATE_SERVICE_INTERNAL_IMPL_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/sequence_checker.h"
 #include "chrome/updater/update_service_internal.h"
 
@@ -18,9 +18,7 @@ class UpdateServiceInternalImpl : public UpdateServiceInternal {
 
   // Overrides for updater::UpdateServiceInternal.
   void Run(base::OnceClosure callback) override;
-  void InitializeUpdateService(base::OnceClosure callback) override;
-
-  void Uninitialize() override;
+  void Hello(base::OnceClosure callback) override;
 
  private:
   ~UpdateServiceInternalImpl() override;

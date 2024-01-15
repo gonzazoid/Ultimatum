@@ -10,8 +10,12 @@ pybind_extension(
     srcs = [
         "flatbuffers_lib.cc",
     ],
+    enable_stub_generation = True,
     features = ["-use_header_modules"],
     module_name = "_pywrap_flatbuffers",
+    pytype_srcs = [
+        "_pywrap_flatbuffers.pyi",
+    ],
     deps = [
         "@flatbuffers",
         "@local_config_python//:python_headers",

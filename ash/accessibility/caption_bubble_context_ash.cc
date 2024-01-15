@@ -6,22 +6,51 @@
 
 #include "ash/shell.h"
 #include "ash/wm/work_area_insets.h"
+#include "base/functional/callback.h"
+#include "base/location.h"
+#include "base/notreached.h"
+#include "base/task/sequenced_task_runner.h"
 
-namespace ash {
-namespace captions {
+namespace {
+constexpr char kAshSessionId[] = "ash";
+}  // namespace
+
+namespace ash::captions {
 
 CaptionBubbleContextAsh::CaptionBubbleContextAsh() = default;
 
 CaptionBubbleContextAsh::~CaptionBubbleContextAsh() = default;
 
-absl::optional<gfx::Rect> CaptionBubbleContextAsh::GetBounds() const {
-  return WorkAreaInsets::ForWindow(Shell::GetRootWindowForNewWindows())
-      ->user_work_area_bounds();
+void CaptionBubbleContextAsh::GetBounds(GetBoundsCallback callback) const {
+  const std::optional<gfx::Rect> bounds =
+      WorkAreaInsets::ForWindow(Shell::GetRootWindowForNewWindows())
+          ->user_work_area_bounds();
+  if (!bounds.has_value()) {
+    return;
+  }
+
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback), *bounds));
+}
+
+const std::string CaptionBubbleContextAsh::GetSessionId() const {
+  return std::string(kAshSessionId);
 }
 
 bool CaptionBubbleContextAsh::IsActivatable() const {
   return false;
 }
 
-}  // namespace captions
-}  // namespace ash
+std::unique_ptr<::captions::CaptionBubbleSessionObserver>
+CaptionBubbleContextAsh::GetCaptionBubbleSessionObserver() {
+  return nullptr;
+}
+
+::captions::OpenCaptionSettingsCallback
+CaptionBubbleContextAsh::GetOpenCaptionSettingsCallback() {
+  // Live Translate is not implemented on ChromeOS.
+  NOTIMPLEMENTED();
+  return base::RepeatingClosure();
+}
+
+}  // namespace ash::captions

@@ -10,9 +10,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/flat_set.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/no_destructor.h"
 #include "base/path_service.h"
@@ -20,17 +20,18 @@
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/common/channel_info.h"
-#include "chrome/common/child_process_host_flags.h"
 #include "chrome/common/child_process_logging.h"
 #include "chrome/common/chrome_constants.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/crash_keys.h"
 #include "chrome/common/media/cdm_registration.h"
+#include "chrome/common/ppapi_utils.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/common_resources.h"
 #include "chrome/grit/generated_resources.h"
@@ -54,8 +55,8 @@
 #include "ppapi/buildflags/buildflags.h"
 #include "third_party/widevine/cdm/buildflags.h"
 #include "ui/base/l10n/l10n_util.h"
-#include "ui/base/layout.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #include "url/url_constants.h"
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
@@ -137,14 +138,20 @@ void ChromeContentClient::SetGpuInfo(const gpu::GPUInfo& gpu_info) {
 void ChromeContentClient::AddPlugins(
     std::vector<content::ContentPluginInfo>* plugins) {
 #if BUILDFLAG(ENABLE_PDF)
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  static constexpr char kPDFPluginName[] = "Chrome PDF Plugin";
+#else
+  static constexpr char kPDFPluginName[] = "Chromium PDF Plugin";
+#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
   static constexpr char kPDFPluginExtension[] = "pdf";
   static constexpr char kPDFPluginDescription[] = "Portable Document Format";
+
   content::ContentPluginInfo pdf_info;
   pdf_info.is_internal = true;
   pdf_info.is_out_of_process = true;
-  pdf_info.name = ChromeContentClient::kPDFInternalPluginName;
+  pdf_info.name = kPDFPluginName;
   pdf_info.description = kPDFPluginDescription;
-  pdf_info.path = base::FilePath(ChromeContentClient::kPDFPluginPath);
+  pdf_info.path = base::FilePath(ChromeContentClient::kPDFInternalPluginPath);
   content::WebPluginMimeType pdf_mime_type(
       pdf::kInternalPluginMimeType, kPDFPluginExtension, kPDFPluginDescription);
   pdf_info.mime_types.push_back(pdf_mime_type);
@@ -152,28 +159,31 @@ void ChromeContentClient::AddPlugins(
 #endif  // BUILDFLAG(ENABLE_PDF)
 
 #if BUILDFLAG(ENABLE_NACL)
-  // Handle Native Client just like the PDF plugin. This means that it is
-  // enabled by default for the non-portable case.  This allows apps installed
-  // from the Chrome Web Store to use NaCl even if the command line switch
-  // isn't set.  For other uses of NaCl we check for the command line switch.
-  content::ContentPluginInfo nacl;
-  // The nacl plugin is now built into the Chromium binary.
-  nacl.is_internal = true;
-  nacl.path = base::FilePath(nacl::kInternalNaClPluginFileName);
-  nacl.name = nacl::kNaClPluginName;
-  content::WebPluginMimeType nacl_mime_type(nacl::kNaClPluginMimeType,
-                                            nacl::kNaClPluginExtension,
-                                            nacl::kNaClPluginDescription);
-  nacl.mime_types.push_back(nacl_mime_type);
-  content::WebPluginMimeType pnacl_mime_type(nacl::kPnaclPluginMimeType,
-                                             nacl::kPnaclPluginExtension,
-                                             nacl::kPnaclPluginDescription);
-  nacl.mime_types.push_back(pnacl_mime_type);
-  nacl.internal_entry_points.get_interface = g_nacl_get_interface;
-  nacl.internal_entry_points.initialize_module = g_nacl_initialize_module;
-  nacl.internal_entry_points.shutdown_module = g_nacl_shutdown_module;
-  nacl.permissions = ppapi::PERMISSION_PRIVATE | ppapi::PERMISSION_DEV;
-  plugins->push_back(nacl);
+  // By default NaCl plugin info is loaded in every process. There is now logic
+  // in ChromeBrowserMainExtraPartsNaclDeprecation which checks some runtime
+  // conditions to see if NaCl should be disabled. If so, it sets a command line
+  // flag which is propagated to all relevant child processes. If this comment
+  // line flag has been set, then NaCl plugin info is not loaded.
+  if (IsNaclAllowed()) {
+    content::ContentPluginInfo nacl;
+    // The nacl plugin is now built into the Chromium binary.
+    nacl.is_internal = true;
+    nacl.path = base::FilePath(nacl::kInternalNaClPluginFileName);
+    nacl.name = nacl::kNaClPluginName;
+    content::WebPluginMimeType nacl_mime_type(nacl::kNaClPluginMimeType,
+                                              nacl::kNaClPluginExtension,
+                                              nacl::kNaClPluginDescription);
+    nacl.mime_types.push_back(nacl_mime_type);
+    content::WebPluginMimeType pnacl_mime_type(nacl::kPnaclPluginMimeType,
+                                               nacl::kPnaclPluginExtension,
+                                               nacl::kPnaclPluginDescription);
+    nacl.mime_types.push_back(pnacl_mime_type);
+    nacl.internal_entry_points.get_interface = g_nacl_get_interface;
+    nacl.internal_entry_points.initialize_module = g_nacl_initialize_module;
+    nacl.internal_entry_points.shutdown_module = g_nacl_shutdown_module;
+    nacl.permissions = ppapi::PERMISSION_PRIVATE | ppapi::PERMISSION_DEV;
+    plugins->push_back(nacl);
+  }
 #endif  // BUILDFLAG(ENABLE_NACL)
 }
 
@@ -320,23 +330,6 @@ gfx::Image& ChromeContentClient::GetNativeImageNamed(int resource_id) {
   return ui::ResourceBundle::GetSharedInstance().GetNativeImageNamed(
       resource_id);
 }
-
-#if BUILDFLAG(IS_MAC)
-base::FilePath ChromeContentClient::GetChildProcessPath(
-    int child_flags,
-    const base::FilePath& helpers_path) {
-  std::string helper_name(chrome::kHelperProcessExecutableName);
-  if (child_flags == chrome::kChildProcessHelperAlerts) {
-    helper_name += chrome::kMacHelperSuffixAlerts;
-    return helpers_path.Append(helper_name + ".app")
-        .Append("Contents")
-        .Append("MacOS")
-        .Append(helper_name);
-  }
-  NOTREACHED() << "Unsupported child process flags!";
-  return {};
-}
-#endif  // BUILDFLAG(IS_MAC)
 
 std::string ChromeContentClient::GetProcessTypeNameInEnglish(int type) {
 #if BUILDFLAG(ENABLE_NACL)

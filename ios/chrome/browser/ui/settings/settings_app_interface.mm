@@ -4,6 +4,7 @@
 
 #import "ios/chrome/browser/ui/settings/settings_app_interface.h"
 
+#import "base/containers/contains.h"
 #import "base/strings/sys_string_conversions.h"
 #import "components/browsing_data/core/pref_names.h"
 #import "components/metrics/metrics_pref_names.h"
@@ -12,18 +13,16 @@
 #import "components/prefs/pref_service.h"
 #import "components/search_engines/template_url_service.h"
 #import "ios/chrome/app/main_controller.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/content_settings/host_content_settings_map_factory.h"
-#import "ios/chrome/browser/prefs/pref_names.h"
-#import "ios/chrome/browser/search_engines/template_url_service_factory.h"
+#import "ios/chrome/browser/content_settings/model/host_content_settings_map_factory.h"
+#import "ios/chrome/browser/search_engines/model/template_url_service_factory.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider_interface.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
 #import "ios/chrome/test/app/chrome_test_util.h"
 #import "ios/chrome/test/app/tab_test_util.h"
 #import "ios/web/public/navigation/navigation_manager.h"
 #import "ios/web/public/web_state.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -32,10 +31,9 @@ std::string portForRewrite;
 
 bool HostToLocalHostRewrite(GURL* url, web::BrowserState* browser_state) {
   DCHECK(url);
-  for (std::string host : listHosts) {
-    if (url->host().find(host) != std::string::npos) {
-      *url =
-          GURL(std::string("http://127.0.0.1:") + portForRewrite + "/" + host);
+  for (const std::string& host : listHosts) {
+    if (base::Contains(url->host(), host)) {
+      *url = GURL("http://127.0.0.1:" + portForRewrite + "/" + host);
       return true;
     }
   }
@@ -83,7 +81,7 @@ bool HostToLocalHostRewrite(GURL* url, web::BrowserState* browser_state) {
 + (BOOL)settingsRegisteredKeyboardCommands {
   UIViewController* viewController =
       chrome_test_util::GetMainController()
-          .interfaceProvider.mainInterface.viewController;
+          .browserProviderInterface.mainBrowserProvider.viewController;
   return viewController.presentedViewController.keyCommands != nil;
 }
 

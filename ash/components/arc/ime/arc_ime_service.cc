@@ -16,6 +16,7 @@
 #include "ash/public/cpp/app_types_util.h"
 #include "ash/public/cpp/external_arc/message_center/arc_notification_content_view.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/singleton.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_util.h"
@@ -44,8 +45,8 @@ namespace arc {
 
 namespace {
 
-absl::optional<double> g_override_default_device_scale_factor;
-absl::optional<gfx::Point> g_override_display_origin;
+std::optional<double> g_override_default_device_scale_factor;
+std::optional<gfx::Point> g_override_display_origin;
 
 // Return true when a rich text editing is available on a text field with the
 // given type.
@@ -59,7 +60,7 @@ bool IsCharacterKeyEvent(const ui::KeyEvent* event) {
 }
 
 // Return true if the given key event is used for language switching by IME.
-// Please refer to ui::InputMethodAsh::DispatchKeyEvent for details.
+// Please refer to `ash::InputMethodAsh::DispatchKeyEvent` for details.
 bool IsLanguageInputKey(const ui::KeyEvent* event) {
   switch (event->key_code()) {
     case ui::VKEY_CONVERT:
@@ -143,7 +144,7 @@ class ArcWindowDelegateImpl : public ArcImeService::ArcWindowDelegate {
   }
 
  private:
-  ArcImeService* const ime_service_;
+  const raw_ptr<ArcImeService> ime_service_;
 };
 
 // Singleton factory for ArcImeService.
@@ -319,9 +320,6 @@ void ArcImeService::OnTextInputTypeChanged(
     ui::TextInputType type,
     bool is_personalized_learning_allowed,
     int flags) {
-  if (!ShouldSendUpdateToInputMethod())
-    return;
-
   if (ime_type_ == type &&
       is_personalized_learning_allowed_ == is_personalized_learning_allowed &&
       ime_flags_ == flags) {
@@ -330,6 +328,9 @@ void ArcImeService::OnTextInputTypeChanged(
   ime_type_ = type;
   is_personalized_learning_allowed_ = is_personalized_learning_allowed;
   ime_flags_ = flags;
+
+  if (!ShouldSendUpdateToInputMethod())
+    return;
 
   ui::InputMethod* const input_method = GetInputMethod();
   if (input_method)
@@ -472,7 +473,7 @@ void ArcImeService::InsertChar(const ui::KeyEvent& event) {
 
   if (IsCharacterKeyEvent(&event)) {
     has_composition_text_ = false;
-    ime_bridge_->SendInsertText(std::u16string(1, event.GetText()),
+    ime_bridge_->SendInsertText(std::u16string(1, event.GetCharacter()),
                                 /*new_cursor_position=*/1);
   }
 }
@@ -642,11 +643,11 @@ bool ArcImeService::SetAutocorrectRange(const gfx::Range& range) {
   return false;
 }
 
-absl::optional<ui::GrammarFragment> ArcImeService::GetGrammarFragmentAtCursor()
+std::optional<ui::GrammarFragment> ArcImeService::GetGrammarFragmentAtCursor()
     const {
   // TODO(https://crbug.com/1201454): Implement this method.
   NOTIMPLEMENTED_LOG_ONCE();
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 bool ArcImeService::ClearGrammarFragments(const gfx::Range& range) {
@@ -657,6 +658,10 @@ bool ArcImeService::ClearGrammarFragments(const gfx::Range& range) {
 
 bool ArcImeService::AddGrammarFragments(
     const std::vector<ui::GrammarFragment>& fragments) {
+  if (!fragments.empty()) {
+    base::UmaHistogramEnumeration("InputMethod.Assistive.Grammar.Count",
+                                  TextInputClient::SubClass::kArcImeService);
+  }
   // TODO(https://crbug.com/1201454): Implement this method.
   NOTIMPLEMENTED_LOG_ONCE();
   return false;
@@ -670,7 +675,7 @@ void ArcImeService::OnDispatchingKeyEventPostIME(ui::KeyEvent* event) {
 
   // Do not forward the key event from virtual keyboard if it's sent via
   // InsertChar(). By the special logic in
-  // `ui::InputMethodAsh::DispatchKeyEvent`, both of InsertChar() and
+  // `ash::InputMethodAsh::DispatchKeyEvent`, both of InsertChar() and
   // DispatchKeyEventPostIME() are called for a key event injected by the
   // virtual keyboard. The below logic stops key event propagation through
   // DispatchKeyEventPostIME() to prevent from inputting two characters.
@@ -681,7 +686,7 @@ void ArcImeService::OnDispatchingKeyEventPostIME(ui::KeyEvent* event) {
     event->SetHandled();
 
   // Do not forward the language input key event from virtual keyboard because
-  // it's already handled by ui::InputMethodAsh.
+  // it's already handled by `ash::InputMethodAsh`.
   if (from_vk && IsLanguageInputKey(event))
     event->SetHandled();
 
@@ -695,13 +700,13 @@ void ArcImeService::OnDispatchingKeyEventPostIME(ui::KeyEvent* event) {
 
 // static
 void ArcImeService::SetOverrideDefaultDeviceScaleFactorForTesting(
-    absl::optional<double> scale_factor) {
+    std::optional<double> scale_factor) {
   g_override_default_device_scale_factor = scale_factor;
 }
 
 // static
 void ArcImeService::SetOverrideDisplayOriginForTesting(
-    absl::optional<gfx::Point> origin) {
+    std::optional<gfx::Point> origin) {
   g_override_display_origin = origin;
 }
 
@@ -805,7 +810,7 @@ double ArcImeService::GetDefaultDeviceScaleFactor() const {
     return g_override_default_device_scale_factor.value();
   if (!exo::WMHelper::HasInstance())
     return 1.0;
-  return exo::WMHelper::GetInstance()->GetDefaultDeviceScaleFactor();
+  return exo::GetDefaultDeviceScaleFactor();
 }
 
 gfx::Point ArcImeService::GetDisplayOriginForFocusedWindow() const {
@@ -816,6 +821,11 @@ gfx::Point ArcImeService::GetDisplayOriginForFocusedWindow() const {
       ->GetDisplayNearestWindow(focused_arc_window_)
       .bounds()
       .origin();
+}
+
+// static
+void ArcImeService::EnsureFactoryBuilt() {
+  ArcImeServiceFactory::GetInstance();
 }
 
 }  // namespace arc

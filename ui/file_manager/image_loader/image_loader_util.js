@@ -1,8 +1,9 @@
 // Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+// @ts-nocheck
 
-import {assert} from 'chrome://resources/js/assert.js';
+import {assert} from 'chrome://resources/ash/common/assert.js';
 
 import {LoadImageRequest} from './load_image_request.js';
 
@@ -21,7 +22,7 @@ ImageLoaderUtil.shouldProcess = function(width, height, request) {
       ImageLoaderUtil.resizeDimensions(width, height, request);
 
   // Dimensions has to be adjusted.
-  if (targetDimensions.width != width || targetDimensions.height != height) {
+  if (targetDimensions.width !== width || targetDimensions.height !== height) {
     return true;
   }
 

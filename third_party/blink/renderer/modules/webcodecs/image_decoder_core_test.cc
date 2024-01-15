@@ -6,6 +6,7 @@
 
 #include "media/base/video_frame.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
@@ -24,7 +25,7 @@ class ImageDecoderCoreTest : public testing::Test {
     DCHECK(data->size()) << "Missing file: " << file_name;
     return std::make_unique<ImageDecoderCore>(
         mime_type, std::move(data),
-        /*data_complete=*/true, ColorBehavior::Tag(), SkISize::MakeEmpty(),
+        /*data_complete=*/true, ColorBehavior::kTag, SkISize::MakeEmpty(),
         ImageDecoder::AnimationOption::kPreferAnimation);
   }
 
@@ -36,6 +37,7 @@ class ImageDecoderCoreTest : public testing::Test {
     return SegmentReader::CreateFromSharedBuffer(
         test::ReadFromFile(file_path.ToString()));
   }
+  test::TaskEnvironment task_environment_;
 };
 
 TEST_F(ImageDecoderCoreTest, InOrderDecodePreservesMemory) {

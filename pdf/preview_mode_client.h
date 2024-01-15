@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "pdf/pdf_engine.h"
 
@@ -60,6 +60,7 @@ class PreviewModeClient : public PDFEngine::Client {
                   const void* data,
                   int length) override;
   std::unique_ptr<UrlLoader> CreateUrlLoader() override;
+  v8::Isolate* GetIsolate() override;
   std::vector<SearchStringResult> SearchString(const char16_t* string,
                                                const char16_t* term,
                                                bool case_sensitive) override;

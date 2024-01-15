@@ -155,7 +155,7 @@ class CC_EXPORT PictureLayerImpl
 
   // Set the paint result (PaintRecord) for a given PaintWorkletInput.
   void SetPaintWorkletRecord(scoped_refptr<const PaintWorkletInput>,
-                             sk_sp<PaintRecord>);
+                             PaintRecord);
 
   // Retrieve the map of PaintWorkletInputs to their painted results
   // (PaintRecords). If a PaintWorkletInput has not been painted yet, it will
@@ -169,7 +169,9 @@ class CC_EXPORT PictureLayerImpl
   // Invalidates all PaintWorklets in this layer who depend on the given
   // property to be painted. Used when the value for the property is changed by
   // an animation, at which point the PaintWorklet must be re-painted.
-  void InvalidatePaintWorklets(const PaintWorkletInput::PropertyKey& key);
+  void InvalidatePaintWorklets(const PaintWorkletInput::PropertyKey& key,
+                               const PaintWorkletInput::PropertyValue& prev,
+                               const PaintWorkletInput::PropertyValue& next);
 
   void SetContentsScaleForTesting(float scale) {
     ideal_contents_scale_ = raster_contents_scale_ =
@@ -198,7 +200,8 @@ class CC_EXPORT PictureLayerImpl
   // Returns false if raster translation is not applicable.
   bool CalculateRasterTranslation(gfx::Vector2dF& raster_translation) const;
   void CleanUpTilingsOnActiveLayer(
-      const std::vector<PictureLayerTiling*>& used_tilings);
+      const std::vector<raw_ptr<PictureLayerTiling, VectorExperimental>>&
+          used_tilings);
   float MinimumContentsScale() const;
   float MaximumContentsScale() const;
   void UpdateViewportRectForTilePriorityInContentSpace();
@@ -280,22 +283,22 @@ class CC_EXPORT PictureLayerImpl
     return std::max(raster_contents_scale_.x(), raster_contents_scale_.y());
   }
 
-  bool is_backdrop_filter_mask_ : 1;
+  bool is_backdrop_filter_mask_ : 1 = false;
 
-  bool was_screen_space_transform_animating_ : 1;
-  bool only_used_low_res_last_append_quads_ : 1;
+  bool was_screen_space_transform_animating_ : 1 = false;
+  bool only_used_low_res_last_append_quads_ : 1 = false;
 
-  bool nearest_neighbor_ : 1;
+  bool nearest_neighbor_ : 1 = false;
 
   // This is set by UpdateRasterSource() on change of raster source size. It's
   // used to recalculate raster scale for will-chagne:transform. It's reset to
   // false after raster scale update.
-  bool raster_source_size_changed_ : 1;
+  bool raster_source_size_changed_ : 1 = false;
 
-  bool directly_composited_image_default_raster_scale_changed_ : 1;
+  bool directly_composited_image_default_raster_scale_changed_ : 1 = false;
 
   LCDTextDisallowedReason lcd_text_disallowed_reason_ =
-      LCDTextDisallowedReason::kNone;
+      LCDTextDisallowedReason::kNoText;
 
   // If this scale is not zero, it indicates that this layer is a directly
   // composited image layer (i.e. the only thing drawn into this layer is an
@@ -318,7 +321,8 @@ class CC_EXPORT PictureLayerImpl
   // drawn. Note that accessing this vector should only be done in the context
   // of comparing pointers, since objects pointed to are not guaranteed to
   // exist.
-  std::vector<PictureLayerTiling*> last_append_quads_tilings_;
+  std::vector<raw_ptr<PictureLayerTiling, VectorExperimental>>
+      last_append_quads_tilings_;
 
   // The set of PaintWorkletInputs that are part of this PictureLayerImpl, and
   // their painted results (if any). During commit, Blink hands us a set of

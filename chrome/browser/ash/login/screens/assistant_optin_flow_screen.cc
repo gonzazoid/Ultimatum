@@ -6,9 +6,11 @@
 
 #include <memory>
 
+#include "ash/constants/ash_features.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/assistant/assistant_util.h"
 #include "chrome/browser/ash/login/users/chrome_user_manager_util.h"
+#include "chrome/browser/ash/login/wizard_context.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/webui/ash/login/assistant_optin_flow_screen_handler.h"
@@ -50,8 +52,13 @@ AssistantOptInFlowScreen::AssistantOptInFlowScreen(
 AssistantOptInFlowScreen::~AssistantOptInFlowScreen() = default;
 
 bool AssistantOptInFlowScreen::MaybeSkip(WizardContext& context) {
+  if (features::IsOobeSkipAssistantEnabled()) {
+    exit_callback_.Run(Result::NOT_APPLICABLE);
+    return true;
+  }
+
   if (context.skip_post_login_screens_for_tests || !g_libassistant_enabled ||
-      chrome_user_manager_util::IsPublicSessionOrEphemeralLogin()) {
+      chrome_user_manager_util::IsManagedGuestSessionOrEphemeralLogin()) {
     exit_callback_.Run(Result::NOT_APPLICABLE);
     return true;
   }

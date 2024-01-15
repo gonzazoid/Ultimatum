@@ -6,12 +6,13 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/ash/login/oobe_screen.h"
 #include "chrome/browser/ash/login/screens/encryption_migration_mode.h"
 #include "chromeos/ash/components/login/auth/public/user_context.h"
 #include "components/account_id/account_id.h"
 #include "components/login/base_screen_handler_utils.h"
+#include "components/prefs/pref_service.h"
 
 namespace ash {
 
@@ -48,7 +49,8 @@ class SigninUI {
   // Starts user onboarding after successful sign-in for new users.
   virtual void StartUserOnboarding() = 0;
   // Resumes user onboarding after successful sign-in for returning users.
-  virtual void ResumeUserOnboarding(OobeScreenId screen_id) = 0;
+  virtual void ResumeUserOnboarding(const PrefService& prefs,
+                                    OobeScreenId screen_id) = 0;
   // Show UI for management transition flow.
   virtual void StartManagementTransition() = 0;
   // Show additional terms of service on login.
@@ -58,9 +60,10 @@ class SigninUI {
   virtual void ShowNewTermsForFlexUsers() = 0;
 
   virtual void StartEncryptionMigration(
-      const UserContext& user_context,
+      std::unique_ptr<UserContext> user_context,
       EncryptionMigrationMode migration_mode,
-      base::OnceCallback<void(const UserContext&)> skip_migration_callback) = 0;
+      base::OnceCallback<void(std::unique_ptr<UserContext>)>
+          skip_migration_callback) = 0;
 
   // Might store authentication data so that additional auth factors can be
   // added during user onboarding.
@@ -69,13 +72,16 @@ class SigninUI {
   // Clears authentication data that were stored for user onboarding.
   virtual void ClearOnboardingAuthSession() = 0;
 
-  // Show password changed dialog. If `show_password_error` is true, user
-  // already tried to enter old password but it turned out to be incorrect.
-  virtual void ShowPasswordChangedDialog(const AccountId& account_id,
-                                         bool password_incorrect) = 0;
+  // Start authentication flow that would use factors beyond
+  // online authentication factor (Recovery, old online password,
+  // fallback to local password/PIN, etc).
+  virtual void UseAlternativeAuthentication(
+      std::unique_ptr<UserContext> user_context,
+      bool online_password_mismatch) = 0;
 
-  // Start Cryptohome recovery flow and show the screen.
-  virtual void StartCryptohomeRecovery(const AccountId& account_id) = 0;
+  // Runs an extra step of local authentication.
+  virtual void RunLocalAuthentication(
+      std::unique_ptr<UserContext> user_context) = 0;
 
   virtual void ShowSigninError(SigninError error,
                                const std::string& details) = 0;
@@ -91,11 +97,5 @@ class SigninUI {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::SigninError;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_UI_SIGNIN_UI_H_

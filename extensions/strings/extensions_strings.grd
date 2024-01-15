@@ -214,6 +214,9 @@
       <message name="IDS_EXTENSION_CRX_EXISTS" desc="Warning displayed in pack dialog when the crx file already exists.">
         There is already a CRX file present with this name.
       </message>
+      <message name="IDS_EXTENSION_CONTENT_SCRIPT_FILE_TOO_LARGE" desc="Install warning displayed when a content script's size would exceed the per-file or per-extension maximum size.">
+        Could not load file '<ph name="RELATIVE_PATH">$1<ex>file.js</ex></ph>' for content script as it would exceed the maximum script size or the extension's maximum total content script size.
+      </message>
       <message name="IDS_EXTENSION_DIRECTORY_NO_EXISTS" desc="Warning displayed in pack dialog when the extension directory does not exist.">
         Input directory must exist.
       </message>
@@ -233,10 +236,10 @@
         Could not load background page '<ph name="BACKGROUND_PAGE">$1<ex>page.html</ex></ph>'.
       </message>
       <message name="IDS_EXTENSION_LOAD_CSS_FAILED" desc="">
-        Could not load css '<ph name="RELATIVE_PATH">$1<ex>file.css</ex></ph>' for content script.
+        Could not load css '<ph name="RELATIVE_PATH">$1<ex>file.css</ex></ph>' for script.
       </message>
       <message name="IDS_EXTENSION_LOAD_JAVASCRIPT_FAILED" desc="">
-        Could not load javascript '<ph name="RELATIVE_PATH">$1<ex>javas.js</ex></ph>' for content script.
+        Could not load javascript '<ph name="RELATIVE_PATH">$1<ex>javas.js</ex></ph>' for script.
       </message>
       <message name="IDS_EXTENSION_LOAD_OPTIONS_PAGE_FAILED" desc="">
         Could not load options page '<ph name="OPTIONS_PAGE">$1<ex>page.html</ex></ph>'.
@@ -303,7 +306,12 @@
       <message name="IDS_EXTENSION_DISABLED_UPDATE_REQUIRED_BY_POLICY" desc="Error message when an extension doesn't meet minimum version required by administrator policy.">
         The administrator of this machine requires <ph name="EXTENSION_NAME">$1<ex>Google Talk</ex></ph> to have a minimum version of <ph name="EXTENSION_VERSION">$2<ex>1.1.0</ex></ph>. It cannot be enabled until it has updated to that version (or higher).
       </message>
-
+      <message name="IDS_EXTENSION_DISABLED_PUBLISHED_IN_STORE_REQUIRED_BY_POLICY" desc="Error message when an extension is no longer published and available on the Chrome Web Store as required by administrator policy." translateable="false">
+         (Placeholder, not used currently) The administrator of this machine requires <ph name="EXTENSION_NAME">$1<ex>Google Talk</ex></ph> to be available on the Chrome Web Store.
+      </message>
+      <message name="IDS_EXTENSION_MANIFEST_VERSION_NOT_SUPPORTED" desc="Error message when an extension doesn't meet minimum manifest version required by administrator policy.">
+        The administrator of this machine requires <ph name="EXTENSION_NAME">$1<ex>Google Talk</ex></ph> to have a minimum manifest version of 3.
+      </message>
       <!--
         Device API strings. Please keep alphabetized.
 
@@ -419,11 +427,6 @@
       <message name="IDS_EXTENSION_WEBGL_NOT_SUPPORTED" desc="Error message when an extension has a requirement for WebGL that the system does not support.">
         WebGL is not supported.
       </message>
-      <if expr="not use_aura">
-        <message name="IDS_EXTENSION_WINDOW_SHAPE_NOT_SUPPORTED" desc="Error message when an extension has a requirement for shaped windows that the system does not support.">
-          Shaped windows are not supported.
-        </message>
-      </if>
     </messages>
   </release>
 </grit>

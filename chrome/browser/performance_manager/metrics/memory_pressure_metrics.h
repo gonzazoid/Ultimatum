@@ -7,7 +7,6 @@
 
 #include "base/memory/memory_pressure_listener.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/weak_ptr.h"
 #include "components/performance_manager/public/graph/graph.h"
 #include "components/performance_manager/public/graph/system_node.h"
 
@@ -34,9 +33,6 @@ class MemoryPressureMetrics : public GraphOwned,
  private:
   using MemoryPressureLevel = base::MemoryPressureListener::MemoryPressureLevel;
   static constexpr int kInvalidSysRAMValue = 0;
-
-  // SystemNodeObserver:
-  void OnBeforeMemoryPressure(MemoryPressureLevel new_level) override;
 
   raw_ptr<Graph> graph_ = nullptr;
   int system_ram_mb_ = kInvalidSysRAMValue;

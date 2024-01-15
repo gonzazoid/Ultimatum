@@ -7,12 +7,13 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "components/viz/service/display/software_output_device_client.h"
 #include "components/viz/service/viz_service_export.h"
 #include "third_party/skia/include/core/SkSurface.h"
+#include "ui/gfx/frame_data.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/geometry/vector2d.h"
@@ -31,7 +32,7 @@ class SoftwareOutputDeviceClient;
 // OutputSurface, such as to a platform-provided window framebuffer.
 class VIZ_SERVICE_EXPORT SoftwareOutputDevice {
  public:
-  // Uses TaskRunner returned from SequencedTaskRunnerHandle::Get().
+  // Uses TaskRunner returned from SequencedTaskRunner::GetCurrentDefault().
   SoftwareOutputDevice();
   explicit SoftwareOutputDevice(
       scoped_refptr<base::SequencedTaskRunner> task_runner);
@@ -75,7 +76,8 @@ class VIZ_SERVICE_EXPORT SoftwareOutputDevice {
   // immediately run |swap_ack_callback| via PostTask. If swap isn't synchronous
   // this can be overriden so that |swap_ack_callback| is run after swap
   // completes.
-  virtual void OnSwapBuffers(SwapBuffersCallback swap_ack_callback);
+  virtual void OnSwapBuffers(SwapBuffersCallback swap_ack_callback,
+                             gfx::FrameData data);
 
   virtual int MaxFramesPending() const;
 

@@ -8,7 +8,6 @@
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
-#include "chrome/browser/ui/views/tabs/tab_drag_controller.h"
 #include "tab_style_views.h"
 
 class TabDragWithScrollManager;
@@ -21,11 +20,10 @@ class TabStripScrollSession {
   TabStripScrollSession(const TabStripScrollSession&) = delete;
   TabStripScrollSession& operator=(const TabStripScrollSession&) = delete;
   virtual ~TabStripScrollSession();
-  // TODO: Make RTL work for Tab Scrolling in https://crbug.com/1377094
   enum class TabScrollDirection {
     kNoScroll,
-    kScrollTowardsLeft,
-    kScrollTowardsRight
+    kScrollTowardsLeadingTabs,
+    kScrollTowardsTrailingTabs
   };
   // Calculates which direction should the scrolling occur and
   // starts the `Start()` method
@@ -36,6 +34,9 @@ class TabStripScrollSession {
   virtual bool IsRunning() = 0;
   // Determines which direction should the scrolling happen.
   virtual TabStripScrollSession::TabScrollDirection GetTabScrollDirection() = 0;
+  // The offset from the start or end of scroll view when the scrolling should
+  // begin.
+  int GetScrollableOffset() const;
 
  protected:
   // Start the scroll_session towards the direction passed
@@ -76,7 +77,7 @@ class TabStripScrollSessionWithTimer : public TabStripScrollSession {
   }
   // Getter to expose kScrollableOffsetFromScrollView to test class
   int GetScrollableOffsetFromScrollViewForTesting() {
-    return kScrollableOffsetFromScrollView;
+    return GetScrollableOffset();
   }
   // Returns the base scroll offset which is the case with constant timer
   double CalculateBaseScrollOffset();
@@ -97,10 +98,6 @@ class TabStripScrollSessionWithTimer : public TabStripScrollSession {
   // based on how close the tabs are to the end of the visible content view.
   const ScrollSessionTimerType timer_type_ =
       ScrollSessionTimerType::kConstantTimer;
-  // The offset from the start or end of scroll view when the scrolling should
-  // begin.
-  const int kScrollableOffsetFromScrollView =
-      TabStyleViews::GetMinimumInactiveWidth() / 5;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_TABS_TAB_STRIP_SCROLL_SESSION_H_

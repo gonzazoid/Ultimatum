@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "components/payments/content/web_app_manifest.h"
@@ -132,18 +132,18 @@ class PaymentManifestParser {
   // Visible for tests.
   static void ParsePaymentMethodManifestIntoVectors(
       const GURL& manifest_url,
-      std::unique_ptr<base::Value> value,
+      base::Value value,
       const ErrorLogger& log,
       std::vector<GURL>* web_app_manifest_urls,
       std::vector<url::Origin>* supported_origins);
 
   static bool ParseWebAppManifestIntoVector(
-      std::unique_ptr<base::Value> value,
+      base::Value value,
       const ErrorLogger& log,
       std::vector<WebAppManifestSection>* output);
 
   static bool ParseWebAppInstallationInfoIntoStructs(
-      std::unique_ptr<base::Value> value,
+      base::Value value,
       const ErrorLogger& log,
       WebAppInstallationInfo* installation_info,
       std::vector<WebAppIcon>* icons);

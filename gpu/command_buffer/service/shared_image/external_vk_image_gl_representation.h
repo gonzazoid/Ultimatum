@@ -18,14 +18,16 @@ namespace gpu {
 class ExternalVkImageGLRepresentationShared {
  public:
   static void AcquireTexture(ExternalSemaphore* semaphore,
-                             GLuint texture_id,
-                             VkImageLayout src_layout);
-  static ExternalSemaphore ReleaseTexture(ExternalSemaphorePool* pool,
-                                          GLuint texture_id,
-                                          VkImageLayout dst_layout);
+                             const std::vector<GLuint>& texture_ids,
+                             const std::vector<GLenum>& src_layouts);
+  static ExternalSemaphore ReleaseTexture(
+      ExternalSemaphorePool* pool,
+      const std::vector<GLuint>& texture_ids,
+      const std::vector<GLenum>& dst_layouts);
 
-  ExternalVkImageGLRepresentationShared(SharedImageBacking* backing,
-                                        GLuint texture_service_id);
+  ExternalVkImageGLRepresentationShared(
+      SharedImageBacking* backing,
+      std::vector<GLuint> texture_service_ids);
 
   ExternalVkImageGLRepresentationShared(
       const ExternalVkImageGLRepresentationShared&) = delete;
@@ -45,18 +47,18 @@ class ExternalVkImageGLRepresentationShared {
   }
 
   const raw_ptr<ExternalVkImageBacking> backing_;
-  const GLuint texture_service_id_;
+  const std::vector<GLuint> texture_service_ids_;
   GLenum current_access_mode_ = 0;
   std::vector<ExternalSemaphore> begin_access_semaphores_;
 };
 
 class ExternalVkImageGLRepresentation : public GLTextureImageRepresentation {
  public:
-  ExternalVkImageGLRepresentation(SharedImageManager* manager,
-                                  SharedImageBacking* backing,
-                                  MemoryTypeTracker* tracker,
-                                  gles2::Texture* texture,
-                                  GLuint texture_service_id);
+  ExternalVkImageGLRepresentation(
+      SharedImageManager* manager,
+      SharedImageBacking* backing,
+      MemoryTypeTracker* tracker,
+      std::vector<raw_ptr<gles2::Texture, VectorExperimental>> textures);
 
   ExternalVkImageGLRepresentation(const ExternalVkImageGLRepresentation&) =
       delete;
@@ -71,17 +73,18 @@ class ExternalVkImageGLRepresentation : public GLTextureImageRepresentation {
   void EndAccess() override;
 
  private:
-  const raw_ptr<gles2::Texture> texture_;
+  std::vector<raw_ptr<gles2::Texture, VectorExperimental>> textures_;
   ExternalVkImageGLRepresentationShared representation_shared_;
 };
 
 class ExternalVkImageGLPassthroughRepresentation
     : public GLTexturePassthroughImageRepresentation {
  public:
-  ExternalVkImageGLPassthroughRepresentation(SharedImageManager* manager,
-                                             SharedImageBacking* backing,
-                                             MemoryTypeTracker* tracker,
-                                             GLuint texture_service_id);
+  ExternalVkImageGLPassthroughRepresentation(
+      SharedImageManager* manager,
+      SharedImageBacking* backing,
+      MemoryTypeTracker* tracker,
+      std::vector<scoped_refptr<gles2::TexturePassthrough>> texture);
 
   ExternalVkImageGLPassthroughRepresentation(
       const ExternalVkImageGLPassthroughRepresentation&) = delete;
@@ -97,6 +100,7 @@ class ExternalVkImageGLPassthroughRepresentation
   void EndAccess() override;
 
  private:
+  std::vector<scoped_refptr<gles2::TexturePassthrough>> textures_;
   ExternalVkImageGLRepresentationShared representation_shared_;
 };
 

@@ -8,8 +8,8 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.support.test.InstrumentationRegistry;
 
+import androidx.test.core.app.ApplicationProvider;
 import androidx.test.filters.SmallTest;
 
 import org.hamcrest.Matchers;
@@ -30,9 +30,10 @@ public class GSAAccountChangeListenerTest {
     @Test(expected = AssertionError.class)
     @SmallTest
     public void testReceivesBroadcastIntents() {
-        final Context context = InstrumentationRegistry.getTargetContext();
+        final Context context = ApplicationProvider.getApplicationContext();
         BroadcastReceiver receiver = new GSAAccountChangeListener.AccountChangeBroadcastReceiver();
-        context.registerReceiver(receiver,
+        context.registerReceiver(
+                receiver,
                 new IntentFilter(GSAAccountChangeListener.ACCOUNT_UPDATE_BROADCAST_INTENT));
 
         // Send a broadcast without the permission, should be received.
@@ -42,25 +43,29 @@ public class GSAAccountChangeListenerTest {
         intent.putExtra(GSAAccountChangeListener.BROADCAST_INTENT_ACCOUNT_NAME_EXTRA, ACCOUNT_NAME);
         context.sendBroadcast(intent);
 
-        CriteriaHelper.pollUiThread(() -> {
-            String currentAccount =
-                    GSAState.getInstance(context.getApplicationContext()).getGsaAccount();
-            Criteria.checkThat(currentAccount, Matchers.is(ACCOUNT_NAME));
-        });
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    String currentAccount = GSAState.getInstance().getGsaAccount();
+                    Criteria.checkThat(currentAccount, Matchers.is(ACCOUNT_NAME));
+                });
 
         // A broadcast with a permission that Chrome doesn't hold should not be received.
-        context.registerReceiver(receiver,
+        context.registerReceiver(
+                receiver,
                 new IntentFilter(GSAAccountChangeListener.ACCOUNT_UPDATE_BROADCAST_INTENT),
-                PERMISSION, null);
+                PERMISSION,
+                null);
         intent.putExtra(
                 GSAAccountChangeListener.BROADCAST_INTENT_ACCOUNT_NAME_EXTRA, ACCOUNT_NAME2);
         context.sendBroadcast(intent, "permission.you.dont.have");
 
         // This is ugly, but so is checking that some asynchronous call was never received.
-        CriteriaHelper.pollUiThread(() -> {
-            String currentAccount =
-                    GSAState.getInstance(context.getApplicationContext()).getGsaAccount();
-            Criteria.checkThat(currentAccount, Matchers.is(ACCOUNT_NAME2));
-        }, 1000, 100);
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    String currentAccount = GSAState.getInstance().getGsaAccount();
+                    Criteria.checkThat(currentAccount, Matchers.is(ACCOUNT_NAME2));
+                },
+                1000,
+                100);
     }
 }

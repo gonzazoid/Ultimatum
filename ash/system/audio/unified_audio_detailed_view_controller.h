@@ -9,6 +9,7 @@
 
 #include "ash/ash_export.h"
 #include "ash/system/unified/detailed_view_controller.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/audio/cras_audio_handler.h"
 
 namespace ash {
@@ -32,19 +33,23 @@ class ASH_EXPORT UnifiedAudioDetailedViewController
 
   ~UnifiedAudioDetailedViewController() override;
 
-  // DetailedViewControllerBase:
-  views::View* CreateView() override;
+  // DetailedViewController:
+  std::unique_ptr<views::View> CreateView() override;
   std::u16string GetAccessibleName() const override;
 
   // CrasAudioHandler::AudioObserver.
   void OnAudioNodesChanged() override;
   void OnActiveOutputNodeChanged() override;
   void OnActiveInputNodeChanged() override;
+  void OnNoiseCancellationStateChanged() override;
 
  private:
+  // Used in observers to call `AudioDetailedView::Update` on `view_`.
+  void UpdateView();
+
   const std::unique_ptr<DetailedViewDelegate> detailed_view_delegate_;
 
-  AudioDetailedView* view_ = nullptr;
+  raw_ptr<AudioDetailedView, DanglingUntriaged> view_ = nullptr;
 };
 
 }  // namespace ash

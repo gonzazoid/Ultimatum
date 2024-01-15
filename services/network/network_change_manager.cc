@@ -6,13 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/ranges/algorithm.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/base/network_change_notifier.h"
-#include "net/base/network_change_notifier_posix.h"
+#include "net/base/network_change_notifier_passive.h"
 
 namespace network {
 
@@ -50,7 +50,7 @@ void NetworkChangeManager::RequestNotifications(
   clients_.push_back(std::move(client_remote));
 }
 
-#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_LINUX)
 void NetworkChangeManager::OnNetworkChanged(
     bool dns_changed,
     bool ip_address_changed,
@@ -62,8 +62,8 @@ void NetworkChangeManager::OnNetworkChanged(
   if (!network_change_notifier_)
     return;
 
-  net::NetworkChangeNotifierPosix* notifier =
-      static_cast<net::NetworkChangeNotifierPosix*>(
+  net::NetworkChangeNotifierPassive* notifier =
+      static_cast<net::NetworkChangeNotifierPassive*>(
           network_change_notifier_.get());
   if (dns_changed)
     notifier->OnDNSChanged();
@@ -80,6 +80,30 @@ void NetworkChangeManager::OnNetworkChanged(
   }
 }
 #endif
+
+#if BUILDFLAG(IS_LINUX)
+void NetworkChangeManager::BindNetworkInterfaceChangeListener(
+    mojo::PendingAssociatedReceiver<mojom::NetworkInterfaceChangeListener>
+        listener_receiver) {
+  interface_change_listener_receiver_.Bind(std::move(listener_receiver));
+}
+
+// NetworkInterfaceChangeListener implementation:
+void NetworkChangeManager::OnNetworkInterfacesChanged(
+    mojom::NetworkInterfaceChangeParamsPtr change_params) {
+  // network_change_notifier_ can be null in unit tests.
+  if (!network_change_notifier_) {
+    return;
+  }
+
+  net::NetworkChangeNotifierPassive* notifier =
+      static_cast<net::NetworkChangeNotifierPassive*>(
+          network_change_notifier_.get());
+
+  notifier->GetAddressMapOwner()->GetAddressMapCacheLinux()->ApplyDiffs(
+      change_params->address_map, change_params->online_links);
+}
+#endif  // BUILDFLAG(IS_LINUX)
 
 size_t NetworkChangeManager::GetNumClientsForTesting() const {
   return clients_.size();

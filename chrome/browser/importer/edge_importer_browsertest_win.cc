@@ -125,7 +125,7 @@ bool DecompressDatabase(const base::FilePath& data_path) {
     return false;
   if (!compression::GzipUncompress(gzip_data, &gzip_data))
     return false;
-  return base::WriteFile(output_file, gzip_data.c_str(), gzip_data.size()) >= 0;
+  return base::WriteFile(output_file, gzip_data);
 }
 
 const char kDummyFaviconImageData[] =
@@ -159,10 +159,6 @@ class EdgeImporterBrowserTest : public InProcessBrowserTest {
 };
 
 IN_PROC_BROWSER_TEST_F(EdgeImporterBrowserTest, EdgeImporter) {
-  // Only verified to work with ESE library on Windows 8.1 and above.
-  if (base::win::GetVersion() < base::win::Version::WIN8_1)
-    return;
-
   const BookmarkInfo kEdgeBookmarks[] = {
       {true,
        2,
@@ -269,10 +265,9 @@ IN_PROC_BROWSER_TEST_F(EdgeImporterBrowserTest, EdgeImporterLegacyFallback) {
   base::FilePath source_path = temp_dir_.GetPath().AppendASCII("edge_profile");
   {
     base::ScopedAllowBlockingForTesting allow_blocking;
-    ASSERT_NE(
-        -1, base::WriteFile(
-                source_path.AppendASCII("Favorites\\Google.url:favicon:$DATA"),
-                kDummyFaviconImageData, sizeof(kDummyFaviconImageData)));
+    ASSERT_TRUE(base::WriteFile(
+        source_path.AppendASCII("Favorites\\Google.url:favicon:$DATA"),
+        kDummyFaviconImageData));
   }
   source_profile.source_path = source_path;
 
@@ -282,10 +277,6 @@ IN_PROC_BROWSER_TEST_F(EdgeImporterBrowserTest, EdgeImporterLegacyFallback) {
 }
 
 IN_PROC_BROWSER_TEST_F(EdgeImporterBrowserTest, EdgeImporterNoDatabase) {
-  // Only verified to work with ESE library on Windows 8.1 and above.
-  if (base::win::GetVersion() < base::win::Version::WIN8_1)
-    return;
-
   std::vector<BookmarkInfo> bookmark_entries;
   std::vector<FaviconGroup> favicon_groups;
 

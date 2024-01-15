@@ -4,11 +4,12 @@
 
 #include "chrome/browser/ash/policy/off_hours/device_off_hours_controller.h"
 
+#include <optional>
 #include <string>
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/time/default_clock.h"
 #include "base/time/tick_clock.h"
@@ -21,7 +22,6 @@
 #include "components/prefs/pref_value_map.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace policy::off_hours {
 
@@ -68,7 +68,7 @@ bool DeviceOffHoursController::IsCurrentSessionAllowedOnlyForOffHours() const {
   const user_manager::UserList& logged_in_users =
       user_manager->GetLoggedInUsers();
   user_manager::UserList users_to_check;
-  for (auto* user : logged_in_users) {
+  for (user_manager::User* user : logged_in_users) {
     if (user->GetType() == user_manager::USER_TYPE_REGULAR ||
         user->GetType() == user_manager::USER_TYPE_GUEST ||
         user->GetType() == user_manager::USER_TYPE_CHILD) {
@@ -92,7 +92,7 @@ void DeviceOffHoursController::UpdateOffHoursPolicy(
   if (device_settings_proto.has_device_off_hours()) {
     const em::DeviceOffHoursProto& container(
         device_settings_proto.device_off_hours());
-    absl::optional<std::string> timezone = ExtractTimezoneFromProto(container);
+    std::optional<std::string> timezone = ExtractTimezoneFromProto(container);
     if (timezone) {
       off_hours_intervals = weekly_time_utils::ConvertIntervalsToGmt(
           ExtractWeeklyTimeIntervalsFromProto(container, *timezone, clock_));
@@ -128,7 +128,7 @@ void DeviceOffHoursController::UpdateOffHoursMode() {
   namespace wtu = weekly_time_utils;
   const base::Time now = clock_->Now();
   const bool in_interval = wtu::Contains(now, off_hours_intervals_);
-  const absl::optional<base::Time> update_time =
+  const std::optional<base::Time> update_time =
       wtu::GetNextEventTime(now, off_hours_intervals_);
 
   // weekly off_hours_intervals_ is not empty -> update_time has a value

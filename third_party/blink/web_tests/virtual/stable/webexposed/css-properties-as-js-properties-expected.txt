@@ -9,6 +9,7 @@ alignSelf
 alignmentBaseline
 all
 animation
+animationComposition
 animationDelay
 animationDirection
 animationDuration
@@ -16,6 +17,10 @@ animationFillMode
 animationIterationCount
 animationName
 animationPlayState
+animationRange
+animationRangeEnd
+animationRangeStart
+animationTimeline
 animationTimingFunction
 appRegion
 appearance
@@ -34,11 +39,10 @@ backgroundPosition
 backgroundPositionX
 backgroundPositionY
 backgroundRepeat
-backgroundRepeatX
-backgroundRepeatY
 backgroundSize
 basePalette
 baselineShift
+baselineSource
 blockSize
 border
 borderBlock
@@ -184,10 +188,12 @@ fontSynthesisSmallCaps
 fontSynthesisStyle
 fontSynthesisWeight
 fontVariant
+fontVariantAlternates
 fontVariantCaps
 fontVariantEastAsian
 fontVariantLigatures
 fontVariantNumeric
+fontVariantPosition
 fontVariationSettings
 fontWeight
 forcedColorAdjust
@@ -219,6 +225,7 @@ hyphens
 imageOrientation
 imageRendering
 inherits
+initialLetter
 initialValue
 inlineSize
 inset
@@ -260,7 +267,18 @@ markerEnd
 markerMid
 markerStart
 mask
+maskClip
+maskComposite
+maskImage
+maskMode
+maskOrigin
+maskPosition
+maskRepeat
+maskSize
 maskType
+mathDepth
+mathShift
+mathStyle
 maxBlockSize
 maxHeight
 maxInlineSize
@@ -275,8 +293,10 @@ objectFit
 objectPosition
 objectViewBox
 offset
+offsetAnchor
 offsetDistance
 offsetPath
+offsetPosition
 offsetRotate
 opacity
 order
@@ -292,6 +312,7 @@ overflowClipMargin
 overflowWrap
 overflowX
 overflowY
+overlay
 overrideColors
 overscrollBehavior
 overscrollBehaviorBlock
@@ -363,7 +384,12 @@ scrollPaddingTop
 scrollSnapAlign
 scrollSnapStop
 scrollSnapType
+scrollTimeline
+scrollTimelineAxis
+scrollTimelineName
+scrollbarColor
 scrollbarGutter
+scrollbarWidth
 setProperty
 shapeImageThreshold
 shapeMargin
@@ -413,6 +439,8 @@ textSizeAdjust
 textTransform
 textUnderlineOffset
 textUnderlinePosition
+textWrap
+timelineScope
 top
 touchAction
 transform
@@ -420,6 +448,7 @@ transformBox
 transformOrigin
 transformStyle
 transition
+transitionBehavior
 transitionDelay
 transitionDuration
 transitionProperty
@@ -430,6 +459,11 @@ unicodeRange
 userSelect
 vectorEffect
 verticalAlign
+viewTimeline
+viewTimelineAxis
+viewTimelineInset
+viewTimelineName
+viewTransitionName
 visibility
 webkitAlignContent
 webkitAlignItems
@@ -506,7 +540,6 @@ webkitFlexShrink
 webkitFlexWrap
 webkitFontFeatureSettings
 webkitFontSmoothing
-webkitHighlight
 webkitHyphenateCharacter
 webkitJustifyContent
 webkitLineBreak
@@ -533,8 +566,6 @@ webkitMaskPosition
 webkitMaskPositionX
 webkitMaskPositionY
 webkitMaskRepeat
-webkitMaskRepeatX
-webkitMaskRepeatY
 webkitMaskSize
 webkitMaxLogicalHeight
 webkitMaxLogicalWidth
@@ -586,6 +617,7 @@ webkitUserModify
 webkitUserSelect
 webkitWritingMode
 whiteSpace
+whiteSpaceCollapse
 widows
 width
 willChange

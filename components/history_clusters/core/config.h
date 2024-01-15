@@ -10,8 +10,6 @@
 #include "base/containers/flat_set.h"
 #include "base/time/time.h"
 
-class PrefService;
-
 namespace history_clusters {
 
 namespace switches {
@@ -19,8 +17,6 @@ namespace switches {
 extern const char kShouldShowAllClustersOnProminentUiSurfaces[];
 
 }  // namespace switches
-
-class HistoryClustersService;
 
 // The default configuration. Always use |GetConfig()| to get the current
 // configuration.
@@ -58,10 +54,6 @@ struct Config {
   // one "top visit" and three subordinate looking visits will be always shown.
   size_t num_visits_to_always_show_above_the_fold = 4;
 
-  // If enabled, hidden visits are dropped entirely, instead of being gated
-  // behind a "Show More" UI control.
-  bool drop_hidden_visits = true;
-
   // If enabled, when there is a Journeys search query, the backend re-scores
   // visits within a cluster to account for whether or not that visit matches.
   bool rescore_visits_within_clusters_for_query = true;
@@ -73,12 +65,6 @@ struct Config {
 
   // The `kJourneysLabels` feature and child params.
 
-  // Whether to assign labels to clusters. If the label exists, it will be shown
-  // in the UI. If the label doesn't exist, the UI will emphasize the top visit.
-  // Note: The default value here is meaningless, because the actual default
-  // value is derived from the base::Feature.
-  bool should_label_clusters = true;
-
   // Whether to assign labels to clusters from the hostnames of the cluster.
   // Does nothing if `should_label_clusters` is false. Note that since every
   // cluster has a hostname, this flag in conjunction with
@@ -89,9 +75,18 @@ struct Config {
   // Does nothing if `should_label_clusters` is false.
   bool labels_from_entities = false;
 
-  // Whether to attempt to provide images for eligible Journeys (so far just
-  // a proof of concept implementation for Entities only).
-  bool images = false;
+  // Whether to assign labels to clusters from the entities associated with
+  // search visits within a cluster if there are multiple search visits for the
+  // cluster.
+  bool labels_from_search_visit_entities = false;
+
+  // The `kJourneysImages` feature and child params.
+
+  // Whether to attempt to provide images for eligible Journeys.
+  bool images = true;
+
+  // Whether the image covers the whole icon container.
+  bool images_cover = true;
 
   // The `kPersistedClusters` feature and child params.
 
@@ -99,17 +94,27 @@ struct Config {
   // and accessing clusters will retrieve them from the history DB. If disabled,
   // updating clusters is a no-op and accessing clusters will generate and
   // return new clusters without persisting them.
-  bool persist_clusters_in_history_db = false;
+  bool persist_clusters_in_history_db = true;
 
   // No effect if `persist_clusters_in_history_db` is disabled. Determines how
   // soon to update clusters after startup in minutes. E.g., by default, will
   // update clusters 5 minutes after startup.
-  int persist_clusters_in_history_db_after_startup_delay_minutes = 5;
+  int persist_clusters_in_history_db_after_startup_delay_minutes = 1;
 
   // No effect if `persist_clusters_in_history_db` is disabled. Determines how
   // often to update clusters in minutes. E.g., by default, will update clusters
-  // every hour.
-  int persist_clusters_in_history_db_period_minutes = 60;
+  // every 1 hour.
+  int persist_clusters_in_history_db_period_minutes = 1;
+
+  // No effect if `persist_clusters_in_history_db` is disabled. If disabled,
+  // persistence occurs on a timer (see the above 2 params). If enabled, will
+  // instead occur on query like refreshing the keyword cache does. This may
+  // help bound the number of persistence requests. If enabled, will continue to
+  // also be capped to at most 1 request per
+  // `persist_clusters_in_history_db_period_minutes`, but
+  // `persist_clusters_in_history_db_after_startup_delay_minutes` will be
+  // unused.
+  bool persist_on_query = true;
 
   // Hard cap on max clusters to fetch after exhausting unclustered visits and
   // fetching persisted clusters for the get most recent flow. Doesn't affect
@@ -126,24 +131,13 @@ struct Config {
   // clusters. E.g., if set to 2, and clusters up to 1/10 have been persisted,
   // then the next request will include visits from clusters from 1/8 and 1/9,
   // and unclustered visits from 1/10.
-  size_t persist_clusters_recluster_window_days = 2;
+  size_t persist_clusters_recluster_window_days = 0;
 
   // The `kOmniboxAction` feature and child params.
 
   // Enables the Journeys Omnibox Action chip. `kJourneys` must also be enabled
   // for this to take effect.
   bool omnibox_action = false;
-
-  // If enabled, allows the Omnibox Action chip to also appear on URLs. This
-  // does nothing if `omnibox_action` is disabled. Note, that if you turn this
-  // flag to true, you almost certainly will want to set
-  // `omnibox_action_on_navigation_intents` to true as well, as otherwise your
-  // desired action chips on URLs will almost certainly all be suppressed.
-  bool omnibox_action_on_urls = false;
-
-  // If enabled, allows the Omnibox Action chip to appear on URLs from noisy
-  // visits. This does nothing if `omnibox_action_on_urls` is disabled.
-  bool omnibox_action_on_noisy_urls = true;
 
   // If enabled, allows the Omnibox Action chip to appear when the suggestions
   // contain pedals. Does nothing if `omnibox_action` is disabled.
@@ -158,9 +152,6 @@ struct Config {
   // suggestions are allowed to display the chip. Does nothing if
   // `omnibox_action` is disabled.
   bool omnibox_action_on_navigation_intents = false;
-
-  // If enabled, allowed the acting chip to appear on search entity suggestions.
-  bool omnibox_action_on_entities = false;
 
   // The `kOmniboxHistoryClusterProvider` feature and child params.
 
@@ -183,18 +174,12 @@ struct Config {
   // aren't too many strong navigation matches.
   int omnibox_history_cluster_provider_score = 900;
 
-  // Whether Journey suggestions from the `HistoryClusterProvider` can be
-  // surfaced from the shortcuts' provider. They will be scored according to the
-  // shortcuts' provider's scoring, which is more aggressive than the default
-  // 900 score the `HistoryClusterProvider` assigns. Journey suggestions will
-  // still be limited to 1, and will still be locked to the last suggestion
-  // slot. More aggressive scoring won't affect ranking, but visibility. If
-  // disabled, journey suggestions will still be added to the table, but
-  // filtered out when retrieving suggesting; this is so that users in an
-  // experiment group with `omnibox_history_cluster_provider_shortcuts` enabled
-  // don't have lingering effects when they leave the group. Meaningless if
-  // `omnibox_history_cluster_provider` is disabled.
-  bool omnibox_history_cluster_provider_shortcuts = false;
+  // If enabled, will inherit the score from the matched search suggestion
+  // minus 1. This will force the journey suggestion immediately after the
+  // search suggestion, except if there's a tie with another suggestion, in
+  // which case it's indeterminate which is ordered first. If enabled,
+  // `omnibox_history_cluster_provider_score` becomes a no-op.
+  bool omnibox_history_cluster_provider_inherit_search_match_score = false;
 
   // If `omnibox_history_cluster_provider_on_navigation_intents` is false, this
   // threshold helps determine when the user is intending to perform a
@@ -207,10 +192,6 @@ struct Config {
   // is intending to perform a navigation. Meaningless if
   // `omnibox_history_cluster_provider` is disabled.
   bool omnibox_history_cluster_provider_on_navigation_intents = false;
-
-  // If enabled, allows the suggestion row to be ranked in any position;
-  // otherwise, always ranked last.
-  bool omnibox_history_cluster_provider_free_ranking = false;
 
   // The `kOnDeviceClusteringKeywordFiltering` feature and child params.
 
@@ -226,9 +207,6 @@ struct Config {
   // cluster.
   bool keyword_filter_on_noisy_visits = false;
 
-  // If enabled, adds the search terms of the visits that have them.
-  bool keyword_filter_on_search_terms = false;
-
   // Maximum number of keywords to keep per cluster.
   size_t max_num_keywords_per_cluster = 20;
 
@@ -242,16 +220,9 @@ struct Config {
   // visit.
   int entity_relevance_threshold = 60;
 
-  // Whether to hide single-visit clusters on prominent UI surfaces.
-  bool should_hide_single_visit_clusters_on_prominent_ui_surfaces = true;
-
-  // Whether to hide clusters that only contain URLs from the same domain on
-  // prominent UI surfaces.
-  bool should_hide_single_domain_clusters_on_prominent_ui_surfaces = false;
-
-  // Whether to filter clusters that are noisy from the UI. This will
-  // heuristically remove clusters that are unlikely to be "interesting".
-  bool should_filter_noisy_clusters = true;
+  // Returns the threshold for which we should mark a cluster as being able to
+  // show on prominent UI surfaces.
+  float content_visibility_threshold = 0.7;
 
   // Returns the threshold used to determine if a cluster, and its visits, has
   // too high site engagement to be likely useful.
@@ -262,55 +233,12 @@ struct Config {
   // on the zero state UI).
   size_t number_interesting_visits_filter_threshold = 1;
 
-  // Whether to determine whether to show/hide clusters on prominent UI surfaces
-  // based on categories annotated for a visit.
-  bool should_use_categories_to_filter_on_prominent_ui_surfaces = false;
-
-  // The category IDs used for filtering. These should represent categories that
-  // are repesentatitive of Journeys that we think the user is likely to want to
-  // re-engage with.
-  base::flat_set<std::string> categories_for_filtering;
-
-  // The `kOnDeviceClusteringContentClustering` feature and child params.
-
-  // Returns whether content clustering is enabled and
-  // should be performed by the clustering backend.
-  bool content_clustering_enabled = false;
-
-  // Returns the weight that should be placed on entity similarity for
-  // determining if two clusters are similar enough to be combined into one.
-  float content_clustering_entity_similarity_weight = 1.0;
-
-  // Returns the similarity threshold, between 0 and 1, used to determine if
-  // two clusters are similar enough to be combined into
-  // a single cluster.
-  float content_clustering_similarity_threshold = 0.2;
-
-  // Returns the threshold for which we should mark a cluster as being able to
-  // show on prominent UI surfaces.
-  float content_visibility_threshold = 0.7;
-
-  // Returns true if content clustering should use the intersection similarity
-  // score.
-  bool content_cluster_on_intersection_similarity = false;
-
-  // Returns the threshold, in terms of the number of overlapping keywords, to
-  // use when clustering based on intersection score.
-  int cluster_interaction_threshold = 2;
-
-  // Returns true if content clustering should use the cosine similarity
-  // algorithm.
-  bool content_cluster_using_cosine_similarity = false;
-
-  // Returns whether we should exclude entities that do not have associated
-  // collections from content clustering.
-  bool exclude_entities_that_have_no_collections_from_content_clustering =
-      false;
-
-  // The set of collections to block from being content clustered.
-  base::flat_set<std::string> collections_to_block_from_content_clustering;
-
   // The `kUseEngagementScoreCache` feature and child params.
+
+  // Whether to use a cache to store the site engagement scores per host. Used
+  // in both the old (OnDeviceClusteringBackend) and new
+  // (ContextClustererHistoryServiceObserver) clustering paths.
+  bool use_engagement_score_cache = true;
 
   // The max number of hosts that should be stored in the engagement score
   // cache.
@@ -319,10 +247,42 @@ struct Config {
   // The max time a host should be stored in the engagement score cache.
   base::TimeDelta engagement_score_cache_refresh_duration = base::Minutes(120);
 
+  // The `kOnDeviceClusteringContentClustering` feature and child params.
+
+  // Returns whether content clustering is enabled and
+  // should be performed by the clustering backend.
+  bool content_clustering_enabled = false;
+
+  // Returns whether content clustering should only be done across clusters that
+  // contain a search.
+  bool content_clustering_search_visits_only = false;
+
+  // Returns the similarity threshold, between 0 and 1, used to determine if
+  // two clusters are similar enough to be combined into
+  // a single cluster.
+  float content_clustering_similarity_threshold = 0.2;
+
+  // Returns whether we should exclude entities that do not have associated
+  // collections from content clustering.
+  bool exclude_entities_that_have_no_collections_from_content_clustering = true;
+
+  // The set of collections to block from being content clustered.
+  base::flat_set<std::string> collections_to_block_from_content_clustering = {
+      "/collection/it_glossary", "/collection/periodicals",
+      "/collection/software", "/collection/tv_networks",
+      "/collection/websites"};
+
+  // Whether to merge similar clusters using pairwise merge.
+  bool use_pairwise_merge = false;
+
+  // The maximum number of iterations to run for the convergence of pairwise
+  // merging of similar clusters.
+  int max_pairwise_merge_iterations = 40;
+
   // The `kHistoryClustersVisitDeduping` feature and child params.
 
   // Use host instead of heavily-stripped URL as URL for deduping.
-  bool use_host_for_visit_deduping = false;
+  bool use_host_for_visit_deduping = true;
 
   // The `kOnDeviceClusteringVisitRanking` feature and child params.
 
@@ -341,6 +301,45 @@ struct Config {
   // Returns the weight to use for visits that are search results pages ranking
   // visits within a cluster. Will always be greater than or equal to 0.
   float search_results_page_ranking_weight = 2.0;
+
+  // Returns the weight to use for visits with URL-keyed images when ranking
+  // visits within a cluster. Will always be greater than or equal to 0.
+  float has_url_keyed_image_ranking_weight = 1.5;
+
+  // The `kHistoryClustersNavigationContextClustering` feature and child params.
+
+  // Whether to use the new clustering path that does context clustering at
+  // navigation and embellishes clusters for display at UI time.
+  bool use_navigation_context_clusters = true;
+
+  // The duration between context clustering clean up passes.
+  base::TimeDelta context_clustering_clean_up_duration = base::Minutes(10);
+
+  // The duration since the most recent visit for which a context cluster is
+  // considered to be fully frozen and triggerability can be finalized.
+  base::TimeDelta cluster_triggerability_cutoff_duration = base::Minutes(120);
+
+  // WebUI features and params.
+
+  // Whether new tab groups created by "Open all in new tab group" should be
+  // named after the cluster title. If false, the new tab group is anonymous,
+  // which is the pre-M115 behavior.
+  bool named_new_tab_groups = true;
+
+  // The `kJourneysZeroStateFiltering` feature and child params.
+
+  bool apply_zero_state_filtering = true;
+
+  // The `kNtpChromeCartInHistoryClusterModule` child params.
+
+  // Whether to use the NTP-specific algorithms and signals for determining
+  // intracluster ranking.
+  bool use_ntp_specific_intracluster_ranking = false;
+
+  // Returns the weight to use for the visit duration when ranking visits within
+  // a cluster. Will always be greater than or equal to 0 specifically on the
+  // NTP surface when `use_ntp_specific_intracluster_ranking is true`.
+  float ntp_visit_duration_ranking_weight = 1.0;
 
   // Lonely features without child params.
 
@@ -375,6 +374,12 @@ struct Config {
   bool should_show_all_clusters_unconditionally_on_prominent_ui_surfaces =
       false;
 
+  // Whether to include synced visits in clusters.
+  bool include_synced_visits = false;
+
+  // Whether keyword caches should be written to and read from prefs.
+  bool persist_caches_to_prefs = true;
+
   // Order consistently with features.h.
 
   Config();
@@ -383,12 +388,10 @@ struct Config {
 };
 
 // Returns the set of collections that should not be included for content
-// clustering.
-base::flat_set<std::string> JourneysCollectionContentClusteringBlocklist();
-
-// Returns the set of categories that should be used to filter for whether a
-// user is likely to re-engage with a cluster.
-base::flat_set<std::string> JourneysCategoryFilteringAllowlist();
+// clustering. If the experiment string is empty or malformed, `default_value`
+// will be used.
+base::flat_set<std::string> JourneysCollectionContentClusteringBlocklist(
+    const base::flat_set<std::string>& default_value);
 
 // Returns the set of mids that should be blocked from being used by the
 // clustering backend, particularly for potential keywords used for omnibox
@@ -401,11 +404,6 @@ base::flat_set<std::string> JourneysMidBlocklist();
 // cached.
 bool IsApplicationLocaleSupportedByJourneys(
     const std::string& application_locale);
-
-// Checks some prerequisites for history cluster omnibox suggestions and
-// actions.
-bool IsJourneysEnabledInOmnibox(HistoryClustersService* service,
-                                PrefService* prefs);
 
 // Gets the current configuration.
 const Config& GetConfig();

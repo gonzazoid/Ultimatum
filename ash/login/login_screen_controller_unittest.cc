@@ -12,32 +12,52 @@
 #include "ash/session/test_session_controller_client.h"
 #include "ash/shell.h"
 #include "ash/system/status_area_widget.h"
+#include "ash/system/toast/toast_manager_impl.h"
+#include "ash/system/toast/toast_overlay.h"
 #include "ash/system/tray/system_tray_notifier.h"
 #include "ash/system/unified/unified_system_tray.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/test/ash_test_util.h"
 #include "ash/wallpaper/wallpaper_controller_impl.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
+#include "chromeos/ash/components/login/auth/auth_events_recorder.h"
 #include "components/prefs/pref_service.h"
 #include "components/session_manager/session_manager_types.h"
 #include "components/user_manager/known_user.h"
+#include "testing/gmock/include/gmock/gmock.h"
 
 using session_manager::SessionState;
 using ::testing::_;
 
 namespace ash {
 
-namespace {
 class LoginScreenControllerTest : public AshTestBase {
  public:
   LoginScreenControllerTest() {
-    user_manager::KnownUser::RegisterPrefs(local_state()->registry());
+    auth_events_recorder_ = ash::AuthEventsRecorder::CreateForTesting();
   }
+
+  ToastOverlay* GetCurrentToast() {
+    aura::Window* root_window = Shell::GetRootWindowForNewWindows();
+    return Shell::Get()->toast_manager()->GetCurrentOverlayForTesting(
+        root_window);
+  }
+
+ private:
+  std::unique_ptr<ash::AuthEventsRecorder> auth_events_recorder_;
 };
 
-using LoginScreenControllerNoSessionTest = NoSessionAshTestBase;
+class LoginScreenControllerNoSessionTest : public NoSessionAshTestBase {
+ public:
+  LoginScreenControllerNoSessionTest() {
+    auth_events_recorder_ = ash::AuthEventsRecorder::CreateForTesting();
+  }
+
+ private:
+  std::unique_ptr<ash::AuthEventsRecorder> auth_events_recorder_;
+};
 
 // Enum instead of enum class, because it is used for indexing.
 enum WindowType { kPrimary = 0, kSecondary = 1 };
@@ -53,11 +73,11 @@ TEST_F(LoginScreenControllerTest, RequestAuthentication) {
   // (hashed) password, and the correct PIN state.
   EXPECT_CALL(*client,
               AuthenticateUserWithPasswordOrPin_(id, password, false, _));
-  absl::optional<bool> callback_result;
+  std::optional<bool> callback_result;
   base::RunLoop run_loop1;
   controller->AuthenticateUserWithPasswordOrPin(
       id, password, false,
-      base::BindLambdaForTesting([&](absl::optional<bool> did_auth) {
+      base::BindLambdaForTesting([&](std::optional<bool> did_auth) {
         callback_result = did_auth;
         run_loop1.Quit();
       }));
@@ -77,7 +97,7 @@ TEST_F(LoginScreenControllerTest, RequestAuthentication) {
   base::RunLoop run_loop2;
   controller->AuthenticateUserWithPasswordOrPin(
       id, pin, true,
-      base::BindLambdaForTesting([&](absl::optional<bool> did_auth) {
+      base::BindLambdaForTesting([&](std::optional<bool> did_auth) {
         callback_result = did_auth;
         run_loop2.Quit();
       }));
@@ -97,11 +117,6 @@ TEST_F(LoginScreenControllerTest, RequestEasyUnlock) {
   EXPECT_CALL(*client, AuthenticateUserWithEasyUnlock(id));
   controller->AuthenticateUserWithEasyUnlock(id);
   base::RunLoop().RunUntilIdle();
-
-  // Verify HardlockPod mojo call is run with the same account id.
-  EXPECT_CALL(*client, HardlockPod(id));
-  controller->HardlockPod(id);
-  base::RunLoop().RunUntilIdle();
 }
 
 TEST_F(LoginScreenControllerTest, RequestUserPodFocus) {
@@ -114,10 +129,25 @@ TEST_F(LoginScreenControllerTest, RequestUserPodFocus) {
   EXPECT_CALL(*client, OnFocusPod(id));
   controller->OnFocusPod(id);
   base::RunLoop().RunUntilIdle();
+}
 
-  // Verify NoPodFocused mojo call is run.
-  EXPECT_CALL(*client, OnNoPodFocused());
-  controller->OnNoPodFocused();
+// b/308840749 test for clicking on second user pod while first is logging in.
+TEST_F(LoginScreenControllerNoSessionTest, DoesNotCallOnFocusPodDuringLogin) {
+  ASSERT_EQ(SessionState::LOGIN_PRIMARY,
+            Shell::Get()->session_controller()->GetSessionState());
+
+  LoginScreenController* controller = Shell::Get()->login_screen_controller();
+  auto client = std::make_unique<testing::StrictMock<MockLoginScreenClient>>();
+  AccountId id = AccountId::FromUserEmail("user1@test.com");
+  EXPECT_CALL(*client, OnFocusPod(id)).Times(1);
+  controller->OnFocusPod(id);
+
+  // Simulate starting log in as user1.
+  GetSessionControllerClient()->SetSessionState(
+      SessionState::LOGGED_IN_NOT_ACTIVE);
+
+  // Click on user2 pod while logging in as user1. No `OnFocusPod` calls sent.
+  controller->OnFocusPod(AccountId::FromUserEmail("user2@test.com"));
   base::RunLoop().RunUntilIdle();
 }
 
@@ -208,5 +238,16 @@ TEST_F(LoginScreenControllerTest, SystemTrayFocus) {
   Shell::Get()->system_tray_notifier()->NotifyFocusOut(false);
 }
 
-}  // namespace
+TEST_F(LoginScreenControllerTest, KioskAppErrorToastIsDismissedOnDestroy) {
+  EXPECT_EQ(GetCurrentToast(), nullptr);
+  Shell::Get()->login_screen_controller()->ShowKioskAppError("Some error");
+
+  auto* toast = GetCurrentToast();
+  ASSERT_NE(toast, nullptr);
+  ASSERT_EQ(toast->GetText(), u"Some error");
+
+  Shell::Get()->login_screen_controller()->OnLockScreenDestroyed();
+  EXPECT_EQ(GetCurrentToast(), nullptr);
+}
+
 }  // namespace ash

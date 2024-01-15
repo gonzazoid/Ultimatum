@@ -11,25 +11,27 @@
 // the content public API.
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/files/file_path.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
 #include "content/browser/bad_message.h"
 #include "content/browser/renderer_host/back_forward_cache_metrics.h"
-#include "content/public/browser/devtools_agent_host.h"
+#include "content/browser/renderer_host/navigation_type.h"
+#include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/public/browser/javascript_dialog_manager.h"
-#include "content/public/browser/navigation_type.h"
 #include "content/public/browser/web_contents_delegate.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/test/browser_test_utils.h"
+#include "content/public/test/content_browser_test_content_browser_client.h"
+#include "content/public/test/test_navigation_observer.h"
 #include "content/public/test/test_utils.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "net/test/embedded_test_server/embedded_test_server.h"
 #include "third_party/blink/public/mojom/choosers/file_chooser.mojom-forward.h"
 #include "third_party/blink/public/mojom/choosers/popup_menu.mojom.h"
 #include "third_party/blink/public/mojom/page/widget.mojom-test-utils.h"
@@ -125,7 +127,9 @@ Shell* OpenWindow(WebContentsImpl* web_contents, const GURL& url);
 //             D = http://next.com/
 //
 // SiteInstances are assigned single-letter names (A, B, C) which are remembered
-// across invocations of the pretty-printer.
+// across invocations of the pretty-printer. Port numbers are excluded from the
+// descriptions by default for DepictFrameTree. Isolated sandboxed SiteInstances
+// are denoted with "(sandboxed)".
 class FrameTreeVisualizer {
  public:
   FrameTreeVisualizer();
@@ -141,6 +145,9 @@ class FrameTreeVisualizer {
  private:
   // Assign or retrive the abbreviated short name (A, B, C) for a site instance.
   std::string GetName(SiteInstance* site_instance);
+
+  // Returns an identical URL except the port, if any, has been removed.
+  GURL GetUrlWithoutPort(const GURL& url);
 
   // Elements are site instance ids. The index of the SiteInstance in the vector
   // determines the abbreviated name (0->A, 1->B) for that SiteInstance.
@@ -179,7 +186,10 @@ class FileChooserDelegate : public WebContentsDelegate {
   // The mocked file dialog will always reply that the user selected |file| or
   // |files|. |callback| is invoked when RunFileChooser() is called.
   FileChooserDelegate(const base::FilePath& file, base::OnceClosure callback);
+  // |base_dir| must be set to the folder being uploaded in |kUploadFolder|
+  // mode, and must be empty in all other modes.
   FileChooserDelegate(std::vector<base::FilePath> files,
+                      const base::FilePath& base_dir,
                       base::OnceClosure callback);
   ~FileChooserDelegate() override;
 
@@ -193,6 +203,7 @@ class FileChooserDelegate : public WebContentsDelegate {
 
  private:
   std::vector<base::FilePath> files_;
+  const base::FilePath base_dir_;
   base::OnceClosure callback_;
   blink::mojom::FileChooserParamsPtr params_;
 };
@@ -267,9 +278,9 @@ class RenderProcessHostBadIpcMessageWaiter {
       const RenderProcessHostBadIpcMessageWaiter&) = delete;
 
   // Waits until the renderer process exits.  Returns the bad message that made
-  // //content kill the renderer.  |absl::nullopt| is returned if the renderer
+  // //content kill the renderer.  |std::nullopt| is returned if the renderer
   // was killed outside of //content or exited normally.
-  [[nodiscard]] absl::optional<bad_message::BadMessageReason> Wait();
+  [[nodiscard]] std::optional<bad_message::BadMessageReason> Wait();
 
  private:
   RenderProcessHostKillWaiter internal_waiter_;
@@ -320,52 +331,6 @@ class ShowPopupWidgetWaiter
 #endif
 };
 
-// A BrowserMessageFilter that drops a pre-specified message.
-class DropMessageFilter : public BrowserMessageFilter {
- public:
-  DropMessageFilter(uint32_t message_class, uint32_t drop_message_id);
-
-  DropMessageFilter(const DropMessageFilter&) = delete;
-  DropMessageFilter& operator=(const DropMessageFilter&) = delete;
-
- protected:
-  ~DropMessageFilter() override;
-
- private:
-  // BrowserMessageFilter:
-  bool OnMessageReceived(const IPC::Message& message) override;
-
-  const uint32_t drop_message_id_;
-};
-
-// A BrowserMessageFilter that observes a message without handling it, and
-// reports when it was seen.
-class ObserveMessageFilter : public BrowserMessageFilter {
- public:
-  ObserveMessageFilter(uint32_t message_class, uint32_t watch_message_id);
-
-  ObserveMessageFilter(const ObserveMessageFilter&) = delete;
-  ObserveMessageFilter& operator=(const ObserveMessageFilter&) = delete;
-
-  bool has_received_message() { return received_; }
-
-  // Spins a RunLoop until the message is observed.
-  void Wait();
-
- protected:
-  ~ObserveMessageFilter() override;
-
-  // BrowserMessageFilter:
-  bool OnMessageReceived(const IPC::Message& message) override;
-
- private:
-  void QuitWait();
-
-  const uint32_t watch_message_id_;
-  bool received_ = false;
-  base::OnceClosure quit_closure_;
-};
-
 // This observer waits until WebContentsObserver::OnRendererUnresponsive
 // notification.
 class UnresponsiveRendererObserver : public WebContentsObserver {
@@ -407,6 +372,8 @@ class BeforeUnloadBlockingDelegate : public JavaScriptDialogManager,
   JavaScriptDialogManager* GetJavaScriptDialogManager(
       WebContents* source) override;
 
+  bool IsBackForwardCacheSupported() override;
+
   // JavaScriptDialogManager
 
   void RunJavaScriptDialog(WebContents* web_contents,
@@ -434,27 +401,6 @@ class BeforeUnloadBlockingDelegate : public JavaScriptDialogManager,
   DialogClosedCallback callback_;
 
   std::unique_ptr<base::RunLoop> run_loop_ = std::make_unique<base::RunLoop>();
-};
-
-// A helper class to get DevTools inspector log messages (e.g. network errors).
-class DevToolsInspectorLogWatcher : public DevToolsAgentHostClient {
- public:
-  explicit DevToolsInspectorLogWatcher(WebContents* web_contents);
-  ~DevToolsInspectorLogWatcher() override;
-
-  void FlushAndStopWatching();
-  std::string last_message() { return last_message_; }
-
-  // DevToolsAgentHostClient:
-  void DispatchProtocolMessage(DevToolsAgentHost* host,
-                               base::span<const uint8_t> message) override;
-  void AgentHostClosed(DevToolsAgentHost* host) override;
-
- private:
-  scoped_refptr<DevToolsAgentHost> host_;
-  base::RunLoop run_loop_enable_log_;
-  base::RunLoop run_loop_disable_log_;
-  std::string last_message_;
 };
 
 // Captures various properties of the NavigationHandle on DidFinishNavigation.
@@ -543,7 +489,7 @@ class FrameNavigateParamsCapturer : public WebContentsObserver {
   // The id of the FrameTreeNode whose navigations to observe. If this is not
   // set, then this FrameNavigateParamsCapturer observes all navigations that
   // happen in the observed WebContents.
-  absl::optional<int> frame_tree_node_id_;
+  std::optional<int> frame_tree_node_id_;
 
   // How many navigations remain to capture.
   int navigations_remaining_ = 1;
@@ -604,7 +550,7 @@ class RenderFrameHostCreatedObserver : public WebContentsObserver {
   base::RunLoop run_loop_;
 
   // The last RenderFrameHost created.
-  raw_ptr<RenderFrameHost, DanglingUntriaged> last_rfh_ = nullptr;
+  raw_ptr<RenderFrameHost, AcrossTasksDanglingUntriaged> last_rfh_ = nullptr;
 
   // The callback to call when a RenderFrameCreated call is observed.
   OnRenderFrameHostCreatedCallback on_rfh_created_;
@@ -682,6 +628,111 @@ class InactiveRenderFrameHostDeletionObserver : public WebContentsObserver {
   std::unique_ptr<base::RunLoop> loop_;
   std::set<RenderFrameHost*> inactive_rfhs_;
 };
+
+class TestNavigationObserverInternal : public TestNavigationObserver {
+ public:
+  using TestNavigationObserver::TestNavigationObserver;
+  ~TestNavigationObserverInternal() override = default;
+
+  // TestNavigationObserver:
+  void OnDidFinishNavigation(NavigationHandle* navigation_handle) override;
+  // Return the NavigationType of the last navigation.
+  NavigationType last_navigation_type() const { return last_navigation_type_; }
+
+ private:
+  NavigationType last_navigation_type_ = NAVIGATION_TYPE_UNKNOWN;
+};
+
+// Return the descendant of `rfh` found by selecting children according to
+// `descendant_indices`. E.g. `DescendantRenderFrameHostImplAt(rfh, {0, 1}) will
+// return the child at index 1 of the child at index 0 of `rfh`.
+RenderFrameHostImpl* DescendantRenderFrameHostImplAt(
+    const ToRenderFrameHost& adapter,
+    std::vector<size_t> descendant_indices);
+
+class EffectiveURLContentBrowserTestContentBrowserClient
+    : public ContentBrowserTestContentBrowserClient {
+ public:
+  explicit EffectiveURLContentBrowserTestContentBrowserClient(
+      bool requires_dedicated_process);
+  EffectiveURLContentBrowserTestContentBrowserClient(
+      const GURL& url_to_modify,
+      const GURL& url_to_return,
+      bool requires_dedicated_process);
+  ~EffectiveURLContentBrowserTestContentBrowserClient() override;
+
+  // Adds effective URL translation from |url_to_modify| to |url_to_return|.
+  void AddTranslation(const GURL& url_to_modify, const GURL& url_to_return);
+
+ private:
+  GURL GetEffectiveURL(BrowserContext* browser_context,
+                       const GURL& url) override;
+  bool DoesSiteRequireDedicatedProcess(BrowserContext* browser_context,
+                                       const GURL& effective_site_url) override;
+
+  EffectiveURLContentBrowserClientHelper helper_;
+};
+
+// Class that requests that all pages belonging to the provided site get loaded
+// in a non-default StoragePartition.
+class CustomStoragePartitionBrowserClient
+    : public ContentBrowserTestContentBrowserClient {
+ public:
+  explicit CustomStoragePartitionBrowserClient(const GURL& site_to_isolate);
+
+  StoragePartitionConfig GetStoragePartitionConfigForSite(
+      BrowserContext* browser_context,
+      const GURL& site) override;
+
+ private:
+  GURL site_to_isolate_;
+};
+
+// Helper that waits for a request from the specified `RenderFrameHost` to send
+// `CommitNavigation()` to the browser.
+class CommitNavigationPauser
+    : public RenderFrameHostImpl::CommitCallbackInterceptor {
+ public:
+  explicit CommitNavigationPauser(RenderFrameHostImpl* rfh);
+  ~CommitNavigationPauser() override;
+
+  void WaitForCommitAndPause();
+
+  // Once a `CommitNavigation()` call has been paused, these two methods may be
+  // used to resume or discard the commit as appropriate.
+  void ResumePausedCommit();
+  void DiscardPausedCommit();
+
+ private:
+  // CommitCallbackInterceptor overrides:
+  bool WillProcessDidCommitNavigation(
+      NavigationRequest* request,
+      mojom::DidCommitProvisionalLoadParamsPtr* params,
+      mojom::DidCommitProvisionalLoadInterfaceParamsPtr* interface_params)
+      override;
+
+  base::RunLoop loop_;
+
+  // The parameters to resume a previously paused `CommitNavigation()`.
+  base::WeakPtr<NavigationRequest> paused_request_;
+  mojom::DidCommitProvisionalLoadParamsPtr paused_params_;
+  mojom::DidCommitProvisionalLoadInterfaceParamsPtr paused_interface_params_;
+};
+
+// Blocks the current execution until the renderer main thread is in a steady
+// state, so the caller can issue an `viz::CopyOutputRequest` against the
+// current `WebContents`.
+void WaitForCopyableViewInWebContents(WebContents* web_contents);
+
+// Blocks the current execution until the frame submitted via the browser's
+// compositor is presented on the screen.
+void WaitForBrowserCompositorFramePresented(WebContents* web_contents);
+
+// Sets up a /redirect-on-second-navigation?url endpoint on the provided
+// `server`, which will return a 200 OK response for the first request, and
+// redirect the second request to `url` provided in the query param. This should
+// be called before starting `server`.
+void AddRedirectOnSecondNavigationHandler(net::EmbeddedTestServer* server);
 
 }  // namespace content
 

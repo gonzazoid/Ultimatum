@@ -13,72 +13,24 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "chrome/test/chromedriver/chrome/browser_info.h"
 #include "chrome/test/chromedriver/chrome/devtools_endpoint.h"
+#include "chrome/test/chromedriver/chrome/web_view_info.h"
 
 namespace base {
 class TimeDelta;
 }
 
-namespace network {
-namespace mojom {
+namespace network::mojom {
 class URLLoaderFactory;
-}
-}  // namespace network
+}  // namespace network::mojom
 
 class Status;
-
-struct WebViewInfo {
-  enum Type {
-    kApp,
-    kBackgroundPage,
-    kPage,
-    kWorker,
-    kWebView,
-    kIFrame,
-    kOther,
-    kServiceWorker,
-    kSharedWorker,
-    kExternal,
-    kBrowser,
-  };
-
-  WebViewInfo(const std::string& id,
-              const std::string& debugger_url,
-              const std::string& url,
-              Type type);
-  WebViewInfo(const WebViewInfo& other);
-  ~WebViewInfo();
-
-  bool IsFrontend() const;
-  bool IsInactiveBackgroundPage() const;
-
-  std::string id;
-  std::string debugger_url;
-  std::string url;
-  Type type;
-};
-
-class WebViewsInfo {
- public:
-  WebViewsInfo();
-  explicit WebViewsInfo(const std::vector<WebViewInfo>& info);
-  ~WebViewsInfo();
-
-  const WebViewInfo& Get(int index) const;
-  size_t GetSize() const;
-  const WebViewInfo* GetForId(const std::string& id) const;
-
- private:
-  std::vector<WebViewInfo> views_info;
-};
 
 class DevToolsHttpClient {
  public:
   DevToolsHttpClient(const DevToolsEndpoint& endpoint,
-                     network::mojom::URLLoaderFactory* factory,
-                     std::unique_ptr<std::set<WebViewInfo::Type>> window_types);
+                     network::mojom::URLLoaderFactory* factory);
 
   DevToolsHttpClient(const DevToolsHttpClient&) = delete;
   DevToolsHttpClient& operator=(const DevToolsHttpClient&) = delete;
@@ -90,8 +42,9 @@ class DevToolsHttpClient {
   Status GetWebViewsInfo(WebViewsInfo* views_info);
 
   const BrowserInfo* browser_info();
-  bool IsBrowserWindow(const WebViewInfo& view) const;
-  const DevToolsEndpoint& endpoint() const;
+
+  static Status ParseWebViewsInfo(const std::string& data,
+                                  WebViewsInfo& views_info);
 
  private:
   virtual bool FetchUrlAndLog(const std::string& url, std::string* response);
@@ -101,11 +54,5 @@ class DevToolsHttpClient {
   BrowserInfo browser_info_;
   std::unique_ptr<std::set<WebViewInfo::Type>> window_types_;
 };
-
-Status ParseType(const std::string& data, WebViewInfo::Type* type);
-
-namespace internal {
-Status ParseWebViewsInfo(const std::string& data, WebViewsInfo* views_info);
-}  // namespace internal
 
 #endif  // CHROME_TEST_CHROMEDRIVER_CHROME_DEVTOOLS_HTTP_CLIENT_H_

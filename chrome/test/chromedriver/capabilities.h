@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include <third_party/abseil-cpp/absl/types/optional.h>
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/time/time.h"
@@ -20,8 +21,10 @@
 #include "chrome/test/chromedriver/chrome/device_metrics.h"
 #include "chrome/test/chromedriver/chrome/devtools_http_client.h"
 #include "chrome/test/chromedriver/chrome/log.h"
+#include "chrome/test/chromedriver/chrome/mobile_device.h"
 #include "chrome/test/chromedriver/net/net_util.h"
 #include "chrome/test/chromedriver/session.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class CommandLine;
@@ -99,7 +102,7 @@ struct Capabilities {
 
   // Accepts all W3C defined capabilities
   // and all ChromeDriver-specific extensions.
-  Status Parse(const base::DictionaryValue& desired_caps,
+  Status Parse(const base::Value::Dict& desired_caps,
                bool w3c_compliant = true);
 
   //
@@ -119,6 +122,8 @@ struct Capabilities {
   base::TimeDelta script_timeout = Session::kDefaultScriptTimeout;
   base::TimeDelta page_load_timeout = Session::kDefaultPageLoadTimeout;
   base::TimeDelta implicit_wait_timeout = Session::kDefaultImplicitWaitTimeout;
+  base::TimeDelta browser_startup_timeout =
+      Session::kDefaultBrowserStartupTimeout;
 
   bool strict_file_interactability;
 
@@ -156,8 +161,7 @@ struct Capabilities {
   // ChromeDriver dies.
   bool detach;
 
-  // Device metrics for use in Device Emulation.
-  std::unique_ptr<DeviceMetrics> device_metrics;
+  absl::optional<MobileDevice> mobile_device;
 
   // Set of switches which should be removed from default list when launching
   // Chrome.
@@ -168,7 +172,7 @@ struct Capabilities {
   // Time to wait for extension background page to appear. If 0, no waiting.
   base::TimeDelta extension_load_timeout;
 
-  std::unique_ptr<base::DictionaryValue> local_state;
+  std::unique_ptr<base::Value::Dict> local_state;
 
   std::string log_path;
 
@@ -183,7 +187,7 @@ struct Capabilities {
 
   base::Value devtools_events_logging_prefs;
 
-  std::unique_ptr<base::DictionaryValue> prefs;
+  std::unique_ptr<base::Value::Dict> prefs;
 
   Switches switches;
 
@@ -191,9 +195,6 @@ struct Capabilities {
 
   bool webSocketUrl = false;
 };
-
-bool GetChromeOptionsDictionaryDeprecated(const base::DictionaryValue& params,
-                                          const base::DictionaryValue** out);
 
 bool GetChromeOptionsDictionary(const base::Value::Dict& params,
                                 const base::Value::Dict** out);

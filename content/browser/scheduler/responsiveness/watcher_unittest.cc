@@ -4,9 +4,9 @@
 
 #include "content/browser/scheduler/responsiveness/watcher.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/pending_task.h"
@@ -34,6 +34,8 @@ struct TaskTiming {
 
 class FakeCalculator : public Calculator {
  public:
+  using Calculator::Calculator;
+
   void TaskOrEventFinishedOnUIThread(
       base::TimeTicks queue_time,
       base::TimeTicks execution_start_time,
@@ -100,7 +102,7 @@ class FakeWatcher : public Watcher {
  public:
   std::unique_ptr<Calculator> CreateCalculator() override {
     std::unique_ptr<FakeCalculator> calculator =
-        std::make_unique<FakeCalculator>();
+        std::make_unique<FakeCalculator>(nullptr);
     calculator_ = calculator.get();
     return calculator;
   }
@@ -275,7 +277,7 @@ TEST_F(ResponsivenessWatcherTest, BlockedOrLowPriorityTask) {
 // Test that the queue duration of a delayed task is zero.
 TEST_F(ResponsivenessWatcherTest, DelayedTask) {
   base::PendingTask task(FROM_HERE, base::OnceClosure(),
-                         /*queue_time=*/base::TimeTicks(),
+                         /*queue_time=*/base::TimeTicks::Now(),
                          /*delayed_run_time=*/base::TimeTicks::Now());
   task_environment_.FastForwardBy(base::Seconds(1));
 

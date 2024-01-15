@@ -5,11 +5,12 @@
 #ifndef BASE_SCOPED_OBSERVATION_H_
 #define BASE_SCOPED_OBSERVATION_H_
 
-#include <stddef.h>
+#include <utility>
 
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/memory/raw_ptr.h"
+#include "base/scoped_observation_traits.h"
 
 namespace base {
 
@@ -35,33 +36,63 @@ namespace base {
 //   `ScopedObservation`, one might need to keep track of whether one has
 //   already stopped observing in a separate boolean.
 //
-// Basic example (as a member variable):
+// A complete usage example can be found below.
 //
-//   class MyObserver : public Observable::Observer {
+// `observer.h`:
+//   class Observer {
 //    public:
-//     MyObserver(Observable* observable) {
-//       observation_.Observe(observable);
-//     }
+//     virtual ~Observer() {}
+//
+//     virtual void OnEvent() {}
+//   };
+//
+// `source.h`:
+//   class Observer;
+//   class Source {
+//    public:
+//     void AddObserver(Observer* observer);
+//     void RemoveObserver(Observer* observer);
+//   };
+//
+// `observer_impl.h`:
+//   #include "observer.h"
+//
+//   class Source;
+//
+//   class ObserverImpl: public Observer {
+//    public:
+//     ObserverImpl(Source* source);
 //     // Note how there is no need to stop observing in the destructor.
+//     ~ObserverImpl() override {}
+//
+//     void OnEvent() override {
+//       ...
+//     }
+//
 //    private:
-//     ScopedObservation<Observable, Observable::Observer> observation_{this};
+//     // Note that |obs_| can be instantiated with forward-declared Source.
+//     base::ScopedObservation<Source, Observer> obs_{this};
 //   };
 //
-// For cases with methods not named AddObserver/RemoveObserver:
+// `observer_impl.cc`:
+//   #include "observer_impl.h"
+//   #include "source.h"
 //
-//   class MyStateObserver : public Observable::StateObserver {
-//     ...
-//    private:
-//     ScopedObservation<Observable,
-//                       Observable::StateObserver,
-//                       &Observable::AddStateObserver,
-//                       &Observable::RemoveStateObserver>
-//       observation_{this};
-//   };
-template <class Source,
-          class Observer,
-          void (Source::*AddObsFn)(Observer*) = &Source::AddObserver,
-          void (Source::*RemoveObsFn)(Observer*) = &Source::RemoveObserver>
+//   ObserverImpl::ObserverImpl(Source* source) {
+//     // After the call |this| starts listening to events from |source|.
+//     obs_.Observe(source);
+//   }
+//
+////////////////////////////////////////////////////////////////////////////////
+//
+// By default `ScopedObservation` only works with sources that expose
+// `AddObserver` and `RemoveObserver`. However, it's also possible to
+// adapt it to custom function names (say `AddFoo` and `RemoveFoo` accordingly)
+// by tailoring ScopedObservationTraits<> for the given Source and Observer --
+// see `base/scoped_observation_traits.h` for details.
+//
+
+template <class Source, class Observer>
 class ScopedObservation {
  public:
   explicit ScopedObservation(Observer* observer) : observer_(observer) {}
@@ -72,19 +103,16 @@ class ScopedObservation {
   // Adds the object passed to the constructor as an observer on |source|.
   // IsObserving() must be false.
   void Observe(Source* source) {
-    // TODO(https://crbug.com/1145565): Make this a DCHECK once ScopedObserver
-    //     has been fully retired.
-    CHECK_EQ(source_, nullptr);
+    DCHECK_EQ(source_, nullptr);
     source_ = source;
-    (source_.get()->*AddObsFn)(observer_);
+    Traits::AddObserver(source_, observer_);
   }
 
   // Remove the object passed to the constructor as an observer from |source_|
   // if currently observing. Does nothing otherwise.
   void Reset() {
     if (source_) {
-      (source_.get()->*RemoveObsFn)(observer_);
-      source_ = nullptr;
+      Traits::RemoveObserver(std::exchange(source_, nullptr), observer_);
     }
   }
 
@@ -97,11 +125,18 @@ class ScopedObservation {
     return source_ == source;
   }
 
+  // Gets a pointer to the observed source, or nullptr if no source is being
+  // observed.
+  Source* GetSource() { return source_; }
+  const Source* GetSource() const { return source_; }
+
  private:
+  using Traits = ScopedObservationTraits<Source, Observer>;
+
   const raw_ptr<Observer> observer_;
 
   // The observed source, if any.
-  raw_ptr<Source> source_ = nullptr;
+  raw_ptr<Source, LeakedDanglingUntriaged> source_ = nullptr;
 };
 
 }  // namespace base

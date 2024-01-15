@@ -7,19 +7,22 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "content/common/content_export.h"
+#include "content/services/auction_worklet/auction_v8_helper.h"
+#include "content/services/auction_worklet/public/mojom/auction_network_events_handler.mojom.h"
 #include "net/http/http_response_headers.h"
 #include "services/network/public/mojom/url_loader_factory.mojom-forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 #include "v8/include/v8-forward.h"
@@ -27,7 +30,6 @@
 namespace auction_worklet {
 
 class AuctionDownloader;
-class AuctionV8Helper;
 
 // Represents the trusted bidding/scoring signals that are part of the FLEDGE
 // bidding system (https://github.com/WICG/turtledove/blob/main/FLEDGE.md).
@@ -35,14 +37,6 @@ class AuctionV8Helper;
 // separate methods for fetching bidding and scoring signals. A single
 // TrustedSignals object can only be used to fetch bidding signals or scoring
 // signals, even if a single URL is used for both types of signals.
-//
-// TODO(mmenke): This class currently does 4 copies when loading the data (To V8
-// string, use V8's JSON parser, split data into V8 JSON subcomponent strings,
-// convert to C++ strings), and 2 copies of each substring to use the data (To
-// V8 per-key JSON string, use V8's JSON parser). Keeping the data stored as V8
-// JSON subcomponents would remove 2 copies, without too much complexity. Could
-// even implement V8 deep-copy logic, to remove two more copies (counting the
-// clone operation as a copy).
 class CONTENT_EXPORT TrustedSignals {
  public:
   // Contains the values returned by the server.
@@ -56,13 +50,15 @@ class CONTENT_EXPORT TrustedSignals {
 
     // Constructor for bidding signals.
     Result(PriorityVectorMap priority_vectors,
-           std::map<std::string, std::string> bidder_json_data,
-           absl::optional<uint32_t> data_version);
+           std::map<std::string, AuctionV8Helper::SerializedValue> bidder_data,
+           std::optional<uint32_t> data_version);
 
     // Constructor for scoring signals.
-    Result(std::map<std::string, std::string> render_url_json_data,
-           std::map<std::string, std::string> ad_component_json_data,
-           absl::optional<uint32_t> data_version);
+    Result(
+        std::map<std::string, AuctionV8Helper::SerializedValue> render_url_data,
+        std::map<std::string, AuctionV8Helper::SerializedValue>
+            ad_component_data,
+        std::optional<uint32_t> data_version);
 
     explicit Result(const Result&) = delete;
     Result& operator=(const Result&) = delete;
@@ -101,7 +97,7 @@ class CONTENT_EXPORT TrustedSignals {
         const GURL& render_url,
         const std::vector<std::string>& ad_component_render_urls) const;
 
-    absl::optional<uint32_t> GetDataVersion() const { return data_version_; }
+    std::optional<uint32_t> GetDataVersion() const { return data_version_; }
 
    private:
     friend class base::RefCountedThreadSafe<Result>;
@@ -110,23 +106,24 @@ class CONTENT_EXPORT TrustedSignals {
 
     // Per-interest-group priority vectors returned by the trusted bidding
     // server.
-    const absl::optional<PriorityVectorMap> priority_vectors_;
-    // Map of keys to the associated JSON data for trusted bidding signals.
-    const absl::optional<std::map<std::string, std::string>> bidder_json_data_;
+    const std::optional<PriorityVectorMap> priority_vectors_;
+    // Map of keys to the associated data for trusted bidding signals.
+    const std::optional<std::map<std::string, AuctionV8Helper::SerializedValue>>
+        bidder_data_;
 
-    // Map of keys to the associated JSON data for trusted scoring signals.
-    const absl::optional<std::map<std::string, std::string>>
-        render_url_json_data_;
-    const absl::optional<std::map<std::string, std::string>>
-        ad_component_json_data_;
+    // Map of keys to the associated data for trusted scoring signals.
+    const std::optional<std::map<std::string, AuctionV8Helper::SerializedValue>>
+        render_url_data_;
+    const std::optional<std::map<std::string, AuctionV8Helper::SerializedValue>>
+        ad_component_data_;
 
     // Data version associated with the trusted signals.
-    const absl::optional<uint32_t> data_version_;
+    const std::optional<uint32_t> data_version_;
   };
 
   using LoadSignalsCallback =
       base::OnceCallback<void(scoped_refptr<Result> result,
-                              absl::optional<std::string> error_msg)>;
+                              std::optional<std::string> error_msg)>;
 
   explicit TrustedSignals(const TrustedSignals&) = delete;
   TrustedSignals& operator=(const TrustedSignals&) = delete;
@@ -141,36 +138,48 @@ class CONTENT_EXPORT TrustedSignals {
   // or all of the render URLs are missing, still succeeds, and GetSignals()
   // will populate them with nulls.
   //
+  // If non-empty, "&`trusted_bidding_signals_slot_size_param`" is appended to
+  // the end of the query string. It's expected to already be escaped if
+  // necessary.
+  //
   // There are no lifetime constraints of `url_loader_factory`.
   static std::unique_ptr<TrustedSignals> LoadBiddingSignals(
       network::mojom::URLLoaderFactory* url_loader_factory,
+      mojo::PendingRemote<auction_worklet::mojom::AuctionNetworkEventsHandler>
+          auction_network_events_handler,
       std::set<std::string> interest_group_names,
       std::set<std::string> bidding_signals_keys,
       const std::string& hostname,
       const GURL& trusted_bidding_signals_url,
-      absl::optional<uint16_t> experiment_group_id,
+      std::optional<uint16_t> experiment_group_id,
+      const std::string& trusted_bidding_signals_slot_size_param,
       scoped_refptr<AuctionV8Helper> v8_helper,
       LoadSignalsCallback load_signals_callback);
 
   // Just like LoadBiddingSignals() above, but for fetching seller signals.
   static std::unique_ptr<TrustedSignals> LoadScoringSignals(
       network::mojom::URLLoaderFactory* url_loader_factory,
+      mojo::PendingRemote<auction_worklet::mojom::AuctionNetworkEventsHandler>
+          auction_network_events_handler,
       std::set<std::string> render_urls,
       std::set<std::string> ad_component_render_urls,
       const std::string& hostname,
       const GURL& trusted_scoring_signals_url,
-      absl::optional<uint16_t> experiment_group_id,
+      std::optional<uint16_t> experiment_group_id,
       scoped_refptr<AuctionV8Helper> v8_helper,
       LoadSignalsCallback load_signals_callback);
 
  private:
-  TrustedSignals(absl::optional<std::set<std::string>> interest_group_names,
-                 absl::optional<std::set<std::string>> bidding_signals_keys,
-                 absl::optional<std::set<std::string>> render_urls,
-                 absl::optional<std::set<std::string>> ad_component_render_urls,
-                 const GURL& trusted_signals_url,
-                 scoped_refptr<AuctionV8Helper> v8_helper,
-                 LoadSignalsCallback load_signals_callback);
+  TrustedSignals(
+      std::optional<std::set<std::string>> interest_group_names,
+      std::optional<std::set<std::string>> bidding_signals_keys,
+      std::optional<std::set<std::string>> render_urls,
+      std::optional<std::set<std::string>> ad_component_render_urls,
+      const GURL& trusted_signals_url,
+      mojo::PendingRemote<auction_worklet::mojom::AuctionNetworkEventsHandler>
+          auction_network_events_handler,
+      scoped_refptr<AuctionV8Helper> v8_helper,
+      LoadSignalsCallback load_signals_callback);
 
   // Starts downloading `url`, which should be the bidding or scoring signals
   // URL with the query parameter correctly set.
@@ -179,20 +188,20 @@ class CONTENT_EXPORT TrustedSignals {
 
   void OnDownloadComplete(std::unique_ptr<std::string> body,
                           scoped_refptr<net::HttpResponseHeaders> headers,
-                          absl::optional<std::string> error_msg);
+                          std::optional<std::string> error_msg);
 
   // Parses the response body on the V8 thread, and extracts values associated
   // with the requested keys.
   static void HandleDownloadResultOnV8Thread(
       scoped_refptr<AuctionV8Helper> v8_helper,
       const GURL& signals_url,
-      absl::optional<std::set<std::string>> interest_group_names,
-      absl::optional<std::set<std::string>> bidding_signals_keys,
-      absl::optional<std::set<std::string>> render_urls,
-      absl::optional<std::set<std::string>> ad_component_render_urls,
+      std::optional<std::set<std::string>> interest_group_names,
+      std::optional<std::set<std::string>> bidding_signals_keys,
+      std::optional<std::set<std::string>> render_urls,
+      std::optional<std::set<std::string>> ad_component_render_urls,
       std::unique_ptr<std::string> body,
       scoped_refptr<net::HttpResponseHeaders> headers,
-      absl::optional<std::string> error_msg,
+      std::optional<std::string> error_msg,
       scoped_refptr<base::SequencedTaskRunner> user_thread_task_runner,
       base::WeakPtr<TrustedSignals> weak_instance,
       base::TimeDelta download_time);
@@ -202,21 +211,21 @@ class CONTENT_EXPORT TrustedSignals {
       scoped_refptr<base::SequencedTaskRunner> user_thread_task_runner,
       base::WeakPtr<TrustedSignals> weak_instance,
       scoped_refptr<Result> result,
-      absl::optional<std::string> error_msg);
+      std::optional<std::string> error_msg);
 
   // Called on user thread.
   void DeliverCallbackOnUserThread(scoped_refptr<Result>,
-                                   absl::optional<std::string> error_msg);
+                                   std::optional<std::string> error_msg);
 
   // Keys being fetched. For bidding signals, only `bidding_signals_keys_` and
   // `interest_group_names_` are non-null. For scoring signals, only
   // `render_urls_` and `ad_component_render_urls_` are non-null. These are
   // cleared and ownership is passed to the V8 thread once the download
   // completes, as they're no longer on the main thread after that point.
-  absl::optional<std::set<std::string>> interest_group_names_;
-  absl::optional<std::set<std::string>> bidding_signals_keys_;
-  absl::optional<std::set<std::string>> render_urls_;
-  absl::optional<std::set<std::string>> ad_component_render_urls_;
+  std::optional<std::set<std::string>> interest_group_names_;
+  std::optional<std::set<std::string>> bidding_signals_keys_;
+  std::optional<std::set<std::string>> render_urls_;
+  std::optional<std::set<std::string>> ad_component_render_urls_;
 
   const GURL trusted_signals_url_;  // original, for error messages.
   const scoped_refptr<AuctionV8Helper> v8_helper_;
@@ -225,6 +234,9 @@ class CONTENT_EXPORT TrustedSignals {
   std::unique_ptr<AuctionDownloader> auction_downloader_;
   // Used only for metrics; time when download started.
   base::TimeTicks download_start_time_;
+
+  mojo::PendingRemote<auction_worklet::mojom::AuctionNetworkEventsHandler>
+      auction_network_events_handler_;
 
   base::WeakPtrFactory<TrustedSignals> weak_ptr_factory{this};
 };

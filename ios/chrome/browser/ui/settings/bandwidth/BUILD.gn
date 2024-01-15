@@ -3,10 +3,10 @@
 # found in the LICENSE file.
 
 source_set("bandwidth") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "bandwidth_management_table_view_controller.h",
     "bandwidth_management_table_view_controller.mm",
+    "dataplan_usage_table_view_controller+Testing.h",
     "dataplan_usage_table_view_controller.h",
     "dataplan_usage_table_view_controller.mm",
   ]
@@ -15,24 +15,23 @@ source_set("bandwidth") {
     "//components/prefs",
     "//components/prefs/ios",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/net:crurl",
-    "//ios/chrome/browser/prefs:pref_names",
-    "//ios/chrome/browser/prerender:prerender_pref",
-    "//ios/chrome/browser/ui:feature_flags",
+    "//ios/chrome/browser/net/model:crurl",
+    "//ios/chrome/browser/prerender/model:prerender_pref",
+    "//ios/chrome/browser/shared/model/browser_state",
+    "//ios/chrome/browser/shared/model/prefs:pref_names",
+    "//ios/chrome/browser/shared/public/features",
+    "//ios/chrome/browser/shared/ui/table_view:styler",
+    "//ios/chrome/browser/shared/ui/table_view:utils",
+    "//ios/chrome/browser/shared/ui/table_view/cells",
+    "//ios/chrome/browser/shared/ui/util",
     "//ios/chrome/browser/ui/settings:constants",
     "//ios/chrome/browser/ui/settings:settings_root",
-    "//ios/chrome/browser/ui/table_view:styler",
-    "//ios/chrome/browser/ui/table_view:utils",
-    "//ios/chrome/browser/ui/table_view/cells",
-    "//ios/chrome/browser/ui/util",
     "//ui/base",
     "//url",
   ]
 }
 
 source_set("unit_tests") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   sources = [
     "bandwidth_management_table_view_controller_unittest.mm",
@@ -47,12 +46,12 @@ source_set("unit_tests") {
     "//components/sync_preferences",
     "//components/sync_preferences:test_support",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/browser_state:test_support",
-    "//ios/chrome/browser/prefs:browser_prefs",
-    "//ios/chrome/browser/prefs:pref_names",
-    "//ios/chrome/browser/prerender:prerender_pref",
-    "//ios/chrome/browser/ui/table_view",
-    "//ios/chrome/browser/ui/table_view:test_support",
+    "//ios/chrome/browser/prerender/model:prerender_pref",
+    "//ios/chrome/browser/shared/model/browser_state:test_support",
+    "//ios/chrome/browser/shared/model/prefs:browser_prefs",
+    "//ios/chrome/browser/shared/model/prefs:pref_names",
+    "//ios/chrome/browser/shared/ui/table_view",
+    "//ios/chrome/browser/shared/ui/table_view:test_support",
     "//ios/chrome/test:test_support",
     "//ios/web/public/test",
     "//testing/gmock",

@@ -7,22 +7,21 @@
 namespace blink {
 
 void ReferenceClipPathOperation::AddClient(SVGResourceClient& client) {
-  if (resource_)
+  if (resource_) {
     resource_->AddClient(client);
+  }
 }
 
 void ReferenceClipPathOperation::RemoveClient(SVGResourceClient& client) {
-  if (resource_)
+  if (resource_) {
     resource_->RemoveClient(client);
-}
-
-SVGResource* ReferenceClipPathOperation::Resource() const {
-  return resource_;
+  }
 }
 
 bool ReferenceClipPathOperation::operator==(const ClipPathOperation& o) const {
-  if (!IsSameType(o))
+  if (!IsSameType(o)) {
     return false;
+  }
   const ReferenceClipPathOperation& other = To<ReferenceClipPathOperation>(o);
   return resource_ == other.resource_ && url_ == other.url_;
 }

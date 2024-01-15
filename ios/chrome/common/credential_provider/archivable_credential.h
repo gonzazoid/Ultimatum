@@ -17,14 +17,13 @@
 @interface ArchivableCredential : NSObject <Credential, NSSecureCoding>
 
 - (instancetype)initWithFavicon:(NSString*)favicon
-             keychainIdentifier:(NSString*)keychainIdentifier
+                       password:(NSString*)password
                            rank:(int64_t)rank
                recordIdentifier:(NSString*)recordIdentifier
               serviceIdentifier:(NSString*)serviceIdentifier
                     serviceName:(NSString*)serviceName
                            user:(NSString*)user
-           validationIdentifier:(NSString*)validationIdentifier
-    NS_DESIGNATED_INITIALIZER;
+                           note:(NSString*)note NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)init NS_UNAVAILABLE;
 

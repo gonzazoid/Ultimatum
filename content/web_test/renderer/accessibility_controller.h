@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "content/web_test/renderer/web_ax_object_proxy.h"
 #include "third_party/blink/public/web/web_ax_object.h"
@@ -61,7 +62,7 @@ class AccessibilityController {
   v8::Local<v8::Object> RootElement();
   v8::Local<v8::Object> AccessibleElementById(const std::string& id);
   bool CanCallAOMEventListeners() const;
-  bool IsInstalled() { return elements_ != nullptr; }
+  bool IsInstalled() { return elements_ != nullptr && ax_context_ != nullptr; }
 
   v8::Local<v8::Object> FindAccessibleElementByIdRecursive(
       const blink::WebAXObject&,
@@ -77,7 +78,7 @@ class AccessibilityController {
   v8::Persistent<v8::Function> notification_callback_;
 
   blink::WebView* web_view() const;
-  WebFrameTestProxy* web_frame_test_proxy_;
+  raw_ptr<WebFrameTestProxy, ExperimentalRenderer> web_frame_test_proxy_;
 
   std::unique_ptr<blink::WebAXContext> ax_context_;
 

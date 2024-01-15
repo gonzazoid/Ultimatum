@@ -7,12 +7,12 @@
 #include <map>
 #include <memory>
 
-#include "base/guid.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/uuid.h"
 #include "base/values.h"
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/devtools_frontend_host.h"
@@ -133,8 +133,9 @@ class DevToolsFrontend::AgentHostClient
     auto it = extensions_api_.find(origin);
     if (it == extensions_api_.end())
       return;
-    std::string script = base::StringPrintf("%s(\"%s\")", it->second.c_str(),
-                                            base::GenerateGUID().c_str());
+    std::string script = base::StringPrintf(
+        "%s(\"%s\")", it->second.c_str(),
+        base::Uuid::GenerateRandomV4().AsLowercaseString().c_str());
     content::DevToolsFrontendHost::SetupExtensionsAPI(frame, script);
   }
 
@@ -165,7 +166,7 @@ class DevToolsFrontend::AgentHostClient
       NOTREACHED();
       return;
     } else if (*method == "getPreferences") {
-      SendMessageAck(request_id, std::move(preferences_));
+      SendMessageAck(request_id, base::Value(std::move(preferences_)));
       return;
     } else if (*method == "setPreference") {
       if (params.size() < 2)
@@ -177,12 +178,12 @@ class DevToolsFrontend::AgentHostClient
       if (!name || !params[1].is_string())
         return;
 
-      preferences_.SetKey(*name, std::move(params[1]));
+      preferences_.Set(*name, std::move(params[1]));
     } else if (*method == "removePreference") {
       const std::string* name = params[0].GetIfString();
       if (!name)
         return;
-      preferences_.RemoveKey(*name);
+      preferences_.Remove(*name);
     } else if (*method == "requestFileSystems") {
       CallClientFunction("DevToolsAPI", "fileSystemsLoaded",
                          base::Value(base::Value::Type::LIST));
@@ -220,7 +221,7 @@ class DevToolsFrontend::AgentHostClient
 
   std::map<std::string, std::string> extensions_api_;
 
-  base::DictionaryValue preferences_;
+  base::Value::Dict preferences_;
 };
 
 class DevToolsFrontend::Pointer : public content::WebContentsUserData<Pointer> {

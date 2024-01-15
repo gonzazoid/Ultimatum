@@ -8,14 +8,19 @@
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/enterprise/connectors/analysis/analysis_service_settings.h"
 #include "chrome/browser/enterprise/connectors/common.h"
-#include "chrome/browser/enterprise/connectors/file_system/service_settings.h"
 #include "chrome/browser/enterprise/connectors/reporting/extension_install_event_router.h"
 #include "chrome/browser/enterprise/connectors/reporting/reporting_service_settings.h"
 #include "chrome/browser/enterprise/connectors/service_provider_config.h"
+#include "components/enterprise/buildflags/buildflags.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
+
+#if BUILDFLAG(ENTERPRISE_LOCAL_CONTENT_ANALYSIS)
+#include "chrome/browser/ui/browser_list_observer.h"
+#include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
+#endif  // BUILDFLAG(ENTERPRISE_LOCAL_CONTENT_ANALYSIS)
 
 namespace storage {
 class FileSystemURL;
@@ -27,23 +32,31 @@ class BrowserCrashEventRouter;
 // Manages access to Connector policies for a given profile. This class is
 // responsible for caching the Connector policies, validate them against
 // approved service providers and provide a simple interface to them.
+#if BUILDFLAG(ENTERPRISE_LOCAL_CONTENT_ANALYSIS)
+class ConnectorsManager : public BrowserListObserver,
+                          public TabStripModelObserver {
+#else
 class ConnectorsManager {
+#endif  // BUILDFLAG(ENTERPRISE_LOCAL_CONTENT_ANALYSIS)
+
  public:
   // Maps used to cache connectors settings.
   using AnalysisConnectorsSettings =
       std::map<AnalysisConnector, std::vector<AnalysisServiceSettings>>;
   using ReportingConnectorsSettings =
       std::map<ReportingConnector, std::vector<ReportingServiceSettings>>;
-  using FileSystemConnectorsSettings =
-      std::map<FileSystemConnector, std::vector<FileSystemServiceSettings>>;
 
   ConnectorsManager(
       std::unique_ptr<BrowserCrashEventRouter> browser_crash_event_router,
-      ExtensionInstallEventRouter extension_install_router,
+      std::unique_ptr<ExtensionInstallEventRouter> extension_install_router,
       PrefService* pref_service,
       const ServiceProviderConfig* config,
       bool observe_prefs = true);
+#if BUILDFLAG(ENTERPRISE_LOCAL_CONTENT_ANALYSIS)
+  ~ConnectorsManager() override;
+#else
   ~ConnectorsManager();
+#endif  // BUILDFLAG(ENTERPRISE_LOCAL_CONTENT_ANALYSIS)
 
   // Validates which settings should be applied to a reporting event
   // against cached policies. Cache the policy value the first time this is
@@ -65,19 +78,14 @@ class ConnectorsManager {
       AnalysisConnector connector);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-  // Validates which settings should be applied to a file system connector
-  // against cached policies.
-  absl::optional<FileSystemSettings> GetFileSystemGlobalSettings(
-      FileSystemConnector connector);
-  // In addition to method above; also validates specifically for an URL.
-  absl::optional<FileSystemSettings> GetFileSystemSettings(
-      const GURL& url,
-      FileSystemConnector connector);
-
   // Checks if the corresponding connector is enabled.
   bool IsConnectorEnabled(AnalysisConnector connector) const;
   bool IsConnectorEnabled(ReportingConnector connector) const;
-  bool IsConnectorEnabled(FileSystemConnector connector) const;
+
+#if BUILDFLAG(ENTERPRISE_LOCAL_CONTENT_ANALYSIS)
+  // Check if the corresponding connector is enabled for any local agent.
+  bool IsConnectorEnabledForLocalAgent(AnalysisConnector connector) const;
+#endif
 
   bool DelayUntilVerdict(AnalysisConnector connector);
   absl::optional<std::u16string> GetCustomMessage(AnalysisConnector connector,
@@ -100,10 +108,20 @@ class ConnectorsManager {
       const;
   const ReportingConnectorsSettings& GetReportingConnectorsSettingsForTesting()
       const;
-  const FileSystemConnectorsSettings&
-  GetFileSystemConnectorsSettingsForTesting() const;
 
  private:
+#if BUILDFLAG(ENTERPRISE_LOCAL_CONTENT_ANALYSIS)
+  // BrowserListObserver overrides:
+  void OnBrowserAdded(Browser* browser) override;
+  void OnBrowserRemoved(Browser* browser) override;
+
+  // TabStripModelObserver overrides:
+  void OnTabStripModelChanged(
+      TabStripModel* tab_strip_model,
+      const TabStripModelChange& change,
+      const TabStripSelectionChange& selection) override;
+#endif  // BUILDFLAG(ENTERPRISE_LOCAL_CONTENT_ANALYSIS)
+
   // Validates which settings should be applied to an analysis connector event
   // against connector policies. Cache the policy value the first time this is
   // called for every different connector.
@@ -112,16 +130,24 @@ class ConnectorsManager {
       AnalysisConnector connector);
 
   // Read and cache the policy corresponding to |connector|.
-  void CacheAnalysisConnectorPolicy(AnalysisConnector connector);
+  void CacheAnalysisConnectorPolicy(AnalysisConnector connector) const;
   void CacheReportingConnectorPolicy(ReportingConnector connector);
-  void CacheFileSystemConnectorPolicy(FileSystemConnector connector);
+
+#if BUILDFLAG(ENTERPRISE_LOCAL_CONTENT_ANALYSIS)
+  // Close connection with local agent if all the relevant connectors are turned
+  // off for it.
+  void MaybeCloseLocalContentAnalysisAgentConnection();
+#endif  // BUILDFLAG(ENTERPRISE_LOCAL_CONTENT_ANALYSIS)
+
+  // Re-cache analysis connector policy and update local agent connection if
+  // needed.
+  void OnPrefChanged(AnalysisConnector connector);
 
   // Sets up |pref_change_registrar_|. Used by the constructor and
   // SetUpForTesting.
   void StartObservingPrefs(PrefService* pref_service);
   void StartObservingPref(AnalysisConnector connector);
   void StartObservingPref(ReportingConnector connector);
-  void StartObservingPref(FileSystemConnector connector);
 
   // Validates which settings should be applied to an analysis connector event
   // against connector policies. Cache the policy value the first time this is
@@ -129,21 +155,20 @@ class ConnectorsManager {
   absl::optional<ReportingSettings> GetReportingSettingsFromConnectorPolicy(
       ReportingConnector connector);
 
-  // Returns service settings (if there are multiple service providers, only the
-  // first one for now) for |connector|. Cache the policy value the first time
-  // this is called for every different connector.
-  FileSystemServiceSettings* GetFileSystemServiceSettings(
-      FileSystemConnector connector);
+  PrefService* prefs() { return pref_change_registrar_.prefs(); }
+
+  const PrefService* prefs() const { return pref_change_registrar_.prefs(); }
 
   // Cached values of available service providers. This information validates
   // the Connector policies have a valid provider.
   raw_ptr<const ServiceProviderConfig> service_provider_config_;
 
   // Cached values of the connector policies. Updated when a connector is first
-  // used or when a policy is updated.
-  AnalysisConnectorsSettings analysis_connector_settings_;
+  // used or when a policy is updated.  Analysis connectors settings are
+  // mutable because they maybe updated by a call to IsConnectorEnabled(),
+  // which is a const method.
+  mutable AnalysisConnectorsSettings analysis_connector_settings_;
   ReportingConnectorsSettings reporting_connector_settings_;
-  FileSystemConnectorsSettings file_system_connector_settings_;
 
   // Used to track changes of connector policies and propagate them in
   // |connector_settings_|.
@@ -153,7 +178,7 @@ class ConnectorsManager {
   std::unique_ptr<BrowserCrashEventRouter> browser_crash_event_router_;
 
   // An observer to report extension install events via the reporting pipeline.
-  ExtensionInstallEventRouter extension_install_event_router_;
+  std::unique_ptr<ExtensionInstallEventRouter> extension_install_event_router_;
 };
 
 }  // namespace enterprise_connectors

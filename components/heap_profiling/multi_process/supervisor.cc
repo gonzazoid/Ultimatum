@@ -4,11 +4,14 @@
 
 #include "components/heap_profiling/multi_process/supervisor.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include <utility>
+
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/no_destructor.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "components/heap_profiling/multi_process/client_connection_manager.h"
 #include "components/services/heap_profiling/heap_profiling_service.h"
@@ -102,10 +105,13 @@ Mode Supervisor::GetMode() {
   return client_connection_manager_->GetMode();
 }
 
-void Supervisor::StartManualProfiling(base::ProcessId pid) {
+void Supervisor::StartManualProfiling(
+    base::ProcessId pid,
+    base::OnceClosure started_profiling_closure) {
   DCHECK(content::BrowserThread::CurrentlyOn(content::BrowserThread::UI));
   DCHECK(HasStarted());
-  client_connection_manager_->StartProfilingProcess(pid);
+  client_connection_manager_->StartProfilingProcess(
+      pid, std::move(started_profiling_closure));
 }
 
 void Supervisor::GetProfiledPids(GetProfiledPidsCallback callback) {
@@ -131,7 +137,7 @@ void Supervisor::RequestTraceWithHeapDump(TraceFinishedCallback callback,
 
   if (content::TracingController::GetInstance()->IsTracing()) {
     DLOG(ERROR) << "Requesting heap dump when tracing has already started.";
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), false, std::string()));
     return;
   }
@@ -164,9 +170,9 @@ void Supervisor::RequestTraceWithHeapDump(TraceFinishedCallback callback,
              finished_dump_callback) {
         memory_instrumentation::MemoryInstrumentation::GetInstance()
             ->RequestGlobalDumpAndAppendToTrace(
-                base::trace_event::MemoryDumpType::EXPLICITLY_TRIGGERED,
-                base::trace_event::MemoryDumpLevelOfDetail::BACKGROUND,
-                base::trace_event::MemoryDumpDeterminism::NONE,
+                base::trace_event::MemoryDumpType::kExplicitlyTriggered,
+                base::trace_event::MemoryDumpLevelOfDetail::kBackground,
+                base::trace_event::MemoryDumpDeterminism::kNone,
                 std::move(finished_dump_callback));
       },
       std::move(finished_dump_callback));

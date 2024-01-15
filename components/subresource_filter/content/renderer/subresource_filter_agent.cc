@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/time/time.h"
@@ -35,12 +35,7 @@
 
 namespace {
 
-bool IsMPArchFencedFrameRoot(content::RenderFrame* frame) {
-  if (blink::features::kFencedFramesImplementationTypeParam.Get() !=
-      blink::features::FencedFramesImplementationType::kMPArch) {
-    return false;
-  }
-
+bool IsFencedFrameRoot(content::RenderFrame* frame) {
   // Unit tests may have a nullptr render_frame.
   if (!frame)
     return false;
@@ -53,12 +48,10 @@ namespace subresource_filter {
 
 SubresourceFilterAgent::SubresourceFilterAgent(
     content::RenderFrame* render_frame,
-    UnverifiedRulesetDealer* ruleset_dealer,
-    std::unique_ptr<AdResourceTracker> ad_resource_tracker)
+    UnverifiedRulesetDealer* ruleset_dealer)
     : content::RenderFrameObserver(render_frame),
       content::RenderFrameObserverTracker<SubresourceFilterAgent>(render_frame),
-      ruleset_dealer_(ruleset_dealer),
-      ad_resource_tracker_(std::move(ad_resource_tracker)) {
+      ruleset_dealer_(ruleset_dealer) {
   DCHECK(ruleset_dealer);
 }
 
@@ -78,7 +71,7 @@ void SubresourceFilterAgent::Initialize() {
   // to match previous behaviour, and because this frame will always exist.
   // Whereas the provisional frame would only be created to perform the
   // navigation conditionally, so we ignore sending the IPC there.
-  if (IsSubresourceFilterChild() && !IsMPArchFencedFrameRoot(render_frame()) &&
+  if (IsSubresourceFilterChild() && !IsFencedFrameRoot(render_frame()) &&
       !IsProvisional()) {
     // Note: We intentionally exclude fenced-frame roots here since they do not
     // create a RenderFrame in the creating renderer. By the time the fenced
@@ -127,11 +120,7 @@ void SubresourceFilterAgent::Initialize() {
   }
 }
 
-SubresourceFilterAgent::~SubresourceFilterAgent() {
-  // Filter may outlive us, so reset the ad tracker.
-  if (filter_for_last_created_document_)
-    filter_for_last_created_document_->set_ad_resource_tracker(nullptr);
-}
+SubresourceFilterAgent::~SubresourceFilterAgent() = default;
 
 GURL SubresourceFilterAgent::GetDocumentURL() {
   return render_frame()->GetWebFrame()->GetDocument().Url();
@@ -145,7 +134,7 @@ bool SubresourceFilterAgent::IsSubresourceFilterChild() {
 bool SubresourceFilterAgent::IsParentAdFrame() {
   // A fenced frame root should never ask this since it can't see the outer
   // frame tree. Its AdEvidence is always computed by the browser.
-  DCHECK(!IsMPArchFencedFrameRoot(render_frame()));
+  DCHECK(!IsFencedFrameRoot(render_frame()));
   return render_frame()->GetWebFrame()->Parent()->IsAdFrame();
 }
 
@@ -154,7 +143,7 @@ bool SubresourceFilterAgent::IsProvisional() {
 }
 
 bool SubresourceFilterAgent::IsFrameCreatedByAdScript() {
-  DCHECK(!IsMPArchFencedFrameRoot(render_frame()));
+  DCHECK(!IsFencedFrameRoot(render_frame()));
   return render_frame()->GetWebFrame()->IsFrameCreatedByAdScript();
 }
 
@@ -180,7 +169,7 @@ void SubresourceFilterAgent::SendFrameIsAd() {
 }
 
 void SubresourceFilterAgent::SendFrameWasCreatedByAdScript() {
-  DCHECK(!IsMPArchFencedFrameRoot(render_frame()));
+  DCHECK(!IsFencedFrameRoot(render_frame()));
   GetSubresourceFilterHost()->FrameWasCreatedByAdScript();
 }
 
@@ -208,7 +197,7 @@ mojom::ActivationState SubresourceFilterAgent::GetInheritedActivationState(
   // the parent's activation state. However, that's ok because the embedder
   // cannot script the fenced frame so we can wait until a navigation to set
   // activation state.
-  if (IsMPArchFencedFrameRoot(render_frame))
+  if (IsFencedFrameRoot(render_frame))
     return mojom::ActivationState();
 
   blink::WebFrame* frame_to_inherit_from =
@@ -240,8 +229,6 @@ void SubresourceFilterAgent::RecordHistogramsOnFilterCreation(
   // Note: mojom::ActivationLevel used to be called mojom::ActivationState, the
   // legacy name is kept for the histogram.
   mojom::ActivationLevel activation_level = activation_state.activation_level;
-  UMA_HISTOGRAM_ENUMERATION("SubresourceFilter.DocumentLoad.ActivationState",
-                            activation_level);
 
   if (!IsSubresourceFilterChild()) {
     UMA_HISTOGRAM_BOOLEAN(
@@ -292,7 +279,7 @@ void SubresourceFilterAgent::OnDestruct() {
 void SubresourceFilterAgent::SetAdEvidenceForInitialEmptySubframe() {
   DCHECK(!IsAdFrame());
   DCHECK(!AdEvidence().has_value());
-  DCHECK(!IsMPArchFencedFrameRoot(render_frame()));
+  DCHECK(!IsFencedFrameRoot(render_frame()));
 
   blink::FrameAdEvidence ad_evidence(IsParentAdFrame());
   ad_evidence.set_created_by_ad_script(
@@ -344,9 +331,6 @@ SubresourceFilterAgent::GetInheritedActivationStateForNewDocument() {
 void SubresourceFilterAgent::ConstructFilter(
     const mojom::ActivationState activation_state,
     const GURL& url) {
-  // Filter may outlive us, so reset the ad tracker.
-  if (filter_for_last_created_document_)
-    filter_for_last_created_document_->set_ad_resource_tracker(nullptr);
   filter_for_last_created_document_.reset();
 
   if (activation_state.activation_level == mojom::ActivationLevel::kDisabled ||
@@ -361,11 +345,10 @@ void SubresourceFilterAgent::ConstructFilter(
   base::OnceClosure first_disallowed_load_callback(
       base::BindOnce(&SubresourceFilterAgent::
                          SignalFirstSubresourceDisallowedForCurrentDocument,
-                     AsWeakPtr()));
+                     weak_ptr_factory_.GetWeakPtr()));
   auto filter = std::make_unique<WebDocumentSubresourceFilterImpl>(
       url::Origin::Create(url), activation_state, std::move(ruleset),
       std::move(first_disallowed_load_callback));
-  filter->set_ad_resource_tracker(ad_resource_tracker_.get());
   filter_for_last_created_document_ = filter->AsWeakPtr();
   SetSubresourceFilterForCurrentDocument(std::move(filter));
 }
@@ -400,7 +383,7 @@ void SubresourceFilterAgent::WillCreateWorkerFetchContext(
           std::move(ruleset_file),
           base::BindOnce(&SubresourceFilterAgent::
                              SignalFirstSubresourceDisallowedForCurrentDocument,
-                         AsWeakPtr())));
+                         weak_ptr_factory_.GetWeakPtr())));
 }
 
 void SubresourceFilterAgent::OnOverlayPopupAdDetected() {

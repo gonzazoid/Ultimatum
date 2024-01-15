@@ -8,6 +8,7 @@
 #include <map>
 #include <string>
 
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/desktop_media_id.h"
 #include "content/public/browser/desktop_streams_registry.h"
 #include "url/origin.h"
@@ -27,31 +28,26 @@ class DesktopStreamsRegistryImpl : public DesktopStreamsRegistry {
   // Returns the DesktopStreamRegistryImpl singleton.
   static DesktopStreamsRegistryImpl* GetInstance();
 
+  // DesktopStreamsRegistry:
   std::string RegisterStream(int render_process_id,
-                             int render_frame_id,
+                             std::optional<int> restrict_to_render_frame_id,
                              const url::Origin& origin,
                              const DesktopMediaID& source,
-                             const std::string& extension_name,
                              const DesktopStreamRegistryType type) override;
-
   DesktopMediaID RequestMediaForStreamId(
       const std::string& id,
       int render_process_id,
       int render_frame_id,
       const url::Origin& origin,
-      std::string* extension_name,
       const DesktopStreamRegistryType type) override;
 
  private:
   // Type used to store list of accepted desktop media streams.
   struct ApprovedDesktopMediaStream {
-    ApprovedDesktopMediaStream();
-
-    int render_process_id;
-    int render_frame_id;
+    int render_process_id = content::ChildProcessHost::kInvalidUniqueID;
+    std::optional<int> restrict_to_render_frame_id;
     url::Origin origin;
     DesktopMediaID source;
-    std::string extension_name;
     DesktopStreamRegistryType type;
   };
   typedef std::map<std::string, ApprovedDesktopMediaStream> StreamsMap;

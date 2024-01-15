@@ -14,177 +14,132 @@ ChromeVoxLibLouisTest = class extends ChromeVoxE2ETest {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
-    await importModule(
-        'BrailleTable', '/chromevox/common/braille/braille_table.js');
-    await importModule('LibLouis', '/chromevox/background/braille/liblouis.js');
-    await importModule(
-        'BrailleKeyEvent', '/chromevox/common/braille/braille_key_types.js');
+    await Promise.all([
+      // Alphabetized by file path.
+      importModule(
+          'BrailleTable', '/chromevox/common/braille/braille_table.js'),
+      importModule('LibLouis', '/chromevox/background/braille/liblouis.js'),
+      importModule(
+          'BrailleKeyEvent', '/chromevox/common/braille/braille_key_types.js'),
+    ]);
+
+    const path = chrome.extension.getURL(
+        'chromevox/third_party/liblouis/liblouis_wrapper.js');
+    this.liblouis = await LibLouis.create(path, '');
   }
 
-  createLiblouis() {
-    return new LibLouis(
-        chrome.extension.getURL(
-            'chromevox/background/braille/liblouis_wrapper.js'),
-        '', () => {});
+  async backTranslate(tableNames, buffer) {
+    const translator = await this.liblouis.getTranslator(tableNames);
+    return new Promise(resolve => translator.backTranslate(buffer, resolve));
   }
 
-  withTranslator(liblouis, tableNames, callback) {
-    liblouis.getTranslator(tableNames, this.newCallback(callback));
+  async translate(tableNames, text) {
+    const translator = await this.liblouis.getTranslator(tableNames);
+    return new Promise(
+        resolve => translator.translate(text, [], (...args) => resolve(args)));
   }
 };
 
 function assertEqualsUint8Array(expected, actual) {
-  const asArray = [];
-  const uint8array = new Uint8Array(actual);
-  for (let i = 0; i < uint8array.length; ++i) {
-    asArray[i] = uint8array[i];
-  }
+  const asArray = Array.from(new Uint8Array(actual));
   assertEqualsJSON(expected, asArray);
 }
 
-function LIBLOUIS_TEST_F(testName, testFunc, opt_preamble) {
-  const wrappedTestFunc = function() {
-    const liblouis = new LibLouis(
-        chrome.extension.getURL(
-            'chromevox/background/braille/liblouis_wrapper.js'),
-        '', testFunc.bind(this));
-  };
-  TEST_F('ChromeVoxLibLouisTest', testName, wrappedTestFunc, opt_preamble);
-}
+AX_TEST_F(
+    'ChromeVoxLibLouisTest', 'TranslateComputerBraille', async function() {
+      const [cells, textToBraille, brailleToText] =
+          await this.translate('en-us-comp8.ctb', 'Hello!');
+      assertEqualsUint8Array([0x53, 0x11, 0x07, 0x07, 0x15, 0x2e], cells);
+      assertEqualsJSON([0, 1, 2, 3, 4, 5], textToBraille);
+      assertEqualsJSON([0, 1, 2, 3, 4, 5], brailleToText);
+    });
 
-function LIBLOUIS_TEST_F_WITH_PREAMBLE(preamble, testName, testFunc) {
-  LIBLOUIS_TEST_F(testName, testFunc, preamble);
-}
-
-LIBLOUIS_TEST_F('testTranslateComputerBraille', function(liblouis) {
-  this.withTranslator(liblouis, 'en-us-comp8.ctb', function(translator) {
-    translator.translate(
-        'Hello!', [],
-        this.newCallback(function(cells, textToBraille, brailleToText) {
-          assertEqualsUint8Array([0x53, 0x11, 0x07, 0x07, 0x15, 0x2e], cells);
-          assertEqualsJSON([0, 1, 2, 3, 4, 5], textToBraille);
-          assertEqualsJSON([0, 1, 2, 3, 4, 5], brailleToText);
-        }));
-  });
-});
-
-LIBLOUIS_TEST_F_WITH_PREAMBLE(
-    `
+AX_TEST_F('ChromeVoxLibLouisTest', 'MAYBE_CheckAllTables', async function() {
+  const tables = await new Promise(resolve => BrailleTable.getAll(resolve));
+  for (const table of tables) {
+    const translator = await this.liblouis.getTranslator(table.fileNames);
+    assertNotEquals(
+        null, translator,
+        'Table ' + JSON.stringify(table) + ' should be valid');
+  }
+}, `
 #if defined(MEMORY_SANITIZER)
 #define MAYBE_CheckAllTables DISABLED_CheckAllTables
 #else
 #define MAYBE_CheckAllTables CheckAllTables
 #endif
-`,
-    'MAYBE_CheckAllTables', function(liblouis) {
-      BrailleTable.getAll(this.newCallback(function(tables) {
-        let i = 0;
-        const checkNextTable = function() {
-          const table = tables[i++];
-          if (table) {
-            this.withTranslator(
-                liblouis, table.fileNames, function(translator) {
-                  assertNotEquals(
-                      null, translator,
-                      'Table ' + JSON.stringify(table) + ' should be valid');
-                  checkNextTable();
-                });
-          }
-        }.bind(this);
-        checkNextTable();
-      }.bind(this)));
-    });
+`);
 
-LIBLOUIS_TEST_F('testBackTranslateComputerBraille', function(liblouis) {
-  this.withTranslator(liblouis, 'en-us-comp8.ctb', function(translator) {
-    const cells = new Uint8Array([0x53, 0x11, 0x07, 0x07, 0x15, 0x2e]);
-    translator.backTranslate(cells.buffer, this.newCallback(function(text) {
+AX_TEST_F(
+    'ChromeVoxLibLouisTest', 'BackTranslateComputerBraille', async function() {
+      const cells = new Uint8Array([0x53, 0x11, 0x07, 0x07, 0x15, 0x2e]);
+      const text = await this.backTranslate('en-us-comp8.ctb', cells.buffer);
       assertEquals('Hello!', text);
-    }));
-  });
-});
-
-LIBLOUIS_TEST_F('testTranslateGermanGrade2Braille', function(liblouis) {
-  // This is one of the moderately large tables.
-  this.withTranslator(liblouis, 'de-g2.ctb', function(translator) {
-    translator.translate(
-        'München', [],
-        this.newCallback(function(cells, textToBraille, brailleToText) {
-          assertEqualsUint8Array([0x0d, 0x33, 0x1d, 0x39, 0x09], cells);
-          assertEqualsJSON([0, 1, 2, 3, 3, 4, 4], textToBraille);
-          assertEqualsJSON([0, 1, 2, 3, 5], brailleToText);
-        }));
-  });
-});
-
-LIBLOUIS_TEST_F('testTranslateSpaceIsNotDropped', function(liblouis) {
-  this.withTranslator(liblouis, 'en-ueb-g2.ctb', function(translator) {
-    translator.translate(
-        ' ', [],
-        this.newCallback(function(cells, textToBraille, brailleToText) {
-          assertEqualsUint8Array([0x0], cells);
-        }));
-  });
-});
-
-LIBLOUIS_TEST_F('testBackTranslateGermanComputerBraille', function(liblouis) {
-  this.withTranslator(liblouis, 'de-de-comp8.ctb', function(translator) {
-    const cells = new Uint8Array([0xb3]);
-    translator.backTranslate(cells.buffer, this.newCallback(function(text) {
-      assertEquals('ü', text);
-    }));
-  });
-});
-
-LIBLOUIS_TEST_F(
-    'testBackTranslateUSEnglishGrade2PreservesTrailingSpace',
-    function(liblouis) {
-      this.withTranslator(liblouis, 'en-ueb-g2.ctb', function(translator) {
-        translator.backTranslate(
-            // A full braille cell (dots 1-6) is 'for' when backtranslated.
-            new Uint8Array([0b111111, 0]).buffer,
-            this.newCallback(function(text) {
-              assertNotEquals(null, text);
-              assertEquals('for ', text);
-            }));
-      });
     });
 
-LIBLOUIS_TEST_F('testBackTranslateEmptyCells', function(liblouis) {
-  this.withTranslator(liblouis, 'de-de-comp8.ctb', function(translator) {
-    translator.backTranslate(
-        new Uint8Array().buffer, this.newCallback(function(text) {
-          assertNotEquals(null, text);
-          assertEquals(0, text.length);
-        }));
-  });
+AX_TEST_F(
+    'ChromeVoxLibLouisTest', 'TranslateGermanGrade2Braille', async function() {
+      // This is one of the moderately large tables.
+      const [cells, textToBraille, brailleToText] =
+          await this.translate('de-g2.ctb', 'München');
+      assertEqualsUint8Array([0x0d, 0x33, 0x1d, 0x39, 0x09], cells);
+      assertEqualsJSON([0, 1, 2, 3, 3, 4, 4], textToBraille);
+      assertEqualsJSON([0, 1, 2, 3, 5], brailleToText);
+    });
+
+AX_TEST_F(
+    'ChromeVoxLibLouisTest', 'TranslateSpaceIsNotDropped', async function() {
+      const [cells, textToBraille, brailleToText] =
+          await this.translate('en-ueb-g2.ctb', ' ');
+      assertEqualsUint8Array([0x0], cells);
+    });
+
+AX_TEST_F(
+    'ChromeVoxLibLouisTest', 'BackTranslateGermanComputerBraille',
+    async function() {
+      const cells = new Uint8Array([0xb3]);
+      const text = await this.backTranslate('de-de-comp8.ctb', cells.buffer);
+      assertEquals('ü', text);
+    });
+
+AX_TEST_F(
+    'ChromeVoxLibLouisTest',
+    'BackTranslateUSEnglishGrade2PreservesTrailingSpace', async function() {
+      // A full braille cell (dots 1-6) is 'for' when backtranslated.
+      const cells = new Uint8Array([0b111111, 0]);
+      const text = await this.backTranslate('en-ueb-g2.ctb', cells.buffer);
+      assertNotEquals(null, text);
+      assertEquals('for ', text);
+    });
+
+AX_TEST_F('ChromeVoxLibLouisTest', 'BackTranslateEmptyCells', async function() {
+  const text =
+      await this.backTranslate('de-de-comp8.ctb', new Uint8Array().buffer);
+  assertNotEquals(null, text);
+  assertEquals(0, text.length);
 });
 
-LIBLOUIS_TEST_F('testGetInvalidTranslator', function(liblouis) {
-  this.withTranslator(liblouis, 'nonexistant-table', function(translator) {
-    assertEquals(null, translator);
-  });
+AX_TEST_F('ChromeVoxLibLouisTest', 'GetInvalidTranslator', async function() {
+  console.log('Expecting an error from liblouis');
+  const translator = await this.liblouis.getTranslator('nonexistant-table');
+  assertEquals(null, translator);
 });
 
-LIBLOUIS_TEST_F('testKeyEventStaticData', function(liblouis) {
-  this.withTranslator(liblouis, 'en-us-comp8.ctb', function(translator) {
-    translator.translate(
-        'abcdefghijklmnopqrstuvwxyz 0123456789', [],
-        this.newCallback(function(cells, textToBraille, brailleToText) {
-          // A-Z.
-          const view = new Uint8Array(cells);
-          for (let i = 0; i < 26; i++) {
-            assertEquals(
-                String.fromCharCode(i + 65),
-                BrailleKeyEvent.brailleDotsToStandardKeyCode[view[i]]);
-          }
+AX_TEST_F('ChromeVoxLibLouisTest', 'KeyEventStaticData', async function() {
+  const [cells, textToBraille, brailleToText] = await this.translate(
+      'en-us-comp8.ctb', 'abcdefghijklmnopqrstuvwxyz 0123456789');
+  // A-Z.
+  const view = new Uint8Array(cells);
+  for (let i = 0; i < 26; i++) {
+    assertEquals(
+        String.fromCharCode(i + 65),
+        BrailleKeyEvent.brailleDotsToStandardKeyCode[view[i]]);
+  }
 
-          // 0-9.
-          for (let i = 27; i < 37; i++) {
-            assertEquals(
-                String.fromCharCode(i + 21),
-                BrailleKeyEvent.brailleDotsToStandardKeyCode[view[i]]);
-          }
-        }));
-  });
+  // 0-9.
+  for (let i = 27; i < 37; i++) {
+    assertEquals(
+        String.fromCharCode(i + 21),
+        BrailleKeyEvent.brailleDotsToStandardKeyCode[view[i]]);
+  }
 });

@@ -7,31 +7,13 @@
 
 #include <set>
 
-#include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/browser/support_tool/data_collection_module.pb.h"
 #include "chrome/browser/support_tool/data_collector.h"
-#include "components/feedback/pii_types.h"
+#include "components/feedback/redaction_tool/pii_types.h"
 #include "url/gurl.h"
 
 namespace support_tool_ui {
-
-// Strings that contain the human readable description of feedback::PIIType
-// enums.
-extern const char kAndroidAppInfo[];
-extern const char kSSID[];
-extern const char kLocationInfo[];
-extern const char kEmail[];
-extern const char kGAIA[];
-extern const char kStableIdentifier[];
-extern const char kIPPAddress[];
-extern const char kIPAddress[];
-extern const char kMACAddress[];
-extern const char kWindowTitle[];
-extern const char kURL[];
-extern const char kSerial[];
-extern const char kRemovableStorage[];
-extern const char kEAP[];
 
 // String keys of the fields of PIIDataItem dictionary that Support Tool UI
 // stores the detected PII to display it to user.
@@ -49,12 +31,15 @@ extern const char kModuleQuery[];
 extern const char kDataCollectorIncluded[];
 extern const char kDataCollectorProtoEnum[];
 
-// String keys of URL generation result that Support Tool UI accepts.
-extern const char kUrlGenerationResultSuccess[];
-extern const char kUrlGenerationResultUrl[];
-extern const char kUrlGenerationResultErrorMessage[];
+// String keys of token generation result that Support Tool UI accepts.
+extern const char kSupportTokenGenerationResultSuccess[];
+extern const char kSupportTokenGenerationResultToken[];
+extern const char kSupportTokenGenerationResultErrorMessage[];
 
 }  // namespace support_tool_ui
+
+// Returns the human readable name corresponding to `type_enum`.
+std::string GetPIITypeDescription(redaction::PIIType type_enum);
 
 // Returns PIIDataItems in `detected_pii` where PIIDataItem is
 // type PIIDataItem = {
@@ -67,7 +52,7 @@ extern const char kUrlGenerationResultErrorMessage[];
 base::Value::List GetDetectedPIIDataItems(const PIIMap& detected_pii);
 
 // Returns the set of PIITypes that has their `keep` field true in `pii_items`.
-std::set<feedback::PIIType> GetPIITypesToKeep(
+std::set<redaction::PIIType> GetPIITypesToKeep(
     const base::Value::List* pii_items);
 
 // Returns the support case ID that's extracted from `url` with query
@@ -85,6 +70,7 @@ std::string GetSupportCaseIDFromURL(const GURL& url);
 //  protoEnum: number,
 // }
 // Returns only the data collectors that are available for user's device.
+// Sets `isIncluded` as false for all items if `module_query` is empty.
 base::Value::List GetDataCollectorItemsInQuery(std::string module_query);
 
 // Creates base::Value::List according to the format Support Tool UI
@@ -96,13 +82,13 @@ base::Value::List GetDataCollectorItemsInQuery(std::string module_query);
 //  isIncluded: boolean,
 //  protoEnum: number,
 // }
-base::Value::List GetAllDataCollectors();
+base::Value::List GetAllDataCollectorItems();
 
 // Creates base::Value::List according to the format Support Tool UI
 // accepts and fills the contents with all data collectors with isIncluded:
 // false as a default choice. Only return data collectors available for caller's
 // platform.
-base::Value::List GetAllDataCollectorsForDevice();
+base::Value::List GetAllDataCollectorItemsForDeviceForTesting();
 
 std::set<support_tool::DataCollectorType> GetIncludedDataCollectorTypes(
     const base::Value::List* data_collector_items);
@@ -113,11 +99,7 @@ std::set<support_tool::DataCollectorType> GetIncludedDataCollectorTypes(
 //   errorMessage: string,
 // }
 base::Value::Dict GetStartDataCollectionResult(bool success,
-                                               std::string error_message);
-
-base::FilePath GetDefaultFileToExport(base::FilePath suggested_path,
-                                      const std::string& case_id,
-                                      base::Time timestamp);
+                                               std::u16string error_message);
 
 // Generates a customized chrome://support-tool URL from given `case_id` and
 // `data_collector_items` and returns the result in a format Support Tool UI
@@ -125,6 +107,12 @@ base::FilePath GetDefaultFileToExport(base::FilePath suggested_path,
 // in `data_collector_items`.
 base::Value::Dict GenerateCustomizedURL(
     std::string case_id,
+    const base::Value::List* data_collector_items);
+
+// Generates a support token from `data_collector_items` and returns the result
+// in a format Support Tool UI expects. Returns a result with error when there's
+// no data collector selected in `data_collector_items`.
+base::Value::Dict GenerateSupportToken(
     const base::Value::List* data_collector_items);
 
 #endif  // CHROME_BROWSER_UI_WEBUI_SUPPORT_TOOL_SUPPORT_TOOL_UI_UTILS_H_

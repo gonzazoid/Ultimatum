@@ -37,8 +37,7 @@ bool IsFirstVisiblePosition(Node* node, unsigned pos_offset) {
   auto range_end = PositionInFlatTree(node, pos_offset);
   return node->getNodeType() == Node::kElementNode || pos_offset == 0 ||
          PlainText(EphemeralRangeInFlatTree(range_start, range_end))
-             .StripWhiteSpace()
-             .empty();
+                 .LengthWithStrippedWhiteSpace() == 0;
 }
 
 // Returns true if text from |pos_offset| until end of |node| can be considered
@@ -49,8 +48,7 @@ bool IsLastVisiblePosition(Node* node, unsigned pos_offset) {
   return node->getNodeType() == Node::kElementNode ||
          pos_offset == node->textContent().length() ||
          PlainText(EphemeralRangeInFlatTree(range_start, range_end))
-             .StripWhiteSpace()
-             .empty();
+                 .LengthWithStrippedWhiteSpace() == 0;
 }
 
 struct ForwardDirection {
@@ -84,10 +82,10 @@ Node* NextNonEmptyVisibleTextNode(Node* start_node) {
       return nullptr;
     // Filter out nodes without layout object.
     if (next_node->GetLayoutObject() &&
-        !PlainText(EphemeralRange::RangeOfContents(*next_node))
-             .StripWhiteSpace()
-             .empty())
+        PlainText(EphemeralRange::RangeOfContents(*next_node))
+                .LengthWithStrippedWhiteSpace() > 0) {
       return next_node;
+    }
     node = next_node;
   }
   return nullptr;
@@ -128,15 +126,7 @@ absl::optional<int> g_exactTextMaxCharsOverride;
 
 TextFragmentSelectorGenerator::TextFragmentSelectorGenerator(
     LocalFrame* main_frame)
-    : frame_(main_frame) {
-  if (base::FeatureList::IsEnabled(
-          shared_highlighting::kSharedHighlightingRefinedMaxContextWords)) {
-    max_context_words_ =
-        shared_highlighting::kSharedHighlightingMaxContextWords.Get();
-  } else {
-    max_context_words_ = kMaxContextWords;
-  }
-}
+    : frame_(main_frame) {}
 
 void TextFragmentSelectorGenerator::Generate(const RangeInFlatTree& range,
                                              GenerateCallback callback) {
@@ -197,8 +187,9 @@ void TextFragmentSelectorGenerator::DidFindMatch(const RangeInFlatTree& match,
     std::move(did_find_match_callback_for_testing_).Run(is_unique);
 
   if (is_unique &&
-      PlainText(match.ToEphemeralRange()).StripWhiteSpace().length() ==
-          PlainText(range_->ToEphemeralRange()).StripWhiteSpace().length()) {
+      PlainText(match.ToEphemeralRange()).LengthWithStrippedWhiteSpace() ==
+          PlainText(range_->ToEphemeralRange())
+              .LengthWithStrippedWhiteSpace()) {
     state_ = kSuccess;
     ResolveSelectorState();
   } else {
@@ -325,8 +316,7 @@ void TextFragmentSelectorGenerator::StartGeneration() {
   }
 
   // Shouldn't continue if selection is empty.
-  String selected_text = PlainText(ephemeral_range).StripWhiteSpace();
-  if (selected_text.empty()) {
+  if (PlainText(ephemeral_range).LengthWithStrippedWhiteSpace() == 0) {
     state_ = kFailure;
     error_ = LinkGenerationError::kEmptySelection;
     ResolveSelectorState();
@@ -346,8 +336,6 @@ void TextFragmentSelectorGenerator::StartGeneration() {
     return;
   }
 
-  UMA_HISTOGRAM_COUNTS_1000("SharedHighlights.LinkGenerated.SelectionLength",
-                            PlainText(range_->ToEphemeralRange()).length());
   state_ = kNeedsNewCandidate;
   GenerateSelectorCandidate();
 }
@@ -482,16 +470,16 @@ void TextFragmentSelectorGenerator::ExtendRangeSelector() {
     PositionInFlatTree range_end_position =
         GetPreviousTextEndPosition(range_->EndPosition());
 
-    if (range_start_position.IsNotNull()) {
-      range_start_iterator_ =
-          MakeGarbageCollected<ForwardSameBlockWordIterator>(
-              range_start_position);
+    if (range_start_position.IsNull() || range_end_position.IsNull()) {
+      state_ = kFailure;
+      error_ = LinkGenerationError::kNoRange;
+      return;
     }
 
-    if (range_end_position.IsNotNull()) {
-      range_end_iterator_ = MakeGarbageCollected<BackwardSameBlockWordIterator>(
-          range_end_position);
-    }
+    range_start_iterator_ = MakeGarbageCollected<ForwardSameBlockWordIterator>(
+        range_start_position);
+    range_end_iterator_ =
+        MakeGarbageCollected<BackwardSameBlockWordIterator>(range_end_position);
 
     // Use at least 3 words from both sides for more robust link to text unless
     // the selected text is shorter than 6 words.
@@ -531,7 +519,7 @@ void TextFragmentSelectorGenerator::ExtendRangeSelector() {
     }
   }
 
-  if (!range_start_iterator_ && !range_end_iterator_) {
+  if (!range_start_iterator_ || !range_end_iterator_) {
     state_ = kFailure;
     error_ = LinkGenerationError::kNoRange;
     return;
@@ -582,7 +570,7 @@ void TextFragmentSelectorGenerator::ExtendContext() {
   DCHECK(selector_);
 
   // Give up if context is already too long.
-  if (num_context_words_ >= max_context_words_) {
+  if (num_context_words_ >= kMaxContextWords) {
     state_ = kFailure;
     error_ = LinkGenerationError::kContextLimitReached;
     return;
@@ -653,17 +641,9 @@ void TextFragmentSelectorGenerator::RecordAllMetrics(
   ukm::SourceId source_id = frame_->GetDocument()->UkmSourceID();
 
   if (selector.Type() != TextFragmentSelector::SelectorType::kInvalid) {
-    UMA_HISTOGRAM_COUNTS_1000("SharedHighlights.LinkGenerated.ParamLength",
-                              selector.ToString().length());
-
-    UMA_HISTOGRAM_EXACT_LINEAR("SharedHighlights.LinkGenerated.Iterations",
-                               iteration_, kMaxIterationCountToRecord);
     UMA_HISTOGRAM_TIMES("SharedHighlights.LinkGenerated.TimeToGenerate",
                         base::DefaultTickClock::GetInstance()->NowTicks() -
                             generation_start_time_);
-    UMA_HISTOGRAM_ENUMERATION(
-        "SharedHighlights.LinkGenerated.SelectorParameters",
-        TextFragmentAnchorMetrics::GetParametersForSelector(selector));
 
     shared_highlighting::LogLinkGeneratedSuccessUkmEvent(recorder, source_id);
   } else {

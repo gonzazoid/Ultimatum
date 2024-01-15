@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/platform/allow_discouraged_type.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
@@ -39,6 +40,7 @@ class CORE_EXPORT FetchHeaderList final
   size_t size() const;
   void Remove(const String&);
   bool Get(const String&, String&) const;
+  Vector<String> GetSetCookie() const;
   String GetAsRawString(int status_code, String status_message) const;
   bool Has(const String&) const;
   void ClearList();
@@ -67,7 +69,8 @@ class CORE_EXPORT FetchHeaderList final
   // iterate through all keys and vectors in the HashMap. Similarly,
   // list() would require callers to manually iterate through the
   // HashMap's keys and value vector.
-  std::multimap<String, String, ByteCaseInsensitiveCompare> header_list_;
+  std::multimap<String, String, ByteCaseInsensitiveCompare> header_list_
+      ALLOW_DISCOURAGED_TYPE("No multimap equivalent in blink");
 };
 
 }  // namespace blink

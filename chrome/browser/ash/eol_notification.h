@@ -7,8 +7,10 @@
 
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
+#include "chrome/browser/ash/eol_incentive_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
 #include "third_party/cros_system_api/dbus/update_engine/dbus-constants.h"
@@ -43,6 +45,8 @@ class EolNotification final : public message_center::NotificationObserver {
   void Click(const absl::optional<int>& button_index,
              const absl::optional<std::u16string>& reply) override;
 
+  void OverrideClockForTesting(base::Clock* clock);
+
  private:
   friend class EolNotificationTest;
 
@@ -64,11 +68,26 @@ class EolNotification final : public message_center::NotificationObserver {
   // - EolInfo eol_info: the End of Life info.
   void OnEolInfo(UpdateEngineClient::EolInfo eol_info);
 
+  // Shows the EOL incentive notification when the correct criteria are met. If
+  // the final EOL incentive date has passed and the final incenteve was not
+  // shown, then a normal EOL notification is shown.
+  void MaybeShowEolIncentiveNotification(
+      base::Time eol_date,
+      eol_incentive_util::EolIncentiveType incentive_type);
+
+  // Creates the EOL incentive notification.
+  void ShowIncentiveNotification(
+      base::Time eol_date,
+      eol_incentive_util::EolIncentiveType incentive_type);
+
+  // Resets all notification dismissed prefs back to false.
+  void ResetDismissedPrefs();
+
   // Overridden for testing pending EOL notifications.
-  base::Clock* clock_;
+  raw_ptr<base::Clock, DanglingUntriaged> clock_;
 
   // Profile which is associated with the EndOfLife notification.
-  Profile* const profile_;
+  const raw_ptr<Profile, DanglingUntriaged> profile_;
 
   // Pref which determines which warning should be displayed to the user.
   absl::optional<std::string> dismiss_pref_;

@@ -8,6 +8,7 @@
 #include <string>
 
 #include "ash/components/arc/mojom/tts.mojom.h"
+#include "base/memory/raw_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 namespace content {
@@ -50,10 +51,13 @@ class ArcTtsService : public KeyedService,
     tts_controller_ = tts_controller;
   }
 
- private:
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  static void EnsureFactoryBuilt();
 
-  content::TtsController* tts_controller_;
+ private:
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
+
+  raw_ptr<content::TtsController, DanglingUntriaged> tts_controller_;
 };
 
 }  // namespace arc

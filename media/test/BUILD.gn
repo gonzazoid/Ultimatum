@@ -5,6 +5,10 @@
 import("//media/media_options.gni")
 import("//testing/libfuzzer/fuzzer_test.gni")
 
+if (is_ios) {
+  import("//build/config/ios/bundle_data_from_filelist.gni")
+}
+
 source_set("run_all_unittests") {
   testonly = true
   sources = [ "run_all_unittests.cc" ]
@@ -18,6 +22,10 @@ source_set("run_all_unittests") {
 
   if (is_android) {
     deps += [ "//ui/gl" ]
+  }
+
+  if (is_chromeos) {
+    deps += [ "//ui/gfx/linux:gbm" ]
   }
 }
 
@@ -51,10 +59,7 @@ source_set("pipeline_integration_test_base") {
 source_set("pipeline_integration_tests") {
   testonly = true
 
-  # Even if FFmpeg is enabled on Android we don't want these.
-  # TODO(watk): Refactor tests that could be made to run on Android. See
-  # http://crbug.com/570762
-  if (media_use_ffmpeg && !is_android) {
+  if (media_use_ffmpeg) {
     sources = [ "pipeline_integration_test.cc" ]
 
     deps = [
@@ -66,13 +71,9 @@ source_set("pipeline_integration_tests") {
       "//media/mojo/clients",
 
       # Needed for the opus_config
+      "//testing/gmock",
       "//third_party/opus",
       "//url",
-
-      # TODO(dalecurtis): Required since the gmock header is included in the
-      # header for pipeline_integration_test_base.h.  This should be moved
-      #  into the .cc file to avoid the extra dependency here.
-      "//testing/gmock",
     ]
   }
 }
@@ -86,13 +87,9 @@ source_set("pipeline_integration_perftests") {
     deps = [
       ":pipeline_integration_test_base",
       "//media:test_support",
+      "//testing/gmock",
       "//testing/gtest",
       "//testing/perf",
-
-      # TODO(dalecurtis): Required since the gmock header is included in the
-      # header for pipeline_integration_test_base.h.  This should be moved into
-      # the .cc file to avoid the extra dependency here.
-      "//testing/gmock",
     ]
   }
 }
@@ -167,14 +164,7 @@ foreach(variant, pipeline_integration_fuzzer_variants) {
       "//base",
       "//base/test:test_support",
       "//media",
-
-      # TODO(dalecurtis): Required since the gmock header is included in the
-      # header for pipeline_integration_test_base.h.  This should be
-      # moved into the .cc file to avoid the extra dependency here.
       "//testing/gmock",
-
-      # TODO(https://crbug.com/1039559): Required for inclusion of
-      # gtest-internal-inl.h.
       "//testing/gtest",
       "//ui/gfx:test_support",
     ]
@@ -182,5 +172,12 @@ foreach(variant, pipeline_integration_fuzzer_variants) {
     defines = [ "PIPELINE_FUZZER_VARIANT=${variant}" ]
 
     seed_corpus = "//media/test/data/"
+  }
+}
+
+if (is_ios) {
+  bundle_data_from_filelist("media_bundle_data") {
+    testonly = true
+    filelist_name = "media_bundle_data.filelist"
   }
 }

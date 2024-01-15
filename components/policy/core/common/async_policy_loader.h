@@ -5,7 +5,7 @@
 #ifndef COMPONENTS_POLICY_CORE_COMMON_ASYNC_POLICY_LOADER_H_
 #define COMPONENTS_POLICY_CORE_COMMON_ASYNC_POLICY_LOADER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
@@ -51,7 +51,9 @@ class POLICY_EXPORT AsyncPolicyLoader {
   virtual ~AsyncPolicyLoader();
 
   // Gets a SequencedTaskRunner backed by the background thread.
-  base::SequencedTaskRunner* task_runner() const { return task_runner_.get(); }
+  const scoped_refptr<base::SequencedTaskRunner>& task_runner() const {
+    return task_runner_;
+  }
 
   // Returns the currently configured policies. Load() is always invoked on
   // the background thread, except for the initial Load() at startup which is
@@ -81,7 +83,7 @@ class POLICY_EXPORT AsyncPolicyLoader {
   // When |periodic_updates_| is true a reload is posted periodically, if it
   // hasn't been triggered recently. This makes sure the policies are reloaded
   // if the update events aren't triggered.
-  void Reload(bool force);
+  virtual void Reload(bool force);
 
   // Returns `true` and only if the platform is not managed by a trusted source.
   bool ShouldFilterSensitivePolicies();
@@ -90,6 +92,17 @@ class POLICY_EXPORT AsyncPolicyLoader {
       ManagementAuthorityTrustworthiness trustworthiness);
 
   const scoped_refptr<SchemaMap>& schema_map() const { return schema_map_; }
+
+  base::TimeDelta get_reload_interval() const { return reload_interval_; }
+
+  void set_reload_interval(base::TimeDelta reload_interval) {
+    reload_interval_ = reload_interval;
+  }
+
+ protected:
+  // Return true if we need to asynchronously get
+  //`platform_management_trustworthiness_` bit before reloading policies.
+  bool NeedManagementBitBeforeLoad();
 
  private:
   // Allow AsyncPolicyProvider to call Init().
@@ -142,6 +155,10 @@ class POLICY_EXPORT AsyncPolicyLoader {
 
   // The current policy schemas that this provider should load.
   scoped_refptr<SchemaMap> schema_map_;
+
+  // The interval of time between periodic updates. Only relevant when
+  // `periodic_updates_` is true to enable periodic updates.
+  base::TimeDelta reload_interval_;
 
   // Used to get WeakPtrs for the periodic reload task.
   base::WeakPtrFactory<AsyncPolicyLoader> weak_factory_{this};

@@ -12,6 +12,7 @@
 #include <set>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "content/browser/accessibility/browser_accessibility_manager.h"
 #include "content/common/content_export.h"
 #include "ui/accessibility/platform/ax_platform_node_win.h"
@@ -46,7 +47,6 @@ class CONTENT_EXPORT BrowserAccessibilityManagerWin
 
   // BrowserAccessibilityManager methods
   void UserIsReloading() override;
-  BrowserAccessibility* GetFocus() const override;
   bool IsIgnoredChangedNode(const BrowserAccessibility* node) const;
   bool CanFireEvents() const override;
 
@@ -71,14 +71,6 @@ class CONTENT_EXPORT BrowserAccessibilityManagerWin
   // Do event post-processing
   void FinalizeAccessibilityEvents() override;
 
-  // Track this object and post a VISIBLE_DATA_CHANGED notification when
-  // its container scrolls.
-  // TODO(dmazzoni): remove once http://crbug.com/113483 is fixed.
-  void TrackScrollingObject(BrowserAccessibilityWin* node);
-
-  // Called when |accessible_hwnd_| is deleted by its parent.
-  void OnAccessibleHwndDeleted();
-
  protected:
   // AXTreeObserver methods.
   void OnSubtreeWillBeDeleted(ui::AXTree* tree, ui::AXNode* node) override;
@@ -89,8 +81,8 @@ class CONTENT_EXPORT BrowserAccessibilityManagerWin
 
  private:
   struct SelectionEvents {
-    std::vector<BrowserAccessibility*> added;
-    std::vector<BrowserAccessibility*> removed;
+    std::vector<raw_ptr<BrowserAccessibility, VectorExperimental>> added;
+    std::vector<raw_ptr<BrowserAccessibility, VectorExperimental>> removed;
     SelectionEvents();
     ~SelectionEvents();
   };

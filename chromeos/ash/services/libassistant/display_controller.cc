@@ -6,7 +6,8 @@
 
 #include <memory>
 
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "chromeos/ash/services/libassistant/display_connection.h"
 #include "chromeos/ash/services/libassistant/grpc/assistant_client.h"
@@ -37,12 +38,13 @@ class DisplayController::EventObserver : public DisplayConnectionObserver {
   ~EventObserver() override = default;
 
   void OnSpeechLevelUpdated(const float speech_level) override {
-    for (auto& observer : parent_->speech_recognition_observers_)
+    for (auto& observer : *parent_->speech_recognition_observers_) {
       observer->OnSpeechLevelUpdated(speech_level);
+    }
   }
 
  private:
-  DisplayController* const parent_;
+  const raw_ptr<DisplayController> parent_;
 };
 
 DisplayController::DisplayController(
@@ -53,7 +55,7 @@ DisplayController::DisplayController(
           std::make_unique<DisplayConnection>(event_observer_.get(),
                                               /*feedback_ui_enabled=*/true)),
       speech_recognition_observers_(*speech_recognition_observers),
-      mojom_task_runner_(base::SequencedTaskRunnerHandle::Get()) {
+      mojom_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {
   DCHECK(speech_recognition_observers);
 }
 
@@ -79,7 +81,7 @@ void DisplayController::SetDeviceAppsEnabled(bool enabled) {
 
   DCHECK(action_module_);
   action_module_->SetAppSupportEnabled(
-      chromeos::assistant::features::IsAppSupportEnabled() && enabled);
+      assistant::features::IsAppSupportEnabled() && enabled);
 }
 
 void DisplayController::SetRelatedInfoEnabled(bool enabled) {

@@ -8,9 +8,9 @@
 #include <random>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
@@ -23,7 +23,7 @@ struct Env {
   Env() {
     media::InitializeMediaLibrary();
     base::CommandLine::Init(0, nullptr);
-    logging::SetMinLogLevel(logging::LOG_FATAL);
+    logging::SetMinLogLevel(logging::LOGGING_FATAL);
   }
 
   base::AtExitManager at_exit_manager;

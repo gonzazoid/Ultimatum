@@ -4,14 +4,7 @@
 
 #import "ios/chrome/browser/ui/first_run/first_run_constants.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace first_run {
-
-NSString* const kUMAMetricsButtonAccessibilityIdentifier =
-    @"UMAMetricsButtonAccessibilityIdentifier";
 
 NSString* const kFirstRunWelcomeScreenAccessibilityIdentifier =
     @"firstRunWelcomeScreenAccessibilityIdentifier";
@@ -25,8 +18,14 @@ NSString* const kFirstRunLegacySignInScreenAccessibilityIdentifier =
 NSString* const kFirstRunSyncScreenAccessibilityIdentifier =
     @"firstRunSyncScreenAccessibilityIdentifier";
 
+NSString* const kSearchEngineChoiceTitleAccessibilityIdentifier =
+    @"SearchEngineChoiceTitleAccessibilityIdentifier";
+
 NSString* const kFirstRunDefaultBrowserScreenAccessibilityIdentifier =
     @"firstRunDefaultBrowserScreenAccessibilityIdentifier";
+
+NSString* const kFirstRunOmniboxPositionChoiceScreenAccessibilityIdentifier =
+    @"firstRunOmniboxPositionChoiceScreenAccessibilityIdentifier";
 
 // URL for the terms of service text.
 NSString* const kTermsOfServiceURL = @"internal://terms-of-service";

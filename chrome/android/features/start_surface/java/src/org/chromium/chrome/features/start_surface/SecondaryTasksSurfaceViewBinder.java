@@ -16,7 +16,9 @@ import org.chromium.ui.modelutil.PropertyModel;
 
 /** The binder controls the display of the secondary {@link TasksView} in its parent. */
 class SecondaryTasksSurfaceViewBinder {
-    public static void bind(PropertyModel model, TasksSurfaceViewBinder.ViewHolder viewHolder,
+    public static void bind(
+            PropertyModel model,
+            StartSurfaceWithParentViewBinder.ViewHolder viewHolder,
             PropertyKey propertyKey) {
         if (IS_SECONDARY_SURFACE_VISIBLE == propertyKey) {
             updateVisibility(viewHolder, model);
@@ -28,7 +30,7 @@ class SecondaryTasksSurfaceViewBinder {
     }
 
     private static void updateVisibility(
-            TasksSurfaceViewBinder.ViewHolder viewHolder, PropertyModel model) {
+            StartSurfaceWithParentViewBinder.ViewHolder viewHolder, PropertyModel model) {
         boolean isShowing = model.get(IS_SECONDARY_SURFACE_VISIBLE);
         if (isShowing && viewHolder.tasksSurfaceView.getParent() == null) {
             viewHolder.parentView.addView(viewHolder.tasksSurfaceView);
@@ -42,13 +44,14 @@ class SecondaryTasksSurfaceViewBinder {
     }
 
     private static void bringSurfaceToFront(
-            TasksSurfaceViewBinder.ViewHolder viewHolder, PropertyModel model) {
+            StartSurfaceWithParentViewBinder.ViewHolder viewHolder, PropertyModel model) {
         if (model.get(IS_SECONDARY_SURFACE_VISIBLE)) {
             viewHolder.tasksSurfaceView.bringToFront();
         }
     }
 
-    private static void setTopMargin(TasksSurfaceViewBinder.ViewHolder viewHolder, int topMargin) {
+    private static void setTopMargin(
+            StartSurfaceWithParentViewBinder.ViewHolder viewHolder, int topMargin) {
         MarginLayoutParams layoutParams =
                 (MarginLayoutParams) viewHolder.tasksSurfaceView.getLayoutParams();
         if (layoutParams == null) return;

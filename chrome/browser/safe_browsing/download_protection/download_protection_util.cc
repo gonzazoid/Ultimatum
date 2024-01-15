@@ -5,8 +5,12 @@
 #include "chrome/browser/safe_browsing/download_protection/download_protection_util.h"
 
 #include "base/hash/sha1.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
+#include "chrome/browser/download/download_item_warning_data.h"
+#include "components/safe_browsing/content/common/file_type_policies.h"
 #include "net/cert/x509_util.h"
 #include "url/gurl.h"
 
@@ -29,6 +33,69 @@ std::string EscapeCertAttribute(const std::string& attribute) {
     }
   }
   return escaped;
+}
+
+int ArchiveEntryWeight(const ClientDownloadRequest::ArchivedBinary& entry) {
+  return FileTypePolicies::GetInstance()
+      ->SettingsForFile(base::FilePath::FromUTF8Unsafe(entry.file_path()),
+                        GURL{}, nullptr)
+      .file_weight();
+}
+
+size_t ArchiveEntryDepth(const ClientDownloadRequest::ArchivedBinary& entry) {
+  return base::FilePath::FromUTF8Unsafe(entry.file_path())
+      .GetComponents()
+      .size();
+}
+
+void SelectEncryptedEntry(
+    std::vector<ClientDownloadRequest::ArchivedBinary>* considering,
+    google::protobuf::RepeatedPtrField<ClientDownloadRequest::ArchivedBinary>*
+        selected) {
+  auto it = base::ranges::find_if(
+      *considering, &ClientDownloadRequest::ArchivedBinary::is_encrypted);
+  if (it != considering->end()) {
+    *selected->Add() = *it;
+    considering->erase(it);
+  }
+}
+
+void SelectDeepestEntry(
+    std::vector<ClientDownloadRequest::ArchivedBinary>* considering,
+    google::protobuf::RepeatedPtrField<ClientDownloadRequest::ArchivedBinary>*
+        selected) {
+  auto it = base::ranges::max_element(*considering, {}, &ArchiveEntryDepth);
+  if (it != considering->end()) {
+    *selected->Add() = *it;
+    considering->erase(it);
+  }
+}
+
+void SelectWildcardEntryAtFront(
+    std::vector<ClientDownloadRequest::ArchivedBinary>* considering,
+    google::protobuf::RepeatedPtrField<ClientDownloadRequest::ArchivedBinary>*
+        selected) {
+  int remaining_executables = base::ranges::count_if(
+      *considering, &ClientDownloadRequest::ArchivedBinary::is_executable);
+  for (auto it = considering->begin(); it != considering->end(); ++it) {
+    if (it->is_executable()) {
+      // Choose the current entry with probability 1/remaining_executables. This
+      // leads to a uniform distribution over all executables.
+      if (remaining_executables * base::RandDouble() < 1) {
+        *selected->Add() = *it;
+        // Move the selected entry to the front. There's no easy way to insert
+        // at a specific location in a RepeatedPtrField, so we do the move as a
+        // series of swaps.
+        for (int i = 0; i < selected->size() - 1; ++i) {
+          selected->SwapElements(i, selected->size() - 1);
+        }
+        considering->erase(it);
+        return;
+      }
+
+      --remaining_executables;
+    }
+  }
 }
 
 }  // namespace
@@ -80,9 +147,8 @@ void GetCertificateAllowlistStrings(
     paths_to_check.insert(ou_tokens[i]);
   }
 
-  std::string hashed = base::SHA1HashString(std::string(
-      net::x509_util::CryptoBufferAsStringPiece(issuer.cert_buffer())));
-  std::string issuer_fp = base::HexEncode(hashed.data(), hashed.size());
+  std::string issuer_fp = base::HexEncode(base::SHA1HashSpan(
+      net::x509_util::CryptoBufferAsSpan(issuer.cert_buffer())));
   for (auto it = paths_to_check.begin(); it != paths_to_check.end(); ++it) {
     allowlist_strings->push_back("cert/" + issuer_fp + *it);
   }
@@ -95,6 +161,84 @@ GURL GetFileSystemAccessDownloadUrl(const GURL& frame_url) {
   // random UUID.
   return GURL("blob:" + frame_url.DeprecatedGetOriginAsURL().spec() +
               "file-system-access-write");
+}
+
+google::protobuf::RepeatedPtrField<ClientDownloadRequest::ArchivedBinary>
+SelectArchiveEntries(const google::protobuf::RepeatedPtrField<
+                     ClientDownloadRequest::ArchivedBinary>& src_binaries) {
+  // Limit the number of entries so we don't clog the backend.
+  // We can expand this limit by pushing a new download_file_types update.
+  size_t limit =
+      FileTypePolicies::GetInstance()->GetMaxArchivedBinariesToReport();
+
+  google::protobuf::RepeatedPtrField<ClientDownloadRequest::ArchivedBinary>
+      selected;
+
+  std::vector<ClientDownloadRequest::ArchivedBinary> considering;
+  for (const ClientDownloadRequest::ArchivedBinary& entry : src_binaries) {
+    if (entry.is_executable() || entry.is_archive()) {
+      considering.push_back(entry);
+    }
+  }
+
+  if (static_cast<size_t>(selected.size()) < limit) {
+    SelectEncryptedEntry(&considering, &selected);
+  }
+
+  if (static_cast<size_t>(selected.size()) < limit) {
+    SelectDeepestEntry(&considering, &selected);
+  }
+
+  std::sort(considering.begin(), considering.end(),
+            [](const ClientDownloadRequest::ArchivedBinary& lhs,
+               const ClientDownloadRequest::ArchivedBinary& rhs) {
+              // The comparator should return true if `lhs` should come before
+              // `rhs`. We want the shallowest and highest-weight entries first.
+              if (ArchiveEntryDepth(lhs) != ArchiveEntryDepth(rhs)) {
+                return ArchiveEntryDepth(lhs) < ArchiveEntryDepth(rhs);
+              }
+
+              return ArchiveEntryWeight(lhs) > ArchiveEntryWeight(rhs);
+            });
+
+  // Only add the wildcard if we otherwise wouldn't be able to fit all the
+  // entries.
+  bool should_choose_wildcard = static_cast<size_t>(selected.size()) < limit &&
+                                considering.size() + selected.size() > limit;
+  if (should_choose_wildcard) {
+    --limit;
+  }
+
+  auto last_taken_it = considering.begin();
+  for (auto binary_it = considering.begin(); binary_it != considering.end();
+       ++binary_it) {
+    if (static_cast<size_t>(selected.size()) >= limit) {
+      break;
+    }
+
+    if (binary_it->is_executable() || binary_it->is_archive()) {
+      *selected.Add() = std::move(*binary_it);
+      last_taken_it = binary_it;
+    }
+  }
+
+  // By actually choosing the wildcard at the end, we ensure that all the other
+  // entries in the ping are completely deterministic.
+  if (should_choose_wildcard && last_taken_it != considering.end()) {
+    ++last_taken_it;
+    considering.erase(considering.begin(), last_taken_it);
+    SelectWildcardEntryAtFront(&considering, &selected);
+  }
+
+  return selected;
+}
+
+void LogDeepScanEvent(download::DownloadItem* item, DeepScanEvent event) {
+  base::UmaHistogramEnumeration("SBClientDownload.DeepScanEvent3", event);
+  if (DownloadItemWarningData::IsEncryptedArchive(item)) {
+    base::UmaHistogramEnumeration(
+        "SBClientDownload.PasswordProtectedDeepScanEvent3", event);
+  }
 }
 
 }  // namespace safe_browsing

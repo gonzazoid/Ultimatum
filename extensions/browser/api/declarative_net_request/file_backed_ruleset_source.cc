@@ -6,13 +6,14 @@
 
 #include <memory>
 #include <set>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/memory/ptr_util.h"
@@ -57,7 +58,7 @@ std::string GetFilename(const base::FilePath& file_path) {
 }
 
 std::string GetErrorWithFilename(const base::FilePath& json_path,
-                                 base::StringPiece error) {
+                                 std::string_view error) {
   return base::StrCat({GetFilename(json_path), ": ", error});
 }
 
@@ -102,18 +103,15 @@ ReadJSONRulesResult ParseRulesFromJSON(const RulesetID& ruleset_id,
   }
 
   for (size_t i = 0; i < rules_list.size(); i++) {
-    dnr_api::Rule parsed_rule;
-    std::u16string parse_error;
-
-    if (dnr_api::Rule::Populate(rules_list[i], &parsed_rule, &parse_error)) {
-      DCHECK(parse_error.empty());
+    auto parsed_rule = dnr_api::Rule::FromValue(rules_list[i]);
+    if (parsed_rule.has_value()) {
       if (result.rules.size() == rule_limit) {
         result.rule_parse_warnings.push_back(
             CreateInstallWarning(json_path, kRuleCountExceeded));
         break;
       }
 
-      const bool is_regex_rule = !!parsed_rule.condition.regex_filter;
+      const bool is_regex_rule = !!parsed_rule->condition.regex_filter;
       if (is_regex_rule && ++regex_rule_count > GetRegexRuleLimit()) {
         // Only add the install warning once.
         if (!regex_rule_count_exceeded) {
@@ -125,25 +123,24 @@ ReadJSONRulesResult ParseRulesFromJSON(const RulesetID& ruleset_id,
         continue;
       }
 
-      result.rules.push_back(std::move(parsed_rule));
+      result.rules.push_back(std::move(*parsed_rule));
       continue;
     }
 
     std::string rule_location;
 
     // If possible use the rule ID in the install warning.
-    if (auto* id_val =
-            rules_list[i].FindKeyOfType(kIDKey, base::Value::Type::INTEGER)) {
-      rule_location = base::StringPrintf("id %d", id_val->GetInt());
+    if (auto id = rules_list[i].GetDict().FindInt(kIDKey)) {
+      rule_location = base::StringPrintf("id %d", *id);
     } else {
       // Use one-based indices.
       rule_location = base::StringPrintf("index %zu", i + 1);
     }
 
     result.rule_parse_warnings.push_back(CreateInstallWarning(
-        json_path,
-        ErrorUtils::FormatErrorMessage(kRuleNotParsedWarning, rule_location,
-                                       base::UTF16ToUTF8(parse_error))));
+        json_path, ErrorUtils::FormatErrorMessage(
+                       kRuleNotParsedWarning, rule_location,
+                       base::UTF16ToUTF8(parsed_rule.error()))));
   }
 
   DCHECK_LE(result.rules.size(), rule_limit);
@@ -333,7 +330,7 @@ FileBackedRulesetSource FileBackedRulesetSource::CreateDynamic(
   return FileBackedRulesetSource(
       dynamic_ruleset_directory.AppendASCII(kDynamicRulesJSONFilename),
       dynamic_ruleset_directory.AppendASCII(kDynamicIndexedRulesFilename),
-      kDynamicRulesetID, GetDynamicAndSessionRuleLimit(), extension_id,
+      kDynamicRulesetID, GetDynamicRuleLimit(), extension_id,
       true /* enabled_by_default */);
 }
 

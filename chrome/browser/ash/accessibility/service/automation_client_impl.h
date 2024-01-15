@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,11 @@
 #define CHROME_BROWSER_ASH_ACCESSIBILITY_SERVICE_AUTOMATION_CLIENT_IMPL_H_
 
 #include "extensions/browser/api/automation_internal/automation_event_router_interface.h"
-#include "mojo/public/cpp/bindings/receiver.h"
-#include "mojo/public/cpp/bindings/remote.h"
-#include "services/accessibility/public/mojom/accessibility_service.mojom.h"
-
-namespace ax {
-class AccessibilityServiceRouter;
-}  // namespace ax
+#include "mojo/public/cpp/bindings/pending_associated_remote.h"
+#include "mojo/public/cpp/bindings/receiver_set.h"
+#include "mojo/public/cpp/bindings/remote_set.h"
+#include "services/accessibility/public/mojom/automation.mojom.h"
+#include "services/accessibility/public/mojom/automation_client.mojom.h"
 
 namespace ash {
 
@@ -26,15 +24,22 @@ class AutomationClientImpl : public ax::mojom::AutomationClient,
   AutomationClientImpl& operator=(const AutomationClientImpl&) = delete;
   ~AutomationClientImpl() override;
 
-  void Bind(ax::AccessibilityServiceRouter* router);
+  void BindAutomation(
+      mojo::PendingAssociatedRemote<ax::mojom::Automation> automation);
+  void BindAutomationClient(
+      mojo::PendingReceiver<ax::mojom::AutomationClient> automation_client);
+
+  void Disable();
 
  private:
+  friend class AccessibilityServiceClientTest;
+
   // The following are called by the Accessibility service, passing information
   // back to the OS.
+  // ax::mojom::AutomationClient:
+  void Enable(EnableCallback callback) override;
   // TODO(crbug.com/1355633): Override from ax::mojom::AutomationClient:
-  void Enable();
-  void Disable();
-  void EnableTree(const base::UnguessableToken& tree_id);
+  void EnableTree(const ui::AXTreeID& tree_id);
   void PerformAction(const ui::AXActionData& data);
 
   // Receive accessibility information from AutomationEventRouter in ash and
@@ -45,23 +50,24 @@ class AutomationClientImpl : public ax::mojom::AutomationClient,
                                    const gfx::Point& mouse_location,
                                    std::vector<ui::AXEvent> events) override;
   void DispatchAccessibilityLocationChange(
-      const ExtensionMsg_AccessibilityLocationChangeParams& params) override;
+      const content::AXLocationChangeNotificationDetails& details) override;
   void DispatchTreeDestroyedEvent(ui::AXTreeID tree_id) override;
   void DispatchActionResult(const ui::AXActionData& data,
                             bool result,
                             content::BrowserContext* browser_context) override;
   void DispatchGetTextLocationDataResult(
       const ui::AXActionData& data,
-      const absl::optional<gfx::Rect>& rect) override;
+      const std::optional<gfx::Rect>& rect) override;
 
-  // Here is the remote to Automation in the service.
-  mojo::Remote<ax::mojom::Automation> automation_;
+  mojo::AssociatedRemoteSet<ax::mojom::Automation> automation_remotes_;
 
   // This class is the AutomationClient, receiving AutomationClient calls
-  // from the AccessibilityService, therefore it is the Receiver.
-  mojo::Receiver<ax::mojom::AutomationClient> automation_client_receiver_{this};
+  // from the AccessibilityService.
+  mojo::ReceiverSet<ax::mojom::AutomationClient> automation_client_receivers_;
 
   bool bound_ = false;
 };
+
 }  // namespace ash
-#endif  // CHROME_BROWSER_ACCESSIBILITY_ACCESSIBILITY_CLIENT_IMPL_H_
+
+#endif  // CHROME_BROWSER_ASH_ACCESSIBILITY_SERVICE_AUTOMATION_CLIENT_IMPL_H_

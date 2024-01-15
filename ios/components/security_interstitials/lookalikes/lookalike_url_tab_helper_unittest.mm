@@ -5,19 +5,13 @@
 #import "ios/components/security_interstitials/lookalikes/lookalike_url_tab_helper.h"
 
 #import "base/test/metrics/histogram_tester.h"
-#import "base/test/scoped_feature_list.h"
-#import "components/lookalikes/core/features.h"
-#import "components/reputation/core/safety_tip_test_utils.h"
+#import "components/lookalikes/core/safety_tip_test_utils.h"
 #import "ios/components/security_interstitials/lookalikes/lookalike_url_container.h"
 #import "ios/components/security_interstitials/lookalikes/lookalike_url_tab_allow_list.h"
 #import "ios/web/public/navigation/web_state_policy_decider.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
 #import "net/base/mac/url_conversions.h"
 #import "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 class LookalikeUrlTabHelperTest : public PlatformTest {
  protected:
@@ -69,15 +63,15 @@ class LookalikeUrlTabHelperTest : public PlatformTest {
 // Also tests that UMA records correctly.
 TEST_F(LookalikeUrlTabHelperTest, ShouldAllowResponse) {
   GURL lookalike_url("https://xn--googl-fsa.com/");
-  reputation::InitializeSafetyTipConfig();
+  lookalikes::InitializeSafetyTipConfig();
 
   // Lookalike IDNs should be blocked.
   EXPECT_FALSE(ShouldAllowResponseUrl(lookalike_url, /*main_frame=*/true)
                    .ShouldAllowNavigation());
   histogram_tester_.ExpectUniqueSample(
-      lookalikes::kHistogramName,
+      lookalikes::kInterstitialHistogramName,
       static_cast<base::HistogramBase::Sample>(
-          NavigationSuggestionEvent::kMatchSkeletonTop500),
+          lookalikes::NavigationSuggestionEvent::kMatchSkeletonTop500),
       1);
 
   // Non-main frame navigations should be allowed.
@@ -94,15 +88,15 @@ TEST_F(LookalikeUrlTabHelperTest, ShouldAllowResponse) {
   EXPECT_TRUE(ShouldAllowResponseUrl(lookalike_url, /*main_frame=*/true)
                   .ShouldAllowNavigation());
 
-  histogram_tester_.ExpectTotalCount(lookalikes::kHistogramName, 1);
+  histogram_tester_.ExpectTotalCount(lookalikes::kInterstitialHistogramName, 1);
 }
 
 // Tests that ShouldAllowResponse properly allows lookalike navigations
 // when the domain has been allowlisted by the Safety Tips component.
 TEST_F(LookalikeUrlTabHelperTest, ShouldAllowResponseForAllowlistedDomains) {
   GURL lookalike_url("https://xn--googl-fsa.com/");
-  reputation::InitializeSafetyTipConfig();
-  reputation::SetSafetyTipAllowlistPatterns({"xn--googl-fsa.com/"}, {}, {});
+  lookalikes::InitializeSafetyTipConfig();
+  lookalikes::SetSafetyTipAllowlistPatterns({"xn--googl-fsa.com/"}, {}, {});
 
   EXPECT_TRUE(ShouldAllowResponseUrl(lookalike_url, /*main_frame=*/true)
                   .ShouldAllowNavigation());
@@ -112,7 +106,7 @@ TEST_F(LookalikeUrlTabHelperTest, ShouldAllowResponseForAllowlistedDomains) {
 // to IDNs.
 TEST_F(LookalikeUrlTabHelperTest, ShouldAllowResponseForPunycode) {
   GURL lookalike_url("https://ɴoτ-τoρ-ďoᛖaiɴ.com/");
-  reputation::InitializeSafetyTipConfig();
+  lookalikes::InitializeSafetyTipConfig();
 
   EXPECT_FALSE(ShouldAllowResponseUrl(lookalike_url, /*main_frame=*/true)
                    .ShouldAllowNavigation());

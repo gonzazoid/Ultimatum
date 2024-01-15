@@ -31,7 +31,7 @@ class TestLayout : public views::LayoutManagerBase {
       if (!IsChildIncludedInLayout(*it))
         continue;
       views::ChildLayout child_layout;
-      child_layout.child_view = *it;
+      child_layout.child_view = (*it).get();
       child_layout.visible = true;
       child_layout.bounds = gfx::Rect(x, 1, size_, size_);
       layout.child_layouts.push_back(child_layout);
@@ -76,7 +76,8 @@ class InterpolatingLayoutManagerTest : public testing::Test {
   views::View* host_view() { return host_view_.get(); }
 
  private:
-  raw_ptr<InterpolatingLayoutManager> layout_manager_ = nullptr;
+  raw_ptr<InterpolatingLayoutManager, DanglingUntriaged> layout_manager_ =
+      nullptr;
   std::unique_ptr<views::View> host_view_;
 };
 

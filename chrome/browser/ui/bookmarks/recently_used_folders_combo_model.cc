@@ -6,9 +6,12 @@
 
 #include <stddef.h>
 
+#include "base/feature_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/user_metrics.h"
 #include "base/observer_list.h"
 #include "base/ranges/algorithm.h"
+#include "chrome/browser/ui/ui_features.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/bookmark_utils.h"
@@ -28,6 +31,7 @@ const size_t kMaxMRUFolders = 5;
 struct RecentlyUsedFoldersComboModel::Item {
   enum Type {
     TYPE_NODE,
+    TYPE_ALL_BOOKMARKS_NODE,
     TYPE_SEPARATOR,
     TYPE_CHOOSE_ANOTHER_FOLDER
   };
@@ -37,7 +41,7 @@ struct RecentlyUsedFoldersComboModel::Item {
 
   bool operator==(const Item& item) const;
 
-  const BookmarkNode* node;
+  raw_ptr<const BookmarkNode> node;
   Type type;
 };
 
@@ -83,7 +87,7 @@ RecentlyUsedFoldersComboModel::RecentlyUsedFoldersComboModel(
 
   // And put the bookmark bar and other nodes at the end of the list.
   items_.emplace_back(model->bookmark_bar_node(), Item::TYPE_NODE);
-  items_.emplace_back(model->other_node(), Item::TYPE_NODE);
+  items_.emplace_back(model->other_node(), Item::TYPE_ALL_BOOKMARKS_NODE);
   if (model->mobile_node()->IsVisible())
     items_.emplace_back(model->mobile_node(), Item::TYPE_NODE);
   items_.emplace_back(nullptr, Item::TYPE_SEPARATOR);
@@ -102,6 +106,8 @@ std::u16string RecentlyUsedFoldersComboModel::GetItemAt(size_t index) const {
   switch (items_[index].type) {
     case Item::TYPE_NODE:
       return items_[index].node->GetTitle();
+    case Item::TYPE_ALL_BOOKMARKS_NODE:
+      return l10n_util::GetStringUTF16(IDS_BOOKMARKS_ALL_BOOKMARKS);
     case Item::TYPE_SEPARATOR:
       // This function should not be called for separators.
       NOTREACHED();
@@ -118,7 +124,7 @@ bool RecentlyUsedFoldersComboModel::IsItemSeparatorAt(size_t index) const {
   return items_[index].type == Item::TYPE_SEPARATOR;
 }
 
-absl::optional<size_t> RecentlyUsedFoldersComboModel::GetDefaultIndex() const {
+std::optional<size_t> RecentlyUsedFoldersComboModel::GetDefaultIndex() const {
   // TODO(pbos): Ideally we shouldn't have to handle `parent_node_` removal
   // here, the dialog should instead close immediately (and destroy `this`).
   // If that can be resolved, this should DCHECK that it != items_.end() and
@@ -127,6 +133,10 @@ absl::optional<size_t> RecentlyUsedFoldersComboModel::GetDefaultIndex() const {
   // TODO(pbos): Look at returning -1 here if there's no default index. Right
   // now a lot of code in Combobox assumes an index within `items_` bounds.
   auto it = base::ranges::find(items_, Item(parent_node_, Item::TYPE_NODE));
+  if (it == items_.end()) {
+    it = base::ranges::find(items_,
+                            Item(parent_node_, Item::TYPE_ALL_BOOKMARKS_NODE));
+  }
   return it == items_.end() ? 0 : static_cast<int>(it - items_.begin());
 }
 
@@ -218,8 +228,10 @@ void RecentlyUsedFoldersComboModel::BookmarkAllUserNodesRemoved(
 void RecentlyUsedFoldersComboModel::MaybeChangeParent(const BookmarkNode* node,
                                                       size_t selected_index) {
   DCHECK_LT(selected_index, items_.size());
-  if (items_[selected_index].type != Item::TYPE_NODE)
+  if (items_[selected_index].type != Item::TYPE_NODE &&
+      items_[selected_index].type != Item::TYPE_ALL_BOOKMARKS_NODE) {
     return;
+  }
 
   const BookmarkNode* new_parent = GetNodeAt(selected_index);
   if (new_parent != node->parent()) {
@@ -229,7 +241,7 @@ void RecentlyUsedFoldersComboModel::MaybeChangeParent(const BookmarkNode* node,
 }
 
 const BookmarkNode* RecentlyUsedFoldersComboModel::GetNodeAt(size_t index) {
-  return (index < items_.size()) ? items_[index].node : nullptr;
+  return (index < items_.size()) ? items_[index].node.get() : nullptr;
 }
 
 void RecentlyUsedFoldersComboModel::RemoveNode(const BookmarkNode* node) {

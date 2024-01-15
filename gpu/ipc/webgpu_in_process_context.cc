@@ -41,8 +41,7 @@ WebGPUInProcessContext::~WebGPUInProcessContext() {
 ContextResult WebGPUInProcessContext::Initialize(
     CommandBufferTaskExecutor* task_executor,
     const ContextCreationAttribs& attribs,
-    const SharedMemoryLimits& memory_limits,
-    ImageFactory* image_factory) {
+    const SharedMemoryLimits& memory_limits) {
   DCHECK(attribs.context_type == CONTEXT_TYPE_WEBGPU);
 
   if (attribs.context_type != CONTEXT_TYPE_WEBGPU ||
@@ -54,9 +53,10 @@ ContextResult WebGPUInProcessContext::Initialize(
   command_buffer_ =
       std::make_unique<InProcessCommandBuffer>(task_executor, GURL());
 
-  auto result = command_buffer_->Initialize(
-      attribs, image_factory, client_task_runner_, /*gr_shader_cache=*/nullptr,
-      /*activity_flags=*/nullptr);
+  auto result =
+      command_buffer_->Initialize(attribs, client_task_runner_,
+                                  /*gr_shader_cache=*/nullptr,
+                                  /*use_shader_cache_shm_count=*/nullptr);
   if (result != ContextResult::kSuccess) {
     DLOG(ERROR) << "Failed to initialize InProcessCommmandBuffer";
     return result;
@@ -105,6 +105,11 @@ ServiceTransferCache* WebGPUInProcessContext::GetTransferCacheForTest() const {
 InProcessCommandBuffer* WebGPUInProcessContext::GetCommandBufferForTest()
     const {
   return command_buffer_.get();
+}
+
+CommandBufferHelper* WebGPUInProcessContext::GetCommandBufferHelperForTest()
+    const {
+  return helper_.get();
 }
 
 }  // namespace gpu

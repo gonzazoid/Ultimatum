@@ -11,16 +11,12 @@
 #import "base/strings/sys_string_conversions.h"
 #import "components/consent_auditor/consent_auditor.h"
 #import "components/unified_consent/unified_consent_service.h"
-#import "ios/chrome/browser/signin/authentication_service.h"
-#import "ios/chrome/browser/signin/chrome_account_manager_service.h"
-#import "ios/chrome/browser/signin/identity_manager_factory.h"
-#import "ios/chrome/browser/signin/system_identity.h"
-#import "ios/chrome/browser/sync/sync_setup_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/chrome_account_manager_service.h"
+#import "ios/chrome/browser/signin/model/identity_manager_factory.h"
+#import "ios/chrome/browser/signin/model/system_identity.h"
+#import "ios/chrome/browser/sync/model/sync_setup_service.h"
 #import "ios/chrome/browser/ui/authentication/authentication_flow.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface UserSigninMediator ()
 
@@ -73,13 +69,10 @@
 }
 
 - (void)dealloc {
-  DCHECK(!self.authenticationFlow);
-  DCHECK(!self.identityManager);
-  DCHECK(!self.accountManagerService);
-  DCHECK(!self.consentAuditor);
-  DCHECK(!self.authenticationService);
-  DCHECK(!self.syncService);
-  DCHECK(!self.delegate);
+  DCHECK(!self.identityManager)
+      << "delegate: " << base::SysNSStringToUTF8([self.delegate description])
+      << ", AuthenticationFlow "
+      << base::SysNSStringToUTF8([self.authenticationFlow description]);
 }
 
 - (void)authenticateWithIdentity:(id<SystemIdentity>)identity
@@ -111,7 +104,7 @@
     // We need to set Sync requested in order to display the preferences
     // correctly and differentiate the special state where the user is
     // signed in, but the sync feature can't start yet.
-    self.syncService->GetUserSettings()->SetSyncRequested(true);
+    self.syncService->SetSyncFeatureRequested();
   } else {
     [self.delegate userSigninMediatorSigninFailed];
   }
@@ -131,50 +124,73 @@
                              SigninCoordinatorResultCanceledByUser];
     }
   };
-  [self cancelAndDismissAuthenticationFlowAnimated:NO completion:completion];
+  [self interruptWithAction:SigninCoordinatorInterrupt::DismissWithoutAnimation
+                 completion:completion];
 }
 
-- (void)cancelAndDismissAuthenticationFlowAnimated:(BOOL)animated
-                                        completion:(ProceduralBlock)completion {
-  [self.authenticationFlow cancelAndDismissAnimated:animated];
-
-  self.syncService->GetUserSettings()->SetSyncRequested(false);
-  DCHECK(self.delegate);
+- (void)interruptWithAction:(SigninCoordinatorInterrupt)action
+                 completion:(ProceduralBlock)completion {
+  [self.authenticationFlow interruptWithAction:action];
   switch (self.delegate.signinStateOnStart) {
-    case IdentitySigninStateSignedOut: {
-      self.authenticationService->SignOut(signin_metrics::ABORT_SIGNIN,
-                                          /*force_clear_browsing_data=*/false,
-                                          completion);
+    case IdentitySigninStateSignedOut:
+      switch (action) {
+        case SigninCoordinatorInterrupt::UIShutdownNoDismiss:
+          self.authenticationService->SignOut(
+              signin_metrics::ProfileSignout::kAbortSignin,
+              /*force_clear_browsing_data=*/false, nil);
+          if (completion) {
+            completion();
+          }
+          break;
+        case SigninCoordinatorInterrupt::DismissWithoutAnimation:
+        case SigninCoordinatorInterrupt::DismissWithAnimation:
+          self.authenticationService->SignOut(
+              signin_metrics::ProfileSignout::kAbortSignin,
+              /*force_clear_browsing_data=*/false, completion);
+          break;
+      }
       break;
-    }
-    case IdentitySigninStateSignedInWithSyncDisabled: {
-      DCHECK(!self.authenticationService->GetPrimaryIdentity(
-          signin::ConsentLevel::kSync));
+    case IdentitySigninStateSignedInWithSyncDisabled:
       if ([self.authenticationService->GetPrimaryIdentity(
               signin::ConsentLevel::kSignin)
               isEqual:self.delegate.signinIdentityOnStart]) {
-        // Call StopAndClear() to clear the encryption passphrase, in case the
-        // user entered it before canceling the sync opt-in flow.
-        _syncService->StopAndClear();
         if (completion)
           completion();
       } else {
         __weak __typeof(self) weakSelf = self;
-        self.authenticationService->SignOut(
-            signin_metrics::ABORT_SIGNIN,
-            /*force_clear_browsing_data=*/false, ^() {
-              [weakSelf signinWithIdentityOnStartAfterSignout];
-              if (completion)
-                completion();
-            });
+        switch (action) {
+          case SigninCoordinatorInterrupt::UIShutdownNoDismiss:
+            // NoDismiss action is called during a shutdown. Unfortunately,
+            // the completion block has to be called synchronously. We can't
+            // wait for the sign-out completion block.
+            // See crbug.com/1455216.
+            self.authenticationService->SignOut(
+                signin_metrics::ProfileSignout::kAbortSignin,
+                /*force_clear_browsing_data=*/false, nil);
+            if (completion) {
+              completion();
+            }
+            break;
+          case SigninCoordinatorInterrupt::DismissWithoutAnimation:
+          case SigninCoordinatorInterrupt::DismissWithAnimation:
+            self.authenticationService->SignOut(
+                signin_metrics::ProfileSignout::kAbortSignin,
+                /*force_clear_browsing_data=*/false, ^() {
+                  [weakSelf signinWithIdentityOnStartAfterSignout];
+                  if (completion) {
+                    completion();
+                  }
+                });
+            break;
+        }
       }
       break;
-    }
-    case IdentitySigninStateSignedInWithSyncEnabled: {
+    case IdentitySigninStateSignedInWithSyncEnabled:
       // Switching accounts is not possible without sign-out.
+      // TODO(crbug.com/1410747): DCHECK failures are reported for this
+      // codepath that requires more investigation.
       NOTREACHED();
       break;
-    }
   }
 }
 
@@ -195,7 +211,8 @@
   if (!authenticationService)
     return;
 
-  authenticationService->SignIn(identity);
+  signin_metrics::AccessPoint accessPoint = self.authenticationFlow.accessPoint;
+  authenticationService->SignIn(identity, accessPoint);
 }
 
 - (void)disconnect {
@@ -249,11 +266,13 @@
       base::SysNSStringToUTF8(identity.gaiaID),
       base::SysNSStringToUTF8(identity.userEmail));
   self.consentAuditor->RecordSyncConsent(coreAccountId, syncConsent);
-  self.authenticationService->GrantSyncConsent(identity);
+
+  signin_metrics::AccessPoint accessPoint = self.authenticationFlow.accessPoint;
+  self.authenticationService->GrantSyncConsent(identity, accessPoint);
 
   // FirstSetupComplete flag should be turned on after the authentication
   // service has granted user consent to start Sync when tapping "Yes, I'm in."
-  self.syncSetupService->SetFirstSetupComplete(
+  self.syncSetupService->SetInitialSyncFeatureSetupComplete(
       syncer::SyncFirstSetupCompleteSource::BASIC_FLOW);
   self.syncSetupService->CommitSyncChanges();
 

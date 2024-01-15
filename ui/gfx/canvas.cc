@@ -111,16 +111,15 @@ void Canvas::Save() {
 }
 
 void Canvas::SaveLayerAlpha(uint8_t alpha) {
-  canvas_->saveLayerAlpha(NULL, alpha);
+  canvas_->saveLayerAlphaf(alpha / 255.0f);
 }
 
 void Canvas::SaveLayerAlpha(uint8_t alpha, const Rect& layer_bounds) {
-  SkRect bounds(RectToSkRect(layer_bounds));
-  canvas_->saveLayerAlpha(&bounds, alpha);
+  canvas_->saveLayerAlphaf(RectToSkRect(layer_bounds), alpha / 255.0f);
 }
 
 void Canvas::SaveLayerWithFlags(const cc::PaintFlags& flags) {
-  canvas_->saveLayer(nullptr /* bounds */, &flags);
+  canvas_->saveLayer(flags);
 }
 
 void Canvas::Restore() {
@@ -301,7 +300,7 @@ void Canvas::DrawImageInt(const ImageSkia& image, int x, int y) {
 
 void Canvas::DrawImageInt(const ImageSkia& image, int x, int y, uint8_t a) {
   cc::PaintFlags flags;
-  flags.setAlpha(a);
+  flags.setAlphaf(a / 255.0f);
   DrawImageInt(image, x, y, flags);
 }
 
@@ -319,7 +318,7 @@ void Canvas::DrawImageInt(const ImageSkia& image,
                  SkFloatToScalar(1.0f / bitmap_scale));
   canvas_->translate(SkFloatToScalar(std::round(x * bitmap_scale)),
                      SkFloatToScalar(std::round(y * bitmap_scale)));
-  canvas_->saveLayer(nullptr, &flags);
+  canvas_->saveLayer(flags);
   canvas_->drawPicture(image_rep.GetPaintRecord());
   canvas_->restore();
 }
@@ -472,7 +471,7 @@ bool Canvas::InitPaintFlagsForTiling(const ImageSkia& image,
 }
 
 void Canvas::Transform(const gfx::Transform& transform) {
-  canvas_->concat(TransformToFlattenedSkMatrix(transform));
+  canvas_->concat(TransformToSkM44(transform));
 }
 
 SkBitmap Canvas::GetBitmap() const {

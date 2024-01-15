@@ -7,10 +7,10 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path_watcher.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -94,8 +94,8 @@ ConfigFileWatcher::ConfigFileWatcher(
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
     const base::FilePath& config_path)
     : impl_(new ConfigFileWatcherImpl(main_task_runner,
-                                      io_task_runner, config_path)) {
-}
+                                      io_task_runner,
+                                      config_path)) {}
 
 ConfigFileWatcher::~ConfigFileWatcher() {
   impl_->StopWatching();
@@ -182,8 +182,9 @@ void ConfigFileWatcherImpl::OnConfigUpdated(const base::FilePath& path,
   // the updated configuration file before it has been completely written.
   // If the writer moves the new configuration file into place atomically,
   // this delay may not be necessary.
-  if (!error && config_path_ == path)
+  if (!error && config_path_ == path) {
     config_updated_timer_->Reset();
+  }
 }
 
 void ConfigFileWatcherImpl::NotifyError() {

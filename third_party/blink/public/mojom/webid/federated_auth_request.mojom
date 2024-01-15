@@ -4,11 +4,13 @@
 
 module blink.mojom;
 
+import "third_party/blink/public/mojom/credentialmanagement/credential_manager.mojom";
 import "url/mojom/url.mojom";
+import "url/mojom/origin.mojom";
 
-// Implementation of the proposed WebID API.
+// Implementation of the proposed FedCM API.
 //
-// Proposal: https://github.com/WICG/WebID
+// Proposal: https://fedidcg.github.io/FedCM/
 
 // Represents the fetch result from a federated authentication request. It is
 // used to determine whether a JavaScript exception should be thrown, and what
@@ -23,53 +25,214 @@ enum RequestTokenStatus {
   kError,
 };
 
-enum LogoutRpsStatus {
+// Represents the fetch result from a federated user info request. It is
+// used to determine whether a JavaScript exception should be thrown, and what
+// the error message of such exception should say.
+enum RequestUserInfoStatus {
   kSuccess,
-  kErrorTooManyRequests,
   kError,
 };
 
-// The details of a single logout request from an identity provider.
-struct LogoutRpsRequest {
-  // URL to which the request will be sent. The origin is validated to
-  // have an associated active session.
-  url.mojom.Url url;
-
-  // Identifier for the account being logged out. This is used to verify that
-  // the logout request correlates to a previous sign-in event, and will
-  // result in the corresponding active session being terminated.
-  string account_id;
+// Represents the fetch result from a IdentityProvider.disconnect() request.
+// It is used to determine whether a JavaScript exception should be
+// thrown, and what the error message of such exception should say.
+enum DisconnectStatus {
+  kSuccess,
+  kErrorTooManyRequests,
+  kError
 };
 
-// The details of an identity provider.
-struct IdentityProvider {
+enum IdpSigninStatus {
+  kSignedIn,
+  kSignedOut
+};
+
+enum RpContext {
+  kSignIn,
+  kSignUp,
+  kUse,
+  kContinue
+};
+
+enum RpMode {
+  kButton,
+  kWidget
+};
+
+// The details of different mechanisms that allows the browser
+// to intermediate the exchange of the user's entities.
+// Currently, federated identities are supported, and digital credentials
+// are being prototyped.
+union IdentityProvider {
+  IdentityProviderRequestOptions federated;
+  DigitalCredentialProvider holder;
+};
+
+// The specification of the query to digital credentials.
+struct DigitalCredentialProvider {
+  map<string, string>? params;
+  DigitalCredentialSelector? selector;
+  string? protocol;
+  string? request;
+  string? publicKey;
+};
+
+// The requirements of the credentials that are being requested.
+struct DigitalCredentialSelector {
+  array<string> format;
+  string? doctype;
+  array<DigitalCredentialFieldRequirement> fields;
+};
+
+// The requirements that the verifier needs on specific fields.
+struct DigitalCredentialFieldRequirement {
+  // The name of the field (e.g. "org.iso.18013.5.1.family_name").
+  string name;
+
+  // Optionally, whether the field's value is equal to a specific value or not.
+  string? equals;
+};
+
+// The details of a federated identity provider.
+struct IdentityProviderConfig {
+  // Explicitly references a specific provider by a Config URL.
   url.mojom.Url config_url;
+
+  // Indirectly references providers that have been registered in the past
+  // rather than directly.
+  bool use_registered_config_urls;
 
   // Can be an empty string to be omitted in the request sent to the provider.
   string client_id;
+};
+
+// The request parameters for a navigator.credentials.get() FedCM call.
+struct IdentityProviderRequestOptions {
+  IdentityProviderConfig config;
 
   // Can be an empty string to be omitted in the request sent to the provider.
   string nonce;
+
+  // The login hint for this identity provider. Used by the relying party to
+  // specify which user account they would like to show in the FedCM dialog.
+  // This field is not sent to the provider, but rather used by the user agent.
+  string login_hint;
+
+  // The domain hint for this identity provider. Used by the relying party to
+  // specify the domain hint they require an account to belong to. The field
+  // is not sent to the provider, but rather used by the user agent.
+  string domain_hint;
+
+  // The scope of the federated identity request: name/email/photo or
+  // custom ones (e.g. "access to calendar", "access to social graph", etc).
+  array<string> scope;
+
+  // The types of token the relying party wants to get back (e.g. an id token
+  // or an access token).
+  // More than one type can be requested, e.g. to support OIDC flows:
+  // https://openid.net/specs/openid-connect-core-1_0.html#code-id_token-tokenExample
+  array<string> responseType;
+
+  // Additional parameters that the relying party can send to the IdP after
+  // the user's permission has been gathered.
+  map<string, string> params;
+};
+
+// The information passed in an IdentityProvider.disconnect() call.
+struct IdentityCredentialDisconnectOptions {
+  IdentityProviderConfig config;
+
+  // The account hint for which the disconnect ought to happen.
+  string account_hint;
+};
+
+// The list of user information that can be returned to an identity provider during a UserInfo API call.
+struct IdentityUserInfo {
+  string email;
+  string given_name;
+  string name;
+  string picture;
+};
+
+// The parameters for a get call for identity provider(s).
+struct IdentityProviderGetParameters {
+  // Details of identity provider(s).
+  array<IdentityProvider> providers;
+
+  // Controls the wording of the FedCM prompt.
+  RpContext context;
+
+  // Controls the UX of the FedCM prompt: modality, behavior when the
+  // user is signed-out, etc.
+  RpMode mode;
+};
+
+// The error which occurred during the retrieval of a token.
+struct TokenError {
+  // Type of error which resulted in an IdentityCredential not being created.
+  string? code;
+
+  // String URL where the user can learn more information about the error.
+  string? url;
 };
 
 // Create a federated sign-in request using the specified provider.
 // This interface is called from a renderer process and implemented in the
 // browser process.
 interface FederatedAuthRequest {
-  // Requests a token to be generated, given an array of IdentityProviders.
+  // Requests a token to be generated, given an array of
+  // IdentityProviderGetParameters.
   // Returns:
+  // - Status of token request.
   // - Configuration URL of the identity provider that the user selected.
   //   A null URL is returned if the token request failed or did not occur due
   //   to an error earlier in the flow.
   // - Raw content of the token.
-  RequestToken(array<IdentityProvider> identity_providers,
-               bool prefer_auto_sign_in, bool show_iframe_requester) =>
-      (RequestTokenStatus status, url.mojom.Url? selected_identity_provider_config_url, string? token);
+  // - The error which occurred during the retrieval of a token.
+  // - Whether the account was automatically selected.
+  RequestToken(array<IdentityProviderGetParameters> idp_get_params,
+      CredentialMediationRequirement requirement) =>
+      (RequestTokenStatus status,
+      url.mojom.Url? selected_identity_provider_config_url,
+      string? token,
+      TokenError? error,
+      bool is_auto_selected);
+
+  // Requests user info to be generated, given an IDP config.
+  // Returns an IdentityUserInfo for each of the user's accounts.
+  RequestUserInfo(IdentityProviderConfig provider) =>
+      (RequestUserInfoStatus status, array<IdentityUserInfo>? user_info);
 
   // Cancels the pending token request, if any.
   CancelTokenRequest();
 
-  // Contact the list of Relying Party logout endpoints and account IDs to
-  // attempt to initiate user logout.
-  LogoutRps(array<LogoutRpsRequest> rp_logout_requests) => (LogoutRpsStatus status);
+  // Resolve the token request from a JS call from a WebView dialog,
+  // when the id_assertion_endpoint returns a continue_on rather than the
+  // actual token.
+  ResolveTokenRequest(string token) => (bool success);
+
+  // Marks the user as logged in/out to the IDP on this origin.
+  SetIdpSigninStatus(url.mojom.Origin origin, IdpSigninStatus status);
+
+  // Registers the url as an IdP's configURL of the user's preference.
+  RegisterIdP(url.mojom.Url url) => (bool accepted);
+
+  // Unregisters the url as an IdP's configURL of the user's preference.
+  UnregisterIdP(url.mojom.Url url) => (bool success);
+
+  // Closes the modal dialog view, if any.
+  CloseModalDialogView();
+
+  // Require user mediation with navigator.credentials.preventSilentAccess() as
+  // defined in https://w3c.github.io/webappsec-credential-management/#user-mediation
+  // TODO(https://crbug.com/1441075): There's `PreventSilentAccess` in
+  // credential_manager.mojom but that's specific to PasswordManager and it's
+  // hard to reuse it as-is. We should unify the implementation for different
+  // CredentialTypes and avoid the duplication eventually.
+  PreventSilentAccess() => ();
+
+  // Disconnects the sharing permission for the specified |account_id| from
+  // |provider| for the RP identified by |client_id|.
+  Disconnect(IdentityCredentialDisconnectOptions options) =>
+      (DisconnectStatus status);
 };

@@ -12,7 +12,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
@@ -38,8 +39,7 @@ class ServiceWorkerContextWrapper;
 //
 // Lives on the UI thread.
 class CONTENT_EXPORT DevToolsBackgroundServicesContextImpl
-    : public DevToolsBackgroundServicesContext,
-      public base::RefCountedThreadSafe<DevToolsBackgroundServicesContextImpl> {
+    : public DevToolsBackgroundServicesContext {
  public:
   using GetLoggedBackgroundServiceEventsCallback = base::OnceCallback<void(
       std::vector<devtools::proto::BackgroundServiceEvent>)>;
@@ -57,6 +57,7 @@ class CONTENT_EXPORT DevToolsBackgroundServicesContextImpl
   DevToolsBackgroundServicesContextImpl(
       BrowserContext* browser_context,
       scoped_refptr<ServiceWorkerContextWrapper> service_worker_context);
+  ~DevToolsBackgroundServicesContextImpl() override;
 
   DevToolsBackgroundServicesContextImpl(
       const DevToolsBackgroundServicesContextImpl&) = delete;
@@ -70,7 +71,7 @@ class CONTENT_EXPORT DevToolsBackgroundServicesContextImpl
   bool IsRecording(DevToolsBackgroundService service) override;
   void LogBackgroundServiceEvent(
       uint64_t service_worker_registration_id,
-      const url::Origin& origin,
+      blink::StorageKey storage_key,
       DevToolsBackgroundService service,
       const std::string& event_name,
       const std::string& instance_id,
@@ -99,9 +100,6 @@ class CONTENT_EXPORT DevToolsBackgroundServicesContextImpl
 
  private:
   friend class DevToolsBackgroundServicesContextTest;
-  friend class base::RefCountedThreadSafe<
-      DevToolsBackgroundServicesContextImpl>;
-  ~DevToolsBackgroundServicesContextImpl() override;
 
   // Whether |service| has an expiration time and it was exceeded.
   bool IsRecordingExpired(devtools::proto::BackgroundService service);
@@ -116,7 +114,7 @@ class CONTENT_EXPORT DevToolsBackgroundServicesContextImpl
 
   void OnRecordingTimeExpired(devtools::proto::BackgroundService service);
 
-  BrowserContext* browser_context_;
+  const raw_ref<BrowserContext> browser_context_;
   scoped_refptr<ServiceWorkerContextWrapper> service_worker_context_;
 
   // Maps from the background service to the time up until the events can be

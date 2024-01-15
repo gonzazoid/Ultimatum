@@ -12,6 +12,7 @@ import "mojo/public/mojom/base/time.mojom";
 import "services/network/public/mojom/network_types.mojom";
 import "skia/public/mojom/skcolor.mojom";
 import "third_party/blink/public/mojom/browser_interface_broker.mojom";
+import "third_party/blink/public/mojom/origin_trials/origin_trials_settings.mojom";
 import "third_party/blink/public/mojom/user_agent/user_agent_metadata.mojom";
 import "ui/color/color_id.mojom";
 
@@ -39,15 +40,18 @@ struct UpdateSystemColorInfoParams {
   // renderer's ColorProviders.
   map<SystemThemeColor, uint32> colors;
 
+  // Accent color used by the system. Currently only set on ChromeOS.
+  uint32? accent_color;
+
   // Maps used to reconstruct ColorProvider instances in the renderer.
   map<color.mojom.RendererColorId, skia.mojom.SkColor> light_colors;
   map<color.mojom.RendererColorId, skia.mojom.SkColor> dark_colors;
+  map<color.mojom.RendererColorId, skia.mojom.SkColor> forced_colors_map;
 };
 
 // The background state for the render process.  When backgrounded the process's
-// priority will be lower (via base::Process::SetProcessBackgrounded()) if
-// allowed on the current platform (as determined by
-// base::Process::CanBackgroundProcesses()).
+// priority will be lower (via base::Process::SetPriority()) if allowed on the
+// current platform (as determined by base::Process::CanSetPriority()).
 enum RenderProcessBackgroundState {
   // The renderer process has not been backgrounded, a hidden renderer may still
   // be foregrounded, e.g. when it is playing audio.
@@ -120,8 +124,7 @@ interface Renderer {
   UpdateScrollbarTheme(UpdateScrollbarThemeParams params);
 
   // Notification that the OS X Aqua color preferences changed.
-  OnSystemColorsChanged(int32 aqua_color_variant, string highlight_text_color,
-                        string highlight_color);
+  OnSystemColorsChanged(int32 aqua_color_variant);
 
   // Tells the renderer process the new system color info.
   UpdateSystemColorInfo(UpdateSystemColorInfoParams params);
@@ -130,10 +133,17 @@ interface Renderer {
   // pages containing plugins.
   PurgePluginListCache(bool reload_pages);
 
+  // Tells the renderer to purge its in-memory resource cache.
+  PurgeResourceCache() => ();
 
   // Tells the renderer process of a change in visibility or background state.
   SetProcessState(RenderProcessBackgroundState background_state,
                   RenderProcessVisibleState visible_state);
+
+  // Asks the renderer process to modify its internal settings to bias towards
+  // energy efficiency because the embedder is in battery saver mode. The
+  // default is `false`.
+  SetBatterySaverMode(bool battery_saver_mode_enabled);
 
   // Tells the renderer process that it has been locked to a site (i.e., a
   // scheme plus eTLD+1, such as https://google.com), or to a more specific
@@ -154,6 +164,11 @@ interface Renderer {
   // This is called at most once, prior to committing a navigation.
   SetIsCrossOriginIsolated(bool value);
 
+  // Sets whether `--disable-web-security` has been set.
+  //
+  // This is called at most once on process startup.
+  SetIsWebSecurityDisabled(bool value);
+
   // Set whether this renderer process is allowed to use Isolated Context APIs.
   // Similarly to the `SetIsCrossOriginIsolated()` method above, this flag is
   // process global, and called at most once, prior to committing a navigation.
@@ -161,27 +176,25 @@ interface Renderer {
   // TODO(crbug.com/1206150): We need a specification for this restriction.
   SetIsIsolatedContext(bool value);
 
-  // Initialize renderer user agent string, user agent metadata and CORS exempt
-  // header list on renderer startup.
+  // Initialize renderer user agent string, user agent metadata, CORS exempt
+  // header list and origin trials settings on renderer startup.
   //
   // |user_agent| sets the user-agent string. This is needed because getting the
   // value in the renderer from the system leads to a wrong value due to
   // sandboxing. This must be called as early as possible, during the renderer
   // process initialization.
   //
-  // |full_user_agent| sets the full user-agent with high-entropy information.
-  //
-  // |reduced_user_agent| sets a user-agent with high-entropy information
-  // reduced to common values.
-  //
   // |metadata| sets the user agent metadata. This will replace `SetUserAgent()`
   // if we decide to ship https://github.com/WICG/ua-client-hints.
   //
   // |cors_exempt_header_list| sets the CORS exempt header list for sanity
   // checking (e.g. DCHECKs).
+  //
+  // |origin_trials_settings| sets the settings used to build a
+  // blink::OriginTrialPolicy for the renderer. It can be null if the embedder
+  // does not support origin trials.
   InitializeRenderer(string user_agent,
-                     string full_user_agent,
-                     string reduced_user_agent,
                      blink.mojom.UserAgentMetadata metadata,
-                     array<string> cors_exempt_header_list);
+                     array<string> cors_exempt_header_list,
+                     blink.mojom.OriginTrialsSettings? origin_trials_settings);
 };

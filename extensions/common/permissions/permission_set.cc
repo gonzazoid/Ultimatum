@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include "base/containers/contains.h"
 #include "base/memory/ptr_util.h"
 #include "extensions/common/permissions/permissions_info.h"
 #include "extensions/common/url_pattern.h"
@@ -17,7 +18,7 @@ using extensions::mojom::APIPermissionID;
 
 namespace extensions {
 
-PermissionSet::PermissionSet() {}
+PermissionSet::PermissionSet() = default;
 PermissionSet::PermissionSet(APIPermissionSet apis,
                              ManifestPermissionSet manifest_permissions,
                              URLPatternSet explicit_hosts,
@@ -27,11 +28,10 @@ PermissionSet::PermissionSet(APIPermissionSet apis,
       explicit_hosts_(std::move(explicit_hosts)),
       scriptable_hosts_(std::move(scriptable_hosts)) {
   CleanExplicitHostPaths();
-  InitImplicitPermissions();
   InitEffectiveHosts();
 }
 
-PermissionSet::~PermissionSet() {}
+PermissionSet::~PermissionSet() = default;
 
 PermissionSet::PermissionSet(PermissionSet&& other) = default;
 
@@ -148,7 +148,7 @@ bool PermissionSet::IsEmpty() const {
 }
 
 bool PermissionSet::HasAPIPermission(APIPermissionID id) const {
-  return apis().find(id) != apis().end();
+  return base::Contains(apis(), id);
 }
 
 bool PermissionSet::HasAPIPermission(const std::string& permission_name) const {
@@ -215,9 +215,7 @@ bool PermissionSet::HasEffectiveAccessToURL(const GURL& url) const {
 void PermissionSet::SetAPIPermissions(APIPermissionSet new_apis) {
   apis_ = std::move(new_apis);
   // Since we're rewriting the API permissions, we need to re-initialize the
-  // value of whether to warn about all hosts and re-add any implicit API
-  // permissions.
-  InitImplicitPermissions();
+  // value of whether to warn about all hosts.
   api_permissions_should_warn_all_hosts_ = UNINITIALIZED;
 }
 
@@ -277,16 +275,6 @@ void PermissionSet::CleanExplicitHostPaths() {
 
   for (URLPattern& pattern : modified_patterns)
     explicit_hosts_.AddPattern(std::move(pattern));
-}
-
-void PermissionSet::InitImplicitPermissions() {
-  // The downloads permission implies the internal version as well.
-  if (apis_.find(APIPermissionID::kDownloads) != apis_.end())
-    apis_.insert(APIPermissionID::kDownloadsInternal);
-
-  // The fileBrowserHandler permission implies the internal version as well.
-  if (apis_.find(APIPermissionID::kFileBrowserHandler) != apis_.end())
-    apis_.insert(APIPermissionID::kFileBrowserHandlerInternal);
 }
 
 void PermissionSet::InitEffectiveHosts() {

@@ -13,10 +13,12 @@
 #include "ash/system/accessibility/floating_accessibility_detailed_controller.h"
 #include "ash/system/accessibility/floating_accessibility_view.h"
 #include "ash/system/locale/locale_update_controller_impl.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/display/display_observer.h"
 
 namespace ash {
 
-class AccessibilityControllerImpl;
+class AccessibilityController;
 class FloatingAccessibilityView;
 
 // Controls the floating accessibility menu.
@@ -25,10 +27,11 @@ class ASH_EXPORT FloatingAccessibilityController
       public FloatingAccessibilityDetailedController::Delegate,
       public TrayBubbleView::Delegate,
       public LocaleChangeObserver,
-      public AccessibilityObserver {
+      public AccessibilityObserver,
+      public display::DisplayObserver {
  public:
   explicit FloatingAccessibilityController(
-      AccessibilityControllerImpl* accessibility_controller);
+      AccessibilityController* accessibility_controller);
   FloatingAccessibilityController(const FloatingAccessibilityController&) =
       delete;
   FloatingAccessibilityController& operator=(
@@ -42,8 +45,14 @@ class ASH_EXPORT FloatingAccessibilityController
   // AccessibilityObserver:
   void OnAccessibilityStatusChanged() override;
 
+  // display::DisplayObserver:
+  void OnDisplayMetricsChanged(const display::Display& display,
+                               uint32_t changed_metrics) override;
+
   // Focuses on the first element in the floating menu.
   void FocusOnMenu();
+
+  FloatingAccessibilityBubbleView* bubble_view() { return bubble_view_; }
 
  private:
   friend class FloatingAccessibilityControllerTest;
@@ -56,12 +65,14 @@ class ASH_EXPORT FloatingAccessibilityController
   // TrayBubbleView::Delegate:
   void BubbleViewDestroyed() override;
   std::u16string GetAccessibleNameForBubble() override;
+  void HideBubble(const TrayBubbleView* bubble_view) override;
+
   // LocaleChangeObserver:
   void OnLocaleChanged() override;
 
-  FloatingAccessibilityView* menu_view_ = nullptr;
-  FloatingAccessibilityBubbleView* bubble_view_ = nullptr;
-  views::Widget* bubble_widget_ = nullptr;
+  raw_ptr<FloatingAccessibilityView> menu_view_ = nullptr;
+  raw_ptr<FloatingAccessibilityBubbleView> bubble_view_ = nullptr;
+  raw_ptr<views::Widget> bubble_widget_ = nullptr;
 
   bool detailed_view_shown_ = false;
 
@@ -74,7 +85,9 @@ class ASH_EXPORT FloatingAccessibilityController
   // Used in tests to notify on the menu layout change events.
   base::RepeatingClosure on_layout_change_;
 
-  AccessibilityControllerImpl* const accessibility_controller_;  // Owns us.
+  display::ScopedDisplayObserver display_observer_{this};
+
+  const raw_ptr<AccessibilityController> accessibility_controller_;  // Owns us.
 };
 
 }  // namespace ash

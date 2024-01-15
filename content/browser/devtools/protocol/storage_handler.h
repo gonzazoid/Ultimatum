@@ -9,27 +9,32 @@
 #include <string>
 
 #include "base/memory/weak_ptr.h"
+#include "base/scoped_observation.h"
 #include "components/services/storage/shared_storage/shared_storage_manager.h"
+#include "content/browser/attribution_reporting/attribution_observer.h"
 #include "content/browser/devtools/protocol/devtools_domain_handler.h"
 #include "content/browser/devtools/protocol/storage.h"
 #include "content/browser/interest_group/interest_group_manager_impl.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/shared_storage/shared_storage_worklet_host_manager.h"
+#include "storage/browser/quota/quota_manager.h"
 
 namespace storage {
 class QuotaOverrideHandle;
 }
 
 namespace content {
+class AttributionManager;
 class StoragePartition;
 
 namespace protocol {
 
-class StorageHandler : public DevToolsDomainHandler,
-                       public Storage::Backend,
-                       private content::InterestGroupManagerImpl::
-                           InterestGroupObserverInterface {
+class StorageHandler
+    : public DevToolsDomainHandler,
+      public Storage::Backend,
+      public content::InterestGroupManagerImpl::InterestGroupObserver,
+      public AttributionObserver {
  public:
   explicit StorageHandler(bool client_is_trusted);
 
@@ -82,7 +87,11 @@ class StorageHandler : public DevToolsDomainHandler,
 
   // Ignores all double calls to track an origin.
   Response TrackCacheStorageForOrigin(const std::string& origin) override;
+  Response TrackCacheStorageForStorageKey(
+      const std::string& storage_key) override;
   Response UntrackCacheStorageForOrigin(const std::string& origin) override;
+  Response UntrackCacheStorageForStorageKey(
+      const std::string& storage_key) override;
   Response TrackIndexedDBForOrigin(const std::string& origin) override;
   Response TrackIndexedDBForStorageKey(const std::string& storage_key) override;
   Response UntrackIndexedDBForOrigin(const std::string& origin) override;
@@ -107,7 +116,36 @@ class StorageHandler : public DevToolsDomainHandler,
   void GetSharedStorageEntries(
       const std::string& owner_origin_string,
       std::unique_ptr<GetSharedStorageEntriesCallback> callback) override;
+  void SetSharedStorageEntry(
+      const std::string& owner_origin_string,
+      const std::string& key,
+      const std::string& value,
+      Maybe<bool> ignore_if_present,
+      std::unique_ptr<SetSharedStorageEntryCallback> callback) override;
+  void DeleteSharedStorageEntry(
+      const std::string& owner_origin_string,
+      const std::string& key,
+      std::unique_ptr<DeleteSharedStorageEntryCallback> callback) override;
+  void ClearSharedStorageEntries(
+      const std::string& owner_origin_string,
+      std::unique_ptr<ClearSharedStorageEntriesCallback> callback) override;
   Response SetSharedStorageTracking(bool enable) override;
+  void ResetSharedStorageBudget(
+      const std::string& owner_origin_string,
+      std::unique_ptr<ResetSharedStorageBudgetCallback> callback) override;
+
+  DispatchResponse SetStorageBucketTracking(
+      const std::string& serialized_storage_key,
+      bool enable) override;
+
+  DispatchResponse DeleteStorageBucket(
+      std::unique_ptr<protocol::Storage::StorageBucket> bucket) override;
+
+  void SetAttributionReportingLocalTestingMode(
+      bool enabled,
+      std::unique_ptr<SetAttributionReportingLocalTestingModeCallback>)
+      override;
+  Response SetAttributionReportingTracking(bool enable) override;
 
  private:
   // See definition for lifetime information.
@@ -115,6 +153,7 @@ class StorageHandler : public DevToolsDomainHandler,
   class IndexedDBObserver;
   class InterestGroupObserver;
   class SharedStorageObserver;
+  class QuotaManagerObserver;
 
   // Not thread safe.
   CacheStorageObserver* GetCacheStorageObserver();
@@ -123,13 +162,25 @@ class StorageHandler : public DevToolsDomainHandler,
   SharedStorageWorkletHostManager* GetSharedStorageWorkletHostManager();
   absl::variant<protocol::Response, storage::SharedStorageManager*>
   GetSharedStorageManager();
+  storage::QuotaManagerProxy* GetQuotaManagerProxy();
+  AttributionManager* GetAttributionManager();
 
-  // content::InterestGroupManagerImpl::InterestGroupObserverInterface
+  // content::InterestGroupManagerImpl::InterestGroupObserver
   void OnInterestGroupAccessed(
       const base::Time& accessTime,
-      InterestGroupManagerImpl::InterestGroupObserverInterface::AccessType type,
-      const std::string& owner_origin,
+      InterestGroupManagerImpl::InterestGroupObserver::AccessType type,
+      const url::Origin& owner_origin,
       const std::string& name) override;
+
+  // AttributionObserver
+  void OnSourceHandled(
+      const StorableSource&,
+      base::Time source_time,
+      std::optional<uint64_t> cleared_debug_key,
+      attribution_reporting::mojom::StoreSourceResult) override;
+  void OnTriggerHandled(const AttributionTrigger&,
+                        std::optional<uint64_t> cleared_debug_key,
+                        const CreateReportResult&) override;
 
   void NotifySharedStorageAccessed(
       const base::Time& access_time,
@@ -139,18 +190,22 @@ class StorageHandler : public DevToolsDomainHandler,
       const std::string& owner_origin,
       const SharedStorageEventParams& params);
 
-  void NotifyCacheStorageListChanged(const std::string& origin);
-  void NotifyCacheStorageContentChanged(const std::string& origin,
-                                        const std::string& name);
-  void NotifyIndexedDBListChanged(const std::string& origin,
-                                  const std::string& storage_key);
-  void NotifyIndexedDBContentChanged(const std::string& origin,
-                                     const std::string& storage_key,
+  void NotifyCacheStorageListChanged(
+      const storage::BucketLocator& bucket_locator);
+  void NotifyCacheStorageContentChanged(
+      const storage::BucketLocator& bucket_locator,
+      const std::string& name);
+  void NotifyIndexedDBListChanged(storage::BucketLocator bucket_locator);
+  void NotifyIndexedDBContentChanged(storage::BucketLocator bucket_locator,
                                      const std::u16string& database_name,
                                      const std::u16string& object_store_name);
+  void NotifyCreateOrUpdateBucket(const storage::BucketInfo& bucket_info);
+  void NotifyDeleteBucket(const storage::BucketLocator& bucket_locator);
 
   Response FindStoragePartition(const Maybe<std::string>& browser_context_id,
                                 StoragePartition** storage_partition);
+
+  void ResetAttributionReporting();
 
   std::unique_ptr<Storage::Frontend> frontend_;
   StoragePartition* storage_partition_{nullptr};
@@ -158,10 +213,14 @@ class StorageHandler : public DevToolsDomainHandler,
   std::unique_ptr<CacheStorageObserver> cache_storage_observer_;
   std::unique_ptr<IndexedDBObserver> indexed_db_observer_;
   std::unique_ptr<SharedStorageObserver> shared_storage_observer_;
+  std::unique_ptr<QuotaManagerObserver> quota_manager_observer_;
 
   // Exposes the API for managing storage quota overrides.
   std::unique_ptr<storage::QuotaOverrideHandle> quota_override_handle_;
   bool client_is_trusted_;
+
+  base::ScopedObservation<AttributionManager, AttributionObserver>
+      attribution_observation_{this};
 
   base::WeakPtrFactory<StorageHandler> weak_ptr_factory_{this};
 };

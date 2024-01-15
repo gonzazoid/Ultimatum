@@ -12,6 +12,7 @@
 #include "ash/system/tray/tray_bubble_view.h"
 #include "ash/system/tray/tray_bubble_wrapper.h"
 #include "ash/system/virtual_keyboard/virtual_keyboard_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/ime/ash/ime_keyset.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 
@@ -40,14 +41,12 @@ class ASH_EXPORT ImeMenuTray : public TrayBackgroundView,
   ImeMenuTray& operator=(const ImeMenuTray&) = delete;
   ~ImeMenuTray() override;
 
+  // Callback called when this TrayBackgroundView is pressed.
+  void OnTrayButtonPressed();
+
   // Shows the virtual keyboard with the given keyset: emoji, handwriting or
   // voice.
   void ShowKeyboardWithKeyset(input_method::ImeKeyset keyset);
-
-  // Returns true if the menu should show emoji, handwriting and voice buttons
-  // on the bottom. Otherwise, the menu will show a 'Customize...' bottom row
-  // for non-MD UI, and a Settings button in the title row for MD.
-  bool ShouldShowBottomButtons();
 
   // Returns whether the virtual keyboard toggle should be shown in shown in the
   // opt-in IME menu.
@@ -59,7 +58,7 @@ class ASH_EXPORT ImeMenuTray : public TrayBackgroundView,
   void HandleLocaleChange() override;
   void HideBubbleWithView(const TrayBubbleView* bubble_view) override;
   void ClickedOutsideBubble() override;
-  void OnTrayActivated(const ui::Event& event) override;
+  void UpdateTrayItemColor(bool is_active) override;
   void CloseBubble() override;
   void ShowBubble() override;
   TrayBubbleView* GetBubbleView() override;
@@ -81,6 +80,10 @@ class ASH_EXPORT ImeMenuTray : public TrayBackgroundView,
   // VirtualKeyboardObserver:
   void OnKeyboardSuppressionChanged(bool suppressed) override;
 
+  // Returns true if any of the bottom buttons in the IME tray bubble are shown.
+  // Only used in test code.
+  bool AnyBottomButtonShownForTest() const;
+
  private:
   friend class ImeMenuTrayTest;
 
@@ -92,15 +95,19 @@ class ASH_EXPORT ImeMenuTray : public TrayBackgroundView,
   void CreateLabel();
   void CreateImageView();
 
-  ImeControllerImpl* ime_controller_;
+  // Updates the color of `image_view_` if `is_image` is true or the color of
+  // `label_` otherwise.
+  void UpdateTrayImageOrLabelColor(bool is_image);
+
+  raw_ptr<ImeControllerImpl> ime_controller_;
 
   // Bubble for default and detailed views.
   std::unique_ptr<TrayBubbleWrapper> bubble_;
-  ImeListView* ime_list_view_;
+  raw_ptr<ImeListView> ime_list_view_;
 
   // Only one of |label_| and |image_view_| can be non null at the same time.
-  views::Label* label_;
-  views::ImageView* image_view_;
+  raw_ptr<views::Label> label_;
+  raw_ptr<views::ImageView> image_view_;
 
   bool keyboard_suppressed_;
   bool show_bubble_after_keyboard_hidden_;

@@ -10,10 +10,10 @@ import './strings.m.js';
 import 'chrome://resources/cr_elements/cr_toolbar/cr_toolbar.js';
 import 'chrome://resources/cr_elements/cr_toolbar/cr_toolbar_search_field.js';
 
-import {CrToolbarElement} from 'chrome://resources/cr_elements/cr_toolbar/cr_toolbar.js';
-import {CrToolbarSearchFieldElement} from 'chrome://resources/cr_elements/cr_toolbar/cr_toolbar_search_field.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import type {CrToolbarElement} from 'chrome://resources/cr_elements/cr_toolbar/cr_toolbar.js';
+import type {CrToolbarSearchFieldElement} from 'chrome://resources/cr_elements/cr_toolbar/cr_toolbar_search_field.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {setSearchTerm} from './actions.js';
@@ -82,7 +82,7 @@ export class BookmarksToolbarElement extends BookmarksToolbarElementBase {
         .getSearchField();
   }
 
-  private onMenuButtonOpenTap_(e: Event) {
+  private onMenuButtonOpenClick_(e: Event) {
     this.dispatchEvent(new CustomEvent('open-command-menu', {
       bubbles: true,
       composed: true,
@@ -93,14 +93,14 @@ export class BookmarksToolbarElement extends BookmarksToolbarElementBase {
     }));
   }
 
-  private onDeleteSelectionTap_() {
+  private onDeleteSelectionClick_() {
     const selection = this.selectedItems_;
     const commandManager = BookmarksCommandManagerElement.getInstance();
     assert(commandManager.canExecute(Command.DELETE, selection));
     commandManager.handle(Command.DELETE, selection);
   }
 
-  private onClearSelectionTap_() {
+  private onClearSelectionClick_() {
     const commandManager = BookmarksCommandManagerElement.getInstance();
     assert(
         commandManager.canExecute(Command.DESELECT_ALL, this.selectedItems_));

@@ -6,6 +6,7 @@
 #define CHROMEOS_ASH_SERVICES_ASSISTANT_MEDIA_HOST_H_
 
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/unguessable_token.h"
 #include "chromeos/ash/services/libassistant/public/mojom/media_controller.mojom-forward.h"
@@ -56,8 +57,6 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) MediaHost {
   class LibassistantMediaDelegate;
   class ChromeosMediaStateObserver;
 
-  libassistant::mojom::MediaController& libassistant_media_controller();
-
   void UpdateMediaState(const base::UnguessableToken& media_session_id,
                         libassistant::mojom::MediaStatePtr media_state);
   void ResetMediaState();
@@ -66,11 +65,11 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) MediaHost {
   void StopObservingMediaController();
 
   // Owned by our parent |AssistantManagerServiceImpl|.
-  const base::ObserverList<AssistantInteractionSubscriber>* const
+  const raw_ptr<const base::ObserverList<AssistantInteractionSubscriber>>
       interaction_subscribers_;
   // Owned by our parent |AssistantManagerServiceImpl|.
-  libassistant::mojom::MediaController* libassistant_media_controller_ =
-      nullptr;
+  raw_ptr<libassistant::mojom::MediaController, DanglingUntriaged>
+      libassistant_media_controller_ = nullptr;
 
   std::unique_ptr<AssistantMediaSession> media_session_;
   mojo::Remote<media_session::mojom::MediaController>

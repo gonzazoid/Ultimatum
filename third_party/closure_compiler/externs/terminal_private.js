@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors
+// Copyright 2023 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -115,9 +115,7 @@ chrome.terminalPrivate.openSettingsSubpage = function(subpage, callback) {};
  * Terminal, e.g. which feature flags are enabled.
  * @param {function({
  *   alternative_emulator: boolean,
- *   multi_profile: boolean,
- *   sftp: boolean,
- *   tmux_integration: boolean
+ *   tast: boolean
  * }): void} callback Callback that will be called with the info object.
  */
 chrome.terminalPrivate.getOSInfo = function(callback) {};

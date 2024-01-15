@@ -43,6 +43,7 @@
 #include "third_party/blink/renderer/core/html/html_frame_owner_element.h"
 #include "third_party/blink/renderer/core/html/html_view_source_document.h"
 #include "third_party/blink/renderer/core/html/image_document.h"
+#include "third_party/blink/renderer/core/html/json_document.h"
 #include "third_party/blink/renderer/core/html/media/html_media_element.h"
 #include "third_party/blink/renderer/core/html/media/media_document.h"
 #include "third_party/blink/renderer/core/html/plugin_document.h"
@@ -54,6 +55,7 @@
 #include "third_party/blink/renderer/platform/network/mime/content_type.h"
 #include "third_party/blink/renderer/platform/network/mime/mime_type_registry.h"
 #include "third_party/blink/renderer/platform/network/network_utils.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 namespace blink {
 
@@ -87,10 +89,16 @@ bool DocumentInit::IsSrcdocDocument() const {
   return window_ && !window_->GetFrame()->IsMainFrame() && is_srcdoc_document_;
 }
 
-const KURL& DocumentInit::FallbackSrcdocBaseURL() const {
-  DCHECK(window_ && !window_->GetFrame()->IsMainFrame() ||
-         fallback_srcdoc_base_url_.IsEmpty());
-  return fallback_srcdoc_base_url_;
+bool DocumentInit::IsAboutBlankDocument() const {
+  return window_ && url_.IsAboutBlankURL();
+}
+
+const KURL& DocumentInit::FallbackBaseURL() const {
+  DCHECK(IsSrcdocDocument() || IsAboutBlankDocument() ||
+         IsInitialEmptyDocument() || is_for_javascript_url_ ||
+         fallback_base_url_.IsEmpty())
+      << " url = " << url_ << ", fallback_base_url = " << fallback_base_url_;
+  return fallback_base_url_;
 }
 
 DocumentInit& DocumentInit::WithWindow(LocalDOMWindow* window,
@@ -270,15 +278,13 @@ DocumentInit& DocumentInit::WithSrcdocDocument(bool is_srcdoc_document) {
   return *this;
 }
 
-DocumentInit& DocumentInit::WithFallbackSrcdocBaseURL(
-    const KURL& fallback_srcdoc_base_url) {
-  fallback_srcdoc_base_url_ = fallback_srcdoc_base_url;
+DocumentInit& DocumentInit::WithFallbackBaseURL(const KURL& fallback_base_url) {
+  fallback_base_url_ = fallback_base_url;
   return *this;
 }
 
-DocumentInit& DocumentInit::WithWebBundleClaimedUrl(
-    const KURL& web_bundle_claimed_url) {
-  web_bundle_claimed_url_ = web_bundle_claimed_url;
+DocumentInit& DocumentInit::WithJavascriptURL(bool is_for_javascript_url) {
+  is_for_javascript_url_ = is_for_javascript_url;
   return *this;
 }
 
@@ -315,8 +321,13 @@ Document* DocumentInit::CreateDocument() const {
       return MakeGarbageCollected<XMLDocument>(*this);
     case Type::kViewSource:
       return MakeGarbageCollected<HTMLViewSourceDocument>(*this);
-    case Type::kText:
+    case Type::kText: {
+      if (MIMETypeRegistry::IsJSONMimeType(mime_type_) &&
+          RuntimeEnabledFeatures::PrettyPrintJSONDocumentEnabled()) {
+        return MakeGarbageCollected<JSONDocument>(*this);
+      }
       return MakeGarbageCollected<TextDocument>(*this);
+    }
     case Type::kUnspecified:
       [[fallthrough]];
     default:

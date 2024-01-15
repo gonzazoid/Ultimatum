@@ -7,25 +7,31 @@
 #include <list>
 #include <utility>
 
-#include "components/viz/common/resources/resource_sizes.h"
+#include "build/build_config.h"
 #include "gpu/command_buffer/common/mailbox.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
-#include "gpu/command_buffer/service/service_utils.h"
 #include "gpu/command_buffer/service/shared_image/gl_texture_image_backing.h"
 #include "gpu/config/gpu_preferences.h"
 #include "ui/gl/gl_gl_api_implementation.h"
+#include "ui/gl/gl_implementation.h"
 #include "ui/gl/progress_reporter.h"
 
 namespace gpu {
-
 namespace {
 
-using ScopedRestoreTexture = GLTextureImageBackingHelper::ScopedRestoreTexture;
+constexpr uint32_t kWebGPUUsages =
+    SHARED_IMAGE_USAGE_WEBGPU | SHARED_IMAGE_USAGE_WEBGPU_SWAP_CHAIN_TEXTURE |
+    SHARED_IMAGE_USAGE_WEBGPU_STORAGE_TEXTURE;
 
-using InitializeGLTextureParams =
-    GLTextureImageBackingHelper::InitializeGLTextureParams;
-
-}  // anonymous namespace
+constexpr uint32_t kSupportedUsage =
+    SHARED_IMAGE_USAGE_GLES2_READ | SHARED_IMAGE_USAGE_GLES2_WRITE |
+    SHARED_IMAGE_USAGE_GLES2_FRAMEBUFFER_HINT |
+    SHARED_IMAGE_USAGE_DISPLAY_WRITE | SHARED_IMAGE_USAGE_DISPLAY_READ |
+    SHARED_IMAGE_USAGE_RASTER | SHARED_IMAGE_USAGE_OOP_RASTERIZATION |
+    SHARED_IMAGE_USAGE_SCANOUT | SHARED_IMAGE_USAGE_CONCURRENT_READ_WRITE |
+    SHARED_IMAGE_USAGE_HIGH_PERFORMANCE_GPU | SHARED_IMAGE_USAGE_CPU_UPLOAD |
+    kWebGPUUsages;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // GLTextureImageBackingFactory
@@ -36,7 +42,8 @@ GLTextureImageBackingFactory::GLTextureImageBackingFactory(
     const gles2::FeatureInfo* feature_info,
     gl::ProgressReporter* progress_reporter,
     bool for_cpu_upload_usage)
-    : GLCommonImageBackingFactory(gpu_preferences,
+    : GLCommonImageBackingFactory(kSupportedUsage,
+                                  gpu_preferences,
                                   workarounds,
                                   feature_info,
                                   progress_reporter),
@@ -54,11 +61,12 @@ GLTextureImageBackingFactory::CreateSharedImage(
     GrSurfaceOrigin surface_origin,
     SkAlphaType alpha_type,
     uint32_t usage,
+    std::string debug_label,
     bool is_thread_safe) {
   DCHECK(!is_thread_safe);
-  return CreateSharedImageInternal(mailbox, format, surface_handle, size,
-                                   color_space, surface_origin, alpha_type,
-                                   usage, base::span<const uint8_t>());
+  return CreateSharedImageInternal(
+      mailbox, format, surface_handle, size, color_space, surface_origin,
+      alpha_type, usage, std::move(debug_label), base::span<const uint8_t>());
 }
 
 std::unique_ptr<SharedImageBacking>
@@ -70,49 +78,41 @@ GLTextureImageBackingFactory::CreateSharedImage(
     GrSurfaceOrigin surface_origin,
     SkAlphaType alpha_type,
     uint32_t usage,
+    std::string debug_label,
     base::span<const uint8_t> pixel_data) {
   return CreateSharedImageInternal(mailbox, format, kNullSurfaceHandle, size,
                                    color_space, surface_origin, alpha_type,
-                                   usage, pixel_data);
+                                   usage, std::move(debug_label), pixel_data);
 }
 
 std::unique_ptr<SharedImageBacking>
 GLTextureImageBackingFactory::CreateSharedImage(
     const Mailbox& mailbox,
-    int client_id,
-    gfx::GpuMemoryBufferHandle handle,
-    gfx::BufferFormat buffer_format,
-    gfx::BufferPlane plane,
-    SurfaceHandle surface_handle,
+    viz::SharedImageFormat format,
     const gfx::Size& size,
     const gfx::ColorSpace& color_space,
     GrSurfaceOrigin surface_origin,
     SkAlphaType alpha_type,
-    uint32_t usage) {
-  NOTIMPLEMENTED_LOG_ONCE();
-  return nullptr;
+    uint32_t usage,
+    std::string debug_label,
+    gfx::GpuMemoryBufferHandle handle) {
+  NOTREACHED_NORETURN();
 }
 
 std::unique_ptr<SharedImageBacking>
-GLTextureImageBackingFactory::CreateSharedImageForTest(
+GLTextureImageBackingFactory::CreateSharedImage(
     const Mailbox& mailbox,
-    GLenum target,
-    GLuint service_id,
-    bool is_cleared,
-    viz::SharedImageFormat format,
+    gfx::GpuMemoryBufferHandle handle,
+    gfx::BufferFormat buffer_format,
+    gfx::BufferPlane plane,
     const gfx::Size& size,
-    uint32_t usage) {
-  auto result = std::make_unique<GLTextureImageBacking>(
-      mailbox, format, size, gfx::ColorSpace(), kTopLeft_GrSurfaceOrigin,
-      kPremul_SkAlphaType, usage, false /* is_passthrough */);
-  InitializeGLTextureParams params;
-  params.target = target;
-  params.internal_format = viz::GLInternalFormat(format);
-  params.format = viz::GLDataFormat(format);
-  params.type = viz::GLDataType(format);
-  params.is_cleared = is_cleared;
-  result->InitializeGLTexture(service_id, params);
-  return std::move(result);
+    const gfx::ColorSpace& color_space,
+    GrSurfaceOrigin surface_origin,
+    SkAlphaType alpha_type,
+    uint32_t usage,
+    std::string debug_label) {
+  NOTIMPLEMENTED_LOG_ONCE();
+  return nullptr;
 }
 
 bool GLTextureImageBackingFactory::IsSupported(
@@ -123,6 +123,11 @@ bool GLTextureImageBackingFactory::IsSupported(
     gfx::GpuMemoryBufferType gmb_type,
     GrContextType gr_context_type,
     base::span<const uint8_t> pixel_data) {
+  if (format.is_multi_plane() && !use_passthrough_) {
+    // With validating command decoder the clear rect tracking doesn't work with
+    // multi-planar textures.
+    return false;
+  }
   if (!pixel_data.empty() && gr_context_type != GrContextType::kGL) {
     return false;
   }
@@ -139,19 +144,32 @@ bool GLTextureImageBackingFactory::IsSupported(
     return false;
 
   if (has_cpu_upload_usage) {
-    if (!GLTextureImageBacking::SupportsPixelUploadWithFormat(format))
+    if (!GLTextureImageBacking::SupportsPixelUploadWithFormat(format)) {
       return false;
+    }
 
-    // Drop scanout usage for shared memory GMBs to match legacy behaviour
-    // from GLImageBackingFactory.
-    usage = usage & ~SHARED_IMAGE_USAGE_SCANOUT;
+    // Don't reject scanout usage for shared memory GMBs to match legacy
+    // behaviour from GLImageBackingFactory.
+  } else {
+    if (usage & SHARED_IMAGE_USAGE_SCANOUT) {
+      return false;
+    }
   }
 
-  constexpr uint32_t kInvalidUsages =
-      SHARED_IMAGE_USAGE_VIDEO_DECODE | SHARED_IMAGE_USAGE_SCANOUT;
-  if (usage & kInvalidUsages) {
-    return false;
+  // This is not beneficial on iOS. The main purpose of this is a multi-gpu
+  // support.
+#if BUILDFLAG(IS_MAC)
+  if (gl::GetGLImplementation() == gl::kGLImplementationEGLANGLE &&
+      gl::GetANGLEImplementation() == gl::ANGLEImplementation::kMetal) {
+    constexpr uint32_t kMetalInvalidUsages =
+        SHARED_IMAGE_USAGE_DISPLAY_READ | SHARED_IMAGE_USAGE_SCANOUT |
+        SHARED_IMAGE_USAGE_GLES2_READ | SHARED_IMAGE_USAGE_GLES2_WRITE |
+        SHARED_IMAGE_USAGE_GLES2_FRAMEBUFFER_HINT;
+    if (usage & kMetalInvalidUsages) {
+      return false;
+    }
   }
+#endif  // BUILDFLAG(IS_MAC)
 
   // Doesn't support contexts other than GL for OOPR Canvas
   if (gr_context_type != GrContextType::kGL &&
@@ -161,20 +179,16 @@ bool GLTextureImageBackingFactory::IsSupported(
     return false;
   }
 
-  // Linux and ChromeOS support WebGPU/Compat on GL. All other platforms
-  // do not support WebGPU on GL.
-  if (usage & SHARED_IMAGE_USAGE_WEBGPU) {
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || defined(USE_OZONE)
-    if (use_webgpu_adapter_ != WebGPUAdapterName::kCompat) {
+  // Only supports WebGPU usages on Dawn's OpenGLES backend.
+  if (usage & kWebGPUUsages) {
+    if (use_webgpu_adapter_ != WebGPUAdapterName::kOpenGLES ||
+        gl::GetGLImplementation() != gl::kGLImplementationEGLANGLE ||
+        gl::GetANGLEImplementation() != gl::ANGLEImplementation::kOpenGL) {
       return false;
     }
-#else
-    return false;
-#endif
   }
 
-  return CanCreateSharedImage(size, pixel_data, GetFormatInfo(format),
-                              GL_TEXTURE_2D);
+  return CanCreateTexture(format, size, pixel_data, GL_TEXTURE_2D);
 }
 
 std::unique_ptr<SharedImageBacking>
@@ -187,74 +201,23 @@ GLTextureImageBackingFactory::CreateSharedImageInternal(
     GrSurfaceOrigin surface_origin,
     SkAlphaType alpha_type,
     uint32_t usage,
+    std::string debug_label,
     base::span<const uint8_t> pixel_data) {
-  const FormatInfo& format_info = GetFormatInfo(format);
-  GLenum target = GL_TEXTURE_2D;
+  DCHECK(CanCreateTexture(format, size, pixel_data, GL_TEXTURE_2D));
 
   const bool for_framebuffer_attachment =
       (usage & (SHARED_IMAGE_USAGE_RASTER |
                 SHARED_IMAGE_USAGE_GLES2_FRAMEBUFFER_HINT)) != 0;
-
-  InitializeGLTextureParams params;
-  params.target = target;
-  // TODO(piman): We pretend the texture was created in an ES2 context, so that
-  // it can be used in other ES2 contexts, and so we have to pass gl_format as
-  // the internal format in the LevelInfo. https://crbug.com/628064
-  params.internal_format = format_info.gl_format;
-  params.format = format_info.gl_format;
-  params.type = format_info.gl_type;
-  params.is_cleared = !pixel_data.empty();
-  params.has_immutable_storage = format_info.supports_storage;
-  params.framebuffer_attachment_angle =
+  const bool framebuffer_attachment_angle =
       for_framebuffer_attachment && texture_usage_angle_;
 
   auto result = std::make_unique<GLTextureImageBacking>(
       mailbox, format, size, color_space, surface_origin, alpha_type, usage,
       use_passthrough_);
-  result->InitializeGLTexture(0, params);
+  result->InitializeGLTexture(GetFormatInfo(format), pixel_data,
+                              progress_reporter_, framebuffer_attachment_angle,
+                              std::move(debug_label));
 
-  gl::GLApi* api = gl::g_current_gl_context;
-  ScopedRestoreTexture scoped_restore(api, target);
-  api->glBindTextureFn(target, result->GetGLServiceId());
-
-  if (format_info.supports_storage) {
-    {
-      gl::ScopedProgressReporter scoped_progress_reporter(progress_reporter_);
-      api->glTexStorage2DEXTFn(target, 1, format_info.storage_internal_format,
-                               size.width(), size.height());
-    }
-
-    if (!pixel_data.empty()) {
-      ScopedUnpackState scoped_unpack_state(
-          /*uploading_data=*/true);
-      gl::ScopedProgressReporter scoped_progress_reporter(progress_reporter_);
-      api->glTexSubImage2DFn(target, 0, 0, 0, size.width(), size.height(),
-                             format_info.adjusted_format, format_info.gl_type,
-                             pixel_data.data());
-    }
-  } else if (format_info.is_compressed) {
-    ScopedUnpackState scoped_unpack_state(!pixel_data.empty());
-    gl::ScopedProgressReporter scoped_progress_reporter(progress_reporter_);
-    api->glCompressedTexImage2DFn(target, 0, format_info.image_internal_format,
-                                  size.width(), size.height(), 0,
-                                  pixel_data.size(), pixel_data.data());
-  } else {
-    ScopedUnpackState scoped_unpack_state(!pixel_data.empty());
-    gl::ScopedProgressReporter scoped_progress_reporter(progress_reporter_);
-    api->glTexImage2DFn(target, 0, format_info.image_internal_format,
-                        size.width(), size.height(), 0,
-                        format_info.adjusted_format, format_info.gl_type,
-                        pixel_data.data());
-  }
-
-  if (gl::g_current_gl_driver->ext.b_GL_KHR_debug) {
-    const std::string label =
-        "SharedImage_GLTexture" + CreateLabelForSharedImageUsage(usage);
-    api->glObjectLabelFn(GL_TEXTURE, result->GetGLServiceId(), -1,
-                         label.c_str());
-  }
-
-  result->SetCompatibilitySwizzle(format_info.swizzle);
   return std::move(result);
 }
 

@@ -1075,7 +1075,6 @@ GLuint GLES2InterfaceStub::GetLastFlushIdCHROMIUM() {
 void GLES2InterfaceStub::SetActiveURLCHROMIUM(const char* /* url */) {}
 void GLES2InterfaceStub::ContextVisibilityHintCHROMIUM(
     GLboolean /* visibility */) {}
-void GLES2InterfaceStub::CoverageModulationCHROMIUM(GLenum /* components */) {}
 GLenum GLES2InterfaceStub::GetGraphicsResetStatusKHR() {
   return 0;
 }
@@ -1131,6 +1130,87 @@ void GLES2InterfaceStub::BeginSharedImageAccessDirectCHROMIUM(
     GLenum /* mode */) {}
 void GLES2InterfaceStub::EndSharedImageAccessDirectCHROMIUM(
     GLuint /* texture */) {}
+void GLES2InterfaceStub::ConvertRGBAToYUVAMailboxesINTERNAL(
+    GLenum /* planes_yuv_color_space */,
+    GLenum /* plane_config */,
+    GLenum /* subsampling */,
+    const GLbyte* /* mailboxes */) {}
+void GLES2InterfaceStub::ConvertYUVAMailboxesToRGBINTERNAL(
+    GLint /* src_x */,
+    GLint /* src_y */,
+    GLsizei /* width */,
+    GLsizei /* height */,
+    GLenum /* planes_yuv_color_space */,
+    GLenum /* plane_config */,
+    GLenum /* subsampling */,
+    const GLbyte* /* mailboxes */) {}
+void GLES2InterfaceStub::ConvertYUVAMailboxesToTextureINTERNAL(
+    GLuint /* texture */,
+    GLenum /* target */,
+    GLuint /* internal_format */,
+    GLenum /* type */,
+    GLint /* src_x */,
+    GLint /* src_y */,
+    GLsizei /* width */,
+    GLsizei /* height */,
+    GLboolean /* flip_y */,
+    GLenum /* planes_yuv_color_space */,
+    GLenum /* plane_config */,
+    GLenum /* subsampling */,
+    const GLbyte* /* mailboxes */) {}
+void GLES2InterfaceStub::CopySharedImageINTERNAL(
+    GLint /* xoffset */,
+    GLint /* yoffset */,
+    GLint /* x */,
+    GLint /* y */,
+    GLsizei /* width */,
+    GLsizei /* height */,
+    GLboolean /* unpack_flip_y */,
+    const GLbyte* /* mailboxes */) {}
+void GLES2InterfaceStub::CopySharedImageToTextureINTERNAL(
+    GLuint /* texture */,
+    GLenum /* target */,
+    GLuint /* internal_format */,
+    GLenum /* type */,
+    GLint /* src_x */,
+    GLint /* src_y */,
+    GLsizei /* width */,
+    GLsizei /* height */,
+    GLboolean /* flip_y */,
+    const GLbyte* /* src_mailbox */) {}
+void GLES2InterfaceStub::ReadbackARGBImagePixelsINTERNAL(
+    const GLbyte* /* mailbox */,
+    const void* /* dst_color_space */,
+    GLuint /* dst_color_space_size */,
+    GLuint /* dst_size */,
+    GLuint /* dst_width */,
+    GLuint /* dst_height */,
+    GLuint /* dst_color_type */,
+    GLuint /* dst_alpha_type */,
+    GLuint /* dst_row_bytes */,
+    GLint /* src_x */,
+    GLint /* src_y */,
+    GLint /* plane_index */,
+    void* /* pixels */) {}
+void GLES2InterfaceStub::WritePixelsYUVINTERNAL(
+    const GLbyte* /* mailbox */,
+    GLuint /* src_size_plane1 */,
+    GLuint /* src_size_plane2 */,
+    GLuint /* src_size_plane3 */,
+    GLuint /* src_size_plane4 */,
+    GLuint /* src_width */,
+    GLuint /* src_height */,
+    GLuint /* src_plane_config */,
+    GLuint /* src_subsampling */,
+    GLuint /* src_datatype */,
+    GLuint /* src_row_bytes_plane1 */,
+    GLuint /* src_row_bytes_plane2 */,
+    GLuint /* src_row_bytes_plane3 */,
+    GLuint /* src_row_bytes_plane4 */,
+    const void* /* src_pixels_plane1 */,
+    const void* /* src_pixels_plane2 */,
+    const void* /* src_pixels_plane3 */,
+    const void* /* src_pixels_plane4 */) {}
 void GLES2InterfaceStub::EnableiOES(GLenum /* target */, GLuint /* index */) {}
 void GLES2InterfaceStub::DisableiOES(GLenum /* target */, GLuint /* index */) {}
 void GLES2InterfaceStub::BlendEquationiOES(GLuint /* buf */,
@@ -1155,4 +1235,46 @@ GLboolean GLES2InterfaceStub::IsEnablediOES(GLenum /* target */,
                                             GLuint /* index */) {
   return 0;
 }
+void GLES2InterfaceStub::ProvokingVertexANGLE(GLenum /* provokeMode */) {}
+void GLES2InterfaceStub::FramebufferMemorylessPixelLocalStorageANGLE(
+    GLint /* plane */,
+    GLenum /* internalformat */) {}
+void GLES2InterfaceStub::FramebufferTexturePixelLocalStorageANGLE(
+    GLint /* plane */,
+    GLuint /* backingtexture */,
+    GLint /* level */,
+    GLint /* layer */) {}
+void GLES2InterfaceStub::FramebufferPixelLocalClearValuefvANGLE(
+    GLint /* plane */,
+    const GLfloat* /* value */) {}
+void GLES2InterfaceStub::FramebufferPixelLocalClearValueivANGLE(
+    GLint /* plane */,
+    const GLint* /* value */) {}
+void GLES2InterfaceStub::FramebufferPixelLocalClearValueuivANGLE(
+    GLint /* plane */,
+    const GLuint* /* value */) {}
+void GLES2InterfaceStub::BeginPixelLocalStorageANGLE(
+    GLsizei /* count */,
+    const GLenum* /* loadops */) {}
+void GLES2InterfaceStub::EndPixelLocalStorageANGLE(
+    GLsizei /* count */,
+    const GLenum* /* storeops */) {}
+void GLES2InterfaceStub::PixelLocalStorageBarrierANGLE() {}
+void GLES2InterfaceStub::FramebufferPixelLocalStorageInterruptANGLE() {}
+void GLES2InterfaceStub::FramebufferPixelLocalStorageRestoreANGLE() {}
+void GLES2InterfaceStub::GetFramebufferPixelLocalStorageParameterfvANGLE(
+    GLint /* plane */,
+    GLenum /* pname */,
+    GLfloat* /* params */) {}
+void GLES2InterfaceStub::GetFramebufferPixelLocalStorageParameterivANGLE(
+    GLint /* plane */,
+    GLenum /* pname */,
+    GLint* /* params */) {}
+void GLES2InterfaceStub::ClipControlEXT(GLenum /* origin */,
+                                        GLenum /* depth */) {}
+void GLES2InterfaceStub::PolygonModeANGLE(GLenum /* face */,
+                                          GLenum /* mode */) {}
+void GLES2InterfaceStub::PolygonOffsetClampEXT(GLfloat /* factor */,
+                                               GLfloat /* units */,
+                                               GLfloat /* clamp */) {}
 #endif  // GPU_COMMAND_BUFFER_CLIENT_GLES2_INTERFACE_STUB_IMPL_AUTOGEN_H_

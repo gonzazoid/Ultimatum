@@ -5,7 +5,7 @@
 import 'chrome://resources/cr_elements/cr_button/cr_button.js';
 import 'chrome://resources/cr_elements/icons.html.js';
 import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
-import 'chrome://resources/js/cr.m.js';
+import 'chrome://resources/js/cr.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import '../shared/animations.css.js';
 import '../shared/chooser_shared.css.js';
@@ -13,16 +13,17 @@ import '../shared/step_indicator.js';
 import '../strings.m.js';
 
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {isRTL} from 'chrome://resources/js/util.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {navigateToNextStep, NavigationMixin} from '../navigation_mixin.js';
 import {ModuleMetricsManager} from '../shared/module_metrics_proxy.js';
-import {StepIndicatorModel} from '../shared/nux_types.js';
+import type {StepIndicatorModel} from '../shared/nux_types.js';
 
 import {NtpBackgroundMetricsProxyImpl} from './ntp_background_metrics_proxy.js';
-import {NtpBackgroundData, NtpBackgroundProxy, NtpBackgroundProxyImpl} from './ntp_background_proxy.js';
+import type {NtpBackgroundData, NtpBackgroundProxy} from './ntp_background_proxy.js';
+import {NtpBackgroundProxyImpl} from './ntp_background_proxy.js';
 import {getTemplate} from './nux_ntp_background.html.js';
 
 const KEYBOARD_FOCUSED_CLASS = 'keyboard-focused';
@@ -135,7 +136,6 @@ export class NuxNtpBackgroundElement extends NuxNtpBackgroundElementBase {
     if (id > -1) {
       this.imageIsLoading_ = true;
       const imageUrl = this.selectedBackground_!.imageUrl;
-      const beforeLoadTime = window.performance.now();
       this.ntpBackgroundProxy_.preloadImage(imageUrl).then(
           () => {
             if (this.selectedBackground_!.id === id) {
@@ -144,9 +144,6 @@ export class NuxNtpBackgroundElement extends NuxNtpBackgroundElementBase {
               this.$.backgroundPreview.style.backgroundImage =
                   `url(${imageUrl})`;
             }
-
-            this.ntpBackgroundProxy_.recordBackgroundImageLoadTime(
-                Math.floor(performance.now() - beforeLoadTime));
           },
           () => {
             this.ntpBackgroundProxy_.recordBackgroundImageFailedToLoad();

@@ -34,12 +34,23 @@ CrosSpeechRecognitionServiceFactory::CrosSpeechRecognitionServiceFactory()
           "SpeechRecognitionService",
           // Incognito profiles should use their own instance of the browser
           // context.
-          ProfileSelections::BuildForRegularAndIncognito()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {}
 
 CrosSpeechRecognitionServiceFactory::~CrosSpeechRecognitionServiceFactory() =
     default;
 
-KeyedService* CrosSpeechRecognitionServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+CrosSpeechRecognitionServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new speech::CrosSpeechRecognitionService(context);
+  return std::make_unique<speech::CrosSpeechRecognitionService>(context);
+}
+
+// static
+void CrosSpeechRecognitionServiceFactory::EnsureFactoryBuilt() {
+  GetInstance();
 }

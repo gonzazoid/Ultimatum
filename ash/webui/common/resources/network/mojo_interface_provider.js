@@ -2,23 +2,22 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {addSingletonGetter} from '//resources/js/cr.m.js';
-import {CrosNetworkConfig, CrosNetworkConfigRemote} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/cros_network_config.mojom-webui.js';
+import {CrosNetworkConfig, CrosNetworkConfigInterface} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/cros_network_config.mojom-webui.js';
 
 /** @interface */
 export class MojoInterfaceProvider {
-  /** @return {!CrosNetworkConfigRemote} */
+  /** @return {!CrosNetworkConfigInterface} */
   getMojoServiceRemote() {}
 }
 
 /** @implements {MojoInterfaceProvider} */
 export class MojoInterfaceProviderImpl {
   constructor() {
-    /** @private {?CrosNetworkConfigRemote} */
+    /** @private {?CrosNetworkConfigInterface} */
     this.remote_ = null;
   }
 
-  /** @override */
+  /** @return {!CrosNetworkConfigInterface} */
   getMojoServiceRemote() {
     if (!this.remote_) {
       this.remote_ = CrosNetworkConfig.getRemote();
@@ -26,6 +25,21 @@ export class MojoInterfaceProviderImpl {
 
     return this.remote_;
   }
+  /** @param {!CrosNetworkConfigInterface} remote */
+  setMojoServiceRemoteForTest(remote) {
+    this.remote_ = remote;
+  }
+
+  /** @return {!MojoInterfaceProviderImpl} */
+  static getInstance() {
+    return instance || (instance = new MojoInterfaceProviderImpl());
+  }
+
+  /** @param {!MojoInterfaceProviderImpl} obj */
+  static setInstanceForTest(obj) {
+    instance = obj;
+  }
 }
 
-addSingletonGetter(MojoInterfaceProviderImpl);
+/** @type {?MojoInterfaceProviderImpl} */
+let instance = null;

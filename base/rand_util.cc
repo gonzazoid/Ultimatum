@@ -13,8 +13,15 @@
 
 #include "base/check_op.h"
 #include "base/strings/string_util.h"
+#include "base/time/time.h"
 
 namespace base {
+
+namespace {
+
+bool g_subsampling_enabled = true;
+
+}  // namespace
 
 uint64_t RandUint64() {
   uint64_t number;
@@ -41,6 +48,23 @@ double RandDouble() {
 
 float RandFloat() {
   return BitsToOpenEndedUnitIntervalF(base::RandUint64());
+}
+
+TimeDelta RandTimeDelta(TimeDelta start, TimeDelta limit) {
+  // We must have a finite, non-empty, non-reversed interval.
+  CHECK_LT(start, limit);
+  CHECK(!start.is_min());
+  CHECK(!limit.is_max());
+
+  const int64_t range = (limit - start).InMicroseconds();
+  // Because of the `CHECK_LT()` above, range > 0, so this cast is safe.
+  const uint64_t delta_us = base::RandGenerator(static_cast<uint64_t>(range));
+  // ...and because `range` fit in an `int64_t`, so will `delta_us`.
+  return start + Microseconds(static_cast<int64_t>(delta_us));
+}
+
+TimeDelta RandTimeDeltaUpTo(TimeDelta limit) {
+  return RandTimeDelta(TimeDelta(), limit);
 }
 
 double BitsToOpenEndedUnitInterval(uint64_t bits) {
@@ -88,6 +112,14 @@ std::string RandBytesAsString(size_t length) {
   return result;
 }
 
+std::vector<uint8_t> RandBytesAsVector(size_t length) {
+  std::vector<uint8_t> result(length);
+  if (result.size()) {
+    RandBytes(result);
+  }
+  return result;
+}
+
 InsecureRandomGenerator::InsecureRandomGenerator() {
   a_ = base::RandUint64();
   b_ = base::RandUint64();
@@ -131,7 +163,17 @@ double InsecureRandomGenerator::RandDouble() {
 
 MetricsSubSampler::MetricsSubSampler() = default;
 bool MetricsSubSampler::ShouldSample(double probability) {
-  return generator_.RandDouble() < probability;
+  return !g_subsampling_enabled || generator_.RandDouble() < probability;
+}
+
+MetricsSubSampler::ScopedDisableForTesting::ScopedDisableForTesting() {
+  DCHECK(g_subsampling_enabled);
+  g_subsampling_enabled = false;
+}
+
+MetricsSubSampler::ScopedDisableForTesting::~ScopedDisableForTesting() {
+  DCHECK(!g_subsampling_enabled);
+  g_subsampling_enabled = true;
 }
 
 }  // namespace base

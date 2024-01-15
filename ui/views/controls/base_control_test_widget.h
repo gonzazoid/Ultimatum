@@ -15,16 +15,12 @@
 #if BUILDFLAG(IS_MAC)
 #include <memory>
 
-namespace display {
-namespace test {
+namespace display::test {
 class TestScreen;
-}  // namespace test
-}  // namespace display
+}  // namespace display::test
 #endif
 
-namespace views {
-
-namespace test {
+namespace views::test {
 
 class BaseControlTestWidget : public ViewsTestBase {
  public:
@@ -53,7 +49,6 @@ class BaseControlTestWidget : public ViewsTestBase {
 #endif
 };
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test
 
 #endif  // UI_VIEWS_CONTROLS_BASE_CONTROL_TEST_WIDGET_H_

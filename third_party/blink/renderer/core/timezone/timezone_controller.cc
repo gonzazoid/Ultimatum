@@ -18,8 +18,9 @@
 #include "third_party/blink/renderer/core/workers/worker_backing_thread.h"
 #include "third_party/blink/renderer/core/workers/worker_or_worklet_global_scope.h"
 #include "third_party/blink/renderer/core/workers/worker_thread.h"
-#include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread_scheduler.h"
 #include "third_party/icu/source/common/unicode/char16ptr.h"
 #include "third_party/icu/source/i18n/unicode/timezone.h"
 #include "v8/include/v8.h"
@@ -65,8 +66,9 @@ void DispatchTimeZoneChangeEventToFrames() {
     for (Frame* frame = page->MainFrame(); frame;
          frame = frame->Tree().TraverseNext()) {
       if (auto* main_local_frame = DynamicTo<LocalFrame>(frame)) {
-        main_local_frame->DomWindow()->DispatchEvent(
-            *Event::Create(event_type_names::kTimezonechange));
+        main_local_frame->DomWindow()->EnqueueWindowEvent(
+            *Event::Create(event_type_names::kTimezonechange),
+            TaskType::kMiscPlatformAPI);
       }
     }
   }
@@ -83,7 +85,11 @@ bool SetIcuTimeZoneAndNotifyV8(const String& timezone_id) {
 
   icu::TimeZone::adoptDefault(timezone.release());
 
-  NotifyTimezoneChangeToV8(V8PerIsolateData::MainThreadIsolate());
+  Thread::MainThread()
+      ->Scheduler()
+      ->ToMainThreadScheduler()
+      ->ForEachMainThreadIsolate(WTF::BindRepeating(
+          [](v8::Isolate* isolate) { NotifyTimezoneChangeToV8(isolate); }));
   WorkerThread::CallOnAllWorkerThreads(&NotifyTimezoneChangeOnWorkerThread,
                                        TaskType::kInternalDefault);
   DispatchTimeZoneChangeEventToFrames();
@@ -159,6 +165,11 @@ TimeZoneController::SetTimeZoneOverride(const String& timezone_id) {
 // static
 bool TimeZoneController::HasTimeZoneOverride() {
   return !instance().override_timezone_id_.empty();
+}
+
+// static
+const String& TimeZoneController::TimeZoneIdOverride() {
+  return instance().override_timezone_id_;
 }
 
 // static

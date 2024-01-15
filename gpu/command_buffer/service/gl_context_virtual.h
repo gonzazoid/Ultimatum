@@ -32,8 +32,8 @@ class GPU_GLES2_EXPORT GLContextVirtual : public gl::GLContext {
   GLContextVirtual& operator=(const GLContextVirtual&) = delete;
 
   // Implement GLContext.
-  bool Initialize(gl::GLSurface* compatible_surface,
-                  const gl::GLContextAttribs& attribs) override;
+  bool InitializeImpl(gl::GLSurface* compatible_surface,
+                      const gl::GLContextAttribs& attribs) override;
   bool MakeCurrentImpl(gl::GLSurface* surface) override;
   void ReleaseCurrent(gl::GLSurface* surface) override;
   bool IsCurrent(gl::GLSurface* surface) override;
@@ -46,9 +46,14 @@ class GPU_GLES2_EXPORT GLContextVirtual : public gl::GLContext {
   unsigned int CheckStickyGraphicsResetStatusImpl() override;
   void SetUnbindFboOnMakeCurrent() override;
   void ForceReleaseVirtuallyCurrent() override;
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
+  void AddMetalSharedEventsForBackpressure(
+      std::vector<std::unique_ptr<BackpressureMetalSharedEvent>> events)
+      override;
   uint64_t BackpressureFenceCreate() override;
   void BackpressureFenceWait(uint64_t fence) override;
+#endif
+#if BUILDFLAG(IS_MAC)
   void FlushForDriverCrashWorkaround() override;
 #endif
 

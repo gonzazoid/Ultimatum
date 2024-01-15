@@ -8,13 +8,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/cxx17_backports.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chromecast/media/audio/mixer_service/loopback_connection.h"
@@ -298,7 +298,7 @@ std::unique_ptr<::media::AudioBus> GetMixedAudioData(
         }
       }
 
-      *result = base::clamp(*result, -1.0f, 1.0f);
+      *result = std::clamp(*result, -1.0f, 1.0f);
     }
   }
   return mixed;
@@ -386,7 +386,8 @@ class StreamMixerTest : public testing::Test {
     auto output = std::make_unique<NiceMock<MockMixerOutput>>();
     mock_output_ = output.get();
     mixer_ = std::make_unique<StreamMixer>(
-        std::move(output), base::ThreadTaskRunnerHandle::Get(), "{}");
+        std::move(output), base::SingleThreadTaskRunner::GetCurrentDefault(),
+        "{}");
     mixer_->SetVolume(AudioContentType::kMedia, 1.0f);
     mixer_->SetVolume(AudioContentType::kAlarm, 1.0f);
     std::string test_pipeline_json = base::StringPrintf(
@@ -403,8 +404,8 @@ class StreamMixerTest : public testing::Test {
 
   void WaitForMixer() {
     base::RunLoop run_loop1;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  run_loop1.QuitClosure());
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, run_loop1.QuitClosure());
     run_loop1.Run();
   }
 
@@ -416,8 +417,8 @@ class StreamMixerTest : public testing::Test {
                                      _))
         .Times(1);
     base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  run_loop.QuitClosure());
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, run_loop.QuitClosure());
     run_loop.Run();
     testing::Mock::VerifyAndClearExpectations(mock_output_);
   }
@@ -1079,8 +1080,7 @@ TEST_F(StreamMixerTest, PostProcessorDelayListedDeviceId) {
   delays.push_back(common_delay + kTtsProcessorDelay);
 
   // Convert delay from frames to microseconds.
-  std::transform(delays.begin(), delays.end(), delays.begin(),
-                 &FramesToDelayUs);
+  base::ranges::transform(delays, delays.begin(), &FramesToDelayUs);
 
   for (size_t i = 0; i < inputs.size(); ++i) {
     EXPECT_CALL(*inputs[i], InitializeAudioPlayback(_, _)).Times(1);
@@ -1656,7 +1656,7 @@ TEST_F(StreamMixerDeathTest, InvalidStreamTypeCrashes) {
 }
 )json";
 
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
   EXPECT_DEATH(mixer_->ResetPostProcessorsForTest(
                    std::make_unique<MockPostProcessorFactory>(), json),
                DeathRegex("foobar is not a stream type"));
@@ -1664,7 +1664,7 @@ TEST_F(StreamMixerDeathTest, InvalidStreamTypeCrashes) {
 
 TEST_F(StreamMixerDeathTest, BadJsonCrashes) {
   const std::string json("{{");
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
   EXPECT_DEATH(mixer_->ResetPostProcessorsForTest(
                    std::make_unique<MockPostProcessorFactory>(), json),
                DeathRegex("Invalid JSON"));

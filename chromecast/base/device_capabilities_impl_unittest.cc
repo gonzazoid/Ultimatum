@@ -183,10 +183,7 @@ base::Value GetSampleDynamicCapabilityNewValue() {
 bool JsonStringEquals(const std::string& json,
                       const std::string& key,
                       const base::Value& value) {
-  base::Value dict_value(base::Value::Type::DICTIONARY);
-  dict_value.SetKey(key, value.Clone());
-  std::string dict_json;
-  return base::JSONWriter::Write(dict_value, &dict_json) && dict_json == json;
+  return base::WriteJson(base::Value::Dict().Set(key, value.Clone())) == json;
 }
 
 // The function runs through the set of basic operations of DeviceCapabilities.
@@ -269,7 +266,7 @@ class DeviceCapabilitiesImplTest : public ::testing::Test {
 // Tests that class is in correct state after Create().
 TEST_F(DeviceCapabilitiesImplTest, Create) {
   std::string empty_dict_string;
-  base::JSONWriter::Write(base::Value(base::Value::Type::DICTIONARY),
+  base::JSONWriter::Write(base::Value(base::Value::Type::DICT),
                           &empty_dict_string);
   EXPECT_EQ(capabilities()->GetAllData()->json_string(), empty_dict_string);
   EXPECT_TRUE(capabilities()->GetAllData()->dictionary().empty());
@@ -287,7 +284,7 @@ TEST_F(DeviceCapabilitiesImplTest, Register) {
 
   EXPECT_EQ(capabilities()->GetValidator(key), &manager);
   std::string empty_dict_string;
-  base::JSONWriter::Write(base::Value(base::Value::Type::DICTIONARY),
+  base::JSONWriter::Write(base::Value(base::Value::Type::DICT),
                           &empty_dict_string);
   EXPECT_EQ(capabilities()->GetAllData()->json_string(), empty_dict_string);
   EXPECT_TRUE(capabilities()->GetCapability(key).is_none());
@@ -307,7 +304,7 @@ TEST_F(DeviceCapabilitiesImplTest, Unregister) {
 
   EXPECT_FALSE(capabilities()->GetValidator(key));
   std::string empty_dict_string;
-  base::JSONWriter::Write(base::Value(base::Value::Type::DICTIONARY),
+  base::JSONWriter::Write(base::Value(base::Value::Type::DICT),
                           &empty_dict_string);
   EXPECT_EQ(capabilities()->GetAllData()->json_string(), empty_dict_string);
   EXPECT_TRUE(capabilities()->GetCapability(key).is_none());
@@ -583,11 +580,11 @@ TEST_F(DeviceCapabilitiesImplTest, SetCapabilityDictionaryInvalid) {
   EXPECT_EQ(value.GetInt(), 99);
 }
 
-// Test  MergeDictionary.
+// Test MergeDictionary.
 TEST_F(DeviceCapabilitiesImplTest, MergeDictionary) {
-  auto deserialized_value = base::JSONReader::Read(kSampleDictionaryCapability);
+  std::optional<base::Value::Dict> deserialized_value =
+      base::JSONReader::ReadDict(kSampleDictionaryCapability);
   ASSERT_TRUE(deserialized_value);
-  ASSERT_TRUE(deserialized_value->is_dict());
 
   capabilities()->MergeDictionary(*deserialized_value);
   base::RunLoop().RunUntilIdle();
@@ -603,8 +600,8 @@ TEST_F(DeviceCapabilitiesImplTest, MergeDictionary) {
 
   // Now just update one of the fields. Make sure the updated value is changed
   // in DeviceCapabilities and the other field remains untouched.
-  deserialized_value->SetIntKey("dummy_field_int", 100);
-  ASSERT_TRUE(deserialized_value->RemoveKey("dummy_field_bool"));
+  deserialized_value->Set("dummy_field_int", 100);
+  ASSERT_TRUE(deserialized_value->Remove("dummy_field_bool"));
 
   capabilities()->MergeDictionary(*deserialized_value);
   base::RunLoop().RunUntilIdle();

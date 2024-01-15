@@ -255,14 +255,16 @@ bool DownloadDatabase::MigrateHashHttpMethodAndGenerateGuids() {
   //
   // This GUID generation scheme is only used for migrated download rows and
   // assumes that the likelihood of a collision with a GUID generated via
-  // base::GenerateGUID() will be vanishingly small.
+  // base::Uuid::GenerateRandomV4().AsLowercaseString() will be vanishingly
+  // small.
   //
   // A previous version of this code generated GUIDs that used random bits for
   // all but the first 32-bits. I.e. the scheme didn't respect the 6 fixed bits
   // as prescribed for type 4 GUIDs. The resulting GUIDs are not believed to
   // have an elevated risk of collision with GUIDs generated via
-  // base::GenerateGUID() and are considered valid by all known consumers. Hence
-  // no additional migration logic is being introduced to fix those GUIDs.
+  // base::Uuid::GenerateRandomV4().AsLowercaseString() and are considered valid
+  // by all known consumers. Hence no additional migration logic is being
+  // introduced to fix those GUIDs.
   sql::Statement select(GetDB().GetUniqueStatement(
       base::StringPrintf("SELECT id FROM %s", kDownloadsTable).c_str()));
   sql::Statement update(GetDB().GetUniqueStatement(
@@ -314,6 +316,10 @@ bool DownloadDatabase::MigrateDownloadSliceFinished() {
                                    "INTEGER NOT NULL DEFAULT 0");
 }
 
+bool DownloadDatabase::MigrateDownloadByWebApp() {
+  return EnsureColumnExists("by_web_app_id", "VARCHAR NOT NULL DEFAULT ''");
+}
+
 bool DownloadDatabase::InitDownloadTable() {
   const std::string kSchema = base::StringPrintf(
       "CREATE TABLE %s ("
@@ -348,6 +354,8 @@ bool DownloadDatabase::InitDownloadTable() {
       "by_ext_id VARCHAR NOT NULL,"       // ID of extension that started the
                                           // download
       "by_ext_name VARCHAR NOT NULL,"     // name of extension
+      "by_web_app_id VARCHAR NOT NULL,"   // ID of web app that started the
+                                          // download.
       "etag VARCHAR NOT NULL,"            // ETag
       "last_modified VARCHAR NOT NULL,"   // Last-Modified header
       "mime_type VARCHAR(255) NOT NULL,"  // MIME type.
@@ -448,8 +456,7 @@ void DownloadDatabase::QueryDownloads(std::vector<DownloadRow>* results) {
           "danger_type, interrupt_reason, hash, end_time, opened, "
           "last_access_time, transient, referrer, site_url, "
           "embedder_download_data, tab_url, tab_referrer_url, http_method, "
-          "by_ext_id, by_ext_name, etag, last_modified FROM %s ORDER BY "
-          "start_time",
+          "by_ext_id, by_ext_name, by_web_app_id, etag, last_modified FROM %s ",
           kDownloadsTable)
           .c_str()));
 
@@ -492,6 +499,7 @@ void DownloadDatabase::QueryDownloads(std::vector<DownloadRow>* results) {
     info->http_method = statement_main.ColumnString(column++);
     info->by_ext_id = statement_main.ColumnString(column++);
     info->by_ext_name = statement_main.ColumnString(column++);
+    info->by_web_app_id = statement_main.ColumnString(column++);
     info->etag = statement_main.ColumnString(column++);
     info->last_modified = statement_main.ColumnString(column++);
 
@@ -596,7 +604,7 @@ bool DownloadDatabase::UpdateDownload(const DownloadRow& data) {
                          "danger_type=?, interrupt_reason=?, hash=?, "
                          "end_time=?, total_bytes=?, "
                          "opened=?, last_access_time=?, transient=?, "
-                         "by_ext_id=?, by_ext_name=?, "
+                         "by_ext_id=?, by_ext_name=?, by_web_app_id=?, "
                          "etag=?, last_modified=? WHERE id=?",
                          kDownloadsTable)
           .c_str()));
@@ -611,13 +619,14 @@ bool DownloadDatabase::UpdateDownload(const DownloadRow& data) {
   statement.BindInt(column++,
                     DownloadInterruptReasonToInt(data.interrupt_reason));
   statement.BindBlob(column++, data.hash);
-  statement.BindInt64(column++, data.end_time.ToInternalValue());
+  statement.BindTime(column++, data.end_time);
   statement.BindInt64(column++, data.total_bytes);
   statement.BindInt(column++, (data.opened ? 1 : 0));
-  statement.BindInt64(column++, data.last_access_time.ToInternalValue());
+  statement.BindTime(column++, data.last_access_time);
   statement.BindInt(column++, (data.transient ? 1 : 0));
   statement.BindString(column++, data.by_ext_id);
   statement.BindString(column++, data.by_ext_name);
+  statement.BindString(column++, data.by_web_app_id);
   statement.BindString(column++, data.etag);
   statement.BindString(column++, data.last_modified);
   statement.BindInt64(column++, DownloadIdToInt(data.id));
@@ -680,10 +689,10 @@ bool DownloadDatabase::CreateDownload(const DownloadRow& info) {
             "state, danger_type, interrupt_reason, hash, end_time, opened, "
             "last_access_time, transient, referrer, site_url, "
             "embedder_download_data, tab_url, tab_referrer_url, http_method, "
-            "by_ext_id, by_ext_name, etag, last_modified) "
+            "by_ext_id, by_ext_name, by_web_app_id, etag, last_modified) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
             "        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
-            "        ?, ?, ?, ?, ?, ?, ?)",
+            "        ?, ?, ?, ?, ?, ?, ?, ?)",
             kDownloadsTable)
             .c_str()));
 
@@ -694,7 +703,7 @@ bool DownloadDatabase::CreateDownload(const DownloadRow& info) {
     BindFilePath(statement_insert, info.target_path, column++);
     statement_insert.BindString(column++, info.mime_type);
     statement_insert.BindString(column++, info.original_mime_type);
-    statement_insert.BindInt64(column++, info.start_time.ToInternalValue());
+    statement_insert.BindTime(column++, info.start_time);
     statement_insert.BindInt64(column++, info.received_bytes);
     statement_insert.BindInt64(column++, info.total_bytes);
     statement_insert.BindInt(column++, DownloadStateToInt(info.state));
@@ -703,10 +712,9 @@ bool DownloadDatabase::CreateDownload(const DownloadRow& info) {
     statement_insert.BindInt(
         column++, DownloadInterruptReasonToInt(info.interrupt_reason));
     statement_insert.BindBlob(column++, info.hash);
-    statement_insert.BindInt64(column++, info.end_time.ToInternalValue());
+    statement_insert.BindTime(column++, info.end_time);
     statement_insert.BindInt(column++, info.opened ? 1 : 0);
-    statement_insert.BindInt64(column++,
-                               info.last_access_time.ToInternalValue());
+    statement_insert.BindTime(column++, info.last_access_time);
     statement_insert.BindInt(column++, info.transient ? 1 : 0);
     statement_insert.BindString(column++, info.referrer_url.spec());
     statement_insert.BindString(column++, info.site_url.spec());
@@ -716,6 +724,7 @@ bool DownloadDatabase::CreateDownload(const DownloadRow& info) {
     statement_insert.BindString(column++, info.http_method);
     statement_insert.BindString(column++, info.by_ext_id);
     statement_insert.BindString(column++, info.by_ext_name);
+    statement_insert.BindString(column++, info.by_web_app_id);
     statement_insert.BindString(column++, info.etag);
     statement_insert.BindString(column++, info.last_modified);
     if (!statement_insert.Run()) {

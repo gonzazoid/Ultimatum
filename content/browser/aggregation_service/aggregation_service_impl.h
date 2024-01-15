@@ -5,13 +5,13 @@
 #ifndef CONTENT_BROWSER_AGGREGATION_SERVICE_AGGREGATION_SERVICE_IMPL_H_
 #define CONTENT_BROWSER_AGGREGATION_SERVICE_AGGREGATION_SERVICE_IMPL_H_
 
-#include <stdint.h>
-
 #include <memory>
+#include <optional>
+#include <set>
 #include <vector>
 
-#include "base/callback_forward.h"
-#include "base/containers/flat_map.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/threading/sequence_bound.h"
@@ -24,14 +24,19 @@
 #include "content/browser/aggregation_service/aggregation_service_storage_context.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/storage_partition.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class GURL;
 
 namespace base {
 class Clock;
+class ElapsedTimer;
 class FilePath;
+class UpdateableSequencedTaskRunner;
 }  // namespace base
+
+namespace url {
+class Origin;
+}  // namespace url
 
 namespace content {
 
@@ -89,6 +94,8 @@ class CONTENT_EXPORT AggregationServiceImpl
   void SendReportsForWebUI(
       const std::vector<AggregationServiceStorage::RequestId>& ids,
       base::OnceClosure reports_sent_callback) override;
+  void GetPendingReportReportingOrigins(
+      base::OnceCallback<void(std::set<url::Origin>)> callback) override;
   void AddObserver(AggregationServiceObserver* observer) override;
   void RemoveObserver(AggregationServiceObserver* observer) override;
 
@@ -116,25 +123,30 @@ class CONTENT_EXPORT AggregationServiceImpl
       std::vector<AggregationServiceStorage::RequestAndId> requests_and_ids,
       base::RepeatingClosure done);
 
-  // `request_id` is `absl::nullopt` iff `report_request` was not
+  // `request_id` is `std::nullopt` iff `report_request` was not
   // stored/scheduled.
   void AssembleAndSendReportImpl(
       AggregatableReportRequest report_request,
-      absl::optional<AggregationServiceStorage::RequestId> request_id,
+      std::optional<AggregationServiceStorage::RequestId> request_id,
       base::OnceClosure done);
   void OnReportAssemblyComplete(
       base::OnceClosure done,
-      absl::optional<AggregationServiceStorage::RequestId> request_id,
+      std::optional<AggregationServiceStorage::RequestId> request_id,
       GURL reporting_url,
+      base::ElapsedTimer elapsed_timer,
       AggregatableReportRequest report_request,
-      absl::optional<AggregatableReport> report,
+      std::optional<AggregatableReport> report,
       AggregatableReportAssembler::AssemblyStatus status);
   void OnReportSendingComplete(
       base::OnceClosure done,
       AggregatableReportRequest report_request,
-      absl::optional<AggregationServiceStorage::RequestId> request_id,
+      std::optional<AggregationServiceStorage::RequestId> request_id,
       AggregatableReport report,
+      base::ElapsedTimer elapsed_timer,
       AggregatableReportSender::RequestStatus status);
+  void OnUserVisibleTaskStarted();
+  void OnUserVisibleTaskComplete();
+  void OnClearDataComplete();
 
   void OnGetRequestsToSendFromWebUI(
       base::OnceClosure reports_sent_callback,
@@ -142,11 +154,20 @@ class CONTENT_EXPORT AggregationServiceImpl
 
   void NotifyReportHandled(
       const AggregatableReportRequest& request,
-      absl::optional<AggregationServiceStorage::RequestId> request_id,
-      const absl::optional<AggregatableReport>& report,
+      std::optional<AggregationServiceStorage::RequestId> request_id,
+      const std::optional<AggregatableReport>& report,
       AggregationServiceObserver::ReportStatus status);
 
   void NotifyRequestStorageModified();
+
+  // The task runner for all aggregation service storage operations. Updateable
+  // to allow for priority to be temporarily increased to `USER_VISIBLE` when a
+  // clear data task is queued or running. Otherwise `BEST_EFFORT` is used.
+  scoped_refptr<base::UpdateableSequencedTaskRunner> storage_task_runner_;
+
+  // How many user visible storage tasks are queued or running currently, i.e.
+  // have been posted but the reply has not been run.
+  int num_pending_user_visible_tasks_ = 0;
 
   base::SequenceBound<AggregationServiceStorage> storage_;
   std::unique_ptr<AggregatableReportScheduler> scheduler_;

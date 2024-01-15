@@ -7,7 +7,9 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "chromeos/ash/services/assistant/public/mojom/assistant_audio_decoder.mojom.h"
 #include "chromeos/assistant/internal/libassistant/shared_headers.h"
@@ -49,7 +51,7 @@ class AudioMediaDataSource : public assistant::mojom::AssistantMediaDataSource {
   SEQUENCE_CHECKER(sequence_checker_);
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
 
-  assistant_client::AudioOutput::Delegate* delegate_ = nullptr;
+  raw_ptr<assistant_client::AudioOutput::Delegate> delegate_ = nullptr;
 
   std::vector<uint8_t> source_buffer_;
 

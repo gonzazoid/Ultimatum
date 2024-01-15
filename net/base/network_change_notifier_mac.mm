@@ -7,11 +7,12 @@
 #include <netinet/in.h>
 #include <resolv.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
+#include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
 #include "net/dns/dns_config_service.h"
 
@@ -116,11 +117,10 @@ NetworkChangeNotifierMac::CalculateConnectionType(
     return CONNECTION_WIFI;
   }
   if (@available(iOS 12, *)) {
-    CTTelephonyNetworkInfo* info =
-        [[[CTTelephonyNetworkInfo alloc] init] autorelease];
+    CTTelephonyNetworkInfo* info = [[CTTelephonyNetworkInfo alloc] init];
     NSDictionary<NSString*, NSString*>*
         service_current_radio_access_technology =
-            [info serviceCurrentRadioAccessTechnology];
+            info.serviceCurrentRadioAccessTechnology;
     NSSet<NSString*>* technologies_2g = [NSSet
         setWithObjects:CTRadioAccessTechnologyGPRS, CTRadioAccessTechnologyEdge,
                        CTRadioAccessTechnologyCDMA1x, nil];
@@ -218,7 +218,7 @@ void NetworkChangeNotifierMac::SetInitialConnectionType() {
 
   SCNetworkConnectionFlags flags;
   ConnectionType connection_type = CONNECTION_UNKNOWN;
-  if (SCNetworkReachabilityGetFlags(reachability_, &flags)) {
+  if (SCNetworkReachabilityGetFlags(reachability_.get(), &flags)) {
     connection_type = CalculateConnectionType(flags);
   } else {
     LOG(ERROR) << "Could not get initial network connection type,"
@@ -246,12 +246,12 @@ void NetworkChangeNotifierMac::StartReachabilityNotifications() {
       nullptr   // description
   };
   if (!SCNetworkReachabilitySetCallback(
-          reachability_, &NetworkChangeNotifierMac::ReachabilityCallback,
+          reachability_.get(), &NetworkChangeNotifierMac::ReachabilityCallback,
           &reachability_context)) {
     LOG(DFATAL) << "Could not set network reachability callback";
     reachability_.reset();
-  } else if (!SCNetworkReachabilityScheduleWithRunLoop(reachability_, run_loop_,
-                                                       kCFRunLoopCommonModes)) {
+  } else if (!SCNetworkReachabilityScheduleWithRunLoop(
+                 reachability_.get(), run_loop_.get(), kCFRunLoopCommonModes)) {
     LOG(DFATAL) << "Could not schedule network reachability on run loop";
     reachability_.reset();
   }
@@ -263,9 +263,9 @@ void NetworkChangeNotifierMac::SetDynamicStoreNotificationKeys(
   // SCDynamicStore API does not exist on iOS.
   NOTREACHED();
 #else
-  base::ScopedCFTypeRef<CFMutableArrayRef> notification_keys(
+  base::apple::ScopedCFTypeRef<CFMutableArrayRef> notification_keys(
       CFArrayCreateMutable(kCFAllocatorDefault, 0, &kCFTypeArrayCallBacks));
-  base::ScopedCFTypeRef<CFStringRef> key(
+  base::apple::ScopedCFTypeRef<CFStringRef> key(
       SCDynamicStoreKeyCreateNetworkGlobalEntity(
           nullptr, kSCDynamicStoreDomainState, kSCEntNetInterface));
   CFArrayAppendValue(notification_keys.get(), key.get());
@@ -278,7 +278,7 @@ void NetworkChangeNotifierMac::SetDynamicStoreNotificationKeys(
 
   // Set the notification keys.  This starts us receiving notifications.
   bool ret = SCDynamicStoreSetNotificationKeys(store, notification_keys.get(),
-                                               nullptr);
+                                               /*patterns=*/nullptr);
   // TODO(willchan): Figure out a proper way to handle this rather than crash.
   CHECK(ret);
 #endif  // BUILDFLAG(IS_IOS)

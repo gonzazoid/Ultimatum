@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_PEERCONNECTION_PEER_CONNECTION_TRACKER_H_
 
 #include "base/gtest_prod_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "base/types/pass_key.h"
 #include "base/values.h"
@@ -20,6 +21,7 @@
 #include "third_party/blink/renderer/platform/peerconnection/rtc_rtp_transceiver_platform.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_session_description_platform.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
+#include "third_party/blink/renderer/platform/wtf/gc_plugin.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/webrtc/api/peer_connection_interface.h"
@@ -222,6 +224,15 @@ class MODULES_EXPORT PeerConnectionTracker
                                         const String& error,
                                         const String& error_message);
 
+  // Sends an update when getDisplayMedia is called.
+  virtual void TrackGetDisplayMedia(UserMediaRequest* user_media_request);
+  // Sends an update when getDisplayMedia resolveѕ with a stream.
+  virtual void TrackGetDisplayMediaSuccess(UserMediaRequest* user_media_request,
+                                           MediaStream* stream);
+  // Sends an update when getDisplayMedia fails with an error.
+  virtual void TrackGetDisplayMediaFailure(UserMediaRequest* user_media_request,
+                                           const String& error,
+                                           const String& error_message);
   // Sends a new fragment on an RtcEventLog.
   virtual void TrackRtcEventLogWrite(RTCPeerConnectionHandler* pc_handler,
                                      const WTF::Vector<uint8_t>& output);
@@ -269,7 +280,7 @@ class MODULES_EXPORT PeerConnectionTracker
                      int output_period_ms) override;
   void StopEventLog(int peer_connection_local_id) override;
   void GetStandardStats() override;
-  void GetLegacyStats() override;
+  void GetCurrentState() override;
 
   // Called to deliver an update to the host (PeerConnectionTrackerHost).
   // |local_id| - The id of the registered RTCPeerConnectionHandler.
@@ -297,6 +308,7 @@ class MODULES_EXPORT PeerConnectionTracker
   int32_t current_speed_limit_ = mojom::blink::kSpeedLimitMax;
 
   THREAD_CHECKER(main_thread_);
+  GC_PLUGIN_IGNORE("https://crbug.com/1381979")
   mojo::Remote<blink::mojom::blink::PeerConnectionTrackerHost>
       peer_connection_tracker_host_;
   HeapMojoReceiver<blink::mojom::blink::PeerConnectionManager,

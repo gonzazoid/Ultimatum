@@ -10,9 +10,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
@@ -22,7 +22,6 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/current_thread.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/win/scoped_handle.h"
 #include "ipc/ipc_channel.h"
 #include "ipc/ipc_channel_proxy.h"
@@ -180,7 +179,7 @@ WtsSessionProcessDelegate::Core::Core(
     bool launch_elevated,
     const std::string& channel_security)
     : base::MessagePumpForIO::IOHandler(FROM_HERE),
-      caller_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      caller_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       io_task_runner_(std::move(io_task_runner)),
       channel_security_(channel_security),
       launch_elevated_(launch_elevated),
@@ -206,13 +205,11 @@ bool WtsSessionProcessDelegate::Core::Initialize(uint32_t session_id) {
     // that all processes will be killed once the job object is destroyed.
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION info;
     memset(&info, 0, sizeof(info));
-    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_ACTIVE_PROCESS |
-        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    info.BasicLimitInformation.LimitFlags =
+        JOB_OBJECT_LIMIT_ACTIVE_PROCESS | JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
     info.BasicLimitInformation.ActiveProcessLimit = 2;
-    if (!SetInformationJobObject(job.Get(),
-                                 JobObjectExtendedLimitInformation,
-                                 &info,
-                                 sizeof(info))) {
+    if (!SetInformationJobObject(job.Get(), JobObjectExtendedLimitInformation,
+                                 &info, sizeof(info))) {
       PLOG(ERROR) << "Failed to set limits on the job object";
       return false;
     }
@@ -371,8 +368,9 @@ void WtsSessionProcessDelegate::Core::OnChannelConnected(int32_t peer_pid) {
 
   channel_->GetRemoteAssociatedInterface(&worker_process_control_);
 
-  if (event_handler_)
+  if (event_handler_) {
     event_handler_->OnChannelConnected(peer_pid);
+  }
 }
 
 void WtsSessionProcessDelegate::Core::OnChannelError() {
@@ -418,10 +416,10 @@ void WtsSessionProcessDelegate::Core::DoLaunchProcess() {
   }
 
   std::string mojo_pipe_token = base::NumberToString(base::RandUint64());
-  std::unique_ptr<IPC::ChannelProxy> channel = IPC::ChannelProxy::Create(
+  channel_ = IPC::ChannelProxy::Create(
       mojo_invitation_.AttachMessagePipe(mojo_pipe_token).release(),
       IPC::Channel::MODE_SERVER, this, io_task_runner_,
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   command_line.AppendSwitchASCII(kMojoPipeToken, mojo_pipe_token);
 
   std::unique_ptr<mojo::PlatformChannel> normal_mojo_channel;
@@ -467,8 +465,6 @@ void WtsSessionProcessDelegate::Core::DoLaunchProcess() {
     ReportFatalError();
     return;
   }
-
-  channel_ = std::move(channel);
 
   if (launch_elevated_) {
     // When launching an elevated worker process, an intermediate launcher

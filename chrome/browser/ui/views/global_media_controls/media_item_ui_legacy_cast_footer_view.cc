@@ -6,7 +6,6 @@
 
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/feature_engagement/tracker_factory.h"
-#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/global_media_controls/cast_media_notification_item.h"
 #include "chrome/browser/ui/global_media_controls/media_notification_service.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
@@ -17,6 +16,7 @@
 #include "components/media_router/browser/media_router.h"
 #include "components/media_router/browser/media_router_factory.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/background.h"
@@ -100,3 +100,6 @@ void MediaItemUILegacyCastFooterView::UpdateColors() {
       views::CreateRoundedRectBorder(1, radius, foreground_color_),
       kBorderInsets));
 }
+
+BEGIN_METADATA(MediaItemUILegacyCastFooterView)
+END_METADATA

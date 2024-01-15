@@ -6,16 +6,17 @@
 
 #include <lib/sys/cpp/component_context.h>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/fuchsia/fuchsia_logging.h"
 #include "base/fuchsia/process_context.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 
 namespace ui {
 
-FlatlandConnection::FlatlandConnection(const std::string& debug_name) {
+FlatlandConnection::FlatlandConnection(base::StringPiece debug_name,
+                                       OnErrorCallback error_callback) {
   zx_status_t status =
       base::ComponentContextForProcess()
           ->svc()
@@ -23,9 +24,14 @@ FlatlandConnection::FlatlandConnection(const std::string& debug_name) {
   if (status != ZX_OK) {
     ZX_LOG(FATAL, status) << "Failed to connect to Flatland";
   }
-  flatland_->SetDebugName(debug_name);
+
+  flatland_->SetDebugName(static_cast<std::string>(debug_name));
+  DCHECK(error_callback);
   flatland_.events().OnError =
-      fit::bind_member(this, &FlatlandConnection::OnError);
+      [callback = std::move(error_callback)](
+          fuchsia::ui::composition::FlatlandError error) mutable {
+        std::move(callback).Run(std::move(error));
+      };
   flatland_.events().OnFramePresented =
       fit::bind_member(this, &FlatlandConnection::OnFramePresented);
   flatland_.events().OnNextFrameBegin =
@@ -40,7 +46,8 @@ void FlatlandConnection::Present() {
   present_args.set_acquire_fences({});
   present_args.set_release_fences({});
   present_args.set_unsquashable(false);
-  Present(std::move(present_args), base::BindOnce([](zx_time_t) {}));
+  Present(std::move(present_args),
+          base::BindOnce([](base::TimeTicks, base::TimeDelta) {}));
 }
 
 void FlatlandConnection::Present(
@@ -63,14 +70,18 @@ void FlatlandConnection::Present(
   presented_callbacks_.push(std::move(callback));
 }
 
-void FlatlandConnection::OnError(
-    fuchsia::ui::composition::FlatlandError error) {
-  LOG(ERROR) << "Flatland error: " << static_cast<int>(error);
-  // TODO(fxbug.dev/93998): Send error signal to the owners of this class.
-}
-
 void FlatlandConnection::OnNextFrameBegin(
     fuchsia::ui::composition::OnNextFrameBeginValues values) {
+  // Calculate the presentation interval by looking at the 2 closest
+  // presentation times.
+  if (values.has_future_presentation_infos() &&
+      values.future_presentation_infos().size() > 1) {
+    presentation_interval_ =
+        base::TimeTicks::FromZxTime(
+            values.future_presentation_infos()[1].presentation_time()) -
+        base::TimeTicks::FromZxTime(
+            values.future_presentation_infos()[0].presentation_time());
+  }
   present_credits_ += values.additional_present_credits();
   if (present_credits_ && !pending_presents_.empty()) {
     // Only iterate over the elements once, because they may be added back to
@@ -86,7 +97,9 @@ void FlatlandConnection::OnNextFrameBegin(
 void FlatlandConnection::OnFramePresented(
     fuchsia::scenic::scheduling::FramePresentedInfo info) {
   for (size_t i = 0; i < info.presentation_infos.size(); ++i) {
-    std::move(presented_callbacks_.front()).Run(info.actual_presentation_time);
+    std::move(presented_callbacks_.front())
+        .Run(base::TimeTicks::FromZxTime(info.actual_presentation_time),
+             presentation_interval_);
     presented_callbacks_.pop();
   }
 }

@@ -6,11 +6,12 @@ package org.chromium.android_webview.test;
 
 import android.content.Context;
 import android.content.Intent;
-import android.support.test.InstrumentationRegistry;
-import android.support.test.runner.lifecycle.Stage;
 import android.util.AndroidRuntimeException;
 import android.util.Base64;
 import android.view.ViewGroup;
+
+import androidx.test.InstrumentationRegistry;
+import androidx.test.runner.lifecycle.Stage;
 
 import org.junit.Assert;
 import org.junit.runner.Description;
@@ -31,7 +32,6 @@ import org.chromium.base.test.BaseActivityTestRule;
 import org.chromium.base.test.util.ApplicationTestUtils;
 import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.base.test.util.CriteriaHelper;
-import org.chromium.base.test.util.InMemorySharedPreferences;
 import org.chromium.base.test.util.ScalableTimeout;
 import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.content_public.browser.test.util.TestCallbackHelperContainer.OnPageFinishedHelper;
@@ -49,6 +49,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -67,9 +68,7 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
 
     private static boolean sBrowserProcessStarted;
 
-    /**
-     * An interface to call onCreateWindow(AwContents).
-     */
+    /** An interface to call onCreateWindow(AwContents). */
     public interface OnCreateWindowHandler {
         /** This will be called when a new window pops up from the current webview. */
         public boolean onCreateWindow(AwContents awContents);
@@ -82,21 +81,33 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
 
     private List<WeakReference<AwContents>> mAwContentsDestroyedInTearDown = new ArrayList<>();
 
+    private Consumer<AwSettings> mMaybeMutateAwSettings;
+
     public AwActivityTestRule() {
         super(AwTestRunnerActivity.class);
+    }
+
+    public AwActivityTestRule(Consumer<AwSettings> mMaybeMutateAwSettings) {
+        super(AwTestRunnerActivity.class);
+        this.mMaybeMutateAwSettings = mMaybeMutateAwSettings;
     }
 
     @Override
     public Statement apply(final Statement base, Description description) {
         mCurrentTestDescription = description;
-        return super.apply(new Statement() {
-            @Override
-            public void evaluate() throws Throwable {
-                setUp();
-                base.evaluate();
-                tearDown();
-            }
-        }, description);
+        return super.apply(
+                new Statement() {
+                    @Override
+                    public void evaluate() throws Throwable {
+                        setUp();
+                        try {
+                            base.evaluate();
+                        } finally {
+                            tearDown();
+                        }
+                    }
+                },
+                description);
     }
 
     public void setUp() {
@@ -107,22 +118,26 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
             startBrowserProcess();
         } else {
             assert !sBrowserProcessStarted
-                : "needsBrowserProcessStarted false and @Batch are incompatible";
+                    : "needsBrowserProcessStarted false and @Batch are incompatible";
         }
     }
 
     public void tearDown() {
         if (!needsAwContentsCleanup()) return;
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            for (WeakReference<AwContents> awContentsRef : mAwContentsDestroyedInTearDown) {
-                AwContents awContents = awContentsRef.get();
-                if (awContents == null) continue;
-                awContents.destroy();
-            }
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    for (WeakReference<AwContents> awContentsRef : mAwContentsDestroyedInTearDown) {
+                        AwContents awContents = awContentsRef.get();
+                        if (awContents == null) continue;
+                        awContents.destroy();
+                    }
+                });
         // Flush the UI queue since destroy posts again to UI thread.
-        TestThreadUtils.runOnUiThreadBlocking(() -> { mAwContentsDestroyedInTearDown.clear(); });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mAwContentsDestroyedInTearDown.clear();
+                });
     }
 
     public boolean needsHideActionBar() {
@@ -150,9 +165,9 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
         return getActivity();
     }
 
-    public AwBrowserContext createAwBrowserContextOnUiThread(InMemorySharedPreferences prefs) {
+    public AwBrowserContext createAwBrowserContextOnUiThread() {
         // Native pointer is initialized later in startBrowserProcess if needed.
-        return new AwBrowserContext(prefs, 0, true);
+        return new AwBrowserContext(0);
     }
 
     public TestDependencyFactory createTestDependencyFactory() {
@@ -191,9 +206,8 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
             throw new AndroidRuntimeException("There should only be one browser context.");
         }
         launchActivity(); // The Activity must be launched in order to load native code
-        final InMemorySharedPreferences prefs = new InMemorySharedPreferences();
         TestThreadUtils.runOnUiThreadBlockingNoException(
-                () -> mBrowserContext = createAwBrowserContextOnUiThread(prefs));
+                () -> mBrowserContext = createAwBrowserContextOnUiThread());
     }
 
     public void startBrowserProcess() {
@@ -209,15 +223,16 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
         launchActivity();
         if (!sBrowserProcessStarted) {
             sBrowserProcessStarted = true;
-            TestThreadUtils.runOnUiThreadBlocking(() -> {
-                AwTestContainerView.installDrawFnFunctionTable(useVulkan);
-                AwBrowserProcess.start();
-            });
+            TestThreadUtils.runOnUiThreadBlocking(
+                    () -> {
+                        AwTestContainerView.installDrawFnFunctionTable(useVulkan);
+                        AwBrowserProcess.start();
+                    });
         }
         if (mBrowserContext != null) {
             TestThreadUtils.runOnUiThreadBlocking(
-                    ()
-                            -> mBrowserContext.setNativePointer(
+                    () ->
+                            mBrowserContext.setNativePointer(
                                     AwBrowserContext.getDefault()
                                             .getNativeBrowserContextPointer()));
         }
@@ -243,25 +258,31 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
         TestThreadUtils.runOnUiThreadBlocking(() -> awContents.setNetworkAvailable(networkUp));
     }
 
-    /**
-     * Loads url on the UI thread and blocks until onPageFinished is called.
-     */
-    public void loadUrlSync(final AwContents awContents, CallbackHelper onPageFinishedHelper,
-            final String url) throws Exception {
+    /** Loads url on the UI thread and blocks until onPageFinished is called. */
+    public void loadUrlSync(
+            final AwContents awContents, CallbackHelper onPageFinishedHelper, final String url)
+            throws Exception {
         loadUrlSync(awContents, onPageFinishedHelper, url, null);
     }
 
-    public void loadUrlSync(final AwContents awContents, CallbackHelper onPageFinishedHelper,
-            final String url, final Map<String, String> extraHeaders) throws Exception {
+    public void loadUrlSync(
+            final AwContents awContents,
+            CallbackHelper onPageFinishedHelper,
+            final String url,
+            final Map<String, String> extraHeaders)
+            throws Exception {
         int currentCallCount = onPageFinishedHelper.getCallCount();
         loadUrlAsync(awContents, url, extraHeaders);
         onPageFinishedHelper.waitForCallback(
                 currentCallCount, 1, WAIT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     }
 
-    public void loadUrlSyncAndExpectError(final AwContents awContents,
-            CallbackHelper onPageFinishedHelper, CallbackHelper onReceivedErrorHelper,
-            final String url) throws Exception {
+    public void loadUrlSyncAndExpectError(
+            final AwContents awContents,
+            CallbackHelper onPageFinishedHelper,
+            CallbackHelper onReceivedErrorHelper,
+            final String url)
+            throws Exception {
         int onReceivedErrorCount = onReceivedErrorHelper.getCallCount();
         int onFinishedCallCount = onPageFinishedHelper.getCallCount();
         loadUrlAsync(awContents, url);
@@ -271,9 +292,7 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
                 onFinishedCallCount, 1, WAIT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     }
 
-    /**
-     * Loads url on the UI thread but does not block.
-     */
+    /** Loads url on the UI thread but does not block. */
     public void loadUrlAsync(final AwContents awContents, final String url) {
         loadUrlAsync(awContents, url, null);
     }
@@ -283,26 +302,28 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
         TestThreadUtils.runOnUiThreadBlocking(() -> awContents.loadUrl(url, extraHeaders));
     }
 
-    /**
-     * Posts url on the UI thread and blocks until onPageFinished is called.
-     */
-    public void postUrlSync(final AwContents awContents, CallbackHelper onPageFinishedHelper,
-            final String url, byte[] postData) throws Exception {
+    /** Posts url on the UI thread and blocks until onPageFinished is called. */
+    public void postUrlSync(
+            final AwContents awContents,
+            CallbackHelper onPageFinishedHelper,
+            final String url,
+            byte[] postData)
+            throws Exception {
         int currentCallCount = onPageFinishedHelper.getCallCount();
         postUrlAsync(awContents, url, postData);
         onPageFinishedHelper.waitForCallback(
                 currentCallCount, 1, WAIT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     }
 
-    /**
-     * Loads url on the UI thread but does not block.
-     */
+    /** Loads url on the UI thread but does not block. */
     public void postUrlAsync(final AwContents awContents, final String url, byte[] postData) {
         class PostUrl implements Runnable {
             byte[] mPostData;
+
             public PostUrl(byte[] postData) {
                 mPostData = postData;
             }
+
             @Override
             public void run() {
                 awContents.postUrl(url, mPostData);
@@ -311,11 +332,13 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
         TestThreadUtils.runOnUiThreadBlocking(new PostUrl(postData));
     }
 
-    /**
-     * Loads data on the UI thread and blocks until onPageFinished is called.
-     */
-    public void loadDataSync(final AwContents awContents, CallbackHelper onPageFinishedHelper,
-            final String data, final String mimeType, final boolean isBase64Encoded)
+    /** Loads data on the UI thread and blocks until onPageFinished is called. */
+    public void loadDataSync(
+            final AwContents awContents,
+            CallbackHelper onPageFinishedHelper,
+            final String data,
+            final String mimeType,
+            final boolean isBase64Encoded)
             throws Exception {
         int currentCallCount = onPageFinishedHelper.getCallCount();
         loadDataAsync(awContents, data, mimeType, isBase64Encoded);
@@ -323,36 +346,49 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
                 currentCallCount, 1, WAIT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     }
 
-    public void loadHtmlSync(final AwContents awContents, CallbackHelper onPageFinishedHelper,
-            final String html) throws Throwable {
-        int currentCallCount = onPageFinishedHelper.getCallCount();
+    public void loadHtmlSync(
+            final AwContents awContents, CallbackHelper onPageFinishedHelper, final String html)
+            throws Throwable {
         final String encodedData = Base64.encodeToString(html.getBytes(), Base64.NO_PADDING);
         loadDataSync(awContents, onPageFinishedHelper, encodedData, "text/html", true);
     }
 
-    public void loadDataSyncWithCharset(final AwContents awContents,
-            CallbackHelper onPageFinishedHelper, final String data, final String mimeType,
-            final boolean isBase64Encoded, final String charset) throws Exception {
+    public void loadDataSyncWithCharset(
+            final AwContents awContents,
+            CallbackHelper onPageFinishedHelper,
+            final String data,
+            final String mimeType,
+            final boolean isBase64Encoded,
+            final String charset)
+            throws Exception {
         int currentCallCount = onPageFinishedHelper.getCallCount();
         TestThreadUtils.runOnUiThreadBlocking(
-                () -> awContents.loadUrl(LoadUrlParams.createLoadDataParams(
-                                data, mimeType, isBase64Encoded, charset)));
+                () ->
+                        awContents.loadUrl(
+                                LoadUrlParams.createLoadDataParams(
+                                        data, mimeType, isBase64Encoded, charset)));
         onPageFinishedHelper.waitForCallback(
                 currentCallCount, 1, WAIT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     }
 
-    /**
-     * Loads data on the UI thread but does not block.
-     */
-    public void loadDataAsync(final AwContents awContents, final String data, final String mimeType,
+    /** Loads data on the UI thread but does not block. */
+    public void loadDataAsync(
+            final AwContents awContents,
+            final String data,
+            final String mimeType,
             final boolean isBase64Encoded) {
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> awContents.loadData(data, mimeType, isBase64Encoded ? "base64" : null));
     }
 
-    public void loadDataWithBaseUrlSync(final AwContents awContents,
-            CallbackHelper onPageFinishedHelper, final String data, final String mimeType,
-            final boolean isBase64Encoded, final String baseUrl, final String historyUrl)
+    public void loadDataWithBaseUrlSync(
+            final AwContents awContents,
+            CallbackHelper onPageFinishedHelper,
+            final String data,
+            final String mimeType,
+            final boolean isBase64Encoded,
+            final String baseUrl,
+            final String historyUrl)
             throws Throwable {
         int currentCallCount = onPageFinishedHelper.getCallCount();
         loadDataWithBaseUrlAsync(awContents, data, mimeType, isBase64Encoded, baseUrl, historyUrl);
@@ -360,16 +396,25 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
                 currentCallCount, 1, WAIT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     }
 
-    public void loadDataWithBaseUrlAsync(final AwContents awContents, final String data,
-            final String mimeType, final boolean isBase64Encoded, final String baseUrl,
-            final String historyUrl) throws Throwable {
-        runOnUiThread(() -> awContents.loadDataWithBaseURL(baseUrl, data, mimeType,
-                                      isBase64Encoded ? "base64" : null, historyUrl));
+    public void loadDataWithBaseUrlAsync(
+            final AwContents awContents,
+            final String data,
+            final String mimeType,
+            final boolean isBase64Encoded,
+            final String baseUrl,
+            final String historyUrl)
+            throws Throwable {
+        runOnUiThread(
+                () ->
+                        awContents.loadDataWithBaseURL(
+                                baseUrl,
+                                data,
+                                mimeType,
+                                isBase64Encoded ? "base64" : null,
+                                historyUrl));
     }
 
-    /**
-     * Reloads the current page synchronously.
-     */
+    /** Reloads the current page synchronously. */
     public void reloadSync(final AwContents awContents, CallbackHelper onPageFinishedHelper)
             throws Exception {
         int currentCallCount = onPageFinishedHelper.getCallCount();
@@ -379,9 +424,7 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
                 currentCallCount, 1, WAIT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     }
 
-    /**
-     * Stops loading on the UI thread.
-     */
+    /** Stops loading on the UI thread. */
     public void stopLoading(final AwContents awContents) {
         TestThreadUtils.runOnUiThreadBlocking(() -> awContents.stopLoading());
     }
@@ -389,21 +432,26 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
     public void waitForVisualStateCallback(final AwContents awContents) throws Exception {
         final CallbackHelper ch = new CallbackHelper();
         final int chCount = ch.getCallCount();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            final long requestId = 666;
-            awContents.insertVisualStateCallback(requestId, new AwContents.VisualStateCallback() {
-                @Override
-                public void onComplete(long id) {
-                    Assert.assertEquals(requestId, id);
-                    ch.notifyCalled();
-                }
-            });
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    final long requestId = 666;
+                    awContents.insertVisualStateCallback(
+                            requestId,
+                            new AwContents.VisualStateCallback() {
+                                @Override
+                                public void onComplete(long id) {
+                                    Assert.assertEquals(requestId, id);
+                                    ch.notifyCalled();
+                                }
+                            });
+                });
         ch.waitForCallback(chCount);
     }
 
-    public void insertVisualStateCallbackOnUIThread(final AwContents awContents,
-            final long requestId, final AwContents.VisualStateCallback callback) {
+    public void insertVisualStateCallbackOnUIThread(
+            final AwContents awContents,
+            final long requestId,
+            final AwContents.VisualStateCallback callback) {
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> awContents.insertVisualStateCallback(requestId, callback));
     }
@@ -411,20 +459,27 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
     // Waits for the pixel at the center of AwContents to color up into expectedColor.
     // Note that this is a stricter condition that waiting for a visual state callback,
     // as visual state callback only indicates that *something* has appeared in WebView.
-    public void waitForPixelColorAtCenterOfView(final AwContents awContents,
-            final AwTestContainerView testContainerView, final int expectedColor) {
-        pollUiThread(() -> GraphicsTestUtils.getPixelColorAtCenterOfView(
-                    awContents, testContainerView) == expectedColor);
+    public void waitForPixelColorAtCenterOfView(
+            final AwContents awContents,
+            final AwTestContainerView testContainerView,
+            final int expectedColor) {
+        pollUiThread(
+                () ->
+                        GraphicsTestUtils.getPixelColorAtCenterOfView(awContents, testContainerView)
+                                == expectedColor);
     }
 
     public AwTestContainerView createAwTestContainerView(final AwContentsClient awContentsClient) {
         return createAwTestContainerView(awContentsClient, false, null);
     }
 
-    public AwTestContainerView createAwTestContainerView(final AwContentsClient awContentsClient,
-            boolean supportsLegacyQuirks, final TestDependencyFactory testDependencyFactory) {
-        AwTestContainerView testContainerView = createDetachedAwTestContainerView(
-                awContentsClient, supportsLegacyQuirks, testDependencyFactory);
+    public AwTestContainerView createAwTestContainerView(
+            final AwContentsClient awContentsClient,
+            boolean supportsLegacyQuirks,
+            final TestDependencyFactory testDependencyFactory) {
+        AwTestContainerView testContainerView =
+                createDetachedAwTestContainerView(
+                        awContentsClient, supportsLegacyQuirks, testDependencyFactory);
         getActivity().addView(testContainerView);
         testContainerView.requestFocus();
         return testContainerView;
@@ -440,7 +495,8 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
     }
 
     public AwTestContainerView createDetachedAwTestContainerView(
-            final AwContentsClient awContentsClient, boolean supportsLegacyQuirks,
+            final AwContentsClient awContentsClient,
+            boolean supportsLegacyQuirks,
             TestDependencyFactory testDependencyFactory) {
         if (testDependencyFactory == null) {
             testDependencyFactory = createTestDependencyFactory();
@@ -452,18 +508,24 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
 
         AwSettings awSettings =
                 testDependencyFactory.createAwSettings(getActivity(), supportsLegacyQuirks);
-        AwContents awContents = testDependencyFactory.createAwContents(mBrowserContext,
-                testContainerView, testContainerView.getContext(),
-                testContainerView.getInternalAccessDelegate(),
-                testContainerView.getNativeDrawFunctorFactory(), awContentsClient, awSettings,
-                testDependencyFactory);
+        if (mMaybeMutateAwSettings != null) mMaybeMutateAwSettings.accept(awSettings);
+        AwContents awContents =
+                testDependencyFactory.createAwContents(
+                        mBrowserContext,
+                        testContainerView,
+                        testContainerView.getContext(),
+                        testContainerView.getInternalAccessDelegate(),
+                        testContainerView.getNativeDrawFunctorFactory(),
+                        awContentsClient,
+                        awSettings,
+                        testDependencyFactory);
         testContainerView.initialize(awContents);
         mAwContentsDestroyedInTearDown.add(new WeakReference<>(awContents));
         return testContainerView;
     }
 
     public boolean isHardwareAcceleratedTest() {
-        return !testMethodHasAnnotation(DisableHardwareAccelerationForTest.class);
+        return !testMethodHasAnnotation(DisableHardwareAcceleration.class);
     }
 
     public AwTestContainerView createAwTestContainerViewOnMainSync(final AwContentsClient client) {
@@ -475,10 +537,13 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
         return createAwTestContainerViewOnMainSync(client, supportsLegacyQuirks, null);
     }
 
-    public AwTestContainerView createAwTestContainerViewOnMainSync(final AwContentsClient client,
-            final boolean supportsLegacyQuirks, final TestDependencyFactory testDependencyFactory) {
+    public AwTestContainerView createAwTestContainerViewOnMainSync(
+            final AwContentsClient client,
+            final boolean supportsLegacyQuirks,
+            final TestDependencyFactory testDependencyFactory) {
         return TestThreadUtils.runOnUiThreadBlockingNoException(
-                () -> createAwTestContainerView(
+                () ->
+                        createAwTestContainerView(
                                 client, supportsLegacyQuirks, testDependencyFactory));
     }
 
@@ -510,10 +575,11 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
      * Executes the given snippet of JavaScript code within the given ContentView. Returns the
      * result of its execution in JSON format.
      */
-    public String executeJavaScriptAndWaitForResult(final AwContents awContents,
-            TestAwContentsClient viewClient, final String code) throws Exception {
+    public String executeJavaScriptAndWaitForResult(
+            final AwContents awContents, TestAwContentsClient viewClient, final String code)
+            throws Exception {
         return executeJavaScriptAndWaitForResult(
-                awContents, viewClient, code, /*shouldCheckSettings=*/true);
+                awContents, viewClient, code, /* shouldCheckSettings= */ true);
     }
 
     /**
@@ -521,8 +587,11 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
      * {@link checkJavaScriptEnabled}. This is useful if your test expects JavaScript to be disabled
      * (in which case the underlying executeJavaScriptAndWaitForResult() is expected to be a NOOP).
      */
-    public String executeJavaScriptAndWaitForResult(final AwContents awContents,
-            TestAwContentsClient viewClient, final String code, boolean shouldCheckSettings)
+    public String executeJavaScriptAndWaitForResult(
+            final AwContents awContents,
+            TestAwContentsClient viewClient,
+            final String code,
+            boolean shouldCheckSettings)
             throws Exception {
         if (shouldCheckSettings) {
             checkJavaScriptEnabled(awContents);
@@ -537,7 +606,7 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
         if (!javaScriptEnabled) {
             throw new IllegalStateException(
                     "JavaScript is disabled in this AwContents; did you forget to call "
-                    + "AwActivityTestRule.enableJavaScriptOnUiThread()?");
+                            + "AwActivityTestRule.enableJavaScriptOnUiThread()?");
         }
     }
 
@@ -547,8 +616,9 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
      */
     public String getJavaScriptResultBodyTextContent(
             final AwContents awContents, final TestAwContentsClient viewClient) throws Exception {
-        String raw = executeJavaScriptAndWaitForResult(
-                awContents, viewClient, "document.body.textContent");
+        String raw =
+                executeJavaScriptAndWaitForResult(
+                        awContents, viewClient, "document.body.textContent");
         return maybeStripDoubleQuotes(raw);
     }
 
@@ -563,8 +633,11 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
      * @param javascriptIdentifier the name with which to refer to {@code objectToInject} from
      *        JavaScript code.
      */
-    public static void addJavascriptInterfaceOnUiThread(final AwContents awContents,
-            final Object objectToInject, final String javascriptIdentifier) throws Exception {
+    public static void addJavascriptInterfaceOnUiThread(
+            final AwContents awContents,
+            final Object objectToInject,
+            final String javascriptIdentifier)
+            throws Exception {
         checkJavaScriptEnabled(awContents);
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> awContents.addJavascriptInterface(objectToInject, javascriptIdentifier));
@@ -575,14 +648,17 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
      * timeouts and treats timeouts and exceptions as test failures automatically.
      */
     public static void pollInstrumentationThread(final Callable<Boolean> callable) {
-        CriteriaHelper.pollInstrumentationThread(() -> {
-            try {
-                return callable.call();
-            } catch (Throwable e) {
-                Log.e(TAG, "Exception while polling.", e);
-                return false;
-            }
-        }, WAIT_TIMEOUT_MS, CHECK_INTERVAL);
+        CriteriaHelper.pollInstrumentationThread(
+                () -> {
+                    try {
+                        return callable.call();
+                    } catch (Throwable e) {
+                        Log.e(TAG, "Exception while polling.", e);
+                        return false;
+                    }
+                },
+                WAIT_TIMEOUT_MS,
+                CHECK_INTERVAL);
     }
 
     /**
@@ -613,8 +689,8 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
             // another thread).
             Throwable cause = e.getCause();
             // If the cause is an unchecked Throwable type, re-throw as-is.
-            if (cause instanceof Error) throw(Error) cause;
-            if (cause instanceof RuntimeException) throw(RuntimeException) cause;
+            if (cause instanceof Error) throw (Error) cause;
+            if (cause instanceof RuntimeException) throw (RuntimeException) cause;
             // Otherwise, wrap this in an unchecked Exception so callers don't need to declare
             // checked Exceptions.
             throw new RuntimeException(cause);
@@ -631,9 +707,7 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
         }
     }
 
-    /**
-     * Takes an element out of the {@link BlockingQueue} (or times out).
-     */
+    /** Takes an element out of the {@link BlockingQueue} (or times out). */
     public static <T> T waitForNextQueueElement(BlockingQueue<T> queue) throws Exception {
         T value = queue.poll(SCALED_WAIT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         if (value == null) {
@@ -655,46 +729,42 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
         TestThreadUtils.runOnUiThreadBlocking(() -> awContents.clearCache(includeDiskFiles));
     }
 
-    /**
-     * Returns pure page scale.
-     */
+    /** Returns pure page scale. */
     public float getScaleOnUiThread(final AwContents awContents) throws Exception {
         return TestThreadUtils.runOnUiThreadBlocking(() -> awContents.getPageScaleFactor());
     }
 
-    /**
-     * Returns page scale multiplied by the screen density.
-     */
+    /** Returns page scale multiplied by the screen density. */
     public float getPixelScaleOnUiThread(final AwContents awContents) throws Exception {
         return TestThreadUtils.runOnUiThreadBlocking(() -> awContents.getScale());
     }
 
-    /**
-     * Returns whether a user can zoom the page in.
-     */
+    /** Returns whether a user can zoom the page in. */
     public boolean canZoomInOnUiThread(final AwContents awContents) throws Exception {
         return TestThreadUtils.runOnUiThreadBlocking(() -> awContents.canZoomIn());
     }
 
-    /**
-     * Returns whether a user can zoom the page out.
-     */
+    /** Returns whether a user can zoom the page out. */
     public boolean canZoomOutOnUiThread(final AwContents awContents) throws Exception {
         return TestThreadUtils.runOnUiThreadBlocking(() -> awContents.canZoomOut());
     }
 
-    /**
-     * Loads the main html then triggers the popup window.
-     */
-    public void triggerPopup(final AwContents parentAwContents,
-            TestAwContentsClient parentAwContentsClient, TestWebServer testWebServer,
-            String mainHtml, String popupHtml, String popupPath, String triggerScript)
+    /** Loads the main html then triggers the popup window. */
+    public void triggerPopup(
+            final AwContents parentAwContents,
+            TestAwContentsClient parentAwContentsClient,
+            TestWebServer testWebServer,
+            String mainHtml,
+            String popupHtml,
+            String popupPath,
+            String triggerScript)
             throws Exception {
         enableJavaScriptOnUiThread(parentAwContents);
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            parentAwContents.getSettings().setSupportMultipleWindows(true);
-            parentAwContents.getSettings().setJavaScriptCanOpenWindowsAutomatically(true);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    parentAwContents.getSettings().setSupportMultipleWindows(true);
+                    parentAwContents.getSettings().setJavaScriptCanOpenWindowsAutomatically(true);
+                });
 
         final String parentUrl = testWebServer.setResponse("/popupParent.html", mainHtml, null);
         if (popupHtml != null) {
@@ -725,9 +795,7 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
         return popupInfo;
     }
 
-    /**
-     * Creates a popup window with AwContents.
-     */
+    /** Creates a popup window with AwContents. */
     public PopupInfo createPopupContents(final AwContents parentAwContents) {
         TestAwContentsClient popupContentsClient;
         AwTestContainerView popupContainerView;
@@ -745,10 +813,12 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
      * @param info The PopupInfo.
      * @param onCreateWindowHandler An instance of OnCreateWindowHandler. null if there isn't.
      */
-    public void loadPopupContents(final AwContents parentAwContents, PopupInfo info,
-            OnCreateWindowHandler onCreateWindowHandler) throws Exception {
+    public void loadPopupContents(
+            final AwContents parentAwContents,
+            PopupInfo info,
+            OnCreateWindowHandler onCreateWindowHandler)
+            throws Exception {
         TestAwContentsClient popupContentsClient = info.popupContentsClient;
-        AwTestContainerView popupContainerView = info.popupContainerView;
         final AwContents popupContents = info.popupContents;
         OnPageFinishedHelper onPageFinishedHelper = popupContentsClient.getOnPageFinishedHelper();
         int finishCallCount = onPageFinishedHelper.getCallCount();
@@ -769,7 +839,7 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
     }
 
     private boolean testMethodHasAnnotation(Class<? extends Annotation> clazz) {
-        return mCurrentTestDescription.getAnnotation(clazz) != null ? true : false;
+        return mCurrentTestDescription.getAnnotation(clazz) != null;
     }
 
     /**
@@ -784,31 +854,46 @@ public class AwActivityTestRule extends BaseActivityTestRule<AwTestRunnerActivit
         }
 
         public AwSettings createAwSettings(Context context, boolean supportsLegacyQuirks) {
-            return new AwSettings(context, false /* isAccessFromFileURLsGrantedByDefault */,
-                    supportsLegacyQuirks, false /* allowEmptyDocumentPersistence */,
-                    true /* allowGeolocationOnInsecureOrigins */,
-                    false /* doNotUpdateSelectionOnMutatingSelectionRange */);
+            return new AwSettings(
+                    context,
+                    /* isAccessFromFileURLsGrantedByDefault= */ false,
+                    supportsLegacyQuirks,
+                    /* allowEmptyDocumentPersistence= */ false,
+                    /* allowGeolocationOnInsecureOrigins= */ true,
+                    /* doNotUpdateSelectionOnMutatingSelectionRange= */ false);
         }
 
-        public AwContents createAwContents(AwBrowserContext browserContext, ViewGroup containerView,
-                Context context, InternalAccessDelegate internalAccessAdapter,
-                NativeDrawFunctorFactory nativeDrawFunctorFactory, AwContentsClient contentsClient,
-                AwSettings settings, DependencyFactory dependencyFactory) {
-            return new AwContents(browserContext, containerView, context, internalAccessAdapter,
-                    nativeDrawFunctorFactory, contentsClient, settings, dependencyFactory);
+        public AwContents createAwContents(
+                AwBrowserContext browserContext,
+                ViewGroup containerView,
+                Context context,
+                InternalAccessDelegate internalAccessAdapter,
+                NativeDrawFunctorFactory nativeDrawFunctorFactory,
+                AwContentsClient contentsClient,
+                AwSettings settings,
+                DependencyFactory dependencyFactory) {
+            return new AwContents(
+                    browserContext,
+                    containerView,
+                    context,
+                    internalAccessAdapter,
+                    nativeDrawFunctorFactory,
+                    contentsClient,
+                    settings,
+                    dependencyFactory);
         }
     }
 
-    /**
-     * POD object for holding references to helper objects of a popup window.
-     */
+    /** POD object for holding references to helper objects of a popup window. */
     public static class PopupInfo {
         public final TestAwContentsClient popupContentsClient;
         public final AwTestContainerView popupContainerView;
         public final AwContents popupContents;
 
-        public PopupInfo(TestAwContentsClient popupContentsClient,
-                AwTestContainerView popupContainerView, AwContents popupContents) {
+        public PopupInfo(
+                TestAwContentsClient popupContentsClient,
+                AwTestContainerView popupContainerView,
+                AwContents popupContents) {
             this.popupContentsClient = popupContentsClient;
             this.popupContainerView = popupContainerView;
             this.popupContents = popupContents;

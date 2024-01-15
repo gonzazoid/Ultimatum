@@ -16,6 +16,8 @@
 
 namespace device {
 
+struct SensorReadingSharedBuffer;
+
 class FakeSensor : public mojom::Sensor {
  public:
   FakeSensor(mojom::SensorType sensor_type, SensorReadingSharedBuffer* buffer);
@@ -66,9 +68,31 @@ class FakeSensorProvider : public mojom::SensorProvider {
 
   // mojom::sensorProvider:
   void GetSensor(mojom::SensorType type, GetSensorCallback callback) override;
+  void CreateVirtualSensor(
+      mojom::SensorType type,
+      mojom::VirtualSensorMetadataPtr metadata,
+      mojom::SensorProvider::CreateVirtualSensorCallback callback) override {}
+  void UpdateVirtualSensor(
+      mojom::SensorType type,
+      const SensorReading& reading,
+      mojom::SensorProvider::UpdateVirtualSensorCallback callback) override {}
+  void RemoveVirtualSensor(
+      mojom::SensorType type,
+      mojom::SensorProvider::RemoveVirtualSensorCallback callback) override {}
+  void GetVirtualSensorInformation(
+      mojom::SensorType type,
+      mojom::SensorProvider::GetVirtualSensorInformationCallback callback)
+      override {}
 
   void Bind(mojo::PendingReceiver<mojom::SensorProvider> receiver);
   bool is_bound() const;
+
+  // Configures a callback which is invoked when GetSensor() is called, allowing
+  // tests to take an action before the response callback is invoked.
+  void set_sensor_requested_callback(
+      base::OnceCallback<void(mojom::SensorType)> callback) {
+    sensor_requested_callback_ = std::move(callback);
+  }
 
   void set_ambient_light_sensor_is_available(
       bool ambient_light_sensor_is_available) {
@@ -134,13 +158,17 @@ class FakeSensorProvider : public mojom::SensorProvider {
 
   // The following sensor pointers are owned by the caller of
   // FakeSensorProvider::GetSensor().
-  raw_ptr<FakeSensor, DanglingUntriaged> ambient_light_sensor_ = nullptr;
-  raw_ptr<FakeSensor, DanglingUntriaged> accelerometer_ = nullptr;
-  raw_ptr<FakeSensor, DanglingUntriaged> linear_acceleration_sensor_ = nullptr;
-  raw_ptr<FakeSensor, DanglingUntriaged> gravity_sensor_ = nullptr;
-  raw_ptr<FakeSensor, DanglingUntriaged> gyroscope_ = nullptr;
-  raw_ptr<FakeSensor, DanglingUntriaged> relative_orientation_sensor_ = nullptr;
-  raw_ptr<FakeSensor, DanglingUntriaged> absolute_orientation_sensor_ = nullptr;
+  raw_ptr<FakeSensor, AcrossTasksDanglingUntriaged> ambient_light_sensor_ =
+      nullptr;
+  raw_ptr<FakeSensor, AcrossTasksDanglingUntriaged> accelerometer_ = nullptr;
+  raw_ptr<FakeSensor, AcrossTasksDanglingUntriaged>
+      linear_acceleration_sensor_ = nullptr;
+  raw_ptr<FakeSensor, AcrossTasksDanglingUntriaged> gravity_sensor_ = nullptr;
+  raw_ptr<FakeSensor, AcrossTasksDanglingUntriaged> gyroscope_ = nullptr;
+  raw_ptr<FakeSensor, AcrossTasksDanglingUntriaged>
+      relative_orientation_sensor_ = nullptr;
+  raw_ptr<FakeSensor, AcrossTasksDanglingUntriaged>
+      absolute_orientation_sensor_ = nullptr;
 
   SensorReading ambient_light_sensor_reading_;
   SensorReading accelerometer_reading_;
@@ -149,6 +177,7 @@ class FakeSensorProvider : public mojom::SensorProvider {
   SensorReading gyroscope_reading_;
   SensorReading relative_orientation_sensor_reading_;
   SensorReading absolute_orientation_sensor_reading_;
+  base::OnceCallback<void(mojom::SensorType)> sensor_requested_callback_;
   bool ambient_light_sensor_is_available_ = true;
   bool accelerometer_is_available_ = true;
   bool linear_acceleration_sensor_is_available_ = true;

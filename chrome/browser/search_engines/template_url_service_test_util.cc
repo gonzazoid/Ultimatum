@@ -8,11 +8,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/search_engines/chrome_template_url_service_client.h"
 #include "chrome/test/base/testing_profile.h"
@@ -55,8 +56,8 @@ class TestingTemplateURLServiceClient : public ChromeTemplateURLServiceClient {
 void SetManagedDefaultSearchPreferences(const TemplateURLData& managed_data,
                                         bool enabled,
                                         TestingProfile* profile) {
-  auto dict = TemplateURLDataToDictionary(managed_data);
-  dict->SetBoolean(DefaultSearchManager::kDisabledByPolicy, !enabled);
+  base::Value::Dict dict = TemplateURLDataToDictionary(managed_data);
+  dict.Set(DefaultSearchManager::kDisabledByPolicy, !enabled);
 
   profile->GetTestingPrefService()->SetManagedPref(
       DefaultSearchManager::kDefaultSearchProviderDataPrefName,
@@ -71,12 +72,27 @@ void RemoveManagedDefaultSearchPreferences(TestingProfile* profile) {
 void SetRecommendedDefaultSearchPreferences(const TemplateURLData& data,
                                             bool enabled,
                                             TestingProfile* profile) {
-  auto dict = TemplateURLDataToDictionary(data);
-  dict->SetBoolean(DefaultSearchManager::kDisabledByPolicy, !enabled);
+  base::Value::Dict dict = TemplateURLDataToDictionary(data);
+  dict.Set(DefaultSearchManager::kDisabledByPolicy, !enabled);
 
   profile->GetTestingPrefService()->SetRecommendedPref(
       DefaultSearchManager::kDefaultSearchProviderDataPrefName,
       std::move(dict));
+}
+
+void SetManagedSiteSearchSettingsPreference(
+    const EnterpriseSiteSearchManager::OwnedTemplateURLDataVector&
+        site_search_engines,
+    TestingProfile* profile) {
+  base::Value::List pref_value;
+  for (auto& site_search_engine : site_search_engines) {
+    pref_value.Append(
+        base::Value(TemplateURLDataToDictionary(*site_search_engine)));
+  }
+
+  profile->GetTestingPrefService()->SetManagedPref(
+      EnterpriseSiteSearchManager::kSiteSearchSettingsPrefName,
+      std::move(pref_value));
 }
 
 std::unique_ptr<TemplateURL> CreateTestTemplateURL(
@@ -85,7 +101,7 @@ std::unique_ptr<TemplateURL> CreateTestTemplateURL(
     const std::string& guid,
     base::Time last_modified,
     bool safe_for_autoreplace,
-    bool created_by_policy,
+    TemplateURLData::CreatedByPolicy created_by_policy,
     int prepopulate_id) {
   DCHECK(!base::StartsWith(guid, "key"))
       << "Don't use test GUIDs with the form \"key1\". Use \"guid1\" instead "
@@ -117,14 +133,15 @@ TemplateURLServiceTestUtil::TemplateURLServiceTestUtil(
 
   scoped_refptr<WebDatabaseService> web_database_service =
       new WebDatabaseService(profile_->GetPath().AppendASCII("webdata"),
-                             base::ThreadTaskRunnerHandle::Get(),
-                             base::ThreadTaskRunnerHandle::Get());
+                             base::SingleThreadTaskRunner::GetCurrentDefault(),
+                             base::SingleThreadTaskRunner::GetCurrentDefault());
   web_database_service->AddTable(
       std::unique_ptr<WebDatabaseTable>(new KeywordTable()));
   web_database_service->LoadDatabase();
 
   web_data_service_ = new KeywordWebDataService(
-      web_database_service.get(), base::ThreadTaskRunnerHandle::Get());
+      web_database_service.get(),
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   web_data_service_->Init(base::NullCallback());
 
   ResetModel(false);
@@ -185,7 +202,11 @@ void TemplateURLServiceTestUtil::ResetModel(bool verify_load) {
               HistoryServiceFactory::GetForProfileIfExists(
                   profile(), ServiceAccessType::EXPLICIT_ACCESS),
               &search_term_)),
-      base::BindLambdaForTesting([&] { ++dsp_set_to_google_callback_count_; }));
+      base::BindLambdaForTesting([&] { ++dsp_set_to_google_callback_count_; })
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+      , profile()->IsMainProfile()
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+  );
   model()->AddObserver(this);
   changed_count_ = 0;
   if (verify_load)

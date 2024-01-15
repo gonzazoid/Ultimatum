@@ -57,9 +57,6 @@ class Config {
                        llvm::StringRef ns_name,
                        RecordInfo* info,
                        RecordInfo::TemplateArgs* args) {
-    if (name == "Member") {
-      return VerifyNamespaceAndArgCount("blink", 1, ns_name, info, args);
-    }
     if (name == "BasicMember") {
       if (!VerifyNamespaceAndArgCount("cppgc", 2, ns_name, info, args))
         return false;
@@ -72,9 +69,6 @@ class Config {
                            llvm::StringRef ns_name,
                            RecordInfo* info,
                            RecordInfo::TemplateArgs* args) {
-    if (name == "WeakMember") {
-      return VerifyNamespaceAndArgCount("blink", 1, ns_name, info, args);
-    }
     if (name == "BasicMember") {
       if (!VerifyNamespaceAndArgCount("cppgc", 2, ns_name, info, args))
         return false;
@@ -87,9 +81,6 @@ class Config {
                            llvm::StringRef ns_name,
                            RecordInfo* info,
                            RecordInfo::TemplateArgs* args) {
-    if ((name == "Persistent") || (name == "WeakPersistent")) {
-      return VerifyNamespaceAndArgCount("blink", 1, ns_name, info, args);
-    }
     if (name == "BasicPersistent") {
       return VerifyNamespaceAndArgCount("cppgc", 1, ns_name, info, args);
     }
@@ -100,10 +91,6 @@ class Config {
                                       llvm::StringRef ns_name,
                                       RecordInfo* info,
                                       RecordInfo::TemplateArgs* args) {
-    if ((name == "CrossThreadPersistent") ||
-        (name == "CrossThreadWeakPersistent")) {
-      return VerifyNamespaceAndArgCount("blink", 1, ns_name, info, args);
-    }
     if (name == "BasicCrossThreadPersistent") {
       return VerifyNamespaceAndArgCount("cppgc", 1, ns_name, info, args);
     }
@@ -139,6 +126,12 @@ class Config {
            name == "HashMap";
   }
 
+  static bool IsSTDCollection(llvm::StringRef name) {
+    return name == "vector" || name == "map" || name == "unordered_map" ||
+           name == "set" || name == "unordered_set" || name == "array" ||
+           name == "optional" || name == "variant";
+  }
+
   static bool IsGCCollection(llvm::StringRef name) {
     return name == "HeapVector" || name == "HeapDeque" ||
            name == "HeapHashSet" || name == "HeapLinkedHashSet" ||
@@ -146,11 +139,17 @@ class Config {
   }
 
   static bool IsHashMap(llvm::StringRef name) {
-    return name == "HashMap" || name == "HeapHashMap";
+    return name == "HashMap" || name == "HeapHashMap" || name == "map" ||
+           name == "unordered_map";
   }
 
   // Assumes name is a valid collection name.
   static size_t CollectionDimension(llvm::StringRef name) {
+    // In case we're dealing with a variant, we want to collect the whole
+    // parameter pack.
+    if (name == "variant") {
+      return 0;
+    }
     return (IsHashMap(name) || name == "pair") ? 2 : 1;
   }
 

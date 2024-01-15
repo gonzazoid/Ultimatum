@@ -12,24 +12,33 @@ import("//build/config/ios/ios_sdk.gni")
 assert(xcode_version_int >= 1310, "Xcode 13.1 or higher is required.")
 
 declare_args() {
-  # Enable widget extensions.
+  # Enable notification center widget extensions.
   ios_enable_content_widget_extension = true
   ios_enable_search_widget_extension = true
 
-  # Enable iOS 14, WidgetKit extension.
-  ios_enable_widget_kit_extension = true
-
-  # Enable iOS 16 lockscreen extensions.
-  ios_enable_lockscreen_extension = true
-
   # Enable share extension.
   ios_enable_share_extension = true
+
+  # Enable open in extension.
+  ios_enable_open_extension = true
 
   # Enable credential provider extension.
   ios_enable_credential_provider_extension = true
 
   # Enable intents extension.
-  ios_enable_intents_extension = false
+  ios_enable_intents_extension = true
+
+  # Enable iOS 14, WidgetKit extension.
+  ios_enable_widget_kit_extension = true
+
+  # Enable iOS 16 lockscreen widget in WidgetKit extension.
+  ios_enable_lockscreen_widget = true
+
+  # Enable iOS shortcut widget in WidgetKit extension.
+  ios_enable_shortcuts_widget = true
+
+  # Enable iOS search passwords widget in WidgetKit extension.
+  ios_enable_search_passwords_widget = true
 
   # Label of the target providing implementation for AccountVerificationProvider.
   # Overridden when using the Google-internal repository to build Chrome on iOS.
@@ -39,7 +48,7 @@ declare_args() {
   ios_credential_provider_extension_api_key = ""
 
   # Controls whether ScreenTime API is used.
-  ios_enable_screen_time = true
+  ios_enable_screen_time = false
 
   # Enable background fetch mode for feed refresh.
   ios_enable_background_mode = true
@@ -69,6 +78,9 @@ declare_args() {
 
   # List of plist templates to merge when generating chrome cpe entitlements.
   ios_chrome_cpe_entitlements_additions = []
+
+  # Use perf_tests_hook if true
+  ios_is_perf_test = false
 }
 
 if (target_environment == "catalyst") {
@@ -78,21 +90,18 @@ if (target_environment == "catalyst") {
   ios_enable_credential_provider_extension = false
   ios_enable_widget_kit_extension = false
   ios_enable_prebuilt_widget_kit_extension = false
+  ios_enable_open_extension = false
 
   # ScreenTime framework is not available in the iOS support libraries provided
   # by "catalyst" environment.
   ios_enable_screen_time = false
 }
 
-# Configure whether breakpad support is enabled.
-breakpad_enabled = is_official_build && is_chrome_branded
-
-if (breakpad_enabled) {
-  breakpad_enabled_as_int = 1
+# Configure is_official_release.
+if (is_official_build && is_chrome_branded) {
   is_official_release = enable_dsyms && target_environment == "device" &&
                         current_toolchain == default_toolchain
 } else {
-  breakpad_enabled_as_int = 0
   is_official_release = false
 }
 

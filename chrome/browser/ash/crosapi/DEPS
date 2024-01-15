@@ -1,6 +1,12 @@
 specific_include_rules = {
+  "crosapi_ash\.cc": [
+    "+services/video_capture/ash",
+  ],
   "crosapi_ash\.h": [
     "+media/gpu/buildflags.h",
+  ],
+  "eye_dropper_ash\.cc": [
+    "+components/eye_dropper",
   ],
   "message_center_ash(\.cc|_unittest\.cc)": [
     # Provides a mojo interface around the message center, but lives in this
@@ -9,9 +15,15 @@ specific_include_rules = {
     "+chrome/browser/ash/crosapi",
     "+ui/message_center/message_center.h",
   ],
+  "power_ash\.cc": [
+    "+services/device/wake_lock/power_save_blocker/power_save_blocker.h",
+  ],
   "remoting_ash\.cc": [
     # For remote support functionality.
     "+remoting/host/chromeos",
+  ],
+  "screen_manager_ash\.cc": [
+    "+services/video_capture/ash",
   ],
   "select_file_ash\.cc": [
     # For Chrome OS-specific file manager parameters.

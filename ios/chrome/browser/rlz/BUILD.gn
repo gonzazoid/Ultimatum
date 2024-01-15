@@ -3,7 +3,6 @@
 # found in the LICENSE file.
 
 source_set("rlz") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "rlz_tracker_delegate_impl.h",
     "rlz_tracker_delegate_impl.mm",
@@ -13,10 +12,11 @@ source_set("rlz") {
     "//components/omnibox/browser",
     "//components/rlz",
     "//components/search_engines",
-    "//ios/chrome/browser/application_context",
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/google",
-    "//ios/chrome/browser/search_engines",
+    "//ios/chrome/browser/application_context/model",
+    "//ios/chrome/browser/google/model",
+    "//ios/chrome/browser/search_engines/model",
+    "//ios/chrome/browser/shared/model/application_context",
+    "//ios/chrome/browser/shared/model/browser_state",
     "//ios/public/provider/chrome/browser/app_distribution:app_distribution_api",
     "//ios/web",
     "//services/network/public/cpp",

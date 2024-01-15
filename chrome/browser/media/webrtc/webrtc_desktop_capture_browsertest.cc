@@ -3,9 +3,9 @@
 // found in the LICENSE file.
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback_forward.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
@@ -32,13 +32,14 @@
 #include "components/infobars/core/confirm_infobar_delegate.h"
 #include "components/infobars/core/infobar.h"
 #include "components/infobars/core/infobar_manager.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "media/base/media_switches.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
+#include "ui/gl/gl_switches.h"
 
 namespace {
 static const char kMainWebrtcTestHtmlPage[] = "/webrtc/webrtc_jsep01_test.html";
@@ -74,7 +75,7 @@ infobars::ContentInfoBarManager* GetInfoBarManager(
 
 ConfirmInfoBarDelegate* GetDelegate(Browser* browser, int tab) {
   return static_cast<ConfirmInfoBarDelegate*>(
-      GetInfoBarManager(browser, tab)->infobar_at(0)->delegate());
+      GetInfoBarManager(browser, tab)->infobars()[0]->delegate());
 }
 
 class InfobarUIChangeObserver : public TabStripModelObserver {
@@ -231,6 +232,11 @@ class WebRtcDesktopCaptureBrowserTest : public WebRtcTestBase {
     command_line->AppendSwitchASCII(switches::kAutoSelectDesktopCaptureSource,
                                     "Entire screen");
     command_line->AppendSwitch(switches::kEnableUserMediaScreenCapturing);
+    // TODO(https://crbug.com/1424557): Remove this after fixing feature
+    // detection in 0c tab capture path as it'll no longer be needed.
+    if constexpr (!BUILDFLAG(IS_CHROMEOS)) {
+      command_line->AppendSwitch(switches::kUseGpuInTests);
+    }
   }
 
  protected:
@@ -295,15 +301,20 @@ class WebRtcDesktopCaptureBrowserTest : public WebRtcTestBase {
     SetupPeerconnectionWithLocalStream(first_tab);
     SetupPeerconnectionWithLocalStream(second_tab);
     NegotiateCall(first_tab, second_tab);
-    VerifyStatsGeneratedCallback(second_tab);
     DetectVideoAndHangUp(first_tab, second_tab);
   }
 
   FakeDesktopMediaPickerFactory picker_factory_;
 };
 
+// TODO(crbug.com/1449889): Fails on MAC.
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_TabCaptureProvidesMinFps DISABLED_TabCaptureProvidesMinFps
+#else
+#define MAYBE_TabCaptureProvidesMinFps TabCaptureProvidesMinFps
+#endif
 IN_PROC_BROWSER_TEST_F(WebRtcDesktopCaptureBrowserTest,
-                       TabCaptureProvidesMinFps) {
+                       MAYBE_TabCaptureProvidesMinFps) {
   constexpr int kFps = 30;
   constexpr const char* const kFpsString = "30";
   constexpr int kTestTimeSeconds = 2;
@@ -351,9 +362,19 @@ IN_PROC_BROWSER_TEST_F(WebRtcDesktopCaptureBrowserTest,
   ASSERT_GE(average_fps, kFps / 3);
 }
 
+// TODO(crbug.com/1449889): Fails on Linux ASan, LSan and MSan builders.
+#if BUILDFLAG(IS_LINUX) &&                                      \
+    ((defined(ADDRESS_SANITIZER) && defined(LEAK_SANITIZER)) || \
+     defined(MEMORY_SANITIZER))
+#define MAYBE_TabCaptureProvides0HzWith0MinFpsConstraintAndStaticContent \
+  DISABLED_TabCaptureProvides0HzWith0MinFpsConstraintAndStaticContent
+#else
+#define MAYBE_TabCaptureProvides0HzWith0MinFpsConstraintAndStaticContent \
+  TabCaptureProvides0HzWith0MinFpsConstraintAndStaticContent
+#endif
 IN_PROC_BROWSER_TEST_F(
     WebRtcDesktopCaptureBrowserTest,
-    TabCaptureProvides0HzWith0MinFpsConstraintAndStaticContent) {
+    MAYBE_TabCaptureProvides0HzWith0MinFpsConstraintAndStaticContent) {
   constexpr base::TimeDelta kTestTime = base::Seconds(2);
   InitializeTabSharingForFirstTab(
       base::BindOnce(GetDesktopMediaIDForTab, base::Unretained(browser()), 1),
@@ -385,9 +406,8 @@ IN_PROC_BROWSER_TEST_F(WebRtcDesktopCaptureBrowserTest,
   RunP2PScreenshareWhileSharing(base::BindOnce(GetDesktopMediaIDForScreen));
 }
 
-// TODO(crbug.com/1282292, crbug.com/1304686): Test is flaky on Linux, Windows
-// and ChromeOS.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN)
+// TODO(crbug.com/1450456) flaky on ASan bots
+#if defined(ADDRESS_SANITIZER) || defined(MEMORY_SANITIZER)
 #define MAYBE_RunP2PScreenshareWhileSharingTab \
   DISABLED_RunP2PScreenshareWhileSharingTab
 #else

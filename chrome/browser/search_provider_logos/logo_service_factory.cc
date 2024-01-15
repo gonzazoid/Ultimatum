@@ -4,8 +4,8 @@
 
 #include "chrome/browser/search_provider_logos/logo_service_factory.h"
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "chrome/browser/image_fetcher/image_decoder_impl.h"
 #include "chrome/browser/profiles/profile.h"
@@ -38,26 +38,36 @@ LogoService* LogoServiceFactory::GetForProfile(Profile* profile) {
 
 // static
 LogoServiceFactory* LogoServiceFactory::GetInstance() {
-  return base::Singleton<LogoServiceFactory>::get();
+  static base::NoDestructor<LogoServiceFactory> instance;
+  return instance.get();
 }
 
 LogoServiceFactory::LogoServiceFactory()
-    : ProfileKeyedServiceFactory("LogoService") {
+    : ProfileKeyedServiceFactory(
+          "LogoService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(IdentityManagerFactory::GetInstance());
   DependsOn(TemplateURLServiceFactory::GetInstance());
 }
 
 LogoServiceFactory::~LogoServiceFactory() = default;
 
-KeyedService* LogoServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+LogoServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = static_cast<Profile*>(context);
   DCHECK(!profile->IsOffTheRecord());
-  return new LogoServiceImpl(profile->GetPath().Append(kCachedLogoDirectory),
-                             IdentityManagerFactory::GetForProfile(profile),
-                             TemplateURLServiceFactory::GetForProfile(profile),
-                             std::make_unique<ImageDecoderImpl>(),
-                             profile->GetDefaultStoragePartition()
-                                 ->GetURLLoaderFactoryForBrowserProcess(),
-                             base::BindRepeating(&UseGrayLogo));
+  return std::make_unique<LogoServiceImpl>(
+      profile->GetPath().Append(kCachedLogoDirectory),
+      IdentityManagerFactory::GetForProfile(profile),
+      TemplateURLServiceFactory::GetForProfile(profile),
+      std::make_unique<ImageDecoderImpl>(),
+      profile->GetDefaultStoragePartition()
+          ->GetURLLoaderFactoryForBrowserProcess(),
+      base::BindRepeating(&UseGrayLogo));
 }

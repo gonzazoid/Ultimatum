@@ -12,7 +12,6 @@ import static org.junit.Assert.assertTrue;
 import android.content.Intent;
 import android.os.Bundle;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -41,11 +40,6 @@ public class WebappLauncherActivityTest {
         WebApkValidator.setDisableValidationForTesting(true);
     }
 
-    @After
-    public void tearDown() {
-        WebApkValidator.setDisableValidationForTesting(false);
-    }
-
     /**
      * Test that WebappLauncherActivity modifies the passed-in intent so that
      * WebApkIntentDataProviderFactory#create() returns null if the intent does not refer to a valid
@@ -63,9 +57,7 @@ public class WebappLauncherActivityTest {
         assertNull(WebApkIntentDataProviderFactory.create(intent));
     }
 
-    /**
-     * Test the launch intent created by {@link WebappLauncherActivity} for old-style WebAPKs.
-     */
+    /** Test the launch intent created by {@link WebappLauncherActivity} for old-style WebAPKs. */
     @Test
     public void testOldStyleLaunchIntent() {
         registerWebApk(WEBAPK_PACKAGE_NAME, START_URL);
@@ -82,9 +74,7 @@ public class WebappLauncherActivityTest {
         assertNotNull(WebApkIntentDataProviderFactory.create(launchIntent));
     }
 
-    /**
-     * Test the launch intent created by {@link WebappLauncherActivity} for new-style WebAPKs.
-     */
+    /** Test the launch intent created by {@link WebappLauncherActivity} for new-style WebAPKs. */
     @Test
     public void testNewStyleLaunchIntent() {
         registerWebApk(WEBAPK_PACKAGE_NAME, START_URL);
@@ -104,7 +94,7 @@ public class WebappLauncherActivityTest {
         Bundle bundle = new Bundle();
         bundle.putString(WebApkMetaDataKeys.START_URL, START_URL);
         WebApkTestHelper.registerWebApkWithMetaData(
-                webApkPackage, bundle, null /* shareTargetMetaData */);
+                webApkPackage, bundle, /* shareTargetMetaData= */ null);
         WebApkTestHelper.addIntentFilterForUrl(webApkPackage, startUrl);
     }
 

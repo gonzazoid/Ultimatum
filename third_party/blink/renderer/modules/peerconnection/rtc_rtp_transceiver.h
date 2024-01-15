@@ -26,7 +26,8 @@ class RTCRtpReceiver;
 class RTCRtpSender;
 
 webrtc::RtpTransceiverInit ToRtpTransceiverInit(ExecutionContext* context,
-                                                const RTCRtpTransceiverInit*);
+                                                const RTCRtpTransceiverInit*,
+                                                const String& kind);
 
 class RTCRtpTransceiver final : public ScriptWrappable {
   DEFINE_WRAPPERTYPEINFO();
@@ -71,14 +72,13 @@ class RTCRtpTransceiver final : public ScriptWrappable {
   bool DirectionHasRecv() const;
   bool FiredDirectionHasRecv() const;
 
-  void setOfferedRtpHeaderExtensions(
-      const HeapVector<Member<RTCRtpHeaderExtensionCapability>>&
-          header_extensions_to_offer,
+  void setHeaderExtensionsToNegotiate(
+      const HeapVector<Member<RTCRtpHeaderExtensionCapability>>& extensions,
       ExceptionState& exception_state);
-  HeapVector<Member<RTCRtpHeaderExtensionCapability>> headerExtensionsToOffer()
-      const;
   HeapVector<Member<RTCRtpHeaderExtensionCapability>>
-  headerExtensionsNegotiated() const;
+  getHeaderExtensionsToNegotiate() const;
+  HeapVector<Member<RTCRtpHeaderExtensionCapability>>
+  getNegotiatedHeaderExtensions() const;
 
   void Trace(Visitor*) const override;
 

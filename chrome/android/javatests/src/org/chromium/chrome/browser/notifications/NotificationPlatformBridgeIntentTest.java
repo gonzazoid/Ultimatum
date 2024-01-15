@@ -7,9 +7,9 @@ package org.chromium.chrome.browser.notifications;
 import android.app.Notification;
 import android.content.Context;
 import android.content.Intent;
-import android.support.test.InstrumentationRegistry;
 
 import androidx.test.filters.MediumTest;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.hamcrest.Matchers;
 import org.junit.Assert;
@@ -33,7 +33,7 @@ import org.chromium.components.browser_ui.site_settings.SingleWebsiteSettings;
 /**
  * Instrumentation tests for the Notification Platform Bridge.
  *
- * Exercises the handling of intents and explicitly does not do anything in startMainActivity so
+ * <p>Exercises the handling of intents and explicitly does not do anything in startMainActivity so
  * that the responsibility for correct initialization, e.g. loading the native library, lies with
  * the code exercised by this test.
  */
@@ -55,15 +55,16 @@ public class NotificationPlatformBridgeIntentTest {
      */
     @Test
     @MediumTest
-    @DisabledTest(message = "https://crbug.com/1246141")
     @Feature({"Browser", "Notifications"})
     public void testLaunchNotificationPreferencesForCategory() {
-        Assert.assertFalse("The native library should not be loaded yet",
+        Assert.assertFalse(
+                "The native library should not be loaded yet",
                 LibraryLoader.getInstance().isInitialized());
 
-        final Context context = InstrumentationRegistry.getInstrumentation()
-                                        .getTargetContext()
-                                        .getApplicationContext();
+        final Context context =
+                InstrumentationRegistry.getInstrumentation()
+                        .getTargetContext()
+                        .getApplicationContext();
 
         final Intent intent =
                 new Intent(Intent.ACTION_MAIN)
@@ -71,14 +72,16 @@ public class NotificationPlatformBridgeIntentTest {
                         .setClassName(context, ChromeLauncherActivity.class.getName())
                         .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
-        SettingsActivity activity = ActivityTestUtils.waitForActivity(
-                InstrumentationRegistry.getInstrumentation(), SettingsActivity.class,
-                new Runnable() {
-                    @Override
-                    public void run() {
-                        context.startActivity(intent);
-                    }
-                });
+        SettingsActivity activity =
+                ActivityTestUtils.waitForActivity(
+                        InstrumentationRegistry.getInstrumentation(),
+                        SettingsActivity.class,
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                context.startActivity(intent);
+                            }
+                        });
         Assert.assertNotNull("Could not find the Settings activity", activity);
 
         SingleCategorySettings fragment =
@@ -93,15 +96,16 @@ public class NotificationPlatformBridgeIntentTest {
      */
     @Test
     @MediumTest
-    @DisabledTest(message = "https://crbug.com/1246141")
     @Feature({"Browser", "Notifications"})
     public void testLaunchNotificationPreferencesForWebsite() {
-        Assert.assertFalse("The native library should not be loaded yet",
+        Assert.assertFalse(
+                "The native library should not be loaded yet",
                 LibraryLoader.getInstance().isInitialized());
 
-        final Context context = InstrumentationRegistry.getInstrumentation()
-                                        .getTargetContext()
-                                        .getApplicationContext();
+        final Context context =
+                InstrumentationRegistry.getInstrumentation()
+                        .getTargetContext()
+                        .getApplicationContext();
 
         final Intent intent =
                 new Intent(Intent.ACTION_MAIN)
@@ -109,17 +113,20 @@ public class NotificationPlatformBridgeIntentTest {
                         .setClassName(context, ChromeLauncherActivity.class.getName())
                         .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         .putExtra(EXTRA_NOTIFICATION_ID, NotificationPlatformBridge.PLATFORM_ID)
-                        .putExtra(NotificationConstants.EXTRA_NOTIFICATION_TAG,
-                                "p#https://example.com#0" /* notificationId */);
+                        .putExtra(
+                                NotificationConstants.EXTRA_NOTIFICATION_TAG,
+                                /* notificationId= */ "p#https://example.com#0");
 
-        SettingsActivity activity = ActivityTestUtils.waitForActivity(
-                InstrumentationRegistry.getInstrumentation(), SettingsActivity.class,
-                new Runnable() {
-                    @Override
-                    public void run() {
-                        context.startActivity(intent);
-                    }
-                });
+        SettingsActivity activity =
+                ActivityTestUtils.waitForActivity(
+                        InstrumentationRegistry.getInstrumentation(),
+                        SettingsActivity.class,
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                context.startActivity(intent);
+                            }
+                        });
         Assert.assertNotNull("Could not find the Settings activity", activity);
 
         SingleWebsiteSettings fragment =
@@ -132,21 +139,23 @@ public class NotificationPlatformBridgeIntentTest {
      * routed through the NotificationService which starts the browser process, which in turn will
      * create an instance of the NotificationPlatformBridge.
      *
-     * The created intent does not carry significant data and is expected to fail, but has to be
+     * <p>The created intent does not carry significant data and is expected to fail, but has to be
      * sufficient for the Java code to trigger start-up of the browser process.
      */
     @Test
     @MediumTest
-    @DisabledTest(message = "https://crbug.com/950635")
     @Feature({"Browser", "Notifications"})
+    @DisabledTest(message = "https://crbug.com/1420990")
     public void testLaunchProcessForNotificationActivation() throws Exception {
-        Assert.assertFalse("The native library should not be loaded yet",
+        Assert.assertFalse(
+                "The native library should not be loaded yet",
                 LibraryLoader.getInstance().isInitialized());
         Assert.assertNull(NotificationPlatformBridge.getInstanceForTests());
 
-        Context context = InstrumentationRegistry.getInstrumentation()
-                                  .getTargetContext()
-                                  .getApplicationContext();
+        Context context =
+                InstrumentationRegistry.getInstrumentation()
+                        .getTargetContext()
+                        .getApplicationContext();
 
         Intent intent = new Intent(NotificationConstants.ACTION_CLICK_NOTIFICATION);
         intent.setClass(context, NotificationServiceImpl.Receiver.class);
@@ -158,12 +167,16 @@ public class NotificationPlatformBridgeIntentTest {
 
         context.sendBroadcast(intent);
 
-        CriteriaHelper.pollUiThread(() -> {
-            Criteria.checkThat("Browser process was never started.",
-                    NotificationPlatformBridge.getInstanceForTests(), Matchers.notNullValue());
-        });
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    Criteria.checkThat(
+                            "Browser process was never started.",
+                            NotificationPlatformBridge.getInstanceForTests(),
+                            Matchers.notNullValue());
+                });
 
-        Assert.assertTrue("The native library should be loaded now",
+        Assert.assertTrue(
+                "The native library should be loaded now",
                 LibraryLoader.getInstance().isInitialized());
         Assert.assertNotNull(NotificationPlatformBridge.getInstanceForTests());
     }

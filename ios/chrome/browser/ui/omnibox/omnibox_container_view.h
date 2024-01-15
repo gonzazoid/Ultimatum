@@ -7,12 +7,15 @@
 
 #import <UIKit/UIKit.h>
 
+#import "ios/chrome/browser/ui/omnibox/text_field_view_containing.h"
+
+@class LayoutGuideCenter;
 @class OmniboxTextFieldIOS;
 
 // The omnibox container view is the view that is shown in the location bar's
 // edit state. It contains the omnibox textfield and the buttons on the left and
 // right of it.
-@interface OmniboxContainerView : UIView
+@interface OmniboxContainerView : UIView <TextFieldViewContaining>
 
 // Initialize the container view with the given frame, text color, and tint
 // color for omnibox.
@@ -33,17 +36,15 @@
 // and icon colors.
 @property(nonatomic, assign) BOOL incognito;
 
-// Sets the leading button's image.
-- (void)setLeadingImage:(UIImage*)image;
+// The layout guide center to use to refer to the omnibox leading image.
+@property(nonatomic, strong) LayoutGuideCenter* layoutGuideCenter;
 
-// Sets the alpha level of the leading image view.
-- (void)setLeadingImageAlpha:(CGFloat)alpha;
+// Sets the leading button's image and sets its accessibility identifier.
+- (void)setLeadingImage:(UIImage*)image
+    withAccessibilityIdentifier:(NSString*)accessibilityIdentifier;
 
 // Sets the scale of the leading image view.
 - (void)setLeadingImageScale:(CGFloat)scaleValue;
-
-// Asks the container view to attch any layout guides to its views.
-- (void)attachLayoutGuides;
 
 @end
 

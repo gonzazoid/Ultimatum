@@ -15,10 +15,10 @@
 #include <unistd.h>
 #include <cstring>
 
-#include "base/bind.h"
 #include "base/containers/span.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/numerics/checked_math.h"
 #include "base/path_service.h"
@@ -404,7 +404,7 @@ ssize_t EncryptedSwapFile::ReadFromSwap(const Region& swap_region,
   }
   cipher_text.resize(read_bytes);
 
-  absl::optional<std::vector<uint8_t>> decrypted =
+  std::optional<std::vector<uint8_t>> decrypted =
       aead_.Open(cipher_text, nonce_,
                  /* additional data */ base::span<const uint8_t>());
   if (!decrypted) {

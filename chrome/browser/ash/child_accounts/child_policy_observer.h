@@ -8,7 +8,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "components/policy/core/common/cloud/cloud_policy_service.h"
 
@@ -89,14 +90,9 @@ class ChildPolicyObserver : public policy::CloudPolicyService::Observer {
   PolicyReadyCallback on_policy_ready_;
 
   // Profile of the child user, not owned.
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromOS code migration is done.
-namespace chromeos {
-using ::ash::ChildPolicyObserver;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_CHILD_ACCOUNTS_CHILD_POLICY_OBSERVER_H_

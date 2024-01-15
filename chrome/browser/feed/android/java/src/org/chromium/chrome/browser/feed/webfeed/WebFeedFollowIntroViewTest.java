@@ -13,7 +13,6 @@ import android.view.View;
 
 import androidx.test.filters.SmallTest;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -27,7 +26,6 @@ import org.chromium.base.FeatureList;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.feature_engagement.TrackerFactory;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.user_education.UserEducationHelper;
 import org.chromium.components.feature_engagement.Tracker;
@@ -44,19 +42,13 @@ public final class WebFeedFollowIntroViewTest {
     private Activity mActivity;
     private View mMenuButtonAnchorView;
 
-    @Rule
-    public JniMocker mJniMocker = new JniMocker();
+    @Rule public JniMocker mJniMocker = new JniMocker();
 
-    @Mock
-    private Profile mProfile;
-    @Mock
-    private PrefService mPrefService;
-    @Mock
-    private UserPrefs.Natives mUserPrefsJniMock;
-    @Mock
-    private Tracker mTracker;
-    @Mock
-    private UserEducationHelper mHelper;
+    @Mock private Profile mProfile;
+    @Mock private PrefService mPrefService;
+    @Mock private UserPrefs.Natives mUserPrefsJniMock;
+    @Mock private Tracker mTracker;
+    @Mock private UserEducationHelper mHelper;
 
     @Before
     public void setUp() {
@@ -74,22 +66,18 @@ public final class WebFeedFollowIntroViewTest {
         // Build the class under test.
         Runnable noOp = () -> {};
         mWebFeedFollowIntroView =
-                new WebFeedFollowIntroView(mActivity, null, mMenuButtonAnchorView, mTracker,
-                        /*introDismissedCallback=*/noOp);
-    }
-
-    @After
-    public void tearDown() {
-        TrackerFactory.setTrackerForTests(null);
+                new WebFeedFollowIntroView(
+                        mActivity,
+                        null,
+                        mMenuButtonAnchorView,
+                        mTracker,
+                        /* introDismissedCallback= */ noOp);
     }
 
     @Test
     @SmallTest
     public void showIPHTest() {
         FeatureList.TestValues baseTestValues = new FeatureList.TestValues();
-        baseTestValues.addFeatureFlagOverride(
-                ChromeFeatureList.ANDROID_SCROLL_OPTIMIZATIONS, false);
-        baseTestValues.addFeatureFlagOverride(ChromeFeatureList.ENABLE_IPH, true);
         FeatureList.setTestValues(baseTestValues);
 
         mWebFeedFollowIntroView.showIPH(mHelper, () -> {}, () -> {});

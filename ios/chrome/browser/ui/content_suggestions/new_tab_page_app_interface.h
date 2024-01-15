@@ -8,38 +8,7 @@
 #import <UIKit/UIKit.h>
 
 // App interface for the NTP.
-// TODO(crbug.com/1299373): Separate content suggestions functions into
-// ContentSuggestionsAppInterface interface and move this to /ui/ntp.
 @interface NewTabPageAppInterface : NSObject
-
-// Sets the fake service up.
-+ (void)setUpService;
-
-// Resets the service to the real, non-fake service to avoid leaking the fake.
-+ (void)resetService;
-
-// Marks the suggestions as available.
-+ (void)makeSuggestionsAvailable;
-
-// Disables the suggestions.
-+ (void)disableSuggestions;
-
-// Adds `numberOfSuggestions` suggestions to the list of suggestions provided.
-// The suggestions have the name "chromium<suggestionNumber>" and the url
-// http://chromium/<suggestionNumber>.
-+ (void)addNumberOfSuggestions:(NSInteger)numberOfSuggestions
-      additionalSuggestionsURL:(NSURL*)URL;
-
-// Add one particular suggestion, following the convention explained above, with
-// `suggestionNumber`.
-+ (void)addSuggestionNumber:(NSInteger)suggestionNumber;
-
-// Returns the short name of the default search engine.
-+ (NSString*)defaultSearchEngine;
-
-// Resets the default search engine to `defaultSearchEngine`.
-// `defaultSearchEngine` should be its short name.
-+ (void)resetSearchEngineTo:(NSString*)defaultSearchEngine;
 
 // Returns the width the search field is supposed to have when the collection
 // has `collectionWidth`. `traitCollection` is the trait collection of the view
@@ -59,6 +28,29 @@
 
 // Returns the Discover header label.
 + (UILabel*)discoverHeaderLabel;
+
+// Disables the SetUpList via a pref.
++ (void)disableSetUpList;
+
+// Resets SetUpList prefs to clear any completed items.
++ (void)resetSetUpListPrefs;
+
+// Returns YES if the SetUpListItemView for SignInSync is complete.
++ (BOOL)setUpListItemSignInSyncIsComplete;
+
+// Returns YES if the SetUpListItemView for DefaultBrowser is complete.
++ (BOOL)setUpListItemDefaultBrowserIsComplete;
+
+// Returns YES if the SetUpListItemView for Autofill is complete.
++ (BOOL)setUpListItemAutofillIsComplete;
+
+// Returns YES if the Default Browser SetUpListItemView item in the Magic Stack
+// is complete.
++ (BOOL)setUpListItemDefaultBrowserInMagicStackIsComplete;
+
+// Returns YES if the Autofill SetUpListItemView item in the Magic Stack is
+// complete.
++ (BOOL)setUpListItemAutofillInMagicStackIsComplete;
 
 @end
 

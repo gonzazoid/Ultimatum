@@ -8,7 +8,7 @@
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_member.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
-#include "services/network/public/mojom/network_service.mojom.h"
+#include "services/network/public/mojom/network_context.mojom-forward.h"
 #include "services/network/public/mojom/ssl_config.mojom.h"
 
 class PrefService;
@@ -55,8 +55,6 @@ class SSLConfigServiceManager {
   // cached list of parsed SSL/TLS cipher suites that are disabled.
   void OnDisabledCipherSuitesChange(PrefService* local_state);
 
-  void CacheVariationsPolicy(PrefService* local_state);
-
   PrefChangeRegistrar local_state_change_registrar_;
 
   // The local_state prefs.
@@ -65,15 +63,13 @@ class SSLConfigServiceManager {
   StringPrefMember ssl_version_min_;
   StringPrefMember ssl_version_max_;
   StringListPrefMember h2_client_cert_coalescing_host_patterns_;
-  BooleanPrefMember cecpq2_enabled_;
+  BooleanPrefMember post_quantum_enabled_;
   BooleanPrefMember ech_enabled_;
+  BooleanPrefMember insecure_hash_enabled_;
+  BooleanPrefMember rsa_key_usage_for_local_anchors_enabled_;
 
   // The cached list of disabled SSL cipher suites.
   std::vector<uint16_t> disabled_cipher_suites_;
-
-  // variations_unrestricted_ is true iff the ChromeVariations policy has not
-  // been set to anything more restrictive than the default NO_RESTRICTIONS.
-  bool variations_unrestricted_ = true;
 
   mojo::RemoteSet<network::mojom::SSLConfigClient> ssl_config_client_set_;
 };

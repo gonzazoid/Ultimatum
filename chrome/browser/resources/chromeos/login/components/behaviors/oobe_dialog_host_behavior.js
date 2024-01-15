@@ -2,10 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// clang-format off
-// #import {dom, Polymer} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-// #import {invokePolymerMethod} from '../../display_manager.m.js';
-// clang-format on
+import {dom} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {invokePolymerMethod} from '../../display_manager.js';
+import {traceFirstScreenShown} from '../../oobe_trace.js';
 
 /**
  * @fileoverview
@@ -14,19 +14,17 @@
  */
 
 /** @polymerBehavior */
-/* #export */ var OobeDialogHostBehavior = {
-  properties: {},
-
+export const OobeDialogHostBehavior = {
   /**
    * Triggers onBeforeShow for descendants.
-   * @suppress {missingProperties} cr.ui.login.invokePolymerMethod
+   * @suppress {missingProperties} invokePolymerMethod
    */
   propagateOnBeforeShow() {
     const dialogs = this.shadowRoot.querySelectorAll(
         'oobe-dialog,oobe-adaptive-dialog,oobe-content-dialog,' +
         'gaia-dialog,oobe-loading-dialog');
     for (const dialog of dialogs) {
-      cr.ui.login.invokePolymerMethod(dialog, 'onBeforeShow');
+      invokePolymerMethod(dialog, 'onBeforeShow');
     }
   },
 
@@ -34,6 +32,7 @@
    * Trigger onBeforeShow for all children.
    */
   onBeforeShow() {
+    traceFirstScreenShown();
     this.propagateOnBeforeShow();
   },
 
@@ -42,8 +41,8 @@
    * @param {string} selector CSS selector (optional).
    */
   propagateUpdateLocalizedContent(selector) {
-    var screens = Polymer.dom(this.root).querySelectorAll(selector);
-    for (var i = 0; i < screens.length; ++i) {
+    const screens = dom(this.root).querySelectorAll(selector);
+    for (let i = 0; i < screens.length; ++i) {
       /** @type {{updateLocalizedContent: function()}}}*/ (screens[i])
           .updateLocalizedContent();
     }
@@ -51,10 +50,8 @@
 
 };
 
-/**
- * TODO(alemate): Replace with an interface. b/24294625
- * @typedef {{
- *   onBeforeShow: function()
- * }}
- */
-OobeDialogHostBehavior.Proto;
+/** @interface */
+export class OobeDialogHostBehaviorInterface {
+  /** @param {...Object} data  */
+  onBeforeShow(...data) {}
+}

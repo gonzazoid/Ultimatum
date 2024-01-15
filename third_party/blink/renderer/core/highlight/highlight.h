@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HIGHLIGHT_HIGHLIGHT_H_
 
 #include "third_party/blink/renderer/bindings/core/v8/iterable.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_sync_iterator_highlight.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/abstract_range.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
@@ -16,12 +17,10 @@
 
 namespace blink {
 
-using HighlightSetIterable =
-    SetlikeIterable<Member<AbstractRange>, AbstractRange>;
+using HighlightSetIterable = ValueSyncIterable<Highlight>;
 class HighlightRegistry;
 
-class CORE_EXPORT Highlight : public EventTargetWithInlineData,
-                              public HighlightSetIterable {
+class CORE_EXPORT Highlight : public EventTarget, public HighlightSetIterable {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -55,10 +54,7 @@ class CORE_EXPORT Highlight : public EventTargetWithInlineData,
    public:
     explicit IterationSource(const Highlight& highlight);
 
-    bool Next(ScriptState*,
-              Member<AbstractRange>&,
-              Member<AbstractRange>&,
-              ExceptionState&) override;
+    bool FetchNextItem(ScriptState*, AbstractRange*&, ExceptionState&) override;
 
     void Trace(blink::Visitor*) const override;
 
@@ -66,10 +62,6 @@ class CORE_EXPORT Highlight : public EventTargetWithInlineData,
     wtf_size_t index_;
     HeapVector<Member<AbstractRange>> highlight_ranges_snapshot_;
   };
-
-  HighlightSetIterable::IterationSource* StartIteration(
-      ScriptState*,
-      ExceptionState&) override;
 
   const HeapLinkedHashSet<Member<AbstractRange>>& GetRanges() const {
     return highlight_ranges_;
@@ -79,9 +71,13 @@ class CORE_EXPORT Highlight : public EventTargetWithInlineData,
   void DeregisterFrom(HighlightRegistry* highlight_registry);
 
  private:
+  HighlightSetIterable::IterationSource* CreateIterationSource(
+      ScriptState*,
+      ExceptionState&) override;
+
   HeapLinkedHashSet<Member<AbstractRange>> highlight_ranges_;
   int32_t priority_ = 0;
-  AtomicString type_ = "highlight";
+  AtomicString type_{"highlight"};
   // Since a Highlight can be registered many times under different names in
   // many HighlightRegistries, we need to keep track of the number of times
   // it's present in each registry. If the Highlight is not registered anywhere,

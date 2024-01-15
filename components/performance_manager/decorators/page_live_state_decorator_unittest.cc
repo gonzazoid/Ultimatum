@@ -6,13 +6,20 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
+#include "base/test/bind.h"
+#include "components/performance_manager/graph/page_node_impl.h"
+#include "components/performance_manager/public/performance_manager.h"
 #include "components/performance_manager/test_support/decorators_utils.h"
 #include "components/performance_manager/test_support/graph_test_harness.h"
 #include "components/performance_manager/test_support/performance_manager_test_harness.h"
+#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_contents.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -44,7 +51,9 @@ class TestPageLiveStateObserver : public PageLiveStateObserver {
     kOnIsAutoDiscardableChanged,
     kOnWasDiscardedChanged,
     kOnIsActiveTabChanged,
+    kOnIsPinnedTabChanged,
     kOnContentSettingsChanged,
+    kOnIsDevToolsOpenChanged,
   };
 
   void OnIsConnectedToUSBDeviceChanged(const PageNode* page_node) override {
@@ -90,8 +99,16 @@ class TestPageLiveStateObserver : public PageLiveStateObserver {
     latest_function_called_ = ObserverFunction::kOnIsActiveTabChanged;
     page_node_passed_ = page_node;
   }
+  void OnIsPinnedTabChanged(const PageNode* page_node) override {
+    latest_function_called_ = ObserverFunction::kOnIsPinnedTabChanged;
+    page_node_passed_ = page_node;
+  }
   void OnContentSettingsChanged(const PageNode* page_node) override {
     latest_function_called_ = ObserverFunction::kOnContentSettingsChanged;
+    page_node_passed_ = page_node;
+  }
+  void OnIsDevToolsOpenChanged(const PageNode* page_node) override {
+    latest_function_called_ = ObserverFunction::kOnIsDevToolsOpenChanged;
     page_node_passed_ = page_node;
   }
 
@@ -106,7 +123,7 @@ class MockPageLiveStateDelegate
 
  private:
   std::map<ContentSettingsType, ContentSetting> GetContentSettingsForUrl(
-      WebContentsProxy web_contents_proxy,
+      content::WebContents* web_contents,
       const GURL& url) override {
     return {
         {ContentSettingsType::NOTIFICATIONS, CONTENT_SETTING_ALLOW},
@@ -198,18 +215,17 @@ class PageLiveStateDecoratorTest : public PerformanceManagerTestHarness {
   }
 
   void OnGraphCreated(GraphImpl* graph) override {
-    task_runner_ = base::ThreadPool::CreateSequencedTaskRunner({});
     graph->PassToGraph(std::make_unique<PageLiveStateDecorator>(
-        base::SequenceBound<MockPageLiveStateDelegate>(task_runner_)));
+        base::SequenceBound<MockPageLiveStateDelegate>(
+            content::GetUIThreadTaskRunner({}))));
   }
 
   scoped_refptr<base::SequencedTaskRunner> task_runner() {
-    return task_runner_;
+    return content::GetUIThreadTaskRunner({});
   }
 
  private:
   std::unique_ptr<TestPageLiveStateObserver> observer_;
-  scoped_refptr<base::SequencedTaskRunner> task_runner_;
 };
 
 TEST_F(PageLiveStateDecoratorTest, OnIsConnectedToUSBDeviceChanged) {
@@ -308,6 +324,16 @@ TEST_F(PageLiveStateDecoratorTest, OnIsActiveTabChanged) {
       TestPageLiveStateObserver::ObserverFunction::kOnIsActiveTabChanged);
 }
 
+TEST_F(PageLiveStateDecoratorTest, OnIsPinnedTabChanged) {
+  testing::EndToEndBooleanPropertyTest(
+      web_contents(), &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsPinnedTab,
+      &PageLiveStateDecorator::SetIsPinnedTab,
+      /*default_state=*/false);
+  VerifyObserverExpectationOnPMSequence(
+      TestPageLiveStateObserver::ObserverFunction::kOnIsPinnedTabChanged);
+}
+
 TEST_F(PageLiveStateDecoratorTest, OnContentSettingsChanged) {
   base::WeakPtr<PageNode> node =
       PerformanceManager::GetPrimaryPageNodeForWebContents(web_contents());
@@ -379,6 +405,8 @@ TEST_F(PageLiveStateDecoratorTest, OnContentSettingsChanged) {
       TestPageLiveStateObserver::ObserverFunction::kOnContentSettingsChanged);
 }
 
+// Content settings aren't fetched on navigation on Android.
+#if !BUILDFLAG(IS_ANDROID)
 TEST_F(PageLiveStateDecoratorTest, GetContentSettingsOnNavigation) {
   base::WeakPtr<PageNode> node =
       PerformanceManager::GetPrimaryPageNodeForWebContents(web_contents());
@@ -433,6 +461,68 @@ TEST_F(PageLiveStateDecoratorTest, GetContentSettingsOnNavigation) {
 
   VerifyObserverExpectationOnPMSequence(
       TestPageLiveStateObserver::ObserverFunction::kOnContentSettingsChanged);
+}
+
+TEST_F(PageLiveStateDecoratorTest, OnIsDevToolsOpenChanged) {
+  testing::EndToEndBooleanPropertyTest(
+      web_contents(), &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsDevToolsOpen,
+      &PageLiveStateDecorator::SetIsDevToolsOpen,
+      /*default_state=*/false);
+  VerifyObserverExpectationOnPMSequence(
+      TestPageLiveStateObserver::ObserverFunction::kOnIsDevToolsOpenChanged);
+}
+
+#endif  // !BUILDFLAG(IS_ANDROID)
+
+TEST_F(PageLiveStateDecoratorTest, UpdateTitleInBackground) {
+  base::WeakPtr<PageNode> node =
+      PerformanceManager::GetPrimaryPageNodeForWebContents(web_contents());
+  base::RunLoop run_loop;
+  PerformanceManager::CallOnGraph(
+      FROM_HERE, base::BindLambdaForTesting([&]() {
+        ASSERT_TRUE(node);
+        auto* node_impl = PageNodeImpl::FromNode(node.get());
+        auto* data =
+            PageLiveStateDecorator::Data::GetOrCreateForPageNode(node.get());
+
+        // Updating the title while the node is visible does nothing.
+        node_impl->SetIsVisible(true);
+        node_impl->OnTitleUpdated();
+        EXPECT_EQ(data->UpdatedTitleOrFaviconInBackground(), false);
+
+        node_impl->SetIsVisible(false);
+        node_impl->OnTitleUpdated();
+        EXPECT_EQ(data->UpdatedTitleOrFaviconInBackground(), true);
+
+        run_loop.Quit();
+      }));
+  run_loop.Run();
+}
+
+TEST_F(PageLiveStateDecoratorTest, UpdateFaviconInBackground) {
+  base::WeakPtr<PageNode> node =
+      PerformanceManager::GetPrimaryPageNodeForWebContents(web_contents());
+  base::RunLoop run_loop;
+  PerformanceManager::CallOnGraph(
+      FROM_HERE, base::BindLambdaForTesting([&]() {
+        ASSERT_TRUE(node);
+        auto* node_impl = PageNodeImpl::FromNode(node.get());
+        auto* data =
+            PageLiveStateDecorator::Data::GetOrCreateForPageNode(node.get());
+
+        // Updating the favicon while the node is visible does nothing.
+        node_impl->SetIsVisible(true);
+        node_impl->OnFaviconUpdated();
+        EXPECT_EQ(data->UpdatedTitleOrFaviconInBackground(), false);
+
+        node_impl->SetIsVisible(false);
+        node_impl->OnFaviconUpdated();
+        EXPECT_EQ(data->UpdatedTitleOrFaviconInBackground(), true);
+
+        run_loop.Quit();
+      }));
+  run_loop.Run();
 }
 
 }  // namespace performance_manager

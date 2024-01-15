@@ -5,10 +5,11 @@
 #include "chrome/browser/ash/chromebox_for_meetings/browser/cfm_browser_service.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/run_loop.h"
@@ -27,12 +28,12 @@
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash::cfm {
 namespace {
 
-// TODO(https://crbug.com/1164001): remove after the migration to namespace ash.
+// TODO(https://crbug.com/1403174): Remove when namespace of mojoms for CfM are
+// migarted to ash.
 namespace mojom = ::chromeos::cfm::mojom;
 
 class CfmBrowserServiceTest : public testing::Test {
@@ -126,7 +127,7 @@ TEST_F(CfmBrowserServiceTest, GetBrowserRemote) {
 
 TEST_F(CfmBrowserServiceTest, GetVariationsData) {
   std::string field_trial_parameters = "Foo.Bar:Key/Value";
-  std::string field_trial_states = "*Baz/Qux/Foo/Bar/";
+  std::string field_trial_states = "*Baz/Qux/Foo/Bar";
   std::string enabled_features = "enabled<Foo";
   std::string disabled_features = "disabled<Baz";
 

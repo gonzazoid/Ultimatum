@@ -36,8 +36,8 @@ out_linux_ash: the directory that holds artifacts for ash-chrome running on linu
 ```shell
 % gn args out_linux_ash/Release
 
-target_os = "chromeos"
-use_goma = true          # speeds up compilation
+target_os="chromeos"
+use_remoteeec=true          # speeds up compilation
 ```
 out_linux_lacros: the directory that holds artifacts for lacros-chrome running on linux
 ```shell
@@ -45,7 +45,7 @@ out_linux_lacros: the directory that holds artifacts for lacros-chrome running o
 
 target_os="chromeos"
 chromeos_is_browser_only=true
-use_goma=true             # speeds up compilation
+use_remoteexec=true             # speeds up compilation
 is_component_build=true   # speeds up links
 ```
 
@@ -62,7 +62,7 @@ Build ash-chrome with typical target_os="chromeos" workflow
 ```shell
 % mkdir -p out_linux_ash/Release
 % echo '
-use_goma=true
+use_remoteexec=true
 target_os="chromeos"' > out_linux_ash/Release/args.gn
 % gn gen out_linux_ash/Release
 % autoninja -C out_linux_ash/Release chrome
@@ -74,7 +74,7 @@ Build lacros-chrome-on-linux:
 % mkdir -p out_linux_lacros/Release
 % echo '
 chromeos_is_browser_only=true
-use_goma=true
+use_remoteexec=true
 target_os="chromeos"
 is_component_build=true' > out_linux_lacros/Release/args.gn
 % gn gen out_linux_lacros/Release
@@ -88,9 +88,9 @@ launch issues be sure to run this step.
 % rm -rf /tmp/ash-chrome
 ```
 
-Run ash-chrome-on-linux with support for lacros-chrome:
+Run ash-chrome-on-linux with lacros-chrome as the only browser:
 ```shell
-% XDG_RUNTIME_DIR=/tmp/ash_chrome_xdg_runtime ./out_linux_ash/Release/chrome --user-data-dir=/tmp/ash-chrome --enable-wayland-server --no-startup-window --login-manager --login-profile=user --enable-features=LacrosSupport,LacrosPrimary,LacrosOnly --lacros-chrome-path=${PWD}/out_linux_lacros/Release/
+% XDG_RUNTIME_DIR=/tmp/ash_chrome_xdg_runtime ./out_linux_ash/Release/chrome --user-data-dir=/tmp/ash-chrome --enable-wayland-server --no-startup-window --login-manager --login-profile=user --enable-features=LacrosOnly --lacros-chrome-path=${PWD}/out_linux_lacros/Release/chrome --lacros-chrome-additional-args=--gpu-sandbox-start-early
 ```
 
 You will be prompted to log in. Once you log in, Lacros will be the primary
@@ -100,6 +100,16 @@ chrome://version. It should report OS:Linux.
 The log file for the lacros-chrome-on-linux instance can be found at
 ${user_data_dir}/lacros/lacros.log, where ${user_data_dir} is set via
 --user-data-dir=/tmp/ash-chrome in the command line.
+
+If due to linux driver environment, lacros gpu process is not able to start, use
+--no-sandbox:
+```shell
+% XDG_RUNTIME_DIR=/tmp/ash_chrome_xdg_runtime ./out_linux_ash/Release/chrome --user-data-dir=/tmp/ash-chrome --enable-wayland-server --no-startup-window --login-manager --login-profile=user --enable-features=LacrosOnly --lacros-chrome-path=${PWD}/out_linux_lacros/Release/chrome --lacros-chrome-additional-args=--no-sandbox
+```
+or --disable-gpu:
+```shell
+% XDG_RUNTIME_DIR=/tmp/ash_chrome_xdg_runtime ./out_linux_ash/Release/chrome --user-data-dir=/tmp/ash-chrome --enable-wayland-server --no-startup-window --login-manager --login-profile=user --enable-features=LacrosOnly --lacros-chrome-path=${PWD}/out_linux_lacros/Release/chrome --lacros-chrome-additional-args=--disable-gpu####--no-sandbox
+```
 
 More configuration options
 To pass command line flags to the lacros browser use
@@ -113,7 +123,7 @@ of the mojo_connection_lacros_launcher.py script (without the script, mojo
 connection won’t be hooked up correctly). Firstly, launch ash-chrome-on-linux
 with the --lacros-mojo-socket-for-testing cmd line argument.
 ```shell
-% XDG_RUNTIME_DIR=/tmp/ash_chrome_xdg_runtime ./out_linux_ash/Release/chrome --user-data-dir=/tmp/ash-chrome --enable-wayland-server --no-startup-window --login-manager --enable-features=LacrosSupport --lacros-mojo-socket-for-testing=/tmp/lacros.sock
+% XDG_RUNTIME_DIR=/tmp/ash_chrome_xdg_runtime ./out_linux_ash/Release/chrome --user-data-dir=/tmp/ash-chrome --enable-wayland-server --no-startup-window --login-manager --enable-features=LacrosOnly --lacros-mojo-socket-for-testing=/tmp/lacros.sock
 ```
 
 Then, launch lacros-chrome-on-linux with the launcher script with

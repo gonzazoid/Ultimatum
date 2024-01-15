@@ -4,13 +4,13 @@
 
 package org.chromium.chrome.browser.tab;
 
+import static androidx.test.espresso.matcher.ViewMatchers.assertThat;
+
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyObject;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -33,8 +33,7 @@ import org.robolectric.annotation.Config;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.app.ChromeActivity;
-import org.chromium.chrome.browser.tab.state.CriticalPersistedTabData;
-import org.chromium.chrome.browser.tab.state.CriticalPersistedTabDataObserver;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.ui.native_page.NativePage;
 import org.chromium.chrome.test.util.browser.Features;
 import org.chromium.content_public.browser.LoadUrlParams;
@@ -43,54 +42,32 @@ import org.chromium.ui.base.WindowAndroid;
 
 import java.lang.ref.WeakReference;
 
-/**
- * Tests for {@link Tab}.
- */
+/** Tests for {@link Tab}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
-@Features.EnableFeatures("ShoppingAssist")
 public class TabUnitTest {
     private static final int TAB1_ID = 456;
     private static final int TAB2_ID = 789;
 
-    @Rule
-    public TestRule mFeaturesProcessorRule = new Features.JUnitProcessor();
+    @Rule public TestRule mFeaturesProcessorRule = new Features.JUnitProcessor();
 
-    @Rule
-    public JniMocker mocker = new JniMocker();
+    @Rule public JniMocker mocker = new JniMocker();
 
-    @Mock
-    private WindowAndroid mWindowAndroid;
-    @Mock
-    private LoadUrlParams mLoadUrlParams;
-    @Mock
-    private EmptyTabObserver mObserver;
-    @Mock
-    private Context mContext;
-    @Mock
-    private WeakReference<Context> mWeakReferenceContext;
-    @Mock
-    private WeakReference<Activity> mWeakReferenceActivity;
-    @Mock
-    private Activity mActivity;
-    @Mock
-    private CriticalPersistedTabData mCriticalPersistedTabData;
-    @Mock
-    private CriticalPersistedTabDataObserver mCriticalPersistedTabDataObserver;
-    @Mock
-    private NativePage mNativePage;
-    @Mock
-    private TabDelegateFactory mDelegateFactory;
-    @Mock
-    private TabWebContentsDelegateAndroid mTabWebContentsDelegateAndroid;
-    @Mock
-    private WebContents mWebContents;
-    @Mock
-    private View mNativePageView;
-    @Mock
-    private ChromeActivity mChromeActivity;
-    @Mock
-    TabImpl.Natives mNativeMock;
+    @Mock private Profile mProfile;
+    @Mock private WindowAndroid mWindowAndroid;
+    @Mock private LoadUrlParams mLoadUrlParams;
+    @Mock private EmptyTabObserver mObserver;
+    @Mock private Context mContext;
+    @Mock private WeakReference<Context> mWeakReferenceContext;
+    @Mock private WeakReference<Activity> mWeakReferenceActivity;
+    @Mock private Activity mActivity;
+    @Mock private NativePage mNativePage;
+    @Mock private TabDelegateFactory mDelegateFactory;
+    @Mock private TabWebContentsDelegateAndroid mTabWebContentsDelegateAndroid;
+    @Mock private WebContents mWebContents;
+    @Mock private View mNativePageView;
+    @Mock private ChromeActivity mChromeActivity;
+    @Mock TabImpl.Natives mNativeMock;
 
     private TabImpl mTab;
 
@@ -104,36 +81,52 @@ public class TabUnitTest {
         doReturn(mContext).when(mWeakReferenceContext).get();
         doReturn(mContext).when(mContext).getApplicationContext();
 
-        mTab = new TabImpl(TAB1_ID, false, null, null);
+        mTab =
+                new TabImpl(TAB1_ID, mProfile, null) {
+                    @Override
+                    public boolean isInitialized() {
+                        return true;
+                    }
+                };
         mTab.addObserver(mObserver);
-        CriticalPersistedTabData.from(mTab).addObserver(mCriticalPersistedTabDataObserver);
     }
 
     @Test
     @SmallTest
     public void testSetRootIdWithChange() {
-        assertThat(CriticalPersistedTabData.from(mTab).getRootId(), equalTo(TAB1_ID));
+        TabStateAttributes.createForTab(mTab, TabCreationState.FROZEN_ON_RESTORE);
+        assertThat(
+                TabStateAttributes.from(mTab).getDirtinessState(),
+                equalTo(TabStateAttributes.DirtinessState.CLEAN));
+        assertThat(mTab.getRootId(), equalTo(TAB1_ID));
 
-        CriticalPersistedTabData.from(mTab).setRootId(TAB2_ID);
+        mTab.setRootId(TAB2_ID);
 
-        verify(mCriticalPersistedTabDataObserver).onRootIdChanged(mTab, TAB2_ID);
+        verify(mObserver).onRootIdChanged(mTab, TAB2_ID);
 
-        assertThat(CriticalPersistedTabData.from(mTab).getRootId(), equalTo(TAB2_ID));
-        assertThat(TabStateAttributes.from(mTab).isTabStateDirty(), equalTo(true));
+        assertThat(mTab.getRootId(), equalTo(TAB2_ID));
+        assertThat(
+                TabStateAttributes.from(mTab).getDirtinessState(),
+                equalTo(TabStateAttributes.DirtinessState.DIRTY));
     }
 
     @Test
     @SmallTest
     public void testSetRootIdWithoutChange() {
-        assertThat(CriticalPersistedTabData.from(mTab).getRootId(), equalTo(TAB1_ID));
-        TabStateAttributes.from(mTab).setIsTabStateDirty(false);
+        TabStateAttributes.createForTab(mTab, TabCreationState.FROZEN_ON_RESTORE);
+        assertThat(
+                TabStateAttributes.from(mTab).getDirtinessState(),
+                equalTo(TabStateAttributes.DirtinessState.CLEAN));
+        assertThat(mTab.getRootId(), equalTo(TAB1_ID));
+        TabStateAttributes.from(mTab).clearTabStateDirtiness();
 
-        CriticalPersistedTabData.from(mTab).setRootId(TAB1_ID);
+        mTab.setRootId(TAB1_ID);
 
-        verify(mCriticalPersistedTabDataObserver, never())
-                .onRootIdChanged(any(Tab.class), anyInt());
-        assertThat(CriticalPersistedTabData.from(mTab).getRootId(), equalTo(TAB1_ID));
-        assertThat(TabStateAttributes.from(mTab).isTabStateDirty(), equalTo(false));
+        verify(mObserver, never()).onRootIdChanged(any(Tab.class), anyInt());
+        assertThat(mTab.getRootId(), equalTo(TAB1_ID));
+        assertThat(
+                TabStateAttributes.from(mTab).getDirtinessState(),
+                equalTo(TabStateAttributes.DirtinessState.CLEAN));
     }
 
     @Test
@@ -146,26 +139,35 @@ public class TabUnitTest {
                 .createWebContentsDelegate(any(Tab.class));
         doReturn(mNativePage)
                 .when(mDelegateFactory)
-                .createNativePage(any(String.class), anyObject(), any(Tab.class));
+                .createNativePage(any(String.class), any(), any(Tab.class));
         doReturn(false).when(mNativePage).isFrozen();
         doReturn(mNativePageView).when(mNativePage).getView();
         doReturn(mWindowAndroid).when(mWebContents).getTopLevelNativeWindow();
         doReturn(mChromeActivity).when(mWeakReferenceContext).get();
 
-        mTab = new TabImpl(TAB1_ID, false, null, null) {
-            @Override
-            void updateWindowAndroid(WindowAndroid windowAndroid) {}
-            @Override
-            public WebContents getWebContents() {
-                return mWebContents;
-            }
-            @Override
-            public boolean isNativePage() {
-                return true;
-            }
-            @Override
-            void pushNativePageStateToNavigationEntry() {}
-        };
+        mTab =
+                new TabImpl(TAB1_ID, mProfile, null) {
+                    @Override
+                    public WindowAndroid getWindowAndroid() {
+                        return mWindowAndroid;
+                    }
+
+                    @Override
+                    void updateWindowAndroid(WindowAndroid windowAndroid) {}
+
+                    @Override
+                    public WebContents getWebContents() {
+                        return mWebContents;
+                    }
+
+                    @Override
+                    public boolean isNativePage() {
+                        return true;
+                    }
+
+                    @Override
+                    void pushNativePageStateToNavigationEntry() {}
+                };
         mTab.updateAttachment(mWindowAndroid, mDelegateFactory);
 
         // A valid, non-null NativeFrozenPage object should be instantiated when a Tab is

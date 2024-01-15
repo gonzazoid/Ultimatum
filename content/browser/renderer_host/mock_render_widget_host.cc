@@ -24,8 +24,11 @@ void MockRenderWidgetHost::OnTouchEventAck(
 }
 
 void MockRenderWidgetHost::DisableGestureDebounce() {
+  InputRouter::Config config;
+  config.touch_config.task_runner =
+      content::GetUIThreadTaskRunner({BrowserTaskType::kUserInput});
   input_router_ = std::make_unique<InputRouterImpl>(
-      this, this, fling_scheduler_.get(), InputRouter::Config());
+      this, this, fling_scheduler_.get(), config);
 }
 
 void MockRenderWidgetHost::ExpectForceEnableZoom(bool enable) {
@@ -80,8 +83,9 @@ MockRenderWidgetHost::MockRenderWidgetHost(
     mojo::PendingAssociatedRemote<blink::mojom::Widget> pending_blink_widget)
     : RenderWidgetHostImpl(frame_tree,
                            /*self_owned=*/false,
+                           DefaultFrameSinkId(*site_instance_group, routing_id),
                            delegate,
-                           std::move(site_instance_group),
+                           site_instance_group,
                            routing_id,
                            /*hidden=*/false,
                            /*renderer_initiated_creation=*/false,

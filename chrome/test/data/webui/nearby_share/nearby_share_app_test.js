@@ -2,17 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// So that mojo is defined.
-import 'chrome://resources/mojo/mojo/public/js/mojo_bindings_lite.js';
 import 'chrome://nearby/app.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
+import 'chrome://resources/mojo/chromeos/ash/services/nearby/public/mojom/nearby_share_settings.mojom-webui.js';
 
-import {NearbyShareAppElement} from 'chrome://nearby/app.js';
 import {setContactManagerForTesting} from 'chrome://nearby/shared/nearby_contact_manager.js';
 import {setNearbyShareSettingsForTesting} from 'chrome://nearby/shared/nearby_share_settings.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
 import {waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertEquals, assertFalse, assertTrue} from '../chai_assert.js';
+import {assertEquals, assertFalse, assertTrue} from '../chromeos/chai_assert.js';
 
 import {FakeContactManager} from './shared/fake_nearby_contact_manager.js';
 import {FakeNearbyShareSettings} from './shared/fake_nearby_share_settings.js';
@@ -20,7 +19,7 @@ import {FakeNearbyShareSettings} from './shared/fake_nearby_share_settings.js';
 suite('ShareAppTest', function() {
   /** @type {!NearbyShareAppElement} */
   let shareAppElement;
-  /** @type {!nearbyShare.mojom.NearbyShareSettingsInterface} */
+  /** @type {!FakeNearbyShareSettings} */
   let fakeSettings;
 
   /** @param {!string} page Page to check if it is active. */
@@ -57,19 +56,41 @@ suite('ShareAppTest', function() {
   }
 
   suite('EnabledTests', function() {
-    setup(function() {
-      sharedSetup(/*enabled=*/ true, /*isOnboardingComplete=*/ true);
-    });
-
     teardown(sharedTeardown);
 
     test('renders discovery page when enabled', async function() {
+      sharedSetup(/*enabled=*/ true, /*isOnboardingComplete=*/ true);
+
       assertEquals('NEARBY-SHARE-APP', shareAppElement.tagName);
       assertEquals(null, shareAppElement.shadowRoot.querySelector('.active'));
       // We have to wait for settings to return from the mojo after which
       // the app will route to the correct page.
       await waitAfterNextRender(shareAppElement);
       assertTrue(isPageActive('discovery'));
+    });
+
+    [false, true].forEach(isJellyEnabled => {
+      test(
+          'Dynamic theme CSS is added when isJellyEnabled is set', async () => {
+            loadTimeData.overrideValues({
+              isJellyEnabled: isJellyEnabled,
+            });
+
+            sharedSetup(/*enabled=*/ true, /*isOnboardingComplete=*/ true);
+
+            const colorLink = document.querySelector(
+                'link[href*=\'chrome://theme/colors.css\']');
+            const fontLink = document.querySelector(
+                'link[href*=\'chrome://theme/typography.css\']');
+            if (isJellyEnabled) {
+              assertTrue(!!colorLink);
+              assertTrue(!!fontLink);
+              assertTrue(document.body.classList.contains('jelly-enabled'));
+            }
+            // From b/287683464: We can't enforce the false case, as every Jelly
+            // component attempts to set these global values (and this
+            // loadTimeData only flips Jelly enablement for Nearby Share).
+          });
     });
   });
 

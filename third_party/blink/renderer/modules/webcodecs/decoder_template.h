@@ -9,7 +9,6 @@
 #include <memory>
 
 #include "media/base/decoder_status.h"
-#include "media/base/media_log.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
@@ -41,7 +40,7 @@ namespace blink {
 
 template <typename Traits>
 class MODULES_EXPORT DecoderTemplate
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public ActiveScriptWrappable<DecoderTemplate<Traits>>,
       public ReclaimableCodec {
  public:
@@ -146,10 +145,12 @@ class MODULES_EXPORT DecoderTemplate
     Type type;
 
     // For kConfigure Requests. Prefer absl::optional<> to ensure values are
-    // only accessed on the proper request type.
+    // only accessed on the proper request type. If `media_config` is null then
+    // `js_error_message` will have details on why the config isn't supported.
     std::unique_ptr<MediaConfigType> media_config;
     absl::optional<HardwarePreference> hw_pref;
     absl::optional<bool> low_delay;
+    String js_error_message;
 
     // For kDecode Requests.
     scoped_refptr<media::DecoderBuffer> decoder_buffer;
@@ -201,6 +202,11 @@ class MODULES_EXPORT DecoderTemplate
 
   void ScheduleDequeueEvent();
   void DispatchDequeueEvent(Event* event);
+
+  // Returns false if `reset_generation_` match the one in the request. If not,
+  // aborts the promise attached to request and returns true.
+  bool MaybeAbortRequest(Request* request) const;
+
   bool dequeue_event_pending_ = false;
 
   Member<ScriptState> script_state_;
@@ -215,7 +221,7 @@ class MODULES_EXPORT DecoderTemplate
 
   // Set on Shutdown(), used to generate accurate abort messages.
   bool shutting_down_ = false;
-  bool shutting_down_due_to_error_ = false;
+  Member<DOMException> shutting_down_due_to_error_;
 
   // Which state the codec is in, determining which calls we can receive.
   V8CodecState state_;

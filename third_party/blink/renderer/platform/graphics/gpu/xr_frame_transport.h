@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_GPU_XR_FRAME_TRANSPORT_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_GPU_XR_FRAME_TRANSPORT_H_
 
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "device/vr/public/mojom/vr_service.mojom-blink.h"
 #include "third_party/blink/public/platform/web_graphics_context_3d_provider.h"
@@ -28,7 +29,7 @@ class GLES2Interface;
 
 namespace blink {
 
-class GpuMemoryBufferImageCopy;
+class ImageToBufferCopier;
 class Image;
 
 class PLATFORM_EXPORT XRFrameTransport final
@@ -96,7 +97,7 @@ class PLATFORM_EXPORT XRFrameTransport final
 
   device::mojom::blink::XRPresentationTransportOptionsPtr transport_options_;
 
-  std::unique_ptr<GpuMemoryBufferImageCopy> frame_copier_;
+  std::unique_ptr<ImageToBufferCopier> frame_copier_;
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
 };
 

@@ -6,8 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/sequenced_task_runner.h"
 
 namespace content {
 
@@ -35,6 +36,10 @@ void FlingingRendererClient::Initialize(media::MediaResource* media_resource,
       std::move(delayed_bind_client_extension_receiver_), media_task_runner_);
 
   MojoRendererWrapper::Initialize(media_resource, client, std::move(init_cb));
+}
+
+media::RendererType FlingingRendererClient::GetRendererType() {
+  return media::RendererType::kFlinging;
 }
 
 void FlingingRendererClient::OnRemotePlayStateChange(

@@ -10,34 +10,32 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/toolbar/chrome_labs_prefs.h"
+#include "chrome/browser/ui/toolbar/chrome_labs_utils.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/toolbar/chrome_labs_bubble_view.h"
 #include "chrome/browser/ui/views/toolbar/chrome_labs_coordinator.h"
-#include "chrome/browser/ui/views/toolbar/chrome_labs_utils.h"
 #include "chrome/browser/ui/webui/flags/flags_ui.h"
 #include "chrome/grit/generated_resources.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/button/button_controller.h"
 #include "ui/views/controls/dot_indicator.h"
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/constants/ash_switches.h"
-#include "base/system/sys_info.h"
-#include "chrome/browser/ash/ownership/owner_settings_service_ash.h"
-#include "chrome/browser/ash/ownership/owner_settings_service_ash_factory.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
-#endif
+#include "ui/views/view_class_properties.h"
 
 ChromeLabsButton::ChromeLabsButton(BrowserView* browser_view,
-                                   const ChromeLabsBubbleViewModel* model)
+                                   const ChromeLabsModel* model)
     : ToolbarButton(base::BindRepeating(&ChromeLabsButton::ButtonPressed,
                                         base::Unretained(this))),
       browser_view_(browser_view),
       model_(model) {
-  SetVectorIcons(kChromeLabsIcon, kChromeLabsTouchIcon);
+  SetProperty(views::kElementIdentifierKey, kToolbarChromeLabsButtonElementId);
+  SetVectorIcons(features::IsChromeRefresh2023() ? kChromeLabsChromeRefreshIcon
+                                                 : kChromeLabsIcon,
+                 kChromeLabsTouchIcon);
   SetAccessibleName(l10n_util::GetStringUTF16(IDS_ACCNAME_CHROMELABS_BUTTON));
   SetTooltipText(l10n_util::GetStringUTF16(IDS_TOOLTIP_CHROMELABS_BUTTON));
   button_controller()->set_notify_action(
@@ -70,76 +68,12 @@ void ChromeLabsButton::HideDotIndicator() {
 }
 
 void ChromeLabsButton::ButtonPressed() {
-  // On Chrome OS if we are still waiting for IsOwnerAsync to return abort
-  // button clicks.
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  if (is_waiting_to_show) {
-    return;
-  }
-#endif
-
-  if (chrome_labs_coordinator_->BubbleExists()) {
-    chrome_labs_coordinator_->Hide();
-    return;
-  }
-
-  // Ash-chrome uses a different FlagsStorage if the user is the owner. On
-  // ChromeOS verifying if the owner is signed in is async operation.
-  // Asynchronously check if the user is the owner and show the Chrome Labs
-  // bubble only after we have this information.
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // Bypass possible incognito profile same as chrome://flags does.
-  Profile* original_profile =
-      browser_view_->browser()->profile()->GetOriginalProfile();
-  if ((base::SysInfo::IsRunningOnChromeOS() ||
-       should_circumvent_device_check_for_testing_) &&
-      ash::OwnerSettingsServiceAshFactory::GetForBrowserContext(
-          original_profile)) {
-    ash::OwnerSettingsServiceAsh* service =
-        ash::OwnerSettingsServiceAshFactory::GetForBrowserContext(
-            original_profile);
-    is_waiting_to_show = true;
-    service->IsOwnerAsync(base::BindOnce(
-        [](ChromeLabsButton* button, base::WeakPtr<BrowserView> browser_view,
-           ChromeLabsCoordinator* coordinator, bool is_owner) {
-          // BrowserView may have been destroyed before async function returns
-          if (!browser_view)
-            return;
-          is_owner
-              ? coordinator->Show(
-                    ChromeLabsCoordinator::ShowUserType::kChromeOsOwnerUserType)
-              : coordinator->Show();
-          button->is_waiting_to_show = false;
-        },
-        this, browser_view_->GetAsWeakPtr(), chrome_labs_coordinator_.get()));
-    return;
-  }
-#endif
-  chrome_labs_coordinator_->Show();
+  chrome_labs_coordinator_->ShowOrHide();
 }
 
 void ChromeLabsButton::UpdateDotIndicator() {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  ScopedDictPrefUpdate update(
-      browser_view_->browser()->profile()->GetPrefs(),
-      chrome_labs_prefs::kChromeLabsNewBadgeDictAshChrome);
-#else
-  ScopedDictPrefUpdate update(g_browser_process->local_state(),
-                              chrome_labs_prefs::kChromeLabsNewBadgeDict);
-#endif
-
-  base::Value::Dict& new_badge_prefs = update.Get();
-
-  std::vector<std::string> lab_internal_names;
-  const std::vector<LabInfo>& all_labs = model_->GetLabInfo();
-
-  bool should_show_dot_indicator = base::ranges::any_of(
-      all_labs.begin(), all_labs.end(), [&new_badge_prefs](const LabInfo& lab) {
-        absl::optional<int> new_badge_pref_value =
-            new_badge_prefs.FindInt(lab.internal_name);
-        // Show the dot indicator if new experiments have not been seen yet.
-        return new_badge_pref_value == chrome_labs_prefs::kChromeLabsNewExperimentPrefValue;
-      });
+  bool should_show_dot_indicator = AreNewChromeLabsExperimentsAvailable(
+      model_, browser_view_->browser()->profile());
 
   if (should_show_dot_indicator)
     new_experiments_indicator_->Show();
@@ -147,22 +81,5 @@ void ChromeLabsButton::UpdateDotIndicator() {
     new_experiments_indicator_->Hide();
 }
 
-// static
-bool ChromeLabsButton::ShouldShowButton(const ChromeLabsBubbleViewModel* model,
-                                        Profile* profile) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          ash::switches::kSafeMode) ||
-      !ash::ProfileHelper::IsPrimaryProfile(profile)) {
-    return false;
-  }
-#endif
-
-  return base::ranges::any_of(model->GetLabInfo(),
-                              [&profile](const LabInfo& lab) {
-                                return IsChromeLabsFeatureValid(lab, profile);
-                              });
-}
-
-BEGIN_METADATA(ChromeLabsButton, ToolbarButton)
+BEGIN_METADATA(ChromeLabsButton)
 END_METADATA

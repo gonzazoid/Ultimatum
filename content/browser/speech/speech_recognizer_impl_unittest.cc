@@ -8,15 +8,14 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/sys_byteorder.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "content/browser/speech/speech_recognition_engine.h"
 #include "content/browser/speech/speech_recognizer_impl.h"
 #include "content/public/browser/google_streaming_api.pb.h"
@@ -316,7 +315,29 @@ TEST_F(SpeechRecognizerImplTest, StartNoInputDevices) {
   EXPECT_TRUE(recognition_started_);
   EXPECT_FALSE(audio_started_);
   EXPECT_FALSE(result_received_);
+  OnCaptureError();
+  base::RunLoop().RunUntilIdle();
   EXPECT_EQ(blink::mojom::SpeechRecognitionErrorCode::kAudioCapture, error_);
+  CheckFinalEventsConsistency();
+}
+
+TEST_F(SpeechRecognizerImplTest, StartFakeInputDevice) {
+  // Check for callbacks when stopping record before any audio gets recorded.
+  audio_manager_->SetHasInputDevices(false);
+  recognizer_->StartRecognition(
+      media::AudioDeviceDescription::kDefaultDeviceId);
+  base::RunLoop().RunUntilIdle();  // EVENT_PREPARE processing.
+  WaitForAudioThreadToPostDeviceInfo();
+  base::RunLoop().RunUntilIdle();  // EVENT_START processing.
+  Capture(audio_bus_.get());
+  recognizer_->StopAudioCapture();
+  base::RunLoop().RunUntilIdle();
+  EXPECT_TRUE(recognition_started_);
+  EXPECT_TRUE(audio_started_);
+  EXPECT_FALSE(result_received_);
+  EXPECT_EQ(blink::mojom::SpeechRecognitionErrorCode::kNone, error_);
+  recognizer_->AbortRecognition();
+  base::RunLoop().RunUntilIdle();
   CheckFinalEventsConsistency();
 }
 

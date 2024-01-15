@@ -61,7 +61,7 @@ class LocalDOMWindow;
 class ServiceWorkerErrorForUpdate;
 
 class MODULES_EXPORT ServiceWorkerContainer final
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public Supplement<LocalDOMWindow>,
       public ExecutionContextLifecycleObserver,
       public WebServiceWorkerProviderClient {
@@ -84,7 +84,7 @@ class MODULES_EXPORT ServiceWorkerContainer final
 
   void Trace(Visitor*) const override;
 
-  ServiceWorker* controller() { return controller_; }
+  ServiceWorker* controller() { return controller_.Get(); }
   ScriptPromise ready(ScriptState*, ExceptionState&);
 
   ScriptPromise registerServiceWorker(ScriptState*,
@@ -156,15 +156,13 @@ class MODULES_EXPORT ServiceWorkerContainer final
   // ServiceWorkerRegistration object in current execution context.
   HeapHashMap<int64_t,
               WeakMember<ServiceWorkerRegistration>,
-              WTF::IntHash<int64_t>,
-              WTF::UnsignedWithZeroKeyHashTraits<int64_t>>
+              IntWithZeroKeyHashTraits<int64_t>>
       service_worker_registration_objects_;
   // Map from service worker version id to JavaScript ServiceWorker object in
   // current execution context.
   HeapHashMap<int64_t,
               WeakMember<ServiceWorker>,
-              WTF::IntHash<int64_t>,
-              WTF::UnsignedWithZeroKeyHashTraits<int64_t>>
+              IntWithZeroKeyHashTraits<int64_t>>
       service_worker_objects_;
 
   // For https://w3c.github.io/ServiceWorker/#dfn-client-message-queue

@@ -4,6 +4,8 @@
 
 #include "ash/shelf/window_scale_animation.h"
 
+#include <optional>
+
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/public/cpp/window_backdrop.h"
 #include "ash/public/cpp/window_properties.h"
@@ -14,8 +16,8 @@
 #include "ash/wm/window_state.h"
 #include "ash/wm/window_util.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_observer.h"
 #include "ui/compositor/layer.h"
@@ -104,7 +106,7 @@ class WindowScaleAnimation::AnimationObserver
   AnimationObserver(aura::Window* window,
                     WindowScaleAnimation* window_scale_animation)
       : window_(window), window_scale_animation_(window_scale_animation) {
-    window_observation_.Observe(window_);
+    window_observation_.Observe(window_.get());
   }
 
   AnimationObserver(const AnimationObserver&) = delete;
@@ -132,9 +134,9 @@ class WindowScaleAnimation::AnimationObserver
  private:
   // Pointers to the window and the parent scale animation. Guaranteed to
   // outlive `this`.
-  aura::Window* const window_;
+  const raw_ptr<aura::Window> window_;
 
-  WindowScaleAnimation* const window_scale_animation_;
+  const raw_ptr<WindowScaleAnimation> window_scale_animation_;
 
   base::ScopedObservation<aura::Window, aura::WindowObserver>
       window_observation_{this};

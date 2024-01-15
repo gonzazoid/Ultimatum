@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_piece.h"
@@ -15,6 +15,7 @@
 #include "net/base/address_list.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/load_timing_info.h"
+#include "net/base/proxy_chain.h"
 #include "net/base/proxy_server.h"
 #include "net/base/test_completion_callback.h"
 #include "net/base/winsock_init.h"
@@ -105,7 +106,8 @@ base::WeakPtr<SpdySession> CreateSpdyProxySession(
 
   SSLConfig ssl_config;
   auto ssl_params = base::MakeRefCounted<SSLSocketParams>(
-      transport_params, nullptr, nullptr,
+      transport_params, /*socks_proxy_params=*/nullptr,
+      /*http_proxy_params=*/nullptr,
       HostPortPair::FromSchemeHostPort(destination), ssl_config,
       key.privacy_mode(), key.network_anonymization_key());
   TestConnectJobDelegate connect_job_delegate;
@@ -212,7 +214,7 @@ class SpdyProxyClientSocketTest : public PlatformTest,
   GURL url_;
   HostPortPair proxy_host_port_;
   HostPortPair endpoint_host_port_pair_;
-  ProxyServer proxy_;
+  ProxyChain proxy_chain_;
   SpdySessionKey endpoint_spdy_session_key_;
   std::unique_ptr<CommonConnectJobParams> common_connect_job_params_;
   SSLSocketDataProvider ssl_;
@@ -224,9 +226,9 @@ SpdyProxyClientSocketTest::SpdyProxyClientSocketTest()
       url_(kRequestUrl),
       proxy_host_port_(kProxyHost, kProxyPort),
       endpoint_host_port_pair_(kOriginHost, kOriginPort),
-      proxy_(ProxyServer::SCHEME_HTTPS, proxy_host_port_),
+      proxy_chain_(ProxyServer::SCHEME_HTTPS, proxy_host_port_),
       endpoint_spdy_session_key_(endpoint_host_port_pair_,
-                                 proxy_,
+                                 proxy_chain_,
                                  PRIVACY_MODE_DISABLED,
                                  SpdySessionKey::IsProxySession::kFalse,
                                  SocketTag(),
@@ -280,8 +282,8 @@ void SpdyProxyClientSocketTest::Initialize(base::span<const MockRead> reads,
 
   // Create the SpdyProxyClientSocket.
   sock_ = std::make_unique<SpdyProxyClientSocket>(
-      spdy_stream, ProxyServer(ProxyServer::SCHEME_HTTPS, proxy_host_port_),
-      user_agent_, endpoint_host_port_pair_, net_log_with_source_,
+      spdy_stream, proxy_chain_, /*proxy_chain_index=*/0, user_agent_,
+      endpoint_host_port_pair_, net_log_with_source_,
       base::MakeRefCounted<HttpAuthController>(
           HttpAuth::AUTH_PROXY, GURL("https://" + proxy_host_port_.ToString()),
           NetworkAnonymizationKey(), session_->http_auth_cache(),
@@ -319,13 +321,12 @@ void SpdyProxyClientSocketTest::AssertConnectionEstablished() {
   // values.
   net::SSLInfo ssl_info;
   EXPECT_FALSE(sock_->GetSSLInfo(&ssl_info));
-  EXPECT_FALSE(sock_->WasAlpnNegotiated());
   EXPECT_EQ(sock_->GetNegotiatedProtocol(), NextProto::kProtoUnknown);
 }
 
 void SpdyProxyClientSocketTest::AssertSyncReadEquals(const char* data,
                                                      int len) {
-  scoped_refptr<IOBuffer> buf = base::MakeRefCounted<IOBuffer>(len);
+  auto buf = base::MakeRefCounted<IOBufferWithSize>(len);
   if (use_read_if_ready()) {
     ASSERT_EQ(len,
               sock_->ReadIfReady(buf.get(), len, CompletionOnceCallback()));
@@ -348,7 +349,7 @@ void SpdyProxyClientSocketTest::AssertAsyncReadEquals(const char* data,
                                                       int len,
                                                       bool fin) {
   // Issue the read, which will be completed asynchronously
-  scoped_refptr<IOBuffer> buf = base::MakeRefCounted<IOBuffer>(len);
+  auto buf = base::MakeRefCounted<IOBufferWithSize>(len);
   if (use_read_if_ready()) {
     ASSERT_EQ(ERR_IO_PENDING,
               sock_->ReadIfReady(buf.get(), len, read_callback_.callback()));
@@ -379,7 +380,7 @@ void SpdyProxyClientSocketTest::AssertAsyncReadEquals(const char* data,
 
 void SpdyProxyClientSocketTest::AssertReadStarts(const char* data, int len) {
   // Issue the read, which will be completed asynchronously.
-  read_buf_ = base::MakeRefCounted<IOBuffer>(len);
+  read_buf_ = base::MakeRefCounted<IOBufferWithSize>(len);
   if (use_read_if_ready()) {
     ASSERT_EQ(ERR_IO_PENDING, sock_->ReadIfReady(read_buf_.get(), len,
                                                  read_callback_.callback()));
@@ -1213,7 +1214,7 @@ TEST_P(SpdyProxyClientSocketTest, ReadOnClosedSocketReturnsBufferedData) {
   ResumeAndRun();
 
   ASSERT_FALSE(sock_->IsConnected());
-  scoped_refptr<IOBuffer> buf = base::MakeRefCounted<IOBuffer>(kLen1);
+  auto buf = base::MakeRefCounted<IOBufferWithSize>(kLen1);
   ASSERT_EQ(kLen1, sock_->Read(buf.get(), kLen1, CompletionOnceCallback()));
   ASSERT_EQ(std::string(kMsg1, kLen1), std::string(buf->data(), kLen1));
 
@@ -1368,7 +1369,7 @@ TEST_P(SpdyProxyClientSocketTest, DisconnectWithReadPending) {
 
   EXPECT_TRUE(sock_->IsConnected());
 
-  scoped_refptr<IOBuffer> buf = base::MakeRefCounted<IOBuffer>(kLen1);
+  auto buf = base::MakeRefCounted<IOBufferWithSize>(kLen1);
   ASSERT_EQ(ERR_IO_PENDING,
             sock_->Read(buf.get(), kLen1, read_callback_.callback()));
 
@@ -1403,7 +1404,7 @@ TEST_P(SpdyProxyClientSocketTest, RstWithReadAndWritePending) {
 
   EXPECT_TRUE(sock_->IsConnected());
 
-  scoped_refptr<IOBuffer> read_buf = base::MakeRefCounted<IOBuffer>(kLen1);
+  auto read_buf = base::MakeRefCounted<IOBufferWithSize>(kLen1);
   ASSERT_EQ(ERR_IO_PENDING,
             sock_->Read(read_buf.get(), kLen1, read_callback_.callback()));
 
@@ -1533,7 +1534,7 @@ TEST_P(SpdyProxyClientSocketTest, RstWithReadAndWritePendingDelete) {
 
   DeleteSockCallback read_callback(&sock_);
 
-  scoped_refptr<IOBuffer> read_buf = base::MakeRefCounted<IOBuffer>(kLen1);
+  auto read_buf = base::MakeRefCounted<IOBufferWithSize>(kLen1);
   ASSERT_EQ(ERR_IO_PENDING,
             sock_->Read(read_buf.get(), kLen1, read_callback.callback()));
 

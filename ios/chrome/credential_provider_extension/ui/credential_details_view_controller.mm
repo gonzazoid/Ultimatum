@@ -4,9 +4,9 @@
 
 #import "ios/chrome/credential_provider_extension/ui/credential_details_view_controller.h"
 
-#import <MobileCoreServices/UTCoreTypes.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "ios/chrome/common/app_group/app_group_metrics.h"
 #import "ios/chrome/common/constants.h"
 #import "ios/chrome/common/credential_provider/credential.h"
@@ -14,12 +14,9 @@
 #import "ios/chrome/common/ui/elements/highlight_button.h"
 #import "ios/chrome/credential_provider_extension/metrics_util.h"
 #import "ios/chrome/credential_provider_extension/ui/feature_flags.h"
+#import "ios/chrome/credential_provider_extension/ui/password_note_cell.h"
 #import "ios/chrome/credential_provider_extension/ui/tooltip_view.h"
 #import "ios/chrome/credential_provider_extension/ui/ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -35,6 +32,7 @@ typedef NS_ENUM(NSInteger, RowIdentifier) {
   RowIdentifierURL,
   RowIdentifierUsername,
   RowIdentifierPassword,
+  RowIdentifierNote,
   NumRows
 };
 
@@ -109,6 +107,19 @@ typedef NS_ENUM(NSInteger, RowIdentifier) {
 
 - (UITableViewCell*)tableView:(UITableView*)tableView
         cellForRowAtIndexPath:(NSIndexPath*)indexPath {
+  if (indexPath.row == RowIdentifier::RowIdentifierNote) {
+    PasswordNoteCell* cell =
+        [tableView dequeueReusableCellWithIdentifier:PasswordNoteCell.reuseID];
+    if (!cell) {
+      cell = [[PasswordNoteCell alloc] initWithStyle:UITableViewCellStyleValue1
+                                     reuseIdentifier:PasswordNoteCell.reuseID];
+    }
+    [cell configureCell];
+    cell.textView.text = self.credential.note;
+    cell.textView.editable = NO;
+    return cell;
+  }
+
   UITableViewCell* cell =
       [tableView dequeueReusableCellWithIdentifier:kCellIdentifier];
   if (!cell) {
@@ -138,6 +149,8 @@ typedef NS_ENUM(NSInteger, RowIdentifier) {
       cell.textLabel.text = NSLocalizedString(
           @"IDS_IOS_CREDENTIAL_PROVIDER_DETAILS_PASSWORD", @"Password");
       cell.detailTextLabel.text = [self password];
+      break;
+    case RowIdentifier::RowIdentifierNote:
       break;
     default:
       break;
@@ -213,7 +226,7 @@ typedef NS_ENUM(NSInteger, RowIdentifier) {
 
 // Copy password to clipboard.
 - (void)copyPassword {
-  NSDictionary* item = @{(NSString*)kUTTypePlainText : self.clearPassword};
+  NSDictionary* item = @{UTTypePlainText.identifier : self.clearPassword};
   NSDate* expirationDate =
       [NSDate dateWithTimeIntervalSinceNow:kSecurePasteboardExpiration];
   NSDictionary* options = @{UIPasteboardOptionExpirationDate : expirationDate};

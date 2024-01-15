@@ -1,10 +1,9 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.base;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -37,9 +36,7 @@ public class BuildInfoTest {
         mShadowPackageManager.setSystemFeature(
                 PackageManager.FEATURE_AUTOMOTIVE, /* supported= */ true);
 
-        BuildInfo buildInfo = new BuildInfo();
-
-        assertTrue(buildInfo.isAutomotive);
+        assertTrue(BuildInfo.getInstance().isAutomotive);
     }
 
     @Test
@@ -47,36 +44,6 @@ public class BuildInfoTest {
         mShadowPackageManager.setSystemFeature(
                 PackageManager.FEATURE_AUTOMOTIVE, /* supported= */ false);
 
-        BuildInfo buildInfo = new BuildInfo();
-
-        assertFalse(buildInfo.isAutomotive);
-    }
-
-    @Test
-    public void testIsAutomotive_isTrue_setsGetAllPropertesTo1() {
-        mShadowPackageManager.setSystemFeature(
-                PackageManager.FEATURE_AUTOMOTIVE, /* supported= */ true);
-
-        BuildInfo buildInfo = new BuildInfo();
-        String[] properties = buildInfo.getAllProperties();
-
-        // This index matches the value in the constructor of base/android/build_info.cc.
-        int isAutomotiveIndex = 27;
-
-        assertEquals("1", properties[isAutomotiveIndex]);
-    }
-
-    @Test
-    public void testIsAutomotive_isFalse_setsGetAllPropertesTo0() {
-        mShadowPackageManager.setSystemFeature(
-                PackageManager.FEATURE_AUTOMOTIVE, /* supported= */ false);
-
-        BuildInfo buildInfo = new BuildInfo();
-        String[] properties = buildInfo.getAllProperties();
-
-        // This index matches the value in the constructor of base/android/build_info.cc.
-        int isAutomotiveIndex = 27;
-
-        assertEquals("0", properties[isAutomotiveIndex]);
+        assertFalse(BuildInfo.getInstance().isAutomotive);
     }
 }

@@ -10,6 +10,8 @@
 #include "ash/shell.h"
 #include "ash/tray_action/tray_action.h"
 #include "ash/tray_action/tray_action_observer.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 
 namespace ash {
 
@@ -26,6 +28,8 @@ enum class TrayActionState;
 // (the view observes the action availability using login data dispatcher, and
 // updates itself accordingly).
 class ASH_EXPORT NoteActionLaunchButton : public NonAccessibleView {
+  METADATA_HEADER(NoteActionLaunchButton, NonAccessibleView)
+
  public:
   // Used by tests to get internal implementation details.
   class ASH_EXPORT TestApi {
@@ -44,7 +48,7 @@ class ASH_EXPORT NoteActionLaunchButton : public NonAccessibleView {
     const views::View* BackgroundView() const;
 
    private:
-    NoteActionLaunchButton* launch_button_;
+    raw_ptr<NoteActionLaunchButton> launch_button_;
   };
 
   explicit NoteActionLaunchButton(
@@ -63,10 +67,10 @@ class ASH_EXPORT NoteActionLaunchButton : public NonAccessibleView {
   class ActionButton;
 
   // The background bubble view.
-  BackgroundView* background_ = nullptr;
+  raw_ptr<BackgroundView> background_ = nullptr;
 
   // The actionable image button view.
-  ActionButton* action_button_ = nullptr;
+  raw_ptr<ActionButton> action_button_ = nullptr;
 };
 
 }  // namespace ash

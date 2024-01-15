@@ -8,8 +8,9 @@
 #include <ostream>
 #include <sstream>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "media/gpu/macros.h"
 
@@ -32,6 +33,8 @@ std::string VectorToString(const std::vector<T>& vec) {
 }
 
 }  // namespace
+
+ImageProcessorBackend::PortConfig::PortConfig() = default;
 
 ImageProcessorBackend::PortConfig::PortConfig(const PortConfig&) = default;
 
@@ -62,13 +65,11 @@ ImageProcessorBackend::ImageProcessorBackend(
     const PortConfig& input_config,
     const PortConfig& output_config,
     OutputMode output_mode,
-    VideoRotation relative_rotation,
     ErrorCB error_cb,
     scoped_refptr<base::SequencedTaskRunner> backend_task_runner)
     : input_config_(input_config),
       output_config_(output_config),
       output_mode_(output_mode),
-      relative_rotation_(relative_rotation),
       error_cb_(error_cb),
       backend_task_runner_(std::move(backend_task_runner)) {
   DETACH_FROM_SEQUENCE(backend_sequence_checker_);

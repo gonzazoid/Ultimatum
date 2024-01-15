@@ -4,9 +4,10 @@
 
 #include "components/remote_cocoa/app_shim/native_widget_ns_window_fullscreen_controller.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#import "base/task/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "ui/base/cocoa/nswindow_test_util.h"
 
 namespace remote_cocoa {
@@ -44,18 +45,18 @@ void NativeWidgetNSWindowFullscreenController::EnterFullscreen(
     return;
   }
 
-  // Early-out for no-ops.
   if (state_ == State::kFullscreen) {
+    // Early-out for no-ops.
     if (target_display_id == display::kInvalidDisplayId ||
         target_display_id == client_->FullscreenControllerGetDisplayId()) {
       return;
     }
+  } else if (state_ == State::kWindowed) {
+    windowed_frame_ = client_->FullscreenControllerGetFrame();
   }
 
   // If we are starting a new transition, then notify `client_`.
   if (!IsInFullscreenTransition()) {
-    if (!windowed_frame_)
-      windowed_frame_ = client_->FullscreenControllerGetFrame();
     client_->FullscreenControllerTransitionStart(true);
   }
 
@@ -101,6 +102,7 @@ void NativeWidgetNSWindowFullscreenController::
   gfx::Rect display_frame =
       client_->FullscreenControllerGetFrameForDisplay(target_display_id);
   if (!display_frame.IsEmpty()) {
+    DCHECK(windowed_frame_);
     restore_windowed_frame_ = true;
     SetStateAndCancelPostedTasks(State::kEnterFullscreenTransition);
     client_->FullscreenControllerSetFrame(
@@ -125,13 +127,12 @@ void NativeWidgetNSWindowFullscreenController::RestoreWindowedFrame() {
 
 void NativeWidgetNSWindowFullscreenController::OnWindowedFrameRestored() {
   restore_windowed_frame_ = false;
-  windowed_frame_.reset();
 
   SetStateAndCancelPostedTasks(State::kWindowed);
   HandlePendingState();
   if (!IsInFullscreenTransition()) {
     client_->FullscreenControllerTransitionComplete(
-        /*target_fullscreen_state=*/false);
+        /*is_fullscreen=*/false);
   }
 }
 
@@ -172,10 +173,12 @@ void NativeWidgetNSWindowFullscreenController::OnWindowWillClose() {
 }
 
 void NativeWidgetNSWindowFullscreenController::OnWindowWillEnterFullscreen() {
+  if (state_ == State::kWindowed) {
+    windowed_frame_ = client_->FullscreenControllerGetFrame();
+  }
+
   // If we are starting a new transition, then notify `client_`.
   if (!IsInFullscreenTransition()) {
-    if (!windowed_frame_)
-      windowed_frame_ = client_->FullscreenControllerGetFrame();
     client_->FullscreenControllerTransitionStart(true);
   }
 
@@ -218,7 +221,7 @@ void NativeWidgetNSWindowFullscreenController::OnWindowDidExitFullscreen() {
   HandlePendingState();
   if (!IsInFullscreenTransition()) {
     client_->FullscreenControllerTransitionComplete(
-        /*actual_fullscreen_state=*/false);
+        /*is_fullscreen=*/false);
   }
 }
 
@@ -230,13 +233,13 @@ void NativeWidgetNSWindowFullscreenController::HandlePendingState() {
       return;
     case State::kWindowed:
       if (pending_state_ && pending_state_->is_fullscreen) {
-        if (pending_state_->display_id != display::kInvalidDisplayId) {
-          // Handle entering fullscreen on a specified display (note that this
-          // applies to entering fullscreen on the default display, if specified
-          // explicitly).
+        if (pending_state_->display_id != display::kInvalidDisplayId &&
+            pending_state_->display_id !=
+                client_->FullscreenControllerGetDisplayId()) {
+          // Handle entering fullscreen on another specified display.
           SetStateAndCancelPostedTasks(
               State::kWindowedMovingToFullscreenTarget);
-          base::ThreadTaskRunnerHandle::Get()->PostTask(
+          base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
               FROM_HERE,
               base::BindOnce(&NativeWidgetNSWindowFullscreenController::
                                  MoveToTargetDisplayThenToggleFullscreen,
@@ -245,7 +248,7 @@ void NativeWidgetNSWindowFullscreenController::HandlePendingState() {
         } else {
           // Handle entering fullscreen on the default display.
           SetStateAndCancelPostedTasks(State::kEnterFullscreenTransition);
-          base::ThreadTaskRunnerHandle::Get()->PostTask(
+          base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
               FROM_HERE,
               base::BindOnce(
                   &NativeWidgetNSWindowFullscreenController::ToggleFullscreen,
@@ -256,15 +259,11 @@ void NativeWidgetNSWindowFullscreenController::HandlePendingState() {
         // and having called setFrame during some transition. It is necessary
         // to restore the original frame prior to having entered fullscreen.
         SetStateAndCancelPostedTasks(State::kWindowedRestoringOriginalFrame);
-        base::ThreadTaskRunnerHandle::Get()->PostTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE,
             base::BindOnce(
                 &NativeWidgetNSWindowFullscreenController::RestoreWindowedFrame,
                 weak_factory_.GetWeakPtr()));
-      } else {
-        // Handle returning to the kWindowed state without having called
-        // setFrame.
-        windowed_frame_.reset();
       }
       // Always reset `pending_state_` when handling kWindowed state.
       pending_state_.reset();
@@ -286,7 +285,7 @@ void NativeWidgetNSWindowFullscreenController::HandlePendingState() {
           pending_state_.reset();
         }
         SetStateAndCancelPostedTasks(State::kExitFullscreenTransition);
-        base::ThreadTaskRunnerHandle::Get()->PostTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE,
             base::BindOnce(
                 &NativeWidgetNSWindowFullscreenController::ToggleFullscreen,

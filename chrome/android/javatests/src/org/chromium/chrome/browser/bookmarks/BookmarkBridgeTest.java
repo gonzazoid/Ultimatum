@@ -12,26 +12,18 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.Mockito;
 
 import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.base.test.UiThreadTest;
 import org.chromium.base.test.util.Batch;
-import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
 import org.chromium.base.test.util.RequiresRestart;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.profiles.Profile;
-import org.chromium.chrome.browser.subscriptions.CommerceSubscription;
-import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.test.ChromeBrowserTestRule;
 import org.chromium.chrome.test.util.BookmarkTestUtil;
-import org.chromium.chrome.test.util.browser.Features;
 import org.chromium.components.bookmarks.BookmarkId;
 import org.chromium.components.bookmarks.BookmarkItem;
 import org.chromium.components.bookmarks.BookmarkType;
-import org.chromium.components.power_bookmarks.PowerBookmarkMeta;
-import org.chromium.components.power_bookmarks.ShoppingSpecifics;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.url.GURL;
 
@@ -40,39 +32,33 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 
-/**
- * Tests for bookmark bridge
- */
+/** Tests for bookmark bridge */
 @RunWith(BaseJUnit4ClassRunner.class)
 @Batch(Batch.PER_CLASS)
 public class BookmarkBridgeTest {
-    @Rule
-    public final ChromeBrowserTestRule mChromeBrowserTestRule = new ChromeBrowserTestRule();
+    @Rule public final ChromeBrowserTestRule mChromeBrowserTestRule = new ChromeBrowserTestRule();
 
     private BookmarkBridge mBookmarkBridge;
-    private BookmarkBridge mDestroyedBookmarkBridge;
     private BookmarkId mMobileNode;
     private BookmarkId mOtherNode;
     private BookmarkId mDesktopNode;
 
     @Before
     public void setUp() {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            Profile profile = Profile.getLastUsedRegularProfile();
-            mBookmarkBridge = new BookmarkBridge(profile);
-            mBookmarkBridge.loadFakePartnerBookmarkShimForTesting();
-
-            mDestroyedBookmarkBridge = new BookmarkBridge(profile);
-            mDestroyedBookmarkBridge.loadFakePartnerBookmarkShimForTesting();
-            mDestroyedBookmarkBridge.destroy();
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    Profile profile = Profile.getLastUsedRegularProfile();
+                    mBookmarkBridge = BookmarkBridge.getForProfile(profile);
+                    mBookmarkBridge.loadFakePartnerBookmarkShimForTesting();
+                });
 
         BookmarkTestUtil.waitForBookmarkModelLoaded();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mMobileNode = mBookmarkBridge.getMobileFolderId();
-            mDesktopNode = mBookmarkBridge.getDesktopFolderId();
-            mOtherNode = mBookmarkBridge.getOtherFolderId();
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mMobileNode = mBookmarkBridge.getMobileFolderId();
+                    mDesktopNode = mBookmarkBridge.getDesktopFolderId();
+                    mOtherNode = mBookmarkBridge.getOtherFolderId();
+                });
     }
 
     @After
@@ -107,8 +93,12 @@ public class BookmarkBridgeTest {
         verifyBookmark(folderAA, "faa", null, true, folderA);
     }
 
-    private void verifyBookmark(BookmarkId idToVerify, String expectedTitle,
-            String expectedUrl, boolean isFolder, BookmarkId expectedParent) {
+    private void verifyBookmark(
+            BookmarkId idToVerify,
+            String expectedTitle,
+            String expectedUrl,
+            boolean isFolder,
+            BookmarkId expectedParent) {
         Assert.assertNotNull(idToVerify);
         BookmarkItem item = mBookmarkBridge.getBookmarkById(idToVerify);
         Assert.assertEquals(expectedTitle, item.getTitle());
@@ -136,7 +126,7 @@ public class BookmarkBridgeTest {
         mBookmarkBridge.addBookmark(folderA, 0, "ua", new GURL("http://www.medium.com"));
 
         // Map folders to depths as expected results
-        HashMap<BookmarkId, Integer> idToDepth = new HashMap<BookmarkId, Integer>();
+        HashMap<BookmarkId, Integer> idToDepth = new HashMap<>();
         idToDepth.put(mMobileNode, 0);
         idToDepth.put(folderA, 1);
         idToDepth.put(folderAA, 2);
@@ -148,8 +138,8 @@ public class BookmarkBridgeTest {
         idToDepth.put(mOtherNode, 0);
         idToDepth.put(folderC, 1);
 
-        List<BookmarkId> folderList = new ArrayList<BookmarkId>();
-        List<Integer> depthList = new ArrayList<Integer>();
+        List<BookmarkId> folderList = new ArrayList<>();
+        List<Integer> depthList = new ArrayList<>();
         mBookmarkBridge.getAllFoldersWithDepths(folderList, depthList);
         verifyFolderDepths(folderList, depthList, idToDepth);
     }
@@ -172,10 +162,10 @@ public class BookmarkBridgeTest {
         mBookmarkBridge.addBookmark(folderA, 0, "ua", new GURL("http://www.medium.com"));
 
         // Map folders to depths as expected results
-        HashMap<BookmarkId, Integer> idToDepth = new HashMap<BookmarkId, Integer>();
+        HashMap<BookmarkId, Integer> idToDepth = new HashMap<>();
 
-        List<BookmarkId> folderList = new ArrayList<BookmarkId>();
-        List<Integer> depthList = new ArrayList<Integer>();
+        List<BookmarkId> folderList = new ArrayList<>();
+        List<Integer> depthList = new ArrayList<>();
 
         mBookmarkBridge.getMoveDestinations(folderList, depthList, Arrays.asList(folderA));
         idToDepth.put(mMobileNode, 0);
@@ -229,7 +219,9 @@ public class BookmarkBridgeTest {
         verifyFolderDepths(folderList, depthList, idToDepth);
     }
 
-    private void verifyFolderDepths(List<BookmarkId> folderList, List<Integer> depthList,
+    private void verifyFolderDepths(
+            List<BookmarkId> folderList,
+            List<Integer> depthList,
             HashMap<BookmarkId, Integer> idToDepth) {
         Assert.assertEquals(folderList.size(), depthList.size());
         Assert.assertEquals(folderList.size(), idToDepth.size());
@@ -238,7 +230,8 @@ public class BookmarkBridgeTest {
             Integer depth = depthList.get(i);
             Assert.assertNotNull(folder);
             Assert.assertNotNull(depthList.get(i));
-            Assert.assertTrue("Folder list contains non-folder elements: ",
+            Assert.assertTrue(
+                    "Folder list contains non-folder elements: ",
                     mBookmarkBridge.getBookmarkById(folder).isFolder());
             Assert.assertTrue(
                     "Returned list contained unexpected key: ", idToDepth.containsKey(folder));
@@ -266,14 +259,14 @@ public class BookmarkBridgeTest {
 
         long[] startingIdsArray = new long[] {kBUrl, kAUrl, kBFolder, kAFolder, kPartnerBookmarks};
         Assert.assertArrayEquals(
-                startingIdsArray, getIdArray(mBookmarkBridge.getChildIDs(mMobileNode)));
+                startingIdsArray, getIdArray(mBookmarkBridge.getChildIds(mMobileNode)));
 
         long[] reorderedIdsArray = new long[] {kAUrl, kBFolder, kBUrl, kAFolder};
         mBookmarkBridge.reorderBookmarks(mMobileNode, reorderedIdsArray);
 
         long[] endingIdsArray = new long[] {kAUrl, kBFolder, kBUrl, kAFolder, kPartnerBookmarks};
         Assert.assertArrayEquals(
-                endingIdsArray, getIdArray(mBookmarkBridge.getChildIDs(mMobileNode)));
+                endingIdsArray, getIdArray(mBookmarkBridge.getChildIds(mMobileNode)));
     }
 
     /**
@@ -297,14 +290,18 @@ public class BookmarkBridgeTest {
     @Feature({"Bookmark"})
     public void testSearchPartner() {
         List<BookmarkId> expectedSearchResults = new ArrayList<>();
-        expectedSearchResults.add(new BookmarkId(
-                1, 1)); // Partner bookmark with ID 1: "Partner Bookmark A", http://a.com
-        expectedSearchResults.add(new BookmarkId(
-                2, 1)); // Partner bookmark with ID 2: "Partner Bookmark B", http://b.com
+        expectedSearchResults.add(
+                new BookmarkId(
+                        1, 1)); // Partner bookmark with ID 1: "Partner Bookmark A", http://a.com
+        expectedSearchResults.add(
+                new BookmarkId(
+                        2, 1)); // Partner bookmark with ID 2: "Partner Bookmark B", http://b.com
         List<BookmarkId> searchResults = mBookmarkBridge.searchBookmarks("pArTnER BookMARK", 100);
-        Assert.assertEquals("Expected search results would yield partner bookmark with "
+        Assert.assertEquals(
+                "Expected search results would yield partner bookmark with "
                         + "case-insensitive title match",
-                expectedSearchResults, searchResults);
+                expectedSearchResults,
+                searchResults);
     }
 
     @Test
@@ -315,9 +312,10 @@ public class BookmarkBridgeTest {
         List<BookmarkId> expectedSearchResults = new ArrayList<>();
         expectedSearchResults.add(mBookmarkBridge.addFolder(mMobileNode, 0, "FooBar"));
         List<BookmarkId> searchResults = mBookmarkBridge.searchBookmarks("oba", 100);
-        Assert.assertEquals("Expected search results would yield case-insensitive match of "
-                        + "part of title",
-                expectedSearchResults, searchResults);
+        Assert.assertEquals(
+                "Expected search results would yield case-insensitive match of " + "part of title",
+                expectedSearchResults,
+                searchResults);
     }
 
     @Test
@@ -328,80 +326,36 @@ public class BookmarkBridgeTest {
         List<BookmarkId> expectedSearchResults = new ArrayList<>();
         expectedSearchResults.add(mBookmarkBridge.addFolder(mMobileNode, 0, "FooBar"));
         expectedSearchResults.add(mBookmarkBridge.addFolder(mMobileNode, 1, "BazQuux"));
-        expectedSearchResults.add(new BookmarkId(
-                1, 1)); // Partner bookmark with ID 1: "Partner Bookmark A", http://a.com
+        expectedSearchResults.add(
+                new BookmarkId(
+                        1, 1)); // Partner bookmark with ID 1: "Partner Bookmark A", http://a.com
 
         List<BookmarkId> searchResults = mBookmarkBridge.searchBookmarks("a", 3);
         Assert.assertEquals(
                 "Expected search results size to be 3 (maximum size)", 3, searchResults.size());
-        Assert.assertEquals("Expected that user (non-partner) bookmarks would get priority "
+        Assert.assertEquals(
+                "Expected that user (non-partner) bookmarks would get priority "
                         + "over partner bookmarks",
-                expectedSearchResults, searchResults);
-    }
-
-    @Test
-    @SmallTest
-    @UiThreadTest
-    @Feature({"Bookmark"})
-    public void testGetUserBookmarkIdForTab() {
-        Assert.assertNull(mBookmarkBridge.getUserBookmarkIdForTab(null));
-        Assert.assertNull(
-                mDestroyedBookmarkBridge.getUserBookmarkIdForTab(Mockito.mock(Tab.class)));
+                expectedSearchResults,
+                searchResults);
     }
 
     @Test
     @SmallTest
     @UiThreadTest
     @RequiresRestart
-    @Features.EnableFeatures({ChromeFeatureList.READ_LATER})
-    @DisabledTest(message = "Broken on official bot, crbug.com/1165869")
     public void testAddToReadingList() {
-        Assert.assertTrue("Read later feature is not loaded properly.",
-                ChromeFeatureList.isEnabled(ChromeFeatureList.READ_LATER));
-        Assert.assertNull("Should return null for non http/https URLs.",
-                mBookmarkBridge.addToReadingList("a", new GURL("chrome://flags")));
+        Assert.assertNull(
+                "Should return null for non http/https URLs.",
+                mBookmarkBridge.addToDefaultReadingList("a", new GURL("chrome://flags")));
         BookmarkId readingListId =
-                mBookmarkBridge.addToReadingList("a", new GURL("https://www.google.com/"));
+                mBookmarkBridge.addToDefaultReadingList("a", new GURL("https://www.google.com/"));
         Assert.assertNotNull("Failed to add to reading list", readingListId);
         Assert.assertEquals(BookmarkType.READING_LIST, readingListId.getType());
-        BookmarkItem readingListItem =
-                mBookmarkBridge.getReadingListItem(new GURL("https://www.google.com/"));
+        BookmarkItem readingListItem = mBookmarkBridge.getBookmarkById(readingListId);
         Assert.assertNotNull("Failed to find the reading list", readingListItem);
         Assert.assertEquals(
                 "https://www.google.com/", readingListItem.getUrl().getValidSpecOrEmpty());
         Assert.assertEquals("a", readingListItem.getTitle());
-    }
-
-    @Test
-    @SmallTest
-    @UiThreadTest
-    @Feature({"Bookmark"})
-    @Features.EnableFeatures({ChromeFeatureList.SHOPPING_LIST})
-    public void testProductUnsubscribeUpdatesBookmark() {
-        BookmarkId bookmark =
-                mBookmarkBridge.addBookmark(mMobileNode, 0, "a", new GURL("http://a.com"));
-        verifyBookmark(bookmark, "a", "http://a.com/", false, mMobileNode);
-
-        long offerId = 12345L;
-        ShoppingSpecifics specifics =
-                ShoppingSpecifics.newBuilder().setIsPriceTracked(true).setOfferId(offerId).build();
-        PowerBookmarkMeta meta =
-                PowerBookmarkMeta.newBuilder().setShoppingSpecifics(specifics).build();
-        mBookmarkBridge.setPowerBookmarkMeta(bookmark, meta);
-
-        // Check that the price is tracked prior to sending an unsubscribe event.
-        PowerBookmarkMeta originalMeta = mBookmarkBridge.getPowerBookmarkMeta(bookmark);
-        Assert.assertTrue(originalMeta.getShoppingSpecifics().getIsPriceTracked());
-
-        ArrayList<CommerceSubscription> subscriptions = new ArrayList<>();
-        subscriptions.add(new CommerceSubscription(
-                CommerceSubscription.CommerceSubscriptionType.PRICE_TRACK, Long.toString(offerId),
-                CommerceSubscription.SubscriptionManagementType.USER_MANAGED,
-                CommerceSubscription.TrackingIdType.OFFER_ID));
-        mBookmarkBridge.getSubscriptionObserver().onUnsubscribe(subscriptions);
-
-        // The product with the unsubscribed ID should no longer be price tracked.
-        PowerBookmarkMeta updatedMeta = mBookmarkBridge.getPowerBookmarkMeta(bookmark);
-        Assert.assertFalse(updatedMeta.getShoppingSpecifics().getIsPriceTracked());
     }
 }

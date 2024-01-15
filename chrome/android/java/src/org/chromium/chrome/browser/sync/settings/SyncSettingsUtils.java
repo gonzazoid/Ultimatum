@@ -3,8 +3,6 @@
 // found in the LICENSE file.
 package org.chromium.chrome.browser.sync.settings;
 
-import static org.chromium.chrome.browser.flags.ChromeFeatureList.UNIFIED_PASSWORD_MANAGER_ERROR_MESSAGES;
-
 import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -13,6 +11,7 @@ import android.content.IntentSender;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.provider.Browser;
+import android.text.TextUtils;
 
 import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
@@ -31,34 +30,42 @@ import org.chromium.chrome.R;
 import org.chromium.chrome.browser.LaunchIntentDispatcher;
 import org.chromium.chrome.browser.browserservices.intents.BrowserServicesIntentDataProvider.CustomTabsUiType;
 import org.chromium.chrome.browser.customtabs.CustomTabIntentDataProvider;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
-import org.chromium.chrome.browser.profiles.Profile;
-import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
-import org.chromium.chrome.browser.sync.SyncService;
+import org.chromium.chrome.browser.signin.services.DisplayableProfileData;
 import org.chromium.chrome.browser.sync.TrustedVaultClient;
 import org.chromium.components.signin.base.CoreAccountInfo;
 import org.chromium.components.signin.base.GoogleServiceAuthError;
-import org.chromium.components.signin.identitymanager.ConsentLevel;
+import org.chromium.components.sync.SyncService;
 import org.chromium.components.sync.TrustedVaultUserActionTriggerForUMA;
 import org.chromium.ui.widget.Toast;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
-/**
- * Helper methods for sync settings.
- */
+/** Helper methods for sync settings. */
 public class SyncSettingsUtils {
     private static final String DASHBOARD_URL = "https://www.google.com/settings/chrome/sync";
     private static final String MY_ACCOUNT_URL = "https://myaccount.google.com/smartlink/home";
     private static final String TAG = "SyncSettingsUtils";
 
-    @IntDef({SyncError.NO_ERROR, SyncError.AUTH_ERROR, SyncError.PASSPHRASE_REQUIRED,
-            SyncError.TRUSTED_VAULT_KEY_REQUIRED_FOR_EVERYTHING,
-            SyncError.TRUSTED_VAULT_KEY_REQUIRED_FOR_PASSWORDS,
-            SyncError.TRUSTED_VAULT_RECOVERABILITY_DEGRADED_FOR_EVERYTHING,
-            SyncError.TRUSTED_VAULT_RECOVERABILITY_DEGRADED_FOR_PASSWORDS,
-            SyncError.CLIENT_OUT_OF_DATE, SyncError.SYNC_SETUP_INCOMPLETE, SyncError.OTHER_ERRORS})
+    @IntDef({TitlePreference.FULL_NAME, TitlePreference.EMAIL})
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface TitlePreference {
+        int FULL_NAME = 0;
+        int EMAIL = 1;
+    }
+
+    @IntDef({
+        SyncError.NO_ERROR,
+        SyncError.AUTH_ERROR,
+        SyncError.PASSPHRASE_REQUIRED,
+        SyncError.TRUSTED_VAULT_KEY_REQUIRED_FOR_EVERYTHING,
+        SyncError.TRUSTED_VAULT_KEY_REQUIRED_FOR_PASSWORDS,
+        SyncError.TRUSTED_VAULT_RECOVERABILITY_DEGRADED_FOR_EVERYTHING,
+        SyncError.TRUSTED_VAULT_RECOVERABILITY_DEGRADED_FOR_PASSWORDS,
+        SyncError.CLIENT_OUT_OF_DATE,
+        SyncError.SYNC_SETUP_INCOMPLETE,
+        SyncError.OTHER_ERRORS
+    })
     @Retention(RetentionPolicy.SOURCE)
     public @interface SyncError {
         int NO_ERROR = -1;
@@ -73,17 +80,13 @@ public class SyncSettingsUtils {
         int OTHER_ERRORS = 128;
     }
 
-    /**
-     * Returns the type of the sync error.
-     */
-    @SyncError
-    public static int getSyncError() {
-        SyncService syncService = SyncService.get();
+    /** Returns the type of the sync error. */
+    public static @SyncError int getSyncError(SyncService syncService) {
         if (syncService == null) {
             return SyncError.NO_ERROR;
         }
 
-        if (!syncService.isSyncRequested()) {
+        if (!syncService.hasSyncConsent()) {
             return SyncError.NO_ERROR;
         }
 
@@ -119,7 +122,7 @@ public class SyncSettingsUtils {
                     : SyncError.TRUSTED_VAULT_RECOVERABILITY_DEGRADED_FOR_PASSWORDS;
         }
 
-        if (!syncService.isFirstSetupComplete()) {
+        if (!syncService.isInitialSyncFeatureSetupComplete()) {
             return SyncError.SYNC_SETUP_INCOMPLETE;
         }
 
@@ -128,15 +131,14 @@ public class SyncSettingsUtils {
 
     /**
      * Gets hint message to resolve sync error.
+     *
      * @param context The application context.
      * @param error The sync error.
      */
     public static String getSyncErrorHint(Context context, @SyncError int error) {
         switch (error) {
             case SyncError.AUTH_ERROR:
-                return ChromeFeatureList.isEnabled(UNIFIED_PASSWORD_MANAGER_ERROR_MESSAGES)
-                        ? context.getString(R.string.hint_sync_auth_error_modern)
-                        : context.getString(R.string.hint_sync_auth_error);
+                return context.getString(R.string.hint_sync_auth_error_modern);
             case SyncError.CLIENT_OUT_OF_DATE:
                 return context.getString(
                         R.string.hint_client_out_of_date, BuildInfo.getInstance().hostPackageLabel);
@@ -193,7 +195,8 @@ public class SyncSettingsUtils {
                 // Both these errors should be resolved by signing the user again.
                 return context.getString(R.string.auth_error_card_button);
             case SyncError.CLIENT_OUT_OF_DATE:
-                return context.getString(R.string.client_out_of_date_error_card_button,
+                return context.getString(
+                        R.string.client_out_of_date_error_card_button,
                         BuildInfo.getInstance().hostPackageLabel);
             case SyncError.PASSPHRASE_REQUIRED:
                 return context.getString(R.string.passphrase_required_error_card_button);
@@ -210,19 +213,14 @@ public class SyncSettingsUtils {
         }
     }
 
-    /**
-     * Return a short summary of the current sync status.
-     */
-    public static String getSyncStatusSummary(Context context) {
-        if (!IdentityServicesProvider.get()
-                        .getIdentityManager(Profile.getLastUsedRegularProfile())
-                        .hasPrimaryAccount(ConsentLevel.SYNC)) {
-            // There is no account with sync consent available.
+    /** Return a short summary of the current sync status. */
+    public static String getSyncStatusSummary(Context context, SyncService syncService) {
+        if (syncService == null) {
             return context.getString(R.string.sync_off);
         }
 
-        SyncService syncService = SyncService.get();
-        if (syncService == null) {
+        if (!syncService.hasSyncConsent()) {
+            // There is no account with sync consent available.
             return context.getString(R.string.sync_off);
         }
 
@@ -230,7 +228,7 @@ public class SyncSettingsUtils {
             return context.getString(R.string.sync_is_disabled_by_administrator);
         }
 
-        if (!syncService.isFirstSetupComplete()) {
+        if (!syncService.isInitialSyncFeatureSetupComplete()) {
             return context.getString(R.string.sync_settings_not_confirmed);
         }
 
@@ -247,7 +245,7 @@ public class SyncSettingsUtils {
             return context.getString(R.string.sync_error_generic);
         }
 
-        if (!syncService.isSyncRequested() || syncService.getSelectedTypes().isEmpty()) {
+        if (syncService.getSelectedTypes().isEmpty()) {
             return context.getString(R.string.sync_data_types_off);
         }
 
@@ -277,7 +275,7 @@ public class SyncSettingsUtils {
      * @param context The application context, used by the method to get string resources.
      * @param state Must not be GoogleServiceAuthError.State.None.
      */
-    public static String getSyncStatusSummaryForAuthError(
+    private static String getSyncStatusSummaryForAuthError(
             Context context, @GoogleServiceAuthError.State int state) {
         switch (state) {
             case GoogleServiceAuthError.State.INVALID_GAIA_CREDENTIALS:
@@ -299,26 +297,16 @@ public class SyncSettingsUtils {
         }
     }
 
-    /**
-     * Returns an icon that represents the current sync state.
-     */
-    public static @Nullable Drawable getSyncStatusIcon(Context context) {
-        if (!IdentityServicesProvider.get()
-                        .getIdentityManager(Profile.getLastUsedRegularProfile())
-                        .hasPrimaryAccount(ConsentLevel.SYNC)) {
+    /** Returns an icon that represents the current sync state. */
+    public static @Nullable Drawable getSyncStatusIcon(Context context, SyncService syncService) {
+        if (syncService == null
+                || !syncService.hasSyncConsent()
+                || syncService.getSelectedTypes().isEmpty()
+                || syncService.isSyncDisabledByEnterprisePolicy()) {
             return AppCompatResources.getDrawable(context, R.drawable.ic_sync_off_48dp);
         }
 
-        SyncService syncService = SyncService.get();
-        if (syncService == null || !syncService.isSyncRequested()
-                || syncService.getSelectedTypes().isEmpty()) {
-            return AppCompatResources.getDrawable(context, R.drawable.ic_sync_off_48dp);
-        }
-        if (syncService.isSyncDisabledByEnterprisePolicy()) {
-            return AppCompatResources.getDrawable(context, R.drawable.ic_sync_off_48dp);
-        }
-
-        if (getSyncError() != SyncError.NO_ERROR) {
+        if (getSyncError(syncService) != SyncError.NO_ERROR) {
             return AppCompatResources.getDrawable(context, R.drawable.ic_sync_error_48dp);
         }
 
@@ -355,8 +343,9 @@ public class SyncSettingsUtils {
                 new CustomTabsIntent.Builder().setShowTitle(false).build();
         customTabIntent.intent.setData(Uri.parse(url));
 
-        Intent intent = LaunchIntentDispatcher.createCustomTabActivityIntent(
-                activity, customTabIntent.intent);
+        Intent intent =
+                LaunchIntentDispatcher.createCustomTabActivityIntent(
+                        activity, customTabIntent.intent);
         intent.setPackage(activity.getPackageName());
         intent.putExtra(CustomTabIntentDataProvider.EXTRA_UI_TYPE, CustomTabsUiType.DEFAULT);
         intent.putExtra(Browser.EXTRA_APPLICATION_ID, activity.getPackageName());
@@ -376,12 +365,12 @@ public class SyncSettingsUtils {
 
     /**
      * Opens web dashboard to manage google account in a custom tab.
+     *
+     * Callers should ensure the current account has sync consent prior to calling.
+     *
      * @param activity The activity to use for starting the intent.
      */
     public static void openGoogleMyAccount(Activity activity) {
-        assert IdentityServicesProvider.get()
-                .getIdentityManager(Profile.getLastUsedRegularProfile())
-                .hasPrimaryAccount(ConsentLevel.SYNC);
         RecordUserAction.record("SyncPreferences_ManageGoogleAccountClicked");
         openCustomTabWithURL(activity, MY_ACCOUNT_URL);
     }
@@ -396,12 +385,13 @@ public class SyncSettingsUtils {
      *         Fragment.onActivityResult().
      * @param pendingIntentPromise promise that provides the intent to be started.
      */
-    private static void openTrustedVaultDialogForPendingIntent(Fragment fragment,
-            CoreAccountInfo accountInfo, int requestCode,
+    private static void openTrustedVaultDialogForPendingIntent(
+            Fragment fragment,
+            CoreAccountInfo accountInfo,
+            int requestCode,
             Promise<PendingIntent> pendingIntentPromise) {
         pendingIntentPromise.then(
-                (pendingIntent)
-                        -> {
+                (pendingIntent) -> {
                     try {
                         // startIntentSenderForResult() will fail if the fragment is
                         // already gone, see crbug.com/1362141.
@@ -409,18 +399,29 @@ public class SyncSettingsUtils {
                             return;
                         }
 
-                        fragment.startIntentSenderForResult(pendingIntent.getIntentSender(),
+                        fragment.startIntentSenderForResult(
+                                pendingIntent.getIntentSender(),
                                 requestCode,
-                                /* fillInIntent */ null, /* flagsMask */ 0,
-                                /* flagsValues */ 0, /* extraFlags */ 0,
-                                /* options */ null);
+                                /* fillInIntent= */ null,
+                                /* flagsMask= */ 0,
+                                /* flagsValues= */ 0,
+                                /* extraFlags= */ 0,
+                                /* options= */ null);
                     } catch (IntentSender.SendIntentException exception) {
-                        Log.w(TAG, "Error sending trusted vault intent for code ", requestCode,
-                                ": ", exception);
+                        Log.w(
+                                TAG,
+                                "Error sending trusted vault intent for code ",
+                                requestCode,
+                                ": ",
+                                exception);
                     }
                 },
                 (exception) -> {
-                    Log.e(TAG, "Error opening trusted vault dialog for code ", requestCode, ": ",
+                    Log.e(
+                            TAG,
+                            "Error opening trusted vault dialog for code ",
+                            requestCode,
+                            ": ",
                             exception);
                 });
     }
@@ -436,9 +437,12 @@ public class SyncSettingsUtils {
      */
     public static void openTrustedVaultKeyRetrievalDialog(
             Fragment fragment, CoreAccountInfo accountInfo, int requestCode) {
-        TrustedVaultClient.get().recordKeyRetrievalTrigger(
-                TrustedVaultUserActionTriggerForUMA.SETTINGS);
-        openTrustedVaultDialogForPendingIntent(fragment, accountInfo, requestCode,
+        TrustedVaultClient.get()
+                .recordKeyRetrievalTrigger(TrustedVaultUserActionTriggerForUMA.SETTINGS);
+        openTrustedVaultDialogForPendingIntent(
+                fragment,
+                accountInfo,
+                requestCode,
                 TrustedVaultClient.get().createKeyRetrievalIntent(accountInfo));
     }
 
@@ -453,9 +457,13 @@ public class SyncSettingsUtils {
      */
     public static void openTrustedVaultRecoverabilityDegradedDialog(
             Fragment fragment, CoreAccountInfo accountInfo, int requestCode) {
-        TrustedVaultClient.get().recordRecoverabilityDegradedFixTrigger(
-                TrustedVaultUserActionTriggerForUMA.SETTINGS);
-        openTrustedVaultDialogForPendingIntent(fragment, accountInfo, requestCode,
+        TrustedVaultClient.get()
+                .recordRecoverabilityDegradedFixTrigger(
+                        TrustedVaultUserActionTriggerForUMA.SETTINGS);
+        openTrustedVaultDialogForPendingIntent(
+                fragment,
+                accountInfo,
+                requestCode,
                 TrustedVaultClient.get().createRecoverabilityDegradedIntent(accountInfo));
     }
 
@@ -469,7 +477,10 @@ public class SyncSettingsUtils {
      */
     public static void openTrustedVaultOptInDialog(
             Fragment fragment, CoreAccountInfo accountInfo, int requestCode) {
-        openTrustedVaultDialogForPendingIntent(fragment, accountInfo, requestCode,
+        openTrustedVaultDialogForPendingIntent(
+                fragment,
+                accountInfo,
+                requestCode,
                 TrustedVaultClient.get().createOptInIntent(accountInfo));
     }
 
@@ -479,8 +490,47 @@ public class SyncSettingsUtils {
      * @param context The context where the toast will be shown.
      */
     public static void showSyncDisabledByAdministratorToast(Context context) {
-        Toast.makeText(context, context.getString(R.string.sync_is_disabled_by_administrator),
-                     Toast.LENGTH_LONG)
+        Toast.makeText(
+                        context,
+                        context.getString(R.string.sync_is_disabled_by_administrator),
+                        Toast.LENGTH_LONG)
                 .show();
+    }
+
+    /**
+     * Returns either the full name or the email address of a DisplayableProfileData according
+     * to preference. If the preferred string is not displayable, returns the other displayable
+     * string, or fallback to default string.
+     *
+     * This method is used by {@link Preference#setTitle(CharSequence)} callers.
+     *
+     * @param profileData DisplayableProfileData containing the user's full name and email address.
+     * @param context The context where the returned string is passed to setTitle(CharSequence).
+     * @param preference Whether the full name or the email is preferred.
+     */
+    public static String getDisplayableFullNameOrEmailWithPreference(
+            DisplayableProfileData profileData, Context context, @TitlePreference int preference) {
+        final String fullName = profileData.getFullName();
+        final String accountEmail = profileData.getAccountEmail();
+        final String defaultString = context.getString(R.string.default_google_account_username);
+        final boolean canShowFullName = !TextUtils.isEmpty(fullName);
+        final boolean canShowEmailAddress = profileData.hasDisplayableEmailAddress();
+        // Both strings are not displayable, use generic string.
+        if (!canShowFullName && !canShowEmailAddress) {
+            return defaultString;
+        }
+        // Both strings are displayable, use the preferred one.
+        if (canShowFullName && canShowEmailAddress) {
+            switch (preference) {
+                case TitlePreference.FULL_NAME:
+                    return fullName;
+                case TitlePreference.EMAIL:
+                    return accountEmail;
+                default:
+                    return defaultString;
+            }
+        }
+        // The preference cannot be fulfilled, use the other displayable string.
+        return canShowFullName ? fullName : accountEmail;
     }
 }

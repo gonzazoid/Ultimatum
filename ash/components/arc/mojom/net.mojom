@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// Next MinVersion: 22
+// Next MinVersion: 35
 
 // This file defines the mojo interface between the ARC networking stack and
 // Chrome OS. There are three different groups of interactions:
@@ -12,6 +12,8 @@
 
 module arc.mojom;
 
+import "ash/components/arc/mojom/app.mojom";
+import "services/network/public/mojom/ip_address.mojom";
 import "url/mojom/url.mojom";
 
 // Indicates if a request send by ARC to the host has successfully completed.
@@ -80,6 +82,12 @@ struct VisibleNetworkDetails {
 struct ConfiguredNetworkDetails {
   string? passphrase;
   bool autoconnect;
+
+  // This is the BSSID that the client would like to connect to. This is
+  // semantically different from |WiFi.bssid|, which is what the network's BSSID
+  // actually is. In the format of an Ethernet MAC address with lowercase
+  // letters (e.g. 00:11:22:aa:bb:cc).
+  [MinVersion=33] string? bssid;
 };
 
 // Passpoint credentials used to connect to matching passpoint networks.
@@ -121,6 +129,17 @@ struct PasspointCredentials {
 
   // Package name of the App that provided these credentials.
   string package_name@7;
+
+  // Friendly name of the home service provider. Taken from Android's
+  // android.net.wifi.hotspot2.pps.HomeSp.getFriendlyName().
+  [MinVersion=22] string? friendly_name@8;
+
+  // The time this subscription will expire or minimum value of 64-bit int to
+  // indicate unset value. It is in the format of number of milliseconds since
+  // January 1, 1970, 00:00:00 GMT.
+  // The field is a direct copy of Android's Java signed value taken from
+  // android.net.wifi.hotspot2.getSubscriptionExpirationTimeMillis().
+  [MinVersion=22] int64 subscription_expiration_time_ms@9;
 };
 
 // Values to be used to remove matching Passpoint credentials.
@@ -309,9 +328,9 @@ struct WiFi {
   // The type of wireless security protocol used by this network.
   SecurityType security;
 
-  // The current RSSI of this network. Updates for this value are not sent to
-  // ARC for connected WiFi networks and should be considered precise only for
-  // scanning results.
+  // The current signal strength of this network. Updates for this value are not
+  // sent to ARC for connected WiFi networks and should be considered precise
+  // only for scanning results.
   int32 signal_strength;
 
   // True if the network represents a Passpoint network.
@@ -319,6 +338,11 @@ struct WiFi {
 
   // Fully qualified domain name (FQDN) of a Passpoint configuration.
   [MinVersion=16] string? fqdn;
+
+  // The current RSSI (Received Signal Strength Indicator) in dBm of this
+  // network. This is typically between -90 and -20 dBm. Unknown value
+  // is represented as -32768 dBm (int16 min value).
+  [MinVersion=23] int16 rssi;
 };
 
 // The physical network types exposed to ARC by the host,
@@ -456,6 +480,15 @@ struct NetworkConfiguration {
   // IPv4 and IPv6 addresses of DNS proxy. When this field is not empty ARC
   // overrides the network DNS addresses with these addresses.
   [MinVersion=19] array<string>? dns_proxy_addresses;
+
+  // Available maximal uplink and downlink speeds for the network in kbps.
+  [MinVersion=28] LinkSpeed? link_speed;
+};
+
+// Uplink and downlink speeds in Kbps for the network.
+struct LinkSpeed {
+  uint32 uplink_speed_kbps@0;
+  uint32 downlink_speed_kbps@1;
 };
 
 // Describes a Wifi network configuration that ARC has requested the host to
@@ -503,6 +536,13 @@ struct WifiConfiguration {
 
     // DNS server IP addresses included in the configuration
   [MinVersion=20] array<string>? dns_servers@13;
+
+  // A list of BSSIDs that control what APs can be connected to.
+  // If null, there are no restrictions and this field is ignored.
+  // If empty, then nothing is allowed and no AP will be connected to.
+  // If non-empty, then only APs whose BSSID is included in the list can be
+  // connected to. BSSIDs should be in MAC address format.
+  [MinVersion=26] array<string>? bssid_allowlist@14;
 };
 
 [Extensible]
@@ -642,8 +682,102 @@ struct ArcPingTestResult {
   int64 duration_ms;
 };
 
-// Next Method ID: 18
+// Chrome flags that should be passed into ARC via NetInstance::SetUpFlag().
+[Extensible]
+enum Flag {
+  [Default] UNKNOWN  = 0,
+
+  // Launched and deprecated, b/257889534
+  DEPRECATED_ENABLE_ARC_HOST_VPN = 1,
+};
+
+// The band to start an AP on.
+[Extensible]
+enum WifiBand {
+  [Default] kUnknown = 0,
+  k2Ghz = 1,
+  k5Ghz = 2,
+  k6Ghz = 3,
+  k60Ghz = 4,
+};
+
+
+// The status to represent a local only hotspot connection status.
+[Extensible]
+enum LohsStatus {
+  [Default] kUnknown = 0,
+  kSuccess = 1,
+  kErrorGeneric = 2,
+  kErrorIncompatibleMode = 3,
+  kErrorTetheringDisallowed = 4,
+
+  // The ARC config contains values that the host cannot support.
+  [MinVersion=27] kErrorInvalidArgument = 5,
+
+  // The ARC config is theoretically valid, but there was some error at the
+  // platform-level.
+  [MinVersion=27] kErrorConfiguringPlatform = 6,
+};
+
+// The struct to represent a local only hotspot configuration.
+struct LohsConfig {
+  // The network band that Android is requesting.
+  WifiBand band@0;
+
+  // Security type of the local only hotspot.
+  SecurityType security_type@1;
+
+  // SSID of the local only hotspot. The network SSID encoded as a
+  // hexadecimal string.
+  string hexssid@2;
+
+  // Passphrase of the local only hotspot. If the security type requires one.
+  // It will be null otherwise.
+  string? passphrase@3;
+};
+
+// Request object that is passed to the Chrome API RequestPasspointAppApproval.
+struct PasspointApprovalRequest {
+  // The package name of the app requesting the approval. This is needed for
+  // Chrome to check if the app window is valid.
+  string package_name;
+
+  // The name of the app requesting the approval.
+  string app_name;
+
+  // Friendly name of the home service provider. Matches Android's
+  // android.net.wifi.hotspot2.pps.HomeSp.getFriendlyName() and
+  // PasspointCredentials.friendly_name.
+  // This value can be different from |app_name|, for instance for aggregator
+  // Apps.
+  [MinVersion=31] string? friendly_name;
+
+  // The time this subscription will expire or minimum value of 64-bit int to
+  // indicate unset value. It is in the format of number of milliseconds since
+  // January 1, 1970, 00:00:00 GMT.
+  // The field is a direct copy of Android's Java signed value taken from
+  // android.net.wifi.hotspot2.getSubscriptionExpirationTimeMillis().
+  // The field also matches subscription_expiration_time_ms of
+  // PasspointCredentials.
+  [MinVersion=31] int64 subscription_expiration_time_ms;
+};
+
+// Result object that is returned to the caller to the Chrome API
+// RequestPasspointAppApproval.
+struct PasspointApprovalResponse {
+  // True if the user allowed the request.
+  bool allowed;
+};
+
+// Next Method ID: 24
 // IDs 3 and 9 are missing as they belonged to deprecated methods.
+// Mojo interface exposed by the Chrome browser process for
+// networking/WiFi/VPN, ARC is the client.
+// The reason for using int for uint fields such as port is: Mojo
+// uint values are byte cast when deserialized in Java, the practical
+// and safe solution is to pick the next signed type that includes the
+// whole unsigned range of possible values. Otherwise it forces writing
+// error-prone conversion code at the entry or exit of mojo data.
 interface NetHost {
   // Sends a request to get enabled / disabled status of WiFi.
   GetWifiEnabledState@1() => (bool is_enabled);
@@ -663,6 +797,10 @@ interface NetHost {
 
   // Deletes an existing network.
   [MinVersion=4] ForgetNetwork@6(string guid) => (NetworkResult status);
+
+  // Updates an existing Wifi network.
+  [MinVersion=29] UpdateWifiNetwork@20(string guid, WifiConfiguration cfg) =>
+      (NetworkResult status);
 
   // Initiates a network connection.  If called when connected to a different
   // network, it will drop the current connection first.
@@ -701,6 +839,11 @@ interface NetHost {
   // Call with empty string as |vpnPackage| to lift the restriction.
   [MinVersion=9] SetAlwaysOnVpn@13(string vpnPackage, bool lockdown);
 
+  // Sends a request to Chrome to ask for user approval for the app to set up
+  // WiFi networks through Passpoint.
+  [MinVersion=30] RequestPasspointAppApproval@21(
+      PasspointApprovalRequest request) => (PasspointApprovalResponse response);
+
   // Adds a PasspointCredentials block provided by an Android App onto the host
   // platform.
   [MinVersion=16] AddPasspointCredentials@14(PasspointCredentials credentials);
@@ -714,15 +857,32 @@ interface NetHost {
   [MinVersion=17] RemovePasspointCredentials@16(
       PasspointRemovalProperties properties);
 
-  // Disconnect the current ChromeOS VPN network if one exists. If ChromeOS has
+  // Disconnects the current ChromeOS VPN network if one exists. If ChromeOS has
   // a network that represents an Android VPN, the network doesn't count as a
   // ChromeOS VPN network and won't be disconnected. If the default network
   // isn't a ChromeOS VPN network, then nothing happens.
   [MinVersion=18] DisconnectHostVpn@17();
+
+  // Sends a request to Chrome to start a local only hotspot.
+  [MinVersion=25] StartLohs@18(LohsConfig config) => (LohsStatus status);
+
+  // Sends a request to Chrome to stop a local only hotspot.
+  [MinVersion=25] StopLohs@19();
+
+  // Sends a notification to Chrome about the change in whether Android WiFi
+  // multicast lock is held by any app in ARC.
+  [MinVersion=32] NotifyAndroidWifiMulticastLockChange@22(bool is_held);
+
+  // Sends a notification to Chrome about a socket connection event in ARC.
+  [MinVersion=34] NotifySocketConnectionEvent@23(SocketConnectionEvent msg);
 };
 
-// Next Method ID: 11
+// Next Method ID: 12
 // IDs 0 and 2 are missing as they belonged to deprecated method.
+// Mojo interface exposed by ARC for networking/WiFi/VPN, the Chrome
+// browser process is the client.
+// The reason for using int for uint fields like port is the same and
+// can be found in description for interface |NetHost|.
 interface NetInstance {
   // Establishes full-duplex communication with the host.
   [MinVersion=8] Init@6(pending_remote<NetHost> host_remote) => ();
@@ -768,4 +928,59 @@ interface NetInstance {
   // name |transport_name|.
   [MinVersion=15] PingTest@10(string transport_name, string ip_address)
       => (ArcPingTestResult result);
+
+  // Pass a Chrome flag value into ARC.
+  [MinVersion=24] SetUpFlag@11(Flag flag, bool value);
+};
+
+// IP protocols used in a socket connection. Currently we are only interested
+// in TCP and UDP for WiFi QoS and ignore other protocols such as ICMP.
+[Extensible]
+enum IpProtocol {
+  [Default] kUnknown = 0,
+  kTcp = 1,
+  kUdp = 2,
+};
+
+// Events to describe status change of a socket.
+[Extensible]
+enum SocketEvent {
+  [Default] kUnknown = 0,
+  kOpen = 1,
+  kClose = 2,
+};
+
+// QoS categories for a socket connection defined in RFC4594.
+[Extensible]
+enum QosCategory {
+  [Default] kUnknown = 0,
+  kRealtimeInteractive = 1,
+  kMultimediaConferencing = 2,
+};
+
+struct SocketConnectionEvent {
+  // Source IP address for this socket connection.
+  network.mojom.IPAddress src_addr@0;
+
+  // Destination IP address for this socket connection.
+  network.mojom.IPAddress dst_addr@1;
+
+  // Source IP port for this socket connection.
+  int32 src_port@2;
+
+  // Destination IP port for this socket connection.
+  int32 dst_port@3;
+
+  // Procotol used for this socket connection.
+  IpProtocol proto@4;
+
+  // Socket event of this socket connection, whether this connection is opened
+  // or closed.
+  SocketEvent event@5;
+
+  // Category of App that this socket connection is associated with.
+  AppCategory app_category@6;
+
+  // The inferred QoS category of this socket connection.
+  QosCategory qos_category@7;
 };

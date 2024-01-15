@@ -15,8 +15,12 @@ namespace {
 
 const char kAudioServiceHistogramName[] = "AudioService";
 const char kBrowserHistogramName[] = "Browser";
+const char kCdmServiceHistogramName[] = "CdmService";
 const char kExtensionHistogramName[] = "Extension";
 const char kGpuHistogramName[] = "Gpu";
+#if BUILDFLAG(IS_WIN)
+const char kMediaFoundationServiceHistogramName[] = "MediaFoundationService";
+#endif
 const char kNetworkServiceHistogramName[] = "NetworkService";
 const char kPaintPreviewCompositorHistogramName[] = "PaintPreviewCompositor";
 const char kRendererHistogramName[] = "Renderer";
@@ -32,10 +36,16 @@ const char* HistogramProcessTypeToString(HistogramProcessType type) {
       return kAudioServiceHistogramName;
     case HistogramProcessType::kBrowser:
       return kBrowserHistogramName;
+    case HistogramProcessType::kCdmService:
+      return kCdmServiceHistogramName;
     case HistogramProcessType::kExtension:
       return kExtensionHistogramName;
     case HistogramProcessType::kGpu:
       return kGpuHistogramName;
+#if BUILDFLAG(IS_WIN)
+    case HistogramProcessType::kMediaFoundationService:
+      return kMediaFoundationServiceHistogramName;
+#endif
     case HistogramProcessType::kNetworkService:
       return kNetworkServiceHistogramName;
     case HistogramProcessType::kPaintPreviewCompositor:
@@ -58,9 +68,10 @@ base::TimeDelta GetDelayForNextMemoryLog() {
 #else
   base::TimeDelta mean_time = base::Minutes(30);
 #endif
-  // Compute the actual delay before sampling using a Poisson process.
+  // Compute the actual delay before sampling using a Poisson process. Use
+  // `1-RandDouble()` to avoid log(0).
   double uniform = base::RandDouble();
-  return -std::log(uniform) * mean_time;
+  return -std::log(1 - uniform) * mean_time;
 }
 
 }  // namespace memory_instrumentation

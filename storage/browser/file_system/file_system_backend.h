@@ -12,11 +12,13 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
+#include "components/file_access/scoped_file_access_delegate.h"
 #include "storage/browser/file_system/file_permission_policy.h"
+#include "storage/browser/file_system/file_stream_reader.h"
 #include "storage/browser/file_system/open_file_system_mode.h"
 #include "storage/browser/file_system/task_runner_bound_observer_list.h"
 #include "storage/common/file_system/file_system_types.h"
@@ -35,6 +37,8 @@ class FileSystemContext;
 class FileSystemOperation;
 class FileSystemQuotaUtil;
 class WatcherManager;
+
+enum class OperationType;
 
 // Callback to take GURL.
 using URLCallback = base::OnceCallback<void(const GURL& url)>;
@@ -99,6 +103,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemBackend {
   // This method is usually dispatched by
   // FileSystemContext::CreateFileSystemOperation.
   virtual std::unique_ptr<FileSystemOperation> CreateFileSystemOperation(
+      OperationType type,
       const FileSystemURL& url,
       FileSystemContext* context,
       base::File::Error* error_code) const = 0;
@@ -121,13 +126,17 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemBackend {
   // ERR_UPLOAD_FILE_CHANGED error.
   // This method itself does *not* check if the given path exists and is a
   // regular file. At most |max_bytes_to_read| can be fetched from the file
-  // stream reader.
+  // stream reader. The callback `file_access` grants access to dlp restricted
+  // files. Passing a NullCallback will lead to default behaviour of
+  // ScopedFileAccessDelegate::RequestDefaultFilesAccessIO.
   virtual std::unique_ptr<FileStreamReader> CreateFileStreamReader(
       const FileSystemURL& url,
       int64_t offset,
       int64_t max_bytes_to_read,
       const base::Time& expected_modification_time,
-      FileSystemContext* context) const = 0;
+      FileSystemContext* context,
+      file_access::ScopedFileAccessDelegate::RequestFilesAccessIOCallback
+          file_access) const = 0;
 
   // Creates a new file stream writer for a given filesystem URL |url| with an
   // offset |offset|.
@@ -156,39 +165,6 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) FileSystemBackend {
   // observers are added.
   virtual const AccessObserverList* GetAccessObservers(
       FileSystemType type) const = 0;
-};
-
-// An interface to control external file system access permissions.
-// TODO(satorux): Move this out of 'storage/browser/fileapi'. crbug.com/257279
-class ExternalFileSystemBackend : public FileSystemBackend {
- public:
-  // Returns true if |url| is allowed to be accessed.
-  // This is supposed to perform ExternalFileSystem-specific security
-  // checks.
-  virtual bool IsAccessAllowed(const FileSystemURL& url) const = 0;
-  // Returns the list of top level directories that are exposed by this
-  // provider. This list is used to set appropriate child process file access
-  // permissions.
-  virtual std::vector<base::FilePath> GetRootDirectories() const = 0;
-  // Grants access to |virtual_path| from |origin| URL.
-  virtual void GrantFileAccessToOrigin(const url::Origin& origin,
-                                       const base::FilePath& virtual_path) = 0;
-  // Revokes file access from origin identified with |origin|.
-  virtual void RevokeAccessForOrigin(const url::Origin& origin) = 0;
-  // Gets virtual path by known filesystem path. Returns false when filesystem
-  // path is not exposed by this provider.
-  virtual bool GetVirtualPath(const base::FilePath& file_system_path,
-                              base::FilePath* virtual_path) const = 0;
-  // Gets a redirect URL for contents. e.g. Google Drive URL for hosted
-  // documents. Returns empty URL if the entry does not have the redirect URL.
-  virtual void GetRedirectURLForContents(const FileSystemURL& url,
-                                         URLCallback callback) const = 0;
-  // Creates an internal File System URL for performing internal operations such
-  // as confirming if a file or a directory exist before granting the final
-  // permission to the entry. The path must be an absolute path.
-  virtual FileSystemURL CreateInternalURL(
-      FileSystemContext* context,
-      const base::FilePath& entry_path) const = 0;
 };
 
 }  // namespace storage

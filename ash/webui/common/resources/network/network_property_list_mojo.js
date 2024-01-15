@@ -14,7 +14,7 @@ import './cr_policy_network_indicator_mojo.js';
 import './network_shared.css.js';
 
 import {I18nBehavior} from '//resources/ash/common/i18n_behavior.js';
-import {assert} from '//resources/js/assert.js';
+import {assert} from '//resources/ash/common/assert.js';
 import {flush, Polymer} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {ActivationStateType, SecurityType, SubjectAltName, VpnType} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/cros_network_config.mojom-webui.js';
 import {OncSource, PolicySource, PortalState} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/network_types.mojom-webui.js';
@@ -506,21 +506,18 @@ Polymer({
 
     if (key === 'tether.signalStrength') {
       assert(typeof value === 'number');
-      // Possible |signalStrength| values should be 0, 25, 50, 75, and 100. Add
-      // <= checks for robustness.
-      if (value <= 24) {
-        return this.i18n('OncTether-SignalStrength_Weak');
+      // Possible |signalStrength| values should be from 0 to 100. Add <=
+      // checks for robustness.
+      if (value === 0) {
+        return this.i18n('OncTether-SignalStrength_None');
       }
-      if (value <= 49) {
-        return this.i18n('OncTether-SignalStrength_Okay');
+      if (value <= 25) {
+        return this.i18n('OncTether-SignalStrength_Low');
       }
-      if (value <= 74) {
-        return this.i18n('OncTether-SignalStrength_Good');
+      if (value <= 50) {
+        return this.i18n('OncTether-SignalStrength_Medium');
       }
-      if (value <= 99) {
-        return this.i18n('OncTether-SignalStrength_Strong');
-      }
-      return this.i18n('OncTether-SignalStrength_VeryStrong');
+      return this.i18n('OncTether-SignalStrength_Strong');
     }
 
     if (key === 'tether.carrier') {

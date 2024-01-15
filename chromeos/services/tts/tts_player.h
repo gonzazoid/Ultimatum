@@ -8,12 +8,13 @@
 #include <queue>
 
 #include "base/synchronization/lock.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/thread_annotations.h"
 #include "base/time/time.h"
 #include "chromeos/services/tts/public/mojom/tts_service.mojom.h"
+#include "media/base/audio_glitch_info.h"
 #include "media/base/audio_renderer_sink.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
-#include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/audio/public/cpp/output_device.h"
 
@@ -30,11 +31,16 @@ class TtsPlayer : public media::AudioRendererSink::RenderCallback {
     ~AudioBuffer();
     AudioBuffer(const AudioBuffer& other) = delete;
     AudioBuffer(AudioBuffer&& other);
+    AudioBuffer& operator=(AudioBuffer&& other) = default;
 
     std::vector<float> frames;
     int char_index = -1;
     int status = 0;
     bool is_first_buffer = false;
+
+    // Internal bookkeeping if only a partial buffer has been read during
+    // TtsPlayer::Render.
+    size_t current_frame_index = 0;
   };
 
   TtsPlayer(mojo::PendingRemote<media::mojom::AudioStreamFactory> factory,
@@ -55,7 +61,7 @@ class TtsPlayer : public media::AudioRendererSink::RenderCallback {
   // media::AudioRendererSink::RenderCallback:
   int Render(base::TimeDelta delay,
              base::TimeTicks delay_timestamp,
-             int prior_frames_skipped,
+             const media::AudioGlitchInfo& glitch_info,
              media::AudioBus* dest) override;
   void OnRenderError() override;
 
@@ -67,6 +73,10 @@ class TtsPlayer : public media::AudioRendererSink::RenderCallback {
   // Do any processing (e.g. sending start/end events) on buffers that have just
   // been rendered on the audio thread.
   void ProcessRenderedBuffers();
+
+  // Post task on the main thread to call ProcessRenderedBuffers.
+  void PostTaskProcessRenderedBuffersLocked(AudioBuffer* buffer)
+      EXCLUSIVE_LOCKS_REQUIRED(state_lock_);
 
   // Protects access to state from main thread and audio thread.
   base::Lock state_lock_;

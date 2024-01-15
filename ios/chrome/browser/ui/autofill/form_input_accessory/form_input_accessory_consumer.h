@@ -7,7 +7,9 @@
 
 #import <Foundation/Foundation.h>
 
-#import "ios/chrome/browser/ui/util/keyboard_observer_helper.h"
+#include "components/autofill/core/browser/ui/popup_types.h"
+#include "components/autofill/core/common/unique_ids.h"
+#import "ios/chrome/browser/shared/ui/util/keyboard_observer_helper.h"
 
 @class FormSuggestion;
 @protocol FormInputAccessoryViewDelegate;
@@ -33,12 +35,19 @@
 // Enables or disables the previous button if any.
 @property(nonatomic) BOOL formInputPreviousButtonEnabled;
 
+// Type of the form suggestions.
+@property(nonatomic) autofill::PopupType suggestionType;
+
+// ID of the field that currently has focus.
+@property(nonatomic) autofill::FieldRendererId currentFieldId;
+
 // Replace the keyboard accessory view with one showing the passed suggestions.
 // And form navigation buttons on iPhone (iPad already includes those).
 - (void)showAccessorySuggestions:(NSArray<FormSuggestion*>*)suggestions;
 
-// Animates the first form suggestion label.
-- (void)animateSuggestionLabel;
+// Preferred omnibox position was updated. `isBottomOmnibox`: whether the new
+// position is bottom omnibox.
+- (void)newOmniboxPositionIsBottom:(BOOL)isBottomOmnibox;
 
 @end
 

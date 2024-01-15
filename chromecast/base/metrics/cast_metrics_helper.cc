@@ -7,8 +7,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_writer.h"
 #include "base/location.h"
 #include "base/logging.h"
@@ -55,8 +56,10 @@ bool CastMetricsHelper::DecodeAppInfoFromMetricsName(
   DCHECK(app_id);
   DCHECK(session_id);
   DCHECK(sdk_version);
-  if (metrics_name.find(kMetricsNameAppInfoDelimiter) == std::string::npos)
+
+  if (!base::Contains(metrics_name, kMetricsNameAppInfoDelimiter)) {
     return false;
+  }
 
   std::vector<std::string> tokens = base::SplitString(
       metrics_name, std::string(1, kMetricsNameAppInfoDelimiter),

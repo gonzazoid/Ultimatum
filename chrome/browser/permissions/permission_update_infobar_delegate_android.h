@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/permissions/permission_update_requester_android.h"
 #include "components/content_settings/core/common/content_settings_types.h"
 #include "components/infobars/core/confirm_infobar_delegate.h"
@@ -22,13 +22,10 @@ class WebContents;
 // permissions for previously allowed ContentSettingsTypes.
 class PermissionUpdateInfoBarDelegate : public ConfirmInfoBarDelegate {
  public:
-
   // Creates an infobar to resolve conflicts in Android runtime permissions.
-  // The necessary runtime permissions are generated based on the list of
-  // ContentSettingsTypes passed in. Returns the infobar if it was successfully
-  // added.
+  // Returns the infobar if it was successfully added.
   //
-  // This function can only be called with one of
+  // This function can only be called with |content_settings_types| as follow:
   // ContentSettingsType::MEDIASTREAM_MIC,
   // ContentSettingsType::MEDIASTREAM_CAMERA,
   // ContentSettingsType::GEOLOCATION, or
@@ -40,6 +37,9 @@ class PermissionUpdateInfoBarDelegate : public ConfirmInfoBarDelegate {
   static infobars::InfoBar* Create(
       content::WebContents* web_contents,
       const std::vector<ContentSettingsType>& content_settings_types,
+      const std::vector<ContentSettingsType>& filtered_content_settings_types,
+      const std::vector<std::string>& required_permissions,
+      const std::vector<std::string>& optional_permissions,
       PermissionUpdatedCallback callback);
 
   // Creates an infobar to resolve conflicts in Android runtime permissions.
@@ -69,9 +69,7 @@ class PermissionUpdateInfoBarDelegate : public ConfirmInfoBarDelegate {
       PermissionUpdatedCallback callback);
 
   static int GetPermissionUpdateUiTitleId(
-      const std::vector<ContentSettingsType>& content_settings_types,
-      std::vector<std::string>& required_permissions,
-      std::vector<std::string>& optional_permissions);
+      const std::vector<ContentSettingsType>& content_settings_types);
 
   PermissionUpdateInfoBarDelegate(
       content::WebContents* web_contents,

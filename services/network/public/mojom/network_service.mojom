@@ -7,7 +7,7 @@ module network.mojom;
 import "mojo/public/mojom/base/byte_string.mojom";
 import "mojo/public/mojom/base/file.mojom";
 import "mojo/public/mojom/base/memory_pressure_level.mojom";
-import "mojo/public/mojom/base/read_only_buffer.mojom";
+import "mojo/public/mojom/base/read_only_file.mojom";
 import "mojo/public/mojom/base/time.mojom";
 import "mojo/public/mojom/base/values.mojom";
 import "sandbox/policy/mojom/context.mojom";
@@ -22,6 +22,8 @@ import "services/network/public/mojom/network_change_manager.mojom";
 import "services/network/public/mojom/network_context.mojom";
 import "services/network/public/mojom/ip_address_space.mojom";
 import "services/network/public/mojom/network_interface.mojom";
+import "services/network/public/mojom/proxy_config.mojom";
+import "services/network/public/mojom/network_interface_change_listener.mojom";
 import "services/network/public/mojom/network_param.mojom";
 import "services/network/public/mojom/network_quality_estimator_manager.mojom";
 import "services/network/public/mojom/network_service_test.mojom";
@@ -89,7 +91,7 @@ struct HttpAuthDynamicParams {
   string android_negotiate_account_type;
 
   // Indicates whether the GSSAPI library should be loaded. Only supported on
-  // Chrome OS.
+  // Chrome OS and Linux.
   bool allow_gssapi_library_load = true;
 
   // True if Basic authentication challenges should be allowed for non-secure
@@ -108,6 +110,13 @@ struct NetworkServiceParams {
   ConnectionType initial_connection_type = CONNECTION_UNKNOWN;
   ConnectionSubtype initial_connection_subtype = SUBTYPE_UNKNOWN;
 
+  // The initial AddressMapOwnerLinux::AddressMap and set of online links for
+  // the AddressMapCacheLinux in the network service.
+  // TODO(crbug.com/1312226): this should be non-optional once the kill switch
+  // is removed.
+  [EnableIf=use_network_interface_change_listener]
+  InitialAddressMap? initial_address_map;
+
   // A set of environment variables that should be set in the network
   // service when starting up.
   array<EnvironmentVariable> environment;
@@ -123,6 +132,11 @@ struct NetworkServiceParams {
   // A SystemDnsResolver to provide out-of-process system DNS resolution, in
   // case the system DNS resolver cannot always run sandboxed.
   pending_remote<SystemDnsResolver>? system_dns_resolver;
+
+  // The policy used for bypassing requests that are eligible for IP Protection.
+  // Even if a domain is part of the masked domain list, the bypass policy can
+  // be used to bypass certain network requests from IP Protection.
+  IpProtectionProxyBypassPolicy ip_protection_proxy_bypass_policy;
 };
 
 // Configuration settings for SCT Auditing.
@@ -153,6 +167,14 @@ struct SCTAuditingConfiguration {
   MutableNetworkTrafficAnnotationTag hashdance_traffic_annotation;
 };
 
+// GssapiLibraryLoadObserver will be notified once when GSSAPI libraries
+// are about to be loaded, on a "WWW_Authenticate: negotiate" header.
+[EnableIf=is_linux]
+interface GssapiLibraryLoadObserver {
+  // Called only once per network service.
+  OnBeforeGssapiLibraryLoad();
+};
+
 // Implemented by the network service. The browser process sends messages to
 // the network service over this interface.
 //
@@ -165,13 +187,19 @@ interface NetworkService {
   // Sets the parameters and initializes the service.
   SetParams(NetworkServiceParams params);
 
-  // Starts observing the NetLog event stream and writing entries to |file|.
-  // |constants| is a legend used for decoding constant values in the log; it
-  // will be merged with the |GetNetConstants()| dictionary before being passed
-  // through to the FileObserver. (See |FileNetLogObserver::CreateBounded()|
-  // for more details). Most clients will just be adding a dictionary under
-  // the key "clientInfo".
+  // Starts observing the NetLog event stream and writing entries to |file| with
+  // a maximum size specified by |max_total_size|. |constants| is a legend used
+  // for decoding constant values in the log; it will be merged with the
+  // |GetNetConstants()| dictionary before being passed through to the
+  // FileObserver. (See |FileNetLogObserver::CreateBounded()| for more details).
+  // Most clients will just be adding a dictionary under the key "clientInfo".
+  // If |max_total_size| is net::FileNetLogObserver::kNoLimit then the log has
+  // an unbounded size.
+  //
+  // Note that maximum size is only a rough limit and the final file size may
+  // differ by a small amount from the requested value.
   StartNetLog(mojo_base.mojom.File file,
+              uint64 max_total_size,
               NetLogCaptureMode capture_mode,
               mojo_base.mojom.DictionaryValue constants);
 
@@ -273,15 +301,11 @@ interface NetworkService {
   // network interfaces. Corresponds to enum net::HostAddressSelectionPolicy.
   GetNetworkList(uint32 policy) => (array<NetworkInterface>? networks);
 
-  // Updates the CRLSet used in the verification of certificates. CRLSets that
-  // cannot be parsed using net::CRLSet::Parse will be ignored, as will older
-  // CRLSets (where older is determined by the sequence number). All Network
-  // Contexts created by the Network Service, including those created after
-  // this call, will use the same CRLSet.
-  UpdateCRLSet(mojo_base.mojom.ReadOnlyBuffer crl_set) => ();
+  // Notification that the certificate trust store has been modified.
+  OnTrustStoreChanged();
 
-  // Notification that the certificate database has been modified.
-  OnCertDBChanged();
+  // Notification that the client certificate store has been modified.
+  OnClientCertStoreChanged();
 
   // Send the encryption key to the network service to use for AES encryption.
   SetEncryptionKey(mojo_base.mojom.ByteString encryption_key);
@@ -296,11 +320,6 @@ interface NetworkService {
   // Called on state changes of the Android application.
   [EnableIf=is_android]
   OnApplicationStateChange(mojo_base.mojom.ApplicationState state);
-
-  // Sets the given environment variables in the network service's process.
-  // This method won't modify variables that aren't present in the
-  // |environment| array.
-  SetEnvironment(array<EnvironmentVariable> environment);
 
   // Sets Trust Tokens key commitment state. |raw_commitments| is the
   // JSON-encoded string representation of a collection of issuers' key
@@ -317,13 +336,9 @@ interface NetworkService {
   [EnableIf=is_ct_supported]
   ConfigureSCTAuditing(SCTAuditingConfiguration configuration);
 
-  // Updates the log list used for CT verification. `update_time` should
-  // contain the timestamp that the log list was considered fresh/current, in
-  // order to ensure that CT is not enforced if the log list is too out of
-  // date.
+  // Updates the log list used for CT auditing.
   [EnableIf=is_ct_supported]
-  UpdateCtLogList(array<CTLogInfo> log_list,
-                  mojo_base.mojom.Time update_time) => ();
+  UpdateCtLogList(array<CTLogInfo> log_list) => ();
 
   // Updates the list of popular SCTs queried during CT hashdance auditing.
   [EnableIf=is_ct_supported]
@@ -346,7 +361,7 @@ interface NetworkService {
 
   // Binds the test service's testing interface. Available only in some test
   // environments.
-  BindTestInterface(pending_receiver<NetworkServiceTest> receiver);
+  BindTestInterfaceForTesting(pending_receiver<NetworkServiceTest> receiver);
 
   // Sets the global First-Party Sets data.
   //
@@ -358,6 +373,15 @@ interface NetworkService {
   // be restricted.
   SetExplicitlyAllowedPorts(array<uint16> ports);
 
+  // Updates the Masked Domain List data used to generate custom proxy configs
+  // for the Privacy Proxy. Any existing NetworkContexts that are using the
+  // custom proxy configs will have their configs updated.
+  //
+  // |raw_mdl| contains the byte string representation of the MaskedDomainList
+  // proto. See the proto definition at
+  // //components/privacy_sandbox/masked_domain_list/masked_domain_list.proto.
+  UpdateMaskedDomainList(mojo_base.mojom.ByteString raw_mdl);
+
   // Parses response headers and returns a structured version to the caller.
   // This call originates from the browser process. Used for navigations when
   // the URLLoader didn't provide ParsedHeader in the first place. This happens
@@ -368,4 +392,21 @@ interface NetworkService {
   // Extensions, etc.
   ParseHeaders(url.mojom.Url url, HttpResponseHeaders headers)
       => (ParsedHeaders parsed_headers);
+
+  // Enables or disables whether URLLoaders need to call
+  // URLLoaderNetworkServiceObserver::OnDataUseUpdate. By default it's not
+  // enabled.
+  EnableDataUseUpdates(bool enable);
+
+  // Set IPv6 reachability override. When `reachability_override` is true, the
+  // DNS stack queries AAAA record even when the IPv6 reachability probe fails.
+  SetIPv6ReachabilityOverride(bool reachability_override);
+
+  // Set the GssapiLibraryLoadObserver for this network service.
+  // Will only be notified once unless the observer is set again.
+  // TODO(crbug.com/1474362): remove this observer once GSSAPI is brokered
+  // out of the network service.
+  [EnableIf=is_linux]
+  SetGssapiLibraryLoadObserver(
+    pending_remote<GssapiLibraryLoadObserver> gssapi_library_load_observer);
 };

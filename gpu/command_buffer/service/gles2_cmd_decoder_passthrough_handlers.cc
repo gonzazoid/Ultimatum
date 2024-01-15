@@ -1051,6 +1051,61 @@ error::Error GLES2DecoderPassthroughImpl::HandlePixelStorei(
   return DoPixelStorei(pname, param);
 }
 
+error::Error GLES2DecoderPassthroughImpl::HandleWritePixelsYUVINTERNAL(
+    uint32_t immediate_data_size,
+    const volatile void* cmd_data) {
+  const volatile gles2::cmds::WritePixelsYUVINTERNAL& c =
+      *static_cast<const volatile gles2::cmds::WritePixelsYUVINTERNAL*>(
+          cmd_data);
+  GLuint src_width = static_cast<GLuint>(c.src_width);
+  GLuint src_height = static_cast<GLuint>(c.src_height);
+  GLuint src_row_bytes_plane1 = static_cast<GLuint>(c.src_row_bytes_plane1);
+  GLuint src_row_bytes_plane2 = static_cast<GLuint>(c.src_row_bytes_plane2);
+  GLuint src_row_bytes_plane3 = static_cast<GLuint>(c.src_row_bytes_plane3);
+  GLuint src_row_bytes_plane4 = static_cast<GLuint>(c.src_row_bytes_plane4);
+  GLuint src_yuv_plane_config = static_cast<GLuint>(c.src_yuv_plane_config);
+  GLuint src_yuv_subsampling = static_cast<GLuint>(c.src_yuv_subsampling);
+  GLuint src_yuv_datatype = static_cast<GLuint>(c.src_yuv_datatype);
+  GLint shm_id = static_cast<GLint>(c.shm_id);
+  GLuint shm_offset = static_cast<GLuint>(c.shm_offset);
+  GLuint pixels_offset_plane1 = static_cast<GLuint>(c.pixels_offset_plane1);
+  GLuint pixels_offset_plane2 = static_cast<GLuint>(c.pixels_offset_plane2);
+  GLuint pixels_offset_plane3 = static_cast<GLuint>(c.pixels_offset_plane3);
+  GLuint pixels_offset_plane4 = static_cast<GLuint>(c.pixels_offset_plane4);
+  DoWritePixelsYUVINTERNAL(
+      src_width, src_height, src_row_bytes_plane1, src_row_bytes_plane2,
+      src_row_bytes_plane3, src_row_bytes_plane4, src_yuv_plane_config,
+      src_yuv_subsampling, src_yuv_datatype, shm_id, shm_offset,
+      pixels_offset_plane1, pixels_offset_plane2, pixels_offset_plane3,
+      pixels_offset_plane4);
+  return error::kNoError;
+}
+
+error::Error GLES2DecoderPassthroughImpl::HandleReadbackARGBImagePixelsINTERNAL(
+    uint32_t immediate_data_size,
+    const volatile void* cmd_data) {
+  const volatile gles2::cmds::ReadbackARGBImagePixelsINTERNAL& c = *static_cast<
+      const volatile gles2::cmds::ReadbackARGBImagePixelsINTERNAL*>(cmd_data);
+  GLint src_x = static_cast<GLint>(c.src_x);
+  GLint src_y = static_cast<GLint>(c.src_y);
+  GLint plane_index = static_cast<GLint>(c.plane_index);
+  GLuint dst_width = static_cast<GLuint>(c.dst_width);
+  GLuint dst_height = static_cast<GLuint>(c.dst_height);
+  GLuint row_bytes = static_cast<GLuint>(c.row_bytes);
+  GLuint dst_sk_color_type = static_cast<GLuint>(c.dst_sk_color_type);
+  GLuint dst_sk_alpha_type = static_cast<GLuint>(c.dst_sk_alpha_type);
+  GLint shm_id = static_cast<GLint>(c.shm_id);
+  GLuint shm_offset = static_cast<GLuint>(c.shm_offset);
+  GLuint color_space_offset = static_cast<GLuint>(c.color_space_offset);
+  GLuint pixels_offset = static_cast<GLuint>(c.pixels_offset);
+  GLuint mailbox_offset = static_cast<GLuint>(c.mailbox_offset);
+  DoReadbackARGBImagePixelsINTERNAL(
+      src_x, src_y, plane_index, dst_width, dst_height, row_bytes,
+      dst_sk_color_type, dst_sk_alpha_type, shm_id, shm_offset,
+      color_space_offset, pixels_offset, mailbox_offset);
+  return error::kNoError;
+}
+
 error::Error GLES2DecoderPassthroughImpl::HandleReadPixels(
     uint32_t immediate_data_size,
     const volatile void* cmd_data) {

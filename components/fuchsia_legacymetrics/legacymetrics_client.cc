@@ -13,11 +13,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_helpers.h"
 #include "base/fuchsia/fuchsia_logging.h"
 #include "base/fuchsia/process_context.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "components/fuchsia_legacymetrics/legacymetrics_histogram_flattener.h"
 

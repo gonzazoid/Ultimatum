@@ -10,7 +10,6 @@
 #include <memory>
 
 #include "base/environment.h"
-#include "base/test/test_reg_util_win.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace updater {
@@ -43,12 +42,14 @@ class TestConfiguration : public Configuration {
 }  // namespace
 
 class UpdaterInstallerConfigurationTest : public ::testing::Test {
- protected:
-  UpdaterInstallerConfigurationTest() = default;
+ public:
   UpdaterInstallerConfigurationTest(const UpdaterInstallerConfigurationTest&) =
       delete;
   UpdaterInstallerConfigurationTest& operator=(
       const UpdaterInstallerConfigurationTest&) = delete;
+
+ protected:
+  UpdaterInstallerConfigurationTest() = default;
 };
 
 // Test that the operation type is CLEANUP iff --cleanup is on the cmdline.
@@ -80,12 +81,6 @@ TEST_F(UpdaterInstallerConfigurationTest, IsSystemLevel) {
     ScopedGoogleUpdateIsMachine env_setter(true);
     EXPECT_TRUE(TestConfiguration(L"spam.exe").is_system_level());
   }
-}
-
-TEST_F(UpdaterInstallerConfigurationTest, HasInvalidSwitch) {
-  EXPECT_FALSE(TestConfiguration(L"spam.exe").has_invalid_switch());
-  EXPECT_TRUE(
-      TestConfiguration(L"spam.exe --chrome-frame").has_invalid_switch());
 }
 
 }  // namespace updater

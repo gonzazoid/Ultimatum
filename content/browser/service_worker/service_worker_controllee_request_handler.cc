@@ -4,11 +4,16 @@
 
 #include "content/browser/service_worker/service_worker_controllee_request_handler.h"
 
+#include <optional>
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/no_destructor.h"
+#include "base/strings/string_split.h"
+#include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "components/offline_pages/buildflags/buildflags.h"
 #include "content/browser/loader/navigation_url_loader_impl.h"
@@ -16,6 +21,7 @@
 #include "content/browser/service_worker/service_worker_container_host.h"
 #include "content/browser/service_worker/service_worker_context_core.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
+#include "content/browser/service_worker/service_worker_loader_helpers.h"
 #include "content/browser/service_worker/service_worker_main_resource_loader.h"
 #include "content/browser/service_worker/service_worker_metrics.h"
 #include "content/browser/service_worker/service_worker_registration.h"
@@ -29,7 +35,6 @@
 #include "net/base/load_flags.h"
 #include "net/base/url_util.h"
 #include "services/network/public/cpp/resource_request_body.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/loader/resource_type_util.h"
 #include "third_party/blink/public/common/service_worker/service_worker_loader_helpers.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -82,6 +87,71 @@ const char* FetchHandlerTypeToString(
   }
 }
 
+bool ShouldBypassFetchHandlerForMainResource(ServiceWorkerVersion& version) {
+  if (!base::FeatureList::IsEnabled(
+          features::kServiceWorkerBypassFetchHandler)) {
+    return false;
+  }
+
+  if (features::kServiceWorkerBypassFetchHandlerTarget.Get() !=
+      features::ServiceWorkerBypassFetchHandlerTarget::kMainResource) {
+    return false;
+  }
+
+  // If the feature is enabled, the main resource request bypasses ServiceWorker
+  // and starts the worker in parallel for subsequent subresources.
+  switch (features::kServiceWorkerBypassFetchHandlerStrategy.Get()) {
+    // kFeatureOptIn means that the feature relies on the manual feature
+    // toggle from about://flags etc, which is triggered by developers. We
+    // bypass fetch handler regardless of the url matching in this case.
+    case features::ServiceWorkerBypassFetchHandlerStrategy::kFeatureOptIn:
+      RecordSkipReason(
+          ServiceWorkerControlleeRequestHandler::FetchHandlerSkipReason::
+              kMainResourceSkippedDueToFeatureFlag);
+      return true;
+    // If kAllowList, the allowlist should be specified. In this case, main
+    // resource fetch handlers are bypassed only when the sha256 checksum of the
+    // script is in the allowlist.
+    case features::ServiceWorkerBypassFetchHandlerStrategy::kAllowList:
+      if (content::service_worker_loader_helpers::
+              FetchHandlerBypassedHashStrings()
+                  .contains(version.sha256_script_checksum())) {
+        version.CountFeature(
+            blink::mojom::WebFeature::
+                kServiceWorkerBypassFetchHandlerForMainResource);
+        RecordSkipReason(
+            ServiceWorkerControlleeRequestHandler::FetchHandlerSkipReason::
+                kMainResourceSkippedBecauseMatchedWithAllowedScriptList);
+        return true;
+      }
+      return false;
+  }
+
+  NOTREACHED();
+  return false;
+}
+
+bool ShouldBypassFetchHandlerForMainResourceByOriginTrial(
+    ServiceWorkerVersion& version) {
+  if (version.origin_trial_tokens() &&
+      version.origin_trial_tokens()->contains(
+          "ServiceWorkerBypassFetchHandlerForMainResource")) {
+    RecordSkipReason(
+        ServiceWorkerControlleeRequestHandler::FetchHandlerSkipReason::
+            kMainResourceSkippedDueToOriginTrial);
+    // The UseCounter for
+    // kServiceWorkerBypassFetchHandlerForMainResourceByOriginTrial should only
+    // capture the usage of this feature invoked by the Origin Trial for the OT
+    // measurement purpose.
+    version.CountFeature(
+        blink::mojom::WebFeature::
+            kServiceWorkerBypassFetchHandlerForMainResourceByOriginTrial);
+    return true;
+  }
+
+  return false;
+}
+
 }  // namespace
 
 ServiceWorkerControlleeRequestHandler::ServiceWorkerControlleeRequestHandler(
@@ -117,13 +187,15 @@ ServiceWorkerControlleeRequestHandler::
 }
 
 void ServiceWorkerControlleeRequestHandler::MaybeScheduleUpdate() {
-  if (!container_host_ || !container_host_->controller())
+  if (!container_host_ || !container_host_->controller()) {
     return;
+  }
 
   // For navigations, the update logic is taken care of
   // during navigation and waits for the HintToUpdateServiceWorker message.
-  if (blink::IsRequestDestinationFrame(destination_))
+  if (blink::IsRequestDestinationFrame(destination_)) {
     return;
+  }
 
   // For shared workers. The renderer doesn't yet send a
   // HintToUpdateServiceWorker message.
@@ -131,8 +203,9 @@ void ServiceWorkerControlleeRequestHandler::MaybeScheduleUpdate() {
   // to simplify the code.
 
   // If DevTools forced an update, there is no need to update again.
-  if (force_update_started_)
+  if (force_update_started_) {
     return;
+  }
 
   container_host_->controller()->ScheduleUpdate();
 }
@@ -191,14 +264,14 @@ void ServiceWorkerControlleeRequestHandler::MaybeCreateLoader(
 
   loader_callback_ = std::move(loader_callback);
   fallback_callback_ = std::move(fallback_callback);
-  browser_context_ = browser_context;
 
   // Look up a registration.
   context_->registry()->FindRegistrationForClientUrl(
-      stripped_url_, storage_key_,
+      ServiceWorkerRegistry::Purpose::kNavigation, stripped_url_, storage_key_,
       base::BindOnce(
           &ServiceWorkerControlleeRequestHandler::ContinueWithRegistration,
-          weak_factory_.GetWeakPtr(), base::TimeTicks::Now()));
+          weak_factory_.GetWeakPtr(), /*is_for_navigation=*/true,
+          base::TimeTicks::Now()));
 }
 
 void ServiceWorkerControlleeRequestHandler::InitializeContainerHost(
@@ -213,23 +286,40 @@ void ServiceWorkerControlleeRequestHandler::InitializeContainerHost(
   storage_key_ = storage_key;
 
   container_host_->UpdateUrls(stripped_url_,
-                              // TODO(1199077): Use top_frame_origin from
-                              // `storage_key_` instead, since that is populated
-                              // also for workers.
+                              // The storage key only has a top_level_site, not
+                              // an origin, so we must extract the origin from
+                              // trusted_params.
                               tentative_resource_request.trusted_params
                                   ? tentative_resource_request.trusted_params
                                         ->isolation_info.top_frame_origin()
-                                  : absl::nullopt,
+                                  : std::nullopt,
                               storage_key_);
 }
 
 void ServiceWorkerControlleeRequestHandler::ContinueWithRegistration(
-    base::TimeTicks start_time,
+    bool is_for_navigation,
+    base::TimeTicks find_registration_start_time,
     blink::ServiceWorkerStatusCode status,
     scoped_refptr<ServiceWorkerRegistration> registration) {
-  if (!start_time.is_null()) {
+  if (is_for_navigation) {
+    DCHECK(!find_registration_start_time.is_null());
+    auto now = base::TimeTicks::Now();
+
     ServiceWorkerMetrics::RecordFindRegistrationForClientUrlTime(
-        base::TimeTicks::Now() - start_time);
+        now - find_registration_start_time);
+
+    base::UmaHistogramBoolean(
+        "ServiceWorker.FoundServiceWorkerRegistrationOnNavigation",
+        status == blink::ServiceWorkerStatusCode::kOk);
+
+    TRACE_EVENT_NESTABLE_ASYNC_BEGIN_WITH_TIMESTAMP0(
+        "ServiceWorker",
+        "ServiceWorker.MaybeCreateLoaderToContinueWithRegistration",
+        TRACE_ID_LOCAL(this), find_registration_start_time);
+    TRACE_EVENT_NESTABLE_ASYNC_END_WITH_TIMESTAMP0(
+        "ServiceWorker",
+        "ServiceWorker.MaybeCreateLoaderToContinueWithRegistration",
+        TRACE_ID_LOCAL(this), now);
   }
 
   if (status != blink::ServiceWorkerStatusCode::kOk) {
@@ -271,7 +361,7 @@ void ServiceWorkerControlleeRequestHandler::ContinueWithRegistration(
       GetContentClient()->browser()->AllowServiceWorker(
           registration->scope(), container_host_->site_for_cookies(),
           container_host_->top_frame_origin(), /*script_url=*/GURL(),
-          browser_context_);
+          context_->wrapper()->browser_context());
 
   service_worker_accessed_callback_.Run(registration->scope(),
                                         allow_service_worker);
@@ -325,8 +415,9 @@ void ServiceWorkerControlleeRequestHandler::ContinueWithRegistration(
   // Initiate activation of a waiting version. Usually a register job initiates
   // activation but that doesn't happen if the browser exits prior to activation
   // having occurred. This check handles that case.
-  if (registration->waiting_version())
+  if (registration->waiting_version()) {
     registration->ActivateWaitingVersionWhenReady();
+  }
 
   scoped_refptr<ServiceWorkerVersion> active_version =
       registration->active_version();
@@ -348,7 +439,8 @@ void ServiceWorkerControlleeRequestHandler::ContinueWithRegistration(
   if (active_version->status() == ServiceWorkerVersion::ACTIVATING) {
     registration->active_version()->RegisterStatusChangeCallback(base::BindOnce(
         &ServiceWorkerControlleeRequestHandler::ContinueWithActivatedVersion,
-        weak_factory_.GetWeakPtr(), registration, active_version));
+        weak_factory_.GetWeakPtr(), registration, active_version,
+        std::move(find_registration_start_time)));
     TRACE_EVENT_WITH_FLOW1(
         "ServiceWorker",
         "ServiceWorkerControlleeRequestHandler::ContinueWithRegistration",
@@ -365,12 +457,14 @@ void ServiceWorkerControlleeRequestHandler::ContinueWithRegistration(
       TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT);
 
   ContinueWithActivatedVersion(std::move(registration),
-                               std::move(active_version));
+                               std::move(active_version),
+                               std::move(find_registration_start_time));
 }
 
 void ServiceWorkerControlleeRequestHandler::ContinueWithActivatedVersion(
     scoped_refptr<ServiceWorkerRegistration> registration,
-    scoped_refptr<ServiceWorkerVersion> active_version) {
+    scoped_refptr<ServiceWorkerVersion> active_version,
+    base::TimeTicks find_registration_start_time) {
   if (!context_ || !container_host_) {
     TRACE_EVENT_WITH_FLOW1(
         "ServiceWorker",
@@ -427,8 +521,9 @@ void ServiceWorkerControlleeRequestHandler::ContinueWithActivatedVersion(
       "TypeAtContinueWithActivatedVersion",
       active_version->fetch_handler_type());
 
-  if (blink::IsRequestDestinationFrame(destination_))
+  if (blink::IsRequestDestinationFrame(destination_)) {
     container_host_->AddServiceWorkerToUpdate(active_version);
+  }
 
   switch (active_version->EffectiveFetchHandlerType()) {
     case ServiceWorkerVersion::FetchHandlerType::kNoHandler: {
@@ -453,10 +548,93 @@ void ServiceWorkerControlleeRequestHandler::ContinueWithActivatedVersion(
           "FetchHandlerType",
           FetchHandlerTypeToString(
               active_version->EffectiveFetchHandlerType()));
+      active_version->CountFeature(
+          blink::mojom::WebFeature::kServiceWorkerSkippedForEmptyFetchHandler);
       CompleteWithoutLoader();
+      if (!features::kStartServiceWorkerForEmptyFetchHandler.Get()) {
+        return;
+      }
+      if (features::kAsyncStartServiceWorkerForEmptyFetchHandler.Get()) {
+        int duration =
+            features::kAsyncStartServiceWorkerForEmptyFetchHandlerDurationInMs
+                .Get();
+        constexpr int kDurationThresholdInMs = 10 * 1000;  // 10 seconds.
+        if (duration < 0 || duration > kDurationThresholdInMs) {
+          LOG(ERROR) << "Ignored out-of-range duration:" << duration;
+          duration = 0;
+        }
+        base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
+            FROM_HERE,
+            base::BindOnce(
+                &ServiceWorkerControlleeRequestHandler::MaybeStartServiceWorker,
+                weak_factory_.GetWeakPtr(), std::move(active_version),
+                ServiceWorkerMetrics::EventType::SKIP_EMPTY_FETCH_HANDLER),
+            base::Milliseconds(duration));
+        return;
+      }
+      MaybeStartServiceWorker(
+          std::move(active_version),
+          ServiceWorkerMetrics::EventType::SKIP_EMPTY_FETCH_HANDLER);
       return;
     }
     case ServiceWorkerVersion::FetchHandlerType::kNotSkippable: {
+      // When FetchHandlerType::kNotSkippable, then check if the fetch handler
+      // should bypassed or not. First, check the origin trial token. If there
+      // is no valid origin trial token, then check the eligibility based on the
+      // feature flag and the url.
+      if (ShouldBypassFetchHandlerForMainResourceByOriginTrial(
+              *active_version) ||
+          ShouldBypassFetchHandlerForMainResource(*active_version)) {
+        // If true, the main resource request bypasses ServiceWorker and starts
+        // the worker in parallel for subsequent subresources.
+        CompleteWithoutLoader();
+        MaybeStartServiceWorker(
+            std::move(active_version),
+            ServiceWorkerMetrics::EventType::BYPASS_MAIN_RESOURCE);
+        return;
+      }
+      // If the feature param ServiceWorkerBypassFetchHandlerTarget is
+      // |kAllOnlyIfServiceWorkerNotStarted| takes effect and the ServiceWorker
+      // isn't started yet, skip the fetch handler and then start the
+      // ServiceWorker.
+      if (base::FeatureList::IsEnabled(
+              features::kServiceWorkerBypassFetchHandler) &&
+          features::kServiceWorkerBypassFetchHandlerTarget.Get() ==
+              features::ServiceWorkerBypassFetchHandlerTarget::
+                  kAllOnlyIfServiceWorkerNotStarted) {
+        switch (active_version->running_status()) {
+          case blink::EmbeddedWorkerStatus::kStopped:
+          case blink::EmbeddedWorkerStatus::kStopping:
+          case blink::EmbeddedWorkerStatus::kStarting:
+            // If the status is STARTING, the Serviceworker is not actually
+            // started yet. So it makes sense to skip the fetch handler.
+            active_version->set_fetch_handler_bypass_option(
+                blink::mojom::ServiceWorkerFetchHandlerBypassOption::
+                    kBypassOnlyIfServiceWorkerNotStarted);
+            CompleteWithoutLoader();
+            RecordSkipReason(
+                active_version->running_status() ==
+                        blink::EmbeddedWorkerStatus::kStarting
+                    ? FetchHandlerSkipReason::
+                          kBypassFetchHandlerForAllOnlyIfServiceWorkerNotStarted_Status_Starting
+                    : FetchHandlerSkipReason::
+                          kBypassFetchHandlerForAllOnlyIfServiceWorkerNotStarted_Status_Stop);
+            base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+                FROM_HERE,
+                base::BindOnce(&ServiceWorkerControlleeRequestHandler::
+                                   MaybeStartServiceWorker,
+                               weak_factory_.GetWeakPtr(),
+                               std::move(active_version),
+                               ServiceWorkerMetrics::EventType::
+                                   BYPASS_ONLY_IF_SERVICE_WORKER_NOT_STARTED));
+            return;
+          case blink::EmbeddedWorkerStatus::kRunning:
+            active_version->set_fetch_handler_bypass_option(
+                blink::mojom::ServiceWorkerFetchHandlerBypassOption::kDefault);
+            break;
+        }
+      }
+      // Otherwise, record the skip reason as kNotSkipped.
       RecordSkipReason(FetchHandlerSkipReason::kNotSkipped);
       TRACE_EVENT_WITH_FLOW1(
           "ServiceWorker",
@@ -472,12 +650,22 @@ void ServiceWorkerControlleeRequestHandler::ContinueWithActivatedVersion(
   // ServiceWorkerMainResourceLoader which does that work.
   loader_wrapper_ = std::make_unique<ServiceWorkerMainResourceLoaderWrapper>(
       std::make_unique<ServiceWorkerMainResourceLoader>(
-          std::move(fallback_callback_), container_host_, frame_tree_node_id_));
+          std::move(fallback_callback_), container_host_, frame_tree_node_id_,
+          std::move(find_registration_start_time)));
 
   std::move(loader_callback_)
-      .Run(base::MakeRefCounted<SingleRequestURLLoaderFactory>(
+      .Run(base::MakeRefCounted<network::SingleRequestURLLoaderFactory>(
           base::BindOnce(&ServiceWorkerMainResourceLoader::StartRequest,
                          loader_wrapper_->get()->AsWeakPtr())));
+}
+
+void ServiceWorkerControlleeRequestHandler::DidStartWorker(
+    blink::ServiceWorkerStatusCode status) {
+  TRACE_EVENT_WITH_FLOW1(
+      "ServiceWorker", "ServiceWorkerControlleeRequestHandler::DidStartWorker",
+      TRACE_ID_LOCAL(this),
+      TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT, "Status",
+      blink::ServiceWorkerStatusToString(status));
 }
 
 void ServiceWorkerControlleeRequestHandler::DidUpdateRegistration(
@@ -502,10 +690,12 @@ void ServiceWorkerControlleeRequestHandler::DidUpdateRegistration(
     // Update failed. Look up the registration again since the original
     // registration was possibly unregistered in the meantime.
     context_->registry()->FindRegistrationForClientUrl(
-        stripped_url_, storage_key_,
+        ServiceWorkerRegistry::Purpose::kNotForNavigation, stripped_url_,
+        storage_key_,
         base::BindOnce(
             &ServiceWorkerControlleeRequestHandler::ContinueWithRegistration,
-            weak_factory_.GetWeakPtr(), base::TimeTicks()));
+            weak_factory_.GetWeakPtr(),
+            /*is_for_navigation=*/false, base::TimeTicks()));
     TRACE_EVENT_WITH_FLOW1(
         "ServiceWorker",
         "ServiceWorkerControlleeRequestHandler::DidUpdateRegistration",
@@ -558,10 +748,12 @@ void ServiceWorkerControlleeRequestHandler::OnUpdatedVersionStatusChanged(
     // continue with the incumbent version.
     // In case unregister job may have run, look up the registration again.
     context_->registry()->FindRegistrationForClientUrl(
-        stripped_url_, storage_key_,
+        ServiceWorkerRegistry::Purpose::kNotForNavigation, stripped_url_,
+        storage_key_,
         base::BindOnce(
             &ServiceWorkerControlleeRequestHandler::ContinueWithRegistration,
-            weak_factory_.GetWeakPtr(), base::TimeTicks()));
+            weak_factory_.GetWeakPtr(),
+            /*is_for_navigation=*/false, base::TimeTicks()));
     return;
   }
   version->RegisterStatusChangeCallback(base::BindOnce(
@@ -571,6 +763,21 @@ void ServiceWorkerControlleeRequestHandler::OnUpdatedVersionStatusChanged(
 
 void ServiceWorkerControlleeRequestHandler::CompleteWithoutLoader() {
   std::move(loader_callback_).Run({});
+}
+
+void ServiceWorkerControlleeRequestHandler::MaybeStartServiceWorker(
+    scoped_refptr<ServiceWorkerVersion> active_version,
+    ServiceWorkerMetrics::EventType event_type) {
+  // Start service worker if it is not running so that we run the code
+  // written in the top level.
+  if (active_version->running_status() ==
+      blink::EmbeddedWorkerStatus::kRunning) {
+    return;
+  }
+  active_version->StartWorker(
+      event_type,
+      base::BindOnce(&ServiceWorkerControlleeRequestHandler::DidStartWorker,
+                     weak_factory_.GetWeakPtr()));
 }
 
 }  // namespace content

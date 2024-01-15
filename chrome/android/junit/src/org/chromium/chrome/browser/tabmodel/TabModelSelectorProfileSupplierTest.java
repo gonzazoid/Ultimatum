@@ -5,7 +5,7 @@
 package org.chromium.chrome.browser.tabmodel;
 
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -21,50 +21,56 @@ import org.chromium.base.Callback;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.test.util.browser.tabmodel.MockTabModel;
+import org.chromium.chrome.test.util.browser.tabmodel.MockTabModelSelector;
 
-/**
- * Unit tests for {@link TabModelSelectorProfileSupplierTest}.
- */
+/** Unit tests for {@link TabModelSelectorProfileSupplierTest}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class TabModelSelectorProfileSupplierTest {
-    @Mock
-    TabModelSelector mTabModelSelector;
-    @Mock
-    TabModel mTabModel;
-    @Mock
-    TabModel mIncognitoTabModel;
-    @Mock
-    Profile mProfile;
-    @Mock
-    Profile mIncognitoProfile;
-    @Mock
-    Callback<Profile> mProfileCallback1;
-    @Mock
-    Callback<Profile> mProfileCallback2;
+    @Mock Profile mProfile;
+    @Mock Profile mIncognitoProfile;
+    @Mock Callback<Profile> mProfileCallback1;
+    @Mock Callback<Profile> mProfileCallback2;
 
     ObservableSupplierImpl<TabModelSelector> mTabModelSelectorSupplier =
             new ObservableSupplierImpl<>();
 
     TabModelSelectorProfileSupplier mSupplier;
+    MockTabModelSelector mSelector;
+    MockTabModel mNormalModel;
+    MockTabModel mIncognitoModel;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
+        initTabModelSelector();
         mSupplier = new TabModelSelectorProfileSupplier(mTabModelSelectorSupplier);
-        doReturn(true).when(mIncognitoTabModel).isIncognito();
         doReturn(true).when(mIncognitoProfile).isOffTheRecord();
-        doReturn(mTabModel).when(mTabModelSelector).getCurrentModel();
+    }
+
+    private void initTabModelSelector() {
+        mSelector = new MockTabModelSelector(mProfile, mIncognitoProfile, 0, 0, null);
+        mSelector.initializeTabModels(
+                new EmptyTabModel() {
+                    @Override
+                    public boolean isActiveModel() {
+                        return true;
+                    }
+                },
+                new IncognitoTabModelImpl(null));
+        mNormalModel = new MockTabModel(mProfile, null);
+        mNormalModel.setActive(true);
+        mIncognitoModel = new MockTabModel(mIncognitoProfile, null);
     }
 
     @Test
     public void testInitialTabModelHasNoProfile_initializedLater() {
-        mTabModelSelectorSupplier.set(mTabModelSelector);
-        mSupplier.onTabModelSelected(mTabModel, null);
-        Assert.assertNull(mSupplier.get());
+        mTabModelSelectorSupplier.set(mSelector);
+        Assert.assertFalse(mSupplier.hasValue());
 
-        doReturn(mProfile).when(mTabModel).getProfile();
-        mSupplier.onTabStateInitialized();
+        mSelector.initializeTabModels(mNormalModel, mIncognitoModel);
+        mSelector.markTabStateInitialized();
         Assert.assertEquals(mProfile, mSupplier.get());
     }
 
@@ -73,48 +79,104 @@ public class TabModelSelectorProfileSupplierTest {
         mSupplier.addObserver(mProfileCallback1);
         mSupplier.addObserver(mProfileCallback2);
 
-        doReturn(mTabModel).when(mTabModelSelector).getCurrentModel();
-        doReturn(mProfile).when(mTabModel).getProfile();
-        mTabModelSelectorSupplier.set(mTabModelSelector);
-        mSupplier.onTabModelSelected(mTabModel, null);
+        mTabModelSelectorSupplier.set(mSelector);
+        Assert.assertFalse(mSupplier.hasValue());
+        mSelector.initializeTabModels(mNormalModel, mIncognitoModel);
+        mSelector.markTabStateInitialized();
 
+        Assert.assertEquals(mProfile, mSupplier.get());
         verify(mProfileCallback1, times(1)).onResult(mProfile);
         verify(mProfileCallback2, times(1)).onResult(mProfile);
 
-        doReturn(mIncognitoProfile).when(mTabModel).getProfile();
-        mSupplier.onTabModelSelected(mTabModel, null);
-
+        mSelector.selectModel(true);
+        Assert.assertEquals(mIncognitoProfile, mSupplier.get());
         verify(mProfileCallback1, times(1)).onResult(mIncognitoProfile);
         verify(mProfileCallback2, times(1)).onResult(mIncognitoProfile);
     }
 
     @Test
     public void tesOTRProfileReturnsForIncognitoTabModel() {
-        doReturn(mIncognitoProfile).when(mIncognitoTabModel).getProfile();
-        mSupplier.onTabModelSelected(mIncognitoTabModel, mTabModel);
+        mTabModelSelectorSupplier.set(mSelector);
+        mSelector.initializeTabModels(mNormalModel, mIncognitoModel);
+        mSelector.markTabStateInitialized();
+        mSelector.selectModel(true);
 
         Assert.assertEquals(mIncognitoProfile, mSupplier.get());
     }
 
     @Test
     public void tesRegularProfileReturnsForRegularTabModel() {
-        doReturn(mProfile).when(mTabModel).getProfile();
-        mSupplier.onTabModelSelected(mTabModel, mIncognitoTabModel);
+        mTabModelSelectorSupplier.set(mSelector);
+        mSelector.initializeTabModels(mNormalModel, mIncognitoModel);
+        mSelector.markTabStateInitialized();
+        Assert.assertEquals(mProfile, mSupplier.get());
 
+        mSelector.selectModel(true);
+        Assert.assertEquals(mIncognitoProfile, mSupplier.get());
+
+        mSelector.selectModel(false);
         Assert.assertEquals(mProfile, mSupplier.get());
     }
 
     @Test
     public void testDestroyPreInitialization() {
         mSupplier.destroy();
-        // There's nothing to tear down before the tab model selector is initialized.
-        verify(mTabModelSelector, never()).removeObserver(mSupplier);
+
+        mTabModelSelectorSupplier.set(mSelector);
+        mSelector.initializeTabModels(mNormalModel, mIncognitoModel);
+        mSelector.markTabStateInitialized();
+        Assert.assertFalse(mSupplier.hasValue());
     }
 
     @Test
     public void testDestroyPostInitialization() {
-        mTabModelSelectorSupplier.set(mTabModelSelector);
+        mTabModelSelectorSupplier.set(mSelector);
         mSupplier.destroy();
-        verify(mTabModelSelector).removeObserver(mSupplier);
+
+        mSelector.initializeTabModels(mNormalModel, mIncognitoModel);
+        mSelector.markTabStateInitialized();
+        Assert.assertFalse(mSupplier.hasValue());
+    }
+
+    @Test
+    public void testPreviouslyInitializedSelector() {
+        mSelector.initializeTabModels(mNormalModel, mIncognitoModel);
+        mSelector.markTabStateInitialized();
+
+        mTabModelSelectorSupplier.set(mSelector);
+
+        Assert.assertEquals(mProfile, mSupplier.get());
+    }
+
+    @Test
+    public void testSwapTabModelSelector() {
+        mTabModelSelectorSupplier.set(mSelector);
+        mSelector.initializeTabModels(mNormalModel, mIncognitoModel);
+        mSelector.markTabStateInitialized();
+        Assert.assertEquals(mProfile, mSupplier.get());
+
+        Profile profile2 = mock(Profile.class);
+        Profile incognitoProfile2 = mock(Profile.class);
+        doReturn(true).when(incognitoProfile2).isOffTheRecord();
+        MockTabModelSelector selector2 =
+                new MockTabModelSelector(profile2, incognitoProfile2, 0, 0, null);
+        MockTabModel normalModel2 = new MockTabModel(profile2, null);
+        MockTabModel incognitoModel2 = new MockTabModel(incognitoProfile2, null);
+        selector2.initializeTabModels(normalModel2, incognitoModel2);
+        selector2.markTabStateInitialized();
+        mTabModelSelectorSupplier.set(selector2);
+
+        Assert.assertEquals(profile2, mSupplier.get());
+
+        // Change the model on the no longer registered selector and ensure the profile does not
+        // change.
+        mSelector.selectModel(true);
+        Assert.assertEquals(profile2, mSupplier.get());
+        mSelector.selectModel(false);
+        Assert.assertEquals(profile2, mSupplier.get());
+
+        // Change the model on the registered selector and ensure the profile changes.
+        selector2.selectModel(true);
+        Assert.assertEquals(incognitoProfile2, mSupplier.get());
     }
 }

@@ -8,11 +8,11 @@
 #include <memory>
 #include <set>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/time/time.h"
 
 namespace base {
-class DictionaryValue;
+class Value;
 }
 
 namespace enterprise_management {
@@ -43,7 +43,7 @@ extern const char kSettingsKeyAllowPreserveDeviceState[];
 extern const char kSettingsKeyAutoUpdateMode[];
 
 // Decodes the TPM firmware update settings into base::Value representation.
-std::unique_ptr<base::DictionaryValue> DecodeSettingsProto(
+base::Value DecodeSettingsProto(
     const enterprise_management::TPMFirmwareUpdateSettingsProto& settings);
 
 // Check what update modes are allowed. The |timeout| parameter determines how
@@ -65,12 +65,5 @@ void UpdateAvailable(base::OnceCallback<void(bool)> completion,
 
 }  // namespace tpm_firmware_update
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace chromeos {
-namespace tpm_firmware_update {
-using ::ash::tpm_firmware_update::Mode;
-}
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_TPM_FIRMWARE_UPDATE_H_

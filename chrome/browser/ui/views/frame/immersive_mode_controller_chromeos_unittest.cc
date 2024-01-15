@@ -5,10 +5,11 @@
 #include "chrome/browser/ui/views/frame/immersive_mode_controller_chromeos.h"
 
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/app/chrome_command_ids.h"
-#include "chrome/browser/ui/ash/window_pin_util.h"
 #include "chrome/browser/ui/browser_commands.h"
+#include "chrome/browser/ui/chromeos/window_pin_util.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_test.h"
 #include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
 #include "chrome/browser/ui/ui_features.h"
@@ -100,7 +101,7 @@ class ImmersiveModeControllerChromeosTest : public TestWithBrowserView {
 
  private:
   // Not owned.
-  ImmersiveModeController* controller_;
+  raw_ptr<ImmersiveModeController, DanglingUntriaged> controller_;
 
   std::unique_ptr<ImmersiveRevealedLock> revealed_lock_;
 };

@@ -5,7 +5,7 @@
 #include "ash/utility/layer_copy_animator.h"
 
 #include "ash/utility/layer_util.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ui/aura/window.h"
 #include "ui/base/class_property.h"
 #include "ui/compositor/layer_animation_sequence.h"
@@ -123,7 +123,7 @@ void LayerCopyAnimator::RunAnimation() {
   parent_layer->StackAbove(copied_layer_.get(), window_->layer());
   window_->layer()->SetOpacity(0.f);
 
-  std::move(animation_callback_).Run(copied_layer_.get(), observer_);
+  std::move(animation_callback_).Run(copied_layer_.get(), observer_.get());
 
   // Callback may not run animations, in which case, just end immediately.
   if (!copied_layer_->GetAnimator()->is_animating()) {

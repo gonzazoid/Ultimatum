@@ -4,8 +4,8 @@
 
 #include <math.h>
 
-#include "base/bind.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/no_destructor.h"
 #include "base/numerics/math_constants.h"
@@ -14,6 +14,7 @@
 #include "device/vr/orientation/orientation_session.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/device/public/cpp/generic_sensor/sensor_reading.h"
+#include "services/device/public/cpp/generic_sensor/sensor_reading_shared_buffer.h"
 #include "services/device/public/cpp/generic_sensor/sensor_reading_shared_buffer_reader.h"
 #include "services/device/public/mojom/sensor_provider.mojom.h"
 #include "ui/display/display.h"
@@ -175,6 +176,19 @@ void VROrientationDevice::RequestSession(
 
   // The sensor may have been suspended, so resume it now.
   sensor_->Resume();
+}
+
+void VROrientationDevice::ShutdownSession(
+    mojom::XRRuntime::ShutdownSessionCallback callback) {
+  // We don't actually have enough information here to figure out which session
+  // is being requested to be terminated. However, since sessions don't get
+  // exclusive control of the device and we can drive many sessions at once,
+  // there's not really anything for us to do here except to reply to the
+  // callback.
+  // The session will end up getting shutdown via other mechanisms (some of
+  // its mojom pipes getting torn down during destruction in the other
+  // processes as a result of continuing the flow here).
+  std::move(callback).Run();
 }
 
 void VROrientationDevice::EndMagicWindowSession(VROrientationSession* session) {

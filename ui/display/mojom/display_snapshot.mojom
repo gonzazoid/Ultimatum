@@ -25,8 +25,8 @@ struct DisplaySnapshot {
   bool is_aspect_preserving_scaling;
   bool has_overscan;
   display.mojom.PrivacyScreenState privacy_screen_state;
+  bool has_content_protection_key;
   bool has_color_correction_matrix;
-  bool color_correction_in_linear_space;
   gfx.mojom.ColorSpace color_space;
   uint32 bits_per_channel;
   gfx.mojom.HDRStaticMetadata? hdr_static_metadata;
@@ -43,4 +43,10 @@ struct DisplaySnapshot {
   int64 product_code;
   int32 year_of_manufacture;
   gfx.mojom.Size maximum_cursor_size;
+  VariableRefreshRateState variable_refresh_rate_state;
+  uint16 vsync_rate_min;
+  // |drm_formats_and_modifiers| contains a list of supported Linux DRM formats
+  // and corresponding lists of modifiers for each one.
+  [EnableIf=is_chromeos]
+  map<uint32, array<uint64>> drm_formats_and_modifiers;
 };

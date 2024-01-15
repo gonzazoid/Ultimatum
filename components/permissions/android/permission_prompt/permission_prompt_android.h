@@ -13,6 +13,8 @@
 #include "components/permissions/permission_prompt.h"
 #include "components/permissions/permission_uma_util.h"
 #include "components/permissions/permissions_client.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/gfx/geometry/rect.h"
 
 namespace content {
 class WebContents;
@@ -40,9 +42,12 @@ class PermissionPromptAndroid : public PermissionPrompt {
   // PermissionPrompt:
   bool UpdateAnchor() override;
   TabSwitchingBehavior GetTabSwitchingBehavior() override;
+  absl::optional<gfx::Rect> GetViewBoundsInScreen() const override;
+  bool ShouldFinalizeRequestAfterDecided() const override;
 
   void Closing();
   void Accept();
+  void AcceptThisTime();
   void Deny();
   void SetManageClicked();
   void SetLearnMoreClicked();
@@ -55,9 +60,10 @@ class PermissionPromptAndroid : public PermissionPrompt {
   size_t PermissionCount() const;
   ContentSettingsType GetContentSettingType(size_t position) const;
   int GetIconId() const;
-  std::u16string GetTitleText() const;
   std::u16string GetMessageText() const;
+  bool ShouldUseRequestingOriginFavicon() const;
 
+  GURL GetRequestingOrigin() const;
   content::WebContents* web_contents() { return web_contents_; }
 
  private:

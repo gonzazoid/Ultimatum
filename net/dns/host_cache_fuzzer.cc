@@ -10,7 +10,7 @@
 #include "base/logging.h"
 #include "base/numerics/clamped_math.h"
 #include "base/numerics/ostream_operators.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "net/dns/host_cache.h"
 #include "net/dns/host_cache_fuzzer.pb.h"
 #include "testing/libfuzzer/proto/json.pb.h"
@@ -21,7 +21,7 @@
 namespace net {
 
 struct Environment {
-  Environment() { logging::SetMinLogLevel(logging::LOG_INFO); }
+  Environment() { logging::SetMinLogLevel(logging::LOGGING_INFO); }
   const bool kDumpStats = getenv("DUMP_FUZZER_STATS");
   const bool kDumpNativeInput = getenv("LPM_DUMP_NATIVE_INPUT");
 };

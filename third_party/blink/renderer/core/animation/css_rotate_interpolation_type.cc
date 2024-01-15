@@ -156,7 +156,7 @@ OptionalRotation GetRotation(const ComputedStyle& style) {
 }
 
 InterpolationValue ConvertRotation(const OptionalRotation& rotation) {
-  return InterpolationValue(std::make_unique<InterpolableNumber>(0),
+  return InterpolationValue(MakeGarbageCollected<InterpolableNumber>(0),
                             CSSRotateNonInterpolableValue::Create(rotation));
 }
 
@@ -231,8 +231,8 @@ PairwiseInterpolationValue CSSRotateInterpolationType::MaybeMergeSingles(
     InterpolationValue&& start,
     InterpolationValue&& end) const {
   return PairwiseInterpolationValue(
-      std::make_unique<InterpolableNumber>(0),
-      std::make_unique<InterpolableNumber>(1),
+      MakeGarbageCollected<InterpolableNumber>(0),
+      MakeGarbageCollected<InterpolableNumber>(1),
       CSSRotateNonInterpolableValue::Create(
           To<CSSRotateNonInterpolableValue>(*start.non_interpolable_value),
           To<CSSRotateNonInterpolableValue>(*end.non_interpolable_value)));
@@ -269,10 +269,10 @@ void CSSRotateInterpolationType::ApplyStandardPropertyValue(
       To<CSSRotateNonInterpolableValue>(*untyped_non_interpolable_value);
   OptionalRotation rotation = non_interpolable_value.SlerpedRotation(progress);
   if (rotation.IsNone()) {
-    state.Style()->SetRotate(nullptr);
+    state.StyleBuilder().SetRotate(nullptr);
     return;
   }
-  state.Style()->SetRotate(RotateTransformOperation::Create(
+  state.StyleBuilder().SetRotate(RotateTransformOperation::Create(
       rotation.GetRotation(), TransformOperation::kRotate3D));
 }
 

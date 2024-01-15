@@ -16,6 +16,7 @@ config("config") {
     "//ios/third_party/earl_grey2/src/AppFramework/DistantObject",
     "//ios/third_party/earl_grey2/src/AppFramework/Error",
     "//ios/third_party/earl_grey2/src/AppFramework/Event",
+    "//ios/third_party/earl_grey2/src/AppFramework/IdlingResources",
     "//ios/third_party/earl_grey2/src/AppFramework/Keyboard",
     "//ios/third_party/earl_grey2/src/AppFramework/Matcher",
     "//ios/third_party/earl_grey2/src/AppFramework/Synchronization",
@@ -80,6 +81,8 @@ source_set("common_lib") {
     "src/CommonLib/Assertion/GREYAssertionBlock.h",
     "src/CommonLib/Assertion/GREYAssertionBlock.m",
     "src/CommonLib/Assertion/GREYAssertionDefinesPrivate.h",
+    "src/CommonLib/Assertion/GREYDescribeVariable.h",
+    "src/CommonLib/Assertion/GREYDescribeVariable.m",
     "src/CommonLib/Assertion/GREYFatalAsserts.h",
     "src/CommonLib/Assertion/GREYThrowDefines.h",
     "src/CommonLib/Config/GREYAppState.h",
@@ -167,7 +170,6 @@ source_set("common_lib") {
   ]
   configs += [
     "//build/config/compiler:no_chromium_code",
-    "//build/config/compiler:enable_arc",
     "//build/config/gcc:symbol_visibility_default",
   ]
 }
@@ -178,7 +180,9 @@ source_set("ui_lib_shared_headers") {
   sources = [
     "src/UILib/GREYElementHierarchy.h",
     "src/UILib/GREYScreenshotter.h",
+    "src/UILib/Provider/GREYUIWindowProvider.h",
     "src/UILib/Visibility/GREYVisibilityChecker.h",
+    "src/UILib/Visibility/GREYVisibilityCheckerCacheEntry.h",
   ]
 }
 
@@ -197,7 +201,6 @@ source_set("ui_lib") {
     "src/UILib/Provider/GREYDataEnumerator.m",
     "src/UILib/Provider/GREYElementProvider.h",
     "src/UILib/Provider/GREYElementProvider.m",
-    "src/UILib/Provider/GREYUIWindowProvider.h",
     "src/UILib/Provider/GREYUIWindowProvider.m",
     "src/UILib/Traversal/GREYTraversalBFS.h",
     "src/UILib/Traversal/GREYTraversalBFS.m",
@@ -215,7 +218,6 @@ source_set("ui_lib") {
     "src/UILib/Visibility/GREYQuickVisibilityChecker.m",
     "src/UILib/Visibility/GREYThoroughVisibilityChecker.h",
     "src/UILib/Visibility/GREYThoroughVisibilityChecker.m",
-    "src/UILib/Visibility/GREYVisibilityChecker+Private.h",
     "src/UILib/Visibility/GREYVisibilityChecker.h",
     "src/UILib/Visibility/GREYVisibilityChecker.m",
     "src/UILib/Visibility/GREYVisibilityCheckerCacheEntry.h",
@@ -241,7 +243,6 @@ source_set("ui_lib") {
   ]
   configs += [
     "//build/config/compiler:no_chromium_code",
-    "//build/config/compiler:enable_arc",
     "//build/config/gcc:symbol_visibility_default",
   ]
 }
@@ -251,8 +252,10 @@ source_set("app_framework_shared_headers") {
 
   sources = [
     "src/AppFramework/Action/GREYAction.h",
+    "src/AppFramework/Action/GREYActionBlock.h",
     "src/AppFramework/Action/GREYActions.h",
     "src/AppFramework/Action/GREYActionsShorthand.h",
+    "src/AppFramework/Action/GREYBaseAction.h",
     "src/AppFramework/Additions/UITextSelectionView+GREYApp.h",
     "src/AppFramework/Config/GREYAppConfiguration.h",
     "src/AppFramework/Core/GREYElementInteraction.h",
@@ -280,11 +283,9 @@ ios_framework_bundle("app_framework") {
 
   sources = [
     "src/AppFramework/Action/GREYActionBlock+Private.h",
-    "src/AppFramework/Action/GREYActionBlock.h",
     "src/AppFramework/Action/GREYActionBlock.m",
     "src/AppFramework/Action/GREYActions.m",
     "src/AppFramework/Action/GREYActionsShorthand.m",
-    "src/AppFramework/Action/GREYBaseAction.h",
     "src/AppFramework/Action/GREYBaseAction.m",
     "src/AppFramework/Action/GREYChangeStepperAction.h",
     "src/AppFramework/Action/GREYChangeStepperAction.m",
@@ -450,7 +451,6 @@ ios_framework_bundle("app_framework") {
   ]
   configs += [
     "//build/config/compiler:no_chromium_code",
-    "//build/config/compiler:enable_arc",
     "//build/config/gcc:symbol_visibility_default",
   ]
 }
@@ -490,10 +490,10 @@ source_set("test_lib") {
     "src/TestLib/DistantObject/GREYTestApplicationDistantObject+GREYLogger.h",
     "src/TestLib/DistantObject/GREYTestApplicationDistantObject+GREYLogger.m",
     "src/TestLib/DistantObject/GREYTestApplicationDistantObject.m",
-    "src/TestLib/EarlGreyImpl/EarlGrey.h",
-    "src/TestLib/EarlGreyImpl/EarlGrey.m",
     "src/TestLib/EarlGreyImpl/EarlGreyImpl+XCUIApplication.h",
     "src/TestLib/EarlGreyImpl/EarlGreyImpl+XCUIApplication.m",
+    "src/TestLib/EarlGreyImpl/EarlGreyImpl.h",
+    "src/TestLib/EarlGreyImpl/EarlGreyImpl.m",
     "src/TestLib/EarlGreyImpl/GREYElementInteractionErrorHandler.h",
     "src/TestLib/EarlGreyImpl/GREYElementInteractionErrorHandler.m",
     "src/TestLib/EarlGreyImpl/GREYElementInteractionProxy.h",
@@ -545,7 +545,6 @@ source_set("test_lib") {
   ]
   configs += [
     "//build/config/compiler:no_chromium_code",
-    "//build/config/compiler:enable_arc",
     "//build/config/gcc:symbol_visibility_default",
   ]
 }

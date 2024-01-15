@@ -15,6 +15,10 @@
 #include "ui/touch_selection/touch_selection_controller.h"
 #include "ui/touch_selection/touch_selection_menu_runner.h"
 
+namespace ui {
+class TouchSelectionMagnifierAura;
+}
+
 namespace content {
 struct ContextMenuParams;
 class RenderWidgetHostViewAura;
@@ -55,13 +59,17 @@ class CONTENT_EXPORT TouchSelectionControllerClientAura
   // better not to send context menu request from the renderer in this case and
   // instead decide in the client about showing the quick menu in response to
   // selection events. (http://crbug.com/548245)
-  bool HandleContextMenu(const ContextMenuParams& params);
+  virtual bool HandleContextMenu(const ContextMenuParams& params);
 
-  void UpdateClientSelectionBounds(const gfx::SelectionBound& start,
-                                   const gfx::SelectionBound& end);
+  virtual void UpdateClientSelectionBounds(const gfx::SelectionBound& start,
+                                           const gfx::SelectionBound& end);
 
   // TouchSelectionControllerClientManager.
   void DidStopFlinging() override;
+  void OnSwipeToMoveCursorBegin() override;
+  void OnSwipeToMoveCursorEnd() override;
+  void OnClientHitTestRegionUpdated(
+      ui::TouchSelectionControllerClient* client) override;
   void UpdateClientSelectionBounds(
       const gfx::SelectionBound& start,
       const gfx::SelectionBound& end,
@@ -82,6 +90,8 @@ class CONTENT_EXPORT TouchSelectionControllerClientAura
   bool IsQuickMenuAvailable() const;
   void ShowQuickMenu();
   void UpdateQuickMenu();
+  void ShowMagnifier();
+  void HideMagnifier();
 
   // ui::TouchSelectionControllerClient:
   bool SupportsAnimation() const override;
@@ -124,7 +134,7 @@ class CONTENT_EXPORT TouchSelectionControllerClientAura
     void DidScroll() override;
 
    private:
-    raw_ptr<RenderWidgetHostViewAura> rwhva_;
+    raw_ptr<RenderWidgetHostViewAura, DanglingUntriaged> rwhva_;
   } internal_client_;
 
   // Keep track of which client interface to use.
@@ -146,6 +156,9 @@ class CONTENT_EXPORT TouchSelectionControllerClientAura
 
   // An event observer that deactivates touch selection on certain input events.
   std::unique_ptr<EnvEventObserver> env_event_observer_;
+
+  // Magnifier which is shown when touch dragging to adjust the selection.
+  std::unique_ptr<ui::TouchSelectionMagnifierAura> touch_selection_magnifier_;
 };
 
 }  // namespace content

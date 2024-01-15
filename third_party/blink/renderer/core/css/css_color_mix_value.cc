@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/css/css_color_mix_value.h"
-#include "third_party/blink/renderer/core/css/css_color.h"
 #include "third_party/blink/renderer/core/css/css_primitive_value.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
@@ -28,8 +27,9 @@ bool CSSColorMixValue::NormalizePercentages(
     p2 = ClampTo<double>(percentage2->GetDoubleValue(), 0.0, 100.0) / 100.0;
   }
 
-  if (p1 == 0.0 && p2 == 0.0)
+  if (p1 == 0.0 && p2 == 0.0) {
     return false;
+  }
 
   alpha_multiplier = 1.0;
 
@@ -37,13 +37,15 @@ bool CSSColorMixValue::NormalizePercentages(
   if (scale != 0.0) {
     p1 /= scale;
     p2 /= scale;
-    if (scale <= 1.0)
+    if (scale <= 1.0) {
       alpha_multiplier = scale;
+    }
   }
 
-  mix_amount = p1;
-  if (p2 == 0.0)
+  mix_amount = p2;
+  if (p1 == 0.0) {
     mix_amount = 1.0;
+  }
 
   return true;
 }
@@ -56,23 +58,33 @@ bool CSSColorMixValue::Equals(const CSSColorMixValue& other) const {
          hue_interpolation_method_ == other.hue_interpolation_method_;
 }
 
+// https://drafts.csswg.org/css-color-5/#serial-color-mix
 String CSSColorMixValue::CustomCSSText() const {
-  // color-mix values with currentColor as one of the components cannot be
-  // eagerly resolved (https://github.com/w3c/csswg-drafts/issues/6168)
-  // Color keywords should be handled similarly.
   StringBuilder result;
-  result.Append("color-mix(");
-  result.Append(Color::ColorInterpolationSpaceToString(
-      color_interpolation_space_, hue_interpolation_method_));
+  result.Append("color-mix(in ");
+  result.Append(Color::SerializeInterpolationSpace(color_interpolation_space_,
+                                                   hue_interpolation_method_));
   result.Append(", ");
   result.Append(color1_->CssText());
-  if (percentage1_) {
+  bool percentagesNormalized = true;
+  if (percentage1_ && percentage2_ &&
+      (percentage1_->GetDoubleValue() + percentage2_->GetDoubleValue() !=
+       100.0)) {
+    percentagesNormalized = false;
+  }
+  if (percentage1_ &&
+      (percentage1_->GetDoubleValue() != 50.0 || !percentagesNormalized)) {
     result.Append(" ");
     result.Append(percentage1_->CssText());
   }
+  if (!percentage1_ && percentage2_ && percentage2_->GetDoubleValue() != 50.0) {
+    result.Append(" ");
+    result.AppendNumber(100.0 - percentage2_->GetDoubleValue());
+    result.Append("%");
+  }
   result.Append(", ");
   result.Append(color2_->CssText());
-  if (percentage2_) {
+  if (!percentagesNormalized) {
     result.Append(" ");
     result.Append(percentage2_->CssText());
   }

@@ -35,6 +35,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Random;
 import java.util.Set;
 
 /**
@@ -69,93 +70,90 @@ public class ShareServiceImpl implements ShareService {
     // - //third_party/blink/renderer/modules/webshare/FILE_TYPES.md
     // - //chrome/browser/webshare/share_service_impl.cc
 
-    // clang-format off
     private static final Set<String> PERMITTED_EXTENSIONS =
-            Collections.unmodifiableSet(CollectionUtil.newHashSet(
-                    "avif", // image/avif
-                    "bmp", // image/bmp / image/x-ms-bmp
-                    "css", // text/css
-                    "csv", // text/csv / text/comma-separated-values
-                    "ehtml", // text/html
-                    "flac", // audio/flac
-                    "gif", // image/gif
-                    "htm", // text/html
-                    "html", // text/html
-                    "ico", // image/x-icon
-                    "jfif", // image/jpeg
-                    "jpeg", // image/jpeg
-                    "jpg", // image/jpeg
-                    "m4a", // audio/x-m4a
-                    "m4v", // video/mp4
-                    "mp3", // audio/mpeg audio/mp3
-                    "mp4", // video/mp4
-                    "mpeg", // video/mpeg
-                    "mpg", // video/mpeg
-                    "oga", // audio/ogg
-                    "ogg", // audio/ogg
-                    "ogm", // video/ogg
-                    "ogv", // video/ogg
-                    "opus", // audio/ogg
-                    "pdf", // application/pdf
-                    "pjp", // image/jpeg
-                    "pjpeg", // image/jpeg
-                    "png", // image/png
-                    "shtm", // text/html
-                    "shtml", // text/html
-                    "svg", // image/svg+xml
-                    "svgz", // image/svg+xml
-                    "text", // text/plain
-                    "tif", // image/tiff
-                    "tiff", // image/tiff
-                    "txt", // text/plain
-                    "wav", // audio/wav
-                    "weba", // audio/webm
-                    "webm", // video/webm
-                    "webp", // image/webp
-                    "xbm" // image/x-xbitmap
-            ));
+            Collections.unmodifiableSet(
+                    CollectionUtil.newHashSet(
+                            "avif", // image/avif
+                            "bmp", // image/bmp / image/x-ms-bmp
+                            "css", // text/css
+                            "csv", // text/csv / text/comma-separated-values
+                            "ehtml", // text/html
+                            "flac", // audio/flac
+                            "gif", // image/gif
+                            "htm", // text/html
+                            "html", // text/html
+                            "ico", // image/x-icon
+                            "jfif", // image/jpeg
+                            "jpeg", // image/jpeg
+                            "jpg", // image/jpeg
+                            "m4a", // audio/x-m4a
+                            "m4v", // video/mp4
+                            "mp3", // audio/mpeg audio/mp3
+                            "mp4", // video/mp4
+                            "mpeg", // video/mpeg
+                            "mpg", // video/mpeg
+                            "oga", // audio/ogg
+                            "ogg", // audio/ogg
+                            "ogm", // video/ogg
+                            "ogv", // video/ogg
+                            "opus", // audio/ogg
+                            "pdf", // application/pdf
+                            "pjp", // image/jpeg
+                            "pjpeg", // image/jpeg
+                            "png", // image/png
+                            "shtm", // text/html
+                            "shtml", // text/html
+                            "svg", // image/svg+xml
+                            "svgz", // image/svg+xml
+                            "text", // text/plain
+                            "tif", // image/tiff
+                            "tiff", // image/tiff
+                            "txt", // text/plain
+                            "wav", // audio/wav
+                            "weba", // audio/webm
+                            "webm", // video/webm
+                            "webp", // image/webp
+                            "xbm" // image/x-xbitmap
+                            ));
 
     private static final Set<String> PERMITTED_MIME_TYPES =
-            Collections.unmodifiableSet(CollectionUtil.newHashSet(
-                     "audio/flac",
-                     "application/pdf",
-                     "audio/mp3",
-                     "audio/mpeg",
-                     "audio/ogg",
-                     "audio/wav",
-                     "audio/webm",
-                     "audio/x-m4a",
-                     "image/avif",
-                     "image/bmp",
-                     "image/gif",
-                     "image/jpeg",
-                     "image/png",
-                     "image/svg+xml",
-                     "image/tiff",
-                     "image/webp",
-                     "image/x-icon",
-                     "image/x-ms-bmp",
-                     "image/x-xbitmap",
-                     "text/comma-separated-values",
-                     "text/css",
-                     "text/csv",
-                     "text/html",
-                     "text/plain",
-                     "video/mp4",
-                     "video/mpeg",
-                     "video/ogg",
-                     "video/webm"
-            ));
-    // clang-format on
+            Collections.unmodifiableSet(
+                    CollectionUtil.newHashSet(
+                            "audio/flac",
+                            "application/pdf",
+                            "audio/mp3",
+                            "audio/mpeg",
+                            "audio/ogg",
+                            "audio/wav",
+                            "audio/webm",
+                            "audio/x-m4a",
+                            "image/avif",
+                            "image/bmp",
+                            "image/gif",
+                            "image/jpeg",
+                            "image/png",
+                            "image/svg+xml",
+                            "image/tiff",
+                            "image/webp",
+                            "image/x-icon",
+                            "image/x-ms-bmp",
+                            "image/x-xbitmap",
+                            "text/comma-separated-values",
+                            "text/css",
+                            "text/csv",
+                            "text/html",
+                            "text/plain",
+                            "video/mp4",
+                            "video/mpeg",
+                            "video/ogg",
+                            "video/webm"));
 
     private static final TaskRunner TASK_RUNNER =
             PostTask.createSequencedTaskRunner(TaskTraits.USER_BLOCKING);
 
     /** Delegate class that provides embedder-specific functionality. */
     public interface WebShareDelegate {
-        /**
-         * @return true if sharing is currently possible.
-         */
+        /** @return true if sharing is currently possible. */
         public boolean canShare();
 
         /**
@@ -177,37 +175,49 @@ public class ShareServiceImpl implements ShareService {
     public void onConnectionError(MojoException e) {}
 
     @Override
-    public void share(String title, String text, Url url, final SharedFile[] files,
+    public void share(
+            String title,
+            String text,
+            Url url,
+            final SharedFile[] files,
             final Share_Response callback) {
         RecordHistogram.recordEnumeratedHistogram(
                 "WebShare.ApiCount", WEBSHARE_METHOD_SHARE, WEBSHARE_METHOD_COUNT);
 
         if (!mDelegate.canShare()) {
-            RecordHistogram.recordEnumeratedHistogram("WebShare.ShareOutcome",
-                    WEBSHARE_OUTCOME_UNKNOWN_FAILURE, WEBSHARE_OUTCOME_COUNT);
+            RecordHistogram.recordEnumeratedHistogram(
+                    "WebShare.ShareOutcome",
+                    WEBSHARE_OUTCOME_UNKNOWN_FAILURE,
+                    WEBSHARE_OUTCOME_COUNT);
             callback.call(ShareError.INTERNAL_ERROR);
             return;
         }
 
-        ShareParams.TargetChosenCallback innerCallback = new ShareParams.TargetChosenCallback() {
-            @Override
-            public void onTargetChosen(ComponentName chosenComponent) {
-                RecordHistogram.recordEnumeratedHistogram(
-                        "WebShare.ShareOutcome", WEBSHARE_OUTCOME_SUCCESS, WEBSHARE_OUTCOME_COUNT);
-                callback.call(ShareError.OK);
-            }
+        ShareParams.TargetChosenCallback innerCallback =
+                new ShareParams.TargetChosenCallback() {
+                    @Override
+                    public void onTargetChosen(ComponentName chosenComponent) {
+                        RecordHistogram.recordEnumeratedHistogram(
+                                "WebShare.ShareOutcome",
+                                WEBSHARE_OUTCOME_SUCCESS,
+                                WEBSHARE_OUTCOME_COUNT);
+                        callback.call(ShareError.OK);
+                    }
 
-            @Override
-            public void onCancel() {
-                RecordHistogram.recordEnumeratedHistogram(
-                        "WebShare.ShareOutcome", WEBSHARE_OUTCOME_CANCELED, WEBSHARE_OUTCOME_COUNT);
-                callback.call(ShareError.CANCELED);
-            }
-        };
+                    @Override
+                    public void onCancel() {
+                        RecordHistogram.recordEnumeratedHistogram(
+                                "WebShare.ShareOutcome",
+                                WEBSHARE_OUTCOME_CANCELED,
+                                WEBSHARE_OUTCOME_COUNT);
+                        callback.call(ShareError.CANCELED);
+                    }
+                };
 
-        final ShareParams.Builder paramsBuilder = new ShareParams.Builder(mWindow, title, url.url)
-                                                          .setText(text)
-                                                          .setCallback(innerCallback);
+        final ShareParams.Builder paramsBuilder =
+                new ShareParams.Builder(mWindow, title, url.url)
+                        .setText(text)
+                        .setCallback(innerCallback);
         if (files == null || files.length == 0) {
             mDelegate.share(paramsBuilder.build());
             return;
@@ -221,9 +231,13 @@ public class ShareServiceImpl implements ShareService {
         for (SharedFile file : files) {
             if (isDangerousFilename(file.name.path.path)
                     || isDangerousMimeType(file.blob.contentType)) {
-                Log.i(TAG,
-                        "Cannot share potentially dangerous \"" + file.blob.contentType
-                                + "\" file \"" + file.name + "\".");
+                Log.i(
+                        TAG,
+                        "Cannot share potentially dangerous \""
+                                + file.blob.contentType
+                                + "\" file \""
+                                + file.name
+                                + "\".");
                 callback.call(ShareError.PERMISSION_DENIED);
                 return;
             }
@@ -248,13 +262,31 @@ public class ShareServiceImpl implements ShareService {
                         throw new IOException("Failed to create directory for shared file.");
                     }
 
-                    for (int index = 0; index < files.length; ++index) {
-                        File tempFile = File.createTempFile("share",
-                                "." + FileUtils.getExtension(files[index].name.path.path),
-                                sharePath);
+                    // As multiple files may have the same name, we create a distinct
+                    // subdirectory for each file.
+                    // Oreo (API level 26) has Files.createTempDirectory(). We emulate it here by
+                    // generating temp directories with random names.
+                    Random rand = new Random();
+                    for (SharedFile file : files) {
+                        File tempDir;
+                        File tempFile;
+                        int attempts = 0;
+                        do {
+                            if (++attempts > 10) {
+                                throw new IOException("Failed to create shared file.");
+                            }
+                            tempDir =
+                                    new File(
+                                            sharePath,
+                                            "share" + Integer.toHexString(rand.nextInt(1 << 30)));
+                            tempDir.mkdir();
+                            tempFile = new File(tempDir, file.name.path.path);
+                        } while (!tempFile.createNewFile());
+
                         fileUris.add(ContentUriUtils.getContentUriFromFile(tempFile));
-                        blobReceivers.add(new BlobReceiver(
-                                new FileOutputStream(tempFile), MAX_SHARED_FILE_BYTES));
+                        blobReceivers.add(
+                                new BlobReceiver(
+                                        new FileOutputStream(tempFile), MAX_SHARED_FILE_BYTES));
                     }
 
                 } catch (IOException ie) {
@@ -264,13 +296,16 @@ public class ShareServiceImpl implements ShareService {
 
                 paramsBuilder.setFileContentType(SharedFileCollator.commonMimeType(files));
                 paramsBuilder.setFileUris(fileUris);
-                SharedFileCollator collator = new SharedFileCollator(files.length, success -> {
-                    if (success) {
-                        mDelegate.share(paramsBuilder.build());
-                    } else {
-                        callback.call(ShareError.INTERNAL_ERROR);
-                    }
-                });
+                SharedFileCollator collator =
+                        new SharedFileCollator(
+                                files.length,
+                                success -> {
+                                    if (success) {
+                                        mDelegate.share(paramsBuilder.build());
+                                    } else {
+                                        callback.call(ShareError.INTERNAL_ERROR);
+                                    }
+                                });
 
                 for (int index = 0; index < files.length; ++index) {
                     blobReceivers.get(index).start(files[index].blob.blob, collator);

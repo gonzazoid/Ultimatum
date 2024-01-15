@@ -8,37 +8,32 @@ import android.app.Activity;
 import android.app.KeyguardManager;
 import android.content.Context;
 import android.content.Intent;
-import android.os.Build;
 import android.provider.Settings;
 import android.text.SpannableString;
 import android.text.style.ForegroundColorSpan;
 
-import androidx.annotation.RequiresApi;
-import androidx.annotation.VisibleForTesting;
-
 import org.chromium.base.ContextUtils;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.chrome.browser.incognito.R;
 import org.chromium.components.browser_ui.styles.SemanticColorUtils;
 import org.chromium.ui.text.SpanApplier;
 
-/**
- * A utility class to provide helper methods for the Incognito re-authentication lock setting.
- */
+/** A utility class to provide helper methods for the Incognito re-authentication lock setting. */
 public class IncognitoReauthSettingUtils {
     private static Boolean sIsDeviceScreenLockEnabledForTesting;
 
     /**
      * @return A boolean indicating if the screen lock is enabled in device or not.
      */
-    @RequiresApi(Build.VERSION_CODES.M)
     public static boolean isDeviceScreenLockEnabled() {
         if (sIsDeviceScreenLockEnabledForTesting != null) {
             return sIsDeviceScreenLockEnabledForTesting;
         }
 
         KeyguardManager keyguardManager =
-                ((KeyguardManager) ContextUtils.getApplicationContext().getSystemService(
-                        Context.KEYGUARD_SERVICE));
+                ((KeyguardManager)
+                        ContextUtils.getApplicationContext()
+                                .getSystemService(Context.KEYGUARD_SERVICE));
         assert keyguardManager != null;
         return keyguardManager.isDeviceSecure();
     }
@@ -52,9 +47,10 @@ public class IncognitoReauthSettingUtils {
      * @return A {@link CharSequence} containing the summary string for the Incognito lock setting.
      */
     public static CharSequence getSummaryString(Activity activity) {
-        return (isDeviceScreenLockEnabled()) ? activity.getString(
-                       R.string.settings_incognito_tab_lock_summary_android_setting_on)
-                                             : buildLinkToAndroidScreenLockSettings(activity);
+        return (isDeviceScreenLockEnabled())
+                ? activity.getString(
+                        R.string.settings_incognito_tab_lock_summary_android_setting_on)
+                : buildLinkToAndroidScreenLockSettings(activity);
     }
 
     /**
@@ -67,9 +63,9 @@ public class IncognitoReauthSettingUtils {
         return i;
     }
 
-    @VisibleForTesting
     public static void setIsDeviceScreenLockEnabledForTesting(boolean value) {
         sIsDeviceScreenLockEnabledForTesting = value;
+        ResettersForTesting.register(() -> sIsDeviceScreenLockEnabledForTesting = null);
     }
 
     // TODO(crbug.com/1249473): Use NoUnderlineClickableSpan here to build the

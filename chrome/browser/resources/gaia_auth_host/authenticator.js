@@ -2,14 +2,24 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// clang-format off
+// <if expr="not chromeos_ash">
 import {assert} from 'chrome://resources/js/assert.js';
-import {getPropertyDescriptor, sendWithPromise} from 'chrome://resources/js/cr.m.js';
-import {NativeEventTarget as EventTarget} from 'chrome://resources/js/cr/event_target.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 import {$, appendParam} from 'chrome://resources/js/util.js';
+// </if>
+// <if expr="chromeos_ash">
+import {assert} from 'chrome://resources/ash/common/assert.js';
+import {sendWithPromise} from 'chrome://resources/ash/common/cr.m.js';
+import {NativeEventTarget as EventTarget} from 'chrome://resources/ash/common/event_target.js';
+import {$, appendParam} from 'chrome://resources/ash/common/util.js';
+
+// </if>
 
 import {OnHeadersReceivedDetails, SamlHandler} from './saml_handler.js';
 import {PasswordAttributes} from './saml_password_attributes.js';
 import {WebviewEventManager} from './webview_event_manager.js';
+//clang-format on
 
 /**
  * @fileoverview An UI component to authenticate to Chrome. The component hosts
@@ -58,7 +68,6 @@ export let SyncTrustedVaultKeys;
  *   password: string,
  *   usingSAML: boolean,
  *   publicSAML: boolean,
- *   chooseWhatToSync: boolean,
  *   skipForNow: boolean,
  *   sessionIndex: string,
  *   trusted: boolean,
@@ -91,29 +100,30 @@ export let AuthCompletedCredentials;
  *   flow: string,
  *   ignoreCrOSIdpSetting: boolean,
  *   enableGaiaActionButtons: boolean,
+ *   forceDarkMode: boolean,
  *   enterpriseEnrollmentDomain: string,
  *   samlAclUrl: string,
  *   isSupervisedUser: boolean,
  *   isDeviceOwner: boolean,
  *   ssoProfile: string,
- *   urlParameterToAutofillSAMLUsername: string
+ *   urlParameterToAutofillSAMLUsername: string,
+ *   frameUrl: URL,
+ *   isFirstUser : (boolean|undefined),
+ *   recordAccountCreation : (boolean|undefined),
  * }}
  */
 export let AuthParams;
 
-// TODO(rogerta): should use gaia URL from GaiaUrls::gaia_url() instead
-// of hardcoding the prod URL here.  As is, this does not work with staging
-// environments.
-const IDP_ORIGIN = 'https://accounts.google.com/';
 const SIGN_IN_HEADER = 'google-accounts-signin';
 const EMBEDDED_FORM_HEADER = 'google-accounts-embedded';
-const LOCATION_HEADER = 'location';
 const SERVICE_ID = 'chromeoslogin';
-const EMBEDDED_SETUP_CHROMEOS_ENDPOINT_V2 = 'embedded/setup/v2/chromeos';
-const SAML_REDIRECTION_PATH = 'samlredirect';
 const BLANK_PAGE_URL = 'about:blank';
 
 const GAIA_DONE_ELAPSED_TIME = 'ChromeOS.Gaia.Done.ElapsedTime';
+const GAIA_CREATE_ACCOUNT_FIRST_USER =
+      'ChromeOS.Gaia.CreateAccount.IsFirstUser';
+const GAIA_DONE_OOBE_NEW_ACCOUNT =
+      'ChromeOS.Gaia.Done.Oobe.NewAccount';
 
 // Metric names for messages we get from Gaia.
 const GAIA_MESSAGE_SAML_USER_INFO = 'ChromeOS.Gaia.Message.Saml.UserInfo';
@@ -160,7 +170,7 @@ export const SUPPORTED_PARAMS = [
   'service',       // Name of Gaia service.
   'frameUrl',      // Initial frame URL to use. If empty defaults to
                    // gaiaUrl.
-  'constrained',   // Whether the extension is loaded in a constrained
+  'constrained',   // Whether authentication happens in a constrained
                    // window.
   'clientId',      // Chrome client id.
   'needPassword',  // Whether the host is interested in getting a password.
@@ -193,23 +203,16 @@ export const SUPPORTED_PARAMS = [
   'ssoProfile',  // An identifier for the device's managing OU's
                  // SAML SSO setting. Used by the login screen to
                  // pass to Gaia.
-
-  // The email fields allow for the following possibilities:
-  //
-  // 1/ If 'email' is not supplied, then the email text field is blank and the
-  // user must type an email to proceed.
-  //
-  // 2/ If 'email' is supplied, and 'readOnlyEmail' is truthy, then the email
-  // is hardcoded and the user cannot change it.  The user is asked for
-  // password.  This is useful for re-auth scenarios, where chrome needs the
-  // user to authenticate for a specific account and only that account.
-  //
-  // 3/ If 'email' is supplied, and 'readOnlyEmail' is falsy, gaia will
-  // prefill the email text field using the given email address, but the user
-  // can still change it and then proceed.  This is used on desktop when the
-  // user disconnects their profile then reconnects, to encourage them to use
-  // the same account.
+  // The email can be passed to Gaia to let it know which user is trying to
+  // sign in. Gaia behavior can be different depending on the `gaiaPath`: it
+  // can either simply prefill the email field, but still allow modifying it,
+  // or it can proceed straight to the authentication challenge for the
+  // corresponding account, not allowing the user to modify the email.
   'email',
+   // Determines which URL parameter will be used to pass the email to Gaia.
+   // TODO(b/292087570): misleading name, should be either renamed or
+   // removed completely (need to confirm if email_hint URL parameter
+   // is still relevant for some flows).
   'readOnlyEmail',
   'realm',
   // If the authentication is done via external IdP, 'startsOnSamlPage'
@@ -225,6 +228,12 @@ export const SUPPORTED_PARAMS = [
   // Url parameter name for SAML IdP web page which is used to autofill the
   // username.
   'urlParameterToAutofillSAMLUsername',
+  'forceDarkMode',
+  // A tri-state value which indicates the support level for passwordless login.
+  // Refer to `GaiaView::PasswordlessSupportLevel` for details.
+  'pwl',
+  // Control if the account creation during sign in flow should be handled.
+  'recordAccountCreation',
 ];
 
 // Timeout in ms to wait for the message from Gaia indicating end of the flow.
@@ -256,7 +265,6 @@ const messageHandlers = {
       this.password_ = msg.password;
     }
 
-    this.chooseWhatToSync_ = msg.chooseWhatToSync;
     // We need to dispatch only first event, before user enters password.
     this.dispatchEvent(new CustomEvent('attemptLogin', {detail: msg.email}));
   },
@@ -361,6 +369,9 @@ const messageHandlers = {
       this.maybeCompleteAuth_();
     }
   },
+  'getDeviceId'(msg) {
+    this.dispatchEvent(new Event('getDeviceId'));
+  },
 };
 
 /**
@@ -384,28 +395,23 @@ export class Authenticator extends EventTarget {
   constructor(webview) {
     super();
 
-    // --------------------  SPECIAL PROPERTIES ---------------------
-    // Whenever these properties change, an event is fired to notify
-    // observers of the change. Event name: [propertyNameChange]
-    // Refer to the bottom of the class definition for more details.
-    //
-    /** @type {AuthFlow} The current auth flow of the hosted page.*/
-    this.authFlow = AuthFlow.DEFAULT;
-    /** @type {string} The domain name of the current auth page. */
-    this.authDomain = '';
-    /** @type {boolean}  Whether media access was requested. */
-    this.videoEnabled = false;
-    // --------------------  SPECIAL PROPERTIES ---------------------
+    /** @private {AuthFlow} The current auth flow of the hosted page.*/
+    this.authFlow_ = AuthFlow.DEFAULT;
+    /** @private {string} The domain name of the current auth page. */
+    this.authDomain_ = '';
+    /** @private {boolean}  Whether media access was requested. */
+    this.videoEnabled_ = false;
 
     this.isLoaded_ = false;
     this.email_ = null;
     this.password_ = null;
     this.gaiaId_ = null, this.sessionIndex_ = null;
-    this.chooseWhatToSync_ = false;
     this.skipForNow_ = false;
     /** @type {AuthMode} */
     this.authMode = AuthMode.DEFAULT;
     this.dontResizeNonEmbeddedPages = false;
+    this.isFirstUser_ = false;
+    this.isNewAccount = false;
 
     /**
      * @type {!SamlHandler|undefined}
@@ -468,6 +474,69 @@ export class Authenticator extends EventTarget {
     }
   }
 
+  /** @return {AuthFlow} */
+  get authFlow() {
+    return this.authFlow_;
+  }
+
+  /**
+   * Dispatches 'authFlowChange' event if the value changes.
+   * @param {AuthFlow} value
+   */
+  set authFlow(value) {
+    const previous = this.authFlow_;
+    if (value !== previous) {
+      this.authFlow_ = value;
+      this.dispatchEvent(new CustomEvent('authFlowChange', {
+        bubbles: true,
+        composed: true,
+        detail: {oldValue: previous, newValue: value},
+      }));
+    }
+  }
+
+  /** @return {string} */
+  get authDomain() {
+    return this.authDomain_;
+  }
+
+  /**
+   * Dispatches 'authDomainChange' event if the value changes.
+   * @param {string} domain
+   */
+  set authDomain(domain) {
+    const previous = this.authDomain_;
+    if (domain !== previous) {
+      this.authDomain_ = domain;
+      this.dispatchEvent(new CustomEvent('authDomainChange', {
+        bubbles: true,
+        composed: true,
+        detail: {oldValue: previous, newValue: domain},
+      }));
+    }
+  }
+
+  /** @return {boolean} */
+  get videoEnabled() {
+    return this.videoEnabled_;
+  }
+
+  /**
+   * Dispatches 'videoEnabledChange' event if the value changes.
+   * @param {boolean} enabled
+   */
+  set videoEnabled(enabled) {
+    const previous = this.videoEnabled_;
+    if (enabled !== previous) {
+      this.videoEnabled_ = enabled;
+      this.dispatchEvent(new CustomEvent('videoEnabledChange', {
+        bubbles: true,
+        composed: true,
+        detail: {oldValue: previous, newValue: enabled},
+      }));
+    }
+  }
+
   /**
    * Reinitializes authentication parameters so that a failed login attempt
    * would not result in an infinite loop.
@@ -478,7 +547,6 @@ export class Authenticator extends EventTarget {
     this.gaiaId_ = null;
     this.password_ = null;
     this.readyFired_ = false;
-    this.chooseWhatToSync_ = false;
     this.skipForNow_ = false;
     this.sessionIndex_ = null;
     this.trusted_ = true;
@@ -491,6 +559,7 @@ export class Authenticator extends EventTarget {
     this.maybeClearGaiaTimeout_();
     this.syncTrustedVaultKeys_ = null;
     this.closeViewReceived_ = false;
+    this.disableAllActions_();
   }
 
   /**
@@ -533,6 +602,9 @@ export class Authenticator extends EventTarget {
     this.webviewEventManager_.addEventListener(
         this.samlHandler_, 'apiPasswordAdded',
         e => this.onSamlApiPasswordAdded_(e));
+    this.webviewEventManager_.addEventListener(
+          this.samlHandler_, 'apiAccountCreated',
+          e => this.onSamlApiAccountCreated_(e));
     this.webviewEventManager_.addEventListener(
         this.samlHandler_, 'apiPasswordConfirmed',
         e => this.onSamlApiPasswordConfirmed_(e));
@@ -617,7 +689,6 @@ export class Authenticator extends EventTarget {
    * already navigated, this function re-creates it since the storage
    * partition of an active renderer process cannot change.
    * @param {string} newWebviewPartitionName the new partition
-   * @private
    */
   setWebviewPartition(newWebviewPartitionName) {
     if (!this.webview_.src) {
@@ -650,9 +721,7 @@ export class Authenticator extends EventTarget {
     this.authMode = authMode;
     this.resetStates();
     this.authCompletedFired_ = false;
-    // gaiaUrl parameter is used for testing. Once defined, it is never
-    // changed.
-    this.idpOrigin_ = data.gaiaUrl || IDP_ORIGIN;
+    this.idpOrigin_ = data.gaiaUrl;
     this.isConstrainedWindow_ = data.constrained === '1';
     this.clientId_ = data.clientId;
     this.dontResizeNonEmbeddedPages = data.dontResizeNonEmbeddedPages;
@@ -666,6 +735,14 @@ export class Authenticator extends EventTarget {
     if (data.startsOnSamlPage) {
       this.samlHandler_.startsOnSamlPage = true;
     }
+
+    // True if this is non-enterprise device and there are no users yet.
+    this.isFirstUser_ = !!data.isFirstUser;
+
+    // Enable or disable handling account create message from Gaia.
+    this.samlHandler_.shouldHandleAccountCreationMessage =
+        !!data.recordAccountCreation;
+
     // Don't block insecure content for desktop flow because it lands on
     // http. Otherwise, block insecure content as long as gaia is https.
     this.samlHandler_.blockInsecureContent =
@@ -683,10 +760,7 @@ export class Authenticator extends EventTarget {
 
     this.webview_.src = this.reloadUrl_;
     this.isLoaded_ = true;
-  }
-
-  constructChromeOSAPIUrl_() {
-    return this.idpOrigin_ + EMBEDDED_SETUP_CHROMEOS_ENDPOINT_V2;
+    this.isNewAccount = false;
   }
 
   /**
@@ -707,9 +781,20 @@ export class Authenticator extends EventTarget {
     this.sendMessageToWebview('accountsListed', accounts);
   }
 
+  /**
+   * Called in response to 'getDeviceId' event.
+   * @param {string} deviceId Device ID.
+   */
+  getDeviceIdResponse(deviceId) {
+    this.sendMessageToWebview('deviceIdFetched', deviceId);
+  }
+
   constructInitialFrameUrl_(data) {
+    assert(this.idpOrigin_ !== undefined, "this.idpOrigin_ must be defined");
+    assert(data.gaiaPath !== undefined, "data.gaiaPath must be defined");
+    let url = this.idpOrigin_ + data.gaiaPath;
+
     if (data.doSamlRedirect) {
-      let url = this.idpOrigin_ + SAML_REDIRECTION_PATH;
       url = appendParam(url, 'domain', data.enterpriseEnrollmentDomain);
       if (data.ssoProfile) {
         url = appendParam(url, 'sso_profile', data.ssoProfile);
@@ -720,15 +805,11 @@ export class Authenticator extends EventTarget {
               '&scope=https%3A%2F%2Fwww.google.com%2Faccounts%2FOAuthLogin&' +
               'client_id=' + encodeURIComponent(data.clientId) +
               '&access_type=offline');
+      if (data.rart) {
+        url = appendParam(url, 'rart', data.rart);
+      }
 
       return url;
-    }
-
-    let url;
-    if (data.gaiaPath) {
-      url = this.idpOrigin_ + data.gaiaPath;
-    } else {
-      url = this.constructChromeOSAPIUrl_();
     }
 
     if (data.chromeType) {
@@ -805,6 +886,12 @@ export class Authenticator extends EventTarget {
     }
     if (data.rart) {
       url = appendParam(url, 'rart', data.rart);
+    }
+    if (data.forceDarkMode) {
+      url = appendParam(url, 'color_scheme', 'dark');
+    }
+    if (data.pwl) {
+      url = appendParam(url, 'pwl', data.pwl);
     }
 
     return url;
@@ -930,19 +1017,13 @@ export class Authenticator extends EventTarget {
         this.setEmail_(email);
         this.gaiaId_ = signinDetails['obfuscatedid'].slice(1, -1);
         this.sessionIndex_ = signinDetails['sessionindex'];
-      } else if (headerName === LOCATION_HEADER) {
-        // If the "choose what to sync" checkbox was clicked, then the
-        // continue URL will contain a source=3 field.
-        assert(header.value !== undefined);
-        const location =
-            decodeURIComponent(/** @type {string} */ (header.value));
-        this.chooseWhatToSync_ = !!location.match(/(\?|&)source=3($|&)/);
       }
     }
   }
 
   /**
-   * Returns true if given HTML5 message is received from the webview element.
+   * Returns true if given HTML5 message is received from `this.idpOrigin_` -
+   * which is usually Gaia.
    * @param {Object} e Payload of the received HTML5 message.
    */
   isGaiaMessage_(e) {
@@ -950,7 +1031,8 @@ export class Authenticator extends EventTarget {
       return false;
     }
 
-    // The event origin does not have a trailing slash.
+    // The event origin does not have a trailing slash, while `idpOrigin_` does.
+    // Strip the trailing slash from `idpOrigin_` before comparison.
     if (e.origin !== this.idpOrigin_.substring(0, this.idpOrigin_.length - 1)) {
       return false;
     }
@@ -987,7 +1069,7 @@ export class Authenticator extends EventTarget {
    * Invoked to send a HTML5 message with attached data to the webview
    * element.
    * @param {string} messageType Type of the HTML5 message.
-   * @param {Object=} messageData Data to be attached to the message.
+   * @param {string|Object=} messageData Data to be attached to the message.
    */
   sendMessageToWebview(messageType, messageData = null) {
     const currentUrl = this.webview_.src;
@@ -1046,6 +1128,7 @@ export class Authenticator extends EventTarget {
 
     if (gaiaDone) {
       this.maybeRecordGaiaElapsedTime_();
+      this.maybeRecordAccountFreshnessInOobe_();
       this.maybeClearGaiaTimeout_();
     } else if (this.gaiaDoneTimer_) {
       // Early out if `gaiaDoneTimer_` is running.
@@ -1185,7 +1268,6 @@ export class Authenticator extends EventTarget {
             usingSAML: this.authFlow === AuthFlow.SAML,
             scrapedSAMLPasswords: scrapedPasswords,
             publicSAML: this.samlAclUrl_ || false,
-            chooseWhatToSync: this.chooseWhatToSync_,
             skipForNow: this.skipForNow_,
             sessionIndex: this.sessionIndex_ || '',
             trusted: this.trusted_,
@@ -1249,6 +1331,15 @@ export class Authenticator extends EventTarget {
     if (this.gaiaId_) {
       this.maybeCompleteAuth_();
     }
+  }
+
+  /**
+   * Invoked when |samlHandler_| fires 'apiAccountCreated' event.
+   * @private
+   */
+  onSamlApiAccountCreated_(e) {
+    this.isNewAccount = true;
+    this.recordAccountCreated_();
   }
 
   /**
@@ -1367,9 +1458,6 @@ export class Authenticator extends EventTarget {
    * @private
    */
   isWebviewEvent_(e) {
-    // Note: <webview> prints error message to console if |contentWindow| is
-    // not defined.
-    // TODO(dzhioev): remove the message. http://crbug.com/469522
     const webviewWindow = this.webview_.contentWindow;
     return !!webviewWindow && webviewWindow === e.source;
   }
@@ -1380,7 +1468,7 @@ export class Authenticator extends EventTarget {
    */
   onGaiaDoneTimeout_() {
     if (!this.services_) {
-      console.error('Gaia done timeout: Forcing empty services.');
+      console.warn('Gaia done timeout: Forcing empty services.');
       this.services_ = [];
       const metric = this.authFlow === AuthFlow.SAML ?
           GAIA_MESSAGE_SAML_USER_INFO :
@@ -1389,7 +1477,7 @@ export class Authenticator extends EventTarget {
     }
 
     if (!this.closeViewReceived_) {
-      console.error('Gaia done timeout: closeView was not called.');
+      console.warn('Gaia done timeout: closeView was not called.');
       this.closeViewReceived_ = true;
 
       const metric = this.authFlow === AuthFlow.SAML ?
@@ -1401,7 +1489,8 @@ export class Authenticator extends EventTarget {
     if (this.waitApiPasswordConfirm_) {
       // Log duplicates the log from the saml handler. The message is used by
       // the tast test to catch failures.
-      console.error('SamlHandler.onAPICall_: API password was not confirmed');
+      console.warn('SamlHandler.onAPICall_: API password was not confirmed');
+      this.samlHandler_.recordPasswordNotConfirmedError();
       this.waitApiPasswordConfirm_ = false;
     }
 
@@ -1424,6 +1513,41 @@ export class Authenticator extends EventTarget {
   }
 
   /**
+   * Record if the sign-in account in Oobe is an existing account or new
+   * account.
+   * @private
+   */
+  maybeRecordAccountFreshnessInOobe_() {
+      // Record the metric if the record new account feature
+      // flag is enabled. This metric is recorded only for the sign-in
+      // event happens in Oobe.
+      if (!this.samlHandler_.shouldHandleAccountCreationMessage ||
+          !this.isFirstUser_) {
+        return;
+      }
+      chrome.send('metricsHandler:recordBooleanHistogram', [
+        GAIA_DONE_OOBE_NEW_ACCOUNT,
+        this.isNewAccount
+      ]);
+      this.isNewAccount = false;
+    }
+
+  /**
+   * Record new account creation.
+   * @private
+   */
+  recordAccountCreated_() {
+    // Record true account is created during the first sign in event
+    // and false if another account existed.
+    // TODO (b/307591058): add metric to track if account is created
+    // during login or not.
+    chrome.send('metricsHandler:recordBooleanHistogram',[
+      GAIA_CREATE_ACCOUNT_FIRST_USER,
+      this.isFirstUser_
+    ]);
+  }
+
+  /**
    * @private
    */
   maybeClearGaiaTimeout_() {
@@ -1432,6 +1556,15 @@ export class Authenticator extends EventTarget {
     }
     window.clearTimeout(this.gaiaDoneTimer_);
     this.gaiaDoneTimer_ = null;
+  }
+
+  /**
+   * Disables all navigation actions until explicitly re-enabled by GAIA.
+   * @private
+   */
+  disableAllActions_() {
+    this.dispatchEvent(
+        new CustomEvent('setAllActionsEnabled', {detail: false}));
   }
 
   /**
@@ -1444,15 +1577,3 @@ export class Authenticator extends EventTarget {
     this.samlHandler_.email = email;
   }
 }
-
-// ---------------------  SPECIAL PROPERTIES ----------------------
-// These properties are special since they fire an event whenever
-// they change. The event name is 'propertyNameChange' and it is
-// used by the Custom Elements that use the Authenticator to listen
-// for changes.
-Object.defineProperties(Authenticator.prototype, {
-  'authFlow': getPropertyDescriptor('authFlow'),
-  'authDomain': getPropertyDescriptor('authDomain'),
-  'videoEnabled': getPropertyDescriptor('videoEnabled'),
-});
-// ---------------------  SPECIAL PROPERTIES ----------------------

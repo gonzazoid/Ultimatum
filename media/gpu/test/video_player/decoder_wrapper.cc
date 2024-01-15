@@ -7,16 +7,19 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/single_thread_task_runner_thread_mode.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
 #include "gpu/config/gpu_driver_bug_workarounds.h"
+#include "media/base/media_switches.h"
 #include "media/base/media_util.h"
 #include "media/base/waiting.h"
 #include "media/gpu/macros.h"
-#include "media/gpu/test/video.h"
+#include "media/gpu/test/video_bitstream.h"
 #include "media/gpu/test/video_frame_helpers.h"
 #include "media/gpu/test/video_player/frame_renderer_dummy.h"
 #include "media/gpu/test/video_player/test_vda_video_decoder.h"
@@ -27,7 +30,6 @@
 #if BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
 #include "media/gpu/chromeos/platform_video_frame_pool.h"
 #include "media/gpu/chromeos/video_decoder_pipeline.h"
-#include "media/gpu/chromeos/video_frame_converter.h"
 #endif  // BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
 
 namespace media {
@@ -121,7 +123,7 @@ void DecoderWrapper::WaitForRenderer() {
   frame_renderer_->WaitUntilRenderingDone();
 }
 
-void DecoderWrapper::Initialize(const Video* video) {
+void DecoderWrapper::Initialize(const VideoBitstream* video) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(parent_sequence_checker_);
   DCHECK(video);
 
@@ -161,12 +163,10 @@ void DecoderWrapper::CreateDecoderTask(base::WaitableEvent* done) {
   switch (decoder_wrapper_config_.implementation) {
     case DecoderImplementation::kVD:
 #if BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
-      decoder_ = VideoDecoderPipeline::Create(
-          gpu::GpuDriverBugWorkarounds(), base::ThreadTaskRunnerHandle::Get(),
-          std::make_unique<PlatformVideoFramePool>(),
-          std::make_unique<VideoFrameConverter>(),
+      decoder_ = VideoDecoderPipeline::CreateForTesting(
+          base::SingleThreadTaskRunner::GetCurrentDefault(),
           std::make_unique<NullMediaLog>(),
-          /*oop_video_decoder=*/{});
+          decoder_wrapper_config_.ignore_resolution_changes_to_smaller_vp9);
 #endif  // BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
       break;
     case DecoderImplementation::kVDA:
@@ -189,7 +189,7 @@ void DecoderWrapper::CreateDecoderTask(base::WaitableEvent* done) {
   done->Signal();
 }
 
-void DecoderWrapper::InitializeTask(const Video* video,
+void DecoderWrapper::InitializeTask(const VideoBitstream* video,
                                     base::WaitableEvent* done) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(worker_sequence_checker_);
   DCHECK(state_ == DecoderWrapperState::kUninitialized ||
@@ -230,7 +230,11 @@ void DecoderWrapper::InitializeTask(const Video* video,
 
 void DecoderWrapper::DestroyDecoderTask(base::WaitableEvent* done) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(worker_sequence_checker_);
-  DCHECK_EQ(0u, num_outstanding_decode_requests_);
+  LOG_IF(WARNING, 0u != num_outstanding_decode_requests_)
+      << "There is/are " << num_outstanding_decode_requests_
+      << " Decode() requests that have not been acknowledged by |decoder_|. "
+         "This might be fine or a problem depending on whether the calling "
+         "test needed to have processed the full input bitstream or not.";
   DVLOGF(4);
 
   // Invalidate all scheduled tasks.
@@ -363,17 +367,28 @@ void DecoderWrapper::OnDecodeDoneTask(DecoderStatus status) {
       FROM_HERE,
       base::BindOnce(&DecoderWrapper::DecodeNextFragmentTask, weak_this_),
 #if BUILDFLAG(USE_V4L2_CODEC)
-      base::Milliseconds(1)
+      base::FeatureList::IsEnabled(kV4L2FlatStatefulVideoDecoder)
+          ? base::Milliseconds(5)
+          : base::Milliseconds(1)
 #else
       base::Milliseconds(0)
 #endif
   );
+  FireEvent(DecoderListener::Event::kDecoderBufferAccepted);
 }
 
 void DecoderWrapper::OnFrameReadyTask(scoped_refptr<VideoFrame> video_frame) {
   DVLOGF(4) << current_frame_index_;
   DCHECK_CALLED_ON_VALID_SEQUENCE(worker_sequence_checker_);
   DCHECK(video_frame->metadata().power_efficient);
+
+  // Technically VideoDecoder clients shouldn't care about |video_frame|'s'
+  // timestamps but we do because we feed non-zeros in DecodeNextFragmentTask().
+  // Note that we cannot enforce non-strictly monotonically increasing time
+  // deltas because the feeding order might not be the same as the output order
+  // (e.g. in H.264 with B-frames the output order would be the "presentation"
+  // order and not the "decode" or "transmission" order).
+  DCHECK_NE(video_frame->timestamp(), base::TimeDelta());
 
   frame_renderer_->RenderFrame(video_frame);
 

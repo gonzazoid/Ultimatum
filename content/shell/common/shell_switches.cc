@@ -30,14 +30,29 @@ const char kContentShellHostWindowSize[] = "content-shell-host-window-size";
 // Hides toolbar from content_shell's host window.
 const char kContentShellHideToolbar[] = "content-shell-hide-toolbar";
 
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 // Let DevTools front-end talk to the target of type "tab" rather than
 // "frame" when inspecting a WebContents.
 const char kContentShellDevToolsTabTarget[] =
     "content-shell-devtools-tab-target";
+#endif
+
+// Enables APIs guarded with the [IsolatedContext] IDL attribute for the given
+// comma-separated list of origins.
+const char kIsolatedContextOrigins[] = "isolated-context-origins";
+
+// Use the given address instead of the default loopback for accepting remote
+// debugging connections. Note that the remote debugging protocol does not
+// perform any authentication, so exposing it too widely can be a security
+// risk.
+const char kRemoteDebuggingAddress[] = "remote-debugging-address";
 
 // Runs Content Shell in web test mode, injecting test-only behaviour for
 // blink web tests.
 const char kRunWebTests[] = "run-web-tests";
+
+// Register the provided scheme as a standard scheme.
+const char kTestRegisterStandardScheme[] = "test-register-standard-scheme";
 
 bool IsRunWebTestsSwitchPresent() {
   return base::CommandLine::ForCurrentProcess()->HasSwitch(

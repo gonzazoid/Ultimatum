@@ -9,7 +9,6 @@ import android.view.MotionEvent;
 
 import androidx.test.filters.MediumTest;
 
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -27,13 +26,12 @@ import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.components.paintpreview.player.PlayerManager;
 import org.chromium.content_public.browser.WebContentsAccessibility;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
+import org.chromium.ui.accessibility.AccessibilityState;
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
-/**
- * Accessibility tests for the {@link TabbedPaintPreview} class.
- */
+/** Accessibility tests for the {@link TabbedPaintPreview} class. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 public class TabbedPaintPreviewAccessibilityTest {
@@ -49,14 +47,7 @@ public class TabbedPaintPreviewAccessibilityTest {
         PaintPreviewTabService.setAccessibilityEnabledForTesting(true);
     }
 
-    @After
-    public void tearDown() {
-        PaintPreviewTabService.setAccessibilityEnabledForTesting(false);
-    }
-
-    /**
-     * Asserts that the player has a non-null {@link WebContentsAccessibility}.
-     */
+    /** Asserts that the player has a non-null {@link WebContentsAccessibility}. */
     @Test
     @MediumTest
     public void smokeTest() throws ExecutionException, TimeoutException {
@@ -66,29 +57,34 @@ public class TabbedPaintPreviewAccessibilityTest {
 
         // Capture paint preview.
         CallbackHelper captureSuccessCallback = new CallbackHelper();
-        TestThreadUtils.runOnUiThreadBlocking(() -> tabbedPaintPreview.capture(result -> {
-            if (result) {
-                captureSuccessCallback.notifyCalled();
-            } else {
-                Assert.fail("Failed to capture paint preview.");
-            }
-        }));
+        TestThreadUtils.runOnUiThreadBlocking(
+                () ->
+                        tabbedPaintPreview.capture(
+                                result -> {
+                                    if (result) {
+                                        captureSuccessCallback.notifyCalled();
+                                    } else {
+                                        Assert.fail("Failed to capture paint preview.");
+                                    }
+                                }));
         captureSuccessCallback.waitForFirst("Timeout waiting for paint preview capture.");
 
         // Show the captured paint preview.
         CallbackHelper viewReadyCallback = new CallbackHelper();
-        PlayerManager.Listener listener = new TabbedPaintPreviewTest.EmptyPlayerListener() {
-            @Override
-            public void onCompositorError(int status) {
-                Assert.fail("Paint Preview should have been displayed successfully"
-                        + "with no errors.");
-            }
+        PlayerManager.Listener listener =
+                new TabbedPaintPreviewTest.EmptyPlayerListener() {
+                    @Override
+                    public void onCompositorError(int status) {
+                        Assert.fail(
+                                "Paint Preview should have been displayed successfully"
+                                        + "with no errors.");
+                    }
 
-            @Override
-            public void onViewReady() {
-                viewReadyCallback.notifyCalled();
-            }
-        };
+                    @Override
+                    public void onViewReady() {
+                        viewReadyCallback.notifyCalled();
+                    }
+                };
         TestThreadUtils.runOnUiThreadBlocking(() -> tabbedPaintPreview.maybeShow(listener));
 
         // Wait until it's displayed.
@@ -96,22 +92,27 @@ public class TabbedPaintPreviewAccessibilityTest {
 
         // Assert accessibility support is initialized.
         CriteriaHelper.pollInstrumentationThread(
-                ()
-                        -> tabbedPaintPreview.getPlayerManagerForTesting()
-                                   .getWebContentsAccessibilityForTesting()
-                        != null,
+                () ->
+                        tabbedPaintPreview
+                                        .getPlayerManagerForTesting()
+                                        .getWebContentsAccessibilityForTesting()
+                                != null,
                 "PlayerManager doesn't have a valid WebContentsAccessibility.");
 
         // Try hit testing.
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            WebContentsAccessibility wcax = tabbedPaintPreview.getPlayerManagerForTesting()
-                                                    .getWebContentsAccessibilityForTesting();
-            wcax.setAccessibilityEnabledForTesting();
-            long time = SystemClock.uptimeMillis();
-            MotionEvent e =
-                    MotionEvent.obtain(time, time, MotionEvent.ACTION_HOVER_ENTER, 20, 20, 0);
-            wcax.onHoverEventNoRenderer(e);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    WebContentsAccessibility wcax =
+                            tabbedPaintPreview
+                                    .getPlayerManagerForTesting()
+                                    .getWebContentsAccessibilityForTesting();
+                    AccessibilityState.setIsAnyAccessibilityServiceEnabledForTesting(true);
+                    long time = SystemClock.uptimeMillis();
+                    MotionEvent e =
+                            MotionEvent.obtain(
+                                    time, time, MotionEvent.ACTION_HOVER_ENTER, 20, 20, 0);
+                    wcax.onHoverEventNoRenderer(e);
+                });
 
         // Remove the preview.
         TestThreadUtils.runOnUiThreadBlocking(() -> tabbedPaintPreview.remove(true, false));

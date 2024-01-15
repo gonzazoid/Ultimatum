@@ -5,12 +5,17 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_DESKTOP_CAPTURE_DESKTOP_MEDIA_PICKER_VIEWS_H_
 #define CHROME_BROWSER_UI_VIEWS_DESKTOP_CAPTURE_DESKTOP_MEDIA_PICKER_VIEWS_H_
 
+#include <string>
+
+#include "base/feature_list.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "chrome/browser/media/webrtc/desktop_media_picker.h"
 #include "chrome/browser/ui/views/desktop_capture/desktop_media_list_controller.h"
+#include "chrome/browser/ui/views/desktop_capture/desktop_media_pane_view.h"
 #include "ui/base/interaction/element_identifier.h"
 #include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/views/controls/button/toggle_button.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/tabbed_pane/tabbed_pane_listener.h"
 #include "ui/views/window/dialog_delegate.h"
@@ -23,18 +28,21 @@ class MdTextButton;
 
 class DesktopMediaPickerViews;
 
+BASE_DECLARE_FEATURE(kShareThisTabDialog);
+BASE_DECLARE_FEATURE(kDisplayMediaPickerRedesign);
+
 // Dialog view used for DesktopMediaPickerViews.
 //
 // TODO(crbug.com/987001): Consider renaming this class.
 class DesktopMediaPickerDialogView : public views::DialogDelegateView,
                                      public views::TabbedPaneListener {
+  METADATA_HEADER(DesktopMediaPickerDialogView, views::DialogDelegateView)
+
  public:
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(
       kDesktopMediaPickerDialogViewIdentifier);
   // Used for UMA. Visible to this class's .cc file, but opaque beyond.
   enum class DialogType : int;
-
-  METADATA_HEADER(DesktopMediaPickerDialogView);
   DesktopMediaPickerDialogView(
       const DesktopMediaPicker::Params& params,
       DesktopMediaPickerViews* parent,
@@ -44,21 +52,19 @@ class DesktopMediaPickerDialogView : public views::DialogDelegateView,
       delete;
   ~DesktopMediaPickerDialogView() override;
 
+  void RecordUmaDismissal() const;
+
   // Called by parent (DesktopMediaPickerViews) when it's destroyed.
   void DetachParent();
 
   // Called by DesktopMediaListController.
   void OnSelectionChanged();
   void AcceptSource();
-  void AcceptSpecificSource(content::DesktopMediaID source);
+  void AcceptSpecificSource(const content::DesktopMediaID& source);
   void Reject();
   void OnSourceListLayoutChanged();
   void OnDelegatedSourceListDismissed();
   void OnCanReselectChanged(const DesktopMediaListController* controller);
-
-  // Relevant for UMA. (E.g. for DesktopMediaPickerViews to report
-  // when the dialog gets dismissed.)
-  DialogType GetDialogType() const;
 
   // views::TabbedPaneListener:
   void TabSelectedAt(int index) override;
@@ -96,9 +102,10 @@ class DesktopMediaPickerDialogView : public views::DialogDelegateView,
     // category. Primarily used if there is a separate selection surface that we
     // may need to re-open.
     bool supports_reselect_button;
+    raw_ptr<DesktopMediaPaneView> pane = nullptr;
   };
 
-  static bool AudioSupported(DesktopMediaList::Type type);
+  bool AudioSupported(DesktopMediaList::Type type);
 
   void ConfigureUIForNewPane(int index);
   void StoreAudioCheckboxState();
@@ -106,6 +113,19 @@ class DesktopMediaPickerDialogView : public views::DialogDelegateView,
   void MaybeCreateReselectButtonForPane(const DisplaySurfaceCategory& category);
   void MaybeCreateAudioCheckboxForPane(const DisplaySurfaceCategory& category);
   void MaybeSetAudioCheckboxMaxSize();
+
+  std::u16string GetLabelForAudioToggle(
+      const DisplaySurfaceCategory& category) const;
+
+  // Sets up the view for the pane based on the passed-in content_view and the
+  // corresponding category object.
+  std::unique_ptr<views::View> SetupPane(
+      DesktopMediaList::Type type,
+      std::unique_ptr<DesktopMediaListController> controller,
+      bool audio_offered,
+      bool audio_checked,
+      bool supports_reselect_button,
+      std::unique_ptr<views::View> content_view);
 
   void OnSourceTypeSwitched(int index);
 
@@ -115,9 +135,32 @@ class DesktopMediaPickerDialogView : public views::DialogDelegateView,
   DesktopMediaListController* GetSelectedController();
 
   DesktopMediaList::Type GetSelectedSourceListType() const;
+  bool IsAudioSharingApprovedByUser() const;
 
-  const raw_ptr<content::WebContents, DanglingUntriaged> web_contents_;
-  const bool is_get_display_media_call_;
+  // Records the number of tabs, windows and screens that were available
+  // for the user to choose from when they eventually made their selection
+  // of which tab/window/screen to capture.
+  //
+  // Note: The number of sources available can flactuate over time while
+  // the media-picker is open. We only record the number at the end,
+  // when the user either chooses what to capture, or chooses
+  // not to capture anything.
+  void RecordSourceCountsUma();
+
+  // Helper for UMA-tracking of how often a user shares a discarded tab.
+  void RecordTabDiscardedStatusUma(const content::DesktopMediaID& source);
+
+  // Counts the number of sources of a given type.
+  // * Returns nullopt if such sources are not offered to the user due to
+  //   a configuration of the picker.
+  // * Returns 0 if such sources were supposed to be offered to the user,
+  //   but no such sources were available.
+  std::optional<int> CountSourcesOfType(DesktopMediaList::Type type);
+
+  const raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged>
+      web_contents_;
+  const DesktopMediaPicker::Params::RequestSource request_source_;
+  const std::u16string app_name_;
   const bool audio_requested_;
   const bool suppress_local_audio_playback_;  // Effective only if audio shared.
   const content::GlobalRenderFrameHostId capturer_global_id_;
@@ -136,7 +179,10 @@ class DesktopMediaPickerDialogView : public views::DialogDelegateView,
 
   DialogType dialog_type_;
 
-  absl::optional<content::DesktopMediaID> accepted_source_;
+  std::optional<content::DesktopMediaID> accepted_source_;
+
+  // For recording dialog-duration UMA histograms.
+  const base::TimeTicks dialog_open_time_;
 };
 
 // Implementation of DesktopMediaPicker for Views.
@@ -146,18 +192,12 @@ class DesktopMediaPickerDialogView : public views::DialogDelegateView,
 // DesktopMediaPicker.
 class DesktopMediaPickerViews : public DesktopMediaPicker {
  public:
-#if BUILDFLAG(IS_WIN) || defined(USE_CRAS)
-  static constexpr bool kScreenAudioShareSupportedOnPlatform = true;
-#else
-  static constexpr bool kScreenAudioShareSupportedOnPlatform = false;
-#endif
-
   DesktopMediaPickerViews();
   DesktopMediaPickerViews(const DesktopMediaPickerViews&) = delete;
   DesktopMediaPickerViews& operator=(const DesktopMediaPickerViews&) = delete;
   ~DesktopMediaPickerViews() override;
 
-  void NotifyDialogResult(content::DesktopMediaID source);
+  void NotifyDialogResult(const content::DesktopMediaID& source);
 
   // DesktopMediaPicker:
   void Show(const DesktopMediaPicker::Params& params,
@@ -173,7 +213,7 @@ class DesktopMediaPickerViews : public DesktopMediaPicker {
 
   DoneCallback callback_;
 
-  bool is_get_display_media_call_ = false;
+  Params::RequestSource request_source_;
 
   // The |dialog_| is owned by the corresponding views::Widget instance.
   // When DesktopMediaPickerViews is destroyed the |dialog_| is destroyed

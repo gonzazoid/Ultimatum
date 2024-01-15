@@ -8,8 +8,8 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
-#include "base/base_jni_headers/JavaHandlerThread_jni.h"
-#include "base/bind.h"
+#include "base/base_jni/JavaHandlerThread_jni.h"
+#include "base/functional/bind.h"
 #include "base/message_loop/message_pump.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
@@ -169,7 +169,7 @@ JavaHandlerThread::State::State()
   pump = static_cast<MessagePumpForUI*>(message_pump.get());
 
   // We must set SetTaskRunner before binding because the Android UI pump
-  // creates a RunLoop which samples ThreadTaskRunnerHandle::Get.
+  // creates a RunLoop which samples SingleThreadTaskRunner::GetCurrentDefault.
   static_cast<sequence_manager::internal::SequenceManagerImpl*>(
       sequence_manager.get())
       ->SetTaskRunner(default_task_queue->task_runner());

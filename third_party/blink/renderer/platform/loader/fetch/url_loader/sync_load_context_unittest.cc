@@ -3,8 +3,9 @@
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/loader/fetch/url_loader/sync_load_context.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
@@ -16,9 +17,9 @@
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/resource_load_info_notifier_wrapper.h"
-#include "third_party/blink/public/platform/web_back_forward_cache_loader_helper.h"
-#include "third_party/blink/public/platform/web_resource_request_sender.h"
+#include "third_party/blink/renderer/platform/loader/fetch/url_loader/resource_request_sender.h"
 #include "third_party/blink/renderer/platform/loader/fetch/url_loader/sync_load_response.h"
+#include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
 
 namespace blink {
 
@@ -71,19 +72,19 @@ class MockPendingSharedURLLoaderFactory
   scoped_refptr<TestSharedURLLoaderFactory> factory_;
 };
 
-class MockResourceRequestSender : public WebResourceRequestSender {
+class MockResourceRequestSender : public ResourceRequestSender {
  public:
-  void CreatePendingRequest(scoped_refptr<WebRequestPeer> peer) {
-    peer_ = std::move(peer);
+  void CreatePendingRequest(scoped_refptr<ResourceRequestClient> client) {
+    client_ = std::move(client);
   }
 
   void DeletePendingRequest(
-      scoped_refptr<base::SingleThreadTaskRunner> task_runner) override {
-    peer_.reset();
+      scoped_refptr<base::SequencedTaskRunner> task_runner) override {
+    client_.reset();
   }
 
  private:
-  scoped_refptr<WebRequestPeer> peer_;
+  scoped_refptr<ResourceRequestClient> client_;
 };
 
 }  // namespace
@@ -113,7 +114,7 @@ class SyncLoadContextTest : public testing::Test {
             nullptr /* terminate_sync_load_event */,
             base::Seconds(60) /* timeout */,
             mojo::NullRemote() /* download_to_blob_registry */,
-            WebVector<WebString>() /* cors_exempt_header_list */,
+            Vector<String>() /* cors_exempt_header_list */,
             std::make_unique<ResourceLoadInfoNotifierWrapper>(
                 /*resource_load_info_notifier=*/nullptr,
                 task_environment_.GetMainThreadTaskRunner())));
@@ -127,28 +128,28 @@ class SyncLoadContextTest : public testing::Test {
       base::WaitableEvent* redirect_or_response_event,
       scoped_refptr<base::SingleThreadTaskRunner> task_runner) {
     DCHECK(task_runner->BelongsToCurrentThread());
-    auto* context = new SyncLoadContext(
+    auto context = base::AdoptRef(new SyncLoadContext(
         request, std::make_unique<MockPendingSharedURLLoaderFactory>(),
         response, context_for_redirect, redirect_or_response_event,
         nullptr /* terminate_sync_load_event */,
         base::Seconds(60) /* timeout */,
-        mojo::NullRemote() /* download_to_blob_registry */, task_runner);
+        mojo::NullRemote() /* download_to_blob_registry */, task_runner));
 
     auto mock_resource_request_sender =
         std::make_unique<MockResourceRequestSender>();
-    mock_resource_request_sender->CreatePendingRequest(
-        base::WrapRefCounted(context));
+    mock_resource_request_sender->CreatePendingRequest(context);
     context->resource_request_sender_ = std::move(mock_resource_request_sender);
 
-    // Simulate the response.
-    context->OnReceivedResponse(network::mojom::URLResponseHead::New(),
-                                base::TimeTicks());
     mojo::ScopedDataPipeProducerHandle producer_handle;
     mojo::ScopedDataPipeConsumerHandle consumer_handle;
     EXPECT_EQ(MOJO_RESULT_OK,
               mojo::CreateDataPipe(nullptr /* options */, producer_handle,
                                    consumer_handle));
-    context->OnStartLoadingResponseBody(std::move(consumer_handle));
+
+    // Simulate the response.
+    context->OnReceivedResponse(network::mojom::URLResponseHead::New(),
+                                std::move(consumer_handle),
+                                /*cached_metadata=*/absl::nullopt);
     context->OnCompletedRequest(network::URLLoaderCompletionStatus(net::OK));
 
     mojo::BlockingCopyFromString(expected_data, producer_handle);
@@ -182,9 +183,9 @@ TEST_F(SyncLoadContextTest, StartAsyncWithWaitableEvent) {
 
   // Check if |response| is set properly after the WaitableEvent fires.
   EXPECT_EQ(net::OK, response.error_code);
-  const char* response_data = nullptr;
-  size_t size = response.data.GetSomeData(response_data, 0);
-  EXPECT_EQ(expected_data, std::string(response_data, size));
+  ASSERT_TRUE(response.data);
+  EXPECT_EQ(expected_data,
+            std::string(response.data->begin()->data(), response.data->size()));
 }
 
 TEST_F(SyncLoadContextTest, ResponseBodyViaDataPipe) {
@@ -211,9 +212,9 @@ TEST_F(SyncLoadContextTest, ResponseBodyViaDataPipe) {
 
   // Check if |response| is set properly after the WaitableEvent fires.
   EXPECT_EQ(net::OK, response.error_code);
-  const char* response_data = nullptr;
-  size_t size = response.data.GetSomeData(response_data, 0);
-  EXPECT_EQ(expected_data, std::string(response_data, size));
+  ASSERT_TRUE(response.data);
+  EXPECT_EQ(expected_data,
+            std::string(response.data->begin()->data(), response.data->size()));
 }
 
 }  // namespace blink

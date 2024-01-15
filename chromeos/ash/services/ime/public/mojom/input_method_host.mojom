@@ -6,7 +6,7 @@
 // the Chromium repo. This file should be updated first, before syncing in the
 // other repos.
 
-// Next MinVersion: 9
+// Next MinVersion: 12
 
 module ash.ime.mojom;
 
@@ -20,13 +20,16 @@ enum CommitTextCursorBehavior {
   kMoveCursorBeforeText = 1,
 };
 
-// Next ordinal: 1
+// Next ordinal: 3
 [Stable, Extensible, RenamedFrom="chromeos.ime.mojom.CompositionSpanStyle"]
 enum CompositionSpanStyle {
   // Default composition style. Usually, this adds an underline to the span.
   [Default] kDefault = 0,
   // No styling.
   kNone = 1,
+  // A stronger style that emphasizes the span, distinguishing it from kDefault.
+  // Usually, this uses a thicker underline than kDefault.
+  [MinVersion=9] kHighlight = 2,
 };
 
 // A span with the composition text, used for styling parts of the composition.
@@ -104,6 +107,16 @@ struct SuggestionsResponse {
   array<SuggestionCandidate> candidates@0;
 };
 
+// Next ordinal: 1
+[Stable]
+struct SuggestionsTextContext {
+  // The last N chars from the text used to produce the suggestions.
+  string last_n_chars;
+
+  // The total length of the surrounding text used to produce suggestions.
+  uint32 surrounding_text_length;
+};
+
 // A URL-Keyed Metric (UKM) entry.
 [Stable]
 union UkmEntry {
@@ -113,13 +126,14 @@ union UkmEntry {
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
 //
-// Next ordinal: 4
+// Next ordinal: 5
 [Stable, Extensible, RenamedFrom="chromeos.ime.mojom.InputMethodApiOperation"]
 enum InputMethodApiOperation {
   [Default] kUnknown = 0,
   kCommitText = 1,
   kSetCompositionText = 2,
   kDeleteSurroundingText = 3,
+  [MinVersion = 11] kReplaceSurroundingText = 4
 };
 
 // Next ordinal: 1
@@ -188,11 +202,54 @@ enum KoreanAction {
   kComposeOutOfOrder = 3,
 };
 
+// Specifies how the buckets of an UMA histogram are determined.
+//
+// Next ordinal: 2
+[Extensible, Stable]
+enum HistogramBucketType {
+  // Buckets are exponential. For example, buckets might contain (sequentially)
+  // the count of values in the following intervals:
+  // [0,1), [1,2), [2,4), [4,8), [8,16), [16,32), [32,64), [64,infinity)
+  // The algorithm to determine the buckets is from base::Histogram.
+  // This is the default for most metrics.
+  [Default] kExponential = 0,
+
+  // Buckets are evenly spaced. For example, buckets might contain
+  // (sequentially) the count of values in the following intervals:
+  // [0,5), [5,10), [10,infinity)
+  // The algorithm to determine the buckets is from base::LinearHistogram.
+  kLinear = 1,
+};
+
+// An UMA histogram with each sample allocated to a bucket.
+// The buckets are determined by `bucket_type`, `minimum`, `maximum` and
+// `bucket_count`.
+//
+// Next ordinal: 5
+[Stable]
+struct BucketedHistogram {
+  string name@0;
+  HistogramBucketType bucket_type@1;
+
+  // The minimum value for a sample.
+  // This must be > 0.
+  uint16 minimum@2;
+
+  // The maximum value for a sample.
+  // This must be > minimum.
+  uint16 maximum@3;
+
+  // The number of buckets between `minimum` and `maximum`.
+  // This must be > 2.
+  // This must also be <= (maximum - minimum + 2).
+  uint16 bucket_count@4;
+};
+
 // Interface for InputMethod to interact with Chrome.
 // Provides a way for the InputMethod, which lives in a Chrome utility process,
 // to communicate back to the browser process.
 //
-// Next ordinal: 15
+// Next ordinal: 17
 [Stable]
 interface InputMethodHost {
   // ========================================================
@@ -261,6 +318,14 @@ interface InputMethodHost {
   DeleteSurroundingText@4(uint32 num_before_cursor,
                           uint32 num_after_cursor);
 
+  // Asks the input field to replace the text around the cursor with `text`.
+  // Specifically, delete `num_before_cursor` and `num_after_cursor` UTF-16 code
+  // units before and after the cursor, respectively and insert `text` at the
+  // cursor position.
+  [MinVersion = 11] ReplaceSurroundingText@16(uint32 num_before_cursor,
+                                              uint32 num_after_cursor,
+                                              mojo_base.mojom.String16 text);
+
   // Asks the input field to mark the region represented by `autocorrect_span`
   // as having been autocorrected. This usually involves showing some UI
   // (e.g. flashing the text or showing an underline).
@@ -270,8 +335,13 @@ interface InputMethodHost {
   // This method does not modify the input field text.
   HandleAutocorrect@5(AutocorrectSpan autocorrect_span);
 
-  // Asks the system to display the given suggestions to the user.
-  DisplaySuggestions@6(array<SuggestionCandidate> suggestions);
+  // Asks the system to display the given suggestions to the user. The
+  // surrounding text given with the call was the text used to generate the
+  // suggestions. Listeners to this call can use this text to decide what they
+  // want to do with the suggestions given.
+  DisplaySuggestions@6(
+    array<SuggestionCandidate> suggestions,
+    [MinVersion=10] SuggestionsTextContext? context);
 
   // Asks the system to update the current candidates window state.
   // If `window` is null, then the candidates window is hidden.
@@ -298,16 +368,25 @@ interface InputMethodHost {
 
   // Reports an action performed on the Korean IME.
   // Recorded in UMA as InputMethod.PhysicalKeyboard.Korean.Action.
-  [MinVersion=3] ReportKoreanAction@10(KoreanAction action);
+  // DEPRECATED: Use ReportHistogramSample instead.
+  [MinVersion=3] DEPRECATED_ReportKoreanAction@10(KoreanAction action);
 
   // Reports the usage of certain settings on the Korean IME:
   // - The input multiple syllables setting is recorded in UMA as
   //   InputMethod.PhysicalKeyboard.Korean.MultipleSyllables.
   // - The layout setting is recorded in UMA as
   //   InputMethod.PhysicalKeyboard.Korean.Layout.
-  [MinVersion=3] ReportKoreanSettings@11(KoreanSettings settings);
+  // DEPRECATED: Use ReportHistogramSample instead.
+  [MinVersion=3] DEPRECATED_ReportKoreanSettings@11(KoreanSettings settings);
 
   // Reports an opportunity identified in the current text to show a predictive
   // text suggestions.
-  [MinVersion=8] ReportSuggestionOpportunity@14(SuggestionMode mode);
+  // DEPRECATED: Use ReportHistogramSample instead.
+  [MinVersion=8] DEPRECATED_ReportSuggestionOpportunity@14(SuggestionMode mode);
+
+  // Reports a histogram sample to UMA.
+  // The name of the histogram must start with 'Untrusted.'. (e.g.
+  // 'Untrusted.InputMethod.CharacterCount'), or else this sample is dropped.
+  [MinVersion=10] ReportHistogramSample@15(BucketedHistogram histogram,
+                                           uint16 value);
 };

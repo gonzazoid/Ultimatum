@@ -30,6 +30,7 @@
 #include "base/auto_reset.h"
 #include "third_party/blink/public/common/security_context/insecure_request_policy.h"
 #include "third_party/blink/public/mojom/security_context/insecure_request_policy.mojom-blink.h"
+#include "third_party/blink/public/web/web_form_related_change_type.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_submit_event_init.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_element_radionodelist.h"
@@ -73,6 +74,8 @@
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 
 namespace blink {
+
+using mojom::blink::FormControlType;
 
 namespace {
 
@@ -137,8 +140,10 @@ Node::InsertionNotificationRequest HTMLFormElement::InsertedInto(
   HTMLElement::InsertedInto(insertion_point);
   LogAddElementIfIsolatedWorldAndInDocument("form", html_names::kMethodAttr,
                                             html_names::kActionAttr);
-  if (insertion_point.isConnected())
-    GetDocument().DidAssociateFormControl(this);
+  if (insertion_point.isConnected()) {
+    GetDocument().DidChangeFormRelatedElementDynamically(
+        this, WebFormRelatedChangeType::kAdd);
+  }
   return kInsertionDone;
 }
 
@@ -179,6 +184,11 @@ void HTMLFormElement::RemovedFrom(ContainerNode& insertion_point) {
   }
   GetDocument().GetFormController().WillDeleteForm(this);
   HTMLElement::RemovedFrom(insertion_point);
+
+  if (insertion_point.isConnected()) {
+    GetDocument().DidChangeFormRelatedElementDynamically(
+        this, WebFormRelatedChangeType::kRemove);
+  }
 }
 
 void HTMLFormElement::HandleLocalEvents(Event& event) {
@@ -271,9 +281,8 @@ bool HTMLFormElement::ValidateInteractively() {
       ConsoleMessage* console_message = MakeGarbageCollected<ConsoleMessage>(
           mojom::blink::ConsoleMessageSource::kRendering,
           mojom::blink::ConsoleMessageLevel::kError, message);
-      console_message->SetNodes(
-          GetDocument().GetFrame(),
-          {DOMNodeIds::IdForNode(&unhandled->ToHTMLElement())});
+      console_message->SetNodes(GetDocument().GetFrame(),
+                                {unhandled->ToHTMLElement().GetDomNodeId()});
       GetDocument().AddConsoleMessage(console_message);
     }
   }
@@ -332,6 +341,18 @@ void HTMLFormElement::PrepareForSubmission(
     }
   }
 
+  for (ListedElement* element : ListedElements()) {
+    if (auto* form_control =
+            DynamicTo<HTMLFormControlElementWithState>(element)) {
+      // After attempting form submission we have to make the controls start
+      // matching :user-valid/:user-invalid. We could do this by calling
+      // SetUserHasEditedTheFieldAndBlurred() even though the user has not
+      // actually taken those actions, but that would have side effects on
+      // autofill.
+      form_control->ForceUserValid();
+    }
+  }
+
   bool should_submit;
   {
     base::AutoReset<bool> submit_event_handler_scope(&in_user_js_submit_event_,
@@ -382,10 +403,7 @@ void HTMLFormElement::requestSubmit(HTMLElement* submitter,
   if (submitter) {
     // 1.1. If submitter is not a submit button, then throw a TypeError.
     control = DynamicTo<HTMLFormControlElement>(submitter);
-    // button[type] is a subset of input[type]. So it's ok to compare button's
-    // type and input_type_names.
-    if (!control || (control->type() != input_type_names::kSubmit &&
-                     control->type() != input_type_names::kImage)) {
+    if (!control || !control->CanBeSuccessfulSubmitButton()) {
       exception_state.ThrowTypeError(
           "The specified element is not a submit button.");
       return;
@@ -467,6 +485,12 @@ void HTMLFormElement::ScheduleFormSubmission(
 
   FormSubmission* form_submission =
       FormSubmission::Create(this, attributes_, event, submit_button);
+  if (!form_submission) {
+    // Form submission is not allowed for some NavigationPolicies, e.g. Link
+    // Preview. If an user triggered such user event for form submission, just
+    // ignores it.
+    return;
+  }
   Frame* target_frame = form_submission->TargetFrame();
 
   // 'formdata' event handlers might disconnect the form.
@@ -486,7 +510,6 @@ void HTMLFormElement::ScheduleFormSubmission(
   DCHECK(form_submission->Method() == FormSubmission::kPostMethod ||
          form_submission->Method() == FormSubmission::kGetMethod);
   DCHECK(form_submission->Data());
-  DCHECK(form_submission->Form());
   if (form_submission->Action().IsEmpty())
     return;
   if (GetExecutionContext()->IsSandboxed(
@@ -586,9 +609,10 @@ FormData* HTMLFormElement::ConstructEntryList(
     if (!element.IsDisabledFormControl())
       control->AppendToFormData(form_data);
     if (auto* input = DynamicTo<HTMLInputElement>(element)) {
-      if (input->type() == input_type_names::kPassword &&
-          !input->Value().empty())
+      if (input->FormControlType() == FormControlType::kInputPassword &&
+          !input->Value().empty()) {
         form_data.SetContainsPasswordData(true);
+      }
     }
   }
   DispatchEvent(*MakeGarbageCollected<FormDataEvent>(form_data));
@@ -627,6 +651,20 @@ void HTMLFormElement::reset() {
     frame->GetPage()->GetChromeClient().FormElementReset(*this);
 }
 
+void HTMLFormElement::AttachLayoutTree(AttachContext& context) {
+  HTMLElement::AttachLayoutTree(context);
+  if (!GetLayoutObject()) {
+    FocusabilityLost();
+  }
+}
+
+void HTMLFormElement::DetachLayoutTree(bool performing_reattach) {
+  HTMLElement::DetachLayoutTree(performing_reattach);
+  if (!performing_reattach) {
+    FocusabilityLost();
+  }
+}
+
 void HTMLFormElement::ParseAttribute(
     const AttributeModificationParams& params) {
   const QualifiedName& name = params.name;
@@ -661,8 +699,7 @@ void HTMLFormElement::ParseAttribute(
     attributes_.SetAcceptCharset(params.new_value);
   } else if (name == html_names::kDisabledAttr) {
     UseCounter::Count(GetDocument(), WebFeature::kFormDisabledAttributePresent);
-  } else if (name == html_names::kRelAttr &&
-             RuntimeEnabledFeatures::FormRelAttributeEnabled()) {
+  } else if (name == html_names::kRelAttr) {
     rel_attribute_ = RelAttribute::kNone;
     rel_list_->DidUpdateAttributeValue(params.old_value, params.new_value);
     if (rel_list_->contains(AtomicString("noreferrer")))
@@ -763,8 +800,6 @@ void HTMLFormElement::CollectListedElements(
 // because of lazy evaluation.
 const ListedElement::List& HTMLFormElement::ListedElements(
     bool include_shadow_trees) const {
-  if (!RuntimeEnabledFeatures::AutofillShadowDOMEnabled())
-    include_shadow_trees = false;
   bool collect_shadow_inputs =
       include_shadow_trees && listed_elements_including_shadow_trees_are_dirty_;
 

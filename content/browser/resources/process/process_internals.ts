@@ -6,7 +6,7 @@ import 'chrome://resources/cr_elements/cr_tree/cr_tree.js';
 
 import {CrTreeElement} from 'chrome://resources/cr_elements/cr_tree/cr_tree.js';
 import {CrTreeItemElement, MAY_HAVE_CHILDREN_ATTR} from 'chrome://resources/cr_elements/cr_tree/cr_tree_item.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {assert} from 'chrome://resources/js/assert.js';
 
 import {FrameInfo, FrameInfo_Type, ProcessInternalsHandler, ProcessInternalsHandlerRemote, WebContentsInfo} from './process_internals.mojom-webui.js';
 
@@ -69,9 +69,47 @@ function setupTabs() {
 }
 
 /**
+ * Collects and displays info about the renderer process count and limit across
+ * all profiles.
+ */
+async function loadProcessCountInfo() {
+  assert(pageHandler);
+  const {info} = await pageHandler.getProcessCountInfo();
+
+  const processCountTotal =
+      document.querySelector<HTMLElement>('#process-count-total');
+  assert(processCountTotal);
+  processCountTotal.innerText = String(info.rendererProcessCountTotal);
+
+  const processCountForLimit =
+      document.querySelector<HTMLElement>('#process-count-for-limit');
+  assert(processCountForLimit);
+  processCountForLimit.innerText = String(info.rendererProcessCountForLimit);
+
+  const processLimit = document.querySelector<HTMLElement>('#process-limit');
+  assert(processLimit);
+  processLimit.innerText = String(info.rendererProcessLimit);
+
+  const overProcessLimit =
+      document.querySelector<HTMLElement>('#over-process-limit');
+  assert(overProcessLimit);
+  overProcessLimit.innerText =
+      (info.rendererProcessCountForLimit >= info.rendererProcessLimit) ? 'Yes' :
+                                                                         'No';
+}
+
+/**
  * Root of the WebContents tree.
  */
 let treeViewRoot: CrTreeElement|null = null;
+
+/**
+ * Accumulators for tracking frame and process counts. Reset in
+ * loadWebContentsInfo.
+ */
+let totalFrameCount: number = 0;
+let totalCrossProcessFrameCount: number = 0;
+let processIdSet: Set<number> = new Set();
 
 /**
  * Initialize and return |treeViewRoot|.
@@ -87,13 +125,22 @@ function getTreeViewRoot(): CrTreeElement {
 
 /**
  * Initialize and return a tree item representing a FrameInfo object and
- * recursively creates its subframe objects.
+ * recursively creates its subframe objects. For subframes, pass the parent
+ * frame's process ID in `parentProcessId`.
  */
-function frameToTreeItem(frame: FrameInfo):
+function frameToTreeItem(frame: FrameInfo, parentProcessId: number = -1):
     {item: CrTreeItemElement, count: number} {
+  // Count out-of-process iframes.
+  const isCrossProcessFrame: boolean =
+      parentProcessId !== -1 && parentProcessId !== frame.processId;
+  if (isCrossProcessFrame) {
+    totalCrossProcessFrameCount++;
+  }
+  processIdSet.add(frame.processId);
+
   // Compose the string which will appear in the entry for this frame.
-  let itemLabel = `Frame[${frame.processId}:${frame.routingId}:${
-      frame.agentSchedulingGroupId}]:`;
+  const prefix = isCrossProcessFrame ? 'OOPIF' : 'Frame';
+  let itemLabel = `${prefix}[${frame.processId}:${frame.routingId}]:`;
   if (frame.type === FrameInfo_Type.kBackForwardCache) {
     itemLabel += ` bfcached`;
   } else if (frame.type === FrameInfo_Type.kPrerender) {
@@ -101,8 +148,12 @@ function frameToTreeItem(frame: FrameInfo):
   }
 
   itemLabel += ` SI:${frame.siteInstance.id}`;
+  itemLabel += `, SIG:${frame.siteInstance.siteInstanceGroupId}`;
+  itemLabel += `, BI:${frame.siteInstance.browsingInstanceId}`;
   if (frame.siteInstance.locked) {
     itemLabel += ', locked';
+  } else {
+    itemLabel += ', unlocked';
   }
   if (frame.siteInstance.siteUrl) {
     itemLabel += `, site:${frame.siteInstance.siteUrl.url}`;
@@ -119,6 +170,9 @@ function frameToTreeItem(frame: FrameInfo):
   if (frame.siteInstance.isGuest) {
     itemLabel += ', guest';
   }
+  if (frame.siteInstance.isPdf) {
+    itemLabel += ', pdf';
+  }
   if (frame.siteInstance.storagePartition) {
     itemLabel += `, partition:${frame.siteInstance.storagePartition}`;
   }
@@ -134,7 +188,7 @@ function frameToTreeItem(frame: FrameInfo):
 
   let frameCount = 1;
   for (const subframe of frame.subframes) {
-    const result = frameToTreeItem(subframe);
+    const result = frameToTreeItem(subframe, frame.processId);
     const subItem = result.item;
     const count = result.count;
 
@@ -200,6 +254,8 @@ function webContentsToTreeItem(webContents: WebContentsInfo):
   }
   item.label = itemLabel;
 
+  totalFrameCount += activeCount + cachedCount + prerenderCount;
+
   return item;
 }
 
@@ -224,9 +280,29 @@ function populateWebContentsTab(infos: WebContentsInfo[]) {
  * current browser profile. The result is passed to populateWebContentsTab.
  */
 async function loadWebContentsInfo() {
+  // Reset frame counts.
+  totalFrameCount = 0;
+  totalCrossProcessFrameCount = 0;
+  processIdSet = new Set();
+
   assert(pageHandler);
   const {infos} = await pageHandler.getAllWebContentsInfo();
   populateWebContentsTab(infos);
+
+  // Post tab, frame, and process counts.
+  const tabCount = document.querySelector<HTMLElement>('#tab-count');
+  assert(tabCount);
+  tabCount.innerText = String(infos.length);
+  const frameCount = document.querySelector<HTMLElement>('#frame-count');
+  assert(frameCount);
+  frameCount.innerText = String(totalFrameCount);
+  const oopifCount = document.querySelector<HTMLElement>('#oopif-count');
+  assert(oopifCount);
+  oopifCount.innerText = String(totalCrossProcessFrameCount);
+  const processCount =
+      document.querySelector<HTMLElement>('#profile-process-count');
+  assert(processCount);
+  processCount.innerText = String(processIdSet.size);
 }
 
 /**
@@ -318,9 +394,20 @@ function loadIsolatedOriginInfo() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  // Setup Mojo interface to the backend.
+  // Set up Mojo interface to the backend.
   pageHandler = ProcessInternalsHandler.getRemote();
   assert(pageHandler);
+
+  // Set up the tabbed UI.
+  setupTabs();
+
+  // Populate the process count and limit info.
+  loadProcessCountInfo();
+
+  const refreshProcessInfoButton =
+      document.querySelector<HTMLElement>('#refresh-process-info');
+  assert(refreshProcessInfoButton);
+  refreshProcessInfoButton.addEventListener('click', loadProcessCountInfo);
 
   // Get the Site Isolation mode and populate it.
   pageHandler.getIsolationMode().then((response) => {
@@ -329,16 +416,13 @@ document.addEventListener('DOMContentLoaded', function() {
     assert(isolationMode);
     isolationMode.innerText = response.mode;
   });
-
   loadIsolatedOriginInfo();
-
-  // Setup the tabbed UI
-  setupTabs();
 
   // Start loading the information about WebContents.
   loadWebContentsInfo();
 
-  const refreshButton = document.querySelector<HTMLElement>('#refresh-button');
-  assert(refreshButton);
-  refreshButton.addEventListener('click', loadWebContentsInfo);
+  const refreshFrameTreesButton =
+      document.querySelector<HTMLElement>('#refresh-frame-trees');
+  assert(refreshFrameTreesButton);
+  refreshFrameTreesButton.addEventListener('click', loadWebContentsInfo);
 });

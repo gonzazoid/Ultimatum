@@ -4,7 +4,6 @@
 
 #include "components/autofill/core/browser/form_parsing/merchant_promo_code_field.h"
 
-#include "base/test/scoped_feature_list.h"
 #include "components/autofill/core/browser/form_parsing/parsing_test_utils.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
 
@@ -21,21 +20,11 @@ class MerchantPromoCodeFieldTest
   MerchantPromoCodeFieldTest& operator=(const MerchantPromoCodeFieldTest&) =
       delete;
 
-  void SetUp() override {
-    scoped_feature_list_.InitAndEnableFeature(
-        features::kAutofillParseMerchantPromoCodeFields);
-  }
-
  protected:
-  std::unique_ptr<FormField> Parse(
-      AutofillScanner* scanner,
-      const LanguageCode& page_language = LanguageCode("en")) override {
-    return MerchantPromoCodeField::Parse(scanner, page_language,
-                                         GetActivePatternSource(),
-                                         /*log_manager=*/nullptr);
+  std::unique_ptr<FormField> Parse(ParsingContext& context,
+                                   AutofillScanner* scanner) override {
+    return MerchantPromoCodeField::Parse(context, scanner);
   }
-
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 INSTANTIATE_TEST_SUITE_P(
@@ -95,16 +84,6 @@ TEST_P(MerchantPromoCodeFieldTest, ParseNonPromoCode) {
   // Regex relies on "promo/coupon/gift" + "code" together.
   AddTextFormFieldData("otherField", "Field for gift card or promo details",
                        UNKNOWN_TYPE);
-
-  ClassifyAndVerify(ParseResult::NOT_PARSED);
-}
-
-TEST_P(MerchantPromoCodeFieldTest, ParsePromoCodeFlagOff) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndDisableFeature(
-      features::kAutofillParseMerchantPromoCodeFields);
-  AddTextFormFieldData("promoCodeField", "Enter promo code here",
-                       MERCHANT_PROMO_CODE);
 
   ClassifyAndVerify(ParseResult::NOT_PARSED);
 }

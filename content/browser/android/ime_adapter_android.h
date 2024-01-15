@@ -100,7 +100,12 @@ class CONTENT_EXPORT ImeAdapterAndroid : public RenderWidgetHostConnector {
   void HandleStylusWritingGestureAction(
       JNIEnv*,
       const base::android::JavaParamRef<jobject>&,
+      const jint,
       const base::android::JavaParamRef<jobject>&);
+
+  void OnStylusWritingGestureActionCompleted(
+      int,
+      blink::mojom::HandwritingGestureResult);
 
   // RendetWidgetHostConnector implementation.
   void UpdateRenderProcessConnection(
@@ -116,7 +121,10 @@ class CONTENT_EXPORT ImeAdapterAndroid : public RenderWidgetHostConnector {
   void CancelComposition();
   void FocusedNodeChanged(bool is_editable_node,
                           const gfx::Rect& node_bounds_in_screen);
-  void SetCharacterBounds(const std::vector<gfx::RectF>& rects);
+  // Update the composition character bounds, the visible line bounds or both.
+  void SetBounds(const std::vector<gfx::Rect>& character_bounds,
+                 const bool character_bounds_changed,
+                 const std::optional<std::vector<gfx::Rect>>& line_bounds);
   // Requests to start stylus writing and returns true if successful.
   bool RequestStartStylusWriting();
 
@@ -151,6 +159,7 @@ class CONTENT_EXPORT ImeAdapterAndroid : public RenderWidgetHostConnector {
   // Current RenderWidgetHostView connected to this instance. Can be null.
   raw_ptr<RenderWidgetHostViewAndroid> rwhva_;
   JavaObjectWeakGlobalRef java_ime_adapter_;
+  base::WeakPtrFactory<ImeAdapterAndroid> weak_factory_{this};
 };
 
 }  // namespace content

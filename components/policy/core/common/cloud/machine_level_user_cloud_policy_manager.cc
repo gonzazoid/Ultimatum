@@ -4,14 +4,16 @@
 
 #include "components/policy/core/common/cloud/machine_level_user_cloud_policy_manager.h"
 
+#include <memory>
 #include <string>
 #include <utility>
 
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/policy/core/common/cloud/cloud_external_data_manager.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/core/common/cloud/cloud_policy_util.h"
 #include "components/policy/core/common/cloud/machine_level_user_cloud_policy_store.h"
+#include "components/policy/core/common/policy_logger.h"
 #include "components/policy/core/common/policy_pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
@@ -32,10 +34,11 @@ MachineLevelUserCloudPolicyManager::MachineLevelUserCloudPolicyManager(
     network::NetworkConnectionTrackerGetter network_connection_tracker_getter)
     : CloudPolicyManager(GetMachineLevelUserCloudPolicyTypeForCurrentOS(),
                          std::string(),
-                         store.get(),
+                         std::move(store),
                          task_runner,
                          std::move(network_connection_tracker_getter)),
-      store_(std::move(store)),
+      user_store_(static_cast<MachineLevelUserCloudPolicyStore*>(
+          CloudPolicyManager::store())),
       external_data_manager_(std::move(external_data_manager)),
       policy_dir_(policy_dir) {}
 
@@ -84,14 +87,15 @@ void MachineLevelUserCloudPolicyManager::DisconnectAndRemovePolicy() {
   // component policies are also empty at CheckAndPublishPolicy().
   ClearAndDestroyComponentCloudPolicyService();
 
-  // When the |store_| is cleared, it informs the |external_data_manager_| that
-  // all external data references have been removed, causing the
+  // When the |user_store_| is cleared, it informs the |external_data_manager_|
+  // that all external data references have been removed, causing the
   // |external_data_manager_| to clear its cache as well.
-  store_->Clear();
+  user_store_->Clear();
 }
 
 void MachineLevelUserCloudPolicyManager::Init(SchemaRegistry* registry) {
-  DVLOG(1) << "Machine level cloud policy manager initialized";
+  DVLOG_POLICY(1, POLICY_FETCHING)
+      << "Machine level cloud policy manager initialized";
   // Call to grand-parent's Init() instead of parent's is intentional.
   // NOLINTNEXTLINE(bugprone-parent-virtual-call)
   ConfigurationPolicyProvider::Init(registry);

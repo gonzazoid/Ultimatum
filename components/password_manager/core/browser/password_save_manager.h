@@ -5,7 +5,7 @@
 #ifndef COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_PASSWORD_SAVE_MANAGER_H_
 #define COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_PASSWORD_SAVE_MANAGER_H_
 
-#include "components/password_manager/core/browser/password_store_interface.h"
+#include "components/password_manager/core/browser/password_store/password_store_interface.h"
 
 namespace autofill {
 struct FormData;
@@ -100,7 +100,7 @@ class PasswordSaveManager {
   // PasswordForm returned by GetPendingCredentials() and stores it in the
   // profile store. This is relevant only for account store users.
   virtual void BlockMovingToAccountStoreFor(
-      const autofill::GaiaIdHash& gaia_id_hash) = 0;
+      const signin::GaiaIdHash& gaia_id_hash) = 0;
 
   // Updates the submission indicator event for pending credentials at the
   // moment of submisison detection.
@@ -109,7 +109,6 @@ class PasswordSaveManager {
 
   virtual bool IsNewLogin() const = 0;
   virtual bool IsPasswordUpdate() const = 0;
-  virtual bool IsSamePassword() const = 0;
   virtual bool HasGeneratedPassword() const = 0;
 
   // Signals that the user updated the username value in the bubble prompt.

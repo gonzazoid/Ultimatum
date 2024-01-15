@@ -14,8 +14,7 @@ import java.util.concurrent.Executor;
  * Information about a finished request. Passed to {@link RequestFinishedInfo.Listener}.
  *
  * <p>To associate the data with the original request, use {@link
- * UrlRequest.Builder#addRequestAnnotation} or {@link
- * BidirectionalStream.Builder#addRequestAnnotation} to add a unique identifier when creating the
+ * UrlRequest.Builder#addRequestAnnotation} to add a unique identifier when creating the
  * request, and call {@link #getAnnotations} when the {@link RequestFinishedInfo} is received to
  * retrieve the identifier.
  */
@@ -265,15 +264,15 @@ public abstract class RequestFinishedInfo {
         public abstract Long getReceivedByteCount();
     }
 
-    /**
-     * Reason value indicating that the request succeeded. Returned from {@link #getFinishedReason}.
-     */
+    /** Reason value indicating that the request succeeded. Returned from {@link #getFinishedReason}. */
     public static final int SUCCEEDED = 0;
+
     /**
      * Reason value indicating that the request failed or returned an error. Returned from {@link
      * #getFinishedReason}.
      */
     public static final int FAILED = 1;
+
     /**
      * Reason value indicating that the request was canceled. Returned from {@link
      * #getFinishedReason}.
@@ -289,8 +288,7 @@ public abstract class RequestFinishedInfo {
 
     /**
      * Returns the objects that the caller has supplied when initiating the request, using {@link
-     * UrlRequest.Builder#addRequestAnnotation} or {@link
-     * BidirectionalStream.Builder#addRequestAnnotation}. Annotations can be used to associate a
+     * UrlRequest.Builder#addRequestAnnotation}. Annotations can be used to associate a
      * {@link RequestFinishedInfo} with the original request or type of request.
      *
      * @return annotations supplied when creating the request
@@ -310,6 +308,8 @@ public abstract class RequestFinishedInfo {
      * definitions are debatable, but are chosen to make sense for user-facing latency analysis.
      *
      * @return metrics collected for this request.
+     *
+     * <p>{@hide} as the Metrics class is hidden
      */
     public abstract Metrics getMetrics();
 

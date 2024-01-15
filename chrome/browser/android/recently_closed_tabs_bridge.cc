@@ -63,7 +63,7 @@ void PrepareTabs(
     const sessions::SerializedNavigationEntry& current_navigation =
         tab.navigations.at(tab.current_navigation_index);
     ids.push_back(tab.id.id());
-    timestamps.push_back(tab.timestamp.ToJavaTime());
+    timestamps.push_back(tab.timestamp.InMillisecondsSinceUnixEpoch());
     titles.push_back(current_navigation.title());
     urls.push_back(url::GURLAndroid::FromNativeGURL(
         env, current_navigation.virtual_url()));
@@ -80,7 +80,7 @@ void JNI_RecentlyClosedBridge_AddTabToEntries(
   const sessions::SerializedNavigationEntry& current_navigation =
       tab.navigations.at(tab.current_navigation_index);
   Java_RecentlyClosedBridge_addTabToEntries(
-      env, jentries, tab.id.id(), tab.timestamp.ToJavaTime(),
+      env, jentries, tab.id.id(), tab.timestamp.InMillisecondsSinceUnixEpoch(),
       ConvertUTF16ToJavaString(env, current_navigation.title()),
       url::GURLAndroid::FromNativeGURL(env, current_navigation.virtual_url()),
       tab.group ? ConvertUTF8ToJavaString(env, tab.group->ToString())
@@ -108,7 +108,8 @@ void JNI_RecentlyClosedBridge_AddGroupToEntries(
   PrepareTabs(env, it, current_entry, ids, timestamps, titles, urls, group_ids);
 
   Java_RecentlyClosedBridge_addGroupToEntries(
-      env, jentries, group.id.id(), group.timestamp.ToJavaTime(),
+      env, jentries, group.id.id(),
+      group.timestamp.InMillisecondsSinceUnixEpoch(),
       ConvertUTF16ToJavaString(env, group.visual_data.title()),
       ToJavaIntArray(env, ids), ToJavaLongArray(env, timestamps),
       ToJavaArrayOfStrings(env, titles),
@@ -149,7 +150,8 @@ void JNI_RecentlyClosedBridge_AddBulkEventToEntries(
   }
 
   Java_RecentlyClosedBridge_addBulkEventToEntries(
-      env, jentries, window.id.id(), window.timestamp.ToJavaTime(),
+      env, jentries, window.id.id(),
+      window.timestamp.InMillisecondsSinceUnixEpoch(),
       ToJavaArrayOfStrings(env, group_ids),
       ToJavaArrayOfStrings(env, group_titles), ToJavaIntArray(env, ids),
       ToJavaLongArray(env, timestamps), ToJavaArrayOfStrings(env, titles),
@@ -225,7 +227,7 @@ sessions::TabRestoreService::Entries::const_iterator TabIterator::CurrentEntry()
 
 TabIterator& TabIterator::operator++() {
   // Early out at end.
-  if (current_entry_ == entries_.cend()) {
+  if (current_entry_ == entries_->cend()) {
     return *this;
   }
 
@@ -239,9 +241,9 @@ TabIterator& TabIterator::operator++() {
 
   // At the end of an entry then go to the next entry.
   tabs_ = nullptr;
-  current_tab_ = absl::nullopt;
+  current_tab_ = std::nullopt;
   current_entry_++;
-  if (current_entry_ == entries_.cend()) {
+  if (current_entry_ == entries_->cend()) {
     return *this;
   }
 
@@ -278,7 +280,7 @@ const sessions::TabRestoreService::Tab* TabIterator::operator->() const {
 }
 
 void TabIterator::SetupInnerTabList() {
-  if (current_entry_ == entries_.cend()) {
+  if (current_entry_ == entries_->cend()) {
     return;
   }
 

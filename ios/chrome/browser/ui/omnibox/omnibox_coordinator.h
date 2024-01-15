@@ -5,23 +5,39 @@
 #ifndef IOS_CHROME_BROWSER_UI_OMNIBOX_OMNIBOX_COORDINATOR_H_
 #define IOS_CHROME_BROWSER_UI_OMNIBOX_OMNIBOX_COORDINATOR_H_
 
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
 
-class WebOmniboxEditController;
+class WebLocationBar;
+@class BubblePresenter;
 @protocol EditViewAnimatee;
 @class OmniboxPopupCoordinator;
 @class OmniboxTextFieldIOS;
 @protocol LocationBarOffsetProvider;
 @protocol OmniboxPopupPresenterDelegate;
+@protocol TextFieldViewContaining;
+@protocol ToolbarOmniboxConsumer;
 
 // The coordinator for the omnibox.
 @interface OmniboxCoordinator : ChromeCoordinator
 
+// Returns a popup coordinator created by this coordinator.
+// Created and started at `start` and stopped & destroyed at `stop`.
+@property(nonatomic, strong, readonly)
+    OmniboxPopupCoordinator* popupCoordinator;
 // The edit controller interfacing the `textField` and the omnibox components
 // code. Needs to be set before the coordinator is started.
-@property(nonatomic, assign) WebOmniboxEditController* editController;
+@property(nonatomic, assign) WebLocationBar* locationBar;
 // Returns the animatee for the omnibox focus orchestrator.
 @property(nonatomic, strong, readonly) id<EditViewAnimatee> animatee;
+
+/// Positioner for the popup. Has to be configured before calling `start`.
+@property(nonatomic, weak) id<OmniboxPopupPresenterDelegate> presenterDelegate;
+
+// Bubble presenter for displaying IPH bubbles relating to the omnibox.
+@property(nonatomic, strong) BubblePresenter* bubblePresenter;
+
+//// The edit view, which contains a text field.
+@property(nonatomic, readonly) UIView<TextFieldViewContaining>* editView;
 
 // The view controller managed by this coordinator. The parent of this
 // coordinator is expected to add it to the responder chain.
@@ -31,7 +47,7 @@ class WebOmniboxEditController;
 - (id<LocationBarOffsetProvider>)offsetProvider;
 
 // Start this coordinator. When it starts, it expects to have `textField` and
-// `editController`.
+// `locationBar`.
 - (void)start;
 // Stop this coordinator.
 - (void)stop;
@@ -54,11 +70,9 @@ class WebOmniboxEditController;
 
 // Use this method to resign `textField` as the first responder.
 - (void)endEditing;
-// Creates a child popup coordinator. The popup coordinator is linked to the
-// `textField` through components code.
-- (OmniboxPopupCoordinator*)createPopupCoordinator:
-    (id<OmniboxPopupPresenterDelegate>)presenterDelegate;
 
+// Returns the toolbar omnibox consumer.
+- (id<ToolbarOmniboxConsumer>)toolbarOmniboxConsumer;
 @end
 
 #endif  // IOS_CHROME_BROWSER_UI_OMNIBOX_OMNIBOX_COORDINATOR_H_

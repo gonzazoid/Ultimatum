@@ -10,6 +10,8 @@
 #include "third_party/blink/renderer/core/editing/testing/editing_test_base.h"
 #include "third_party/blink/renderer/core/editing/visible_position.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/core/frame/settings.h"
+#include "third_party/blink/renderer/core/html/shadow/shadow_element_names.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 
 namespace blink {
@@ -77,38 +79,6 @@ TEST_F(SelectionModifierTest, MoveByLineBlockInInline) {
             MoveBackwardByLine(modifier));
 }
 
-TEST_F(SelectionModifierTest, MoveByLineBlockInInlineCulled) {
-  // |LayoutNGBlockInInline| prevents the inline box from culling. This test is
-  // exactly the same as |MoveByLineBlockInInline| above.
-  if (RuntimeEnabledFeatures::LayoutNGBlockInInlineEnabled())
-    return;
-
-  LoadAhem();
-  InsertStyleElement(
-      "div {"
-      "font: 10px/20px Ahem;"
-      "padding: 10px;"
-      "writing-mode: horizontal-tb;"
-      "}");
-  const SelectionInDOMTree selection =
-      SetSelectionTextToBody("<div>ab|c<b><p>ABC</p><p>DEF</p>def</b></div>");
-  SelectionModifier modifier(GetFrame(), selection);
-
-  EXPECT_EQ("<div>abc<b><p>AB|C</p><p>DEF</p>def</b></div>",
-            MoveForwardByLine(modifier));
-  EXPECT_EQ("<div>abc<b><p>ABC</p><p>DE|F</p>def</b></div>",
-            MoveForwardByLine(modifier));
-  EXPECT_EQ("<div>abc<b><p>ABC</p><p>DEF</p>de|f</b></div>",
-            MoveForwardByLine(modifier));
-
-  EXPECT_EQ("<div>abc<b><p>ABC</p><p>DE|F</p>def</b></div>",
-            MoveBackwardByLine(modifier));
-  EXPECT_EQ("<div>abc<b><p>AB|C</p><p>DEF</p>def</b></div>",
-            MoveBackwardByLine(modifier));
-  EXPECT_EQ("<div>ab|c<b><p>ABC</p><p>DEF</p>def</b></div>",
-            MoveBackwardByLine(modifier));
-}
-
 TEST_F(SelectionModifierTest, MoveByLineHorizontal) {
   LoadAhem();
   InsertStyleElement(
@@ -131,8 +101,6 @@ TEST_F(SelectionModifierTest, MoveByLineHorizontal) {
 }
 
 TEST_F(SelectionModifierTest, MoveByLineMultiColumnSingleText) {
-  RuntimeEnabledFeaturesTestHelpers::ScopedLayoutNGBlockFragmentation
-      block_fragmentation(RuntimeEnabledFeatures::LayoutNGEnabled());
   LoadAhem();
   InsertStyleElement(
       "div { font: 10px/15px Ahem; column-count: 3; width: 20ch; }");
@@ -241,7 +209,7 @@ TEST_F(SelectionModifierTest, MoveCaretWithShadow) {
   LoadAhem();
   InsertStyleElement("body {font-family: Ahem}");
   SetBodyContent(body_content);
-  Element* host = GetDocument().getElementById("host");
+  Element* host = GetDocument().getElementById(AtomicString("host"));
   ShadowRoot& shadow_root =
       host->AttachShadowRootInternal(ShadowRootType::kOpen);
   shadow_root.setInnerHTML(shadow_content);
@@ -250,9 +218,9 @@ TEST_F(SelectionModifierTest, MoveCaretWithShadow) {
   Element* body = GetDocument().body();
   Node* a = body->childNodes()->item(0);
   Node* b = shadow_root.childNodes()->item(0);
-  Node* c = host->QuerySelector("[slot=c]")->firstChild();
+  Node* c = host->QuerySelector(AtomicString("[slot=c]"))->firstChild();
   Node* d = shadow_root.childNodes()->item(2);
-  Node* e = host->QuerySelector("[slot=e]")->firstChild();
+  Node* e = host->QuerySelector(AtomicString("[slot=e]"))->firstChild();
   Node* f = body->childNodes()->item(2);
 
   auto makeSelection = [&](Position position) {
@@ -460,11 +428,38 @@ TEST_F(SelectionModifierTest, OptgroupAndTable) {
       "<optgroup></optgroup><table><tbody><tr><td></td></tr></tbody></table>",
       GetSelectionTextFromBody(selection));
 
-  Element* optgroup = GetDocument().QuerySelector("optgroup");
+  Element* optgroup = GetDocument().QuerySelector(AtomicString("optgroup"));
   ShadowRoot* shadow_root = optgroup->GetShadowRoot();
-  Element* label = shadow_root->getElementById("optgroup-label");
+  Element* label =
+      shadow_root->getElementById(shadow_element_names::kIdOptGroupLabel);
   EXPECT_EQ(Position(label, 0), selection.Base());
   EXPECT_EQ(Position(shadow_root, 1), selection.Extent());
+}
+
+TEST_F(SelectionModifierTest, EditableVideo) {
+  const SelectionInDOMTree selection =
+      SetSelectionTextToBody("a^<video contenteditable> </video>|");
+  GetFrame().GetSettings()->SetEditingBehaviorType(
+      mojom::EditingBehavior::kEditingUnixBehavior);
+  for (SelectionModifyDirection direction :
+       {SelectionModifyDirection::kBackward, SelectionModifyDirection::kForward,
+        SelectionModifyDirection::kLeft, SelectionModifyDirection::kRight}) {
+    for (TextGranularity granularity :
+         {TextGranularity::kCharacter, TextGranularity::kWord,
+          TextGranularity::kSentence, TextGranularity::kLine,
+          TextGranularity::kParagraph, TextGranularity::kSentenceBoundary,
+          TextGranularity::kLineBoundary, TextGranularity::kParagraphBoundary,
+          TextGranularity::kDocumentBoundary}) {
+      SelectionModifier modifier(GetFrame(), selection);
+      // We should not crash here. See http://crbug.com/1376218
+      modifier.Modify(SelectionModifyAlteration::kMove, direction, granularity);
+      EXPECT_EQ("a|<video contenteditable> </video>",
+                GetSelectionTextFromBody(modifier.Selection().AsSelection()))
+          << "Direction " << (int)direction << ", granularity "
+          << (int)granularity;
+      ;
+    }
+  }
 }
 
 }  // namespace blink

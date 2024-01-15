@@ -4,6 +4,7 @@
 
 #include <utility>
 
+#include "build/build_config.h"
 #include "mojo/public/cpp/base/time_mojom_traits.h"
 #include "mojo/public/cpp/test_support/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -16,7 +17,7 @@
 #include "ui/gfx/geometry/mojom/geometry_mojom_traits.h"
 #include "ui/latency/mojom/latency_info_mojom_traits.h"
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/events/ozone/layout/scoped_keyboard_layout_engine.h"  // nogncheck
 #include "ui/events/ozone/layout/stub/stub_keyboard_layout_engine.h"  // nogncheck
 #endif
@@ -101,13 +102,14 @@ TEST(StructTraitsTest, KeyEvent) {
       {ET_KEY_RELEASED, VKEY_MENU, EF_ALT_DOWN},
       {ET_KEY_PRESSED, VKEY_A, DomCode::US_A, EF_NONE},
       {ET_KEY_PRESSED, VKEY_B, DomCode::US_B, EF_CONTROL_DOWN | EF_ALT_DOWN},
-      {'\x12', VKEY_2, DomCode::NONE, EF_CONTROL_DOWN},
-      {'Z', VKEY_Z, DomCode::NONE, EF_CAPS_LOCK_ON},
-      {'z', VKEY_Z, DomCode::NONE, EF_NONE},
+      ui::KeyEvent::FromCharacter('\x12', VKEY_2, DomCode::NONE,
+                                  EF_CONTROL_DOWN),
+      ui::KeyEvent::FromCharacter('Z', VKEY_Z, DomCode::NONE, EF_CAPS_LOCK_ON),
+      ui::KeyEvent::FromCharacter('z', VKEY_Z, DomCode::NONE, EF_NONE),
       {ET_KEY_PRESSED, VKEY_Z, EF_NONE,
        base::TimeTicks() + base::Microseconds(101)},
-      {'Z', VKEY_Z, DomCode::NONE, EF_NONE,
-       base::TimeTicks() + base::Microseconds(102)},
+      ui::KeyEvent::FromCharacter('Z', VKEY_Z, DomCode::NONE, EF_NONE,
+                                  base::TimeTicks() + base::Microseconds(102)),
   };
 
   for (size_t i = 0; i < std::size(kTestData); i++) {
@@ -242,6 +244,11 @@ TEST(StructTraitsTest, GestureEvent) {
   GestureEventDetails pinch_update_details(ET_GESTURE_PINCH_UPDATE);
   pinch_update_details.set_device_type(ui::GestureDeviceType::DEVICE_TOUCHPAD);
   pinch_update_details.set_scale(1.23f);
+  GestureEventDetails swipe_top_left_details(ET_GESTURE_SWIPE, -1, -1);
+  swipe_top_left_details.set_device_type(
+      ui::GestureDeviceType::DEVICE_TOUCHPAD);
+  GestureEventDetails swipe_right_details(ET_GESTURE_SWIPE, 1, 0);
+  swipe_right_details.set_device_type(ui::GestureDeviceType::DEVICE_TOUCHPAD);
 
   const GestureEvent kTestData[] = {
       {10, 20, EF_NONE, base::TimeTicks() + base::Microseconds(401),
@@ -254,6 +261,10 @@ TEST(StructTraitsTest, GestureEvent) {
        pinch_end_details},
       {10, 20, EF_NONE, base::TimeTicks() + base::Microseconds(401),
        pinch_update_details},
+      {10, 20, EF_NONE, base::TimeTicks() + base::Microseconds(401),
+       swipe_top_left_details},
+      {10, 20, EF_NONE, base::TimeTicks() + base::Microseconds(401),
+       swipe_right_details},
   };
 
   for (size_t i = 0; i < std::size(kTestData); i++) {
@@ -389,7 +400,7 @@ TEST(StructTraitsTest, UnserializedTouchEventFields) {
             output->AsTouchEvent()->unique_event_id());
 }
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 
 // Test KeyboardLayoutEngine implementation that always returns 'x'.
 class FixedKeyboardLayoutEngine : public StubKeyboardLayoutEngine {

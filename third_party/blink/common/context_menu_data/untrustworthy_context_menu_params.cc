@@ -26,7 +26,6 @@ UntrustworthyContextMenuParams::UntrustworthyContextMenuParams()
       edit_flags(0),
       referrer_policy(network::mojom::ReferrerPolicy::kDefault),
       source_type(ui::MENU_SOURCE_NONE),
-      input_field_type(blink::mojom::ContextMenuDataInputFieldType::kNone),
       selection_start_offset(0) {}
 
 UntrustworthyContextMenuParams::UntrustworthyContextMenuParams(
@@ -53,6 +52,7 @@ void UntrustworthyContextMenuParams::Assign(
   unfiltered_link_url = other.unfiltered_link_url;
   src_url = other.src_url;
   has_image_contents = other.has_image_contents;
+  is_image_media_plugin_document = other.is_image_media_plugin_document;
   media_flags = other.media_flags;
   selection_text = other.selection_text;
   title_text = other.title_text;
@@ -72,12 +72,14 @@ void UntrustworthyContextMenuParams::Assign(
   for (auto& item : other.custom_items)
     custom_items.push_back(item.Clone());
   source_type = other.source_type;
-  input_field_type = other.input_field_type;
   selection_rect = other.selection_rect;
   selection_start_offset = other.selection_start_offset;
   opened_from_highlight = other.opened_from_highlight;
-  form_renderer_id = other.form_renderer_id;
+  form_control_type = other.form_control_type;
+  is_content_editable_for_autofill = other.is_content_editable_for_autofill;
   field_renderer_id = other.field_renderer_id;
+  form_renderer_id = other.form_renderer_id;
+  is_password_type_by_heuristics = other.is_password_type_by_heuristics;
 }
 
 UntrustworthyContextMenuParams::~UntrustworthyContextMenuParams() = default;

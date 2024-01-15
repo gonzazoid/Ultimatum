@@ -1,13 +1,11 @@
 include_rules = [
-  "+components/browser_ui/share/android"
+  "+components/browser_ui/share/android",
+  "+components/browser_ui/device_lock/android",
 ]
 
 specific_include_rules = {
   ".*_[a-z]*test\.cc": [
     "+mojo/core/embedder",
-  ],
-  "feed_reliability_logging_bridge.cc": [
-    "+third_party/abseil-cpp/absl/status/status.h",
   ],
   ".*FeedProcessScopeDependencyProvider\.java": [
      "+chrome/android/java/src/org/chromium/chrome/browser/base",

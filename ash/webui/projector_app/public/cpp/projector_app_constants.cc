@@ -9,25 +9,28 @@ namespace ash {
 const char kChromeUIProjectorAppHost[] = "projector";
 const char kChromeUIProjectorAnnotatorHost[] = "projector-annotator";
 
-// content::WebUIDataSource::Create() requires trailing slash.
+// content::WebUIDataSource::CreateAndAdd() requires trailing slash.
 const char kChromeUIUntrustedProjectorUrl[] = "chrome-untrusted://projector/";
 const char kChromeUIUntrustedProjectorPwaUrl[] =
     "https://screencast.apps.chrome";
 
-const char kChromeUITrustedProjectorUrl[] = "chrome://projector/";
-const char kChromeUITrustedAnnotatorUrl[] = "chrome://projector-annotator/";
 const char kChromeUIUntrustedAnnotatorUrl[] =
     "chrome-untrusted://projector-annotator/";
 
-// LINT.IfChange
-const char kChromeUITrustedProjectorSwaAppId[] =
+const char kChromeUITrustedProjectorSwaAppIdDeprecated[] =
     "nblbgfbmjfjaeonhjnbbkabkdploocij";
+
+// LINT.IfChange
+const char kChromeUIUntrustedProjectorSwaAppId[] =
+    "hohmppfoilmflgicnofelkdablfahbnl";
 // Also update the Projector app id in the file below.
 // LINT.ThenChange(
 // src/platform/tast-tests/src/chromiumos/tast/local/apps/apps.go)
 
 const base::FilePath::CharType kProjectorMetadataFileExtension[] =
     FILE_PATH_LITERAL(".projector");
+const base::FilePath::CharType kProjectorV2MetadataFileExtension[] =
+    FILE_PATH_LITERAL(".screencast");
 
 const base::FilePath::CharType kProjectorMediaFileExtension[] =
     FILE_PATH_LITERAL(".webm");

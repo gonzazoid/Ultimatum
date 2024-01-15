@@ -14,7 +14,8 @@ namespace translate {
 
 // static
 TranslateRankerFactory* TranslateRankerFactory::GetInstance() {
-  return base::Singleton<TranslateRankerFactory>::get();
+  static base::NoDestructor<TranslateRankerFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -27,9 +28,15 @@ translate::TranslateRanker* TranslateRankerFactory::GetForBrowserContext(
 TranslateRankerFactory::TranslateRankerFactory()
     : ProfileKeyedServiceFactory(
           "TranslateRanker",
-          ProfileSelections::BuildRedirectedInIncognito()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // Translate is enabled in guest profiles.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .WithSystem(ProfileSelection::kNone)
+              .WithAshInternals(ProfileSelection::kNone)
+              .Build()) {}
 
-TranslateRankerFactory::~TranslateRankerFactory() {}
+TranslateRankerFactory::~TranslateRankerFactory() = default;
 
 KeyedService* TranslateRankerFactory::BuildServiceInstanceFor(
     content::BrowserContext* browser_context) const {

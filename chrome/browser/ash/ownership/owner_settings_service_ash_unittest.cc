@@ -7,26 +7,35 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/queue.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/scoped_path_override.h"
 #include "base/test/test_future.h"
 #include "base/values.h"
+#include "chrome/browser/ash/ownership/owner_key_loader.h"
 #include "chrome/browser/ash/ownership/owner_settings_service_ash_factory.h"
+#include "chrome/browser/ash/ownership/ownership_histograms.h"
 #include "chrome/browser/ash/settings/device_settings_provider.h"
 #include "chrome/browser/ash/settings/device_settings_test_helper.h"
+#include "chrome/browser/net/fake_nss_service.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/settings/cros_settings_names.h"
-#include "components/flags_ui/pref_service_flags_storage.h"
+#include "crypto/nss_key_util.h"
+#include "crypto/signature_verifier.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace em = enterprise_management;
+using base::Bucket;
+using testing::ElementsAre;
 
 namespace ash {
 
@@ -76,8 +85,8 @@ class PrefsChecker : public ownership::OwnerSettingsService::Observer {
   void Wait() { loop_.Run(); }
 
  private:
-  OwnerSettingsServiceAsh* service_;
-  DeviceSettingsProvider* provider_;
+  raw_ptr<OwnerSettingsServiceAsh> service_;
+  raw_ptr<DeviceSettingsProvider> provider_;
   base::RunLoop loop_;
 
   using SetRequest = std::pair<std::string, base::Value>;
@@ -95,10 +104,8 @@ bool FindInListValue(const std::string& needle, const base::Value* haystack) {
 class OwnerSettingsServiceAshTest : public DeviceSettingsTestBase {
  public:
   OwnerSettingsServiceAshTest()
-      : service_(nullptr),
-        local_state_(TestingBrowserProcess::GetGlobal()),
-        user_data_dir_override_(chrome::DIR_USER_DATA),
-        management_settings_set_(false) {}
+      : local_state_(TestingBrowserProcess::GetGlobal()),
+        user_data_dir_override_(chrome::DIR_USER_DATA) {}
 
   OwnerSettingsServiceAshTest(const OwnerSettingsServiceAshTest&) = delete;
   OwnerSettingsServiceAshTest& operator=(const OwnerSettingsServiceAshTest&) =
@@ -106,6 +113,13 @@ class OwnerSettingsServiceAshTest : public DeviceSettingsTestBase {
 
   void SetUp() override {
     DeviceSettingsTestBase::SetUp();
+
+    // By default disable the migration, so the imported key doesn't get
+    // replaced.
+    feature_list_.InitWithFeatures(
+        /*enabled_features=*/{kStoreOwnerKeyInPrivateSlot},
+        /*disabled_features=*/{kMigrateOwnerKeyToPrivateSlot});
+
     provider_ = std::make_unique<DeviceSettingsProvider>(
         base::BindRepeating(&OnPrefChanged), device_settings_service_.get(),
         TestingBrowserProcess::GetGlobal()->local_state());
@@ -153,17 +167,29 @@ class OwnerSettingsServiceAshTest : public DeviceSettingsTestBase {
   }
 
  protected:
-  OwnerSettingsServiceAsh* service_;
+  base::test::ScopedFeatureList feature_list_;
+  raw_ptr<OwnerSettingsServiceAsh, DanglingUntriaged> service_ = nullptr;
   ScopedTestingLocalState local_state_;
   std::unique_ptr<DeviceSettingsProvider> provider_;
   base::ScopedPathOverride user_data_dir_override_;
-  bool management_settings_set_;
+  bool management_settings_set_ = false;
+  base::HistogramTester histogram_tester_;
 };
 
 TEST_F(OwnerSettingsServiceAshTest, SingleSetTest) {
   TestSingleSet(service_, kReleaseChannel, base::Value("dev-channel"));
   TestSingleSet(service_, kReleaseChannel, base::Value("beta-channel"));
   TestSingleSet(service_, kReleaseChannel, base::Value("stable-channel"));
+
+  EXPECT_LE(1, histogram_tester_.GetBucketCount(
+                   kOwnerKeyHistogramName,
+                   OwnerKeyUmaEvent::kStartSigningPolicySuccess));
+  EXPECT_LE(
+      1, histogram_tester_.GetBucketCount(
+             kOwnerKeyHistogramName, OwnerKeyUmaEvent::kSignedPolicySuccess));
+  EXPECT_LE(
+      1, histogram_tester_.GetBucketCount(
+             kOwnerKeyHistogramName, OwnerKeyUmaEvent::kStoredPolicySuccess));
 }
 
 TEST_F(OwnerSettingsServiceAshTest, MultipleSetTest) {
@@ -303,83 +329,60 @@ TEST_F(OwnerSettingsServiceAshTest, AccountPrefUsersBothLists) {
             device_policy_->payload().user_whitelist().user_whitelist().size());
 }
 
-TEST_F(OwnerSettingsServiceAshTest, MigrateFeatureFlagsAbsent) {
-  base::HistogramTester histogram_tester;
-  EXPECT_FALSE(device_settings().has_feature_flags());
+// Test that OwnerSettingsServiceAsh can successfully sign a policy and that the
+// signature is correct.
+TEST_F(OwnerSettingsServiceAshTest, SignPolicySuccess) {
+  auto policy = std::make_unique<enterprise_management::PolicyData>();
+  policy->set_username("username0");
 
-  // Force a settings write. No changes to feature flags or switches.
-  TestSingleSet(service_, kReleaseChannel, base::Value("dev-channel"));
+  base::test::TestFuture<
+      scoped_refptr<ownership::PublicKey>,
+      std::unique_ptr<enterprise_management::PolicyFetchResponse>>
+      result_waiter;
+  EXPECT_TRUE(service_->AssembleAndSignPolicyAsync(
+      base::SequencedTaskRunner::GetCurrentDefault().get(), std::move(policy),
+      result_waiter.GetCallback()));
 
-  EXPECT_FALSE(device_settings().has_feature_flags());
-  histogram_tester.ExpectUniqueSample(
-      "ChromeOS.DeviceSettings.FeatureFlagsMigration",
-      FeatureFlagsMigrationStatus::kNoFeatureFlags, 1);
+  scoped_refptr<ownership::PublicKey> pub_key = result_waiter.Get<0>();
+  const std::unique_ptr<enterprise_management::PolicyFetchResponse>&
+      signed_policy = result_waiter.Get<1>();
+  EXPECT_TRUE(signed_policy);
+
+  crypto::SignatureVerifier signature_verifier;
+  EXPECT_TRUE(signature_verifier.VerifyInit(
+      crypto::SignatureVerifier::SignatureAlgorithm::RSA_PKCS1_SHA1,
+      base::as_bytes(base::make_span(signed_policy->policy_data_signature())),
+      pub_key->data()));
 }
 
-TEST_F(OwnerSettingsServiceAshTest, MigrateFeatureFlagsNoSwitches) {
-  base::HistogramTester histogram_tester;
-  device_policy_->payload().mutable_feature_flags();
-  EXPECT_TRUE(device_policy_->payload().has_feature_flags());
+// Test that OwnerSettingsServiceAsh correctly fails when it cannot sign
+// policies.
+TEST_F(OwnerSettingsServiceAshTest, SignPolicyFailure) {
+  // Generate a new key and set it. 256 bits is not enough to perform SHA-1, so
+  // it will cause a failure.
+  crypto::ScopedSECKEYPublicKey public_key_nss;
+  crypto::ScopedSECKEYPrivateKey private_key_nss;
+  crypto::GenerateRSAKeyPairNSS(PK11_GetInternalSlot(), 256,
+                                /*permanent=*/false, &public_key_nss,
+                                &private_key_nss);
+  scoped_refptr<ownership::PrivateKey> private_key =
+      base::MakeRefCounted<ownership::PrivateKey>(std::move(private_key_nss));
+  service_->SetPrivateKeyForTesting(private_key);
 
-  // Force a settings write. No changes to feature flags.
-  TestSingleSet(service_, kReleaseChannel, base::Value("dev-channel"));
+  auto policy = std::make_unique<enterprise_management::PolicyData>();
+  policy->set_username("username0");
 
-  EXPECT_EQ(0, device_settings().feature_flags().feature_flags_size());
-  histogram_tester.ExpectUniqueSample(
-      "ChromeOS.DeviceSettings.FeatureFlagsMigration",
-      FeatureFlagsMigrationStatus::kNoFeatureFlags, 1);
-}
+  base::test::TestFuture<
+      scoped_refptr<ownership::PublicKey>,
+      std::unique_ptr<enterprise_management::PolicyFetchResponse>>
+      result_waiter;
+  EXPECT_TRUE(service_->AssembleAndSignPolicyAsync(
+      base::SequencedTaskRunner::GetCurrentDefault().get(), std::move(policy),
+      result_waiter.GetCallback()));
 
-TEST_F(OwnerSettingsServiceAshTest, MigrateFeatureFlagsSuccess) {
-  base::HistogramTester histogram_tester;
-  device_policy_->payload().mutable_feature_flags()->add_switches("--foobar");
-  device_policy_->Build();
-  session_manager_client_.set_device_policy(device_policy_->GetBlob());
-  ReloadDeviceSettings();
-
-  ASSERT_EQ(1, device_settings().feature_flags().switches_size());
-  EXPECT_EQ("--foobar", device_settings().feature_flags().switches(0));
-
-  flags_ui::PrefServiceFlagsStorage flags_storage(profile_->GetPrefs());
-  flags_storage.SetFlags({"feature-name"});
-
-  // Force a settings write. The switches field should be dropped and the
-  // feature_flags field be re-initialized from OwnerFlagsStorage.
-  TestSingleSet(service_, kReleaseChannel, base::Value("dev-channel"));
-
-  EXPECT_EQ(0, device_settings().feature_flags().switches_size());
-  ASSERT_EQ(1, device_settings().feature_flags().feature_flags_size());
-  EXPECT_EQ("feature-name", device_settings().feature_flags().feature_flags(0));
-  histogram_tester.ExpectUniqueSample(
-      "ChromeOS.DeviceSettings.FeatureFlagsMigration",
-      FeatureFlagsMigrationStatus::kMigrationPerformed, 1);
-}
-
-TEST_F(OwnerSettingsServiceAshTest, MigrateFeatureFlagsAlreadyMigrated) {
-  base::HistogramTester histogram_tester;
-  device_policy_->payload().mutable_feature_flags()->add_switches("--foobar");
-  device_policy_->payload().mutable_feature_flags()->add_feature_flags(
-      "feature-name");
-  device_policy_->Build();
-  session_manager_client_.set_device_policy(device_policy_->GetBlob());
-  ReloadDeviceSettings();
-
-  ASSERT_EQ(1, device_settings().feature_flags().switches_size());
-  EXPECT_EQ("--foobar", device_settings().feature_flags().switches(0));
-
-  flags_ui::PrefServiceFlagsStorage flags_storage(profile_->GetPrefs());
-  flags_storage.SetFlags({"feature-name-2"});
-
-  // Force a settings write. No migration should take place because the
-  // feature flags field is already populated.
-  TestSingleSet(service_, kReleaseChannel, base::Value("dev-channel"));
-
-  EXPECT_EQ(0, device_settings().feature_flags().switches_size());
-  ASSERT_EQ(1, device_settings().feature_flags().feature_flags_size());
-  EXPECT_EQ("feature-name", device_settings().feature_flags().feature_flags(0));
-  histogram_tester.ExpectUniqueSample(
-      "ChromeOS.DeviceSettings.FeatureFlagsMigration",
-      FeatureFlagsMigrationStatus::kAlreadyMigrated, 1);
+  const std::unique_ptr<enterprise_management::PolicyFetchResponse>&
+      signed_policy = result_waiter.Get<1>();
+  EXPECT_FALSE(signed_policy);
 }
 
 class OwnerSettingsServiceAshNoOwnerTest : public OwnerSettingsServiceAshTest {
@@ -395,6 +398,13 @@ class OwnerSettingsServiceAshNoOwnerTest : public OwnerSettingsServiceAshTest {
 
   void SetUp() override {
     DeviceSettingsTestBase::SetUp();
+
+    // By default disable the migration, so the imported key doesn't get
+    // replaced.
+    feature_list_.InitWithFeatures(
+        /*enabled_features=*/{kStoreOwnerKeyInPrivateSlot},
+        /*disabled_features=*/{kMigrateOwnerKeyToPrivateSlot});
+
     provider_ = std::make_unique<DeviceSettingsProvider>(
         base::BindRepeating(&OnPrefChanged), device_settings_service_.get(),
         TestingBrowserProcess::GetGlobal()->local_state());
@@ -404,6 +414,9 @@ class OwnerSettingsServiceAshNoOwnerTest : public OwnerSettingsServiceAshTest {
     ASSERT_TRUE(service_);
     ASSERT_FALSE(service_->IsOwner());
   }
+
+ protected:
+  base::test::ScopedFeatureList feature_list_;
 };
 
 // Test that a non-owner cannot set owner settings.
@@ -475,6 +488,45 @@ TEST_F(OwnerSettingsServiceAshNoOwnerTest, LoadKeysBothKeys) {
 
   EXPECT_TRUE(service_->IsReady());
   EXPECT_EQ(service_->IsOwner(), is_owner.Get());
+}
+
+// Test that the old owner key gets cleaned up after the new one is installed by
+// session manager.
+TEST_F(OwnerSettingsServiceAshNoOwnerTest, CleanUpOldOwnerKey) {
+  base::HistogramTester histogram_tester;
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitWithFeatures(
+      /*enabled_features=*/{kStoreOwnerKeyInPrivateSlot,
+                            kMigrateOwnerKeyToPrivateSlot},
+      /*disabled_features=*/{});
+
+  FakeNssService* nss_service = FakeNssService::InitializeForBrowserContext(
+      profile_.get(), /*enable_system_slot=*/false);
+  owner_key_util_->ImportPrivateKeyInSlotAndSetPublicKey(
+      device_policy_->GetSigningKey(), nss_service->GetPublicSlot());
+
+  EXPECT_FALSE(service_->IsReady());
+  service_->OnTPMTokenReady();  // Trigger key load.
+
+  base::test::TestFuture<bool> is_owner;
+  service_->IsOwnerAsync(is_owner.GetCallback());
+  EXPECT_TRUE(is_owner.Get());
+
+  // Check that the old key is not deleted too early.
+  task_environment_.RunUntilIdle();
+  EXPECT_THAT(
+      histogram_tester_.GetAllSamples(kOwnerKeyHistogramName),
+      BucketsInclude(Bucket(OwnerKeyUmaEvent::kOldOwnerKeyCleanUpStarted, 0)));
+
+  service_->OwnerKeySet(/*success=*/true);
+
+  task_environment_.RunUntilIdle();
+
+  EXPECT_THAT(histogram_tester_.GetAllSamples(kOwnerKeyHistogramName),
+              BucketsInclude(
+                  Bucket(OwnerKeyUmaEvent::kMigrationToPrivateSlotStarted, 1),
+                  Bucket(OwnerKeyUmaEvent::kOwnerKeySetSuccess, 1),
+                  Bucket(OwnerKeyUmaEvent::kOldOwnerKeyCleanUpStarted, 1)));
 }
 
 }  // namespace ash

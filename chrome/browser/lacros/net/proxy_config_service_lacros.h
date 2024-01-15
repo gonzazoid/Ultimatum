@@ -14,7 +14,6 @@
 #include "net/proxy_resolution/proxy_config_with_annotation.h"
 
 class PrefRegistrySimple;
-class PrefService;
 class Profile;
 
 namespace lacros {
@@ -51,13 +50,14 @@ class ProxyConfigServiceLacros
  private:
   // crosapi::mojom::NetworkSettingsObserver impl
   void OnProxyChanged(crosapi::mojom::ProxyConfigPtr proxy_config) override;
+  void OnAlwaysOnVpnPreConnectUrlAllowlistEnforcedChanged(
+      bool enforced) override;
 
   void OnUseAshProxyPrefChanged();
 
   void NotifyObservers();
-
-  // Owned by the Profile instance.
-  raw_ptr<PrefService> profile_prefs_ = nullptr;
+  // The profile associated with this ProxyConfigServiceLacros instance.
+  raw_ptr<Profile> profile_;
 
   PrefChangeRegistrar profile_pref_change_registrar_;
 
@@ -69,6 +69,9 @@ class ProxyConfigServiceLacros
   // enforced in the browser only if the pref kUseAshProxy=true and the
   // kProxy pref, which has precedence, is unset or set to mode=system.
   absl::optional<net::ProxyConfigWithAnnotation> cached_config_;
+  // Indicates if the proxy config comes from an extension active in the main
+  // Lacros profile.
+  bool proxy_controlled_by_extension_ = false;
 
   // Forwards proxy configs set via extensions in the Lacros primary profile
   // to Ash-Chrome.

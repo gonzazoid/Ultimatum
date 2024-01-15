@@ -37,6 +37,7 @@
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/bookmarks/browser/bookmark_model.h"
+#include "components/feature_engagement/public/feature_constants.h"
 #include "components/google/core/common/google_util.h"
 #include "components/navigation_metrics/navigation_metrics.h"
 #include "components/profile_metrics/browser_profile_type.h"
@@ -47,8 +48,8 @@
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/sync/base/user_selectable_type.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_user_settings.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_user_settings.h"
 #include "components/vector_icons/vector_icons.h"
 #include "content/public/browser/navigation_details.h"
 #include "content/public/browser/navigation_entry.h"
@@ -60,6 +61,7 @@
 #include "extensions/common/constants.h"
 #include "google_apis/gaia/gaia_auth_util.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/vector_icon_types.h"
 #include "url/gurl.h"
@@ -104,19 +106,12 @@ void RecordNewTabLoadTime(content::WebContents* contents) {
   if (core_tab_helper->new_tab_start_time().is_null())
     return;
 
-  base::TimeDelta duration =
-      base::TimeTicks::Now() - core_tab_helper->new_tab_start_time();
   if (IsCacheableNTP(contents)) {
     if (google_util::IsGoogleDomainUrl(
             contents->GetController().GetLastCommittedEntry()->GetURL(),
             google_util::ALLOW_SUBDOMAIN,
             google_util::DISALLOW_NON_STANDARD_PORTS)) {
-      UMA_HISTOGRAM_TIMES("Tab.NewTabOnload.Google", duration);
-    } else {
-      UMA_HISTOGRAM_TIMES("Tab.NewTabOnload.Other", duration);
     }
-  } else {
-    UMA_HISTOGRAM_TIMES("Tab.NewTabOnload.Local", duration);
   }
   core_tab_helper->set_new_tab_start_time(base::TimeTicks());
 }
@@ -189,6 +184,8 @@ void SearchTabHelper::OnTabActivated() {
 
   if (search::IsInstantNTP(web_contents()) && instant_service_)
     instant_service_->OnNewTabPageOpened();
+
+  CloseNTPCustomizeChromeFeaturePromo();
 }
 
 void SearchTabHelper::OnTabDeactivated() {
@@ -218,6 +215,8 @@ void SearchTabHelper::DidStartNavigation(
           entry, l10n_util::GetStringUTF16(IDS_NEW_TAB_TITLE));
     }
   }
+
+  CloseNTPCustomizeChromeFeaturePromo();
 }
 
 void SearchTabHelper::TitleWasSet(content::NavigationEntry* entry) {
@@ -319,6 +318,24 @@ Profile* SearchTabHelper::profile() const {
 
 bool SearchTabHelper::IsInputInProgress() const {
   return search::IsOmniboxInputInProgress(web_contents());
+}
+
+void SearchTabHelper::CloseNTPCustomizeChromeFeaturePromo() {
+  const base::Feature& customize_chrome_feature =
+      features::IsChromeRefresh2023() && features::IsChromeWebuiRefresh2023()
+          ? feature_engagement::kIPHDesktopCustomizeChromeRefreshFeature
+          : feature_engagement::kIPHDesktopCustomizeChromeFeature;
+  if (web_contents()->GetController().GetVisibleEntry()->GetURL() ==
+      GURL(chrome::kChromeUINewTabPageURL)) {
+    return;
+  }
+  Browser* const browser = chrome::FindBrowserWithTab(web_contents());
+  if (browser && browser->window() &&
+      browser->tab_strip_model()->GetActiveWebContents() == web_contents()) {
+    browser->window()->CloseFeaturePromo(
+        customize_chrome_feature,
+        user_education::EndFeaturePromoReason::kAbortPromo);
+  }
 }
 
 WEB_CONTENTS_USER_DATA_KEY_IMPL(SearchTabHelper);

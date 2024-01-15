@@ -8,10 +8,10 @@
 
 #include "base/android/callback_android.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/android/chrome_jni_headers/ChildAccountService_jni.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/supervised_user/child_accounts/child_account_service.h"
+#include "components/supervised_user/core/browser/child_account_service.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/android/window_android.h"
 
@@ -28,6 +28,11 @@ void ReauthenticateChildAccount(
     const base::RepeatingCallback<void()>& on_failure_callback) {
   ui::WindowAndroid* window_android =
       web_contents->GetNativeView()->GetWindowAndroid();
+  if (!window_android) {
+    // The native view may not be available on shutdown (crbug.com/1468955).
+    on_failure_callback.Run();
+    return;
+  }
 
   // Make a copy of the callback which can be passed as a pointer through
   // to Java.

@@ -70,6 +70,7 @@ RUNNING TEST: extension_testAPI
         themeName : "themeNameForTest"
     }
     recorder : {
+        createView : <function>
         registerRecorderExtensionPlugin : <function>
         unregisterRecorderExtensionPlugin : <function>
     }
@@ -88,9 +89,6 @@ RUNNING TEST: extension_testAPI
             addListener : <function>
             removeListener : <function>
         }
-    }
-    timeline : {
-        addTraceProvider : <function>
     }
 }
 All tests done.

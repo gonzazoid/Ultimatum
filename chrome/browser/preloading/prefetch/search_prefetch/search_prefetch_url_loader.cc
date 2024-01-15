@@ -8,11 +8,8 @@
 
 #include "base/metrics/histogram_macros.h"
 
-SearchPrefetchURLLoader::RequestHandler
-SearchPrefetchURLLoader::ServingResponseHandler(
-    std::unique_ptr<SearchPrefetchURLLoader> loader) {
+void SearchPrefetchURLLoader::RecordInterceptionTime() {
   interception_time_ = base::TimeTicks::Now();
-  return ServingResponseHandlerImpl(std::move(loader));
 }
 
 void SearchPrefetchURLLoader::OnForwardingComplete() {

@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "components/captive_portal/content/captive_portal_service.h"
 #include "components/captive_portal/content/captive_portal_tab_reloader.h"
@@ -86,6 +86,7 @@ class CaptivePortalTabHelperTest : public content::RenderViewHostTestHarness {
   }
 
   void TearDown() override {
+    mock_reloader_ = nullptr;
     tab_helper_.reset();
     captive_portal_service_.reset();
     content::RenderViewHostTestHarness::TearDown();
@@ -279,7 +280,6 @@ TEST_F(CaptivePortalTabHelperTest, UnexpectedProvisionalLoad) {
   std::unique_ptr<NavigationSimulator> same_site_navigation =
       NavigationSimulator::CreateRendererInitiated(same_site_url, main_rfh());
   same_site_navigation->Start();
-  same_site_navigation->ReadyToCommit();
 
   // It's unexpectedly interrupted by a cross-process navigation, which starts
   // navigating before the old navigation cancels.

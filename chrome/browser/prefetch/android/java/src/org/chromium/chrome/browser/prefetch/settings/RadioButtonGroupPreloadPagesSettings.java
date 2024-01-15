@@ -6,14 +6,11 @@ package org.chromium.chrome.browser.prefetch.settings;
 
 import android.content.Context;
 import android.util.AttributeSet;
-import android.view.View;
 import android.widget.RadioGroup;
 
-import androidx.annotation.VisibleForTesting;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceViewHolder;
 
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.components.browser_ui.settings.ManagedPreferenceDelegate;
 import org.chromium.components.browser_ui.settings.ManagedPreferencesUtils;
 import org.chromium.components.browser_ui.widget.RadioButtonWithDescription;
@@ -26,10 +23,8 @@ import org.chromium.components.browser_ui.widget.RadioButtonWithDescriptionLayou
  */
 public class RadioButtonGroupPreloadPagesSettings extends Preference
         implements RadioGroup.OnCheckedChangeListener,
-                   RadioButtonWithDescriptionAndAuxButton.OnAuxButtonClickedListener {
-    /**
-     * Interface that will subscribe to Preload Pages state details requested events.
-     */
+                RadioButtonWithDescriptionAndAuxButton.OnAuxButtonClickedListener {
+    /** Interface that will subscribe to Preload Pages state details requested events. */
     public interface OnPreloadPagesStateDetailsRequested {
         /**
          * Notify that details of a Preload Pages state are requested.
@@ -37,6 +32,7 @@ public class RadioButtonGroupPreloadPagesSettings extends Preference
          */
         void onPreloadPagesStateDetailsRequested(@PreloadPagesState int preloadPagesState);
     }
+
     private RadioButtonWithDescriptionAndAuxButton mExtendedPreloading;
     private RadioButtonWithDescriptionAndAuxButton mStandardPreloading;
     private RadioButtonWithDescription mNoPreloading;
@@ -74,15 +70,13 @@ public class RadioButtonGroupPreloadPagesSettings extends Preference
     @Override
     public void onBindViewHolder(PreferenceViewHolder holder) {
         super.onBindViewHolder(holder);
-        mExtendedPreloading = (RadioButtonWithDescriptionAndAuxButton) holder.findViewById(
-                R.id.extended_preloading);
-        if (ChromeFeatureList.isEnabled(ChromeFeatureList.SHOW_EXTENDED_PRELOADING_SETTING)) {
-            mExtendedPreloading.setAuxButtonClickedListener(this);
-        } else {
-            mExtendedPreloading.setVisibility(View.INVISIBLE);
-        }
-        mStandardPreloading = (RadioButtonWithDescriptionAndAuxButton) holder.findViewById(
-                R.id.standard_preloading);
+        mExtendedPreloading =
+                (RadioButtonWithDescriptionAndAuxButton)
+                        holder.findViewById(R.id.extended_preloading);
+        mExtendedPreloading.setAuxButtonClickedListener(this);
+        mStandardPreloading =
+                (RadioButtonWithDescriptionAndAuxButton)
+                        holder.findViewById(R.id.standard_preloading);
         mStandardPreloading.setAuxButtonClickedListener(this);
         mNoPreloading = (RadioButtonWithDescription) holder.findViewById(R.id.no_preloading);
         RadioButtonWithDescriptionLayout groupLayout =
@@ -93,7 +87,7 @@ public class RadioButtonGroupPreloadPagesSettings extends Preference
 
         // If Preload Pages is managed, disable the radio button group, but keep the aux buttons
         // enabled to disclose information.
-        if (mManagedPrefDelegate.isPreferenceClickDisabledByPolicy(this)) {
+        if (mManagedPrefDelegate.isPreferenceClickDisabled(this)) {
             groupLayout.setEnabled(false);
             mExtendedPreloading.setAuxButtonEnabled(true);
             mStandardPreloading.setAuxButtonEnabled(true);
@@ -128,7 +122,13 @@ public class RadioButtonGroupPreloadPagesSettings extends Preference
      */
     public void setManagedPreferenceDelegate(ManagedPreferenceDelegate delegate) {
         mManagedPrefDelegate = delegate;
-        ManagedPreferencesUtils.initPreference(mManagedPrefDelegate, this);
+        // The value of `allowManagedIcon` doesn't matter, because the corresponding layout doesn't
+        // define an icon view.
+        ManagedPreferencesUtils.initPreference(
+                mManagedPrefDelegate,
+                this,
+                /* allowManagedIcon= */ true,
+                /* hasCustomLayout= */ true);
     }
 
     /**
@@ -137,34 +137,24 @@ public class RadioButtonGroupPreloadPagesSettings extends Preference
      *         buttons of other states to unchecked.
      */
     public void setCheckedState(@PreloadPagesState int checkedState) {
-        if (!ChromeFeatureList.isEnabled(ChromeFeatureList.SHOW_EXTENDED_PRELOADING_SETTING)
-                && checkedState == PreloadPagesState.EXTENDED_PRELOADING) {
-            // If the extended preloading UI setting is disabled, show "Standard
-            // Preloading" as a substitute.
-            checkedState = PreloadPagesState.STANDARD_PRELOADING;
-        }
         mPreloadPagesState = checkedState;
         mExtendedPreloading.setChecked(checkedState == PreloadPagesState.EXTENDED_PRELOADING);
         mStandardPreloading.setChecked(checkedState == PreloadPagesState.STANDARD_PRELOADING);
         mNoPreloading.setChecked(checkedState == PreloadPagesState.NO_PRELOADING);
     }
 
-    @VisibleForTesting
     public @PreloadPagesState int getPreloadPagesStateForTesting() {
         return mPreloadPagesState;
     }
 
-    @VisibleForTesting
     public RadioButtonWithDescriptionAndAuxButton getExtendedPreloadingButtonForTesting() {
         return mExtendedPreloading;
     }
 
-    @VisibleForTesting
     public RadioButtonWithDescriptionAndAuxButton getStandardPreloadingButtonForTesting() {
         return mStandardPreloading;
     }
 
-    @VisibleForTesting
     public RadioButtonWithDescription getNoPreloadingButtonForTesting() {
         return mNoPreloading;
     }

@@ -4,11 +4,11 @@
 
 #include "ash/system/tray/system_tray_notifier.h"
 
-#include "ash/public/cpp/system_tray_observer.h"
 #include "ash/system/ime/ime_observer.h"
 #include "ash/system/network/network_observer.h"
-#include "ash/system/privacy/screen_capture_observer.h"
-#include "ash/system/privacy/screen_share_observer.h"
+#include "ash/system/privacy/screen_security_observer.h"
+#include "ash/system/tray/system_tray_observer.h"
+#include "ash/system/tray/tray_bubble_view.h"
 #include "ash/system/virtual_keyboard/virtual_keyboard_observer.h"
 
 namespace ash {
@@ -48,49 +48,43 @@ void SystemTrayNotifier::NotifyRequestToggleWifi() {
     observer.RequestToggleWifi();
 }
 
-void SystemTrayNotifier::AddScreenCaptureObserver(
-    ScreenCaptureObserver* observer) {
-  screen_capture_observers_.AddObserver(observer);
+void SystemTrayNotifier::AddScreenSecurityObserver(
+    ScreenSecurityObserver* observer) {
+  screen_security_observers_.AddObserver(observer);
 }
 
-void SystemTrayNotifier::RemoveScreenCaptureObserver(
-    ScreenCaptureObserver* observer) {
-  screen_capture_observers_.RemoveObserver(observer);
+void SystemTrayNotifier::RemoveScreenSecurityObserver(
+    ScreenSecurityObserver* observer) {
+  screen_security_observers_.RemoveObserver(observer);
 }
 
-void SystemTrayNotifier::NotifyScreenCaptureStart(
+void SystemTrayNotifier::NotifyScreenAccessStart(
     base::RepeatingClosure stop_callback,
     base::RepeatingClosure source_callback,
-    const std::u16string& sharing_app_name) {
-  for (auto& observer : screen_capture_observers_)
-    observer.OnScreenCaptureStart(stop_callback, source_callback,
-                                  sharing_app_name);
+    const std::u16string& access_app_name) {
+  for (auto& observer : screen_security_observers_) {
+    observer.OnScreenAccessStart(stop_callback, source_callback,
+                                 access_app_name);
+  }
 }
 
-void SystemTrayNotifier::NotifyScreenCaptureStop() {
-  for (auto& observer : screen_capture_observers_)
-    observer.OnScreenCaptureStop();
+void SystemTrayNotifier::NotifyScreenAccessStop() {
+  for (auto& observer : screen_security_observers_) {
+    observer.OnScreenAccessStop();
+  }
 }
 
-void SystemTrayNotifier::AddScreenShareObserver(ScreenShareObserver* observer) {
-  screen_share_observers_.AddObserver(observer);
+void SystemTrayNotifier::NotifyRemotingScreenShareStart(
+    base::RepeatingClosure stop_callback) {
+  for (auto& observer : screen_security_observers_) {
+    observer.OnRemotingScreenShareStart(stop_callback);
+  }
 }
 
-void SystemTrayNotifier::RemoveScreenShareObserver(
-    ScreenShareObserver* observer) {
-  screen_share_observers_.RemoveObserver(observer);
-}
-
-void SystemTrayNotifier::NotifyScreenShareStart(
-    base::RepeatingClosure stop_callback,
-    const std::u16string& helper_name) {
-  for (auto& observer : screen_share_observers_)
-    observer.OnScreenShareStart(stop_callback, helper_name);
-}
-
-void SystemTrayNotifier::NotifyScreenShareStop() {
-  for (auto& observer : screen_share_observers_)
-    observer.OnScreenShareStop();
+void SystemTrayNotifier::NotifyRemotingScreenShareStop() {
+  for (auto& observer : screen_security_observers_) {
+    observer.OnRemotingScreenShareStop();
+  }
 }
 
 void SystemTrayNotifier::AddSystemTrayObserver(SystemTrayObserver* observer) {
@@ -110,6 +104,27 @@ void SystemTrayNotifier::NotifyFocusOut(bool reverse) {
 void SystemTrayNotifier::NotifySystemTrayBubbleShown() {
   for (auto& observer : system_tray_observers_)
     observer.OnSystemTrayBubbleShown();
+}
+
+void SystemTrayNotifier::NotifyStatusAreaAnchoredBubbleVisibilityChanged(
+    TrayBubbleView* tray_bubble,
+    bool visible) {
+  for (auto& observer : system_tray_observers_) {
+    observer.OnStatusAreaAnchoredBubbleVisibilityChanged(tray_bubble, visible);
+  }
+}
+
+void SystemTrayNotifier::NotifyTrayBubbleBoundsChanged(
+    TrayBubbleView* tray_bubble) {
+  for (auto& observer : system_tray_observers_) {
+    observer.OnTrayBubbleBoundsChanged(tray_bubble);
+  }
+}
+
+void SystemTrayNotifier::NotifyImeMenuTrayBubbleShown() {
+  for (auto& observer : system_tray_observers_) {
+    observer.OnImeMenuTrayBubbleShown();
+  }
 }
 
 void SystemTrayNotifier::AddVirtualKeyboardObserver(

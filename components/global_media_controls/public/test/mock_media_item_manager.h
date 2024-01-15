@@ -18,12 +18,15 @@ class MockMediaItemManager : public MediaItemManager {
   MockMediaItemManager& operator=(const MockMediaItemManager&) = delete;
   ~MockMediaItemManager() override;
 
+  base::WeakPtr<MediaItemManager> GetWeakPtr() override;
+
   MOCK_METHOD(void, AddObserver, (MediaItemManagerObserver*));
   MOCK_METHOD(void, RemoveObserver, (MediaItemManagerObserver*));
   MOCK_METHOD(void, AddItemProducer, (MediaItemProducer*));
   MOCK_METHOD(void, RemoveItemProducer, (MediaItemProducer*));
   MOCK_METHOD(void, ShowItem, (const std::string&));
   MOCK_METHOD(void, HideItem, (const std::string&));
+  MOCK_METHOD(void, RefreshItem, (const std::string&));
   MOCK_METHOD(void, OnItemsChanged, ());
   MOCK_METHOD(void, SetDialogDelegate, (MediaDialogDelegate*));
   MOCK_METHOD(void,
@@ -34,6 +37,10 @@ class MockMediaItemManager : public MediaItemManager {
   MOCK_METHOD(bool, HasActiveItems, ());
   MOCK_METHOD(bool, HasFrozenItems, ());
   MOCK_METHOD(bool, HasOpenDialog, ());
+  MOCK_METHOD(std::list<std::string>, GetActiveItemIds, ());
+
+ private:
+  base::WeakPtrFactory<MediaItemManager> weak_ptr_factory_{this};
 };
 
 }  // namespace test

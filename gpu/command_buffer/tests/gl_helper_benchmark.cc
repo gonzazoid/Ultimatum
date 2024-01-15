@@ -26,7 +26,6 @@
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "components/viz/test/test_gpu_service_holder.h"
 #include "gpu/command_buffer/client/gl_helper.h"
@@ -60,21 +59,13 @@ class GLHelperBenchmark : public testing::Test {
  protected:
   void SetUp() override {
     ContextCreationAttribs attributes;
-    attributes.alpha_size = 8;
-    attributes.depth_size = 24;
-    attributes.red_size = 8;
-    attributes.green_size = 8;
-    attributes.blue_size = 8;
-    attributes.stencil_size = 8;
-    attributes.samples = 4;
-    attributes.sample_buffers = 1;
     attributes.bind_generates_resource = false;
     attributes.gpu_preference = gl::GpuPreference::kHighPerformance;
 
     context_ = std::make_unique<GLInProcessContext>();
     auto result = context_->Initialize(
         viz::TestGpuServiceHolder::GetInstance()->task_executor(), attributes,
-        SharedMemoryLimits(), /*image_factory=*/nullptr);
+        SharedMemoryLimits());
     DCHECK_EQ(result, ContextResult::kSuccess);
     gl_ = context_->GetImplementation();
     ContextSupport* support = context_->GetImplementation();
@@ -86,6 +77,7 @@ class GLHelperBenchmark : public testing::Test {
   void TearDown() override {
     helper_scaling_.reset(nullptr);
     helper_.reset(nullptr);
+    gl_ = nullptr;
     context_.reset(nullptr);
   }
 
@@ -117,7 +109,7 @@ class GLHelperBenchmark : public testing::Test {
 
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<GLInProcessContext> context_;
-  raw_ptr<gles2::GLES2Interface> gl_;
+  raw_ptr<gles2::GLES2Interface> gl_;  // This is owned by |context_|.
   std::unique_ptr<GLHelper> helper_;
   std::unique_ptr<GLHelperScaling> helper_scaling_;
   base::circular_deque<GLHelperScaling::ScaleOp> x_ops_, y_ops_;

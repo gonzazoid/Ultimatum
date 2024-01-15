@@ -92,7 +92,7 @@ void AppendValueAndShortTokens(
   for (const base::StringPiece16& token : tokens) {
     if (token.size() < kMinimumWordLength)
       short_tokens.emplace_back(token);
-    field_data_value->append(token.data(), token.size());
+    field_data_value->append(token);
   }
   // It is better to insert elements to a |base::flat_set| in one operation.
   field_data_short_tokens->insert(short_tokens.begin(), short_tokens.end());
@@ -222,8 +222,8 @@ void FindWordsFromCategoryInForm(
   for (const UsernameFieldData& field_data : possible_usernames_data) {
     if (ContainsWordFromCategory(field_data, category)) {
       if (fields_found == 0) {
-        chosen_field_renderer_id = FieldRendererId(
-            field_data.input_element.UniqueRendererFormControlId());
+        chosen_field_renderer_id =
+            form_util::GetFieldRendererId(field_data.input_element);
       }
       fields_found++;
     }
@@ -235,7 +235,7 @@ void FindWordsFromCategoryInForm(
 }
 
 // Find username elements if there is no cached result for the given form and
-// add them to |username_predictions| in the order of decreasing relibility.
+// add them to |username_predictions| in the order of decreasing reliability.
 void FindUsernameFieldInternal(
     const std::vector<blink::WebFormControlElement>& all_control_elements,
     const FormData& form_data,

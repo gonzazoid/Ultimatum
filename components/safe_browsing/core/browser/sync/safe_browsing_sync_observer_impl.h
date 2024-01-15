@@ -7,8 +7,8 @@
 
 #include "base/scoped_observation.h"
 #include "components/safe_browsing/core/browser/safe_browsing_sync_observer.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_service_observer.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_service_observer.h"
 
 namespace syncer {
 class SyncService;
@@ -25,7 +25,7 @@ class SafeBrowsingSyncObserverImpl : public SafeBrowsingSyncObserver,
   ~SafeBrowsingSyncObserverImpl() override;
 
   // SafeBrowsingSyncObserver:
-  void ObserveSyncStateChanged(Callback callback) override;
+  void ObserveHistorySyncStateChanged(Callback callback) override;
 
   // syncer::SyncServiceObserver:
   void OnStateChanged(syncer::SyncService* sync) override;
@@ -33,7 +33,7 @@ class SafeBrowsingSyncObserverImpl : public SafeBrowsingSyncObserver,
 
  private:
   Callback callback_;
-  bool is_sync_feature_enabled_ = false;
+  bool is_history_sync_enabled_ = false;
 
   base::ScopedObservation<syncer::SyncService, syncer::SyncServiceObserver>
       sync_service_observer_{this};

@@ -79,7 +79,6 @@ class InlineLoginHandlerImpl : public InlineLoginHandler {
                               const std::string& gaia_id,
                               const std::string& password,
                               const std::string& auth_code,
-                              bool choose_what_to_sync,
                               bool is_force_sign_in_with_usermanager);
     FinishCompleteLoginParams(const FinishCompleteLoginParams& other);
     ~FinishCompleteLoginParams();
@@ -106,8 +105,6 @@ class InlineLoginHandlerImpl : public InlineLoginHandler {
     // for the account used to sign in.  Used only with password separated
     // signin flow.
     std::string auth_code;
-    // True if the user wants to configure sync before signing in.
-    bool choose_what_to_sync;
     // True if user signing in with UserManager when force-sign-in policy is
     // enabled.
     bool is_force_sign_in_with_usermanager;
@@ -157,8 +154,7 @@ class InlineSigninHelper : public GaiaAuthConsumer {
   void OnClientOAuthFailure(const GoogleServiceAuthError& error)
       override;
 
-  void OnClientOAuthSuccessAndBrowserOpened(const ClientOAuthResult& result,
-                                            Profile* profile);
+  void OnClientOAuthSuccessAndBrowserOpened(const ClientOAuthResult& result);
 
   // Callback invoked once the user has responded to the signin confirmation UI.
   // If confirmed is false, the signin is aborted.

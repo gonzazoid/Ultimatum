@@ -3,17 +3,12 @@
 # found in the LICENSE file.
 
 import optparse
-import os
-import sys
 import unittest
 
-from blinkpy.common import path_finder
 from blinkpy.common.host_mock import MockHost
 from blinkpy.common.system.filesystem_mock import MockFileSystem
 from blinkpy.web_tests.controllers import web_test_finder
 from blinkpy.web_tests.models import test_expectations
-
-import mock
 
 
 class WebTestFinderTests(unittest.TestCase):
@@ -133,9 +128,6 @@ class WebTestFinderTests(unittest.TestCase):
         expectations = test_expectations.TestExpectations(port)
         tests = finder.skip_tests([], all_tests, expectations)
         self.assertEqual(tests, set())
-        for test in all_tests:
-            self.assertTrue(
-                expectations.get_expectations(test).is_default_pass)
 
         # MSAN/ASAN, with no paths specified explicitly, so should skip both
         # idlharness tests.
@@ -143,12 +135,6 @@ class WebTestFinderTests(unittest.TestCase):
         finder._options.enable_sanitizer = True
         tests = finder.skip_tests([], all_tests, expectations)
         self.assertEqual(tests, set([idlharness_test_1, idlharness_test_2]))
-        self.assertTrue(
-            expectations.get_expectations(non_idlharness_test).is_default_pass)
-        self.assertEquals(
-            expectations.get_expectations(idlharness_test_1).results, {'SKIP'})
-        self.assertEquals(
-            expectations.get_expectations(idlharness_test_2).results, {'SKIP'})
 
         # Disable expectations entirely; we should still skip the idlharness
         # tests but shouldn't touch the expectations parameter.
@@ -161,15 +147,6 @@ class WebTestFinderTests(unittest.TestCase):
         expectations = test_expectations.TestExpectations(port)
         tests = finder.skip_tests([idlharness_test_1], all_tests, expectations)
         self.assertEqual(tests, set([idlharness_test_2]))
-        # Although we will run the test because it was specified explicitly, it
-        # is still *expected* to Skip. This is consistent with how entries in
-        # TestExpectations work.
-        self.assertTrue(
-            expectations.get_expectations(non_idlharness_test).is_default_pass)
-        self.assertEquals(
-            expectations.get_expectations(idlharness_test_1).results, {'SKIP'})
-        self.assertEquals(
-            expectations.get_expectations(idlharness_test_2).results, {'SKIP'})
 
     def test_find_fastest_tests(self):
         host = MockHost()
@@ -312,54 +289,55 @@ class WebTestFinderTests(unittest.TestCase):
 
 
 class FilterTestsTests(unittest.TestCase):
-    simple_test_list = ['a/a1.html', 'a/a2.html', 'b/b1.html']
+    simple_test_filter = ['a/a1.html', 'a/a2.html', 'b/b1.html']
 
     def check(self, tests, filters, expected_tests):
         self.assertEqual(expected_tests,
                          web_test_finder.filter_tests(tests, filters))
 
     def test_no_filters(self):
-        self.check(self.simple_test_list, [], self.simple_test_list)
+        self.check(self.simple_test_filter, [], self.simple_test_filter)
 
     def test_empty_glob_is_rejected(self):
-        self.assertRaises(ValueError, self.check, self.simple_test_list,
+        self.assertRaises(ValueError, self.check, self.simple_test_filter,
                           [['']], [])
-        self.assertRaises(ValueError, self.check, self.simple_test_list,
+        self.assertRaises(ValueError, self.check, self.simple_test_filter,
                           [['-']], [])
 
     def test_one_all_positive_filter(self):
-        self.check(self.simple_test_list, [['a*']], ['a/a1.html', 'a/a2.html'])
-        self.check(self.simple_test_list, [['+a*']],
+        self.check(self.simple_test_filter, [['a*']],
+                   ['a/a1.html', 'a/a2.html'])
+        self.check(self.simple_test_filter, [['+a*']],
                    ['a/a1.html', 'a/a2.html'])
 
-        self.check(self.simple_test_list, [['a*', 'b*']],
-                   self.simple_test_list)
+        self.check(self.simple_test_filter, [['a*', 'b*']],
+                   self.simple_test_filter)
 
     def test_one_exact_positive_filter(self):
-        self.check(self.simple_test_list, [['a/a1.html']], ['a/a1.html'])
-        self.check(self.simple_test_list, [['+a/a1.html']], ['a/a1.html'])
+        self.check(self.simple_test_filter, [['a/a1.html']], ['a/a1.html'])
+        self.check(self.simple_test_filter, [['+a/a1.html']], ['a/a1.html'])
 
     def test_one_all_negative_filter(self):
-        self.check(self.simple_test_list, [['-c*']], self.simple_test_list)
+        self.check(self.simple_test_filter, [['-c*']], self.simple_test_filter)
 
     def test_one_exact_negative_filter(self):
-        self.check(self.simple_test_list, [['-a/a1.html']],
+        self.check(self.simple_test_filter, [['-a/a1.html']],
                    ['a/a2.html', 'b/b1.html'])
 
     def test_one_mixed_filter(self):
-        self.check(self.simple_test_list, [['a*', '-c*']],
+        self.check(self.simple_test_filter, [['a*', '-c*']],
                    ['a/a1.html', 'a/a2.html'])
 
     def test_two_all_positive_filters(self):
-        self.check(self.simple_test_list, [['a*'], ['b*']], [])
+        self.check(self.simple_test_filter, [['a*'], ['b*']], [])
 
     def test_two_all_negative_filters(self):
-        self.check(self.simple_test_list, [['-a*'], ['-b*']], [])
+        self.check(self.simple_test_filter, [['-a*'], ['-b*']], [])
 
-        self.check(self.simple_test_list, [['-a*'], ['-c*']], ['b/b1.html'])
+        self.check(self.simple_test_filter, [['-a*'], ['-c*']], ['b/b1.html'])
 
     def test_two_mixed_filters(self):
-        self.check(self.simple_test_list, [['a*'], ['-b*']],
+        self.check(self.simple_test_filter, [['a*'], ['-b*']],
                    ['a/a1.html', 'a/a2.html'])
 
     def test_longest_glob_wins(self):
@@ -367,24 +345,27 @@ class FilterTestsTests(unittest.TestCase):
         # part of the same filter expression, the longest matching
         # glob wins (takes precedence). The order of the two globs
         # must not matter.
-        self.check(self.simple_test_list, [['a/a*', '-a/a2*']], ['a/a1.html'])
-        self.check(self.simple_test_list, [['-a/a*', 'a/a2*']], ['a/a2.html'])
+        self.check(self.simple_test_filter, [['a/a*', '-a/a2*']],
+                   ['a/a1.html'])
+        self.check(self.simple_test_filter, [['-a/a*', 'a/a2*']],
+                   ['a/a2.html'])
 
         # In this test, the positive and negative globs are in
         # separate filter expressions, so a2 should be filtered out
         # and nothing should run (tests should only be run if they
         # would be run by every filter individually).
-        self.check(self.simple_test_list, [['-a/a*'], ['a/a2*']], [])
+        self.check(self.simple_test_filter, [['-a/a*'], ['a/a2*']], [])
 
     def test_only_trailing_unescaped_globs_work(self):
-        self.check(self.simple_test_list, [['a*']], ['a/a1.html', 'a/a2.html'])
+        self.check(self.simple_test_filter, [['a*']],
+                   ['a/a1.html', 'a/a2.html'])
         # These test that if you have a glob that contains a "*" that isn't
         # at the end, it is rejected; only globs at the end should work.
-        self.assertRaises(ValueError, self.check, self.simple_test_list,
+        self.assertRaises(ValueError, self.check, self.simple_test_filter,
                           [['*1.html']], [])
-        self.assertRaises(ValueError, self.check, self.simple_test_list,
+        self.assertRaises(ValueError, self.check, self.simple_test_filter,
                           [['a*.html']], [])
 
     def test_escaped_globs_allowed(self):
-        self.check(self.simple_test_list + ['a\\*1'], [['-a\\*1']],
-                   self.simple_test_list)
+        self.check(self.simple_test_filter + ['a\\*1'], [['-a\\*1']],
+                   self.simple_test_filter)

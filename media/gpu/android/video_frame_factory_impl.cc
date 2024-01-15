@@ -6,20 +6,19 @@
 
 #include <memory>
 
-#include "base/android/android_image_reader_compat.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
-#include "gpu/command_buffer/service/abstract_texture.h"
 #include "gpu/command_buffer/service/shared_context_state.h"
 #include "gpu/command_buffer/service/texture_owner.h"
 #include "gpu/config/gpu_finch_features.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/media_switches.h"
 #include "media/base/video_frame.h"
 #include "media/gpu/android/codec_image.h"
@@ -49,8 +48,7 @@ gpu::TextureOwner::Mode GetTextureOwnerMode(
       return gpu::TextureOwner::Mode::kAImageReaderInsecureSurfaceControl;
   }
 
-  NOTREACHED();
-  return gpu::TextureOwner::Mode::kSurfaceTextureInsecure;
+  NOTREACHED_NORETURN();
 }
 
 // Run on the GPU main thread to allocate the texture owner, and return it
@@ -65,15 +63,12 @@ static void AllocateTextureOwnerOnGpuThread(
     return;
   }
 
-  std::move(init_cb).Run(gpu::TextureOwner::Create(
-      gpu::TextureOwner::CreateTexture(shared_context_state),
-      GetTextureOwnerMode(overlay_mode), shared_context_state,
-      std::move(drdc_lock)));
+  std::move(init_cb).Run(
+      gpu::TextureOwner::Create(GetTextureOwnerMode(overlay_mode),
+                                shared_context_state, std::move(drdc_lock)));
 }
 
 }  // namespace
-
-using gpu::gles2::AbstractTexture;
 
 VideoFrameFactoryImpl::VideoFrameFactoryImpl(
     scoped_refptr<base::SingleThreadTaskRunner> gpu_task_runner,
@@ -102,9 +97,10 @@ void VideoFrameFactoryImpl::Initialize(OverlayMode overlay_mode,
 
   // On init success, create the TextureOwner and hop it back to this thread to
   // call |init_cb|.
-  auto gpu_init_cb = base::BindOnce(&AllocateTextureOwnerOnGpuThread,
-                                    BindToCurrentLoop(std::move(init_cb)),
-                                    overlay_mode, GetDrDcLock());
+  auto gpu_init_cb =
+      base::BindOnce(&AllocateTextureOwnerOnGpuThread,
+                     base::BindPostTaskToCurrentDefault(std::move(init_cb)),
+                     overlay_mode, GetDrDcLock());
   image_provider_->Initialize(std::move(gpu_init_cb));
 }
 
@@ -156,10 +152,10 @@ void VideoFrameFactoryImpl::CreateVideoFrame(
   // The pixel format doesn't matter here as long as it's valid for texture
   // frames. But SkiaRenderer wants to ensure that the format of the resource
   // used here which will eventually create a promise image must match the
-  // format of the resource(SharedImageVideo) used to create fulfill image.
-  // crbug.com/1028746. Since we create all the textures/abstract textures as
-  // well as shared images for video to be of format RGBA, we need to use the
-  // pixel format as ABGR here(which corresponds to 32bpp RGBA).
+  // format of the resource(AndroidVideoImageBacking) used to create fulfill
+  // image. crbug.com/1028746. Since we create all the textures/abstract
+  // textures as well as shared images for video to be of format RGBA, we need
+  // to use the pixel format as ABGR here(which corresponds to 32bpp RGBA).
   VideoPixelFormat pixel_format = PIXEL_FORMAT_ABGR;
 
   // Check that we can create a VideoFrame for this config before trying to
@@ -357,6 +353,10 @@ void VideoFrameFactoryImpl::RunAfterPendingVideoFrames(
       std::move(closure));
 
   RequestImage(nullptr, std::move(image_ready_cb));
+}
+
+bool VideoFrameFactoryImpl::IsStalled() const {
+  return frame_info_helper_->IsStalled();
 }
 
 }  // namespace media

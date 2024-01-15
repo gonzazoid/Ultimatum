@@ -7,7 +7,8 @@
 
 #include <map>
 
-#include "base/callback.h"
+#include <optional>
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/synchronization/lock.h"
 #include "gpu/command_buffer/client/client_discardable_manager.h"
@@ -15,7 +16,6 @@
 #include "gpu/command_buffer/client/gles2_interface.h"
 #include "gpu/command_buffer/client/mapped_memory.h"
 #include "gpu/command_buffer/client/transfer_buffer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace gpu {
 class MappedMemoryManager;
@@ -112,18 +112,21 @@ class GLES2_IMPL_EXPORT ClientTransferCache {
 
  private:
   using EntryKey = std::pair<uint32_t, uint32_t>;
-  ClientDiscardableHandle::Id FindDiscardableHandleId(const EntryKey& key);
-  ClientDiscardableHandle CreateDiscardableHandle(const EntryKey& key);
+  ClientDiscardableHandle::Id FindDiscardableHandleId(const EntryKey& key)
+      EXCLUSIVE_LOCKS_REQUIRED(lock_);
+  ClientDiscardableHandle CreateDiscardableHandle(const EntryKey& key)
+      EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   const raw_ptr<Client> client_;  // not owned --- client_ outlives this
 
-  absl::optional<ScopedMappedMemoryPtr> mapped_ptr_;
-  absl::optional<ScopedTransferBufferPtr> transfer_buffer_ptr_;
+  std::optional<ScopedMappedMemoryPtr> mapped_ptr_;
+  std::optional<ScopedTransferBufferPtr> transfer_buffer_ptr_;
 
   // Access to other members must always be done with |lock_| held.
   base::Lock lock_;
-  ClientDiscardableManager discardable_manager_;
-  std::map<EntryKey, ClientDiscardableHandle::Id> discardable_handle_id_map_;
+  ClientDiscardableManager discardable_manager_ GUARDED_BY(lock_);
+  std::map<EntryKey, ClientDiscardableHandle::Id> discardable_handle_id_map_
+      GUARDED_BY(lock_);
 };
 
 }  // namespace gpu

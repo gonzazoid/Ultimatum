@@ -3,16 +3,12 @@
 // found in the LICENSE file.
 
 // <if expr="chromeos_ash">
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 // </if>
 
 export interface DownloadsBrowserProxy {
   initializeDownloads(): void;
 
-  /**
-   * @param enableLink whether to link or unlink account.
-   */
-  setDownloadsConnectionAccountLink(enableLink: boolean): void;
 
   selectDownloadLocation(): void;
 
@@ -30,10 +26,6 @@ export interface DownloadsBrowserProxy {
 export class DownloadsBrowserProxyImpl implements DownloadsBrowserProxy {
   initializeDownloads() {
     chrome.send('initializeDownloads');
-  }
-
-  setDownloadsConnectionAccountLink(enableLink: boolean) {
-    chrome.send('setDownloadsConnectionAccountLink', [enableLink]);
   }
 
   selectDownloadLocation() {

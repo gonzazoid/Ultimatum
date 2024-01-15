@@ -8,10 +8,11 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/sequenced_task_runner.h"
 #include "gpu/command_buffer/common/gl2_types.h"
 #include "media/gpu/chromeos/image_processor_backend.h"
 #include "media/gpu/media_gpu_export.h"
@@ -26,13 +27,14 @@ namespace media {
 // An image processor which uses GL to perform scaling.
 class MEDIA_GPU_EXPORT GLImageProcessorBackend : public ImageProcessorBackend {
  public:
+  GLImageProcessorBackend(const GLImageProcessorBackend&) = delete;
+  GLImageProcessorBackend& operator=(const GLImageProcessorBackend&) = delete;
+
   static std::unique_ptr<ImageProcessorBackend> Create(
       const PortConfig& input_config,
       const PortConfig& output_config,
       OutputMode output_mode,
-      VideoRotation relative_rotation,
-      ErrorCB error_cb,
-      scoped_refptr<base::SequencedTaskRunner> backend_task_runner);
+      ErrorCB error_cb);
 
   // ImageProcessorBackend implementation.
   void Process(scoped_refptr<VideoFrame> input_frame,
@@ -40,23 +42,18 @@ class MEDIA_GPU_EXPORT GLImageProcessorBackend : public ImageProcessorBackend {
                FrameReadyCB cb) override;
 
   static bool IsSupported(const PortConfig& input_config,
-                          const PortConfig& output_config,
-                          VideoRotation relative_rotation);
+                          const PortConfig& output_config);
+  std::string type() const override;
 
  private:
   // Callback for initialization.
   using InitCB = base::OnceCallback<void(bool)>;
 
-  GLImageProcessorBackend(
-      const PortConfig& input_config,
-      const PortConfig& output_config,
-      OutputMode output_mode,
-      VideoRotation relative_rotation,
-      ErrorCB error_cb,
-      scoped_refptr<base::SequencedTaskRunner> backend_task_runner);
-  GLImageProcessorBackend(const GLImageProcessorBackend&) = delete;
+  GLImageProcessorBackend(const PortConfig& input_config,
+                          const PortConfig& output_config,
+                          OutputMode output_mode,
+                          ErrorCB error_cb);
   ~GLImageProcessorBackend() override;
-  GLImageProcessorBackend& operator=(const GLImageProcessorBackend&) = delete;
 
   void InitializeTask(base::WaitableEvent* done, bool* success);
   void DestroyTask();

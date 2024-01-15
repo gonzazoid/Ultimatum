@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/values.h"
 
 class DevToolsEventListener;
@@ -39,14 +39,14 @@ class DevToolsClient {
   // Precondition: IsMainPage()
   // Precondition: IsConnected()
   // Precondition: BiDi tunnel for CDP traffic is not set.
-  virtual Status StartBidiServer(std::string bidi_mapper_script) = 0;
+  virtual Status StartBidiServer(std::string bidi_mapper_script,
+                                 const base::Value::Dict& mapper_options) = 0;
 
   virtual bool WasCrashed() = 0;
 
   virtual bool IsNull() const = 0;
 
-  // Connect to DevTools if the DevToolsClient is disconnected.
-  virtual Status ConnectIfNecessary() = 0;
+  virtual bool IsConnected() const = 0;
 
   virtual Status PostBidiCommand(base::Value::Dict command) = 0;
 
@@ -64,17 +64,15 @@ class DevToolsClient {
   virtual Status SendAsyncCommand(const std::string& method,
                                   const base::Value::Dict& params) = 0;
 
-  // A base::Value(base::Value::Type::DICTIONARY) gets assigned to |result|.
   virtual Status SendCommandAndGetResult(const std::string& method,
                                          const base::Value::Dict& params,
-                                         base::Value* result) = 0;
+                                         base::Value::Dict* result) = 0;
 
-  // A base::Value(base::Value::Type::DICTIONARY) gets assigned to |result|.
   virtual Status SendCommandAndGetResultWithTimeout(
       const std::string& method,
       const base::Value::Dict& params,
       const Timeout* timeout,
-      base::Value* result) = 0;
+      base::Value::Dict* result) = 0;
 
   virtual Status SendCommandAndIgnoreResponse(
       const std::string& method,
@@ -82,6 +80,9 @@ class DevToolsClient {
 
   // Adds a listener. This must only be done when the client is disconnected.
   virtual void AddListener(DevToolsEventListener* listener) = 0;
+
+  // Remove a listener added by AddListener().
+  virtual void RemoveListener(DevToolsEventListener* listener) = 0;
 
   // Handles events until the given function reports the condition is met
   // and there are no more received events to handle. If the given

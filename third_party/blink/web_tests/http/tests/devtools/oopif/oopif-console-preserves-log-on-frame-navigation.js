@@ -2,12 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ConsoleTestRunner} from 'console_test_runner';
+
+import * as Common from 'devtools/core/common/common.js';
+
 (async function() {
   TestRunner.addResult(`Tests that console preserves log on oopif navigation`);
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('console_test_runner');
   await TestRunner.showPanel('console');
 
-  Common.settingForTest('preserveConsoleLog').set(false);
+  Common.Settings.settingForTest('preserveConsoleLog').set(false);
   await TestRunner.navigatePromise('resources/empty.html');
   await TestRunner.evaluateInPage(`console.log('Before navigation')`);
   await TestRunner.addIframe('http://devtools.oopif.test:8000/devtools/oopif/resources/empty.html');

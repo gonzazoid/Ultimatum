@@ -14,6 +14,9 @@ extern const CGFloat kHintTextScale;
 // Bottom margin for the Return to Recent Tab tile.
 extern const CGFloat kReturnToRecentTabSectionBottomMargin;
 
+// The width of NTP modules, as a multiplier of the view width.
+extern const CGFloat kModuleWidth;
+
 // Returns the proper height for the doodle. `logo_is_showing` is YES if showing
 // the Google logo. `doodle_is_showing` is YES if the doodle is showing. The
 // SizeClass of the `trait_collection` of the view displaying the doodle is used
@@ -23,8 +26,16 @@ CGFloat DoodleHeight(BOOL logo_is_showing,
                      UITraitCollection* trait_collection);
 // Returns the proper margin to the top of the header for the doodle.
 CGFloat DoodleTopMargin(CGFloat top_inset, UITraitCollection* trait_collection);
+// Returns the height of the separator line below the omnibox.
+CGFloat HeaderSeparatorHeight();
 // Returns the proper margin to the bottom of the doodle for the search field.
 CGFloat SearchFieldTopMargin();
+// Returns the height of the Fake Omnibox on Home when it is not scrolled.
+CGFloat FakeOmniboxHeight();
+// Returns the height of the Fake Omnibox on Home when it is pinned / scrolled.
+CGFloat PinnedFakeOmniboxHeight();
+// Returns the height of the fake toolbar shown when the fake omnibox is pinned.
+CGFloat FakeToolbarHeight();
 // Returns the proper width for the search field inside a view with a `width`.
 // The SizeClass of the `traitCollection` of the view displaying the search
 // field is used in the computation.
@@ -34,11 +45,12 @@ CGFloat SearchFieldWidth(CGFloat width, UITraitCollection* trait_collection);
 // shown.
 CGFloat HeightForLogoHeader(BOOL logo_is_showing,
                             BOOL doodle_is_showing,
-                            CGFloat top_inset,
                             UITraitCollection* trait_collection);
 // Returns the bottom padding for the header. This represents the spacing
 // between the fake omnibox and the content suggestions tiles.
 CGFloat HeaderBottomPadding();
+// Creates a magnifying glass to be added to the fake omnibox.
+UIImageView* CreateMagnifyingGlassView();
 // Configure the `search_hint_label` for the fake omnibox.  `hintLabelContainer`
 // is added to the `search_tab_target` with autolayout and `search_hint_label`
 // is added to `hintLabelContainer` with autoresizing.  This is done due to the
@@ -49,12 +61,18 @@ void ConfigureSearchHintLabel(UILabel* search_hint_label,
 // constraining it.
 void ConfigureVoiceSearchButton(UIButton* voice_search_button,
                                 UIView* search_tab_target);
-// Configure the `lens_button`, adding it to the `search_tap_target` and
-// constraining it.
-void ConfigureLensButton(UIButton* lens_button, UIView* search_tap_target);
+// Configure the `lens_button` appearance.
+void ConfigureLensButtonAppearance(UIButton* lens_button, BOOL use_new_badge);
 
 // Returns the nearest ancestor of `view` that is kind of `of_class`.
 UIView* NearestAncestor(UIView* view, Class of_class);
+
+// YES if the Magic Stack should be using a wider layout.
+BOOL ShouldShowWiderMagicStackLayer(UITraitCollection* traitCollection,
+                                    UIWindow* window);
+
+// Returns the color of the search hint label in the fakebox.
+UIColor* SearchHintLabelColor();
 
 }  // namespace content_suggestions
 

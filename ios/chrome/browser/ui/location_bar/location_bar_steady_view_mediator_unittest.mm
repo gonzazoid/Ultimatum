@@ -5,29 +5,23 @@
 #import "ios/chrome/browser/ui/location_bar/location_bar_steady_view_mediator.h"
 
 #import "components/omnibox/browser/test_location_bar_model.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/main/test_browser.h"
-#import "ios/chrome/browser/overlays/public/overlay_presenter.h"
-#import "ios/chrome/browser/overlays/public/overlay_request.h"
-#import "ios/chrome/browser/overlays/public/overlay_request_queue.h"
-#import "ios/chrome/browser/overlays/public/web_content_area/http_auth_overlay.h"
-#import "ios/chrome/browser/overlays/public/web_content_area/java_script_dialog_overlay.h"
-#import "ios/chrome/browser/overlays/test/fake_overlay_presentation_context.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_presenter.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_request.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_request_queue.h"
+#import "ios/chrome/browser/overlays/model/public/web_content_area/http_auth_overlay.h"
+#import "ios/chrome/browser/overlays/model/public/web_content_area/java_script_alert_dialog_overlay.h"
+#import "ios/chrome/browser/overlays/model/test/fake_overlay_presentation_context.h"
+#import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_opener.h"
 #import "ios/chrome/browser/ui/location_bar/test/fake_location_bar_steady_view_consumer.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
-#import "ios/chrome/browser/web_state_list/web_state_opener.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
 #import "ios/web/public/test/web_task_environment.h"
 #import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
 #import "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-using java_script_dialog_overlays::JavaScriptDialogRequest;
 
 // Test fixture for LocationBarSteadyViewMediator.
 class LocationBarSteadyViewMediatorTest : public PlatformTest {
@@ -76,10 +70,10 @@ TEST_F(LocationBarSteadyViewMediatorTest, DisableShareForOverlays) {
   // longer shareable.
   OverlayRequestQueue* queue = OverlayRequestQueue::FromWebState(
       web_state, OverlayModality::kWebContentArea);
-  queue->AddRequest(OverlayRequest::CreateWithConfig<JavaScriptDialogRequest>(
-      web::JAVASCRIPT_DIALOG_TYPE_ALERT, web_state, kUrl,
-      /*is_main_frame=*/true, @"message",
-      /*default_text_field_value=*/nil));
+  queue->AddRequest(
+      OverlayRequest::CreateWithConfig<JavaScriptAlertDialogRequest>(
+          web_state, kUrl,
+          /*is_main_frame=*/true, @"message"));
   EXPECT_FALSE(consumer_.locationShareable);
 
   // Cancel the request and verify that the location is shareable again.

@@ -6,6 +6,7 @@
 #define COMPONENTS_FEATURE_ENGAGEMENT_PUBLIC_EVENT_CONSTANTS_H_
 
 #include "build/build_config.h"
+#include "components/feature_engagement/public/feature_constants.h"
 
 namespace feature_engagement {
 
@@ -29,13 +30,8 @@ extern const char kReadingListItemAdded[];
 extern const char kReadingListMenuOpened[];
 // Bookmark star button was clicked opening the menu.
 extern const char kBookmarkStarMenuOpened[];
-
-// All conditions for reopen closed tab IPH were met. Since this IPH needs to
-// track user events (opening/closing tabs, focusing the omnibox, etc) on the
-// second level, it must be done manually.
-extern const char kReopenTabConditionsMet[];
-// The user reopened a previously closed tab.
-extern const char kTabReopened[];
+// Customize chrome was opened.
+extern const char kCustomizeChromeOpened[];
 
 // A tab with playing media was sent to the background.
 extern const char kMediaBackgrounded[];
@@ -43,13 +39,10 @@ extern const char kMediaBackgrounded[];
 // The user opened the Global Media Controls dialog.
 extern const char kGlobalMediaControlsOpened[];
 
-// All the events declared below are the string names of deferred onboarding
-// events for the Focus Mode feature.
-
-// The user has opened a Focus Mode window.
-extern const char kFocusModeOpened[];
-// All conditions for show Focus Mode IPH were met.
-extern const char kFocusModeConditionsMet[];
+// A side panel has been pinned.
+extern const char kSidePanelPinned[];
+// A side panel has been opened from the app menu.
+extern const char kSidePanelFromMenuShown[];
 
 // The side search panel was automatically triggered.
 extern const char kSideSearchAutoTriggered[];
@@ -69,6 +62,9 @@ extern const char kWebUITabStripOpened[];
 // The PWA was installed by the user.
 extern const char kDesktopPwaInstalled[];
 
+// A module's actions were clicked on the NewTabPage.
+extern const char kDesktopNTPModuleUsed[];
+
 // The user entered the special "focus help bubble" accelerator.
 extern const char kFocusHelpBubbleAcceleratorPressed[];
 
@@ -80,10 +76,16 @@ extern const char kFocusHelpBubbleAcceleratorPromoRead[];
 extern const char kBatterySaverDialogShown[];
 
 // The user has opened the high efficiency page action chip
-extern const char kHighEfficiencyDialogShown[];
+extern const char kMemorySaverDialogShown[];
 
-// The user clicked on the performance menu item
-extern const char kPerformanceMenuItemActivated[];
+// Extensions menu is opened when any extension has access to the current site.
+extern const char kExtensionsMenuOpenedWhileExtensionHasAccess[];
+
+// Th user clicked the extensions request access button in the toolbar.
+extern const char kExtensionsRequestAccessButtonClicked[];
+
+// The user has opened the cookie controls bubble.
+extern const char kCookieControlsBubbleShown[];
 
 #endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_LINUX) ||
         // BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_FUCHSIA)
@@ -119,15 +121,115 @@ extern const char kDesktopVersionRequested[];
 // The default site view mode has been used.
 extern const char kDefaultSiteViewUsed[];
 
-// Autofill displayed password suggestions.
-extern const char kPasswordSuggestionsShown[];
-
-// The user has selected an Autofill password suggestion.
-extern const char kPasswordSuggestionSelected[];
-
 // The user has exited the overflow menu without scrolling horizontally and
 // without taking an action.
 extern const char kOverflowMenuNoHorizontalScrollOrAction[];
+
+// The user has opened Price Tracking.
+extern const char kPriceNotificationsUsed[];
+
+// The user has been shown a default browser promo.
+extern const char kDefaultBrowserPromoShown[];
+
+// The user tapped Remind Me Later on a default browser promo.
+extern const char kDefaultBrowserPromoRemindMeLater[];
+
+// The Password Manager widget promo was triggered.
+extern const char kPasswordManagerWidgetPromoTriggered[];
+
+// The Password Manager widget was used.
+extern const char kPasswordManagerWidgetPromoUsed[];
+
+// The Password Manager widget promo was closed.
+extern const char kPasswordManagerWidgetPromoClosed[];
+
+// The user has taken an action that is a criterion towards becoming eligible to
+// be shown the blue dot default browser promo.
+extern const char kBlueDotPromoCriterionMet[];
+
+// The user has met all criteria and has become eligible to be shown the blue
+// dot default browser promo.
+extern const char kBlueDotPromoEligibilityMet[];
+
+// The user has been shown the blue dot default browser promo on the overflow
+// carousel.
+extern const char kBlueDotPromoOverflowMenuShown[];
+
+// The user has been shown the blue dot default browser promo on the overflow
+// carousel, for a new user session. (i.e. after 6 hours from last shown).
+extern const char kBlueDotPromoOverflowMenuShownNewSession[];
+
+// The user has been shown the blue dot default browser promo on the settings
+// row.
+extern const char kBlueDotPromoSettingsShown[];
+
+// The user has been shown the blue dot default browser promo on the settings
+// row, after a new user session (i.e. after 6 hours from last shown).
+extern const char kBlueDotPromoSettingsShownNewSession[];
+
+// The user has dismissed the blue dot default browser promo on the overflow
+// carousel.
+extern const char kBlueDotPromoOverflowMenuDismissed[];
+
+// The user has dismissed the blue dot default browser promo on the settings
+// row.
+extern const char kBlueDotPromoSettingsDismissed[];
+
+// The user snoozed the Credential Provider Extension Promo
+extern const char kCredentialProviderExtensionPromoSnoozed[];
+
+// The user opened an url from omnibox.
+extern const char kOpenUrlFromOmnibox[];
+
+// The new tab toolbar item is used.
+extern const char kNewTabToolbarItemUsed[];
+
+// The tab grid toolbar item is used.
+extern const char kTabGridToolbarItemUsed[];
+
+// The history item on overflow menu is used.
+extern const char kHistoryOnOverflowMenuUsed[];
+
+// The share item on the toolbar is used.
+extern const char kShareToolbarItemUsed[];
+
+// The user has met a condition that makes the default browser video promo
+// eligible to be displayed.
+extern const char kDefaultBrowserVideoPromoConditionsMet[];
+
+// The user has triggered the Lens button in the Omnibox keyboard.
+extern const char kLensButtonKeyboardUsed[];
+
+// The omnibox position choice promo has been shown.
+extern const char kOmniboxPositionPromoShown[];
+
+// The user has triggered Parcel Tracking.
+extern const char kParcelTrackingTriggered[];
+
+// The user has tracked a parcel.
+extern const char kParcelTracked[];
+
+// The user has more than one gesture to refresh a page in iOS. This includes
+// but not limited to re-typing the URL in omnibox and refreshing from context
+// menu.
+extern const char kIOSMultiGestureRefreshUsed[];
+
+// The user has used the pull-to-refresh feature in iOS.
+extern const char kIOSPullToRefreshUsed[];
+
+// The user has tapped "incognito" on the page control in the tab grid.
+extern const char kIOSIncognitoPageControlTapped[];
+
+// The user has swiped left from regular tab grid to the incognito tab grid.
+extern const char kIOSSwipeLeftForIncognitoUsed[];
+
+// The user has met a condition that makes the Enhanced Safe Browsing
+// inline and blue-dot promos eligible to be displayed.
+extern const char kEnhancedSafeBrowsingPromoCriterionMet[];
+
+// The user has tapped on the 'X' button to remove the Enhanced Safe Browsing
+// inline promo from the settings menu.
+extern const char kEnhancedSafeBrowsingInlinePromoClosed[];
 
 #endif  // BUILDFLAG(IS_IOS)
 

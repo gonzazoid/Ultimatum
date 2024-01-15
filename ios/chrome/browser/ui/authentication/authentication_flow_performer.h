@@ -8,7 +8,9 @@
 #import <UIKit/UIKit.h>
 
 #import "base/ios/block_types.h"
+#import "components/signin/public/base/signin_metrics.h"
 #import "ios/chrome/browser/ui/authentication/authentication_flow_performer_delegate.h"
+#import "ios/chrome/browser/ui/authentication/signin/signin_constants.h"
 
 class Browser;
 @protocol BrowsingDataCommands;
@@ -28,10 +30,8 @@ class PrefService;
 
 // Cancels any outstanding work and dismisses an alert view (if shown) using
 // animation if `animated` is true.
-- (void)cancelAndDismissAnimated:(BOOL)animated;
-
-// Starts sync for `browserState`.
-- (void)commitSyncForBrowserState:(ChromeBrowserState*)browserState;
+- (void)interruptWithAction:(SigninCoordinatorInterrupt)action
+                 completion:(ProceduralBlock)completion;
 
 // Fetches the managed status for `identity`.
 - (void)fetchManagedStatus:(ChromeBrowserState*)browserState
@@ -39,6 +39,7 @@ class PrefService;
 
 // Signs `identity` with `hostedDomain` into `browserState`.
 - (void)signInIdentity:(id<SystemIdentity>)identity
+         atAccessPoint:(signin_metrics::AccessPoint)accessPoint
       withHostedDomain:(NSString*)hostedDomain
         toBrowserState:(ChromeBrowserState*)browserState;
 
@@ -69,10 +70,17 @@ class PrefService;
                        browserStatePrefs:(PrefService*)prefs;
 
 // Shows a confirmation dialog for signing in to an account managed by
-// `hostedDomain`.
+// `hostedDomain`. The confirmation dialog's content will be different depending
+// on the status of User Policy and the `syncConsent`.
 - (void)showManagedConfirmationForHostedDomain:(NSString*)hostedDomain
                                 viewController:(UIViewController*)viewController
-                                       browser:(Browser*)browser;
+                                       browser:(Browser*)browser
+                                   syncConsent:(BOOL)syncConsent;
+
+// Shows a snackbar confirming sign-in with `identity` and an undo button to
+// sign out the user.
+- (void)showSnackbarWithSignInIdentity:(id<SystemIdentity>)identity
+                               browser:(Browser*)browser;
 
 // Shows `error` to the user and calls `callback` on dismiss.
 - (void)showAuthenticationError:(NSError*)error
@@ -86,6 +94,7 @@ class PrefService;
 - (void)fetchUserPolicy:(ChromeBrowserState*)browserState
             withDmToken:(NSString*)dmToken
                clientID:(NSString*)clientID
+     userAffiliationIDs:(NSArray<NSString*>*)userAffiliationIDs
                identity:(id<SystemIdentity>)identity;
 
 @property(nonatomic, weak, readonly) id<AuthenticationFlowPerformerDelegate>

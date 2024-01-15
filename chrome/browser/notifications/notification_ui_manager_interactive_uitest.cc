@@ -19,7 +19,6 @@
 #include "chrome/common/chrome_features.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
-#include "components/permissions/permission_result.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
@@ -71,8 +70,10 @@ class NotificationUIManagerInteractiveUITest : public InProcessBrowserTest {
   // Executes |script| and stores the result as a string in |result|. A boolean
   // will be returned, indicating whether the script was executed successfully.
   bool RunScript(const std::string& script, std::string* result) const {
-    return content::ExecuteScriptAndExtractString(
-        GetActiveWebContents()->GetPrimaryMainFrame(), script, result);
+    *result =
+        content::EvalJs(GetActiveWebContents()->GetPrimaryMainFrame(), script)
+            .ExtractString();
+    return true;
   }
 
   GURL TestPageUrl() const {

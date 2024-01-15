@@ -6,6 +6,7 @@
 
 #include "ash/display/display_configuration_controller.h"
 #include "ash/shell.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
@@ -103,7 +104,7 @@ void DeviceDisplayPolicyCrosBrowserTest::SetUpInProcessBrowserTestFixture() {
 void DeviceDisplayPolicyCrosBrowserTest::TearDownOnMainThread() {
   // If the login display is still showing, exit gracefully.
   if (ash::LoginDisplayHost::default_host()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&chrome::AttemptExit));
     RunUntilBrowserProcessQuits();
   }

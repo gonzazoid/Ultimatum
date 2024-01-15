@@ -5,15 +5,17 @@
 #include "components/search_engines/android/template_url_service_android.h"
 
 #include <stddef.h>
+
 #include <string>
 #include <vector>
 
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
@@ -21,6 +23,7 @@
 #include "components/google/core/common/google_util.h"
 #include "components/search_engines/android/jni_headers/TemplateUrlService_jni.h"
 #include "components/search_engines/android/template_url_android.h"
+#include "components/search_engines/search_engine_choice_utils.h"
 #include "components/search_engines/search_terms_data.h"
 #include "components/search_engines/template_url.h"
 #include "components/search_engines/template_url_prepopulate_data.h"
@@ -69,12 +72,15 @@ void TemplateUrlServiceAndroid::Load(JNIEnv* env,
 void TemplateUrlServiceAndroid::SetUserSelectedDefaultSearchProvider(
     JNIEnv* env,
     const JavaParamRef<jobject>& obj,
-    const JavaParamRef<jstring>& jkeyword) {
+    const JavaParamRef<jstring>& jkeyword,
+    jint choice_made_location) {
   std::u16string keyword(
       base::android::ConvertJavaStringToUTF16(env, jkeyword));
   TemplateURL* template_url =
       template_url_service_->GetTemplateURLForKeyword(keyword);
-  template_url_service_->SetUserSelectedDefaultSearchProvider(template_url);
+  template_url_service_->SetUserSelectedDefaultSearchProvider(
+      template_url,
+      static_cast<search_engines::ChoiceMadeLocation>(choice_made_location));
 }
 
 jboolean TemplateUrlServiceAndroid::IsLoaded(
@@ -315,6 +321,14 @@ jboolean TemplateUrlServiceAndroid::SetPlayAPISearchEngine(
     const base::android::JavaParamRef<jstring>& jsearch_url,
     const base::android::JavaParamRef<jstring>& jsuggest_url,
     const base::android::JavaParamRef<jstring>& jfavicon_url,
+    const base::android::JavaParamRef<jstring>& jnew_tab_url,
+    const base::android::JavaParamRef<jstring>& jimage_url,
+    const base::android::JavaParamRef<jstring>& jimage_url_post_params,
+    const base::android::JavaParamRef<jstring>& jimage_translate_url,
+    const base::android::JavaParamRef<jstring>&
+        jimage_translate_source_language_param_key,
+    const base::android::JavaParamRef<jstring>&
+        jimage_translate_target_language_param_key,
     jboolean set_as_default) {
   // Check if there is already a search engine created from Play API.
   TemplateURLService::TemplateURLVector template_urls =
@@ -324,11 +338,8 @@ jboolean TemplateUrlServiceAndroid::SetPlayAPISearchEngine(
   if (existing_play_api_turl != template_urls.cend()) {
     // Migrate old Play API database entries that were incorrectly marked as
     // safe_for_autoreplace() before M89.
-    // TODO(tommycli): Delete this once the below metric approaches zero.
     TemplateURL* turl = *existing_play_api_turl;
     if (turl->safe_for_autoreplace()) {
-      TemplateURLService::LogSearchTemplateURLEvent(
-          TemplateURLService::MIGRATE_SAFE_FOR_AUTOREPLACE_PLAY_API_ENGINE);
       template_url_service_->ResetTemplateURL(turl, turl->short_name(),
                                               turl->keyword(), turl->url());
     }
@@ -347,14 +358,51 @@ jboolean TemplateUrlServiceAndroid::SetPlayAPISearchEngine(
   if (jfavicon_url) {
     favicon_url = base::android::ConvertJavaStringToUTF8(jfavicon_url);
   }
+  std::string new_tab_url;
+  if (jnew_tab_url) {
+    new_tab_url = base::android::ConvertJavaStringToUTF8(jnew_tab_url);
+  }
+  std::string image_url;
+  if (jimage_url) {
+    image_url = base::android::ConvertJavaStringToUTF8(jimage_url);
+  }
+  std::string image_url_post_params;
+  if (jimage_url_post_params) {
+    image_url_post_params =
+        base::android::ConvertJavaStringToUTF8(jimage_url_post_params);
+  }
+  std::string image_translate_url;
+  if (jimage_translate_url) {
+    image_translate_url =
+        base::android::ConvertJavaStringToUTF8(jimage_translate_url);
+  }
+  std::string image_translate_source_language_param_key;
+  if (jimage_translate_source_language_param_key) {
+    image_translate_source_language_param_key =
+        base::android::ConvertJavaStringToUTF8(
+            jimage_translate_source_language_param_key);
+  }
+  std::string image_translate_target_language_param_key;
+  if (jimage_translate_target_language_param_key) {
+    image_translate_target_language_param_key =
+        base::android::ConvertJavaStringToUTF8(
+            jimage_translate_target_language_param_key);
+  }
 
   TemplateURL* t_url = template_url_service_->CreatePlayAPISearchEngine(
-      name, keyword, search_url, suggest_url, favicon_url);
+      name, keyword, search_url, suggest_url, favicon_url, new_tab_url,
+      image_url, image_url_post_params, image_translate_url,
+      image_translate_source_language_param_key,
+      image_translate_target_language_param_key);
 
   // CanMakeDefault() will prevent us from taking over a policy or extension
   // defined default search engine.
   if (set_as_default && template_url_service_->CanMakeDefault(t_url)) {
-    template_url_service_->SetUserSelectedDefaultSearchProvider(t_url);
+    template_url_service_->SetUserSelectedDefaultSearchProvider(
+        t_url,
+        // This method gets eventually called when the user interacts with the
+        // OS-level choice screen, so we use it as the location of the choice.
+        search_engines::ChoiceMadeLocation::kChoiceScreen);
   }
   return true;
 }
@@ -391,7 +439,7 @@ void TemplateUrlServiceAndroid::GetTemplateUrls(
     JNIEnv* env,
     const base::android::JavaParamRef<jobject>& obj,
     const base::android::JavaParamRef<jobject>& template_url_list_obj) {
-  std::vector<TemplateURL*> template_urls =
+  std::vector<raw_ptr<TemplateURL, VectorExperimental>> template_urls =
       template_url_service_->GetTemplateURLs();
 
   // Clean up duplication between a Play API template URL and a corresponding
@@ -404,7 +452,7 @@ void TemplateUrlServiceAndroid::GetTemplateUrls(
   for (TemplateURL* template_url : template_urls) {
     // When Play API template URL supercedes the current template URL, skip it.
     if (play_api_turl && play_api_turl->keyword() == template_url->keyword() &&
-        play_api_turl->IsBetterThanEngineWithConflictingKeyword(template_url)) {
+        play_api_turl->IsBetterThanConflictingEngine(template_url)) {
       continue;
     }
 
@@ -425,4 +473,30 @@ TemplateUrlServiceAndroid::GetDefaultSearchEngine(
     return base::android::ScopedJavaLocalRef<jobject>(env, nullptr);
   }
   return CreateTemplateUrlAndroid(env, default_search_provider);
+}
+
+base::android::ScopedJavaLocalRef<jobjectArray>
+TemplateUrlServiceAndroid::GetImageUrlAndPostContent(
+    JNIEnv* env,
+    const JavaParamRef<jobject>& obj) {
+  const TemplateURL* template_url =
+      template_url_service_->GetDefaultSearchProvider();
+
+  TemplateURLRef::PostContent post_content;
+  GURL result(template_url->image_url_ref().ReplaceSearchTerms(
+      TemplateURLRef::SearchTermsArgs(u""),
+      template_url_service_->search_terms_data(), &post_content));
+
+  std::vector<std::string> output;
+  output.push_back(result.spec());
+  output.push_back(post_content.first);
+  return base::android::ToJavaArrayOfStrings(env, output);
+}
+
+jboolean TemplateUrlServiceAndroid::IsEeaChoiceCountry(JNIEnv* env) {
+  return template_url_service_->IsEeaChoiceCountry();
+}
+
+jboolean TemplateUrlServiceAndroid::ShouldShowUpdatedSettings(JNIEnv* env) {
+  return template_url_service_->ShouldShowUpdatedSettings();
 }

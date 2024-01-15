@@ -4,10 +4,10 @@
 
 #include "chrome/browser/web_applications/externally_managed_app_registration_task.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/web_applications/externally_managed_app_manager.h"
-#include "chrome/browser/web_applications/web_app_url_loader.h"
+#include "chrome/browser/web_applications/web_contents/web_app_url_loader.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/service_worker_context.h"
 #include "content/public/browser/storage_partition.h"
@@ -19,23 +19,28 @@
 namespace web_app {
 
 ExternallyManagedAppRegistrationTaskBase::
-    ExternallyManagedAppRegistrationTaskBase(GURL install_url)
-    : install_url_(std::move(install_url)) {}
+    ExternallyManagedAppRegistrationTaskBase(
+        GURL install_url,
+        const base::TimeDelta registration_timeout)
+    : install_url_(std::move(install_url)),
+      registration_timeout_(registration_timeout) {}
 
 ExternallyManagedAppRegistrationTaskBase::
     ~ExternallyManagedAppRegistrationTaskBase() = default;
 
-int ExternallyManagedAppRegistrationTask::registration_timeout_in_seconds_ = 40;
-
 ExternallyManagedAppRegistrationTask::ExternallyManagedAppRegistrationTask(
     GURL install_url,
+    const base::TimeDelta registration_timeout,
     WebAppUrlLoader* url_loader,
     content::WebContents* web_contents,
     RegistrationCallback callback)
-    : ExternallyManagedAppRegistrationTaskBase(std::move(install_url)),
+    : ExternallyManagedAppRegistrationTaskBase(std::move(install_url),
+                                               registration_timeout),
       url_loader_(url_loader),
       web_contents_(web_contents),
-      callback_(std::move(callback)) {
+      callback_(std::move(callback)) {}
+
+void ExternallyManagedAppRegistrationTask::Start() {
   content::StoragePartition* storage_partition =
       web_contents_->GetBrowserContext()->GetStoragePartition(
           web_contents_->GetSiteInstance());
@@ -45,7 +50,7 @@ ExternallyManagedAppRegistrationTask::ExternallyManagedAppRegistrationTask(
   service_worker_context_->AddObserver(this);
 
   registration_timer_.Start(
-      FROM_HERE, base::Seconds(registration_timeout_in_seconds_),
+      FROM_HERE, registration_timeout(),
       base::BindOnce(
           &ExternallyManagedAppRegistrationTask::OnRegistrationTimeout,
           weak_ptr_factory_.GetWeakPtr()));
@@ -60,8 +65,12 @@ ExternallyManagedAppRegistrationTask::~ExternallyManagedAppRegistrationTask() {
 
 void ExternallyManagedAppRegistrationTask::OnRegistrationCompleted(
     const GURL& scope) {
-  if (!content::ServiceWorkerContext::ScopeMatches(scope, install_url()))
+  if (!callback_) {
     return;
+  }
+  if (!content::ServiceWorkerContext::ScopeMatches(scope, install_url())) {
+    return;
+  }
 
   registration_timer_.Stop();
   std::move(callback_).Run(RegistrationResultCode::kSuccess);
@@ -73,14 +82,11 @@ void ExternallyManagedAppRegistrationTask::OnDestruct(
   service_worker_context_ = nullptr;
 }
 
-void ExternallyManagedAppRegistrationTask::SetTimeoutForTesting(
-    int registration_timeout_in_seconds) {
-  registration_timeout_in_seconds_ = registration_timeout_in_seconds;
-}
-
 void ExternallyManagedAppRegistrationTask::CheckHasServiceWorker() {
+  // Note: This can call the callback synchronously
   service_worker_context_->CheckHasServiceWorker(
-      install_url(), blink::StorageKey(url::Origin::Create(install_url())),
+      install_url(),
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(install_url())),
       base::BindOnce(
           &ExternallyManagedAppRegistrationTask::OnDidCheckHasServiceWorker,
           weak_ptr_factory_.GetWeakPtr()));
@@ -88,31 +94,28 @@ void ExternallyManagedAppRegistrationTask::CheckHasServiceWorker() {
 
 void ExternallyManagedAppRegistrationTask::OnDidCheckHasServiceWorker(
     content::ServiceWorkerCapability capability) {
+  if (!callback_) {
+    return;
+  }
   if (capability != content::ServiceWorkerCapability::NO_SERVICE_WORKER) {
     registration_timer_.Stop();
-    std::move(callback_).Run(RegistrationResultCode::kAlreadyRegistered);
+    // This is posted as a task because the serviceworker check can be
+    // synchronous.
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback_),
+                                  RegistrationResultCode::kAlreadyRegistered));
     return;
   }
 
-  url_loader_->PrepareForLoad(
-      web_contents_,
-      base::BindOnce(&ExternallyManagedAppRegistrationTask::OnWebContentsReady,
-                     weak_ptr_factory_.GetWeakPtr()));
-}
-
-void ExternallyManagedAppRegistrationTask::OnWebContentsReady(
-    WebAppUrlLoader::Result result) {
-  // TODO(crbug.com/1098139): Handle the scenario where WebAppUrlLoader fails to
-  // load about:blank and flush WebContents states.
-
-  // No action is needed when the URL loads.
-  // We wait for OnRegistrationCompleted (or registration timeout).
   url_loader_->LoadUrl(install_url(), web_contents_,
                        WebAppUrlLoader::UrlComparison::kExact,
                        base::DoNothing());
 }
 
 void ExternallyManagedAppRegistrationTask::OnRegistrationTimeout() {
+  if (!callback_) {
+    return;
+  }
   std::move(callback_).Run(RegistrationResultCode::kTimeout);
 }
 

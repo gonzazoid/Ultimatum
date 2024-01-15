@@ -6,13 +6,12 @@
 #define EXTENSIONS_BROWSER_API_DECLARATIVE_NET_REQUEST_INDEXED_RULE_H_
 
 #include <stdint.h>
+#include <optional>
 #include <string>
-
 #include "base/containers/flat_set.h"
 #include "components/url_pattern_index/flat/url_pattern_index_generated.h"
 #include "extensions/common/api/declarative_net_request.h"
 #include "extensions/common/api/declarative_net_request/constants.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class GURL;
 
@@ -41,7 +40,7 @@ struct IndexedRule {
       IndexedRule* indexed_rule);
 
   api::declarative_net_request::RuleActionType action_type =
-      api::declarative_net_request::RULE_ACTION_TYPE_NONE;
+      api::declarative_net_request::RuleActionType::kNone;
 
   // These fields correspond to the attributes of a flatbuffer UrlRule, as
   // specified by the url_pattern_index component.
@@ -68,24 +67,32 @@ struct IndexedRule {
   // Note: For redirect rules, exactly one of |redirect_url|,
   // |regex_substitution| or |url_transform|  will be set.
   // The redirect url for the rule.
-  absl::optional<std::string> redirect_url;
+  std::optional<std::string> redirect_url;
   // The regex substitution for this rule.
-  absl::optional<std::string> regex_substitution;
+  std::optional<std::string> regex_substitution;
   // UrlTransform for this rule.
-  absl::optional<api::declarative_net_request::URLTransform> url_transform;
+  std::optional<api::declarative_net_request::URLTransform> url_transform;
 
   // List of request headers to modify. Valid iff this is a modify headers rule.
-  std::vector<api::declarative_net_request::ModifyHeaderInfo> request_headers;
+  std::vector<api::declarative_net_request::ModifyHeaderInfo>
+      request_headers_to_modify;
 
   // List of response headers to modify. Valid iff this is a modify headers
   // rule.
-  std::vector<api::declarative_net_request::ModifyHeaderInfo> response_headers;
+  std::vector<api::declarative_net_request::ModifyHeaderInfo>
+      response_headers_to_modify;
 
   // Set of tab IDs this rule applies to.
   base::flat_set<int> tab_ids;
 
   // Set of tab IDs this rule doesn't apply to.
   base::flat_set<int> excluded_tab_ids;
+
+  // List of response headers this rule applies to.
+  std::vector<api::declarative_net_request::HeaderInfo> response_headers;
+
+  // List of response headers this rule doesn't apply to.
+  std::vector<std::string> excluded_response_headers;
 };
 
 // Compute the rule priority for indexing, by combining the priority from

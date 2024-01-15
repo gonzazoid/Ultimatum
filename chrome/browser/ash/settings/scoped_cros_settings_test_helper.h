@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/settings/stub_cros_settings_provider.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "chromeos/ash/components/install_attributes/stub_install_attributes.h"
@@ -95,17 +96,11 @@ class ScopedCrosSettingsTestHelper {
   std::unique_ptr<ScopedTestCrosSettings> test_cros_settings_;
   std::unique_ptr<CrosSettingsProvider> real_settings_provider_;
   std::unique_ptr<CrosSettingsProvider> stub_settings_provider_;
-  StubCrosSettingsProvider* stub_settings_provider_ptr_;
+  raw_ptr<StubCrosSettingsProvider> stub_settings_provider_ptr_;
 
   void Initialize(bool create_settings_service);
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::ScopedCrosSettingsTestHelper;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_SETTINGS_SCOPED_CROS_SETTINGS_TEST_HELPER_H_

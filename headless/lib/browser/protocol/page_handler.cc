@@ -4,12 +4,12 @@
 
 #include "headless/lib/browser/protocol/page_handler.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "content/public/browser/web_contents.h"
 
 #if BUILDFLAG(ENABLE_PRINTING)
+#include <optional>
 #include "components/printing/browser/print_to_pdf/pdf_print_utils.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #endif
 
 namespace headless {
@@ -17,8 +17,8 @@ namespace protocol {
 
 #if BUILDFLAG(ENABLE_PRINTING)
 template <typename T>
-absl::optional<T> OptionalFromMaybe(const Maybe<T>& maybe) {
-  return maybe.isJust() ? absl::optional<T>(maybe.fromJust()) : absl::nullopt;
+std::optional<T> OptionalFromMaybe(const Maybe<T>& maybe) {
+  return maybe.has_value() ? std::optional<T>(maybe.value()) : std::nullopt;
 }
 #endif
 
@@ -53,6 +53,8 @@ void PageHandler::PrintToPDF(Maybe<bool> landscape,
                              Maybe<String> footer_template,
                              Maybe<bool> prefer_css_page_size,
                              Maybe<String> transfer_mode,
+                             Maybe<bool> generate_tagged_pdf,
+                             Maybe<bool> generate_document_outline,
                              std::unique_ptr<PrintToPDFCallback> callback) {
   DCHECK(callback);
 
@@ -77,7 +79,9 @@ void PageHandler::PrintToPDF(Maybe<bool> landscape,
           OptionalFromMaybe<double>(margin_right),
           OptionalFromMaybe<std::string>(header_template),
           OptionalFromMaybe<std::string>(footer_template),
-          OptionalFromMaybe<bool>(prefer_css_page_size));
+          OptionalFromMaybe<bool>(prefer_css_page_size),
+          OptionalFromMaybe<bool>(generate_tagged_pdf),
+          OptionalFromMaybe<bool>(generate_document_outline));
   if (absl::holds_alternative<std::string>(print_pages_params)) {
     callback->sendFailure(
         Response::InvalidParams(absl::get<std::string>(print_pages_params)));
@@ -87,11 +91,11 @@ void PageHandler::PrintToPDF(Maybe<bool> landscape,
   DCHECK(absl::holds_alternative<printing::mojom::PrintPagesParamsPtr>(
       print_pages_params));
 
-  bool return_as_stream = transfer_mode.fromMaybe("") ==
+  bool return_as_stream = transfer_mode.value_or("") ==
                           Page::PrintToPDF::TransferModeEnum::ReturnAsStream;
   HeadlessPrintManager::FromWebContents(web_contents_.get())
       ->PrintToPdf(
-          web_contents_->GetPrimaryMainFrame(), page_ranges.fromMaybe(""),
+          web_contents_->GetPrimaryMainFrame(), page_ranges.value_or(""),
           std::move(absl::get<printing::mojom::PrintPagesParamsPtr>(
               print_pages_params)),
           base::BindOnce(&PageHandler::PDFCreated, weak_factory_.GetWeakPtr(),
@@ -107,7 +111,6 @@ void PageHandler::PDFCreated(bool return_as_stream,
                              std::unique_ptr<PrintToPDFCallback> callback,
                              print_to_pdf::PdfPrintResult print_result,
                              scoped_refptr<base::RefCountedMemory> data) {
-  std::unique_ptr<base::DictionaryValue> response;
   if (print_result != print_to_pdf::PdfPrintResult::kPrintSuccess) {
     callback->sendFailure(Response::ServerError(
         print_to_pdf::PdfPrintResultToString(print_result)));

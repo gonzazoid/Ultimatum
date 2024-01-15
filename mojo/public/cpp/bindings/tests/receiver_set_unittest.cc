@@ -5,8 +5,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "mojo/public/cpp/bindings/associated_receiver_set.h"
@@ -20,6 +20,14 @@
 
 namespace mojo {
 namespace test {
+
+class ReceiverSetStaticAssertTests {
+  // The receiver entry in a receiver set with no context should be the same
+  // size as a regular receiver + one machine word for the vtable.
+  static_assert(sizeof(Receiver<PingService>) + sizeof(void*) ==
+                sizeof(ReceiverSet<PingService>::ReceiverEntry));
+};
+
 namespace {
 
 using ReceiverSetTest = BindingsTestBase;

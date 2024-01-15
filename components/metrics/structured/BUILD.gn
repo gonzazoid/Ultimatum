@@ -10,32 +10,70 @@ import("//third_party/protobuf/proto_library.gni")
 # events with several attached metrics.
 static_library("structured") {
   sources = [
-    "external_metrics.cc",
-    "external_metrics.h",
+    "event_storage.cc",
+    "event_storage.h",
     "key_data.cc",
     "key_data.h",
+    "key_data_file_delegate.cc",
+    "key_data_file_delegate.h",
+    "key_data_prefs_delegate.cc",
+    "key_data_prefs_delegate.h",
+    "key_data_provider.cc",
+    "key_data_provider.h",
+    "key_data_provider_file.cc",
+    "key_data_provider_file.h",
+    "key_util.cc",
+    "key_util.h",
     "persistent_proto.cc",
     "persistent_proto.h",
+    "reporting/structured_metrics_log_metrics.cc",
+    "reporting/structured_metrics_log_metrics.h",
+    "reporting/structured_metrics_reporting_service.cc",
+    "reporting/structured_metrics_reporting_service.h",
+    "structured_metrics_prefs.cc",
+    "structured_metrics_prefs.h",
     "structured_metrics_provider.cc",
     "structured_metrics_provider.h",
+    "structured_metrics_recorder.cc",
+    "structured_metrics_recorder.h",
+    "structured_metrics_scheduler.cc",
+    "structured_metrics_scheduler.h",
+    "structured_metrics_service.cc",
+    "structured_metrics_service.h",
   ]
 
   public_deps = [
     ":common",
     ":events",
+    ":proto",
     "//third_party/metrics_proto",
   ]
 
   deps = [
-    ":storage",
     ":structured_events",
     ":structured_metrics_validator",
     "//base",
     "//components/metrics",
+    "//components/metrics/structured/lib:proto",
     "//components/metrics/structured/mojom",
     "//components/prefs",
     "//crypto",
   ]
+}
+
+if (is_chromeos_ash) {
+  static_library("external_metrics") {
+    sources = [
+      "external_metrics.cc",
+      "external_metrics.h",
+    ]
+    deps = [
+      ":common",
+      ":proto",
+      ":structured_events",
+      "//base",
+    ]
+  }
 }
 
 static_library("events") {
@@ -55,13 +93,13 @@ static_library("events") {
   ]
 }
 
-proto_library("storage") {
+proto_library("proto") {
   # These protos are only used internally, so make them visible only to
   # subdirectories.
   visibility = [ "./*" ]
   proto_in_dir = "//"
   generate_python = false
-  sources = [ "storage.proto" ]
+  sources = [ "proto/event_storage.proto" ]
 
   # This is required because metrics_proto/BUILD.gn sets proto_in_dir as ".",
   # which means protos can't be referred to by absolute paths from within other
@@ -78,21 +116,29 @@ source_set("common") {
     "histogram_util.h",
     "recorder.cc",
     "recorder.h",
-    "structured_metrics_features.cc",
-    "structured_metrics_features.h",
   ]
 
   public_deps = [
     ":events",
-    "//base",
+    ":structured_metrics_features",
   ]
 
   deps = [
-    ":storage",
+    ":proto",
     ":structured_metrics_validator",
+    "//base",
     "//components/prefs",
     "//third_party/metrics_proto",
   ]
+}
+
+static_library("structured_metrics_features") {
+  sources = [
+    "structured_metrics_features.cc",
+    "structured_metrics_features.h",
+  ]
+
+  public_deps = [ "//base" ]
 }
 
 action("gen_structured_events") {
@@ -102,11 +148,11 @@ action("gen_structured_events") {
   inputs = [
     "//tools/metrics/structured/codegen.py",
     "//tools/metrics/structured/gen_events.py",
-    "//tools/metrics/structured/model.py",
-    "//tools/metrics/structured/model_util.py",
+    "//tools/metrics/structured/sync/model.py",
+    "//tools/metrics/structured/sync/model_util.py",
     "//tools/metrics/structured/templates_events.py",
   ]
-  sources = [ "//tools/metrics/structured/structured.xml" ]
+  sources = [ "//tools/metrics/structured/sync/structured.xml" ]
 
   outdir = "$target_gen_dir"
 
@@ -123,6 +169,7 @@ action("gen_structured_events") {
   ]
 }
 
+# TODO(b/309122738): Generate the events by platform.
 static_library("structured_events") {
   sources = get_target_outputs(":gen_structured_events")
 
@@ -140,11 +187,11 @@ action("gen_structured_metrics_validator") {
   inputs = [
     "//tools/metrics/structured/codegen.py",
     "//tools/metrics/structured/gen_validator.py",
-    "//tools/metrics/structured/model.py",
-    "//tools/metrics/structured/model_util.py",
+    "//tools/metrics/structured/sync/model.py",
+    "//tools/metrics/structured/sync/model_util.py",
     "//tools/metrics/structured/templates_validator.py",
   ]
-  sources = [ "//tools/metrics/structured/structured.xml" ]
+  sources = [ "//tools/metrics/structured/sync/structured.xml" ]
 
   outdir = "$target_gen_dir"
 
@@ -176,62 +223,64 @@ static_library("structured_metrics_validator") {
   ]
 }
 
-static_library("neutrino_logging") {
+static_library("test_support") {
+  testonly = true
   sources = [
-    "neutrino_logging.cc",
-    "neutrino_logging.h",
+    "test/test_event_storage.cc",
+    "test/test_event_storage.h",
+    "test/test_key_data_provider.cc",
+    "test/test_key_data_provider.h",
+    "test/test_structured_metrics_provider.cc",
+    "test/test_structured_metrics_provider.h",
   ]
-
   deps = [
-    ":common",
-    ":structured_events",
+    ":structured",
+    ":structured_metrics_validator",
     "//base",
-  ]
-}
-
-static_library("neutrino_logging_util") {
-  sources = [
-    "neutrino_logging_util.cc",
-    "neutrino_logging_util.h",
-  ]
-
-  deps = [
-    ":neutrino_logging",
-    ":structured_events",
-    "//base",
-    "//components/metrics",
-    "//components/prefs",
+    "//base/test:test_support",
+    "//components/metrics:metrics",
   ]
 }
 
 source_set("unit_tests") {
   testonly = true
   sources = [
-    "external_metrics_unittest.cc",
-    "key_data_unittest.cc",
+    "key_data_file_delegate_unittest.cc",
+    "key_data_prefs_delegate_unittest.cc",
     "persistent_proto_unittest.cc",
     "structured_metrics_provider_unittest.cc",
+    "structured_metrics_recorder_unittest.cc",
+    "structured_metrics_service_unittest.cc",
   ]
 
   deps = [
     ":events",
-    ":storage",
+    ":proto",
     ":structured",
     ":structured_events",
     ":structured_metrics_validator",
+    ":test_support",
     "//base",
     "//base/test:test_support",
+    "//components/metrics",
+    "//components/metrics:test_support",
+    "//components/metrics/structured/lib:proto",
     "//components/prefs",
+    "//components/prefs:test_support",
     "//testing/gtest",
   ]
+
+  if (is_chromeos_ash) {
+    sources += [ "external_metrics_unittest.cc" ]
+
+    deps += [ ":external_metrics" ]
+  }
 }
 
 # Convenience testing target
 test("structured_metrics_unittests") {
   deps = [
     ":unit_tests",
-    "//base",
-    "//base/test:test_support",
     "//components/metrics/structured/mojom:unit_tests",
     "//components/test:run_all_unittests",
   ]

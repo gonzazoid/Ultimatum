@@ -31,24 +31,23 @@ class FuseBoxServiceProvider : public CrosDBusService::ServiceProviderInterface,
   void OnRegisterFSURLPrefix(const std::string& subdir) override;
   void OnUnregisterFSURLPrefix(const std::string& subdir) override;
 
-  // D-Bus methods.
-  //
-  // In terms of semantics, they're roughly equivalent to the C standard
-  // library functions of the same name. For example, the Stat method here
-  // corresponds to the standard stat function described by "man 2 stat".
-  void Close(dbus::MethodCall* method_call,
-             dbus::ExportedObject::ResponseSender sender);
-  void Open(dbus::MethodCall* method_call,
-            dbus::ExportedObject::ResponseSender sender);
-  void Read(dbus::MethodCall* method_call,
-            dbus::ExportedObject::ResponseSender sender);
-  void ReadDir2(dbus::MethodCall* method_call,
-                dbus::ExportedObject::ResponseSender sender);
-  void Stat(dbus::MethodCall* method_call,
-            dbus::ExportedObject::ResponseSender sender);
+  // D-Bus template methods.
 
-  void ListStorages(dbus::MethodCall* method_call,
-                    dbus::ExportedObject::ResponseSender sender);
+  template <typename RequestProto, typename ResponseProto>
+  using ServerMethodPtr = void (fusebox::Server::*)(
+      const RequestProto& request,
+      base::OnceCallback<void(const ResponseProto& response)> callback);
+
+  template <typename RequestProto, typename ResponseProto>
+  void ServeProtoMethod(ServerMethodPtr<RequestProto, ResponseProto> method,
+                        dbus::MethodCall* method_call,
+                        dbus::ExportedObject::ResponseSender sender);
+
+  template <typename RequestProto, typename ResponseProto>
+  void ExportProtoMethod(const std::string& method_name,
+                         ServerMethodPtr<RequestProto, ResponseProto> method);
+
+  // Private fields.
 
   scoped_refptr<dbus::ExportedObject> exported_object_;
   fusebox::Server server_;

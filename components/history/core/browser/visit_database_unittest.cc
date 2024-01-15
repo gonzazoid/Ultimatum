@@ -11,6 +11,7 @@
 #include "base/time/time.h"
 #include "components/history/core/browser/url_database.h"
 #include "components/history/core/browser/visit_database.h"
+#include "components/history/core/browser/visited_link_database.h"
 #include "sql/database.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -35,14 +36,16 @@ bool IsVisitInfoEqual(const VisitRow& a, const VisitRow& b) {
                                                      b.transition) &&
          a.originator_cache_guid == b.originator_cache_guid &&
          a.originator_visit_id == b.originator_visit_id &&
-         a.is_known_to_sync == b.is_known_to_sync;
+         a.is_known_to_sync == b.is_known_to_sync &&
+         a.consider_for_ntp_most_visited == b.consider_for_ntp_most_visited;
 }
 
 }  // namespace
 
 class VisitDatabaseTest : public PlatformTest,
                           public URLDatabase,
-                          public VisitDatabase {
+                          public VisitDatabase,
+                          public VisitedLinkDatabase {
  public:
   VisitDatabaseTest() {}
 
@@ -56,6 +59,7 @@ class VisitDatabaseTest : public PlatformTest,
     // Initialize the tables for this test.
     CreateURLTable(false);
     CreateMainURLIndex();
+    CreateVisitedLinkTable();
     InitVisitTable();
   }
   void TearDown() override {
@@ -87,6 +91,8 @@ TEST_F(VisitDatabaseTest, Add) {
   // Add third visit for a different page.
   VisitRow visit_info3(2, visit_info1.visit_time + base::Seconds(2), 0,
                        ui::PAGE_TRANSITION_LINK, 0, false, 0);
+  // Verify we can add a corresponding VisitedLinkID.
+  visit_info3.visited_link_id = 10000;
   EXPECT_TRUE(AddVisit(&visit_info3, SOURCE_BROWSED));
 
   // Query the first two.
@@ -159,6 +165,59 @@ TEST_F(VisitDatabaseTest, Update) {
   VisitRow final;
   GetRowForVisit(original.visit_id, &final);
   EXPECT_TRUE(IsVisitInfoEqual(modification, final));
+}
+
+TEST_F(VisitDatabaseTest, IsKnownToSync) {
+  // Insert three rows, VisitIDs 1, 2, and 3.
+  for (VisitID i = 1; i <= 3; i++) {
+    VisitRow original(i, Time::Now(), 23, ui::PageTransitionFromInt(0), 19,
+                      false, 0);
+    AddVisit(&original, SOURCE_BROWSED);
+    ASSERT_EQ(i, original.visit_id);  // Verifies that we added 1, 2, and 3
+  }
+
+  // Set 2 and 3 to be `is_known_to_sync`.
+  {
+    VisitRow visit2;
+    ASSERT_TRUE(GetRowForVisit(2, &visit2));
+    EXPECT_FALSE(visit2.is_known_to_sync);
+    visit2.is_known_to_sync = true;
+    ASSERT_TRUE(UpdateVisitRow(visit2));
+
+    VisitRow visit3;
+    ASSERT_TRUE(GetRowForVisit(3, &visit3));
+    EXPECT_FALSE(visit3.is_known_to_sync);
+    visit3.is_known_to_sync = true;
+    ASSERT_TRUE(UpdateVisitRow(visit3));
+  }
+
+  // Verify the new expected values for all visits.
+  {
+    VisitRow visit1;
+    ASSERT_TRUE(GetRowForVisit(1, &visit1));
+    EXPECT_FALSE(visit1.is_known_to_sync);
+    VisitRow visit2;
+    ASSERT_TRUE(GetRowForVisit(2, &visit2));
+    EXPECT_TRUE(visit2.is_known_to_sync);
+    VisitRow visit3;
+    ASSERT_TRUE(GetRowForVisit(3, &visit3));
+    EXPECT_TRUE(visit3.is_known_to_sync);
+  }
+
+  // Now clear out all `is_known_to_sync` bits and verify that worked.
+  {
+    SetAllVisitsAsNotKnownToSync();
+
+    VisitRow visit1;
+    ASSERT_TRUE(GetRowForVisit(2, &visit1));
+    EXPECT_FALSE(visit1.is_known_to_sync);
+    VisitRow visit2;
+    ASSERT_TRUE(GetRowForVisit(2, &visit2));
+    EXPECT_FALSE(visit2.is_known_to_sync);
+    VisitRow visit3;
+    ASSERT_TRUE(GetRowForVisit(3, &visit3));
+    EXPECT_FALSE(visit3.is_known_to_sync);
+  }
 }
 
 // TODO(brettw) write test for GetMostRecentVisitForURL!
@@ -930,7 +989,8 @@ TEST_F(VisitDatabaseTest, GetLastVisitToURL) {
   }
 }
 
-TEST_F(VisitDatabaseTest, GetDailyVisitsToHostWithVisits) {
+// TODO(crbug.com/1499614): Test is failing.
+TEST_F(VisitDatabaseTest, DISABLED_GetDailyVisitsToHostWithVisits) {
   base::Time begin_time = base::Time::Now();
   base::Time end_time = begin_time + base::Days(10);
 

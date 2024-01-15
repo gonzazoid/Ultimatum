@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "base/component_export.h"
+#include "base/containers/span.h"
 #include "base/memory/ref_counted.h"
 #include "chromeos/ash/services/ime/public/mojom/ime_service.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -21,14 +22,13 @@
 
 class Profile;
 
-namespace ui {
-class TextInputMethod;
-class VirtualKeyboardController;
-}  // namespace ui
-
 namespace ash {
+
 class ComponentExtensionIMEManager;
+class TextInputMethod;
+
 namespace input_method {
+
 class InputMethodUtil;
 class ImeKeyboard;
 
@@ -139,7 +139,7 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) InputMethodManager {
     virtual void AddInputMethodExtension(
         const std::string& extension_id,
         const InputMethodDescriptors& descriptors,
-        ui::TextInputMethod* instance) = 0;
+        TextInputMethod* instance) = 0;
 
     // Removes an input method extension.
     virtual void RemoveInputMethodExtension(
@@ -183,14 +183,13 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) InputMethodManager {
     // methods, sorted in ascending order of their localized full display names,
     // according to the lexicographical order defined by the current system
     // locale (aka. display language).
-    virtual std::unique_ptr<InputMethodDescriptors>
+    virtual InputMethodDescriptors
     GetEnabledInputMethodsSortedByLocalizedDisplayNames() const = 0;
 
     // Returns enabled input methods, including extension input methods.
     // Although presented as a list, the result is NOT sorted in any specific
     // order; the ordering is arbitrary and undefined.
-    virtual std::unique_ptr<InputMethodDescriptors> GetEnabledInputMethods()
-        const = 0;
+    virtual InputMethodDescriptors GetEnabledInputMethods() const = 0;
 
     // Returns IDs of enabled input methods, including extension input methods.
     // Although presented as a list, the result is NOT sorted in any specific
@@ -209,7 +208,7 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) InputMethodManager {
         const std::string& input_method_id) const = 0;
 
     // Sets the list of extension IME ids which should be enabled.
-    virtual void SetEnabledExtensionImes(std::vector<std::string>* ids) = 0;
+    virtual void SetEnabledExtensionImes(base::span<const std::string> ids) = 0;
 
     // Sets current input method to login default (first owners, then hardware).
     virtual void SetInputMethodLoginDefault() = 0;
@@ -339,7 +338,12 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) InputMethodManager {
   // If keyboard layout can be uset at login screen
   virtual bool IsLoginKeyboard(const std::string& layout) const = 0;
 
-  // Migrates the input method id to extension-based input method id.
+  // Returns an extension-based input method id if |input_method_id| is a valid
+  // engine id. Otherwise, returns |input_method_id|.
+  virtual std::string GetMigratedInputMethodID(
+      const std::string& input_method_id) = 0;
+
+  // Migrates the input method ids to extension-based input method ids.
   virtual bool MigrateInputMethods(
       std::vector<std::string>* input_method_ids) = 0;
 
@@ -380,9 +384,6 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) InputMethodManager {
   // status has changed.
   virtual void NotifyObserversImeExtraInputStateChange() = 0;
 
-  // Gets the implementation of the keyboard controller.
-  virtual ui::VirtualKeyboardController* GetVirtualKeyboardController() = 0;
-
   // Notifies an input method extension is added or removed.
   virtual void NotifyInputMethodExtensionAdded(
       const std::string& extension_id) = 0;
@@ -392,12 +393,5 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) InputMethodManager {
 
 }  // namespace input_method
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-namespace input_method {
-using ::ash::input_method::InputMethodManager;
-}
-}  // namespace chromeos
 
 #endif  // UI_BASE_IME_ASH_INPUT_METHOD_MANAGER_H_

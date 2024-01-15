@@ -6,98 +6,111 @@
 
 #include <memory>
 
+#include "chrome/browser/extensions/tab_helper.h"
+#include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/extensions/extension_action_view_controller.h"
 #include "chrome/browser/ui/toolbar/toolbar_action_view_controller.h"
 #include "chrome/browser/ui/views/extensions/extensions_request_access_button.h"
 #include "chrome/browser/ui/views/extensions/extensions_toolbar_button.h"
+#include "chrome/browser/ui/views/toolbar/toolbar_button.h"
 #include "content/public/browser/web_contents.h"
+#include "extensions/browser/permissions_manager.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/views/background.h"
 
 ExtensionsToolbarControls::ExtensionsToolbarControls(
-    std::unique_ptr<ExtensionsToolbarButton> extensions_button,
-    std::unique_ptr<ExtensionsToolbarButton> site_access_button,
-    std::unique_ptr<ExtensionsRequestAccessButton> request_access_button)
-    : ToolbarIconContainerView(/*uses_highlight=*/true),
-      request_access_button_(AddChildView(std::move(request_access_button))),
-      site_access_button_(AddChildView(std::move(site_access_button))),
-      extensions_button_(extensions_button.get()) {
-  site_access_button_->SetVisible(false);
+    raw_ptr<ExtensionsToolbarButton> extensions_button,
+    raw_ptr<ExtensionsRequestAccessButton> request_access_button)
+    : request_access_button_(request_access_button),
+      extensions_button_(extensions_button) {
   request_access_button_->SetVisible(false);
-  // TODO(emiliapaz): Consider changing AddMainItem() to receive a unique_ptr.
-  AddMainItem(extensions_button.release());
 }
 
 ExtensionsToolbarControls::~ExtensionsToolbarControls() = default;
 
-void ExtensionsToolbarControls::UpdateAllIcons() {}
-
 void ExtensionsToolbarControls::UpdateControls(
+    bool is_restricted_url,
     const std::vector<std::unique_ptr<ToolbarActionViewController>>& actions,
     extensions::PermissionsManager::UserSiteSetting site_setting,
-    content::WebContents* current_web_contents) {
-  UpdateSiteAccessButton(actions, current_web_contents);
+    content::WebContents* current_web_contents,
+    Browser* browser) {
+  UpdateExtensionsButton(actions, site_setting, current_web_contents,
+                         is_restricted_url);
   UpdateRequestAccessButton(actions, site_setting, current_web_contents);
-
-  // Display background only when multiple buttons are visible. Since
-  // the extensions button is always visible, check if any of the other
-  // buttons is too.
-  SetBackground(site_access_button_->GetVisible() ||
-                        request_access_button_->GetVisible()
-                    ? views::CreateThemedRoundedRectBackground(
-                          kColorExtensionsToolbarControlsBackground,
-                          extensions_button_->GetPreferredSize().height())
-                    : nullptr);
-
-  // Resets the layout since layout animation does not handle host view
-  // visibility changing. This should be called after any visibility changes.
-  GetAnimatingLayoutManager()->ResetLayout();
 }
 
-void ExtensionsToolbarControls::UpdateSiteAccessButton(
+void ExtensionsToolbarControls::UpdateExtensionsButton(
     const std::vector<std::unique_ptr<ToolbarActionViewController>>& actions,
-    content::WebContents* web_contents) {
-  site_access_button_->SetVisible(
-      ExtensionActionViewController::AnyActionHasCurrentSiteAccess(
-          actions, web_contents));
+    extensions::PermissionsManager::UserSiteSetting site_setting,
+    content::WebContents* web_contents,
+    bool is_restricted_url) {
+  ExtensionsToolbarButton::State extensions_button_state =
+      ExtensionsToolbarButton::State::kDefault;
+
+  if (is_restricted_url || site_setting ==
+                               extensions::PermissionsManager::UserSiteSetting::
+                                   kBlockAllExtensions) {
+    extensions_button_state =
+        ExtensionsToolbarButton::State::kAllExtensionsBlocked;
+  } else if (ExtensionActionViewController::AnyActionHasCurrentSiteAccess(
+                 actions, web_contents)) {
+    extensions_button_state =
+        ExtensionsToolbarButton::State::kAnyExtensionHasAccess;
+  }
+
+  extensions_button_->UpdateState(extensions_button_state);
 }
 
 void ExtensionsToolbarControls::UpdateRequestAccessButton(
     const std::vector<std::unique_ptr<ToolbarActionViewController>>& actions,
     extensions::PermissionsManager::UserSiteSetting site_setting,
     content::WebContents* web_contents) {
-  // User site settings takes precedence over extension site access. If the user
-  // has allowed or blocked all extensions, individual extensions cannot grant
-  // access to the page and therefore the request access button is not
-  // displayed.
-  if (site_setting == extensions::PermissionsManager::UserSiteSetting::
-                          kGrantAllExtensions ||
-      site_setting == extensions::PermissionsManager::UserSiteSetting::
-                          kBlockAllExtensions) {
-    request_access_button_->SetVisible(false);
+  // Don't update the button if the confirmation message is currently showing;
+  // it'll go away after a few seconds. Once the confirmation is collapsed,
+  // button should be updated again.
+  if (request_access_button_->IsShowingConfirmation()) {
     return;
   }
 
-  // Request access button is displayed if any extension requests access.
-  std::vector<ToolbarActionViewController*> extensions_requesting_access;
-  for (const auto& action : actions) {
-    if (action->IsRequestingSiteAccess(web_contents))
-      extensions_requesting_access.push_back(action.get());
+  // Extensions are included in the request access button only when the site
+  // allows customizing site access by extension, and when the extension
+  // itself can show access requests in the toolbar and hasn't been dismissed.
+  std::vector<extensions::ExtensionId> extensions;
+  if (site_setting ==
+      extensions::PermissionsManager::UserSiteSetting::kCustomizeByExtension) {
+    for (const auto& action : actions) {
+      bool dismissed_requests =
+          extensions::TabHelper::FromWebContents(web_contents)
+              ->HasExtensionDismissedRequests(action->GetId());
+      if (action->ShouldShowSiteAccessRequestInToolbar(web_contents) &&
+          !dismissed_requests) {
+        extensions.push_back(action->GetId());
+      }
+    }
   }
-  if (extensions_requesting_access.empty()) {
-    request_access_button_->SetVisible(false);
-  } else {
-    // TODO(crbug.com/1239772): Update icons, based on the number of extensions
-    // requesting access, once multiple icons in button is supported. Since we
-    // will need to access the extension information, this method may receive
-    // actions instead of actions count. For now, just show the number of
-    // actions.
-    request_access_button_->UpdateExtensionsRequestingAccess(
-        extensions_requesting_access);
-    request_access_button_->SetVisible(true);
-  }
+
+  request_access_button_->Update(extensions);
+
+  // Extensions button has left flat edge iff request access button is visible.
+  // This will also update the button's background.
+  absl::optional<ToolbarButton::Edge> extensions_button_edge =
+      request_access_button_->GetVisible()
+          ? absl::optional<ToolbarButton::Edge>(ToolbarButton::Edge::kLeft)
+          : absl::nullopt;
+  extensions_button_->SetFlatEdge(extensions_button_edge);
 }
 
-BEGIN_METADATA(ExtensionsToolbarControls, ToolbarIconContainerView)
-END_METADATA
+void ExtensionsToolbarControls::ResetConfirmation() {
+  request_access_button_->ResetConfirmation();
+}
+
+bool ExtensionsToolbarControls::IsShowingConfirmation() const {
+  return request_access_button_->IsShowingConfirmation();
+}
+
+bool ExtensionsToolbarControls::IsShowingConfirmationFor(
+    const url::Origin& origin) const {
+  return request_access_button_->IsShowingConfirmationFor(origin);
+}

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -44,7 +44,7 @@ def GetOptions():
   header_guard = cmdline_options.output.upper()
   if header_guard[0].isdigit():
     header_guard = '_' + header_guard
-  header_guard = re.sub('[^\w]', '_', header_guard)
+  header_guard = re.sub(r'[^\w]', '_', header_guard)
   header_guard += '_'
 
   # The actual output file is inside the gen dir.

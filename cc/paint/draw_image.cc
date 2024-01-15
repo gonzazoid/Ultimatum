@@ -48,7 +48,7 @@ DrawImage::DrawImage(PaintImage image,
                      const SkIRect& src_rect,
                      PaintFlags::FilterQuality filter_quality,
                      const SkM44& matrix,
-                     absl::optional<size_t> frame_index)
+                     std::optional<size_t> frame_index)
     : paint_image_(std::move(image)),
       use_dark_mode_(use_dark_mode),
       src_rect_(src_rect),
@@ -62,7 +62,7 @@ DrawImage::DrawImage(PaintImage image,
                      const SkIRect& src_rect,
                      PaintFlags::FilterQuality filter_quality,
                      const SkM44& matrix,
-                     absl::optional<size_t> frame_index,
+                     std::optional<size_t> frame_index,
                      const TargetColorParams& target_color_params)
     : paint_image_(std::move(image)),
       use_dark_mode_(use_dark_mode),
@@ -94,8 +94,8 @@ DrawImage::~DrawImage() = default;
 DrawImage& DrawImage::operator=(DrawImage&& other) = default;
 DrawImage& DrawImage::operator=(const DrawImage& other) = default;
 
-bool DrawImage::operator==(const DrawImage& other) const {
-  return paint_image_ == other.paint_image_ &&
+bool DrawImage::IsSameForTesting(const DrawImage& other) const {
+  return paint_image_.IsSameForTesting(other.paint_image_) &&  // IN-TEST
          use_dark_mode_ == other.use_dark_mode_ &&
          src_rect_ == other.src_rect_ &&
          filter_quality_ == other.filter_quality_ && scale_ == other.scale_ &&

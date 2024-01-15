@@ -41,6 +41,8 @@ class MEDIA_EXPORT MemoryDataSource final : public DataSource {
   [[nodiscard]] bool GetSize(int64_t* size_out) final;
   bool IsStreaming() final;
   void SetBitrate(int bitrate) final;
+  bool PassedTimingAllowOriginCheck() final;
+  bool WouldTaintOrigin() final;
 
  private:
   const std::string data_string_;

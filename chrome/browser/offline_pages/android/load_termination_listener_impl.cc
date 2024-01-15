@@ -5,18 +5,19 @@
 #include "chrome/browser/offline_pages/android/load_termination_listener_impl.h"
 
 #include "base/android/application_status_listener.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/system/sys_info.h"
 
 namespace offline_pages {
 
 LoadTerminationListenerImpl::LoadTerminationListenerImpl() {
-  if (base::SysInfo::IsLowEndDevice())
+  if (base::SysInfo::IsLowEndDeviceOrPartialLowEndModeEnabled()) {
     app_listener_ =
         base::android::ApplicationStatusListener::New(base::BindRepeating(
             &LoadTerminationListenerImpl::OnApplicationStateChange,
             weak_ptr_factory_.GetWeakPtr()));
+  }
 }
 
 LoadTerminationListenerImpl::~LoadTerminationListenerImpl() {

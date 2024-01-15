@@ -7,8 +7,10 @@
 #include <cstdint>
 #include <memory>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/logging.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/reporting/client/report_queue.h"
 #include "components/reporting/client/report_queue_provider.h"
 #include "components/reporting/proto/synced/record_constants.pb.h"
@@ -17,7 +19,8 @@ namespace ash::cfm {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove after the migration to namespace ash.
+// TODO(https://crbug.com/1403174): Remove when namespace of mojoms for CfM are
+// migarted to ash.
 namespace mojom = ::chromeos::cfm::mojom;
 
 ::reporting::Priority ToReportingPriority(mojom::EnqueuePriority priority) {
@@ -49,7 +52,7 @@ constexpr auto kHandlerDestination =
 ReportingPipeline::ReportingPipeline(
     UpdateStatusCallback update_status_callback)
     : update_status_callback_(std::move(update_status_callback)),
-      task_runner_(base::SequencedTaskRunnerHandle::Get()) {
+      task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {
   DETACH_FROM_SEQUENCE(sequence_checker_);
 }
 
@@ -130,9 +133,9 @@ void ReportingPipeline::UpdateToken(std::string request_token) {
       base::BindRepeating(&ReportingPipeline::CheckPolicy,
                           base::Unretained(this)));
 
-  if (!config_result.ok()) {
+  if (!config_result.has_value()) {
     LOG(ERROR) << "Report Client Configuration failed with error message: "
-               << config_result.status().ToString();
+               << config_result.error();
     // Reset DMToken to allow future attempts at configuring the report queue.
     // TODO(b/175156039): Attempt to create a new configuration again.
     dm_token_.clear();
@@ -144,7 +147,7 @@ void ReportingPipeline::UpdateToken(std::string request_token) {
                                    weak_ptr_factory_.GetWeakPtr()));
 
   // Asynchronously create ReportingQueue.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           [](std::unique_ptr<reporting::ReportQueueConfiguration> config,
@@ -153,7 +156,7 @@ void ReportingPipeline::UpdateToken(std::string request_token) {
             reporting::ReportQueueProvider::CreateQueue(
                 std::move(config), std::move(queue_callback));
           },
-          std::move(config_result).ValueOrDie(), std::move(queue_callback)));
+          std::move(config_result).value(), std::move(queue_callback)));
 }
 
 ::reporting::Status ReportingPipeline::CheckPolicy() const {
@@ -176,16 +179,16 @@ void ReportingPipeline::OnReportQueueUpdated(
         report_queue_result) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (!report_queue_result.ok()) {
+  if (!report_queue_result.has_value()) {
     LOG(ERROR) << "Report Queue creation failed with error message: "
-               << report_queue_result.status().ToString();
+               << report_queue_result.error();
     // Reset DMToken to allow future attempts at creating a report queue.
     // TODO(b/175156039): Attempt to create a new queue again.
     dm_token_.clear();
     return;
   }
 
-  report_queue_ = std::move(report_queue_result.ValueOrDie());
+  report_queue_ = std::move(report_queue_result.value());
 
   update_status_callback_.Run(mojom::LoggerState::kReadyForRequests);
 

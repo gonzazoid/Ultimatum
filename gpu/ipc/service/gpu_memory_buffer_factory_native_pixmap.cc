@@ -7,48 +7,20 @@
 #include "build/build_config.h"
 #include "components/viz/common/gpu/vulkan_context_provider.h"
 #include "gpu/command_buffer/common/gpu_memory_buffer_support.h"
-#include "gpu/vulkan/vulkan_device_queue.h"
 #include "ui/gfx/buffer_format_util.h"
 #include "ui/gfx/buffer_usage_util.h"
 #include "ui/gfx/client_native_pixmap.h"
 #include "ui/gfx/linux/native_pixmap_dmabuf.h"
 #include "ui/gfx/native_pixmap.h"
-#include "ui/gl/gl_bindings.h"
-#include "ui/gl/gl_enums.h"
-#include "ui/gl/gl_image_native_pixmap.h"
 #include "ui/gl/gl_implementation.h"
-#include "ui/ozone/buildflags.h"
 #include "ui/ozone/public/ozone_platform.h"
 #include "ui/ozone/public/surface_factory_ozone.h"
 
-#if BUILDFLAG(OZONE_PLATFORM_X11)
-#include "ui/gl/gl_image_glx_native_pixmap.h"            // nogncheck
+#if BUILDFLAG(ENABLE_VULKAN)
+#include "gpu/vulkan/vulkan_device_queue.h"
 #endif
 
 namespace gpu {
-
-namespace {
-
-// The boilerplate code to initialize each GLImage that we need is the same, but
-// the Initialize() methods are not virtual, so a template is needed.
-template <class Image, class Pixmap>
-scoped_refptr<Image> CreateImageFromPixmap(const gfx::Size& size,
-                                           gfx::BufferFormat format,
-                                           const gfx::ColorSpace& color_space,
-                                           scoped_refptr<Pixmap> pixmap,
-                                           gfx::BufferPlane plane) {
-  auto image = base::MakeRefCounted<Image>(size, format, plane);
-  if (color_space.IsValid())
-    image->SetColorSpace(color_space);
-  if (!image->Initialize(std::move(pixmap))) {
-    LOG(ERROR) << "Failed to create GLImage " << size.ToString() << ", "
-               << gfx::BufferFormatToString(format);
-    return nullptr;
-  }
-  return image;
-}
-
-}  // namespace
 
 GpuMemoryBufferFactoryNativePixmap::GpuMemoryBufferFactoryNativePixmap()
     : GpuMemoryBufferFactoryNativePixmap(nullptr) {}
@@ -72,8 +44,8 @@ GpuMemoryBufferFactoryNativePixmap::CreateGpuMemoryBuffer(
   scoped_refptr<gfx::NativePixmap> pixmap =
       ui::OzonePlatform::GetInstance()
           ->GetSurfaceFactoryOzone()
-          ->CreateNativePixmap(surface_handle, GetVulkanDevice(), size, format,
-                               usage, framebuffer_size);
+          ->CreateNativePixmap(surface_handle, GetVulkanDeviceQueue(), size,
+                               format, usage, framebuffer_size);
   return CreateGpuMemoryBufferFromNativePixmap(id, size, format, usage,
                                                client_id, std::move(pixmap));
 }
@@ -89,7 +61,7 @@ void GpuMemoryBufferFactoryNativePixmap::CreateGpuMemoryBufferAsync(
   ui::OzonePlatform::GetInstance()
       ->GetSurfaceFactoryOzone()
       ->CreateNativePixmapAsync(
-          surface_handle, GetVulkanDevice(), size, format, usage,
+          surface_handle, GetVulkanDeviceQueue(), size, format, usage,
           base::BindOnce(
               &GpuMemoryBufferFactoryNativePixmap::OnNativePixmapCreated, id,
               size, format, usage, client_id, std::move(callback),
@@ -111,118 +83,13 @@ bool GpuMemoryBufferFactoryNativePixmap::
   return false;
 }
 
-ImageFactory* GpuMemoryBufferFactoryNativePixmap::AsImageFactory() {
-  return this;
-}
-
-scoped_refptr<gl::GLImage>
-GpuMemoryBufferFactoryNativePixmap::CreateImageForGpuMemoryBuffer(
-    gfx::GpuMemoryBufferHandle handle,
-    const gfx::Size& size,
-    gfx::BufferFormat format,
-    const gfx::ColorSpace& color_space,
-    gfx::BufferPlane plane,
-    int client_id,
-    SurfaceHandle surface_handle) {
-  if (handle.type != gfx::NATIVE_PIXMAP)
-    return nullptr;
-
-  scoped_refptr<gfx::NativePixmap> pixmap;
-
-  // If CreateGpuMemoryBuffer was used to allocate this buffer then avoid
-  // creating a new native pixmap for it.
-  {
-    base::AutoLock lock(native_pixmaps_lock_);
-    NativePixmapMapKey key(handle.id.id, client_id);
-    auto it = native_pixmaps_.find(key);
-    if (it != native_pixmaps_.end())
-      pixmap = it->second;
-  }
-
-  // Create new pixmap from handle if one doesn't already exist.
-  if (!pixmap) {
-    pixmap = ui::OzonePlatform::GetInstance()
-                 ->GetSurfaceFactoryOzone()
-                 ->CreateNativePixmapFromHandle(
-                     surface_handle, size, format,
-                     std::move(handle.native_pixmap_handle));
-#if !BUILDFLAG(IS_FUCHSIA)
-    if (!pixmap) {
-      DCHECK_EQ(surface_handle, gpu::kNullSurfaceHandle);
-      pixmap = base::WrapRefCounted(new gfx::NativePixmapDmaBuf(
-          size, format, std::move(handle.native_pixmap_handle)));
-    }
+VulkanDeviceQueue* GpuMemoryBufferFactoryNativePixmap::GetVulkanDeviceQueue() {
+#if BUILDFLAG(ENABLE_VULKAN)
+  if (vulkan_context_provider_)
+    return vulkan_context_provider_->GetDeviceQueue();
 #endif
 
-    if (!pixmap) {
-      DLOG(ERROR) << "Failed to create pixmap from handle";
-      return nullptr;
-    }
-  }
-
-  gfx::Size plane_size = GetPlaneSize(plane, size);
-  gfx::BufferFormat plane_format = GetPlaneBufferFormat(plane, format);
-  switch (gl::GetGLImplementation()) {
-    case gl::kGLImplementationEGLGLES2:
-    case gl::kGLImplementationEGLANGLE:
-      // EGL
-      return CreateImageFromPixmap<gl::GLImageNativePixmap>(
-          plane_size, plane_format, color_space, pixmap, plane);
-#if BUILDFLAG(OZONE_PLATFORM_X11)
-    case gl::kGLImplementationDesktopGL:
-      return CreateImageFromPixmap<gl::GLImageGLXNativePixmap>(
-          size, format, color_space, pixmap, plane);
-#endif
-    default:
-      NOTREACHED();
-      return nullptr;
-  }
-}
-
-bool GpuMemoryBufferFactoryNativePixmap::SupportsCreateAnonymousImage() const {
-  // Platforms may not support native pixmaps.
-  return ui::OzonePlatform::GetInstance()
-      ->GetPlatformRuntimeProperties()
-      .supports_native_pixmaps;
-}
-
-scoped_refptr<gl::GLImage>
-GpuMemoryBufferFactoryNativePixmap::CreateAnonymousImage(
-    const gfx::Size& size,
-    gfx::BufferFormat format,
-    gfx::BufferUsage usage,
-    SurfaceHandle surface_handle,
-    bool* is_cleared) {
-  scoped_refptr<gfx::NativePixmap> pixmap;
-  pixmap = ui::OzonePlatform::GetInstance()
-               ->GetSurfaceFactoryOzone()
-               ->CreateNativePixmap(surface_handle, GetVulkanDevice(), size,
-                                    format, usage);
-  if (!pixmap.get()) {
-    LOG(ERROR) << "Failed to create pixmap " << size.ToString() << ", "
-               << gfx::BufferFormatToString(format) << ", usage "
-               << gfx::BufferUsageToString(usage);
-    return nullptr;
-  }
-  auto image = base::MakeRefCounted<gl::GLImageNativePixmap>(size, format);
-  if (!image->Initialize(std::move(pixmap))) {
-    LOG(ERROR) << "Failed to create GLImage " << size.ToString() << ", "
-               << gfx::BufferFormatToString(format) << ", usage "
-               << gfx::BufferUsageToString(usage);
-    return nullptr;
-  }
-  *is_cleared = true;
-  return image;
-}
-
-unsigned GpuMemoryBufferFactoryNativePixmap::RequiredTextureType() {
-  return GL_TEXTURE_2D;
-}
-
-VkDevice GpuMemoryBufferFactoryNativePixmap::GetVulkanDevice() {
-  return vulkan_context_provider_
-             ? vulkan_context_provider_->GetDeviceQueue()->GetVulkanDevice()
-             : VK_NULL_HANDLE;
+  return nullptr;
 }
 
 // static

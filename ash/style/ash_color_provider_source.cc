@@ -5,6 +5,7 @@
 #include "ash/style/ash_color_provider_source.h"
 
 #include "ui/color/color_provider.h"
+#include "ui/color/color_provider_manager.h"
 
 namespace ash {
 
@@ -19,14 +20,25 @@ const ui::ColorProvider* AshColorProviderSource::GetColorProvider() const {
       GetColorProviderKey());
 }
 
+const ui::RendererColorMap AshColorProviderSource::GetRendererColorMap(
+    ui::ColorProviderKey::ColorMode color_mode,
+    ui::ColorProviderKey::ForcedColors forced_colors) const {
+  auto key = GetColorProviderKey();
+  key.color_mode = color_mode;
+  key.forced_colors = forced_colors;
+  ui::ColorProvider* color_provider =
+      ui::ColorProviderManager::Get().GetColorProviderFor(key);
+  CHECK(color_provider);
+  return ui::CreateRendererColorMap(*color_provider);
+}
+
 void AshColorProviderSource::OnNativeThemeUpdated(
     ui::NativeTheme* observed_theme) {
   DCHECK(native_theme_observation_.IsObservingSource(observed_theme));
   NotifyColorProviderChanged();
 }
 
-ui::ColorProviderManager::Key AshColorProviderSource::GetColorProviderKey()
-    const {
+ui::ColorProviderKey AshColorProviderSource::GetColorProviderKey() const {
   return ui::NativeTheme::GetInstanceForNativeUi()->GetColorProviderKey(
       nullptr);
 }

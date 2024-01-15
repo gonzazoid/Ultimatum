@@ -10,7 +10,7 @@
 
 #include "ash/hud_display/hud_constants.h"
 #include "ash/hud_display/reference_lines.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -28,44 +28,44 @@ END_METADATA
 
 MemoryGraphPageView::MemoryGraphPageView(const base::TimeDelta refresh_interval)
     : graph_chrome_rss_private_(kHUDGraphWidth,
-                                Graph::Baseline::BASELINE_BOTTOM,
-                                Graph::Fill::SOLID,
-                                Graph::Style::LINES,
+                                Graph::Baseline::kBaselineBottom,
+                                Graph::Fill::kSolid,
+                                Graph::Style::kLines,
                                 SkColorSetA(SK_ColorRED, kHUDAlpha)),
       graph_mem_free_(kHUDGraphWidth,
-                      Graph::Baseline::BASELINE_BOTTOM,
-                      Graph::Fill::NONE,
-                      Graph::Style::LINES,
+                      Graph::Baseline::kBaselineBottom,
+                      Graph::Fill::kNone,
+                      Graph::Style::kLines,
                       SkColorSetA(SK_ColorDKGRAY, kHUDAlpha)),
       graph_mem_used_unknown_(kHUDGraphWidth,
-                              Graph::Baseline::BASELINE_BOTTOM,
-                              Graph::Fill::SOLID,
-                              Graph::Style::LINES,
+                              Graph::Baseline::kBaselineBottom,
+                              Graph::Fill::kSolid,
+                              Graph::Style::kLines,
                               SkColorSetA(SK_ColorLTGRAY, kHUDAlpha)),
       graph_renderers_rss_private_(kHUDGraphWidth,
-                                   Graph::Baseline::BASELINE_BOTTOM,
-                                   Graph::Fill::SOLID,
-                                   Graph::Style::LINES,
+                                   Graph::Baseline::kBaselineBottom,
+                                   Graph::Fill::kSolid,
+                                   Graph::Style::kLines,
                                    SkColorSetA(SK_ColorCYAN, kHUDAlpha)),
       graph_arc_rss_private_(kHUDGraphWidth,
-                             Graph::Baseline::BASELINE_BOTTOM,
-                             Graph::Fill::SOLID,
-                             Graph::Style::LINES,
+                             Graph::Baseline::kBaselineBottom,
+                             Graph::Fill::kSolid,
+                             Graph::Style::kLines,
                              SkColorSetA(SK_ColorMAGENTA, kHUDAlpha)),
       graph_gpu_rss_private_(kHUDGraphWidth,
-                             Graph::Baseline::BASELINE_BOTTOM,
-                             Graph::Fill::SOLID,
-                             Graph::Style::LINES,
+                             Graph::Baseline::kBaselineBottom,
+                             Graph::Fill::kSolid,
+                             Graph::Style::kLines,
                              SkColorSetA(SK_ColorRED, kHUDAlpha)),
       graph_gpu_kernel_(kHUDGraphWidth,
-                        Graph::Baseline::BASELINE_BOTTOM,
-                        Graph::Fill::SOLID,
-                        Graph::Style::LINES,
+                        Graph::Baseline::kBaselineBottom,
+                        Graph::Fill::kSolid,
+                        Graph::Style::kLines,
                         SkColorSetA(SK_ColorYELLOW, kHUDAlpha)),
       graph_chrome_rss_shared_(kHUDGraphWidth,
-                               Graph::Baseline::BASELINE_BOTTOM,
-                               Graph::Fill::NONE,
-                               Graph::Style::LINES,
+                               Graph::Baseline::kBaselineBottom,
+                               Graph::Fill::kNone,
+                               Graph::Style::kLines,
                                SkColorSetA(SK_ColorBLUE, kHUDAlpha)) {
   const int data_width = graph_arc_rss_private_.max_data_points();
   // Verical ticks are drawn every 10% (10/100 interval).

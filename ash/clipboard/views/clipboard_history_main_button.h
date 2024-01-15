@@ -5,6 +5,8 @@
 #ifndef ASH_CLIPBOARD_VIEWS_CLIPBOARD_HISTORY_MAIN_BUTTON_H_
 #define ASH_CLIPBOARD_VIEWS_CLIPBOARD_HISTORY_MAIN_BUTTON_H_
 
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/button.h"
 
 namespace ash {
@@ -12,6 +14,8 @@ class ClipboardHistoryItemView;
 
 // The view responding to mouse click or gesture tap events.
 class ClipboardHistoryMainButton : public views::Button {
+  METADATA_HEADER(ClipboardHistoryMainButton, views::Button)
+
  public:
   explicit ClipboardHistoryMainButton(ClipboardHistoryItemView* container);
   ClipboardHistoryMainButton(const ClipboardHistoryMainButton& rhs) = delete;
@@ -19,23 +23,15 @@ class ClipboardHistoryMainButton : public views::Button {
       delete;
   ~ClipboardHistoryMainButton() override;
 
-  void OnHostPseudoFocusUpdated();
-
  private:
-  void SetShouldHighlight(bool should_highlight);
-
   // views::Button:
-  const char* GetClassName() const override;
   void OnClickCanceled(const ui::Event& event) override;
   void OnThemeChanged() override;
   void OnGestureEvent(ui::GestureEvent* event) override;
   void PaintButtonContents(gfx::Canvas* canvas) override;
 
   // The parent view.
-  ClipboardHistoryItemView* const container_;
-
-  // Indicates whether the view should be highlighted.
-  bool should_highlight_ = false;
+  const raw_ptr<ClipboardHistoryItemView> container_;
 };
 
 }  // namespace ash

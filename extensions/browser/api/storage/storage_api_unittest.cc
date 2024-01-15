@@ -4,13 +4,16 @@
 
 #include "extensions/browser/api/storage/storage_api.h"
 
+#include "stdint.h"
+
+#include <limits>
 #include <memory>
 #include <set>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/stringprintf.h"
@@ -18,6 +21,7 @@
 #include "components/value_store/leveldb_value_store.h"
 #include "components/value_store/value_store.h"
 #include "components/value_store/value_store_factory_impl.h"
+#include "content/public/test/mock_render_process_host.h"
 #include "content/public/test/test_browser_context.h"
 #include "extensions/browser/api/extensions_api_client.h"
 #include "extensions/browser/api/storage/settings_storage_quota_enforcer.h"
@@ -69,6 +73,18 @@ class StorageApiUnittest : public ApiUnitTest {
     StorageFrontend::GetFactoryInstance()->SetTestingFactory(
         browser_context(),
         base::BindRepeating(&CreateStorageFrontendForTesting));
+
+    render_process_host_ =
+        std::make_unique<content::MockRenderProcessHost>(browser_context());
+  }
+
+  void TearDown() override {
+    render_process_host_.reset();
+    ApiUnitTest::TearDown();
+  }
+
+  content::RenderProcessHost* render_process_host() const {
+    return render_process_host_.get();
   }
 
   // Runs the storage.set() API function with local storage.
@@ -83,16 +99,15 @@ class StorageApiUnittest : public ApiUnitTest {
   // |out_value| with the string result.
   testing::AssertionResult RunGetFunction(const std::string& key,
                                           std::string* out_value) {
-    std::unique_ptr<base::Value> result = RunFunctionAndReturnValue(
+    std::optional<base::Value> result = RunFunctionAndReturnValue(
         new StorageStorageAreaGetFunction(),
         base::StringPrintf("[\"local\", \"%s\"]", key.c_str()));
-    if (!result.get())
+    if (!result)
       return testing::AssertionFailure() << "No result";
 
     const base::Value::Dict* dict = result->GetIfDict();
     if (!dict) {
-      return testing::AssertionFailure() << result.get()
-                                         << " was not a dictionary.";
+      return testing::AssertionFailure() << *result << " was not a dictionary.";
     }
 
     const std::string* dict_value = dict->FindString(key);
@@ -106,6 +121,7 @@ class StorageApiUnittest : public ApiUnitTest {
   }
 
   ExtensionsAPIClient extensions_api_client_;
+  std::unique_ptr<content::RenderProcessHost> render_process_host_;
 };
 
 TEST_F(StorageApiUnittest, RestoreCorruptedStorage) {
@@ -148,11 +164,10 @@ TEST_F(StorageApiUnittest, StorageAreaOnChanged) {
   TestEventRouterObserver event_observer(EventRouter::Get(browser_context()));
 
   EventRouter* event_router = EventRouter::Get(browser_context());
-  content::RenderProcessHost* process = nullptr;
-  event_router->AddEventListener(api::storage::OnChanged::kEventName, process,
-                                 extension()->id());
-  event_router->AddEventListener("storage.local.onChanged", process,
-                                 extension()->id());
+  event_router->AddEventListener(api::storage::OnChanged::kEventName,
+                                 render_process_host(), extension()->id());
+  event_router->AddEventListener("storage.local.onChanged",
+                                 render_process_host(), extension()->id());
 
   RunSetFunction("key", "value");
   EXPECT_EQ(2u, event_observer.events().size());
@@ -177,13 +192,12 @@ TEST_F(StorageApiUnittest, StorageAreaOnChangedOtherListener) {
   TestEventRouterObserver event_observer(EventRouter::Get(browser_context()));
 
   EventRouter* event_router = EventRouter::Get(browser_context());
-  content::RenderProcessHost* process = nullptr;
   std::string other_listener_id =
       crx_file::id_util::GenerateId("other-listener");
-  event_router->AddEventListener(api::storage::OnChanged::kEventName, process,
-                                 other_listener_id);
-  event_router->AddEventListener("storage.local.onChanged", process,
-                                 other_listener_id);
+  event_router->AddEventListener(api::storage::OnChanged::kEventName,
+                                 render_process_host(), other_listener_id);
+  event_router->AddEventListener("storage.local.onChanged",
+                                 render_process_host(), other_listener_id);
 
   RunSetFunction("key", "value");
   EXPECT_EQ(0u, event_observer.events().size());
@@ -193,15 +207,108 @@ TEST_F(StorageApiUnittest, StorageAreaOnChangedOnlyOneListener) {
   TestEventRouterObserver event_observer(EventRouter::Get(browser_context()));
 
   EventRouter* event_router = EventRouter::Get(browser_context());
-  content::RenderProcessHost* process = nullptr;
-  event_router->AddEventListener(api::storage::OnChanged::kEventName, process,
-                                 extension()->id());
+  event_router->AddEventListener(api::storage::OnChanged::kEventName,
+                                 render_process_host(), extension()->id());
 
   RunSetFunction("key", "value");
   EXPECT_EQ(1u, event_observer.events().size());
 
   EXPECT_TRUE(base::Contains(event_observer.events(),
                              api::storage::OnChanged::kEventName));
+}
+
+// This is a regression test for crbug.com/1483828.
+TEST_F(StorageApiUnittest, GetBytesInUseIntOverflow) {
+  // A fake value store that only implements the overloads of GetBytesInUse().
+  class FakeValueStore : public value_store::ValueStore {
+   public:
+    explicit FakeValueStore(size_t bytes_in_use)
+        : bytes_in_use_(bytes_in_use) {}
+
+    size_t GetBytesInUse(const std::string& key) override {
+      return bytes_in_use_;
+    }
+
+    size_t GetBytesInUse(const std::vector<std::string>& keys) override {
+      return bytes_in_use_;
+    }
+
+    size_t GetBytesInUse() override { return bytes_in_use_; }
+
+    ReadResult Get(const std::string& key) override {
+      NOTREACHED();
+      return ReadResult(Status());
+    }
+
+    ReadResult Get(const std::vector<std::string>& keys) override {
+      NOTREACHED();
+      return ReadResult(Status());
+    }
+
+    ReadResult Get() override {
+      NOTREACHED();
+      return ReadResult(Status());
+    }
+
+    WriteResult Set(WriteOptions options,
+                    const std::string& key,
+                    const base::Value& value) override {
+      NOTREACHED();
+      return WriteResult(Status());
+    }
+
+    WriteResult Set(WriteOptions options,
+                    const base::Value::Dict& values) override {
+      NOTREACHED();
+      return WriteResult(Status());
+    }
+
+    WriteResult Remove(const std::string& key) override {
+      NOTREACHED();
+      return WriteResult(Status());
+    }
+
+    WriteResult Remove(const std::vector<std::string>& keys) override {
+      NOTREACHED();
+      return WriteResult(Status());
+    }
+
+    WriteResult Clear() override {
+      NOTREACHED();
+      return WriteResult(Status());
+    }
+
+   private:
+    size_t bytes_in_use_ = 0;
+  };
+
+  static constexpr struct TestCase {
+    size_t bytes_in_use;
+    double result;
+  } test_cases[] = {
+      {1, 1.0},
+      {std::numeric_limits<int>::max(), std::numeric_limits<int>::max()},
+      // Test the overflow case from the bug. It's enough to have a value
+      // that exceeds the max value that an int can represent.
+      {static_cast<size_t>(std::numeric_limits<int>::max()) + 1,
+       static_cast<size_t>(std::numeric_limits<int>::max()) + 1}};
+
+  for (const auto& test_case : test_cases) {
+    FakeValueStore value_store(test_case.bytes_in_use);
+    auto function =
+        base::MakeRefCounted<StorageStorageAreaGetBytesInUseFunction>();
+    // Call into the protected member function to avoid dealing with how the
+    // base class gets the StorageArea to use. Set `args` to a base::Value
+    // "none" so we get the total bytes in use.
+    base::Value::List args;
+    args.Append(base::Value());
+    function->SetArgs(std::move(args));
+    function->RunWithStorage(&value_store);
+    const base::Value::List* results = function->GetResultListForTest();
+    ASSERT_TRUE(results);
+    ASSERT_EQ(1u, results->size());
+    EXPECT_EQ(test_case.result, (*results)[0]);
+  }
 }
 
 }  // namespace extensions

@@ -11,10 +11,10 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/circular_deque.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
@@ -329,7 +329,7 @@ class LocalFileSyncContext
       base::File::Error error);
 
   const base::FilePath local_base_path_;
-  raw_ptr<leveldb::Env> env_override_;
+  raw_ptr<leveldb::Env, DanglingUntriaged> env_override_;
 
   scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner_;
   scoped_refptr<base::SingleThreadTaskRunner> io_task_runner_;

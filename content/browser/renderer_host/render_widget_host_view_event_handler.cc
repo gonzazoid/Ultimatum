@@ -19,9 +19,9 @@
 #include "content/browser/renderer_host/render_widget_host_view_base.h"
 #include "content/browser/renderer_host/text_input_manager.h"
 #include "content/common/content_switches_internal.h"
+#include "content/common/features.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/render_widget_host.h"
-#include "content/public/common/content_features.h"
 #include "ui/aura/client/cursor_client.h"
 #include "ui/aura/client/focus_client.h"
 #include "ui/aura/scoped_keyboard_hook.h"
@@ -217,7 +217,7 @@ void RenderWidgetHostViewEventHandler::UnlockMouse() {
 }
 
 bool RenderWidgetHostViewEventHandler::LockKeyboard(
-    absl::optional<base::flat_set<ui::DomCode>> codes) {
+    std::optional<base::flat_set<ui::DomCode>> codes) {
   aura::Window* root_window = window_->GetRootWindow();
   if (!root_window)
     return false;
@@ -264,7 +264,7 @@ void RenderWidgetHostViewEventHandler::OnKeyEvent(ui::KeyEvent* event) {
   // If the key has been reserved as part of the active KeyboardLock request,
   // then we want to mark it as such so it is not intercepted by the browser.
   if (IsKeyLocked(*event))
-    webkit_event.skip_in_browser = true;
+    webkit_event.skip_if_unhandled = true;
 
   bool mark_event_as_handled = true;
   delegate_->ForwardKeyboardEventWithLatencyInfo(
@@ -410,7 +410,7 @@ void RenderWidgetHostViewEventHandler::OnScrollEvent(ui::ScrollEvent* event) {
     mouse_wheel_phase_handler_.AddPhaseIfNeededAndScheduleEndEvent(
         mouse_wheel_event, should_route_event);
 
-    absl::optional<blink::WebGestureEvent> maybe_synthetic_fling_cancel;
+    std::optional<blink::WebGestureEvent> maybe_synthetic_fling_cancel;
     if (mouse_wheel_event.phase == blink::WebMouseWheelEvent::kPhaseBegan) {
       maybe_synthetic_fling_cancel =
           ui::MakeWebGestureEventFlingCancel(mouse_wheel_event);
@@ -536,6 +536,8 @@ void RenderWidgetHostViewEventHandler::OnGestureEvent(ui::GestureEvent* event) {
     blink::WebGestureEvent fling_cancel = gesture;
     fling_cancel.SetType(blink::WebInputEvent::Type::kGestureFlingCancel);
     fling_cancel.SetSourceDevice(blink::WebGestureDevice::kTouchscreen);
+    fling_cancel.data.fling_cancel.prevent_boosting = false;
+    fling_cancel.data.fling_cancel.target_viewport = false;
     if (ShouldRouteEvents()) {
       host_->delegate()->GetInputEventRouter()->RouteGestureEvent(
           host_view_, &fling_cancel,
@@ -584,6 +586,7 @@ void RenderWidgetHostViewEventHandler::GestureEventAck(
     const blink::WebGestureEvent& event,
     blink::mojom::InputEventResultState ack_result) {
   mouse_wheel_phase_handler_.GestureEventAck(event, ack_result);
+  HandleSwipeToMoveCursorGestureAck(event);
 }
 
 bool RenderWidgetHostViewEventHandler::CanRendererHandleEvent(
@@ -674,6 +677,12 @@ void RenderWidgetHostViewEventHandler::HandleGestureForTouchSelection(
       delegate_->selection_controller()->HandleLongPressEvent(
           event->time_stamp(), event->location_f());
       break;
+    case ui::ET_GESTURE_TAP_DOWN:
+      if (event->details().tap_down_count() == 2) {
+        delegate_->selection_controller()->HandleDoublePressEvent(
+            event->time_stamp(), event->location_f());
+      }
+      break;
     case ui::ET_GESTURE_TAP:
       delegate_->selection_controller()->HandleTapEvent(
           event->location_f(), event->details().tap_count());
@@ -684,6 +693,34 @@ void RenderWidgetHostViewEventHandler::HandleGestureForTouchSelection(
     case ui::ET_GESTURE_SCROLL_END:
       delegate_->selection_controller_client()->OnScrollCompleted();
       break;
+    default:
+      break;
+  }
+}
+
+void RenderWidgetHostViewEventHandler::HandleSwipeToMoveCursorGestureAck(
+    const blink::WebGestureEvent& event) {
+  if (!delegate_->selection_controller_client()) {
+    return;
+  }
+
+  switch (event.GetType()) {
+    case blink::WebInputEvent::Type::kGestureScrollBegin: {
+      if (!event.data.scroll_begin.cursor_control) {
+        break;
+      }
+      swipe_to_move_cursor_activated_ = true;
+      delegate_->selection_controller_client()->OnSwipeToMoveCursorBegin();
+      break;
+    }
+    case blink::WebInputEvent::Type::kGestureScrollEnd: {
+      if (!swipe_to_move_cursor_activated_) {
+        break;
+      }
+      swipe_to_move_cursor_activated_ = false;
+      delegate_->selection_controller_client()->OnSwipeToMoveCursorEnd();
+      break;
+    }
     default:
       break;
   }

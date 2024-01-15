@@ -22,17 +22,26 @@ enum VulkanImplementationName {
 // Corresponds to gpu::WebGPUAdapterName.
 enum WebGPUAdapterName {
   kDefault = 0,
-  kCompat = 1,
-  kSwiftShader = 2,
+  kD3D11 = 1,
+  kOpenGLES = 2,
+  kSwiftShader = 3,
+};
+
+// Corresponds to gpu::WebGPUPowerPreference.
+enum WebGPUPowerPreference {
+  kNone = 0,
+  kDefaultLowPower = 1,
+  kDefaultHighPerformance = 2,
+  kForceLowPower = 3,
+  kForceHighPerformance = 4,
 };
 
 // Corresponds to gpu::GrContextType.
 enum GrContextType {
-  kGL = 0,
-  kVulkan = 1,
-  kMetal = 2,
-  kDawn = 3,
-  kLast = kDawn,
+  kGL,  // Ganesh
+  kVulkan,  // Ganesh
+  kGraphiteDawn,
+  kGraphiteMetal,
 };
 
 // Corresponds to gpu::DawnBackendValidationLevel
@@ -55,7 +64,6 @@ struct GpuPreferences {
   bool enable_low_latency_dxva;
   bool enable_zero_copy_dxgi_video;
   bool enable_nv12_dxgi_video;
-  bool enable_media_foundation_vea_on_windows7;
   bool disable_software_rasterizer;
   bool log_gpu_control_list_decisions;
 
@@ -92,15 +100,16 @@ struct GpuPreferences {
   bool disable_vulkan_fallback_to_gl_for_testing;
   uint32 vulkan_heap_memory_limit;
   uint32 vulkan_sync_cpu_memory_limit;
-  bool enable_metal;
   bool enable_gpu_benchmarking_extension;
   bool enable_webgpu;
   bool enable_unsafe_webgpu;
+  bool enable_webgpu_developer_features;
   WebGPUAdapterName use_webgpu_adapter;
+  WebGPUPowerPreference use_webgpu_power_preference;
+  bool force_webgpu_compat;
   DawnBackendValidationLevel enable_dawn_backend_validation;
   array<string> enabled_dawn_features_list;
   array<string> disabled_dawn_features_list;
-  bool enable_gpu_blocked_time_metric;
   bool enable_perf_data_collection;
 
   [EnableIf=use_ozone]
@@ -110,4 +119,6 @@ struct GpuPreferences {
 
   [EnableIf=is_chromeos]
   bool enable_chromeos_direct_video_decoder;
+
+  bool force_separate_egl_display_for_webgl_testing;
 };

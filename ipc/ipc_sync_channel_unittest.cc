@@ -11,10 +11,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/process/process_handle.h"
 #include "base/run_loop.h"
@@ -24,7 +25,6 @@
 #include "base/test/task_environment.h"
 #include "base/threading/platform_thread.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "ipc/ipc_listener.h"
 #include "ipc/ipc_message.h"
@@ -54,7 +54,8 @@ class Worker : public Listener, public Sender {
                               base::WaitableEvent::InitialState::NOT_SIGNALED)),
         channel_handle_(std::move(channel_handle)),
         mode_(mode),
-        ipc_thread_((thread_name + "_ipc").c_str()),
+        ipc_thread_(
+            std::make_unique<base::Thread>((thread_name + "_ipc").c_str())),
         listener_thread_((thread_name + "_listener").c_str()),
         overrided_thread_(nullptr),
         shutdown_event_(base::WaitableEvent::ResetPolicy::MANUAL,
@@ -71,7 +72,7 @@ class Worker : public Listener, public Sender {
                               base::WaitableEvent::InitialState::NOT_SIGNALED)),
         channel_handle_(std::move(channel_handle)),
         mode_(mode),
-        ipc_thread_("ipc thread"),
+        ipc_thread_(std::make_unique<base::Thread>("ipc thread")),
         listener_thread_("listener thread"),
         overrided_thread_(nullptr),
         shutdown_event_(base::WaitableEvent::ResetPolicy::MANUAL,
@@ -102,16 +103,11 @@ class Worker : public Listener, public Sender {
     // may result in a race conditions. See http://crbug.com/25841.
     WaitableEvent listener_done(
         base::WaitableEvent::ResetPolicy::AUTOMATIC,
-        base::WaitableEvent::InitialState::NOT_SIGNALED),
-        ipc_done(base::WaitableEvent::ResetPolicy::AUTOMATIC,
-                 base::WaitableEvent::InitialState::NOT_SIGNALED);
+        base::WaitableEvent::InitialState::NOT_SIGNALED);
     ListenerThread()->task_runner()->PostTask(
-        FROM_HERE,
-        base::BindOnce(&Worker::OnListenerThreadShutdown1,
-                       base::Unretained(this), &listener_done, &ipc_done));
+        FROM_HERE, base::BindOnce(&Worker::OnListenerThreadShutdown1,
+                                  base::Unretained(this), &listener_done));
     listener_done.Wait();
-    ipc_done.Wait();
-    ipc_thread_.Stop();
     listener_thread_.Stop();
     is_shutdown_ = true;
   }
@@ -177,8 +173,9 @@ class Worker : public Listener, public Sender {
 
   virtual SyncChannel* CreateChannel() {
     std::unique_ptr<SyncChannel> channel = SyncChannel::Create(
-        TakeChannelHandle(), mode_, this, ipc_thread_.task_runner(),
-        base::ThreadTaskRunnerHandle::Get(), true, &shutdown_event_);
+        TakeChannelHandle(), mode_, this, ipc_thread_->task_runner(),
+        base::SingleThreadTaskRunner::GetCurrentDefault(), true,
+        &shutdown_event_);
     return channel.release();
   }
 
@@ -186,39 +183,43 @@ class Worker : public Listener, public Sender {
     return overrided_thread_ ? overrided_thread_.get() : &listener_thread_;
   }
 
-  const base::Thread& ipc_thread() const { return ipc_thread_; }
+  const base::Thread& ipc_thread() const { return *ipc_thread_.get(); }
 
  private:
   // Called on the listener thread to create the sync channel.
   void OnStart() {
     // Link ipc_thread_, listener_thread_ and channel_ altogether.
-    StartThread(&ipc_thread_, base::MessagePumpType::IO);
+    StartThread(ipc_thread_.get(), base::MessagePumpType::IO);
     channel_.reset(CreateChannel());
     channel_created_->Signal();
     Run();
   }
 
-  void OnListenerThreadShutdown1(WaitableEvent* listener_event,
-                                 WaitableEvent* ipc_event) {
+  void OnListenerThreadShutdown1(WaitableEvent* listener_event) {
+    WaitableEvent ipc_event(base::WaitableEvent::ResetPolicy::AUTOMATIC,
+                            base::WaitableEvent::InitialState::NOT_SIGNALED);
     // SyncChannel needs to be destructed on the thread that it was created on.
     channel_.reset();
 
     base::RunLoop().RunUntilIdle();
 
-    ipc_thread_.task_runner()->PostTask(
+    ipc_thread_->task_runner()->PostTask(
         FROM_HERE,
         base::BindOnce(&Worker::OnIPCThreadShutdown, base::Unretained(this),
-                       listener_event, ipc_event));
+                       listener_event, &ipc_event));
+    ipc_event.Wait();
+    // This destructs `ipc_thread_` on the listener thread.
+    ipc_thread_.reset();
+
+    listener_thread_.task_runner()->PostTask(
+        FROM_HERE, base::BindOnce(&Worker::OnListenerThreadShutdown2,
+                                  base::Unretained(this), listener_event));
   }
 
   void OnIPCThreadShutdown(WaitableEvent* listener_event,
                            WaitableEvent* ipc_event) {
     base::RunLoop().RunUntilIdle();
     ipc_event->Signal();
-
-    listener_thread_.task_runner()->PostTask(
-        FROM_HERE, base::BindOnce(&Worker::OnListenerThreadShutdown2,
-                                  base::Unretained(this), listener_event));
   }
 
   void OnListenerThreadShutdown2(WaitableEvent* listener_event) {
@@ -248,7 +249,10 @@ class Worker : public Listener, public Sender {
   mojo::ScopedMessagePipeHandle channel_handle_;
   Channel::Mode mode_;
   std::unique_ptr<SyncChannel> channel_;
-  base::Thread ipc_thread_;
+  // This thread is constructed on the main thread, Start() on
+  // `listener_thread_`, and therefore destructed/Stop()'d on the
+  // `listener_thread_` too.
+  std::unique_ptr<base::Thread> ipc_thread_;
   base::Thread listener_thread_;
   raw_ptr<base::Thread> overrided_thread_;
 
@@ -359,7 +363,7 @@ class TwoStepServer : public Worker {
     SyncChannel* channel =
         SyncChannel::Create(TakeChannelHandle(), mode(), this,
                             ipc_thread().task_runner(),
-                            base::ThreadTaskRunnerHandle::Get(),
+                            base::SingleThreadTaskRunner::GetCurrentDefault(),
                             create_pipe_now_, shutdown_event())
             .release();
     return channel;
@@ -386,7 +390,7 @@ class TwoStepClient : public Worker {
     SyncChannel* channel =
         SyncChannel::Create(TakeChannelHandle(), mode(), this,
                             ipc_thread().task_runner(),
-                            base::ThreadTaskRunnerHandle::Get(),
+                            base::SingleThreadTaskRunner::GetCurrentDefault(),
                             create_pipe_now_, shutdown_event())
             .release();
     return channel;
@@ -692,7 +696,9 @@ class MultipleClient1 : public Worker {
   }
 
  private:
-  WaitableEvent *client1_msg_received_, *client1_can_reply_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #overlapping
+  RAW_PTR_EXCLUSION WaitableEvent *client1_msg_received_, *client1_can_reply_;
 };
 
 class MultipleServer2 : public Worker {
@@ -723,7 +729,9 @@ class MultipleClient2 : public Worker {
   }
 
  private:
-  WaitableEvent *client1_msg_received_, *client1_can_reply_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #overlapping
+  RAW_PTR_EXCLUSION WaitableEvent *client1_msg_received_, *client1_can_reply_;
 };
 
 void Multiple() {
@@ -1096,8 +1104,9 @@ class RestrictedDispatchClient : public Worker {
 
     non_restricted_channel_ = SyncChannel::Create(
         non_restricted_channel_handle_.release(), IPC::Channel::MODE_CLIENT,
-        this, ipc_thread().task_runner(), base::ThreadTaskRunnerHandle::Get(),
-        true, shutdown_event());
+        this, ipc_thread().task_runner(),
+        base::SingleThreadTaskRunner::GetCurrentDefault(), true,
+        shutdown_event());
 
     server_->ListenerThread()->task_runner()->PostTask(
         FROM_HERE, base::BindOnce(&RestrictedDispatchServer::OnDoPing,
@@ -1163,8 +1172,8 @@ class RestrictedDispatchClient : public Worker {
   }
 
   int ping_;
-  raw_ptr<RestrictedDispatchServer> server_;
-  raw_ptr<NonRestrictedDispatchServer> server2_;
+  raw_ptr<RestrictedDispatchServer, DanglingUntriaged> server_;
+  raw_ptr<NonRestrictedDispatchServer, DanglingUntriaged> server2_;
   raw_ptr<int> success_;
   raw_ptr<WaitableEvent> sent_ping_event_;
   std::unique_ptr<SyncChannel> non_restricted_channel_;
@@ -1276,8 +1285,8 @@ class RestrictedDispatchDeadlockServer : public Worker {
 
   int server_num_;
   raw_ptr<WaitableEvent> server_ready_event_;
-  raw_ptr<WaitableEvent*> events_;
-  raw_ptr<RestrictedDispatchDeadlockServer> peer_;
+  raw_ptr<WaitableEvent*, AllowPtrArithmetic> events_;
+  raw_ptr<RestrictedDispatchDeadlockServer, DanglingUntriaged> peer_;
 };
 
 class RestrictedDispatchDeadlockClient2 : public Worker {
@@ -1311,6 +1320,7 @@ class RestrictedDispatchDeadlockClient2 : public Worker {
   }
 
   base::Thread* ListenerThread() { return Worker::ListenerThread(); }
+
  private:
   bool OnMessageReceived(const Message& message) override {
     IPC_BEGIN_MESSAGE_MAP(RestrictedDispatchDeadlockClient2, message)
@@ -1334,7 +1344,7 @@ class RestrictedDispatchDeadlockClient2 : public Worker {
   }
 
   raw_ptr<WaitableEvent> server_ready_event_;
-  raw_ptr<WaitableEvent*> events_;
+  raw_ptr<WaitableEvent*, AllowPtrArithmetic> events_;
   bool received_msg_;
   bool received_noarg_reply_;
   bool done_issued_;
@@ -1400,10 +1410,10 @@ class RestrictedDispatchDeadlockClient1 : public Worker {
     }
   }
 
-  raw_ptr<RestrictedDispatchDeadlockServer> server_;
-  raw_ptr<RestrictedDispatchDeadlockClient2> peer_;
+  raw_ptr<RestrictedDispatchDeadlockServer, DanglingUntriaged> server_;
+  raw_ptr<RestrictedDispatchDeadlockClient2, DanglingUntriaged> peer_;
   raw_ptr<WaitableEvent> server_ready_event_;
-  raw_ptr<WaitableEvent*> events_;
+  raw_ptr<WaitableEvent*, AllowPtrArithmetic> events_;
   bool received_msg_;
   bool received_noarg_reply_;
   bool done_issued_;
@@ -1504,7 +1514,8 @@ class RestrictedDispatchPipeWorker : public Worker {
     event2_->Wait();
     other_channel_ = SyncChannel::Create(
         other_channel_handle_.release(), IPC::Channel::MODE_CLIENT, this,
-        ipc_thread().task_runner(), base::ThreadTaskRunnerHandle::Get(), true,
+        ipc_thread().task_runner(),
+        base::SingleThreadTaskRunner::GetCurrentDefault(), true,
         shutdown_event());
     other_channel_->SetRestrictDispatchChannelGroup(group_);
     if (!is_first()) {
@@ -1599,7 +1610,8 @@ class ReentrantReplyServer1 : public Worker {
   void Run() override {
     server2_channel_ = SyncChannel::Create(
         other_channel_handle_.release(), IPC::Channel::MODE_CLIENT, this,
-        ipc_thread().task_runner(), base::ThreadTaskRunnerHandle::Get(), true,
+        ipc_thread().task_runner(),
+        base::SingleThreadTaskRunner::GetCurrentDefault(), true,
         shutdown_event());
     server_ready_->Signal();
     Message* msg = new SyncChannelTestMsg_Reentrant1();

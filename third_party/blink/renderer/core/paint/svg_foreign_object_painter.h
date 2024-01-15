@@ -10,22 +10,19 @@
 namespace blink {
 
 struct PaintInfo;
-class LayoutBlockFlow;
+class LayoutSVGForeignObject;
 
 class SVGForeignObjectPainter {
   STACK_ALLOCATED();
 
  public:
   explicit SVGForeignObjectPainter(
-      const LayoutBlockFlow& layout_svg_foreign_object);
+      const LayoutSVGForeignObject& layout_svg_foreign_object);
 
-  void Paint(const PaintInfo&);
   void PaintLayer(const PaintInfo& paint_info);
 
  private:
-  // layout_svg_foreign_object_ must be a LayoutSVGForeignObject or a
-  // LayoutNGSVGForeignObject.
-  const LayoutBlockFlow& layout_svg_foreign_object_;
+  const LayoutSVGForeignObject& layout_svg_foreign_object_;
 };
 
 }  // namespace blink

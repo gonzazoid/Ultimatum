@@ -11,9 +11,9 @@
 #include <string>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
 #include "base/containers/span.h"
 #include "base/feature_list.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/translate/core/browser/translate_step.h"
@@ -26,8 +26,10 @@ namespace translate {
 
 class TranslateManager;
 class TranslateUIDelegate;
+class TranslateUILanguagesManager;
 
 BASE_DECLARE_FEATURE(kTranslateMessageUI);
+extern const char kTranslateMessageUISnackbarParam[];
 
 class TranslateMessage {
  public:
@@ -161,6 +163,7 @@ class TranslateMessage {
 
   // Constructed the first time ShowTranslateStep is called.
   std::unique_ptr<TranslateUIDelegate> ui_delegate_;
+  raw_ptr<TranslateUILanguagesManager> ui_languages_manager_;
   State state_ = State::kDismissed;
 
   // Keeps track of whether or not this TranslateMessage has ever been

@@ -57,6 +57,7 @@ declare global {
         MAX_FILE_SIZE = 'MAX_FILE_SIZE',
         IMPORT_ALREADY_ACTIVE = 'IMPORT_ALREADY_ACTIVE',
         NUM_PASSWORDS_EXCEEDED = 'NUM_PASSWORDS_EXCEEDED',
+        CONFLICTS = 'CONFLICTS',
       }
 
       export enum ImportEntryStatus {
@@ -70,18 +71,48 @@ declare global {
         LONG_USERNAME = 'LONG_USERNAME',
         CONFLICT_PROFILE = 'CONFLICT_PROFILE',
         CONFLICT_ACCOUNT = 'CONFLICT_ACCOUNT',
+        LONG_NOTE = 'LONG_NOTE',
+        LONG_CONCATENATED_NOTE = 'LONG_CONCATENATED_NOTE',
+        VALID = 'VALID',
+      }
+
+      export enum FamilyFetchStatus {
+        UNKNOWN_ERROR = 'UNKNOWN_ERROR',
+        NO_MEMBERS = 'NO_MEMBERS',
+        SUCCESS = 'SUCCESS',
+      }
+
+      export interface PublicKey {
+        value: string;
+        version: number;
+      }
+
+      export interface RecipientInfo {
+        userId: string;
+        email: string;
+        displayName: string;
+        profileImageUrl: string;
+        isEligible: boolean;
+        publicKey?: PublicKey;
+      }
+
+      export interface FamilyFetchResults {
+        status: FamilyFetchStatus;
+        familyMembers: RecipientInfo[];
       }
 
       export interface ImportEntry {
         status: ImportEntryStatus;
         url: string;
         username: string;
+        password: string;
+        id: number;
       }
 
       export interface ImportResults {
         status: ImportResultsStatus;
         numberImported: number;
-        failedImports: ImportEntry[];
+        displayedEntries: ImportEntry[];
         fileName: string;
       }
 
@@ -98,18 +129,30 @@ declare global {
         isMuted: boolean;
       }
 
+      export interface DomainInfo {
+        name: string;
+        url: string;
+        signonRealm: string;
+      }
+
       export interface PasswordUiEntry {
-        urls: UrlCollection;
+        isPasskey: boolean;
+        affiliatedDomains: DomainInfo[];
         username: string;
+        displayName?: string;
         password?: string;
         federationText?: string;
         id: number;
         storedIn: PasswordStoreSet;
-        isAndroidCredential: boolean;
         note?: string;
         changePasswordUrl?: string;
-        hasStartableScript: boolean;
         compromisedInfo?: CompromisedInfo;
+      }
+
+      export interface CredentialGroup {
+        name: string;
+        iconUrl: string;
+        entries: PasswordUiEntry[];
       }
 
       export interface ExceptionEntry {
@@ -119,11 +162,13 @@ declare global {
 
       export interface PasswordExportProgress {
         status: ExportProgressStatus;
+        filePath?: string;
         folderName?: string;
       }
 
       export interface PasswordCheckStatus {
         state: PasswordCheckState;
+        totalNumberOfPasswords?: number;
         alreadyProcessed?: number;
         remainingInQueue?: number;
         elapsedTimeSinceLastCheck?: string;
@@ -137,49 +182,47 @@ declare global {
         useAccountStore: boolean;
       }
 
-      export interface ChangeSavedPasswordParams {
-        username: string;
-        password: string;
-        note?: string;
+      export interface PasswordUiEntryList {
+        entries: PasswordUiEntry[];
       }
 
       export function recordPasswordsPageAccessInSettings(): void;
-      export function changeSavedPassword(
-          id: number, params: ChangeSavedPasswordParams): Promise<number>;
-      export function removeSavedPassword(
+      export function changeCredential(credential: PasswordUiEntry):
+          Promise<void>;
+      export function removeCredential(
           id: number, fromStores: PasswordStoreSet): void;
       export function removePasswordException(id: number): void;
       export function undoRemoveSavedPasswordOrException(): void;
       export function requestPlaintextPassword(
           id: number, reason: PlaintextReason): Promise<string>;
-      export function requestCredentialDetails(id: number):
-          Promise<PasswordUiEntry>;
-      export function getSavedPasswordList(
-          callback: (entries: PasswordUiEntry[]) => void): void;
-      export function getPasswordExceptionList(
-          callback: (entries: ExceptionEntry[]) => void): void;
+      export function requestCredentialsDetails(ids: number[]):
+          Promise<PasswordUiEntry[]>;
+      export function getSavedPasswordList(): Promise<PasswordUiEntry[]>;
+      export function getCredentialGroups(): Promise<CredentialGroup[]>;
+      export function getPasswordExceptionList(): Promise<ExceptionEntry[]>;
       export function movePasswordsToAccount(ids: number[]): void;
+      export function fetchFamilyMembers(): Promise<FamilyFetchResults>;
+      export function sharePassword(id: number, recipients: RecipientInfo[]):
+          Promise<void>;
       export function importPasswords(toStore: PasswordStoreSet):
           Promise<ImportResults>;
+      export function continueImport(selectedIds: number[]):
+          Promise<ImportResults>;
+      export function resetImporter(deleteFile: boolean): Promise<void>;
       export function exportPasswords(): Promise<void>;
       export function requestExportProgressStatus():
           Promise<ExportProgressStatus>;
-      export function cancelExportPasswords(): void;
       export function isOptedInForAccountStorage(): Promise<boolean>;
       export function optInForAccountStorage(optIn: boolean): void;
       export function getInsecureCredentials(): Promise<PasswordUiEntry[]>;
+      export function getCredentialsWithReusedPassword():
+          Promise<PasswordUiEntryList[]>;
       export function muteInsecureCredential(credential: PasswordUiEntry):
           Promise<void>;
       export function unmuteInsecureCredential(credential: PasswordUiEntry):
           Promise<void>;
-      export function recordChangePasswordFlowStarted(
-          credential: PasswordUiEntry, isManualFlow: boolean): void;
-      export function refreshScriptsIfNecessary(): Promise<void>;
       export function startPasswordCheck(): Promise<void>;
-      export function stopPasswordCheck(): Promise<void>;
       export function getPasswordCheckStatus(): Promise<PasswordCheckStatus>;
-      export function startAutomatedPasswordChange(credential: PasswordUiEntry):
-          Promise<boolean>;
       export function isAccountStoreDefault(): Promise<boolean>;
       export function getUrlCollection(url: string):
           Promise<UrlCollection|null>;
@@ -187,6 +230,7 @@ declare global {
       export function extendAuthValidity(): Promise<void>;
       export function switchBiometricAuthBeforeFillingState(): void;
       export function showAddShortcutDialog(): void;
+      export function showExportedFileInShell(filePath: string): void;
 
       export const onSavedPasswordsListChanged:
           ChromeEvent<(entries: PasswordUiEntry[]) => void>;

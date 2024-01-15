@@ -2,34 +2,40 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/login_screen_test_api.h"
 #include "ash/shell.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
+#include "base/test/metrics/histogram_tester.h"
+#include "base/test/test_future.h"
 #include "chrome/browser/ash/login/screens/guest_tos_screen.h"
+#include "chrome/browser/ash/login/screens/theme_selection_screen.h"
 #include "chrome/browser/ash/login/screens/welcome_screen.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
 #include "chrome/browser/ash/login/test/fake_eula_mixin.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
 #include "chrome/browser/ash/login/test/oobe_screen_exit_waiter.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
+#include "chrome/browser/ash/login/test/oobe_screens_utils.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/webui/ash/login/guest_tos_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/network_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/theme_selection_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/user_creation_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/welcome_screen_handler.h"
-#include "chromeos/constants/chromeos_features.h"
+#include "chrome/browser/ui/webui/ash/login/network_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/theme_selection_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/user_creation_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/welcome_screen_handler.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "content/public/test/browser_test.h"
 
 namespace ash {
+
 namespace {
+
+using ::testing::ElementsAre;
+
 constexpr char kThemeSelectionId[] = "theme-selection";
 constexpr char kLightThemeButton[] = "lightThemeButton";
 constexpr char kDarkThemeButton[] = "darkThemeButton";
@@ -43,106 +49,137 @@ const test::UIPath kScreenSubtitleClamshellPath = {
     kThemeSelectionId, "theme-selection-subtitle-clamshell"};
 const test::UIPath kScreenSubtitleTabletPath = {
     kThemeSelectionId, "theme-selection-subtitle-tablet"};
+
+constexpr char kStepShownStatusHistogram[] =
+    "OOBE.StepShownStatus.Theme-selection";
+constexpr char kStepCompletionTimeHistogram[] =
+    "OOBE.StepCompletionTime.Theme-selection";
+constexpr char kProceedExitReasonHistogram[] =
+    "OOBE.StepCompletionTimeByExitReason.Theme-selection.Proceed";
+constexpr char kSelectedThemeHistogram[] =
+    "OOBE.ThemeSelectionScreen.SelectedTheme";
+
 }  // namespace
 
 class ThemeSelectionScreenTest
     : public OobeBaseTest,
-      public ::testing::WithParamInterface<test::UIPath> {
+      public ::testing::WithParamInterface<std::tuple<test::UIPath, bool>> {
  public:
-  ThemeSelectionScreenTest() {
-    feature_list_.InitWithFeatures({features::kEnableOobeThemeSelection,
-                                    chromeos::features::kDarkLightMode},
-                                   {});
-  }
-
   void SetUpOnMainThread() override {
     ThemeSelectionScreen* theme_selection_screen =
         WizardController::default_controller()
             ->GetScreen<ThemeSelectionScreen>();
 
-    theme_selection_screen->set_exit_callback_for_testing(base::BindRepeating(
-        &ThemeSelectionScreenTest::HandleScreenExit, base::Unretained(this)));
+    original_callback_ =
+        theme_selection_screen->get_exit_callback_for_testing();
+    theme_selection_screen->set_exit_callback_for_testing(
+        screen_result_waiter_.GetRepeatingCallback());
     OobeBaseTest::SetUpOnMainThread();
   }
 
   void ShowThemeSelectionScreen() {
+    LoginDisplayHost::default_host()
+        ->GetWizardContextForTesting()
+        ->skip_choobe_for_tests = true;
+
     login_manager_mixin_.LoginAsNewRegularUser();
     OobeScreenExitWaiter(GetFirstSigninScreen()).Wait();
     WizardController::default_controller()->AdvanceToScreen(
         ThemeSelectionScreenView::kScreenId);
   }
 
-  void WaitForScreenExit() {
-    if (result_.has_value())
-      return;
-    base::RunLoop run_loop;
-    quit_closure_ = base::BindOnce(run_loop.QuitClosure());
-    run_loop.Run();
+  ThemeSelectionScreen::Result WaitForScreenExitResult() {
+    auto result = screen_result_waiter_.Take();
+    original_callback_.Run(result);
+    return result;
   }
 
   void setTabletMode(bool enabled) {
-    ash::TabletMode::Waiter waiter(enabled);
-    ash::Shell::Get()->tablet_mode_controller()->SetEnabledForTest(enabled);
+    TabletMode::Waiter waiter(enabled);
+    Shell::Get()->tablet_mode_controller()->SetEnabledForTest(enabled);
     waiter.Wait();
   }
 
-  absl::optional<ThemeSelectionScreen::Result> result_;
-
- protected:
-  base::test::ScopedFeatureList feature_list_;
+  base::HistogramTester histogram_tester_;
 
  private:
-  void HandleScreenExit(ThemeSelectionScreen::Result result) {
-    result_ = result;
-    if (quit_closure_)
-      std::move(quit_closure_).Run();
-  }
-
   LoginManagerMixin login_manager_mixin_{&mixin_host_};
-  base::OnceClosure quit_closure_;
+  ThemeSelectionScreen::ScreenExitCallback original_callback_;
+  base::test::TestFuture<ThemeSelectionScreen::Result> screen_result_waiter_;
 };
 
-IN_PROC_BROWSER_TEST_F(ThemeSelectionScreenTest, ProceedWithDefaultTheme) {
+IN_PROC_BROWSER_TEST_F(ThemeSelectionScreenTest,
+                       ProceedWithDefaultThemeBrandedBuild) {
+  LoginDisplayHost::default_host()->GetWizardContext()->is_branded_build = true;
   ShowThemeSelectionScreen();
-  Profile* profile = ProfileManager::GetActiveUserProfile();
   test::OobeJS().ClickOnPath(kNextButtonPath);
-  // Verify that remaining nudge shown count is 0 after proceeding with the
-  // default theme.
-  EXPECT_EQ(0, profile->GetPrefs()->GetInteger(
-                   prefs::kDarkLightModeNudgeLeftToShowCount));
-  WaitForScreenExit();
+
+  EXPECT_EQ(WaitForScreenExitResult(), ThemeSelectionScreen::Result::kProceed);
+
+  EXPECT_THAT(
+      histogram_tester_.GetAllSamples(kStepShownStatusHistogram),
+      ElementsAre(base::Bucket(
+          static_cast<int>(OobeMetricsHelper::ScreenShownStatus::kShown), 1)));
+  histogram_tester_.ExpectTotalCount(kStepCompletionTimeHistogram, 1);
+  histogram_tester_.ExpectTotalCount(kProceedExitReasonHistogram, 1);
+}
+
+IN_PROC_BROWSER_TEST_F(ThemeSelectionScreenTest,
+                       ProceedWithDefaultThemeNotBrandedBuild) {
+  LoginDisplayHost::default_host()->GetWizardContext()->is_branded_build =
+      false;
+  ShowThemeSelectionScreen();
+
+  test::OobeJS().ClickOnPath(kNextButtonPath);
+  EXPECT_EQ(WaitForScreenExitResult(), ThemeSelectionScreen::Result::kProceed);
+
+  EXPECT_THAT(
+      histogram_tester_.GetAllSamples(kStepShownStatusHistogram),
+      ElementsAre(base::Bucket(
+          static_cast<int>(OobeMetricsHelper::ScreenShownStatus::kShown), 1)));
+  histogram_tester_.ExpectTotalCount(kStepCompletionTimeHistogram, 1);
+  histogram_tester_.ExpectTotalCount(kProceedExitReasonHistogram, 1);
 }
 
 IN_PROC_BROWSER_TEST_P(ThemeSelectionScreenTest, SelectTheme) {
+  auto selected_option_path = std::get<0>(GetParam());
+  bool branded_build = std::get<1>(GetParam());
+
+  LoginDisplayHost::default_host()->GetWizardContext()->is_branded_build =
+      branded_build;
+
   ShowThemeSelectionScreen();
   Profile* profile = ProfileManager::GetActiveUserProfile();
 
   // Expect the default dark mode schedule type to be sunset-to-sunrise.
   EXPECT_EQ(profile->GetPrefs()->GetInteger(prefs::kDarkModeScheduleType), 1);
 
-  test::OobeJS().ExpectVisiblePath(GetParam());
-  test::OobeJS().ClickOnPath(GetParam());
+  test::OobeJS().ExpectVisiblePath(selected_option_path);
+  test::OobeJS().ClickOnPath(selected_option_path);
 
-  auto selectedOption = GetParam().begin()[GetParam().size() - 1];
+  auto selectedOption =
+      selected_option_path.begin()[selected_option_path.size() - 1];
+  ThemeSelectionScreen::SelectedTheme theme =
+      ThemeSelectionScreen::SelectedTheme::kDark;
   if (selectedOption == kDarkThemeButton) {
     EXPECT_EQ(profile->GetPrefs()->GetBoolean(prefs::kDarkModeEnabled), true);
     EXPECT_EQ(profile->GetPrefs()->GetInteger(prefs::kDarkModeScheduleType), 0);
-    EXPECT_TRUE(ash::DarkLightModeControllerImpl::Get()->IsDarkModeEnabled());
-
+    EXPECT_TRUE(DarkLightModeControllerImpl::Get()->IsDarkModeEnabled());
   } else if (selectedOption == kLightThemeButton) {
     EXPECT_EQ(profile->GetPrefs()->GetBoolean(prefs::kDarkModeEnabled), false);
     EXPECT_EQ(profile->GetPrefs()->GetInteger(prefs::kDarkModeScheduleType), 0);
-    EXPECT_FALSE(ash::DarkLightModeControllerImpl::Get()->IsDarkModeEnabled());
-
+    EXPECT_FALSE(DarkLightModeControllerImpl::Get()->IsDarkModeEnabled());
+    theme = ThemeSelectionScreen::SelectedTheme::kLight;
   } else if (selectedOption == kAutoThemeButton) {
     EXPECT_EQ(profile->GetPrefs()->GetInteger(prefs::kDarkModeScheduleType), 1);
+    theme = ThemeSelectionScreen::SelectedTheme::kAuto;
   }
 
   test::OobeJS().ClickOnPath(kNextButtonPath);
-  // Verify that remaining nudge shown count is 0 after user selects the theme.
-  EXPECT_EQ(0, profile->GetPrefs()->GetInteger(
-                   prefs::kDarkLightModeNudgeLeftToShowCount));
-  WaitForScreenExit();
+
+  EXPECT_THAT(histogram_tester_.GetAllSamples(kSelectedThemeHistogram),
+              ElementsAre(base::Bucket(static_cast<int>(theme), 1)));
+  EXPECT_EQ(WaitForScreenExitResult(), ThemeSelectionScreen::Result::kProceed);
 }
 
 IN_PROC_BROWSER_TEST_F(ThemeSelectionScreenTest, ToggleTabletMode) {
@@ -159,18 +196,21 @@ IN_PROC_BROWSER_TEST_F(ThemeSelectionScreenTest, ToggleTabletMode) {
   test::OobeJS().ExpectVisiblePath(kScreenSubtitleClamshellPath);
 }
 
-INSTANTIATE_TEST_SUITE_P(All,
-                         ThemeSelectionScreenTest,
-                         ::testing::Values(kDarkThemeButtonPath,
-                                           kLightThemeButtonPath,
-                                           kAutoThemeButtonPath));
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    ThemeSelectionScreenTest,
+    testing::Combine(testing::ValuesIn({kDarkThemeButtonPath,
+                                        kLightThemeButtonPath,
+                                        kAutoThemeButtonPath}),
+                     testing::Bool()));
 
 class ThemeSelectionScreenResumeTest
     : public OobeBaseTest,
       public ::testing::WithParamInterface<test::UIPath> {
  protected:
   DeviceStateMixin device_state_{
-      &mixin_host_, DeviceStateMixin::State::OOBE_COMPLETED_UNOWNED};
+      &mixin_host_,
+      DeviceStateMixin::State::OOBE_COMPLETED_PERMANENTLY_UNOWNED};
   FakeGaiaMixin gaia_mixin_{&mixin_host_};
   LoginManagerMixin login_mixin_{&mixin_host_, LoginManagerMixin::UserList(),
                                  &gaia_mixin_};
@@ -179,6 +219,10 @@ class ThemeSelectionScreenResumeTest
 };
 
 IN_PROC_BROWSER_TEST_P(ThemeSelectionScreenResumeTest, PRE_ResumedScreen) {
+  LoginDisplayHost::default_host()
+      ->GetWizardContextForTesting()
+      ->skip_choobe_for_tests = true;
+
   OobeScreenWaiter(UserCreationView::kScreenId).Wait();
   LoginManagerMixin::TestUserInfo test_user(user_);
   login_mixin_.LoginWithDefaultContext(test_user);
@@ -196,12 +240,12 @@ IN_PROC_BROWSER_TEST_P(ThemeSelectionScreenResumeTest, PRE_ResumedScreen) {
   if (selectedOption == kDarkThemeButton) {
     EXPECT_EQ(profile->GetPrefs()->GetBoolean(prefs::kDarkModeEnabled), true);
     EXPECT_EQ(profile->GetPrefs()->GetInteger(prefs::kDarkModeScheduleType), 0);
-    EXPECT_TRUE(ash::DarkLightModeControllerImpl::Get()->IsDarkModeEnabled());
+    EXPECT_TRUE(DarkLightModeControllerImpl::Get()->IsDarkModeEnabled());
 
   } else if (selectedOption == kLightThemeButton) {
     EXPECT_EQ(profile->GetPrefs()->GetBoolean(prefs::kDarkModeEnabled), false);
     EXPECT_EQ(profile->GetPrefs()->GetInteger(prefs::kDarkModeScheduleType), 0);
-    EXPECT_FALSE(ash::DarkLightModeControllerImpl::Get()->IsDarkModeEnabled());
+    EXPECT_FALSE(DarkLightModeControllerImpl::Get()->IsDarkModeEnabled());
 
   } else if (selectedOption == kAutoThemeButton) {
     EXPECT_EQ(profile->GetPrefs()->GetInteger(prefs::kDarkModeScheduleType), 1);

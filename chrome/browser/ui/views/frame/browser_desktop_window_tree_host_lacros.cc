@@ -4,24 +4,38 @@
 
 #include "chrome/browser/ui/views/frame/browser_desktop_window_tree_host_lacros.h"
 
+#include <optional>
+
+#include "base/check.h"
+#include "chrome/browser/ui/lacros/window_properties.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/frame/browser_frame.h"
-#include "chrome/browser/ui/views/frame/browser_non_client_frame_view.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/desktop_browser_frame_lacros.h"
+#include "chrome/browser/ui/views/tabs/tab_drag_controller.h"
 #include "chrome/browser/ui/views/tabs/tab_strip.h"
-#include "chromeos/ui/base/chromeos_ui_constants.h"
+#include "chromeos/ui/base/window_pin_type.h"
 #include "chromeos/ui/base/window_properties.h"
-#include "ui/compositor/layer.h"
+#include "chromeos/ui/frame/frame_utils.h"
+#include "ui/base/dragdrop/mojom/drag_drop_types.mojom-shared.h"
 #include "ui/platform_window/extensions/wayland_extension.h"
 #include "ui/platform_window/platform_window.h"
 
 namespace {
 
-bool ShouldHaveRoundedCorners(chromeos::WindowStateType window_state) {
-  return window_state == chromeos::WindowStateType::kNormal ||
-         window_state == chromeos::WindowStateType::kDefault ||
-         window_state == chromeos::WindowStateType::kFloated;
+// Returns the event source for the active tab drag session.
+std::optional<ui::mojom::DragEventSource> GetCurrentTabDragEventSource() {
+  if (auto* source_context = TabDragController::GetSourceContext()) {
+    if (auto* drag_controller = source_context->GetDragController()) {
+      return drag_controller->event_source();
+    }
+  }
+  return std::nullopt;
+}
+
+bool IsPinned(ui::PlatformWindowState state) {
+  return state == ui::PlatformWindowState::kPinnedFullscreen ||
+         state == ui::PlatformWindowState::kTrustedPinnedFullscreen;
 }
 
 }  // namespace
@@ -38,93 +52,18 @@ BrowserDesktopWindowTreeHostLacros::BrowserDesktopWindowTreeHostLacros(
                                   desktop_native_widget_aura),
       browser_view_(browser_view),
       desktop_native_widget_aura_(desktop_native_widget_aura) {
-  auto* native_frame = static_cast<DesktopBrowserFrameLacros*>(
+  native_frame_ = static_cast<DesktopBrowserFrameLacros*>(
       browser_frame->native_browser_frame());
-  native_frame->set_host(this);
+  native_frame_->set_host(this);
 
   // Lacros receives occlusion information from exo via aura-shell.
   SetNativeWindowOcclusionEnabled(true);
 }
 
-BrowserDesktopWindowTreeHostLacros::~BrowserDesktopWindowTreeHostLacros() =
-    default;
-
-void BrowserDesktopWindowTreeHostLacros::UpdateFrameHints() {
-  auto* const view = browser_view_->frame()->GetFrameView();
-  const bool showing_frame =
-      browser_view_->frame()->UseCustomFrame() && !view->IsFrameCondensed();
-  const float scale = device_scale_factor();
-  const gfx::Size widget_size =
-      view->GetWidget()->GetWindowBoundsInScreen().size();
-
-  std::vector<gfx::Rect> opaque_region;
-  if (showing_frame &&
-      ShouldHaveRoundedCorners(browser_view_->GetNativeWindow()->GetProperty(
-          chromeos::kWindowStateTypeKey))) {
-    const float corner_radius = chromeos::kTopCornerRadiusWhenRestored;
-    GetContentWindow()->layer()->SetRoundedCornerRadius(
-        gfx::RoundedCornersF(corner_radius, corner_radius, 0, 0));
-    GetContentWindow()->layer()->SetIsFastRoundedCorner(true);
-
-    // The opaque region is a list of rectangles that contain only fully
-    // opaque pixels of the window.  We need to convert the clipping
-    // rounded-rect into this format.
-    const SkVector radii[4]{
-        {corner_radius, corner_radius}, {corner_radius, corner_radius}, {}, {}};
-    SkRRect rrect;
-    rrect.setRectRadii(gfx::RectToSkRect(view->GetLocalBounds()), radii);
-    gfx::RectF rectf = gfx::SkRectToRectF(rrect.rect());
-    rectf.Scale(scale);
-    // It is acceptable to omit some pixels that are opaque, but the region
-    // must not include any translucent pixels.  Therefore, we must
-    // conservatively scale to the enclosed rectangle.
-    gfx::Rect rect = gfx::ToEnclosedRect(rectf);
-
-    // Create the initial region from the clipping rectangle without rounded
-    // corners.
-    SkRegion region(gfx::RectToSkIRect(rect));
-
-    // Now subtract out the small rectangles that cover the corners.
-    struct {
-      SkRRect::Corner corner;
-      bool left;
-      bool upper;
-    } kCorners[] = {
-        {SkRRect::kUpperLeft_Corner, true, true},
-        {SkRRect::kUpperRight_Corner, false, true},
-        {SkRRect::kLowerLeft_Corner, true, false},
-        {SkRRect::kLowerRight_Corner, false, false},
-    };
-    for (const auto& corner : kCorners) {
-      auto corner_radii = rrect.radii(corner.corner);
-      auto rx = std::ceil(scale * corner_radii.x());
-      auto ry = std::ceil(scale * corner_radii.y());
-      auto corner_rect = SkIRect::MakeXYWH(
-          corner.left ? rect.x() : rect.right() - rx,
-          corner.upper ? rect.y() : rect.bottom() - ry, rx, ry);
-      region.op(corner_rect, SkRegion::kDifference_Op);
-    }
-
-    // Convert the region to a list of rectangles.
-    for (SkRegion::Iterator i(region); !i.done(); i.next())
-      opaque_region.push_back(gfx::SkIRectToRect(i.rect()));
-  } else {
-    GetContentWindow()->layer()->SetRoundedCornerRadius({});
-    GetContentWindow()->layer()->SetIsFastRoundedCorner(false);
-    opaque_region.push_back({{}, widget_size});
-  }
-  platform_window()->SetOpaqueRegion(&opaque_region);
+BrowserDesktopWindowTreeHostLacros::~BrowserDesktopWindowTreeHostLacros() {
+  native_frame_->set_host(nullptr);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// BrowserDesktopWindowTreeHostLacros,
-//     DesktopWindowTreeHost implementation:
-
-void BrowserDesktopWindowTreeHostLacros::OnWidgetInitDone() {
-  DesktopWindowTreeHostLacros::OnWidgetInitDone();
-
-  UpdateFrameHints();
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 // BrowserDesktopWindowTreeHostLacros,
@@ -152,9 +91,12 @@ void BrowserDesktopWindowTreeHostLacros::TabDraggingKindChanged(
     return;
 
   auto* wayland_extension = ui::GetWaylandExtension(*platform_window());
-  auto allow_system_drag = base::FeatureList::IsEnabled(
-      features::kAllowWindowDragUsingSystemDragDrop);
-  wayland_extension->StartWindowDraggingSessionIfNeeded(allow_system_drag);
+  if (auto event_source = GetCurrentTabDragEventSource()) {
+    const auto allow_system_drag = base::FeatureList::IsEnabled(
+        features::kAllowWindowDragUsingSystemDragDrop);
+    wayland_extension->StartWindowDraggingSessionIfNeeded(*event_source,
+                                                          allow_system_drag);
+  }
 }
 
 bool BrowserDesktopWindowTreeHostLacros::SupportsMouseLock() {
@@ -180,13 +122,6 @@ void BrowserDesktopWindowTreeHostLacros::UnlockMouse(aura::Window* window) {
   }
 }
 
-void BrowserDesktopWindowTreeHostLacros::OnBoundsChanged(
-    const BoundsChange& change) {
-  DesktopWindowTreeHostLacros::OnBoundsChanged(change);
-
-  UpdateFrameHints();
-}
-
 void BrowserDesktopWindowTreeHostLacros::OnWindowStateChanged(
     ui::PlatformWindowState old_window_show_state,
     ui::PlatformWindowState new_window_show_state) {
@@ -194,15 +129,37 @@ void BrowserDesktopWindowTreeHostLacros::OnWindowStateChanged(
                                                     new_window_show_state);
 
   bool fullscreen_changed =
-      new_window_show_state == ui::PlatformWindowState::kFullScreen ||
-      old_window_show_state == ui::PlatformWindowState::kFullScreen;
+      ui::IsPlatformWindowStateFullscreen(new_window_show_state) ||
+      ui::IsPlatformWindowStateFullscreen(old_window_show_state);
   if (old_window_show_state != new_window_show_state && fullscreen_changed) {
+    // Update WindowPinTypeKey before triggering BrowserView::ProcessFullscreen.
+    if (IsPinned(old_window_show_state)) {
+      CHECK(!IsPinned(new_window_show_state));
+      desktop_native_widget_aura_->GetNativeWindow()->SetProperty(
+          lacros::kWindowPinTypeKey, chromeos::WindowPinType::kNone);
+    } else if (IsPinned(new_window_show_state)) {
+      CHECK(!IsPinned(old_window_show_state));
+      desktop_native_widget_aura_->GetNativeWindow()->SetProperty(
+          lacros::kWindowPinTypeKey,
+          new_window_show_state == ui::PlatformWindowState::kPinnedFullscreen
+              ? chromeos::WindowPinType::kPinned
+              : chromeos::WindowPinType::kTrustedPinned);
+    }
+
     // If the browser view initiated this state change,
     // BrowserView::ProcessFullscreen will no-op, so this call is harmless.
     browser_view_->FullscreenStateChanging();
   }
+}
 
-  UpdateFrameHints();
+void BrowserDesktopWindowTreeHostLacros::OnFullscreenTypeChanged(
+    ui::PlatformFullscreenType old_type,
+    ui::PlatformFullscreenType new_type) {
+  DesktopWindowTreeHostLacros::OnFullscreenTypeChanged(old_type, new_type);
+
+  // Finalizing full screen mode transition after Ash has also asynchronously
+  // entered the full screen mode state for this window.
+  browser_view_->FullscreenStateChanged();
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -9,8 +9,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
@@ -23,6 +23,7 @@
 #include "net/base/features.h"
 #include "net/base/ip_address.h"
 #include "net/base/net_errors.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
 #include "net/base/url_util.h"
 #include "net/log/net_log.h"
@@ -259,7 +260,7 @@ class NetworkErrorLoggingServiceImpl : public NetworkErrorLoggingService {
       policy_dict.Set("origin", key.origin.Serialize());
       policy_dict.Set("includeSubdomains", policy.include_subdomains);
       policy_dict.Set("reportTo", policy.report_to);
-      policy_dict.Set("expires", NetLog::TimeToValue(policy.expires));
+      policy_dict.Set("expires", NetLog::TimeToString(policy.expires));
       policy_dict.Set("successFraction", policy.success_fraction);
       policy_dict.Set("failureFraction", policy.failure_fraction);
       policy_list.Append(std::move(policy_dict));
@@ -286,7 +287,7 @@ class NetworkErrorLoggingServiceImpl : public NetworkErrorLoggingService {
   }
 
  private:
-  // Map from (NIK, origin) to owned policy.
+  // Map from (NAK, origin) to owned policy.
   using PolicyMap = std::map<NelPolicyKey, NelPolicy>;
 
   // Wildcard policies are policies for which the include_subdomains flag is
@@ -300,7 +301,7 @@ class NetworkErrorLoggingServiceImpl : public NetworkErrorLoggingService {
   // the longest host part (most specific subdomain) that is a substring of the
   // domain.
   //
-  // When multiple policies with the same (NIK, origin.host()) are present, they
+  // When multiple policies with the same (NAK, origin.host()) are present, they
   // are all stored, the policy returned is not well defined.
   //
   // Policies in the map are unowned; they are pointers to the original in
@@ -333,10 +334,9 @@ class NetworkErrorLoggingServiceImpl : public NetworkErrorLoggingService {
   // Backlog of tasks waiting on initialization.
   std::vector<base::OnceClosure> task_backlog_;
 
-  // Set based on features::kPartitionNelAndReportingByNetworkIsolationKey on
-  // construction.
-  bool respect_network_anonymization_key_ = base::FeatureList::IsEnabled(
-      features::kPartitionNelAndReportingByNetworkIsolationKey);
+  // Set based on network state partitioning status on construction.
+  bool respect_network_anonymization_key_ =
+      NetworkAnonymizationKey::IsPartitioningEnabled();
 
   base::WeakPtrFactory<NetworkErrorLoggingServiceImpl> weak_factory_{this};
 
@@ -455,6 +455,13 @@ class NetworkErrorLoggingServiceImpl : public NetworkErrorLoggingService {
     if (details.reporting_upload_depth > kMaxNestedReportDepth)
       return;
 
+    // include_subdomains policies are only allowed to report on DNS resolution
+    // errors.
+    if (phase_string != kDnsPhase &&
+        IsMismatchingSubdomainReport(*policy, report_origin)) {
+      return;
+    }
+
     // If the server that handled the request is different than the server that
     // delivered the NEL policy (as determined by their IP address), then we
     // have to "downgrade" the NEL report, so that it only includes information
@@ -465,13 +472,6 @@ class NetworkErrorLoggingServiceImpl : public NetworkErrorLoggingService {
       type_string = kDnsAddressChangedType;
       details.elapsed_time = base::TimeDelta();
       details.status_code = 0;
-    }
-
-    // include_subdomains policies are only allowed to report on DNS resolution
-    // errors.
-    if (phase_string != kDnsPhase &&
-        IsMismatchingSubdomainReport(*policy, report_origin)) {
-      return;
     }
 
     bool success = (type == OK) && !IsHttpError(details);

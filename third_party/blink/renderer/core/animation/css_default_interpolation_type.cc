@@ -7,7 +7,6 @@
 #include "third_party/blink/renderer/core/animation/css_interpolation_environment.h"
 #include "third_party/blink/renderer/core/animation/string_keyframe.h"
 #include "third_party/blink/renderer/core/css/resolver/style_builder.h"
-#include "third_party/blink/renderer/core/css/scoped_css_value.h"
 
 namespace blink {
 
@@ -36,7 +35,7 @@ InterpolationValue CSSDefaultInterpolationType::MaybeConvertSingle(
   if (!css_value)
     return nullptr;
 
-  return InterpolationValue(std::make_unique<InterpolableList>(0),
+  return InterpolationValue(MakeGarbageCollected<InterpolableList>(0),
                             CSSDefaultNonInterpolableValue::Create(css_value));
 }
 
@@ -49,9 +48,7 @@ void CSSDefaultInterpolationType::Apply(
   StyleBuilder::ApplyProperty(
       GetProperty().GetCSSPropertyName(),
       To<CSSInterpolationEnvironment>(environment).GetState(),
-      ScopedCSSValue(*To<CSSDefaultNonInterpolableValue>(non_interpolable_value)
-                          ->CssValue(),
-                     nullptr));
+      *To<CSSDefaultNonInterpolableValue>(non_interpolable_value)->CssValue());
 }
 
 }  // namespace blink

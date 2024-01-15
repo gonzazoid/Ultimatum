@@ -10,10 +10,13 @@
 #include "content/browser/renderer_host/frame_tree.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
 #include "content/browser/renderer_host/navigation_request.h"
+#include "content/common/features.h"
 #include "content/common/navigation_params_utils.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_frame_host.h"
-#include "content/public/common/content_features.h"
+#include "storage/browser/file_system/external_mount_points.h"
+#include "storage/browser/file_system/file_system_url.h"
+#include "storage/common/file_system/file_system_util.h"
 #include "third_party/blink/public/mojom/devtools/console_message.mojom.h"
 #include "url/url_constants.h"
 
@@ -22,6 +25,13 @@ namespace content {
 namespace {
 const char kConsoleError[] = "Not allowed to navigate top frame to %s URL: %s";
 const char kAnyFrameConsoleError[] = "Not allowed to navigate to %s URL: %s";
+
+bool IsExternalMountedFile(const GURL& url) {
+  storage::FileSystemURL file_system_url =
+      storage::ExternalMountPoints::GetSystemInstance()->CrackURL(
+          url, blink::StorageKey::CreateFirstParty(url::Origin::Create(url)));
+  return file_system_url.is_valid();
+}
 }
 
 BlockedSchemeNavigationThrottle::BlockedSchemeNavigationThrottle(
@@ -40,11 +50,12 @@ BlockedSchemeNavigationThrottle::WillStartRequest() {
     return PROCEED;
 
   RenderFrameHost* top_frame =
-      request->frame_tree_node()->frame_tree()->root()->current_frame_host();
+      request->frame_tree_node()->frame_tree().root()->current_frame_host();
   BrowserContext* browser_context = top_frame->GetBrowserContext();
 
   if (base::FeatureList::IsEnabled(
           blink::features::kFileSystemUrlNavigationForChromeAppsOnly) &&
+      !IsExternalMountedFile(request->GetURL()) &&
       (url::Origin::Create(request->GetURL()) ==
        request->GetInitiatorOrigin()) &&
       content::GetContentClient()->browser()->IsFileSystemURLNavigationAllowed(
@@ -68,7 +79,7 @@ BlockedSchemeNavigationThrottle::WillProcessResponse() {
     return PROCEED;
 
   RenderFrameHost* top_frame =
-      request->frame_tree_node()->frame_tree()->root()->current_frame_host();
+      request->frame_tree_node()->frame_tree().root()->current_frame_host();
   top_frame->AddMessageToConsole(
       blink::mojom::ConsoleMessageLevel::kError,
       base::StringPrintf(kConsoleError, request->GetURL().scheme().c_str(),
@@ -121,6 +132,12 @@ BlockedSchemeNavigationThrottle::CreateThrottleForNavigation(
           blink::features::kFileSystemUrlNavigation) &&
       request->IsRendererInitiated() &&
       request->GetURL().SchemeIs(url::kFileSystemScheme)) {
+    return std::make_unique<BlockedSchemeNavigationThrottle>(request);
+  }
+  // Block any external mounted files.
+  if (!base::FeatureList::IsEnabled(
+          blink::features::kFileSystemUrlNavigation) &&
+      IsExternalMountedFile(request->GetURL())) {
     return std::make_unique<BlockedSchemeNavigationThrottle>(request);
   }
   return nullptr;

@@ -4,12 +4,14 @@
 
 #include "chromecast/cast_core/grpc/grpc_server.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/run_loop.h"
-#include "base/task/task_traits.h"
+#include <algorithm>
+#include <utility>
+
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/logging.h"
+#include "base/task/bind_post_task.h"
 #include "base/task/thread_pool.h"
-#include "base/time/time.h"
 #include "chromecast/cast_core/grpc/grpc_call_options.h"
 
 namespace cast {
@@ -61,15 +63,19 @@ GrpcServer::~GrpcServer() {
   DCHECK(!server_) << "gRPC server must be explicitly stopped";
 }
 
-void GrpcServer::Start(const std::string& endpoint) {
+grpc::Status GrpcServer::Start(const std::string& endpoint) {
   DCHECK(!server_) << "Server is already running";
-  DCHECK(server_reactor_tracker_) << "Server was already shutdown";
+  DCHECK(server_reactor_tracker_) << "Server was alreadys shutdown";
 
   server_ = grpc::ServerBuilder()
                 .AddListeningPort(endpoint, grpc::InsecureServerCredentials())
                 .RegisterCallbackGenericService(this)
                 .BuildAndStart();
-  DCHECK(server_) << "Failed to start server";
+  if (!server_) {
+    return grpc::Status(grpc::StatusCode::INTERNAL,
+                        "can't start gRPC server on " + endpoint);
+  }
+  return grpc::Status::OK;
 }
 
 void GrpcServer::Stop() {
@@ -79,7 +85,7 @@ void GrpcServer::Stop() {
   }
 
   StopGrpcServer(std::move(server_), std::move(server_reactor_tracker_),
-                 kDefaultServerStopTimeoutMs, base::DoNothing());
+                 kDefaultServerStopTimeoutMs, base::BindOnce([]() {}));
 }
 
 void GrpcServer::Stop(int64_t timeout_ms,
@@ -90,12 +96,13 @@ void GrpcServer::Stop(int64_t timeout_ms,
     return;
   }
 
-  scoped_refptr<base::SequencedTaskRunner> task_runner =
-      base::ThreadPool::CreateSequencedTaskRunner({base::MayBlock()});
-  task_runner->PostTask(
-      FROM_HERE, base::BindOnce(&StopGrpcServer, std::move(server_),
-                                std::move(server_reactor_tracker_), timeout_ms,
-                                std::move(server_stopped_callback)));
+  // Synchronous requests will block gRPC shutdown unless we post shutdown on
+  // a different thread.
+  base::ThreadPool::PostTask(
+      FROM_HERE, {base::MayBlock()},
+      base::BindOnce(&StopGrpcServer, std::move(server_),
+                     std::move(server_reactor_tracker_), timeout_ms,
+                     std::move(server_stopped_callback)));
 }
 
 grpc::ServerGenericBidiReactor* GrpcServer::CreateReactor(

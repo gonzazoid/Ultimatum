@@ -9,7 +9,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "chromeos/crosapi/mojom/sync.mojom.h"
-#include "components/sync/driver/sync_service_observer.h"
+#include "components/sync/service/sync_service_observer.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
@@ -20,14 +20,13 @@ class SyncService;
 // Once created, observes changes of passphrase state in both Lacros SyncService
 // (via SyncServiceObserver) and Ash SyncService (via crosapi) and passes
 // decryption nigori key from one to another when needed.
-// Stops working upon Lacros SyncService Shutdown().
 class SyncExplicitPassphraseClientLacros {
  public:
-  // |sync_service| must not be null. |sync_service_remote| must not be null and
-  // bound.
+  // |remote| must be bound. |sync_service| must not be null and must outlive
+  // |this| object.
   SyncExplicitPassphraseClientLacros(
-      syncer::SyncService* sync_service,
-      mojo::Remote<crosapi::mojom::SyncService>* sync_service_remote);
+      mojo::Remote<crosapi::mojom::SyncExplicitPassphraseClient> remote,
+      syncer::SyncService* sync_service);
   SyncExplicitPassphraseClientLacros(
       const SyncExplicitPassphraseClientLacros& other) = delete;
   SyncExplicitPassphraseClientLacros& operator=(
@@ -48,16 +47,14 @@ class SyncExplicitPassphraseClientLacros {
     ~LacrosSyncServiceObserver() override;
 
     void OnStateChanged(syncer::SyncService* sync_service) override;
-    void OnSyncShutdown(syncer::SyncService* sync_service) override;
 
     bool is_passphrase_required() const { return is_passphrase_required_; }
 
     bool is_passphrase_available() const { return is_passphrase_available_; }
 
    private:
-    base::raw_ptr<syncer::SyncService> sync_service_;
-    base::raw_ptr<SyncExplicitPassphraseClientLacros>
-        explicit_passphrase_client_;
+    raw_ptr<syncer::SyncService> sync_service_;
+    raw_ptr<SyncExplicitPassphraseClientLacros> explicit_passphrase_client_;
 
     bool is_passphrase_required_;
     bool is_passphrase_available_;
@@ -84,8 +81,7 @@ class SyncExplicitPassphraseClientLacros {
     bool is_passphrase_available() const { return is_passphrase_available_; }
 
    private:
-    base::raw_ptr<SyncExplicitPassphraseClientLacros>
-        explicit_passphrase_client_;
+    raw_ptr<SyncExplicitPassphraseClientLacros> explicit_passphrase_client_;
     mojo::Receiver<crosapi::mojom::SyncExplicitPassphraseClientObserver>
         receiver_{this};
 
@@ -95,7 +91,6 @@ class SyncExplicitPassphraseClientLacros {
 
   void OnLacrosPassphraseRequired();
   void OnLacrosPassphraseAvailable();
-  void OnLacrosSyncShutdown();
   void OnAshPassphraseRequired();
   void OnAshPassphraseAvailable();
 
@@ -105,7 +100,7 @@ class SyncExplicitPassphraseClientLacros {
   void OnQueryDecryptionKeyFromAshCompleted(
       crosapi::mojom::NigoriKeyPtr mojo_nigori_key);
 
-  base::raw_ptr<syncer::SyncService> sync_service_;
+  raw_ptr<syncer::SyncService> sync_service_;
   LacrosSyncServiceObserver sync_service_observer_;
   std::unique_ptr<AshSyncExplicitPassphraseClientObserver>
       ash_explicit_passphrase_client_observer_;

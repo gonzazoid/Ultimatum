@@ -77,6 +77,10 @@ class PopupBlockerTabHelperTest : public content::RenderViewHostTestHarness {
     PopupBlockerTabHelper::CreateForWebContents(web_contents());
     helper_ = PopupBlockerTabHelper::FromWebContents(web_contents());
   }
+  void TearDown() override {
+    helper_ = nullptr;
+    content::RenderViewHostTestHarness::TearDown();
+  }
 
   PopupBlockerTabHelper* helper() { return helper_; }
 

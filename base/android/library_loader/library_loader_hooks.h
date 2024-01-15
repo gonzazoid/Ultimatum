@@ -8,8 +8,8 @@
 #include <jni.h>
 
 #include "base/base_export.h"
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/functional/callback.h"
 #include "base/metrics/field_trial.h"
 
 namespace base {
@@ -29,12 +29,8 @@ enum LibraryProcessType {
   PROCESS_WEBVIEW = 3,
   // Shared library is running in child process as part of webview.
   PROCESS_WEBVIEW_CHILD = 4,
-  // Shared library is running in the app that uses weblayer.
-  PROCESS_WEBLAYER = 5,
-  // Shared library is running in child process as part of weblayer.
-  PROCESS_WEBLAYER_CHILD = 6,
   // Shared library is running in a non-embedded WebView process.
-  PROCESS_WEBVIEW_NONEMBEDDED = 7,
+  PROCESS_WEBVIEW_NONEMBEDDED = 5,
 };
 
 // Returns the library process type this library was loaded for.
@@ -50,11 +46,6 @@ typedef bool NativeInitializationHook(LibraryProcessType library_process_type);
 
 BASE_EXPORT void SetNativeInitializationHook(
     NativeInitializationHook native_initialization_hook);
-
-typedef void NonMainDexJniRegistrationHook();
-
-BASE_EXPORT void SetNonMainDexJniRegistrationHook(
-    NonMainDexJniRegistrationHook jni_registration_hook);
 
 // Record any pending renderer histogram value as histograms.  Pending values
 // are set by

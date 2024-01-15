@@ -7,11 +7,12 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/metrics_hashes.h"
 #include "base/strings/strcat.h"
+#include "build/build_config.h"
 #include "content/browser/devtools/devtools_instrumentation.h"
-#include "content/browser/portal/portal_navigation_throttle.h"
 #include "content/browser/preloading/prerender/prerender_navigation_throttle.h"
 #include "content/browser/preloading/prerender/prerender_subframe_navigation_throttle.h"
 #include "content/browser/renderer_host/ancestor_throttle.h"
+#include "content/browser/renderer_host/back_forward_cache_subframe_navigation_throttle.h"
 #include "content/browser/renderer_host/blocked_scheme_navigation_throttle.h"
 #include "content/browser/renderer_host/http_error_navigation_throttle.h"
 #include "content/browser/renderer_host/isolated_web_app_throttle.h"
@@ -19,9 +20,14 @@
 #include "content/browser/renderer_host/navigation_request.h"
 #include "content/browser/renderer_host/navigator_delegate.h"
 #include "content/browser/renderer_host/renderer_cancellation_throttle.h"
+#include "content/browser/renderer_host/subframe_history_navigation_throttle.h"
 #include "content/public/browser/navigation_handle.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
+
+#if !BUILDFLAG(IS_ANDROID)
+#include "content/browser/picture_in_picture/document_picture_in_picture_navigation_throttle.h"
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 namespace content {
 
@@ -31,6 +37,9 @@ NavigationThrottle::ThrottleCheckResult ExecuteNavigationEvent(
     NavigationThrottle* throttle,
     NavigationThrottleRunner::Event event) {
   switch (event) {
+    case NavigationThrottleRunner::Event::NoEvent:
+      DUMP_WILL_BE_NOTREACHED_NORETURN();
+      return NavigationThrottle::CANCEL_AND_IGNORE;
     case NavigationThrottleRunner::Event::WillStartRequest:
       return throttle->WillStartRequest();
     case NavigationThrottleRunner::Event::WillRedirectRequest:
@@ -39,8 +48,8 @@ NavigationThrottle::ThrottleCheckResult ExecuteNavigationEvent(
       return throttle->WillFailRequest();
     case NavigationThrottleRunner::Event::WillProcessResponse:
       return throttle->WillProcessResponse();
-    default:
-      NOTREACHED();
+    case NavigationThrottleRunner::Event::WillCommitWithoutUrlLoader:
+      return throttle->WillCommitWithoutUrlLoader();
   }
   NOTREACHED();
   return NavigationThrottle::CANCEL_AND_IGNORE;
@@ -48,6 +57,9 @@ NavigationThrottle::ThrottleCheckResult ExecuteNavigationEvent(
 
 const char* GetEventName(NavigationThrottleRunner::Event event) {
   switch (event) {
+    case NavigationThrottleRunner::Event::NoEvent:
+      DUMP_WILL_BE_NOTREACHED_NORETURN();
+      return "";
     case NavigationThrottleRunner::Event::WillStartRequest:
       return "NavigationThrottle::WillStartRequest";
     case NavigationThrottleRunner::Event::WillRedirectRequest:
@@ -56,14 +68,18 @@ const char* GetEventName(NavigationThrottleRunner::Event event) {
       return "NavigationThrottle::WillFailRequest";
     case NavigationThrottleRunner::Event::WillProcessResponse:
       return "NavigationThrottle::WillProcessResponse";
-    default:
-      NOTREACHED();
+    case NavigationThrottleRunner::Event::WillCommitWithoutUrlLoader:
+      return "NavigationThrottle::WillCommitWithoutUrlLoader";
   }
+  NOTREACHED();
   return "";
 }
 
 const char* GetEventNameForHistogram(NavigationThrottleRunner::Event event) {
   switch (event) {
+    case NavigationThrottleRunner::Event::NoEvent:
+      DUMP_WILL_BE_NOTREACHED_NORETURN();
+      return "";
     case NavigationThrottleRunner::Event::WillStartRequest:
       return "WillStartRequest";
     case NavigationThrottleRunner::Event::WillRedirectRequest:
@@ -72,9 +88,10 @@ const char* GetEventNameForHistogram(NavigationThrottleRunner::Event event) {
       return "WillFailRequest";
     case NavigationThrottleRunner::Event::WillProcessResponse:
       return "WillProcessResponse";
-    default:
-      NOTREACHED();
+    case NavigationThrottleRunner::Event::WillCommitWithoutUrlLoader:
+      return "WillCommitWithoutUrlLoader";
   }
+  NOTREACHED();
   return "";
 }
 
@@ -153,6 +170,14 @@ void NavigationThrottleRunner::RegisterNavigationThrottles() {
   AddThrottle(
       BlockedSchemeNavigationThrottle::CreateThrottleForNavigation(request));
 
+#if !BUILDFLAG(IS_ANDROID)
+  // Prevent cross-document navigations from document picture-in-picture
+  // windows.
+  AddThrottle(
+      DocumentPictureInPictureNavigationThrottle::MaybeCreateThrottleFor(
+          request));
+#endif  // !BUILDFLAG(IS_ANDROID)
+
   AddThrottle(AncestorThrottle::MaybeCreateThrottleFor(request));
 
   // Check for mixed content. This is done after the AncestorThrottle and the
@@ -161,9 +186,6 @@ void NavigationThrottleRunner::RegisterNavigationThrottles() {
   // console about CSP blocking the load.
   AddThrottle(
       MixedContentNavigationThrottle::CreateThrottleForNavigation(request));
-
-  // Block certain requests that are not permitted for portals.
-  AddThrottle(PortalNavigationThrottle::MaybeCreateThrottleFor(request));
 
   // Block certain requests that are not permitted for prerendering.
   AddThrottle(PrerenderNavigationThrottle::MaybeCreateThrottleFor(request));
@@ -190,6 +212,58 @@ void NavigationThrottleRunner::RegisterNavigationThrottles() {
   // wait for the JS task that starts the navigation to finish, so add it close
   // to the end to not delay running other throttles.
   AddThrottle(RendererCancellationThrottle::MaybeCreateThrottleFor(request));
+
+  // Defer any cross-document subframe history navigations if there is an
+  // associated main-frame same-document history navigation in progress, until
+  // the main frame has had an opportunity to fire a navigate event in the
+  // renderer. If the navigate event cancels the history navigation, the
+  // subframe navigations should not proceed.
+  AddThrottle(
+      SubframeHistoryNavigationThrottle::MaybeCreateThrottleFor(request));
+
+  // Insert all testing NavigationThrottles last.
+  throttles_.insert(throttles_.end(),
+                    std::make_move_iterator(testing_throttles.begin()),
+                    std::make_move_iterator(testing_throttles.end()));
+}
+
+void NavigationThrottleRunner::
+    RegisterNavigationThrottlesForCommitWithoutUrlLoader() {
+  // Note: |throttle_| might not be empty. Some NavigationThrottles might have
+  // been registered with RegisterThrottleForTesting. These must reside at the
+  // end of |throttles_|. TestNavigationManagerThrottle expects that the
+  // NavigationThrottles added for test are the last NavigationThrottles to
+  // execute. Take them out while appending the rest of the
+  // NavigationThrottles.
+  std::vector<std::unique_ptr<NavigationThrottle>> testing_throttles =
+      std::move(throttles_);
+
+  // The NavigationRequest associated with the NavigationThrottles this
+  // NavigationThrottleRunner manages.
+  // Unit tests that do not use NavigationRequest should never call
+  // RegisterNavigationThrottlesForCommitWithoutUrlLoader as this function
+  // expects |delegate_| to be a NavigationRequest.
+  NavigationRequest* request = static_cast<NavigationRequest*>(delegate_);
+
+  // Defer any same-document subframe history navigations if there is an
+  // associated main-frame same-document history navigation in progress, until
+  // the main frame has had an opportunity to fire a navigate event in the
+  // renderer. If the navigate event cancels the history navigation, the
+  // subframe navigations should not proceed.
+  AddThrottle(
+      SubframeHistoryNavigationThrottle::MaybeCreateThrottleFor(request));
+
+  // Defer cross-origin about:srcdoc subframe loading during prerendering state.
+  AddThrottle(
+      PrerenderSubframeNavigationThrottle::MaybeCreateThrottleFor(request));
+
+  // Defer subframe navigation in bfcached page.
+  if (base::FeatureList::IsEnabled(
+          features::kEnableBackForwardCacheForOngoingSubframeNavigation)) {
+    AddThrottle(
+        BackForwardCacheSubframeNavigationThrottle::MaybeCreateThrottleFor(
+            request));
+  }
 
   // Insert all testing NavigationThrottles last.
   throttles_.insert(throttles_.end(),
@@ -281,7 +355,9 @@ void NavigationThrottleRunner::InformDelegate(
 void NavigationThrottleRunner::RecordDeferTimeUKM() {
   if (!is_primary_main_frame_)
     return;
-  DCHECK(GetDeferringThrottle());
+  if (!GetDeferringThrottle()) {
+    return;
+  }
   ukm::builders::NavigationThrottleDeferredTime builder(
       ukm::ConvertToSourceId(navigation_id_, ukm::SourceIdType::NAVIGATION_ID));
   builder.SetDurationOfNavigationDeferralMs(

@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "base/component_export.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "chromeos/components/onc/onc_signature.h"
 
 namespace ash::onc {
@@ -44,6 +44,10 @@ COMPONENT_EXPORT(CHROMEOS_NETWORK)
 extern const StringTranslationEntry kOpenVpnCompressionAlgorithmTable[];
 COMPONENT_EXPORT(CHROMEOS_NETWORK)
 extern const StringTranslationEntry kIKEv2AuthenticationTypeTable[];
+COMPONENT_EXPORT(CHROMEOS_NETWORK)
+extern const StringTranslationEntry kApnAuthenticationTranslationTable[];
+COMPONENT_EXPORT(CHROMEOS_NETWORK)
+extern const StringTranslationEntry kApnIpTypeTranslationTable[];
 
 // A separate translation table for cellular properties that are stored in a
 // Shill Device instead of a Service. The |shill_property_name| entries
@@ -95,13 +99,5 @@ bool TranslateStringToONC(const StringTranslationEntry table[],
                           std::string* onc_value);
 
 }  // namespace ash::onc
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos::onc {
-using ::ash::onc::kNetworkTechnologyTable;
-using ::ash::onc::kVPNTypeTable;
-using ::ash::onc::StringTranslationEntry;
-using ::ash::onc::TranslateStringToONC;
-}  // namespace chromeos::onc
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_ONC_ONC_TRANSLATION_TABLES_H_

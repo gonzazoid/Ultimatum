@@ -9,11 +9,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
 #include "base/sequence_checker.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/types/pass_key.h"
 #include "components/services/storage/public/cpp/buckets/bucket_locator.h"
 #include "content/browser/media/cdm_file_impl.h"
@@ -27,7 +28,31 @@
 
 namespace content {
 
-using CdmFileId = MediaLicenseManager::CdmFileId;
+namespace {
+constexpr uint64_t kBytesPerKB = 1024;
+constexpr int kMinDatabaseSizeKB = 0;
+// Used for histogram reporting, the max size of the database we expect in KB.
+constexpr uint64_t kMaxDatabaseSizeKB = 512000 * 10;
+constexpr int kSizeKBBuckets = 1000;
+}  // namespace
+
+// static
+void MediaLicenseStorageHost::ReportDatabaseOpenError(
+    MediaLicenseStorageHostOpenError error,
+    bool is_incognito) {
+  DCHECK_NE(error, MediaLicenseStorageHostOpenError::kOk);
+  const std::string kDatabaseOpenErrorUmaName =
+      "Media.EME.MediaLicenseStorageHostOpenError";
+  base::UmaHistogramEnumeration(kDatabaseOpenErrorUmaName, error);
+
+  if (is_incognito) {
+    base::UmaHistogramEnumeration(kDatabaseOpenErrorUmaName + ".Incognito",
+                                  error);
+  } else {
+    base::UmaHistogramEnumeration(kDatabaseOpenErrorUmaName + ".NotIncognito",
+                                  error);
+  }
+}
 
 MediaLicenseStorageHost::MediaLicenseStorageHost(
     MediaLicenseManager* manager,
@@ -54,22 +79,29 @@ void MediaLicenseStorageHost::Open(const std::string& file_name,
 
   if (bucket_locator_.id.is_null()) {
     DVLOG(1) << "Could not retrieve valid bucket.";
+    ReportDatabaseOpenError(MediaLicenseStorageHostOpenError::kInvalidBucket,
+                            in_memory());
     std::move(callback).Run(Status::kFailure, mojo::NullAssociatedRemote());
     return;
   }
 
   if (file_name.empty()) {
     DVLOG(1) << "No file specified.";
+    ReportDatabaseOpenError(MediaLicenseStorageHostOpenError::kNoFileSpecified,
+                            in_memory());
     std::move(callback).Run(Status::kFailure, mojo::NullAssociatedRemote());
     return;
   }
 
   if (!CdmFileImpl::IsValidName(file_name)) {
+    ReportDatabaseOpenError(MediaLicenseStorageHostOpenError::kInvalidFileName,
+                            in_memory());
     std::move(callback).Run(Status::kFailure, mojo::NullAssociatedRemote());
     return;
   }
 
-  const BindingContext& binding_context = receivers_.current_context();
+  const CdmStorageBindingContext& binding_context =
+      receivers_.current_context();
   db_.AsyncCall(&MediaLicenseDatabase::OpenFile)
       .WithArgs(binding_context.cdm_type, file_name)
       .Then(base::BindOnce(&MediaLicenseStorageHost::DidOpenFile,
@@ -78,7 +110,7 @@ void MediaLicenseStorageHost::Open(const std::string& file_name,
 }
 
 void MediaLicenseStorageHost::BindReceiver(
-    const BindingContext& binding_context,
+    const CdmStorageBindingContext& binding_context,
     mojo::PendingReceiver<media::mojom::CdmStorage> receiver) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK_EQ(binding_context.storage_key, bucket_locator_.storage_key);
@@ -86,13 +118,15 @@ void MediaLicenseStorageHost::BindReceiver(
   receivers_.Add(this, std::move(receiver), binding_context);
 }
 
-void MediaLicenseStorageHost::DidOpenFile(const std::string& file_name,
-                                          BindingContext binding_context,
-                                          OpenCallback callback,
-                                          bool success) {
+void MediaLicenseStorageHost::DidOpenFile(
+    const std::string& file_name,
+    CdmStorageBindingContext binding_context,
+    OpenCallback callback,
+    MediaLicenseStorageHostOpenError error) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (!success) {
+  if (error != MediaLicenseStorageHostOpenError::kOk) {
+    ReportDatabaseOpenError(error, in_memory());
     std::move(callback).Run(Status::kFailure, mojo::NullAssociatedRemote());
     return;
   }
@@ -115,9 +149,9 @@ void MediaLicenseStorageHost::DidOpenFile(const std::string& file_name,
   // We don't actually touch the database here, but notify the quota system
   // anyways since conceptually we're creating an empty file.
   manager_->quota_manager_proxy()->NotifyBucketModified(
-      storage::QuotaClientType::kMediaLicense, bucket_locator_.id, /*delta=*/0,
+      storage::QuotaClientType::kMediaLicense, bucket_locator_, /*delta=*/0,
       /*modification_time=*/base::Time::Now(),
-      base::SequencedTaskRunnerHandle::Get(),
+      base::SequencedTaskRunner::GetCurrentDefault(),
       base::BindOnce(std::move(callback), Status::kSuccess,
                      std::move(cdm_file)));
 }
@@ -128,12 +162,63 @@ void MediaLicenseStorageHost::ReadFile(const media::CdmType& cdm_type,
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   manager_->quota_manager_proxy()->NotifyBucketAccessed(
-      bucket_locator_.id,
+      bucket_locator_,
       /*access_time=*/base::Time::Now());
+
+  // This is to read from the cdm_storage database when the migration is active
+  // and we've already migrated the data from the cdm_storage database to the
+  // media_license database.
+  if (manager_->cdm_storage_manager() &&
+      base::Contains(files_migrated_,
+                     CdmFileIdTwo{file_name, cdm_type, storage_key()})) {
+    manager_->cdm_storage_manager()->ReadFile(storage_key(), cdm_type,
+                                              file_name, std::move(callback));
+    return;
+  }
 
   db_.AsyncCall(&MediaLicenseDatabase::ReadFile)
       .WithArgs(cdm_type, file_name)
-      .Then(std::move(callback));
+      .Then(base::BindOnce(&MediaLicenseStorageHost::DidReadFile,
+                           weak_factory_.GetWeakPtr(), cdm_type, file_name,
+                           std::move(callback)));
+}
+
+void MediaLicenseStorageHost::DidReadFile(
+    const media::CdmType& cdm_type,
+    const std::string& file_name,
+    ReadFileCallback callback,
+    std::optional<std::vector<uint8_t>> data) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  // The code only reaches this callback during the migration when this is our
+  // first time reading this specific storage_key, cdm_type, and file name. If
+  // the data has value, then we write it to the cdm_storage database and from
+  // then on, read from the cdm_storage database through the media_license code
+  // when the migration is active.
+  if (data.has_value() && manager_->cdm_storage_manager()) {
+    manager_->cdm_storage_manager()->WriteFile(
+        storage_key(), cdm_type, file_name, data.value(), base::DoNothing());
+    files_migrated_.emplace_back(file_name, cdm_type, storage_key());
+  }
+
+  if (!database_size_reported_) {
+    db_.AsyncCall(&MediaLicenseDatabase::GetDatabaseSize)
+        .Then(base::BindOnce(&MediaLicenseStorageHost::DidGetDatabaseSize,
+                             weak_factory_.GetWeakPtr()));
+  }
+
+  std::move(callback).Run(data);
+}
+
+void MediaLicenseStorageHost::DidGetDatabaseSize(const uint64_t size) {
+  // One time report DatabaseSize.
+
+  base::UmaHistogramCustomCounts(
+      "Media.EME.MediaLicenseStorageHost.CurrentDatabaseUsageKB",
+      size / kBytesPerKB, kMinDatabaseSizeKB, kMaxDatabaseSizeKB,
+      kSizeKBBuckets);
+
+  database_size_reported_ = true;
 }
 
 void MediaLicenseStorageHost::WriteFile(const media::CdmType& cdm_type,
@@ -141,6 +226,15 @@ void MediaLicenseStorageHost::WriteFile(const media::CdmType& cdm_type,
                                         const std::vector<uint8_t>& data,
                                         WriteFileCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (manager_->cdm_storage_manager()) {
+    // We don't populate the callback because we want the
+    // `MediaLicenseStorageHost` to still maintain control. We just call in to
+    // the `CdmStorageManager` object to be able to update the
+    // `CdmStorageDatabase` to keep it in line with `MediaLicenseDatabase`.
+    manager_->cdm_storage_manager()->WriteFile(
+        storage_key(), cdm_type, file_name, data, base::DoNothing());
+  }
 
   db_.AsyncCall(&MediaLicenseDatabase::WriteFile)
       .WithArgs(cdm_type, file_name, data)
@@ -153,7 +247,7 @@ void MediaLicenseStorageHost::DidWriteFile(WriteFileCallback callback,
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (!success) {
-    manager_->quota_manager_proxy()->NotifyWriteFailed(storage_key());
+    manager_->quota_manager_proxy()->OnClientWriteFailed(storage_key());
     std::move(callback).Run(false);
     return;
   }
@@ -161,9 +255,9 @@ void MediaLicenseStorageHost::DidWriteFile(WriteFileCallback callback,
   // Pass `delta`=0 since media license data does not count against quota.
   // TODO(crbug.com/1305441): Consider counting this data against quota.
   manager_->quota_manager_proxy()->NotifyBucketModified(
-      storage::QuotaClientType::kMediaLicense, bucket_locator_.id, /*delta=*/0,
+      storage::QuotaClientType::kMediaLicense, bucket_locator_, /*delta=*/0,
       /*modification_time=*/base::Time::Now(),
-      base::SequencedTaskRunnerHandle::Get(),
+      base::SequencedTaskRunner::GetCurrentDefault(),
       base::BindOnce(std::move(callback), success));
 }
 
@@ -171,6 +265,18 @@ void MediaLicenseStorageHost::DeleteFile(const media::CdmType& cdm_type,
                                          const std::string& file_name,
                                          DeleteFileCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (manager_->cdm_storage_manager()) {
+    // We don't populate the callback because we want the
+    // `MediaLicenseStorageHost` to still maintain control. We just call in to
+    // the `CdmStorageManager` object to be able to update the
+    // `CdmStorageDatabase` to keep it in line with `MediaLicenseDatabase`.
+    // TODO(crbug.com/1454512): Create UMA to track failures from the
+    // MediaLicense* path, as we choose to fail silently to not affect the
+    // current code-path's behavior and affect CDM operations.
+    manager_->cdm_storage_manager()->DeleteFile(storage_key(), cdm_type,
+                                                file_name, base::DoNothing());
+  }
 
   db_.AsyncCall(&MediaLicenseDatabase::DeleteFile)
       .WithArgs(cdm_type, file_name)

@@ -41,13 +41,13 @@ class BASE_EXPORT SamplingHeapProfiler
     // Total size attributed to the sample.
     size_t total;
     // Type of the allocator.
-    PoissonAllocationSampler::AllocatorType allocator;
+    base::allocator::dispatcher::AllocationSubsystem allocator;
     // Context as provided by the allocation hook.
     const char* context = nullptr;
     // Name of the thread that made the sampled allocation.
     const char* thread_name = nullptr;
     // Call stack of PC addresses responsible for the allocation.
-    std::vector<void*> stack;
+    std::vector<const void*> stack;
 
     // Public for testing.
     Sample(size_t size, size_t total, uint32_t ordinal);
@@ -64,7 +64,7 @@ class BASE_EXPORT SamplingHeapProfiler
   enum class StackUnwinder {
     DEPRECATED_kNotChecked,
     kDefault,
-    kCFIBacktrace,
+    DEPRECATED_kCFIBacktrace,
     kUnavailable,
     kFramePointers,
     kMaxValue = kFramePointers,
@@ -100,7 +100,9 @@ class BASE_EXPORT SamplingHeapProfiler
   // Captures up to |max_entries| stack frames using the buffer pointed by
   // |frames|. Puts the number of captured frames into the |count| output
   // parameters. Returns the pointer to the topmost frame.
-  void** CaptureStackTrace(void** frames, size_t max_entries, size_t* count);
+  const void** CaptureStackTrace(const void** frames,
+                                 size_t max_entries,
+                                 size_t* count);
 
   static void Init();
   static SamplingHeapProfiler* Get();
@@ -119,7 +121,7 @@ class BASE_EXPORT SamplingHeapProfiler
   void SampleAdded(void* address,
                    size_t size,
                    size_t total,
-                   PoissonAllocationSampler::AllocatorType type,
+                   base::allocator::dispatcher::AllocationSubsystem type,
                    const char* context) override;
   void SampleRemoved(void* address) override;
 

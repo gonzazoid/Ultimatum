@@ -9,8 +9,8 @@
 #include "third_party/blink/renderer/core/editing/ephemeral_range.h"
 #include "third_party/blink/renderer/core/editing/iterators/text_iterator.h"
 #include "third_party/blink/renderer/core/html/forms/text_control_element.h"
+#include "third_party/blink/renderer/core/layout/inline/inline_node.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
-#include "third_party/blink/renderer/core/layout/ng/inline/ng_inline_node.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
 namespace blink {
@@ -86,14 +86,20 @@ void CachedTextInputInfo::DidLayoutSubtree(const LayoutObject& layout_object) {
   // <div style="contain:strict; ...">abc</div> reaches here.
   if (!container_)
     return;
-  Node* const node = layout_object.NonPseudoNode();
-  if (!node)
+
+  if (!layout_object_) {
     return;
-  const ContainerNode* const container =
-      RootEditableElementOrTreeScopeRootNodeOf(Position(node, 0));
-  if (container != container_)
-    return;
-  Clear();
+  }
+
+  if (layout_object_->IsDescendantOf(&layout_object)) {
+    // `<span contenteditable>...</span>` reaches here.
+    return Clear();
+  }
+
+  if (layout_object.IsDescendantOf(layout_object_)) {
+    // CachedTextInputInfoTest.RelayoutBoundary reaches here.
+    return Clear();
+  }
 }
 
 void CachedTextInputInfo::DidUpdateLayout(const LayoutObject& layout_object) {
@@ -135,9 +141,10 @@ void CachedTextInputInfo::EnsureCached(const ContainerNode& container) const {
     unsigned capacity = kInitialCapacity;
     if (auto* block_flow =
             DynamicTo<LayoutBlockFlow>(container.GetLayoutObject())) {
-      if (block_flow->HasNGInlineNodeData()) {
-        if (const auto* mapping = NGInlineNode::GetOffsetMapping(block_flow))
+      if (block_flow->GetInlineNodeData()) {
+        if (const auto* mapping = InlineNode::GetOffsetMapping(block_flow)) {
           capacity = mapping->GetText().length();
+        }
       }
     }
     builder.ReserveCapacity(capacity);

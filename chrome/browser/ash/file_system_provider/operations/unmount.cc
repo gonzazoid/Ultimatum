@@ -7,18 +7,14 @@
 #include "base/values.h"
 #include "chrome/common/extensions/api/file_system_provider.h"
 
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 
-Unmount::Unmount(extensions::EventRouter* event_router,
+Unmount::Unmount(RequestDispatcher* dispatcher,
                  const ProvidedFileSystemInfo& file_system_info,
                  storage::AsyncFileUtil::StatusCallback callback)
-    : Operation(event_router, file_system_info),
-      callback_(std::move(callback)) {}
+    : Operation(dispatcher, file_system_info), callback_(std::move(callback)) {}
 
-Unmount::~Unmount() {
-}
+Unmount::~Unmount() = default;
 
 bool Unmount::Execute(int request_id) {
   using extensions::api::file_system_provider::UnmountRequestedOptions;
@@ -35,19 +31,17 @@ bool Unmount::Execute(int request_id) {
 }
 
 void Unmount::OnSuccess(int /* request_id */,
-                        std::unique_ptr<RequestValue> /* result */,
+                        const RequestValue& /* result */,
                         bool /* has_more */) {
   DCHECK(callback_);
   std::move(callback_).Run(base::File::FILE_OK);
 }
 
 void Unmount::OnError(int /* request_id */,
-                      std::unique_ptr<RequestValue> /* result */,
+                      const RequestValue& /* result */,
                       base::File::Error error) {
   DCHECK(callback_);
   std::move(callback_).Run(error);
 }
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations

@@ -7,19 +7,20 @@
 #import "base/metrics/histogram_functions.h"
 #import "base/metrics/user_metrics.h"
 #import "base/metrics/user_metrics_action.h"
+#import "ios/chrome/browser/default_browser/model/utils.h"
+#import "ios/chrome/browser/intents/intents_donation_helper.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_detail_icon_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_image_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_link_header_footer_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_utils.h"
+#import "ios/chrome/browser/ui/default_promo/default_browser_instructions_view.h"
 #import "ios/chrome/browser/ui/settings/settings_table_view_controller_constants.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_detail_icon_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_image_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_link_header_footer_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_item.h"
-#import "ios/chrome/browser/ui/table_view/table_view_utils.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
+#import "ios/chrome/common/ui/util/constraints_ui_util.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -41,7 +42,27 @@ typedef NS_ENUM(NSInteger, ItemType) {
   ItemTypeHeaderItem,
 };
 
+// Values of the UMA IOS.ExternalAction.DefaultBrowserPromo histogram.
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+// LINT.IfChange
+enum class ExternalActionDefaultBrowserPromoUsage {
+  kOpenSettings = 0,
+  kDismiss,
+  kMaxValue = kDismiss,
+};
+// LINT.ThenChange(//tools/metrics/histograms/metadata/ios/enums.xml)
+
 }  // namespace
+
+@interface DefaultBrowserSettingsTableViewController () {
+  // Whether Settings have been dismissed.
+  BOOL _settingsAreDismissed;
+
+  // Whether the user visited the iOS Default Browser settings page.
+  BOOL _defaultBrowserSettingsVisited;
+}
+@end
 
 @implementation DefaultBrowserSettingsTableViewController
 
@@ -56,10 +77,20 @@ typedef NS_ENUM(NSInteger, ItemType) {
   self.shouldHideDoneButton = YES;
   self.tableView.accessibilityIdentifier = kDefaultBrowserSettingsTableViewId;
 
-  [self loadModel];
+  if (IsDefaultBrowserVideoInSettingsEnabled()) {
+    [self addDefaultBrowserVideoInstructionsView];
+  } else {
+    [self loadModel];
+  }
 }
 
-#pragma mark - ChromeTableViewController
+- (void)viewWillAppear:(BOOL)animated {
+  [super viewWillAppear:animated];
+
+  [IntentDonationHelper donateIntent:IntentType::kSetDefaultBrowser];
+}
+
+#pragma mark - LegacyChromeTableViewController
 
 - (void)loadModel {
   [super loadModel];
@@ -125,12 +156,37 @@ typedef NS_ENUM(NSInteger, ItemType) {
        toSectionWithIdentifier:SectionIdentifierOpenSettings];
 }
 
+#pragma mark - SettingsControllerProtocol
+
+- (void)reportDismissalUserAction {
+}
+
+- (void)reportBackUserAction {
+}
+
+- (void)settingsWillBeDismissed {
+  DCHECK(!_settingsAreDismissed);
+
+  if (!_defaultBrowserSettingsVisited &&
+      self.source == DefaultBrowserPromoSource::kExternalAction) {
+    base::UmaHistogramEnumeration(
+        "IOS.ExternalAction.DefaultBrowserPromo",
+        ExternalActionDefaultBrowserPromoUsage::kDismiss);
+  }
+
+  // No-op as there are no C++ objects or observers.
+
+  _settingsAreDismissed = YES;
+}
+
 #pragma mark UITableViewDelegate
 
 - (UITableViewCell*)tableView:(UITableView*)tableView
         cellForRowAtIndexPath:(NSIndexPath*)indexPath {
   UITableViewCell* cell = [super tableView:tableView
                      cellForRowAtIndexPath:indexPath];
+  if (_settingsAreDismissed)
+    return cell;
   NSInteger itemType = [self.tableViewModel itemTypeForIndexPath:indexPath];
 
   if (itemType == ItemTypeOpenSettingsStep ||
@@ -147,15 +203,52 @@ typedef NS_ENUM(NSInteger, ItemType) {
   [self.tableView deselectRowAtIndexPath:indexPath animated:NO];
 
   if (itemType == ItemTypeOpenSettingsButton) {
-    base::RecordAction(base::UserMetricsAction("Settings.DefaultBrowser"));
-    base::UmaHistogramEnumeration("Settings.DefaultBrowserFromSource",
-                                  self.source);
-    [[UIApplication sharedApplication]
-                  openURL:[NSURL
-                              URLWithString:UIApplicationOpenSettingsURLString]
-                  options:{}
-        completionHandler:nil];
+    [self openSettingsButtonPressed];
   }
+}
+
+#pragma mark Private
+
+// Responds to user action to go to default browser settings.
+- (void)openSettingsButtonPressed {
+  if (!_defaultBrowserSettingsVisited &&
+      self.source == DefaultBrowserPromoSource::kExternalAction) {
+    base::UmaHistogramEnumeration(
+        "IOS.ExternalAction.DefaultBrowserPromo",
+        ExternalActionDefaultBrowserPromoUsage::kOpenSettings);
+  }
+  base::RecordAction(base::UserMetricsAction("Settings.DefaultBrowser"));
+  base::UmaHistogramEnumeration("Settings.DefaultBrowserFromSource",
+                                self.source);
+
+  _defaultBrowserSettingsVisited = YES;
+
+  [[UIApplication sharedApplication]
+                openURL:[NSURL URLWithString:UIApplicationOpenSettingsURLString]
+                options:{}
+      completionHandler:nil];
+}
+
+// Adds default browser video instructions view as a background view.
+- (void)addDefaultBrowserVideoInstructionsView {
+  DefaultBrowserInstructionsView* instructionsView =
+      [[DefaultBrowserInstructionsView alloc] init:NO
+                                          hasSteps:YES
+                                     actionHandler:self];
+
+  self.tableView.backgroundView = [[UIView alloc] init];
+  [self.tableView.backgroundView
+      setBackgroundColor:[UIColor colorNamed:kGrey100Color]];
+  [self.tableView addSubview:instructionsView];
+  instructionsView.translatesAutoresizingMaskIntoConstraints = NO;
+  AddSameConstraints(instructionsView, self.tableView);
+  AddSameConstraints(self.tableView.backgroundView, self.tableView);
+}
+
+#pragma mark - ConfirmationAlertActionHandler
+
+- (void)confirmationAlertPrimaryAction {
+  [self openSettingsButtonPressed];
 }
 
 @end

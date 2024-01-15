@@ -11,7 +11,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_string_trustedscript.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_union_stringtreatnullasemptystring_trustedscript.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_union_stringlegacynulltoemptystring_trustedscript.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_trustedhtml_trustedscript_trustedscripturl.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/csp/content_security_policy.h"
@@ -116,7 +116,7 @@ const char* GetMessage(TrustedTypeViolationKind kind) {
 String GetSamplePrefix(const ExceptionContext& exception_context,
                        const String& value) {
   const char* interface_name = exception_context.GetClassName();
-  const char* property_name = exception_context.GetPropertyName();
+  const String& property_name = exception_context.GetPropertyName();
 
   // We have two sample formats, one for eval and one for assignment.
   // If we don't have the required values being passed in, just leave the
@@ -130,11 +130,11 @@ String GetSamplePrefix(const ExceptionContext& exception_context,
                                                             : "eval");
   } else if ((strcmp("Worker", interface_name) == 0 ||
               strcmp("SharedWorker", interface_name) == 0) &&
-             !property_name) {
+             property_name.IsNull()) {
     // Worker/SharedWorker constructor has nullptr as property_name.
     sample_prefix.Append(interface_name);
     sample_prefix.Append(" constructor");
-  } else if (interface_name && property_name) {
+  } else if (interface_name && !property_name.IsNull()) {
     sample_prefix.Append(interface_name);
     sample_prefix.Append(" ");
     sample_prefix.Append(property_name);
@@ -158,11 +158,10 @@ HeapVector<ScriptValue> GetDefaultCallbackArgs(
     const char* type,
     const ExceptionContext& exception_context,
     const String& value = g_empty_string) {
-  ScriptState* script_state = ScriptState::Current(isolate);
   HeapVector<ScriptValue> args;
-  args.push_back(ScriptValue::From(script_state, type));
-  args.push_back(ScriptValue::From(script_state,
-                                   GetSamplePrefix(exception_context, value)));
+  args.push_back(ScriptValue(isolate, V8String(isolate, type)));
+  args.push_back(ScriptValue(
+      isolate, V8String(isolate, GetSamplePrefix(exception_context, value))));
   return args;
 }
 
@@ -268,10 +267,9 @@ String GetStringFromScriptHelper(
   //   we are not executing a source String, but an already compiled callback
   //   function.
   v8::HandleScope handle_scope(context->GetIsolate());
-  ScriptState::Scope script_state_scope(
-      ToScriptState(context, DOMWrapperWorld::MainWorld()));
+  ScriptState::Scope script_state_scope(ToScriptStateForMainWorld(context));
   ExceptionState exception_state(
-      context->GetIsolate(), ExceptionState::kUnknownContext,
+      context->GetIsolate(), ExceptionContextType::kUnknown,
       element_name_for_exception, attribute_name_for_exception);
 
   TrustedTypePolicy* default_policy = GetDefaultPolicy(context);
@@ -518,7 +516,7 @@ String TrustedTypesCheckForScript(const V8UnionStringOrTrustedScript* value,
 }
 
 String TrustedTypesCheckForScript(
-    const V8UnionStringTreatNullAsEmptyStringOrTrustedScript* value,
+    const V8UnionStringLegacyNullToEmptyStringOrTrustedScript* value,
     const ExecutionContext* execution_context,
     ExceptionState& exception_state) {
   // To remain compatible with legacy behaviour, HTMLElement uses extended IDL
@@ -531,12 +529,12 @@ String TrustedTypesCheckForScript(
   }
 
   switch (value->GetContentType()) {
-    case V8UnionStringTreatNullAsEmptyStringOrTrustedScript::ContentType::
-        kStringTreatNullAsEmptyString:
+    case V8UnionStringLegacyNullToEmptyStringOrTrustedScript::ContentType::
+        kStringLegacyNullToEmptyString:
       return TrustedTypesCheckForScript(
-          value->GetAsStringTreatNullAsEmptyString(), execution_context,
+          value->GetAsStringLegacyNullToEmptyString(), execution_context,
           exception_state);
-    case V8UnionStringTreatNullAsEmptyStringOrTrustedScript::ContentType::
+    case V8UnionStringLegacyNullToEmptyStringOrTrustedScript::ContentType::
         kTrustedScript:
       return value->GetAsTrustedScript()->toString();
   }
@@ -601,6 +599,39 @@ bool IsTrustedTypesEventHandlerAttribute(const QualifiedName& q_name) {
   return q_name.NamespaceURI().IsNull() &&
          TrustedTypePolicyFactory::IsEventHandlerAttributeName(
              q_name.LocalName());
+}
+
+String GetTrustedTypesLiteral(const ScriptValue& script_value,
+                              ScriptState* script_state) {
+  DCHECK(script_state);
+  // TrustedTypes fromLiteral requires several checks, which are steps 1-3
+  // in the "create a trusted type from literal algorithm". Ref:
+  // https://w3c.github.io/trusted-types/dist/spec/#create-a-trusted-type-from-literal-algorithm
+
+  // The core functionality here are the checks that we, indeed, have a
+  // literal object. The key work is done by
+  // v8::Context::HasTemplateLiteralObject, but we will additionally check that
+  // we have an object, with a real (non-inherited) property 0 (but not 1),
+  // whose value is a string.
+  v8::Local<v8::Context> context = script_state->GetContext();
+  v8::Local<v8::Value> value = script_value.V8ValueFor(script_state);
+  if (!context.IsEmpty() && !value.IsEmpty() &&
+      context->HasTemplateLiteralObject(value) && value->IsObject()) {
+    v8::Local<v8::Object> value_as_object = v8::Local<v8::Object>::Cast(value);
+    v8::Local<v8::Value> first_value;
+    if (value_as_object->HasRealIndexedProperty(context, 0).FromMaybe(false) &&
+        !value_as_object->HasRealIndexedProperty(context, 1).FromMaybe(false) &&
+        value_as_object->Get(context, 0).ToLocal(&first_value) &&
+        first_value->IsString()) {
+      v8::Local<v8::String> first_value_as_string =
+          v8::Local<v8::String>::Cast(first_value);
+      return ToCoreString(script_state->GetIsolate(), first_value_as_string);
+    }
+  }
+
+  // Fall-through: Some of the required conditions didn't hold. Return a
+  // null-string.
+  return String();
 }
 
 }  // namespace blink

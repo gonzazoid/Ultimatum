@@ -12,6 +12,23 @@
 #include "third_party/abseil-cpp/absl/types/variant.h"
 
 namespace cryptohome {
+
+// =============== `RecoveryCreation` =====================
+AuthFactorInput::RecoveryCreation::RecoveryCreation(
+    const std::string& pub_key,
+    const std::string& user_gaia_id,
+    const std::string& device_user_id,
+    bool ensure_fresh_recovery_id)
+    : pub_key(pub_key),
+      user_gaia_id(user_gaia_id),
+      device_user_id(device_user_id),
+      ensure_fresh_recovery_id(ensure_fresh_recovery_id) {}
+AuthFactorInput::RecoveryCreation::RecoveryCreation(
+    const RecoveryCreation& other) = default;
+AuthFactorInput::RecoveryCreation& AuthFactorInput::RecoveryCreation::operator=(
+    const RecoveryCreation&) = default;
+AuthFactorInput::RecoveryCreation::~RecoveryCreation() = default;
+
 // =============== `SmartCard` =====================
 AuthFactorInput::SmartCard::SmartCard(
     const std::vector<ChallengeResponseKey::SignatureAlgorithm> algorithms,
@@ -35,37 +52,49 @@ AuthFactorInput& AuthFactorInput::operator=(AuthFactorInput&&) noexcept =
 AuthFactorInput::~AuthFactorInput() = default;
 
 AuthFactorType AuthFactorInput::GetType() const {
-  if (absl::holds_alternative<AuthFactorInput::Password>(factor_input_))
+  if (absl::holds_alternative<AuthFactorInput::Password>(factor_input_)) {
     return AuthFactorType::kPassword;
-  if (absl::holds_alternative<AuthFactorInput::Pin>(factor_input_))
+  }
+  if (absl::holds_alternative<AuthFactorInput::Pin>(factor_input_)) {
     return AuthFactorType::kPin;
-  if (absl::holds_alternative<AuthFactorInput::Kiosk>(factor_input_))
+  }
+  if (absl::holds_alternative<AuthFactorInput::Kiosk>(factor_input_)) {
     return AuthFactorType::kKiosk;
-  if (absl::holds_alternative<AuthFactorInput::SmartCard>(factor_input_))
+  }
+  if (absl::holds_alternative<AuthFactorInput::SmartCard>(factor_input_)) {
     return AuthFactorType::kSmartCard;
-  if (absl::holds_alternative<AuthFactorInput::RecoveryCreation>(factor_input_))
+  }
+  if (absl::holds_alternative<AuthFactorInput::RecoveryCreation>(
+          factor_input_)) {
     return AuthFactorType::kRecovery;
+  }
   if (absl::holds_alternative<AuthFactorInput::RecoveryAuthentication>(
-          factor_input_))
+          factor_input_)) {
     return AuthFactorType::kRecovery;
+  }
   NOTREACHED();
   return AuthFactorType::kUnknownLegacy;
 }
 
 bool AuthFactorInput::UsableForCreation() const {
-  if (GetType() != AuthFactorType::kRecovery)
+  if (GetType() != AuthFactorType::kRecovery) {
     return true;
-  if (absl::holds_alternative<AuthFactorInput::RecoveryCreation>(factor_input_))
+  }
+  if (absl::holds_alternative<AuthFactorInput::RecoveryCreation>(
+          factor_input_)) {
     return true;
+  }
   return false;
 }
 
 bool AuthFactorInput::UsableForAuthentication() const {
-  if (GetType() != AuthFactorType::kRecovery)
+  if (GetType() != AuthFactorType::kRecovery) {
     return true;
+  }
   if (absl::holds_alternative<AuthFactorInput::RecoveryAuthentication>(
-          factor_input_))
+          factor_input_)) {
     return true;
+  }
   return false;
 }
 

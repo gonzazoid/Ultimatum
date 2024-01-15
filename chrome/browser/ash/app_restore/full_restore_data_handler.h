@@ -5,6 +5,8 @@
 #ifndef CHROME_BROWSER_ASH_APP_RESTORE_FULL_RESTORE_DATA_HANDLER_H_
 #define CHROME_BROWSER_ASH_APP_RESTORE_FULL_RESTORE_DATA_HANDLER_H_
 
+#include "base/memory/raw_ptr.h"
+#include "base/scoped_observation.h"
 #include "components/services/app_service/public/cpp/app_registry_cache.h"
 
 class Profile;
@@ -27,7 +29,11 @@ class FullRestoreDataHandler : public apps::AppRegistryCache::Observer {
       apps::AppRegistryCache* cache) override;
 
  private:
-  Profile* profile_ = nullptr;
+  raw_ptr<Profile> profile_ = nullptr;
+
+  base::ScopedObservation<apps::AppRegistryCache,
+                          apps::AppRegistryCache::Observer>
+      app_registry_cache_observer_{this};
 
   base::WeakPtrFactory<FullRestoreDataHandler> weak_ptr_factory_{this};
 };

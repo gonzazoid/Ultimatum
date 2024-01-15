@@ -8,15 +8,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/proto/cloud_policy.pb.h"
 #include "components/policy/proto/device_management_backend.pb.h"
@@ -49,8 +48,7 @@ bool WriteStringToFile(const base::FilePath path, const std::string& data) {
     return false;
   }
 
-  int size = data.size();
-  if (base::WriteFile(path, data.c_str(), size) != size) {
+  if (!base::WriteFile(path, data)) {
     DLOG(WARNING) << "Failed to write " << path.value();
     return false;
   }
@@ -142,8 +140,8 @@ void DesktopCloudPolicyStore::Load() {
 
   // Start a new Load operation and have us get called back when it is
   // complete.
-  base::PostTaskAndReplyWithResult(
-      background_task_runner().get(), FROM_HERE,
+  background_task_runner()->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&DesktopCloudPolicyStore::LoadAndFilterPolicyFromDisk,
                      policy_path_, key_path_, policy_load_filter_),
       base::BindOnce(&DesktopCloudPolicyStore::PolicyLoaded,

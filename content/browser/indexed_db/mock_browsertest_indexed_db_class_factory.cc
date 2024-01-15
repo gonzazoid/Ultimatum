@@ -10,13 +10,12 @@
 
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/services/storage/indexed_db/scopes/leveldb_scope.h"
 #include "components/services/storage/indexed_db/scopes/leveldb_scopes.h"
 #include "components/services/storage/indexed_db/transactional_leveldb/transactional_leveldb_database.h"
 #include "components/services/storage/indexed_db/transactional_leveldb/transactional_leveldb_iterator.h"
 #include "components/services/storage/indexed_db/transactional_leveldb/transactional_leveldb_transaction.h"
-#include "content/browser/indexed_db/indexed_db_factory.h"
-#include "content/browser/indexed_db/indexed_db_metadata_coding.h"
 #include "content/browser/indexed_db/indexed_db_transaction.h"
 #include "third_party/leveldatabase/env_chromium.h"
 #include "third_party/leveldatabase/src/include/leveldb/status.h"
@@ -53,60 +52,6 @@ class FunctionTracer {
 
 namespace content {
 
-class IndexedDBTestDatabase : public IndexedDBDatabase {
- public:
-  IndexedDBTestDatabase(
-      const std::u16string& name,
-      IndexedDBBackingStore* backing_store,
-      IndexedDBFactory* factory,
-      IndexedDBClassFactory* class_factory,
-      TasksAvailableCallback tasks_available_callback,
-      std::unique_ptr<IndexedDBMetadataCoding> metadata_coding,
-      const Identifier& unique_identifier,
-      PartitionedLockManager* transaction_lock_manager)
-      : IndexedDBDatabase(name,
-                          backing_store,
-                          factory,
-                          class_factory,
-                          std::move(tasks_available_callback),
-                          std::move(metadata_coding),
-                          unique_identifier,
-                          transaction_lock_manager) {}
-  ~IndexedDBTestDatabase() override {}
-
- protected:
-  size_t GetUsableMessageSizeInBytes() const override {
-    return 10 * 1024 * 1024;  // 10MB
-  }
-};
-
-class IndexedDBTestTransaction : public IndexedDBTransaction {
- public:
-  IndexedDBTestTransaction(
-      int64_t id,
-      IndexedDBConnection* connection,
-      const std::set<int64_t>& scope,
-      blink::mojom::IDBTransactionMode mode,
-      TasksAvailableCallback tasks_available_callback,
-      IndexedDBTransaction::TearDownCallback tear_down_callback,
-      IndexedDBBackingStore::Transaction* backing_store_transaction)
-      : IndexedDBTransaction(id,
-                             connection,
-                             scope,
-                             mode,
-                             std::move(tasks_available_callback),
-                             std::move(tear_down_callback),
-                             backing_store_transaction) {}
-  ~IndexedDBTestTransaction() override {}
-
- protected:
-  // Browser tests run under memory/address sanitizers (etc) may trip the
-  // default 60s timeout, so relax it during tests.
-  base::TimeDelta GetInactivityTimeout() const override {
-    return base::Seconds(60 * 60);
-  }
-};
-
 class LevelDBTestDatabase : public TransactionalLevelDBDatabase {
  public:
   LevelDBTestDatabase(scoped_refptr<LevelDBState> level_db_state,
@@ -129,7 +74,7 @@ class LevelDBTestDatabase : public TransactionalLevelDBDatabase {
   }
   ~LevelDBTestDatabase() override = default;
 
-  leveldb::Status Get(const base::StringPiece& key,
+  leveldb::Status Get(std::string_view key,
                       std::string* value,
                       bool* found) override {
     if (fail_method_ != FailMethod::GET ||
@@ -166,7 +111,7 @@ class LevelDBTestDirectTransaction : public LevelDBDirectTransaction {
   }
   ~LevelDBTestDirectTransaction() override = default;
 
-  leveldb::Status Get(const base::StringPiece& key,
+  leveldb::Status Get(std::string_view key,
                       std::string* value,
                       bool* found) override {
     if (fail_method_ != FailMethod::GET ||
@@ -197,7 +142,7 @@ class LevelDBTestTransaction : public TransactionalLevelDBTransaction {
     DCHECK_GT(fail_on_call_num, 0);
   }
 
-  leveldb::Status Get(const base::StringPiece& key,
+  leveldb::Status Get(std::string_view key,
                       std::string* value,
                       bool* found) override {
     if (fail_method_ != FailMethod::GET ||
@@ -209,23 +154,29 @@ class LevelDBTestTransaction : public TransactionalLevelDBTransaction {
   }
 
   leveldb::Status Commit(bool sync_on_commit) override {
-    if ((fail_method_ != FailMethod::COMMIT &&
-         fail_method_ != FailMethod::COMMIT_DISK_FULL) ||
-        ++current_call_num_ != fail_on_call_num_)
+    if (++current_call_num_ != fail_on_call_num_)
       return TransactionalLevelDBTransaction::Commit(sync_on_commit);
 
-    // TODO(jsbell): Consider parameterizing the failure mode.
+    if (fail_method_ == FailMethod::COMMIT)
+      return leveldb::Status::Corruption("Corrupted for the test");
+
     if (fail_method_ == FailMethod::COMMIT_DISK_FULL) {
       return leveldb_env::MakeIOError("dummy filename", "Disk Full",
                                       leveldb_env::kWritableFileAppend,
                                       base::File::FILE_ERROR_NO_SPACE);
     }
 
-    return leveldb::Status::Corruption("Corrupted for the test");
+    if (fail_method_ == FailMethod::COMMIT_SYNC && sync_on_commit) {
+      return leveldb_env::MakeIOError("dummy filename", "Sync on commit",
+                                      leveldb_env::kWritableFileAppend,
+                                      base::File::FILE_ERROR_FAILED);
+    }
+
+    return TransactionalLevelDBTransaction::Commit(sync_on_commit);
   }
 
  private:
-  ~LevelDBTestTransaction() override {}
+  ~LevelDBTestTransaction() override = default;
 
   FailMethod fail_method_;
   int fail_on_call_num_;
@@ -242,7 +193,7 @@ class LevelDBTraceTransaction : public TransactionalLevelDBTransaction {
         commit_tracer_(class_name_, "Commit", tx_num),
         get_tracer_(class_name_, "Get", tx_num) {}
 
-  leveldb::Status Get(const base::StringPiece& key,
+  leveldb::Status Get(std::string_view key,
                       std::string* value,
                       bool* found) override {
     get_tracer_.log_call();
@@ -295,7 +246,7 @@ class LevelDBTraceIterator : public TransactionalLevelDBIterator {
     seek_to_last_tracer_.log_call();
     return TransactionalLevelDBIterator::SeekToLast();
   }
-  leveldb::Status Seek(const base::StringPiece& target) override {
+  leveldb::Status Seek(std::string_view target) override {
     seek_tracer_.log_call();
     return TransactionalLevelDBIterator::Seek(target);
   }
@@ -340,10 +291,10 @@ class LevelDBTestIterator : public content::TransactionalLevelDBIterator {
         fail_method_(fail_method),
         fail_on_call_num_(fail_on_call_num),
         current_call_num_(0) {}
-  ~LevelDBTestIterator() override {}
+  ~LevelDBTestIterator() override = default;
 
  private:
-  leveldb::Status Seek(const base::StringPiece& target) override {
+  leveldb::Status Seek(std::string_view target) override {
     if (fail_method_ != FailMethod::SEEK ||
         ++current_call_num_ != fail_on_call_num_)
       return TransactionalLevelDBIterator::Seek(target);
@@ -363,45 +314,6 @@ MockBrowserTestIndexedDBClassFactory::MockBrowserTestIndexedDBClassFactory()
 MockBrowserTestIndexedDBClassFactory::~MockBrowserTestIndexedDBClassFactory() =
     default;
 
-TransactionalLevelDBFactory&
-MockBrowserTestIndexedDBClassFactory::transactional_leveldb_factory() {
-  return *this;
-}
-
-std::pair<std::unique_ptr<IndexedDBDatabase>, leveldb::Status>
-MockBrowserTestIndexedDBClassFactory::CreateIndexedDBDatabase(
-    const std::u16string& name,
-    IndexedDBBackingStore* backing_store,
-    IndexedDBFactory* factory,
-    TasksAvailableCallback tasks_available_callback,
-    std::unique_ptr<IndexedDBMetadataCoding> metadata_coding,
-    const IndexedDBDatabase::Identifier& unique_identifier,
-    PartitionedLockManager* transaction_lock_manager) {
-  std::unique_ptr<IndexedDBTestDatabase> database =
-      std::make_unique<IndexedDBTestDatabase>(
-          name, backing_store, factory, this,
-          std::move(tasks_available_callback), std::move(metadata_coding),
-          unique_identifier, transaction_lock_manager);
-  leveldb::Status s = database->OpenInternal();
-  if (!s.ok())
-    database.reset();
-  return {std::move(database), s};
-}
-
-std::unique_ptr<IndexedDBTransaction>
-MockBrowserTestIndexedDBClassFactory::CreateIndexedDBTransaction(
-    int64_t id,
-    IndexedDBConnection* connection,
-    const std::set<int64_t>& scope,
-    blink::mojom::IDBTransactionMode mode,
-    TasksAvailableCallback tasks_available_callback,
-    IndexedDBTransaction::TearDownCallback tear_down_callback,
-    IndexedDBBackingStore::Transaction* backing_store_transaction) {
-  return std::make_unique<IndexedDBTestTransaction>(
-      id, connection, scope, mode, std::move(tasks_available_callback),
-      std::move(tear_down_callback), backing_store_transaction);
-}
-
 std::unique_ptr<TransactionalLevelDBDatabase>
 MockBrowserTestIndexedDBClassFactory::CreateLevelDBDatabase(
     scoped_refptr<LevelDBState> state,
@@ -417,11 +329,10 @@ MockBrowserTestIndexedDBClassFactory::CreateLevelDBDatabase(
         std::move(state), std::move(scopes), this, std::move(task_runner),
         max_open_iterators, failure_method_,
         fail_on_call_num_[FailClass::LEVELDB_DATABASE]);
-  } else {
-    return DefaultTransactionalLevelDBFactory::CreateLevelDBDatabase(
-        std::move(state), std::move(scopes), std::move(task_runner),
-        max_open_iterators);
   }
+  return DefaultTransactionalLevelDBFactory::CreateLevelDBDatabase(
+      std::move(state), std::move(scopes), std::move(task_runner),
+      max_open_iterators);
 }
 
 std::unique_ptr<LevelDBDirectTransaction>
@@ -435,10 +346,8 @@ MockBrowserTestIndexedDBClassFactory::CreateLevelDBDirectTransaction(
     return std::make_unique<LevelDBTestDirectTransaction>(
         db, failure_method_,
         fail_on_call_num_[FailClass::LEVELDB_DIRECT_TRANSACTION]);
-  } else {
-    return DefaultTransactionalLevelDBFactory::CreateLevelDBDirectTransaction(
-        db);
   }
+  return DefaultTransactionalLevelDBFactory::CreateLevelDBDirectTransaction(db);
 }
 
 scoped_refptr<TransactionalLevelDBTransaction>
@@ -450,18 +359,16 @@ MockBrowserTestIndexedDBClassFactory::CreateLevelDBTransaction(
   if (only_trace_calls_) {
     return base::MakeRefCounted<LevelDBTraceTransaction>(
         db, std::move(scope), instance_count_[FailClass::LEVELDB_TRANSACTION]);
-  } else {
-    if (failure_class_ == FailClass::LEVELDB_TRANSACTION &&
-        instance_count_[FailClass::LEVELDB_TRANSACTION] ==
-            fail_on_instance_num_[FailClass::LEVELDB_TRANSACTION]) {
-      return base::MakeRefCounted<LevelDBTestTransaction>(
-          db, std::move(scope), failure_method_,
-          fail_on_call_num_[FailClass::LEVELDB_TRANSACTION]);
-    } else {
-      return DefaultTransactionalLevelDBFactory::CreateLevelDBTransaction(
-          db, std::move(scope));
-    }
   }
+  if (failure_class_ == FailClass::LEVELDB_TRANSACTION &&
+      instance_count_[FailClass::LEVELDB_TRANSACTION] ==
+          fail_on_instance_num_[FailClass::LEVELDB_TRANSACTION]) {
+    return base::MakeRefCounted<LevelDBTestTransaction>(
+        db, std::move(scope), failure_method_,
+        fail_on_call_num_[FailClass::LEVELDB_TRANSACTION]);
+  }
+  return DefaultTransactionalLevelDBFactory::CreateLevelDBTransaction(
+      db, std::move(scope));
 }
 
 std::unique_ptr<TransactionalLevelDBIterator>
@@ -476,18 +383,16 @@ MockBrowserTestIndexedDBClassFactory::CreateIterator(
     return std::make_unique<LevelDBTraceIterator>(
         std::move(iterator), db, std::move(txn), std::move(snapshot),
         instance_count_[FailClass::LEVELDB_ITERATOR]);
-  } else {
-    if (failure_class_ == FailClass::LEVELDB_ITERATOR &&
-        instance_count_[FailClass::LEVELDB_ITERATOR] ==
-            fail_on_instance_num_[FailClass::LEVELDB_ITERATOR]) {
-      return std::make_unique<LevelDBTestIterator>(
-          std::move(iterator), db, std::move(txn), std::move(snapshot),
-          failure_method_, fail_on_call_num_[FailClass::LEVELDB_ITERATOR]);
-    } else {
-      return DefaultTransactionalLevelDBFactory::CreateIterator(
-          std::move(iterator), db, std::move(txn), std::move(snapshot));
-    }
   }
+  if (failure_class_ == FailClass::LEVELDB_ITERATOR &&
+      instance_count_[FailClass::LEVELDB_ITERATOR] ==
+          fail_on_instance_num_[FailClass::LEVELDB_ITERATOR]) {
+    return std::make_unique<LevelDBTestIterator>(
+        std::move(iterator), db, std::move(txn), std::move(snapshot),
+        failure_method_, fail_on_call_num_[FailClass::LEVELDB_ITERATOR]);
+  }
+  return DefaultTransactionalLevelDBFactory::CreateIterator(
+      std::move(iterator), db, std::move(txn), std::move(snapshot));
 }
 
 void MockBrowserTestIndexedDBClassFactory::FailOperation(

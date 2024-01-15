@@ -4,7 +4,8 @@
 
 #include "media/mojo/services/media_foundation_renderer_wrapper.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/win/mf_helpers.h"
 #include "media/mojo/mojom/renderer_extensions.mojom.h"
 #include "media/mojo/services/media_foundation_gpu_info_monitor.h"
@@ -17,7 +18,7 @@ namespace media {
 namespace {
 
 bool HasAudio(MediaResource* media_resource) {
-  DCHECK(media_resource->GetType() == MediaResource::Type::STREAM);
+  DCHECK(media_resource->GetType() == MediaResource::Type::kStream);
 
   const auto media_streams = media_resource->GetAllStreams();
   for (const media::DemuxerStream* stream : media_streams) {
@@ -118,6 +119,10 @@ void MediaFoundationRendererWrapper::SetVolume(float volume) {
 
 base::TimeDelta MediaFoundationRendererWrapper::GetMediaTime() {
   return renderer_->GetMediaTime();
+}
+
+RendererType MediaFoundationRendererWrapper::GetRendererType() {
+  return RendererType::kMediaFoundation;
 }
 
 void MediaFoundationRendererWrapper::GetDCOMPSurface(

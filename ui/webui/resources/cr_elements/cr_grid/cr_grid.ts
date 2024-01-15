@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './cr_grid.html.js';
 
@@ -30,9 +30,11 @@ export class CrGridElement extends PolymerElement {
         type: Number,
         observer: 'onColumnsChange_',
       },
+      disableArrowNavigation: Boolean,
     };
   }
 
+  disableArrowNavigation: boolean = false;
   columns: number = 1;
 
   private onColumnsChange_() {
@@ -40,7 +42,8 @@ export class CrGridElement extends PolymerElement {
   }
 
   private onKeyDown_(e: KeyboardEvent) {
-    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+    if (!this.disableArrowNavigation &&
+        ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
       e.preventDefault();
       const items =
           (this.$.items.assignedElements() as HTMLElement[]).filter(el => {

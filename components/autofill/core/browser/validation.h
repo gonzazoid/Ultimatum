@@ -5,11 +5,8 @@
 #ifndef COMPONENTS_AUTOFILL_CORE_BROWSER_VALIDATION_H_
 #define COMPONENTS_AUTOFILL_CORE_BROWSER_VALIDATION_H_
 
-#include <set>
 #include <string>
-
-#include "base/strings/string_piece_forward.h"
-#include "components/autofill/core/browser/field_types.h"
+#include <string_view>
 
 namespace base {
 class Time;
@@ -20,6 +17,16 @@ namespace autofill {
 // Constants for the length of a CVC.
 static const size_t GENERAL_CVC_LENGTH = 3;
 static const size_t AMEX_CVC_LENGTH = 4;
+
+enum class CvcType {
+  kUnknown = 0,
+  // Regular card verification code. For CVC length, default to regular case of
+  // the network.
+  kRegularCvc = 1,
+  // Three digit card verification code used for unique American Express cases.
+  kBackOfAmexCvc = 2,
+  kMaxValue = kBackOfAmexCvc,
+};
 
 // Returns true if |year| and |month| describe a date later than |now|.
 // |year| must have 4 digits.
@@ -44,15 +51,8 @@ bool PassesLuhnCheck(const std::u16string& number);
 // Returns true if |code| looks like a valid credit card security code
 // for the given credit card network.
 bool IsValidCreditCardSecurityCode(const std::u16string& code,
-                                   const base::StringPiece card_network);
-
-// Returns true if |text| is a supported card type and a valid credit card
-// number. |error_message| can't be null and will be filled with the appropriate
-// error message.
-bool IsValidCreditCardNumberForBasicCardNetworks(
-    const std::u16string& text,
-    const std::set<std::string>& supported_basic_card_networks,
-    std::u16string* error_message);
+                                   const std::string_view card_network,
+                                   CvcType cvc_type = CvcType::kRegularCvc);
 
 // Returns true if |text| looks like a valid e-mail address.
 bool IsValidEmailAddress(const std::u16string& text);
@@ -74,14 +74,9 @@ bool IsValidZip(const std::u16string& text);
 // Returns true if |text| looks like an SSN, with or without separators.
 bool IsSSN(const std::u16string& text);
 
-// Returns whether |value| is valid for the given |type|. If not null,
-// |error_message| is populated when the function returns false.
-bool IsValidForType(const std::u16string& value,
-                    ServerFieldType type,
-                    std::u16string* error_message);
-
 // Returns the expected CVC length based on the |card_network|.
-size_t GetCvcLengthForCardNetwork(const base::StringPiece card_network);
+size_t GetCvcLengthForCardNetwork(const std::string_view card_network,
+                                  CvcType cvc_type = CvcType::kRegularCvc);
 
 // Returns true if |value| appears to be a UPI Virtual Payment Address.
 // https://upipayments.co.in/virtual-payment-address-vpa/

@@ -4,7 +4,8 @@
 
 #import "chrome/browser/ui/cocoa/history_menu_cocoa_controller.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/user_metrics.h"
 #include "chrome/app/chrome_command_ids.h"  // IDC_HISTORY_MENU
 #import "chrome/browser/app_controller_mac.h"
@@ -63,7 +64,10 @@ void OpenURLForItem(HistoryMenuBridge::HistoryItem node,
 
 }  // namespace
 
-@implementation HistoryMenuCocoaController
+@implementation HistoryMenuCocoaController {
+  raw_ptr<HistoryMenuBridge, AcrossTasksDanglingUntriaged>
+      _bridge;  // weak; owns us
+}
 
 - (instancetype)initWithBridge:(HistoryMenuBridge*)bridge {
   if ((self = [super init])) {
@@ -74,9 +78,7 @@ void OpenURLForItem(HistoryMenuBridge::HistoryItem node,
 }
 
 - (BOOL)validateMenuItem:(NSMenuItem*)menuItem {
-  AppController* controller =
-      base::mac::ObjCCastStrict<AppController>([NSApp delegate]);
-  return ![controller keyWindowIsModal];
+  return ![AppController.sharedController keyWindowIsModal];
 }
 
 // Open the URL of the given history item in the current tab.

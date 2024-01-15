@@ -12,13 +12,13 @@ namespace remoting::features {
 // Enable to allow CRD remote admin connections when the ChromeOS device is at
 // the login screen.
 BASE_DECLARE_FEATURE(kEnableCrdAdminRemoteAccess);
-// Force all enterprise remote connections to be remote access connections.
-// Only used for local testing until the DPanel UI supports sending remote
-// access requests.
-BASE_DECLARE_FEATURE(kForceCrdAdminRemoteAccess);
 
-// Enable to allow FrameSinkDesktopCapturer to be used for CRD video streaming.
-BASE_DECLARE_FEATURE(kEnableFrameSinkDesktopCapturerInCrd);
+// Enable the V2 feature development related to launching CRD remote admin
+// to GA.
+BASE_DECLARE_FEATURE(kEnableCrdAdminRemoteAccessV2);
+
+// Enable to allow file transfer in CRD video streaming to Kiosk devices.
+BASE_DECLARE_FEATURE(kEnableCrdFileTransferForKiosk);
 
 }  // namespace remoting::features
 

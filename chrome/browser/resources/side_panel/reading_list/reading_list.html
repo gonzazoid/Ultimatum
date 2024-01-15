@@ -1,8 +1,10 @@
 <!doctype html>
-<html dir="$i18n{textdirection}" lang="$i18n{language}">
+<html dir="$i18n{textdirection}" lang="$i18n{language}"
+    $i18n{chromeRefresh2023Attribute}>
 <head>
   <meta charset="utf-8">
   <title>$i18n{title}</title>
+  <link rel="stylesheet" href="chrome://theme/colors.css?sets=ui,chrome">
   <link rel="stylesheet" href="chrome://resources/css/text_defaults_md.css">
   <style>
     html,
@@ -13,11 +15,16 @@
       background-color: var(--mwb-background-color);
       margin: 0;
     }
+
+    html[chrome-refresh-2023],
+    html[chrome-refresh-2023] body {
+      background: var(--color-side-panel-content-background);
+    }
   </style>
 </head>
 <body>
   <reading-list-app></reading-list-app>
-  <script type="module" src="reading_list/app.js"></script>
+  <script type="module" src="app.js"></script>
   <script type="module" src="chrome://resources/cr_elements/mwb_shared_vars.css.js">
   </script>
 </body>

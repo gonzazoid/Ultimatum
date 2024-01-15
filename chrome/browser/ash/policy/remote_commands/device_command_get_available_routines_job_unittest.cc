@@ -8,11 +8,12 @@
 #include <vector>
 
 #include "base/json/json_writer.h"
-#include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "base/time/time.h"
 #include "base/values.h"
+#include "chromeos/ash/components/mojo_service_manager/fake_mojo_service_manager.h"
 #include "chromeos/ash/services/cros_healthd/public/cpp/fake_cros_healthd.h"
 #include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd_diagnostics.mojom.h"
 #include "components/policy/proto/device_management_backend.pb.h"
@@ -64,6 +65,7 @@ class DeviceCommandGetAvailableRoutinesJobTest : public testing::Test {
 
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
+  ::ash::mojo_service_manager::FakeMojoServiceManager fake_service_manager_;
 
   base::TimeTicks test_start_time_;
 };
@@ -99,11 +101,13 @@ std::string DeviceCommandGetAvailableRoutinesJobTest::CreateSuccessPayload(
     const std::vector<ash::cros_healthd::mojom::DiagnosticRoutineEnum>&
         available_routines) {
   std::string payload;
-  base::Value root_dict(base::Value::Type::DICTIONARY);
-  base::Value routine_list(base::Value::Type::LIST);
-  for (const auto& routine : available_routines)
+
+  base::Value::List routine_list;
+  for (const auto& routine : available_routines) {
     routine_list.Append(static_cast<int>(routine));
-  root_dict.SetPath(kRoutinesFieldName, std::move(routine_list));
+  }
+  auto root_dict =
+      base::Value::Dict().Set(kRoutinesFieldName, std::move(routine_list));
   base::JSONWriter::Write(root_dict, &payload);
   return payload;
 }
@@ -119,18 +123,15 @@ TEST_F(DeviceCommandGetAvailableRoutinesJobTest, Success) {
       std::make_unique<DeviceCommandGetAvailableRoutinesJob>();
   InitializeJob(job.get(), kUniqueID, test_start_time_, base::Seconds(30),
                 /*terminate_upon_input=*/false);
-  base::RunLoop run_loop;
-  bool success =
-      job->Run(base::Time::Now(), base::TimeTicks::Now(),
-               base::BindLambdaForTesting([&]() {
-                 EXPECT_EQ(job->status(), RemoteCommandJob::SUCCEEDED);
-                 std::unique_ptr<std::string> payload = job->GetResultPayload();
-                 EXPECT_TRUE(payload);
-                 EXPECT_EQ(CreateSuccessPayload(kAvailableRoutines), *payload);
-                 run_loop.Quit();
-               }));
+  base::test::TestFuture<void> job_finished_future;
+  bool success = job->Run(base::Time::Now(), base::TimeTicks::Now(),
+                          job_finished_future.GetCallback());
   EXPECT_TRUE(success);
-  run_loop.Run();
+  ASSERT_TRUE(job_finished_future.Wait()) << "Job did not finish.";
+  EXPECT_EQ(job->status(), RemoteCommandJob::SUCCEEDED);
+  std::unique_ptr<std::string> payload = job->GetResultPayload();
+  EXPECT_TRUE(payload);
+  EXPECT_EQ(CreateSuccessPayload(kAvailableRoutines), *payload);
 }
 
 TEST_F(DeviceCommandGetAvailableRoutinesJobTest, Failure) {
@@ -139,17 +140,14 @@ TEST_F(DeviceCommandGetAvailableRoutinesJobTest, Failure) {
       std::make_unique<DeviceCommandGetAvailableRoutinesJob>();
   InitializeJob(job.get(), kUniqueID, test_start_time_, base::Seconds(30),
                 /*terminate_upon_input=*/false);
-  base::RunLoop run_loop;
+  base::test::TestFuture<void> job_finished_future;
   bool success = job->Run(base::Time::Now(), base::TimeTicks::Now(),
-                          base::BindLambdaForTesting([&]() {
-                            EXPECT_EQ(job->status(), RemoteCommandJob::FAILED);
-                            std::unique_ptr<std::string> payload =
-                                job->GetResultPayload();
-                            EXPECT_FALSE(payload);
-                            run_loop.Quit();
-                          }));
+                          job_finished_future.GetCallback());
   EXPECT_TRUE(success);
-  run_loop.Run();
+  ASSERT_TRUE(job_finished_future.Wait()) << "Job did not finish.";
+  EXPECT_EQ(job->status(), RemoteCommandJob::FAILED);
+  std::unique_ptr<std::string> payload = job->GetResultPayload();
+  EXPECT_FALSE(payload);
 }
 
 }  // namespace policy

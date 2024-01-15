@@ -6,11 +6,18 @@
 #define PRINTING_UNITS_H_
 
 #include "base/component_export.h"
+#include "build/build_config.h"
 
 namespace printing {
 
 // Length of an inch in 0.001mm unit.
 constexpr int kMicronsPerInch = 25400;
+
+// A micron is a thousandth of a mm.
+constexpr int kMicronsPerMm = 1000;
+
+// Length of a PWG unit in 0.001mm unit.
+constexpr int kMicronsPerPwgUnit = kMicronsPerMm / 100;
 
 // Mil is a thousandth of an inch.
 constexpr float kMicronsPerMil = 25.4f;
@@ -24,7 +31,12 @@ constexpr int kPointsPerInch = 72;
 // http://dev.w3.org/csswg/css3-values/#the-px-unit
 constexpr int kPixelsPerInch = 96;
 
-// Dpi used to save to PDF or Cloud Print.
+#if BUILDFLAG(IS_MAC)
+constexpr int kDefaultMacDpi = 72;
+#endif  // BUILDFLAG(IS_MAC)
+
+// DPI used for Save to PDF. Also used as the default DPI in various use cases
+// where there is no specified DPI.
 constexpr int kDefaultPdfDpi = 300;
 
 // LETTER: 8.5 x 11 inches

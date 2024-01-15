@@ -4,7 +4,7 @@
 
 #include "components/performance_manager/graph/policies/process_priority_policy.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "components/performance_manager/public/render_process_host_proxy.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -63,6 +63,12 @@ void SetProcessPriorityOnUIThread(RenderProcessHostProxy rph_proxy,
 // lives.
 void DispatchSetProcessPriority(const ProcessNode* process_node,
                                 bool foreground) {
+  if (process_node->GetProcessType() != content::PROCESS_TYPE_RENDERER) {
+    // This is triggered from ProcessNode observers that fire for all process
+    // types, but only renderer processes have a RenderProcessHostProxy.
+    return;
+  }
+
   // TODO(chrisha): This will actually result in a further thread-hop over to
   // the process launcher thread. If we migrate to process priority logic being
   // driven 100% from the PM, we could post directly to the launcher thread

@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_util.h"
 #include "base/test/task_environment.h"
@@ -24,7 +25,7 @@ class TestingProfile;
 namespace ash {
 
 // Wraps the singleton device settings and initializes it to the point where it
-// reports OWNERSHIP_NONE for the ownership status.
+// reports OwnershipStatus::kOwnershipNone for the ownership status.
 class ScopedDeviceSettingsTestHelper {
  public:
   ScopedDeviceSettingsTestHelper();
@@ -70,6 +71,8 @@ class DeviceSettingsTestBase : public testing::Test {
 
   void InitOwner(const AccountId& account_id, bool tpm_is_ready);
 
+  void SetSessionStopping();
+
   content::BrowserTaskEnvironment task_environment_;
 
   std::unique_ptr<policy::DevicePolicyBuilder> device_policy_;
@@ -77,7 +80,7 @@ class DeviceSettingsTestBase : public testing::Test {
   FakeSessionManagerClient session_manager_client_;
   // Note that FakeUserManager is used by ProfileHelper, which some of the
   // tested classes depend on implicitly.
-  FakeChromeUserManager* user_manager_;
+  raw_ptr<FakeChromeUserManager, DanglingUntriaged> user_manager_;
   std::unique_ptr<user_manager::ScopedUserManager> user_manager_enabler_;
   scoped_refptr<ownership::MockOwnerKeyUtil> owner_key_util_;
   // Local DeviceSettingsService instance for tests. Avoid using in combination
@@ -91,12 +94,5 @@ class DeviceSettingsTestBase : public testing::Test {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when Chrome OS code migration is
-// done.
-namespace chromeos {
-using ::ash::DeviceSettingsTestBase;
-using ::ash::ScopedDeviceSettingsTestHelper;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_SETTINGS_DEVICE_SETTINGS_TEST_HELPER_H_

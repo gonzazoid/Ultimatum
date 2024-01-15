@@ -41,7 +41,6 @@ source_set("cdm") {
     # TODO(crbug.com/583067): These files should not be in //media/base.
     "//media/base/android",
     "//media/filters",
-    "//media/fuchsia/cdm",
   ]
 
   sources = [
@@ -67,7 +66,10 @@ source_set("cdm") {
     "supported_audio_codecs.h",
   ]
 
-  public_deps = [ ":cdm_type" ]
+  public_deps = [
+    ":cdm_type",
+    ":clear_key_cdm_common",
+  ]
 
   deps = [
     "//crypto",
@@ -123,8 +125,8 @@ source_set("cdm") {
     deps += [
       ":cdm_api",
       ":cdm_type_conversion",
-      "//components/crash/core/common:crash_key",
     ]
+    public_deps += [ "//components/crash/core/common:crash_key" ]
   }
 
   if (is_win) {
@@ -150,6 +152,24 @@ source_set("cdm") {
       "//media/base/win:media_foundation_util",
     ]
   }
+
+  if (is_fuchsia) {
+    sources += [
+      "fuchsia/fuchsia_cdm.cc",
+      "fuchsia/fuchsia_cdm.h",
+      "fuchsia/fuchsia_cdm_context.h",
+      "fuchsia/fuchsia_cdm_factory.cc",
+      "fuchsia/fuchsia_cdm_factory.h",
+      "fuchsia/fuchsia_cdm_provider.h",
+      "fuchsia/fuchsia_decryptor.cc",
+      "fuchsia/fuchsia_decryptor.h",
+      "fuchsia/fuchsia_stream_decryptor.cc",
+      "fuchsia/fuchsia_stream_decryptor.h",
+    ]
+
+    public_deps += [ "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.media.drm:fuchsia.media.drm_hlcpp" ]
+    deps += [ "//media/fuchsia/common" ]
+  }
 }
 
 if (enable_library_cdms) {
@@ -157,8 +177,6 @@ if (enable_library_cdms) {
     public = [ "cdm_paths.h" ]
 
     sources = [ "cdm_paths.cc" ]
-
-    public_deps = [ ":cdm_type" ]
 
     deps = [
       "//base",
@@ -170,6 +188,12 @@ if (enable_library_cdms) {
 source_set("cdm_type") {
   sources = [ "cdm_type.h" ]
   deps = [ "//base" ]
+}
+
+source_set("clear_key_cdm_common") {
+  sources = [ "clear_key_cdm_common.h" ]
+  public_deps = [ ":cdm_type" ]
+  deps = [ "//media:media_buildflags" ]
 }
 
 source_set("unit_tests") {
@@ -233,6 +257,5 @@ source_set("unit_tests") {
       "win/media_foundation_cdm_session_unittest.cc",
       "win/media_foundation_cdm_unittest.cc",
     ]
-    deps += [ "//media/base/win:media_foundation_util" ]
   }
 }

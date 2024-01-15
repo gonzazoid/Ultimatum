@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,11 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/notreached.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromeos/ash/components/login/auth/recovery/service_constants.h"
 #include "net/base/load_flags.h"
 #include "net/http/http_status_code.h"
@@ -233,9 +234,9 @@ void CryptohomeRecoveryServiceClient::OnFetchEpochComplete(
     if (!shouldRetry(status_code) ||
         epoch_retry_backoff_.failure_count() >= kMaxRetries) {
       epoch_retry_backoff_.Reset();
-      std::move(callback).Run(absl::nullopt, status_code);
+      std::move(callback).Run(std::nullopt, status_code);
     } else {
-      base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
           FROM_HERE,
           base::BindOnce(&CryptohomeRecoveryServiceClient::FetchEpoch,
                          weak_ptr_factory_.GetWeakPtr(), access_token,
@@ -275,9 +276,9 @@ void CryptohomeRecoveryServiceClient::OnFetchRecoveryResponseComplete(
     if (!shouldRetry(status_code) ||
         recovery_retry_backoff_.failure_count() >= kMaxRetries) {
       recovery_retry_backoff_.Reset();
-      std::move(callback).Run(absl::nullopt, status_code);
+      std::move(callback).Run(std::nullopt, status_code);
     } else {
-      base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
           FROM_HERE,
           base::BindOnce(
               &CryptohomeRecoveryServiceClient::FetchRecoveryResponse,

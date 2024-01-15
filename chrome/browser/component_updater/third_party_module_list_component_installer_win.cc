@@ -7,8 +7,8 @@
 #include <iterator>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/ranges/algorithm.h"
@@ -45,8 +45,9 @@ void OnModuleListComponentReady(const base::FilePath& module_list_path) {
 
   ThirdPartyConflictsManager* manager =
       ModuleDatabase::GetInstance()->third_party_conflicts_manager();
-  if (!manager)
+  if (!manager) {
     return;
+  }
 
   manager->LoadModuleList(module_list_path);
 }
@@ -57,8 +58,9 @@ void OnModuleListComponentRegistered(const base::Version& component_version) {
   // Notify the ThirdPartyConflictsManager.
   ThirdPartyConflictsManager* manager =
       ModuleDatabase::GetInstance()->third_party_conflicts_manager();
-  if (!manager)
+  if (!manager) {
     return;
+  }
 
   manager->OnModuleListComponentRegistered(kComponentId, component_version);
 }
@@ -93,7 +95,7 @@ bool ThirdPartyModuleListComponentInstallerPolicy::RequiresNetworkEncryption()
 
 update_client::CrxInstaller::Result
 ThirdPartyModuleListComponentInstallerPolicy::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   return update_client::CrxInstaller::Result(0);  // Nothing custom here.
 }
@@ -106,7 +108,7 @@ void ThirdPartyModuleListComponentInstallerPolicy::OnCustomUninstall() {}
 void ThirdPartyModuleListComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value manifest) {
+    base::Value::Dict manifest) {
   // Forward the notification to the ThirdPartyConflictsManager on the
   // ModuleDatabase task runner. The manager is responsible for the work of
   // actually loading the module list, etc, on background threads.
@@ -116,7 +118,7 @@ void ThirdPartyModuleListComponentInstallerPolicy::ComponentReady(
 }
 
 bool ThirdPartyModuleListComponentInstallerPolicy::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
   // This is called during startup and installation before ComponentReady().
   // The component is considered valid if the expected file exists in the

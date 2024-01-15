@@ -20,17 +20,18 @@
 #include "ash/system/power/power_button_menu_screen_view.h"
 #include "ash/system/power/power_button_menu_view.h"
 #include "ash/system/power/power_button_screenshot_controller.h"
+#include "ash/wm/container_finder.h"
 #include "ash/wm/lock_state_controller.h"
 #include "ash/wm/session_state_animator.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "ash/wm/window_util.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
 #include "chromeos/dbus/power_manager/backlight.pb.h"
 #include "ui/compositor/layer.h"
+#include "ui/display/tablet_state.h"
 #include "ui/display/types/display_snapshot.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_observer.h"
@@ -60,6 +61,11 @@ enum PowerButtonUpState {
   UP_MENU_WAS_OPENED = 1 << 4,
 };
 
+aura::Window* GetPowerMenuContainer() {
+  return Shell::GetPrimaryRootWindow()->GetChildById(
+      kShellWindowId_PowerMenuContainer);
+}
+
 // Creates a fullscreen widget responsible for showing the power button menu.
 std::unique_ptr<views::Widget> CreateMenuWidget() {
   auto menu_widget = std::make_unique<views::Widget>();
@@ -71,8 +77,7 @@ std::unique_ptr<views::Widget> CreateMenuWidget() {
   params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
   params.name = "PowerButtonMenuWindow";
   params.layer_type = ui::LAYER_SOLID_COLOR;
-  params.parent = Shell::GetPrimaryRootWindow()->GetChildById(
-      kShellWindowId_PowerMenuContainer);
+  params.parent = GetPowerMenuContainer();
   menu_widget->Init(std::move(params));
 
   gfx::Rect widget_bounds =
@@ -122,7 +127,6 @@ PowerButtonController::PowerButtonController(
   auto* shell = Shell::Get();
   shell->display_configurator()->AddObserver(this);
   backlights_forced_off_observation_.Observe(backlights_forced_off_setter);
-  shell->tablet_mode_controller()->AddObserver(this);
   shell->lock_state_controller()->AddObserver(this);
   shell->session_controller()->AddObserver(this);
 }
@@ -131,8 +135,6 @@ PowerButtonController::~PowerButtonController() {
   auto* shell = Shell::Get();
   shell->session_controller()->RemoveObserver(this);
   shell->lock_state_controller()->RemoveObserver(this);
-  if (shell->tablet_mode_controller())
-    shell->tablet_mode_controller()->RemoveObserver(this);
   shell->display_configurator()->RemoveObserver(this);
   AccelerometerReader::GetInstance()->RemoveObserver(this);
   chromeos::PowerManagerClient::Get()->RemoveObserver(this);
@@ -141,8 +143,9 @@ PowerButtonController::~PowerButtonController() {
 void PowerButtonController::OnPreShutdownTimeout() {
   lock_state_controller_->StartShutdownAnimation(ShutdownReason::POWER_BUTTON);
   // |menu_widget_| might be reset on login status change while shutting down.
-  if (!menu_widget_)
+  if (!menu_widget_) {
     return;
+  }
 
   static_cast<PowerButtonMenuScreenView*>(menu_widget_->GetContentsView())
       ->power_button_menu_view()
@@ -153,24 +156,28 @@ void PowerButtonController::OnLegacyPowerButtonEvent(bool down) {
   // Avoid starting the lock/shutdown sequence if the power button is pressed
   // while the screen is off (http://crbug.com/128451), unless an external
   // display is still on (http://crosbug.com/p/24912).
-  if (brightness_is_zero_ && !internal_display_off_and_external_display_on_)
+  if (brightness_is_zero_ && !internal_display_off_and_external_display_on_) {
     return;
+  }
 
-  if (!down)
+  if (!down) {
     return;
+  }
 
   // Ignore the power button down event if the menu is partially opened.
-  if (IsMenuOpened() && !show_menu_animation_done_)
+  if (IsMenuOpened() && !show_menu_animation_done_) {
     return;
+  }
 
   // If power button releases won't get reported correctly because we're not
   // running on official hardware, show menu animation on the first power
   // button press. On a further press while the menu is open, simply shut down
   // (http://crbug.com/945005).
-  if (!show_menu_animation_done_)
+  if (!show_menu_animation_done_) {
     StartPowerMenuAnimation(ShutdownReason::POWER_BUTTON);
-  else
+  } else {
     lock_state_controller_->RequestShutdown(ShutdownReason::POWER_BUTTON);
+  }
 }
 
 void PowerButtonController::OnPowerButtonEvent(
@@ -186,8 +193,9 @@ void PowerButtonController::OnPowerButtonEvent(
       // backlight has been turned back on before seeing the power button events
       // that woke the system. Avoid forcing off display just after resuming to
       // ensure that we don't turn the display off in response to the events.
-      if (timestamp - last_resume_time_ <= kIgnorePowerButtonAfterResumeDelay)
+      if (timestamp - last_resume_time_ <= kIgnorePowerButtonAfterResumeDelay) {
         force_off_on_button_up_ = false;
+      }
 
       // The actual display may remain off for a short period after powerd asks
       // Chrome to turn it on. If the user presses the power button again during
@@ -247,25 +255,31 @@ void PowerButtonController::OnPowerButtonEvent(
 
     // If the button is tapped (i.e. not held long enough to start the
     // cancellable shutdown animation) while the menu is open, dismiss the menu.
-    if (menu_shown_when_power_button_down_ && pre_shutdown_timer_was_running)
+    if (menu_shown_when_power_button_down_ && pre_shutdown_timer_was_running) {
       DismissMenu();
+    }
 
     // Ignore the event if it comes too soon after the last one.
-    if (timestamp - previous_up_time <= kIgnoreRepeatedButtonUpDelay)
+    if (timestamp - previous_up_time <= kIgnoreRepeatedButtonUpDelay) {
       return;
+    }
 
     if (!screen_off_when_power_button_down_) {
-      if (menu_timer_was_running)
+      if (menu_timer_was_running) {
         up_state |= UP_MENU_TIMER_WAS_RUNNING;
-      if (pre_shutdown_timer_was_running)
+      }
+      if (pre_shutdown_timer_was_running) {
         up_state |= UP_PRE_SHUTDOWN_TIMER_WAS_RUNNING;
-      if (show_menu_animation_done_)
+      }
+      if (show_menu_animation_done_) {
         up_state |= UP_MENU_WAS_OPENED;
+      }
       UpdatePowerButtonEventUMAHistogram(up_state);
     }
 
-    if (screen_off_when_power_button_down_ || !force_off_on_button_up_)
+    if (screen_off_when_power_button_down_ || !force_off_on_button_up_) {
       return;
+    }
 
     if (menu_timer_was_running || (menu_shown_when_power_button_down_ &&
                                    pre_shutdown_timer_was_running)) {
@@ -281,8 +295,9 @@ void PowerButtonController::OnLockButtonEvent(
   lock_button_down_ = down;
 
   // Ignore the lock button behavior if power button is being pressed.
-  if (power_button_down_)
+  if (power_button_down_) {
     return;
+  }
 
   const SessionControllerImpl* const session_controller =
       Shell::Get()->session_controller();
@@ -293,14 +308,19 @@ void PowerButtonController::OnLockButtonEvent(
     return;
   }
 
-  if (down)
+  if (down) {
     lock_state_controller_->StartLockAnimation();
-  else
+  } else {
     lock_state_controller_->CancelLockAnimation();
+  }
 }
 
 bool PowerButtonController::IsMenuOpened() const {
   return menu_widget_ && menu_widget_->GetLayer()->GetTargetVisibility();
+}
+
+void PowerButtonController::ShowMenuOnDebugAccelerator() {
+  StartPowerMenuAnimation(ShutdownReason::DEBUG_ACCELERATOR);
 }
 
 void PowerButtonController::DismissMenu() {
@@ -333,8 +353,9 @@ void PowerButtonController::OnDisplayModeChanged(
   bool external_display_on = false;
   for (const display::DisplaySnapshot* display : display_states) {
     if (display->type() == display::DISPLAY_CONNECTION_TYPE_INTERNAL) {
-      if (!display->current_mode())
+      if (!display->current_mode()) {
         internal_display_off = true;
+      }
     } else if (display->current_mode()) {
       external_display_on = true;
     }
@@ -352,8 +373,9 @@ void PowerButtonController::ScreenBrightnessChanged(
 void PowerButtonController::PowerButtonEventReceived(
     bool down,
     base::TimeTicks timestamp) {
-  if (lock_state_controller_->ShutdownRequested())
+  if (lock_state_controller_->ShutdownRequested()) {
     return;
+  }
 
   // Handle tablet mode power button screenshot accelerator.
   if (screenshot_controller_ &&
@@ -363,8 +385,9 @@ void PowerButtonController::PowerButtonEventReceived(
 
   power_button_down_ = down;
   // Ignore power button if lock button is being pressed.
-  if (lock_button_down_)
+  if (lock_button_down_) {
     return;
+  }
 
   button_type_ == ButtonType::LEGACY ? OnLegacyPowerButtonEvent(down)
                                      : OnPowerButtonEvent(down, timestamp);
@@ -386,9 +409,10 @@ void PowerButtonController::OnLoginStatusChanged(LoginStatus status) {
 }
 
 void PowerButtonController::OnGetSwitchStates(
-    absl::optional<chromeos::PowerManagerClient::SwitchStates> result) {
-  if (!result.has_value())
+    std::optional<chromeos::PowerManagerClient::SwitchStates> result) {
+  if (!result.has_value()) {
     return;
+  }
 
   if (result->tablet_mode !=
       chromeos::PowerManagerClient::TabletMode::UNSUPPORTED) {
@@ -414,18 +438,37 @@ void PowerButtonController::OnBacklightsForcedOffChanged(bool forced_off) {
 
 void PowerButtonController::OnScreenBacklightStateChanged(
     ScreenBacklightState screen_backlight_state) {
-  if (screen_backlight_state != ScreenBacklightState::ON)
+  if (screen_backlight_state != ScreenBacklightState::ON) {
     DismissMenu();
+  }
 }
 
-void PowerButtonController::OnTabletModeStarted() {
-  in_tablet_mode_ = true;
-  StopTimersAndDismissMenu();
+void PowerButtonController::OnDisplayTabletStateChanged(
+    display::TabletState state) {
+  switch (state) {
+    case display::TabletState::kEnteringTabletMode:
+    case display::TabletState::kExitingTabletMode:
+      break;
+    case display::TabletState::kInTabletMode:
+      in_tablet_mode_ = true;
+      StopTimersAndDismissMenu();
+      break;
+    case display::TabletState::kInClamshellMode:
+      in_tablet_mode_ = false;
+      StopTimersAndDismissMenu();
+      break;
+  }
 }
 
-void PowerButtonController::OnTabletModeEnded() {
-  in_tablet_mode_ = false;
-  StopTimersAndDismissMenu();
+void PowerButtonController::OnSecurityCurtainEnabled() {
+  DismissMenu();
+  Shell::GetPrimaryRootWindow()->AddChild(GetPowerMenuContainer());
+}
+
+void PowerButtonController::OnSecurityCurtainDisabled() {
+  DismissMenu();
+  GetPowerMenuContainerParent(Shell::GetPrimaryRootWindow())
+      ->AddChild(GetPowerMenuContainer());
 }
 
 void PowerButtonController::OnLockStateEvent(
@@ -434,8 +477,9 @@ void PowerButtonController::OnLockStateEvent(
   // not allowed when screen is locked, which means OnLockButtonEvent will not
   // be called in lock screen. This will lead |lock_button_down_| to stay in a
   // dirty state if press lock button after login but release in lock screen.
-  if (event == EVENT_LOCK_ANIMATION_FINISHED)
+  if (event == EVENT_LOCK_ANIMATION_FINISHED) {
     lock_button_down_ = false;
+  }
 }
 
 bool PowerButtonController::UseTabletBehavior() const {
@@ -476,8 +520,9 @@ void PowerButtonController::StartPowerMenuAnimation(ShutdownReason reason) {
 
   // Hide cursor, but let it reappear if the mouse moves.
   Shell* shell = Shell::Get();
-  if (shell->cursor_manager())
+  if (shell->cursor_manager()) {
     shell->cursor_manager()->HideCursor();
+  }
 
   contents_view->ScheduleShowHideAnimation(true);
 }
@@ -521,10 +566,11 @@ void PowerButtonController::SetShowMenuAnimationDone() {
 
 void PowerButtonController::ParsePowerButtonPositionSwitch() {
   const base::CommandLine* cl = base::CommandLine::ForCurrentProcess();
-  if (!cl->HasSwitch(switches::kAshPowerButtonPosition))
+  if (!cl->HasSwitch(switches::kAshPowerButtonPosition)) {
     return;
+  }
 
-  absl::optional<base::Value> parsed_json = base::JSONReader::Read(
+  std::optional<base::Value> parsed_json = base::JSONReader::Read(
       cl->GetSwitchValueASCII(switches::kAshPowerButtonPosition));
   if (!parsed_json || !parsed_json->is_dict()) {
     LOG(ERROR) << switches::kAshPowerButtonPosition << " flag has no value";
@@ -533,7 +579,7 @@ void PowerButtonController::ParsePowerButtonPositionSwitch() {
 
   const base::Value::Dict& position_info = parsed_json->GetDict();
   const std::string* edge = position_info.FindString(kEdgeField);
-  absl::optional<double> position = position_info.FindDouble(kPositionField);
+  std::optional<double> position = position_info.FindDouble(kPositionField);
 
   if (!edge || !position) {
     LOG(ERROR) << "Both " << kEdgeField << " field and " << kPositionField
@@ -568,11 +614,13 @@ void PowerButtonController::ParsePowerButtonPositionSwitch() {
 
 void PowerButtonController::UpdatePowerButtonEventUMAHistogram(
     uint32_t up_state) {
-  if (up_state & UP_SHOWING_ANIMATION_CANCELLED)
+  if (up_state & UP_SHOWING_ANIMATION_CANCELLED) {
     RecordPressInLaptopModeHistogram(PowerButtonPressType::kTapWithoutMenu);
+  }
 
-  if (up_state & UP_MENU_TIMER_WAS_RUNNING)
+  if (up_state & UP_MENU_TIMER_WAS_RUNNING) {
     RecordPressInTabletModeHistogram(PowerButtonPressType::kTapWithoutMenu);
+  }
 
   if (menu_shown_when_power_button_down_) {
     if (up_state & UP_PRE_SHUTDOWN_TIMER_WAS_RUNNING) {

@@ -6,33 +6,17 @@
 
 #include <ostream>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
-#include "ui/gfx/presentation_feedback.h"
 
 namespace ui {
 
 namespace {
 
 bool report_immediately_for_test = false;
-
-std::string ToFlagString(uint32_t flags) {
-  std::string tmp;
-  if (flags & gfx::PresentationFeedback::kVSync)
-    tmp += "V,";
-  if (flags & gfx::PresentationFeedback::kFailure)
-    tmp += "F,";
-  if (flags & gfx::PresentationFeedback::kHWClock)
-    tmp += "HCL,";
-  if (flags & gfx::PresentationFeedback::kHWCompletion)
-    tmp += "HCO,";
-  if (flags & gfx::PresentationFeedback::kZeroCopy)
-    tmp += "Z";
-  return tmp;
-}
 
 }  // namespace
 
@@ -53,9 +37,11 @@ class PresentationTimeRecorder::PresentationTimeRecorderInternal
       const PresentationTimeRecorderInternal&) = delete;
 
   ~PresentationTimeRecorderInternal() override {
+    const int average_latency_ms =
+        present_count_ ? total_latency_ms_ / present_count_ : 0;
     VLOG(1) << "Finished Recording FrameTime: average latency="
-            << average_latency_ms() << "ms, max latency=" << max_latency_ms()
-            << "ms, failure_ratio=" << failure_ratio();
+            << average_latency_ms << "ms, max latency=" << max_latency_ms_
+            << "ms";
     if (compositor_)
       compositor_->RemoveObserver(this);
   }
@@ -89,7 +75,7 @@ class PresentationTimeRecorder::PresentationTimeRecorderInternal
 
  protected:
   int max_latency_ms() const { return max_latency_ms_; }
-  int success_count() const { return success_count_; }
+  int present_count() const { return present_count_; }
 
  private:
   friend class TestApi;
@@ -109,21 +95,11 @@ class PresentationTimeRecorder::PresentationTimeRecorderInternal
 
   void OnPresented(int count,
                    base::TimeTicks requested_time,
-                   const gfx::PresentationFeedback& feedback);
-
-  int average_latency_ms() const {
-    return success_count_ ? total_latency_ms_ / success_count_ : 0;
-  }
-  int failure_ratio() const {
-    return failure_count_
-               ? (100 * failure_count_) / (success_count_ + failure_count_)
-               : 0;
-  }
+                   base::TimeTicks presentation_timestamp);
 
   State state_ = PRESENTED;
 
-  int success_count_ = 0;
-  int failure_count_ = 0;
+  int present_count_ = 0;
   int request_count_ = 0;
   int total_latency_ms_ = 0;
   int max_latency_ms_ = 0;
@@ -150,13 +126,11 @@ bool PresentationTimeRecorder::PresentationTimeRecorderInternal::RequestNext() {
 
   if (report_immediately_for_test) {
     state_ = COMMITTED;
-    gfx::PresentationFeedback feedback;
-    feedback.timestamp = now;
-    OnPresented(request_count_++, now, feedback);
+    OnPresented(request_count_++, now, now);
     return true;
   }
 
-  compositor_->RequestPresentationTimeForNextFrame(
+  compositor_->RequestSuccessfulPresentationTimeForNextFrame(
       base::BindOnce(&PresentationTimeRecorderInternal::OnPresented,
                      weak_ptr_factory_.GetWeakPtr(), request_count_++, now));
   return true;
@@ -165,7 +139,7 @@ bool PresentationTimeRecorder::PresentationTimeRecorderInternal::RequestNext() {
 void PresentationTimeRecorder::PresentationTimeRecorderInternal::OnPresented(
     int count,
     base::TimeTicks requested_time,
-    const gfx::PresentationFeedback& feedback) {
+    base::TimeTicks presentation_timestamp) {
   std::unique_ptr<PresentationTimeRecorderInternal> deleter;
   if (!recording_ && (count == (request_count_ - 1)))
     deleter = base::WrapUnique(this);
@@ -173,34 +147,27 @@ void PresentationTimeRecorder::PresentationTimeRecorderInternal::OnPresented(
   if (state_ == COMMITTED)
     state_ = PRESENTED;
 
-  if (feedback.flags & gfx::PresentationFeedback::kFailure) {
-    failure_count_++;
-    LOG(WARNING) << "PresentationFailed (" << count << "):"
-                 << ", flags=" << ToFlagString(feedback.flags);
-    return;
-  }
-  if (feedback.timestamp.is_null()) {
+  if (presentation_timestamp.is_null()) {
     // TODO(b/165951963): ideally feedback.timestamp should not be null.
     // Consider replacing this by DCHECK or CHECK.
     LOG(ERROR) << "Invalid feedback timestamp (" << count << "):"
                << " timestamp is not set";
     return;
   }
-  const base::TimeDelta delta = feedback.timestamp - requested_time;
+  const base::TimeDelta delta = presentation_timestamp - requested_time;
   if (delta.InMilliseconds() < 0) {
     LOG(ERROR) << "Invalid timestamp for presentation feedback (" << count
                << "): requested_time=" << requested_time
-               << " feedback.timestamp=" << feedback.timestamp;
+               << " presentation_timestamp=" << presentation_timestamp;
     return;
   }
   if (delta.InMilliseconds() > max_latency_ms_)
     max_latency_ms_ = delta.InMilliseconds();
 
-  success_count_++;
+  present_count_++;
   total_latency_ms_ += delta.InMilliseconds();
   ReportTime(delta);
-  VLOG(1) << "OnPresented (" << count << "):" << delta.InMilliseconds()
-          << ",flags=" << ToFlagString(feedback.flags);
+  VLOG(1) << "OnPresented (" << count << "):" << delta.InMilliseconds();
 }
 
 // PresentationTimeRecorder ---------------------------------------------------
@@ -227,9 +194,10 @@ void PresentationTimeRecorder::SetReportPresentationTimeImmediatelyForTest(
 
 namespace {
 
-base::HistogramBase* CreateTimesHistogram(const char* name) {
+base::HistogramBase* CreateTimesHistogram(const char* name,
+                                          base::TimeDelta maximum) {
   return base::Histogram::FactoryTimeGet(
-      name, base::Milliseconds(1), base::Milliseconds(200), 50,
+      name, base::Milliseconds(1), maximum, 50,
       base::HistogramBase::kUmaTargetedHistogramFlag);
 }
 
@@ -245,11 +213,13 @@ class PresentationTimeHistogramRecorder
   PresentationTimeHistogramRecorder(
       ui::Compositor* compositor,
       const char* presentation_time_histogram_name,
-      const char* max_latency_histogram_name)
+      const char* max_latency_histogram_name,
+      base::TimeDelta maximum)
       : PresentationTimeRecorderInternal(compositor),
         presentation_time_histogram_(
-            CreateTimesHistogram(presentation_time_histogram_name)),
-        max_latency_histogram_name_(max_latency_histogram_name) {}
+            CreateTimesHistogram(presentation_time_histogram_name, maximum)),
+        max_latency_histogram_name_(max_latency_histogram_name),
+        maximum_(maximum) {}
 
   PresentationTimeHistogramRecorder(const PresentationTimeHistogramRecorder&) =
       delete;
@@ -257,8 +227,8 @@ class PresentationTimeHistogramRecorder
       const PresentationTimeHistogramRecorder&) = delete;
 
   ~PresentationTimeHistogramRecorder() override {
-    if (success_count() > 0 && !max_latency_histogram_name_.empty()) {
-      CreateTimesHistogram(max_latency_histogram_name_.c_str())
+    if (present_count() > 0 && !max_latency_histogram_name_.empty()) {
+      CreateTimesHistogram(max_latency_histogram_name_.c_str(), maximum_)
           ->AddTimeMillisecondsGranularity(
               base::Milliseconds(max_latency_ms()));
     }
@@ -272,6 +242,7 @@ class PresentationTimeHistogramRecorder
  private:
   raw_ptr<base::HistogramBase> presentation_time_histogram_;
   std::string max_latency_histogram_name_;
+  base::TimeDelta maximum_;
 };
 
 }  // namespace
@@ -280,11 +251,12 @@ std::unique_ptr<PresentationTimeRecorder>
 CreatePresentationTimeHistogramRecorder(
     ui::Compositor* compositor,
     const char* presentation_time_histogram_name,
-    const char* max_latency_histogram_name) {
+    const char* max_latency_histogram_name,
+    base::TimeDelta maximum) {
   return std::make_unique<PresentationTimeRecorder>(
       std::make_unique<PresentationTimeHistogramRecorder>(
           compositor, presentation_time_histogram_name,
-          max_latency_histogram_name));
+          max_latency_histogram_name, maximum));
 }
 
 // TestApi --------------------------------------------------------------------
@@ -300,20 +272,9 @@ void PresentationTimeRecorder::TestApi::OnCompositingDidCommit(
 void PresentationTimeRecorder::TestApi::OnPresented(
     int count,
     base::TimeTicks requested_time,
-    const gfx::PresentationFeedback& feedback) {
-  recorder_->recorder_internal_->OnPresented(count, requested_time, feedback);
-}
-
-int PresentationTimeRecorder::TestApi::GetMaxLatencyMs() const {
-  return recorder_->recorder_internal_->max_latency_ms();
-}
-
-int PresentationTimeRecorder::TestApi::GetSuccessCount() const {
-  return recorder_->recorder_internal_->success_count();
-}
-
-int PresentationTimeRecorder::TestApi::GetFailureRatio() const {
-  return recorder_->recorder_internal_->failure_ratio();
+    base::TimeTicks presentation_timestamp) {
+  recorder_->recorder_internal_->OnPresented(count, requested_time,
+                                             presentation_timestamp);
 }
 
 }  // namespace ui

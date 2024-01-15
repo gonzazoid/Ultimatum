@@ -15,10 +15,10 @@
 #include <unordered_map>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/notreached.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkUnPreMultiply.h"
@@ -301,7 +301,9 @@ class ColorBox {
 
   // The set of colors of which this box captures a subset. This vector is not
   // owned but may be modified during the split operation.
-  std::vector<SkColor>* color_space_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION std::vector<SkColor>* color_space_;
 
   // The range of indexes into |color_space_| that are part of this box.
   gfx::Range color_range_;
@@ -388,7 +390,7 @@ std::vector<Swatch> CalculateProminentColors(
   return best_colors;
 }
 
-} // namespace
+}  // namespace
 
 KMeanImageSampler::KMeanImageSampler() {
 }
@@ -605,7 +607,7 @@ SkColor CalculateKMeanColorOfBuffer(uint8_t* decoded_data,
              : color;
 }
 
-SkColor CalculateKMeanColorOfPNG(scoped_refptr<base::RefCountedMemory> png,
+SkColor CalculateKMeanColorOfPNG(base::span<const uint8_t> png,
                                  const HSL& lower_bound,
                                  const HSL& upper_bound,
                                  KMeanImageSampler* sampler) {
@@ -614,17 +616,16 @@ SkColor CalculateKMeanColorOfPNG(scoped_refptr<base::RefCountedMemory> png,
   std::vector<uint8_t> decoded_data;
   SkColor color = kDefaultBgColor;
 
-  if (png.get() && png->size() &&
-      gfx::PNGCodec::Decode(png->front(), png->size(),
-                            gfx::PNGCodec::FORMAT_BGRA, &decoded_data,
-                            &img_width, &img_height)) {
+  if (!png.empty() &&
+      gfx::PNGCodec::Decode(png.data(), png.size(), gfx::PNGCodec::FORMAT_BGRA,
+                            &decoded_data, &img_width, &img_height)) {
     return CalculateKMeanColorOfBuffer(&decoded_data[0], img_width, img_height,
                                        lower_bound, upper_bound, sampler, true);
   }
   return color;
 }
 
-SkColor CalculateKMeanColorOfPNG(scoped_refptr<base::RefCountedMemory> png) {
+SkColor CalculateKMeanColorOfPNG(base::span<const uint8_t> png) {
   GridSampler sampler;
   return CalculateKMeanColorOfPNG(
       png, kDefaultLowerHSLBound, kDefaultUpperHSLBound, &sampler);
@@ -639,7 +640,7 @@ SkColor CalculateKMeanColorOfBitmap(const SkBitmap& bitmap,
   // we can end up creating a larger buffer than we have data for, and the end
   // of the buffer will remain uninitialized after we copy/UnPreMultiply the
   // image data into it).
-  height = base::clamp(height, 0, bitmap.height());
+  height = std::clamp(height, 0, bitmap.height());
 
   // SkBitmap uses pre-multiplied alpha but the KMean clustering function
   // above uses non-pre-multiplied alpha. Transform the bitmap before we
@@ -816,4 +817,4 @@ std::vector<color_utils::Swatch> CalculateProminentColorsOfBitmap(
       filter.is_null() ? base::BindRepeating(&IsInterestingColor) : filter);
 }
 
-}  // color_utils
+}  // namespace color_utils

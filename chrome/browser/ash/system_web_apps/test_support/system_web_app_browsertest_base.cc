@@ -36,15 +36,15 @@ SystemWebAppManager& SystemWebAppBrowserTestBase::GetManager() {
   return *swa_manager;
 }
 
-SystemWebAppType SystemWebAppBrowserTestBase::GetMockAppType() {
-  CHECK(maybe_installation_);
-  return maybe_installation_->GetType();
+SystemWebAppType SystemWebAppBrowserTestBase::GetAppType() {
+  CHECK(installation_);
+  return installation_->GetType();
 }
 
 void SystemWebAppBrowserTestBase::WaitForTestSystemAppInstall() {
   // Wait for the System Web Apps to install.
-  if (maybe_installation_) {
-    maybe_installation_->WaitForAppInstall();
+  if (installation_) {
+    installation_->WaitForAppInstall();
   } else {
     GetManager().InstallSystemAppsForTesting();
   }
@@ -52,7 +52,7 @@ void SystemWebAppBrowserTestBase::WaitForTestSystemAppInstall() {
 
 apps::AppLaunchParams SystemWebAppBrowserTestBase::LaunchParamsForApp(
     SystemWebAppType system_app_type) {
-  absl::optional<web_app::AppId> app_id =
+  std::optional<webapps::AppId> app_id =
       GetManager().GetAppIdForSystemApp(system_app_type);
 
   CHECK(app_id.has_value());
@@ -79,7 +79,7 @@ content::WebContents* SystemWebAppBrowserTestBase::LaunchApp(
     // URL matches the start URL.
     params.override_url =
         web_app::WebAppProvider::GetForLocalAppsUnchecked(browser()->profile())
-            ->registrar()
+            ->registrar_unsafe()
             .GetAppStartUrl(params.app_id);
   }
 
@@ -94,9 +94,8 @@ content::WebContents* SystemWebAppBrowserTestBase::LaunchApp(
   }
 
   if (out_browser) {
-    *out_browser = web_contents
-                       ? chrome::FindBrowserWithWebContents(web_contents)
-                       : nullptr;
+    *out_browser =
+        web_contents ? chrome::FindBrowserWithTab(web_contents) : nullptr;
   }
 
   return web_contents;
@@ -132,7 +131,7 @@ GURL SystemWebAppBrowserTestBase::GetStartUrl(
              ? params.override_url
              : web_app::WebAppProvider::GetForLocalAppsUnchecked(
                    browser()->profile())
-                   ->registrar()
+                   ->registrar_unsafe()
                    .GetAppStartUrl(params.app_id);
 }
 
@@ -141,7 +140,7 @@ GURL SystemWebAppBrowserTestBase::GetStartUrl(SystemWebAppType type) {
 }
 
 GURL SystemWebAppBrowserTestBase::GetStartUrl() {
-  return GetStartUrl(LaunchParamsForApp(GetMockAppType()));
+  return GetStartUrl(LaunchParamsForApp(GetAppType()));
 }
 
 size_t SystemWebAppBrowserTestBase::GetSystemWebAppBrowserCount(
@@ -152,12 +151,15 @@ size_t SystemWebAppBrowserTestBase::GetSystemWebAppBrowserCount(
   });
 }
 
-SystemWebAppManagerBrowserTest::SystemWebAppManagerBrowserTest(
-    bool install_mock) {
-  if (install_mock) {
-    maybe_installation_ =
-        TestSystemWebAppInstallation::SetUpStandaloneSingleWindowApp();
-  }
+void SystemWebAppBrowserTestBase::SetSystemWebAppInstallation(
+    std::unique_ptr<TestSystemWebAppInstallation> installation) {
+  CHECK(!installation_);
+  installation_ = std::move(installation);
+}
+
+SystemWebAppManagerBrowserTest::SystemWebAppManagerBrowserTest() {
+  SetSystemWebAppInstallation(
+      TestSystemWebAppInstallation::SetUpStandaloneSingleWindowApp());
 }
 
 }  // namespace ash

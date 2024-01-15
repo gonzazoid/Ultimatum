@@ -9,12 +9,12 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
 #include "build/build_config.h"
-#include "content/browser/renderer_host/input/synthetic_gesture_controller.h"
-#include "content/browser/renderer_host/input/synthetic_gesture_target.h"
-#include "content/browser/renderer_host/input/synthetic_pointer_driver.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
 #include "content/browser/renderer_host/render_widget_host_view_base.h"
 #include "content/browser/web_contents/web_contents_impl.h"
+#include "content/common/input/synthetic_gesture_controller.h"
+#include "content/common/input/synthetic_gesture_target.h"
+#include "content/common/input/synthetic_pointer_driver.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/common/content_switches.h"
@@ -119,14 +119,6 @@ class InputEventBrowserTest : public ContentBrowserTest {
     return title == ready_title;
   }
 
-  int ExecuteScriptAndExtractInt(const std::string& script) {
-    return EvalJs(shell(), script).ExtractInt();
-  }
-
-  double ExecuteScriptAndExtractDouble(const std::string& script) {
-    return EvalJs(shell(), script).ExtractDouble();
-  }
-
   void SimulateSyntheticMousePressAt(base::TimeTicks event_time) {
     DCHECK(URLLoaded());
 
@@ -226,13 +218,16 @@ IN_PROC_BROWSER_TEST_F(InputEventBrowserTest, MAYBE_MouseDownEventTimeStamp) {
   base::TimeTicks event_time = base::TimeTicks::Now();
   int64_t event_time_ms = event_time.since_origin().InMilliseconds();
   SimulateSyntheticMousePressAt(event_time);
-  while (ExecuteScriptAndExtractInt("eventCounts.mousedown") == 0)
+  while (EvalJs(shell(), "eventCounts.mousedown") == 0) {
     frame_observer.Wait();
+  }
 
-  int64_t monotonic_time = ExecuteScriptAndExtractDouble(
-      "internals.zeroBasedDocumentTimeToMonotonicTime(eventTimeStamp."
-      "mousedown)");
-  EXPECT_EQ(1, ExecuteScriptAndExtractInt("eventCounts.mousedown"));
+  int64_t monotonic_time =
+      EvalJs(shell(),
+             "internals.zeroBasedDocumentTimeToMonotonicTime(eventTimeStamp."
+             "mousedown)")
+          .ExtractDouble();
+  EXPECT_EQ(1, EvalJs(shell(), "eventCounts.mousedown"));
   EXPECT_NEAR(event_time_ms, monotonic_time, 1);
 }
 
@@ -245,17 +240,26 @@ IN_PROC_BROWSER_TEST_F(InputEventBrowserTest, KeyDownEventTimeStamp) {
   int64_t event_time_ms = event_time.since_origin().InMilliseconds();
   SimulateSyntheticKeyDown(event_time);
 
-  while (ExecuteScriptAndExtractInt("eventCounts.keydown") == 0)
+  while (EvalJs(shell(), "eventCounts.keydown") == 0) {
     frame_observer.Wait();
+  }
 
-  int64_t monotonic_time = ExecuteScriptAndExtractDouble(
-      "internals.zeroBasedDocumentTimeToMonotonicTime(eventTimeStamp."
-      "keydown)");
-  EXPECT_EQ(1, ExecuteScriptAndExtractInt("eventCounts.keydown"));
+  int64_t monotonic_time =
+      EvalJs(shell(),
+             "internals.zeroBasedDocumentTimeToMonotonicTime(eventTimeStamp."
+             "keydown)")
+          .ExtractDouble();
+  EXPECT_EQ(1, EvalJs(shell(), "eventCounts.keydown"));
   EXPECT_NEAR(event_time_ms, monotonic_time, 1);
 }
 
-IN_PROC_BROWSER_TEST_F(InputEventBrowserTest, TouchStartEventTimeStamp) {
+// TODO(crbug.com/1516021): Flaky on LaCros.
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#define MAYBE_TouchStartEventTimeStamp DISABLED_TouchStartEventTimeStamp
+#else
+#define MAYBE_TouchStartEventTimeStamp TouchStartEventTimeStamp
+#endif
+IN_PROC_BROWSER_TEST_F(InputEventBrowserTest, MAYBE_TouchStartEventTimeStamp) {
   LoadURL(kEventListenerDataURL);
 
   MainThreadFrameObserver frame_observer(GetWidgetHost());
@@ -264,13 +268,16 @@ IN_PROC_BROWSER_TEST_F(InputEventBrowserTest, TouchStartEventTimeStamp) {
   int64_t event_time_ms = event_time.since_origin().InMilliseconds();
   SimulateSyntheticTouchTapAt(event_time);
 
-  while (ExecuteScriptAndExtractInt("eventCounts.touchstart") == 0)
+  while (EvalJs(shell(), "eventCounts.touchstart") == 0) {
     frame_observer.Wait();
+  }
 
-  int64_t monotonic_time = ExecuteScriptAndExtractDouble(
-      "internals.zeroBasedDocumentTimeToMonotonicTime(eventTimeStamp."
-      "touchstart)");
-  EXPECT_EQ(1, ExecuteScriptAndExtractInt("eventCounts.touchstart"));
+  int64_t monotonic_time =
+      EvalJs(shell(),
+             "internals.zeroBasedDocumentTimeToMonotonicTime(eventTimeStamp."
+             "touchstart)")
+          .ExtractDouble();
+  EXPECT_EQ(1, EvalJs(shell(), "eventCounts.touchstart"));
   EXPECT_NEAR(event_time_ms, monotonic_time, 1);
 }
 
@@ -283,13 +290,16 @@ IN_PROC_BROWSER_TEST_F(InputEventBrowserTest, ClickEventTimeStamp) {
   int64_t event_time_ms = event_time.since_origin().InMilliseconds();
   SimulateSyntheticTouchTapAt(event_time);
 
-  while (ExecuteScriptAndExtractInt("eventCounts.click") == 0)
+  while (EvalJs(shell(), "eventCounts.click") == 0) {
     frame_observer.Wait();
+  }
 
-  int64_t monotonic_time = ExecuteScriptAndExtractDouble(
-      "internals.zeroBasedDocumentTimeToMonotonicTime(eventTimeStamp."
-      "click)");
-  EXPECT_EQ(1, ExecuteScriptAndExtractInt("eventCounts.click"));
+  int64_t monotonic_time =
+      EvalJs(shell(),
+             "internals.zeroBasedDocumentTimeToMonotonicTime(eventTimeStamp."
+             "click)")
+          .ExtractDouble();
+  EXPECT_EQ(1, EvalJs(shell(), "eventCounts.click"));
   EXPECT_NEAR(event_time_ms, monotonic_time, 1);
 }
 
@@ -302,13 +312,16 @@ IN_PROC_BROWSER_TEST_F(InputEventBrowserTest, WheelEventTimeStamp) {
   int64_t event_time_ms = event_time.since_origin().InMilliseconds();
   SimulateSyntheticWheelScroll(event_time);
 
-  while (ExecuteScriptAndExtractInt("eventCounts.wheel") == 0)
+  while (EvalJs(shell(), "eventCounts.wheel") == 0) {
     frame_observer.Wait();
+  }
 
-  int64_t monotonic_time = ExecuteScriptAndExtractDouble(
-      "internals.zeroBasedDocumentTimeToMonotonicTime(eventTimeStamp."
-      "wheel)");
-  EXPECT_GE(ExecuteScriptAndExtractInt("eventCounts.wheel"), 1);
+  int64_t monotonic_time =
+      EvalJs(shell(),
+             "internals.zeroBasedDocumentTimeToMonotonicTime(eventTimeStamp."
+             "wheel)")
+          .ExtractDouble();
+  EXPECT_GE(EvalJs(shell(), "eventCounts.wheel").ExtractInt(), 1);
   EXPECT_NEAR(event_time_ms, monotonic_time, 1);
 }
 

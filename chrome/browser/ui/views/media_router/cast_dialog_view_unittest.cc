@@ -22,9 +22,9 @@
 #include "chrome/browser/ui/media_router/media_route_starter.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
-#include "chrome/browser/ui/views/hover_button.h"
+#include "chrome/browser/ui/views/controls/hover_button.h"
 #include "chrome/browser/ui/views/media_router/cast_dialog_coordinator.h"
-#include "chrome/browser/ui/views/media_router/cast_dialog_sink_button.h"
+#include "chrome/browser/ui/views/media_router/cast_dialog_sink_view.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/views/chrome_views_test_base.h"
@@ -68,6 +68,31 @@ UIMediaSink CreateConnectedSink() {
   return sink;
 }
 
+UIMediaSink CreateFreezableSink() {
+  UIMediaSink sink{mojom::MediaRouteProviderId::CAST};
+  sink.id = "sink_freezable";
+  sink.state = UIMediaSinkState::CONNECTED;
+  sink.cast_modes = {TAB_MIRROR};
+  sink.route =
+      MediaRoute("route_id_freezable", MediaSource("https://example.com"),
+                 sink.id, "", true);
+  sink.freeze_info.can_freeze = true;
+  return sink;
+}
+
+UIMediaSink CreateFreezableFrozenSink() {
+  UIMediaSink sink{mojom::MediaRouteProviderId::CAST};
+  sink.id = "sink_freezable_frozen";
+  sink.state = UIMediaSinkState::CONNECTED;
+  sink.cast_modes = {TAB_MIRROR};
+  sink.route =
+      MediaRoute("route_id_freezable_frozen",
+                 MediaSource("https://example.com"), sink.id, "", true);
+  sink.freeze_info.can_freeze = true;
+  sink.freeze_info.is_frozen = true;
+  return sink;
+}
+
 CastDialogModel CreateModelWithSinks(std::vector<UIMediaSink> sinks) {
   CastDialogModel model;
   model.set_dialog_header(u"Dialog header");
@@ -84,13 +109,27 @@ ui::MouseEvent CreateMouseEvent() {
 
 class MockCastDialogController : public CastDialogController {
  public:
-  MOCK_METHOD1(AddObserver, void(CastDialogController::Observer* observer));
-  MOCK_METHOD1(RemoveObserver, void(CastDialogController::Observer* observer));
-  MOCK_METHOD2(StartCasting,
-               void(const std::string& sink_id, MediaCastMode cast_mode));
-  MOCK_METHOD1(StopCasting, void(const std::string& route_id));
-  MOCK_METHOD1(ClearIssue, void(const Issue::Id& issue_id));
-  MOCK_METHOD0(TakeMediaRouteStarter, std::unique_ptr<MediaRouteStarter>());
+  MOCK_METHOD(void,
+              AddObserver,
+              (CastDialogController::Observer * observer),
+              (override));
+  MOCK_METHOD(void,
+              RemoveObserver,
+              (CastDialogController::Observer * observer),
+              (override));
+  MOCK_METHOD(void,
+              StartCasting,
+              (const std::string& sink_id, MediaCastMode cast_mode),
+              (override));
+  MOCK_METHOD(void, StopCasting, (const std::string& route_id), (override));
+  MOCK_METHOD(void, ClearIssue, (const Issue::Id& issue_id), (override));
+  MOCK_METHOD(void, FreezeRoute, (const std::string& route_id), (override));
+  MOCK_METHOD(void, UnfreezeRoute, (const std::string& route_id), (override));
+  MOCK_METHOD(std::unique_ptr<MediaRouteStarter>,
+              TakeMediaRouteStarter,
+              (),
+              (override));
+  MOCK_METHOD(void, RegisterDestructor, (base::OnceClosure), (override));
 };
 
 class CastDialogViewTest : public ChromeViewsTestBase {
@@ -120,17 +159,29 @@ class CastDialogViewTest : public ChromeViewsTestBase {
   }
 
   void SinkPressedAtIndex(int index) {
+    NotifyButtonOfClick(sink_views().at(index)->cast_sink_button_for_test());
+  }
+
+  void StopPressedAtIndex(int index) {
+    NotifyButtonOfClick(sink_views().at(index)->stop_button_for_test());
+  }
+
+  void FreezePressedAtIndex(int index) {
+    NotifyButtonOfClick(sink_views().at(index)->freeze_button_for_test());
+  }
+
+  void NotifyButtonOfClick(views::Button* button) {
     ui::MouseEvent mouse_event(ui::ET_MOUSE_PRESSED, gfx::Point(0, 0),
                                gfx::Point(0, 0), ui::EventTimeForNow(), 0, 0);
-    views::test::ButtonTestApi(sink_buttons().at(index))
-        .NotifyClick(mouse_event);
+    views::test::ButtonTestApi(button).NotifyClick(mouse_event);
     // The request to cast/stop is sent asynchronously, so we must call
     // RunUntilIdle().
     base::RunLoop().RunUntilIdle();
   }
 
-  const std::vector<CastDialogSinkButton*>& sink_buttons() {
-    return dialog_->sink_buttons_for_test();
+  const std::vector<raw_ptr<CastDialogSinkView, DanglingUntriaged>>&
+  sink_views() {
+    return dialog_->sink_views_for_test();
   }
 
   views::ScrollView* scroll_view() { return dialog_->scroll_view_for_test(); }
@@ -154,7 +205,7 @@ class CastDialogViewTest : public ChromeViewsTestBase {
   std::unique_ptr<views::Widget> anchor_widget_;
   NiceMock<MockCastDialogController> controller_;
   CastDialogCoordinator cast_dialog_coordinator_;
-  raw_ptr<CastDialogView> dialog_ = nullptr;
+  raw_ptr<CastDialogView, DanglingUntriaged> dialog_ = nullptr;
   TestingProfile profile_;
 };
 
@@ -179,19 +230,80 @@ TEST_F(CastDialogViewTest, StartCasting) {
   SinkPressedAtIndex(0);
 }
 
+TEST_F(CastDialogViewTest, FreezeUiStartCasting) {
+  // Enable the proper features / prefs.
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(features::kAccessCodeCastFreezeUI);
+  profile_.GetPrefs()->SetBoolean(prefs::kAccessCodeCastEnabled, true);
+
+  std::vector<UIMediaSink> media_sinks = {CreateAvailableSink(),
+                                          CreateAvailableSink()};
+  media_sinks[0].id = "sink0";
+  media_sinks[1].id = "sink1";
+  CastDialogModel model = CreateModelWithSinks(std::move(media_sinks));
+  InitializeDialogWithModel(model);
+
+  EXPECT_CALL(controller_, StartCasting(model.media_sinks()[0].id, TAB_MIRROR));
+  SinkPressedAtIndex(0);
+}
+
 TEST_F(CastDialogViewTest, StopCasting) {
   CastDialogModel model =
       CreateModelWithSinks({CreateAvailableSink(), CreateConnectedSink()});
   InitializeDialogWithModel(model);
   EXPECT_CALL(controller_,
               StopCasting(model.media_sinks()[1].route->media_route_id()));
-  SinkPressedAtIndex(1);
+  StopPressedAtIndex(1);
+}
+
+TEST_F(CastDialogViewTest, FreezeRoute) {
+  // Enable the proper features / prefs.
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(features::kAccessCodeCastFreezeUI);
+  profile_.GetPrefs()->SetBoolean(prefs::kAccessCodeCastEnabled, true);
+
+  CastDialogModel model = CreateModelWithSinks(
+      {CreateFreezableSink(), CreateFreezableFrozenSink()});
+  InitializeDialogWithModel(model);
+
+  EXPECT_CALL(controller_,
+              FreezeRoute(model.media_sinks()[0].route->media_route_id()))
+      .Times(1);
+  EXPECT_CALL(controller_,
+              UnfreezeRoute(model.media_sinks()[1].route->media_route_id()))
+      .Times(1);
+  FreezePressedAtIndex(0);
+  FreezePressedAtIndex(1);
+}
+
+TEST_F(CastDialogViewTest, FreezeNoRoute) {
+  // Enable the proper features / prefs.
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(features::kAccessCodeCastFreezeUI);
+  profile_.GetPrefs()->SetBoolean(prefs::kAccessCodeCastEnabled, true);
+
+  CastDialogModel model = CreateModelWithSinks({CreateFreezableSink()});
+  InitializeDialogWithModel(model);
+
+  // Now that the CastDialogSinkView has been created with the proper buttons,
+  // change the associated sink. This simulates an edge case where a sink may
+  // change status while the CastDialogSinkView has not been destroyed.
+  sink_views().at(0)->set_sink_for_test(CreateAvailableSink());
+
+  // When there is no associated route, FreezePressed should be a no-op.
+  EXPECT_CALL(controller_,
+              FreezeRoute(model.media_sinks()[0].route->media_route_id()))
+      .Times(0);
+  EXPECT_CALL(controller_,
+              UnfreezeRoute(model.media_sinks()[0].route->media_route_id()))
+      .Times(0);
+  FreezePressedAtIndex(0);
 }
 
 TEST_F(CastDialogViewTest, ClearIssue) {
   std::vector<UIMediaSink> media_sinks = {CreateAvailableSink()};
-  media_sinks[0].issue = Issue(IssueInfo("title", IssueInfo::Action::DISMISS,
-                                         IssueInfo::Severity::WARNING));
+  media_sinks[0].issue =
+      Issue(IssueInfo("title", IssueInfo::Severity::WARNING, "sinkId1"));
   CastDialogModel model = CreateModelWithSinks(std::move(media_sinks));
   InitializeDialogWithModel(model);
   // When there is an issue, clicking on an available sink should clear the
@@ -256,15 +368,15 @@ TEST_F(CastDialogViewTest, DisableUnsupportedSinks) {
   sources_menu_model()->ActivatedAt(1);
   // Sink at index 0 doesn't support desktop mirroring, so it should be
   // disabled.
-  EXPECT_FALSE(sink_buttons().at(0)->GetEnabled());
-  EXPECT_TRUE(sink_buttons().at(1)->GetEnabled());
+  EXPECT_FALSE(sink_views().at(0)->cast_sink_button_for_test()->GetEnabled());
+  EXPECT_TRUE(sink_views().at(1)->cast_sink_button_for_test()->GetEnabled());
 
   test_api.NotifyClick(CreateMouseEvent());
   EXPECT_EQ(CastDialogView::kTab, sources_menu_model()->GetCommandIdAt(0));
   sources_menu_model()->ActivatedAt(0);
   // Both sinks support tab or presentation casting, so they should be enabled.
-  EXPECT_TRUE(sink_buttons().at(0)->GetEnabled());
-  EXPECT_TRUE(sink_buttons().at(1)->GetEnabled());
+  EXPECT_TRUE(sink_views().at(0)->cast_sink_button_for_test()->GetEnabled());
+  EXPECT_TRUE(sink_views().at(1)->cast_sink_button_for_test()->GetEnabled());
 }
 
 TEST_F(CastDialogViewTest, ShowNoDeviceView) {

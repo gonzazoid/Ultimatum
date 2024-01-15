@@ -5,16 +5,18 @@
 #import "ios/chrome/browser/ui/authentication/signin/signin_coordinator.h"
 
 #import "base/test/ios/wait_util.h"
-#import "components/sync/driver/sync_service_utils.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/main/test_browser.h"
-#import "ios/chrome/browser/signin/authentication_service_factory.h"
-#import "ios/chrome/browser/signin/authentication_service_fake.h"
-#import "ios/chrome/browser/signin/fake_system_identity.h"
-#import "ios/chrome/browser/signin/trusted_vault_client_backend_factory.h"
+#import "components/sync/service/sync_service_utils.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
+#import "ios/chrome/browser/signin/model/fake_authentication_service_delegate.h"
+#import "ios/chrome/browser/signin/model/fake_system_identity.h"
+#import "ios/chrome/browser/signin/model/fake_system_identity_manager.h"
+#import "ios/chrome/browser/signin/model/trusted_vault_client_backend_factory.h"
 #import "ios/chrome/test/ios_chrome_scoped_testing_local_state.h"
 #import "ios/chrome/test/providers/signin/fake_trusted_vault_client_backend.h"
-#import "ios/public/provider/chrome/browser/signin/fake_chrome_identity_service.h"
 #import "ios/web/common/uikit_ui_util.h"
 #import "ios/web/public/test/web_task_environment.h"
 #import "testing/gmock/include/gmock/gmock.h"
@@ -22,10 +24,6 @@
 #import "third_party/ocmock/OCMock/OCMock.h"
 #import "third_party/ocmock/gtest_support.h"
 #import "third_party/ocmock/ocmock_extensions.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 class TrustedVaultReauthenticationCoordinatorTest : public PlatformTest {
  public:
@@ -37,24 +35,23 @@ class TrustedVaultReauthenticationCoordinatorTest : public PlatformTest {
     base_view_controller_ = [[UIViewController alloc] init];
     base_view_controller_.view.backgroundColor = UIColor.blueColor;
     GetAnyKeyWindow().rootViewController = base_view_controller_;
-
     TestChromeBrowserState::Builder builder;
     builder.AddTestingFactory(
         AuthenticationServiceFactory::GetInstance(),
-        base::BindRepeating(
-            &AuthenticationServiceFake::CreateAuthenticationService));
+        AuthenticationServiceFactory::GetDefaultFactory());
     browser_state_ = builder.Build();
-
-    id<SystemIdentity> identity =
-        [FakeSystemIdentity identityWithEmail:@"foo1@gmail.com"
-                                       gaiaID:@"foo1ID"
-                                         name:@"Fake Foo 1"];
-    ios::FakeChromeIdentityService* identity_service =
-        ios::FakeChromeIdentityService::GetInstanceFromChromeProvider();
-    identity_service->AddIdentity(identity);
+    AuthenticationServiceFactory::CreateAndInitializeForBrowserState(
+        browser_state_.get(),
+        std::make_unique<FakeAuthenticationServiceDelegate>());
+    id<SystemIdentity> identity = [FakeSystemIdentity fakeIdentity1];
+    FakeSystemIdentityManager* system_identity_manager =
+        FakeSystemIdentityManager::FromSystemIdentityManager(
+            GetApplicationContext()->GetSystemIdentityManager());
+    system_identity_manager->AddIdentity(identity);
     AuthenticationService* authentication_service =
         AuthenticationServiceFactory::GetForBrowserState(browser_state_.get());
-    authentication_service->SignIn(identity);
+    authentication_service->SignIn(
+        identity, signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN);
 
     browser_ = std::make_unique<TestBrowser>(browser_state_.get());
   }
@@ -82,8 +79,12 @@ TEST_F(TrustedVaultReauthenticationCoordinatorTest, TestCancel) {
           base_view_controller_
                                                             browser:browser()
                                                              intent:
-                                         SigninTrustedVaultDialogIntentFetchKeys
-                                                            trigger:trigger];
+                                                                 SigninTrustedVaultDialogIntentFetchKeys
+                                                            trigger:trigger
+                                                        accessPoint:
+                                                            signin_metrics::
+                                                                AccessPoint::
+                                                                    ACCESS_POINT_START_PAGE];
   // Open and cancel the web sign-in dialog.
   __block bool signin_completion_called = false;
   signinCoordinator.signinCompletion =
@@ -124,10 +125,11 @@ TEST_F(TrustedVaultReauthenticationCoordinatorTest, TestCancel) {
       base::test::ios::kWaitForUIElementTimeout, ^bool() {
         return signin_completion_called;
       }));
+  [signinCoordinator stop];
 }
 
 // Opens the trusted vault reauth dialog, and simulate a user cancel.
-TEST_F(TrustedVaultReauthenticationCoordinatorTest, TestInterrupt) {
+TEST_F(TrustedVaultReauthenticationCoordinatorTest, TestInterruptWithDismiss) {
   // Create sign-in coordinator.
   syncer::TrustedVaultUserActionTriggerForUMA trigger =
       syncer::TrustedVaultUserActionTriggerForUMA::kSettings;
@@ -136,8 +138,12 @@ TEST_F(TrustedVaultReauthenticationCoordinatorTest, TestInterrupt) {
           base_view_controller_
                                                             browser:browser()
                                                              intent:
-                                         SigninTrustedVaultDialogIntentFetchKeys
-                                                            trigger:trigger];
+                                                                 SigninTrustedVaultDialogIntentFetchKeys
+                                                            trigger:trigger
+                                                        accessPoint:
+                                                            signin_metrics::
+                                                                AccessPoint::
+                                                                    ACCESS_POINT_START_PAGE];
   // Open and cancel the web sign-in dialog.
   __block bool signin_completion_called = false;
   signinCoordinator.signinCompletion =
@@ -155,15 +161,67 @@ TEST_F(TrustedVaultReauthenticationCoordinatorTest, TestInterrupt) {
       }));
   // Interrupt the coordinator.
   __block bool interrupt_completion_called = false;
-  [signinCoordinator interruptWithAction:
-                         SigninCoordinatorInterruptActionDismissWithoutAnimation
-                              completion:^() {
-                                EXPECT_TRUE(signin_completion_called);
-                                interrupt_completion_called = true;
-                              }];
+  [signinCoordinator
+      interruptWithAction:SigninCoordinatorInterrupt::DismissWithoutAnimation
+               completion:^() {
+                 EXPECT_TRUE(signin_completion_called);
+                 interrupt_completion_called = true;
+               }];
+  // The sign-in and interrupt completion blocks should be called
+  // asynchronously, after the UI is dismissed.
+  EXPECT_FALSE(signin_completion_called);
+  EXPECT_FALSE(interrupt_completion_called);
   // Test the completion block.
   EXPECT_TRUE(base::test::ios::WaitUntilConditionOrTimeout(
       base::test::ios::kWaitForUIElementTimeout, ^bool() {
         return interrupt_completion_called;
       }));
+  [signinCoordinator stop];
+}
+
+// Opens the trusted vault reauth dialog, and interrupt it with
+// `UIShutdownNoDismiss`.
+TEST_F(TrustedVaultReauthenticationCoordinatorTest,
+       TestInterruptUIShutdownNoDismiss) {
+  // Create sign-in coordinator.
+  syncer::TrustedVaultUserActionTriggerForUMA trigger =
+      syncer::TrustedVaultUserActionTriggerForUMA::kSettings;
+  SigninCoordinator* signinCoordinator = [SigninCoordinator
+      trustedVaultReAuthenticationCoordinatorWithBaseViewController:
+          base_view_controller_
+                                                            browser:browser()
+                                                             intent:
+                                                                 SigninTrustedVaultDialogIntentFetchKeys
+                                                            trigger:trigger
+                                                        accessPoint:
+                                                            signin_metrics::
+                                                                AccessPoint::
+                                                                    ACCESS_POINT_START_PAGE];
+  // Open and cancel the web sign-in dialog.
+  __block bool signin_completion_called = false;
+  signinCoordinator.signinCompletion =
+      ^(SigninCoordinatorResult result, SigninCompletionInfo* info) {
+        signin_completion_called = true;
+        EXPECT_EQ(SigninCoordinatorResultInterrupted, result);
+        EXPECT_EQ(nil, info.identity);
+      };
+  [signinCoordinator start];
+  // Wait until the view controllre is presented.
+  EXPECT_NE(nil, base_view_controller_.presentedViewController);
+  EXPECT_TRUE(base::test::ios::WaitUntilConditionOrTimeout(
+      base::test::ios::kWaitForUIElementTimeout, ^bool() {
+        return !base_view_controller_.presentedViewController.beingPresented;
+      }));
+  // Interrupt the coordinator.
+  __block bool interrupt_completion_called = false;
+  [signinCoordinator
+      interruptWithAction:SigninCoordinatorInterrupt::UIShutdownNoDismiss
+               completion:^() {
+                 EXPECT_TRUE(signin_completion_called);
+                 interrupt_completion_called = true;
+               }];
+  // Sign-in and interrupt completion blocks should be called synchronously.
+  EXPECT_TRUE(signin_completion_called);
+  EXPECT_TRUE(interrupt_completion_called);
+  [signinCoordinator stop];
 }

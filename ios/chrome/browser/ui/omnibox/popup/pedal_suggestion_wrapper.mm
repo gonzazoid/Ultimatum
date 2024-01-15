@@ -3,11 +3,8 @@
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/omnibox/popup/pedal_suggestion_wrapper.h"
+#import "base/notreached.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @implementation PedalSuggestionWrapper
 
@@ -21,7 +18,7 @@
 
 #pragma mark - AutocompleteSuggestion
 
-// Do not expose any pedal, pretend that this is a normal suggestion.
+/// Do not expose any pedal, pretend that this is a normal suggestion.
 - (id<OmniboxPedal>)pedal {
   return nil;
 }
@@ -40,9 +37,6 @@
   return NO;
 }
 - (BOOL)isTabMatch {
-  return NO;
-}
-- (BOOL)isClipboardMatch {
   return NO;
 }
 - (NSNumber*)suggestionGroupId {
@@ -93,8 +87,17 @@
   return nil;
 }
 
+- (NSString*)matchTypeIconAccessibilityIdentifier {
+  NOTREACHED();
+  return nil;
+}
+
 - (BOOL)isMatchTypeSearch {
-  return true;
+  return YES;
+}
+
+- (BOOL)isWrapping {
+  return YES;
 }
 
 - (CrURL*)destinationUrl {

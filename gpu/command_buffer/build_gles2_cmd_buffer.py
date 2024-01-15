@@ -40,12 +40,6 @@ _NAMED_TYPE_INFO = {
       'GL_LINEAR_MIPMAP_LINEAR',
     ],
   },
-  'CoverageModulationComponents': {
-    'type': 'GLenum',
-    'valid': [
-      'GL_RGB', 'GL_RGBA', 'GL_ALPHA', 'GL_NONE'
-    ],
-  },
   'FramebufferTarget': {
     'type': 'GLenum',
     'valid': [
@@ -227,7 +221,6 @@ _NAMED_TYPE_INFO = {
       'GL_STENCIL_BITS',
       'GL_TEXTURE_BINDING_2D',
       'GL_TEXTURE_BINDING_CUBE_MAP',
-      'GL_TEXTURE_FILTERING_HINT_CHROMIUM',
       'GL_UNPACK_ALIGNMENT',
       'GL_BIND_GENERATES_RESOURCE_CHROMIUM',
       # we can add this because we emulate it if the driver does not support it.
@@ -764,7 +757,6 @@ _NAMED_TYPE_INFO = {
       'GL_ANY_SAMPLES_PASSED_CONSERVATIVE_EXT',
       'GL_COMMANDS_ISSUED_CHROMIUM',
       'GL_COMMANDS_ISSUED_TIMESTAMP_CHROMIUM',
-      'GL_LATENCY_QUERY_CHROMIUM',
       'GL_ASYNC_PIXEL_PACK_COMPLETED_CHROMIUM',
       'GL_COMMANDS_COMPLETED_CHROMIUM',
       'GL_READBACK_SHADOW_COPIES_UPDATED_CHROMIUM',
@@ -984,7 +976,6 @@ _NAMED_TYPE_INFO = {
     'type': 'GLenum',
     'valid': [
       'GL_GENERATE_MIPMAP_HINT',
-      'GL_TEXTURE_FILTERING_HINT_CHROMIUM',
     ],
     'valid_es3': [
       'GL_FRAGMENT_SHADER_DERIVATIVE_HINT',
@@ -1601,7 +1592,6 @@ _NAMED_TYPE_INFO = {
     'type': 'GLenum',
     'is_complete': True,
     'valid': [
-      'GL_SHARED_IMAGE_ACCESS_MODE_OVERLAY_CHROMIUM',
       'GL_SHARED_IMAGE_ACCESS_MODE_READWRITE_CHROMIUM',
       'GL_SHARED_IMAGE_ACCESS_MODE_READ_CHROMIUM',
     ],
@@ -1846,6 +1836,11 @@ _FUNCTION_INFO = {
     'result': ['GLenum'],
     'trace_level': 2,
   },
+  'ClipControlEXT': {
+    'extension_flag': 'ext_clip_control',
+    'unit_test': False,
+    'extension': 'EXT_clip_control',
+  },
   'ColorMask': {
     'type': 'StateSet',
     'state': 'ColorMask',
@@ -1868,13 +1863,6 @@ _FUNCTION_INFO = {
     'impl_func': False,
     'unit_test': False,
     'es3': True,
-  },
-  'CoverageModulationCHROMIUM': {
-    'type': 'StateSet',
-    'state': 'CoverageModulationCHROMIUM',
-    'decoder_func': 'glCoverageModulationNV',
-    'extension': 'CHROMIUM_framebuffer_mixed_samples',
-    'extension_flag': 'chromium_framebuffer_mixed_samples',
   },
   'CreateAndConsumeTextureCHROMIUM': {
     'type': 'NoCommand',
@@ -2056,9 +2044,19 @@ _FUNCTION_INFO = {
       '0': '2.0f'
     },
   },
+  'PolygonModeANGLE': {
+    'extension_flag': 'angle_polygon_mode',
+    'unit_test': False,
+    'extension': 'ANGLE_polygon_mode',
+  },
   'PolygonOffset': {
     'type': 'StateSet',
     'state': 'PolygonOffset',
+  },
+  'PolygonOffsetClampEXT': {
+    'extension_flag': 'ext_polygon_offset_clamp',
+    'unit_test': False,
+    'extension': 'EXT_polygon_offset_clamp',
   },
   'DeleteBuffers': {
     'type': 'DELn',
@@ -3093,6 +3091,11 @@ _FUNCTION_INFO = {
     'extension': "CHROMIUM_texture_mailbox",
     'trace_level': 1,
   },
+  'ProvokingVertexANGLE': {
+    'extension_flag': 'angle_provoking_vertex',
+    'unit_test': False,
+    'extension': 'ANGLE_provoking_vertex',
+  },
   'RenderbufferStorage': {
     'decoder_func': 'DoRenderbufferStorage',
     'gl_test_func': 'glRenderbufferStorageEXT',
@@ -4042,7 +4045,196 @@ _FUNCTION_INFO = {
     'decoder_func': 'DoEndSharedImageAccessDirectCHROMIUM',
     'extension': 'CHROMIUM_shared_image',
     'unit_test': False,
-  }
+  },
+  # NOTE: Following functions are given an INTERNAL suffix but they're not
+  # truly 'internal'. This is because they are to be accessed as client only
+  # from RasterImplementationGLES to be used with Passthrough Command Decoder.
+  # Also, they have similar implementations to corresponding functions for
+  # Raster Decoder.
+  # TODO(hitawala): Remove these methods once OOP-C is launched and we prefer
+  # Raster Decoder over Passthrough Command Decoder everywhere.
+  'ConvertRGBAToYUVAMailboxesINTERNAL': {
+    'decoder_func': 'DoConvertRGBAToYUVAMailboxesINTERNAL',
+    'extension': 'CHROMIUM_shared_image',
+    'internal': False,
+    'type': 'PUT',
+    'count': 80, #GL_MAILBOX_SIZE_CHROMIUM x5
+    'impl_func': True,
+    'unit_test': False,
+    'trace_level': 2,
+  },
+  'ConvertYUVAMailboxesToRGBINTERNAL': {
+    'decoder_func': 'DoConvertYUVAMailboxesToRGBINTERNAL',
+    'extension': 'CHROMIUM_shared_image',
+    'internal': False,
+    'type': 'PUT',
+    'count': 144, #GL_MAILBOX_SIZE_CHROMIUM x5 + 16 floats
+    'impl_func': True,
+    'unit_test': False,
+    'trace_level': 2,
+  },
+  'ConvertYUVAMailboxesToTextureINTERNAL': {
+    'decoder_func': 'DoConvertYUVAMailboxesToTextureINTERNAL',
+    'extension': 'CHROMIUM_shared_image',
+    'internal': False,
+    'type': 'PUT',
+    'count': 64, #GL_MAILBOX_SIZE_CHROMIUM x4
+    'impl_func': True,
+    'unit_test': False,
+    'trace_level': 2,
+  },
+  'CopySharedImageINTERNAL': {
+    'decoder_func': 'DoCopySharedImageINTERNAL',
+    'extension': 'CHROMIUM_shared_image',
+    'internal': False,
+    'type': 'PUT',
+    'count': 32, #GL_MAILBOX_SIZE_CHROMIUM x2
+    'impl_func': True,
+    'unit_test': False,
+    'trace_level': 2,
+  },
+  'CopySharedImageToTextureINTERNAL': {
+    'decoder_func': 'DoCopySharedImageToTextureINTERNAL',
+    'extension': 'CHROMIUM_shared_image',
+    'internal': False,
+    'type': 'PUT',
+    'count': 16, #GL_MAILBOX_SIZE_CHROMIUM
+    'impl_func': True,
+    'unit_test': False,
+    'trace_level': 2,
+  },
+  # mailbox_offset refers to the offset in shared memory pointing to shared
+  # image mailbox.
+  'ReadbackARGBImagePixelsINTERNAL': {
+    'type': 'Custom',
+    'extension': 'CHROMIUM_shared_image',
+    'impl_func': False,
+    'client_test': False,
+    'cmd_args':
+        'GLint src_x, GLint src_y, GLint plane_index, GLuint dst_width, '
+        'GLuint dst_height, GLuint row_bytes, GLuint dst_sk_color_type, '
+        'GLuint dst_sk_alpha_type, GLint shm_id, GLuint shm_offset, '
+        'GLuint color_space_offset, GLuint pixels_offset, '
+        'GLuint mailbox_offset',
+    'result': ['uint32_t'],
+    'trace_level': 2,
+  },
+  # mailbox_offset refers to the offset in shared memory pointing to shared
+  # image mailbox.
+  'WritePixelsYUVINTERNAL': {
+    'type': 'Custom',
+    'extension': 'CHROMIUM_shared_image',
+    'impl_func': False,
+    'client_test': False,
+    'cmd_args':
+        'GLuint src_width, GLuint src_height, GLuint src_row_bytes_plane1, '
+        'GLuint src_row_bytes_plane2, GLuint src_row_bytes_plane3, '
+        'GLuint src_row_bytes_plane4, GLuint src_yuv_plane_config, '
+        'GLuint src_yuv_subsampling, GLuint src_yuv_datatype, GLint shm_id, '
+        'GLuint shm_offset, GLuint pixels_offset_plane1, '
+        'GLuint pixels_offset_plane2, GLuint pixels_offset_plane3, '
+        'GLuint pixels_offset_plane4',
+    'trace_level': 2,
+  },
+  'FramebufferMemorylessPixelLocalStorageANGLE': {
+    'extension': 'ANGLE_shader_pixel_local_storage',
+    'extension_flag': 'angle_shader_pixel_local_storage',
+    'unit_test': False,
+    'es3': True,
+    'decoder_func': 'DoFramebufferMemorylessPixelLocalStorageANGLE',
+  },
+  'FramebufferTexturePixelLocalStorageANGLE': {
+    'extension': 'ANGLE_shader_pixel_local_storage',
+    'extension_flag': 'angle_shader_pixel_local_storage',
+    'unit_test': False,
+    'es3': True,
+    'decoder_func': 'DoFramebufferTexturePixelLocalStorageANGLE',
+  },
+  'FramebufferPixelLocalClearValuefvANGLE': {
+    'extension': 'ANGLE_shader_pixel_local_storage',
+    'extension_flag': 'angle_shader_pixel_local_storage',
+    'type': 'PUT',
+    'count': 4,
+    'unit_test': False,
+    'es3': True,
+    'decoder_func': 'DoFramebufferPixelLocalClearValuefvANGLE',
+  },
+  'FramebufferPixelLocalClearValueivANGLE': {
+    'extension': 'ANGLE_shader_pixel_local_storage',
+    'extension_flag': 'angle_shader_pixel_local_storage',
+    'type': 'PUT',
+    'count': 4,
+    'unit_test': False,
+    'es3': True,
+    'decoder_func': 'DoFramebufferPixelLocalClearValueivANGLE',
+  },
+  'FramebufferPixelLocalClearValueuivANGLE': {
+    'extension': 'ANGLE_shader_pixel_local_storage',
+    'extension_flag': 'angle_shader_pixel_local_storage',
+    'type': 'PUT',
+    'use_count_func': True,
+    'count': 4,
+    'unit_test': False,
+    'es3': True,
+    'decoder_func': 'DoFramebufferPixelLocalClearValueuivANGLE',
+  },
+  'BeginPixelLocalStorageANGLE': {
+    'extension': 'ANGLE_shader_pixel_local_storage',
+    'extension_flag': 'angle_shader_pixel_local_storage',
+    'type': 'PUTn',
+    'count': 1,
+    'unit_test': False,
+    'es3': True,
+    'decoder_func': 'DoBeginPixelLocalStorageANGLE',
+  },
+  'EndPixelLocalStorageANGLE': {
+    'extension': 'ANGLE_shader_pixel_local_storage',
+    'extension_flag': 'angle_shader_pixel_local_storage',
+    'type': 'PUTn',
+    'count': 1,
+    'unit_test': False,
+    'es3': True,
+    'decoder_func': 'DoBeginPixelLocalStorageANGLE',
+  },
+  'PixelLocalStorageBarrierANGLE': {
+    'extension': 'ANGLE_shader_pixel_local_storage',
+    'extension_flag': 'angle_shader_pixel_local_storage',
+    'unit_test': False,
+    'es3': True,
+    'decoder_func': 'DoPixelLocalStorageBarrierANGLE',
+  },
+  'FramebufferPixelLocalStorageInterruptANGLE': {
+    'extension': 'ANGLE_shader_pixel_local_storage',
+    'extension_flag': 'angle_shader_pixel_local_storage',
+    'unit_test': False,
+    'es3': True,
+    'decoder_func': 'DoFramebufferPixelLocalStorageInterruptANGLE',
+  },
+  'FramebufferPixelLocalStorageRestoreANGLE': {
+    'extension': 'ANGLE_shader_pixel_local_storage',
+    'extension_flag': 'angle_shader_pixel_local_storage',
+    'unit_test': False,
+    'es3': True,
+    'decoder_func': 'DoFramebufferPixelLocalStorageRestoreANGLE',
+  },
+  'GetFramebufferPixelLocalStorageParameterfvANGLE': {
+    'extension': 'ANGLE_shader_pixel_local_storage',
+    'extension_flag': 'angle_shader_pixel_local_storage',
+    'type': 'GETn',
+    'unit_test': False,
+    'es3': True,
+    'result': ['SizedResult<GLfloat>'],
+    'decoder_func': 'DoGetFramebufferPixelLocalStorageParameterfvANGLE',
+  },
+  'GetFramebufferPixelLocalStorageParameterivANGLE': {
+    'extension': 'ANGLE_shader_pixel_local_storage',
+    'extension_flag': 'angle_shader_pixel_local_storage',
+    'type': 'GETn',
+    'unit_test': False,
+    'es3': True,
+    'result': ['SizedResult<GLint>'],
+    'decoder_func': 'DoGetFramebufferPixelLocalStorageParameterivANGLE',
+  },
 
 }
 

@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "base/files/file_path.h"
+#include "base/values.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace device_signals {
@@ -37,6 +38,12 @@ struct ExecutableMetadata {
 
   // Version of this executable.
   absl::optional<std::string> version = absl::nullopt;
+
+  // Is true if the OS has verified the signing certificate.
+  bool is_os_verified = false;
+
+  // The subject name of the signing certificate.
+  absl::optional<std::string> subject_name = absl::nullopt;
 
   bool operator==(const ExecutableMetadata& other) const;
 };
@@ -83,6 +90,17 @@ struct GetFileSystemInfoOptions {
   bool compute_executable_metadata = false;
 
   bool operator==(const GetFileSystemInfoOptions& other) const;
+};
+
+struct CrowdStrikeSignals {
+  std::string customer_id{};
+  std::string agent_id{};
+
+  // Returns a Value with the non-empty values. Returns absl::nullopt if neither
+  // values are set.
+  absl::optional<base::Value> ToValue() const;
+
+  bool operator==(const CrowdStrikeSignals& other) const;
 };
 
 }  // namespace device_signals

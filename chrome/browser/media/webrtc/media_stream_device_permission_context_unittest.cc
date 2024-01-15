@@ -4,7 +4,8 @@
 
 #include "chrome/browser/media/webrtc/media_stream_device_permission_context.h"
 
-#include "base/bind.h"
+#include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
@@ -16,15 +17,20 @@
 #include "components/permissions/permission_request_id.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_features.h"
+#include "content/public/common/content_switches.h"
 #include "content/public/test/mock_render_process_host.h"
 #include "content/public/test/web_contents_tester.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/mojom/permissions/permission_status.mojom.h"
 
 #if !BUILDFLAG(IS_ANDROID)
 #include "components/permissions/permission_request_manager.h"
 #endif
 
 namespace {
+
+using PermissionStatus = blink::mojom::PermissionStatus;
+
 class TestPermissionContext : public MediaStreamDevicePermissionContext {
  public:
   TestPermissionContext(Profile* profile,
@@ -71,17 +77,17 @@ class MediaStreamDevicePermissionContextTests
                                       secure_url.DeprecatedGetOriginAsURL(),
                                       content_settings_type));
 
-    EXPECT_EQ(CONTENT_SETTING_BLOCK,
+    EXPECT_EQ(PermissionStatus::DENIED,
               permission_context
                   .GetPermissionStatus(nullptr /* render_frame_host */,
                                        insecure_url, insecure_url)
-                  .content_setting);
+                  .status);
 
-    EXPECT_EQ(CONTENT_SETTING_BLOCK,
+    EXPECT_EQ(PermissionStatus::DENIED,
               permission_context
                   .GetPermissionStatus(nullptr /* render_frame_host */,
                                        insecure_url, secure_url)
-                  .content_setting);
+                  .status);
   }
 
   void TestSecureQueryingUrl(ContentSettingsType content_settings_type) {
@@ -95,11 +101,41 @@ class MediaStreamDevicePermissionContextTests
                                       secure_url.DeprecatedGetOriginAsURL(),
                                       content_settings_type));
 
-    EXPECT_EQ(CONTENT_SETTING_ASK,
+    EXPECT_EQ(PermissionStatus::ASK,
               permission_context
                   .GetPermissionStatus(nullptr /* render_frame_host */,
                                        secure_url, secure_url)
-                  .content_setting);
+                  .status);
+  }
+
+  void TestUseFakeUiSwitch(ContentSettingsType content_setting_type,
+                           bool use_deny_switch) {
+    GURL secure_url("https://www.example.com");
+    TestPermissionContext permission_context(profile(), content_setting_type);
+
+    EXPECT_EQ(PermissionStatus::ASK,
+              permission_context
+                  .GetPermissionStatus(nullptr /* render_frame_host */,
+                                       secure_url, secure_url)
+                  .status);
+
+    if (use_deny_switch) {
+      base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
+          switches::kUseFakeUIForMediaStream, "deny");
+    } else {
+      base::CommandLine::ForCurrentProcess()->AppendSwitch(
+          switches::kUseFakeUIForMediaStream);
+    }
+
+    EXPECT_EQ(
+        use_deny_switch ? PermissionStatus::DENIED : PermissionStatus::GRANTED,
+        permission_context
+            .GetPermissionStatus(nullptr /* render_frame_host */, secure_url,
+                                 secure_url)
+            .status);
+
+    base::CommandLine::ForCurrentProcess()->RemoveSwitch(
+        switches::kUseFakeUIForMediaStream);
   }
 
  private:
@@ -134,4 +170,24 @@ TEST_F(MediaStreamDevicePermissionContextTests, TestMicSecureQueryingUrl) {
 // MEDIASTREAM_CAMERA permission status should be ask for Secure origin.
 TEST_F(MediaStreamDevicePermissionContextTests, TestCameraSecureQueryingUrl) {
   TestSecureQueryingUrl(ContentSettingsType::MEDIASTREAM_CAMERA);
+}
+
+TEST_F(MediaStreamDevicePermissionContextTests, TestMicUseFakeUiSwitch) {
+  TestUseFakeUiSwitch(ContentSettingsType::MEDIASTREAM_MIC,
+                      false /* use_deny_switch */);
+}
+
+TEST_F(MediaStreamDevicePermissionContextTests, TestCameraUseFakeUiSwitch) {
+  TestUseFakeUiSwitch(ContentSettingsType::MEDIASTREAM_CAMERA,
+                      false /* use_deny_switch */);
+}
+
+TEST_F(MediaStreamDevicePermissionContextTests, TestMicUseFakeUiSwitchDeny) {
+  TestUseFakeUiSwitch(ContentSettingsType::MEDIASTREAM_MIC,
+                      true /* use_deny_switch */);
+}
+
+TEST_F(MediaStreamDevicePermissionContextTests, TestCameraUseFakeUiSwitchDeny) {
+  TestUseFakeUiSwitch(ContentSettingsType::MEDIASTREAM_CAMERA,
+                      true /* use_deny_switch */);
 }

@@ -4,12 +4,17 @@
 
 #include "chrome/browser/ash/login/screens/pin_setup_screen.h"
 
+#include <optional>
+#include <string>
+#include <utility>
+
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/public/cpp/test/shell_test_api.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "chrome/browser/ash/login/screen_manager.h"
+#include "chrome/browser/ash/login/test/cryptohome_mixin.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
@@ -18,8 +23,10 @@
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/webui/chromeos/login/pin_setup_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/pin_setup_screen_handler.h"
+#include "chromeos/ash/components/cryptohome/constants.h"
 #include "chromeos/ash/components/dbus/userdataauth/fake_userdataauth_client.h"
+#include "chromeos/ash/components/osauth/public/auth_session_storage.h"
 #include "components/user_manager/user_type.h"
 #include "content/public/test/browser_test.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -29,11 +36,15 @@ namespace {
 
 using ::testing::ElementsAre;
 
-const test::UIPath kBackButton = {"pin-setup", "backButton"};
-const test::UIPath kNextButton = {"pin-setup", "nextButton"};
-const test::UIPath kSkipButton = {"pin-setup", "setupSkipButton"};
-const test::UIPath kDoneButton = {"pin-setup", "doneButton"};
-const test::UIPath kPinKeyboardInput = {"pin-setup", "pinKeyboard",
+constexpr char kPinSetupScreen[] = "pin-setup";
+
+const test::UIPath kPinSetupScreenDoneStep = {kPinSetupScreen, "doneDialog"};
+
+const test::UIPath kBackButton = {kPinSetupScreen, "backButton"};
+const test::UIPath kNextButton = {kPinSetupScreen, "nextButton"};
+const test::UIPath kSkipButton = {kPinSetupScreen, "setupSkipButton"};
+const test::UIPath kDoneButton = {kPinSetupScreen, "doneButton"};
+const test::UIPath kPinKeyboardInput = {kPinSetupScreen, "pinKeyboard",
                                         "pinKeyboard", "pinInput"};
 
 }  // namespace
@@ -65,11 +76,32 @@ class PinSetupScreenTest : public OobeBaseTest {
     GetScreen()->set_exit_callback_for_testing(base::BindRepeating(
         &PinSetupScreenTest::HandleScreenExit, base::Unretained(this)));
 
+    auto* wizard_context =
+        LoginDisplayHost::default_host()->GetWizardContextForTesting();
+
     // Force the sync screen to be shown so that we don't jump to PIN setup
     // screen (consuming auth session) in unbranded build
-    LoginDisplayHost::default_host()->GetWizardContext()->is_branded_build =
-        true;
+    wizard_context->is_branded_build = true;
+
     login_manager_mixin_.LoginAsNewRegularUser();
+
+    // Add an authenticated session to the user context used during OOBE. In
+    // production, this is set by earlier screens which are skipped in this
+    // test.
+    std::unique_ptr<UserContext> context =
+        ash::AuthSessionStorage::Get()->BorrowForTests(
+            FROM_HERE, wizard_context->extra_factors_token.value());
+    // LoginManagerMixin uses StubAuthenticator that fills out authsession.
+    // Reset Authsession to correctly interact with FakeUserDataAuthClient.
+    context->ResetAuthSessionIds();
+    cryptohome_.MarkUserAsExisting(context->GetAccountId());
+    auto session_ids =
+        cryptohome_.AddSession(context->GetAccountId(), /*authenticated=*/true);
+    context->SetAuthSessionIds(session_ids.first, session_ids.second);
+    context->SetSessionLifetime(base::Time::Now() +
+                                cryptohome::kAuthsessionInitialLifetime);
+    ash::AuthSessionStorage::Get()->Return(
+        wizard_context->extra_factors_token.value(), std::move(context));
   }
 
   PinSetupScreen* GetScreen() {
@@ -100,11 +132,29 @@ class PinSetupScreenTest : public OobeBaseTest {
     run_loop.Run();
   }
 
-  absl::optional<PinSetupScreen::Result> screen_result_;
+  void ConfigureUserContextForTest() {
+    std::unique_ptr<UserContext> context = std::make_unique<UserContext>();
+    context->SetAuthSessionIds("fake-session-id", "broadcast");
+    context->SetSessionLifetime(base::Time::Now() +
+                                cryptohome::kAuthsessionInitialLifetime);
+    LoginDisplayHost::default_host()
+        ->GetWizardContextForTesting()
+        ->extra_factors_token =
+        ash::AuthSessionStorage::Get()->Store(std::move(context));
+  }
+
+  void CheckCredentialsWereCleared() {
+    EXPECT_FALSE(LoginDisplayHost::default_host()
+                     ->GetWizardContextForTesting()
+                     ->extra_factors_token.has_value());
+  }
+
+  std::optional<PinSetupScreen::Result> screen_result_;
   base::HistogramTester histogram_tester_;
   bool screen_exited_ = false;
 
   LoginManagerMixin login_manager_mixin_{&mixin_host_};
+  CryptohomeMixin cryptohome_{&mixin_host_};
 
  private:
   void HandleScreenExit(PinSetupScreen::Result result) {
@@ -131,6 +181,18 @@ IN_PROC_BROWSER_TEST_F(PinSetupScreenTest, Skipped) {
   histogram_tester_.ExpectTotalCount("OOBE.StepCompletionTime.Pin-setup", 0);
 }
 
+// If the PIN setup screen is skipped, auth session should be
+// cleared.
+IN_PROC_BROWSER_TEST_F(PinSetupScreenTest, SkippedClearsAuthSession) {
+  ConfigureUserContextForTest();
+
+  ShowPinSetupScreen();
+  WaitForScreenExit();
+
+  EXPECT_EQ(screen_result_.value(), PinSetupScreen::Result::NOT_APPLICABLE);
+  CheckCredentialsWereCleared();
+}
+
 // Oobe should show the PIN setup screen if the device is in tablet mode.
 IN_PROC_BROWSER_TEST_F(PinSetupScreenTest, ShowInTabletMode) {
   SetTabletMode(true);
@@ -139,6 +201,20 @@ IN_PROC_BROWSER_TEST_F(PinSetupScreenTest, ShowInTabletMode) {
   TapSkipButton();
   WaitForScreenExit();
   EXPECT_EQ(screen_result_.value(), PinSetupScreen::Result::USER_SKIP);
+}
+
+// If the PIN setup screen is shown, auth session should be
+// cleared.
+IN_PROC_BROWSER_TEST_F(PinSetupScreenTest, ShowClearsAuthSession) {
+  ConfigureUserContextForTest();
+  SetTabletMode(true);
+
+  ShowPinSetupScreen();
+  TapSkipButton();
+  WaitForScreenExit();
+
+  EXPECT_EQ(screen_result_.value(), PinSetupScreen::Result::USER_SKIP);
+  CheckCredentialsWereCleared();
 }
 
 // Fixture to pretend that we have hardware support for login.
@@ -258,7 +334,9 @@ IN_PROC_BROWSER_TEST_F(PinSetupScreenTestLoginSupport, FinishedFlow) {
 
   EnterPin();
   test::OobeJS().TapOnPath(kNextButton);
-  test::OobeJS().CreateVisibilityWaiter(true, {kDoneButton})->Wait();
+  test::OobeJS()
+      .CreateVisibilityWaiter(true, {kPinSetupScreenDoneStep})
+      ->Wait();
 
   test::OobeJS().TapOnPath(kDoneButton);
 

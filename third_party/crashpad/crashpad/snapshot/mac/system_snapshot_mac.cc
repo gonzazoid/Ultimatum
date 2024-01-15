@@ -86,7 +86,6 @@ SystemSnapshotMac::SystemSnapshotMac()
       os_version_major_(0),
       os_version_minor_(0),
       os_version_bugfix_(0),
-      os_server_(false),
       initialized_() {
 }
 
@@ -107,7 +106,6 @@ void SystemSnapshotMac::Initialize(ProcessReaderMac* process_reader,
                          &os_version_minor_,
                          &os_version_bugfix_,
                          &os_version_build_,
-                         &os_server_,
                          &os_version_string);
 
   std::string uname_string;
@@ -304,7 +302,7 @@ SystemSnapshot::OperatingSystem SystemSnapshotMac::GetOperatingSystem() const {
 
 bool SystemSnapshotMac::OSServer() const {
   INITIALIZATION_STATE_DCHECK_VALID(initialized_);
-  return os_server_;
+  return false;
 }
 
 void SystemSnapshotMac::OSVersion(int* major,
@@ -388,6 +386,20 @@ void SystemSnapshotMac::TimeZone(DaylightSavingTimeStatus* dst_status,
                      daylight_offset_seconds,
                      standard_name,
                      daylight_name);
+}
+
+uint64_t SystemSnapshotMac::AddressMask() const {
+  uint64_t mask = 0;
+#if defined(ARCH_CPU_ARM64)
+  // `machdep.virtual_address_size` is the number of addressable bits in
+  // userspace virtual addresses
+  uint8_t addressable_bits =
+      CastIntSysctlByName<uint8_t>("machdep.virtual_address_size", 0);
+  if (addressable_bits) {
+    mask = ~((1UL << addressable_bits) - 1);
+  }
+#endif
+  return mask;
 }
 
 }  // namespace internal

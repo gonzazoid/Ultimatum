@@ -23,9 +23,11 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_SVG_SVG_ELEMENT_H_
 
 #include "base/dcheck_is_on.h"
+#include "base/gtest_prod_util.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/events/simulated_click_options.h"
+#include "third_party/blink/renderer/core/svg/animation/smil_time_container.h"
 #include "third_party/blink/renderer/core/svg/properties/svg_property_info.h"
 #include "third_party/blink/renderer/core/svg/svg_parsing_error.h"
 #include "third_party/blink/renderer/core/svg_names.h"
@@ -42,7 +44,6 @@ class Document;
 class ElementSMILAnimations;
 class ExecutionContext;
 class SVGAnimatedPropertyBase;
-class SubtreeLayoutScope;
 class SVGAnimatedString;
 class SVGElement;
 class SVGElementRareData;
@@ -59,8 +60,6 @@ class CORE_EXPORT SVGElement : public Element {
  public:
   ~SVGElement() override;
 
-  bool SupportsFocus() const override { return false; }
-
   bool IsOutermostSVGSVGElement() const;
 
   bool HasTagName(const SVGQualifiedName& name) const {
@@ -73,12 +72,16 @@ class CORE_EXPORT SVGElement : public Element {
   }
   static bool IsAnimatableCSSProperty(const QualifiedName&);
 
-  enum ApplyMotionTransform {
+  bool HasMotionTransform() const { return HasSVGRareData(); }
+  // Apply any "motion transform" contribution (if existing.)
+  void ApplyMotionTransform(AffineTransform&) const;
+
+  enum ApplyMotionTransformTag {
     kExcludeMotionTransform,
     kIncludeMotionTransform
   };
-  bool HasTransform(ApplyMotionTransform) const;
-  AffineTransform CalculateTransform(ApplyMotionTransform) const;
+  bool HasTransform(ApplyMotionTransformTag) const;
+  AffineTransform CalculateTransform(ApplyMotionTransformTag) const;
 
   enum CTMScope {
     kNearestViewportScope,  // Used by SVGGraphicsElement::getCTM()
@@ -139,7 +142,7 @@ class CORE_EXPORT SVGElement : public Element {
   };
   virtual void SvgAttributeChanged(const SvgAttributeChangedParams&);
 
-  SVGAnimatedPropertyBase* PropertyFromAttribute(
+  virtual SVGAnimatedPropertyBase* PropertyFromAttribute(
       const QualifiedName& attribute_name) const;
   static AnimatedPropertyType AnimatedPropertyTypeForCSSAttribute(
       const QualifiedName& attribute_name);
@@ -162,12 +165,13 @@ class CORE_EXPORT SVGElement : public Element {
   SVGUseElement* GeneratingUseElement() const;
 
   void SynchronizeSVGAttribute(const QualifiedName&) const;
+  virtual void SynchronizeAllSVGAttributes() const;
   void CollectExtraStyleForPresentationAttribute(
       MutableCSSPropertyValueSet*) override;
 
-  scoped_refptr<ComputedStyle> CustomStyleForLayoutObject(
+  const ComputedStyle* CustomStyleForLayoutObject(
       const StyleRecalcContext&) final;
-  bool LayoutObjectIsNeeded(const ComputedStyle&) const override;
+  bool LayoutObjectIsNeeded(const DisplayStyle&) const override;
 
 #if DCHECK_IS_ON()
   virtual bool IsAnimatableAttribute(const QualifiedName&) const;
@@ -176,11 +180,10 @@ class CORE_EXPORT SVGElement : public Element {
   MutableCSSPropertyValueSet* AnimatedSMILStyleProperties() const;
   MutableCSSPropertyValueSet* EnsureAnimatedSMILStyleProperties();
 
+  virtual void BuildPendingResource() {}
   virtual bool HaveLoadedRequiredResources();
 
-  void InvalidateRelativeLengthClients(SubtreeLayoutScope* = nullptr);
-
-  void AddToPropertyMap(SVGAnimatedPropertyBase*);
+  void InvalidateRelativeLengthClients();
 
   SVGAnimatedString* className() { return class_name_.Get(); }
 
@@ -189,7 +192,6 @@ class CORE_EXPORT SVGElement : public Element {
   void AddReferenceTo(SVGElement*);
   template <typename InvalidationFunction>
   void NotifyIncomingReferences(InvalidationFunction&&);
-  void RebuildAllIncomingReferences();
   void RemoveAllIncomingReferences();
   void RemoveAllOutgoingReferences();
 
@@ -234,6 +236,13 @@ class CORE_EXPORT SVGElement : public Element {
 
   bool HasSVGParent() const;
 
+  // Utility function for implementing SynchronizeAllSVGAttributes() in
+  // subclasses (and mixins such as SVGTests).
+  static void SynchronizeListOfSVGAttributes(
+      const base::span<SVGAnimatedPropertyBase*> attributes);
+
+  bool HasFocusEventListeners() const;
+
  protected:
   SVGElement(const QualifiedName&,
              Document&,
@@ -260,13 +269,14 @@ class CORE_EXPORT SVGElement : public Element {
   }
   void UpdateRelativeLengthsInformation(bool has_relative_lengths, SVGElement*);
   static void MarkForLayoutAndParentResourceInvalidation(LayoutObject&);
+  void NotifyResourceClients() const;
 
   virtual bool SelfHasRelativeLengths() const { return false; }
 
   SVGElementSet* SetOfIncomingReferences() const;
 
   SVGElementRareData* EnsureSVGRareData();
-  inline bool HasSVGRareData() const { return svg_rare_data_; }
+  inline bool HasSVGRareData() const { return svg_rare_data_ != nullptr; }
   inline SVGElementRareData* SvgRareData() const {
     DCHECK(svg_rare_data_);
     return svg_rare_data_.Get();
@@ -275,14 +285,14 @@ class CORE_EXPORT SVGElement : public Element {
   void ReportAttributeParsingError(SVGParsingError,
                                    const QualifiedName&,
                                    const AtomicString&);
-  bool HasFocusEventListeners() const;
-
   void AddedEventListener(const AtomicString& event_type,
                           RegisteredEventListener&) override;
   void RemovedEventListener(const AtomicString& event_type,
                             const RegisteredEventListener&) final;
 
   void AccessKeyAction(SimulatedClickCreationScope creation_scope) override;
+
+  void AttachLayoutTree(AttachContext&) override;
 
  private:
   FRIEND_TEST_ALL_PREFIXES(SVGElementTest,
@@ -293,15 +303,15 @@ class CORE_EXPORT SVGElement : public Element {
   bool IsStyledElement() const =
       delete;  // This will catch anyone doing an unnecessary check.
 
+  bool SupportsFocus(UpdateBehavior) const override { return false; }
+
   void WillRecalcStyle(const StyleRecalcChange) override;
   static SVGElementSet& GetDependencyTraversalVisitedSet();
   void UpdateWebAnimatedAttributeOnBaseValChange(const QualifiedName&);
 
-  HeapHashSet<WeakMember<SVGElement>> elements_with_relative_lengths_;
+  SMILTimeContainer* GetTimeContainer() const;
 
-  typedef HeapHashMap<QualifiedName, Member<SVGAnimatedPropertyBase>>
-      AttributeToPropertyMap;
-  AttributeToPropertyMap attribute_to_property_map_;
+  HeapHashSet<WeakMember<SVGElement>> elements_with_relative_lengths_;
 
 #if DCHECK_IS_ON()
   bool in_relative_length_clients_invalidation_ = false;
@@ -322,7 +332,8 @@ void SVGElement::NotifyIncomingReferences(
   // adjustments on changes, so we need to break possible cycles here.
   SVGElementSet& invalidating_dependencies = GetDependencyTraversalVisitedSet();
 
-  for (SVGElement* element : *dependencies) {
+  for (auto& member : *dependencies) {
+    auto* element = member.Get();
     if (!element->GetLayoutObject())
       continue;
     if (UNLIKELY(!invalidating_dependencies.insert(element).is_new_entry)) {
@@ -343,7 +354,7 @@ struct SVGAttributeHashTranslator {
                                             key.NamespaceURI().Impl()};
       return HashComponents(components);
     }
-    return DefaultHash<QualifiedName>::GetHash(key);
+    return WTF::GetHash(key);
   }
   static bool Equal(const QualifiedName& a, const QualifiedName& b) {
     return a.Matches(b);

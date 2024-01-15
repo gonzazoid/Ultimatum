@@ -2,20 +2,22 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
+
 import {DiagnosticsStickyBannerElement} from 'chrome://diagnostics/diagnostics_sticky_banner.js';
+import {assertEquals, assertFalse, assertNotEquals, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertEquals, assertFalse, assertNotEquals, assertTrue} from '../../chai_assert.js';
-import {isVisible} from '../../test_util.js';
+import {isVisible} from '../test_util.js';
 
 import * as dx_utils from './diagnostics_test_utils.js';
 
-export function diagnosticsStickyBannerTestSuite() {
+suite('diagnosticsStickyBannerTestSuite', function() {
   /** @type {?DiagnosticsStickyBannerElement} */
   let diagnosticsStickyBannerElement = null;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes.emptyHTML;
   });
 
   teardown(() => {
@@ -58,7 +60,7 @@ export function diagnosticsStickyBannerTestSuite() {
    * @return {string}
    */
   function getScrollClass_() {
-    return diagnosticsStickyBannerElement.scrollingClass_;
+    return diagnosticsStickyBannerElement.scrollingClass;
   }
 
   /**
@@ -66,7 +68,7 @@ export function diagnosticsStickyBannerTestSuite() {
    * @return {number}
    */
   function getScrollTimerId_() {
-    return diagnosticsStickyBannerElement.scrollTimerId_;
+    return diagnosticsStickyBannerElement.scrollTimerId;
   }
 
   /**
@@ -204,4 +206,4 @@ export function diagnosticsStickyBannerTestSuite() {
           assertNotEquals(-1, getScrollTimerId_());
         });
   });
-}
+});

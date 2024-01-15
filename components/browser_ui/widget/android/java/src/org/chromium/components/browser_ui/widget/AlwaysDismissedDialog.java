@@ -5,7 +5,6 @@
 package org.chromium.components.browser_ui.widget;
 
 import android.app.Activity;
-import android.app.Dialog;
 
 import org.chromium.base.ActivityState;
 import org.chromium.base.ApplicationStatus;
@@ -16,8 +15,8 @@ import org.chromium.base.ApplicationStatus;
  * references to memory or performs other crucial cleanup. See http://crbug.com/507748.
  * DialogFragments ensure that dismiss() is called as well.
  */
-public class AlwaysDismissedDialog
-        extends Dialog implements ApplicationStatus.ActivityStateListener {
+public class AlwaysDismissedDialog extends ChromeDialog
+        implements ApplicationStatus.ActivityStateListener {
     public AlwaysDismissedDialog(Activity ownerActivity, int theme) {
         super(ownerActivity, theme);
         ApplicationStatus.registerStateListenerForActivity(this, ownerActivity);

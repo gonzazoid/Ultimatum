@@ -10,6 +10,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/download/download_item_warning_data.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
 #include "chrome/browser/profiles/profile.h"
@@ -18,6 +19,7 @@
 #include "chrome/browser/safe_browsing/chrome_user_population_helper.h"
 #include "chrome/browser/safe_browsing/download_protection/download_protection_service.h"
 #include "chrome/browser/safe_browsing/download_protection/download_protection_util.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/proto/csd.pb.h"
 #include "components/safe_browsing/core/common/utils.h"
 #include "content/public/browser/browser_context.h"
@@ -33,7 +35,9 @@ namespace {
 // The version of this client supporting tailored warnings.
 // Please update the description of TailoredInfo field in csd.proto when
 // changing this value.
-constexpr int kTailoredWarningVersion = 1;
+// Note: The name of this variable is checked by PRESUBMIT. Please update the
+// PRESUBMIT script before renaming this variable.
+constexpr int kTailoredWarningVersion = 3;
 
 DownloadRequestMaker::TabUrls TabUrlsFromWebContents(
     content::WebContents* web_contents) {
@@ -49,13 +53,32 @@ DownloadRequestMaker::TabUrls TabUrlsFromWebContents(
   return result;
 }
 
+void SetDownloadItemWarningData(download::DownloadItem* item,
+                                const absl::optional<std::string>& password,
+                                const FileAnalyzer::Results& results) {
+  DownloadItemWarningData::SetIsEncryptedArchive(
+      item, results.encryption_info.is_encrypted);
+  DownloadItemWarningData::SetIsFullyExtractedArchive(
+      item, results.archive_summary.parser_status() ==
+                    ClientDownloadRequest::ArchiveSummary::VALID &&
+                (!results.encryption_info.is_encrypted ||
+                 results.encryption_info.password_status ==
+                     EncryptionInfo::kKnownCorrect));
+  if (password.has_value()) {
+    DownloadItemWarningData::SetHasIncorrectPassword(
+        item, results.encryption_info.password_status ==
+                  EncryptionInfo::kKnownIncorrect);
+  }
+}
+
 }  // namespace
 
 // static
 std::unique_ptr<DownloadRequestMaker>
 DownloadRequestMaker::CreateFromDownloadItem(
     scoped_refptr<BinaryFeatureExtractor> binary_feature_extractor,
-    download::DownloadItem* item) {
+    download::DownloadItem* item,
+    base::optional_ref<const std::string> password) {
   std::vector<ClientDownloadRequest::Resource> resources;
   for (size_t i = 0; i < item->GetUrlChain().size(); ++i) {
     ClientDownloadRequest::Resource resource;
@@ -86,7 +109,13 @@ DownloadRequestMaker::CreateFromDownloadItem(
       item->GetHash(), item->GetReceivedBytes(), resources,
       item->HasUserGesture(),
       static_cast<ReferrerChainData*>(
-          item->GetUserData(ReferrerChainData::kDownloadReferrerChainDataKey)));
+          item->GetUserData(ReferrerChainData::kDownloadReferrerChainDataKey)),
+      password, DownloadProtectionService::GetDownloadPingToken(item),
+      // It's safe to use a raw pointer to `item` here because this class is
+      // owned by the CheckClientDownloadRequest, which observes for `item`
+      // being destroyed, and deletes this if it is.
+      base::BindOnce(&SetDownloadItemWarningData, item,
+                     password.CopyAsOptional()));
 }
 
 // static
@@ -112,7 +141,8 @@ DownloadRequestMaker::CreateFromFileSystemAccess(
       item.full_path, GetFileSystemAccessDownloadUrl(item.frame_url),
       item.sha256_hash, item.size,
       std::vector<ClientDownloadRequest::Resource>{resource},
-      item.has_user_gesture, referrer_chain_data.get());
+      item.has_user_gesture, referrer_chain_data.get(), absl::nullopt,
+      /*previous_token=*/"", base::DoNothing());
 }
 
 DownloadRequestMaker::DownloadRequestMaker(
@@ -126,13 +156,18 @@ DownloadRequestMaker::DownloadRequestMaker(
     int64_t length,
     const std::vector<ClientDownloadRequest::Resource>& resources,
     bool is_user_initiated,
-    ReferrerChainData* referrer_chain_data)
+    ReferrerChainData* referrer_chain_data,
+    base::optional_ref<const std::string> password,
+    const std::string& previous_token,
+    base::OnceCallback<void(const FileAnalyzer::Results&)> on_results_callback)
     : browser_context_(browser_context),
       request_(std::make_unique<ClientDownloadRequest>()),
       binary_feature_extractor_(binary_feature_extractor),
       tab_urls_(tab_urls),
       target_file_path_(target_file_path),
-      full_path_(full_path) {
+      full_path_(full_path),
+      password_(password.CopyAsOptional()),
+      on_results_callback_(std::move(on_results_callback)) {
   request_->set_url(ShortURLForReporting(source_url));
   request_->mutable_digests()->set_sha256(sha256_hash);
   request_->set_length(length);
@@ -150,6 +185,8 @@ DownloadRequestMaker::DownloadRequestMaker(
         ->set_recent_navigations_to_collect(
             referrer_chain_data->recent_navigations_to_collect());
   }
+
+  request_->set_previous_token(previous_token);
 }
 
 DownloadRequestMaker::~DownloadRequestMaker() = default;
@@ -162,7 +199,12 @@ void DownloadRequestMaker::Start(DownloadRequestMaker::Callback callback) {
       profile && AdvancedProtectionStatusManagerFactory::GetForProfile(profile)
                      ->IsUnderAdvancedProtection();
 
-  *request_->mutable_population() = GetUserPopulationForProfile(profile);
+  *request_->mutable_population() =
+      GetUserPopulationForProfileWithCookieTheftExperiments(profile);
+  if (base::FeatureList::IsEnabled(kNestedArchives)) {
+    request_->mutable_population()->add_finch_active_groups(
+        "SafeBrowsingArchiveImprovements.Enabled");
+  }
   request_->set_request_ap_verdicts(is_under_advanced_protection);
   request_->set_locale(g_browser_process->GetApplicationLocale());
   request_->set_file_basename(target_file_path_.BaseName().AsUTF8Unsafe());
@@ -170,25 +212,16 @@ void DownloadRequestMaker::Start(DownloadRequestMaker::Callback callback) {
   PopulateTailoredInfo();
 
   file_analyzer_->Start(
-      target_file_path_, full_path_,
+      target_file_path_, full_path_, password_,
       base::BindOnce(&DownloadRequestMaker::OnFileFeatureExtractionDone,
                      weakptr_factory_.GetWeakPtr()));
-  start_time_ = base::Time::Now();
 }
 
 void DownloadRequestMaker::OnFileFeatureExtractionDone(
     FileAnalyzer::Results results) {
-  base::UmaHistogramMediumTimes(
-      "SBClientDownload.FileFeatureExtractionDuration",
-      base::Time::Now() - start_time_);
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   request_->set_download_type(results.type);
-  request_->set_archive_valid(results.archive_summary.parser_status() ==
-                              ClientDownloadRequest::ArchiveSummary::VALID);
-  request_->set_archive_file_count(results.archive_summary.file_count());
-  request_->set_archive_directory_count(
-      results.archive_summary.directory_count());
   request_->mutable_archived_binary()->CopyFrom(results.archived_binaries);
   request_->mutable_signature()->CopyFrom(results.signature_info);
   request_->mutable_image_headers()->CopyFrom(results.image_headers);
@@ -206,11 +239,14 @@ void DownloadRequestMaker::OnFileFeatureExtractionDone(
   }
 #endif
 
+  if (on_results_callback_) {
+    std::move(on_results_callback_).Run(results);
+  }
+
   GetTabRedirects();
 }
 
 void DownloadRequestMaker::GetTabRedirects() {
-  start_time_ = base::Time::Now();
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   if (!tab_urls_.url.is_valid()) {
     OnGotTabRedirects({});
@@ -239,8 +275,6 @@ void DownloadRequestMaker::GetTabRedirects() {
 
 void DownloadRequestMaker::OnGotTabRedirects(
     history::RedirectList redirect_list) {
-  base::UmaHistogramMediumTimes("SBClientDownload.GetTabRedirectsDuration",
-                                base::Time::Now() - start_time_);
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   for (size_t i = 0; i < redirect_list.size(); ++i) {

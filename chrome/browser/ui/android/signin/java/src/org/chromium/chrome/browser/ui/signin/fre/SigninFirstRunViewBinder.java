@@ -14,34 +14,36 @@ import androidx.annotation.Nullable;
 
 import org.chromium.chrome.browser.signin.services.DisplayableProfileData;
 import org.chromium.chrome.browser.ui.signin.R;
+import org.chromium.chrome.browser.ui.signin.SigninUtils;
 import org.chromium.chrome.browser.ui.signin.account_picker.ExistingAccountRowViewBinder;
 import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
 
-/**
- * Stateless SigninFirstRun view binder.
- */
+/** Stateless SigninFirstRun view binder. */
 class SigninFirstRunViewBinder {
     static void bind(PropertyModel model, SigninFirstRunView view, PropertyKey propertyKey) {
         if (propertyKey == SigninFirstRunProperties.ON_CONTINUE_AS_CLICKED) {
-            view.getContinueButtonView().setOnClickListener(
-                    model.get(SigninFirstRunProperties.ON_CONTINUE_AS_CLICKED));
+            view.getContinueButtonView()
+                    .setOnClickListener(model.get(SigninFirstRunProperties.ON_CONTINUE_AS_CLICKED));
         } else if (propertyKey == SigninFirstRunProperties.ON_DISMISS_CLICKED) {
-            view.getDismissButtonView().setOnClickListener(
-                    model.get(SigninFirstRunProperties.ON_DISMISS_CLICKED));
+            view.getDismissButtonView()
+                    .setOnClickListener(model.get(SigninFirstRunProperties.ON_DISMISS_CLICKED));
         } else if (propertyKey == SigninFirstRunProperties.SHOW_SIGNIN_PROGRESS_SPINNER_WITH_TEXT) {
             updateVisibilityOnButtonClick(view, model);
         } else if (propertyKey == SigninFirstRunProperties.SHOW_SIGNIN_PROGRESS_SPINNER) {
             updateVisibilityOnButtonClick(view, model);
         } else if (propertyKey == SigninFirstRunProperties.ON_SELECTED_ACCOUNT_CLICKED) {
-            view.getSelectedAccountView().setOnClickListener(
-                    model.get(SigninFirstRunProperties.ON_SELECTED_ACCOUNT_CLICKED));
+            view.getSelectedAccountView()
+                    .setOnClickListener(
+                            model.get(SigninFirstRunProperties.ON_SELECTED_ACCOUNT_CLICKED));
         } else if (propertyKey == SigninFirstRunProperties.SELECTED_ACCOUNT_DATA) {
             updateSelectedAccount(view, model);
         } else if (propertyKey == SigninFirstRunProperties.IS_SELECTED_ACCOUNT_SUPERVISED) {
             final boolean isSelectedAccountSupervised =
                     model.get(SigninFirstRunProperties.IS_SELECTED_ACCOUNT_SUPERVISED);
             view.getSelectedAccountView().setEnabled(!isSelectedAccountSupervised);
+
+            updateBrowserManagedHeaderView(view, model);
             updateVisibility(view, model);
         } else if (propertyKey == SigninFirstRunProperties.SHOW_INITIAL_LOAD_PROGRESS_SPINNER) {
             final boolean showInitialLoadProgressSpinner =
@@ -58,9 +60,7 @@ class SigninFirstRunViewBinder {
             }
             updateVisibility(view, model);
         } else if (propertyKey == SigninFirstRunProperties.FRE_POLICY) {
-            view.getBrowserManagedHeaderView().setVisibility(
-                    model.get(SigninFirstRunProperties.FRE_POLICY) != null ? View.VISIBLE
-                                                                           : View.GONE);
+            updateBrowserManagedHeaderView(view, model);
         } else if (propertyKey == SigninFirstRunProperties.IS_SIGNIN_SUPPORTED) {
             if (!model.get(SigninFirstRunProperties.IS_SIGNIN_SUPPORTED)) {
                 view.getContinueButtonView().setText(R.string.continue_button);
@@ -71,6 +71,35 @@ class SigninFirstRunViewBinder {
             view.getFooterView().setMovementMethod(LinkMovementMethod.getInstance());
         } else {
             throw new IllegalArgumentException("Unknown property key:" + propertyKey);
+        }
+    }
+
+    private static void updateBrowserManagedHeaderView(
+            SigninFirstRunView view, PropertyModel model) {
+        // Supervised accounts do not have any enterprise policy set, but they set app
+        // restrictions which the policy load listener considers as policy. But if child
+        // accounts are loaded dynamically, policy load listener may say there are no
+        // policies on device. Because of the entangled nature of IS_SELECTED_ACCOUNT_SUPERVISED
+        // and FRE_POLICY they are both handled in this function as one of these properties
+        // will get updated before the other.
+        final boolean hasPolicy = model.get(SigninFirstRunProperties.FRE_POLICY) != null;
+        final boolean isAccountSupervised =
+                model.get(SigninFirstRunProperties.IS_SELECTED_ACCOUNT_SUPERVISED);
+
+        if (isAccountSupervised) {
+            view.getBrowserManagedHeaderView().setVisibility(View.VISIBLE);
+            view.getPrivacyDisclaimer().setText(R.string.fre_browser_managed_by_parent);
+            view.getPrivacyDisclaimer()
+                    .setCompoundDrawablesRelativeWithIntrinsicBounds(
+                            R.drawable.ic_account_child_20dp, 0, 0, 0);
+        } else if (hasPolicy) {
+            view.getBrowserManagedHeaderView().setVisibility(View.VISIBLE);
+            view.getPrivacyDisclaimer().setText(R.string.fre_browser_managed_by_organization);
+            view.getPrivacyDisclaimer()
+                    .setCompoundDrawablesRelativeWithIntrinsicBounds(
+                            R.drawable.ic_business, 0, 0, 0);
+        } else {
+            view.getBrowserManagedHeaderView().setVisibility(View.GONE);
         }
     }
 
@@ -85,8 +114,8 @@ class SigninFirstRunViewBinder {
         } else {
             ExistingAccountRowViewBinder.bindAccountView(
                     profileData, view.getSelectedAccountView());
-            view.getContinueButtonView().setText(view.getContext().getString(
-                    R.string.sync_promo_continue_as, profileData.getGivenNameOrFullNameOrEmail()));
+            view.getContinueButtonView()
+                    .setText(SigninUtils.getContinueAsButtonText(view.getContext(), profileData));
         }
         updateVisibility(view, model);
     }
@@ -94,25 +123,35 @@ class SigninFirstRunViewBinder {
     private static void updateVisibility(SigninFirstRunView view, PropertyModel model) {
         final boolean showInitialLoadProgressSpinner =
                 model.get(SigninFirstRunProperties.SHOW_INITIAL_LOAD_PROGRESS_SPINNER);
-        if (!showInitialLoadProgressSpinner) view.applyVariationsExperiment();
-
-        final int selectedAccountVisibility = !showInitialLoadProgressSpinner
-                        && model.get(SigninFirstRunProperties.SELECTED_ACCOUNT_DATA) != null
-                        && model.get(SigninFirstRunProperties.IS_SIGNIN_SUPPORTED)
-                ? View.VISIBLE
-                : View.GONE;
-        view.getSelectedAccountView().setVisibility(selectedAccountVisibility);
         final boolean isSelectedAccountSupervised =
                 model.get(SigninFirstRunProperties.IS_SELECTED_ACCOUNT_SUPERVISED);
-        view.getExpandIconView().setVisibility(
-                selectedAccountVisibility == View.VISIBLE && isSelectedAccountSupervised
-                        ? View.INVISIBLE
-                        : View.VISIBLE);
-        final int dismissButtonVisibility = !showInitialLoadProgressSpinner
-                        && model.get(SigninFirstRunProperties.IS_SIGNIN_SUPPORTED)
-                        && !isSelectedAccountSupervised
-                ? View.VISIBLE
-                : View.GONE;
+        final boolean hasPolicy = model.get(SigninFirstRunProperties.FRE_POLICY) != null;
+        view.getSubtitle()
+                .setVisibility(
+                        !showInitialLoadProgressSpinner
+                                        && !isSelectedAccountSupervised
+                                        && !hasPolicy
+                                ? View.VISIBLE
+                                : View.GONE);
+
+        final int selectedAccountVisibility =
+                !showInitialLoadProgressSpinner
+                                && model.get(SigninFirstRunProperties.SELECTED_ACCOUNT_DATA) != null
+                                && model.get(SigninFirstRunProperties.IS_SIGNIN_SUPPORTED)
+                        ? View.VISIBLE
+                        : View.GONE;
+        view.getSelectedAccountView().setVisibility(selectedAccountVisibility);
+        view.getExpandIconView()
+                .setVisibility(
+                        selectedAccountVisibility == View.VISIBLE && isSelectedAccountSupervised
+                                ? View.INVISIBLE
+                                : View.VISIBLE);
+        final int dismissButtonVisibility =
+                !showInitialLoadProgressSpinner
+                                && model.get(SigninFirstRunProperties.IS_SIGNIN_SUPPORTED)
+                                && !isSelectedAccountSupervised
+                        ? View.VISIBLE
+                        : View.GONE;
         view.getDismissButtonView().setVisibility(dismissButtonVisibility);
 
         final int otherElementsVisibility =
@@ -125,7 +164,7 @@ class SigninFirstRunViewBinder {
             SigninFirstRunView view, PropertyModel model) {
         final boolean showSigninProgressSpinner =
                 model.get(SigninFirstRunProperties.SHOW_SIGNIN_PROGRESS_SPINNER_WITH_TEXT)
-                || model.get(SigninFirstRunProperties.SHOW_SIGNIN_PROGRESS_SPINNER);
+                        || model.get(SigninFirstRunProperties.SHOW_SIGNIN_PROGRESS_SPINNER);
         final boolean isSelectedAccountSupervised =
                 model.get(SigninFirstRunProperties.IS_SELECTED_ACCOUNT_SUPERVISED);
         final boolean showSigningInText =
@@ -145,8 +184,8 @@ class SigninFirstRunViewBinder {
         view.getContinueButtonView().setVisibility(bottomGroupVisibility);
         view.getFooterView().setVisibility(bottomGroupVisibility);
 
-        view.getSigninProgressSpinner().setVisibility(
-                showSigninProgressSpinner ? View.VISIBLE : View.GONE);
+        view.getSigninProgressSpinner()
+                .setVisibility(showSigninProgressSpinner ? View.VISIBLE : View.GONE);
         view.getSigninProgressText().setVisibility(showSigningInText ? View.VISIBLE : View.GONE);
     }
 

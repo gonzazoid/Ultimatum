@@ -5,36 +5,36 @@
 #ifndef CONTENT_PUBLIC_BROWSER_TRACING_DELEGATE_H_
 #define CONTENT_PUBLIC_BROWSER_TRACING_DELEGATE_H_
 
-#include "base/callback.h"
+#include <optional>
+
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "content/common/content_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
-class BackgroundTracingConfig;
 
 // This can be implemented by the embedder to provide functionality for the
 // about://tracing WebUI.
 class CONTENT_EXPORT TracingDelegate {
  public:
-  virtual ~TracingDelegate() {}
+  virtual ~TracingDelegate() = default;
 
-  // This can be used to veto a particular background tracing scenario.
-  virtual bool IsAllowedToBeginBackgroundScenario(
-      const BackgroundTracingConfig& config,
-      bool requires_anonymized_data);
+  // Notifies that background tracing became active and a tracing session
+  // started. Returns true if the tracing session is allowed to begin.
+  virtual bool OnBackgroundTracingActive(bool requires_anonymized_data);
+  // Notifies that a tracing session stopped and background tracing became idle
+  // again. Returns true if the tracing session is allowed finalize.
+  virtual bool OnBackgroundTracingIdle(bool requires_anonymized_data);
 
-  virtual bool IsAllowedToEndBackgroundScenario(
-      const content::BackgroundTracingConfig& config,
-      bool requires_anonymized_data,
-      bool is_crash_scenario);
+  // Specifies whether traces that aren't uploaded should still be saved.
+  virtual bool ShouldSaveUnuploadedTrace() const;
 
   // Whether system-wide performance trace collection using the external system
   // tracing service is enabled.
   virtual bool IsSystemWideTracingEnabled();
 
   // Used to add any additional metadata to traces.
-  virtual absl::optional<base::Value::Dict> GenerateMetadataDict();
+  virtual std::optional<base::Value::Dict> GenerateMetadataDict();
 };
 
 }  // namespace content

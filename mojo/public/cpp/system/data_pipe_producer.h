@@ -7,9 +7,9 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
 #include "base/containers/span.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "mojo/public/cpp/system/system_export.h"
@@ -88,6 +88,10 @@ class MOJO_CPP_SYSTEM_EXPORT DataPipeProducer {
   // completes), but Write() must not be called before the |callback| for the
   // previous call to Write() (if any) has returned.
   void Write(std::unique_ptr<DataSource> reader, CompletionCallback callback);
+
+  // Returns the underlying producer handle.
+  // Must be called only when writes are NOT ongoing.
+  const DataPipeProducerHandle& GetProducerHandle() const;
 
  private:
   class SequenceState;

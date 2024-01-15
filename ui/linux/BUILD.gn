@@ -31,6 +31,7 @@ component("linux_ui") {
   deps = [
     "//base",
     "//ui/base:types",
+    "//ui/gfx/geometry",
   ]
   public_deps = [ "//printing/buildflags" ]
 }
@@ -38,7 +39,11 @@ component("linux_ui") {
 component("linux_ui_factory") {
   defines = [ "IS_LINUX_UI_FACTORY_IMPL" ]
   public = [ "linux_ui_factory.h" ]
-  sources = [ "linux_ui_factory.cc" ]
+  sources = [
+    "fallback_linux_ui.cc",
+    "fallback_linux_ui.h",
+    "linux_ui_factory.cc",
+  ]
 
   public_deps = [
     ":linux_ui",
@@ -47,7 +52,13 @@ component("linux_ui_factory") {
 
   deps = [
     "//base",
-    "//ui/base:buildflags",
+    "//ui/base",
+    "//ui/base/ime/linux:linux",
+    "//ui/events:dom_keyboard_layout",
+    "//ui/gfx",
+    "//ui/native_theme",
+    "//ui/shell_dialogs",
+    "//ui/views",
   ]
   if (use_gtk) {
     # This is the only component that can interact with gtk.
@@ -68,6 +79,7 @@ source_set("test_support") {
   deps = [
     "//base",
     "//skia",
+    "//ui/base/ime/linux",
     "//ui/gfx",
     "//ui/native_theme",
     "//ui/shell_dialogs",

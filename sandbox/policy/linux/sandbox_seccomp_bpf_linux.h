@@ -7,8 +7,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
 #include "sandbox/linux/bpf_dsl/policy.h"
 #include "sandbox/linux/seccomp-bpf/sandbox_bpf.h"
@@ -27,6 +27,7 @@ class SANDBOX_POLICY_EXPORT SandboxSeccompBPF {
   struct Options {
     bool use_amd_specific_policies = false;     // For ChromiumOS.
     bool use_intel_specific_policies = false;   // For ChromiumOS.
+    bool use_virtio_specific_policies = false;  // For ChromiumOS VM.
     bool use_nvidia_specific_policies = false;  // For Linux.
 
     // Options for GPU's PreSandboxHook.
@@ -63,11 +64,16 @@ class SANDBOX_POLICY_EXPORT SandboxSeccompBPF {
 
   // This is the API to enable a seccomp-bpf sandbox by using an
   // external policy.
+  // If `force_disable_spectre_variant2_mitigation` is true, the Spectre variant
+  // 2 mitigation will be disabled--except on ChromeOS ash if the user always
+  // wants the mitigation enabled, see the feature
+  // sandbox::policy::features::kForceSpectreVariant2Mitigation.
   static bool StartSandboxWithExternalPolicy(
       std::unique_ptr<bpf_dsl::Policy> policy,
       base::ScopedFD proc_fd,
       SandboxBPF::SeccompLevel seccomp_level =
-          SandboxBPF::SeccompLevel::SINGLE_THREADED);
+          SandboxBPF::SeccompLevel::SINGLE_THREADED,
+      bool force_disable_spectre_variant2_mitigation = false);
 
   // The "baseline" policy can be a useful base to build a sandbox policy.
   static std::unique_ptr<bpf_dsl::Policy> GetBaselinePolicy();

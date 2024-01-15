@@ -4,9 +4,9 @@
 
 #include "v8_platform_page_allocator.h"
 
-#include "base/allocator/partition_allocator/address_space_randomization.h"
-#include "base/allocator/partition_allocator/page_allocator_constants.h"
-#include "base/allocator/partition_allocator/random.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/address_space_randomization.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/page_allocator_constants.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/random.h"
 #include "base/check_op.h"
 #include "base/cpu.h"
 #include "base/memory/page_size.h"
@@ -15,8 +15,8 @@
 namespace {
 
 // Maps the v8 page permissions into a page configuration from base.
-::partition_alloc::PageAccessibilityConfiguration GetPageConfig(
-    v8::PageAllocator::Permission permission) {
+::partition_alloc::PageAccessibilityConfiguration::Permissions
+GetPagePermissions(v8::PageAllocator::Permission permission) {
   switch (permission) {
     case v8::PageAllocator::Permission::kRead:
       return ::partition_alloc::PageAccessibilityConfiguration::kRead;
@@ -38,15 +38,18 @@ namespace {
       return ::partition_alloc::PageAccessibilityConfiguration::kReadExecute;
 #endif
     case v8::PageAllocator::Permission::kNoAccessWillJitLater:
-      // We could use this information to conditionally set the MAP_JIT flag
-      // on Mac-arm64; however this permissions value is intended to be a
-      // short-term solution, so we continue to set MAP_JIT for all V8 pages
-      // for now.
-      return ::partition_alloc::PageAccessibilityConfiguration::kInaccessible;
+      return ::partition_alloc::PageAccessibilityConfiguration::
+          kInaccessibleWillJitLater;
     default:
       DCHECK_EQ(v8::PageAllocator::Permission::kNoAccess, permission);
       return ::partition_alloc::PageAccessibilityConfiguration::kInaccessible;
   }
+}
+
+::partition_alloc::PageAccessibilityConfiguration GetPageConfig(
+    v8::PageAllocator::Permission permission) {
+  return ::partition_alloc::PageAccessibilityConfiguration(
+      GetPagePermissions(permission));
 }
 
 }  // namespace
@@ -77,7 +80,7 @@ void* PageAllocator::AllocatePages(void* address,
   partition_alloc::PageAccessibilityConfiguration config =
       GetPageConfig(permissions);
   return partition_alloc::AllocPages(address, length, alignment, config,
-                                     partition_alloc::PageTag::kV8);
+                                     ::partition_alloc::PageTag::kV8);
 }
 
 bool PageAllocator::FreePages(void* address, size_t length) {
@@ -143,8 +146,7 @@ bool PageAllocator::DiscardSystemPages(void* address, size_t size) {
 bool PageAllocator::DecommitPages(void* address, size_t size) {
   // V8 expects the pages to be inaccessible and zero-initialized upon next
   // access.
-  partition_alloc::DecommitAndZeroSystemPages(address, size);
-  return true;
+  return partition_alloc::DecommitAndZeroSystemPages(address, size);
 }
 
 partition_alloc::PageAccessibilityConfiguration::Permissions

@@ -41,6 +41,7 @@
 #include "extensions/browser/pref_names.h"
 #include "extensions/common/extension.h"
 #include "services/preferences/public/cpp/tracked/tracked_preference_histogram_names.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/constants/ash_switches.h"
@@ -146,7 +147,7 @@ int GetTrackedPrefHistogramCount(const char* histogram_name,
 }
 
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
-std::unique_ptr<base::DictionaryValue> ReadPrefsDictionary(
+absl::optional<base::Value::Dict> ReadPrefsDictionary(
     const base::FilePath& pref_file) {
   JSONFileValueDeserializer deserializer(pref_file);
   int error_code = JSONFileValueDeserializer::JSON_NO_ERROR;
@@ -155,14 +156,13 @@ std::unique_ptr<base::DictionaryValue> ReadPrefsDictionary(
       deserializer.Deserialize(&error_code, &error_str);
   if (!prefs || error_code != JSONFileValueDeserializer::JSON_NO_ERROR) {
     ADD_FAILURE() << "Error #" << error_code << ": " << error_str;
-    return nullptr;
+    return absl::nullopt;
   }
   if (!prefs->is_dict()) {
     ADD_FAILURE();
-    return nullptr;
+    return absl::nullopt;
   }
-  return std::unique_ptr<base::DictionaryValue>(
-      static_cast<base::DictionaryValue*>(prefs.release()));
+  return std::move(*prefs).TakeDict();
 }
 #endif
 
@@ -249,12 +249,12 @@ class PrefHashBrowserTestBase : public extensions::ExtensionBrowserTest {
     EXPECT_EQ(protection_level_ > PROTECTION_DISABLED_ON_PLATFORM,
               base::PathExists(protected_pref_file));
 
-    std::unique_ptr<base::DictionaryValue> unprotected_preferences(
+    absl::optional<base::Value::Dict> unprotected_preferences(
         ReadPrefsDictionary(unprotected_pref_file));
     if (!unprotected_preferences)
       return false;
 
-    std::unique_ptr<base::DictionaryValue> protected_preferences;
+    absl::optional<base::Value::Dict> protected_preferences;
     if (protection_level_ > PROTECTION_DISABLED_ON_PLATFORM) {
       protected_preferences = ReadPrefsDictionary(protected_pref_file);
       if (!protected_preferences)
@@ -262,11 +262,11 @@ class PrefHashBrowserTestBase : public extensions::ExtensionBrowserTest {
     }
 
     // Let the underlying test modify the preferences.
-    AttackPreferencesOnDisk(unprotected_preferences.get(),
-                            protected_preferences.get());
+    AttackPreferencesOnDisk(
+        &unprotected_preferences.value(),
+        protected_preferences ? &protected_preferences.value() : nullptr);
 
     // Write the modified preferences back to disk.
-
     JSONFileValueSerializer unprotected_prefs_serializer(unprotected_pref_file);
     EXPECT_TRUE(
         unprotected_prefs_serializer.Serialize(*unprotected_preferences));
@@ -399,8 +399,8 @@ class PrefHashBrowserTestBase : public extensions::ExtensionBrowserTest {
   // main test. |unprotected_preferences| is never NULL, |protected_preferences|
   // may be NULL if in PROTECTION_DISABLED_ON_PLATFORM mode.
   virtual void AttackPreferencesOnDisk(
-      base::DictionaryValue* unprotected_preferences,
-      base::DictionaryValue* protected_preferences) = 0;
+      base::Value::Dict* unprotected_preferences,
+      base::Value::Dict* protected_preferences) = 0;
 
   // Called from the body of the main test. Overrides should use it to verify
   // that the browser had the desired reaction when faced when the attack
@@ -443,8 +443,8 @@ class PrefHashBrowserTestUnchangedDefault : public PrefHashBrowserTestBase {
   }
 
   void AttackPreferencesOnDisk(
-      base::DictionaryValue* unprotected_preferences,
-      base::DictionaryValue* protected_preferences) override {
+      base::Value::Dict* unprotected_preferences,
+      base::Value::Dict* protected_preferences) override {
     // No attack.
   }
 
@@ -535,15 +535,15 @@ class PrefHashBrowserTestClearedAtomic : public PrefHashBrowserTestBase {
   }
 
   void AttackPreferencesOnDisk(
-      base::DictionaryValue* unprotected_preferences,
-      base::DictionaryValue* protected_preferences) override {
-    base::DictionaryValue* selected_prefs =
+      base::Value::Dict* unprotected_preferences,
+      base::Value::Dict* protected_preferences) override {
+    base::Value::Dict* selected_prefs =
         protection_level_ >= PROTECTION_ENABLED_BASIC ? protected_preferences
                                                       : unprotected_preferences;
     // |selected_prefs| should never be NULL under the protection level picking
     // it.
     EXPECT_TRUE(selected_prefs);
-    EXPECT_TRUE(selected_prefs->RemoveKey(prefs::kHomePage));
+    EXPECT_TRUE(selected_prefs->Remove(prefs::kHomePage));
   }
 
   void VerifyReactionToPrefAttack() override {
@@ -607,7 +607,11 @@ class PrefHashBrowserTestUntrustedInitialized : public PrefHashBrowserTestBase {
     // Explicitly set the DSE (it's otherwise NULL by default, preventing
     // thorough testing of the PROTECTION_ENABLED_DSE level).
     DefaultSearchManager default_search_manager(
-        profile()->GetPrefs(), DefaultSearchManager::ObserverCallback());
+        profile()->GetPrefs(), DefaultSearchManager::ObserverCallback()
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+        , profile()->IsMainProfile()
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+    );
     DefaultSearchManager::Source dse_source =
         static_cast<DefaultSearchManager::Source>(-1);
 
@@ -628,11 +632,11 @@ class PrefHashBrowserTestUntrustedInitialized : public PrefHashBrowserTestBase {
   }
 
   void AttackPreferencesOnDisk(
-      base::DictionaryValue* unprotected_preferences,
-      base::DictionaryValue* protected_preferences) override {
-    unprotected_preferences->RemovePath("protection.macs");
+      base::Value::Dict* unprotected_preferences,
+      base::Value::Dict* protected_preferences) override {
+    unprotected_preferences->RemoveByDottedPath("protection.macs");
     if (protected_preferences)
-      protected_preferences->RemovePath("protection.macs");
+      protected_preferences->RemoveByDottedPath("protection.macs");
   }
 
   void VerifyReactionToPrefAttack() override {
@@ -687,7 +691,11 @@ class PrefHashBrowserTestUntrustedInitialized : public PrefHashBrowserTestBase {
     // Explicitly verify the result of reported resets.
 
     DefaultSearchManager default_search_manager(
-        profile()->GetPrefs(), DefaultSearchManager::ObserverCallback());
+        profile()->GetPrefs(), DefaultSearchManager::ObserverCallback()
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+        , profile()->IsMainProfile()
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+    );
     DefaultSearchManager::Source dse_source =
         static_cast<DefaultSearchManager::Source>(-1);
     default_search_manager.GetDefaultSearchEngine(&dse_source);
@@ -746,19 +754,18 @@ class PrefHashBrowserTestChangedAtomic : public PrefHashBrowserTestBase {
   }
 
   void AttackPreferencesOnDisk(
-      base::DictionaryValue* unprotected_preferences,
-      base::DictionaryValue* protected_preferences) override {
-    base::DictionaryValue* selected_prefs =
+      base::Value::Dict* unprotected_preferences,
+      base::Value::Dict* protected_preferences) override {
+    base::Value::Dict* selected_prefs =
         protection_level_ >= PROTECTION_ENABLED_BASIC ? protected_preferences
                                                       : unprotected_preferences;
-    // |selected_prefs| should never be NULL under the protection level picking
+    // `selected_prefs` should never be NULL under the protection level picking
     // it.
-    EXPECT_TRUE(selected_prefs);
-    base::ListValue* startup_urls;
-    EXPECT_TRUE(
-        selected_prefs->GetList(prefs::kURLsToRestoreOnStartup, &startup_urls));
-    EXPECT_TRUE(startup_urls);
-    EXPECT_EQ(1U, startup_urls->GetList().size());
+    ASSERT_TRUE(selected_prefs);
+    base::Value::List* startup_urls =
+        selected_prefs->FindListByDottedPath(prefs::kURLsToRestoreOnStartup);
+    ASSERT_TRUE(startup_urls);
+    EXPECT_EQ(1U, startup_urls->size());
     startup_urls->Append("http://example.org");
   }
 
@@ -838,33 +845,32 @@ class PrefHashBrowserTestChangedSplitPref : public PrefHashBrowserTestBase {
   }
 
   void AttackPreferencesOnDisk(
-      base::DictionaryValue* unprotected_preferences,
-      base::DictionaryValue* protected_preferences) override {
-    base::DictionaryValue* selected_prefs =
+      base::Value::Dict* unprotected_preferences,
+      base::Value::Dict* protected_preferences) override {
+    base::Value::Dict* selected_prefs =
         protection_level_ >= PROTECTION_ENABLED_EXTENSIONS
             ? protected_preferences
             : unprotected_preferences;
     // |selected_prefs| should never be NULL under the protection level picking
     // it.
     EXPECT_TRUE(selected_prefs);
-    base::DictionaryValue* extensions_dict;
-    EXPECT_TRUE(selected_prefs->GetDictionary(
-        extensions::pref_names::kExtensions, &extensions_dict));
+    base::Value::Dict* extensions_dict = selected_prefs->FindDictByDottedPath(
+        extensions::pref_names::kExtensions);
     EXPECT_TRUE(extensions_dict);
 
     // Tamper with any installed setting for good.crx
-    base::DictionaryValue* good_crx_dict;
-    EXPECT_TRUE(extensions_dict->GetDictionary(kGoodCrxId, &good_crx_dict));
-    absl::optional<int> good_crx_state = good_crx_dict->FindIntKey("state");
+    base::Value::Dict* good_crx_dict = extensions_dict->FindDict(kGoodCrxId);
+    ASSERT_TRUE(good_crx_dict);
+    absl::optional<int> good_crx_state = good_crx_dict->FindInt("state");
     ASSERT_TRUE(good_crx_state);
     EXPECT_EQ(extensions::Extension::ENABLED, *good_crx_state);
-    good_crx_dict->SetInteger("state", extensions::Extension::DISABLED);
+    good_crx_dict->Set("state", extensions::Extension::DISABLED);
 
     // Drop a fake extension (for the purpose of this test, dropped settings
     // don't need to be valid extension settings).
-    base::DictionaryValue fake_extension;
-    fake_extension.SetString("name", "foo");
-    extensions_dict->SetKey(std::string(32, 'a'), std::move(fake_extension));
+    base::Value::Dict fake_extension;
+    fake_extension.Set("name", "foo");
+    extensions_dict->Set(std::string(32, 'a'), std::move(fake_extension));
   }
 
   void VerifyReactionToPrefAttack() override {
@@ -945,10 +951,10 @@ class PrefHashBrowserTestUntrustedAdditionToPrefs
   }
 
   void AttackPreferencesOnDisk(
-      base::DictionaryValue* unprotected_preferences,
-      base::DictionaryValue* protected_preferences) override {
-    unprotected_preferences->SetInteger(prefs::kRestoreOnStartup,
-                                        SessionStartupPref::LAST);
+      base::Value::Dict* unprotected_preferences,
+      base::Value::Dict* protected_preferences) override {
+    unprotected_preferences->SetByDottedPath(
+        prefs::kRestoreOnStartup, static_cast<int>(SessionStartupPref::LAST));
   }
 
   void VerifyReactionToPrefAttack() override {
@@ -1027,13 +1033,13 @@ class PrefHashBrowserTestUntrustedAdditionToPrefsAfterWipe
   }
 
   void AttackPreferencesOnDisk(
-      base::DictionaryValue* unprotected_preferences,
-      base::DictionaryValue* protected_preferences) override {
+      base::Value::Dict* unprotected_preferences,
+      base::Value::Dict* protected_preferences) override {
     // Set or change the value in Preferences to the attacker's choice.
-    unprotected_preferences->SetString(prefs::kHomePage, "http://example.net");
+    unprotected_preferences->Set(prefs::kHomePage, "http://example.net");
     // Clear the value in Secure Preferences, if any.
     if (protected_preferences)
-      protected_preferences->RemoveKey(prefs::kHomePage);
+      protected_preferences->Remove(prefs::kHomePage);
   }
 
   void VerifyReactionToPrefAttack() override {
@@ -1112,8 +1118,8 @@ class PrefHashBrowserTestRegistryValidationFailure
   }
 
   void AttackPreferencesOnDisk(
-      base::DictionaryValue* unprotected_preferences,
-      base::DictionaryValue* protected_preferences) override {
+      base::Value::Dict* unprotected_preferences,
+      base::Value::Dict* protected_preferences) override {
     std::wstring registry_key =
         GetRegistryPathForTestProfile() + L"\\PreferenceMACs\\Default";
     base::win::RegKey key;
@@ -1155,7 +1161,11 @@ class PrefHashBrowserTestDefaultSearch : public PrefHashBrowserTestBase {
   void SetupPreferences() override {
     // Set user selected default search engine.
     DefaultSearchManager default_search_manager(
-        profile()->GetPrefs(), DefaultSearchManager::ObserverCallback());
+        profile()->GetPrefs(), DefaultSearchManager::ObserverCallback()
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+        , profile()->IsMainProfile()
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+    );
     DefaultSearchManager::Source dse_source =
         static_cast<DefaultSearchManager::Source>(-1);
 
@@ -1175,8 +1185,8 @@ class PrefHashBrowserTestDefaultSearch : public PrefHashBrowserTestBase {
   }
 
   void AttackPreferencesOnDisk(
-      base::DictionaryValue* unprotected_preferences,
-      base::DictionaryValue* protected_preferences) override {
+      base::Value::Dict* unprotected_preferences,
+      base::Value::Dict* protected_preferences) override {
     static constexpr char default_search_provider_data[] = R"(
     {
       "default_search_provider_data" : {
@@ -1207,22 +1217,24 @@ class PrefHashBrowserTestDefaultSearch : public PrefHashBrowserTestBase {
     })";
 
     // Try to override default search in all three of available preferences.
-    auto attack1 = base::DictionaryValue::From(
-        base::JSONReader::ReadDeprecated(default_search_provider_data));
-    auto attack2 = base::DictionaryValue::From(
-        base::JSONReader::ReadDeprecated(search_provider_overrides));
-    unprotected_preferences->MergeDictionary(attack1.get());
-    unprotected_preferences->MergeDictionary(attack2.get());
+    base::Value attack1 = *base::JSONReader::Read(default_search_provider_data);
+    base::Value attack2 = *base::JSONReader::Read(search_provider_overrides);
+    unprotected_preferences->Merge(attack1.GetDict().Clone());
+    unprotected_preferences->Merge(attack2.GetDict().Clone());
     if (protected_preferences) {
       // Override here, too.
-      protected_preferences->MergeDictionary(attack1.get());
-      protected_preferences->MergeDictionary(attack2.get());
+      protected_preferences->Merge(attack1.GetDict().Clone());
+      protected_preferences->Merge(attack2.GetDict().Clone());
     }
   }
 
   void VerifyReactionToPrefAttack() override {
     DefaultSearchManager default_search_manager(
-        profile()->GetPrefs(), DefaultSearchManager::ObserverCallback());
+        profile()->GetPrefs(), DefaultSearchManager::ObserverCallback()
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+        , profile()->IsMainProfile()
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+    );
     DefaultSearchManager::Source dse_source =
         static_cast<DefaultSearchManager::Source>(-1);
 
@@ -1251,3 +1263,51 @@ class PrefHashBrowserTestDefaultSearch : public PrefHashBrowserTestBase {
 };
 
 PREF_HASH_BROWSER_TEST(PrefHashBrowserTestDefaultSearch, SearchProtected);
+
+// Verifies that we handle a protected Dict preference being changed to an
+// unexpected type (int). See https://crbug.com/1512724.
+class PrefHashBrowserTestExtensionDictTypeChanged
+    : public PrefHashBrowserTestBase {
+ public:
+  void SetupPreferences() override {
+    InstallExtensionWithUIAutoConfirm(test_data_dir_.AppendASCII("good.crx"), 1,
+                                      browser());
+  }
+
+  void AttackPreferencesOnDisk(
+      base::Value::Dict* unprotected_preferences,
+      base::Value::Dict* protected_preferences) override {
+    base::Value::Dict* const selected_prefs =
+        protection_level_ >= PROTECTION_ENABLED_EXTENSIONS
+            ? protected_preferences
+            : unprotected_preferences;
+    // |selected_prefs| should never be NULL under the protection level picking
+    // it.
+    ASSERT_TRUE(selected_prefs);
+    EXPECT_TRUE(selected_prefs->FindDictByDottedPath(
+        extensions::pref_names::kExtensions));
+    // Overwrite with an int (wrong type).
+    selected_prefs->SetByDottedPath(extensions::pref_names::kExtensions, 13);
+    EXPECT_EQ(13, selected_prefs
+                      ->FindIntByDottedPath(extensions::pref_names::kExtensions)
+                      .value());
+  }
+
+  void VerifyReactionToPrefAttack() override {
+    // Setting the extensions dict to an invalid type gets noticed regardless
+    // of protection level. This implementation just happened to be easier and
+    // it doesn't seem important to not protect the kExtensions from being the
+    // wrong type at any protection level. PrefService will correct the type
+    // either way.
+    EXPECT_EQ(protection_level_ > PROTECTION_DISABLED_ON_PLATFORM ? 1 : 0,
+              GetTrackedPrefHistogramCount(
+                  user_prefs::tracked::kTrackedPrefHistogramCleared,
+                  BEGIN_ALLOW_SINGLE_BUCKET + 5));
+
+    // Expect a dictionary for extensions. This shouldn't somehow explode.
+    profile()->GetPrefs()->GetDict(extensions::pref_names::kExtensions);
+  }
+};
+
+PREF_HASH_BROWSER_TEST(PrefHashBrowserTestExtensionDictTypeChanged,
+                       ExtensionDictTypeChanged);

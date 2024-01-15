@@ -8,11 +8,11 @@
 #include <stddef.h>
 
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <string>
 
 #include "base/compiler_specific.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -36,7 +36,16 @@ enum class CredentialManagerError {
   UNKNOWN,
 };
 
-enum class CredentialMediationRequirement { kSilent, kOptional, kRequired };
+// This enum described the mediation requirement of a
+// navigator.credentials.get() call. Do not change the meaning or order of these
+// values, since they are being recorded in metrics and in sync with the
+// counterpart in enums.xml. New values can be added at the end.
+enum class CredentialMediationRequirement {
+  kOptional,
+  kSilent,
+  kRequired,
+  kMaxValue = kRequired
+};
 
 std::string CredentialTypeToString(CredentialType value);
 std::ostream& operator<<(std::ostream& os, CredentialType value);
@@ -44,10 +53,10 @@ std::ostream& operator<<(std::ostream& os, CredentialType value);
 struct CredentialInfo {
   CredentialInfo();
   CredentialInfo(CredentialType type,
-                 absl::optional<std::u16string> id,
-                 absl::optional<std::u16string> name,
+                 std::optional<std::u16string> id,
+                 std::optional<std::u16string> name,
                  GURL icon,
-                 absl::optional<std::u16string> password,
+                 std::optional<std::u16string> password,
                  url::Origin federation);
 
   CredentialInfo(const CredentialInfo& other);
@@ -59,18 +68,18 @@ struct CredentialInfo {
 
   // An identifier (username, email address, etc). Corresponds to
   // WebCredential's id property.
-  absl::optional<std::u16string> id;
+  std::optional<std::u16string> id;
 
   // An user-friendly name ("Jane Doe"). Corresponds to WebCredential's name
   // property.
-  absl::optional<std::u16string> name;
+  std::optional<std::u16string> name;
 
   // The address of this credential's icon (e.g. the user's avatar).
   // Corresponds to WebCredential's icon property.
   GURL icon;
 
   // Corresponds to WebPasswordCredential's password property.
-  absl::optional<std::u16string> password;
+  std::optional<std::u16string> password;
 
   // Corresponds to WebFederatedCredential's provider property.
   url::Origin federation;

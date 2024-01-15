@@ -18,6 +18,10 @@ class TransportHoverListModel : public HoverListModel {
   explicit TransportHoverListModel(
       base::span<const AuthenticatorRequestDialogModel::Mechanism> mechanisms);
 
+  TransportHoverListModel(
+      base::span<const AuthenticatorRequestDialogModel::Mechanism> mechanisms,
+      std::vector<int> mechanism_indices_to_display);
+
   TransportHoverListModel(const TransportHoverListModel&) = delete;
   TransportHoverListModel& operator=(const TransportHoverListModel&) = delete;
 
@@ -30,11 +34,11 @@ class TransportHoverListModel : public HoverListModel {
   ui::ImageModel GetItemIcon(int item_tag) const override;
   void OnListItemSelected(int item_tag) override;
   size_t GetPreferredItemCount() const override;
-  bool StyleForTwoLines() const override;
 
  private:
   const base::span<const AuthenticatorRequestDialogModel::Mechanism>
       mechanisms_;
+  const std::vector<int> mechanism_indices_to_display_;
 };
 
 #endif  // CHROME_BROWSER_UI_WEBAUTHN_TRANSPORT_HOVER_LIST_MODEL_H_

@@ -3,11 +3,9 @@
 // found in the LICENSE file.
 package org.chromium.chrome.browser.contacts_picker;
 
-import android.support.test.InstrumentationRegistry;
-
+import androidx.test.core.app.ApplicationProvider;
 import androidx.test.filters.LargeTest;
 
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -15,6 +13,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import org.chromium.base.task.PostTask;
+import org.chromium.base.task.TaskTraits;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
@@ -24,7 +23,6 @@ import org.chromium.chrome.browser.init.EmptyBrowserParts;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.content_public.browser.ContactsPicker;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.net.test.EmbeddedTestServer;
@@ -45,41 +43,48 @@ public class ContactsPickerLauncherTest {
     @Before
     public void setUp() throws Exception {
         mActivityTestRule.startMainActivityOnBlankPage();
-        mTestServer = EmbeddedTestServer.createAndStartServer(InstrumentationRegistry.getContext());
+        mTestServer =
+                EmbeddedTestServer.createAndStartServer(
+                        ApplicationProvider.getApplicationContext());
 
         loadNative();
-    }
-
-    @After
-    public void tearDown() {
-        if (mTestServer != null) mTestServer.stopAndDestroyServer();
     }
 
     // Based on BackgroundMetricsTest.java
     private void loadNative() {
         final AtomicBoolean mNativeLoaded = new AtomicBoolean();
-        final BrowserParts parts = new EmptyBrowserParts() {
-            @Override
-            public void finishNativeInitialization() {
-                mNativeLoaded.set(true);
-            }
-        };
-        PostTask.postTask(UiThreadTaskTraits.DEFAULT, () -> {
-            ChromeBrowserInitializer.getInstance().handlePreNativeStartupAndLoadLibraries(parts);
-            ChromeBrowserInitializer.getInstance().handlePostNativeStartup(true, parts);
-        });
+        final BrowserParts parts =
+                new EmptyBrowserParts() {
+                    @Override
+                    public void finishNativeInitialization() {
+                        mNativeLoaded.set(true);
+                    }
+                };
+        PostTask.postTask(
+                TaskTraits.UI_DEFAULT,
+                () -> {
+                    ChromeBrowserInitializer.getInstance()
+                            .handlePreNativeStartupAndLoadLibraries(parts);
+                    ChromeBrowserInitializer.getInstance().handlePostNativeStartup(true, parts);
+                });
         CriteriaHelper.pollUiThread(
                 () -> mNativeLoaded.get(), "Failed while waiting for starting native.");
     }
 
     private boolean showContactsPicker(WebContents webContents) {
-        return TestThreadUtils.runOnUiThreadBlockingNoException(() -> {
-            return ContactsPicker.showContactsPicker(webContents, /* listener */ null,
-                    true /* allowMultiple */,
-                    /* includeNames */ true, /*  includeEmails*/ true, /* includeTel */ true,
-                    /* includeAddresses */ true, /* includeIcons */ true,
-                    webContents.getMainFrame().getLastCommittedOrigin().getScheme());
-        });
+        return TestThreadUtils.runOnUiThreadBlockingNoException(
+                () -> {
+                    return ContactsPicker.showContactsPicker(
+                            webContents,
+                            /* listener= */ null,
+                            /* allowMultiple= */ true,
+                            /* includeNames= */ true,
+                            /* includeEmails= */ true,
+                            /* includeTel= */ true,
+                            /* includeAddresses= */ true,
+                            /* includeIcons= */ true,
+                            webContents.getMainFrame().getLastCommittedOrigin().getScheme());
+                });
     }
 
     @Test

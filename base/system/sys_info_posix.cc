@@ -14,10 +14,15 @@
 #include <sys/utsname.h>
 #include <unistd.h>
 
+#include <algorithm>
+
+#include "base/check.h"
 #include "base/files/file_util.h"
 #include "base/lazy_instance.h"
 #include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/strings/string_number_conversions.h"
+#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info_internal.h"
 #include "base/threading/scoped_blocking_call.h"
@@ -36,15 +41,10 @@
 #endif
 
 #if BUILDFLAG(IS_MAC)
-#include <sys/sysctl.h>
-#include "base/feature_list.h"
-#include "base/system/sys_info_internal.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #endif
 
 namespace {
-#if BUILDFLAG(IS_MAC)
-bool is_cpu_security_mitigation_enabled = false;
-#endif
 
 uint64_t AmountOfVirtualMemory() {
   struct rlimit limit;
@@ -67,10 +67,16 @@ bool IsStatsZeroIfUnlimited(const base::FilePath& path) {
   if (HANDLE_EINTR(statfs(path.value().c_str(), &stats)) != 0)
     return false;
 
-  switch (stats.f_type) {
+  // This static_cast is here because various libcs disagree about the size
+  // and signedness of statfs::f_type. In particular, glibc has it as either a
+  // signed long or a signed int depending on platform, and other libcs
+  // (following the statfs(2) man page) use unsigned int instead. To avoid
+  // either an unsigned -> signed cast, or a narrowing cast, we always upcast
+  // statfs::f_type to unsigned long. :(
+  switch (static_cast<unsigned long>(stats.f_type)) {
     case TMPFS_MAGIC:
-    case static_cast<int>(HUGETLBFS_MAGIC):
-    case static_cast<int>(RAMFS_MAGIC):
+    case HUGETLBFS_MAGIC:
+    case RAMFS_MAGIC:
       return true;
   }
   return false;
@@ -111,81 +117,62 @@ bool GetDiskSpaceInfo(const base::FilePath& path,
 
 namespace base {
 
-namespace internal {
-
-int NumberOfProcessors() {
+#if !BUILDFLAG(IS_OPENBSD)
+// static
+int SysInfo::NumberOfProcessors() {
 #if BUILDFLAG(IS_MAC)
-  // When CPU security mitigation is enabled, return number of "physical"
-  // cores and not the number of "logical" cores. CPU security mitigations
-  // disables hyper-threading for the current application, which effectively
-  // limits the number of concurrently executing threads to the number of
-  // physical cores.
-  if (base::FeatureList::IsEnabled(
-          base::kNumberOfCoresWithCpuSecurityMitigation) &&
-      is_cpu_security_mitigation_enabled) {
-    absl::optional<int> number_of_physical_cores =
-        internal::NumberOfPhysicalProcessors();
-    if (number_of_physical_cores.has_value())
-      return number_of_physical_cores.value();
+  absl::optional<int> number_of_physical_cores =
+      internal::NumberOfProcessorsWhenCpuSecurityMitigationEnabled();
+  if (number_of_physical_cores.has_value()) {
+    return number_of_physical_cores.value();
   }
 #endif  // BUILDFLAG(IS_MAC)
 
-  // sysconf returns the number of "logical" (not "physical") processors on both
-  // Mac and Linux.  So we get the number of max available "logical" processors.
-  //
-  // Note that the number of "currently online" processors may be fewer than the
-  // returned value of NumberOfProcessors(). On some platforms, the kernel may
-  // make some processors offline intermittently, to save power when system
-  // loading is low.
-  //
-  // One common use case that needs to know the processor count is to create
-  // optimal number of threads for optimization. It should make plan according
-  // to the number of "max available" processors instead of "currently online"
-  // ones. The kernel should be smart enough to make all processors online when
-  // it has sufficient number of threads waiting to run.
-  long res = sysconf(_SC_NPROCESSORS_CONF);
-  if (res == -1) {
-    NOTREACHED();
-    return 1;
-  }
+  // This value is cached to avoid computing this value in the sandbox, which
+  // doesn't work on some platforms. The Mac-specific code above is not
+  // included because changing the value at runtime is the best way to unittest
+  // its behavior.
+  static int cached_num_cpus = []() {
+    // sysconf returns the number of "logical" (not "physical") processors on
+    // both Mac and Linux.  So we get the number of max available "logical"
+    // processors.
+    //
+    // Note that the number of "currently online" processors may be fewer than
+    // the returned value of NumberOfProcessors(). On some platforms, the kernel
+    // may make some processors offline intermittently, to save power when
+    // system loading is low.
+    //
+    // One common use case that needs to know the processor count is to create
+    // optimal number of threads for optimization. It should make plan according
+    // to the number of "max available" processors instead of "currently online"
+    // ones. The kernel should be smart enough to make all processors online
+    // when it has sufficient number of threads waiting to run.
+    long res = sysconf(_SC_NPROCESSORS_CONF);
+    if (res == -1) {
+      // `res` can be -1 if this function is invoked under the sandbox, which
+      // should never happen.
+      NOTREACHED();
+      return 1;
+    }
 
-  int num_cpus = static_cast<int>(res);
+    int num_cpus = static_cast<int>(res);
 
 #if BUILDFLAG(IS_LINUX)
-  // Restrict the CPU count based on the process's CPU affinity mask, if
-  // available.
-  cpu_set_t* cpu_set = CPU_ALLOC(num_cpus);
-  size_t cpu_set_size = CPU_ALLOC_SIZE(num_cpus);
-  int ret = sched_getaffinity(0, cpu_set_size, cpu_set);
-  if (ret == 0) {
-    num_cpus = CPU_COUNT_S(cpu_set_size, cpu_set);
-  }
-  CPU_FREE(cpu_set);
+    // Restrict the CPU count based on the process's CPU affinity mask, if
+    // available.
+    cpu_set_t* cpu_set = CPU_ALLOC(num_cpus);
+    size_t cpu_set_size = CPU_ALLOC_SIZE(num_cpus);
+    int ret = sched_getaffinity(0, cpu_set_size, cpu_set);
+    if (ret == 0) {
+      num_cpus = CPU_COUNT_S(cpu_set_size, cpu_set);
+    }
+    CPU_FREE(cpu_set);
 #endif  // BUILDFLAG(IS_LINUX)
 
-  return num_cpus;
-}
+    return num_cpus;
+  }();
 
-#if BUILDFLAG(IS_MAC)
-absl::optional<int> NumberOfPhysicalProcessors() {
-  uint32_t sysctl_value = 0;
-  size_t length = sizeof(sysctl_value);
-
-  if (sysctlbyname("hw.physicalcpu_max", &sysctl_value, &length, nullptr, 0) ==
-      0) {
-    return static_cast<int>(sysctl_value);
-  }
-
-  return absl::nullopt;
-}
-#endif  // BUILDFLAG(IS_LINUX)
-
-}  // namespace internal
-
-#if !BUILDFLAG(IS_OPENBSD)
-int SysInfo::NumberOfProcessors() {
-  static int number_of_processors = internal::NumberOfProcessors();
-  return number_of_processors;
+  return cached_num_cpus;
 }
 #endif  // !BUILDFLAG(IS_OPENBSD)
 
@@ -289,15 +276,43 @@ size_t SysInfo::VMAllocationGranularity() {
   return checked_cast<size_t>(getpagesize());
 }
 
-#if BUILDFLAG(IS_MAC)
-BASE_FEATURE(kNumberOfCoresWithCpuSecurityMitigation,
-             "NumberOfCoresWithCpuSecurityMitigation",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+#if !BUILDFLAG(IS_APPLE)
+// static
+int SysInfo::NumberOfEfficientProcessorsImpl() {
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID)
+  // Try to guess the CPU architecture and cores of each cluster by comparing
+  // the maximum frequencies of the available (online and offline) cores.
+  int num_cpus = SysInfo::NumberOfProcessors();
+  DCHECK_GE(num_cpus, 0);
+  std::vector<uint32_t> max_core_frequencies_khz(static_cast<size_t>(num_cpus),
+                                                 0);
+  for (int core_index = 0; core_index < num_cpus; ++core_index) {
+    std::string content;
+    auto path = StringPrintf(
+        "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", core_index);
+    if (!ReadFileToStringNonBlocking(FilePath(path), &content))
+      return 0;
+    if (!StringToUint(
+            content,
+            &max_core_frequencies_khz[static_cast<size_t>(core_index)]))
+      return 0;
+  }
 
-void SysInfo::SetIsCpuSecurityMitigationsEnabled(bool is_enabled) {
-  is_cpu_security_mitigation_enabled = is_enabled;
+  auto [min_max_core_frequencies_khz_it, max_max_core_frequencies_khz_it] =
+      std::minmax_element(max_core_frequencies_khz.begin(),
+                          max_core_frequencies_khz.end());
+
+  if (*min_max_core_frequencies_khz_it == *max_max_core_frequencies_khz_it)
+    return 0;
+
+  return static_cast<int>(std::count(max_core_frequencies_khz.begin(),
+                                     max_core_frequencies_khz.end(),
+                                     *min_max_core_frequencies_khz_it));
+#else
+  NOTIMPLEMENTED();
+  return 0;
+#endif
 }
-
-#endif  // BUILDFLAG(IS_MAC)
+#endif  // !BUILDFLAG(IS_APPLE)
 
 }  // namespace base

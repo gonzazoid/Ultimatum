@@ -4,11 +4,11 @@
 
 #include "chrome/browser/nearby_sharing/instantmessaging/stream_parser.h"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/nearby_sharing/instantmessaging/proto/instantmessaging.pb.h"
 #include "testing/gtest/include/gtest/gtest.h"
 

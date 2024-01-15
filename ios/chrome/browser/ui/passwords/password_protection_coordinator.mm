@@ -7,15 +7,12 @@
 #import "base/check.h"
 #import "base/notreached.h"
 #import "components/safe_browsing/core/browser/password_protection/metrics_util.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/ui/passwords/password_protection_coordinator_delegate.h"
 #import "ios/chrome/browser/ui/passwords/password_protection_view_controller.h"
 #import "ios/chrome/common/ui/confirmation_alert/confirmation_alert_action_handler.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface PasswordProtectionCoordinator () <ConfirmationAlertActionHandler>
 
@@ -66,22 +63,23 @@
 
 - (void)confirmationAlertDismissAction {
   self.completion(safe_browsing::WarningAction::CLOSE);
-  [self stop];
+  [self.delegate passwordProtectionCoordinatorWantsToBeStopped:self];
 }
 
 - (void)confirmationAlertPrimaryAction {
   self.completion(safe_browsing::WarningAction::CHANGE_PASSWORD);
   // Opening Password page will stop the presentation. No need to send `stop`.
-  [self startPasswordCheck];
+  [self openSavedPasswordsSettings];
 }
 
 #pragma mark - Private
 
-- (void)startPasswordCheck {
+- (void)openSavedPasswordsSettings {
   id<ApplicationCommands> handler = HandlerForProtocol(
       self.browser->GetCommandDispatcher(), ApplicationCommands);
-  [handler showSavedPasswordsSettingsAndStartPasswordCheckFromViewController:
-               self.baseViewController];
+
+  [handler showSavedPasswordsSettingsFromViewController:self.baseViewController
+                                       showCancelButton:NO];
 }
 
 @end

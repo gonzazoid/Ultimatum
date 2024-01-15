@@ -8,11 +8,12 @@
 #include <string>
 
 #include "ash/constants/ash_switches.h"
-#include "chrome/browser/ash/login/test/embedded_policy_test_server_mixin.h"
+#include "base/path_service.h"
 #include "chrome/browser/ash/login/test/session_manager_state_waiter.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/policy/core/device_local_account.h"
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
+#include "chrome/browser/ash/policy/test_support/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/chrome_test_extension_loader.h"
 #include "chrome/browser/extensions/component_loader.h"
@@ -20,6 +21,7 @@
 #include "chrome/browser/extensions/pending_extension_manager.h"
 #include "chrome/browser/extensions/policy_test_utils.h"
 #include "chrome/browser/policy/extension_force_install_mixin.h"
+#include "chrome/common/chrome_paths.h"
 #include "components/app_constants/constants.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/core/common/cloud/test/policy_builder.h"
@@ -58,7 +60,7 @@ class ExtensionCleanupHandlerTest : public policy::DevicePolicyCrosBrowserTest {
 
  protected:
   ExtensionCleanupHandlerTest() = default;
-  ~ExtensionCleanupHandlerTest() override {}
+  ~ExtensionCleanupHandlerTest() override = default;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     DevicePolicyCrosBrowserTest::SetUpCommandLine(command_line);
@@ -132,13 +134,11 @@ class ExtensionCleanupHandlerTest : public policy::DevicePolicyCrosBrowserTest {
     extensions::ExtensionService* extension_service =
         extensions::ExtensionSystem::Get(GetActiveUserProfile())
             ->extension_service();
-    std::unique_ptr<base::DictionaryValue> manifest(
-        extensions::DictionaryBuilder()
-            .Set("name", "Foo")
-            .Set("description", "Bar")
-            .Set("manifest_version", 2)
-            .Set("version", "1.0")
-            .Build());
+    base::Value::Dict manifest(base::Value::Dict()
+                                   .Set("name", "Foo")
+                                   .Set("description", "Bar")
+                                   .Set("manifest_version", 2)
+                                   .Set("version", "1.0"));
 
     auto observer = GetTestExtensionRegistryObserver(extension_id);
     scoped_refptr<const extensions::Extension> extension =
@@ -161,7 +161,7 @@ class ExtensionCleanupHandlerTest : public policy::DevicePolicyCrosBrowserTest {
   int GetNumberOfInstalledExtensions() {
     return extensions::ExtensionRegistry::Get(GetActiveUserProfile())
         ->GenerateInstalledExtensionsSet()
-        ->size();
+        .size();
   }
 
   void WaitForSessionStart() {
@@ -235,11 +235,11 @@ IN_PROC_BROWSER_TEST_F(ExtensionCleanupHandlerTest,
   EXPECT_EQ(GetNumberOfInstalledExtensions(), num_default_extensions + 3);
 
   // Create observers for all extensions and apps that will be cleaned up.
-  std::unique_ptr<extensions::ExtensionSet> all_installed_extensions =
+  const extensions::ExtensionSet all_installed_extensions =
       extension_registry->GenerateInstalledExtensionsSet();
   std::unordered_set<std::unique_ptr<extensions::TestExtensionRegistryObserver>>
       extension_observers;
-  for (auto& extension : *all_installed_extensions) {
+  for (const auto& extension : all_installed_extensions) {
     // Don't observe exempt and user installed extensions.
     if (base::Contains(kExemptExtensions, extension->id()))
       continue;

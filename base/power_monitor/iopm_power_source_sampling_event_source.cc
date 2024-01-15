@@ -28,7 +28,8 @@ bool IOPMPowerSourceSamplingEventSource::Start(SamplingEventCallback callback) {
       kIOMasterPortDefault, IOServiceMatching("IOPMPowerSource")));
 
   if (!service_) {
-    LOG(ERROR) << "IOPMPowerSource service not found";
+    VLOG(1) << "IOPMPowerSource service not found. This is expected on desktop "
+               "Macs.";
     return false;
   }
 
@@ -42,8 +43,8 @@ bool IOPMPowerSourceSamplingEventSource::Start(SamplingEventCallback callback) {
                                      dispatch_get_main_queue());
 
   kern_return_t result = IOServiceAddInterestNotification(
-      notify_port_.get(), service_, kIOGeneralInterest, OnNotification, this,
-      notification_.InitializeInto());
+      notify_port_.get(), service_.get(), kIOGeneralInterest, OnNotification,
+      this, notification_.InitializeInto());
 
   if (result != KERN_SUCCESS) {
     LOG(ERROR) << "Could not register to IOPMPowerSource notifications";

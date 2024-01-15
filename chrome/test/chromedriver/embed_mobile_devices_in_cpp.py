@@ -41,7 +41,7 @@ def main():
   # current Chrome version. First we read the version file.
   version_parts = ['MAJOR', 'MINOR', 'BUILD', 'PATCH']
   version = []
-  version_file = open(options.version_file, 'r')
+  version_file = open(options.version_file, 'r', encoding='utf-8')
   for part in version_parts:
     # The version file should have 4 lines, with format like MAJOR=63
     components = version_file.readline().split('=')
@@ -54,7 +54,7 @@ def main():
 
   devices = {}
   file_name = args[0]
-  with open(file_name, 'r') as f:
+  with open(file_name, 'r', encoding='utf-8') as f:
     data = f.read()
 
     # Extract the list from the source file.
@@ -105,14 +105,29 @@ def main():
         words[i] = token
         titles.append(' '.join(words))
     for title in titles:
-      devices[title] = {
-        'userAgent': device['user-agent'].replace('%s', version),
-        'width': device['screen']['vertical']['width'],
-        'height': device['screen']['vertical']['height'],
-        'deviceScaleFactor': device['screen']['device-pixel-ratio'],
-        'touch': 'touch' in device['capabilities'],
-        'mobile': 'mobile' in device['capabilities'],
+      mobile_emulation = {
+        'userAgent': device['user-agent'],
+        'deviceMetrics': {
+          'width': device['screen']['vertical']['width'],
+          'height': device['screen']['vertical']['height'],
+          'deviceScaleFactor': device['screen']['device-pixel-ratio'],
+          'touch': 'touch' in device['capabilities'],
+          'mobile': 'mobile' in device['capabilities'],
+        },
+        'type': device['type']
       }
+      if 'user-agent-metadata' in device:
+        client_hints = device['user-agent-metadata']
+        mobile_emulation['clientHints'] = {
+            'architecture': client_hints['architecture'],
+            'bitness': '',
+            'platform': client_hints['platform'],
+            'platformVersion': client_hints['platformVersion'],
+            'model': client_hints['model'],
+            'mobile': client_hints['mobile'],
+            'wow64': False,
+        }
+      devices[title] = mobile_emulation
 
   output_dir = 'chrome/test/chromedriver/chrome'
   cpp_source.WriteSource('mobile_device_list',

@@ -4,7 +4,7 @@
 
 #include "services/network/websocket_factory.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "mojo/public/cpp/bindings/message.h"
 #include "net/base/isolation_info.h"
 #include "net/base/url_util.h"
@@ -23,7 +23,7 @@ WebSocketFactory::WebSocketFactory(NetworkContext* context)
 
 WebSocketFactory::~WebSocketFactory() {
   // Subtle: This is important to avoid WebSocketFactory::Remove calls during
-  // |connections_| destruction.
+  // `connections_` destruction.
   WebSocketSet connections = std::move(connections_);
 }
 
@@ -31,6 +31,7 @@ void WebSocketFactory::CreateWebSocket(
     const GURL& url,
     const std::vector<std::string>& requested_protocols,
     const net::SiteForCookies& site_for_cookies,
+    bool has_storage_access,
     const net::IsolationInfo& isolation_info,
     std::vector<mojom::HttpHeaderPtr> additional_headers,
     int32_t process_id,
@@ -50,10 +51,11 @@ void WebSocketFactory::CreateWebSocket(
     return;
   }
 
-  // If |require_network_isolation_key| is set, |isolation_info| must not be
+  // If `require_network_anonymization_key` is set, `isolation_info` must not be
   // empty.
-  if (context_->require_network_isolation_key())
+  if (context_->require_network_anonymization_key()) {
     DCHECK(!isolation_info.IsEmpty());
+  }
 
   if (throttler_.HasTooManyPendingConnections(process_id)) {
     // Too many websockets!
@@ -68,9 +70,9 @@ void WebSocketFactory::CreateWebSocket(
       context_->network_service()->HasRawHeadersAccess(
           process_id, net::ChangeWebSocketSchemeToHttpScheme(url)));
   connections_.insert(std::make_unique<WebSocket>(
-      this, url, requested_protocols, site_for_cookies, isolation_info,
-      std::move(additional_headers), origin, options, traffic_annotation,
-      has_raw_headers_access, std::move(handshake_client),
+      this, url, requested_protocols, site_for_cookies, has_storage_access,
+      isolation_info, std::move(additional_headers), origin, options,
+      traffic_annotation, has_raw_headers_access, std::move(handshake_client),
       std::move(url_loader_network_observer), std::move(auth_handler),
       std::move(header_client),
       throttler_.IssuePendingConnectionTracker(process_id),

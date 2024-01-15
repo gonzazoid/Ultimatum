@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/component_updater/cros_component_installer_chromeos.h"
@@ -108,7 +109,7 @@ class ComponentUpdaterServiceProvider
   scoped_refptr<dbus::ExportedObject> exported_object_;
 
   // Weak pointer to CrOSComponentManager to avoid calling BrowserProcess.
-  component_updater::CrOSComponentManager* cros_component_manager_;
+  raw_ptr<component_updater::CrOSComponentManager> cros_component_manager_;
 
   // Keep this last so that all weak pointers will be invalidated at the
   // beginning of destruction.
@@ -116,10 +117,5 @@ class ComponentUpdaterServiceProvider
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-using ::ash::ComponentUpdaterServiceProvider;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_DBUS_COMPONENT_UPDATER_SERVICE_PROVIDER_H_

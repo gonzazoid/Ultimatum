@@ -51,8 +51,11 @@ class BackgroundFetchDelegateImplTest : public testing::Test {
   content::BrowserTaskEnvironment task_environment_;
 
   std::unique_ptr<ukm::TestAutoSetUkmRecorder> recorder_;
-  raw_ptr<BackgroundFetchDelegateImpl> delegate_;
   std::unique_ptr<TestingProfile> profile_;
+
+  // Can't outlive `profile_` which owns it.
+  raw_ptr<BackgroundFetchDelegateImpl> delegate_;
+
   const GURL kOriginUrl{"https://example.com/"};
 };
 
@@ -60,8 +63,8 @@ TEST_F(BackgroundFetchDelegateImplTest, RecordUkmEvent) {
   url::Origin origin = url::Origin::Create(kOriginUrl);
 
   {
-    std::vector<const ukm::mojom::UkmEntry*> entries =
-        recorder_->GetEntriesByName(
+    std::vector<raw_ptr<const ukm::mojom::UkmEntry, VectorExperimental>>
+        entries = recorder_->GetEntriesByName(
             ukm::builders::BackgroundFetchDeletingRegistration::kEntryName);
     EXPECT_EQ(entries.size(), 0u);
   }
@@ -75,12 +78,15 @@ TEST_F(BackgroundFetchDelegateImplTest, RecordUkmEvent) {
   run_loop.Run();
 
   {
-    std::vector<const ukm::mojom::UkmEntry*> entries =
-        recorder_->GetEntriesByName(
+    std::vector<raw_ptr<const ukm::mojom::UkmEntry, VectorExperimental>>
+        entries = recorder_->GetEntriesByName(
             ukm::builders::BackgroundFetchDeletingRegistration::kEntryName);
     ASSERT_EQ(entries.size(), 1u);
-    auto* entry = recorder_->GetEntriesByName(
-        ukm::builders::BackgroundFetchDeletingRegistration::kEntryName)[0];
+    auto* entry = recorder_
+                      ->GetEntriesByName(
+                          ukm::builders::BackgroundFetchDeletingRegistration::
+                              kEntryName)[0]
+                      .get();
     recorder_->ExpectEntryMetric(entry, kUserInitiatedAbort, 1);
   }
 }

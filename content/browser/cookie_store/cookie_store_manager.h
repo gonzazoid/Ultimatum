@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/linked_list.h"
 #include "base/containers/span.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -22,7 +22,6 @@
 #include "content/common/content_export.h"
 #include "mojo/public/cpp/bindings/message.h"
 #include "mojo/public/cpp/bindings/unique_receiver_set.h"
-#include "services/network/public/mojom/network_service.mojom.h"
 #include "third_party/blink/public/mojom/cookie_store/cookie_store.mojom.h"
 #include "url/origin.h"
 
@@ -69,7 +68,7 @@ class CONTENT_EXPORT CookieStoreManager
   // This is called when service workers use the Cookie Store API to subscribe
   // to cookie changes or obtain the list of cookie changes.
   void BindReceiver(mojo::PendingReceiver<blink::mojom::CookieStore> receiver,
-                    const url::Origin& origin);
+                    const blink::StorageKey& storage_key);
 
   // Starts loading the on-disk subscription data.
   //
@@ -88,19 +87,19 @@ class CONTENT_EXPORT CookieStoreManager
   // blink::mojom::CookieStore implementation
   void AddSubscriptions(
       int64_t service_worker_registration_id,
-      const url::Origin& origin,
+      const blink::StorageKey& storage_key,
       std::vector<blink::mojom::CookieChangeSubscriptionPtr> mojo_subscriptions,
       mojo::ReportBadMessageCallback bad_message_callback,
       blink::mojom::CookieStore::AddSubscriptionsCallback callback);
   void RemoveSubscriptions(
       int64_t service_worker_registration_id,
-      const url::Origin& origin,
+      const blink::StorageKey& storage_key,
       std::vector<blink::mojom::CookieChangeSubscriptionPtr> mojo_subscriptions,
       mojo::ReportBadMessageCallback bad_message_callback,
       blink::mojom::CookieStore::RemoveSubscriptionsCallback callback);
   void GetSubscriptions(
       int64_t service_worker_registration_id,
-      const url::Origin& origin,
+      const blink::StorageKey& storage_key,
       mojo::ReportBadMessageCallback bad_message_callback,
       blink::mojom::CookieStore::GetSubscriptionsCallback callback);
 
@@ -141,7 +140,7 @@ class CONTENT_EXPORT CookieStoreManager
   // Updates on-disk subscription data for a registration.
   void StoreSubscriptions(
       int64_t service_worker_registration_id,
-      const GURL& service_worker_origin,
+      const blink::StorageKey& storage_key,
       const std::vector<std::unique_ptr<CookieChangeSubscription>>&
           subscriptions,
       base::OnceCallback<void(bool)> callback);

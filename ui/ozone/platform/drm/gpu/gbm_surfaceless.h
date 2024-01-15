@@ -8,12 +8,16 @@
 #include <memory>
 #include <vector>
 
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
+
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/gfx/gpu_fence_handle.h"
 #include "ui/gfx/native_widget_types.h"
-#include "ui/gl/gl_image.h"
-#include "ui/gl/gl_surface_egl.h"
+#include "ui/gl/gl_display.h"
 #include "ui/gl/gl_surface_overlay.h"
+#include "ui/gl/presenter.h"
 #include "ui/gl/scoped_binders.h"
 #include "ui/ozone/platform/drm/gpu/drm_overlay_plane.h"
 
@@ -30,7 +34,7 @@ class GbmSurfaceFactory;
 // displaying happens directly through NativePixmap buffers. CC would call into
 // SurfaceFactoryOzone to allocate the buffers and then call
 // ScheduleOverlayPlane(..) to schedule the buffer for presentation.
-class GbmSurfaceless : public gl::SurfacelessEGL {
+class GbmSurfaceless : public gl::Presenter {
  public:
   GbmSurfaceless(GbmSurfaceFactory* surface_factory,
                  gl::GLDisplayEGL* display,
@@ -42,10 +46,7 @@ class GbmSurfaceless : public gl::SurfacelessEGL {
 
   void QueueOverlayPlane(DrmOverlayPlane plane);
 
-  // gl::GLSurface:
-  bool Initialize(gl::GLSurfaceFormat format) override;
-  gfx::SwapResult SwapBuffers(PresentationCallback callback,
-                              gl::FrameData data) override;
+  // gl::Presenter:
   bool ScheduleOverlayPlane(
       gl::OverlayImage image,
       std::unique_ptr<gfx::GpuFence> gpu_fence,
@@ -54,30 +55,11 @@ class GbmSurfaceless : public gl::SurfacelessEGL {
               float scale_factor,
               const gfx::ColorSpace& color_space,
               bool has_alpha) override;
-  bool IsOffscreen() override;
-  bool SupportsAsyncSwap() override;
-  bool SupportsPostSubBuffer() override;
   bool SupportsPlaneGpuFences() const override;
-  gfx::SwapResult PostSubBuffer(int x,
-                                int y,
-                                int width,
-                                int height,
-                                PresentationCallback callback,
-                                gl::FrameData data) override;
-  void SwapBuffersAsync(SwapCompletionCallback completion_callback,
-                        PresentationCallback presentation_callback,
-                        gl::FrameData data) override;
-  void PostSubBufferAsync(int x,
-                          int y,
-                          int width,
-                          int height,
-                          SwapCompletionCallback completion_callback,
-                          PresentationCallback presentation_callback,
-                          gl::FrameData data) override;
-  EGLConfig GetConfig() override;
   void SetRelyOnImplicitSync() override;
-  void SetForceGlFlushOnSwapBuffers() override;
-  gfx::SurfaceOrigin GetOrigin() const override;
+  void Present(SwapCompletionCallback completion_callback,
+               PresentationCallback presentation_callback,
+               gfx::FrameData data) override;
 
  protected:
   ~GbmSurfaceless() override;
@@ -107,13 +89,14 @@ class GbmSurfaceless : public gl::SurfacelessEGL {
   void OnSubmission(gfx::SwapResult result, gfx::GpuFenceHandle release_fence);
   void OnPresentation(const gfx::PresentationFeedback& feedback);
 
-  GbmSurfaceFactory* const surface_factory_;
+  EGLDisplay GetEGLDisplay();
+
+  const raw_ptr<GbmSurfaceFactory> surface_factory_;
   const std::unique_ptr<DrmWindowProxy> window_;
   std::vector<DrmOverlayPlane> planes_;
 
   // The native surface. Deleting this is allowed to free the EGLNativeWindow.
   const gfx::AcceleratedWidget widget_;
-  std::unique_ptr<gfx::VSyncProvider> vsync_provider_;
   std::vector<std::unique_ptr<PendingFrame>> unsubmitted_frames_;
   std::unique_ptr<PendingFrame> submitted_frame_;
   std::unique_ptr<gfx::GpuFence> submitted_frame_gpu_fence_;
@@ -125,7 +108,8 @@ class GbmSurfaceless : public gl::SurfacelessEGL {
   // Conservatively assume we begin on a device that requires
   // explicit synchronization.
   bool is_on_external_drm_device_ = true;
-  bool requires_gl_flush_on_swap_buffers_ = false;
+
+  const raw_ptr<gl::GLDisplayEGL> display_;
 
   base::WeakPtrFactory<GbmSurfaceless> weak_factory_{this};
 };

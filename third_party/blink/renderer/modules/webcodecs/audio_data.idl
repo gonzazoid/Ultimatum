@@ -5,10 +5,10 @@
 // https://github.com/WICG/web-codecs
 [
     Exposed=(Window,DedicatedWorker),
-    Serializable,
-    RuntimeEnabled=WebCodecs
+    Serializable
 ] interface AudioData {
-  [RaisesException] constructor(AudioDataInit init);
+   [CallWith=ScriptState, RaisesException]
+   constructor(AudioDataInit init);
 
   // Creates identical AudioData, which needs to be independently closed.
   [RaisesException] AudioData clone();
@@ -19,7 +19,7 @@
   [RaisesException] void copyTo(AllowSharedBufferSource destination,
                                 AudioDataCopyToOptions options);
 
-  readonly attribute AudioSampleFormat format;
+  readonly attribute AudioSampleFormat? format;
   readonly attribute float sampleRate;
   readonly attribute unsigned long numberOfFrames;
   readonly attribute unsigned long numberOfChannels;

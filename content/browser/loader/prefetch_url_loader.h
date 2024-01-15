@@ -6,10 +6,10 @@
 #define CONTENT_BROWSER_LOADER_PREFETCH_URL_LOADER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback.h"
-#include "base/memory/weak_ptr.h"
+#include "base/functional/callback.h"
 #include "base/unguessable_token.h"
 #include "content/browser/web_package/prefetched_signed_exchange_cache.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -20,7 +20,6 @@
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace network {
@@ -36,7 +35,6 @@ namespace content {
 class BrowserContext;
 class PrefetchedSignedExchangeCacheAdapter;
 class SignedExchangePrefetchHandler;
-class SignedExchangePrefetchMetricRecorder;
 
 // A URLLoader for loading a prefetch request, including <link rel="prefetch">.
 // It basically just keeps draining the data.
@@ -69,8 +67,6 @@ class PrefetchURLLoader : public network::mojom::URLLoader,
       scoped_refptr<network::SharedURLLoaderFactory> network_loader_factory,
       URLLoaderThrottlesGetter url_loader_throttles_getter,
       BrowserContext* browser_context,
-      scoped_refptr<SignedExchangePrefetchMetricRecorder>
-          signed_exchange_prefetch_metric_recorder,
       scoped_refptr<PrefetchedSignedExchangeCache>
           prefetched_signed_exchange_cache,
       const std::string& accept_langs,
@@ -95,7 +91,7 @@ class PrefetchURLLoader : public network::mojom::URLLoader,
       const std::vector<std::string>& removed_headers,
       const net::HttpRequestHeaders& modified_headers,
       const net::HttpRequestHeaders& modified_cors_exempt_headers,
-      const absl::optional<GURL>& new_url) override;
+      const std::optional<GURL>& new_url) override;
   void SetPriority(net::RequestPriority priority,
                    int intra_priority_value) override;
   void PauseReadingBodyFromNet() override;
@@ -106,7 +102,7 @@ class PrefetchURLLoader : public network::mojom::URLLoader,
   void OnReceiveResponse(
       network::mojom::URLResponseHeadPtr head,
       mojo::ScopedDataPipeConsumerHandle body,
-      absl::optional<mojo_base::BigBuffer> cached_metadata) override;
+      std::optional<mojo_base::BigBuffer> cached_metadata) override;
   void OnReceiveRedirect(const net::RedirectInfo& redirect_info,
                          network::mojom::URLResponseHeadPtr head) override;
   void OnUploadProgress(int64_t current_position,
@@ -146,9 +142,6 @@ class PrefetchURLLoader : public network::mojom::URLLoader,
 
   std::unique_ptr<SignedExchangePrefetchHandler>
       signed_exchange_prefetch_handler_;
-
-  scoped_refptr<SignedExchangePrefetchMetricRecorder>
-      signed_exchange_prefetch_metric_recorder_;
 
   // Used to store the prefetched signed exchanges to a
   // PrefetchedSignedExchangeCache.

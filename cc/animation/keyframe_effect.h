@@ -5,6 +5,7 @@
 #ifndef CC_ANIMATION_KEYFRAME_EFFECT_H_
 #define CC_ANIMATION_KEYFRAME_EFFECT_H_
 
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -28,6 +29,15 @@ namespace cc {
 class Animation;
 enum class PauseCondition { kUnconditional, kAfterStart };
 struct PropertyAnimationState;
+
+// Specially designed for a custom property animation on a paint worklet
+// element. It doesn't require an element id to run on the compositor thread.
+// However, our animation system requires the element to be on the property
+// tree in order to keep ticking the animation. Therefore, we use a reserved
+// element id for this animation so that the compositor animation system
+// recognize it. We do not use ElementId because it's an invalid element id.
+inline constexpr ElementId kReservedElementIdForPaintWorklet(
+    std::numeric_limits<ElementId::InternalValue>::max());
 
 // A KeyframeEffect owns a group of KeyframeModels for a single target
 // (identified by an ElementId). It is responsible for managing the
@@ -82,13 +92,13 @@ class CC_ANIMATION_EXPORT KeyframeEffect : public gfx::KeyframeEffect {
   void AttachElement(ElementId element_id);
   void DetachElement();
 
-  void Tick(base::TimeTicks monotonic_time) override;
+  bool Tick(base::TimeTicks monotonic_time) override;
   void RemoveFromTicking();
 
   void UpdateState(bool start_ready_keyframe_models, AnimationEvents* events);
   void UpdateTickingState();
 
-  void Pause(base::TimeDelta pause_offset,
+  void Pause(base::TimeTicks timeline_time,
              PauseCondition = PauseCondition::kUnconditional);
 
   void AddKeyframeModel(
@@ -112,8 +122,6 @@ class CC_ANIMATION_EXPORT KeyframeEffect : public gfx::KeyframeEffect {
 
   bool RequiresInvalidation() const;
   bool AffectsNativeProperty() const;
-
-  bool HasNonDeletedKeyframeModel() const;
 
   bool AnimationsPreserveAxisAlignment() const;
 
@@ -143,7 +151,10 @@ class CC_ANIMATION_EXPORT KeyframeEffect : public gfx::KeyframeEffect {
       KeyframeEffect* element_keyframe_effect_impl) const;
   void RemoveKeyframeModelsCompletedOnMainThread(
       KeyframeEffect* element_keyframe_effect_impl) const;
-  void PushPropertiesTo(KeyframeEffect* keyframe_effect_impl);
+  // If `replaced_start_time` is provided, it will be set as the start time on
+  // this' keyframe models prior to being pushed.
+  void PushPropertiesTo(KeyframeEffect* keyframe_effect_impl,
+                        std::optional<base::TimeTicks> replaced_start_time);
 
   std::string KeyframeModelsToString() const;
 
@@ -152,6 +163,8 @@ class CC_ANIMATION_EXPORT KeyframeEffect : public gfx::KeyframeEffect {
   // Returns 0 if there is a continuous animation which should be ticked as
   // fast as possible.
   base::TimeDelta MinimumTickInterval() const;
+
+  bool awaiting_deletion() { return awaiting_deletion_; }
 
  protected:
   // We override this because we have additional bookkeeping (eg, noting if
@@ -169,7 +182,7 @@ class CC_ANIMATION_EXPORT KeyframeEffect : public gfx::KeyframeEffect {
   void MarkKeyframeModelsForDeletion(base::TimeTicks, AnimationEvents* events);
   void MarkFinishedKeyframeModels(base::TimeTicks monotonic_time);
 
-  absl::optional<gfx::PointF> ScrollOffsetForAnimation() const;
+  std::optional<gfx::PointF> ScrollOffsetForAnimation() const;
   void GenerateEvent(AnimationEvents* events,
                      const KeyframeModel& keyframe_model,
                      AnimationEvent::Type type,
@@ -194,7 +207,8 @@ class CC_ANIMATION_EXPORT KeyframeEffect : public gfx::KeyframeEffect {
   bool scroll_offset_animation_was_interrupted_;
 
   bool is_ticking_;
-  absl::optional<base::TimeTicks> last_tick_time_;
+  bool awaiting_deletion_;
+  std::optional<base::TimeTicks> last_tick_time_;
 
   bool needs_push_properties_;
 };

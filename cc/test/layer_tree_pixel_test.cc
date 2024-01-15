@@ -7,8 +7,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/test/test_switches.h"
 #include "cc/layers/solid_color_layer.h"
@@ -21,18 +21,21 @@
 #include "cc/trees/effect_node.h"
 #include "cc/trees/layer_tree_impl.h"
 #include "components/viz/common/display/renderer_settings.h"
-#include "components/viz/common/features.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
 #include "components/viz/common/frame_sinks/copy_output_result.h"
+#include "components/viz/common/gpu/raster_context_provider.h"
 #include "components/viz/service/display/software_output_device.h"
 #include "components/viz/service/display_embedder/skia_output_surface_dependency_impl.h"
 #include "components/viz/service/display_embedder/skia_output_surface_impl.h"
 #include "components/viz/test/paths.h"
 #include "components/viz/test/test_gpu_service_holder.h"
 #include "components/viz/test/test_in_process_context_provider.h"
-#include "gpu/GLES2/gl2extchromium.h"
-#include "gpu/command_buffer/client/gles2_implementation.h"
-#include "gpu/ipc/gl_in_process_context.h"
+#include "skia/buildflags.h"
+
+#if BUILDFLAG(SKIA_USE_DAWN)
+#include "third_party/dawn/include/dawn/dawn_proc.h"
+#include "third_party/dawn/include/dawn/native/DawnNative.h"  // nogncheck
+#endif
 
 using gpu::gles2::GLES2Interface;
 
@@ -45,7 +48,8 @@ TestRasterType GetDefaultRasterType(viz::RendererType renderer_type) {
     case viz::RendererType::kSoftware:
       return TestRasterType::kBitmap;
     case viz::RendererType::kSkiaVk:
-    case viz::RendererType::kSkiaDawn:
+    case viz::RendererType::kSkiaGraphiteDawn:
+    case viz::RendererType::kSkiaGraphiteMetal:
       return TestRasterType::kGpu;
     default:
       return TestRasterType::kOneCopy;
@@ -57,8 +61,13 @@ TestRasterType GetDefaultRasterType(viz::RendererType renderer_type) {
 LayerTreePixelTest::LayerTreePixelTest(viz::RendererType renderer_type)
     : LayerTreeTest(renderer_type),
       raster_type_(GetDefaultRasterType(renderer_type)),
-      pixel_comparator_(new ExactPixelComparator(true)),
-      pending_texture_mailbox_callbacks_(0) {}
+      pixel_comparator_(
+          std::make_unique<AlphaDiscardingExactPixelComparator>()),
+      pending_texture_mailbox_callbacks_(0) {
+#if BUILDFLAG(SKIA_USE_DAWN)
+  dawnProcSetProcs(&dawn::native::GetProcs());
+#endif
+}
 
 LayerTreePixelTest::~LayerTreePixelTest() = default;
 
@@ -66,14 +75,14 @@ std::unique_ptr<TestLayerTreeFrameSink>
 LayerTreePixelTest::CreateLayerTreeFrameSink(
     const viz::RendererSettings& renderer_settings,
     double refresh_rate,
-    scoped_refptr<viz::ContextProvider>,
+    scoped_refptr<viz::RasterContextProvider>,
     scoped_refptr<viz::RasterContextProvider>) {
   scoped_refptr<viz::TestInProcessContextProvider> compositor_context_provider;
   scoped_refptr<viz::TestInProcessContextProvider> worker_context_provider;
   if (!use_software_renderer()) {
     compositor_context_provider =
         base::MakeRefCounted<viz::TestInProcessContextProvider>(
-            viz::TestContextType::kGLES2, /*support_locking=*/false);
+            viz::TestContextType::kSoftwareRaster, /*support_locking=*/false);
 
     viz::TestContextType worker_ri_type;
     switch (raster_type()) {
@@ -97,7 +106,16 @@ LayerTreePixelTest::CreateLayerTreeFrameSink(
     // the impl thread in LayerTreeFrameSink::BindToCurrentSequence().
     gpu::ContextResult result =
         worker_context_provider->BindToCurrentSequence();
+    {
+      viz::RasterContextProvider::ScopedRasterContextLock scoped_context(
+          worker_context_provider.get());
+      max_texture_size_ =
+          worker_context_provider->ContextCapabilities().max_texture_size;
+    }
     DCHECK_EQ(result, gpu::ContextResult::kSuccess);
+  } else {
+    max_texture_size_ =
+        layer_tree_host()->GetSettings().max_render_buffer_bounds_for_sw;
   }
   static constexpr bool disable_display_vsync = false;
   bool synchronous_composite =
@@ -122,11 +140,12 @@ void LayerTreePixelTest::DrawLayersOnThread(LayerTreeHostImpl* host_impl) {
   if (!use_software_renderer()) {
     viz::RasterContextProvider* worker_context_provider =
         host_impl->layer_tree_frame_sink()->worker_context_provider();
+    viz::RasterContextProvider::ScopedRasterContextLock lock(
+        worker_context_provider);
     EXPECT_EQ(use_accelerated_raster(),
               worker_context_provider->ContextCapabilities().gpu_rasterization);
-    EXPECT_EQ(
-        raster_type() == TestRasterType::kGpu,
-        worker_context_provider->ContextCapabilities().supports_oop_raster);
+    EXPECT_EQ(raster_type() == TestRasterType::kGpu,
+              worker_context_provider->ContextCapabilities().gpu_rasterization);
   } else {
     EXPECT_EQ(TestRasterType::kBitmap, raster_type());
   }
@@ -355,75 +374,6 @@ void LayerTreePixelTest::SetupTree() {
   SetInitialRootBounds(content_root_->bounds());
   LayerTreeTest::SetupTree();
   layer_tree_host()->root_layer()->AddChild(content_root_);
-}
-
-SkBitmap LayerTreePixelTest::CopyMailboxToBitmap(
-    const gfx::Size& size,
-    const gpu::Mailbox& mailbox,
-    const gpu::SyncToken& sync_token,
-    const gfx::ColorSpace& color_space) {
-  SkBitmap bitmap;
-  std::unique_ptr<gpu::GLInProcessContext> context =
-      viz::CreateTestInProcessContext();
-  GLES2Interface* gl = context->GetImplementation();
-
-  if (sync_token.HasData())
-    gl->WaitSyncTokenCHROMIUM(sync_token.GetConstData());
-
-  GLuint texture_id =
-      gl->CreateAndTexStorage2DSharedImageCHROMIUM(mailbox.name);
-  gl->BeginSharedImageAccessDirectCHROMIUM(
-      texture_id, GL_SHARED_IMAGE_ACCESS_MODE_READ_CHROMIUM);
-
-  GLuint fbo = 0;
-  gl->GenFramebuffers(1, &fbo);
-  gl->BindFramebuffer(GL_FRAMEBUFFER, fbo);
-  gl->FramebufferTexture2D(
-      GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture_id, 0);
-  EXPECT_EQ(static_cast<unsigned>(GL_FRAMEBUFFER_COMPLETE),
-            gl->CheckFramebufferStatus(GL_FRAMEBUFFER));
-
-  std::unique_ptr<uint8_t[]> pixels(new uint8_t[size.GetArea() * 4]);
-  gl->ReadPixels(0,
-                 0,
-                 size.width(),
-                 size.height(),
-                 GL_RGBA,
-                 GL_UNSIGNED_BYTE,
-                 pixels.get());
-
-  gl->DeleteFramebuffers(1, &fbo);
-  gl->EndSharedImageAccessDirectCHROMIUM(texture_id);
-  gl->DeleteTextures(1, &texture_id);
-
-  EXPECT_TRUE(color_space.IsValid());
-  bitmap.allocPixels(SkImageInfo::MakeN32Premul(size.width(), size.height(),
-                                                color_space.ToSkColorSpace()));
-
-  uint8_t* out_pixels = static_cast<uint8_t*>(bitmap.getPixels());
-
-  size_t row_bytes = size.width() * 4;
-  size_t total_bytes = size.height() * row_bytes;
-  for (size_t dest_y = 0; dest_y < total_bytes; dest_y += row_bytes) {
-    // Flip Y axis.
-    size_t src_y = total_bytes - dest_y - row_bytes;
-    // Swizzle OpenGL -> Skia byte order.
-    for (size_t x = 0; x < row_bytes; x += 4) {
-      out_pixels[dest_y + x + SK_R32_SHIFT/8] = pixels.get()[src_y + x + 0];
-      out_pixels[dest_y + x + SK_G32_SHIFT/8] = pixels.get()[src_y + x + 1];
-      out_pixels[dest_y + x + SK_B32_SHIFT/8] = pixels.get()[src_y + x + 2];
-      out_pixels[dest_y + x + SK_A32_SHIFT/8] = pixels.get()[src_y + x + 3];
-    }
-  }
-
-  return bitmap;
-}
-
-void LayerTreePixelTest::Finish() {
-  std::unique_ptr<gpu::GLInProcessContext> context =
-      viz::CreateTestInProcessContext();
-  GLES2Interface* gl = context->GetImplementation();
-  gl->Finish();
 }
 
 }  // namespace cc

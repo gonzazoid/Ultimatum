@@ -6,7 +6,7 @@
 
 #include "base/logging.h"
 #include "base/observer_list.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "device/bluetooth/floss/floss_dbus_client.h"
 
 namespace floss {
@@ -17,14 +17,18 @@ FakeFlossLEScanClient::~FakeFlossLEScanClient() = default;
 
 void FakeFlossLEScanClient::Init(dbus::Bus* bus,
                                  const std::string& service_name,
-                                 const int adapter_index) {}
+                                 const int adapter_index,
+                                 base::Version version,
+                                 base::OnceClosure on_ready) {
+  version_ = version;
+  std::move(on_ready).Run();
+}
 
 void FakeFlossLEScanClient::RegisterScanner(
     ResponseCallback<device::BluetoothUUID> callback) {
   scanners_registered_++;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE,
-      base::BindOnce(std::move(callback), device::BluetoothUUID(kTestUuidStr)));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback), next_scanner_uuid_));
 }
 
 void FakeFlossLEScanClient::UnregisterScanner(ResponseCallback<bool> callback,
@@ -33,17 +37,17 @@ void FakeFlossLEScanClient::UnregisterScanner(ResponseCallback<bool> callback,
     scanners_registered_--;
   }
   scanner_ids_.clear();
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true));
 }
 
-void FakeFlossLEScanClient::StartScan(ResponseCallback<BtifStatus> callback,
-                                      uint8_t scanner_id,
-                                      const ScanSettings& scan_settings,
-                                      const ScanFilter& filters) {
-  // TODO (b/217274013): filters are currently being ignored
+void FakeFlossLEScanClient::StartScan(
+    ResponseCallback<BtifStatus> callback,
+    uint8_t scanner_id,
+    const absl::optional<ScanSettings>& scan_settings,
+    const absl::optional<ScanFilter>& filters) {
   scanner_ids_.insert(scanner_id);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), BtifStatus::kSuccess));
 }
 

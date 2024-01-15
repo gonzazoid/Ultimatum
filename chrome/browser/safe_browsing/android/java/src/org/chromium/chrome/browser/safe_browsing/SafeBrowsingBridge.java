@@ -6,12 +6,11 @@ package org.chromium.chrome.browser.safe_browsing;
 
 import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
 
-/**
- * Bridge providing access to native-side Safe Browsing data.
- */
+/** Bridge providing access to native-side Safe Browsing data. */
+// TODO(crbug.com/1410601): Pass in the profile and remove GetActiveUserProfile in C++.
 @JNINamespace("safe_browsing")
 public final class SafeBrowsingBridge {
     /**
@@ -70,31 +69,39 @@ public final class SafeBrowsingBridge {
     }
 
     /**
-     * @return Whether there is a Google account to use for the leak detection check.
+     * @return Whether the user is under Advanced Protection.
      */
-    public static boolean hasAccountForLeakCheckRequest() {
-        return SafeBrowsingBridgeJni.get().hasAccountForLeakCheckRequest();
+    public static boolean isUnderAdvancedProtection() {
+        return SafeBrowsingBridgeJni.get().isUnderAdvancedProtection();
     }
 
     /**
-     * @return Whether the Leak Detection for signed out users feature is enabled.
+     * @return Whether hash real-time lookup is enabled.
      */
-    public static boolean isLeakDetectionUnauthenticatedEnabled() {
-        return SafeBrowsingBridgeJni.get().isLeakDetectionUnauthenticatedEnabled();
+    public static boolean isHashRealTimeLookupEligibleInSession() {
+        return SafeBrowsingBridgeJni.get().isHashRealTimeLookupEligibleInSession();
     }
 
     @NativeMethods
     @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
     public interface Natives {
         int umaValueForFile(String path);
+
         boolean getSafeBrowsingExtendedReportingEnabled();
+
         void setSafeBrowsingExtendedReportingEnabled(boolean enabled);
+
         boolean getSafeBrowsingExtendedReportingManaged();
+
         @SafeBrowsingState
         int getSafeBrowsingState();
+
         void setSafeBrowsingState(@SafeBrowsingState int state);
+
         boolean isSafeBrowsingManaged();
-        boolean hasAccountForLeakCheckRequest();
-        boolean isLeakDetectionUnauthenticatedEnabled();
+
+        boolean isUnderAdvancedProtection();
+
+        boolean isHashRealTimeLookupEligibleInSession();
     }
 }

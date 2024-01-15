@@ -9,7 +9,7 @@
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "chrome/browser/renderer_host/chrome_navigation_ui_data.h"
 #include "components/omnibox/common/omnibox_features.h"
@@ -102,8 +102,7 @@ bool TypedNavigationUpgradeThrottle::IsNavigationUsingHttpsAsDefaultScheme(
           ->is_using_https_as_default_scheme();
   return is_using_https_as_default_scheme && handle->IsInPrimaryMainFrame() &&
          !handle->IsSameDocument() &&
-         handle->GetURL().SchemeIs(url::kHttpsScheme) &&
-         !handle->GetWebContents()->IsPortal();
+         handle->GetURL().SchemeIs(url::kHttpsScheme);
 }
 
 TypedNavigationUpgradeThrottle::~TypedNavigationUpgradeThrottle() = default;
@@ -112,7 +111,6 @@ content::NavigationThrottle::ThrottleCheckResult
 TypedNavigationUpgradeThrottle::WillStartRequest() {
   DCHECK_EQ(url::kHttpsScheme, navigation_handle()->GetURL().scheme());
   RecordUMA(Event::kHttpsLoadStarted);
-  metrics_timer_.Begin();
   timer_.Start(FROM_HERE, kFallbackDelay.Get(), this,
                &TypedNavigationUpgradeThrottle::OnHttpsLoadTimeout);
   return content::NavigationThrottle::PROCEED;
@@ -132,9 +130,6 @@ TypedNavigationUpgradeThrottle::WillFailRequest() {
       navigation_handle()->GetNetErrorCode() == net::OK) {
     return content::NavigationThrottle::PROCEED;
   }
-
-  UmaHistogramTimes("TypedNavigationUpgradeThrottle.UpgradeFailTime",
-                    metrics_timer_.Elapsed());
 
   if (net::IsCertStatusError(cert_status)) {
     RecordUMA(Event::kHttpsLoadFailedWithCertError);
@@ -164,8 +159,6 @@ TypedNavigationUpgradeThrottle::WillProcessResponse() {
   // so stop the timer.
   RecordUMA(Event::kHttpsLoadSucceeded);
   timer_.Stop();
-  UmaHistogramTimes("TypedNavigationUpgradeThrottle.UpgradeSuccessTime",
-                    metrics_timer_.Elapsed());
   return content::NavigationThrottle::PROCEED;
 }
 
@@ -220,7 +213,7 @@ void TypedNavigationUpgradeThrottle::FallbackToHttp(bool stop_navigation) {
   // Post a task to navigate to the fallback URL. We don't navigate
   // synchronously here, as starting a navigation within a navigation is
   // an antipattern.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           [](base::WeakPtr<content::WebContents> web_contents,

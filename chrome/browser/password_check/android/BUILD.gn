@@ -3,6 +3,7 @@
 # found in the LICENSE file.
 
 import("//build/config/android/rules.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 java_cpp_enum("password_check_enums_srcjar") {
   sources = [ "password_check_ui_status.h" ]
@@ -42,6 +43,7 @@ android_library("public_java") {
     "//chrome/browser/password_manager/android:settings_interface_java",
     "//chrome/browser/tab:java",
     "//components/browser_ui/settings/android:java",
+    "//components/browser_ui/util/android:java",
     "//components/browser_ui/widget/android:java",
     "//components/password_manager/core/browser:password_manager_java_enums",
     "//components/ukm/android:java",
@@ -69,7 +71,7 @@ android_library("public_java") {
 
 android_library("public_ui_java") {
   deps = [
-    "//base:jni_java",
+    "//third_party/jni_zero:jni_zero_java",
     "//url:gurl_java",
   ]
   sources = [
@@ -80,6 +82,7 @@ android_library("public_ui_java") {
 
 robolectric_binary("password_check_junit_tests") {
   testonly = true
+  resources_package = "org.chromium.chrome.browser.password_check"
 
   sources = [ "junit/src/org/chromium/chrome/browser/password_check/PasswordCheckControllerTest.java" ]
 
@@ -101,6 +104,7 @@ robolectric_binary("password_check_junit_tests") {
     "//chrome/test/android:chrome_java_unit_test_support",
     "//components/browser_ui/settings/android:java",
     "//components/password_manager/core/browser:password_manager_java_enums",
+    "//third_party/android_deps:espresso_java",
     "//third_party/androidx:androidx_appcompat_appcompat_java",
     "//third_party/androidx:androidx_test_core_java",
     "//third_party/hamcrest:hamcrest_java",
@@ -112,6 +116,7 @@ robolectric_binary("password_check_junit_tests") {
 
 android_library("test_java") {
   testonly = true
+  resources_package = "org.chromium.chrome.browser.password_check"
 
   sources = [
     "javatests/src/org/chromium/chrome/browser/password_check/PasswordCheckIntegrationTest.java",
@@ -123,7 +128,9 @@ android_library("test_java") {
     ":public_ui_java",
     "internal:internal_java",
     "internal:internal_ui_factory_java",
+    "internal:java_resources",
     "//base:base_java_test_support",
+    "//chrome/android:chrome_app_java_resources",
     "//chrome/android:chrome_java",
     "//chrome/android:chrome_test_java",
     "//chrome/android:chrome_test_util_java",
@@ -136,6 +143,7 @@ android_library("test_java") {
     "//chrome/browser/settings:java",
     "//chrome/browser/settings:test_support_java",
     "//chrome/test/android:chrome_java_integration_test_support",
+    "//components/browser_ui/settings/android:java",
     "//components/browser_ui/widget/android:java",
     "//components/embedder_support/android:util_java",
     "//components/password_manager/core/browser:password_manager_java_enums",
@@ -150,6 +158,7 @@ android_library("test_java") {
     "//third_party/androidx:androidx_recyclerview_recyclerview_java",
     "//third_party/androidx:androidx_test_runner_java",
     "//third_party/hamcrest:hamcrest_java",
+    "//third_party/jni_zero:jni_zero_java",
     "//third_party/junit",
     "//third_party/mockito:mockito_java",
     "//ui/android:ui_full_java",
@@ -160,22 +169,18 @@ android_library("test_java") {
 
 generate_jni("jni_headers") {
   visibility = [ "//chrome/browser" ]
-  sources = [
-    "internal/java/src/org/chromium/chrome/browser/password_check/PasswordCheckBridge.java",
-    "java/src/org/chromium/chrome/browser/password_check/CompromisedCredential.java",
-  ]
+  sources = [ "java/src/org/chromium/chrome/browser/password_check/CompromisedCredential.java" ]
+  public_deps =
+      [ "//chrome/browser/password_check/android/internal:internal_jni" ]
 }
 
 android_resources("java_resources") {
   sources = [
     "java/res/drawable-night/password_check_header_red.xml",
     "java/res/drawable-night/password_check_neutral.xml",
-    "java/res/drawable-night/password_checkup_change_automatically.xml",
     "java/res/drawable-night/password_checkup_warning.xml",
-    "java/res/drawable/ic_autofill_assistant_white_24dp.xml",
     "java/res/drawable/password_check_header_red.xml",
     "java/res/drawable/password_check_neutral.xml",
-    "java/res/drawable/password_checkup_change_automatically.xml",
     "java/res/drawable/password_checkup_warning.xml",
   ]
   deps = [

@@ -9,11 +9,11 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "remoting/protocol/protocol_mock_objects.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -196,21 +196,19 @@ TEST_F(PairingRegistryTest, SerializedRequests) {
       .InSequence(s);
   EXPECT_CALL(callbacks, GetPairingCallback(EqualsClientName("client2")))
       .InSequence(s);
-  EXPECT_CALL(callbacks, DoneCallback(true))
-      .InSequence(s);
+  EXPECT_CALL(callbacks, DoneCallback(true)).InSequence(s);
   EXPECT_CALL(callbacks, GetPairingCallback(EqualsClientName("client1")))
       .InSequence(s);
   EXPECT_CALL(callbacks, GetPairingCallback(EqualsClientName("")))
       .InSequence(s);
-  EXPECT_CALL(callbacks, DoneCallback(true))
-      .InSequence(s);
+  EXPECT_CALL(callbacks, DoneCallback(true)).InSequence(s);
   EXPECT_CALL(callbacks, GetAllPairingsCallback(NoPairings())).InSequence(s);
   EXPECT_CALL(callbacks, GetPairingCallback(EqualsClientName("client3")))
       .InSequence(s)
       .WillOnce(QuitMessageLoop(run_loop_.QuitClosure()));
 
   scoped_refptr<PairingRegistry> registry =
-      new PairingRegistry(base::ThreadTaskRunnerHandle::Get(),
+      new PairingRegistry(base::SingleThreadTaskRunner::GetCurrentDefault(),
                           std::make_unique<MockPairingRegistryDelegate>());
   PairingRegistry::Pairing pairing_1 = registry->CreatePairing("client1");
   PairingRegistry::Pairing pairing_2 = registry->CreatePairing("client2");

@@ -8,14 +8,17 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
+#include "base/files/scoped_file.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "base/scoped_observation.h"
 #include "base/time/time.h"
-#include "build/chromeos_buildflags.h"
 #include "components/exo/wayland/scoped_wl.h"
-#include "ui/display/display_observer.h"
+#include "ui/display/manager/display_manager.h"
+#include "ui/display/manager/display_manager_observer.h"
 
 struct wl_resource;
 struct wl_client;
@@ -26,7 +29,9 @@ class Display;
 
 namespace wayland {
 
+class ClientTracker;
 class SerialTracker;
+class UiControls;
 struct WaylandDataDeviceManager;
 class WaylandDisplayOutput;
 struct WaylandKeyboardExtension;
@@ -34,17 +39,17 @@ struct WaylandSeat;
 struct WaylandTextInputExtension;
 struct WaylandTextInputManager;
 struct WaylandXdgShell;
-struct WaylandZxdgShell;
 struct WaylandRemoteShellData;
+class WaylandDmabufFeedbackManager;
 class WestonTest;
 class WaylandWatcher;
 
 // This class is a thin wrapper around a Wayland display server. All Wayland
 // requests are dispatched into the given Exosphere display.
-class Server : public display::DisplayObserver {
+class Server : public display::DisplayManagerObserver {
  public:
-  using StartCallback =
-      base::OnceCallback<void(bool, const base::FilePath& path)>;
+  using ServerGetter = base::RepeatingCallback<Server*(wl_display*)>;
+  using StartCallback = base::OnceCallback<void(bool)>;
 
   Server(Display* display, std::unique_ptr<SecurityDelegate> security_delegate);
 
@@ -62,22 +67,22 @@ class Server : public display::DisplayObserver {
       Display* display,
       std::unique_ptr<SecurityDelegate> security_delegate);
 
-  // In cases where the server was started asynchronously, this helper can be
-  // used to delete it asynchronously as well.
-  static void DestroyAsync(std::unique_ptr<Server> server);
+  // Gets the Server instance for a given wl_display.
+  static Server* GetServerForDisplay(wl_display* display);
 
-  void StartAsync(StartCallback callback);
+  // Sets the callback used to find the Server instance for a given wl_display.
+  static void SetServerGetter(ServerGetter server_getter);
+
   void StartWithDefaultPath(StartCallback callback);
+  void StartWithFdAsync(base::ScopedFD fd, StartCallback callback);
 
   void Initialize();
 
-  bool Open(bool default_path);
+  bool Open();
+
+  bool OpenFd(base::ScopedFD fd);
 
   void Finalize(StartCallback callback, bool success);
-
-  // This adds a Unix socket to the Wayland display server which can be used
-  // by clients to connect to the display server.
-  bool AddSocket(const std::string& name);
 
   // Returns the file descriptor associated with the server.
   int GetFileDescriptor() const;
@@ -91,51 +96,55 @@ class Server : public display::DisplayObserver {
   // Send all buffered events to the clients.
   void Flush();
 
-  // Overridden from display::DisplayObserver:
-  void OnDisplayAdded(const display::Display& new_display) override;
-  void OnDisplayRemoved(const display::Display& old_display) override;
+  // display::DisplayManagerObserver:
+  void OnDidProcessDisplayChanges(
+      const DisplayConfigurationChange& configuration_change) override;
 
   wl_resource* GetOutputResource(wl_client* client, int64_t display_id);
 
   Display* GetDisplay() { return display_; }
+  wl_display* GetWaylandDisplay() { return wl_display_.get(); }
 
-  // Public version of the protected accessor below, to be used in tests.
-  wl_display* GetWaylandDisplayForTesting() const {
-    return GetWaylandDisplay();
-  }
-
-  const base::FilePath& socket_path() const { return socket_path_; }
+  // Returns whether a client associated with this server has started
+  // destruction.
+  bool IsClientDestroyed(wl_client* client) const;
 
  protected:
+  friend class UiControls;
   friend class WestonTest;
   void AddWaylandOutput(int64_t id,
                         std::unique_ptr<WaylandDisplayOutput> output);
-  wl_display* GetWaylandDisplay() const { return wl_display_.get(); }
 
  private:
   friend class ScopedEventDispatchDisabler;
 
-  // This has the server's socket inside it, so it must be deleted last.
-  base::ScopedTempDir socket_dir_;
-  Display* const display_;
+  // This adds a Unix socket to the Wayland display server which can be used
+  // by clients to connect to the display server.
+  bool AddSocket(const std::string& name);
+
+  const raw_ptr<Display> display_;
   std::unique_ptr<SecurityDelegate> security_delegate_;
   // Deleting wl_display depends on SerialTracker.
   std::unique_ptr<SerialTracker> serial_tracker_;
+  std::unique_ptr<SerialTracker> rotation_serial_tracker_;
   std::unique_ptr<wl_display, WlDisplayDeleter> wl_display_;
   base::flat_map<int64_t, std::unique_ptr<WaylandDisplayOutput>> outputs_;
   std::unique_ptr<WaylandDataDeviceManager> data_device_manager_data_;
   std::unique_ptr<WaylandSeat> seat_data_;
-  display::ScopedDisplayObserver display_observer_{this};
   std::unique_ptr<wayland::WaylandWatcher> wayland_watcher_;
-  base::FilePath socket_path_;
+  std::unique_ptr<WaylandDmabufFeedbackManager> wayland_feedback_manager_;
 
   std::unique_ptr<WaylandKeyboardExtension> zcr_keyboard_extension_data_;
   std::unique_ptr<WaylandTextInputManager> zwp_text_manager_data_;
   std::unique_ptr<WaylandTextInputExtension> zcr_text_input_extension_data_;
-  std::unique_ptr<WaylandZxdgShell> zxdg_shell_data_;
   std::unique_ptr<WaylandXdgShell> xdg_shell_data_;
   std::unique_ptr<WaylandRemoteShellData> remote_shell_data_;
-  std::unique_ptr<WestonTest> weston_test_holder_;
+  std::unique_ptr<UiControls> ui_controls_holder_;
+  std::unique_ptr<ClientTracker> client_tracker_;
+
+  base::ScopedObservation<display::DisplayManager,
+                          display::DisplayManagerObserver>
+      display_manager_observation_{this};
 };
 
 }  // namespace wayland

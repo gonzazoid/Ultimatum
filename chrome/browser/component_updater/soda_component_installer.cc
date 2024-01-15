@@ -4,12 +4,16 @@
 
 #include "chrome/browser/component_updater/soda_component_installer.h"
 
-#include "base/bind.h"
+#include <memory>
+#include <utility>
+
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/task/task_traits.h"
+#include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/component_updater/soda_language_pack_component_installer.h"
@@ -24,9 +28,6 @@
 #include "content/public/browser/browser_thread.h"
 #include "crypto/sha2.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-
-#include <memory>
-#include <utility>
 
 #if BUILDFLAG(IS_WIN)
 #include <aclapi.h>
@@ -82,8 +83,7 @@ SodaComponentInstallerPolicy::SodaComponentInstallerPolicy(
 SodaComponentInstallerPolicy::~SodaComponentInstallerPolicy() = default;
 
 const std::string SodaComponentInstallerPolicy::GetExtensionId() {
-  return crx_file::id_util::GenerateIdFromHash(kSodaPublicKeySHA256,
-                                               sizeof(kSodaPublicKeySHA256));
+  return crx_file::id_util::GenerateIdFromHash(kSodaPublicKeySHA256);
 }
 
 void SodaComponentInstallerPolicy::UpdateSodaComponentOnDemand() {
@@ -93,10 +93,11 @@ void SodaComponentInstallerPolicy::UpdateSodaComponentOnDemand() {
       crx_id, component_updater::OnDemandUpdater::Priority::FOREGROUND,
       base::BindOnce([](update_client::Error error) {
         if (error != update_client::Error::NONE &&
-            error != update_client::Error::UPDATE_IN_PROGRESS)
+            error != update_client::Error::UPDATE_IN_PROGRESS) {
           LOG(ERROR) << "On demand update of the SODA component failed "
                         "with error: "
                      << static_cast<int>(error);
+        }
       }));
 }
 
@@ -154,7 +155,7 @@ bool SodaComponentInstallerPolicy::RequiresNetworkEncryption() const {
 
 update_client::CrxInstaller::Result
 SodaComponentInstallerPolicy::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   return SodaComponentInstallerPolicy::SetComponentDirectoryPermission(
       install_dir);
@@ -163,7 +164,7 @@ SodaComponentInstallerPolicy::OnCustomInstall(
 void SodaComponentInstallerPolicy::OnCustomUninstall() {}
 
 bool SodaComponentInstallerPolicy::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_APPLE)
   bool missing_indicator_file =
@@ -184,14 +185,16 @@ bool SodaComponentInstallerPolicy::VerifyInstallation(
 void SodaComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value manifest) {
+    base::Value::Dict manifest) {
   VLOG(1) << "Component ready, version " << version.GetString() << " in "
           << install_dir.value();
-  if (on_installed_callback_)
+  if (on_installed_callback_) {
     on_installed_callback_.Run(install_dir);
+  }
 
-  if (on_ready_callback_)
+  if (on_ready_callback_) {
     std::move(on_ready_callback_).Run();
+  }
 }
 
 base::FilePath SodaComponentInstallerPolicy::GetRelativeInstallDir() const {

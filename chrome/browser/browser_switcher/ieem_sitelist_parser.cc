@@ -4,8 +4,8 @@
 
 #include "chrome/browser/browser_switcher/ieem_sitelist_parser.h"
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
 #include "chrome/browser/browser_switcher/browser_switcher_features.h"
 #include "content/public/browser/browser_thread.h"
@@ -80,8 +80,7 @@ void ParseIeFileVersionOne(const base::Value& xml,
       base::FeatureList::IsEnabled(kBrowserSwitcherNoneIsGreylist);
 
   DCHECK(data_decoder::IsXmlElementNamed(xml, kSchema1RulesElement));
-  for (const base::Value& node :
-       data_decoder::GetXmlElementChildren(xml)->GetList()) {
+  for (const base::Value& node : *data_decoder::GetXmlElementChildren(xml)) {
     // Skip over anything that is not a <emie> or <docMode> element.
     if (!data_decoder::IsXmlElementNamed(node, kSchema1EmieElement) &&
         !data_decoder::IsXmlElementNamed(node, kSchema1DocModeElement)) {

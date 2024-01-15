@@ -18,6 +18,7 @@
 #include "base/native_library.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/threading/scoped_blocking_call.h"
 #include "net/base/net_errors.h"
 #include "net/dns/public/dns_protocol.h"
 #include "net/net_jni_headers/AndroidNetworkLibrary_jni.h"
@@ -26,11 +27,22 @@
 using base::android::AttachCurrentThread;
 using base::android::ConvertJavaStringToUTF8;
 using base::android::ConvertUTF8ToJavaString;
+using base::android::JavaArrayOfByteArrayToStringVector;
 using base::android::ScopedJavaLocalRef;
 using base::android::ToJavaArrayOfByteArray;
 using base::android::ToJavaByteArray;
 
 namespace net::android {
+
+std::vector<std::string> GetUserAddedRoots() {
+  std::vector<std::string> roots;
+  JNIEnv* env = AttachCurrentThread();
+
+  ScopedJavaLocalRef<jobjectArray> roots_byte_array =
+      Java_AndroidNetworkLibrary_getUserAddedRoots(env);
+  JavaArrayOfByteArrayToStringVector(env, roots_byte_array, &roots);
+  return roots;
+}
 
 void VerifyX509CertChain(const std::vector<std::string>& cert_chain,
                          base::StringPiece auth_type,
@@ -72,18 +84,20 @@ void ClearTestRootCertificates() {
   Java_AndroidNetworkLibrary_clearTestRootCertificates(env);
 }
 
-bool IsCleartextPermitted(const std::string& host) {
+bool IsCleartextPermitted(base::StringPiece host) {
   JNIEnv* env = AttachCurrentThread();
   ScopedJavaLocalRef<jstring> host_string = ConvertUTF8ToJavaString(env, host);
   return Java_AndroidNetworkLibrary_isCleartextPermitted(env, host_string);
 }
 
 bool HaveOnlyLoopbackAddresses() {
+  base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
+                                                base::BlockingType::MAY_BLOCK);
   JNIEnv* env = AttachCurrentThread();
   return Java_AndroidNetworkLibrary_haveOnlyLoopbackAddresses(env);
 }
 
-bool GetMimeTypeFromExtension(const std::string& extension,
+bool GetMimeTypeFromExtension(base::StringPiece extension,
                               std::string* result) {
   JNIEnv* env = AttachCurrentThread();
 
@@ -122,7 +136,7 @@ std::string GetWifiSSID() {
 }
 
 void SetWifiEnabledForTesting(bool enabled) {
-  Java_AndroidNetworkLibrary_setWifiEnabled(
+  Java_AndroidNetworkLibrary_setWifiEnabledForTesting(
       base::android::AttachCurrentThread(), enabled);
 }
 

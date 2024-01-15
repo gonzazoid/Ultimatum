@@ -7,11 +7,13 @@
 
 #include <string>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/unguessable_token.h"
 #include "components/media_message_center/media_notification_item.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -46,6 +48,9 @@ class COMPONENT_EXPORT(GLOBAL_MEDIA_CONTROLS) MediaSessionNotificationItem
     // The given item should be destroyed.
     virtual void RemoveItem(const std::string& id) = 0;
 
+    // The given item's UI should be refreshed.
+    virtual void RefreshItem(const std::string& id) = 0;
+
     // The given button has been pressed, and therefore the action should be
     // recorded.
     virtual void LogMediaSessionActionButtonPressed(
@@ -60,6 +65,7 @@ class COMPONENT_EXPORT(GLOBAL_MEDIA_CONTROLS) MediaSessionNotificationItem
       Delegate* delegate,
       const std::string& request_id,
       const std::string& source_name,
+      const absl::optional<base::UnguessableToken>& source_id,
       mojo::Remote<media_session::mojom::MediaController> controller,
       media_session::mojom::MediaSessionInfoPtr session_info);
   MediaSessionNotificationItem(const MediaSessionNotificationItem&) = delete;
@@ -85,6 +91,10 @@ class COMPONENT_EXPORT(GLOBAL_MEDIA_CONTROLS) MediaSessionNotificationItem
   // top frame.
   void UpdatePresentationRequestOrigin(const url::Origin& origin);
 
+  // Called during the creation of the footer view to show / set sink name if
+  // there is an active casting session associated with `this` media item.
+  void UpdateDeviceName(const absl::optional<std::string>& device_name);
+
   // media_session::mojom::MediaControllerImageObserver:
   void MediaControllerImageChanged(
       media_session::mojom::MediaSessionImageType type,
@@ -98,9 +108,12 @@ class COMPONENT_EXPORT(GLOBAL_MEDIA_CONTROLS) MediaSessionNotificationItem
   // This will stop the media session associated with this item. The item will
   // then call |MediaNotificationController::RemoveItem()| to ensure removal.
   void Dismiss() override;
-  media_message_center::SourceType SourceType() override;
   void SetVolume(float volume) override {}
   void SetMute(bool mute) override;
+  bool RequestMediaRemoting() override;
+  media_message_center::Source GetSource() const override;
+  media_message_center::SourceType GetSourceType() const override;
+  absl::optional<base::UnguessableToken> GetSourceId() const override;
 
   // Stops the media session.
   void Stop();
@@ -125,21 +138,35 @@ class COMPONENT_EXPORT(GLOBAL_MEDIA_CONTROLS) MediaSessionNotificationItem
 
   bool frozen() const { return frozen_; }
 
+  // Returns nullptr if `remote_playback_disabled` is true in `session_info_` or
+  // the media duration is too short.
+  media_session::mojom::RemotePlaybackMetadataPtr GetRemotePlaybackMetadata()
+      const;
+
+  // Returns whether the item is actively playing.
+  bool IsPlaying() const;
+
   void FlushForTesting();
 
-  void SetMediaControllerForTesting(
-      mojo::Remote<media_session::mojom::MediaController> controller) {
-    media_controller_remote_ = std::move(controller);
-  }
-
  private:
+  FRIEND_TEST_ALL_PREFIXES(MediaSessionNotificationItemTest,
+                           GetSessionMetadata);
+  FRIEND_TEST_ALL_PREFIXES(MediaSessionNotificationItemTest,
+                           GetMediaSessionActions);
+  FRIEND_TEST_ALL_PREFIXES(MediaSessionNotificationItemTest,
+                           ShouldShowNotification);
+
   media_session::MediaMetadata GetSessionMetadata() const;
+  base::flat_set<media_session::mojom::MediaSessionAction>
+  GetMediaSessionActions() const;
 
   bool ShouldShowNotification() const;
 
   void MaybeUnfreeze();
 
-  void Unfreeze();
+  void UnfreezeNonArtwork();
+
+  void UnfreezeArtwork();
 
   bool HasActions() const;
 
@@ -148,6 +175,8 @@ class COMPONENT_EXPORT(GLOBAL_MEDIA_CONTROLS) MediaSessionNotificationItem
   void OnFreezeTimerFired();
 
   void MaybeHideOrShowNotification();
+
+  void UpdateViewCommon();
 
   const raw_ptr<Delegate> delegate_;
 
@@ -160,8 +189,11 @@ class COMPONENT_EXPORT(GLOBAL_MEDIA_CONTROLS) MediaSessionNotificationItem
   // to be globally unique.
   const std::string request_id_;
 
-  // The source of the media session (e.g. arc, web).
-  const Source source_;
+  // The source of the media session.
+  const media_message_center::Source source_;
+
+  // The ID assigned to `source_`.
+  absl::optional<base::UnguessableToken> source_id_;
 
   mojo::Remote<media_session::mojom::MediaController> media_controller_remote_;
 
@@ -174,6 +206,10 @@ class COMPONENT_EXPORT(GLOBAL_MEDIA_CONTROLS) MediaSessionNotificationItem
   // top frame. So, in case of having a presentation request, this field is set
   // to hold the origin of that presentation request.
   absl::optional<url::Origin> optional_presentation_request_origin_;
+
+  // This name is used when the playback is happening on a non-default playback
+  // device.
+  absl::optional<std::string> device_name_;
 
   base::flat_set<media_session::mojom::MediaSessionAction> session_actions_;
 
@@ -202,10 +238,6 @@ class COMPONENT_EXPORT(GLOBAL_MEDIA_CONTROLS) MediaSessionNotificationItem
   // True if we're currently frozen and the frozen view contains non-null
   // artwork.
   bool frozen_with_artwork_ = false;
-
-  // True if we have the necessary metadata to unfreeze, but we're waiting for
-  // new artwork to load.
-  bool waiting_for_artwork_ = false;
 
   // The timer that will notify the controller to destroy this item after it
   // has been frozen for a certain period of time.

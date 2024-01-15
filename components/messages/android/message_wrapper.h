@@ -11,7 +11,7 @@
 #include <string>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/messages/android/message_enums.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 
@@ -62,6 +62,10 @@ class MessageWrapper {
   void AddSecondaryMenuItem(int item_id,
                             int resource_id,
                             const std::u16string& item_text);
+  void AddSecondaryMenuItem(int item_id,
+                            int resource_id,
+                            const std::u16string& item_text,
+                            const std::u16string& item_description);
   void ClearSecondaryMenuItems();
   void AddSecondaryMenuItemDivider();
 
@@ -97,8 +101,6 @@ class MessageWrapper {
   void HandleSecondaryActionClick(JNIEnv* env);
   void HandleSecondaryMenuItemSelected(JNIEnv* env, int item_id);
   void HandleDismissCallback(JNIEnv* env, int dismiss_reason);
-
-  // TODO (crbug.com/1264117): Add ON_STARTED_SHOWING support.
 
   const base::android::JavaRef<jobject>& GetJavaMessageWrapper() const;
 

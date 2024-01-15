@@ -25,7 +25,10 @@
 
 html {
     display: block;
-    page-transition-tag: root;
+}
+
+:root {
+    view-transition-name: root;
 }
 
 /* generic block-level elements */
@@ -51,7 +54,7 @@ div {
     display: block
 }
 
-article, aside, footer, header, hgroup, main, nav, section {
+article, aside, footer, header, hgroup, main, nav, search, section {
     display: block
 }
 
@@ -146,6 +149,21 @@ audio:not([controls]) {
 audio {
   width: 300px;
   height: 54px;
+}
+
+video, canvas, img {
+  overflow: clip;
+  overflow-clip-margin: content-box;
+}
+
+img:is([sizes="auto" i], [sizes^="auto," i]) {
+    contain: size !important;
+    contain-intrinsic-size: 300px 150px;
+}
+
+iframe, embed, object, fencedframe {
+   overflow: clip !important;
+   overflow-clip-margin: content-box !important;
 }
 
 /* heading elements */
@@ -289,7 +307,14 @@ tr {
 
 td, th {
     display: table-cell;
-    vertical-align: inherit
+    vertical-align: inherit;
+}
+
+/* When the td/th are inside a table (the normal case), the padding is taken
+   care of by HTMLTableCellElement::AdditionalPresentationAttributeStyle(). */
+td:not(table td),
+th:not(table th) {
+  padding: 1px;
 }
 
 th {
@@ -397,11 +422,6 @@ button {
     appearance: auto;
 }
 
-/* Form controls don't go vertical. */
-input, textarea, select, button, meter, progress {
-    writing-mode: horizontal-tb !important;
-}
-
 input, textarea, select, button {
     margin: 0__qem;
     font: -webkit-small-control;
@@ -440,6 +460,10 @@ input {
     background-color: Field;
 }
 
+input:not([type="file" i], [type="image" i], [type="checkbox" i], [type="radio" i]) {
+    -internal-align-content-block: center;
+}
+
 input[type="search" i] {
     appearance: auto;
     box-sizing: border-box;
@@ -451,7 +475,6 @@ input::-webkit-textfield-decoration-container {
     -webkit-user-modify: read-only !important;
     content: none !important;
     writing-mode: inherit !important;
-    -internal-align-self-block: center;
 }
 
 input::-webkit-clear-button {
@@ -500,7 +523,12 @@ input[type="search" i],
 input[type="tel" i],
 input[type="text" i],
 input[type="url" i] {
-  padding: 1px 2px;
+  padding-block: 1px;
+  padding-inline: 2px;
+}
+
+input[type="tel" i] {
+  direction: ltr;
 }
 
 input::-webkit-inner-spin-button {
@@ -546,6 +574,9 @@ input::-internal-input-suggested {
 input::-internal-input-suggested,
 textarea::-internal-input-suggested {
     font: -webkit-small-control !important;
+    /* -webkit-small-control does not pin the font-feature-settings and we want
+       previews to look consistent. */
+    font-feature-settings: normal !important;
     /* Prevent that overflow affects the scrollable area. Without this,
        LayoutBox::*Scroll{Height,Width}() may determine the scroll width/height
        from the scrollable area instead of from the overrides in
@@ -562,8 +593,18 @@ input[type="password" i] {
     -webkit-text-security: disc !important;
 }
 
-input[type="password" i]::-internal-input-suggested {
+input[type="password" i]::-internal-input-suggested:not(.reveal-password) {
     -webkit-text-security: disc !important;
+}
+
+input[type="password" i]::-internal-input-suggested.reveal-password {
+    -webkit-text-security: none;
+}
+
+input[type="password" i]::-internal-input-suggested.fade-out-password {
+    width: fit-content;
+    -webkit-mask: linear-gradient(to right, #000 50%, #0000);
+    mask: linear-gradient(to right, #000 50%, #0000);
 }
 
 input[type="password" i]::-internal-reveal {
@@ -571,7 +612,7 @@ input[type="password" i]::-internal-reveal {
   height: 1.3em;
   cursor: default;
   flex: none;
-  background-image: -webkit-image-set(url(images/password_reveal_on.svg) 1x);
+  background-image: url(images/password_reveal_on.svg);
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
@@ -580,13 +621,19 @@ input[type="password" i]::-internal-reveal {
 }
 
 input[type="password" i]::-internal-reveal.reveal {
-  background-image: -webkit-image-set(url(images/password_reveal_off.svg) 1x);
+  background-image: url(images/password_reveal_off.svg);
 }
 
 input[type="password" i]::-internal-reveal:hover,
 input[type="password" i]::-internal-reveal:focus {
   border-radius: 1px;
   cursor: pointer;
+}
+
+input[type="password" i]::-internal-strong {
+  color: -internal-light-dark(#0B57D0, #A8C7FA);
+  font-family: roboto;
+  -webkit-text-security: none;
 }
 
 input[type="hidden" i], input[type="image" i], input[type="file" i] {
@@ -649,7 +696,7 @@ input[type="file" i]::-webkit-file-upload-button {
     -webkit-user-modify: read-only !important;
     white-space: nowrap;
     margin: 0;
-    margin-inline-end: 4px;
+    margin-inline-end: 4px; /* See FileUploadControlIntrinsicInlineSize() */
     font-size: inherit;
 }
 
@@ -661,7 +708,8 @@ button {
     align-items: flex-start;
     text-align: center;
     cursor: default;
-    padding: 1px 6px;
+    padding-block: 1px;
+    padding-inline: 6px;
     border: 2px outset ButtonBorder;
     box-sizing: border-box;
     background-color: ButtonFace;
@@ -798,8 +846,8 @@ input[type="radio" i] {
 
 input[type="color" i] {
     appearance: auto;
-    width: 50px;
-    height: 27px;
+    inline-size: 50px;
+      block-size: 27px;
     /* Same as native_theme_base. */
     border: 1px solid ButtonBorder;
     padding: 1px 2px;
@@ -830,8 +878,8 @@ input[type="color" i]::-webkit-color-swatch {
 
 input[type="color" i][list] {
     appearance: auto;
-    width: 94px;
-    height: 27px
+    inline-size: 94px;
+      block-size: 27px
 }
 
 input[type="color" i][list]::-webkit-color-swatch-wrapper {
@@ -845,9 +893,10 @@ input[type="color" i][list]::-webkit-color-swatch {
 
 input::-webkit-calendar-picker-indicator {
     display: inline-block;
-    width: 0.66em;
-    height: 0.66em;
-    padding: 0.17em 0.34em;
+    inline-size: 0.66em;
+    block-size: 0.66em;
+    padding-block: 0.17em;
+    padding-inline: 0.34em;
     -webkit-user-modify: read-only !important;
     opacity: 0;
     cursor: default;
@@ -885,6 +934,14 @@ input[readonly]::-webkit-calendar-picker-indicator {
     visibility: hidden;
 }
 
+/* Form controls that measure the inline size without doing actual layout
+   need to disable `text-autospace`, if their content can be affected by
+   the property. crbug.com/1484863 */
+input[type="date" i], input[type="datetime-local" i], input[type="month" i],
+input[type="week" i], select {
+    text-autospace: no-autospace !important;
+}
+
 select {
     appearance: auto;
     box-sizing: border-box;
@@ -909,8 +966,8 @@ select:disabled {
 select:-internal-list-box {
     appearance: auto;
     align-items: flex-start;
-    overflow-x: hidden;
-    overflow-y: scroll;
+    -internal-overflow-inline: hidden;
+    -internal-overflow-block: scroll;
     vertical-align: text-bottom;
     white-space: nowrap;
     border-radius: 2px;
@@ -920,8 +977,11 @@ select:not(:-internal-list-box) {
     overflow: visible !important;
 }
 
-select:-internal-list-box optgroup option:before {
-    content: "\00a0\00a0\00a0\00a0";;
+/* The padding here should match the value of
+   |extraPaddingForOptionInsideOptgroup| in list_picker.js, which is the
+   padding for select optgroup option. */
+select:-internal-list-box optgroup option {
+    padding-inline-start: 20px;
 }
 
 select:-internal-list-box option,
@@ -995,8 +1055,8 @@ meter {
     appearance: auto;
     box-sizing: border-box;
     display: inline-block;
-    height: 1em;
-    width: 5em;
+    block-size: 1em;
+    inline-size: 5em;
     vertical-align: -0.2em;
     -webkit-user-modify: read-only !important;
 }
@@ -1006,8 +1066,8 @@ meter::-webkit-meter-inner-element {
     box-sizing: inherit;
     display: none;
     -webkit-user-modify: read-only !important;
-    height: 100%;
-    width: 100%;
+    block-size: 100%;
+    inline-size: 100%;
 }
 
 meter::-webkit-meter-inner-element:-internal-shadow-host-has-appearance {
@@ -1021,8 +1081,8 @@ meter::-internal-fallback:-internal-shadow-host-has-appearance {
 }
 
 meter::-webkit-meter-bar {
-    height: 100%;
-    width: 100%;
+    block-size: 100%;
+    inline-size: 100%;
     -webkit-user-modify: read-only !important;
     background: -internal-light-dark(#efefef, #3B3B3B);
     border: thin solid -internal-light-dark(rgba(118, 118, 118, 0.3), #858585);
@@ -1036,21 +1096,21 @@ meter::-webkit-meter-bar {
 }
 
 meter::-webkit-meter-optimum-value {
-    height: 100%;
+    block-size: 100%;
     -webkit-user-modify: read-only !important;
     box-sizing: border-box;
     background: -internal-light-dark(#107c10, #74b374)
 }
 
 meter::-webkit-meter-suboptimum-value {
-    height: 100%;
+    block-size: 100%;
     -webkit-user-modify: read-only !important;
     box-sizing: border-box;
     background: -internal-light-dark(#ffb900, #f2c812)
 }
 
 meter::-webkit-meter-even-less-good-value {
-    height: 100%;
+    block-size: 100%;
     -webkit-user-modify: read-only !important;
     box-sizing: border-box;
     background: -internal-light-dark(#d83b01, #e98f6d)
@@ -1062,30 +1122,30 @@ progress {
     appearance: auto;
     box-sizing: border-box;
     display: inline-block;
-    height: 1em;
-    width: 10em;
+    block-size: 1em;
+    inline-size: 10em;
     vertical-align: -0.2em;
 }
 
 progress::-webkit-progress-inner-element {
     box-sizing: inherit;
     -webkit-user-modify: read-only;
-    height: 100%;
-    width: 100%;
+    block-size: 100%;
+    inline-size: 100%;
 }
 
 progress::-webkit-progress-bar {
     background-color: gray;
-    height: 100%;
-    width: 100%;
+    block-size: 100%;
+    inline-size: 100%;
     -webkit-user-modify: read-only !important;
     box-sizing: border-box;
 }
 
 progress::-webkit-progress-value {
     background-color: green;
-    height: 100%;
-    width: 50%; /* should be removed later */
+    block-size: 100%;
+    inline-size: 50%; /* should be removed later */
     -webkit-user-modify: read-only !important;
     box-sizing: border-box;
 }
@@ -1156,11 +1216,6 @@ nobr {
     outline: Highlight 3px solid;
 }
 
-:-internal-spatial-navigation-interest {
-    outline: auto 1px -webkit-focus-ring-color !important;
-    box-shadow: none !important
-}
-
 :focus-visible {
     outline: auto 1px -webkit-focus-ring-color
 }
@@ -1197,12 +1252,12 @@ input[type="date" i]::-webkit-calendar-picker-indicator,
 input[type="datetime-local" i]::-webkit-calendar-picker-indicator,
 input[type="month" i]::-webkit-calendar-picker-indicator,
 input[type="week" i]::-webkit-calendar-picker-indicator {
-  background-image: -internal-light-dark(-webkit-image-set(url(images/calendar_icon.svg) 1x), -webkit-image-set(url(images/calendar_icon_white.svg) 1x));
+  background-image: -internal-light-dark(url(images/calendar_icon.svg), url(images/calendar_icon_white.svg));
   background-origin: content-box;
   background-repeat: no-repeat;
   background-size: contain;
-  height: 1.0em;
-  width: 1.0em;
+  block-size: 1.0em;
+  inline-size: 1.0em;
   opacity: 1;
   outline: none;
   padding: 2px;
@@ -1217,19 +1272,18 @@ input[type="week" i]::-webkit-calendar-picker-indicator:focus-visible {
 }
 
 input[type="time" i]::-webkit-calendar-picker-indicator {
-  background-image: -internal-light-dark(-webkit-image-set(url(images/time_icon.svg) 1x), -webkit-image-set(url(images/time_icon_white.svg) 1x));
+  background-image: -internal-light-dark(url(images/time_icon.svg), url(images/time_icon_white.svg));
   background-origin: content-box;
   background-repeat: no-repeat;
   background-size: contain;
-  height: 1.05em;
-  margin-inline-start: 8px;
   opacity: 1;
   outline: none;
-  padding-bottom: 3px;
+  margin-inline-start: 8px;
   padding-inline-start: 3px;
   padding-inline-end: 3px;
-  padding-top: 3px;
-  width: 1.05em;
+  padding-block: 3px;
+  block-size: 1.05em;
+  inline-size: 1.05em;
 }
 
 input[type="time" i]::-webkit-calendar-picker-indicator:focus-visible {
@@ -1283,12 +1337,6 @@ a:-webkit-any-link:read-write {
 
 a:-webkit-any-link:focus-visible {
   outline-offset: 1px;
-}
-
-/* ensure that selected links are underlined.*/
-a:-webkit-any-link::target-text {
-    text-decoration:underline;
-    background-color:#E9D2FD;
 }
 
 /* HTML5 ruby elements */
@@ -1386,7 +1434,7 @@ dialog[open] {
     display: block;
 }
 
-dialog:modal {
+dialog:-internal-dialog-in-top-layer {
     /* https://html.spec.whatwg.org/multipage/rendering.html#flow-content-3 */
     position: fixed;
     overflow: auto;
@@ -1399,20 +1447,67 @@ dialog:modal {
     visibility: visible;
 }
 
+dialog:modal {
+    overlay: auto !important;
+}
+
 /* TODO(foolip): In the Fullscreen spec, there's a ::backdrop block with the
    properties shared with :fullscreen::backdrop (see fullscreen.css). */
-dialog::backdrop {
+dialog:-internal-dialog-in-top-layer::backdrop {
     position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
+    inset: 0;
     /* https://html.spec.whatwg.org/multipage/rendering.html#flow-content-3 */
-    background: rgba(0,0,0,0.1)
+    background: rgba(0,0,0,0.1);
 }
 
 slot {
     display: contents;
+}
+
+[popover] {
+  position: fixed;
+  inset: 0;
+  width: fit-content;
+  height: fit-content;
+  margin: auto;
+  border: solid;
+  padding: 0.25em;
+  overflow: auto;
+  color: CanvasText;
+  background-color: Canvas;
+}
+
+/* This ensures that popovers get display:none when they are not open, and we
+   need to be careful not to affect `<dialog popover>` when open as a dialog. */
+[popover]:not(:popover-open):not(dialog[open]) {
+  display:none;
+}
+
+/* The UA stylesheet has a rule like dialog{display:none}, so <dialog popover>
+   needs this to be visible when it is open as a popover. */
+dialog:popover-open {
+  display:block;
+}
+
+/* Popovers using anchor positioning get their inset properties reset, to make
+ * it easier to position them. */
+[popover][anchor] {
+  inset:auto;
+}
+
+/* This rule matches popovers (dialog or not) that are currently open as a
+   popover. */
+[popover]:popover-open:not(dialog), dialog:popover-open:not([open]) {
+  overlay: auto !important;
+}
+
+[popover]:-internal-popover-in-top-layer::backdrop {
+  /* From the (modified) fullscreen spec: https://fullscreen.spec.whatwg.org/#user-agent-level-style-sheet-defaults: */
+  position: fixed;
+  inset: 0;
+  /* Specific to [popover]: */
+  pointer-events: none !important;
+  background-color: transparent;
 }
 
 /* page */

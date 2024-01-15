@@ -4,13 +4,14 @@
 
 #include "chrome/browser/ash/login/extensions/login_screen_extensions_lifetime_manager.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/check_is_test.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/trace_event/trace_event.h"
 #include "base/values.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/extension_service.h"
@@ -88,6 +89,8 @@ void LoginScreenExtensionsLifetimeManager::OnProfileManagerDestroying() {
 }
 
 void LoginScreenExtensionsLifetimeManager::OnSessionStateChanged() {
+  TRACE_EVENT0("login",
+               "LoginScreenExtensionsLifetimeManager::OnSessionStateChanged");
   UpdateStateIfProfileReady();
 }
 
@@ -102,7 +105,7 @@ void LoginScreenExtensionsLifetimeManager::OnExtensionLoaded(
     // extensions subsystem. Therefore forcibly disable this extension.
     // Doing this in an asynchronous job, in order to avoid confusing other
     // observers of OnExtensionLoaded().
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&LoginScreenExtensionsLifetimeManager::DisableExtension,
                        weak_factory_.GetWeakPtr(), extension->id()));
@@ -160,12 +163,13 @@ LoginScreenExtensionsLifetimeManager::GetPolicyExtensionIds() const {
   const PrefService::Preference* const pref =
       prefs->FindPreference(extensions::pref_names::kInstallForceList);
   if (!pref || !pref->IsManaged() ||
-      pref->GetType() != base::Value::Type::DICTIONARY) {
+      pref->GetType() != base::Value::Type::DICT) {
     return {};
   }
   extensions::ExtensionIdList extension_ids;
-  for (const auto item : pref->GetValue()->DictItems())
+  for (const auto item : pref->GetValue()->GetDict()) {
     extension_ids.push_back(item.first);
+  }
   return extension_ids;
 }
 

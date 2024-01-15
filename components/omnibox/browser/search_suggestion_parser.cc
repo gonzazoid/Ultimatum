@@ -12,9 +12,9 @@
 #include "base/check.h"
 #include "base/containers/contains.h"
 #include "base/containers/fixed_flat_map.h"
+#include "base/feature_list.h"
 #include "base/i18n/icu_string_conversions.h"
 #include "base/json/json_reader.h"
-#include "base/json/json_string_value_serializer.h"
 #include "base/json/json_writer.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
@@ -31,32 +31,82 @@
 #include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/omnibox/browser/suggestion_group_util.h"
 #include "components/omnibox/browser/url_prefix.h"
+#include "components/omnibox/common/omnibox_features.h"
+#include "components/strings/grit/components_strings.h"
 #include "components/url_formatter/url_fixer.h"
 #include "components/url_formatter/url_formatter.h"
 #include "net/http/http_response_headers.h"
 #include "services/network/public/cpp/simple_url_loader.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/omnibox_proto/entity_info.pb.h"
 #include "ui/base/device_form_factor.h"
+#include "ui/base/l10n/l10n_util.h"
 #include "url/url_constants.h"
 
 namespace {
 
-AutocompleteMatchType::Type GetAutocompleteMatchType(const std::string& type) {
-  if (type == "CALCULATOR")
-    return AutocompleteMatchType::CALCULATOR;
-  if (type == "ENTITY")
-    return AutocompleteMatchType::SEARCH_SUGGEST_ENTITY;
-  if (type == "TAIL")
-    return AutocompleteMatchType::SEARCH_SUGGEST_TAIL;
-  if (type == "PERSONALIZED_QUERY")
-    return AutocompleteMatchType::SEARCH_SUGGEST_PERSONALIZED;
-  if (type == "PROFILE")
-    return AutocompleteMatchType::SEARCH_SUGGEST_PROFILE;
-  if (type == "NAVIGATION")
-    return AutocompleteMatchType::NAVSUGGEST;
-  if (type == "PERSONALIZED_NAVIGATION")
-    return AutocompleteMatchType::NAVSUGGEST_PERSONALIZED;
-  return AutocompleteMatchType::SEARCH_SUGGEST;
+// Converts a suggestion type name found in the JSON response to an equivalent
+// omnibox::SuggestType enum value.
+omnibox::SuggestType GetSuggestType(const std::string& type) {
+  if (type == "CALCULATOR") {
+    return omnibox::TYPE_CALCULATOR;
+  }
+  if (type == "ENTITY") {
+    return omnibox::TYPE_ENTITY;
+  }
+  if (type == "TAIL") {
+    return omnibox::TYPE_TAIL;
+  }
+  if (type == "PERSONALIZED_QUERY") {
+    return omnibox::TYPE_PERSONALIZED_QUERY;
+  }
+  if (type == "PROFILE") {
+    return omnibox::TYPE_PROFILE;
+  }
+  if (type == "NAVIGATION") {
+    return omnibox::TYPE_NAVIGATION;
+  }
+  if (type == "PERSONALIZED_NAVIGATION") {
+    return omnibox::TYPE_PERSONALIZED_NAVIGATION;
+  }
+  if (type == "CHROME_QUERY_TILES") {
+    return omnibox::TYPE_CHROME_QUERY_TILES;
+  }
+  if (type == "CATEGORICAL_QUERY") {
+    return omnibox::TYPE_CATEGORICAL_QUERY;
+  }
+  return omnibox::TYPE_QUERY;
+}
+
+// Converts an omnibox::SuggestType enum value to an equivalent
+// AutocompleteMatchType::Type enum values.
+AutocompleteMatchType::Type GetAutocompleteMatchType(
+    omnibox::SuggestType suggest_type) {
+  switch (suggest_type) {
+    case omnibox::TYPE_CALCULATOR:
+      return AutocompleteMatchType::CALCULATOR;
+    case omnibox::TYPE_ENTITY:
+      return AutocompleteMatchType::SEARCH_SUGGEST_ENTITY;
+    case omnibox::TYPE_TAIL:
+      return AutocompleteMatchType::SEARCH_SUGGEST_TAIL;
+    case omnibox::TYPE_PERSONALIZED_QUERY:
+      return AutocompleteMatchType::SEARCH_SUGGEST_PERSONALIZED;
+    case omnibox::TYPE_PROFILE:
+      return AutocompleteMatchType::SEARCH_SUGGEST_PROFILE;
+    case omnibox::TYPE_NAVIGATION:
+      return AutocompleteMatchType::NAVSUGGEST;
+    case omnibox::TYPE_PERSONALIZED_NAVIGATION:
+      return AutocompleteMatchType::NAVSUGGEST_PERSONALIZED;
+    default: {
+      // Use `ACMatchType::SEARCH_SUGGEST_ENTITY` for categorical suggestions.
+      if (suggest_type == omnibox::TYPE_CATEGORICAL_QUERY &&
+          base::FeatureList::IsEnabled(omnibox::kCategoricalSuggestions)) {
+        return AutocompleteMatchType::SEARCH_SUGGEST_ENTITY;
+      }
+      return AutocompleteMatchType::SEARCH_SUGGEST;
+    }
+  }
 }
 
 // Convert the supplied Json::Value representation of list-of-lists-of-integers
@@ -66,26 +116,26 @@ AutocompleteMatchType::Type GetAutocompleteMatchType(const std::string& type) {
 // number of returned matches and will supply empty vector for any item that is
 // either invalid or missing.
 // The function will always return a valid and properly sized vector of vectors,
-// equal in length to |expected_size|, even if the input |subtypes_value| is not
+// equal in length to `expected_size`, even if the input `subtypes_list` is not
 // valid.
 std::vector<std::vector<int>> ParseMatchSubtypes(
-    const base::Value* subtypes_value,
+    const base::Value::List* subtypes_list,
     size_t expected_size) {
   std::vector<std::vector<int>> result(expected_size);
 
-  if (subtypes_value == nullptr || !subtypes_value->is_list())
+  if (subtypes_list == nullptr) {
     return result;
-  const auto& subtypes_list = subtypes_value->GetList();
+  }
 
-  if (!subtypes_list.empty() && subtypes_list.size() != expected_size) {
-    LOG(WARNING) << "The length of reported subtypes (" << subtypes_list.size()
+  if (!subtypes_list->empty() && subtypes_list->size() != expected_size) {
+    LOG(WARNING) << "The length of reported subtypes (" << subtypes_list->size()
                  << ") does not match the expected length (" << expected_size
                  << ')';
   }
 
-  const auto num_items = std::min(expected_size, subtypes_list.size());
+  const auto num_items = std::min(expected_size, subtypes_list->size());
   for (auto index = 0u; index < num_items; index++) {
-    const auto& subtypes_item = subtypes_list[index];
+    const auto& subtypes_item = (*subtypes_list)[index];
     // Permissive: ignore subtypes that are not in a form of a list.
     if (!subtypes_item.is_list())
       continue;
@@ -105,8 +155,8 @@ std::vector<std::vector<int>> ParseMatchSubtypes(
   return result;
 }
 
-std::string FindStringKeyOrEmpty(const base::Value& value, std::string key) {
-  auto* ptr = value.FindStringKey(key);
+std::string FindStringOrEmpty(const base::Value::Dict& value, std::string key) {
+  auto* ptr = value.FindString(key);
   return ptr ? *ptr : "";
 }
 
@@ -115,31 +165,6 @@ std::string FindStringKeyOrEmpty(const base::Value& value, std::string key) {
 constexpr char kTypeIntFieldNumber[] = "4";
 // The field number for the string value in ExperimentStatsV2.
 constexpr char kStringValueFieldNumber[] = "2";
-
-constexpr auto kPolarisGroupIdsMap =
-    base::MakeFixedFlatMap<int, omnibox::GroupId>(
-        {{0, omnibox::GROUP_PREVIOUS_SEARCH_RELATED},
-         {1, omnibox::GROUP_PREVIOUS_SEARCH_RELATED_ENTITY_CHIPS},
-         {2, omnibox::GROUP_TRENDS},
-         {3, omnibox::GROUP_TRENDS_ENTITY_CHIPS},
-         {4, omnibox::GROUP_RELATED_QUERIES},
-         {5, omnibox::GROUP_VISITED_DOC_RELATED}});
-
-// Dynamically assigns a group ID known to Chrome for the given |group_id| based
-// on its 0-based |group_index| in the server response.
-// omnibox::GROUP_PERSONALIZED_ZERO_SUGGEST is an exception and retains its
-// server provided ID.
-omnibox::GroupId ChromeGroupIdForRemoteGroupIdAndIndex(const int group_id,
-                                                       const int group_index) {
-  if (group_id == omnibox::GROUP_PERSONALIZED_ZERO_SUGGEST) {
-    return omnibox::GROUP_PERSONALIZED_ZERO_SUGGEST;
-  } else if (base::Contains(kPolarisGroupIdsMap, group_index)) {
-    return kPolarisGroupIdsMap.at(group_index);
-  } else {
-    // Return an invalid group ID if we don't have any reserved IDs left.
-    return omnibox::GROUP_INVALID;
-  }
-}
 
 constexpr auto kReservedReservedGroupSectionsMap =
     base::MakeFixedFlatMap<int, omnibox::GroupSection>(
@@ -166,6 +191,29 @@ omnibox::GroupSection ChromeGroupSectionForRemoteGroupIndex(
   }
 }
 
+// Decodes a proto object from its serialized Base64 string representation.
+template <typename T>
+bool DecodeProtoFromBase64(const std::string* encoded_data, T& result_proto) {
+  if (!encoded_data || encoded_data->empty()) {
+    return false;
+  }
+
+  std::string decoded_data;
+  if (!base::Base64Decode(*encoded_data, &decoded_data)) {
+    return false;
+  }
+
+  if (decoded_data.empty()) {
+    return false;
+  }
+
+  if (!result_proto.ParseFromString(decoded_data)) {
+    return false;
+  }
+
+  return true;
+}
+
 }  // namespace
 
 omnibox::SuggestSubtype SuggestSubtypeForNumber(int value) {
@@ -185,10 +233,12 @@ SearchSuggestionParser::Result::Result(bool from_keyword,
                                        int relevance,
                                        bool relevance_from_server,
                                        AutocompleteMatchType::Type type,
+                                       omnibox::SuggestType suggest_type,
                                        std::vector<int> subtypes,
                                        const std::string& deletion_url)
     : from_keyword_(from_keyword),
       type_(type),
+      suggest_type_(suggest_type),
       subtypes_(std::move(subtypes)),
       relevance_(relevance),
       relevance_from_server_(relevance_from_server),
@@ -204,6 +254,7 @@ SearchSuggestionParser::Result::~Result() {}
 SearchSuggestionParser::SuggestResult::SuggestResult(
     const std::u16string& suggestion,
     AutocompleteMatchType::Type type,
+    omnibox::SuggestType suggest_type,
     std::vector<int> subtypes,
     bool from_keyword,
     int relevance,
@@ -211,15 +262,13 @@ SearchSuggestionParser::SuggestResult::SuggestResult(
     const std::u16string& input_text)
     : SuggestResult(suggestion,
                     type,
+                    suggest_type,
                     std::move(subtypes),
                     suggestion,
                     /*match_contents_prefix=*/std::u16string(),
                     /*annotation=*/std::u16string(),
-                    /*additional_query_params=*/"",
-                    /*entity_id=*/"",
+                    /*entity_info=*/omnibox::EntityInfo(),
                     /*deletion_url=*/"",
-                    /*image_dominant_color=*/"",
-                    /*image_url=*/"",
                     from_keyword,
                     relevance,
                     relevance_from_server,
@@ -230,15 +279,13 @@ SearchSuggestionParser::SuggestResult::SuggestResult(
 SearchSuggestionParser::SuggestResult::SuggestResult(
     const std::u16string& suggestion,
     AutocompleteMatchType::Type type,
+    omnibox::SuggestType suggest_type,
     std::vector<int> subtypes,
     const std::u16string& match_contents,
     const std::u16string& match_contents_prefix,
     const std::u16string& annotation,
-    const std::string& additional_query_params,
-    const std::string& entity_id,
+    omnibox::EntityInfo entity_info,
     const std::string& deletion_url,
-    const std::string& image_dominant_color,
-    const std::string& image_url,
     bool from_keyword,
     int relevance,
     bool relevance_from_server,
@@ -249,18 +296,21 @@ SearchSuggestionParser::SuggestResult::SuggestResult(
              relevance,
              relevance_from_server,
              type,
+             suggest_type,
              std::move(subtypes),
              deletion_url),
       suggestion_(suggestion),
       match_contents_prefix_(match_contents_prefix),
-      annotation_(annotation),
-      additional_query_params_(additional_query_params),
-      entity_id_(entity_id),
-      image_dominant_color_(image_dominant_color),
-      image_url_(GURL(image_url)),
+      entity_info_(std::move(entity_info)),
       should_prefetch_(should_prefetch),
       should_prerender_(should_prerender) {
-  match_contents_ = match_contents;
+  annotation_ = !entity_info_.annotation().empty()
+                    ? base::UTF8ToUTF16(entity_info_.annotation())
+                    : annotation;
+  match_contents_ = !entity_info_.name().empty()
+                        ? base::UTF8ToUTF16(entity_info_.name())
+                        : match_contents;
+  match_contents_ = base::CollapseWhitespace(match_contents_, false);
   DCHECK(!match_contents_.empty());
   ClassifyMatchContents(true, input_text);
 }
@@ -270,8 +320,9 @@ SearchSuggestionParser::SuggestResult::SuggestResult(
 
 SearchSuggestionParser::SuggestResult::~SuggestResult() {}
 
-SearchSuggestionParser::SuggestResult& SearchSuggestionParser::SuggestResult::
-operator=(const SuggestResult& rhs) = default;
+SearchSuggestionParser::SuggestResult&
+SearchSuggestionParser::SuggestResult::operator=(const SuggestResult& rhs) =
+    default;
 
 void SearchSuggestionParser::SuggestResult::ClassifyMatchContents(
     const bool allow_bolding_all,
@@ -310,13 +361,18 @@ void SearchSuggestionParser::SuggestResult::ClassifyMatchContents(
   }
 
   // Note we discard our existing match_contents_class_ with this call.
-  match_contents_class_ = AutocompleteProvider::ClassifyAllMatchesInString(
-      input_text, match_contents_, true);
+  match_contents_class_ =
+      ClassifyAllMatchesInString(input_text, match_contents_, true);
 }
 
 void SearchSuggestionParser::SuggestResult::SetAnswer(
     const SuggestionAnswer& answer) {
   answer_ = answer;
+}
+
+void SearchSuggestionParser::SuggestResult::SetEntityInfo(
+    const omnibox::EntityInfo& entity_info) {
+  entity_info_ = entity_info;
 }
 
 int SearchSuggestionParser::SuggestResult::CalculateRelevance(
@@ -333,6 +389,7 @@ SearchSuggestionParser::NavigationResult::NavigationResult(
     const AutocompleteSchemeClassifier& scheme_classifier,
     const GURL& url,
     AutocompleteMatchType::Type match_type,
+    omnibox::SuggestType suggest_type,
     std::vector<int> subtypes,
     const std::u16string& description,
     const std::string& deletion_url,
@@ -344,6 +401,7 @@ SearchSuggestionParser::NavigationResult::NavigationResult(
              relevance,
              relevance_from_server,
              match_type,
+             suggest_type,
              std::move(subtypes),
              deletion_url),
       url_(url),
@@ -501,7 +559,7 @@ std::string SearchSuggestionParser::ExtractJsonData(
 }
 
 // static
-std::unique_ptr<base::Value> SearchSuggestionParser::DeserializeJsonData(
+absl::optional<base::Value::List> SearchSuggestionParser::DeserializeJsonData(
     base::StringPiece json_data) {
   // The JSON response should be an array.
   for (size_t response_start_index = json_data.find("["), i = 0;
@@ -510,35 +568,32 @@ std::unique_ptr<base::Value> SearchSuggestionParser::DeserializeJsonData(
     // Remove any XSSI guards to allow for JSON parsing.
     json_data.remove_prefix(response_start_index);
 
-    JSONStringValueDeserializer deserializer(json_data,
-                                             base::JSON_ALLOW_TRAILING_COMMAS);
-    int error_code = 0;
-    std::unique_ptr<base::Value> data =
-        deserializer.Deserialize(&error_code, nullptr);
-    if (error_code == 0)
-      return data;
+    absl::optional<base::Value> data =
+        base::JSONReader::Read(json_data, base::JSON_ALLOW_TRAILING_COMMAS);
+    if (data && data->is_list()) {
+      return std::move(data->GetList());
+    }
   }
-  return nullptr;
+  return absl::nullopt;
 }
 
 // static
 bool SearchSuggestionParser::ParseSuggestResults(
-    const base::Value& root_val,
+    const base::Value::List& root_list,
     const AutocompleteInput& input,
     const AutocompleteSchemeClassifier& scheme_classifier,
     int default_result_relevance,
     bool is_keyword_result,
     Results* results) {
-  if (!root_val.is_list())
-    return false;
-  const auto& root_list = root_val.GetList();
+  const std::u16string input_text = input.IsZeroSuggest() ? u"" : input.text();
 
   // 1st element: query.
   if (root_list.empty() || !root_list[0].is_string())
     return false;
   std::u16string query = base::UTF8ToUTF16(root_list[0].GetString());
-  if (query != input.text())
+  if (query != input_text) {
     return false;
+  }
 
   // 2nd element: suggestions list.
   if (root_list.size() < 2u || !root_list[1].is_list())
@@ -552,47 +607,42 @@ bool SearchSuggestionParser::ParseSuggestResults(
   // Reset suggested relevance information.
   results->verbatim_relevance = -1;
 
-  const base::Value* suggest_types = nullptr;
-  const base::Value* suggest_subtypes = nullptr;
-  const base::Value* relevances = nullptr;
-  const base::Value* suggestion_details = nullptr;
-  const base::Value* subtype_identifiers = nullptr;
+  const base::Value::List* suggest_types = nullptr;
+  const base::Value::List* suggest_subtypes = nullptr;
+  const base::Value::List* relevances = nullptr;
+  const base::Value::List* suggestion_details = nullptr;
+  const base::Value::List* subtype_identifiers = nullptr;
   int prefetch_index = -1;
   int prerender_index = -1;
   omnibox::GroupsInfo groups_info;
-  bool groups_info_parsed_from_proto = false;
 
   if (root_list.size() > 4u && root_list[4].is_dict()) {
-    const base::Value& extras = root_list[4];
+    const base::Value::Dict& extras = root_list[4].GetDict();
 
-    suggest_types = extras.FindListKey("google:suggesttype");
+    suggest_types = extras.FindList("google:suggesttype");
 
-    suggest_subtypes = extras.FindListKey("google:suggestsubtypes");
+    suggest_subtypes = extras.FindList("google:suggestsubtypes");
 
-    relevances = extras.FindListKey("google:suggestrelevance");
+    relevances = extras.FindList("google:suggestrelevance");
     // Discard this list if its size does not match that of the suggestions.
-    if (relevances && relevances->GetList().size() != results_list.size()) {
+    if (relevances && relevances->size() != results_list.size()) {
       relevances = nullptr;
     }
 
     if (absl::optional<int> relevance =
-            extras.FindIntKey("google:verbatimrelevance")) {
+            extras.FindInt("google:verbatimrelevance")) {
       results->verbatim_relevance = *relevance;
     }
 
     // Check if the active suggest field trial (if any) has triggered either
     // for the default provider or keyword provider.
     absl::optional<bool> field_trial_triggered =
-        extras.FindBoolKey("google:fieldtrialtriggered");
+        extras.FindBool("google:fieldtrialtriggered");
     results->field_trial_triggered = field_trial_triggered.value_or(false);
 
     results->experiment_stats_v2s.clear();
-    const base::Value* experiment_stats_v2s_value =
-        extras.FindListKey("google:experimentstats");
-    const base::Value::List* experiment_stats_v2s_list = nullptr;
-    if (experiment_stats_v2s_value) {
-      experiment_stats_v2s_list = experiment_stats_v2s_value->GetIfList();
-    }
+    const base::Value::List* experiment_stats_v2s_list =
+        extras.FindList("google:experimentstats");
     if (experiment_stats_v2s_list) {
       for (const auto& experiment_stats_v2_value : *experiment_stats_v2s_list) {
         const base::Value::Dict* experiment_stats_v2_dict =
@@ -607,74 +657,41 @@ bool SearchSuggestionParser::ParseSuggestResults(
         if (!type_int || !string_value) {
           continue;
         }
-        metrics::ChromeSearchboxStats::ExperimentStatsV2 experiment_stats_v2;
+        omnibox::metrics::ChromeSearchboxStats::ExperimentStatsV2
+            experiment_stats_v2;
         experiment_stats_v2.set_type_int(*type_int);
         experiment_stats_v2.set_string_value(*string_value);
         results->experiment_stats_v2s.push_back(std::move(experiment_stats_v2));
       }
     }
 
-    const auto* groups_info_string = extras.FindStringKey("google:groupsinfo");
-    std::string groups_info_decoded;
-    if (groups_info_string && !groups_info_string->empty() &&
-        base::Base64Decode(*groups_info_string, &groups_info_decoded) &&
-        !groups_info_decoded.empty()) {
-      groups_info_parsed_from_proto =
-          groups_info.ParseFromString(groups_info_decoded);
-    }
+    const auto* groups_info_string = extras.FindString("google:groupsinfo");
+    DecodeProtoFromBase64<omnibox::GroupsInfo>(groups_info_string, groups_info);
 
-    const base::Value* header_texts = extras.FindDictKey("google:headertexts");
-    if (!groups_info_parsed_from_proto && header_texts) {
-      const base::Value* headers = header_texts->FindDictKey("a");
-      if (headers) {
-        for (auto it : headers->DictItems()) {
-          int suggestion_group_id;
-          if (base::StringToInt(it.first, &suggestion_group_id) &&
-              it.second.is_string()) {
-            (*groups_info.mutable_group_configs())[suggestion_group_id]
-                .set_header_text(it.second.GetString());
-          }
-        }
-      }
-
-      const base::Value* hidden_group_ids = header_texts->FindListKey("h");
-      if (hidden_group_ids) {
-        for (const auto& value : hidden_group_ids->GetList()) {
-          if (value.is_int()) {
-            auto it = groups_info.mutable_group_configs()->find(value.GetInt());
-            if (it != groups_info.mutable_group_configs()->end()) {
-              it->second.set_visibility(omnibox::GroupConfig_Visibility_HIDDEN);
-            }
-          }
-        }
-      }
-    }
-
-    const base::Value* client_data = extras.FindDictKey("google:clientdata");
+    const base::Value::Dict* client_data = extras.FindDict("google:clientdata");
     if (client_data) {
-      prefetch_index = client_data->FindIntKey("phi").value_or(-1);
-      prerender_index = client_data->FindIntKey("pre").value_or(-1);
+      prefetch_index = client_data->FindInt("phi").value_or(-1);
+      prerender_index = client_data->FindInt("pre").value_or(-1);
     }
 
-    suggestion_details = extras.FindListKey("google:suggestdetail");
+    suggestion_details = extras.FindList("google:suggestdetail");
     // Discard this list if its size does not match that of the suggestions.
     if (suggestion_details &&
-        suggestion_details->GetList().size() != results_list.size()) {
+        suggestion_details->size() != results_list.size()) {
       suggestion_details = nullptr;
     }
 
     // Legacy code: Get subtype identifiers.
-    subtype_identifiers = extras.FindListKey("google:subtypeid");
+    subtype_identifiers = extras.FindList("google:subtypeid");
     // Discard this list if its size does not match that of the suggestions.
     if (subtype_identifiers &&
-        subtype_identifiers->GetList().size() != results_list.size()) {
+        subtype_identifiers->size() != results_list.size()) {
       subtype_identifiers = nullptr;
     }
 
     // Store the metadata that came with the response in case we need to pass
     // it along with the prefetch query to Instant.
-    JSONStringValueSerializer json_serializer(&results->metadata);
-    json_serializer.Serialize(extras);
+    base::JSONWriter::Write(extras, &results->metadata);
   }
 
   // Processed list of match subtypes, one vector per match.
@@ -690,7 +707,7 @@ bool SearchSuggestionParser::ParseSuggestResults(
   std::string type;
   int relevance = default_result_relevance;
   const std::u16string& trimmed_input =
-      base::CollapseWhitespace(input.text(), false);
+      base::CollapseWhitespace(input_text, false);
 
   for (size_t index = 0;
        index < results_list.size() && results_list[index].is_string();
@@ -705,36 +722,36 @@ bool SearchSuggestionParser::ParseSuggestResults(
 
     // Apply valid suggested relevance scores; discard invalid lists.
     if (relevances) {
-      if (!relevances->GetList()[index].is_int()) {
+      if (!(*relevances)[index].is_int()) {
         relevances = nullptr;
       } else {
-        relevance = relevances->GetList()[index].GetInt();
+        relevance = (*relevances)[index].GetInt();
       }
     }
 
     AutocompleteMatchType::Type match_type =
         AutocompleteMatchType::SEARCH_SUGGEST;
+    omnibox::SuggestType suggest_type = omnibox::TYPE_QUERY;
 
     // Legacy code: if the server sends us a single subtype ID, place it beside
     // other subtypes.
-    if (subtype_identifiers && index < subtype_identifiers->GetList().size() &&
-        subtype_identifiers->GetList()[index].is_int()) {
-      subtypes[index].emplace_back(
-          subtype_identifiers->GetList()[index].GetInt());
+    if (subtype_identifiers && index < subtype_identifiers->size() &&
+        (*subtype_identifiers)[index].is_int()) {
+      subtypes[index].emplace_back((*subtype_identifiers)[index].GetInt());
     }
 
-    if (suggest_types && index < suggest_types->GetList().size() &&
-        suggest_types->GetList()[index].is_string()) {
-      match_type =
-          GetAutocompleteMatchType(suggest_types->GetList()[index].GetString());
+    if (suggest_types && index < suggest_types->size() &&
+        (*suggest_types)[index].is_string()) {
+      suggest_type = GetSuggestType((*suggest_types)[index].GetString());
+      match_type = GetAutocompleteMatchType(suggest_type);
     }
 
     std::string deletion_url;
-    if (suggestion_details && index < suggestion_details->GetList().size() &&
-        suggestion_details->GetList()[index].is_dict()) {
-      const base::Value& suggestion_detail =
-          suggestion_details->GetList()[index];
-      deletion_url = FindStringKeyOrEmpty(suggestion_detail, "du");
+    if (suggestion_details && index < suggestion_details->size() &&
+        (*suggestion_details)[index].is_dict()) {
+      const base::Value::Dict& suggestion_detail =
+          (*suggestion_details)[index].GetDict();
+      deletion_url = FindStringOrEmpty(suggestion_detail, "du");
     }
 
     if ((match_type == AutocompleteMatchType::NAVSUGGEST) ||
@@ -752,9 +769,9 @@ bool SearchSuggestionParser::ParseSuggestResults(
           }
         }
         results->navigation_results.push_back(NavigationResult(
-            scheme_classifier, url, match_type, subtypes[index], title,
-            deletion_url, is_keyword_result, relevance, relevances != nullptr,
-            input.text()));
+            scheme_classifier, url, match_type, suggest_type, subtypes[index],
+            title, deletion_url, is_keyword_result, relevance,
+            relevances != nullptr, input_text));
       }
     } else {
       std::u16string annotation;
@@ -770,50 +787,54 @@ bool SearchSuggestionParser::ParseSuggestResults(
             continue;
         }
         if (ui::GetDeviceFormFactor() == ui::DEVICE_FORM_FACTOR_DESKTOP) {
-          annotation = has_equals_prefix ? suggestion : match_contents;
-          match_contents = query;
+          if (OmniboxFieldTrial::IsUniformRowHeightEnabled()) {
+            // If calculator results are going to be displayed on 1 line,
+            // keep everything in the match contents
+            match_contents = l10n_util::GetStringFUTF16(
+                IDS_OMNIBOX_ONE_LINE_CALCULATOR_SUGGESTION_TEMPLATE, query,
+                suggestion);
+          } else {
+            annotation = has_equals_prefix ? suggestion : match_contents;
+            match_contents = query;
+          }
         }
       }
 
       std::u16string match_contents_prefix;
       SuggestionAnswer answer;
       bool answer_parsed_successfully = false;
-      std::string image_dominant_color;
-      std::string image_url;
-      std::string additional_query_params;
-      std::string entity_id;
       absl::optional<int> suggestion_group_id;
+      omnibox::EntityInfo entity_info;
 
-      if (suggestion_details &&
-          suggestion_details->GetList()[index].is_dict() &&
-          !suggestion_details->GetList()[index].DictEmpty()) {
-        const base::Value& suggestion_detail =
-            suggestion_details->GetList()[index];
-        match_contents =
-            base::UTF8ToUTF16(FindStringKeyOrEmpty(suggestion_detail, "t"));
-        if (match_contents.empty()) {
-          match_contents = suggestion;
+      if (suggestion_details && (*suggestion_details)[index].is_dict() &&
+          !(*suggestion_details)[index].GetDict().empty()) {
+        const base::Value::Dict& suggestion_detail =
+            (*suggestion_details)[index].GetDict();
+
+        const auto* entity_info_string =
+            suggestion_detail.FindString("google:entityinfo");
+        DecodeProtoFromBase64<omnibox::EntityInfo>(entity_info_string,
+                                                   entity_info);
+
+        // Tail Suggest.
+        std::string match_contents_tail =
+            FindStringOrEmpty(suggestion_detail, "t");
+        if (!match_contents_tail.empty()) {
+          match_contents = base::UTF8ToUTF16(match_contents_tail);
         }
         match_contents_prefix =
-            base::UTF8ToUTF16(FindStringKeyOrEmpty(suggestion_detail, "mp"));
-        annotation =
-            base::UTF8ToUTF16(FindStringKeyOrEmpty(suggestion_detail, "a"));
-        image_dominant_color = FindStringKeyOrEmpty(suggestion_detail, "dc");
-        image_url = FindStringKeyOrEmpty(suggestion_detail, "i");
-        additional_query_params = FindStringKeyOrEmpty(suggestion_detail, "q");
-        entity_id = FindStringKeyOrEmpty(suggestion_detail, "zae");
+            base::UTF8ToUTF16(FindStringOrEmpty(suggestion_detail, "mp"));
 
         // Suggestion group Id.
-        suggestion_group_id = suggestion_detail.FindIntKey("zl");
+        suggestion_group_id = suggestion_detail.FindInt("zl");
 
         // Extract the Answer, if provided.
-        const base::Value* answer_json = suggestion_detail.FindDictKey("ansa");
-        const std::string* answer_type =
-            suggestion_detail.FindStringKey("ansb");
+        const base::Value::Dict* answer_json =
+            suggestion_detail.FindDict("ansa");
+        const std::string* answer_type = suggestion_detail.FindString("ansb");
         if (answer_json && answer_type) {
-          if (SuggestionAnswer::ParseAnswer(answer_json->GetDict(),
-                                            base::UTF8ToUTF16(*answer_type),
-                                            &answer)) {
+          if (SuggestionAnswer::ParseAnswer(
+                  *answer_json, base::UTF8ToUTF16(*answer_type), &answer)) {
             base::UmaHistogramSparse("Omnibox.AnswerParseType", answer.type());
             answer_parsed_successfully = true;
           }
@@ -826,78 +847,50 @@ bool SearchSuggestionParser::ParseSuggestResults(
       bool should_prefetch = int_index == prefetch_index;
       bool should_prerender = int_index == prerender_index;
       results->suggest_results.push_back(SuggestResult(
-          suggestion, match_type, subtypes[index],
-          base::CollapseWhitespace(match_contents, false),
-          match_contents_prefix, annotation, additional_query_params, entity_id,
-          deletion_url, image_dominant_color, image_url, is_keyword_result,
-          relevance, relevances != nullptr, should_prefetch, should_prerender,
-          trimmed_input));
+          suggestion, match_type, suggest_type, subtypes[index], match_contents,
+          match_contents_prefix, annotation, std::move(entity_info),
+          deletion_url, is_keyword_result, relevance, relevances != nullptr,
+          should_prefetch, should_prerender, trimmed_input));
 
       if (answer_parsed_successfully) {
         results->suggest_results.back().SetAnswer(answer);
       }
 
       if (suggestion_group_id) {
-        // Do not use omnibox::GroupIdForNumber() because |suggestion_group_id|
-        // may not be present in omnibox::GroupId. However, casting int values
-        // into omnibox::GroupId enum without testing membership is expected to
-        // be safe as omnibox::GroupId enum has a fixed int underlying type.
-        // TODO(crbug.com/1343512): Use omnibox::GroupIdForNumber() once the
-        //  server response migrates to a serialized omnibox::GroupsInfo proto.
         results->suggest_results.back().set_suggestion_group_id(
-            static_cast<omnibox::GroupId>(*suggestion_group_id));
+            omnibox::GroupIdForNumber(*suggestion_group_id));
       }
     }
   }
 
   results->relevances_from_server = relevances != nullptr;
 
-  // Keeps the mapping from server-provided group IDs to those known to Chrome.
-  std::unordered_map<omnibox::GroupId, omnibox::GroupId> chrome_group_ids_map;
+  // Keeps track of the position of the server-provided group IDs.
+  size_t group_index = 0;
 
   // Adds the given group config to the results for the given group ID. Returns
   // true if the entry was added to or was already present in the results.
   auto add_group_config = [&](const omnibox::GroupId suggestion_group_id,
                               const omnibox::GroupConfig& group_config) {
-    // The group config is already added if the group ID was seen before.
-    if (base::Contains(chrome_group_ids_map, suggestion_group_id)) {
-      return true;
-    }
-
-    // Assign a 0-based index to the group based on the number of groups so far.
-    const int group_index = chrome_group_ids_map.size();
-
-    // Convert the server-provided group ID to one known to Chrome; unless
-    // |groups_info| is parsed from a serialized proto in "google:groupsinfo",
-    // in which case server-provided group IDs are present in omnibox::GroupId.
-    // TODO(crbug.com/1343512): Simplify this logic once the server response has
-    // migrated to a serialized omnibox::GroupsInfo in "google:groupsinfo".
-    const auto chrome_group_id = groups_info_parsed_from_proto
-                                     ? suggestion_group_id
-                                     : ChromeGroupIdForRemoteGroupIdAndIndex(
-                                           suggestion_group_id, group_index);
-
-    // Do not add the group config if Chrome ran out of group IDs to assign or
-    // if the group ID was invalid to begin with.
-    if (chrome_group_id == omnibox::GROUP_INVALID) {
+    // Do not add the group config if the group ID is invalid or unknown to
+    // Chrome.
+    if (suggestion_group_id == omnibox::GROUP_INVALID) {
       return false;
     }
 
-    // Remember the conversion.
-    chrome_group_ids_map[suggestion_group_id] = chrome_group_id;
-
     // There is nothing to do if the group config has been added before.
-    if (base::Contains(results->suggestion_groups_map, chrome_group_id)) {
+    if (base::Contains(results->suggestion_groups_map, suggestion_group_id)) {
       return true;
     }
 
     // Store the group config with the appropriate section in the results.
-    results->suggestion_groups_map[chrome_group_id].MergeFrom(group_config);
-    results->suggestion_groups_map[chrome_group_id].set_section(
-        ChromeGroupSectionForRemoteGroupIndex(group_index));
+    results->suggestion_groups_map[suggestion_group_id].MergeFrom(group_config);
+    results->suggestion_groups_map[suggestion_group_id].set_section(
+        ChromeGroupSectionForRemoteGroupIndex(group_index++));
     return true;
   };
 
+  // Add the group configs associated with the suggestions.
   for (auto& suggest_result : results->suggest_results) {
     if (!suggest_result.suggestion_group_id().has_value()) {
       continue;
@@ -908,17 +901,12 @@ bool SearchSuggestionParser::ParseSuggestResults(
 
     // Add the group config associated with the suggestion, if the suggestion
     // has a valid group ID and a corresponding group config is found in the
-    // response. Note that a group ID is deemed invalid if Chrome runs out of
-    // group IDs to assign or if the group ID was invalid to begin with.
+    // response.
     if (!base::Contains(groups_info.group_configs(), suggestion_group_id) ||
         !add_group_config(suggestion_group_id, groups_info.group_configs().at(
                                                    suggestion_group_id))) {
       continue;
     }
-
-    // Update the group ID in the suggestion.
-    suggest_result.set_suggestion_group_id(
-        chrome_group_ids_map[suggestion_group_id]);
   }
 
   // Add the remaining group configs without any suggestions in the response.
@@ -926,13 +914,7 @@ bool SearchSuggestionParser::ParseSuggestResults(
   // produced by Chrome and relies on the server-provided group config to show
   // with the appropriate header text, where a header text is applicable.
   for (const auto& entry : groups_info.group_configs()) {
-    // Do not use omnibox::GroupIdForNumber() because |groups_info| keys may not
-    // be present in omnibox::GroupId. However, casting int values into
-    // omnibox::GroupId enum without testing membership is expected to be safe
-    // as omnibox::GroupId enum has a fixed int underlying type.
-    // TODO(crbug.com/1343512): Use omnibox::GroupIdForNumber() once the server
-    //  response migrates to a serialized omnibox::GroupsInfo proto.
-    add_group_config(static_cast<omnibox::GroupId>(entry.first), entry.second);
+    add_group_config(omnibox::GroupIdForNumber(entry.first), entry.second);
   }
 
   return true;

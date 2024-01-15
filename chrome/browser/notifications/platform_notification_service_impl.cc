@@ -9,13 +9,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "chrome/browser/browser_features.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/metrics/ukm_background_recorder_service.h"
@@ -37,6 +38,7 @@
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
+#include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/platform_notification_context.h"
 #include "content/public/browser/storage_partition.h"
@@ -47,8 +49,10 @@
 #include "third_party/blink/public/mojom/notifications/notification.mojom.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/message_center/public/cpp/notification.h"
 #include "ui/message_center/public/cpp/notification_types.h"
 #include "ui/message_center/public/cpp/notifier_id.h"
+#include "ui/strings/grit/ui_strings.h"
 #include "url/origin.h"
 
 #if !BUILDFLAG(IS_ANDROID)
@@ -83,7 +87,7 @@ static bool ShouldDisplayWebNotificationOnFullScreen(Profile* profile,
 #else
   // Check to see if this notification comes from a webpage that is displaying
   // fullscreen content.
-  for (auto* browser : *BrowserList::GetInstance()) {
+  for (Browser* browser : *BrowserList::GetInstance()) {
     // Only consider the browsers for the profile that created the notification
     if (browser->profile() != profile)
       continue;
@@ -179,15 +183,12 @@ void PlatformNotificationServiceImpl::OnContentSettingChanged(
     return;
 
   auto recorder = base::MakeRefCounted<RevokeDeleteCountRecorder>();
-  profile_->ForEachStoragePartition(
-      base::BindRepeating(
-          [](scoped_refptr<RevokeDeleteCountRecorder> recorder,
-             content::StoragePartition* partition) {
-            partition->GetPlatformNotificationContext()
-                ->DeleteAllNotificationDataForBlockedOrigins(base::BindOnce(
-                    &RevokeDeleteCountRecorder::OnDeleted, recorder));
-          },
-          recorder));
+  profile_->ForEachLoadedStoragePartition(
+      [&](content::StoragePartition* partition) {
+        partition->GetPlatformNotificationContext()
+            ->DeleteAllNotificationDataForBlockedOrigins(base::BindOnce(
+                &RevokeDeleteCountRecorder::OnDeleted, recorder));
+      });
 }
 
 bool PlatformNotificationServiceImpl::WasClosedProgrammatically(
@@ -267,6 +268,10 @@ void PlatformNotificationServiceImpl::DisplayPersistentNotification(
 
   NotificationMetricsLoggerFactory::GetForBrowserContext(profile_)
       ->LogPersistentNotificationShown();
+  if (safe_browsing::IsEnhancedProtectionEnabled(*profile_->GetPrefs())) {
+    NotificationMetricsLoggerFactory::GetForBrowserContext(profile_)
+        ->LogPersistentNotificationSize(profile_, notification_data, origin);
+  }
 
   if (base::FeatureList::IsEnabled(
           permissions::features::kNotificationInteractionHistory)) {
@@ -321,6 +326,25 @@ void PlatformNotificationServiceImpl::GetDisplayedNotifications(
       std::move(callback));
 }
 
+void PlatformNotificationServiceImpl::GetDisplayedNotificationsForOrigin(
+    const GURL& origin,
+    DisplayedNotificationsCallback callback) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  if (g_browser_process->IsShuttingDown() || !profile_) {
+    return;
+  }
+
+  // Tests will not have a message center.
+  if (profile_->AsTestingProfile()) {
+    std::set<std::string> displayed_notifications;
+    std::move(callback).Run(std::move(displayed_notifications),
+                            false /* supports_synchronization */);
+    return;
+  }
+  NotificationDisplayServiceFactory::GetForProfile(profile_)
+      ->GetDisplayedForOrigin(origin, std::move(callback));
+}
+
 void PlatformNotificationServiceImpl::ScheduleTrigger(base::Time timestamp) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   if (g_browser_process->IsShuttingDown() || !profile_)
@@ -333,7 +357,6 @@ void PlatformNotificationServiceImpl::ScheduleTrigger(base::Time timestamp) {
   if (current_trigger > timestamp)
     prefs->SetTime(prefs::kNotificationNextTriggerTime, timestamp);
 
-  trigger_scheduler_->ScheduleTrigger(timestamp);
 }
 
 base::Time PlatformNotificationServiceImpl::ReadNextTriggerTimestamp() {
@@ -451,6 +474,13 @@ PlatformNotificationServiceImpl::CreateNotificationFromData(
   optional_fields.settings_button_handler =
       message_center::SettingsButtonHandler::INLINE;
 
+  // TODO(https://crbug.com/1468301): We can do a better job than basing this
+  // purely on `web_app_hint_url`, for example for non-persistent notifications
+  // triggered from workers (where `web_app_hint_url` is always blank) but also
+  // for persistent notifications triggered from web pages (where the page url
+  // might be a better "hint" than the service worker scope).
+  absl::optional<webapps::AppId> web_app_id = FindWebAppId(web_app_hint_url);
+
   absl::optional<WebAppIconAndTitle> web_app_icon_and_title;
 #if BUILDFLAG(IS_CHROMEOS)
   web_app_icon_and_title = FindWebAppIconAndTitle(web_app_hint_url);
@@ -465,9 +495,11 @@ PlatformNotificationServiceImpl::CreateNotificationFromData(
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
   message_center::NotifierId notifier_id(
-      origin, web_app_icon_and_title
-                  ? absl::make_optional(web_app_icon_and_title->title)
-                  : absl::nullopt);
+      origin,
+      web_app_icon_and_title
+          ? absl::make_optional(web_app_icon_and_title->title)
+          : absl::nullopt,
+      web_app_id);
 
   // TODO(peter): Handle different screen densities instead of always using the
   // 1x bitmap - crbug.com/585815.
@@ -528,6 +560,35 @@ PlatformNotificationServiceImpl::CreateNotificationFromData(
   if (notification_data.require_interaction)
     notification.set_never_timeout(true);
 
+  notification.set_scenario(message_center::NotificationScenario::DEFAULT);
+  if (base::FeatureList::IsEnabled(features::kIncomingCallNotifications) &&
+      notification_data.scenario ==
+          blink::mojom::NotificationScenario::INCOMING_CALL) {
+    // If the origin is not installed, the notification scenario should be set
+    // to DEFAULT.
+    if (IsActivelyInstalledWebAppScope(web_app_hint_url)) {
+      notification.set_scenario(
+          message_center::NotificationScenario::INCOMING_CALL);
+    } else {
+      notification.set_scenario(message_center::NotificationScenario::DEFAULT);
+    }
+
+    // Create the default incoming call dismiss button and set the button types
+    // accordingly to fit the incoming call scenario - i.e., developer supplied
+    // action buttond are of type ButtonType::ACKNOWLEDGE and the default dimiss
+    // button is of type ButtonType::DISMISS
+    message_center::ButtonInfo default_dismiss_button(
+        l10n_util::GetStringUTF16(IDS_APP_CLOSE));
+    default_dismiss_button.type = message_center::ButtonType::DISMISS;
+    for (auto& button : buttons) {
+      button.type = message_center::ButtonType::ACKNOWLEDGE;
+    }
+    // Insert the default dismiss button at the end of the vector and reset the
+    // notification buttons.
+    buttons.push_back(default_dismiss_button);
+    notification.set_buttons(buttons);
+  }
+
   return notification;
 }
 
@@ -548,6 +609,20 @@ std::u16string PlatformNotificationServiceImpl::DisplayNameForContextMessage(
   return std::u16string();
 }
 
+absl::optional<webapps::AppId> PlatformNotificationServiceImpl::FindWebAppId(
+    const GURL& web_app_hint_url) const {
+#if !BUILDFLAG(IS_ANDROID)
+  web_app::WebAppProvider* web_app_provider =
+      web_app::WebAppProvider::GetForLocalAppsUnchecked(profile_);
+  if (web_app_provider) {
+    return web_app_provider->registrar_unsafe().FindInstalledAppWithUrlInScope(
+        web_app_hint_url);
+  }
+#endif
+
+  return absl::nullopt;
+}
+
 absl::optional<PlatformNotificationServiceImpl::WebAppIconAndTitle>
 PlatformNotificationServiceImpl::FindWebAppIconAndTitle(
     const GURL& web_app_hint_url) const {
@@ -555,14 +630,15 @@ PlatformNotificationServiceImpl::FindWebAppIconAndTitle(
   web_app::WebAppProvider* web_app_provider =
       web_app::WebAppProvider::GetForLocalAppsUnchecked(profile_);
   if (web_app_provider) {
-    const absl::optional<web_app::AppId> app_id =
-        web_app_provider->registrar().FindAppWithUrlInScope(web_app_hint_url);
+    const absl::optional<webapps::AppId> app_id =
+        web_app_provider->registrar_unsafe().FindAppWithUrlInScope(
+            web_app_hint_url);
     if (app_id) {
       absl::optional<WebAppIconAndTitle> icon_and_title;
       icon_and_title.emplace();
 
       icon_and_title->title = base::UTF8ToUTF16(
-          web_app_provider->registrar().GetAppShortName(*app_id));
+          web_app_provider->registrar_unsafe().GetAppShortName(*app_id));
       icon_and_title->icon =
           web_app_provider->icon_manager().GetMonochromeFavicon(*app_id);
       return icon_and_title;
@@ -571,4 +647,25 @@ PlatformNotificationServiceImpl::FindWebAppIconAndTitle(
 #endif
 
   return absl::nullopt;
+}
+
+bool PlatformNotificationServiceImpl::IsActivelyInstalledWebAppScope(
+    const GURL& web_app_url) const {
+#if BUILDFLAG(IS_ANDROID)
+  // TODO(peter): Investigate whether it makes sense to consider installed
+  // WebAPKs and TWAs on Android here, when depending features are considered.
+  return false;
+#else
+  web_app::WebAppProvider* web_app_provider =
+      web_app::WebAppProvider::GetForLocalAppsUnchecked(profile_);
+  if (!web_app_provider) {
+    return false;
+  }
+
+  const absl::optional<webapps::AppId> app_id =
+      web_app_provider->registrar_unsafe().FindAppWithUrlInScope(web_app_url);
+  return app_id.has_value() &&
+         web_app_provider->registrar_unsafe().IsActivelyInstalled(
+             app_id.value());
+#endif
 }

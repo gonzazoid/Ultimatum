@@ -11,11 +11,12 @@
 #include "base/sequence_checker.h"
 #include "base/task/cancelable_task_tracker.h"
 #include "base/timer/timer.h"
+#include "base/types/optional_ref.h"
 #include "components/browsing_data/core/counters/browsing_data_counter.h"
 #include "components/browsing_data/core/counters/sync_tracker.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/browser/web_history_service.h"
-#include "components/sync/driver/sync_service.h"
+#include "components/sync/service/sync_service.h"
 
 namespace browsing_data {
 
@@ -55,7 +56,7 @@ class HistoryCounter : public browsing_data::BrowsingDataCounter {
 
   void OnGetLocalHistoryCount(history::HistoryCountResult result);
   void OnGetWebHistoryCount(history::WebHistoryService::Request* request,
-                            const base::Value* result);
+                            base::optional_ref<const base::Value::Dict> result);
   void OnWebHistoryTimeout();
   void MergeResults();
 
@@ -63,7 +64,7 @@ class HistoryCounter : public browsing_data::BrowsingDataCounter {
 
   bool IsHistorySyncEnabled(const syncer::SyncService* sync_service);
 
-  raw_ptr<history::HistoryService> history_service_;
+  raw_ptr<history::HistoryService, DanglingUntriaged> history_service_;
 
   GetUpdatedWebHistoryServiceCallback web_history_service_callback_;
 

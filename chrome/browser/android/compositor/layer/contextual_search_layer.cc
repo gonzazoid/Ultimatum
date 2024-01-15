@@ -4,11 +4,11 @@
 
 #include "chrome/browser/android/compositor/layer/contextual_search_layer.h"
 
-#include "cc/layers/layer.h"
-#include "cc/layers/nine_patch_layer.h"
-#include "cc/layers/solid_color_layer.h"
-#include "cc/layers/ui_resource_layer.h"
 #include "cc/resources/scoped_ui_resource.h"
+#include "cc/slim/layer.h"
+#include "cc/slim/nine_patch_layer.h"
+#include "cc/slim/solid_color_layer.h"
+#include "cc/slim/ui_resource_layer.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/android/resources/nine_patch_resource.h"
 #include "ui/android/resources/resource_manager.h"
@@ -48,15 +48,12 @@ void ContextualSearchLayer::SetProperties(
     int progress_bar_tint,
     int search_promo_resource_id,
     float dp_to_px,
-    const scoped_refptr<cc::Layer>& content_layer,
+    const scoped_refptr<cc::slim::Layer>& content_layer,
     bool search_promo_visible,
     float search_promo_height,
     float search_promo_opacity,
     int search_promo_background_color,
     // Related Searches
-    int related_searches_in_content_resource_id,
-    bool related_searches_in_content_visible,
-    float related_searches_in_content_height,
     int related_searches_in_bar_resource_id,
     bool related_searches_in_bar_visible,
     float related_searches_in_bar_height,
@@ -108,8 +105,7 @@ void ContextualSearchLayer::SetProperties(
       open_tab_icon_resource_id, close_icon_resource_id);
 
   //  TODO(donnd): Update when moving Related Searches.
-  float content_view_top = search_bar_bottom + search_promo_height +
-                           related_searches_in_content_height;
+  float content_view_top = search_bar_bottom + search_promo_height;
   float should_render_bar_border = search_bar_border_visible
       && !should_render_progress_bar;
 
@@ -168,33 +164,6 @@ void ContextualSearchLayer::SetProperties(
   } else if (related_searches_in_bar_.get() &&
              related_searches_in_bar_->parent()) {
     related_searches_in_bar_->RemoveFromParent();
-  }
-
-  // ---------------------------------------------------------------------------
-  // Related Searches In-Content Control
-  // ---------------------------------------------------------------------------
-  if (related_searches_in_content_visible) {
-    // Grabs the Related Searches in-content resource.
-    ui::Resource* related_searches_resource =
-        resource_manager_->GetResource(ui::ANDROID_RESOURCE_TYPE_DYNAMIC,
-                                       related_searches_in_content_resource_id);
-    DCHECK(related_searches_resource);
-    if (related_searches_resource) {
-      int related_searches_height = related_searches_resource->size().height();
-      gfx::Size related_searches_size(search_panel_width,
-                                      related_searches_height);
-      if (related_searches_in_content_->parent() != layer_)
-        layer_->AddChild(related_searches_in_content_);
-      related_searches_in_content_->SetUIResourceId(
-          related_searches_resource->ui_resource()->id());
-      related_searches_in_content_->SetBounds(related_searches_size);
-      related_searches_in_content_->SetPosition(
-          gfx::PointF(0.f, next_section_top));
-      next_section_top += related_searches_height;
-    }
-  } else if (related_searches_in_content_.get() &&
-             related_searches_in_content_->parent()) {
-    related_searches_in_content_->RemoveFromParent();
   }
 
   // ---------------------------------------------------------------------------
@@ -280,7 +249,7 @@ void ContextualSearchLayer::SetProperties(
                  custom_image_visibility_percentage);
 }
 
-scoped_refptr<cc::Layer> ContextualSearchLayer::GetIconLayer() {
+scoped_refptr<cc::slim::Layer> ContextualSearchLayer::GetIconLayer() {
   return icon_layer_;
 }
 
@@ -292,8 +261,6 @@ void ContextualSearchLayer::SetupIconLayer(
     float custom_image_visibility_percentage) {
   icon_layer_->SetBounds(gfx::Size(bar_image_size_, bar_image_size_));
   icon_layer_->SetMasksToBounds(true);
-
-  scoped_refptr<cc::UIResourceLayer> custom_image_layer;
 
   if (quick_action_icon_visible) {
     if (quick_action_icon_layer_->parent() != icon_layer_)
@@ -354,7 +321,7 @@ void ContextualSearchLayer::SetupIconLayer(
 }
 
 void ContextualSearchLayer::SetCustomImageProperties(
-    scoped_refptr<cc::UIResourceLayer> custom_image_layer,
+    scoped_refptr<cc::slim::UIResourceLayer> custom_image_layer,
     float top_margin,
     float side_margin,
     float visibility_percentage) {
@@ -432,7 +399,7 @@ int ContextualSearchLayer::SetupTextLayer(float content_top,
 
   // The Term might not be visible or initialized yet, so set up main_text with
   // whichever main bar text seems appropriate.
-  scoped_refptr<cc::UIResourceLayer> main_text =
+  scoped_refptr<cc::slim::UIResourceLayer> main_text =
       (bar_text_visible ? bar_text_ : search_context_);
 
   // The search_caption_ may not have had it's resource set by this point, if so
@@ -591,18 +558,17 @@ void ContextualSearchLayer::SetThumbnail(const SkBitmap* thumbnail) {
 ContextualSearchLayer::ContextualSearchLayer(
     ui::ResourceManager* resource_manager)
     : OverlayPanelLayer(resource_manager),
-      search_context_(cc::UIResourceLayer::Create()),
-      icon_layer_(cc::Layer::Create()),
-      search_provider_icon_layer_(cc::UIResourceLayer::Create()),
-      thumbnail_layer_(cc::UIResourceLayer::Create()),
-      quick_action_icon_layer_(cc::UIResourceLayer::Create()),
-      search_promo_(cc::UIResourceLayer::Create()),
-      search_promo_container_(cc::SolidColorLayer::Create()),
-      related_searches_in_bar_(cc::UIResourceLayer::Create()),
-      related_searches_in_content_(cc::UIResourceLayer::Create()),
-      search_caption_(cc::UIResourceLayer::Create()),
-      text_layer_(cc::UIResourceLayer::Create()),
-      touch_highlight_layer_(cc::SolidColorLayer::Create()) {
+      search_context_(cc::slim::UIResourceLayer::Create()),
+      icon_layer_(cc::slim::Layer::Create()),
+      search_provider_icon_layer_(cc::slim::UIResourceLayer::Create()),
+      thumbnail_layer_(cc::slim::UIResourceLayer::Create()),
+      quick_action_icon_layer_(cc::slim::UIResourceLayer::Create()),
+      search_promo_(cc::slim::UIResourceLayer::Create()),
+      search_promo_container_(cc::slim::SolidColorLayer::Create()),
+      related_searches_in_bar_(cc::slim::UIResourceLayer::Create()),
+      search_caption_(cc::slim::UIResourceLayer::Create()),
+      text_layer_(cc::slim::UIResourceLayer::Create()),
+      touch_highlight_layer_(cc::slim::SolidColorLayer::Create()) {
   // Search Bar Text
   search_context_->SetIsDrawable(true);
 
@@ -617,7 +583,6 @@ ContextualSearchLayer::ContextualSearchLayer(
 
   // Related Searches sections
   related_searches_in_bar_->SetIsDrawable(true);
-  related_searches_in_content_->SetIsDrawable(true);
 
   // Icon - holds thumbnail, search provider icon and/or quick action icon
   icon_layer_->SetIsDrawable(true);

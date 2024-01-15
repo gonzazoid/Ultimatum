@@ -10,8 +10,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/process/process.h"
 #include "base/sync_socket.h"
@@ -64,7 +64,7 @@ class SyncReader : public OutputController::SyncReader {
   // OutputController::SyncReader implementation.
   void RequestMoreData(base::TimeDelta delay,
                        base::TimeTicks delay_timestamp,
-                       int prior_frames_skipped) override;
+                       const media::AudioGlitchInfo& glitch_info) override;
   void Read(media::AudioBus* dest, bool is_mixing) override;
   void Close() override;
 
@@ -78,7 +78,7 @@ class SyncReader : public OutputController::SyncReader {
   base::UnsafeSharedMemoryRegion shared_memory_region_;
   base::WritableSharedMemoryMapping shared_memory_mapping_;
 
-  const media::AudioLatency::LatencyType latency_tag_;
+  const media::AudioLatency::Type latency_tag_;
 
   // Mutes all incoming samples. This is used to prevent audible sound
   // during automated testing.
@@ -107,6 +107,14 @@ class SyncReader : public OutputController::SyncReader {
   // The index of the audio buffer we're expecting to be sent from the renderer;
   // used to block with timeout for audio data.
   uint32_t buffer_index_{0};
+
+  // Tracks the glitch info that we should send over IPC. This is only reset
+  // once we have confirmation that the info has been received by the other
+  // side.
+  media::AudioGlitchInfo pending_glitch_info_;
+
+  // The glitch information of a single read timeout glitch.
+  const media::AudioGlitchInfo read_timeout_glitch_;
 
   std::unique_ptr<OutputGlitchCounter> glitch_counter_;
 };

@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
@@ -18,9 +18,6 @@
 #include "components/signin/public/identity_manager/account_info.h"
 #include "components/sync/base/extensions_activity.h"
 #include "components/sync/base/model_type.h"
-#include "components/sync/base/weak_handle.h"
-#include "components/sync/engine/configure_reason.h"
-#include "components/sync/engine/cycle/sync_cycle_snapshot.h"
 #include "components/sync/engine/model_type_configurer.h"
 #include "components/sync/engine/shutdown_reason.h"
 #include "components/sync/engine/sync_credentials.h"
@@ -65,11 +62,11 @@ class SyncEngine : public ModelTypeConfigurer {
     GURL service_url;
     SyncEngine::HttpPostProviderFactoryGetter http_factory_getter;
     CoreAccountInfo authenticated_account_info;
-    std::string invalidator_client_id;
     std::unique_ptr<SyncManagerFactory> sync_manager_factory;
     bool enable_local_sync_backend = false;
     base::FilePath local_sync_backend_folder;
     std::unique_ptr<EngineComponentsFactory> engine_components_factory;
+    bool sync_poll_immediately_on_every_startup = false;
   };
 
   SyncEngine();
@@ -155,6 +152,11 @@ class SyncEngine : public ModelTypeConfigurer {
   // Returns current detailed status information.
   virtual const SyncStatus& GetDetailedStatus() const = 0;
 
+  // Returns types that have local changes yet to be synced to the server.
+  // ONLY CALL THIS IF OnInitializationComplete was called!
+  virtual void GetTypesWithUnsyncedData(
+      base::OnceCallback<void(ModelTypeSet)> cb) const = 0;
+
   // Determines if the underlying sync engine has made any local changes to
   // items that have not yet been synced with the server.
   // ONLY CALL THIS IF OnInitializationComplete was called!
@@ -179,11 +181,18 @@ class SyncEngine : public ModelTypeConfigurer {
   virtual void OnCookieJarChanged(bool account_mismatch,
                                   base::OnceClosure callback) = 0;
 
-  // Enables/Disables invalidations for session sync related datatypes.
-  virtual void SetInvalidationsForSessionsEnabled(bool enabled) = 0;
+  // Returns whether the poll interval elapsed since the last known poll time.
+  // If returns true, there will likely be the next PERIODIC sync cycle soon but
+  // it's not guaranteed, see SyncSchedulerImpl for details. Note that this may
+  // diverge from a real scheduled poll time because this method uses base::Time
+  // while scheduler uses base::TimeTicks (which may be paused in sleep mode).
+  virtual bool IsNextPollTimeInThePast() const = 0;
 
   // Returns a Value::List representing Nigori node.
   virtual void GetNigoriNodeForDebugging(AllNodesCallback callback) = 0;
+
+  // Record histograms related to Nigori type.
+  virtual void RecordNigoriMemoryUsageAndCountsHistograms() = 0;
 };
 
 }  // namespace syncer

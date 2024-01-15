@@ -14,7 +14,6 @@
 
 class BrowserView;
 class TabSearchBubbleHost;
-class WebAppFrameToolbarView;
 
 // Type used for functions whose return values depend on the active state of
 // the frame.
@@ -28,8 +27,9 @@ enum class BrowserFrameActiveState {
 // Browser-specific methods.
 class BrowserNonClientFrameView : public views::NonClientFrameView,
                                   public ProfileAttributesStorage::Observer {
+  METADATA_HEADER(BrowserNonClientFrameView, views::NonClientFrameView)
+
  public:
-  METADATA_HEADER(BrowserNonClientFrameView);
   // The minimum total height users should have to use as a drag handle to move
   // the window with.
   static constexpr int kMinimumDragHeight = 8;
@@ -58,6 +58,19 @@ class BrowserNonClientFrameView : public views::NonClientFrameView,
   virtual gfx::Rect GetBoundsForTabStripRegion(
       const gfx::Size& tabstrip_minimum_size) const = 0;
 
+  // Retrieves the maximum bounds in non-client view coordinates for the
+  // WebAppFrameToolbarView that contains Web App controls.
+  virtual gfx::Rect GetBoundsForWebAppFrameToolbar(
+      const gfx::Size& toolbar_preferred_size) const = 0;
+
+  // Lays out the window title for a web app within the given available space.
+  // Unlike the above GetBounds methods this is not just a method to return the
+  // bounds the title should occupy, since different implementations might also
+  // want to change other attributes of the title, such as alignment.
+  virtual void LayoutWebAppWindowTitle(
+      const gfx::Rect& available_space,
+      views::Label& window_title_label) const = 0;
+
   // Returns the inset of the topmost view in the client view from the top of
   // the non-client view. The topmost view depends on the window type. The
   // topmost view is the tab strip for tabbed browser windows, the toolbar for
@@ -65,9 +78,6 @@ class BrowserNonClientFrameView : public views::NonClientFrameView,
   // If |restored| is true, this is calculated as if the window was restored,
   // regardless of its current state.
   virtual int GetTopInset(bool restored) const = 0;
-
-  // Returns the amount that the theme background should be inset.
-  virtual int GetThemeBackgroundXInset() const = 0;
 
   // Updates the top UI state to be hidden or shown in fullscreen according to
   // the preference's state. Currently only used on Mac.
@@ -105,13 +115,9 @@ class BrowserNonClientFrameView : public views::NonClientFrameView,
   // tabstrip background.
   virtual SkColor GetFrameColor(BrowserFrameActiveState active_state) const;
 
-  // Called by BrowserView to signal the frame color has changed and needs
-  // to be repainted.
-  virtual void UpdateFrameColor();
-
   // For non-transparent windows, returns the background tab image resource ID
   // if the image has been customized, directly or indirectly, by the theme.
-  absl::optional<int> GetCustomBackgroundId(
+  std::optional<int> GetCustomBackgroundId(
       BrowserFrameActiveState active_state) const;
 
   // Updates the throbber.
@@ -124,27 +130,38 @@ class BrowserNonClientFrameView : public views::NonClientFrameView,
   // or disabled.
   virtual void WindowControlsOverlayEnabledChanged() {}
 
-  // Set the visibility of the window controls overlay toggle button.
-  void SetWindowControlsOverlayToggleVisible(bool visible);
-
-  // Updates the visibility of the title bar based on the visibility of the
-  // borderless mode.
-  void UpdateBorderlessModeEnabled();
-
   // views::NonClientFrameView:
   using views::NonClientFrameView::ShouldPaintAsActive;
-  void Layout() override;
   void VisibilityChanged(views::View* starting_from, bool is_visible) override;
-  int NonClientHitTest(const gfx::Point& point) override;
-  void ResetWindowControls() override;
-
-  WebAppFrameToolbarView* web_app_frame_toolbar_for_testing() {
-    return web_app_frame_toolbar_;
-  }
 
   // Gets the TabSearchBubbleHost if present in the NonClientFrameView. Can
   // return null.
   virtual TabSearchBubbleHost* GetTabSearchBubbleHost();
+
+  // Returns the insets from the edge of the native window to the client view in
+  // DIPs. The value is left-to-right even on RTL locales. That is,
+  // insets.left() will be on the left in screen coordinates.
+  virtual gfx::Insets MirroredFrameBorderInsets() const;
+
+  // Returns the insets from the client view to the input region. The returned
+  // insets will be negative, such that view_rect.Inset(GetInputInsets()) will
+  // be the input region.
+  virtual gfx::Insets GetInputInsets() const;
+
+  // Gets the rounded-rect that will be used to clip the window frame when
+  // drawing. The region will be as if the window was restored, and will be in
+  // view coordinates.
+  virtual SkRRect GetRestoredClipRegion() const;
+
+  // Returns the height of the top frame.  This value will be 0 if the
+  // compositor doesn't support translucency, if the top frame is not
+  // translucent, or if the window is in full screen mode.
+  virtual int GetTranslucentTopAreaHeight() const;
+
+#if BUILDFLAG(IS_MAC)
+  // Used by TabContainerOverlayView to paint tab strip background.
+  virtual void PaintThemedFrame(gfx::Canvas* canvas) {}
+#endif
 
  protected:
   // Called when |frame_|'s "paint as active" state has changed.
@@ -161,9 +178,6 @@ class BrowserNonClientFrameView : public views::NonClientFrameView,
       BrowserFrameActiveState active_state =
           BrowserFrameActiveState::kUseCurrent) const;
 
-  // views::NonClientFrameView:
-  void ChildPreferredSizeChanged(views::View* child) override;
-
   // ProfileAttributesStorage::Observer:
   void OnProfileAdded(const base::FilePath& profile_path) override;
   void OnProfileWasRemoved(const base::FilePath& profile_path,
@@ -171,17 +185,6 @@ class BrowserNonClientFrameView : public views::NonClientFrameView,
   void OnProfileAvatarChanged(const base::FilePath& profile_path) override;
   void OnProfileHighResAvatarLoaded(
       const base::FilePath& profile_path) override;
-
-  void set_web_app_frame_toolbar(
-      WebAppFrameToolbarView* web_app_frame_toolbar) {
-    web_app_frame_toolbar_ = web_app_frame_toolbar;
-  }
-  WebAppFrameToolbarView* web_app_frame_toolbar() {
-    return web_app_frame_toolbar_;
-  }
-  const WebAppFrameToolbarView* web_app_frame_toolbar() const {
-    return web_app_frame_toolbar_;
-  }
 
  private:
 #if BUILDFLAG(IS_WIN)
@@ -197,10 +200,6 @@ class BrowserNonClientFrameView : public views::NonClientFrameView,
 
   // The BrowserView hosted within this View.
   const raw_ptr<BrowserView, DanglingUntriaged> browser_view_;
-
-  // Menu button and page status icons. Only used by web-app windows.
-  raw_ptr<WebAppFrameToolbarView, DanglingUntriaged> web_app_frame_toolbar_ =
-      nullptr;
 
   base::CallbackListSubscription paint_as_active_subscription_ =
       frame_->RegisterPaintAsActiveChangedCallback(

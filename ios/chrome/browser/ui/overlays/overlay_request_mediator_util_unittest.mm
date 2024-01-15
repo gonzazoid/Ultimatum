@@ -4,15 +4,11 @@
 
 #import "ios/chrome/browser/ui/overlays/overlay_request_mediator_util.h"
 
-#import "ios/chrome/browser/overlays/public/overlay_request.h"
-#import "ios/chrome/browser/overlays/public/overlay_request_support.h"
-#import "ios/chrome/browser/overlays/test/overlay_test_macros.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_request.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_request_support.h"
+#import "ios/chrome/browser/overlays/model/test/overlay_test_macros.h"
 #import "ios/chrome/browser/ui/overlays/overlay_request_mediator.h"
 #import "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 // Fake request config types for use in tests.

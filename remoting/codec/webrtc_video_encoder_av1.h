@@ -5,7 +5,7 @@
 #ifndef REMOTING_CODEC_WEBRTC_VIDEO_ENCODER_AV1_H_
 #define REMOTING_CODEC_WEBRTC_VIDEO_ENCODER_AV1_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "remoting/codec/encoder_bitrate_filter.h"
 #include "remoting/codec/video_encoder_active_map.h"
 #include "remoting/codec/webrtc_video_encoder.h"
@@ -31,8 +31,8 @@ class WebrtcVideoEncoderAV1 : public WebrtcVideoEncoder {
   ~WebrtcVideoEncoderAV1() override;
 
   // WebrtcVideoEncoder interface.
-  void SetLosslessEncode(bool want_lossless) override;
   void SetLosslessColor(bool want_lossless) override;
+  void SetEncoderSpeed(int encoder_speed) override;
   void Encode(std::unique_ptr<webrtc::DesktopFrame> frame,
               const FrameParams& params,
               EncodeCallback done) override;
@@ -56,6 +56,7 @@ class WebrtcVideoEncoderAV1 : public WebrtcVideoEncoder {
   // Indicates whether the frames provided to the encoder will use I420 (lossy)
   // or I444 (lossless) format.
   bool lossless_color_ = false;
+  int av1_encoder_speed_ = -1;
 
   // Active map used to optimize out processing of unchanged macroblocks.
   VideoEncoderActiveMap active_map_;
@@ -65,7 +66,7 @@ class WebrtcVideoEncoderAV1 : public WebrtcVideoEncoder {
   // This timestamp is monotonically increased using the current frame duration.
   // It's only used for rate control and is not related to the timestamps on the
   // incoming frames to encode.
-  aom_codec_pts_t artificial_timestamp_us_ = 0;
+  aom_codec_pts_t artificial_timestamp_ms_ = 0;
 
   EncoderBitrateFilter bitrate_filter_;
 };

@@ -14,6 +14,7 @@
 #include "components/performance_manager/graph/graph_impl.h"
 #include "components/performance_manager/graph/page_node_impl.h"
 #include "components/performance_manager/public/decorators/page_live_state_decorator.h"
+#include "components/performance_manager/public/user_tuning/prefs.h"
 #include "components/performance_manager/test_support/graph_test_harness.h"
 
 namespace performance_manager {
@@ -24,13 +25,15 @@ LenientMockPageDiscarder::~LenientMockPageDiscarder() = default;
 
 void LenientMockPageDiscarder::DiscardPageNodes(
     const std::vector<const PageNode*>& page_nodes,
-    base::OnceCallback<void(bool)> post_discard_cb) {
-  bool result = false;
+    ::mojom::LifecycleUnitDiscardReason discard_reason,
+    base::OnceCallback<void(const std::vector<DiscardEvent>&)>
+        post_discard_cb) {
+  std::vector<DiscardEvent> discard_events;
   for (auto* node : page_nodes) {
     if (DiscardPageNodeImpl(node))
-      result = true;
+      discard_events.emplace_back(base::TimeTicks::Now(), 0);
   }
-  std::move(post_discard_cb).Run(result);
+  std::move(post_discard_cb).Run(std::move(discard_events));
 }
 
 GraphTestHarnessWithMockDiscarder::GraphTestHarnessWithMockDiscarder()
@@ -41,6 +44,10 @@ GraphTestHarnessWithMockDiscarder::~GraphTestHarnessWithMockDiscarder() =
 
 void GraphTestHarnessWithMockDiscarder::SetUp() {
   GraphTestHarness::SetUp();
+
+  performance_manager::user_tuning::prefs::RegisterLocalStatePrefs(
+      local_state_.registry());
+  user_performance_tuning_manager_environment_.SetUp(&local_state_);
 
   // Some tests depends on the existence of the PageAggregator.
   graph()->PassToGraph(std::make_unique<PageAggregator>());
@@ -57,6 +64,11 @@ void GraphTestHarnessWithMockDiscarder::SetUp() {
   auto page_discarding_helper =
       std::make_unique<policies::PageDiscardingHelper>();
   page_discarding_helper->SetMockDiscarderForTesting(std::move(mock_discarder));
+  // The PageDiscardingHelper usually keeps track of the relevant patterns on
+  // profile creation and deletion. Since no profile is involved in this kind of
+  // test, add an empty patterns list associated with the "empty string" browser
+  // context ID, which is the one used by default for new PageNodes.
+  page_discarding_helper->SetNoDiscardPatternsForProfile("", {});
 
   graph()->PassToGraph(std::move(page_discarding_helper));
   DCHECK(policies::PageDiscardingHelper::GetFromGraph(graph()));
@@ -66,7 +78,6 @@ void GraphTestHarnessWithMockDiscarder::SetUp() {
   page_node_ = CreateNode<performance_manager::PageNodeImpl>();
   main_frame_node_ =
       CreateFrameNodeAutoId(process_node_.get(), page_node_.get());
-  main_frame_node_->SetIsCurrent(true);
   MakePageNodeDiscardable(page_node(), task_env());
 }
 
@@ -74,11 +85,15 @@ void GraphTestHarnessWithMockDiscarder::TearDown() {
   main_frame_node_.reset();
   page_node_.reset();
   process_node_.reset();
+  user_performance_tuning_manager_environment_.TearDown();
   GraphTestHarness::TearDown();
 }
 
 void MakePageNodeDiscardable(PageNodeImpl* page_node,
                              content::BrowserTaskEnvironment& task_env) {
+  using CanDiscardResult = policies::PageDiscardingHelper::CanDiscardResult;
+  using DiscardReason = policies::PageDiscardingHelper::DiscardReason;
+
   page_node->SetIsVisible(false);
   page_node->SetIsAudible(false);
   const auto kUrl = GURL("https://foo.com");
@@ -86,8 +101,14 @@ void MakePageNodeDiscardable(PageNodeImpl* page_node,
                                             kUrl, "text/html");
   (*page_node->main_frame_nodes().begin())->OnNavigationCommitted(kUrl, false);
   task_env.FastForwardBy(base::Minutes(10));
-  DCHECK(policies::PageDiscardingHelper::GetFromGraph(page_node->graph())
-             ->CanUrgentlyDiscardForTesting(page_node));
+  const auto* helper =
+      policies::PageDiscardingHelper::GetFromGraph(page_node->graph());
+  CHECK_EQ(helper->CanDiscard(page_node, DiscardReason::URGENT),
+           CanDiscardResult::kEligible);
+  CHECK_EQ(helper->CanDiscard(page_node, DiscardReason::PROACTIVE),
+           CanDiscardResult::kEligible);
+  CHECK_EQ(helper->CanDiscard(page_node, DiscardReason::EXTERNAL),
+           CanDiscardResult::kEligible);
 }
 
 }  // namespace testing

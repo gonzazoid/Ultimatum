@@ -5,16 +5,17 @@
 #ifndef UI_OZONE_PLATFORM_FLATLAND_FLATLAND_WINDOW_H_
 #define UI_OZONE_PLATFORM_FLATLAND_FLATLAND_WINDOW_H_
 
+#include <fidl/fuchsia.ui.input3/cpp/fidl.h>
+#include <fuchsia/element/cpp/fidl.h>
 #include <fuchsia/ui/composition/cpp/fidl.h>
-#include <fuchsia/ui/input3/cpp/fidl.h>
 #include <fuchsia/ui/views/cpp/fidl.h>
-#include <lib/ui/scenic/cpp/view_ref_pair.h>
 
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "base/component_export.h"
+#include "base/fuchsia/fidl_event_handler.h"
 #include "base/functional/callback.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/ime/fuchsia/keyboard_client.h"
@@ -48,6 +49,8 @@ class COMPONENT_EXPORT(OZONE) FlatlandWindow : public PlatformWindow,
   FlatlandWindow(const FlatlandWindow&) = delete;
   FlatlandWindow& operator=(const FlatlandWindow&) = delete;
 
+  void ResetSurfaceContent();
+
   // Embeds the Flatland identified by |token| into the scene graph.
   void AttachSurfaceContent(fuchsia::ui::views::ViewportCreationToken token);
 
@@ -74,7 +77,7 @@ class COMPONENT_EXPORT(OZONE) FlatlandWindow : public PlatformWindow,
   void SetCapture() override;
   void ReleaseCapture() override;
   bool HasCapture() const override;
-  void ToggleFullscreen() override;
+  void SetFullscreen(bool fullscreen, int64_t target_display_id) override;
   void Maximize() override;
   void Minimize() override;
   void Restore() override;
@@ -111,6 +114,7 @@ class COMPONENT_EXPORT(OZONE) FlatlandWindow : public PlatformWindow,
 
   void UpdateSize();
 
+  void OnFlatlandError(fuchsia::ui::composition::FlatlandError error);
   void OnViewControllerDisconnected(zx_status_t status);
 
   FlatlandWindowManager* const manager_;
@@ -118,7 +122,9 @@ class COMPONENT_EXPORT(OZONE) FlatlandWindow : public PlatformWindow,
   ScenicWindowDelegate* const scenic_window_delegate_;
   gfx::AcceleratedWidget const window_id_;
 
-  fuchsia::ui::input3::KeyboardPtr keyboard_service_;
+  fidl::Client<fuchsia_ui_input3::Keyboard> keyboard_fidl_client_;
+  base::FidlErrorEventLogger<fuchsia_ui_input3::Keyboard>
+      fidl_error_event_logger_;
   std::unique_ptr<KeyboardClient> keyboard_client_;
   std::unique_ptr<PointerEventsHandler> pointer_handler_;
 
@@ -136,6 +142,8 @@ class COMPONENT_EXPORT(OZONE) FlatlandWindow : public PlatformWindow,
 
   fuchsia::ui::composition::TransformId root_transform_id_;
   fuchsia::ui::composition::TransformId surface_transform_id_;
+  fuchsia::ui::composition::TransformId shield_transform_id_;
+
   fuchsia::ui::composition::ContentId surface_content_id_;
 
   // Pending Viewport creation callback waiting on |logical_size_|.
@@ -163,6 +171,11 @@ class COMPONENT_EXPORT(OZONE) FlatlandWindow : public PlatformWindow,
   // |PlatformWindowInitProperties.bounds.size()| value until
   // |parent_viewport_watcher_| is bound and returns OnGetLayout().
   gfx::Rect bounds_;
+
+  // The offsets between the edges and the visible rectangle of the View, set
+  // based on fuchsia::ui::composition::LayoutInfo. Used to set
+  // `bounds_.system_ui_overlap` in `UpdateSize()`.
+  gfx::Insets view_inset_;
 
   // False if the View for this window is detached from the View tree, in which
   // case it is definitely not visible.

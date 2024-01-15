@@ -6,14 +6,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/adapters.h"
+#include "base/functional/bind.h"
 #include "base/hash/hash.h"
 #include "base/task/bind_post_task.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "chrome/browser/media/webrtc/desktop_media_list_layout_config.h"
+#include "chrome/browser/media/webrtc/desktop_media_picker_utils.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
@@ -30,11 +30,10 @@
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkImage.h"
 #include "ui/gfx/favicon_size.h"
-#include "ui/gfx/image/image.h"
-#include "ui/gfx/image/image_skia_operations.h"
 
 using content::BrowserThread;
 using content::DesktopMediaID;
+using content::WebContents;
 
 namespace {
 
@@ -69,34 +68,6 @@ gfx::ImageSkia CreateEnclosedFaviconImage(gfx::Size size,
 // Update the list once per second.
 const int kDefaultTabDesktopMediaListUpdatePeriod = 1000;
 
-gfx::ImageSkia ScaleBitmap(const SkBitmap& bitmap, gfx::Size size) {
-  const gfx::Rect scaled_rect = media::ComputeLetterboxRegion(
-      gfx::Rect(0, 0, size.width(), size.height()),
-      gfx::Size(bitmap.info().width(), bitmap.info().height()));
-
-  // TODO(crbug.com/1246835): Consider changing to ResizeMethod::BEST after
-  // verifying CPU impact isn't too high.
-  const gfx::ImageSkia resized = gfx::ImageSkiaOperations::CreateResizedImage(
-      gfx::ImageSkia::CreateFromBitmap(bitmap, 1.f),
-      skia::ImageOperations::ResizeMethod::RESIZE_GOOD, scaled_rect.size());
-
-  SkBitmap result(*resized.bitmap());
-
-  // Set alpha channel values to 255 for all pixels.
-  // TODO(crbug.com/264424): Fix screen/window capturers to capture alpha
-  // channel and remove this code. Currently screen/window capturers (at least
-  // some implementations) only capture R, G and B channels and set Alpha to 0.
-  uint8_t* pixels_data = reinterpret_cast<uint8_t*>(result.getPixels());
-  for (int y = 0; y < result.height(); ++y) {
-    for (int x = 0; x < result.width(); ++x) {
-      pixels_data[result.rowBytes() * y + x * result.bytesPerPixel() + 3] =
-          0xff;
-    }
-  }
-
-  return gfx::ImageSkia::CreateFrom1xBitmap(result);
-}
-
 void HandleCapturedBitmap(
     base::OnceCallback<void(uint32_t, const gfx::ImageSkia&)> reply,
     absl::optional<uint32_t> last_hash,
@@ -117,10 +88,14 @@ void HandleCapturedBitmap(
 }  // namespace
 
 TabDesktopMediaList::TabDesktopMediaList(
+    WebContents* web_contents,
     DesktopMediaList::WebContentsFilter includable_web_contents_filter,
     bool include_chrome_app_windows)
     : DesktopMediaListBase(
           base::Milliseconds(kDefaultTabDesktopMediaListUpdatePeriod)),
+      web_contents_(web_contents
+                        ? absl::make_optional(web_contents->GetWeakPtr())
+                        : absl::nullopt),
       includable_web_contents_filter_(
           std::move(includable_web_contents_filter)),
       include_chrome_app_windows_(include_chrome_app_windows) {
@@ -151,21 +126,32 @@ void TabDesktopMediaList::Refresh(bool update_thumnails) {
   DCHECK(can_refresh());
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  Profile* profile = ProfileManager::GetLastUsedProfileAllowedByPolicy();
+  Profile* profile;
+  if (web_contents_.has_value()) {
+    const base::WeakPtr<WebContents>& wc_weak_ref = web_contents_.value();
+    // Profile::FromBrowserContext is robust to receiving nullptr as input.
+    profile = Profile::FromBrowserContext(
+        wc_weak_ref ? wc_weak_ref->GetBrowserContext() : nullptr);
+  } else {
+    // When going through DesktopMediaPickerController::Show(), it can be that
+    // no WebContents was ever associated. In that case, fall back on the
+    // legacy behavior of using the last-used profile.
+    profile = ProfileManager::GetLastUsedProfileAllowedByPolicy();
+  }
   if (!profile) {
     OnRefreshComplete();
     return;
   }
 
   std::vector<Browser*> browsers;
-  for (auto* browser : *BrowserList::GetInstance()) {
+  for (Browser* browser : *BrowserList::GetInstance()) {
     if (browser->profile()->GetOriginalProfile() ==
         profile->GetOriginalProfile()) {
       browsers.push_back(browser);
     }
   }
 
-  std::vector<content::WebContents*> contents_list;
+  std::vector<WebContents*> contents_list;
   // Enumerate all tabs for a user profile.
   for (auto* browser : browsers) {
     const TabStripModel* tab_strip_model = browser->tab_strip_model();
@@ -173,7 +159,7 @@ void TabDesktopMediaList::Refresh(bool update_thumnails) {
 
     for (int i = 0; i < tab_strip_model->count(); i++) {
       // Create id for tab.
-      content::WebContents* contents = tab_strip_model->GetWebContentsAt(i);
+      WebContents* contents = tab_strip_model->GetWebContentsAt(i);
       DCHECK(contents);
       contents_list.push_back(contents);
     }
@@ -239,8 +225,8 @@ void TabDesktopMediaList::Refresh(bool update_thumnails) {
   for (const auto& it : favicon_pairs) {
     // Create a thumbail in a different thread and update the thumbnail in
     // current thread.
-    base::PostTaskAndReplyWithResult(
-        image_resize_task_runner_.get(), FROM_HERE,
+    image_resize_task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&CreateEnclosedFaviconImage, thumbnail_size_, it.second),
         base::BindOnce(&TabDesktopMediaList::UpdateSourceThumbnail,
                        weak_factory_.GetWeakPtr(), it.first));
@@ -358,8 +344,7 @@ void TabDesktopMediaList::SetPreviewedSource(
       id->web_contents_id.render_process_id,
       id->web_contents_id.main_render_frame_id);
   // Note host may be nullptr, but FromRenderFrameHost handles that for us.
-  content::WebContents* const source_contents =
-      content::WebContents::FromRenderFrameHost(host);
+  WebContents* const source_contents = WebContents::FromRenderFrameHost(host);
   if (!source_contents) {
     // No WebContents instance found, likely the selected tab has been recently
     // closed or crashed and the list of sources hasn't been updated yet.

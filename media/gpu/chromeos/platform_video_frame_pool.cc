@@ -7,6 +7,8 @@
 #include <utility>
 
 #include "base/logging.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/trace_event/trace_event.h"
 #include "media/base/video_util.h"
 #include "media/gpu/chromeos/gpu_buffer_layout.h"
 #include "media/gpu/chromeos/platform_video_frame_utils.h"
@@ -41,12 +43,11 @@ CroStatus::Or<scoped_refptr<VideoFrame>> DefaultCreateFrame(
   if (!frame)
     return CroStatus::Codes::kFailedToCreateVideoFrame;
 
-  if (use_protected) {
-    media::VideoFrameMetadata frame_metadata;
-    frame_metadata.protected_video = true;
-    frame_metadata.hw_protected = true;
-    frame->set_metadata(frame_metadata);
-  }
+  // A SCANOUT usage was requested for the allocated |frame|, so there's a
+  // possibility that it can be promoted to overlay, mark it so.
+  frame->metadata().allow_overlay = true;
+  frame->metadata().protected_video = use_protected;
+  frame->metadata().hw_protected = use_protected;
   return frame;
 }
 
@@ -139,18 +140,8 @@ scoped_refptr<VideoFrame> PlatformVideoFramePool::GetFrame() {
       base::BindOnce(&PlatformVideoFramePool::OnFrameReleasedThunk, weak_this_,
                      parent_task_runner_, std::move(origin_frame)));
 
-  // Clear all metadata before returning to client, in case origin frame has any
-  // unrelated metadata.
-  wrapped_frame->clear_metadata();
-
-  // We need to put this metadata in the wrapped frame if we are in protected
-  // mode.
-  if (use_protected_) {
-    media::VideoFrameMetadata frame_metadata;
-    frame_metadata.protected_video = true;
-    frame_metadata.hw_protected = true;
-    wrapped_frame->set_metadata(frame_metadata);
-  }
+  DCHECK_EQ(wrapped_frame->metadata().protected_video, use_protected_);
+  DCHECK_EQ(wrapped_frame->metadata().hw_protected, use_protected_);
 
   return wrapped_frame;
 }
@@ -288,11 +279,20 @@ void PlatformVideoFramePool::ReleaseAllFrames() {
   weak_this_ = weak_this_factory_.GetWeakPtr();
 }
 
+absl::optional<GpuBufferLayout> PlatformVideoFramePool::GetGpuBufferLayout() {
+  DCHECK(parent_task_runner_->RunsTasksInCurrentSequence());
+  base::AutoLock auto_lock(lock_);
+  return frame_layout_;
+}
+
 // static
 void PlatformVideoFramePool::OnFrameReleasedThunk(
     absl::optional<base::WeakPtr<PlatformVideoFramePool>> pool,
     scoped_refptr<base::SequencedTaskRunner> task_runner,
     scoped_refptr<VideoFrame> origin_frame) {
+  TRACE_EVENT2("media", "PlatformVideoFramePool::OnFrameReleasedThunk",
+               "frame_id", origin_frame->unique_id(), "frame",
+               origin_frame->AsHumanReadableString());
   DCHECK(pool);
   DVLOGF(4);
 
@@ -303,6 +303,9 @@ void PlatformVideoFramePool::OnFrameReleasedThunk(
 
 void PlatformVideoFramePool::OnFrameReleased(
     scoped_refptr<VideoFrame> origin_frame) {
+  TRACE_EVENT2("media", "PlatformVideoFramePool::OnFrameReleased", "frame_id",
+               origin_frame->unique_id(), "frame",
+               origin_frame->AsHumanReadableString());
   DCHECK(parent_task_runner_->RunsTasksInCurrentSequence());
   DVLOGF(4);
   base::AutoLock auto_lock(lock_);

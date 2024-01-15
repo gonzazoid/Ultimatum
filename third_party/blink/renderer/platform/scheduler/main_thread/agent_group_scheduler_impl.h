@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_MAIN_THREAD_AGENT_GROUP_SCHEDULER_IMPL_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_MAIN_THREAD_AGENT_GROUP_SCHEDULER_IMPL_H_
 
+#include "base/memory/raw_ref.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/sequence_manager/task_queue.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -14,6 +15,7 @@
 #include "third_party/blink/renderer/platform/heap/prefinalizer.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/scheduler/public/agent_group_scheduler.h"
+#include "third_party/blink/renderer/platform/wtf/gc_plugin.h"
 
 namespace base {
 class SingleThreadTaskRunner;
@@ -65,9 +67,11 @@ class PLATFORM_EXPORT AgentGroupSchedulerImpl : public AgentGroupScheduler {
   scoped_refptr<base::SingleThreadTaskRunner> default_task_runner_;
   scoped_refptr<MainThreadTaskQueue> compositor_task_queue_;
   scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner_;
-  MainThreadSchedulerImpl& main_thread_scheduler_;  // Not owned.
+  const raw_ref<MainThreadSchedulerImpl, DanglingUntriaged>
+      main_thread_scheduler_;  // Not owned.
   HeapHashSet<WeakMember<Agent>> agents_;
 
+  GC_PLUGIN_IGNORE("https://crbug.com/1381979")
   BrowserInterfaceBrokerProxy broker_;
 };
 

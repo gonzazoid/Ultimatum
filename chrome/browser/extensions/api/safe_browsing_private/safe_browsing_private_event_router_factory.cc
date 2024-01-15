@@ -25,7 +25,8 @@ SafeBrowsingPrivateEventRouterFactory::GetForProfile(
 // static
 SafeBrowsingPrivateEventRouterFactory*
 SafeBrowsingPrivateEventRouterFactory::GetInstance() {
-  return base::Singleton<SafeBrowsingPrivateEventRouterFactory>::get();
+  static base::NoDestructor<SafeBrowsingPrivateEventRouterFactory> instance;
+  return instance.get();
 }
 
 SafeBrowsingPrivateEventRouterFactory::SafeBrowsingPrivateEventRouterFactory()
@@ -33,6 +34,8 @@ SafeBrowsingPrivateEventRouterFactory::SafeBrowsingPrivateEventRouterFactory()
           "SafeBrowsingPrivateEventRouter",
           ProfileSelections::Builder()
               .WithRegular(ProfileSelection::kOwnInstance)
+              // Guest Profile follows Regular Profile selection mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
               .WithSystem(ProfileSelection::kNone)
               .Build()) {
   DependsOn(ExtensionsBrowserClient::Get()->GetExtensionSystemFactory());
@@ -43,11 +46,12 @@ SafeBrowsingPrivateEventRouterFactory::SafeBrowsingPrivateEventRouterFactory()
 }
 
 SafeBrowsingPrivateEventRouterFactory::
-    ~SafeBrowsingPrivateEventRouterFactory() {}
+    ~SafeBrowsingPrivateEventRouterFactory() = default;
 
-KeyedService* SafeBrowsingPrivateEventRouterFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SafeBrowsingPrivateEventRouterFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new SafeBrowsingPrivateEventRouter(context);
+  return std::make_unique<SafeBrowsingPrivateEventRouter>(context);
 }
 
 bool SafeBrowsingPrivateEventRouterFactory::ServiceIsCreatedWithBrowserContext()

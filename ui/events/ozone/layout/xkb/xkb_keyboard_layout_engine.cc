@@ -10,17 +10,17 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/span.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/free_deleter.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/strings/string_util.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "ui/events/event_constants.h"
@@ -496,7 +496,9 @@ const PrintableSubEntry kU017E[] = {
 // Table mapping unshifted characters to PrintableSubEntry tables.
 struct PrintableMultiEntry {
   char16_t plain_character;
-  const PrintableSubEntry* subtable;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #global-scope
+  RAW_PTR_EXCLUSION const PrintableSubEntry* subtable;
   size_t subtable_size;
 };
 
@@ -713,7 +715,7 @@ bool XkbKeyboardLayoutEngine::SetCurrentLayoutByNameWithCallback(
       FROM_HERE,
       {base::MayBlock(), base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
       base::BindOnce(&LoadKeymap, layout_name,
-                     base::ThreadTaskRunnerHandle::Get(),
+                     base::SingleThreadTaskRunner::GetCurrentDefault(),
                      std::move(reply_callback)));
 #else
   NOTIMPLEMENTED();
@@ -757,8 +759,9 @@ bool XkbKeyboardLayoutEngine::Lookup(DomCode dom_code,
   if (dom_code == DomCode::NONE)
     return false;
   // Convert DOM physical key to XKB representation.
-  xkb_keycode_t xkb_keycode = key_code_converter_.DomCodeToXkbKeyCode(dom_code);
-  if (xkb_keycode == key_code_converter_.InvalidXkbKeyCode()) {
+  xkb_keycode_t xkb_keycode =
+      key_code_converter_->DomCodeToXkbKeyCode(dom_code);
+  if (xkb_keycode == key_code_converter_->InvalidXkbKeyCode()) {
     LOG(ERROR) << "No XKB keycode for DomCode 0x" << std::hex
                << static_cast<int>(dom_code) << " '"
                << KeycodeConverter::DomCodeToCodeString(dom_code) << "'";
@@ -809,8 +812,8 @@ bool XkbKeyboardLayoutEngine::Lookup(DomCode dom_code,
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
   // Classify the keysym and convert to DOM and VKEY representations.
-  if (xkb_keysym != XKB_KEY_at || (flags & EF_CONTROL_DOWN) == 0) {
-    // Non-character key. (We only support NUL as ^@.)
+  if (dom_code != DomCode::DIGIT2 || (flags & EF_CONTROL_DOWN) == 0) {
+    // Non-character key. (We only support NUL as ^@ and ^2.)
     *dom_key = NonPrintableXKeySymToDomKey(xkb_keysym);
     if (*dom_key != DomKey::NONE) {
       *key_code = NonPrintableDomKeyToKeyboardCode(*dom_key);

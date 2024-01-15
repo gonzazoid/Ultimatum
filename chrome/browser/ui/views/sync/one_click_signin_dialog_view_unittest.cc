@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "chrome/browser/ui/views/chrome_constrained_window_views_client.h"
@@ -16,7 +16,6 @@
 #include "components/constrained_window/constrained_window_views.h"
 #include "ui/events/event_utils.h"
 #include "ui/views/controls/button/label_button.h"
-#include "ui/views/input_event_activation_protector.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_observer.h"
 
@@ -31,8 +30,6 @@ class OneClickSigninDialogViewTest : public ChromeViewsTestBase,
 
   void SetUp() override {
     ChromeViewsTestBase::SetUp();
-    views::InputEventActivationProtector::DisableForTesting();
-
     SetConstrainedWindowViewsClient(CreateChromeConstrainedWindowViewsClient());
 
     // Create a widget to host the anchor view.

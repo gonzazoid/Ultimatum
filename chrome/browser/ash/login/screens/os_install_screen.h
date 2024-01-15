@@ -7,20 +7,21 @@
 
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ui/webui/chromeos/login/os_install_screen_handler.h"
 #include "chromeos/ash/components/dbus/os_install/os_install_client.h"
 
 namespace ash {
 
+class OsInstallScreenView;
+
 class OsInstallScreen : public BaseScreen, public OsInstallClient::Observer {
  public:
-  using TView = chromeos::OsInstallScreenView;
+  using TView = OsInstallScreenView;
 
   OsInstallScreen(base::WeakPtr<OsInstallScreenView> view,
                   const base::RepeatingClosure& exit_callback);
@@ -55,7 +56,7 @@ class OsInstallScreen : public BaseScreen, public OsInstallClient::Observer {
   std::unique_ptr<base::RepeatingTimer> shutdown_countdown_;
 
   // Used for testing.
-  const base::TickClock* tick_clock_;
+  raw_ptr<const base::TickClock> tick_clock_;
 
   base::ScopedObservation<OsInstallClient, OsInstallClient::Observer>
       scoped_observation_{this};

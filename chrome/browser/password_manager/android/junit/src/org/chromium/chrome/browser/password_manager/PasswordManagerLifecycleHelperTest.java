@@ -21,20 +21,16 @@ import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.JniMocker;
 
-/**
- * Test class for {@link PasswordManagerLifecycleHelper}.
- */
+/** Test class for {@link PasswordManagerLifecycleHelper}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 @Batch(Batch.PER_CLASS)
 public class PasswordManagerLifecycleHelperTest {
-    private static final long sDummyNativePointer = 96024;
+    private static final long sFakeNativePointer = 96024;
 
-    @Rule
-    public JniMocker mJniMocker = new JniMocker();
+    @Rule public JniMocker mJniMocker = new JniMocker();
 
-    @Mock
-    private PasswordManagerLifecycleHelper.Natives mBridgeJniMock;
+    @Mock private PasswordManagerLifecycleHelper.Natives mBridgeJniMock;
 
     @Before
     public void setUp() {
@@ -44,7 +40,8 @@ public class PasswordManagerLifecycleHelperTest {
 
     @Test
     public void testReuseInstance() {
-        assertSame(PasswordManagerLifecycleHelper.getInstance(),
+        assertSame(
+                PasswordManagerLifecycleHelper.getInstance(),
                 PasswordManagerLifecycleHelper.getInstance());
     }
 
@@ -56,16 +53,16 @@ public class PasswordManagerLifecycleHelperTest {
 
     @Test
     public void testNotifyForegroundSessionStart() {
-        PasswordManagerLifecycleHelper.getInstance().registerObserver(sDummyNativePointer);
+        PasswordManagerLifecycleHelper.getInstance().registerObserver(sFakeNativePointer);
         PasswordManagerLifecycleHelper.getInstance().onStartForegroundSession();
-        verify(mBridgeJniMock).onForegroundSessionStart(sDummyNativePointer);
+        verify(mBridgeJniMock).onForegroundSessionStart(sFakeNativePointer);
     }
 
     @Test
     public void testDonNotifyAfterUnregister() {
-        PasswordManagerLifecycleHelper.getInstance().registerObserver(sDummyNativePointer);
-        PasswordManagerLifecycleHelper.getInstance().unregisterObserver(sDummyNativePointer);
+        PasswordManagerLifecycleHelper.getInstance().registerObserver(sFakeNativePointer);
+        PasswordManagerLifecycleHelper.getInstance().unregisterObserver(sFakeNativePointer);
         PasswordManagerLifecycleHelper.getInstance().onStartForegroundSession();
-        verify(mBridgeJniMock, never()).onForegroundSessionStart(sDummyNativePointer);
+        verify(mBridgeJniMock, never()).onForegroundSessionStart(sFakeNativePointer);
     }
 }

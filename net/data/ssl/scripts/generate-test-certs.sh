@@ -241,13 +241,6 @@ SUBJECT_NAME="req_punycode_dn" \
     -config ../scripts/ee.cnf -newkey rsa:2048 -text \
     -out ../certificates/punycodetest.pem
 
-## Leaf certificate with a large key; Apple's certificate verifier rejects with
-## a fatal error if the key is bigger than 8192 bits.
-openssl req -x509 -days 3650 \
-    -config ../scripts/ee.cnf -newkey rsa:8200 -text \
-    -sha256 \
-    -out ../certificates/large_key.pem
-
 ## SHA1 certificate expiring in 2016.
 openssl req -config ../scripts/ee.cnf \
   -newkey rsa:2048 -text -out out/sha1_2016.req
@@ -433,19 +426,6 @@ CA_NAME="req_ca_dn" \
     -out ../certificates/825_days_1_second_after_2018_03_01.pem \
     -config ca.cnf
 
-# Issued prior to 1 June 2016 (Symantec CT Enforcement Date)
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/pre_june_2016.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 160501000000Z \
-    -enddate   170703000000Z \
-    -in out/pre_june_2016.req \
-    -out ../certificates/pre_june_2016.pem \
-    -config ca.cnf
-
 # Issued after 2020-09-01, lifetime == 399 days (bad)
 openssl req -config ../scripts/ee.cnf \
   -newkey rsa:2048 -text -out out/399_days_after_2020_09_01.req
@@ -483,19 +463,6 @@ CA_NAME="req_ca_dn" \
     -out ../certificates/398_days_1_second_after_2020_09_01.pem \
     -config ca.cnf
 
-
-# Issued after 1 June 2016 (Symantec CT Enforcement Date)
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/post_june_2016.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 160601000000Z \
-    -enddate   170703000000Z \
-    -in out/post_june_2016.req \
-    -out ../certificates/post_june_2016.pem \
-    -config ca.cnf
 
 # Includes the canSignHttpExchangesDraft extension
 openssl req -x509 -newkey rsa:2048 \
@@ -555,22 +522,6 @@ CA_NAME="req_ca_dn" \
     -config ca.cnf
 /bin/sh -c "cat out/common_name_only.key out/common_name_only.pem \
     > ../certificates/common_name_only.pem"
-
-# Issued after 1 Dec 2017 (Symantec Legacy Distrust Date)
-openssl req \
-  -config ../scripts/ee.cnf \
-  -newkey rsa:2048 \
-  -text \
-  -out out/dec_2017.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 171220000000Z \
-    -enddate   201220000000Z \
-    -in out/dec_2017.req \
-    -out ../certificates/dec_2017.pem \
-    -config ca.cnf
 
 # Issued on 1 May 2018 (after the 30 Apr 2018 CT Requirement date)
 openssl req \
@@ -678,7 +629,7 @@ python3 crlsetutil.py -o ../certificates/crlset_by_root_subject_no_spki.raw \
   "LimitedSubjects": {
     "../certificates/root_ca_cert.pem": []
   },
-  "Sequence": 1
+  "Sequence": 2
 }
 CRLSETBYROOTSUBJECTNOSPKI
 

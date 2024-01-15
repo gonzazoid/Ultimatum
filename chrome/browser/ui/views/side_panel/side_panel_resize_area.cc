@@ -22,26 +22,21 @@ namespace views {
 
 SidePanelResizeHandle::SidePanelResizeHandle(SidePanel* side_panel)
     : side_panel_(side_panel) {
-  const gfx::Size preferred_resize_handle_size = gfx::Size(16, 24);
-  SetPreferredSize(preferred_resize_handle_size);
+  constexpr gfx::Size kPreferredResizeHandleSize(16, 24);
+  SetPreferredSize(kPreferredResizeHandleSize);
   SetCanProcessEventsWithinSubtree(false);
   SetFocusBehavior(FocusBehavior::ALWAYS);
   FocusRing::Install(this);
+
+  constexpr int kIconSize = 16;
+  SetImage(ui::ImageModel::FromVectorIcon(
+      kDragHandleIcon, kColorSidePanelResizeAreaHandle, kIconSize));
 }
 
 void SidePanelResizeHandle::GetAccessibleNodeData(ui::AXNodeData* node_data) {
   node_data->role = ax::mojom::Role::kSlider;
   node_data->SetNameChecked(
       l10n_util::GetStringUTF16(IDS_ACCNAME_SIDE_PANEL_RESIZE));
-}
-
-void SidePanelResizeHandle::OnThemeChanged() {
-  ImageView::OnThemeChanged();
-  const int icon_size = 16;
-  gfx::ImageSkia icon = gfx::CreateVectorIcon(
-      kDragHandleIcon, icon_size,
-      GetColorProvider()->GetColor(kColorToolbarContentAreaSeparator));
-  SetImage(icon);
 }
 
 void SidePanelResizeHandle::AddedToWidget() {
@@ -62,7 +57,7 @@ void SidePanelResizeHandle::OnDidChangeFocus(views::View* before,
   }
 }
 
-BEGIN_METADATA(SidePanelResizeHandle, ImageView)
+BEGIN_METADATA(SidePanelResizeHandle)
 END_METADATA
 
 SidePanelResizeArea::SidePanelResizeArea(SidePanel* side_panel)
@@ -115,7 +110,7 @@ void SidePanelResizeArea::Layout() {
   SetBoundsRect(resize_bounds);
 }
 
-BEGIN_METADATA(SidePanelResizeArea, ResizeArea)
+BEGIN_METADATA(SidePanelResizeArea)
 END_METADATA
 
 }  // namespace views

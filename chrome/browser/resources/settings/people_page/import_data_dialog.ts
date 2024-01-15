@@ -12,11 +12,12 @@ import 'chrome://resources/cr_elements/md_select.css.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
 import '../controls/settings_checkbox.js';
-import '../controls/settings_toggle_button.js';
+import '/shared/settings/controls/settings_toggle_button.js';
 import '../icons.html.js';
 import '../settings_vars.css.js';
 import '../i18n_setup.js';
 
+import {PrefsMixin} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
 import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
 import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
@@ -24,7 +25,6 @@ import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {SettingsCheckboxElement} from '../controls/settings_checkbox.js';
-import {PrefsMixin} from '../prefs/prefs_mixin.js';
 
 import {BrowserProfile, ImportDataBrowserProxy, ImportDataBrowserProxyImpl, ImportDataStatus} from './import_data_browser_proxy.js';
 import {getTemplate} from './import_data_dialog.html.js';
@@ -111,7 +111,7 @@ export class SettingsImportDataDialogElement extends
       this.$.dialog.showModal();
     });
 
-    this.addWebUIListener(
+    this.addWebUiListener(
         'import-data-status-changed', (importStatus: ImportDataStatus) => {
           this.importStatus_ = importStatus;
           if (this.hasImportStatus_(ImportDataStatus.FAILED)) {
@@ -153,7 +153,7 @@ export class SettingsImportDataDialogElement extends
     this.selected_ = this.browserProfiles_[this.$.browserSelect.selectedIndex];
   }
 
-  private onActionButtonTap_() {
+  private onActionButtonClick_() {
     const checkboxes = this.shadowRoot!.querySelectorAll('settings-checkbox');
     if (this.isImportFromFileSelected_()) {
       this.browserProxy_.importFromBookmarksFile();

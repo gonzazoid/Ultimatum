@@ -4,6 +4,7 @@
 
 #include "components/browsing_topics/epoch_topics.h"
 
+#include "base/json/values_util.h"
 #include "base/logging.h"
 #include "components/browsing_topics/util.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -16,11 +17,12 @@ constexpr base::Time kCalculationTime =
     base::Time::FromDeltaSinceWindowsEpoch(base::Days(1));
 constexpr browsing_topics::HmacKey kTestKey = {1};
 constexpr size_t kTaxonomySize = 349;
+constexpr int kConfigVersion = 1;
 constexpr int kTaxonomyVersion = 1;
 constexpr int64_t kModelVersion = 2;
 constexpr size_t kPaddedTopTopicsStartIndex = 2;
 
-EpochTopics CreateTestEpochTopics() {
+std::vector<TopicAndDomains> CreateTestTopTopics() {
   std::vector<TopicAndDomains> top_topics_and_observing_domains;
   top_topics_and_observing_domains.emplace_back(
       TopicAndDomains(Topic(1), {HashedDomain(1)}));
@@ -31,11 +33,15 @@ EpochTopics CreateTestEpochTopics() {
   top_topics_and_observing_domains.emplace_back(
       TopicAndDomains(Topic(4), {HashedDomain(2), HashedDomain(3)}));
   top_topics_and_observing_domains.emplace_back(
-      TopicAndDomains(Topic(5), {HashedDomain(1)}));
+      TopicAndDomains(Topic(100), {HashedDomain(1)}));
+  return top_topics_and_observing_domains;
+}
 
-  EpochTopics epoch_topics(std::move(top_topics_and_observing_domains),
-                           kPaddedTopTopicsStartIndex, kTaxonomySize,
-                           kTaxonomyVersion, kModelVersion, kCalculationTime);
+EpochTopics CreateTestEpochTopics() {
+  EpochTopics epoch_topics(CreateTestTopTopics(), kPaddedTopTopicsStartIndex,
+                           kConfigVersion, kTaxonomyVersion, kModelVersion,
+                           kCalculationTime,
+                           /*from_manually_triggered_calculation=*/true);
 
   return epoch_topics;
 }
@@ -51,8 +57,9 @@ TEST_F(EpochTopicsTest, CandidateTopicForSite_InvalidIndividualTopics) {
   }
 
   EpochTopics epoch_topics(std::move(top_topics_and_observing_domains),
-                           kPaddedTopTopicsStartIndex, kTaxonomySize,
-                           kTaxonomyVersion, kModelVersion, kCalculationTime);
+                           kPaddedTopTopicsStartIndex, kConfigVersion,
+                           kTaxonomyVersion, kModelVersion, kCalculationTime,
+                           /*from_manually_triggered_calculation=*/false);
   EXPECT_FALSE(epoch_topics.empty());
 
   CandidateTopic candidate_topic = epoch_topics.CandidateTopicForSite(
@@ -65,6 +72,7 @@ TEST_F(EpochTopicsTest, CandidateTopicForSite) {
   EpochTopics epoch_topics = CreateTestEpochTopics();
 
   EXPECT_FALSE(epoch_topics.empty());
+  EXPECT_EQ(epoch_topics.config_version(), kConfigVersion);
   EXPECT_EQ(epoch_topics.taxonomy_version(), kTaxonomyVersion);
   EXPECT_EQ(epoch_topics.model_version(), kModelVersion);
   EXPECT_EQ(epoch_topics.calculation_time(), kCalculationTime);
@@ -173,7 +181,9 @@ TEST_F(EpochTopicsTest, CandidateTopicForSite) {
         HashTopDomainForRandomTopicIndexDecision(kTestKey, kCalculationTime,
                                                  top_site);
 
-    // The random topic index is 185, thus Topic(186) will be returned.
+    // The real topic would have been 4, but a random topic (186) is returned
+    // instead. Only callers that are able to receive 4 (domains 2 and 3) should
+    // receive the random topic.
     ASSERT_EQ(random_topic_index_decision % kTaxonomySize, 185ULL);
 
     {
@@ -182,7 +192,7 @@ TEST_F(EpochTopicsTest, CandidateTopicForSite) {
 
       EXPECT_EQ(candidate_topic.topic(), Topic(186));
       EXPECT_FALSE(candidate_topic.is_true_topic());
-      EXPECT_FALSE(candidate_topic.should_be_filtered());
+      EXPECT_TRUE(candidate_topic.should_be_filtered());
     }
 
     {
@@ -220,7 +230,7 @@ TEST_F(EpochTopicsTest, ClearTopics) {
   EXPECT_FALSE(candidate_topic.IsValid());
 }
 
-TEST_F(EpochTopicsTest, ClearTopic) {
+TEST_F(EpochTopicsTest, ClearTopic_NoDescendants) {
   EpochTopics epoch_topics = CreateTestEpochTopics();
 
   EXPECT_FALSE(epoch_topics.empty());
@@ -233,6 +243,22 @@ TEST_F(EpochTopicsTest, ClearTopic) {
   EXPECT_TRUE(epoch_topics.top_topics_and_observing_domains()[1].IsValid());
   EXPECT_FALSE(epoch_topics.top_topics_and_observing_domains()[2].IsValid());
   EXPECT_TRUE(epoch_topics.top_topics_and_observing_domains()[3].IsValid());
+  EXPECT_TRUE(epoch_topics.top_topics_and_observing_domains()[4].IsValid());
+}
+
+TEST_F(EpochTopicsTest, ClearTopic_WithDescendants) {
+  EpochTopics epoch_topics = CreateTestEpochTopics();
+
+  EXPECT_FALSE(epoch_topics.empty());
+
+  epoch_topics.ClearTopic(Topic(1));
+
+  EXPECT_FALSE(epoch_topics.empty());
+
+  EXPECT_FALSE(epoch_topics.top_topics_and_observing_domains()[0].IsValid());
+  EXPECT_FALSE(epoch_topics.top_topics_and_observing_domains()[1].IsValid());
+  EXPECT_FALSE(epoch_topics.top_topics_and_observing_domains()[2].IsValid());
+  EXPECT_FALSE(epoch_topics.top_topics_and_observing_domains()[3].IsValid());
   EXPECT_TRUE(epoch_topics.top_topics_and_observing_domains()[4].IsValid());
 }
 
@@ -262,6 +288,7 @@ TEST_F(EpochTopicsTest, FromEmptyDictionaryValue) {
       EpochTopics::FromDictValue(base::Value::Dict());
 
   EXPECT_TRUE(read_epoch_topics.empty());
+  EXPECT_EQ(read_epoch_topics.config_version(), 0);
   EXPECT_EQ(read_epoch_topics.taxonomy_version(), 0);
   EXPECT_EQ(read_epoch_topics.model_version(), 0);
   EXPECT_EQ(read_epoch_topics.calculation_time(), base::Time());
@@ -272,6 +299,33 @@ TEST_F(EpochTopicsTest, FromEmptyDictionaryValue) {
   EXPECT_FALSE(candidate_topic.IsValid());
 }
 
+TEST_F(EpochTopicsTest,
+       FromDictionaryValueWithoutConfigVersion_UseConfigVersion1) {
+  base::Value::Dict dict;
+
+  base::Value::List top_topics_and_observing_domains_list;
+  std::vector<TopicAndDomains> top_topics_and_domains = CreateTestTopTopics();
+  for (const TopicAndDomains& topic_and_domains : top_topics_and_domains) {
+    top_topics_and_observing_domains_list.Append(
+        topic_and_domains.ToDictValue());
+  }
+
+  dict.Set("top_topics_and_observing_domains",
+           std::move(top_topics_and_observing_domains_list));
+  dict.Set("padded_top_topics_start_index", 0);
+  dict.Set("taxonomy_version", 2);
+  dict.Set("model_version", base::Int64ToValue(3));
+  dict.Set("calculation_time", base::TimeToValue(kCalculationTime));
+
+  EpochTopics read_epoch_topics = EpochTopics::FromDictValue(std::move(dict));
+
+  EXPECT_FALSE(read_epoch_topics.empty());
+  EXPECT_EQ(read_epoch_topics.config_version(), 1);
+  EXPECT_EQ(read_epoch_topics.taxonomy_version(), 2);
+  EXPECT_EQ(read_epoch_topics.model_version(), 3);
+  EXPECT_EQ(read_epoch_topics.calculation_time(), kCalculationTime);
+}
+
 TEST_F(EpochTopicsTest, EmptyEpochTopics_ToAndFromDictValue) {
   EpochTopics epoch_topics(kCalculationTime);
 
@@ -279,6 +333,7 @@ TEST_F(EpochTopicsTest, EmptyEpochTopics_ToAndFromDictValue) {
   EpochTopics read_epoch_topics = EpochTopics::FromDictValue(dict_value);
 
   EXPECT_TRUE(read_epoch_topics.empty());
+  EXPECT_EQ(read_epoch_topics.config_version(), 0);
   EXPECT_EQ(read_epoch_topics.taxonomy_version(), 0);
   EXPECT_EQ(read_epoch_topics.model_version(), 0);
   EXPECT_EQ(read_epoch_topics.calculation_time(), kCalculationTime);
@@ -296,9 +351,15 @@ TEST_F(EpochTopicsTest, PopulatedEpochTopics_ToAndFromValue) {
   EpochTopics read_epoch_topics = EpochTopics::FromDictValue(dict_value);
 
   EXPECT_FALSE(read_epoch_topics.empty());
+  EXPECT_EQ(read_epoch_topics.config_version(), 1);
   EXPECT_EQ(read_epoch_topics.taxonomy_version(), 1);
   EXPECT_EQ(read_epoch_topics.model_version(), 2);
   EXPECT_EQ(read_epoch_topics.calculation_time(), kCalculationTime);
+
+  // `from_manually_triggered_calculation` should not persist after being
+  // written.
+  EXPECT_TRUE(epoch_topics.from_manually_triggered_calculation());
+  EXPECT_FALSE(read_epoch_topics.from_manually_triggered_calculation());
 
   CandidateTopic candidate_topic = epoch_topics.CandidateTopicForSite(
       /*top_domain=*/"foo.com", HashedDomain(1), kTestKey);

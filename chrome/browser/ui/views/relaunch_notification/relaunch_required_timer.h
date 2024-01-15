@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_RELAUNCH_NOTIFICATION_RELAUNCH_REQUIRED_TIMER_H_
 #define CHROME_BROWSER_UI_VIEWS_RELAUNCH_NOTIFICATION_RELAUNCH_REQUIRED_TIMER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "base/timer/wall_clock_timer.h"
 
@@ -29,6 +29,9 @@ class RelaunchRequiredTimer {
   // Sets the relaunch deadline to |deadline| and refreshes the notifications's
   // title accordingly.
   void SetDeadline(base::Time deadline);
+
+  // Returns the deadline used to derive the time-to-relaunch shown to the user.
+  base::Time deadline() const { return deadline_; }
 
   // Returns how much time is left until the deadline rounded to the nearest
   // day/hour/minute/second.

@@ -25,7 +25,7 @@ class PrefMetricsService : public KeyedService {
 
   ~PrefMetricsService() override;
 
-  // Records metrics about the state of the homepage on launch.
+  // Records metrics about various per-profile configurations on profile open.
   static void RecordHomePageLaunchMetrics(bool show_home_button,
                                           bool homepage_is_ntp,
                                           const GURL& homepage_url);
@@ -41,8 +41,8 @@ class PrefMetricsService : public KeyedService {
     ~Factory() override;
 
     // BrowserContextKeyedServiceFactory implementation
-    KeyedService* BuildServiceInstanceFor(
-        content::BrowserContext* profile) const override;
+    std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
+        content::BrowserContext* context) const override;
     bool ServiceIsCreatedWithBrowserContext() const override;
   };
 

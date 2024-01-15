@@ -9,6 +9,7 @@ import android.accounts.AccountManager;
 import android.accounts.AuthenticatorDescription;
 import android.app.Activity;
 import android.content.Intent;
+import android.os.Bundle;
 
 import androidx.annotation.AnyThread;
 import androidx.annotation.IntDef;
@@ -26,19 +27,17 @@ import java.lang.annotation.RetentionPolicy;
  * Provides methods for getting accounts and managing auth tokens.
  */
 public interface AccountManagerDelegate {
-    /**
-     * Response code of the {@link AccountManagerDelegate#hasCapability} result.
-     */
+    /** Response code of the {@link AccountManagerDelegate#hasCapability} result. */
     @IntDef({CapabilityResponse.EXCEPTION, CapabilityResponse.YES, CapabilityResponse.NO})
     @Retention(RetentionPolicy.SOURCE)
     @interface CapabilityResponse {
-        /**
-         * This value is returned when no valid response YES or NO is fetched from the server.
-         */
+        /** This value is returned when no valid response YES or NO is fetched from the server. */
         int EXCEPTION = 0;
+
         int YES = 1;
         int NO = 2;
     }
+
     /**
      * Attaches the {@link AccountsChangeObserver} to the delegate and registers the
      * accounts change receivers to listen to the accounts change broadcast from the
@@ -47,11 +46,9 @@ public interface AccountManagerDelegate {
     @MainThread
     void attachAccountsChangeObserver(AccountsChangeObserver observer);
 
-    /**
-     * Get all the accounts on device synchronously.
-     */
+    /** Get all the accounts on device synchronously. */
     @WorkerThread
-    Account[] getAccounts();
+    Account[] getAccountsSynchronous() throws AccountManagerDelegateException;
 
     /**
      * Get an auth token.
@@ -75,15 +72,11 @@ public interface AccountManagerDelegate {
     @WorkerThread
     void invalidateAuthToken(String authToken) throws AuthException;
 
-    /**
-     * Get all the available authenticator types.
-     */
+    /** Get all the available authenticator types. */
     @AnyThread
     AuthenticatorDescription[] getAuthenticatorTypes();
 
-    /**
-     * Check whether the given account has a specific feature.
-     */
+    /** Check whether the given account has a specific feature. */
     @WorkerThread
     boolean hasFeature(Account account, String feature);
 
@@ -128,4 +121,15 @@ public interface AccountManagerDelegate {
     @WorkerThread
     @Nullable
     String getAccountGaiaId(String accountEmail);
+
+    /**
+     * Asks the user to confirm their knowledge of the password to the given account.
+     *
+     * @param account The {@link Account} to confirm the credentials for.
+     * @param activity The {@link Activity} context to use for launching a new authenticator-defined
+     *                 sub-Activity to prompt the user to confirm the account's password.
+     * @param callback The callback to indicate whether the user successfully confirmed their
+     *                 knowledge of the account's credentials.
+     */
+    void confirmCredentials(Account account, Activity activity, Callback<Bundle> callback);
 }

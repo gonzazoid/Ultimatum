@@ -8,9 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * Interface for {@link LocaleManager} APIs.
- */
+/** Interface for {@link LocaleManager} APIs. */
 public class LocaleManagerDelegateImpl implements LocaleManagerDelegate {
     /**
      * Gets the currently set system App locale. Returns null if no override
@@ -19,7 +17,7 @@ public class LocaleManagerDelegateImpl implements LocaleManagerDelegate {
      */
     @Override
     public Locale getApplicationLocale() {
-        // TODO(https://crbug.com/1293523): Replace with calls to {@link LocaleManager} once the T
+        // TODO(https://crbug.com/1348676): Replace with calls to {@link LocaleManager} once the T
         // SDK is available.
         return null;
     }
@@ -31,14 +29,12 @@ public class LocaleManagerDelegateImpl implements LocaleManagerDelegate {
      */
     @Override
     public void setApplicationLocale(String languageName) {
-        // TODO(https://crbug.com/1293523): Replace with calls to {@link LocaleManager} once the T
+        // TODO(https://crbug.com/1348676): Replace with calls to {@link LocaleManager} once the T
         // SDK is available.
         return;
     }
 
-    /**
-     * The default implementation returns a list with the current Java locale.
-     */
+    /** The default implementation returns a list with the current Java locale. */
     @Override
     public List<Locale> getSystemLocales() {
         ArrayList<Locale> locales = new ArrayList<Locale>();

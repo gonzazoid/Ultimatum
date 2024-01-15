@@ -10,8 +10,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -22,13 +22,14 @@
 #include "chrome/browser/extensions/pref_mapping.h"
 #include "chrome/browser/extensions/pref_transformer_interface.h"
 #include "chrome/browser/prefetch/pref_names.h"
-#include "chrome/browser/prefetch/prefetch_prefs.h"
+#include "chrome/browser/preloading/preloading_prefs.h"
 #include "chrome/common/pref_names.h"
 #include "components/autofill/core/common/autofill_prefs.h"
 #include "components/content_settings/core/browser/cookie_settings.h"
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/content_settings/core/common/pref_names.h"
 #include "components/prefs/pref_service.h"
+#include "components/privacy_sandbox/privacy_sandbox_prefs.h"
 #include "components/proxy_config/proxy_config_pref_names.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "extensions/browser/api/content_settings/content_settings_service.h"
@@ -36,15 +37,19 @@
 #include "extensions/browser/extension_pref_value_map_factory.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_prefs_factory.h"
+#include "extensions/browser/extension_prefs_helper.h"
 #include "extensions/browser/extension_system_provider.h"
 #include "extensions/browser/extensions_browser_client.h"
 #include "extensions/browser/pref_names.h"
+#include "extensions/common/api/types.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/error_utils.h"
 #include "extensions/common/extension_id.h"
 #include "extensions/common/permissions/api_permission.h"
 #include "extensions/common/permissions/permissions_data.h"
 #include "media/media_buildflags.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/mojom/devtools/inspector_issue.mojom.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_CHROMEOS_LACROS)
 #include "chrome/browser/chromeos/extensions/controlled_pref_mapping.h"
@@ -57,6 +62,8 @@ namespace extensions {
 
 namespace {
 
+using extensions::api::types::ChromeSettingScope;
+
 constexpr char kConversionErrorMessage[] =
     "Internal error: Stored value for preference '*' cannot be converted "
     "properly.";
@@ -64,8 +71,12 @@ constexpr char kPermissionErrorMessage[] =
     "You do not have permission to access the preference '*'. "
     "Be sure to declare in your manifest what permissions you need.";
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
+constexpr char kInvalidPrefPathErrorMessage[] =
+    "Invalid PrefPath '*' for getting extension pref with control.";
 constexpr char kPrimaryProfileOnlyErrorMessage[] =
     "You may only access the preference '*' in the primary profile.";
+constexpr char kAshDoesNotSupportPreference[] =
+    "The browser preference is not supported.";
 #endif
 constexpr char kIncognitoKey[] = "incognito";
 constexpr char kScopeKey[] = "scope";
@@ -73,110 +84,149 @@ constexpr char kIncognitoSpecific[] = "incognitoSpecific";
 constexpr char kLevelOfControl[] = "levelOfControl";
 constexpr char kValue[] = "value";
 
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+// Returns true if the get, set or clear requests for the preference associated
+// with `pref_path` should only be applied at browser level. Returns false if
+// the requests should be forwarded to Ash.
+// All preferences explicitly added to`crosapi::mojom::PrefPath` should be
+// handled by Ash. The only exception is the `crosapi::mojom::PrefPath::kProxy`
+// pref which, for secondary profiles only, is applied at browser scope.
+bool IsBrowserScopePrefOperation(crosapi::mojom::PrefPath pref_path,
+                                 Profile* profile) {
+  if (pref_path == crosapi::mojom::PrefPath::kUnknown) {
+    return true;
+  }
+  if (pref_path == crosapi::mojom::PrefPath::kProxy) {
+    if (!profile->IsMainProfile()) {
+      return true;
+    }
+    // TODO(acostinas,b/267719988) If the current version of Ash does not
+    // support syncing the proxy pref via the Prefs mojo service, the proxy pref
+    // can be set at browser scope only and it will be synced with Ash via the
+    // NetworkSettingsService mojo API.
+    static constexpr int kMinVersionProxyPref = 4;
+    const int version = chromeos::LacrosService::Get()
+                            ->GetInterfaceVersion<crosapi::mojom::Prefs>();
+    if (version < kMinVersionProxyPref) {
+      return true;
+    }
+  }
+  return false;
+}
+#endif
+
 // Transform the thirdPartyCookiesAllowed extension api to CookieControlsMode
 // enum values.
 class CookieControlsModeTransformer : public PrefTransformerInterface {
   using CookieControlsMode = content_settings::CookieControlsMode;
 
  public:
-  std::unique_ptr<base::Value> ExtensionToBrowserPref(
-      const base::Value* extension_pref,
-      std::string* error,
-      bool* bad_message) override {
-    bool third_party_cookies_allowed = extension_pref->GetBool();
-    return std::make_unique<base::Value>(static_cast<int>(
+  absl::optional<base::Value> ExtensionToBrowserPref(
+      const base::Value& extension_pref,
+      std::string& error,
+      bool& bad_message) override {
+    bool third_party_cookies_allowed = extension_pref.GetBool();
+    return base::Value(static_cast<int>(
         third_party_cookies_allowed ? CookieControlsMode::kOff
                                     : CookieControlsMode::kBlockThirdParty));
   }
 
-  std::unique_ptr<base::Value> BrowserToExtensionPref(
-      const base::Value* browser_pref,
+  absl::optional<base::Value> BrowserToExtensionPref(
+      const base::Value& browser_pref,
       bool is_incognito_profile) override {
     auto cookie_control_mode =
-        static_cast<CookieControlsMode>(browser_pref->GetInt());
+        static_cast<CookieControlsMode>(browser_pref.GetInt());
 
     bool third_party_cookies_allowed =
         cookie_control_mode == content_settings::CookieControlsMode::kOff ||
         (!is_incognito_profile &&
          cookie_control_mode == CookieControlsMode::kIncognitoOnly);
 
-    return std::make_unique<base::Value>(third_party_cookies_allowed);
+    return base::Value(third_party_cookies_allowed);
   }
 };
 
 class NetworkPredictionTransformer : public PrefTransformerInterface {
  public:
-  std::unique_ptr<base::Value> ExtensionToBrowserPref(
-      const base::Value* extension_pref,
-      std::string* error,
-      bool* bad_message) override {
-    if (!extension_pref->is_bool()) {
+  absl::optional<base::Value> ExtensionToBrowserPref(
+      const base::Value& extension_pref,
+      std::string& error,
+      bool& bad_message) override {
+    if (!extension_pref.is_bool()) {
       DCHECK(false) << "Preference not found.";
-    } else if (extension_pref->GetBool()) {
-      return std::make_unique<base::Value>(
+    } else if (extension_pref.GetBool()) {
+      return base::Value(
           static_cast<int>(prefetch::NetworkPredictionOptions::kDefault));
     }
-    return std::make_unique<base::Value>(
+    return base::Value(
         static_cast<int>(prefetch::NetworkPredictionOptions::kDisabled));
   }
 
-  std::unique_ptr<base::Value> BrowserToExtensionPref(
-      const base::Value* browser_pref,
+  absl::optional<base::Value> BrowserToExtensionPref(
+      const base::Value& browser_pref,
       bool is_incognito_profile) override {
     prefetch::NetworkPredictionOptions value =
         prefetch::NetworkPredictionOptions::kDefault;
-    if (browser_pref->is_int()) {
+    if (browser_pref.is_int()) {
       value = static_cast<prefetch::NetworkPredictionOptions>(
-          browser_pref->GetInt());
+          browser_pref.GetInt());
     }
-    return std::make_unique<base::Value>(
-        value != prefetch::NetworkPredictionOptions::kDisabled);
+    return base::Value(value != prefetch::NetworkPredictionOptions::kDisabled);
   }
 };
 
 class ProtectedContentEnabledTransformer : public PrefTransformerInterface {
  public:
-  std::unique_ptr<base::Value> ExtensionToBrowserPref(
-      const base::Value* extension_pref,
-      std::string* error,
-      bool* bad_message) override {
-    bool protected_identifier_allowed = extension_pref->GetBool();
-    return std::make_unique<base::Value>(
-        static_cast<int>(protected_identifier_allowed ? CONTENT_SETTING_ALLOW
-                                                      : CONTENT_SETTING_BLOCK));
+  absl::optional<base::Value> ExtensionToBrowserPref(
+      const base::Value& extension_pref,
+      std::string& error,
+      bool& bad_message) override {
+    bool protected_identifier_allowed = extension_pref.GetBool();
+    return base::Value(static_cast<int>(protected_identifier_allowed
+                                            ? CONTENT_SETTING_ALLOW
+                                            : CONTENT_SETTING_BLOCK));
   }
 
-  std::unique_ptr<base::Value> BrowserToExtensionPref(
-      const base::Value* browser_pref,
+  absl::optional<base::Value> BrowserToExtensionPref(
+      const base::Value& browser_pref,
       bool is_incognito_profile) override {
     auto protected_identifier_mode =
-        static_cast<ContentSetting>(browser_pref->GetInt());
-    return std::make_unique<base::Value>(protected_identifier_mode ==
-                                         CONTENT_SETTING_ALLOW);
+        static_cast<ContentSetting>(browser_pref.GetInt());
+    return base::Value(protected_identifier_mode == CONTENT_SETTING_ALLOW);
   }
 };
 
-constexpr char kIncognitoPersistent[] = "incognito_persistent";
-constexpr char kIncognitoSessionOnly[] = "incognito_session_only";
-constexpr char kRegular[] = "regular";
-constexpr char kRegularOnly[] = "regular_only";
+// Return error when extensions try to enable a Privacy Sandbox API.
+class PrivacySandboxTransformer : public PrefTransformerInterface {
+ public:
+  absl::optional<base::Value> ExtensionToBrowserPref(
+      const base::Value& extension_pref,
+      std::string& error,
+      bool& bad_message) override {
+    if (!extension_pref.is_bool()) {
+      bad_message = true;
+      return absl::nullopt;
+    }
 
-// TODO(crbug.com/1366445): Consider using the ChromeSettingScope
-// enum instead of ExtensionPrefsScope. That way, we could remove
-// this function and the preceding string constants.
-bool StringToScope(const std::string& s, ExtensionPrefsScope* scope) {
-  if (s == kRegular) {
-    *scope = kExtensionPrefsScopeRegular;
-  } else if (s == kRegularOnly) {
-    *scope = kExtensionPrefsScopeRegularOnly;
-  } else if (s == kIncognitoPersistent) {
-    *scope = kExtensionPrefsScopeIncognitoPersistent;
-  } else if (s == kIncognitoSessionOnly) {
-    *scope = kExtensionPrefsScopeIncognitoSessionOnly;
-  } else {
-    return false;
+    if (extension_pref.GetBool()) {
+      error = "Extensions aren’t allowed to enable Privacy Sandbox APIs.";
+      return absl::nullopt;
+    }
+
+    return extension_pref.Clone();
   }
-  return true;
+
+  // Default behaviour
+  absl::optional<base::Value> BrowserToExtensionPref(
+      const base::Value& browser_pref,
+      bool is_incognito_profile) override {
+    return browser_pref.Clone();
+  }
+};
+
+bool StringToScope(const std::string& s, ChromeSettingScope& scope) {
+  scope = extensions::api::types::ParseChromeSettingScope(s);
+  return scope != ChromeSettingScope::kNone;
 }
 
 }  // namespace
@@ -200,7 +250,7 @@ PreferenceEventRouter::PreferenceEventRouter(Profile* profile)
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
     crosapi::mojom::PrefPath pref_path =
         PrefMapping::GetInstance()->GetPrefPathForPrefName(pref.browser_pref);
-    if (pref_path != crosapi::mojom::PrefPath::kUnknown &&
+    if (!IsBrowserScopePrefOperation(pref_path, profile) &&
         ash_supports_crosapi_observers) {
       // Extension-controlled pref with the real value to watch in ash.
       // This base::Unretained() is safe because PreferenceEventRouter owns
@@ -294,6 +344,14 @@ void PreferenceEventRouter::OnAshGetSuccess(
     const std::string& browser_pref,
     absl::optional<::base::Value> opt_value,
     crosapi::mojom::PrefControlState control_state) {
+  // Note: crosapi::mojom::prefs::GetExtensionPrefWithControl could be called
+  // with an invalid pref path, and returns empty opt_value.
+  if (!opt_value.has_value()) {
+    LOG(ERROR) << ErrorUtils::FormatErrorMessage(kInvalidPrefPathErrorMessage,
+                                                 browser_pref);
+    return;
+  }
+
   bool incognito = false;
 
   std::string event_name;
@@ -302,13 +360,12 @@ void PreferenceEventRouter::OnAshGetSuccess(
       browser_pref, &event_name, &permission);
   DCHECK(found_event);
 
-  base::ListValue args;
+  base::Value::List args;
   PrefTransformerInterface* transformer =
       PrefMapping::GetInstance()->FindTransformerForBrowserPref(browser_pref);
 
-  base::Value* pref_value = &opt_value.value();
-  std::unique_ptr<base::Value> transformed_value =
-      transformer->BrowserToExtensionPref(pref_value, incognito);
+  absl::optional<base::Value> transformed_value =
+      transformer->BrowserToExtensionPref(opt_value.value(), incognito);
   if (!transformed_value) {
     LOG(ERROR) << ErrorUtils::FormatErrorMessage(kConversionErrorMessage,
                                                  browser_pref);
@@ -322,8 +379,8 @@ void PreferenceEventRouter::OnAshGetSuccess(
   events::HistogramValue histogram_value =
       events::TYPES_CHROME_SETTING_ON_CHANGE;
   extensions::preference_helpers::DispatchEventToExtensionsWithAshControlState(
-      profile_, histogram_value, event_name, &args, permission, incognito,
-      browser_pref, control_state);
+      profile_, histogram_value, event_name, std::move(args), permission,
+      incognito, browser_pref, control_state);
 }
 #endif
 
@@ -337,14 +394,14 @@ void PreferenceEventRouter::OnPrefChanged(PrefService* pref_service,
       browser_pref, &event_name, &permission);
   DCHECK(rv);
 
-  base::ListValue args;
+  base::Value::List args;
   const PrefService::Preference* pref =
       pref_service->FindPreference(browser_pref);
   CHECK(pref);
   PrefTransformerInterface* transformer =
       PrefMapping::GetInstance()->FindTransformerForBrowserPref(browser_pref);
-  std::unique_ptr<base::Value> transformed_value =
-      transformer->BrowserToExtensionPref(pref->GetValue(), incognito);
+  absl::optional<base::Value> transformed_value =
+      transformer->BrowserToExtensionPref(*pref->GetValue(), incognito);
   if (!transformed_value) {
     LOG(ERROR) << ErrorUtils::FormatErrorMessage(kConversionErrorMessage,
                                                  pref->name());
@@ -371,8 +428,8 @@ void PreferenceEventRouter::OnPrefChanged(PrefService* pref_service,
   events::HistogramValue histogram_value =
       events::TYPES_CHROME_SETTING_ON_CHANGE;
   extensions::preference_helpers::DispatchEventToExtensions(
-      profile_, histogram_value, event_name, &args, permission, incognito,
-      browser_pref);
+      profile_, histogram_value, event_name, std::move(args), permission,
+      incognito, browser_pref);
 }
 
 void PreferenceEventRouter::OnOffTheRecordProfileCreated(
@@ -403,10 +460,7 @@ void PreferenceEventRouter::ObserveOffTheRecordPrefs(PrefService* prefs) {
 }
 
 PreferenceAPI::PreferenceAPI(content::BrowserContext* context)
-    : profile_(Profile::FromBrowserContext(context)),
-      prefs_helper_(
-          ExtensionPrefs::Get(profile_),
-          ExtensionPrefValueMapFactory::GetForBrowserContext(profile_)) {
+    : profile_(Profile::FromBrowserContext(context)) {
   PrefMapping* pref_mapping = PrefMapping::GetInstance();
 
   // TODO(dbertoni): Only register the transformers once. We need a better
@@ -425,6 +479,22 @@ PreferenceAPI::PreferenceAPI(content::BrowserContext* context)
     pref_mapping->RegisterPrefTransformer(
         prefs::kProtectedContentDefault,
         std::make_unique<ProtectedContentEnabledTransformer>());
+  }
+
+  if (!pref_mapping->HasPrefTransformer(
+          prefs::kPrivacySandboxM1TopicsEnabled)) {
+    pref_mapping->RegisterPrefTransformer(
+        prefs::kPrivacySandboxM1TopicsEnabled,
+        std::make_unique<PrivacySandboxTransformer>());
+    pref_mapping->RegisterPrefTransformer(
+        prefs::kPrivacySandboxM1FledgeEnabled,
+        std::make_unique<PrivacySandboxTransformer>());
+    pref_mapping->RegisterPrefTransformer(
+        prefs::kPrivacySandboxM1AdMeasurementEnabled,
+        std::make_unique<PrivacySandboxTransformer>());
+    pref_mapping->RegisterPrefTransformer(
+        prefs::kPrivacySandboxRelatedWebsiteSetsEnabled,
+        std::make_unique<PrivacySandboxTransformer>());
   }
 
   for (const auto& pref : PrefMapping::GetMappings()) {
@@ -449,7 +519,7 @@ PreferenceAPI::~PreferenceAPI() = default;
 
 void PreferenceAPI::Shutdown() {
   EventRouter::Get(profile_)->UnregisterObserver(this);
-  if (!prefs_helper_.prefs()->extensions_disabled())
+  if (!ExtensionPrefs::Get(profile_)->extensions_disabled())
     ClearIncognitoSessionOnlyContentSettings();
   content_settings_store()->RemoveObserver(this);
 }
@@ -483,26 +553,22 @@ void PreferenceAPI::EnsurePreferenceEventRouterCreated() {
 void PreferenceAPI::OnContentSettingChanged(const std::string& extension_id,
                                             bool incognito) {
   if (incognito) {
-    prefs_helper_.prefs()->UpdateExtensionPref(
+    ExtensionPrefs::Get(profile_)->UpdateExtensionPref(
         extension_id, pref_names::kPrefIncognitoContentSettings,
-        base::Value::ToUniquePtrValue(
-            base::Value(content_settings_store()->GetSettingsForExtension(
-                extension_id, kExtensionPrefsScopeIncognitoPersistent))));
+        base::Value(content_settings_store()->GetSettingsForExtension(
+            extension_id, ChromeSettingScope::kIncognitoPersistent)));
   } else {
-    prefs_helper_.prefs()->UpdateExtensionPref(
+    ExtensionPrefs::Get(profile_)->UpdateExtensionPref(
         extension_id, pref_names::kPrefContentSettings,
-        base::Value::ToUniquePtrValue(
-            base::Value(content_settings_store()->GetSettingsForExtension(
-                extension_id, kExtensionPrefsScopeRegular))));
+        base::Value(content_settings_store()->GetSettingsForExtension(
+            extension_id, ChromeSettingScope::kRegular)));
   }
 }
 
 void PreferenceAPI::ClearIncognitoSessionOnlyContentSettings() {
-  ExtensionIdList extension_ids;
-  prefs_helper_.prefs()->GetExtensions(&extension_ids);
-  for (const auto& id : extension_ids) {
+  for (const auto& id : ExtensionPrefs::Get(profile_)->GetExtensions()) {
     content_settings_store()->ClearContentSettingsForExtension(
-        id, kExtensionPrefsScopeIncognitoSessionOnly);
+        id, ChromeSettingScope::kIncognitoSessionOnly);
   }
 }
 
@@ -532,7 +598,7 @@ ExtensionFunction::ResponseAction GetPreferenceFunction::Run() {
   const base::Value& details = args()[1];
 
   bool incognito = false;
-  if (absl::optional<bool> result = details.FindBoolKey(kIncognitoKey)) {
+  if (absl::optional<bool> result = details.GetDict().FindBool(kIncognitoKey)) {
     incognito = *result;
   }
 
@@ -566,8 +632,12 @@ ExtensionFunction::ResponseAction GetPreferenceFunction::Run() {
   cached_browser_pref_ = browser_pref;
   crosapi::mojom::PrefPath pref_path =
       PrefMapping::GetInstance()->GetPrefPathForPrefName(cached_browser_pref_);
-  if (pref_path != crosapi::mojom::PrefPath::kUnknown) {
-    if (!profile->IsMainProfile()) {
+  if (!IsBrowserScopePrefOperation(pref_path, profile)) {
+    // Exclude chrome.privacy.website.protectedContentID (mapped to
+    // kProtectedContentDefault) from secondary profile access
+    // (crbug.com/1450718).
+    if (!profile->IsMainProfile() &&
+        pref_path == crosapi::mojom::PrefPath::kProtectedContentDefault) {
       return RespondNow(Error(kPrimaryProfileOnlyErrorMessage, pref_key));
     }
     // This pref should be read from ash.
@@ -595,23 +665,23 @@ ExtensionFunction::ResponseAction GetPreferenceFunction::Run() {
       extensions::preference_helpers::GetLevelOfControl(
           profile, extension_id(), browser_pref, incognito);
 
-  base::Value result(base::Value::Type::DICTIONARY);
+  base::Value::Dict result;
   ProduceGetResult(&result, pref->GetValue(), level_of_control, browser_pref,
                    incognito);
 
-  return RespondNow(OneArgument(std::move(result)));
+  return RespondNow(WithArguments(std::move(result)));
 }
 
 void GetPreferenceFunction::ProduceGetResult(
-    base::Value* result,
+    base::Value::Dict* result,
     const base::Value* pref_value,
     const std::string& level_of_control,
     const std::string& browser_pref,
     bool incognito) {
   PrefTransformerInterface* transformer =
       PrefMapping::GetInstance()->FindTransformerForBrowserPref(browser_pref);
-  std::unique_ptr<base::Value> transformed_value =
-      transformer->BrowserToExtensionPref(pref_value, incognito);
+  absl::optional<base::Value> transformed_value =
+      transformer->BrowserToExtensionPref(*pref_value, incognito);
   if (!transformed_value) {
     // TODO(devlin): Can this happen?  When?  Should it be an error, or a bad
     // message?
@@ -620,15 +690,13 @@ void GetPreferenceFunction::ProduceGetResult(
     return;
   }
 
-  result->SetKey(kValue,
-                 base::Value::FromUniquePtrValue(std::move(transformed_value)));
-  result->SetStringKey(kLevelOfControl, level_of_control);
+  result->Set(kValue, std::move(*transformed_value));
+  result->Set(kLevelOfControl, level_of_control);
 
   // Retrieve incognito status.
   if (incognito) {
     ExtensionPrefs* ep = ExtensionPrefs::Get(browser_context());
-    result->SetBoolKey(kIncognitoSpecific,
-                       ep->HasIncognitoPrefValue(browser_pref));
+    result->Set(kIncognitoSpecific, ep->HasIncognitoPrefValue(browser_pref));
   }
 }
 
@@ -640,6 +708,11 @@ void GetPreferenceFunction::OnLacrosGetSuccess(
     return;
   }
 
+  if (!opt_value) {
+    Respond(Error(kAshDoesNotSupportPreference));
+    return;
+  }
+
   // Get read/write permissions and pref name again.
   Profile* profile = Profile::FromBrowserContext(browser_context());
 
@@ -647,7 +720,7 @@ void GetPreferenceFunction::OnLacrosGetSuccess(
   const base::Value& details = args()[1];
 
   bool incognito = false;
-  if (absl::optional<bool> result = details.FindBoolKey(kIncognitoKey)) {
+  if (absl::optional<bool> result = details.GetDict().FindBool(kIncognitoKey)) {
     incognito = *result;
   }
 
@@ -659,12 +732,12 @@ void GetPreferenceFunction::OnLacrosGetSuccess(
           control_state, profile, extension_id(), cached_browser_pref_,
           incognito);
 
-  base::Value result(base::Value::Type::DICTIONARY);
+  base::Value::Dict result;
 
   ProduceGetResult(&result, pref_value, level_of_control, cached_browser_pref_,
                    incognito);
 
-  Respond(OneArgument(std::move(result)));
+  Respond(WithArguments(std::move(result)));
 }
 #endif
 
@@ -681,15 +754,14 @@ ExtensionFunction::ResponseAction SetPreferenceFunction::Run() {
   const base::Value* value = details.Find(kValue);
   EXTENSION_FUNCTION_VALIDATE(value);
 
-  ExtensionPrefsScope scope = kExtensionPrefsScopeRegular;
+  ChromeSettingScope scope = ChromeSettingScope::kRegular;
   if (const std::string* scope_str = details.FindString(kScopeKey)) {
-    EXTENSION_FUNCTION_VALIDATE(StringToScope(*scope_str, &scope));
+    EXTENSION_FUNCTION_VALIDATE(StringToScope(*scope_str, scope));
   }
 
   // Check incognito scope.
-  bool incognito =
-      (scope == kExtensionPrefsScopeIncognitoPersistent ||
-       scope == kExtensionPrefsScopeIncognitoSessionOnly);
+  bool incognito = scope == ChromeSettingScope::kIncognitoPersistent ||
+                   scope == ChromeSettingScope::kIncognitoSessionOnly;
   if (incognito) {
     // Regular profiles can't access incognito unless
     // include_incognito_information is true.
@@ -707,7 +779,7 @@ ExtensionFunction::ResponseAction SetPreferenceFunction::Run() {
   }
 
   Profile* profile = Profile::FromBrowserContext(browser_context());
-  if (scope == kExtensionPrefsScopeIncognitoSessionOnly &&
+  if (scope == ChromeSettingScope::kIncognitoSessionOnly &&
       !profile->HasPrimaryOTRProfile()) {
     return RespondNow(Error(extension_misc::kIncognitoSessionOnlyErrorMessage));
   }
@@ -728,7 +800,7 @@ ExtensionFunction::ResponseAction SetPreferenceFunction::Run() {
   crosapi::mojom::PrefPath pref_path =
       PrefMapping::GetInstance()->GetPrefPathForPrefName(browser_pref);
   chromeos::LacrosService* lacros_service;
-  if (pref_path != crosapi::mojom::PrefPath::kUnknown) {
+  if (!IsBrowserScopePrefOperation(pref_path, profile)) {
     if (!profile->IsMainProfile()) {
       return RespondNow(Error(kPrimaryProfileOnlyErrorMessage, pref_key));
     }
@@ -752,8 +824,8 @@ ExtensionFunction::ResponseAction SetPreferenceFunction::Run() {
       PrefMapping::GetInstance()->FindTransformerForBrowserPref(browser_pref);
   std::string error;
   bool bad_message = false;
-  std::unique_ptr<base::Value> browser_pref_value(
-      transformer->ExtensionToBrowserPref(value, &error, &bad_message));
+  absl::optional<base::Value> browser_pref_value =
+      transformer->ExtensionToBrowserPref(*value, error, bad_message);
   if (!browser_pref_value) {
     EXTENSION_FUNCTION_VALIDATE(!bad_message);
     return RespondNow(Error(std::move(error)));
@@ -762,21 +834,21 @@ ExtensionFunction::ResponseAction SetPreferenceFunction::Run() {
 
   // Validate also that the stored value can be converted back by the
   // transformer.
-  std::unique_ptr<base::Value> extension_pref_value(
-      transformer->BrowserToExtensionPref(browser_pref_value.get(), incognito));
+  absl::optional<base::Value> extension_pref_value =
+      transformer->BrowserToExtensionPref(*browser_pref_value, incognito);
   EXTENSION_FUNCTION_VALIDATE(extension_pref_value);
 
-  PreferenceAPI* preference_api = PreferenceAPI::Get(browser_context());
+  auto* prefs_helper = ExtensionPrefsHelper::Get(browser_context());
 
   // Set the new Autofill prefs if the extension sets the deprecated pref in
   // order to maintain backward compatibility in the extensions preference API.
   // TODO(crbug.com/870328): Remove this once the deprecated pref is retired.
   if (autofill::prefs::kAutofillEnabledDeprecated == browser_pref) {
     // |SetExtensionControlledPref| takes ownership of the base::Value pointer.
-    preference_api->SetExtensionControlledPref(
+    prefs_helper->SetExtensionControlledPref(
         extension_id(), autofill::prefs::kAutofillCreditCardEnabled, scope,
         base::Value(browser_pref_value->GetBool()));
-    preference_api->SetExtensionControlledPref(
+    prefs_helper->SetExtensionControlledPref(
         extension_id(), autofill::prefs::kAutofillProfileEnabled, scope,
         base::Value(browser_pref_value->GetBool()));
   }
@@ -788,22 +860,19 @@ ExtensionFunction::ResponseAction SetPreferenceFunction::Run() {
   // TODO(crbug.com/1064722): Consider extending
   // chrome.privacy.services.safeBrowsingEnabled to a three-state enum.
   if (prefs::kSafeBrowsingEnabled == browser_pref) {
-    preference_api->SetExtensionControlledPref(extension_id(),
-                                               prefs::kSafeBrowsingEnhanced,
-                                               scope, base::Value(false));
+    prefs_helper->SetExtensionControlledPref(extension_id(),
+                                             prefs::kSafeBrowsingEnhanced,
+                                             scope, base::Value(false));
   }
 
-  base::Value val =
-      base::Value::FromUniquePtrValue(std::move(browser_pref_value));
-
-  preference_api->SetExtensionControlledPref(extension_id(), browser_pref,
-                                             scope, val.Clone());
+  prefs_helper->SetExtensionControlledPref(extension_id(), browser_pref, scope,
+                                           browser_pref_value->Clone());
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (pref_path != crosapi::mojom::PrefPath::kUnknown &&
-      preference_api->DoesExtensionControlPref(extension_id(), browser_pref,
-                                               nullptr)) {
+  if (!IsBrowserScopePrefOperation(pref_path, profile) &&
+      prefs_helper->DoesExtensionControlPref(extension_id(), browser_pref,
+                                             nullptr)) {
     lacros_service->GetRemote<crosapi::mojom::Prefs>()->SetPref(
-        pref_path, val.Clone(),
+        pref_path, std::move(*browser_pref_value),
         base::BindOnce(&SetPreferenceFunction::OnLacrosSetSuccess, this));
     return RespondLater();
   }
@@ -828,15 +897,14 @@ ExtensionFunction::ResponseAction ClearPreferenceFunction::Run() {
   std::string pref_key = args()[0].GetString();
   const base::Value::Dict& details = args()[1].GetDict();
 
-  ExtensionPrefsScope scope = kExtensionPrefsScopeRegular;
+  ChromeSettingScope scope = ChromeSettingScope::kRegular;
   if (const std::string* scope_str = details.FindString(kScopeKey)) {
-    EXTENSION_FUNCTION_VALIDATE(StringToScope(*scope_str, &scope));
+    EXTENSION_FUNCTION_VALIDATE(StringToScope(*scope_str, scope));
   }
 
   // Check incognito scope.
-  bool incognito =
-      (scope == kExtensionPrefsScopeIncognitoPersistent ||
-       scope == kExtensionPrefsScopeIncognitoSessionOnly);
+  bool incognito = scope == ChromeSettingScope::kIncognitoPersistent ||
+                   scope == ChromeSettingScope::kIncognitoSessionOnly;
   if (incognito) {
     // We don't check incognito permissions here, as an extension should be
     // always allowed to clear its own settings.
@@ -856,14 +924,16 @@ ExtensionFunction::ResponseAction ClearPreferenceFunction::Run() {
   if (!extension()->permissions_data()->HasAPIPermission(write_permission))
     return RespondNow(Error(kPermissionErrorMessage, pref_key));
 
+  auto* prefs_helper = ExtensionPrefsHelper::Get(browser_context());
+
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   // If the pref is ash-controlled, check that the service is present.
   // If it isn't, don't allow the pref to be cleared.
   crosapi::mojom::PrefPath pref_path =
       PrefMapping::GetInstance()->GetPrefPathForPrefName(browser_pref);
   chromeos::LacrosService* lacros_service;
-  if (pref_path != crosapi::mojom::PrefPath::kUnknown) {
-    Profile* profile = Profile::FromBrowserContext(browser_context());
+  Profile* profile = Profile::FromBrowserContext(browser_context());
+  if (!IsBrowserScopePrefOperation(pref_path, profile)) {
     if (!profile->IsMainProfile()) {
       return RespondNow(Error(kPrimaryProfileOnlyErrorMessage, pref_key));
     }
@@ -874,13 +944,12 @@ ExtensionFunction::ResponseAction ClearPreferenceFunction::Run() {
       return RespondNow(Error("OS Service is unavailable."));
     }
   }
-  bool did_just_control_pref =
-      PreferenceAPI::Get(browser_context())
-          ->DoesExtensionControlPref(extension_id(), browser_pref, nullptr);
+  bool did_just_control_pref = prefs_helper->DoesExtensionControlPref(
+      extension_id(), browser_pref, nullptr);
 #endif
 
-  PreferenceAPI::Get(browser_context())
-      ->RemoveExtensionControlledPref(extension_id(), browser_pref, scope);
+  prefs_helper->RemoveExtensionControlledPref(extension_id(), browser_pref,
+                                              scope);
 
   // Whenever an extension clears the |kSafeBrowsingEnabled| preference,
   // it must also clear |kSafeBrowsingEnhanced|. See crbug.com/1064722 for
@@ -889,19 +958,17 @@ ExtensionFunction::ResponseAction ClearPreferenceFunction::Run() {
   // TODO(crbug.com/1064722): Consider extending
   // chrome.privacy.services.safeBrowsingEnabled to a three-state enum.
   if (prefs::kSafeBrowsingEnabled == browser_pref) {
-    PreferenceAPI::Get(browser_context())
-        ->RemoveExtensionControlledPref(extension_id(),
-                                        prefs::kSafeBrowsingEnhanced, scope);
+    prefs_helper->RemoveExtensionControlledPref(
+        extension_id(), prefs::kSafeBrowsingEnhanced, scope);
   }
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (pref_path != crosapi::mojom::PrefPath::kUnknown &&
+  if (!IsBrowserScopePrefOperation(pref_path, profile) &&
       did_just_control_pref) {
     // This is an ash pref and we need to update ash because the extension that
     // just cleared the pref used to control it. Now, either another extension
     // of lower precedence controls the pref (in which case we update the pref
     // to that value), or no other extension has set the pref (in which case
     // we can clear the value set by extensions in ash).
-    Profile* profile = Profile::FromBrowserContext(browser_context());
     PrefService* pref_service =
         extensions::preference_helpers::GetProfilePrefService(profile,
                                                               incognito);

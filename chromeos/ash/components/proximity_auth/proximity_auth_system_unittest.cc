@@ -6,11 +6,11 @@
 
 #include <memory>
 
-#include "ash/constants/ash_features.h"
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chromeos/ash/components/multidevice/logging/logging.h"
 #include "chromeos/ash/components/multidevice/remote_device_ref.h"
 #include "chromeos/ash/components/multidevice/remote_device_test_util.h"
@@ -91,7 +91,6 @@ class MockProximityAuthPrefManager : public ProximityAuthProfilePrefManager {
   MockProximityAuthPrefManager& operator=(const MockProximityAuthPrefManager&) =
       delete;
 
-  ~MockProximityAuthPrefManager() override {}
   MOCK_CONST_METHOD0(GetLastPasswordEntryTimestampMs, int64_t());
 };
 
@@ -101,7 +100,7 @@ class TestableProximityAuthSystem : public ProximityAuthSystem {
   TestableProximityAuthSystem(
       ash::secure_channel::SecureChannelClient* secure_channel_client,
       std::unique_ptr<UnlockManager> unlock_manager,
-      ProximityAuthPrefManager* pref_manager)
+      ProximityAuthProfilePrefManager* pref_manager)
       : ProximityAuthSystem(secure_channel_client, std::move(unlock_manager)),
         life_cycle_(nullptr) {}
 
@@ -116,14 +115,14 @@ class TestableProximityAuthSystem : public ProximityAuthSystem {
  private:
   std::unique_ptr<RemoteDeviceLifeCycle> CreateRemoteDeviceLifeCycle(
       ash::multidevice::RemoteDeviceRef remote_device,
-      absl::optional<ash::multidevice::RemoteDeviceRef> local_device) override {
+      std::optional<ash::multidevice::RemoteDeviceRef> local_device) override {
     std::unique_ptr<FakeRemoteDeviceLifeCycle> life_cycle(
         new FakeRemoteDeviceLifeCycle(remote_device, local_device));
     life_cycle_ = life_cycle.get();
     return life_cycle;
   }
 
-  FakeRemoteDeviceLifeCycle* life_cycle_;
+  raw_ptr<FakeRemoteDeviceLifeCycle, DanglingUntriaged> life_cycle_;
 };
 
 }  // namespace
@@ -138,7 +137,7 @@ class ProximityAuthSystemTest : public testing::Test {
       : user1_local_device_(CreateRemoteDevice(kUser1, "user1_local_device")),
         user2_local_device_(CreateRemoteDevice(kUser2, "user2_local_device")),
         task_runner_(new base::TestSimpleTaskRunner()),
-        thread_task_runner_handle_(task_runner_) {}
+        thread_task_runner_current_default_handle_(task_runner_) {}
 
   void TearDown() override {
     UnlockScreen();
@@ -199,12 +198,6 @@ class ProximityAuthSystemTest : public testing::Test {
     task_runner_->RunUntilIdle();
   }
 
-  void SimulateScreenOff() {
-    proximity_auth_system_->OnScreenOff();
-    proximity_auth_system_->OnScreenOffDone();
-    task_runner_->RunUntilIdle();
-  }
-
   FakeRemoteDeviceLifeCycle* life_cycle() {
     return proximity_auth_system_->life_cycle();
   }
@@ -214,7 +207,7 @@ class ProximityAuthSystemTest : public testing::Test {
   std::unique_ptr<ash::secure_channel::FakeSecureChannelClient>
       fake_secure_channel_client_;
   std::unique_ptr<TestableProximityAuthSystem> proximity_auth_system_;
-  MockUnlockManager* unlock_manager_;
+  raw_ptr<MockUnlockManager> unlock_manager_;
   std::unique_ptr<MockProximityAuthPrefManager> pref_manager_;
   std::unique_ptr<ash::multidevice_setup::FakeMultiDeviceSetupClient>
       fake_multidevice_setup_client_;
@@ -226,7 +219,8 @@ class ProximityAuthSystemTest : public testing::Test {
   ash::multidevice::RemoteDeviceRefList user2_remote_devices_;
 
   scoped_refptr<base::TestSimpleTaskRunner> task_runner_;
-  base::ThreadTaskRunnerHandle thread_task_runner_handle_;
+  base::SingleThreadTaskRunner::CurrentDefaultHandle
+      thread_task_runner_current_default_handle_;
 
  private:
   ash::multidevice::ScopedDisableLoggingForTesting disable_logging_;
@@ -436,41 +430,6 @@ TEST_F(ProximityAuthSystemTest, Suspend_RegisteredUserFocused) {
         .Times(AtLeast(1));
     EXPECT_CALL(*unlock_manager_, SetRemoteDeviceLifeCycle(NotNull()));
     SimulateSuspend();
-  }
-
-  EXPECT_EQ(kUser1, life_cycle()->GetRemoteDevice().user_email());
-
-  EXPECT_CALL(*unlock_manager_, SetRemoteDeviceLifeCycle(nullptr))
-      .Times(AtLeast(1));
-}
-
-TEST_F(ProximityAuthSystemTest, ScreenOff_ScreenUnlocked) {
-  base::test::ScopedFeatureList feature_list(
-      ash::features::kSmartLockBluetoothScreenOffFix);
-  UnlockScreen();
-  EXPECT_FALSE(life_cycle());
-  SimulateScreenOff();
-  EXPECT_FALSE(life_cycle());
-}
-
-TEST_F(ProximityAuthSystemTest, ScreenOff_UnregisteredUserFocused) {
-  base::test::ScopedFeatureList feature_list(
-      ash::features::kSmartLockBluetoothScreenOffFix);
-  SimulateScreenOff();
-  EXPECT_FALSE(life_cycle());
-}
-
-TEST_F(ProximityAuthSystemTest, ScreenOff_RegisteredUserFocused) {
-  base::test::ScopedFeatureList feature_list(
-      ash::features::kSmartLockBluetoothScreenOffFix);
-  FocusUser(kUser1);
-
-  {
-    InSequence sequence;
-    EXPECT_CALL(*unlock_manager_, SetRemoteDeviceLifeCycle(nullptr))
-        .Times(AtLeast(1));
-    EXPECT_CALL(*unlock_manager_, SetRemoteDeviceLifeCycle(NotNull()));
-    SimulateScreenOff();
   }
 
   EXPECT_EQ(kUser1, life_cycle()->GetRemoteDevice().user_email());

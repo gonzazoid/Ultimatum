@@ -10,6 +10,7 @@
 #include "base/nix/xdg_util.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/bind.h"
 #include "components/crash/core/common/crash_key.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/ozone/platform/wayland/test/mock_surface.h"
@@ -28,110 +29,147 @@ std::string NumberToString(uint32_t number) {
 
 }  // namespace
 
-class WaylandEventWatcherTest : public WaylandTest {
- public:
-  WaylandEventWatcherTest() = default;
+// Tests that various types of critical errors result in correct crash keys.
+//
+// Posting the error terminates the client-server connection.  Further attempts
+// to sync will hang.  That is why we run "bare" lambdas in all tests of this
+// suite instead of using `PostToServerAndWait()`: that helper syncs the
+// connection after running the server task.  Due to the same reason we disable
+// the sync on the test tear down.  To ensure that the error message is caught
+// by the crash reporter, we wait until idle in the end of each test before
+// checking the crash key value.
+class WaylandEventWatcherTest : public WaylandTestSimple {
+ protected:
+  void TearDown() override {
+    // All tests in this suite terminate the client-server connection by posting
+    // various errors.  We cannot sync the connection on tear down.
+    DisableSyncOnTearDown();
+
+    WaylandTestSimple::TearDown();
+  }
 };
 
-TEST_P(WaylandEventWatcherTest, CrashKeyResourceError) {
+TEST_F(WaylandEventWatcherTest, CrashKeyResourceError) {
   const std::string kTestErrorString = "This is a nice error.";
-  auto* mock_surface = server_.GetObject<wl::MockSurface>(
-      window_->root_surface()->get_surface_id());
-  auto* xdg_surface = mock_surface->xdg_surface();
 
-  // Prepare the expectation error string.
-  const std::string expected_error_code =
-      base::StrCat({wl_resource_get_class(xdg_surface->resource()), ": error ",
-                    NumberToString(static_cast<uint32_t>(
-                        XDG_SURFACE_ERROR_UNCONFIGURED_BUFFER)),
-                    ": ", kTestErrorString});
+  std::string text;
+  auto callback = base::BindLambdaForTesting(
+      [&text](const std::string& data) { text = data; });
 
-  wl_resource_post_error(xdg_surface->resource(),
-                         XDG_SURFACE_ERROR_UNCONFIGURED_BUFFER, "%s",
-                         kTestErrorString.c_str());
+  server_.RunAndWait(base::BindLambdaForTesting(
+      [&kTestErrorString, callback,
+       surface_id = window_->root_surface()->get_surface_id()](
+          wl::TestWaylandServerThread* server) {
+        auto* const xdg_surface = server->GetObject<wl::MockSurface>(surface_id)
+                                      ->xdg_surface()
+                                      ->resource();
 
-  Sync();
+        // Prepare the expectation error string.
+        const std::string expected_error_code =
+            base::StrCat({wl_resource_get_class(xdg_surface), ": error ",
+                          NumberToString(static_cast<uint32_t>(
+                              XDG_SURFACE_ERROR_UNCONFIGURED_BUFFER)),
+                          ": ", kTestErrorString});
 
-  EXPECT_EQ(expected_error_code,
-            crash_reporter::GetCrashKeyValue("wayland_error"));
+        callback.Run(expected_error_code);
+        wl_resource_post_error(xdg_surface,
+                               XDG_SURFACE_ERROR_UNCONFIGURED_BUFFER, "%s",
+                               kTestErrorString.c_str());
+      }));
+
+  base::RunLoop().RunUntilIdle();
+
+  EXPECT_EQ(text, crash_reporter::GetCrashKeyValue("wayland_error"));
 }
 
-TEST_P(WaylandEventWatcherTest, CrashKeyResourceNoMemory) {
-  auto* mock_surface = server_.GetObject<wl::MockSurface>(
-      window_->root_surface()->get_surface_id());
-  auto* xdg_surface = mock_surface->xdg_surface();
-
+TEST_F(WaylandEventWatcherTest, CrashKeyResourceNoMemory) {
   // Prepare the expectation error string.
   const std::string expected_error_code = base::StrCat(
       {"wl_display: error ",
        NumberToString(static_cast<uint32_t>(WL_DISPLAY_ERROR_NO_MEMORY)),
        ": no memory"});
 
-  wl_resource_post_no_memory(xdg_surface->resource());
+  server_.RunAndWait(base::BindLambdaForTesting(
+      [surface_id = window_->root_surface()->get_surface_id()](
+          wl::TestWaylandServerThread* server) {
+        auto* const xdg_surface = server->GetObject<wl::MockSurface>(surface_id)
+                                      ->xdg_surface()
+                                      ->resource();
 
-  Sync();
+        wl_resource_post_no_memory(xdg_surface);
+      }));
+
+  base::RunLoop().RunUntilIdle();
 
   EXPECT_EQ(expected_error_code,
             crash_reporter::GetCrashKeyValue("wayland_error"));
 }
 
-TEST_P(WaylandEventWatcherTest, CrashKeyClientNoMemoryError) {
+TEST_F(WaylandEventWatcherTest, CrashKeyClientNoMemoryError) {
   const std::string expected_error_code = base::StrCat(
       {"wl_display: error ",
        NumberToString(static_cast<uint32_t>(WL_DISPLAY_ERROR_NO_MEMORY)),
        ": no memory"});
 
-  wl_client_post_no_memory(server_.client());
+  server_.RunAndWait(
+      base::BindLambdaForTesting([](wl::TestWaylandServerThread* server) {
+        wl_client_post_no_memory(server->client());
+      }));
 
-  Sync();
+  base::RunLoop().RunUntilIdle();
 
   EXPECT_EQ(expected_error_code,
             crash_reporter::GetCrashKeyValue("wayland_error"));
 }
 
-TEST_P(WaylandEventWatcherTest, CrashKeyClientImplementationError) {
+TEST_F(WaylandEventWatcherTest, CrashKeyClientImplementationError) {
   const std::string kError = "A nice error.";
   const std::string expected_error_code = base::StrCat(
       {"wl_display: error ",
        NumberToString(static_cast<uint32_t>(WL_DISPLAY_ERROR_IMPLEMENTATION)),
        ": ", kError});
 
-  wl_client_post_implementation_error(server_.client(), "%s", kError.c_str());
+  server_.RunAndWait(base::BindLambdaForTesting(
+      [&kError](wl::TestWaylandServerThread* server) {
+        wl_client_post_implementation_error(server->client(), "%s",
+                                            kError.c_str());
+      }));
 
-  Sync();
+  base::RunLoop().RunUntilIdle();
 
   EXPECT_EQ(expected_error_code,
             crash_reporter::GetCrashKeyValue("wayland_error"));
 }
 
-TEST_P(WaylandEventWatcherTest, CrashKeyCompositorNameSet) {
+TEST_F(WaylandEventWatcherTest, CrashKeyCompositorNameSet) {
   const std::string kTestWaylandCompositor = "OzoneWaylandTestCompositor";
   base::Environment::Create()->SetVar(base::nix::kXdgCurrentDesktopEnvVar,
                                       kTestWaylandCompositor);
 
-  wl_client_post_implementation_error(server_.client(), "%s", "stub error");
-  Sync();
+  server_.RunAndWait(
+      base::BindLambdaForTesting([](wl::TestWaylandServerThread* server) {
+        wl_client_post_implementation_error(server->client(), "%s",
+                                            "stub error");
+      }));
+
+  base::RunLoop().RunUntilIdle();
 
   EXPECT_EQ(kTestWaylandCompositor,
             crash_reporter::GetCrashKeyValue("wayland_compositor"));
 }
 
-TEST_P(WaylandEventWatcherTest, CrashKeyCompositorNameUnset) {
+TEST_F(WaylandEventWatcherTest, CrashKeyCompositorNameUnset) {
   base::Environment::Create()->UnSetVar(base::nix::kXdgCurrentDesktopEnvVar);
 
-  wl_client_post_implementation_error(server_.client(), "%s", "stub error");
-  Sync();
+  server_.RunAndWait(
+      base::BindLambdaForTesting([](wl::TestWaylandServerThread* server) {
+        wl_client_post_implementation_error(server->client(), "%s",
+                                            "stub error");
+      }));
+
+  base::RunLoop().RunUntilIdle();
 
   EXPECT_EQ("Unknown", crash_reporter::GetCrashKeyValue("wayland_compositor"));
 }
-
-INSTANTIATE_TEST_SUITE_P(XdgVersionStableTest,
-                         WaylandEventWatcherTest,
-                         Values(wl::ServerConfig{
-                             .shell_version = wl::ShellVersion::kStable}));
-INSTANTIATE_TEST_SUITE_P(XdgVersionV6Test,
-                         WaylandEventWatcherTest,
-                         Values(wl::ServerConfig{
-                             .shell_version = wl::ShellVersion::kV6}));
 
 }  // namespace ui

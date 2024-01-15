@@ -10,15 +10,15 @@
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/ash/arc/enterprise/cert_store/arc_cert_installer_utils.h"
 #include "chrome/browser/ash/policy/remote_commands/user_command_arc_job.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/net/x509_certificate_model_nss.h"
-#include "chrome/services/keymaster/public/mojom/cert_store.mojom.h"
+#include "chrome/services/keymanagement/public/mojom/cert_store_types.mojom.h"
 #include "crypto/rsa_private_key.h"
 #include "net/cert/x509_util_nss.h"
 
@@ -30,7 +30,7 @@ namespace arc {
 
 CertDescription::CertDescription(crypto::RSAPrivateKey* placeholder_key,
                                  CERTCertificate* nss_cert,
-                                 keymaster::mojom::ChapsSlot slot,
+                                 keymanagement::mojom::ChapsSlot slot,
                                  std::string label,
                                  std::string id)
     : placeholder_key(placeholder_key),
@@ -135,11 +135,12 @@ std::string ArcCertInstaller::InstallArcCert(
   command_proto.set_command_id(next_id_);
   command_proto.set_age_of_command(0);
 
-  std::string der_cert64;
-  base::Base64Encode(der_cert, &der_cert64);
+  std::string der_cert64 = base::Base64Encode(der_cert);
 
   crypto::RSAPrivateKey* rsa = certificate.placeholder_key.get();
   std::string pkcs12 = CreatePkcs12ForKey(name, rsa->key());
+  // NOTE: command_proto contains crypto key value. Avoid logging its value out
+  // on release build, by using LOG instead of SYSLOG.
   command_proto.set_payload(
       base::StringPrintf("{\"type\":\"INSTALL_KEY_PAIR\","
                          "\"payload\":\"{"
@@ -149,6 +150,7 @@ std::string ArcCertInstaller::InstallArcCert(
                          "\\\"is_user_selectable\\\":false"
                          "}\"}",
                          pkcs12.c_str(), name.c_str(), der_cert64.c_str()));
+  LOG(INFO) << "Attempting to install a key pair via remote command.";
   if (!job || !job->Init(queue_->GetNowTicks(), command_proto,
                          enterprise_management::SignedData())) {
     LOG(ERROR) << "Initialization of remote command failed";

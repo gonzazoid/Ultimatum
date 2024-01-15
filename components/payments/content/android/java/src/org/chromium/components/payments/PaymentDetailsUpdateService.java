@@ -11,7 +11,7 @@ import android.os.Bundle;
 import android.os.IBinder;
 
 import org.chromium.base.task.PostTask;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
+import org.chromium.base.task.TaskTraits;
 
 /**
  * A bound service responsible for receiving change payment method, shipping option, and shipping
@@ -25,52 +25,57 @@ public class PaymentDetailsUpdateService extends Service {
     private final IPaymentDetailsUpdateService.Stub mBinder =
             new IPaymentDetailsUpdateService.Stub() {
                 @Override
-                public void changePaymentMethod(Bundle paymentHandlerMethodData,
+                public void changePaymentMethod(
+                        Bundle paymentHandlerMethodData,
                         IPaymentDetailsUpdateServiceCallback callback) {
                     int callingUid = Binder.getCallingUid();
-                    PostTask.runOrPostTask(UiThreadTaskTraits.DEFAULT, () -> {
-                        if (!PaymentDetailsUpdateServiceHelper.getInstance().isCallerAuthorized(
-                                    callingUid)) {
-                            return;
-                        }
-                        PaymentDetailsUpdateServiceHelper.getInstance().changePaymentMethod(
-                                paymentHandlerMethodData, callback);
-                    });
+                    PostTask.runOrPostTask(
+                            TaskTraits.UI_DEFAULT,
+                            () -> {
+                                if (!PaymentDetailsUpdateServiceHelper.getInstance()
+                                        .isCallerAuthorized(callingUid)) {
+                                    return;
+                                }
+                                PaymentDetailsUpdateServiceHelper.getInstance()
+                                        .changePaymentMethod(paymentHandlerMethodData, callback);
+                            });
                 }
+
                 @Override
                 public void changeShippingOption(
                         String shippingOptionId, IPaymentDetailsUpdateServiceCallback callback) {
                     int callingUid = Binder.getCallingUid();
-                    PostTask.runOrPostTask(UiThreadTaskTraits.DEFAULT, () -> {
-                        if (!PaymentDetailsUpdateServiceHelper.getInstance().isCallerAuthorized(
-                                    callingUid)) {
-                            return;
-                        }
-                        PaymentDetailsUpdateServiceHelper.getInstance().changeShippingOption(
-                                shippingOptionId, callback);
-                    });
+                    PostTask.runOrPostTask(
+                            TaskTraits.UI_DEFAULT,
+                            () -> {
+                                if (!PaymentDetailsUpdateServiceHelper.getInstance()
+                                        .isCallerAuthorized(callingUid)) {
+                                    return;
+                                }
+                                PaymentDetailsUpdateServiceHelper.getInstance()
+                                        .changeShippingOption(shippingOptionId, callback);
+                            });
                 }
+
                 @Override
                 public void changeShippingAddress(
                         Bundle shippingAddress, IPaymentDetailsUpdateServiceCallback callback) {
                     int callingUid = Binder.getCallingUid();
-                    PostTask.runOrPostTask(UiThreadTaskTraits.DEFAULT, () -> {
-                        if (!PaymentDetailsUpdateServiceHelper.getInstance().isCallerAuthorized(
-                                    callingUid)) {
-                            return;
-                        }
-                        PaymentDetailsUpdateServiceHelper.getInstance().changeShippingAddress(
-                                shippingAddress, callback);
-                    });
+                    PostTask.runOrPostTask(
+                            TaskTraits.UI_DEFAULT,
+                            () -> {
+                                if (!PaymentDetailsUpdateServiceHelper.getInstance()
+                                        .isCallerAuthorized(callingUid)) {
+                                    return;
+                                }
+                                PaymentDetailsUpdateServiceHelper.getInstance()
+                                        .changeShippingAddress(shippingAddress, callback);
+                            });
                 }
             };
 
     @Override
     public IBinder onBind(Intent intent) {
-        if (!PaymentFeatureList.isEnabledOrExperimentalFeaturesEnabled(
-                    PaymentFeatureList.ANDROID_APP_PAYMENT_UPDATE_EVENTS)) {
-            return null;
-        }
         return mBinder;
     }
 }

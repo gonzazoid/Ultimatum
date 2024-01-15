@@ -76,12 +76,12 @@ scoped_refptr<const ElementAnimations> Animation::element_animations() const {
 }
 
 void Animation::AttachElement(ElementId element_id) {
-  DCHECK_NE(element_id.GetStableId(), ElementId::kReservedElementId);
+  DCHECK_NE(element_id, kReservedElementIdForPaintWorklet);
   AttachElementInternal(element_id);
 }
 
-void Animation::AttachNoElement() {
-  AttachElementInternal(ElementId(ElementId::kReservedElementId));
+void Animation::AttachPaintWorkletElement() {
+  AttachElementInternal(kReservedElementIdForPaintWorklet);
 }
 
 void Animation::AttachElementInternal(ElementId element_id) {
@@ -139,29 +139,28 @@ void Animation::UnregisterAnimation() {
 }
 
 void Animation::PushPropertiesTo(Animation* animation_impl) {
-  keyframe_effect()->PushPropertiesTo(animation_impl->keyframe_effect());
+  std::optional<base::TimeTicks> impl_start_time;
+  if (use_start_time_from_impl_ && !GetStartTime()) {
+    // If this animation is replacing an existing one before having received a
+    // start time, try to get the start from the animation being replaced.
+    // This is done to prevent a race where the client may cancel and restart
+    // the Animation before having received a start time but after the
+    // Animation has started playing on the compositor thread.
+    impl_start_time = animation_impl->GetStartTime();
+
+    // This should always happen only on the first commit which must need
+    // pushing (and hence, the below call won't no-op).
+    CHECK(keyframe_effect()->needs_push_properties());
+  }
+  use_start_time_from_impl_ = false;
+
+  keyframe_effect()->PushPropertiesTo(animation_impl->keyframe_effect(),
+                                      impl_start_time);
 }
 
-void Animation::Tick(base::TimeTicks tick_time) {
+bool Animation::Tick(base::TimeTicks tick_time) {
   DCHECK(!IsWorkletAnimation());
-  if (IsScrollLinkedAnimation()) {
-    // blink::Animation uses its start time to calculate local time for each of
-    // its keyframes. However, in cc the start time is stored at the Keyframe
-    // level so we have to delegate the tick time to a lower level to calculate
-    // the local time.
-    // With ScrollTimeline, the start time of the animation is calculated
-    // differently i.e. it is not the current time at the moment of start.
-    // To deal with this the scroll timeline pauses the animation at its desired
-    // time and then ticks it which side-steps the start time altogether. See
-    // crbug.com/1076012 for alternative design choices considered for future
-    // improvement.
-    keyframe_effect()->Pause(tick_time - base::TimeTicks(),
-                             PauseCondition::kAfterStart);
-    keyframe_effect()->Tick(base::TimeTicks());
-  } else {
-    DCHECK(!tick_time.is_null());
-    keyframe_effect()->Tick(tick_time);
-  }
+  return keyframe_effect()->Tick(tick_time);
 }
 
 bool Animation::IsScrollLinkedAnimation() const {
@@ -201,22 +200,22 @@ void Animation::DispatchAndDelegateAnimationEvent(const AnimationEvent& event) {
 void Animation::DelegateAnimationEvent(const AnimationEvent& event) {
   if (animation_delegate_) {
     switch (event.type) {
-      case AnimationEvent::STARTED:
+      case AnimationEvent::Type::kStarted:
         animation_delegate_->NotifyAnimationStarted(
             event.monotonic_time, event.target_property, event.group_id);
         break;
 
-      case AnimationEvent::FINISHED:
+      case AnimationEvent::Type::kFinished:
         animation_delegate_->NotifyAnimationFinished(
             event.monotonic_time, event.target_property, event.group_id);
         break;
 
-      case AnimationEvent::ABORTED:
+      case AnimationEvent::Type::kAborted:
         animation_delegate_->NotifyAnimationAborted(
             event.monotonic_time, event.target_property, event.group_id);
         break;
 
-      case AnimationEvent::TAKEOVER:
+      case AnimationEvent::Type::kTakeOver:
         // TODO(crbug.com/1018213): Routing TAKEOVER events is broken.
         DCHECK(!event.is_impl_only);
         DCHECK(event.target_property == TargetProperty::SCROLL_OFFSET);
@@ -226,7 +225,7 @@ void Animation::DelegateAnimationEvent(const AnimationEvent& event) {
             event.animation_start_time, event.curve->Clone());
         break;
 
-      case AnimationEvent::TIME_UPDATED:
+      case AnimationEvent::Type::kTimeUpdated:
         DCHECK(!event.is_impl_only);
         animation_delegate_->NotifyLocalTimeUpdated(event.local_time);
         break;
@@ -245,6 +244,24 @@ bool Animation::AffectsNativeProperty() const {
 void Animation::SetNeedsCommit() {
   DCHECK(animation_host());
   animation_host()->SetNeedsCommit();
+}
+
+std::optional<base::TimeTicks> Animation::GetStartTime() const {
+  CHECK(keyframe_effect());
+
+  if (!keyframe_effect()->keyframe_models().size()) {
+    return std::nullopt;
+  }
+
+  // KeyframeModels should all share the same start time so just use the first
+  // one's.
+  gfx::KeyframeModel& km = *keyframe_effect()->keyframe_models().front();
+
+  if (!km.has_set_start_time()) {
+    return std::nullopt;
+  }
+
+  return km.start_time();
 }
 
 void Animation::SetNeedsPushProperties() {
@@ -305,7 +322,7 @@ void Animation::NotifyKeyframeModelFinishedForTesting(
     int keyframe_model_id,
     TargetProperty::Type target_property,
     int group_id) {
-  AnimationEvent event(AnimationEvent::FINISHED,
+  AnimationEvent event(AnimationEvent::Type::kFinished,
                        {timeline_id, id(), keyframe_model_id}, group_id,
                        target_property, base::TimeTicks());
   DispatchAndDelegateAnimationEvent(event);

@@ -24,12 +24,16 @@
 - (void)setTextFieldConfigurations:
     (NSArray<TextFieldConfiguration*>*)textFieldConfigurations;
 
-// Sets the actions for this alert.
-- (void)setActions:(NSArray<AlertAction*>*)actions;
+// Sets the actions for this alert. The double array of actions would be
+// represented visually with each sub-array being a row of buttons, unless the
+// sum of the button text widths cannot fit into a single row.
+- (void)setActions:(NSArray<NSArray<AlertAction*>*>*)actions;
 
 // Sets the accessibility identifier for the alert view.
 - (void)setAlertAccessibilityIdentifier:(NSString*)identifier;
 
+// Sets whether the activity indicator should be visible in the alert view.
+- (void)setShouldShowActivityIndicator:(BOOL)shouldShowActivityIndicator;
 @end
 
 #endif  // IOS_CHROME_BROWSER_UI_ALERT_VIEW_ALERT_CONSUMER_H_

@@ -5,10 +5,11 @@
 #ifndef CHROME_BROWSER_PRIVACY_PRIVACY_METRICS_SERVICE_H_
 #define CHROME_BROWSER_PRIVACY_PRIVACY_METRICS_SERVICE_H_
 
+#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
-#include "components/sync/driver/sync_service.h"
+#include "components/sync/service/sync_service.h"
 
 class HostContentSettingsMap;
 class PrefService;

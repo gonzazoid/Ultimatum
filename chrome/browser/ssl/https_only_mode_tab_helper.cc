@@ -4,29 +4,32 @@
 
 #include "chrome/browser/ssl/https_only_mode_tab_helper.h"
 
-#include "components/security_interstitials/content/https_only_mode_blocking_page.h"
-#include "components/security_interstitials/content/security_interstitial_tab_helper.h"
+#include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/navigation_handle.h"
+#include "content/public/browser/reload_type.h"
 
 HttpsOnlyModeTabHelper::~HttpsOnlyModeTabHelper() = default;
 
-void HttpsOnlyModeTabHelper::ReadyToCommitNavigation(
+void HttpsOnlyModeTabHelper::DidStartNavigation(
     content::NavigationHandle* navigation_handle) {
-  if (is_timer_interstitial()) {
-    set_is_timer_interstitial(false);
-    std::unique_ptr<security_interstitials::HttpsOnlyModeBlockingPage>
-        blocking_page = factory_->CreateHttpsOnlyModeBlockingPage(
-            navigation_handle->GetWebContents(), fallback_url());
-    security_interstitials::SecurityInterstitialTabHelper::
-        AssociateBlockingPage(navigation_handle, std::move(blocking_page));
+  // If the user was on an exempt net error and the tab was reloaded, only
+  // reset the exempt error state, but keep the upgrade state so the reload
+  // will result in continuing to attempt the upgraded navigation (and if it
+  // later fails, the fallback will be to the original fallback URL).
+  bool should_maintain_upgrade_state =
+      is_exempt_error() &&
+      navigation_handle->GetReloadType() != content::ReloadType::NONE;
+  set_is_exempt_error(false);
+  if (!should_maintain_upgrade_state) {
+    set_fallback_url(GURL());
+    set_is_navigation_fallback(false);
+    set_is_navigation_upgraded(false);
   }
 }
 
 HttpsOnlyModeTabHelper::HttpsOnlyModeTabHelper(
     content::WebContents* web_contents)
     : WebContentsObserver(web_contents),
-      content::WebContentsUserData<HttpsOnlyModeTabHelper>(*web_contents) {
-  factory_ = std::make_unique<ChromeSecurityBlockingPageFactory>();
-}
+      content::WebContentsUserData<HttpsOnlyModeTabHelper>(*web_contents) {}
 
 WEB_CONTENTS_USER_DATA_KEY_IMPL(HttpsOnlyModeTabHelper);

@@ -7,28 +7,37 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
-#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_piece.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/webauthn/authenticator_request_dialog_model.h"
+#include "components/signin/public/identity_manager/access_token_info.h"
+#include "components/signin/public/identity_manager/primary_account_access_token_fetcher.h"
 #include "content/public/browser/authenticator_request_client_delegate.h"
 #include "content/public/browser/global_routing_id.h"
 #include "device/fido/cable/cable_discovery_data.h"
 #include "device/fido/fido_request_handler_base.h"
 #include "device/fido/fido_transport_protocol.h"
+#include "google_apis/gaia/google_service_auth_error.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
+class PrefService;
 class Profile;
 
 namespace content {
 class BrowserContext;
 class RenderFrameHost;
 }  // namespace content
+
+namespace device {
+class PublicKeyCredentialDescriptor;
+class PublicKeyCredentialUserEntity;
+}  // namespace device
 
 namespace user_prefs {
 class PrefRegistrySyncable;
@@ -53,7 +62,6 @@ class ChromeWebAuthenticationDelegate
 
   ~ChromeWebAuthenticationDelegate() override;
 
-#if !BUILDFLAG(IS_ANDROID)
   // content::WebAuthenticationDelegate:
   bool OverrideCallerOriginAndRelyingPartyIdValidation(
       content::BrowserContext* browser_context,
@@ -71,16 +79,16 @@ class ChromeWebAuthenticationDelegate
       const std::string& relying_party_id) override;
   bool SupportsResidentKeys(
       content::RenderFrameHost* render_frame_host) override;
+  bool SupportsPasskeyMetadataSyncing() override;
   bool IsFocused(content::WebContents* web_contents) override;
   absl::optional<bool> IsUserVerifyingPlatformAuthenticatorAvailableOverride(
       content::RenderFrameHost* render_frame_host) override;
   content::WebAuthenticationRequestProxy* MaybeGetRequestProxy(
+      content::BrowserContext* browser_context,
+      const url::Origin& caller_origin) override;
+  bool IsEnclaveAuthenticatorAvailable(
       content::BrowserContext* browser_context) override;
-#endif
-#if BUILDFLAG(IS_WIN)
-  void OperationSucceeded(content::BrowserContext* browser_context,
-                          bool used_win_api) override;
-#endif
+
 #if BUILDFLAG(IS_MAC)
   absl::optional<TouchIdAuthenticatorConfig> GetTouchIdAuthenticatorConfig(
       content::BrowserContext* browser_context) override;
@@ -112,12 +120,9 @@ class ChromeAuthenticatorRequestDelegate
     virtual void UIShown(ChromeAuthenticatorRequestDelegate* delegate) = 0;
 
     virtual void CableV2ExtensionSeen(
-        base::span<const uint8_t> server_link_data,
-        base::span<const uint8_t> experiments,
-        AuthenticatorRequestDialogModel::ExperimentServerLinkSheet,
-        AuthenticatorRequestDialogModel::ExperimentServerLinkTitle) = 0;
+        base::span<const uint8_t> server_link_data) = 0;
 
-    virtual void ConfiguringCable(device::CableRequestType request_type) {}
+    virtual void ConfiguringCable(device::FidoRequestType request_type) {}
 
     virtual void AccountSelectorShown(
         const std::vector<device::AuthenticatorGetAssertionResponse>&
@@ -157,16 +162,25 @@ class ChromeAuthenticatorRequestDelegate
       AccountPreselectedCallback account_preselected_callback,
       device::FidoRequestHandlerBase::RequestCallback request_callback,
       base::RepeatingClosure bluetooth_adapter_power_on_callback) override;
+  void OnTransactionSuccessful(RequestSource request_source,
+                               device::FidoRequestType,
+                               device::AuthenticatorType) override;
   void ShouldReturnAttestation(
       const std::string& relying_party_id,
       const device::FidoAuthenticator* authenticator,
       bool is_enterprise_attestation,
       base::OnceCallback<void(bool)> callback) override;
-  void ConfigureCable(
+  void ConfigureDiscoveries(
       const url::Origin& origin,
-      device::CableRequestType request_type,
+      const std::string& rp_id,
+      RequestSource request_source,
+      device::FidoRequestType request_type,
+      absl::optional<device::ResidentKeyRequirement> resident_key_requirement,
       base::span<const device::CableDiscoveryData> pairings_from_extension,
+      bool is_enclave_authenticator_available,
       device::FidoDiscoveryFactory* discovery_factory) override;
+  void SetHints(
+      const AuthenticatorRequestClientDelegate::Hints& hints) override;
   void SelectAccount(
       std::vector<device::AuthenticatorGetAssertionResponse> responses,
       base::OnceCallback<void(device::AuthenticatorGetAssertionResponse)>
@@ -174,6 +188,8 @@ class ChromeAuthenticatorRequestDelegate
   void DisableUI() override;
   bool IsWebAuthnUIEnabled() override;
   void SetConditionalRequest(bool is_conditional) override;
+  void SetCredentialIdFilter(std::vector<device::PublicKeyCredentialDescriptor>
+                                 credential_list) override;
   void SetUserEntityForMakeCredentialRequest(
       const device::PublicKeyCredentialUserEntity& user_entity) override;
 
@@ -202,7 +218,7 @@ class ChromeAuthenticatorRequestDelegate
   void OnManageDevicesClicked() override;
 
   // A non-const version of dialog_model().
-  raw_ptr<AuthenticatorRequestDialogModel> GetDialogModelForTesting();
+  AuthenticatorRequestDialogModel* GetDialogModelForTesting();
 
   // SetPassEmptyUsbDeviceManagerForTesting controls whether the
   // `DiscoveryFactory` will be given an empty USB device manager. This is
@@ -212,10 +228,13 @@ class ChromeAuthenticatorRequestDelegate
   // "leaks" to be reported.
   void SetPassEmptyUsbDeviceManagerForTesting(bool value);
 
-  FRIEND_TEST_ALL_PREFIXES(ChromeAuthenticatorRequestDelegateTest,
-                           TestTransportPrefType);
-  FRIEND_TEST_ALL_PREFIXES(ChromeAuthenticatorRequestDelegateTest,
-                           TestPairedDeviceAddressPreference);
+ private:
+  FRIEND_TEST_ALL_PREFIXES(ChromeAuthenticatorRequestDelegatePrivateTest,
+                           DaysSinceDate);
+  FRIEND_TEST_ALL_PREFIXES(ChromeAuthenticatorRequestDelegatePrivateTest,
+                           GetICloudKeychainPref);
+  FRIEND_TEST_ALL_PREFIXES(ChromeAuthenticatorRequestDelegatePrivateTest,
+                           ShouldCreateInICloudKeychain);
 
   // GetRenderFrameHost returns a pointer to the RenderFrameHost that was given
   // to the constructor.
@@ -230,7 +249,56 @@ class ChromeAuthenticatorRequestDelegate
   // information that will be broadcast by the device.
   bool ShouldPermitCableExtension(const url::Origin& origin);
 
-  void OnInvalidatedCablePairing(size_t failed_contact_index);
+  void OnInvalidatedCablePairing(
+      std::unique_ptr<device::cablev2::Pairing> failed_pairing);
+  void OnCableEvent(device::cablev2::Event event);
+
+  // Adds GPM passkeys matching |rp_id| to |passkeys|.
+  void GetPhoneContactableGpmPasskeysForRpId(
+      std::vector<device::DiscoverableCredentialMetadata>* passkeys);
+
+  // Configures an WebAuthn enclave authenticator discovery and provides it with
+  // synced passkeys.
+  void ConfigureEnclaveDiscovery(
+      const std::string& rp_id,
+      device::FidoDiscoveryFactory* discovery_factory);
+
+  // Invoked when a new GPM passkey is created, to save it to sync data.
+  void OnPasskeyCreated(sync_pb::WebauthnCredentialSpecifics passkey);
+
+#if BUILDFLAG(IS_MAC)
+  // DaysSinceDate returns the number of days between `formatted_date` (in ISO
+  // 8601 format) and `now`. It returns `nullopt` if `formatted_date` cannot be
+  // parsed or if it's in `now`s future.
+  //
+  // It does not parse `formatted_date` strictly and is intended for trusted
+  // inputs.
+  static absl::optional<int> DaysSinceDate(const std::string& formatted_date,
+                                           base::Time now);
+
+  // GetICloudKeychainPref returns the value of the iCloud Keychain preference
+  // as a tristate. If no value for the preference has been set then it
+  // returns `absl::nullopt`.
+  static absl::optional<bool> GetICloudKeychainPref(const PrefService* prefs);
+
+  // IsActiveProfileAuthenticatorUser returns true if the profile authenticator
+  // has been used in the past 31 days.
+  static bool IsActiveProfileAuthenticatorUser(const PrefService* prefs);
+
+  // ShouldCreateInICloudKeychain returns true if attachment=platform creation
+  // requests should default to iCloud Keychain.
+  static bool ShouldCreateInICloudKeychain(
+      RequestSource request_source,
+      bool is_active_profile_authenticator_user,
+      bool has_icloud_drive_enabled,
+      bool request_is_for_google_com,
+      absl::optional<bool> preference);
+
+  // ConfigureICloudKeychain is called by `ConfigureDiscoveries` to configure
+  // the `AuthenticatorRequestDialogModel` with iCloud Keychain-related values.
+  void ConfigureICloudKeychain(RequestSource request_source,
+                               const std::string& rp_id);
+#endif
 
   const content::GlobalRenderFrameHostId render_frame_host_id_;
   const std::unique_ptr<AuthenticatorRequestDialogModel> dialog_model_;
@@ -238,11 +306,6 @@ class ChromeAuthenticatorRequestDelegate
   base::RepeatingClosure start_over_callback_;
   AccountPreselectedCallback account_preselected_callback_;
   device::FidoRequestHandlerBase::RequestCallback request_callback_;
-
-  // The next two fields are the same length and contain the names and public
-  // keys of paired phones.
-  std::vector<std::string> phone_names_;
-  std::vector<std::array<uint8_t, device::kP256X962Length>> phone_public_keys_;
 
   // If in the TransportAvailabilityInfo reported by the request handler,
   // disable_embedder_ui is set, this will be set to true. No UI must be
@@ -253,10 +316,30 @@ class ChromeAuthenticatorRequestDelegate
   // credentials on the device.
   bool is_conditional_ = false;
 
+  // A list of credentials used to filter passkeys by ID. When non-empty,
+  // non-matching passkeys will not be displayed during conditional mediation
+  // requests. When empty, no filter is applied and all passkeys are displayed.
+  std::vector<device::PublicKeyCredentialDescriptor> credential_filter_;
+
   // See `SetPassEmptyUsbDeviceManagerForTesting`.
   bool pass_empty_usb_device_manager_ = false;
 
- private:
+  // cable_device_ready_ is true if a caBLE handshake has completed. At this
+  // point we assume that any errors were communicated on the caBLE device and
+  // don't show errors on the desktop too.
+  bool cable_device_ready_ = false;
+
+  // can_use_synced_phone_passkeys_ is true if there is a phone pairing
+  // available that can service requests for synced GPM passkeys.
+  bool can_use_synced_phone_passkeys_ = false;
+
+  // True when the cloud enclave authenticator is available for use.
+  bool is_enclave_authenticator_available_ = false;
+
+  // Fetcher for OAuth access tokens needed to use the enclave authenticator.
+  std::unique_ptr<signin::PrimaryAccountAccessTokenFetcher>
+      access_token_fetcher_;
+
   base::WeakPtrFactory<ChromeAuthenticatorRequestDelegate> weak_ptr_factory_{
       this};
 };

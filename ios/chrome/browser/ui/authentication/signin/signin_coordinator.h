@@ -11,7 +11,7 @@
 #import "components/signin/public/base/signin_metrics.h"
 #import "ios/chrome/browser/ui/authentication/signin/signin_completion_info.h"
 #import "ios/chrome/browser/ui/authentication/signin/signin_constants.h"
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#import "ios/chrome/browser/ui/first_run/interruptible_chrome_coordinator.h"
 
 class Browser;
 namespace syncer {
@@ -24,11 +24,24 @@ class PrefRegistrySyncable;
 
 // Main class for sign-in coordinator. This class should not be instantiated
 // directly, this should be done using the class methods.
-@interface SigninCoordinator : ChromeCoordinator
+@interface SigninCoordinator : InterruptibleChromeCoordinator
 
 // Called when the sign-in dialog is interrupted, canceled or successful.
 // This completion needs to be set before calling -[SigninCoordinator start].
 @property(nonatomic, copy) SigninCoordinatorCompletionCallback signinCompletion;
+
+// The access point which caused this coordinator to open.
+// Used for histogram only.
+@property(nonatomic, readonly) signin_metrics::AccessPoint accessPoint;
+
+- (instancetype)initWithBaseViewController:(UIViewController*)viewController
+                                   browser:(Browser*)browser
+                               accessPoint:
+                                   (signin_metrics::AccessPoint)accessPoint
+    NS_DESIGNATED_INITIALIZER;
+
+- (instancetype)initWithBaseViewController:(UIViewController*)viewController
+                                   browser:(Browser*)browser NS_UNAVAILABLE;
 
 // Registers preferences related to sign-in coordinator.
 + (void)registerBrowserStatePrefs:(user_prefs::PrefRegistrySyncable*)registry;
@@ -48,22 +61,42 @@ class PrefRegistrySyncable;
                                     promoAction:(signin_metrics::PromoAction)
                                                     promoAction;
 
-// Returns a coordinator for first run sign-in workflow. If the user tap on the
-// settings link to open the advanced settings sign-in, the SigninCoordinator
-// owner is in charge open this view, according to -[SigninCompletionInfo
-// signinCompletionAction] in `signinCompletionInfo` from `signinCompletion`.
-// `navigationController` presents the sign-in. Will be responsible for
-// dismissing itself upon sign-in completion.
-+ (instancetype)firstRunCoordinatorWithBaseNavigationController:
-                    (UINavigationController*)navigationController
-                                                        browser:
-                                                            (Browser*)browser;
+// Returns a coordinator to sign-in the user without taps if the identity has
+// been selected with `identity`. Otherwise, it will ask the user to select
+// an identity, and starts the sign-in flow. If there is no identity on the
+// device, the add account dialog will be displayed, and then the sign-in flow
+// is started with the newly added identity.
++ (instancetype)
+    instantSigninCoordinatorWithBaseViewController:
+        (UIViewController*)viewController
+                                           browser:(Browser*)browser
+                                          identity:(id<SystemIdentity>)identity
+                                       accessPoint:(signin_metrics::AccessPoint)
+                                                       accessPoint
+                                       promoAction:(signin_metrics::PromoAction)
+                                                       promoAction;
 
 // Returns a coordinator for forced sign-in workflow.
 // `viewController` presents the sign-in.
-+ (instancetype)forcedSigninCoordinatorWithBaseViewController:
-                    (UIViewController*)viewController
-                                                      browser:(Browser*)browser;
++ (instancetype)
+    forcedSigninCoordinatorWithBaseViewController:
+        (UIViewController*)viewController
+                                          browser:(Browser*)browser
+                                      accessPoint:(signin_metrics::AccessPoint)
+                                                      accessPoint;
+
+// Returns a coordinator for the sign-in and sync workflow. The views will be
+// the newer FRE style views. `viewController` presents the sign-in.
++ (instancetype)
+    twoScreensSigninCoordinatorWithBaseViewController:
+        (UIViewController*)viewController
+                                              browser:(Browser*)browser
+                                          accessPoint:
+                                              (signin_metrics::AccessPoint)
+                                                  accessPoint
+                                          promoAction:
+                                              (signin_metrics::PromoAction)
+                                                  promoAction;
 
 // Returns a coordinator for upgrade sign-in workflow.
 // `viewController` presents the sign-in.
@@ -82,7 +115,10 @@ class PrefRegistrySyncable;
                                                     browser:(Browser*)browser
                                                 signinState:
                                                     (IdentitySigninState)
-                                                        signinState;
+                                                        signinState
+                                                accessPoint:(signin_metrics::
+                                                                 AccessPoint)
+                                                                accessPoint;
 
 // Returns a coordinator to add an account.
 // `viewController` presents the sign-in.
@@ -94,20 +130,37 @@ class PrefRegistrySyncable;
                                     accessPoint:(signin_metrics::AccessPoint)
                                                     accessPoint;
 
-// Returns a coordinator for re-authentication workflow.
+// Returns a coordinator for re-authentication workflow. This should only be
+// called when the primary account is available.
 // `viewController` presents the sign-in.
 // `accessPoint` access point from the sign-in where is started.
 // `promoAction` is promo button used to trigger the sign-in.
 + (instancetype)
-    reAuthenticationCoordinatorWithBaseViewController:
+    primaryAccountReauthCoordinatorWithBaseViewController:
         (UIViewController*)viewController
-                                              browser:(Browser*)browser
-                                          accessPoint:
-                                              (signin_metrics::AccessPoint)
-                                                  accessPoint
-                                          promoAction:
-                                              (signin_metrics::PromoAction)
-                                                  promoAction;
+                                                  browser:(Browser*)browser
+                                              accessPoint:
+                                                  (signin_metrics::AccessPoint)
+                                                      accessPoint
+                                              promoAction:
+                                                  (signin_metrics::PromoAction)
+                                                      promoAction;
+
+// Returns a coordinator for re-authentication workflow. This should only be
+// called when there is no primary account.
+// `viewController` presents the sign-in.
+// `accessPoint` access point from the sign-in where is started.
+// `promoAction` is promo button used to trigger the sign-in.
++ (instancetype)
+    signinAndSyncReauthCoordinatorWithBaseViewController:
+        (UIViewController*)viewController
+                                                 browser:(Browser*)browser
+                                             accessPoint:
+                                                 (signin_metrics::AccessPoint)
+                                                     accessPoint
+                                             promoAction:
+                                                 (signin_metrics::PromoAction)
+                                                     promoAction;
 
 // Returns a coordinator for re-authentication workflow for Trusted
 // Vault for the primary identity. This is done with TrustedVaultService.
@@ -126,7 +179,11 @@ class PrefRegistrySyncable;
                                                           trigger:
                                                               (syncer::
                                                                    TrustedVaultUserActionTriggerForUMA)
-                                                                  trigger;
+                                                                  trigger
+                                                      accessPoint:
+                                                          (signin_metrics::
+                                                               AccessPoint)
+                                                              accessPoint;
 
 // Returns a coordinator to display the account consistency promo with a list
 // of accounts available on the device for sign-in.
@@ -141,12 +198,31 @@ class PrefRegistrySyncable;
                                                                  AccessPoint)
                                                                 accessPoint;
 
+// Returns a coordinator to display the sign-in view then the history opt-in.
++ (instancetype)
+    sheetSigninAndHistorySyncCoordinatorWithBaseViewController:
+        (UIViewController*)viewController
+                                                       browser:(Browser*)browser
+                                                   accessPoint:(signin_metrics::
+                                                                    AccessPoint)
+                                                                   accessPoint
+                                                   promoAction:(signin_metrics::
+                                                                    PromoAction)
+                                                                   promoAction;
+
 // Interrupts the sign-in flow.
 // `signinCompletion(SigninCoordinatorResultInterrupted, nil)` is guaranteed to
 // be called before `completion()`.
-// `action` action describing how to interrupt the sign-in.
-// `completion` called once the sign-in is fully interrupted.
-- (void)interruptWithAction:(SigninCoordinatorInterruptAction)action
+// When the coordinator is interrupted with `UIShutdownNoDismiss` action, both
+// `signinCompletion()` and `completion()` are called synchronously in this
+// order.
+// When the coordinator is interrupted with `DismissWithoutAnimation` or
+// `DismissWithAnimation`, the view is dismissed first. After being dismissed,
+// `signinCompletion()` is called, and then `completion()` is called.
+//
+// It is still mandatory to call `-[SigninCoordinator stop]` once
+// `signinCompletion()` is called.
+- (void)interruptWithAction:(SigninCoordinatorInterrupt)action
                  completion:(ProceduralBlock)completion;
 
 // ChromeCoordinator.

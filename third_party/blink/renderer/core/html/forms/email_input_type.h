@@ -45,7 +45,7 @@ class EmailInputType final : public BaseTextInputType {
                                                        const String&);
   CORE_EXPORT static bool IsValidEmailAddress(const ScriptRegexp&,
                                               const String&);
-  CORE_EXPORT static ScriptRegexp* CreateEmailRegexp();
+  CORE_EXPORT static ScriptRegexp* CreateEmailRegexp(v8::Isolate* isolate);
 
   static Vector<String> ParseMultipleValues(const String& value);
 
@@ -53,13 +53,13 @@ class EmailInputType final : public BaseTextInputType {
 
  private:
   void CountUsage() override;
-  const AtomicString& FormControlType() const override;
   bool TypeMismatch() const override;
   String TypeMismatchText() const override;
   bool SupportsSelectionAPI() const override;
   String SanitizeValue(const String&) const override;
   String ConvertFromVisibleValue(const String&) const override;
   String VisibleValue() const override;
+  void MultipleAttributeChanged() override;
 
   String ConvertEmailAddressToUnicode(const String&) const;
   String FindInvalidAddress(const String&) const;

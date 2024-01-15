@@ -8,7 +8,7 @@
 #include <map>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "components/prefs/pref_observer.h"
 #include "components/prefs/prefs_export.h"
@@ -74,7 +74,7 @@ class COMPONENTS_PREFS_EXPORT PrefChangeRegistrar final : public PrefObserver {
   using ObserverMap = std::map<std::string, NamedChangeCallback>;
 
   ObserverMap observers_;
-  raw_ptr<PrefService, DanglingUntriaged> service_;
+  raw_ptr<PrefService, AcrossTasksDanglingUntriaged> service_;
 };
 
 #endif  // COMPONENTS_PREFS_PREF_CHANGE_REGISTRAR_H_

@@ -8,23 +8,22 @@
 #include "base/memory/weak_ptr.h"
 #include "components/autofill/core/browser/iban_manager.h"
 #include "components/autofill/core/browser/personal_data_manager.h"
+#include "components/autofill/core/browser/ui/popup_item_ids.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace autofill {
 
-class MockIBANManager : public IBANManager {
+class MockIbanManager : public IbanManager {
  public:
-  explicit MockIBANManager(PersonalDataManager* personal_data_manager);
+  explicit MockIbanManager(PersonalDataManager* personal_data_manager);
 
-  ~MockIBANManager() override;
+  ~MockIbanManager() override;
 
   MOCK_METHOD(bool,
               OnGetSingleFieldSuggestions,
-              (int query_id,
-               AutoselectFirstSuggestion autoselect_first_suggestion,
-               const FormFieldData& field,
+              (const FormFieldData& field,
                const AutofillClient& client,
-               base::WeakPtr<IBANManager::SuggestionsHandler> handler,
+               SingleFieldFormFiller::OnSuggestionsReturnedCallback callback,
                const SuggestionsContext& context),
               (override));
   MOCK_METHOD(void,
@@ -32,17 +31,14 @@ class MockIBANManager : public IBANManager {
               (const std::vector<FormFieldData>& fields,
                bool is_autocomplete_enabled),
               (override));
-  MOCK_METHOD(void,
-              CancelPendingQueries,
-              (const IBANManager::SuggestionsHandler*),
-              (override));
+  MOCK_METHOD(void, CancelPendingQueries, (), (override));
   MOCK_METHOD(void,
               OnRemoveCurrentSingleFieldSuggestion,
-              (const std::u16string&, const std::u16string&, int),
+              (const std::u16string&, const std::u16string&, PopupItemId),
               (override));
   MOCK_METHOD(void,
               OnSingleFieldSuggestionSelected,
-              (const std::u16string&, int),
+              (const std::u16string&, PopupItemId),
               (override));
 };
 

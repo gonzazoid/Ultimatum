@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "base/containers/contains.h"
-#include "base/json/json_reader.h"
 #include "base/run_loop.h"
 #include "base/test/values_test_util.h"
 #include "base/values.h"
@@ -135,12 +134,12 @@ class WebRequestRulesRegistryTest : public testing::Test {
     api::events::Rule rule;
     rule.id = kRuleId1;
     rule.priority = 100;
-    rule.actions.emplace_back(action_dict.Clone());
+    rule.actions.Append(std::move(action_dict));
     http_condition_dict.Set(keys2::kSchemesKey, std::move(scheme_http));
     http_condition_url_filter.Set(keys::kUrlKey,
                                   std::move(http_condition_dict));
-    rule.conditions.emplace_back(http_condition_url_filter.Clone());
-    rule.conditions.emplace_back(https_condition_url_filter.Clone());
+    rule.conditions.Append(std::move(http_condition_url_filter));
+    rule.conditions.Append(std::move(https_condition_url_filter));
     return rule;
   }
 
@@ -155,8 +154,8 @@ class WebRequestRulesRegistryTest : public testing::Test {
     api::events::Rule rule;
     rule.id = kRuleId2;
     rule.priority = 100;
-    rule.actions.emplace_back(action_dict.Clone());
-    rule.conditions.emplace_back(condition_dict.Clone());
+    rule.actions.Append(std::move(action_dict));
+    rule.conditions.Append(std::move(condition_dict));
     return rule;
   }
 
@@ -171,8 +170,8 @@ class WebRequestRulesRegistryTest : public testing::Test {
     api::events::Rule rule;
     rule.id = kRuleId3;
     rule.priority = 100;
-    rule.actions.emplace_back(action_dict.Clone());
-    rule.conditions.emplace_back(condition_dict.Clone());
+    rule.actions.Append(std::move(action_dict));
+    rule.conditions.Append(std::move(condition_dict));
     return rule;
   }
 
@@ -192,8 +191,8 @@ class WebRequestRulesRegistryTest : public testing::Test {
     api::events::Rule rule;
     rule.id = kRuleId4;
     rule.priority = 200;
-    rule.actions.emplace_back(action_dict.Clone());
-    rule.conditions.emplace_back(condition_dict.Clone());
+    rule.actions.Append(std::move(action_dict));
+    rule.conditions.Append(std::move(condition_dict));
     return rule;
   }
 
@@ -221,9 +220,9 @@ class WebRequestRulesRegistryTest : public testing::Test {
     api::events::Rule rule;
     rule.id = rule_id;
     rule.priority = 1;
-    rule.actions.emplace_back(action_dict.Clone());
+    rule.actions.Append(std::move(action_dict));
     for (auto* attribute : attributes)
-      rule.conditions.push_back(CreateCondition(*attribute));
+      rule.conditions.Append(CreateCondition(*attribute));
     return rule;
   }
 
@@ -536,20 +535,15 @@ TEST_F(WebRequestRulesRegistryTest, IgnoreRulesByTag) {
       "  \"priority\": 300                                               \n"
       "}                                                                 ";
 
-  std::unique_ptr<base::Value> value1 =
-      base::JSONReader::ReadDeprecated(kRule1);
-  ASSERT_TRUE(value1.get());
-  std::unique_ptr<base::Value> value2 =
-      base::JSONReader::ReadDeprecated(kRule2);
-  ASSERT_TRUE(value2.get());
+  base::Value::Dict value1 = base::test::ParseJsonDict(kRule1);
+  base::Value::Dict value2 = base::test::ParseJsonDict(kRule2);
 
-  std::vector<const api::events::Rule*> rules;
-  api::events::Rule rule1;
-  api::events::Rule rule2;
-  rules.push_back(&rule1);
-  rules.push_back(&rule2);
-  ASSERT_TRUE(api::events::Rule::Populate(*value1, &rule1));
-  ASSERT_TRUE(api::events::Rule::Populate(*value2, &rule2));
+  std::optional<api::events::Rule> rule1 = api::events::Rule::FromValue(value1);
+  std::optional<api::events::Rule> rule2 = api::events::Rule::FromValue(value2);
+  ASSERT_TRUE(rule1);
+  ASSERT_TRUE(rule2);
+  std::vector<const api::events::Rule*> rules = {&rule1.value(),
+                                                 &rule2.value()};
 
   scoped_refptr<WebRequestRulesRegistry> registry(
       new TestWebRequestRulesRegistry(&profile_));
@@ -699,23 +693,22 @@ TEST(WebRequestRulesRegistrySimpleTest, StageChecker) {
       "  \"priority\": 200                                                \n"
       "}                                                                  ";
 
-  std::unique_ptr<base::Value> value = base::JSONReader::ReadDeprecated(kRule);
-  ASSERT_TRUE(value);
+  base::Value::Dict value = base::test::ParseJsonDict(kRule);
 
-  api::events::Rule rule;
-  ASSERT_TRUE(api::events::Rule::Populate(*value, &rule));
+  std::optional<api::events::Rule> rule = api::events::Rule::FromValue(value);
+  ASSERT_TRUE(rule);
 
   std::string error;
   URLMatcher matcher;
   std::unique_ptr<WebRequestConditionSet> conditions =
       WebRequestConditionSet::Create(nullptr, matcher.condition_factory(),
-                                     rule.conditions, &error);
+                                     rule->conditions, &error);
   ASSERT_TRUE(error.empty()) << error;
   ASSERT_TRUE(conditions);
 
   bool bad_message = false;
   std::unique_ptr<WebRequestActionSet> actions = WebRequestActionSet::Create(
-      nullptr, nullptr, rule.actions, &error, &bad_message);
+      nullptr, nullptr, rule->actions, &error, &bad_message);
   ASSERT_TRUE(error.empty()) << error;
   ASSERT_FALSE(bad_message);
   ASSERT_TRUE(actions);
@@ -732,11 +725,10 @@ TEST(WebRequestRulesRegistrySimpleTest, HostPermissionsChecker) {
       "  \"instanceType\": \"declarativeWebRequest.RedirectRequest\",\n"
       "  \"redirectUrl\": \"http://bar.com\"                         \n"
       "}                                                             ";
-  absl::optional<base::Value> action_value = base::JSONReader::Read(kAction);
-  ASSERT_TRUE(action_value);
+  base::Value action_value = base::test::ParseJson(kAction);
 
-  WebRequestActionSet::Values actions;
-  actions.push_back(std::move(*action_value));
+  base::Value::List actions;
+  actions.Append(std::move(action_value));
 
   std::string error;
   bool bad_message = false;
@@ -787,13 +779,11 @@ TEST_F(WebRequestRulesRegistryTest, CheckOriginAndPathRegEx) {
       "  \"priority\": 200                                               \n"
       "}                                                                 ";
 
-  std::unique_ptr<base::Value> value = base::JSONReader::ReadDeprecated(kRule);
-  ASSERT_TRUE(value.get());
+  base::Value::Dict value = base::test::ParseJsonDict(kRule);
 
-  std::vector<const api::events::Rule*> rules;
-  api::events::Rule rule;
-  rules.push_back(&rule);
-  ASSERT_TRUE(api::events::Rule::Populate(*value, &rule));
+  std::optional<api::events::Rule> rule = api::events::Rule::FromValue(value);
+  ASSERT_TRUE(rule);
+  std::vector<const api::events::Rule*> rules = {&rule.value()};
 
   scoped_refptr<WebRequestRulesRegistry> registry(
       new TestWebRequestRulesRegistry(&profile_));

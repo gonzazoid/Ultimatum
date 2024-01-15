@@ -8,6 +8,8 @@
 
 #include "build/build_config.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/compositor/layer.h"
@@ -24,7 +26,7 @@
 #include "ui/views/animation/flood_fill_ink_drop_ripple.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/animation/ink_drop_highlight.h"
-#include "ui/views/animation/ink_drop_host_view.h"
+#include "ui/views/animation/ink_drop_host.h"
 #include "ui/views/animation/ink_drop_impl.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/button/md_text_button.h"
@@ -116,6 +118,8 @@ gfx::Insets CalculateTopPadding(int font_list_height) {
 // as well as capitalizing the given label string. Used by chrome notifications.
 // Ash notifications create their own.
 class NotificationTextButton : public views::MdTextButton {
+  METADATA_HEADER(NotificationTextButton, views::MdTextButton)
+
  public:
   NotificationTextButton(PressedCallback callback, const std::u16string& label)
       : views::MdTextButton(std::move(callback), label) {
@@ -151,9 +155,14 @@ class NotificationTextButton : public views::MdTextButton {
   absl::optional<SkColor> color_;
 };
 
+BEGIN_METADATA(NotificationTextButton)
+END_METADATA
+
 // InlineSettingsRadioButton ///////////////////////////////////////////////////
 
 class InlineSettingsRadioButton : public views::RadioButton {
+  METADATA_HEADER(InlineSettingsRadioButton, views::RadioButton)
+
  public:
   explicit InlineSettingsRadioButton(const std::u16string& label_text)
       : views::RadioButton(label_text, 1 /* group */) {
@@ -174,6 +183,9 @@ class InlineSettingsRadioButton : public views::RadioButton {
     return GetColorProvider()->GetColor(ui::kColorLabelForeground);
   }
 };
+
+BEGIN_METADATA(InlineSettingsRadioButton)
+END_METADATA
 
 // NotificationInkDropImpl /////////////////////////////////////////////////////
 
@@ -255,18 +267,14 @@ NotificationView::NotificationView(
   views::InkDrop::Get(this)->SetCreateRippleCallback(base::BindRepeating(
       [](NotificationViewBase* host) -> std::unique_ptr<views::InkDropRipple> {
         return std::make_unique<views::FloodFillInkDropRipple>(
-            host->GetPreferredSize(),
+            views::InkDrop::Get(host), host->GetPreferredSize(),
             views::InkDrop::Get(host)->GetInkDropCenterBasedOnLastEvent(),
             views::InkDrop::Get(host)->GetBaseColor(),
             views::InkDrop::Get(host)->GetVisibleOpacity());
       },
       this));
-  views::InkDrop::Get(this)->SetBaseColorCallback(base::BindRepeating(
-      [](NotificationViewBase* host) {
-        return host->GetColorProvider()->GetColor(
-            ui::kColorNotificationBackgroundActive);
-      },
-      this));
+  views::InkDrop::Get(this)->SetBaseColorId(
+      ui::kColorNotificationBackgroundActive);
 
   auto header_row = CreateHeaderRowBuilder().Build();
   // Font list for text views.
@@ -307,6 +315,7 @@ NotificationView::NotificationView(
           .SetBorder(views::CreateEmptyBorder(kLargeImageContainerPadding))
           .Build());
   AddChildView(CreateInlineSettingsBuilder().Build());
+  AddChildView(CreateSnoozeSettingsBuilder().Build());
   AddChildView(CreateActionsRow());
 
   CreateOrUpdateViews(notification);
@@ -321,9 +330,9 @@ NotificationView::NotificationView(
 
 NotificationView::~NotificationView() {
   // InkDrop is explicitly removed as it can have `this` as an observer
-  // installed. This is currently also required because RemoveLayerBeneathView()
-  // gets called in the destructor of InkDrop which would've called the wrong
-  // override if it destroys in a parent destructor.
+  // installed. This is currently also required because
+  // RemoveLayerFromRegions() gets called in the destructor of InkDrop which
+  // would've called the wrong override if it destroys in a parent destructor.
   views::InkDrop::Remove(this);
 }
 
@@ -440,8 +449,9 @@ void NotificationView::CreateOrUpdateInlineSettingsViews(
   }
   DCHECK_NE(block_notifications_message_id, 0);
 
-  inline_settings_row()->SetLayoutManager(std::make_unique<views::BoxLayout>(
-      views::BoxLayout::Orientation::kVertical, kSettingsRowPadding, 0));
+  inline_settings_row()->SetOrientation(
+      views::BoxLayout::Orientation::kVertical);
+  inline_settings_row()->SetInsideBorderInsets(kSettingsRowPadding);
 
   auto block_all_button = std::make_unique<InlineSettingsRadioButton>(
       l10n_util::GetStringUTF16(block_notifications_message_id));
@@ -473,6 +483,11 @@ void NotificationView::CreateOrUpdateInlineSettingsViews(
   settings_done_button_ =
       settings_button_row->AddChildView(std::move(settings_done_button));
   inline_settings_row()->AddChildView(std::move(settings_button_row));
+}
+
+void NotificationView::CreateOrUpdateSnoozeSettingsViews(
+    const Notification& notification) {
+  // Not implemented by default.
 }
 
 std::unique_ptr<views::LabelButton>
@@ -565,6 +580,10 @@ void NotificationView::ToggleInlineSettings(const ui::Event& event) {
     MessageCenter::Get()->DisableNotification(notification_id());
 }
 
+void NotificationView::ToggleSnoozeSettings(const ui::Event& event) {
+  // Not implemented by default.
+}
+
 bool NotificationView::IsExpandable() const {
   // Inline settings can not be expanded.
   if (GetMode() == Mode::SETTING)
@@ -594,16 +613,17 @@ bool NotificationView::IsExpandable() const {
   return false;
 }
 
-void NotificationView::AddLayerBeneathView(ui::Layer* layer) {
+void NotificationView::AddLayerToRegion(ui::Layer* layer,
+                                        views::LayerRegion region) {
   for (auto* child : GetChildrenForLayerAdjustment()) {
     child->SetPaintToLayer();
     child->layer()->SetFillsBoundsOpaquely(false);
   }
-  ink_drop_container_->AddLayerBeneathView(layer);
+  ink_drop_container_->AddLayerToRegion(layer, region);
 }
 
-void NotificationView::RemoveLayerBeneathView(ui::Layer* layer) {
-  ink_drop_container_->RemoveLayerBeneathView(layer);
+void NotificationView::RemoveLayerFromRegions(ui::Layer* layer) {
+  ink_drop_container_->RemoveLayerFromRegions(layer);
   for (auto* child : GetChildrenForLayerAdjustment())
     child->DestroyLayer();
 }
@@ -674,11 +694,15 @@ void NotificationView::HeaderRowPressed() {
   if (!IsExpandable() || !content_row()->GetVisible())
     return;
 
+  const bool target_expanded_state = !IsExpanded();
+
   // Tapping anywhere on |header_row_| can expand the notification, though only
   // |expand_button| can be focused by TAB.
-  SetManuallyExpandedOrCollapsed(true);
+  SetManuallyExpandedOrCollapsed(
+      target_expanded_state ? message_center::ExpandState::USER_EXPANDED
+                            : message_center::ExpandState::USER_COLLAPSED);
   auto weak_ptr = weak_ptr_factory_.GetWeakPtr();
-  SetExpanded(!IsExpanded());
+  SetExpanded(target_expanded_state);
   // Check |this| is valid before continuing, because ToggleExpanded() might
   // cause |this| to be deleted.
   if (!weak_ptr)
@@ -686,5 +710,8 @@ void NotificationView::HeaderRowPressed() {
   Layout();
   SchedulePaint();
 }
+
+BEGIN_METADATA(NotificationView, NotificationViewBase)
+END_METADATA
 
 }  // namespace message_center

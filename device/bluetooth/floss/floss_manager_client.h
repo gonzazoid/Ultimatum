@@ -8,8 +8,9 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -19,6 +20,7 @@
 #include "device/bluetooth/bluetooth_export.h"
 #include "device/bluetooth/floss/exported_callback_manager.h"
 #include "device/bluetooth/floss/floss_dbus_client.h"
+#include "device/bluetooth/floss/floss_version.h"
 
 namespace dbus {
 class PropertySet;
@@ -90,32 +92,6 @@ class DEVICE_BLUETOOTH_EXPORT FlossManagerClient
     virtual void DefaultAdapterChanged(int previous, int adapter) {}
   };
 
-  class PoweredCallback {
-   public:
-    explicit PoweredCallback(ResponseCallback<Void> cb, int timeout_ms);
-    ~PoweredCallback();
-
-    static std::unique_ptr<FlossManagerClient::PoweredCallback>
-    CreateWithTimeout(ResponseCallback<Void> cb, int timeout_ms);
-    void RunError() {
-      if (cb_) {
-        std::move(cb_).Run(base::unexpected(Error(kErrorNoResponse, "")));
-      }
-    }
-    void RunNoError() {
-      if (cb_) {
-        std::move(cb_).Run(Void{});
-      }
-    }
-
-   private:
-    void PostDelayedError();
-
-    ResponseCallback<Void> cb_;
-    int timeout_ms_;
-    base::WeakPtrFactory<PoweredCallback> weak_ptr_factory_{this};
-  };
-
   // Creates the instance.
   static std::unique_ptr<FlossManagerClient> Create();
 
@@ -148,13 +124,25 @@ class DEVICE_BLUETOOTH_EXPORT FlossManagerClient
                                  bool enabled,
                                  ResponseCallback<Void> callback);
 
+  // Gets Floss API version.
+  virtual base::Version GetFlossApiVersion() const;
+
   // Invoke D-Bus API to enable or disable LL privacy.
-  virtual void SetLLPrivacy(ResponseCallback<Void> callback, const bool enable);
+  virtual void SetLLPrivacy(ResponseCallback<bool> callback, const bool enable);
+
+  // Invoke D-Bus API to enable or disable devcoredump.
+  virtual void SetDevCoredump(ResponseCallback<Void> callback,
+                              const bool enable);
 
   // Initializes the manager client.
   void Init(dbus::Bus* bus,
             const std::string& service_name,
-            const int adapter_index) override;
+            const int adapter_index,
+            base::Version version,
+            base::OnceClosure on_ready) override;
+
+  // Whether the manager client has been initialized successfully.
+  bool IsInitialized() const { return init_; }
 
  protected:
   friend class FlossManagerClientTest;
@@ -175,12 +163,27 @@ class DEVICE_BLUETOOTH_EXPORT FlossManagerClient
                        int retry_wait_ms,
                        absl::optional<ResponseCallback<bool>> cb);
 
+  // Make actual D-Bus call to retrieve Floss API version from daemon.
+  void DoGetFlossApiVersion();
+
+  // Checks if it is safe to use the API exported by the Floss daemon.
+  bool IsCompatibleFlossApi();
+
   // Handle response to |GetDefaultAdapter| DBus method call.
   void HandleGetDefaultAdapter(DBusResult<int32_t> response);
 
   // Handle response to |GetAvailableAdapters| DBus method call.
   void HandleGetAvailableAdapters(
       DBusResult<std::vector<internal::AdapterWithEnabled>> adapters);
+
+  // Handle response to |GetAdapterEnabled| DBus method call.
+  // Currently we only expect to handle |GetAdapterEnabled| calls when we get a
+  // notification that an adapter is present.
+  void HandleGetAdapterEnabledAfterPresent(int32_t adapter,
+                                           DBusResult<bool> response);
+
+  // Handle response to |RegisterCallback| DBus method call.
+  void HandleRegisterCallback(DBusResult<Void> result);
 
   // internal::FlossManagerClientCallbacks overrides.
   void OnHciDeviceChanged(int32_t adapter, bool present) override;
@@ -201,6 +204,9 @@ class DEVICE_BLUETOOTH_EXPORT FlossManagerClient
 
   // Completion of |SetFlossEnabled|.
   void CompleteSetFlossEnabled(DBusResult<bool> ret);
+
+  // Handles response to |DoGetFlossApiVersion|.
+  void HandleGetFlossApiVersion(DBusResult<uint32_t> response);
 
   // Get active adapters and register for callbacks with manager object.
   void RegisterWithManager();
@@ -232,15 +238,21 @@ class DEVICE_BLUETOOTH_EXPORT FlossManagerClient
   // Default adapter to use.
   int default_adapter_ = 0;
 
-  // Cached list of available adapters and their powered state indexed by hci
+  // Cached list of available adapters and their enabled state indexed by hci
   // index.
-  base::flat_map<int, bool> adapter_to_powered_;
+  base::flat_map<int, bool> adapter_to_enabled_;
+
+  // List of adapters that the enabled state is unknown, pending querying.
+  base::flat_set<int> adapter_present_pending_;
 
   // Name of service that implements manager interface.
   std::string service_name_;
 
   // List of observers interested in event notifications from this client.
   base::ObserverList<Observer> observers_;
+
+  // Whether the manager client has been initialized successfully.
+  bool init_ = false;
 
  private:
   // Handle response to SetAdapterEnabled
@@ -273,11 +285,12 @@ class DEVICE_BLUETOOTH_EXPORT FlossManagerClient
   // enabled).
   static const int kSetFlossEnabledDBusTimeoutMs;
 
-  // Powered callback called only when adapter actually powers on
-  std::unique_ptr<PoweredCallback> powered_callback_;
+  // Enabled callback called only when adapter becomes enabled.
+  std::unique_ptr<WeaklyOwnedResponseCallback<Void>> adapter_enabled_callback_;
 
   // Callback sent for SetFlossEnabled completion.
-  std::unique_ptr<WeaklyOwnedCallback<bool>> set_floss_enabled_callback_;
+  std::unique_ptr<WeaklyOwnedResponseCallback<bool>>
+      set_floss_enabled_callback_;
 
   template <typename R, typename... Args>
   void CallManagerMethod(ResponseCallback<R> callback,
@@ -290,6 +303,9 @@ class DEVICE_BLUETOOTH_EXPORT FlossManagerClient
   // Exported callbacks for interacting with daemon.
   ExportedCallbackManager<FlossManagerClientCallbacks>
       exported_callback_manager_{manager::kCallbackInterface};
+
+  // Signal when the client is ready to be used.
+  base::OnceClosure on_ready_;
 
   base::WeakPtrFactory<FlossManagerClient> weak_ptr_factory_{this};
 };

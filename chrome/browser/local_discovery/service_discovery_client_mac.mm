@@ -12,13 +12,13 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
+#include "base/functional/bind.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/strings/sys_string_conversions.h"
+#import "base/task/single_thread_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/ip_address.h"
 #include "net/base/ip_endpoint.h"
 
@@ -77,19 +77,19 @@ const NSTimeInterval kResolveTimeout = 10.0;
 // counted, the strong references passed to these functions ensure the object
 // remains alive until for the duration of the operation.
 
-void StartServiceBrowser(base::scoped_nsobject<NetServiceBrowser> browser) {
+void StartServiceBrowser(NetServiceBrowser* browser) {
   [browser discoverServices];
 }
 
-void StopServiceBrowser(base::scoped_nsobject<NetServiceBrowser> browser) {
+void StopServiceBrowser(NetServiceBrowser* browser) {
   [browser stop];
 }
 
-void StartServiceResolver(base::scoped_nsobject<NetServiceResolver> resolver) {
+void StartServiceResolver(NetServiceResolver* resolver) {
   [resolver resolveService];
 }
 
-void StopServiceResolver(base::scoped_nsobject<NetServiceResolver> resolver) {
+void StopServiceResolver(NetServiceResolver* resolver) {
   [resolver stop];
 }
 
@@ -101,9 +101,9 @@ void StopServiceResolver(base::scoped_nsobject<NetServiceResolver> resolver) {
 // <name>._<type>._<sub>._<protocol2>._<protocol1>.<domain>.
 bool ExtractServiceInfo(const std::string& service,
                         bool is_service_name,
-                        base::scoped_nsobject<NSString>* instance,
-                        base::scoped_nsobject<NSString>* type,
-                        base::scoped_nsobject<NSString>* domain) {
+                        NSString** instance,
+                        NSString** type,
+                        NSString** domain) {
   if (service.empty())
     return false;
 
@@ -112,26 +112,22 @@ bool ExtractServiceInfo(const std::string& service,
     return false;
 
   if (!is_service_name) {
-    type->reset(base::SysUTF8ToNSString(service.substr(0, last_period) + "."),
-                base::scoped_policy::RETAIN);
+    *type = base::SysUTF8ToNSString(service.substr(0, last_period) + ".");
   } else {
     // Find third last period that delimits type and instance name.
     size_t type_period = last_period;
     for (int i = 0; i < 2; ++i) {
       type_period = service.find_last_of('.', type_period - 1);
-      if (type_period == std::string::npos)
+      if (type_period == std::string::npos) {
         return false;
+      }
     }
 
-    instance->reset(base::SysUTF8ToNSString(service.substr(0, type_period)),
-                    base::scoped_policy::RETAIN);
-    type->reset(
-        base::SysUTF8ToNSString(
-            service.substr(type_period + 1, last_period - type_period)),
-        base::scoped_policy::RETAIN);
+    *instance = base::SysUTF8ToNSString(service.substr(0, type_period));
+    *type = base::SysUTF8ToNSString(
+        service.substr(type_period + 1, last_period - type_period));
   }
-  domain->reset(base::SysUTF8ToNSString(service.substr(last_period + 1) + "."),
-                base::scoped_policy::RETAIN);
+  *domain = base::SysUTF8ToNSString(service.substr(last_period + 1) + ".");
 
   return [*domain length] > 0 &&
          [*type length] > 0 &&
@@ -139,23 +135,24 @@ bool ExtractServiceInfo(const std::string& service,
 }
 
 void ParseTxtRecord(NSData* record, std::vector<std::string>* output) {
-  if ([record length] <= 1)
+  if (record.length <= 1) {
     return;
+  }
 
-  VLOG(1) << "ParseTxtRecord: " << [record length];
+  VLOG(1) << "ParseTxtRecord: " << record.length;
 
-  const uint8_t* bytes = reinterpret_cast<const uint8_t*>([record bytes]);
-  size_t size = [record length];
+  const uint8_t* bytes = reinterpret_cast<const uint8_t*>(record.bytes);
+  size_t size = record.length;
   size_t offset = 0;
   while (offset < size) {
     uint8_t record_size = bytes[offset++];
     if (offset > size - record_size)
       break;
 
-    base::scoped_nsobject<NSString> txt_record(
+    NSString* txt_record =
         [[NSString alloc] initWithBytes:&bytes[offset]
                                  length:record_size
-                               encoding:NSUTF8StringEncoding]);
+                               encoding:NSUTF8StringEncoding];
     if (txt_record) {
       std::string txt_record_string = base::SysNSStringToUTF8(txt_record);
       VLOG(1) << "TxtRecord: " << txt_record_string;
@@ -233,24 +230,20 @@ void ServiceWatcherImplMac::Start() {
   DCHECK(!started_);
   VLOG(1) << "ServiceWatcherImplMac::Start";
 
-  browser_.reset([[NetServiceBrowser alloc]
+  browser_ = [[NetServiceBrowser alloc]
       initWithServiceType:service_type_
                  callback:base::BindRepeating(
                               &ServiceWatcherImplMac::OnServicesUpdate,
                               weak_factory_.GetWeakPtr())
-           callbackRunner:base::ThreadTaskRunnerHandle::Get()]);
+           callbackRunner:base::SingleThreadTaskRunner::GetCurrentDefault()];
   started_ = true;
 }
 
 void ServiceWatcherImplMac::DiscoverNewServices() {
   DCHECK(started_);
   VLOG(1) << "ServiceWatcherImplMac::DiscoverNewServices";
-  // Provide an additional reference on the browser_, in case |this|
-  // gets deleted and releases its reference.
   service_discovery_runner_->PostTask(
-      FROM_HERE, base::BindOnce(&StartServiceBrowser,
-                                base::scoped_nsobject<NetServiceBrowser>(
-                                    [browser_ retain])));
+      FROM_HERE, base::BindOnce(&StartServiceBrowser, browser_));
 }
 
 void ServiceWatcherImplMac::SetActivelyRefreshServices(
@@ -286,18 +279,14 @@ ServiceResolverImplMac::~ServiceResolverImplMac() {
 
 void ServiceResolverImplMac::StartResolving() {
   VLOG(1) << "Resolving service " << service_name_;
-  resolver_.reset([[NetServiceResolver alloc]
+  resolver_ = [[NetServiceResolver alloc]
       initWithServiceName:service_name_
          resolvedCallback:base::BindOnce(
                               &ServiceResolverImplMac::OnResolveComplete,
                               weak_factory_.GetWeakPtr())
-           callbackRunner:base::ThreadTaskRunnerHandle::Get()]);
-  // Provide an additional reference on the resolver_, in case |this|
-  // gets deleted and releases its reference.
+           callbackRunner:base::SingleThreadTaskRunner::GetCurrentDefault()];
   service_discovery_runner_->PostTask(
-      FROM_HERE, base::BindOnce(&StartServiceResolver,
-                                base::scoped_nsobject<NetServiceResolver>(
-                                    [resolver_ retain])));
+      FROM_HERE, base::BindOnce(&StartServiceResolver, resolver_));
 }
 
 std::string ServiceResolverImplMac::GetName() const {
@@ -350,8 +339,8 @@ void ParseNetService(NSNetService* service, ServiceDescription& description) {
   ServiceWatcher::UpdatedCallback _callback;
   scoped_refptr<base::SingleThreadTaskRunner> _callbackRunner;
 
-  base::scoped_nsobject<NSNetServiceBrowser> _browser;
-  base::scoped_nsobject<NSMutableArray<NSNetService*>> _services;
+  NSNetServiceBrowser* __strong _browser;
+  NSMutableArray<NSNetService*>* __strong _services;
 }
 
 - (instancetype)initWithServiceType:(const std::string&)serviceType
@@ -365,23 +354,24 @@ void ParseNetService(NSNetService* service, ServiceDescription& description) {
     _callback = std::move(callback);
     _callbackRunner = callbackRunner;
 
-    _services.reset([[NSMutableArray alloc] initWithCapacity:1]);
+    _services = [[NSMutableArray alloc] initWithCapacity:1];
   }
   return self;
 }
 
 - (void)dealloc {
   [self stop];
-  [super dealloc];
 }
 
 - (void)discoverServices {
   if (!_browser) {
-    _browser.reset([[NSNetServiceBrowser alloc] init]);
+    _browser = [[NSNetServiceBrowser alloc] init];
     [_browser setDelegate:self];
   }
 
-  base::scoped_nsobject<NSString> instance, type, domain;
+  NSString* instance;
+  NSString* type;
+  NSString* domain;
   if (!local_discovery::ExtractServiceInfo(_serviceType, false, &instance,
                                            &type, &domain)) {
     return;
@@ -402,17 +392,17 @@ void ParseNetService(NSNetService* service, ServiceDescription& description) {
   // attempts to clear the pointer to itself in an NSNetServiceBrowser that's
   // already gone.
   // https://crbug.com/657495, https://openradar.appspot.com/28943305
-  [_browser setDelegate:nil];
+  _browser.delegate = nil;
 
   // Ensure the delegate clears all references to itself, which it had added as
   // discovered services were reported to it.
-  for (NSNetService* netService in _services.get()) {
+  for (NSNetService* netService in _services) {
     [netService stopMonitoring];
     [netService setDelegate:nil];
   }
   [_services removeAllObjects];
 
-  _browser.reset();
+  _browser = nil;
 }
 
 - (void)netServiceBrowser:(NSNetServiceBrowser*)netServiceBrowser
@@ -468,7 +458,7 @@ void ParseNetService(NSNetService* service, ServiceDescription& description) {
   scoped_refptr<base::SingleThreadTaskRunner> _callbackRunner;
 
   ServiceDescription _serviceDescription;
-  base::scoped_nsobject<NSNetService> _service;
+  NSNetService* __strong _service;
 }
 
 - (instancetype)
@@ -486,11 +476,12 @@ void ParseNetService(NSNetService* service, ServiceDescription& description) {
 
 - (void)dealloc {
   [self stop];
-  [super dealloc];
 }
 
 - (void)resolveService {
-  base::scoped_nsobject<NSString> instance, type, domain;
+  NSString* instance;
+  NSString* type;
+  NSString* domain;
   if (!local_discovery::ExtractServiceInfo(_serviceName, true, &instance, &type,
                                            &domain)) {
     [self updateServiceDescription:ServiceResolver::STATUS_KNOWN_NONEXISTENT];
@@ -501,9 +492,9 @@ void ParseNetService(NSNetService* service, ServiceDescription& description) {
           << ", instance: " << instance << ", type: " << type
           << ", domain: " << domain;
 
-  _service.reset([[NSNetService alloc] initWithDomain:domain
-                                                 type:type
-                                                 name:instance]);
+  _service = [[NSNetService alloc] initWithDomain:domain
+                                             type:type
+                                             name:instance];
   [_service setDelegate:self];
   [_service resolveWithTimeout:local_discovery::kResolveTimeout];
 }
@@ -516,8 +507,8 @@ void ParseNetService(NSNetService* service, ServiceDescription& description) {
   // attempts to clear the pointer to itself in an NSNetService that's already
   // gone.
   // https://crbug.com/657495, https://openradar.appspot.com/28943305
-  [_service setDelegate:nil];
-  _service.reset();
+  _service.delegate = nil;
+  _service = nil;
 }
 
 - (void)netServiceDidResolveAddress:(NSNetService*)sender {
@@ -541,7 +532,7 @@ void ParseNetService(NSNetService* service, ServiceDescription& description) {
   }
 
   _serviceDescription.service_name = _serviceName;
-  ParseNetService(_service.get(), _serviceDescription);
+  ParseNetService(_service, _serviceDescription);
 
   if (_serviceDescription.address.host().empty()) {
     VLOG(1) << "Service IP is not resolved: " << _serviceName;

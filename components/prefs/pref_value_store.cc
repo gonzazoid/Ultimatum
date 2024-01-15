@@ -106,6 +106,16 @@ std::unique_ptr<PrefValueStore> PrefValueStore::CloneAndSpecialize(
       recommended_prefs, default_prefs, pref_notifier);
 }
 
+PrefValueStore::PrefStoreType PrefValueStore::ControllingPrefStoreForPref(
+    const std::string& name) const {
+  for (size_t i = 0; i <= PREF_STORE_TYPE_MAX; ++i) {
+    if (PrefValueInStore(name, static_cast<PrefStoreType>(i))) {
+      return static_cast<PrefStoreType>(i);
+    }
+  }
+  return INVALID_STORE;
+}
+
 bool PrefValueStore::GetValue(base::StringPiece name,
                               base::Value::Type type,
                               const base::Value** out_value) const {
@@ -133,8 +143,6 @@ void PrefValueStore::NotifyPrefChanged(
   // store is currently being overridden by a higher-priority store, the
   // effective value of the pref will not have changed.
   pref_notifier_->OnPreferenceChanged(path);
-  if (!pref_changed_callback_.is_null())
-    pref_changed_callback_.Run(path);
 }
 
 bool PrefValueStore::PrefValueInManagedStore(const std::string& name) const {
@@ -203,8 +211,9 @@ void PrefValueStore::UpdateCommandLinePrefStore(PrefStore* command_line_prefs) {
 bool PrefValueStore::IsInitializationComplete() const {
   for (size_t i = 0; i <= PREF_STORE_TYPE_MAX; ++i) {
     const PrefStore* pref_store = GetPrefStore(static_cast<PrefStoreType>(i));
-    if (pref_store && !pref_store->IsInitializationComplete())
+    if (pref_store && !pref_store->IsInitializationComplete()) {
       return false;
+    }
   }
   return true;
 }
@@ -233,15 +242,6 @@ bool PrefValueStore::PrefValueInStoreRange(
       return true;
   }
   return false;
-}
-
-PrefValueStore::PrefStoreType PrefValueStore::ControllingPrefStoreForPref(
-    const std::string& name) const {
-  for (size_t i = 0; i <= PREF_STORE_TYPE_MAX; ++i) {
-    if (PrefValueInStore(name, static_cast<PrefStoreType>(i)))
-      return static_cast<PrefStoreType>(i);
-  }
-  return INVALID_STORE;
 }
 
 bool PrefValueStore::GetValueFromStore(base::StringPiece name,

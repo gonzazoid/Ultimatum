@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/callback_list.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "components/user_education/common/help_bubble.h"
 #include "components/user_education/common/help_bubble_factory.h"
@@ -60,17 +60,10 @@ bool HelpBubbleFactoryRegistry::ToggleFocusForAccessibility(
   for (const auto& pr : help_bubbles_) {
     if (pr.first->GetContext() == context &&
         pr.first->ToggleFocusForAccessibility()) {
-      toggle_focus_callbacks_.Notify(pr.first);
       return true;
     }
   }
   return false;
-}
-
-base::CallbackListSubscription
-HelpBubbleFactoryRegistry::AddToggleFocusCallback(
-    ToggleFocusCallback callback) {
-  return toggle_focus_callbacks_.Add(std::move(callback));
 }
 
 HelpBubble* HelpBubbleFactoryRegistry::GetHelpBubble(

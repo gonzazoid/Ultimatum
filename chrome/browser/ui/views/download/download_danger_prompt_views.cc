@@ -8,17 +8,21 @@
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/download/download_danger_prompt.h"
 #include "chrome/browser/download/download_stats.h"
+#include "chrome/browser/download/download_ui_safe_browsing_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/safe_browsing/advanced_protection_status_manager.h"
 #include "chrome/browser/safe_browsing/advanced_protection_status_manager_factory.h"
 #include "chrome/browser/ui/bookmarks/bookmark_editor.h"
+#include "chrome/browser/ui/hats/trust_safety_sentiment_service.h"
+#include "chrome/browser/ui/hats/trust_safety_sentiment_service_factory.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/constrained_window/constrained_window_views.h"
 #include "components/download/public/common/download_danger_type.h"
 #include "components/download/public/common/download_item.h"
 #include "components/safe_browsing/core/common/features.h"
+#include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
@@ -70,6 +74,8 @@ class DownloadDangerPromptViews : public DownloadDangerPrompt,
   // If show_context_ is true, this is a download confirmation dialog by
   // download API, otherwise it is download recovery dialog from a regular
   // download.
+  // TODO(chlily): Remove this after ImprovedDownloadPageWarnings launches,
+  // because then this will only ever be shown for download API.
   const bool show_context_;
   OnDone done_;
 };
@@ -119,8 +125,6 @@ DownloadDangerPromptViews::DownloadDangerPromptViews(
   message_body_label->SetAllowCharacterBreak(true);
 
   AddChildView(std::move(message_body_label));
-
-  RecordOpenedDangerousConfirmDialog(download_->GetDangerType());
 }
 
 DownloadDangerPromptViews::~DownloadDangerPromptViews() {
@@ -145,8 +149,7 @@ void DownloadDangerPromptViews::InvokeActionForTesting(Action action) {
       break;
 
     default:
-      NOTREACHED();
-      break;
+      NOTREACHED_NORETURN();
   }
 }
 
@@ -218,13 +221,16 @@ std::u16string DownloadDangerPromptViews::GetMessageBody() const {
       }
       case download::DOWNLOAD_DANGER_TYPE_BLOCKED_UNSUPPORTED_FILETYPE:
       case download::DOWNLOAD_DANGER_TYPE_PROMPT_FOR_SCANNING:
+      case download::DOWNLOAD_DANGER_TYPE_PROMPT_FOR_LOCAL_PASSWORD_SCANNING:
       case download::DOWNLOAD_DANGER_TYPE_SENSITIVE_CONTENT_WARNING:
       case download::DOWNLOAD_DANGER_TYPE_SENSITIVE_CONTENT_BLOCK:
+      case download::DOWNLOAD_DANGER_TYPE_DEEP_SCANNED_FAILED:
       case download::DOWNLOAD_DANGER_TYPE_DEEP_SCANNED_SAFE:
       case download::DOWNLOAD_DANGER_TYPE_DEEP_SCANNED_OPENED_DANGEROUS:
       case download::DOWNLOAD_DANGER_TYPE_BLOCKED_TOO_LARGE:
       case download::DOWNLOAD_DANGER_TYPE_BLOCKED_PASSWORD_PROTECTED:
       case download::DOWNLOAD_DANGER_TYPE_ASYNC_SCANNING:
+      case download::DOWNLOAD_DANGER_TYPE_ASYNC_LOCAL_PASSWORD_SCANNING:
       case download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS:
       case download::DOWNLOAD_DANGER_TYPE_MAYBE_DANGEROUS_CONTENT:
       case download::DOWNLOAD_DANGER_TYPE_USER_VALIDATED:
@@ -234,10 +240,10 @@ std::u16string DownloadDangerPromptViews::GetMessageBody() const {
       }
     }
   } else {
-    // If we're mixed content, we show that warning first.
-    if (download_->IsMixedContent()) {
+    // If we're insecurely downloading, show a warning first.
+    if (download_->IsInsecure()) {
       return l10n_util::GetStringFUTF16(
-          IDS_PROMPT_CONFIRM_MIXED_CONTENT_DOWNLOAD,
+          IDS_PROMPT_CONFIRM_INSECURE_DOWNLOAD,
           download_->GetFileNameToReportUser().LossyDisplayName());
     }
     switch (download_->GetDangerType()) {
@@ -256,8 +262,7 @@ std::u16string DownloadDangerPromptViews::GetMessageBody() const {
       }
     }
   }
-  NOTREACHED();
-  return std::u16string();
+  NOTREACHED_NORETURN();
 }
 
 void DownloadDangerPromptViews::RunDone(Action action) {
@@ -265,11 +270,31 @@ void DownloadDangerPromptViews::RunDone(Action action) {
   // the window to close, and |callback| refers to a member variable.
   OnDone done = std::move(done_);
   if (download_) {
+    const bool accept = action == DownloadDangerPrompt::ACCEPT;
     // If this download is no longer dangerous, is already canceled or
     // completed, don't send any report.
     if (download_->IsDangerous() && !download_->IsDone()) {
-      const bool accept = action == DownloadDangerPrompt::ACCEPT;
-      RecordDownloadDangerPrompt(accept, *download_);
+      // Survey triggered on ACCEPT action, since this is where the user
+      // confirms their choice to keep a dangerous download, rather than
+      // triggering a survey after selecting to KEEP in the downloads page UI.
+      if (safe_browsing::IsSafeBrowsingSurveysEnabled(*profile_->GetPrefs()) &&
+          accept) {
+        TrustSafetySentimentService* trust_safety_sentiment_service =
+            TrustSafetySentimentServiceFactory::GetForProfile(profile_);
+        if (trust_safety_sentiment_service) {
+          trust_safety_sentiment_service->InteractedWithDownloadWarningUI(
+              DownloadItemWarningData::WarningSurface::DOWNLOAD_PROMPT,
+              DownloadItemWarningData::WarningAction::PROCEED);
+        }
+      }
+      // Log here for "Shown" unconditionally, and for "Proceed" iff the dialog
+      // was accepted. This assumes the dialog cannot be dismissed once it is
+      // shown without taking some action on it.
+      RecordDownloadDangerPromptHistogram("Shown", *download_);
+      if (accept) {
+        RecordDownloadDangerPromptHistogram("Proceed", *download_);
+      }
+      RecordDownloadWarningEvent(action, download_);
       if (!download_->GetURL().is_empty() &&
           !content::DownloadItemUtils::GetBrowserContext(download_)
                ->IsOffTheRecord()) {
@@ -277,7 +302,10 @@ void DownloadDangerPromptViews::RunDone(Action action) {
             show_context_
                 ? ClientSafeBrowsingReportRequest::DANGEROUS_DOWNLOAD_BY_API
                 : ClientSafeBrowsingReportRequest::DANGEROUS_DOWNLOAD_RECOVERY;
-        SendSafeBrowsingDownloadReport(report_type, accept, download_);
+        // Do not send cancel report since it's not a terminal action.
+        if (accept) {
+          SendSafeBrowsingDownloadReport(report_type, accept, download_);
+        }
       }
     }
     download_->RemoveObserver(this);

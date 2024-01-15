@@ -4,6 +4,8 @@
 
 #include "chrome/browser/ui/views/location_bar/icon_label_bubble_view.h"
 
+#include <optional>
+
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
@@ -14,14 +16,13 @@
 #include "chrome/test/views/chrome_views_test_base.h"
 #include "components/strings/grit/components_strings.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/gesture_detection/gesture_configuration.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/views/animation/ink_drop.h"
-#include "ui/views/animation/test/ink_drop_host_view_test_api.h"
+#include "ui/views/animation/test/ink_drop_host_test_api.h"
 #include "ui/views/animation/test/test_ink_drop.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/widget/widget_utils.h"
@@ -104,8 +105,7 @@ class TestIconLabelBubbleView : public IconLabelBubbleView {
       case SHRINKING:
         return min + (max - min) * ((1.0 - fraction) / kOpenFraction);
     }
-    NOTREACHED();
-    return 1.0;
+    NOTREACHED_NORETURN();
   }
 
   bool IsShrinking() const override { return state() == SHRINKING; }
@@ -269,8 +269,8 @@ class IconLabelBubbleViewTest : public IconLabelBubbleViewTestBase {
   }
 
   std::unique_ptr<views::Widget> widget_;
-  raw_ptr<TestIconLabelBubbleView> view_ = nullptr;
-  raw_ptr<TestInkDrop> ink_drop_ = nullptr;
+  raw_ptr<TestIconLabelBubbleView, DanglingUntriaged> view_ = nullptr;
+  raw_ptr<TestInkDrop, DanglingUntriaged> ink_drop_ = nullptr;
   std::unique_ptr<ui::test::EventGenerator> generator_;
 
   bool steady_reached_ = false;
@@ -389,12 +389,12 @@ TEST_F(IconLabelBubbleViewTest, GestureInkDropState) {
 #endif
 
 TEST_F(IconLabelBubbleViewTest, LabelVisibilityAfterAnimation) {
-  view()->AnimateIn(absl::nullopt);
+  view()->AnimateIn(std::nullopt);
   EXPECT_TRUE(view()->IsLabelVisible());
   view()->AnimateOut();
   EXPECT_FALSE(view()->IsLabelVisible());
   // Label should reappear if animated in after being animated out.
-  view()->AnimateIn(absl::nullopt);
+  view()->AnimateIn(std::nullopt);
   EXPECT_TRUE(view()->IsLabelVisible());
 }
 
@@ -404,7 +404,7 @@ TEST_F(IconLabelBubbleViewTest, LabelVisibilityAfterAnimationReset) {
   view()->ResetSlideAnimation(false);
   EXPECT_FALSE(view()->IsLabelVisible());
   // Label should reappear if animated in after being reset out.
-  view()->AnimateIn(absl::nullopt);
+  view()->AnimateIn(std::nullopt);
   EXPECT_TRUE(view()->IsLabelVisible());
 }
 

@@ -5,7 +5,7 @@
 #ifndef IOS_CHROME_TEST_PROVIDERS_SIGNIN_FAKE_TRUSTED_VAULT_CLIENT_BACKEND_H_
 #define IOS_CHROME_TEST_PROVIDERS_SIGNIN_FAKE_TRUSTED_VAULT_CLIENT_BACKEND_H_
 
-#include "ios/chrome/browser/signin/trusted_vault_client_backend.h"
+#include "ios/chrome/browser/signin/model/trusted_vault_client_backend.h"
 
 @class FakeTrustedVaultClientBackendViewController;
 
@@ -18,6 +18,8 @@ class FakeTrustedVaultClientBackend final : public TrustedVaultClientBackend {
   // TrustedVaultClientBackend implementation.
   void AddObserver(Observer* observer) final;
   void RemoveObserver(Observer* observer) final;
+  void SetDeviceRegistrationPublicKeyVerifierForUMA(
+      VerifierCallback verifier) final;
   void FetchKeys(id<SystemIdentity> identity,
                  KeyFetchedCallback callback) final;
   void MarkLocalKeysAsStale(id<SystemIdentity> identity,
@@ -32,6 +34,10 @@ class FakeTrustedVaultClientBackend final : public TrustedVaultClientBackend {
                                  UIViewController* presenting_view_controller,
                                  CompletionBlock callback) final;
   void CancelDialog(BOOL animated, ProceduralBlock callback) final;
+  void ClearLocalData(id<SystemIdentity> identity,
+                      base::OnceCallback<void(bool)> callback) final;
+  void GetPublicKeyForIdentity(id<SystemIdentity> identity,
+                               GetPublicKeyCallback callback) final;
 
   // Simulates user cancelling the reauth dialog.
   void SimulateUserCancel();

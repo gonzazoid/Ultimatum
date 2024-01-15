@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "base/base_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/platform_thread.h"
@@ -90,7 +90,7 @@ class BASE_EXPORT ThreadIdNameManager {
 
   // There's no point using a base::ObserverList behind a lock, so we just use
   // an std::vector instead.
-  std::vector<Observer*> observers_;
+  std::vector<raw_ptr<Observer, VectorExperimental>> observers_;
 };
 
 }  // namespace base

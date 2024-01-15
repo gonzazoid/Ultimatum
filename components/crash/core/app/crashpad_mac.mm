@@ -12,10 +12,11 @@
 #include <map>
 #include <vector>
 
+#include "base/apple/bridging.h"
+#include "base/apple/bundle_locations.h"
+#include "base/apple/foundation_util.h"
 #include "base/check.h"
 #include "base/files/file_path.h"
-#include "base/mac/bundle_locations.h"
-#include "base/mac/foundation_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/sys_string_conversions.h"
@@ -37,12 +38,13 @@ std::map<std::string, std::string> GetProcessSimpleAnnotations() {
   static std::map<std::string, std::string> annotations = []() -> auto {
     std::map<std::string, std::string> process_annotations;
     @autoreleasepool {
-      NSBundle* outer_bundle = base::mac::OuterBundle();
+      NSBundle* outer_bundle = base::apple::OuterBundle();
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
       process_annotations["prod"] = "Chrome_Mac";
 #else
-      NSString* product = base::mac::ObjCCast<NSString>([outer_bundle
-          objectForInfoDictionaryKey:base::mac::CFToNSCast(kCFBundleNameKey)]);
+      NSString* product = base::apple::ObjCCast<NSString>(
+          [outer_bundle objectForInfoDictionaryKey:base::apple::CFToNSPtrCast(
+                                                       kCFBundleNameKey)]);
       process_annotations["prod"] =
           base::SysNSStringToUTF8(product).append("_Mac");
 #endif
@@ -53,7 +55,7 @@ std::map<std::string, std::string> GetProcessSimpleAnnotations() {
 #else
       const bool allow_empty_channel = false;
 #endif
-      NSString* channel = base::mac::ObjCCast<NSString>(
+      NSString* channel = base::apple::ObjCCast<NSString>(
           [outer_bundle objectForInfoDictionaryKey:@"KSChannelID"]);
       if (!channel || [channel isEqual:@"arm64"] ||
           [channel isEqual:@"universal"]) {
@@ -77,7 +79,7 @@ std::map<std::string, std::string> GetProcessSimpleAnnotations() {
       }
 
       NSString* version =
-          base::mac::ObjCCast<NSString>([base::mac::FrameworkBundle()
+          base::apple::ObjCCast<NSString>([base::apple::FrameworkBundle()
               objectForInfoDictionaryKey:@"CFBundleShortVersionString"]);
       process_annotations["ver"] = base::SysNSStringToUTF8(version);
 
@@ -141,7 +143,7 @@ bool PlatformCrashpadInitialization(
 
   if (initial_client) {
     @autoreleasepool {
-      base::FilePath framework_bundle_path = base::mac::FrameworkBundlePath();
+      base::FilePath framework_bundle_path = base::apple::FrameworkBundlePath();
       base::FilePath handler_path =
           framework_bundle_path.Append("Helpers").Append(
               "chrome_crashpad_handler");

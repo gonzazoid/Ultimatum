@@ -251,7 +251,7 @@ class GFX_EXPORT RenderText {
       const std::u16string& text) const;
 
   const std::u16string& text() const { return text_; }
-  void SetText(const std::u16string& text);
+  void SetText(std::u16string text);
   void AppendText(const std::u16string& text);
 
   HorizontalAlignment horizontal_alignment() const {
@@ -448,6 +448,11 @@ class GFX_EXPORT RenderText {
   void SetWeight(Font::Weight weight);
   void ApplyWeight(Font::Weight weight, const Range& range);
 
+  // Replace the elided text by an ellipsis. This property is getting rewritten
+  // by the use of SetElideBehavior(...).
+  void SetEliding(bool value);
+  void ApplyEliding(bool value, const Range& range);
+
   // Returns whether this style is enabled consistently across the entire
   // RenderText.
   bool GetStyle(TextStyle style) const;
@@ -591,22 +596,21 @@ class GFX_EXPORT RenderText {
 
   // Retrieves the word displayed at the given |point| along with its styling
   // information. |point| is in the view's coordinates. If no word is displayed
-  // at the point, returns a nearby word. |baseline_point| should correspond to
-  // the baseline point of the leftmost glyph of the |word| in the view's
-  // coordinates. Returns false, if no word can be retrieved.
+  // at the point, returns a nearby word. |rect| should correspond to the space
+  // used by the glyph of the |word| in the view's coordinates. Returns false,
+  // if no word can be retrieved.
   bool GetWordLookupDataAtPoint(const Point& point,
                                 DecoratedText* decorated_word,
-                                Point* baseline_point);
+                                Rect* rect);
 
   // Retrieves the text at |range| along with its styling information.
-  // |baseline_point| should correspond to the baseline point of
-  // the leftmost glyph of the text in the view's coordinates. If the text
-  // spans multiple lines, |baseline_point| will correspond with the leftmost
-  // glyph on the first line in the range. Returns false, if no text can be
-  // retrieved.
+  // |rect| should correspond to the space used by the glyph of the text in the
+  // view's coordinates. If the text spans multiple lines, |rect| will
+  // correspond with the leftmost glyph on the first line in the range. Returns
+  // false, if no text can be retrieved.
   bool GetLookupDataForRange(const Range& range,
                              DecoratedText* decorated_text,
-                             Point* baseline_point);
+                             Rect* rect);
 
   // Retrieves the text in the given |range|.
   std::u16string GetTextFromRange(const Range& range) const;
@@ -620,6 +624,10 @@ class GFX_EXPORT RenderText {
   // Expands |range| to its nearest grapheme boundaries and returns the
   // resulting range. Maintains directionality of |range|.
   Range ExpandRangeToGraphemeBoundary(const Range& range) const;
+
+  // Expands |range| to its nearest word boundaries and returns the resulting
+  // range. Maintains directionality of |range|.
+  Range ExpandRangeToWordBoundary(const Range& range) const;
 
   // Specify the width/height of a glyph for test. The width/height of glyphs is
   // very platform-dependent and environment-dependent. Otherwise multiline text
@@ -874,17 +882,16 @@ class GFX_EXPORT RenderText {
   // the text length if no valid boundary is found.
   size_t GetNearestWordStartBoundary(size_t index) const;
 
-  // Expands |range| to its nearest word boundaries and returns the resulting
-  // range. Maintains directionality of |range|.
-  Range ExpandRangeToWordBoundary(const Range& range) const;
-
   // Returns an implementation-specific run list, if implemented.
   virtual internal::TextRunList* GetRunList() = 0;
   virtual const internal::TextRunList* GetRunList() const = 0;
 
-  // Returns the decorated text corresponding to |range|. Returns false if the
-  // text cannot be retrieved, e.g. if the text is obscured.
-  virtual bool GetDecoratedTextForRange(const Range& range,
+  // Returns the decorated text corresponding to `text_range`, in logical
+  // offsets. The text returned in the decorated text object is the text(), not
+  // the display_text(), and it's not obscured. It's the responsibility of the
+  // callers of this function to replace the text by the password replacement
+  // character if it is obscured and exposed to platform APIs.
+  virtual void GetDecoratedTextForRange(const Range& text_range,
                                         DecoratedText* decorated_text) = 0;
 
   // Logical UTF-16 string data to be drawn.
@@ -949,10 +956,11 @@ class GFX_EXPORT RenderText {
   // BreakList positions are stored with text indices, not display indices.
   // TODO(msw): Expand to support cursor, selection, background, etc. colors.
   BreakList<SkColor> colors_{kPlaceholderColor};
-  BreakList<BaselineStyle> baselines_{NORMAL_BASELINE};
+  BreakList<BaselineStyle> baselines_{BaselineStyle::kNormalBaseline};
   BreakList<int> font_size_overrides_{0};
   BreakList<Font::Weight> weights_{Font::Weight::NORMAL};
   internal::StyleArray styles_;
+  BreakList<bool> elidings_;
 
   mutable BreakList<SkColor> layout_colors_;
   mutable BreakList<BaselineStyle> layout_baselines_;
@@ -962,7 +970,9 @@ class GFX_EXPORT RenderText {
 
   // A mapping from text to display text indices for each grapheme. The vector
   // contains an ordered sequence of indice pairs. Both sequence |text_index|
-  // and |display_index| are sorted.
+  // and |display_index| are sorted. Note that currently this is a mapping
+  // between `text_` and `layout_text_`, but the intention is to combine the
+  // phases that currently creates `layout_text_` and `display_text_`.
   mutable internal::TextToDisplaySequence text_to_display_indices_;
 
   // A flag to obscure actual text with asterisks for password fields.

@@ -8,7 +8,7 @@
 #include <mfmediaengine.h>
 #include <wrl.h>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/synchronization/lock.h"
 #include "media/base/buffering_state.h"
 #include "media/base/pipeline_status.h"
@@ -31,16 +31,20 @@ class MediaEngineNotifyImpl
   using EndedCB = base::RepeatingClosure;
   using FormatChangeCB = base::RepeatingClosure;
   using LoadedDataCB = base::RepeatingClosure;
+  using CanPlayThroughCB = base::RepeatingClosure;
   using PlayingCB = base::RepeatingClosure;
   using WaitingCB = base::RepeatingClosure;
+  using FrameStepCompletedCB = base::RepeatingClosure;
   using TimeUpdateCB = base::RepeatingClosure;
 
   HRESULT RuntimeClassInitialize(ErrorCB error_cb,
                                  EndedCB ended_cb,
                                  FormatChangeCB format_change_cb,
                                  LoadedDataCB loaded_data_cb,
+                                 CanPlayThroughCB can_play_through_cb,
                                  PlayingCB playing_cb,
                                  WaitingCB waiting_cb,
+                                 FrameStepCompletedCB frame_step_completed_cb,
                                  TimeUpdateCB time_update_cb);
 
   // IMFMediaEngineNotify implementation.
@@ -53,13 +57,15 @@ class MediaEngineNotifyImpl
  private:
   // Callbacks are called on the MF threadpool thread and the creator of this
   // object must make sure the callbacks are safe to be called on that thread,
-  // e.g. using BindToCurrentLoop().
+  // e.g. using base::BindPostTaskToCurrentDefault().
   ErrorCB error_cb_;
   EndedCB ended_cb_;
   FormatChangeCB format_change_cb_;
   LoadedDataCB loaded_data_cb_;
+  CanPlayThroughCB can_play_through_cb_;
   PlayingCB playing_cb_;
   WaitingCB waiting_cb_;
+  FrameStepCompletedCB frame_step_completed_cb_;
   TimeUpdateCB time_update_cb_;
 
   // EventNotify is invoked from MF threadpool thread where the callbacks are

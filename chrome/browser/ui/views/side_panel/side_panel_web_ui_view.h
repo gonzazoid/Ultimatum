@@ -7,9 +7,10 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/bubble/bubble_contents_wrapper.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/webview/unhandled_keyboard_event_handler.h"
 #include "ui/views/controls/webview/webview.h"
 
@@ -26,7 +27,10 @@ class MenuRunner;
 // handling visibility updates.
 class SidePanelWebUIView : public views::WebView,
                            public BubbleContentsWrapper::Host {
+  METADATA_HEADER(SidePanelWebUIView, views::WebView)
+
  public:
+  static inline constexpr int kSidePanelWebViewId = 777;
   SidePanelWebUIView(base::RepeatingClosure on_show_cb,
                      base::RepeatingClosure close_cb,
                      BubbleContentsWrapper* contents_wrapper);
@@ -35,7 +39,6 @@ class SidePanelWebUIView : public views::WebView,
   ~SidePanelWebUIView() override;
 
   // views::WebView:
-  void SetVisible(bool visible) override;
   void ViewHierarchyChanged(
       const views::ViewHierarchyChangedDetails& details) override;
 
@@ -64,6 +67,8 @@ class SidePanelWebUIView : public views::WebView,
 
 template <class T>
 class SidePanelWebUIViewT : public SidePanelWebUIView {
+  METADATA_TEMPLATE_HEADER(SidePanelWebUIViewT, SidePanelWebUIView)
+
  public:
   SidePanelWebUIViewT(
       base::RepeatingClosure on_show_cb,

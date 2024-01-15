@@ -11,12 +11,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include <optional>
 #include "base/containers/span.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/numerics/checked_math.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/task/single_thread_task_runner.h"
@@ -43,7 +45,6 @@
 #include "gpu/ipc/service/gpu_channel.h"
 #include "gpu/ipc/service/gpu_channel_manager.h"
 #include "gpu/ipc/service/shared_image_stub.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
 #include "third_party/skia/include/core/SkImage.h"
 #include "third_party/skia/include/core/SkImageInfo.h"
@@ -68,33 +69,21 @@ namespace {
 
 struct CleanUpContext {
   scoped_refptr<base::SingleThreadTaskRunner> main_task_runner;
-  SharedContextState* shared_context_state = nullptr;
+  raw_ptr<SharedContextState> shared_context_state = nullptr;
   std::unique_ptr<SkiaImageRepresentation> skia_representation;
   std::unique_ptr<SkiaImageRepresentation::ScopedReadAccess> skia_scoped_access;
 };
 
-void CleanUpResource(SkImage::ReleaseContext context) {
+void CleanUpResource(SkImages::ReleaseContext context) {
   auto* clean_up_context = static_cast<CleanUpContext*>(context);
   DCHECK(clean_up_context->main_task_runner->BelongsToCurrentThread());
 
   // The context should be current as we set it to be current earlier, and this
   // call is coming from Skia itself.
   DCHECK(
-      clean_up_context->shared_context_state->IsCurrent(nullptr /* surface */));
+      clean_up_context->shared_context_state->IsCurrent(/*surface=*/nullptr));
 
-  // Note: While we have to call TakeEndState() here by contract, we can elide
-  // setting the backend texture state of the GrContext to that end state. The
-  // latter usually needs to be called to add a layout transition for the
-  // underlying image (currently relevant only for VkImage), but the underlying
-  // image in this case is going away: this VkImage will be deleted right after
-  // the transition would be complete and the underlying dma-buf is going to be
-  // deleted at the same time (we are dropping our ref to the dma-buf here and
-  // Vulkan will drop the last one with the VkImage deletion). Not performing
-  // the layout transition layout saves some work. It might result in missing
-  // data in the dma-buf as caches won't be flushed, but no one was writing to
-  // that dma-buf and no one is going to use it at this point in any case.
-  std::ignore = clean_up_context->skia_scoped_access->TakeEndState();
-
+  clean_up_context->skia_scoped_access->ApplyBackendSurfaceEndState();
   delete clean_up_context;
 }
 
@@ -237,7 +226,7 @@ void ImageDecodeAcceleratorStub::ProcessCompletedDecode(
   }
 
   std::vector<sk_sp<SkImage>> plane_sk_images;
-  absl::optional<base::ScopedClosureRunner> notify_gl_state_changed;
+  std::optional<base::ScopedClosureRunner> notify_gl_state_changed;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // Right now, we only support YUV 4:2:0 for the output of the decoder (either
   // as YV12 or NV12).
@@ -299,8 +288,9 @@ void ImageDecodeAcceleratorStub::ProcessCompletedDecode(
     const bool is_nv12_chroma_plane = completed_decode->buffer_format ==
                                           gfx::BufferFormat::YUV_420_BIPLANAR &&
                                       plane == 1u;
-    const auto plane_format = is_nv12_chroma_plane ? gfx::BufferFormat::RG_88
-                                                   : gfx::BufferFormat::R_8;
+    const auto plane_format = is_nv12_chroma_plane
+                                  ? viz::SinglePlaneFormat::kRG_88
+                                  : viz::SinglePlaneFormat::kR_8;
 
     // NOTE: The SurfaceHandle would typically be used to know what gpu adapter
     // the buffer belongs to, but here we already have the buffer handle, so it
@@ -308,11 +298,10 @@ void ImageDecodeAcceleratorStub::ProcessCompletedDecode(
     // SurfaceHandle was used to create the original buffers).
     gpu::Mailbox mailbox = gpu::Mailbox::GenerateForSharedImage();
     if (!channel_->shared_image_stub()->CreateSharedImage(
-            mailbox, channel_->client_id(), std::move(plane_handle),
-            plane_format, gfx::BufferPlane::DEFAULT, kNullSurfaceHandle,
-            plane_size, gfx::ColorSpace(), kTopLeft_GrSurfaceOrigin,
-            kOpaque_SkAlphaType,
-            SHARED_IMAGE_USAGE_RASTER | SHARED_IMAGE_USAGE_OOP_RASTERIZATION)) {
+            mailbox, std::move(plane_handle), plane_format, plane_size,
+            gfx::ColorSpace(), kTopLeft_GrSurfaceOrigin, kOpaque_SkAlphaType,
+            SHARED_IMAGE_USAGE_RASTER | SHARED_IMAGE_USAGE_OOP_RASTERIZATION,
+            "ImageDecodeAccelerator")) {
       DLOG(ERROR) << "Could not create SharedImage";
       return;
     }
@@ -362,7 +351,7 @@ void ImageDecodeAcceleratorStub::ProcessCompletedDecode(
     resource->skia_scoped_access = std::move(skia_scoped_access);
 
     plane_sk_images[plane] = resource->skia_scoped_access->CreateSkImage(
-        shared_context_state->gr_context(), CleanUpResource, resource);
+        shared_context_state.get(), CleanUpResource, resource);
     if (!plane_sk_images[plane]) {
       DLOG(ERROR) << "Could not create planar SkImage";
       return;
@@ -394,7 +383,7 @@ void ImageDecodeAcceleratorStub::ProcessCompletedDecode(
 
   {
     auto* gr_shader_cache = channel_->gpu_channel_manager()->gr_shader_cache();
-    absl::optional<raster::GrShaderCache::ScopedCacheUse> cache_use;
+    std::optional<raster::GrShaderCache::ScopedCacheUse> cache_use;
     if (gr_shader_cache)
       cache_use.emplace(gr_shader_cache,
                         base::strict_cast<int32_t>(channel_->client_id()));

@@ -4,8 +4,6 @@
 
 package org.chromium.android_webview.test;
 
-import static org.junit.Assert.assertEquals;
-
 import android.os.SystemClock;
 import android.view.KeyEvent;
 
@@ -15,33 +13,38 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.UseParametersRunnerFactory;
 
 import org.chromium.android_webview.AwContents;
 import org.chromium.android_webview.metrics.AwMetricsServiceClient;
-import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.test.util.Batch;
-import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
-import org.chromium.base.test.util.MetricsUtils;
+import org.chromium.base.test.util.HistogramWatcher;
+import org.chromium.base.test.util.RequiresRestart;
 import org.chromium.blink.mojom.WebFeature;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.net.test.util.TestWebServer;
 
 import java.util.concurrent.Callable;
 
-/**
- * Integration test for PageLoadMetrics.
- */
+/** Integration test for PageLoadMetrics. */
 @Batch(Batch.PER_CLASS)
-public class AwPageLoadMetricsTest {
+@RunWith(Parameterized.class)
+@UseParametersRunnerFactory(AwJUnit4ClassRunnerWithParameters.Factory.class)
+public class AwPageLoadMetricsTest extends AwParameterizedTest {
     private static final String MAIN_FRAME_FILE = "/main_frame.html";
 
-    @Rule
-    public AwActivityTestRule mRule = new AwActivityTestRule();
+    @Rule public AwActivityTestRule mRule;
 
     private AwTestContainerView mTestContainerView;
     private TestAwContentsClient mContentsClient;
     private TestWebServer mWebServer;
+
+    public AwPageLoadMetricsTest(AwSettingsMutation param) {
+        this.mRule = new AwActivityTestRule(param.getMutation());
+    }
 
     @Before
     public void setUp() throws Exception {
@@ -72,70 +75,77 @@ public class AwPageLoadMetricsTest {
     public void testUseCounterMetrics() throws Throwable {
         final String data = "<html><head></head><body><form></form></body></html>";
         final String url = mWebServer.setResponse(MAIN_FRAME_FILE, data, null);
-        MetricsUtils.HistogramDelta delta = new MetricsUtils.HistogramDelta(
-                "Blink.UseCounter.MainFrame.Features", WebFeature.PAGE_VISITS);
-        MetricsUtils.HistogramDelta form = new MetricsUtils.HistogramDelta(
-                "Blink.UseCounter.Features", WebFeature.FORM_ELEMENT);
+        var histograms =
+                HistogramWatcher.newBuilder()
+                        .expectIntRecord(
+                                "Blink.UseCounter.MainFrame.Features", WebFeature.PAGE_VISITS)
+                        .expectIntRecord("Blink.UseCounter.Features", WebFeature.FORM_ELEMENT)
+                        .allowExtraRecordsForHistogramsAbove()
+                        .build();
         loadUrlSync(url);
         loadUrlSync("about:blank");
-        assertEquals(1, delta.getDelta());
-        assertEquals(1, form.getDelta());
+        histograms.assertExpected();
     }
 
-    /**
-     * This test covers WebView heartbeat metrics from CorePageLoadMetrics.
-     */
+    /** This test covers WebView heartbeat metrics from CorePageLoadMetrics. */
     @Test
     @SmallTest
     @Feature({"AndroidWebView"})
+    @RequiresRestart(
+            "NavigationToFirstPaint is only recorded once, making the test fail "
+                    + "when run in a batch and being the first test.")
     public void testHeartbeatMetrics() throws Throwable {
         final String data = "<html><head></head><body><p>Hello World</p></body></html>";
         final String url = mWebServer.setResponse(MAIN_FRAME_FILE, data, null);
-        int navigationToFirstPaint = RecordHistogram.getHistogramTotalCountForTesting(
-                "PageLoad.PaintTiming.NavigationToFirstPaint");
-        int navigationToFirstContentfulPaint = RecordHistogram.getHistogramTotalCountForTesting(
-                "PageLoad.PaintTiming.NavigationToFirstContentfulPaint");
-        int navigationToLargestContentfulPaint = RecordHistogram.getHistogramTotalCountForTesting(
-                "PageLoad.PaintTiming.NavigationToLargestContentfulPaint2");
+        var histograms =
+                HistogramWatcher.newBuilder()
+                        .expectAnyRecord("PageLoad.PaintTiming.NavigationToFirstPaint")
+                        .expectAnyRecord("PageLoad.PaintTiming.NavigationToFirstContentfulPaint")
+                        .build();
         loadUrlSync(url);
-        AwActivityTestRule.pollInstrumentationThread(
-                () -> (1 + navigationToFirstPaint
-                        == RecordHistogram.getHistogramTotalCountForTesting(
-                                "PageLoad.PaintTiming.NavigationToFirstPaint")));
-        AwActivityTestRule.pollInstrumentationThread(
-                () -> (1 + navigationToFirstContentfulPaint
-                        == RecordHistogram.getHistogramTotalCountForTesting(
-                                "PageLoad.PaintTiming.NavigationToFirstContentfulPaint")));
+        histograms.pollInstrumentationThreadUntilSatisfied();
+
         // Flush NavigationToLargestContentfulPaint.
+        histograms =
+                HistogramWatcher.newBuilder()
+                        .expectAnyRecord("PageLoad.PaintTiming.NavigationToLargestContentfulPaint2")
+                        .build();
         loadUrlSync("about:blank");
-        AwActivityTestRule.pollInstrumentationThread(
-                ()
-                        -> (1 + navigationToLargestContentfulPaint
-                                == RecordHistogram.getHistogramTotalCountForTesting(
-                                        "PageLoad.PaintTiming.NavigationToLargestContentfulPaint2")));
+        histograms.pollInstrumentationThreadUntilSatisfied();
     }
 
-    /**
-     * This test covers WebView heartbeat metrics FirstInputDelay4.
-     */
+    /** This test covers WebView heartbeat metrics FirstInputDelay4. */
     @Test
     @SmallTest
     @Feature({"AndroidWebView"})
-    @DisabledTest(message = "https://crbug.com/1312527")
     public void testFirstInputDelay4() throws Throwable {
-        final String data = "<html><head></head><body>"
-                + "<p>Hello World</p><input type='text' id='text1'>"
-                + "</body></html>";
+        final String data =
+                "<html><head></head><body>"
+                        + "<p>Hello World</p><input type='text' id='text1'>"
+                        + "</body></html>";
         final String url = mWebServer.setResponse(MAIN_FRAME_FILE, data, null);
-        int firstInputDelay4 = RecordHistogram.getHistogramTotalCountForTesting(
-                "PageLoad.InteractiveTiming.FirstInputDelay4");
+        var firstInputDelay4Histogram =
+                HistogramWatcher.newBuilder()
+                        .expectAnyRecord("PageLoad.InteractiveTiming.FirstInputDelay4")
+                        .build();
         loadUrlSync(url);
         executeJavaScriptAndWaitForResult("document.getElementById('text1').select();");
-        dispatchDownAndUpKeyEvents(KeyEvent.KEYCODE_A);
+
+        // On emulator, the page might not ready for accepting the input, multiple endeavor is
+        // needed.
         AwActivityTestRule.pollInstrumentationThread(
-                () -> (1 + firstInputDelay4
-                        == RecordHistogram.getHistogramTotalCountForTesting(
-                                "PageLoad.InteractiveTiming.FirstInputDelay4")));
+                () -> {
+                    try {
+                        dispatchDownAndUpKeyEvents(KeyEvent.KEYCODE_A);
+                        return !"\"\""
+                                .equals(
+                                        executeJavaScriptAndWaitForResult(
+                                                "document.getElementById('text1').value;"));
+                    } catch (Throwable e) {
+                        return false;
+                    }
+                });
+        firstInputDelay4Histogram.pollInstrumentationThreadUntilSatisfied();
     }
 
     @Test
@@ -144,17 +154,21 @@ public class AwPageLoadMetricsTest {
     public void testPageLoadMetricsProvider() throws Throwable {
         final String data = "<html><head></head><body><input type='text' id='text1'></body></html>";
         final String url = mWebServer.setResponse(MAIN_FRAME_FILE, data, null);
-        int foregroundDuration = RecordHistogram.getHistogramTotalCountForTesting(
-                "PageLoad.PageTiming.ForegroundDuration");
+        var foregroundDurationHistogram =
+                HistogramWatcher.newBuilder()
+                        .expectAnyRecord("PageLoad.PageTiming.ForegroundDuration")
+                        .build();
         TestThreadUtils.runOnUiThreadBlocking(
-                () -> { AwMetricsServiceClient.setConsentSetting(true); });
+                () -> {
+                    AwMetricsServiceClient.setConsentSetting(true);
+                });
         loadUrlSync(url);
         // Remove the WebView from the container, to simulate app going to background.
-        TestThreadUtils.runOnUiThreadBlocking(() -> { mRule.getActivity().removeAllViews(); });
-        AwActivityTestRule.pollInstrumentationThread(
-                () -> (1 + foregroundDuration
-                        == RecordHistogram.getHistogramTotalCountForTesting(
-                                "PageLoad.PageTiming.ForegroundDuration")));
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mRule.getActivity().removeAllViews();
+                });
+        foregroundDurationHistogram.pollInstrumentationThreadUntilSatisfied();
     }
 
     private String executeJavaScriptAndWaitForResult(String code) throws Throwable {
@@ -163,18 +177,29 @@ public class AwPageLoadMetricsTest {
     }
 
     private void dispatchDownAndUpKeyEvents(final int code) throws Throwable {
-        dispatchKeyEvent(new KeyEvent(SystemClock.uptimeMillis(), SystemClock.uptimeMillis(),
-                KeyEvent.ACTION_DOWN, code, 0));
-        dispatchKeyEvent(new KeyEvent(SystemClock.uptimeMillis(), SystemClock.uptimeMillis(),
-                KeyEvent.ACTION_UP, code, 0));
+        dispatchKeyEvent(
+                new KeyEvent(
+                        SystemClock.uptimeMillis(),
+                        SystemClock.uptimeMillis(),
+                        KeyEvent.ACTION_DOWN,
+                        code,
+                        0));
+        dispatchKeyEvent(
+                new KeyEvent(
+                        SystemClock.uptimeMillis(),
+                        SystemClock.uptimeMillis(),
+                        KeyEvent.ACTION_UP,
+                        code,
+                        0));
     }
 
     private boolean dispatchKeyEvent(final KeyEvent event) throws Throwable {
-        return TestThreadUtils.runOnUiThreadBlocking(new Callable<Boolean>() {
-            @Override
-            public Boolean call() {
-                return mTestContainerView.dispatchKeyEvent(event);
-            }
-        });
+        return TestThreadUtils.runOnUiThreadBlocking(
+                new Callable<Boolean>() {
+                    @Override
+                    public Boolean call() {
+                        return mTestContainerView.dispatchKeyEvent(event);
+                    }
+                });
     }
 }

@@ -7,11 +7,10 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/ref_counted_memory.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
@@ -23,7 +22,6 @@
 #include "content/public/browser/browser_thread.h"
 #include "printing/buildflags/buildflags.h"
 #include "printing/mojom/print.mojom.h"
-#include "printing/printing_features.h"
 
 #if BUILDFLAG(IS_MAC)
 #include "chrome/common/printing/printer_capabilities_mac.h"
@@ -34,6 +32,7 @@
 #endif
 
 #if BUILDFLAG(ENABLE_OOP_PRINTING)
+#include "chrome/browser/printing/prefs_util.h"
 #include "chrome/browser/printing/print_backend_service_manager.h"
 #include "chrome/browser/ui/webui/print_preview/printer_handler.h"
 #include "chrome/services/printing/public/mojom/print_backend_service.mojom.h"
@@ -50,14 +49,13 @@ scoped_refptr<base::TaskRunner> CreatePrinterHandlerTaskRunner() {
       base::MayBlock(), base::TaskPriority::USER_VISIBLE};
 #endif
 
-#if defined(USE_CUPS)
+#if BUILDFLAG(USE_CUPS)
   // CUPS is thread safe.
   return base::ThreadPool::CreateTaskRunner(kTraits);
 #elif BUILDFLAG(IS_WIN)
   // Windows drivers are likely not thread-safe and need to be accessed on the
   // UI thread.
-  return content::GetUIThreadTaskRunner(
-      {base::MayBlock(), base::TaskPriority::USER_VISIBLE});
+  return content::GetUIThreadTaskRunner({base::TaskPriority::USER_VISIBLE});
 #else
   // Be conservative on unsupported platforms.
   return base::ThreadPool::CreateSingleThreadTaskRunner(kTraits);
@@ -66,54 +64,53 @@ scoped_refptr<base::TaskRunner> CreatePrinterHandlerTaskRunner() {
 
 #if BUILDFLAG(ENABLE_OOP_PRINTING)
 
-void OnDidGetDefaultPrinterName(
+void OnDidGetDefaultPrinterNameFromPrintBackendService(
     PrinterHandler::DefaultPrinterCallback callback,
-    mojom::DefaultPrinterNameResultPtr printer_name) {
-  if (printer_name->is_result_code()) {
+    mojom::DefaultPrinterNameResultPtr result) {
+  if (result->is_result_code()) {
     PRINTER_LOG(ERROR)
         << "Failure getting default printer via service, result: "
-        << printer_name->get_result_code();
+        << result->get_result_code();
     std::move(callback).Run(std::string());
     return;
   }
 
   PRINTER_LOG(EVENT) << "Default Printer from service: "
-                     << printer_name->get_default_printer_name();
-  std::move(callback).Run(printer_name->get_default_printer_name());
+                     << result->get_default_printer_name();
+  std::move(callback).Run(result->get_default_printer_name());
 }
 
-void OnDidEnumeratePrinters(
+void OnDidEnumeratePrintersFromPrintBackendService(
     PrinterHandler::AddedPrintersCallback added_printers_callback,
     PrinterHandler::GetPrintersDoneCallback done_callback,
-    mojom::PrinterListResultPtr printer_list) {
-  if (printer_list->is_result_code()) {
+    mojom::PrinterListResultPtr result) {
+  PrinterList printer_list;
+  if (result->is_printer_list()) {
+    printer_list = std::move(result->get_printer_list());
+    PRINTER_LOG(EVENT) << "Enumerated " << printer_list.size() << " printer(s)";
+  } else {
     PRINTER_LOG(ERROR)
         << "Failure enumerating local printers via service, result: "
-        << printer_list->get_result_code();
+        << result->get_result_code();
   }
 
-  ConvertPrinterListForCallback(
-      std::move(added_printers_callback), std::move(done_callback),
-      printer_list->is_printer_list() ? printer_list->get_printer_list()
-                                      : PrinterList());
+  ConvertPrinterListForCallback(std::move(added_printers_callback),
+                                std::move(done_callback), printer_list);
 }
 
-void OnDidFetchCapabilities(
+void OnDidFetchCapabilitiesFromPrintBackendService(
     const std::string& device_name,
     bool elevated_privileges,
-    bool has_secure_protocol,
     PrinterHandler::GetCapabilityCallback callback,
-    mojom::PrinterCapsAndInfoResultPtr printer_caps_and_info) {
-  if (printer_caps_and_info->is_result_code()) {
+    mojom::PrinterCapsAndInfoResultPtr result) {
+  if (result->is_result_code()) {
     PRINTER_LOG(ERROR)
         << "Failure fetching printer capabilities via service for "
-        << device_name
-        << ", result: " << printer_caps_and_info->get_result_code();
+        << device_name << ", result: " << result->get_result_code();
 
     // If we failed because of access denied then we could retry at an elevated
     // privilege (if not already elevated).
-    if (printer_caps_and_info->get_result_code() ==
-            mojom::ResultCode::kAccessDenied &&
+    if (result->get_result_code() == mojom::ResultCode::kAccessDenied &&
         !elevated_privileges) {
       // Register that this printer requires elevated privileges.
       PrintBackendServiceManager& service_mgr =
@@ -124,9 +121,9 @@ void OnDidFetchCapabilities(
       // level.
       service_mgr.FetchCapabilities(
           device_name,
-          base::BindOnce(&OnDidFetchCapabilities, device_name,
-                         /*elevated_privileges=*/true, has_secure_protocol,
-                         std::move(callback)));
+          base::BindOnce(&OnDidFetchCapabilitiesFromPrintBackendService,
+                         device_name,
+                         /*elevated_privileges=*/true, std::move(callback)));
       return;
     }
 
@@ -138,11 +135,10 @@ void OnDidFetchCapabilities(
   PRINTER_LOG(EVENT) << "Received printer info & capabilities via service for "
                      << device_name;
   const mojom::PrinterCapsAndInfoPtr& caps_and_info =
-      printer_caps_and_info->get_printer_caps_and_info();
+      result->get_printer_caps_and_info();
   base::Value::Dict settings = AssemblePrinterSettings(
       device_name, caps_and_info->printer_info,
-      caps_and_info->user_defined_papers, has_secure_protocol,
-      &caps_and_info->printer_caps);
+      /*has_secure_protocol=*/false, &caps_and_info->printer_caps);
   std::move(callback).Run(std::move(settings));
 }
 
@@ -151,7 +147,7 @@ void OnDidFetchCapabilities(
 }  // namespace
 
 // static
-PrinterList LocalPrinterHandlerDefault::EnumeratePrintersAsync(
+PrinterList LocalPrinterHandlerDefault::EnumeratePrintersOnBlockingTaskRunner(
     const std::string& locale) {
 #if BUILDFLAG(IS_WIN)
   // Blocking is needed here because Windows printer drivers are oftentimes
@@ -164,7 +160,9 @@ PrinterList LocalPrinterHandlerDefault::EnumeratePrintersAsync(
 
   PrinterList printer_list;
   mojom::ResultCode result = print_backend->EnumeratePrinters(printer_list);
-  if (result != mojom::ResultCode::kSuccess) {
+  if (result == mojom::ResultCode::kSuccess) {
+    PRINTER_LOG(EVENT) << "Enumerated " << printer_list.size() << " printer(s)";
+  } else {
     PRINTER_LOG(ERROR) << "Failure enumerating local printers, result: "
                        << result;
   }
@@ -172,7 +170,8 @@ PrinterList LocalPrinterHandlerDefault::EnumeratePrintersAsync(
 }
 
 // static
-base::Value::Dict LocalPrinterHandlerDefault::FetchCapabilitiesAsync(
+base::Value::Dict
+LocalPrinterHandlerDefault::FetchCapabilitiesOnBlockingTaskRunner(
     const std::string& device_name,
     const std::string& locale) {
   PrinterSemanticCapsAndDefaults::Papers user_defined_papers;
@@ -189,24 +188,23 @@ base::Value::Dict LocalPrinterHandlerDefault::FetchCapabilitiesAsync(
   scoped_refptr<PrintBackend> print_backend(
       PrintBackend::CreateInstance(locale));
 
-  VLOG(1) << "Get printer capabilities start for " << device_name;
-
   PrinterBasicInfo basic_info;
   mojom::ResultCode result =
       print_backend->GetPrinterBasicInfo(device_name, &basic_info);
-  if (result != mojom::ResultCode::kSuccess) {
+  if (result == mojom::ResultCode::kSuccess) {
+    PRINTER_LOG(EVENT) << "Got basic info for " << device_name;
+  } else {
     PRINTER_LOG(ERROR) << "Invalid printer when getting basic info for "
                        << device_name << ", result: " << result;
     return base::Value::Dict();
   }
 
   return GetSettingsOnBlockingTaskRunner(
-      device_name, basic_info, std::move(user_defined_papers),
-      /*has_secure_protocol=*/false, print_backend);
+      device_name, basic_info, std::move(user_defined_papers), print_backend);
 }
 
 // static
-std::string LocalPrinterHandlerDefault::GetDefaultPrinterAsync(
+std::string LocalPrinterHandlerDefault::GetDefaultPrinterOnBlockingTaskRunner(
     const std::string& locale) {
 #if BUILDFLAG(IS_WIN)
   // Blocking is needed here because Windows printer drivers are oftentimes
@@ -234,7 +232,7 @@ LocalPrinterHandlerDefault::LocalPrinterHandlerDefault(
     : preview_web_contents_(preview_web_contents),
       task_runner_(CreatePrinterHandlerTaskRunner()) {}
 
-LocalPrinterHandlerDefault::~LocalPrinterHandlerDefault() {}
+LocalPrinterHandlerDefault::~LocalPrinterHandlerDefault() = default;
 
 void LocalPrinterHandlerDefault::Reset() {}
 
@@ -242,20 +240,20 @@ void LocalPrinterHandlerDefault::GetDefaultPrinter(DefaultPrinterCallback cb) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
 #if BUILDFLAG(ENABLE_OOP_PRINTING)
-  if (base::FeatureList::IsEnabled(features::kEnableOopPrintDrivers)) {
-    VLOG(1) << "Getting default printer via service";
+  if (IsOopPrintingEnabled()) {
+    PRINTER_LOG(EVENT) << "Getting default printer via service";
     PrintBackendServiceManager& service_mgr =
         PrintBackendServiceManager::GetInstance();
-    service_mgr.GetDefaultPrinterName(
-        base::BindOnce(&OnDidGetDefaultPrinterName, std::move(cb)));
+    service_mgr.GetDefaultPrinterName(base::BindOnce(
+        &OnDidGetDefaultPrinterNameFromPrintBackendService, std::move(cb)));
     return;
   }
 #endif  // BUILDFLAG(ENABLE_OOP_PRINTING)
 
-  VLOG(1) << "Getting default printer in-process";
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
-      base::BindOnce(&GetDefaultPrinterAsync,
+  PRINTER_LOG(EVENT) << "Getting default printer in-process";
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
+      base::BindOnce(&GetDefaultPrinterOnBlockingTaskRunner,
                      g_browser_process->GetApplicationLocale()),
       std::move(cb));
 }
@@ -266,21 +264,21 @@ void LocalPrinterHandlerDefault::StartGetPrinters(
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
 #if BUILDFLAG(ENABLE_OOP_PRINTING)
-  if (base::FeatureList::IsEnabled(features::kEnableOopPrintDrivers)) {
-    VLOG(1) << "Enumerate printers start via service";
+  if (IsOopPrintingEnabled()) {
+    PRINTER_LOG(EVENT) << "Enumerate printers start via service";
     PrintBackendServiceManager& service_mgr =
         PrintBackendServiceManager::GetInstance();
     service_mgr.EnumeratePrinters(
-        base::BindOnce(&OnDidEnumeratePrinters, std::move(callback),
-                       std::move(done_callback)));
+        base::BindOnce(&OnDidEnumeratePrintersFromPrintBackendService,
+                       std::move(callback), std::move(done_callback)));
     return;
   }
 #endif  // BUILDFLAG(ENABLE_OOP_PRINTING)
 
-  VLOG(1) << "Enumerate printers start in-process";
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
-      base::BindOnce(&EnumeratePrintersAsync,
+  PRINTER_LOG(EVENT) << "Enumerate printers start in-process";
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
+      base::BindOnce(&EnumeratePrintersOnBlockingTaskRunner,
                      g_browser_process->GetApplicationLocale()),
       base::BindOnce(&ConvertPrinterListForCallback, std::move(callback),
                      std::move(done_callback)));
@@ -292,24 +290,27 @@ void LocalPrinterHandlerDefault::StartGetCapability(
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
 #if BUILDFLAG(ENABLE_OOP_PRINTING)
-  if (base::FeatureList::IsEnabled(features::kEnableOopPrintDrivers)) {
-    VLOG(1) << "Getting printer capabilities via service for " << device_name;
+  if (IsOopPrintingEnabled()) {
+    PRINTER_LOG(EVENT) << "Getting printer capabilities via service for "
+                       << device_name;
     PrintBackendServiceManager& service_mgr =
         PrintBackendServiceManager::GetInstance();
     service_mgr.FetchCapabilities(
         device_name,
-        base::BindOnce(&OnDidFetchCapabilities, device_name,
+        base::BindOnce(&OnDidFetchCapabilitiesFromPrintBackendService,
+                       device_name,
                        service_mgr.PrinterDriverFoundToRequireElevatedPrivilege(
                            device_name),
-                       /*has_secure_protocol=*/false, std::move(cb)));
+                       std::move(cb)));
     return;
   }
 #endif  // BUILDFLAG(ENABLE_OOP_PRINTING)
 
-  VLOG(1) << "Getting printer capabilities in-process for " << device_name;
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
-      base::BindOnce(&FetchCapabilitiesAsync, device_name,
+  PRINTER_LOG(EVENT) << "Getting printer capabilities in-process for "
+                     << device_name;
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
+      base::BindOnce(&FetchCapabilitiesOnBlockingTaskRunner, device_name,
                      g_browser_process->GetApplicationLocale()),
       std::move(cb));
 }

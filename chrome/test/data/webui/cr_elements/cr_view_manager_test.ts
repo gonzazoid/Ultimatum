@@ -6,12 +6,11 @@
 import 'chrome://resources/cr_elements/cr_view_manager/cr_view_manager.js';
 
 import {CrViewManagerElement} from 'chrome://resources/cr_elements/cr_view_manager/cr_view_manager.js';
-
-import {assert} from 'chrome://resources/js/assert.js';
-
+import {getTrustedHTML} from 'chrome://resources/js/static_types.js';
 import {assertEquals} from 'chrome://webui-test/chai_assert.js';
 import {isChildVisible} from 'chrome://webui-test/test_util.js';
 // clang-format on
+
 
 /** @fileoverview Suite of tests for cr-view-manager. */
 /** @enum {string} */
@@ -29,7 +28,7 @@ suite(suiteName, function() {
   // Initialize an cr-view-manager inside a parent div before
   // each test.
   setup(function() {
-    document.body.innerHTML = `
+    document.body.innerHTML = getTrustedHTML`
         <div id="parent">
           <cr-view-manager id="viewManager">
             <div slot="view" id="viewOne">view 1</div>
@@ -42,7 +41,7 @@ suite(suiteName, function() {
     viewManager = document.body.querySelector('#viewManager')!;
   });
 
-  test(assert(TestNames.VISIBILITY), function() {
+  test(TestNames.VISIBILITY, function() {
     function assertViewVisible(id: string, expectIsVisible: boolean) {
       assertEquals(
           expectIsVisible,
@@ -68,7 +67,7 @@ suite(suiteName, function() {
         });
   });
 
-  test(assert(TestNames.EVENT_FIRING), function() {
+  test(TestNames.EVENT_FIRING, function() {
     const viewOne = viewManager.querySelector('#viewOne')!;
 
     let fired = new Set();

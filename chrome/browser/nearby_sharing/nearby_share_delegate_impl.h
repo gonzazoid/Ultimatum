@@ -10,9 +10,9 @@
 
 #include "ash/public/cpp/nearby_share_delegate.h"
 #include "ash/public/cpp/session/session_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/nearby_sharing/nearby_sharing_service.h"
-#include "mojo/public/cpp/bindings/receiver.h"
 
 namespace ash {
 class NearbyShareController;
@@ -52,6 +52,7 @@ class NearbyShareDelegateImpl
   ~NearbyShareDelegateImpl() override;
 
   // ash::NearbyShareDelegate
+  bool IsEnabled() override;
   bool IsPodButtonVisible() override;
   bool IsHighVisibilityOn() override;
   bool IsEnableHighVisibilityRequestActive() const override;
@@ -59,6 +60,8 @@ class NearbyShareDelegateImpl
   void EnableHighVisibility() override;
   void DisableHighVisibility() override;
   void ShowNearbyShareSettings() const override;
+  const gfx::VectorIcon& GetIcon(bool on_icon) const override;
+  std::u16string GetPlaceholderFeatureName() const override;
 
   // ash::SessionObserver
   void OnLockStateChanged(bool locked) override;
@@ -79,8 +82,8 @@ class NearbyShareDelegateImpl
   void AddNearbyShareServiceObservers();
   void RemoveNearbyShareServiceObservers();
 
-  ash::NearbyShareController* const nearby_share_controller_;
-  NearbySharingService* nearby_share_service_ = nullptr;
+  const raw_ptr<ash::NearbyShareController> nearby_share_controller_;
+  raw_ptr<NearbySharingService> nearby_share_service_ = nullptr;
   std::unique_ptr<SettingsOpener> settings_opener_;
 
   // Track if there is an outstanding request to enable high visibility. Reset

@@ -39,6 +39,8 @@
 #include "third_party/blink/renderer/platform/heap/thread_state.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/vector2d_conversions.h"
@@ -70,7 +72,6 @@ class MockScrollableAreaForAnimatorTest
         min_offset_(min_offset),
         max_offset_(max_offset) {}
 
-  MOCK_CONST_METHOD0(VisualRectForScrollbarParts, LayoutRect());
   MOCK_CONST_METHOD0(IsActive, bool());
   MOCK_CONST_METHOD0(IsThrottled, bool());
   MOCK_CONST_METHOD1(ScrollSize, int(ScrollbarOrientation));
@@ -85,8 +86,9 @@ class MockScrollableAreaForAnimatorTest
   MOCK_CONST_METHOD0(ScrollbarsCanBeActive, bool());
   MOCK_METHOD0(RegisterForAnimation, void());
   MOCK_METHOD0(ScheduleAnimation, bool());
-  MOCK_CONST_METHOD0(UsedColorScheme, mojom::blink::ColorScheme());
+  MOCK_CONST_METHOD0(UsedColorSchemeScrollbars, mojom::blink::ColorScheme());
 
+  bool UsesCompositedScrolling() const override { NOTREACHED_NORETURN(); }
   bool UserInputScrollable(ScrollbarOrientation) const override { return true; }
   bool ShouldPlaceVerticalScrollbarOnLeft() const override { return false; }
   gfx::Vector2d ScrollOffsetInt() const override { return gfx::Vector2d(); }
@@ -116,15 +118,15 @@ class MockScrollableAreaForAnimatorTest
     return ScrollableArea::GetScrollOffset();
   }
 
-  void SetScrollOffset(const ScrollOffset& offset,
+  bool SetScrollOffset(const ScrollOffset& offset,
                        mojom::blink::ScrollType type,
                        mojom::blink::ScrollBehavior behavior =
                            mojom::blink::ScrollBehavior::kInstant,
                        ScrollCallback on_finish = ScrollCallback()) override {
     if (animator)
       animator->SetCurrentOffset(offset);
-    ScrollableArea::SetScrollOffset(offset, type, behavior,
-                                    std::move(on_finish));
+    return ScrollableArea::SetScrollOffset(offset, type, behavior,
+                                           std::move(on_finish));
   }
 
   scoped_refptr<base::SingleThreadTaskRunner> GetTimerTaskRunner() const final {
@@ -189,6 +191,7 @@ static void Reset(ScrollAnimator& scroll_animator) {
 // TODO(skobes): Add unit tests for composited scrolling paths.
 
 TEST(ScrollAnimatorTest, MainThreadStates) {
+  test::TaskEnvironment task_environment;
   auto* scrollable_area =
       MakeGarbageCollected<MockScrollableAreaForAnimatorTest>(
           true, ScrollOffset(), ScrollOffset(1000, 1000));
@@ -247,6 +250,7 @@ TEST(ScrollAnimatorTest, MainThreadStates) {
 }
 
 TEST(ScrollAnimatorTest, MainThreadEnabled) {
+  test::TaskEnvironment task_environment;
   auto* scrollable_area =
       MakeGarbageCollected<MockScrollableAreaForAnimatorTest>(
           true, ScrollOffset(), ScrollOffset(1000, 1000));
@@ -338,6 +342,7 @@ TEST(ScrollAnimatorTest, MainThreadEnabled) {
 // Test that a smooth scroll offset animation is aborted when followed by a
 // non-smooth scroll offset animation.
 TEST(ScrollAnimatorTest, AnimatedScrollAborted) {
+  test::TaskEnvironment task_environment;
   auto* scrollable_area =
       MakeGarbageCollected<MockScrollableAreaForAnimatorTest>(
           true, ScrollOffset(), ScrollOffset(1000, 1000));
@@ -390,6 +395,7 @@ TEST(ScrollAnimatorTest, AnimatedScrollAborted) {
 // Test that a smooth scroll offset animation running on the compositor is
 // completed on the main thread.
 TEST(ScrollAnimatorTest, AnimatedScrollTakeover) {
+  test::TaskEnvironment task_environment;
   auto* scrollable_area =
       MakeGarbageCollected<MockScrollableAreaForAnimatorTest>(
           true, ScrollOffset(), ScrollOffset(1000, 1000));
@@ -446,6 +452,7 @@ TEST(ScrollAnimatorTest, AnimatedScrollTakeover) {
 }
 
 TEST(ScrollAnimatorTest, Disabled) {
+  test::TaskEnvironment task_environment;
   auto* scrollable_area =
       MakeGarbageCollected<MockScrollableAreaForAnimatorTest>(
           false, ScrollOffset(), ScrollOffset(1000, 1000));
@@ -489,6 +496,7 @@ TEST(ScrollAnimatorTest, Disabled) {
 // Test that cancelling an animation resets the animation state.
 // See crbug.com/598548.
 TEST(ScrollAnimatorTest, CancellingAnimationResetsState) {
+  test::TaskEnvironment task_environment;
   auto* scrollable_area =
       MakeGarbageCollected<MockScrollableAreaForAnimatorTest>(
           true, ScrollOffset(), ScrollOffset(1000, 1000));
@@ -561,6 +569,7 @@ TEST(ScrollAnimatorTest, CancellingAnimationResetsState) {
 // Test that the callback passed to UserScroll function will be run when the
 // animation is canceled or finished when the scroll is sent to main thread.
 TEST(ScrollAnimatorTest, UserScrollCallBackAtAnimationFinishOnMainThread) {
+  test::TaskEnvironment task_environment;
   auto* scrollable_area =
       MakeGarbageCollected<MockScrollableAreaForAnimatorTest>(
           true, ScrollOffset(), ScrollOffset(1000, 1000));
@@ -584,8 +593,11 @@ TEST(ScrollAnimatorTest, UserScrollCallBackAtAnimationFinishOnMainThread) {
   bool finished = false;
   scroll_animator->UserScroll(
       ui::ScrollGranularity::kScrollByLine, ScrollOffset(10, 0),
-      ScrollableArea::ScrollCallback(
-          base::BindOnce([](bool* finished) { *finished = true; }, &finished)));
+      ScrollableArea::ScrollCallback(WTF::BindOnce(
+          [](bool* finished, ScrollableArea::ScrollCompletionMode) {
+            *finished = true;
+          },
+          WTF::Unretained(&finished))));
   EXPECT_FALSE(finished);
   EXPECT_EQ(scroll_animator->run_state_,
             ScrollAnimatorCompositorCoordinator::RunState::
@@ -638,6 +650,7 @@ TEST(ScrollAnimatorTest, UserScrollCallBackAtAnimationFinishOnMainThread) {
 // Test that the callback passed to UserScroll function will be run when the
 // animation is canceled or finished when the scroll is sent to compositor.
 TEST(ScrollAnimatorTest, UserScrollCallBackAtAnimationFinishOnCompositor) {
+  test::TaskEnvironment task_environment;
   auto* scrollable_area =
       MakeGarbageCollected<MockScrollableAreaForAnimatorTest>(
           true, ScrollOffset(), ScrollOffset(1000, 1000));
@@ -656,8 +669,11 @@ TEST(ScrollAnimatorTest, UserScrollCallBackAtAnimationFinishOnCompositor) {
   bool finished = false;
   scroll_animator->UserScroll(
       ui::ScrollGranularity::kScrollByLine, ScrollOffset(100, 0),
-      ScrollableArea::ScrollCallback(
-          base::BindOnce([](bool* finished) { *finished = true; }, &finished)));
+      ScrollableArea::ScrollCallback(WTF::BindOnce(
+          [](bool* finished, ScrollableArea::ScrollCompletionMode) {
+            *finished = true;
+          },
+          WTF::Unretained(&finished))));
   EXPECT_FALSE(finished);
   EXPECT_TRUE(scroll_animator->HasRunningAnimation());
   EXPECT_EQ(100, scroll_animator->DesiredTargetOffset().x());
@@ -689,6 +705,7 @@ TEST(ScrollAnimatorTest, UserScrollCallBackAtAnimationFinishOnCompositor) {
 // Test the behavior when in WaitingToCancelOnCompositor and a new user scroll
 // happens.
 TEST(ScrollAnimatorTest, CancellingCompositorAnimation) {
+  test::TaskEnvironment task_environment;
   auto* scrollable_area =
       MakeGarbageCollected<MockScrollableAreaForAnimatorTest>(
           true, ScrollOffset(), ScrollOffset(1000, 1000));
@@ -777,6 +794,7 @@ TEST(ScrollAnimatorTest, CancellingCompositorAnimation) {
 // This test verifies that impl only animation updates get cleared once they
 // are pushed to compositor animation host.
 TEST(ScrollAnimatorTest, ImplOnlyAnimationUpdatesCleared) {
+  test::TaskEnvironment task_environment;
   auto* scrollable_area =
       MakeGarbageCollected<MockScrollableAreaForAnimatorTest>(
           true, ScrollOffset(), ScrollOffset(1000, 1000));
@@ -817,6 +835,7 @@ TEST(ScrollAnimatorTest, ImplOnlyAnimationUpdatesCleared) {
 }
 
 TEST(ScrollAnimatorTest, MainThreadAnimationTargetAdjustment) {
+  test::TaskEnvironment task_environment;
   auto* scrollable_area =
       MakeGarbageCollected<MockScrollableAreaForAnimatorTest>(
           true, ScrollOffset(-100, -100), ScrollOffset(1000, 1000));

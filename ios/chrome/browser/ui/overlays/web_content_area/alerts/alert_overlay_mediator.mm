@@ -7,14 +7,10 @@
 #import "base/check_op.h"
 #import "base/metrics/user_metrics.h"
 #import "base/metrics/user_metrics_action.h"
-#import "ios/chrome/browser/overlays/public/overlay_callback_manager.h"
-#import "ios/chrome/browser/overlays/public/web_content_area/alert_overlay.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_callback_manager.h"
+#import "ios/chrome/browser/overlays/model/public/web_content_area/alert_overlay.h"
 #import "ios/chrome/browser/ui/alert_view/alert_action.h"
 #import "ios/chrome/browser/ui/alert_view/alert_consumer.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using alert_overlays::AlertRequest;
 using alert_overlays::AlertResponse;
@@ -25,7 +21,7 @@ using alert_overlays::AlertResponse;
 @property(nonatomic, readonly) AlertRequest* alertRequest;
 // Returns the alert actions to provide to the consumer.  Constructed using the
 // AlertRequest.
-@property(nonatomic, readonly) NSArray<AlertAction*>* alertActions;
+@property(nonatomic, readonly) NSArray<NSArray<AlertAction*>*>* alertActions;
 // Returns an array containing the current values of all alert text fields.
 @property(nonatomic, readonly) NSArray<NSString*>* textFieldValues;
 @end
@@ -44,12 +40,11 @@ using alert_overlays::AlertResponse;
 
   AlertRequest* alertRequest = self.alertRequest;
   DCHECK(alertRequest);
-  DCHECK_GT(alertRequest->title().length + alertRequest->message().length, 0U);
 
   [_consumer setTitle:alertRequest->title()];
   [_consumer setMessage:alertRequest->message()];
   [_consumer setTextFieldConfigurations:alertRequest->text_field_configs()];
-  NSArray<AlertAction*>* alertActions = self.alertActions;
+  NSArray<NSArray<AlertAction*>*>* alertActions = self.alertActions;
   DCHECK_GT(alertActions.count, 0U);
   [_consumer setActions:alertActions];
   [_consumer
@@ -60,20 +55,32 @@ using alert_overlays::AlertResponse;
   return self.request ? self.request->GetConfig<AlertRequest>() : nullptr;
 }
 
-- (NSArray<AlertAction*>*)alertActions {
+- (NSArray<NSArray<AlertAction*>*>*)alertActions {
   AlertRequest* alertRequest = self.alertRequest;
   if (!alertRequest || !alertRequest->button_configs().size())
     return nil;
-  const std::vector<alert_overlays::ButtonConfig>& buttonConfigs =
+  const std::vector<std::vector<alert_overlays::ButtonConfig>>& buttonConfigs =
       alertRequest->button_configs();
-  size_t buttonCount = buttonConfigs.size();
-  NSMutableArray<AlertAction*>* actions =
-      [[NSMutableArray<AlertAction*> alloc] initWithCapacity:buttonCount];
-  for (size_t i = 0; i < buttonCount; ++i) {
-    [actions addObject:[AlertAction
-                           actionWithTitle:buttonConfigs[i].title
-                                     style:buttonConfigs[i].style
-                                   handler:[self actionForButtonAtIndex:i]]];
+  size_t rowCount = buttonConfigs.size();
+  NSMutableArray<NSArray<AlertAction*>*>* actions =
+      [[NSMutableArray<NSArray<AlertAction*>*> alloc]
+          initWithCapacity:rowCount];
+  for (size_t i = 0; i < rowCount; ++i) {
+    const std::vector<alert_overlays::ButtonConfig> buttonConfigsForRow =
+        buttonConfigs[i];
+    size_t columnCount = buttonConfigsForRow.size();
+    DCHECK_GT(columnCount, 0U);
+    NSMutableArray<AlertAction*>* actionsForRow =
+        [[NSMutableArray<AlertAction*> alloc] initWithCapacity:columnCount];
+    for (size_t j = 0; j < columnCount; ++j) {
+      [actionsForRow
+          addObject:[AlertAction
+                        actionWithTitle:buttonConfigsForRow[j].title
+                                  style:buttonConfigsForRow[j].style
+                                handler:[self actionForButtonAtIndexRow:i
+                                                                 column:j]]];
+    }
+    [actions addObject:actionsForRow];
   }
   return actions;
 }
@@ -102,15 +109,16 @@ using alert_overlays::AlertResponse;
 
 #pragma mark - Private
 
-// Sets a completion OverlayResponse after the button at `tappedButtonIndex`
-// was tapped.
-- (void)setCompletionResponse:(size_t)tappedButtonIndex {
+// Sets a completion OverlayResponse after the button at `tappedButtonIndexRow`
+// and `tappedButtonIndexColumn` was tapped.
+- (void)setCompletionResponseWithRow:(size_t)tappedButtonIndexRow
+                              column:(size_t)tappedButtonIndexColumn {
   AlertRequest* alertRequest = self.alertRequest;
   if (!alertRequest)
     return;
   std::unique_ptr<OverlayResponse> alertResponse =
-      OverlayResponse::CreateWithInfo<AlertResponse>(tappedButtonIndex,
-                                                     self.textFieldValues);
+      OverlayResponse::CreateWithInfo<AlertResponse>(
+          tappedButtonIndexRow, tappedButtonIndexColumn, self.textFieldValues);
   self.request->GetCallbackManager()->SetCompletionResponse(
       alertRequest->response_converter().Run(std::move(alertResponse)));
   // The response converter should convert the AlertResponse into a feature-
@@ -120,17 +128,18 @@ using alert_overlays::AlertResponse;
   DCHECK(!convertedResponse || !convertedResponse->GetInfo<AlertResponse>());
 }
 
-// Returns the action block for the button at `index`.
-- (void (^)(AlertAction* action))actionForButtonAtIndex:(size_t)index {
+// Returns the action block for the button at index `row` and `column`.
+- (void (^)(AlertAction* action))actionForButtonAtIndexRow:(size_t)row
+                                                    column:(size_t)column {
   __weak __typeof__(self) weakSelf = self;
   base::StringPiece actionName =
-      self.alertRequest->button_configs()[index].user_action_name;
+      self.alertRequest->button_configs()[row][column].user_action_name;
   return ^(AlertAction*) {
     if (!actionName.empty()) {
       base::RecordComputedAction(actionName.data());
     }
     __typeof__(self) strongSelf = weakSelf;
-    [strongSelf setCompletionResponse:index];
+    [strongSelf setCompletionResponseWithRow:row column:column];
     [strongSelf.delegate stopOverlayForMediator:strongSelf];
   };
 }

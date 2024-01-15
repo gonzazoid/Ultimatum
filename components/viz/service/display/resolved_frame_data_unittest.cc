@@ -17,6 +17,8 @@
 #include "components/viz/test/compositor_frame_helpers.h"
 #include "components/viz/test/draw_quad_matchers.h"
 #include "components/viz/test/test_surface_id_allocator.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_manager.h"
+#include "gpu/command_buffer/service/sync_point_manager.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -44,13 +46,14 @@ void AddRenderPassQuad(CompositorRenderPass* render_pass,
                        CompositorRenderPassId render_pass_id) {
   auto* sqs = render_pass->CreateAndAppendSharedQuadState();
   sqs->SetAll(gfx::Transform(), kOutputRect, kOutputRect, gfx::MaskFilterInfo(),
-              absl::nullopt, /*are_contents_opaque=*/false, 1,
-              SkBlendMode::kSrcOver, 0);
+              /*clip=*/absl::nullopt, /*contents_opaque=*/false, 1,
+              SkBlendMode::kSrcOver, /*sorting_context=*/0,
+              /*layer_id=*/0u, /*fast_rounded_corner=*/false);
   auto* quad =
       render_pass->CreateAndAppendDrawQuad<CompositorRenderPassDrawQuad>();
   quad->SetNew(sqs, kOutputRect, kOutputRect, render_pass_id,
-               kInvalidResourceId, gfx::RectF(), gfx::Size(), gfx::Vector2dF(),
-               gfx::PointF(), gfx::RectF(),
+               kInvalidResourceId, gfx::RectF(), gfx::Size(),
+               gfx::Vector2dF(1.0f, 1.0f), gfx::PointF(), gfx::RectF(),
                /*force_anti_aliasing_off=*/false,
                /*backdrop_filter_quality=*/1.0f);
 }
@@ -79,7 +82,11 @@ class ResolvedFrameDataTest : public testing::Test {
   }
 
   ServerSharedBitmapManager shared_bitmap_manager_;
-  DisplayResourceProviderSoftware resource_provider_{&shared_bitmap_manager_};
+  gpu::SharedImageManager shared_image_manager_;
+  gpu::SyncPointManager sync_point_manager_;
+
+  DisplayResourceProviderSoftware resource_provider_{
+      &shared_bitmap_manager_, &shared_image_manager_, &sync_point_manager_};
   FrameSinkManagerImpl frame_sink_manager_{
       FrameSinkManagerImpl::InitParams(&shared_bitmap_manager_)};
 
@@ -99,7 +106,8 @@ TEST_F(ResolvedFrameDataTest, UpdateActiveFrame) {
                    .Build();
 
   Surface* surface = SubmitCompositorFrame(std::move(frame));
-  ResolvedFrameData resolved_frame(&resource_provider_, surface, 0u);
+  ResolvedFrameData resolved_frame(&resource_provider_, surface, 0u,
+                                   AggregatedRenderPassId());
 
   // The resolved frame should be false after construction.
   EXPECT_FALSE(resolved_frame.is_valid());
@@ -131,7 +139,8 @@ TEST_F(ResolvedFrameDataTest, DupliateRenderPassIds) {
                    .Build();
 
   Surface* surface = SubmitCompositorFrame(std::move(frame));
-  ResolvedFrameData resolved_frame(&resource_provider_, surface, 0u);
+  ResolvedFrameData resolved_frame(&resource_provider_, surface, 0u,
+                                   AggregatedRenderPassId());
 
   resolved_frame.UpdateForActiveFrame(render_pass_id_generator_);
   EXPECT_FALSE(resolved_frame.is_valid());
@@ -149,7 +158,8 @@ TEST_F(ResolvedFrameDataTest, RenderPassIdsSelfCycle) {
       CompositorFrameBuilder().AddRenderPass(std::move(render_pass)).Build();
 
   Surface* surface = SubmitCompositorFrame(std::move(frame));
-  ResolvedFrameData resolved_frame(&resource_provider_, surface, 0u);
+  ResolvedFrameData resolved_frame(&resource_provider_, surface, 0u,
+                                   AggregatedRenderPassId());
 
   resolved_frame.UpdateForActiveFrame(render_pass_id_generator_);
   EXPECT_FALSE(resolved_frame.is_valid());
@@ -170,7 +180,8 @@ TEST_F(ResolvedFrameDataTest, RenderPassIdsCycle) {
                    .AddRenderPass(std::move(render_pass2))
                    .Build();
   Surface* surface = SubmitCompositorFrame(std::move(frame));
-  ResolvedFrameData resolved_frame(&resource_provider_, surface, 0u);
+  ResolvedFrameData resolved_frame(&resource_provider_, surface, 0u,
+                                   AggregatedRenderPassId());
 
   // RenderPasses have duplicate IDs so the resolved frame should be marked as
   // invalid.
@@ -196,7 +207,8 @@ TEST_F(ResolvedFrameDataTest, RenderPassWithPerQuadDamage) {
 
   Surface* surface = SubmitCompositorFrame(std::move(frame));
   EXPECT_EQ(surface->GetActiveFrameIndex(), kFrameIndexStart);
-  ResolvedFrameData resolved_frame(&resource_provider_, surface, 1u);
+  ResolvedFrameData resolved_frame(&resource_provider_, surface, 1u,
+                                   AggregatedRenderPassId());
 
   resolved_frame.UpdateForActiveFrame(render_pass_id_generator_);
   ASSERT_TRUE(resolved_frame.is_valid());
@@ -213,7 +225,8 @@ TEST_F(ResolvedFrameDataTest, RenderPassWithPerQuadDamage) {
 
 TEST_F(ResolvedFrameDataTest, MarkAsUsed) {
   Surface* surface = SubmitCompositorFrame(MakeSimpleFrame());
-  ResolvedFrameData resolved_frame(&resource_provider_, surface, 0u);
+  ResolvedFrameData resolved_frame(&resource_provider_, surface, 0u,
+                                   AggregatedRenderPassId());
 
   resolved_frame.UpdateForActiveFrame(render_pass_id_generator_);
   EXPECT_FALSE(resolved_frame.WasUsedInAggregation());
@@ -223,8 +236,7 @@ TEST_F(ResolvedFrameDataTest, MarkAsUsed) {
   EXPECT_TRUE(resolved_frame.WasUsedInAggregation());
 
   // This is the first frame this aggregation.
-  EXPECT_FALSE(resolved_frame.IsSameFrameAsLastAggregation());
-  EXPECT_FALSE(resolved_frame.IsNextFrameSinceLastAggregation());
+  EXPECT_EQ(resolved_frame.GetFrameDamageType(), FrameDamageType::kFull);
 
   // Nothing changes if MarkAsUsedInAggregation() is called more than once
   // before reset.
@@ -238,8 +250,7 @@ TEST_F(ResolvedFrameDataTest, MarkAsUsed) {
   // Don't submit a new frame for the next aggregation.
   resolved_frame.MarkAsUsedInAggregation();
   EXPECT_TRUE(resolved_frame.WasUsedInAggregation());
-  EXPECT_TRUE(resolved_frame.IsSameFrameAsLastAggregation());
-  EXPECT_FALSE(resolved_frame.IsNextFrameSinceLastAggregation());
+  EXPECT_EQ(resolved_frame.GetFrameDamageType(), FrameDamageType::kNone);
 
   resolved_frame.ResetAfterAggregation();
 
@@ -248,8 +259,7 @@ TEST_F(ResolvedFrameDataTest, MarkAsUsed) {
   resolved_frame.UpdateForActiveFrame(render_pass_id_generator_);
   resolved_frame.MarkAsUsedInAggregation();
 
-  EXPECT_FALSE(resolved_frame.IsSameFrameAsLastAggregation());
-  EXPECT_TRUE(resolved_frame.IsNextFrameSinceLastAggregation());
+  EXPECT_EQ(resolved_frame.GetFrameDamageType(), FrameDamageType::kFrame);
 
   resolved_frame.ResetAfterAggregation();
 
@@ -259,14 +269,14 @@ TEST_F(ResolvedFrameDataTest, MarkAsUsed) {
   SubmitCompositorFrame(MakeSimpleFrame());
   resolved_frame.UpdateForActiveFrame(render_pass_id_generator_);
   resolved_frame.MarkAsUsedInAggregation();
-  EXPECT_FALSE(resolved_frame.IsSameFrameAsLastAggregation());
-  EXPECT_FALSE(resolved_frame.IsNextFrameSinceLastAggregation());
+  EXPECT_EQ(resolved_frame.GetFrameDamageType(), FrameDamageType::kFull);
 }
 
 // Verifies that SetFullDamageForNextAggregation()
 TEST_F(ResolvedFrameDataTest, SetFullDamageNextAggregation) {
   Surface* surface = SubmitCompositorFrame(MakeSimpleFrame());
-  ResolvedFrameData resolved_frame(&resource_provider_, surface, 0u);
+  ResolvedFrameData resolved_frame(&resource_provider_, surface, 0u,
+                                   AggregatedRenderPassId());
 
   // First aggregation to setup existing state.
   resolved_frame.UpdateForActiveFrame(render_pass_id_generator_);
@@ -284,9 +294,23 @@ TEST_F(ResolvedFrameDataTest, SetFullDamageNextAggregation) {
   // This is the next frame so normally it would use `damage_rect` for damage.
   // SetFullDamageForNextAggregation() changes that so the full output_rect is
   // damaged.
-  EXPECT_FALSE(resolved_frame.IsNextFrameSinceLastAggregation());
-  EXPECT_FALSE(resolved_frame.IsSameFrameAsLastAggregation());
+  EXPECT_EQ(resolved_frame.GetFrameDamageType(), FrameDamageType::kFull);
   EXPECT_EQ(resolved_frame.GetSurfaceDamage(), kOutputRect);
+}
+
+// Verifies that the ResolvedFrameData will reuse a provided root pass ID
+TEST_F(ResolvedFrameDataTest, ReusePreviousRootPassId) {
+  Surface* surface = SubmitCompositorFrame(MakeSimpleFrame());
+  AggregatedRenderPassId prev_root_pass_id =
+      render_pass_id_generator_.GenerateNextId();
+  ResolvedFrameData resolved_frame(&resource_provider_, surface, 0u,
+                                   prev_root_pass_id);
+
+  resolved_frame.UpdateForActiveFrame(render_pass_id_generator_);
+  resolved_frame.MarkAsUsedInAggregation();
+
+  EXPECT_EQ(resolved_frame.GetRootRenderPassData().remapped_id(),
+            prev_root_pass_id);
 }
 
 }  // namespace

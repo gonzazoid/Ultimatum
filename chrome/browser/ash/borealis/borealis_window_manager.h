@@ -9,6 +9,7 @@
 
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "base/scoped_observation.h"
@@ -32,6 +33,10 @@ extern const char kFullscreenClientShellId[];
 // Base64-encoded application id suffix for borealis client windows.
 extern const char kBorealisClientSuffix[];
 
+// Anonymous apps do not have a CrOS-standard app_id (i.e. one registered with
+// the GuestOsRegistryService), so to identify them we prepend this.
+extern const char kBorealisAnonymousPrefix[];
+
 // The borealis window manager keeps track of the association of windows to
 // borealis apps. This includes determining which windows belong to a borealis
 // app, what the lifetime of the app is relative to its windows, and the
@@ -45,9 +50,8 @@ class BorealisWindowManager : public apps::InstanceRegistry::Observer {
   // Returns true if this window's ID belongs to a borealis VM.
   static bool IsBorealisWindowId(const std::string& window_id);
 
-  // Determines if a newly created window should be minimized on creation.
-  // TODO(b/210569001): this is intended to be a temporary solution.
-  static bool ShouldNewWindowBeMinimized(const std::string& window_id);
+  // Whether this window belongs to a Steam game within the Borealis VM.
+  static bool IsSteamGameWindow(Profile* profile, const aura::Window* window);
 
   // Returns true when the given |app_id| is for an anonymous borealis app.
   static bool IsAnonymousAppId(const std::string& app_id);
@@ -138,7 +142,7 @@ class BorealisWindowManager : public apps::InstanceRegistry::Observer {
   void HandleWindowDestruction(aura::Window* window, const std::string& app_id);
   void HandleWindowCreation(aura::Window* window, const std::string& app_id);
 
-  Profile* const profile_;
+  const raw_ptr<Profile, DanglingUntriaged> profile_;
   base::ScopedObservation<apps::InstanceRegistry,
                           apps::InstanceRegistry::Observer>
       instance_registry_observation_;

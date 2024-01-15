@@ -12,8 +12,8 @@
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/shell_delegate.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_change_registrar.h"
@@ -168,7 +168,7 @@ void TouchDevicesController::UpdateTapDraggingEnabled() {
   UMA_HISTOGRAM_BOOLEAN("Touchpad.TapDragging.Changed", enabled);
 
   ui::OzonePlatform::GetInstance()->GetInputController()->SetTapDragging(
-      enabled);
+      std::nullopt, enabled);
 }
 
 void TouchDevicesController::UpdateTouchpadEnabled() {

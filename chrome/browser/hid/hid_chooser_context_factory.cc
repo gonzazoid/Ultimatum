@@ -31,15 +31,22 @@ HidChooserContext* HidChooserContextFactory::GetForProfileIfExists(
 HidChooserContextFactory::HidChooserContextFactory()
     : ProfileKeyedServiceFactory(
           "HidChooserContext",
-          ProfileSelections::BuildForRegularAndIncognito()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
   DependsOn(HostContentSettingsMapFactory::GetInstance());
 }
 
 HidChooserContextFactory::~HidChooserContextFactory() = default;
 
-KeyedService* HidChooserContextFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+HidChooserContextFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new HidChooserContext(Profile::FromBrowserContext(context));
+  return std::make_unique<HidChooserContext>(
+      Profile::FromBrowserContext(context));
 }
 
 void HidChooserContextFactory::BrowserContextShutdown(

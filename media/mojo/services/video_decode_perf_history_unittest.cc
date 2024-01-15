@@ -6,7 +6,7 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
@@ -267,7 +267,7 @@ class VideoDecodePerfHistoryTest : public testing::Test {
     const auto& entries =
         test_recorder_->GetEntriesByName(UkmEntry::kEntryName);
     ASSERT_GE(entries.size(), 1U);
-    auto* entry = entries.back();
+    auto* entry = entries.back().get();
 
     // Verify stream properties. Make a key to ensure we check bucketed values.
     VideoDecodeStatsDB::VideoDescKey key =

@@ -5,17 +5,17 @@
 #ifndef CHROME_BROWSER_PERMISSIONS_PERMISSION_REVOCATION_REQUEST_H_
 #define CHROME_BROWSER_PERMISSIONS_PERMISSION_REVOCATION_REQUEST_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/permissions/crowd_deny_preload_data.h"
 #include "chrome/browser/permissions/crowd_deny_safe_browsing_request.h"
+#include "components/content_settings/core/common/content_settings_types.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 class Profile;
-enum class ContentSettingsType;
 
 // Revokes the notifications permission if an origin marked as abusive or
 // disruptive. This is the case when:

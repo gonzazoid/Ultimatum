@@ -8,7 +8,10 @@
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/app_service/browser_app_launcher.h"
 #include "chrome/browser/ash/system_web_apps/system_web_app_manager.h"
+#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_commands.h"
+#include "chrome/browser/ui/web_applications/web_app_controller_browsertest.h"
 #include "chrome/browser/web_applications/test/with_crosapi_param.h"
 #include "chrome/browser/web_applications/web_app_id_constants.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
@@ -17,7 +20,6 @@
 #include "chrome/test/base/in_process_browser_test.h"
 #include "components/account_id/account_id.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "components/user_manager/user_names.h"
 #include "content/public/test/browser_test.h"
 #include "ui/base/window_open_disposition.h"
@@ -28,7 +30,7 @@ using web_app::test::WithCrosapiParam;
 
 namespace web_app {
 
-class WebAppGuestSessionBrowserTest : public InProcessBrowserTest,
+class WebAppGuestSessionBrowserTest : public WebAppControllerBrowserTest,
                                       public WithCrosapiParam {
   void SetUpCommandLine(base::CommandLine* command_line) override {
     command_line->AppendSwitch(ash::switches::kGuestSession);
@@ -37,6 +39,18 @@ class WebAppGuestSessionBrowserTest : public InProcessBrowserTest,
     command_line->AppendSwitchASCII(
         ash::switches::kLoginUser,
         user_manager::GuestAccountId().GetUserEmail());
+  }
+
+  void SetUpOnMainThread() override {
+    if (browser() == nullptr) {
+      // Create a new Ash browser window so test code using browser() can work
+      // even when Lacros is the only browser.
+      // TODO(crbug.com/1450158): Remove uses of browser() from such tests.
+      chrome::NewEmptyWindow(ProfileManager::GetActiveUserProfile());
+      SelectFirstBrowser();
+    }
+    WebAppControllerBrowserTest::SetUpOnMainThread();
+    VerifyLacrosStatus();
   }
 };
 

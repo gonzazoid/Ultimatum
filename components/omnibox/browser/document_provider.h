@@ -46,15 +46,13 @@ class DocumentProvider : public AutocompleteProvider {
  public:
   // Creates and returns an instance of this provider.
   static DocumentProvider* Create(AutocompleteProviderClient* client,
-                                  AutocompleteProviderListener* listener,
-                                  size_t cache_size = 20);
+                                  AutocompleteProviderListener* listener);
 
   // AutocompleteProvider:
   void Start(const AutocompleteInput& input, bool minimal_changes) override;
   void Stop(bool clear_cached_results, bool due_to_user_inactivity) override;
   void DeleteMatch(const AutocompleteMatch& match) override;
   void AddProviderInfo(ProvidersInfo* provider_info) const override;
-  void ResetSession() override;
 
   // Registers a client-side preference to enable document suggestions.
   static void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
@@ -79,32 +77,12 @@ class DocumentProvider : public AutocompleteProvider {
   static const GURL GetURLForDeduping(const GURL& url);
 
  private:
-  FRIEND_TEST_ALL_PREFIXES(DocumentProviderTest, IsDocumentProviderAllowed);
-  FRIEND_TEST_ALL_PREFIXES(DocumentProviderTest, IsInputLikelyURL);
-  FRIEND_TEST_ALL_PREFIXES(DocumentProviderTest, ParseDocumentSearchResults);
-  FRIEND_TEST_ALL_PREFIXES(DocumentProviderTest,
-                           ProductDescriptionStringsAndAccessibleLabels);
-  FRIEND_TEST_ALL_PREFIXES(DocumentProviderTest, MatchDescriptionString);
-  FRIEND_TEST_ALL_PREFIXES(DocumentProviderTest,
-                           ParseDocumentSearchResultsBreakTies);
-  FRIEND_TEST_ALL_PREFIXES(DocumentProviderTest,
-                           ParseDocumentSearchResultsBreakTiesCascade);
-  FRIEND_TEST_ALL_PREFIXES(DocumentProviderTest,
-                           ParseDocumentSearchResultsBreakTiesZeroLimit);
-  FRIEND_TEST_ALL_PREFIXES(DocumentProviderTest,
-                           ParseDocumentSearchResultsWithBadResponse);
-  FRIEND_TEST_ALL_PREFIXES(DocumentProviderTest, GenerateLastModifiedString);
-  FRIEND_TEST_ALL_PREFIXES(DocumentProviderTest, Scoring);
-  FRIEND_TEST_ALL_PREFIXES(DocumentProviderTest, CachingForAsyncMatches);
-  FRIEND_TEST_ALL_PREFIXES(DocumentProviderTest, CachingForSyncMatches);
-  FRIEND_TEST_ALL_PREFIXES(DocumentProviderTest, StartCallsStop);
-  FRIEND_TEST_ALL_PREFIXES(DocumentProviderTest, Logging);
+  friend class FakeDocumentProvider;
 
   using MatchesCache = base::LRUCache<GURL, AutocompleteMatch>;
 
   DocumentProvider(AutocompleteProviderClient* client,
-                   AutocompleteProviderListener* listener,
-                   size_t cache_size);
+                   AutocompleteProviderListener* listener);
 
   ~DocumentProvider() override;
 
@@ -113,8 +91,7 @@ class DocumentProvider : public AutocompleteProvider {
 
   // Determines whether the profile/session/window meet the feature
   // prerequisites.
-  bool IsDocumentProviderAllowed(AutocompleteProviderClient* client,
-                                 const AutocompleteInput& input);
+  bool IsDocumentProviderAllowed(const AutocompleteInput& input);
 
   // Determines if the input is a URL, or is the start of the user entering one.
   // We avoid queries for these cases for quality and scaling reasons.
@@ -125,6 +102,7 @@ class DocumentProvider : public AutocompleteProvider {
 
   // Called when the network request for suggestions has completed.
   void OnURLLoadComplete(const network::SimpleURLLoader* source,
+                         const int response_code,
                          std::unique_ptr<std::string> response_body);
 
   // The function updates |matches_| with data parsed from |json_data|.
@@ -141,12 +119,8 @@ class DocumentProvider : public AutocompleteProvider {
   ACMatches ParseDocumentSearchResults(const base::Value& root_val);
 
   // Appends |matches_cache_| to |matches_|. Updates their classifications
-  // according to |input_.text()| and sets their relevance to 0.
-  // |skip_n_most_recent_matches| indicates the number of cached matches already
-  //   in |matches_|. E.g. if the drive server responded with 3 docs, these 3
-  //   docs are added both to |matches_| and |matches_cache| prior to invoking
-  //   |CopyCachedMatchesToMatches()| in order to avoid duplicate matches.
-  void CopyCachedMatchesToMatches(size_t skip_n_most_recent_matches = 0);
+  // according to |input_.text()|.
+  void CopyCachedMatchesToMatches();
 
   // Sets the scores of all cached matches to 0. This is invoked before pushing
   // the latest async response returns so that the scores aren't preserved for
@@ -180,12 +154,6 @@ class DocumentProvider : public AutocompleteProvider {
                                             const std::string& mimetype,
                                             const std::string& owner);
 
-  // Whether a field trial has triggered for this query and this session,
-  // respectively. Works similarly to BaseSearchProvider, though this class does
-  // not inherit from it.
-  bool field_trial_triggered_;
-  bool field_trial_triggered_in_session_;
-
   // Whether the server has instructed us to backoff for this session (in
   // cases where the corpus is uninteresting).
   bool backoff_for_session_;
@@ -213,7 +181,6 @@ class DocumentProvider : public AutocompleteProvider {
   // Appending cached doc suggestions with relevance 0 ensures cached
   // suggestions only display if deduped with a non-cached suggestion and do not
   // affect which autocomplete results are displayed and their ranks.
-  const size_t cache_size_;
   MatchesCache matches_cache_;
 
   std::unique_ptr<AutocompleteProviderDebouncer> debouncer_;

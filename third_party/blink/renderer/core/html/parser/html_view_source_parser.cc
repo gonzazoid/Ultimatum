@@ -33,11 +33,21 @@
 
 namespace blink {
 
+namespace {
+
+HTMLParserOptions CreateParserOptions(HTMLViewSourceDocument& document) {
+  HTMLParserOptions options(&document);
+  options.track_attributes_ranges = true;
+  return options;
+}
+
+}  // namespace
+
 HTMLViewSourceParser::HTMLViewSourceParser(HTMLViewSourceDocument& document,
                                            const String& mime_type)
     : DecodedDataDocumentParser(document),
       tokenizer_(
-          std::make_unique<HTMLTokenizer>(HTMLParserOptions(&document))) {
+          std::make_unique<HTMLTokenizer>(CreateParserOptions(document))) {
   if (mime_type != "text/html" && !MIMETypeRegistry::IsXMLMIMEType(mime_type))
     tokenizer_->SetState(HTMLTokenizer::kPLAINTEXTState);
 }
@@ -45,15 +55,19 @@ HTMLViewSourceParser::HTMLViewSourceParser(HTMLViewSourceDocument& document,
 void HTMLViewSourceParser::PumpTokenizer() {
   while (true) {
     StartTracker(input_.Current(), tokenizer_.get(), token_);
-    if (!tokenizer_->NextToken(input_.Current(), token_))
+    HTMLToken* token = tokenizer_->NextToken(input_.Current());
+    if (!token)
       return;
-    EndTracker(input_.Current(), tokenizer_.get(), token_);
+    token_ = token;
+    EndTracker(input_.Current(), tokenizer_.get());
 
-    GetDocument()->AddSource(SourceForToken(token_), token_);
+    GetDocument()->AddSource(SourceForToken(*token_), *token_,
+                             tokenizer_->attributes_ranges(), token_start_);
 
-    if (token_.GetType() == HTMLToken::kStartTag)
-      tokenizer_->UpdateStateFor(token_);
-    token_.Clear();
+    if (token_->GetType() == HTMLToken::kStartTag)
+      tokenizer_->UpdateStateFor(*token_);
+    token_->Clear();
+    tokenizer_->attributes_ranges().Clear();
   }
 }
 
@@ -75,8 +89,8 @@ void HTMLViewSourceParser::Finish() {
 
 void HTMLViewSourceParser::StartTracker(SegmentedString& current_input,
                                         HTMLTokenizer* tokenizer,
-                                        HTMLToken& token) {
-  if (token.GetType() == HTMLToken::kUninitialized && !tracker_is_started_) {
+                                        HTMLToken* token) {
+  if (!tracker_is_started_ && (!token || token->IsUninitialized())) {
     previous_source_.Clear();
     if (NeedToCheckTokenizerBuffer(tokenizer) &&
         tokenizer->NumberOfBufferedCharacters())
@@ -87,13 +101,13 @@ void HTMLViewSourceParser::StartTracker(SegmentedString& current_input,
 
   tracker_is_started_ = true;
   current_source_ = current_input;
-  token.SetBaseOffset(current_source_.NumberOfCharactersConsumed() -
-                      previous_source_.length());
+
+  token_start_ =
+      current_source_.NumberOfCharactersConsumed() - previous_source_.length();
 }
 
 void HTMLViewSourceParser::EndTracker(SegmentedString& current_input,
-                                      HTMLTokenizer* tokenizer,
-                                      HTMLToken& token) {
+                                      HTMLTokenizer* tokenizer) {
   tracker_is_started_ = false;
 
   cached_source_for_token_ = String();
@@ -103,8 +117,8 @@ void HTMLViewSourceParser::EndTracker(SegmentedString& current_input,
   if (NeedToCheckTokenizerBuffer(tokenizer)) {
     number_of_buffered_characters = tokenizer->NumberOfBufferedCharacters();
   }
-  token.end(current_input.NumberOfCharactersConsumed() -
-            number_of_buffered_characters);
+  token_end_ = current_input.NumberOfCharactersConsumed() -
+               number_of_buffered_characters - token_start_;
 }
 
 String HTMLViewSourceParser::SourceForToken(const HTMLToken& token) {
@@ -117,8 +131,7 @@ String HTMLViewSourceParser::SourceForToken(const HTMLToken& token) {
     // mark the end of the file.
     length = previous_source_.length() + current_source_.length() - 1;
   } else {
-    DCHECK(!token.StartIndex());
-    length = static_cast<wtf_size_t>(token.EndIndex() - token.StartIndex());
+    length = token_end_;
   }
 
   StringBuilder source;

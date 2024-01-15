@@ -6,15 +6,26 @@
 
 #include "base/check_op.h"
 #include "base/notreached.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace mojo {
 
+namespace {
+absl::optional<bool> OptionalBoolFromMojo(network::mojom::OptionalBool v) {
+  switch (v) {
+    case network::mojom::OptionalBool::kTrue:
+      return absl::make_optional(true);
+    case network::mojom::OptionalBool::kFalse:
+      return absl::make_optional(false);
+    case network::mojom::OptionalBool::kUnset:
+      return absl::nullopt;
+  }
+  NOTREACHED_NORETURN();
+}
+}  // namespace
+
 int MojoSSLVersionToNetSSLVersion(network::mojom::SSLVersion mojo_version) {
   switch (mojo_version) {
-    case network::mojom::SSLVersion::kTLS1:
-      return net::SSL_PROTOCOL_VERSION_TLS1;
-    case network::mojom::SSLVersion::kTLS11:
-      return net::SSL_PROTOCOL_VERSION_TLS1_1;
     case network::mojom::SSLVersion::kTLS12:
       return net::SSL_PROTOCOL_VERSION_TLS1_2;
     case network::mojom::SSLVersion::kTLS13:
@@ -35,8 +46,13 @@ net::SSLContextConfig MojoSSLConfigToSSLContextConfig(
   DCHECK_LE(net_config.version_min, net_config.version_max);
 
   net_config.disabled_cipher_suites = mojo_config->disabled_cipher_suites;
-  net_config.cecpq2_enabled = mojo_config->cecpq2_enabled;
+  net_config.post_quantum_override =
+      OptionalBoolFromMojo(mojo_config->post_quantum_override);
   net_config.ech_enabled = mojo_config->ech_enabled;
+  net_config.insecure_hash_override =
+      OptionalBoolFromMojo(mojo_config->insecure_hash_override);
+  net_config.rsa_key_usage_for_local_anchors_override = OptionalBoolFromMojo(
+      mojo_config->rsa_key_usage_for_local_anchors_override);
   return net_config;
 }
 

@@ -49,11 +49,12 @@ void FetchContext::PrepareRequest(ResourceRequest&,
                                   WebScopedVirtualTimePauser&,
                                   ResourceType) {}
 
-void FetchContext::AddResourceTiming(const ResourceTimingInfo&) {}
+void FetchContext::AddResourceTiming(mojom::blink::ResourceTimingInfoPtr,
+                                     const WTF::AtomicString&) {}
 
 void FetchContext::PopulateResourceRequest(
     ResourceType,
-    const FetchParameters::ResourceWidth&,
+    const absl::optional<float> resource_width,
     ResourceRequest&,
     const ResourceLoaderOptions&) {}
 

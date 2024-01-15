@@ -45,7 +45,7 @@ TEST_F(SyncStartupTrackerTest, SyncNotSignedIn) {
   // Make sure that we get a SyncStartupFailed() callback if sync is not logged
   // in.
   sync_service_.SetDisableReasons(
-      syncer::SyncService::DISABLE_REASON_NOT_SIGNED_IN);
+      {syncer::SyncService::DISABLE_REASON_NOT_SIGNED_IN});
   sync_service_.SetTransportState(
       syncer::SyncService::TransportState::DISABLED);
   EXPECT_CALL(callback_, Run(SyncStartupTracker::ServiceStartupState::kError));
@@ -56,9 +56,7 @@ TEST_F(SyncStartupTrackerTest, SyncAuthError) {
   // Make sure that we get a SyncStartupFailed() callback if sync gets an auth
   // error.
   sync_service_.SetDisableReasons(syncer::SyncService::DisableReasonSet());
-  sync_service_.SetTransportState(
-      syncer::SyncService::TransportState::INITIALIZING);
-  sync_service_.SetPersistentAuthErrorOtherThanWebSignout();
+  sync_service_.SetPersistentAuthError();
   EXPECT_CALL(callback_, Run(SyncStartupTracker::ServiceStartupState::kError));
   SyncStartupTracker tracker(&sync_service_, callback_.Get());
 }
@@ -86,9 +84,7 @@ TEST_F(SyncStartupTrackerTest, SyncDelayedAuthError) {
 
   // Now, mark the Sync Service as having an auth error.
   sync_service_.SetDisableReasons(syncer::SyncService::DisableReasonSet());
-  sync_service_.SetTransportState(
-      syncer::SyncService::TransportState::INITIALIZING);
-  sync_service_.SetPersistentAuthErrorOtherThanWebSignout();
+  sync_service_.SetPersistentAuthError();
   EXPECT_CALL(callback_, Run(SyncStartupTracker::ServiceStartupState::kError));
   tracker.OnStateChanged(&sync_service_);
 }
@@ -103,7 +99,7 @@ TEST_F(SyncStartupTrackerTest, SyncDelayedUnrecoverableError) {
 
   // Now, mark the Sync Service as having an unrecoverable error.
   sync_service_.SetDisableReasons(
-      syncer::SyncService::DISABLE_REASON_UNRECOVERABLE_ERROR);
+      {syncer::SyncService::DISABLE_REASON_UNRECOVERABLE_ERROR});
   sync_service_.SetTransportState(
       syncer::SyncService::TransportState::DISABLED);
   EXPECT_CALL(callback_, Run(SyncStartupTracker::ServiceStartupState::kError));

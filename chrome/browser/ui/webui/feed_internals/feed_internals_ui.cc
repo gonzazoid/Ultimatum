@@ -6,13 +6,15 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/feed/feed_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/webui/feed_internals/feed_internals.mojom.h"
+#include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/url_constants.h"
-#include "chrome/grit/dev_ui_browser_resources.h"
+#include "chrome/grit/feed_internals_resources.h"
+#include "chrome/grit/feed_internals_resources_map.h"
 #include "components/feed/buildflags.h"
 #include "components/feed/feed_feature_list.h"
 #include "content/public/browser/web_ui_data_source.h"
@@ -24,16 +26,13 @@
 
 FeedInternalsUI::FeedInternalsUI(content::WebUI* web_ui)
     : ui::MojoWebUIController(web_ui), profile_(Profile::FromWebUI(web_ui)) {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUISnippetsInternalsHost);
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile_, chrome::kChromeUISnippetsInternalsHost);
 
-  source->AddResourcePath("feed_internals.js", IDR_FEED_INTERNALS_JS);
-  source->AddResourcePath("feed_internals.mojom-webui.js",
-                          IDR_FEED_INTERNALS_MOJO_JS);
-  source->AddResourcePath("feed_internals.css", IDR_FEED_INTERNALS_CSS);
-  source->SetDefaultResource(IDR_FEED_INTERNALS_HTML);
-
-  content::WebUIDataSource::Add(profile_, source);
+  webui::SetupWebUIDataSource(
+      source,
+      base::make_span(kFeedInternalsResources, kFeedInternalsResourcesSize),
+      IDR_FEED_INTERNALS_FEED_INTERNALS_HTML);
 }
 
 WEB_UI_CONTROLLER_TYPE_IMPL(FeedInternalsUI)

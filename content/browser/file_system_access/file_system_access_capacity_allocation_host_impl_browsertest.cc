@@ -5,11 +5,12 @@
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/test/bind.h"
+#include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/storage_partition.h"
-#include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/content_browser_test.h"
@@ -158,8 +159,10 @@ IN_PROC_BROWSER_TEST_F(FileSystemAccessCapacityAllocationHostImplBrowserTest,
   EXPECT_EQ(usage_before_operation, usage_after_operation + 100);
 }
 
-// TODO(crbug.com/1304977): Failing on Mac builders.
-#if BUILDFLAG(IS_MAC)
+// TODO(crbug.com/1304977): Failing on various builders.
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) ||                     \
+    (BUILDFLAG(IS_CHROMEOS_LACROS) && defined(ADDRESS_SANITIZER) && \
+     defined(LEAK_SANITIZER))
 #define MAYBE_QuotaUsageOverallocation DISABLED_QuotaUsageOverallocation
 #else
 #define MAYBE_QuotaUsageOverallocation QuotaUsageOverallocation
@@ -209,14 +212,10 @@ IN_PROC_BROWSER_TEST_F(FileSystemAccessCapacityAllocationHostImplBrowserTest,
             4 * 1024 * 1024);
 }
 
-// TODO(crbug.com/1304977): Failing on Mac builders.
-#if BUILDFLAG(IS_MAC)
-#define MAYBE_QuotaUsageShrinks DISABLED_QuotaUsageShrinks
-#else
-#define MAYBE_QuotaUsageShrinks QuotaUsageShrinks
-#endif
+// TODO(crbug.com/1304977): Failing on Mac, Linux, and ChromeOS builders.
+// TODO(crbug.com/1459385): Re-enable this test
 IN_PROC_BROWSER_TEST_F(FileSystemAccessCapacityAllocationHostImplBrowserTest,
-                       MAYBE_QuotaUsageShrinks) {
+                       DISABLED_QuotaUsageShrinks) {
   const GURL& test_url =
       embedded_test_server()->GetURL("/run_async_code_on_worker.html");
   Shell* browser = CreateBrowser();

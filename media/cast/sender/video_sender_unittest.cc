@@ -10,15 +10,16 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "base/time/time.h"
 #include "media/base/fake_single_thread_task_runner.h"
+#include "media/base/mock_filters.h"
 #include "media/base/video_frame.h"
 #include "media/cast/cast_environment.h"
 #include "media/cast/common/video_frame_factory.h"
@@ -110,17 +111,17 @@ void IgnorePlayoutDelayChanges(base::TimeDelta unused_playout_delay) {}
 
 class PeerVideoSender : public VideoSender {
  public:
-  PeerVideoSender(
-      scoped_refptr<CastEnvironment> cast_environment,
-      const FrameSenderConfig& video_config,
-      const StatusChangeCallback& status_change_cb,
-      const CreateVideoEncodeAcceleratorCallback& create_vea_cb,
-      CastTransport* const transport_sender)
+  PeerVideoSender(scoped_refptr<CastEnvironment> cast_environment,
+                  const FrameSenderConfig& video_config,
+                  const StatusChangeCallback& status_change_cb,
+                  const CreateVideoEncodeAcceleratorCallback& create_vea_cb,
+                  CastTransport* const transport_sender)
       : VideoSender(cast_environment,
                     video_config,
                     status_change_cb,
                     create_vea_cb,
                     transport_sender,
+                    std::make_unique<media::MockVideoEncoderMetricsProvider>(),
                     base::BindRepeating(&IgnorePlayoutDelayChanges),
                     base::BindRepeating(&PeerVideoSender::ProcessFeedback,
                                         base::Unretained(this))) {}
@@ -176,10 +177,11 @@ class VideoSenderTest : public ::testing::Test {
     testing_clock_.Advance(base::TimeTicks::Now() - base::TimeTicks());
     vea_factory_.SetAutoRespond(true);
     last_pixel_value_ = kPixelValue;
-    transport_ = new TestPacketSender();
+    auto sender = std::make_unique<TestPacketSender>();
+    transport_ = sender.get();
     transport_sender_ = std::make_unique<CastTransportImpl>(
         &testing_clock_, base::TimeDelta(), std::make_unique<TransportClient>(),
-        base::WrapUnique(transport_.get()), task_runner_);
+        std::move(sender), task_runner_);
   }
 
   ~VideoSenderTest() override = default;
@@ -193,7 +195,7 @@ class VideoSenderTest : public ::testing::Test {
   // |expect_init_success| is true if initialization is expected to succeed.
   void InitEncoder(bool external, bool expect_init_success) {
     FrameSenderConfig video_config = GetDefaultVideoSenderConfig();
-    video_config.use_external_encoder = external;
+    video_config.use_hardware_encoder = external;
 
     ASSERT_EQ(operational_status_, STATUS_UNINITIALIZED);
 
@@ -248,8 +250,8 @@ class VideoSenderTest : public ::testing::Test {
   const scoped_refptr<CastEnvironment> cast_environment_;
   OperationalStatus operational_status_;
   FakeVideoEncodeAcceleratorFactory vea_factory_;
-  raw_ptr<TestPacketSender> transport_;  // Owned by CastTransport.
   std::unique_ptr<CastTransportImpl> transport_sender_;
+  raw_ptr<TestPacketSender> transport_;  // Owned by CastTransport.
   std::unique_ptr<PeerVideoSender> video_sender_;
   int last_pixel_value_;
   base::TimeTicks first_frame_timestamp_;

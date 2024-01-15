@@ -10,12 +10,13 @@
 
 #include "base/base64.h"
 #include "base/base_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/unpacked_installer.h"
@@ -212,8 +213,7 @@ std::string TabCapturePerformanceTestBase::MakeBase64EncodedGZippedString(
     const std::string& input) {
   std::string gzipped_input;
   compression::GzipCompress(input, &gzipped_input);
-  std::string result;
-  base::Base64Encode(gzipped_input, &result);
+  std::string result = base::Base64Encode(gzipped_input);
 
   // Break up the string with newlines to make it easier to handle in the
   // console logs.
@@ -232,7 +232,7 @@ std::string TabCapturePerformanceTestBase::MakeBase64EncodedGZippedString(
 void TabCapturePerformanceTestBase::ContinueBrowserFor(
     base::TimeDelta duration) {
   base::RunLoop run_loop;
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(), duration);
   run_loop.Run();
 }

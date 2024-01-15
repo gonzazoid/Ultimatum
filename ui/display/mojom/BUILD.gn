@@ -9,6 +9,7 @@ mojom("mojom") {
 
   sources = [
     "display.mojom",
+    "display_color_management.mojom",
     "display_configuration_params.mojom",
     "display_constants.mojom",
     "display_layout.mojom",
@@ -22,6 +23,7 @@ mojom("mojom") {
 
   public_deps = [
     "//mojo/public/mojom/base",
+    "//skia/public/mojom",
     "//ui/gfx/geometry/mojom",
     "//ui/gfx/mojom",
   ]
@@ -96,6 +98,10 @@ mojom("mojom") {
           mojom = "display.mojom.PrivacyScreenState"
           cpp = "::display::PrivacyScreenState"
         },
+        {
+          mojom = "display.mojom.VariableRefreshRateState"
+          cpp = "::display::VariableRefreshRateState"
+        },
       ]
       traits_sources = [ "display_constants_mojom_traits.cc" ]
       traits_headers = [ "display_constants_mojom_traits.h" ]
@@ -165,8 +171,31 @@ mojom("mojom") {
     {
       types = [
         {
+          mojom = "display.mojom.GammaCurve"
+          cpp = "::display::GammaCurve"
+        },
+      ]
+      traits_sources = [ "display_color_management_mojom_traits.cc" ]
+      traits_headers = [ "display_color_management_mojom_traits.h" ]
+      traits_public_deps = [ "//ui/display" ]
+    },
+    {
+      types = [
+        {
+          mojom = "display.mojom.ColorCalibration"
+          cpp = "::display::ColorCalibration"
+        },
+        {
+          mojom = "display.mojom.ColorTemperatureAdjustment"
+          cpp = "::display::ColorTemperatureAdjustment"
+        },
+        {
           mojom = "display.mojom.DisplayConfigurationParams"
           cpp = "::display::DisplayConfigurationParams"
+        },
+        {
+          mojom = "display.mojom.GammaAdjustment"
+          cpp = "::display::GammaAdjustment"
         },
       ]
       traits_sources = [ "display_configuration_params_mojom_traits.cc" ]
@@ -183,6 +212,7 @@ mojom("mojom") {
 component("shared_mojom_traits") {
   output_name = "display_shared_mojom_traits"
   defines = [ "IS_DISPLAY_SHARED_MOJOM_TRAITS_IMPL" ]
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
   sources = [
     "display_mojom_traits.cc",
     "display_mojom_traits.h",

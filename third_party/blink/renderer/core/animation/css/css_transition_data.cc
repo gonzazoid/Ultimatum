@@ -8,8 +8,9 @@
 
 namespace blink {
 
-CSSTransitionData::CSSTransitionData() {
+CSSTransitionData::CSSTransitionData() : CSSTimingData(InitialDuration()) {
   property_list_.push_back(InitialProperty());
+  behavior_list_.push_back(InitialBehavior());
 }
 
 CSSTransitionData::CSSTransitionData(const CSSTransitionData& other) = default;

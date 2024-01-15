@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/observer_list.h"
 #include "base/values.h"
 #include "components/invalidation/impl/channels_states.h"
@@ -61,11 +61,6 @@ class FCMSyncNetworkChannel {
   // FCMSyncNetworkChannel::Observer and register here.
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);
-
-  // Subclass should implement RequestDetailedStatus to provide debugging
-  // information.
-  virtual void RequestDetailedStatus(
-      const base::RepeatingCallback<void(base::Value::Dict)>& callback) = 0;
 
  protected:
   // Subclass should notify about connection state through

@@ -4,20 +4,20 @@
 
 #include "chrome/browser/ash/crosapi/message_center_ash.h"
 
+#include <algorithm>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "chromeos/crosapi/mojom/message_center.mojom.h"
 #include "chromeos/crosapi/mojom/notification.mojom-shared.h"
 #include "chromeos/crosapi/mojom/notification.mojom.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/image/image.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/public/cpp/notification.h"
@@ -71,7 +71,7 @@ mc::FullscreenVisibility FromMojo(mojom::FullscreenVisibility visibility) {
 std::unique_ptr<mc::Notification> FromMojo(
     mojom::NotificationPtr notification) {
   mc::RichNotificationData rich_data;
-  rich_data.priority = base::clamp(notification->priority, -2, 2);
+  rich_data.priority = std::clamp(notification->priority, -2, 2);
   rich_data.never_timeout = notification->require_interaction;
   rich_data.timestamp = notification->timestamp;
   if (!notification->image.isNull())
@@ -89,7 +89,7 @@ std::unique_ptr<mc::Notification> FromMojo(
     item.message = mojo_item->message;
     rich_data.items.push_back(item);
   }
-  rich_data.progress = base::clamp(notification->progress, -1, 100);
+  rich_data.progress = std::clamp(notification->progress, -1, 100);
   rich_data.progress_status = notification->progress_status;
   for (const auto& mojo_button : notification->buttons) {
     mc::ButtonInfo button;
@@ -119,6 +119,13 @@ std::unique_ptr<mc::Notification> FromMojo(
     if (notification->notifier_id->title.has_value())
       notifier_id.title = notification->notifier_id->title;
     notifier_id.profile_id = notification->notifier_id->profile_id;
+    if (notification->notifier_id->group_key.has_value()) {
+      notifier_id.group_key = notification->notifier_id->group_key.value();
+    }
+  }
+
+  if (notification->image_path) {
+    rich_data.image_path = notification->image_path;
   }
 
   return std::make_unique<mc::Notification>(
@@ -175,8 +182,8 @@ class ForwardingDelegate : public message_center::NotificationDelegate {
       remote_delegate_->OnNotificationClosed(by_user);
   }
 
-  void Click(const absl::optional<int>& button_index,
-             const absl::optional<std::u16string>& reply) override {
+  void Click(const std::optional<int>& button_index,
+             const std::optional<std::u16string>& reply) override {
     // The button index comes out of
     // trusted ash-side message center UI code and is guaranteed not to be
     // negative.

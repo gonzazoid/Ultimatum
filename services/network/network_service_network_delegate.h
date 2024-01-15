@@ -11,16 +11,15 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/network_delegate_impl.h"
+#include "net/cookies/cookie_setting_override.h"
 #include "net/first_party_sets/first_party_set_metadata.h"
 #include "net/first_party_sets/first_party_sets_cache_filter.h"
-#include "net/first_party_sets/same_party_context.h"
 #include "services/network/cookie_settings.h"
 #include "services/network/network_context.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
-class SchemefulSite;
-class SiteForCookies;
+class CookieInclusionStatus;
 }  // namespace net
 
 namespace network {
@@ -48,7 +47,6 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkServiceNetworkDelegate
   }
 
  private:
-  using QueryReason = CookieSettings::QueryReason;
   // net::NetworkDelegateImpl implementation.
   int OnBeforeURLRequest(net::URLRequest* request,
                          net::CompletionOnceCallback callback,
@@ -76,14 +74,14 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkServiceNetworkDelegate
       const net::FirstPartySetMetadata& first_party_set_metadata,
       net::CookieAccessResultList& maybe_included_cookies,
       net::CookieAccessResultList& excluded_cookies) override;
-  bool OnCanSetCookie(const net::URLRequest& request,
-                      const net::CanonicalCookie& cookie,
-                      net::CookieOptions* options) override;
+  bool OnCanSetCookie(
+      const net::URLRequest& request,
+      const net::CanonicalCookie& cookie,
+      net::CookieOptions* options,
+      const net::FirstPartySetMetadata& first_party_set_metadata,
+      net::CookieInclusionStatus* inclusion_status) override;
   net::NetworkDelegate::PrivacySetting OnForcePrivacyMode(
-      const GURL& url,
-      const net::SiteForCookies& site_for_cookies,
-      const absl::optional<url::Origin>& top_frame_origin,
-      net::SamePartyContext::Type same_party_context_type) const override;
+      const net::URLRequest& request) const override;
   bool OnCancelURLRequestWithPolicyViolatingReferrerHeader(
       const net::URLRequest& request,
       const GURL& target_url,
@@ -96,11 +94,6 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkServiceNetworkDelegate
                                const GURL& endpoint) const override;
   bool OnCanUseReportingClient(const url::Origin& origin,
                                const GURL& endpoint) const override;
-  absl::optional<net::FirstPartySetsCacheFilter::MatchInfo>
-  OnGetFirstPartySetsCacheFilterMatchInfoMaybeAsync(
-      const net::SchemefulSite& request_site,
-      base::OnceCallback<void(net::FirstPartySetsCacheFilter::MatchInfo)>
-          callback) const override;
 
   int HandleClearSiteDataHeader(
       net::URLRequest* request,

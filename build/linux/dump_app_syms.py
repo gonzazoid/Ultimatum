@@ -5,7 +5,6 @@
 # Helper script to run dump_syms on Chrome Linux executables and strip
 # them if needed.
 
-from __future__ import print_function
 
 import os
 import subprocess
@@ -25,7 +24,7 @@ outfile = sys.argv[4]
 if not os.path.isfile(outfile) or \
    os.stat(outfile).st_mtime < os.stat(infile).st_mtime:
   with open(outfile, 'w') as outfileobj:
-    subprocess.check_call([dumpsyms, '-d', infile], stdout=outfileobj)
+    subprocess.check_call([dumpsyms, '-m', '-d', infile], stdout=outfileobj)
 
 if strip_binary != '0':
   subprocess.check_call(['strip', infile])

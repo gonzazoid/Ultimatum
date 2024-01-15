@@ -11,13 +11,13 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_set.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback_forward.h"
 #include "base/i18n/rtl.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "base/values.h"
 #include "cc/paint/paint_image.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
@@ -27,6 +27,7 @@
 #include "pdf/mojom/pdf.mojom.h"
 #include "pdf/paint_manager.h"
 #include "pdf/pdf_accessibility_action_handler.h"
+#include "pdf/pdf_accessibility_image_fetcher.h"
 #include "pdf/pdf_engine.h"
 #include "pdf/pdfium/pdfium_form_filler.h"
 #include "pdf/post_message_receiver.h"
@@ -82,6 +83,7 @@ class PdfViewWebPlugin final : public PDFEngine::Client,
                                public PostMessageReceiver::Client,
                                public PaintManager::Client,
                                public PdfAccessibilityActionHandler,
+                               public PdfAccessibilityImageFetcher,
                                public PreviewModeClient::Client {
  public:
   // Do not save files larger than 100 MB. This cap should be kept in sync with
@@ -121,7 +123,10 @@ class PdfViewWebPlugin final : public PDFEngine::Client,
     // Returns the plugin container set by `SetPluginContainer()`.
     virtual blink::WebPluginContainer* PluginContainer() = 0;
 
-    // Returrns the document's site for cookies.
+    // Returns the current V8 isolate, if any.
+    virtual v8::Isolate* GetIsolate() = 0;
+
+    // Returns the document's site for cookies.
     virtual net::SiteForCookies SiteForCookies() const = 0;
 
     // Resolves `partial_url` relative to the document's base URL.
@@ -219,7 +224,8 @@ class PdfViewWebPlugin final : public PDFEngine::Client,
     // client.
     virtual std::unique_ptr<PdfAccessibilityDataHandler>
     CreateAccessibilityDataHandler(
-        PdfAccessibilityActionHandler* action_handler);
+        PdfAccessibilityActionHandler* action_handler,
+        PdfAccessibilityImageFetcher* image_fetcher);
   };
 
   PdfViewWebPlugin(std::unique_ptr<Client> client,
@@ -328,6 +334,7 @@ class PdfViewWebPlugin final : public PDFEngine::Client,
                   const void* data,
                   int length) override;
   std::unique_ptr<UrlLoader> CreateUrlLoader() override;
+  v8::Isolate* GetIsolate() override;
   std::vector<SearchStringResult> SearchString(const char16_t* string,
                                                const char16_t* term,
                                                bool case_sensitive) override;
@@ -379,6 +386,11 @@ class PdfViewWebPlugin final : public PDFEngine::Client,
   void EnableAccessibility() override;
   void HandleAccessibilityAction(
       const AccessibilityActionData& action_data) override;
+  void LoadOrReloadAccessibility() override;
+
+  // PdfAccessibilityImageFetcher:
+  SkBitmap GetImageForOcr(int32_t page_index,
+                          int32_t page_object_index) override;
 
   // PreviewModeClient::Client:
   void PreviewDocumentLoadComplete() override;
@@ -401,6 +413,14 @@ class PdfViewWebPlugin final : public PDFEngine::Client,
 
   AccessibilityDocInfo GetAccessibilityDocInfoForTesting() const {
     return GetAccessibilityDocInfo();
+  }
+
+  int32_t next_accessibility_page_index_for_testing() const {
+    return next_accessibility_page_index_;
+  }
+
+  void set_next_accessibility_page_index_for_testing(int32_t index) {
+    next_accessibility_page_index_ = index;
   }
 
  private:
@@ -461,6 +481,7 @@ class PdfViewWebPlugin final : public PDFEngine::Client,
   // Message handlers.
   void HandleDisplayAnnotationsMessage(const base::Value::Dict& message);
   void HandleGetNamedDestinationMessage(const base::Value::Dict& message);
+  void HandleGetPageBoundingBoxMessage(const base::Value::Dict& message);
   void HandleGetPasswordCompleteMessage(const base::Value::Dict& message);
   void HandleGetSelectedTextMessage(const base::Value::Dict& message);
   void HandleGetThumbnailMessage(const base::Value::Dict& message);
@@ -655,9 +676,6 @@ class PdfViewWebPlugin final : public PDFEngine::Client,
   // The viewport coordinates to DIP (device-independent pixel) ratio.
   float viewport_to_dip_scale_ = 1.0f;
 
-  // The device pixel to CSS pixel ratio.
-  float device_to_css_scale_ = 1.0f;
-
   // Combined translate from snapshot to device to CSS pixels.
   gfx::Vector2dF total_translate_;
 
@@ -787,7 +805,7 @@ class PdfViewWebPlugin final : public PDFEngine::Client,
   std::vector<int> pages_to_print_;
 
   // Assigned a value only between `PrintBegin()` and `PrintEnd()` calls.
-  absl::optional<blink::WebPrintParams> print_params_;
+  std::optional<blink::WebPrintParams> print_params_;
 
   // For identifying actual print operations to avoid double logging of UMA.
   bool print_pages_called_;

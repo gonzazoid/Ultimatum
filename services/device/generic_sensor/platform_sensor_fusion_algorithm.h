@@ -5,11 +5,10 @@
 #ifndef SERVICES_DEVICE_GENERIC_SENSOR_PLATFORM_SENSOR_FUSION_ALGORITHM_H_
 #define SERVICES_DEVICE_GENERIC_SENSOR_PLATFORM_SENSOR_FUSION_ALGORITHM_H_
 
-#include <vector>
-
+#include "base/containers/flat_set.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "services/device/public/cpp/generic_sensor/sensor_reading.h"
+#include "services/device/public/mojom/sensor.mojom-shared.h"
 
 namespace device {
 
@@ -31,7 +30,7 @@ class PlatformSensorFusionAlgorithm {
     fusion_sensor_ = fusion_sensor;
   }
 
-  const std::vector<mojom::SensorType>& source_types() const {
+  const base::flat_set<mojom::SensorType>& source_types() const {
     return source_types_;
   }
 
@@ -52,7 +51,7 @@ class PlatformSensorFusionAlgorithm {
  protected:
   PlatformSensorFusionAlgorithm(
       mojom::SensorType fused_type,
-      const std::vector<mojom::SensorType>& source_types);
+      const base::flat_set<mojom::SensorType>& source_types);
 
   virtual bool GetFusedDataInternal(mojom::SensorType which_sensor_changed,
                                     SensorReading* fused_reading) = 0;
@@ -67,7 +66,7 @@ class PlatformSensorFusionAlgorithm {
   double threshold_ = 0.1;
 
   mojom::SensorType fused_type_;
-  std::vector<mojom::SensorType> source_types_;
+  base::flat_set<mojom::SensorType> source_types_;
 };
 
 }  // namespace device

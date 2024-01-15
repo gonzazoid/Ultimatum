@@ -80,6 +80,10 @@ void PaymentRequestRowView::SetClickable(bool clickable) {
   OnPropertyChanged(&clickable_, views::PropertyEffects::kPropertyEffectsPaint);
 }
 
+base::WeakPtr<PaymentRequestRowView> PaymentRequestRowView::AsWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
+}
+
 gfx::Insets PaymentRequestRowView::GetRowInsets() const {
   return row_insets_;
 }
@@ -170,7 +174,7 @@ void PaymentRequestRowView::OnBlur() {
     SetHighlighted(false);
 }
 
-BEGIN_METADATA(PaymentRequestRowView, views::Button)
+BEGIN_METADATA(PaymentRequestRowView)
 ADD_PROPERTY_METADATA(bool, Clickable)
 ADD_PROPERTY_METADATA(gfx::Insets, RowInsets)
 END_METADATA

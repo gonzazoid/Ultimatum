@@ -5,14 +5,13 @@
 #include <windows.h>
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/files/file_path.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/win/scoped_handle.h"
-#include "base/win/windows_version.h"
 #include "components/services/quarantine/common.h"
 #include "components/services/quarantine/common_win.h"
 #include "components/services/quarantine/test_support.h"
@@ -45,15 +44,15 @@ bool ZoneIdentifierPresentForFile(const base::FilePath& path,
   std::string zone_identifier_contents(zone_identifier_contents_buffer.begin(),
                                        zone_identifier_contents_buffer.end());
 
-  std::vector<base::StringPiece> lines =
+  std::vector<std::string_view> lines =
       base::SplitStringPiece(zone_identifier_contents, "\n",
                              base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
   if (lines.size() < 2 || lines[0] != "[ZoneTransfer]" != 0)
     return false;
 
-  base::StringPiece found_zone_id;
-  base::StringPiece found_host_url;
-  base::StringPiece found_referrer_url;
+  std::string_view found_zone_id;
+  std::string_view found_host_url;
+  std::string_view found_referrer_url;
 
   // Note that we don't try too hard to parse the zone identifier here. This is
   // a test. If Windows starts adding whitespace or doing anything fancier than
@@ -79,11 +78,7 @@ bool ZoneIdentifierPresentForFile(const base::FilePath& path,
 bool IsFileQuarantined(const base::FilePath& file,
                        const GURL& source_url,
                        const GURL& referrer_url) {
-  if (base::win::GetVersion() >= base::win::Version::WIN10)
-    return ZoneIdentifierPresentForFile(file, source_url, referrer_url);
-  else
-    return ZoneIdentifierPresentForFile(file, GURL::EmptyGURL(),
-                                        GURL::EmptyGURL());
+  return ZoneIdentifierPresentForFile(file, source_url, referrer_url);
 }
 
 }  // namespace quarantine

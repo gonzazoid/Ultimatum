@@ -4,8 +4,9 @@
 
 #include "chrome/browser/ash/arc/tracing/arc_system_model.h"
 
-#include <stdio.h>
+#include <cstdio>
 
+#include <optional>
 #include <set>
 
 #include "base/strings/stringprintf.h"
@@ -25,7 +26,7 @@ bool LoadThreads(const base::Value* value,
   if (!value || !value->is_dict())
     return false;
 
-  for (const auto it : value->DictItems()) {
+  for (const auto it : value->GetDict()) {
     int tid;
     if (sscanf(it.first.c_str(), "%d", &tid) != 1)
       return false;
@@ -33,29 +34,30 @@ bool LoadThreads(const base::Value* value,
     if (!it.second.is_dict())
       return false;
 
-    const base::Value* name = it.second.FindKey(kKeyName);
-    if (!name || !name->is_string())
+    const std::string* name = it.second.GetDict().FindString(kKeyName);
+    if (!name) {
       return false;
-    const base::Value* pid = it.second.FindKey(kKeyPid);
-    if (!pid || !pid->is_int())
+    }
+    const std::optional<int> pid = it.second.GetDict().FindInt(kKeyPid);
+    if (!pid) {
       return false;
+    }
 
-    (*out_threads)[tid] =
-        ArcSystemModel::ThreadInfo(pid->GetInt(), name->GetString());
+    (*out_threads)[tid] = ArcSystemModel::ThreadInfo(pid.value(), *name);
   }
 
   return true;
 }
 
-base::DictionaryValue SerializeThreads(
+base::Value::Dict SerializeThreads(
     const ArcSystemModel::ThreadMap& threads) {
-  base::DictionaryValue result;
+  base::Value::Dict result;
 
   for (auto& thread_info : threads) {
-    base::DictionaryValue entry;
-    entry.SetKey(kKeyPid, base::Value(thread_info.second.pid));
-    entry.SetKey(kKeyName, base::Value(thread_info.second.name));
-    result.SetKey(base::StringPrintf("%d", thread_info.first),
+    base::Value::Dict entry;
+    entry.Set(kKeyPid, base::Value(thread_info.second.pid));
+    entry.Set(kKeyName, base::Value(thread_info.second.name));
+    result.Set(base::StringPrintf("%d", thread_info.first),
                   std::move(entry));
   }
 
@@ -152,11 +154,11 @@ void ArcSystemModel::CopyFrom(const ArcSystemModel& other) {
   memory_events_ = other.memory_events_;
 }
 
-base::DictionaryValue ArcSystemModel::Serialize() const {
-  base::DictionaryValue result;
-  result.SetKey(kKeyThreads, SerializeThreads(thread_map_));
-  result.SetKey(kKeyCpu, SerializeAllCpuEvents(all_cpu_events_));
-  result.SetKey(kKeyMemory, SerializeValueEvents(memory_events_));
+base::Value::Dict ArcSystemModel::Serialize() const {
+  base::Value::Dict result;
+  result.Set(kKeyThreads, SerializeThreads(thread_map_));
+  result.Set(kKeyCpu, SerializeAllCpuEvents(all_cpu_events_));
+  result.Set(kKeyMemory, SerializeValueEvents(memory_events_));
   return result;
 }
 
@@ -164,14 +166,17 @@ bool ArcSystemModel::Load(const base::Value* root) {
   if (!root || !root->is_dict())
     return false;
 
-  if (!LoadThreads(root->FindKey(kKeyThreads), &thread_map_))
+  if (!LoadThreads(root->GetDict().Find(kKeyThreads), &thread_map_)) {
     return false;
+  }
 
-  if (!LoadAllCpuEvents(root->FindKey(kKeyCpu), &all_cpu_events_))
+  if (!LoadAllCpuEvents(root->GetDict().Find(kKeyCpu), &all_cpu_events_)) {
     return false;
+  }
 
-  if (!LoadValueEvents(root->FindKey(kKeyMemory), &memory_events_))
+  if (!LoadValueEvents(root->GetDict().Find(kKeyMemory), &memory_events_)) {
     return false;
+  }
 
   return true;
 }

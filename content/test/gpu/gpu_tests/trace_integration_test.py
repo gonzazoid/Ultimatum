@@ -11,8 +11,10 @@ import os
 import posixpath
 import sys
 import tempfile
-from typing import Any, Dict, Generator, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Generator, Iterator, List, Optional, Set, Tuple
 import unittest
+
+import dataclasses  # Built-in, but pylint gives an ordering false positive.
 
 from gpu_tests import common_browser_args as cba
 from gpu_tests import common_typing as ct
@@ -109,8 +111,8 @@ _SWAP_CHAIN_GET_FRAME_STATISTICS_MEDIA_FAILED = -1
 
 _GET_STATISTICS_EVENT_NAME = 'GetFrameStatisticsMedia'
 _SWAP_CHAIN_PRESENT_EVENT_NAME = 'SwapChain::Present'
-_PRESENT_TO_SWAP_CHAIN_EVENT_NAME = 'SwapChainPresenter::PresentToSwapChain'
-_PRESENT_ROOT_SWAP_CHAIN_EVENT_NAME =\
+_UPDATE_OVERLAY_EVENT_NAME = 'DCLayerTree::VisualTree::UpdateOverlay'
+_PRESENT_SWAP_CHAIN_EVENT_NAME =\
     'DirectCompositionChildSurfaceWin::PresentSwapChain'
 
 _SUPPORTED_WIN_AMD_GPUS_WITH_NV12_ROTATED_OVERLAYS = [0x7340]
@@ -150,29 +152,20 @@ class _TraceTestOrigin(Enum):
   LOCALHOST = 'LocalhostUrlOfStaticFilePath'
 
 
+@dataclasses.dataclass
 class _TraceTestArguments():
   """Struct-like object for passing trace test arguments instead of dicts."""
-
-  def __init__(  # pylint: disable=too-many-arguments
-      self,
-      browser_args: List[str],
-      category: str,
-      test_harness_script: str,
-      finish_js_condition: str,
-      success_eval_func: str,
-      other_args: dict,
-      restart_browser: bool = True,
-      origin: _TraceTestOrigin = _TraceTestOrigin.DEFAULT):
-    self.browser_args = browser_args
-    self.category = category
-    self.test_harness_script = test_harness_script
-    self.finish_js_condition = finish_js_condition
-    self.success_eval_func = success_eval_func
-    self.other_args = other_args
-    self.restart_browser = restart_browser
-    self.origin = origin
+  browser_args: List[str]
+  category: str
+  test_harness_script: str
+  finish_js_condition: str
+  success_eval_func: str
+  other_args: dict
+  restart_browser: bool = True
+  origin: _TraceTestOrigin = _TraceTestOrigin.DEFAULT
 
 
+@dataclasses.dataclass
 class _CacheTraceTestArguments():
   """Struct-like object for passing persistent cache trace test arguments.
 
@@ -195,28 +188,17 @@ class _CacheTraceTestArguments():
   be written to the cache, thereby causing subsequent |cache_pages| to see cache
   hits when we actually expect them to be misses. Note this is not a problem
   for the restarted browser case because each browser restart seeds a new
-  temporary directory with only the contents after the first load page."""
-
-  def __init__(  # pylint: disable=too-many-arguments
-      self,
-      browser_args: List[str],
-      category: str,
-      test_harness_script: str,
-      finish_js_condition: str,
-      first_load_eval_func: str,
-      cache_eval_func: str,
-      cache_pages: List[str],
-      cache_page_origin: _TraceTestOrigin = _TraceTestOrigin.DEFAULT,
-      test_renavigation: bool = True):
-    self.browser_args = browser_args
-    self.category = category
-    self.test_harness_script = test_harness_script
-    self.finish_js_condition = finish_js_condition
-    self.first_load_eval_func = first_load_eval_func
-    self.cache_eval_func = cache_eval_func
-    self.cache_pages = cache_pages
-    self.cache_page_origin = cache_page_origin
-    self.test_renavigation = test_renavigation
+  temporary directory with only the contents after the first load page.
+  """
+  browser_args: List[str]
+  category: str
+  test_harness_script: str
+  finish_js_condition: str
+  first_load_eval_func: str
+  cache_eval_func: str
+  cache_pages: List[str]
+  cache_page_origin: _TraceTestOrigin = _TraceTestOrigin.DEFAULT
+  test_renavigation: bool = True
 
   def GenerateFirstLoadTest(self) -> _TraceTestArguments:
     """Returns the trace test arguments for the first load cache test."""
@@ -269,6 +251,29 @@ class TraceIntegrationTest(gpu_integration_test.GpuIntegrationTest):
     return 'trace_test'
 
   @classmethod
+  def _SuiteSupportsParallelTests(cls) -> bool:
+    return True
+
+  def _GetSerialGlobs(self) -> Set[str]:
+    serial_globs = set()
+    if sys.platform == 'win32':
+      serial_globs |= {
+          # Flaky when run in parallel on Windows.
+          'OverlayModeTraceTest_DirectComposition_Underlay*',
+      }
+    return serial_globs
+
+  def _GetSerialTests(self) -> Set[str]:
+    serial_tests = set()
+    if sys.platform == 'darwin':
+      serial_tests |= {
+          # Flaky when run in parallel on Mac.
+          'WebGPUTraceTest_WebGPUCanvasOneCopyCapture',
+          'WebGPUTraceTest_WebGPUCanvasDisableOneCopyCapture_Accelerated',
+      }
+    return serial_tests
+
+  @classmethod
   def GenerateGpuTests(cls, options: ct.ParsedCmdArgs) -> ct.TestGenerator:
     # Include the device level trace tests, even though they're
     # currently skipped on all platforms, to give a hint that they
@@ -314,6 +319,16 @@ class TraceIntegrationTest(gpu_integration_test.GpuIntegrationTest):
               success_eval_func='CheckOverlayMode',
               other_args=p.other_args)
       ])
+    for p in namespace.RootSwapChainPages('SwapChainTraceTest'):
+      yield (p.name, posixpath.join(gpu_data_relative_path, p.url), [
+          _TraceTestArguments(
+              browser_args=p.browser_args,
+              category='gpu',
+              test_harness_script=basic_test_harness_script,
+              finish_js_condition='domAutomationController._finished',
+              success_eval_func='CheckSwapChainHasAlpha',
+              other_args=p.other_args)
+      ])
 
     for p in namespace.VideoFromCanvasPages('WebGLCanvasCaptureTraceTest'):
       yield (p.name, posixpath.join(gpu_data_relative_path, p.url), [
@@ -350,9 +365,9 @@ class TraceIntegrationTest(gpu_integration_test.GpuIntegrationTest):
     #   expect in following loads.
     # cache_pages: List of URLs that should be both re-navigated and/or
     #   reloaded in a restarted browser to expect some cache condition.
-    webgpu_cache_test_browser_args = [
-        cba.ENABLE_UNSAFE_WEBGPU,
+    webgpu_cache_test_browser_args = cba.ENABLE_WEBGPU_FOR_TESTING + [
         cba.ENABLE_EXPERIMENTAL_WEB_PLATFORM_FEATURES,
+        '--enable-features=WebGPUBlobCache',
     ]
     # For the tests to run properly on Linux, we need additional args.
     if sys.platform.startswith('linux'):
@@ -546,30 +561,18 @@ class TraceIntegrationTest(gpu_integration_test.GpuIntegrationTest):
          ]),
     ]
     for (name, first_load_page, cache_pages) in webgpu_xorigin_cache_miss_tests:
-      yield (
-          'WebGPUCachingTraceTest_' + name,
-          posixpath.join(gpu_data_relative_path, first_load_page),
-          [
-              _CacheTraceTestArguments(
-                  browser_args=webgpu_cache_test_browser_args + [
-                      # Currently it seems like this is not always the default
-                      # yet. We may be able to remove this once it is defaulted.
-                      # Without this flag, origin caching uses an isolation key
-                      # that depends only on the top-level page, and hence these
-                      # tests will fail. With the flag, the isolation key uses
-                      # both the top-level page and the subpage.
-                      # TODO(dawn:1568) Revisit whether this is necessary.
-                      '--disable-features=' +
-                      'ForceIsolationInfoFrameOriginToTopLevelFrame'
-                  ],
-                  category='gpu',
-                  test_harness_script=basic_test_harness_script,
-                  finish_js_condition='domAutomationController._finished',
-                  first_load_eval_func='CheckWebGPUFirstLoadCache',
-                  cache_eval_func='CheckNoWebGPUCacheHits',
-                  cache_pages=cache_pages,
-                  test_renavigation=False)
-          ])
+      yield ('WebGPUCachingTraceTest_' + name,
+             posixpath.join(gpu_data_relative_path, first_load_page), [
+                 _CacheTraceTestArguments(
+                     browser_args=webgpu_cache_test_browser_args,
+                     category='gpu',
+                     test_harness_script=basic_test_harness_script,
+                     finish_js_condition='domAutomationController._finished',
+                     first_load_eval_func='CheckWebGPUFirstLoadCache',
+                     cache_eval_func='CheckNoWebGPUCacheHits',
+                     cache_pages=cache_pages,
+                     test_renavigation=False)
+             ])
 
   def _RunActualGpuTraceTest(self,
                              test_path: str,
@@ -661,6 +664,10 @@ class TraceIntegrationTest(gpu_integration_test.GpuIntegrationTest):
     default_args.extend([
         cba.ENABLE_LOGGING,
         cba.ENABLE_EXPERIMENTAL_WEB_PLATFORM_FEATURES,
+        # --test-type=gpu is used to suppress the "stability and security will
+        # suffer" infobar caused by --enable-gpu-benchmarking which can
+        # interfere with these tests.
+        cba.TEST_TYPE_GPU,
     ])
     return default_args
 
@@ -894,20 +901,59 @@ class TraceIntegrationTest(gpu_integration_test.GpuIntegrationTest):
     for event in event_iterator:
       if event.category != category:
         continue
-      if event.name != _PRESENT_TO_SWAP_CHAIN_EVENT_NAME:
+      if event.name != _UPDATE_OVERLAY_EVENT_NAME:
         continue
       image_type = event.args.get('image_type', None)
-      if image_type == 'swap chain':
+      if image_type == 'DCompVisualContent':
         found_overlay = True
         break
     if expect_overlay and not found_overlay:
       self.fail(
           'Overlay expected but not found: matching %s events were not found' %
-          _PRESENT_TO_SWAP_CHAIN_EVENT_NAME)
+          _UPDATE_OVERLAY_EVENT_NAME)
     elif expect_no_overlay and found_overlay:
       self.fail(
           'Overlay not expected but found: matching %s events were found' %
-          _PRESENT_TO_SWAP_CHAIN_EVENT_NAME)
+          _UPDATE_OVERLAY_EVENT_NAME)
+
+  def _EvaluateSuccess_CheckSwapChainHasAlpha(self, category: str,
+                                              event_iterator: Iterator,
+                                              other_args: dict) -> None:
+    """Verified that all DXGI swap chains are presented with the expected alpha
+    mode."""
+    os_name = self.browser.platform.GetOSName()
+    assert os_name and os_name.lower() == 'win'
+
+    overlay_bot_config = self._GetOverlayBotConfig()
+    if overlay_bot_config is None:
+      self.fail('Overlay bot config can not be determined')
+    assert overlay_bot_config.get('direct_composition', False)
+
+    expect_has_alpha = other_args and other_args.get('has_alpha', False)
+
+    has_present_swap_chain_event_with_has_alpha = False
+
+    # Verify expectations through captured trace events.
+    for event in event_iterator:
+      if event.category != category:
+        continue
+      if event.name != _PRESENT_SWAP_CHAIN_EVENT_NAME:
+        continue
+
+      got_has_alpha = event.args.get('has_alpha', None)
+      if got_has_alpha is not None:
+        has_present_swap_chain_event_with_has_alpha = True
+
+        if expect_has_alpha != got_has_alpha:
+          self.fail(
+              f'Expected events with name {_PRESENT_SWAP_CHAIN_EVENT_NAME} with'
+              f' has_alpha expected {expect_has_alpha}, got {got_has_alpha}')
+
+    # It's also considered a failure if we did not see the expected event.
+    if not has_present_swap_chain_event_with_has_alpha:
+      self.fail(
+          f'Expected events with name {_PRESENT_SWAP_CHAIN_EVENT_NAME} and '
+          'has_alpha value, but were not found')
 
   def _EvaluateSuccess_CheckWebGLCanvasCapture(self, category: str,
                                                event_iterator: Iterator,
@@ -1055,14 +1101,13 @@ class TraceIntegrationTest(gpu_integration_test.GpuIntegrationTest):
     ]
 
 
+@dataclasses.dataclass
 class _VideoExpectations():
   """Struct-like object for passing around video test expectations."""
-
-  def __init__(self):
-    self.pixel_format = None  # str
-    self.zero_copy = None  # bool
-    self.no_overlay = None  # bool
-    self.presentation_mode = None  # str
+  pixel_format: Optional[str] = None
+  zero_copy: Optional[bool] = None
+  no_overlay: Optional[bool] = None
+  presentation_mode: Optional[str] = None
 
 
 def load_tests(loader: unittest.TestLoader, tests: Any,

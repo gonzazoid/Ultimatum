@@ -8,13 +8,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/app_mode/app_mode_utils.h"
 #include "chrome/browser/apps/platform_apps/audio_focus_web_contents_observer.h"
 #include "chrome/browser/favicon/favicon_utils.h"
 #include "chrome/browser/file_select_helper.h"
+#include "chrome/browser/file_system_access/file_system_access_permission_request_manager.h"
 #include "chrome/browser/lifetime/termination_notification.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/picture_in_picture/picture_in_picture_window_manager.h"
@@ -81,6 +82,12 @@ content::WebContents* OpenURLFromTabInternal(
   // window.
   if (params.disposition == WindowOpenDisposition::NEW_BACKGROUND_TAB) {
     new_tab_params.disposition = WindowOpenDisposition::NEW_BACKGROUND_TAB;
+  } else if (params.disposition == WindowOpenDisposition::OFF_THE_RECORD) {
+    // Don't force this behaviour for requests for an incognito window, where
+    // it would not be acceptable to open in a new tab of a non-incognito
+    // window.
+    new_tab_params.disposition = WindowOpenDisposition::OFF_THE_RECORD;
+    new_tab_params.window_action = NavigateParams::SHOW_WINDOW;
   } else {
     new_tab_params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
     new_tab_params.window_action = NavigateParams::SHOW_WINDOW;
@@ -237,6 +244,8 @@ void ChromeAppDelegate::InitWebContents(content::WebContents* web_contents) {
 #endif
 
   zoom::ZoomController::CreateForWebContents(web_contents);
+
+  FileSystemAccessPermissionRequestManager::CreateForWebContents(web_contents);
 }
 
 void ChromeAppDelegate::RenderFrameCreated(
@@ -318,7 +327,7 @@ void ChromeAppDelegate::RequestMediaAccessPermission(
 
 bool ChromeAppDelegate::CheckMediaAccessPermission(
     content::RenderFrameHost* render_frame_host,
-    const GURL& security_origin,
+    const url::Origin& security_origin,
     blink::mojom::MediaStreamType type,
     const extensions::Extension* extension) {
   return MediaCaptureDevicesDispatcher::GetInstance()

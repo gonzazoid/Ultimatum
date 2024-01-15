@@ -11,10 +11,10 @@
 
 #include <vector>
 
+#include "base/apple/scoped_mach_port.h"
 #include "base/containers/id_map.h"
 #include "base/files/scoped_file.h"
 #include "base/location.h"
-#include "base/mac/scoped_mach_port.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/message_loop/message_pump.h"
@@ -105,12 +105,19 @@ class BASE_EXPORT MessagePumpKqueue : public MessagePump,
 
   ~MessagePumpKqueue() override;
 
+  static void InitializeFeatures();
+
   // MessagePump:
   void Run(Delegate* delegate) override;
+  // Simplified version of the loop used under experiment (crbug.com/1200141)
+  void RunSimplified(Delegate* delegate);
   void Quit() override;
   void ScheduleWork() override;
   void ScheduleDelayedWork(
       const Delegate::NextWorkInfo& next_work_info) override;
+  TimeTicks AdjustDelayedRunTime(TimeTicks earliest_time,
+                                 TimeTicks run_time,
+                                 TimeTicks latest_time) override;
 
   // Begins watching the Mach receive right named by |port|. The |controller|
   // can be used to stop watching for incoming messages, and new message
@@ -150,14 +157,16 @@ class BASE_EXPORT MessagePumpKqueue : public MessagePump,
   // scheduled wakeup. Clears the wakeup timer if |wakeup_time| is
   // base::TimeTicks::Max().
   // Updates |scheduled_wakeup_time_| to follow.
-  void MaybeUpdateWakeupTimer(const base::TimeTicks& wakeup_time);
+  void MaybeUpdateWakeupTimer(const base::TimeTicks& wakeup_time,
+                              base::TimeDelta leeway);
 
   void SetWakeupTimerEvent(const base::TimeTicks& wakeup_time,
+                           base::TimeDelta leeway,
                            kevent64_s* timer_event);
 
   // Receive right to which an empty Mach message is sent to wake up the pump
   // in response to ScheduleWork().
-  mac::ScopedMachReceiveRight wakeup_;
+  apple::ScopedMachReceiveRight wakeup_;
   // Scratch buffer that is used to receive the message sent to |wakeup_|.
   mach_msg_empty_rcv_t wakeup_buffer_;
 

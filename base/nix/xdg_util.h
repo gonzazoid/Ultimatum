@@ -8,6 +8,8 @@
 // XDG refers to http://en.wikipedia.org/wiki/Freedesktop.org .
 // This file contains utilities found across free desktop environments.
 
+#include <vector>
+
 #include "base/base_export.h"
 
 namespace base {
@@ -22,11 +24,12 @@ enum DesktopEnvironment {
   DESKTOP_ENVIRONMENT_CINNAMON = 1,
   DESKTOP_ENVIRONMENT_DEEPIN = 2,
   DESKTOP_ENVIRONMENT_GNOME = 3,
-  // KDE3, KDE4 and KDE5 are sufficiently different that we count
+  // KDE{3,4,5,6} are sufficiently different that we count
   // them as different desktop environments here.
   DESKTOP_ENVIRONMENT_KDE3 = 4,
   DESKTOP_ENVIRONMENT_KDE4 = 5,
   DESKTOP_ENVIRONMENT_KDE5 = 6,
+  DESKTOP_ENVIRONMENT_KDE6 = 12,
   DESKTOP_ENVIRONMENT_PANTHEON = 7,
   DESKTOP_ENVIRONMENT_UKUI = 8,
   DESKTOP_ENVIRONMENT_UNITY = 9,
@@ -74,6 +77,17 @@ BASE_EXPORT FilePath GetXDGDirectory(Environment* env, const char* env_name,
 // folder. Examples of |dir_name| are DESKTOP and MUSIC.
 BASE_EXPORT FilePath GetXDGUserDirectory(const char* dir_name,
                                          const char* fallback_dir);
+
+// Get the path to write user-specific application data files to, as specified
+// in the XDG Base Directory Specification:
+// http://standards.freedesktop.org/basedir-spec/latest/
+BASE_EXPORT FilePath GetXDGDataWriteLocation(Environment* env);
+
+// Get the list of paths to search for application data files, in order of
+// preference, as specified in the XDG Base Directory Specification:
+// http://standards.freedesktop.org/basedir-spec/latest/
+// Called on the FILE thread.
+BASE_EXPORT std::vector<FilePath> GetXDGDataSearchLocations(Environment* env);
 
 // Return an entry from the DesktopEnvironment enum with a best guess
 // of which desktop environment we're using.  We use this to know when

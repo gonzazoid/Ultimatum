@@ -70,7 +70,7 @@ class CONTENT_EXPORT NavigationControllerAndroid {
   void GoToNavigationIndex(JNIEnv* env,
                            const base::android::JavaParamRef<jobject>& obj,
                            jint index);
-  base::android::ScopedJavaGlobalRef<jobject> LoadUrl(
+  base::android::ScopedJavaLocalRef<jobject> LoadUrl(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& obj,
       const base::android::JavaParamRef<jstring>& url,
@@ -90,6 +90,8 @@ class CONTENT_EXPORT NavigationControllerAndroid {
       const base::android::JavaParamRef<jobject>& j_initiator_origin,
       jboolean has_user_gesture,
       jboolean should_clear_history_list,
+      const base::android::JavaParamRef<jobject>&
+          j_additional_navigation_params,
       jlong input_start,
       jlong navigation_ui_data_ptr);
   void ClearSslPreferences(
@@ -143,10 +145,6 @@ class CONTENT_EXPORT NavigationControllerAndroid {
                          jint index,
                          const base::android::JavaParamRef<jstring>& jkey,
                          const base::android::JavaParamRef<jstring>& jvalue);
-  jboolean IsEntryMarkedToBeSkipped(
-      JNIEnv* env,
-      const base::android::JavaParamRef<jobject>& obj,
-      jint index);
 
  private:
   void SetUseDesktopUserAgentInternal(bool enabled,

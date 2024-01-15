@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/blink/public/mojom/idle/idle_manager.mojom-blink.h"
@@ -47,21 +48,19 @@ static_assert(
 
 class IdleDetector::StartAbortAlgorithm final : public AbortSignal::Algorithm {
  public:
-  StartAbortAlgorithm(IdleDetector* idle_detector, AbortSignal* signal)
-      : idle_detector_(idle_detector), abort_signal_(signal) {}
+  explicit StartAbortAlgorithm(IdleDetector* idle_detector)
+      : idle_detector_(idle_detector) {}
   ~StartAbortAlgorithm() override = default;
 
-  void Run() override { idle_detector_->Abort(abort_signal_); }
+  void Run() override { idle_detector_->Abort(); }
 
   void Trace(Visitor* visitor) const override {
     visitor->Trace(idle_detector_);
-    visitor->Trace(abort_signal_);
     Algorithm::Trace(visitor);
   }
 
  private:
   Member<IdleDetector> idle_detector_;
-  Member<AbortSignal> abort_signal_;
 };
 
 IdleDetector* IdleDetector::Create(ScriptState* script_state) {
@@ -70,7 +69,8 @@ IdleDetector* IdleDetector::Create(ScriptState* script_state) {
 }
 
 IdleDetector::IdleDetector(ExecutionContext* context)
-    : ExecutionContextClient(context),
+    : ActiveScriptWrappable<IdleDetector>({}),
+      ExecutionContextLifecycleObserver(context),
       task_runner_(context->GetTaskRunner(TaskType::kMiscPlatformAPI)),
       timer_(task_runner_, this, &IdleDetector::DispatchUserIdleEvent),
       receiver_(this, context) {}
@@ -82,7 +82,7 @@ const AtomicString& IdleDetector::InterfaceName() const {
 }
 
 ExecutionContext* IdleDetector::GetExecutionContext() const {
-  return ExecutionContextClient::GetExecutionContext();
+  return ExecutionContextLifecycleObserver::GetExecutionContext();
 }
 
 bool IdleDetector::HasPendingActivity() const {
@@ -119,6 +119,12 @@ ScriptPromise IdleDetector::requestPermission(ScriptState* script_state,
 ScriptPromise IdleDetector::start(ScriptState* script_state,
                                   const IdleOptions* options,
                                   ExceptionState& exception_state) {
+  if (!GetExecutionContext() || GetExecutionContext()->IsContextDestroyed()) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
+                                      "Execution context is detached.");
+    return ScriptPromise();
+  }
+
   ExecutionContext* context = ExecutionContext::From(script_state);
   DCHECK(context->IsContextThread());
 
@@ -144,14 +150,16 @@ ScriptPromise IdleDetector::start(ScriptState* script_state,
     threshold_ = threshold;
   }
 
-  if (options->hasSignal()) {
-    signal_ = options->signal();
-    signal_->AddAlgorithm(
-        MakeGarbageCollected<StartAbortAlgorithm>(this, signal_));
-  }
-
-  if (signal_ && signal_->aborted()) {
-    return ScriptPromise::Reject(script_state, signal_->reason(script_state));
+  signal_ = options->getSignalOr(nullptr);
+  if (signal_) {
+    if (signal_->aborted()) {
+      return ScriptPromise::Reject(script_state, signal_->reason(script_state));
+    }
+    // If there was a previous algorithm, it should have been removed when we
+    // reached the "stopped" state.
+    DCHECK(!abort_handle_);
+    abort_handle_ =
+        signal_->AddAlgorithm(MakeGarbageCollected<StartAbortAlgorithm>(this));
   }
 
   mojo::PendingRemote<mojom::blink::IdleMonitor> remote;
@@ -159,7 +167,8 @@ ScriptPromise IdleDetector::start(ScriptState* script_state,
   receiver_.set_disconnect_handler(WTF::BindOnce(
       &IdleDetector::OnMonitorDisconnected, WrapWeakPersistent(this)));
 
-  resolver_ = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  resolver_ = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver_->Promise();
   IdleManager::From(context)->AddMonitor(
       std::move(remote),
@@ -175,12 +184,7 @@ void IdleDetector::SetTaskRunnerForTesting(
   timer_.SetTaskRunnerForTesting(task_runner_, tick_clock);
 }
 
-void IdleDetector::Abort(AbortSignal* signal) {
-  // There is no RemoveAlgorithm() method on AbortSignal so compare the signal
-  // bound to this callback to the one last passed to start().
-  if (signal_ != signal)
-    return;
-
+void IdleDetector::Abort() {
   if (resolver_) {
     ScriptState* script_state = resolver_->GetScriptState();
     if (IsInParallelAlgorithmRunnable(resolver_->GetExecutionContext(),
@@ -189,10 +193,7 @@ void IdleDetector::Abort(AbortSignal* signal) {
       resolver_->Reject(signal_->reason(script_state));
     }
   }
-
-  resolver_ = nullptr;
-  has_state_ = false;
-  receiver_.reset();
+  Clear();
 }
 
 void IdleDetector::OnMonitorDisconnected() {
@@ -206,10 +207,7 @@ void IdleDetector::OnMonitorDisconnected() {
         resolver_->GetScriptState()->GetIsolate(),
         DOMExceptionCode::kNotSupportedError, "Idle detection not available."));
   }
-
-  resolver_ = nullptr;
-  has_state_ = false;
-  receiver_.reset();
+  Clear();
 }
 
 void IdleDetector::OnAddMonitor(ScriptPromiseResolver* resolver,
@@ -308,11 +306,27 @@ void IdleDetector::DispatchUserIdleEvent(TimerBase*) {
 void IdleDetector::Trace(Visitor* visitor) const {
   visitor->Trace(timer_);
   visitor->Trace(signal_);
+  visitor->Trace(abort_handle_);
   visitor->Trace(resolver_);
   visitor->Trace(receiver_);
-  EventTargetWithInlineData::Trace(visitor);
-  ExecutionContextClient::Trace(visitor);
+  EventTarget::Trace(visitor);
+  ExecutionContextLifecycleObserver::Trace(visitor);
   ActiveScriptWrappable::Trace(visitor);
+}
+
+void IdleDetector::ContextDestroyed() {
+  Clear();
+}
+
+void IdleDetector::Clear() {
+  if (abort_handle_) {
+    CHECK(signal_);
+    signal_->RemoveAlgorithm(abort_handle_);
+  }
+  resolver_ = nullptr;
+  abort_handle_ = nullptr;
+  has_state_ = false;
+  receiver_.reset();
 }
 
 }  // namespace blink

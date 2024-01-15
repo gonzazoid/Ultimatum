@@ -6,14 +6,13 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/notreached.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "ppapi/c/pp_completion_callback.h"
 #include "ppapi/c/pp_errors.h"
 #include "ppapi/c/ppb_message_loop.h"
@@ -267,7 +266,7 @@ void TrackedCallback::PostRunWithLock(int32_t result) {
       // classes protect against having a null target_loop_ otherwise).
       DCHECK(IsMainThread());
       DCHECK(PpapiGlobals::Get()->IsHostGlobals());
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, std::move(callback_closure));
     }
   }

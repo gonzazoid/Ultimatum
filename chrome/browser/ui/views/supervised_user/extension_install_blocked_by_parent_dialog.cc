@@ -6,7 +6,7 @@
 #include <utility>
 
 #include "chrome/browser/ui/extensions/extensions_dialogs.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/ui/vector_icons/vector_icons.h"
 #include "components/constrained_window/constrained_window_views.h"
@@ -37,17 +37,6 @@ std::u16string GetTitle(
           : IDS_EXTENSION_ENABLE_BLOCKED_BY_PARENT_PROMPT_TITLE;
   return l10n_util::GetStringFUTF16(title_id, extension_type);
 }
-
-std::u16string GetBodyText(
-    extensions::ExtensionInstalledBlockedByParentDialogAction action,
-    std::u16string extension_type) {
-  int body_id =
-      action == extensions::ExtensionInstalledBlockedByParentDialogAction::kAdd
-          ? IDS_EXTENSION_INSTALL_BLOCKED_BY_PARENT_PROMPT_MESSAGE
-          : IDS_EXTENSION_ENABLE_BLOCKED_BY_PARENT_PROMPT_MESSAGE;
-  return l10n_util::GetStringFUTF16(body_id, extension_type);
-}
-
 }  // namespace
 
 namespace extensions {
@@ -63,11 +52,13 @@ void ShowExtensionInstallBlockedByParentDialog(
   auto dialog_model =
       ui::DialogModel::Builder()
           .SetTitle(GetTitle(action, extension_type))
-          .SetIcon(ui::ImageModel::FromImageSkia(gfx::CreateVectorIcon(
-              chromeos::kNotificationSupervisedUserIcon, ui::kColorIcon)))
-          .AddParagraph(
-              ui::DialogModelLabel(GetBodyText(action, extension_type)))
-          .AddOkButton(base::DoNothing(), l10n_util::GetStringUTF16(IDS_OK))
+          .SetIcon(ui::ImageModel::FromVectorIcon(
+              chromeos::kNotificationSupervisedUserIcon, ui::kColorIcon))
+          .AddParagraph(ui::DialogModelLabel(l10n_util::GetStringUTF16(
+              IDS_EXTENSION_PERMISSIONS_BLOCKED_BY_PARENT_PROMPT_MESSAGE)))
+          .AddOkButton(base::DoNothing(),
+                       ui::DialogModel::Button::Params().SetLabel(
+                           l10n_util::GetStringUTF16(IDS_OK)))
           .SetDialogDestroyingCallback(std::move(done_callback))
           .Build();
 

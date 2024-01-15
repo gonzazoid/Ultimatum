@@ -8,7 +8,6 @@
 #include <memory>
 #include <utility>
 
-#include "base/metrics/histogram_functions.h"
 #include "components/schema_org/common/metadata.mojom-blink.h"
 #include "third_party/blink/public/mojom/document_metadata/document_metadata.mojom-blink.h"
 #include "third_party/blink/renderer/core/dom/document.h"
@@ -55,13 +54,18 @@ constexpr wtf_size_t kMaxRepeatedSize = 100;
 constexpr char kJSONLDKeyType[] = "@type";
 constexpr char kJSONLDKeyGraph[] = "@graph";
 bool IsSupportedType(AtomicString type) {
-  DEFINE_STATIC_LOCAL(HashSet<AtomicString>, elements,
-                      ({// Common types that include addresses.
-                        "AutoDealer", "Hotel", "LocalBusiness", "Organization",
-                        "Person", "Place", "PostalAddress", "Product",
-                        "Residence", "Restaurant", "SingleFamilyResidence",
-                        // Common types including phone numbers
-                        "Store", "ContactPoint", "LodgingBusiness"}));
+  DEFINE_STATIC_LOCAL(
+      HashSet<AtomicString>, elements,
+      ({// Common types that include addresses.
+        AtomicString("AutoDealer"), AtomicString("Hotel"),
+        AtomicString("LocalBusiness"), AtomicString("Organization"),
+        AtomicString("Person"), AtomicString("Place"),
+        AtomicString("PostalAddress"), AtomicString("Product"),
+        AtomicString("Residence"), AtomicString("Restaurant"),
+        AtomicString("SingleFamilyResidence"),
+        // Common types including phone numbers
+        AtomicString("Store"), AtomicString("ContactPoint"),
+        AtomicString("LodgingBusiness")}));
   return type && elements.Contains(type);
 }
 
@@ -270,7 +274,9 @@ ExtractionStatus ExtractMetadata(const Element& root,
     if (element.HasTagName(html_names::kScriptTag) &&
         element.FastGetAttribute(html_names::kTypeAttr) ==
             "application/ld+json") {
-      std::unique_ptr<JSONValue> json = ParseJSON(element.textContent());
+      // TODO(crbug.com/1264024): Deprecate JSON comments here, if possible.
+      std::unique_ptr<JSONValue> json =
+          ParseJSONWithCommentsDeprecated(element.textContent());
       if (!json) {
         LOG(ERROR) << "Failed to parse json.";
         return ExtractionStatus::kParseFailure;
@@ -309,21 +315,10 @@ WebPagePtr DocumentMetadataExtractor::Extract(const Document& document) {
   WebPagePtr page = WebPage::New();
 
   // Traverse the DOM tree and extract the metadata.
-  base::TimeTicks start_time = base::TimeTicks::Now();
   ExtractionStatus status = ExtractMetadata(*html, page->entities);
-  base::TimeDelta elapsed_time = base::TimeTicks::Now() - start_time;
-
-  base::UmaHistogramEnumeration("CopylessPaste.ExtractionStatus", status);
-
   if (status != ExtractionStatus::kOK) {
-    base::UmaHistogramCustomMicrosecondsTimes(
-        "CopylessPaste.ExtractionFailedUs", elapsed_time, base::Microseconds(1),
-        base::Seconds(1), 50);
     return nullptr;
   }
-  base::UmaHistogramCustomMicrosecondsTimes("CopylessPaste.ExtractionUs",
-                                            elapsed_time, base::Microseconds(1),
-                                            base::Seconds(1), 50);
 
   page->url = document.Url();
   page->title = document.title();

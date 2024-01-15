@@ -7,13 +7,13 @@
 #include <memory>
 #include <string>
 
-#include "ash/services/device_sync/proto/cryptauth_api.pb.h"
 #include "base/strings/string_util.h"
 #include "base/test/simple_test_clock.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/multidevice/beacon_seed.h"
 #include "chromeos/ash/components/multidevice/remote_device_ref.h"
 #include "chromeos/ash/components/multidevice/remote_device_test_util.h"
+#include "chromeos/ash/services/device_sync/proto/cryptauth_api.pb.h"
 #include "chromeos/ash/services/secure_channel/data_with_timestamp.h"
 #include "chromeos/ash/services/secure_channel/raw_eid_generator_impl.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -38,9 +38,6 @@ const std::string kFirstSeed = "firstSeed";
 const std::string kSecondSeed = "secondSeed";
 const std::string kThirdSeed = "thirdSeed";
 const std::string kFourthSeed = "fourthSeed";
-
-const std::string kDeviceId1 = "deviceId1";
-const std::string kDeviceId2 = "deviceId2";
 
 cryptauth::BeaconSeed CreateBeaconSeed(const std::string& data,
                                        const int64_t start_timestamp_ms,
@@ -231,8 +228,8 @@ TEST_F(SecureChannelBackgroundEidGeneratorTest,
 
 // Test the case where the account has other devices, but their beacon seeds
 // don't match the incoming advertisement. |beacon_seeds_[0]| corresponds to
-// |kDeviceId1|. Since |kDeviceId1| is not present in the device ids passed to
-// IdentifyRemoteDeviceByAdvertisement(), no match is
+// |test_remote_devices_[1]|. Since |test_remote_devices_[1]| is not present in
+// the device ids passed to IdentifyRemoteDeviceByAdvertisement(), no match is
 // expected to be found.
 TEST_F(SecureChannelBackgroundEidGeneratorTest,
        IdentifyRemoteDeviceByAdvertisement_NoMatchingRemoteDevices) {

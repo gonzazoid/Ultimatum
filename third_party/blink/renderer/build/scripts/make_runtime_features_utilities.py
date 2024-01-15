@@ -96,6 +96,31 @@ def browser_read_access(features):
         or f['browser_process_read_write_access']
     ]
 
+def browser_read_access_with_third_party(features):
+    return [
+        f for f in features if (f['browser_process_read_access']
+                                or f['browser_process_read_write_access'])
+        and f['origin_trial_allows_third_party']
+    ]
+
 
 def browser_write_access(features):
     return [f for f in features if f['browser_process_read_write_access']]
+
+def overridable_features(features):
+    """
+    Returns a deduplicate list of features that runtime feature state needs to
+    keep track of (see runtime_feature_state_override_context).
+
+    The features are usually origin trials that involves browser components
+    (e.g. persisted storage) or browser controlled features (e.g. Blink
+    extensions).
+    """
+    feature_list = browser_read_access(features)
+    seen = set()
+    final_list = []
+    for f in feature_list:
+        if f['name'] not in seen:
+            seen.add(f['name'])
+            final_list.append(f)
+    return final_list

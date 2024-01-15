@@ -4,9 +4,10 @@
 
 #include "content/browser/renderer_host/media/service_video_capture_device_launcher.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/mock_callback.h"
 #include "base/threading/thread.h"
 #include "content/browser/renderer_host/media/ref_counted_video_source_provider.h"
@@ -169,7 +170,7 @@ TEST_F(ServiceVideoCaptureDeviceLauncherTest, LaunchingDeviceSucceeds) {
   launcher_->LaunchDeviceAsync(
       kStubDeviceId, blink::mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE,
       kArbitraryParams, kNullReceiver, connection_lost_cb_.Get(),
-      &mock_callbacks_, done_cb_.Get());
+      &mock_callbacks_, done_cb_.Get(), {});
   wait_for_done_cb.Run();
 
   launcher_.reset();
@@ -251,7 +252,7 @@ void ServiceVideoCaptureDeviceLauncherTest::RunLaunchingDeviceIsAbortedTest(
   launcher_->LaunchDeviceAsync(
       kStubDeviceId, blink::mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE,
       kArbitraryParams, kNullReceiver, connection_lost_cb_.Get(),
-      &mock_callbacks_, done_cb_.Get());
+      &mock_callbacks_, done_cb_.Get(), {});
   step_1_run_loop.Run();
   launcher_->AbortLaunch();
 
@@ -281,7 +282,7 @@ TEST_F(ServiceVideoCaptureDeviceLauncherTest,
                  callback) {
             // Note: We post this to the end of the message queue to make it
             // asynchronous.
-            base::ThreadTaskRunnerHandle::Get()->PostTask(
+            base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                 FROM_HERE,
                 base::BindOnce(
                     [](mojo::PendingRemote<
@@ -317,7 +318,7 @@ TEST_F(ServiceVideoCaptureDeviceLauncherTest,
   launcher_->LaunchDeviceAsync(
       kStubDeviceId, blink::mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE,
       kArbitraryParams, kNullReceiver, connection_lost_cb_.Get(),
-      &mock_callbacks_, done_cb_.Get());
+      &mock_callbacks_, done_cb_.Get(), {});
   run_loop.Run();
 }
 
@@ -339,7 +340,7 @@ TEST_F(ServiceVideoCaptureDeviceLauncherTest,
   launcher_->LaunchDeviceAsync(
       kStubDeviceId, blink::mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE,
       kArbitraryParams, kNullReceiver, connection_lost_cb_.Get(),
-      &mock_callbacks_, done_cb_.Get());
+      &mock_callbacks_, done_cb_.Get(), {});
 
   run_loop.Run();
 }
@@ -381,7 +382,7 @@ TEST_F(ServiceVideoCaptureDeviceLauncherTest,
   launcher_->LaunchDeviceAsync(
       kStubDeviceId, blink::mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE,
       kArbitraryParams, kNullReceiver, connection_lost_cb_.Get(),
-      &mock_callbacks_, done_cb_.Get());
+      &mock_callbacks_, done_cb_.Get(), {});
 
   run_loop.Run();
 
@@ -432,7 +433,7 @@ void ServiceVideoCaptureDeviceLauncherTest::
   launcher_->LaunchDeviceAsync(
       kStubDeviceId, blink::mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE,
       kArbitraryParams, kNullReceiver, connection_lost_cb_.Get(),
-      &mock_callbacks_, done_cb_.Get());
+      &mock_callbacks_, done_cb_.Get(), {});
   step_1_run_loop.Run();
 
   base::RunLoop step_2_run_loop;

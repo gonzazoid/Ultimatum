@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "base/json/json_reader.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/values.h"
 
 namespace sandbox {
@@ -23,14 +24,14 @@ namespace {
 static void ConvertToValuesAndRespond(
     std::unique_ptr<PolicyList> policies,
     base::OnceCallback<void(base::Value)> response) {
-  base::Value policy_values(base::Value::Type::LIST);
+  base::Value::List policy_values;
   for (auto&& item : *policies) {
     auto snapshot = base::JSONReader::ReadAndReturnValueWithError(
         item->JsonString(), base::JSON_PARSE_RFC);
     CHECK(snapshot.has_value());
     policy_values.Append(std::move(*snapshot));
   }
-  std::move(response).Run(std::move(policy_values));
+  std::move(response).Run(base::Value(std::move(policy_values)));
 }
 
 // Runs on a non-sandbox thread to ensure that response callback is not

@@ -82,7 +82,9 @@ class ClassPropertyValueSetter : public PropertySetterBase {
   }
 
  private:
-  const ui::ClassProperty<TValue>* property_;
+  // This field is not a raw_ptr<> because of compiler error when passed to
+  // templated param T*.
+  RAW_PTR_EXCLUSION const ui::ClassProperty<TValue>* property_;
   TValue value_;
 };
 
@@ -132,14 +134,14 @@ template <typename TClass, typename TSig, TSig Set, typename... Args>
 class ClassMethodCaller : public PropertySetterBase {
  public:
   explicit ClassMethodCaller(Args... args)
-      : args_(std::make_tuple<Args...>(std::forward<Args>(args)...)) {}
+      : args_(std::make_tuple<Args...>(std::move(args)...)) {}
   ClassMethodCaller(const ClassMethodCaller&) = delete;
   ClassMethodCaller& operator=(const ClassMethodCaller&) = delete;
   ~ClassMethodCaller() override = default;
 
   void SetProperty(View* obj) override {
-    std::apply(
-        Set, std::tuple_cat(std::make_tuple(static_cast<TClass*>(obj)), args_));
+    std::apply(Set, std::tuple_cat(std::make_tuple(static_cast<TClass*>(obj)),
+                                   std::move(args_)));
   }
 
  private:

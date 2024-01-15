@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/feature_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
@@ -115,7 +116,8 @@ class PLATFORM_EXPORT MainThreadEventQueue
                    mojom::blink::InputEventResultState ack_result,
                    const WebInputEventAttribution& attribution,
                    std::unique_ptr<cc::EventMetrics> metrics,
-                   HandledEventCallback handled_callback);
+                   HandledEventCallback handled_callback,
+                   bool allow_main_gesture_scroll = false);
   void DispatchRafAlignedInput(base::TimeTicks frame_time);
   void QueueClosure(base::OnceClosure closure);
 
@@ -137,8 +139,13 @@ class PLATFORM_EXPORT MainThreadEventQueue
       mojom::blink::InputEventResultState ack_state) {
     return ack_state == mojom::blink::InputEventResultState::kNotConsumed ||
            ack_state ==
+               mojom::blink::InputEventResultState::kNotConsumedBlocking ||
+           ack_state ==
                mojom::blink::InputEventResultState::kSetNonBlockingDueToFling;
   }
+
+  // Acquires a lock but use is restricted to tests.
+  bool IsEmptyForTesting();
 
  protected:
   friend class base::RefCountedThreadSafe<MainThreadEventQueue>;
@@ -168,7 +175,7 @@ class PLATFORM_EXPORT MainThreadEventQueue
   friend class QueuedWebInputEvent;
   friend class MainThreadEventQueueTest;
   friend class MainThreadEventQueueInitializationTest;
-  MainThreadEventQueueClient* client_;
+  raw_ptr<MainThreadEventQueueClient, ExperimentalRenderer> client_;
   bool last_touch_start_forced_nonblocking_due_to_fling_;
   bool needs_low_latency_;
   bool needs_unbuffered_input_for_debugger_;
@@ -201,6 +208,16 @@ class PLATFORM_EXPORT MainThreadEventQueue
   std::unique_ptr<base::OneShotTimer> raf_fallback_timer_;
 
   std::unique_ptr<InputEventPrediction> event_predictor_;
+
+ private:
+  // Returns false if we are trying to send a gesture scroll event to the main
+  // thread when we shouldn't be.  Used for DCHECK in HandleEvent.
+  bool Allowed(const WebInputEvent& event, bool force_allow);
+
+  // Tracked here for DCHECK purposes only.  For cursor control we allow gesture
+  // scroll events to go to main.  See CursorControlHandler (impl-side filter)
+  // and WebFrameWidgetImpl::WillHandleGestureEvent (main thread consumer).
+  bool cursor_control_in_progress_ = false;
 };
 
 }  // namespace blink

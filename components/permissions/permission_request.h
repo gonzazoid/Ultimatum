@@ -7,12 +7,15 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/content_settings/core/common/content_settings_types.h"
+#include "components/permissions/permission_request_data.h"
 #include "components/permissions/permission_request_enums.h"
 #include "components/permissions/request_type.h"
+#include "content/public/browser/global_routing_id.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
@@ -37,7 +40,9 @@ class PermissionRequest {
   // If `is_one_time` is true, the decision will last until all tabs of
   // `requesting_origin_` are closed or navigated away from.
   using PermissionDecidedCallback =
-      base::OnceCallback<void(ContentSetting /*result*/, bool /*is_one_time*/)>;
+      base::RepeatingCallback<void(ContentSetting /*result*/,
+                                   bool /*is_one_time*/,
+                                   bool /*is_final_decision*/)>;
 
   // `permission_decided_callback` is called when the permission request is
   // resolved by the user (see comment on PermissionDecidedCallback above).
@@ -54,6 +59,10 @@ class PermissionRequest {
                     PermissionDecidedCallback permission_decided_callback,
                     base::OnceClosure delete_callback);
 
+  PermissionRequest(PermissionRequestData request_data,
+                    PermissionDecidedCallback permission_decided_callback,
+                    base::OnceClosure delete_callback);
+
   PermissionRequest(const PermissionRequest&) = delete;
   PermissionRequest& operator=(const PermissionRequest&) = delete;
 
@@ -61,15 +70,17 @@ class PermissionRequest {
     LOUD_REQUEST,
     QUIET_REQUEST,
     ALLOW_CONFIRMATION,
+    ALLOW_ONCE_CONFIRMATION,
     BLOCKED_CONFIRMATION,
     ACCESSIBILITY_ALLOWED_CONFIRMATION,
+    ACCESSIBILITY_ALLOWED_ONCE_CONFIRMATION,
     ACCESSIBILITY_BLOCKED_CONFIRMATION
   };
 
   virtual ~PermissionRequest();
 
-  GURL requesting_origin() const { return requesting_origin_; }
-  RequestType request_type() const { return request_type_; }
+  GURL requesting_origin() const { return data_.requesting_origin; }
+  RequestType request_type() const;
 
   // Whether |this| and |other_request| are duplicates and therefore don't both
   // need to be shown in the UI.
@@ -79,6 +90,9 @@ class PermissionRequest {
   // Returns prompt text appropriate for displaying in an Android dialog.
   virtual std::u16string GetDialogMessageText() const;
 #endif
+
+  // Returns a weak pointer to this instance.
+  base::WeakPtr<PermissionRequest> GetWeakPtr();
 
 #if !BUILDFLAG(IS_ANDROID)
   // Returns whether displaying a confirmation chip for the request is
@@ -102,6 +116,20 @@ class PermissionRequest {
   virtual std::u16string GetMessageTextFragment() const;
 #endif
 
+  // Returns the text to be used in the "allow always" button of the
+  // permission prompt.
+  // If not provided, the generic text for this button will be used instead.
+  // The default implementation returns std::nullopt (ie, use generic text).
+  virtual std::optional<std::u16string> GetAllowAlwaysText() const;
+
+  // Whether the request was initiated by the user clicking on the permission
+  // element.
+  bool IsEmbeddedPermissionElementInitiated() const;
+
+  // Returns true if the request has two origins and should use the two origin
+  // prompt. Returns false otherwise.
+  bool ShouldUseTwoOriginPrompt() const;
+
   // Called when the user has granted the requested permission.
   // If |is_one_time| is true the permission will last until all tabs of
   // |origin| are closed or navigated away from, and then the permission will
@@ -114,7 +142,7 @@ class PermissionRequest {
   // Called when the user has cancelled the permission request. This
   // corresponds to a denial, but is segregated in case the context needs to
   // be able to distinguish between an active refusal or an implicit refusal.
-  void Cancelled();
+  void Cancelled(bool is_final_decision = true);
 
   // The UI this request was associated with was answered by the user.
   // It is safe for the request to be deleted at this point -- it will receive
@@ -130,19 +158,33 @@ class PermissionRequest {
   // request types.
   PermissionRequestGestureType GetGestureType() const;
 
+  const std::vector<std::string>& GetRequestedAudioCaptureDeviceIds() const;
+  const std::vector<std::string>& GetRequestedVideoCaptureDeviceIds() const;
+
   // Used on Android to determine what Android OS permissions are needed for
   // this permission request.
   ContentSettingsType GetContentSettingsType() const;
 
+  void set_requesting_frame_id(content::GlobalRenderFrameHostId id) {
+    data_.id.set_global_render_frame_host_id(id);
+  }
+
+  const content::GlobalRenderFrameHostId& get_requesting_frame_id() {
+    return data_.id.global_render_frame_host_id();
+  }
+
+  // Permission name text fragment which can be used in permission prompts to
+  // identify the permission being requested.
+  virtual std::u16string GetPermissionNameTextFragment() const;
+
+ protected:
+  // Sets whether this request is permission element initiated, for testing
+  // subclasses only.
+  void SetEmbeddedPermissionElementInitiatedForTesting(
+      bool embedded_permission_element_initiated);
+
  private:
-  // The origin on whose behalf this permission request is being made.
-  GURL requesting_origin_;
-
-  // The type of this request.
-  RequestType request_type_;
-
-  // Whether the request was associated with a user gesture.
-  bool has_gesture_;
+  PermissionRequestData data_;
 
   // Called once a decision is made about the permission.
   PermissionDecidedCallback permission_decided_callback_;
@@ -150,6 +192,8 @@ class PermissionRequest {
   // Called when the request is no longer in use so it can be deleted by the
   // caller.
   base::OnceClosure delete_callback_;
+
+  base::WeakPtrFactory<PermissionRequest> weak_factory_{this};
 };
 
 }  // namespace permissions

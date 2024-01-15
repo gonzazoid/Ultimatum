@@ -20,12 +20,12 @@ import android.content.res.Configuration;
 import android.graphics.Rect;
 import android.os.Build;
 import android.os.Bundle;
-import android.support.test.InstrumentationRegistry;
 import android.util.Rational;
 import android.view.View;
 
 import androidx.annotation.RequiresApi;
 import androidx.test.filters.MediumTest;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.hamcrest.Matchers;
 import org.junit.After;
@@ -54,29 +54,28 @@ import org.chromium.content_public.browser.overlay_window.PlaybackState;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.content_public.browser.test.util.WebContentsUtils;
 import org.chromium.media_session.mojom.MediaSessionAction;
+import org.chromium.ui.test.util.DeviceRestriction;
 
 import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeoutException;
 
-/**
- * Tests for PictureInPictureActivity.
- */
+/** Tests for PictureInPictureActivity. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @Batch(Batch.PER_CLASS)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
+@Restriction(DeviceRestriction.RESTRICTION_TYPE_NON_AUTO)
 @RequiresApi(Build.VERSION_CODES.O)
 public class PictureInPictureActivityTest {
     @Rule
     public ChromeTabbedActivityTestRule mActivityTestRule = new ChromeTabbedActivityTestRule();
-    @Rule
-    public JniMocker mMocker = new JniMocker();
+
+    @Rule public JniMocker mMocker = new JniMocker();
 
     private static final long NATIVE_OVERLAY = 100L;
     private static final long PIP_TIMEOUT_MILLISECONDS = 10000L;
 
-    @Mock
-    private PictureInPictureActivity.Natives mNativeMock;
+    @Mock private PictureInPictureActivity.Natives mNativeMock;
 
     private Tab mTab;
 
@@ -163,10 +162,11 @@ public class PictureInPictureActivityTest {
     public void testExitOnBackToTab() throws Throwable {
         PictureInPictureActivity activity = startPictureInPictureActivity();
         Configuration newConfig = activity.getResources().getConfiguration();
-        testExitOn(activity,
-                ()
-                        -> activity.onPictureInPictureModeChanged(
-                                /*isInPictureInPictureMode=*/false, newConfig));
+        testExitOn(
+                activity,
+                () ->
+                        activity.onPictureInPictureModeChanged(
+                                /* isInPictureInPictureMode= */ false, newConfig));
         verify(mNativeMock, times(1)).onBackToTab(NATIVE_OVERLAY);
     }
 
@@ -218,6 +218,17 @@ public class PictureInPictureActivityTest {
         Assert.assertEquals(actions.size(), 3);
         Assert.assertEquals(actions.get(0), manager.mPreviousTrack);
         Assert.assertEquals(actions.get(2), manager.mNextTrack);
+        Assert.assertTrue(actions.get(0).isEnabled());
+        Assert.assertFalse(actions.get(2).isEnabled());
+
+        // Both next slide and previous slide button should be visible when only one of them is
+        // enabled. The one that is not handled should be visible and disabled.
+        activity.updateVisibleActions(
+                new int[] {MediaSessionAction.PLAY, MediaSessionAction.PREVIOUS_SLIDE});
+        actions = manager.getActionsForPictureInPictureParams();
+        Assert.assertEquals(actions.size(), 3);
+        Assert.assertEquals(actions.get(0), manager.mPreviousSlide);
+        Assert.assertEquals(actions.get(2), manager.mNextSlide);
         Assert.assertTrue(actions.get(0).isEnabled());
         Assert.assertFalse(actions.get(2).isEnabled());
 
@@ -297,28 +308,46 @@ public class PictureInPictureActivityTest {
         testExitOn(activity, () -> activity.close());
     }
 
+    @Test
+    @MediumTest
+    @MinAndroidSdkLevel(Build.VERSION_CODES.O)
+    @Restriction(RESTRICTION_TYPE_NON_LOW_END_DEVICE)
+    public void testNotifyNativeWhenTabClose() throws Throwable {
+        PictureInPictureActivity activity = startPictureInPictureActivity();
+        testExitOn(activity, () -> mTab.setClosing(/* closing= */ true));
+        verify(mNativeMock, times(1)).destroy(NATIVE_OVERLAY);
+    }
+
     private WebContents getWebContents() {
         return mActivityTestRule.getActivity().getCurrentWebContents();
     }
 
     private void testExitOn(Activity activity, Runnable runnable) throws Throwable {
-        runnable.run();
+        TestThreadUtils.runOnUiThreadBlocking(() -> runnable.run());
 
-        CriteriaHelper.pollUiThread(() -> {
-            Criteria.checkThat(activity == null || activity.isDestroyed(), Matchers.is(true));
-        }, PIP_TIMEOUT_MILLISECONDS, CriteriaHelper.DEFAULT_POLLING_INTERVAL);
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    Criteria.checkThat(
+                            activity == null || activity.isDestroyed(), Matchers.is(true));
+                },
+                PIP_TIMEOUT_MILLISECONDS,
+                CriteriaHelper.DEFAULT_POLLING_INTERVAL);
     }
 
     private PictureInPictureActivity startPictureInPictureActivity() throws Exception {
         PictureInPictureActivity activity =
-                ActivityTestUtils.waitForActivity(InstrumentationRegistry.getInstrumentation(),
-                        PictureInPictureActivity.class, new Callable<Void>() {
+                ActivityTestUtils.waitForActivity(
+                        InstrumentationRegistry.getInstrumentation(),
+                        PictureInPictureActivity.class,
+                        new Callable<Void>() {
                             @Override
                             public Void call() throws TimeoutException {
                                 TestThreadUtils.runOnUiThreadBlocking(
-                                        ()
-                                                -> PictureInPictureActivity.createActivity(
-                                                        NATIVE_OVERLAY, mTab, mSourceRectHint.left,
+                                        () ->
+                                                PictureInPictureActivity.createActivity(
+                                                        NATIVE_OVERLAY,
+                                                        mTab,
+                                                        mSourceRectHint.left,
                                                         mSourceRectHint.top,
                                                         mSourceRectHint.width(),
                                                         mSourceRectHint.height()));
@@ -329,12 +358,16 @@ public class PictureInPictureActivityTest {
         verify(mNativeMock, timeout(500).times(1))
                 .onActivityStart(eq(NATIVE_OVERLAY), eq(activity), any());
 
-        CriteriaHelper.pollUiThread(() -> {
-            Criteria.checkThat(activity.isInPictureInPictureMode(), Matchers.is(true));
-        }, PIP_TIMEOUT_MILLISECONDS, CriteriaHelper.DEFAULT_POLLING_INTERVAL);
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    Criteria.checkThat(activity.isInPictureInPictureMode(), Matchers.is(true));
+                },
+                PIP_TIMEOUT_MILLISECONDS,
+                CriteriaHelper.DEFAULT_POLLING_INTERVAL);
 
         Rational ratio = activity.getAspectRatio();
-        Criteria.checkThat(ratio,
+        Criteria.checkThat(
+                ratio,
                 Matchers.is(new Rational(mSourceRectHint.width(), mSourceRectHint.height())));
 
         return activity;

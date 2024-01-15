@@ -5,8 +5,8 @@
 #include "components/desks_storage/core/desk_model_wrapper.h"
 
 #include "ash/public/cpp/desk_template.h"
-#include "base/guid.h"
-#include "base/logging.h"
+#include "base/memory/raw_ptr.h"
+#include "base/uuid.h"
 #include "components/account_id/account_id.h"
 #include "components/desks_storage/core/desk_model.h"
 #include "desk_sync_bridge.h"
@@ -35,10 +35,12 @@ DeskModel::GetAllEntriesResult DeskModelWrapper::GetAllEntries() {
     return save_and_recall_result;
   }
 
-  std::vector<const ash::DeskTemplate*>& all_entries = templates_result.entries;
+  std::vector<raw_ptr<const ash::DeskTemplate, VectorExperimental>>&
+      all_entries = templates_result.entries;
 
-  for (auto* const entry : save_and_recall_result.entries)
+  for (const ash::DeskTemplate* const entry : save_and_recall_result.entries) {
     all_entries.push_back(entry);
+  }
 
   for (const auto& it : policy_entries_)
     all_entries.push_back(it.get());
@@ -48,7 +50,7 @@ DeskModel::GetAllEntriesResult DeskModelWrapper::GetAllEntries() {
 }
 
 DeskModel::GetEntryByUuidResult DeskModelWrapper::GetEntryByUUID(
-    const base::GUID& uuid) {
+    const base::Uuid& uuid) {
   // Check if this is an admin template uuid first.
   std::unique_ptr<ash::DeskTemplate> policy_entry =
       GetAdminDeskTemplateByUUID(uuid);
@@ -68,16 +70,25 @@ DeskModel::GetEntryByUuidResult DeskModelWrapper::GetEntryByUUID(
 void DeskModelWrapper::AddOrUpdateEntry(
     std::unique_ptr<ash::DeskTemplate> new_entry,
     DeskModel::AddOrUpdateEntryCallback callback) {
-  if (new_entry->type() == ash::DeskTemplateType::kTemplate) {
-    GetDeskTemplateModel()->AddOrUpdateEntry(std::move(new_entry),
-                                             std::move(callback));
-  } else {
-    save_and_recall_desks_model_->AddOrUpdateEntry(std::move(new_entry),
-                                                   std::move(callback));
+  switch (new_entry->type()) {
+    case ash::DeskTemplateType::kTemplate:
+    case ash::DeskTemplateType::kFloatingWorkspace:
+      GetDeskTemplateModel()->AddOrUpdateEntry(std::move(new_entry),
+                                               std::move(callback));
+      return;
+    case ash::DeskTemplateType::kSaveAndRecall:
+      save_and_recall_desks_model_->AddOrUpdateEntry(std::move(new_entry),
+                                                     std::move(callback));
+      return;
+    // Return kInvalidArgument on an unknown desk type.
+    case ash::DeskTemplateType::kUnknown:
+      std::move(callback).Run(AddOrUpdateEntryStatus::kInvalidArgument,
+                              std::move(new_entry));
+      return;
   }
 }
 
-void DeskModelWrapper::DeleteEntry(const base::GUID& uuid,
+void DeskModelWrapper::DeleteEntry(const base::Uuid& uuid,
                                    DeskModel::DeleteEntryCallback callback) {
   auto status = std::make_unique<DeskModel::DeleteEntryStatus>();
   if (GetDeskTemplateModel()->HasUuid(uuid)) {
@@ -115,10 +126,6 @@ size_t DeskModelWrapper::GetDeskTemplateEntryCount() const {
          policy_entries_.size();
 }
 
-size_t DeskModelWrapper::GetMaxEntryCount() const {
-  return GetMaxSaveAndRecallDeskEntryCount() + GetMaxDeskTemplateEntryCount();
-}
-
 size_t DeskModelWrapper::GetMaxSaveAndRecallDeskEntryCount() const {
   return save_and_recall_desks_model_->GetMaxSaveAndRecallDeskEntryCount();
 }
@@ -128,20 +135,20 @@ size_t DeskModelWrapper::GetMaxDeskTemplateEntryCount() const {
          policy_entries_.size();
 }
 
-std::vector<base::GUID> DeskModelWrapper::GetAllEntryUuids() const {
-  std::vector<base::GUID> keys;
+std::set<base::Uuid> DeskModelWrapper::GetAllEntryUuids() const {
+  std::set<base::Uuid> keys;
 
   for (const auto& it : policy_entries_)
-    keys.push_back(it.get()->uuid());
+    keys.emplace(it.get()->uuid());
 
   for (const auto& save_and_recall_uuid :
        save_and_recall_desks_model_->GetAllEntryUuids()) {
-    keys.emplace_back(save_and_recall_uuid);
+    keys.emplace(save_and_recall_uuid);
   }
 
   for (const auto& desk_template_uuid :
        GetDeskTemplateModel()->GetAllEntryUuids()) {
-    keys.emplace_back(desk_template_uuid);
+    keys.emplace(desk_template_uuid);
   }
   return keys;
 }
@@ -158,15 +165,22 @@ bool DeskModelWrapper::IsSyncing() const {
 ash::DeskTemplate* DeskModelWrapper::FindOtherEntryWithName(
     const std::u16string& name,
     ash::DeskTemplateType type,
-    const base::GUID& uuid) const {
-  if (type == ash::DeskTemplateType::kTemplate) {
-    return GetDeskTemplateModel()->FindOtherEntryWithName(name, type, uuid);
-  } else {
-    return save_and_recall_desks_model_->FindOtherEntryWithName(name, type,
-                                                                uuid);
+    const base::Uuid& uuid) const {
+  switch (type) {
+    case ash::DeskTemplateType::kTemplate:
+    case ash::DeskTemplateType::kFloatingWorkspace:
+      return GetDeskTemplateModel()->FindOtherEntryWithName(name, type, uuid);
+    case ash::DeskTemplateType::kSaveAndRecall:
+      return save_and_recall_desks_model_->FindOtherEntryWithName(name, type,
+                                                                  uuid);
+    case ash::DeskTemplateType::kUnknown:
+      return nullptr;
   }
 }
 
+std::string DeskModelWrapper::GetCacheGuid() {
+  return GetDeskTemplateModel()->GetCacheGuid();
+}
 desks_storage::DeskSyncBridge* DeskModelWrapper::GetDeskTemplateModel() const {
   DCHECK(desk_template_model_);
   return desk_template_model_;

@@ -17,6 +17,10 @@
 
 namespace caspian {
 
+namespace {
+constexpr const char kNoPath[] = "(No path)";
+}  // namespace
+
 Container::Container(const std::string& name_in) : name(name_in) {}
 Container::~Container() = default;
 Container::Container(const Container& other) = default;
@@ -51,14 +55,14 @@ void Symbol::DeriveNames() const {
              IsOther()) {
     template_name_ = full_name_;
     name_ = full_name_;
+  } else if (IsStringLiteral()) {
+    template_name_ = full_name_;
+    name_ = full_name_;
   } else if (IsDex()) {
     std::tuple<std::string_view, std::string_view, std::string_view>
         parsed_names = ParseJava(full_name_, &size_info_->owned_strings);
     template_name_ = std::get<1>(parsed_names);
     name_ = std::get<2>(parsed_names);
-  } else if (IsStringLiteral()) {
-    template_name_ = full_name_;
-    name_ = full_name_;
   } else if (IsNative()) {
     std::tuple<std::string_view, std::string_view, std::string_view>
         parsed_names = ParseCpp(full_name_, &size_info_->owned_strings);
@@ -110,6 +114,15 @@ const char* Symbol::ObjectPath() const {
 }
 const char* Symbol::SourcePath() const {
   return source_path_;
+}
+const char* Symbol::GroupingPath() const {
+  if (source_path_ && *source_path_) {
+    return source_path_;
+  }
+  if (object_path_ && *object_path_) {
+    return object_path_;
+  }
+  return kNoPath;
 }
 const char* Symbol::SectionName() const {
   return section_name_;
@@ -230,6 +243,10 @@ const char* DeltaSymbol::SourcePath() const {
   return (after_ ? after_ : before_)->SourcePath();
 }
 
+const char* DeltaSymbol::GroupingPath() const {
+  return (after_ ? after_ : before_)->GroupingPath();
+}
+
 const char* DeltaSymbol::SectionName() const {
   return (after_ ? after_ : before_)->SectionName();
 }
@@ -291,7 +308,9 @@ DiffStatus DeltaSymbol::GetDiffStatus() const {
   return DiffStatus::kUnchanged;
 }
 
-TreeNode::TreeNode() = default;
+TreeNode::TreeNode(ArtifactType artifact_type_in, int32_t id_in)
+    : artifact_type(artifact_type_in), id(id_in) {}
+
 TreeNode::~TreeNode() {
   // TODO(jaspercb): Could use custom allocator to delete all nodes in one go.
   for (TreeNode* child : children) {
@@ -337,6 +356,8 @@ SectionId BaseSizeInfo::ShortSectionName(const char* section_name) {
       ret = SectionId::kPakNontranslated;
     } else if (!strcmp(section_name, ".pak.translations")) {
       ret = SectionId::kPakTranslations;
+    } else if (!strcmp(section_name, ".arsc")) {
+      ret = SectionId::kArsc;
     } else {
       std::cerr << "Attributing unrecognized section name to .other: "
                 << section_name << std::endl;
@@ -353,8 +374,14 @@ bool SizeInfo::IsSparse() const {
   return is_sparse;
 }
 
-DeltaSizeInfo::DeltaSizeInfo(const SizeInfo* before, const SizeInfo* after)
-    : before(before), after(after) {}
+DeltaSizeInfo::DeltaSizeInfo(const SizeInfo* before_in,
+                             const SizeInfo* after_in,
+                             const std::vector<std::string>* removed_sources_in,
+                             const std::vector<std::string>* added_sources_in)
+    : before(before_in),
+      after(after_in),
+      removed_sources(removed_sources_in),
+      added_sources(added_sources_in) {}
 
 DeltaSizeInfo::~DeltaSizeInfo() = default;
 DeltaSizeInfo::DeltaSizeInfo(const DeltaSizeInfo&) = default;
@@ -370,6 +397,7 @@ void TreeNode::WriteIntoJson(
         compare_func,
     int depth,
     Json::Value* out) {
+  (*out)["id"] = id;
   if (symbol) {
     (*out)["container"] = std::string(symbol->ContainerName());
     (*out)["helpme"] = std::string(symbol->Name());
@@ -392,7 +420,12 @@ void TreeNode::WriteIntoJson(
     }
   } else {
     (*out)["idPath"] = id_path.ToString();
-    if (!opts.is_sparse && !children.empty()) {
+    if (opts.is_sparse) {
+      if (node_stats.imposed_diff_status != DiffStatus::kUnchanged) {
+        (*out)["diffStatus"] =
+            static_cast<uint8_t>(node_stats.imposed_diff_status);
+      }
+    } else if (!children.empty()) {
       // Add tag to containers in which all child symbols were added/removed.
       DiffStatus diff_status = node_stats.GetGlobalDiffStatus();
       if (diff_status != DiffStatus::kUnchanged) {
@@ -535,4 +568,12 @@ DiffStatus NodeStats::GetGlobalDiffStatus() const {
   }
   return DiffStatus::kUnchanged;
 }
+
+TreeNodeFactory::TreeNodeFactory() = default;
+TreeNodeFactory::~TreeNodeFactory() = default;
+
+TreeNode* TreeNodeFactory::Make(ArtifactType artifact_type) {
+  return new TreeNode(artifact_type, next_id++);
+}
+
 }  // namespace caspian

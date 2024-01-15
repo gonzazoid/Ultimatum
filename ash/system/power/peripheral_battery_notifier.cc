@@ -16,8 +16,9 @@
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/model/system_tray_model.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
@@ -60,7 +61,7 @@ struct NotificationParams {
   std::u16string message;
   std::string notifier_name;
   GURL url;
-  const gfx::VectorIcon* icon;
+  raw_ptr<const gfx::VectorIcon> icon;
 };
 
 NotificationParams GetNonStylusNotificationParams(const std::string& map_key,
@@ -96,7 +97,7 @@ const char PeripheralBatteryNotifier::kStylusNotificationId[] =
 PeripheralBatteryNotifier::NotificationInfo::NotificationInfo() = default;
 
 PeripheralBatteryNotifier::NotificationInfo::NotificationInfo(
-    absl::optional<uint8_t> level,
+    std::optional<uint8_t> level,
     base::TimeTicks last_notification_timestamp)
     : level(level),
       last_notification_timestamp(last_notification_timestamp),
@@ -172,7 +173,7 @@ void PeripheralBatteryNotifier::UpdateBattery(
     battery_notifications_[map_key] = new_notification_info;
   } else {
     NotificationInfo& existing_notification_info = it->second;
-    absl::optional<uint8_t> old_level = existing_notification_info.level;
+    std::optional<uint8_t> old_level = existing_notification_info.level;
     was_old_battery_level_low = old_level && *old_level <= kLowBatteryLevel;
     existing_notification_info.level = battery_info.level;
   }
@@ -240,7 +241,7 @@ void PeripheralBatteryNotifier::ShowOrUpdateNotification(
       },
       params));
 
-  auto notification = CreateSystemNotification(
+  auto notification = CreateSystemNotificationPtr(
       message_center::NOTIFICATION_TYPE_SIMPLE, params.id, params.title,
       params.message, std::u16string(), params.url,
       message_center::NotifierId(message_center::NotifierType::SYSTEM_COMPONENT,

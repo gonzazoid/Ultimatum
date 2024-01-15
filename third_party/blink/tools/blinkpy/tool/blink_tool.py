@@ -35,11 +35,12 @@ These commands don't necessarily have anything to do with each other.
 import logging
 import optparse
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
+# pylint: disable=cyclic-import; `rebaseline_cl -> rebaseline` false positive
 from blinkpy.common.host import Host
 from blinkpy.tool.commands.analyze_baselines import AnalyzeBaselines
 from blinkpy.tool.commands.command import HelpPrintingOptionParser
-from blinkpy.tool.commands.copy_existing_baselines import CopyExistingBaselines
 from blinkpy.tool.commands.flaky_tests import FlakyTests
 from blinkpy.tool.commands.help_command import HelpCommand
 from blinkpy.tool.commands.optimize_baselines import OptimizeBaselines
@@ -49,8 +50,6 @@ from blinkpy.tool.commands.queries import PrintBaselines
 from blinkpy.tool.commands.queries import PrintExpectations
 from blinkpy.tool.commands.rebaseline import Rebaseline
 from blinkpy.tool.commands.rebaseline_cl import RebaselineCL
-from blinkpy.tool.commands.rebaseline_test import RebaselineTest
-from blinkpy.tool.commands.update_metadata import UpdateMetadata
 
 _log = logging.getLogger(__name__)
 
@@ -70,11 +69,11 @@ class BlinkTool(Host):
     ]
 
     def __init__(self, path):
-        super(BlinkTool, self).__init__()
+        super().__init__()
         self._path = path
+        io_pool = ThreadPoolExecutor(max_workers=RebaselineCL.MAX_WORKERS)
         self.commands = [
             AnalyzeBaselines(),
-            CopyExistingBaselines(),
             CrashLog(),
             FlakyTests(),
             OptimizeBaselines(),
@@ -82,12 +81,13 @@ class BlinkTool(Host):
             PrintBaselines(),
             PrintExpectations(),
             Rebaseline(),
-            RebaselineCL(),
-            RebaselineTest(),
-            UpdateMetadata(self),
+            RebaselineCL(self, io_pool),
         ]
         self.help_command = HelpCommand(tool=self)
         self.commands.append(self.help_command)
+
+    def __reduce__(self):
+        return (self.__class__, (self._path, ))
 
     def main(self, argv=None):
         argv = argv or sys.argv

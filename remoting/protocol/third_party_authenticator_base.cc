@@ -5,9 +5,9 @@
 #include "remoting/protocol/third_party_authenticator_base.h"
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "remoting/base/constants.h"
 #include "remoting/base/rsa_key_pair.h"
 #include "remoting/protocol/channel_authenticator.h"
@@ -16,12 +16,12 @@
 namespace remoting::protocol {
 
 // static
-const jingle_xmpp::StaticQName ThirdPartyAuthenticatorBase::kTokenUrlTag =
-    { remoting::kChromotingXmlNamespace, "third-party-token-url" };
-const jingle_xmpp::StaticQName ThirdPartyAuthenticatorBase::kTokenScopeTag =
-    { remoting::kChromotingXmlNamespace, "third-party-token-scope" };
-const jingle_xmpp::StaticQName ThirdPartyAuthenticatorBase::kTokenTag =
-    { remoting::kChromotingXmlNamespace, "third-party-token" };
+const jingle_xmpp::StaticQName ThirdPartyAuthenticatorBase::kTokenUrlTag = {
+    remoting::kChromotingXmlNamespace, "third-party-token-url"};
+const jingle_xmpp::StaticQName ThirdPartyAuthenticatorBase::kTokenScopeTag = {
+    remoting::kChromotingXmlNamespace, "third-party-token-scope"};
+const jingle_xmpp::StaticQName ThirdPartyAuthenticatorBase::kTokenTag = {
+    remoting::kChromotingXmlNamespace, "third-party-token"};
 
 ThirdPartyAuthenticatorBase::ThirdPartyAuthenticatorBase(
     Authenticator::State initial_state)
@@ -36,17 +36,19 @@ bool ThirdPartyAuthenticatorBase::started() const {
 }
 
 Authenticator::State ThirdPartyAuthenticatorBase::state() const {
-  if (token_state_ == ACCEPTED)
+  if (token_state_ == ACCEPTED) {
     return underlying_->state();
+  }
   return token_state_;
 }
 
-Authenticator::RejectionReason
-ThirdPartyAuthenticatorBase::rejection_reason() const {
+Authenticator::RejectionReason ThirdPartyAuthenticatorBase::rejection_reason()
+    const {
   DCHECK_EQ(state(), REJECTED);
 
-  if (token_state_ == REJECTED)
+  if (token_state_ == REJECTED) {
     return rejection_reason_;
+  }
   return underlying_->rejection_reason();
 }
 

@@ -2,12 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 
 import {pageVisibility} from './page_visibility.js';
-import {Route, Router} from './router.js';
-import {SettingsRoutes} from './settings_routes.js';
+import {Route, Router, SettingsRoutes} from './router.js';
 
 /**
  * Add all of the child routes that originate from the privacy route,
@@ -18,14 +17,41 @@ function addPrivacyChildRoutes(r: Partial<SettingsRoutes>) {
   r.CLEAR_BROWSER_DATA = r.PRIVACY.createChild('/clearBrowserData');
   r.CLEAR_BROWSER_DATA.isNavigableDialog = true;
 
-  r.SAFETY_CHECK = r.PRIVACY.createSection('/safetyCheck', 'safetyCheck');
+  if (loadTimeData.getBoolean('enableSafetyHub')) {
+    r.SAFETY_HUB = r.PRIVACY.createChild('/safetyCheck');
+  } else {
+    r.SAFETY_CHECK = r.PRIVACY.createSection('/safetyCheck', 'safetyCheck');
+  }
 
   if (loadTimeData.getBoolean('showPrivacyGuide')) {
     r.PRIVACY_GUIDE = r.PRIVACY.createChild('guide');
   }
   r.SITE_SETTINGS = r.PRIVACY.createChild('/content');
-  r.COOKIES = r.PRIVACY.createChild('/cookies');
   r.SECURITY = r.PRIVACY.createChild('/security');
+
+  r.TRACKING_PROTECTION = r.PRIVACY.createChild('/trackingProtection');
+  r.COOKIES = r.PRIVACY.createChild('/cookies');
+
+  if (!loadTimeData.getBoolean('isPrivacySandboxRestricted')) {
+    r.PRIVACY_SANDBOX = r.PRIVACY.createChild('/adPrivacy');
+    r.PRIVACY_SANDBOX_TOPICS =
+        r.PRIVACY_SANDBOX.createChild('/adPrivacy/interests');
+    if (loadTimeData.getBoolean('isProactiveTopicsBlockingEnabled')) {
+      r.PRIVACY_SANDBOX_MANAGE_TOPICS =
+          r.PRIVACY_SANDBOX_TOPICS.createChild('/adPrivacy/interests/manage');
+    }
+    r.PRIVACY_SANDBOX_FLEDGE =
+        r.PRIVACY_SANDBOX.createChild('/adPrivacy/sites');
+    r.PRIVACY_SANDBOX_AD_MEASUREMENT =
+        r.PRIVACY_SANDBOX.createChild('/adPrivacy/measurement');
+  } else if (loadTimeData.getBoolean(
+                 'isPrivacySandboxRestrictedNoticeEnabled')) {
+    r.PRIVACY_SANDBOX = r.PRIVACY.createChild('/adPrivacy');
+    // When the view is restricted, but the notice is configured to show, allow
+    // measurement settings only.
+    r.PRIVACY_SANDBOX_AD_MEASUREMENT =
+        r.PRIVACY_SANDBOX.createChild('/adPrivacy/measurement');
+  }
 
   // <if expr="use_nss_certs">
   r.CERTIFICATES = r.SECURITY.createChild('/certificates');
@@ -53,6 +79,13 @@ function addPrivacyChildRoutes(r: Partial<SettingsRoutes>) {
   r.SITE_SETTINGS_AR = r.SITE_SETTINGS.createChild('ar');
   r.SITE_SETTINGS_AUTOMATIC_DOWNLOADS =
       r.SITE_SETTINGS.createChild('automaticDownloads');
+  if (loadTimeData.getBoolean('autoPictureInPictureEnabled')) {
+    r.SITE_SETTINGS_AUTO_PICTURE_IN_PICTURE =
+        r.SITE_SETTINGS.createChild('autoPictureInPicture');
+  }
+  if (loadTimeData.getBoolean('privateStateTokensEnabled')) {
+    r.SITE_SETTINGS_AUTO_VERIFY = r.SITE_SETTINGS.createChild('autoVerify');
+  }
   r.SITE_SETTINGS_BACKGROUND_SYNC =
       r.SITE_SETTINGS.createChild('backgroundSync');
   r.SITE_SETTINGS_CAMERA = r.SITE_SETTINGS.createChild('camera');
@@ -71,6 +104,9 @@ function addPrivacyChildRoutes(r: Partial<SettingsRoutes>) {
   r.SITE_SETTINGS_USB_DEVICES = r.SITE_SETTINGS.createChild('usbDevices');
   r.SITE_SETTINGS_HID_DEVICES = r.SITE_SETTINGS.createChild('hidDevices');
   r.SITE_SETTINGS_SERIAL_PORTS = r.SITE_SETTINGS.createChild('serialPorts');
+  if (loadTimeData.getBoolean('enableWebPrintingContentSetting')) {
+    r.SITE_SETTINGS_WEB_PRINTING = r.SITE_SETTINGS.createChild('webPrinting');
+  }
   if (loadTimeData.getBoolean('enableWebBluetoothNewPermissionsBackend')) {
     r.SITE_SETTINGS_BLUETOOTH_DEVICES =
         r.SITE_SETTINGS.createChild('bluetoothDevices');
@@ -87,6 +123,7 @@ function addPrivacyChildRoutes(r: Partial<SettingsRoutes>) {
     r.SITE_SETTINGS_FEDERATED_IDENTITY_API =
         r.SITE_SETTINGS.createChild('federatedIdentityApi');
   }
+  r.SITE_SETTINGS_SITE_DATA = r.SITE_SETTINGS.createChild('siteData');
   r.SITE_SETTINGS_VR = r.SITE_SETTINGS.createChild('vr');
   if (loadTimeData.getBoolean('enableExperimentalWebPlatformFeatures')) {
     r.SITE_SETTINGS_BLUETOOTH_SCANNING =
@@ -96,13 +133,20 @@ function addPrivacyChildRoutes(r: Partial<SettingsRoutes>) {
   r.SITE_SETTINGS_WINDOW_MANAGEMENT =
       r.SITE_SETTINGS.createChild('windowManagement');
   r.SITE_SETTINGS_FILE_SYSTEM_WRITE = r.SITE_SETTINGS.createChild('filesystem');
+  r.SITE_SETTINGS_FILE_SYSTEM_WRITE_DETAILS =
+      r.SITE_SETTINGS_FILE_SYSTEM_WRITE.createChild('siteDetails');
   r.SITE_SETTINGS_LOCAL_FONTS = r.SITE_SETTINGS.createChild('localFonts');
+
+  if (loadTimeData.getBoolean('enablePermissionStorageAccessApi')) {
+    r.SITE_SETTINGS_STORAGE_ACCESS =
+        r.SITE_SETTINGS.createChild('storageAccess');
+  }
 }
 
 /**
  * Adds Route objects for each path.
  */
-function createBrowserSettingsRoutes(): Partial<SettingsRoutes> {
+function createBrowserSettingsRoutes(): SettingsRoutes {
   const r: Partial<SettingsRoutes> = {};
 
   // Root pages.
@@ -112,21 +156,31 @@ function createBrowserSettingsRoutes(): Partial<SettingsRoutes> {
 
   r.SEARCH = r.BASIC.createSection(
       '/search', 'search', loadTimeData.getString('searchPageTitle'));
+
   if (!loadTimeData.getBoolean('isGuest')) {
     r.PEOPLE = r.BASIC.createSection(
         '/people', 'people', loadTimeData.getString('peoplePageTitle'));
+    // <if expr="not chromeos_ash">
     r.SIGN_OUT = r.PEOPLE.createChild('/signOut');
     r.SIGN_OUT.isNavigableDialog = true;
-    // <if expr="not chromeos_ash">
     r.IMPORT_DATA = r.PEOPLE.createChild('/importData');
     r.IMPORT_DATA.isNavigableDialog = true;
     // </if>
 
     r.SYNC = r.PEOPLE.createChild('/syncSetup');
     r.SYNC_ADVANCED = r.SYNC.createChild('/syncSetup/advanced');
+    if (loadTimeData.getBoolean('enablePageContentSetting')) {
+      r.PAGE_CONTENT = r.SYNC.createChild('/syncSetup/pageContent');
+    }
   }
 
   const visibility = pageVisibility || {};
+
+  if (visibility.ai !== false &&
+      loadTimeData.getBoolean('showAdvancedFeaturesMainControl')) {
+    r.AI = r.BASIC.createSection(
+        '/ai', 'ai', loadTimeData.getString('experimentalAdvancedPageTitle'));
+  }
 
   // <if expr="not chromeos_ash">
   if (visibility.people !== false) {
@@ -145,14 +199,6 @@ function createBrowserSettingsRoutes(): Partial<SettingsRoutes> {
   if (visibility.autofill !== false) {
     r.AUTOFILL = r.BASIC.createSection(
         '/autofill', 'autofill', loadTimeData.getString('autofillPageTitle'));
-    r.PASSWORDS = r.AUTOFILL.createChild('/passwords');
-    if (loadTimeData.getBoolean('enablePasswordViewPage')) {
-      r.PASSWORD_VIEW = r.PASSWORDS.createChild('view');
-    }
-    r.CHECK_PASSWORDS = r.PASSWORDS.createChild('check');
-
-    r.DEVICE_PASSWORDS = r.PASSWORDS.createChild('device');
-
     r.PAYMENTS = r.AUTOFILL.createChild('/payments');
     r.ADDRESSES = r.AUTOFILL.createChild('/addresses');
 
@@ -235,26 +281,29 @@ function createBrowserSettingsRoutes(): Partial<SettingsRoutes> {
       // </if>
     }
 
-    if (visibility.performance !== false &&
-        ((loadTimeData.getBoolean('highEfficiencyModeAvailable')) ||
-         (loadTimeData.getBoolean('batterySaverModeAvailable')))) {
-      r.PERFORMANCE = r.ADVANCED!.createSection(
+    if (visibility.performance !== false) {
+      r.PERFORMANCE = r.BASIC.createSection(
           '/performance', 'performance',
           loadTimeData.getString('performancePageTitle'));
     }
+
+    // <if expr="_google_chrome">
+    if (visibility.getMostChrome !== false &&
+        loadTimeData.getBoolean('showGetTheMostOutOfChromeSection')) {
+      r.GET_MOST_CHROME = r.ADVANCED.createSection(
+          '/getMostChrome', 'getMostChrome',
+          loadTimeData.getString('getTheMostOutOfChrome'));
+    }
+    // </if>
   }
-  return r;
+  return r as unknown as SettingsRoutes;
 }
 
 /**
  * @return A router with the browser settings routes.
  */
 export function buildRouter(): Router {
-  return new Router(createBrowserSettingsRoutes() as {
-    BASIC: Route,
-    ADVANCED: Route,
-    ABOUT: Route,
-  });
+  return new Router(createBrowserSettingsRoutes());
 }
 
 Router.setInstance(buildRouter());

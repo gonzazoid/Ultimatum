@@ -56,10 +56,6 @@ WidgetDelegate::~WidgetDelegate() {
     delete default_contents_view_;
     default_contents_view_ = nullptr;
   }
-  if (destructor_ran_) {
-    DCHECK(!*destructor_ran_);
-    *destructor_ran_ = true;
-  }
 }
 
 void WidgetDelegate::SetCanActivate(bool can_activate) {
@@ -104,6 +100,10 @@ bool WidgetDelegate::CanMinimize() const {
   return params_.can_minimize;
 }
 
+bool WidgetDelegate::CanFullscreen() const {
+  return params_.can_fullscreen;
+}
+
 bool WidgetDelegate::CanActivate() const {
   return can_activate_;
 }
@@ -137,21 +137,78 @@ bool WidgetDelegate::ShouldCenterWindowTitleText() const {
 #endif
 }
 
+// TODO(ffred): refactor this method.
+bool WidgetDelegate::RotatePaneFocusFromView(View* focused_view,
+                                             bool forward,
+                                             bool enable_wrapping) {
+  // Get the list of all accessible panes.
+  std::vector<View*> panes;
+  GetAccessiblePanes(&panes);
+
+  // Count the number of panes and set the default index if no pane
+  // is initially focused.
+  const size_t count = panes.size();
+  if (!count) {
+    return false;
+  }
+
+  // Initialize |index| to an appropriate starting index if nothing is
+  // focused initially.
+  size_t index = forward ? (count - 1) : 0;
+
+  // Check to see if a pane already has focus and update the index accordingly.
+  if (focused_view) {
+    const auto i =
+        base::ranges::find_if(panes, [focused_view](const auto* pane) {
+          return pane && pane->Contains(focused_view);
+        });
+    if (i != panes.cend()) {
+      index = static_cast<size_t>(i - panes.cbegin());
+    }
+  }
+
+  // Rotate focus.
+  for (const size_t start_index = index;;) {
+    index = (!forward ? (index + count - 1) : (index + 1)) % count;
+
+    if (!enable_wrapping && (index == (forward ? 0 : (count - 1)))) {
+      return false;
+    }
+
+    // Ensure that we don't loop more than once.
+    if (index == start_index) {
+      return false;
+    }
+
+    views::View* pane = panes[index];
+    DCHECK(pane);
+    if (pane->GetVisible()) {
+      pane->RequestFocus();
+      // |pane| may be in a different widget, so don't assume its focus manager
+      // is |this|.
+      focused_view = pane->GetWidget()->GetFocusManager()->GetFocusedView();
+      if (pane == focused_view || pane->Contains(focused_view)) {
+        return true;
+      }
+    }
+  }
+}
+
 bool WidgetDelegate::ShouldShowCloseButton() const {
   return params_.show_close_button;
 }
 
 ui::ImageModel WidgetDelegate::GetWindowAppIcon() {
   // Prefer app icon if available.
-  if (!params_.app_icon.isNull())
-    return ui::ImageModel::FromImageSkia(params_.app_icon);
+  if (!params_.app_icon.IsEmpty())
+    return params_.app_icon;
   // Fall back to the window icon.
   return GetWindowIcon();
 }
 
 // Returns the icon to be displayed in the window.
 ui::ImageModel WidgetDelegate::GetWindowIcon() {
-  return ui::ImageModel::FromImageSkia(params_.icon);
+  return params_.icon;
 }
 
 bool WidgetDelegate::ShouldShowWindowIcon() const {
@@ -195,6 +252,8 @@ bool WidgetDelegate::GetSavedWindowPlacement(
 }
 
 void WidgetDelegate::WidgetInitializing(Widget* widget) {
+  can_delete_this_ = false;
+
   widget_ = widget;
 }
 
@@ -223,12 +282,13 @@ void WidgetDelegate::WindowClosing() {
 }
 
 void WidgetDelegate::DeleteDelegate() {
-  bool owned_by_widget = params_.owned_by_widget;
+  can_delete_this_ = true;
+
+  bool owned_by_widget = owned_by_widget_;
   ClosureVector delete_callbacks;
   delete_callbacks.swap(delete_delegate_callbacks_);
 
-  bool destructor_ran = false;
-  destructor_ran_ = &destructor_ran;
+  base::WeakPtr<WidgetDelegate> weak_this = AsWeakPtr();
   for (auto&& callback : delete_callbacks)
     std::move(callback).Run();
 
@@ -239,21 +299,10 @@ void WidgetDelegate::DeleteDelegate() {
   // DeleteDelegate callbacks to destruct it; if it is not owned by the Widget,
   // the DeleteDelete callbacks are allowed but not required to destroy it.
   if (owned_by_widget) {
-    DCHECK(!destructor_ran);
+    DCHECK(weak_this);
     // TODO(kylxird): Rework this once the Widget stops being able to "own" the
     // delegate.
-    // Only delete this if this delegate was never actually initialized wth a
-    // Widget or the delegate isn't "owned" by the Widget.
-    if (can_delete_this_) {
-      delete this;
-      return;
-    }
-    destructor_ran_ = nullptr;
-  } else {
-    // If the destructor didn't get run, reset destructor_ran_ so that when it
-    // does run it doesn't try to scribble over where our stack was.
-    if (!destructor_ran)
-      destructor_ran_ = nullptr;
+    delete this;
   }
 }
 
@@ -310,12 +359,20 @@ bool WidgetDelegate::ShouldDescendIntoChildForEventHandling(
   return true;
 }
 
-void WidgetDelegate::SetAccessibleRole(ax::mojom::Role role) {
+void WidgetDelegate::SetAccessibleWindowRole(ax::mojom::Role role) {
   params_.accessible_role = role;
 }
 
 void WidgetDelegate::SetAccessibleTitle(std::u16string title) {
   params_.accessible_title = std::move(title);
+}
+
+void WidgetDelegate::SetCanFullscreen(bool can_fullscreen) {
+  bool old_can_fullscreen =
+      std::exchange(params_.can_fullscreen, can_fullscreen);
+  if (GetWidget() && params_.can_fullscreen != old_can_fullscreen) {
+    GetWidget()->OnSizeConstraintsChanged();
+  }
 }
 
 void WidgetDelegate::SetCanMaximize(bool can_maximize) {
@@ -339,15 +396,7 @@ void WidgetDelegate::SetCanResize(bool can_resize) {
 // TODO (kylixrd): This will be removed once Widget no longer "owns" the
 // WidgetDelegate.
 void WidgetDelegate::SetOwnedByWidget(bool owned) {
-  if (params_.owned_by_widget == owned)
-    return;
-  params_.owned_by_widget = owned;
-  if (widget_ && widget_->widget_delegate_.get() == this) {
-    if (params_.owned_by_widget)
-      widget_->owned_widget_delegate_ = base::WrapUnique(this);
-    else
-      widget_->owned_widget_delegate_.release();
-  }
+  owned_by_widget_ = owned;
 }
 
 void WidgetDelegate::SetFocusTraversesOut(bool focus_traverses_out) {
@@ -359,14 +408,14 @@ void WidgetDelegate::SetEnableArrowKeyTraversal(
   params_.enable_arrow_key_traversal = enable_arrow_key_traversal;
 }
 
-void WidgetDelegate::SetIcon(const gfx::ImageSkia& icon) {
-  params_.icon = icon;
+void WidgetDelegate::SetIcon(ui::ImageModel icon) {
+  params_.icon = std::move(icon);
   if (GetWidget())
     GetWidget()->UpdateWindowIcon();
 }
 
-void WidgetDelegate::SetAppIcon(const gfx::ImageSkia& icon) {
-  params_.app_icon = icon;
+void WidgetDelegate::SetAppIcon(ui::ImageModel icon) {
+  params_.app_icon = std::move(icon);
   if (GetWidget())
     GetWidget()->UpdateWindowIcon();
 }
@@ -414,6 +463,7 @@ void WidgetDelegate::SetCenterTitle(bool center_title) {
 #endif
 
 void WidgetDelegate::SetHasWindowSizeControls(bool has_controls) {
+  SetCanFullscreen(has_controls);
   SetCanMaximize(has_controls);
   SetCanMinimize(has_controls);
   SetCanResize(has_controls);
@@ -479,7 +529,7 @@ views::View* WidgetDelegateView::GetContentsView() {
   return this;
 }
 
-BEGIN_METADATA(WidgetDelegateView, View)
+BEGIN_METADATA(WidgetDelegateView)
 END_METADATA
 
 }  // namespace views

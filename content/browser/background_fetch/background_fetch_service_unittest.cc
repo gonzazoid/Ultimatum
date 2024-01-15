@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
@@ -298,7 +298,7 @@ class BackgroundFetchServiceTest
             embedded_worker_test_helper()->context_wrapper()));
     context_->data_manager_->AddObserver(this);
     embedded_worker_test_helper()->context_wrapper()->AddObserver(this);
-    devtools_context()->AddObserver(this);
+    devtools_context().AddObserver(this);
 
     web_contents_ = base::WrapUnique(WebContentsTester::CreateTestWebContents(
         WebContents::CreateParams(browser_context())));
@@ -325,7 +325,7 @@ class BackgroundFetchServiceTest
 
     service_.reset();
 
-    devtools_context()->RemoveObserver(this);
+    devtools_context().RemoveObserver(this);
     embedded_worker_test_helper()->context_wrapper()->RemoveObserver(this);
     context_->data_manager_->RemoveObserver(this);
     context_ = nullptr;
@@ -354,7 +354,7 @@ class BackgroundFetchServiceTest
                     int num_requests,
                     std::vector<scoped_refptr<BackgroundFetchRequestInfo>>
                         active_fetch_requests,
-                    absl::optional<net::IsolationInfo> isolation_info));
+                    std::optional<net::IsolationInfo> isolation_info));
   MOCK_METHOD2(
       OnRegistrationQueried,
       void(const BackgroundFetchRegistrationId& registration_id,
@@ -1117,8 +1117,8 @@ TEST_F(BackgroundFetchServiceTest, GetDeveloperIds) {
   // the service worker registration is correct.
   {
     ScopedCustomBackgroundFetchService scoped_bogus_url_service(
-        this, blink::StorageKey(
-                  url::Origin::Create(GURL("https://www.bogus-origin.com"))));
+        this, blink::StorageKey::CreateFromStringForTesting(
+                  "https://www.bogus-origin.com"));
     blink::mojom::BackgroundFetchError error;
     std::vector<std::string> developer_ids;
 
@@ -1243,7 +1243,7 @@ TEST_F(BackgroundFetchServiceTest, JobsInitializedOnBrowserRestart) {
 TEST_F(BackgroundFetchServiceTest,
        DevToolsContextReceivesBackgroundFetchEvents) {
   // Allow the DevTools Context to log Background Fetch events.
-  devtools_context()->StartRecording(devtools::proto::BACKGROUND_FETCH);
+  devtools_context().StartRecording(devtools::proto::BACKGROUND_FETCH);
 
   // Start a fetch and wait for it to complete.
   auto* worker =

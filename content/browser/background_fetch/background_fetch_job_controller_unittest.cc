@@ -12,11 +12,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/uuid.h"
 #include "components/download/public/common/download_item.h"
 #include "content/browser/background_fetch/background_fetch_constants.h"
 #include "content/browser/background_fetch/background_fetch_context.h"
@@ -120,7 +120,7 @@ class BackgroundFetchJobControllerTest : public BackgroundFetchTestBase {
     // New |unique_id|, since this is a new Background Fetch registration.
     *registration_id = BackgroundFetchRegistrationId(
         kExampleServiceWorkerRegistrationId, storage_key(), kExampleDeveloperId,
-        base::GenerateGUID());
+        base::Uuid::GenerateRandomV4().AsLowercaseString());
 
     std::vector<scoped_refptr<BackgroundFetchRequestInfo>> request_infos;
     int request_counter = 0;
@@ -172,7 +172,7 @@ class BackgroundFetchJobControllerTest : public BackgroundFetchTestBase {
                                         total_downloads,
                                         /* outstanding_guids= */ {},
                                         /* start_paused= */ false,
-                                        /* isolation_info= */ absl::nullopt);
+                                        /* isolation_info= */ std::nullopt);
 
     return controller;
   }
@@ -524,7 +524,7 @@ TEST_F(BackgroundFetchJobControllerTest, ServiceWorkerRegistrationDeleted) {
                               std::move(controller));
   scheduler()->OnRegistrationDeleted(
       kExampleServiceWorkerRegistrationId, kFunnyCatUrl,
-      blink::StorageKey(url::Origin::Create(kFunnyCatUrl)));
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(kFunnyCatUrl)));
 
   base::RunLoop().RunUntilIdle();
 

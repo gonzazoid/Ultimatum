@@ -14,6 +14,7 @@
 #include "build/build_config.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/color/chrome_color_mixers.h"
+#include "components/color/color_mixers.h"
 #include "ui/color/color_mixers.h"
 #include "ui/color/color_provider.h"
 #include "ui/color/color_provider_utils.h"
@@ -48,24 +49,26 @@ std::string SkColorToString(SkColor color) {
 int main(int argc, const char* argv[]) {
   const auto add_mixers = [](ui::ColorProvider* provider, auto color_mode,
                              auto contrast_mode) {
-    const ui::ColorProviderManager::Key key = {
-        color_mode, contrast_mode, ui::SystemTheme::kDefault,
-        ui::ColorProviderManager::FrameType::kChromium};
+    ui::ColorProviderKey key;
+    key.color_mode = color_mode;
+    key.contrast_mode = contrast_mode;
     ui::AddColorMixers(provider, key);
+    color::AddComponentsColorMixers(provider, key);
     AddChromeColorMixers(provider, key);
+    provider->GenerateColorMap();
   };
   ui::ColorProvider light_provider, dark_provider, light_high_contrast_provider,
       dark_high_contrast_provider;
-  add_mixers(&light_provider, ui::ColorProviderManager::ColorMode::kLight,
-             ui::ColorProviderManager::ContrastMode::kNormal);
-  add_mixers(&dark_provider, ui::ColorProviderManager::ColorMode::kDark,
-             ui::ColorProviderManager::ContrastMode::kNormal);
+  add_mixers(&light_provider, ui::ColorProviderKey::ColorMode::kLight,
+             ui::ColorProviderKey::ContrastMode::kNormal);
+  add_mixers(&dark_provider, ui::ColorProviderKey::ColorMode::kDark,
+             ui::ColorProviderKey::ContrastMode::kNormal);
   add_mixers(&light_high_contrast_provider,
-             ui::ColorProviderManager::ColorMode::kLight,
-             ui::ColorProviderManager::ContrastMode::kHigh);
+             ui::ColorProviderKey::ColorMode::kLight,
+             ui::ColorProviderKey::ContrastMode::kHigh);
   add_mixers(&dark_high_contrast_provider,
-             ui::ColorProviderManager::ColorMode::kDark,
-             ui::ColorProviderManager::ContrastMode::kHigh);
+             ui::ColorProviderKey::ColorMode::kDark,
+             ui::ColorProviderKey::ContrastMode::kHigh);
 
   size_t longest_name = 0;
   for (const char* name : enum_names)

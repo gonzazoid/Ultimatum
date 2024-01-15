@@ -17,6 +17,7 @@ import '../cr_shared_style.css.js';
 import '../cr_shared_vars.css.js';
 import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
 
+import {loadTimeData} from '//resources/js/load_time_data.js';
 import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {CrIconButtonElement} from '../cr_icon_button/cr_icon_button.js';
@@ -26,6 +27,7 @@ import {getTemplate} from './cr_link_row.html.js';
 export interface CrLinkRowElement {
   $: {
     icon: CrIconButtonElement,
+    buttonAriaDescription: HTMLElement,
   };
 }
 
@@ -40,6 +42,18 @@ export class CrLinkRowElement extends PolymerElement {
 
   static get properties() {
     return {
+      ariaShowLabel: {
+        type: Boolean,
+        reflectToAttribute: true,
+        value: false,
+      },
+
+      ariaShowSublabel: {
+        type: Boolean,
+        reflectToAttribute: true,
+        value: false,
+      },
+
       startIcon: {
         type: String,
         value: '',
@@ -73,6 +87,8 @@ export class CrLinkRowElement extends PolymerElement {
 
       roleDescription: String,
 
+      buttonAriaDescription: String,
+
       hideLabelWrapper_: {
         type: Boolean,
         computed: 'computeHideLabelWrapper_(label, usingSlottedLabel)',
@@ -80,6 +96,8 @@ export class CrLinkRowElement extends PolymerElement {
     };
   }
 
+  ariaShowLabel: boolean;
+  ariaShowSublabel: boolean;
   startIcon: string;
   label: string;
   subLabel: string;
@@ -87,6 +105,7 @@ export class CrLinkRowElement extends PolymerElement {
   external: boolean;
   usingSlottedLabel: boolean;
   roleDescription: string;
+  buttonAriaDescription: string;
   private hideLabelWrapper_: boolean;
 
   override focus() {
@@ -99,6 +118,12 @@ export class CrLinkRowElement extends PolymerElement {
 
   private getIcon_(): string {
     return this.external ? 'cr:open-in-new' : 'cr:arrow-right';
+  }
+
+  private computeButtonAriaDescription_(
+      external: boolean, buttonAriaDescription?: string): string {
+    return buttonAriaDescription ??
+        (external ? loadTimeData.getString('opensInNewTab') : '');
   }
 }
 

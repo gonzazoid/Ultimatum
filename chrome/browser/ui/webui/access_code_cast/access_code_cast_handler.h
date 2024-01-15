@@ -5,12 +5,13 @@
 #ifndef CHROME_BROWSER_UI_WEBUI_ACCESS_CODE_CAST_ACCESS_CODE_CAST_HANDLER_H_
 #define CHROME_BROWSER_UI_WEBUI_ACCESS_CODE_CAST_ACCESS_CODE_CAST_HANDLER_H_
 
+#include "base/gtest_prod_util.h"
 #include "base/scoped_observation.h"
+#include "base/time/time.h"
 #include "chrome/browser/media/router/discovery/access_code/access_code_cast_sink_service.h"
 #include "chrome/browser/media/router/discovery/access_code/discovery_resources.pb.h"
 #include "chrome/browser/media/router/discovery/mdns/cast_media_sink_service_impl.h"
 #include "chrome/browser/media/router/discovery/mdns/media_sink_util.h"
-#include "chrome/browser/ui/app_list/search/search_controller.h"
 #include "chrome/browser/ui/media_router/media_cast_mode.h"
 #include "chrome/browser/ui/media_router/media_route_starter.h"
 #include "chrome/browser/ui/media_router/media_router_ui.h"
@@ -22,7 +23,7 @@
 #include "components/media_router/browser/presentation/web_contents_presentation_manager.h"
 #include "components/media_router/common/discovery/media_sink_internal.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
-#include "components/sync/driver/sync_service.h"
+#include "components/sync/service/sync_service.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -93,7 +94,7 @@ class AccessCodeCastHandler : public access_code_cast::mojom::PageHandler,
 
   void OnSinkAddedResult(
       access_code_cast::mojom::AddSinkResultCode add_sink_result,
-      absl::optional<MediaSink::Id> sink_id);
+      std::optional<MediaSink::Id> sink_id);
 
   // MediaSinkWithCastModesObserver:
   void OnSinksUpdated(
@@ -135,7 +136,8 @@ class AccessCodeCastHandler : public access_code_cast::mojom::PageHandler,
   // Contains the info necessary to start a media route.
   std::unique_ptr<MediaRouteStarter> media_route_starter_;
 
-  raw_ptr<AccessCodeCastSinkService> access_code_sink_service_;
+  raw_ptr<AccessCodeCastSinkService, DanglingUntriaged>
+      access_code_sink_service_;
   raw_ptr<signin::IdentityManager> identity_manager_;
   raw_ptr<syncer::SyncService> sync_service_;
 
@@ -144,10 +146,13 @@ class AccessCodeCastHandler : public access_code_cast::mojom::PageHandler,
   int access_code_not_found_count_ = 0;
 
   // The id of the media sink discovered from the access code;
-  absl::optional<MediaSink::Id> sink_id_;
+  std::optional<MediaSink::Id> sink_id_;
 
   // This contains a value only when tracking a pending route request.
-  absl::optional<RouteRequest> current_route_request_;
+  std::optional<RouteRequest> current_route_request_;
+
+  // The time that the AddSink() function was last called. Used for metrics.
+  base::Time add_sink_request_time_;
 
   base::WeakPtrFactory<AccessCodeCastHandler> weak_ptr_factory_{this};
 };

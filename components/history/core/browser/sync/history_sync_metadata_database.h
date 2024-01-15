@@ -46,15 +46,19 @@ class HistorySyncMetadataDatabase : public syncer::SyncMetadataStore {
   // before anything else.
   bool Init();
 
-  // Reads all stored metadata for History and fills `metadata_batch` with it.
+  // Reads all stored metadata for History (both ModelTypeState and
+  // EntityMetadata) and fills `metadata_batch` with it.
   bool GetAllSyncMetadata(syncer::MetadataBatch* metadata_batch);
 
+  // Deletes all EntityMetadata (but leaves the ModelTypeState alone).
+  bool ClearAllEntityMetadata();
+
   // syncer::SyncMetadataStore implementation.
-  bool UpdateSyncMetadata(syncer::ModelType model_type,
-                          const std::string& storage_key,
-                          const sync_pb::EntityMetadata& metadata) override;
-  bool ClearSyncMetadata(syncer::ModelType model_type,
-                         const std::string& storage_key) override;
+  bool UpdateEntityMetadata(syncer::ModelType model_type,
+                            const std::string& storage_key,
+                            const sync_pb::EntityMetadata& metadata) override;
+  bool ClearEntityMetadata(syncer::ModelType model_type,
+                           const std::string& storage_key) override;
   bool UpdateModelTypeState(
       syncer::ModelType model_type,
       const sync_pb::ModelTypeState& model_type_state) override;

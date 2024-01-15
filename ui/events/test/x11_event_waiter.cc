@@ -4,26 +4,24 @@
 
 #include "ui/events/test/x11_event_waiter.h"
 
-#include "base/threading/thread_task_runner_handle.h"
-#include "ui/gfx/x/x11_atom_cache.h"
+#include "base/task/single_thread_task_runner.h"
+#include "ui/gfx/x/atom_cache.h"
 #include "ui/gfx/x/xproto.h"
-#include "ui/gfx/x/xproto_util.h"
 
 namespace ui {
 
 // static
 XEventWaiter* XEventWaiter::Create(x11::Window window,
                                    base::OnceClosure callback) {
-  auto* connection = x11::Connection::Get();
-
   x11::ClientMessageEvent marker_event{
       .format = 8,
       .window = window,
       .type = MarkerEventAtom(),
   };
 
-  x11::SendEvent(marker_event, window, x11::EventMask::NoEvent);
-  connection->Flush();
+  x11::Connection::Get()->SendEvent(marker_event, window,
+                                    x11::EventMask::NoEvent);
+  x11::Connection::Get()->Flush();
 
   // Will be deallocated when the expected event is received.
   return new XEventWaiter(std::move(callback));
@@ -42,8 +40,8 @@ XEventWaiter::~XEventWaiter() {
 void XEventWaiter::OnEvent(const x11::Event& xev) {
   auto* client = xev.As<x11::ClientMessageEvent>();
   if (client && client->type == MarkerEventAtom()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  std::move(success_callback_));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(success_callback_));
     delete this;
   }
 }

@@ -27,33 +27,24 @@ import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.UmaRecorderHolder;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 
-/**
- *  Tests for {@link Linker}.
- */
+/** Tests for {@link Linker}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 @SuppressWarnings("GuardedBy") // doNothing().when(...).methodLocked() cannot resolve |mLock|.
 public class LinkerTest {
-    @Mock
-    Linker.Natives mNativeMock;
+    @Mock Linker.Natives mNativeMock;
 
-    @Mock
-    ModernLinker.Natives mModernLinkerNativeMock;
-
-    @Rule
-    public MockitoRule mMockitoRule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
+    @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
 
     @Before
     public void setUp() {
         UmaRecorderHolder.resetForTesting();
-        Linker.setNativesForTesting(mNativeMock);
-        ModernLinker.setModernLinkerNativesForTesting(mModernLinkerNativeMock);
+        Linker.setLinkerNativesForTesting(mNativeMock);
     }
 
     @After
     public void tearDown() {
-        Linker.setNativesForTesting(null);
-        ModernLinker.setModernLinkerNativesForTesting(null);
+        Linker.setLinkerNativesForTesting(null);
     }
 
     static Linker.LibInfo anyLibInfo() {
@@ -64,7 +55,7 @@ public class LinkerTest {
     @SmallTest
     public void testConsumer() {
         // Set up.
-        Linker linker = Mockito.spy(new ModernLinker());
+        Linker linker = Mockito.spy(new Linker());
         Mockito.doNothing().when(linker).loadLinkerJniLibraryLocked();
 
         // Exercise.
@@ -74,7 +65,6 @@ public class LinkerTest {
 
         // Verify.
         Assert.assertFalse(linker.mRelroProducer);
-        Mockito.verify(linker).keepMemoryReservationUntilLoad();
         Mockito.verify(mNativeMock).reserveMemoryForLibrary(anyLibInfo());
         Assert.assertNotEquals(null, linker.mLocalLibInfo);
         Assert.assertEquals(someAddress, linker.mLocalLibInfo.mLoadAddress);
@@ -82,27 +72,9 @@ public class LinkerTest {
 
     @Test
     @SmallTest
-    public void testLegacyConsumer() {
-        // Set up.
-        Linker linker = Mockito.spy(new LegacyLinker());
-        Mockito.doNothing().when(linker).loadLinkerJniLibraryLocked();
-
-        // Exercise.
-        long someAddress = 1 << 12;
-        linker.ensureInitialized(
-                /* asRelroProducer= */ false, PreferAddress.RESERVE_HINT, someAddress);
-
-        // Verify.
-        Assert.assertFalse(linker.mRelroProducer);
-        Mockito.verify(linker).keepMemoryReservationUntilLoad();
-        Mockito.verify(mNativeMock, Mockito.never()).reserveMemoryForLibrary(anyLibInfo());
-    }
-
-    @Test
-    @SmallTest
     public void testProducer() {
         // Set up.
-        Linker linker = Mockito.spy(new ModernLinker());
+        Linker linker = Mockito.spy(new Linker());
         Mockito.doNothing().when(linker).loadLinkerJniLibraryLocked();
 
         // Exercise.
@@ -110,9 +82,7 @@ public class LinkerTest {
 
         // Verify.
         Assert.assertTrue(linker.mRelroProducer);
-        Mockito.verify(linker).keepMemoryReservationUntilLoad();
-        Mockito.verify(mNativeMock)
-                .findMemoryRegionAtRandomAddress(anyLibInfo(), ArgumentMatchers.eq(true));
+        Mockito.verify(mNativeMock).findMemoryRegionAtRandomAddress(anyLibInfo());
         Assert.assertNotEquals(null, linker.mLocalLibInfo);
     }
 
@@ -120,39 +90,35 @@ public class LinkerTest {
     @SmallTest
     public void testConsumerReserveRandom() {
         // Set up.
-        Linker linker = Mockito.spy(new ModernLinker());
+        Linker linker = Mockito.spy(new Linker());
         Mockito.doNothing().when(linker).loadLinkerJniLibraryLocked();
 
         // Exercise.
         linker.ensureInitialized(/* asRelroProducer= */ false, PreferAddress.RESERVE_RANDOM, 0);
 
         // Verify.
-        Mockito.verify(linker).keepMemoryReservationUntilLoad();
-        Mockito.verify(mNativeMock)
-                .findMemoryRegionAtRandomAddress(anyLibInfo(), ArgumentMatchers.eq(true));
+        Mockito.verify(mNativeMock).findMemoryRegionAtRandomAddress(anyLibInfo());
     }
 
     @Test
     @SmallTest
     public void testReservingZeroFallsBackToRandom() {
         // Set up.
-        Linker linker = Mockito.spy(new ModernLinker());
+        Linker linker = Mockito.spy(new Linker());
         Mockito.doNothing().when(linker).loadLinkerJniLibraryLocked();
 
         // Exercise.
         linker.ensureInitialized(/* asRelroProducer= */ false, PreferAddress.RESERVE_HINT, 0);
 
         // Verify.
-        Mockito.verify(linker).keepMemoryReservationUntilLoad();
-        Mockito.verify(mNativeMock)
-                .findMemoryRegionAtRandomAddress(anyLibInfo(), ArgumentMatchers.eq(true));
+        Mockito.verify(mNativeMock).findMemoryRegionAtRandomAddress(anyLibInfo());
     }
 
     @Test
     @SmallTest
     public void testAppZygoteProducingRelro() {
         // Set up.
-        Linker linker = Mockito.spy(new ModernLinker());
+        Linker linker = Mockito.spy(new Linker());
         Mockito.doNothing().when(linker).loadLinkerJniLibraryLocked();
         // The lookup of the region succeeds.
         Mockito.when(mNativeMock.findRegionReservedByWebViewZygote(anyLibInfo())).thenReturn(true);
@@ -162,10 +128,8 @@ public class LinkerTest {
         linker.ensureInitialized(/* asRelroProducer= */ true, PreferAddress.FIND_RESERVED, 0);
 
         // Verify.
-        Mockito.verify(linker).keepMemoryReservationUntilLoad();
         Mockito.verify(mNativeMock).findRegionReservedByWebViewZygote(anyLibInfo());
-        Mockito.verify(mNativeMock, Mockito.never())
-                .findMemoryRegionAtRandomAddress(anyLibInfo(), ArgumentMatchers.anyBoolean());
+        Mockito.verify(mNativeMock, Mockito.never()).findMemoryRegionAtRandomAddress(anyLibInfo());
         Mockito.verify(mNativeMock, Mockito.never()).reserveMemoryForLibrary(anyLibInfo());
     }
 
@@ -173,7 +137,7 @@ public class LinkerTest {
     @SmallTest
     public void testAppZygoteFailsToFindReservedAddressRange() {
         // Set up.
-        Linker linker = Mockito.spy(new ModernLinker());
+        Linker linker = Mockito.spy(new Linker());
         Mockito.doNothing().when(linker).loadLinkerJniLibraryLocked();
         // The lookup of the region fails.
         Mockito.when(mNativeMock.findRegionReservedByWebViewZygote(anyLibInfo())).thenReturn(false);
@@ -182,19 +146,17 @@ public class LinkerTest {
         linker.ensureInitialized(/* asRelroProducer= */ true, PreferAddress.FIND_RESERVED, 0);
 
         // Verify.
-        Mockito.verify(linker).keepMemoryReservationUntilLoad();
         Mockito.verify(mNativeMock).findRegionReservedByWebViewZygote(anyLibInfo());
-        Mockito.verify(mNativeMock)
-                .findMemoryRegionAtRandomAddress(anyLibInfo(), ArgumentMatchers.anyBoolean());
+        Mockito.verify(mNativeMock).findMemoryRegionAtRandomAddress(anyLibInfo());
     }
 
     @Test
     @SmallTest
     public void testRelroSharingStatusHistogram() {
         // Set up.
-        Linker linker = Mockito.spy(new ModernLinker());
+        Linker linker = Mockito.spy(new Linker());
         Mockito.doNothing().when(linker).loadLinkerJniLibraryLocked();
-        Mockito.when(mModernLinkerNativeMock.getRelroSharingResult()).thenReturn(1);
+        Mockito.when(mNativeMock.getRelroSharingResult()).thenReturn(1);
         Linker.LibInfo libInfo = Mockito.spy(new Linker.LibInfo());
         long someAddress = 1 << 12;
         libInfo.mLoadAddress = someAddress;
@@ -214,8 +176,8 @@ public class LinkerTest {
         linker.takeSharedRelrosFromBundle(b);
 
         // Verify.
-        Mockito.verify(linker).keepMemoryReservationUntilLoad();
-        Assert.assertEquals(1,
+        Assert.assertEquals(
+                1,
                 RecordHistogram.getHistogramTotalCountForTesting(
                         "ChromiumAndroidLinker.RelroSharingStatus2"));
     }
@@ -224,7 +186,7 @@ public class LinkerTest {
     @SmallTest
     public void testBrowserExpectingRelroFromZygote() {
         // Set up.
-        Linker linker = Mockito.spy(new ModernLinker());
+        Linker linker = Mockito.spy(new Linker());
         Mockito.doNothing().when(linker).loadLinkerJniLibraryLocked();
         // The lookup of the region succeeds.
         Mockito.when(mNativeMock.findRegionReservedByWebViewZygote(anyLibInfo())).thenReturn(true);
@@ -234,10 +196,8 @@ public class LinkerTest {
         linker.ensureInitialized(/* asRelroProducer= */ false, PreferAddress.FIND_RESERVED, 0);
 
         // Verify.
-        Mockito.verify(linker).keepMemoryReservationUntilLoad();
         Mockito.verify(mNativeMock).findRegionReservedByWebViewZygote(anyLibInfo());
-        Mockito.verify(mNativeMock, Mockito.never())
-                .findMemoryRegionAtRandomAddress(anyLibInfo(), ArgumentMatchers.anyBoolean());
+        Mockito.verify(mNativeMock, Mockito.never()).findMemoryRegionAtRandomAddress(anyLibInfo());
         Mockito.verify(mNativeMock, Mockito.never()).reserveMemoryForLibrary(anyLibInfo());
     }
 
@@ -245,7 +205,7 @@ public class LinkerTest {
     @SmallTest
     public void testPrivilegedProcessWithHint() {
         // Set up.
-        Linker linker = Mockito.spy(new ModernLinker());
+        Linker linker = Mockito.spy(new Linker());
         Mockito.doNothing().when(linker).loadLinkerJniLibraryLocked();
         // The lookup of the region succeeds.
         Mockito.when(mNativeMock.findRegionReservedByWebViewZygote(anyLibInfo())).thenReturn(true);
@@ -257,53 +217,9 @@ public class LinkerTest {
                 /* asRelroProducer= */ false, PreferAddress.FIND_RESERVED, someAddress);
 
         // Verify.
-        Mockito.verify(linker).keepMemoryReservationUntilLoad();
         Mockito.verify(mNativeMock).findRegionReservedByWebViewZygote(anyLibInfo());
         // Unfortunately there does not seem to be an elegant way to set |mLoadAddress| without
         // extracting creation of mLocalLibInfo from ensureInitialized(). Hence no checks are
         // present here involving the exact value of |mLoadAddress|.
-    }
-
-    @Test
-    @SmallTest
-    public void testWebviewRegionSearchHistograms() {
-        // Set up.
-        Linker linker = Mockito.spy(new ModernLinker());
-        Mockito.doNothing().when(linker).loadLinkerJniLibraryLocked();
-        // The lookup of the region succeeds.
-        Mockito.when(mNativeMock.findRegionReservedByWebViewZygote(anyLibInfo())).thenReturn(true);
-        Mockito.when(linker.isNonZeroLoadAddress(anyLibInfo())).thenReturn(true);
-
-        // Exercise.
-        linker.ensureInitialized(
-                /* asRelroProducer= */ false, PreferAddress.FIND_RESERVED, 0);
-        linker.recordHistograms("Zygote");
-
-        // Verify.
-        Assert.assertNotNull(linker.mWebviewReservationSearchResult);
-        Assert.assertEquals(1,
-                RecordHistogram.getHistogramTotalCountForTesting(
-                        "ChromiumAndroidLinker.TimeToFindWebViewReservation.Found.Zygote"));
-    }
-
-    @Test
-    @SmallTest
-    public void testWebviewRegionSearchFailedHistograms() {
-        // Set up.
-        Linker linker = Mockito.spy(new ModernLinker());
-        Mockito.doNothing().when(linker).loadLinkerJniLibraryLocked();
-        // The lookup of the region fails.
-        Mockito.when(mNativeMock.findRegionReservedByWebViewZygote(anyLibInfo())).thenReturn(false);
-
-        // Exercise.
-        linker.ensureInitialized(
-                /* asRelroProducer= */ false, PreferAddress.FIND_RESERVED, 0);
-        linker.recordHistograms("Child");
-
-        // Verify.
-        Assert.assertNotNull(linker.mWebviewReservationSearchResult);
-        Assert.assertEquals(1,
-                RecordHistogram.getHistogramTotalCountForTesting(
-                        "ChromiumAndroidLinker.TimeToFindWebViewReservation.NotFound.Child"));
     }
 }

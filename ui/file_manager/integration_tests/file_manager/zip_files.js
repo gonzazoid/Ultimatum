@@ -5,7 +5,8 @@
 import {addEntries, ENTRIES, expectHistogramTotalCount, getCaller, pending, repeatUntil, RootPath, sendTestMessage} from '../test_util.js';
 import {testcase} from '../testcase.js';
 
-import {navigateWithDirectoryTree, remoteCall, setupAndWaitUntilReady} from './background.js';
+import {remoteCall, setupAndWaitUntilReady} from './background.js';
+import {DirectoryTreePageObject} from './page_objects/directory_tree.js';
 import {BASIC_ZIP_ENTRY_SET, COMPLEX_ZIP_ENTRY_SET} from './test_data.js';
 
 /**
@@ -124,8 +125,6 @@ testcase.zipFileOpenUsb = async () => {
     openType: 'launch',
   });
 
-  const USB_VOLUME_QUERY = '#directory-tree [volume-type-icon="removable"]';
-
   // Open Files app on Drive.
   const appId =
       await setupAndWaitUntilReady(RootPath.DRIVE, [], [ENTRIES.beautiful]);
@@ -133,12 +132,9 @@ testcase.zipFileOpenUsb = async () => {
   // Mount empty USB volume in the Drive window.
   await sendTestMessage({name: 'mountFakeUsbEmpty'});
 
-  // Wait for the USB mount.
-  await remoteCall.waitForElement(appId, USB_VOLUME_QUERY);
-
-  // Click to open the USB volume.
-  await remoteCall.callRemoteTestUtil(
-      'fakeMouseClick', appId, [USB_VOLUME_QUERY]);
+  // Wait for the USB mount and click to open the USB volume.
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.selectItemByType('removable');
 
   // Add zip file to the USB volume.
   await addEntries(['usb'], [ENTRIES.zipArchive]);
@@ -279,11 +275,37 @@ testcase.zipCreateFileDriveOffice = async () => {
 };
 
 /**
+ * Tests that creating a ZIP file containing an encrypted file is disabled.
+ */
+testcase.zipDoesntCreateFileEncrypted = async () => {
+  // Open Files app on Drive containing a test CSE file.
+  const appId =
+      await setupAndWaitUntilReady(RootPath.DRIVE, [], [ENTRIES.testCSEFile]);
+
+  // Select the file.
+  await remoteCall.waitAndClickElement(
+      appId, `#file-list [file-name="${ENTRIES.testCSEFile.nameText}"]`);
+
+  // Right-click the selected file.
+  chrome.test.assertTrue(
+      !!await remoteCall.callRemoteTestUtil(
+          'fakeMouseRightClick', appId, ['.table-row[selected]']),
+      'fakeMouseRightClick failed');
+
+  // Check: the context menu should appear.
+  await remoteCall.waitForElement(appId, '#file-context-menu:not([hidden])');
+
+  // Get the zip menu item.
+  const element =
+      await remoteCall.waitForElement(appId, '[command="#zip-selection"]');
+
+  chrome.test.assertEq('disabled', element.attributes.disabled);
+};
+
+/**
  * Tests creating a ZIP file on a removable USB volume.
  */
 testcase.zipCreateFileUsb = async () => {
-  const USB_VOLUME_QUERY = '#directory-tree [volume-type-icon="removable"]';
-
   // Open Files app on Drive.
   const appId =
       await setupAndWaitUntilReady(RootPath.DRIVE, [], [ENTRIES.beautiful]);
@@ -291,12 +313,9 @@ testcase.zipCreateFileUsb = async () => {
   // Mount empty USB volume in the Drive window.
   await sendTestMessage({name: 'mountFakeUsbEmpty'});
 
-  // Wait for the USB mount.
-  await remoteCall.waitForElement(appId, USB_VOLUME_QUERY);
-
-  // Click to open the USB volume.
-  await remoteCall.callRemoteTestUtil(
-      'fakeMouseClick', appId, [USB_VOLUME_QUERY]);
+  // Wait for the USB mount and click to open the USB volume.
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.selectItemByType('removable');
 
   // Add ENTRIES.photos to the USB volume.
   await addEntries(['usb'], [ENTRIES.photos]);
@@ -850,8 +869,8 @@ testcase.zipExtractFromReadOnly = async () => {
   const appId = await setupAndWaitUntilReady(RootPath.DRIVE, [], [entry]);
 
   // Navigate to Shared with me.
-  await remoteCall.callRemoteTestUtil(
-      'fakeMouseClick', appId, ['[volume-type-icon=\'drive_shared_with_me\']']);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.selectItemByLabel('Shared with me');
 
   // Wait for the navigation to complete.
   await remoteCall.waitUntilCurrentDirectoryIsChanged(appId, '/Shared with me');
@@ -881,7 +900,7 @@ testcase.zipExtractFromReadOnly = async () => {
       'fakeMouseClick failed');
 
   // Navigate to My Files.
-  await navigateWithDirectoryTree(appId, '/My files');
+  await directoryTree.navigateToPath('/My files');
 
   const directoryQuery = '#file-list [file-name="' + targetDirectoryName + '"]';
   // Check: the extract directory should appear.

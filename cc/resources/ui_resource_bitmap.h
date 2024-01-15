@@ -7,7 +7,6 @@
 
 #include <stdint.h>
 
-#include "base/memory/ref_counted.h"
 #include "cc/cc_export.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkCanvas.h"
@@ -53,6 +52,8 @@ class CC_EXPORT UIResourceBitmap {
   size_t row_bytes() const { return pixel_ref_ ? pixel_ref_->rowBytes() : 0; }
 
   bool IsUniquelyOwned() const { return pixel_ref_->unique(); }
+
+  SkBitmap GetBitmapForTesting() const;
 
  private:
   friend class AutoLockUIResourceBitmap;

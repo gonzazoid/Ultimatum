@@ -7,14 +7,15 @@ package org.chromium.chrome.browser.widget.bottomsheet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import static org.chromium.base.test.util.CriteriaHelper.pollUiThread;
 import static org.chromium.chrome.browser.flags.ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE;
 import static org.chromium.content_public.browser.test.util.TestThreadUtils.runOnUiThreadBlocking;
+
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
 
 import androidx.test.filters.MediumTest;
 
@@ -23,7 +24,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import org.chromium.base.Callback;
 import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Restriction;
@@ -32,13 +32,12 @@ import org.chromium.chrome.browser.toolbar.ToolbarManager;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
+import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent.ContentPriority;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent.HeightMode;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController.SheetState;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController.StateChangeReason;
-import org.chromium.components.browser_ui.bottomsheet.BottomSheetObserver;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetTestSupport;
-import org.chromium.components.browser_ui.bottomsheet.EmptyBottomSheetObserver;
 import org.chromium.components.browser_ui.bottomsheet.TestBottomSheetContent;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.ui.test.util.UiRestriction;
@@ -54,8 +53,7 @@ public class BottomSheetTest {
     private static final float VELOCITY_WHEN_MOVING_UP = 1.0f;
     private static final float VELOCITY_WHEN_MOVING_DOWN = -1.0f;
 
-    @Rule
-    public ChromeTabbedActivityTestRule mTestRule = new ChromeTabbedActivityTestRule();
+    @Rule public ChromeTabbedActivityTestRule mTestRule = new ChromeTabbedActivityTestRule();
     private TestBottomSheetContent mLowPriorityContent;
     private TestBottomSheetContent mHighPriorityContent;
     private BottomSheetController mSheetController;
@@ -70,12 +68,19 @@ public class BottomSheetTest {
                 mTestRule.getActivity().getRootUiCoordinatorForTesting().getBottomSheetController();
         mTestSupport = new BottomSheetTestSupport(mSheetController);
 
-        runOnUiThreadBlocking(() -> {
-            mLowPriorityContent = new TestBottomSheetContent(
-                    mTestRule.getActivity(), BottomSheetContent.ContentPriority.LOW, false);
-            mHighPriorityContent = new TestBottomSheetContent(
-                    mTestRule.getActivity(), BottomSheetContent.ContentPriority.HIGH, false);
-        });
+        runOnUiThreadBlocking(
+                () -> {
+                    mLowPriorityContent =
+                            new TestBottomSheetContent(
+                                    mTestRule.getActivity(),
+                                    BottomSheetContent.ContentPriority.LOW,
+                                    false);
+                    mHighPriorityContent =
+                            new TestBottomSheetContent(
+                                    mTestRule.getActivity(),
+                                    BottomSheetContent.ContentPriority.HIGH,
+                                    false);
+                });
         mHighPriorityContent.setPeekHeight(HeightMode.DISABLED);
         mHighPriorityContent.setHalfHeightRatio(0.5f);
         mHighPriorityContent.setSkipHalfStateScrollingDown(false);
@@ -89,7 +94,9 @@ public class BottomSheetTest {
 
         showContent(mHighPriorityContent, SheetState.PEEK);
 
-        assertEquals("Sheet should be peeking at the custom height.", customToolbarHeight,
+        assertEquals(
+                "Sheet should be peeking at the custom height.",
+                customToolbarHeight,
                 mSheetController.getCurrentOffset());
     }
 
@@ -98,7 +105,9 @@ public class BottomSheetTest {
     public void testMovingDownFromFullClearsThresholdToReachHalfState() {
         showContent(mHighPriorityContent, SheetState.FULL);
 
-        assertEquals("Sheet should reach half state.", SheetState.HALF,
+        assertEquals(
+                "Sheet should reach half state.",
+                SheetState.HALF,
                 simulateScrollTo(0.6f * getMaxSheetHeightInPx(), VELOCITY_WHEN_MOVING_DOWN));
     }
 
@@ -107,7 +116,9 @@ public class BottomSheetTest {
     public void testMovingDownFromFullDoesntClearThresholdToReachHalfState() {
         showContent(mHighPriorityContent, SheetState.FULL);
 
-        assertEquals("Sheet should remain in full state.", SheetState.FULL,
+        assertEquals(
+                "Sheet should remain in full state.",
+                SheetState.FULL,
                 simulateScrollTo(0.9f * getMaxSheetHeightInPx(), VELOCITY_WHEN_MOVING_DOWN));
     }
 
@@ -116,7 +127,9 @@ public class BottomSheetTest {
     public void testMovingUpFromHalfClearsThresholdToReachFullState() {
         showContent(mHighPriorityContent, SheetState.HALF);
 
-        assertEquals("Sheet should reach full state.", SheetState.FULL,
+        assertEquals(
+                "Sheet should reach full state.",
+                SheetState.FULL,
                 simulateScrollTo(0.8f * getMaxSheetHeightInPx(), VELOCITY_WHEN_MOVING_UP));
     }
 
@@ -125,7 +138,9 @@ public class BottomSheetTest {
     public void testMovingUpFromHalfDoesntClearThresholdToReachHalfState() {
         showContent(mHighPriorityContent, SheetState.HALF);
 
-        assertEquals("Sheet should remain in half state.", SheetState.HALF,
+        assertEquals(
+                "Sheet should remain in half state.",
+                SheetState.HALF,
                 simulateScrollTo(0.6f * getMaxSheetHeightInPx(), VELOCITY_WHEN_MOVING_UP));
     }
 
@@ -134,7 +149,9 @@ public class BottomSheetTest {
     public void testMovingDownFromHalfClearsThresholdToReachHiddenState() {
         showContent(mHighPriorityContent, SheetState.HALF);
 
-        assertEquals("Sheet should reach hidden state.", SheetState.HIDDEN,
+        assertEquals(
+                "Sheet should reach hidden state.",
+                SheetState.HIDDEN,
                 simulateScrollTo(0.2f * getMaxSheetHeightInPx(), VELOCITY_WHEN_MOVING_DOWN));
     }
 
@@ -143,7 +160,9 @@ public class BottomSheetTest {
     public void testMovingDownFromHalfDoesntClearThresholdToReachHiddenState() {
         showContent(mHighPriorityContent, SheetState.HALF);
 
-        assertEquals("Sheet should remain in half state.", SheetState.HALF,
+        assertEquals(
+                "Sheet should remain in half state.",
+                SheetState.HALF,
                 simulateScrollTo(0.4f * getMaxSheetHeightInPx(), VELOCITY_WHEN_MOVING_DOWN));
     }
 
@@ -152,11 +171,12 @@ public class BottomSheetTest {
     public void testTabObscuringState() throws TimeoutException {
         CallbackHelper obscuringStateChangedHelper = new CallbackHelper();
         TabObscuringHandler handler = mTestRule.getActivity().getTabObscuringHandler();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            handler.addObserver(
-                    (isTabObscured,
-                            isToolbarObscured) -> obscuringStateChangedHelper.notifyCalled());
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    handler.addObserver(
+                            (isTabObscured, isToolbarObscured) ->
+                                    obscuringStateChangedHelper.notifyCalled());
+                });
         mHighPriorityContent.setHasCustomScrimLifecycle(false);
 
         assertFalse("The tab should not yet be obscured.", handler.isTabContentObscured());
@@ -181,11 +201,12 @@ public class BottomSheetTest {
     public void testTabObscuringState_customScrim() throws ExecutionException {
         CallbackHelper obscuringStateChangedHelper = new CallbackHelper();
         TabObscuringHandler handler = mTestRule.getActivity().getTabObscuringHandler();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            handler.addObserver(
-                    (isTabObscured,
-                            isToolbarObscured) -> obscuringStateChangedHelper.notifyCalled());
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    handler.addObserver(
+                            (isTabObscured, isToolbarObscured) ->
+                                    obscuringStateChangedHelper.notifyCalled());
+                });
         mHighPriorityContent.setHasCustomScrimLifecycle(true);
 
         assertFalse("The tab should not be obscured.", handler.isTabContentObscured());
@@ -195,7 +216,9 @@ public class BottomSheetTest {
 
         hideSheet();
 
-        assertEquals("The obscuring handler should not have been called.", 0,
+        assertEquals(
+                "The obscuring handler should not have been called.",
+                0,
                 obscuringStateChangedHelper.getCallCount());
     }
 
@@ -208,12 +231,16 @@ public class BottomSheetTest {
 
         runOnUiThreadBlocking(() -> toolbarManager.setUrlBarFocus(true, 0));
 
-        assertEquals("The bottom sheet should be hidden.", SheetState.HIDDEN,
+        assertEquals(
+                "The bottom sheet should be hidden.",
+                SheetState.HIDDEN,
                 mSheetController.getSheetState());
 
         runOnUiThreadBlocking(() -> toolbarManager.setUrlBarFocus(false, 0));
 
-        assertNotEquals("The bottom sheet should not be hidden.", SheetState.HIDDEN,
+        assertNotEquals(
+                "The bottom sheet should not be hidden.",
+                SheetState.HIDDEN,
                 mSheetController.getSheetState());
     }
 
@@ -222,20 +249,26 @@ public class BottomSheetTest {
     public void testSuppressionState_unsuppress() {
         showContent(mHighPriorityContent, SheetState.HALF);
 
-        runOnUiThreadBlocking(() -> {
-            mSuppressToken = mTestSupport.suppressSheet(StateChangeReason.NONE);
-            mTestSupport.endAllAnimations();
-        });
+        runOnUiThreadBlocking(
+                () -> {
+                    mSuppressToken = mTestSupport.suppressSheet(StateChangeReason.NONE);
+                    mTestSupport.endAllAnimations();
+                });
 
-        assertEquals("The sheet should be in the hidden state.", SheetState.HIDDEN,
+        assertEquals(
+                "The sheet should be in the hidden state.",
+                SheetState.HIDDEN,
                 mSheetController.getSheetState());
 
-        runOnUiThreadBlocking(() -> {
-            mTestSupport.unsuppressSheet(mSuppressToken);
-            mTestSupport.endAllAnimations();
-        });
+        runOnUiThreadBlocking(
+                () -> {
+                    mTestSupport.unsuppressSheet(mSuppressToken);
+                    mTestSupport.endAllAnimations();
+                });
 
-        assertEquals("The sheet should be restored to the half state.", SheetState.HALF,
+        assertEquals(
+                "The sheet should be restored to the half state.",
+                SheetState.HALF,
                 mSheetController.getSheetState());
     }
 
@@ -244,67 +277,85 @@ public class BottomSheetTest {
     public void testSuppressionState_unsuppressDifferentContent() {
         showContent(mHighPriorityContent, SheetState.HALF);
 
-        runOnUiThreadBlocking(() -> {
-            mSuppressToken = mTestSupport.suppressSheet(StateChangeReason.NONE);
-            mTestSupport.endAllAnimations();
-        });
+        runOnUiThreadBlocking(
+                () -> {
+                    mSuppressToken = mTestSupport.suppressSheet(StateChangeReason.NONE);
+                    mTestSupport.endAllAnimations();
+                });
 
-        assertEquals("The sheet should be in the hidden state.", SheetState.HIDDEN,
+        assertEquals(
+                "The sheet should be in the hidden state.",
+                SheetState.HIDDEN,
                 mSheetController.getSheetState());
 
         runOnUiThreadBlocking(() -> mSheetController.hideContent(mHighPriorityContent, false));
 
         showContent(mLowPriorityContent, SheetState.PEEK);
 
-        runOnUiThreadBlocking(() -> {
-            mTestSupport.unsuppressSheet(mSuppressToken);
-            mTestSupport.endAllAnimations();
-        });
+        runOnUiThreadBlocking(
+                () -> {
+                    mTestSupport.unsuppressSheet(mSuppressToken);
+                    mTestSupport.endAllAnimations();
+                });
 
-        assertEquals("The sheet should be restored to the peek state.", SheetState.PEEK,
+        assertEquals(
+                "The sheet should be restored to the peek state.",
+                SheetState.PEEK,
                 mSheetController.getSheetState());
     }
 
     @Test
     @MediumTest
-    public void testOffsetController() {
-        mLowPriorityContent.setContentControlsOffset(true);
+    public void testWrapContentHeightChange() throws ExecutionException, TimeoutException {
+        final int startingHeight = 300;
+        final int endingHeight = 400;
 
-        BottomSheetObserver forbidStateChanges = new EmptyBottomSheetObserver() {
-            @Override
-            public void onSheetOpened(@StateChangeReason int reason) {
-                fail("onSheetOpened unexpected");
-            }
+        runOnUiThreadBlocking(
+                () -> {
+                    // Set up content view.
+                    final ViewGroup contentView = new FrameLayout(mTestRule.getActivity());
+                    View child = new View(mTestRule.getActivity());
+                    child.setLayoutParams(
+                            new ViewGroup.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT, startingHeight));
+                    contentView.addView(child);
 
-            @Override
-            public void onSheetClosed(@StateChangeReason int reason) {
-                fail("onSheetClosed unexpected");
-            }
-        };
-        runOnUiThreadBlocking(() -> {
-            assertTrue(mSheetController.requestShowContent(mLowPriorityContent, false));
+                    // Set up bottom sheet.
+                    TestBottomSheetContent sizeChangingContent =
+                            new TestBottomSheetContent(
+                                    mTestRule.getActivity(),
+                                    ContentPriority.HIGH,
+                                    false,
+                                    contentView);
+                    sizeChangingContent.setFullHeightRatio(HeightMode.WRAP_CONTENT);
+                    sizeChangingContent.setHalfHeightRatio(HeightMode.DISABLED);
+                    sizeChangingContent.setPeekHeight(HeightMode.DISABLED);
 
-            Callback<Integer> offsetController = mLowPriorityContent.getOffsetController();
-            assertNotNull(offsetController);
+                    // Show content view in bottom sheet.
+                    mSheetController.requestShowContent(sizeChangingContent, false);
+                });
 
-            mSheetController.addObserver(forbidStateChanges);
+        BottomSheetTestSupport.waitForState(mSheetController, SheetState.FULL);
+        assertEquals(startingHeight, mSheetController.getCurrentOffset());
 
-            int startOffset = mSheetController.getCurrentOffset();
-            int modifiedOffset = startOffset / 2;
-            offsetController.onResult(modifiedOffset);
-            assertEquals(modifiedOffset, mSheetController.getCurrentOffset());
+        // Change the size of the content to make sure the sheet's height reflects the change.
+        runOnUiThreadBlocking(
+                () -> {
+                    ViewGroup contentView =
+                            (ViewGroup) mSheetController.getCurrentSheetContent().getContentView();
+                    View child = contentView.getChildAt(0);
+                    ViewGroup.LayoutParams params =
+                            (ViewGroup.LayoutParams) child.getLayoutParams();
+                    params.height = endingHeight;
+                    child.setLayoutParams(params);
+                });
+        // Expect SCROLLING state to be reached to the animation caused by the height change.
+        BottomSheetTestSupport.waitForState(mSheetController, SheetState.SCROLLING);
 
-            offsetController.onResult(0);
-            assertEquals(0, mSheetController.getCurrentOffset());
+        // The bottom sheet should reach FULL state again after the animation is finished.
+        BottomSheetTestSupport.waitForState(mSheetController, SheetState.FULL);
 
-            offsetController.onResult(startOffset);
-            assertEquals(startOffset, mSheetController.getCurrentOffset());
-
-            mSheetController.removeObserver(forbidStateChanges);
-
-            mSheetController.hideContent(mLowPriorityContent, false);
-            assertNull(mLowPriorityContent.getOffsetController());
-        });
+        assertEquals(endingHeight, mSheetController.getCurrentOffset());
     }
 
     private void hideSheet() {
@@ -319,17 +370,22 @@ public class BottomSheetTest {
         return mTestSupport.forceScrolling(targetHeightInPx, yUpwardsVelocity);
     }
 
-    /** @param content The content to show in the bottom sheet. */
+    /**
+     * @param content The content to show in the bottom sheet.
+     */
     private void showContent(BottomSheetContent content, @SheetState int targetState) {
-        runOnUiThreadBlocking(() -> {
-            boolean shown = mSheetController.requestShowContent(content, false);
-            if (shown) {
-                mTestSupport.setSheetState(targetState, false);
-            } else {
-                assertEquals("The sheet should still be hidden.", SheetState.HIDDEN,
-                        mSheetController.getSheetState());
-            }
-        });
+        runOnUiThreadBlocking(
+                () -> {
+                    boolean shown = mSheetController.requestShowContent(content, false);
+                    if (shown) {
+                        mTestSupport.setSheetState(targetState, false);
+                    } else {
+                        assertEquals(
+                                "The sheet should still be hidden.",
+                                SheetState.HIDDEN,
+                                mSheetController.getSheetState());
+                    }
+                });
 
         // If the content switched, wait for the desired state.
         if (mSheetController.getCurrentSheetContent() == content) {

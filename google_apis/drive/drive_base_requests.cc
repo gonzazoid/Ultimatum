@@ -10,18 +10,17 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/location.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
+#include "google_apis/common/base_requests.h"
 #include "google_apis/common/request_sender.h"
 #include "google_apis/common/task_util.h"
 #include "google_apis/common/time_util.h"
@@ -66,9 +65,8 @@ void ParseJsonOnBlockingPool(
     base::TaskRunner* blocking_task_runner,
     std::string json,
     base::OnceCallback<void(std::unique_ptr<base::Value> value)> callback) {
-  base::PostTaskAndReplyWithResult(
-      blocking_task_runner, FROM_HERE,
-      base::BindOnce(&google_apis::ParseJson, std::move(json)),
+  blocking_task_runner->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&google_apis::ParseJson, std::move(json)),
       std::move(callback));
 }
 
@@ -129,8 +127,8 @@ void GenerateMultipartBody(MultipartType multipart_type,
     while (true) {
       boundary = net::GenerateMimeMultipartBoundary();
       bool conflict_with_content = false;
-      for (auto& part : parts) {
-        if (part.data.find(boundary, 0) != std::string::npos) {
+      for (const auto& part : parts) {
+        if (base::Contains(part.data, boundary)) {
           conflict_with_content = true;
           break;
         }
@@ -154,7 +152,7 @@ void GenerateMultipartBody(MultipartType multipart_type,
   output->data.clear();
   if (data_offset)
     data_offset->clear();
-  for (auto& part : parts) {
+  for (const auto& part : parts) {
     output->data.append(base::StringPrintf(
         kMultipartItemHeaderFormat, boundary.c_str(), part.type.c_str()));
     if (data_offset)
@@ -287,8 +285,8 @@ GURL UploadRangeRequestBase::GetURL() const {
   return upload_url_;
 }
 
-std::string UploadRangeRequestBase::GetRequestType() const {
-  return "PUT";
+HttpRequestMethod UploadRangeRequestBase::GetRequestType() const {
+  return HttpRequestMethod::kPut;
 }
 
 void UploadRangeRequestBase::ProcessURLFetchResults(
@@ -479,8 +477,8 @@ void MultipartUploadRequestBase::Prepare(PrepareCallback callback) {
   // |UrlFetchRequestBase::Cancel| and OnPrepareUploadContent won't be called.
   std::string* const upload_content_type = new std::string();
   std::string* const upload_content_data = new std::string();
-  PostTaskAndReplyWithResult(
-      blocking_task_runner_.get(), FROM_HERE,
+  blocking_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&GetMultipartContent, boundary_, metadata_json_,
                      content_type_, local_path_,
                      base::Unretained(upload_content_type),
@@ -532,7 +530,7 @@ void MultipartUploadRequestBase::NotifyResult(
                        weak_ptr_factory_.GetWeakPtr(), code,
                        std::move(notify_complete_callback)));
   } else {
-    absl::optional<std::string> reason = MapJsonErrorToReason(body);
+    std::optional<std::string> reason = MapJsonErrorToReason(body);
     NotifyError(reason.has_value() ? MapDriveReasonToError(code, reason.value())
                                    : code);
     std::move(notify_complete_callback).Run();

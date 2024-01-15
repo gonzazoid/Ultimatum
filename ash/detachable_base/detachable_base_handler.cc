@@ -8,7 +8,7 @@
 #include "ash/detachable_base/detachable_base_observer.h"
 #include "ash/public/cpp/session/user_info.h"
 #include "ash/shell.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/values.h"
 #include "components/account_id/account_id.h"
@@ -179,7 +179,7 @@ void DetachableBaseHandler::TabletModeEventReceived(
 }
 
 void DetachableBaseHandler::OnGotPowerManagerSwitchStates(
-    absl::optional<chromeos::PowerManagerClient::SwitchStates> switch_states) {
+    std::optional<chromeos::PowerManagerClient::SwitchStates> switch_states) {
   if (!switch_states.has_value() || tablet_mode_.has_value())
     return;
 

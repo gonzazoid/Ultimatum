@@ -62,11 +62,13 @@ void IntersectionObserverController::DeliverNotifications(
 
 bool IntersectionObserverController::ComputeIntersections(
     unsigned flags,
-    LocalFrameUkmAggregator& ukm_aggregator,
-    absl::optional<base::TimeTicks>& monotonic_time) {
+    LocalFrameUkmAggregator* metrics_aggregator,
+    absl::optional<base::TimeTicks>& monotonic_time,
+    gfx::Vector2dF accumulated_scroll_delta_since_last_update) {
   needs_occlusion_tracking_ = false;
-  if (!GetExecutionContext())
+  if (!GetExecutionContext()) {
     return false;
+  }
   TRACE_EVENT0("blink,devtools.timeline",
                "IntersectionObserverController::"
                "computeIntersections");
@@ -77,11 +79,16 @@ bool IntersectionObserverController::ComputeIntersections(
   int64_t internal_observation_count = 0;
   int64_t javascript_observation_count = 0;
   {
-    LocalFrameUkmAggregator::IterativeTimer ukm_timer(ukm_aggregator);
+    absl::optional<LocalFrameUkmAggregator::IterativeTimer> metrics_timer;
+    if (metrics_aggregator)
+      metrics_timer.emplace(*metrics_aggregator);
     for (auto& observer : observers_to_process) {
+      DCHECK(!observer->RootIsImplicit());
       if (observer->HasObservations()) {
-        ukm_timer.StartInterval(observer->GetUkmMetricId());
-        int64_t count = observer->ComputeIntersections(flags, monotonic_time);
+        if (metrics_timer)
+          metrics_timer->StartInterval(observer->GetUkmMetricId());
+        int64_t count = observer->ComputeIntersections(
+            flags, monotonic_time, accumulated_scroll_delta_since_last_update);
         if (observer->IsInternal())
           internal_observation_count += count;
         else
@@ -92,8 +99,12 @@ bool IntersectionObserverController::ComputeIntersections(
       }
     }
     for (auto& observation : observations_to_process) {
-      ukm_timer.StartInterval(observation->Observer()->GetUkmMetricId());
-      int64_t count = observation->ComputeIntersection(flags, monotonic_time);
+      if (metrics_timer)
+        metrics_timer->StartInterval(observation->Observer()->GetUkmMetricId());
+      absl::optional<IntersectionGeometry::RootGeometry> root_geometry;
+      int64_t count = observation->ComputeIntersection(
+          flags, accumulated_scroll_delta_since_last_update, monotonic_time,
+          root_geometry);
       if (observation->Observer()->IsInternal())
         internal_observation_count += count;
       else
@@ -102,12 +113,14 @@ bool IntersectionObserverController::ComputeIntersections(
     }
   }
 
-  ukm_aggregator.RecordCountSample(
-      LocalFrameUkmAggregator::kIntersectionObservationInternalCount,
-      internal_observation_count);
-  ukm_aggregator.RecordCountSample(
-      LocalFrameUkmAggregator::kIntersectionObservationJavascriptCount,
-      javascript_observation_count);
+  if (metrics_aggregator) {
+    metrics_aggregator->RecordCountSample(
+        LocalFrameUkmAggregator::kIntersectionObservationInternalCount,
+        internal_observation_count);
+    metrics_aggregator->RecordCountSample(
+        LocalFrameUkmAggregator::kIntersectionObservationJavascriptCount,
+        javascript_observation_count);
+  }
 
   return needs_occlusion_tracking_;
 }
@@ -167,6 +180,19 @@ void IntersectionObserverController::RemoveTrackedObservation(
   if (!observer->RootIsImplicit())
     return;
   tracked_implicit_root_observations_.erase(&observation);
+}
+
+void IntersectionObserverController::
+    InvalidateCachedRectsIfPaintPropertiesChanged() {
+  DCHECK(RuntimeEnabledFeatures::IntersectionOptimizationEnabled());
+  for (auto& observer : tracked_explicit_root_observers_) {
+    for (auto& observation : observer->Observations()) {
+      observation->InvalidateCachedRectsIfPaintPropertiesChanged();
+    }
+  }
+  for (auto& observation : tracked_implicit_root_observations_) {
+    observation->InvalidateCachedRectsIfPaintPropertiesChanged();
+  }
 }
 
 void IntersectionObserverController::Trace(Visitor* visitor) const {

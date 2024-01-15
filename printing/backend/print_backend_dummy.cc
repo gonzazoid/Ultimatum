@@ -8,7 +8,6 @@
 
 #include "printing/backend/print_backend.h"
 
-#include "base/values.h"
 #include "printing/mojom/print.mojom.h"
 
 namespace printing {
@@ -41,14 +40,9 @@ class DummyPrintBackend : public PrintBackend {
     return mojom::ResultCode::kFailed;
   }
 
-  mojom::ResultCode GetPrinterCapsAndDefaults(
-      const std::string& printer_name,
-      PrinterCapsAndDefaults* printer_info) override {
-    return mojom::ResultCode::kFailed;
-  }
-
-  std::string GetPrinterDriverInfo(const std::string& printer_name) override {
-    return std::string();
+  std::vector<std::string> GetPrinterDriverInfo(
+      const std::string& printer_name) override {
+    return std::vector<std::string>();
   }
 
   bool IsValidPrinter(const std::string& printer_name) override {
@@ -61,7 +55,6 @@ class DummyPrintBackend : public PrintBackend {
 
 // static
 scoped_refptr<PrintBackend> PrintBackend::CreateInstanceImpl(
-    const base::Value::Dict* print_backend_settings,
     const std::string& /*locale*/) {
   return base::MakeRefCounted<DummyPrintBackend>();
 }

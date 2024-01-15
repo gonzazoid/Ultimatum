@@ -10,9 +10,9 @@
 #include "apps/launcher.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/public/mojom/tray_action.mojom-shared.h"
-#include "base/callback_forward.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
@@ -240,8 +240,7 @@ IN_PROC_BROWSER_TEST_F(LockScreenNoteTakingTest, LaunchInNonLockScreenContext) {
   // Launch note taking in regular, non lock screen context. The test will
   // verify the app cannot create lock screen enabled app windows in this case.
   extensions::api::app_runtime::ActionData action_data;
-  action_data.action_type =
-      extensions::api::app_runtime::ActionType::ACTION_TYPE_NEW_NOTE;
+  action_data.action_type = extensions::api::app_runtime::ActionType::kNewNote;
   apps::LaunchPlatformAppWithAction(profile(), app.get(),
                                     std::move(action_data));
 

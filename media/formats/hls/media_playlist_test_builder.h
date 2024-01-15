@@ -5,8 +5,8 @@
 #ifndef MEDIA_FORMATS_HLS_MEDIA_PLAYLIST_TEST_BUILDER_H_
 #define MEDIA_FORMATS_HLS_MEDIA_PLAYLIST_TEST_BUILDER_H_
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
@@ -77,7 +77,7 @@ class MediaPlaylistTestBuilder : public PlaylistTestBuilder<MediaPlaylist> {
   void VerifyExpectations(const MediaPlaylist& playlist,
                           const base::Location& from) const override;
 
-  raw_ptr<const MultivariantPlaylist> parent_ = nullptr;
+  raw_ptr<const MultivariantPlaylist, DanglingUntriaged> parent_ = nullptr;
   std::vector<SegmentExpectations> segment_expectations_;
 };
 

@@ -54,6 +54,9 @@ enum AttestationCertificateProfile {
   // A profile for certificates intended for setting up ChromeOS devices using
   // other authenticated devices.
   PROFILE_DEVICE_SETUP_CERTIFICATE = 11,
+  // A profile for certificates intended for using the Device Trust Connector on
+  // unmanaged devices.
+  PROFILE_DEVICE_TRUST_USER_CERTIFICATE = 14,
 };
 
 // Status for operations involving an attestation server.
@@ -63,7 +66,9 @@ enum AttestationStatus {
   // Failure, no specific reason
   ATTESTATION_UNSPECIFIED_FAILURE,
   // Failure, sending a bad request to an attestation server
-  ATTESTATION_SERVER_BAD_REQUEST_FAILURE
+  ATTESTATION_SERVER_BAD_REQUEST_FAILURE,
+  // Failure, attestation is not supported on this device
+  ATTESTATION_NOT_AVAILABLE
 };
 
 enum PrivacyCAType {
@@ -101,11 +106,12 @@ extern const char kSoftBindKey[];
 COMPONENT_EXPORT(ASH_DBUS_CONSTANTS)
 extern const char kDeviceSetupKey[];
 
-}  // namespace ash::attestation
+// The key name prefix for the Device Trust Connector Key. This prefix must be
+// appended with an user identifier to form the final key name. This key should
+// always be stored as a DEVICE_KEY.
+COMPONENT_EXPORT(ASH_DBUS_CONSTANTS)
+extern const char kDeviceTrustConnectorKeyPrefix[];
 
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos::attestation {
-using ::ash::attestation::KEY_DEVICE;
-}
+}  // namespace ash::attestation
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_CONSTANTS_ATTESTATION_CONSTANTS_H_

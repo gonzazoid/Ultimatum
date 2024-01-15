@@ -40,7 +40,7 @@ FakeMultiDeviceSetup::~FakeMultiDeviceSetup() {
     if (get_host_arg) {
       std::move(get_host_arg)
           .Run(mojom::HostStatus::kNoEligibleHosts,
-               absl::nullopt /* host_device */);
+               std::nullopt /* host_device */);
     }
   }
 
@@ -66,6 +66,13 @@ FakeMultiDeviceSetup::~FakeMultiDeviceSetup() {
       std::move(triggered_debug_event.second).Run(false /* success */);
   }
 
+  for (auto& get_qs_phone_instance_id_arg : get_qs_phone_instance_id_args_) {
+    if (get_qs_phone_instance_id_arg) {
+      std::move(get_qs_phone_instance_id_arg)
+          .Run("" /* qs_phone_instance_id */);
+    }
+  }
+
   for (auto& set_host_without_auth_arg : set_host_without_auth_args_) {
     if (set_host_without_auth_arg.second)
       std::move(set_host_without_auth_arg.second).Run(false /* success */);
@@ -87,7 +94,7 @@ bool FakeMultiDeviceSetup::HasAtLeastOneFeatureStateObserver() {
 
 void FakeMultiDeviceSetup::NotifyHostStatusChanged(
     mojom::HostStatus host_status,
-    const absl::optional<multidevice::RemoteDevice>& host_device) {
+    const std::optional<multidevice::RemoteDevice>& host_device) {
   for (auto& observer : host_status_observers_)
     observer->OnHostStatusChanged(host_status, host_device);
 }
@@ -144,7 +151,7 @@ void FakeMultiDeviceSetup::GetHostStatus(GetHostStatusCallback callback) {
 void FakeMultiDeviceSetup::SetFeatureEnabledState(
     mojom::Feature feature,
     bool enabled,
-    const absl::optional<std::string>& auth_token,
+    const std::optional<std::string>& auth_token,
     SetFeatureEnabledStateCallback callback) {
   set_feature_enabled_args_.emplace_back(feature, enabled, auth_token,
                                          std::move(callback));
@@ -162,6 +169,16 @@ void FakeMultiDeviceSetup::TriggerEventForDebugging(
     mojom::EventTypeForDebugging type,
     TriggerEventForDebuggingCallback callback) {
   triggered_debug_events_.emplace_back(type, std::move(callback));
+}
+
+void FakeMultiDeviceSetup::SetQuickStartPhoneInstanceID(
+    const std::string& qs_phone_instance_id) {
+  set_qs_phone_instance_id_args_.emplace_back(qs_phone_instance_id);
+}
+
+void FakeMultiDeviceSetup::GetQuickStartPhoneInstanceID(
+    GetQuickStartPhoneInstanceIDCallback callback) {
+  get_qs_phone_instance_id_args_.emplace_back(std::move(callback));
 }
 
 void FakeMultiDeviceSetup::SetHostDeviceWithoutAuthToken(

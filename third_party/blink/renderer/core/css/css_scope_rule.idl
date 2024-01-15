@@ -5,6 +5,7 @@
 [
     Exposed=Window,
     RuntimeEnabled=CSSScope
-] interface CSSScopeRule : CSSConditionRule {
-    // TODO(crbug.com/1315532): Spec.
+] interface CSSScopeRule : CSSGroupingRule {
+    readonly attribute CSSOMString? start;
+    readonly attribute CSSOMString? end;
 };

@@ -5,19 +5,20 @@
 #include "chrome/browser/web_applications/locks/app_lock.h"
 
 #include "chrome/browser/web_applications/locks/lock.h"
+#include "components/services/storage/indexed_db/locks/partitioned_lock_manager.h"
 
 namespace web_app {
 
-AppLockDescription::AppLockDescription(base::flat_set<AppId> app_ids)
+AppLockDescription::AppLockDescription(const webapps::AppId& app_id)
+    : LockDescription({app_id}, LockDescription::Type::kApp) {}
+AppLockDescription::AppLockDescription(base::flat_set<webapps::AppId> app_ids)
     : LockDescription(std::move(app_ids), LockDescription::Type::kApp) {}
+AppLockDescription::AppLockDescription(AppLockDescription&&) = default;
 AppLockDescription::~AppLockDescription() = default;
 
-AppLock::AppLock(WebAppRegistrar& registrar,
-                 WebAppSyncBridge& sync_bridge,
-                 OsIntegrationManager& os_integration_manager)
-    : registrar_(registrar),
-      sync_bridge_(sync_bridge),
-      os_integration_manager_(os_integration_manager) {}
+AppLock::AppLock(base::WeakPtr<WebAppLockManager> lock_manager,
+                 std::unique_ptr<content::PartitionedLockHolder> holder)
+    : Lock(std::move(holder), lock_manager), WithAppResources(lock_manager) {}
 AppLock::~AppLock() = default;
 
 }  // namespace web_app

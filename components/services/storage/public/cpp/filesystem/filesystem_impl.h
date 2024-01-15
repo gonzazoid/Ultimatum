@@ -28,11 +28,26 @@ class FilesystemProxy;
 class COMPONENT_EXPORT(STORAGE_SERVICE_FILESYSTEM_SUPPORT) FilesystemImpl
     : public mojom::Directory {
  public:
+  enum class ClientType {
+    // No additional restrictions are placed on file objects returned by this
+    // implementation.
+    kTrusted,
+
+    // The client is not trusted to handle certain types of file objects,
+    // so this object must not return such objects to the client. In
+    // particular, such clients are not trusted with file handles that
+    // are both executable and writable. See
+    // base::File::AddFlagsForPassingToUntrustedProcess.
+    kUntrusted,
+  };
+
   // |root| must be an absolute path. Operations performed by this object
   // will be contained within |root| or a transitive subdirectory thereof. All
   // relative paths given to methods of this object are interpreted as relative
   // to |root|.
-  explicit FilesystemImpl(const base::FilePath& root);
+  // |client_type| specifies the level of trust the client has in handling
+  // certain types of file objects.
+  FilesystemImpl(const base::FilePath& root, ClientType client_type);
 
   FilesystemImpl(const FilesystemImpl&) = delete;
   FilesystemImpl& operator=(const FilesystemImpl) = delete;
@@ -50,22 +65,14 @@ class COMPONENT_EXPORT(STORAGE_SERVICE_FILESYSTEM_SUPPORT) FilesystemImpl
                 mojom::FileReadAccess read_access,
                 mojom::FileWriteAccess write_access,
                 OpenFileCallback callback) override;
-  void WriteFileAtomically(const base::FilePath& path,
-                           const std::string& contents,
-                           WriteFileAtomicallyCallback callback) override;
   void CreateDirectory(const base::FilePath& path,
                        CreateDirectoryCallback callback) override;
   void DeleteFile(const base::FilePath& path,
                   DeleteFileCallback callback) override;
-  void DeletePathRecursively(const base::FilePath& path,
-                             DeletePathRecursivelyCallback callback) override;
   void GetFileInfo(const base::FilePath& path,
                    GetFileInfoCallback callback) override;
   void GetPathAccess(const base::FilePath& path,
                      GetPathAccessCallback callback) override;
-  void GetMaximumPathComponentLength(
-      const base::FilePath& path,
-      GetMaximumPathComponentLengthCallback callback) override;
   void RenameFile(const base::FilePath& old_path,
                   const base::FilePath& new_path,
                   RenameFileCallback callback) override;
@@ -93,6 +100,7 @@ class COMPONENT_EXPORT(STORAGE_SERVICE_FILESYSTEM_SUPPORT) FilesystemImpl
   base::FilePath MakeAbsolute(const base::FilePath& path) const;
 
   const base::FilePath root_;
+  const ClientType client_type_;
 };
 
 }  // namespace storage

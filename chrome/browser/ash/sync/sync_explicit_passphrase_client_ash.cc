@@ -13,8 +13,8 @@
 #include "components/account_manager_core/account_manager_util.h"
 #include "components/signin/public/identity_manager/account_info.h"
 #include "components/sync/chromeos/explicit_passphrase_mojo_utils.h"
-#include "components/sync/driver/sync_user_settings.h"
 #include "components/sync/engine/nigori/nigori.h"
+#include "components/sync/service/sync_user_settings.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
@@ -71,7 +71,8 @@ void SyncExplicitPassphraseClientAsh::GetDecryptionNigoriKey(
   }
 
   std::unique_ptr<syncer::Nigori> decryption_key =
-      sync_service_->GetUserSettings()->GetDecryptionNigoriKey();
+      sync_service_->GetUserSettings()
+          ->GetExplicitPassphraseDecryptionNigoriKey();
   if (!decryption_key) {
     std::move(callback).Run(nullptr);
     return;
@@ -94,7 +95,7 @@ void SyncExplicitPassphraseClientAsh::SetDecryptionNigoriKey(
     // Nigori key.
     return;
   }
-  sync_service_->GetUserSettings()->SetDecryptionNigoriKey(
+  sync_service_->GetUserSettings()->SetExplicitPassphraseDecryptionNigoriKey(
       std::move(nigori_key));
 }
 

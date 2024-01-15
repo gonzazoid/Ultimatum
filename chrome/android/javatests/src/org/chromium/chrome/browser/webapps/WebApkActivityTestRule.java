@@ -5,7 +5,9 @@
 package org.chromium.chrome.browser.webapps;
 
 import android.content.Intent;
-import android.support.test.InstrumentationRegistry;
+
+import androidx.test.core.app.ApplicationProvider;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.hamcrest.Matchers;
 import org.junit.runner.Description;
@@ -31,16 +33,14 @@ public class WebApkActivityTestRule extends ChromeActivityTestRule<WebappActivit
 
     @Override
     public Statement apply(final Statement base, Description description) {
-        Statement webApkUpdateManagerStatement = new Statement() {
-            @Override
-            public void evaluate() throws Throwable {
-                WebApkUpdateManager.setUpdatesEnabledForTesting(false);
-
-                base.evaluate();
-
-                WebApkUpdateManager.setUpdatesEnabledForTesting(true);
-            }
-        };
+        Statement webApkUpdateManagerStatement =
+                new Statement() {
+                    @Override
+                    public void evaluate() throws Throwable {
+                        WebApkUpdateManager.setUpdatesDisabledForTesting(true);
+                        base.evaluate();
+                    }
+                };
         return super.apply(webApkUpdateManagerStatement, description);
     }
 
@@ -63,7 +63,7 @@ public class WebApkActivityTestRule extends ChromeActivityTestRule<WebappActivit
      */
     public WebappActivity startWebApkActivity(final String startUrl) {
         Intent intent =
-                new Intent(InstrumentationRegistry.getTargetContext(), WebappActivity.class);
+                new Intent(ApplicationProvider.getApplicationContext(), WebappActivity.class);
         intent.putExtra(WebApkConstants.EXTRA_WEBAPK_PACKAGE_NAME, "org.chromium.webapk.test");
         intent.putExtra(WebappConstants.EXTRA_URL, startUrl);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -73,14 +73,17 @@ public class WebApkActivityTestRule extends ChromeActivityTestRule<WebappActivit
 
     private WebappActivity startWebApkActivity(final Intent intent, final String startUrl) {
         final WebappActivity webApkActivity =
-                (WebappActivity) InstrumentationRegistry.getInstrumentation().startActivitySync(
-                        intent);
+                (WebappActivity)
+                        InstrumentationRegistry.getInstrumentation().startActivitySync(intent);
         setActivity(webApkActivity);
         InstrumentationRegistry.getInstrumentation().waitForIdleSync();
 
-        CriteriaHelper.pollInstrumentationThread(() -> {
-            Criteria.checkThat(webApkActivity.getActivityTab(), Matchers.notNullValue());
-        }, STARTUP_TIMEOUT, CriteriaHelper.DEFAULT_POLLING_INTERVAL);
+        CriteriaHelper.pollInstrumentationThread(
+                () -> {
+                    Criteria.checkThat(webApkActivity.getActivityTab(), Matchers.notNullValue());
+                },
+                STARTUP_TIMEOUT,
+                CriteriaHelper.DEFAULT_POLLING_INTERVAL);
 
         ChromeTabUtils.waitForTabPageLoaded(webApkActivity.getActivityTab(), startUrl);
         WebappActivityTestRule.waitUntilSplashHides(webApkActivity);
@@ -89,7 +92,7 @@ public class WebApkActivityTestRule extends ChromeActivityTestRule<WebappActivit
 
     private Intent createIntent(WebappInfo webApkInfo) {
         Intent intent =
-                new Intent(InstrumentationRegistry.getTargetContext(), WebappActivity.class);
+                new Intent(ApplicationProvider.getApplicationContext(), WebappActivity.class);
         intent.putExtra(WebApkConstants.EXTRA_WEBAPK_PACKAGE_NAME, webApkInfo.webApkPackageName());
         intent.putExtra(WebappConstants.EXTRA_ID, webApkInfo.id());
         intent.putExtra(WebappConstants.EXTRA_URL, webApkInfo.url());

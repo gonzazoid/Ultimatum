@@ -8,14 +8,13 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback_helpers.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback_helpers.h"
 #include "base/threading/thread_checker.h"
 #include "components/viz/common/display/update_vsync_parameters_callback.h"
 #include "components/viz/common/gpu/gpu_vsync_callback.h"
-#include "components/viz/common/resources/resource_format.h"
 #include "components/viz/common/resources/returned_resource.h"
 #include "components/viz/service/display/pending_swap_params.h"
+#include "components/viz/service/display/render_pass_alpha_type.h"
 #include "components/viz/service/display/software_output_device.h"
 #include "components/viz/service/viz_service_export.h"
 #include "gpu/command_buffer/common/mailbox.h"
@@ -52,8 +51,7 @@ class VIZ_SERVICE_EXPORT OutputSurface {
  public:
   enum Type {
     kSoftware = 0,
-    kOpenGL = 1,
-    kVulkan = 2,
+    kSkia = 1,
   };
 
   enum class OrientationMode {
@@ -78,8 +76,6 @@ class VIZ_SERVICE_EXPORT OutputSurface {
     gfx::SurfaceOrigin output_surface_origin = gfx::SurfaceOrigin::kBottomLeft;
     // Whether this OutputSurface supports post sub buffer or not.
     bool supports_post_sub_buffer = false;
-    // Whether this OutputSurface supports commit overlay planes.
-    bool supports_commit_overlay_planes = false;
     // Whether this OutputSurface permits scheduling an isothetic sub-rectangle
     // (i.e. viewport) of its contents for display, allowing the DirectRenderer
     // to apply resize optimization by padding to its width/height.
@@ -118,9 +114,11 @@ class VIZ_SERVICE_EXPORT OutputSurface {
     int max_render_target_size = 0;
     // The root surface is rendered using vulkan secondary command buffer.
     bool root_is_vulkan_secondary_command_buffer = false;
+    // Maximum number of non-required YUV overlays that will be promoted per
+    // frame. Currently only used with DirectComposition.
     // Some new Intel GPUs support two YUV MPO planes. Promoting two videos
     // to hardware overlays in these platforms will benefit power consumption.
-    bool supports_two_yuv_hardware_overlays = false;
+    int allowed_yuv_overlay_count = 1;
     // True if the OS supports delegated ink trails.
     // This is currently only implemented on Win10 with DirectComposition on the
     // SkiaRenderer.
@@ -142,6 +140,8 @@ class VIZ_SERVICE_EXPORT OutputSurface {
     // Wayland backend is able to delegate these overlays without buffer
     // backings depending on the availability of a certain protocol.
     bool supports_non_backed_solid_color_overlays = false;
+    // Whether the platform supports single pixel buffer protocol.
+    bool supports_single_pixel_buffer = false;
 
     // SkColorType for all supported buffer formats.
     SkColorType sk_color_types[static_cast<int>(gfx::BufferFormat::LAST) + 1] =
@@ -152,7 +152,7 @@ class VIZ_SERVICE_EXPORT OutputSurface {
   };
 
   // Constructor for skia-based compositing.
-  explicit OutputSurface(Type type);
+  OutputSurface();
   // Constructor for software compositing.
   explicit OutputSurface(std::unique_ptr<SoftwareOutputDevice> software_device);
 
@@ -212,21 +212,12 @@ class VIZ_SERVICE_EXPORT OutputSurface {
     gfx::Size size;
     float device_scale_factor = 1.f;
     gfx::ColorSpace color_space;
-    float sdr_white_level = gfx::ColorSpace::kDefaultSDRWhiteLevel;
     // TODO(sunnyps): Change to SkColorType.
     gfx::BufferFormat format = gfx::BufferFormat::RGBA_8888;
-    SkAlphaType alpha_type = kPremul_SkAlphaType;
+    RenderPassAlphaType alpha_type = RenderPassAlphaType::kPremul;
 
-    bool operator==(const ReshapeParams& other) const {
-      return size == other.size &&
-             device_scale_factor == other.device_scale_factor &&
-             color_space == other.color_space &&
-             sdr_white_level == other.sdr_white_level &&
-             format == other.format && alpha_type == other.alpha_type;
-    }
-    bool operator!=(const ReshapeParams& other) const {
-      return !(*this == other);
-    }
+    friend bool operator==(const ReshapeParams&,
+                           const ReshapeParams&) = default;
   };
   virtual void Reshape(const ReshapeParams& params) = 0;
 
@@ -256,6 +247,8 @@ class VIZ_SERVICE_EXPORT OutputSurface {
 
   // Enable or disable vsync callback based on whether begin frames are needed.
   virtual void SetGpuVSyncEnabled(bool enabled);
+
+  virtual void SetVSyncDisplayID(int64_t display_id) {}
 
   // When the device is rotated, the scene prepared by the UI is in the logical
   // screen space as seen by the user. However, attempting to scanout a buffer

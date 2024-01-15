@@ -16,21 +16,7 @@ MEDIA_EXPORT BASE_DECLARE_FEATURE(kDumpOnAudioServiceHang);
 
 #if BUILDFLAG(IS_ANDROID)
 MEDIA_EXPORT BASE_DECLARE_FEATURE(kUseAAudioDriver);
-#endif
-
-#if BUILDFLAG(IS_CHROMEOS)
-MEDIA_EXPORT BASE_DECLARE_FEATURE(kCrOSSystemAEC);
-MEDIA_EXPORT BASE_DECLARE_FEATURE(kCrOSSystemAECDeactivatedGroups);
-MEDIA_EXPORT BASE_DECLARE_FEATURE(kCrOSEnforceSystemAecNsAgc);
-MEDIA_EXPORT BASE_DECLARE_FEATURE(kCrOSEnforceSystemAecNs);
-MEDIA_EXPORT BASE_DECLARE_FEATURE(kCrOSEnforceSystemAecAgc);
-MEDIA_EXPORT BASE_DECLARE_FEATURE(kCrOSEnforceSystemAec);
-MEDIA_EXPORT BASE_DECLARE_FEATURE(kCrOSDspBasedAecDeactivatedGroups);
-MEDIA_EXPORT BASE_DECLARE_FEATURE(kCrOSDspBasedNsDeactivatedGroups);
-MEDIA_EXPORT BASE_DECLARE_FEATURE(kCrOSDspBasedAgcDeactivatedGroups);
-MEDIA_EXPORT BASE_DECLARE_FEATURE(kCrOSDspBasedAecAllowed);
-MEDIA_EXPORT BASE_DECLARE_FEATURE(kCrOSDspBasedNsAllowed);
-MEDIA_EXPORT BASE_DECLARE_FEATURE(kCrOSDspBasedAgcAllowed);
+MEDIA_EXPORT BASE_DECLARE_FEATURE(kUseAAudioInput);
 #endif
 
 #if BUILDFLAG(IS_WIN)
@@ -38,5 +24,13 @@ MEDIA_EXPORT BASE_DECLARE_FEATURE(kAllowIAudioClient3);
 #endif
 
 }  // namespace features
+
+namespace media {
+
+// Returns true if system audio loopback capture is implemented for the current
+// OS.
+MEDIA_EXPORT bool IsSystemLoopbackCaptureSupported();
+
+}  // namespace media
 
 #endif  // MEDIA_AUDIO_AUDIO_FEATURES_H_

@@ -4,10 +4,11 @@
 
 #include "components/segmentation_platform/internal/scheduler/execution_service.h"
 
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/prefs/pref_service.h"
-#include "components/segmentation_platform/internal/data_collection/training_data_collector.h"
+#include "components/segmentation_platform/internal/database/cached_result_provider.h"
 #include "components/segmentation_platform/internal/database/storage_service.h"
-#include "components/segmentation_platform/internal/execution/default_model_manager.h"
 #include "components/segmentation_platform/internal/execution/execution_request.h"
 #include "components/segmentation_platform/internal/execution/model_executor_impl.h"
 #include "components/segmentation_platform/internal/execution/processing/feature_aggregator_impl.h"
@@ -17,6 +18,8 @@
 #include "components/segmentation_platform/internal/signals/signal_handler.h"
 #include "components/segmentation_platform/public/config.h"
 #include "components/segmentation_platform/public/input_delegate.h"
+#include "components/segmentation_platform/public/model_provider.h"
+#include "components/segmentation_platform/public/proto/model_metadata.pb.h"
 
 namespace segmentation_platform {
 
@@ -27,26 +30,26 @@ void ExecutionService::InitForTesting(
     std::unique_ptr<processing::FeatureListQueryProcessor> feature_processor,
     std::unique_ptr<ModelExecutor> executor,
     std::unique_ptr<ModelExecutionScheduler> scheduler,
-    std::unique_ptr<ModelExecutionManager> execution_manager) {
+    ModelManager* model_manager) {
   feature_list_query_processor_ = std::move(feature_processor);
   model_executor_ = std::move(executor);
   model_execution_scheduler_ = std::move(scheduler);
-  model_execution_manager_ = std::move(execution_manager);
+  model_manager_ = model_manager;
 }
 
 void ExecutionService::Initialize(
     StorageService* storage_service,
     SignalHandler* signal_handler,
     base::Clock* clock,
-    ModelExecutionManager::SegmentationModelUpdatedCallback callback,
     scoped_refptr<base::SequencedTaskRunner> task_runner,
-    const base::flat_set<SegmentId>& all_segment_ids,
+    const base::flat_set<SegmentId>& legacy_output_segment_ids,
     ModelProviderFactory* model_provider_factory,
-    std::vector<ModelExecutionScheduler::Observer*>&& observers,
+    std::vector<raw_ptr<ModelExecutionScheduler::Observer,
+                        VectorExperimental>>&& observers,
     const PlatformOptions& platform_options,
     std::unique_ptr<processing::InputDelegateHolder> input_delegate_holder,
-    std::vector<std::unique_ptr<Config>>* configs,
-    PrefService* profile_prefs) {
+    PrefService* profile_prefs,
+    CachedResultProvider* cached_result_provider) {
   storage_service_ = storage_service;
 
   feature_list_query_processor_ =
@@ -55,51 +58,41 @@ void ExecutionService::Initialize(
           std::make_unique<processing::FeatureAggregatorImpl>());
 
   training_data_collector_ = TrainingDataCollector::Create(
-      storage_service->segment_info_database(),
-      feature_list_query_processor_.get(),
+      platform_options, feature_list_query_processor_.get(),
       signal_handler->deprecated_histogram_signal_handler(),
-      storage_service->signal_storage_config(), configs, profile_prefs, clock);
+      signal_handler->user_action_signal_handler(), storage_service,
+      profile_prefs, clock, cached_result_provider);
 
   model_executor_ = std::make_unique<ModelExecutorImpl>(
-      clock, feature_list_query_processor_.get());
+      clock, storage_service->segment_info_database(),
+      feature_list_query_processor_.get());
 
-  model_execution_manager_ = std::make_unique<ModelExecutionManagerImpl>(
-      all_segment_ids, model_provider_factory, clock,
-      storage_service->segment_info_database(), callback);
+  model_manager_ = storage_service->model_manager();
 
   model_execution_scheduler_ = std::make_unique<ModelExecutionSchedulerImpl>(
       std::move(observers), storage_service->segment_info_database(),
-      storage_service->signal_storage_config(), model_execution_manager_.get(),
-      model_executor_.get(), all_segment_ids, clock, platform_options);
+      storage_service->signal_storage_config(), model_manager_,
+      model_executor_.get(), legacy_output_segment_ids, clock,
+      platform_options);
 }
 
-void ExecutionService::OnNewModelInfoReady(
+void ExecutionService::OnNewModelInfoReadyLegacy(
     const proto::SegmentInfo& segment_info) {
+  // TODO(crbug.com/1420015): Change path flow as
+  // SPSI->RRM->EE::RequestModelExecution and migrate
+  // MES::CancelOutstandingExecutionRequests() to EE.
   model_execution_scheduler_->OnNewModelInfoReady(segment_info);
 }
 
-ModelProvider* ExecutionService::GetModelProvider(SegmentId segment_id) {
-  return model_execution_manager_->GetProvider(segment_id);
+ModelProvider* ExecutionService::GetModelProvider(SegmentId segment_id,
+                                                  ModelSource model_source) {
+  return model_manager_->GetModelProvider(segment_id, model_source);
 }
 
 void ExecutionService::RequestModelExecution(
     std::unique_ptr<ExecutionRequest> request) {
-  DCHECK(request->segment_info);
-  if (request->save_result_to_db) {
-    DCHECK(!request->record_metrics_for_default)
-        << "cannot record metics for default model from scheduler";
-    // TODO(ssid): Scheduler should use the `request` instead of fetching the
-    // model provider.
-    DCHECK(!request->model_provider)
-        << "using custom model provider to save result is not supported";
-    DCHECK(request->callback.is_null())
-        << "save_result_to_db + callback cannot be set together";
-    DCHECK(!request->input_context)
-        << "saving results keyed on input context is not supported";
-    model_execution_scheduler_->RequestModelExecution(*request->segment_info);
-    return;
-  }
-
+  DCHECK_NE(request->segment_id, SegmentId::OPTIMIZATION_TARGET_UNKNOWN);
+  DCHECK_NE(request->model_source, proto::ModelSource::UNKNOWN_MODEL_SOURCE);
   DCHECK(!request->callback.is_null());
   model_executor_->ExecuteModel(std::move(request));
 }
@@ -107,10 +100,13 @@ void ExecutionService::RequestModelExecution(
 void ExecutionService::OverwriteModelExecutionResult(
     proto::SegmentId segment_id,
     const std::pair<float, ModelExecutionStatus>& result) {
+  // TODO(ritikagup): Change the use of this according to MultiOutputModel.
   auto execution_result = std::make_unique<ModelExecutionResult>(
-      ModelExecutionResult::Tensor(), result.first);
+      ModelProvider::Request(), ModelProvider::Response(1, result.first));
+  proto::SegmentInfo segment_info;
+  segment_info.set_segment_id(segment_id);
   model_execution_scheduler_->OnModelExecutionCompleted(
-      segment_id, std::move(execution_result));
+      segment_info, std::move(execution_result));
 }
 
 void ExecutionService::RefreshModelResults() {

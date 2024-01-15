@@ -16,7 +16,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.supplier.ObservableSupplier;
+import org.chromium.base.supplier.Supplier;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.modaldialog.ModalDialogProperties;
 import org.chromium.ui.modaldialog.ModalDialogProperties.ButtonType;
@@ -35,25 +35,37 @@ public class LoadingModalDialogCoordinator {
     private final View mButtonsView;
 
     // Used to indicate the current loading dialog state.
-    @IntDef({State.READY, State.PENDING, State.SHOWN, State.FINISHED, State.CANCELLED,
-            State.TIMED_OUT})
+    @IntDef({
+        State.READY,
+        State.PENDING,
+        State.SHOWN,
+        State.FINISHED,
+        State.CANCELLED,
+        State.TIMED_OUT
+    })
     @Retention(RetentionPolicy.SOURCE)
     public @interface State {
         /** Loading is not started, the dialog is not shown. */
         int READY = 0;
+
         /** The dialog is scheduled to be shown after the default delay. */
         int PENDING = 1;
+
         /** The dialog is visible. */
         int SHOWN = 2;
+
         /**
          * Dialog is dismissed by the client as the loading operation finished. It may be still
          * visible for a short period to prevent UI flickering.
          */
         int FINISHED = 3;
+
         /** User dismissed the dialog before the loading finished. */
         int CANCELLED = 4;
+
         /** Loading timeout occurred and the dialog was automatically dismissed. */
         int TIMED_OUT = 5;
+
         int NUM_ENTRIES = 6;
     }
 
@@ -62,15 +74,11 @@ public class LoadingModalDialogCoordinator {
      * about the loading dialog dismissals and the readiness to be immediately dismissed.
      */
     public interface Observer {
-        /**
-         * A notification that the dialog could be dismissed without causing the UI to flicker.
-         */
-        default void onDismissable(){};
+        /** A notification that the dialog could be dismissed without causing the UI to flicker. */
+        default void onDismissable() {}
 
-        /**
-         * A notification that the dialog was dismissed with given final state.
-         */
-        default void onDismissedWithState(@State int finalState){};
+        /** A notification that the dialog was dismissed with given final state. */
+        default void onDismissedWithState(@State int finalState) {}
     }
 
     /**
@@ -81,20 +89,23 @@ public class LoadingModalDialogCoordinator {
      * @param context The context for accessing resources.
      */
     public static LoadingModalDialogCoordinator create(
-            ObservableSupplier<ModalDialogManager> modalDialogManagerSupplier, Context context) {
+            Supplier<ModalDialogManager> modalDialogManagerSupplier, Context context) {
         return create(modalDialogManagerSupplier, context, new Handler(Looper.getMainLooper()));
     }
 
     @VisibleForTesting
     static LoadingModalDialogCoordinator create(
-            ObservableSupplier<ModalDialogManager> modalDialogManagerSupplier, Context context,
+            Supplier<ModalDialogManager> modalDialogManagerSupplier,
+            Context context,
             Handler handler) {
         LoadingModalDialogMediator dialogMediator =
                 new LoadingModalDialogMediator(modalDialogManagerSupplier, handler);
         RelativeLayout dialogView =
                 (RelativeLayout) LayoutInflater.from(context).inflate(R.layout.loading_modal, null);
-        RelativeLayout buttonsView = (RelativeLayout) LayoutInflater.from(context).inflate(
-                R.layout.loading_modal_button_bar, null);
+        RelativeLayout buttonsView =
+                (RelativeLayout)
+                        LayoutInflater.from(context)
+                                .inflate(R.layout.loading_modal_button_bar, null);
         return new LoadingModalDialogCoordinator(dialogMediator, dialogView, buttonsView);
     }
 
@@ -104,8 +115,10 @@ public class LoadingModalDialogCoordinator {
      * @param modalDialogMediator The LoadingModalDialogMediator to control the dialog.
      * @param dialogView The custom view with dialog content.
      */
-    private LoadingModalDialogCoordinator(@NonNull LoadingModalDialogMediator dialogMediator,
-            @NonNull RelativeLayout dialogView, @Nullable View buttonsView) {
+    private LoadingModalDialogCoordinator(
+            @NonNull LoadingModalDialogMediator dialogMediator,
+            @NonNull RelativeLayout dialogView,
+            @Nullable View buttonsView) {
         mMediator = dialogMediator;
         mCustomView = dialogView;
         mButtonsView = buttonsView;
@@ -118,13 +131,15 @@ public class LoadingModalDialogCoordinator {
     public void show() {
         PropertyModel dialogModel =
                 new PropertyModel.Builder(ModalDialogProperties.ALL_KEYS)
-                        .with(ModalDialogProperties.FULLSCREEN_DIALOG, true)
-                        .with(ModalDialogProperties.EXCEED_MAX_HEIGHT, true)
+                        .with(
+                                ModalDialogProperties.DIALOG_STYLES,
+                                ModalDialogProperties.DialogStyles.FULLSCREEN_DIALOG)
                         .with(ModalDialogProperties.CONTROLLER, mMediator)
                         .with(ModalDialogProperties.CUSTOM_VIEW, mCustomView)
                         .with(ModalDialogProperties.CUSTOM_BUTTON_BAR_VIEW, mButtonsView)
                         .build();
-        mButtonsView.findViewById(R.id.cancel_loading_modal)
+        mButtonsView
+                .findViewById(R.id.cancel_loading_modal)
                 .setOnClickListener(view -> mMediator.onClick(dialogModel, ButtonType.NEGATIVE));
         mMediator.show(dialogModel);
     }
@@ -139,30 +154,25 @@ public class LoadingModalDialogCoordinator {
         mMediator.dismiss();
     }
 
-    /**
-     * Indicates the current dialog state.
-     */
+    /** Indicates the current dialog state. */
     public @State int getState() {
         return mMediator.getState();
     }
 
-    @VisibleForTesting
     void skipDelayForTesting() {
         mMediator.skipDelays();
     }
 
-    @VisibleForTesting
     void disableTimeoutForTesting() {
         mMediator.disableTimeout();
     }
+
     @VisibleForTesting
     View getButtonsView() {
         return mButtonsView;
     }
 
-    /**
-     * Indicates if the dailog could be immediately dismissed.
-     */
+    /** Indicates if the dailog could be immediately dismissed. */
     public boolean isImmediatelyDismissable() {
         return mMediator.isImmediatelyDismissable();
     }

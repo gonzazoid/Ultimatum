@@ -132,7 +132,8 @@ InterpolationValue CSSSizeListInterpolationType::MaybeConvertInherit(
       CssProperty(), *state.ParentStyle());
   conversion_checkers.push_back(std::make_unique<InheritedSizeListChecker>(
       CssProperty(), inherited_size_list));
-  return ConvertSizeList(inherited_size_list, state.Style()->EffectiveZoom());
+  return ConvertSizeList(inherited_size_list,
+                         state.StyleBuilder().EffectiveZoom());
 }
 
 InterpolationValue CSSSizeListInterpolationType::MaybeConvertValue(
@@ -192,7 +193,7 @@ void CSSSizeListInterpolationType::ApplyStandardPropertyValue(
         *interpolable_list.Get(i * 2 + 1), non_interpolable_list.Get(i * 2 + 1),
         state.CssToLengthConversionData());
   }
-  SizeListPropertyFunctions::SetSizeList(CssProperty(), *state.Style(),
+  SizeListPropertyFunctions::SetSizeList(CssProperty(), state.StyleBuilder(),
                                          size_list);
 }
 

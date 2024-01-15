@@ -6,10 +6,10 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -80,7 +80,7 @@ enum class FirstSmartLockStatus {
   kMaxValue = kPrimaryUserAbsent
 };
 
-absl::optional<FirstSmartLockStatus> GetFirstSmartLockStatus(
+std::optional<FirstSmartLockStatus> GetFirstSmartLockStatus(
     SmartLockState state) {
   switch (state) {
     case SmartLockState::kBluetoothDisabled:
@@ -102,7 +102,7 @@ absl::optional<FirstSmartLockStatus> GetFirstSmartLockStatus(
     case SmartLockState::kPrimaryUserAbsent:
       return FirstSmartLockStatus::kPrimaryUserAbsent;
     default:
-      return absl::nullopt;
+      return std::nullopt;
   }
 }
 
@@ -149,29 +149,14 @@ std::string GetHistogramStatusSuffix(bool unlockable) {
   return unlockable ? "Unlockable" : "Other";
 }
 
-std::string GetHistogramScreenLockTypeName(
-    ProximityAuthSystem::ScreenlockType screenlock_type) {
-  return screenlock_type == ProximityAuthSystem::SESSION_LOCK ? "Unlock"
-                                                              : "SignIn";
-}
-
-void RecordFindAndConnectToHostResult(
-    ProximityAuthSystem::ScreenlockType screenlock_type,
-    FindAndConnectToHostResult result) {
-  base::UmaHistogramEnumeration(
-      "SmartLock.FindAndConnectToHostResult." +
-          GetHistogramScreenLockTypeName(screenlock_type),
-      result);
+void RecordFindAndConnectToHostResult(FindAndConnectToHostResult result) {
+  base::UmaHistogramEnumeration("SmartLock.FindAndConnectToHostResult.Unlock",
+                                result);
 }
 
 void RecordAuthResultFailure(
-    ProximityAuthSystem::ScreenlockType screenlock_type,
     SmartLockMetricsRecorder::SmartLockAuthResultFailureReason failure_reason) {
-  if (screenlock_type == ProximityAuthSystem::SESSION_LOCK) {
-    SmartLockMetricsRecorder::RecordAuthResultUnlockFailure(failure_reason);
-  } else if (screenlock_type == ProximityAuthSystem::SIGN_IN) {
-    SmartLockMetricsRecorder::RecordAuthResultSignInFailure(failure_reason);
-  }
+  SmartLockMetricsRecorder::RecordAuthResultUnlockFailure(failure_reason);
 }
 
 void RecordExtendedDurationTimerMetric(const std::string& histogram_name,
@@ -194,8 +179,6 @@ bool HasCommunicatedWithPhone(SmartLockState state) {
     case SmartLockState::kPhoneNotFound:
       [[fallthrough]];
     case SmartLockState::kConnectingToPhone:
-      [[fallthrough]];
-    case SmartLockState::kPasswordReentryRequired:
       return false;
     case SmartLockState::kPhoneNotLockable:
       [[fallthrough]];
@@ -216,11 +199,8 @@ bool HasCommunicatedWithPhone(SmartLockState state) {
 
 }  // namespace
 
-UnlockManagerImpl::UnlockManagerImpl(
-    ProximityAuthSystem::ScreenlockType screenlock_type,
-    ProximityAuthClient* proximity_auth_client)
-    : screenlock_type_(screenlock_type),
-      proximity_auth_client_(proximity_auth_client),
+UnlockManagerImpl::UnlockManagerImpl(ProximityAuthClient* proximity_auth_client)
+    : proximity_auth_client_(proximity_auth_client),
       bluetooth_suspension_recovery_timer_(
           std::make_unique<base::OneShotTimer>()) {
   chromeos::PowerManagerClient::Get()->AddObserver(this);
@@ -248,8 +228,7 @@ bool UnlockManagerImpl::IsUnlockAllowed() {
   return (remote_screenlock_state_ &&
           *remote_screenlock_state_ == RemoteScreenlockState::UNLOCKED &&
           is_bluetooth_connection_to_phone_active_ && proximity_monitor_ &&
-          proximity_monitor_->IsUnlockAllowed() &&
-          (screenlock_type_ != ProximityAuthSystem::SIGN_IN || GetMessenger()));
+          proximity_monitor_->IsUnlockAllowed());
 }
 
 void UnlockManagerImpl::SetRemoteDeviceLifeCycle(
@@ -275,7 +254,6 @@ void UnlockManagerImpl::SetRemoteDeviceLifeCycle(
       AttemptToStartRemoteDeviceLifecycle();
     } else {
       RecordFindAndConnectToHostResult(
-          screenlock_type_,
           FindAndConnectToHostResult::kCanceledBluetoothDisabled);
       SetIsPerformingInitialScan(false /* is_performing_initial_scan */);
     }
@@ -313,7 +291,6 @@ void UnlockManagerImpl::OnLifeCycleStateChanged(
 
     if (is_performing_initial_scan_) {
       RecordFindAndConnectToHostResult(
-          screenlock_type_,
           FindAndConnectToHostResult::kFoundAndConnectedToHost);
     }
   } else {
@@ -335,7 +312,6 @@ void UnlockManagerImpl::OnLifeCycleStateChanged(
 
     if (is_performing_initial_scan_) {
       RecordFindAndConnectToHostResult(
-          screenlock_type_,
           FindAndConnectToHostResult::kSecureChannelConnectionAttemptFailure);
       SetIsPerformingInitialScan(false /* is_performing_initial_scan */);
     }
@@ -362,7 +338,7 @@ void UnlockManagerImpl::OnUnlockEventSent(bool success) {
         SmartLockMetricsRecorder::SmartLockAuthResultFailureReason::
             kUnlockEventSentButNotAttemptingAuth);
   } else if (success) {
-    FinalizeAuthAttempt(absl::nullopt /* failure_reason */);
+    FinalizeAuthAttempt(std::nullopt /* failure_reason */);
   } else {
     FinalizeAuthAttempt(
         SmartLockMetricsRecorder::SmartLockAuthResultFailureReason::
@@ -395,24 +371,6 @@ void UnlockManagerImpl::OnRemoteStatusUpdate(
   SetIsPerformingInitialScan(false /* is_performing_initial_scan */);
 }
 
-void UnlockManagerImpl::OnDecryptResponse(const std::string& decrypted_bytes) {
-  if (!is_attempting_auth_) {
-    PA_LOG(ERROR) << "Decrypt response received but not attempting auth.";
-    return;
-  }
-
-  if (decrypted_bytes.empty()) {
-    PA_LOG(WARNING) << "Failed to decrypt sign-in challenge.";
-    FinalizeAuthAttempt(
-        SmartLockMetricsRecorder::SmartLockAuthResultFailureReason::
-            kFailedToDecryptSignInChallenge);
-  } else {
-    sign_in_secret_ = std::make_unique<std::string>(decrypted_bytes);
-    if (GetMessenger())
-      GetMessenger()->DispatchUnlockEvent();
-  }
-}
-
 void UnlockManagerImpl::OnUnlockResponse(bool success) {
   if (!is_attempting_auth_) {
     FinalizeAuthAttempt(
@@ -437,12 +395,10 @@ void UnlockManagerImpl::OnUnlockResponse(bool success) {
 void UnlockManagerImpl::OnDisconnected() {
   if (is_attempting_auth_) {
     RecordAuthResultFailure(
-        screenlock_type_,
         SmartLockMetricsRecorder::SmartLockAuthResultFailureReason::
             kAuthenticatedChannelDropped);
   } else if (is_performing_initial_scan_) {
     RecordGetRemoteStatusResultFailure(
-        screenlock_type_,
         GetRemoteStatusResultFailureReason::kAuthenticatedChannelDropped);
   }
 
@@ -524,11 +480,9 @@ void UnlockManagerImpl::OnBluetoothAdapterPresentAndPoweredChanged() {
     if (is_bluetooth_connection_to_phone_active_ &&
         !has_received_first_remote_status_) {
       RecordGetRemoteStatusResultFailure(
-          screenlock_type_,
           GetRemoteStatusResultFailureReason::kCanceledBluetoothDisabled);
     } else {
       RecordFindAndConnectToHostResult(
-          screenlock_type_,
           FindAndConnectToHostResult::kCanceledBluetoothDisabled);
     }
 
@@ -583,7 +537,7 @@ void UnlockManagerImpl::OnAuthAttempted(mojom::AuthType auth_type) {
     return;
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(
           &UnlockManagerImpl::FinalizeAuthAttempt,
@@ -592,11 +546,7 @@ void UnlockManagerImpl::OnAuthAttempted(mojom::AuthType auth_type) {
               kAuthAttemptTimedOut),
       kAuthAttemptTimeout);
 
-  if (screenlock_type_ == ProximityAuthSystem::SIGN_IN) {
-    SendSignInChallenge();
-  } else {
-    GetMessenger()->RequestUnlock();
-  }
+  GetMessenger()->RequestUnlock();
 }
 
 void UnlockManagerImpl::CancelConnectionAttempt() {
@@ -614,11 +564,9 @@ void UnlockManagerImpl::CancelConnectionAttempt() {
     if (is_bluetooth_connection_to_phone_active_ &&
         !has_received_first_remote_status_) {
       RecordGetRemoteStatusResultFailure(
-          screenlock_type_,
           GetRemoteStatusResultFailureReason::kCanceledUserEnteredPassword);
     } else {
       RecordFindAndConnectToHostResult(
-          screenlock_type_,
           FindAndConnectToHostResult::kCanceledUserEnteredPassword);
     }
 
@@ -630,39 +578,6 @@ std::unique_ptr<ProximityMonitor> UnlockManagerImpl::CreateProximityMonitor(
     RemoteDeviceLifeCycle* life_cycle) {
   return std::make_unique<ProximityMonitorImpl>(life_cycle->GetRemoteDevice(),
                                                 life_cycle->GetChannel());
-}
-
-void UnlockManagerImpl::SendSignInChallenge() {
-  if (!life_cycle_ || !GetMessenger()) {
-    PA_LOG(ERROR) << "Not ready to send sign-in challenge";
-    return;
-  }
-
-  if (!GetMessenger()->GetChannel()) {
-    PA_LOG(ERROR) << "Channel is not ready to send sign-in challenge.";
-    return;
-  }
-
-  GetMessenger()->GetChannel()->GetConnectionMetadata(
-      base::BindOnce(&UnlockManagerImpl::OnGetConnectionMetadata,
-                     weak_ptr_factory_.GetWeakPtr()));
-}
-
-void UnlockManagerImpl::OnGetConnectionMetadata(
-    ash::secure_channel::mojom::ConnectionMetadataPtr connection_metadata_ptr) {
-  ash::multidevice::RemoteDeviceRef remote_device =
-      life_cycle_->GetRemoteDevice();
-  proximity_auth_client_->GetChallengeForUserAndDevice(
-      remote_device.user_email(), remote_device.public_key(),
-      connection_metadata_ptr->channel_binding_data,
-      base::BindOnce(&UnlockManagerImpl::OnGotSignInChallenge,
-                     weak_ptr_factory_.GetWeakPtr()));
-}
-
-void UnlockManagerImpl::OnGotSignInChallenge(const std::string& challenge) {
-  PA_LOG(VERBOSE) << "Got sign-in challenge, sending for decryption...";
-  if (GetMessenger())
-    GetMessenger()->RequestDecryption(challenge);
 }
 
 SmartLockState UnlockManagerImpl::GetSmartLockState() {
@@ -760,7 +675,7 @@ void UnlockManagerImpl::SetIsPerformingInitialScan(
     initial_scan_start_time_ = base::DefaultClock::GetInstance()->Now();
     has_received_first_remote_status_ = false;
 
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&UnlockManagerImpl::OnInitialScanTimeout,
                        initial_scan_timeout_weak_ptr_factory_.GetWeakPtr()),
@@ -781,22 +696,21 @@ void UnlockManagerImpl::OnInitialScanTimeout() {
     PA_LOG(ERROR) << "Successfully connected to host, but it did not provide "
                      "remote status update.";
     RecordGetRemoteStatusResultFailure(
-        screenlock_type_, GetRemoteStatusResultFailureReason::
-                              kTimedOutDidNotReceiveRemoteStatusUpdate);
+        GetRemoteStatusResultFailureReason::
+            kTimedOutDidNotReceiveRemoteStatusUpdate);
   } else {
     PA_LOG(INFO) << "Initial scan for host returned no result.";
-    RecordFindAndConnectToHostResult(screenlock_type_,
-                                     FindAndConnectToHostResult::kTimedOut);
+    RecordFindAndConnectToHostResult(FindAndConnectToHostResult::kTimedOut);
   }
 
   SetIsPerformingInitialScan(false /* is_performing_initial_scan */);
 }
 
 void UnlockManagerImpl::FinalizeAuthAttempt(
-    const absl::optional<
+    const std::optional<
         SmartLockMetricsRecorder::SmartLockAuthResultFailureReason>& error) {
   if (error) {
-    RecordAuthResultFailure(screenlock_type_, *error);
+    RecordAuthResultFailure(*error);
   }
 
   if (!is_attempting_auth_)
@@ -810,14 +724,9 @@ void UnlockManagerImpl::FinalizeAuthAttempt(
     proximity_monitor_->RecordProximityMetricsOnAuthSuccess();
 
   is_attempting_auth_ = false;
-  if (screenlock_type_ == ProximityAuthSystem::SIGN_IN) {
-    PA_LOG(VERBOSE) << "Finalizing sign-in...";
-    proximity_auth_client_->FinalizeSignin(
-        should_accept && sign_in_secret_ ? *sign_in_secret_ : std::string());
-  } else {
-    PA_LOG(VERBOSE) << "Finalizing unlock...";
-    proximity_auth_client_->FinalizeUnlock(should_accept);
-  }
+
+  PA_LOG(VERBOSE) << "Finalizing unlock...";
+  proximity_auth_client_->FinalizeUnlock(should_accept);
 }
 
 UnlockManagerImpl::RemoteScreenlockState
@@ -859,7 +768,7 @@ void UnlockManagerImpl::RecordFirstRemoteStatusReceived(bool unlockable) {
     return;
   has_received_first_remote_status_ = true;
 
-  RecordGetRemoteStatusResultSuccess(screenlock_type_);
+  RecordGetRemoteStatusResultSuccess();
 
   if (initial_scan_start_time_.is_null() ||
       attempt_get_remote_status_start_time_.is_null()) {
@@ -878,32 +787,30 @@ void UnlockManagerImpl::RecordFirstRemoteStatusReceived(bool unlockable) {
   base::TimeDelta authentication_to_receive_first_remote_status_duration =
       now - attempt_get_remote_status_start_time_;
 
-  if (screenlock_type_ == ProximityAuthSystem::SESSION_LOCK) {
-    RecordExtendedDurationTimerMetric(
-        "SmartLock.Performance.StartScanToReceiveFirstRemoteStatusDuration."
-        "Unlock",
-        start_scan_to_receive_first_remote_status_duration);
-    RecordExtendedDurationTimerMetric(
-        "SmartLock.Performance.StartScanToReceiveFirstRemoteStatusDuration."
-        "Unlock." +
-            histogram_status_suffix,
-        start_scan_to_receive_first_remote_status_duration);
+  RecordExtendedDurationTimerMetric(
+      "SmartLock.Performance.StartScanToReceiveFirstRemoteStatusDuration."
+      "Unlock",
+      start_scan_to_receive_first_remote_status_duration);
+  RecordExtendedDurationTimerMetric(
+      "SmartLock.Performance.StartScanToReceiveFirstRemoteStatusDuration."
+      "Unlock." +
+          histogram_status_suffix,
+      start_scan_to_receive_first_remote_status_duration);
 
-    // This should be much less than 10 seconds, so use UmaHistogramTimes.
-    base::UmaHistogramTimes(
-        "SmartLock.Performance."
-        "AuthenticationToReceiveFirstRemoteStatusDuration.Unlock",
-        authentication_to_receive_first_remote_status_duration);
-    base::UmaHistogramTimes(
-        "SmartLock.Performance."
-        "AuthenticationToReceiveFirstRemoteStatusDuration.Unlock." +
-            histogram_status_suffix,
-        authentication_to_receive_first_remote_status_duration);
-  }
+  // This should be much less than 10 seconds, so use UmaHistogramTimes.
+  base::UmaHistogramTimes(
+      "SmartLock.Performance."
+      "AuthenticationToReceiveFirstRemoteStatusDuration.Unlock",
+      authentication_to_receive_first_remote_status_duration);
+  base::UmaHistogramTimes(
+      "SmartLock.Performance."
+      "AuthenticationToReceiveFirstRemoteStatusDuration.Unlock." +
+          histogram_status_suffix,
+      authentication_to_receive_first_remote_status_duration);
 }
 
 void UnlockManagerImpl::RecordFirstStatusShownToUser(SmartLockState new_state) {
-  absl::optional<FirstSmartLockStatus> first_status =
+  std::optional<FirstSmartLockStatus> first_status =
       GetFirstSmartLockStatus(new_state);
   if (!first_status.has_value()) {
     return;
@@ -928,7 +835,6 @@ void UnlockManagerImpl::RecordFirstStatusShownToUser(SmartLockState new_state) {
   base::TimeDelta show_lock_screen_to_show_first_status_to_user_duration =
       now - show_lock_screen_time_;
 
-  if (screenlock_type_ == ProximityAuthSystem::SESSION_LOCK) {
     RecordExtendedDurationTimerMetric(
         "SmartLock.Performance.ShowLockScreenToShowFirstStatusToUserDuration."
         "Unlock",
@@ -950,7 +856,6 @@ void UnlockManagerImpl::RecordFirstStatusShownToUser(SmartLockState new_state) {
           "Unlock.Other",
           show_lock_screen_to_show_first_status_to_user_duration);
     }
-  }
 }
 
 void UnlockManagerImpl::ResetPerformanceMetricsTimestamps() {
@@ -964,30 +869,17 @@ void UnlockManagerImpl::SetBluetoothSuspensionRecoveryTimerForTesting(
   bluetooth_suspension_recovery_timer_ = std::move(timer);
 }
 
-void UnlockManagerImpl::RecordGetRemoteStatusResultSuccess(
-    ProximityAuthSystem::ScreenlockType screenlock_type,
-    bool success) {
-  base::UmaHistogramBoolean("SmartLock.GetRemoteStatus." +
-                                GetHistogramScreenLockTypeName(screenlock_type),
-                            success);
-
-  if (screenlock_type == ProximityAuthSystem::SESSION_LOCK) {
-    get_remote_status_unlock_success_ = success;
-  }
+void UnlockManagerImpl::RecordGetRemoteStatusResultSuccess(bool success) {
+  base::UmaHistogramBoolean("SmartLock.GetRemoteStatus.Unlock", success);
+  get_remote_status_unlock_success_ = success;
 }
 
 void UnlockManagerImpl::RecordGetRemoteStatusResultFailure(
-    ProximityAuthSystem::ScreenlockType screenlock_type,
     GetRemoteStatusResultFailureReason failure_reason) {
-  RecordGetRemoteStatusResultSuccess(screenlock_type, false /* success */);
-  base::UmaHistogramEnumeration(
-      "SmartLock.GetRemoteStatus." +
-          GetHistogramScreenLockTypeName(screenlock_type) + ".Failure",
-      failure_reason);
-
-  if (screenlock_type == ProximityAuthSystem::SESSION_LOCK) {
-    get_remote_status_unlock_failure_reason_ = failure_reason;
-  }
+  RecordGetRemoteStatusResultSuccess(false /* success */);
+  base::UmaHistogramEnumeration("SmartLock.GetRemoteStatus.Unlock.Failure",
+                                failure_reason);
+  get_remote_status_unlock_failure_reason_ = failure_reason;
 }
 
 std::string UnlockManagerImpl::GetRemoteStatusResultFailureReasonToString(

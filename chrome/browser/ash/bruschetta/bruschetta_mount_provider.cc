@@ -5,7 +5,9 @@
 #include "chrome/browser/ash/bruschetta/bruschetta_mount_provider.h"
 
 #include "base/logging.h"
+#include "base/notreached.h"
 #include "chrome/browser/ash/bruschetta/bruschetta_launcher.h"
+#include "chrome/browser/ash/bruschetta/bruschetta_pref_names.h"
 #include "chrome/browser/ash/bruschetta/bruschetta_service.h"
 #include "chrome/browser/ash/bruschetta/bruschetta_util.h"
 #include "chrome/browser/ash/guest_os/guest_os_session_tracker.h"
@@ -24,7 +26,15 @@ Profile* BruschettaMountProvider::profile() {
 }
 
 std::string BruschettaMountProvider::DisplayName() {
-  return kBruschettaDisplayName;
+  auto config = GetConfigForGuest(profile_, guest_id_,
+                                  prefs::PolicyEnabledState::BLOCKED);
+  if (!config.has_value() || !config.value()) {
+    // If the config doesn't exist this provider should have been removed.
+    NOTREACHED();
+    return {};
+  }
+
+  return *config.value()->FindString(prefs::kPolicyNameKey);
 }
 
 guest_os::GuestId BruschettaMountProvider::GuestId() {
@@ -47,9 +57,13 @@ BruschettaMountProvider::CreateFileWatcher(base::FilePath mount_path,
 void BruschettaMountProvider::Prepare(PrepareCallback callback) {
   auto* service = BruschettaService::GetForProfile(profile_);
   auto launcher = service->GetLauncher(guest_id_.vm_name);
-  launcher->EnsureRunning(base::BindOnce(&BruschettaMountProvider::OnRunning,
-                                         weak_ptr_factory_.GetWeakPtr(),
-                                         std::move(callback)));
+  if (launcher) {
+    launcher->EnsureRunning(base::BindOnce(&BruschettaMountProvider::OnRunning,
+                                           weak_ptr_factory_.GetWeakPtr(),
+                                           std::move(callback)));
+  } else {
+    std::move(callback).Run(false, {}, {}, {});
+  }
 }
 
 void BruschettaMountProvider::OnRunning(PrepareCallback callback,

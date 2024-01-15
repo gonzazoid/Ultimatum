@@ -12,9 +12,9 @@
 #if BUILDFLAG(IS_APPLE)
 #include <mach/thread_policy.h>
 
-#include "base/mac/mach_logging.h"
-#include "base/mac/scoped_mach_port.h"
-#include "base/mac/scoped_nsautorelease_pool.h"
+#include "base/apple/mach_logging.h"
+#include "base/apple/scoped_mach_port.h"
+#include "base/apple/scoped_nsautorelease_pool.h"
 #include "base/threading/threading_features.h"
 #endif
 
@@ -34,7 +34,7 @@ void MessagePumpDefault::Run(Delegate* delegate) {
 
   for (;;) {
 #if BUILDFLAG(IS_APPLE)
-    mac::ScopedNSAutoreleasePool autorelease_pool;
+    apple::ScopedNSAutoreleasePool autorelease_pool;
 #endif
 
     Delegate::NextWorkInfo next_work_info = delegate->DoWork();
@@ -80,23 +80,5 @@ void MessagePumpDefault::ScheduleDelayedWork(
   // TODO(gab): Consider removing ScheduleDelayedWork() when all pumps function
   // this way (bit.ly/merge-message-pump-do-work).
 }
-
-#if BUILDFLAG(IS_APPLE)
-void MessagePumpDefault::SetTimerSlack(TimerSlack timer_slack) {
-  if (!FeatureList::GetInstance() ||
-      !FeatureList::IsEnabled(kUseThreadQoSMac)) {
-    thread_latency_qos_policy_data_t policy{};
-    policy.thread_latency_qos_tier = timer_slack == TIMER_SLACK_MAXIMUM
-                                         ? LATENCY_QOS_TIER_3
-                                         : LATENCY_QOS_TIER_UNSPECIFIED;
-    mac::ScopedMachSendRight thread_port(mach_thread_self());
-    kern_return_t kr =
-        thread_policy_set(thread_port.get(), THREAD_LATENCY_QOS_POLICY,
-                          reinterpret_cast<thread_policy_t>(&policy),
-                          THREAD_LATENCY_QOS_POLICY_COUNT);
-    MACH_DVLOG_IF(1, kr != KERN_SUCCESS, kr) << "thread_policy_set";
-  }
-}
-#endif
 
 }  // namespace base

@@ -5,10 +5,12 @@
 #include "services/network/public/cpp/content_security_policy/content_security_policy.h"
 
 #include "base/containers/contains.h"
-#include "base/strings/string_piece.h"
+#include "base/memory/raw_ref.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/scoped_feature_list.h"
 #include "net/http/http_response_headers.h"
 #include "services/network/public/cpp/content_security_policy/csp_context.h"
+#include "services/network/public/cpp/features.h"
 #include "services/network/public/cpp/web_sandbox_flags.h"
 #include "services/network/public/mojom/content_security_policy.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -101,7 +103,7 @@ class CSPContextTest : public CSPContext {
     scheme_to_bypass_.push_back(scheme);
   }
 
-  bool SchemeShouldBypassCSP(const base::StringPiece& scheme) override {
+  bool SchemeShouldBypassCSP(const std::string_view& scheme) override {
     return base::Contains(scheme_to_bypass_, scheme);
   }
 
@@ -1248,37 +1250,37 @@ TEST(ContentSecurityPolicy, NavigateToChecks) {
 
   struct TestCase {
     mojom::CSPSourceListPtr navigate_to_list;
-    const GURL& url;
+    const raw_ref<const GURL> url;
     bool is_response_check;
     bool is_form_submission;
     mojom::CSPSourceListPtr form_action_list;
     bool expected;
   } cases[] = {
       // Basic source matching.
-      {allow_none(), url_a, false, false, {}, false},
-      {allow_a(), url_a, false, false, {}, true},
-      {allow_a(), url_b, false, false, {}, false},
-      {allow_self(), url_a, false, false, {}, true},
+      {allow_none(), raw_ref(url_a), false, false, {}, false},
+      {allow_a(), raw_ref(url_a), false, false, {}, true},
+      {allow_a(), raw_ref(url_b), false, false, {}, false},
+      {allow_self(), raw_ref(url_a), false, false, {}, true},
 
       // Checking allow_redirect flag interactions.
-      {allow_redirect(), url_a, false, false, {}, true},
-      {allow_redirect(), url_a, true, false, {}, false},
-      {allow_redirect_a(), url_a, false, false, {}, true},
-      {allow_redirect_a(), url_a, true, false, {}, true},
+      {allow_redirect(), raw_ref(url_a), false, false, {}, true},
+      {allow_redirect(), raw_ref(url_a), true, false, {}, false},
+      {allow_redirect_a(), raw_ref(url_a), false, false, {}, true},
+      {allow_redirect_a(), raw_ref(url_a), true, false, {}, true},
 
       // Interaction with form-action:
 
       // Form submission without form-action present.
-      {allow_none(), url_a, false, true, {}, false},
-      {allow_a(), url_a, false, true, {}, true},
-      {allow_a(), url_b, false, true, {}, false},
-      {allow_self(), url_a, false, true, {}, true},
+      {allow_none(), raw_ref(url_a), false, true, {}, false},
+      {allow_a(), raw_ref(url_a), false, true, {}, true},
+      {allow_a(), raw_ref(url_b), false, true, {}, false},
+      {allow_self(), raw_ref(url_a), false, true, {}, true},
 
       // Form submission with form-action present.
-      {allow_none(), url_a, false, true, allow_a(), true},
-      {allow_a(), url_a, false, true, allow_a(), true},
-      {allow_a(), url_b, false, true, allow_a(), true},
-      {allow_self(), url_a, false, true, allow_a(), true},
+      {allow_none(), raw_ref(url_a), false, true, allow_a(), true},
+      {allow_a(), raw_ref(url_a), false, true, allow_a(), true},
+      {allow_a(), raw_ref(url_b), false, true, allow_a(), true},
+      {allow_self(), raw_ref(url_a), false, true, allow_a(), true},
   };
 
   for (auto& test : cases) {
@@ -1292,14 +1294,15 @@ TEST(ContentSecurityPolicy, NavigateToChecks) {
           std::move(test.form_action_list);
     }
 
-    EXPECT_EQ(test.expected, CheckContentSecurityPolicy(
-                                 policy, CSPDirectiveName::NavigateTo, test.url,
-                                 GURL(), true, test.is_response_check, &context,
-                                 SourceLocation(), test.is_form_submission));
-    EXPECT_EQ(test.expected,
+    EXPECT_EQ(CSPCheckResult(test.expected),
               CheckContentSecurityPolicy(
-                  policy, CSPDirectiveName::NavigateTo, test.url, GURL(), false,
+                  policy, CSPDirectiveName::NavigateTo, *test.url, GURL(), true,
                   test.is_response_check, &context, SourceLocation(),
+                  test.is_form_submission));
+    EXPECT_EQ(CSPCheckResult(test.expected),
+              CheckContentSecurityPolicy(
+                  policy, CSPDirectiveName::NavigateTo, *test.url, GURL(),
+                  false, test.is_response_check, &context, SourceLocation(),
                   test.is_form_submission));
   }
 }
@@ -1579,6 +1582,47 @@ TEST(ContentSecurityPolicy, ParseHash) {
       EXPECT_TRUE(hashes.empty()) << test.hash << " should be an invalid hash";
     }
   }
+}
+
+TEST(ContentSecurityPolicy, ParseInlineSpeculationRules) {
+  std::vector<mojom::ContentSecurityPolicyPtr> script_src_policies =
+      ParseCSP("script-src 'inline-speculation-rules'");
+  ASSERT_EQ(1u, script_src_policies.size());
+  ASSERT_EQ(1u, script_src_policies[0]->directives.size());
+  ASSERT_TRUE(script_src_policies[0]->directives.contains(
+      mojom::CSPDirectiveName::ScriptSrc));
+  EXPECT_TRUE(script_src_policies[0]
+                  ->directives[mojom::CSPDirectiveName::ScriptSrc]
+                  ->allow_inline_speculation_rules);
+  EXPECT_EQ(0u, script_src_policies[0]->parsing_errors.size());
+
+  std::vector<mojom::ContentSecurityPolicyPtr> script_src_elem_policies =
+      ParseCSP("script-src-elem 'inline-speculation-rules'");
+  ASSERT_EQ(1u, script_src_elem_policies.size());
+  ASSERT_EQ(1u, script_src_elem_policies[0]->directives.size());
+  ASSERT_TRUE(script_src_elem_policies[0]->directives.contains(
+      mojom::CSPDirectiveName::ScriptSrcElem));
+  EXPECT_TRUE(script_src_elem_policies[0]
+                  ->directives[mojom::CSPDirectiveName::ScriptSrcElem]
+                  ->allow_inline_speculation_rules);
+  EXPECT_EQ(0u, script_src_elem_policies[0]->parsing_errors.size());
+
+  std::vector<mojom::ContentSecurityPolicyPtr> img_src_policies =
+      ParseCSP("img-src 'inline-speculation-rules'");
+  ASSERT_EQ(1u, img_src_policies.size());
+  ASSERT_EQ(1u, img_src_policies[0]->directives.size());
+  ASSERT_TRUE(img_src_policies[0]->directives.contains(
+      mojom::CSPDirectiveName::ImgSrc));
+  EXPECT_FALSE(img_src_policies[0]
+                   ->directives[mojom::CSPDirectiveName::ImgSrc]
+                   ->allow_inline_speculation_rules);
+  ASSERT_EQ(1u, img_src_policies[0]->parsing_errors.size());
+  EXPECT_EQ(
+      "The Content-Security-Policy directive 'img-src' contains "
+      "''inline-speculation-rules'' as a source expression that is permitted "
+      "only for 'script-src' and 'script-src-elem' directives. It will be "
+      "ignored.",
+      img_src_policies[0]->parsing_errors[0]);
 }
 
 TEST(ContentSecurityPolicy, IsValidRequiredCSPAttr) {
@@ -1998,20 +2042,26 @@ TEST(ContentSecurityPolicy, AllowsBlanketEnforcementOfRequiredCSP) {
           "http://example.com",
       },
       {
-          "Same origin allows",
+          "Same origin does not allow",
           "http://example.com",
           "http://example.com",
           nullptr,
+          false,
+      },
+      {
+          "Same origin with right header allows",
+          "http://example.com",
+          "http://example.com",
+          "http://example.com",
           true,
           "http://example.com",
       },
       {
-          "Same origin allows independently of header",
+          "Same origin with wrong header does not allow",
           "http://example.com",
           "http://example.com",
           "http://not-example.com",
-          true,
-          "http://example.com",
+          false,
       },
       {
           "Different origin does not allow",
@@ -2177,7 +2227,8 @@ TEST(ContentSecurityPolicy, FencedFrameSrcOpaqueURL) {
       policy, CSPDirectiveName::FencedFrameSrc, GURL("https://a.com"), GURL(),
       /*has_followed_redirect=*/false,
       /*is_response_check=*/false, &context, SourceLocation(),
-      /*is_form_submission=*/false, /*is_opaque_fenced_frame=*/true));
+      /*is_form_submission=*/false,
+      /*is_opaque_fenced_frame=*/true));
   ASSERT_EQ(1u, context.violations().size());
   const char kConsoleMessage[] =
       "Refused to frame 'urn:uuid' as a fenced frame because it violates the "

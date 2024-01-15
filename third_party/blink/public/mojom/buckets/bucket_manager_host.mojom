@@ -6,18 +6,20 @@ module blink.mojom;
 
 import "mojo/public/mojom/base/time.mojom";
 import "third_party/blink/public/mojom/cache_storage/cache_storage.mojom";
+import "third_party/blink/public/mojom/file_system_access/file_system_access_directory_handle.mojom";
+import "third_party/blink/public/mojom/file_system_access/file_system_access_error.mojom";
 import "third_party/blink/public/mojom/indexeddb/indexeddb.mojom";
 import "third_party/blink/public/mojom/locks/lock_manager.mojom";
+import "third_party/blink/public/mojom/quota/quota_types.mojom";
 
 // Implementation of the proposed "Storage Buckets API".
 //
 // Proposal: https://github.com/WICG/storage-buckets
 
-// The durability policy to apply to a single StorageBucket. The values are
-// persisted to the quota DB and must not be changed.
-enum BucketDurability {
-  kRelaxed = 0,
-  kStrict = 1,
+enum BucketError {
+  kUnknown = 0,
+  kQuotaExceeded = 1,
+  kInvalidExpiration = 2,
 };
 
 // The policies applied to a StorageBucket upon its creation.
@@ -28,6 +30,9 @@ struct BucketPolicies {
   BucketDurability durability;
   bool has_durability = false;
 
+  // `quota` should always be positive, but this is not uint64_t because SQLite
+  // only handles signed integers and some legacy code does arithmetic with
+  // these values.
   int64 quota;
   bool has_quota = false;
 
@@ -51,6 +56,8 @@ interface BucketHost {
 
   // Retrieves estimated quota usage data for the StorageBucket. The values for
   // |current_usage| and |current_quota| are only valid when |success| is true.
+  // Ideally usage and quota should be an uint64s. See comment in BucketPolicies
+  // for quota.
   // TODO(ayui): Return quota UsageBreakdown.
   Estimate() => (int64 current_usage, int64 current_quota, bool success);
 
@@ -74,6 +81,12 @@ interface BucketHost {
 
   // Connects a CacheStorage implementation in the browser process.
   GetCaches(pending_receiver<CacheStorage> cache_storage);
+
+  // Opens the sandboxed filesystem for this bucket.
+  GetDirectory() =>
+      (FileSystemAccessError result,
+       pending_remote<FileSystemAccessDirectoryHandle>? directory);
+
 };
 
 // Origin-scoped entry point to the Storage Buckets API.
@@ -85,9 +98,13 @@ interface BucketManagerHost {
   // Open or create or bucket with the specified name and policies.
   // On success, it will return a mojo data pipe to the BucketHost in the
   // browser process. Returns a null remote on error, e.g. if the storage bucket
-  // failed to be created or retrieved due to a database error.
+  // failed to be created or retrieved due to a database error. `error` is only
+  // meaningful if `remote` is null.
   OpenBucket(string name, BucketPolicies policy)
-      => (pending_remote<BucketHost>? remote);
+      => (pending_remote<BucketHost>? remote, BucketError error);
+
+  // Gets bucket without creating or updating it.
+  GetBucketForDevtools(string name, pending_receiver<BucketHost> receiver);
 
   // Returns a list of stored bucket names in alphabetical order.
   Keys() => (array<string> buckets, bool success);

@@ -5,11 +5,11 @@
 #include "components/exo/test/exo_test_base.h"
 
 #include "ash/shell.h"
+#include "ash/test_shell_delegate.h"
 #include "components/exo/buffer.h"
 #include "components/exo/shell_surface.h"
 #include "components/exo/surface.h"
 #include "components/exo/wm_helper.h"
-#include "components/exo/wm_helper_chromeos.h"
 #include "components/viz/service/frame_sinks/frame_sink_manager_impl.h"
 #include "components/viz/service/surfaces/surface_manager.h"
 #include "ui/aura/client/aura_constants.h"
@@ -49,15 +49,26 @@ ExoTestBase::ExoTestBase() = default;
 ExoTestBase::~ExoTestBase() = default;
 
 void ExoTestBase::SetUp() {
-  AshTestBase::SetUp();
-  wm_helper_ = std::make_unique<WMHelperChromeOS>();
-  wm_helper_->RegisterAppPropertyResolver(
-      base::WrapUnique(new TestPropertyResolver()));
+  SetUp(nullptr);
+
+  if (task_environment()->UsesMockTime()) {
+    // Reduce the refresh rate to save cost for fast forwarding when mock time
+    // is used.
+    GetContextFactory()->SetRefreshRateForTests(10.0);
+  }
 }
 
 void ExoTestBase::TearDown() {
   wm_helper_.reset();
   AshTestBase::TearDown();
+}
+
+void ExoTestBase::SetUp(
+    std::unique_ptr<ash::TestShellDelegate> shell_delegate) {
+  AshTestBase::SetUp(std::move(shell_delegate));
+  wm_helper_ = std::make_unique<WMHelper>();
+  wm_helper_->RegisterAppPropertyResolver(
+      base::WrapUnique(new TestPropertyResolver()));
 }
 
 viz::SurfaceManager* ExoTestBase::GetSurfaceManager() {

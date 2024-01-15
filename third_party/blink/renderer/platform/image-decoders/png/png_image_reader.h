@@ -26,6 +26,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_IMAGE_DECODERS_PNG_PNG_IMAGE_READER_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_IMAGE_DECODERS_PNG_PNG_IMAGE_READER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "third_party/blink/renderer/platform/image-decoders/image_frame.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
@@ -86,8 +87,9 @@ class PLATFORM_EXPORT PNGImageReader final {
   bool ParseCompleted() const { return parse_completed_; }
 
   bool FrameIsReceivedAtIndex(wtf_size_t index) const {
-    if (!index)
+    if (!index) {
       return FirstFrameFullyReceived();
+    }
     return index < FrameCount();
   }
 
@@ -108,7 +110,7 @@ class PLATFORM_EXPORT PNGImageReader final {
   png_uint_32 width_;
   png_uint_32 height_;
 
-  PNGImageDecoder* decoder_;
+  raw_ptr<PNGImageDecoder> decoder_;
 
   // The offset in the stream where the PNG image starts.
   const wtf_size_t initial_offset_;

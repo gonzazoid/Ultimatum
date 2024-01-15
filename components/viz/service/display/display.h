@@ -9,10 +9,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_helpers.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/platform_thread.h"
@@ -46,6 +45,9 @@ class Size;
 
 namespace gpu {
 class ScopedAllowScheduleGpuTask;
+struct SwapBuffersCompleteParams;
+class SharedImageManager;
+class SyncPointManager;
 }
 
 namespace viz {
@@ -85,6 +87,8 @@ class VIZ_SERVICE_EXPORT Display : public DisplaySchedulerClient,
   // subclasses are replaced by SkiaRenderer.
   Display(
       SharedBitmapManager* bitmap_manager,
+      gpu::SharedImageManager* shared_image_manager,
+      gpu::SyncPointManager* sync_point_manager,
       const RendererSettings& settings,
       const DebugRendererSettings* debug_settings,
       const FrameSinkId& frame_sink_id,
@@ -124,6 +128,10 @@ class VIZ_SERVICE_EXPORT Display : public DisplaySchedulerClient,
   void SetVisible(bool visible);
   void Resize(const gfx::Size& new_size);
 
+  // Sets additional clip rect for the OutputSurface. DirectRenderer will not
+  // draw outside of this rect.
+  void SetOutputSurfaceClipRect(const gfx::Rect& clip_rect);
+
   // Sets the current SurfaceId to an invalid value. Additionally, the display
   // will fail to draw until SetLocalSurfaceId() is called.
   void InvalidateCurrentSurfaceId();
@@ -157,8 +165,7 @@ class VIZ_SERVICE_EXPORT Display : public DisplaySchedulerClient,
                                               double percentile) const override;
 
   // OutputSurfaceClient implementation.
-  void SetNeedsRedrawRect(const gfx::Rect& damage_rect) override;
-  void DidReceiveSwapBuffersAck(const gfx::SwapTimings& timings,
+  void DidReceiveSwapBuffersAck(const gpu::SwapBuffersCompleteParams& params,
                                 gfx::GpuFenceHandle release_fence) override;
   void DidReceiveCALayerParams(
       const gfx::CALayerParams& ca_layer_params) override;
@@ -167,6 +174,7 @@ class VIZ_SERVICE_EXPORT Display : public DisplaySchedulerClient,
       const gfx::PresentationFeedback& feedback) override;
   void DidReceiveReleasedOverlays(
       const std::vector<gpu::Mailbox>& released_overlays) override;
+  void AddChildWindowToBrowser(gpu::SurfaceHandle child_window) override;
 
   // LatestLocalSurfaceIdLookupDelegate implementation.
   LocalSurfaceId GetSurfaceAtAggregation(
@@ -183,6 +191,8 @@ class VIZ_SERVICE_EXPORT Display : public DisplaySchedulerClient,
       mojom::CompositorFrameSinkType* type) override;
 
   bool has_scheduler() const { return !!scheduler_; }
+  bool visible() const { return visible_; }
+  const RendererSettings& settings() const { return settings_; }
   DirectRenderer* renderer_for_testing() const { return renderer_.get(); }
 
   bool resize_based_on_root_surface() const {
@@ -212,6 +222,10 @@ class VIZ_SERVICE_EXPORT Display : public DisplaySchedulerClient,
       mojo::PendingReceiver<gfx::mojom::DelegatedInkPointRenderer>
           pending_receiver);
 
+  // `old_client` is used to guarantee that the callee is a correct owner of
+  // this Display instance.
+  void ResetDisplayClientForTesting(DisplayClient* old_client);
+
  protected:
   friend class DisplayTest;
   // PresentationGroupTiming stores rendering pipeline stage timings associated
@@ -232,7 +246,8 @@ class VIZ_SERVICE_EXPORT Display : public DisplaySchedulerClient,
         std::unique_ptr<Surface::PresentationHelper> helper);
     void OnDraw(base::TimeTicks frame_time,
                 base::TimeTicks draw_start_timestamp,
-                base::flat_set<base::PlatformThreadId> thread_ids);
+                base::flat_set<base::PlatformThreadId> thread_ids,
+                HintSession::BoostType boost_type);
     void OnSwap(gfx::SwapTimings timings, DisplaySchedulerBase* scheduler);
     bool HasSwapped() const { return !swap_timings_.is_null(); }
     void OnPresent(const gfx::PresentationFeedback& feedback);
@@ -248,6 +263,7 @@ class VIZ_SERVICE_EXPORT Display : public DisplaySchedulerClient,
     gfx::SwapTimings swap_timings_;
     std::vector<std::unique_ptr<Surface::PresentationHelper>>
         presentation_helpers_;
+    HintSession::BoostType boost_type_;
   };
 
   // TODO(cblume, crbug.com/900973): |enable_shared_images| is a temporary
@@ -258,6 +274,8 @@ class VIZ_SERVICE_EXPORT Display : public DisplaySchedulerClient,
   void OnContextLost() override;
 
   const raw_ptr<SharedBitmapManager> bitmap_manager_;
+  const raw_ptr<gpu::SharedImageManager> shared_image_manager_;
+  const raw_ptr<gpu::SyncPointManager> sync_point_manager_;
   const RendererSettings settings_;
 
   // Points to the viz-global singleton.

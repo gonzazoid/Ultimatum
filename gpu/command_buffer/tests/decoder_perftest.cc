@@ -183,10 +183,9 @@ class RecordReplayContext : public GpuControl {
     scoped_refptr<gles2::ContextGroup> context_group = new gles2::ContextGroup(
         gpu_preferences_, true, &mailbox_manager_, nullptr /* memory_tracker */,
         &translator_cache_, &completeness_cache_, feature_info,
-        bind_generates_resource, nullptr /* image_factory */,
-        nullptr /* progress_reporter */, GpuFeatureInfo(),
-        &discardable_manager_, &passthrough_discardable_manager_,
-        &shared_image_manager_);
+        bind_generates_resource, nullptr /* progress_reporter */,
+        GpuFeatureInfo(), &discardable_manager_,
+        &passthrough_discardable_manager_, &shared_image_manager_);
     command_buffer_ = std::make_unique<RecordReplayCommandBuffer>();
 
     decoder_.reset(gles2::GLES2Decoder::Create(
@@ -197,13 +196,6 @@ class RecordReplayContext : public GpuControl {
     decoder_->GetLogger()->set_log_synthesized_gl_errors(false);
 
     ContextCreationAttribs attrib_helper;
-    attrib_helper.offscreen_framebuffer_size = gfx::Size(16, 16);
-    attrib_helper.red_size = 8;
-    attrib_helper.green_size = 8;
-    attrib_helper.blue_size = 8;
-    attrib_helper.alpha_size = 8;
-    attrib_helper.depth_size = 0;
-    attrib_helper.stencil_size = 0;
     attrib_helper.context_type = CONTEXT_TYPE_OPENGLES3;
 
     ContextResult result =
@@ -211,6 +203,7 @@ class RecordReplayContext : public GpuControl {
                              gles2::DisallowedFeatures(), attrib_helper);
     DCHECK_EQ(result, ContextResult::kSuccess);
     capabilities_ = decoder_->GetCapabilities();
+    gl_capabilities_ = decoder_->GetGLCapabilities();
 
     const SharedMemoryLimits limits;
     gles2_helper_ =
@@ -266,9 +259,15 @@ class RecordReplayContext : public GpuControl {
 
   const Capabilities& GetCapabilities() const override { return capabilities_; }
 
+  const GLCapabilities& GetGLCapabilities() const override {
+    return gl_capabilities_;
+  }
+
   void SignalQuery(uint32_t query, base::OnceClosure callback) override {
     NOTREACHED();
   }
+
+  void CancelAllQueries() override { NOTREACHED(); }
 
   void CreateGpuFence(uint32_t gpu_fence_id, ClientGpuFence source) override {
     NOTREACHED();
@@ -337,6 +336,7 @@ class RecordReplayContext : public GpuControl {
   gles2::TraceOutputter outputter_;
   std::unique_ptr<gles2::GLES2Decoder> decoder_;
   gpu::Capabilities capabilities_;
+  gpu::GLCapabilities gl_capabilities_;
 
   std::unique_ptr<gles2::GLES2CmdHelper> gles2_helper_;
   std::unique_ptr<TransferBuffer> transfer_buffer_;

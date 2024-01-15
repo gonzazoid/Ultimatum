@@ -9,16 +9,16 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/content_settings/browser/page_specific_content_settings.h"
@@ -194,7 +194,13 @@ class ContentSubresourceFilterThrottleManagerTest
       public content::WebContentsObserver,
       public ::testing::WithParamInterface<PageActivationNotificationTiming> {
  public:
-  ContentSubresourceFilterThrottleManagerTest() {}
+  ContentSubresourceFilterThrottleManagerTest()
+      // We need the task environment to use a separate IO thread so that the
+      // ChildProcessSecurityPolicy checks which perform different logic
+      // based on whether they are called on the UI thread or the IO thread do
+      // the right thing.
+      : content::RenderViewHostTestHarness(
+            content::BrowserTaskEnvironment::REAL_IO_THREAD) {}
 
   ContentSubresourceFilterThrottleManagerTest(
       const ContentSubresourceFilterThrottleManagerTest&) = delete;
@@ -229,7 +235,7 @@ class ContentSubresourceFilterThrottleManagerTest
     // tests, to ensure that the NavigationSimulator properly runs all necessary
     // tasks while waiting for throttle checks to finish.
     dealer_handle_ = std::make_unique<VerifiedRulesetDealer::Handle>(
-        base::ThreadTaskRunnerHandle::Get());
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     dealer_handle_->TryOpenAndSetRulesetFile(test_ruleset_pair_.indexed.path,
                                              /*expected_checksum=*/0,
                                              base::DoNothing());
@@ -1109,13 +1115,30 @@ TEST_P(ContentSubresourceFilterThrottleManagerTest,
                                  true /* is_ad_frame */);
 }
 
+// Helper class to make sure strict site isolation is on for tests that need
+// it. This is already the default on desktop platforms, so doing this is
+// mainly to provide coverage on Android. Note that these tests can't just call
+// IsolateAllSitesForTesting() in the test body, as the SetUp() method in the
+// test harness also performs a navigation, so site isolation must be turned on
+// early enough so that it can be in effect for that navigation.
+class SitePerProcessContentSubresourceFilterThrottleManagerTest
+    : public ContentSubresourceFilterThrottleManagerTest {
+ public:
+  SitePerProcessContentSubresourceFilterThrottleManagerTest() {
+    content::IsolateAllSitesForTesting(base::CommandLine::ForCurrentProcess());
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    SitePerProcessContentSubresourceFilterThrottleManagerTest,
+    ::testing::Values(WILL_START_REQUEST, WILL_PROCESS_RESPONSE));
+
 // If the RenderFrame determines that the frame is an ad due to creation by ad
 // script, and the frame changes processes, then the frame should still be
 // considered an ad.
-TEST_P(ContentSubresourceFilterThrottleManagerTest,
+TEST_P(SitePerProcessContentSubresourceFilterThrottleManagerTest,
        AdTagCarriesAcrossProcesses) {
-  content::IsolateAllSitesForTesting(base::CommandLine::ForCurrentProcess());
-
   NavigateAndCommitMainFrame(GURL(kTestURLWithDryRun));
   ExpectActivationSignalForFrame(main_rfh(), true /* expect_activation */,
                                  false /* is_ad_frame */);
@@ -1773,14 +1796,15 @@ class ContentSubresourceFilterThrottleManagerInfoBarUiTest
   bool presenting_ads_blocked_infobar() {
     auto* infobar_manager = infobars::ContentInfoBarManager::FromWebContents(
         content::RenderViewHostTestHarness::web_contents());
-    if (infobar_manager->infobar_count() == 0)
+    if (infobar_manager->infobars().empty()) {
       return false;
+    }
 
     // No infobars other than the ads blocked infobar should be displayed in the
     // context of these tests.
-    EXPECT_EQ(infobar_manager->infobar_count(), 1u);
-    auto* infobar = infobar_manager->infobar_at(0);
-    EXPECT_EQ(infobar->delegate()->GetIdentifier(),
+    EXPECT_EQ(infobar_manager->infobars().size(), 1u);
+    auto* infobar = infobar_manager->infobars()[0].get();
+    EXPECT_EQ(infobar->GetIdentifier(),
               infobars::InfoBarDelegate::ADS_BLOCKED_INFOBAR_DELEGATE_ANDROID);
 
     return true;

@@ -9,20 +9,22 @@
 #include "base/test/mock_callback.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/renderer/bindings/core/v8/iterable.h"
 #include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_tester.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
 #include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_dom_exception.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_iterator_result_value.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/streams/readable_stream.h"
+#include "third_party/blink/renderer/core/streams/readable_stream_byob_reader.h"
 #include "third_party/blink/renderer/core/streams/readable_stream_default_reader.h"
 #include "third_party/blink/renderer/core/streams/stream_promise_resolver.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_typed_array.h"
 #include "third_party/blink/renderer/modules/webtransport/web_transport_error.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "v8/include/v8.h"
 
@@ -105,16 +107,28 @@ class IncomingStreamTest : public ::testing::Test {
     return IteratorFromReadResult(scope, tester.Value().V8Value());
   }
 
+  static Iterator Read(V8TestingScope& scope,
+                       ReadableStreamBYOBReader* reader,
+                       NotShared<DOMArrayBufferView> view) {
+    auto* script_state = scope.GetScriptState();
+    ScriptPromise read_promise =
+        reader->read(script_state, view, ASSERT_NO_EXCEPTION);
+    ScriptPromiseTester tester(script_state, read_promise);
+    tester.WaitUntilSettled();
+    EXPECT_TRUE(tester.IsFulfilled());
+    return IteratorFromReadResult(scope, tester.Value().V8Value());
+  }
+
   static Iterator IteratorFromReadResult(V8TestingScope& scope,
                                          v8::Local<v8::Value> result) {
     CHECK(result->IsObject());
     Iterator ret;
     v8::Local<v8::Value> v8value;
-    if (!V8UnpackIteratorResult(scope.GetScriptState(), result.As<v8::Object>(),
-                                &ret.done)
-             .ToLocal(&v8value)) {
+    if (!V8UnpackIterationResult(scope.GetScriptState(),
+                                 result.As<v8::Object>(), &v8value,
+                                 &ret.done)) {
       ADD_FAILURE() << "Couldn't unpack iterator";
-      return ret;
+      return {};
     }
     if (ret.done) {
       EXPECT_TRUE(v8value->IsUndefined());
@@ -126,6 +140,7 @@ class IncomingStreamTest : public ::testing::Test {
   }
 
   base::MockOnceCallback<void(absl::optional<uint8_t>)> mock_on_abort_;
+  test::TaskEnvironment task_environment_;
   mojo::ScopedDataPipeProducerHandle data_pipe_producer_;
   mojo::ScopedDataPipeConsumerHandle data_pipe_consumer_;
 };
@@ -148,6 +163,35 @@ TEST_F(IncomingStreamTest, ReadArrayBuffer) {
   Iterator result = Read(scope, reader);
   EXPECT_FALSE(result.done);
   EXPECT_THAT(result.value, ElementsAre('A'));
+}
+
+// Respond BYOB requests created before and after receiving data.
+TEST_F(IncomingStreamTest, ReadArrayBufferWithBYOBReader) {
+  V8TestingScope scope;
+
+  auto* incoming_stream = CreateIncomingStream(scope);
+  auto* script_state = scope.GetScriptState();
+  auto* reader = incoming_stream->Readable()->GetBYOBReaderForTesting(
+      script_state, ASSERT_NO_EXCEPTION);
+  NotShared<DOMArrayBufferView> view =
+      NotShared<DOMUint8Array>(DOMUint8Array::Create(1));
+  ScriptPromise read_promise =
+      reader->read(script_state, view, ASSERT_NO_EXCEPTION);
+  ScriptPromiseTester tester(script_state, read_promise);
+  EXPECT_FALSE(tester.IsFulfilled());
+
+  WriteToPipe({'A', 'B', 'C'});
+
+  tester.WaitUntilSettled();
+  EXPECT_TRUE(tester.IsFulfilled());
+  Iterator result = IteratorFromReadResult(scope, tester.Value().V8Value());
+  EXPECT_FALSE(result.done);
+  EXPECT_THAT(result.value, ElementsAre('A'));
+
+  view = NotShared<DOMUint8Array>(DOMUint8Array::Create(2));
+  result = Read(scope, reader, view);
+  EXPECT_FALSE(result.done);
+  EXPECT_THAT(result.value, ElementsAre('B', 'C'));
 }
 
 // Reading data followed by a remote close should not lose data.
@@ -215,7 +259,7 @@ TEST_F(IncomingStreamTest, ReadThenClosedWithoutFin) {
   ScriptPromiseTester result3_tester(script_state, result3);
   result3_tester.WaitUntilSettled();
   EXPECT_TRUE(result3_tester.IsRejected());
-  DOMException* exception = V8DOMException::ToImplWithTypeCheck(
+  DOMException* exception = V8DOMException::ToWrappable(
       scope.GetIsolate(), result3_tester.Value().V8Value());
   ASSERT_TRUE(exception);
   EXPECT_EQ(exception->code(),
@@ -311,7 +355,7 @@ TEST_F(IncomingStreamTest, DataPipeResetBeforeClosedWithoutFin) {
   ScriptPromiseTester result2_tester(script_state, result2);
   result2_tester.WaitUntilSettled();
   EXPECT_TRUE(result2_tester.IsRejected());
-  DOMException* exception = V8DOMException::ToImplWithTypeCheck(
+  DOMException* exception = V8DOMException::ToWrappable(
       scope.GetIsolate(), result2_tester.Value().V8Value());
   ASSERT_TRUE(exception);
   EXPECT_EQ(exception->code(),

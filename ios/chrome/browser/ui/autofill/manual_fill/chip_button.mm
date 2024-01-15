@@ -4,12 +4,11 @@
 
 #import "ios/chrome/browser/ui/autofill/manual_fill/chip_button.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
+#import "base/ios/ios_util.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/common/button_configuration_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 // Top and bottom padding for the button.
@@ -71,14 +70,20 @@ static const CGFloat kChipVerticalMargin = 4;
 - (void)setEnabled:(BOOL)enabled {
   [super setEnabled:enabled];
   self.backgroundView.hidden = !enabled;
-  self.contentEdgeInsets = enabled ? [self chipEdgeInsets] : UIEdgeInsetsZero;
+  UIButtonConfiguration* buttonConfiguration =
+      [UIButtonConfiguration plainButtonConfiguration];
+  buttonConfiguration.contentInsets = enabled
+                                          ? [self chipNSDirectionalEdgeInsets]
+                                          : NSDirectionalEdgeInsetsZero;
+  self.configuration = buttonConfiguration;
 }
 
 #pragma mark - Private
 
-- (UIEdgeInsets)chipEdgeInsets {
-  return UIEdgeInsetsMake(kChipVerticalPadding, kChipHorizontalPadding,
-                          kChipVerticalPadding, kChipHorizontalPadding);
+- (NSDirectionalEdgeInsets)chipNSDirectionalEdgeInsets {
+  return NSDirectionalEdgeInsetsMake(
+      kChipVerticalPadding, kChipHorizontalPadding, kChipVerticalPadding,
+      kChipHorizontalPadding);
 }
 
 - (void)initializeStyling {
@@ -106,7 +111,10 @@ static const CGFloat kChipVerticalMargin = 4;
   self.titleLabel.adjustsFontForContentSizeCategory = YES;
 
   [self updateTitleLabelFont];
-  self.contentEdgeInsets = [self chipEdgeInsets];
+  UIButtonConfiguration* buttonConfiguration =
+      [UIButtonConfiguration plainButtonConfiguration];
+  buttonConfiguration.contentInsets = [self chipNSDirectionalEdgeInsets];
+  self.configuration = buttonConfiguration;
 }
 
 - (void)updateTitleLabelFont {

@@ -8,9 +8,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
@@ -65,12 +65,12 @@ class UkmRecorderFactoryImpl : public cc::UkmRecorderFactory {
 
   // This method gets called on the compositor thread.
   std::unique_ptr<ukm::UkmRecorder> CreateRecorder() override {
-    mojo::PendingRemote<ukm::mojom::UkmRecorderInterface> recorder;
+    mojo::Remote<ukm::mojom::UkmRecorderFactory> factory;
 
     // Calling these methods on the compositor thread are thread safe.
     Platform::Current()->GetBrowserInterfaceBroker()->GetInterface(
-        recorder.InitWithNewPipeAndPassReceiver());
-    return std::make_unique<ukm::MojoUkmRecorder>(std::move(recorder));
+        factory.BindNewPipeAndPassReceiver());
+    return ukm::MojoUkmRecorder::Create(*factory);
   }
 };
 
@@ -119,6 +119,9 @@ void LayerTreeView::Initialize(
     layer_tree_host_ =
         cc::LayerTreeHost::CreateThreaded(std::move(compositor_thread), std::move(params));
   }
+
+  first_source_frame_for_current_delegate_ =
+      layer_tree_host_->SourceFrameNumber();
 }
 
 void LayerTreeView::Disconnect() {
@@ -131,12 +134,69 @@ void LayerTreeView::Disconnect() {
   delegate_ = nullptr;
 }
 
+void LayerTreeView::ReattachTo(
+    LayerTreeViewDelegate* delegate,
+    scoped_refptr<scheduler::WidgetScheduler> scheduler) {
+  // Reset state tied to the previous `delegate_`.
+  layer_tree_host_->WaitForProtectedSequenceCompletion();
+  layer_tree_host_->DetachInputDelegateAndRenderFrameObserver();
+  layer_tree_host_->StopDeferringCommits(
+      cc::PaintHoldingCommitTrigger::kWidgetSwapped);
+  for (uint32_t i = 0;
+       i <= static_cast<uint32_t>(cc::EventListenerClass::kLast); ++i) {
+    layer_tree_host_->SetEventListenerProperties(
+        static_cast<cc::EventListenerClass>(i),
+        cc::EventListenerProperties::kNone);
+  }
+
+  delegate_ = delegate;
+  CHECK_GE(layer_tree_host_->SourceFrameNumber(),
+           first_source_frame_for_current_delegate_)
+      << "SourceFrameNumber() must be monotonically increasing";
+  first_source_frame_for_current_delegate_ =
+      layer_tree_host_->SourceFrameNumber();
+  widget_scheduler_ = std::move(scheduler);
+
+  // Invalidate weak ptrs so callbacks from the previous delegate are dropped.
+  weak_factory_for_delegate_.InvalidateWeakPtrs();
+
+  switch (frame_sink_state_) {
+    case FrameSinkState::kNoFrameSink:
+      // No frame sink, the LTH should issue a request which will set both the
+      // frame sink and RenderFrameObserver.
+      break;
+    case FrameSinkState::kRequestBufferedInvisible:
+      // The frame sink request was buffered because it was made when the LTH
+      // was invisible. It will be issued when the LTH is made visible.
+      break;
+    case FrameSinkState::kRequestPending:
+      // If the request was pending, it targeted the previous delegate and we
+      // cancelled it by invalidating the weak pointers above. Re-issue it
+      // targeting the new delegate.
+      DidFailToInitializeLayerTreeFrameSink();
+      break;
+    case FrameSinkState::kInitializing:
+      // The LTH is initializing a new FrameSink which can be reused but we need
+      // a new RenderFrameObserver associated with the new delegate.
+    case FrameSinkState::kInitialized:
+      // The LTH has an initialized FrameSink which can be reused but we need a
+      // new RenderFrameObserver associated with the new delegate.
+      if (auto render_frame_observer = delegate_->CreateRenderFrameObserver()) {
+        layer_tree_host_->SetRenderFrameObserver(
+            std::move(render_frame_observer));
+      }
+      break;
+  }
+}
+
 void LayerTreeView::SetVisible(bool visible) {
   DCHECK(delegate_);
   layer_tree_host_->SetVisible(visible);
 
-  if (visible && layer_tree_frame_sink_request_failed_while_invisible_)
+  if (visible &&
+      frame_sink_state_ == FrameSinkState::kRequestBufferedInvisible) {
     DidFailToInitializeLayerTreeFrameSink();
+  }
 }
 
 void LayerTreeView::SetLayerTreeFrameSink(
@@ -144,6 +204,10 @@ void LayerTreeView::SetLayerTreeFrameSink(
     std::unique_ptr<cc::RenderFrameMetadataObserver>
         render_frame_metadata_observer) {
   DCHECK(delegate_);
+
+  CHECK_EQ(frame_sink_state_, FrameSinkState::kRequestPending);
+  frame_sink_state_ = FrameSinkState::kInitializing;
+
   if (!layer_tree_frame_sink) {
     DidFailToInitializeLayerTreeFrameSink();
     return;
@@ -199,10 +263,10 @@ void LayerTreeView::OnDeferMainFrameUpdatesChanged(bool status) {
   delegate_->OnDeferMainFrameUpdatesChanged(status);
 }
 
-void LayerTreeView::OnPauseRenderingChanged(bool paused) {
+void LayerTreeView::OnCommitRequested() {
   if (!delegate_)
     return;
-  delegate_->OnPauseRenderingChanged(paused);
+  delegate_->OnCommitRequested();
 }
 
 void LayerTreeView::OnDeferCommitsChanged(
@@ -249,33 +313,48 @@ void LayerTreeView::UpdateCompositorScrollState(
 void LayerTreeView::RequestNewLayerTreeFrameSink() {
   if (!delegate_)
     return;
+
+  CHECK(frame_sink_state_ == FrameSinkState::kNoFrameSink ||
+        frame_sink_state_ == FrameSinkState::kInitialized);
+
   // When the compositor is not visible it would not request a
   // LayerTreeFrameSink so this is a race where it requested one on the
   // compositor thread while becoming non-visible on the main thread. In that
   // case, we can wait for it to become visible again before replying.
   if (!layer_tree_host_->IsVisible()) {
-    layer_tree_frame_sink_request_failed_while_invisible_ = true;
+    frame_sink_state_ = FrameSinkState::kRequestBufferedInvisible;
     return;
   }
 
-  delegate_->RequestNewLayerTreeFrameSink(base::BindOnce(
-      &LayerTreeView::SetLayerTreeFrameSink, weak_factory_.GetWeakPtr()));
+  frame_sink_state_ = FrameSinkState::kRequestPending;
+  delegate_->RequestNewLayerTreeFrameSink(
+      base::BindOnce(&LayerTreeView::SetLayerTreeFrameSink,
+                     weak_factory_for_delegate_.GetWeakPtr()));
 }
 
-void LayerTreeView::DidInitializeLayerTreeFrameSink() {}
+void LayerTreeView::DidInitializeLayerTreeFrameSink() {
+  CHECK_EQ(frame_sink_state_, FrameSinkState::kInitializing);
+  frame_sink_state_ = FrameSinkState::kInitialized;
+}
 
 void LayerTreeView::DidFailToInitializeLayerTreeFrameSink() {
   if (!delegate_)
     return;
+
+  CHECK(frame_sink_state_ == FrameSinkState::kRequestBufferedInvisible ||
+        frame_sink_state_ == FrameSinkState::kInitializing ||
+        frame_sink_state_ == FrameSinkState::kRequestPending);
+
   // When the RenderWidget is made hidden while an async request for a
   // LayerTreeFrameSink is being processed, then if it fails we would arrive
   // here. Since the compositor does not request a LayerTreeFrameSink while not
   // visible, we can delay trying again until becoming visible again.
   if (!layer_tree_host_->IsVisible()) {
-    layer_tree_frame_sink_request_failed_while_invisible_ = true;
+    frame_sink_state_ = FrameSinkState::kRequestBufferedInvisible;
     return;
   }
-  layer_tree_frame_sink_request_failed_while_invisible_ = false;
+
+  frame_sink_state_ = FrameSinkState::kNoFrameSink;
   layer_tree_host_->GetTaskRunnerProvider()->MainThreadTaskRunner()->PostTask(
       FROM_HERE, base::BindOnce(&LayerTreeView::RequestNewLayerTreeFrameSink,
                                 weak_factory_.GetWeakPtr()));
@@ -290,25 +369,32 @@ void LayerTreeView::WillCommit(const cc::CommitState&) {
   }
 }
 
-void LayerTreeView::DidCommit(base::TimeTicks commit_start_time,
+void LayerTreeView::DidCommit(int source_frame_number,
+                              base::TimeTicks commit_start_time,
                               base::TimeTicks commit_finish_time) {
-  if (!delegate_)
+  if (!delegate_ ||
+      source_frame_number < first_source_frame_for_current_delegate_) {
     return;
+  }
   delegate_->DidCommitCompositorFrame(commit_start_time, commit_finish_time);
   if (!base::FeatureList::IsEnabled(features::kNonBlockingCommit)) {
     widget_scheduler_->DidCommitFrameToCompositor();
   }
 }
 
-void LayerTreeView::DidCommitAndDrawFrame() {
-  if (!delegate_)
+void LayerTreeView::DidCommitAndDrawFrame(int source_frame_number) {
+  if (!delegate_ ||
+      source_frame_number < first_source_frame_for_current_delegate_) {
     return;
+  }
   delegate_->DidCommitAndDrawCompositorFrame();
 }
 
-void LayerTreeView::DidCompletePageScaleAnimation() {
-  if (!delegate_)
+void LayerTreeView::DidCompletePageScaleAnimation(int source_frame_number) {
+  if (!delegate_ ||
+      source_frame_number < first_source_frame_for_current_delegate_) {
     return;
+  }
   delegate_->DidCompletePageScaleAnimation();
 }
 
@@ -332,7 +418,7 @@ void LayerTreeView::DidPresentCompositorFrame(
     presentation_callbacks_.erase(front);
   }
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   while (!core_animation_error_code_callbacks_.empty()) {
     const auto& front = core_animation_error_code_callbacks_.begin();
     if (viz::FrameTokenGT(front->first, frame_token))
@@ -377,9 +463,11 @@ void LayerTreeView::NotifyThroughputTrackerResults(
 }
 
 void LayerTreeView::DidObserveFirstScrollDelay(
+    int source_frame_number,
     base::TimeDelta first_scroll_delay,
     base::TimeTicks first_scroll_timestamp) {
-  if (!delegate_) {
+  if (!delegate_ ||
+      source_frame_number < first_source_frame_for_current_delegate_) {
     return;
   }
   delegate_->DidObserveFirstScrollDelay(first_scroll_delay,
@@ -390,13 +478,6 @@ void LayerTreeView::RunPaintBenchmark(int repeat_count,
                                       cc::PaintBenchmarkResult& result) {
   if (delegate_)
     delegate_->RunPaintBenchmark(repeat_count, result);
-}
-
-void LayerTreeView::ReportEventLatency(
-    std::vector<cc::EventLatencyTracker::LatencyData> latencies) {
-  // EventLatency metrics for the renderers are reported in
-  // `CompositorFrameReporter`, so this functions should not be called.
-  NOTREACHED();
 }
 
 void LayerTreeView::DidRunBeginMainFrame() {
@@ -423,7 +504,7 @@ void LayerTreeView::AddPresentationCallback(
   AddCallback(frame_token, std::move(callback), presentation_callbacks_);
 }
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
 void LayerTreeView::AddCoreAnimationErrorCodeCallback(
     uint32_t frame_token,
     base::OnceCallback<void(gfx::CALayerResult)> callback) {

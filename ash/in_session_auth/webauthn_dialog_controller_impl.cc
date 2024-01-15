@@ -9,8 +9,8 @@
 #include "ash/public/cpp/in_session_auth_dialog_client.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_util.h"
 #include "components/user_manager/known_user.h"
 #include "ui/aura/window.h"
@@ -50,23 +50,19 @@ void WebAuthNDialogControllerImpl::ShowAuthenticationDialog(
                      weak_factory_.GetWeakPtr(), account_id, origin_name,
                      auth_methods, source_window);
 
-  if (ash::features::IsUseAuthsessionForWebAuthNEnabled()) {
-    auto on_auth_session_started = [](base::OnceClosure continuation,
-                                      bool is_auth_session_started) {
-      if (!is_auth_session_started) {
-        LOG(ERROR)
-            << "Failed to start cryptohome auth session, exiting dialog early";
-        return;
-      }
-      std::move(continuation).Run();
-    };
+  auto on_auth_session_started = [](base::OnceClosure continuation,
+                                    bool is_auth_session_started) {
+    if (!is_auth_session_started) {
+      LOG(ERROR)
+          << "Failed to start cryptohome auth session, exiting dialog early";
+      return;
+    }
+    std::move(continuation).Run();
+  };
 
-    client_->StartAuthSession(
-        base::BindOnce(on_auth_session_started, std::move(continuation)));
-    return;
-  }
-
-  std::move(continuation).Run();
+  client_->StartAuthSession(
+      base::BindOnce(on_auth_session_started, std::move(continuation)));
+  return;
 }
 
 void WebAuthNDialogControllerImpl::CheckAuthFactorAvailability(
@@ -154,12 +150,18 @@ void WebAuthNDialogControllerImpl::DestroyAuthenticationDialog() {
   if (!dialog_)
     return;
 
-  if (ash::features::IsUseAuthsessionForWebAuthNEnabled())
-    client_->InvalidateAuthSession();
+  if (dialog_->GetAuthMethods() & AuthDialogContentsView::kAuthFingerprint) {
+    client_->EndFingerprintAuthSession(
+        base::BindOnce(&WebAuthNDialogControllerImpl::ProcessFinalCleanups,
+                       weak_factory_.GetWeakPtr()));
+    return;
+  }
 
-  if (dialog_->GetAuthMethods() & AuthDialogContentsView::kAuthFingerprint)
-    client_->EndFingerprintAuthSession();
+  ProcessFinalCleanups();
+}
 
+void WebAuthNDialogControllerImpl::ProcessFinalCleanups() {
+  client_->InvalidateAuthSession();
   dialog_.reset();
   source_window_tracker_.RemoveAll();
 }

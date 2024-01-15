@@ -8,8 +8,9 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
@@ -82,7 +83,7 @@ class CustomerRegistrationClient {
       const ::assistant::api::ServiceRegistrationResponse& response);
 
   const std::string customer_server_address_;
-  GrpcLibassistantClient* const libassistant_client_ = nullptr;
+  const raw_ptr<GrpcLibassistantClient> libassistant_client_ = nullptr;
 
   ::assistant::api::RegisterCustomerRequest customer_registration_request_;
   bool is_started_ = false;

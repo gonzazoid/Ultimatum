@@ -1,12 +1,90 @@
-<style>
+<style include="cr-hidden-style sp-shared-style">
+  :host-context([chrome-refresh-2023]) #empty-state-container {
+    border-radius: 12px;
+  }
+  .sp-scroller {
+    display: block;
+  }
+  :host-context([chrome-refresh-2023]) #empty-state-container {
+    margin: 0 8px;
+    padding: 20px 0;
+  }
+
+  #toolbar-container {
+    width: 100%;
+  }
+
+  #flex-parent {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #container-parent {
+    background: var(--background-color);
+    height: 100%;
+  }
+
+  :host-context([chrome-refresh-2023]) .sp-scroller::-webkit-scrollbar-track {
+    margin-top: 6px;
+    margin-bottom: 6px;
+  }
+
   #container {
-    background-color: var(--background-color);
+    background: var(--background-color);
     color: var(--foreground-color);
     font-family: var(--font-family);
     font-size: var(--font-size);
     letter-spacing: var(--letter-spacing);
     line-height: var(--line-height);
     padding: 20px;
+    /* max-width should match line width limit in read_anything_constants.h. */
+    max-width: 60ch;
+    margin: 0 auto;
+  }
+  a:link {
+    color: var(--link-color);
+  }
+  a:visited {
+    color: var(--visited-link-color);
+  }
+  #empty-state-container {
+    background: var(--background-color);
+    height: 100%;
+    padding: 20px;
+  }
+  sp-empty-state {
+    display: flex;
+    margin: 0 auto 16px auto;
+    width: fit-content;
+  }
+  ::selection {
+    background: var(--selection-color);
+    color: var(--selection-text-color);
+  }
+  .current-read-highlight {
+    background-color: var(--current-highlight-bg-color);
+  }
+  .previous-read-highlight {
+    color: var(--previous-highlight-color);
+    background-color: transparent;
   }
 </style>
-<div id="container"></div>
+<div id="flex-parent" on-keydown="onKeyDown_">
+  <div id="toolbar-container" hidden="[[!isWebUIToolbarVisible_]]">
+    <read-anything-toolbar id="toolbar"></read-anything-toolbar>
+  </div>
+  <div id="container-parent" class="sp-card sp-scroller"
+       hidden="[[!hasContent_]]">
+    <div id="container"></div>
+  </div>
+  <div id="empty-state-container" hidden="[[hasContent_]]">
+    <sp-empty-state
+        image-path="[[emptyStateImagePath_]]"
+        dark-image-path="[[emptyStateDarkImagePath_]]"
+        heading="[[emptyStateHeading_]]"
+        body="[[emptyStateSubheading_]]">
+    </sp-empty-state>
+  </div>
+</div>

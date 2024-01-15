@@ -8,8 +8,9 @@
 #include <utility>
 
 #include "ash/shell.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/check_deref.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
 #include "remoting/host/chromeos/point_transformer.h"
@@ -99,13 +100,15 @@ void LocalPointerInputMonitorChromeos::Core::Start() {
   // TODO(erg): Need to handle the mus case where PlatformEventSource is null
   // because we are in mus. This class looks like it can be rewritten with mus
   // EventMatchers. (And if that doesn't work, maybe a PointerObserver.)
-  if (ui::PlatformEventSource::GetInstance())
+  if (ui::PlatformEventSource::GetInstance()) {
     ui::PlatformEventSource::GetInstance()->AddPlatformEventObserver(this);
+  }
 }
 
 LocalPointerInputMonitorChromeos::Core::~Core() {
-  if (ui::PlatformEventSource::GetInstance())
+  if (ui::PlatformEventSource::GetInstance()) {
     ui::PlatformEventSource::GetInstance()->RemovePlatformEventObserver(this);
+  }
 }
 
 void LocalPointerInputMonitorChromeos::Core::WillProcessEvent(
@@ -117,8 +120,9 @@ void LocalPointerInputMonitorChromeos::Core::DidProcessEvent(
     const ui::PlatformEvent& event) {
   // Do not pass on events remotely injected by CRD, as we're supposed to
   // monitor for local input only.
-  if (IsInjectedByCrd(event))
+  if (IsInjectedByCrd(event)) {
     return;
+  }
 
   ui::EventType type = ui::EventTypeFromNative(event);
   if (type == ui::ET_MOUSE_MOVED || type == ui::ET_TOUCH_MOVED) {
@@ -137,8 +141,8 @@ void LocalPointerInputMonitorChromeos::Core::HandlePointerMove(
   // Luckily the cursor manager remembers the display the mouse is on.
   const display::Display& current_display =
       ash::Shell::Get()->cursor_manager()->GetDisplay();
-  const aura::Window* window =
-      ash::Shell::Get()->GetRootWindowForDisplayId(current_display.id());
+  const aura::Window& window = CHECK_DEREF(
+      ash::Shell::Get()->GetRootWindowForDisplayId(current_display.id()));
 
   gfx::PointF location_in_window_in_pixels = located_event->location_f();
 

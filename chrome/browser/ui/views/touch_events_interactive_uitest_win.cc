@@ -4,7 +4,6 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
-#include "base/win/windows_version.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/views/test/view_event_test_base.h"
 #include "chrome/test/base/testing_profile.h"
@@ -65,7 +64,7 @@ class TouchEventHandler : public ui::EventHandler {
 
     if (recursion_enabled_ && (event->type() == ui::ET_TOUCH_RELEASED)) {
       recursion_enabled_ = false;
-      ui_controls::SendTouchEvents(ui_controls::PRESS | ui_controls::PRESS, 1,
+      ui_controls::SendTouchEvents(ui_controls::kTouchPress, 1,
                                    touch_point_.x(), touch_point_.y());
       WaitForIdle();
     }
@@ -162,13 +161,6 @@ class TouchEventsViewTest : public ViewEventTestBase {
   }
 
   void DoTestOnMessageLoop() override {
-    // ui_controls::SendTouchEvents which uses InjectTouchInput API only works
-    // on Windows 8 and up.
-    if (base::win::GetVersion() <= base::win::Version::WIN7) {
-      Done();
-      return;
-    }
-
     const int touch_pointer_count = 3;
     TouchEventHandler touch_event_handler;
     window()->GetNativeWindow()->GetHost()->window()->AddPreTargetHandler(
@@ -176,7 +168,7 @@ class TouchEventsViewTest : public ViewEventTestBase {
     gfx::Point in_content(touch_view_->width() / 2, touch_view_->height() / 2);
     views::View::ConvertPointToScreen(touch_view_, &in_content);
 
-    ASSERT_TRUE(ui_controls::SendTouchEvents(ui_controls::PRESS,
+    ASSERT_TRUE(ui_controls::SendTouchEvents(ui_controls::kTouchPress,
                                              touch_pointer_count,
                                              in_content.x(), in_content.y()));
     touch_event_handler.WaitForIdle();
@@ -219,13 +211,6 @@ class TouchEventsRecursiveViewTest : public TouchEventsViewTest {
       delete;
 
   void DoTestOnMessageLoop() override {
-    // ui_controls::SendTouchEvents which uses InjectTouchInput API only works
-    // on Windows 8 and up.
-    if (base::win::GetVersion() <= base::win::Version::WIN7) {
-      Done();
-      return;
-    }
-
     const int touch_pointer_count = 1;
     TouchEventHandler touch_event_handler;
     window()->GetNativeWindow()->GetHost()->window()->AddPreTargetHandler(
@@ -234,7 +219,7 @@ class TouchEventsRecursiveViewTest : public TouchEventsViewTest {
     views::View::ConvertPointToScreen(touch_view_, &in_content);
     touch_event_handler.ForceRecursionInEventHandler(in_content);
 
-    ASSERT_TRUE(ui_controls::SendTouchEvents(ui_controls::PRESS,
+    ASSERT_TRUE(ui_controls::SendTouchEvents(ui_controls::kTouchPress,
                                              touch_pointer_count,
                                              in_content.x(), in_content.y()));
     touch_event_handler.WaitForEvents();

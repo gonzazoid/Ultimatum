@@ -10,8 +10,8 @@
 #include <map>
 #include <string>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/values.h"
 #include "content/browser/webui/url_data_manager.h"
@@ -59,6 +59,7 @@ class CONTENT_EXPORT WebUIDataSourceImpl : public URLDataSourceImpl,
   void DisableDenyXFrameOptions() override;
   void EnableReplaceI18nInJS() override;
   std::string GetSource() override;
+  void SetSupportedScheme(base::StringPiece scheme) override;
 
   // Add the locale to the load time data defaults. May be called repeatedly.
   void EnsureLoadTimeDataDefaultsAdded();
@@ -83,6 +84,7 @@ class CONTENT_EXPORT WebUIDataSourceImpl : public URLDataSourceImpl,
  private:
   class InternalDataSource;
   friend class InternalDataSource;
+  friend class URLDataManagerBackend;
   friend class WebUIDataSource;
   friend class WebUIDataSourceTest;
 
@@ -129,6 +131,9 @@ class CONTENT_EXPORT WebUIDataSourceImpl : public URLDataSourceImpl,
   bool replace_existing_source_ = true;
   bool should_replace_i18n_in_js_ = false;
   std::set<GURL> frame_ancestors_;
+
+  // Supported scheme if not one of the default supported schemes.
+  std::optional<std::string> supported_scheme_;
 };
 
 }  // namespace content

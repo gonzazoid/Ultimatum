@@ -8,12 +8,11 @@
 #include <memory>
 #include <utility>
 
-#include "chrome/updater/constants.h"
 #include "chrome/updater/device_management/dm_cached_policy_info.h"
 #include "chrome/updater/device_management/dm_message.h"
 #include "chrome/updater/device_management/dm_policy_builder_for_testing.h"
 #include "chrome/updater/protos/omaha_settings.pb.h"
-#include "chrome/updater/unittest_util.h"
+#include "chrome/updater/util/unit_test_util.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -51,7 +50,9 @@ DMResponseValidatorTests::GetDMResponseWithOmahaPolicy(
     const edm::OmahaSettingsClientProto& omaha_settings) const {
   std::unique_ptr<DMPolicyBuilderForTesting> policy_builder =
       DMPolicyBuilderForTesting::CreateInstanceWithOptions(
-          true, true, DMPolicyBuilderForTesting::SigningOption::kSignNormally);
+          /*first_request=*/true, /*rotate_to_new_key=*/true,
+          DMPolicyBuilderForTesting::SigningOption::kSignNormally,
+          "test-dm-token", "test-device-id");
   DMPolicyMap policy_map;
   policy_map.emplace(kGoogleUpdatePolicyType,
                      omaha_settings.SerializeAsString());
@@ -78,6 +79,10 @@ TEST_F(DMResponseValidatorTests, ValidationOKWithoutPublicKey) {
 }
 
 TEST_F(DMResponseValidatorTests, ValidationOKWithPublicKey) {
+  // Cached info should be created before parsing next policy response.
+  CachedPolicyInfo cached_info;
+  GetCachedInfoWithPublicKey(cached_info);
+
   std::unique_ptr<::enterprise_management::DeviceManagementResponse>
       dm_response = GetDefaultTestingPolicyFetchDMResponse(
           /*first_request=*/false, /*rotate_to_new_key=*/false,
@@ -87,8 +92,6 @@ TEST_F(DMResponseValidatorTests, ValidationOKWithPublicKey) {
   const ::enterprise_management::PolicyFetchResponse& response =
       dm_response->policy_response().responses(0);
 
-  CachedPolicyInfo cached_info;
-  GetCachedInfoWithPublicKey(cached_info);
   DMResponseValidator validator(cached_info, "test-dm-token", "test-device-id");
   PolicyValidationResult validation_result;
   EXPECT_TRUE(validator.ValidatePolicyResponse(response, validation_result));
@@ -160,6 +163,10 @@ TEST_F(DMResponseValidatorTests, NoCachedPublicKey) {
 }
 
 TEST_F(DMResponseValidatorTests, BadSignedPublicKey) {
+  // Cached info should be created before parsing next policy response.
+  CachedPolicyInfo cached_info;
+  GetCachedInfoWithPublicKey(cached_info);
+
   // Validation should fail if the public key is not signed properly.
   std::unique_ptr<::enterprise_management::DeviceManagementResponse>
       dm_response = GetDefaultTestingPolicyFetchDMResponse(
@@ -170,8 +177,6 @@ TEST_F(DMResponseValidatorTests, BadSignedPublicKey) {
   const ::enterprise_management::PolicyFetchResponse& response =
       dm_response->policy_response().responses(0);
 
-  CachedPolicyInfo cached_info;
-  GetCachedInfoWithPublicKey(cached_info);
   DMResponseValidator validator(cached_info, "test-dm-token", "test-device-id");
   PolicyValidationResult validation_result;
   EXPECT_FALSE(validator.ValidatePolicyResponse(response, validation_result));
@@ -213,7 +218,7 @@ TEST_F(DMResponseValidatorTests, OmahaPolicyWithBadValues) {
   omaha_settings.set_proxy_mode("weird_proxy_mode");
   omaha_settings.set_proxy_server("unexpected_proxy");
   omaha_settings.set_proxy_pac_url("foo.c/proxy.pa");
-  omaha_settings.set_install_default(edm::INSTALL_DISABLED);
+  omaha_settings.set_install_default(edm::INSTALL_DEFAULT_DISABLED);
   omaha_settings.set_update_default(edm::MANUAL_UPDATES_ONLY);
 
   edm::ApplicationSettings app;
@@ -272,7 +277,7 @@ TEST_F(DMResponseValidatorTests, OmahaPolicyWithBadValues) {
             "Value out of range(0 - 960): 1000");
   EXPECT_EQ(validation_result.issues[5].policy_name, "proxy_mode");
   EXPECT_EQ(validation_result.issues[5].severity,
-            PolicyValueValidationIssue::Severity::kError);
+            PolicyValueValidationIssue::Severity::kWarning);
   EXPECT_EQ(validation_result.issues[5].message,
             "Unrecognized proxy mode: weird_proxy_mode");
   EXPECT_EQ(validation_result.issues[6].policy_name, "proxy_server");

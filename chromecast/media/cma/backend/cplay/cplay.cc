@@ -13,7 +13,6 @@
 #include <string>
 #include <vector>
 
-#include "base/cxx17_backports.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
@@ -204,7 +203,7 @@ class WavOutputHandler : public OutputHandler {
                 clipped_data.size() * sizeof(clipped_data[0]));
     if (saturate_output) {
       for (size_t i = 0; i < clipped_data.size(); ++i) {
-        clipped_data[i] = base::clamp(clipped_data[i], -1.0f, 1.0f);
+        clipped_data[i] = std::clamp(clipped_data[i], -1.0f, 1.0f);
       }
     }
     wav_file_.WriteAtCurrentPos(reinterpret_cast<char*>(clipped_data.data()),
@@ -340,7 +339,12 @@ int CplayMain(int argc, char* argv[]) {
   // Set volume.
   std::string contents;
   base::ReadFileToString(params.cast_audio_json_path, &contents);
-  GetVolumeMap().LoadVolumeMap(base::JSONReader::ReadDeprecated(contents));
+  std::optional<base::Value> parsed_json = base::JSONReader::Read(contents);
+  if (parsed_json && parsed_json->is_dict()) {
+    GetVolumeMap().LoadVolumeMap(std::move(*parsed_json).TakeDict());
+  } else {
+    GetVolumeMap().LoadVolumeMap(std::nullopt);
+  }
   float volume_dbfs = GetVolumeMap().VolumeToDbFS(params.cast_volume);
   float volume_multiplier = std::pow(10.0, volume_dbfs / 20.0);
   mixer_input.SetVolumeMultiplier(1.0);

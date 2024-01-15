@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "extensions/browser/api/clipboard/clipboard_api.h"
@@ -126,6 +126,10 @@ class ExtensionsAPIClient {
   virtual void ClearActionCount(content::BrowserContext* context,
                                 const Extension& extension);
 
+  // A method to open file: URL for tests.
+  virtual void OpenFileUrl(const GURL& file_url,
+                           content::BrowserContext* browser_context);
+
   // Creates the AppViewGuestDelegate.
   virtual AppViewGuestDelegate* CreateAppViewGuestDelegate() const;
 
@@ -136,7 +140,7 @@ class ExtensionsAPIClient {
 
   // Returns a delegate for GuestViewManagerDelegate.
   virtual std::unique_ptr<guest_view::GuestViewManagerDelegate>
-  CreateGuestViewManagerDelegate(content::BrowserContext* context) const;
+  CreateGuestViewManagerDelegate() const;
 
   // Creates a delegate for MimeHandlerViewGuest.
   virtual std::unique_ptr<MimeHandlerViewGuestDelegate>
@@ -185,7 +189,8 @@ class ExtensionsAPIClient {
   // Creates a delegate for calling into the SupervisedUserService from the
   // Management API.
   virtual std::unique_ptr<SupervisedUserExtensionsDelegate>
-  CreateSupervisedUserExtensionsDelegate() const;
+  CreateSupervisedUserExtensionsDelegate(
+      content::BrowserContext* browser_context) const;
 
   // Creates and returns the DisplayInfoProvider used by the
   // chrome.system.display extension API.

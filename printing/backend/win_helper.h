@@ -20,8 +20,10 @@
 #include <string>
 
 #include "base/component_export.h"
+#include "base/logging.h"
 #include "base/memory/free_deleter.h"
 #include "base/win/scoped_handle.h"
+#include "printing/mojom/print.mojom.h"
 
 // These are helper functions for dealing with Windows Printing.
 namespace printing {
@@ -160,7 +162,8 @@ void SetGetDisplayNameFunction(
 COMPONENT_EXPORT(PRINT_BACKEND)
 bool InitBasicPrinterInfo(HANDLE printer, PrinterBasicInfo* printer_info);
 
-COMPONENT_EXPORT(PRINT_BACKEND) std::string GetDriverInfo(HANDLE printer);
+COMPONENT_EXPORT(PRINT_BACKEND)
+std::vector<std::string> GetDriverInfo(HANDLE printer);
 
 // Determines if the specified printer driver is known to cause a file save
 // UI dialog to be displayed when printing a document.
@@ -195,6 +198,19 @@ std::unique_ptr<DEVMODE, base::FreeDeleter> PromptDevMode(
     DEVMODE* in,
     HWND window,
     bool* canceled);
+
+// Expose helper to convert a driver version number to human-friendly
+// dot-separated format only for testing.
+COMPONENT_EXPORT(PRINT_BACKEND)
+std::string GetDriverVersionStringForTesting(DWORDLONG version_number);
+
+// `GetResultCodeFromSystemErrorCode()` is only ever invoked when something has
+// gone wrong while interacting with the OS printing system.  If the cause of
+// the failure was not of the type to register and be and available from
+// `GetLastError()` then we should just use the general error result.
+COMPONENT_EXPORT(PRINT_BACKEND)
+mojom::ResultCode GetResultCodeFromSystemErrorCode(
+    logging::SystemErrorCode system_code);
 
 }  // namespace printing
 

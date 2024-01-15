@@ -8,6 +8,8 @@
 
 #include "ash/public/cpp/app_menu_constants.h"
 #include "base/check.h"
+#include "base/check_op.h"
+#include "base/notreached.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/chromeos_buildflags.h"
@@ -17,14 +19,18 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/policy/core/common/policy_pref_names.h"
+#include "components/services/app_service/public/cpp/app_registry_cache.h"
+#include "components/services/app_service/public/cpp/app_update.h"
 #include "content/public/common/content_features.h"
+#include "third_party/blink/public/common/features.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/models/image_model.h"
 #include "ui/color/color_id.h"
 #include "ui/gfx/image/image_skia.h"
-#include "ui/gfx/vector_icon_types.h"
 
 namespace {
+
 const int kInvalidRadioGroupId = -1;
 const int kGroupId = 1;
 
@@ -53,6 +59,8 @@ void PopulateRadioItemFromMenuItems(
 
 namespace apps {
 
+DEFINE_ELEMENT_IDENTIFIER_VALUE(kLaunchNewMenuItem);
+
 void AddCommandItem(uint32_t command_id,
                     uint32_t string_id,
                     MenuItems& menu_items) {
@@ -61,13 +69,6 @@ void AddCommandItem(uint32_t command_id,
   menu_item->string_id = string_id;
   menu_item->radio_group_id = kInvalidRadioGroupId;
   menu_items.items.push_back(std::move(menu_item));
-}
-
-void AddRadioItem(uint32_t command_id,
-                  uint32_t string_id,
-                  int group_id,
-                  MenuItems& menu_items) {
-  menu_items.items.push_back(CreateRadioItem(command_id, string_id, group_id));
 }
 
 void AddSeparator(ui::MenuSeparatorType separator_type, MenuItems& menu_items) {
@@ -94,17 +95,18 @@ void CreateOpenNewSubmenu(uint32_t string_id, MenuItems& menu_items) {
       std::make_unique<MenuItem>(MenuItemType::kSubmenu, ash::LAUNCH_NEW);
   menu_item->string_id = string_id;
 
-  menu_item->submenu.push_back(
-      CreateRadioItem(ash::USE_LAUNCH_TYPE_REGULAR,
-                      IDS_APP_LIST_CONTEXT_MENU_NEW_TAB, kGroupId));
-  menu_item->submenu.push_back(
-      CreateRadioItem(ash::USE_LAUNCH_TYPE_WINDOW,
-                      IDS_APP_LIST_CONTEXT_MENU_NEW_WINDOW, kGroupId));
-  if (base::FeatureList::IsEnabled(features::kDesktopPWAsTabStrip) &&
+  menu_item->submenu.push_back(CreateRadioItem(
+      ash::USE_LAUNCH_TYPE_REGULAR,
+      StringIdForUseLaunchTypeCommand(ash::USE_LAUNCH_TYPE_REGULAR), kGroupId));
+  menu_item->submenu.push_back(CreateRadioItem(
+      ash::USE_LAUNCH_TYPE_WINDOW,
+      StringIdForUseLaunchTypeCommand(ash::USE_LAUNCH_TYPE_WINDOW), kGroupId));
+  if (base::FeatureList::IsEnabled(blink::features::kDesktopPWAsTabStrip) &&
       base::FeatureList::IsEnabled(features::kDesktopPWAsTabStripSettings)) {
-    menu_item->submenu.push_back(
-        CreateRadioItem(ash::USE_LAUNCH_TYPE_TABBED_WINDOW,
-                        IDS_APP_LIST_CONTEXT_MENU_NEW_TABBED_WINDOW, kGroupId));
+    menu_item->submenu.push_back(CreateRadioItem(
+        ash::USE_LAUNCH_TYPE_TABBED_WINDOW,
+        StringIdForUseLaunchTypeCommand(ash::USE_LAUNCH_TYPE_TABBED_WINDOW),
+        kGroupId));
   }
 
   menu_item->radio_group_id = kInvalidRadioGroupId;
@@ -131,52 +133,49 @@ bool ShouldAddCloseItem(const std::string& app_id,
     return false;
   }
 
-  return apps::AppServiceProxyFactory::GetForProfile(profile)
-      ->InstanceRegistry()
-      .ContainsAppId(app_id);
+  bool can_close = true;
+  apps::AppServiceProxyFactory::GetForProfile(profile)
+      ->AppRegistryCache()
+      .ForOneApp(app_id, [&can_close](const apps::AppUpdate& update) {
+        can_close = update.AllowClose().value_or(true);
+      });
+
+  return can_close && apps::AppServiceProxyFactory::GetForProfile(profile)
+                          ->InstanceRegistry()
+                          .ContainsAppId(app_id);
 }
 
-bool PopulateNewItemFromMenuItems(const MenuItems& menu_items,
-                                  ui::SimpleMenuModel* model,
-                                  ui::SimpleMenuModel* submenu,
-                                  GetVectorIconCallback get_vector_icon) {
-  if (menu_items.items.empty()) {
-    return false;
+void PopulateLaunchNewItemFromMenuItem(const MenuItemPtr& menu_item,
+                                       ui::SimpleMenuModel* model,
+                                       ui::SimpleMenuModel* submenu,
+                                       int* launch_new_string_id) {
+  DCHECK_EQ(menu_item->command_id, ash::LAUNCH_NEW);
+
+  if (launch_new_string_id) {
+    *launch_new_string_id = menu_item->string_id;
   }
 
-  const auto& item = menu_items.items[0];
-  if (item->command_id != ash::LAUNCH_NEW)
-    return false;
-
-  const ui::ColorId color_id = GetColorIdForMenuItemIcon();
-  switch (item->type) {
+  switch (menu_item->type) {
     case apps::MenuItemType::kCommand: {
-      const gfx::VectorIcon& icon =
-          std::move(get_vector_icon).Run(item->command_id, item->string_id);
-      model->AddItemWithStringIdAndIcon(
-          item->command_id, item->string_id,
-          ui::ImageModel::FromVectorIcon(icon, color_id,
-                                         ash::kAppContextMenuIconSize));
+      model->AddItemWithStringId(menu_item->command_id, menu_item->string_id);
+      model->SetElementIdentifierAt(
+          model->GetIndexOfCommandId(menu_item->command_id).value(),
+          kLaunchNewMenuItem);
       break;
     }
     case apps::MenuItemType::kSubmenu:
-      if (!item->submenu.empty()) {
-        PopulateRadioItemFromMenuItems(item->submenu, submenu);
-        const gfx::VectorIcon& icon =
-            std::move(get_vector_icon).Run(item->command_id, item->string_id);
-        model->AddActionableSubmenuWithStringIdAndIcon(
-            item->command_id, item->string_id, submenu,
-            ui::ImageModel::FromVectorIcon(icon, color_id,
-                                           ash::kAppContextMenuIconSize));
+      if (!menu_item->submenu.empty()) {
+        PopulateRadioItemFromMenuItems(menu_item->submenu, submenu);
+        model->AddActionableSubMenu(
+            menu_item->command_id,
+            l10n_util::GetStringUTF16(menu_item->string_id), submenu);
       }
       break;
     case apps::MenuItemType::kRadio:
     case apps::MenuItemType::kSeparator:
     case apps::MenuItemType::kPublisherCommand:
       NOTREACHED();
-      return false;
   }
-  return true;
 }
 
 void PopulateItemFromMenuItem(const apps::MenuItemPtr& item,
@@ -212,10 +211,12 @@ base::StringPiece MenuTypeToString(MenuType menu_type) {
 }
 
 MenuType MenuTypeFromString(base::StringPiece menu_type) {
-  if (base::EqualsCaseInsensitiveASCII(menu_type, "shelf"))
+  if (base::EqualsCaseInsensitiveASCII(menu_type, "shelf")) {
     return MenuType::kShelf;
-  if (base::EqualsCaseInsensitiveASCII(menu_type, "applist"))
+  }
+  if (base::EqualsCaseInsensitiveASCII(menu_type, "applist")) {
     return MenuType::kAppList;
+  }
   return MenuType::kShelf;
 }
 
@@ -225,7 +226,7 @@ MenuItems CreateBrowserMenuItems(const Profile* profile) {
 
   // "Normal" windows are not allowed when incognito is enforced.
   if (IncognitoModePrefs::GetAvailability(profile->GetPrefs()) !=
-      IncognitoModePrefs::Availability::kForced) {
+      policy::IncognitoModeAvailability::kForced) {
     AddCommandItem(ash::APP_CONTEXT_MENU_NEW_WINDOW, IDS_APP_LIST_NEW_WINDOW,
                    menu_items);
   }
@@ -233,7 +234,7 @@ MenuItems CreateBrowserMenuItems(const Profile* profile) {
   // Incognito windows are not allowed when incognito is disabled.
   if (!profile->IsOffTheRecord() &&
       IncognitoModePrefs::GetAvailability(profile->GetPrefs()) !=
-          IncognitoModePrefs::Availability::kDisabled) {
+          policy::IncognitoModeAvailability::kDisabled) {
     AddCommandItem(ash::APP_CONTEXT_MENU_NEW_INCOGNITO_WINDOW,
                    IDS_APP_LIST_NEW_INCOGNITO_WINDOW, menu_items);
   }
@@ -250,6 +251,25 @@ ui::ColorId GetColorIdForMenuItemIcon() {
 #else
   return ui::kColorMenuIcon;
 #endif
+}
+
+uint32_t StringIdForUseLaunchTypeCommand(uint32_t command_id) {
+  DCHECK(command_id >= ash::USE_LAUNCH_TYPE_COMMAND_START &&
+         command_id < ash::USE_LAUNCH_TYPE_COMMAND_END);
+  switch (command_id) {
+    case ash::USE_LAUNCH_TYPE_REGULAR:
+      return IDS_APP_LIST_CONTEXT_MENU_NEW_TAB;
+    case ash::USE_LAUNCH_TYPE_WINDOW:
+      return IDS_APP_LIST_CONTEXT_MENU_NEW_WINDOW;
+    case ash::USE_LAUNCH_TYPE_TABBED_WINDOW:
+      return IDS_APP_LIST_CONTEXT_MENU_NEW_TABBED_WINDOW;
+    case ash::DEPRECATED_USE_LAUNCH_TYPE_PINNED:
+    case ash::DEPRECATED_USE_LAUNCH_TYPE_FULLSCREEN:
+      [[fallthrough]];
+    default:
+      NOTREACHED();
+      return 0;
+  }
 }
 
 }  // namespace apps

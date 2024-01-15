@@ -4,19 +4,21 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/test/test_trace_processor.h"
 #include "build/build_config.h"
 #include "cc/base/switches.h"
-#include "content/browser/renderer_host/input/synthetic_gesture.h"
-#include "content/browser/renderer_host/input/synthetic_gesture_controller.h"
-#include "content/browser/renderer_host/input/synthetic_gesture_target.h"
-#include "content/browser/renderer_host/input/synthetic_smooth_scroll_gesture.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
 #include "content/browser/web_contents/web_contents_impl.h"
+#include "content/common/input/synthetic_gesture.h"
+#include "content/common/input/synthetic_gesture_controller.h"
 #include "content/common/input/synthetic_gesture_params.h"
+#include "content/common/input/synthetic_gesture_target.h"
+#include "content/common/input/synthetic_smooth_scroll_gesture.h"
 #include "content/common/input/synthetic_smooth_scroll_gesture_params.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/render_widget_host_view.h"
@@ -93,7 +95,7 @@ class ScrollLatencyBrowserTest : public ContentBrowserTest {
   // crbug.com/405282 for details.
   void GiveItSomeTime() {
     base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(10));
     run_loop.Run();
   }
@@ -106,9 +108,6 @@ class ScrollLatencyBrowserTest : public ContentBrowserTest {
  protected:
   void SetUpCommandLine(base::CommandLine* command_line) override {
     ContentBrowserTest::SetUpCommandLine(command_line);
-    if (disable_threaded_scrolling_) {
-      command_line->AppendSwitch(::blink::switches::kDisableThreadedScrolling);
-    }
     // Set the scroll animation duration to a large number so that
     // we ensure secondary GestureScrollUpdates update the animation
     // instead of starting a new one.
@@ -173,22 +172,6 @@ class ScrollLatencyBrowserTest : public ContentBrowserTest {
     visual_state_callback_count_++;
   }
 
-  void RunMultipleWheelScroll() {
-    DoSmoothWheelScroll(gfx::Vector2d(0, 100));
-    // We expect to see one ScrollBegin and two ScrollUpdate swap values.
-    while (!VerifyRecordedSamplesForHistogram(
-        1, "Event.Latency.ScrollBegin.Wheel.TimeToScrollUpdateSwapBegin4")) {
-      GiveItSomeTime();
-      FetchHistogramsFromChildProcesses();
-    }
-
-    while (!VerifyRecordedSamplesForHistogram(
-        1, "Event.Latency.ScrollUpdate.Wheel.TimeToScrollUpdateSwapBegin4")) {
-      GiveItSomeTime();
-      FetchHistogramsFromChildProcesses();
-    }
-  }
-
   // Returns true if the given histogram has recorded the expected number of
   // samples.
   [[nodiscard]] bool VerifyRecordedSamplesForHistogram(
@@ -202,40 +185,11 @@ class ScrollLatencyBrowserTest : public ContentBrowserTest {
   }
 
   std::unique_ptr<base::RunLoop> run_loop_;
-  bool disable_threaded_scrolling_ = false;
 
  protected:
   base::HistogramTester histogram_tester_;
   uint32_t visual_state_callback_count_ = 0;
 };
-
-// Disabled due to flakiness https://crbug.com/1163246.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || \
-    BUILDFLAG(IS_ANDROID)
-#define MAYBE_MultipleWheelScroll DISABLED_MultipleWheelScroll
-#else
-#define MAYBE_MultipleWheelScroll MultipleWheelScroll
-#endif
-
-// Perform a smooth wheel scroll, and verify that our end-to-end wheel latency
-// metrics are recorded. See crbug.com/599910 for details.
-IN_PROC_BROWSER_TEST_F(ScrollLatencyBrowserTest, MAYBE_MultipleWheelScroll) {
-  LoadURL();
-  RunMultipleWheelScroll();
-}
-
-// Disabled due to flakiness https://crbug.com/1163246 and https://crbug.com/1349901
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_MAC)
-#define MAYBE_MultipleWheelScrollOnMain DISABLED_MultipleWheelScrollOnMain
-#else
-#define MAYBE_MultipleWheelScrollOnMain MultipleWheelScrollOnMain
-#endif
-IN_PROC_BROWSER_TEST_F(ScrollLatencyBrowserTest,
-                       MAYBE_MultipleWheelScrollOnMain) {
-  disable_threaded_scrolling_ = true;
-  LoadURL();
-  RunMultipleWheelScroll();
-}
 
 // Do an upward touch scroll, and verify that no scroll metrics is recorded when
 // the scroll event is ignored.
@@ -273,366 +227,42 @@ IN_PROC_BROWSER_TEST_F(ScrollLatencyBrowserTest,
       std::make_unique<RenderFrameSubmissionObserver>(
           GetWidgetHost()->render_frame_metadata_provider());
   frame_observer->WaitForAnyFrameSubmission();
-  FetchHistogramsFromChildProcesses();
+
   EXPECT_TRUE(VerifyRecordedSamplesForHistogram(
-      0, "Event.Latency.ScrollBegin.Touch.BrowserNotifiedToBeforeGpuSwap2"));
-  EXPECT_TRUE(VerifyRecordedSamplesForHistogram(
-      0, "Event.Latency.ScrollBegin.Touch.GpuSwap2"));
-  EXPECT_TRUE(VerifyRecordedSamplesForHistogram(
-      0, "Event.Latency.ScrollBegin.Touch.HandledToRendererSwap2_Impl"));
-  EXPECT_TRUE(VerifyRecordedSamplesForHistogram(
-      0, "Event.Latency.ScrollBegin.Touch.RendererSwapToBrowserNotified2"));
-  EXPECT_TRUE(VerifyRecordedSamplesForHistogram(
-      0, "Event.Latency.ScrollBegin.Touch.TimeToHandled2_Impl"));
-  EXPECT_TRUE(VerifyRecordedSamplesForHistogram(
-      0, "Event.Latency.ScrollBegin.Touch.TimeToScrollUpdateSwapBegin4"));
+      0, "EventLatency.GestureScrollUpdate.TotalLatency"));
 }
 
-using ScrollThroughputBrowserTest = ScrollLatencyBrowserTest;
-
-// https://crbug.com/1067492. Flaky on Android.
-#if BUILDFLAG(IS_ANDROID)
-#define MAYBE_ScrollThroughputMetrics DISABLED_ScrollThroughputMetrics
-#else
-#define MAYBE_ScrollThroughputMetrics ScrollThroughputMetrics
-#endif
-IN_PROC_BROWSER_TEST_F(ScrollThroughputBrowserTest,
-                       MAYBE_ScrollThroughputMetrics) {
+#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
+// A basic smoke test verifying that key scroll-related events are recorded
+// during scrolling. This test performs a simple scroll and expects to see three
+// EventLatency events with the correct types.
+IN_PROC_BROWSER_TEST_F(ScrollLatencyBrowserTest, ScrollingEventLatencyTrace) {
   LoadURL();
-  auto scroll_update_watcher = std::make_unique<InputMsgWatcher>(
-      GetWidgetHost(), blink::WebInputEvent::Type::kGestureScrollEnd);
-
-  SyntheticSmoothScrollGestureParams params;
-  params.gesture_source_type = content::mojom::GestureSourceType::kTouchInput;
-  params.anchor = gfx::PointF(10, 10);
-  params.distances.push_back(gfx::Vector2d(0, -6000));
-  params.fling_velocity_x = 0;
-  params.fling_velocity_y = -2000;
-  params.prevent_fling = false;
-
-  run_loop_ = std::make_unique<base::RunLoop>();
-
-  auto gesture = std::make_unique<SyntheticSmoothScrollGesture>(params);
-  GetWidgetHost()->QueueSyntheticGesture(
-      std::move(gesture),
-      base::BindOnce(&ScrollLatencyBrowserTest::OnSyntheticGestureCompleted,
-                     base::Unretained(this)));
-  run_loop_->Run();
-  scroll_update_watcher->GetAckStateWaitIfNecessary();
-
-  const char histogram_name[] =
-      "Graphics.Smoothness.PercentDroppedFrames.ScrollingThread.TouchScroll";
-  while (!GetSampleCountForHistogram(histogram_name)) {
+  base::test::TestTraceProcessor ttp;
+  ttp.StartTrace("input.scrolling");
+  DoSmoothWheelScroll(gfx::Vector2d(0, 100));
+  while (!VerifyRecordedSamplesForHistogram(
+      1, "EventLatency.GestureScrollUpdate.TotalLatency2")) {
     GiveItSomeTime();
     FetchHistogramsFromChildProcesses();
   }
-
-  // TODO(crbug.com/1067492): The following check is flaky.
-  // RunUntilInputProcessed(GetWidgetHost());
-  // FetchHistogramsFromChildProcesses();
-  // EXPECT_TRUE(VerifyRecordedSamplesForHistogram(
-  //     1, "Event.Latency.ScrollBegin.Touch.BrowserNotifiedToBeforeGpuSwap2"));
+  absl::Status status = ttp.StopAndParseTrace();
+  ASSERT_TRUE(status.ok()) << status.message();
+  std::string query =
+      R"(
+      SELECT EXTRACT_ARG(arg_set_id, 'event_latency.event_type') AS type
+      FROM slice
+      WHERE name = 'EventLatency'
+      )";
+  auto result = ttp.RunQuery(query);
+  ASSERT_TRUE(result.has_value()) << result.error();
+  EXPECT_THAT(result.value(),
+              ::testing::ElementsAre(
+                  std::vector<std::string>{"type"},
+                  std::vector<std::string>{"GESTURE_SCROLL_BEGIN"},
+                  std::vector<std::string>{"FIRST_GESTURE_SCROLL_UPDATE"},
+                  std::vector<std::string>{"GESTURE_SCROLL_UPDATE"}));
 }
-
-class ScrollLatencyScrollbarBrowserTest : public ScrollLatencyBrowserTest {
- public:
-  ScrollLatencyScrollbarBrowserTest() = default;
-
-  void SetUpCommandLine(base::CommandLine* command_line) override {
-    ScrollLatencyBrowserTest::SetUpCommandLine(command_line);
-    command_line->AppendSwitch(::switches::kDisableSmoothScrolling);
-
-    // The following features need to be disabled:
-    // - kOverlayScrollbar since overlay scrollbars are not hit-testable (thus
-    // input is not routed to scrollbars).
-    // - kCompositorThreadedScrollbarScrolling since this feature is already
-    // tested by ScrollLatencyCompositedScrollbarBrowserTest. Hence, this
-    // current test can be used exclusively to test the main thread scrollbar
-    // path.
-    scoped_feature_list_.InitWithFeaturesAndParameters(
-        {}, {features::kOverlayScrollbar,
-             features::kCompositorThreadedScrollbarScrolling});
-  }
-
-  ~ScrollLatencyScrollbarBrowserTest() override = default;
-
- private:
-#if BUILDFLAG(IS_MAC)
-  // Native scrollbars on Mac are overlay scrollbars. Hence they need to be
-  // disabled.
-  ui::test::ScopedPreferredScrollerStyle scroller_style_override{false};
-#endif
-
- protected:
-  void RunScrollbarButtonLatencyTest() {
-    // We don't run tests that click the scrollbar on Android for a few reasons:
-    //  - Mobile browser uses scrollbars that are not hit-testable.
-    //  - On Android, you cannot resize the RenderWidgetHostView (see
-    //    |RenderWidgetHostViewAndroid::SetSize()|) and thus getting consistent
-    //    coordinates to manipulate the scrollbar is different from other
-    //    platforms.
-    // We could overcome the first limitation, by toggling various features
-    // and WebPreferences (e.g. kOverlayScrollbar feature, and viewport_enabled
-    // WebPreferences) but at that point, we're not really testing a shipping
-    // configuration.
-#if !BUILDFLAG(IS_ANDROID)
-    // Click on the forward scrollbar button to induce a compositor thread
-    // scrollbar scroll.
-    gfx::PointF scrollbar_forward_button(795, 595);
-    blink::WebMouseEvent mouse_event =
-        blink::SyntheticWebMouseEventBuilder::Build(
-            blink::WebInputEvent::Type::kMouseDown,
-            scrollbar_forward_button.x(), scrollbar_forward_button.y(), 0);
-    mouse_event.button = blink::WebMouseEvent::Button::kLeft;
-    mouse_event.SetTimeStamp(base::TimeTicks::Now());
-    GetWidgetHost()->ForwardMouseEvent(mouse_event);
-
-    mouse_event.SetType(blink::WebInputEvent::Type::kMouseUp);
-    GetWidgetHost()->ForwardMouseEvent(mouse_event);
-
-    RunUntilInputProcessed(GetWidgetHost());
-
-    FetchHistogramsFromChildProcesses();
-    EXPECT_TRUE(VerifyRecordedSamplesForHistogram(
-        1, "Event.Latency.ScrollBegin.Scrollbar.TimeToScrollUpdateSwapBegin4"));
-    EXPECT_TRUE(VerifyRecordedSamplesForHistogram(
-        1,
-        "Event.Latency.ScrollBegin.Scrollbar.RendererSwapToBrowserNotified2"));
-    EXPECT_TRUE(VerifyRecordedSamplesForHistogram(
-        1,
-        "Event.Latency.ScrollBegin.Scrollbar.BrowserNotifiedToBeforeGpuSwap2"));
-    EXPECT_TRUE(VerifyRecordedSamplesForHistogram(
-        1, "Event.Latency.ScrollBegin.Scrollbar.GpuSwap2"));
-    std::string thread_name =
-        DoesScrollbarScrollOnMainThread() ? "Main" : "Impl";
-    EXPECT_TRUE(VerifyRecordedSamplesForHistogram(
-        1,
-        "Event.Latency.ScrollBegin.Scrollbar.TimeToHandled2_" + thread_name));
-    EXPECT_TRUE(VerifyRecordedSamplesForHistogram(
-        1, "Event.Latency.ScrollBegin.Scrollbar.HandledToRendererSwap2_" +
-               thread_name));
-#endif  // !BUILDFLAG(IS_ANDROID)
-  }
-
-  void RunScrollbarThumbDragLatencyTest() {
-    // See above comment in RunScrollbarButtonLatencyTest for why this test
-    // doesn't run on Android.
-#if !BUILDFLAG(IS_ANDROID)
-    // Click on the scrollbar thumb and drag it twice to induce a compositor
-    // thread scrollbar ScrollBegin and ScrollUpdate.
-    gfx::PointF scrollbar_thumb(795, 30);
-    blink::WebMouseEvent mouse_down =
-        blink::SyntheticWebMouseEventBuilder::Build(
-            blink::WebInputEvent::Type::kMouseDown, scrollbar_thumb.x(),
-            scrollbar_thumb.y(), 0);
-    mouse_down.button = blink::WebMouseEvent::Button::kLeft;
-    mouse_down.SetTimeStamp(base::TimeTicks::Now());
-    GetWidgetHost()->ForwardMouseEvent(mouse_down);
-
-    // This is to avoid a race condition where a mousemove is processed before
-    // the renderer has had a chance to set up the scroll state (like the
-    // scroll_node etc). This happens due to the fact that when the renderer
-    // gets a mousedown, it is first "queued" as a GSB. At this point, the
-    // scroll node is not yet set up. Now, if a mousemove is sent from the
-    // browser proc before a frame is generated, it gets dispatched immediately
-    // and this can lead to nullptr derefernces.
-    RunUntilInputProcessed(GetWidgetHost());
-
-    blink::WebMouseEvent mouse_move =
-        blink::SyntheticWebMouseEventBuilder::Build(
-            blink::WebInputEvent::Type::kMouseMove, scrollbar_thumb.x(),
-            scrollbar_thumb.y() + 10, 0);
-    mouse_move.button = blink::WebMouseEvent::Button::kLeft;
-    mouse_move.SetTimeStamp(base::TimeTicks::Now());
-    GetWidgetHost()->ForwardMouseEvent(mouse_move);
-    RunUntilInputProcessed(GetWidgetHost());
-
-    mouse_move.SetPositionInWidget(scrollbar_thumb.x(),
-                                   scrollbar_thumb.y() + 20);
-    mouse_move.SetPositionInScreen(scrollbar_thumb.x(),
-                                   scrollbar_thumb.y() + 20);
-    GetWidgetHost()->ForwardMouseEvent(mouse_move);
-    RunUntilInputProcessed(GetWidgetHost());
-
-    blink::WebMouseEvent mouse_up = blink::SyntheticWebMouseEventBuilder::Build(
-        blink::WebInputEvent::Type::kMouseUp, scrollbar_thumb.x(),
-        scrollbar_thumb.y() + 20, 0);
-    mouse_up.button = blink::WebMouseEvent::Button::kLeft;
-    mouse_up.SetTimeStamp(base::TimeTicks::Now());
-    GetWidgetHost()->ForwardMouseEvent(mouse_up);
-
-    RunUntilInputProcessed(GetWidgetHost());
-
-    FetchHistogramsFromChildProcesses();
-    EXPECT_GT(
-        GetSampleCountForHistogram(
-            "Event.Latency.ScrollBegin.Scrollbar.TimeToScrollUpdateSwapBegin4"),
-        0u);
-    EXPECT_GT(GetSampleCountForHistogram("Event.Latency.ScrollBegin.Scrollbar."
-                                         "RendererSwapToBrowserNotified2"),
-              0u);
-    EXPECT_GT(GetSampleCountForHistogram("Event.Latency.ScrollBegin.Scrollbar."
-                                         "BrowserNotifiedToBeforeGpuSwap2"),
-              0u);
-    EXPECT_GT(GetSampleCountForHistogram(
-                  "Event.Latency.ScrollBegin.Scrollbar.GpuSwap2"),
-              0u);
-    std::string thread_name =
-        DoesScrollbarScrollOnMainThread() ? "Main" : "Impl";
-    EXPECT_GT(GetSampleCountForHistogram(
-                  "Event.Latency.ScrollBegin.Scrollbar.TimeToHandled2_" +
-                  thread_name),
-              0u);
-    EXPECT_GT(
-        GetSampleCountForHistogram(
-            "Event.Latency.ScrollBegin.Scrollbar.HandledToRendererSwap2_" +
-            thread_name),
-        0u);
-    EXPECT_GT(GetSampleCountForHistogram("Event.Latency.ScrollUpdate.Scrollbar."
-                                         "TimeToScrollUpdateSwapBegin4"),
-              0u);
-    EXPECT_GT(GetSampleCountForHistogram("Event.Latency.ScrollUpdate.Scrollbar."
-                                         "RendererSwapToBrowserNotified2"),
-              0u);
-    EXPECT_GT(GetSampleCountForHistogram("Event.Latency.ScrollUpdate.Scrollbar."
-                                         "BrowserNotifiedToBeforeGpuSwap2"),
-              0u);
-    EXPECT_GT(GetSampleCountForHistogram(
-                  "Event.Latency.ScrollUpdate.Scrollbar.GpuSwap2"),
-              0u);
-    EXPECT_GT(GetSampleCountForHistogram(
-                  "Event.Latency.ScrollUpdate.Scrollbar.TimeToHandled2_" +
-                  thread_name),
-              0u);
-    EXPECT_GT(
-        GetSampleCountForHistogram(
-            "Event.Latency.ScrollUpdate.Scrollbar.HandledToRendererSwap2_" +
-            thread_name),
-        0u);
-#endif  // !BUILDFLAG(IS_ANDROID)
-  }
-
-  virtual bool DoesScrollbarScrollOnMainThread() const { return true; }
-
-  base::test::ScopedFeatureList scoped_feature_list_;
-};
-
-// This test flakes on most platforms: https://crbug.com/1122371.
-IN_PROC_BROWSER_TEST_F(ScrollLatencyScrollbarBrowserTest,
-                       DISABLED_ScrollbarButtonLatency) {
-  LoadURL();
-
-  RunScrollbarButtonLatencyTest();
-}
-
-// Disabled due to flakes; see https://crbug.com/1188553.
-IN_PROC_BROWSER_TEST_F(ScrollLatencyScrollbarBrowserTest,
-                       DISABLED_ScrollbarThumbDragLatency) {
-  LoadURL();
-
-  RunScrollbarThumbDragLatencyTest();
-}
-
-class ScrollLatencyCompositedScrollbarBrowserTest
-    : public ScrollLatencyScrollbarBrowserTest {
- public:
-  ScrollLatencyCompositedScrollbarBrowserTest() {}
-
-  void SetUpCommandLine(base::CommandLine* command_line) override {
-    ScrollLatencyScrollbarBrowserTest::SetUpCommandLine(command_line);
-    scoped_feature_list_.InitAndEnableFeature(
-        features::kCompositorThreadedScrollbarScrolling);
-  }
-
-  ~ScrollLatencyCompositedScrollbarBrowserTest() override {}
-
- protected:
-  bool DoesScrollbarScrollOnMainThread() const override { return false; }
-
-  base::test::ScopedFeatureList scoped_feature_list_;
-};
-
-// Flaky test on all platforms: https://crbug.com/1122371.
-IN_PROC_BROWSER_TEST_F(ScrollLatencyCompositedScrollbarBrowserTest,
-                       DISABLED_ScrollbarButtonLatency) {
-  LoadURL();
-
-  RunScrollbarButtonLatencyTest();
-}
-
-// Crashes on Mac ASAN.  https://crbug.com/1188553
-#if BUILDFLAG(IS_MAC)
-#define MAYBE_ScrollbarThumbDragLatency DISABLED_ScrollbarThumbDragLatency
-#else
-#define MAYBE_ScrollbarThumbDragLatency ScrollbarThumbDragLatency
-#endif
-IN_PROC_BROWSER_TEST_F(ScrollLatencyCompositedScrollbarBrowserTest,
-                       MAYBE_ScrollbarThumbDragLatency) {
-  LoadURL();
-
-  RunScrollbarThumbDragLatencyTest();
-}
-
-// Disabled due to flakiness https://crbug.com/1188553
-IN_PROC_BROWSER_TEST_F(ScrollLatencyCompositedScrollbarBrowserTest,
-                       DISABLED_ScrollbarThumbDragDeviceChange) {
-#if !BUILDFLAG(IS_ANDROID)
-  LoadURL();
-
-  // First, set up a gesture scroll for any device other than a scrollbar.
-  const blink::WebGestureEvent scroll_begin =
-      blink::SyntheticWebGestureEventBuilder::BuildScrollBegin(
-          0, 0, blink::WebGestureDevice::kTouchpad, 1);
-  GetWidgetHost()->ForwardGestureEvent(scroll_begin);
-
-  const blink::WebGestureEvent scroll_update =
-      blink::SyntheticWebGestureEventBuilder::BuildScrollUpdate(
-          0, -10, 0, blink::WebGestureDevice::kTouchpad);
-  GetWidgetHost()->ForwardGestureEvent(scroll_update);
-
-  // Next, drag the scrollbar thumb. Start with a mousedown.
-  const gfx::PointF scrollbar_thumb(795, 30);
-  blink::WebMouseEvent mouse_down = blink::SyntheticWebMouseEventBuilder::Build(
-      blink::WebInputEvent::Type::kMouseDown, scrollbar_thumb.x(),
-      scrollbar_thumb.y(), 0);
-  mouse_down.button = blink::WebMouseEvent::Button::kLeft;
-  mouse_down.SetTimeStamp(base::TimeTicks::Now());
-  GetWidgetHost()->ForwardMouseEvent(mouse_down);
-  RunUntilInputProcessed(GetWidgetHost());
-
-  // Followed by a couple of mousemoves.
-  blink::WebMouseEvent mouse_move = blink::SyntheticWebMouseEventBuilder::Build(
-      blink::WebInputEvent::Type::kMouseMove, scrollbar_thumb.x(),
-      scrollbar_thumb.y() + 10, 0);
-  mouse_move.button = blink::WebMouseEvent::Button::kLeft;
-  mouse_move.SetTimeStamp(base::TimeTicks::Now());
-  GetWidgetHost()->ForwardMouseEvent(mouse_move);
-  RunUntilInputProcessed(GetWidgetHost());
-
-  mouse_move.SetPositionInWidget(scrollbar_thumb.x(), scrollbar_thumb.y() + 20);
-  mouse_move.SetPositionInScreen(scrollbar_thumb.x(), scrollbar_thumb.y() + 20);
-  GetWidgetHost()->ForwardMouseEvent(mouse_move);
-  RunUntilInputProcessed(GetWidgetHost());
-
-  // And end with a mouseup.
-  blink::WebMouseEvent mouse_up = blink::SyntheticWebMouseEventBuilder::Build(
-      blink::WebInputEvent::Type::kMouseUp, scrollbar_thumb.x(),
-      scrollbar_thumb.y() + 20, 0);
-  mouse_up.button = blink::WebMouseEvent::Button::kLeft;
-  mouse_up.SetTimeStamp(base::TimeTicks::Now());
-  GetWidgetHost()->ForwardMouseEvent(mouse_up);
-  RunUntilInputProcessed(GetWidgetHost());
-  FetchHistogramsFromChildProcesses();
-
-  // Expect to see histograms generated for scroll begin and updates.
-  EXPECT_GT(
-      GetSampleCountForHistogram(
-          "Event.Latency.ScrollBegin.Scrollbar.RendererSwapToBrowserNotified2"),
-      0u);
-  EXPECT_GT(GetSampleCountForHistogram("Event.Latency.ScrollUpdate.Scrollbar."
-                                       "RendererSwapToBrowserNotified2"),
-            0u);
-#endif  // !BUILDFLAG(IS_ANDROID)
-}
+#endif  // BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
 
 }  // namespace content

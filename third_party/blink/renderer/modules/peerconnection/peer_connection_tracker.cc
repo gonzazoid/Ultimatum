@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "base/containers/contains.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/types/pass_key.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -30,9 +31,9 @@
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/web_local_frame_impl.h"
+#include "third_party/blink/renderer/modules/mediastream/media_constraints.h"
 #include "third_party/blink/renderer/modules/mediastream/user_media_request.h"
 #include "third_party/blink/renderer/modules/peerconnection/rtc_peer_connection_handler.h"
-#include "third_party/blink/renderer/platform/mediastream/media_constraints.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_component.h"
 #include "third_party/blink/renderer/platform/mojo/mojo_binding_context.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_answer_options_platform.h"
@@ -43,6 +44,7 @@
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
+#include "third_party/webrtc/api/stats/rtcstats_objects.h"
 
 using webrtc::StatsReport;
 using webrtc::StatsReports;
@@ -441,68 +443,6 @@ const char* GetTransceiverUpdatedReasonString(
   return nullptr;
 }
 
-// Builds a dictionary Value from the StatsReport.
-// Note:
-// The format must be consistent with what webrtc_internals.js expects.
-// If you change it here, you must change webrtc_internals.js as well.
-absl::optional<base::Value::Dict> GetDictValueStats(const StatsReport& report) {
-  if (report.values().empty())
-    return absl::nullopt;
-
-  base::Value::List values;
-
-  for (const auto& v : report.values()) {
-    const StatsReport::ValuePtr& value = v.second;
-    values.Append(value->display_name());
-    switch (value->type()) {
-      case StatsReport::Value::kInt:
-        values.Append(value->int_val());
-        break;
-      case StatsReport::Value::kFloat:
-        values.Append(value->float_val());
-        break;
-      case StatsReport::Value::kString:
-        values.Append(value->string_val());
-        break;
-      case StatsReport::Value::kStaticString:
-        values.Append(value->static_string_val());
-        break;
-      case StatsReport::Value::kBool:
-        values.Append(value->bool_val());
-        break;
-      case StatsReport::Value::kInt64:  // int64_t isn't supported, so use
-                                        // string.
-      case StatsReport::Value::kId:
-      default:
-        values.Append(value->ToString());
-        break;
-    }
-  }
-
-  base::Value::Dict dict;
-  dict.Set("timestamp", report.timestamp());
-  dict.Set("values", std::move(values));
-
-  return dict;
-}
-
-// Builds a dictionary Value from the StatsReport.
-absl::optional<base::Value::Dict> GetDictValue(const StatsReport& report) {
-  absl::optional<base::Value::Dict> stats = GetDictValueStats(report);
-  if (!stats)
-    return absl::nullopt;
-
-  // Note:
-  // The format must be consistent with what webrtc_internals.js expects.
-  // If you change it here, you must change webrtc_internals.js as well.
-  base::Value::Dict result;
-  result.Set("stats", std::move(stats).value());
-  result.Set("id", report.id()->ToString());
-  result.Set("type", report.TypeToString());
-
-  return result;
-}
-
 int GetNextProcessLocalID() {
   static int next_local_id = 1;
   return next_local_id++;
@@ -511,65 +451,8 @@ int GetNextProcessLocalID() {
 }  // namespace
 
 // chrome://webrtc-internals displays stats and stats graphs. The call path
-// involves thread and process hops (IPC). This is the webrtc::StatsObserver
-// that is used when webrtc-internals wants legacy stats. It starts in
-// webrtc_internals.js performing requestLegacyStats and the result gets
-// asynchronously delivered to webrtc_internals.js at addLegacyStats.
-class InternalLegacyStatsObserver : public webrtc::StatsObserver {
- public:
-  InternalLegacyStatsObserver(
-      int lid,
-      scoped_refptr<base::SingleThreadTaskRunner> main_thread,
-      CrossThreadOnceFunction<void(int, base::Value::List)> completion_callback)
-      : lid_(lid),
-        main_thread_(std::move(main_thread)),
-        completion_callback_(std::move(completion_callback)) {}
-
-  void OnComplete(const StatsReports& reports) override {
-    base::Value::List list;
-    for (const auto* r : reports) {
-      absl::optional<base::Value::Dict> report = GetDictValue(*r);
-      if (report)
-        list.Append(std::move(*report));
-    }
-
-    if (!list.empty()) {
-      PostCrossThreadTask(
-          *main_thread_.get(), FROM_HERE,
-          CrossThreadBindOnce(&InternalLegacyStatsObserver::OnCompleteImpl,
-                              std::move(list), lid_,
-                              std::move(completion_callback_)));
-    }
-  }
-
- protected:
-  ~InternalLegacyStatsObserver() override {
-    // Will be destructed on libjingle's signaling thread.
-    // The signaling thread is where libjingle's objects live and from where
-    // libjingle makes callbacks.  This may or may not be the same thread as
-    // the main thread.
-  }
-
- private:
-  // Static since |this| will most likely have been deleted by the time we
-  // get here.
-  static void OnCompleteImpl(
-      base::Value::List list,
-      int lid,
-      CrossThreadOnceFunction<void(int, base::Value::List)>
-          completion_callback) {
-    DCHECK(!list.empty());
-    std::move(completion_callback).Run(lid, std::move(list));
-  }
-
-  const int lid_;
-  const scoped_refptr<base::SingleThreadTaskRunner> main_thread_;
-  CrossThreadOnceFunction<void(int, base::Value::List)> completion_callback_;
-};
-
-// chrome://webrtc-internals displays stats and stats graphs. The call path
-// involves thread and process hops (IPC). This is the ----webrtc::StatsObserver
-// that is used when webrtc-internals wants standard stats. It starts in
+// involves thread and process hops (IPC). This is the stats observer that is
+// used when webrtc-internals wants standard stats. It starts in
 // webrtc_internals.js performing requestStandardStats and the result gets
 // asynchronously delivered to webrtc_internals.js at addStandardStats.
 class InternalStandardStatsObserver : public webrtc::RTCStatsCollectorCallback {
@@ -577,9 +460,11 @@ class InternalStandardStatsObserver : public webrtc::RTCStatsCollectorCallback {
   InternalStandardStatsObserver(
       int lid,
       scoped_refptr<base::SingleThreadTaskRunner> main_thread,
+      Vector<std::unique_ptr<blink::RTCRtpSenderPlatform>> senders,
       CrossThreadOnceFunction<void(int, base::Value::List)> completion_callback)
       : lid_(lid),
         main_thread_(std::move(main_thread)),
+        senders_(std::move(senders)),
         completion_callback_(std::move(completion_callback)) {}
 
   void OnStatsDelivered(
@@ -604,24 +489,63 @@ class InternalStandardStatsObserver : public webrtc::RTCStatsCollectorCallback {
 
   base::Value::List ReportToList(
       const rtc::scoped_refptr<const webrtc::RTCStatsReport>& report) {
+    std::map<std::string, MediaStreamTrackPlatform*> tracks_by_id;
+    for (const auto& sender : senders_) {
+      MediaStreamComponent* track_component = sender->Track();
+      if (!track_component) {
+        continue;
+      }
+      tracks_by_id.insert(std::make_pair(track_component->Id().Utf8(),
+                                         track_component->GetPlatformTrack()));
+    }
+
     base::Value::List result_list;
+    // Used for string comparisons with const char* below.
+    const std::string kTypeMediaSource = "media-source";
     for (const auto& stats : *report) {
       // The format of "stats_subdictionary" is:
       // {timestamp:<milliseconds>, values: [<key-value pairs>]}
+      // The timestamp unit is milliseconds but we want decimal
+      // precision so we convert ourselves.
       base::Value::Dict stats_subdictionary;
-      // Timestamp is reported in milliseconds.
-      stats_subdictionary.Set("timestamp", stats.timestamp_us() / 1000.0);
+      stats_subdictionary.Set(
+          "timestamp",
+          stats.timestamp().us() /
+              static_cast<double>(base::Time::kMicrosecondsPerMillisecond));
       // Values are reported as
-      // "values": ["member1", value, "member2", value...]
+      // "values": ["attribute1", value, "attribute2", value...]
       base::Value::List name_value_pairs;
-      for (const auto* member : stats.Members()) {
-        if (!member->is_defined())
+      for (const auto& attribute : stats.Attributes()) {
+        if (!attribute.has_value()) {
           continue;
-        // Non-standardized / provisional stats which are not exposed
-        // to Javascript are postfixed with an asterisk.
-        std::string postfix = member->is_standardized() ? "" : "*";
-        name_value_pairs.Append(member->name() + postfix);
-        name_value_pairs.Append(MemberToValue(*member));
+        }
+        name_value_pairs.Append(attribute.name());
+        name_value_pairs.Append(AttributeToValue(attribute));
+      }
+      // Modify "media-source" to also contain the result of the
+      // MediaStreamTrack Statistics API, if applicable.
+      if (stats.type() == kTypeMediaSource) {
+        const webrtc::RTCMediaSourceStats& media_source =
+            static_cast<const webrtc::RTCMediaSourceStats&>(stats);
+        if (media_source.kind.has_value() && *media_source.kind == "video" &&
+            media_source.track_identifier.has_value()) {
+          auto it = tracks_by_id.find(*media_source.track_identifier);
+          if (it != tracks_by_id.end()) {
+            MediaStreamTrackPlatform::VideoFrameStats video_frame_stats =
+                it->second->GetVideoFrameStats();
+            name_value_pairs.Append("track.deliveredFrames");
+            name_value_pairs.Append(base::Value(
+                static_cast<int>(video_frame_stats.deliverable_frames)));
+            name_value_pairs.Append("track.discardedFrames");
+            name_value_pairs.Append(base::Value(
+                static_cast<int>(video_frame_stats.discarded_frames)));
+            name_value_pairs.Append("track.totalFrames");
+            name_value_pairs.Append(base::Value(
+                static_cast<int>(video_frame_stats.deliverable_frames +
+                                 video_frame_stats.discarded_frames +
+                                 video_frame_stats.dropped_frames)));
+          }
+        }
       }
       stats_subdictionary.Set("values", std::move(name_value_pairs));
 
@@ -636,38 +560,27 @@ class InternalStandardStatsObserver : public webrtc::RTCStatsCollectorCallback {
     return result_list;
   }
 
-  base::Value MemberToValue(const webrtc::RTCStatsMemberInterface& member) {
-    switch (member.type()) {
-      // Types supported by base::Value are passed as the appropriate type.
-      case webrtc::RTCStatsMemberInterface::Type::kBool:
-        return base::Value(*member.cast_to<webrtc::RTCStatsMember<bool>>());
-      case webrtc::RTCStatsMemberInterface::Type::kInt32:
-        return base::Value(*member.cast_to<webrtc::RTCStatsMember<int32_t>>());
-      case webrtc::RTCStatsMemberInterface::Type::kString:
-        return base::Value(
-            *member.cast_to<webrtc::RTCStatsMember<std::string>>());
-      case webrtc::RTCStatsMemberInterface::Type::kDouble:
-        return base::Value(*member.cast_to<webrtc::RTCStatsMember<double>>());
-      // Types not supported by base::Value are converted to string.
-      case webrtc::RTCStatsMemberInterface::Type::kUint32:
-      case webrtc::RTCStatsMemberInterface::Type::kInt64:
-      case webrtc::RTCStatsMemberInterface::Type::kUint64:
-      case webrtc::RTCStatsMemberInterface::Type::kSequenceBool:
-      case webrtc::RTCStatsMemberInterface::Type::kSequenceInt32:
-      case webrtc::RTCStatsMemberInterface::Type::kSequenceUint32:
-      case webrtc::RTCStatsMemberInterface::Type::kSequenceInt64:
-      case webrtc::RTCStatsMemberInterface::Type::kSequenceUint64:
-      case webrtc::RTCStatsMemberInterface::Type::kSequenceDouble:
-      case webrtc::RTCStatsMemberInterface::Type::kSequenceString:
-      case webrtc::RTCStatsMemberInterface::Type::kMapStringUint64:
-      case webrtc::RTCStatsMemberInterface::Type::kMapStringDouble:
-      default:
-        return base::Value(member.ValueToString());
+  base::Value AttributeToValue(const webrtc::Attribute& attribute) {
+    // Types supported by `base::Value` are passed as the appropriate type.
+    if (attribute.holds_alternative<bool>()) {
+      return base::Value(attribute.get<bool>());
     }
+    if (attribute.holds_alternative<int32_t>()) {
+      return base::Value(attribute.get<int32_t>());
+    }
+    if (attribute.holds_alternative<std::string>()) {
+      return base::Value(attribute.get<std::string>());
+    }
+    if (attribute.holds_alternative<double>()) {
+      return base::Value(attribute.get<double>());
+    }
+    // Types not supported by `base::Value` are converted to string.
+    return base::Value(attribute.ValueToString());
   }
 
   const int lid_;
   const scoped_refptr<base::SingleThreadTaskRunner> main_thread_;
+  const Vector<std::unique_ptr<blink::RTCRtpSenderPlatform>> senders_;
   CrossThreadOnceFunction<void(int, base::Value::List)> completion_callback_;
 };
 
@@ -733,7 +646,7 @@ PeerConnectionTracker::~PeerConnectionTracker() {}
 void PeerConnectionTracker::Bind(
     mojo::PendingReceiver<blink::mojom::blink::PeerConnectionManager>
         receiver) {
-  DCHECK(!receiver_.is_bound());
+  DCHECK_CALLED_ON_VALID_THREAD(main_thread_);
   receiver_.Bind(std::move(receiver), GetSupplementable()->GetTaskRunner(
                                           TaskType::kMiscPlatformAPI));
 }
@@ -799,27 +712,22 @@ void PeerConnectionTracker::GetStandardStats() {
   DCHECK_CALLED_ON_VALID_THREAD(main_thread_);
 
   for (const auto& pair : peer_connection_local_id_map_) {
-    scoped_refptr<InternalStandardStatsObserver> observer(
+    Vector<std::unique_ptr<blink::RTCRtpSenderPlatform>> senders =
+        pair.key->GetPlatformSenders();
+    rtc::scoped_refptr<InternalStandardStatsObserver> observer(
         new rtc::RefCountedObject<InternalStandardStatsObserver>(
-            pair.value, main_thread_task_runner_,
+            pair.value, main_thread_task_runner_, std::move(senders),
             CrossThreadBindOnce(&PeerConnectionTracker::AddStandardStats,
                                 WrapCrossThreadWeakPersistent(this))));
     pair.key->GetStandardStatsForTracker(observer);
   }
 }
 
-void PeerConnectionTracker::GetLegacyStats() {
+void PeerConnectionTracker::GetCurrentState() {
   DCHECK_CALLED_ON_VALID_THREAD(main_thread_);
 
   for (const auto& pair : peer_connection_local_id_map_) {
-    rtc::scoped_refptr<InternalLegacyStatsObserver> observer(
-        new rtc::RefCountedObject<InternalLegacyStatsObserver>(
-            pair.value, main_thread_task_runner_,
-            CrossThreadBindOnce(&PeerConnectionTracker::AddLegacyStats,
-                                WrapCrossThreadWeakPersistent(this))));
-    pair.key->GetStats(observer.get(),
-                       webrtc::PeerConnectionInterface::kStatsOutputLevelDebug,
-                       nullptr);
+    pair.key->EmitCurrentStateForTracker();
   }
 }
 
@@ -1027,10 +935,40 @@ void PeerConnectionTracker::TrackCreateDataChannel(
   int id = GetLocalIDForHandler(pc_handler);
   if (id == -1)
     return;
-  String value = "label: " + String::FromUTF8(data_channel->label()) +
-                 ", reliable: " + SerializeBoolean(data_channel->reliable());
+  // See https://w3c.github.io/webrtc-pc/#dom-rtcdatachannelinit
+  StringBuilder result;
+  result.Append("label: ");
+  result.Append(String::FromUTF8(data_channel->label()));
+  result.Append(", ordered: ");
+  result.Append(SerializeBoolean(data_channel->ordered()));
+  absl::optional<uint16_t> maxPacketLifeTime =
+      data_channel->maxPacketLifeTime();
+  if (maxPacketLifeTime.has_value()) {
+    result.Append(", maxPacketLifeTime: ");
+    result.Append(String::Number(*maxPacketLifeTime));
+  }
+  absl::optional<uint16_t> maxRetransmits = data_channel->maxRetransmitsOpt();
+  if (maxRetransmits.has_value()) {
+    result.Append(", maxRetransmits: ");
+    result.Append(String::Number(*maxRetransmits));
+  }
+  if (!data_channel->protocol().empty()) {
+    result.Append(", protocol: \"");
+    result.Append(String::FromUTF8(data_channel->protocol()));
+    result.Append("\"");
+  }
+  bool negotiated = data_channel->negotiated();
+  result.Append(", negotiated: ");
+  result.Append(SerializeBoolean(negotiated));
+  if (negotiated) {
+    result.Append(", id: ");
+    result.Append(String::Number(data_channel->id()));
+  }
+  // TODO(crbug.com/1455847): add priority
+  // https://w3c.github.io/webrtc-priority/#new-rtcdatachannelinit-member
   SendPeerConnectionUpdate(
-      id, source == kSourceLocal ? "createDataChannel" : "datachannel", value);
+      id, source == kSourceLocal ? "createDataChannel" : "datachannel",
+      result.ToString());
 }
 
 void PeerConnectionTracker::TrackClose(RTCPeerConnectionHandler* pc_handler) {
@@ -1192,6 +1130,52 @@ void PeerConnectionTracker::TrackGetUserMediaFailure(
   DCHECK_CALLED_ON_VALID_THREAD(main_thread_);
 
   peer_connection_tracker_host_->GetUserMediaFailure(
+      user_media_request->request_id(), error, error_message);
+}
+
+void PeerConnectionTracker::TrackGetDisplayMedia(
+    UserMediaRequest* user_media_request) {
+  DCHECK_CALLED_ON_VALID_THREAD(main_thread_);
+
+  peer_connection_tracker_host_->GetDisplayMedia(
+      user_media_request->request_id(), user_media_request->Audio(),
+      user_media_request->Video(),
+      SerializeGetUserMediaMediaConstraints(
+          user_media_request->AudioConstraints()),
+      SerializeGetUserMediaMediaConstraints(
+          user_media_request->VideoConstraints()));
+}
+
+void PeerConnectionTracker::TrackGetDisplayMediaSuccess(
+    UserMediaRequest* user_media_request,
+    MediaStream* stream) {
+  DCHECK_CALLED_ON_VALID_THREAD(main_thread_);
+
+  // Serialize audio and video track information (id and label) or an
+  // empty string when there is no such track.
+  String audio_track_info =
+      stream->getAudioTracks().empty()
+          ? String("")
+          : String("id:") + stream->getAudioTracks()[0]->id() +
+                String(" label:") + stream->getAudioTracks()[0]->label();
+  String video_track_info =
+      stream->getVideoTracks().empty()
+          ? String("")
+          : String("id:") + stream->getVideoTracks()[0]->id() +
+                String(" label:") + stream->getVideoTracks()[0]->label();
+
+  peer_connection_tracker_host_->GetDisplayMediaSuccess(
+      user_media_request->request_id(), stream->id(), audio_track_info,
+      video_track_info);
+}
+
+void PeerConnectionTracker::TrackGetDisplayMediaFailure(
+    UserMediaRequest* user_media_request,
+    const String& error,
+    const String& error_message) {
+  DCHECK_CALLED_ON_VALID_THREAD(main_thread_);
+
+  peer_connection_tracker_host_->GetDisplayMediaFailure(
       user_media_request->request_id(), error, error_message);
 }
 

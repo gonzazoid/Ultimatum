@@ -6,15 +6,18 @@ package org.chromium.chrome.features.start_surface;
 
 import android.app.Activity;
 import android.content.Context;
+import android.view.View.OnClickListener;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
 
 import org.chromium.base.jank_tracker.JankTracker;
+import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.OneshotSupplier;
 import org.chromium.base.supplier.OneshotSupplierImpl;
 import org.chromium.base.supplier.Supplier;
 import org.chromium.chrome.browser.back_press.BackPressManager;
+import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
 import org.chromium.chrome.browser.compositor.layouts.Layout;
 import org.chromium.chrome.browser.compositor.layouts.LayoutRenderHost;
 import org.chromium.chrome.browser.compositor.layouts.LayoutUpdateHost;
@@ -25,8 +28,8 @@ import org.chromium.chrome.browser.init.ChromeActivityNativeDelegate;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
 import org.chromium.chrome.browser.multiwindow.MultiWindowModeStateDispatcher;
 import org.chromium.chrome.browser.omnibox.OmniboxStub;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.share.ShareDelegate;
-import org.chromium.chrome.browser.share.crow.CrowButtonDelegate;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tabmodel.TabCreatorManager;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
@@ -49,8 +52,11 @@ public class StartSurfaceDelegate {
      * @param startSurface The {@link StartSurface} the layout should own.
      * @return The {@link StartSurfaceHomeLayout}.
      */
-    public static Layout createStartSurfaceHomeLayout(Context context, LayoutUpdateHost updateHost,
-            LayoutRenderHost renderHost, StartSurface startSurface) {
+    public static StartSurfaceHomeLayout createStartSurfaceHomeLayout(
+            Context context,
+            LayoutUpdateHost updateHost,
+            LayoutRenderHost renderHost,
+            StartSurface startSurface) {
         return new StartSurfaceHomeLayout(context, updateHost, renderHost, startSurface);
     }
 
@@ -59,34 +65,46 @@ public class StartSurfaceDelegate {
      * @param context The current Android's context.
      * @param updateHost The parent {@link LayoutUpdateHost}.
      * @param renderHost The parent {@link LayoutRenderHost}.
+     * @param browserControlsStateProvider The {@link BrowserControlsStateProvider} of the top
+     *         controls.
      * @param startSurface The {@link StartSurface} the layout should own.
      * @param tabSwitcherScrimAnchor {@link ViewGroup} used by tab switcher layout to show scrim
      *         when overview is visible.
      * @param scrimCoordinator {@link ScrimCoordinator} to show/hide scrim.
      * @return The {@link TabSwitcherAndStartSurfaceLayout}.
      */
-    public static Layout createTabSwitcherAndStartSurfaceLayout(Context context,
-            LayoutUpdateHost updateHost, LayoutRenderHost renderHost, StartSurface startSurface,
-            JankTracker jankTracker, ViewGroup tabSwitcherScrimAnchor,
+    public static Layout createTabSwitcherAndStartSurfaceLayout(
+            Context context,
+            LayoutUpdateHost updateHost,
+            LayoutRenderHost renderHost,
+            BrowserControlsStateProvider browserControlsStateProvider,
+            StartSurface startSurface,
+            ViewGroup tabSwitcherScrimAnchor,
             ScrimCoordinator scrimCoordinator) {
-        return new TabSwitcherAndStartSurfaceLayout(context, updateHost, renderHost, startSurface,
-                jankTracker, tabSwitcherScrimAnchor, scrimCoordinator);
+        return new TabSwitcherAndStartSurfaceLayout(
+                context,
+                updateHost,
+                renderHost,
+                browserControlsStateProvider,
+                startSurface,
+                tabSwitcherScrimAnchor,
+                scrimCoordinator);
     }
 
     /**
      * Create the {@link StartSurfaceCoordinator}
+     *
      * @param activity The {@link Activity} creates this {@link StartSurface}.
      * @param scrimCoordinator The {@link ScrimCoordinator} to control the scrim view.
      * @param sheetController A {@link BottomSheetController} to show content in the bottom sheet.
      * @param startSurfaceOneshotSupplier Supplies the {@link StartSurface}, passing the owned
-     *         supplier to StartSurface itself.
-     * @param parentTabSupplier A {@link Supplier} to provide parent tab for
-     *         StartSurface.
+     *     supplier to StartSurface itself.
+     * @param parentTabSupplier A {@link Supplier} to provide parent tab for StartSurface.
      * @param hadWarmStart Whether the activity had a warm start because the native library was
-     *         already fully loaded and initialized
+     *     already fully loaded and initialized
      * @param windowAndroid An instance of a {@link WindowAndroid}
      * @param containerView The container {@link ViewGroup} for this ui, also the root view for
-     *         StartSurface.
+     *     StartSurface.
      * @param dynamicResourceLoaderSupplier Supplies the current {@link DynamicResourceLoader}.
      * @param tabModelSelector Gives access to the current set of {@TabModel}.
      * @param browserControlsManager Manages the browser controls.
@@ -100,20 +118,25 @@ public class StartSurfaceDelegate {
      * @param tabCreatorManager Manages creation of tabs.
      * @param menuOrKeyboardActionController allows access to menu or keyboard actions.
      * @param multiWindowModeStateDispatcher Gives access to the multi window mode state.
-     * @param jankTracker Measures jank while tab switcher is visible.
      * @param toolbarSupplier Supplies the {@link Toolbar}.
-     * @param crowButtonDelegate The {@link CrowButtonDelegate} to handle Crow click events.
      * @param backPressManager {@link BackPressManager} to handle back press gesture.
      * @param incognitoReauthControllerSupplier {@link OneshotSupplier<IncognitoReauthController>}
-     *         to detect pending re-auth when tab switcher is shown.
+     *     to detect pending re-auth when tab switcher is shown.
+     * @param tabSwitcherClickHandler The {@link OnClickListener} for the tab switcher button.
+     * @param profileSupplier Supplies the {@link Profile}.
+     * @param tabStripHeightSupplier Supplier for the tab strip height.
      * @return the {@link StartSurface}
      */
-    public static StartSurface createStartSurface(@NonNull Activity activity,
+    public static StartSurface createStartSurface(
+            @NonNull Activity activity,
             @NonNull ScrimCoordinator scrimCoordinator,
             @NonNull BottomSheetController sheetController,
             @NonNull OneshotSupplierImpl<StartSurface> startSurfaceOneshotSupplier,
-            @NonNull Supplier<Tab> parentTabSupplier, boolean hadWarmStart,
-            @NonNull WindowAndroid windowAndroid, @NonNull ViewGroup containerView,
+            @NonNull Supplier<Tab> parentTabSupplier,
+            boolean hadWarmStart,
+            @NonNull WindowAndroid windowAndroid,
+            @NonNull JankTracker jankTracker,
+            @NonNull ViewGroup containerView,
             @NonNull Supplier<DynamicResourceLoader> dynamicResourceLoaderSupplier,
             @NonNull TabModelSelector tabModelSelector,
             @NonNull BrowserControlsManager browserControlsManager,
@@ -127,16 +150,40 @@ public class StartSurfaceDelegate {
             @NonNull TabCreatorManager tabCreatorManager,
             @NonNull MenuOrKeyboardActionController menuOrKeyboardActionController,
             @NonNull MultiWindowModeStateDispatcher multiWindowModeStateDispatcher,
-            @NonNull JankTracker jankTracker, @NonNull Supplier<Toolbar> toolbarSupplier,
-            @NonNull CrowButtonDelegate crowButtonDelegate, BackPressManager backPressManager,
-            @NonNull OneshotSupplier<IncognitoReauthController> incognitoReauthControllerSupplier) {
-        return new StartSurfaceCoordinator(activity, scrimCoordinator, sheetController,
-                startSurfaceOneshotSupplier, parentTabSupplier, hadWarmStart, windowAndroid,
-                containerView, dynamicResourceLoaderSupplier, tabModelSelector,
-                browserControlsManager, snackbarManager, shareDelegateSupplier, omniboxStubSupplier,
-                tabContentManager, modalDialogManager, chromeActivityNativeDelegate,
-                activityLifecycleDispatcher, tabCreatorManager, menuOrKeyboardActionController,
-                multiWindowModeStateDispatcher, jankTracker, toolbarSupplier, crowButtonDelegate,
-                backPressManager, incognitoReauthControllerSupplier);
+            @NonNull Supplier<Toolbar> toolbarSupplier,
+            BackPressManager backPressManager,
+            @NonNull OneshotSupplier<IncognitoReauthController> incognitoReauthControllerSupplier,
+            @NonNull OnClickListener tabSwitcherClickHandler,
+            @NonNull ObservableSupplier<Profile> profileSupplier,
+            @NonNull ObservableSupplier<Integer> tabStripHeightSupplier) {
+        return new StartSurfaceCoordinator(
+                activity,
+                scrimCoordinator,
+                sheetController,
+                startSurfaceOneshotSupplier,
+                parentTabSupplier,
+                hadWarmStart,
+                windowAndroid,
+                jankTracker,
+                containerView,
+                dynamicResourceLoaderSupplier,
+                tabModelSelector,
+                browserControlsManager,
+                snackbarManager,
+                shareDelegateSupplier,
+                omniboxStubSupplier,
+                tabContentManager,
+                modalDialogManager,
+                chromeActivityNativeDelegate,
+                activityLifecycleDispatcher,
+                tabCreatorManager,
+                menuOrKeyboardActionController,
+                multiWindowModeStateDispatcher,
+                toolbarSupplier,
+                backPressManager,
+                incognitoReauthControllerSupplier,
+                tabSwitcherClickHandler,
+                profileSupplier,
+                tabStripHeightSupplier);
     }
 }

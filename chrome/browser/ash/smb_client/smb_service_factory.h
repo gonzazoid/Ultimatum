@@ -5,14 +5,14 @@
 #ifndef CHROME_BROWSER_ASH_SMB_CLIENT_SMB_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_ASH_SMB_CLIENT_SMB_SERVICE_FACTORY_H_
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
 #include "content/public/browser/browser_context.h"
-// TODO(https://crbug.com/1164001): remove and use forward declaration.
-#include "chrome/browser/ash/smb_client/smb_service.h"
 
 namespace ash {
 namespace smb_client {
+
+class SmbService;
 
 class SmbServiceFactory : public ProfileKeyedServiceFactory {
  public:
@@ -31,13 +31,13 @@ class SmbServiceFactory : public ProfileKeyedServiceFactory {
   SmbServiceFactory& operator=(const SmbServiceFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<SmbServiceFactory>;
+  friend base::NoDestructor<SmbServiceFactory>;
 
   SmbServiceFactory();
   ~SmbServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory overrides:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
   void RegisterProfilePrefs(
@@ -46,12 +46,5 @@ class SmbServiceFactory : public ProfileKeyedServiceFactory {
 
 }  // namespace smb_client
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-namespace smb_client {
-using ::ash::smb_client::SmbServiceFactory;
-}  // namespace smb_client
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_SMB_CLIENT_SMB_SERVICE_FACTORY_H_

@@ -9,10 +9,11 @@
 #include <vector>
 
 #include "ash/ash_export.h"
-#include "ash/login/ui/login_palette.h"
 #include "ash/login/ui/non_accessible_view.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
 namespace base {
@@ -50,6 +51,8 @@ namespace ash {
 // The submit button is optional.
 //
 class ASH_EXPORT LoginPinView : public NonAccessibleView {
+  METADATA_HEADER(LoginPinView, NonAccessibleView)
+
  public:
   // Visual style of PIN keyboard.
   enum class Style {
@@ -82,7 +85,7 @@ class ASH_EXPORT LoginPinView : public NonAccessibleView {
     void ClickOnDigit(int number) const;
 
    private:
-    LoginPinView* const view_;
+    const raw_ptr<LoginPinView, DanglingUntriaged> view_;
   };
 
   using OnPinKey = base::RepeatingCallback<void(int value)>;
@@ -97,7 +100,6 @@ class ASH_EXPORT LoginPinView : public NonAccessibleView {
   // If |on_submit| is valid, there will be a submit button on the pinpad that
   // calls it when the user wants to submit the PIN / password.
   LoginPinView(Style keyboard_style,
-               const LoginPalette& palette,
                const OnPinKey& on_key,
                const OnPinBackspace& on_backspace,
                const OnPinSubmit& on_submit = base::NullCallback());
@@ -113,8 +115,6 @@ class ASH_EXPORT LoginPinView : public NonAccessibleView {
   // Called when the password field text changed.
   void OnPasswordTextChanged(bool is_empty);
 
-  void UpdatePalette(const LoginPalette& palette);
-
  private:
   class BackspacePinButton;
   class DigitPinButton;
@@ -123,14 +123,12 @@ class ASH_EXPORT LoginPinView : public NonAccessibleView {
   // Builds and returns a new view which contains a row of the PIN keyboard.
   NonAccessibleView* BuildAndAddRow();
 
-  LoginPalette palette_;
-
-  BackspacePinButton* backspace_ = nullptr;
+  raw_ptr<BackspacePinButton> backspace_ = nullptr;
   // The submit button does not exist when no |on_submit| callback is passed.
-  SubmitPinButton* submit_button_ = nullptr;
+  raw_ptr<SubmitPinButton> submit_button_ = nullptr;
 
-  std::vector<NonAccessibleView*> rows_;
-  std::vector<DigitPinButton*> digit_buttons_;
+  std::vector<raw_ptr<NonAccessibleView, VectorExperimental>> rows_;
+  std::vector<raw_ptr<DigitPinButton, VectorExperimental>> digit_buttons_;
 };
 
 }  // namespace ash

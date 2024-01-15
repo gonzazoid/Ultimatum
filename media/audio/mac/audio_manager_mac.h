@@ -16,8 +16,18 @@
 
 #include "base/compiler_specific.h"
 #include "base/memory/weak_ptr.h"
+#include "media/audio/apple/audio_io_stream_client.h"
+#include "media/audio/apple/audio_manager_apple.h"
 #include "media/audio/audio_manager_base.h"
+#include "media/audio/mac/audio_auhal_mac.h"
 #include "media/audio/mac/audio_device_listener_mac.h"
+
+namespace base {
+
+namespace apple {
+class ScopedObjCClassSwizzler;
+}  // namespace apple
+}  // namespace base
 
 namespace media {
 
@@ -27,7 +37,7 @@ class AUHALStream;
 // Mac OS X implementation of the AudioManager singleton. This class is internal
 // to the audio output and only internal users can call methods not exposed by
 // the AudioManager class.
-class MEDIA_EXPORT AudioManagerMac : public AudioManagerBase {
+class MEDIA_EXPORT AudioManagerMac : public AudioManagerApple {
  public:
   AudioManagerMac(std::unique_ptr<AudioThread> audio_thread,
                   AudioLogFactory* audio_log_factory);
@@ -77,13 +87,61 @@ class MEDIA_EXPORT AudioManagerMac : public AudioManagerBase {
   // manager and it ensures that we only try to increase the IO buffer size
   // for real streams and not for fake or mocked streams.
   void ReleaseOutputStreamUsingRealDevice(AudioOutputStream* stream,
-                                          AudioDeviceID device_id);
+                                          AudioDeviceID device_id) override;
+  void ReleaseInputStreamUsingRealDevice(AudioInputStream* stream) override;
 
-  static int HardwareSampleRateForDevice(AudioDeviceID device_id);
-  static int HardwareSampleRate();
-  static bool GetDefaultOutputDevice(AudioDeviceID* device);
+  // Changes the I/O buffer size for |device_id| if |desired_buffer_size| is
+  // lower than the current device buffer size. The buffer size can also be
+  // modified under other conditions. See comments in the corresponding cc-file
+  // for more details.
+  // Returns false if an error occurred.
+  bool MaybeChangeBufferSize(AudioDeviceID device_id,
+                             AudioUnit audio_unit,
+                             AudioUnitElement element,
+                             size_t desired_buffer_size) override;
+  base::TimeDelta GetDeferStreamStartTimeout() const override;
+  base::SingleThreadTaskRunner* GetTaskRunnerForStreamClient() const override;
+  void StopAmplitudePeakTrace() override;
+
+  // Implementation of AudioManagerApple
+
+  // Returns the maximum microphone analog volume or 0.0 if device does not
+  // have volume control.
+  double GetMaxInputVolume(AudioDeviceID device_id) override;
+
+  // Sets the microphone analog volume, with range [0.0, 1.0] inclusive.
+  void SetInputVolume(AudioDeviceID device_id, double volume) override;
+
+  // Returns the microphone analog volume, with range [0.0, 1.0] inclusive.
+  double GetInputVolume(AudioDeviceID device_id) override;
+
+  // Returns the current muting state for the microphone.
+  bool IsInputMuted(AudioDeviceID device_id) override;
+
+  // Retrieves the current hardware sample rate associated with a specified
+  // device.
+  int HardwareSampleRateForDevice(AudioDeviceID device_id) override;
+
+  // If successful, this function returns no error and populates the out
+  // parameter `input_format` with a valid ASBD. Otherwise, an error status code
+  // will be returned.
+  OSStatus GetInputDeviceStreamFormat(
+      AudioUnit audio_unit,
+      AudioStreamBasicDescription* input_format) override;
+
+  static bool GetDefaultInputDevice(AudioDeviceID* input_device);
+  static bool GetDefaultOutputDevice(AudioDeviceID* output_device);
   static AudioDeviceID GetAudioDeviceIdByUId(bool is_input,
                                              const std::string& device_id);
+
+  // Finds the first subdevice, in an aggregate device, with output streams.
+  static AudioDeviceID FindFirstOutputSubdevice(
+      AudioDeviceID aggregate_device_id);
+
+  // Returns a vector with the IDs of all devices related to the given
+  // |device_id|. The vector is empty if there are no related devices or
+  // if there is an error.
+  std::vector<AudioObjectID> GetRelatedDeviceIDs(AudioObjectID device_id);
 
   // OSX has issues with starting streams as the system goes into suspend and
   // immediately after it wakes up from resume.  See http://crbug.com/160920.
@@ -96,7 +154,7 @@ class MEDIA_EXPORT AudioManagerMac : public AudioManagerBase {
   // TODO(henrika): track UMA statistics related to defer start to come up with
   // a suitable delay value.
   enum { kStartDelayInSecsForPowerEvents = 5 };
-  bool ShouldDeferStreamStart() const;
+  bool ShouldDeferStreamStart() const override;
 
   // True if the device is on battery power.
   bool IsOnBatteryPower() const;
@@ -107,24 +165,6 @@ class MEDIA_EXPORT AudioManagerMac : public AudioManagerBase {
   // True if the device is suspending.
   bool IsSuspending() const;
 
-  // Changes the I/O buffer size for |device_id| if |desired_buffer_size| is
-  // lower than the current device buffer size. The buffer size can also be
-  // modified under other conditions. See comments in the corresponding cc-file
-  // for more details.
-  // Returns false if an error occurred.
-  bool MaybeChangeBufferSize(AudioDeviceID device_id,
-                             AudioUnit audio_unit,
-                             AudioUnitElement element,
-                             size_t desired_buffer_size);
-
-  // Returns the latency for the given audio unit and device. Total latency is
-  // the sum of the latency of the AudioUnit, device, and stream. If any one
-  // component of the latency can't be retrieved it is considered as zero.
-  static base::TimeDelta GetHardwareLatency(AudioUnit audio_unit,
-                                            AudioDeviceID device_id,
-                                            AudioObjectPropertyScope scope,
-                                            int sample_rate);
-
   // Number of constructed output and input streams.
   size_t output_streams() const { return output_streams_.size(); }
   size_t low_latency_input_streams() const {
@@ -132,9 +172,11 @@ class MEDIA_EXPORT AudioManagerMac : public AudioManagerBase {
   }
   size_t basic_input_streams() const { return basic_input_streams_.size(); }
 
-  bool DeviceSupportsAmbientNoiseReduction(AudioDeviceID device_id);
-  bool SuppressNoiseReduction(AudioDeviceID device_id);
-  void UnsuppressNoiseReduction(AudioDeviceID device_id);
+  // Manage device capabilities for ambient noise reduction. These functionality
+  // currently implemented on the Mac platform.
+  bool DeviceSupportsAmbientNoiseReduction(AudioDeviceID device_id) override;
+  bool SuppressNoiseReduction(AudioDeviceID device_id) override;
+  void UnsuppressNoiseReduction(AudioDeviceID device_id) override;
 
   // The state of a single device for which we've tried to disable Ambient Noise
   // Reduction. If the device initially has ANR enabled, it will be turned off
@@ -154,6 +196,34 @@ class MEDIA_EXPORT AudioManagerMac : public AudioManagerBase {
   AudioParameters GetPreferredOutputStreamParameters(
       const std::string& output_device_id,
       const AudioParameters& input_params) override;
+
+  // Returns a vector with the IDs of all bluetooth devices related to the given
+  // |device_id|, which is also a bluetooth device. The vector is empty if there
+  // are no related devices or if there is an error.
+  std::vector<AudioObjectID> GetRelatedBluetoothDeviceIDs(
+      AudioObjectID device_id);
+
+  // Virtual for testing.
+
+  // Returns a vector with the IDs of all audio devices in the system.
+  // The vector is empty if there are no devices or if there is an error.
+  virtual std::vector<AudioObjectID> GetAllAudioDeviceIDs();
+
+  // Returns a vector with the IDs of all non-bluetooth devices related to the
+  // given |device_id|, which is also a non-bluetooth device. The vector is
+  // empty if there are no related devices or if there is an error.
+  virtual std::vector<AudioObjectID> GetRelatedNonBluetoothDeviceIDs(
+      AudioObjectID device_id);
+
+  // Returns a string with a unique device ID for the given |device_id|, or no
+  // value if there is an error.
+  virtual absl::optional<std::string> GetDeviceUniqueID(
+      AudioObjectID device_id);
+
+  // Returns the transport type of the given |device_id|, or no value if
+  // |device_id| has no source or if there is an error.
+  virtual absl::optional<uint32_t> GetDeviceTransportType(
+      AudioObjectID device_id);
   void ShutdownOnAudioThread() override;
 
  private:
@@ -167,6 +237,14 @@ class MEDIA_EXPORT AudioManagerMac : public AudioManagerBase {
 
   // Returns true if any active input stream is using the specified |device_id|.
   bool AudioDeviceIsUsedForInput(AudioDeviceID device_id);
+
+  // Helper function to check if the volume control is available on specific
+  // channel of a device.
+  static bool IsVolumeSettableOnChannel(AudioDeviceID device_id, int channel);
+
+  // Return the number of channels in each frame of audio data, which is used
+  // when querying the volume of each channel.
+  static int GetNumberOfChannelsForDevice(AudioDeviceID device_id);
 
   std::string GetDefaultDeviceID(bool is_input);
 
@@ -191,6 +269,10 @@ class MEDIA_EXPORT AudioManagerMac : public AudioManagerBase {
   std::list<AudioInputStream*> basic_input_streams_;
   std::list<AUAudioInputStream*> low_latency_input_streams_;
   std::list<AUHALStream*> output_streams_;
+
+  // Used to swizzle SCStreamManager when performing loopback capture.
+  std::unique_ptr<base::apple::ScopedObjCClassSwizzler>
+      screen_capture_kit_swizzler_;
 
   // Set to true in the destructor. Ensures that methods that touches native
   // Core Audio APIs are not executed during shutdown.

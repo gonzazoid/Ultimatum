@@ -25,7 +25,6 @@
       "name": "Scroll corner of LayoutView #document",
       "position": [785, 585],
       "bounds": [15, 15],
-      "contentsOpaqueForText": true,
       "invalidations": [
         [0, 0, 15, 15]
       ]

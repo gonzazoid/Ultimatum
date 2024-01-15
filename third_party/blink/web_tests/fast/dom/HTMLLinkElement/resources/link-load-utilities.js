@@ -3,14 +3,49 @@ if (window.testRunner) {
   testRunner.waitUntilDone();
 }
 
-function shouldComputedColorOfElementBeEqualToRGBString(element, expectedColor)
+var haveBuffer = false;
+var bufferedOutput = [];
+var bufferedFinished = false;
+
+function ensureBuffer() {
+  if (haveBuffer)
+    return;
+
+  haveBuffer = true;
+  window.addEventListener("load", flushBuffer);
+}
+
+function flushBuffer() {
+  haveBuffer = false;
+  for (let line of bufferedOutput) {
+    log(line);
+  }
+  bufferedOutput = [];
+  if (bufferedFinished) {
+    testFinished();
+    bufferedFinished = false;
+  }
+}
+
+function shouldComputedColorOfElementByIdBeEqualToRGBStringAndTestFinished(element_id, expectedColor)
 {
-  var elementName = "#" + element.id || element.tagName;
+  let element = document.getElementById(element_id);
+  if (!element) {
+    if (document.readyState == "complete") {
+      log(`FAIL unable to find element with ID "${element_id}".`);
+      testFinished();
+      return;
+    }
+    window.addEventListener("load", () => shouldComputedColorOfElementByIdBeEqualToRGBStringAndTestFinished(element_id, expectedColor));
+    return;
+  }
+  var elementName = "#" + element_id;
   var actualColor = window.getComputedStyle(element, null).color;
   if (actualColor === expectedColor)
     log("PASS " + elementName + " color was " + expectedColor + ".");
   else
     log("FAIL " + elementName + " color should be " + expectedColor + ". Was " + actualColor + ".");
+  testFinished();
 }
 
 function createLinkElementWithStylesheet(stylesheetURL)
@@ -30,7 +65,16 @@ function createStyleElementWithString(stylesheetData)
 
 function log(message)
 {
-  document.getElementById("console").appendChild(document.createTextNode(message + "\n"));
+  let console = document.getElementById("console");
+  if (!console) {
+    ensureBuffer();
+    bufferedOutput.push(message);
+    return;
+  }
+  if (haveBuffer) {
+    flushBuffer();
+  }
+  console.appendChild(document.createTextNode(message + "\n"));
 }
 
 function testPassed(message)
@@ -57,6 +101,10 @@ function testFailedAndNotifyDone(message)
 
 function testFinished()
 {
+  if (haveBuffer) {
+    bufferedFinished = true;
+    return;
+  }
   if (window.testRunner)
     testRunner.notifyDone();
 }

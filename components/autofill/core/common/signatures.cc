@@ -4,8 +4,6 @@
 
 #include "components/autofill/core/common/signatures.h"
 
-#include <cctype>
-
 #include "base/containers/span.h"
 #include "base/hash/sha1.h"
 #include "base/strings/strcat.h"
@@ -26,7 +24,7 @@ namespace autofill {
 namespace {
 
 // Returns a copy of |input| without >= 5 consecutive digits.
-std::string StripDigitsIfRequired(base::StringPiece input) {
+std::string StripDigitsIfRequired(std::string_view input) {
   static constexpr auto IsDigit = base::IsAsciiDigit<char>;
   std::string result;
   result.reserve(input.size());
@@ -43,7 +41,7 @@ std::string StripDigitsIfRequired(base::StringPiece input) {
     // If `input[i]` is a digit, find the range of consecutive digits starting
     // at `i`. If this range is shorter than 5 characters append it to `result`.
     auto* end_it = base::ranges::find_if_not(input.substr(i), IsDigit);
-    base::StringPiece digits = base::MakeStringPiece(input.begin() + i, end_it);
+    std::string_view digits = base::MakeStringPiece(input.begin() + i, end_it);
     DCHECK(base::ranges::all_of(digits, IsDigit));
     if (digits.size() < 5)
       base::StrAppend(&result, {digits});
@@ -81,8 +79,8 @@ std::string GetDOMFormName(const std::string& form_name) {
 FormSignature CalculateFormSignature(const FormData& form_data) {
   const GURL& target_url = form_data.action;
   const GURL& source_url = form_data.url;
-  base::StringPiece scheme = target_url.scheme_piece();
-  base::StringPiece host = target_url.host_piece();
+  std::string_view scheme = target_url.scheme_piece();
+  std::string_view host = target_url.host_piece();
 
   // If target host or scheme is empty, set scheme and host of source url.
   // This is done to match the Toolbar's behavior.
@@ -109,11 +107,52 @@ FormSignature CalculateFormSignature(const FormData& form_data) {
   return FormSignature(StrToHash64Bit(form_string));
 }
 
+FormSignature CalculateAlternativeFormSignature(const FormData& form_data) {
+  std::string_view scheme = form_data.action.scheme_piece();
+  std::string_view host = form_data.action.host_piece();
+
+  // If target host or scheme is empty, set scheme and host of source url.
+  // This is done to match the Toolbar's behavior.
+  if (scheme.empty() || host.empty()) {
+    scheme = form_data.url.scheme_piece();
+    host = form_data.url.host_piece();
+  }
+
+  std::string form_signature_field_types;
+  for (const FormFieldData& field : form_data.fields) {
+    if (!IsCheckable(field.check_status)) {
+      // Add all supported form fields' form control types to the signature.
+      base::StrAppend(&form_signature_field_types,
+                      {"&", FormControlTypeToString(field.form_control_type)});
+    }
+  }
+
+  std::string form_string =
+      base::StrCat({scheme, "://", host, form_signature_field_types});
+
+  // Add more non-empty elements (one of path, reference, or query ordered by
+  // preference) for small forms with 1-2 fields in order to prevent signature
+  // collisions.
+  if (form_data.fields.size() <= 2) {
+    // Path piece includes the slash "/", so a non-empty path must have length
+    // longer than 1.
+    if (form_data.url.path_piece().length() > 1) {
+      base::StrAppend(&form_string, {form_data.url.path_piece()});
+    } else if (form_data.url.has_ref()) {
+      base::StrAppend(&form_string, {"#", form_data.url.ref_piece()});
+    } else if (form_data.url.has_query()) {
+      base::StrAppend(&form_string, {"?", form_data.url.query_piece()});
+    }
+  }
+
+  return FormSignature(StrToHash64Bit(form_string));
+}
+
 FieldSignature CalculateFieldSignatureByNameAndType(
     base::StringPiece16 field_name,
-    base::StringPiece field_type) {
-  return FieldSignature(
-      StrToHash32Bit(base::StrCat({UTF16ToUTF8(field_name), "&", field_type})));
+    FormControlType field_type) {
+  return FieldSignature(StrToHash32Bit(base::StrCat(
+      {UTF16ToUTF8(field_name), "&", FormControlTypeToString(field_type)})));
 }
 
 FieldSignature CalculateFieldSignatureForField(
@@ -122,13 +161,13 @@ FieldSignature CalculateFieldSignatureForField(
                                               field_data.form_control_type);
 }
 
-uint64_t StrToHash64Bit(base::StringPiece str) {
+uint64_t StrToHash64Bit(std::string_view str) {
   auto bytes = base::as_bytes(base::make_span(str));
   const base::SHA1Digest digest = base::SHA1HashSpan(bytes);
   return PackBytes(base::make_span(digest).subspan<0, 8>());
 }
 
-uint32_t StrToHash32Bit(base::StringPiece str) {
+uint32_t StrToHash32Bit(std::string_view str) {
   auto bytes = base::as_bytes(base::make_span(str));
   const base::SHA1Digest digest = base::SHA1HashSpan(bytes);
   return PackBytes(base::make_span(digest).subspan<0, 4>());

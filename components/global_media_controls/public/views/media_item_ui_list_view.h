@@ -32,7 +32,8 @@ class COMPONENT_EXPORT(GLOBAL_MEDIA_CONTROLS) MediaItemUIListView
   };
 
   explicit MediaItemUIListView(
-      const absl::optional<SeparatorStyle>& separator_style);
+      const absl::optional<SeparatorStyle>& separator_style,
+      bool should_clip_height);
   MediaItemUIListView();
   MediaItemUIListView(const MediaItemUIListView&) = delete;
   MediaItemUIListView& operator=(const MediaItemUIListView&) = delete;
@@ -43,6 +44,8 @@ class COMPONENT_EXPORT(GLOBAL_MEDIA_CONTROLS) MediaItemUIListView
 
   // Removes the given item from the list.
   void HideItem(const std::string& id);
+
+  MediaItemUIView* GetItem(const std::string& id);
 
   bool empty() { return items_.empty(); }
 

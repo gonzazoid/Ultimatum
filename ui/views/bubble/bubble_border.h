@@ -5,6 +5,8 @@
 #ifndef UI_VIEWS_BUBBLE_BUBBLE_BORDER_H_
 #define UI_VIEWS_BUBBLE_BUBBLE_BORDER_H_
 
+#include <utility>
+
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
@@ -15,6 +17,7 @@
 #include "ui/color/color_id.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/rect.h"
+#include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/views/background.h"
 #include "ui/views/border.h"
 #include "ui/views/views_export.h"
@@ -66,11 +69,8 @@ class VIEWS_EXPORT BubbleBorder : public Border {
   };
 
   enum Shadow {
-    // NO_SHADOW_LEGACY is obsolete. Used only for Win7 where custom shadows are
-    // not supported.
-    NO_SHADOW_LEGACY = 0,
-    STANDARD_SHADOW,
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+    STANDARD_SHADOW = 0,
+#if BUILDFLAG(IS_CHROMEOS)
     // CHROMEOS_SYSTEM_UI_SHADOW uses ChromeOS system UI shadow style.
     CHROMEOS_SYSTEM_UI_SHADOW,
 #endif
@@ -83,7 +83,7 @@ class VIEWS_EXPORT BubbleBorder : public Border {
     // On Mac, the native window server should provide its own shadow for
     // windows that could overlap the browser window.
     DIALOG_SHADOW = NO_SHADOW,
-#elif BUILDFLAG(IS_CHROMEOS_ASH)
+#elif BUILDFLAG(IS_CHROMEOS)
     DIALOG_SHADOW = CHROMEOS_SYSTEM_UI_SHADOW,
 #else
     DIALOG_SHADOW = STANDARD_SHADOW,
@@ -94,10 +94,8 @@ class VIEWS_EXPORT BubbleBorder : public Border {
   // have to deal in dip coordinates, so round up to 1dip.
   static constexpr int kBorderThicknessDip = 1;
 
-  // Specific to MD bubbles: size of shadow blur (outside the bubble) and
-  // vertical offset, both in DIP.
+  // Specific to MD bubbles: size of shadow blur (outside the bubble) in DIP.
   static constexpr int kShadowBlur = 6;
-  static constexpr int kShadowVerticalOffset = 2;
 
   // Space between the anchor view and a visible arrow if one is present.
   static constexpr int kVisibleArrowGap = 4;
@@ -156,7 +154,8 @@ class VIEWS_EXPORT BubbleBorder : public Border {
   // |shadow_elevation|. This is only used for MD bubbles. A null
   // |shadow_elevation| will yield the default BubbleBorder MD insets.
   static gfx::Insets GetBorderAndShadowInsets(
-      absl::optional<int> shadow_elevation = absl::nullopt,
+      const absl::optional<int>& shadow_elevation = absl::nullopt,
+      const absl::optional<bool>& draw_border_stroke = absl::nullopt,
       Shadow shadow_type = Shadow::STANDARD_SHADOW);
 
   // Draws a border and shadow outside the |rect| on |canvas|. |color_provider|
@@ -167,12 +166,14 @@ class VIEWS_EXPORT BubbleBorder : public Border {
 
   // Set the corner radius, enables Material Design.
   void SetCornerRadius(int radius);
+  int corner_radius() const { return corner_radius_; }
 
-  // Set the customized rounded corners.
-  void SetRoundedCorners(int top_left,
-                         int top_right,
-                         int bottom_right,
-                         int bottom_left);
+  // Set the customized rounded corners. Takes precedence over `corner_radius_`
+  // when non-empty.
+  void set_rounded_corners(const gfx::RoundedCornersF& rounded_corners) {
+    rounded_corners_ = rounded_corners;
+  }
+  const gfx::RoundedCornersF& rounded_corners() { return rounded_corners_; }
 
   // Get or set the arrow type.
   void set_arrow(Arrow arrow) { arrow_ = arrow; }
@@ -180,6 +181,12 @@ class VIEWS_EXPORT BubbleBorder : public Border {
 
   void set_visible_arrow(bool visible_arrow) { visible_arrow_ = visible_arrow; }
   bool visible_arrow() const { return visible_arrow_; }
+
+  // Sets whether to draw the border stroke. Passing `nullopt` uses the default
+  // behavior (see comments on `ShouldDrawStroke()` below).
+  void set_draw_border_stroke(absl::optional<bool> draw_border_stroke) {
+    draw_border_stroke_ = std::move(draw_border_stroke);
+  }
 
   // Get the shadow type.
   Shadow shadow() const { return shadow_; }
@@ -213,9 +220,6 @@ class VIEWS_EXPORT BubbleBorder : public Border {
   virtual gfx::Rect GetBounds(const gfx::Rect& anchor_rect,
                               const gfx::Size& contents_size) const;
 
-  // Returns the corner radius of the current image set.
-  int corner_radius() const { return corner_radius_; }
-
   // Overridden from Border:
   void Paint(const View& view, gfx::Canvas* canvas) override;
   gfx::Insets GetInsets() const override;
@@ -242,15 +246,13 @@ class VIEWS_EXPORT BubbleBorder : public Border {
   // significant direction, the arrow is placed at the most extreme allowed
   // position that is closest to the targeted point.
   //
-  // If |move_bubble_to_add_arrow| is true, the |bubble_bounds| are displaced to
-  // account for the size of the arrow.
+  // Note that |bubble_bounds| can be slightly shifted to accommodate appended
+  // arrow and make the whole popup visialy pointing to the anchor element.
   //
   // Returns false if the arrow cannot be added due to missing space on the
   // bubble border.
-  bool AddArrowToBubbleCornerAndPointTowardsAnchor(
-      const gfx::Rect& anchor_rect,
-      bool move_bubble_to_add_arrow,
-      gfx::Rect& bubble_bounds);
+  bool AddArrowToBubbleCornerAndPointTowardsAnchor(const gfx::Rect& anchor_rect,
+                                                   gfx::Rect& bubble_bounds);
 
   // Returns a constant reference to the |visible_arrow_rect_| for teseting
   // purposes.
@@ -289,6 +291,10 @@ class VIEWS_EXPORT BubbleBorder : public Border {
   // draw over the contents of the bubble.
   SkRRect GetClientRect(const View& view) const;
 
+  // Returns whether to draw the border stroke. By default the stroke is drawn
+  // iff there is a visible shadow and it does not have a custom elevation.
+  bool ShouldDrawStroke() const;
+
   // Sets `color_` appropriately, using `view` to obtain a ColorProvider.
   // `view` may be null if `requested_color_` is set.
   void UpdateColor(View* view);
@@ -297,27 +303,26 @@ class VIEWS_EXPORT BubbleBorder : public Border {
   // to make the window shape based on insets and GetBorderCornerRadius().
   void PaintNoShadow(const View& view, gfx::Canvas* canvas);
 
-  // Paint for the NO_SHADOW_LEGACY shadow type. This paints a simple line
-  // border.
-  void PaintNoShadowLegacy(const View& view, gfx::Canvas* canvas);
-
   // Paint a visible arrow pointing to the anchor region.
   void PaintVisibleArrow(const View& view, gfx::Canvas* canvas);
 
   Arrow arrow_;
   int arrow_offset_ = 0;
+
   // Corner radius for the bubble border. If supplied the border will use
   // material design.
   int corner_radius_ = 0;
 
-  // The rounded corner radius for the 4 corners.
-  SkVector radii_[4]{{}, {}, {}, {}};
+  // Customized rounded corners for the bubble border. Takes precedence over
+  // `corner_radius_` when non-empty.
+  gfx::RoundedCornersF rounded_corners_;
 
   // Whether a visible arrow should be present.
   bool visible_arrow_ = false;
   // Cached arrow bounding box, calculated when bounds are calculated.
   mutable gfx::Rect visible_arrow_rect_;
 
+  absl::optional<bool> draw_border_stroke_;
   Shadow shadow_;
   absl::optional<int> md_shadow_elevation_;
   ui::ColorId color_id_;
@@ -340,7 +345,7 @@ class VIEWS_EXPORT BubbleBackground : public Background {
   void Paint(gfx::Canvas* canvas, View* view) const override;
 
  private:
-  raw_ptr<BubbleBorder, DanglingUntriaged> border_;
+  const raw_ptr<BubbleBorder> border_;
 };
 
 }  // namespace views

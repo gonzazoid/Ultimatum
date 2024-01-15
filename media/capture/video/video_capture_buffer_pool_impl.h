@@ -47,10 +47,12 @@ class CAPTURE_EXPORT VideoCaptureBufferPoolImpl
   // VideoCaptureBufferPool implementation.
   base::UnsafeSharedMemoryRegion DuplicateAsUnsafeRegion(
       int buffer_id) override;
-  mojo::ScopedSharedBufferHandle DuplicateAsMojoBuffer(int buffer_id) override;
   std::unique_ptr<VideoCaptureBufferHandle> GetHandleForInProcessAccess(
       int buffer_id) override;
   gfx::GpuMemoryBufferHandle GetGpuMemoryBufferHandle(int buffer_id) override;
+
+  VideoCaptureBufferType GetBufferType(int buffer_id) override;
+
   VideoCaptureDevice::Client::ReserveResult ReserveForProducer(
       const gfx::Size& dimensions,
       VideoPixelFormat format,
@@ -59,8 +61,11 @@ class CAPTURE_EXPORT VideoCaptureBufferPoolImpl
       int* buffer_id,
       int* buffer_id_to_drop) override;
   void RelinquishProducerReservation(int buffer_id) override;
-  int ReserveIdForExternalBuffer(const gfx::GpuMemoryBufferHandle& handle,
-                                 int* buffer_id_to_drop) override;
+  VideoCaptureDevice::Client::ReserveResult ReserveIdForExternalBuffer(
+      CapturedExternalVideoBuffer buffer,
+      const gfx::Size& dimensions,
+      int* buffer_id_to_drop,
+      int* buffer_id) override;
   double GetBufferPoolUtilization() const override;
   void HoldForConsumers(int buffer_id, int num_clients) override;
   void RelinquishConsumerHold(int buffer_id, int num_clients) override;

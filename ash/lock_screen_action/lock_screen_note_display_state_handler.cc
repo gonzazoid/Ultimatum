@@ -11,7 +11,7 @@
 #include "ash/shell.h"
 #include "ash/system/power/scoped_backlights_forced_off.h"
 #include "ash/tray_action/tray_action.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/time/time.h"
 
@@ -30,7 +30,8 @@ LockScreenNoteDisplayStateHandler::LockScreenNoteDisplayStateHandler(
     BacklightsForcedOffSetter* backlights_forced_off_setter)
     : backlights_forced_off_setter_(backlights_forced_off_setter),
       backlights_forced_off_observation_(this) {
-  backlights_forced_off_observation_.Observe(backlights_forced_off_setter_);
+  backlights_forced_off_observation_.Observe(
+      backlights_forced_off_setter_.get());
 }
 
 LockScreenNoteDisplayStateHandler::~LockScreenNoteDisplayStateHandler() =

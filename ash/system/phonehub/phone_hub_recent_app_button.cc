@@ -4,6 +4,8 @@
 
 #include "ash/system/phonehub/phone_hub_recent_app_button.h"
 
+#include <utility>
+
 #include "ash/style/ash_color_provider.h"
 #include "ash/style/style_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -18,7 +20,7 @@ namespace ash {
 namespace {
 
 // Appearance in DIPs.
-constexpr int kRecentAppButtonSize = 32;
+constexpr int kRecentAppButtonSize = 42;
 
 }  // namespace
 
@@ -26,11 +28,13 @@ PhoneHubRecentAppButton::PhoneHubRecentAppButton(
     const gfx::Image& icon,
     const std::u16string& visible_app_name,
     PressedCallback callback)
-    : views::ImageButton(callback) {
-  SetImage(views::Button::STATE_NORMAL,
-           gfx::ImageSkiaOperations::CreateResizedImage(
-               icon.AsImageSkia(), skia::ImageOperations::RESIZE_BEST,
-               gfx::Size(kRecentAppButtonSize, kRecentAppButtonSize)));
+    : views::ImageButton(std::move(callback)) {
+  SetImageModel(
+      views::Button::STATE_NORMAL,
+      ui::ImageModel::FromImageSkia(
+          gfx::ImageSkiaOperations::CreateResizedImage(
+              icon.AsImageSkia(), skia::ImageOperations::RESIZE_BEST,
+              gfx::Size(kRecentAppButtonSize, kRecentAppButtonSize))));
   SetImageHorizontalAlignment(ALIGN_CENTER);
   SetImageVerticalAlignment(ALIGN_MIDDLE);
   StyleUtil::SetUpInkDropForButton(this);
@@ -49,10 +53,6 @@ gfx::Size PhoneHubRecentAppButton::CalculatePreferredSize() const {
 void PhoneHubRecentAppButton::PaintButtonContents(gfx::Canvas* canvas) {
   cc::PaintFlags flags;
   flags.setAntiAlias(true);
-  flags.setColor(AshColorProvider::Get()->GetControlsLayerColor(
-      AshColorProvider::ControlsLayerType::kControlBackgroundColorInactive));
-  flags.setStyle(cc::PaintFlags::kFill_Style);
-  canvas->DrawPath(views::GetHighlightPath(this), flags);
   views::ImageButton::PaintButtonContents(canvas);
 }
 

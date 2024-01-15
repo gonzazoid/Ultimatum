@@ -9,6 +9,10 @@ import("//third_party/protobuf/proto_library.gni")
 proto_library("seatbelt_proto") {
   visibility = [ ":*" ]
   sources = [ "seatbelt.proto" ]
+  cc_generator_options = "dllexport_decl=SEATBELT_EXPORT:"
+  cc_include = "sandbox/mac/seatbelt_export.h"
+  deps = [ ":seatbelt_export" ]
+  defines = [ "SEATBELT_IMPLEMENTATION" ]
 }
 
 source_set("seatbelt_export") {
@@ -19,6 +23,8 @@ component("seatbelt") {
   sources = [
     "sandbox_compiler.cc",
     "sandbox_compiler.h",
+    "sandbox_crash_message.cc",
+    "sandbox_crash_message.h",
     "sandbox_logging.cc",
     "sandbox_logging.h",
     "seatbelt.cc",
@@ -67,14 +73,12 @@ source_set("sandbox_unittests") {
 
   sources = [
     "mojom/mojom_traits_unittest.cc",
-    "sandbox_mac_compiler_unittest.mm",
-    "sandbox_mac_seatbelt_exec_unittest.cc",
+    "sandbox_compiler_unittest.cc",
+    "sandbox_test.cc",
+    "sandbox_test.h",
+    "seatbelt_exec_unittest.cc",
     "seatbelt_extension_unittest.cc",
-  ]
-
-  frameworks = [
-    "CoreFoundation.framework",
-    "Foundation.framework",
+    "seatbelt_unittest.cc",
   ]
 
   deps = [
@@ -86,6 +90,7 @@ source_set("sandbox_unittests") {
     "//base/test:test_config",
     "//base/test:test_support",
     "//mojo/core/test:run_all_unittests",
+    "//mojo/core/test:test_support",
     "//testing/gtest",
   ]
 }

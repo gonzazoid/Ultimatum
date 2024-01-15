@@ -7,6 +7,7 @@
 #include "ash/public/cpp/app_menu_constants.h"
 #include "base/strings/string_number_conversions.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/strings/grit/ui_strings.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/label.h"
@@ -35,14 +36,14 @@ NotificationMenuHeaderView::NotificationMenuHeaderView() {
       {views::Label::GetDefaultFontList().DeriveWithSizeDelta(1)});
   notification_title_->SetEnabledColor(kNotificationHeaderTextColor);
   notification_title_->SetLineHeight(kNotificationHeaderLineHeight);
-  AddChildView(notification_title_);
+  AddChildView(notification_title_.get());
 
   counter_ = new views::Label(
       std::u16string(),
       {views::Label::GetDefaultFontList().DeriveWithSizeDelta(1)});
   counter_->SetEnabledColor(kNotificationHeaderTextColor);
   counter_->SetLineHeight(kNotificationHeaderLineHeight);
-  AddChildView(counter_);
+  AddChildView(counter_.get());
 }
 
 NotificationMenuHeaderView::~NotificationMenuHeaderView() = default;
@@ -76,5 +77,8 @@ void NotificationMenuHeaderView::Layout() {
                       insets.top(), counter_preferred_size.width(),
                       counter_preferred_size.height());
 }
+
+BEGIN_METADATA(NotificationMenuHeaderView)
+END_METADATA
 
 }  // namespace ash

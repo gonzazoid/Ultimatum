@@ -8,10 +8,11 @@
 #import <UIKit/UIKit.h>
 
 #import "base/ios/block_types.h"
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
 
 enum class UrlLoadStrategy;
 
+@protocol HistoryCoordinatorDelegate;
 @protocol HistoryPresentationDelegate;
 
 // Coordinator that presents History.
@@ -24,8 +25,11 @@ enum class UrlLoadStrategy;
 // Delegate used to make the Tab UI visible.
 @property(nonatomic, weak) id<HistoryPresentationDelegate> presentationDelegate;
 
-// Stops this Coordinator then calls `completionHandler`.
-- (void)stopWithCompletion:(ProceduralBlock)completionHandler;
+// The delegate handling coordinator dismissal.
+@property(nonatomic, weak) id<HistoryCoordinatorDelegate> delegate;
+
+// Dismisses this Coordinator then calls `completionHandler`.
+- (void)dismissWithCompletion:(ProceduralBlock)completionHandler;
 
 @end
 

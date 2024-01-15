@@ -4,12 +4,13 @@
 
 #include "chrome/browser/ash/printing/synced_printers_manager.h"
 
+#include <optional>
 #include <unordered_map>
 #include <utility>
 
-#include "base/guid.h"
 #include "base/observer_list_threadsafe.h"
 #include "base/synchronization/lock.h"
+#include "base/uuid.h"
 #include "base/values.h"
 #include "chrome/browser/ash/printing/enterprise_printers_provider.h"
 #include "chrome/browser/ash/printing/printers_sync_bridge.h"
@@ -22,7 +23,6 @@
 #include "components/policy/policy_constants.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -90,7 +90,7 @@ class SyncedPrintersManagerImpl : public SyncedPrintersManager,
   std::unique_ptr<chromeos::Printer> GetPrinterLocked(
       const std::string& printer_id) const {
     lock_.AssertAcquired();
-    absl::optional<sync_pb::PrinterSpecifics> printer =
+    std::optional<sync_pb::PrinterSpecifics> printer =
         sync_bridge_->GetPrinter(printer_id);
     return printer.has_value() ? SpecificsToPrinter(*printer) : nullptr;
   }
@@ -102,7 +102,7 @@ class SyncedPrintersManagerImpl : public SyncedPrintersManager,
     // Need a local copy since we may set the id.
     chromeos::Printer printer = printer_arg;
     if (printer.id().empty()) {
-      printer.set_id(base::GenerateGUID());
+      printer.set_id(base::Uuid::GenerateRandomV4().AsLowercaseString());
     }
 
     sync_bridge_->UpdatePrinter(PrinterToSpecifics(printer));

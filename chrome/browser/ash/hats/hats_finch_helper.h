@@ -8,6 +8,8 @@
 #include <limits.h>
 
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/time/time.h"
 #include "chrome/common/chrome_features.h"
 
@@ -32,6 +34,10 @@ class HatsFinchHelper {
   // provided as a param via the finch seed under the key "custom_client_data".
   static std::string GetCustomClientDataAsString(const HatsConfig& config);
 
+  // Returns true if and only if the finch parameter "enabled_for_googlers"
+  // is set to "true".
+  static bool IsEnabledForGooglers(const HatsConfig& config);
+
   explicit HatsFinchHelper(Profile* profile, const HatsConfig& config);
   ~HatsFinchHelper();
 
@@ -47,6 +53,7 @@ class HatsFinchHelper {
   FRIEND_TEST_ALL_PREFIXES(HatsFinchHelperTest, ResetSurveyCycle);
   FRIEND_TEST_ALL_PREFIXES(HatsFinchHelperTest, ResetHats);
 
+  static const char kEnabledForGooglersParam[];
   static const char kCustomClientDataParam[];
   static const char kProbabilityParam[];
   static const char kResetAllParam[];
@@ -103,9 +110,9 @@ class HatsFinchHelper {
   // current survey cycle. This is set by |CheckForDeviceSelection()|.
   bool device_is_selected_for_cycle_ = false;
 
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
 
-  const HatsConfig& hats_config_;
+  const raw_ref<const HatsConfig> hats_config_;
 };
 
 }  // namespace ash

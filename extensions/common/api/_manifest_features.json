@@ -39,14 +39,21 @@
     "channel": "stable",
     "extension_types": ["platform_app"]
   },
-  "automation": [{
-    "channel": "dev",
-    "extension_types": ["extension", "legacy_packaged_app", "platform_app"]
-  }, {
+  "automation": {
+    // This is a private API which, for historical reasons, does not include
+    // 'private' in the name. It should not be exposed outside of first-party
+    // allow-listed very trusted extensions and component extensions.
+    // This API has no protection in the JS wrappers around untrusted scripts
+    // putting getters/setters to intercept and manipulate native bindings.
     "channel": "stable",
-    "extension_types": ["extension", "legacy_packaged_app"],
-    "allowlist": [ "2FCBCE08B34CCA1728A85F1EFBD9A34DD2558B2E" ]
-  }],
+    "extension_types": ["extension", "legacy_packaged_app", "platform_app"],
+    "allowlist": [
+      "2FCBCE08B34CCA1728A85F1EFBD9A34DD2558B2E",
+      "05D1DBD6E8B9C4690FFA7D50E6F60C5290DC662A", // http://crbug.com/941107
+      "0D209B5E4401BB8E7873B5AB5B1346A1CB067015", // http://crbug.com/654525
+      "93CFDA3681E923AD7AB291CEDD98248396B5496C"  // http://crbug.com/803543
+    ]
+  },
   "background": {
     "channel": "stable",
     "extension_types": [
@@ -56,11 +63,20 @@
   "background.persistent": {
     "channel": "stable",
     "extension_types": [
-      "extension", "legacy_packaged_app", "login_screen_extension" ]
+      "extension", "legacy_packaged_app", "login_screen_extension" ],
+    "max_manifest_version": 2
+  },
+  "background.scripts": {
+    "channel": "stable",
+    "max_manifest_version": 2
+  },
+  "background.page": {
+    "channel": "stable",
+    "max_manifest_version": 2
   },
   "background.service_worker": {
     "channel": "stable",
-    "extension_types": ["extension", "chromeos_system_extension"]
+    "extension_types": ["extension", "chromeos_system_extension", "login_screen_extension"]
   },
   "bluetooth": [{
     // Note: The "bluetooth" manifest permission is used by the
@@ -68,7 +84,7 @@
     // APIs.
     "channel": "stable",
     "extension_types": ["platform_app"],
-    "platforms": ["chromeos", "win", "mac"]
+    "platforms": ["chromeos", "lacros", "win", "mac"]
   }, {
     "channel": "stable",
     "extension_types": ["platform_app"],
@@ -145,7 +161,7 @@
     "channel": "stable",
     "extension_types": "all"
   },
-  "externally_connectable": {
+  "externally_connectable": [{
     "channel": "stable",
     "extension_types": [
       "extension",
@@ -154,12 +170,21 @@
       "platform_app",
       "chromeos_system_extension"
     ]
-  },
+  }, {
+    "channel": "stable",
+    "extension_types": ["login_screen_extension"],
+    "location": "policy",
+    "platforms": ["chromeos"],
+    "allowlist": [
+      "93B7178E8C275515C38D4F43D9DF4648F0EA9B03" // Badge Based Auth Extension
+    ]
+  }],
   "file_handlers": [
     {
       "channel": "stable",
       "extension_types": ["platform_app"]
-    }, {
+    },
+    {
       "channel": "stable",
       "extension_types": [ "extension"],
       "allowlist": [
@@ -169,16 +194,23 @@
       ]
     },
     {
-      "channel": "canary",
+      "channel": "stable",
       "extension_types": ["extension"],
-      "min_manifest_version": 3
+      "min_manifest_version": 3,
+      "platforms": ["chromeos", "lacros"]
     }
   ],
-  "host_permissions": {
+  "host_permissions": [{
     "channel": "stable",
     "extension_types": ["extension"],
     "min_manifest_version": 3
   },
+  {
+    "channel": "stable",
+    "dependencies": ["behavior:imprivata_login_screen_extension"],
+    "extension_types": ["login_screen_extension"],
+    "min_manifest_version": 3
+  }],
   "icons": {
     "channel": "stable",
     "extension_types": "all"
@@ -334,10 +366,6 @@
       "chromeos_system_extension"
     ]
   },
-  "replacement_android_app": {
-    "channel": "trunk",
-    "extension_types": ["platform_app"]
-  },
   "replacement_web_app": {
     "channel": "stable",
     "extension_types": ["extension", "platform_app"]
@@ -368,6 +396,10 @@
       "session_types": ["kiosk"]
     }
   ],
+  "trial_tokens": {
+    "channel": "canary",
+    "extension_types": ["extension"]
+  },
   "usb_printers": {
     "channel": "stable",
     "extension_types": ["platform_app"]

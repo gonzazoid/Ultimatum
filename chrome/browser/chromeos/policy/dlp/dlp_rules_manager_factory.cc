@@ -82,7 +82,14 @@ DlpRulesManager* DlpRulesManagerFactory::GetForPrimaryProfile() {
 }
 
 DlpRulesManagerFactory::DlpRulesManagerFactory()
-    : ProfileKeyedServiceFactory("DlpRulesManager") {}
+    : ProfileKeyedServiceFactory(
+          "DlpRulesManager",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 bool DlpRulesManagerFactory::ServiceIsCreatedWithBrowserContext() const {
   // We have to create the instance immediately because it's responsible for
@@ -92,7 +99,8 @@ bool DlpRulesManagerFactory::ServiceIsCreatedWithBrowserContext() const {
   return true;
 }
 
-KeyedService* DlpRulesManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+DlpRulesManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
   if (!CanBuildServiceForProfile(profile))
@@ -103,6 +111,6 @@ KeyedService* DlpRulesManagerFactory::BuildServiceInstanceFor(
   if (!local_state)
     return nullptr;
 
-  return new DlpRulesManagerImpl(local_state);
+  return std::make_unique<DlpRulesManagerImpl>(local_state, profile);
 }
 }  // namespace policy

@@ -99,8 +99,9 @@ class DelegatedInkPointRendererGpuTest : public testing::Test {
  protected:
   void SetUp() override {
     // Without this, the following check always fails.
-    display_ = gl::init::InitializeGLNoExtensionsOneOff(/*init_bindings=*/true,
-                                                        /*system_device_id=*/0);
+    display_ = gl::init::InitializeGLNoExtensionsOneOff(
+        /*init_bindings=*/true,
+        /*gpu_preference=*/gl::GpuPreference::kDefault);
     if (!gl::DirectCompositionSupported()) {
       LOG(WARNING)
           << "GL implementation not using DirectComposition, skipping test.";
@@ -133,12 +134,12 @@ class DelegatedInkPointRendererGpuTest : public testing::Test {
   void CreateDirectCompositionSurfaceWin() {
     DirectCompositionSurfaceWin::Settings settings;
     surface_ = base::MakeRefCounted<DirectCompositionSurfaceWin>(
-        gl::GLSurfaceEGL::GetGLDisplayEGL(), parent_window_,
+        gl::GLSurfaceEGL::GetGLDisplayEGL(),
         DirectCompositionSurfaceWin::VSyncCallback(), settings);
     EXPECT_TRUE(surface_->Initialize(GLSurfaceFormat()));
 
-    // ImageTransportSurfaceDelegate::DidCreateAcceleratedSurfaceChildWindow()
-    // is called in production code here. However, to remove dependency from
+    // ImageTransportSurfaceDelegate::AddChildWindowToBrowser() is called in
+    // production code here. However, to remove dependency from
     // gpu/ipc/service/image_transport_surface_delegate.h, here we directly
     // executes the required minimum code.
     if (parent_window_)

@@ -9,7 +9,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "content/browser/bad_message.h"
@@ -341,7 +341,7 @@ void PepperRendererConnection::DidDeleteOutOfProcessPepperInstance(
 void PepperRendererConnection::OpenChannelToPepperPlugin(
     const url::Origin& embedder_origin,
     const base::FilePath& path,
-    const absl::optional<url::Origin>& origin_lock,
+    const std::optional<url::Origin>& origin_lock,
     mojom::PepperHost::OpenChannelToPepperPluginCallback callback) {
   // Enforce that the sender of the IPC (i.e. |render_process_id_|) is actually
   // able/allowed to host a frame with |embedder_origin|.

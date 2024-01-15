@@ -4,9 +4,9 @@
 
 #include "media/capture/video/video_capture_device.h"
 
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/functional/callback.h"
 #include "base/i18n/timezone.h"
 #include "base/strings/string_util.h"
 #include "base/token.h"
@@ -24,21 +24,40 @@ CapturedExternalVideoBuffer::CapturedExternalVideoBuffer(
       format(std::move(format)),
       color_space(std::move(color_space)) {}
 
+#if BUILDFLAG(IS_WIN)
+CapturedExternalVideoBuffer::CapturedExternalVideoBuffer(
+    Microsoft::WRL::ComPtr<IMFMediaBuffer> imf_buffer,
+    gfx::GpuMemoryBufferHandle handle,
+    VideoCaptureFormat format,
+    gfx::ColorSpace color_space)
+    : imf_buffer(std::move(imf_buffer)),
+      handle(std::move(handle)),
+      format(std::move(format)),
+      color_space(std::move(color_space)) {}
+#endif
+
 CapturedExternalVideoBuffer::CapturedExternalVideoBuffer(
     CapturedExternalVideoBuffer&& other)
     : handle(std::move(other.handle)),
       format(std::move(other.format)),
-      color_space(std::move(other.color_space)) {}
-
-CapturedExternalVideoBuffer::~CapturedExternalVideoBuffer() = default;
+      color_space(std::move(other.color_space)) {
+#if BUILDFLAG(IS_WIN)
+  imf_buffer = std::move(other.imf_buffer);
+#endif
+}
 
 CapturedExternalVideoBuffer& CapturedExternalVideoBuffer::operator=(
     CapturedExternalVideoBuffer&& other) {
   handle = std::move(other.handle);
   format = std::move(other.format);
   color_space = std::move(other.color_space);
+#if BUILDFLAG(IS_WIN)
+  imf_buffer = std::move(other.imf_buffer);
+#endif
   return *this;
 }
+
+CapturedExternalVideoBuffer::~CapturedExternalVideoBuffer() = default;
 
 VideoCaptureDevice::Client::Buffer::Buffer() : id(0), frame_feedback_id(0) {}
 
@@ -60,14 +79,41 @@ VideoCaptureDevice::Client::Buffer::~Buffer() = default;
 VideoCaptureDevice::Client::Buffer& VideoCaptureDevice::Client::Buffer::
 operator=(VideoCaptureDevice::Client::Buffer&& other) = default;
 
+void VideoCaptureDevice::Client::OnIncomingCapturedData(
+    const uint8_t* data,
+    int length,
+    const VideoCaptureFormat& frame_format,
+    const gfx::ColorSpace& color_space,
+    int clockwise_rotation,
+    bool flip_y,
+    base::TimeTicks reference_time,
+    base::TimeDelta timestamp) {
+  OnIncomingCapturedData(data, length, frame_format, color_space,
+                         clockwise_rotation, flip_y, reference_time, timestamp,
+                         /*frame_feedback_id=*/0);
+}
+
+void VideoCaptureDevice::Client::OnIncomingCapturedGfxBuffer(
+    gfx::GpuMemoryBuffer* buffer,
+    const VideoCaptureFormat& frame_format,
+    int clockwise_rotation,
+    base::TimeTicks reference_time,
+    base::TimeDelta timestamp) {
+  OnIncomingCapturedGfxBuffer(buffer, frame_format, clockwise_rotation,
+                              reference_time, timestamp,
+                              /*frame_feedback_id=*/0);
+}
+
 VideoCaptureDevice::~VideoCaptureDevice() = default;
 
-void VideoCaptureDevice::Crop(
-    const base::Token& crop_id,
-    uint32_t crop_version,
-    base::OnceCallback<void(media::mojom::CropRequestResult)> callback) {
+void VideoCaptureDevice::ApplySubCaptureTarget(
+    mojom::SubCaptureTargetType type,
+    const base::Token& target,
+    uint32_t sub_capture_target_version,
+    base::OnceCallback<void(media::mojom::ApplySubCaptureTargetResult)>
+        callback) {
   std::move(callback).Run(
-      media::mojom::CropRequestResult::kUnsupportedCaptureDevice);
+      media::mojom::ApplySubCaptureTargetResult::kUnsupportedCaptureDevice);
 }
 
 void VideoCaptureDevice::GetPhotoState(GetPhotoStateCallback callback) {}
@@ -81,7 +127,7 @@ void VideoCaptureDevice::TakePhoto(TakePhotoCallback callback) {}
 PowerLineFrequency VideoCaptureDevice::GetPowerLineFrequencyForLocation() {
   const std::string current_country = base::CountryCodeForCurrentTimezone();
   if (current_country.empty())
-    return PowerLineFrequency::FREQUENCY_DEFAULT;
+    return PowerLineFrequency::kDefault;
   // Sorted out list of countries with 60Hz power line frequency, from
   // http://en.wikipedia.org/wiki/Mains_electricity_by_country
   const char* countries_using_60Hz[] = {
@@ -90,17 +136,17 @@ PowerLineFrequency VideoCaptureDevice::GetPowerLineFrequencyForLocation() {
       "KN", "KR", "KY", "MS", "MX", "NI", "PA", "PE", "PF", "PH", "PR",
       "PW", "SA", "SR", "SV", "TT", "TW", "UM", "US", "VG", "VI", "VE"};
   if (!base::Contains(countries_using_60Hz, current_country)) {
-    return PowerLineFrequency::FREQUENCY_50HZ;
+    return PowerLineFrequency::k50Hz;
   }
-  return PowerLineFrequency::FREQUENCY_60HZ;
+  return PowerLineFrequency::k60Hz;
 }
 
 // static
 PowerLineFrequency VideoCaptureDevice::GetPowerLineFrequency(
     const VideoCaptureParams& params) {
   switch (params.power_line_frequency) {
-    case PowerLineFrequency::FREQUENCY_50HZ:  // fall through
-    case PowerLineFrequency::FREQUENCY_60HZ:
+    case PowerLineFrequency::k50Hz:  // fall through
+    case PowerLineFrequency::k60Hz:
       return params.power_line_frequency;
     default:
       return GetPowerLineFrequencyForLocation();

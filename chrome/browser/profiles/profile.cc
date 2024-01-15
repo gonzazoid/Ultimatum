@@ -6,9 +6,9 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/check_deref.h"
 #include "base/files/file_path.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/path_service.h"
@@ -17,24 +17,28 @@
 #include "base/time/time.h"
 #include "base/trace_event/typed_macros.h"
 #include "base/tracing/protos/chrome_track_event.pbzero.h"
+#include "base/uuid.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browsing_data/chrome_browsing_data_remover_constants.h"
 #include "chrome/browser/profiles/profile_observer.h"
+#include "chrome/browser/profiles/profile_selections.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/pref_names.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/language/core/browser/pref_names.h"
 #include "components/live_caption/pref_names.h"
 #include "components/pref_registry/pref_registry_syncable.h"
+#include "components/prefs/pref_service.h"
 #include "components/profile_metrics/browser_profile_type.h"
+#include "components/search_engines/search_engine_choice_utils.h"
+#include "components/search_engines/search_engines_pref_names.h"
 #include "components/variations/variations.mojom.h"
 #include "components/variations/variations_client.h"
 #include "components/variations/variations_ids_provider.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/host_zoom_map.h"
-#include "content/public/browser/resource_context.h"
 #include "content/public/browser/shared_cors_origin_access_list.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/browser/web_contents.h"
@@ -118,6 +122,13 @@ bool Profile::OTRProfileID::AllowsBrowserWindows() const {
   return false;
 }
 
+#if BUILDFLAG(IS_CHROMEOS)
+bool Profile::OTRProfileID::IsCaptivePortal() const {
+  return base::StartsWith(profile_id_, kCaptivePortalOTRProfileIDPrefix,
+                          base::CompareCase::SENSITIVE);
+}
+#endif
+
 // static
 const Profile::OTRProfileID Profile::OTRProfileID::PrimaryID() {
   // OTRProfileID value should be same as
@@ -130,7 +141,7 @@ Profile::OTRProfileID Profile::OTRProfileID::CreateUnique(
     const std::string& profile_id_prefix) {
   return OTRProfileID(base::StringPrintf(
       "%s-%s", profile_id_prefix.c_str(),
-      base::GUID::GenerateRandomV4().AsLowercaseString().c_str()));
+      base::Uuid::GenerateRandomV4().AsLowercaseString().c_str()));
 }
 
 // static
@@ -214,8 +225,7 @@ std::string Profile::OTRProfileID::Serialize() const {
 }
 #endif  // BUILDFLAG(IS_ANDROID)
 
-Profile::Profile()
-    : resource_context_(std::make_unique<content::ResourceContext>()) {
+Profile::Profile() {
 #if DCHECK_IS_ON()
   base::AutoLock lock(g_profile_instances_lock.Get());
   g_profile_instances.Get().insert(this);
@@ -225,10 +235,6 @@ Profile::Profile()
 }
 
 Profile::~Profile() {
-  if (content::BrowserThread::IsThreadInitialized(content::BrowserThread::IO)) {
-    content::GetIOThreadTaskRunner({})->DeleteSoon(
-        FROM_HERE, std::move(resource_context_));
-  }
 #if DCHECK_IS_ON()
   base::AutoLock lock(g_profile_instances_lock.Get());
   g_profile_instances.Get().erase(this);
@@ -359,7 +365,6 @@ void Profile::RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
 #endif
 
 #if BUILDFLAG(IS_ANDROID)
-  registry->RegisterBooleanPref(prefs::kClickedUpdateMenuItem, false);
   registry->RegisterStringPref(prefs::kLatestVersionWhenClickedUpdateMenuItem,
                                std::string());
 #endif
@@ -478,12 +483,12 @@ void Profile::MaybeSendDestroyedNotification() {
 PrefStore* Profile::CreateExtensionPrefStore(Profile* profile,
                                              bool incognito_pref_store) {
 #if BUILDFLAG(ENABLE_EXTENSIONS)
-  return new ExtensionPrefStore(
-      ExtensionPrefValueMapFactory::GetForBrowserContext(profile),
-      incognito_pref_store);
-#else
-  return nullptr;
+  if (ExtensionPrefValueMap* pref_value_map =
+          ExtensionPrefValueMapFactory::GetForBrowserContext(profile)) {
+    return new ExtensionPrefStore(pref_value_map, incognito_pref_store);
+  }
 #endif
+  return nullptr;
 }
 
 bool ProfileCompare::operator()(Profile* a, Profile* b) const {
@@ -498,6 +503,12 @@ double Profile::GetDefaultZoomLevelForProfile() {
 }
 
 void Profile::Wipe() {
+  // Clear the search engine choice prefs.
+  // TODO(b/312180262): Consider clearing other preferences as well.
+  search_engines::WipeSearchEngineChoicePrefs(
+      CHECK_DEREF(GetPrefs()),
+      search_engines::WipeSearchEngineChoiceReason::kProfileWipe);
+
   GetBrowsingDataRemover()->Remove(
       base::Time(), base::Time::Max(),
       chrome_browsing_data_remover::WIPE_PROFILE,
@@ -509,6 +520,13 @@ void Profile::NotifyOffTheRecordProfileCreated(Profile* off_the_record) {
   DCHECK(off_the_record->IsOffTheRecord());
   for (auto& observer : observers_)
     observer.OnOffTheRecordProfileCreated(off_the_record);
+}
+
+void Profile::NotifyProfileInitializationComplete() {
+  DCHECK(!IsOffTheRecord());
+  for (auto& observer : observers_) {
+    observer.OnProfileInitializationComplete(this);
+  }
 }
 
 Profile* Profile::GetPrimaryOTRProfile(bool create_if_needed) {
@@ -543,8 +561,8 @@ variations::VariationsClient* Profile::GetVariationsClient() {
   return chrome_variations_client_.get();
 }
 
-content::ResourceContext* Profile::GetResourceContext() {
-  return resource_context_.get();
+base::WeakPtr<const Profile> Profile::GetWeakPtr() const {
+  return weak_factory_.GetWeakPtr();
 }
 
 base::WeakPtr<Profile> Profile::GetWeakPtr() {

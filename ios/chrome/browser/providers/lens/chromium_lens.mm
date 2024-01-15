@@ -2,19 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#import <UIKit/UIKit.h>
+#import <ostream>
+
+#import "base/functional/bind.h"
+#import "base/notreached.h"
 #import "ios/public/provider/chrome/browser/lens/lens_api.h"
 #import "ios/public/provider/chrome/browser/lens/lens_configuration.h"
 #import "ios/web/public/navigation/navigation_manager.h"
-
-#import "base/bind.h"
-#import "base/notreached.h"
-#import "base/threading/sequenced_task_runner_handle.h"
-
-#import <UIKit/UIKit.h>
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace ios {
 namespace provider {
@@ -31,6 +26,9 @@ enum ChromiumLensProviderErrors : NSInteger {
 
 }
 
+using LensWebParamsCallback =
+    base::OnceCallback<void(web::NavigationManager::WebLoadParams)>;
+
 id<ChromeLensController> NewChromeLensController(LensConfiguration* config) {
   // Lens is not supported in Chromium.
   return nil;
@@ -46,13 +44,13 @@ bool IsLensWebResultsURL(const GURL& url) {
   return false;
 }
 
-web::NavigationManager::WebLoadParams GenerateLensLoadParamsForImage(
-    UIImage* image,
-    LensEntrypoint entry_point,
-    bool is_incognito) {
-  // Lens is not supported in Chromium; this function will never be called.
+std::optional<LensEntrypoint> GetLensEntryPointFromURL(const GURL& url) {
+  return std::nullopt;
+}
+
+void GenerateLensLoadParamsAsync(LensQuery* query,
+                                 LensWebParamsCallback completion) {
   NOTREACHED() << "Lens is not supported.";
-  return web::NavigationManager::WebLoadParams({});
 }
 
 }  // namespace provider

@@ -15,9 +15,8 @@ TEST(EnterpriseMemoryLimitEvaluatorTest, OnProcessMemoryMetricsAvailable) {
   base::test::TaskEnvironment task_environment;
 
   memory_pressure::MultiSourceMemoryPressureMonitor monitor;
-  monitor.ResetSystemEvaluatorForTesting();
   bool cb_called = false;
-  monitor.SetDispatchCallback(base::BindLambdaForTesting(
+  monitor.SetDispatchCallbackForTesting(base::BindLambdaForTesting(
       [&](base::MemoryPressureListener::MemoryPressureLevel level) {
         EXPECT_EQ(level,
                   base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL);

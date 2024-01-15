@@ -4,8 +4,8 @@
 
 #include "services/device/generic_sensor/platform_sensor_fusion.h"
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/notreached.h"
@@ -23,7 +23,7 @@ class PlatformSensorFusion::Factory : public base::RefCounted<Factory> {
   static void CreateSensorFusion(
       SensorReadingSharedBuffer* reading_buffer,
       std::unique_ptr<PlatformSensorFusionAlgorithm> fusion_algorithm,
-      PlatformSensorProviderBase::CreateSensorCallback callback,
+      PlatformSensorProvider::CreateSensorCallback callback,
       PlatformSensorProvider* provider) {
     scoped_refptr<Factory> factory(new Factory(reading_buffer,
                                                std::move(fusion_algorithm),
@@ -36,16 +36,13 @@ class PlatformSensorFusion::Factory : public base::RefCounted<Factory> {
 
   Factory(SensorReadingSharedBuffer* reading_buffer,
           std::unique_ptr<PlatformSensorFusionAlgorithm> fusion_algorithm,
-          PlatformSensorProviderBase::CreateSensorCallback callback,
+          PlatformSensorProvider::CreateSensorCallback callback,
           PlatformSensorProvider* provider)
       : fusion_algorithm_(std::move(fusion_algorithm)),
         result_callback_(std::move(callback)),
         reading_buffer_(reading_buffer),
         provider_(provider) {
-    const auto& types = fusion_algorithm_->source_types();
-    DCHECK(!types.empty());
-    // Make sure there are no dups.
-    DCHECK(base::ranges::adjacent_find(types) == types.end());
+    DCHECK(!fusion_algorithm_->source_types().empty());
     DCHECK(result_callback_);
     DCHECK(reading_buffer_);
     DCHECK(provider_);
@@ -88,7 +85,7 @@ class PlatformSensorFusion::Factory : public base::RefCounted<Factory> {
   }
 
   std::unique_ptr<PlatformSensorFusionAlgorithm> fusion_algorithm_;
-  PlatformSensorProviderBase::CreateSensorCallback result_callback_;
+  PlatformSensorProvider::CreateSensorCallback result_callback_;
   raw_ptr<SensorReadingSharedBuffer>
       reading_buffer_;  // NOTE: Owned by |provider_|.
   raw_ptr<PlatformSensorProvider> provider_;
@@ -100,7 +97,7 @@ void PlatformSensorFusion::Create(
     SensorReadingSharedBuffer* reading_buffer,
     PlatformSensorProvider* provider,
     std::unique_ptr<PlatformSensorFusionAlgorithm> fusion_algorithm,
-    PlatformSensorProviderBase::CreateSensorCallback callback) {
+    PlatformSensorProvider::CreateSensorCallback callback) {
   Factory::CreateSensorFusion(reading_buffer, std::move(fusion_algorithm),
                               std::move(callback), provider);
 }

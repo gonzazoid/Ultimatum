@@ -49,7 +49,8 @@ class CORE_EXPORT PerformanceMeasure final : public PerformanceEntry {
                      double start_time,
                      double end_time,
                      scoped_refptr<SerializedScriptValue>,
-                     ExceptionState&);
+                     ExceptionState&,
+                     DOMWindow* source);
   ~PerformanceMeasure() override = default;
 
   static PerformanceMeasure* Create(ScriptState*,
@@ -57,11 +58,12 @@ class CORE_EXPORT PerformanceMeasure final : public PerformanceEntry {
                                     double start_time,
                                     double end_time,
                                     const ScriptValue& detail,
-                                    ExceptionState&);
+                                    ExceptionState&,
+                                    DOMWindow* source);
 
   ScriptValue detail(ScriptState*);
 
-  AtomicString entryType() const override;
+  const AtomicString& entryType() const override;
   PerformanceEntryType EntryTypeEnum() const override;
   mojom::blink::PerformanceMarkOrMeasurePtr ToMojoPerformanceMarkOrMeasure()
       override;

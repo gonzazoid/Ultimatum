@@ -6,15 +6,11 @@
 
 #import <Foundation/Foundation.h>
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/location.h"
 #import "ios/net/cookies/cookie_store_ios.h"
 #import "ios/web/public/thread/web_task_traits.h"
 #import "ios/web/public/thread/web_thread.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 

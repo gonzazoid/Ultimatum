@@ -20,8 +20,9 @@ cbor::Value CreateByteString(base::StringPiece s) {
 
 cbor::Value CreateHeaderMap(const WebBundleBuilder::Headers& headers) {
   cbor::Value::MapValue map;
-  for (const auto& pair : headers)
+  for (const auto& pair : headers) {
     map.insert({CreateByteString(pair.first), CreateByteString(pair.second)});
+  }
   return cbor::Value(std::move(map));
 }
 
@@ -58,6 +59,12 @@ cbor::Value WebBundleBuilder::GetCborValueOfURL(base::StringPiece url) {
   return cbor::Value(url);
 }
 
+void WebBundleBuilder::AddExchange(const GURL& url,
+                                   const Headers& response_headers,
+                                   base::StringPiece payload) {
+  AddExchange(url.spec(), response_headers, payload);
+}
+
 void WebBundleBuilder::AddExchange(base::StringPiece url,
                                    const Headers& response_headers,
                                    base::StringPiece payload) {
@@ -79,6 +86,12 @@ WebBundleBuilder::ResponseLocation WebBundleBuilder::AddResponse(
 }
 
 void WebBundleBuilder::AddIndexEntry(
+    const GURL& url,
+    const ResponseLocation& response_location) {
+  AddIndexEntry(url.spec(), response_location);
+}
+
+void WebBundleBuilder::AddIndexEntry(
     base::StringPiece url,
     const ResponseLocation& response_location) {
   delayed_index_.insert({std::string{url}, response_location});
@@ -90,12 +103,8 @@ void WebBundleBuilder::AddSection(base::StringPiece name, cbor::Value section) {
   sections_.emplace_back(std::move(section));
 }
 
-void WebBundleBuilder::AddAuthority(cbor::Value::MapValue authority) {
-  authorities_.emplace_back(std::move(authority));
-}
-
-void WebBundleBuilder::AddVouchedSubset(cbor::Value::MapValue vouched_subset) {
-  vouched_subsets_.emplace_back(std::move(vouched_subset));
+void WebBundleBuilder::AddPrimaryURL(const GURL& url) {
+  AddPrimaryURL(url.spec());
 }
 
 void WebBundleBuilder::AddPrimaryURL(base::StringPiece url) {
@@ -118,39 +127,8 @@ std::vector<uint8_t> WebBundleBuilder::CreateBundle() {
         {GetCborValueOfURL(entry.first), cbor::Value(index_value_array)});
   }
   AddSection("index", cbor::Value(index));
-  if (!authorities_.empty() || !vouched_subsets_.empty()) {
-    cbor::Value::ArrayValue signatures_section;
-    signatures_section.emplace_back(std::move(authorities_));
-    signatures_section.emplace_back(std::move(vouched_subsets_));
-    AddSection("signatures", cbor::Value(std::move(signatures_section)));
-  }
   AddSection("responses", cbor::Value(responses_));
   return CreateTopLevel();
-}
-
-cbor::Value WebBundleBuilder::CreateEncodedSigned(
-    base::StringPiece validity_url,
-    base::StringPiece auth_sha256,
-    int64_t date,
-    int64_t expires,
-    base::StringPiece url,
-    base::StringPiece header_sha256,
-    base::StringPiece payload_integrity_header) {
-  cbor::Value::ArrayValue subset_hash_value;
-  subset_hash_value.emplace_back(CreateByteString(""));  // variants-value
-  subset_hash_value.emplace_back(CreateByteString(header_sha256));
-  subset_hash_value.emplace_back(payload_integrity_header);
-
-  cbor::Value::MapValue subset_hashes;
-  subset_hashes.emplace(GetCborValueOfURL(url), std::move(subset_hash_value));
-
-  cbor::Value::MapValue signed_subset;
-  signed_subset.emplace("validity-url", validity_url);
-  signed_subset.emplace("auth-sha256", CreateByteString(auth_sha256));
-  signed_subset.emplace("date", date);
-  signed_subset.emplace("expires", expires);
-  signed_subset.emplace("subset-hashes", std::move(subset_hashes));
-  return cbor::Value(Encode(cbor::Value(signed_subset)));
 }
 
 std::vector<uint8_t> WebBundleBuilder::CreateTopLevel() {

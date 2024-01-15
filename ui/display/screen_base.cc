@@ -5,6 +5,7 @@
 #include "ui/display/screen_base.h"
 
 #include "ui/display/display_finder.h"
+#include "ui/gfx/native_widget_types.h"
 
 namespace display {
 
@@ -24,14 +25,14 @@ bool ScreenBase::IsWindowUnderCursor(gfx::NativeWindow window) {
 
 gfx::NativeWindow ScreenBase::GetWindowAtScreenPoint(const gfx::Point& point) {
   NOTIMPLEMENTED_LOG_ONCE();
-  return nullptr;
+  return gfx::NativeWindow();
 }
 
 gfx::NativeWindow ScreenBase::GetLocalProcessWindowAtPoint(
     const gfx::Point& screen_point,
     const std::set<gfx::NativeWindow>& ignore) {
   NOTIMPLEMENTED_LOG_ONCE();
-  return nullptr;
+  return gfx::NativeWindow();
 }
 
 Display ScreenBase::GetPrimaryDisplay() const {
@@ -51,7 +52,7 @@ Display ScreenBase::GetDisplayNearestPoint(const gfx::Point& point) const {
 }
 
 int ScreenBase::GetNumDisplays() const {
-  return static_cast<int>(display_list_.displays().size());
+  return static_cast<int>(GetAllDisplays().size());
 }
 
 const std::vector<Display>& ScreenBase::GetAllDisplays() const {

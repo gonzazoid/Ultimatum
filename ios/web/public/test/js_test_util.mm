@@ -6,15 +6,17 @@
 
 #import <WebKit/WebKit.h>
 
-#import "base/mac/bundle_locations.h"
+#import "base/apple/bundle_locations.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
+#import "ios/web/js_messaging/java_script_feature_manager.h"
 #import "ios/web/js_messaging/page_script_util.h"
+#import "ios/web/public/js_messaging/java_script_feature.h"
+#import "ios/web/test/js_test_util_internal.h"
+#import "ios/web/web_state/ui/crw_web_controller.h"
+#import "ios/web/web_state/ui/wk_web_view_configuration_provider.h"
+#import "ios/web/web_state/web_state_impl.h"
 #import "testing/gtest/include/gtest/gtest.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::test::ios::kWaitForJSCompletionTimeout;
 using base::test::ios::kWaitForPageLoadTimeout;
@@ -55,6 +57,21 @@ id ExecuteJavaScript(WKWebView* web_view,
   return result;
 }
 
+id ExecuteJavaScriptForFeature(web::WebState* web_state,
+                               NSString* script,
+                               JavaScriptFeature* feature) {
+  JavaScriptFeatureManager* feature_manager =
+      JavaScriptFeatureManager::FromBrowserState(web_state->GetBrowserState());
+  JavaScriptContentWorld* world =
+      feature_manager->GetContentWorldForFeature(feature);
+
+  WKWebView* web_view =
+      [web::WebStateImpl::FromWebState(web_state)->GetWebController()
+          ensureWebViewCreated];
+  return web::test::ExecuteJavaScript(web_view, world->GetWKContentWorld(),
+                                      script);
+}
+
 bool LoadHtml(WKWebView* web_view, NSString* html, NSURL* base_url) {
   [web_view loadHTMLString:html baseURL:base_url];
 
@@ -79,6 +96,21 @@ NSString* GetSharedScripts() {
   return [NSString stringWithFormat:@"%@; %@; %@", GetPageScript(@"gcrweb"),
                                     GetPageScript(@"common"),
                                     GetPageScript(@"message")];
+}
+
+void OverrideJavaScriptFeatures(web::BrowserState* browser_state,
+                                std::vector<JavaScriptFeature*> features) {
+  WKWebViewConfigurationProvider& configuration_provider =
+      WKWebViewConfigurationProvider::FromBrowserState(browser_state);
+  WKWebViewConfiguration* configuration =
+      configuration_provider.GetWebViewConfiguration();
+  // User scripts must be removed because
+  // `JavaScriptFeatureManager::ConfigureFeatures` will remove script message
+  // handlers.
+  [configuration.userContentController removeAllUserScripts];
+
+  JavaScriptFeatureManager::FromBrowserState(browser_state)
+      ->ConfigureFeatures(features);
 }
 
 }  // namespace test

@@ -8,12 +8,6 @@
     return document.getElementById(id);
   };
 
-  window.onerror = function(errorMsg, url, lineNumber, column, errorObj) {
-    failTest('Error: ' + errorMsg + '\nScript: ' + url +
-             '\nLine: ' + lineNumber + '\nColumn: ' + column +
-             '\nStackTrace: ' + errorObj);
-  }
-
   var gFirstConnection = null;
   var gSecondConnection = null;
   var gLocalStream = null;
@@ -24,53 +18,39 @@
   // we expect audio to be playing after the second renegotiation.
   function callAndRenegotiateToAudio(constraints, renegotiationConstraints) {
     createConnections(null);
-    navigator.mediaDevices.getUserMedia(constraints)
-        .then(addStreamToBothConnectionsAndNegotiate)
-        .catch(failTest);
+    return Promise.all([
+      navigator.mediaDevices.getUserMedia(constraints)
+          .then(addStreamToBothConnectionsAndNegotiate),
 
-    waitForConnectionToStabilize(gFirstConnection).then(() => {
-      gFirstConnection.removeStream(gLocalStream);
-      gSecondConnection.removeStream(gLocalStream);
-      return navigator.mediaDevices.getUserMedia(renegotiationConstraints)
-          .then(addStreamToTheFirstConnectionAndNegotiate);
-      }).then(() => {
-        return waitForConnectionToStabilize(gFirstConnection)
-      }).then(() => {
-        return ensureAudioPlaying(gSecondConnection);
-      })
-      .then(reportTestSuccess)
-      .catch(failTest);
+      waitForConnectionToStabilize(gFirstConnection).then(() => {
+        gFirstConnection.removeStream(gLocalStream);
+        gSecondConnection.removeStream(gLocalStream);
+        return navigator.mediaDevices.getUserMedia(renegotiationConstraints)
+            .then(addStreamToTheFirstConnectionAndNegotiate);
+        }).then(() => {
+          return waitForConnectionToStabilize(gFirstConnection)
+        }).then(() => {
+          return ensureAudioPlaying(gSecondConnection);
+        }),
+    ])
+    .then(logSuccess);
   }
 
   function setupCallAndPromiseAudioPlaying(constraints) {
     createConnections(null);
 
     // Add the local stream to gFirstConnection to play one-way audio.
-    navigator.mediaDevices.getUserMedia(constraints)
-        .then(addStreamToTheFirstConnectionAndNegotiate)
-        .catch(failTest);
-
-    return waitForConnectionToStabilize(gFirstConnection)
-        .then(() => { return ensureAudioPlaying(gSecondConnection); });
+    return Promise.all([
+      navigator.mediaDevices.getUserMedia(constraints)
+          .then(addStreamToTheFirstConnectionAndNegotiate),
+      waitForConnectionToStabilize(gFirstConnection)
+          .then(() => { return ensureAudioPlaying(gSecondConnection); }),
+    ]);
   }
 
   function callAndEnsureAudioIsPlaying(constraints) {
-    setupCallAndPromiseAudioPlaying(constraints)
-        .then(reportTestSuccess)
-        .catch(failTest);
-  }
-
-  function callWithIsac16KAndEnsureAudioIsPlaying(constraints) {
-    setOfferSdpTransform(function(sdp) {
-      sdp = sdp.replace(/m=audio (\d+) RTP\/SAVPF.*\r\n/g,
-                        'm=audio $1 RTP/SAVPF 103 126\r\n');
-      sdp = sdp.replace('a=fmtp:111 minptime=10', 'a=fmtp:103 minptime=10');
-      if (sdp.search(/a=rtpmap:103 ISAC\/16000/i) == -1)
-        failTest('Missing iSAC 16K codec on Android; cannot force codec.');
-
-      return sdp;
-    });
-    callAndEnsureAudioIsPlaying(constraints);
+    return setupCallAndPromiseAudioPlaying(constraints)
+        .then(logSuccess);
   }
 
   function enableRemoteVideo(peerConnection, enabled) {
@@ -94,35 +74,35 @@
   }
 
   function callAndEnsureRemoteAudioTrackMutingWorks(constraints) {
-    setupCallAndPromiseAudioPlaying(constraints).then(() => {
+    return setupCallAndPromiseAudioPlaying(constraints).then(() => {
       // Call is up, now mute the remote track and check we stop playing out
       // audio (after a small delay, we don't expect it to happen instantly).
       enableRemoteAudio(gSecondConnection, false);
 
-      setTimeout( function() {
-       ensureSilence(gSecondConnection)
-          .then(reportTestSuccess)
-          .catch(failTest);
-      }, 250 );
-    }).catch(failTest);
+      return new Promise(resolve => {
+        setTimeout(resolve, 250);
+      })
+      .then(() => ensureSilence(gSecondConnection));
+    })
+    .then(logSuccess);
   }
 
   function callAndEnsureLocalAudioTrackMutingWorks(constraints) {
-    setupCallAndPromiseAudioPlaying(constraints).then(() => {
+    return setupCallAndPromiseAudioPlaying(constraints).then(() => {
       // Call is up, now mute the local track of the sending side and ensure
       // the receiving side stops receiving audio.
       enableLocalAudio(gFirstConnection, false);
 
-      setTimeout( function() {
-       ensureSilence(gSecondConnection)
-          .then(reportTestSuccess)
-          .catch(failTest);
-      }, 250 );
-    }).catch(failTest);
+      return new Promise(resolve => {
+        setTimeout(resolve, 250);
+      })
+      .then(() => ensureSilence(gSecondConnection));
+    })
+    .then(logSuccess);
   }
 
   function callAndEnsureAudioTrackUnmutingWorks(constraints) {
-    setupCallAndPromiseAudioPlaying(constraints).then(() => {
+    return setupCallAndPromiseAudioPlaying(constraints).then(() => {
       // Mute, wait a while, unmute, verify audio gets back up.
       // (Also, ensure video muting doesn't affect audio).
       enableRemoteAudio(gSecondConnection, false);
@@ -132,27 +112,27 @@
         enableRemoteAudio(gSecondConnection, true);
       }, 500);
 
-      setTimeout(function() {
-        ensureAudioPlaying(gSecondConnection)
-            .then(reportTestSuccess)
-            .catch(failTest);
-      }, 1500);
-    }).catch(failTest);
+      return new Promise(resolve => {
+        setTimeout(resolve, 1500);
+      })
+      .then(() => ensureAudioPlaying(gSecondConnection));
+    })
+    .then(logSuccess);
   }
 
   function callAndEnsureLocalVideoMutingDoesntMuteAudio(constraints) {
-    setupCallAndPromiseAudioPlaying(constraints).then(() => {
+    return setupCallAndPromiseAudioPlaying(constraints).then(() => {
       enableLocalVideo(gFirstConnection, false);
       return ensureAudioPlaying(gSecondConnection)
-          .then(reportTestSuccess);
+          .then(logSuccess);
     });
   }
 
   function callAndEnsureRemoteVideoMutingDoesntMuteAudio(constraints) {
-    setupCallAndPromiseAudioPlaying(constraints).then(() => {
+    return setupCallAndPromiseAudioPlaying(constraints).then(() => {
       enableRemoteVideo(gSecondConnection, false);
       return ensureAudioPlaying(gSecondConnection)
-          .then(reportTestSuccess);
+          .then(logSuccess);
     });
   }
 
@@ -203,7 +183,7 @@
       assertEquals(typeof result.voiceActivityFlag, 'boolean');
     }
 
-    reportTestSuccess();
+    return logSuccess();
   }
 
   function createConnections(constraints) {

@@ -6,8 +6,9 @@
 #define CHROME_BROWSER_ASH_ECHE_APP_ECHE_APP_MANAGER_FACTORY_H_
 
 #include "ash/webui/eche_app_ui/launch_app_helper.h"
-#include "base/memory/singleton.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/image/image.h"
@@ -20,6 +21,7 @@ namespace eche_app {
 class EcheAppManager;
 class EcheAppNotificationController;
 class SystemInfo;
+class AppsLaunchInfoProvider;
 
 class LaunchedAppInfo {
  public:
@@ -29,8 +31,9 @@ class LaunchedAppInfo {
     ~Builder();
 
     std::unique_ptr<LaunchedAppInfo> Build() {
-      return base::WrapUnique(
-          new LaunchedAppInfo(package_name_, visible_name_, user_id_, icon_));
+      return base::WrapUnique(new LaunchedAppInfo(package_name_, visible_name_,
+                                                  user_id_, icon_, phone_name_,
+                                                  apps_launch_info_provider_));
     }
     Builder& SetPackageName(const std::string& package_name) {
       package_name_ = package_name;
@@ -52,11 +55,24 @@ class LaunchedAppInfo {
       return *this;
     }
 
+    Builder& SetPhoneName(const std::u16string& phone_name) {
+      phone_name_ = phone_name;
+      return *this;
+    }
+
+    Builder& SetAppsLaunchInfoProvider(
+        AppsLaunchInfoProvider* apps_launch_info_provider) {
+      apps_launch_info_provider_ = apps_launch_info_provider;
+      return *this;
+    }
+
    private:
     std::string package_name_;
     std::u16string visible_name_;
     absl::optional<int64_t> user_id_;
     gfx::Image icon_;
+    std::u16string phone_name_;
+    raw_ptr<AppsLaunchInfoProvider> apps_launch_info_provider_;
   };
 
   LaunchedAppInfo() = delete;
@@ -68,18 +84,26 @@ class LaunchedAppInfo {
   std::u16string visible_name() const { return visible_name_; }
   absl::optional<int64_t> user_id() const { return user_id_; }
   gfx::Image icon() const { return icon_; }
+  std::u16string phone_name() const { return phone_name_; }
+  AppsLaunchInfoProvider* apps_launch_info_provider() {
+    return apps_launch_info_provider_;
+  }
 
  protected:
   LaunchedAppInfo(const std::string& package_name,
                   const std::u16string& visible_name,
                   const absl::optional<int64_t>& user_id,
-                  const gfx::Image& icon);
+                  const gfx::Image& icon,
+                  const std::u16string& phone_name,
+                  AppsLaunchInfoProvider* apps_launch_info_provider);
 
  private:
   std::string package_name_;
   std::u16string visible_name_;
   absl::optional<int64_t> user_id_;
   gfx::Image icon_;
+  std::u16string phone_name_;
+  raw_ptr<AppsLaunchInfoProvider, DanglingUntriaged> apps_launch_info_provider_;
 };
 
 // Factory to create a single EcheAppManager.
@@ -101,7 +125,9 @@ class EcheAppManagerFactory : public ProfileKeyedServiceFactory {
                             const std::string& package_name,
                             const std::u16string& visible_name,
                             const absl::optional<int64_t>& user_id,
-                            const gfx::Image& icon);
+                            const gfx::Image& icon,
+                            const std::u16string& phone_name,
+                            AppsLaunchInfoProvider* apps_launch_info_provider);
 
   void SetLastLaunchedAppInfo(
       std::unique_ptr<LaunchedAppInfo> last_launched_app_info);
@@ -111,20 +137,20 @@ class EcheAppManagerFactory : public ProfileKeyedServiceFactory {
   EcheAppManagerFactory(const EcheAppManagerFactory&) = delete;
   EcheAppManagerFactory& operator=(const EcheAppManagerFactory&) = delete;
 
+  std::unique_ptr<SystemInfo> GetSystemInfo(Profile* profile) const;
+
  private:
-  friend struct base::DefaultSingletonTraits<EcheAppManagerFactory>;
+  friend base::NoDestructor<EcheAppManagerFactory>;
   friend class EcheAppManagerFactoryTest;
 
   EcheAppManagerFactory();
   ~EcheAppManagerFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   void RegisterProfilePrefs(
       user_prefs::PrefRegistrySyncable* registry) override;
-
-  std::unique_ptr<SystemInfo> GetSystemInfo(Profile* profile) const;
 
   std::unique_ptr<LaunchedAppInfo> last_launched_app_info_;
 
@@ -134,13 +160,5 @@ class EcheAppManagerFactory : public ProfileKeyedServiceFactory {
 
 }  // namespace eche_app
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-namespace eche_app {
-using ::ash::eche_app::EcheAppManagerFactory;
-}
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_ECHE_APP_ECHE_APP_MANAGER_FACTORY_H_

@@ -4,23 +4,21 @@
 
 #include "chrome/browser/ash/app_mode/web_app/web_kiosk_browser_controller_ash.h"
 
-#include "chrome/browser/ash/app_mode/web_app/web_kiosk_app_manager.h"
-#include "chrome/browser/ui/browser.h"
-
 namespace ash {
 
 WebKioskBrowserControllerAsh::WebKioskBrowserControllerAsh(
     web_app::WebAppProvider& provider,
     Browser* browser,
-    web_app::AppId app_id)
-    : WebKioskBrowserControllerBase(provider, browser, app_id) {}
+    webapps::AppId app_id,
+    const ash::SystemWebAppDelegate* system_app)
+    : WebKioskBrowserControllerBase(provider, browser, app_id),
+      system_app_(system_app) {}
 
 WebKioskBrowserControllerAsh::~WebKioskBrowserControllerAsh() = default;
 
-void WebKioskBrowserControllerAsh::MaybeInitAppSession() {
-  if (!WebKioskAppManager::Get()->app_session()) {
-    WebKioskAppManager::Get()->InitSession(browser(), browser()->profile());
-  }
+const ash::SystemWebAppDelegate* WebKioskBrowserControllerAsh::system_app()
+    const {
+  return system_app_;
 }
 
 }  // namespace ash

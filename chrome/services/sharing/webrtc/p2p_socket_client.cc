@@ -4,7 +4,7 @@
 
 #include "chrome/services/sharing/webrtc/p2p_socket_client.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/time/time.h"
 #include "chrome/services/sharing/webrtc/p2p_socket_client_delegate.h"
@@ -57,14 +57,16 @@ void P2PSocketClient::Init(network::P2PSocketType type,
   state_ = STATE_OPENING;
   socket_manager_->CreateSocket(
       type, local_address, network::P2PPortRange(min_port, max_port),
-      remote_address, receiver_.BindNewPipeAndPassRemote(),
+      remote_address,
+      net::MutableNetworkTrafficAnnotationTag(traffic_annotation_),
+      receiver_.BindNewPipeAndPassRemote(),
       socket_.BindNewPipeAndPassReceiver());
   receiver_.set_disconnect_handler(base::BindOnce(
       &P2PSocketClient::OnConnectionError, base::Unretained(this)));
 }
 
 uint64_t P2PSocketClient::Send(const net::IPEndPoint& address,
-                               const std::vector<int8_t>& data,
+                               base::span<const uint8_t> data,
                                const rtc::PacketOptions& options) {
   uint64_t unique_id = GetUniqueId(random_socket_id_, ++next_packet_id_);
 
@@ -78,11 +80,10 @@ uint64_t P2PSocketClient::Send(const net::IPEndPoint& address,
 }
 
 void P2PSocketClient::SendWithPacketId(const net::IPEndPoint& address,
-                                       const std::vector<int8_t>& data,
+                                       base::span<const uint8_t> data,
                                        const rtc::PacketOptions& options,
                                        uint64_t packet_id) {
-  socket_->Send(data, network::P2PPacketInfo(address, options, packet_id),
-                net::MutableNetworkTrafficAnnotationTag(traffic_annotation_));
+  socket_->Send(data, network::P2PPacketInfo(address, options, packet_id));
 }
 
 void P2PSocketClient::SetOption(network::P2PSocketOption option, int value) {
@@ -125,13 +126,27 @@ void P2PSocketClient::SendComplete(
     delegate_->OnSendComplete(send_metrics);
 }
 
-void P2PSocketClient::DataReceived(const net::IPEndPoint& socket_address,
-                                   const std::vector<int8_t>& data,
-                                   base::TimeTicks timestamp) {
+void P2PSocketClient::SendBatchComplete(
+    const std::vector<::network::P2PSendPacketMetrics>& send_metrics_batch) {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  if (delegate_) {
+    for (const auto& send_metrics : send_metrics_batch) {
+      delegate_->OnSendComplete(send_metrics);
+    }
+  }
+}
+
+void P2PSocketClient::DataReceived(
+    std::vector<network::mojom::P2PReceivedPacketPtr> packets) {
+  DCHECK(!packets.empty());
   DCHECK_EQ(STATE_OPEN, state_);
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  if (delegate_)
-    delegate_->OnDataReceived(socket_address, data, timestamp);
+  if (delegate_) {
+    for (auto& packet : packets) {
+      delegate_->OnDataReceived(packet->socket_address, packet->data,
+                                packet->timestamp);
+    }
+  }
 }
 
 void P2PSocketClient::OnConnectionError() {

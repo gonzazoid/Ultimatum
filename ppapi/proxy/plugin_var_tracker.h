@@ -6,10 +6,9 @@
 #define PPAPI_PROXY_PLUGIN_VAR_TRACKER_H_
 
 #include <map>
-#include <string>
 
 #include "base/compiler_specific.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "ppapi/c/pp_stdint.h"
 #include "ppapi/c/pp_var.h"

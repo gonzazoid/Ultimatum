@@ -16,12 +16,14 @@
 #include "url/android/gurl_android.h"
 
 namespace {
+using ::base::android::ConvertJavaStringToUTF16;
+using ::base::android::ConvertJavaStringToUTF8;
 using ::base::android::ConvertUTF16ToJavaString;
 using ::base::android::ConvertUTF8ToJavaString;
 using ::base::android::JavaRef;
 
 void MaybeSetInfo(autofill::AutofillProfile* profile,
-                  autofill::ServerFieldType type,
+                  autofill::FieldType type,
                   const JavaRef<jstring>& value,
                   const std::string& locale) {
   if (value) {
@@ -30,7 +32,7 @@ void MaybeSetInfo(autofill::AutofillProfile* profile,
 }
 
 void MaybeSetRawInfo(autofill::AutofillProfile* profile,
-                     autofill::ServerFieldType type,
+                     autofill::FieldType type,
                      const JavaRef<jstring>& value) {
   if (value) {
     profile->SetRawInfo(type, ConvertJavaStringToUTF16(value));
@@ -48,8 +50,7 @@ base::android::ScopedJavaLocalRef<jobject> CreateFastCheckoutAutofillProfile(
   const autofill::AutofillCountry country(country_code, locale);
   return Java_FastCheckoutAutofillProfile_Constructor(
       env, ConvertUTF8ToJavaString(env, profile.guid()),
-      ConvertUTF8ToJavaString(env, profile.origin()),
-      profile.record_type() == autofill::AutofillProfile::LOCAL_PROFILE,
+      /*isLocal=*/true,
       ConvertUTF16ToJavaString(
           env, profile.GetInfo(autofill::NAME_HONORIFIC_PREFIX, locale)),
       ConvertUTF16ToJavaString(env,
@@ -86,8 +87,9 @@ base::android::ScopedJavaLocalRef<jobject> CreateFastCheckoutCreditCard(
   return Java_FastCheckoutCreditCard_Constructor(
       env, ConvertUTF8ToJavaString(env, credit_card.guid()),
       ConvertUTF8ToJavaString(env, credit_card.origin()),
-      credit_card.record_type() == autofill::CreditCard::LOCAL_CARD,
-      credit_card.record_type() == autofill::CreditCard::FULL_SERVER_CARD,
+      credit_card.record_type() == autofill::CreditCard::RecordType::kLocalCard,
+      credit_card.record_type() ==
+          autofill::CreditCard::RecordType::kFullServerCard,
       ConvertUTF16ToJavaString(
           env, credit_card.GetRawInfo(autofill::CREDIT_CARD_NAME_FULL)),
       ConvertUTF16ToJavaString(
@@ -99,8 +101,7 @@ base::android::ScopedJavaLocalRef<jobject> CreateFastCheckoutCreditCard(
           env, credit_card.GetRawInfo(autofill::CREDIT_CARD_EXP_4_DIGIT_YEAR)),
       ConvertUTF8ToJavaString(env,
                               payment_request_data.basic_card_issuer_network),
-      ConvertUTF8ToJavaString(
-          env, credit_card.CardIconStringForAutofillSuggestion()),
+      static_cast<jint>(credit_card.CardIconForAutofillSuggestion()),
       ConvertUTF8ToJavaString(env, credit_card.billing_address_id()),
       ConvertUTF8ToJavaString(env, credit_card.server_id()),
       credit_card.instrument_id(),
@@ -115,7 +116,9 @@ CreateFastCheckoutAutofillProfileFromJava(
     JNIEnv* env,
     const base::android::JavaParamRef<jobject>& jprofile,
     const std::string& locale) {
-  auto profile = std::make_unique<autofill::AutofillProfile>();
+  AddressCountryCode country_code = AddressCountryCode(ConvertJavaStringToUTF8(
+      Java_FastCheckoutAutofillProfile_getCountryCode(env, jprofile)));
+  auto profile = std::make_unique<autofill::AutofillProfile>(country_code);
   // Only set the guid if it is an existing profile (Java guid not empty).
   // Otherwise, keep the generated one.
   std::string guid = ConvertJavaStringToUTF8(
@@ -124,8 +127,6 @@ CreateFastCheckoutAutofillProfileFromJava(
     profile->set_guid(guid);
   }
 
-  profile->set_origin(ConvertJavaStringToUTF8(
-      Java_FastCheckoutAutofillProfile_getOrigin(env, jprofile)));
   MaybeSetInfo(profile.get(), autofill::NAME_FULL,
                Java_FastCheckoutAutofillProfile_getFullName(env, jprofile),
                locale);
@@ -151,9 +152,6 @@ CreateFastCheckoutAutofillProfileFromJava(
   MaybeSetRawInfo(
       profile.get(), autofill::ADDRESS_HOME_SORTING_CODE,
       Java_FastCheckoutAutofillProfile_getSortingCode(env, jprofile));
-  MaybeSetInfo(profile.get(), autofill::ADDRESS_HOME_COUNTRY,
-               Java_FastCheckoutAutofillProfile_getCountryCode(env, jprofile),
-               locale);
   MaybeSetRawInfo(
       profile.get(), autofill::PHONE_HOME_WHOLE_NUMBER,
       Java_FastCheckoutAutofillProfile_getPhoneNumber(env, jprofile));
@@ -179,12 +177,14 @@ std::unique_ptr<autofill::CreditCard> CreateFastCheckoutCreditCardFromJava(
   }
 
   if (Java_FastCheckoutCreditCard_getIsLocal(env, jcredit_card)) {
-    credit_card->set_record_type(autofill::CreditCard::LOCAL_CARD);
+    credit_card->set_record_type(autofill::CreditCard::RecordType::kLocalCard);
   } else {
     if (Java_FastCheckoutCreditCard_getIsCached(env, jcredit_card)) {
-      credit_card->set_record_type(autofill::CreditCard::FULL_SERVER_CARD);
+      credit_card->set_record_type(
+          autofill::CreditCard::RecordType::kFullServerCard);
     } else {
-      credit_card->set_record_type(autofill::CreditCard::MASKED_SERVER_CARD);
+      credit_card->set_record_type(
+          autofill::CreditCard::RecordType::kMaskedServerCard);
       credit_card->SetNetworkForMaskedCard(
           autofill::data_util::GetIssuerNetworkForBasicCardIssuerNetwork(
               ConvertJavaStringToUTF8(

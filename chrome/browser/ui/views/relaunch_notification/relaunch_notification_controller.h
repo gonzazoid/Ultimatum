@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_RELAUNCH_NOTIFICATION_RELAUNCH_NOTIFICATION_CONTROLLER_H_
 #define CHROME_BROWSER_UI_VIEWS_RELAUNCH_NOTIFICATION_RELAUNCH_NOTIFICATION_CONTROLLER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/wall_clock_timer.h"
@@ -87,9 +87,6 @@ class RelaunchNotificationController : public UpgradeObserver {
     kRequired,     // Relaunches are required.
   };
 
-  // The platform-specific implementation.
-  RelaunchNotificationControllerPlatformImpl platform_impl_;
-
   // Adjusts to the current notification style as indicated by the
   // browser.relaunch_notification Local State preference. If the notification
   // style has been overridden, then that value is given priority over the
@@ -161,9 +158,6 @@ class RelaunchNotificationController : public UpgradeObserver {
   // default notification on Chrome OS.
   virtual void Close();
 
-  // Updates the required relaunch deadline in the UX.
-  virtual void SetDeadline(base::Time deadline);
-
   // Run to restart the browser/device once the relaunch deadline is reached
   // when relaunches are required by policy.
   virtual void OnRelaunchDeadlineExpired();
@@ -174,6 +168,9 @@ class RelaunchNotificationController : public UpgradeObserver {
   // A provider of Time to the controller and its timer for the sake of
   // testability.
   const raw_ptr<const base::Clock> clock_;
+
+  // The platform-specific implementation.
+  RelaunchNotificationControllerPlatformImpl platform_impl_;
 
   // Observes changes to the browser.relaunch_notification Local State pref.
   PrefChangeRegistrar pref_change_registrar_;

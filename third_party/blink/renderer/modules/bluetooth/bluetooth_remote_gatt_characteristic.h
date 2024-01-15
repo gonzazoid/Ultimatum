@@ -37,7 +37,7 @@ class ScriptState;
 // class's "Interface required by CallbackPromiseAdapter" section and the
 // CallbackPromiseAdapter class comments.
 class BluetoothRemoteGATTCharacteristic final
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public ActiveScriptWrappable<BluetoothRemoteGATTCharacteristic>,
       public ExecutionContextLifecycleObserver,
       public mojom::blink::WebBluetoothCharacteristicClient {
@@ -71,10 +71,10 @@ class BluetoothRemoteGATTCharacteristic final
   void Trace(Visitor*) const override;
 
   // IDL exposed interface:
-  BluetoothRemoteGATTService* service() { return service_; }
+  BluetoothRemoteGATTService* service() { return service_.Get(); }
   String uuid() { return characteristic_->uuid; }
-  BluetoothCharacteristicProperties* properties() { return properties_; }
-  DOMDataView* value() const { return value_; }
+  BluetoothCharacteristicProperties* properties() { return properties_.Get(); }
+  DOMDataView* value() const { return value_.Get(); }
   ScriptPromise getDescriptor(ScriptState* script_state,
                               const V8BluetoothDescriptorUUID* descriptor_uuid,
                               ExceptionState& exception_state);

@@ -5,8 +5,10 @@
 #ifndef ASH_APP_LIST_VIEWS_TOP_ICON_ANIMATION_VIEW_H_
 #define ASH_APP_LIST_VIEWS_TOP_ICON_ANIMATION_VIEW_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/compositor/layer_animation_observer.h"
 #include "ui/views/view.h"
 
@@ -34,6 +36,8 @@ class TopIconAnimationObserver : public base::CheckedObserver {
 // a folder. Owns itself.
 class TopIconAnimationView : public views::View,
                              public ui::ImplicitAnimationObserver {
+  METADATA_HEADER(TopIconAnimationView, views::View)
+
  public:
   // |grid|: The apps grid to which the icon animation view belongs.
   // |icon|: The icon image of the item icon of full scale size.
@@ -63,9 +67,6 @@ class TopIconAnimationView : public views::View,
   // location to the small icon inside the folder icon.
   void TransformView(base::TimeDelta duration);
 
-  // views::View:
-  const char* GetClassName() const override;
-
  private:
   // views::View overrides:
   gfx::Size CalculatePreferredSize() const override;
@@ -75,10 +76,11 @@ class TopIconAnimationView : public views::View,
   void OnImplicitAnimationsCompleted() override;
   bool RequiresNotificationWhenAnimatorDestroyed() const override;
 
-  const AppsGridView* grid_;  // Owned by views hierarchy.
+  raw_ptr<const AppsGridView, DanglingUntriaged>
+      grid_;  // Owned by views hierarchy.
   gfx::Size icon_size_;
-  views::ImageView* icon_;  // Owned by views hierarchy.
-  views::Label* title_;     // Owned by views hierarchy.
+  raw_ptr<views::ImageView> icon_;  // Owned by views hierarchy.
+  raw_ptr<views::Label> title_;     // Owned by views hierarchy.
   // Rect of the scaled down top item icon inside folder icon's ink bubble.
   gfx::Rect scaled_rect_;
   // true: opening folder; false: closing folder.

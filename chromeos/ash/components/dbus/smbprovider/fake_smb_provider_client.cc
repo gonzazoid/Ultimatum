@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace ash {
 
@@ -70,7 +70,7 @@ void FakeSmbProviderClient::GetShares(const base::FilePath& server_url,
 
 void FakeSmbProviderClient::SetupKerberos(const std::string& account_id,
                                           SetupKerberosCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true /* success */));
 }
 
@@ -97,6 +97,10 @@ void FakeSmbProviderClient::ParseNetBiosPacket(
   }
 
   std::move(callback).Run(result);
+}
+
+base::WeakPtr<SmbProviderClient> FakeSmbProviderClient::AsWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 void FakeSmbProviderClient::ClearShares() {

@@ -52,7 +52,8 @@ class DISPLAY_EXPORT Screen {
 
   // Retrieves the single Screen object; this may be null if it's not already
   // created, except for IOS where it creates a native screen instance
-  // automatically.
+  // automatically. On ChromeOS ash the return value is only null on startup.
+
   static Screen* GetScreen();
 
   // Returns whether a Screen singleton exists or not.
@@ -121,7 +122,7 @@ class DISPLAY_EXPORT Screen {
   Display GetDisplayForNewWindows() const;
 
   // Sets the suggested display to use when creating a new window.
-  void SetDisplayForNewWindows(int64_t display_id);
+  virtual void SetDisplayForNewWindows(int64_t display_id);
 
   // Returns ScreenInfos, attempting to set the current ScreenInfo to the
   // display corresponding to `nearest_id`.  The returned result is guaranteed
@@ -197,12 +198,22 @@ class DISPLAY_EXPORT Screen {
 
 #if BUILDFLAG(IS_CHROMEOS)
   // Returns tablet state.
-  // TODO(crbug.com/1170013): Support this on ash-chrome as well.
   virtual TabletState GetTabletState() const;
-#endif
+
+  // Returns true if the system is in tablet mode.
+  bool InTabletMode() const;
+
+  // Overrides tablet state stored in screen and notifies observers only on
+  // Lacros side.
+  // Not that this method may make tablet state out-of-sync with Ash side.
+  virtual void OverrideTabletStateForTesting(TabletState tablet_state) {}
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
  protected:
   void set_shutdown(bool shutdown) { shutdown_ = shutdown; }
+  int64_t display_id_for_new_windows() const {
+    return display_id_for_new_windows_;
+  }
 
  private:
   friend class ScopedDisplayForNewWindows;
@@ -225,37 +236,24 @@ class DISPLAY_EXPORT Screen {
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_LINUX)
 };
 
+#if BUILDFLAG(IS_APPLE)
+
+// TODO(oshima): move this to separate apple specific file.
+
 // TODO(crbug.com/1317416): Make this static private member of
 // ScopedNativeScreen.
 DISPLAY_EXPORT Screen* CreateNativeScreen();
 
-// Android does not have `CreateNativeScreen()`.
-#if !BUILDFLAG(IS_ANDROID)
-
 // ScopedNativeScreen creates a native screen if there is no screen created yet
 // (e.g. by a unit test).
-class DISPLAY_EXPORT ScopedNativeScreen {
+class DISPLAY_EXPORT ScopedNativeScreen final {
  public:
   explicit ScopedNativeScreen(const base::Location& location = FROM_HERE);
   ScopedNativeScreen(const ScopedNativeScreen&) = delete;
   ScopedNativeScreen& operator=(const ScopedNativeScreen&) = delete;
-  virtual ~ScopedNativeScreen();
-
-  // Create and initialize the screen instance if the screen instance does not
-  // exist yet.
-  void MaybeInit(const base::Location& location = FROM_HERE);
-  void Shutdown();
-
-  Screen* screen() { return screen_.get(); }
-
-  virtual Screen* CreateScreen();
-
- protected:
-  explicit ScopedNativeScreen(bool call_maybe_init,
-                              const base::Location& location = FROM_HERE);
+  ~ScopedNativeScreen();
 
  private:
-  bool maybe_init_called_{false};
   std::unique_ptr<Screen> screen_;
 };
 

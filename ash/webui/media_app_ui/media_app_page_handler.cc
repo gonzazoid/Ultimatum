@@ -9,8 +9,8 @@
 #include "ash/webui/media_app_ui/file_system_access_helpers.h"
 #include "ash/webui/media_app_ui/media_app_ui.h"
 #include "ash/webui/media_app_ui/media_app_ui_delegate.h"
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "content/public/browser/web_contents.h"
@@ -21,7 +21,7 @@ namespace {
 
 void IsFileURLBrowserWritable(
     MediaAppPageHandler::IsFileBrowserWritableCallback callback,
-    absl::optional<storage::FileSystemURL> url) {
+    std::optional<storage::FileSystemURL> url) {
   if (!url.has_value()) {
     std::move(callback).Run(false);
     return;

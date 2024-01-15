@@ -2,14 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/task/sequenced_task_runner.h"
 #include "content/public/test/browser_test.h"
 #include "fuchsia_web/common/string_util.h"
+#include "fuchsia_web/common/test/frame_for_test.h"
 #include "fuchsia_web/common/test/frame_test_util.h"
 #include "fuchsia_web/common/test/test_navigation_listener.h"
 #include "fuchsia_web/common/test/url_request_rewrite_test_util.h"
 #include "fuchsia_web/webengine/browser/frame_impl_browser_test_base.h"
 #include "fuchsia_web/webengine/switches.h"
-#include "fuchsia_web/webengine/test/frame_for_test.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace {
@@ -33,9 +34,10 @@ class RequestMonitoringTest : public FrameImplTestBase {
   void SetUpOnMainThread() override {
     // Accumulate all http requests made to |embedded_test_server| into
     // |accumulated_requests_| container.
-    embedded_test_server()->RegisterRequestMonitor(base::BindRepeating(
-        &RequestMonitoringTest::MonitorRequestOnIoThread,
-        base::Unretained(this), base::SequencedTaskRunnerHandle::Get()));
+    embedded_test_server()->RegisterRequestMonitor(
+        base::BindRepeating(&RequestMonitoringTest::MonitorRequestOnIoThread,
+                            base::Unretained(this),
+                            base::SequencedTaskRunner::GetCurrentDefault()));
 
     ASSERT_TRUE(test_server_handle_ =
                     embedded_test_server()->StartAndReturnHandle());
@@ -288,7 +290,7 @@ IN_PROC_BROWSER_TEST_F(RequestMonitoringTest, UrlRequestRewriteRemoveHeader) {
 
   std::vector<fuchsia::web::UrlRequestRewrite> rewrites;
   rewrites.push_back(CreateRewriteAddHeaders("Test", "Value"));
-  rewrites.push_back(CreateRewriteRemoveHeader(absl::nullopt, "Test"));
+  rewrites.push_back(CreateRewriteRemoveHeader(std::nullopt, "Test"));
   fuchsia::web::UrlRequestRewriteRule rule;
   rule.set_rewrites(std::move(rewrites));
   std::vector<fuchsia::web::UrlRequestRewriteRule> rules;
@@ -328,7 +330,7 @@ IN_PROC_BROWSER_TEST_F(RequestMonitoringTest,
   std::vector<fuchsia::web::UrlRequestRewrite> rewrites;
   rewrites.push_back(CreateRewriteAddHeaders("Test", "Value"));
   rewrites.push_back(
-      CreateRewriteRemoveHeader(absl::make_optional("[pattern]"), "Test"));
+      CreateRewriteRemoveHeader(std::make_optional("[pattern]"), "Test"));
   fuchsia::web::UrlRequestRewriteRule rule;
   rule.set_rewrites(std::move(rewrites));
   std::vector<fuchsia::web::UrlRequestRewriteRule> rules;

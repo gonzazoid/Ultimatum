@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_PAGE_SCROLLING_STICKY_POSITION_SCROLLING_CONSTRAINTS_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_PAGE_SCROLLING_STICKY_POSITION_SCROLLING_CONSTRAINTS_H_
 
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/geometry/physical_rect.h"
 #include "third_party/blink/renderer/platform/geometry/layout_unit.h"
@@ -13,6 +14,7 @@
 
 namespace blink {
 
+class LayoutBoxModelObject;
 class PaintLayer;
 
 // Encapsulates the constraint information for a position: sticky element and
@@ -84,15 +86,10 @@ struct CORE_EXPORT StickyPositionScrollingConstraints final
 
   void Trace(Visitor* visitor) const;
 
-  bool is_anchored_left = false;
-  bool is_anchored_right = false;
-  bool is_anchored_top = false;
-  bool is_anchored_bottom = false;
-
-  LayoutUnit left_offset;
-  LayoutUnit right_offset;
-  LayoutUnit top_offset;
-  LayoutUnit bottom_offset;
+  absl::optional<LayoutUnit> left_inset;
+  absl::optional<LayoutUnit> right_inset;
+  absl::optional<LayoutUnit> top_inset;
+  absl::optional<LayoutUnit> bottom_inset;
 
   // The rectangle in which the sticky box is able to be positioned. This may be
   // smaller than the scroller viewport due to things like padding.
@@ -127,9 +124,10 @@ struct CORE_EXPORT StickyPositionScrollingConstraints final
   //
   // See the implementation of |ComputeStickyOffset| for documentation on how
   // these ancestors are used to correct the offset calculation.
-  Member<const PaintLayer> nearest_sticky_layer_shifting_sticky_box = nullptr;
-  Member<const PaintLayer> nearest_sticky_layer_shifting_containing_block =
+  Member<const LayoutBoxModelObject> nearest_sticky_layer_shifting_sticky_box =
       nullptr;
+  Member<const LayoutBoxModelObject>
+      nearest_sticky_layer_shifting_containing_block = nullptr;
 
   // These fields cache the result of
   // PaintLayer::ContainingScrollContainerLayer().

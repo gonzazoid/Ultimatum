@@ -12,10 +12,11 @@
 #include <queue>
 #include <string>
 
+#include "base/atomic_sequence_num.h"
 #include "base/atomicops.h"
 #include "base/base_export.h"
-#include "base/callback_forward.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback_forward.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_piece.h"
 #include "base/synchronization/waitable_event.h"
@@ -26,12 +27,15 @@
 #include "base/task/thread_pool/task_source.h"
 #include "base/task/thread_pool/tracked_ref.h"
 #include "base/thread_annotations.h"
+#include "base/threading/thread_local.h"
 
 namespace base {
 
 class ConditionVariable;
 
 namespace internal {
+
+class JobTaskSource;
 
 // Determines which tasks are allowed to run.
 enum class CanRunPolicy {
@@ -95,18 +99,25 @@ class BASE_EXPORT TaskTracker {
   // DelayedTaskManager (if delayed). Returns true if this operation is allowed
   // (the operation should be performed if-and-only-if it is). This method may
   // also modify metadata on |task| if desired.
+  // If this returns false, `task` must be leaked by the caller if deleting it
+  // on the current sequence may invoke sequence-affine code that belongs to
+  // another sequence.
   bool WillPostTask(Task* task, TaskShutdownBehavior shutdown_behavior);
 
   // Informs this TaskTracker that |task| that is about to be pushed to a task
   // source with |priority|. Returns true if this operation is allowed (the
   // operation should be performed if-and-only-if it is).
-  [[nodiscard]] bool WillPostTaskNow(const Task& task, TaskPriority priority);
+  [[nodiscard]] bool WillPostTaskNow(const Task& task,
+                                     TaskPriority priority) const;
 
   // Informs this TaskTracker that |task_source| is about to be queued. Returns
   // a RegisteredTaskSource that should be queued if-and-only-if it evaluates to
   // true.
   RegisteredTaskSource RegisterTaskSource(
       scoped_refptr<TaskSource> task_source);
+
+  // Informs this TaskTracker that |task_source| is about to be queued.
+  void WillEnqueueJob(JobTaskSource* task_source);
 
   // Returns true if a task with |priority| can run under to the current policy.
   bool CanRunPriority(TaskPriority priority) const;
@@ -131,6 +142,9 @@ class BASE_EXPORT TaskTracker {
   TrackedRef<TaskTracker> GetTrackedRef() {
     return tracked_ref_factory_.GetTrackedRef();
   }
+
+  void BeginFizzlingBlockShutdownTasks();
+  void EndFizzlingBlockShutdownTasks();
 
   // Returns true if there are task sources that haven't completed their
   // execution (still queued or in progress). If it returns false: the side-
@@ -209,15 +223,12 @@ class BASE_EXPORT TaskTracker {
                                    TaskSource* task_source,
                                    const SequenceToken& token);
 
-  void NOT_TAIL_CALLED RunTaskImpl(Task& task,
+  NOT_TAIL_CALLED void RunTaskImpl(Task& task,
                                    const TaskTraits& traits,
                                    TaskSource* task_source,
                                    const SequenceToken& token);
 
   TaskAnnotator task_annotator_;
-
-  // Suffix for histograms recorded by this TaskTracker.
-  const std::string histogram_label_;
 
   // Indicates whether logging information about TaskPriority::BEST_EFFORT tasks
   // was enabled with a command line switch.
@@ -262,6 +273,9 @@ class BASE_EXPORT TaskTracker {
   // Event instantiated when shutdown starts and signaled when shutdown
   // completes.
   std::unique_ptr<WaitableEvent> shutdown_event_ GUARDED_BY(shutdown_lock_);
+
+  // Used to generate unique |PendingTask::sequence_num| when posting tasks.
+  AtomicSequenceNumber sequence_nums_;
 
   // Ensures all state (e.g. dangling cleaned up workers) is coalesced before
   // destroying the TaskTracker (e.g. in test environments).

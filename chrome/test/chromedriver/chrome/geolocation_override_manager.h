@@ -9,11 +9,8 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "base/values.h"
 #include "chrome/test/chromedriver/chrome/devtools_event_listener.h"
-
-namespace base {
-class DictionaryValue;
-}
 
 class DevToolsClient;
 struct Geoposition;
@@ -37,7 +34,7 @@ class GeolocationOverrideManager : public DevToolsEventListener {
   Status OnConnected(DevToolsClient* client) override;
   Status OnEvent(DevToolsClient* client,
                  const std::string& method,
-                 const base::DictionaryValue& params) override;
+                 const base::Value::Dict& params) override;
 
  private:
   Status ApplyOverrideIfNeeded();

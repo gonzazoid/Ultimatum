@@ -4,23 +4,23 @@
 
 import 'chrome://resources/cr_elements/cr_shared_style.css.js';
 import 'chrome://resources/polymer/v3_0/iron-collapse/iron-collapse.js';
-import '../controls/controlled_radio_button.js';
-import '../controls/settings_radio_group.js';
-import '../controls/settings_toggle_button.js';
+import 'chrome://resources/cr_elements/cr_link_row/cr_link_row.js';
+import '/shared/settings/controls/controlled_radio_button.js';
+import '/shared/settings/controls/settings_radio_group.js';
+import '/shared/settings/controls/settings_toggle_button.js';
 import '../settings_shared.css.js';
 
+import {ControlledRadioButtonElement} from '/shared/settings/controls/controlled_radio_button.js';
+import {SettingsRadioGroupElement} from '/shared/settings/controls/settings_radio_group.js';
+import {SettingsToggleButtonElement} from '/shared/settings/controls/settings_toggle_button.js';
+import {PrefsMixin} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
+import {OpenWindowProxyImpl} from 'chrome://resources/js/open_window_proxy.js';
 import {IronCollapseElement} from 'chrome://resources/polymer/v3_0/iron-collapse/iron-collapse.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {ControlledRadioButtonElement} from '../controls/controlled_radio_button.js';
-import {SettingsRadioGroupElement} from '../controls/settings_radio_group.js';
-import {SettingsToggleButtonElement} from '../controls/settings_toggle_button.js';
 import {loadTimeData} from '../i18n_setup.js';
-import {OpenWindowProxyImpl} from '../open_window_proxy.js';
-import {PrefsMixin} from '../prefs/prefs_mixin.js';
 
 import {getTemplate} from './battery_page.html.js';
-import {PerformanceBrowserProxy, PerformanceBrowserProxyImpl} from './performance_browser_proxy.js';
 import {BatterySaverModeState, PerformanceMetricsProxy, PerformanceMetricsProxyImpl} from './performance_metrics_proxy.js';
 
 export const BATTERY_SAVER_MODE_PREF =
@@ -48,58 +48,45 @@ export class SettingsBatteryPageElement extends SettingsBatteryPageElementBase {
 
   static get properties() {
     return {
-      /**
-       * Possible values for the
-       * 'prefs.performance_tuning.battery_saver_mode.state' preference. These
-       * values map to
-       * performance_manager::user_tuning::prefs::BatterySaverModeState, and
-       * are written to prefs and metrics, so order should not be changed.
-       */
-      batterySaverModeStatePrefValues: {
+      batterySaverModeStateEnum_: {
         readOnly: true,
         type: Object,
-        value: {
-          disabled: BatterySaverModeState.DISABLED,
-          enabledBelowThreshold: BatterySaverModeState.ENABLED_BELOW_THRESHOLD,
-          enabledOnBattery: BatterySaverModeState.ENABLED_ON_BATTERY,
-          enabled: BatterySaverModeState.ENABLED,
+        value: BatterySaverModeState,
+      },
+
+      isBatterySaverModeManagedByOS_: {
+        type: Boolean,
+        value() {
+          return loadTimeData.getBoolean('isBatterySaverModeManagedByOS');
         },
+      },
+
+      numericUncheckedValues_: {
+        type: Array,
+        value: () => [BatterySaverModeState.DISABLED],
       },
     };
   }
 
-  batterySaverModeStatePrefValues: {
-    disabled: number,
-    enabledBelowThreshold: number,
-    enabledOnBattery: number,
-    enabled: number,
-  };
-
-  private browserProxy_: PerformanceBrowserProxy =
-      PerformanceBrowserProxyImpl.getInstance();
+  private numericUncheckedValues_: BatterySaverModeState[];
   private metricsProxy_: PerformanceMetricsProxy =
       PerformanceMetricsProxyImpl.getInstance();
 
   private isBatterySaverModeEnabled_(value: number): boolean {
-    return value !== this.batterySaverModeStatePrefValues.disabled;
-  }
-
-  private onLearnMoreOrSendFeedbackClick_(e: CustomEvent<string>) {
-    switch (e.detail) {
-      case 'batterySaverLearnMore':
-        OpenWindowProxyImpl.getInstance().openURL(
-            loadTimeData.getString('batterySaverLearnMoreUrl'));
-        break;
-      case 'batterySaverSendFeedback':
-        this.browserProxy_.openBatterySaverFeedbackDialog();
-        break;
-    }
+    return value !== BatterySaverModeState.DISABLED;
   }
 
   private onChange_() {
     this.metricsProxy_.recordBatterySaverModeChanged(
-        this.getPref(BATTERY_SAVER_MODE_PREF).value);
+        this.getPref<number>(BATTERY_SAVER_MODE_PREF).value);
   }
+
+  // <if expr="is_chromeos">
+  private openOsPowerSettings_() {
+    OpenWindowProxyImpl.getInstance().openUrl(
+        loadTimeData.getString('osPowerSettingsUrl'));
+  }
+  // </if>
 }
 
 declare global {

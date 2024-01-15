@@ -14,10 +14,6 @@
 #import "ios/web/shell/test/earl_grey/web_shell_test_case.h"
 #import "net/test/embedded_test_server/embedded_test_server.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
 
 const char kLongPage1[] = "/tall_page.html";
@@ -101,9 +97,7 @@ void ScrollLongPageToTop(const GURL& url) {
 
 // Tests that the content offset of the webview scroll view is {0, 0} after a
 // load.
-// // TODO(crbug.com/1363701): Investigate flakiness on
-// ios-simulator-full-config bots.
-- (void)DISABLED_testZeroContentOffsetAfterLoad {
+- (void)testZeroContentOffsetAfterLoad {
   // Set up the file-based server to load the tall page.
   const GURL baseURL = self.testServer->GetURL(kLongPage1);
   [ShellEarlGrey loadURL:baseURL];

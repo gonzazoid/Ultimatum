@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,9 +40,11 @@ namespace blink {
 // losing some audio at the end of the recording.
 class AudioTrackMojoEncoder : public AudioTrackEncoder {
  public:
-  AudioTrackMojoEncoder(AudioTrackRecorder::CodecId codec,
-                        OnEncodedAudioCB on_encoded_audio_cb,
-                        uint32_t bits_per_second = 0);
+  AudioTrackMojoEncoder(
+      scoped_refptr<base::SequencedTaskRunner> encoder_task_runner,
+      AudioTrackRecorder::CodecId codec,
+      OnEncodedAudioCB on_encoded_audio_cb,
+      uint32_t bits_per_second = 0);
 
   AudioTrackMojoEncoder(const AudioTrackMojoEncoder&) = delete;
   AudioTrackMojoEncoder& operator=(const AudioTrackMojoEncoder&) = delete;
@@ -58,12 +60,7 @@ class AudioTrackMojoEncoder : public AudioTrackEncoder {
   void EncodeAudio(std::unique_ptr<media::AudioBus> input_bus,
                    base::TimeTicks capture_time) override;
 
-  // Must be called on `encoder_thread_` before destructing this class.
-  void Shutdown() override;
-
  private:
-  ~AudioTrackMojoEncoder() override;
-
   // Run when the platform encoder finishes initializing, will flush
   // `input_queue_`.
   void OnInitializeDone(media::EncoderStatus status);
@@ -83,6 +80,8 @@ class AudioTrackMojoEncoder : public AudioTrackEncoder {
     std::unique_ptr<media::AudioBus> audio_bus;
     const base::TimeTicks capture_time;
   };
+
+  const scoped_refptr<base::SequencedTaskRunner> encoder_task_runner_;
 
   AudioTrackRecorder::CodecId codec_;
 

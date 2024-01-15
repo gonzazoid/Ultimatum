@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/test_switches.h"
@@ -54,8 +54,10 @@ class CredentialProviderSigninDialogWinBaseTest : public InProcessBrowserTest {
   content::WebContents* web_contents() { return web_contents_; }
   virtual void WaitForDialogToLoad();
 
-  raw_ptr<views::WebDialogView> web_view_ = nullptr;
-  raw_ptr<content::WebContents> web_contents_ = nullptr;
+  raw_ptr<views::WebDialogView, AcrossTasksDanglingUntriaged> web_view_ =
+      nullptr;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> web_contents_ =
+      nullptr;
 };
 
 CredentialProviderSigninDialogWinBaseTest::
@@ -87,7 +89,7 @@ class CredentialProviderSigninDialogWinDialogTest
  protected:
   CredentialProviderSigninDialogWinDialogTest();
 
-  void SendSigninCompleteMessage(const base::Value& value);
+  void SendSigninCompleteMessage(const base::Value::Dict& value);
   void SendValidSigninCompleteMessage();
   void WaitForSigninCompleteMessage();
 
@@ -117,7 +119,7 @@ CredentialProviderSigninDialogWinDialogTest::
     : CredentialProviderSigninDialogWinBaseTest() {}
 
 void CredentialProviderSigninDialogWinDialogTest::SendSigninCompleteMessage(
-    const base::Value& value) {
+    const base::Value::Dict& value) {
   std::string json_string;
   EXPECT_TRUE(base::JSONWriter::Write(value, &json_string));
 
@@ -204,7 +206,7 @@ IN_PROC_BROWSER_TEST_F(CredentialProviderSigninDialogWinDialogTest,
 
   EXPECT_TRUE(signin_complete_called_);
   EXPECT_EQ(result_dict_.size(), 1u);
-  absl::optional<int> exit_code =
+  std::optional<int> exit_code =
       result_dict_.FindInt(credential_provider::kKeyExitCode);
   EXPECT_TRUE(exit_code);
   EXPECT_EQ(credential_provider::kUiecAbort, exit_code.value());
@@ -363,18 +365,18 @@ IN_PROC_BROWSER_TEST_P(CredentialProviderSigninDialogWinDialogExitCodeTest,
                        SigninResultWithExitCode) {
   ShowSigninDialog(base::CommandLine(base::CommandLine::NoProgram::NO_PROGRAM));
   WaitForDialogToLoad();
-  base::Value signin_result = test_data_storage_.MakeValidSignInResponseValue();
+  base::Value::Dict signin_result =
+      test_data_storage_.MakeValidSignInResponseValue();
 
   int expected_error_code = GetParam();
   bool should_succeed = expected_error_code ==
                         static_cast<int>(credential_provider::kUiecSuccess);
-  signin_result.SetKey(credential_provider::kKeyExitCode,
-                       base::Value(expected_error_code));
+  signin_result.Set(credential_provider::kKeyExitCode, expected_error_code);
 
   SendSigninCompleteMessage(signin_result);
   EXPECT_TRUE(signin_complete_called_);
   EXPECT_EQ(exit_code_, expected_error_code);
-  absl::optional<int> exit_code_value =
+  std::optional<int> exit_code_value =
       result_dict_.FindInt(credential_provider::kKeyExitCode);
   EXPECT_EQ(exit_code_value, expected_error_code);
 

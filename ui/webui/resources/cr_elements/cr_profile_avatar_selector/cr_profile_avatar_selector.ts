@@ -14,9 +14,9 @@ import '//resources/polymer/v3_0/paper-styles/color.js';
 import '//resources/polymer/v3_0/paper-tooltip/paper-tooltip.js';
 import './cr_profile_avatar_selector_grid.js';
 
+import {assert} from '//resources/js/assert.js';
+import {getImage} from '//resources/js/icon.js';
 import {DomRepeatEvent, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
-import {getImage} from '../../js/icon.js';
 
 import {getTemplate} from './cr_profile_avatar_selector.html.js';
 
@@ -124,10 +124,18 @@ export class CrProfileAvatarSelectorElement extends PolymerElement {
     return getImage(iconUrl);
   }
 
-  private onAvatarTap_(e: DomRepeatEvent<AvatarIcon>) {
+  private onAvatarClick_(e: DomRepeatEvent<AvatarIcon>) {
     // |selectedAvatar| is set to pass back selection to the owner of this
     // component.
     this.selectedAvatar = e.model.item;
+
+    // Autoscroll to selected avatar if it is not completely visible.
+    const avatarList =
+        this.shadowRoot!.querySelectorAll<HTMLElement>('.avatar-container');
+    assert(avatarList.length > 0);
+    const selectedAvatarElement = avatarList[e.model.index];
+    assert(selectedAvatarElement!.classList.contains('iron-selected'));
+    selectedAvatarElement!.scrollIntoViewIfNeeded();
   }
 }
 

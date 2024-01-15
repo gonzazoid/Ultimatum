@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/one_shot_event.h"
 #include "base/time/tick_clock.h"
@@ -92,9 +92,6 @@ void LockScreenProfileCreatorImpl::OnExtensionSystemReady() {
 void LockScreenProfileCreatorImpl::OnProfileReady(
     const base::TimeTicks& start_time,
     Profile* profile) {
-  UMA_HISTOGRAM_BOOLEAN("Apps.LockScreen.AppsProfile.Creation.Success",
-                        profile != nullptr);
-
   // On error, bail out - this will cause the lock screen apps to remain
   // unavailable on the device.
   if (!profile) {
@@ -103,9 +100,6 @@ void LockScreenProfileCreatorImpl::OnProfileReady(
   }
 
   profile->GetPrefs()->SetBoolean(prefs::kForceEphemeralProfiles, true);
-
-  UMA_HISTOGRAM_TIMES("Apps.LockScreen.AppsProfile.Creation.Duration",
-                      tick_clock_->NowTicks() - start_time);
 
   OnLockScreenProfileCreated(profile);
 }

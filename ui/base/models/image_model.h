@@ -5,8 +5,9 @@
 #ifndef UI_BASE_MODELS_IMAGE_MODEL_H_
 #define UI_BASE_MODELS_IMAGE_MODEL_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/color/color_id.h"
@@ -68,10 +69,10 @@ class COMPONENT_EXPORT(UI_BASE) VectorIconModel {
                   int icon_size,
                   const gfx::VectorIcon* badge_icon);
 
-  const gfx::VectorIcon* vector_icon_ = nullptr;
+  raw_ptr<const gfx::VectorIcon> vector_icon_ = nullptr;
   int icon_size_ = 0;
   absl::variant<ColorId, SkColor> color_ = gfx::kPlaceholderColor;
-  const gfx::VectorIcon* badge_icon_ = nullptr;
+  raw_ptr<const gfx::VectorIcon> badge_icon_ = nullptr;
 };
 
 // ImageModel encapsulates one of several image representations. See FromXXXX

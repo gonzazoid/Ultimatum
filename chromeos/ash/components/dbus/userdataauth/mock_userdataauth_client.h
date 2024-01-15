@@ -37,57 +37,10 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) MockUserDataAuthClient
                UnmountCallback callback),
               (override));
   MOCK_METHOD(void,
-              Mount,
-              (const ::user_data_auth::MountRequest& request,
-               MountCallback callback),
-              (override));
-  MOCK_METHOD(void,
               Remove,
               (const ::user_data_auth::RemoveRequest& request,
                RemoveCallback callback),
               (override));
-  MOCK_METHOD(void,
-              GetKeyData,
-              (const ::user_data_auth::GetKeyDataRequest& request,
-               GetKeyDataCallback callback),
-              (override));
-  MOCK_METHOD(void,
-              CheckKey,
-              (const ::user_data_auth::CheckKeyRequest& request,
-               CheckKeyCallback callback),
-              (override));
-  MOCK_METHOD(void,
-              AddKey,
-              (const ::user_data_auth::AddKeyRequest& request,
-               AddKeyCallback callback),
-              (override));
-  MOCK_METHOD(void,
-              RemoveKey,
-              (const ::user_data_auth::RemoveKeyRequest& request,
-               RemoveKeyCallback callback),
-              (override));
-  MOCK_METHOD(void,
-              MassRemoveKeys,
-              (const ::user_data_auth::MassRemoveKeysRequest& request,
-               MassRemoveKeysCallback callback),
-              (override));
-  MOCK_METHOD(void,
-              MigrateKey,
-              (const ::user_data_auth::MigrateKeyRequest& request,
-               MigrateKeyCallback callback),
-              (override));
-  MOCK_METHOD(
-      void,
-      StartFingerprintAuthSession,
-      (const ::user_data_auth::StartFingerprintAuthSessionRequest& request,
-       StartFingerprintAuthSessionCallback callback),
-      (override));
-  MOCK_METHOD(
-      void,
-      EndFingerprintAuthSession,
-      (const ::user_data_auth::EndFingerprintAuthSessionRequest& request,
-       EndFingerprintAuthSessionCallback callback),
-      (override));
   MOCK_METHOD(void,
               StartMigrateToDircrypto,
               (const ::user_data_auth::StartMigrateToDircryptoRequest& request,
@@ -114,21 +67,6 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) MockUserDataAuthClient
                StartAuthSessionCallback callback),
               (override));
   MOCK_METHOD(void,
-              AuthenticateAuthSession,
-              (const ::user_data_auth::AuthenticateAuthSessionRequest& request,
-               AuthenticateAuthSessionCallback callback),
-              (override));
-  MOCK_METHOD(void,
-              AddCredentials,
-              (const ::user_data_auth::AddCredentialsRequest& request,
-               AddCredentialsCallback callback),
-              (override));
-  MOCK_METHOD(void,
-              UpdateCredential,
-              (const ::user_data_auth::UpdateCredentialRequest& request,
-               UpdateCredentialCallback callback),
-              (override));
-  MOCK_METHOD(void,
               PrepareGuestVault,
               (const ::user_data_auth::PrepareGuestVaultRequest& request,
                PrepareGuestVaultCallback callback),
@@ -142,6 +80,11 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) MockUserDataAuthClient
               CreatePersistentUser,
               (const ::user_data_auth::CreatePersistentUserRequest& request,
                CreatePersistentUserCallback callback),
+              (override));
+  MOCK_METHOD(void,
+              RestoreDeviceKey,
+              (const ::user_data_auth::RestoreDeviceKeyRequest& request,
+               RestoreDeviceKeyCallback callback),
               (override));
   MOCK_METHOD(void,
               PreparePersistentVault,
@@ -183,6 +126,12 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) MockUserDataAuthClient
               (const ::user_data_auth::ListAuthFactorsRequest& request,
                ListAuthFactorsCallback callback),
               (override));
+  MOCK_METHOD(
+      void,
+      GetAuthFactorExtendedInfo,
+      (const ::user_data_auth::GetAuthFactorExtendedInfoRequest& request,
+       GetAuthFactorExtendedInfoCallback callback),
+      (override));
   MOCK_METHOD(void,
               RemoveAuthFactor,
               (const ::user_data_auth::RemoveAuthFactorRequest& request,
@@ -207,6 +156,16 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) MockUserDataAuthClient
               TerminateAuthFactor,
               (const ::user_data_auth::TerminateAuthFactorRequest& request,
                TerminateAuthFactorCallback callback),
+              (override));
+  MOCK_METHOD(void,
+              GetArcDiskFeatures,
+              (const ::user_data_auth::GetArcDiskFeaturesRequest& request,
+               GetArcDiskFeaturesCallback callback),
+              (override));
+  MOCK_METHOD(void,
+              GetRecoverableKeyStores,
+              (const ::user_data_auth::GetRecoverableKeyStoresRequest& request,
+               GetRecoverableKeyStoresCallback),
               (override));
 };
 

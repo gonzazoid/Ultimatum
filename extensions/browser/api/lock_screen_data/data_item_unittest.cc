@@ -8,10 +8,10 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/values.h"
@@ -66,14 +66,13 @@ void ReadCallback(base::OnceClosure callback,
   std::move(callback).Run();
 }
 
-void GetRegisteredItemsCallback(
-    base::OnceClosure callback,
-    OperationResult* result_out,
-    std::unique_ptr<base::DictionaryValue>* value_out,
-    OperationResult result,
-    std::unique_ptr<base::DictionaryValue> value) {
+void GetRegisteredItemsCallback(base::OnceClosure callback,
+                                OperationResult* result_out,
+                                base::Value::Dict* dict_out,
+                                OperationResult result,
+                                base::Value::Dict dict) {
   *result_out = result;
-  *value_out = std::move(value);
+  *dict_out = std::move(dict);
   std::move(callback).Run();
 }
 
@@ -170,29 +169,26 @@ class DataItemTest : public testing::Test {
 
   scoped_refptr<const Extension> CreateTestExtension(
       const std::string& extension_id) {
-    DictionaryBuilder app_builder;
+    base::Value::Dict app_builder;
     app_builder.Set("background",
-                    DictionaryBuilder()
-                        .Set("scripts", ListBuilder().Append("script").Build())
-                        .Build());
-    ListBuilder app_handlers_builder;
-    app_handlers_builder.Append(DictionaryBuilder()
+                    base::Value::Dict().Set(
+                        "scripts", base::Value::List().Append("script")));
+    base::Value::List app_handlers_builder;
+    app_handlers_builder.Append(base::Value::Dict()
                                     .Set("action", "new_note")
-                                    .Set("enabled_on_lock_screen", true)
-                                    .Build());
+                                    .Set("enabled_on_lock_screen", true));
     scoped_refptr<const Extension> extension =
         ExtensionBuilder()
             .SetID(extension_id)
             .SetManifest(
-                DictionaryBuilder()
+                base::Value::Dict()
                     .Set("name", "Test app")
                     .Set("version", "1.0")
                     .Set("manifest_version", 2)
-                    .Set("app", app_builder.Build())
-                    .Set("action_handlers", app_handlers_builder.Build())
+                    .Set("app", std::move(app_builder))
+                    .Set("action_handlers", std::move(app_handlers_builder))
                     .Set("permissions",
-                         ListBuilder().Append("lockScreen").Build())
-                    .Build())
+                         base::Value::List().Append("lockScreen")))
             .Build();
     ExtensionRegistry::Get(context_.get())->AddEnabled(extension);
     return extension;
@@ -256,21 +252,21 @@ class DataItemTest : public testing::Test {
   OperationResult GetRegisteredItemIds(const std::string& extension_id,
                                        std::set<std::string>* items) {
     OperationResult result = OperationResult::kFailed;
-    std::unique_ptr<base::DictionaryValue> items_value;
+    base::Value::Dict items_dict;
 
     base::RunLoop run_loop;
     DataItem::GetRegisteredValuesForExtension(
         context_.get(), value_store_cache_.get(), task_runner_.get(),
         extension_id,
         base::BindOnce(&GetRegisteredItemsCallback, run_loop.QuitClosure(),
-                       &result, &items_value));
+                       &result, &items_dict));
     run_loop.Run();
 
     if (result != OperationResult::kSuccess)
       return result;
 
     items->clear();
-    for (const auto item : items_value->GetDict()) {
+    for (const auto item : items_dict) {
       EXPECT_EQ(0u, items->count(item.first));
       items->insert(item.first);
     }

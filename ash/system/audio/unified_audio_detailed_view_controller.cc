@@ -4,7 +4,6 @@
 
 #include "ash/system/audio/unified_audio_detailed_view_controller.h"
 
-#include "ash/constants/ash_features.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/audio/audio_detailed_view.h"
 #include "ash/system/tray/detailed_view_delegate.h"
@@ -23,11 +22,13 @@ UnifiedAudioDetailedViewController::~UnifiedAudioDetailedViewController() {
   CrasAudioHandler::Get()->RemoveAudioObserver(this);
 }
 
-views::View* UnifiedAudioDetailedViewController::CreateView() {
+std::unique_ptr<views::View> UnifiedAudioDetailedViewController::CreateView() {
   DCHECK(!view_);
-  view_ = new AudioDetailedView(detailed_view_delegate_.get());
+  auto view =
+      std::make_unique<AudioDetailedView>(detailed_view_delegate_.get());
+  view_ = view.get();
   view_->Update();
-  return view_;
+  return view;
 }
 
 std::u16string UnifiedAudioDetailedViewController::GetAccessibleName() const {
@@ -36,18 +37,25 @@ std::u16string UnifiedAudioDetailedViewController::GetAccessibleName() const {
 }
 
 void UnifiedAudioDetailedViewController::OnAudioNodesChanged() {
-  if (view_)
-    view_->Update();
+  UpdateView();
 }
 
 void UnifiedAudioDetailedViewController::OnActiveOutputNodeChanged() {
-  if (view_)
-    view_->Update();
+  UpdateView();
 }
 
 void UnifiedAudioDetailedViewController::OnActiveInputNodeChanged() {
-  if (view_)
+  UpdateView();
+}
+
+void UnifiedAudioDetailedViewController::OnNoiseCancellationStateChanged() {
+  UpdateView();
+}
+
+void UnifiedAudioDetailedViewController::UpdateView() {
+  if (view_) {
     view_->Update();
+  }
 }
 
 }  // namespace ash

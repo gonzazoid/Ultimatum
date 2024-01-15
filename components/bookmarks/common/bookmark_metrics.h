@@ -13,6 +13,17 @@ struct UrlLoadStats;
 
 namespace metrics {
 
+// Enum for folder categories, reported through UMA. Present in enums.xml as
+// BookmarkFolderType. New values should be added at the end and things should
+// not be renumbered.
+enum class BookmarkFolderTypeForUMA {
+  kBookmarksBar = 0,
+  kOtherBookmarks = 1,
+  kMobileBookmarks = 2,
+  kUserGeneratedFolder = 3,
+  kMaxValue = kUserGeneratedFolder,
+};
+
 // Enum for possible sources for edits, reported through UMA. Present in
 // enums.xml as BookmarkEditSource. New values should be added at the end
 // and things should not be renumbered.
@@ -25,13 +36,37 @@ enum class BookmarkEditSource {
   kMaxValue = kOther,
 };
 
+// An enum class to add storage state as a suffix to metrics.
+enum class StorageStateForUma {
+  // Account storage.
+  kAccount,
+  // Local storage that is not being synced at the time the metric is
+  // recorded.
+  kLocalOnly,
+  // Local storage that is being synced at the time the metric is recorded.
+  kSyncEnabled,
+};
+
 // Records when a bookmark is added by the user.
-void RecordBookmarkAdded();
+void RecordUrlBookmarkAdded(BookmarkFolderTypeForUMA parent,
+                            StorageStateForUma storage_state);
+
+// Records when a bookmark folder is added by the user.
+void RecordBookmarkFolderAdded(BookmarkFolderTypeForUMA parent,
+                               StorageStateForUma storage_state);
+
+// Records when a bookmark is removed.
+void RecordBookmarkRemoved(BookmarkEditSource source);
 
 // Records when a bookmark is opened by the user.
 void RecordBookmarkOpened(base::Time now,
                           base::Time date_last_used,
-                          base::Time date_added);
+                          base::Time date_added,
+                          StorageStateForUma storage_state);
+
+// Records when a bookmark or bookmark folder is moved to a different parent
+// folder.
+void RecordBookmarkMovedTo(BookmarkFolderTypeForUMA new_parent);
 
 // Records the time since the last save with a 1 hour max. The first save will
 // record the time since startup.
@@ -39,7 +74,8 @@ void RecordTimeSinceLastScheduledSave(base::TimeDelta delta);
 
 // Records the time it takes to load the bookmark model on startup with a 10
 // second max, the time starts when BookmarkModel.Load is called.
-void RecordTimeToLoadAtStartup(base::TimeDelta delta);
+void RecordTimeToLoadAtStartup(base::TimeDelta delta,
+                               StorageStateForUma storage_state);
 
 // Records size of the bookmark file at startup.
 void RecordFileSizeAtStartup(int64_t total_bytes);

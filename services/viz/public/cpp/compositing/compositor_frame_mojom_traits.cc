@@ -41,6 +41,12 @@ bool StructTraits<viz::mojom::CompositorFrameDataView, viz::CompositorFrame>::
   // Ensure that all render passes referenced by shared elements are present in
   // the CompositorFrame.
   for (const auto& directive : out->metadata.transition_directives) {
+    if (directive.type() !=
+        viz::CompositorFrameTransitionDirective::Type::kSave) {
+      DCHECK(directive.shared_elements().empty());
+      continue;
+    }
+
     for (const auto& shared_element : directive.shared_elements()) {
       if (shared_element.render_pass_id.is_null())
         continue;
@@ -49,6 +55,15 @@ bool StructTraits<viz::mojom::CompositorFrameDataView, viz::CompositorFrame>::
                             out->render_pass_list)) {
         return false;
       }
+    }
+  }
+
+  // Ensure that all region capture bounds are contained within the compositor
+  // frame.
+  gfx::Rect compositor_frame_bounds(out->size_in_pixels());
+  for (const auto& crop_id_and_bounds : out->metadata.capture_bounds.bounds()) {
+    if (!compositor_frame_bounds.Contains(crop_id_and_bounds.second)) {
+      return false;
     }
   }
 

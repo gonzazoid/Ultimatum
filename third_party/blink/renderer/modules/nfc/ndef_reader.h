@@ -31,7 +31,7 @@ class NFCProxy;
 class ScopedAbortState;
 class ScriptPromiseResolver;
 
-class MODULES_EXPORT NDEFReader : public EventTargetWithInlineData,
+class MODULES_EXPORT NDEFReader : public EventTarget,
                                   public ActiveScriptWrappable<NDEFReader>,
                                   public ExecutionContextLifecycleObserver {
   DEFINE_WRAPPERTYPEINFO();
@@ -88,18 +88,16 @@ class MODULES_EXPORT NDEFReader : public EventTargetWithInlineData,
   // ExecutionContextLifecycleObserver overrides.
   void ContextDestroyed() override;
 
-  NFCProxy* GetNfcProxy() const;
-
   void ReadAbort(AbortSignal* signal);
   void ReadOnRequestCompleted(device::mojom::blink::NDEFErrorPtr error);
 
-  void WriteAbort(AbortSignal* signal);
+  void WriteAbort();
   void WriteOnRequestCompleted(
       ScriptPromiseResolver* resolver,
       std::unique_ptr<ScopedAbortState> scoped_abort_state,
       device::mojom::blink::NDEFErrorPtr error);
 
-  void MakeReadOnlyAbort(AbortSignal* signal);
+  void MakeReadOnlyAbort();
   void MakeReadOnlyOnRequestCompleted(
       ScriptPromiseResolver* resolver,
       std::unique_ptr<ScopedAbortState> scoped_abort_state,
@@ -124,6 +122,8 @@ class MODULES_EXPORT NDEFReader : public EventTargetWithInlineData,
       const NDEFMakeReadOnlyOptions* options,
       mojom::blink::PermissionStatus status);
 
+  Member<NFCProxy> nfc_proxy_;
+
   // |scan_resolver_| is kept here to handle Mojo connection failures because in
   // that case the callback passed to Watch() won't be called and
   // mojo::WrapCallbackWithDefaultInvokeIfNotRun() is forbidden in Blink.
@@ -140,13 +140,11 @@ class MODULES_EXPORT NDEFReader : public EventTargetWithInlineData,
   // in that case the callback passed to Push() won't be called and
   // mojo::WrapCallbackWithDefaultInvokeIfNotRun() is forbidden in Blink.
   HeapHashSet<Member<ScriptPromiseResolver>> write_requests_;
-  Member<AbortSignal> write_signal_;
 
   // |make_read_only_requests_| are kept here to handle Mojo connection failures
   // because in that case the callback passed to MakeReadOnly() won't be called
   // and mojo::WrapCallbackWithDefaultInvokeIfNotRun() is forbidden in Blink.
   HeapHashSet<Member<ScriptPromiseResolver>> make_read_only_requests_;
-  Member<AbortSignal> make_read_only_signal_;
 };
 
 }  // namespace blink

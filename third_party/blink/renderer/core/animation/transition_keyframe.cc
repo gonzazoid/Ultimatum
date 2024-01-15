@@ -45,13 +45,13 @@ void TransitionKeyframe::AddKeyframePropertiesToV8Object(
 
   Document& document = element->GetDocument();
   StyleResolverState state(document, *element);
-  state.SetStyle(document.GetStyleResolver().CreateComputedStyle());
+  state.SetStyle(document.GetStyleResolver().InitialStyle());
   CSSInterpolationTypesMap map(document.GetPropertyRegistry(), document);
-  CSSInterpolationEnvironment environment(map, state, nullptr, nullptr);
+  CSSInterpolationEnvironment environment(map, state);
   value_->GetType().Apply(value_->GetInterpolableValue(),
                           value_->GetNonInterpolableValue(), environment);
 
-  const ComputedStyle* style = state.Style();
+  const ComputedStyle* style = state.TakeStyle();
   String property_value =
       AnimationUtils::KeyframeValueFromComputedStyle(
           property_, *style, document, element->GetLayoutObject())
@@ -59,10 +59,11 @@ void TransitionKeyframe::AddKeyframePropertiesToV8Object(
 
   String property_name =
       AnimationInputHelpers::PropertyHandleToKeyframeAttribute(property_);
-  object_builder.Add(property_name, property_value);
+  object_builder.AddString(property_name, property_value);
 }
 
 void TransitionKeyframe::Trace(Visitor* visitor) const {
+  visitor->Trace(value_);
   visitor->Trace(compositor_value_);
   Keyframe::Trace(visitor);
 }
@@ -95,6 +96,7 @@ TransitionKeyframe::PropertySpecificKeyframe::CreateInterpolation(
 
 void TransitionKeyframe::PropertySpecificKeyframe::Trace(
     Visitor* visitor) const {
+  visitor->Trace(value_);
   visitor->Trace(compositor_value_);
   Keyframe::PropertySpecificKeyframe::Trace(visitor);
 }

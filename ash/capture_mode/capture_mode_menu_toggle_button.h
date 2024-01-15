@@ -5,9 +5,9 @@
 #ifndef ASH_CAPTURE_MODE_CAPTURE_MODE_MENU_TOGGLE_BUTTON_H_
 #define ASH_CAPTURE_MODE_CAPTURE_MODE_MENU_TOGGLE_BUTTON_H_
 
-#include "ash/capture_mode/capture_mode_session_focus_cycler.h"
+#include "ash/style/switch.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
-#include "ui/views/controls/button/toggle_button.h"
 
 namespace gfx {
 struct VectorIcon;
@@ -21,10 +21,8 @@ class Label;
 namespace ash {
 
 // A view section in the capture mode settings menu that consists of a menu item
-// with a toggle button.
-class CaptureModeMenuToggleButton
-    : public views::View,
-      public CaptureModeSessionFocusCycler::HighlightableView {
+// with a switch (toggle button).
+class CaptureModeMenuToggleButton : public views::View {
  public:
   METADATA_HEADER(CaptureModeMenuToggleButton);
 
@@ -37,15 +35,17 @@ class CaptureModeMenuToggleButton
       delete;
   ~CaptureModeMenuToggleButton() override;
 
-  // CaptureModeSessionFocusCycler::HighlightableView:
-  views::View* GetView() override;
+  Switch* toggle_button() { return toggle_button_; }
 
-  views::ToggleButton* toggle_button_for_testing() { return toggle_button_; }
+  // views::View
+  void OnThemeChanged() override;
 
  private:
-  views::ImageView* icon_view_;
-  views::Label* label_view_;
-  views::ToggleButton* toggle_button_;
+  raw_ptr<views::ImageView> icon_view_;
+  raw_ptr<views::Label> label_view_;
+
+  // Toggles between enabling and disabling the capture mode demo tools feature.
+  raw_ptr<Switch> toggle_button_;
 };
 
 }  // namespace ash

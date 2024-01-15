@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/types/strong_alias.h"
 #include "mojo/public/cpp/system/data_pipe.h"
@@ -56,7 +56,7 @@ class MODULES_EXPORT IncomingStream final
   ReadableStream* Readable() const {
     DVLOG(1) << "IncomingStream::readable() called";
 
-    return readable_;
+    return readable_.Get();
   }
 
   // Called from WebTransport via a WebTransportStream class. May execute
@@ -93,8 +93,12 @@ class MODULES_EXPORT IncomingStream final
   // becomes available.
   void ReadFromPipeAndEnqueue(ExceptionState&);
 
-  // Copies a sequence of bytes into an ArrayBuffer and enqueues it.
-  void EnqueueBytes(const void* source, uint32_t byte_length, ExceptionState&);
+  // Responds current BYOB request or copies a sequence of bytes into an
+  // ArrayBuffer and enqueues it if there is no BYOB request. Returns the size
+  // of bytes responded or copied.
+  uint32_t RespondBYOBRequestOrEnqueueBytes(const void* source,
+                                            uint32_t byte_length,
+                                            ExceptionState&);
 
   // Closes |readable_|, and resets |data_pipe_|.
   void CloseAbortAndReset(ExceptionState&);

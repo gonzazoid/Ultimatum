@@ -23,10 +23,11 @@ bool StructTraits<network::mojom::URLLoaderCompletionStatusDataView,
          network::URLLoaderCompletionStatus* out) {
   if (!data.ReadCompletionTime(&out->completion_time) ||
       !data.ReadCorsErrorStatus(&out->cors_error_status) ||
+      !data.ReadPrivateNetworkAccessPreflightResult(
+          &out->private_network_access_preflight_result) ||
       !data.ReadTrustTokenOperationStatus(&out->trust_token_operation_status) ||
       !data.ReadSslInfo(&out->ssl_info) ||
       !data.ReadBlockedByResponseReason(&out->blocked_by_response_reason) ||
-      !data.ReadProxyServer(&out->proxy_server) ||
       !data.ReadResolveErrorInfo(&out->resolve_error_info)) {
     return false;
   }
@@ -40,7 +41,6 @@ bool StructTraits<network::mojom::URLLoaderCompletionStatusDataView,
   out->decoded_body_length = data.decoded_body_length();
   out->should_report_corb_blocking = data.should_report_corb_blocking();
   out->should_collapse_initiator = data.should_collapse_initiator();
-  out->pervasive_payload_requested = data.pervasive_payload_requested();
   return true;
 }
 

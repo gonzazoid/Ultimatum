@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 
+#include "base/containers/contains.h"
 #include "base/metrics/histogram_macros.h"
 #include "gpu/command_buffer/service/shader_manager.h"
 #include "third_party/angle/src/common/angle_version_info.h"
@@ -19,10 +20,17 @@ namespace gles2 {
 ProgramCache::ScopedCacheUse::ScopedCacheUse(ProgramCache* cache,
                                              CacheProgramCallback callback)
     : cache_(cache) {
-  cache_->cache_program_callback_ = callback;
+  base::AutoLock auto_lock(cache_->lock_);
+  // The existing callback should be null, otherwise we'll overwrite it.
+  DCHECK(!cache_->cache_program_callback_);
+  cache_->cache_program_callback_ = std::move(callback);
 }
 
 ProgramCache::ScopedCacheUse::~ScopedCacheUse() {
+  base::AutoLock auto_lock(cache_->lock_);
+  // The callback should be the one installed by the constructor. The DCHECK
+  // doesn't exactly check that, but checking for non-null is a cheap second.
+  DCHECK(cache_->cache_program_callback_);
   cache_->cache_program_callback_.Reset();
 }
 
@@ -42,10 +50,7 @@ bool ProgramCache::HasSuccessfullyCompiledShader(
   ComputeShaderHash(shader_signature, sha);
   const std::string sha_string(sha, kHashLength);
 
-  if (compiled_shaders_.find(sha_string) != compiled_shaders_.end()) {
-    return true;
-  }
-  return false;
+  return base::Contains(compiled_shaders_, sha_string);
 }
 
 ProgramCache::LinkedProgramStatus ProgramCache::GetLinkedProgramStatus(

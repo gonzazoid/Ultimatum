@@ -8,7 +8,7 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/run_loop.h"
 #include "base/test/mock_log.h"
@@ -18,7 +18,6 @@
 #include "chrome/browser/media/router/providers/cast/cast_session_client_impl.h"
 #include "chrome/browser/media/router/providers/cast/mock_app_activity.h"
 #include "chrome/browser/media/router/providers/cast/test_util.h"
-#include "chrome/browser/media/router/providers/common/buffered_message_sender.h"
 #include "chrome/browser/media/router/test/mock_mojo_media_router.h"
 #include "chrome/browser/media/router/test/provider_test_helpers.h"
 #include "components/media_router/common/providers/cast/channel/cast_test_util.h"
@@ -73,10 +72,10 @@ class MockPresentationConnection : public blink::mojom::PresentationConnection {
 
 }  // namespace
 
-#define EXPECT_ERROR_LOG(matcher)                                \
-  if (DLOG_IS_ON(ERROR)) {                                       \
-    EXPECT_CALL(log_, Log(logging::LOG_ERROR, _, _, _, matcher)) \
-        .WillOnce(Return(true)); /* suppress logging */          \
+#define EXPECT_ERROR_LOG(matcher)                                    \
+  if (DLOG_IS_ON(ERROR)) {                                           \
+    EXPECT_CALL(log_, Log(logging::LOGGING_ERROR, _, _, _, matcher)) \
+        .WillOnce(Return(true)); /* suppress logging */              \
   }
 
 class CastSessionClientImplTest : public testing::Test {
@@ -244,7 +243,7 @@ TEST_F(CastSessionClientImplTest, OnMediaStatusUpdatedWithPendingRequest) {
     "timeoutMillis": 0,
     "type": "v2_message"
   })")));
-  client_->SendMediaStatusToClient(ParseJsonDict(R"({"foo": "bar"})"), 123);
+  client_->SendMediaMessageToClient(ParseJsonDict(R"({"foo": "bar"})"), 123);
 }
 
 TEST_F(CastSessionClientImplTest, SendSetVolumeCommandToReceiver) {
@@ -303,12 +302,16 @@ TEST_F(CastSessionClientImplTest, SendStopSessionCommandToReceiver) {
 }
 
 TEST_F(CastSessionClientImplTest, CloseConnection) {
-  EXPECT_CALL(activity_, CloseConnectionOnReceiver("theClientId"));
+  EXPECT_CALL(activity_,
+              CloseConnectionOnReceiver(
+                  "theClientId", PresentationConnectionCloseReason::CLOSED));
   client_->CloseConnection(PresentationConnectionCloseReason::CLOSED);
 }
 
 TEST_F(CastSessionClientImplTest, DidCloseConnection) {
-  EXPECT_CALL(activity_, CloseConnectionOnReceiver("theClientId"));
+  EXPECT_CALL(activity_,
+              CloseConnectionOnReceiver(
+                  "theClientId", PresentationConnectionCloseReason::WENT_AWAY));
   client_->DidClose(PresentationConnectionCloseReason::WENT_AWAY);
 }
 

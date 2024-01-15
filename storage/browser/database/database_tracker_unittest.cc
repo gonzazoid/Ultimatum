@@ -9,11 +9,11 @@
 
 #include <memory>
 
-#include "base/callback_helpers.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback_helpers.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
@@ -21,7 +21,6 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "net/base/net_errors.h"
 #include "net/base/test_completion_callback.h"
@@ -103,7 +102,7 @@ class TestQuotaManagerProxy : public QuotaManagerProxy {
   TestQuotaManagerProxy()
       : QuotaManagerProxy(
             /*quota_manager_impl=*/nullptr,
-            base::SequencedTaskRunnerHandle::Get(),
+            base::SequencedTaskRunner::GetCurrentDefault(),
             /*profile_path=*/base::FilePath()) {}
 
   void RegisterClient(
@@ -114,25 +113,23 @@ class TestQuotaManagerProxy : public QuotaManagerProxy {
     registered_client_.Bind(std::move(client));
   }
 
-  void NotifyStorageAccessed(const blink::StorageKey& storage_key,
-                             blink::mojom::StorageType type,
-                             base::Time access_time) override {
-    EXPECT_EQ(blink::mojom::StorageType::kTemporary, type);
-    accesses_[storage_key] += 1;
+  void NotifyBucketAccessed(const BucketLocator& bucket,
+                            base::Time access_time) override {
+    EXPECT_EQ(blink::mojom::StorageType::kTemporary, bucket.type);
+    accesses_[bucket.storage_key] += 1;
   }
 
-  void NotifyStorageModified(
+  void NotifyBucketModified(
       QuotaClientType client_id,
-      const blink::StorageKey& storage_key,
-      blink::mojom::StorageType type,
-      int64_t delta,
+      const BucketLocator& bucket,
+      std::optional<int64_t> delta,
       base::Time modification_time,
       scoped_refptr<base::SequencedTaskRunner> callback_task_runner,
       base::OnceClosure callback) override {
     EXPECT_EQ(QuotaClientType::kDatabase, client_id);
-    EXPECT_EQ(blink::mojom::StorageType::kTemporary, type);
-    modifications_[storage_key].first += 1;
-    modifications_[storage_key].second += delta;
+    EXPECT_EQ(blink::mojom::StorageType::kTemporary, bucket.type);
+    modifications_[bucket.storage_key].first += 1;
+    modifications_[bucket.storage_key].second += delta.value_or(0);
     if (callback)
       callback_task_runner->PostTask(FROM_HERE, std::move(callback));
   }

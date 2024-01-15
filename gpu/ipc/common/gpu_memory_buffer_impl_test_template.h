@@ -13,7 +13,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
@@ -25,7 +25,7 @@
 #include "ui/gfx/mojom/buffer_types.mojom.h"
 #include "ui/gl/gl_display.h"
 
-#if BUILDFLAG(IS_WIN) || defined(USE_OZONE)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_OZONE)
 #include "ui/gl/init/gl_factory.h"
 #include "ui/gl/test/gl_surface_test_support.h"
 #endif
@@ -52,7 +52,7 @@ class GpuMemoryBufferImplTest : public testing::Test {
     return &gpu_memory_buffer_support_;
   }
 
-#if BUILDFLAG(IS_WIN) || defined(USE_OZONE)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_OZONE)
   // Overridden from testing::Test:
   void SetUp() override {
     display_ = gl::GLSurfaceTestSupport::InitializeOneOff();
@@ -68,9 +68,7 @@ class GpuMemoryBufferImplTest : public testing::Test {
   GpuMemoryBufferSupport gpu_memory_buffer_support_;
   raw_ptr<gl::GLDisplay> display_ = nullptr;
 
-  void FreeGpuMemoryBuffer(base::OnceClosure free_callback,
-                           bool* destroyed,
-                           const gpu::SyncToken& sync_token) {
+  void FreeGpuMemoryBuffer(base::OnceClosure free_callback, bool* destroyed) {
     std::move(free_callback).Run();
     if (destroyed)
       *destroyed = true;
@@ -387,14 +385,14 @@ TYPED_TEST_P(GpuMemoryBufferImplCreateTest, Create) {
   for (auto format : gfx::GetBufferFormatsForTesting()) {
     if (!TestFixture::gpu_memory_buffer_support()
              ->IsConfigurationSupportedForTest(TypeParam::kBufferType, format,
-                                               usage))
+                                               usage)) {
       continue;
+    }
     bool destroyed = false;
     std::unique_ptr<TypeParam> buffer(TypeParam::Create(
         kBufferId, kBufferSize, format, usage,
-        base::BindOnce(
-            [](bool* destroyed, const gpu::SyncToken&) { *destroyed = true; },
-            base::Unretained(&destroyed))));
+        base::BindOnce([](bool* destroyed) { *destroyed = true; },
+                       base::Unretained(&destroyed))));
     ASSERT_TRUE(buffer);
     EXPECT_EQ(buffer->GetFormat(), format);
 

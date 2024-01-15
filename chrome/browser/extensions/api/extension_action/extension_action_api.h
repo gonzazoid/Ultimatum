@@ -98,7 +98,7 @@ class ExtensionActionAPI : public BrowserContextKeyedAPI {
                                 const std::string& extension_id,
                                 events::HistogramValue histogram_value,
                                 const std::string& event_name,
-                                std::unique_ptr<base::ListValue> event_args);
+                                base::Value::List event_args);
 
   // BrowserContextKeyedAPI implementation.
   void Shutdown() override;
@@ -143,7 +143,7 @@ class ExtensionActionFunction : public ExtensionFunction {
   int tab_id_;
 
   // WebContents for |tab_id_| if one exists.
-  content::WebContents* contents_;
+  raw_ptr<content::WebContents> contents_;
 
   // The extension action for the current extension.
   raw_ptr<ExtensionAction> extension_action_;

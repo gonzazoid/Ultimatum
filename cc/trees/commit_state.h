@@ -17,7 +17,6 @@
 #include "cc/benchmarks/micro_benchmark_impl.h"
 #include "cc/cc_export.h"
 #include "cc/debug/layer_tree_debug_state.h"
-#include "cc/document_transition/document_transition_request.h"
 #include "cc/input/event_listener_properties.h"
 #include "cc/input/layer_selection_bound.h"
 #include "cc/input/overscroll_behavior.h"
@@ -32,6 +31,7 @@
 #include "cc/trees/presentation_time_callback_buffer.h"
 #include "cc/trees/swap_promise.h"
 #include "cc/trees/viewport_property_ids.h"
+#include "cc/view_transition/view_transition_request.h"
 #include "components/viz/common/surfaces/local_surface_id.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/delegated_ink_metadata.h"
@@ -42,6 +42,7 @@
 #include "ui/gfx/overlay_transform.h"
 
 namespace cc {
+static constexpr int kInvalidSourceFrameNumber = -1;
 
 // CommitState and ThreadUnsafeCommitState contain all of the information from
 // LayerTreeHost that is needed to run compositor commit. CommitState is
@@ -105,8 +106,6 @@ struct CC_EXPORT CommitState {
   SkColor4f background_color = SkColors::kWhite;
   ViewportPropertyIds viewport_property_ids;
   viz::LocalSurfaceId local_surface_id_from_parent;
-  base::TimeDelta previous_surfaces_visual_update_duration;
-  base::TimeDelta visual_update_duration;
 
   // -------------------------------------------------------------------------
   // Take/reset: these values are reset on the LayerTreeHost between commits.
@@ -125,27 +124,35 @@ struct CC_EXPORT CommitState {
   bool next_commit_forces_redraw = false;
   uint64_t trace_id = 0;
   EventMetrics::List event_metrics;
+
   // Latency information for work done in ProxyMain::BeginMainFrame. The
   // unique_ptr is allocated in RequestMainFrameUpdate, and passed to Blink's
   // LocalFrameView that fills in the fields. This object adds the timing for
   // UpdateLayers. CC reads the data during commit, and clears the unique_ptr.
   std::unique_ptr<BeginMainFrameMetrics> begin_main_frame_metrics;
+
   // Metadata required for drawing a delegated ink trail onto the end of a
   // stroke. std::unique_ptr was specifically chosen so that it would be
   // cleared as it is forwarded along the pipeline to avoid old information
   // incorrectly sticking around and potentially being reused.
   std::unique_ptr<gfx::DelegatedInkMetadata> delegated_ink_metadata;
+
   std::unique_ptr<PendingPageScaleAnimation> pending_page_scale_animation;
   std::vector<std::pair<int, std::unique_ptr<PaintImage>>> queued_image_decodes;
+
   // Presentation time callbacks requested for the next frame are initially
   // added here.
-  std::vector<PresentationTimeCallbackBuffer::MainCallback>
-      pending_presentation_time_callbacks;
+  std::vector<PresentationTimeCallbackBuffer::Callback>
+      pending_presentation_callbacks;
+  std::vector<PresentationTimeCallbackBuffer::SuccessfulCallback>
+      pending_successful_presentation_callbacks;
+
   std::vector<std::unique_ptr<MicroBenchmarkImpl>> benchmarks;
-  // A list of document transitions that need to be transported from Blink to
+
+  // A list of view transitions that need to be transported from Blink to
   // Viz, as a CompositorFrameTransitionDirective.
-  std::vector<std::unique_ptr<DocumentTransitionRequest>>
-      document_transition_requests;
+  std::vector<std::unique_ptr<ViewTransitionRequest>> view_transition_requests;
+
   std::vector<std::unique_ptr<SwapPromise>> swap_promises;
   std::vector<UIResourceRequest> ui_resource_request_queue;
   base::flat_map<UIResourceId, gfx::Size> ui_resource_sizes;

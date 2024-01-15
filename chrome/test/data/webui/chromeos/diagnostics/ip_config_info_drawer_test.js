@@ -3,20 +3,21 @@
 // found in the LICENSE file.
 
 import 'chrome://diagnostics/ip_config_info_drawer.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
 import {DiagnosticsBrowserProxyImpl} from 'chrome://diagnostics/diagnostics_browser_proxy.js';
 import {fakeEthernetNetwork, fakeWifiNetwork, fakeWifiNetworkEmptyNameServers, fakeWifiNetworkMultipleNameServers, fakeWifiNetworkNoNameServers} from 'chrome://diagnostics/fake_data.js';
 import {IpConfigInfoDrawerElement} from 'chrome://diagnostics/ip_config_info_drawer.js';
 import {Network} from 'chrome://diagnostics/network_health_provider.mojom-webui.js';
+import {assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertFalse, assertTrue} from '../../chai_assert.js';
-import {isVisible} from '../../test_util.js';
+import {isVisible} from '../test_util.js';
 
 import * as dx_utils from './diagnostics_test_utils.js';
 import {TestDiagnosticsBrowserProxy} from './test_diagnostics_browser_proxy.js';
 
-export function ipConfigInfoDrawerTestSuite() {
+suite('ipConfigInfoDrawerTestSuite', function() {
   /** @type {?IpConfigInfoDrawerElement} */
   let ipConfigInfoDrawerElement = null;
 
@@ -29,7 +30,7 @@ export function ipConfigInfoDrawerTestSuite() {
   });
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes.emptyHTML;
   });
 
   teardown(() => {
@@ -214,4 +215,4 @@ export function ipConfigInfoDrawerTestSuite() {
               getNameServersHeaderText(), 'Name Servers');
         });
   });
-}
+});

@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_WEBAUDIO_AUDIO_PARAM_HANDLER_H_
 
 #include <sys/types.h>
+
 #include <atomic>
 
 #include "base/memory/scoped_refptr.h"
@@ -139,19 +140,6 @@ class AudioParamHandler final : public ThreadSafeRefCounted<AudioParamHandler>,
   float DefaultValue() const { return static_cast<float>(default_value_); }
   float MinValue() const { return min_value_; }
   float MaxValue() const { return max_value_; }
-
-  // Value smoothing:
-
-  // When a new value is set with setValue(), in our internal use of the
-  // parameter we don't immediately jump to it.  Instead we smoothly approach
-  // this value to avoid glitching.
-  float SmoothedValue();
-
-  // Smoothly exponentially approaches to (de-zippers) the desired value.
-  // Returns true if smoothed value has already snapped exactly to value.
-  bool Smooth();
-
-  void ResetSmoothedValue() { timeline_.SetSmoothedValue(IntrinsicValue()); }
 
   // An AudioParam needs sample accurate processing if there are
   // automations scheduled or if there are connections.

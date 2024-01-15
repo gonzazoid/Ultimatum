@@ -58,16 +58,17 @@ BluetoothManifestPermission::BluetoothManifestPermission()
     : socket_(false), low_energy_(false), peripheral_(false) {
 }
 
-BluetoothManifestPermission::~BluetoothManifestPermission() {}
+BluetoothManifestPermission::~BluetoothManifestPermission() = default;
 
 // static
 std::unique_ptr<BluetoothManifestPermission>
 BluetoothManifestPermission::FromValue(const base::Value& value,
                                        std::u16string* error) {
-  std::unique_ptr<api::extensions_manifest_types::Bluetooth> bluetooth =
-      api::extensions_manifest_types::Bluetooth::FromValue(value, error);
-  if (!bluetooth)
+  auto bluetooth = api::extensions_manifest_types::Bluetooth::FromValue(value);
+  if (!bluetooth.has_value()) {
+    *error = std::move(bluetooth).error();
     return nullptr;
+  }
 
   std::unique_ptr<BluetoothManifestPermission> result(
       new BluetoothManifestPermission());

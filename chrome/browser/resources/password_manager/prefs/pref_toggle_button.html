@@ -16,22 +16,30 @@
   }
 
   #labelWrapper {
-    padding: var(--cr-section-vertical-padding) 0;
     margin-inline-end: var(--control-label-spacing);
+    padding: var(--cr-section-vertical-padding) 0;
+  }
+
+  cr-policy-pref-indicator {
+    margin-inline-end: var(--cr-controlled-by-spacing);
   }
 </style>
 <div id="outerRow" noSubLabel$="[[!subLabel]]">
   <div class="flex" id="labelWrapper">
     <div class="label" aria-hidden="true">[[label]]</div>
-    <div class="cr-secondary-text label" id="sub-label">
+    <div class="cr-secondary-text label" id="sub-label" hidden="[[!subLabel]]">
       <span id="sub-label-text" aria-hidden="true">
         [[subLabel]]
       </span>
     </div>
   </div>
-  <!-- TODO(crbug.com/1350947): Add policy pref indicator -->
+  <template is="dom-if" if="[[hasPrefPolicyIndicator_(pref.*)]]">
+    <cr-policy-pref-indicator pref="[[pref]]" icon-aria-label="[[label]]">
+    </cr-policy-pref-indicator>
+  </template>
   <cr-toggle id="control" checked="{{checked}}"
-      on-change="onChange_"
-      aria-describedby="sub-label-text">
+      disabled="[[controlDisabled_(pref.*, disabled)]]"
+      on-change="onToggleClick_"
+      aria-label="[[getAriaLabel_(label, subLabel)]]">
   </cr-toggle>
 </div>

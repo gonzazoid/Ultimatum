@@ -29,8 +29,10 @@ class NET_EXPORT CookiePartitionKey {
   bool operator<(const CookiePartitionKey& other) const;
 
   // Methods for serializing and deserializing a partition key to/from a string.
-  // This will be used for Android, storing persistent partitioned cookies, and
-  // loading partitioned cookies into Java code.
+  // This is currently used for:
+  // -  Storing persistent partitioned cookies
+  // -  Loading partitioned cookies into Java code
+  // -  Sending cookie partition keys as strings in the DevTools protocol
   //
   // This function returns true if the partition key is not opaque and if nonce_
   // is not present. We do not want to serialize cookies with opaque origins or
@@ -58,14 +60,10 @@ class NET_EXPORT CookiePartitionKey {
                  : CookiePartitionKey(url);
   }
 
-  // Create a cookie partition key from a request's NetworkIsolationKey.
-  //
-  // `first_party_set_owner_site` should be nullptr if the NetworkIsolationKey's
-  // top-frame site is not in  First-Party Set. Otherwise it should be the owner
-  // site of the top-frame site's set.
+  // Create a partition key from a network isolation key. Partition key is
+  // derived from the key's top-frame site.
   static absl::optional<CookiePartitionKey> FromNetworkIsolationKey(
-      const NetworkIsolationKey& network_isolation_key,
-      const SchemefulSite* first_party_set_owner_site = nullptr);
+      const NetworkIsolationKey& network_isolation_key);
 
   // Create a new CookiePartitionKey from the site of an existing
   // CookiePartitionKey. This should only be used for sites of partition keys

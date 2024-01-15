@@ -2,20 +2,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://webui-test/mojo_webui_test_support.js';
 import 'chrome://new-tab-page/lazy_load.js';
 
 import {VoiceSearchOverlayElement} from 'chrome://new-tab-page/lazy_load.js';
 import {$$, NewTabPageProxy, VoiceAction as Action, VoiceError as Error, WindowProxy} from 'chrome://new-tab-page/new_tab_page.js';
 import {PageCallbackRouter, PageHandlerRemote} from 'chrome://new-tab-page/new_tab_page.mojom-webui.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {fakeMetricsPrivate, MetricsTracker} from 'chrome://webui-test/metrics_test_support.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
-import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
+import {TestMock} from 'chrome://webui-test/test_mock.js';
 import {isVisible} from 'chrome://webui-test/test_util.js';
 
-import {assertEquals, assertFalse, assertTrue} from '../chai_assert.js';
-
-import {fakeMetricsPrivate, MetricsTracker} from './metrics_test_support.js';
 import {assertNotStyle, assertStyle, installMock, keydown} from './test_support.js';
 
 function createResults(n: number): SpeechRecognitionEvent {
@@ -73,7 +71,7 @@ let mockSpeechRecognition: MockSpeechRecognition;
 
 suite('NewTabPageVoiceSearchOverlayTest', () => {
   let voiceSearchOverlay: VoiceSearchOverlayElement;
-  let windowProxy: TestBrowserProxy;
+  let windowProxy: TestMock<WindowProxy>;
   let metrics: MetricsTracker;
 
   setup(async () => {
@@ -146,8 +144,8 @@ suite('NewTabPageVoiceSearchOverlayTest', () => {
     // Arrange.
     windowProxy.setResultFor('random', 0.5);
     const result = createResults(2);
-    Object.assign(result.results[0]![0], {transcript: 'hello'});
-    Object.assign(result.results[1]![0], {confidence: 0, transcript: 'world'});
+    Object.assign(result.results[0]![0]!, {transcript: 'hello'});
+    Object.assign(result.results[1]![0]!, {confidence: 0, transcript: 'world'});
 
     // Act.
     mockSpeechRecognition.onresult!(result);
@@ -171,8 +169,8 @@ suite('NewTabPageVoiceSearchOverlayTest', () => {
     loadTimeData.overrideValues({googleBaseUrl: googleBaseUrl});
     windowProxy.setResultFor('random', 0);
     const result = createResults(1);
-    Object.assign(result.results[0], {isFinal: true});
-    Object.assign(result.results[0]![0], {transcript: 'hello world'});
+    Object.assign(result.results[0]!, {isFinal: true});
+    Object.assign(result.results[0]![0]!, {transcript: 'hello world'});
 
     // Act.
     mockSpeechRecognition.onresult!(result);
@@ -256,7 +254,7 @@ suite('NewTabPageVoiceSearchOverlayTest', () => {
   test('on end received shows result text if final result', () => {
     // Arrange.
     const result = createResults(1);
-    Object.assign(result.results[0], {isFinal: true});
+    Object.assign(result.results[0]!, {isFinal: true});
 
     // Act.
     mockSpeechRecognition.onresult!(result);

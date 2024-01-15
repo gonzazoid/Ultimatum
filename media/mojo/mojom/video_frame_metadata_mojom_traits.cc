@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/base/time_mojom_traits.h"
@@ -33,7 +33,8 @@ bool StructTraits<media::mojom::VideoFrameMetadataDataView,
          media::VideoFrameMetadata* output) {
   // int.
   DESERIALIZE_INTO_OPT(capture_counter);
-  output->crop_version = input.crop_version();
+  output->sub_capture_target_version = input.sub_capture_target_version();
+  output->frame_sequence = input.frame_sequence();
 
   // bool.
   output->allow_overlay = input.allow_overlay();
@@ -78,6 +79,8 @@ bool StructTraits<media::mojom::VideoFrameMetadataDataView,
   READ_AND_ASSIGN_OPT(base::TimeDelta, frame_duration, FrameDuration);
   READ_AND_ASSIGN_OPT(base::TimeDelta, wallclock_frame_duration,
                       WallclockFrameDuration);
+
+  output->frame_sequence = input.frame_sequence();
 
   return true;
 }

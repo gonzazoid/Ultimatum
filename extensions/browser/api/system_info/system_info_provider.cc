@@ -4,9 +4,8 @@
 
 #include "extensions/browser/api/system_info/system_info_provider.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "components/storage_monitor/storage_info.h"
@@ -19,9 +18,8 @@ using storage_monitor::StorageMonitor;
 
 namespace extensions {
 
-using api::system_storage::STORAGE_UNIT_TYPE_FIXED;
-using api::system_storage::STORAGE_UNIT_TYPE_REMOVABLE;
 using api::system_storage::StorageUnitInfo;
+using api::system_storage::StorageUnitType;
 
 namespace systeminfo {
 
@@ -31,8 +29,8 @@ void BuildStorageUnitInfo(const StorageInfo& info, StorageUnitInfo* unit) {
   unit->name = base::UTF16ToUTF8(info.GetDisplayName(false));
   // TODO(hmin): Might need to take MTP device into consideration.
   unit->type = StorageInfo::IsRemovableDevice(info.device_id())
-                   ? STORAGE_UNIT_TYPE_REMOVABLE
-                   : STORAGE_UNIT_TYPE_FIXED;
+                   ? StorageUnitType::kRemovable
+                   : StorageUnitType::kFixed;
   unit->capacity = static_cast<double>(info.total_size_in_bytes());
 }
 
@@ -87,9 +85,8 @@ void SystemInfoProvider::StartQueryInfoPostInitialization() {
   PrepareQueryOnUIThread();
   // Post the custom query info task to blocking pool for information querying
   // and reply with OnQueryCompleted.
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
-      base::BindOnce(&SystemInfoProvider::QueryInfo, this),
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&SystemInfoProvider::QueryInfo, this),
       base::BindOnce(&SystemInfoProvider::OnQueryCompleted, this));
 }
 

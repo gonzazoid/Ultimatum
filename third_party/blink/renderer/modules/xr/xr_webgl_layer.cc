@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/cxx17_backports.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/trace_event/trace_event.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
@@ -117,8 +116,8 @@ XRWebGLLayer* XRWebGLLayer::Create(XRSession* session,
     // small to see or unreasonably large.
     // TODO(bajones): Would be best to have the max value communicated from the
     // service rather than limited to the native res.
-    framebuffer_scale = base::clamp(initializer->framebufferScaleFactor(),
-                                    kFramebufferMinScale, max_scale);
+    framebuffer_scale = std::clamp(initializer->framebufferScaleFactor(),
+                                   kFramebufferMinScale, max_scale);
   }
 
   gfx::SizeF framebuffers_size = session->RecommendedFramebufferSize();
@@ -127,8 +126,8 @@ XRWebGLLayer* XRWebGLLayer::Create(XRSession* session,
       gfx::ToFlooredSize(gfx::ScaleSize(framebuffers_size, framebuffer_scale));
 
   // Create an opaque WebGL Framebuffer
-  WebGLFramebuffer* framebuffer =
-      WebGLFramebuffer::CreateOpaque(webgl_context, want_stencil_buffer);
+  WebGLFramebuffer* framebuffer = WebGLFramebuffer::CreateOpaque(
+      webgl_context, want_depth_buffer, want_stencil_buffer);
 
   scoped_refptr<XRWebGLDrawingBuffer> drawing_buffer =
       XRWebGLDrawingBuffer::Create(webgl_context->GetDrawingBuffer(),
@@ -194,7 +193,10 @@ bool XRWebGLLayer::antialias() const {
   if (drawing_buffer_) {
     return drawing_buffer_->antialias();
   }
-  return webgl_context_->GetDrawingBuffer()->Multisample();
+  if (!webgl_context_->isContextLost()) {
+    return webgl_context_->GetDrawingBuffer()->Multisample();
+  }
+  return false;
 }
 
 XRViewport* XRWebGLLayer::getViewport(XRView* view) {
@@ -232,10 +234,10 @@ XRViewport* XRWebGLLayer::GetViewportForEye(device::mojom::blink::XREye eye) {
     UpdateViewports();
 
   if (eye == device::mojom::blink::XREye::kRight)
-    return right_viewport_;
+    return right_viewport_.Get();
 
   // This code path also handles an eye of "none".
-  return left_viewport_;
+  return left_viewport_.Get();
 }
 
 double XRWebGLLayer::getNativeFramebufferScaleFactor(XRSession* session) {
@@ -245,9 +247,12 @@ double XRWebGLLayer::getNativeFramebufferScaleFactor(XRSession* session) {
 void XRWebGLLayer::UpdateViewports() {
   uint32_t framebuffer_width = framebufferWidth();
   uint32_t framebuffer_height = framebufferHeight();
-  // Framebuffer width and height are assumed to be nonzero.
-  DCHECK_NE(framebuffer_width, 0U);
-  DCHECK_NE(framebuffer_height, 0U);
+  if (framebuffer_width == 0U || framebuffer_height == 0U) {
+    LOG_IF(ERROR, !webgl_context_->isContextLost())
+        << __func__ << " Received width=" << framebuffer_width
+        << " height=" << framebuffer_height << " without having lost context";
+    return;
+  }
 
   viewports_dirty_ = false;
 
@@ -309,7 +314,7 @@ WebGLTexture* XRWebGLLayer::GetCameraTexture() {
 
   // We already have a WebGL texture for the camera image - return it:
   if (camera_image_texture_) {
-    return camera_image_texture_;
+    return camera_image_texture_.Get();
   }
 
   // We don't have a WebGL texture, and we cannot create it - return null:
@@ -322,7 +327,7 @@ WebGLTexture* XRWebGLLayer::GetCameraTexture() {
   camera_image_texture_ = MakeGarbageCollected<WebGLUnownedTexture>(
       webgl_context_, camera_image_texture_id_, GL_TEXTURE_2D);
 
-  return camera_image_texture_;
+  return camera_image_texture_.Get();
 }
 
 void XRWebGLLayer::OnFrameStart(

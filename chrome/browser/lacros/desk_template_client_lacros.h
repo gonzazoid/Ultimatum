@@ -5,6 +5,8 @@
 #ifndef CHROME_BROWSER_LACROS_DESK_TEMPLATE_CLIENT_LACROS_H_
 #define CHROME_BROWSER_LACROS_DESK_TEMPLATE_CLIENT_LACROS_H_
 
+#include "base/observer_list.h"
+#include "base/observer_list_types.h"
 #include "base/task/cancelable_task_tracker.h"
 #include "chromeos/crosapi/mojom/desk_template.mojom.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -19,19 +21,19 @@ class DeskTemplateClientLacros : public crosapi::mojom::DeskTemplateClient {
   DeskTemplateClientLacros& operator=(const DeskTemplateClientLacros&) = delete;
   ~DeskTemplateClientLacros() override;
 
- private:
   // DeskTemplateClient:
   void CreateBrowserWithRestoredData(
       const gfx::Rect& bounds,
-      const ui::mojom::WindowShowState show_state,
+      const ui::WindowShowState show_state,
       crosapi::mojom::DeskTemplateStatePtr additional_state) override;
-  void GetTabStripModelUrls(uint32_t serial,
-                            const std::string& window_unique_id,
-                            GetTabStripModelUrlsCallback callback) override;
+  void GetBrowserInformation(uint32_t serial,
+                             const std::string& window_unique_id,
+                             GetBrowserInformationCallback callback) override;
   void GetFaviconImage(const GURL& url,
                        GetFaviconImageCallback callback) override;
 
-  // The cancelable task tracker used for retreiving icons from the favicon
+ private:
+  // The cancelable task tracker used for retrieving icons from the favicon
   // service.
   base::CancelableTaskTracker task_tracker_;
 

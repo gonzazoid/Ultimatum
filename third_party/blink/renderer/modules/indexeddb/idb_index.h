@@ -26,7 +26,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_INDEXEDDB_IDB_INDEX_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_INDEXEDDB_IDB_INDEX_H_
 
-#include "third_party/blink/public/common/indexeddb/web_idb_types.h"
 #include "third_party/blink/public/mojom/indexeddb/indexeddb.mojom-blink-forward.h"
 #include "third_party/blink/renderer/modules/indexeddb/idb_cursor.h"
 #include "third_party/blink/renderer/modules/indexeddb/idb_key_path.h"
@@ -34,7 +33,6 @@
 #include "third_party/blink/renderer/modules/indexeddb/idb_metadata.h"
 #include "third_party/blink/renderer/modules/indexeddb/idb_request.h"
 #include "third_party/blink/renderer/modules/indexeddb/web_idb_cursor.h"
-#include "third_party/blink/renderer/modules/indexeddb/web_idb_database.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -68,13 +66,6 @@ class IDBIndex final : public ScriptWrappable {
   bool unique() const { return Metadata().unique; }
   bool multiEntry() const { return Metadata().multi_entry; }
 
-  IDBRequest* batchGetAll(ScriptState*,
-                          const HeapVector<ScriptValue>& ranges,
-                          uint32_t max_count,
-                          ExceptionState&);
-  IDBRequest* batchGetAll(ScriptState*,
-                          const HeapVector<ScriptValue>& ranges,
-                          ExceptionState&);
   IDBRequest* openCursor(ScriptState*,
                          const ScriptValue& key,
                          const String& direction,
@@ -128,16 +119,11 @@ class IDBIndex final : public ScriptWrappable {
       mojom::IDBCursorDirection,
       IDBRequest::AsyncTraceState = IDBRequest::AsyncTraceState());
 
-  WebIDBDatabase* BackendDB() const;
+  IDBDatabase* db() const;
 
  private:
   const IDBIndexMetadata& Metadata() const { return *metadata_; }
 
-  IDBRequest* BatchGetAllInternal(ScriptState* script_state,
-                                  const HeapVector<ScriptValue>& key_ranges,
-                                  uint32_t max_count,
-                                  ExceptionState& exception_state,
-                                  IDBRequest::AsyncTraceState metrics);
   IDBRequest* GetInternal(ScriptState*,
                           const ScriptValue& key,
                           ExceptionState&,

@@ -12,19 +12,15 @@
 #include "base/containers/adapters.h"
 #include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
-#include "components/autofill/core/browser/autofill_data_util.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill/core/browser/geo/phone_number_i18n.h"
 #include "components/autofill/core/browser/geo/state_names.h"
-#include "components/autofill/core/common/autofill_clock.h"
 #include "components/autofill/core/common/autofill_regex_constants.h"
 #include "components/autofill/core/common/autofill_regexes.h"
 #include "components/strings/grit/components_strings.h"
-#include "ui/base/l10n/l10n_util.h"
 
 namespace autofill {
 
@@ -36,30 +32,24 @@ bool IsValidCreditCardExpirationDate(int year,
 
   base::Time::Exploded now_exploded;
   now.LocalExplode(&now_exploded);
-
-  if (year < now_exploded.year)
-    return false;
-
-  if (year == now_exploded.year && month < now_exploded.month)
-    return false;
-
-  return true;
+  return year > now_exploded.year ||
+         (year == now_exploded.year && month >= now_exploded.month);
 }
 
 bool IsValidCreditCardExpirationYear(int year, const base::Time& now) {
   base::Time::Exploded now_exploded;
   now.LocalExplode(&now_exploded);
-
   return year >= now_exploded.year;
 }
 
+// Credit card validation logic is duplicated in
+// components/feedback/redaction_tool/validation.cc. Any changes here must
+// be copied there.
+// TODO(b/281812289) Deduplicate the logic and let the autofill component
+// depend on the code in //components/feedback/redaction_tool/.
 bool IsValidCreditCardNumber(const std::u16string& text) {
   const std::u16string number = CreditCard::StripSeparators(text);
-
-  if (!HasCorrectLength(number))
-    return false;
-
-  return PassesLuhnCheck(number);
+  return HasCorrectLength(number) && PassesLuhnCheck(number);
 }
 
 bool HasCorrectLength(const std::u16string& number) {
@@ -97,7 +87,6 @@ bool HasCorrectLength(const std::u16string& number) {
   return true;
 }
 
-// TODO(crbug.com/927767): Add unit tests for this function.
 bool PassesLuhnCheck(const std::u16string& number) {
   // Use the Luhn formula [3] to validate the number.
   // [3] http://en.wikipedia.org/wiki/Luhn_algorithm
@@ -121,33 +110,10 @@ bool PassesLuhnCheck(const std::u16string& number) {
 }
 
 bool IsValidCreditCardSecurityCode(const std::u16string& code,
-                                   const base::StringPiece card_network) {
-  return code.length() == GetCvcLengthForCardNetwork(card_network) &&
+                                   const std::string_view card_network,
+                                   CvcType cvc_type) {
+  return code.length() == GetCvcLengthForCardNetwork(card_network, cvc_type) &&
          base::ContainsOnlyChars(code, u"0123456789");
-}
-
-bool IsValidCreditCardNumberForBasicCardNetworks(
-    const std::u16string& text,
-    const std::set<std::string>& supported_basic_card_networks,
-    std::u16string* error_message) {
-  DCHECK(error_message);
-
-  // The type check is cheaper than the credit card number check.
-  const std::string basic_card_issuer_network =
-      data_util::GetPaymentRequestData(CreditCard::GetCardNetwork(text))
-          .basic_card_issuer_network;
-  if (!supported_basic_card_networks.count(basic_card_issuer_network)) {
-    *error_message = l10n_util::GetStringUTF16(
-        IDS_PAYMENTS_VALIDATION_UNSUPPORTED_CREDIT_CARD_TYPE);
-    return false;
-  }
-
-  if (IsValidCreditCardNumber(text))
-    return true;
-
-  *error_message = l10n_util::GetStringUTF16(
-      IDS_PAYMENTS_CARD_NUMBER_INVALID_VALIDATION_MESSAGE);
-  return false;
 }
 
 bool IsValidEmailAddress(const std::u16string& text) {
@@ -232,113 +198,12 @@ bool IsSSN(const std::u16string& text) {
   return true;
 }
 
-bool IsValidForType(const std::u16string& value,
-                    ServerFieldType type,
-                    std::u16string* error_message) {
-  switch (type) {
-    case CREDIT_CARD_NAME_FULL:
-      if (!value.empty())
-        return true;
-
-      if (error_message) {
-        *error_message =
-            l10n_util::GetStringUTF16(IDS_PAYMENTS_VALIDATION_INVALID_NAME);
-      }
-      break;
-
-    case CREDIT_CARD_EXP_MONTH: {
-      CreditCard temp;
-      // Expiration month was in an invalid format.
-      temp.SetExpirationMonthFromString(value, /* app_locale= */ std::string());
-      if (temp.expiration_month() == 0) {
-        if (error_message) {
-          *error_message = l10n_util::GetStringUTF16(
-              IDS_PAYMENTS_VALIDATION_INVALID_CREDIT_CARD_EXPIRATION_MONTH);
-        }
-        break;
-      }
-      return true;
-    }
-
-    case CREDIT_CARD_EXP_2_DIGIT_YEAR:
-    case CREDIT_CARD_EXP_4_DIGIT_YEAR: {
-      CreditCard temp;
-      temp.SetExpirationYearFromString(value);
-      // Expiration year was in an invalid format.
-      if ((temp.expiration_year() == 0) ||
-          (type == CREDIT_CARD_EXP_2_DIGIT_YEAR && value.size() != 2u) ||
-          (type == CREDIT_CARD_EXP_4_DIGIT_YEAR && value.size() != 4u)) {
-        if (error_message) {
-          *error_message = l10n_util::GetStringUTF16(
-              IDS_PAYMENTS_VALIDATION_INVALID_CREDIT_CARD_EXPIRATION_YEAR);
-        }
-        break;
-      }
-
-      base::Time::Exploded now_exploded;
-      AutofillClock::Now().LocalExplode(&now_exploded);
-      if (temp.expiration_year() >= now_exploded.year)
-        return true;
-
-      // If the year is before this year, it's expired.
-      if (error_message) {
-        *error_message = l10n_util::GetStringUTF16(
-            IDS_PAYMENTS_VALIDATION_INVALID_CREDIT_CARD_EXPIRED);
-      }
-      break;
-    }
-
-    case CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR:
-    case CREDIT_CARD_EXP_DATE_4_DIGIT_YEAR: {
-      static constexpr char16_t kDateYY[] = u"^[0-9]{1,2}[-/|]?[0-9]{2}$";
-      static constexpr char16_t kDateYYYY[] = u"^[0-9]{1,2}[-/|]?[0-9]{4}$";
-
-      CreditCard temp;
-      temp.SetExpirationDateFromString(value);
-
-      // Expiration date was in an invalid format.
-      if (temp.expiration_month() == 0 || temp.expiration_year() == 0 ||
-          (type == CREDIT_CARD_EXP_DATE_2_DIGIT_YEAR
-               ? !MatchesRegex<kDateYY>(value)
-               : !MatchesRegex<kDateYYYY>(value))) {
-        if (error_message) {
-          *error_message = l10n_util::GetStringUTF16(
-              IDS_PAYMENTS_CARD_EXPIRATION_INVALID_VALIDATION_MESSAGE);
-        }
-        break;
-      }
-
-      // Checking for card expiration.
-      if (IsValidCreditCardExpirationDate(temp.expiration_year(),
-                                          temp.expiration_month(),
-                                          AutofillClock::Now())) {
-        return true;
-      }
-
-      if (error_message) {
-        *error_message = l10n_util::GetStringUTF16(
-            IDS_PAYMENTS_VALIDATION_INVALID_CREDIT_CARD_EXPIRED);
-      }
-      break;
-    }
-
-    case CREDIT_CARD_NUMBER:
-      NOTREACHED() << "IsValidCreditCardNumberForBasicCardNetworks should be "
-                   << "used to validate credit card numbers";
-      break;
-
-    default:
-      // Other types such as CREDIT_CARD_TYPE and CREDIT_CARD_VERIFICATION_CODE
-      // are not validated for now.
-      NOTREACHED() << "Attempting to validate unsupported type " << type;
-      break;
-  }
-  return false;
-}
-
-size_t GetCvcLengthForCardNetwork(const base::StringPiece card_network) {
-  if (card_network == kAmericanExpressCard)
+size_t GetCvcLengthForCardNetwork(const std::string_view card_network,
+                                  CvcType cvc_type) {
+  if (card_network == kAmericanExpressCard &&
+      cvc_type == CvcType::kRegularCvc) {
     return AMEX_CVC_LENGTH;
+  }
 
   return GENERAL_CVC_LENGTH;
 }

@@ -107,6 +107,7 @@ class CORE_EXPORT ImageBitmap final : public ScriptWrappable,
 
   // CanvasImageSource implementation
   scoped_refptr<Image> GetSourceImageForCanvas(
+      FlushReason,
       SourceImageStatus*,
       const gfx::SizeF&,
       const AlphaDisposition alpha_disposition = kPremultiplyAlpha) override;
@@ -131,6 +132,7 @@ class CORE_EXPORT ImageBitmap final : public ScriptWrappable,
     bool should_scale_input = false;
     bool has_color_space_conversion = false;
     bool source_is_unpremul = false;
+    bool orientation_from_image = true;
     unsigned resize_width = 0;
     unsigned resize_height = 0;
     gfx::Rect crop_rect;
@@ -146,7 +148,7 @@ class CORE_EXPORT ImageBitmap final : public ScriptWrappable,
                                              sk_sp<SkImage>,
                                              const ImageOrientationEnum);
   static void RasterizeImageOnBackgroundThread(
-      sk_sp<PaintRecord>,
+      PaintRecord,
       const gfx::Rect&,
       scoped_refptr<base::SequencedTaskRunner>,
       WTF::CrossThreadOnceFunction<void(sk_sp<SkImage>,

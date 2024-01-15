@@ -12,14 +12,15 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/run_loop.h"
 #include "base/strings/string_split.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
 #include "mojo/core/embedder/embedder.h"
@@ -126,7 +127,7 @@ class MultiprocessMessagePipeTestWithPeerSupport
 
     const bool is_peer_launch =
         GetParam() == test::MojoTestBase::LaunchType::PEER;
-#if BUILDFLAG(IS_FUCHSIA)
+#if BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_IOS)
     const bool is_named_peer_launch = false;
 #else
     const bool is_named_peer_launch =
@@ -1309,7 +1310,7 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(MessagePipeStatusChangeInTransitClient,
   {
     base::RunLoop run_loop;
     SimpleWatcher watcher(FROM_HERE, SimpleWatcher::ArmingPolicy::AUTOMATIC,
-                          base::SequencedTaskRunnerHandle::Get());
+                          base::SequencedTaskRunner::GetCurrentDefault());
     watcher.Watch(Handle(handles[1]), MOJO_HANDLE_SIGNAL_PEER_CLOSED,
                   base::BindRepeating(
                       [](base::RunLoop* loop, MojoResult result) {
@@ -1412,7 +1413,7 @@ INSTANTIATE_TEST_SUITE_P(
                     test::MojoTestBase::LaunchType::CHILD_WITHOUT_CAPABILITIES,
                     test::MojoTestBase::LaunchType::PEER,
                     test::MojoTestBase::LaunchType::ASYNC
-#if !BUILDFLAG(IS_FUCHSIA)
+#if !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_IOS)
                     // Fuchsia has no named pipe support.
                     ,
                     test::MojoTestBase::LaunchType::NAMED_CHILD,

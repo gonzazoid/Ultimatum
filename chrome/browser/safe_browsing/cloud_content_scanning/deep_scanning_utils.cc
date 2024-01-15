@@ -42,8 +42,6 @@ std::string MaybeGetUnscannedReason(BinaryUploadService::Result result) {
       return "SERVICE_UNAVAILABLE";
     case BinaryUploadService::Result::FILE_ENCRYPTED:
       return "FILE_PASSWORD_PROTECTED";
-    case BinaryUploadService::Result::DLP_SCAN_UNSUPPORTED_FILE_TYPE:
-      return "DLP_SCAN_UNSUPPORTED_FILE_TYPE";
   }
 }
 
@@ -137,6 +135,7 @@ void ModifyKey(ScanningCrashKey key, int delta) {
 void MaybeReportDeepScanningVerdict(
     Profile* profile,
     const GURL& url,
+    const GURL& tab_url,
     const std::string& source,
     const std::string& destination,
     const std::string& file_name,
@@ -156,9 +155,10 @@ void MaybeReportDeepScanningVerdict(
 
   std::string unscanned_reason = MaybeGetUnscannedReason(result);
   if (!unscanned_reason.empty()) {
-    router->OnUnscannedFileEvent(
-        url, source, destination, file_name, download_digest_sha256, mime_type,
-        trigger, access_point, unscanned_reason, content_size, event_result);
+    router->OnUnscannedFileEvent(url, tab_url, source, destination, file_name,
+                                 download_digest_sha256, mime_type, trigger,
+                                 access_point, unscanned_reason, content_size,
+                                 event_result);
   }
 
   if (result != BinaryUploadService::Result::SUCCESS)
@@ -173,13 +173,13 @@ void MaybeReportDeepScanningVerdict(
       else if (response_result.tag() == "dlp")
         unscanned_reason = "DLP_SCAN_FAILED";
 
-      router->OnUnscannedFileEvent(url, source, destination, file_name,
+      router->OnUnscannedFileEvent(url, tab_url, source, destination, file_name,
                                    download_digest_sha256, mime_type, trigger,
                                    access_point, std::move(unscanned_reason),
                                    content_size, event_result);
     } else if (response_result.triggered_rules_size() > 0) {
       router->OnAnalysisConnectorResult(
-          url, source, destination, file_name, download_digest_sha256,
+          url, tab_url, source, destination, file_name, download_digest_sha256,
           mime_type, trigger, response.request_token(), access_point,
           response_result, content_size, event_result);
     }
@@ -189,6 +189,7 @@ void MaybeReportDeepScanningVerdict(
 void ReportAnalysisConnectorWarningBypass(
     Profile* profile,
     const GURL& url,
+    const GURL& tab_url,
     const std::string& source,
     const std::string& destination,
     const std::string& file_name,
@@ -211,9 +212,9 @@ void ReportAnalysisConnectorWarningBypass(
       continue;
 
     router->OnAnalysisConnectorWarningBypassed(
-        url, source, destination, file_name, download_digest_sha256, mime_type,
-        trigger, response.request_token(), access_point, result, content_size,
-        user_justification);
+        url, tab_url, source, destination, file_name, download_digest_sha256,
+        mime_type, trigger, response.request_token(), access_point, result,
+        content_size, user_justification);
   }
 }
 
@@ -377,8 +378,6 @@ std::string BinaryUploadServiceResultToString(
       return "";
     case BinaryUploadService::Result::FILE_ENCRYPTED:
       return "FileEncrypted";
-    case BinaryUploadService::Result::DLP_SCAN_UNSUPPORTED_FILE_TYPE:
-      return "DlpScanUnsupportedFileType";
     case BinaryUploadService::Result::TOO_MANY_REQUESTS:
       return "TooManyRequests";
   }

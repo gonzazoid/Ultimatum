@@ -5,6 +5,8 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_TABS_Z_ORDERABLE_TAB_CONTAINER_ELEMENT_H_
 #define CHROME_BROWSER_UI_VIEWS_TABS_Z_ORDERABLE_TAB_CONTAINER_ELEMENT_H_
 
+#include "base/memory/raw_ptr.h"
+
 namespace views {
 class View;
 }
@@ -18,6 +20,10 @@ class ZOrderableTabContainerElement {
   explicit ZOrderableTabContainerElement(views::View* const child)
       : child_(child), z_value_(CalculateZValue(child)) {}
 
+  // Returns true iff a ZOrderableTabContainerElement can be constructed with
+  // `view`.
+  static bool CanOrderView(views::View* view);
+
   bool operator<(const ZOrderableTabContainerElement& rhs) const {
     return z_value_ < rhs.z_value_;
   }
@@ -30,7 +36,7 @@ class ZOrderableTabContainerElement {
   // on top of smaller ones.
   static float CalculateZValue(views::View* child);
 
-  views::View* child_;
+  raw_ptr<views::View> child_;
   float z_value_;
 };  // ZOrderableTabContainerElement
 

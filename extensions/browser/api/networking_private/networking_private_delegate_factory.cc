@@ -25,9 +25,11 @@ namespace extensions {
 
 using content::BrowserContext;
 
-NetworkingPrivateDelegateFactory::UIDelegateFactory::UIDelegateFactory() {}
+NetworkingPrivateDelegateFactory::UIDelegateFactory::UIDelegateFactory() =
+    default;
 
-NetworkingPrivateDelegateFactory::UIDelegateFactory::~UIDelegateFactory() {}
+NetworkingPrivateDelegateFactory::UIDelegateFactory::~UIDelegateFactory() =
+    default;
 
 // static
 NetworkingPrivateDelegate*
@@ -46,45 +48,47 @@ NetworkingPrivateDelegateFactory::GetInstance() {
 NetworkingPrivateDelegateFactory::NetworkingPrivateDelegateFactory()
     : BrowserContextKeyedServiceFactory(
           "NetworkingPrivateDelegate",
-          BrowserContextDependencyManager::GetInstance()) {
-}
+          BrowserContextDependencyManager::GetInstance()) {}
 
-NetworkingPrivateDelegateFactory::~NetworkingPrivateDelegateFactory() {
-}
+NetworkingPrivateDelegateFactory::~NetworkingPrivateDelegateFactory() = default;
 
 void NetworkingPrivateDelegateFactory::SetUIDelegateFactory(
     std::unique_ptr<UIDelegateFactory> factory) {
   ui_factory_ = std::move(factory);
 }
 
-KeyedService* NetworkingPrivateDelegateFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+NetworkingPrivateDelegateFactory::BuildServiceInstanceForBrowserContext(
     BrowserContext* browser_context) const {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  NetworkingPrivateDelegate* delegate;
+  std::unique_ptr<NetworkingPrivateDelegate> delegate;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  delegate = new NetworkingPrivateChromeOS(browser_context);
+  delegate = std::make_unique<NetworkingPrivateChromeOS>(browser_context);
 #elif BUILDFLAG(IS_CHROMEOS_LACROS)
-  delegate = new NetworkingPrivateLacros(browser_context);
+  delegate = std::make_unique<NetworkingPrivateLacros>(browser_context);
 #elif BUILDFLAG(IS_LINUX)
-  delegate = new NetworkingPrivateLinux();
+  delegate = std::make_unique<NetworkingPrivateLinux>();
 #elif BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
   std::unique_ptr<wifi::WiFiService> wifi_service(wifi::WiFiService::Create());
-  delegate = new NetworkingPrivateServiceClient(std::move(wifi_service));
+  delegate =
+      std::make_unique<NetworkingPrivateServiceClient>(std::move(wifi_service));
 #else
   NOTREACHED();
   delegate = nullptr;
 #endif
 
-  if (ui_factory_)
+  if (ui_factory_) {
     delegate->set_ui_delegate(ui_factory_->CreateDelegate());
+  }
 
   return delegate;
 }
 
 BrowserContext* NetworkingPrivateDelegateFactory::GetBrowserContextToUse(
     BrowserContext* context) const {
-  return ExtensionsBrowserClient::Get()->GetOriginalContext(context);
+  return ExtensionsBrowserClient::Get()->GetContextRedirectedToOriginal(
+      context, /*force_guest_profile=*/true);
 }
 
 }  // namespace extensions

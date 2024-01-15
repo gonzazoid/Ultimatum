@@ -8,14 +8,15 @@
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/shelf/shelf.h"
 #include "ash/shell.h"
+#include "ash/strings/grit/ash_strings.h"
 #include "ash/system/tray/tray_background_view.h"
 #include "ash/system/tray/tray_constants.h"
-#include "ash/system/unified/unified_system_tray_view.h"
 #include "ash/wm/collision_detection/collision_detection_utils.h"
 #include "ash/wm/work_area_insets.h"
 #include "ash/wm/workspace/workspace_layout_manager.h"
 #include "ash/wm/workspace_controller.h"
 #include "ui/aura/window_tree_host.h"
+#include "ui/base/l10n/l10n_util.h"
 #include "ui/compositor/layer.h"
 #include "ui/display/manager/display_manager.h"
 #include "ui/events/event_utils.h"
@@ -45,6 +46,10 @@ AutoclickScrollBubbleController::AutoclickScrollBubbleController() = default;
 AutoclickScrollBubbleController::~AutoclickScrollBubbleController() {
   if (bubble_widget_ && !bubble_widget_->IsClosed())
     bubble_widget_->CloseNow();
+
+  bubble_view_ = nullptr;
+  scroll_view_ = nullptr;
+  bubble_widget_ = nullptr;
 }
 
 void AutoclickScrollBubbleController::UpdateAnchorRect(
@@ -204,20 +209,15 @@ void AutoclickScrollBubbleController::ShowBubble(
   init_params.preferred_width = kAutoclickScrollMenuSizeDips;
   init_params.max_height = kAutoclickScrollMenuSizeDips;
   init_params.translucent = true;
+  init_params.type = TrayBubbleView::TrayBubbleType::kAccessibilityBubble;
+
   bubble_view_ = new AutoclickScrollBubbleView(init_params);
   bubble_view_->SetArrow(alignment);
 
   scroll_view_ = new AutoclickScrollView();
   scroll_view_->SetBorder(views::CreateEmptyBorder(
       gfx::Insets::TLBR(kUnifiedTopShortcutSpacing, 0, 0, 0)));
-  bubble_view_->AddChildView(scroll_view_);
-
-  // In dark light mode, we switch TrayBubbleView to use a textured layer
-  // instead of solid color layer, so no need to create an extra layer here.
-  if (!features::IsDarkLightModeEnabled()) {
-    scroll_view_->SetPaintToLayer();
-    scroll_view_->layer()->SetFillsBoundsOpaquely(false);
-  }
+  bubble_view_->AddChildView(scroll_view_.get());
 
   bubble_widget_ = views::BubbleDialogDelegateView::CreateBubble(bubble_view_);
   TrayBackgroundView::InitializeBubbleAnimations(bubble_widget_);
@@ -275,6 +275,16 @@ void AutoclickScrollBubbleController::BubbleViewDestroyed() {
   bubble_view_ = nullptr;
   bubble_widget_ = nullptr;
   scroll_view_ = nullptr;
+}
+
+std::u16string AutoclickScrollBubbleController::GetAccessibleNameForBubble() {
+  return l10n_util::GetStringUTF16(IDS_ASH_AUTOCLICK_SCROLL_BUBBLE);
+}
+
+void AutoclickScrollBubbleController::HideBubble(
+    const TrayBubbleView* bubble_view) {
+  // This function is currently not unused for bubbles of type
+  // `kAccessibilityBubble`, so can leave this empty.
 }
 
 }  // namespace ash

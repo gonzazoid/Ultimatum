@@ -21,8 +21,7 @@ tools/binary_size/trybot_commit_size_checker.py \
     --after-dir out/binary-size-results/$HASH2 \
     --results-path output.json \
     --staging-dir tmp \
-    --local-test \
-    -v
+    --local-test
 """
 
 import argparse
@@ -53,8 +52,6 @@ _SIZEDIFF_FILENAME = 'supersize_diff.sizediff'
 _HTML_REPORT_URL = (
     'https://chrome-supersize.firebaseapp.com/viewer.html?load_url={{' +
     _SIZEDIFF_FILENAME + '}}')
-_MAX_DEX_METHOD_COUNT_INCREASE = 200
-_MAX_NORMALIZED_INCREASE = 16 * 1024
 _MAX_PAK_INCREASE = 1024
 _TRYBOT_MD_URL = ('https://chromium.googlesource.com/chromium/src/+/main/docs/'
                   'speed/binary_size/android_binary_size_trybot.md')
@@ -99,6 +96,17 @@ class _SizeDelta(collections.namedtuple(
     return self.name < other.name
 
 
+# See https://crbug.com/1426694
+def _MaxSizeIncrease(author, subject):
+  if 'AFDO' in subject:
+    return 1024 * 1024
+  if 'Update V8' in subject:
+    return 100 * 1024
+  if 'autoroll' in author:
+    return 50 * 1024
+  return 16 * 1024
+
+
 def _SymbolDiffHelper(title_fragment, symbols):
   added = symbols.WhereDiffStatusIs(models.DIFF_STATUS_ADDED)
   removed = symbols.WhereDiffStatusIs(models.DIFF_STATUS_REMOVED)
@@ -129,7 +137,7 @@ def _CreateMutableConstantsDelta(symbols):
   return lines, _SizeDelta('Mutable Constants', 'symbols', 0, net_added)
 
 
-def _CreateMethodCountDelta(symbols):
+def _CreateMethodCountDelta(symbols, max_increase):
   symbols = symbols.WhereIsOnDemand(False)
   method_symbols = symbols.WhereInSection(models.SECTION_DEX_METHOD)
   method_lines, net_method_added = _SymbolDiffHelper('Methods', method_symbols)
@@ -143,25 +151,25 @@ def _CreateMethodCountDelta(symbols):
   if method_lines:
     lines.extend(method_lines)
 
-  return lines, _SizeDelta('Dex Methods Count', 'methods',
-                           _MAX_DEX_METHOD_COUNT_INCREASE, net_method_added)
+  return lines, _SizeDelta('Dex Methods Count', 'methods', max_increase,
+                           net_method_added)
 
 
-def _CreateResourceSizesDelta(before_dir, after_dir):
+def _CreateResourceSizesDelta(before_dir, after_dir, max_increase):
   sizes_diff = diagnose_bloat.ResourceSizesDiff()
   sizes_diff.ProduceDiff(before_dir, after_dir)
 
-  return sizes_diff.Summary(), _SizeDelta(
-      'Normalized APK Size', 'bytes', _MAX_NORMALIZED_INCREASE,
-      sizes_diff.summary_stat.value)
+  return sizes_diff.Summary(), _SizeDelta('Normalized APK Size', 'bytes',
+                                          max_increase,
+                                          sizes_diff.summary_stat.value)
 
 
-def _CreateBaseModuleResourceSizesDelta(before_dir, after_dir):
+def _CreateBaseModuleResourceSizesDelta(before_dir, after_dir, max_increase):
   sizes_diff = diagnose_bloat.ResourceSizesDiff(include_sections=['base'])
   sizes_diff.ProduceDiff(before_dir, after_dir)
 
   return sizes_diff.DetailedResults(), _SizeDelta(
-      'Base Module Size', 'bytes', _MAX_NORMALIZED_INCREASE,
+      'Base Module Size', 'bytes', max_increase,
       sizes_diff.CombinedSizeChangeForSection('base'))
 
 
@@ -191,41 +199,46 @@ def _CreateUncompressedPakSizeDeltas(symbols):
   ]
 
 
-def _ExtractForTestingSymbolsFromSingleMapping(mapping_path):
-  with open(mapping_path) as f:
-    proguard_mapping_lines = f.readlines()
-    current_class_orig = None
-    for line in proguard_mapping_lines:
-      if line.isspace() or '#' in line:
-        continue
-      if not line.startswith(' '):
-        match = _PROGUARD_CLASS_MAPPING_RE.search(line)
-        if match is None:
-          raise Exception('Malformed class mapping')
-        current_class_orig = match.group('original_name')
-        continue
-      assert current_class_orig is not None
-      line = line.strip()
-      match = _PROGUARD_METHOD_MAPPING_RE.search(line)
-      if (match is not None
-          and match.group('original_method_name').find('ForTest') > -1):
-        method_symbol = '{}#{}'.format(
-            match.group('original_method_class') or current_class_orig,
-            match.group('original_method_name'))
-        yield method_symbol
+def _IsForTestSymbol(value):
+  return 'ForTest' in value or 'FOR_TEST' in value
 
-      match = _PROGUARD_FIELD_MAPPING_RE.search(line)
-      if (match is not None
-          and match.group('original_name').find('ForTest') > -1):
-        field_symbol = '{}#{}'.format(current_class_orig,
-                                      match.group('original_name'))
-        yield field_symbol
+
+def IterForTestingSymbolsFromMapping(contents):
+  current_class_orig = None
+  for line in contents.splitlines(keepends=True):
+    if line.isspace() or '#' in line:
+      continue
+    if not line.startswith(' '):
+      match = _PROGUARD_CLASS_MAPPING_RE.search(line)
+      if match is None:
+        raise Exception('Malformed class mapping')
+      current_class_orig = match.group('original_name')
+      if _IsForTestSymbol(current_class_orig):
+        yield current_class_orig
+      continue
+
+    assert current_class_orig is not None
+    line = line.strip()
+    match = _PROGUARD_METHOD_MAPPING_RE.search(line)
+    if match:
+      method_name = match.group('original_method_name')
+      class_name = match.group('original_method_class') or current_class_orig
+      if _IsForTestSymbol(method_name) or _IsForTestSymbol(class_name):
+        yield f'{class_name}#{method_name}'
+      continue
+
+    match = _PROGUARD_FIELD_MAPPING_RE.search(line)
+    if match:
+      field_name = match.group('original_name')
+      if _IsForTestSymbol(field_name) or _IsForTestSymbol(current_class_orig):
+        yield f'{current_class_orig}#{field_name}'
 
 
 def _ExtractForTestingSymbolsFromMappings(mapping_paths):
   symbols = set()
   for mapping_path in mapping_paths:
-    symbols.update(_ExtractForTestingSymbolsFromSingleMapping(mapping_path))
+    with open(mapping_path) as f:
+      symbols.update(IterForTestingSymbolsFromMapping(f.read()))
   return symbols
 
 
@@ -289,6 +302,17 @@ def _FormatNumber(number):
   return '{:+,}'.format(number)
 
 
+# TODO(https://crbug.com/1414410): If missing and file is x32y, return xy; else
+# return original filename. Basically allows comparing x_32 targets with x
+# targets built under 32bit target_cpu without failing the script due to
+# different file names. Remove once migration is complete.
+def _UseAlterantiveIfMissing(path):
+  if not os.path.isfile(path):
+    parent, name = os.path.split(path)
+    path = os.path.join(parent, name.replace('32', '', 1))
+  return path
+
+
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument('--author', required=True, help='CL author')
@@ -318,11 +342,10 @@ def main():
       '--local-test',
       action='store_true',
       help='Allow input directories to be diagnose_bloat.py ones.')
-  parser.add_argument('-v', '--verbose', action='store_true')
   args = parser.parse_args()
 
-  if args.verbose:
-    logging.basicConfig(level=logging.INFO)
+  logging.basicConfig(level=logging.INFO,
+                      format='%(levelname).1s %(relativeCreated)6d %(message)s')
 
   before_path = pathlib.Path(args.before_dir)
   after_path = pathlib.Path(args.after_dir)
@@ -344,23 +367,31 @@ def main():
     size_filename = config['supersize_input_file'] + '.size'
 
   before_mapping_paths = [
-      before_path_resolver(f) for f in config['mapping_files']
+      _UseAlterantiveIfMissing(before_path_resolver(f))
+      for f in config['mapping_files']
   ]
   after_mapping_paths = [
-      after_path_resolver(f) for f in config['mapping_files']
+      _UseAlterantiveIfMissing(after_path_resolver(f))
+      for f in config['mapping_files']
   ]
+
+  max_size_increase = _MaxSizeIncrease(args.author, args.review_subject)
+  # We do not care as much about method count anymore, so this limit is set
+  # such that it is very unlikely to be hit.
+  max_methods_increase = 200 if '-autoroll' not in args.author else 800
 
   logging.info('Creating Supersize diff')
   supersize_diff_lines, delta_size_info = _CreateSupersizeDiff(
-      before_path_resolver(size_filename), after_path_resolver(size_filename),
+      _UseAlterantiveIfMissing(before_path_resolver(size_filename)),
+      _UseAlterantiveIfMissing(after_path_resolver(size_filename)),
       args.review_subject, args.review_url)
 
   changed_symbols = delta_size_info.raw_symbols.WhereDiffStatusIs(
       models.DIFF_STATUS_UNCHANGED).Inverted()
 
-  # Monitor dex method count since the "multidex limit" is a thing.
   logging.info('Checking dex symbols')
-  dex_delta_lines, dex_delta = _CreateMethodCountDelta(changed_symbols)
+  dex_delta_lines, dex_delta = _CreateMethodCountDelta(changed_symbols,
+                                                       max_methods_increase)
   size_deltas = {dex_delta}
   metrics = {(dex_delta, _DEX_SYMBOLS_LOG)}
 
@@ -388,13 +419,14 @@ def main():
   # Normalized APK Size is the main metric we use to monitor binary size.
   logging.info('Creating sizes diff')
   resource_sizes_lines, resource_sizes_delta = (_CreateResourceSizesDelta(
-      args.before_dir, args.after_dir))
+      args.before_dir, args.after_dir, max_size_increase))
   size_deltas.add(resource_sizes_delta)
   metrics.add((resource_sizes_delta, _RESOURCE_SIZES_LOG))
 
   logging.info('Creating base module sizes diff')
   base_resource_sizes_lines, base_resource_sizes_delta = (
-      _CreateBaseModuleResourceSizesDelta(args.before_dir, args.after_dir))
+      _CreateBaseModuleResourceSizesDelta(args.before_dir, args.after_dir,
+                                          max_size_increase))
   size_deltas.add(base_resource_sizes_delta)
   metrics.add((base_resource_sizes_delta, _BASE_RESOURCE_SIZES_LOG))
 
@@ -413,7 +445,6 @@ def main():
   passing_deltas = set(d for d in size_deltas if d.IsAllowable())
   failing_deltas = size_deltas - passing_deltas
 
-  is_roller = '-autoroll' in args.author
   failing_checks_text = '\n'.join(d.explanation for d in sorted(failing_deltas))
   passing_checks_text = '\n'.join(d.explanation for d in sorted(passing_deltas))
   checks_text = """\
@@ -429,13 +460,6 @@ To understand what those checks are and how to pass them, see:
 """.format(failing_checks_text, passing_checks_text, _TRYBOT_MD_URL)
 
   status_code = int(bool(failing_deltas))
-
-  # Give rollers a free pass, except for mutable constants.
-  # Mutable constants are rare, and other regressions are generally noticed in
-  # size graphs and can be investigated after-the-fact.
-  if is_roller and mutable_constants_delta not in failing_deltas:
-    status_code = 0
-
   see_docs_lines = ['\n', f'For more details: {_TRYBOT_MD_URL}\n']
 
   summary = '<br>' + checks_text.replace('\n', '<br>')

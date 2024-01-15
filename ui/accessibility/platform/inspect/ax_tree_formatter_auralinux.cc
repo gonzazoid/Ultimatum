@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "base/logging.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -20,20 +21,6 @@
 #include "ui/accessibility/platform/inspect/ax_inspect_utils_auralinux.h"
 #include "ui/accessibility/platform/inspect/ax_property_node.h"
 #include "ui/accessibility/platform/inspect/ax_script_instruction.h"
-
-#define CHECK_ATSPI_ERROR(error)                       \
-  if (error) {                                         \
-    LOG(ERROR) << error->message;                      \
-    g_clear_error(&error);                             \
-    return base::Value(base::Value::Type::DICTIONARY); \
-  }
-
-#define CHECK_ATSPI_ERROR_NULLPTR(error) \
-  if (error) {                           \
-    LOG(ERROR) << error->message;        \
-    g_clear_error(&error);               \
-    return nullptr;                      \
-  }
 
 namespace ui {
 
@@ -229,18 +216,23 @@ void AXTreeFormatterAuraLinux::AddHypertextProperties(
       }
 
       AtkHyperlink* link = atk_hypertext_get_link(hypertext, link_index);
+      if (!link)
+        continue;  // TODO(aleventhal) Change to DCHECK(link);
+
+#if DCHECK_IS_ON()
+      AtkObject* link_obj = atk_hyperlink_get_object(link, 0);
+      DCHECK(link_obj);
+      int index_in_parent = atk_object_get_index_in_parent(link_obj);
+      DCHECK_GE(index_in_parent, 0);
+#endif
 
       int utf8_offset = atk_hyperlink_get_start_index(link);
       gchar* link_start = g_utf8_offset_to_pointer(character_text, utf8_offset);
       int offset = link_start - character_text;
 
-      gchar* character_substring =
-          g_utf8_substring(character_text, utf8_offset, utf8_offset + 1);
-      DCHECK(std::string(character_substring) == "\uFFFC");
-
-      base::ReplaceFirstSubstringAfterOffset(&text, offset, character_substring,
+      std::string replacement_char = "\uFFFC";
+      base::ReplaceFirstSubstringAfterOffset(&text, offset, replacement_char,
                                              link_str);
-      g_free(character_substring);
     }
   }
 
@@ -320,6 +312,48 @@ void AXTreeFormatterAuraLinux::AddActionProperties(
     actions.Append(name ? name : "");
   }
   dict->Set("actions", std::move(actions));
+}
+
+void AXTreeFormatterAuraLinux::AddRelationProperties(
+    AtkObject* atk_object,
+    base::Value::Dict* dict) const {
+  AtkRelationSet* relation_set = atk_object_ref_relation_set(atk_object);
+  base::Value::List relations;
+
+  for (int i = ATK_RELATION_NULL; i < ATK_RELATION_LAST_DEFINED; i++) {
+    AtkRelationType relation_type = static_cast<AtkRelationType>(i);
+    if (atk_relation_set_contains(relation_set, relation_type)) {
+      AtkRelation* relation =
+          atk_relation_set_get_relation_by_type(relation_set, relation_type);
+      DCHECK(relation);
+
+      relations.Append(ToString(relation));
+    }
+  }
+
+  g_object_unref(relation_set);
+  dict->Set("relations", std::move(relations));
+}
+
+std::string AXTreeFormatterAuraLinux::ToString(AtkRelation* relation) {
+  std::string relation_name =
+      atk_relation_type_get_name(relation->relationship);
+  GPtrArray* relation_targets = atk_relation_get_target(relation);
+  DCHECK(relation_targets);
+
+  std::vector<std::string> target_roles(relation_targets->len);
+  for (guint i = 0; i < relation_targets->len; i++) {
+    AtkObject* atk_target =
+        static_cast<AtkObject*>(g_ptr_array_index(relation_targets, i));
+    DCHECK(atk_target);
+    target_roles[i] = atk_role_get_name(atk_object_get_role(atk_target));
+  }
+
+  // We need to alphabetically sort the roles so tests don't flake from the
+  // order of `relation_targets`.
+  std::sort(target_roles.begin(), target_roles.end());
+  return base::StrCat(
+      {relation_name, "=[", base::JoinString(target_roles, ","), "]"});
 }
 
 void AXTreeFormatterAuraLinux::AddValueProperties(
@@ -511,16 +545,6 @@ void AXTreeFormatterAuraLinux::AddProperties(AtkObject* atk_object,
   dict->Set("states", std::move(states));
   g_object_unref(state_set);
 
-  AtkRelationSet* relation_set = atk_object_ref_relation_set(atk_object);
-  base::Value::List relations;
-  for (int i = ATK_RELATION_NULL; i < ATK_RELATION_LAST_DEFINED; i++) {
-    AtkRelationType relation_type = static_cast<AtkRelationType>(i);
-    if (atk_relation_set_contains(relation_set, relation_type))
-      relations.Append(atk_relation_type_get_name(relation_type));
-  }
-  dict->Set("relations", std::move(relations));
-  g_object_unref(relation_set);
-
   AtkAttributeSet* attributes = atk_object_get_attributes(atk_object);
   for (AtkAttributeSet* attr = attributes; attr; attr = attr->next) {
     AtkAttribute* attribute = static_cast<AtkAttribute*>(attr->data);
@@ -532,6 +556,7 @@ void AXTreeFormatterAuraLinux::AddProperties(AtkObject* atk_object,
   AddTextProperties(atk_object, dict);
   AddHypertextProperties(atk_object, dict);
   AddActionProperties(atk_object, dict);
+  AddRelationProperties(atk_object, dict);
   AddValueProperties(atk_object, dict);
   AddTableProperties(atk_object, dict);
   AddTableCellProperties(platform_node, atk_object, dict);
@@ -615,6 +640,7 @@ const char* const ATK_OBJECT_ATTRIBUTES[] = {
     "id",
     "keyshortcuts",
     "level",
+    "link-target",
     "live",
     "placeholder",
     "posinset",
@@ -700,8 +726,8 @@ std::string AXTreeFormatterAuraLinux::ProcessTreeForOutput(
         // By default, exclude embedded-by because that should appear on every
         // top-level document object. The other relation types are less common
         // and thus almost always of interest when testing.
-        WriteAttribute(*relation_value != "embedded-by", *relation_value,
-                       &line);
+        WriteAttribute(!relation_value->starts_with("embedded-by"),
+                       *relation_value, &line);
       }
     }
   }

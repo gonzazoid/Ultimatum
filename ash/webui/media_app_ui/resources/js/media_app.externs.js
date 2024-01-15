@@ -187,6 +187,28 @@ mediaApp.AbstractFileList.prototype.filterInPlace = function(filter) {};
 
 
 /**
+ * Represents a box with top-left coordinates and a width and height.
+ * @param {number} left Left.
+ * @param {number} top Top.
+ * @param {number} width Width.
+ * @param {number} height Height.
+ * @struct
+ * @constructor
+ */
+mediaApp.Rect = function(left, top, width, height) {
+  // These fields match rect.js from the closure library.
+  /* @type {number} */
+  this.left = left;
+  /* @type {number} */
+  this.top = top;
+  /* @type {number} */
+  this.width = width;
+  /* @type {number} */
+  this.height = height;
+};
+
+
+/**
  * The delegate which exposes open source privileged WebUi functions to
  * MediaApp.
  * @record
@@ -261,6 +283,16 @@ mediaApp.ClientApiDelegate.prototype.reloadMainFrame = function() {};
  * @type {function()|undefined}
  */
 mediaApp.ClientApiDelegate.prototype.maybeTriggerPdfHats = function() {};
+/**
+ * Called whenever the viewport changes, e.g. due to scrolling, zooming,
+ * resizing the window, or opening and closing toolbars/panels.
+ * @param {!mediaApp.Rect} viewportBox The new bounding box of the viewport.
+ * @param {number} scaleFactor The ratio between CSS pixels (i.e. ignoring
+ *     browser and pinch zoom) and ink units. Larger numbers indicate the
+ *     document is more zoomed in.
+ */
+mediaApp.ClientApiDelegate.prototype.viewportUpdated = function(
+    viewportBox, scaleFactor) {};
 
 /**
  * The client Api for interacting with the media app instance.
@@ -274,6 +306,12 @@ mediaApp.ClientApi = function() {};
  * @return {!Promise<undefined>}
  */
 mediaApp.ClientApi.prototype.loadFiles = function(files) {};
+/**
+ * If a document is currently loaded, scrolls and zooms to the given viewport.
+ * @param {!mediaApp.Rect} viewport
+ * @return {!Promise<undefined>}
+ */
+mediaApp.ClientApi.prototype.setViewport = function(viewport) {};
 /**
  * Sets the delegate through which MediaApp can access open-source privileged
  * WebUI methods.

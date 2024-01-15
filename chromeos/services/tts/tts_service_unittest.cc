@@ -4,99 +4,21 @@
 
 #include "chromeos/services/tts/tts_service.h"
 
-#include "base/bind.h"
-#include "base/strings/utf_string_conversions.h"
-#include "base/test/task_environment.h"
 #include "chromeos/services/tts/public/mojom/tts_service.mojom.h"
-#include "media/mojo/mojom/audio_data_pipe.mojom.h"
-#include "media/mojo/mojom/audio_stream_factory.mojom.h"
-#include "mojo/public/cpp/bindings/pending_receiver.h"
-#include "mojo/public/cpp/bindings/pending_remote.h"
-#include "mojo/public/cpp/bindings/receiver.h"
-#include "mojo/public/cpp/bindings/remote.h"
-#include "testing/gtest/include/gtest/gtest.h"
-
-using mojo::PendingReceiver;
-using mojo::PendingRemote;
+#include "chromeos/services/tts/tts_test_utils.h"
 
 namespace chromeos {
 namespace tts {
 namespace {
 
-using CreateOutputStreamCallback =
-    base::OnceCallback<void(media::mojom::ReadWriteAudioDataPipePtr)>;
-using CreateLoopbackStreamCallback =
-    base::OnceCallback<void(media::mojom::ReadOnlyAudioDataPipePtr)>;
-
-class MockAudioStreamFactory : public media::mojom::AudioStreamFactory {
+// Tests the TtsService interface, the main interface that handles TTS
+// requests from clients on ChromeOS. For more info, please see
+// chromeos/services/tts/public/mojom/tts_service.mojom.
+class TtsServiceTest : public TtsTestBase {
  public:
-  void CreateInputStream(
-      PendingReceiver<media::mojom::AudioInputStream> stream,
-      PendingRemote<media::mojom::AudioInputStreamClient> client,
-      PendingRemote<media::mojom::AudioInputStreamObserver> observer,
-      PendingRemote<media::mojom::AudioLog> log,
-      const std::string& device_id,
-      const media::AudioParameters& params,
-      uint32_t shared_memory_count,
-      bool enable_agc,
-      base::ReadOnlySharedMemoryRegion key_press_count_buffer,
-      media::mojom::AudioProcessingConfigPtr processing_config,
-      CreateInputStreamCallback callback) override {}
-  void AssociateInputAndOutputForAec(
-      const base::UnguessableToken& input_stream_id,
-      const std::string& output_device_id) override {}
-
-  void CreateOutputStream(
-      PendingReceiver<media::mojom::AudioOutputStream> stream,
-      mojo::PendingAssociatedRemote<media::mojom::AudioOutputStreamObserver>
-          observer,
-      PendingRemote<media::mojom::AudioLog> log,
-      const std::string& device_id,
-      const media::AudioParameters& params,
-      const base::UnguessableToken& group_id,
-      CreateOutputStreamCallback callback) override {
-    audio_output_stream_ = std::move(stream);
-    std::move(callback).Run(nullptr);
-  }
-  void BindMuter(
-      mojo::PendingAssociatedReceiver<media::mojom::LocalMuter> receiver,
-      const base::UnguessableToken& group_id) override {}
-
-  void CreateLoopbackStream(
-      PendingReceiver<media::mojom::AudioInputStream> receiver,
-      PendingRemote<media::mojom::AudioInputStreamClient> client,
-      PendingRemote<media::mojom::AudioInputStreamObserver> observer,
-      const media::AudioParameters& params,
-      uint32_t shared_memory_count,
-      const base::UnguessableToken& group_id,
-      CreateLoopbackStreamCallback callback) override {}
-
-  PendingReceiver<media::mojom::AudioOutputStream> audio_output_stream_;
-};
-
-class MockTtsEventObserver : public mojom::TtsEventObserver {
- public:
-  // mojom::TtsEventObserver:
-  void OnStart() override { start_count++; }
-
-  void OnTimepoint(int32_t char_index) override {
-    char_indices.push_back(char_index);
-  }
-
-  void OnEnd() override { end_count++; }
-
-  void OnError() override {}
-
-  int start_count = 0;
-  std::vector<int> char_indices;
-  int end_count = 0;
-};
-
-class TtsServiceTest : public testing::Test {
- public:
-  TtsServiceTest()
-      : service_(remote_service_.BindNewPipeAndPassReceiver()),
-        audio_stream_factory_(&mock_audio_stream_factory_) {}
+  TtsServiceTest() : service_(remote_service_.BindNewPipeAndPassReceiver()) {}
+  TtsServiceTest(const TtsServiceTest&) = delete;
+  TtsServiceTest& operator=(const TtsServiceTest&) = delete;
   ~TtsServiceTest() override = default;
 
  protected:
@@ -123,11 +45,8 @@ class TtsServiceTest : public testing::Test {
   // testing::Test:
   void SetUp() override { service_.set_keep_process_alive_for_testing(true); }
 
-  base::test::TaskEnvironment task_environment_;
   mojo::Remote<mojom::TtsService> remote_service_;
   TtsService service_;
-  MockAudioStreamFactory mock_audio_stream_factory_;
-  mojo::Receiver<media::mojom::AudioStreamFactory> audio_stream_factory_;
 };
 
 TEST_F(TtsServiceTest, DisconnectPlaybackStream) {
@@ -165,7 +84,7 @@ TEST_F(TtsServiceTest, BasicAudioBuffering) {
 
   auto bus = media::AudioBus::Create(1 /* channels */, 512 /* frames */);
   service_.playback_tts_stream_for_testing()->tts_player_for_testing()->Render(
-      base::Seconds(0), base::TimeTicks::Now(), 0 /* prior frames skipped */,
+      base::Seconds(0), base::TimeTicks::Now(), {} /* glitch info */,
       bus.get());
   observer.FlushForTesting();
 
@@ -178,7 +97,7 @@ TEST_F(TtsServiceTest, BasicAudioBuffering) {
       std::vector<float>(), 100 /* char_index */, false /* last buffer */);
   playback_tts_stream.FlushForTesting();
   service_.playback_tts_stream_for_testing()->tts_player_for_testing()->Render(
-      base::Seconds(0), base::TimeTicks::Now(), 0 /* prior frames skipped */,
+      base::Seconds(0), base::TimeTicks::Now(), {} /* glitch info */,
       bus.get());
   observer.FlushForTesting();
   EXPECT_EQ(1, backing_observer.start_count);
@@ -192,7 +111,7 @@ TEST_F(TtsServiceTest, BasicAudioBuffering) {
       std::vector<float>(), 9999 /* char_index */, true /* last buffer */);
   playback_tts_stream.FlushForTesting();
   service_.playback_tts_stream_for_testing()->tts_player_for_testing()->Render(
-      base::Seconds(0), base::TimeTicks::Now(), 0 /* prior frames skipped */,
+      base::Seconds(0), base::TimeTicks::Now(), {} /* glitch info */,
       bus.get());
   observer.FlushForTesting();
   EXPECT_EQ(1, backing_observer.start_count);
@@ -216,7 +135,7 @@ TEST_F(TtsServiceTest, ExplicitAudioTimepointing) {
 
   auto bus = media::AudioBus::Create(1 /* channels */, 512 /* frames */);
   service_.playback_tts_stream_for_testing()->tts_player_for_testing()->Render(
-      base::Seconds(0), base::TimeTicks::Now(), 0 /* prior frames skipped */,
+      base::Seconds(0), base::TimeTicks::Now(), {} /* glitch info */,
       bus.get());
   observer.FlushForTesting();
 
@@ -229,7 +148,7 @@ TEST_F(TtsServiceTest, ExplicitAudioTimepointing) {
       std::vector<float>(), -1 /* char_index */, false /* last buffer */);
   playback_tts_stream.FlushForTesting();
   service_.playback_tts_stream_for_testing()->tts_player_for_testing()->Render(
-      base::Seconds(0), base::TimeTicks::Now(), 0 /* prior frames skipped */,
+      base::Seconds(0), base::TimeTicks::Now(), {} /* glitch info */,
       bus.get());
   observer.FlushForTesting();
   EXPECT_EQ(1, backing_observer.start_count);
@@ -249,7 +168,7 @@ TEST_F(TtsServiceTest, ExplicitAudioTimepointing) {
       ->AddExplicitTimepoint(300, base::Seconds(0));
   playback_tts_stream.FlushForTesting();
   service_.playback_tts_stream_for_testing()->tts_player_for_testing()->Render(
-      base::Seconds(0), base::TimeTicks::Now(), 0 /* prior frames skipped */,
+      base::Seconds(0), base::TimeTicks::Now(), {} /* glitch info */,
       bus.get());
   observer.FlushForTesting();
   EXPECT_EQ(1, backing_observer.start_count);
@@ -263,7 +182,7 @@ TEST_F(TtsServiceTest, ExplicitAudioTimepointing) {
       std::vector<float>(), 9999 /* char_index */, true /* last buffer */);
   playback_tts_stream.FlushForTesting();
   service_.playback_tts_stream_for_testing()->tts_player_for_testing()->Render(
-      base::Seconds(0), base::TimeTicks::Now(), 0 /* prior frames skipped */,
+      base::Seconds(0), base::TimeTicks::Now(), {} /* glitch info */,
       bus.get());
   observer.FlushForTesting();
   EXPECT_EQ(1, backing_observer.start_count);

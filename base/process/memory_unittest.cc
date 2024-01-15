@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr_exclusion.h"
+
 #define _CRT_SECURE_NO_WARNINGS
 
 #include "base/process/memory.h"
@@ -13,8 +15,8 @@
 #include <vector>
 
 #include "base/allocator/allocator_check.h"
-#include "base/allocator/buildflags.h"
-#include "base/allocator/partition_allocator/page_allocator.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/page_allocator.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_buildflags.h"
 #include "base/compiler_specific.h"
 #include "base/debug/alias.h"
 #include "base/memory/aligned_memory.h"
@@ -30,8 +32,9 @@
 #endif
 #if BUILDFLAG(IS_MAC)
 #include <malloc/malloc.h>
-#include "base/allocator/partition_allocator/shim/allocator_interception_mac.h"
-#include "base/allocator/partition_allocator/shim/allocator_shim.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/shim/allocator_interception_apple.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/shim/allocator_shim.h"
+#include "base/check_op.h"
 #include "base/process/memory_unittest_mac.h"
 #endif
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
@@ -98,11 +101,10 @@ TEST(ProcessMemoryTest, MacTerminateOnHeapCorruption) {
 
 #endif  // BUILDFLAG(IS_MAC)
 
+#if BUILDFLAG(USE_ALLOCATOR_SHIM)
 TEST(MemoryTest, AllocatorShimWorking) {
 #if BUILDFLAG(IS_MAC)
-#if BUILDFLAG(USE_ALLOCATOR_SHIM)
   allocator_shim::InitializeAllocatorShim();
-#endif
   allocator_shim::InterceptAllocationsMac();
 #endif
   ASSERT_TRUE(base::allocator::IsAllocatorInitialized());
@@ -111,6 +113,7 @@ TEST(MemoryTest, AllocatorShimWorking) {
   allocator_shim::UninterceptMallocZonesForTesting();
 #endif
 }
+#endif  // BUILDFLAG(USE_ALLOCATOR_SHIM)
 
 // OpenBSD does not support these tests. Don't test these on ASan/TSan/MSan
 // configurations: only test the real allocator.
@@ -148,7 +151,9 @@ class OutOfMemoryTest : public testing::Test {
         signed_test_size_(std::numeric_limits<ssize_t>::max()) {}
 
  protected:
-  void* value_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION void* value_;
   size_t test_size_;
   size_t insecure_test_size_;
   ssize_t signed_test_size_;
@@ -284,7 +289,10 @@ TEST_F(OutOfMemoryDeathTest, NewHandlerGeneratesUnhandledException) {
 
 // OS X has no 2Gb allocation limit.
 // See https://crbug.com/169327.
-#if !BUILDFLAG(IS_MAC)
+// PartitionAlloc is not active in component builds, so cannot enforce
+// this limit. (//BUILD.gn asserts that we cannot have an official component
+// build.)
+#if !BUILDFLAG(IS_MAC) && !defined(COMPONENT_BUILD)
 TEST_F(OutOfMemoryDeathTest, SecurityNew) {
   if (ShouldSkipTest()) {
     return;
@@ -696,3 +704,25 @@ TEST_F(OutOfMemoryHandledTest, UncheckedCalloc) {
 #endif  // BUILDFLAG(IS_ANDROID)
 #endif  // !BUILDFLAG(IS_OPENBSD) && BUILDFLAG(USE_ALLOCATOR_SHIM) &&
         // !defined(MEMORY_TOOL_REPLACES_ALLOCATOR)
+
+#if BUILDFLAG(IS_MAC) && BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
+
+// Not a proper test because it needs to be in a static initializer, see the
+// comment in UncheckedMalloc() in memory_mac.mm.
+//
+// The "test" passes if the binary doesn't crash.
+size_t need_a_static_initializer = []() {
+  void* ptr;
+  constexpr size_t kRequestedSize = 1000u;
+  bool ok = base::UncheckedMalloc(kRequestedSize, &ptr);
+  CHECK(ok);
+  size_t actual_size = malloc_size(ptr);
+  // If no known zone owns the pointer, dispatching code in libmalloc returns 0.
+  CHECK_GE(actual_size, kRequestedSize);
+  // If no zone owns the pointer, libmalloc aborts here.
+  free(ptr);
+
+  return actual_size;
+}();
+
+#endif  // BUILDFLAG(IS_MAC) && BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)

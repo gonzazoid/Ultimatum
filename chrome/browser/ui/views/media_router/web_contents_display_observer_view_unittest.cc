@@ -5,7 +5,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ui/views/media_router/web_contents_display_observer_view.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "content/public/browser/web_contents.h"
@@ -18,7 +18,7 @@ namespace media_router {
 
 class MockCallback {
  public:
-  MOCK_METHOD0(OnDisplayChanged, void());
+  MOCK_METHOD(void, OnDisplayChanged, (), ());
 };
 
 class TestWebContentsDisplayObserverView

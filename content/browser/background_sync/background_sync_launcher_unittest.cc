@@ -7,7 +7,7 @@
 #include <map>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -98,17 +98,13 @@ class BackgroundSyncLauncherTest : public testing::Test {
     auto done_closure = base::BindLambdaForTesting(
         [&]() { num_invocations_fire_background_sync_events_++; });
 
-    test_browser_context_.ForEachStoragePartition(
-        base::BindRepeating(
-            [](base::OnceClosure done_closure,
-               StoragePartition* storage_partition) {
-              BackgroundSyncContext* sync_context =
-                  storage_partition->GetBackgroundSyncContext();
-              sync_context->FireBackgroundSyncEvents(
-                  blink::mojom::BackgroundSyncType::ONE_SHOT,
-                  std::move(done_closure));
-            },
-            std::move(done_closure)));
+    test_browser_context_.ForEachLoadedStoragePartition(
+        [&](StoragePartition* storage_partition) {
+          BackgroundSyncContext* sync_context =
+              storage_partition->GetBackgroundSyncContext();
+          sync_context->FireBackgroundSyncEvents(
+              blink::mojom::BackgroundSyncType::ONE_SHOT, done_closure);
+        });
 
     task_environment_.RunUntilIdle();
   }

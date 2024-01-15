@@ -6,15 +6,15 @@
 #define CHROMEOS_ASH_SERVICES_MULTIDEVICE_SETUP_PUBLIC_CPP_FAKE_MULTIDEVICE_SETUP_CLIENT_H_
 
 #include <memory>
+#include <optional>
 #include <queue>
 #include <string>
 #include <tuple>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chromeos/ash/components/multidevice/remote_device_ref.h"
 #include "chromeos/ash/services/multidevice_setup/public/cpp/multidevice_setup_client.h"
 #include "chromeos/ash/services/multidevice_setup/public/mojom/multidevice_setup.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -46,7 +46,7 @@ class FakeMultiDeviceSetupClient : public MultiDeviceSetupClient {
   void InvokePendingSetFeatureEnabledStateCallback(
       mojom::Feature expected_feature,
       bool expected_enabled,
-      const absl::optional<std::string>& expected_auth_token,
+      const std::optional<std::string>& expected_auth_token,
       bool success);
   void InvokePendingRetrySetHostNowCallback(bool success);
   void InvokePendingTriggerEventForDebuggingCallback(
@@ -58,6 +58,8 @@ class FakeMultiDeviceSetupClient : public MultiDeviceSetupClient {
   size_t num_remove_host_device_called() {
     return num_remove_host_device_called_;
   }
+
+  const std::string& qs_phone_instance_id() { return qs_phone_instance_id_; }
 
   // MultiDeviceSetupClient:
   const HostStatusWithDevice& GetHostStatus() const override;
@@ -74,7 +76,7 @@ class FakeMultiDeviceSetupClient : public MultiDeviceSetupClient {
   void SetFeatureEnabledState(
       mojom::Feature feature,
       bool enabled,
-      const absl::optional<std::string>& auth_token,
+      const std::optional<std::string>& auth_token,
       mojom::MultiDeviceSetup::SetFeatureEnabledStateCallback callback)
       override;
   void RetrySetHostNow(
@@ -83,8 +85,11 @@ class FakeMultiDeviceSetupClient : public MultiDeviceSetupClient {
       mojom::EventTypeForDebugging type,
       mojom::MultiDeviceSetup::TriggerEventForDebuggingCallback callback)
       override;
+  void SetQuickStartPhoneInstanceID(
+      const std::string& qs_phone_instance_id) override;
 
   size_t num_remove_host_device_called_ = 0u;
+  std::string qs_phone_instance_id_;
 
   std::queue<GetEligibleHostDevicesCallback>
       get_eligible_host_devices_callback_queue_;
@@ -95,7 +100,7 @@ class FakeMultiDeviceSetupClient : public MultiDeviceSetupClient {
   std::queue<
       std::tuple<mojom::Feature,
                  bool,
-                 absl::optional<std::string>,
+                 std::optional<std::string>,
                  mojom::MultiDeviceSetup::SetFeatureEnabledStateCallback>>
       set_feature_enabled_state_args_queue_;
   std::queue<mojom::MultiDeviceSetup::RetrySetHostNowCallback>
@@ -112,10 +117,5 @@ class FakeMultiDeviceSetupClient : public MultiDeviceSetupClient {
 }  // namespace multidevice_setup
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos::multidevice_setup {
-using ::ash::multidevice_setup::FakeMultiDeviceSetupClient;
-}
 
 #endif  // CHROMEOS_ASH_SERVICES_MULTIDEVICE_SETUP_PUBLIC_CPP_FAKE_MULTIDEVICE_SETUP_CLIENT_H_

@@ -7,7 +7,8 @@ package org.chromium.chrome.browser.partnercustomizations;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.net.Uri;
-import android.support.test.InstrumentationRegistry;
+
+import androidx.test.core.app.ApplicationProvider;
 
 import org.junit.rules.TestRule;
 import org.junit.runner.Description;
@@ -18,9 +19,7 @@ import org.chromium.chrome.test.partnercustomizations.TestPartnerBrowserCustomiz
 
 import java.util.concurrent.Semaphore;
 
-/**
- * Basic shared functionality for partner customization unit tests.
- */
+/** Basic shared functionality for partner customization unit tests. */
 public class BasePartnerBrowserCustomizationUnitTestRule implements TestRule {
     static final String PARTNER_BROWSER_CUSTOMIZATIONS_PROVIDER =
             TestPartnerBrowserCustomizationsProvider.class.getName();
@@ -30,12 +29,13 @@ public class BasePartnerBrowserCustomizationUnitTestRule implements TestRule {
             TestPartnerBrowserCustomizationsDelayedProvider.class.getName();
     static final long DEFAULT_TIMEOUT_MS = 500;
 
-    private final Runnable mCallback = new Runnable() {
-        @Override
-        public void run() {
-            mCallbackLock.release();
-        }
-    };
+    private final Runnable mCallback =
+            new Runnable() {
+                @Override
+                public void run() {
+                    mCallbackLock.release();
+                }
+            };
     private final Semaphore mCallbackLock = new Semaphore(0);
 
     /**
@@ -64,7 +64,7 @@ public class BasePartnerBrowserCustomizationUnitTestRule implements TestRule {
     }
 
     Context getContextWrapper() {
-        return new ContextWrapper(InstrumentationRegistry.getContext()) {
+        return new ContextWrapper(ApplicationProvider.getApplicationContext()) {
             @Override
             public Context getApplicationContext() {
                 return getBaseContext();

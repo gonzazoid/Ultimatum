@@ -18,6 +18,11 @@ class ArcSessionManagerObserver {
   // is represented by "arc.enabled" preference, is updated.
   virtual void OnArcPlayStoreEnabledChanged(bool enabled) {}
 
+  // Called with when user opted-in for ARC and ARC is going to be created for
+  // this user. I.e. successful user action triggered ARC user instance
+  // initialization.
+  virtual void OnArcOptInUserAction() {}
+
   // Called to notify that checking of Android management status started
   // during the opt-in flow.
   virtual void OnArcOptInManagementCheckStarted() {}
@@ -41,6 +46,9 @@ class ArcSessionManagerObserver {
   // browser_tests
   virtual void OnArcDataRemoved() {}
 
+  // Called to notify that ARC start is delayed by ARC on demand
+  virtual void OnArcStartDelayed() {}
+
   // Called to notify that the error is requested by the session manager to be
   // displayed in the support host. This is called even if Support UI is
   // disabled. Note that this is not called in cases when the support app
@@ -54,6 +62,13 @@ class ArcSessionManagerObserver {
   // per observer regardless of whether the attempt has already been made
   // before the observer is added.
   virtual void OnPropertyFilesExpanded(bool result) {}
+
+  // Called when ARC session is blocked because ARCVM /data migration is in
+  // progress. If |auto_resume_enabled| is true, the migration will be
+  // automatically resumed by restarting the Chrome session. Otherwise the user
+  // needs to manually enter the migration flow by clicking a notification.
+  virtual void OnArcSessionBlockedByArcVmDataMigration(
+      bool auto_resume_enabled) {}
 
  protected:
   virtual ~ArcSessionManagerObserver() = default;

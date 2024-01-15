@@ -23,23 +23,32 @@ class ExtensionInstallEventRouter
  public:
   explicit ExtensionInstallEventRouter(content::BrowserContext* context);
 
+  ExtensionInstallEventRouter(const ExtensionInstallEventRouter&) = delete;
   ExtensionInstallEventRouter& operator=(const ExtensionInstallEventRouter&) =
+      delete;
+  ExtensionInstallEventRouter(ExtensionInstallEventRouter&&) = delete;
+  ExtensionInstallEventRouter& operator=(ExtensionInstallEventRouter&&) =
       delete;
 
   ~ExtensionInstallEventRouter() override;
   void OnExtensionInstalled(content::BrowserContext* browser_context,
                             const extensions::Extension* extension,
                             bool is_update) override;
+  void OnExtensionUninstalled(content::BrowserContext* browser_context,
+                              const extensions::Extension* extension,
+                              extensions::UninstallReason reason) override;
 
   void StartObserving();
 
  private:
-  raw_ptr<enterprise_connectors::RealtimeReportingClient, DanglingUntriaged>
+  raw_ptr<RealtimeReportingClient, AcrossTasksDanglingUntriaged>
       reporting_client_ = nullptr;
   raw_ptr<extensions::ExtensionRegistry, DanglingUntriaged>
       extension_registry_ = nullptr;
+  void ReportExtensionInstallEvent(const extensions::Extension* extension,
+                                   const char* extension_action);
 };
 
 }  // namespace enterprise_connectors
 
-#endif  // CHROME_BROWSER_ENTERPRISE_CONNECTORS_REPORTING_REPORTING_SERVICE_SETTINGS_H_
+#endif  // CHROME_BROWSER_ENTERPRISE_CONNECTORS_REPORTING_EXTENSION_INSTALL_EVENT_ROUTER_H_

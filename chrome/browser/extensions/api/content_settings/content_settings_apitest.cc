@@ -4,17 +4,17 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
+#include "base/path_service.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/content_settings/cookie_settings_factory.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/extensions/api/content_settings/content_settings_api.h"
@@ -24,24 +24,27 @@
 #include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
+#include "chrome/test/base/ui_test_utils.h"
+#include "components/content_settings/core/browser/content_settings_uma_util.h"
 #include "components/content_settings/core/browser/cookie_settings.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/content_settings.h"
-#include "components/content_settings/core/common/features.h"
 #include "components/keep_alive_registry/keep_alive_types.h"
 #include "components/keep_alive_registry/scoped_keep_alive.h"
-#include "components/permissions/features.h"
 #include "components/permissions/permission_manager.h"
-#include "components/permissions/permission_result.h"
 #include "components/prefs/pref_service.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/common/webplugininfo.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/test_extension_registry_observer.h"
+#include "extensions/common/extension_features.h"
+#include "extensions/test/test_extension_dir.h"
+#include "net/base/schemeful_site.h"
+#include "net/dns/mock_host_resolver.h"
 
 #if BUILDFLAG(ENABLE_PLUGINS)
 #include "content/public/browser/plugin_service.h"
@@ -50,7 +53,6 @@
 namespace extensions {
 
 using ContextType = ExtensionApiTest::ContextType;
-using QueryReason = content_settings::CookieSettings::QueryReason;
 
 class ExtensionContentSettingsApiTest : public ExtensionApiTest {
  public:
@@ -83,7 +85,7 @@ class ExtensionContentSettingsApiTest : public ExtensionApiTest {
     profile_keep_alive_.reset();
     // BrowserProcess::Shutdown() needs to be called in a message loop, so we
     // post a task to release the keep alive, then run the message loop.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&std::unique_ptr<ScopedKeepAlive>::reset,
                                   base::Unretained(&keep_alive_), nullptr));
     content::RunAllPendingInMessageLoop();
@@ -101,9 +103,9 @@ class ExtensionContentSettingsApiTest : public ExtensionApiTest {
     // Check default content settings by using an unknown URL.
     GURL example_url("http://www.example.com");
     EXPECT_TRUE(cookie_settings->IsFullCookieAccessAllowed(
-        example_url, example_url, QueryReason::kSetting));
-    EXPECT_TRUE(cookie_settings->IsCookieSessionOnly(example_url,
-                                                     QueryReason::kSetting));
+        example_url, net::SiteForCookies::FromUrl(example_url),
+        url::Origin::Create(example_url), net::CookieSettingOverrides()));
+    EXPECT_TRUE(cookie_settings->IsCookieSessionOnly(example_url));
     EXPECT_EQ(CONTENT_SETTING_ALLOW,
               map->GetContentSetting(example_url, example_url,
                                      ContentSettingsType::IMAGES));
@@ -131,11 +133,19 @@ class ExtensionContentSettingsApiTest : public ExtensionApiTest {
     EXPECT_EQ(CONTENT_SETTING_ALLOW,
               map->GetContentSetting(example_url, example_url,
                                      ContentSettingsType::AUTOPLAY));
+    EXPECT_EQ(CONTENT_SETTING_BLOCK,
+              map->GetContentSetting(example_url, example_url,
+                                     ContentSettingsType::ANTI_ABUSE));
+    EXPECT_EQ(
+        CONTENT_SETTING_ASK,
+        map->GetContentSetting(example_url, example_url,
+                               ContentSettingsType::CLIPBOARD_READ_WRITE));
 
     // Check content settings for www.google.com
     GURL url("http://www.google.com");
     EXPECT_FALSE(cookie_settings->IsFullCookieAccessAllowed(
-        url, url, QueryReason::kSetting));
+        url, net::SiteForCookies::FromUrl(url), url::Origin::Create(url),
+        net::CookieSettingOverrides()));
     EXPECT_EQ(CONTENT_SETTING_ALLOW,
               map->GetContentSetting(url, url, ContentSettingsType::IMAGES));
     EXPECT_EQ(
@@ -160,6 +170,15 @@ class ExtensionContentSettingsApiTest : public ExtensionApiTest {
                                      ContentSettingsType::AUTOMATIC_DOWNLOADS));
     EXPECT_EQ(CONTENT_SETTING_ALLOW,
               map->GetContentSetting(url, url, ContentSettingsType::AUTOPLAY));
+    EXPECT_EQ(
+        CONTENT_SETTING_BLOCK,
+        map->GetContentSetting(url, url, ContentSettingsType::ANTI_ABUSE));
+    EXPECT_EQ(base::FeatureList::IsEnabled(
+                  extensions_features::kApiContentSettingsClipboard)
+                  ? CONTENT_SETTING_BLOCK
+                  : CONTENT_SETTING_ASK,
+              map->GetContentSetting(
+                  url, url, ContentSettingsType::CLIPBOARD_READ_WRITE));
   }
 
   void CheckContentSettingsDefault() {
@@ -171,9 +190,9 @@ class ExtensionContentSettingsApiTest : public ExtensionApiTest {
     // Check content settings for www.google.com
     GURL url("http://www.google.com");
     EXPECT_TRUE(cookie_settings->IsFullCookieAccessAllowed(
-        url, url, QueryReason::kSetting));
-    EXPECT_FALSE(
-        cookie_settings->IsCookieSessionOnly(url, QueryReason::kSetting));
+        url, net::SiteForCookies::FromUrl(url), url::Origin::Create(url),
+        net::CookieSettingOverrides()));
+    EXPECT_FALSE(cookie_settings->IsCookieSessionOnly(url));
     EXPECT_EQ(CONTENT_SETTING_ALLOW,
               map->GetContentSetting(url, url, ContentSettingsType::IMAGES));
     EXPECT_EQ(
@@ -198,6 +217,12 @@ class ExtensionContentSettingsApiTest : public ExtensionApiTest {
                                      ContentSettingsType::AUTOMATIC_DOWNLOADS));
     EXPECT_EQ(CONTENT_SETTING_ALLOW,
               map->GetContentSetting(url, url, ContentSettingsType::AUTOPLAY));
+    EXPECT_EQ(
+        CONTENT_SETTING_ALLOW,
+        map->GetContentSetting(url, url, ContentSettingsType::ANTI_ABUSE));
+    EXPECT_EQ(CONTENT_SETTING_ASK,
+              map->GetContentSetting(
+                  url, url, ContentSettingsType::CLIPBOARD_READ_WRITE));
   }
 
   // Returns a snapshot of content settings for a given URL.
@@ -210,9 +235,9 @@ class ExtensionContentSettingsApiTest : public ExtensionApiTest {
         CookieSettingsFactory::GetForProfile(profile_).get();
 
     content_settings.push_back(cookie_settings->IsFullCookieAccessAllowed(
-        url, url, QueryReason::kSetting));
-    content_settings.push_back(
-        cookie_settings->IsCookieSessionOnly(url, QueryReason::kSetting));
+        url, net::SiteForCookies::FromUrl(url), url::Origin::Create(url),
+        net::CookieSettingOverrides()));
+    content_settings.push_back(cookie_settings->IsCookieSessionOnly(url));
     content_settings.push_back(
         map->GetContentSetting(url, url, ContentSettingsType::IMAGES));
     content_settings.push_back(
@@ -231,14 +256,39 @@ class ExtensionContentSettingsApiTest : public ExtensionApiTest {
         url, url, ContentSettingsType::AUTOMATIC_DOWNLOADS));
     content_settings.push_back(
         map->GetContentSetting(url, url, ContentSettingsType::AUTOPLAY));
+    content_settings.push_back(map->GetContentSetting(
+        url, url, ContentSettingsType::CLIPBOARD_READ_WRITE));
     return content_settings;
   }
 
  private:
-  raw_ptr<Profile, DanglingUntriaged> profile_ = nullptr;
+  raw_ptr<Profile, AcrossTasksDanglingUntriaged> profile_ = nullptr;
   std::unique_ptr<ScopedKeepAlive> keep_alive_;
   std::unique_ptr<ScopedProfileKeepAlive> profile_keep_alive_;
 };
+
+class ExtensionContentSettingsApiTestWithClipboard
+    : public ExtensionContentSettingsApiTest,
+      public testing::WithParamInterface<bool> {
+ public:
+  ExtensionContentSettingsApiTestWithClipboard()
+      : ExtensionContentSettingsApiTest() {
+    scoped_feature_list_.InitWithFeatureState(
+        extensions_features::kApiContentSettingsClipboard, GetParam());
+  }
+  ~ExtensionContentSettingsApiTestWithClipboard() override = default;
+  ExtensionContentSettingsApiTestWithClipboard(
+      const ExtensionContentSettingsApiTestWithClipboard&) = delete;
+  ExtensionContentSettingsApiTestWithClipboard& operator=(
+      const ExtensionContentSettingsApiTestWithClipboard&) = delete;
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+INSTANTIATE_TEST_SUITE_P(All,
+                         ExtensionContentSettingsApiTestWithClipboard,
+                         ::testing::Bool());
 
 class ExtensionContentSettingsApiTestWithContextType
     : public ExtensionContentSettingsApiTest,
@@ -260,7 +310,7 @@ INSTANTIATE_TEST_SUITE_P(ServiceWorker,
                          ExtensionContentSettingsApiTestWithContextType,
                          ::testing::Values(ContextType::kServiceWorker));
 
-IN_PROC_BROWSER_TEST_F(ExtensionContentSettingsApiTest, Standard) {
+IN_PROC_BROWSER_TEST_P(ExtensionContentSettingsApiTestWithClipboard, Standard) {
   CheckContentSettingsDefault();
 
   static constexpr char kExtensionPath[] = "content_settings/standard";
@@ -347,13 +397,15 @@ IN_PROC_BROWSER_TEST_P(ExtensionContentSettingsApiTestWithContextType,
   const char kExtensionPath[] = "content_settings/embeddedsettingsmetric";
   EXPECT_TRUE(RunExtensionTest(kExtensionPath)) << message_;
 
-  size_t num_values = 0;
-  int images_type = ContentSettingTypeToHistogramValue(
-      ContentSettingsType::IMAGES, &num_values);
-  int geolocation_type = ContentSettingTypeToHistogramValue(
-      ContentSettingsType::GEOLOCATION, &num_values);
-  int cookies_type = ContentSettingTypeToHistogramValue(
-      ContentSettingsType::COOKIES, &num_values);
+  int images_type =
+      content_settings_uma_util::ContentSettingTypeToHistogramValue(
+          ContentSettingsType::IMAGES);
+  int geolocation_type =
+      content_settings_uma_util::ContentSettingTypeToHistogramValue(
+          ContentSettingsType::GEOLOCATION);
+  int cookies_type =
+      content_settings_uma_util::ContentSettingTypeToHistogramValue(
+          ContentSettingsType::COOKIES);
 
   histogram_tester.ExpectBucketCount(
       "ContentSettings.ExtensionEmbeddedSettingSet", images_type, 1);
@@ -381,11 +433,110 @@ IN_PROC_BROWSER_TEST_F(ExtensionContentSettingsApiTest, ConsoleErrorTest) {
                            ->host_contents();
   content::WebContentsConsoleObserver console_observer(web_contents);
   console_observer.SetPattern("*contentSettings.plugins is deprecated.*");
-  browsertest_util::ExecuteScriptInBackgroundPageNoWait(
-      profile(), extension->id(), "setPluginsSetting()");
+  ExecuteScriptInBackgroundPageNoWait(extension->id(), "setPluginsSetting()");
   ASSERT_TRUE(console_observer.Wait());
   EXPECT_EQ(1u, console_observer.messages().size());
 }
 #endif  // BUILDFLAG(ENABLE_PLUGINS)
+
+class ImageContentSettingApiTest : public ExtensionApiTest {
+ public:
+  void LoadImageContentSettingExtension() {
+    static constexpr char kManifest[] =
+        R"({
+             "name": "MV3 ImageContentSetting",
+             "version": "0.1",
+             "manifest_version": 3,
+             "permissions": ["contentSettings"],
+             "background": {"service_worker": "background.js"}
+           })";
+    static constexpr char kBackgroundJs[] =
+        R"(
+           chrome.contentSettings['images'].set({
+             primaryPattern: 'http://*.example1.com/*',
+             secondaryPattern: 'http://*.example2.com/*',
+             setting: 'block',
+             scope: 'regular'
+           });
+          )";
+
+    test_extension_dir_.WriteManifest(kManifest);
+    test_extension_dir_.WriteFile(FILE_PATH_LITERAL("background.js"),
+                                  kBackgroundJs);
+
+    const Extension* extension =
+        LoadExtension(test_extension_dir_.UnpackedPath());
+    ASSERT_TRUE(extension);
+  }
+
+  void SetUpOnMainThread() override {
+    ExtensionApiTest::SetUpOnMainThread();
+    host_resolver()->AddRule("*", "127.0.0.1");
+
+    ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
+    embedded_test_server()->ServeFilesFromDirectory(temp_dir_.GetPath());
+    ASSERT_TRUE(StartEmbeddedTestServer());
+  }
+
+ protected:
+  base::ScopedTempDir temp_dir_;
+  TestExtensionDir test_extension_dir_;
+};
+
+// Tests that secondary patterns for image content settings perform
+// resource-scoped origin blocking. For example:
+//   primaryPattern: 'example1.com'
+//   secondaryPattern: 'example2.com'
+// Should only block images with origin=example2.com.
+IN_PROC_BROWSER_TEST_F(ImageContentSettingApiTest, OriginBlocking) {
+  LoadImageContentSettingExtension();
+  std::string page_js =
+      R"(
+         <body onload="console.log('body load');">
+         <img src=$2 onload="console.log('example2 load');">
+         <img src=$1 onload="console.log('example1 load');">
+         </body>
+           )";
+  GURL example1_img =
+      embedded_test_server()->GetURL("example1.com", "/test.png");
+  GURL example2_img =
+      embedded_test_server()->GetURL("example2.com", "/test.png");
+  page_js = content::JsReplace(page_js, example1_img, example2_img);
+
+  {
+    base::ScopedAllowBlockingForTesting allow_blocking;
+    ASSERT_TRUE(base::WriteFile(temp_dir_.GetPath().AppendASCII("index.html"),
+                                page_js));
+
+    base::FilePath test_data_dir;
+    base::PathService::Get(chrome::DIR_TEST_DATA, &test_data_dir);
+
+    ASSERT_TRUE(
+        base::CopyFile(test_data_dir.AppendASCII("extensions/icon1.png"),
+                       temp_dir_.GetPath().AppendASCII("test.png")));
+  }
+
+  content::WebContents* web_contents =
+      browser()->tab_strip_model()->GetActiveWebContents();
+  content::WebContentsConsoleObserver body_load_observer(web_contents);
+  body_load_observer.SetPattern("body load");
+  content::WebContentsConsoleObserver observer(web_contents);
+
+  GURL example1_index =
+      embedded_test_server()->GetURL("example1.com", "/index.html");
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), example1_index));
+
+  // The onload event will fire when there are no more pending image loads. We
+  // should then have two messages -- one for the onload event and one for
+  // "example 1" loading. "example 2" was blocked and should never load.
+  EXPECT_TRUE(body_load_observer.Wait());
+
+  std::vector<std::u16string> message_strings;
+  for (const auto& message : observer.messages()) {
+    message_strings.push_back(message.message);
+  }
+  EXPECT_THAT(message_strings,
+              testing::UnorderedElementsAre(u"example1 load", u"body load"));
+}
 
 }  // namespace extensions

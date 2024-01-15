@@ -4,9 +4,8 @@
 
 #import "ios/chrome/app/tests_hook.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/time/time.h"
+#import "components/signin/internal/identity_manager/profile_oauth2_token_service_delegate.h"
 
 namespace tests_hook {
 
@@ -22,11 +21,22 @@ bool DisableContentSuggestions() {
 bool DisableDiscoverFeed() {
   return false;
 }
-bool DisableFirstRun() {
+bool DisableDefaultFirstRun() {
+  return false;
+}
+bool DisableDefaultSearchEngineChoice() {
   return false;
 }
 bool DisableGeolocation() {
   return false;
+}
+bool DisablePromoManagerFullScreenPromos() {
+  return false;
+}
+std::unique_ptr<ProfileOAuth2TokenService> GetOverriddenTokenService(
+    PrefService* user_prefs,
+    std::unique_ptr<ProfileOAuth2TokenServiceDelegate> delegate) {
+  return nullptr;
 }
 bool DisableUpgradeSigninPromo() {
   return false;
@@ -37,10 +47,32 @@ bool DisableUpdateService() {
 bool DisableMainThreadFreezeDetection() {
   return false;
 }
+bool DelayAppLaunchPromos() {
+  return false;
+}
 policy::ConfigurationPolicyProvider* GetOverriddenPlatformPolicyProvider() {
+  return nullptr;
+}
+std::unique_ptr<SystemIdentityManager> CreateSystemIdentityManager() {
+  return nullptr;
+}
+std::unique_ptr<password_manager::BulkLeakCheckServiceInterface>
+GetOverriddenBulkLeakCheckService() {
+  return nullptr;
+}
+std::unique_ptr<password_manager::RecipientsFetcher>
+GetOverriddenRecipientsFetcher() {
   return nullptr;
 }
 void SetUpTestsIfPresent() {}
 void RunTestsIfPresent() {}
+
+base::TimeDelta PasswordCheckMinimumDuration() {
+  return base::Seconds(3);
+}
+
+std::unique_ptr<drive::DriveService> GetOverriddenDriveService() {
+  return nullptr;
+}
 
 }  // namespace tests_hook

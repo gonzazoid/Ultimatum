@@ -1,6 +1,9 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/ci/chromeos-jacuzzi-rel/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
@@ -28,7 +31,7 @@
               },
               "legacy_gclient_config": {
                 "apply_configs": [
-                  "arm",
+                  "arm64",
                   "chromeos"
                 ],
                 "config": "chromium"
@@ -55,7 +58,8 @@
   "$build/reclient": {
     "instance": "rbe-chromium-trusted",
     "jobs": 500,
-    "metrics_project": "chromium-reclient-metrics"
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],

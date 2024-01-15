@@ -4,7 +4,10 @@
 
 #include "third_party/blink/renderer/modules/xr/xr_cube_map.h"
 
-#include "base/cxx17_backports.h"
+#include <algorithm>
+#include <bit>
+#include <cstring>
+
 #include "device/vr/public/mojom/vr_service.mojom-blink.h"
 #include "third_party/blink/renderer/modules/webgl/webgl_rendering_context_base.h"
 #include "third_party/blink/renderer/modules/webgl/webgl_texture.h"
@@ -12,21 +15,19 @@
 #include "third_party/blink/renderer/platform/graphics/gpu/drawing_buffer.h"
 
 namespace {
-bool IsPowerOfTwo(uint32_t value) {
-  return value && (value & (value - 1)) == 0;
-}
 
 // This is an inversion of FloatToHalfFloat in ui/gfx/half_float.cc
 float HalfFloatToFloat(const uint16_t input) {
   uint32_t tmp = (input & 0x7fff) << 13 | (input & 0x8000) << 16;
-  float tmp2 = *reinterpret_cast<float*>(&tmp);
+  float tmp2;
+  std::memcpy(&tmp2, &tmp, 4);
   return tmp2 / 1.9259299444e-34f;
 }
 
 // Linear to sRGB converstion as given in
 // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_framebuffer_sRGB.txt
 uint8_t LinearToSrgb(float cl) {
-  float cs = base::clamp(
+  float cs = std::clamp(
       cl < 0.0031308f ? 12.92f * cl : 1.055f * std::pow(cl, 0.41666f) - 0.055f,
       0.0f, 1.0f);
   return static_cast<uint8_t>(255.0f * cs + 0.5f);
@@ -57,7 +58,7 @@ XRCubeMap::XRCubeMap(const device::mojom::blink::XRCubeMap& cube_map) {
                 "XRCubeMaps are expected to be in the RGBA16F format");
 
   // Cube map sides must all be a power-of-two image
-  bool valid = IsPowerOfTwo(cube_map.width_and_height);
+  bool valid = std::has_single_bit(cube_map.width_and_height);
   const size_t expected_size =
       cube_map.width_and_height * cube_map.width_and_height;
   valid &= cube_map.positive_x.size() == expected_size;

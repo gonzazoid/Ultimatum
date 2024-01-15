@@ -5,6 +5,7 @@
 #include <memory>
 
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/task_environment.h"
@@ -52,9 +53,10 @@ class MojoDemuxerStreamAdapterTest : public testing::Test {
     init_loop.Run();
   }
 
-  void ReadBuffer(DemuxerStream::ReadCB done_cb) {
+  void ReadBuffer(int count, DemuxerStream::ReadCB done_cb) {
     EXPECT_TRUE(is_stream_ready_);
-    mojo_stream_adapter_->Read(std::move(done_cb));
+    EXPECT_GT(count, 0);
+    mojo_stream_adapter_->Read(count, std::move(done_cb));
   }
 
   base::test::TaskEnvironment task_environment_;
@@ -74,21 +76,27 @@ TEST_F(MojoDemuxerStreamAdapterTest, InitializeAudioStream) {
   EXPECT_TRUE(mojo_stream_adapter_->SupportsConfigChanges());
 }
 
-TEST_F(MojoDemuxerStreamAdapterTest, InitializeAudioStreamAndReadBuffer) {
+TEST_F(MojoDemuxerStreamAdapterTest, InitializeAudioStreamAndReadMultiBuffer) {
   Initialize(DemuxerStream::Type::AUDIO);
 
   {
     base::RunLoop success_read_loop;
+    DemuxerStream::DecoderBufferVector buffers;
+    // Requested 200 but just return 100 buffer.
+    for (int i = 0; i < 100; ++i) {
+      buffers.emplace_back(base::MakeRefCounted<DecoderBuffer>(12));
+    }
     EXPECT_CALL(*stream_, OnRead(_))
-        .WillOnce(RunOnceCallback<0>(DemuxerStream::Status::kOk,
-                                     base::MakeRefCounted<DecoderBuffer>(12)));
+        .WillOnce(RunOnceCallback<0>(DemuxerStream::Status::kOk, buffers));
 
     auto done_cb = base::BindLambdaForTesting(
-        [&](DemuxerStream::Status status, scoped_refptr<DecoderBuffer> buffer) {
+        [&](DemuxerStream::Status status,
+            DemuxerStream::DecoderBufferVector buffers) {
           EXPECT_EQ(status, DemuxerStream::Status::kOk);
+          EXPECT_EQ(buffers.size(), 100u);
           success_read_loop.QuitWhenIdle();
         });
-    ReadBuffer(done_cb);
+    ReadBuffer(200, done_cb);
     success_read_loop.Run();
   }
 
@@ -96,14 +104,16 @@ TEST_F(MojoDemuxerStreamAdapterTest, InitializeAudioStreamAndReadBuffer) {
     base::RunLoop config_changed_read_loop;
     EXPECT_CALL(*stream_, OnRead(_))
         .WillOnce(RunOnceCallback<0>(DemuxerStream::Status::kConfigChanged,
-                                     base::MakeRefCounted<DecoderBuffer>(12)));
+                                     DemuxerStream::DecoderBufferVector()));
 
     auto done_cb = base::BindLambdaForTesting(
-        [&](DemuxerStream::Status status, scoped_refptr<DecoderBuffer> buffer) {
+        [&](DemuxerStream::Status status,
+            DemuxerStream::DecoderBufferVector buffers) {
           EXPECT_EQ(status, DemuxerStream::Status::kConfigChanged);
+          EXPECT_TRUE(buffers.empty());
           config_changed_read_loop.QuitWhenIdle();
         });
-    ReadBuffer(done_cb);
+    ReadBuffer(200, done_cb);
     config_changed_read_loop.Run();
   }
 
@@ -111,14 +121,71 @@ TEST_F(MojoDemuxerStreamAdapterTest, InitializeAudioStreamAndReadBuffer) {
     base::RunLoop abort_read_loop;
     EXPECT_CALL(*stream_, OnRead(_))
         .WillOnce(RunOnceCallback<0>(DemuxerStream::Status::kAborted,
-                                     /*buffer=*/nullptr));
+                                     DemuxerStream::DecoderBufferVector()));
 
     auto done_cb = base::BindLambdaForTesting(
-        [&](DemuxerStream::Status status, scoped_refptr<DecoderBuffer> buffer) {
+        [&](DemuxerStream::Status status,
+            DemuxerStream::DecoderBufferVector buffers) {
           EXPECT_EQ(status, DemuxerStream::Status::kAborted);
+          EXPECT_TRUE(buffers.empty());
           abort_read_loop.QuitWhenIdle();
         });
-    ReadBuffer(done_cb);
+    ReadBuffer(200, done_cb);
+    abort_read_loop.Run();
+  }
+}
+
+TEST_F(MojoDemuxerStreamAdapterTest, InitializeAudioStreamAndReadOneBuffer) {
+  Initialize(DemuxerStream::Type::AUDIO);
+
+  {
+    base::RunLoop success_read_loop;
+    DemuxerStream::DecoderBufferVector buffers;
+    buffers.emplace_back(base::MakeRefCounted<DecoderBuffer>(12));
+    EXPECT_CALL(*stream_, OnRead(_))
+        .WillOnce(RunOnceCallback<0>(DemuxerStream::Status::kOk, buffers));
+
+    auto done_cb = base::BindLambdaForTesting(
+        [&](DemuxerStream::Status status,
+            DemuxerStream::DecoderBufferVector buffers) {
+          EXPECT_EQ(status, DemuxerStream::Status::kOk);
+          success_read_loop.QuitWhenIdle();
+        });
+    ReadBuffer(1, done_cb);
+    success_read_loop.Run();
+  }
+
+  {
+    base::RunLoop config_changed_read_loop;
+    EXPECT_CALL(*stream_, OnRead(_))
+        .WillOnce(RunOnceCallback<0>(DemuxerStream::Status::kConfigChanged,
+                                     DemuxerStream::DecoderBufferVector()));
+
+    auto done_cb = base::BindLambdaForTesting(
+        [&](DemuxerStream::Status status,
+            DemuxerStream::DecoderBufferVector buffers) {
+          EXPECT_EQ(status, DemuxerStream::Status::kConfigChanged);
+          EXPECT_TRUE(buffers.empty());
+          config_changed_read_loop.QuitWhenIdle();
+        });
+    ReadBuffer(1, done_cb);
+    config_changed_read_loop.Run();
+  }
+
+  {
+    base::RunLoop abort_read_loop;
+    EXPECT_CALL(*stream_, OnRead(_))
+        .WillOnce(RunOnceCallback<0>(DemuxerStream::Status::kAborted,
+                                     DemuxerStream::DecoderBufferVector()));
+
+    auto done_cb = base::BindLambdaForTesting(
+        [&](DemuxerStream::Status status,
+            DemuxerStream::DecoderBufferVector buffers) {
+          EXPECT_EQ(status, DemuxerStream::Status::kAborted);
+          EXPECT_TRUE(buffers.empty());
+          abort_read_loop.QuitWhenIdle();
+        });
+    ReadBuffer(1, done_cb);
     abort_read_loop.Run();
   }
 }

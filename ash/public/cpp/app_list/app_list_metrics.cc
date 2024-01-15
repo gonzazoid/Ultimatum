@@ -7,6 +7,7 @@
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/notreached.h"
 
 namespace {
 
@@ -19,10 +20,6 @@ const char kAppListSearchResultOpenTypeHistogramInTablet[] =
     "Apps.AppListSearchResultOpenTypeV2.TabletMode";
 const char kAppListSearchResultOpenTypeHistogramInClamshell[] =
     "Apps.AppListSearchResultOpenTypeV2.ClamshellMode";
-const char kAppListSuggestionChipOpenTypeHistogramInClamshell[] =
-    "Apps.AppListSuggestedChipOpenType.ClamshellMode";
-const char kAppListSuggestionChipOpenTypeHistogramInTablet[] =
-    "Apps.AppListSuggestedChipOpenType.TabletMode";
 const char kAppListContinueTaskOpenTypeHistogramInClamshell[] =
     "Apps.AppListContinueTaskOpenType.ClamshellMode";
 const char kAppListContinueTaskOpenTypeHistogramInTablet[] =
@@ -75,6 +72,24 @@ constexpr char kAppListSortDiscoveryDurationAfterNudgeClamshell[] =
 constexpr char kAppListSortDiscoveryDurationAfterNudgeTablet[] =
     "Apps.AppList.SortDiscoveryDurationAfterEducationNudgeV2.TabletMode";
 
+bool IsAppListShowSourceUserTriggered(AppListShowSource show_source) {
+  switch (show_source) {
+    case AppListShowSource::kScrollFromShelf:
+    case AppListShowSource::kSearchKey:
+    case AppListShowSource::kSearchKeyFullscreen_DEPRECATED:
+    case AppListShowSource::kShelfButton:
+    case AppListShowSource::kShelfButtonFullscreen_DEPRECATED:
+    case AppListShowSource::kSwipeFromShelf:
+      return true;
+    case AppListShowSource::kTabletMode:
+    case AppListShowSource::kAssistantEntryPoint:
+    case AppListShowSource::kBrowser:
+    case AppListShowSource::kWelcomeTour:
+      return false;
+  }
+  NOTREACHED_NORETURN();
+}
+
 void RecordSearchResultOpenTypeHistogram(AppListLaunchedFrom launch_location,
                                          SearchResultType type,
                                          bool is_tablet_mode) {
@@ -96,17 +111,6 @@ void RecordSearchResultOpenTypeHistogram(AppListLaunchedFrom launch_location,
             SEARCH_RESULT_TYPE_BOUNDARY);
       }
       break;
-    case AppListLaunchedFrom::kLaunchedFromSuggestionChip:
-      if (is_tablet_mode) {
-        UMA_HISTOGRAM_ENUMERATION(
-            kAppListSuggestionChipOpenTypeHistogramInTablet, type,
-            SEARCH_RESULT_TYPE_BOUNDARY);
-      } else {
-        UMA_HISTOGRAM_ENUMERATION(
-            kAppListSuggestionChipOpenTypeHistogramInClamshell, type,
-            SEARCH_RESULT_TYPE_BOUNDARY);
-      }
-      break;
     case AppListLaunchedFrom::kLaunchedFromContinueTask:
       if (is_tablet_mode) {
         UMA_HISTOGRAM_ENUMERATION(kAppListContinueTaskOpenTypeHistogramInTablet,
@@ -120,6 +124,8 @@ void RecordSearchResultOpenTypeHistogram(AppListLaunchedFrom launch_location,
     case AppListLaunchedFrom::kLaunchedFromShelf:
     case AppListLaunchedFrom::kLaunchedFromGrid:
     case AppListLaunchedFrom::kLaunchedFromRecentApps:
+    case AppListLaunchedFrom::DEPRECATED_kLaunchedFromSuggestionChip:
+    case AppListLaunchedFrom::kLaunchedFromQuickAppAccess:
       // Search results don't live in the shelf, the app grid or recent apps.
       NOTREACHED();
       break;

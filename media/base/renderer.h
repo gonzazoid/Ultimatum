@@ -5,8 +5,7 @@
 #ifndef MEDIA_BASE_RENDERER_H_
 #define MEDIA_BASE_RENDERER_H_
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "media/base/buffering_state.h"
 #include "media/base/demuxer_stream.h"
@@ -19,6 +18,30 @@ namespace media {
 class CdmContext;
 class MediaResource;
 class RendererClient;
+
+// Types of media::Renderer.
+// WARNING: These values are reported to metrics. Entries should not be
+// renumbered and numeric values should not be reused. When adding new entries,
+// also update media::mojom::RendererType & tools/metrics/histograms/enums.xml.
+enum class RendererType {
+  kRendererImpl = 0,     // RendererImplFactory
+  kMojo = 1,             // MojoRendererFactory
+  kMediaPlayer = 2,      // MediaPlayerRendererClientFactory
+  kCourier = 3,          // CourierRendererFactory
+  kFlinging = 4,         // FlingingRendererClientFactory
+  kCast = 5,             // CastRendererClientFactory
+  kMediaFoundation = 6,  // MediaFoundationRendererClientFactory
+  // kFuchsia = 7,       // Deprecated
+  kRemoting = 8,       // RemotingRendererFactory for remoting::Receiver
+  kCastStreaming = 9,  // PlaybackCommandForwardingRendererFactory
+  kContentEmbedderDefined = 10,  // Defined by the content embedder
+  kTest = 11,                    // Renderer implementations used in tests
+  kMaxValue = kTest,
+};
+
+// Get the name of the Renderer for `renderer_type`. The returned name could be
+// the actual Renderer class name or a descriptive name.
+std::string MEDIA_EXPORT GetRendererName(RendererType renderer_type);
 
 class MEDIA_EXPORT Renderer {
  public:
@@ -103,6 +126,11 @@ class MEDIA_EXPORT Renderer {
   // MediaFoundationRendererClient to produce a VideoFrame with 'data'
   // accessible by the client it must switch to operate in Frame Server mode.
   virtual void OnExternalVideoFrameRequest();
+
+  // Returns the type of the Renderer implementation. Marked as pure virtual to
+  // enforce RendererType registration for all Renderer implementations.
+  // Note: New implementation should update RendererType.
+  virtual RendererType GetRendererType() = 0;
 };
 
 }  // namespace media

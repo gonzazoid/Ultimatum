@@ -117,7 +117,7 @@ constructor since it seemed reasonable to do:
 
 **Best practice**
 
-The [current version](https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/file_system_access/file_system_access_usage_bubble_view.cc;l=196;drc=532834e1da3874a57dde3ed76511f53b8eb8ecdf)
+The [current version](https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/file_system_access/file_system_access_usage_bubble_view.cc?q=symbol%3A%5CbCollapsibleListView%3A%3AOnThemeChanged%5Cb%20case%3Ayes)
 moves this to `OnThemeChanged()` and thus handles theme changes correctly:
 
 |||---|||
@@ -132,6 +132,7 @@ explicit CollapsibleListView(ui::TableModel* model) {
   ...
   auto button =
       views::CreateVectorToggleImageButton(this);
+  ...
 
 
 
@@ -170,16 +171,21 @@ explicit CollapsibleListView(ui::TableModel* model) {
 
 void CollapsibleListView::OnThemeChanged() {
   views::View::OnThemeChanged();
+  const auto* color_provider = GetColorProvider();
   const SkColor icon_color =
-      GetColorProvider()->GetColor(ui::kColorIcon);
-
-
+      color_provider->GetColor(ui::kColorIcon);
+  const SkColor disabled_icon_color =
+      color_provider->GetColor(ui::kColorIconDisabled);
   views::SetImageFromVectorIconWithColor(
-      expand_collapse_button_, kCaretDownIcon,
-      ui::TableModel::kIconSize, icon_color);
+      expand_collapse_button_,
+      vector_icons::kCaretDownIcon,
+      ui::TableModel::kIconSize, icon_color,
+      disabled_icon_color);
   views::SetToggledImageFromVectorIconWithColor(
-      expand_collapse_button_, kCaretUpIcon,
-      ui::TableModel::kIconSize, icon_color);
+      expand_collapse_button_,
+      vector_icons::kCaretUpIcon,
+      ui::TableModel::kIconSize, icon_color,
+      disabled_icon_color);
 }
 
 ```
@@ -313,7 +319,7 @@ For new UI, **add new, specific color identifiers**. If a mock for a new
 `FooBarMenu` background, don't reuse `kFooBarMenuBackgroundColor` when
 implementing the new menu, as the name will no longer be accurate. Add a
 `kFrobberMenuBackgroundColor` identifier and use that instead. `ui/` code should
-add identifiers to the [`NATIVE_THEME_COLOR_IDS`](https://source.chromium.org/chromium/chromium/src/+/main:ui/native_theme/native_theme_color_id.h;l=10;drc=21c19ce054e99a4361dff61877a4197831b80e6b)
+add identifiers to the [`COLOR_IDS`](https://source.chromium.org/chromium/chromium/src/+/main:ui/color/color_id.h?q=symbol%3A%5CbCOLOR_IDS%5Cb%20case%3Ayes)
 macro; `chrome/` code should typically add to the
 [`NotOverwritableByUserThemeProperty`](https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/themes/theme_properties.h;l=91;drc=cfa76e5827628eb2104df0e0b55d5d89f4a93eaf)
 enum.
@@ -331,7 +337,7 @@ constant to paint the drop indicator, since they have the same physical color:
 
 **Best practice**
 
-[Current version](https://source.chromium.org/chromium/chromium/src/+/main:ui/views/controls/menu/submenu_view.cc;l=229;drc=7910ceae672184033abc44a287e309f14e664b5e)
+[Current version](https://source.chromium.org/chromium/chromium/src/+/main:ui/views/controls/menu/submenu_view.cc;drc=69982e42da25a60eba54c7c88e97577f7cf67fd2;l=233)
 defines these as distinct logical colors with the same default physical color,
 better accommodating platforms where menu text and menu icons may differ:
 
@@ -389,11 +395,11 @@ void SubmenuView::PaintChildren(
     const PaintInfo& paint_info) {
   ...
   const SkColor drop_indicator_color =
-      GetNativeTheme()->GetSystemColor(
-          ui::NativeTheme::
-              kColorId_MenuDropIndicator);
+      GetColorProvider()->GetColor(
+          ui::kColorMenuDropmarker);
   recorder.canvas()->FillRect(
       bounds, drop_indicator_color);
+  ...
 }
 ```
 
@@ -574,7 +580,7 @@ void TabStripUIHandler::HandleGetThemeColors(
 #####
 
 ```
-class [TabStripPageHandler](https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/webui/tab_strip/tab_strip_page_handler.h;drc=beeec6c4e2ef41bca3182279155079a1c4dcb06d;l=29) : public tab_strip::mojom::PageHandler,
+class TabStripPageHandler : public tab_strip::mojom::PageHandler,
                             public TabStripModelObserver,
                             public content::WebContentsDelegate,
                             public ThemeServiceObserver,
@@ -585,7 +591,7 @@ class [TabStripPageHandler](https://source.chromium.org/chromium/chromium/src/+/
   ...
 }
 
-void [TabStripPageHandler::GetThemeColors](https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/webui/tab_strip/tab_strip_page_handler.cc;drc=bf9500afcb08e7dfaec3cf4f52e00618ab663ec9;l=594)(
+void TabStripPageHandler::GetThemeColors(
     GetThemeColorsCallback callback) {
   // This should return an object of CSS variables to rgba values so that
   // the WebUI can use the CSS variables to color the tab strip
@@ -641,7 +647,7 @@ class HistoryMenuBridge : public sessions::TabRestoreServiceObserver,
 
 ...
 
-bool [HistoryMenuBridge::AddGroupEntryToMenu](https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/cocoa/history_menu_bridge.mm;drc=eb8341716b8bf349823849aae4dac3d9a7f83f13;l=320)(
+bool HistoryMenuBridge::AddGroupEntryToMenu(
     sessions::TabRestoreService::Group* group,
     NSMenu* menu,
     NSInteger tag,
@@ -650,9 +656,7 @@ bool [HistoryMenuBridge::AddGroupEntryToMenu](https://source.chromium.org/chromi
 ...
 
   // Set the icon of the group to the group color circle.
-  AppController* controller =
-      base::mac::ObjCCastStrict<AppController>([NSApp delegate]);
-  const auto& theme = [controller lastActiveThemeProvider];
+  const auto& theme = [AppController.sharedController lastActiveThemeProvider];
   const int color_id =
       GetTabGroupContextMenuColorIdDeprecated(group->visual_data.color());
   gfx::ImageSkia group_icon = gfx::CreateVectorIcon(
@@ -682,7 +686,7 @@ const ui::ThemeProvider* GetThemeProvider(content::WebContents* web_contents);
 
 }  // namespace webui
 
-void [NTPResourceCache::CreateNewTabIncognitoCSS](https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/webui/ntp/ntp_resource_cache.cc;drc=29361d558ea9ffc6053f437de14cb20fd8c9e3c6;l=421)(
+void NTPResourceCache::CreateNewTabIncognitoCSS(
     const content::WebContents::Getter& wc_getter) {
   auto* web_contents = wc_getter.Run();
   const ui::NativeTheme* native_theme = webui::GetNativeTheme(web_contents);

@@ -8,8 +8,8 @@ import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.StrictModeContext;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
-import org.chromium.components.digital_asset_links.VerificationResultStore;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
+import org.chromium.components.content_relationship_verification.VerificationResultStore;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -38,19 +38,19 @@ public class ChromeVerificationResultStore extends VerificationResultStore {
         try (StrictModeContext ignored = StrictModeContext.allowDiskReads()) {
             // From the official docs, modifying the result of a SharedPreferences.getStringSet can
             // cause bad things to happen including exceptions or ruining the data.
-            return new HashSet<>(SharedPreferencesManager.getInstance().readStringSet(
-                    ChromePreferenceKeys.VERIFIED_DIGITAL_ASSET_LINKS));
+            return new HashSet<>(
+                    ChromeSharedPreferences.getInstance()
+                            .readStringSet(ChromePreferenceKeys.VERIFIED_DIGITAL_ASSET_LINKS));
         }
     }
 
     @Override
     @VisibleForTesting
     public void setRelationships(Set<String> relationships) {
-        SharedPreferencesManager.getInstance().writeStringSet(
-                ChromePreferenceKeys.VERIFIED_DIGITAL_ASSET_LINKS, relationships);
+        ChromeSharedPreferences.getInstance()
+                .writeStringSet(ChromePreferenceKeys.VERIFIED_DIGITAL_ASSET_LINKS, relationships);
     }
 
-    @VisibleForTesting
     public static ChromeVerificationResultStore getInstanceForTesting() {
         return getInstance();
     }

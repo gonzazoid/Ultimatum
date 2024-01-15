@@ -5,7 +5,7 @@
 
 from __future__ import print_function
 
-from typing import Any, Callable, Iterable, List, Optional, Tuple, Type
+from typing import Any, Callable, Iterable, List, Optional, Set, Tuple, Type
 import unittest.mock as mock
 
 from unexpected_passes_common import builders
@@ -17,9 +17,9 @@ from unexpected_passes_common import queries as queries_module
 def CreateStatsWithPassFails(passes: int, fails: int) -> data_types.BuildStats:
   stats = data_types.BuildStats()
   for _ in range(passes):
-    stats.AddPassedBuild()
+    stats.AddPassedBuild(frozenset())
   for i in range(fails):
-    stats.AddFailedBuild('build_id%d' % i)
+    stats.AddFailedBuild('build_id%d' % i, frozenset())
   return stats
 
 
@@ -67,6 +67,7 @@ def CreateGenericQuerier(
     num_samples: Optional[int] = None,
     large_query_mode: Optional[bool] = None,
     num_jobs: Optional[int] = None,
+    use_batching: bool = True,
     cls: Optional[Type[queries_module.BigQueryQuerier]] = None
 ) -> queries_module.BigQueryQuerier:
   suite = suite or 'pixel'
@@ -74,7 +75,8 @@ def CreateGenericQuerier(
   num_samples = num_samples or 5
   large_query_mode = large_query_mode or False
   cls = cls or SimpleBigQueryQuerier
-  return cls(suite, project, num_samples, large_query_mode, num_jobs)
+  return cls(suite, project, num_samples, large_query_mode, num_jobs,
+             use_batching)
 
 
 def GetArgsForMockCall(call_args_list: List[tuple],
@@ -112,6 +114,12 @@ class FakePool():
   def apipe(self, f: Callable[[Any], Any],
             inputs: Iterable[Any]) -> 'FakeAsyncResult':
     return FakeAsyncResult(f(inputs))
+
+  def close(self) -> None:
+    pass
+
+  def join(self) -> None:
+    pass
 
 
 class FakeAsyncResult():
@@ -183,9 +191,17 @@ class GenericExpectations(expectations.Expectations):
   def _GetExpectationFileTagHeader(self, _) -> str:
     return """\
 # tags: [ linux mac win ]
+# tags: [ amd intel nvidia ]
 # results: [ Failure RetryOnFailure Skip Pass ]
 """
+
+  def _GetKnownTags(self) -> Set[str]:
+    return set(['linux', 'mac', 'win', 'amd', 'intel', 'nvidia'])
 
 
 def CreateGenericExpectations() -> GenericExpectations:
   return GenericExpectations()
+
+
+def RegisterGenericExpectationsImplementation() -> None:
+  expectations.RegisterInstance(CreateGenericExpectations())

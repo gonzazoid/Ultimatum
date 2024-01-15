@@ -216,6 +216,8 @@ class BASE_EXPORT Histogram : public HistogramBase {
   void Add(Sample value) override;
   void AddCount(Sample value, int count) override;
   std::unique_ptr<HistogramSamples> SnapshotSamples() const override;
+  std::unique_ptr<HistogramSamples> SnapshotUnloggedSamples() const override;
+  void MarkSamplesAsLogged(const HistogramSamples& samples) final;
   std::unique_ptr<HistogramSamples> SnapshotDelta() override;
   std::unique_ptr<HistogramSamples> SnapshotFinalDelta() const override;
   void AddSamples(const HistogramSamples& samples) override;
@@ -258,6 +260,7 @@ class BASE_EXPORT Histogram : public HistogramBase {
  private:
   // Allow tests to corrupt our innards for testing purposes.
   friend class HistogramTest;
+  friend class HistogramThreadsafeTest;
   FRIEND_TEST_ALL_PREFIXES(HistogramTest, BoundsTest);
   FRIEND_TEST_ALL_PREFIXES(HistogramTest, BucketPlacementTest);
   FRIEND_TEST_ALL_PREFIXES(HistogramTest, CorruptSampleCounts);
@@ -274,8 +277,10 @@ class BASE_EXPORT Histogram : public HistogramBase {
   // internal use.
   std::unique_ptr<SampleVector> SnapshotAllSamples() const;
 
-  // Create a copy of unlogged samples.
-  std::unique_ptr<SampleVector> SnapshotUnloggedSamples() const;
+  // Returns a copy of unlogged samples as the underlying SampleVector class,
+  // instead of the HistogramSamples base class. Used for tests and to avoid
+  // virtual dispatch from some callsites.
+  std::unique_ptr<SampleVector> SnapshotUnloggedSamplesImpl() const;
 
   // Writes the type, min, max, and bucket count information of the histogram in
   // |params|.
@@ -431,7 +436,8 @@ class BASE_EXPORT ScaledLinearHistogram {
   // Like AddCount() but actually accumulates |count|/|scale| and increments
   // the accumulated remainder by |count|%|scale|. An additional increment
   // is done when the remainder has grown sufficiently large.
-  void AddScaledCount(Sample value, int count);
+  // The value after scaling must fit into 32-bit signed integer.
+  void AddScaledCount(Sample value, int64_t count);
 
   int32_t scale() const { return scale_; }
   HistogramBase* histogram() { return histogram_; }

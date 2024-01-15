@@ -10,21 +10,27 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/contains.h"
 #include "base/containers/queue.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/time/time.h"
 #include "base/values.h"
-#include "chromeos/login/login_state/login_state.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
+#include "components/account_id/account_id.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
+#include "components/user_manager/fake_user_manager.h"
+#include "components/user_manager/scoped_user_manager.h"
+#include "components/user_manager/user.h"
+#include "components/user_manager/user_manager.h"
 #include "components/user_prefs/user_prefs.h"
 #include "components/value_store/test_value_store_factory.h"
 #include "content/public/test/test_browser_context.h"
@@ -39,7 +45,6 @@
 #include "extensions/browser/test_extensions_browser_client.h"
 #include "extensions/common/api/lock_screen_data.h"
 #include "extensions/common/extension_builder.h"
-#include "extensions/common/value_builder.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace extensions {
@@ -108,7 +113,7 @@ class TestEventRouter : public extensions::EventRouter {
     ASSERT_TRUE(!event->event_args.empty());
     const base::Value& arg_value = event->event_args[0];
 
-    std::unique_ptr<extensions::api::lock_screen_data::DataItemsAvailableEvent>
+    std::optional<extensions::api::lock_screen_data::DataItemsAvailableEvent>
         event_args = extensions::api::lock_screen_data::
             DataItemsAvailableEvent::FromValue(arg_value);
     ASSERT_TRUE(event_args);
@@ -186,23 +191,22 @@ class ItemRegistry {
   void RunCallback(DataItem::RegisteredValuesCallback callback) {
     std::move(callback).Run(
         fail_ ? OperationResult::kFailed : OperationResult::kSuccess,
-        ItemsToValue());
+        ItemsToDict());
   }
 
-  std::unique_ptr<base::DictionaryValue> ItemsToValue() {
+  base::Value::Dict ItemsToDict() {
     if (fail_)
-      return nullptr;
+      return base::Value::Dict();
 
-    std::unique_ptr<base::DictionaryValue> result =
-        std::make_unique<base::DictionaryValue>();
+    base::Value::Dict result;
 
     for (const std::string& item_id : items_)
-      result->SetKey(item_id, base::Value(base::Value::Type::DICTIONARY));
+      result.Set(item_id, base::Value::Dict());
 
     return result;
   }
 
-  const std::string extension_id_;
+  const ExtensionId extension_id_;
   // Whether data item registration should succeed.
   bool allow_new_ = true;
   // Whether data item retrievals should fail.
@@ -344,7 +348,7 @@ class OperationQueue {
 
  private:
   std::string id_;
-  ItemRegistry* item_registry_;
+  raw_ptr<ItemRegistry> item_registry_;
   base::queue<PendingOperation> pending_operations_;
   std::vector<char> content_;
   bool deleted_ = false;
@@ -386,7 +390,7 @@ class TestDataItem : public DataItem {
   }
 
  private:
-  OperationQueue* operations_;
+  raw_ptr<OperationQueue> operations_;
 };
 
 class TestLockScreenValueStoreMigrator : public LockScreenValueStoreMigrator {
@@ -472,10 +476,21 @@ class LockScreenItemStorageTest : public ExtensionsTest {
     user_prefs::UserPrefs::Set(browser_context(), &testing_pref_service_);
     extensions_browser_client()->set_lock_screen_context(&lock_screen_context_);
 
-    chromeos::LoginState::Initialize();
-    chromeos::LoginState::Get()->SetLoggedInStateAndPrimaryUser(
-        chromeos::LoginState::LOGGED_IN_ACTIVE,
-        chromeos::LoginState::LOGGED_IN_USER_REGULAR, kTestUserIdHash);
+    // TODO(b/278643115) Remove LoginState dependency.
+    ash::LoginState::Initialize();
+
+    const AccountId account_id = AccountId::FromUserEmail("test@test");
+    auto fake_user_manager = std::make_unique<user_manager::FakeUserManager>();
+    fake_user_manager->AddUser(account_id);
+    fake_user_manager->UserLoggedIn(account_id, kTestUserIdHash,
+                                    /*browser_restart=*/false,
+                                    /*is_child=*/false);
+    scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
+        std::move(fake_user_manager));
+
+    ash::LoginState::Get()->SetLoggedInState(
+        ash::LoginState::LOGGED_IN_ACTIVE,
+        ash::LoginState::LOGGED_IN_USER_REGULAR);
 
     extension_ = CreateTestExtension(kTestExtensionId);
     item_registry_ = std::make_unique<ItemRegistry>(extension()->id());
@@ -511,7 +526,10 @@ class LockScreenItemStorageTest : public ExtensionsTest {
     item_registry_.reset();
     LockScreenItemStorage::SetItemProvidersForTesting(nullptr, nullptr,
                                                       nullptr);
-    chromeos::LoginState::Shutdown();
+
+    scoped_user_manager_.reset();
+
+    ash::LoginState::Shutdown();
     ExtensionsTest::TearDown();
   }
 
@@ -659,29 +677,26 @@ class LockScreenItemStorageTest : public ExtensionsTest {
 
   scoped_refptr<const Extension> CreateTestExtension(
       const ExtensionId& extension_id) {
-    DictionaryBuilder app_builder;
+    base::Value::Dict app_builder;
     app_builder.Set("background",
-                    DictionaryBuilder()
-                        .Set("scripts", ListBuilder().Append("script").Build())
-                        .Build());
-    ListBuilder app_handlers_builder;
-    app_handlers_builder.Append(DictionaryBuilder()
+                    base::Value::Dict().Set(
+                        "scripts", base::Value::List().Append("script")));
+    base::Value::List app_handlers_builder;
+    app_handlers_builder.Append(base::Value::Dict()
                                     .Set("action", "new_note")
-                                    .Set("enabled_on_lock_screen", true)
-                                    .Build());
+                                    .Set("enabled_on_lock_screen", true));
     scoped_refptr<const Extension> extension =
         ExtensionBuilder()
             .SetID(extension_id)
             .SetManifest(
-                DictionaryBuilder()
+                base::Value::Dict()
                     .Set("name", "Test app")
                     .Set("version", "1.0")
                     .Set("manifest_version", 2)
-                    .Set("app", app_builder.Build())
-                    .Set("action_handlers", app_handlers_builder.Build())
+                    .Set("app", std::move(app_builder))
+                    .Set("action_handlers", std::move(app_handlers_builder))
                     .Set("permissions",
-                         ListBuilder().Append("lockScreen").Build())
-                    .Build())
+                         base::Value::List().Append("lockScreen")))
             .Build();
     ExtensionRegistry::Get(browser_context())->AddEnabled(extension);
     return extension;
@@ -747,7 +762,8 @@ class LockScreenItemStorageTest : public ExtensionsTest {
   void GetRegisteredItems(const std::string& extension_id,
                           DataItem::RegisteredValuesCallback callback) {
     if (extension()->id() != extension_id) {
-      std::move(callback).Run(OperationResult::kUnknownExtension, nullptr);
+      std::move(callback).Run(OperationResult::kUnknownExtension,
+                              base::Value::Dict());
       return;
     }
     item_registry_->HandleGetRequest(std::move(callback));
@@ -759,6 +775,8 @@ class LockScreenItemStorageTest : public ExtensionsTest {
     item_registry_->RemoveAll();
     std::move(callback).Run();
   }
+
+  std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
 
   std::unique_ptr<LockScreenItemStorage> lock_screen_item_storage_;
 
@@ -784,7 +802,8 @@ class LockScreenItemStorageTest : public ExtensionsTest {
   // Whether the test is expected to create deprecated value store version.
   bool can_create_deprecated_value_store_ = false;
 
-  TestLockScreenValueStoreMigrator* value_store_migrator_ = nullptr;
+  raw_ptr<TestLockScreenValueStoreMigrator, DanglingUntriaged>
+      value_store_migrator_ = nullptr;
 };
 
 }  // namespace

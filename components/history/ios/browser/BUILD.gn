@@ -3,7 +3,6 @@
 # found in the LICENSE file.
 
 source_set("browser") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "history_database_helper.cc",
     "history_database_helper.h",
@@ -14,6 +13,7 @@ source_set("browser") {
   deps = [
     "//base",
     "//components/history/core/browser",
+    "//components/version_info",
     "//ios/web",
     "//url",
   ]

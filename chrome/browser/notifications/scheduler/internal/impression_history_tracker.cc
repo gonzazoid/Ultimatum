@@ -4,16 +4,15 @@
 
 #include "chrome/browser/notifications/scheduler/internal/impression_history_tracker.h"
 
+#include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
 #include "chrome/browser/notifications/scheduler/internal/scheduler_utils.h"
-#include "chrome/browser/notifications/scheduler/internal/stats.h"
 
 namespace notifications {
 namespace {
@@ -173,8 +172,6 @@ void ImpressionHistoryTrackerImpl::OnStoreInitialized(
     InitCallback callback,
     bool success,
     CollectionStore<ClientState>::Entries entries) {
-  stats::LogDbInit(stats::DatabaseType::kImpressionDb, success, entries.size());
-
   if (!success) {
     std::move(callback).Run(false);
     return;
@@ -190,14 +187,13 @@ void ImpressionHistoryTrackerImpl::OnStoreInitialized(
     ClientState::Impressions impressions;
     for (auto& impression : entry->impressions) {
       bool expired =
-          now - impression.create_time > config_.impression_expiration;
+          now - impression.create_time > config_->impression_expiration;
       if (expired) {
         SetNeedsUpdate(type, true);
       } else {
         impressions.emplace_back(impression);
       }
     }
-    stats::LogImpressionCount(impressions.size(), type);
     entry->impressions.swap(impressions);
     client_states_.emplace(type, std::move(*it));
     MaybeUpdateDb(type);
@@ -213,8 +209,7 @@ void ImpressionHistoryTrackerImpl::SyncRegisteredClients() {
     auto client_type = it->first;
     if (!base::Contains(registered_clients_, client_type)) {
       store_->Delete(ToDatabaseKey(client_type),
-                     base::BindOnce(&stats::LogDbOperation,
-                                    stats::DatabaseType::kImpressionDb));
+                     /*callback=*/base::DoNothing());
       client_states_.erase(it++);
       continue;
     } else {
@@ -225,12 +220,11 @@ void ImpressionHistoryTrackerImpl::SyncRegisteredClients() {
   // Add new data for new registered client.
   for (const auto type : registered_clients_) {
     if (client_states_.find(type) == client_states_.end()) {
-      auto new_client_data = CreateNewClientState(type, config_);
+      auto new_client_data = CreateNewClientState(type, *config_);
 
       DCHECK(new_client_data);
       store_->Add(ToDatabaseKey(type), *new_client_data.get(),
-                  base::BindOnce(&stats::LogDbOperation,
-                                 stats::DatabaseType::kImpressionDb));
+                  /*callback=*/base::DoNothing());
       client_states_.emplace(type, std::move(new_client_data));
     }
   }
@@ -263,7 +257,7 @@ void ImpressionHistoryTrackerImpl::AnalyzeImpressionHistory(
       case UserFeedback::kIgnore:
         dismisses.emplace_back(impression);
         PruneImpressionByCreateTime(
-            &dismisses, impression->create_time - config_.dismiss_duration);
+            &dismisses, impression->create_time - config_->dismiss_duration);
         CheckConsecutiveDismiss(client_state, &dismisses);
         break;
       case UserFeedback::kClick:
@@ -373,7 +367,7 @@ void ImpressionHistoryTrackerImpl::OnCustomNegativeActionCountQueried(
   if (it == client_states_.end())
     return;
   ClientState* client_state = it->second.get();
-  size_t num_actions = GetDismissCount(custom_throttle_config.get(), config_);
+  size_t num_actions = GetDismissCount(custom_throttle_config.get(), *config_);
   if (impressions->size() < num_actions)
     return;
 
@@ -407,14 +401,13 @@ void ImpressionHistoryTrackerImpl::ApplyPositiveImpression(
     client_state->current_max_daily_show =
         client_state->suppression_info->recover_goal;
     client_state->suppression_info.reset();
-    stats::LogImpressionEvent(stats::ImpressionEvent::kSuppressionRelease);
     return;
   }
 
   // Increase |current_max_daily_show| by 1.
   client_state->current_max_daily_show =
-      base::clamp(client_state->current_max_daily_show + 1, 0,
-                  config_.max_daily_shown_per_type);
+      std::clamp(client_state->current_max_daily_show + 1, 0,
+                  config_->max_daily_shown_per_type);
 }
 
 void ImpressionHistoryTrackerImpl::ApplyNegativeImpression(
@@ -445,12 +438,11 @@ void ImpressionHistoryTrackerImpl::OnCustomSuppressionDurationQueried(
   // Suppress the notification, the user will not see this type of
   // notification for a while.
   SuppressionInfo supression_info(
-      now, GetSuppressionDuration(custom_throttle_config.get(), config_));
+      now, GetSuppressionDuration(custom_throttle_config.get(), *config_));
   client_state->suppression_info = std::move(supression_info);
   client_state->current_max_daily_show = 0;
   client_state->last_negative_event_ts = now;
   client_state->negative_events_count++;
-  stats::LogImpressionEvent(stats::ImpressionEvent::kNewSuppression);
 }
 
 void ImpressionHistoryTrackerImpl::CheckSuppressionExpiration(
@@ -473,7 +465,6 @@ void ImpressionHistoryTrackerImpl::CheckSuppressionExpiration(
   // Clear suppression if fully recovered.
   client_state->suppression_info.reset();
   SetNeedsUpdate(client_state->type, true);
-  stats::LogImpressionEvent(stats::ImpressionEvent::kSuppressionExpired);
 }
 
 bool ImpressionHistoryTrackerImpl::MaybeUpdateDb(SchedulerClientType type) {
@@ -484,8 +475,7 @@ bool ImpressionHistoryTrackerImpl::MaybeUpdateDb(SchedulerClientType type) {
   bool db_updated = false;
   if (NeedsUpdate(type)) {
     store_->Update(ToDatabaseKey(type), *(it->second.get()),
-                   base::BindOnce(&stats::LogDbOperation,
-                                  stats::DatabaseType::kImpressionDb));
+                   /*callback=*/base::DoNothing());
     db_updated = true;
   }
   SetNeedsUpdate(type, false);

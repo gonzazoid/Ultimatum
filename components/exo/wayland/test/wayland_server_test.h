@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <type_traits>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/test/bind.h"
 #include "components/exo/wayland/server.h"
 #include "components/exo/wayland/test/test_client.h"
@@ -27,6 +27,13 @@ class WaylandServerTest : public WaylandServerTestBase {
 
  protected:
   WaylandServerTest();
+
+  // Constructs a WaylandServerTest with |traits| being forwarded to its
+  // TaskEnvironment. See the corresponding |WaylandServerTestBase| constructor.
+  template <typename... TaskEnvironmentTraits>
+  explicit WaylandServerTest(TaskEnvironmentTraits&&... traits)
+      : WaylandServerTestBase(std::forward<TaskEnvironmentTraits>(traits)...) {}
+
   ~WaylandServerTest() override;
 
   // WaylandServerTestBase:
@@ -49,13 +56,20 @@ class WaylandServerTest : public WaylandServerTestBase {
     PostToClientAndWait(base::BindLambdaForTesting(std::move(lambda)));
   }
 
-  // Subclasses can override this method to create a TestClient subclass
-  // instance if needed.
-  virtual std::unique_ptr<TestClient> CreateClient();
+  // Initiates a client disconnect from the client thread. Waits until the
+  // disconnect has been processed on the server thread.
+  void DisconnectClientAndWait();
 
+  // Subclasses can override this method to create a TestClient subclass
+  // instance or customize client configuration if needed.
+  // This method is run on the client thread.
+  virtual std::unique_ptr<TestClient> InitOnClientThread();
+
+  std::unique_ptr<ScopedTempSocket> socket_;
   std::unique_ptr<Server> server_;
 
   std::unique_ptr<TestWaylandClientThread> client_thread_;
+  raw_ptr<wl_client> client_resource_;
 };
 
 }  // namespace exo::wayland::test

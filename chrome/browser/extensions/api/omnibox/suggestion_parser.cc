@@ -4,7 +4,7 @@
 
 #include "chrome/browser/extensions/api/omnibox/suggestion_parser.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -31,17 +31,17 @@ std::string CheckedGetElementTag(const base::Value& node) {
 
 // Recursively walks an XML node, generating `result` as it goes along.
 void WalkNode(const base::Value& node, DescriptionAndStyles* result) {
-  const base::Value* children = data_decoder::GetXmlElementChildren(node);
+  const base::Value::List* children = data_decoder::GetXmlElementChildren(node);
   if (!children)
     return;
 
-  DCHECK(children->is_list());
-  for (const base::Value& child : children->GetList()) {
+  for (const base::Value& child : *children) {
     // Append text nodes to our description.
     if (data_decoder::IsXmlElementOfType(
             child, data_decoder::mojom::XmlParser::kTextNodeType)) {
+      DCHECK(child.is_dict());
       const std::string* text =
-          child.FindStringPath(data_decoder::mojom::XmlParser::kTextKey);
+          child.GetDict().FindString(data_decoder::mojom::XmlParser::kTextKey);
       DCHECK(text);
       std::u16string sanitized_text = base::UTF8ToUTF16(*text);
       // Note: We unfortunately can't just use
@@ -70,7 +70,7 @@ void WalkNode(const base::Value& node, DescriptionAndStyles* result) {
     std::string tag = CheckedGetElementTag(child);
     omnibox::DescriptionStyleType style_type =
         omnibox::ParseDescriptionStyleType(tag);
-    if (style_type == omnibox::DESCRIPTION_STYLE_TYPE_NONE) {
+    if (style_type == omnibox::DescriptionStyleType::kNone) {
       // Unsupported style type. Even so, we walk all children in the node for
       // forward compatibility.
       WalkNode(child, result);
@@ -106,13 +106,13 @@ bool PopulateEntriesFromNode(const base::Value& root_node,
   if (CheckedGetElementTag(root_node) != "fragment")
     return false;
 
-  const base::Value* children = data_decoder::GetXmlElementChildren(root_node);
+  const base::Value::List* children =
+      data_decoder::GetXmlElementChildren(root_node);
   if (!children)
     return false;
 
-  DCHECK(children->is_list());
-  entries_out->reserve(children->GetList().size());
-  for (const base::Value& child : children->GetList()) {
+  entries_out->reserve(children->size());
+  for (const base::Value& child : *children) {
     if (!data_decoder::IsXmlElementOfType(
             child, data_decoder::mojom::XmlParser::kElementType)) {
       return false;
@@ -144,21 +144,19 @@ void ConstructResultFromValue(
     run_callback_with_error(std::move(value_or_error.error()));
     return;
   }
-
-  DCHECK(value_or_error.has_value());
+  const base::Value root_node = std::move(*value_or_error);
 
   // From this point on, we hope that everything is valid (e.g., that we don't
   // get non-dictionary values or unexpected top-level types. But, if we did,
   // emit a generic error.
   constexpr char kGenericError[] = "Invalid XML";
 
-  if (!value_or_error->is_dict()) {
+  if (!root_node.is_dict()) {
     run_callback_with_error(kGenericError);
     return;
   }
 
   std::vector<const base::Value*> entries;
-  const base::Value& root_node = *value_or_error;
   if (has_multiple_entries) {
     if (!PopulateEntriesFromNode(root_node, &entries)) {
       run_callback_with_error(kGenericError);

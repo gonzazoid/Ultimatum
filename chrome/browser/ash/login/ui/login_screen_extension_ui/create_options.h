@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "url/gurl.h"
 
 namespace ash {
@@ -32,13 +32,5 @@ struct CreateOptions {
 
 }  // namespace login_screen_extension_ui
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-namespace login_screen_extension_ui {
-using ::ash::login_screen_extension_ui::CreateOptions;
-}
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_UI_LOGIN_SCREEN_EXTENSION_UI_CREATE_OPTIONS_H_

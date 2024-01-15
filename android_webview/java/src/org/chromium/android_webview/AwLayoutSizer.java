@@ -7,9 +7,10 @@ package org.chromium.android_webview;
 import android.view.View;
 import android.view.View.MeasureSpec;
 
-/**
- * Helper methods used to manage the layout of the View that contains AwContents.
- */
+import org.chromium.android_webview.common.Lifetime;
+
+/** Helper methods used to manage the layout of the View that contains AwContents. */
+@Lifetime.WebView
 public class AwLayoutSizer {
     // These are used to prevent a re-layout if the content size changes within a dimension that is
     // fixed by the view system.
@@ -38,13 +39,14 @@ public class AwLayoutSizer {
     // Callback object for interacting with the View.
     private Delegate mDelegate;
 
-    /**
-     * Delegate interface through which the AwLayoutSizer communicates with the view it's sizing.
-     */
+    /** Delegate interface through which the AwLayoutSizer communicates with the view it's sizing. */
     public interface Delegate {
         void requestLayout();
+
         void setMeasuredDimension(int measuredWidth, int measuredHeight);
+
         boolean isLayoutParamsHeightWrapContent();
+
         void setForceZeroLayoutHeight(boolean forceZeroHeight);
     }
 
@@ -52,8 +54,7 @@ public class AwLayoutSizer {
      * Default constructor. Note: both setDelegate and setDIPScale must be called before the class
      * is ready for use.
      */
-    public AwLayoutSizer() {
-    }
+    public AwLayoutSizer() {}
 
     public void setDelegate(Delegate delegate) {
         mDelegate = delegate;
@@ -63,9 +64,7 @@ public class AwLayoutSizer {
         mDIPScale = dipScale;
     }
 
-    /**
-     * Postpone requesting layouts till unfreezeLayoutRequests is called.
-     */
+    /** Postpone requesting layouts till unfreezeLayoutRequests is called. */
     public void freezeLayoutRequests() {
         mFreezeLayoutRequests = true;
         mFrozenLayoutRequestPending = false;
@@ -107,13 +106,15 @@ public class AwLayoutSizer {
         // ignore changes to dimensions that are 'fixed'.
         final int heightPix = (int) (heightCss * mPageScaleFactor * mDIPScale);
         boolean pageScaleChanged = mPageScaleFactor != pageScaleFactor;
-        boolean contentHeightChangeMeaningful = !mHeightMeasurementIsFixed
-                && (!mHeightMeasurementLimited || heightPix < mHeightMeasurementLimit);
+        boolean contentHeightChangeMeaningful =
+                !mHeightMeasurementIsFixed
+                        && (!mHeightMeasurementLimited || heightPix < mHeightMeasurementLimit);
         boolean pageScaleChangeMeaningful =
                 !mWidthMeasurementIsFixed || contentHeightChangeMeaningful;
-        boolean layoutNeeded = (mContentWidthCss != widthCss && !mWidthMeasurementIsFixed)
-                || (mContentHeightCss != heightCss && contentHeightChangeMeaningful)
-                || (pageScaleChanged && pageScaleChangeMeaningful);
+        boolean layoutNeeded =
+                (mContentWidthCss != widthCss && !mWidthMeasurementIsFixed)
+                        || (mContentHeightCss != heightCss && contentHeightChangeMeaningful)
+                        || (pageScaleChanged && pageScaleChangeMeaningful);
 
         mContentWidthCss = widthCss;
         mContentHeightCss = heightCss;
@@ -148,7 +149,7 @@ public class AwLayoutSizer {
         mWidthMeasurementIsFixed = (widthMode != MeasureSpec.UNSPECIFIED);
         mHeightMeasurementIsFixed = (heightMode == MeasureSpec.EXACTLY);
         mHeightMeasurementLimited =
-            (heightMode == MeasureSpec.AT_MOST) && (contentHeightPix > heightSize);
+                (heightMode == MeasureSpec.AT_MOST) && (contentHeightPix > heightSize);
         mHeightMeasurementLimit = heightSize;
 
         if (mHeightMeasurementIsFixed || mHeightMeasurementLimited) {

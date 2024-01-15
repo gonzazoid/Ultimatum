@@ -12,7 +12,6 @@ import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.drawable.Drawable;
 
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -32,14 +31,10 @@ import org.chromium.ui.modaldialog.ModalDialogManager;
 /** This class tests the behavior of the {@link ReaderModeToolbarButtonController}. */
 @RunWith(BaseRobolectricTestRunner.class)
 public class ReaderModeToolbarButtonControllerTest {
-    @Mock
-    private Tab mMockTab;
-    @Mock
-    private ReaderModeManager mMockReaderModeManager;
-    @Mock
-    private Supplier<Tab> mMockTabSupplier;
-    @Mock
-    private ModalDialogManager mMockModalDialogManager;
+    @Mock private Tab mMockTab;
+    @Mock private ReaderModeManager mMockReaderModeManager;
+    @Mock private Supplier<Tab> mMockTabSupplier;
+    @Mock private ModalDialogManager mMockModalDialogManager;
     private UserDataHost mUserDataHost;
     private TestValues mTestValues;
 
@@ -69,7 +64,10 @@ public class ReaderModeToolbarButtonControllerTest {
 
     private ReaderModeToolbarButtonController createController() {
         return new ReaderModeToolbarButtonController(
-                mMockTabSupplier, mMockModalDialogManager, mock(Drawable.class));
+                mMockTab.getContext(),
+                mMockTabSupplier,
+                mMockModalDialogManager,
+                mock(Drawable.class));
     }
 
     @Test
@@ -80,30 +78,5 @@ public class ReaderModeToolbarButtonControllerTest {
         readerModeButton.getButtonSpec().getOnClickListener().onClick(null);
 
         verify(mMockReaderModeManager).activateReaderMode();
-    }
-
-    @Test
-    public void testSwapButtonModeSetsIphCommandBuilder() {
-        ReaderModeToolbarButtonController controller = createController();
-
-        ButtonData readerModeButton = controller.get(mMockTab);
-
-        Assert.assertNotNull(readerModeButton.getButtonSpec().getIPHCommandBuilder());
-    }
-
-    @Test
-    public void testActionChipModeSetsNoIphCommandBuilder() {
-        // Set field trial param to use action chip variant.
-        mTestValues.addFeatureFlagOverride(
-                ChromeFeatureList.ADAPTIVE_BUTTON_IN_TOP_TOOLBAR_CUSTOMIZATION_V2, true);
-        mTestValues.addFieldTrialParamOverride(
-                ChromeFeatureList.CONTEXTUAL_PAGE_ACTIONS, "action_chip", "true");
-
-        ReaderModeToolbarButtonController controller = createController();
-
-        ButtonData readerModeButton = controller.get(mMockTab);
-
-        // IPH command builder should not be set on action chip variant.
-        Assert.assertNull(readerModeButton.getButtonSpec().getIPHCommandBuilder());
     }
 }

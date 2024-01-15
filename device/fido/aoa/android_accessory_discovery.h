@@ -10,9 +10,9 @@
 #include <tuple>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/containers/span.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "device/fido/fido_device_discovery.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
@@ -76,7 +76,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) AndroidAccessoryDiscovery
   void OnGetDevices(std::vector<device::mojom::UsbDeviceInfoPtr> devices);
 
   void OnOpen(mojo::Remote<device::mojom::UsbDevice> device,
-              device::mojom::UsbOpenDeviceError error);
+              device::mojom::UsbOpenDeviceResultPtr result);
   void OnVersionReply(mojo::Remote<device::mojom::UsbDevice> device,
                       device::mojom::UsbTransferStatus status,
                       base::span<const uint8_t> payload);
@@ -93,7 +93,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) AndroidAccessoryDiscovery
   void OnOpenAccessory(mojo::Remote<device::mojom::UsbDevice> device,
                        device::mojom::UsbDeviceInfoPtr device_info,
                        InterfaceInfo interface_info,
-                       device::mojom::UsbOpenDeviceError error);
+                       device::mojom::UsbOpenDeviceResultPtr result);
   void OnSyncWritten(mojo::Remote<device::mojom::UsbDevice> device,
                      InterfaceInfo interface_info,
                      std::array<uint8_t, kSyncNonceLength> nonce,

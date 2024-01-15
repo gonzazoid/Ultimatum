@@ -1,6 +1,6 @@
     <style include="cr-shared-style settings-shared iron-flex">
       #safetyCheckCollapse .list-item.selected {
-         min-height: var(--settings-row-two-line-min-height);
+         min-height: var(--cr-section-two-line-min-height);
       }
 
       iron-icon {
@@ -41,14 +41,20 @@
       </settings-safety-check-passwords-child>
       <settings-safety-check-safe-browsing-child>
       </settings-safety-check-safe-browsing-child>
-      <settings-safety-check-extensions-child>
-      </settings-safety-check-extensions-child>
-<if expr="_google_chrome and is_win">
-      <settings-safety-check-chrome-cleaner-child id="chromeCleanerChild">
-      </settings-safety-check-chrome-cleaner-child>
-</if>
+      <template is="dom-if"
+          if="[[!safetyCheckExtensionsReviewEnabled_]]" restamp>
+        <settings-safety-check-extensions-child>
+        </settings-safety-check-extensions-child>
+      </template>
     </iron-collapse>
-    <template is="dom-if" if="[[safetyCheckUnusedSitePermissionsEnabled_]]"
+    <template is="dom-if" if="[[shouldShowSafetyCheckExtensionsReview_(
+          safetyCheckNumberOfExtensionsThatNeedReview_)]]" restamp>
+      <safety-check-extensions>
+      </safety-check-extensions>
+    </template>
+    <template is="dom-if"
+        if="[[shouldShowUnusedSitePermissions_(
+          unusedSitePermissions_, safetyCheckUnusedSitePermissionsEnabled_)]]"
         restamp>
       <settings-safety-check-unused-site-permissions>
       </settings-safety-check-unused-site-permissions>

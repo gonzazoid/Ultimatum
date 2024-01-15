@@ -28,52 +28,52 @@ class UmaFeatureProcessor : public QueryProcessor {
                       SignalDatabase* signal_database,
                       FeatureAggregator* feature_aggregator,
                       const base::Time prediction_time,
+                      const base::Time observation_time,
                       const base::TimeDelta bucket_duration,
-                      const proto::SegmentId segment_id);
+                      const proto::SegmentId segment_id,
+                      bool is_output);
 
   ~UmaFeatureProcessor() override;
 
-  using FeatureListQueryProcessorCallback =
-      base::OnceCallback<void(std::unique_ptr<FeatureProcessorState>)>;
-
   // QueryProcessor implementation.
-  void Process(std::unique_ptr<FeatureProcessorState> feature_processor_state,
+  void Process(FeatureProcessorState& feature_processor_state,
                QueryProcessorCallback callback) override;
 
  private:
   // Function for processing the next UMAFeature type of input for ML model.
-  void ProcessNextUmaFeature();
+  void ProcessOnGotAllSamples(
+      FeatureProcessorState& feature_processor_state,
+      const std::vector<SignalDatabase::DbEntry>& samples);
+
+  void GetStartAndEndTime(size_t bucket_count,
+                          base::Time& start_time,
+                          base::Time& end_time) const;
 
   // Helper function for parsing a single uma feature.
-  void ProcessSingleUmaFeature(FeatureIndex index,
-                               const proto::UMAFeature& feature);
-
-  // Callback method for when all relevant samples for a particular feature has
-  // been loaded. Processes the samples, and inserts them into the input tensor
-  // that is later given to the ML execution.
-  void OnGetSamplesForUmaFeature(FeatureIndex index,
-                                 const proto::UMAFeature& feature,
-                                 const std::vector<int32_t>& accepted_enum_ids,
-                                 std::vector<SignalDatabase::Sample> samples);
+  void ProcessSingleUmaFeature(
+      const std::vector<SignalDatabase::DbEntry>& samples,
+      FeatureIndex index,
+      const proto::UMAFeature& feature);
 
   // List of custom inputs to process into input tensors.
   base::flat_map<FeatureIndex, Data> uma_features_;
 
   // Main signal database for user actions and histograms.
-  const raw_ptr<SignalDatabase> signal_database_;
+  // This dangling raw_ptr occurred in:
+  // browser_tests: SegmentationPlatformTest.RunDefaultModel (flaky)
+  // https://ci.chromium.org/ui/p/chromium/builders/try/win-rel/175245/test-results?q=ExactID%3Aninja%3A%2F%2Fchrome%2Ftest%3Abrowser_tests%2FSegmentationPlatformTest.RunDefaultModel+VHash%3Abdbee181b3e0309b
+  // This also occurs while checking for dangling ptrs at exit.
+  const raw_ptr<SignalDatabase, LeakedDanglingUntriaged> signal_database_;
 
   // The FeatureAggregator aggregates all the data based on metadata and input.
-  const raw_ptr<FeatureAggregator> feature_aggregator_;
+  const raw_ptr<FeatureAggregator, FlakyDanglingUntriaged> feature_aggregator_;
 
   // Data needed for the processing of uma features.
   const base::Time prediction_time_;
+  const base::Time observation_time_;
   const base::TimeDelta bucket_duration_;
   const proto::SegmentId segment_id_;
-
-  // Temporary storage of the processing state object.
-  // TODO(haileywang): Remove dependency to the state object once error check is
-  // no longer part of the state.
-  std::unique_ptr<FeatureProcessorState> feature_processor_state_;
+  const bool is_output_;
 
   // Callback for sending the resulting indexed tensors to the feature list
   // processor.

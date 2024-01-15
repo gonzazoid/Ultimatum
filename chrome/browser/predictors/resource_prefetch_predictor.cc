@@ -8,13 +8,16 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "chrome/browser/history/history_service_factory.h"
+#include "chrome/browser/predictors/lcp_critical_path_predictor/lcp_critical_path_predictor_util.h"
 #include "chrome/browser/predictors/loading_data_collector.h"
 #include "chrome/browser/predictors/predictor_database.h"
 #include "chrome/browser/predictors/predictor_database_factory.h"
@@ -24,6 +27,7 @@
 #include "components/history/core/browser/url_utils.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_contents.h"
+#include "net/base/url_util.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
 #include "url/origin.h"
 
@@ -53,9 +57,11 @@ void InitializeOriginStatFromOriginRequestSummary(
 
 void InitializeOnDBSequence(
     ResourcePrefetchPredictor::RedirectDataMap* host_redirect_data,
-    ResourcePrefetchPredictor::OriginDataMap* origin_data) {
+    ResourcePrefetchPredictor::OriginDataMap* origin_data,
+    ResourcePrefetchPredictor::LcppDataMap* lcpp_data) {
   host_redirect_data->InitializeOnDBSequence();
   origin_data->InitializeOnDBSequence();
+  lcpp_data->InitializeOnDBSequence();
 }
 
 GURL CreateRedirectURL(const std::string& scheme,
@@ -221,9 +227,9 @@ bool ResourcePrefetchPredictor::GetRedirectEndpointsForPreconnect(
     // Set network anonymization key same as the origin of the redirect target.
     if (prediction) {
       prediction->requests.emplace_back(
-          redirect_origin, 1 /* num_scokets */,
-          net::NetworkAnonymizationKey(net::SchemefulSite(redirect_origin),
-                                       net::SchemefulSite(redirect_origin)));
+          redirect_origin, 1 /* num_sockets */,
+          net::NetworkAnonymizationKey::CreateSameSite(
+              net::SchemefulSite(redirect_origin)));
     }
     at_least_one_redirect_endpoint_added = true;
   }
@@ -267,14 +273,18 @@ void ResourcePrefetchPredictor::StartInitialization() {
   auto origin_data = std::make_unique<OriginDataMap>(
       tables_, tables_->origin_table(), config_.max_hosts_to_track,
       base::Seconds(config_.flush_data_to_disk_delay_seconds));
+  auto lcpp_data = std::make_unique<LcppDataMap>(
+      tables_, tables_->lcpp_table(), config_.max_hosts_to_track_for_lcpp,
+      base::Seconds(config_.flush_data_to_disk_delay_seconds));
 
   // Get raw pointers to pass to the first task. Ownership of the unique_ptrs
   // will be passed to the reply task.
   auto task = base::BindOnce(InitializeOnDBSequence, host_redirect_data.get(),
-                             origin_data.get());
-  auto reply = base::BindOnce(
-      &ResourcePrefetchPredictor::CreateCaches, weak_factory_.GetWeakPtr(),
-      std::move(host_redirect_data), std::move(origin_data));
+                             origin_data.get(), lcpp_data.get());
+  auto reply =
+      base::BindOnce(&ResourcePrefetchPredictor::CreateCaches,
+                     weak_factory_.GetWeakPtr(), std::move(host_redirect_data),
+                     std::move(origin_data), std::move(lcpp_data));
 
   tables_->GetTaskRunner()->PostTaskAndReply(FROM_HERE, std::move(task),
                                              std::move(reply));
@@ -293,23 +303,34 @@ void ResourcePrefetchPredictor::Shutdown() {
   history_service_observation_.Reset();
 }
 
-void ResourcePrefetchPredictor::RecordPageRequestSummary(
-    std::unique_ptr<PageRequestSummary> summary) {
+bool ResourcePrefetchPredictor::TryEnsureRecordingPrecondition() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
+
   // Make sure initialization is done or start initialization if necessary.
   if (initialization_state_ == NOT_INITIALIZED) {
     StartInitialization();
-    return;
+    return false;
   } else if (initialization_state_ == INITIALIZING) {
-    return;
+    return false;
   } else if (initialization_state_ != INITIALIZED) {
     NOTREACHED() << "Unexpected initialization_state_: "
                  << initialization_state_;
+    return false;
+  }
+
+  CHECK(host_redirect_data_);
+  CHECK(origin_data_);
+  CHECK(lcpp_data_);
+  return true;
+}
+
+void ResourcePrefetchPredictor::RecordPageRequestSummary(
+    std::unique_ptr<PageRequestSummary> summary) {
+  if (!TryEnsureRecordingPrecondition()) {
     return;
   }
 
-  LearnRedirect(summary->initial_url.host(), summary->main_frame_url,
-                host_redirect_data_.get());
+  LearnRedirect(summary->initial_url.host(), summary->main_frame_url);
   LearnOrigins(summary->main_frame_url.host(),
                summary->main_frame_url.DeprecatedGetOriginAsURL(),
                summary->origins);
@@ -348,8 +369,8 @@ bool ResourcePrefetchPredictor::PredictPreconnectOrigins(
     prediction->is_redirected = (redirect_origin != url_origin);
   }
   net::SchemefulSite redirect_site = net::SchemefulSite(redirect_origin);
-  net::NetworkAnonymizationKey network_anonymization_key(redirect_site,
-                                                         redirect_site);
+  auto network_anonymization_key =
+      net::NetworkAnonymizationKey::CreateSameSite(redirect_site);
 
   for (const OriginStat& origin : data.origins()) {
     float confidence = static_cast<float>(origin.number_of_hits()) /
@@ -374,17 +395,41 @@ bool ResourcePrefetchPredictor::PredictPreconnectOrigins(
   return has_any_prediction;
 }
 
+absl::optional<LcppData> ResourcePrefetchPredictor::GetLcppData(
+    const GURL& url) const {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  // The `initialization_state_` can be not `INITIALIZED` in the very first
+  // navigation on browser startup. Because this object is initialized on the
+  // first navigation.
+  if (initialization_state_ != INITIALIZED) {
+    return absl::nullopt;
+  }
+
+  if (!url.is_valid() || url.host().empty() || net::IsLocalhost(url) ||
+      !url.SchemeIsHTTPOrHTTPS()) {
+    return absl::nullopt;
+  }
+  LcppData data;
+  if (!lcpp_data_->TryGetData(url.host(), &data)) {
+    return absl::nullopt;
+  }
+  return data;
+}
+
 void ResourcePrefetchPredictor::CreateCaches(
     std::unique_ptr<RedirectDataMap> host_redirect_data,
-    std::unique_ptr<OriginDataMap> origin_data) {
+    std::unique_ptr<OriginDataMap> origin_data,
+    std::unique_ptr<LcppDataMap> lcpp_data) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK_EQ(INITIALIZING, initialization_state_);
 
   DCHECK(host_redirect_data);
   DCHECK(origin_data);
+  DCHECK(lcpp_data);
 
   host_redirect_data_ = std::move(host_redirect_data);
   origin_data_ = std::move(origin_data);
+  lcpp_data_ = std::move(lcpp_data);
 
   ConnectToHistoryService();
 }
@@ -411,6 +456,7 @@ void ResourcePrefetchPredictor::DeleteAllUrls() {
 
   host_redirect_data_->DeleteAllData();
   origin_data_->DeleteAllData();
+  lcpp_data_->DeleteAllData();
 }
 
 void ResourcePrefetchPredictor::DeleteUrls(const history::URLRows& urls) {
@@ -421,11 +467,11 @@ void ResourcePrefetchPredictor::DeleteUrls(const history::URLRows& urls) {
 
   host_redirect_data_->DeleteData(hosts_to_delete);
   origin_data_->DeleteData(hosts_to_delete);
+  lcpp_data_->DeleteData(hosts_to_delete);
 }
 
 void ResourcePrefetchPredictor::LearnRedirect(const std::string& key,
-                                              const GURL& final_redirect,
-                                              RedirectDataMap* redirect_data) {
+                                              const GURL& final_redirect) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   // If the primary key is too long reject it.
@@ -433,7 +479,7 @@ void ResourcePrefetchPredictor::LearnRedirect(const std::string& key,
     return;
 
   RedirectData data;
-  bool exists = redirect_data->TryGetData(key, &data);
+  bool exists = host_redirect_data_->TryGetData(key, &data);
   if (!exists) {
     data.set_primary_key(key);
     data.set_last_visit_time(base::Time::Now().ToInternalValue());
@@ -499,9 +545,9 @@ void ResourcePrefetchPredictor::LearnRedirect(const std::string& key,
       &data, config_.max_redirect_consecutive_misses);
 
   if (data.redirect_endpoints_size() == 0)
-    redirect_data->DeleteData({key});
+    host_redirect_data_->DeleteData({key});
   else
-    redirect_data->UpdateData(key, data);
+    host_redirect_data_->UpdateData(key, data);
 }
 
 void ResourcePrefetchPredictor::LearnOrigins(
@@ -595,6 +641,40 @@ void ResourcePrefetchPredictor::LearnOrigins(
     origin_data_->DeleteData({host});
   else
     origin_data_->UpdateData(host, data);
+}
+
+void ResourcePrefetchPredictor::LearnLcpp(const std::string& host,
+                                          const LcppDataInputs& inputs) {
+  if (!TryEnsureRecordingPrecondition()) {
+    return;
+  }
+
+  if (host.size() > ResourcePrefetchPredictorTables::kMaxStringLength) {
+    return;
+  }
+
+  LcppData data;
+  bool exists = lcpp_data_->TryGetData(host, &data);
+  data.set_last_visit_time(
+      base::Time::Now().ToDeltaSinceWindowsEpoch().InMicroseconds());
+
+  if (!exists) {
+    data.set_host(host);
+  }
+
+  if (!IsValidLcppStat(data.lcpp_stat())) {
+    data.clear_lcpp_stat();
+    base::UmaHistogramBoolean("LoadingPredictor.LcppStatCorruptedAtLearnTime",
+                              true);
+  }
+  bool data_updated = UpdateLcppDataWithLcppDataInputs(config_, inputs, data);
+  DCHECK(IsValidLcppStat(data.lcpp_stat()));
+  if (data_updated) {
+    lcpp_data_->UpdateData(host, data);
+    if (observer_) {
+      observer_->OnLcppLearned();
+    }
+  }
 }
 
 void ResourcePrefetchPredictor::OnURLsDeleted(

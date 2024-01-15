@@ -60,7 +60,8 @@ export class ObjectFieldSetElement extends CustomElement {
 
     const nameMap = JSON.parse(this.dataset.nameMap);
     const valueObject = JSON.parse(this.dataset.value);
-    Object.keys(assert(valueObject)).forEach(function(propName) {
+    assert(valueObject);
+    Object.keys(valueObject).forEach(function(propName) {
       const value = valueObject[propName];
       if (value === false && !this.showAll) {
         return;

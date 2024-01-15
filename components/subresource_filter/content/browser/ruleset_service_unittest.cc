@@ -9,26 +9,27 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/environment.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/task/task_runner_util.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "build/build_config.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/subresource_filter/content/browser/ruleset_publisher.h"
@@ -113,8 +114,8 @@ class MockRulesetPublisherImpl : public RulesetPublisher {
     // Emulate |VerifiedRulesetDealer::Handle| behaviour:
     //   1. Open file on task runner.
     //   2. Reply with result on current thread runner.
-    base::PostTaskAndReplyWithResult(
-        blocking_task_runner_.get(), FROM_HERE,
+    blocking_task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&MockRulesetPublisherImpl::OpenRulesetFile, path),
         std::move(callback));
   }
@@ -147,7 +148,8 @@ class MockRulesetPublisherImpl : public RulesetPublisher {
         new base::File(file_path, base::File::FLAG_OPEN |
                                       base::File::FLAG_READ |
                                       base::File::FLAG_WIN_SHARE_DELETE),
-        base::OnTaskRunnerDeleter(base::SequencedTaskRunnerHandle::Get()));
+        base::OnTaskRunnerDeleter(
+            base::SequencedTaskRunner::GetCurrentDefault()));
   }
 
   std::vector<RulesetFilePtr> published_rulesets_;
@@ -251,9 +253,7 @@ class SubresourceFilteringRulesetServiceTest : public ::testing::Test {
                              base::FilePath* path) {
     ASSERT_NO_FATAL_FAILURE(
         test_ruleset_creator()->GetUniqueTemporaryPath(path));
-    ASSERT_EQ(static_cast<int>(contents.size()),
-              base::WriteFile(*path, contents.data(),
-                              static_cast<int>(contents.size())));
+    ASSERT_TRUE(base::WriteFile(*path, contents));
   }
 
   void IndexAndStoreAndPublishUpdatedRuleset(
@@ -597,13 +597,13 @@ TEST_F(SubresourceFilteringRulesetServiceTest, DeleteObsoleteRulesets) {
   WriteRuleset(test_ruleset_1(), legacy_format_content_version_1);
   WriteRuleset(test_ruleset_2(), legacy_format_content_version_2);
   base::WriteFile(GetExpectedSentinelFilePath(legacy_format_content_version_2),
-                  nullptr, 0);
+                  std::string_view());
 
   WriteRuleset(test_ruleset_1(), current_format_content_version_1);
   WriteRuleset(test_ruleset_2(), current_format_content_version_2);
   WriteRuleset(test_ruleset_3(), current_format_content_version_3);
   base::WriteFile(GetExpectedSentinelFilePath(current_format_content_version_3),
-                  nullptr, 0);
+                  std::string_view());
 
   DeleteObsoleteRulesets(base_dir(), current_format_content_version_2);
 
@@ -776,8 +776,6 @@ TEST_F(SubresourceFilteringRulesetServiceTest, NewRuleset_Persisted) {
       "SubresourceFilter.IndexRuleset.WallDuration", 1);
   histogram_tester.ExpectUniqueSample(
       "SubresourceFilter.IndexRuleset.NumUnsupportedRules", 0, 1);
-  histogram_tester.ExpectTotalCount(
-      "SubresourceFilter.WriteRuleset.ReplaceFileError", 0);
   histogram_tester.ExpectUniqueSample(
       "SubresourceFilter.WriteRuleset.Result",
       static_cast<int>(RulesetService::IndexAndWriteRulesetResult::SUCCESS), 1);
@@ -989,9 +987,6 @@ TEST_F(SubresourceFilteringRulesetServiceTest, NewRuleset_WriteFailure) {
       "SubresourceFilter.IndexRuleset.WallDuration", 1);
   histogram_tester.ExpectUniqueSample(
       "SubresourceFilter.IndexRuleset.NumUnsupportedRules", 0, 1);
-  base::File::Error expected_error = base::File::FILE_ERROR_NOT_FOUND;
-  histogram_tester.ExpectUniqueSample(
-      "SubresourceFilter.WriteRuleset.ReplaceFileError", -expected_error, 1);
   histogram_tester.ExpectUniqueSample(
       "SubresourceFilter.WriteRuleset.Result",
       static_cast<int>(IndexAndWriteRulesetResult::FAILED_REPLACE_FILE), 1);

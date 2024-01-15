@@ -9,11 +9,12 @@
 #include <vector>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/icu_util.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
@@ -40,7 +41,6 @@
 #include "ui/gl/gl_context.h"
 #include "ui/gl/gl_context_egl.h"
 #include "ui/gl/gl_context_stub.h"
-#include "ui/gl/gl_image_ref_counted_memory.h"
 #include "ui/gl/gl_share_group.h"
 #include "ui/gl/gl_stub_api.h"
 #include "ui/gl/gl_surface.h"
@@ -50,7 +50,7 @@
 #include "ui/gl/init/gl_factory.h"
 #include "ui/gl/test/gl_surface_test_support.h"
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/ozone/public/ozone_platform.h"
 #endif
 
@@ -116,7 +116,6 @@ constexpr const char* kExtensions[] = {
     "GL_CHROMIUM_color_buffer_float_rgba",
     "GL_CHROMIUM_copy_compressed_texture",
     "GL_CHROMIUM_copy_texture",
-    "GL_CHROMIUM_texture_filtering_hint",
     "GL_EXT_blend_func_extended",
     "GL_EXT_blend_minmax",
     "GL_EXT_float_blend",
@@ -231,15 +230,13 @@ class BitIterator {
 struct Config {
   size_t MakeFromBits(const uint8_t* bits, size_t size) {
     BitIterator it(bits, size);
+#if BUILDFLAG(IS_ANDROID)
     attrib_helper.red_size = 8;
     attrib_helper.green_size = 8;
     attrib_helper.blue_size = 8;
     attrib_helper.alpha_size = it.GetBit() ? 8 : 0;
-    attrib_helper.depth_size = it.GetBit() ? 24 : 0;
-    attrib_helper.stencil_size = it.GetBit() ? 8 : 0;
-    attrib_helper.buffer_preserved = it.GetBit();
+#endif
     attrib_helper.bind_generates_resource = it.GetBit();
-    attrib_helper.single_buffer = it.GetBit();
     [[maybe_unused]] bool es3 = it.GetBit();
 #if defined(GPU_FUZZER_USE_RASTER_DECODER)
     attrib_helper.context_type = CONTEXT_TYPE_OPENGLES2;
@@ -318,14 +315,14 @@ class CommandBufferSetup {
         gpu_preferences_(GetGpuPreferences()),
         share_group_(new gl::GLShareGroup),
         translator_cache_(gpu_preferences_) {
-    logging::SetMinLogLevel(logging::LOG_FATAL);
+    logging::SetMinLogLevel(logging::LOGGING_FATAL);
     CHECK(base::i18n::InitializeICU());
     base::CommandLine::Init(0, nullptr);
 
     [[maybe_unused]] auto* command_line =
         base::CommandLine::ForCurrentProcess();
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
     ui::OzonePlatform::InitializeForGPU(ui::OzonePlatform::InitParams());
 #endif
 
@@ -346,7 +343,7 @@ class CommandBufferSetup {
         /*fallback_to_software_gl=*/false,
         /*disable_gl_drawing=*/false,
         /*init_extensions=*/true,
-        /*system_device_id=*/0);
+        /*gpu_preference=*/gl::GpuPreference::kDefault);
     CHECK(display_);
 #elif defined(GPU_FUZZER_USE_STUB)
     gl::GLSurfaceTestSupport::InitializeOneOffWithStubBindings();
@@ -385,7 +382,7 @@ class CommandBufferSetup {
     context_->MakeCurrent(surface_.get());
     GpuFeatureInfo gpu_feature_info;
 #if defined(GPU_FUZZER_USE_RASTER_DECODER)
-    gpu_feature_info.status_values[GPU_FEATURE_TYPE_GPU_RASTERIZATION] =
+    gpu_feature_info.status_values[GPU_FEATURE_TYPE_GPU_TILE_RASTERIZATION] =
         kGpuFeatureStatusEnabled;
 #endif
     auto feature_info = base::MakeRefCounted<gles2::FeatureInfo>(
@@ -408,18 +405,17 @@ class CommandBufferSetup {
         share_group_, surface_, std::move(shared_context),
         config_.workarounds.use_virtualized_gl_contexts, base::DoNothing(),
         gpu_preferences_.gr_context_type);
-    context_state_->InitializeGrContext(gpu_preferences_, config_.workarounds,
-                                        nullptr);
+    context_state_->InitializeSkia(gpu_preferences_, config_.workarounds);
     context_state_->InitializeGL(gpu_preferences_, feature_info);
 
     shared_image_manager_ = std::make_unique<SharedImageManager>();
     shared_image_factory_ = std::make_unique<SharedImageFactory>(
         gpu_preferences_, config_.workarounds, gpu_feature_info,
         context_state_.get(), shared_image_manager_.get(),
-        /*image_factory=*/nullptr, /*memory_tracker=*/nullptr,
+        /*memory_tracker=*/nullptr,
         /*is_for_display_compositor=*/false);
-    for (uint32_t usage = SHARED_IMAGE_USAGE_GLES2; usage <= LAST_CLIENT_USAGE;
-         usage <<= 1) {
+    for (uint32_t usage = SHARED_IMAGE_USAGE_GLES2_READ;
+         usage <= LAST_CLIENT_USAGE; usage <<= 1) {
       Mailbox::Name name;
       memset(name, 0, sizeof(name));
       name[0] = usage;
@@ -431,13 +427,12 @@ class CommandBufferSetup {
 
       Mailbox mailbox;
       mailbox.SetName(name);
-      viz::SharedImageFormat si_format =
-          viz::SharedImageFormat::SinglePlane(viz::RGBA_8888);
+      viz::SharedImageFormat si_format = viz::SinglePlaneFormat::kRGBA_8888;
 
       shared_image_factory_->CreateSharedImage(
           mailbox, si_format, gfx::Size(256, 256),
           gfx::ColorSpace::CreateSRGB(), kTopLeft_GrSurfaceOrigin,
-          kPremul_SkAlphaType, gfx::kNullAcceleratedWidget, usage);
+          kPremul_SkAlphaType, gfx::kNullAcceleratedWidget, usage, "TestLabel");
     }
 
 #if defined(GPU_FUZZER_USE_RASTER_DECODER)
@@ -446,8 +441,7 @@ class CommandBufferSetup {
     decoder_.reset(raster::RasterDecoder::Create(
         command_buffer_.get(), command_buffer_->service(), &outputter_,
         gpu_feature_info, gpu_preferences_, nullptr /* memory_tracker */,
-        shared_image_manager_.get(), /*image_factory=*/nullptr, context_state_,
-        true /* is_privileged */));
+        shared_image_manager_.get(), context_state_, true /* is_privileged */));
 #else
     context_->MakeCurrent(surface_.get());
     // GLES2Decoder may Initialize feature_info differently than
@@ -458,9 +452,9 @@ class CommandBufferSetup {
         gpu_preferences_, true, &mailbox_manager_, nullptr /* memory_tracker */,
         &translator_cache_, &completeness_cache_, decoder_feature_info,
         config_.attrib_helper.bind_generates_resource,
-        nullptr /* image_factory */, nullptr /* progress_reporter */,
-        gpu_feature_info, discardable_manager_.get(),
-        passthrough_discardable_manager_.get(), shared_image_manager_.get());
+        nullptr /* progress_reporter */, gpu_feature_info,
+        discardable_manager_.get(), passthrough_discardable_manager_.get(),
+        shared_image_manager_.get());
     auto* context = context_.get();
     decoder_.reset(gles2::GLES2Decoder::Create(
         command_buffer_.get(), command_buffer_->service(), &outputter_,
@@ -472,8 +466,9 @@ class CommandBufferSetup {
     auto result = decoder_->Initialize(surface_.get(), context, true,
                                        gles2::DisallowedFeatures(),
                                        config_.attrib_helper);
-    if (result != gpu::ContextResult::kSuccess)
+    if (result != gpu::ContextResult::kSuccess) {
       return false;
+    }
     decoder_initialized_ = true;
 
     command_buffer_->set_handler(decoder_.get());
@@ -648,7 +643,7 @@ class CommandBufferSetup {
   std::unique_ptr<SharedImageFactory> shared_image_factory_;
 
   bool recreate_context_ = false;
-  gl::GLDisplay* display_ = nullptr;
+  raw_ptr<gl::GLDisplay> display_ = nullptr;
   scoped_refptr<gl::GLSurface> surface_;
   scoped_refptr<gl::GLContext> context_;
   scoped_refptr<SharedContextState> context_state_;

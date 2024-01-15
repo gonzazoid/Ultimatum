@@ -9,11 +9,12 @@
 #include <string>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
+#include "base/scoped_observation.h"
 #include "base/time/time.h"
-#include "chrome/browser/ash/login/signin/oauth2_login_verifier.h"
 #include "components/keyed_service/core/keyed_service.h"
+#include "components/signin/core/browser/account_reconcilor.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 
 class GoogleServiceAuthError;
@@ -24,8 +25,8 @@ namespace ash {
 // This class is responsible for restoring authenticated web sessions out of
 // OAuth2 refresh tokens or pre-authenticated cookie jar.
 class OAuth2LoginManager : public KeyedService,
-                           public OAuth2LoginVerifier::Delegate,
-                           public signin::IdentityManager::Observer {
+                           public signin::IdentityManager::Observer,
+                           public AccountReconcilor::Observer {
  public:
   // Session restore states.
   enum SessionRestoreState {
@@ -74,11 +75,9 @@ class OAuth2LoginManager : public KeyedService,
   // Continues session restore after transient network errors.
   void ContinueSessionRestore();
 
-  // Start restoring session from saved OAuth2 refresh token.
-  void RestoreSessionFromSavedTokens();
-
-  // Stops all background authentication requests.
-  void Stop();
+  // Check if tokens have been loaded in `IdentityManager`. Mark the tokens'
+  // state as `OAUTH_TOKEN_STATUS_UNKNOWN` if not.
+  void CheckIfTokensHaveBeenLoaded();
 
   // Returns session restore state.
   SessionRestoreState state() { return state_; }
@@ -125,12 +124,8 @@ class OAuth2LoginManager : public KeyedService,
   // KeyedService implementation.
   void Shutdown() override;
 
-  // OAuth2LoginVerifier::Delegate overrides.
-  void OnSessionMergeSuccess() override;
-  void OnSessionMergeFailure(bool connection_error) override;
-  void OnListAccountsSuccess(
-      const std::vector<gaia::ListedAccount>& accounts) override;
-  void OnListAccountsFailure(bool connection_error) override;
+  // AccountReconcilor::Observer implementation:
+  void OnStateChanged(signin_metrics::AccountReconcilorState state) override;
 
   // signin::IdentityManager::Observer implementation:
   void OnRefreshTokenUpdatedForAccount(
@@ -143,12 +138,11 @@ class OAuth2LoginManager : public KeyedService,
   // Retrieves IdentityManager for `user_profile_`.
   signin::IdentityManager* GetIdentityManager();
 
+  // Retrieves AccountReconcilor for `user_profile_`.
+  AccountReconcilor* GetAccountReconcilor();
+
   // Retrieves the primary account ID for `user_profile_`.
   CoreAccountId GetUnconsentedPrimaryAccountId();
-
-  // Checks if primary account sessions cookies are stale and restores them
-  // if needed.
-  void VerifySessionCookies();
 
   // Issue GAIA cookie recovery (MergeSession) from `refresh_token_`.
   void RestoreSessionCookies();
@@ -167,18 +161,11 @@ class OAuth2LoginManager : public KeyedService,
   void RecordSessionRestoreOutcome(SessionRestoreOutcome outcome,
                                    SessionRestoreState state);
 
-  // Records `outcome` of merge verification check. `is_pre_merge` specifies
-  // if this is pre or post merge session verification.
-  static void RecordCookiesCheckOutcome(bool is_pre_merge,
-                                        MergeVerificationOutcome outcome);
-
-  Profile* user_profile_;
+  raw_ptr<Profile> user_profile_;
   SessionRestoreState state_;
 
   // Whether there is pending TokenService::LoadCredentials call.
   bool pending_token_service_load_ = false;
-
-  std::unique_ptr<OAuth2LoginVerifier> login_verifier_;
 
   // OAuthLogin scoped access token.
   std::string oauthlogin_access_token_;
@@ -191,14 +178,11 @@ class OAuth2LoginManager : public KeyedService,
   // TODO(zelidrag|gspencer): Figure out how to get rid of ProfileHelper so we
   // can change the line below to base::ObserverList<Observer, true>.
   base::ObserverList<Observer, false>::Unchecked observer_list_;
+
+  base::ScopedObservation<AccountReconcilor, AccountReconcilor::Observer>
+      account_reconcilor_observation_{this};
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::OAuth2LoginManager;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SIGNIN_OAUTH2_LOGIN_MANAGER_H_

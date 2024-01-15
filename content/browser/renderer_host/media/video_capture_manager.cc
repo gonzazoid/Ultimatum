@@ -8,30 +8,34 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/observer_list.h"
 #include "base/ranges/algorithm.h"
+#include "base/task/bind_post_task.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/timer/elapsed_timer.h"
 #include "build/build_config.h"
 #include "content/browser/media/media_internals.h"
 #include "content/browser/renderer_host/media/video_capture_controller.h"
 #include "content/browser/screenlock_monitor/screenlock_monitor.h"
+#include "content/common/features.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/desktop_media_id.h"
-#include "content/public/common/content_features.h"
-#include "media/base/bind_to_current_loop.h"
+#include "content/public/common/content_client.h"
 #include "media/base/media_switches.h"
 #include "media/base/video_facing.h"
+#include "media/capture/mojom/video_capture_types.mojom.h"
 #include "media/capture/video/video_capture_device.h"
+#include "services/video_capture/public/mojom/video_effects_manager.mojom.h"
 #include "third_party/blink/public/common/mediastream/media_stream_request.h"
 
 namespace {
@@ -41,9 +45,12 @@ void LogVideoCaptureError(media::VideoCaptureError error) {
 }
 
 const base::UnguessableToken& FakeSessionId() {
+  // TODO(https://crbug.com/1406985): Investigate whether there's a better way
+  // to accomplish this (without using UnguessableToken::Deserialize).
   static const base::UnguessableToken fake_session_id(
       base::UnguessableToken::Deserialize(0xFFFFFFFFFFFFFFFFU,
-                                          0xFFFFFFFFFFFFFFFFU));
+                                          0xFFFFFFFFFFFFFFFFU)
+          .value());
   return fake_session_id;
 }
 
@@ -54,24 +61,39 @@ namespace content {
 // Class used for queuing request for starting a device.
 class VideoCaptureManager::CaptureDeviceStartRequest {
  public:
-  CaptureDeviceStartRequest(VideoCaptureController* controller,
-                            const media::VideoCaptureSessionId& session_id,
-                            const media::VideoCaptureParams& params);
+  CaptureDeviceStartRequest(
+      VideoCaptureController* controller,
+      const media::VideoCaptureSessionId& session_id,
+      const media::VideoCaptureParams& params,
+      mojo::PendingRemote<video_capture::mojom::VideoEffectsManager>
+          video_effects_manager);
   VideoCaptureController* controller() const { return controller_; }
   const base::UnguessableToken& session_id() const { return session_id_; }
   media::VideoCaptureParams params() const { return params_; }
 
+  mojo::PendingRemote<video_capture::mojom::VideoEffectsManager>&&
+  TakeVideoEffectsManager() {
+    return std::move(video_effects_manager_);
+  }
+
  private:
-  VideoCaptureController* const controller_;
+  const raw_ptr<VideoCaptureController> controller_;
   const base::UnguessableToken session_id_;
   const media::VideoCaptureParams params_;
+  mojo::PendingRemote<video_capture::mojom::VideoEffectsManager>
+      video_effects_manager_;
 };
 
 VideoCaptureManager::CaptureDeviceStartRequest::CaptureDeviceStartRequest(
     VideoCaptureController* controller,
     const media::VideoCaptureSessionId& session_id,
-    const media::VideoCaptureParams& params)
-    : controller_(controller), session_id_(session_id), params_(params) {}
+    const media::VideoCaptureParams& params,
+    mojo::PendingRemote<video_capture::mojom::VideoEffectsManager>
+        video_effects_manager)
+    : controller_(controller),
+      session_id_(session_id),
+      params_(params),
+      video_effects_manager_(std::move(video_effects_manager)) {}
 
 VideoCaptureManager::VideoCaptureManager(
     std::unique_ptr<VideoCaptureProvider> video_capture_provider,
@@ -111,9 +133,9 @@ void VideoCaptureManager::RegisterListener(
   listeners_.AddObserver(listener);
 #if BUILDFLAG(IS_ANDROID)
   application_state_has_running_activities_ = true;
-  app_status_listener_ = base::android::ApplicationStatusListener::New(
-      base::BindRepeating(&VideoCaptureManager::OnApplicationStateChange,
-                          base::Unretained(this)));
+  app_status_listener_ =
+      base::android::ApplicationStatusListener::New(base::BindRepeating(
+          &VideoCaptureManager::OnApplicationStateChange, this));
 #endif
 }
 
@@ -131,9 +153,10 @@ void VideoCaptureManager::EnumerateDevices(
   EmitLogMessage("VideoCaptureManager::EnumerateDevices", 1);
 
   // Pass a timer for UMA histogram collection.
-  video_capture_provider_->GetDeviceInfosAsync(media::BindToCurrentLoop(
-      base::BindOnce(&VideoCaptureManager::OnDeviceInfosReceived, this,
-                     base::ElapsedTimer(), std::move(client_callback))));
+  video_capture_provider_->GetDeviceInfosAsync(
+      base::BindPostTaskToCurrentDefault(
+          base::BindOnce(&VideoCaptureManager::OnDeviceInfosReceived, this,
+                         base::ElapsedTimer(), std::move(client_callback))));
 }
 
 base::UnguessableToken VideoCaptureManager::Open(
@@ -159,7 +182,7 @@ base::UnguessableToken VideoCaptureManager::Open(
   // Notify our listener asynchronously; this ensures that we return
   // |capture_session_id| to the caller of this function before using that
   // same id in a listener event.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&VideoCaptureManager::OnOpened, this,
                                 device.type, capture_session_id));
   return capture_session_id;
@@ -195,49 +218,55 @@ void VideoCaptureManager::Close(
   }
 
   // Notify listeners asynchronously, and forget the session.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&VideoCaptureManager::OnClosed, this,
                                 session_it->second.type, capture_session_id));
 
   if (blink::IsDeviceMediaType(session_it->second.type)) {
     auto locked_it = locked_sessions_.find(session_it->first);
     const bool was_locked = locked_it != locked_sessions_.end();
-    base::UmaHistogramBoolean(
-        "Media.VideoCaptureManager.DeviceSessionWasLocked", was_locked);
     if (was_locked)
       locked_sessions_.erase(locked_it);
-    if (locked_sessions_.empty() && !lock_time_.is_null())
-      RecordDeviceSessionLockDuration();
+    if (locked_sessions_.empty() && !lock_time_.is_null()) {
+      lock_time_ = base::TimeTicks();
+      idle_close_timer_.Stop();
+    }
   } else {
     DCHECK(!locked_sessions_.contains(session_it->first));
   }
   sessions_.erase(session_it);
 }
 
-void VideoCaptureManager::Crop(
+void VideoCaptureManager::ApplySubCaptureTarget(
     const base::UnguessableToken& session_id,
-    const base::Token& crop_id,
-    uint32_t crop_version,
-    base::OnceCallback<void(media::mojom::CropRequestResult)> callback) {
+    media::mojom::SubCaptureTargetType type,
+    const base::Token& target,
+    uint32_t sub_capture_target_version,
+    base::OnceCallback<void(media::mojom::ApplySubCaptureTargetResult)>
+        callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
 
   VideoCaptureController* const controller =
       LookupControllerBySessionId(session_id);
   if (!controller || !controller->IsDeviceAlive()) {
-    std::move(callback).Run(media::mojom::CropRequestResult::kErrorGeneric);
+    std::move(callback).Run(
+        media::mojom::ApplySubCaptureTargetResult::kErrorGeneric);
     return;
   }
-  controller->Crop(crop_id, crop_version, std::move(callback));
+  controller->ApplySubCaptureTarget(type, target, sub_capture_target_version,
+                                    std::move(callback));
 }
 
 void VideoCaptureManager::QueueStartDevice(
     const media::VideoCaptureSessionId& session_id,
     VideoCaptureController* controller,
-    const media::VideoCaptureParams& params) {
+    const media::VideoCaptureParams& params,
+    mojo::PendingRemote<video_capture::mojom::VideoEffectsManager>
+        video_effects_manager) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   DCHECK(lock_time_.is_null());
-  device_start_request_queue_.push_back(
-      CaptureDeviceStartRequest(controller, session_id, params));
+  device_start_request_queue_.push_back(CaptureDeviceStartRequest(
+      controller, session_id, params, std::move(video_effects_manager)));
   if (device_start_request_queue_.size() == 1)
     ProcessDeviceStartRequestQueue();
 }
@@ -322,7 +351,8 @@ void VideoCaptureManager::ProcessDeviceStartRequestQueue() {
       base::BindOnce([](scoped_refptr<VideoCaptureManager>,
                         scoped_refptr<VideoCaptureController>) {},
                      scoped_refptr<VideoCaptureManager>(this),
-                     GetControllerSharedRef(controller)));
+                     GetControllerSharedRef(controller)),
+      request->TakeVideoEffectsManager());
 }
 
 void VideoCaptureManager::OnDeviceLaunched(VideoCaptureController* controller) {
@@ -391,7 +421,8 @@ void VideoCaptureManager::ConnectClient(
     const media::VideoCaptureParams& params,
     VideoCaptureControllerID client_id,
     VideoCaptureControllerEventHandler* client_handler,
-    DoneCB done_cb) {
+    DoneCB done_cb,
+    BrowserContext* browser_context) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("video_and_image_capture"),
                "VideoCaptureManager::ConnectClient");
@@ -420,7 +451,20 @@ void VideoCaptureManager::ConnectClient(
         << "VideoCaptureManager queueing device start for device_id = "
         << controller->device_id();
     EmitLogMessage(string_stream.str(), 1);
-    QueueStartDevice(session_id, controller, params);
+    mojo::PendingRemote<video_capture::mojom::VideoEffectsManager>
+        video_effects_manager;
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS) && !BUILDFLAG(IS_FUCHSIA)
+    if (base::FeatureList::IsEnabled(media::kCameraMicEffects)) {
+      auto* content_client = GetContentClient();
+      if (browser_context && content_client && content_client->browser()) {
+        content_client->browser()->BindVideoEffectsManager(
+            controller->device_id(), browser_context,
+            video_effects_manager.InitWithNewPipeAndPassReceiver());
+      }
+    }
+#endif
+    QueueStartDevice(session_id, controller, params,
+                     std::move(video_effects_manager));
   }
 
   // Run the callback first, as AddClient() may trigger OnFrameInfo().
@@ -433,16 +477,13 @@ void VideoCaptureManager::DisconnectClient(
     VideoCaptureControllerID client_id,
     VideoCaptureControllerEventHandler* client_handler,
     media::VideoCaptureError error) {
+  TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("video_and_image_capture"),
+               "VideoCaptureManager::DisconnectClient");
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   DCHECK(controller);
   DCHECK(client_handler);
-  TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("video_and_image_capture"),
-               "VideoCaptureManager::DisconnectClient");
+  CHECK(IsControllerPointerValid(controller));
 
-  if (!IsControllerPointerValid(controller)) {
-    NOTREACHED();
-    return;
-  }
   if (error != media::VideoCaptureError::kNone) {
     LogVideoCaptureError(error);
     std::ostringstream string_stream;
@@ -567,7 +608,7 @@ bool VideoCaptureManager::GetDeviceFormatsInUse(
   string_stream << "GetDeviceFormatsInUse for device: " << it->second.name;
   EmitLogMessage(string_stream.str(), 1);
 
-  absl::optional<media::VideoCaptureFormat> format =
+  std::optional<media::VideoCaptureFormat> format =
       GetDeviceFormatInUse(it->second.type, it->second.id);
   if (format.has_value())
     formats_in_use->push_back(format.value());
@@ -575,7 +616,7 @@ bool VideoCaptureManager::GetDeviceFormatsInUse(
   return true;
 }
 
-absl::optional<media::VideoCaptureFormat>
+std::optional<media::VideoCaptureFormat>
 VideoCaptureManager::GetDeviceFormatInUse(
     blink::mojom::MediaStreamType stream_type,
     const std::string& device_id) {
@@ -583,10 +624,10 @@ VideoCaptureManager::GetDeviceFormatInUse(
   // Return the currently in-use format of the device, if it's started.
   VideoCaptureController* device_in_use =
       LookupControllerByMediaTypeAndDeviceId(stream_type, device_id);
-  return device_in_use ? device_in_use->GetVideoCaptureFormat() : absl::nullopt;
+  return device_in_use ? device_in_use->GetVideoCaptureFormat() : std::nullopt;
 }
 
-GlobalRoutingID VideoCaptureManager::GetGlobalRoutingID(
+GlobalRenderFrameHostId VideoCaptureManager::GetGlobalRenderFrameHostId(
     const base::UnguessableToken& session_id) const {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
 
@@ -594,7 +635,7 @@ GlobalRoutingID VideoCaptureManager::GetGlobalRoutingID(
       LookupControllerBySessionId(session_id);
   if (!controller || !controller->IsDeviceAlive() ||
       !blink::IsVideoDesktopCaptureMediaType(controller->stream_type())) {
-    return GlobalRoutingID();
+    return GlobalRenderFrameHostId();
   }
 
   const DesktopMediaID desktop_media_id =
@@ -602,11 +643,12 @@ GlobalRoutingID VideoCaptureManager::GetGlobalRoutingID(
 
   if (desktop_media_id.type != DesktopMediaID::Type::TYPE_WEB_CONTENTS ||
       desktop_media_id.web_contents_id.is_null()) {
-    return GlobalRoutingID();
+    return GlobalRenderFrameHostId();
   }
 
-  return GlobalRoutingID(desktop_media_id.web_contents_id.render_process_id,
-                         desktop_media_id.web_contents_id.main_render_frame_id);
+  return GlobalRenderFrameHostId(
+      desktop_media_id.web_contents_id.render_process_id,
+      desktop_media_id.web_contents_id.main_render_frame_id);
 }
 
 void VideoCaptureManager::SetDesktopCaptureWindowId(
@@ -741,14 +783,23 @@ void VideoCaptureManager::OnClosed(
 void VideoCaptureManager::OnDeviceInfosReceived(
     base::ElapsedTimer timer,
     EnumerationCallback client_callback,
+    media::mojom::DeviceEnumerationResult error_code,
     const std::vector<media::VideoCaptureDeviceInfo>& device_infos) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("video_and_image_capture"),
                "VideoCaptureManager::OnDeviceInfosReceived");
 
-  base::UmaHistogramTimes(
-      "Media.VideoCaptureManager.GetAvailableDevicesInfoOnDeviceThreadTime",
-      timer.Elapsed());
+
+  if (error_code != media::mojom::DeviceEnumerationResult::kSuccess) {
+    EmitLogMessage(
+        base::StringPrintf("VideoCaptureManager::OnDeviceInfosReceived: Failed "
+                           "to list device infos with error_code %d",
+                           static_cast<int>(error_code)),
+        0);
+    std::move(client_callback).Run(error_code, {});
+    return;
+  }
+
   devices_info_cache_ = device_infos;
 
   std::ostringstream string_stream;
@@ -774,7 +825,7 @@ void VideoCaptureManager::OnDeviceInfosReceived(
         descriptors_and_formats);
   }
 
-  std::move(client_callback).Run(devices);
+  std::move(client_callback).Run(error_code, devices);
 }
 
 void VideoCaptureManager::DestroyControllerIfNoClients(
@@ -942,7 +993,7 @@ void VideoCaptureManager::ResumeDevices() {
       // Session ID is only valid for Screen capture. So we can fake it to
       // resume video capture devices here.
       QueueStartDevice(FakeSessionId(), controller.get(),
-                       controller->parameters());
+                       controller->parameters(), {});
     }
   }
 }
@@ -984,22 +1035,11 @@ void VideoCaptureManager::OnScreenUnlocked() {
     return;
 
   DCHECK(!locked_sessions_.empty());
-  RecordDeviceSessionLockDuration();
-
-  if (base::FeatureList::IsEnabled(features::kStopVideoCaptureOnScreenLock)) {
-    ResumeDevices();
-  }
-}
-
-void VideoCaptureManager::RecordDeviceSessionLockDuration() {
-  DCHECK(!lock_time_.is_null());
-  base::UmaHistogramMediumTimes(
-      "Media.VideoCaptureManager.DeviceSessionLockDuration",
-      base::TimeTicks::Now() - lock_time_);
   lock_time_ = base::TimeTicks();
 
   if (base::FeatureList::IsEnabled(features::kStopVideoCaptureOnScreenLock)) {
     idle_close_timer_.Stop();
+    ResumeDevices();
   }
 }
 

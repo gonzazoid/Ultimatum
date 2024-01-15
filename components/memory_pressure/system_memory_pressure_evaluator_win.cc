@@ -7,11 +7,11 @@
 #include <windows.h>
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/system/sys_info.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/win/object_watcher.h"
 #include "components/memory_pressure/multi_source_memory_pressure_monitor.h"
@@ -154,9 +154,6 @@ class SystemMemoryPressureEvaluator::OSSignalsMemoryPressureEvaluator {
   // memory gets high again.
   base::RepeatingTimer critical_pressure_notification_timer_;
 
-  // Beginning of the critical memory pressure session.
-  base::TimeTicks critical_pressure_session_begin_;
-
   // Ensures that this object is used from a single sequence.
   SEQUENCE_CHECKER(sequence_checker_);
 };
@@ -186,14 +183,6 @@ SystemMemoryPressureEvaluator::SystemMemoryPressureEvaluator(
 
 SystemMemoryPressureEvaluator::~SystemMemoryPressureEvaluator() {
   StopObserving();
-}
-
-void SystemMemoryPressureEvaluator::CheckMemoryPressureSoon() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, BindOnce(&SystemMemoryPressureEvaluator::CheckMemoryPressure,
-                          weak_ptr_factory_.GetWeakPtr()));
 }
 
 void SystemMemoryPressureEvaluator::CreateOSSignalPressureEvaluator(
@@ -302,6 +291,8 @@ SystemMemoryPressureEvaluator::CalculateCurrentPressureLevel() {
   // How much system memory is actively available for use right now, in MBs.
   int phys_free = static_cast<int>(mem_status.ullAvailPhys / kMBBytes);
 
+  base::UmaHistogramMemoryLargeMB("Memory.System.AvailableMB", phys_free);
+
   // TODO(chrisha): This should eventually care about address space pressure,
   // but the browser process (where this is running) effectively never runs out
   // of address space. Renderers occasionally do, but it does them no good to
@@ -350,17 +341,6 @@ void SystemMemoryPressureEvaluator::OSSignalsMemoryPressureEvaluator::
     OnLowMemoryNotification() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  critical_pressure_session_begin_ = base::TimeTicks::Now();
-
-  base::UmaHistogramEnumeration(
-      "Discarding.WinOSPressureSignals.PressureLevelOnLowMemoryNotification",
-      base::MemoryPressureMonitor::Get()->GetCurrentPressureLevel());
-
-  base::UmaHistogramMemoryMB(
-      "Discarding.WinOSPressureSignals."
-      "AvailableMemoryMbOnLowMemoryNotification",
-      base::SysInfo::AmountOfAvailablePhysicalMemory() / 1024 / 1024);
-
   voter_->SetVote(base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL,
                   /* notify = */ true);
 
@@ -382,11 +362,6 @@ void SystemMemoryPressureEvaluator::OSSignalsMemoryPressureEvaluator::
     OnHighMemoryNotification() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  base::UmaHistogramMediumTimes(
-      "Discarding.WinOSPressureSignals.LowMemorySessionLength",
-      base::TimeTicks::Now() - critical_pressure_session_begin_);
-  critical_pressure_session_begin_ = base::TimeTicks();
-
   critical_pressure_notification_timer_.Stop();
   voter_->SetVote(base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_NONE,
                   /* notify = */ false);
@@ -400,7 +375,7 @@ void SystemMemoryPressureEvaluator::OSSignalsMemoryPressureEvaluator::
     StartLowMemoryNotificationWatcher() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  DCHECK(base::SequencedTaskRunnerHandle::IsSet());
+  DCHECK(base::SequencedTaskRunner::HasCurrentDefault());
   memory_notification_watcher_ =
       std::make_unique<MemoryPressureWatcherDelegate>(
           base::win::ScopedHandle(::CreateMemoryResourceNotification(

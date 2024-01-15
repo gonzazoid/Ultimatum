@@ -10,10 +10,11 @@
 
 #include "base/feature_list.h"
 #include "base/scoped_multi_source_observation.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_service_observer.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_service_observer.h"
 #include "components/ukm/ukm_consent_state.h"
 #include "components/unified_consent/url_keyed_data_collection_consent_helper.h"
+#include "services/metrics/public/cpp/metrics_export.h"
 
 class PrefService;
 
@@ -53,7 +54,17 @@ class UkmConsentStateObserver
   // local data must be purged. Otherwise, more specific consents are checked
   // for individual sync settings, and recorded data may be partially purged if
   // we no longer have the corresponding sync consent.
-  virtual void OnUkmAllowedStateChanged(bool total_purge) = 0;
+  virtual void OnUkmAllowedStateChanged(
+      bool total_purge,
+      UkmConsentState previous_consent_state) = 0;
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Used to set is_demo_mode_ field.
+  void SetIsDemoMode(bool is_demo_mode);
+
+  // Return whether the device is in demo mode.
+  bool IsDeviceInDemoMode();
+#endif
 
  private:
   // syncer::SyncServiceObserver:
@@ -103,7 +114,7 @@ class UkmConsentStateObserver
 
   // Gets the current state of a profile.
   // |sync| and |consent_helper| must not be null.
-  static ProfileState GetProfileState(
+  ProfileState GetProfileState(
       syncer::SyncService* sync,
       unified_consent::UrlKeyedDataCollectionConsentHelper* consent_helper);
 
@@ -125,10 +136,17 @@ class UkmConsentStateObserver
       std::unique_ptr<unified_consent::UrlKeyedDataCollectionConsentHelper>>
       consent_helpers_;
 
-  // Tracks what type of UKM is allowed for all profiles after the last state
+  // Tracks what consent type is granted on all profiles after the last state
   // change. Consent is only granted when EVERY profile consents.
   // Empty means none.
   UkmConsentState ukm_consent_state_;
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Indicate whether the device is in demo mode. If it is true,
+  // set APPS consent to collect App usage data for active demo
+  // session. Default to false.
+  bool is_device_in_demo_mode_ = false;
+#endif
 };
 
 }  // namespace ukm

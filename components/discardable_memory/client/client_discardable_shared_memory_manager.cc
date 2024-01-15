@@ -8,8 +8,8 @@
 #include <utility>
 
 #include "base/atomic_sequence_num.h"
-#include "base/bind.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/memory/discardable_memory.h"
 #include "base/memory/discardable_shared_memory.h"
 #include "base/memory/page_size.h"
@@ -19,7 +19,8 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/system/sys_info.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/trace_event.h"
@@ -28,10 +29,6 @@
 
 namespace discardable_memory {
 namespace {
-
-BASE_FEATURE(kShorterPeriodicPurge,
-             "ShorterPeriodicPurge",
-             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Global atomic to generate unique discardable shared memory IDs.
 base::AtomicSequenceNumber g_next_discardable_shared_memory_id;
@@ -190,14 +187,14 @@ ClientDiscardableSharedMemoryManager::ClientDiscardableSharedMemoryManager(
 ClientDiscardableSharedMemoryManager::ClientDiscardableSharedMemoryManager(
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner)
     : RefCountedDeleteOnSequence<ClientDiscardableSharedMemoryManager>(
-          base::ThreadTaskRunnerHandle::Get()),
-      task_runner_(base::ThreadTaskRunnerHandle::Get()),
+          base::SingleThreadTaskRunner::GetCurrentDefault()),
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       heap_(std::make_unique<DiscardableSharedMemoryHeap>()),
       io_task_runner_(std::move(io_task_runner)),
       manager_mojo_(nullptr) {
   base::trace_event::MemoryDumpManager::GetInstance()->RegisterDumpProvider(
       this, "ClientDiscardableSharedMemoryManager",
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
 }
 
 ClientDiscardableSharedMemoryManager::~ClientDiscardableSharedMemoryManager() {
@@ -422,15 +419,8 @@ void ClientDiscardableSharedMemoryManager::ScheduledPurge() {
   // From local testing and UMA, memory usually accumulates slowly in renderers,
   // and can sit idle for hours. We purge only the old memory, as this should
   // recover the memory without adverse latency effects.
-  // TODO(crbug.com/1123679): Determine if |kMinAgeForScheduledPurge| and the
-  // constant from |ScheduledPurge| need to be tuned.
-  if (base::FeatureList::IsEnabled(kShorterPeriodicPurge)) {
-    PurgeUnlockedMemory(
-        ClientDiscardableSharedMemoryManager::kMinAgeForScheduledPurge / 2);
-  } else {
-    PurgeUnlockedMemory(
-        ClientDiscardableSharedMemoryManager::kMinAgeForScheduledPurge);
-  }
+  PurgeUnlockedMemory(
+      ClientDiscardableSharedMemoryManager::kMinAgeForScheduledPurge);
 
   bool should_schedule = false;
   {
@@ -581,6 +571,7 @@ ClientDiscardableSharedMemoryManager::AllocateLockedDiscardableSharedMemory(
       "discardable-memory-ipc-error-cause");
 
   base::UnsafeSharedMemoryRegion region;
+  base::ScopedAllowBaseSyncPrimitivesOutsideBlockingScope allow;
   base::WaitableEvent event(base::WaitableEvent::ResetPolicy::MANUAL,
                             base::WaitableEvent::InitialState::NOT_SIGNALED);
   base::ScopedClosureRunner event_signal_runner(

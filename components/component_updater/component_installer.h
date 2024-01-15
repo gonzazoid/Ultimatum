@@ -11,11 +11,12 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/ref_counted.h"
+#include "base/sequence_checker.h"
 #include "base/task/task_traits.h"
-#include "base/threading/thread_checker.h"
 #include "base/values.h"
 #include "base/version.h"
 #include "components/update_client/persisted_data.h"
@@ -24,7 +25,6 @@
 
 namespace base {
 class SequencedTaskRunner;
-class SingleThreadTaskRunner;
 }  // namespace base
 
 namespace component_updater {
@@ -48,11 +48,11 @@ class ComponentInstallerPolicy {
 
   // Verifies that a working installation resides within the directory specified
   // by |install_dir|. |install_dir| is of the form <base directory>/<version>.
-  // |manifest| should have been read from the manifest file in |install_dir|.
-  // |manifest| is a DICTIONARY base::Value. Called only from a thread belonging
-  // to a blocking thread pool. The implementation of this function must be
-  // efficient since the function can be called when Chrome starts.
-  virtual bool VerifyInstallation(const base::Value& manifest,
+  // |manifest| should have been read from the manifest file in
+  // |install_dir|. Called only from a thread belonging to a blocking thread
+  // pool. The implementation of this function must be efficient since the
+  // function can be called when Chrome starts.
+  virtual bool VerifyInstallation(const base::Value::Dict& manifest,
                                   const base::FilePath& install_dir) const = 0;
 
   // Returns true if the component supports a group policy to enable updates.
@@ -64,12 +64,12 @@ class ComponentInstallerPolicy {
   virtual bool RequiresNetworkEncryption() const = 0;
 
   // OnCustomInstall is called during the installation process. Components that
-  // require custom installation operations should implement them here.
-  // Returns a failure result if a custom operation failed, and
-  // update_client::InstallError::NONE otherwise. |manifest| is a DICTIONARY
-  // base::Value. Called only from a thread belonging to a blocking thread pool.
+  // require custom installation operations should implement them here. Returns
+  // a failure result if a custom operation failed, and
+  // update_client::InstallError::NONE otherwise. Called only from a thread
+  // belonging to a blocking thread pool.
   virtual update_client::CrxInstaller::Result OnCustomInstall(
-      const base::Value& manifest,
+      const base::Value::Dict& manifest,
       const base::FilePath& install_dir) = 0;
 
   // OnCustomUninstall is called during the unregister (uninstall) process.
@@ -87,11 +87,10 @@ class ComponentInstallerPolicy {
   // such as updating paths elsewhere in Chrome. Called on the UI thread.
   // |version| is the version of the component.
   // |install_dir| is the path to the install directory for this version.
-  // |manifest| is the manifest for this version of the component, and is a
-  // DICTIONARY base::Value.
+  // |manifest| is the manifest for this version of the component.
   virtual void ComponentReady(const base::Version& version,
                               const base::FilePath& install_dir,
-                              base::Value manifest) = 0;
+                              base::Value::Dict manifest) = 0;
 
   // Returns a relative path that will be appended to the component updater
   // root directories to find the data for this particular component.
@@ -112,15 +111,35 @@ class ComponentInstallerPolicy {
   // ^[-_a-zA-Z0-9]{1,256}$ and valid values the value part of an attribute
   // match ^[-.,;+_=$a-zA-Z0-9]{0,256}$ .
   virtual update_client::InstallerAttributes GetInstallerAttributes() const = 0;
+
+  // Returns true if the component allows cached copies for differential
+  // updates. Defaults to |true|.
+  // Differential updates are provided as patches to CRX files. Thus, an
+  // unextracted CRX file is maintained by default in a cache in addition to the
+  // installation of the component.
+  // Existing cache entries will be removed once the component updates.
+  // If the content of the component is never expected to diff well, or the
+  // storage overhead is valued higher than the cost of performing a full update
+  // at the expected cadence, disabling cached copies is a reasonable choice.
+  virtual bool AllowCachedCopies() const;
+
+  // Returns true if the component should not update over metered connections.
+  // Defaults to |true|. This only controls whether updates are accepted: if the
+  // network type changes from unmetered to metered during a download, there is
+  // no guarantee that the transfer will be suspended or cancelled.
+  virtual bool AllowUpdatesOnMeteredConnections() const;
 };
 
 // Defines the installer for Chrome components. The behavior of this class is
 // controlled by an instance of ComponentInstallerPolicy, at construction time.
 class ComponentInstaller final : public update_client::CrxInstaller {
  public:
-  ComponentInstaller(
+  // Tasks will be done with a priority of |task_priority|. Some components may
+  // affect user-visible features, hence a default of USER_VISIBLE.
+  explicit ComponentInstaller(
       std::unique_ptr<ComponentInstallerPolicy> installer_policy,
-      scoped_refptr<update_client::ActionHandler> action_handler = nullptr);
+      scoped_refptr<update_client::ActionHandler> action_handler = nullptr,
+      base::TaskPriority task_priority = base::TaskPriority::USER_VISIBLE);
 
   ComponentInstaller(const ComponentInstaller&) = delete;
   ComponentInstaller& operator=(const ComponentInstaller&) = delete;
@@ -129,24 +148,14 @@ class ComponentInstaller final : public update_client::CrxInstaller {
   // |cus| provides the registration logic.
   // The passed |callback| will be called once the initial check for installed
   // versions is done and the component has been registered.
-  // Registration tasks will be done with a priority of |task_priority|. Some
-  // components may affect user-visible features, hence a default of
-  // USER_VISIBLE.
-  void Register(
-      ComponentUpdateService* cus,
-      base::OnceClosure callback,
-      base::TaskPriority task_priority = base::TaskPriority::USER_VISIBLE);
+  void Register(ComponentUpdateService* cus, base::OnceClosure callback);
 
   // Registers the component for update checks and installs.
   // |register_callback| is called to do the registration.
   // |callback| is called when registration finishes.
-  // Registration tasks will be done with a priority of |task_priority|. Some
-  // components may affect user-visible features, hence a default of
-  // USER_VISIBLE.
   void Register(
       RegisterCallback register_callback,
       base::OnceClosure callback,
-      base::TaskPriority task_priority = base::TaskPriority::USER_VISIBLE,
       const base::Version& registered_version = base::Version(kNullVersion));
 
   // Overrides from update_client::CrxInstaller.
@@ -160,7 +169,7 @@ class ComponentInstaller final : public update_client::CrxInstaller {
 
   bool GetInstalledFile(const std::string& file,
                         base::FilePath* installed_file) override;
-  // Only user-level component installations can be uninstalled.
+  // Components bundled with installations of Chrome cannot be uninstalled.
   bool Uninstall() override;
 
  private:
@@ -173,7 +182,7 @@ class ComponentInstaller final : public update_client::CrxInstaller {
     base::FilePath install_dir;
     base::Version version;
     std::string fingerprint;
-    absl::optional<base::Value> manifest;
+    absl::optional<base::Value::Dict> manifest;
 
    private:
     friend class base::RefCountedThreadSafe<RegistrationInfo>;
@@ -191,7 +200,7 @@ class ComponentInstaller final : public update_client::CrxInstaller {
                            scoped_refptr<RegistrationInfo> registration_info);
   update_client::CrxInstaller::Result InstallHelper(
       const base::FilePath& unpack_path,
-      base::Value* manifest,
+      base::Value::Dict* manifest,
       base::Version* version,
       base::FilePath* install_path);
   void StartRegistration(const base::Version& registered_version,
@@ -199,7 +208,7 @@ class ComponentInstaller final : public update_client::CrxInstaller {
   void FinishRegistration(scoped_refptr<RegistrationInfo> registration_info,
                           RegisterCallback register_callback,
                           base::OnceClosure callback);
-  absl::optional<base::Value> GetValidInstallationManifest(
+  absl::optional<base::Value::Dict> GetValidInstallationManifest(
       const base::FilePath& path);
   absl::optional<base::Version> SelectComponentVersion(
       const base::Version& registered_version,
@@ -210,10 +219,10 @@ class ComponentInstaller final : public update_client::CrxInstaller {
       const base::FilePath& base_dir,
       const absl::optional<base::Version>& selected_version);
   absl::optional<base::FilePath> GetComponentDirectory();
-  void ComponentReady(base::Value manifest);
+  void ComponentReady(base::Value::Dict manifest);
   void UninstallOnTaskRunner();
 
-  THREAD_CHECKER(thread_checker_);
+  SEQUENCE_CHECKER(sequence_checker_);
 
   base::FilePath current_install_dir_;
   base::Version current_version_;
@@ -221,10 +230,10 @@ class ComponentInstaller final : public update_client::CrxInstaller {
 
   std::unique_ptr<ComponentInstallerPolicy> installer_policy_;
   scoped_refptr<update_client::ActionHandler> action_handler_;
-  scoped_refptr<base::SequencedTaskRunner> task_runner_;
 
+  scoped_refptr<base::SequencedTaskRunner> task_runner_;
   // Posts responses back to the main thread.
-  scoped_refptr<base::SingleThreadTaskRunner> main_task_runner_;
+  scoped_refptr<base::SequencedTaskRunner> main_task_runner_;
 
   FRIEND_TEST_ALL_PREFIXES(ComponentInstallerTest, SelectComponentVersion);
 };

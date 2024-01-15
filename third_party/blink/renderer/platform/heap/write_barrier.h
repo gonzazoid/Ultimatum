@@ -40,16 +40,19 @@ class WriteBarrier final {
   // Cannot refer to blink::Member and friends here due to cyclic includes.
   template <typename T,
             typename WeaknessTag,
+            typename StorageType,
             typename WriteBarrierPolicy,
             typename CheckingPolicy>
   ALWAYS_INLINE static void DispatchForObject(
-      cppgc::internal::
-          BasicMember<T, WeaknessTag, WriteBarrierPolicy, CheckingPolicy>*
-              element) {
+      cppgc::internal::BasicMember<T,
+                                   WeaknessTag,
+                                   StorageType,
+                                   WriteBarrierPolicy,
+                                   CheckingPolicy>* element) {
     HeapConsistency::WriteBarrierParams params;
     switch (HeapConsistency::GetWriteBarrierType(*element, params)) {
       case HeapConsistency::WriteBarrierType::kMarking:
-        HeapConsistency::DijkstraWriteBarrier(params, *element);
+        HeapConsistency::DijkstraWriteBarrier(params, element->Get());
         break;
       case HeapConsistency::WriteBarrierType::kGenerational:
         HeapConsistency::GenerationalBarrier(params, element);
@@ -62,12 +65,15 @@ class WriteBarrier final {
   // Cannot refer to blink::Member and friends here due to cyclic includes.
   template <typename T,
             typename WeaknessTag,
+            typename StorageType,
             typename WriteBarrierPolicy,
             typename CheckingPolicy>
   ALWAYS_INLINE static bool IsWriteBarrierNeeded(
-      cppgc::internal::
-          BasicMember<T, WeaknessTag, WriteBarrierPolicy, CheckingPolicy>*
-              element) {
+      cppgc::internal::BasicMember<T,
+                                   WeaknessTag,
+                                   StorageType,
+                                   WriteBarrierPolicy,
+                                   CheckingPolicy>* element) {
     HeapConsistency::WriteBarrierParams params;
     return HeapConsistency::GetWriteBarrierType(*element, params) !=
            HeapConsistency::WriteBarrierType::kNone;

@@ -7,7 +7,6 @@
 #include <utility>
 
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "ui/events/event.h"
 #include "ui/events/keycodes/dom/dom_code.h"
@@ -30,16 +29,6 @@ DemoWindow::DemoWindow(WindowManager* window_manager,
     : window_manager_(window_manager), renderer_factory_(renderer_factory) {
   PlatformWindowInitProperties properties;
   properties.bounds = bounds;
-
-#if BUILDFLAG(IS_FUCHSIA)
-  // When using Scenic Ozone platform we need to supply a view_token to the
-  // window. This is not necessary when using the headless ozone platform.
-  if (ui::OzonePlatform::GetInstance()
-          ->GetPlatformProperties()
-          .needs_view_token) {
-    ui::fuchsia::InitializeViewTokenAndPresentView(&properties);
-  }
-#endif
 
   platform_window_ = OzonePlatform::GetInstance()->CreatePlatformWindow(
       this, std::move(properties));

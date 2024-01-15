@@ -4,7 +4,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/overlay_info.h"
 #include "media/base/renderer_factory_selector.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -71,26 +72,26 @@ class RendererFactorySelectorTest : public testing::Test {
 };
 
 TEST_F(RendererFactorySelectorTest, SingleFactory) {
-  AddBaseFactory(RendererType::kDefault);
-  EXPECT_EQ(RendererType::kDefault, GetCurrentlySelectedRendererType());
+  AddBaseFactory(RendererType::kRendererImpl);
+  EXPECT_EQ(RendererType::kRendererImpl, GetCurrentlySelectedRendererType());
 }
 
 TEST_F(RendererFactorySelectorTest, MultipleFactory) {
-  AddBaseFactory(RendererType::kDefault);
+  AddBaseFactory(RendererType::kRendererImpl);
   AddFactory(RendererType::kMojo);
 
-  EXPECT_EQ(RendererType::kDefault, GetCurrentlySelectedRendererType());
+  EXPECT_EQ(RendererType::kRendererImpl, GetCurrentlySelectedRendererType());
 
   selector_.SetBaseRendererType(RendererType::kMojo);
   EXPECT_EQ(RendererType::kMojo, GetCurrentlySelectedRendererType());
 }
 
 TEST_F(RendererFactorySelectorTest, ConditionalFactory) {
-  AddBaseFactory(RendererType::kDefault);
+  AddBaseFactory(RendererType::kRendererImpl);
   AddFactory(RendererType::kMojo);
   AddConditionalFactory(RendererType::kCourier);
 
-  EXPECT_EQ(RendererType::kDefault, GetCurrentlySelectedRendererType());
+  EXPECT_EQ(RendererType::kRendererImpl, GetCurrentlySelectedRendererType());
 
   condition_met_map_[RendererType::kCourier] = true;
   EXPECT_EQ(RendererType::kCourier, GetCurrentlySelectedRendererType());
@@ -103,11 +104,11 @@ TEST_F(RendererFactorySelectorTest, ConditionalFactory) {
 }
 
 TEST_F(RendererFactorySelectorTest, MultipleConditionalFactories) {
-  AddBaseFactory(RendererType::kDefault);
+  AddBaseFactory(RendererType::kRendererImpl);
   AddConditionalFactory(RendererType::kFlinging);
   AddConditionalFactory(RendererType::kCourier);
 
-  EXPECT_EQ(RendererType::kDefault, GetCurrentlySelectedRendererType());
+  EXPECT_EQ(RendererType::kRendererImpl, GetCurrentlySelectedRendererType());
 
   condition_met_map_[RendererType::kFlinging] = false;
   condition_met_map_[RendererType::kCourier] = true;

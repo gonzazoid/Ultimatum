@@ -6,6 +6,7 @@
 #define SERVICES_NETWORK_WEB_TRANSPORT_H_
 
 #include <memory>
+#include <string_view>
 
 #include "base/containers/queue.h"
 #include "base/memory/raw_ptr.h"
@@ -67,6 +68,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) WebTransport final
   void AbortStream(uint32_t stream_id, uint8_t code) override;
   void StopSending(uint32_t stream_id, uint8_t code) override;
   void SetOutgoingDatagramExpirationDuration(base::TimeDelta duration) override;
+  void GetStats(GetStatsCallback callback) override;
   void Close(mojom::WebTransportCloseInfoPtr close_info) override;
 
   // WebTransportClientVisitor implementation:
@@ -78,7 +80,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) WebTransport final
   void OnError(const net::WebTransportError& error) override;
   void OnIncomingBidirectionalStreamAvailable() override;
   void OnIncomingUnidirectionalStreamAvailable() override;
-  void OnDatagramReceived(base::StringPiece datagram) override;
+  void OnDatagramReceived(std::string_view datagram) override;
   void OnCanCreateNewOutgoingBidirectionalStream() override;
   void OnCanCreateNewOutgoingUnidirectionalStream() override;
   void OnDatagramProcessed(absl::optional<quic::MessageStatus> status) override;

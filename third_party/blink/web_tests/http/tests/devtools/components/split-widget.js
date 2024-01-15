@@ -2,6 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+
+import * as Common from 'devtools/core/common/common.js';
+import * as UIModule from 'devtools/ui/legacy/legacy.js';
+
 (async function() {
   TestRunner.addResult(`Tests how split widget saving to settings works.\n`);
 
@@ -10,9 +15,9 @@
   function createAndShowSplitWidget(
       isVertical, secondIsSidebar, settingName, defaultSidebarWidth, defaultSidebarHeight, shouldSaveShowMode) {
     var splitWidget =
-        new UI.SplitWidget(isVertical, secondIsSidebar, settingName, defaultSidebarWidth, defaultSidebarHeight);
-    splitWidget.setMainWidget(new UI.Widget());
-    splitWidget.setSidebarWidget(new UI.Widget());
+        new UIModule.SplitWidget.SplitWidget(isVertical, secondIsSidebar, settingName, defaultSidebarWidth, defaultSidebarHeight);
+    splitWidget.setMainWidget(new UIModule.Widget.Widget());
+    splitWidget.setSidebarWidget(new UIModule.Widget.Widget());
     if (shouldSaveShowMode)
       splitWidget.enableShowModeSaving();
     splitWidget.element.style.position = 'absolute';
@@ -32,7 +37,7 @@
     TestRunner.addResult(
         '    Sidebar size = ' + sidebarSize + ', showMode = ' + splitWidget.showMode() + ', ' + orientation);
     TestRunner.addResult(
-        '    Setting value: ' + JSON.stringify(Common.settings.settingForTest(splitWidget.setting.name).get()));
+        '    Setting value: ' + JSON.stringify(Common.Settings.settingForTest(splitWidget.setting.name).get()));
   }
 
   function testSplitWidgetSizes(useFraction, shouldSaveShowMode) {

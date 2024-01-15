@@ -22,7 +22,12 @@ void MetricsProvider::AsyncInit(base::OnceClosure done_callback) {
   std::move(done_callback).Run();
 }
 
+bool MetricsProvider::ProvideHistograms() {
+  return true;
+}
+
 void MetricsProvider::OnDidCreateMetricsLog() {
+  emitted_ = ProvideHistograms();
 }
 
 void MetricsProvider::OnRecordingEnabled() {
@@ -36,11 +41,14 @@ void MetricsProvider::OnClientStateCleared() {}
 void MetricsProvider::OnAppEnterBackground() {
 }
 
+void MetricsProvider::OnPageLoadStarted() {}
+
 bool MetricsProvider::HasIndependentMetrics() {
   return false;
 }
 
 void MetricsProvider::ProvideIndependentMetrics(
+    base::OnceClosure serialize_log_callback,
     base::OnceCallback<void(bool)> done_callback,
     ChromeUserMetricsExtension* uma_proto,
     base::HistogramSnapshotManager* snapshot_manager) {
@@ -71,6 +79,10 @@ void MetricsProvider::ProvidePreviousSessionData(
 void MetricsProvider::ProvideCurrentSessionData(
     ChromeUserMetricsExtension* uma_proto) {
   ProvideStabilityMetrics(uma_proto->mutable_system_profile());
+
+  if (!emitted_) {
+    ProvideHistograms();
+  }
 }
 
 void MetricsProvider::ProvideCurrentSessionUKMData() {}

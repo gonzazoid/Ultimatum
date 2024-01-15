@@ -10,11 +10,14 @@
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "components/url_formatter/spoof_checks/skeleton_generator.h"
 #include "components/url_formatter/url_formatter.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/icu/source/common/unicode/uvernum.h"
 #include "url/gurl.h"
+#include "url/url_features.h"
 
 namespace url_formatter {
 
@@ -346,6 +349,10 @@ const IDNTestCase kIdnCases[] = {
     // them.
     {"xn--1-8sbn9akccw8m.com",
      u"\u0455\u0441\u043e\u0440\u0435\u0031\u0440\u0430\u0443.com", kUnsafe},
+    // курс.com is a whole-script-confusable but курс is an allowed word.
+    {"xn--j1amdg.com", u"\u043a\u0443\u0440\u0441.com", kSafe},
+    // ск.com is a whole-script-confusable.
+    {"xn--j1an.com", u"\u0441\u043a.com", kUnsafe},
 
     // The same as above three, but in IDN TLD (рф).
     // 1) ѕсоре.рф with ѕсоре in Cyrillic.
@@ -819,19 +826,6 @@ const IDNTestCase kIdnCases[] = {
     {"xn--foog-opf.com", u"foog\u05b4.com", kUnsafe},    // Latin + Hebrew NSM
     {"xn--shb5495f.com", u"\uac00\u0650.com", kUnsafe},  // Hang + Arabic NSM
 
-    // 4 Deviation characters between IDNA 2003 and IDNA 2008
-    // When entered in Unicode, the first two are mapped to 'ss' and Greek sigma
-    // and the latter two are mapped away. However, the punycode form should
-    // remain in punycode.
-    // U+00DF(sharp-s)
-    {"xn--fu-hia.de", u"fu\u00df.de", kUnsafe},
-    // U+03C2(final-sigma)
-    {"xn--mxac2c.gr", u"\u03b1\u03b2\u03c2.gr", kUnsafe},
-    // U+200C(ZWNJ)
-    {"xn--h2by8byc123p.in", u"\u0924\u094d\u200c\u0930\u093f.in", kUnsafe},
-    // U+200C(ZWJ)
-    {"xn--11b6iy14e.in", u"\u0915\u094d\u200d.in", kUnsafe},
-
     // Math Monospace Small A. When entered in Unicode, it's canonicalized to
     // 'a'. The punycode form should remain in punycode.
     {"xn--bc-9x80a.xyz", u"\U0001d68abc.xyz", kInvalid},
@@ -961,11 +955,12 @@ const IDNTestCase kIdnCases[] = {
     // U+05D7 can look like Latin n in many fonts.
     {"xn--ceba.com", u"\u05d7\u05d7.com", kUnsafe},
 
-    // U+00FE (þ) and U+00F0 (ð) are only allowed under the .is TLD.
+    // U+00FE (þ) and U+00F0 (ð) are only allowed under the .is and .fo TLDs.
     {"xn--acdef-wva.com", u"a\u00fecdef.com", kUnsafe},
     {"xn--mnpqr-jta.com", u"mn\u00f0pqr.com", kUnsafe},
     {"xn--acdef-wva.is", u"a\u00fecdef.is", kSafe},
     {"xn--mnpqr-jta.is", u"mn\u00f0pqr.is", kSafe},
+    {"xn--mnpqr-jta.fo", u"mn\u00f0pqr.fo", kSafe},
 
     // U+0259 (ə) is only allowed under the .az TLD.
     {"xn--xample-vyc.com", u"\u0259xample.com", kUnsafe},
@@ -1108,7 +1103,7 @@ const IDNTestCase kIdnCases[] = {
 };
 
 namespace test {
-#include "components/url_formatter/spoof_checks/top_domains/test_domains-trie-inc.cc"
+#include "components/url_formatter/spoof_checks/top_domains/idn_test_domains-trie-inc.cc"
 }
 
 bool IsPunycode(const std::u16string& s) {
@@ -1118,9 +1113,20 @@ bool IsPunycode(const std::u16string& s) {
 
 }  // namespace
 
-class IDNSpoofCheckerTest : public ::testing::Test {
+// IDNA mode to use in tests.
+enum class IDNAMode { kTransitional, kNonTransitional };
+
+class IDNSpoofCheckerTest : public ::testing::Test,
+                            public ::testing::WithParamInterface<IDNAMode> {
  protected:
   void SetUp() override {
+    if (GetParam() == IDNAMode::kNonTransitional) {
+      scoped_feature_list_.InitAndEnableFeature(
+          url::kUseIDNA2008NonTransitional);
+    } else {
+      scoped_feature_list_.InitAndDisableFeature(
+          url::kUseIDNA2008NonTransitional);
+    }
     IDNSpoofChecker::HuffmanTrieParams trie_params{
         test::kTopDomainsHuffmanTree, sizeof(test::kTopDomainsHuffmanTree),
         test::kTopDomainsTrie, test::kTopDomainsTrieBits,
@@ -1129,7 +1135,45 @@ class IDNSpoofCheckerTest : public ::testing::Test {
   }
 
   void TearDown() override { IDNSpoofChecker::RestoreTrieParamsForTesting(); }
+
+  void RunIDNToUnicodeTest(const IDNTestCase& test) {
+    // Sanity check to ensure that the unicode output matches the input. Bypass
+    // all spoof checks by doing an unsafe conversion.
+    const IDNConversionResult unsafe_result =
+        UnsafeIDNToUnicodeWithDetails(test.input);
+
+    // Ignore inputs that can't be converted even with unsafe conversion because
+    // they contain certain characters not allowed in IDNs. E.g. U+24DF (Latin
+    // CIRCLED LATIN SMALL LETTER P) in hostname causes the conversion to fail
+    // before reaching spoof checks.
+    if (test.expected_result != kInvalid) {
+      // Also ignore domains that need to remain partially in punycode, such
+      // as ѕсоре-рау.한국 where scope-pay is a Cyrillic whole-script
+      // confusable but 한국 is safe. This would require adding yet another
+      // field to the the test struct.
+      if (!IsPunycode(test.unicode_output)) {
+        EXPECT_EQ(unsafe_result.result, test.unicode_output);
+      }
+    } else {
+      // Invalid punycode should not be converted.
+      EXPECT_EQ(unsafe_result.result, base::ASCIIToUTF16(test.input));
+    }
+
+    const std::u16string output(IDNToUnicode(test.input));
+    const std::u16string expected(test.expected_result == kSafe
+                                      ? test.unicode_output
+                                      : base::ASCIIToUTF16(test.input));
+    EXPECT_EQ(expected, output);
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
+
+INSTANTIATE_TEST_SUITE_P(All,
+                         IDNSpoofCheckerTest,
+                         ::testing::Values(IDNAMode::kTransitional,
+                                           IDNAMode::kNonTransitional));
 
 // Test that a domain entered as punycode is decoded to unicode if safe,
 // otherwise is left in punycode.
@@ -1139,42 +1183,49 @@ class IDNSpoofCheckerTest : public ::testing::Test {
 // certain unicode characters are canonicalized to other characters.
 // E.g. Mathematical Monospace Small A (U+1D68A) is canonicalized to "a" when
 // used in a domain name.
-TEST_F(IDNSpoofCheckerTest, IDNToUnicode) {
-  for (size_t i = 0; i < std::size(kIdnCases); i++) {
-    SCOPED_TRACE(
-        base::StringPrintf("input #%zu: \"%s\"", i, kIdnCases[i].input));
-
-    // Sanity check to ensure that the unicode output matches the input. Bypass
-    // all spoof checks by doing an unsafe conversion.
-    const IDNConversionResult unsafe_result =
-        UnsafeIDNToUnicodeWithDetails(kIdnCases[i].input);
-
-    // Ignore inputs that can't be converted even with unsafe conversion because
-    // they contain certain characters not allowed in IDNs. E.g. U+24DF (Latin
-    // CIRCLED LATIN SMALL LETTER P) in hostname causes the conversion to fail
-    // before reaching spoof checks.
-    if (kIdnCases[i].expected_result != kInvalid) {
-      // Also ignore domains that need to remain partially in punycode, such
-      // as ѕсоре-рау.한국 where scope-pay is a Cyrillic whole-script
-      // confusable but 한국 is safe. This would require adding yet another
-      // field to the the test struct.
-      if (!IsPunycode(kIdnCases[i].unicode_output)) {
-        EXPECT_EQ(unsafe_result.result, kIdnCases[i].unicode_output);
-      }
-    } else {
-      // Invalid punycode should not be converted.
-      EXPECT_EQ(unsafe_result.result, base::ASCIIToUTF16(kIdnCases[i].input));
-    }
-
-    const std::u16string output(IDNToUnicode(kIdnCases[i].input));
-    const std::u16string expected(kIdnCases[i].expected_result == kSafe
-                                      ? kIdnCases[i].unicode_output
-                                      : base::ASCIIToUTF16(kIdnCases[i].input));
-    EXPECT_EQ(expected, output);
+TEST_P(IDNSpoofCheckerTest, IDNToUnicode) {
+  for (const auto& test : kIdnCases) {
+    RunIDNToUnicodeTest(test);
   }
 }
 
-TEST_F(IDNSpoofCheckerTest, GetSimilarTopDomain) {
+// Same as IDNToUnicode but only tests hostnames with deviation characters.
+TEST_P(IDNSpoofCheckerTest, IDNToUnicodeDeviationCharacters) {
+  // Tests for 4 Deviation characters between IDNA 2003 and IDNA 2008. When
+  // entered in Unicode:
+  // - In Transitional mode, sharp-s and final-sigma are mapped to 'ss' and
+  //   sigma and ZWJ and ZWNJ two are mapped away. However, the punycode form
+  //   should remain in punycode.
+  // - In Non-Transitional mode, sharp-s and final-sigma shouldn't be be mapped
+  //   and hostnames containing them should be considered safe. ZWJ and ZWNJ
+  //   should still be considered unsafe.
+  bool is_non_transitional_idna = GetParam() == IDNAMode::kNonTransitional;
+
+  const IDNTestCase kTestCases[] = {
+      // U+00DF(sharp-s)
+      {"xn--fu-hia.de", u"fu\u00df.de",
+       is_non_transitional_idna ? kSafe : kUnsafe},
+      // U+03C2(final-sigma)
+      {"xn--mxac2c.gr", u"\u03b1\u03b2\u03c2.gr",
+       is_non_transitional_idna ? kSafe : kUnsafe},
+
+      // Treat ZWJ and ZWNJ explicitly unsafe, even in Non-Transitional mode.
+      // U+200C(ZWNJ)
+      {"xn--h2by8byc123p.in", u"\u0924\u094d\u200c\u0930\u093f.in", kUnsafe},
+      // U+200C(ZWJ)
+      {"xn--11b6iy14e.in", u"\u0915\u094d\u200d.in", kUnsafe},
+
+      // youtuße.com is always unsafe:
+      // - In Transitional mode, deviation characters are disallowed.
+      // - In Non-Transitional mode, skeleton of youtuße.com matches
+      //   youtube.com which is a test top domain.
+      {"xn--youtue-fta.com", u"youtu\u00dfe.com", kUnsafe}};
+  for (const auto& test : kTestCases) {
+    RunIDNToUnicodeTest(test);
+  }
+}
+
+TEST_P(IDNSpoofCheckerTest, GetSimilarTopDomain) {
   struct TestCase {
     const char16_t* const hostname;
     const char* const expected_top_domain;
@@ -1203,30 +1254,30 @@ TEST_F(IDNSpoofCheckerTest, GetSimilarTopDomain) {
     const TopDomainEntry entry =
         IDNSpoofChecker().GetSimilarTopDomain(test_case.hostname);
     EXPECT_EQ(test_case.expected_top_domain, entry.domain);
-    EXPECT_FALSE(entry.is_top_500);
+    EXPECT_FALSE(entry.is_top_bucket);
   }
 }
 
-TEST_F(IDNSpoofCheckerTest, LookupSkeletonInTopDomains) {
+TEST_P(IDNSpoofCheckerTest, LookupSkeletonInTopDomains) {
   {
     TopDomainEntry entry =
         IDNSpoofChecker().LookupSkeletonInTopDomains("d4OOO.corn");
     EXPECT_EQ("d4000.com", entry.domain);
-    EXPECT_TRUE(entry.is_top_500);
+    EXPECT_TRUE(entry.is_top_bucket);
     EXPECT_EQ(entry.skeleton_type, SkeletonType::kFull);
   }
   {
     TopDomainEntry entry = IDNSpoofChecker().LookupSkeletonInTopDomains(
         "d4OOOcorn", SkeletonType::kSeparatorsRemoved);
     EXPECT_EQ("d4000.com", entry.domain);
-    EXPECT_TRUE(entry.is_top_500);
+    EXPECT_TRUE(entry.is_top_bucket);
     EXPECT_EQ(entry.skeleton_type, SkeletonType::kSeparatorsRemoved);
   }
   {
     TopDomainEntry entry =
         IDNSpoofChecker().LookupSkeletonInTopDomains("digklrno68.corn");
     EXPECT_EQ("digklmo68.com", entry.domain);
-    EXPECT_FALSE(entry.is_top_500);
+    EXPECT_FALSE(entry.is_top_bucket);
     EXPECT_EQ(entry.skeleton_type, SkeletonType::kFull);
   }
 }
@@ -1237,14 +1288,14 @@ TEST(IDNSpoofCheckerNoFixtureTest, LookupSkeletonInTopDomains) {
     TopDomainEntry entry =
         IDNSpoofChecker().LookupSkeletonInTopDomains("google.corn");
     EXPECT_EQ("google.com", entry.domain);
-    EXPECT_TRUE(entry.is_top_500);
+    EXPECT_TRUE(entry.is_top_bucket);
     EXPECT_EQ(entry.skeleton_type, SkeletonType::kFull);
   }
   {
     TopDomainEntry entry = IDNSpoofChecker().LookupSkeletonInTopDomains(
         "googlecorn", SkeletonType::kSeparatorsRemoved);
     EXPECT_EQ("google.com", entry.domain);
-    EXPECT_TRUE(entry.is_top_500);
+    EXPECT_TRUE(entry.is_top_bucket);
     EXPECT_EQ(entry.skeleton_type, SkeletonType::kSeparatorsRemoved);
   }
   {
@@ -1253,7 +1304,7 @@ TEST(IDNSpoofCheckerNoFixtureTest, LookupSkeletonInTopDomains) {
     TopDomainEntry entry =
         IDNSpoofChecker().LookupSkeletonInTopDomains("google.sk");
     EXPECT_EQ("google.sk", entry.domain);
-    EXPECT_FALSE(entry.is_top_500);
+    EXPECT_FALSE(entry.is_top_bucket);
     EXPECT_EQ(entry.skeleton_type, SkeletonType::kFull);
   }
 }
@@ -1271,7 +1322,7 @@ TEST(IDNSpoofCheckerNoFixtureTest, UnsafeIDNToUnicodeWithDetails) {
     // The top domain that |punycode| matched to, if any.
     const char* const expected_matching_domain;
     // If true, the matching top domain is expected to be in top 500.
-    const bool expected_is_top_500;
+    const bool expected_is_top_bucket;
     const IDNSpoofChecker::Result expected_spoof_check_result;
   } kTestCases[] = {
       {// An ASCII, top domain.
@@ -1307,8 +1358,8 @@ TEST(IDNSpoofCheckerNoFixtureTest, UnsafeIDNToUnicodeWithDetails) {
     EXPECT_EQ(test_case.expected_has_idn, result.has_idn_component);
     EXPECT_EQ(test_case.expected_matching_domain,
               result.matching_top_domain.domain);
-    EXPECT_EQ(test_case.expected_is_top_500,
-              result.matching_top_domain.is_top_500);
+    EXPECT_EQ(test_case.expected_is_top_bucket,
+              result.matching_top_domain.is_top_bucket);
     EXPECT_EQ(test_case.expected_spoof_check_result, result.spoof_check_result);
   }
 }

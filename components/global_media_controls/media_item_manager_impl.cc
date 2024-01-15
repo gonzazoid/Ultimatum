@@ -4,14 +4,14 @@
 
 #include "components/global_media_controls/media_item_manager_impl.h"
 
-#include <list>
 #include <memory>
-#include <string>
 
+#include "base/metrics/histogram_functions.h"
 #include "base/observer_list.h"
 #include "components/global_media_controls/public/media_dialog_delegate.h"
 #include "components/global_media_controls/public/media_item_manager_observer.h"
 #include "components/global_media_controls/public/media_item_producer.h"
+#include "components/media_message_center/media_notification_item.h"
 #include "components/media_message_center/media_notification_util.h"
 
 namespace global_media_controls {
@@ -45,7 +45,11 @@ void MediaItemManagerImpl::ShowItem(const std::string& id) {
   // If new items come up while the dialog is open for a particular item, do not
   // show the new items.
   if (!HasOpenDialogForItem()) {
-    ShowAndObserveItem(id);
+    OnItemsChanged();
+    if (!dialog_delegate_) {
+      return;
+    }
+    ShowMediaItemUI(id);
   }
 }
 
@@ -57,81 +61,67 @@ void MediaItemManagerImpl::HideItem(const std::string& id) {
   dialog_delegate_->HideMediaItem(id);
 }
 
+void MediaItemManagerImpl::RefreshItem(const std::string& id) {
+  if (!dialog_delegate_) {
+    return;
+  }
+  dialog_delegate_->RefreshMediaItem(id, GetItem(id));
+}
+
 void MediaItemManagerImpl::OnItemsChanged() {
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.OnItemListChanged();
+  }
 }
 
 void MediaItemManagerImpl::SetDialogDelegate(MediaDialogDelegate* delegate) {
   dialog_opened_for_single_item_ = false;
   SetDialogDelegateCommon(delegate);
-  if (!dialog_delegate_)
+  if (!dialog_delegate_) {
     return;
-
-  auto item_ids = GetActiveControllableItemIds();
-  std::list<std::string> sorted_item_ids;
+  }
+  auto item_ids = GetActiveItemIds();
   for (const std::string& id : item_ids) {
-    auto* item_producer = GetItemProducer(id);
-    if (item_producer && item_producer->IsItemActivelyPlaying(id)) {
-      sorted_item_ids.push_front(id);
-    } else {
-      sorted_item_ids.push_back(id);
-    }
+    ShowMediaItemUI(id);
   }
-
-  for (const std::string& id : sorted_item_ids) {
-    base::WeakPtr<media_message_center::MediaNotificationItem> item =
-        GetItem(id);
-    MediaItemUI* item_ui = dialog_delegate_->ShowMediaItem(id, item);
-    auto* item_producer = GetItemProducer(id);
-    if (item_producer)
-      item_producer->OnItemShown(id, item_ui);
-  }
-
-  media_message_center::RecordConcurrentNotificationCount(item_ids.size());
-
   for (auto* item_producer : item_producers_) {
     item_producer->OnDialogDisplayed();
   }
+  media_message_center::RecordConcurrentNotificationCount(item_ids.size());
 }
 
 void MediaItemManagerImpl::SetDialogDelegateForId(MediaDialogDelegate* delegate,
                                                   const std::string& id) {
-  dialog_opened_for_single_item_ = true;
   SetDialogDelegateCommon(delegate);
-  if (!dialog_delegate_)
+  if (!dialog_delegate_) {
     return;
-
-  auto* producer = GetItemProducer(id);
-  if (!producer)
-    return;
-
-  auto item = producer->GetMediaItem(id);
-  if (!item)
-    return;
-
-  auto* item_ui = dialog_delegate_->ShowMediaItem(id, item);
-  producer->OnItemShown(id, item_ui);
+  }
+  if (ShowMediaItemUI(id)) {
+    dialog_opened_for_single_item_ = true;
+  }
 }
 
 void MediaItemManagerImpl::FocusDialog() {
-  if (dialog_delegate_)
+  if (dialog_delegate_) {
     dialog_delegate_->Focus();
+  }
 }
 
 void MediaItemManagerImpl::HideDialog() {
-  if (dialog_delegate_)
+  if (dialog_delegate_) {
     dialog_delegate_->HideMediaDialog();
+  }
 }
 
 bool MediaItemManagerImpl::HasActiveItems() {
-  return !GetActiveControllableItemIds().empty();
+  return !GetActiveItemIds().empty();
 }
 
 bool MediaItemManagerImpl::HasFrozenItems() {
   for (auto* item_producer : item_producers_) {
-    if (item_producer->HasFrozenItems())
+    if (item_producer->HasFrozenItems()) {
       return true;
+    }
   }
   return false;
 }
@@ -140,35 +130,53 @@ bool MediaItemManagerImpl::HasOpenDialog() {
   return !!dialog_delegate_;
 }
 
-void MediaItemManagerImpl::ShowAndObserveItem(const std::string& id) {
-  OnItemsChanged();
-  if (!dialog_delegate_)
-    return;
+std::list<std::string> MediaItemManagerImpl::GetActiveItemIds() {
+  // Get all the active item IDs and remove duplicates.
+  std::set<std::string> item_ids;
+  for (auto* item_producer : item_producers_) {
+    const std::set<std::string>& ids =
+        item_producer->GetActiveControllableItemIds();
+    item_ids.insert(ids.begin(), ids.end());
+  }
 
-  auto item = GetItem(id);
-  auto* item_ui = dialog_delegate_->ShowMediaItem(id, item);
-  auto* producer = GetItemProducer(id);
-  if (producer)
-    producer->OnItemShown(id, item_ui);
+  // Sort the item IDs.
+  std::list<std::string> sorted_item_ids;
+  for (const std::string& id : item_ids) {
+    auto* item_producer = GetItemProducer(id);
+    DCHECK(item_producer);
+
+    if (item_producer->IsItemActivelyPlaying(id)) {
+      sorted_item_ids.push_front(id);
+    } else {
+      sorted_item_ids.push_back(id);
+    }
+  }
+  return sorted_item_ids;
 }
 
-std::set<std::string> MediaItemManagerImpl::GetActiveControllableItemIds()
-    const {
-  std::set<std::string> ids;
-  for (auto* item_producer : item_producers_) {
-    const std::set<std::string>& item_ids =
-        item_producer->GetActiveControllableItemIds();
-    ids.insert(item_ids.begin(), item_ids.end());
+bool MediaItemManagerImpl::ShowMediaItemUI(const std::string& id) {
+  base::WeakPtr<media_message_center::MediaNotificationItem> item = GetItem(id);
+  if (!item) {
+    return false;
   }
-  return ids;
+  CHECK(dialog_delegate_);
+  MediaItemUI* item_ui = dialog_delegate_->ShowMediaItem(id, item);
+  MediaItemProducer* producer = GetItemProducer(id);
+  CHECK(producer);
+  producer->OnItemShown(id, item_ui);
+  base::UmaHistogramEnumeration(
+      media_message_center::MediaNotificationItem::kSourceHistogramName,
+      item->GetSource());
+  return true;
 }
 
 base::WeakPtr<media_message_center::MediaNotificationItem>
 MediaItemManagerImpl::GetItem(const std::string& id) {
   for (auto* producer : item_producers_) {
     auto item = producer->GetMediaItem(id);
-    if (item)
+    if (item) {
       return item;
+    }
   }
   return nullptr;
 }
@@ -176,8 +184,9 @@ MediaItemManagerImpl::GetItem(const std::string& id) {
 MediaItemProducer* MediaItemManagerImpl::GetItemProducer(
     const std::string& item_id) {
   for (auto* producer : item_producers_) {
-    if (producer->GetMediaItem(item_id))
+    if (producer->GetMediaItem(item_id)) {
       return producer;
+    }
   }
   return nullptr;
 }
@@ -188,16 +197,22 @@ void MediaItemManagerImpl::SetDialogDelegateCommon(
   dialog_delegate_ = delegate;
 
   if (dialog_delegate_) {
-    for (auto& observer : observers_)
+    for (auto& observer : observers_) {
       observer.OnMediaDialogOpened();
+    }
   } else {
-    for (auto& observer : observers_)
+    for (auto& observer : observers_) {
       observer.OnMediaDialogClosed();
+    }
   }
 }
 
 bool MediaItemManagerImpl::HasOpenDialogForItem() {
   return HasOpenDialog() && dialog_opened_for_single_item_;
+}
+
+base::WeakPtr<MediaItemManager> MediaItemManagerImpl::GetWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 }  // namespace global_media_controls

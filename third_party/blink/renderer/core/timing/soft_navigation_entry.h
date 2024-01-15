@@ -14,12 +14,10 @@ class CORE_EXPORT SoftNavigationEntry final : public PerformanceEntry {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
-  SoftNavigationEntry(AtomicString name,
-                      double start_time,
-                      uint32_t navigation_id);
+  SoftNavigationEntry(AtomicString name, double start_time, DOMWindow* source);
   ~SoftNavigationEntry() override;
 
-  AtomicString entryType() const override;
+  const AtomicString& entryType() const override;
   PerformanceEntryType EntryTypeEnum() const override;
 };
 

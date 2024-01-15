@@ -6,9 +6,9 @@ load("//console-header.star", "HEADER")
 
 luci.console_view(
     name = "chromium.webrtc.fyi",
-    header = HEADER,
     repo = "https://webrtc.googlesource.com/src",
     refs = ["refs/heads/master", "refs/heads/main"],
+    header = HEADER,
     entries = [
         luci.console_view_entry(
             builder = "webrtc.fyi/WebRTC Chromium FYI Android Builder (dbg)",
@@ -21,14 +21,14 @@ luci.console_view(
             short_name = "64",
         ),
         luci.console_view_entry(
-            builder = "webrtc.fyi/WebRTC Chromium FYI Android Tests (dbg) (M Nexus5X)",
+            builder = "webrtc.fyi/WebRTC Chromium FYI Android Tests (dbg)",
             category = "android|debug|tester",
-            short_name = "M",
+            short_name = "32",
         ),
         luci.console_view_entry(
-            builder = "webrtc.fyi/WebRTC Chromium FYI Android Tests (dbg) (N Nexus5X)",
+            builder = "webrtc.fyi/WebRTC Chromium FYI Android Tests ARM64 (dbg)",
             category = "android|debug|tester",
-            short_name = "N",
+            short_name = "64",
         ),
         luci.console_view_entry(
             builder = "webrtc.fyi/WebRTC Chromium FYI Android Builder",

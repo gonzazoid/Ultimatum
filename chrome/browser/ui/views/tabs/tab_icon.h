@@ -8,8 +8,12 @@
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/ui/tabs/tab_network_state.h"
+#include "components/performance_manager/public/features.h"
+#include "ui/base/interaction/element_tracker.h"
 #include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/models/image_model.h"
 #include "ui/gfx/animation/linear_animation.h"
+#include "ui/gfx/animation/slide_animation.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/paint_throbber.h"
 #include "ui/views/animation/animation_delegate_views.h"
@@ -21,6 +25,8 @@ class TickClock;
 
 struct TabRendererData;
 
+DECLARE_CUSTOM_ELEMENT_EVENT_TYPE(kDiscardAnimationFinishes);
+
 // View that displays the favicon, sad tab, throbber, and attention indicator
 // in a tab.
 //
@@ -30,9 +36,9 @@ struct TabRendererData;
 // bottom of the enclosing view (this is so the crashed tab can animate out of
 // the bottom).
 class TabIcon : public views::View, public views::AnimationDelegateViews {
- public:
-  METADATA_HEADER(TabIcon);
+  METADATA_HEADER(TabIcon, views::View)
 
+ public:
   // Attention indicator types (use as a bitmask). There is only one visual
   // representation, but the state of each of these is tracked separately and
   // the indicator is shown as long as one is enabled.
@@ -49,6 +55,9 @@ class TabIcon : public views::View, public views::AnimationDelegateViews {
   // Sets the tab data (network state, favicon, load progress, etc.) that are
   // used to render the tab icon.
   void SetData(const TabRendererData& data);
+
+  // Sets whether this tab is currently active.
+  void SetActiveState(bool is_active);
 
   // Enables or disables the given attention type. The attention indicator
   // will be shown as long as any of the types are enabled.
@@ -68,6 +77,9 @@ class TabIcon : public views::View, public views::AnimationDelegateViews {
   // strip in order to keep the throbbers in sync.
   void StepLoadingAnimation(const base::TimeDelta& elapsed_time);
 
+  gfx::ImageSkia GetThemedIconForTesting() { return themed_favicon_; }
+  bool GetActiveStateForTesting() { return is_active_tab_; }
+
  private:
   class CrashAnimation;
   friend CrashAnimation;
@@ -86,12 +98,17 @@ class TabIcon : public views::View, public views::AnimationDelegateViews {
                                       const gfx::ImageSkia& icon,
                                       const gfx::Rect& bounds);
 
+  // Paints a dimmed and shrunken favicon surrounded by the discard ring
+  void PaintDiscardRingAndIcon(gfx::Canvas* canvas,
+                               const gfx::ImageSkia& icon,
+                               const gfx::Rect& bounds);
+
   // Paint either the indeterimate throbber or progress indicator according to
   // current tab state.
   void PaintLoadingAnimation(gfx::Canvas* canvas, gfx::Rect bounds);
 
   // Gets either the crashed icon or favicon to be rendered for the tab.
-  const gfx::ImageSkia& GetIconToPaint();
+  gfx::ImageSkia GetIconToPaint();
 
   // Paint the favicon if it's available.
   void MaybePaintFavicon(gfx::Canvas* canvas,
@@ -100,7 +117,10 @@ class TabIcon : public views::View, public views::AnimationDelegateViews {
   bool GetNonDefaultFavicon() const;
 
   // Sets the icon.
-  void SetIcon(const gfx::ImageSkia& icon, bool should_themify_favicon);
+  void SetIcon(const ui::ImageModel& icon, bool should_themify_favicon);
+
+  // Start or stops the favicon fade animation for discard tabs
+  void SetDiscarded(bool show_discard_status);
 
   // For certain types of tabs the loading animation is not desired so the
   // caller can set inhibit_loading_animation to true. When false, the loading
@@ -116,10 +136,15 @@ class TabIcon : public views::View, public views::AnimationDelegateViews {
   void RefreshLayer();
 
   gfx::ImageSkia ThemeFavicon(const gfx::ImageSkia& source);
+  gfx::ImageSkia ThemeMonochromeFavicon(const gfx::ImageSkia& source);
+
+  // Updates the themed favicon if necessary.
+  void UpdateThemedFavicon();
 
   raw_ptr<const base::TickClock> clock_;
 
-  gfx::ImageSkia favicon_;
+  ui::ImageModel favicon_;
+  bool should_themify_favicon_ = false;
   TabNetworkState network_state_ = TabNetworkState::kNone;
   bool crashed_ = false;
   int attention_types_ = 0;  // Bitmask of AttentionType.
@@ -150,9 +175,24 @@ class TabIcon : public views::View, public views::AnimationDelegateViews {
   // it will be drawn off the bottom.
   double hiding_fraction_ = 0.0;
 
-  // Animation used when the favicon fades in after being shown inside the
-  // loading-state spinner.
-  gfx::LinearAnimation favicon_fade_in_animation_;
+  // Animation used when the favicon grows or shrinks in size. `Show` will
+  // represent the favicon growing to full size, while `Hide` will represent the
+  // favicon shrinking which happens when the loading spinner or discard
+  // indicator is present.
+  gfx::SlideAnimation favicon_size_animation_;
+
+  // Animation used when a tab is discarded so the favicon will partially
+  // fade out
+  gfx::LinearAnimation tab_discard_animation_;
+
+  bool was_discard_indicator_shown_ = false;
+
+  performance_manager::features::DiscardTabTreatmentOptions
+      discard_tab_treatment_option_ =
+          performance_manager::features::DiscardTabTreatmentOptions::kNone;
+
+  // Favicon opacity after the discard animation completes
+  double discard_tab_icon_final_opacity_ = 1.0;
 
   // Crash animation (in place of favicon). Lazily created since most of the
   // time it will be unneeded.
@@ -161,6 +201,10 @@ class TabIcon : public views::View, public views::AnimationDelegateViews {
   bool can_paint_to_layer_ = false;
 
   bool has_tab_renderer_data_ = false;
+
+  bool is_active_tab_ = false;
+
+  bool is_monochrome_favicon_ = false;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_TABS_TAB_ICON_H_

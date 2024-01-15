@@ -7,9 +7,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
+#include "build/build_config.h"
 #include "gpu/command_buffer/common/gles2_cmd_format.h"
 #include "gpu/command_buffer/common/gles2_cmd_utils.h"
 #include "gpu/command_buffer/service/context_group.h"
@@ -20,15 +21,17 @@
 #include "gpu/command_buffer/service/mocks.h"
 #include "gpu/command_buffer/service/program_manager.h"
 #include "gpu/command_buffer/service/test_helper.h"
-#include "gpu/command_buffer/service/validating_abstract_texture_impl.h"
 #include "gpu/config/gpu_switches.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/gl/gl_image_stub.h"
 #include "ui/gl/gl_implementation.h"
 #include "ui/gl/gl_mock.h"
 #include "ui/gl/gl_surface_stub.h"
 #include "ui/gl/gpu_timing_fake.h"
 #include "ui/gl/scoped_make_current.h"
+
+#if !BUILDFLAG(IS_ANDROID)
+#include "gpu/command_buffer/service/validating_abstract_texture_impl.h"
+#endif
 
 #if !defined(GL_DEPTH24_STENCIL8)
 #define GL_DEPTH24_STENCIL8 0x88F0
@@ -253,34 +256,7 @@ TEST_P(GLES2DecoderTest, IsTexture) {
   EXPECT_FALSE(DoIsTexture(client_texture_id_));
 }
 
-TEST_P(GLES2DecoderTest, TestImageBindingForDecoderManagement) {
-  const GLuint service_id = 123;
-  EXPECT_CALL(*gl_, GenTextures(1, _))
-      .Times(1)
-      .WillOnce(SetArgPointee<1>(service_id))
-      .RetiresOnSaturation();
-  const GLenum target = GL_TEXTURE_EXTERNAL_OES;
-  std::unique_ptr<AbstractTexture> abstract_texture =
-      GetDecoder()->CreateAbstractTexture(target, GL_RGBA, 256, /* width */
-                                          256,                  /* height */
-                                          1,                    /* depth */
-                                          0,                    /* border */
-                                          GL_RGBA, GL_UNSIGNED_BYTE);
-  scoped_refptr<gl::GLImage> image(new gl::GLImageStub);
-  abstract_texture->BindImage(image.get(), GetParam());
-  auto* validating_texture =
-      static_cast<ValidatingAbstractTextureImpl*>(abstract_texture.get());
-  TextureRef* texture_ref = validating_texture->GetTextureRefForTesting();
-  Texture::ImageState state;
-  EXPECT_EQ(texture_ref->texture()->GetLevelImage(target, 0, &state),
-            image.get());
-  EXPECT_EQ(state, GetParam() ? Texture::ImageState::BOUND
-                              : Texture::ImageState::UNBOUND);
-
-  EXPECT_CALL(*gl_, DeleteTextures(1, _)).Times(1).RetiresOnSaturation();
-  abstract_texture.reset();
-}
-
+#if BUILDFLAG(IS_OZONE)
 TEST_P(GLES2DecoderTest, CreateAbstractTexture) {
   const GLuint service_id = 123;
   EXPECT_CALL(*gl_, GenTextures(1, _))
@@ -313,29 +289,6 @@ TEST_P(GLES2DecoderTest, CreateAbstractTexture) {
   abstract_texture->SetParameteri(GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   EXPECT_EQ(texture->min_filter(), static_cast<GLenum>(GL_LINEAR));
 
-  // Attach an image and see if it works.
-  scoped_refptr<gl::GLImage> image(new gl::GLImageStub);
-  abstract_texture->BindImage(image.get(), true);
-  EXPECT_EQ(abstract_texture->GetImageForTesting(), image.get());
-  // Binding an image should make the texture renderable.
-  EXPECT_EQ(texture->SafeToRenderFrom(), true);
-  EXPECT_EQ(texture->GetLevelImage(target, 0), image.get());
-
-  // Unbinding should make it not renderable.
-  abstract_texture->BindImage(nullptr, false);
-  EXPECT_EQ(texture->SafeToRenderFrom(), false);
-  EXPECT_EQ(abstract_texture->GetImageForTesting(), nullptr);
-
-  // Attach a stream image, and verify that the image changes and the service_id
-  // matches the one we provide.
-  scoped_refptr<gl::GLImage> stream_image(new gl::GLImageStub);
-  const GLuint surface_texture_service_id = service_id + 1;
-  abstract_texture->BindStreamTextureImage(stream_image.get(),
-                                           surface_texture_service_id);
-  EXPECT_EQ(texture->SafeToRenderFrom(), true);
-  EXPECT_EQ(texture->GetLevelImage(target, 0), stream_image.get());
-  EXPECT_EQ(abstract_texture->service_id(), surface_texture_service_id);
-
   // Deleting |abstract_texture| should delete the platform texture as well,
   // since we haven't make a copy of the TextureRef.  Also make sure that the
   // cleanup CB is called.
@@ -346,7 +299,9 @@ TEST_P(GLES2DecoderTest, CreateAbstractTexture) {
   abstract_texture.reset();
   EXPECT_TRUE(cleanup_flag);
 }
+#endif
 
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_WIN) && !BUILDFLAG(IS_APPLE)
 TEST_P(GLES2DecoderTest, AbstractTextureIsDestroyedWithDecoder) {
   // Deleting the decoder should delete the AbstractTexture's TextureRef.
   const GLuint service_id = 123;
@@ -452,6 +407,7 @@ TEST_P(GLES2DecoderTest, TestAbstractTextureSetClearedWorks) {
   EXPECT_CALL(*gl_, DeleteTextures(1, _)).Times(1).RetiresOnSaturation();
   abstract_texture.reset();
 }
+#endif
 
 TEST_P(GLES3DecoderTest, GetInternalformativValidArgsSamples) {
   const GLint kNumSampleCounts = 8;
@@ -777,7 +733,6 @@ struct QueryType {
 const QueryType kQueryTypes[] = {
     {GL_COMMANDS_ISSUED_CHROMIUM, false},
     {GL_COMMANDS_ISSUED_TIMESTAMP_CHROMIUM, true},
-    {GL_LATENCY_QUERY_CHROMIUM, false},
     {GL_ASYNC_PIXEL_PACK_COMPLETED_CHROMIUM, false},
     {GL_GET_ERROR_QUERY_CHROMIUM, false},
     {GL_COMMANDS_COMPLETED_CHROMIUM, false},

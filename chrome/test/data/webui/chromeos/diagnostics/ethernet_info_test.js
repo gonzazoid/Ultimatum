@@ -3,21 +3,21 @@
 // found in the LICENSE file.
 
 import 'chrome://diagnostics/ethernet_info.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
 import {fakeEthernetNetwork} from 'chrome://diagnostics/fake_data.js';
 import {AuthenticationType, EthernetStateProperties, Network} from 'chrome://diagnostics/network_health_provider.mojom-webui.js';
+import {assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
-
-import {assertFalse, assertTrue} from '../../chai_assert.js';
 
 import {assertDataPointHasExpectedHeaderAndValue, assertTextContains, getDataPointValue} from './diagnostics_test_utils.js';
 
-export function ethernetInfoTestSuite() {
+suite('ethernetInfoTestSuite', function() {
   /** @type {?EthernetInfoElement} */
   let ethernetInfoElement = null;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes.emptyHTML;
   });
 
   teardown(() => {
@@ -94,4 +94,4 @@ export function ethernetInfoTestSuite() {
               expectedValue);
         });
   });
-}
+});

@@ -4,7 +4,7 @@
 
 #include "components/permissions/contexts/geolocation_permission_context.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/content_settings/browser/page_specific_content_settings.h"
 #include "components/permissions/permission_request_id.h"
 #include "content/public/browser/browser_thread.h"
@@ -28,18 +28,15 @@ GeolocationPermissionContext::GeolocationPermissionContext(
 GeolocationPermissionContext::~GeolocationPermissionContext() = default;
 
 void GeolocationPermissionContext::DecidePermission(
-    const PermissionRequestID& id,
-    const GURL& requesting_origin,
-    const GURL& embedding_origin,
-    bool user_gesture,
+    PermissionRequestData request_data,
     BrowserPermissionCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  if (!delegate_->DecidePermission(id, requesting_origin, user_gesture,
-                                   &callback, this)) {
+  if (!delegate_->DecidePermission(
+          request_data.id, request_data.requesting_origin,
+          request_data.user_gesture, &callback, this)) {
     DCHECK(callback);
-    PermissionContextBase::DecidePermission(id, requesting_origin,
-                                            embedding_origin, user_gesture,
+    PermissionContextBase::DecidePermission(std::move(request_data),
                                             std::move(callback));
   }
 }

@@ -7,9 +7,9 @@
 #include <fuchsia/sysmem/cpp/fidl.h>
 #include <lib/zx/eventpair.h>
 
+#include <bit>
 #include <tuple>
 
-#include "base/bits.h"
 #include "base/fuchsia/fuchsia_logging.h"
 #include "base/fuchsia/koid.h"
 #include "base/task/current_thread.h"
@@ -332,16 +332,17 @@ FlatlandSysmemBufferCollection::CreateNativePixmap(
       buffers_info_.settings.buffer_settings.coherency_domain ==
       fuchsia::sysmem::CoherencyDomain::RAM;
 
+  // `handle.planes` need to be filled in only for mappable buffers.
+  if (!is_mappable())
+    return new FlatlandSysmemNativePixmap(this, std::move(handle), size);
+
   zx::vmo main_plane_vmo;
-  if (is_mappable()) {
-    DCHECK(buffers_info_.buffers[handle.buffer_index].vmo.is_valid());
-    zx_status_t status =
-        buffers_info_.buffers[handle.buffer_index].vmo.duplicate(
-            ZX_RIGHT_SAME_RIGHTS, &main_plane_vmo);
-    if (status != ZX_OK) {
-      ZX_DLOG(ERROR, status) << "zx_handle_duplicate";
-      return nullptr;
-    }
+  DCHECK(buffers_info_.buffers[handle.buffer_index].vmo.is_valid());
+  zx_status_t status = buffers_info_.buffers[handle.buffer_index].vmo.duplicate(
+      ZX_RIGHT_SAME_RIGHTS, &main_plane_vmo);
+  if (status != ZX_OK) {
+    ZX_DLOG(ERROR, status) << "zx_handle_duplicate";
+    return nullptr;
   }
 
   const fuchsia::sysmem::ImageFormatConstraints& format =
@@ -362,8 +363,17 @@ FlatlandSysmemBufferCollection::CreateNativePixmap(
   if (format_ == gfx::BufferFormat::YUV_420_BIPLANAR) {
     size_t uv_plane_offset = plane_offset + plane_size;
     size_t uv_plane_size = plane_size / 2;
+
+    zx::vmo uv_plane_vmo;
+    status =
+        handle.planes[0].vmo.duplicate(ZX_RIGHT_SAME_RIGHTS, &uv_plane_vmo);
+    if (status != ZX_OK) {
+      ZX_DLOG(ERROR, status) << "zx_handle_duplicate";
+      return nullptr;
+    }
+
     handle.planes.emplace_back(stride, uv_plane_offset, uv_plane_size,
-                               zx::vmo());
+                               std::move(uv_plane_vmo));
     DCHECK_LE(uv_plane_offset + uv_plane_size, buffer_size_);
   }
 
@@ -416,7 +426,7 @@ bool FlatlandSysmemBufferCollection::CreateVkImage(
 
   uint32_t viable_memory_types =
       properties.memoryTypeBits & requirements.memoryTypeBits;
-  uint32_t memory_type = base::bits::CountTrailingZeroBits(viable_memory_types);
+  uint32_t memory_type = std::countr_zero(viable_memory_types);
 
   VkMemoryDedicatedAllocateInfoKHR dedicated_allocate = {
       VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO_KHR};
@@ -621,7 +631,7 @@ bool FlatlandSysmemBufferCollection::InitializeInternal(
       std::make_unique<base::MessagePumpForIO::ZxHandleWatchController>(
           FROM_HERE);
   bool watch_result = base::CurrentIOThread::Get()->WatchZxHandle(
-      handle_.get(), /*persistent=*/true, ZX_EVENTPAIR_PEER_CLOSED,
+      handle_.get(), /*persistent=*/false, ZX_EVENTPAIR_PEER_CLOSED,
       handle_watch_.get(), this);
 
   if (!watch_result) {
@@ -674,5 +684,7 @@ void FlatlandSysmemBufferCollection::OnZxHandleSignalled(zx_handle_t handle,
   for (auto& callback : on_released_) {
     std::move(callback).Run();
   }
+  on_released_.clear();
 }
+
 }  // namespace ui

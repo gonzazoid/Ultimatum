@@ -4,16 +4,20 @@
 
 #include "chrome/browser/ui/webui/settings/captions_handler.h"
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/profiles/profile.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/browser/browser_process.h"
+#include "chrome/browser/translate/chrome_translate_client.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/live_caption/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/soda/constants.h"
+#include "components/soda/soda_installer.h"
+#include "components/translate/core/browser/translate_prefs.h"
 #include "content/public/browser/web_ui.h"
 #include "media/base/media_switches.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -26,12 +30,37 @@
 #include "chrome/browser/accessibility/caption_settings_dialog.h"
 #endif
 
+namespace {
+constexpr char kCodeKey[] = "code";
+constexpr char kDisplayNameKey[] = "displayName";
+constexpr char kNativeDisplayNameKey[] = "nativeDisplayName";
+
+base::Value::List SortByDisplayName(
+    std::vector<base::Value::Dict> language_packs) {
+  std::sort(language_packs.begin(), language_packs.end(),
+            [](const base::Value::Dict& a, const base::Value::Dict& b) {
+              return *(a.Find(kDisplayNameKey)->GetIfString()) <
+                     *(b.Find(kDisplayNameKey)->GetIfString());
+            });
+
+  base::Value::List sorted_language_packs;
+  for (base::Value::Dict& language_pack : language_packs) {
+    sorted_language_packs.Append(std::move(language_pack));
+  }
+
+  return sorted_language_packs;
+}
+
+}  // namespace
+
 namespace settings {
 
 CaptionsHandler::CaptionsHandler(PrefService* prefs) : prefs_(prefs) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   soda_available_ =
       base::FeatureList::IsEnabled(ash::features::kOnDeviceSpeechRecognition);
+#elif BUILDFLAG(IS_CHROMEOS_LACROS)
+  soda_available_ = false;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 }
 
@@ -48,6 +77,22 @@ void CaptionsHandler::RegisterMessages() {
   web_ui()->RegisterMessageCallback(
       "liveCaptionSectionReady",
       base::BindRepeating(&CaptionsHandler::HandleLiveCaptionSectionReady,
+                          base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "getInstalledLanguagePacks",
+      base::BindRepeating(&CaptionsHandler::HandleGetInstalledLanguagePacks,
+                          base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "getAvailableLanguagePacks",
+      base::BindRepeating(&CaptionsHandler::HandleGetAvailableLanguagePacks,
+                          base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "removeLanguagePack",
+      base::BindRepeating(&CaptionsHandler::HandleRemoveLanguagePacks,
+                          base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "installLanguagePacks",
+      base::BindRepeating(&CaptionsHandler::HandleInstallLanguagePacks,
                           base::Unretained(this)));
 }
 
@@ -71,6 +116,90 @@ void CaptionsHandler::HandleOpenSystemCaptionsDialog(
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
   captions::CaptionSettingsDialog::ShowCaptionSettingsDialog();
 #endif
+}
+
+void CaptionsHandler::HandleGetAvailableLanguagePacks(
+    const base::Value::List& args) {
+  CHECK_EQ(args.size(), 1U);
+  AllowJavascript();
+  const base::Value& callback_id = args[0];
+  ResolveJavascriptCallback(callback_id, GetAvailableLanguagePacks());
+}
+
+void CaptionsHandler::HandleGetInstalledLanguagePacks(
+    const base::Value::List& args) {
+  CHECK_EQ(args.size(), 1U);
+  AllowJavascript();
+  const base::Value& callback_id = args[0];
+  ResolveJavascriptCallback(callback_id, GetInstalledLanguagePacks());
+}
+
+void CaptionsHandler::HandleRemoveLanguagePacks(const base::Value::List& args) {
+  CHECK_GT(args.size(), 0U);
+  AllowJavascript();
+  for (const base::Value& arg : args) {
+    const std::string* language_code = arg.GetIfString();
+    speech::SodaInstaller::GetInstance()->UninstallLanguage(
+        *language_code, g_browser_process->local_state());
+  }
+}
+
+void CaptionsHandler::HandleInstallLanguagePacks(
+    const base::Value::List& args) {
+  CHECK_GT(args.size(), 0U);
+  AllowJavascript();
+  for (const base::Value& arg : args) {
+    const std::string* language_code = arg.GetIfString();
+    speech::SodaInstaller::GetInstance()->InstallLanguage(
+        *language_code, g_browser_process->local_state());
+  }
+}
+
+base::Value::List CaptionsHandler::GetAvailableLanguagePacks() {
+  auto enabled_languages = speech::GetEnabledLanguages();
+  std::vector<base::Value::Dict> available_language_packs;
+  for (const auto& config : speech::kLanguageComponentConfigs) {
+    if (config.language_code != speech::LanguageCode::kNone &&
+        base::Contains(enabled_languages, config.language_name)) {
+      base::Value::Dict available_language_pack;
+      available_language_pack.Set(kCodeKey, config.language_name);
+      available_language_pack.Set(
+          kDisplayNameKey,
+          speech::GetLanguageDisplayName(
+              config.language_name, g_browser_process->GetApplicationLocale()));
+      available_language_pack.Set(
+          kNativeDisplayNameKey,
+          speech::GetLanguageDisplayName(config.language_name,
+                                         config.language_name));
+      available_language_packs.push_back(std::move(available_language_pack));
+    }
+  }
+
+  return SortByDisplayName(std::move(available_language_packs));
+}
+
+base::Value::List CaptionsHandler::GetInstalledLanguagePacks() {
+  std::vector<base::Value::Dict> installed_language_packs;
+  for (const auto& language : g_browser_process->local_state()->GetList(
+           prefs::kSodaRegisteredLanguagePacks)) {
+    base::Value::Dict installed_language_pack;
+    const std::optional<speech::SodaLanguagePackComponentConfig> config =
+        speech::GetLanguageComponentConfig(language.GetString());
+    if (config && config->language_code != speech::LanguageCode::kNone) {
+      installed_language_pack.Set(kCodeKey, language.GetString());
+      installed_language_pack.Set(
+          kDisplayNameKey, speech::GetLanguageDisplayName(
+                               config->language_name,
+                               g_browser_process->GetApplicationLocale()));
+      installed_language_pack.Set(
+          kNativeDisplayNameKey,
+          speech::GetLanguageDisplayName(config->language_name,
+                                         config->language_name));
+      installed_language_packs.push_back(std::move(installed_language_pack));
+    }
+  }
+
+  return SortByDisplayName(std::move(installed_language_packs));
 }
 
 void CaptionsHandler::OnSodaInstalled(speech::LanguageCode language_code) {

@@ -9,19 +9,22 @@
 #include <string>
 #include <vector>
 
+#include "base/component_export.h"
+
 class GoogleServiceAuthError;
 class OAuthMultiloginResult;
 
 // An interface that defines the callbacks for objects that
 // GaiaAuthFetcher can return data to.
-class GaiaAuthConsumer {
+class COMPONENT_EXPORT(GOOGLE_APIS) GaiaAuthConsumer {
  public:
-  struct ClientOAuthResult {
-    ClientOAuthResult(const std::string& new_refresh_token,
-                      const std::string& new_access_token,
-                      int new_expires_in_secs,
+  struct COMPONENT_EXPORT(GOOGLE_APIS) ClientOAuthResult {
+    ClientOAuthResult(const std::string& refresh_token,
+                      const std::string& access_token,
+                      int expires_in_secs,
                       bool is_child_account,
-                      bool is_under_advanced_protection);
+                      bool is_under_advanced_protection,
+                      bool is_bound_to_key);
     ClientOAuthResult(const ClientOAuthResult& other);
     ~ClientOAuthResult();
 
@@ -42,6 +45,9 @@ class GaiaAuthConsumer {
 
     // Whether the authenticated user is in advanced protection program.
     bool is_under_advanced_protection;
+
+    // Whether the refresh token is bound to key.
+    bool is_bound_to_key;
   };
 
   // Possible server responses to a token revocation request.
@@ -90,12 +96,6 @@ class GaiaAuthConsumer {
   virtual void OnClientOAuthFailure(const GoogleServiceAuthError& error) {}
 
   virtual void OnOAuth2RevokeTokenCompleted(TokenRevocationStatus status) {}
-
-  virtual void OnUberAuthTokenSuccess(const std::string& token) {}
-  virtual void OnUberAuthTokenFailure(const GoogleServiceAuthError& error) {}
-
-  virtual void OnMergeSessionSuccess(const std::string& data) {}
-  virtual void OnMergeSessionFailure(const GoogleServiceAuthError& error) {}
 
   virtual void OnListAccountsSuccess(const std::string& data) {}
   virtual void OnListAccountsFailure(const GoogleServiceAuthError& error) {}

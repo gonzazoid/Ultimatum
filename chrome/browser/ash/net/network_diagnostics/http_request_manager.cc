@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/profiles/profile.h"
 #include "content/public/browser/storage_partition.h"
 #include "net/base/load_flags.h"
@@ -31,16 +31,18 @@ net::NetworkTrafficAnnotationTag GetTrafficAnnotation() {
       semantics {
         sender: "NetworkDiagnosticsRoutines"
         description: "Routines send network traffic (http requests) to "
-        "hosts in order to validate the internet connection on a device."
-        trigger:
-            "A routine makes an http request."
+          "hosts in order to validate the internet connection on a device."
+        trigger: "A routine makes an http request."
         data:
-            "No data other than the path is sent. No user identifier is "
-            "sent along with the data."
+          "No data other than the path is sent. No user identifier is "
+          "sent along with the data."
         destination: WEBSITE
       }
       policy {
         cookies_allowed: NO
+        policy_exception_justification:
+          "No policy defined to enable/disable or limit this request as this "
+          "is on-demand user initiated operation to do the network diagnostics."
       }
   )");
 }

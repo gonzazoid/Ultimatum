@@ -16,7 +16,29 @@ static_library("hotspot_config") {
     "//base",
     "//chromeos/ash/components/dbus/shill",
     "//chromeos/ash/components/network",
+    "//chromeos/ash/services/hotspot_config/public/cpp",
     "//chromeos/ash/services/hotspot_config/public/mojom",
+  ]
+}
+
+component("in_process_hotspot_config") {
+  sources = [
+    "in_process_instance.cc",
+    "in_process_instance.h",
+  ]
+
+  defines = [ "IS_IN_PROCESS_HOTSPOT_CONFIG_IMPL" ]
+
+  public_deps = [
+    "//chromeos/ash/services/hotspot_config/public/mojom",
+    "//mojo/public/cpp/bindings",
+  ]
+
+  deps = [
+    ":hotspot_config",
+    "//ash/constants",
+    "//chromeos/ash/components/network",
+    "//components/device_event_log",
   ]
 }
 
@@ -31,9 +53,9 @@ source_set("unit_tests") {
     "//base",
     "//base/test:test_support",
     "//chromeos/ash/components/dbus/shill:test_support",
+    "//chromeos/ash/components/login/login_state",
     "//chromeos/ash/components/network:test_support",
     "//chromeos/ash/services/hotspot_config/public/cpp:test_support",
-    "//chromeos/login/login_state",
     "//testing/gtest",
   ]
 }

@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'chrome://resources/cr_elements/cr_url_list_item/cr_url_list_item.js';
 import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
 import 'chrome://resources/cr_elements/cr_icons.css.js';
 import 'chrome://resources/cr_elements/icons.html.js';
@@ -10,20 +11,23 @@ import 'chrome://resources/cr_elements/mwb_shared_vars.css.js';
 import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import './icons.html.js';
 
+import {CrUrlListItemElement} from 'chrome://resources/cr_elements/cr_url_list_item/cr_url_list_item.js';
 import {MouseHoverableMixin} from 'chrome://resources/cr_elements/mouse_hoverable_mixin.js';
-import {assertNotReached} from 'chrome://resources/js/assert_ts.js';
-import {getFaviconForPageURL} from 'chrome://resources/js/icon.js';
+import {assertNotReached} from 'chrome://resources/js/assert.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {ReadLaterEntry} from './reading_list.mojom-webui.js';
 import {ReadingListApiProxy, ReadingListApiProxyImpl} from './reading_list_api_proxy.js';
 import {getTemplate} from './reading_list_item.html.js';
 
+export const MARKED_AS_READ_UI_EVENT = 'reading-list-marked-as-read';
+
 const navigationKeys: Set<string> =
     new Set([' ', 'Enter', 'ArrowRight', 'ArrowLeft']);
 
 export interface ReadingListItemElement {
   $: {
+    crUrlListItem: CrUrlListItemElement,
     updateStatusButton: HTMLElement,
     deleteButton: HTMLElement,
   };
@@ -68,13 +72,17 @@ export class ReadingListItemElement extends ReadingListItemElementBase {
     return this.data.title;
   }
 
+  override focus() {
+    this.$.crUrlListItem.focus();
+  }
+
   private onAuxClick_(e: MouseEvent) {
     if (e.button !== 1) {
       // Not a middle click.
       return;
     }
 
-    this.apiProxy_.openURL(this.data.url, true, {
+    this.apiProxy_.openUrl(this.data.url, true, {
       middleButton: true,
       altKey: e.altKey,
       ctrlKey: e.ctrlKey,
@@ -84,7 +92,7 @@ export class ReadingListItemElement extends ReadingListItemElementBase {
   }
 
   private onClick_(e: MouseEvent|KeyboardEvent) {
-    this.apiProxy_.openURL(this.data.url, true, {
+    this.apiProxy_.openUrl(this.data.url, true, {
       middleButton: false,
       altKey: e.altKey,
       ctrlKey: e.ctrlKey,
@@ -94,37 +102,39 @@ export class ReadingListItemElement extends ReadingListItemElementBase {
   }
 
   private onContextMenu_(e: MouseEvent) {
-    this.apiProxy_.showContextMenuForURL(this.data.url, e.clientX, e.clientY);
+    this.apiProxy_.showContextMenuForUrl(this.data.url, e.clientX, e.clientY);
   }
 
   private onKeyDown_(e: KeyboardEvent) {
     if (e.shiftKey || !navigationKeys.has(e.key)) {
       return;
     }
+
+    const focusableElements: HTMLElement[] = [
+      this.$.crUrlListItem,
+      this.$.updateStatusButton,
+      this.$.deleteButton,
+    ];
+    const focusedIndex = focusableElements.indexOf(
+        this.shadowRoot!.activeElement as HTMLElement);
+
     switch (e.key) {
       case ' ':
       case 'Enter':
         this.onClick_(e);
         break;
       case 'ArrowRight':
-        if (!this.shadowRoot!.activeElement) {
-          this.$.updateStatusButton.focus();
-        } else if (this.shadowRoot!.activeElement.nextElementSibling) {
-          (this.shadowRoot!.activeElement.nextElementSibling as HTMLElement)
-              .focus();
+        if (focusedIndex >= focusableElements.length - 1) {
+          focusableElements[0].focus();
         } else {
-          this.focus();
+          focusableElements[focusedIndex + 1].focus();
         }
         break;
       case 'ArrowLeft':
-        if (!this.shadowRoot!.activeElement) {
-          this.$.deleteButton.focus();
-        } else if (this.shadowRoot!.activeElement.nextElementSibling) {
-        } else if (this.shadowRoot!.activeElement.previousElementSibling) {
-          (this.shadowRoot!.activeElement.previousElementSibling as HTMLElement)
-              .focus();
+        if (focusedIndex <= 0) {
+          focusableElements[focusableElements.length - 1].focus();
         } else {
-          this.focus();
+          focusableElements[focusedIndex - 1].focus();
         }
         break;
       default:
@@ -137,15 +147,15 @@ export class ReadingListItemElement extends ReadingListItemElementBase {
   private onUpdateStatusClick_(e: Event) {
     e.stopPropagation();
     this.apiProxy_.updateReadStatus(this.data.url, !this.data.read);
+    if (!this.data.read) {
+      this.dispatchEvent(new CustomEvent(
+          MARKED_AS_READ_UI_EVENT, {bubbles: true, composed: true}));
+    }
   }
 
   private onItemDeleteClick_(e: Event) {
     e.stopPropagation();
     this.apiProxy_.removeEntry(this.data.url);
-  }
-
-  private getFaviconUrl_(url: string): string {
-    return getFaviconForPageURL(url, false);
   }
 
   /**
@@ -168,6 +178,9 @@ export class ReadingListItemElement extends ReadingListItemElementBase {
 declare global {
   interface HTMLElementTagNameMap {
     'reading-list-item': ReadingListItemElement;
+  }
+  interface HTMLElementEventMap {
+    [MARKED_AS_READ_UI_EVENT]: CustomEvent;
   }
 }
 

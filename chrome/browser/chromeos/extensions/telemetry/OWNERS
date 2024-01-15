@@ -1,6 +1,4 @@
-lamzin@google.com
-mgawad@google.com
+file://chromeos/ash/services/cros_healthd/OWNERS
 
 # Backup reviewers
-sergiyb@chromium.org
-vsavu@google.com
+bkersting@google.com

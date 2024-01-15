@@ -8,10 +8,10 @@
 #include <string>
 
 #include "base/atomicops.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
@@ -32,7 +32,7 @@
 namespace media {
 
 namespace {
-base::subtle::AtomicWord g_fake_input_streams_are_muted = 0;
+std::atomic<bool> g_fake_input_streams_are_muted;
 }
 
 AudioInputStream* FakeAudioInputStream::MakeFakeStream(
@@ -133,7 +133,7 @@ double FakeAudioInputStream::GetVolume() {
 
 bool FakeAudioInputStream::IsMuted() {
   DCHECK(audio_manager_->GetTaskRunner()->BelongsToCurrentThread());
-  return base::subtle::NoBarrier_Load(&g_fake_input_streams_are_muted) != 0;
+  return g_fake_input_streams_are_muted.load(std::memory_order_relaxed);
 }
 
 bool FakeAudioInputStream::SetAutomaticGainControl(bool enabled) {
@@ -170,9 +170,9 @@ void FakeAudioInputStream::ReadAudioFromSource(base::TimeTicks ideal_time,
   {
     base::AutoLock lock(callback_lock_);
     if (audio_bus_ && callback_) {
-      audio_source_->OnMoreData(base::TimeDelta(), ideal_time, 0,
+      audio_source_->OnMoreData(base::TimeDelta(), ideal_time, {},
                                 audio_bus_.get());
-      callback_->OnData(audio_bus_.get(), ideal_time, 1.0);
+      callback_->OnData(audio_bus_.get(), ideal_time, 1.0, {});
     }
   }
 }
@@ -210,8 +210,7 @@ void FakeAudioInputStream::BeepOnce() {
 }
 
 void FakeAudioInputStream::SetGlobalMutedState(bool is_muted) {
-  base::subtle::NoBarrier_Store(&g_fake_input_streams_are_muted,
-                                (is_muted ? 1 : 0));
+  g_fake_input_streams_are_muted.store(is_muted, std::memory_order_relaxed);
 }
 
 }  // namespace media

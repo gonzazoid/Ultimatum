@@ -74,6 +74,7 @@ void MediaDocumentParser::CreateDocumentStructure() {
   did_build_document_structure_ = true;
 
   DCHECK(GetDocument());
+  GetDocument()->SetOverrideSiteForCookiesForCSPMedia(true);
   auto* root_element = MakeGarbageCollected<HTMLHtmlElement>(*GetDocument());
   GetDocument()->AppendChild(root_element);
   root_element->InsertedByParser();
@@ -84,14 +85,15 @@ void MediaDocumentParser::CreateDocumentStructure() {
   auto* head = MakeGarbageCollected<HTMLHeadElement>(*GetDocument());
   auto* meta = MakeGarbageCollected<HTMLMetaElement>(*GetDocument(),
                                                      CreateElementFlags());
-  meta->setAttribute(html_names::kNameAttr, "viewport");
-  meta->setAttribute(html_names::kContentAttr, "width=device-width");
+  meta->setAttribute(html_names::kNameAttr, AtomicString("viewport"));
+  meta->setAttribute(html_names::kContentAttr,
+                     AtomicString("width=device-width"));
   head->AppendChild(meta);
 
   auto* media = MakeGarbageCollected<HTMLVideoElement>(*GetDocument());
-  media->setAttribute(html_names::kControlsAttr, "");
-  media->setAttribute(html_names::kAutoplayAttr, "");
-  media->setAttribute(html_names::kNameAttr, "media");
+  media->setAttribute(html_names::kControlsAttr, g_empty_atom);
+  media->setAttribute(html_names::kAutoplayAttr, g_empty_atom);
+  media->setAttribute(html_names::kNameAttr, AtomicString("media"));
 
   auto* source = MakeGarbageCollected<HTMLSourceElement>(*GetDocument());
   source->setAttribute(html_names::kSrcAttr,
@@ -119,7 +121,7 @@ void MediaDocumentParser::Finish() {
 }
 
 MediaDocument::MediaDocument(const DocumentInit& initializer)
-    : HTMLDocument(initializer, kMediaDocumentClass) {
+    : HTMLDocument(initializer, {DocumentClass::kMedia}) {
   SetCompatibilityMode(kNoQuirksMode);
   LockCompatibilityMode();
 
@@ -151,7 +153,11 @@ void MediaDocument::DefaultEventHandler(Event& event) {
       // space or media key (play/pause)
       video->TogglePlayState();
       event.SetDefaultHandled();
+      return;
     }
+    // Route the keyboard events directly to the media element
+    video->DispatchEvent(event);
+    return;
   }
 }
 

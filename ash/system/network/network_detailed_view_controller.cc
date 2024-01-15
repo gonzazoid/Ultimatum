@@ -4,18 +4,21 @@
 
 #include "ash/system/network/network_detailed_view_controller.h"
 
+#include <memory>
+
 #include "ash/constants/ash_features.h"
+#include "ash/public/cpp/bluetooth_config_service.h"
 #include "ash/public/cpp/system_tray_client.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/system/machine_learning/user_settings_event_logger.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/network/network_detailed_network_view.h"
 #include "ash/system/network/network_list_view_controller.h"
 #include "ash/system/network/network_utils.h"
 #include "ash/system/network/tray_network_state_model.h"
 #include "ash/system/tray/detailed_view_delegate.h"
+#include "base/memory/ptr_util.h"
 #include "base/metrics/user_metrics.h"
 #include "chromeos/ash/components/network/network_connect.h"
 #include "chromeos/services/network_config/public/cpp/cros_network_config_util.h"
@@ -34,19 +37,11 @@ using ::chromeos::network_config::NetworkTypeMatchesType;
 using ::chromeos::network_config::mojom::ActivationStateType;
 using ::chromeos::network_config::mojom::CellularStateProperties;
 using ::chromeos::network_config::mojom::ConnectionStateType;
-using ::chromeos::network_config::mojom::DeviceStateProperties;
 using ::chromeos::network_config::mojom::DeviceStateType;
 using ::chromeos::network_config::mojom::NetworkStateProperties;
 using ::chromeos::network_config::mojom::NetworkStatePropertiesPtr;
 using ::chromeos::network_config::mojom::NetworkType;
 using ::chromeos::network_config::mojom::PortalState;
-
-void LogUserNetworkEvent(const NetworkStateProperties& network) {
-  auto* const logger = ml::UserSettingsEventLogger::Get();
-  if (logger) {
-    logger->LogNetworkUkmEvent(network);
-  }
-}
 
 bool IsSecondaryUser() {
   SessionControllerImpl* session_controller =
@@ -123,8 +118,6 @@ NetworkDetailedViewController::NetworkDetailedViewController(
     : model_(Shell::Get()->system_tray_model()->network_state_model()),
       detailed_view_delegate_(
           std::make_unique<DetailedViewDelegate>(tray_controller)) {
-  DCHECK(ash::features::IsQuickSettingsNetworkRevampEnabled());
-
   GetBluetoothConfigService(
       remote_cros_bluetooth_config_.BindNewPipeAndPassReceiver());
   remote_cros_bluetooth_config_->ObserveSystemProperties(
@@ -133,7 +126,7 @@ NetworkDetailedViewController::NetworkDetailedViewController(
 
 NetworkDetailedViewController::~NetworkDetailedViewController() = default;
 
-views::View* NetworkDetailedViewController::CreateView() {
+std::unique_ptr<views::View> NetworkDetailedViewController::CreateView() {
   DCHECK(!network_detailed_view_);
   std::unique_ptr<NetworkDetailedNetworkView> view =
       NetworkDetailedNetworkView::Factory::Create(detailed_view_delegate_.get(),
@@ -142,9 +135,8 @@ views::View* NetworkDetailedViewController::CreateView() {
   network_list_view_controller_ =
       NetworkListViewController::Factory::Create(view.get());
 
-  // We are expected to return an unowned pointer that the caller is responsible
-  // for deleting.
-  return view.release()->GetAsView();
+  // `view` is not a views::View, so we must GetAsView().
+  return base::WrapUnique(view.release()->GetAsView());
 }
 
 std::u16string NetworkDetailedViewController::GetAccessibleName() const {
@@ -154,8 +146,10 @@ std::u16string NetworkDetailedViewController::GetAccessibleName() const {
 
 void NetworkDetailedViewController::OnNetworkListItemSelected(
     const NetworkStatePropertiesPtr& network) {
-  if (Shell::Get()->session_controller()->login_status() == LoginStatus::LOCKED)
+  if (Shell::Get()->session_controller()->login_status() ==
+      LoginStatus::LOCKED) {
     return;
+  }
 
   if (network) {
     // If the network is locked and is cellular show SIM unlock dialog in OS
@@ -165,31 +159,37 @@ void NetworkDetailedViewController::OnNetworkListItemSelected(
       if (!Shell::Get()->session_controller()->ShouldEnableSettings()) {
         return;
       }
+      // It is not possible to unlock the carrier locked device by entering the
+      // pin on UI as unlock flow is triggered by simLock server
+      if (features::IsCellularCarrierLockEnabled()) {
+        if (network->type_state->get_cellular()->sim_lock_type ==
+            "network-pin") {
+          return;
+        }
+      }
       RecordNetworkRowClickedAction(
           NetworkRowClickedAction::kOpenSimUnlockDialog);
       Shell::Get()->system_tray_model()->client()->ShowSettingsSimUnlock();
       return;
     }
 
-    // If the captive portal UI flag is enabled, the user is logged in, the
-    // network is connected, and the network is in a portal or proxy state, the
-    // user is shown the portal signin. We do not show portal sign in for user
-    // not logged in because it is the only way for the user to get to the
-    // network details page.
-    if (features::IsCaptivePortalUI2022Enabled() &&
-        Shell::Get()->session_controller()->login_status() !=
+    // If user is logged in, the network is connected, and the network is in a
+    // portal or proxy state, the user is shown the portal signin. We do not
+    // show portal sign in for user not logged in because it is the only way for
+    // the user to get to the network details page.
+    if (Shell::Get()->session_controller()->login_status() !=
             LoginStatus::NOT_LOGGED_IN &&
         chromeos::network_config::StateIsConnected(network->connection_state) &&
         IsNetworkBehindPortalOrProxy(network->portal_state)) {
       RecordNetworkRowClickedAction(NetworkRowClickedAction::kOpenPortalSignin);
-      NetworkConnect::Get()->ShowPortalSignin(network->guid);
+      NetworkConnect::Get()->ShowPortalSignin(
+          network->guid, NetworkConnect::Source::kQuickSettings);
       return;
     }
 
     if (IsNetworkConnectable(network)) {
       base::RecordAction(
           UserMetricsAction("StatusArea_Network_ConnectConfigured"));
-      LogUserNetworkEvent(*network.get());
       RecordNetworkRowClickedAction(NetworkRowClickedAction::kConnectToNetwork);
       NetworkConnect::Get()->ConnectToNetworkId(network->guid);
       return;
@@ -206,7 +206,10 @@ void NetworkDetailedViewController::OnNetworkListItemSelected(
 }
 
 void NetworkDetailedViewController::OnMobileToggleClicked(bool new_state) {
-  RecordNetworkTypeToggled(NetworkType::kMobile, new_state);
+  RecordNetworkTypeToggled(features::IsInstantHotspotRebrandEnabled()
+                               ? NetworkType::kCellular
+                               : NetworkType::kMobile,
+                           new_state);
 
   const DeviceStateType cellular_state =
       model_->GetDeviceState(NetworkType::kCellular);
@@ -214,6 +217,10 @@ void NetworkDetailedViewController::OnMobileToggleClicked(bool new_state) {
   // When Cellular is available, the toggle controls Cellular enabled state.
   if (cellular_state != DeviceStateType::kUnavailable) {
     model_->SetNetworkTypeEnabledState(NetworkType::kCellular, new_state);
+    return;
+  }
+
+  if (features::IsInstantHotspotRebrandEnabled()) {
     return;
   }
 

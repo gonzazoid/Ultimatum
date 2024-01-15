@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
@@ -26,7 +26,7 @@ namespace {
 gfx::NativeView GetRenderFrameView(int render_process_id, int render_frame_id) {
   auto* host =
       content::RenderFrameHost::FromID(render_process_id, render_frame_id);
-  return host ? host->GetNativeView() : gfx::kNullNativeView;
+  return host ? host->GetNativeView() : gfx::NativeView();
 }
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)

@@ -15,8 +15,8 @@ import './pdf_viewer_shared_style.css.js';
 import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
 import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 
-import {assert, assertNotReached} from 'chrome://resources/js/assert_ts.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {listenOnce} from 'chrome://resources/js/util.js';
 
 import {Bookmark} from './bookmark_type.js';
@@ -40,7 +40,7 @@ import {NavigatorDelegateImpl, PdfNavigator, WindowOpenDisposition} from './navi
 import {deserializeKeyEvent, LoadState} from './pdf_scripting_api.js';
 import {getTemplate} from './pdf_viewer.html.js';
 import {KeyEventData, PdfViewerBaseElement} from './pdf_viewer_base.js';
-import {DestinationMessageData, DocumentDimensionsMessageData, hasCtrlModifier, shouldIgnoreKeyEvents} from './pdf_viewer_utils.js';
+import {DestinationMessageData, DocumentDimensionsMessageData, hasCtrlModifier, hasCtrlModifierOnly, shouldIgnoreKeyEvents} from './pdf_viewer_utils.js';
 
 interface EmailMessageData {
   type: string;
@@ -193,6 +193,13 @@ export class PdfViewerElement extends PdfViewerBaseElement {
         value: false,
       },
 
+      // <if expr="enable_screen_ai_service">
+      pdfOcrEnabled_: {
+        type: Boolean,
+        value: false,
+      },
+      // </if>
+
       printingEnabled_: {
         type: Boolean,
         value: false,
@@ -242,6 +249,7 @@ export class PdfViewerElement extends PdfViewerBaseElement {
   private docLength_: number;
   private documentHasFocus_: boolean;
   private documentMetadata_: DocumentMetadata;
+  private embedded_: boolean;
   private fileName_: string;
   private hadPassword_: boolean;
   private hasEdits_: boolean;
@@ -251,6 +259,9 @@ export class PdfViewerElement extends PdfViewerBaseElement {
   private navigator_: PdfNavigator|null = null;
   private pageNo_: number;
   private pdfAnnotationsEnabled_: boolean;
+  // <if expr="enable_screen_ai_service">
+  private pdfOcrEnabled_: boolean;
+  // </if>
   private pluginController_: PluginController|null = null;
   private printingEnabled_: boolean;
   private showPasswordDialog_: boolean;
@@ -287,6 +298,10 @@ export class PdfViewerElement extends PdfViewerBaseElement {
     return BACKGROUND_COLOR;
   }
 
+  setPluginSrc(plugin: HTMLEmbedElement) {
+    plugin.src = this.browserApi!.getStreamInfo().streamUrl;
+  }
+
   init(browserApi: BrowserApi) {
     this.initInternal(
         browserApi, this.$.scroller, this.$.sizer, this.$.content);
@@ -298,8 +313,13 @@ export class PdfViewerElement extends PdfViewerBaseElement {
     this.inkController_.init(this.viewport);
     this.tracker.add(
         this.inkController_.getEventTarget(),
-        InkControllerEventType.HAS_UNSAVED_CHANGES,
-        () => chrome.mimeHandlerPrivate.setShowBeforeUnloadDialog(true));
+        InkControllerEventType.HAS_UNSAVED_CHANGES, () => {
+          // TODO(crbug.com/1445746): Write an equivalent API call for
+          // chrome.pdfViewerPrivate.
+          if (!this.pdfOopifEnabled) {
+            chrome.mimeHandlerPrivate.setShowBeforeUnloadDialog(true);
+          }
+        });
     // </if>
 
     this.fileName_ = getFilenameFromURL(this.originalUrl);
@@ -311,15 +331,22 @@ export class PdfViewerElement extends PdfViewerBaseElement {
     if (this.toolbarEnabled_) {
       this.$.toolbar.hidden = false;
     }
+    const showSidenav = this.paramsParser.shouldShowSidenav(
+        this.originalUrl, this.sidenavCollapsed_);
+    this.sidenavCollapsed_ = !showSidenav;
 
     this.navigator_ = new PdfNavigator(
         this.originalUrl, this.viewport, this.paramsParser,
         new NavigatorDelegateImpl(browserApi));
 
     // Listen for save commands from the browser.
-    if (chrome.mimeHandlerPrivate && chrome.mimeHandlerPrivate.onSave) {
+    if (this.pdfOopifEnabled) {
+      chrome.pdfViewerPrivate.onSave.addListener(this.onSave_.bind(this));
+    } else {
       chrome.mimeHandlerPrivate.onSave.addListener(this.onSave_.bind(this));
     }
+
+    this.embedded_ = this.browserApi!.getStreamInfo().embedded;
   }
 
   handleKeyEvent(e: KeyboardEvent) {
@@ -346,7 +373,9 @@ export class PdfViewerElement extends PdfViewerBaseElement {
 
     switch (e.key) {
       case 'a':
-        if (hasCtrlModifier(e)) {
+        // Take over Ctrl+A (but not other combinations like Ctrl-Shift-A).
+        // Note that on macOS, "Ctrl" is Command.
+        if (hasCtrlModifierOnly(e)) {
           this.pluginController_!.selectAll();
           // Since we do selection ourselves.
           e.preventDefault();
@@ -449,6 +478,7 @@ export class PdfViewerElement extends PdfViewerBaseElement {
       const result =
           await this.pluginController_!.save(SaveRequestType.ANNOTATION);
       // Data always exists when save is called with requestType = ANNOTATION.
+      assert(result);
 
       record(UserAction.ENTER_ANNOTATION_MODE);
       this.annotationMode_ = true;
@@ -578,9 +608,9 @@ export class PdfViewerElement extends PdfViewerBaseElement {
    * @param message Message received from the plugin containing the x and y to
    *     navigate to in screen coordinates.
    */
-  private goToPageAndXY_(
+  private goToPageAndXy_(
       origin: ChangePageOrigin, page: number, message: Point) {
-    this.viewport.goToPageAndXY(page, message.x, message.y);
+    this.viewport.goToPageAndXy(page, message.x, message.y);
     if (origin === ChangePageOrigin.BOOKMARK) {
       record(UserAction.FOLLOW_BOOKMARK);
     }
@@ -641,7 +671,7 @@ export class PdfViewerElement extends PdfViewerBaseElement {
     this.pluginController_!.getPasswordComplete(event.detail.password);
   }
 
-  updateUIForViewportChange() {
+  updateUiForViewportChange() {
     // Update toolbar elements.
     this.clockwiseRotations_ = this.viewport.getClockwiseRotations();
     this.pageNo_ = this.viewport.getMostVisiblePage() + 1;
@@ -656,6 +686,9 @@ export class PdfViewerElement extends PdfViewerBaseElement {
 
     this.pdfAnnotationsEnabled_ =
         loadTimeData.getBoolean('pdfAnnotationsEnabled');
+    // <if expr="enable_screen_ai_service">
+    this.pdfOcrEnabled_ = loadTimeData.getBoolean('pdfOcrEnabled');
+    // </if>
     this.printingEnabled_ = loadTimeData.getBoolean('printingEnabled');
     const presetZoomFactors = this.viewport.presetZoomFactors;
     this.zoomBounds_.min = Math.round(presetZoomFactors[0] * 100);
@@ -891,7 +924,11 @@ export class PdfViewerElement extends PdfViewerBaseElement {
             writer.write(blob);
             // Unblock closing the window now that the user has saved
             // successfully.
-            chrome.mimeHandlerPrivate.setShowBeforeUnloadDialog(false);
+            // TODO(crbug.com/1445746): Write an equivalent API call for
+            // chrome.pdfViewerPrivate.
+            if (!this.pdfOopifEnabled) {
+              chrome.mimeHandlerPrivate.setShowBeforeUnloadDialog(false);
+            }
           });
         });
   }
@@ -935,7 +972,7 @@ export class PdfViewerElement extends PdfViewerBaseElement {
 
   private onChangePageAndXy_(e: CustomEvent<ChangePageAndXyDetail>) {
     const point = this.viewport.convertPageToScreen(e.detail.page, e.detail);
-    this.goToPageAndXY_(e.detail.origin, e.detail.page, point);
+    this.goToPageAndXy_(e.detail.origin, e.detail.page, point);
   }
 
   private onNavigate_(e: CustomEvent<NavigateDetail>) {
@@ -1022,7 +1059,11 @@ export class PdfViewerElement extends PdfViewerBaseElement {
             writer.write(blob);
             // Unblock closing the window now that the user has saved
             // successfully.
-            chrome.mimeHandlerPrivate.setShowBeforeUnloadDialog(false);
+            // TODO(crbug.com/1445746): Write an equivalent API call for
+            // chrome.pdfViewerPrivate.
+            if (!this.pdfOopifEnabled) {
+              chrome.mimeHandlerPrivate.setShowBeforeUnloadDialog(false);
+            }
           });
         });
 

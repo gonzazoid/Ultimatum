@@ -5,15 +5,15 @@
 #ifndef CHROME_BROWSER_ASH_PHONEHUB_PHONE_HUB_MANAGER_FACTORY_H_
 #define CHROME_BROWSER_ASH_PHONEHUB_PHONE_HUB_MANAGER_FACTORY_H_
 
-#include "base/memory/singleton.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "ash/components/phonehub/phone_hub_manager.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 class Profile;
 
 namespace ash {
 namespace phonehub {
+
+class PhoneHubManager;
 
 class PhoneHubManagerFactory : public ProfileKeyedServiceFactory {
  public:
@@ -25,7 +25,7 @@ class PhoneHubManagerFactory : public ProfileKeyedServiceFactory {
   static PhoneHubManagerFactory* GetInstance();
 
  private:
-  friend struct base::DefaultSingletonTraits<PhoneHubManagerFactory>;
+  friend base::NoDestructor<PhoneHubManagerFactory>;
 
   PhoneHubManagerFactory();
   PhoneHubManagerFactory(const PhoneHubManagerFactory&) = delete;
@@ -44,13 +44,5 @@ class PhoneHubManagerFactory : public ProfileKeyedServiceFactory {
 
 }  // namespace phonehub
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-namespace phonehub {
-using ::ash::phonehub::PhoneHubManagerFactory;
-}
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_PHONEHUB_PHONE_HUB_MANAGER_FACTORY_H_

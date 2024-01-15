@@ -12,6 +12,8 @@ source_set("trust_tokens") {
     "//services/network:network_service",
     "//services/network:test_support",
     "//services/network:tests",
+    "//services/network/attribution",
+    "//services/network/attribution:tests",
   ]
 
   defines = [ "IS_NETWORK_SERVICE_IMPL" ]
@@ -21,13 +23,12 @@ source_set("trust_tokens") {
     "boringssl_trust_token_issuance_cryptographer.h",
     "boringssl_trust_token_redemption_cryptographer.cc",
     "boringssl_trust_token_redemption_cryptographer.h",
+    "boringssl_trust_token_state.cc",
+    "boringssl_trust_token_state.h",
     "expiry_inspecting_record_expiry_delegate.cc",
     "expiry_inspecting_record_expiry_delegate.h",
     "in_memory_trust_token_persister.cc",
     "in_memory_trust_token_persister.h",
-    "local_trust_token_operation_delegate.h",
-    "local_trust_token_operation_delegate_impl.cc",
-    "local_trust_token_operation_delegate_impl.h",
     "operating_system_matching.cc",
     "operating_system_matching.h",
     "operation_timing_request_helper_wrapper.cc",
@@ -86,12 +87,19 @@ source_set("trust_tokens") {
   ]
 
   public_deps = [ ":public_proto" ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 }
 
 source_set("test_support") {
   testonly = true
 
   defines = [ "IS_NETWORK_SERVICE_IMPL" ]
+
+  sources = [
+    "boringssl_trust_token_test_utils.cc",
+    "boringssl_trust_token_test_utils.h",
+  ]
 
   deps = [
     ":trust_tokens",
@@ -116,7 +124,6 @@ source_set("tests") {
   sources = [
     "boringssl_trust_token_issuance_cryptographer_unittest.cc",
     "expiry_inspecting_record_expiry_delegate_unittest.cc",
-    "local_trust_token_operation_delegate_impl_unittest.cc",
     "pending_trust_token_store_unittest.cc",
     "sqlite_trust_token_persister_unittest.cc",
     "suitable_trust_token_origin_unittest.cc",

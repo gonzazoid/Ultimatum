@@ -13,6 +13,7 @@
 #include "build/buildflag.h"
 #include "components/viz/common/gpu/raster_context_provider.h"
 #include "media/base/decoder_factory.h"
+#include "media/base/media_log.h"
 #include "media/base/media_switches.h"
 #include "media/media_buildflags.h"
 #include "media/video/gpu_video_accelerator_factories.h"
@@ -40,10 +41,6 @@
 
 #if BUILDFLAG(ENABLE_LIBVPX)
 #include "media/filters/vpx_video_decoder.h"
-#endif
-
-#if BUILDFLAG(ENABLE_LIBGAV1_DECODER)
-#include "media/filters/gav1_video_decoder.h"
 #endif
 
 namespace media {
@@ -95,8 +92,9 @@ void DefaultDecoderFactory::CreateVideoDecoders(
     const gfx::ColorSpace& target_color_space,
     std::vector<std::unique_ptr<VideoDecoder>>* video_decoders) {
   base::AutoLock auto_lock(shutdown_lock_);
-  if (is_shutdown_)
+  if (is_shutdown_) {
     return;
+  }
 
 #if !BUILDFLAG(IS_ANDROID)
   video_decoders->push_back(
@@ -121,18 +119,10 @@ void DefaultDecoderFactory::CreateVideoDecoders(
   video_decoders->push_back(std::make_unique<OffloadingVpxVideoDecoder>());
 #endif
 
-#if BUILDFLAG(ENABLE_LIBGAV1_DECODER)
-  if (base::FeatureList::IsEnabled(kGav1VideoDecoder)) {
-    video_decoders->push_back(
-        std::make_unique<OffloadingGav1VideoDecoder>(media_log));
-  } else
-#endif  // BUILDFLAG(ENABLE_LIBGAV1_DECODER)
-  {
 #if BUILDFLAG(ENABLE_DAV1D_DECODER)
-    video_decoders->push_back(
-        std::make_unique<OffloadingDav1dVideoDecoder>(media_log));
+  video_decoders->push_back(
+      std::make_unique<OffloadingDav1dVideoDecoder>(media_log->Clone()));
 #endif
-  }
 
 #if BUILDFLAG(ENABLE_FFMPEG_VIDEO_DECODERS)
   video_decoders->push_back(std::make_unique<FFmpegVideoDecoder>(media_log));

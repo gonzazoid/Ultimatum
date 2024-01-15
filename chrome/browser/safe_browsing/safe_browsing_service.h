@@ -12,9 +12,9 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/callback_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/task/sequenced_task_runner_helpers.h"
@@ -23,6 +23,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager_observer.h"
 #include "chrome/browser/profiles/profile_observer.h"
+#include "chrome/browser/safe_browsing/phishy_interaction_tracker.h"
 #include "chrome/browser/safe_browsing/services_delegate.h"
 #include "components/safe_browsing/buildflags.h"
 #include "components/safe_browsing/content/browser/safe_browsing_service_interface.h"
@@ -77,6 +78,7 @@ class SafeBrowsingDatabaseManager;
 class SafeBrowsingServiceFactory;
 class SafeBrowsingUIManager;
 class TriggerManager;
+class HashRealTimeService;
 
 // Construction needs to happen on the main thread.
 // The SafeBrowsingService owns both the UI and Database managers which do
@@ -173,6 +175,10 @@ class SafeBrowsingService : public SafeBrowsingServiceInterface,
   // Adds |download_manager| to the set monitored by safe browsing.
   void AddDownloadManager(content::DownloadManager* download_manager);
 
+  // Gets the hash-prefix real-time lookup service associated with the profile,
+  // or creates one if one does not already exist.
+  HashRealTimeService* GetHashRealTimeService(Profile* profile);
+
   // Type for subscriptions to SafeBrowsing service state.
   typedef base::RepeatingClosureList::Subscription StateSubscription;
 
@@ -190,6 +196,14 @@ class SafeBrowsingService : public SafeBrowsingServiceInterface,
       ClientSafeBrowsingReportRequest::ReportType report_type,
       bool did_proceed,
       absl::optional<bool> show_download_in_folder);
+
+  // Sends phishy site report to backend. Returns true if the report is sent
+  // successfully.
+  virtual bool SendPhishyInteractionsReport(
+      Profile* profile,
+      const GURL& url,
+      const GURL& page_url,
+      const PhishySiteInteractionMap& phishy_interaction_data);
 #endif
 
   // Create the default v4 protocol config struct. This just calls into a helper
@@ -275,7 +289,7 @@ class SafeBrowsingService : public SafeBrowsingServiceInterface,
   network::mojom::NetworkContextParamsPtr CreateNetworkContextParams();
 
   // Logs metrics related to cookies.
-  void RecordCookieMetrics(Profile* profile);
+  void RecordStartupCookieMetrics(Profile* profile);
 
   std::unique_ptr<ProxyConfigMonitor> proxy_config_monitor_;
 

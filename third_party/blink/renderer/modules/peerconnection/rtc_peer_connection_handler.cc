@@ -4,7 +4,6 @@
 
 #include "third_party/blink/renderer/modules/peerconnection/rtc_peer_connection_handler.h"
 
-#include <ctype.h>
 #include <string.h>
 
 #include <functional>
@@ -14,8 +13,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
@@ -23,10 +22,13 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "base/trace_event/trace_event.h"
 #include "build/chromecast_buildflags.h"
 #include "media/base/media_switches.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url.h"
@@ -36,6 +38,7 @@
 #include "third_party/blink/renderer/bindings/modules/v8/v8_union_boolean_constrainbooleanparameters.h"
 #include "third_party/blink/renderer/core/frame/deprecation/deprecation.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
+#include "third_party/blink/renderer/modules/mediastream/media_constraints.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_constraints_util.h"
 #include "third_party/blink/renderer/modules/peerconnection/adapters/web_rtc_cross_thread_copier.h"
 #include "third_party/blink/renderer/modules/peerconnection/peer_connection_dependency_factory.h"
@@ -45,7 +48,6 @@
 #include "third_party/blink/renderer/modules/peerconnection/webrtc_set_description_observer.h"
 #include "third_party/blink/renderer/modules/webrtc/webrtc_audio_device_impl.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
-#include "third_party/blink/renderer/platform/mediastream/media_constraints.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_component.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_track_platform.h"
 #include "third_party/blink/renderer/platform/mediastream/webrtc_uma_histograms.h"
@@ -53,7 +55,6 @@
 #include "third_party/blink/renderer/platform/peerconnection/rtc_event_log_output_sink.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_event_log_output_sink_proxy.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_ice_candidate_platform.h"
-#include "third_party/blink/renderer/platform/peerconnection/rtc_legacy_stats.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_offer_options_platform.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_rtp_sender_platform.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_rtp_transceiver_platform.h"
@@ -70,6 +71,7 @@
 #include "third_party/blink/renderer/platform/wtf/thread_safe_ref_counted.h"
 #include "third_party/webrtc/api/data_channel_interface.h"
 #include "third_party/webrtc/api/rtc_event_log_output.h"
+#include "third_party/webrtc/api/units/time_delta.h"
 #include "third_party/webrtc/pc/media_session.h"
 #include "third_party/webrtc/pc/session_description.h"
 
@@ -97,9 +99,9 @@ struct CrossThreadCopier<scoped_refptr<PeerConnectionInterface>>
 };
 
 template <>
-struct CrossThreadCopier<scoped_refptr<webrtc::StatsObserver>>
+struct CrossThreadCopier<rtc::scoped_refptr<webrtc::StatsObserver>>
     : public CrossThreadCopierPassThrough<
-          scoped_refptr<webrtc::StatsObserver>> {
+          rtc::scoped_refptr<webrtc::StatsObserver>> {
   STATIC_ONLY(CrossThreadCopier);
 };
 
@@ -163,9 +165,9 @@ void RunSynchronousOnceClosure(base::OnceClosure closure,
 
 // Converter functions from Blink types to WebRTC types.
 
-std::vector<const GoogMediaConstraintsSet*> AllMediaConstraintSets(
+HeapVector<Member<const GoogMediaConstraintsSet>> AllMediaConstraintSets(
     GoogMediaConstraints* media_constraints) {
-  std::vector<const GoogMediaConstraintsSet*> result;
+  HeapVector<Member<const GoogMediaConstraintsSet>> result;
   if (media_constraints->hasMandatory()) {
     result.push_back(media_constraints->mandatory());
   }
@@ -189,12 +191,12 @@ void CopyConstraintsIntoRtcConfiguration(
   // Legacy constraints parsing looks at both mandatory and optional constraints
   // sets (similar to how ScanConstraintsForExactValue() looks at basic and
   // advanced constraints). The sets are iterated until a value is found.
-  std::vector<const GoogMediaConstraintsSet*> all_constraints_sets =
+  HeapVector<Member<const GoogMediaConstraintsSet>> all_constraints_sets =
       AllMediaConstraintSets(media_constraints);
 
   // TODO(crbug.com/804275): Delete when Fuchsia no longer depends on it.
   absl::optional<bool> dtls_srtp_key_agreement;
-  for (auto* constraints_set : all_constraints_sets) {
+  for (auto& constraints_set : all_constraints_sets) {
     if (constraints_set->hasDtlsSrtpKeyAgreement()) {
       dtls_srtp_key_agreement = constraints_set->dtlsSrtpKeyAgreement();
       break;
@@ -299,201 +301,17 @@ class CreateSessionDescriptionRequest
   PeerConnectionTracker::Action action_;
 };
 
-// Class mapping responses from calls to libjingle
-// GetStats into a blink::WebRTCStatsCallback.
-class StatsResponse : public webrtc::StatsObserver {
- public:
-  StatsResponse(const scoped_refptr<LocalRTCStatsRequest>& request,
-                scoped_refptr<base::SingleThreadTaskRunner> task_runner)
-      : request_(request.get()), main_thread_(task_runner) {
-    // Measure the overall time it takes to satisfy a getStats request.
-    TRACE_EVENT_NESTABLE_ASYNC_BEGIN0("webrtc", "getStats_Native",
-                                      TRACE_ID_LOCAL(this));
-    DETACH_FROM_THREAD(signaling_thread_checker_);
-  }
-
-  void OnComplete(const StatsReports& reports) override {
-    DCHECK_CALLED_ON_VALID_THREAD(signaling_thread_checker_);
-    TRACE_EVENT0("webrtc", "StatsResponse::OnComplete");
-    // We can't use webkit objects directly since they use a single threaded
-    // heap allocator.
-    std::vector<Report*>* report_copies = new std::vector<Report*>();
-    report_copies->reserve(reports.size());
-    for (auto* r : reports)
-      report_copies->push_back(new Report(r));
-
-    main_thread_->PostTaskAndReply(
-        FROM_HERE,
-        base::BindOnce(&StatsResponse::DeliverCallback,
-                       rtc::scoped_refptr<StatsResponse>(this),
-                       base::Unretained(report_copies)),
-        base::BindOnce(&StatsResponse::DeleteReports,
-                       base::Unretained(report_copies)));
-  }
-
- private:
-  class Report : public RTCLegacyStats {
-   public:
-    class MemberIterator : public RTCLegacyStatsMemberIterator {
-     public:
-      MemberIterator(
-          const std::vector<StatsReport::Values::value_type>::const_iterator&
-              it,
-          const std::vector<StatsReport::Values::value_type>::const_iterator&
-              end)
-          : it_(it), end_(end) {}
-
-      // RTCLegacyStatsMemberIterator
-      bool IsEnd() const override { return it_ == end_; }
-      void Next() override { ++it_; }
-      String GetName() const override {
-        return String::FromUTF8(it_->second->display_name());
-      }
-      webrtc::StatsReport::Value::Type GetType() const override {
-        return it_->second->type();
-      }
-      int ValueInt() const override { return it_->second->int_val(); }
-      int64_t ValueInt64() const override { return it_->second->int64_val(); }
-      float ValueFloat() const override { return it_->second->float_val(); }
-      String ValueString() const override {
-        const StatsReport::ValuePtr& value = it_->second;
-        if (value->type() == StatsReport::Value::kString)
-          return String::FromUTF8(value->string_val());
-        DCHECK_EQ(value->type(), StatsReport::Value::kStaticString);
-        return String::FromUTF8(value->static_string_val());
-      }
-      bool ValueBool() const override { return it_->second->bool_val(); }
-      String ValueToString() const override {
-        const StatsReport::ValuePtr& value = it_->second;
-        if (value->type() == StatsReport::Value::kString)
-          return String::FromUTF8(value->string_val());
-        if (value->type() == StatsReport::Value::kStaticString)
-          return String::FromUTF8(value->static_string_val());
-        return String::FromUTF8(value->ToString());
-      }
-
-     private:
-      std::vector<StatsReport::Values::value_type>::const_iterator it_;
-      std::vector<StatsReport::Values::value_type>::const_iterator end_;
-    };
-
-    explicit Report(const StatsReport* report)
-        : id_(report->id()->ToString()),
-          type_(report->type()),
-          type_name_(report->TypeToString()),
-          timestamp_(report->timestamp()),
-          values_(report->values().begin(), report->values().end()) {}
-
-    ~Report() override {
-      // Since the values vector holds pointers to const objects that are bound
-      // to the signaling thread, they must be released on the same thread.
-      DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-    }
-
-    // RTCLegacyStats
-    String Id() const override { return String::FromUTF8(id_); }
-    String GetType() const override { return String::FromUTF8(type_name_); }
-    double Timestamp() const override { return timestamp_; }
-    RTCLegacyStatsMemberIterator* Iterator() const override {
-      return new MemberIterator(values_.cbegin(), values_.cend());
-    }
-
-    bool HasValues() const { return values_.size() > 0; }
-
-   private:
-    THREAD_CHECKER(thread_checker_);
-    const std::string id_;
-    const StatsReport::StatsType type_;
-    const std::string type_name_;
-    const double timestamp_;
-    const std::vector<StatsReport::Values::value_type> values_;
-  };
-
-  static void DeleteReports(std::vector<Report*>* reports) {
-    TRACE_EVENT0("webrtc", "StatsResponse::DeleteReports");
-    for (auto* p : *reports)
-      delete p;
-    delete reports;
-  }
-
-  void DeliverCallback(const std::vector<Report*>* reports) {
-    DCHECK(main_thread_->BelongsToCurrentThread());
-    TRACE_EVENT0("webrtc", "StatsResponse::DeliverCallback");
-
-    rtc::scoped_refptr<LocalRTCStatsResponse> response(
-        request_->createResponse().get());
-    for (const auto* report : *reports) {
-      if (report->HasValues())
-        AddReport(response.get(), *report);
-    }
-
-    // Record the getStats operation as done before calling into Blink so that
-    // we don't skew the perf measurements of the native code with whatever the
-    // callback might be doing.
-    TRACE_EVENT_NESTABLE_ASYNC_END0("webrtc", "getStats_Native",
-                                    TRACE_ID_LOCAL(this));
-    request_->requestSucceeded(response.get());
-    request_ = nullptr;  // must be freed on the main thread.
-  }
-
-  void AddReport(LocalRTCStatsResponse* response, const Report& report) {
-    response->addStats(report);
-  }
-
-  rtc::scoped_refptr<LocalRTCStatsRequest> request_;
-  const scoped_refptr<base::SingleThreadTaskRunner> main_thread_;
-  THREAD_CHECKER(signaling_thread_checker_);
-};
-
-void GetStatsOnSignalingThread(
-    const scoped_refptr<webrtc::PeerConnectionInterface>& pc,
-    webrtc::PeerConnectionInterface::StatsOutputLevel level,
-    const scoped_refptr<webrtc::StatsObserver>& observer,
-    rtc::scoped_refptr<webrtc::MediaStreamTrackInterface> selector) {
-  TRACE_EVENT0("webrtc", "GetStatsOnSignalingThread");
-
-  if (selector) {
-    bool belongs_to_pc = false;
-    for (const auto& sender : pc->GetSenders()) {
-      if (sender->track() == selector) {
-        belongs_to_pc = true;
-        break;
-      }
-    }
-    if (!belongs_to_pc) {
-      for (const auto& receiver : pc->GetReceivers()) {
-        if (receiver->track() == selector) {
-          belongs_to_pc = true;
-          break;
-        }
-      }
-    }
-    if (!belongs_to_pc) {
-      DVLOG(1) << "GetStats: Track not found.";
-      observer->OnComplete(StatsReports());
-      return;
-    }
-  }
-
-  if (!pc->GetStats(observer.get(), selector.get(), level)) {
-    DVLOG(1) << "GetStats failed.";
-    observer->OnComplete(StatsReports());
-  }
-}
-
 using RTCStatsReportCallbackInternal =
     CrossThreadOnceFunction<void(std::unique_ptr<RTCStatsReportPlatform>)>;
 
 void GetRTCStatsOnSignalingThread(
     const scoped_refptr<base::SingleThreadTaskRunner>& main_thread,
-    scoped_refptr<webrtc::PeerConnectionInterface> native_peer_connection,
-    RTCStatsReportCallbackInternal callback,
-    const Vector<webrtc::NonStandardGroupId>& exposed_group_ids) {
+    rtc::scoped_refptr<webrtc::PeerConnectionInterface> native_peer_connection,
+    RTCStatsReportCallbackInternal callback) {
   TRACE_EVENT0("webrtc", "GetRTCStatsOnSignalingThread");
   native_peer_connection->GetStats(
       CreateRTCStatsCollectorCallback(
-          main_thread, ConvertToBaseOnceCallback(std::move(callback)),
-          exposed_group_ids)
+          main_thread, ConvertToBaseOnceCallback(std::move(callback)))
           .get());
 }
 
@@ -505,7 +323,7 @@ std::set<RTCPeerConnectionHandler*>* GetPeerConnectionHandlers() {
 
 // Counts the number of senders that have |stream_id| as an associated stream.
 size_t GetLocalStreamUsageCount(
-    const std::vector<std::unique_ptr<blink::RTCRtpSenderImpl>>& rtp_senders,
+    const Vector<std::unique_ptr<blink::RTCRtpSenderImpl>>& rtp_senders,
     const std::string stream_id) {
   size_t usage_count = 0;
   for (const auto& sender : rtp_senders) {
@@ -524,16 +342,6 @@ MediaStreamTrackMetrics::Kind MediaStreamTrackMetricsKind(
   return component->GetSourceType() == MediaStreamSource::kTypeAudio
              ? MediaStreamTrackMetrics::Kind::kAudio
              : MediaStreamTrackMetrics::Kind::kVideo;
-}
-
-bool IsHostnameCandidate(const RTCIceCandidatePlatform& candidate) {
-  // Currently the legitimate hostname candidates have only the .local
-  // top-level domain, which are gathered when the mDNS concealment of local
-  // IPs is enabled.
-  const char kLocalTld[] = ".local";
-  if (!candidate.Address().ContainsOnlyASCIIOrEmpty())
-    return false;
-  return candidate.Address().EndsWithIgnoringASCIICase(kLocalTld);
 }
 
 }  // namespace
@@ -575,41 +383,6 @@ ParsedSessionDescription ParsedSessionDescription::Parse(const String& sdp_type,
 void ParsedSessionDescription::DoParse() {
   description_.reset(webrtc::CreateSessionDescription(
       type_.Utf8().c_str(), sdp_.Utf8().c_str(), &error_));
-}
-
-// Implementation of LocalRTCStatsRequest.
-LocalRTCStatsRequest::LocalRTCStatsRequest(RTCStatsRequest* impl)
-    : impl_(impl) {}
-
-LocalRTCStatsRequest::LocalRTCStatsRequest() {}
-LocalRTCStatsRequest::~LocalRTCStatsRequest() {}
-
-bool LocalRTCStatsRequest::hasSelector() const {
-  return impl_->HasSelector();
-}
-
-MediaStreamComponent* LocalRTCStatsRequest::component() const {
-  return impl_->Component();
-}
-
-scoped_refptr<LocalRTCStatsResponse> LocalRTCStatsRequest::createResponse() {
-  return scoped_refptr<LocalRTCStatsResponse>(
-      new rtc::RefCountedObject<LocalRTCStatsResponse>(
-          impl_->CreateResponse()));
-}
-
-void LocalRTCStatsRequest::requestSucceeded(
-    const LocalRTCStatsResponse* response) {
-  impl_->RequestSucceeded(response->webKitStatsResponse());
-}
-
-// Implementation of LocalRTCStatsResponse.
-RTCStatsResponseBase* LocalRTCStatsResponse::webKitStatsResponse() const {
-  return impl_;
-}
-
-void LocalRTCStatsResponse::addStats(const RTCLegacyStats& stats) {
-  impl_->AddStats(stats);
 }
 
 // Processes the resulting state changes of a SetLocalDescription() or
@@ -715,6 +488,8 @@ class RTCPeerConnectionHandler::WebRtcSetDescriptionObserverImpl
     if (handler_) {
       handler_->OnModifySctpTransport(std::move(states.sctp_transport_state));
     }
+    // Since OnSessionDescriptionsUpdated can fire events, it may cause
+    // garbage collection. Ensure that handler_ is still valid.
     if (handler_) {
       handler_->OnModifyTransceivers(
           states.signaling_state, std::move(states.transceiver_states),
@@ -754,12 +529,13 @@ class RTCPeerConnectionHandler::Observer
     // that `native_peer_connection_` was the last reference, we move it to the
     // signaling thread in a PostTask.
     signaling_thread_->PostTask(
-        FROM_HERE, base::BindOnce(
-                       [](scoped_refptr<webrtc::PeerConnectionInterface> pc) {
-                         // The binding releases `pc` on the signaling thread as
-                         // this method goes out of scope.
-                       },
-                       std::move(native_peer_connection_)));
+        FROM_HERE,
+        base::BindOnce(
+            [](rtc::scoped_refptr<webrtc::PeerConnectionInterface> pc) {
+              // The binding releases `pc` on the signaling thread as
+              // this method goes out of scope.
+            },
+            std::move(native_peer_connection_)));
   }
 
   void Initialize(
@@ -799,8 +575,7 @@ class RTCPeerConnectionHandler::Observer
         *main_thread_.get(), FROM_HERE,
         CrossThreadBindOnce(
             &RTCPeerConnectionHandler::Observer::OnDataChannelImpl,
-            WrapCrossThreadPersistent(this),
-            base::WrapRefCounted<DataChannelInterface>(data_channel.get())));
+            WrapCrossThreadPersistent(this), data_channel));
   }
 
   void OnNegotiationNeededEvent(uint32_t event_id) override {
@@ -910,10 +685,10 @@ class RTCPeerConnectionHandler::Observer
             String::FromUTF8(url), error_code, String::FromUTF8(error_text)));
   }
 
-  void OnDataChannelImpl(scoped_refptr<DataChannelInterface> channel) {
+  void OnDataChannelImpl(rtc::scoped_refptr<DataChannelInterface> channel) {
     DCHECK(main_thread_->BelongsToCurrentThread());
     if (handler_)
-      handler_->OnDataChannel(std::move(channel));
+      handler_->OnDataChannel(channel);
   }
 
   void OnIceCandidateImpl(const String& sdp,
@@ -936,6 +711,10 @@ class RTCPeerConnectionHandler::Observer
           std::move(current_local_description),
           std::move(pending_remote_description),
           std::move(current_remote_description));
+    }
+    // Since OnSessionDescriptionsUpdated can fire events, it may cause
+    // garbage collection. Ensure that handler_ is still valid.
+    if (handler_) {
       handler_->OnIceCandidate(sdp, sdp_mid, sdp_mline_index, component,
                                address_family);
     }
@@ -980,7 +759,7 @@ class RTCPeerConnectionHandler::Observer
   scoped_refptr<base::SingleThreadTaskRunner> signaling_thread_;
   // A copy of |handler_->native_peer_connection_| for use on the WebRTC
   // signaling thread.
-  scoped_refptr<webrtc::PeerConnectionInterface> native_peer_connection_;
+  rtc::scoped_refptr<webrtc::PeerConnectionInterface> native_peer_connection_;
 };
 
 RTCPeerConnectionHandler::RTCPeerConnectionHandler(
@@ -1024,12 +803,13 @@ RTCPeerConnectionHandler::~RTCPeerConnectionHandler() {
   // that `native_peer_connection_` was the last reference, we move it to the
   // signaling thread in a PostTask.
   signaling_thread_->PostTask(
-      FROM_HERE, base::BindOnce(
-                     [](scoped_refptr<webrtc::PeerConnectionInterface> pc) {
-                       // The binding releases `pc` on the signaling thread as
-                       // this method goes out of scope.
-                     },
-                     std::move(native_peer_connection_)));
+      FROM_HERE,
+      base::BindOnce(
+          [](rtc::scoped_refptr<webrtc::PeerConnectionInterface> pc) {
+            // The binding releases `pc` on the signaling thread as
+            // this method goes out of scope.
+          },
+          std::move(native_peer_connection_)));
 }
 
 void RTCPeerConnectionHandler::CloseAndUnregister() {
@@ -1041,8 +821,6 @@ void RTCPeerConnectionHandler::CloseAndUnregister() {
   if (peer_connection_tracker_)
     peer_connection_tracker_->UnregisterPeerConnection(this);
 
-  UMA_HISTOGRAM_COUNTS_10000("WebRTC.NumDataChannelsPerPeerConnection",
-                             num_data_channels_created_);
   // Clear the pointer to client_ so that it does not interfere with
   // garbage collection.
   client_ = nullptr;
@@ -1068,6 +846,8 @@ bool RTCPeerConnectionHandler::Initialize(
   CHECK(!initialize_called_);
   initialize_called_ = true;
 
+  // Prevent garbage collection of client_ during processing.
+  auto* client_on_stack = client_.Get();
   peer_connection_tracker_ = PeerConnectionTracker::From(*frame);
 
   configuration_ = server_configuration;
@@ -1086,9 +866,15 @@ bool RTCPeerConnectionHandler::Initialize(
       blink::Platform::Current()->IsWebRtcSrtpEncryptedHeadersEnabled();
   configuration_.enable_implicit_rollback = true;
 
+  // Apply 40 ms worth of bursting. See webrtc::TaskQueuePacedSender.
+  configuration_.pacer_burst_interval = webrtc::TimeDelta::Millis(40);
+
   // Copy all the relevant constraints into `config`.
   CopyConstraintsIntoRtcConfiguration(context, media_constraints,
                                       &configuration_);
+
+  configuration_.media_config.video.enable_send_packet_batching =
+      base::FeatureList::IsEnabled(features::kWebRtcSendPacketBatch);
 
   peer_connection_observer_ =
       MakeGarbageCollected<Observer>(weak_factory_.GetWeakPtr(), task_runner_);
@@ -1106,8 +892,8 @@ bool RTCPeerConnectionHandler::Initialize(
     peer_connection_tracker_->RegisterPeerConnection(this, configuration_,
                                                      frame_);
   }
-
-  return true;
+  // Gratuitous usage of client_on_stack to prevent compiler errors.
+  return !!client_on_stack;
 }
 
 bool RTCPeerConnectionHandler::InitializeForTest(
@@ -1539,67 +1325,65 @@ void RTCPeerConnectionHandler::RestartIce() {
 }
 
 void RTCPeerConnectionHandler::GetStandardStatsForTracker(
-    scoped_refptr<webrtc::RTCStatsCollectorCallback> observer) {
+    rtc::scoped_refptr<webrtc::RTCStatsCollectorCallback> observer) {
   native_peer_connection_->GetStats(observer.get());
 }
 
-void RTCPeerConnectionHandler::GetStats(RTCStatsRequest* request) {
-  DCHECK(task_runner_->RunsTasksInCurrentSequence());
-  scoped_refptr<LocalRTCStatsRequest> inner_request(
-      new rtc::RefCountedObject<LocalRTCStatsRequest>(request));
-  getStats(inner_request);
-}
-
-void RTCPeerConnectionHandler::getStats(
-    const scoped_refptr<LocalRTCStatsRequest>& request) {
-  DCHECK(task_runner_->RunsTasksInCurrentSequence());
-  TRACE_EVENT0("webrtc", "RTCPeerConnectionHandler::getStats");
-
-  rtc::scoped_refptr<webrtc::StatsObserver> observer(
-      new rtc::RefCountedObject<StatsResponse>(request, task_runner_));
-
-  rtc::scoped_refptr<webrtc::MediaStreamTrackInterface> selector;
-  if (request->hasSelector()) {
-    auto track_adapter_ref =
-        track_adapter_map_->GetLocalTrackAdapter(request->component());
-    if (!track_adapter_ref) {
-      track_adapter_ref =
-          track_adapter_map_->GetRemoteTrackAdapter(request->component());
+void RTCPeerConnectionHandler::EmitCurrentStateForTracker() {
+  if (!peer_connection_tracker_) {
+    return;
+  }
+  RTC_DCHECK(native_peer_connection_);
+  const webrtc::SessionDescriptionInterface* local_desc =
+      native_peer_connection_->local_description();
+  // If the local desc is an answer, emit it after the offer.
+  if (local_desc != nullptr &&
+      local_desc->GetType() == webrtc::SdpType::kOffer) {
+    std::string local_sdp;
+    if (local_desc->ToString(&local_sdp)) {
+      peer_connection_tracker_->TrackSetSessionDescription(
+          this, String(local_sdp),
+          String(SdpTypeToString(local_desc->GetType())),
+          PeerConnectionTracker::kSourceLocal);
     }
-    if (track_adapter_ref)
-      selector = track_adapter_ref->webrtc_track();
+  }
+  const webrtc::SessionDescriptionInterface* remote_desc =
+      native_peer_connection_->remote_description();
+  if (remote_desc != nullptr) {
+    std::string remote_sdp;
+    if (remote_desc->ToString(&remote_sdp)) {
+      peer_connection_tracker_->TrackSetSessionDescription(
+          this, String(remote_sdp),
+          String(SdpTypeToString(remote_desc->GetType())),
+          PeerConnectionTracker::kSourceRemote);
+    }
   }
 
-  GetStats(observer.get(),
-           webrtc::PeerConnectionInterface::kStatsOutputLevelStandard,
-           std::move(selector));
+  if (local_desc != nullptr &&
+      local_desc->GetType() != webrtc::SdpType::kOffer) {
+    std::string local_sdp;
+    if (local_desc->ToString(&local_sdp)) {
+      peer_connection_tracker_->TrackSetSessionDescription(
+          this, String(local_sdp),
+          String(SdpTypeToString(local_desc->GetType())),
+          PeerConnectionTracker::kSourceLocal);
+    }
+  }
+  peer_connection_tracker_->TrackSignalingStateChange(
+      this, native_peer_connection_->signaling_state());
+  peer_connection_tracker_->TrackIceConnectionStateChange(
+      this, native_peer_connection_->standardized_ice_connection_state());
+  peer_connection_tracker_->TrackConnectionStateChange(
+      this, native_peer_connection_->peer_connection_state());
 }
 
-// TODO(tommi,hbos): It's weird to have three {g|G}etStats methods for the
-// legacy stats collector API and even more for the new stats API. Clean it up.
-// TODO(hbos): Rename old |getStats| and related functions to "getLegacyStats",
-// rename new |getStats|'s helper functions from "GetRTCStats*" to "GetStats*".
-void RTCPeerConnectionHandler::GetStats(
-    webrtc::StatsObserver* observer,
-    webrtc::PeerConnectionInterface::StatsOutputLevel level,
-    rtc::scoped_refptr<webrtc::MediaStreamTrackInterface> selector) {
+void RTCPeerConnectionHandler::GetStats(RTCStatsReportCallback callback) {
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
   PostCrossThreadTask(
       *signaling_thread().get(), FROM_HERE,
-      CrossThreadBindOnce(&GetStatsOnSignalingThread, native_peer_connection_,
-                          level, base::WrapRefCounted(observer),
-                          std::move(selector)));
-}
-
-void RTCPeerConnectionHandler::GetStats(
-    RTCStatsReportCallback callback,
-    const Vector<webrtc::NonStandardGroupId>& exposed_group_ids) {
-  DCHECK(task_runner_->RunsTasksInCurrentSequence());
-  PostCrossThreadTask(
-      *signaling_thread().get(), FROM_HERE,
-      CrossThreadBindOnce(
-          &GetRTCStatsOnSignalingThread, task_runner_, native_peer_connection_,
-          CrossThreadBindOnce(std::move(callback)), exposed_group_ids));
+      CrossThreadBindOnce(&GetRTCStatsOnSignalingThread, task_runner_,
+                          native_peer_connection_,
+                          CrossThreadBindOnce(std::move(callback))));
 }
 
 webrtc::RTCErrorOr<std::unique_ptr<RTCRtpTransceiverPlatform>>
@@ -1809,7 +1593,7 @@ webrtc::RTCErrorOr<std::unique_ptr<RTCRtpTransceiverPlatform>>
 RTCPeerConnectionHandler::RemoveTrack(blink::RTCRtpSenderPlatform* web_sender) {
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
   TRACE_EVENT0("webrtc", "RTCPeerConnectionHandler::RemoveTrack");
-  auto it = FindSender(web_sender->Id());
+  auto* it = FindSender(web_sender->Id());
   if (it == rtp_senders_.end())
     return webrtc::RTCError(webrtc::RTCErrorType::INVALID_PARAMETER);
   const auto& sender = *it;
@@ -1880,6 +1664,15 @@ void RTCPeerConnectionHandler::RemoveTrackOnSignalingThread(
   }
   transceiver_state_surfacer->Initialize(
       native_peer_connection_, track_adapter_map_, std::move(transceivers));
+}
+
+Vector<std::unique_ptr<blink::RTCRtpSenderPlatform>>
+RTCPeerConnectionHandler::GetPlatformSenders() const {
+  Vector<std::unique_ptr<blink::RTCRtpSenderPlatform>> senders;
+  for (const auto& sender : rtp_senders_) {
+    senders.push_back(sender->ShallowCopy());
+  }
+  return senders;
 }
 
 void RTCPeerConnectionHandler::CloseClientPeerConnection() {
@@ -1974,27 +1767,28 @@ void RTCPeerConnectionHandler::OnWebRtcEventLogWrite(
   }
 }
 
-scoped_refptr<DataChannelInterface> RTCPeerConnectionHandler::CreateDataChannel(
+rtc::scoped_refptr<DataChannelInterface>
+RTCPeerConnectionHandler::CreateDataChannel(
     const String& label,
     const webrtc::DataChannelInit& init) {
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
   TRACE_EVENT0("webrtc", "RTCPeerConnectionHandler::createDataChannel");
   DVLOG(1) << "createDataChannel label " << label.Utf8();
 
-  rtc::scoped_refptr<DataChannelInterface> webrtc_channel(
-      native_peer_connection_->CreateDataChannel(label.Utf8(), &init));
-  if (!webrtc_channel) {
-    DLOG(ERROR) << "Could not create native data channel.";
+  webrtc::RTCErrorOr<rtc::scoped_refptr<DataChannelInterface>> webrtc_channel =
+      native_peer_connection_->CreateDataChannelOrError(label.Utf8(), &init);
+  if (!webrtc_channel.ok()) {
+    DLOG(ERROR) << "Could not create native data channel: "
+                << webrtc_channel.error().message();
     return nullptr;
   }
   if (peer_connection_tracker_) {
     peer_connection_tracker_->TrackCreateDataChannel(
-        this, webrtc_channel.get(), PeerConnectionTracker::kSourceLocal);
+        this, webrtc_channel.value().get(),
+        PeerConnectionTracker::kSourceLocal);
   }
 
-  ++num_data_channels_created_;
-
-  return base::WrapRefCounted<DataChannelInterface>(webrtc_channel.get());
+  return webrtc_channel.value();
 }
 
 void RTCPeerConnectionHandler::Close() {
@@ -2068,9 +1862,12 @@ void RTCPeerConnectionHandler::OnSessionDescriptionsUpdated(
         pending_remote_description,
     std::unique_ptr<webrtc::SessionDescriptionInterface>
         current_remote_description) {
-  if (!client_ || is_closed_)
+  // Prevent garbage collection of client_ during processing.
+  auto* client_on_stack = client_.Get();
+  if (!client_on_stack || is_closed_) {
     return;
-  client_->DidChangeSessionDescriptions(
+  }
+  client_on_stack->DidChangeSessionDescriptions(
       pending_local_description
           ? CreateWebKitSessionDescription(pending_local_description.get())
           : nullptr,
@@ -2115,27 +1912,6 @@ void RTCPeerConnectionHandler::OnIceConnectionChange(
   TRACE_EVENT0("webrtc", "RTCPeerConnectionHandler::OnIceConnectionChange");
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
   ReportICEState(new_state);
-  if (new_state == webrtc::PeerConnectionInterface::kIceConnectionChecking) {
-    ice_connection_checking_start_ = base::TimeTicks::Now();
-  } else if (new_state ==
-             webrtc::PeerConnectionInterface::kIceConnectionConnected) {
-    // If the state becomes connected, send the time needed for PC to become
-    // connected from checking to UMA. UMA data will help to know how much
-    // time needed for PC to connect with remote peer.
-    if (ice_connection_checking_start_.is_null()) {
-      // From UMA, we have observed a large number of calls falling into the
-      // overflow buckets. One possibility is that the Checking is not signaled
-      // before Connected. This is to guard against that situation to make the
-      // metric more robust.
-      UMA_HISTOGRAM_MEDIUM_TIMES("WebRTC.PeerConnection.TimeToConnect",
-                                 base::TimeDelta());
-    } else {
-      UMA_HISTOGRAM_MEDIUM_TIMES(
-          "WebRTC.PeerConnection.TimeToConnect",
-          base::TimeTicks::Now() - ice_connection_checking_start_);
-    }
-  }
-
   track_metrics_.IceConnectionChange(new_state);
 }
 
@@ -2162,20 +1938,6 @@ void RTCPeerConnectionHandler::OnIceGatheringChange(
     webrtc::PeerConnectionInterface::IceGatheringState new_state) {
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
   TRACE_EVENT0("webrtc", "RTCPeerConnectionHandler::OnIceGatheringChange");
-
-  if (new_state == webrtc::PeerConnectionInterface::kIceGatheringComplete) {
-    UMA_HISTOGRAM_COUNTS_100("WebRTC.PeerConnection.IPv4LocalCandidates",
-                             num_local_candidates_ipv4_);
-
-    UMA_HISTOGRAM_COUNTS_100("WebRTC.PeerConnection.IPv6LocalCandidates",
-                             num_local_candidates_ipv6_);
-  } else if (new_state ==
-             webrtc::PeerConnectionInterface::kIceGatheringGathering) {
-    // ICE restarts will change gathering state back to "gathering",
-    // reset the counter.
-    ResetUMAStats();
-  }
-
   if (peer_connection_tracker_)
     peer_connection_tracker_->TrackIceGatheringStateChange(this, new_state);
   if (!is_closed_)
@@ -2223,7 +1985,7 @@ void RTCPeerConnectionHandler::OnModifyTransceivers(
     uintptr_t transceiver_id = blink::RTCRtpTransceiverImpl::GetId(
         transceiver_states[i].webrtc_transceiver().get());
     ids[i] = transceiver_id;
-    auto it = FindTransceiver(transceiver_id);
+    auto* it = FindTransceiver(transceiver_id);
     bool transceiver_is_new = (it == rtp_transceivers_.end());
     bool transceiver_was_modified = false;
     if (!transceiver_is_new) {
@@ -2278,7 +2040,7 @@ void RTCPeerConnectionHandler::OnModifyTransceivers(
 }
 
 void RTCPeerConnectionHandler::OnDataChannel(
-    scoped_refptr<DataChannelInterface> channel) {
+    rtc::scoped_refptr<DataChannelInterface> channel) {
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
   TRACE_EVENT0("webrtc", "RTCPeerConnectionHandler::OnDataChannelImpl");
 
@@ -2296,8 +2058,12 @@ void RTCPeerConnectionHandler::OnIceCandidate(const String& sdp,
                                               int sdp_mline_index,
                                               int component,
                                               int address_family) {
+  // In order to ensure that the RTCPeerConnection is not garbage collected
+  // from under the function, we keep a pointer to it on the stack.
+  auto* client_on_stack = client_.Get();
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
   TRACE_EVENT0("webrtc", "RTCPeerConnectionHandler::OnIceCandidateImpl");
+  // This line can cause garbage collection.
   auto* platform_candidate = MakeGarbageCollected<RTCIceCandidatePlatform>(
       sdp, sdp_mid, sdp_mline_index);
   if (peer_connection_tracker_) {
@@ -2305,19 +2071,9 @@ void RTCPeerConnectionHandler::OnIceCandidate(const String& sdp,
         this, platform_candidate, PeerConnectionTracker::kSourceLocal, true);
   }
 
-  // Only the first m line's first component is tracked to avoid
-  // miscounting when doing BUNDLE or rtcp mux.
-  if (sdp_mline_index == 0 && component == 1) {
-    if (address_family == AF_INET) {
-      ++num_local_candidates_ipv4_;
-    } else if (address_family == AF_INET6) {
-      ++num_local_candidates_ipv6_;
-    } else if (!IsHostnameCandidate(*platform_candidate)) {
-      NOTREACHED();
-    }
+  if (!is_closed_ && client_on_stack) {
+    client_on_stack->DidGenerateICECandidate(platform_candidate);
   }
-  if (!is_closed_)
-    client_->DidGenerateICECandidate(platform_candidate);
 }
 
 void RTCPeerConnectionHandler::OnIceCandidateError(
@@ -2329,7 +2085,6 @@ void RTCPeerConnectionHandler::OnIceCandidateError(
     const String& error_text) {
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
   TRACE_EVENT0("webrtc", "RTCPeerConnectionHandler::OnIceCandidateError");
-
   if (peer_connection_tracker_) {
     peer_connection_tracker_->TrackIceCandidateError(
         this, address, port, host_candidate, url, error_code, error_text);
@@ -2376,27 +2131,27 @@ void RTCPeerConnectionHandler::ReportFirstSessionDescriptions(
   // video or not.
 }
 
-std::vector<std::unique_ptr<blink::RTCRtpSenderImpl>>::iterator
+Vector<std::unique_ptr<blink::RTCRtpSenderImpl>>::iterator
 RTCPeerConnectionHandler::FindSender(uintptr_t id) {
-  for (auto it = rtp_senders_.begin(); it != rtp_senders_.end(); ++it) {
+  for (auto* it = rtp_senders_.begin(); it != rtp_senders_.end(); ++it) {
     if ((*it)->Id() == id)
       return it;
   }
   return rtp_senders_.end();
 }
 
-std::vector<std::unique_ptr<blink::RTCRtpReceiverImpl>>::iterator
+Vector<std::unique_ptr<blink::RTCRtpReceiverImpl>>::iterator
 RTCPeerConnectionHandler::FindReceiver(uintptr_t id) {
-  for (auto it = rtp_receivers_.begin(); it != rtp_receivers_.end(); ++it) {
+  for (auto* it = rtp_receivers_.begin(); it != rtp_receivers_.end(); ++it) {
     if ((*it)->Id() == id)
       return it;
   }
   return rtp_receivers_.end();
 }
 
-std::vector<std::unique_ptr<blink::RTCRtpTransceiverImpl>>::iterator
+Vector<std::unique_ptr<blink::RTCRtpTransceiverImpl>>::iterator
 RTCPeerConnectionHandler::FindTransceiver(uintptr_t id) {
-  for (auto it = rtp_transceivers_.begin(); it != rtp_transceivers_.end();
+  for (auto* it = rtp_transceivers_.begin(); it != rtp_transceivers_.end();
        ++it) {
     if ((*it)->Id() == id)
       return it;
@@ -2404,9 +2159,9 @@ RTCPeerConnectionHandler::FindTransceiver(uintptr_t id) {
   return rtp_transceivers_.end();
 }
 
-size_t RTCPeerConnectionHandler::GetTransceiverIndex(
+wtf_size_t RTCPeerConnectionHandler::GetTransceiverIndex(
     const RTCRtpTransceiverPlatform& platform_transceiver) {
-  for (size_t i = 0; i < rtp_transceivers_.size(); ++i) {
+  for (wtf_size_t i = 0; i < rtp_transceivers_.size(); ++i) {
     if (platform_transceiver.Id() == rtp_transceivers_[i]->Id())
       return i;
   }
@@ -2426,13 +2181,14 @@ RTCPeerConnectionHandler::CreateOrUpdateTransceiver(
   auto webrtc_receiver = transceiver_state.receiver_state()->webrtc_receiver();
 
   std::unique_ptr<blink::RTCRtpTransceiverImpl> transceiver;
-  auto it = FindTransceiver(
+  auto* it = FindTransceiver(
       blink::RTCRtpTransceiverImpl::GetId(webrtc_transceiver.get()));
   if (it == rtp_transceivers_.end()) {
     // Create a new transceiver, including a sender and a receiver.
     transceiver = std::make_unique<blink::RTCRtpTransceiverImpl>(
         native_peer_connection_, track_adapter_map_,
-        std::move(transceiver_state), encoded_insertable_streams_);
+        std::move(transceiver_state), encoded_insertable_streams_,
+        dependency_factory_->CreateDecodeMetronome());
     rtp_transceivers_.push_back(transceiver->ShallowCopy());
     DCHECK(FindSender(blink::RTCRtpSenderImpl::getId(webrtc_sender.get())) ==
            rtp_senders_.end());
@@ -2473,9 +2229,6 @@ void RTCPeerConnectionHandler::ReportICEState(
 
 void RTCPeerConnectionHandler::ResetUMAStats() {
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
-  num_local_candidates_ipv6_ = 0;
-  num_local_candidates_ipv4_ = 0;
-  ice_connection_checking_start_ = base::TimeTicks();
   memset(ice_state_seen_, 0, sizeof(ice_state_seen_));
 }
 

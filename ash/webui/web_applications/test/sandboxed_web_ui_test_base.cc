@@ -3,9 +3,11 @@
 // found in the LICENSE file.
 
 #include "ash/webui/web_applications/test/sandboxed_web_ui_test_base.h"
+#include "base/memory/raw_ptr.h"
 
 #include <vector>
 
+#include "ash/webui/common/trusted_types_test_util.h"
 #include "ash/webui/web_applications/webui_test_prod_util.h"
 #include "base/base_paths.h"
 #include "base/containers/contains.h"
@@ -16,7 +18,9 @@
 #include "base/test/scoped_run_loop_timeout.h"
 #include "base/test/test_timeouts.h"
 #include "base/threading/thread_restrictions.h"
-#include "chrome/test/base/js_test_api.h"
+#include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_navigator.h"
+#include "chrome/test/base/ash/js_test_api.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -30,14 +34,24 @@ void HandleTestFileRequestCallback(
   base::ScopedAllowBlockingForTesting allow_blocking;
 
   base::FilePath source_root;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &source_root);
-  const base::FilePath test_file_path =
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &source_root);
+  base::FilePath test_file_path =
       source_root.Append(test_file_location).AppendASCII(path);
+  // First try DIR_SRC_TEST_DATA_ROOT, then generated files.
+  if (!base::PathExists(test_file_path)) {
+    base::PathService::Get(base::DIR_GEN_TEST_DATA_ROOT, &source_root);
+    test_file_path = source_root.Append(test_file_location).AppendASCII(path);
+  }
+  if (!base::PathExists(test_file_path)) {
+    LOG(ERROR) << "Test file not found in source tree or generated files: "
+               << test_file_path;
+  }
 
   std::string contents;
   CHECK(base::ReadFileToString(test_file_path, &contents)) << test_file_path;
 
-  std::move(callback).Run(base::RefCountedString::TakeString(&contents));
+  std::move(callback).Run(
+      base::MakeRefCounted<base::RefCountedString>(std::move(contents)));
 }
 
 bool TestRequestHandlerShouldHandleRequest(
@@ -50,6 +64,51 @@ std::string DefaultScriptTimeoutLog(const std::string& script,
                                     const base::TimeDelta& timeout) {
   return base::StringPrintf("Hit timeout of %fs:\n", timeout.InSecondsF()) +
          script;
+}
+
+// Loads a JS module into `target`, avoiding "Cannot use import statement
+// outside a module" errors from direct injection. Uses the
+// `ash-webui-test-script` TrustedTypes policy.
+void MaybeLoadTestModule(const content::ToRenderFrameHost& target,
+                         const std::string& resource) {
+  if (resource.empty()) {
+    return;
+  }
+
+  ASSERT_TRUE(ash::test_util::AddTestStaticUrlPolicy(target));
+  constexpr char kScript[] = R"(
+      (() => {
+        const s = document.createElement('script');
+        s.type = 'module';
+        s.src = window.testStaticUrlPolicy.createScriptURL('$1');
+        document.body.appendChild(s);
+      })();
+  )";
+  ASSERT_TRUE(content::ExecJs(
+      target, base::ReplaceStringPlaceholders(kScript, {resource}, nullptr)));
+}
+
+// Loads the test harness JS module into `target`. Uses the `test-harness`
+// TrustedTypes policy. Waits for the module to be loaded.
+void LoadTestHarnessModule(const content::ToRenderFrameHost& target,
+                           const std::string& resource) {
+  constexpr char kScript[] = R"(
+      (async function LoadTestHarnessModule() {
+        const testHarnessPolicy = trustedTypes.createPolicy('test-harness', {
+          createScriptURL: () => './$1',
+        });
+        const tests = document.createElement('script');
+        tests.type = 'module';
+        tests.src = testHarnessPolicy.createScriptURL('');
+        await new Promise((resolve, reject) => {
+          tests.onload = resolve;
+          tests.onerror = reject;
+          document.body.appendChild(tests);
+        });
+      })();
+  )";
+  ASSERT_TRUE(content::ExecJs(
+      target, base::ReplaceStringPlaceholders(kScript, {resource}, nullptr)));
 }
 
 }  // namespace
@@ -78,42 +137,54 @@ class SandboxedWebUiAppTestBase::TestCodeInjector
                    owner_->scripts_.end());
 
     for (const auto& script : scripts) {
-      // Use ExecuteScript(), not ExecJs(), because of Content Security Policy
-      // directive: "script-src chrome://resources 'self'"
-      ASSERT_TRUE(
-          content::ExecuteScript(guest_frame, LoadJsTestLibrary(script)));
+      ASSERT_TRUE(content::ExecJs(guest_frame, LoadJsTestLibrary(script)));
     }
-    if (!owner_->test_module_.empty()) {
-      constexpr char kScript[] = R"(
-          (() => {
-            const s = document.createElement('script');
-            s.type = 'module';
-            s.src = '$1';
-            document.body.appendChild(s);
-          })();
-      )";
-      ASSERT_TRUE(content::ExecuteScript(
-          guest_frame, base::ReplaceStringPlaceholders(
-                           kScript, {owner_->test_module_}, nullptr)));
-    }
+    MaybeLoadTestModule(guest_frame, owner_->guest_test_module_);
     TestNavigationObserver::OnDidFinishNavigation(navigation_handle);
   }
 
  private:
-  SandboxedWebUiAppTestBase* const owner_;
+  const raw_ptr<SandboxedWebUiAppTestBase> owner_;
 };
 
 SandboxedWebUiAppTestBase::SandboxedWebUiAppTestBase(
     const std::string& host_url,
     const std::string& sandboxed_url,
     const std::vector<base::FilePath>& scripts,
-    const std::string& test_module)
+    const std::string& guest_test_module,
+    const std::string& test_harness_module)
     : host_url_(host_url),
       sandboxed_url_(sandboxed_url),
       scripts_(scripts),
-      test_module_(test_module) {}
+      guest_test_module_(guest_test_module),
+      test_harness_module_(test_harness_module) {}
 
 SandboxedWebUiAppTestBase::~SandboxedWebUiAppTestBase() = default;
+
+void SandboxedWebUiAppTestBase::RunCurrentTest(const std::string& helper) {
+  const testing::TestInfo* test_info =
+      testing::UnitTest::GetInstance()->current_test_info();
+  const std::string fixture = test_info->test_suite_name();
+  const std::string name = test_info->name();
+  LOG(INFO) << "Navigating to " << host_url_ << " to run " << fixture << "."
+            << name << " from " << test_harness_module_;
+
+  content::WebContents* web_contents =
+      browser()->tab_strip_model()->GetActiveWebContents();
+  ASSERT_TRUE(content::NavigateToURL(web_contents, GURL(host_url_)));
+
+  for (const auto& script : JsTestApiConfig().default_libraries) {
+    ASSERT_TRUE(content::ExecJs(web_contents, LoadJsTestLibrary(script)));
+  }
+  LoadTestHarnessModule(web_contents, test_harness_module_);
+
+  constexpr char kScript[] = "isolatedTestRunner('$1', '$2', '$3')";
+  const std::string test_runner_script = base::ReplaceStringPlaceholders(
+      kScript, {fixture, name, helper}, nullptr);
+  EXPECT_EQ("test_completed", content::EvalJs(web_contents, test_runner_script))
+      << test_runner_script;
+  EXPECT_TRUE(EnsureNoCapturedConsoleErrorMessages());
+}
 
 // static
 void SandboxedWebUiAppTestBase::ConfigureDefaultTestRequestHandler(
@@ -129,7 +200,8 @@ void SandboxedWebUiAppTestBase::ConfigureDefaultTestRequestHandler(
 std::string SandboxedWebUiAppTestBase::LoadJsTestLibrary(
     const base::FilePath& script_path) {
   base::FilePath source_root;
-  EXPECT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &source_root));
+  EXPECT_TRUE(
+      base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &source_root));
   const auto full_script_path =
       script_path.IsAbsolute() ? script_path : source_root.Append(script_path);
 

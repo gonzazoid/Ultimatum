@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/no_destructor.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
@@ -171,6 +171,13 @@ base::OnceClosure ShowSSLClientCertificateSelector(
     return GetShowSSLClientCertificateSelectorTestingHook().Run(
         contents, cert_request_info, std::move(client_certs),
         std::move(delegate));
+  }
+
+  // Don't bother prompting the user if there are no certs to choose from.
+  // Just continue with no certificate.
+  if (client_certs.empty()) {
+    delegate->ContinueWithCertificate(nullptr, nullptr);
+    return base::OnceClosure();
   }
 
   // Not all WebContentses can show modal dialogs.

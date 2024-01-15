@@ -4,10 +4,11 @@
 
 #include "content/browser/notifications/notification_event_dispatcher_impl.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
-#include "base/metrics/histogram_functions.h"
+#include <optional>
+
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
 #include "build/build_config.h"
 #include "content/browser/notifications/devtools_event_logging.h"
@@ -17,11 +18,11 @@
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/browser/weak_document_ptr.h"
 #include "content/public/common/persistent_notification_status.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/notifications/platform_notification_data.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 
@@ -78,6 +79,7 @@ PersistentNotificationStatus ConvertServiceWorkerStatus(
     case blink::ServiceWorkerStatusCode::kErrorDisallowed:
     case blink::ServiceWorkerStatusCode::kErrorInvalidArguments:
     case blink::ServiceWorkerStatusCode::kErrorStorageDisconnected:
+    case blink::ServiceWorkerStatusCode::kErrorStorageDataCorrupted:
       return PersistentNotificationStatus::kServiceWorkerError;
   }
   NOTREACHED();
@@ -146,6 +148,7 @@ void DispatchNotificationEventOnRegistration(
     case blink::ServiceWorkerStatusCode::kErrorDisallowed:
     case blink::ServiceWorkerStatusCode::kErrorInvalidArguments:
     case blink::ServiceWorkerStatusCode::kErrorStorageDisconnected:
+    case blink::ServiceWorkerStatusCode::kErrorStorageDataCorrupted:
       status = PersistentNotificationStatus::kServiceWorkerError;
       break;
     case blink::ServiceWorkerStatusCode::kOk:
@@ -185,7 +188,7 @@ void FindServiceWorkerRegistration(
   // NotificationDatabaseData should be changed to use StorageKey.
   service_worker_context->FindReadyRegistrationForId(
       notification_database_data.service_worker_registration_id,
-      blink::StorageKey(origin),
+      blink::StorageKey::CreateFirstParty(origin),
       base::BindOnce(&DispatchNotificationEventOnRegistration,
                      notification_database_data,
                      std::move(notification_action_callback),
@@ -217,8 +220,8 @@ void ReadNotificationDatabaseData(
 void DispatchNotificationClickEventOnWorker(
     const scoped_refptr<ServiceWorkerVersion>& service_worker,
     const NotificationDatabaseData& notification_database_data,
-    const absl::optional<int>& action_index,
-    const absl::optional<std::u16string>& reply,
+    const std::optional<int>& action_index,
+    const std::optional<std::u16string>& reply,
     ServiceWorkerVersion::StatusCallback callback,
     blink::ServiceWorkerStatusCode start_worker_status) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -242,8 +245,8 @@ void DispatchNotificationClickEventOnWorker(
 
 // Dispatches the notification click event on the |service_worker_registration|.
 void DoDispatchNotificationClickEvent(
-    const absl::optional<int>& action_index,
-    const absl::optional<std::u16string>& reply,
+    const std::optional<int>& action_index,
+    const std::optional<std::u16string>& reply,
     const scoped_refptr<PlatformNotificationContext>& notification_context,
     BrowserContext* browser_context,
     const ServiceWorkerRegistration* service_worker_registration,
@@ -381,10 +384,6 @@ void OnDispatchNotificationClickEventComplete(
     PersistentNotificationDispatchCompleteCallback dispatch_complete_callback,
     PersistentNotificationStatus status,
     blink::ServiceWorkerStatusCode service_worker_status) {
-  base::UmaHistogramEnumeration(
-      "Notifications.PersistentWebNotificationClickEventResult",
-      service_worker_status);
-
   std::move(dispatch_complete_callback).Run(status);
 }
 
@@ -392,10 +391,6 @@ void OnDispatchNotificationCloseEventComplete(
     PersistentNotificationDispatchCompleteCallback dispatch_complete_callback,
     PersistentNotificationStatus status,
     blink::ServiceWorkerStatusCode service_worker_status) {
-  base::UmaHistogramEnumeration(
-      "Notifications.PersistentWebNotificationCloseEventResult",
-      service_worker_status);
-
   std::move(dispatch_complete_callback).Run(status);
 }
 
@@ -482,8 +477,8 @@ void NotificationEventDispatcherImpl::DispatchNotificationClickEvent(
     BrowserContext* browser_context,
     const std::string& notification_id,
     const GURL& origin,
-    const absl::optional<int>& action_index,
-    const absl::optional<std::u16string>& reply,
+    const std::optional<int>& action_index,
+    const std::optional<std::u16string>& reply,
     NotificationDispatchCompleteCallback dispatch_complete_callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 

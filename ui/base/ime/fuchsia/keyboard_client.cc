@@ -4,13 +4,15 @@
 
 #include "ui/base/ime/fuchsia/keyboard_client.h"
 
+#include <lib/async/default.h>
+
 #include <limits>
 #include <tuple>
 #include <utility>
 
+#include "base/fuchsia/fuchsia_logging.h"
 #include "base/logging.h"
 #include "base/notreached.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/events/event.h"
 #include "ui/events/fuchsia/input_event_sink.h"
 #include "ui/events/keycodes/dom/dom_code.h"
@@ -22,34 +24,103 @@ namespace ui {
 
 namespace {
 
+// Adds `flag` to `event_flags` if `modifier` is present. Also removes handled
+// modifiers from `unhandled_modifiers`.
+inline void MaybeAddFlag(fuchsia_ui_input3::Modifiers modifier,
+                         EventFlags flag,
+                         EventFlags& event_flags,
+                         fuchsia_ui_input3::Modifiers& unhandled_modifiers) {
+  if (unhandled_modifiers & modifier) {
+    event_flags |= flag;
+    // Remove modifier from unhandled.
+    unhandled_modifiers &= ~modifier;
+  }
+}
+
 // Converts the state of modifiers managed by Fuchsia (e.g. Caps and Num Lock)
 // into ui::Event flags.
-int ModifiersToEventFlags(const fuchsia::ui::input3::Modifiers& modifiers) {
-  int event_flags = 0;
-  if ((modifiers & fuchsia::ui::input3::Modifiers::CAPS_LOCK) ==
-      fuchsia::ui::input3::Modifiers::CAPS_LOCK) {
-    event_flags |= EF_CAPS_LOCK_ON;
+int ModifiersToEventFlags(fuchsia_ui_input3::Modifiers modifiers) {
+  EventFlags event_flags = EF_NONE;
+  MaybeAddFlag(fuchsia_ui_input3::Modifiers::kCapsLock, EF_CAPS_LOCK_ON,
+               event_flags, modifiers);
+  MaybeAddFlag(fuchsia_ui_input3::Modifiers::kNumLock, EF_NUM_LOCK_ON,
+               event_flags, modifiers);
+  MaybeAddFlag(fuchsia_ui_input3::Modifiers::kScrollLock, EF_SCROLL_LOCK_ON,
+               event_flags, modifiers);
+
+  // This mapping is present in case blink adds support in the future, but blink
+  // doesn't currently output the Function modifier. See
+  // https://crsrc.org/c/ui/events/blink/blink_event_util.cc;l=268?q=EventFlagsToWebEventModifiers
+  MaybeAddFlag(fuchsia_ui_input3::Modifiers::kFunction, EF_FUNCTION_DOWN,
+               event_flags, modifiers);
+  if (modifiers & fuchsia_ui_input3::Modifiers::kSymbol) {
+    // fuchsia_ui_input3::Modifiers::SYMBOL has no equivalent in
+    // //ui/events/event_constants.h.
+    DLOG(WARNING) << "Ignoring unsupported Symbol modifier.";
+    modifiers &= ~fuchsia_ui_input3::Modifiers::kSymbol;
   }
-  if ((modifiers & fuchsia::ui::input3::Modifiers::NUM_LOCK) ==
-      fuchsia::ui::input3::Modifiers::NUM_LOCK) {
-    event_flags |= EF_NUM_LOCK_ON;
+
+  MaybeAddFlag(fuchsia_ui_input3::Modifiers::kShift, EF_SHIFT_DOWN, event_flags,
+               modifiers);
+  if (modifiers & (fuchsia_ui_input3::Modifiers::kLeftShift |
+                   fuchsia_ui_input3::Modifiers::kRightShift)) {
+    DCHECK(event_flags & EF_SHIFT_DOWN)
+        << "Fuchsia is expected to provide an agnostic SHIFT modifier for both "
+           "LEFT and RIGHT SHIFT";
+    modifiers &= ~fuchsia_ui_input3::Modifiers::kLeftShift &
+                 ~fuchsia_ui_input3::Modifiers::kRightShift;
   }
-  if ((modifiers & fuchsia::ui::input3::Modifiers::SCROLL_LOCK) ==
-      fuchsia::ui::input3::Modifiers::SCROLL_LOCK) {
-    event_flags |= EF_SCROLL_LOCK_ON;
+
+  MaybeAddFlag(fuchsia_ui_input3::Modifiers::kAlt, EF_ALT_DOWN, event_flags,
+               modifiers);
+  if (modifiers & (fuchsia_ui_input3::Modifiers::kLeftAlt |
+                   fuchsia_ui_input3::Modifiers::kRightAlt)) {
+    DCHECK(event_flags & EF_ALT_DOWN)
+        << "Fuchsia is expected to provide an agnostic ALT modifier for both "
+           "LEFT and RIGHT ALT";
+    modifiers &= ~fuchsia_ui_input3::Modifiers::kLeftAlt &
+                 ~fuchsia_ui_input3::Modifiers::kRightAlt;
   }
+
+  MaybeAddFlag(fuchsia_ui_input3::Modifiers::kAltGraph, EF_ALTGR_DOWN,
+               event_flags, modifiers);
+
+  MaybeAddFlag(fuchsia_ui_input3::Modifiers::kMeta, EF_COMMAND_DOWN,
+               event_flags, modifiers);
+  if (modifiers & (fuchsia_ui_input3::Modifiers::kLeftMeta |
+                   fuchsia_ui_input3::Modifiers::kRightMeta)) {
+    DCHECK(event_flags & EF_COMMAND_DOWN)
+        << "Fuchsia is expected to provide an agnostic META modifier for both "
+           "LEFT and RIGHT META";
+    modifiers &= ~fuchsia_ui_input3::Modifiers::kLeftMeta &
+                 ~fuchsia_ui_input3::Modifiers::kRightMeta;
+  }
+
+  MaybeAddFlag(fuchsia_ui_input3::Modifiers::kCtrl, EF_CONTROL_DOWN,
+               event_flags, modifiers);
+  if (modifiers & (fuchsia_ui_input3::Modifiers::kLeftCtrl |
+                   fuchsia_ui_input3::Modifiers::kRightCtrl)) {
+    DCHECK(event_flags & EF_CONTROL_DOWN)
+        << "Fuchsia is expected to provide an agnostic CTRL modifier for both "
+           "LEFT and RIGHT CTRL";
+    modifiers &= ~fuchsia_ui_input3::Modifiers::kLeftCtrl &
+                 ~fuchsia_ui_input3::Modifiers::kRightCtrl;
+  }
+
+  DLOG_IF(WARNING, modifiers)
+      << "Unkown Modifier received: " << static_cast<uint64_t>(modifiers);
   return event_flags;
 }
 
 absl::optional<EventType> ConvertKeyEventType(
-    fuchsia::ui::input3::KeyEventType type) {
+    fuchsia_ui_input3::KeyEventType type) {
   switch (type) {
-    case fuchsia::ui::input3::KeyEventType::PRESSED:
+    case fuchsia_ui_input3::KeyEventType::kPressed:
       return ET_KEY_PRESSED;
-    case fuchsia::ui::input3::KeyEventType::RELEASED:
+    case fuchsia_ui_input3::KeyEventType::kReleased:
       return ET_KEY_RELEASED;
-    case fuchsia::ui::input3::KeyEventType::SYNC:
-    case fuchsia::ui::input3::KeyEventType::CANCEL:
+    case fuchsia_ui_input3::KeyEventType::kSync:
+    case fuchsia_ui_input3::KeyEventType::kCancel:
       // SYNC and CANCEL should not generate ui::Events.
       return absl::nullopt;
     default:
@@ -61,72 +132,84 @@ absl::optional<EventType> ConvertKeyEventType(
 
 }  // namespace
 
-KeyboardClient::KeyboardClient(fuchsia::ui::input3::Keyboard* keyboard_service,
-                               fuchsia::ui::views::ViewRef view_ref,
-                               InputEventSink* event_sink)
-    : binding_(this), event_sink_(event_sink) {
+KeyboardClient::KeyboardClient(
+    fidl::Client<fuchsia_ui_input3::Keyboard>& keyboard_fidl_client,
+    fuchsia_ui_views::ViewRef view_ref,
+    InputEventSink* event_sink)
+    : event_sink_(event_sink) {
   DCHECK(event_sink_);
 
-  // Connect to the Keyboard service and register |keyboard_client_| as a
+  // Connect to the Keyboard service and register `keyboard_client_` as a
   // listener.
-  fidl::InterfaceHandle<fuchsia::ui::input3::KeyboardListener>
-      keyboard_listener;
-  fidl::InterfaceRequest<fuchsia::ui::input3::KeyboardListener>
-      keyboard_listener_request = keyboard_listener.NewRequest();
-  keyboard_service->AddListener(std::move(view_ref),
-                                std::move(keyboard_listener), [] {});
-  binding_.Bind(std::move(keyboard_listener_request));
+  auto keyboard_listener_endpoints =
+      fidl::CreateEndpoints<fuchsia_ui_input3::KeyboardListener>();
+  ZX_CHECK(keyboard_listener_endpoints.is_ok(),
+           keyboard_listener_endpoints.status_value());
+  keyboard_fidl_client
+      ->AddListener(
+          {{.view_ref = std::move(view_ref),
+            .listener = std::move(keyboard_listener_endpoints->client)}})
+      .Then([](auto result) {});
+  binding_.emplace(async_get_default_dispatcher(),
+                   std::move(keyboard_listener_endpoints->server), this,
+                   fidl::kIgnoreBindingClosure);
 }
 
 KeyboardClient::~KeyboardClient() = default;
 
 void KeyboardClient::OnKeyEvent(
-    fuchsia::ui::input3::KeyEvent key_event,
-    fuchsia::ui::input3::KeyboardListener::OnKeyEventCallback callback) {
-  if (!IsValid(key_event)) {
-    binding_.Close(ZX_ERR_INVALID_ARGS);
+    KeyboardClient::OnKeyEventRequest& request,
+    KeyboardClient::OnKeyEventCompleter::Sync& completer) {
+  if (!IsValid(request.event())) {
+    binding_->Close(ZX_ERR_INVALID_ARGS);
     return;
   }
 
-  if (ProcessKeyEvent(key_event)) {
-    callback(fuchsia::ui::input3::KeyEventStatus::HANDLED);
+  if (ProcessKeyEvent(request.event())) {
+    completer.Reply(fuchsia_ui_input3::KeyEventStatus::kHandled);
   } else {
-    callback(fuchsia::ui::input3::KeyEventStatus::NOT_HANDLED);
+    completer.Reply(fuchsia_ui_input3::KeyEventStatus::kNotHandled);
   }
 }
 
-bool KeyboardClient::IsValid(const fuchsia::ui::input3::KeyEvent& key_event) {
-  if (!key_event.has_type() || !key_event.has_timestamp())
+bool KeyboardClient::IsValid(const fuchsia_ui_input3::KeyEvent& key_event) {
+  if (!key_event.type() || !key_event.timestamp()) {
     return false;
+  }
 
-  if (!key_event.has_key() && !key_event.has_key_meaning())
+  if (!key_event.key() && !key_event.key_meaning()) {
     return false;
+  }
 
   return true;
 }
 
 bool KeyboardClient::ProcessKeyEvent(
-    const fuchsia::ui::input3::KeyEvent& key_event) {
-  UpdateCachedModifiers(key_event);
-
-  absl::optional<EventType> event_type = ConvertKeyEventType(key_event.type());
+    const fuchsia_ui_input3::KeyEvent& key_event) {
+  absl::optional<EventType> event_type =
+      ConvertKeyEventType(key_event.type().value());
   if (!event_type)
     return false;
 
-  // Convert |key_event| to a ui::KeyEvent.
-  int event_flags = EventFlagsForCachedModifiers();
-  if (key_event.has_modifiers())
-    event_flags |= ModifiersToEventFlags(key_event.modifiers());
+  // Convert `key_event` to a ui::KeyEvent.
+  int event_flags = EF_NONE;
+  if (key_event.modifiers()) {
+    event_flags |= ModifiersToEventFlags(key_event.modifiers().value());
+  }
+  if (key_event.repeat_sequence()) {
+    event_flags |= EF_IS_REPEAT;
+  }
 
   // Derive the DOM Key and Code directly from the event's fields.
-  // |key_event| has already been validated, so is guaranteed to have one
-  // or both of the |key| or |key_meaning| fields set.
+  // `key_event` has already been validated, so is guaranteed to have one
+  // or both of the `key` or `key_meaning` fields set.
   DomCode dom_code = DomCode::NONE;
   DomKey dom_key = DomKey::UNIDENTIFIED;
   KeyboardCode key_code = VKEY_UNKNOWN;
 
-  if (key_event.has_key()) {
-    dom_code = KeycodeConverter::UsbKeycodeToDomCode(key_event.key());
+  if (key_event.key()) {
+    dom_code = KeycodeConverter::UsbKeycodeToDomCode(
+        static_cast<uint32_t>(key_event.key().value()));
 
     // Derive the legacy key_code. At present this only takes into account the
     // DOM Code, and event flags, so requires that key() be set.
@@ -138,77 +221,28 @@ bool KeyboardClient::ProcessKeyEvent(
         DomCodeToUsLayoutDomKey(dom_code, event_flags, &dom_key, &key_code);
   }
 
-  if (key_event.has_key_meaning()) {
+  if (key_event.key_meaning()) {
     // If the KeyMeaning is specified then use it to set the DOM Key.
 
     // Ignore events with codepoints outside the Basic Multilingual Plane,
     // since the Chromium keyboard pipeline cannot currently handle them.
-    if (key_event.key_meaning().is_codepoint() &&
-        (key_event.key_meaning().codepoint() >
+    if (key_event.key_meaning()->codepoint() &&
+        (key_event.key_meaning()->codepoint().value() >
          std::numeric_limits<char16_t>::max())) {
       return false;
     }
 
     DomKey dom_key_from_meaning =
-        DomKeyFromFuchsiaKeyMeaning(key_event.key_meaning());
+        DomKeyFromFuchsiaKeyMeaning(key_event.key_meaning().value());
     if (dom_key_from_meaning != DomKey::UNIDENTIFIED)
       dom_key = dom_key_from_meaning;
   }
 
   ui::KeyEvent converted_event(
       *event_type, key_code, dom_code, event_flags, dom_key,
-      base::TimeTicks::FromZxTime(key_event.timestamp()));
+      base::TimeTicks::FromZxTime(key_event.timestamp().value()));
   event_sink_->DispatchEvent(&converted_event);
   return converted_event.handled();
-}
-
-// TODO(https://crbug.com/850697): Add additional modifiers as they become
-// supported.
-void KeyboardClient::UpdateCachedModifiers(
-    const fuchsia::ui::input3::KeyEvent& key_event) {
-  if (!key_event.has_key())
-    return;
-
-  // A SYNC event indicates that the key was pressed while the view gained input
-  // focus. A CANCEL event indicates the key was held when the view lost input
-  // focus. In both cases, the state of locally tracked modifiers should be
-  // updated.
-  bool modifier_active =
-      key_event.type() == fuchsia::ui::input3::KeyEventType::PRESSED ||
-      key_event.type() == fuchsia::ui::input3::KeyEventType::SYNC;
-  switch (key_event.key()) {
-    case fuchsia::input::Key::LEFT_SHIFT:
-      left_shift_ = modifier_active;
-      break;
-    case fuchsia::input::Key::RIGHT_SHIFT:
-      right_shift_ = modifier_active;
-      break;
-    case fuchsia::input::Key::LEFT_ALT:
-      left_alt_ = modifier_active;
-      break;
-    case fuchsia::input::Key::RIGHT_ALT:
-      right_alt_ = modifier_active;
-      break;
-    case fuchsia::input::Key::LEFT_CTRL:
-      left_ctrl_ = modifier_active;
-      break;
-    case fuchsia::input::Key::RIGHT_CTRL:
-      right_ctrl_ = modifier_active;
-      break;
-    default:
-      break;
-  }
-}
-
-int KeyboardClient::EventFlagsForCachedModifiers() {
-  int event_flags = 0;
-  if (left_shift_ || right_shift_)
-    event_flags |= EF_SHIFT_DOWN;
-  if (left_alt_ || right_alt_)
-    event_flags |= EF_ALT_DOWN;
-  if (left_ctrl_ || right_ctrl_)
-    event_flags |= EF_CONTROL_DOWN;
-  return event_flags;
 }
 
 }  // namespace ui

@@ -8,18 +8,19 @@
 #include <string>
 
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-#include "base/scoped_observation.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/network/client_cert_resolver.h"
 #include "chromeos/ash/components/network/network_connection_observer.h"
-#include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_policy_observer.h"
-#include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
-#include "chromeos/login/login_state/login_state.h"
 
 namespace ash {
+
+class NetworkHandler;
+class NetworkStateHandler;
 
 class COMPONENT_EXPORT(CHROMEOS_NETWORK) AutoConnectHandler
     : public LoginState::Observer,
@@ -135,12 +136,11 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) AutoConnectHandler
   void CallShillScanAndConnectToBestServices();
 
   // Local references to the associated handler instances.
-  ClientCertResolver* client_cert_resolver_;
-  NetworkConnectionHandler* network_connection_handler_;
-  NetworkStateHandler* network_state_handler_;
-  base::ScopedObservation<NetworkStateHandler, NetworkStateHandlerObserver>
-      network_state_handler_observer_{this};
-  ManagedNetworkConfigurationHandler* managed_configuration_handler_;
+  raw_ptr<ClientCertResolver> client_cert_resolver_;
+  raw_ptr<NetworkConnectionHandler> network_connection_handler_;
+  raw_ptr<NetworkStateHandler> network_state_handler_;
+  NetworkStateHandlerScopedObservation network_state_handler_observer_{this};
+  raw_ptr<ManagedNetworkConfigurationHandler> managed_configuration_handler_;
 
   // Whether a request to connect to the best network is pending. If true, once
   // all requirements are met (like policy loaded, certificate patterns being

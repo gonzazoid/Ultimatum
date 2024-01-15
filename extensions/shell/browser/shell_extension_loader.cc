@@ -6,13 +6,11 @@
 
 #include "apps/launcher.h"
 #include "base/auto_reset.h"
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
-#include "components/services/app_service/public/mojom/types.mojom-shared.h"
 #include "extensions/browser/extension_file_task_runner.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
@@ -151,9 +149,8 @@ void ShellExtensionLoader::LoadExtensionForReload(
     LoadErrorBehavior load_error_behavior) {
   CHECK(!path.empty());
 
-  base::PostTaskAndReplyWithResult(
-      GetExtensionFileTaskRunner().get(), FROM_HERE,
-      base::BindOnce(&LoadUnpacked, path),
+  GetExtensionFileTaskRunner()->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&LoadUnpacked, path),
       base::BindOnce(&ShellExtensionLoader::FinishExtensionReload,
                      weak_factory_.GetWeakPtr(), extension_id));
   did_schedule_reload_ = true;

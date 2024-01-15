@@ -7,20 +7,17 @@
 #include "chrome/browser/ui/autofill/autofill_bubble_base.h"
 #include "chrome/browser/ui/autofill/autofill_bubble_handler.h"
 #include "chrome/browser/ui/page_action/page_action_icon_type.h"
+#include "components/autofill/core/browser/payments/virtual_card_enroll_metrics_logger.h"
 #include "components/autofill/core/browser/payments/virtual_card_enrollment_flow.h"
+#include "components/autofill/core/common/autofill_payments_features.h"
 #include "components/strings/grit/components_strings.h"
-#include "ui/base/l10n/l10n_util.h"
 
 #if BUILDFLAG(IS_ANDROID)
-#include "chrome/android/chrome_jni_headers/VirtualCardEnrollmentDelegate_jni.h"
-
+#include "chrome/browser/ui/android/autofill/autofill_vcn_enroll_bottom_sheet_bridge.h"
 #include "components/autofill/core/browser/payments/autofill_virtual_card_enrollment_infobar_delegate_mobile.h"
 #include "components/autofill/core/browser/payments/autofill_virtual_card_enrollment_infobar_mobile.h"
 #include "components/infobars/content/content_infobar_manager.h"
 #include "components/infobars/core/infobar.h"
-#include "components/messages/android/messages_feature.h"
-#include "ui/android/view_android.h"
-#include "ui/android/window_android.h"
 #else
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
@@ -36,23 +33,15 @@ VirtualCardEnrollBubbleControllerImpl::VirtualCardEnrollBubbleControllerImpl(
           *web_contents) {}
 
 VirtualCardEnrollBubbleControllerImpl::
-    ~VirtualCardEnrollBubbleControllerImpl() {
-#if BUILDFLAG(IS_ANDROID)
-  HideBubble();
-  // Reset the controller reference in the Java delegate.
-  if (java_delegate_) {
-    Java_VirtualCardEnrollmentDelegate_onNativeDestroyed(
-        base::android::AttachCurrentThread(), java_delegate_);
-  }
-#endif
-}
+    ~VirtualCardEnrollBubbleControllerImpl() = default;
 
 // static
 VirtualCardEnrollBubbleController*
 VirtualCardEnrollBubbleController::GetOrCreate(
     content::WebContents* web_contents) {
-  if (!web_contents)
+  if (!web_contents) {
     return nullptr;
+  }
 
   VirtualCardEnrollBubbleControllerImpl::CreateForWebContents(web_contents);
   return VirtualCardEnrollBubbleControllerImpl::FromWebContents(web_contents);
@@ -62,66 +51,46 @@ void VirtualCardEnrollBubbleControllerImpl::ShowBubble(
     const VirtualCardEnrollmentFields& virtual_card_enrollment_fields,
     base::OnceClosure accept_virtual_card_callback,
     base::OnceClosure decline_virtual_card_callback) {
-  virtual_card_enrollment_fields_ = virtual_card_enrollment_fields;
+  ui_model_ = VirtualCardEnrollUiModel::Create(virtual_card_enrollment_fields);
   accept_virtual_card_callback_ = std::move(accept_virtual_card_callback);
   decline_virtual_card_callback_ = std::move(decline_virtual_card_callback);
 
   is_user_gesture_ = false;
   Show();
 
-  LogVirtualCardEnrollBubbleCardArtAvailable(
-      virtual_card_enrollment_fields_.card_art_image,
-      virtual_card_enrollment_fields_.virtual_card_enrollment_source);
+  if (base::FeatureList::IsEnabled(
+          features::kAutofillEnableVirtualCardEnrollMetricsLogger)) {
+    VirtualCardEnrollMetricsLogger::OnCardArtAvailable(
+        ui_model_.enrollment_fields.card_art_image,
+        ui_model_.enrollment_fields.virtual_card_enrollment_source);
+  } else {
+    LogVirtualCardEnrollBubbleCardArtAvailable(
+        ui_model_.enrollment_fields.card_art_image,
+        ui_model_.enrollment_fields.virtual_card_enrollment_source);
+  }
 }
 
 void VirtualCardEnrollBubbleControllerImpl::ReshowBubble() {
   DCHECK(IsIconVisible());
 
-  if (bubble_view())
+  if (bubble_view()) {
     return;
+  }
 
   is_user_gesture_ = true;
   Show();
 }
 
-std::u16string VirtualCardEnrollBubbleControllerImpl::GetWindowTitle() const {
-  return l10n_util::GetStringUTF16(
-      IDS_AUTOFILL_VIRTUAL_CARD_ENROLLMENT_DIALOG_TITLE_LABEL);
+const VirtualCardEnrollUiModel&
+VirtualCardEnrollBubbleControllerImpl::GetUiModel() const {
+  return ui_model_;
 }
 
-std::u16string VirtualCardEnrollBubbleControllerImpl::GetExplanatoryMessage()
+VirtualCardEnrollmentBubbleSource
+VirtualCardEnrollBubbleControllerImpl::GetVirtualCardEnrollmentBubbleSource()
     const {
-  return l10n_util::GetStringFUTF16(
-      IDS_AUTOFILL_VIRTUAL_CARD_ENROLLMENT_DIALOG_CONTENT_LABEL,
-      GetLearnMoreLinkText());
-}
-
-std::u16string VirtualCardEnrollBubbleControllerImpl::GetAcceptButtonText()
-    const {
-  return l10n_util::GetStringUTF16(
-      IDS_AUTOFILL_VIRTUAL_CARD_ENROLLMENT_ACCEPT_BUTTON_LABEL);
-}
-
-std::u16string VirtualCardEnrollBubbleControllerImpl::GetDeclineButtonText()
-    const {
-  return l10n_util::GetStringUTF16(
-      virtual_card_enrollment_fields_.virtual_card_enrollment_source ==
-              VirtualCardEnrollmentSource::kSettingsPage
-          ? IDS_CANCEL
-          : virtual_card_enrollment_fields_.last_show
-                ? IDS_AUTOFILL_VIRTUAL_CARD_ENROLLMENT_DECLINE_BUTTON_LABEL_NO_THANKS
-                : IDS_AUTOFILL_VIRTUAL_CARD_ENROLLMENT_DECLINE_BUTTON_LABEL_SKIP);
-}
-
-std::u16string VirtualCardEnrollBubbleControllerImpl::GetLearnMoreLinkText()
-    const {
-  return l10n_util::GetStringUTF16(
-      IDS_AUTOFILL_VIRTUAL_CARD_ENROLLMENT_LEARN_MORE_LINK_LABEL);
-}
-
-const VirtualCardEnrollmentFields
-VirtualCardEnrollBubbleControllerImpl::GetVirtualCardEnrollmentFields() const {
-  return virtual_card_enrollment_fields_;
+  return ConvertToVirtualCardEnrollmentBubbleSource(
+      ui_model_.enrollment_fields.virtual_card_enrollment_source);
 }
 
 AutofillBubbleBase*
@@ -160,8 +129,14 @@ void VirtualCardEnrollBubbleControllerImpl::OnLinkClicked(
     const GURL& url) {
   reprompt_required_ = true;
 
-  LogVirtualCardEnrollmentLinkClickedMetric(
-      link_type, GetVirtualCardEnrollmentBubbleSource());
+  if (base::FeatureList::IsEnabled(
+          features::kAutofillEnableVirtualCardEnrollMetricsLogger)) {
+    VirtualCardEnrollMetricsLogger::OnLinkClicked(
+        link_type, ui_model_.enrollment_fields.virtual_card_enrollment_source);
+  } else {
+    LogVirtualCardEnrollmentLinkClickedMetric(
+        link_type, GetVirtualCardEnrollmentBubbleSource());
+  }
 
   web_contents()->OpenURL(content::OpenURLParams(
       url, content::Referrer(), WindowOpenDisposition::NEW_FOREGROUND_TAB,
@@ -208,34 +183,18 @@ void VirtualCardEnrollBubbleControllerImpl::OnBubbleClosed(
   // If the dialog is to be shown again because user clicked on links, do not
   // log metrics.
   if (!reprompt_required_) {
-    LogVirtualCardEnrollmentBubbleResultMetric(
-        result, GetVirtualCardEnrollmentBubbleSource(), is_user_gesture_,
-        virtual_card_enrollment_fields_.previously_declined);
+    if (base::FeatureList::IsEnabled(
+            features::kAutofillEnableVirtualCardEnrollMetricsLogger)) {
+      VirtualCardEnrollMetricsLogger::OnDismissed(
+          result, ui_model_.enrollment_fields.virtual_card_enrollment_source,
+          is_user_gesture_, ui_model_.enrollment_fields.previously_declined);
+    } else {
+      LogVirtualCardEnrollmentBubbleResultMetric(
+          result, GetVirtualCardEnrollmentBubbleSource(), is_user_gesture_,
+          ui_model_.enrollment_fields.previously_declined);
+    }
   }
 }
-
-#if BUILDFLAG(IS_ANDROID)
-void VirtualCardEnrollBubbleControllerImpl::OnAccepted(JNIEnv* env) {
-  OnAcceptButton();
-  OnBubbleClosed(PaymentsBubbleClosedReason::kAccepted);
-}
-
-void VirtualCardEnrollBubbleControllerImpl::OnDeclined(JNIEnv* env) {
-  OnDeclineButton();
-  OnBubbleClosed(PaymentsBubbleClosedReason::kCancelled);
-}
-
-void VirtualCardEnrollBubbleControllerImpl::OnDismissed(JNIEnv* env) {
-  OnBubbleClosed(PaymentsBubbleClosedReason::kNotInteracted);
-}
-
-void VirtualCardEnrollBubbleControllerImpl::OnLinkClicked(JNIEnv* env,
-                                                          jstring url,
-                                                          jint link_type) {
-  OnLinkClicked(static_cast<autofill::VirtualCardEnrollmentLinkType>(link_type),
-                GURL(base::android::ConvertJavaStringToUTF16(env, url)));
-}
-#endif
 
 bool VirtualCardEnrollBubbleControllerImpl::IsIconVisible() const {
 #if BUILDFLAG(IS_ANDROID)
@@ -247,21 +206,15 @@ bool VirtualCardEnrollBubbleControllerImpl::IsIconVisible() const {
 
 void VirtualCardEnrollBubbleControllerImpl::OnVisibilityChanged(
     content::Visibility visibility) {
-#if BUILDFLAG(IS_ANDROID)
-  if (visibility == content::Visibility::VISIBLE && !bubble_view() &&
-      reprompt_required_ && messages::IsSaveCardMessagesUiEnabled()) {
-    Show();
-  } else if (visibility == content::Visibility::HIDDEN) {
-    HideBubble();
-  }
-#else
+#if !BUILDFLAG(IS_ANDROID)
   if (visibility == content::Visibility::VISIBLE && !bubble_view() &&
       bubble_state_ == BubbleState::kShowingIconAndBubble) {
     Show();
   } else if (visibility == content::Visibility::HIDDEN) {
     HideBubble();
-    if (bubble_state_ != BubbleState::kShowingIcon)
+    if (bubble_state_ != BubbleState::kShowingIcon) {
       bubble_state_ = BubbleState::kHidden;
+    }
   }
 #endif
 }
@@ -273,35 +226,35 @@ VirtualCardEnrollBubbleControllerImpl::GetPageActionIconType() {
 
 void VirtualCardEnrollBubbleControllerImpl::DoShowBubble() {
 #if BUILDFLAG(IS_ANDROID)
-  if (messages::IsSaveCardMessagesUiEnabled() &&
-      GetVirtualCardEnrollmentBubbleSource() ==
-          VirtualCardEnrollmentBubbleSource::
-              VIRTUAL_CARD_ENROLLMENT_UPSTREAM_SOURCE) {
-    DCHECK(!bubble_view());
-
-    set_bubble_view(
-        VirtualCardEnrollmentViewAndroid::CreateAndShow(web_contents(), this));
-
-    DCHECK(bubble_view());
+  auto delegate_mobile =
+      std::make_unique<AutofillVirtualCardEnrollmentInfoBarDelegateMobile>(
+          this);
+  if (base::FeatureList::IsEnabled(
+          features::kAutofillEnablePaymentsAndroidBottomSheet)) {
+    autofill_vcn_enroll_bottom_sheet_bridge_ =
+        std::make_unique<AutofillVCNEnrollBottomSheetBridge>();
+    autofill_vcn_enroll_bottom_sheet_bridge_->RequestShowContent(
+        web_contents(), std::move(delegate_mobile));
   } else {
     infobars::ContentInfoBarManager* infobar_manager =
         infobars::ContentInfoBarManager::FromWebContents(web_contents());
     DCHECK(infobar_manager);
     infobar_manager->RemoveAllInfoBars(true);
-    infobar_manager->AddInfoBar(CreateVirtualCardEnrollmentInfoBarMobile(
-        std::make_unique<AutofillVirtualCardEnrollmentInfoBarDelegateMobile>(
-            this)));
+    infobar_manager->AddInfoBar(
+        CreateVirtualCardEnrollmentInfoBarMobile(std::move(delegate_mobile)));
   }
 #else
   // If bubble is already showing for another card, close it.
-  if (bubble_view())
+  if (bubble_view()) {
     HideBubble();
+  }
 
   bubble_state_ = BubbleState::kShowingIconAndBubble;
-  if (!IsWebContentsActive())
+  if (!IsWebContentsActive()) {
     return;
+  }
 
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents());
+  Browser* browser = chrome::FindBrowserWithTab(web_contents());
   // For reprompts after link clicks, |is_user_gesture| is set to false.
   bool user_gesture_reprompt = reprompt_required_ ? false : is_user_gesture_;
   set_bubble_view(browser->window()
@@ -320,55 +273,34 @@ void VirtualCardEnrollBubbleControllerImpl::DoShowBubble() {
   // If the dialog is to be shown again because user clicked on links, do not
   // log metrics.
   if (!reprompt_required_) {
-    LogVirtualCardEnrollmentBubbleShownMetric(
-        GetVirtualCardEnrollmentBubbleSource(), is_user_gesture_);
+    if (base::FeatureList::IsEnabled(
+            features::kAutofillEnableVirtualCardEnrollMetricsLogger)) {
+      VirtualCardEnrollMetricsLogger::OnShown(
+          ui_model_.enrollment_fields.virtual_card_enrollment_source,
+          is_user_gesture_);
+    } else {
+      LogVirtualCardEnrollmentBubbleShownMetric(
+          GetVirtualCardEnrollmentBubbleSource(), is_user_gesture_);
+    }
   }
 
   // Reset value for the next time tab is switched.
   reprompt_required_ = false;
 
-  if (bubble_shown_closure_for_testing_)
+  if (bubble_shown_closure_for_testing_) {
     bubble_shown_closure_for_testing_.Run();
-}
-
-VirtualCardEnrollmentBubbleSource
-VirtualCardEnrollBubbleControllerImpl::GetVirtualCardEnrollmentBubbleSource() {
-  switch (virtual_card_enrollment_fields_.virtual_card_enrollment_source) {
-    case VirtualCardEnrollmentSource::kUpstream:
-      return VirtualCardEnrollmentBubbleSource::
-          VIRTUAL_CARD_ENROLLMENT_UPSTREAM_SOURCE;
-    case VirtualCardEnrollmentSource::kDownstream:
-      return VirtualCardEnrollmentBubbleSource::
-          VIRTUAL_CARD_ENROLLMENT_DOWNSTREAM_SOURCE;
-    case VirtualCardEnrollmentSource::kSettingsPage:
-      return VirtualCardEnrollmentBubbleSource::
-          VIRTUAL_CARD_ENROLLMENT_SETTINGS_PAGE_SOURCE;
-    default:
-      NOTREACHED();
-      return VirtualCardEnrollmentBubbleSource::
-          VIRTUAL_CARD_ENROLLMENT_UNKNOWN_SOURCE;
   }
 }
 
 #if !BUILDFLAG(IS_ANDROID)
 bool VirtualCardEnrollBubbleControllerImpl::IsWebContentsActive() {
   Browser* active_browser = chrome::FindBrowserWithActiveWindow();
-  if (!active_browser)
+  if (!active_browser) {
     return false;
+  }
 
   return active_browser->tab_strip_model()->GetActiveWebContents() ==
          web_contents();
-}
-#endif
-
-#if BUILDFLAG(IS_ANDROID)
-base::android::ScopedJavaGlobalRef<jobject>
-VirtualCardEnrollBubbleControllerImpl::GetOrCreateJavaDelegate() {
-  if (java_delegate_)
-    return java_delegate_;
-  return java_delegate_ = Java_VirtualCardEnrollmentDelegate_create(
-             base::android::AttachCurrentThread(),
-             reinterpret_cast<intptr_t>(this));
 }
 #endif
 

@@ -7,7 +7,7 @@
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "build/build_config.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -35,19 +35,22 @@ BASE_FEATURE(kJourneysLabels,
 
 BASE_FEATURE(kJourneysImages,
              "JourneysImages",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+const base::FeatureParam<bool> kJourneysImagesCover{
+    &kJourneysImages, "JourneysImagesCover", true};
 
 BASE_FEATURE(kPersistedClusters,
              "HistoryClustersPersistedClusters",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 BASE_FEATURE(kOmniboxAction,
              "JourneysOmniboxAction",
-             enabled_by_default_desktop_only);
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kOmniboxHistoryClusterProvider,
              "JourneysOmniboxHistoryClusterProvider",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             enabled_by_default_desktop_only);
 
 BASE_FEATURE(kNonUserVisibleDebug,
              "JourneysNonUserVisibleDebug",
@@ -77,24 +80,39 @@ BASE_FEATURE(kHistoryClustersVisitDeduping,
              "HistoryClustersVisitDeduping",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
+BASE_FEATURE(kJourneysIncludeSyncedVisits,
+             "JourneysIncludeSyncedVisits",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kJourneysPersistCachesToPrefs,
+             "JourneysPersistCachesToPrefs",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kHistoryClustersNavigationContextClustering,
+             "HistoryClustersNavigationContextClustering",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// Killswitch only.
+BASE_FEATURE(kJourneysNamedNewTabGroups,
+             "JourneysNamedNewTabGroups",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kJourneysZeroStateFiltering,
+             "JourneysZeroStateFiltering",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
 }  // namespace internal
 
-BASE_FEATURE(kJourneysSurveyForHistoryEntrypoint,
-             "JourneysSurveyForHistoryEntrypoint",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kSidePanelJourneys,
+             "SidePanelJourneys",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+// If enabled, and the main flag is also enabled, the Journeys omnibox
+// entrypoints open Journeys in Side Panel rather than the History WebUI.
+const base::FeatureParam<bool> kSidePanelJourneysOpensFromOmnibox{
+    &kSidePanelJourneys, "SidePanelJourneysOpensFromOmnibox", true};
 
-const base::FeatureParam<base::TimeDelta>
-    kJourneysSurveyForHistoryEntrypointDelay{
-        &kJourneysSurveyForHistoryEntrypoint, "survey-delay-duration",
-        base::Seconds(6)};
-
-BASE_FEATURE(kJourneysSurveyForOmniboxEntrypoint,
-             "JourneysSurveyForOmniboxEntrypoint",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
-const base::FeatureParam<base::TimeDelta>
-    kJourneysSurveyForOmniboxEntrypointDelay{
-        &kJourneysSurveyForOmniboxEntrypoint, "survey-delay-duration",
-        base::Seconds(6)};
+BASE_FEATURE(kRenameJourneys,
+             "RenameJourneys",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 }  // namespace history_clusters

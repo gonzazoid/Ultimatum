@@ -5,7 +5,7 @@
 #include "chrome/browser/ash/app_restore/app_restore_test_util.h"
 
 #include "ash/shell.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ui/ash/shelf/app_service/exo_app_type_resolver.h"
 #include "components/app_restore/window_properties.h"
 #include "components/exo/shell_surface_util.h"
@@ -28,7 +28,7 @@ views::Widget* CreateExoWindow(const std::string& window_app_id,
                                const std::string& app_id) {
   views::Widget::InitParams params(views::Widget::InitParams::TYPE_WINDOW);
   params.bounds = gfx::Rect(5, 5, 20, 20);
-  params.context = ash::Shell::GetPrimaryRootWindow();
+  params.context = Shell::GetPrimaryRootWindow();
 
   exo::WMHelper::AppPropertyResolver::Params resolver_params;
   resolver_params.app_id = window_app_id;

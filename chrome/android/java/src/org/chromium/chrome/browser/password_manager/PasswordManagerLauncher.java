@@ -4,55 +4,59 @@
 
 package org.chromium.chrome.browser.password_manager;
 
-import android.app.Activity;
+import android.content.Context;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.supplier.ObservableSupplier;
-import org.chromium.base.supplier.ObservableSupplierImpl;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.jni_zero.CalledByNative;
+
+import org.chromium.base.supplier.Supplier;
 import org.chromium.chrome.browser.settings.SettingsLauncherImpl;
-import org.chromium.chrome.browser.sync.SyncService;
+import org.chromium.chrome.browser.sync.SyncServiceFactory;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 
-import java.lang.ref.WeakReference;
-
-/**
- * Bridge between Java and native PasswordManager code.
- */
+/** Bridge between Java and native PasswordManager code. */
 public class PasswordManagerLauncher {
     private PasswordManagerLauncher() {}
 
     /**
      * Launches the password settings.
      *
-     * @param activity used to show the UI to manage passwords.
+     * @param context current activity context
+     * @param referer specifies on whose behalf the PasswordManager will be opened
+     * @param modalDialogManagerSupplier ModalDialogManager supplier to be used by loading dialog.
+     * @param managePasskeys the content to be managed
      */
-    public static void showPasswordSettings(Activity activity,
+    public static void showPasswordSettings(
+            Context context,
             @ManagePasswordsReferrer int referrer,
-            ObservableSupplier<ModalDialogManager> modalDialogManagerSupplier) {
-        SyncService syncService = SyncService.get();
-        if (syncService.isEngineInitialized()
-                && PasswordManagerHelper.hasChosenToSyncPasswordsWithNoCustomPassphrase(syncService)
-                && (ChromeFeatureList.isEnabled(ChromeFeatureList.PASSWORD_SCRIPTS_FETCHING)
-                        || ChromeFeatureList.isEnabled(
-                                ChromeFeatureList.PASSWORD_DOMAIN_CAPABILITIES_FETCHING))) {
-            PasswordScriptsFetcherBridge.prewarmCache();
-        }
-        PasswordManagerHelper.showPasswordSettings(activity, referrer, new SettingsLauncherImpl(),
-                syncService, modalDialogManagerSupplier);
+            Supplier<ModalDialogManager> modalDialogManagerSupplier,
+            boolean managePasskeys) {
+        PasswordManagerHelper.showPasswordSettings(
+                context,
+                referrer,
+                new SettingsLauncherImpl(),
+                SyncServiceFactory.get(),
+                modalDialogManagerSupplier,
+                managePasskeys);
     }
 
     @CalledByNative
     private static void showPasswordSettings(
-            WebContents webContents, @ManagePasswordsReferrer int referrer) {
+            WebContents webContents,
+            @ManagePasswordsReferrer int referrer,
+            boolean managePasskeys) {
         WindowAndroid window = webContents.getTopLevelNativeWindow();
         if (window == null) return;
-        WeakReference<Activity> currentActivity = window.getActivity();
-        ObservableSupplierImpl<ModalDialogManager> modalDialogManagerSupplier =
-                new ObservableSupplierImpl<>();
-        modalDialogManagerSupplier.set(window.getModalDialogManager());
-        showPasswordSettings(currentActivity.get(), referrer, modalDialogManagerSupplier);
+        showPasswordSettings(
+                window.getActivity().get(),
+                referrer,
+                () -> window.getModalDialogManager(),
+                managePasskeys);
+    }
+
+    @CalledByNative
+    private static boolean canManagePasswordsWhenPasskeysPresent() {
+        return PasswordManagerHelper.canUseUpm() || !PasswordManagerHelper.canUseAccountSettings();
     }
 }

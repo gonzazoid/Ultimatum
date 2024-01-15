@@ -10,10 +10,6 @@
 #import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
 
 using base::test::ios::WaitUntilConditionOrTimeout;
@@ -23,13 +19,13 @@ using MultiStoreCredentialStoreTest = PlatformTest;
 
 ArchivableCredential* TestCredential(NSString* user) {
   return [[ArchivableCredential alloc] initWithFavicon:@"favicon"
-                                    keychainIdentifier:@"keychainIdentifier"
+                                              password:@"qwerty123"
                                                   rank:5
                                       recordIdentifier:@"recordIdentifier"
                                      serviceIdentifier:@"serviceIdentifier"
                                            serviceName:@"serviceName"
                                                   user:user
-                                  validationIdentifier:@"validationIdentifier"];
+                                                  note:@"note"];
 }
 
 NSArray<id<CredentialStore>>* TestStoreArray() {

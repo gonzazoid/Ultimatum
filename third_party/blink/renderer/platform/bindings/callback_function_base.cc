@@ -28,14 +28,13 @@ CallbackFunctionBase::CallbackFunctionBase(
     // it's not the same origin-domain, it's already been possible for the
     // callsite to run arbitrary script in the context. No need to protect it.
     // This is an optimization faster than ShouldAllowAccessToV8Context below.
-    callback_relevant_script_state_ = ScriptState::From(
-        callback_function->GetCreationContext().ToLocalChecked());
+    callback_relevant_script_state_ =
+        ScriptState::ForRelevantRealm(callback_function);
   } else {
     v8::MaybeLocal<v8::Context> creation_context =
         callback_function->GetCreationContext();
     if (BindingSecurityForPlatform::ShouldAllowAccessToV8Context(
-            incumbent_script_state_->GetContext(), creation_context,
-            BindingSecurityForPlatform::ErrorReportOption::kDoNotReport)) {
+            incumbent_script_state_->GetContext(), creation_context)) {
       callback_relevant_script_state_ =
           ScriptState::From(creation_context.ToLocalChecked());
     }
@@ -50,16 +49,17 @@ void CallbackFunctionBase::Trace(Visitor* visitor) const {
 
 ScriptState* CallbackFunctionBase::CallbackRelevantScriptStateOrReportError(
     const char* interface_name,
-    const char* operation_name) {
-  if (callback_relevant_script_state_)
+    const char* operation_name) const {
+  if (LIKELY(callback_relevant_script_state_)) {
     return callback_relevant_script_state_;
+  }
 
   // Report a SecurityError due to a cross origin callback object.
   ScriptState::Scope incumbent_scope(incumbent_script_state_);
   v8::TryCatch try_catch(GetIsolate());
   try_catch.SetVerbose(true);
   ExceptionState exception_state(GetIsolate(),
-                                 ExceptionState::kExecutionContext,
+                                 ExceptionContextType::kOperationInvoke,
                                  interface_name, operation_name);
   exception_state.ThrowSecurityError(
       "An invocation of the provided callback failed due to cross origin "
@@ -69,14 +69,15 @@ ScriptState* CallbackFunctionBase::CallbackRelevantScriptStateOrReportError(
 
 ScriptState* CallbackFunctionBase::CallbackRelevantScriptStateOrThrowException(
     const char* interface_name,
-    const char* operation_name) {
-  if (callback_relevant_script_state_)
+    const char* operation_name) const {
+  if (LIKELY(callback_relevant_script_state_)) {
     return callback_relevant_script_state_;
+  }
 
   // Throw a SecurityError due to a cross origin callback object.
   ScriptState::Scope incumbent_scope(incumbent_script_state_);
   ExceptionState exception_state(GetIsolate(),
-                                 ExceptionState::kExecutionContext,
+                                 ExceptionContextType::kOperationInvoke,
                                  interface_name, operation_name);
   exception_state.ThrowSecurityError(
       "An invocation of the provided callback failed due to cross origin "
@@ -85,9 +86,10 @@ ScriptState* CallbackFunctionBase::CallbackRelevantScriptStateOrThrowException(
 }
 
 void CallbackFunctionBase::EvaluateAsPartOfCallback(
-    base::OnceCallback<void()> closure) {
-  if (!callback_relevant_script_state_)
+    base::OnceCallback<void(ScriptState*)> closure) {
+  if (UNLIKELY(!callback_relevant_script_state_)) {
     return;
+  }
 
   // https://webidl.spec.whatwg.org/#es-invoking-callback-functions
   // step 8: Prepare to run script with relevant settings.
@@ -97,7 +99,7 @@ void CallbackFunctionBase::EvaluateAsPartOfCallback(
   v8::Context::BackupIncumbentScope backup_incumbent_scope(
       IncumbentScriptState()->GetContext());
 
-  std::move(closure).Run();
+  std::move(closure).Run(callback_relevant_script_state_);
 }
 
 }  // namespace blink

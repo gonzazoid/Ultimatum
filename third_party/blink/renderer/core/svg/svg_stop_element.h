@@ -48,9 +48,13 @@ class SVGStopElement final : public SVGElement {
   void SvgAttributeChanged(const SvgAttributeChangedParams&) override;
 
   // Stop elements don't have associated layout objects.
-  bool LayoutObjectIsNeeded(const ComputedStyle&) const override {
+  bool LayoutObjectIsNeeded(const DisplayStyle&) const override {
     return false;
   }
+
+  SVGAnimatedPropertyBase* PropertyFromAttribute(
+      const QualifiedName& attribute_name) const override;
+  void SynchronizeAllSVGAttributes() const override;
 
   Member<SVGAnimatedNumber> offset_;
 };

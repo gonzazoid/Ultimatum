@@ -5,6 +5,7 @@
 #include "ash/app_menu/notification_item_view.h"
 
 #include "ash/public/cpp/app_menu_constants.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/image/image.h"
@@ -73,23 +74,23 @@ NotificationItemView::NotificationItemView(
   text_container_ = new views::View();
   text_container_->SetLayoutManager(std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kVertical));
-  AddChildView(text_container_);
+  AddChildView(text_container_.get());
 
   title_label_ = new views::Label(title_);
   title_label_->SetEnabledColor(kNotificationTitleTextColor);
   title_label_->SetLineHeight(kNotificationItemTextLineHeight);
   title_label_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-  text_container_->AddChildView(title_label_);
+  text_container_->AddChildView(title_label_.get());
 
   message_label_ = new views::Label(message_);
   message_label_->SetEnabledColor(kNotificationMessageTextColor);
   message_label_->SetLineHeight(kNotificationItemTextLineHeight);
   message_label_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-  text_container_->AddChildView(message_label_);
+  text_container_->AddChildView(message_label_.get());
 
   proportional_icon_view_ =
       new message_center::ProportionalImageView(kProportionalIconViewSize);
-  AddChildView(proportional_icon_view_);
+  AddChildView(proportional_icon_view_.get());
   proportional_icon_view_->SetImage(icon, kProportionalIconViewSize);
 }
 
@@ -166,5 +167,8 @@ void NotificationItemView::OnGestureEvent(ui::GestureEvent* event) {
       return;
   }
 }
+
+BEGIN_METADATA(NotificationItemView)
+END_METADATA
 
 }  // namespace ash

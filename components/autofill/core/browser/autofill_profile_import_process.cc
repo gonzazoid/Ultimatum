@@ -3,11 +3,17 @@
 // found in the LICENSE file.
 
 #include "components/autofill/core/browser/autofill_profile_import_process.h"
+
+#include "base/ranges/algorithm.h"
+#include "base/strings/utf_string_conversions.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/data_model/autofill_profile_comparator.h"
-#include "components/autofill/core/browser/metrics/autofill_metrics.h"
+#include "components/autofill/core/browser/field_types.h"
+#include "components/autofill/core/browser/metrics/profile_import_metrics.h"
 #include "components/autofill/core/browser/personal_data_manager.h"
+#include "components/autofill/core/browser/profile_requirement_utils.h"
 #include "components/autofill/core/common/autofill_clock.h"
+#include "components/autofill/core/common/autofill_features.h"
 
 namespace autofill {
 
@@ -22,13 +28,36 @@ AutofillProfileImportId GetImportId() {
   return next_import_id;
 }
 
+// When the profile is observed without explicit country information, Autofill
+// guesses it's country. Detecting a profile as a duplicate can fail if we guess
+// incorrectly. This function checks if we have reason to believe that the
+// country of `profile` was guessed incorrectly. It does so by checking whether
+// any of the `existing_profiles` becomes mergeable after removing the country
+// of `profile`.
+// Comparisons are done using `comparator`.
+bool ShouldCountryApproximationBeRemoved(
+    const AutofillProfile& profile,
+    const std::vector<AutofillProfile*>& existing_profiles,
+    const AutofillProfileComparator& comparator) {
+  auto IsMergeableWithExistingProfiles = [&](const AutofillProfile& profile) {
+    return base::ranges::any_of(existing_profiles, [&](auto* existing_profile) {
+      return comparator.AreMergeable(profile, *existing_profile);
+    });
+  };
+  if (IsMergeableWithExistingProfiles(profile))
+    return false;
+  AutofillProfile without_country = profile;
+  without_country.ClearFields({ADDRESS_HOME_COUNTRY});
+  return IsMergeableWithExistingProfiles(without_country);
+}
+
 }  // namespace
 
 ProfileImportProcess::ProfileImportProcess(
     const AutofillProfile& observed_profile,
     const std::string& app_locale,
     const GURL& form_source_url,
-    const PersonalDataManager* personal_data_manager,
+    PersonalDataManager* personal_data_manager,
     bool allow_only_silent_updates,
     ProfileImportMetadata import_metadata)
     : import_id_(GetImportId()),
@@ -39,6 +68,7 @@ ProfileImportProcess::ProfileImportProcess(
       allow_only_silent_updates_(allow_only_silent_updates),
       import_metadata_(import_metadata) {
   DetermineProfileImportType();
+  DetermineSourceOfImportCandidate();
 }
 
 ProfileImportProcess::ProfileImportProcess(const ProfileImportProcess&) =
@@ -56,7 +86,8 @@ bool ProfileImportProcess::prompt_shown() const {
 bool ProfileImportProcess::UserDeclined() const {
   return user_decision_ == UserDecision::kDeclined ||
          user_decision_ == UserDecision::kEditDeclined ||
-         user_decision_ == UserDecision::kMessageDeclined;
+         user_decision_ == UserDecision::kMessageDeclined ||
+         user_decision_ == UserDecision::kNever;
 }
 
 bool ProfileImportProcess::UserAccepted() const {
@@ -74,9 +105,22 @@ void ProfileImportProcess::DetermineProfileImportType() {
           form_source_url_);
 
   int number_of_unchanged_profiles = 0;
+  std::optional<AutofillProfile> migration_candidate;
 
+  // We don't offer an import if `observed_profile_` is a duplicate of an
+  // existing profile.
   const std::vector<AutofillProfile*> existing_profiles =
-      personal_data_manager_->GetProfiles();
+      personal_data_manager_->GetProfiles(
+          PersonalDataManager::ProfileOrder::kMostRecentlyUsedFirstDesc);
+
+  // If we have reason to believe that the country was complemented incorrectly,
+  // remove it.
+  if (import_metadata_.did_complement_country &&
+      ShouldCountryApproximationBeRemoved(observed_profile_, existing_profiles,
+                                          comparator)) {
+    observed_profile_.ClearFields({ADDRESS_HOME_COUNTRY});
+    import_metadata_.did_complement_country = false;
+  }
 
   for (const auto* existing_profile : existing_profiles) {
     // If the existing profile is not mergeable with the observed profile, the
@@ -97,14 +141,17 @@ void ProfileImportProcess::DetermineProfileImportType() {
     AutofillProfile merged_profile = *existing_profile;
     if (!merged_profile.MergeDataFrom(observed_profile_, app_locale_)) {
       ++number_of_unchanged_profiles;
+      // The `observed_profile_` is a duplicate of the `existing_profile`.
+      // Consider it for migration.
+      MaybeSetMigrationCandidate(migration_candidate, *existing_profile);
       continue;
     }
 
-    // At this point, the observed profile was merged with the existing profile
-    // which changed in some way.
+    // At this point, the observed profile was merged with (a copy of) the
+    // existing profile which changed in some way.
     // Now, determine if the merge alters any settings-visible value, or if the
-    // merge can  be considered as a silent update that does not need to get
-    // user confirmation.
+    // merge can be considered as a silent update that does not need to get user
+    // confirmation.
     if (AutofillProfileComparator::ProfilesHaveDifferentSettingsVisibleValues(
             *existing_profile, merged_profile, app_locale_)) {
       if (allow_only_silent_updates_) {
@@ -114,12 +161,13 @@ void ProfileImportProcess::DetermineProfileImportType() {
 
       // Determine if the existing profile is blocked for updates.
       // If the personal data manager is not available the profile is considered
-      // as not blocked.
+      // as not blocked. Also, updates can be disabled by a feature flag.
       bool is_blocked_for_update =
-          personal_data_manager_
-              ? personal_data_manager_->IsProfileUpdateBlocked(
-                    existing_profile->guid())
-              : false;
+          personal_data_manager_->IsProfileUpdateBlocked(
+              existing_profile->guid()) ||
+          base::FeatureList::IsEnabled(
+              features::test::kAutofillDisableProfileUpdates);
+
       if (is_blocked_for_update) {
         ++number_of_blocked_profile_updates_;
       }
@@ -138,9 +186,18 @@ void ProfileImportProcess::DetermineProfileImportType() {
       continue;
     }
     // If the profile changed but all settings-visible values are maintained,
-    // the profile can be updated silently.
-    merged_profile.set_modification_date(AutofillClock::Now());
-    updated_profiles_.emplace_back(merged_profile);
+    // the profile can be updated silently. Silent updates can also be disabled
+    // using a feature flag.
+    if (!base::FeatureList::IsEnabled(
+            features::test::kAutofillDisableSilentProfileUpdates)) {
+      merged_profile.set_modification_date(AutofillClock::Now());
+      silently_updated_profiles_.emplace_back(merged_profile);
+    } else {
+      ++number_of_unchanged_profiles;
+    }
+    // The `observed_profile_` only differs from the `existing_profile` in a
+    // non-settings visible way. Consider it for migration.
+    MaybeSetMigrationCandidate(migration_candidate, merged_profile);
   }
 
   // If the profile is not mergeable with an existing profile, the import
@@ -159,7 +216,7 @@ void ProfileImportProcess::DetermineProfileImportType() {
       import_type_ = AutofillProfileImportType::kUnusableIncompleteProfile;
     }
   } else {
-    bool silent_updates_present = updated_profiles_.size() > 0;
+    bool silent_updates_present = !silently_updated_profiles_.empty();
 
     if (merge_candidate_.has_value()) {
       import_type_ =
@@ -177,10 +234,17 @@ void ProfileImportProcess::DetermineProfileImportType() {
           silent_updates_present
               ? AutofillProfileImportType::kSilentUpdateForIncompleteProfile
               : AutofillProfileImportType::kUnusableIncompleteProfile;
-    } else {
+    } else if (!migration_candidate) {
       import_type_ = silent_updates_present
                          ? AutofillProfileImportType::kSilentUpdate
                          : AutofillProfileImportType::kDuplicateImport;
+    } else {
+      import_type_ =
+          silent_updates_present
+              ? AutofillProfileImportType::kProfileMigrationAndSilentUpdate
+              : AutofillProfileImportType::kProfileMigration;
+      CHECK(migration_candidate.has_value());
+      import_candidate_ = std::move(migration_candidate);
     }
   }
 
@@ -190,45 +254,73 @@ void ProfileImportProcess::DetermineProfileImportType() {
 
   // At this point, all existing profiles are either unchanged, updated and/or
   // one is the merge candidate.
+  // One of the unchanged or updated profiles might be considered for migration.
+  // In this case, `import_type()` is `kProfileMigrationAndMaybeSilentUpdates`.
   DCHECK_EQ(existing_profiles.size(),
-            number_of_unchanged_profiles + updated_profiles_.size() +
+            number_of_unchanged_profiles + silently_updated_profiles_.size() +
                 (merge_candidate_.has_value() ? 1 : 0));
   DCHECK_NE(import_type_, AutofillProfileImportType::kImportTypeUnspecified);
 }
 
-std::vector<AutofillProfile> ProfileImportProcess::GetResultingProfiles() {
+void ProfileImportProcess::DetermineSourceOfImportCandidate() {
+  if (import_type_ != AutofillProfileImportType::kNewProfile) {
+    return;
+  }
+  CHECK(import_candidate_);
+  if (personal_data_manager_->IsEligibleForAddressAccountStorage() &&
+      personal_data_manager_->IsCountryEligibleForAccountStorage(
+          base::UTF16ToUTF8(
+              import_candidate_->GetRawInfo(ADDRESS_HOME_COUNTRY)))) {
+    import_candidate_ = import_candidate_->ConvertToAccountProfile();
+  }
+}
+
+void ProfileImportProcess::MaybeSetMigrationCandidate(
+    std::optional<AutofillProfile>& migration_candidate,
+    const AutofillProfile& profile) const {
+  // Basic checks: No migration candidate was selected yet, prompts can be shown
+  // (i.e. not only silent updates) and the `profile` is not stored in the
+  // user's account already.
+  if (migration_candidate || allow_only_silent_updates_ ||
+      profile.source() != AutofillProfile::Source::kLocalOrSyncable) {
+    return;
+  }
+  // Check the eligiblity of the user and profile.
+  if (IsEligibleForMigrationToAccount(*personal_data_manager_, profile)) {
+    migration_candidate = profile;
+  }
+}
+
+void ProfileImportProcess::ApplyImport() {
   // At this point, a user decision must have been supplied.
   DCHECK_NE(user_decision_, UserDecision::kUndefined);
-
-  std::vector<AutofillProfile> resulting_profiles;
-  std::set<std::string> guids_of_changed_profiles;
-
-  // Add all updated profiles.
-  for (const auto& updated_profile : updated_profiles_) {
-    resulting_profiles.push_back(updated_profile);
-    guids_of_changed_profiles.insert(updated_profile.guid());
+  if (!ProfilesChanged()) {
+    return;
   }
 
-  // If there is a confirmed import candidate, add it.
-  if (confirmed_import_candidate_.has_value()) {
-    resulting_profiles.emplace_back(confirmed_import_candidate_.value());
-    guids_of_changed_profiles.insert(confirmed_import_candidate_->guid());
+  // Apply silent updates.
+  for (const AutofillProfile& updated_profile : silently_updated_profiles_) {
+    personal_data_manager_->UpdateProfile(updated_profile);
   }
 
-  // Add all other profiles that are currently available in the personal data
-  // manager.
-  for (const auto* unchanged_profile : personal_data_manager_->GetProfiles()) {
-    if (guids_of_changed_profiles.count(unchanged_profile->guid()) == 0) {
-      resulting_profiles.push_back(*unchanged_profile);
-    }
+  if (!confirmed_import_candidate_.has_value()) {
+    return;
   }
-
-  return resulting_profiles;
+  const AutofillProfile& confirmed_profile = *confirmed_import_candidate_;
+  // Confirming an import candidate corresponds to either a new/update profile
+  // or a migration prompt.
+  if (is_migration()) {
+    personal_data_manager_->MigrateProfileToAccount(confirmed_profile);
+  } else if (is_confirmable_update()) {
+    personal_data_manager_->UpdateProfile(confirmed_profile);
+  } else {
+    personal_data_manager_->AddProfile(confirmed_profile);
+  }
 }
 
 void ProfileImportProcess::SetUserDecision(
     UserDecision decision,
-    absl::optional<AutofillProfile> edited_profile) {
+    base::optional_ref<const AutofillProfile> edited_profile) {
   // A user decision should only be supplied once.
   DCHECK_EQ(user_decision_, UserDecision::kUndefined);
   DCHECK(!confirmed_import_candidate_.has_value());
@@ -236,7 +328,7 @@ void ProfileImportProcess::SetUserDecision(
   user_decision_ = decision;
   switch (user_decision_) {
     // If the import was accepted either with or without a prompt, the import
-    // candidate gets confired.
+    // candidate gets confirmed.
     case UserDecision::kUserNotAsked:
     case UserDecision::kAccepted:
       confirmed_import_candidate_ = import_candidate_;
@@ -246,41 +338,38 @@ void ProfileImportProcess::SetUserDecision(
       // If the import candidate is supplied, the 'edited_profile' must be
       // supplied.
       DCHECK(edited_profile.has_value());
+      confirmed_import_candidate_ = edited_profile.value();
 
       // Make sure the verification status of all settings-visible non-empty
       // fields in the edited profile are set to kUserVerified.
       for (auto type : GetUserVisibleTypes()) {
-        std::u16string value = edited_profile->GetRawInfo(type);
+        std::u16string value = confirmed_import_candidate_->GetRawInfo(type);
         if (!value.empty() &&
-            edited_profile->GetVerificationStatus(type) ==
-                structured_address::VerificationStatus::kNoStatus) {
-          edited_profile->SetRawInfoWithVerificationStatus(
-              type, value,
-              structured_address::VerificationStatus::kUserVerified);
+            confirmed_import_candidate_->GetVerificationStatus(type) ==
+                VerificationStatus::kNoStatus) {
+          confirmed_import_candidate_->SetRawInfoWithVerificationStatus(
+              type, value, VerificationStatus::kUserVerified);
         }
       }
 
-      edited_profile->FinalizeAfterImport();
-      edited_profile->set_modification_date(AutofillClock::Now());
-      // The `edited_profile` has to have the same `guid` as the original import
-      // candidate.
-      DCHECK_EQ(import_candidate_.value().guid(), edited_profile->guid());
-      confirmed_import_candidate_ = std::move(edited_profile);
+      confirmed_import_candidate_->FinalizeAfterImport();
+      confirmed_import_candidate_->set_modification_date(AutofillClock::Now());
+      // The `confirmed_import_candidate_` has to have the same `guid` as the
+      // original import candidate.
+      DCHECK_EQ(import_candidate_->guid(), confirmed_import_candidate_->guid());
       break;
 
     // If the confirmable merge was declided or ignored, the original merge
-    // candidate should be maintined. Note that the decline/ignore does not mean
-    // that silent updates are not performed.
+    // candidate should be maintined. Note that the decline/ignore/never does
+    // not mean that silent updates are not performed.
     case UserDecision::kDeclined:
     case UserDecision::kEditDeclined:
     case UserDecision::kMessageDeclined:
     case UserDecision::kMessageTimeout:
     case UserDecision::kIgnored:
     case UserDecision::kAutoDeclined:
-      confirmed_import_candidate_ = merge_candidate_;
-      break;
-
     case UserDecision::kNever:
+      confirmed_import_candidate_ = merge_candidate_;
       break;
 
     case UserDecision::kUndefined:
@@ -314,8 +403,7 @@ bool ProfileImportProcess::ProfilesChanged() const {
   // At this point, a user decision must have been supplied.
   DCHECK_NE(user_decision_, UserDecision::kUndefined);
 
-  // If there are any updated profiles, return true.
-  if (updated_profiles_.size() > 0) {
+  if (!silently_updated_profiles_.empty()) {
     return true;
   }
 
@@ -344,18 +432,14 @@ void ProfileImportProcess::CollectMetrics(ukm::UkmRecorder* ukm_recorder,
   DCHECK_NE(user_decision_, UserDecision::kUndefined);
 
   auto LogUkmMetrics = [&](int num_edited_fields = 0) {
-    AutofillMetrics::LogAddressProfileImportUkm(
+    autofill_metrics::LogAddressProfileImportUkm(
         ukm_recorder, source_id, import_type_, user_decision_, import_metadata_,
         num_edited_fields);
   };
 
   if (allow_only_silent_updates_) {
     // Record the import type for the silent updates.
-    AutofillMetrics::LogSilentUpdatesProfileImportType(import_type_);
-    if (import_metadata_.phone_import_status == PhoneImportStatus::kInvalid) {
-      AutofillMetrics::LogSilentUpdatesWithRemovedPhoneNumberProfileImportType(
-          import_type_);
-    }
+    autofill_metrics::LogSilentUpdatesProfileImportType(import_type_);
     if (import_type_ == AutofillProfileImportType::kSilentUpdate ||
         import_type_ ==
             AutofillProfileImportType::kSilentUpdateForIncompleteProfile)
@@ -364,69 +448,21 @@ void ProfileImportProcess::CollectMetrics(ukm::UkmRecorder* ukm_recorder,
   }
 
   // For any finished import process record the type of the import.
-  AutofillMetrics::LogProfileImportType(import_type_);
+  autofill_metrics::LogProfileImportType(import_type_);
 
-  // Tracks number of edited fields by the user in the storage prompt.
-  int num_edited_fields = 0;
-
-  // If the profile was edited by the user, record a histogram of edited types.
-  if (user_decision_ == UserDecision::kEditAccepted) {
-    const std::vector<ProfileValueDifference> edit_difference =
-        AutofillProfileComparator::GetSettingsVisibleProfileDifference(
-            import_candidate_.value(), confirmed_import_candidate_.value(),
-            app_locale_);
-    for (const auto& difference : edit_difference) {
-      if (import_type_ == AutofillProfileImportType::kNewProfile) {
-        AutofillMetrics::LogNewProfileEditedType(difference.type);
-        if (import_metadata_.did_complement_country &&
-            difference.type == ServerFieldType::ADDRESS_HOME_COUNTRY) {
-          AutofillMetrics::LogNewProfileEditedComplementedCountry();
-        }
-      } else {
-        AutofillMetrics::LogProfileUpdateEditedType(difference.type);
-        if (import_metadata_.did_complement_country &&
-            difference.type == ServerFieldType::ADDRESS_HOME_COUNTRY) {
-          AutofillMetrics::LogProfileUpdateEditedComplementedCountry();
-        }
-      }
-    }
-    num_edited_fields = edit_difference.size();
-    if (import_type_ == AutofillProfileImportType::kNewProfile) {
-      AutofillMetrics::LogNewProfileNumberOfEditedFields(num_edited_fields);
-    } else {
-      AutofillMetrics::LogUpdateProfileNumberOfEditedFields(num_edited_fields);
-    }
-  }
+  // Tracks number of edited fields by the user in the storage prompt. Zero if
+  // the user didn't edit any fields.
+  int num_edited_fields = CollectedEditedTypeHistograms();
 
   // For an import process that involves prompting the user, record the
   // decision.
   if (import_type_ == AutofillProfileImportType::kNewProfile) {
-    AutofillMetrics::LogNewProfileImportDecision(user_decision_);
-    if (import_metadata_.did_complement_country) {
-      AutofillMetrics::LogNewProfileWithComplementedCountryImportDecision(
-          user_decision_);
-    }
-    if (import_metadata_.did_ignore_invalid_country) {
-      AutofillMetrics::LogNewProfileWithIgnoredCountryImportDecision(
-          user_decision_);
-    }
-    if (import_metadata_.phone_import_status == PhoneImportStatus::kInvalid) {
-      AutofillMetrics::LogNewProfileWithRemovedPhoneNumberImportDecision(
-          user_decision_);
-    }
-
+    autofill_metrics::LogNewProfileImportDecision(user_decision_);
     LogUkmMetrics(num_edited_fields);
-  } else if (import_type_ == AutofillProfileImportType::kConfirmableMerge ||
-             import_type_ ==
-                 AutofillProfileImportType::kConfirmableMergeAndSilentUpdate) {
-    AutofillMetrics::LogProfileUpdateImportDecision(user_decision_);
-    if (import_metadata_.phone_import_status == PhoneImportStatus::kInvalid) {
-      AutofillMetrics::LogProfileUpdateWithRemovedPhoneNumberImportDecision(
-          user_decision_);
-    }
+  } else if (is_confirmable_update()) {
+    autofill_metrics::LogProfileUpdateImportDecision(user_decision_);
 
     DCHECK(merge_candidate_.has_value() && import_candidate_.has_value());
-
     // For all update prompts, log the field types and total number of fields
     // that would change due to the update. Note that this does not include
     // additional manual edits the user can perform in the storage dialog.
@@ -435,31 +471,55 @@ void ProfileImportProcess::CollectMetrics(ukm::UkmRecorder* ukm_recorder,
         AutofillProfileComparator::GetSettingsVisibleProfileDifference(
             import_candidate_.value(), merge_candidate_.value(), app_locale_);
 
-    bool difference_in_country = false;
     for (const auto& difference : merge_difference) {
-      AutofillMetrics::LogProfileUpdateAffectedType(difference.type,
-                                                    user_decision_);
-      difference_in_country |= difference.type == ADDRESS_HOME_COUNTRY;
+      autofill_metrics::LogProfileUpdateAffectedType(difference.type,
+                                                     user_decision_);
     }
-    // If the country was complemented, but already stored, it didn't make a
-    // difference and we should not count it in the metrics.
-    if (import_metadata_.did_complement_country && difference_in_country) {
-      AutofillMetrics::LogProfileUpdateWithComplementedCountryImportDecision(
-          user_decision_);
-    }
-    // Ignoring an invalid country made the update possible, so this should be
-    // logged in any case.
-    if (import_metadata_.did_ignore_invalid_country) {
-      AutofillMetrics::LogProfileUpdateWithIgnoredCountryImportDecision(
-          user_decision_);
-    }
-
-    AutofillMetrics::LogUpdateProfileNumberOfAffectedFields(
+    autofill_metrics::LogUpdateProfileNumberOfAffectedFields(
         merge_difference.size(), user_decision_);
     LogUkmMetrics(num_edited_fields);
   } else if (import_type_ == AutofillProfileImportType::kSilentUpdate) {
     LogUkmMetrics();
+  } else if (is_migration()) {
+    autofill_metrics::LogProfileMigrationImportDecision(user_decision_);
+    LogUkmMetrics(num_edited_fields);
   }
+}
+
+int ProfileImportProcess::CollectedEditedTypeHistograms() const {
+  if (user_decision_ != UserDecision::kEditAccepted) {
+    return 0;
+  }
+
+  // Compute the number of edited settings-visible fields.
+  std::vector<ProfileValueDifference> edit_difference =
+      AutofillProfileComparator::GetSettingsVisibleProfileDifference(
+          *import_candidate_, *confirmed_import_candidate_, app_locale_);
+
+  // Log edited types.
+  for (const ProfileValueDifference& difference : edit_difference) {
+    if (import_type_ == AutofillProfileImportType::kNewProfile) {
+      autofill_metrics::LogNewProfileEditedType(difference.type);
+    } else if (is_confirmable_update()) {
+      autofill_metrics::LogProfileUpdateEditedType(difference.type);
+    } else {
+      CHECK(is_migration());
+      autofill_metrics::LogProfileMigrationEditedType(difference.type);
+    }
+  }
+
+  // Log number of edited fields.
+  int num_edited_fields = edit_difference.size();
+  if (import_type_ == AutofillProfileImportType::kNewProfile) {
+    autofill_metrics::LogNewProfileNumberOfEditedFields(num_edited_fields);
+  } else if (is_confirmable_update()) {
+    autofill_metrics::LogUpdateProfileNumberOfEditedFields(num_edited_fields);
+  } else {
+    CHECK(is_migration());
+    autofill_metrics::LogProfileMigrationNumberOfEditedFields(
+        num_edited_fields);
+  }
+  return num_edited_fields;
 }
 
 }  // namespace autofill

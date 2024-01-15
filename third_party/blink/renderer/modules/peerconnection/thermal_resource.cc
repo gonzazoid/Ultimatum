@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/modules/peerconnection/thermal_resource.h"
 
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "third_party/webrtc/rtc_base/ref_counted_object.h"
@@ -89,7 +90,7 @@ void ThermalResource::ReportMeasurementWhileHoldingLock(size_t measurement_id) {
   task_runner_->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&ThermalResource::ReportMeasurement,
-                     scoped_refptr<ThermalResource>(this), measurement_id),
+                     rtc::scoped_refptr<ThermalResource>(this), measurement_id),
       base::Seconds(kReportIntervalSeconds));
 }
 

@@ -85,14 +85,15 @@ void ProfileAccountManager::ShowAddAccountDialog(AccountAdditionSource source) {
 void ProfileAccountManager::ShowAddAccountDialog(
     AccountAdditionSource source,
     base::OnceCallback<
-        void(const account_manager::AccountAdditionResult& result)> callback) {
+        void(const account_manager::AccountUpsertionResult& result)> callback) {
   NOTREACHED();
 }
 
 void ProfileAccountManager::ShowReauthAccountDialog(
     AccountAdditionSource source,
     const std::string& email,
-    base::OnceClosure callback) {
+    base::OnceCallback<
+        void(const account_manager::AccountUpsertionResult& result)> callback) {
   NOTREACHED();
 }
 

@@ -8,9 +8,11 @@
 #include <utility>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chromeos/ash/services/assistant/public/mojom/assistant_audio_decoder.mojom.h"
 #include "chromeos/ash/services/libassistant/audio/audio_stream_handler.h"
 #include "chromeos/ash/services/libassistant/public/mojom/platform_delegate.mojom.h"
@@ -134,7 +136,7 @@ class AudioOutputImpl : public assistant_client::AudioOutput {
     }
   }
 
-  AudioOutputProviderImpl* audio_output_provider_impl_
+  raw_ptr<AudioOutputProviderImpl> audio_output_provider_impl_
       GUARDED_BY_CONTEXT(main_sequence_checker_);
   scoped_refptr<AudioOutputProviderImpl::AudioDecoderFactoryManager>
       audio_decoder_factory_manager_ GUARDED_BY_CONTEXT(main_sequence_checker_);
@@ -143,7 +145,7 @@ class AudioOutputImpl : public assistant_client::AudioOutput {
 
   mojo::PendingRemote<media::mojom::AudioStreamFactory> stream_factory_
       GUARDED_BY_CONTEXT(main_sequence_checker_);
-  mojom::AudioOutputDelegate* const audio_output_delegate_
+  const raw_ptr<mojom::AudioOutputDelegate> audio_output_delegate_
       GUARDED_BY_CONTEXT(main_sequence_checker_);
 
   // Accessed from both Libassistant and main sequence, so should remain
@@ -207,7 +209,7 @@ class AudioDecoderFactoryManagerImpl
 AudioOutputProviderImpl::AudioOutputProviderImpl(const std::string& device_id)
     : loop_back_input_(media::AudioDeviceDescription::kLoopbackInputDeviceId),
       volume_control_impl_(),
-      main_task_runner_(base::SequencedTaskRunnerHandle::Get()),
+      main_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()),
       device_id_(device_id),
       start_audio_decoder_on_demand_(
           features::IsStartAssistantAudioDecoderOnDemandEnabled()) {}

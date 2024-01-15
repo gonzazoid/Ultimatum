@@ -23,7 +23,7 @@ body {
   display: flex;
   align-items: center;
 }
-.appbar-progress {
+#prog-appbar {
   display: block;
   width: 100%;
   height: 4px;
@@ -33,42 +33,43 @@ body {
   background: #4285f499;
   transition: opacity 0.5s ease;
 }
-.appbar-progress::-webkit-progress-bar {
+#prog-appbar::-webkit-progress-bar {
   background: transparent;
 }
-.appbar-progress::-webkit-progress-value {
+#prog-appbar::-webkit-progress-value {
   background: #1a73e8;
   transition: width 1s ease-in;
 }
-.appbar-progress[value="0"]::-webkit-progress-value {
+#prog-appbar[value="0"]::-webkit-progress-value {
   transition: none;
 }
-.appbar-progress[value="1"] {
+#prog-appbar[value="1"] {
   opacity: 0;
 }
-.appbar-progress[value="1"]::-webkit-progress-value {
+#prog-appbar[value="1"]::-webkit-progress-value {
   transition-duration: 0.2s;
 }
-.error .appbar-progress {
+.error #prog-appbar {
   background: #ea433599;
 }
-.error .appbar-progress::-webkit-progress-value {
+.error #prog-appbar::-webkit-progress-value {
   background: #d93025;
 }
 
-.options {
+#frm-options {
   visibility: hidden;
   grid-area: options;
+}
+
+.top-view {
+  margin: 0 auto;
+  max-width: 1200px;
 }
 
 .symbols {
   grid-area: symbols;
   padding: 0 48px;
   margin-bottom: 240px;
-}
-.tree-view {
-  margin: 0 auto;
-  max-width: 1200px;
 }
 
 .headline {
@@ -148,16 +149,17 @@ ul {
   position: relative;
 }
 .node {
+  align-items: center;
   display: flex;
+  flex-direction: row;
   padding-right: 8px;
   margin-right: -8px;
-  align-items: center;
   text-decoration: none;
   color: inherit;
   border-radius: 4px;
 }
 .node:hover {
-  background: #f1f3f4;
+  background: rgba(0,36,55,0.055);
 }
 .node::before {
   content: "";
@@ -211,7 +213,7 @@ ul {
   color: #ea4335;
 }
 
-.diff .size-header::after {
+.diff #span-size-header::after {
   content: " diff";
 }
 
@@ -273,44 +275,88 @@ ul {
   vertical-align: middle;
 }
 
-.metadata-symbol-name {
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  padding-left: 5px;
-  word-break: break-word;
-}
-
-.metadata {
-  margin: 0 auto;
-  max-width: 1200px;
-}
-
-#metadata-view:not(.active) {
+#div-metrics-view:not(.active),
+#div-metadata-view:not(.active) {
   display: none;
 }
 
-#metadata-content:not(.active) {
-  display: none;
+#div-metrics-view .node.leaf {
+  display: block;
 }
 
-#review-info{
+#div-metrics-view .node.leaf::before {
+  content: none;
+}
+
+#div-metrics-view table {
+  border-collapse: collapse;
+  margin-left: 25px;
+}
+
+#div-metrics-view table td {
+  border: 1px solid rgba(0,0,0,0.25);
+  min-width: 80px;
+}
+
+#div-metrics-view table td.number {
+  text-align: right;
+}
+
+#div-metrics-view table tr td {
+  background: #fff;
+}
+
+#div-metrics-view table .positive td {
+  background: #fcc;
+}
+
+#div-metrics-view table .negative td {
+  background: #dfd;
+}
+
+#div-metrics-view table .positive .diff {
+  color: #f00;
+}
+#div-metrics-view table .positive .diff:before {
+  content: '+';
+}
+
+#div-metrics-view table .negative .diff {
+  color: #080;
+}
+
+#div-metadata-view table {
+  border-collapse: collapse;
+}
+
+#div-metadata-view table td {
+  border: 1px solid rgba(0,0,0,0.25);
+  min-width: 80px;
+  vertical-align: top;
+  white-space: pre;
+}
+
+#div-metadata-view table td.metadata-changed {
+  background: #ffc;
+}
+
+#div-review-info{
   font-size: 13px;
 }
 
-#review-text {
+#link-review-text {
   color: #0000d1;
   text-decoration: none;
   white-space: pre;
 }
 
-#no-symbols-msg {
+#div-no-symbols-msg {
   position: relative;
   text-align: center;
   top: -1em;
 }
 
-#disassembly-code {
+#div-disassembly-modal .div-code {
   border: 1px solid #ccc;
   box-sizing: border-box;
   max-width: 100%;

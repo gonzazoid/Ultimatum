@@ -7,10 +7,11 @@
 
 #include "ash/shell.h"
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "components/exo/seat_observer.h"
-#include "components/exo/wm_helper_chromeos.h"
+#include "components/exo/wm_helper.h"
 #include "ui/base/user_activity/user_activity_observer.h"
 #include "ui/events/event_handler.h"
 
@@ -33,7 +34,7 @@ extern const base::TimeDelta kLongPressEscapeDuration;
 class UILockController : public ui::EventHandler,
                          public SeatObserver,
                          public ash::SessionObserver,
-                         public WMHelperChromeOS::PowerObserver,
+                         public WMHelper::PowerObserver,
                          public ui::UserActivityObserver {
  public:
   // Interface for classes that display notifications based on UI lock states.
@@ -91,7 +92,7 @@ class UILockController : public ui::EventHandler,
   void OnEscapeHeld();
   void StopTimer();
 
-  Seat* seat_;
+  raw_ptr<Seat> seat_;
   base::OneShotTimer exit_fullscreen_timer_;
 
   // Whether the screen brightness is low enough to make the display dark.
@@ -101,10 +102,10 @@ class UILockController : public ui::EventHandler,
   // running, or nullptr if the timer isn't running. Do not dereference; may
   // dangle if the Surface is destroyed while the timer is running. Valid only
   // for comparison purposes.
-  Surface* focused_surface_to_unlock_ = nullptr;
+  raw_ptr<Surface> focused_surface_to_unlock_ = nullptr;
 
   // Pointers currently being captured.
-  base::flat_set<base::raw_ptr<Pointer>> captured_pointers_;
+  base::flat_set<raw_ptr<Pointer>> captured_pointers_;
 
   base::ObserverList<Notifier> notifiers_;
 

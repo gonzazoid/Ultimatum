@@ -5,7 +5,7 @@
 """Utilies and constants specific to Chromium C++ code.
 """
 
-from code import Code
+from code_util import Code
 from datetime import datetime
 from model import PropertyType
 import os
@@ -94,19 +94,19 @@ def GetValueType(type_):
   if type_.property_type == PropertyType.FUNCTION:
     if type_.is_serializable_function:
       return 'base::Value::Type::STRING'
-    return 'base::Value::Type::DICTIONARY'
+    return 'base::Value::Type::DICT'
   if type_.property_type == PropertyType.INTEGER:
     return 'base::Value::Type::INTEGER'
   if type_.property_type == PropertyType.OBJECT:
-    return 'base::Value::Type::DICTIONARY'
+    return 'base::Value::Type::DICT'
   if type_.property_type == PropertyType.STRING:
     return 'base::Value::Type::STRING'
 
   raise ValueError('Invalid type: %s' % type_.name)
 
-def ShouldUseAbslOptional(type_):
+def ShouldUseStdOptional(type_):
   """Called to validate whether or not an optional value should be represented
-  with absl::optional. This function is a temporary utility, while optional
+  with std::optional. This function is a temporary utility, while optional
   fields are gradually migrated away from using std::unique_ptr.
   """
 

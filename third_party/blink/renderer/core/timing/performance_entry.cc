@@ -38,6 +38,7 @@
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/performance_entry_names.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
+#include "third_party/blink/renderer/platform/wtf/uuid.h"
 
 namespace blink {
 
@@ -48,22 +49,32 @@ static base::AtomicSequenceNumber index_seq;
 PerformanceEntry::PerformanceEntry(const AtomicString& name,
                                    double start_time,
                                    double finish_time,
-                                   uint32_t navigation_id)
+                                   DOMWindow* source,
+                                   bool is_triggered_by_soft_navigation)
     : duration_(finish_time - start_time),
       name_(name),
       start_time_(start_time),
       index_(index_seq.GetNext()),
-      navigation_id_(navigation_id) {}
+      navigation_id_(DynamicTo<LocalDOMWindow>(source)
+                         ? DynamicTo<LocalDOMWindow>(source)->GetNavigationId()
+                         : g_empty_string),
+      source_(source),
+      is_triggered_by_soft_navigation_(is_triggered_by_soft_navigation) {}
 
 PerformanceEntry::PerformanceEntry(double duration,
                                    const AtomicString& name,
                                    double start_time,
-                                   uint32_t navigation_id)
+                                   DOMWindow* source,
+                                   bool is_triggered_by_soft_navigation)
     : duration_(duration),
       name_(name),
       start_time_(start_time),
       index_(index_seq.GetNext()),
-      navigation_id_(navigation_id) {
+      navigation_id_(DynamicTo<LocalDOMWindow>(source)
+                         ? DynamicTo<LocalDOMWindow>(source)->GetNavigationId()
+                         : g_empty_string),
+      source_(source),
+      is_triggered_by_soft_navigation_(is_triggered_by_soft_navigation) {
   DCHECK_GE(duration_, 0.0);
 }
 
@@ -77,8 +88,12 @@ DOMHighResTimeStamp PerformanceEntry::duration() const {
   return duration_;
 }
 
-uint32_t PerformanceEntry::navigationId() const {
+String PerformanceEntry::navigationId() const {
   return navigation_id_;
+}
+
+DOMWindow* PerformanceEntry::source() const {
+  return source_.Get();
 }
 
 mojom::blink::PerformanceMarkOrMeasurePtr
@@ -129,28 +144,28 @@ PerformanceEntry::EntryType PerformanceEntry::ToEntryTypeEnum(
     return kBackForwardCacheRestoration;
   if (entry_type == performance_entry_names::kSoftNavigation)
     return kSoftNavigation;
+  if (entry_type == performance_entry_names::kLongAnimationFrame) {
+    return kLongAnimationFrame;
+  }
   return kInvalid;
 }
 
 // static
-uint32_t PerformanceEntry::GetNavigationId(ScriptState* script_state) {
+String PerformanceEntry::GetNavigationId(ScriptState* script_state) {
   const auto* local_dom_window = LocalDOMWindow::From(script_state);
-  // local_dom_window is null in some browser tests and unit tests.
-  // The navigation_id starts from 1. Without a window, there would be no
-  // subsequent navigations.
+  // The local_dom_window could be null in some browser tests and unit tests.
+  // An empty string is returned in such cases. In case this method is called
+  // within a worker, the navigation id in this case would also be an empty
+  // string.
   if (!local_dom_window)
-    return kNavigationIdDefaultValue;
+    return g_empty_string;
 
   return local_dom_window->GetNavigationId();
 }
 
-// static
-uint32_t PerformanceEntry::GetNavigationId(ExecutionContext* context) {
-  const auto* local_dom_window = DynamicTo<LocalDOMWindow>(context);
-  if (!local_dom_window)
-    return kNavigationIdDefaultValue;
-
-  return local_dom_window->GetNavigationId();
+void PerformanceEntry::Trace(Visitor* visitor) const {
+  visitor->Trace(source_);
+  ScriptWrappable::Trace(visitor);
 }
 
 ScriptValue PerformanceEntry::toJSONForBinding(
@@ -165,8 +180,9 @@ void PerformanceEntry::BuildJSONValue(V8ObjectBuilder& builder) const {
   builder.AddString("entryType", entryType());
   builder.AddNumber("startTime", startTime());
   builder.AddNumber("duration", duration());
-  if (RuntimeEnabledFeatures::NavigationIdEnabled()) {
-    builder.AddNumber("navigationId", navigationId());
+  if (RuntimeEnabledFeatures::NavigationIdEnabled(
+          ExecutionContext::From(builder.GetScriptState()))) {
+    builder.AddString("navigationId", navigationId());
   }
 }
 

@@ -6,11 +6,11 @@
 
 #include "base/files/file_path.h"
 #include "content/public/test/browser_test.h"
+#include "fuchsia_web/common/test/frame_for_test.h"
 #include "fuchsia_web/common/test/frame_test_util.h"
 #include "fuchsia_web/common/test/test_navigation_listener.h"
 #include "fuchsia_web/webengine/browser/context_impl.h"
 #include "fuchsia_web/webengine/browser/frame_impl.h"
-#include "fuchsia_web/webengine/test/frame_for_test.h"
 #include "fuchsia_web/webengine/test/test_data.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/mojom/frame/user_activation_notification_type.mojom.h"
@@ -43,9 +43,10 @@ class AutoplayTest : public WebEngineBrowserTest {
   // Creates a Frame with |navigation_listener_| attached and |policy|
   // applied.
   FrameForTest CreateFrame(fuchsia::web::AutoplayPolicy policy) {
-    fuchsia::web::CreateFrameParams params;
-    params.set_autoplay_policy(policy);
-    auto frame = FrameForTest::Create(context(), std::move(params));
+    auto frame = FrameForTest::Create(context(), {});
+    fuchsia::web::ContentAreaSettings settings;
+    settings.set_autoplay_policy(policy);
+    frame->SetContentAreaSettings(std::move(settings));
     return frame;
   }
 };

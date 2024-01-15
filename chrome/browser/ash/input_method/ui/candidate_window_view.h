@@ -7,6 +7,8 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
+#include "chrome/browser/ash/input_method/text_field_contextual_info_fetcher.h"
 #include "ui/base/ime/candidate_window.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/chromeos/ui_chromeos_export.h"
@@ -74,8 +76,8 @@ class UI_CHROMEOS_EXPORT CandidateWindowView
   // Candidates are arranged per |orientation|.
   void UpdateCandidates(const ui::CandidateWindow& candidate_window);
 
-  void SetCursorBounds(const gfx::Rect& cursor_bounds,
-                       const gfx::Rect& composition_head);
+  void SetCursorAndCompositionBounds(const gfx::Rect& cursor_bounds,
+                                     const gfx::Rect& composition_bounds);
 
  private:
   friend class CandidateWindowViewTest;
@@ -89,6 +91,11 @@ class UI_CHROMEOS_EXPORT CandidateWindowView
 
   void CandidateViewPressed(int index);
 
+  // Only used when ash::features::kImeKoreanModeSwitchDebug flag is enabled.
+  // TODO(b/302460634): Remove when no longer needed.
+  void OnTextFieldContextualInfoAvailable(
+      const ash::input_method::TextFieldContextualInfo& info);
+
   // The candidate window data model.
   ui::CandidateWindow candidate_window_;
 
@@ -100,17 +107,21 @@ class UI_CHROMEOS_EXPORT CandidateWindowView
 
   // Views created in the class will be part of tree of |this|, so these
   // child views will be deleted when |this| is deleted.
-  InformationTextArea* auxiliary_text_;
-  InformationTextArea* preedit_;
-  views::View* candidate_area_;
+  raw_ptr<InformationTextArea> auxiliary_text_;
+  raw_ptr<InformationTextArea> preedit_;
+  raw_ptr<views::View> candidate_area_;
 
   // The candidate views are used for rendering candidates.
-  std::vector<CandidateView*> candidate_views_;
+  std::vector<raw_ptr<CandidateView, VectorExperimental>> candidate_views_;
 
   // Current columns size in |candidate_area_|.
   gfx::Size previous_shortcut_column_size_;
   gfx::Size previous_candidate_column_size_;
   gfx::Size previous_annotation_column_size_;
+
+  // Only used when ash::features::kImeKoreanModeSwitchDebug flag is enabled.
+  // TODO(b/302460634): Remove when no longer needed.
+  gfx::Rect pending_anchor_rect_;
 };
 
 BEGIN_VIEW_BUILDER(UI_CHROMEOS_EXPORT,

@@ -5,6 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_PUBLIC_MAIN_THREAD_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_PUBLIC_MAIN_THREAD_H_
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 
 namespace blink {
@@ -15,10 +16,10 @@ namespace blink {
 class MainThreadTaskRunnerRestricted {
  private:
   // Permitted users of `MainThread::GetTaskRunner`.
+  friend class BlinkCategorizedWorkerPoolDelegate;
   friend class BlinkInitializer;
   friend class BlobBytesProvider;
   friend class CachedStorageArea;
-  friend class CategorizedWorkerPoolImpl;
   friend class FontCache;
   friend class InspectorNetworkAgent;
   friend class MemoryCache;
@@ -32,6 +33,9 @@ class MainThreadTaskRunnerRestricted {
   friend class WebGLWebCodecsVideoFrame;
   friend class WebRtcVideoFrameAdapter;
   friend class WorkerGlobalScope;
+  friend class CanvasHibernationHandler;
+  friend class HibernatedCanvasMemoryDumpProvider;
+  friend class MainThreadTaskRunnerRestrictedForTesting;
   friend MainThreadTaskRunnerRestricted AccessMainThreadForGpuFactories();
   friend MainThreadTaskRunnerRestricted
   AccessMainThreadForWebGraphicsContext3DProvider();
@@ -40,6 +44,9 @@ class MainThreadTaskRunnerRestricted {
 
   MainThreadTaskRunnerRestricted() = default;
 };
+
+class MainThreadTaskRunnerRestrictedForTesting
+    : public MainThreadTaskRunnerRestricted {};
 
 // The interface of a main thread in Blink.
 //

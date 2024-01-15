@@ -9,11 +9,10 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
-#include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/cpp/icon_loader.h"
 #include "ui/gfx/image/image_skia.h"
 
@@ -87,10 +86,9 @@ class IconCache : public IconLoader {
   ~IconCache() override;
 
   // IconLoader overrides.
-  absl::optional<IconKey> GetIconKey(const std::string& app_id) override;
+  absl::optional<IconKey> GetIconKey(const std::string& id) override;
   std::unique_ptr<Releaser> LoadIconFromIconKey(
-      AppType app_type,
-      const std::string& app_id,
+      const std::string& id,
       const IconKey& icon_key,
       IconType icon_type,
       int32_t size_hint_in_dip,
@@ -101,7 +99,7 @@ class IconCache : public IconLoader {
   // actively held.
   void SweepReleasedIcons();
 
-  void RemoveIcon(AppType app_type, const std::string& app_id);
+  void RemoveIcon(const std::string& id);
 
  private:
   class Value {
@@ -123,7 +121,7 @@ class IconCache : public IconLoader {
   void OnRelease(IconLoader::Key);
 
   std::map<IconLoader::Key, Value> map_;
-  raw_ptr<IconLoader> wrapped_loader_;
+  raw_ptr<IconLoader, DanglingUntriaged> wrapped_loader_;
   GarbageCollectionPolicy gc_policy_;
 
   SEQUENCE_CHECKER(sequence_checker_);

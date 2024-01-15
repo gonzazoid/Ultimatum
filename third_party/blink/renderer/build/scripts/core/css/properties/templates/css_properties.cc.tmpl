@@ -33,13 +33,28 @@ namespace {{namespace}} {
 {% for property in properties %}
 {% set class_name = property.name.to_upper_camel_case() %}
 {% set is_alias = property.alias_for %}
+{% set exposed_property = property.ultimate_property %}
 // {{property.name}}
 
-  {% if property.is_internal or property.runtime_flag and not property.in_origin_trial%}
-CSSExposure {{class_name}}::Exposure() const {
+{% macro return_none_if_alternative_exposed(alternative) %}
+  {% if alternative.alternative %}
+{{return_none_if_alternative_exposed(alternative.alternative)}}
+  {% endif %}
+if (RuntimeEnabledFeatures::{{alternative.runtime_flag}}Enabled(execution_context)) {
+  // {{alternative.name}}
+  return CSSExposure::kNone;
+}
+{%- endmacro %}
+
+  {% if not property.known_exposed %}
+CSSExposure {{class_name}}::Exposure(const ExecutionContext* execution_context) const {
+    {% if property.alternative %}
+  {{return_none_if_alternative_exposed(property.alternative)|indent(2)}}
+    {% endif %}
     {% if property.runtime_flag %}
-  if (!RuntimeEnabledFeatures::{{property.runtime_flag}}Enabled())
+  if (!RuntimeEnabledFeatures::{{property.runtime_flag}}Enabled(execution_context)) {
     return CSSExposure::kNone;
+  }
     {% endif %}
     {% if property.is_internal %}
   return CSSExposure::kUA;
@@ -49,37 +64,20 @@ CSSExposure {{class_name}}::Exposure() const {
 }
   {% endif %}
 
-  {% if property.in_origin_trial %}
-CSSExposure {{class_name}}::Exposure(const ExecutionContext* execution_context) const {
-  if (!RuntimeEnabledFeatures::{{property.runtime_flag}}Enabled(execution_context))
-    return CSSExposure::kNone;
-  return CSSExposure::kWeb;
-}
-  {% endif %}
-
 const char* {{class_name}}::GetPropertyName() const {
-  return "{{property.name}}";
+  return "{{exposed_property.name}}";
 }
 
 const WTF::AtomicString& {{class_name}}::GetPropertyNameAtomicString() const {
-  DEFINE_STATIC_LOCAL(const AtomicString, name, ("{{property.name}}"));
+  DEFINE_STATIC_LOCAL(const AtomicString, name, ("{{exposed_property.name}}"));
   return name;
 }
 
 const char* {{class_name}}::GetJSPropertyName() const {
-  return "{{class_name[0].lower() + class_name[1:]}}";
+  return "{{exposed_property.name.to_lower_camel_case()}}";
 }
+
   {% if not is_alias %}
-  {% if property.visited_property %}
-const CSSProperty* {{class_name}}::GetVisitedProperty() const {
-  return &Get{{property.visited_property.property_id}}();
-}
-  {% endif %}
-  {% if property.unvisited_property %}
-const CSSProperty* {{class_name}}::GetUnvisitedProperty() const {
-  return &Get{{property.unvisited_property.property_id}}();
-}
-  {% endif %}
 
   {% if property.surrogate_for %}
 const CSSProperty* {{class_name}}::SurrogateFor(TextDirection direction,
@@ -94,10 +92,10 @@ const CSSProperty* {{class_name}}::SurrogateFor(TextDirection direction,
     {% if group.is_logical %}
 const CSSProperty* {{class_name}}::SurrogateFor(TextDirection direction,
     blink::WritingMode writing_mode) const {
-  return &ResolveDirectionAwareProperty(direction, writing_mode);
+  return &ResolveDirectionAwarePropertyInternal(direction, writing_mode);
 }
 
-const CSSProperty& {{class_name}}::ResolveDirectionAwareProperty(
+const CSSProperty& {{class_name}}::ResolveDirectionAwarePropertyInternal(
     TextDirection direction,
     blink::WritingMode writing_mode) const {
   return CSSDirectionAwareResolver::Resolve{{resolver_name}}(direction, writing_mode,

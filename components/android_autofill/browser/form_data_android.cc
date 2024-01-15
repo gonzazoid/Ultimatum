@@ -4,67 +4,48 @@
 
 #include "components/android_autofill/browser/form_data_android.h"
 
+#include <functional>
 #include <memory>
+#include <string_view>
+#include <tuple>
 
-#include "base/android/jni_string.h"
+#include "base/containers/flat_map.h"
+#include "base/types/cxx23_to_underlying.h"
+#include "components/android_autofill/browser/android_autofill_bridge_factory.h"
+#include "components/android_autofill/browser/form_data_android_bridge.h"
 #include "components/android_autofill/browser/form_field_data_android.h"
-#include "components/android_autofill/browser/jni_headers/FormData_jni.h"
+#include "components/autofill/core/browser/autofill_field.h"
+#include "components/autofill/core/browser/field_types.h"
 #include "components/autofill/core/browser/form_structure.h"
-
-using base::android::AttachCurrentThread;
-using base::android::ConvertJavaStringToUTF16;
-using base::android::ConvertUTF16ToJavaString;
-using base::android::ConvertUTF8ToJavaString;
-using base::android::JavaParamRef;
-using base::android::ScopedJavaGlobalRef;
-using base::android::ScopedJavaLocalRef;
+#include "components/autofill/core/common/form_field_data.h"
+#include "components/autofill/core/common/unique_ids.h"
 
 namespace autofill {
 
-FormDataAndroid::FormDataAndroid(const FormData& form) : form_(form) {}
+FormDataAndroid::FormDataAndroid(const FormData& form, SessionId session_id)
+    : session_id_(session_id),
+      form_(form),
+      bridge_(AndroidAutofillBridgeFactory::GetInstance()
+                  .CreateFormDataAndroidBridge()) {
+  fields_.reserve(form_.fields.size());
+  for (FormFieldData& field : form_.fields) {
+    fields_.push_back(std::make_unique<FormFieldDataAndroid>(&field));
+  }
+}
 
 FormDataAndroid::~FormDataAndroid() = default;
 
-ScopedJavaLocalRef<jobject> FormDataAndroid::GetJavaPeer(
-    const FormStructure* form_structure) {
-  // |form_structure| is ephemeral and shouldn't be used outside this call
-  // stack.
-  JNIEnv* env = AttachCurrentThread();
-  ScopedJavaLocalRef<jobject> obj = java_ref_.get(env);
-  if (obj.is_null()) {
-    for (size_t i = 0; i < form_.fields.size(); ++i) {
-      fields_.push_back(
-          std::make_unique<FormFieldDataAndroid>(&form_.fields[i]));
-    }
-    if (form_structure)
-      UpdateFieldTypes(*form_structure);
-    ScopedJavaLocalRef<jstring> jname =
-        ConvertUTF16ToJavaString(env, form_.name);
-    ScopedJavaLocalRef<jstring> jhost = ConvertUTF8ToJavaString(
-        env, form_.url.DeprecatedGetOriginAsURL().spec());
-    obj = Java_FormData_createFormData(env, reinterpret_cast<intptr_t>(this),
-                                       jname, jhost, form_.fields.size());
-    java_ref_ = JavaObjectWeakGlobalRef(env, obj);
-  }
-  return obj;
+base::android::ScopedJavaLocalRef<jobject> FormDataAndroid::GetJavaPeer() {
+  return bridge_->GetOrCreateJavaPeer(form_, session_id_, fields_);
 }
 
-const FormData& FormDataAndroid::GetAutofillValues() {
+void FormDataAndroid::UpdateFromJava() {
   for (std::unique_ptr<FormFieldDataAndroid>& field : fields_)
-    field->GetValue();
-  return form_;
-}
-
-ScopedJavaLocalRef<jobject> FormDataAndroid::GetNextFormFieldData(JNIEnv* env) {
-  DCHECK(index_ <= fields_.size());
-  if (index_ == fields_.size())
-    return ScopedJavaLocalRef<jobject>();
-  return fields_[index_++]->GetJavaPeer();
+    field->UpdateFromJava();
 }
 
 void FormDataAndroid::OnFormFieldDidChange(size_t index,
-                                           const std::u16string& value) {
-  form_.fields[index].value = value;
+                                           std::u16string_view value) {
   fields_[index]->OnFormFieldDidChange(value);
 }
 
@@ -81,7 +62,7 @@ bool FormDataAndroid::GetFieldIndex(const FormFieldData& field, size_t* index) {
 bool FormDataAndroid::GetSimilarFieldIndex(const FormFieldData& field,
                                            size_t* index) {
   for (size_t i = 0; i < form_.fields.size(); ++i) {
-    if (form_.fields[i].SimilarFieldAs(field)) {
+    if (fields_[i]->SimilarFieldAs(field)) {
       *index = i;
       return true;
     }
@@ -89,30 +70,98 @@ bool FormDataAndroid::GetSimilarFieldIndex(const FormFieldData& field,
   return false;
 }
 
-bool FormDataAndroid::SimilarFormAs(const FormData& form) {
-  return form_.SimilarFormAs(form);
+bool FormDataAndroid::SimilarFieldsAs(const FormData& form) const {
+  if (fields_.size() != form.fields.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < fields_.size(); ++i) {
+    if (!fields_[i]->SimilarFieldAs(form.fields[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool FormDataAndroid::SimilarFormAs(const FormData& form) const {
+  // Note that comparing unique renderer ids alone is not a strict enough check,
+  // since these remain constant even if the page has dynamically modified its
+  // fields to have different labels, form control types, etc.
+  auto SimilarityTuple = [](const FormData& f) {
+    return std::tie(f.host_frame, f.unique_renderer_id, f.name, f.id_attribute,
+                    f.name_attribute, f.url, f.action, f.is_form_tag);
+  };
+  return SimilarityTuple(form_) == SimilarityTuple(form) &&
+         SimilarFieldsAs(form);
+}
+
+FormDataAndroid::SimilarityCheckResult
+FormDataAndroid::SimilarFormAsWithDiagnosis(const FormData& form) const {
+  SimilarityCheckResult result = kFormsAreSimilar;
+
+  // Helper function that sets the `component` bit in `result` if the
+  // `projection` of `form_` and `form` differs.
+  auto check_component = [&](auto projection,
+                             SimilarityCheckComponent component) {
+    if (std::invoke(projection, form_) != std::invoke(projection, form)) {
+      result.value() |= base::to_underlying(component);
+    }
+  };
+  check_component(&FormData::global_id, SimilarityCheckComponent::kGlobalId);
+  check_component(&FormData::name, SimilarityCheckComponent::kName);
+  check_component(&FormData::id_attribute,
+                  SimilarityCheckComponent::kIdAttribute);
+  check_component(&FormData::name_attribute,
+                  SimilarityCheckComponent::kNameAttribute);
+  check_component(&FormData::url, SimilarityCheckComponent::kUrl);
+  check_component(&FormData::action, SimilarityCheckComponent::kAction);
+  check_component(&FormData::is_form_tag, SimilarityCheckComponent::kIsFormTag);
+
+  if (!SimilarFieldsAs(form)) {
+    result.value() |= base::to_underlying(SimilarityCheckComponent::kFields);
+  }
+  return result;
 }
 
 void FormDataAndroid::UpdateFieldTypes(const FormStructure& form_structure) {
-  // This form has been changed after the query starts, ignore this response,
-  // new one is on the way.
-  if (form_structure.field_count() != fields_.size())
-    return;
-  auto form_field_data_android = fields_.begin();
-  for (const auto& autofill_field : form_structure) {
-    DCHECK(form_field_data_android->get()->SimilarFieldAs(*autofill_field));
-    std::vector<AutofillType> server_predictions;
-    for (const auto& prediction : autofill_field->server_predictions()) {
-      server_predictions.emplace_back(
-          static_cast<ServerFieldType>(prediction.type()));
+  // Map FieldGlobalId's to their respective AutofillField, this way we can
+  // quickly ignore below FormFieldDataAndroid's with no matching AutofillField.
+  auto autofill_fields = base::MakeFlatMap<FieldGlobalId, const AutofillField*>(
+      form_structure, {}, [](const auto& field) {
+        return std::make_pair(field->global_id(), field.get());
+      });
+  for (auto& form_field_data_android : fields_) {
+    if (auto it = autofill_fields.find(form_field_data_android->global_id());
+        it != autofill_fields.end()) {
+      const AutofillField* autofill_field = it->second;
+      std::vector<AutofillType> server_predictions;
+      for (const auto& prediction : autofill_field->server_predictions()) {
+        server_predictions.emplace_back(
+            ToSafeFieldType(prediction.type(), NO_SERVER_DATA));
+      }
+      form_field_data_android->UpdateAutofillTypes(
+          FormFieldDataAndroid::FieldTypes(
+              AutofillType(autofill_field->heuristic_type()),
+              AutofillType(autofill_field->server_type()),
+              autofill_field->ComputedType(), std::move(server_predictions)));
     }
-    form_field_data_android->get()->UpdateAutofillTypes(
-        AutofillType(autofill_field->heuristic_type()),
-        AutofillType(autofill_field->server_type()),
-        autofill_field->ComputedType(), server_predictions);
-    if (++form_field_data_android == fields_.end())
-      break;
   }
+}
+
+std::vector<int> FormDataAndroid::UpdateFieldVisibilities(
+    const FormData& form) {
+  CHECK_EQ(form_.fields.size(), form.fields.size());
+  CHECK_EQ(form_.fields.size(), fields_.size());
+
+  // We rarely expect to find any difference in visibility - therefore do not
+  // reserve space in the vector.
+  std::vector<int> indices;
+  for (size_t i = 0; i < form_.fields.size(); ++i) {
+    if (form_.fields[i].IsFocusable() != form.fields[i].IsFocusable()) {
+      fields_[i]->OnFormFieldVisibilityDidChange(form.fields[i]);
+      indices.push_back(i);
+    }
+  }
+  return indices;
 }
 
 }  // namespace autofill

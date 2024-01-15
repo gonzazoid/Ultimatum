@@ -4,11 +4,15 @@
 
 #include "ui/ozone/platform/wayland/host/zwp_text_input_wrapper_v1.h"
 
+#include <sys/mman.h>
+
 #include <string>
 #include <utility>
 
 #include "base/check.h"
+#include "base/files/file_util.h"
 #include "base/location.h"
+#include "base/logging.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/time/time.h"
@@ -106,43 +110,46 @@ ZWPTextInputWrapperV1::ZWPTextInputWrapperV1(
     zwp_text_input_manager_v1* text_input_manager,
     zcr_text_input_extension_v1* text_input_extension)
     : connection_(connection), client_(client) {
-  static constexpr zwp_text_input_v1_listener text_input_listener = {
-      &OnEnter,                  // text_input_enter,
-      &OnLeave,                  // text_input_leave,
-      &OnModifiersMap,           // text_input_modifiers_map,
-      &OnInputPanelState,        // text_input_input_panel_state,
-      &OnPreeditString,          // text_input_preedit_string,
-      &OnPreeditStyling,         // text_input_preedit_styling,
-      &OnPreeditCursor,          // text_input_preedit_cursor,
-      &OnCommitString,           // text_input_commit_string,
-      &OnCursorPosition,         // text_input_cursor_position,
-      &OnDeleteSurroundingText,  // text_input_delete_surrounding_text,
-      &OnKeysym,                 // text_input_keysym,
-      &OnLanguage,               // text_input_language,
-      &OnTextDirection,          // text_input_text_direction
+  static constexpr zwp_text_input_v1_listener kTextInputListener = {
+      .enter = &OnEnter,
+      .leave = &OnLeave,
+      .modifiers_map = &OnModifiersMap,
+      .input_panel_state = &OnInputPanelState,
+      .preedit_string = &OnPreeditString,
+      .preedit_styling = &OnPreeditStyling,
+      .preedit_cursor = &OnPreeditCursor,
+      .commit_string = &OnCommitString,
+      .cursor_position = &OnCursorPosition,
+      .delete_surrounding_text = &OnDeleteSurroundingText,
+      .keysym = &OnKeysym,
+      .language = &OnLanguage,
+      .text_direction = &OnTextDirection,
   };
 
   static constexpr zcr_extended_text_input_v1_listener
-      extended_text_input_listener = {
-          &OnSetPreeditRegion,       // extended_text_input_set_preedit_region,
-          &OnClearGrammarFragments,  // extended_text_input_clear_grammar_fragments,
-          &OnAddGrammarFragment,   // extended_text_input_add_grammar_fragment,
-          &OnSetAutocorrectRange,  // extended_text_input_set_autocorrect_range,
-          &OnSetVirtualKeyboardOccludedBounds,  // extended_text_input_set_virtual_keyboard_occluded_bounds,
+      kExtendedTextInputListener = {
+          .set_preedit_region = &OnSetPreeditRegion,
+          .clear_grammar_fragments = &OnClearGrammarFragments,
+          .add_grammar_fragment = &OnAddGrammarFragment,
+          .set_autocorrect_range = &OnSetAutocorrectRange,
+          .set_virtual_keyboard_occluded_bounds =
+              &OnSetVirtualKeyboardOccludedBounds,
+          .confirm_preedit = &OnConfirmPreedit,
+          .insert_image = &OnInsertImage,
       };
 
   obj_ = wl::Object<zwp_text_input_v1>(
       zwp_text_input_manager_v1_create_text_input(text_input_manager));
   DCHECK(obj_.get());
-  zwp_text_input_v1_add_listener(obj_.get(), &text_input_listener, this);
+  zwp_text_input_v1_add_listener(obj_.get(), &kTextInputListener, this);
 
   if (text_input_extension) {
     extended_obj_ = wl::Object<zcr_extended_text_input_v1>(
         zcr_text_input_extension_v1_get_extended_text_input(
             text_input_extension, obj_.get()));
     DCHECK(extended_obj_.get());
-    zcr_extended_text_input_v1_add_listener(
-        extended_obj_.get(), &extended_text_input_listener, this);
+    zcr_extended_text_input_v1_add_listener(extended_obj_.get(),
+                                            &kExtendedTextInputListener, this);
   }
 }
 
@@ -153,9 +160,40 @@ void ZWPTextInputWrapperV1::Reset() {
   zwp_text_input_v1_reset(obj_.get());
 }
 
-void ZWPTextInputWrapperV1::Activate(WaylandWindow* window) {
+void ZWPTextInputWrapperV1::Activate(WaylandWindow* window,
+                                     TextInputClient::FocusReason reason) {
   DCHECK(connection_->seat());
+  if (extended_obj_.get() &&
+      wl::get_version_of_object(extended_obj_.get()) >=
+          ZCR_EXTENDED_TEXT_INPUT_V1_SET_FOCUS_REASON_SINCE_VERSION) {
+    absl::optional<uint32_t> wayland_focus_reason;
+    switch (reason) {
+      case ui::TextInputClient::FocusReason::FOCUS_REASON_NONE:
+        wayland_focus_reason =
+            ZCR_EXTENDED_TEXT_INPUT_V1_FOCUS_REASON_TYPE_NONE;
+        break;
+      case ui::TextInputClient::FocusReason::FOCUS_REASON_MOUSE:
+        wayland_focus_reason =
+            ZCR_EXTENDED_TEXT_INPUT_V1_FOCUS_REASON_TYPE_MOUSE;
+        break;
+      case ui::TextInputClient::FocusReason::FOCUS_REASON_TOUCH:
+        wayland_focus_reason =
+            ZCR_EXTENDED_TEXT_INPUT_V1_FOCUS_REASON_TYPE_TOUCH;
+        break;
+      case ui::TextInputClient::FocusReason::FOCUS_REASON_PEN:
+        wayland_focus_reason = ZCR_EXTENDED_TEXT_INPUT_V1_FOCUS_REASON_TYPE_PEN;
+        break;
+      case ui::TextInputClient::FocusReason::FOCUS_REASON_OTHER:
+        wayland_focus_reason =
+            ZCR_EXTENDED_TEXT_INPUT_V1_FOCUS_REASON_TYPE_OTHER;
+        break;
+    }
 
+    if (wayland_focus_reason.has_value()) {
+      zcr_extended_text_input_v1_set_focus_reason(extended_obj_.get(),
+                                                  wayland_focus_reason.value());
+    }
+  }
   zwp_text_input_v1_activate(obj_.get(), connection_->seat()->wl_object(),
                              window->root_surface()->surface());
 }
@@ -184,26 +222,80 @@ void ZWPTextInputWrapperV1::SetCursorRect(const gfx::Rect& rect) {
 void ZWPTextInputWrapperV1::SetSurroundingText(
     const std::string& text,
     const gfx::Range& selection_range) {
-  zwp_text_input_v1_set_surrounding_text(
-      obj_.get(), text.c_str(), selection_range.start(), selection_range.end());
+  // Wayland packet has a limit of size due to its serialization format,
+  // so if it exceeds 16 bits, it may be broken.
+  static constexpr size_t kSizeLimit = 60000;
+  if (HasAdvancedSurroundingTextSupport() && text.length() > kSizeLimit) {
+    base::ScopedFD memfd(memfd_create("surrounding_text", MFD_CLOEXEC));
+    if (!memfd.get()) {
+      PLOG(ERROR) << "Failed to create memfd";
+      return;
+    }
+    if (!base::WriteFileDescriptor(memfd.get(), text)) {
+      LOG(ERROR) << "Failed to write into memfd";
+      return;
+    }
+    zcr_extended_text_input_v1_set_large_surrounding_text(
+        extended_obj_.get(), memfd.get(), text.length(),
+        selection_range.start(), selection_range.end());
+  } else {
+    zwp_text_input_v1_set_surrounding_text(obj_.get(), text.c_str(),
+                                           selection_range.start(),
+                                           selection_range.end());
+  }
+}
+
+bool ZWPTextInputWrapperV1::HasAdvancedSurroundingTextSupport() const {
+  return extended_obj_.get() &&
+         wl::get_version_of_object(extended_obj_.get()) >=
+             ZCR_EXTENDED_TEXT_INPUT_V1_SET_LARGE_SURROUNDING_TEXT_SINCE_VERSION;
+}
+
+void ZWPTextInputWrapperV1::SetSurroundingTextOffsetUtf16(
+    uint32_t offset_utf16) {
+  if (HasAdvancedSurroundingTextSupport()) {
+    zcr_extended_text_input_v1_set_surrounding_text_offset_utf16(
+        extended_obj_.get(), offset_utf16);
+  }
 }
 
 void ZWPTextInputWrapperV1::SetContentType(ui::TextInputType type,
                                            ui::TextInputMode mode,
                                            uint32_t flags,
-                                           bool should_do_learning) {
+                                           bool should_do_learning,
+                                           bool can_compose_inline) {
   // If wayland compositor supports the extended version of set input type,
   // use it to avoid losing the info.
-  if (extended_obj_.get() &&
-      wl::get_version_of_object(extended_obj_.get()) >=
-          ZCR_EXTENDED_TEXT_INPUT_V1_SET_INPUT_TYPE_SINCE_VERSION) {
-    zcr_extended_text_input_v1_set_input_type(
-        extended_obj_.get(), ui::wayland::ConvertFromTextInputType(type),
-        ui::wayland::ConvertFromTextInputMode(mode),
-        ui::wayland::ConvertFromTextInputFlags(flags),
-        should_do_learning ? ZCR_EXTENDED_TEXT_INPUT_V1_LEARNING_MODE_ENABLED
-                           : ZCR_EXTENDED_TEXT_INPUT_V1_LEARNING_MODE_DISABLED);
-    return;
+  if (extended_obj_.get()) {
+    uint32_t wl_server_version = wl::get_version_of_object(extended_obj_.get());
+    if (wl_server_version >=
+        ZCR_EXTENDED_TEXT_INPUT_V1_SET_INPUT_TYPE_SINCE_VERSION) {
+      zcr_extended_text_input_v1_set_input_type(
+          extended_obj_.get(), ui::wayland::ConvertFromTextInputType(type),
+          ui::wayland::ConvertFromTextInputMode(mode),
+          ui::wayland::ConvertFromTextInputFlags(flags),
+          should_do_learning
+              ? ZCR_EXTENDED_TEXT_INPUT_V1_LEARNING_MODE_ENABLED
+              : ZCR_EXTENDED_TEXT_INPUT_V1_LEARNING_MODE_DISABLED,
+          can_compose_inline
+              ? ZCR_EXTENDED_TEXT_INPUT_V1_INLINE_COMPOSITION_SUPPORT_SUPPORTED
+              : ZCR_EXTENDED_TEXT_INPUT_V1_INLINE_COMPOSITION_SUPPORT_UNSUPPORTED);
+      return;
+    }
+    if (wl_server_version >=
+        ZCR_EXTENDED_TEXT_INPUT_V1_DEPRECATED_SET_INPUT_TYPE_SINCE_VERSION) {
+      // TODO(crbug.com/1420448) This deprecated method is used here only to
+      // maintain backwards compatibility with an older version of Exo. Once
+      // Exo has stabilized on the new set_input_type, remove this call.
+      zcr_extended_text_input_v1_deprecated_set_input_type(
+          extended_obj_.get(), ui::wayland::ConvertFromTextInputType(type),
+          ui::wayland::ConvertFromTextInputMode(mode),
+          ui::wayland::ConvertFromTextInputFlags(flags),
+          should_do_learning
+              ? ZCR_EXTENDED_TEXT_INPUT_V1_LEARNING_MODE_ENABLED
+              : ZCR_EXTENDED_TEXT_INPUT_V1_LEARNING_MODE_DISABLED);
+      return;
+    }
   }
 
   // Otherwise, fallback to the standard set_content_type.
@@ -370,7 +462,7 @@ void ZWPTextInputWrapperV1::OnKeysym(void* data,
                                      uint32_t state,
                                      uint32_t modifiers) {
   auto* self = static_cast<ZWPTextInputWrapperV1*>(data);
-  self->client_->OnKeysym(key, state, modifiers);
+  self->client_->OnKeysym(key, state, modifiers, time);
 }
 
 // static
@@ -445,6 +537,34 @@ void ZWPTextInputWrapperV1::OnSetVirtualKeyboardOccludedBounds(
   auto* self = static_cast<ZWPTextInputWrapperV1*>(data);
   gfx::Rect screen_bounds(x, y, width, height);
   self->client_->OnSetVirtualKeyboardOccludedBounds(screen_bounds);
+}
+
+// static
+void ZWPTextInputWrapperV1::OnConfirmPreedit(
+    void* data,
+    struct zcr_extended_text_input_v1* extended_text_input,
+    uint32_t selection_behavior) {
+  auto* self = static_cast<ZWPTextInputWrapperV1*>(data);
+  switch (selection_behavior) {
+    case ZCR_EXTENDED_TEXT_INPUT_V1_CONFIRM_PREEDIT_SELECTION_BEHAVIOR_AFTER_PREEDIT:
+      self->client_->OnConfirmPreedit(/*keep_selection=*/false);
+      break;
+    case ZCR_EXTENDED_TEXT_INPUT_V1_CONFIRM_PREEDIT_SELECTION_BEHAVIOR_UNCHANGED:
+      self->client_->OnConfirmPreedit(/*keep_selection=*/true);
+      break;
+    default:
+      self->client_->OnConfirmPreedit(/*keep_selection=*/false);
+      break;
+  }
+}
+
+// static
+void ZWPTextInputWrapperV1::OnInsertImage(
+    void* data,
+    struct zcr_extended_text_input_v1* extended_text_input,
+    const char* src) {
+  auto* self = static_cast<ZWPTextInputWrapperV1*>(data);
+  self->client_->OnInsertImage(GURL(src));
 }
 
 }  // namespace ui

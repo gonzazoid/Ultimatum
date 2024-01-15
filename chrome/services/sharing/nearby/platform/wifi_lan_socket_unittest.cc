@@ -4,6 +4,7 @@
 
 #include "chrome/services/sharing/nearby/platform/wifi_lan_socket.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
@@ -15,7 +16,6 @@
 #include "services/network/public/mojom/tcp_socket.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -63,7 +63,8 @@ class WifiLanSocketTest : public ::testing::Test {
   base::test::TaskEnvironment task_environment_;
   mojo::ScopedDataPipeProducerHandle receive_stream_;
   mojo::ScopedDataPipeConsumerHandle send_stream_;
-  ash::nearby::FakeTcpConnectedSocket* fake_tcp_connected_socket_;
+  raw_ptr<ash::nearby::FakeTcpConnectedSocket, DanglingUntriaged>
+      fake_tcp_connected_socket_;
   mojo::SelfOwnedReceiverRef<network::mojom::TCPConnectedSocket>
       tcp_connected_socket_self_owned_receiver_ref_;
   std::unique_ptr<WifiLanSocket> wifi_lan_socket_;
@@ -127,4 +128,3 @@ TEST_F(WifiLanSocketTest, Disconnect) {
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

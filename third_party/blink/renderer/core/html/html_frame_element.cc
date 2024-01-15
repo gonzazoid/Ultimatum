@@ -37,16 +37,15 @@ HTMLFrameElement::HTMLFrameElement(Document& document)
       frame_border_(true),
       frame_border_set_(false) {}
 
-bool HTMLFrameElement::LayoutObjectIsNeeded(const ComputedStyle&) const {
+bool HTMLFrameElement::LayoutObjectIsNeeded(const DisplayStyle&) const {
   // For compatibility, frames render even when display: none is set.
   return ContentFrame();
 }
 
-LayoutObject* HTMLFrameElement::CreateLayoutObject(const ComputedStyle& style,
-                                                   LegacyLayout legacy) {
+LayoutObject* HTMLFrameElement::CreateLayoutObject(const ComputedStyle& style) {
   if (IsA<HTMLFrameSetElement>(parentNode()))
     return MakeGarbageCollected<LayoutFrame>(this);
-  return LayoutObject::CreateObject(this, style, legacy);
+  return LayoutObject::CreateObject(this, style);
 }
 
 bool HTMLFrameElement::HasFrameBorder() const {

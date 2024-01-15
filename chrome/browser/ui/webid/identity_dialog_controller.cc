@@ -10,7 +10,9 @@
 #include "build/build_config.h"
 #include "chrome/browser/ui/webid/account_selection_view.h"
 
-IdentityDialogController::IdentityDialogController() = default;
+IdentityDialogController::IdentityDialogController(
+    content::WebContents* rp_web_contents)
+    : rp_web_contents_(rp_web_contents) {}
 
 IdentityDialogController::~IdentityDialogController() = default;
 
@@ -23,35 +25,84 @@ int IdentityDialogController::GetBrandIconIdealSize() {
 }
 
 void IdentityDialogController::ShowAccountsDialog(
-    content::WebContents* rp_web_contents,
-    const std::string& rp_for_display,
-    const absl::optional<std::string>& iframe_url_for_display,
+    const std::string& top_frame_for_display,
+    const std::optional<std::string>& iframe_for_display,
     const std::vector<content::IdentityProviderData>& identity_provider_data,
     content::IdentityRequestAccount::SignInMode sign_in_mode,
+    bool show_auto_reauthn_checkbox,
     AccountSelectionCallback on_selected,
+    LoginToIdPCallback on_add_account,
     DismissCallback dismiss_callback) {
-  rp_web_contents_ = rp_web_contents;
   on_account_selection_ = std::move(on_selected);
+  on_login_ = std::move(on_add_account);
   on_dismiss_ = std::move(dismiss_callback);
   if (!account_view_)
     account_view_ = AccountSelectionView::Create(this);
-  account_view_->Show(rp_for_display, iframe_url_for_display,
-                      identity_provider_data, sign_in_mode);
+  account_view_->Show(top_frame_for_display, iframe_for_display,
+                      identity_provider_data, sign_in_mode,
+                      show_auto_reauthn_checkbox);
 }
 
 void IdentityDialogController::ShowFailureDialog(
-    content::WebContents* rp_web_contents,
-    const std::string& rp_for_display,
+    const std::string& top_frame_for_display,
+    const std::optional<std::string>& iframe_for_display,
     const std::string& idp_for_display,
-    const absl::optional<std::string>& iframe_url_for_display,
-    DismissCallback dismiss_callback) {
-  const GURL rp_url = rp_web_contents->GetLastCommittedURL();
-  rp_web_contents_ = rp_web_contents;
+    const blink::mojom::RpContext& rp_context,
+    const content::IdentityProviderMetadata& idp_metadata,
+    DismissCallback dismiss_callback,
+    LoginToIdPCallback login_callback) {
+  const GURL rp_url = rp_web_contents_->GetLastCommittedURL();
   on_dismiss_ = std::move(dismiss_callback);
+  on_login_ = std::move(login_callback);
   if (!account_view_)
     account_view_ = AccountSelectionView::Create(this);
-  account_view_->ShowFailureDialog(rp_for_display, idp_for_display,
-                                   iframe_url_for_display);
+  // Else:
+  //   TODO: If the failure dialog is already being shown, notify user that
+  //   sign-in attempt failed.
+
+  account_view_->ShowFailureDialog(top_frame_for_display, iframe_for_display,
+                                   idp_for_display, rp_context, idp_metadata);
+}
+
+void IdentityDialogController::ShowErrorDialog(
+    const std::string& top_frame_for_display,
+    const std::optional<std::string>& iframe_for_display,
+    const std::string& idp_for_display,
+    const blink::mojom::RpContext& rp_context,
+    const content::IdentityProviderMetadata& idp_metadata,
+    const std::optional<TokenError>& error,
+    DismissCallback dismiss_callback,
+    MoreDetailsCallback more_details_callback) {
+  on_dismiss_ = std::move(dismiss_callback);
+  on_more_details_ = std::move(more_details_callback);
+  if (!account_view_) {
+    account_view_ = AccountSelectionView::Create(this);
+  }
+
+  account_view_->ShowErrorDialog(top_frame_for_display, iframe_for_display,
+                                 idp_for_display, rp_context, idp_metadata,
+                                 error);
+}
+
+void IdentityDialogController::OnLoginToIdP(const GURL& idp_login_url) {
+  std::move(on_login_).Run(idp_login_url);
+}
+
+void IdentityDialogController::OnMoreDetails() {
+  std::move(on_more_details_).Run();
+}
+
+void IdentityDialogController::ShowIdpSigninFailureDialog(
+    base::OnceClosure user_notified_callback) {
+  NOTIMPLEMENTED();
+}
+
+std::string IdentityDialogController::GetTitle() const {
+  return account_view_->GetTitle();
+}
+
+std::optional<std::string> IdentityDialogController::GetSubtitle() const {
+  return account_view_->GetSubtitle();
 }
 
 void IdentityDialogController::OnAccountSelected(const GURL& idp_config_url,
@@ -78,5 +129,27 @@ gfx::NativeView IdentityDialogController::GetNativeView() {
 
 content::WebContents* IdentityDialogController::GetWebContents() {
   return rp_web_contents_;
-  ;
+}
+
+content::WebContents* IdentityDialogController::ShowModalDialog(
+    const GURL& url,
+    DismissCallback dismiss_callback) {
+  on_dismiss_ = std::move(dismiss_callback);
+  if (!account_view_) {
+    account_view_ = AccountSelectionView::Create(this);
+  }
+
+  return account_view_->ShowModalDialog(url);
+}
+
+void IdentityDialogController::CloseModalDialog() {
+#if BUILDFLAG(IS_ANDROID)
+  // On Android, this method is invoked on the modal dialog controller,
+  // which means we may need to initialize the |account_view|.
+  if (!account_view_) {
+    account_view_ = AccountSelectionView::Create(this);
+  }
+#endif  // BUILDFLAG(IS_ANDROID)
+  CHECK(account_view_);
+  account_view_->CloseModalDialog();
 }

@@ -20,7 +20,10 @@ const ContentColorUsage kAllColorUsages[] = {
 gfx::BufferFormat DefaultBufferFormat() {
   // ChromeOS expects the default buffer format be BGRA_8888 in several places.
   // https://crbug.com/1057501, https://crbug.com/1073237
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // The default format on Mac is BGRA in screen_mac.cc, so we set it here
+  // too so that it matches with --ensure-forced-color-profile.
+  // https://crbug.com/1478708
+#if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_MAC)
   return gfx::BufferFormat::BGRA_8888;
 #else
   return gfx::BufferFormat::RGBA_8888;
@@ -118,7 +121,8 @@ gfx::ColorSpace DisplayColorSpaces::GetCompositingColorSpace(
 
 bool DisplayColorSpaces::SupportsHDR() const {
   return GetOutputColorSpace(ContentColorUsage::kHDR, false).IsHDR() ||
-         GetOutputColorSpace(ContentColorUsage::kHDR, true).IsHDR();
+         GetOutputColorSpace(ContentColorUsage::kHDR, true).IsHDR() ||
+         hdr_max_luminance_relative_ > 1.f;
 }
 
 ColorSpace DisplayColorSpaces::GetScreenInfoColorSpace() const {
@@ -203,6 +207,16 @@ bool DisplayColorSpaces::operator==(const DisplayColorSpaces& other) const {
 
 bool DisplayColorSpaces::operator!=(const DisplayColorSpaces& other) const {
   return !(*this == other);
+}
+
+// static
+bool DisplayColorSpaces::EqualExceptForHdrParameters(
+    const DisplayColorSpaces& a,
+    const DisplayColorSpaces& b) {
+  DisplayColorSpaces b_with_a_params = b;
+  b_with_a_params.sdr_max_luminance_nits_ = a.sdr_max_luminance_nits_;
+  b_with_a_params.hdr_max_luminance_relative_ = a.hdr_max_luminance_relative_;
+  return a == b_with_a_params;
 }
 
 }  // namespace gfx

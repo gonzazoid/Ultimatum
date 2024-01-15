@@ -19,17 +19,22 @@
 #include <limits>
 #include <string>
 #include <utility>
+#include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/check.h"
+#include "base/clang_profiling_buildflags.h"
 #include "base/debug/alias.h"
+#include "base/feature_list.h"
+#include "base/features.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/memory_mapped_file.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/path_service.h"
 #include "base/process/process_handle.h"
 #include "base/rand_util.h"
 #include "base/strings/strcat.h"
@@ -43,9 +48,11 @@
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/threading/scoped_thread_priority.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
+#include "base/uuid.h"
 #include "base/win/scoped_handle.h"
+#include "base/win/security_util.h"
+#include "base/win/sid.h"
 #include "base/win/windows_types.h"
 #include "base/win/windows_version.h"
 
@@ -53,8 +60,13 @@ namespace base {
 
 namespace {
 
+int g_extra_allowed_path_for_no_execute = 0;
+
+bool g_disable_secure_system_temp_for_testing = false;
+
 const DWORD kFileShareAll =
     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+const wchar_t kDefaultTempDirPrefix[] = L"ChromiumTemp";
 
 // Returns the Win32 last error code or ERROR_SUCCESS if the last error code is
 // ERROR_FILE_NOT_FOUND or ERROR_PATH_NOT_FOUND. This is useful in cases where
@@ -350,11 +362,67 @@ OnceClosure GetDeleteFileCallbackInternal(
     OnceCallback<void(bool)> reply_callback) {
   OnceCallback<void(bool)> bound_callback;
   if (!reply_callback.is_null()) {
-    bound_callback = BindPostTask(SequencedTaskRunnerHandle::Get(),
+    bound_callback = BindPostTask(SequencedTaskRunner::GetCurrentDefault(),
                                   std::move(reply_callback));
   }
   return BindOnce(&DeleteFileWithRetry, path, recursive, /*attempt=*/0,
                   std::move(bound_callback));
+}
+
+// This function verifies that no code is attempting to set an ACL on a file
+// that is outside of 'safe' paths. A 'safe' path is defined as one that is
+// within the user data dir, or the temporary directory. This is explicitly to
+// prevent code from trying to pass a writeable handle to a file outside of
+// these directories to an untrusted process. E.g. if some future code created a
+// writeable handle to a file in c:\users\user\sensitive.dat, this DCHECK would
+// hit. Setting an ACL on a file outside of these chrome-controlled directories
+// might cause the browser or operating system to fail in unexpected ways.
+bool IsPathSafeToSetAclOn(const FilePath& path) {
+#if BUILDFLAG(CLANG_PROFILING)
+  // Ignore .profraw profiling files, as they can occur anywhere, and only occur
+  // during testing.
+  if (path.Extension() == FILE_PATH_LITERAL(".profraw")) {
+    return true;
+  }
+#endif  // BUILDFLAG(CLANG_PROFILING)
+  std::vector<int> valid_path_keys({DIR_TEMP});
+  if (g_extra_allowed_path_for_no_execute) {
+    valid_path_keys.push_back(g_extra_allowed_path_for_no_execute);
+  }
+
+  // MakeLongFilePath is needed here because temp files can have an 8.3 path
+  // under certain conditions. See comments in base::MakeLongFilePath.
+  FilePath long_path = MakeLongFilePath(path);
+  DCHECK(!long_path.empty()) << "Cannot get long path for " << path;
+
+  std::vector<FilePath> valid_paths;
+  for (const auto path_key : valid_path_keys) {
+    FilePath valid_path;
+    if (!PathService::Get(path_key, &valid_path)) {
+      DLOG(FATAL) << "Cannot get path for pathservice key " << path_key;
+      continue;
+    }
+    valid_paths.push_back(valid_path);
+  }
+
+  // Admin users create temporary files in `GetSecureSystemTemp`, see
+  // `CreateNewTempDirectory` below.
+  FilePath secure_system_temp;
+  if (::IsUserAnAdmin() && GetSecureSystemTemp(&secure_system_temp)) {
+    valid_paths.push_back(secure_system_temp);
+  }
+
+  for (const auto& valid_path : valid_paths) {
+    // Temp files can sometimes have an 8.3 path. See comments in
+    // `MakeLongFilePath`.
+    FilePath full_path = MakeLongFilePath(valid_path);
+    DCHECK(!full_path.empty()) << "Cannot get long path for " << valid_path;
+    if (full_path.IsParent(long_path)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 }  // namespace
@@ -551,7 +619,8 @@ File CreateAndOpenTemporaryFileInDir(const FilePath& dir, FilePath* temp_file) {
   // Although it is nearly impossible to get a duplicate name with GUID, we
   // still use a loop here in case it happens.
   for (int i = 0; i < 100; ++i) {
-    temp_name = dir.Append(FormatTemporaryFileName(UTF8ToWide(GenerateGUID())));
+    temp_name = dir.Append(FormatTemporaryFileName(
+        UTF8ToWide(Uuid::GenerateRandomV4().AsLowercaseString())));
     file.Initialize(temp_name, kFlags);
     if (file.IsValid())
       break;
@@ -620,15 +689,66 @@ bool CreateTemporaryDirInDir(const FilePath& base_dir,
   return false;
 }
 
+bool GetSecureSystemTemp(FilePath* temp) {
+  if (g_disable_secure_system_temp_for_testing) {
+    return false;
+  }
+
+  ScopedBlockingCall scoped_blocking_call(FROM_HERE, BlockingType::MAY_BLOCK);
+
+  CHECK(temp);
+
+  for (const auto key : {DIR_WINDOWS, DIR_PROGRAM_FILES}) {
+    FilePath secure_system_temp;
+    if (!PathService::Get(key, &secure_system_temp)) {
+      continue;
+    }
+
+    if (key == DIR_WINDOWS) {
+      secure_system_temp = secure_system_temp.AppendASCII("SystemTemp");
+    }
+
+    if (PathExists(secure_system_temp) && PathIsWritable(secure_system_temp)) {
+      *temp = secure_system_temp;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void SetDisableSecureSystemTempForTesting(bool disabled) {
+  g_disable_secure_system_temp_for_testing = disabled;
+}
+
+// The directory is created under `GetSecureSystemTemp` for security reasons if
+// the caller is admin to avoid attacks from lower privilege processes.
+//
+// If unable to create a dir under `GetSecureSystemTemp`, the dir is created
+// under %TEMP%. The reasons for not being able to create a dir under
+// `GetSecureSystemTemp` could be because `%systemroot%\SystemTemp` does not
+// exist, or unable to resolve `DIR_WINDOWS` or `DIR_PROGRAM_FILES`, say due to
+// registry redirection, or unable to create a directory due to
+// `GetSecureSystemTemp` being read-only or having atypical ACLs. Tests can also
+// disable this behavior resulting in false being returned.
 bool CreateNewTempDirectory(const FilePath::StringType& prefix,
                             FilePath* new_temp_path) {
   ScopedBlockingCall scoped_blocking_call(FROM_HERE, BlockingType::MAY_BLOCK);
 
-  FilePath system_temp_dir;
-  if (!GetTempDir(&system_temp_dir))
+  DCHECK(new_temp_path);
+
+  FilePath parent_dir;
+  if (::IsUserAnAdmin() && GetSecureSystemTemp(&parent_dir) &&
+      CreateTemporaryDirInDir(parent_dir,
+                              prefix.empty() ? kDefaultTempDirPrefix : prefix,
+                              new_temp_path)) {
+    return true;
+  }
+
+  if (!GetTempDir(&parent_dir))
     return false;
 
-  return CreateTemporaryDirInDir(system_temp_dir, prefix, new_temp_path);
+  return CreateTemporaryDirInDir(parent_dir, prefix, new_temp_path);
 }
 
 bool CreateDirectoryAndGetError(const FilePath& full_path,
@@ -863,23 +983,26 @@ File FILEToFile(FILE* file_stream) {
   return File(ScopedPlatformFile(other_handle));
 }
 
-int ReadFile(const FilePath& filename, char* data, int max_size) {
+std::optional<uint64_t> ReadFile(const FilePath& filename, span<char> buffer) {
   ScopedBlockingCall scoped_blocking_call(FROM_HERE, BlockingType::MAY_BLOCK);
   win::ScopedHandle file(CreateFile(filename.value().c_str(), GENERIC_READ,
                                     FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
                                     OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN,
                                     NULL));
-  if (!file.is_valid() || max_size < 0)
-    return -1;
-
-  DWORD read;
-  if (::ReadFile(file.get(), data, static_cast<DWORD>(max_size), &read, NULL)) {
-    // TODO(crbug.com/1333521): Change to return some type with a uint64_t size
-    // and eliminate this cast.
-    return checked_cast<int>(read);
+  if (!file.is_valid()) {
+    return std::nullopt;
   }
 
-  return -1;
+  // TODO(crbug.com/1333521): Consider supporting reading more than INT_MAX
+  // bytes.
+  DWORD bytes_to_read = static_cast<DWORD>(checked_cast<int>(buffer.size()));
+
+  DWORD bytes_read;
+  if (!::ReadFile(file.get(), buffer.data(), bytes_to_read, &bytes_read,
+                  nullptr)) {
+    return std::nullopt;
+  }
+  return bytes_read;
 }
 
 int WriteFile(const FilePath& filename, const char* data, int size) {
@@ -995,44 +1118,18 @@ bool SetNonBlocking(int fd) {
   return false;
 }
 
-namespace {
-
-// ::PrefetchVirtualMemory() is only available on Windows 8 and above. Chrome
-// supports Windows 7, so we need to check for the function's presence
-// dynamically.
-using PrefetchVirtualMemoryPtr = decltype(&::PrefetchVirtualMemory);
-
-// Returns null if ::PrefetchVirtualMemory() is not available.
-PrefetchVirtualMemoryPtr GetPrefetchVirtualMemoryPtr() {
-  HMODULE kernel32_dll = ::GetModuleHandleA("kernel32.dll");
-  return reinterpret_cast<PrefetchVirtualMemoryPtr>(
-      GetProcAddress(kernel32_dll, "PrefetchVirtualMemory"));
-}
-
-}  // namespace
-
 bool PreReadFile(const FilePath& file_path,
                  bool is_executable,
                  int64_t max_bytes) {
   DCHECK_GE(max_bytes, 0);
 
-  // On Win8 and higher use ::PrefetchVirtualMemory(). This is better than a
-  // simple data file read, more from a RAM perspective than CPU. This is
-  // because reading the file as data results in double mapping to
-  // Image/executable pages for all pages of code executed.
-  static PrefetchVirtualMemoryPtr prefetch_virtual_memory =
-      GetPrefetchVirtualMemoryPtr();
-
-  if (prefetch_virtual_memory == nullptr)
-    return internal::PreReadFileSlow(file_path, max_bytes);
-
   if (max_bytes == 0) {
-    // PrefetchVirtualMemory() fails when asked to read zero bytes.
+    // ::PrefetchVirtualMemory() fails when asked to read zero bytes.
     // base::MemoryMappedFile::Initialize() fails on an empty file.
     return true;
   }
 
-  // PrefetchVirtualMemory() fails if the file is opened with write access.
+  // ::PrefetchVirtualMemory() fails if the file is opened with write access.
   MemoryMappedFile::Access access = is_executable
                                         ? MemoryMappedFile::READ_CODE_IMAGE
                                         : MemoryMappedFile::READ_ONLY;
@@ -1044,12 +1141,80 @@ bool PreReadFile(const FilePath& file_path,
       std::min(base::saturated_cast<::SIZE_T>(max_bytes),
                base::saturated_cast<::SIZE_T>(mapped_file.length()));
   ::_WIN32_MEMORY_RANGE_ENTRY address_range = {mapped_file.data(), length};
-  if (!prefetch_virtual_memory(::GetCurrentProcess(),
+  // Use ::PrefetchVirtualMemory(). This is better than a
+  // simple data file read, more from a RAM perspective than CPU. This is
+  // because reading the file as data results in double mapping to
+  // Image/executable pages for all pages of code executed.
+  if (!::PrefetchVirtualMemory(::GetCurrentProcess(),
                                /*NumberOfEntries=*/1, &address_range,
                                /*Flags=*/0)) {
     return internal::PreReadFileSlow(file_path, max_bytes);
   }
   return true;
+}
+
+bool PreventExecuteMapping(const FilePath& path) {
+  if (!base::FeatureList::IsEnabled(
+          features::kEnforceNoExecutableFileHandles)) {
+    return true;
+  }
+
+  bool is_path_safe = IsPathSafeToSetAclOn(path);
+
+  if (!is_path_safe) {
+    // To mitigate the effect of past OS bugs where attackers are able to use
+    // writeable handles to create malicious executable images which can be
+    // later mapped into unsandboxed processes, file handles that permit writing
+    // that are passed to untrusted processes, e.g. renderers, should be marked
+    // with a deny execute ACE. This prevents re-opening the file for execute
+    // later on.
+    //
+    // To accomplish this, code that needs to pass writable file handles to a
+    // renderer should open the file with the flags added by
+    // `AddFlagsForPassingToUntrustedProcess()` (explicitly
+    // FLAG_WIN_NO_EXECUTE). This results in this PreventExecuteMapping being
+    // called by base::File.
+    //
+    // However, simply using this universally on all files that are opened
+    // writeable is also undesirable: things can and will randomly break if they
+    // are marked no-exec (e.g. marking an exe that the user downloads as
+    // no-exec will prevent the user from running it). There are also
+    // performance implications of doing this for all files unnecessarily.
+    //
+    // Code that passes writable files to the renderer is also expected to
+    // reference files in places like the user data dir (e.g. for the filesystem
+    // API) or temp files. Any attempt to pass a writeable handle to a path
+    // outside these areas is likely its own security issue as an untrusted
+    // renderer process should never have write access to e.g. system files or
+    // downloads.
+    //
+    // This check aims to catch misuse of
+    // `AddFlagsForPassingToUntrustedProcess()` on paths outside these
+    // locations. Any time it hits it is also likely that a handle to a
+    // dangerous path is being passed to a renderer, which is inherently unsafe.
+    //
+    // If this check hits, please do not ignore it but consult security team.
+    DLOG(FATAL) << "Unsafe to deny execute access to path : " << path;
+
+    return false;
+  }
+
+  static constexpr wchar_t kEveryoneSid[] = L"WD";
+  auto sids = win::Sid::FromSddlStringVector({kEveryoneSid});
+
+  // Remove executable access from the file. The API does not add a duplicate
+  // ACE if it already exists.
+  return win::DenyAccessToPath(path, *sids, FILE_EXECUTE, /*NO_INHERITANCE=*/0,
+                               /*recursive=*/false);
+}
+
+void SetExtraNoExecuteAllowedPath(int path_key) {
+  DCHECK(!g_extra_allowed_path_for_no_execute ||
+         g_extra_allowed_path_for_no_execute == path_key);
+  g_extra_allowed_path_for_no_execute = path_key;
+  base::FilePath valid_path;
+  DCHECK(
+      base::PathService::Get(g_extra_allowed_path_for_no_execute, &valid_path));
 }
 
 // -----------------------------------------------------------------------------

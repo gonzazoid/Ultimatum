@@ -10,9 +10,10 @@
 
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
-#include "components/sync/driver/sync_service_observer.h"
+#include "build/chromeos_buildflags.h"
 #include "components/sync/engine/events/protocol_event_observer.h"
 #include "components/sync/invalidations/invalidations_listener.h"
+#include "components/sync/service/sync_service_observer.h"
 #include "content/public/browser/web_ui_message_handler.h"
 
 namespace syncer {
@@ -62,14 +63,19 @@ class SyncInternalsMessageHandler : public content::WebUIMessageHandler,
   // Handler for requestStart message.
   void HandleRequestStart(const base::Value::List& args);
 
-  // Handler for requestStopKeepData message.
-  void HandleRequestStopKeepData(const base::Value::List& args);
-
   // Handler for requestStopClearData message.
   void HandleRequestStopClearData(const base::Value::List& args);
 
   // Handler for triggerRefresh message.
   void HandleTriggerRefresh(const base::Value::List& args);
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Handler for isLacrosEnabled message.
+  void IsLacrosEnabled(const base::Value::List& args);
+
+  // Handler for openBrowserSyncInternals message.
+  void OpenLacrosSyncInternals(const base::Value::List& args);
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   // Callback used in GetAllNodes.
   void OnReceivedAllNodes(const std::string& callback_id,
@@ -107,8 +113,7 @@ class SyncInternalsMessageHandler : public content::WebUIMessageHandler,
   // nullptr (e.g. if sync is disabled on the command line).
   syncer::SyncService* GetSyncService();
 
-  // Gets the SyncInvalidationsService of the underlying original profile. May
-  // return nullptr (e.g. if sync invalidations are not enabled).
+  // Gets the SyncInvalidationsService of the underlying original profile.
   syncer::SyncInvalidationsService* GetSyncInvalidationsService();
 
   // Unregisters for notifications from all notifications coming from the sync

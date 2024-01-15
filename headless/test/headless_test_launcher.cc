@@ -4,17 +4,16 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/launcher/test_launcher.h"
 #include "build/build_config.h"
-#include "content/public/common/content_switches.h"
 #include "content/public/test/content_test_suite_base.h"
 #include "content/public/test/network_service_test_helper.h"
 #include "content/public/test/test_launcher.h"
 #include "headless/lib/browser/headless_browser_impl.h"
 #include "headless/lib/headless_content_main_delegate.h"
-#include "headless/lib/utility/headless_content_utility_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -23,20 +22,6 @@
 
 namespace headless {
 namespace {
-
-class HeadlessBrowserImplForTest : public HeadlessBrowserImpl {
- public:
-  explicit HeadlessBrowserImplForTest(HeadlessBrowser::Options options)
-      : HeadlessBrowserImpl(base::BindOnce(&HeadlessBrowserImplForTest::OnStart,
-                                           base::Unretained(this)),
-                            std::move(options)) {}
-
-  HeadlessBrowserImplForTest(const HeadlessBrowserImplForTest&) = delete;
-  HeadlessBrowserImplForTest& operator=(const HeadlessBrowserImplForTest&) =
-      delete;
-
-  void OnStart(HeadlessBrowser* browser) { EXPECT_EQ(this, browser); }
-};
 
 class HeadlessTestLauncherDelegate : public content::TestLauncherDelegate {
  public:
@@ -58,12 +43,8 @@ class HeadlessTestLauncherDelegate : public content::TestLauncherDelegate {
 
  protected:
   content::ContentMainDelegate* CreateContentMainDelegate() override {
-    // Use HeadlessBrowserTest::options() or HeadlessBrowserContextOptions to
-    // modify these defaults.
-    HeadlessBrowser::Options::Builder options_builder;
-    std::unique_ptr<HeadlessBrowserImpl> browser(
-        new HeadlessBrowserImplForTest(options_builder.Build()));
-    return new HeadlessContentMainDelegate(std::move(browser));
+    return new HeadlessContentMainDelegate(
+        std::make_unique<HeadlessBrowserImpl>(base::DoNothing()));
   }
 };
 
@@ -86,19 +67,7 @@ int main(int argc, char** argv) {
   // Only create this object in the utility process, so that its members don't
   // interfere with other test objects in the browser process.
   std::unique_ptr<content::NetworkServiceTestHelper>
-      network_service_test_helper;
-  if (base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
-          switches::kProcessType) == switches::kUtilityProcess) {
-    network_service_test_helper =
-        std::make_unique<content::NetworkServiceTestHelper>();
-    headless::HeadlessContentUtilityClient::
-        SetNetworkBinderCreationCallbackForTests(base::BindRepeating(
-            [](content::NetworkServiceTestHelper* helper,
-               service_manager::BinderRegistry* registry) {
-              helper->RegisterNetworkBinders(registry);
-            },
-            network_service_test_helper.get()));
-  }
+      network_service_test_helper = content::NetworkServiceTestHelper::Create();
 
   headless::HeadlessTestLauncherDelegate launcher_delegate;
   return LaunchTests(&launcher_delegate, parallel_jobs, argc, argv);

@@ -8,17 +8,23 @@ source_set("permissions") {
     "permissions_infobar_banner_overlay_mediator.mm",
   ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   deps = [
     "//base",
-    "//ios/chrome/browser/overlays",
-    "//ios/chrome/browser/overlays/public/infobar_banner",
-    "//ios/chrome/browser/ui/icons:symbols",
+    "//components/infobars/core",
+    "//ios/chrome/app/strings",
+    "//ios/chrome/browser/infobars/model",
+    "//ios/chrome/browser/infobars/model/overlays:overlay_type",
+    "//ios/chrome/browser/overlays/model",
+    "//ios/chrome/browser/overlays/model/public/default",
+    "//ios/chrome/browser/overlays/model/public/infobar_banner",
+    "//ios/chrome/browser/permissions/model:infobar_delegate",
+    "//ios/chrome/browser/shared/ui/symbols",
     "//ios/chrome/browser/ui/infobars/banners",
     "//ios/chrome/browser/ui/overlays:coordinators",
     "//ios/chrome/browser/ui/overlays/infobar_banner:mediators",
+    "//ios/web/public/permissions",
     "//ui/base",
+    "//url",
   ]
 }
 
@@ -26,17 +32,17 @@ source_set("unit_tests") {
   testonly = true
   sources = [ "permissions_infobar_banner_overlay_mediator_unittest.mm" ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   deps = [
     ":permissions",
     "//base",
     "//components/infobars/core",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/infobars:infobars",
-    "//ios/chrome/browser/infobars/overlays:infobar_delegates",
-    "//ios/chrome/browser/overlays/public/infobar_banner",
-    "//ios/chrome/browser/overlays/test",
+    "//ios/chrome/browser/infobars/model:model",
+    "//ios/chrome/browser/infobars/model:public",
+    "//ios/chrome/browser/overlays/model/public/default",
+    "//ios/chrome/browser/overlays/model/public/infobar_banner",
+    "//ios/chrome/browser/overlays/model/test",
+    "//ios/chrome/browser/permissions/model:infobar_delegate",
     "//ios/chrome/browser/ui/infobars/banners",
     "//ios/chrome/browser/ui/infobars/banners/test",
     "//ios/web/public/permissions",

@@ -39,6 +39,7 @@
 #include "third_party/blink/renderer/platform/graphics/paint/drawing_recorder.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_controller.h"
 #include "third_party/blink/renderer/platform/theme/web_theme_engine_helper.h"
+#include "ui/color/color_provider.h"
 
 #if !BUILDFLAG(IS_MAC)
 #include "third_party/blink/public/platform/web_theme_engine.h"
@@ -107,7 +108,8 @@ void ScrollbarTheme::PaintScrollCorner(
     const Scrollbar* vertical_scrollbar,
     const DisplayItemClient& display_item_client,
     const gfx::Rect& corner_rect,
-    mojom::blink::ColorScheme color_scheme) {
+    mojom::blink::ColorScheme color_scheme,
+    const ui::ColorProvider* color_provider) {
   if (corner_rect.IsEmpty())
     return;
 
@@ -120,9 +122,20 @@ void ScrollbarTheme::PaintScrollCorner(
 #if BUILDFLAG(IS_MAC)
   context.FillRect(corner_rect, Color::kWhite, AutoDarkMode::Disabled());
 #else
+  WebThemeEngine::ScrollbarTrackExtraParams scrollbar_track;
+  if (vertical_scrollbar != nullptr &&
+      vertical_scrollbar->ScrollbarTrackColor().has_value()) {
+    scrollbar_track.track_color = vertical_scrollbar->ScrollbarTrackColor()
+                                      .value()
+                                      .toSkColor4f()
+                                      .toSkColor();
+  }
+  // TODO(crbug.com/1493088): Rounded corner of scroll corner for form controls.
+  WebThemeEngine::ExtraParams extra_params(scrollbar_track);
   WebThemeEngineHelper::GetNativeThemeEngine()->Paint(
       context.Canvas(), WebThemeEngine::kPartScrollbarCorner,
-      WebThemeEngine::kStateNormal, corner_rect, nullptr, color_scheme);
+      WebThemeEngine::kStateNormal, corner_rect, &extra_params, color_scheme,
+      color_provider);
 #endif
 }
 

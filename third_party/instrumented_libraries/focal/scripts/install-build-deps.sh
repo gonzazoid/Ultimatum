@@ -32,12 +32,14 @@ expat \
 fontconfig \
 freetype \
 gdk-pixbuf \
+git \
 glib2.0 \
 gnome-common \
 gnome-keyring \
 gobject-introspection \
 graphite2 \
 gtk+3.0 \
+gyp \
 ido \
 jasper-initramfs \
 libappindicator3-1 \
@@ -53,6 +55,7 @@ libldap-2.4-2 \
 libmicrohttpd \
 libpng1.6 \
 libsasl2-2 \
+libssl1.1 \
 libunity \
 libx11 \
 libxau \

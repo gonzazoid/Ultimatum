@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
@@ -277,9 +277,7 @@ void V8ContextTracker::OnRemoteIframeAttached(
   });
 
   // Posts |on_ui_thread| to the UI sequence.
-  auto rph_id = parent_frame_node->process_node()
-                    ->render_process_host_proxy()
-                    .render_process_host_id();
+  auto rph_id = parent_frame_node->process_node()->GetRenderProcessHostId();
   content::GetUIThreadTaskRunner({})->PostTask(
       FROM_HERE, base::BindOnce(std::move(on_ui_thread), std::move(on_pm_seq),
                                 std::move(data), rph_id));
@@ -407,7 +405,7 @@ void V8ContextTracker::OnTakenFromGraph(Graph* graph) {
   graph->RemoveGraphObserver(this);
 }
 
-base::Value V8ContextTracker::DescribeFrameNodeData(
+base::Value::Dict V8ContextTracker::DescribeFrameNodeData(
     const FrameNode* node) const {
   DCHECK_ON_GRAPH_SEQUENCE(node->GetGraph());
 
@@ -417,12 +415,12 @@ base::Value V8ContextTracker::DescribeFrameNodeData(
   if (ec_data)
     v8_context_count = ec_data->v8_context_count();
 
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetIntKey("v8_context_count", v8_context_count);
+  base::Value::Dict dict;
+  dict.Set("v8_context_count", static_cast<int>(v8_context_count));
   return dict;
 }
 
-base::Value V8ContextTracker::DescribeProcessNodeData(
+base::Value::Dict V8ContextTracker::DescribeProcessNodeData(
     const ProcessNode* node) const {
   DCHECK_ON_GRAPH_SEQUENCE(node->GetGraph());
 
@@ -439,16 +437,18 @@ base::Value V8ContextTracker::DescribeProcessNodeData(
         process_data->GetDestroyedExecutionContextDataCount();
   }
 
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetIntKey("v8_context_count", v8_context_count);
-  dict.SetIntKey("detached_v8_context_count", detached_v8_context_count);
-  dict.SetIntKey("execution_context_count", execution_context_count);
-  dict.SetIntKey("destroyed_execution_context_count",
-                 destroyed_execution_context_count);
+  base::Value::Dict dict;
+  dict.Set("v8_context_count", static_cast<int>(v8_context_count));
+  dict.Set("detached_v8_context_count",
+           static_cast<int>(detached_v8_context_count));
+  dict.Set("execution_context_count",
+           static_cast<int>(execution_context_count));
+  dict.Set("destroyed_execution_context_count",
+           static_cast<int>(destroyed_execution_context_count));
   return dict;
 }
 
-base::Value V8ContextTracker::DescribeWorkerNodeData(
+base::Value::Dict V8ContextTracker::DescribeWorkerNodeData(
     const WorkerNode* node) const {
   DCHECK_ON_GRAPH_SEQUENCE(node->GetGraph());
   size_t v8_context_count = 0;
@@ -457,8 +457,8 @@ base::Value V8ContextTracker::DescribeWorkerNodeData(
   if (ec_data)
     v8_context_count = ec_data->v8_context_count();
 
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetIntKey("v8_context_count", v8_context_count);
+  base::Value::Dict dict;
+  dict.Set("v8_context_count", static_cast<int>(v8_context_count));
   return dict;
 }
 
@@ -499,7 +499,7 @@ void V8ContextTracker::OnRemoteIframeAttachedImpl(
   // committed below it will safely tear itself down.
   auto* process_data = ProcessData::GetOrCreate(frame_node->process_node());
   std::unique_ptr<ExecutionContextData> ec_data;
-  blink::ExecutionContextToken ec_token(frame_node->frame_token());
+  blink::ExecutionContextToken ec_token(frame_node->GetFrameToken());
   auto* raw_ec_data = data_store_->Get(ec_token);
   if (!raw_ec_data) {
     ec_data =

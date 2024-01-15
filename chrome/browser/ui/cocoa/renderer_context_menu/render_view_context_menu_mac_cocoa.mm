@@ -7,23 +7,27 @@
 
 #include <utility>
 
+#import "base/apple/scoped_objc_class_swizzler.h"
 #include "base/compiler_specific.h"
 #include "base/mac/mac_util.h"
-#import "base/mac/scoped_objc_class_swizzler.h"
 #import "base/mac/scoped_sending_event.h"
-#import "base/message_loop/message_pump_mac.h"
+#import "base/message_loop/message_pump_apple.h"
 #include "base/no_destructor.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/task/current_thread.h"
+#include "chrome/browser/headless/headless_mode_util.h"
 #import "chrome/browser/mac/nsprocessinfo_additions.h"
 #include "content/public/browser/web_contents.h"
 #import "ui/base/cocoa/menu_controller.h"
+#include "ui/base/interaction/element_tracker_mac.h"
 #include "ui/color/color_provider.h"
+#include "ui/views/controls/menu/menu_controller_cocoa_delegate_impl.h"
+#include "ui/views/interaction/element_tracker_views.h"
 #include "ui/views/widget/widget.h"
 
 namespace {
 
-base::mac::ScopedObjCClassSwizzler* g_populatemenu_swizzler = nullptr;
+base::apple::ScopedObjCClassSwizzler* g_populatemenu_swizzler = nullptr;
 
 // |g_filtered_entries_array| is only set during testing (see
 // +[ChromeSwizzleServicesMenuUpdater storeFilteredEntriesForTestingInArray:]).
@@ -106,8 +110,7 @@ NSMenuItem* GetMenuItemByID(ui::MenuModel* model,
 }
 
 + (void)storeFilteredEntriesForTestingInArray:(NSMutableArray*)array {
-  [g_filtered_entries_array release];
-  g_filtered_entries_array = [array retain];
+  g_filtered_entries_array = array;
 }
 
 + (void)load {
@@ -146,7 +149,7 @@ NSMenuItem* GetMenuItemByID(ui::MenuModel* model,
     // a static so that it never goes out of scope, because the scoper's
     // destructor undoes the swizzling.
     Class swizzleClass = [ChromeSwizzleServicesMenuUpdater class];
-    static base::NoDestructor<base::mac::ScopedObjCClassSwizzler>
+    static base::NoDestructor<base::apple::ScopedObjCClassSwizzler>
         servicesMenuFilter(targetClass, swizzleClass, targetSelector);
     g_populatemenu_swizzler = servicesMenuFilter.get();
   });
@@ -154,7 +157,7 @@ NSMenuItem* GetMenuItemByID(ui::MenuModel* model,
 
 @end
 
-// OSX implemenation of the ToolkitDelegate.
+// macOS implementation of the ToolkitDelegate.
 // This simply (re)delegates calls to RVContextMenuMac because they do not
 // have to be componentized.
 class ToolkitDelegateMacCocoa : public RenderViewContextMenu::ToolkitDelegate {
@@ -205,24 +208,26 @@ RenderViewContextMenuMacCocoa::~RenderViewContextMenuMacCocoa() {
 void RenderViewContextMenuMacCocoa::Show() {
   views::Widget* widget = views::Widget::GetTopLevelWidgetForNativeView(
       source_web_contents_->GetNativeView());
-  const ui::ColorProvider* color_provider =
-      widget ? widget->GetColorProvider() : nullptr;
 
-  menu_controller_.reset([[MenuControllerCocoa alloc]
-               initWithModel:&menu_model_
-                    delegate:nil
-               colorProvider:color_provider
-      useWithPopUpButtonCell:NO]);
+  if (!widget || headless::IsHeadlessMode()) {
+    return;
+  }
 
-  gfx::Point params_position(params_.x, params_.y);
+  const ui::ColorProvider* color_provider = widget->GetColorProvider();
+
+  menu_controller_delegate_ = [[MenuControllerCocoaDelegateImpl alloc] init];
+  menu_controller_ =
+      [[MenuControllerCocoa alloc] initWithModel:&menu_model_
+                                        delegate:menu_controller_delegate_
+                                   colorProvider:color_provider
+                          useWithPopUpButtonCell:NO];
 
   // Synthesize an event for the click, as there is no certainty that
   // [NSApp currentEvent] will return a valid event.
   NSEvent* currentEvent = [NSApp currentEvent];
   NSWindow* window = [parent_view_ window];
   NSPoint position =
-      NSMakePoint(params_position.x(),
-                  NSHeight([parent_view_ bounds]) - params_position.y());
+      NSMakePoint(params_.x, NSHeight(parent_view_.bounds) - params_.y);
   position = [parent_view_ convertPoint:position toView:nil];
   NSTimeInterval eventTime = [currentEvent timestamp];
   NSEvent* clickEvent = [NSEvent mouseEventWithType:NSEventTypeRightMouseDown
@@ -237,7 +242,7 @@ void RenderViewContextMenuMacCocoa::Show() {
 
   {
     // Make sure events can be pumped while the menu is up.
-    base::CurrentThread::ScopedNestableTaskAllower allow;
+    base::CurrentThread::ScopedAllowApplicationTasksInNativeNestedLoop allow;
 
     // Ensure the UI can update while the menu is fading out.
     base::ScopedPumpMessagesInPrivateModes pump_private;
@@ -249,10 +254,13 @@ void RenderViewContextMenuMacCocoa::Show() {
     // be done manually.
     base::mac::ScopedSendingEvent sendingEventScoper;
 
+    NSMenu* const menu = [menu_controller_ menu];
+    ui::ElementTrackerMac::GetInstance()->NotifyMenuWillShow(
+        menu, views::ElementTrackerViews::GetContextForWidget(widget));
+
     // Show the menu.
-    [NSMenu popUpContextMenu:[menu_controller_ menu]
-                   withEvent:clickEvent
-                     forView:parent_view_];
+    [NSMenu popUpContextMenu:menu withEvent:clickEvent forView:parent_view_];
+    ui::ElementTrackerMac::GetInstance()->NotifyMenuDoneShowing(menu);
   }
 }
 

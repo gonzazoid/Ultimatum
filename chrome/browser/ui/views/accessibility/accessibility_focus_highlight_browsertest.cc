@@ -2,16 +2,19 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "math.h"
+#include "chrome/browser/ui/views/accessibility/accessibility_focus_highlight.h"
+
+#include <math.h>
 
 #include "base/files/file_util.h"
 #include "base/path_service.h"
+#include "base/test/test_future.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "cc/test/pixel_comparator.h"
 #include "cc/test/pixel_test_utils.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
-#include "chrome/browser/ui/views/accessibility/accessibility_focus_highlight.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/pref_names.h"
@@ -24,8 +27,8 @@
 #include "content/public/test/focus_changed_observer.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/accessibility/accessibility_features.h"
-#include "ui/compositor/compositor_switches.h"
 #include "ui/compositor/layer.h"
+#include "ui/gfx/image/image.h"
 #include "ui/snapshot/snapshot.h"
 #include "ui/views/widget/widget.h"
 
@@ -90,21 +93,9 @@ class AccessibilityFocusHighlightBrowserTest : public InProcessBrowserTest {
 
     // Keep trying until we get a successful capture.
     while (true) {
-      // First try sync. If that fails, try async.
-      gfx::Image result_image;
-      if (!ui::GrabViewSnapshot(native_view, bounds, &result_image)) {
-        const auto on_got_snapshot = [](base::RunLoop* run_loop,
-                                        gfx::Image* image,
-                                        gfx::Image got_image) {
-          *image = got_image;
-          run_loop->Quit();
-        };
-        base::RunLoop run_loop;
-        ui::GrabViewSnapshotAsync(
-            native_view, bounds,
-            base::BindOnce(on_got_snapshot, &run_loop, &result_image));
-        run_loop.Run();
-      }
+      base::test::TestFuture<gfx::Image> future;
+      ui::GrabViewSnapshotAsync(native_view, bounds, future.GetCallback());
+      gfx::Image result_image = future.Take();
 
       if (result_image.Size().IsEmpty()) {
         LOG(INFO) << "Bitmap not correct size, trying to capture again";
@@ -141,7 +132,7 @@ class AccessibilityFocusHighlightBrowserTest : public InProcessBrowserTest {
 // Smoke test that ensures that when a node gets focus, the layer with the
 // focus highlight actually gets drawn.
 //
-// Flaky on all platforms. TODO(crbug.com/1083806): Enable this test.
+// Flaky on all platforms. TODO(https://crbug.com/1083806): Enable this test.
 IN_PROC_BROWSER_TEST_F(AccessibilityFocusHighlightBrowserTest,
                        DISABLED_DrawsHighlight) {
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
@@ -177,7 +168,7 @@ IN_PROC_BROWSER_TEST_F(AccessibilityFocusHighlightBrowserTest,
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
   std::string script("document.getElementById('div').focus();");
-  EXPECT_TRUE(content::ExecuteScript(web_contents, script));
+  EXPECT_TRUE(content::ExecJs(web_contents, script));
 
   // Now wait until at least 0.1% of the image has the focus ring's highlight
   // color. If it never does, the test will time out.
@@ -200,7 +191,7 @@ IN_PROC_BROWSER_TEST_F(AccessibilityFocusHighlightBrowserTest,
       browser()->tab_strip_model()->GetActiveWebContents();
   content::FocusChangedObserver observer(web_contents);
   std::string script("document.getElementById('link').focus();");
-  ASSERT_TRUE(content::ExecuteScript(web_contents, script));
+  ASSERT_TRUE(content::ExecJs(web_contents, script));
   auto details = observer.Wait();
 
   gfx::Rect bounds = details.node_bounds_in_screen;
@@ -239,12 +230,11 @@ class ReadbackHolder : public base::RefCountedThreadSafe<ReadbackHolder> {
   std::unique_ptr<base::RunLoop> run_loop_;
 };
 
-const cc::ExactPixelComparator pixel_comparator(/*discard_alpha=*/false);
+const cc::ExactPixelComparator pixel_comparator;
 
-// Flaky on Lacros: https://crbug.com/1289366
-#if (BUILDFLAG(IS_MAC) &&                                     \
-     MAC_OS_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_15) || \
-    BUILDFLAG(IS_CHROMEOS_LACROS)
+// TODO(crbug/1289366): Fix flaky test on Lacros.
+// TODO(crbug/1467250): Fix flaky test on Mac.
+#if BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_MAC)
 #define MAYBE_FocusAppearance DISABLED_FocusAppearance
 #else
 #define MAYBE_FocusAppearance FocusAppearance
@@ -270,7 +260,7 @@ IN_PROC_BROWSER_TEST_F(AccessibilityFocusHighlightBrowserTest,
       browser()->tab_strip_model()->GetActiveWebContents();
   content::FocusChangedObserver observer(web_contents);
   std::string script("document.getElementById('link').focus();");
-  ASSERT_TRUE(content::ExecuteScript(web_contents, script));
+  ASSERT_TRUE(content::ExecJs(web_contents, script));
   observer.Wait();
   BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser());
   AccessibilityFocusHighlight* highlight =

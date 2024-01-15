@@ -8,9 +8,11 @@
 #include <utility>
 
 #include "base/base_paths.h"
+#include "base/files/file_util.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
 #include "chrome/common/safe_browsing/archive_analyzer_results.h"
+#include "chrome/services/file_util/fake_file_util_service.h"
 #include "chrome/services/file_util/file_util_service.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -18,6 +20,8 @@
 namespace safe_browsing {
 
 namespace {
+
+using ::testing::_;
 
 std::string ToHex(const std::string& s) {
   return base::HexEncode(s.data(), s.size());
@@ -76,9 +80,9 @@ class SandboxedSevenZipAnalyzerTest : public ::testing::Test {
     FileUtilService service(remote.InitWithNewPipeAndPassReceiver());
     base::RunLoop run_loop;
     ResultsGetter results_getter(run_loop.QuitClosure(), results);
-    scoped_refptr<SandboxedSevenZipAnalyzer> analyzer(
-        new SandboxedSevenZipAnalyzer(file_path, results_getter.GetCallback(),
-                                      std::move(remote)));
+    std::unique_ptr<SandboxedSevenZipAnalyzer, base::OnTaskRunnerDeleter>
+        analyzer = SandboxedSevenZipAnalyzer::CreateAnalyzer(
+            file_path, results_getter.GetCallback(), std::move(remote));
     analyzer->Start();
     run_loop.Run();
   }
@@ -109,7 +113,7 @@ TEST_F(SandboxedSevenZipAnalyzerTest, OneBinary) {
   EXPECT_EQ(0, results.directory_count);
   ASSERT_EQ(1, results.archived_binary.size());
 
-  EXPECT_EQ("file.exe", results.archived_binary[0].file_basename());
+  EXPECT_EQ("file.exe", results.archived_binary[0].file_path());
   EXPECT_EQ(ClientDownloadRequest::WIN_EXECUTABLE,
             results.archived_binary[0].download_type());
   EXPECT_EQ("B32E028F9B83C5FFB806CA7DFE7A3ECE5F1AED5A0368B0A140B35A67F5B000B3",
@@ -131,17 +135,17 @@ TEST_F(SandboxedSevenZipAnalyzerTest, TwoBinariesAndFolder) {
   EXPECT_EQ(1, results.directory_count);
   ASSERT_EQ(3, results.archived_binary.size());
 
-  EXPECT_EQ("folder", results.archived_binary[0].file_basename());
+  EXPECT_EQ("folder", results.archived_binary[0].file_path());
   EXPECT_EQ(ClientDownloadRequest::WIN_EXECUTABLE,
             results.archived_binary[0].download_type());
   EXPECT_EQ("E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
             ToHex(results.archived_binary[0].digests().sha256()));
   EXPECT_EQ(0, results.archived_binary[0].length());
   EXPECT_FALSE(results.archived_binary[0].is_encrypted());
-  EXPECT_TRUE(results.archived_binary[0].is_executable());
+  EXPECT_FALSE(results.archived_binary[0].is_executable());
   EXPECT_FALSE(results.archived_binary[0].is_archive());
 
-  EXPECT_EQ("file.exe", results.archived_binary[1].file_basename());
+  EXPECT_EQ("file.exe", results.archived_binary[1].file_path());
   EXPECT_EQ(ClientDownloadRequest::WIN_EXECUTABLE,
             results.archived_binary[1].download_type());
   EXPECT_EQ("B32E028F9B83C5FFB806CA7DFE7A3ECE5F1AED5A0368B0A140B35A67F5B000B3",
@@ -151,7 +155,7 @@ TEST_F(SandboxedSevenZipAnalyzerTest, TwoBinariesAndFolder) {
   EXPECT_TRUE(results.archived_binary[1].is_executable());
   EXPECT_FALSE(results.archived_binary[1].is_archive());
 
-  EXPECT_EQ("file2.exe", results.archived_binary[2].file_basename());
+  EXPECT_EQ("file2.exe", results.archived_binary[2].file_path());
   EXPECT_EQ(ClientDownloadRequest::WIN_EXECUTABLE,
             results.archived_binary[2].download_type());
   EXPECT_EQ("B32E028F9B83C5FFB806CA7DFE7A3ECE5F1AED5A0368B0A140B35A67F5B000B3",
@@ -166,14 +170,14 @@ TEST_F(SandboxedSevenZipAnalyzerTest, NestedArchive) {
   safe_browsing::ArchiveAnalyzerResults results;
   RunAnalyzer(dir_test_data_.Append(FILE_PATH_LITERAL("inner_archive.7z")),
               &results);
-  ASSERT_TRUE(results.success);
+  EXPECT_FALSE(results.success);
   EXPECT_FALSE(results.has_executable);
   EXPECT_TRUE(results.has_archive);
   EXPECT_EQ(1, results.file_count);
   EXPECT_EQ(0, results.directory_count);
   ASSERT_EQ(1, results.archived_binary.size());
 
-  EXPECT_EQ("fake.zip", results.archived_binary[0].file_basename());
+  EXPECT_EQ("fake.zip", results.archived_binary[0].file_path());
   EXPECT_EQ(ClientDownloadRequest::ARCHIVE,
             results.archived_binary[0].download_type());
   EXPECT_EQ("DFD138681A2BE04D4E97A4CF839C08042A1A9F7541B4DE0EDEC4422A4D881045",
@@ -195,7 +199,7 @@ TEST_F(SandboxedSevenZipAnalyzerTest, Encrypted) {
   EXPECT_EQ(0, results.directory_count);
   ASSERT_EQ(1, results.archived_binary.size());
 
-  EXPECT_EQ("file.exe", results.archived_binary[0].file_basename());
+  EXPECT_EQ("file.exe", results.archived_binary[0].file_path());
   EXPECT_EQ(ClientDownloadRequest::WIN_EXECUTABLE,
             results.archived_binary[0].download_type());
   EXPECT_TRUE(results.archived_binary[0].digests().sha256().empty());
@@ -210,6 +214,44 @@ TEST_F(SandboxedSevenZipAnalyzerTest, NotASevenZip) {
   RunAnalyzer(dir_test_data_.Append(FILE_PATH_LITERAL("not_a_seven_zip.7z")),
               &results);
   EXPECT_FALSE(results.success);
+}
+
+TEST_F(SandboxedSevenZipAnalyzerTest, CanDeleteDuringExecution) {
+  base::FilePath file_path =
+      dir_test_data_.Append(FILE_PATH_LITERAL("empty.7z"));
+  base::FilePath temp_path;
+  ASSERT_TRUE(base::CreateTemporaryFile(&temp_path));
+  ASSERT_TRUE(base::CopyFile(file_path, temp_path));
+
+  mojo::PendingRemote<chrome::mojom::FileUtilService> remote;
+  base::RunLoop run_loop;
+
+  FakeFileUtilService service(remote.InitWithNewPipeAndPassReceiver());
+  EXPECT_CALL(service.GetSafeArchiveAnalyzer(), AnalyzeSevenZipFile(_, _, _))
+      .WillOnce(
+          [&](base::File zip_file,
+              mojo::PendingRemote<chrome::mojom::TemporaryFileGetter>
+                  temp_file_getter,
+              chrome::mojom::SafeArchiveAnalyzer::AnalyzeSevenZipFileCallback
+                  callback) {
+            EXPECT_TRUE(base::DeleteFile(temp_path));
+            std::move(callback).Run(safe_browsing::ArchiveAnalyzerResults());
+            run_loop.Quit();
+          });
+  std::unique_ptr<SandboxedSevenZipAnalyzer, base::OnTaskRunnerDeleter>
+      analyzer = SandboxedSevenZipAnalyzer::CreateAnalyzer(
+          temp_path, base::DoNothing(), std::move(remote));
+  analyzer->Start();
+  run_loop.Run();
+}
+
+TEST_F(SandboxedSevenZipAnalyzerTest, InvalidPath) {
+  safe_browsing::ArchiveAnalyzerResults results;
+  RunAnalyzer(dir_test_data_.Append(FILE_PATH_LITERAL("does_not_exit")),
+              &results);
+  EXPECT_FALSE(results.success);
+  EXPECT_EQ(results.analysis_result,
+            safe_browsing::ArchiveAnalysisResult::kFailedToOpen);
 }
 
 }  // namespace safe_browsing

@@ -56,7 +56,8 @@ void SessionServiceFactory::ShutdownForProfile(Profile* profile) {
 }
 
 SessionServiceFactory* SessionServiceFactory::GetInstance() {
-  return base::Singleton<SessionServiceFactory>::get();
+  static base::NoDestructor<SessionServiceFactory> instance;
+  return instance.get();
 }
 
 SessionServiceFactory::SessionServiceFactory()
@@ -68,9 +69,11 @@ SessionServiceFactory::SessionServiceFactory()
 
 SessionServiceFactory::~SessionServiceFactory() = default;
 
-KeyedService* SessionServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SessionServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* profile) const {
-  SessionService* service = new SessionService(static_cast<Profile*>(profile));
+  std::unique_ptr<SessionService> service =
+      std::make_unique<SessionService>(static_cast<Profile*>(profile));
   service->ResetFromCurrentBrowsers();
   return service;
 }

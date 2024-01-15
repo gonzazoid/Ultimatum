@@ -8,12 +8,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/sync_file_system/drive_backend/callback_helper.h"
 #include "chrome/browser/sync_file_system/drive_backend/fake_sync_worker.h"
 #include "chrome/browser/sync_file_system/drive_backend/sync_worker_interface.h"
@@ -29,8 +29,7 @@
 namespace sync_file_system {
 namespace drive_backend {
 
-class SyncEngineTest : public testing::Test,
-                       public base::SupportsWeakPtr<SyncEngineTest> {
+class SyncEngineTest : public testing::Test {
  public:
   typedef RemoteFileSyncService::OriginStatusMap RemoteOriginStatusMap;
 
@@ -48,7 +47,7 @@ class SyncEngineTest : public testing::Test,
         new drive::FakeDriveService);
 
     scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner =
-        base::ThreadTaskRunnerHandle::Get();
+        base::SingleThreadTaskRunner::GetCurrentDefault();
     worker_task_runner_ = base::ThreadPool::CreateSequencedTaskRunner(
         {base::MayBlock(), base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN});
 

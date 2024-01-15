@@ -5,20 +5,27 @@
 #ifndef CONTENT_BROWSER_ATTRIBUTION_REPORTING_ATTRIBUTION_STORAGE_H_
 #define CONTENT_BROWSER_ATTRIBUTION_REPORTING_ATTRIBUTION_STORAGE_H_
 
+#include <memory>
+#include <optional>
+#include <set>
 #include <vector>
 
-#include "base/callback_forward.h"
-#include "base/time/time.h"
+#include "base/functional/callback_forward.h"
 #include "content/browser/attribution_reporting/attribution_report.h"
-#include "content/browser/attribution_reporting/storable_source.h"
-#include "content/common/content_export.h"
+#include "content/public/browser/attribution_data_model.h"
 #include "content/public/browser/storage_partition.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+
+namespace base {
+class Time;
+}  // namespace base
 
 namespace content {
 
+class AttributionStorageDelegate;
 class AttributionTrigger;
 class CreateReportResult;
+class StorableSource;
+class StoreSourceResult;
 class StoredSource;
 
 // This class provides an interface for persisting attribution data to
@@ -27,32 +34,6 @@ class StoredSource;
 // properly should result in no-ops.
 class AttributionStorage {
  public:
-  struct CONTENT_EXPORT StoreSourceResult {
-    explicit StoreSourceResult(
-        StorableSource::Result status,
-        absl::optional<base::Time> min_fake_report_time = absl::nullopt,
-        absl::optional<int> max_destinations_per_source_site_reporting_origin =
-            absl::nullopt);
-
-    ~StoreSourceResult();
-
-    StoreSourceResult(const StoreSourceResult&);
-    StoreSourceResult(StoreSourceResult&&);
-
-    StoreSourceResult& operator=(const StoreSourceResult&);
-    StoreSourceResult& operator=(StoreSourceResult&&);
-
-    StorableSource::Result status;
-
-    // The earliest report time for any fake reports stored alongside the
-    // source, if any.
-    absl::optional<base::Time> min_fake_report_time;
-
-    // Only populated in case of
-    // `StorableSource::Result::kInsufficientUniqueDestinationCapacity`.
-    absl::optional<int> max_destinations_per_source_site_reporting_origin;
-  };
-
   virtual ~AttributionStorage() = default;
 
   // When adding a new method, also add it to
@@ -63,7 +44,11 @@ class AttributionStorage {
   // pair. When a source is stored, all matching sources that have already
   // converted are marked as inactive, and are no longer eligible for reporting.
   // Unconverted matching sources are not modified.
-  virtual StoreSourceResult StoreSource(const StorableSource& source) = 0;
+  //
+  // TODO(linnan): Remove default argument for `debug_cookie_set`.
+  // Alternatively, consider making this a field in `StorableSource`.
+  virtual StoreSourceResult StoreSource(const StorableSource& source,
+                                        bool debug_cookie_set = false) = 0;
 
   // Finds all stored sources matching a given `trigger`, and stores the
   // new associated report. Only active sources will receive new attributions.
@@ -77,13 +62,10 @@ class AttributionStorage {
   // a negative number for no limit. Reports are shuffled before being returned.
   virtual std::vector<AttributionReport> GetAttributionReports(
       base::Time max_report_time,
-      int limit = -1,
-      AttributionReport::Types report_types = {
-          AttributionReport::Type::kEventLevel,
-          AttributionReport::Type::kAggregatableAttribution}) = 0;
+      int limit = -1) = 0;
 
   // Returns the first report time strictly after `time`.
-  virtual absl::optional<base::Time> GetNextReportTime(base::Time time) = 0;
+  virtual std::optional<base::Time> GetNextReportTime(base::Time time) = 0;
 
   // Returns the reports with the given IDs. This call is logically const, and
   // does not modify the underlying storage.
@@ -97,6 +79,15 @@ class AttributionStorage {
   // returned. |limit| limits the number of sources to return; use
   // a negative number for no limit.
   virtual std::vector<StoredSource> GetActiveSources(int limit = -1) = 0;
+
+  // Returns all distinct reporting origins for the
+  // Browsing Data Model. Partial data will still be returned
+  // in the event of an error.
+  virtual std::set<AttributionDataModel::DataKey> GetAllDataKeys() = 0;
+
+  // Deletes all data in storage for storage keys matching the provided
+  // reporting origin in the data key.
+  virtual void DeleteByDataKey(const AttributionDataModel::DataKey&) = 0;
 
   // Deletes the report with the given |report_id|. Returns
   // false if an error occurred.
@@ -115,20 +106,25 @@ class AttributionStorage {
   // method returns null, no delay is applied. Otherwise, applies a random value
   // between `min_delay` and `max_delay`, both inclusive. Returns the new first
   // report time in storage, if any.
-  virtual absl::optional<base::Time> AdjustOfflineReportTimes() = 0;
+  virtual std::optional<base::Time> AdjustOfflineReportTimes() = 0;
 
-  // Deletes all data in storage for storage keys matching `filter`, between
-  // `delete_begin` and `delete_end` time. More specifically, this:
+  // Deletes all data in storage for reporting origins matching `filter`,
+  // between `delete_begin` and `delete_end` time. More specifically, this:
   // 1. Deletes all sources within the time range. If any report is
   //    attributed to this source it is also deleted.
   // 2. Deletes all reports within the time range. All sources
   //    attributed to the report are also deleted.
+  // 3. Deletes any rate limits matching `filter` or whose corresponding source
+  //    was deleted.
   //
-  // Note: if `filter` is null, it means that all storage keys should match.
+  // Note: if `filter` is null, it means that all reporting origins should
+  // match.
   virtual void ClearData(base::Time delete_begin,
                          base::Time delete_end,
                          StoragePartition::StorageKeyMatcherFunction filter,
                          bool delete_rate_limit_data = true) = 0;
+
+  virtual void SetDelegate(std::unique_ptr<AttributionStorageDelegate>) = 0;
 };
 
 }  // namespace content

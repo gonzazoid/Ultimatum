@@ -4,7 +4,7 @@
 
 #include "components/policy/core/common/fake_async_policy_loader.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/task/sequenced_task_runner.h"
 
@@ -15,9 +15,7 @@ FakeAsyncPolicyLoader::FakeAsyncPolicyLoader(
     : AsyncPolicyLoader(task_runner, /*periodic_updates=*/true) {}
 
 PolicyBundle FakeAsyncPolicyLoader::Load() {
-  PolicyBundle bundle;
-  bundle.CopyFrom(policy_bundle_);
-  return bundle;
+  return policy_bundle_.Clone();
 }
 
 void FakeAsyncPolicyLoader::InitOnBackgroundThread() {
@@ -25,7 +23,7 @@ void FakeAsyncPolicyLoader::InitOnBackgroundThread() {
 }
 
 void FakeAsyncPolicyLoader::SetPolicies(const PolicyBundle& policy_bundle) {
-  policy_bundle_.CopyFrom(policy_bundle);
+  policy_bundle_ = policy_bundle.Clone();
 }
 
 void FakeAsyncPolicyLoader::PostReloadOnBackgroundThread(bool force) {

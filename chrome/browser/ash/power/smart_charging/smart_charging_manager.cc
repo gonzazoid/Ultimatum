@@ -6,13 +6,12 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/important_file_writer.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
@@ -498,14 +497,14 @@ void SmartChargingManager::UpdateChargeHistory() {
 }
 
 void SmartChargingManager::OnReceiveScreenBrightnessPercent(
-    absl::optional<double> screen_brightness_percent) {
+    std::optional<double> screen_brightness_percent) {
   if (screen_brightness_percent.has_value()) {
     screen_brightness_percent_ = *screen_brightness_percent;
   }
 }
 
 void SmartChargingManager::OnReceiveSwitchStates(
-    const absl::optional<chromeos::PowerManagerClient::SwitchStates>
+    const std::optional<chromeos::PowerManagerClient::SwitchStates>
         switch_states) {
   if (switch_states.has_value()) {
     lid_state_ = switch_states->lid_state;
@@ -539,9 +538,8 @@ base::TimeDelta SmartChargingManager::DurationRecentVideoPlaying() {
 void SmartChargingManager::MaybeLoadFromDisk(
     const base::FilePath& profile_path) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  base::PostTaskAndReplyWithResult(
-      blocking_task_runner_.get(), FROM_HERE,
-      base::BindOnce(&LoadFromDisk, profile_path),
+  blocking_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&LoadFromDisk, profile_path),
       base::BindOnce(&SmartChargingManager::OnLoadProtoFromDiskComplete,
                      weak_ptr_factory_.GetWeakPtr()));
 }
@@ -655,7 +653,7 @@ std::tuple<PastEvent, PastEvent> SmartChargingManager::GetLastChargeEvents() {
 }
 
 void SmartChargingManager::OnChargeHistoryReceived(
-    absl::optional<power_manager::ChargeHistoryState> proto) {
+    std::optional<power_manager::ChargeHistoryState> proto) {
   if (proto.has_value()) {
     charge_history_ = proto.value();
     return;

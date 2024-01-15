@@ -5,13 +5,15 @@
 #include "components/gwp_asan/client/guarded_page_allocator.h"
 
 #include <algorithm>
+#include <bit>
 #include <memory>
 #include <random>
 #include <utility>
 
-#include "base/allocator/partition_allocator/gwp_asan_support.h"
+#include "base/allocator/buildflags.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/gwp_asan_support.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_buildflags.h"
 #include "base/bits.h"
-#include "base/debug/stack_trace.h"
 #include "base/logging.h"
 #include "base/memory/page_size.h"
 #include "base/rand_util.h"
@@ -19,6 +21,8 @@
 #include "base/synchronization/lock.h"
 #include "build/build_config.h"
 #include "components/crash/core/common/crash_key.h"
+#include "components/gwp_asan/client/thread_local_random_bit_generator.h"
+#include "components/gwp_asan/common/allocation_info.h"
 #include "components/gwp_asan/common/allocator_state.h"
 #include "components/gwp_asan/common/crash_key_name.h"
 #include "components/gwp_asan/common/pack_stack_trace.h"
@@ -28,48 +32,16 @@
 #include "components/crash/core/app/crashpad.h"  // nogncheck
 #endif
 
-#if BUILDFLAG(IS_APPLE)
-#include <pthread.h>
-#endif
-
 namespace gwp_asan {
 namespace internal {
 
 namespace {
 
-size_t GetStackTrace(void** trace, size_t count) {
-  // TODO(vtsyrklevich): Investigate using trace_event::CFIBacktraceAndroid
-  // on 32-bit Android for canary/dev (where we can dynamically load unwind
-  // data.)
-#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(CAN_UNWIND_WITH_FRAME_POINTERS)
-  // Android release builds ship without unwind tables so the normal method of
-  // stack trace collection for base::debug::StackTrace doesn't work; however,
-  // AArch64 builds ship with frame pointers so we can still collect stack
-  // traces in that case.
-  return base::debug::TraceStackFramePointers(const_cast<const void**>(trace),
-                                              count, 0);
-#else
-  return base::debug::CollectStackTrace(trace, count);
-#endif
-}
-
-// Report a tid that matches what crashpad collects which may differ from what
-// base::PlatformThread::CurrentId() returns.
-uint64_t ReportTid() {
-#if !BUILDFLAG(IS_APPLE)
-  return base::PlatformThread::CurrentId();
-#else
-  uint64_t tid = base::kInvalidThreadId;
-  pthread_threadid_np(nullptr, &tid);
-  return tid;
-#endif
-}
-
 template <typename T>
 T RandomEviction(std::vector<T>* list) {
   DCHECK(!list->empty());
   std::uniform_int_distribution<uint64_t> distribution(0, list->size() - 1);
-  base::NonAllocatingRandomBitGenerator generator;
+  ThreadLocalRandomBitGenerator generator;
   size_t rand = distribution(generator);
   T out = (*list)[rand];
   (*list)[rand] = list->back();
@@ -179,6 +151,9 @@ void GuardedPageAllocator::Init(size_t max_alloced_pages,
   CHECK_LE(num_metadata, AllocatorState::kMaxMetadata);
   CHECK_LE(num_metadata, total_pages);
   CHECK_LE(total_pages, AllocatorState::kMaxRequestedSlots);
+
+  ThreadLocalRandomBitGenerator::InitIfNeeded();
+
   max_alloced_pages_ = max_alloced_pages;
   state_.num_metadata = num_metadata;
   state_.total_requested_pages = total_pages;
@@ -218,12 +193,12 @@ void GuardedPageAllocator::Init(size_t max_alloced_pages,
       free_slots_ = std::make_unique<PartitionAllocSlotFreeList>();
     else
       free_slots_ = std::make_unique<SimpleFreeList<AllocatorState::SlotIdx>>();
-#if BUILDFLAG(USE_PARTITION_ALLOC) && BUILDFLAG(USE_BACKUP_REF_PTR)
+#if BUILDFLAG(USE_PARTITION_ALLOC) && BUILDFLAG(ENABLE_BACKUP_REF_PTR_SUPPORT)
     free_slots_->Initialize(state_.total_reserved_pages,
                             std::move(free_list_indices));
-#else   // BUILDFLAG(USE_PARTITION_ALLOC) && BUILDFLAG(USE_BACKUP_REF_PTR)
+#else
     free_slots_->Initialize(state_.total_reserved_pages);
-#endif  // BUILDFLAG(USE_PARTITION_ALLOC) && BUILDFLAG(USE_BACKUP_REF_PTR)
+#endif
   }
 
   slot_to_metadata_idx_.resize(state_.total_reserved_pages);
@@ -297,10 +272,9 @@ void* GuardedPageAllocator::Allocate(size_t size,
   // Default alignment is size's next smallest power-of-two, up to
   // kGpaAllocAlignment.
   if (!align) {
-    align =
-        std::min(size_t{1} << base::bits::Log2Floor(size), kGpaAllocAlignment);
+    align = std::min(std::bit_floor(size), kGpaAllocAlignment);
   }
-  CHECK(base::bits::IsPowerOfTwo(align));
+  CHECK(std::has_single_bit(align));
 
   AllocatorState::SlotIdx free_slot;
   AllocatorState::MetadataIdx free_metadata;
@@ -458,13 +432,14 @@ void GuardedPageAllocator::RecordAllocationMetadata(
   metadata_[metadata_idx].alloc_size = size;
   metadata_[metadata_idx].alloc_ptr = reinterpret_cast<uintptr_t>(ptr);
 
-  void* trace[AllocatorState::kMaxStackFrames];
-  size_t len = GetStackTrace(trace, AllocatorState::kMaxStackFrames);
+  const void* trace[AllocatorState::kMaxStackFrames];
+  size_t len =
+      AllocationInfo::GetStackTrace(trace, AllocatorState::kMaxStackFrames);
   metadata_[metadata_idx].alloc.trace_len =
       Pack(reinterpret_cast<uintptr_t*>(trace), len,
            metadata_[metadata_idx].stack_trace_pool,
            sizeof(metadata_[metadata_idx].stack_trace_pool) / 2);
-  metadata_[metadata_idx].alloc.tid = ReportTid();
+  metadata_[metadata_idx].alloc.tid = AllocationInfo::GetCurrentTid();
   metadata_[metadata_idx].alloc.trace_collected = true;
 
   metadata_[metadata_idx].dealloc.tid = base::kInvalidThreadId;
@@ -475,15 +450,16 @@ void GuardedPageAllocator::RecordAllocationMetadata(
 
 void GuardedPageAllocator::RecordDeallocationMetadata(
     AllocatorState::MetadataIdx metadata_idx) {
-  void* trace[AllocatorState::kMaxStackFrames];
-  size_t len = GetStackTrace(trace, AllocatorState::kMaxStackFrames);
+  const void* trace[AllocatorState::kMaxStackFrames];
+  size_t len =
+      AllocationInfo::GetStackTrace(trace, AllocatorState::kMaxStackFrames);
   metadata_[metadata_idx].dealloc.trace_len =
       Pack(reinterpret_cast<uintptr_t*>(trace), len,
            metadata_[metadata_idx].stack_trace_pool +
                metadata_[metadata_idx].alloc.trace_len,
            sizeof(metadata_[metadata_idx].stack_trace_pool) -
                metadata_[metadata_idx].alloc.trace_len);
-  metadata_[metadata_idx].dealloc.tid = ReportTid();
+  metadata_[metadata_idx].dealloc.tid = AllocationInfo::GetCurrentTid();
   metadata_[metadata_idx].dealloc.trace_collected = true;
 }
 

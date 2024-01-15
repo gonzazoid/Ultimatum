@@ -7,13 +7,16 @@
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/public/cpp/shell_window_ids.h"
+#include "ash/public/cpp/style/color_provider.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/root_window_controller.h"
 #include "ash/shelf/hotseat_widget.h"
+#include "ash/shelf/shelf.h"
 #include "ash/shell.h"
-#include "ash/style/ash_color_provider.h"
 #include "base/i18n/rtl.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "ui/base/models/image_model.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/gfx/paint_vector_icon.h"
@@ -30,9 +33,6 @@ namespace {
 // The corner radius of the nudge view.
 constexpr int kNudgeCornerRadius = 8;
 
-// The blur radius for the nudge view's background.
-constexpr int kNudgeBlurRadius = 30;
-
 // The margin between the edge of the screen/shelf and the nudge widget bounds.
 constexpr int kNudgeMargin = 8;
 
@@ -46,7 +46,6 @@ gfx::Rect CalculateWidgetBounds(const gfx::Rect& display_bounds,
                                 int nudge_height) {
   bool shelf_hidden = shelf->GetVisibilityState() != SHELF_VISIBLE &&
                       shelf->GetAutoHideState() == SHELF_AUTO_HIDE_HIDDEN;
-
   int x;
   if (base::i18n::IsRTL()) {
     x = display_bounds.right() - nudge_width - kNudgeMargin;
@@ -65,9 +64,11 @@ gfx::Rect CalculateWidgetBounds(const gfx::Rect& display_bounds,
     y = hotseat_widget->GetTargetBounds().y() - nudge_height - kNudgeMargin;
   } else {
     y = display_bounds.bottom() - nudge_height - kNudgeMargin;
-    if ((shelf->alignment() == ShelfAlignment::kBottom && !shelf_hidden) ||
-        shelf->alignment() == ShelfAlignment::kBottomLocked)
+    if ((shelf->alignment() == ShelfAlignment::kBottom ||
+         shelf->alignment() == ShelfAlignment::kBottomLocked) &&
+        !shelf_hidden) {
       y -= ShelfConfig::Get()->shelf_size();
+    }
   }
 
   return gfx::Rect(x, y, nudge_width, nudge_height);
@@ -87,8 +88,10 @@ class SystemNudge::SystemNudgeView : public views::View {
         views::BoxLayout::CrossAxisAlignment::kStart);
     SetLayoutManager(std::move(layout));
     SetPaintToLayer(ui::LAYER_SOLID_COLOR);
-    if (features::IsBackgroundBlurEnabled())
-      layer()->SetBackgroundBlur(kNudgeBlurRadius);
+    if (features::IsBackgroundBlurEnabled()) {
+      layer()->SetBackgroundBlur(ColorProvider::kBackgroundBlurSigma);
+      layer()->SetBackdropFilterQuality(ColorProvider::kBackgroundBlurQuality);
+    }
     layer()->SetRoundedCornerRadius({kNudgeCornerRadius, kNudgeCornerRadius,
                                      kNudgeCornerRadius, kNudgeCornerRadius});
 
@@ -96,20 +99,9 @@ class SystemNudge::SystemNudgeView : public views::View {
     icon_->SetPaintToLayer();
     icon_->layer()->SetFillsBoundsOpaquely(false);
     icon_->SetSize({nudge->params_.icon_size, nudge->params_.icon_size});
-    icon_->SetImage(ui::ImageModel::FromImageGenerator(
-        base::BindRepeating(
-            [](base::WeakPtr<SystemNudge> nudge, const ui::ColorProvider*) {
-              // If `nudge` does not exist anymore, no image will be displayed.
-              if (!nudge)
-                return gfx::ImageSkia();
-
-              return gfx::CreateVectorIcon(
-                  nudge->GetIcon(),
-                  AshColorProvider::Get()->GetContentLayerColor(
-                      nudge->params_.icon_color_layer_type));
-            },
-            nudge),
-        gfx::Size(nudge->params_.icon_size, nudge->params_.icon_size)));
+    icon_->SetImage(ui::ImageModel::FromVectorIcon(nudge->GetIcon(),
+                                                   nudge->params_.icon_color_id,
+                                                   nudge->params_.icon_size));
     label_ = AddChildView(nudge->CreateLabelView());
     label_->SetPaintToLayer();
     label_->layer()->SetFillsBoundsOpaquely(false);
@@ -123,24 +115,23 @@ class SystemNudge::SystemNudgeView : public views::View {
     layer()->SetColor(ShelfConfig::Get()->GetDefaultShelfColor(GetWidget()));
   }
 
-  views::View* label_ = nullptr;
-  views::ImageView* icon_ = nullptr;
+  raw_ptr<views::View> label_ = nullptr;
+  raw_ptr<views::ImageView> icon_ = nullptr;
 };
 
-SystemNudge::SystemNudge(
-    const std::string& name,
-    NudgeCatalogName catalog_name,
-    int icon_size,
-    int icon_label_spacing,
-    int nudge_padding,
-    AshColorProvider::ContentLayerType icon_color_layer_type)
+SystemNudge::SystemNudge(const std::string& name,
+                         NudgeCatalogName catalog_name,
+                         int icon_size,
+                         int icon_label_spacing,
+                         int nudge_padding,
+                         ui::ColorId icon_color_id)
     : root_window_(Shell::GetRootWindowForNewWindows()) {
   params_.name = name;
   params_.catalog_name = catalog_name;
   params_.icon_size = icon_size;
   params_.icon_label_spacing = icon_label_spacing;
   params_.nudge_padding = nudge_padding;
-  params_.icon_color_layer_type = icon_color_layer_type;
+  params_.icon_color_id = icon_color_id;
 }
 
 SystemNudge::~SystemNudge() = default;
@@ -187,9 +178,6 @@ void SystemNudge::Show() {
   const std::u16string accessibility_text = GetAccessibilityText();
   if (!accessibility_text.empty())
     nudge_view_->GetViewAccessibility().AnnounceText(accessibility_text);
-
-  base::UmaHistogramEnumeration("Ash.NotifierFramework.Nudge.ShownCount",
-                                params_.catalog_name);
 }
 
 void SystemNudge::Close() {

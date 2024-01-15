@@ -4,10 +4,13 @@
 
 #include "content/browser/renderer_host/pending_beacon_host.h"
 
+#include <optional>
 #include <tuple>
 #include <vector>
 
 #include "base/files/file_path.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
@@ -26,7 +29,6 @@
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/permissions/permission_utils.h"
 #include "third_party/blink/public/mojom/frame/pending_beacon.mojom-shared.h"
@@ -94,6 +96,13 @@ class PendingBeaconHostTestBase : public RenderViewHostTestHarness {
   PendingBeaconHostTestBase& operator=(const PendingBeaconHostTestBase&) =
       delete;
   PendingBeaconHostTestBase() = default;
+
+  void TearDown() override {
+    // Clean up error handler, to avoid causing other tests run in the same
+    // process from crashing.
+    mojo::SetDefaultProcessErrorHandler(base::NullCallback());
+    RenderViewHostTestHarness::TearDown();
+  }
 
  protected:
   PendingBeaconHost* host() { return GetOrCreateHostIfNotExist(); }
@@ -165,8 +174,8 @@ class PendingBeaconHostTestBase : public RenderViewHostTestHarness {
         browser_context()->GetPermissionControllerDelegate());
 
     ON_CALL(*mock_permission_manager,
-            GetPermissionResultForOriginWithoutContext(permission_type,
-                                                       ::testing::_))
+            GetPermissionResultForOriginWithoutContext(
+                permission_type, ::testing::_, ::testing::_))
         .WillByDefault(::testing::Return(PermissionResult(
             permission_status, PermissionStatusSource::UNSPECIFIED)));
   }
@@ -327,8 +336,7 @@ TEST_P(PendingBeaconHostTest, SendOnDocumentUnloadWithBackgroundSync) {
   ExpectTotalNetworkRequests(FROM_HERE, total);
 }
 
-TEST_P(PendingBeaconHostTest,
-       DoesNotSendOnDocumentUnloadWithoutBackgroundSync) {
+TEST_P(PendingBeaconHostTest, SendOnDocumentUnloadWithoutBackgroundSync) {
   const std::string method = GetParam();
   const size_t total = 5;
 
@@ -340,7 +348,7 @@ TEST_P(PendingBeaconHostTest,
   // Forces deleting the page where `host` resides.
   DeleteContents();
 
-  ExpectTotalNetworkRequests(FROM_HERE, 0);
+  ExpectTotalNetworkRequests(FROM_HERE, total);
 }
 
 TEST_P(PendingBeaconHostTest, SendOnNavigation) {
@@ -418,7 +426,7 @@ class BeaconTestBase : public PendingBeaconHostTestBase {
 
  private:
   // Owned by `main_rfh()`.
-  PendingBeaconHost* host_;
+  raw_ptr<PendingBeaconHost> host_;
   std::unique_ptr<MockClientBeacon> beacon_;
 };
 
@@ -582,8 +590,7 @@ class PostBeaconRequestDataTest : public BeaconTestBase {
   void SetExpectNetworkRequest(
       const base::Location& location,
       scoped_refptr<network::ResourceRequestBody> expected_body,
-      const absl::optional<std::string>& expected_content_type =
-          absl::nullopt) {
+      const std::optional<std::string>& expected_content_type = std::nullopt) {
     test_url_loader_factory_->SetInterceptor(base::BindLambdaForTesting(
         [location, expected_body,
          expected_content_type](const network::ResourceRequest& request) {

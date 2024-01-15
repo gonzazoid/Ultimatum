@@ -4,20 +4,26 @@
 
 #include "chrome/updater/app/app_server.h"
 
+#include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/check_op.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/process/launch.h"
 #include "base/process/process.h"
+#include "base/time/time.h"
 #include "base/version.h"
+#include "chrome/updater/activity.h"
 #include "chrome/updater/app/app_utils.h"
 #include "chrome/updater/configurator.h"
 #include "chrome/updater/constants.h"
+#include "chrome/updater/external_constants.h"
 #include "chrome/updater/persisted_data.h"
 #include "chrome/updater/prefs.h"
 #include "chrome/updater/update_service.h"
@@ -29,28 +35,26 @@
 #include "chrome/updater/update_service_internal_impl_qualifying.h"
 #include "chrome/updater/updater_scope.h"
 #include "chrome/updater/updater_version.h"
+#include "chrome/updater/util/util.h"
 #include "components/prefs/pref_service.h"
 
 namespace updater {
-
-namespace {
 
 bool IsInternalService() {
   return base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
              kServerServiceSwitch) == kServerUpdateServiceInternalSwitchValue;
 }
 
-}  // namespace
-
-AppServer::AppServer() : external_constants_(CreateExternalConstants()) {}
-
+AppServer::AppServer() = default;
 AppServer::~AppServer() = default;
 
-void AppServer::Initialize() {
+int AppServer::Initialize() {
   first_task_ = ModeCheck();
+  return kErrorOk;
 }
 
 base::OnceClosure AppServer::ModeCheck() {
+  VLOG(2) << __func__;
   scoped_refptr<GlobalPrefs> global_prefs = CreateGlobalPrefs(updater_scope());
   if (!global_prefs) {
     return base::BindOnce(&AppServer::Shutdown, this,
@@ -68,34 +72,53 @@ base::OnceClosure AppServer::ModeCheck() {
 
   if (this_version < active_version) {
     global_prefs = nullptr;
-    uninstall_self_ = true;
     if (IsInternalService()) {
+      uninstall_self_ = true;
       return base::BindOnce(&AppServer::ActiveDutyInternal, this,
                             MakeInactiveUpdateServiceInternal());
     }
+
+#if BUILDFLAG(IS_WIN)
+    return base::BindOnce(&AppServer::Shutdown, this,
+                          static_cast<int>(UpdateService::Result::kInactive));
+#else
     return base::BindOnce(&AppServer::ActiveDuty, this,
                           MakeInactiveUpdateService());
+#endif
   }
 
-  if (active_version != base::Version("0") && active_version != this_version) {
+  if (active_version != base::Version("0") && this_version > active_version) {
     scoped_refptr<LocalPrefs> local_prefs = CreateLocalPrefs(updater_scope());
     if (!local_prefs->GetQualified()) {
       global_prefs = nullptr;
       prefs_ = local_prefs;
       config_ = base::MakeRefCounted<Configurator>(prefs_, external_constants_);
-      return IsInternalService()
-                 ? base::BindOnce(&AppServer::ActiveDutyInternal, this,
-                                  MakeQualifyingUpdateServiceInternal(
-                                      config_, local_prefs))
-                 : base::BindOnce(&AppServer::ActiveDuty, this,
-                                  MakeInactiveUpdateService());
+      if (IsInternalService()) {
+        return base::BindOnce(
+            &AppServer::ActiveDutyInternal, this,
+            MakeQualifyingUpdateServiceInternal(config_, local_prefs));
+      }
+
+#if BUILDFLAG(IS_WIN)
+      return base::BindOnce(&AppServer::Shutdown, this,
+                            static_cast<int>(UpdateService::Result::kInactive));
+#else
+      return base::BindOnce(&AppServer::ActiveDuty, this,
+                            MakeInactiveUpdateService());
+#endif
     }
   }
 
   if (this_version > active_version || global_prefs->GetSwapping()) {
-    if (!SwapVersions(global_prefs.get()))
+    if (!SwapVersions(global_prefs.get(), CreateLocalPrefs(updater_scope()))) {
       return base::BindOnce(&AppServer::Shutdown, this, kErrorFailedToSwap);
+    }
   }
+
+  CHECK_EQ(base::Version(global_prefs->GetActiveVersion()),
+           base::Version(kUpdaterVersion));
+
+  RepairUpdater(updater_scope(), IsInternalService());
 
   if (IsInternalService()) {
     prefs_ = CreateLocalPrefs(updater_scope());
@@ -110,65 +133,126 @@ base::OnceClosure AppServer::ModeCheck() {
                         base::MakeRefCounted<UpdateServiceImpl>(config_));
 }
 
+void AppServer::TaskStarted() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  ++tasks_running_;
+}
+
+void AppServer::TaskCompleted() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(
+          [](scoped_refptr<AppServer> server) {
+            --(server->tasks_running_);
+            server->OnDelayedTaskComplete();
+            if (server->IsIdle() && server->ShutdownIfIdleAfterTask()) {
+              server->Shutdown(0);
+            }
+          },
+          base::WrapRefCounted(this)),
+      external_constants()->ServerKeepAliveTime());
+}
+
+bool AppServer::IsIdle() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return tasks_running_ == 0;
+}
+
 void AppServer::Uninitialize() {
-  if (prefs_)
+  // Simply stopping the timer does not destroy its task. The task holds a
+  // refcount to this AppServer; therefore the task must be replaced and then
+  // the timer stopped.
+  hang_timer_.Start(FROM_HERE, base::Minutes(1), base::DoNothing());
+  hang_timer_.Stop();
+  if (prefs_) {
     PrefsCommitPendingWrites(prefs_->GetPrefService());
+  }
   if (uninstall_self_) {
     VLOG(1) << "Uninstalling version " << kUpdaterVersion;
     UninstallSelf();
   } else {
     MaybeUninstall();
   }
+
+  // Because this instance is leaky when running on Windows, the following
+  // references must be reset to destroy the objects, otherwise `Prefs` leaks.
+  prefs_ = nullptr;
+  config_ = nullptr;
 }
 
 void AppServer::MaybeUninstall() {
-  if (!prefs_)
+  if (!config_ || IsInternalService()) {
     return;
+  }
 
-  auto persisted_data =
-      base::MakeRefCounted<PersistedData>(prefs_->GetPrefService());
+  scoped_refptr<PersistedData> persisted_data =
+      config_->GetUpdaterPersistedData();
   if (ShouldUninstall(persisted_data->GetAppIds(), server_starts_,
                       persisted_data->GetHadApps())) {
-    base::CommandLine command_line(
-        base::CommandLine::ForCurrentProcess()->GetProgram());
-    command_line.AppendSwitch(kUninstallIfUnusedSwitch);
-    if (updater_scope() == UpdaterScope::kSystem)
-      command_line.AppendSwitch(kSystemSwitch);
-    command_line.AppendSwitch(kEnableLoggingSwitch);
-    command_line.AppendSwitchASCII(kLoggingModuleSwitch,
-                                   kLoggingModuleSwitchValue);
-    VLOG(2) << "Launching uninstall command: "
-            << command_line.GetCommandLineString();
-
-    base::Process process = base::LaunchProcess(command_line, {});
-    if (!process.IsValid()) {
-      VLOG(2) << "Invalid process launching command: "
+    std::optional<base::FilePath> executable =
+        GetUpdaterExecutablePath(updater_scope());
+    if (executable) {
+      base::CommandLine command_line(*executable);
+      command_line.AppendSwitch(kUninstallIfUnusedSwitch);
+      if (IsSystemInstall(updater_scope())) {
+        command_line.AppendSwitch(kSystemSwitch);
+      }
+      command_line.AppendSwitch(kEnableLoggingSwitch);
+      command_line.AppendSwitchASCII(kLoggingModuleSwitch,
+                                     kLoggingModuleSwitchValue);
+      VLOG(2) << "Launching uninstall command: "
               << command_line.GetCommandLineString();
+
+      base::Process process = base::LaunchProcess(command_line, {});
+      if (!process.IsValid()) {
+        VLOG(2) << "Invalid process launching command: "
+                << command_line.GetCommandLineString();
+      }
     }
   }
 }
 
 void AppServer::FirstTaskRun() {
   std::move(first_task_).Run();
+  hang_timer_.Start(FROM_HERE, external_constants_->IdleCheckPeriod(),
+                    base::BindRepeating(
+                        [](scoped_refptr<AppServer> server) {
+                          if (server->IsIdle()) {
+                            server->Shutdown(kErrorIdle);
+                          }
+                        },
+                        base::WrapRefCounted(this)));
 }
 
-bool AppServer::SwapVersions(GlobalPrefs* global_prefs) {
+bool AppServer::SwapVersions(GlobalPrefs* global_prefs,
+                             scoped_refptr<LocalPrefs> local_prefs) {
   global_prefs->SetSwapping(true);
   PrefsCommitPendingWrites(global_prefs->GetPrefService());
-  if (!SwapInNewVersion())
-    return false;
   if (!global_prefs->GetMigratedLegacyUpdaters()) {
     if (!MigrateLegacyUpdaters(
-            base::BindRepeating(&PersistedData::RegisterApp,
-                                base::MakeRefCounted<PersistedData>(
-                                    global_prefs->GetPrefService())))) {
+            updater_scope(),
+            base::BindRepeating(
+                &PersistedData::RegisterApp,
+                base::MakeRefCounted<PersistedData>(
+                    updater_scope(), global_prefs->GetPrefService(),
+                    std::make_unique<ActivityDataService>(updater_scope()))))) {
       return false;
     }
     global_prefs->SetMigratedLegacyUpdaters();
   }
+  if (!SwapInNewVersion()) {
+    return false;
+  }
   global_prefs->SetActiveVersion(kUpdaterVersion);
   global_prefs->SetSwapping(false);
   PrefsCommitPendingWrites(global_prefs->GetPrefService());
+
+  // Clear the qualified bit: if ActiveVersion downgrades, something has gone
+  // wrong and this instance should double-check its qualification before taking
+  // back over.
+  local_prefs->SetQualified(false);
+  PrefsCommitPendingWrites(local_prefs->GetPrefService());
   return true;
 }
 

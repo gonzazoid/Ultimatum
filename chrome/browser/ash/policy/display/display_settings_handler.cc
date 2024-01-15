@@ -7,13 +7,12 @@
 #include <utility>
 
 #include "ash/public/ash_interfaces.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
 

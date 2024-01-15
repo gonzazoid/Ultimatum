@@ -24,10 +24,6 @@
 #import "net/base/mac/url_conversions.h"
 #import "url/gurl.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using web::NavigationManagerImpl;
 
 using web::wk_navigation_util::IsRestoreSessionUrl;
@@ -184,8 +180,6 @@ using web::wk_navigation_util::IsRestoreSessionUrl;
       !self.navigationHandler.pendingNavigationInfo.cancelled) {
     // A fast back-forward navigation does not call `didCommitNavigation:`, so
     // signal page change explicitly.
-    DCHECK_EQ(self.documentURL.DeprecatedGetOriginAsURL(),
-              webViewURL.DeprecatedGetOriginAsURL());
     BOOL isSameDocumentNavigation =
         [self isKVOChangePotentialSameDocumentNavigationToURL:webViewURL];
 

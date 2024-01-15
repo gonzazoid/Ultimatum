@@ -5,50 +5,61 @@
 #include "chrome/updater/device_management/dm_storage.h"
 
 #import <Foundation/Foundation.h>
+
+#include <optional>
 #include <string>
 
+#include "base/apple/foundation_util.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/important_file_writer.h"
-#include "base/mac/foundation_util.h"
+#include "base/logging.h"
 #include "base/mac/mac_util.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "base/mac/scoped_ioobject.h"
-#include "base/mac/scoped_nsobject.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
-#include "chrome/updater/mac/mac_util.h"
 #include "chrome/updater/updater_branding.h"
+#include "chrome/updater/util/mac_util.h"
 
 namespace updater {
 namespace {
 
-bool LoadEnrollmentTokenFromPolicy(std::string* enrollment_token) {
-  const CFStringRef kEnrollmentTokenKey = CFSTR("EnrollmentToken");
-  const CFStringRef kBrowserBundleId =
-      CFSTR(MAC_BROWSER_BUNDLE_IDENTIFIER_STRING);
+const CFStringRef kEnrollmentTokenKey = CFSTR("EnrollmentToken");
+const CFStringRef kBrowserBundleId =
+    CFSTR(MAC_BROWSER_BUNDLE_IDENTIFIER_STRING);
 
-  base::ScopedCFTypeRef<CFPropertyListRef> token_value(
+bool LoadEnrollmentTokenFromPolicy(std::string* enrollment_token) {
+  base::apple::ScopedCFTypeRef<CFPropertyListRef> token_value(
       CFPreferencesCopyAppValue(kEnrollmentTokenKey, kBrowserBundleId));
-  if (!token_value || CFGetTypeID(token_value) != CFStringGetTypeID() ||
+  if (!token_value || CFGetTypeID(token_value.get()) != CFStringGetTypeID() ||
       !CFPreferencesAppValueIsForced(kEnrollmentTokenKey, kBrowserBundleId)) {
     return false;
   }
 
-  CFStringRef value_string = base::mac::CFCast<CFStringRef>(token_value);
-  if (!value_string)
+  CFStringRef value_string =
+      base::apple::CFCast<CFStringRef>(token_value.get());
+  if (!value_string) {
     return false;
+  }
 
   *enrollment_token = base::SysCFStringRefToUTF8(value_string);
   return true;
+}
+
+void DeletePolicyEnrollmentToken() {
+  CFPreferencesSetValue(kEnrollmentTokenKey, nil, kBrowserBundleId,
+                        kCFPreferencesAnyUser, kCFPreferencesCurrentHost);
+  CFPreferencesSynchronize(kBrowserBundleId, kCFPreferencesAnyUser,
+                           kCFPreferencesCurrentHost);
 }
 
 // Enrollment token path:
 //   /Library/Google/Chrome/CloudManagementEnrollmentToken.
 base::FilePath GetEnrollmentTokenFilePath() {
   base::FilePath lib_path;
-  if (!base::mac::GetLocalDirectory(NSLibraryDirectory, &lib_path)) {
+  if (!base::apple::GetLocalDirectory(NSLibraryDirectory, &lib_path)) {
     VLOG(1) << "Failed to get local library path.";
     return base::FilePath();
   }
@@ -62,7 +73,8 @@ base::FilePath GetEnrollmentTokenFilePath() {
 //   /Library/Application Support/Google/CloudManagement.
 base::FilePath GetDmTokenFilePath() {
   base::FilePath app_path;
-  if (!base::mac::GetLocalDirectory(NSApplicationSupportDirectory, &app_path)) {
+  if (!base::apple::GetLocalDirectory(NSApplicationSupportDirectory,
+                                      &app_path)) {
     VLOG(1) << "Failed to get Application support path.";
     return base::FilePath();
   }
@@ -85,16 +97,15 @@ bool LoadTokenFromFile(const base::FilePath& token_file_path,
 
 class TokenService : public TokenServiceInterface {
  public:
-  TokenService();
+  TokenService(const base::FilePath& enrollment_token_path,
+               const base::FilePath& dm_token_path);
   ~TokenService() override = default;
 
   // Overrides for TokenServiceInterface.
   std::string GetDeviceID() const override { return device_id_; }
-  bool IsEnrollmentMandatory() const override {
-    // TODO(crbug.com/1345407) : check if enrollment is mandatory.
-    return false;
-  }
+  bool IsEnrollmentMandatory() const override { return false; }
   bool StoreEnrollmentToken(const std::string& enrollment_token) override;
+  bool DeleteEnrollmentToken() override;
   std::string GetEnrollmentToken() const override { return enrollment_token_; }
   bool StoreDmToken(const std::string& dm_token) override;
   bool DeleteDmToken() override;
@@ -102,71 +113,89 @@ class TokenService : public TokenServiceInterface {
 
  private:
   // Cached values in memory.
-  std::string device_id_;
+  const std::string device_id_ = base::mac::GetPlatformSerialNumber();
+  const base::FilePath enrollment_token_path_;
+  const base::FilePath dm_token_path_;
   std::string enrollment_token_;
   std::string dm_token_;
 };
 
-TokenService::TokenService() {
-  device_id_ = base::mac::GetPlatformSerialNumber();
+TokenService::TokenService(const base::FilePath& enrollment_token_path,
+                           const base::FilePath& dm_token_path)
+    : enrollment_token_path_(enrollment_token_path.empty()
+                                 ? GetEnrollmentTokenFilePath()
+                                 : enrollment_token_path),
+      dm_token_path_(dm_token_path.empty() ? GetDmTokenFilePath()
+                                           : dm_token_path) {
   std::string enrollment_token;
   if (LoadEnrollmentTokenFromPolicy(&enrollment_token) ||
-      LoadTokenFromFile(GetEnrollmentTokenFilePath(), &enrollment_token)) {
+      LoadTokenFromFile(enrollment_token_path_, &enrollment_token)) {
     enrollment_token_ = enrollment_token;
   }
 
   std::string dm_token;
-  if (LoadTokenFromFile(GetDmTokenFilePath(), &dm_token)) {
+  if (LoadTokenFromFile(dm_token_path_, &dm_token)) {
     dm_token_ = dm_token;
   }
 }
 
 bool TokenService::StoreEnrollmentToken(const std::string& enrollment_token) {
-  const base::FilePath enrollment_token_path = GetEnrollmentTokenFilePath();
-  if (enrollment_token_path.empty() ||
-      !base::ImportantFileWriter::WriteFileAtomically(enrollment_token_path,
-                                                      enrollment_token)) {
+  if (enrollment_token_path_.empty() ||
+      !CreateGlobalAccessibleDirectory(enrollment_token_path_.DirName()) ||
+      !WriteContentToGlobalReadableFile(enrollment_token_path_,
+                                        enrollment_token)) {
+    VLOG(1) << "Failed to update enrollment token.";
     return false;
   }
 
   enrollment_token_ = enrollment_token;
+  VLOG(1) << "Updated enrollment token to: " << enrollment_token;
   return true;
 }
 
+bool TokenService::DeleteEnrollmentToken() {
+  enrollment_token_ = "";
+  DeletePolicyEnrollmentToken();
+  return base::DeleteFile(base::FilePath(enrollment_token_path_));
+}
+
 bool TokenService::StoreDmToken(const std::string& token) {
-  const base::FilePath dm_token_path = GetDmTokenFilePath();
-  if (dm_token_path.empty() ||
-      !base::ImportantFileWriter::WriteFileAtomically(dm_token_path, token)) {
+  if (dm_token_path_.empty() ||
+      !CreateGlobalAccessibleDirectory(dm_token_path_.DirName()) ||
+      !WriteContentToGlobalReadableFile(dm_token_path_, token)) {
+    VLOG(1) << "Failed to update DM token.";
     return false;
   }
   dm_token_ = token;
+  VLOG(1) << "Updated DM token to: " << token;
   return true;
 }
 
 bool TokenService::DeleteDmToken() {
-  const base::FilePath dm_token_path = GetDmTokenFilePath();
-  if (dm_token_path.empty() || !base::DeleteFile(dm_token_path)) {
+  if (dm_token_path_.empty() || !base::DeleteFile(dm_token_path_)) {
+    VLOG(1) << "Failed to delete DM token.";
     return false;
   }
   dm_token_.clear();
+  VLOG(1) << "DM token deleted.";
   return true;
 }
 
 }  // namespace
 
-DMStorage::DMStorage(const base::FilePath& policy_cache_root)
-    : DMStorage(policy_cache_root, std::make_unique<TokenService>()) {}
+DMStorage::DMStorage(const base::FilePath& policy_cache_root,
+                     const base::FilePath& enrollment_token_path,
+                     const base::FilePath& dm_token_path)
+    : DMStorage(policy_cache_root,
+                std::make_unique<TokenService>(enrollment_token_path,
+                                               dm_token_path)) {}
 
 scoped_refptr<DMStorage> GetDefaultDMStorage() {
-  absl::optional<base::FilePath> sys_library_path =
-      GetLibraryFolderPath(UpdaterScope::kSystem);
-  if (!sys_library_path)
-    return nullptr;
-
-  return base::MakeRefCounted<DMStorage>(
-      sys_library_path->AppendASCII(COMPANY_SHORTNAME_STRING)
-          .Append(FILE_PATH_LITERAL(KEYSTONE_NAME))
-          .AppendASCII("DeviceManagement"));
+  std::optional<base::FilePath> keystone_path =
+      GetKeystoneFolderPath(UpdaterScope::kSystem);
+  return keystone_path ? base::MakeRefCounted<DMStorage>(
+                             keystone_path->AppendASCII("DeviceManagement"))
+                       : nullptr;
 }
 
 }  // namespace updater

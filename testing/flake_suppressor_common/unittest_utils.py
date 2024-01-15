@@ -5,7 +5,7 @@
 import os
 
 from pyfakefs import fake_filesystem_unittest  # pylint: disable=import-error
-from typing import Tuple, Iterable
+from typing import List, Tuple, Iterable
 
 from flake_suppressor_common import common_typing as ct
 from flake_suppressor_common import expectations as expectations_module
@@ -36,7 +36,7 @@ TAG_HEADER = """\
 #         debug debug-x64
 #         release release-x64
 #         fuchsia-chrome web-engine-shell ]
-# results: [ Failure RetryOnFailure Skip Slow ]
+# results: [ Failure RetryOnFailure Pass Skip Slow ]
 """
 
 
@@ -69,6 +69,9 @@ class UnitTest_BigQueryQuerier(queries.BigQueryQuerier):
   def GetFlakyOrFailingTryQuery(self) -> str:
     return """submitted_builds SELECT * FROM bar"""
 
+  def GetFailingBuildCulpritFromCiQuery(self) -> str:
+    raise NotImplementedError()
+
 
 class UnitTestResultProcessor(results_module.ResultProcessor):
   def GetTestSuiteAndNameFromResultDbName(self, result_db_name: str
@@ -78,7 +81,7 @@ class UnitTestResultProcessor(results_module.ResultProcessor):
 
 
 class UnitTestTagUtils(tag_utils.BaseTagUtils):
-  def RemoveMostIgnoredTags(self, tags: Iterable[str]) -> ct.TagTupleType:
+  def RemoveIgnoredTags(self, tags: Iterable[str]) -> ct.TagTupleType:
     tags = list(set(tags) - set(['win-laptop']))
     tags.sort()
     return tuple(tags)
@@ -98,5 +101,11 @@ class UnitTestExpectationProcessor(expectations_module.ExpectationProcessor):
     if fraction < flaky_threshold:
       return 'RetryOnFailure'
     return 'Failure'
+
+  def ListLocalCheckoutExpectationFiles(self) -> List[str]:
+    raise NotImplementedError()
+
+  def ListOriginExpectationFiles(self) -> List[str]:
+    raise NotImplementedError()
 
 # pylint: enable=unused-argument

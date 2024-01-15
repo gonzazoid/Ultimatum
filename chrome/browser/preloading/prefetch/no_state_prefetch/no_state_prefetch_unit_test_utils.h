@@ -12,6 +12,7 @@
 #include "chrome/browser/preloading/prefetch/no_state_prefetch/chrome_no_state_prefetch_manager_delegate.h"
 #include "components/no_state_prefetch/browser/no_state_prefetch_contents.h"
 #include "components/no_state_prefetch/browser/no_state_prefetch_manager.h"
+#include "content/public/browser/preloading_data.h"
 #include "url/gurl.h"
 
 namespace prerender {
@@ -31,12 +32,13 @@ class FakeNoStatePrefetchContents : public NoStatePrefetchContents {
 
   void StartPrerendering(
       const gfx::Rect& bounds,
-      content::SessionStorageNamespace* session_storage_namespace) override;
+      content::SessionStorageNamespace* session_storage_namespace,
+      base::WeakPtr<content::PreloadingAttempt> preloading_attempt) override;
 
   FinalStatus expected_final_status() const { return expected_final_status_; }
 
-  bool prerendering_has_been_cancelled() const {
-    return NoStatePrefetchContents::prerendering_has_been_cancelled();
+  bool prefetching_has_been_cancelled() const {
+    return NoStatePrefetchContents::prefetching_has_been_cancelled();
   }
 
  private:

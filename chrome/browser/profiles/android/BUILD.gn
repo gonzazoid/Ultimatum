@@ -3,13 +3,13 @@
 # found in the LICENSE file.
 
 import("//build/config/android/rules.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 # Keep profiles and cookies in the same target due to bi-directional dependency
 # between Profile and CookiesFetcher.
 android_library("java") {
   deps = [
     "//base:base_java",
-    "//base:jni_java",
     "//build/android:build_java",
     "//chrome/browser/android/crypto:java",
     "//chrome/browser/preferences:java",
@@ -18,8 +18,10 @@ android_library("java") {
     "//components/profile_metrics:browser_profile_type_enum_java",
     "//content/public/android:content_full_java",
     "//third_party/androidx:androidx_annotation_annotation_java",
+    "//third_party/jni_zero:jni_zero_java",
   ]
-  annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
+
+  srcjar_deps = [ ":jni_headers" ]
   sources = [
     "java/src/org/chromium/chrome/browser/cookies/CanonicalCookie.java",
     "java/src/org/chromium/chrome/browser/cookies/CookiesFetcher.java",
@@ -27,8 +29,10 @@ android_library("java") {
     "java/src/org/chromium/chrome/browser/profiles/OriginalProfileSupplier.java",
     "java/src/org/chromium/chrome/browser/profiles/Profile.java",
     "java/src/org/chromium/chrome/browser/profiles/ProfileKey.java",
+    "java/src/org/chromium/chrome/browser/profiles/ProfileKeyedMap.java",
     "java/src/org/chromium/chrome/browser/profiles/ProfileManager.java",
     "java/src/org/chromium/chrome/browser/profiles/ProfileManagerUtils.java",
+    "java/src/org/chromium/chrome/browser/profiles/ProfileProvider.java",
     "java/src/org/chromium/chrome/browser/profiles/ProfileResolver.java",
   ]
 }
@@ -42,5 +46,20 @@ generate_jni("jni_headers") {
     "java/src/org/chromium/chrome/browser/profiles/ProfileManager.java",
     "java/src/org/chromium/chrome/browser/profiles/ProfileManagerUtils.java",
     "java/src/org/chromium/chrome/browser/profiles/ProfileResolver.java",
+  ]
+}
+
+robolectric_library("junit") {
+  sources = [
+    "java/src/org/chromium/chrome/browser/profiles/ProfileKeyedMapTest.java",
+  ]
+
+  deps = [
+    ":java",
+    "//base:base_java",
+    "//base:base_junit_test_support",
+    "//third_party/hamcrest:hamcrest_java",
+    "//third_party/junit",
+    "//third_party/mockito:mockito_java",
   ]
 }

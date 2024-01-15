@@ -10,12 +10,13 @@
 #include "chrome/browser/media/webrtc/desktop_media_list.h"
 
 class GURL;
+class PrefRegistrySimple;
 class PrefService;
 
 namespace content {
 class BrowserContext;
 class WebContents;
-}
+}  // namespace content
 
 // This enum represents the various levels in priority order from most
 // restrictive to least restrictive, to which capture may be restricted by
@@ -31,6 +32,9 @@ enum class AllowedScreenCaptureLevel {
 };
 
 namespace capture_policy {
+
+extern const char kManagedAccessToGetAllScreensMediaAllowedForUrls[];
+
 // Gets the highest capture level that the requesting origin is allowed to
 // request based on any configured enterprise policies. This is a convenience
 // overload which extracts the PrefService from the WebContents.
@@ -60,10 +64,18 @@ void FilterMediaList(std::vector<DesktopMediaList::Type>& media_types,
 
 void ShowCaptureTerminatedDialog(content::WebContents* contents);
 
+void RegisterProfilePrefs(PrefRegistrySimple* registry);
+
 // TODO(crbug.com/1342069): Use Origin instead of GURL.
-bool IsGetDisplayMediaSetSelectAllScreensAllowed(
-    content::BrowserContext* context,
-    const GURL& url);
+bool IsGetAllScreensMediaAllowed(content::BrowserContext* context,
+                                 const GURL& url);
+
+bool IsGetAllScreensMediaAllowedForAnySite(content::BrowserContext* context);
+
+#if !BUILDFLAG(IS_ANDROID)
+bool IsTransientActivationRequiredForGetDisplayMedia(
+    content::WebContents* contents);
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 }  // namespace capture_policy
 

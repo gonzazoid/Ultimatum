@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 namespace base {
 template <typename T>
-struct DefaultSingletonTraits;
+class NoDestructor;
 }
 namespace permissions {
 class PredictionModelHandlerProvider;
@@ -27,14 +27,15 @@ class PredictionModelHandlerProviderFactory
   static permissions::PredictionModelHandlerProvider* GetForBrowserContext(
       content::BrowserContext* context);
 
+  bool ServiceIsCreatedWithBrowserContext() const override;
+
  private:
   PredictionModelHandlerProviderFactory();
   ~PredictionModelHandlerProviderFactory() override;
-  friend struct base::DefaultSingletonTraits<
-      PredictionModelHandlerProviderFactory>;
+  friend base::NoDestructor<PredictionModelHandlerProviderFactory>;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 };
 

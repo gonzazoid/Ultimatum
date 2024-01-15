@@ -7,7 +7,9 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
+#include "base/scoped_observation_traits.h"
 #include "chromeos/ash/services/libassistant/grpc/external_services/grpc_services_observer.h"
 #include "chromeos/ash/services/libassistant/grpc/services_status_observer.h"
 #include "chromeos/ash/services/libassistant/public/cpp/assistant_timer.h"
@@ -47,8 +49,6 @@ class SettingsUiUpdate;
 namespace assistant_client {
 class ActionModule;
 class AssistantManager;
-class AssistantManagerInternal;
-class ChromeOSApiDelegate;
 class HttpConnectionFactory;
 }  // namespace assistant_client
 
@@ -93,8 +93,7 @@ class AssistantClient {
   using AuthTokens = std::vector<std::pair<std::string, std::string>>;
 
   AssistantClient(
-      std::unique_ptr<assistant_client::AssistantManager> assistant_manager,
-      assistant_client::AssistantManagerInternal* assistant_manager_internal);
+      std::unique_ptr<assistant_client::AssistantManager> assistant_manager);
   AssistantClient(const AssistantClient&) = delete;
   AssistantClient& operator=(const AssistantClient&) = delete;
   virtual ~AssistantClient();
@@ -106,9 +105,6 @@ class AssistantClient {
 
   virtual void StartGrpcHttpConnectionClient(
       assistant_client::HttpConnectionFactory*) = 0;
-
-  virtual void SetChromeOSApiDelegate(
-      assistant_client::ChromeOSApiDelegate* delegate) = 0;
 
   // 1. Start a gRPC server which hosts the services that Libassistant depends
   // on (maybe called by Libassistant) or receive events from Libassistant.
@@ -158,8 +154,6 @@ class AssistantClient {
       base::OnceCallback<void(bool)> on_done) = 0;
   virtual void RegisterActionModule(
       assistant_client::ActionModule* action_module) = 0;
-  virtual void SendScreenContextRequest(
-      const std::vector<std::string>& context_protos) = 0;
   virtual void StartVoiceInteraction() = 0;
   virtual void StopAssistantInteraction(bool cancel_conversation) = 0;
   virtual void AddConversationStateEventObserver(
@@ -183,7 +177,6 @@ class AssistantClient {
       base::OnceCallback<void(
           const ::assistant::api::GetAssistantSettingsResponse&)> on_done) = 0;
   virtual void SetLocaleOverride(const std::string& locale) = 0;
-  virtual void SetDeviceAttributes(bool enable_dark_mode) = 0;
   virtual std::string GetDeviceId() = 0;
 
   // Audio-related functionality:
@@ -216,32 +209,41 @@ class AssistantClient {
   assistant_client::AssistantManager* assistant_manager() {
     return assistant_manager_.get();
   }
-  // Will not return nullptr.
-  assistant_client::AssistantManagerInternal* assistant_manager_internal() {
-    return assistant_manager_internal_;
-  }
 
-  // Creates an instance of AssistantClient, the returned instance could be
-  // LibAssistant V1 or V2 based depending on the current flags. It should be
-  // transparent to the caller.
+  // Creates an instance of AssistantClient.
   static std::unique_ptr<AssistantClient> Create(
-      std::unique_ptr<assistant_client::AssistantManager> assistant_manager,
-      assistant_client::AssistantManagerInternal* assistant_manager_internal);
+      std::unique_ptr<assistant_client::AssistantManager> assistant_manager);
 
  protected:
   void ResetAssistantManager();
 
  private:
   std::unique_ptr<assistant_client::AssistantManager> assistant_manager_;
-  assistant_client::AssistantManagerInternal* assistant_manager_internal_ =
-      nullptr;
 };
 
 }  // namespace ash::libassistant
 
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos::libassistant {
-using ::ash::libassistant::AssistantClient;
-}
+namespace base {
+
+template <>
+struct ScopedObservationTraits<
+    ash::libassistant::AssistantClient,
+    ash::libassistant::GrpcServicesObserver<
+        ::assistant::api::OnSpeakerIdEnrollmentEventRequest>> {
+  static void AddObserver(
+      ash::libassistant::AssistantClient* source,
+      ash::libassistant::GrpcServicesObserver<
+          ::assistant::api::OnSpeakerIdEnrollmentEventRequest>* observer) {
+    source->AddSpeakerIdEnrollmentEventObserver(observer);
+  }
+  static void RemoveObserver(
+      ash::libassistant::AssistantClient* source,
+      ash::libassistant::GrpcServicesObserver<
+          ::assistant::api::OnSpeakerIdEnrollmentEventRequest>* observer) {
+    source->RemoveSpeakerIdEnrollmentEventObserver(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // CHROMEOS_ASH_SERVICES_LIBASSISTANT_GRPC_ASSISTANT_CLIENT_H_

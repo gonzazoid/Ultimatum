@@ -10,14 +10,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/task_runner.h"
-#include "base/task/task_runner_util.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "components/ownership/owner_key_util.h"
 #include "crypto/scoped_nss_types.h"
@@ -32,45 +31,73 @@ using ScopedSGNContext = std::unique_ptr<
     SGNContext,
     crypto::NSSDestroyer1<SGNContext, SGN_DestroyContext, PR_TRUE>>;
 
+crypto::ScopedSECItem SignPolicy(
+    const scoped_refptr<ownership::PrivateKey>& private_key,
+    base::span<const uint8_t> policy) {
+  crypto::ScopedSECItem sign_result(SECITEM_AllocItem(nullptr, nullptr, 0));
+
+  if (SEC_SignData(sign_result.get(), policy.data(), policy.size(),
+                   private_key->key(),
+                   SEC_OID_PKCS1_SHA1_WITH_RSA_ENCRYPTION) != SECSuccess) {
+    return nullptr;
+  }
+  return sign_result;
+}
+
+// |public_key| is included in the |policy|
+// if the ChromeSideOwnerKeyGeneration Feature is enabled. |private_key|
+// actually signs the |policy| (must belong to the same key pair as
+// |public_key|).
 std::unique_ptr<em::PolicyFetchResponse> AssembleAndSignPolicy(
     std::unique_ptr<em::PolicyData> policy,
+    scoped_refptr<ownership::PublicKey> public_key,
     scoped_refptr<ownership::PrivateKey> private_key) {
   DCHECK(private_key->key());
 
   // Assemble the policy.
   std::unique_ptr<em::PolicyFetchResponse> policy_response(
       new em::PolicyFetchResponse());
+
+  if (base::FeatureList::IsEnabled(ownership::kChromeSideOwnerKeyGeneration)) {
+    policy_response->set_new_public_key(public_key->data().data(),
+                                        public_key->data().size());
+  }
+
   if (!policy->SerializeToString(policy_response->mutable_policy_data())) {
     LOG(ERROR) << "Failed to encode policy payload.";
     return nullptr;
   }
 
-  ScopedSGNContext sign_context(SGN_NewContext(
-      SEC_OID_PKCS1_SHA1_WITH_RSA_ENCRYPTION, private_key->key()));
-  if (!sign_context) {
-    NOTREACHED();
-    return nullptr;
-  }
+  // Retry signature generation several times. At the low level this is
+  // performed by Chaps which implements the PKCS#11 interface. It's expected
+  // that some operations might fail because PKCS#11 sessions can get closed. In
+  // such cases the caller should retry the request. This is not expected to
+  // happen too often, 5 attempts should be enough.
+  int attempt_counter = 0;
+  constexpr int kMaxSignatureAttempts = 5;
+  crypto::ScopedSECItem signature_item;
+  do {
+    ++attempt_counter;
+    signature_item = SignPolicy(
+        private_key,
+        base::as_bytes(base::make_span(policy_response->policy_data())));
+  } while (!signature_item && attempt_counter < kMaxSignatureAttempts);
 
-  SECItem signature_item;
-  if (SGN_Begin(sign_context.get()) != SECSuccess ||
-      SGN_Update(sign_context.get(),
-                 reinterpret_cast<const uint8_t*>(
-                     policy_response->policy_data().c_str()),
-                 policy_response->policy_data().size()) != SECSuccess ||
-      SGN_End(sign_context.get(), &signature_item) != SECSuccess) {
+  if (!signature_item) {
     LOG(ERROR) << "Failed to create policy signature.";
     return nullptr;
   }
 
   policy_response->mutable_policy_data_signature()->assign(
-      reinterpret_cast<const char*>(signature_item.data), signature_item.len);
-  SECITEM_FreeItem(&signature_item, PR_FALSE);
-
+      reinterpret_cast<const char*>(signature_item->data), signature_item->len);
   return policy_response;
 }
 
 }  // namespace
+
+BASE_FEATURE(kChromeSideOwnerKeyGeneration,
+             "ChromeSideOwnerKeyGeneration",
+             base::FeatureState::FEATURE_ENABLED_BY_DEFAULT);
 
 OwnerSettingsService::OwnerSettingsService(
     const scoped_refptr<ownership::OwnerKeyUtil>& owner_key_util)
@@ -102,7 +129,7 @@ bool OwnerSettingsService::IsOwner() {
 void OwnerSettingsService::IsOwnerAsync(IsOwnerCallback callback) {
   DCHECK(thread_checker_.CalledOnValidThread());
   if (private_key_.get()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), IsOwner()));
   } else {
     pending_is_owner_callbacks_.push_back(std::move(callback));
@@ -116,10 +143,16 @@ bool OwnerSettingsService::AssembleAndSignPolicyAsync(
   DCHECK(thread_checker_.CalledOnValidThread());
   if (!task_runner || !IsOwner())
     return false;
-  return base::PostTaskAndReplyWithResult(
-      task_runner, FROM_HERE,
-      base::BindOnce(&AssembleAndSignPolicy, std::move(policy), private_key_),
-      std::move(callback));
+  // |public_key_| is explicitly forwarded down to
+  // |OwnerSettingsServiceAsh::OnSignedPolicyStored()| to make sure that only
+  // the key that was actually included in a policy gets marked as persisted
+  // (theoretically a different key can be re-assigned to |public_key_| in
+  // between the async calls).
+  return task_runner->PostTaskAndReplyWithResult(
+      FROM_HERE,
+      base::BindOnce(&AssembleAndSignPolicy, std::move(policy), public_key_,
+                     private_key_),
+      base::BindOnce(std::move(callback), public_key_));
 }
 
 bool OwnerSettingsService::SetBoolean(const std::string& setting, bool value) {

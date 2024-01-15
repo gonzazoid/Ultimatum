@@ -11,22 +11,20 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "base/version.h"
 #include "components/update_client/crx_downloader.h"
 #include "components/update_client/protocol_parser.h"
 #include "components/update_client/update_client.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
-
-namespace base {
-class Value;
-}  // namespace base
 
 namespace update_client {
 
@@ -54,11 +52,12 @@ class Component {
 
   CrxUpdateItem GetCrxUpdateItem() const;
 
-  // Sets the uninstall state for this component.
-  void Uninstall(const CrxComponent& crx_component, int reason);
-
-  // Set the registration state for this component.
-  void Registration(const CrxComponent& crx_component);
+  // Sets the ping-only state for this component.
+  void PingOnly(const CrxComponent& crx_component,
+                int event_type,
+                int result,
+                int error_code,
+                int extra_code1);
 
   // Called by the UpdateEngine when an update check for this component is done.
   void SetUpdateCheckResult(
@@ -77,6 +76,8 @@ class Component {
   // Returns true if an update is available for this component, meaning that
   // the update server has return a response containing an update.
   bool IsUpdateAvailable() const { return is_update_available_; }
+
+  void Cancel() { state_->Cancel(); }
 
   base::TimeDelta GetUpdateDuration() const;
 
@@ -110,10 +111,14 @@ class Component {
 
   const std::vector<GURL>& crx_diffurls() const { return crx_diffurls_; }
 
-  bool diff_update_failed() const { return !!diff_error_code_; }
+  bool diff_update_failed() const { return diff_error_code_; }
 
   ErrorCategory error_category() const { return error_category_; }
-  int error_code() const { return error_code_; }
+  int error_code() const {
+    return installer_result_ && installer_result_->original_error
+               ? installer_result_->original_error
+               : error_code_;
+  }
   int extra_code1() const { return extra_code1_; }
   ErrorCategory diff_error_category() const { return diff_error_category_; }
   int diff_error_code() const { return diff_error_code_; }
@@ -125,10 +130,10 @@ class Component {
 
   std::string session_id() const;
 
-  const std::vector<base::Value>& events() const { return events_; }
+  const std::vector<base::Value::Dict>& events() const { return events_; }
 
   // Returns a clone of the component events.
-  std::vector<base::Value> GetEvents() const;
+  std::vector<base::Value::Dict> GetEvents() const;
 
  private:
   friend class MockPingManagerImpl;
@@ -162,6 +167,12 @@ class Component {
 
     ComponentState state() const { return state_; }
 
+    void Cancel() {
+      if (cancel_callback_) {
+        std::move(cancel_callback_).Run();
+      }
+    }
+
    protected:
     // Initiates the transition to the new state.
     void TransitionState(std::unique_ptr<State> new_state);
@@ -170,17 +181,18 @@ class Component {
     // can further occur.
     void EndState();
 
-    Component& component() { return component_; }
-    const Component& component() const { return component_; }
+    Component& component() { return *component_; }
+    const Component& component() const { return *component_; }
 
     SEQUENCE_CHECKER(sequence_checker_);
 
     const ComponentState state_;
+    base::OnceClosure cancel_callback_;
 
    private:
     virtual void DoHandle() = 0;
 
-    Component& component_;
+    const raw_ref<Component> component_;
     CallbackNextState callback_next_state_;
   };
 
@@ -231,6 +243,7 @@ class Component {
     // State overrides.
     void DoHandle() override;
     bool CanTryDiffUpdate() const;
+    void CheckIfCacheContainsCrxComplete(bool crx_is_in_cache);
   };
 
   class StateUpToDate : public State {
@@ -303,7 +316,8 @@ class Component {
     void InstallProgress(int install_progress);
     void InstallComplete(ErrorCategory error_category,
                          int error_code,
-                         int extra_code1);
+                         int extra_code1,
+                         absl::optional<CrxInstaller::Result> installer_result);
   };
 
   class StateUpdating : public State {
@@ -320,7 +334,8 @@ class Component {
     void InstallProgress(int install_progress);
     void InstallComplete(ErrorCategory error_category,
                          int error_code,
-                         int extra_code1);
+                         int extra_code1,
+                         absl::optional<CrxInstaller::Result> installer_result);
   };
 
   class StateUpdated : public State {
@@ -335,26 +350,12 @@ class Component {
     void DoHandle() override;
   };
 
-  class StateUninstalled : public State {
+  class StatePingOnly : public State {
    public:
-    explicit StateUninstalled(Component* component);
-    StateUninstalled(const StateUninstalled&) = delete;
-    StateUninstalled& operator=(const StateUninstalled&) = delete;
-    ~StateUninstalled() override;
-
-   private:
-    // State overrides.
-    void DoHandle() override;
-  };
-
-  class StateRegistration : public State {
-   public:
-    explicit StateRegistration(Component* component);
-
-    StateRegistration(const StateRegistration&) = delete;
-    StateRegistration& operator=(const StateRegistration&) = delete;
-
-    ~StateRegistration() override;
+    explicit StatePingOnly(Component* component);
+    StatePingOnly(const StatePingOnly&) = delete;
+    StatePingOnly& operator=(const StatePingOnly&) = delete;
+    ~StatePingOnly() override;
 
    private:
     // State overrides.
@@ -383,7 +384,7 @@ class Component {
   // by a downloader which can do bandwidth throttling on the client side.
   bool CanDoBackgroundDownload() const;
 
-  void AppendEvent(base::Value event);
+  void AppendEvent(base::Value::Dict event);
 
   // Changes the component state and notifies the caller of the |Handle|
   // function that the handling of this component state is complete.
@@ -399,14 +400,12 @@ class Component {
 
   // These functions return a specific event. Each data member of the event is
   // represented as a key-value pair in a dictionary value.
-  base::Value MakeEventUpdateComplete() const;
-  base::Value MakeEventDownloadMetrics(
+  base::Value::Dict MakeEventUpdateComplete() const;
+  base::Value::Dict MakeEventDownloadMetrics(
       const CrxDownloader::DownloadMetrics& download_metrics) const;
-  base::Value MakeEventUninstalled() const;
-  base::Value MakeEventRegistration() const;
-  base::Value MakeEventActionRun(bool succeeded,
-                                 int error_code,
-                                 int extra_code1) const;
+  base::Value::Dict MakeEventActionRun(bool succeeded,
+                                       int error_code,
+                                       int extra_code1) const;
 
   std::unique_ptr<CrxInstaller::InstallParams> install_params() const;
 
@@ -448,7 +447,7 @@ class Component {
   // The error reported by the update checker.
   int update_check_error_ = 0;
 
-  base::FilePath crx_path_;
+  base::FilePath payload_path_;
 
   // The byte counts below are valid for the current url being fetched.
   // |total_bytes| is equal to the size of the CRX file and |downloaded_bytes|
@@ -467,9 +466,12 @@ class Component {
   // the |extra_code1| usually contains a system error, but it can contain
   // any extended information that is relevant to either the category or the
   // error itself.
+  // The `installer_result_` contains the value provided by the `CrxInstaller`
+  // instance when the install completes.
   ErrorCategory error_category_ = ErrorCategory::kNone;
   int error_code_ = 0;
   int extra_code1_ = 0;
+  absl::optional<CrxInstaller::Result> installer_result_;
   ErrorCategory diff_error_category_ = ErrorCategory::kNone;
   int diff_error_code_ = 0;
   int diff_extra_code1_ = 0;
@@ -482,11 +484,11 @@ class Component {
   absl::optional<CrxInstaller::InstallParams> install_params_;
 
   // Contains the events which are therefore serialized in the requests.
-  std::vector<base::Value> events_;
+  std::vector<base::Value::Dict> events_;
 
   CallbackHandleComplete callback_handle_complete_;
   std::unique_ptr<State> state_;
-  const UpdateContext& update_context_;
+  const raw_ref<const UpdateContext> update_context_;
 
   ComponentState previous_state_ = ComponentState::kLastStatus;
 

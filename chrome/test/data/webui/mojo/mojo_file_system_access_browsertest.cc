@@ -2,12 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/test/test_file_util.h"
 #include "chrome/browser/bad_message.h"
 #include "chrome/browser/chrome_content_browser_client.h"
 #include "chrome/browser/ui/browser.h"
@@ -54,16 +55,17 @@ class MojoFileSystemAccessUI : public ui::MojoWebUIController,
   explicit MojoFileSystemAccessUI(content::WebUI* web_ui)
       : ui::MojoWebUIController(web_ui), receiver_(this) {
     content::WebUIDataSource* data_source =
-        content::WebUIDataSource::Create(kTestWebUIHost);
-    data_source->SetDefaultResource(IDR_MOJO_FILE_SYSTEM_ACCESS_TEST_HTML);
+        content::WebUIDataSource::CreateAndAdd(
+            web_ui->GetWebContents()->GetBrowserContext(), kTestWebUIHost);
+    data_source->SetDefaultResource(
+        IDR_WEBUI_MOJO_MOJO_FILE_SYSTEM_ACCESS_TEST_HTML);
     data_source->DisableContentSecurityPolicy();
     data_source->AddResourcePath(
         "mojo_file_system_access_test.mojom-webui.js",
-        IDR_MOJO_FILE_SYSTEM_ACCESS_TEST_MOJOM_WEBUI_JS);
-    data_source->AddResourcePath("mojo_file_system_access_test.js",
-                                 IDR_MOJO_FILE_SYSTEM_ACCESS_TEST_JS);
-    content::WebUIDataSource::Add(web_ui->GetWebContents()->GetBrowserContext(),
-                                  data_source);
+        IDR_WEBUI_MOJO_MOJO_FILE_SYSTEM_ACCESS_TEST_MOJOM_WEBUI_JS);
+    data_source->AddResourcePath(
+        "mojo_file_system_access_test.js",
+        IDR_WEBUI_MOJO_MOJO_FILE_SYSTEM_ACCESS_TEST_JS);
   }
 
   MojoFileSystemAccessUI(const MojoFileSystemAccessUI&) = delete;
@@ -121,11 +123,11 @@ class OrdinaryMojoWebUI : public ui::MojoWebUIController {
   explicit OrdinaryMojoWebUI(content::WebUI* web_ui)
       : ui::MojoWebUIController(web_ui) {
     content::WebUIDataSource* data_source =
-        content::WebUIDataSource::Create(kOrdinaryWebUIHost);
+        content::WebUIDataSource::CreateAndAdd(
+            web_ui->GetWebContents()->GetBrowserContext(), kOrdinaryWebUIHost);
     data_source->DisableContentSecurityPolicy();
-    data_source->SetDefaultResource(IDR_MOJO_JS_INTERFACE_BROKER_TEST_BUZ_HTML);
-    content::WebUIDataSource::Add(web_ui->GetWebContents()->GetBrowserContext(),
-                                  data_source);
+    data_source->SetDefaultResource(
+        IDR_WEBUI_MOJO_MOJO_JS_INTERFACE_BROKER_TEST_BUZ_HTML);
   }
 };
 
@@ -225,7 +227,14 @@ IN_PROC_BROWSER_TEST_F(MojoFileSystemAccessBrowserTest, CanResolveFilePath) {
   // Create a test file.
   base::ScopedAllowBlockingForTesting allow_blocking;
   base::ScopedTempDir temp_directory;
-  ASSERT_TRUE(temp_directory.CreateUniqueTempDir());
+
+  // Create a scoped directory under %TEMP% instead of using
+  // `base::ScopedTempDir::CreateUniqueTempDir`.
+  // `base::ScopedTempDir::CreateUniqueTempDir` creates a path under
+  // %ProgramFiles% on Windows when running as Admin, which is a blocked path
+  // (`kBlockedPaths`). This can fail some of the tests.
+  ASSERT_TRUE(temp_directory.CreateUniqueTempDirUnderPath(
+      base::GetTempDirForTesting()));
   base::FilePath temp_file;
   ASSERT_TRUE(
       base::CreateTemporaryFileInDir(temp_directory.GetPath(), &temp_file));
@@ -233,7 +242,8 @@ IN_PROC_BROWSER_TEST_F(MojoFileSystemAccessBrowserTest, CanResolveFilePath) {
 
   // In WebUI, open test file and pass it to WebUIController.
   ui::SelectFileDialog::SetFactory(
-      new SelectPredeterminedFileDialogFactory({temp_file}));
+      std::make_unique<SelectPredeterminedFileDialogFactory>(
+          std::vector<base::FilePath>{temp_file}));
 
   EXPECT_EQ(true,
             content::EvalJs(
@@ -253,7 +263,7 @@ IN_PROC_BROWSER_TEST_F(MojoFileSystemAccessBrowserTest, CanResolveFilePath) {
   // Reload the page to trigger RenderFrameHost reuse. The API should remain
   // available.
   content::TestNavigationObserver observer(web_contents, 1);
-  EXPECT_TRUE(content::ExecuteScript(web_contents, "location.reload()"));
+  EXPECT_TRUE(content::ExecJs(web_contents, "location.reload()"));
   observer.Wait();
   EXPECT_EQ(true, content::EvalJs(
                       web_contents,

@@ -8,7 +8,7 @@
 #include <jni.h>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "components/component_updater/update_scheduler.h"
 
@@ -18,9 +18,6 @@ namespace component_updater {
 // BackgroundTaskScheduler.
 class BackgroundTaskUpdateScheduler : public UpdateScheduler {
  public:
-  // Returns true if this scheduler can be used.
-  static bool IsAvailable();
-
   BackgroundTaskUpdateScheduler();
 
   BackgroundTaskUpdateScheduler(const BackgroundTaskUpdateScheduler&) = delete;

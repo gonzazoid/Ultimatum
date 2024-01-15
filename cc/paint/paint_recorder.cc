@@ -4,54 +4,41 @@
 
 #include "cc/paint/paint_recorder.h"
 
-#include "cc/paint/display_item_list.h"
-#include "ui/gfx/geometry/skia_conversions.h"
+#include <utility>
 
 namespace cc {
 
-PaintRecorder::PaintRecorder() {
-  display_item_list_ = base::MakeRefCounted<DisplayItemList>(
-      DisplayItemList::kToBeReleasedAsPaintOpBuffer);
-}
-PaintRecorder::~PaintRecorder() = default;
-
-PaintCanvas* PaintRecorder::beginRecording(const SkRect& bounds) {
-  display_item_list_->StartPaint();
-  canvas_ = CreateCanvas(display_item_list_.get(), bounds);
-  return getRecordingCanvas();
+PaintCanvas* PaintRecorder::beginRecording() {
+  DCHECK(!is_recording_);
+  is_recording_ = true;
+  return &canvas_;
 }
 
-sk_sp<PaintRecord> PaintRecorder::finishRecordingAsPicture() {
-  // SkPictureRecorder users expect that their saves are automatically
-  // closed for them.
-  //
-  // NOTE: Blink paint in general doesn't appear to need this, but the
-  // RecordingImageBufferSurface::fallBackToRasterCanvas finishing off the
-  // current frame depends on this.  Maybe we could remove this assumption and
-  // just have callers do it.
-  canvas_->restoreToCount(1);
-
-  // Some users (e.g. printing) use the existence of the recording canvas
-  // to know if recording is finished, so reset it here.
-  canvas_.reset();
-
-  // The rect doesn't matter, since we just release the record.
-  display_item_list_->EndPaintOfUnpaired(gfx::Rect());
-  return display_item_list_->FinalizeAndReleaseAsRecord();
+PaintRecord PaintRecorder::finishRecordingAsPicture() {
+  DCHECK(is_recording_);
+  is_recording_ = false;
+  return canvas_.ReleaseAsRecord();
 }
 
-std::unique_ptr<RecordPaintCanvas> PaintRecorder::CreateCanvas(
-    DisplayItemList* list,
-    const SkRect& bounds) {
-  return std::make_unique<RecordPaintCanvas>(list, bounds);
+InspectablePaintRecorder::InspectablePaintRecorder() = default;
+InspectablePaintRecorder::~InspectablePaintRecorder() = default;
+
+PaintCanvas* InspectablePaintRecorder::beginRecording(const gfx::Size& size) {
+  DCHECK(!is_recording_);
+  is_recording_ = true;
+
+  if (!canvas_ || size != size_) {
+    canvas_ = std::make_unique<InspectableRecordPaintCanvas>(size);
+  }
+  size_ = size;
+  return canvas_.get();
 }
 
-bool PaintRecorder::ListHasDrawOps() const {
-  return display_item_list_->has_draw_ops();
-}
-
-size_t PaintRecorder::num_paint_ops() const {
-  return display_item_list_->num_paint_ops();
+PaintRecord InspectablePaintRecorder::finishRecordingAsPicture() {
+  DCHECK(canvas_);
+  DCHECK(is_recording_);
+  is_recording_ = false;
+  return canvas_->ReleaseAsRecord();
 }
 
 }  // namespace cc

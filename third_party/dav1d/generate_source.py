@@ -11,7 +11,7 @@ import datetime
 import glob
 import os
 
-_COPYRIGHT = """# Copyright %d The Chromium Authors. All rights reserved.
+_COPYRIGHT = """# Copyright %d The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -19,13 +19,6 @@ _COPYRIGHT = """# Copyright %d The Chromium Authors. All rights reserved.
 
 """ % (
     datetime.datetime.now().year)
-
-# .c files which don't need -DBIT_DEPTH specified for each compilation.
-_DAV1D_ENTRY_POINT_SOURCES = [
-    "libdav1d/src/lib.c",
-    "libdav1d/src/thread_task.c",
-    "libdav1d/src/thread_task.h",
-]
 
 
 def _Glob(pattern):
@@ -35,7 +28,7 @@ def _Glob(pattern):
 
 def _WriteArray(fd, var_name, array, filter_list=[], last_entry=False):
     if len(array) == 0:
-        fd.write("var_name = []\n")
+        fd.write("%s = []\n" % var_name)
         return
 
     fd.write("%s = [\n" % var_name)
@@ -49,6 +42,9 @@ def _WriteArray(fd, var_name, array, filter_list=[], last_entry=False):
 
 def _WriteGn(fd):
     fd.write(_COPYRIGHT)
+
+    # NOTE: $arch_template_sources are empty as of Dec 2022. If they remain
+    # empty over the next few rolls we should remove them.
     _WriteArray(fd, "x86_asm_sources", _Glob("libdav1d/src/x86/*.asm"),
                 ["libdav1d/src/x86/filmgrain_common.asm"])
     _WriteArray(fd, "x86_template_sources", _Glob("libdav1d/src/x86/*_tmpl.c"))
@@ -61,21 +57,13 @@ def _WriteGn(fd):
         _Glob("libdav1d/src/arm/64/*_tmpl.S") + ["libdav1d/src/arm/64/util.S"])
     _WriteArray(fd, "arm_template_sources", _Glob("libdav1d/src/arm/*_tmpl.c"))
 
-    _WriteArray(fd, "ppc64_template_sources", _Glob("libdav1d/src/ppc/*_tmpl.c"))
-
     template_sources = _Glob("libdav1d/src/*_tmpl.c")
     _WriteArray(fd, "template_sources", template_sources)
 
     # Generate list of sources which need to be compiled multiple times with the
     # correct -DBIT_DEPTH=8|10 option specified each time.
-    _WriteArray(fd, "c_headers", _Glob("libdav1d/src/*.h"),
-                _DAV1D_ENTRY_POINT_SOURCES + template_sources)
-    _WriteArray(fd, "c_sources", _Glob("libdav1d/src/*.c"),
-                _DAV1D_ENTRY_POINT_SOURCES + template_sources)
-
-    _WriteArray(fd,
-                "entry_point_sources",
-                _DAV1D_ENTRY_POINT_SOURCES,
+    _WriteArray(fd, "c_headers", _Glob("libdav1d/src/*.h"))
+    _WriteArray(fd, "c_sources", _Glob("libdav1d/src/*.c"), template_sources,
                 last_entry=True)
 
 

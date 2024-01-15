@@ -6,16 +6,18 @@
 #include <string>
 
 #include "base/base64url.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/values_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "chrome/browser/nearby_sharing/certificates/constants.h"
 #include "chrome/browser/nearby_sharing/certificates/nearby_share_certificate_storage_impl.h"
 #include "chrome/browser/nearby_sharing/certificates/test_util.h"
 #include "chrome/browser/nearby_sharing/common/nearby_share_prefs.h"
-#include "chrome/browser/ui/webui/nearby_share/public/mojom/nearby_share_settings.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_share_settings.mojom.h"
 #include "components/leveldb_proto/testing/fake_db.h"
 #include "components/prefs/pref_registry.h"
 #include "components/prefs/pref_registry_simple.h"
@@ -80,7 +82,7 @@ std::string EncodeString(const std::string& unencoded_string) {
   return encoded_string;
 }
 
-nearbyshare::proto::PublicCertificate CreatePublicCertificate(
+nearby::sharing::proto::PublicCertificate CreatePublicCertificate(
     const std::string& secret_id,
     const std::string& secret_key,
     const std::string& public_key,
@@ -92,7 +94,7 @@ nearbyshare::proto::PublicCertificate CreatePublicCertificate(
     const std::string& metadata_encryption_key,
     const std::string& encrypted_metadata_bytes,
     const std::string& metadata_encryption_key_tag) {
-  nearbyshare::proto::PublicCertificate cert;
+  nearby::sharing::proto::PublicCertificate cert;
   cert.set_secret_id(secret_id);
   cert.set_secret_key(secret_key);
   cert.set_public_key(public_key);
@@ -119,7 +121,7 @@ std::vector<NearbySharePrivateCertificate> CreatePrivateCertificates(
   return certs;
 }
 
-base::Time TimestampToTime(nearbyshare::proto::Timestamp timestamp) {
+base::Time TimestampToTime(nearby::sharing::proto::Timestamp timestamp) {
   return base::Time::UnixEpoch() + base::Seconds(timestamp.seconds()) +
          base::Nanoseconds(timestamp.nanos());
 }
@@ -137,7 +139,7 @@ class NearbyShareCertificateStorageImplTest : public ::testing::Test {
 
   void SetUp() override {
     auto db = std::make_unique<
-        leveldb_proto::test::FakeDB<nearbyshare::proto::PublicCertificate>>(
+        leveldb_proto::test::FakeDB<nearby::sharing::proto::PublicCertificate>>(
         &db_entries_);
     db_ = db.get();
 
@@ -156,7 +158,7 @@ class NearbyShareCertificateStorageImplTest : public ::testing::Test {
   }
 
   void PrepopulatePublicCertificates() {
-    std::vector<nearbyshare::proto::PublicCertificate> pub_certs;
+    std::vector<nearby::sharing::proto::PublicCertificate> pub_certs;
     pub_certs.emplace_back(CreatePublicCertificate(
         kSecretId1, kSecretKey1, kPublicKey1, kStartSeconds1, kStartNanos1,
         kEndSeconds1, kEndNanos1, kForSelectedContacts1,
@@ -173,26 +175,26 @@ class NearbyShareCertificateStorageImplTest : public ::testing::Test {
         kMetadataEncryptionKey3, kEncryptedMetadataBytes3,
         kMetadataEncryptionKeyTag3));
 
-    base::Value expiration_dict(base::Value::Type::DICTIONARY);
+    base::Value::Dict expiration_dict;
     db_entries_.clear();
     for (auto& cert : pub_certs) {
-      expiration_dict.SetKey(
-          EncodeString(cert.secret_id()),
-          base::TimeToValue(TimestampToTime(cert.end_time())));
+      expiration_dict.Set(EncodeString(cert.secret_id()),
+                          base::TimeToValue(TimestampToTime(cert.end_time())));
       db_entries_.emplace(cert.secret_id(), std::move(cert));
     }
-    pref_service_->Set(
+    pref_service_->SetDict(
         prefs::kNearbySharingPublicCertificateExpirationDictPrefName,
-        expiration_dict);
+        std::move(expiration_dict));
   }
 
   void CaptureBoolCallback(bool* dest, bool src) { *dest = src; }
 
   void PublicCertificateCallback(
-      std::vector<nearbyshare::proto::PublicCertificate>* public_certificates,
+      std::vector<nearby::sharing::proto::PublicCertificate>*
+          public_certificates,
       base::OnceClosure complete,
       bool success,
-      std::unique_ptr<std::vector<nearbyshare::proto::PublicCertificate>>
+      std::unique_ptr<std::vector<nearby::sharing::proto::PublicCertificate>>
           result) {
     if (success && result) {
       public_certificates->swap(*result);
@@ -202,17 +204,20 @@ class NearbyShareCertificateStorageImplTest : public ::testing::Test {
 
  protected:
   std::unique_ptr<TestingPrefServiceSimple> pref_service_;
-  std::map<std::string, nearbyshare::proto::PublicCertificate> db_entries_;
-  leveldb_proto::test::FakeDB<nearbyshare::proto::PublicCertificate>* db_;
+  std::map<std::string, nearby::sharing::proto::PublicCertificate> db_entries_;
+  raw_ptr<
+      leveldb_proto::test::FakeDB<nearby::sharing::proto::PublicCertificate>,
+      DanglingUntriaged>
+      db_;
   std::unique_ptr<NearbyShareCertificateStorage> cert_store_;
-  std::vector<nearbyshare::proto::PublicCertificate> public_certificates_;
+  std::vector<nearby::sharing::proto::PublicCertificate> public_certificates_;
 };
 
 TEST_F(NearbyShareCertificateStorageImplTest, DeferredCallbackQueue) {
   base::test::SingleThreadTaskEnvironment task_environment;
   base::RunLoop run_loop;
 
-  std::vector<nearbyshare::proto::PublicCertificate> public_certificates;
+  std::vector<nearby::sharing::proto::PublicCertificate> public_certificates;
 
   cert_store_->GetPublicCertificates(base::BindOnce(
       &NearbyShareCertificateStorageImplTest::PublicCertificateCallback,
@@ -222,11 +227,12 @@ TEST_F(NearbyShareCertificateStorageImplTest, DeferredCallbackQueue) {
 
   // These callbacks have to be posted to ensure that they run after the
   // deferred callbacks posted during initialization.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
-      base::BindOnce(&leveldb_proto::test::FakeDB<
-                         nearbyshare::proto::PublicCertificate>::LoadCallback,
-                     base::Unretained(db_), true));
+      base::BindOnce(
+          &leveldb_proto::test::FakeDB<
+              nearby::sharing::proto::PublicCertificate>::LoadCallback,
+          base::Unretained(db_), true));
 
   run_loop.Run();
 
@@ -236,14 +242,14 @@ TEST_F(NearbyShareCertificateStorageImplTest, DeferredCallbackQueue) {
 TEST_F(NearbyShareCertificateStorageImplTest, GetPublicCertificates) {
   db_->InitStatusCallback(leveldb_proto::Enums::InitStatus::kOK);
 
-  std::vector<nearbyshare::proto::PublicCertificate> public_certificates;
+  std::vector<nearby::sharing::proto::PublicCertificate> public_certificates;
   cert_store_->GetPublicCertificates(base::BindOnce(
       &NearbyShareCertificateStorageImplTest::PublicCertificateCallback,
       base::Unretained(this), &public_certificates, base::BindOnce([] {})));
   db_->LoadCallback(true);
 
   ASSERT_EQ(3u, public_certificates.size());
-  for (nearbyshare::proto::PublicCertificate& cert : public_certificates) {
+  for (nearby::sharing::proto::PublicCertificate& cert : public_certificates) {
     std::string expected_serialized, actual_serialized;
     ASSERT_TRUE(cert.SerializeToString(&expected_serialized));
     ASSERT_TRUE(db_entries_.find(cert.secret_id())
@@ -255,7 +261,7 @@ TEST_F(NearbyShareCertificateStorageImplTest, GetPublicCertificates) {
 TEST_F(NearbyShareCertificateStorageImplTest, AddPublicCertificates) {
   db_->InitStatusCallback(leveldb_proto::Enums::InitStatus::kOK);
 
-  std::vector<nearbyshare::proto::PublicCertificate> new_certs = {
+  std::vector<nearby::sharing::proto::PublicCertificate> new_certs = {
       CreatePublicCertificate(kSecretId3, kSecretKey2, kPublicKey2,
                               kStartSeconds2, kStartNanos2, kEndSeconds2,
                               kEndNanos2, kForSelectedContacts2,

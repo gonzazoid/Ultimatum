@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "device/fido/fido_authenticator.h"
 #include "device/fido/fido_device.h"
 #include "device/fido/fido_device_authenticator.h"
@@ -27,7 +27,7 @@ void FidoDeviceDiscovery::Start() {
 
   // To ensure that that NotifyStarted() is never invoked synchronously,
   // post task asynchronously.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&FidoDeviceDiscovery::StartInternal,
                                 weak_factory_.GetWeakPtr()));
 }
@@ -65,15 +65,6 @@ void FidoDeviceDiscovery::NotifyAuthenticatorRemoved(
   observer()->AuthenticatorRemoved(this, authenticator);
 }
 
-std::vector<FidoDeviceAuthenticator*>
-FidoDeviceDiscovery::GetAuthenticatorsForTesting() {
-  std::vector<FidoDeviceAuthenticator*> authenticators;
-  authenticators.reserve(authenticators_.size());
-  for (const auto& authenticator : authenticators_)
-    authenticators.push_back(authenticator.second.get());
-  return authenticators;
-}
-
 std::vector<const FidoDeviceAuthenticator*>
 FidoDeviceDiscovery::GetAuthenticatorsForTesting() const {
   std::vector<const FidoDeviceAuthenticator*> authenticators;
@@ -84,12 +75,7 @@ FidoDeviceDiscovery::GetAuthenticatorsForTesting() const {
 }
 
 FidoDeviceAuthenticator* FidoDeviceDiscovery::GetAuthenticatorForTesting(
-    base::StringPiece authenticator_id) {
-  return GetAuthenticator(authenticator_id);
-}
-
-FidoDeviceAuthenticator* FidoDeviceDiscovery::GetAuthenticator(
-    base::StringPiece authenticator_id) {
+    std::string_view authenticator_id) {
   auto found = authenticators_.find(authenticator_id);
   return found != authenticators_.end() ? found->second.get() : nullptr;
 }
@@ -115,7 +101,7 @@ bool FidoDeviceDiscovery::AddAuthenticator(
   return true;
 }
 
-bool FidoDeviceDiscovery::RemoveDevice(base::StringPiece device_id) {
+bool FidoDeviceDiscovery::RemoveDevice(std::string_view device_id) {
   if (state_ == State::kStopped)
     return false;
 
@@ -129,9 +115,8 @@ bool FidoDeviceDiscovery::RemoveDevice(base::StringPiece device_id) {
   return true;
 }
 
-bool FidoDeviceDiscovery::MaybeStop() {
+void FidoDeviceDiscovery::Stop() {
   state_ = State::kStopped;
-  return true;
 }
 
 }  // namespace device

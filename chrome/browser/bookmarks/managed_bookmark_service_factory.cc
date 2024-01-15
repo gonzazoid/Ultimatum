@@ -6,8 +6,8 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/memory/singleton.h"
+#include "base/functional/bind.h"
+#include "base/no_destructor.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
 #include "chrome/browser/profiles/profile.h"
@@ -16,10 +16,6 @@
 #include "components/bookmarks/managed/managed_bookmark_service.h"
 #include "components/policy/policy_constants.h"
 #include "google_apis/gaia/gaia_auth_util.h"
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/profiles/profile_helper.h"
-#endif
 
 namespace {
 
@@ -44,7 +40,8 @@ bookmarks::ManagedBookmarkService* ManagedBookmarkServiceFactory::GetForProfile(
 
 // static
 ManagedBookmarkServiceFactory* ManagedBookmarkServiceFactory::GetInstance() {
-  return base::Singleton<ManagedBookmarkServiceFactory>::get();
+  static base::NoDestructor<ManagedBookmarkServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -79,20 +76,17 @@ ManagedBookmarkServiceFactory::ManagedBookmarkServiceFactory()
               .WithGuest(ProfileSelection::kRedirectedToOriginal)
               // No service for system profile.
               .WithSystem(ProfileSelection::kNone)
+              // ChromeOS creates various profiles (login, lock screen...) that
+              // do not have/need access to bookmarks.
+              .WithAshInternals(ProfileSelection::kNone)
               .Build()) {}
 
-ManagedBookmarkServiceFactory::~ManagedBookmarkServiceFactory() {}
+ManagedBookmarkServiceFactory::~ManagedBookmarkServiceFactory() = default;
 
-KeyedService* ManagedBookmarkServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ManagedBookmarkServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // ChromeOS creates various profiles (login, lock screen...) that do
-  // not have/need access to bookmarks.
-  Profile* profile = Profile::FromBrowserContext(context);
-  if (!chromeos::ProfileHelper::IsUserProfile(profile))
-    return nullptr;
-#endif
-  return BuildManagedBookmarkService(context).release();
+  return BuildManagedBookmarkService(context);
 }
 
 bool ManagedBookmarkServiceFactory::ServiceIsNULLWhileTesting() const {

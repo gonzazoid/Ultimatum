@@ -8,9 +8,10 @@
 #include <stdint.h>
 
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "dbus/object_path.h"
 #include "dbus/property.h"
 #include "device/bluetooth/bluetooth_export.h"
@@ -116,7 +117,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothGattCharacteristicClient
   // the option. Invokes |callback| on success and |error_callback| on failure.
   virtual void WriteValue(const dbus::ObjectPath& object_path,
                           const std::vector<uint8_t>& value,
-                          base::StringPiece type_option,
+                          std::string_view type_option,
                           base::OnceClosure callback,
                           ErrorCallback error_callback) = 0;
 

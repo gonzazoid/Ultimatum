@@ -36,13 +36,11 @@
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url.h"
 #include "third_party/blink/public/web/web_frame.h"
+#include "v8/include/v8-local-handle.h"
 
 namespace v8 {
 class Isolate;
-class Object;
 class Value;
-template <class T>
-class Local;
 }
 
 namespace blink {
@@ -69,9 +67,10 @@ class BLINK_EXPORT WebDOMFileSystem {
     return *this;
   }
 
-  static WebDOMFileSystem FromV8Value(v8::Local<v8::Value>);
+  static WebDOMFileSystem FromV8Value(v8::Isolate*, v8::Local<v8::Value>);
   // Create file system URL from the given entry.
-  static WebURL CreateFileSystemURL(v8::Local<v8::Value> entry);
+  static WebURL CreateFileSystemURL(v8::Isolate* isolate,
+                                    v8::Local<v8::Value> entry);
 
   // FIXME: Deprecate the last argument when all filesystems become
   // serializable.
@@ -89,11 +88,9 @@ class BLINK_EXPORT WebDOMFileSystem {
   WebFileSystemType GetType() const;
   WebURL RootURL() const;
 
-  v8::Local<v8::Value> ToV8Value(v8::Local<v8::Object> creation_context,
-                                 v8::Isolate*);
+  v8::Local<v8::Value> ToV8Value(v8::Isolate*);
   v8::Local<v8::Value> CreateV8Entry(const WebString& path,
                                      EntryType,
-                                     v8::Local<v8::Object> creation_context,
                                      v8::Isolate*);
 
   bool IsNull() const { return private_.IsNull(); }
@@ -104,7 +101,7 @@ class BLINK_EXPORT WebDOMFileSystem {
 #endif
 
  private:
-  WebPrivatePtr<DOMFileSystem> private_;
+  WebPrivatePtrForGC<DOMFileSystem> private_;
 };
 
 }  // namespace blink

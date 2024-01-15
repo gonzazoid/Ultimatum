@@ -5,7 +5,7 @@
 #ifndef UI_WEBUI_EXAMPLES_BROWSER_DEVTOOLS_DEVTOOLS_MANAGER_DELEGATE_H_
 #define UI_WEBUI_EXAMPLES_BROWSER_DEVTOOLS_DEVTOOLS_MANAGER_DELEGATE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "content/public/browser/devtools_manager_delegate.h"
 #include "url/gurl.h"
 
@@ -31,7 +31,8 @@ class DevToolsManagerDelegate : public content::DevToolsManagerDelegate {
   // DevToolsManagerDelegate:
   content::BrowserContext* GetDefaultBrowserContext() override;
   scoped_refptr<content::DevToolsAgentHost> CreateNewTarget(
-      const GURL& url) override;
+      const GURL& url,
+      TargetType target_type) override;
   std::string GetDiscoveryPageHTML() override;
   bool HasBundledFrontendResources() override;
 

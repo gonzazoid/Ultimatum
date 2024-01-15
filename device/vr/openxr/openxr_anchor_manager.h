@@ -7,16 +7,22 @@
 
 #include <map>
 
+#include "base/memory/raw_ref.h"
 #include "base/numerics/checked_math.h"
 #include "base/numerics/math_constants.h"
-#include "device/vr/openxr/openxr_anchor_request.h"
-#include "device/vr/openxr/openxr_util.h"
+#include "base/types/id_type.h"
+#include "device/vr/create_anchor_request.h"
 #include "device/vr/public/mojom/vr_service.mojom.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/openxr/src/include/openxr/openxr.h"
 
 namespace device {
 
 class OpenXrApiWrapper;
+class OpenXrExtensionHelper;
+
+using AnchorId = base::IdTypeU64<class AnchorTag>;
+constexpr AnchorId kInvalidAnchorId;
 
 class OpenXrAnchorManager {
  public:
@@ -73,7 +79,7 @@ class OpenXrAnchorManager {
       const mojom::XRNativeOriginInformation& native_origin_information,
       const gfx::Transform& native_origin_from_anchor) const;
 
-  const OpenXrExtensionHelper& extension_helper_;
+  const raw_ref<const OpenXrExtensionHelper> extension_helper_;
   XrSession session_;
   XrSpace mojo_space_;  // The intermediate space that mojom poses are
                         // represented in (currently defined as local space)

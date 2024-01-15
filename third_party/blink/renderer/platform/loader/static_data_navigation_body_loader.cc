@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/loader/static_data_navigation_body_loader.h"
-#include "third_party/blink/public/mojom/loader/code_cache.mojom.h"
 
 namespace blink {
 
@@ -87,8 +86,7 @@ void StaticDataNavigationBodyLoader::Continue() {
     client_ = nullptr;
     client->BodyLoadingFinished(
         base::TimeTicks::Now(), total_encoded_data_length_,
-        total_encoded_data_length_, total_encoded_data_length_, false,
-        absl::nullopt);
+        total_encoded_data_length_, total_encoded_data_length_, absl::nullopt);
     // |this| can be destroyed from BodyLoadingFinished.
     if (!weak_self)
       return;

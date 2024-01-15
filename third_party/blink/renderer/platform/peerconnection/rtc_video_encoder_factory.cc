@@ -6,15 +6,15 @@
 
 #include <memory>
 
+#include "base/containers/contains.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
 #include "build/build_config.h"
-#if BUILDFLAG(IS_WIN)
-#include "media/base/media_switches.h"
-#endif
 #include "media/media_buildflags.h"
+#include "media/mojo/clients/mojo_video_encoder_metrics_provider.h"
 #include "media/video/gpu_video_accelerator_factories.h"
 #include "third_party/blink/public/common/features.h"
+#include "third_party/blink/renderer/platform/allow_discouraged_type.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_video_encoder.h"
 #include "third_party/webrtc/api/video_codecs/h264_profile_level_id.h"
 #include "third_party/webrtc/api/video_codecs/sdp_video_format.h"
@@ -25,6 +25,23 @@
 namespace blink {
 
 namespace {
+
+#if BUILDFLAG(IS_WIN)
+// Enables AV1 encode acceleration for Windows.
+BASE_FEATURE(kMediaFoundationAV1Encoding,
+             "MediaFoundationAV1Encoding",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Enables H.264 CBP encode acceleration for Windows.
+BASE_FEATURE(kMediaFoundationH264CbpEncoding,
+             "MediaFoundationH264CbpEncoding",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Enables VP9 encode acceleration for Windows.
+BASE_FEATURE(kMediaFoundationVP9Encoding,
+             "MediaFoundationVP9Encoding",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+#endif
 
 absl::optional<media::VideoCodecProfile> WebRTCFormatToCodecProfile(
     const webrtc::SdpVideoFormat& sdp) {
@@ -152,13 +169,17 @@ absl::optional<webrtc::SdpVideoFormat> VEAToWebRTCFormat(
 
 struct SupportedFormats {
   bool unknown = true;
-  std::vector<media::VideoCodecProfile> profiles;
-  std::vector<std::vector<media::SVCScalabilityMode>> scalability_modes;
-  std::vector<webrtc::SdpVideoFormat> sdp_formats;
+  std::vector<media::VideoCodecProfile> profiles
+      ALLOW_DISCOURAGED_TYPE("Matches webrtc API");
+  std::vector<std::vector<media::SVCScalabilityMode>> scalability_modes
+      ALLOW_DISCOURAGED_TYPE("Matches webrtc API");
+  std::vector<webrtc::SdpVideoFormat> sdp_formats
+      ALLOW_DISCOURAGED_TYPE("Matches webrtc API");
 };
 
 SupportedFormats GetSupportedFormatsInternal(
-    media::GpuVideoAcceleratorFactories* gpu_factories) {
+    media::GpuVideoAcceleratorFactories* gpu_factories,
+    const std::vector<media::VideoCodecProfile>& disabled_profiles) {
   SupportedFormats supported_formats;
   auto profiles = gpu_factories->GetVideoEncodeAcceleratorSupportedProfiles();
   if (!profiles)
@@ -168,8 +189,15 @@ SupportedFormats GetSupportedFormatsInternal(
   // querying GPU process.
   supported_formats.unknown = false;
   for (const auto& profile : *profiles) {
+    if (base::Contains(disabled_profiles, profile.profile))
+      continue;
+
     absl::optional<webrtc::SdpVideoFormat> format = VEAToWebRTCFormat(profile);
     if (format) {
+      if (format->IsCodecInList(supported_formats.sdp_formats)) {
+        continue;
+      }
+
       supported_formats.profiles.push_back(profile.profile);
       supported_formats.scalability_modes.push_back(profile.scalability_modes);
       supported_formats.sdp_formats.push_back(std::move(*format));
@@ -177,7 +205,7 @@ SupportedFormats GetSupportedFormatsInternal(
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
 #if BUILDFLAG(IS_WIN)
       const bool kShouldAddH264Cbp =
-          media::IsMediaFoundationH264CbpEncodingEnabled() &&
+          base::FeatureList::IsEnabled(kMediaFoundationH264CbpEncoding) &&
           profile.profile == media::VideoCodecProfile::H264PROFILE_BASELINE;
 #elif BUILDFLAG(IS_LINUX)
       const bool kShouldAddH264Cbp =
@@ -193,6 +221,11 @@ SupportedFormats GetSupportedFormatsInternal(
 #endif
     }
   }
+
+  DCHECK_EQ(supported_formats.profiles.size(),
+            supported_formats.sdp_formats.size());
+  DCHECK_EQ(supported_formats.profiles.size(),
+            supported_formats.scalability_modes.size());
 
   return supported_formats;
 }
@@ -228,10 +261,35 @@ bool IsScalabiltiyModeSupported(
 }  // anonymous namespace
 
 RTCVideoEncoderFactory::RTCVideoEncoderFactory(
-    media::GpuVideoAcceleratorFactories* gpu_factories)
-    : gpu_factories_(gpu_factories), gpu_codec_support_waiter_(gpu_factories) {}
+    media::GpuVideoAcceleratorFactories* gpu_factories,
+    scoped_refptr<media::MojoVideoEncoderMetricsProviderFactory>
+        encoder_metrics_provider_factory)
+    : gpu_factories_(gpu_factories),
+      encoder_metrics_provider_factory_(
+          std::move(encoder_metrics_provider_factory)),
+      gpu_codec_support_waiter_(gpu_factories) {
+#if BUILDFLAG(IS_WIN)
+  if (!base::FeatureList::IsEnabled(kMediaFoundationVP9Encoding)) {
+    disabled_profiles_.emplace_back(media::VP9PROFILE_PROFILE0);
+    disabled_profiles_.emplace_back(media::VP9PROFILE_PROFILE1);
+    disabled_profiles_.emplace_back(media::VP9PROFILE_PROFILE2);
+    disabled_profiles_.emplace_back(media::VP9PROFILE_PROFILE3);
+  }
+  if (!base::FeatureList::IsEnabled(kMediaFoundationAV1Encoding)) {
+    disabled_profiles_.emplace_back(media::AV1PROFILE_PROFILE_MAIN);
+    disabled_profiles_.emplace_back(media::AV1PROFILE_PROFILE_HIGH);
+    disabled_profiles_.emplace_back(media::AV1PROFILE_PROFILE_PRO);
+  }
+#endif
+}
 
-RTCVideoEncoderFactory::~RTCVideoEncoderFactory() {}
+RTCVideoEncoderFactory::~RTCVideoEncoderFactory() {
+  // |encoder_metrics_provider_factory_| needs to be destroyed on the same
+  // sequence as one that destroys the VideoEncoderMetricsProviders created by
+  // it. It is gpu task runner in this case.
+  gpu_factories_->GetTaskRunner()->ReleaseSoon(
+      FROM_HERE, std::move(encoder_metrics_provider_factory_));
+}
 
 void RTCVideoEncoderFactory::CheckAndWaitEncoderSupportStatusIfNeeded() const {
   if (!gpu_codec_support_waiter_.IsEncoderSupportKnown()) {
@@ -250,20 +308,23 @@ RTCVideoEncoderFactory::CreateVideoEncoder(
 
   std::unique_ptr<webrtc::VideoEncoder> encoder;
   bool is_constrained_h264 = IsConstrainedH264(format);
-  auto supported_formats = GetSupportedFormatsInternal(gpu_factories_);
+  auto supported_formats =
+      GetSupportedFormatsInternal(gpu_factories_, disabled_profiles_);
   if (!supported_formats.unknown) {
     for (size_t i = 0; i < supported_formats.sdp_formats.size(); ++i) {
       if (format.IsSameCodec(supported_formats.sdp_formats[i])) {
         encoder = std::make_unique<RTCVideoEncoder>(
-            supported_formats.profiles[i], is_constrained_h264, gpu_factories_);
+            supported_formats.profiles[i], is_constrained_h264, gpu_factories_,
+            encoder_metrics_provider_factory_);
         break;
       }
     }
   } else {
     auto profile = WebRTCFormatToCodecProfile(format);
     if (profile) {
-      encoder = std::make_unique<RTCVideoEncoder>(*profile, is_constrained_h264,
-                                                  gpu_factories_);
+      encoder = std::make_unique<RTCVideoEncoder>(
+          *profile, is_constrained_h264, gpu_factories_,
+          encoder_metrics_provider_factory_);
     }
   }
 
@@ -274,7 +335,8 @@ std::vector<webrtc::SdpVideoFormat>
 RTCVideoEncoderFactory::GetSupportedFormats() const {
   CheckAndWaitEncoderSupportStatusIfNeeded();
 
-  return GetSupportedFormatsInternal(gpu_factories_).sdp_formats;
+  return GetSupportedFormatsInternal(gpu_factories_, disabled_profiles_)
+      .sdp_formats;
 }
 
 webrtc::VideoEncoderFactory::CodecSupport
@@ -283,7 +345,7 @@ RTCVideoEncoderFactory::QueryCodecSupport(
     absl::optional<std::string> scalability_mode) const {
   CheckAndWaitEncoderSupportStatusIfNeeded();
   SupportedFormats supported_formats =
-      GetSupportedFormatsInternal(gpu_factories_);
+      GetSupportedFormatsInternal(gpu_factories_, disabled_profiles_);
 
   for (size_t i = 0; i < supported_formats.sdp_formats.size(); ++i) {
     if (format.IsSameCodec(supported_formats.sdp_formats[i])) {

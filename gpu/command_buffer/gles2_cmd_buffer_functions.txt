@@ -336,9 +336,6 @@ GL_APICALL void         GL_APIENTRY glSetActiveURLCHROMIUM (const char* url);
 // Extension CHROMIUM_context_visibility_hint
 GL_APICALL void         GL_APIENTRY glContextVisibilityHintCHROMIUM (GLboolean visibility);
 
-// Extension CHROMIUM_framebuffer_mixed_samples
-GL_APICALL void         GL_APIENTRY glCoverageModulationCHROMIUM (GLenumCoverageModulationComponents components);
-
 // Extension KHR_robustness
 GL_APICALL GLenum       GL_APIENTRY glGetGraphicsResetStatusKHR (void);
 
@@ -381,6 +378,13 @@ GL_APICALL GLuint       GL_APIENTRY glCreateAndTexStorage2DSharedImageCHROMIUM (
 GL_APICALL void         GL_APIENTRY glCreateAndTexStorage2DSharedImageINTERNAL (GLuint texture, const GLbyte* mailbox);
 GL_APICALL void         GL_APIENTRY glBeginSharedImageAccessDirectCHROMIUM (GLuint texture, GLenumSharedImageAccessMode mode);
 GL_APICALL void         GL_APIENTRY glEndSharedImageAccessDirectCHROMIUM (GLuint texture);
+GL_APICALL void         GL_APIENTRY glConvertRGBAToYUVAMailboxesINTERNAL (GLenum planes_yuv_color_space, GLenum plane_config, GLenum subsampling, const GLbyte* mailboxes);
+GL_APICALL void         GL_APIENTRY glConvertYUVAMailboxesToRGBINTERNAL (GLint src_x, GLint src_y, GLsizei width, GLsizei height, GLenum planes_yuv_color_space, GLenum plane_config, GLenum subsampling, const GLbyte* mailboxes);
+GL_APICALL void         GL_APIENTRY glConvertYUVAMailboxesToTextureINTERNAL (GLuint texture, GLenum target, GLuint internal_format, GLenum type, GLint src_x, GLint src_y, GLsizei width, GLsizei height, GLboolean flip_y, GLenum planes_yuv_color_space, GLenum plane_config, GLenum subsampling, const GLbyte* mailboxes);
+GL_APICALL void         GL_APIENTRY glCopySharedImageINTERNAL (GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height, GLboolean unpack_flip_y, const GLbyte* mailboxes);
+GL_APICALL void         GL_APIENTRY glCopySharedImageToTextureINTERNAL (GLuint texture, GLenum target, GLuint internal_format, GLenum type, GLint src_x, GLint src_y, GLsizei width, GLsizei height, GLboolean flip_y, const GLbyte* src_mailbox);
+GL_APICALL void         GL_APIENTRY glReadbackARGBImagePixelsINTERNAL (const GLbyte* mailbox, const void* dst_color_space, GLuint dst_color_space_size, GLuint dst_size, GLuint dst_width, GLuint dst_height, GLuint dst_color_type, GLuint dst_alpha_type, GLuint dst_row_bytes, GLint src_x, GLint src_y, GLint plane_index, void* pixels);
+GL_APICALL void         GL_APIENTRY glWritePixelsYUVINTERNAL (const GLbyte* mailbox, GLuint src_size_plane1, GLuint src_size_plane2, GLuint src_size_plane3, GLuint src_size_plane4, GLuint src_width, GLuint src_height, GLuint src_plane_config, GLuint src_subsampling, GLuint src_datatype, GLuint src_row_bytes_plane1, GLuint src_row_bytes_plane2, GLuint src_row_bytes_plane3, GLuint src_row_bytes_plane4, const void* src_pixels_plane1, const void* src_pixels_plane2, const void* src_pixels_plane3, const void* src_pixels_plane4);
 
 // Extension OES_draw_buffers_indexed
 GL_APICALL void         GL_APIENTRY glEnableiOES (GLenum target, GLuint index);
@@ -391,3 +395,29 @@ GL_APICALL void         GL_APIENTRY glBlendFunciOES (GLuint buf, GLenum src, GLe
 GL_APICALL void         GL_APIENTRY glBlendFuncSeparateiOES (GLuint buf, GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha);
 GL_APICALL void         GL_APIENTRY glColorMaskiOES (GLuint buf, GLboolean r, GLboolean g, GLboolean b, GLboolean a);
 GL_APICALL GLboolean    GL_APIENTRY glIsEnablediOES (GLenum target, GLuint index);
+
+// Extension ANGLE_provoking_vertex
+GL_APICALL void         GL_APIENTRY glProvokingVertexANGLE (GLenum provokeMode);
+
+// Extension ANGLE_shader_pixel_local_storage
+GL_APICALL void         GL_APIENTRY glFramebufferMemorylessPixelLocalStorageANGLE (GLint plane, GLenum internalformat);
+GL_APICALL void         GL_APIENTRY glFramebufferTexturePixelLocalStorageANGLE (GLint plane, GLuint backingtexture, GLint level, GLint layer);
+GL_APICALL void         GL_APIENTRY glFramebufferPixelLocalClearValuefvANGLE (GLint plane, const GLfloat* value);
+GL_APICALL void         GL_APIENTRY glFramebufferPixelLocalClearValueivANGLE (GLint plane, const GLint* value);
+GL_APICALL void         GL_APIENTRY glFramebufferPixelLocalClearValueuivANGLE (GLint plane, const GLuint* value);
+GL_APICALL void         GL_APIENTRY glBeginPixelLocalStorageANGLE (GLsizei count, const GLenum* loadops);
+GL_APICALL void         GL_APIENTRY glEndPixelLocalStorageANGLE (GLsizei count, const GLenum* storeops);
+GL_APICALL void         GL_APIENTRY glPixelLocalStorageBarrierANGLE (void);
+GL_APICALL void         GL_APIENTRY glFramebufferPixelLocalStorageInterruptANGLE (void);
+GL_APICALL void         GL_APIENTRY glFramebufferPixelLocalStorageRestoreANGLE (void);
+GL_APICALL void         GL_APIENTRY glGetFramebufferPixelLocalStorageParameterfvANGLE (GLint plane, GLenum pname, GLfloat* params);
+GL_APICALL void         GL_APIENTRY glGetFramebufferPixelLocalStorageParameterivANGLE (GLint plane, GLenum pname, GLint* params);
+
+// Extension EXT_clip_control
+GL_APICALL void         GL_APIENTRY glClipControlEXT (GLenum origin, GLenum depth);
+
+// Extension ANGLE_polygon_mode
+GL_APICALL void         GL_APIENTRY glPolygonModeANGLE (GLenum face, GLenum mode);
+
+// Extension EXT_polygon_offset_clamp
+GL_APICALL void         GL_APIENTRY glPolygonOffsetClampEXT (GLfloat factor, GLfloat units, GLfloat clamp);

@@ -8,8 +8,8 @@
 #include <utility>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "content/browser/background_sync/background_sync_context_impl.h"
@@ -67,20 +67,17 @@ void BackgroundSyncLauncher::FireBackgroundSyncEventsImpl(
   if (sync_type == blink::mojom::BackgroundSyncType::PERIODIC)
     last_browser_wakeup_for_periodic_sync_ = base::Time::Now();
   base::RepeatingClosure done_closure = base::BarrierClosure(
-      browser_context->GetStoragePartitionCount(),
+      browser_context->GetLoadedStoragePartitionCount(),
       base::BindOnce(base::android::RunRunnableAndroid,
                      base::android::ScopedJavaGlobalRef<jobject>(j_runnable)));
 
-  browser_context->ForEachStoragePartition(base::BindRepeating(
-      [](blink::mojom::BackgroundSyncType sync_type,
-         base::OnceClosure done_closure, StoragePartition* storage_partition) {
+  browser_context->ForEachLoadedStoragePartition(
+      [&](StoragePartition* storage_partition) {
         BackgroundSyncContext* sync_context =
             storage_partition->GetBackgroundSyncContext();
         DCHECK(sync_context);
-        sync_context->FireBackgroundSyncEvents(sync_type,
-                                               std::move(done_closure));
-      },
-      sync_type, std::move(done_closure)));
+        sync_context->FireBackgroundSyncEvents(sync_type, done_closure);
+      });
 }
 #endif
 
@@ -113,9 +110,10 @@ base::TimeDelta BackgroundSyncLauncher::GetSoonestWakeupDeltaImpl(
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   SetGlobalSoonestWakeupDelta(sync_type, base::TimeDelta::Max());
-  browser_context->ForEachStoragePartition(base::BindRepeating(
-      &BackgroundSyncLauncher::GetSoonestWakeupDeltaForStoragePartition,
-      base::Unretained(this), sync_type));
+  browser_context->ForEachLoadedStoragePartition(
+      [&](StoragePartition* partition) {
+        GetSoonestWakeupDeltaForStoragePartition(sync_type, partition);
+      });
 
   return GetGlobalSoonestWakeupDelta(sync_type);
 }

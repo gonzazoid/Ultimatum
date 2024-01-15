@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/policy/core/common/cloud/dm_token.h"
 #include "components/reporting/client/dm_token_retriever.h"
@@ -23,7 +23,7 @@ namespace reporting {
 //    user_dm_token_retriever->RetrieveDMToken(
 //      base::BindOnce(
 //        [](StatusOr<std::string> dm_token_result) {
-//          config->SetDMToken(dm_token_result.ValueOrDie());
+//          config->SetDMToken(dm_token_result.value());
 //        }
 //      )
 //    );

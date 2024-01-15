@@ -7,14 +7,14 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/uuid.h"
 #include "base/values.h"
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/bookmark_node.h"
@@ -61,7 +61,7 @@ int64_t ManagedBookmarksTracker::LoadInitial(BookmarkNode* folder,
       continue;
 
     BookmarkNode* child = folder->Add(std::make_unique<BookmarkNode>(
-        next_node_id++, base::GUID::GenerateRandomV4(), url));
+        next_node_id++, base::Uuid::GenerateRandomV4(), url));
     child->SetTitle(title);
     if (children) {
       child->set_date_folder_modified(base::Time::Now());
@@ -162,7 +162,8 @@ void ManagedBookmarksTracker::UpdateBookmarks(const BookmarkNode* folder,
 
   // Remove any extra children of |folder| that haven't been reused.
   while (folder->children().size() != folder_index)
-    model_->Remove(folder->children()[folder_index].get());
+    model_->Remove(folder->children()[folder_index].get(),
+                   bookmarks::metrics::BookmarkEditSource::kOther);
 }
 
 // static

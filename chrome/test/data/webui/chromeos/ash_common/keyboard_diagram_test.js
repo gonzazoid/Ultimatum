@@ -4,12 +4,12 @@
 
 import {MechanicalLayout, PhysicalLayout, TopRightKey, TopRowKey} from 'chrome://resources/ash/common/keyboard_diagram.js';
 import {KeyboardKeyState} from 'chrome://resources/ash/common/keyboard_key.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
 import {flushTasks, waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertEquals, assertNotEquals, assertThrows, assertTrue} from '../../chai_assert.js';
+import {assertEquals, assertNotEquals, assertThrows, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 
-export function keyboardDiagramTestSuite() {
+suite('keyboardDiagramTestSuite', () => {
   /** @type {?KeyboardDiagramElement} */
   let diagramElement = null;
 
@@ -198,16 +198,16 @@ export function keyboardDiagramTestSuite() {
     assertEquals('delete', keyElements[6].mainGlyph);
   });
 
-  test('topRightKey', async () => {
+  test('topRightKeyAppearsDisabled', async () => {
     diagramElement.topRightKey = TopRightKey.POWER;
     await flushTasks();
 
     const topRightKey = diagramElement.$.topRightKey;
-    assertEquals('keyboard:power', topRightKey.icon);
-    assertEquals('Power', topRightKey.ariaName);
+    assertEquals(undefined, topRightKey.icon);
+    assertEquals(undefined, topRightKey.ariaName);
 
     diagramElement.setKeyState(116 /* KEY_POWER */, KeyboardKeyState.PRESSED);
-    assertEquals(KeyboardKeyState.PRESSED, topRightKey.state);
+    assertEquals(KeyboardKeyState.NOT_PRESSED, topRightKey.state);
   });
 
   test('setKeyState', async () => {
@@ -298,6 +298,31 @@ export function keyboardDiagramTestSuite() {
     assertEquals(0, pressedKeys.length);
   });
 
+  test('resetAllKeys', async () => {
+    diagramElement.mechanicalLayout = MechanicalLayout.ISO;
+    diagramElement.topRowKeys = [
+      TopRowKey.kBack,
+      TopRowKey.kRefresh,
+      TopRowKey.kOverview,
+    ];
+    await flushTasks();
+
+    diagramElement.setKeyState(28 /* KEY_ENTER */, KeyboardKeyState.PRESSED);
+    diagramElement.setKeyState(56 /* KEY_LEFTALT */, KeyboardKeyState.PRESSED);
+    diagramElement.setKeyState(15 /* KEY_TAB */, KeyboardKeyState.TESTED);
+    diagramElement.setTopRowKeyState(2, KeyboardKeyState.TESTED);
+    diagramElement.resetAllKeys();
+    await flushTasks();
+
+    const pressedKeys = diagramElement.root.querySelectorAll(
+        `keyboard-key[state="${KeyboardKeyState.PRESSED}"]`);
+    assertEquals(0, pressedKeys.length);
+
+    const testedKeys = diagramElement.root.querySelectorAll(
+        `keyboard-key[state="${KeyboardKeyState.TESTED}"]`);
+    assertEquals(0, testedKeys.length);
+  });
+
   test('visualLayout_mainGlyph', async () => {
     diagramElement.regionCode = 'fr';
 
@@ -333,4 +358,4 @@ export function keyboardDiagramTestSuite() {
         diagramElement.root.querySelector('[data-code="41"]');
     assertEquals('Kana/alphanumeric switch', letterSwitchKey.ariaName);
   });
-}
+});

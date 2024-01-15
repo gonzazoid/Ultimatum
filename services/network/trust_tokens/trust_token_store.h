@@ -7,9 +7,10 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "services/network/public/mojom/network_context.mojom.h"
@@ -90,13 +91,8 @@ class TrustTokenStore {
   [[nodiscard]] virtual absl::optional<base::TimeDelta> TimeSinceLastIssuance(
       const SuitableTrustTokenOrigin& issuer);
 
-  // Updates the given (issuer, top-level) origin pair's last redemption time
-  // to now.
-  virtual void RecordRedemption(const SuitableTrustTokenOrigin& issuer,
-                                const SuitableTrustTokenOrigin& top_level);
-
   // Returns the time elapsed since the last redemption recorded by
-  // RecordRedemption for issuer |issuer| and top level |top_level|,
+  // SetRedemptionRecord for issuer |issuer| and top level |top_level|,
   // or nullopt in the following two cases:
   // 1. there was no prior redemption for the (issuer,
   // top-level origin) pair.
@@ -149,7 +145,7 @@ class TrustTokenStore {
   // tokens issued against non-current keys.
   virtual void AddTokens(const SuitableTrustTokenOrigin& issuer,
                          base::span<const std::string> token_bodies,
-                         base::StringPiece issuing_key);
+                         std::string_view issuing_key);
 
   // Returns the number of tokens stored for |issuer|.
   [[nodiscard]] virtual int CountTokens(const SuitableTrustTokenOrigin& issuer);
@@ -204,6 +200,9 @@ class TrustTokenStore {
   // Returns whether any data was deleted.
   [[nodiscard]] virtual bool ClearDataForFilter(
       mojom::ClearDataFilterPtr filter);
+
+  [[nodiscard]] virtual bool ClearDataForPredicate(
+      base::RepeatingCallback<bool(const std::string&)> predicate);
 
   // Deletes all stored tokens issued by |issuer| but leaves other stored
   // data, including the issuer's Redemption Records (RRs), intact.

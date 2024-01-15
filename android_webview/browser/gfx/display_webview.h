@@ -16,6 +16,7 @@ namespace android_webview {
 class OverlayProcessorWebView;
 class RootFrameSink;
 
+// Lifetime: WebView
 class DisplayWebView : public viz::Display, public viz::FrameSinkObserver {
  public:
   static std::unique_ptr<DisplayWebView> Create(
@@ -68,10 +69,13 @@ class DisplayWebView : public viz::Display, public viz::FrameSinkObserver {
       std::unique_ptr<viz::OverlayProcessorInterface> overlay_processor,
       std::unique_ptr<viz::DisplaySchedulerBase> scheduler,
       OverlayProcessorWebView* overlay_processor_webview,
-      viz::FrameSinkManagerImpl* frame_sink_manager);
+      viz::FrameSinkManagerImpl* frame_sink_manager,
+      RootFrameSink* root_frame_sink);
 
   const raw_ptr<OverlayProcessorWebView> overlay_processor_webview_;
   const raw_ptr<viz::FrameSinkManagerImpl> frame_sink_manager_;
+  const raw_ptr<RootFrameSink> root_frame_sink_;
+
   base::ScopedObservation<viz::FrameSinkManagerImpl, viz::FrameSinkObserver>
       frame_sink_manager_observation_{this};
 

@@ -7,6 +7,8 @@
 
 #import <Foundation/Foundation.h>
 
+#import "ios/chrome/browser/follow/model/followed_web_site_state.h"
+
 @class CrURL;
 
 // A view model representing a followed web channel.
@@ -26,8 +28,8 @@
 // URL of the favicon.
 @property(nonatomic, strong) CrURL* faviconURL;
 
-// YES if the web channel is available.
-@property(nonatomic, assign) BOOL available;
+// State of the website.
+@property(nonatomic, assign) FollowedWebSiteState state;
 
 @end
 

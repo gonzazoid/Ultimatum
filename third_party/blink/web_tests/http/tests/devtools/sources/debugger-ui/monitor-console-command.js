@@ -2,10 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {SourcesTestRunner} from 'sources_test_runner';
+import {ConsoleTestRunner} from 'console_test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Tests traceCalls(fn) console command.\n`);
-  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('console_test_runner');
   await TestRunner.showPanel('sources');
   await TestRunner.evaluateInPagePromise(`
       function simpleTestFunction()
@@ -60,7 +64,7 @@
     ConsoleTestRunner.waitUntilMessageReceived(didReceive);
 
     function didReceive(message) {
-      if (message.type === SDK.ConsoleMessage.FrontendMessageType.Result) {
+      if (message.type === SDK.ConsoleModel.FrontendMessageType.Result) {
         ConsoleTestRunner.waitUntilMessageReceived(didReceive);
         return;
       }

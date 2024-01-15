@@ -5,7 +5,6 @@
 #include "ash/system/time/calendar_metrics.h"
 
 #include "ash/public/cpp/metrics_util.h"
-#include "base/check_op.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
 #include "base/time/time.h"
@@ -33,6 +32,18 @@ constexpr char kCalendarMonthDwellTime[] = "Ash.Calendar.MonthDwellTime";
 constexpr char kCalendarScrollSource[] = "Ash.Calendar.ScrollSource";
 constexpr char kCalendarKeyboardNavigation[] =
     "Ash.Calendar.KeyboardNavigation";
+constexpr char kCalendarEventListItemInUpNextPressed[] =
+    "Ash.Calendar.UpNextView.EventListItem.Pressed";
+constexpr char kCalendarUpNextEventDisplayedCount[] =
+    "Ash.Calendar.UpNextView.EventDisplayedCount";
+constexpr char kCalendarEventListItemJoinButtonPressed[] =
+    "Ash.Calendar.EventListView.JoinMeetingButton.Pressed";
+constexpr char kCalendarUpNextJoinButtonPressed[] =
+    "Ash.Calendar.UpNextView.JoinMeetingButton.Pressed";
+constexpr char kCalendarEventListEventDisplayedCount[] =
+    "Ash.Calendar.EventListViewJelly.EventDisplayedCount";
+constexpr char kCalendarEventsDisplayedToUser[] =
+    "Ash.Calendar.EventsDisplayedToUser";
 
 }  // namespace
 
@@ -102,7 +113,7 @@ ui::AnimationThroughputReporter CreateAnimationReporter(
   // TODO(crbug.com/1297376): Add unit tests for animation metrics recording.
   return ui::AnimationThroughputReporter(
       view->layer()->GetAnimator(),
-      metrics_util::ForSmoothness(base::BindRepeating(
+      metrics_util::ForSmoothnessV3(base::BindRepeating(
           [](const std::string& animation_histogram_name, int smoothness) {
             base::UmaHistogramPercentage(animation_histogram_name, smoothness);
           },
@@ -112,6 +123,34 @@ ui::AnimationThroughputReporter CreateAnimationReporter(
 void RecordCalendarKeyboardNavigation(
     const CalendarKeyboardNavigationSource key_source) {
   base::UmaHistogramEnumeration(kCalendarKeyboardNavigation, key_source);
+}
+
+void RecordEventListItemInUpNextLaunched(const ui::Event& event) {
+  base::UmaHistogramEnumeration(kCalendarEventListItemInUpNextPressed,
+                                GetEventType(event));
+}
+
+void RecordUpNextEventCount(const int event_count) {
+  base::UmaHistogramCounts100(kCalendarUpNextEventDisplayedCount, event_count);
+}
+
+void RecordJoinButtonPressedFromEventListView(const ui::Event& event) {
+  base::UmaHistogramEnumeration(kCalendarEventListItemJoinButtonPressed,
+                                GetEventType(event));
+}
+
+void RecordJoinButtonPressedFromUpNextView(const ui::Event& event) {
+  base::UmaHistogramEnumeration(kCalendarUpNextJoinButtonPressed,
+                                GetEventType(event));
+}
+
+void RecordEventListEventCount(const int event_count) {
+  base::UmaHistogramCounts100(kCalendarEventListEventDisplayedCount,
+                              event_count);
+}
+
+void RecordEventsDisplayedToUser() {
+  base::UmaHistogramBoolean(kCalendarEventsDisplayedToUser, true);
 }
 
 }  // namespace calendar_metrics

@@ -26,10 +26,11 @@ class MEDIA_EXPORT VpxVideoEncoder : public VideoEncoder {
   // VideoDecoder implementation.
   void Initialize(VideoCodecProfile profile,
                   const Options& options,
+                  EncoderInfoCB info_cb,
                   OutputCB output_cb,
                   EncoderStatusCB done_cb) override;
   void Encode(scoped_refptr<VideoFrame> frame,
-              bool key_frame,
+              const EncodeOptions& options,
               EncoderStatusCB done_cb) override;
   void ChangeOptions(const Options& options,
                      OutputCB output_cb,
@@ -42,6 +43,8 @@ class MEDIA_EXPORT VpxVideoEncoder : public VideoEncoder {
                     base::TimeDelta ts,
                     gfx::ColorSpace color_space);
 
+  void UpdateEncoderColorSpace();
+
   using vpx_codec_unique_ptr =
       std::unique_ptr<vpx_codec_ctx_t, void (*)(vpx_codec_ctx_t*)>;
 
@@ -51,7 +54,7 @@ class MEDIA_EXPORT VpxVideoEncoder : public VideoEncoder {
   gfx::Size originally_configured_size_;
   base::TimeDelta last_frame_timestamp_;
   gfx::ColorSpace last_frame_color_space_;
-  int temporal_svc_frame_index = 0;
+  unsigned int temporal_svc_frame_index_ = 0;
   VideoCodecProfile profile_ = VIDEO_CODEC_PROFILE_UNKNOWN;
   VideoFramePool frame_pool_;
   std::vector<uint8_t> resize_buf_;

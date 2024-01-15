@@ -5,7 +5,6 @@
 #include <string>
 
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/media_router/browser/issue_manager.h"
 #include "components/media_router/browser/test/test_helper.h"
 #include "content/public/test/browser_task_environment.h"
@@ -18,9 +17,8 @@ namespace media_router {
 namespace {
 
 IssueInfo CreateTestIssue(IssueInfo::Severity severity) {
-  IssueInfo issue("title", IssueInfo::Action::DISMISS, severity);
+  IssueInfo issue("title", severity, "sinkId1");
   issue.message = "message";
-  issue.help_page_id = 12345;
   return issue;
 }
 

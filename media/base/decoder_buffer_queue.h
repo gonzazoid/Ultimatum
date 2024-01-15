@@ -8,7 +8,7 @@
 #include <stddef.h>
 
 #include "base/containers/circular_deque.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
 #include "media/base/media_export.h"
 
@@ -58,6 +58,9 @@ class MEDIA_EXPORT DecoderBufferQueue {
 
   // Returns the total size of buffers inside the queue.
   size_t data_size() const { return data_size_; }
+
+  // Returns the number of buffers in the queue.
+  size_t queue_size() const { return queue_.size(); }
 
  private:
   using Queue = base::circular_deque<scoped_refptr<DecoderBuffer>>;

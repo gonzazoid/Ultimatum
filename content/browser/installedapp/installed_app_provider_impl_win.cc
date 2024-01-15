@@ -112,17 +112,15 @@ void FilterInstalledAppsForWin(
     std::vector<blink::mojom::RelatedApplicationPtr> related_apps,
     blink::mojom::InstalledAppProvider::FilterInstalledAppsCallback callback,
     const GURL frame_url) {
-  if (!base::win::ScopedHString::ResolveCoreWinRTStringDelayload() ||
-      !base::win::ResolveCoreWinRTDelayload()) {
-    std::move(callback).Run(std::vector<blink::mojom::RelatedApplicationPtr>());
-    return;
-  }
-
   ComPtr<ILauncherStatics4> launcher_statics;
   HRESULT hr = base::win::RoActivateInstance(
       base::win::ScopedHString::Create(RuntimeClass_Windows_System_Launcher)
           .get(),
       &launcher_statics);
+  if (FAILED(hr)) {
+    std::move(callback).Run(std::vector<blink::mojom::RelatedApplicationPtr>());
+    return;
+  }
 
   ComPtr<IUriRuntimeClassFactory> url_factory;
   hr = base::win::GetActivationFactory<IUriRuntimeClassFactory,

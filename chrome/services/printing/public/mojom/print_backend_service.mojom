@@ -37,11 +37,9 @@ union PrinterSemanticCapsAndDefaultsResult {
   ResultCode result_code;
 };
 
-// The set of basic info, paper details, and capabilities/defaults for a
-// printer.
+// The set of basic info and capabilities/defaults for a printer.
 struct PrinterCapsAndInfo {
   PrinterBasicInfo printer_info;
-  array<Paper> user_defined_papers;
   PrinterSemanticCapsAndDefaults printer_caps;
 };
 
@@ -58,14 +56,6 @@ union PrinterCapsAndInfoResult {
 union PrintSettingsResult {
   PrintSettings settings;
   ResultCode result_code;
-};
-
-// The type of printing interface to target.
-enum PrintTargetType {
-  kDirectToDevice,
-  kSystemDialog,
-  [EnableIf=is_mac]
-  kExternalPreview,
 };
 
 // Hosts the PrintBackendService but does so without sandboxing the service -
@@ -92,12 +82,12 @@ interface SandboxedPrintBackendHost {
 interface PrintBackendService {
   // Establish the locale to be used for calls with this service and the
   // interface to the underlying data source.
-  Init(string locale);
-
-  // Binds an interface that is used to communicate with the browser process
-  // to parse XML in a separate process.
-  [EnableIf=is_win]
-  BindPrinterXmlParser(pending_remote<PrinterXmlParser> remote);
+  // For Windows, also establish the interface to the underlying data source.
+  // If `remote` is valid, binds an interface that is used to communicate with
+  // the browser process to parse XML in a separate process.
+  Init(string locale,
+       [EnableIf=is_win]
+       pending_remote<PrinterXmlParser>? remote);
 
   // TODO(crbug.com/1225111)  Message with no arguments and no reply that is
   // useful to ensure that an idle timeout change takes effect.
@@ -112,6 +102,7 @@ interface PrintBackendService {
     => (DefaultPrinterNameResult printer_name);
 
   // Gets the semantic capabilities and defaults for a specific printer.
+  [EnableIf=is_chromeos_ash]
   GetPrinterSemanticCapsAndDefaults(string printer_name)
     => (PrinterSemanticCapsAndDefaultsResult printer_caps);
 
@@ -120,16 +111,50 @@ interface PrintBackendService {
   FetchCapabilities(string printer_name)
     => (PrinterCapsAndInfoResult printer_caps_and_info);
 
+  // Gets the printable area for a particular paper size.  Windows only, as a
+  // workaround for the high cost of trying to get printable area for all paper
+  // sizes in `FetchCapabilities()`.  Returns an empty area if there is any
+  // error in retrieving the printable area.
+  // TODO(crbug.com/1424368):  Remove this if
+  // `PrintBackendWin::GetPrinterSemanticCapsAndDefaults()` can be made to
+  // fetch the all printable areas in a performant manner.
+  [EnableIf=is_win]
+  GetPaperPrintableArea(string printer_name, RequestedMedia media)
+    => (gfx.mojom.Rect printable_area_um);
+
+  // Creates a printing context that can persist across multiple calls.
+  // Necessary to ensure that the context used for system dialogs is still
+  // available by the time that printing is started.  The printing context
+  // is to be referenced by the provided `context_id` in all future calls that
+  // need to use it.
+  // Once an established printing context has been attached to a print job by
+  // calling StartPrinting() then it will be automatically cleaned up as a
+  // result of that print job completing successfully or being canceled.  It is
+  // automatically destroyed upon any failure during UseDefaultSettings() or
+  // AskUserForSettings().
+  // The `parent_window_id` parameter, for configurations where it is
+  // applicable, specifies an ID which is cross-process safe to represent the
+  // native window which owns the modal print dialog used for prompting the
+  // user. This can be needed if:
+  //   - The AskUserForSettings() call will be invoked.
+  //   - (Windows-specific)  If the job settings provided to StartPrinting()
+  //     signal to use a system dialog.
+  EstablishPrintingContext(uint32 context_id,
+                           [EnableIf=enable_oop_basic_print_dialog]
+                           uint32 parent_window_id);
+
   // Generates a print settings object based upon the default settings for the
-  // default printer.
-  UseDefaultSettings()
+  // default printer.  `context_id` must be for a context previously created
+  // by a call to `EstablishPrintingContext()`.
+  UseDefaultSettings(uint32 context_id)
     => (PrintSettingsResult settings);
 
   // Generates a print settings object from user-selected options via a system
-  // print dialog.  The `parent_window_id` parameter specifies an ID which is
-  // cross-process safe to represent the native window which owns the modal
-  // print dialog used for prompting the user.  Other parameters are the same
-  // as used in `PrintingContext::AskUserForSettings()`.
+  // print dialog.  `context_id` must be for a context previously created by a
+  // call to `EstablishPrintingContext()`.
+  // The previously established context has the necessary parent window ID for
+  // displaying a system dialog.  Other parameters are the same as used in
+  // `PrintingContext::AskUserForSettings()`.
   // Currently only supported on Windows:
   //   - It is impossible for macOS `//ui` code to display a system print
   //     dialog from a service utility process that is modal to a window in the
@@ -142,28 +167,44 @@ interface PrintBackendService {
   //     browser process.
   //   - Platforms other than those identified above do not support a system
   //     print dialog.
-  [EnableIf=is_win]
-  AskUserForSettings(uint32 parent_window_id,
+  [EnableIf=enable_oop_basic_print_dialog]
+  AskUserForSettings(uint32 context_id,
                      int32 max_pages,
                      bool has_selection,
                      bool is_scripted)
     => (PrintSettingsResult settings);
 
-  // Generates a print settings object based upon the job settings used with
-  // the device settings.  The driver to be used is expected to be identified
-  // in the `job_settings` map by an entry with key
-  // `printing::kSettingDeviceName`.
-  UpdatePrintSettings(mojo_base.mojom.DictionaryValue job_settings)
+  // Updates the indicated printing context based upon the job settings used
+  // with the device settings.  The driver to be used is expected to be
+  // identified in the `job_settings` map by an entry with key
+  // `printing::kSettingDeviceName`.  `context_id` must be for a context
+  // previously created by a call to `EstablishPrintingContext()`.  The updated
+  // print settings remain in the context for use when a system dialog is
+  // initiated and/or printing of a document is started.
+  UpdatePrintSettings(uint32 context_id,
+                      mojo_base.mojom.DictionaryValue job_settings)
     => (PrintSettingsResult settings);
 
   // Submit the document identified by `document_cookie` to be printed.
+  // A printing context must already have been setup previously with a call to
+  // `EstablishPrintingContext()`.
+  // This call to `StartPrinting()` will take ownership of the indicated
+  // context and automatically free it once the print job has completed (either
+  // with success or via a cancel after failure).
   // Starting the device initialization may be delayed if it needs to wait for
   // prior print jobs to complete before a connection to the system to become
   // available.
-  StartPrinting(int32 document_cookie,
+  // For platforms which do not support an out-of-process system print dialog,
+  // when doing system print the settings are specified from the system dialog
+  // that is invoked from the browser process.  The settings are collected from
+  // that and then are provided at start of printing via `settings`.  This is
+  // optional since such settings are not necessary when printing from Print
+  // Preview, where the print settings are provided via `UpdatePrintSettings()`.
+  StartPrinting(uint32 context_id,
+                int32 document_cookie,
                 mojo_base.mojom.String16 document_name,
-                PrintTargetType target_type,
-                PrintSettings settings)
+                [EnableIfNot=enable_oop_basic_print_dialog]
+                PrintSettings? settings)
     => (ResultCode result_code);
 
   // Render the indicated page as part of print job for `document_cookie`.
@@ -180,6 +221,7 @@ interface PrintBackendService {
  // Render the print job document for `document_cookie`.
   RenderPrintedDocument(
       int32 document_cookie,
+      uint32 page_count,
       MetafileDataType data_type,
       mojo_base.mojom.ReadOnlySharedMemoryRegion serialized_doc)
     => (ResultCode result_code);
@@ -188,4 +230,8 @@ interface PrintBackendService {
   // processing and cleanup for the print job should be performed.
   DocumentDone(int32 document_cookie)
     => (ResultCode result_code);
+
+  // Signal that the document has been canceled and its resources should
+  // be released.
+  Cancel(int32 document_cookie) => ();
 };

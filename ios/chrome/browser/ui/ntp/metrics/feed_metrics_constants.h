@@ -32,7 +32,25 @@ extern const int kMinutesBetweenSessions;
 extern const int kMaxCardsInFeed;
 
 // Stores the time when the user visits an article on the feed.
-extern NSString* const kArticleClickTimestampKey;
+extern const char kArticleVisitTimestampKey[];
+// Stores the time elapsed on the feed when the user leaves.
+extern const char kLongFeedVisitTimeAggregateKey[];
+extern const char kLongFollowingFeedVisitTimeAggregateKey[];
+extern const char kLongDiscoverFeedVisitTimeAggregateKey[];
+extern const char kLastUsedFeedForGoodVisitsKey[];
+// Stores the last interaction time for Good Visits (NSDate).
+extern const char kLastInteractionTimeForGoodVisits[];
+extern const char kLastInteractionTimeForDiscoverGoodVisits[];
+extern const char kLastInteractionTimeForFollowingGoodVisits[];
+// Stores the last day the Time in Feed was reported on UMA. It stores the
+// midnight (beginning of the day) of the last interaction.
+extern const char kLastDayTimeInFeedReportedKey[];
+// Stores the time spent on the feed for a day.
+extern const char kTimeSpentInFeedAggregateKey[];
+// Stores the last time the activity bucket was reported.
+extern const char kActivityBucketLastReportedDateKey[];
+// Stores the last 28 days of activity bucket reported days.
+extern const char kActivityBucketLastReportedDateArrayKey[];
 
 #pragma mark - Enums
 
@@ -50,6 +68,28 @@ enum class BrokenNTPHierarchyRelationship {
 
   // Change this to match max value.
   kMaxValue = 6,
+};
+
+// Values from enums.xml that represent the triggers where feed refreshes are
+// requested. These values are persisted to logs. Entries should not be
+// renumbered and numeric values should never be reused.
+enum class FeedRefreshTrigger {
+  kOther = 0,
+  kBackgroundColdStart = 1,
+  kBackgroundWarmStart = 2,
+  kForegroundFeedStart = 3,
+  kForegroundAccountChange = 4,
+  kForegroundUserTriggered = 5,
+  kForegroundFeedVisibleOther = 6,
+  kForegroundNotForced = 7,
+  kForegroundFeedNotVisible = 8,
+  kForegroundNewFeedViewController = 9,
+  kForegroundAppClose = 10,
+  kBackgroundColdStartAppClose = 11,
+  kBackgroundWarmStartAppClose = 12,
+
+  // Change this to match max value.
+  kMaxValue = kBackgroundWarmStartAppClose,
 };
 
 // Enum class contains values indicating the type of follow request. Ex.
@@ -172,8 +212,24 @@ enum class FeedSortType {
   kMaxValue = kSortedByLatest,
 };
 
+// The values for the Feed Activity Buckets metric.
+enum class FeedActivityBucket {
+  // No activity bucket for users active 0/28 days.
+  kNoActivity = 0,
+  // Low activity bucket for users active 1-7/28 days.
+  kLowActivity = 1,
+  // Medium activity bucket for users active 8-15/28 days.
+  kMediumActivity = 2,
+  // High activity bucket for users active 16+/28 days.
+  kHighActivity = 3,
+  // Highest enumerator. Recommended by Histogram metrics best practices.
+  kMaxValue = kHighActivity,
+};
+
 #pragma mark - Histograms
 
+// Histogram name for the Time Spent in Feed.
+extern const char kTimeSpentInFeedHistogram[];
 // Histogram name for the Discover feed user actions.
 extern const char kDiscoverFeedUserActionHistogram[];
 
@@ -185,17 +241,14 @@ extern const char kDiscoverFeedEngagementTypeHistogram[];
 extern const char kFollowingFeedEngagementTypeHistogram[];
 extern const char kAllFeedsEngagementTypeHistogram[];
 
+// Histogram name for the feed activity bucket metric.
+extern const char kAllFeedsActivityBucketsHistogram[];
+
 // Histogram name for a Discover feed card shown at index.
 extern const char kDiscoverFeedCardShownAtIndex[];
 
 // Histogram name for a Following feed card shown at index.
 extern const char kFollowingFeedCardShownAtIndex[];
-
-// Histogram name for a Discover feed card tapped at index.
-extern const char kDiscoverFeedCardOpenedAtIndex[];
-
-// Histogram name for a Following feed card tapped at index.
-extern const char kFollowingFeedCardOpenedAtIndex[];
 
 // Histogram name to capture Feed Notice card impressions.
 extern const char kDiscoverFeedNoticeCardFulfilled[];
@@ -228,9 +281,11 @@ extern const char kDiscoverFeedUploadActionsNetworkDurationFailure[];
 // operation.
 extern const char kDiscoverFeedNetworkDuration[];
 
-// Histogram name to measure opened URL's regardless of the surface they were
-// opened in.
+// Histogram name to track opened articles from the Discover feed.
 extern const char kDiscoverFeedURLOpened[];
+
+// Histogram name to track opened articles from the Following feed.
+extern const char kFollowingFeedURLOpened[];
 
 // Histogram name to capture if the last Feed fetch had logging enabled.
 extern const char kDiscoverFeedActivityLoggingEnabled[];
@@ -238,6 +293,9 @@ extern const char kDiscoverFeedActivityLoggingEnabled[];
 // Histogram name for broken NTP view hierarchy logs.
 // TODO(crbug.com/1262536): Remove this when issue is fixed.
 extern const char kDiscoverFeedBrokenNTPHierarchy[];
+
+// Histogram name for triggers causing feed refreshes.
+extern const char kDiscoverFeedRefreshTrigger[];
 
 // Histogram name for the Feed settings when the App is being start.
 extern const char kFeedUserSettingsOnStart[];
@@ -261,10 +319,18 @@ extern const char kFollowCountAfterUnfollow[];
 // After engaging with the Following feed.
 extern const char kFollowCountWhenEngaged[];
 
-// Histogram for an action taken on the regular NTP (not start surface).
-extern const char kActionOnNTP[];
-// Histogram for an action taken on the start surface.
-extern const char kActionOnStartSurface[];
+// Histogram name for last visible card when switching from Discover to
+// Following feed.
+extern const char kDiscoverIndexWhenSwitchingFeed[];
+// Histogram name for last visible card when switching from Following to
+// Discover feed.
+extern const char kFollowingIndexWhenSwitchingFeed[];
+
+// Histogram name for sign-in related UI triggered by Feed entry points.
+extern const char kFeedSignInUI[];
+
+// Histogram name for Feed sync related UI triggered by Feed entry points.
+extern const char kFeedSyncPromo[];
 
 #pragma mark - User Actions
 
@@ -346,5 +412,31 @@ extern const char kUnfollowFromMenu[];
 // menu.
 extern const char kFollowingFeedGroupByPublisher[];
 extern const char kFollowingFeedSortByLatest[];
+
+#pragma mark - User Actions for Feed Sign-in Promo
+
+// User actions triggered when a user clicks the buttons on the Feed sign-in
+// promo UI.
+extern const char kFeedSignInPromoUIContinueTapped[];
+extern const char kFeedSignInPromoUICancelTapped[];
+
+// User actions triggered when a user taps on Feed Back of Card menu
+// personalization options when not signed in.
+extern const char kShowFeedSignInOnlyUIWithUserId[];
+extern const char kShowFeedSignInOnlyUIWithoutUserId[];
+
+// User actions triggered when a user taps on Feed personalization controls and
+// a corresponding sign-in related UI is shown. Ex. A sign-in half sheet, a
+// sign-in only flow, or a disabled toast is shown.
+extern const char kShowSyncHalfSheetFromFeed[];
+extern const char kShowSignInOnlyFlowFromFeed[];
+extern const char kShowSignInDisableToastFromFeed[];
+
+#pragma mark - User Actions for Feed Sync Promo
+
+// User actions triggered when a user taps on the Feed sync promo and a sync
+// related UI is shown.
+extern const char kShowSyncFlowFromFeed[];
+extern const char kShowDisableToastFromFeed[];
 
 #endif  // IOS_CHROME_BROWSER_UI_NTP_METRICS_FEED_METRICS_CONSTANTS_H_

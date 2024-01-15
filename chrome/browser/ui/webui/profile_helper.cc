@@ -6,16 +6,17 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/profiles/delete_profile_helper.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_metrics.h"
 #include "chrome/browser/profiles/profile_window.h"
 #include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/signin/signin_util.h"
 #include "chrome/browser/ui/browser_finder.h"
-#include "chrome/browser/ui/profile_picker.h"
+#include "chrome/browser/ui/profiles/profile_picker.h"
 #include "chrome/browser/ui/webui/signin/signin_utils.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
@@ -53,8 +54,10 @@ void DeleteProfileAtPath(base::FilePath file_path,
                          ProfileMetrics::ProfileDelete deletion_source) {
   if (!profiles::IsMultipleProfilesEnabled())
     return;
-  g_browser_process->profile_manager()->MaybeScheduleProfileForDeletion(
-      file_path, base::BindOnce(&OpenNewWindowForProfile), deletion_source);
+  g_browser_process->profile_manager()
+      ->GetDeleteProfileHelper()
+      .MaybeScheduleProfileForDeletion(
+          file_path, base::BindOnce(&OpenNewWindowForProfile), deletion_source);
 }
 
 }  // namespace webui

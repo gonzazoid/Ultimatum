@@ -13,8 +13,14 @@ your editor.
 * Optional: build chrome normally to get generated headers
 * Generate compilation database (note: it's not regenerated automatically):
 ```
-tools/clang/scripts/generate_compdb.py -p out/<build> > compile_commands.json
+tools/clang/scripts/generate_compdb.py -p out/Default > compile_commands.json
 ```
+
+*** note
+Note: If you're using a different build directory, you'll need to replace `out/Default`
+in this and other commands with your build directory.
+***
+
 * Indexing is enabled by default (since clangd 9), note that this might consume
   lots of CPU and RAM. There's also a
   [remote-index service](https://github.com/clangd/chrome-remote-index/blob/main/docs/index.md)
@@ -110,10 +116,10 @@ ninja -C out/Default chrome
 5. Use clangd in your favourite editor, see detailed [instructions](
 https://clangd.llvm.org/installation.html#editor-plugins).
 
-    * Optional: You may want to add `-header-insertion=never` to the clangd flags,
-      so that your editor doesn't automatically add incorrect #include lines. The
-      feature doesn't correctly handle some common Chromium headers like
-      `base/strings/string_piece_forward.h` and `base/callback_forward.h`
+    * Optional: You may want to add `--header-insertion=never` to the clangd
+      flags, so that your editor doesn't automatically add incorrect #include
+      lines. The feature doesn't correctly handle some common Chromium headers
+      like `base/functional/callback_forward.h`.
 
 ## Background Indexing
 
@@ -123,8 +129,9 @@ compilation database). The index improves code navigation features
 
 * clangd only uses idle cores to build the index, you can limit the total amount
   of cores by passing the *-j=\<number\>* flag;
-* the index is saved to the `.clangd/index` in the project root; index shards
-  for common headers e.g. STL will be stored in *$HOME/.clangd/index*;
+* the index is saved to the `.cache/clangd/index` in the project root; index
+  shards for common headers e.g. STL will be stored in
+  *$HOME/.cache/clangd/index*;
 * background indexing can be disabled by the `--background-index=false` flag;
   Note that, disabling background-index will limit clangd’s knowledge about your
   codebase to files you are currently editing.

@@ -3,6 +3,31 @@
 // found in the LICENSE file.
 
 (class TracingHelper {
+  static Phase = {
+    BEGIN: 'B',
+    END: 'E',
+    COMPLETE: 'X',
+    INSTANT: 'I',
+    ASYNC_BEGIN: 'S',
+    ASYNC_STEP_INTO: 'T',
+    ASYNC_STEP_PAST: 'p',
+    ASYNC_END: 'F',
+    NESTABLE_ASYNC_BEGIN: 'b',
+    NESTABLE_ASYNC_END: 'e',
+    NESTABLE_ASYNC_INSTANT: 'n',
+    FLOW_BEGIN: 's',
+    FLOW_STEP: 't',
+    FLOW_END: 'f',
+    METADATA: 'M',
+    COUNTER: 'C',
+    SAMPLE: 'P',
+    CREATE_OBJECT: 'N',
+    SNAPSHOT_OBJECT: 'O',
+    DELETE_OBJECT: 'D',
+    MEMORY_DUMP: 'v',
+    MARK: 'R',
+    CLOCK_SYNC: 'c',
+  }
   constructor(testRunner, session) {
     this._testRunner = testRunner;
     this._session = session;
@@ -117,5 +142,56 @@
   formattedEvents() {
     var formattedEvents = this._devtoolsEvents.map(e => e.name + (e.args.data ? '(' + e.args.data.type + ')' : ''));
     return JSON.stringify(formattedEvents, null, 2);
+  }
+
+  logEventShape(evt, excludedProperties = []) {
+    // The tts, scope, and tdur fields in trace events are optional, and as
+    // such we omit them to prevent flakiness as it may or not be included
+    // on each occasion an event is dispatched.
+    excludedProperties.push('tts', 'tdur', 'scope');
+
+    const logArray = (prefix, name, array) => {
+      let start = name ? `${name}: ` : '';
+      start = prefix + start;
+      this._testRunner.log(`${start}[`);
+      for (const item of array) {
+        if (item instanceof Array) {
+          logArray(`${prefix}\t`, '', item);
+          continue;
+        }
+        if (item instanceof Object) {
+          logObject(`${prefix}\t`, '', item);
+          continue;
+        }
+        this._testRunner.log(`${prefix}\t${typeof item},`);
+      }
+      this._testRunner.log(`${prefix}]`);
+    };
+    const logObject = (prefix, name, object) => {
+      let start = name ? `${name}: ` : '';
+      start = prefix + start;
+      this._testRunner.log(`${start}{`);
+      for (const key in object) {
+        const value = object[key];
+        if (excludedProperties.includes(key)) {
+          continue;
+        }
+        if (value instanceof Array) {
+          logArray(`${prefix}\t`, key, value);
+          continue;
+        } else if (value instanceof Object) {
+          logObject(`${prefix}\t`, key, value)
+          continue;
+        }
+        this._testRunner.log(`${prefix}\t${key}: ${typeof value}`);
+      }
+      this._testRunner.log(`${prefix}}`);
+    };
+    if (evt instanceof Array) {
+      logArray('', 'Array', evt);
+      return;
+    }
+
+    logObject('', 'Object', evt);
   }
 })

@@ -30,9 +30,6 @@ icudtl.dat: %(VersionDir)s\
 libEGL.dll: %(VersionDir)s\
 libGLESv2.dll: %(VersionDir)s\
 mojo_core.dll: %(VersionDir)s\
-nacl64.exe: %(VersionDir)s\
-nacl_irt_x86_32.nexe: %(VersionDir)s\
-nacl_irt_x86_64.nexe: %(VersionDir)s\
 notification_helper.exe: %(VersionDir)s\
 optimization_guide_internal.dll: %(VersionDir)s\
 resources.pak: %(VersionDir)s\
@@ -98,9 +95,18 @@ WidevineCdm\_platform_specific\win_x86\widevinecdm.dll: %(VersionDir)s\WidevineC
 WidevineCdm\_platform_specific\win_x86\widevinecdm.dll.sig: %(VersionDir)s\WidevineCdm\_platform_specific\win_x86\
 WidevineCdm\_platform_specific\win_x64\widevinecdm.dll: %(VersionDir)s\WidevineCdm\_platform_specific\win_x64\
 WidevineCdm\_platform_specific\win_x64\widevinecdm.dll.sig: %(VersionDir)s\WidevineCdm\_platform_specific\win_x64\
+WidevineCdm\_platform_specific\win_arm64\widevinecdm.dll: %(VersionDir)s\WidevineCdm\_platform_specific\win_arm64\
+WidevineCdm\_platform_specific\win_arm64\widevinecdm.dll.sig: %(VersionDir)s\WidevineCdm\_platform_specific\win_arm64\
 
 [SNAPSHOTBLOB]
 # The snapshot_blob.bin V8 snapshot is needed in builds that don't use
 # v8_context_snapshot.bin, such as Linux-Windows cross-builds.
 # It has its own section here so that it's only included when necessary.
 snapshot_blob.bin: %(VersionDir)s\
+
+[DXC]
+# Only include the DXC dlls if dawn_use_built_dxc is enabled. When this flag is false,
+# these DLLs may be present in the build dir if Dawn tests are built, in which case we
+# do not want to include them in the installer.
+dxcompiler.dll: %(VersionDir)s\
+dxil.dll: %(VersionDir)s\

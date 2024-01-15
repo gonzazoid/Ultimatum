@@ -152,10 +152,12 @@ class MODULES_EXPORT RTCRtpTransceiverImpl : public RTCRtpTransceiverPlatform {
       const webrtc::RtpTransceiverInterface* webrtc_transceiver);
 
   RTCRtpTransceiverImpl(
-      scoped_refptr<webrtc::PeerConnectionInterface> native_peer_connection,
+      rtc::scoped_refptr<webrtc::PeerConnectionInterface>
+          native_peer_connection,
       scoped_refptr<blink::WebRtcMediaStreamTrackAdapterMap> track_map,
       RtpTransceiverState state,
-      bool encoded_insertable_streams);
+      bool encoded_insertable_streams,
+      std::unique_ptr<webrtc::Metronome> decode_metronome);
   RTCRtpTransceiverImpl(const RTCRtpTransceiverImpl& other);
   ~RTCRtpTransceiverImpl() override;
 
@@ -170,7 +172,6 @@ class MODULES_EXPORT RTCRtpTransceiverImpl : public RTCRtpTransceiverPlatform {
 
   uintptr_t Id() const override;
   String Mid() const override;
-  void SetMid(absl::optional<String>) override;
   std::unique_ptr<RTCRtpSenderPlatform> Sender() const override;
   std::unique_ptr<RTCRtpReceiverPlatform> Receiver() const override;
   webrtc::RtpTransceiverDirection Direction() const override;
@@ -183,11 +184,11 @@ class MODULES_EXPORT RTCRtpTransceiverImpl : public RTCRtpTransceiverPlatform {
   webrtc::RTCError Stop() override;
   webrtc::RTCError SetCodecPreferences(
       Vector<webrtc::RtpCodecCapability>) override;
-  webrtc::RTCError SetOfferedRtpHeaderExtensions(
+  webrtc::RTCError SetHeaderExtensionsToNegotiate(
       Vector<webrtc::RtpHeaderExtensionCapability> header_extensions) override;
-  Vector<webrtc::RtpHeaderExtensionCapability> HeaderExtensionsNegotiated()
+  Vector<webrtc::RtpHeaderExtensionCapability> GetNegotiatedHeaderExtensions()
       const override;
-  Vector<webrtc::RtpHeaderExtensionCapability> HeaderExtensionsToOffer()
+  Vector<webrtc::RtpHeaderExtensionCapability> GetHeaderExtensionsToNegotiate()
       const override;
 
  private:

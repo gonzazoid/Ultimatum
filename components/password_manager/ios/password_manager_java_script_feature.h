@@ -5,7 +5,7 @@
 #ifndef COMPONENTS_PASSWORD_MANAGER_IOS_PASSWORD_MANAGER_JAVA_SCRIPT_FEATURE_H_
 #define COMPONENTS_PASSWORD_MANAGER_IOS_PASSWORD_MANAGER_JAVA_SCRIPT_FEATURE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/no_destructor.h"
 #include "components/autofill/core/common/unique_ids.h"
 #import "ios/web/public/js_messaging/java_script_feature.h"
@@ -80,6 +80,11 @@ class PasswordManagerJavaScriptFeature : public web::JavaScriptFeature {
       delete;
   PasswordManagerJavaScriptFeature& operator=(
       const PasswordManagerJavaScriptFeature&) = delete;
+
+  // web::JavaScriptFeature
+  std::optional<std::string> GetScriptMessageHandlerName() const override;
+  void ScriptMessageReceived(web::WebState* web_state,
+                             const web::ScriptMessage& message) override;
 
   // Calls the "passwords.fillPasswordForm" JavaScript function to fill the form
   // described by |form_value| with |username| and |password|.

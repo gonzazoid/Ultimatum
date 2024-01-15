@@ -11,6 +11,7 @@
 #include "chrome/browser/ssl/security_state_tab_helper.h"
 #include "components/security_state/content/content_utils.h"
 #include "content/public/browser/web_contents.h"
+#include "net/base/net_errors.h"
 #include "net/cert/x509_certificate.h"
 #include "net/cert/x509_util.h"
 #include "net/ssl/ssl_cipher_suite_names.h"
@@ -99,8 +100,8 @@ CreateCertificateSecurityState(
   if (state.certificate) {
     subject_name = state.certificate->subject().common_name;
     issuer_name = state.certificate->issuer().common_name;
-    valid_from = state.certificate->valid_start().ToDoubleT();
-    valid_to = state.certificate->valid_expiry().ToDoubleT();
+    valid_from = state.certificate->valid_start().InSecondsFSinceUnixEpoch();
+    valid_to = state.certificate->valid_expiry().InSecondsFSinceUnixEpoch();
   }
 
   bool certificate_has_weak_signature =
@@ -152,13 +153,6 @@ CreateCertificateSecurityState(
 std::unique_ptr<protocol::Security::SafetyTipInfo> CreateSafetyTipInfo(
     const security_state::SafetyTipInfo& safety_tip_info) {
   switch (safety_tip_info.status) {
-    case security_state::SafetyTipStatus::kBadReputation:
-    case security_state::SafetyTipStatus::kBadReputationIgnored:
-      return protocol::Security::SafetyTipInfo::Create()
-          .SetSafetyTipStatus(
-              protocol::Security::SafetyTipStatusEnum::BadReputation)
-          .Build();
-
     case security_state::SafetyTipStatus::kLookalike:
     case security_state::SafetyTipStatus::kLookalikeIgnored:
       return protocol::Security::SafetyTipInfo::Create()
@@ -167,11 +161,6 @@ std::unique_ptr<protocol::Security::SafetyTipInfo> CreateSafetyTipInfo(
           .SetSafeUrl(safety_tip_info.safe_url.spec())
           .Build();
 
-    case security_state::SafetyTipStatus::kBadKeyword:
-      NOTREACHED();
-      return nullptr;
-
-    case security_state::SafetyTipStatus::kDigitalAssetLinkMatch:
     case security_state::SafetyTipStatus::kNone:
     case security_state::SafetyTipStatus::kUnknown:
       return nullptr;

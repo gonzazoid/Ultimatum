@@ -60,6 +60,7 @@ _BUILTIN_GENERATORS = {
 _BUILTIN_CHECKS = {
     "attributes": "mojom_attributes_check",
     "definitions": "mojom_definitions_check",
+    "features": "mojom_interface_feature_check",
     "restrictions": "mojom_restrictions_check",
 }
 
@@ -316,7 +317,7 @@ def main():
                                "--checks",
                                dest="checks_string",
                                metavar="CHECKS",
-                               default="attributes,definitions,restrictions",
+                               default=",".join(_BUILTIN_CHECKS.keys()),
                                help="comma-separated list of checks")
   generate_parser.add_argument(
       "--gen_dir", dest="gen_directories", action="append", metavar="directory",

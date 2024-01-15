@@ -4,6 +4,7 @@
 
 #include <utility>
 
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
@@ -81,7 +82,7 @@ void OverlayStateServiceUnittest::PerformRegistration(
 void OverlayStateServiceUnittest::SetService() {
   service_ = OverlayStateService::GetInstance();
   if (!service_->IsInitialized()) {
-    service_->Initialize(base::SequencedTaskRunnerHandle::Get());
+    service_->Initialize(base::SequencedTaskRunner::GetCurrentDefault());
   }
 }
 
@@ -140,11 +141,11 @@ TEST_F(OverlayStateServiceUnittest, AddObserver) {
   SetService();
 
   // Add observer for a new mailbox
-  gpu::Mailbox mailbox = gpu::Mailbox::Generate();
+  gpu::Mailbox mailbox = gpu::Mailbox::GenerateForSharedImage();
   PerformRegistration(mailbox);
 
   // Add observer for existing mailbox with set promotion state
-  gpu::Mailbox mailbox2 = gpu::Mailbox::Generate();
+  gpu::Mailbox mailbox2 = gpu::Mailbox::GenerateForSharedImage();
   SetPromotionHint(mailbox2, true);
   VizTestSuite::RunUntilIdle();
   receiver_.reset();
@@ -156,7 +157,7 @@ TEST_F(OverlayStateServiceUnittest, AddObserver) {
 
 TEST_F(OverlayStateServiceUnittest, SetHint) {
   SetService();
-  gpu::Mailbox mailbox = gpu::Mailbox::Generate();
+  gpu::Mailbox mailbox = gpu::Mailbox::GenerateForSharedImage();
   PerformRegistration(mailbox);
   VizTestSuite::RunUntilIdle();
   SetPromotionHint(mailbox, true);
@@ -171,7 +172,7 @@ TEST_F(OverlayStateServiceUnittest, SetHint) {
 
 TEST_F(OverlayStateServiceUnittest, DeleteMailbox) {
   SetService();
-  gpu::Mailbox mailbox = gpu::Mailbox::Generate();
+  gpu::Mailbox mailbox = gpu::Mailbox::GenerateForSharedImage();
   PerformRegistration(mailbox);
   VizTestSuite::RunUntilIdle();
   SetPromotionHint(mailbox, true);

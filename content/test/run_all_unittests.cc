@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/launcher/unit_test_launcher.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -21,8 +21,8 @@ int main(int argc, char** argv) {
 
   content::UnitTestTestSuite test_suite(
       new content::ContentTestSuite(argc, argv),
-      base::BindRepeating(
-          content::UnitTestTestSuite::CreateTestContentClients));
+      base::BindRepeating(content::UnitTestTestSuite::CreateTestContentClients),
+      /*child_mojo_config=*/std::nullopt);
   return base::LaunchUnitTests(argc, argv,
                                base::BindOnce(&content::UnitTestTestSuite::Run,
                                               base::Unretained(&test_suite)));

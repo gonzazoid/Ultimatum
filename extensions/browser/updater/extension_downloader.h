@@ -7,11 +7,11 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
-
 #include "base/compiler_specific.h"
 #include "base/files/file_path.h"
 #include "base/memory/raw_ptr.h"
@@ -29,7 +29,6 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/http/http_request_headers.h"
 #include "services/network/public/mojom/url_loader_factory.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace crx_file {
@@ -58,14 +57,6 @@ struct DownloadFailure {
 
   ExtensionDownloaderDelegate::Error error;
   ExtensionDownloaderDelegate::FailureData failure_data;
-};
-
-struct UpdateDetails {
-  UpdateDetails(const std::string& id, const base::Version& version);
-  ~UpdateDetails();
-
-  std::string id;
-  base::Version version;
 };
 
 class ExtensionCache;
@@ -124,14 +115,35 @@ class ExtensionDownloader {
     ping_enabled_domain_ = domain;
   }
 
-  // Set backoff policy for manifest queue for testing with less initial delay
-  // so the tests do not timeout on retries.
-  void SetBackoffPolicyForTesting(
-      const net::BackoffEntry::Policy* backoff_policy);
+  // Set backoff policy for manifest and extension queue. Set `std::nullopt` to
+  // restore to the default backoff policy. Used in tests and Kiosk launcher to
+  // reduce retry backoff.
+  void SetBackoffPolicy(
+      std::optional<net::BackoffEntry::Policy> backoff_policy);
 
   bool HasActiveManifestRequestForTesting();
 
   ManifestFetchData* GetActiveManifestFetchForTesting();
+
+  // An observer class that can be used by test code.
+  class TestObserver {
+   public:
+    TestObserver();
+    virtual ~TestObserver();
+
+    // Invoked when an update is found for an extension, but before any attempt
+    // to download it is made.
+    // Will be invoked right before its namesake in ExtensionDownloaderDelegate.
+    virtual void OnExtensionUpdateFound(const ExtensionId& id,
+                                        const std::set<int>& request_ids,
+                                        const base::Version& version) = 0;
+  };
+  // Sets a test observer to be used by any instances of this class.
+  // The |observer| should outlive all ExtensionDownloader instances.
+  static void set_test_observer(TestObserver* observer);
+  // Returns the currently set TestObserver, if any.
+  // Useful for sanity-checking test code.
+  static TestObserver* test_observer();
 
   // Sets a test delegate to use by any instances of this class. The |delegate|
   // should outlive all instances.
@@ -239,14 +251,8 @@ class ExtensionDownloader {
     kBadUpdateSpecification,
   };
 
-  // Updates |url_stats_| for a single extension download requests.
-  void UpdateURLStats(const GURL& update_url, Manifest::Type extension_type);
-
   // Helper for AddExtension() and AddPendingExtension().
   bool AddExtensionData(ExtensionDownloaderTask task);
-
-  // Adds all recorded stats taken so far to histogram counts.
-  void ReportStats() const;
 
   // Begins an update check.
   void StartUpdateCheck(std::unique_ptr<ManifestFetchData> fetch_data);
@@ -291,7 +297,7 @@ class ExtensionDownloader {
   // If |results| is null, it means something went wrong when parsing it.
   void HandleManifestResults(std::unique_ptr<ManifestFetchData> fetch_data,
                              std::unique_ptr<UpdateManifestResults> results,
-                             const absl::optional<ManifestParseFailure>& error);
+                             const std::optional<ManifestParseFailure>& error);
 
   // This function partition extensions from given |tasks| into two sets:
   // update/error using the update information from |possible_updates| and
@@ -310,10 +316,10 @@ class ExtensionDownloader {
       std::vector<std::pair<ExtensionDownloaderTask, DownloadFailure>>* errors);
 
   // Checks whether extension is presented in cache. If yes, return path to its
-  // cached CRX, absl::nullopt otherwise. |manifest_fetch_failed| flag indicates
+  // cached CRX, std::nullopt otherwise. |manifest_fetch_failed| flag indicates
   // whether the lookup in cache is performed after the manifest is fetched or
   // due to failure while fetching or parsing manifest.
-  absl::optional<base::FilePath> GetCachedExtension(
+  std::optional<base::FilePath> GetCachedExtension(
       const ExtensionId& id,
       const std::string& package_hash,
       const base::Version& expected_version,
@@ -323,7 +329,7 @@ class ExtensionDownloader {
   // additional information about the extension update from the info field in
   // the update manifest.
   void FetchUpdatedExtension(std::unique_ptr<ExtensionFetch> fetch_data,
-                             absl::optional<std::string> info);
+                             std::optional<std::string> info);
 
   // Called by RequestQueue when a new extension load request is started.
   void CreateExtensionLoader();
@@ -366,10 +372,6 @@ class ExtensionDownloader {
   void NotifyExtensionsDownloadFailedWithList(
       std::vector<std::pair<ExtensionDownloaderTask, DownloadFailure>> errors,
       std::set<int> request_ids);
-
-  // Send a notification that an update was found for |id| that we'll
-  // attempt to download.
-  void NotifyUpdateFound(const std::string& id, const std::string& version);
 
   // Helper method to populate lists of manifest fetch requests.
   void AddToFetches(std::map<FetchDataGroupKey,
@@ -430,9 +432,6 @@ class ExtensionDownloader {
   // The profile path used to load file:// URLs. It can be invalid.
   base::FilePath profile_path_for_url_loader_factory_;
 
-  // Collects UMA samples that are reported when ReportStats() is called.
-  URLStats url_stats_;
-
   // List of update requests added to the downloader but not started yet.
   std::vector<ExtensionDownloaderTask> pending_tasks_;
 
@@ -449,7 +448,7 @@ class ExtensionDownloader {
   std::map<ExtensionId, ExtensionDownloaderDelegate::PingResult> ping_results_;
 
   // Cache for .crx files.
-  raw_ptr<ExtensionCache> extension_cache_;
+  raw_ptr<ExtensionCache, DanglingUntriaged> extension_cache_;
 
   // May be used to fetch access tokens for protected download requests. May be
   // null. If non-null, guaranteed to outlive this object.

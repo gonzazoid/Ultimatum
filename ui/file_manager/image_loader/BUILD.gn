@@ -4,32 +4,39 @@
 
 import("//third_party/closure_compiler/compile_js.gni")
 import("//third_party/closure_compiler/js_unit_tests.gni")
-import("//ui/file_manager/base/gn/files_webui_bundle/files_webui_bundle.gni")
+import("//tools/typescript/ts_definitions.gni")
+import("//tools/typescript/ts_library.gni")
 import("//ui/file_manager/base/gn/js_test_type_check.gni")
+import("//ui/file_manager/file_names.gni")
+import("//ui/webui/resources/tools/optimize_webui.gni")
+import("//ui/webui/webui_features.gni")
+
+ts_definitions("generate_definitions") {
+  js_files = [ "piex_loader.js" ]
+}
 
 js_type_check("closure_compile_jsmodules") {
   closure_flags = default_closure_args + [
                     "language_in=ECMASCRIPT_2020",
                     "jscomp_error=strictCheckTypes",
+                    "js_module_root=gen/ui/file_manager/image_loader/preprocessed/",
                     "js_module_root=gen/ui/file_manager/",
                     "js_module_root=" +
                         rebase_path("//ui/file_manager/", root_build_dir),
                     "browser_resolver_prefix_replacements=\"chrome://file-manager/=./file_manager/\"",
+                    "browser_resolver_prefix_replacements=\"chrome-extension://pmfjbimdmchhbnneeidfognadeopoehp/=./image_loader/\"",
                   ]
   deps = [
-    ":background",
     ":cache",
     ":image_loader_client",
     ":image_loader_util",
     ":image_orientation",
     ":image_request_task",
+    ":js_from_files_app",
     ":load_image_request",
     ":piex_loader",
     ":scheduler",
   ]
-}
-
-js_library("background") {
 }
 
 js_library("cache") {
@@ -38,7 +45,7 @@ js_library("cache") {
 js_unittest("cache_unittest") {
   deps = [
     ":load_image_request",
-    "//chrome/test/data/webui:chai_assert",
+    "//chrome/test/data/webui/chromeos:chai_assert",
   ]
 }
 
@@ -49,7 +56,7 @@ js_library("image_loader") {
     ":image_request_task",
     ":load_image_request",
     ":scheduler",
-    "//ui/webui/resources/js:assert",
+    "//ash/webui/common/resources:assert",
   ]
 }
 
@@ -58,29 +65,27 @@ js_unittest("image_loader_unittest") {
     ":image_loader_util",
     ":image_orientation",
     ":load_image_request",
-    "//chrome/test/data/webui:chai_assert",
+    "//chrome/test/data/webui/chromeos:chai_assert",
   ]
 }
 
 js_library("image_loader_util") {
   deps = [
     ":load_image_request",
-    "//ui/webui/resources/js:assert",
+    "//ash/webui/common/resources:assert",
   ]
 }
 
 js_library("load_image_request") {
   deps = [
     ":image_orientation",
-    "//ui/webui/resources/js:assert",
+    "//ash/webui/common/resources:assert",
   ]
 }
 
 js_library("image_loader_client") {
-  deps = [
-    ":load_image_request",
-    "//ui/file_manager/file_manager/common/js:lru_cache",
-  ]
+  deps = [ ":load_image_request" ]
+
   externs_list = [
     "$externs_path/chrome.js",
     "$externs_path/chrome_extensions.js",
@@ -92,19 +97,11 @@ js_unittest("image_loader_client_unittest") {
   deps = [
     ":image_loader_client",
     ":load_image_request",
-    "//chrome/test/data/webui:chai_assert",
-    "//ui/file_manager/file_manager/common/js:test_error_reporting",
+    "//chrome/test/data/webui/chromeos:chai_assert",
   ]
 }
 
 js_library("image_orientation") {
-}
-
-js_unittest("image_orientation_unittest") {
-  deps = [
-    ":image_orientation",
-    "//chrome/test/data/webui:chai_assert",
-  ]
 }
 
 js_library("piex_loader") {
@@ -118,14 +115,11 @@ js_library("image_request_task") {
     ":image_orientation",
     ":load_image_request",
     ":piex_loader",
-    "//ui/file_manager/file_manager/common/js:file_type",
-    "//ui/webui/resources/js:assert",
+    "//ash/webui/common/resources:assert",
   ]
   externs_list = [
-    "$externs_path/file_manager_private.js",
-    "$externs_path/file_system_provider.js",
+    "$externs_path/image_loader_private.js",
     "$externs_path/chrome_extensions.js",
-    "$externs_path/chrome.js",
   ]
 }
 
@@ -137,7 +131,7 @@ js_unittest("scheduler_unittest") {
   deps = [
     ":image_request_task",
     ":scheduler",
-    "//chrome/test/data/webui:chai_assert",
+    "//chrome/test/data/webui/chromeos:chai_assert",
   ]
 }
 
@@ -146,19 +140,20 @@ js_test_type_check("js_test_type_check") {
     ":cache_unittest",
     ":image_loader_client_unittest",
     ":image_loader_unittest",
-    ":image_orientation_unittest",
     ":scheduler_unittest",
   ]
 
   closure_flags = strict_error_checking_closure_args + [
                     "language_in=ECMASCRIPT_2020",
-                    "js_module_root=./gen/ui",
+                    "js_module_root=./gen/ui/file_manager/image_loader/preprocessed/",
                     "js_module_root=" +
                         rebase_path("//ui/file_manager/", root_build_dir),
                     "js_module_root=./gen/ui/file_manager/",
                     "browser_resolver_prefix_replacements=\"chrome://webui-test/=./\"",
                     "browser_resolver_prefix_replacements=\"chrome://file-manager/=./file_manager/\"",
+                    "browser_resolver_prefix_replacements=\"chrome-extension://pmfjbimdmchhbnneeidfognadeopoehp/=./image_loader/\"",
                   ]
+  extra_deps = [ ":js_from_files_app" ]
 }
 
 group("closure_compile") {
@@ -169,37 +164,77 @@ group("closure_compile") {
   ]
 }
 
-group("js_modules") {
-  deps = [
-    ":cache",
-    ":image_loader",
-    ":image_loader_client",
-    ":image_loader_util",
-    ":image_orientation",
-    ":image_request_task",
-    ":load_image_request",
-    ":piex_loader",
-    ":scheduler",
+preprocess_folder = "$target_gen_dir/preprocessed"
+tsc_folder = "$target_gen_dir/tsc"
+files_app_path = rebase_path("$tsc_folder/file_manager", root_build_dir)
+image_loader_path = rebase_path("$tsc_folder/image_loader", root_build_dir)
+
+files_app_tsc_folder = "$target_gen_dir/../tsc/file_manager"
+
+copy("from_files_app") {
+  sources = [
+    "$files_app_tsc_folder/common/js/file_types_base.js",
+    "$files_app_tsc_folder/common/js/file_types_data.js",
+    "$files_app_tsc_folder/common/js/lru_cache.js",
   ]
+
+  outputs = [ "$preprocess_folder/file_manager/common/js/{{source_file_part}}" ]
+  if (enable_webui_inline_sourcemaps) {
+    deps = [ "//ui/file_manager:merge_source_maps" ]
+  } else {
+    deps = [ "//ui/file_manager:build_ts" ]
+  }
 }
 
-preprocess_folder =
-    rebase_path("$target_gen_dir/../preprocessed/image_loader", root_build_dir)
+# image_loader_client.js depends on this file from Files app for the type-checking.
+js_library("js_from_files_app") {
+  sources = [
+    "$preprocess_folder/file_manager/common/js/file_types_base.js",
+    "$preprocess_folder/file_manager/common/js/file_types_data.js",
+    "$preprocess_folder/file_manager/common/js/lru_cache.js",
+  ]
+  extra_deps = [ ":from_files_app" ]
+}
 
-files_app_path =
-    rebase_path("$root_gen_dir/ui/file_manager/preprocessed/file_manager",
-                root_build_dir)
-image_loader_path =
-    rebase_path("$root_gen_dir/ui/file_manager/preprocessed/image_loader",
-                root_build_dir)
+copy("copy_src") {
+  sources = [
+    "background.ts",
+    "cache.js",
+    "image_loader.js",
+    "image_loader_client.js",
+    "image_loader_util.js",
+    "image_orientation.js",
+    "image_request_task.js",
+    "load_image_request.js",
+    "piex_loader.js",
+    "scheduler.js",
+  ]
+  outputs = [ "$preprocess_folder/image_loader/{{source_file_part}}" ]
+}
 
-files_webui_bundle("build") {
+ts_library("build_ts") {
+  root_dir = preprocess_folder
+  out_dir = tsc_folder
+  tsconfig_base = "tsconfig_base.json"
+  composite = true
+
+  extra_deps = [
+    ":copy_src",
+    ":from_files_app",
+  ]
+
+  in_files = image_loader_static_js_files + image_loader_ts + [
+               "file_manager/common/js/file_types_data.js",
+               "file_manager/common/js/file_types_base.js",
+               "file_manager/common/js/lru_cache.js",
+             ]
+}
+
+optimize_webui("build") {
   host = "image_loader"
 
-  input = preprocess_folder
+  input = image_loader_path
   js_module_in_files = [ "background.js" ]
-
-  js_out_files = [ "background.rollup.js" ]
 
   external_paths = [
     "chrome://file-manager|$files_app_path",
@@ -207,10 +242,14 @@ files_webui_bundle("build") {
   ]
 
   deps = [
-    ":background",
+    ":build_ts",
     "//ui/file_manager:preprocess_generated",
     "//ui/file_manager:preprocess_static",
     "//ui/file_manager:preprocess_static_image_loader",
-    "//ui/webui/resources:preprocess",
   ]
+  if (enable_webui_inline_sourcemaps) {
+    deps += [ "//ui/file_manager:merge_source_maps" ]
+  } else {
+    deps += [ "//ui/file_manager:build_ts" ]
+  }
 }

@@ -152,7 +152,7 @@ class AV1DecoderTest : public ::testing::Test {
   }
 
   // Owned by |decoder_|.
-  raw_ptr<MockAV1Accelerator> mock_accelerator_;
+  raw_ptr<MockAV1Accelerator, DanglingUntriaged> mock_accelerator_;
 
   std::unique_ptr<AV1Decoder> decoder_;
   int32_t bitstream_id_ = 0;
@@ -426,6 +426,42 @@ TEST_F(AV1DecoderTest, Decode10bitStream) {
                                /*show_existing_frame=*/false,
                                /*show_frame=*/true),
             MatchesYUV420SequenceHeader(kProfile, /*bitdepth=*/10, kFrameSize,
+                                        /*film_grain_params_present=*/false),
+            _, NonEmptyTileBuffers(), MatchesFrameData(buffer)))
+        .WillOnce(Return(AV1Decoder::AV1Accelerator::Status::kOk));
+    EXPECT_CALL(*mock_accelerator_,
+                OutputPicture(SameAV1PictureInstance(av1_picture)))
+        .WillOnce(Return(true));
+    for (DecodeResult r : Decode(buffer)) {
+      results.push_back(r);
+    }
+    expected.push_back(DecodeResult::kRanOutOfStreamData);
+    testing::Mock::VerifyAndClearExpectations(mock_accelerator_);
+  }
+  EXPECT_EQ(results, expected);
+}
+
+TEST_F(AV1DecoderTest, DecodeTemporalLayerStream) {
+  constexpr gfx::Size kFrameSize(640, 360);
+  constexpr gfx::Size kRenderSize(640, 360);
+  constexpr auto kProfile = libgav1::BitstreamProfile::kProfile0;
+  const std::string kTLStream("av1-svc-L1T2.ivf");
+  std::vector<scoped_refptr<DecoderBuffer>> buffers = ReadIVF(kTLStream);
+  ASSERT_FALSE(buffers.empty());
+  std::vector<DecodeResult> expected = {DecodeResult::kConfigChange};
+  std::vector<DecodeResult> results;
+  for (auto buffer : buffers) {
+    ::testing::InSequence sequence;
+    auto av1_picture = base::MakeRefCounted<AV1Picture>();
+    EXPECT_CALL(*mock_accelerator_, CreateAV1Picture(/*apply_grain=*/false))
+        .WillOnce(Return(av1_picture));
+    EXPECT_CALL(
+        *mock_accelerator_,
+        SubmitDecode(
+            MatchesFrameHeader(kFrameSize, kRenderSize,
+                               /*show_existing_frame=*/false,
+                               /*show_frame=*/true),
+            MatchesYUV420SequenceHeader(kProfile, /*bitdepth=*/8, kFrameSize,
                                         /*film_grain_params_present=*/false),
             _, NonEmptyTileBuffers(), MatchesFrameData(buffer)))
         .WillOnce(Return(AV1Decoder::AV1Accelerator::Status::kOk));

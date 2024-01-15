@@ -12,6 +12,7 @@
 #include "chrome/browser/task_manager/web_contents_tags.h"
 #include "chrome/browser/ui/webui/chrome_web_ui_controller_factory.h"
 #include "chrome/common/url_constants.h"
+#include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_view_host.h"
@@ -23,6 +24,8 @@
 #include "extensions/browser/extensions_browser_client.h"
 #include "extensions/browser/view_type_utils.h"
 #include "extensions/common/mojom/view_type.mojom.h"
+#include "services/metrics/public/cpp/ukm_builders.h"
+#include "services/metrics/public/cpp/ukm_recorder.h"
 #include "ui/gfx/geometry/rect.h"
 
 using content::SiteInstance;
@@ -57,6 +60,7 @@ BackgroundContents::BackgroundContents(
   } else {
     web_contents_ = WebContents::Create(create_params);
   }
+  web_contents_->SetOwnerLocationForDebug(FROM_HERE);
   extensions::SetViewType(web_contents_.get(),
                           extensions::mojom::ViewType::kBackgroundContents);
   web_contents_->SetDelegate(this);
@@ -95,8 +99,7 @@ bool BackgroundContents::ShouldSuppressDialogs(WebContents* source) {
   return true;
 }
 
-void BackgroundContents::DidNavigatePrimaryMainFramePostCommit(
-    WebContents* tab) {
+void BackgroundContents::PrimaryPageChanged(content::Page& page) {
   // Note: because BackgroundContents are only available to extension apps,
   // navigation is limited to urls within the app's extent. This is enforced in
   // RenderView::decidePolicyForNavigation. If BackgroundContents become
@@ -133,7 +136,14 @@ void BackgroundContents::PrimaryMainFrameRenderProcessGone(
 }
 
 void BackgroundContents::CreateRendererNow() {
-  web_contents()->GetController().LoadURL(initial_url_, content::Referrer(),
-                                          ui::PAGE_TRANSITION_LINK,
-                                          std::string());
+  base::WeakPtr<content::NavigationHandle> handle =
+      web_contents()->GetController().LoadURL(initial_url_, content::Referrer(),
+                                              ui::PAGE_TRANSITION_LINK,
+                                              std::string());
+  if (handle) {
+    ukm::builders::Extensions_BackgroundContentsCreated(
+        handle->GetNextPageUkmSourceId())
+        .SetSeen(true)
+        .Record(ukm::UkmRecorder::Get());
+  }
 }

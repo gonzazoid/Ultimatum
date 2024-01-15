@@ -9,13 +9,14 @@
 #include <memory>
 #include <vector>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
-
 #include "device/vr/openxr/openxr_controller.h"
 #include "device/vr/openxr/openxr_interaction_profiles.h"
-#include "device/vr/openxr/openxr_util.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/openxr/src/include/openxr/openxr.h"
 
 namespace device {
+
+class OpenXrExtensionHelper;
 
 class OpenXRInputHelper {
  public:
@@ -25,9 +26,12 @@ class OpenXRInputHelper {
       const OpenXrExtensionHelper& extension_helper,
       XrSession session,
       XrSpace local_space,
+      bool hand_input_enabled,
       std::unique_ptr<OpenXRInputHelper>* helper);
 
-  OpenXRInputHelper(XrSession session, XrSpace local_space);
+  OpenXRInputHelper(XrSession session,
+                    XrSpace local_space,
+                    bool hand_input_enabled);
 
   OpenXRInputHelper(const OpenXRInputHelper&) = delete;
   OpenXRInputHelper& operator=(const OpenXRInputHelper&) = delete;
@@ -35,14 +39,13 @@ class OpenXRInputHelper {
   ~OpenXRInputHelper();
 
   std::vector<mojom::XRInputSourceStatePtr> GetInputState(
-      bool hand_input_enabled,
       XrTime predicted_display_time);
 
   XrResult OnInteractionProfileChanged();
 
- private:
-  absl::optional<Gamepad> GetWebXRGamepad(const OpenXrController& controller);
+  bool ReceivedExitGesture() { return received_exit_gesture_; }
 
+ private:
   XrResult Initialize(XrInstance instance,
                       XrSystemId system,
                       const OpenXrExtensionHelper& extension_helper);
@@ -52,6 +55,8 @@ class OpenXRInputHelper {
   XrSpace GetMojomSpace() const {
     return local_space_;  // Mojom space is currently defined as local space
   }
+
+  void OnExitGesture() { received_exit_gesture_ = true; }
 
   XrSession session_;
   XrSpace local_space_;
@@ -66,6 +71,8 @@ class OpenXRInputHelper {
       controller_states_;
 
   std::unique_ptr<OpenXRPathHelper> path_helper_;
+  bool received_exit_gesture_ = false;
+  bool hand_input_enabled_ = false;
 };
 
 }  // namespace device

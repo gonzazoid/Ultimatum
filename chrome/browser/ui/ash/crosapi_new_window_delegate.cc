@@ -34,6 +34,9 @@ crosapi::mojom::OpenUrlParams::WindowOpenDisposition DispositionToMojom(
           kNewForegroundTab;
     case ash::NewWindowDelegate::Disposition::kNewWindow:
       return crosapi::mojom::OpenUrlParams::WindowOpenDisposition::kNewWindow;
+    case ash::NewWindowDelegate::Disposition::kOffTheRecord:
+      return crosapi::mojom::OpenUrlParams::WindowOpenDisposition::
+          kOffTheRecord;
     case ash::NewWindowDelegate::Disposition::kSwitchToTab:
       return crosapi::mojom::OpenUrlParams::WindowOpenDisposition::kSwitchToTab;
   }
@@ -83,6 +86,11 @@ void CrosapiNewWindowDelegate::WindowObserver::OnWindowVisibilityChanged(
     owner_->DestroyWindowObserver();
     return;
   }
+}
+
+void CrosapiNewWindowDelegate::WindowObserver::OnWindowDestroying(
+    aura::Window* window) {
+  observed_windows_.RemoveObservation(window);
 }
 
 void CrosapiNewWindowDelegate::WindowObserver::SetWindowID(
@@ -185,6 +193,10 @@ void CrosapiNewWindowDelegate::RestoreTab() {
 
 void CrosapiNewWindowDelegate::ShowKeyboardShortcutViewer() {
   delegate_->ShowKeyboardShortcutViewer();
+}
+
+void CrosapiNewWindowDelegate::ShowShortcutCustomizationApp() {
+  delegate_->ShowShortcutCustomizationApp();
 }
 
 void CrosapiNewWindowDelegate::ShowTaskManager() {

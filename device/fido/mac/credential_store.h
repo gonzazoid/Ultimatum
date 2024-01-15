@@ -6,14 +6,15 @@
 #define DEVICE_FIDO_MAC_CREDENTIAL_STORE_H_
 
 #include <list>
+#include <memory>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/apple/foundation_util.h"
 #include "base/component_export.h"
-#include "base/mac/foundation_util.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "device/fido/mac/authenticator_config.h"
 #include "device/fido/mac/credential_metadata.h"
@@ -24,28 +25,13 @@
 
 #if defined(__OBJC__)
 @class LAContext;
-#else
-class LAContext;
 #endif
-
-// This enum represents the error or success statuses of calling
-// TouchIdCredentialStore.UpdateCredential.
-// This enum is used for UMA histograms and the values should not be
-// reassigned. New error statuses should be reflected in the
-// WebAuthenticationTouchIdCredentialStoreUpdateCredentialStatus enum.
-enum class TouchIdCredentialStoreUpdateCredentialStatus {
-  kUpdateCredentialSuccess = 0,
-  kNoCredentialsFound = 1,
-  kNoMatchingCredentialId = 2,
-  kSecItemUpdateFailure = 3,
-  kMaxValue = kSecItemUpdateFailure,
-};
 
 namespace device::fido::mac {
 
 // Credential represents a WebAuthn credential from the keychain.
 struct COMPONENT_EXPORT(DEVICE_FIDO) Credential {
-  Credential(base::ScopedCFTypeRef<SecKeyRef> private_key,
+  Credential(base::apple::ScopedCFTypeRef<SecKeyRef> private_key,
              std::vector<uint8_t> credential_id,
              CredentialMetadata metadata,
              std::string rp_id);
@@ -57,8 +43,12 @@ struct COMPONENT_EXPORT(DEVICE_FIDO) Credential {
 
   bool operator==(const Credential&) const;
 
+  // Returns whether the user must be verified via Touch ID or device unlock
+  // in order to sign with the secure enclave key pair for this credential.
+  bool RequiresUvForSignature() const;
+
   // An opaque reference to the private key that can be used for signing.
-  base::ScopedCFTypeRef<SecKeyRef> private_key;
+  base::apple::ScopedCFTypeRef<SecKeyRef> private_key;
 
   // The credential ID is a handle to the key that gets passed to the RP. This
   // ID is opaque to the RP, but is obtained by encrypting the credential
@@ -85,22 +75,18 @@ class COMPONENT_EXPORT(DEVICE_FIDO) TouchIdCredentialStore
   TouchIdCredentialStore& operator=(const TouchIdCredentialStore&) = delete;
   ~TouchIdCredentialStore() override;
 
-  // Returns the access control object used when creating platform authenticator
-  // credentials.
-  static base::ScopedCFTypeRef<SecAccessControlRef> DefaultAccessControl();
-
+#if defined(__OBJC__)
   // An LAContext that has been successfully evaluated using |TouchIdContext|
-  // may be passed in |authenticaton_context|, in order to authorize
+  // may be passed in |authentication_context|, in order to authorize
   // credentials returned by the `Find*` instance methods for signing without
   // triggering a Touch ID prompt.
-  void set_authentication_context(LAContext* authentication_context) {
-    authentication_context_ = authentication_context;
-  }
+  void SetAuthenticationContext(LAContext* authentication_context);
+#endif  // __OBJC__
 
   // CreateCredential inserts a new credential into the keychain. It returns
   // the new credential and its public key, or absl::nullopt if an error
   // occurred.
-  absl::optional<std::pair<Credential, base::ScopedCFTypeRef<SecKeyRef>>>
+  absl::optional<std::pair<Credential, base::apple::ScopedCFTypeRef<SecKeyRef>>>
   CreateCredential(const std::string& rp_id,
                    const PublicKeyCredentialUserEntity& user,
                    Discoverable discoverable) const;
@@ -108,7 +94,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) TouchIdCredentialStore
   // CreateCredentialLegacyCredentialForTesting inserts a credential for an old
   // `CredentialMetadata::Version`. Such credentials can't be created anymore,
   // but they still exist and we need to be able to exercise them.
-  absl::optional<std::pair<Credential, base::ScopedCFTypeRef<SecKeyRef>>>
+  absl::optional<std::pair<Credential, base::apple::ScopedCFTypeRef<SecKeyRef>>>
   CreateCredentialLegacyCredentialForTesting(
       CredentialMetadata::Version version,
       const std::string& rp_id,
@@ -128,7 +114,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) TouchIdCredentialStore
 
   // FindResidentCredentials returns the client-side discoverable credentials
   // for the given |rp_id|. If |rp_id| is not specified, all resident
-  // credentials are returned. base::nulltopt is returned if an error occurred.
+  // credentials are returned. nullopt is returned if an error occurred.
   absl::optional<std::list<Credential>> FindResidentCredentials(
       const absl::optional<std::string>& rp_id) const;
 
@@ -169,7 +155,9 @@ class COMPONENT_EXPORT(DEVICE_FIDO) TouchIdCredentialStore
       const std::set<std::vector<uint8_t>>& credential_ids) const;
 
   AuthenticatorConfig config_;
-  LAContext* authentication_context_ = nullptr;
+
+  struct ObjCStorage;
+  std::unique_ptr<ObjCStorage> objc_storage_;
 };
 
 }  // namespace device::fido::mac

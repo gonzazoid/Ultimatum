@@ -12,13 +12,13 @@
 #include <utility>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/notreached.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "pdf/paint_ready_rect.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkImage.h"
@@ -181,7 +181,7 @@ void PaintManager::EnsureCallbackPending() {
   if (manual_callback_pending_)
     return;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&PaintManager::OnManualCallbackComplete,
                                 weak_factory_.GetWeakPtr()));
   manual_callback_pending_ = true;
@@ -213,8 +213,8 @@ void PaintManager::DoPaint() {
                              : gfx::Size();
     gfx::Size new_size = GetNewContextSize(old_size, pending_size_);
     if (old_size != new_size || !surface_) {
-      surface_ =
-          SkSurface::MakeRasterN32Premul(new_size.width(), new_size.height());
+      surface_ = SkSurfaces::Raster(
+          SkImageInfo::MakeN32Premul(new_size.width(), new_size.height()));
       DCHECK(surface_);
 
       // TODO(crbug.com/1317832): Can we guarantee repainting some other way?
@@ -305,8 +305,8 @@ void PaintManager::Flush() {
                                    SkSamplingOptions(), /*paint=*/nullptr);
   client_->UpdateSnapshot(std::move(snapshot));
 
-  // TODO(crbug.com/1302059): Complete flush synchronously.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  // TODO(crbug.com/1403311): Complete flush synchronously.
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&PaintManager::OnFlushComplete,
                                 weak_factory_.GetWeakPtr()));
   flush_pending_ = true;

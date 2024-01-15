@@ -7,12 +7,12 @@
 #include <stdint.h>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/process/kill.h"
 #include "base/process/launch.h"
 #include "base/task/lazy_thread_pool_task_runner.h"
@@ -29,7 +29,7 @@ namespace debug_log_writer {
 namespace {
 
 using StoreLogsCallback =
-    base::OnceCallback<void(absl::optional<base::FilePath> log_path)>;
+    base::OnceCallback<void(std::optional<base::FilePath> log_path)>;
 
 // Callback for returning status of executed external command.
 typedef base::OnceCallback<void(bool succeeded)> CommandCompletionCallback;
@@ -56,7 +56,7 @@ void WriteDebugLogToFileCompleted(const base::FilePath& file_path,
         base::GetDeleteFileCallback(
             file_path,
             base::OnceCallback<void(bool)>(base::DoNothing())
-                .Then(base::BindOnce(std::move(callback), absl::nullopt))));
+                .Then(base::BindOnce(std::move(callback), std::nullopt))));
     DCHECK(posted);
     return;
   }
@@ -100,6 +100,7 @@ void RunCommand(const std::vector<std::string>& argv,
   }
 
   int exit_code = 0;
+  base::internal::GetAppOutputScopedAllowBaseSyncPrimitives allow_wait;
   if (!process.WaitForExit(&exit_code)) {
     LOG(ERROR) << "Can't get exit code for pid " << process.Pid();
     if (!callback.is_null())
@@ -120,7 +121,7 @@ void OnCompressArchiveCompleted(const base::FilePath& tar_file_path,
   if (!compression_command_success) {
     LOG(ERROR) << "Failed compressing " << compressed_output_path.value();
     content::GetUIThreadTaskRunner({})->PostTask(
-        FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
+        FROM_HERE, base::BindOnce(std::move(callback), std::nullopt));
     base::DeleteFile(tar_file_path);
     base::DeleteFile(compressed_output_path);
     return;
@@ -138,7 +139,7 @@ void CompressArchive(const base::FilePath& tar_file_path,
   if (!add_user_logs_command_success) {
     LOG(ERROR) << "Failed adding user logs to " << tar_file_path.value();
     content::GetUIThreadTaskRunner({})->PostTask(
-        FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
+        FROM_HERE, base::BindOnce(std::move(callback), std::nullopt));
     base::DeleteFile(tar_file_path);
     return;
   }
@@ -169,10 +170,10 @@ void AddUserLogsToArchive(const base::FilePath& user_log_dir,
 
 // Appends user logs after system logs are archived into |tar_file_path|.
 void OnSystemLogsAdded(StoreLogsCallback callback,
-                       absl::optional<base::FilePath> tar_file_path) {
+                       std::optional<base::FilePath> tar_file_path) {
   if (!tar_file_path) {
     if (!callback.is_null())
-      std::move(callback).Run(absl::nullopt);
+      std::move(callback).Run(std::nullopt);
     return;
   }
 
@@ -221,11 +222,10 @@ void StartLogRetrieval(const base::FilePath& file_name_template,
 }  // namespace
 
 // static.
-void StoreLogs(
-    const base::FilePath& out_dir,
-    bool include_chrome_logs,
-    base::OnceCallback<void(absl::optional<base::FilePath> logs_path)>
-        callback) {
+void StoreLogs(const base::FilePath& out_dir,
+               bool include_chrome_logs,
+               base::OnceCallback<void(std::optional<base::FilePath> logs_path)>
+                   callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   DCHECK(!callback.is_null());
 

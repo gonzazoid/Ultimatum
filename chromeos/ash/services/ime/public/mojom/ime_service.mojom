@@ -22,12 +22,6 @@ import "sandbox/policy/mojom/sandbox.mojom";
 // TODO(b/214153032): Paraphrase and modernise this documentation block. There
 // are currently quite some vague and/or oudated bits.
 
-// Specifies where a ConnectionFactory should initialize connections.
-enum ConnectionTarget {
-  kDecoder = 0,
-  kImeService = 1,
-};
-
 // Manages access to a set of IMEs, implemented by the IME service
 // itself. The IME framework in the browser process is responsible for brokering
 // the connection between the IME service and the IME extension, but does not
@@ -50,28 +44,13 @@ interface InputEngineManager {
                      array<uint8> extra)
                      => (bool success);
 
-  // Connects to the input method identified by |ime_spec|.
-  // |input_method_host| runs in the browser process and is used by the input
-  // method to communicate with the text field and the system.
-  // On success, return |success| as true, and |input_method| can be used to
-  // interact with the input method.
-  // On failure (e.g. |ime_spec| is not valid), |success| is false.
-  // TODO(b/214153032): Split this into ConnectToMojoModeSharedLibInputMethod()
-  // and ConnectToRuleBasedInputMethod(), to better manage two distinct kinds of
-  // connections this does. Also, paraphrase documentation accordingly.
-  ConnectToInputMethod(string ime_spec,
-                       pending_receiver<InputMethod> input_method,
-                       pending_remote<InputMethodHost> input_method_host)
-                       => (bool success);
-
   // Initializes the mojo pipe used for messaging between the shared library
   // and Chromium. Any messaging interfaces used will need to be associated
   // to this pipe (see AssociatedInterfaces documentation for more details).
   // TODO(b/214153032): Rename to InitializeMojoModeSharedLibConnectionFactory()
   // to better reflect what this does. Also, paraphrase documentation above.
   InitializeConnectionFactory(
-    pending_receiver<ConnectionFactory> connection_factory,
-    ConnectionTarget connection_target)
+    pending_receiver<ConnectionFactory> connection_factory)
     => (bool success);
 };
 

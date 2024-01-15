@@ -6,8 +6,8 @@
 
 #include <tuple>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/task_environment.h"
@@ -15,29 +15,25 @@
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/policy/messaging_layer/upload/record_handler_impl.h"
 #include "chrome/browser/policy/messaging_layer/util/reporting_server_connector.h"
 #include "chrome/browser/policy/messaging_layer/util/reporting_server_connector_test_util.h"
 #include "chrome/browser/policy/messaging_layer/util/test_request_payload.h"
 #include "chrome/browser/policy/messaging_layer/util/test_response_payload.h"
 #include "components/account_id/account_id.h"
-#include "components/policy/core/common/cloud/dm_token.h"
 #include "components/policy/core/common/cloud/mock_cloud_policy_client.h"
 #include "components/reporting/proto/synced/record.pb.h"
 #include "components/reporting/proto/synced/record_constants.pb.h"
-#include "components/reporting/resources/memory_resource_impl.h"
+#include "components/reporting/resources/resource_manager.h"
+#include "components/reporting/util/status_macros.h"
 #include "components/reporting/util/test_support_callbacks.h"
-#include "content/public/browser/browser_task_traits.h"
-#include "content/public/browser/browser_thread.h"
 #include "content/public/test/browser_task_environment.h"
-#include "services/network/test/test_network_connection_tracker.h"
-#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/user_manager/scoped_user_manager.h"
+#include "google_apis/gaia/core_account_id.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 namespace reporting {
@@ -54,6 +50,7 @@ using ::testing::IsEmpty;
 using ::testing::MockFunction;
 using ::testing::Not;
 using ::testing::Property;
+using testing::SizeIs;
 using ::testing::StrictMock;
 using ::testing::WithArgs;
 
@@ -74,24 +71,23 @@ class UploadClientTest : public ::testing::TestWithParam<
 
  protected:
   void SetUp() override {
-    memory_resource_ = base::MakeRefCounted<MemoryResourceImpl>(
-        4u * 1024LLu * 1024LLu);  // 4 MiB
+    memory_resource_ =
+        base::MakeRefCounted<ResourceManager>(4u * 1024LLu * 1024LLu);  // 4 MiB
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     // Set up fake primary profile.
-    auto mock_user_manager =
-        std::make_unique<testing::NiceMock<ash::FakeChromeUserManager>>();
+    auto fake_user_manager = std::make_unique<ash::FakeChromeUserManager>();
     profile_ = std::make_unique<TestingProfile>(
         base::FilePath(FILE_PATH_LITERAL("/home/chronos/u-0123456789abcdef")));
     const AccountId account_id(AccountId::FromUserEmailGaiaId(
         profile_->GetProfileUserName(), "12345"));
     const user_manager::User* user =
-        mock_user_manager->AddPublicAccountUser(account_id);
-    mock_user_manager->UserLoggedIn(account_id, user->username_hash(),
+        fake_user_manager->AddPublicAccountUser(account_id);
+    fake_user_manager->UserLoggedIn(account_id, user->username_hash(),
                                     /*browser_restart=*/false,
                                     /*is_child=*/false);
     user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
-        std::move(mock_user_manager));
+        std::move(fake_user_manager));
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   }
 
@@ -107,12 +103,13 @@ class UploadClientTest : public ::testing::TestWithParam<
 
   bool force_confirm() const { return std::get<1>(GetParam()); }
 
-  content::BrowserTaskEnvironment task_envrionment_;
+  content::BrowserTaskEnvironment task_environment_;
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   std::unique_ptr<TestingProfile> profile_;
   std::unique_ptr<user_manager::ScopedUserManager> user_manager_;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-  scoped_refptr<ResourceInterface> memory_resource_;
+  scoped_refptr<ResourceManager> memory_resource_;
 };
 
 using TestEncryptionKeyAttached = MockFunction<void(SignedEncryptionInfo)>;
@@ -120,9 +117,13 @@ using TestEncryptionKeyAttached = MockFunction<void(SignedEncryptionInfo)>;
 TEST_P(UploadClientTest, CreateUploadClientAndUploadRecords) {
   static constexpr int64_t kExpectedCallTimes = 10;
   static constexpr int64_t kGenerationId = 1234;
+#if BUILDFLAG(IS_CHROMEOS)
+  static constexpr char kGenerationGuid[] =
+      "c947e7e9-b87d-4592-9fe7-407792544e53";
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
-  base::Value data{base::Value::Type::DICTIONARY};
-  data.SetKey("TEST_KEY", base::Value("TEST_VALUE"));
+  base::Value::Dict data;
+  data.Set("TEST_KEY", "TEST_VALUE");
 
   std::string json_data;
   ASSERT_TRUE(base::JSONWriter::Write(data, &json_data));
@@ -143,6 +144,9 @@ TEST_P(UploadClientTest, CreateUploadClientAndUploadRecords) {
         encrypted_record.mutable_sequence_information();
     sequence_information->set_sequencing_id(static_cast<int64_t>(i));
     sequence_information->set_generation_id(kGenerationId);
+#if BUILDFLAG(IS_CHROMEOS)
+    sequence_information->set_generation_guid(kGenerationGuid);
+#endif  // BUILDFLAG(IS_CHROMEOS)
     sequence_information->set_priority(Priority::IMMEDIATE);
     ScopedReservation record_reservation(encrypted_record.ByteSizeLong(),
                                          memory_resource_);
@@ -163,11 +167,21 @@ TEST_P(UploadClientTest, CreateUploadClientAndUploadRecords) {
       base::BindRepeating(&TestEncryptionKeyAttached::Call,
                           base::Unretained(&encryption_key_attached));
 
-  auto client = std::make_unique<MockCloudPolicyClient>();
-  client->SetDMToken(
-      policy::DMToken::CreateValidTokenForTesting("FAKE_DM_TOKEN").value());
+  ReportingServerConnector::TestEnvironment test_env;
 
   static constexpr char matched_record_template[] =
+#if BUILDFLAG(IS_CHROMEOS)
+      R"JSON(
+{
+  "sequenceInformation": {
+    "generationId": "1234",
+    "generationGuid": "c947e7e9-b87d-4592-9fe7-407792544e53",
+    "priority": 1,
+    "sequencingId": "%d"
+  }
+}
+)JSON"
+#else   // BUILDFLAG(IS_CHROMEOS)
       R"JSON(
 {
   "sequenceInformation": {
@@ -176,32 +190,9 @@ TEST_P(UploadClientTest, CreateUploadClientAndUploadRecords) {
     "sequencingId": "%d"
   }
 }
-)JSON";
-  EXPECT_CALL(*client, UploadEncryptedReport(
-                           AllOf(IsDataUploadRequestValid(),
-                                 DoesRequestContainRecord(base::StringPrintf(
-                                     matched_record_template, 0)),
-                                 DoesRequestContainRecord(base::StringPrintf(
-                                     matched_record_template, 1)),
-                                 DoesRequestContainRecord(base::StringPrintf(
-                                     matched_record_template, 2)),
-                                 DoesRequestContainRecord(base::StringPrintf(
-                                     matched_record_template, 3)),
-                                 DoesRequestContainRecord(base::StringPrintf(
-                                     matched_record_template, 4)),
-                                 DoesRequestContainRecord(base::StringPrintf(
-                                     matched_record_template, 5)),
-                                 DoesRequestContainRecord(base::StringPrintf(
-                                     matched_record_template, 6)),
-                                 DoesRequestContainRecord(base::StringPrintf(
-                                     matched_record_template, 7)),
-                                 DoesRequestContainRecord(base::StringPrintf(
-                                     matched_record_template, 8)),
-                                 DoesRequestContainRecord(base::StringPrintf(
-                                     matched_record_template, 9))),
-                           _, _))
-      .WillOnce(MakeUploadEncryptedReportAction(
-          std::move(ResponseBuilder().SetForceConfirm(force_confirm()))));
+)JSON"
+#endif  // BUILDFLAG(IS_CHROMEOS)
+      ;
 
   test::TestMultiEvent<SequenceInformation, bool> upload_success_event;
 
@@ -209,17 +200,50 @@ TEST_P(UploadClientTest, CreateUploadClientAndUploadRecords) {
   const SequenceInformation last_record_seq_info =
       records.back().sequence_information();
 
-  ReportingServerConnector::TestEnvironment test_env(client.get());
   test::TestEvent<StatusOr<std::unique_ptr<UploadClient>>> e;
   UploadClient::Create(e.cb());
   StatusOr<std::unique_ptr<UploadClient>> upload_client_result = e.result();
-  ASSERT_OK(upload_client_result) << upload_client_result.status();
+  ASSERT_TRUE(upload_client_result.has_value()) << upload_client_result.error();
 
-  auto upload_client = std::move(upload_client_result.ValueOrDie());
+  auto upload_client = std::move(upload_client_result.value());
+  // config_file_version is set to 0 for testing. The default value is -1 and we
+  // want to override it.
   auto enqueue_result = upload_client->EnqueueUpload(
-      need_encryption_key(), std::move(records), std::move(total_reservation),
-      upload_success_event.repeating_cb(), encryption_key_attached_cb);
+      need_encryption_key(), /*config_file_version=*/0, std::move(records),
+      std::move(total_reservation), upload_success_event.repeating_cb(),
+      encryption_key_attached_cb);
   EXPECT_TRUE(enqueue_result.ok());
+  task_environment_.RunUntilIdle();
+
+  ASSERT_THAT(*test_env.url_loader_factory()->pending_requests(), SizeIs(1));
+  base::Value::Dict request_body = test_env.request_body(0);
+  EXPECT_THAT(request_body, AllOf(IsDataUploadRequestValid(),
+                                  DoesRequestContainRecord(base::StringPrintf(
+                                      matched_record_template, 0)),
+                                  DoesRequestContainRecord(base::StringPrintf(
+                                      matched_record_template, 1)),
+                                  DoesRequestContainRecord(base::StringPrintf(
+                                      matched_record_template, 2)),
+                                  DoesRequestContainRecord(base::StringPrintf(
+                                      matched_record_template, 3)),
+                                  DoesRequestContainRecord(base::StringPrintf(
+                                      matched_record_template, 4)),
+                                  DoesRequestContainRecord(base::StringPrintf(
+                                      matched_record_template, 5)),
+                                  DoesRequestContainRecord(base::StringPrintf(
+                                      matched_record_template, 6)),
+                                  DoesRequestContainRecord(base::StringPrintf(
+                                      matched_record_template, 7)),
+                                  DoesRequestContainRecord(base::StringPrintf(
+                                      matched_record_template, 8)),
+                                  DoesRequestContainRecord(base::StringPrintf(
+                                      matched_record_template, 9))));
+
+  auto response = ResponseBuilder(std::move(request_body))
+                      .SetForceConfirm(force_confirm())
+                      .Build();
+  ASSERT_OK(response) << response.error();
+  test_env.SimulateCustomResponseForRequest(0, std::move(*response));
 
   auto upload_success_result = upload_success_event.result();
   EXPECT_THAT(std::get<0>(upload_success_result),

@@ -7,12 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "net/base/elements_upload_data_stream.h"
 #include "net/base/io_buffer.h"
@@ -72,7 +71,7 @@ class RemoteTestServerSpawnerRequest::Core : public URLRequest::Delegate {
 RemoteTestServerSpawnerRequest::Core::Core()
     : event_(base::WaitableEvent::ResetPolicy::AUTOMATIC,
              base::WaitableEvent::InitialState::NOT_SIGNALED),
-      read_buffer_(base::MakeRefCounted<IOBuffer>(kBufferSize)) {
+      read_buffer_(base::MakeRefCounted<IOBufferWithSize>(kBufferSize)) {
   DETACH_FROM_THREAD(thread_checker_);
 }
 

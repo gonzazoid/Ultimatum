@@ -13,6 +13,7 @@ class CSSParserContext;
 
 enum class CSSAtRuleID {
   kCSSAtRuleInvalid,
+  kCSSAtRuleViewTransition,
   kCSSAtRuleCharset,
   kCSSAtRuleFontFace,
   kCSSAtRuleFontPaletteValues,
@@ -27,10 +28,18 @@ enum class CSSAtRuleID {
   kCSSAtRuleContainer,
   kCSSAtRuleCounterStyle,
   kCSSAtRuleScope,
-  kCSSAtRuleScrollTimeline,
+  kCSSAtRuleStartingStyle,
   kCSSAtRuleSupports,
   kCSSAtRuleTry,
   kCSSAtRuleWebkitKeyframes,
+  // Font-feature-values related at-rule ids below:
+  kCSSAtRuleAnnotation,
+  kCSSAtRuleCharacterVariant,
+  kCSSAtRuleFontFeatureValues,
+  kCSSAtRuleOrnaments,
+  kCSSAtRuleStylistic,
+  kCSSAtRuleStyleset,
+  kCSSAtRuleSwash
 };
 
 CSSAtRuleID CssAtRuleID(StringView name);

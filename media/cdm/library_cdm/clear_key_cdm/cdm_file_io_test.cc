@@ -7,8 +7,8 @@
 #include <algorithm>
 #include <limits>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 
@@ -33,11 +33,11 @@ const uint32_t kLargeDataSize = 20 * 1024 + 7;
 
 // |test_name| is also used as the file name. File name validity tests relies
 // on this to work.
-#define START_TEST_CASE(test_name)                      \
-  do {                                                  \
-    std::unique_ptr<FileIOTest> test_case(              \
-        new FileIOTest(create_file_io_cb_, test_name)); \
-    CREATE_FILE_IO  // Create FileIO for each test case.
+#define START_TEST_CASE(test_name)                                   \
+  do {                                                               \
+    auto test_case =                                                 \
+        std::make_unique<FileIOTest>(create_file_io_cb_, test_name); \
+  CREATE_FILE_IO  // Create FileIO for each test case.
 
 #define ADD_TEST_STEP(type, status, data, data_size)                          \
   test_case->AddTestStep(FileIOTest::type, cdm::FileIOClient::Status::status, \
@@ -594,8 +594,7 @@ bool FileIOTest::IsResult(const TestStep& test_step) {
     case ACTION_CLOSE:
       return false;
   }
-  NOTREACHED();
-  return false;
+  NOTREACHED_NORETURN();
 }
 
 bool FileIOTest::MatchesResult(const TestStep& a, const TestStep& b) {

@@ -23,14 +23,8 @@ class MockLockHandler : public proximity_auth::ScreenlockBridge::LockHandler {
               ShowBannerMessage,
               (const std::u16string& message, bool is_warning));
   MOCK_METHOD(void,
-              ShowUserPodCustomIcon,
-              (const AccountId& account_id,
-               const proximity_auth::ScreenlockBridge::UserPodCustomIconInfo&
-                   icon_info));
-  MOCK_METHOD(void, HideUserPodCustomIcon, (const AccountId& account_id));
-  MOCK_METHOD(void,
               SetSmartLockState,
-              (const AccountId& account_id, ash::SmartLockState statel));
+              (const AccountId& account_id, SmartLockState statel));
   MOCK_METHOD(void,
               NotifySmartLockAuthResult,
               (const AccountId& account_id, bool successful));

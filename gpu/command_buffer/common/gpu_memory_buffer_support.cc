@@ -69,8 +69,9 @@ bool IsImageSizeValidForGpuMemoryBufferFormat(const gfx::Size& size,
 
 GPU_EXPORT bool IsPlaneValidForGpuMemoryBufferFormat(gfx::BufferPlane plane,
                                                      gfx::BufferFormat format) {
-#if BUILDFLAG(IS_MAC)
-  // On macOS each plane of a YUV GpuMemoryBuffer must be sampled separately.
+#if BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_WIN)
+  // On Windows, macOS and iOS each plane of a YUV GpuMemoryBuffer must be
+  // sampled separately.
   switch (format) {
     case gfx::BufferFormat::YUV_420_BIPLANAR:
     case gfx::BufferFormat::P010:
@@ -78,6 +79,14 @@ GPU_EXPORT bool IsPlaneValidForGpuMemoryBufferFormat(gfx::BufferPlane plane,
     case gfx::BufferFormat::YUVA_420_TRIPLANAR:
       return plane == gfx::BufferPlane::Y || plane == gfx::BufferPlane::UV ||
              plane == gfx::BufferPlane::A;
+    case gfx::BufferFormat::YVU_420:
+#if BUILDFLAG(IS_APPLE)
+      // YVU_420 not used on macOS or iOS
+      return false;
+#else
+      return plane == gfx::BufferPlane::Y || plane == gfx::BufferPlane::U ||
+             plane == gfx::BufferPlane::V;
+#endif
     default:
       return plane == gfx::BufferPlane::DEFAULT;
   }
@@ -175,8 +184,11 @@ uint32_t GetPlatformSpecificTextureTarget() {
 #elif BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_LINUX) || \
     BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_WIN)
   return GL_TEXTURE_EXTERNAL_OES;
-#elif BUILDFLAG(IS_FUCHSIA)
+#elif BUILDFLAG(IS_IOS)
   return GL_TEXTURE_2D;
+#elif BUILDFLAG(IS_FUCHSIA)
+  // Fuchsia uses Vulkan.
+  return 0;
 #elif BUILDFLAG(IS_NACL)
   NOTREACHED();
   return 0;
@@ -204,11 +216,14 @@ GPU_EXPORT uint32_t GetBufferTextureTarget(gfx::BufferUsage usage,
 GPU_EXPORT bool NativeBufferNeedsPlatformSpecificTextureTarget(
     gfx::BufferFormat format,
     gfx::BufferPlane plane) {
-#if defined(USE_OZONE) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || \
+#if BUILDFLAG(IS_OZONE) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || \
     BUILDFLAG(IS_WIN)
   // Always use GL_TEXTURE_2D as the target for RGB textures.
   // https://crbug.com/916728
   if (format == gfx::BufferFormat::R_8 || format == gfx::BufferFormat::RG_88 ||
+#if BUILDFLAG(IS_CHROMEOS)
+      format == gfx::BufferFormat::RGBA_F16 ||
+#endif
       format == gfx::BufferFormat::RGBA_8888 ||
       format == gfx::BufferFormat::BGRA_8888 ||
       format == gfx::BufferFormat::RGBX_8888 ||

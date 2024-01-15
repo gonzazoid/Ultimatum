@@ -27,7 +27,7 @@ namespace web {
 //
 //  - PostCreateMainMessageLoop: things that should be done as early as possible
 //    but need the main message loop to be around (i.e. APIs like
-//    ThreadTaskRunnerHandle, WebThread::UI are up).
+//    SingleThreadTaskRunner::CurrentDefaultHandle, WebThread::UI are up).
 //
 //  - PreCreateThreads: things that don't need to happen super early but still
 //    need to happen during single-threaded initialization (e.g. immutable
@@ -77,6 +77,7 @@ class WebMainParts {
   virtual void PreCreateMainMessageLoop() {}
   virtual void PostCreateMainMessageLoop() {}
   virtual void PreCreateThreads() {}
+  virtual void PostCreateThreads() {}
   virtual void PreMainMessageLoopRun() {}
   virtual void PostMainMessageLoopRun() {}
   virtual void PostDestroyThreads() {}

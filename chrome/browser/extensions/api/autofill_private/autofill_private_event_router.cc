@@ -8,8 +8,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/autofill/personal_data_manager_factory.h"
 #include "chrome/browser/browser_process.h"
@@ -19,8 +20,20 @@
 #include "chrome/common/extensions/api/autofill_private.h"
 #include "components/autofill/core/browser/personal_data_manager.h"
 #include "content/public/browser/browser_context.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace extensions {
+namespace {
+template <class T>
+base::Value::List ToValueList(const std::vector<T>& values) {
+  base::Value::List list;
+  list.reserve(values.size());
+  for (const auto& value : values) {
+    list.Append(value.ToValue());
+  }
+  return list;
+}
+}  // namespace
 
 AutofillPrivateEventRouter::AutofillPrivateEventRouter(
     content::BrowserContext* context)
@@ -46,7 +59,33 @@ void AutofillPrivateEventRouter::Shutdown() {
     personal_data_->RemoveObserver(this);
 }
 
+void AutofillPrivateEventRouter::RebindPersonalDataManagerForTesting(
+    autofill::PersonalDataManager* personal_data) {
+  if (personal_data_) {
+    personal_data_->RemoveObserver(this);
+  }
+  personal_data_ = personal_data;
+  if (personal_data_) {
+    personal_data_->AddObserver(this);
+  }
+}
+
+void AutofillPrivateEventRouter::UnbindPersonalDataManagerForTesting() {
+  if (personal_data_) {
+    personal_data_->RemoveObserver(this);
+    personal_data_ = nullptr;
+  }
+}
+
 void AutofillPrivateEventRouter::OnPersonalDataChanged() {
+  BroadcastCurrentData();
+}
+
+void AutofillPrivateEventRouter::OnPersonalDataSyncStateChanged() {
+  BroadcastCurrentData();
+}
+
+void AutofillPrivateEventRouter::BroadcastCurrentData() {
   // Ignore any updates before data is loaded. This can happen in tests.
   if (!(personal_data_ && personal_data_->IsDataLoaded()))
     return;
@@ -57,8 +96,19 @@ void AutofillPrivateEventRouter::OnPersonalDataChanged() {
   autofill_util::CreditCardEntryList creditCardList =
       extensions::autofill_util::GenerateCreditCardList(*personal_data_);
 
-  auto args(api::autofill_private::OnPersonalDataChanged::Create(
-      addressList, creditCardList));
+  autofill_util::IbanEntryList ibanList =
+      extensions::autofill_util::GenerateIbanList(*personal_data_);
+
+  absl::optional<api::autofill_private::AccountInfo> account_info =
+      extensions::autofill_util::GetAccountInfo(*personal_data_);
+
+  base::Value::List args;
+  args.Append(ToValueList(addressList));
+  args.Append(ToValueList(creditCardList));
+  args.Append(ToValueList(ibanList));
+  if (account_info.has_value()) {
+    args.Append(account_info->ToValue());
+  }
 
   std::unique_ptr<Event> extension_event(
       new Event(events::AUTOFILL_PRIVATE_ON_PERSONAL_DATA_CHANGED,
@@ -66,11 +116,6 @@ void AutofillPrivateEventRouter::OnPersonalDataChanged() {
                 std::move(args)));
 
   event_router_->BroadcastEvent(std::move(extension_event));
-}
-
-AutofillPrivateEventRouter* AutofillPrivateEventRouter::Create(
-    content::BrowserContext* context) {
-  return new AutofillPrivateEventRouter(context);
 }
 
 }  // namespace extensions

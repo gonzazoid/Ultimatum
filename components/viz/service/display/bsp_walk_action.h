@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "components/viz/service/display/direct_renderer.h"
 #include "components/viz/service/display/draw_polygon.h"
 
@@ -31,17 +32,18 @@ class VIZ_SERVICE_EXPORT BspWalkActionDrawPolygon : public BspWalkAction {
 
  private:
   raw_ptr<DirectRenderer> renderer_;
-  const gfx::Rect& render_pass_scissor_;
+  const raw_ref<const gfx::Rect> render_pass_scissor_;
   bool using_scissor_as_optimization_;
 };
 
 class VIZ_SERVICE_EXPORT BspWalkActionToVector : public BspWalkAction {
  public:
-  explicit BspWalkActionToVector(std::vector<DrawPolygon*>* in_list);
+  explicit BspWalkActionToVector(
+      std::vector<raw_ptr<DrawPolygon, VectorExperimental>>* in_list);
   void operator()(DrawPolygon* item) override;
 
  private:
-  raw_ptr<std::vector<DrawPolygon*>> list_;
+  raw_ptr<std::vector<raw_ptr<DrawPolygon, VectorExperimental>>> list_;
 };
 
 }  // namespace viz

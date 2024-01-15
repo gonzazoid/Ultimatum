@@ -8,8 +8,8 @@
 #include <string>
 
 #include "ash/public/cpp/clipboard_history_controller.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/values.h"
 #include "content/public/browser/browser_context.h"
 #include "extensions/browser/api/virtual_keyboard_private/virtual_keyboard_delegate.h"
 #include "extensions/common/api/virtual_keyboard.h"
@@ -53,18 +53,18 @@ class ChromeVirtualKeyboardDelegate
   bool ShowLanguageSettings() override;
   bool ShowSuggestionSettings() override;
   bool IsSettingsEnabled() override;
-  bool SetVirtualKeyboardMode(int mode_enum,
+  bool SetVirtualKeyboardMode(api::virtual_keyboard_private::KeyboardMode mode,
                               gfx::Rect target_bounds,
                               OnSetModeCallback on_set_mode_callback) override;
   bool SetDraggableArea(
       const api::virtual_keyboard_private::Bounds& rect) override;
-  bool SetRequestedKeyboardState(int state_enum) override;
+  bool SetRequestedKeyboardState(
+      api::virtual_keyboard_private::KeyboardState state) override;
   bool SetOccludedBounds(const std::vector<gfx::Rect>& bounds) override;
   bool SetHitTestBounds(const std::vector<gfx::Rect>& bounds) override;
   bool SetAreaToRemainOnScreen(const gfx::Rect& bounds) override;
   bool SetWindowBoundsInScreen(const gfx::Rect& bounds_in_screen) override;
   void GetClipboardHistory(
-      const std::set<std::string>& item_ids_filter,
       OnGetClipboardHistoryCallback get_history_callback) override;
   bool PasteClipboardItem(const std::string& clipboard_item_id) override;
   bool DeleteClipboardItem(const std::string& clipboard_item_id) override;
@@ -74,17 +74,13 @@ class ChromeVirtualKeyboardDelegate
 
  private:
   // ash::ClipboardHistoryController::Observer:
-  void OnClipboardHistoryItemListAddedOrRemoved() override;
-  void OnClipboardHistoryItemsUpdated(
-      const std::vector<base::UnguessableToken>& menu_item_ids) override;
-
-  void OnGetHistoryValuesAfterItemsUpdated(base::Value updated_items);
+  void OnClipboardHistoryItemsUpdated() override;
 
   void OnHasInputDevices(OnKeyboardSettingsCallback on_settings_callback,
                          bool has_audio_input_devices);
   void DispatchConfigChangeEvent(absl::optional<base::Value::Dict> settings);
 
-  content::BrowserContext* browser_context_;
+  raw_ptr<content::BrowserContext> browser_context_;
   std::unique_ptr<media::AudioSystem> audio_system_;
   base::WeakPtr<ChromeVirtualKeyboardDelegate> weak_this_;
   base::WeakPtrFactory<ChromeVirtualKeyboardDelegate> weak_factory_{this};

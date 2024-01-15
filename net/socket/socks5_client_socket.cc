@@ -6,15 +6,15 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/compiler_specific.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_util.h"
 #include "base/sys_byteorder.h"
-#include "base/trace_event/trace_event.h"
 #include "net/base/io_buffer.h"
 #include "net/base/sys_addrinfo.h"
+#include "net/base/tracing.h"
 #include "net/log/net_log.h"
 #include "net/log/net_log_event_type.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
@@ -94,13 +94,6 @@ const NetLogWithSource& SOCKS5ClientSocket::NetLog() const {
 
 bool SOCKS5ClientSocket::WasEverUsed() const {
   return was_ever_used_;
-}
-
-bool SOCKS5ClientSocket::WasAlpnNegotiated() const {
-  if (transport_socket_)
-    return transport_socket_->WasAlpnNegotiated();
-  NOTREACHED();
-  return false;
 }
 
 NextProto SOCKS5ClientSocket::GetNegotiatedProtocol() const {
@@ -276,7 +269,7 @@ int SOCKS5ClientSocket::DoGreetWrite() {
 
   next_state_ = STATE_GREET_WRITE_COMPLETE;
   size_t handshake_buf_len = buffer_.size() - bytes_sent_;
-  handshake_buf_ = base::MakeRefCounted<IOBuffer>(handshake_buf_len);
+  handshake_buf_ = base::MakeRefCounted<IOBufferWithSize>(handshake_buf_len);
   memcpy(handshake_buf_->data(), &buffer_.data()[bytes_sent_],
          handshake_buf_len);
   return transport_socket_->Write(handshake_buf_.get(), handshake_buf_len,
@@ -301,7 +294,7 @@ int SOCKS5ClientSocket::DoGreetWriteComplete(int result) {
 int SOCKS5ClientSocket::DoGreetRead() {
   next_state_ = STATE_GREET_READ_COMPLETE;
   size_t handshake_buf_len = kGreetReadHeaderSize - bytes_received_;
-  handshake_buf_ = base::MakeRefCounted<IOBuffer>(handshake_buf_len);
+  handshake_buf_ = base::MakeRefCounted<IOBufferWithSize>(handshake_buf_len);
   return transport_socket_->Read(handshake_buf_.get(), handshake_buf_len,
                                  io_callback_);
 }
@@ -374,7 +367,7 @@ int SOCKS5ClientSocket::DoHandshakeWrite() {
 
   int handshake_buf_len = buffer_.size() - bytes_sent_;
   DCHECK_LT(0, handshake_buf_len);
-  handshake_buf_ = base::MakeRefCounted<IOBuffer>(handshake_buf_len);
+  handshake_buf_ = base::MakeRefCounted<IOBufferWithSize>(handshake_buf_len);
   memcpy(handshake_buf_->data(), &buffer_[bytes_sent_],
          handshake_buf_len);
   return transport_socket_->Write(handshake_buf_.get(), handshake_buf_len,
@@ -410,7 +403,7 @@ int SOCKS5ClientSocket::DoHandshakeRead() {
   }
 
   int handshake_buf_len = read_header_size - bytes_received_;
-  handshake_buf_ = base::MakeRefCounted<IOBuffer>(handshake_buf_len);
+  handshake_buf_ = base::MakeRefCounted<IOBufferWithSize>(handshake_buf_len);
   return transport_socket_->Read(handshake_buf_.get(), handshake_buf_len,
                                  io_callback_);
 }

@@ -9,9 +9,9 @@
 #include <cmath>
 #include <limits>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_number_conversions.h"
 #include "media/base/media_tracks.h"
 #include "media/base/stream_parser.h"
@@ -187,7 +187,20 @@ void WebSourceBufferImpl::ResetParserState() {
 void WebSourceBufferImpl::Remove(double start, double end) {
   DCHECK_GE(start, 0);
   DCHECK_GE(end, 0);
-  demuxer_->Remove(id_, DoubleToTimeDelta(start), DoubleToTimeDelta(end));
+
+  const auto timedelta_start = DoubleToTimeDelta(start);
+  const auto timedelta_end = DoubleToTimeDelta(end);
+
+  // Since `start - end` may be less than 1 microsecond and base::TimeDelta is
+  // limited to microseconds, treat smaller ranges as zero.
+  //
+  // We could throw an error here, but removing nanosecond ranges is allowed by
+  // the spec and the risk of breaking existing sites is high.
+  if (timedelta_start == timedelta_end) {
+    return;
+  }
+
+  demuxer_->Remove(id_, timedelta_start, timedelta_end);
 }
 
 bool WebSourceBufferImpl::CanChangeType(const WebString& content_type,
@@ -234,15 +247,12 @@ void WebSourceBufferImpl::RemovedFromMediaSource() {
 
 WebMediaPlayer::TrackType mediaTrackTypeToBlink(media::MediaTrack::Type type) {
   switch (type) {
-    case media::MediaTrack::Audio:
+    case media::MediaTrack::Type::kAudio:
       return WebMediaPlayer::kAudioTrack;
-    case media::MediaTrack::Text:
-      return WebMediaPlayer::kTextTrack;
-    case media::MediaTrack::Video:
+    case media::MediaTrack::Type::kVideo:
       return WebMediaPlayer::kVideoTrack;
   }
-  NOTREACHED();
-  return WebMediaPlayer::kAudioTrack;
+  NOTREACHED_NORETURN();
 }
 
 void WebSourceBufferImpl::InitSegmentReceived(

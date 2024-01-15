@@ -4,9 +4,9 @@
 
 #include "chrome/browser/enterprise/connectors/device_trust/signals/decorators/common/context_signals_decorator.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/notreached.h"
 #include "chrome/browser/enterprise/connectors/device_trust/signals/decorators/common/metrics_utils.h"
 #include "chrome/browser/enterprise/connectors/device_trust/signals/decorators/common/signals_utils.h"
@@ -92,11 +92,6 @@ void ContextSignalsDecorator::OnSignalsFetched(
               static_cast<int32_t>(context_info.os_firewall));
   signals.Set(device_signals::names::kSystemDnsServers,
               ToListValue(context_info.system_dns_servers));
-
-  if (context_info.chrome_cleanup_enabled) {
-    signals.Set(device_signals::names::kChromeCleanupEnabled,
-                context_info.chrome_cleanup_enabled.value());
-  }
 
   if (context_info.third_party_blocking_enabled) {
     signals.Set(device_signals::names::kThirdPartyBlockingEnabled,

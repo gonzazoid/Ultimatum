@@ -8,10 +8,10 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
@@ -45,8 +45,8 @@ class DatabaseHelperTest : public content::ContentBrowserTest {
   virtual void CreateDatabases() {
     storage::DatabaseTracker* db_tracker = shell()
                                                ->web_contents()
-                                               ->GetBrowserContext()
-                                               ->GetDefaultStoragePartition()
+                                               ->GetPrimaryMainFrame()
+                                               ->GetStoragePartition()
                                                ->GetDatabaseTracker();
     base::RunLoop run_loop;
     db_tracker->task_runner()->PostTaskAndReply(
@@ -60,14 +60,14 @@ class DatabaseHelperTest : public content::ContentBrowserTest {
           base::FilePath db_path1 =
               db_tracker->GetFullDBFilePath(kTestIdentifier1, db_name);
           base::CreateDirectory(db_path1.DirName());
-          ASSERT_EQ(0, base::WriteFile(db_path1, nullptr, 0));
+          ASSERT_TRUE(base::WriteFile(db_path1, base::StringPiece()));
           db_tracker->DatabaseOpened(kTestIdentifier2, db_name, description,
                                      &size);
           db_tracker->DatabaseClosed(kTestIdentifier2, db_name);
           base::FilePath db_path2 =
               db_tracker->GetFullDBFilePath(kTestIdentifier2, db_name);
           base::CreateDirectory(db_path2.DirName());
-          ASSERT_EQ(0, base::WriteFile(db_path2, nullptr, 0));
+          ASSERT_TRUE(base::WriteFile(db_path2, base::StringPiece()));
           std::vector<storage::OriginInfo> origins;
           db_tracker->GetAllOriginsInfo(&origins);
           ASSERT_EQ(2U, origins.size());
@@ -77,11 +77,10 @@ class DatabaseHelperTest : public content::ContentBrowserTest {
   }
 };
 
-// Flaky, see https://crbug.com/1293136
-IN_PROC_BROWSER_TEST_F(DatabaseHelperTest, DISABLED_FetchData) {
+IN_PROC_BROWSER_TEST_F(DatabaseHelperTest, FetchData) {
   CreateDatabases();
   auto database_helper = base::MakeRefCounted<DatabaseHelper>(
-      shell()->web_contents()->GetBrowserContext());
+      shell()->web_contents()->GetPrimaryMainFrame()->GetStoragePartition());
   std::list<content::StorageUsageInfo> database_info_list;
   base::RunLoop run_loop;
   database_helper->StartFetching(base::BindLambdaForTesting(
@@ -104,7 +103,7 @@ IN_PROC_BROWSER_TEST_F(DatabaseHelperTest, CannedAddDatabase) {
   const url::Origin origin2 = url::Origin::Create(GURL("http://host2:1/"));
 
   auto database_helper = base::MakeRefCounted<CannedDatabaseHelper>(
-      shell()->web_contents()->GetBrowserContext());
+      shell()->web_contents()->GetPrimaryMainFrame()->GetStoragePartition());
   database_helper->Add(origin1);
   database_helper->Add(origin1);
   database_helper->Add(origin2);
@@ -126,7 +125,7 @@ IN_PROC_BROWSER_TEST_F(DatabaseHelperTest, CannedUnique) {
   const url::Origin origin = url::Origin::Create(GURL("http://host1:1/"));
 
   auto database_helper = base::MakeRefCounted<CannedDatabaseHelper>(
-      shell()->web_contents()->GetBrowserContext());
+      shell()->web_contents()->GetPrimaryMainFrame()->GetStoragePartition());
   database_helper->Add(origin);
   database_helper->Add(origin);
 

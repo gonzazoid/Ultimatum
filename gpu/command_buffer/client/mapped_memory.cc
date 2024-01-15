@@ -17,7 +17,6 @@
 #include "base/numerics/checked_math.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/trace_event.h"
 #include "gpu/command_buffer/client/cmd_buffer_helper.h"
@@ -113,8 +112,8 @@ void* MappedMemoryManager::Alloc(unsigned int size,
     return nullptr;
 
   int32_t id = -1;
-  scoped_refptr<gpu::Buffer> shm =
-      cmd_buf->CreateTransferBuffer(safe_chunk_size, &id, option);
+  scoped_refptr<gpu::Buffer> shm = cmd_buf->CreateTransferBuffer(
+      safe_chunk_size, &id, /* alignment */ 0, option);
   if (id  < 0)
     return nullptr;
   DCHECK(shm.get());
@@ -172,7 +171,7 @@ bool MappedMemoryManager::OnMemoryDump(
   using base::trace_event::MemoryAllocatorDump;
   using base::trace_event::MemoryDumpLevelOfDetail;
 
-  if (args.level_of_detail == MemoryDumpLevelOfDetail::BACKGROUND) {
+  if (args.level_of_detail == MemoryDumpLevelOfDetail::kBackground) {
     std::string dump_name =
         base::StringPrintf("gpu/mapped_memory/manager_%d", tracing_id_);
     MemoryAllocatorDump* dump = pmd->CreateAllocatorDump(dump_name);

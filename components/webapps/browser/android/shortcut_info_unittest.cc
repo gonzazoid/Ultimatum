@@ -7,7 +7,9 @@
 #include <string>
 
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/scoped_feature_list.h"
 #include "components/webapps/browser/android/webapps_icon_utils.h"
+#include "components/webapps/browser/features.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/manifest/manifest.h"
@@ -16,6 +18,7 @@
 
 namespace webapps {
 
+using blink::mojom::DisplayMode;
 using Purpose = blink::mojom::ManifestImageResource_Purpose;
 
 blink::Manifest::ImageResource CreateImage(const std::string& url,
@@ -48,7 +51,51 @@ class ShortcutInfoTest : public testing::Test {
  protected:
   ShortcutInfo info_;
   blink::mojom::Manifest manifest_;
+
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
+
+TEST_F(ShortcutInfoTest, Constructor) {
+  GURL test_url("https://example.com/path/start");
+  ShortcutInfo info(test_url);
+
+  EXPECT_EQ(test_url, info.url);
+  EXPECT_EQ(test_url, info.manifest_id);
+  EXPECT_EQ("https://example.com/path/", info.scope.spec());
+  EXPECT_EQ(GURL(), info.manifest_url);
+}
+
+TEST_F(ShortcutInfoTest, CreateShortcutInfo) {
+  GURL test_url("https://example.com/path/url1");
+
+  webapps::mojom::WebPageMetadataPtr metadata =
+      webapps::mojom::WebPageMetadata::New();
+  metadata->application_name = u"new title";
+  metadata->application_url = GURL("https://example.com/path/application-url");
+
+  manifest_.display = blink::mojom::DisplayMode::kFullscreen;
+  manifest_.has_theme_color = true;
+  manifest_.theme_color = 0xffcc0000;
+  manifest_.id = GURL("https://example.com/path/id");
+
+  GURL manifest_url("https://example.com/manifest_url");
+  GURL icon_url("https://example.com/icon");
+
+  std::unique_ptr<ShortcutInfo> info = ShortcutInfo::CreateShortcutInfo(
+      test_url, manifest_url, manifest_, *metadata, icon_url, true);
+
+  EXPECT_EQ(metadata->application_url, info->url);
+  EXPECT_EQ(metadata->application_name, info->name);
+  EXPECT_EQ(metadata->application_name, info->short_name);
+  EXPECT_EQ(metadata->application_name, info->user_title);
+  EXPECT_EQ(manifest_.display, info->display);
+  EXPECT_EQ(manifest_.theme_color, info->theme_color);
+  EXPECT_EQ(manifest_.id, info->manifest_id);
+  EXPECT_EQ(manifest_url, info->manifest_url);
+  EXPECT_EQ(icon_url, info->best_primary_icon_url);
+  EXPECT_TRUE(info->is_primary_icon_maskable);
+  EXPECT_EQ("https://example.com/path/", info->scope.spec());
+}
 
 TEST_F(ShortcutInfoTest, AllAttributesUpdate) {
   info_.name = u"old name";
@@ -74,6 +121,14 @@ TEST_F(ShortcutInfoTest, AllAttributesUpdate) {
   manifest_.has_background_color = true;
   manifest_.background_color = 0xffbb0000;
 
+  info_.dark_theme_color = 0x000000;
+  manifest_.has_dark_theme_color = true;
+  manifest_.dark_theme_color = 0x7a7a7a;
+
+  info_.dark_background_color = 0x000000;
+  manifest_.has_dark_background_color = true;
+  manifest_.dark_background_color = 0x7a7a7a;
+
   info_.icon_urls.push_back("https://old.com/icon.png");
   blink::Manifest::ImageResource icon;
   icon.src = GURL("https://new.com/icon.png");
@@ -88,8 +143,66 @@ TEST_F(ShortcutInfoTest, AllAttributesUpdate) {
   ASSERT_EQ(manifest_.display, info_.display);
   ASSERT_EQ(manifest_.theme_color, info_.theme_color);
   ASSERT_EQ(manifest_.background_color, info_.background_color);
+  ASSERT_EQ(manifest_.dark_theme_color, info_.dark_theme_color);
+  ASSERT_EQ(manifest_.dark_background_color, info_.dark_background_color);
   ASSERT_EQ(1u, info_.icon_urls.size());
   ASSERT_EQ(manifest_.icons[0].src, GURL(info_.icon_urls[0]));
+}
+
+TEST_F(ShortcutInfoTest, UpdateFromWebPageMetadata) {
+  info_ = ShortcutInfo(GURL());
+  webapps::mojom::WebPageMetadataPtr metadata =
+      webapps::mojom::WebPageMetadata::New();
+  metadata->application_name = u"new title";
+  metadata->description = u"new description";
+  metadata->application_url = GURL("https://new.com/start");
+  metadata->mobile_capable = mojom::WebPageMobileCapable::ENABLED;
+
+  info_.UpdateFromWebPageMetadata(*metadata);
+
+  ASSERT_EQ(metadata->application_name, info_.user_title);
+  ASSERT_EQ(metadata->application_name, info_.name);
+  ASSERT_EQ(metadata->application_name, info_.short_name);
+  ASSERT_EQ(metadata->description, info_.description);
+  ASSERT_EQ(metadata->application_url, info_.url);
+  ASSERT_EQ(GURL("https://new.com/"), info_.scope);
+  ASSERT_EQ(blink::mojom::DisplayMode::kStandalone, info_.display);
+}
+
+TEST_F(ShortcutInfoTest, WebPageMetadataTitleAppName) {
+  info_ = ShortcutInfo(GURL());
+  webapps::mojom::WebPageMetadataPtr metadata =
+      webapps::mojom::WebPageMetadata::New();
+  metadata->title = u"title";
+
+  info_.UpdateFromWebPageMetadata(*metadata);
+  ASSERT_EQ(metadata->title, info_.user_title);
+  ASSERT_EQ(metadata->title, info_.name);
+  ASSERT_EQ(metadata->title, info_.short_name);
+
+  // prefer "application_name" over "title"
+  metadata->application_name = u"app name";
+  info_.UpdateFromWebPageMetadata(*metadata);
+  ASSERT_EQ(metadata->application_name, info_.user_title);
+  ASSERT_EQ(metadata->application_name, info_.name);
+  ASSERT_EQ(metadata->application_name, info_.short_name);
+}
+
+TEST_F(ShortcutInfoTest, UpdateFromEmptyMetadata) {
+  GURL test_url("https://example.com");
+  info_ = ShortcutInfo(test_url);
+  info_.user_title = u"old title";
+  webapps::mojom::WebPageMetadataPtr metadata =
+      webapps::mojom::WebPageMetadata::New();
+
+  info_.UpdateFromWebPageMetadata(*metadata);
+
+  ASSERT_EQ(u"old title", info_.user_title);
+  ASSERT_EQ(u"old title", info_.name);
+  ASSERT_EQ(u"old title", info_.short_name);
+  ASSERT_TRUE(info_.description.empty());
+  ASSERT_EQ(test_url, info_.url);
+  ASSERT_EQ(blink::mojom::DisplayMode::kBrowser, info_.display);
 }
 
 TEST_F(ShortcutInfoTest, GetAllWebApkIcons) {
@@ -103,12 +216,17 @@ TEST_F(ShortcutInfoTest, GetAllWebApkIcons) {
   info_.best_primary_icon_url = best_primary_icon_url;
   info_.splash_image_url = splash_image_url;
 
-  std::set<GURL> result = info_.GetWebApkIcons();
-  std::set<GURL> expected{best_shortcut_icon_url_1, best_shortcut_icon_url_2,
-                          best_primary_icon_url, splash_image_url};
+  std::vector<WebappIcon> result_icons = info_.GetWebApkIcons();
+  ASSERT_EQ(4u, result_icons.size());
 
-  ASSERT_EQ(4u, result.size());
-  ASSERT_EQ(expected, result);
+  std::vector<GURL> result_urls;
+  for (auto icon : result_icons) {
+    result_urls.push_back(icon.url());
+  }
+  std::vector<GURL> expected_urls{best_primary_icon_url, splash_image_url,
+                                  best_shortcut_icon_url_1,
+                                  best_shortcut_icon_url_2};
+  ASSERT_EQ(expected_urls, result_urls);
 }
 
 TEST_F(ShortcutInfoTest, NotContainEmptyOrDuplicateWebApkIcons) {
@@ -119,11 +237,16 @@ TEST_F(ShortcutInfoTest, NotContainEmptyOrDuplicateWebApkIcons) {
   info_.best_shortcut_icon_urls.push_back(best_primary_icon_url);
   info_.best_primary_icon_url = best_primary_icon_url;
 
-  std::set<GURL> result = info_.GetWebApkIcons();
-  std::set<GURL> expected{best_shortcut_icon_url, best_primary_icon_url};
+  std::vector<WebappIcon> result_icons = info_.GetWebApkIcons();
+  std::vector<GURL> result_urls;
+  for (auto icon : result_icons) {
+    result_urls.push_back(icon.url());
+  }
 
-  ASSERT_EQ(2u, result.size());
-  ASSERT_EQ(expected, result);
+  std::vector<GURL> expected{best_primary_icon_url, best_shortcut_icon_url};
+
+  ASSERT_EQ(2u, result_icons.size());
+  ASSERT_EQ(expected, result_urls);
 }
 
 TEST_F(ShortcutInfoTest, NameFallsBackToShortName) {
@@ -238,30 +361,82 @@ TEST_F(ShortcutInfoTest, SplashIconFallbackToAny) {
 }
 
 TEST_F(ShortcutInfoTest, DisplayOverride) {
+  manifest_.display = blink::mojom::DisplayMode::kBrowser;
+  manifest_.display_override = {blink::mojom::DisplayMode::kMinimalUi};
+  info_.UpdateFromManifest(manifest_);
+  EXPECT_EQ(info_.display, blink::mojom::DisplayMode::kMinimalUi);
+
+  manifest_.display = blink::mojom::DisplayMode::kFullscreen;
+  manifest_.display_override = {blink::mojom::DisplayMode::kBrowser};
+  info_.UpdateFromManifest(manifest_);
+  EXPECT_EQ(info_.display, blink::mojom::DisplayMode::kBrowser);
+
   manifest_.display = blink::mojom::DisplayMode::kStandalone;
   manifest_.display_override = {blink::mojom::DisplayMode::kFullscreen};
   info_.UpdateFromManifest(manifest_);
-
   EXPECT_EQ(info_.display, blink::mojom::DisplayMode::kFullscreen);
+
+  manifest_.display = blink::mojom::DisplayMode::kMinimalUi;
+  manifest_.display_override = {blink::mojom::DisplayMode::kStandalone};
+  info_.UpdateFromManifest(manifest_);
+  EXPECT_EQ(info_.display, blink::mojom::DisplayMode::kStandalone);
 }
 
 TEST_F(ShortcutInfoTest, ManifestIdGenerated) {
   manifest_.start_url = GURL("https://new.com/start");
-  manifest_.id = u"new_id";
+  manifest_.id = GURL("https://new.com/new_id");
 
   info_.UpdateFromManifest(manifest_);
 
   EXPECT_EQ(info_.manifest_id.spec(), "https://new.com/new_id");
 }
 
-TEST_F(ShortcutInfoTest, ManifestIdFallback) {
-  manifest_.start_url = GURL("https://new.com/start");
-  manifest_.id = absl::nullopt;
+TEST_F(ShortcutInfoTest, UpdateDisplayModeWebApk) {
+  scoped_feature_list_.InitAndEnableFeature(
+      features::kUniversalInstallManifest);
 
-  info_.UpdateFromManifest(manifest_);
+  std::vector<DisplayMode> display_modes = {
+      DisplayMode::kUndefined, DisplayMode::kBrowser, DisplayMode::kMinimalUi,
+      DisplayMode::kStandalone, DisplayMode::kFullscreen};
 
-  // If id is not specified, use start_url.
-  EXPECT_EQ(info_.manifest_id.spec(), manifest_.start_url.spec());
+  for (auto display : display_modes) {
+    info_.display = display;
+
+    info_.UpdateDisplayMode(true);
+
+    switch (display) {
+      case DisplayMode::kUndefined:
+      case DisplayMode::kBrowser:
+        EXPECT_EQ(info_.display, DisplayMode::kMinimalUi);
+        break;
+      default:
+        EXPECT_EQ(info_.display, display);
+    }
+  }
+}
+
+TEST_F(ShortcutInfoTest, UpdateDisplayModeNotWebApk) {
+  scoped_feature_list_.InitAndEnableFeature(
+      features::kUniversalInstallManifest);
+
+  std::vector<DisplayMode> display_modes = {
+      DisplayMode::kUndefined, DisplayMode::kBrowser, DisplayMode::kMinimalUi,
+      DisplayMode::kStandalone, DisplayMode::kFullscreen};
+
+  for (auto display : display_modes) {
+    info_.display = display;
+
+    info_.UpdateDisplayMode(false);
+
+    switch (display) {
+      case DisplayMode::kUndefined:
+      case DisplayMode::kBrowser:
+        EXPECT_EQ(info_.display, DisplayMode::kBrowser);
+        break;
+      default:
+        EXPECT_EQ(info_.display, DisplayMode::kMinimalUi);
+    }
+  }
 }
 
 }  // namespace webapps

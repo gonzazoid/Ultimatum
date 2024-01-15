@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "components/page_load_metrics/renderer/page_timing_metadata_recorder.h"
+#include <cstdint>
 
 namespace page_load_metrics {
 namespace {
@@ -12,7 +13,7 @@ bool IsTimeTicksRangeSensible(base::TimeTicks start, base::TimeTicks end) {
 }  // namespace
 
 // The next instance id to use for a PageTimingMetadataRecorder.
-int g_next_instance_id = 1;
+uint32_t g_next_instance_id = 1;
 
 PageTimingMetadataRecorder::MonotonicTiming::MonotonicTiming() = default;
 PageTimingMetadataRecorder::MonotonicTiming::MonotonicTiming(
@@ -27,8 +28,9 @@ PageTimingMetadataRecorder::MonotonicTiming::operator=(MonotonicTiming&&) =
     default;
 
 PageTimingMetadataRecorder::PageTimingMetadataRecorder(
-    const MonotonicTiming& initial_timing)
-    : instance_id_(g_next_instance_id++) {
+    const MonotonicTiming& initial_timing,
+    const bool is_main_frame)
+    : instance_id_(g_next_instance_id++), is_main_frame_(is_main_frame) {
   UpdateMetadata(initial_timing);
 }
 
@@ -39,6 +41,9 @@ void PageTimingMetadataRecorder::UpdateMetadata(const MonotonicTiming& timing) {
                                      timing.first_contentful_paint);
   UpdateFirstInputDelayMetadata(timing.first_input_timestamp,
                                 timing.first_input_delay);
+  UpdateLargestContentfulPaintMetadata(timing.navigation_start,
+                                       timing.frame_largest_contentful_paint,
+                                       timing.document_token);
   timing_ = timing;
 }
 
@@ -53,6 +58,14 @@ void PageTimingMetadataRecorder::ApplyMetadataToPastSamples(
                                    scope);
 }
 
+void PageTimingMetadataRecorder::AddProfileMetadata(
+    base::StringPiece name,
+    int64_t key,
+    int64_t value,
+    base::SampleMetadataScope scope) {
+  base::AddProfileMetadata(name, key, value, scope);
+}
+
 void PageTimingMetadataRecorder::UpdateFirstInputDelayMetadata(
     const absl::optional<base::TimeTicks>& first_input_timestamp,
     const absl::optional<base::TimeDelta>& first_input_delay) {
@@ -63,7 +76,7 @@ void PageTimingMetadataRecorder::UpdateFirstInputDelayMetadata(
       (timing_.first_input_timestamp != first_input_timestamp ||
        timing_.first_input_delay != first_input_delay);
 
-  if (should_apply_metadata) {
+  if (should_apply_metadata && !first_input_delay->is_negative()) {
     ApplyMetadataToPastSamples(
         *first_input_timestamp, *first_input_timestamp + *first_input_delay,
         "PageLoad.InteractiveTiming.FirstInputDelay4", /* key=*/instance_id_,
@@ -87,6 +100,80 @@ void PageTimingMetadataRecorder::UpdateFirstContentfulPaintMetadata(
         "PageLoad.PaintTiming.NavigationToFirstContentfulPaint",
         /* key=*/instance_id_,
         /* value=*/1, base::SampleMetadataScope::kProcess);
+  }
+}
+
+int64_t PageTimingMetadataRecorder::CreateInteractionDurationMetadataKey(
+    const uint32_t instance_id,
+    const uint32_t interaction_id) {
+  // Constructing the key as unsigned int to avoid signed wraparound issues.
+  const uint64_t composite_uint =
+      (static_cast<uint64_t>(instance_id) << 32) | interaction_id;
+  return static_cast<int64_t>(composite_uint);
+}
+
+void PageTimingMetadataRecorder::AddInteractionDurationMetadata(
+    const base::TimeTicks interaction_start,
+    const base::TimeTicks interaction_end) {
+  if (!IsTimeTicksRangeSensible(interaction_start, interaction_end)) {
+    return;
+  }
+
+  interaction_count_++;
+  ApplyMetadataToPastSamples(
+      interaction_start, interaction_end,
+      "Blink.Responsiveness.UserInteraction.MaxEventDuration",
+      /* key=*/
+      CreateInteractionDurationMetadataKey(instance_id_, interaction_count_),
+      /* value=*/(interaction_end - interaction_start).InMilliseconds(),
+      base::SampleMetadataScope::kProcess);
+}
+
+void PageTimingMetadataRecorder::UpdateLargestContentfulPaintMetadata(
+    const absl::optional<base::TimeTicks>& navigation_start,
+    const absl::optional<base::TimeTicks>& largest_contentful_paint,
+    const absl::optional<blink::DocumentToken>& document_token) {
+  const bool should_apply_global_lcp_metadata =
+      navigation_start.has_value() && document_token.has_value() &&
+      (timing_.navigation_start != navigation_start ||
+       timing_.document_token != document_token);
+
+  // Document token and navigation start TimeTicks are passed to browser
+  // process, where global LCP value is available.
+  if (should_apply_global_lcp_metadata) {
+    AddProfileMetadata(
+        "Internal.LargestContentfulPaint.NavigationStart",
+        /* key= */ instance_id_,
+        /* value= */ navigation_start->since_origin().InMilliseconds(),
+        base::SampleMetadataScope::kProcess);
+
+    AddProfileMetadata(
+        "Internal.LargestContentfulPaint.DocumentToken",
+        /* key= */ instance_id_,
+        /* value= */ blink::DocumentToken::Hasher()(*document_token),
+        base::SampleMetadataScope::kProcess);
+  }
+
+  // Local LCP can get updated multiple times (mostly < 10 times) during a page
+  // load. For a given `name_hash` and `key`, when applying on new LCP range,
+  // the metadata tag on old overlapping ranges will be removed.
+  const bool should_apply_local_lcp_metadata =
+      navigation_start.has_value() && largest_contentful_paint.has_value() &&
+      (timing_.frame_largest_contentful_paint != largest_contentful_paint ||
+       timing_.navigation_start != navigation_start);
+
+  if (should_apply_local_lcp_metadata &&
+      IsTimeTicksRangeSensible(*navigation_start, *largest_contentful_paint)) {
+    ApplyMetadataToPastSamples(
+        *navigation_start, *largest_contentful_paint,
+        is_main_frame_ ? "PageLoad.PaintTiming."
+                         "NavigationToLargestContentfulPaint2.MainFrame"
+                       : "PageLoad.PaintTiming."
+                         "NavigationToLargestContentfulPaint2.SubFrame",
+        /* key=*/instance_id_,
+        /* value=*/
+        (*largest_contentful_paint - *navigation_start).InMilliseconds(),
+        base::SampleMetadataScope::kProcess);
   }
 }
 

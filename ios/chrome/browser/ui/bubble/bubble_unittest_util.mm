@@ -4,45 +4,42 @@
 
 #import "ios/chrome/browser/ui/bubble/bubble_unittest_util.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
+#import "ios/chrome/browser/ui/bubble/bubble_constants.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-UIView* GetViewOfClassWithIdentifier(Class uiClass,
-                                     NSString* accessibilityIdentifier,
-                                     BubbleView* bubbleView) {
-  for (UIView* subview in bubbleView.subviews) {
-    if ([subview isKindOfClass:uiClass] &&
-        subview.accessibilityIdentifier == accessibilityIdentifier) {
+UIView* GetViewOfClassWithIdentifier(Class ui_class,
+                                     NSString* accessibility_identifier,
+                                     BubbleView* bubble_view) {
+  for (UIView* subview in bubble_view.subviews) {
+    if ([subview isKindOfClass:ui_class] &&
+        subview.accessibilityIdentifier == accessibility_identifier) {
       return subview;
     }
   }
   return nil;
 }
 
-UIButton* GetCloseButtonFromBubbleView(BubbleView* bubbleView) {
-  return base::mac::ObjCCastStrict<UIButton>(GetViewOfClassWithIdentifier(
-      [UIButton class], kBubbleViewCloseButtonIdentifier, bubbleView));
+UIButton* GetCloseButtonFromBubbleView(BubbleView* bubble_view) {
+  return base::apple::ObjCCastStrict<UIButton>(GetViewOfClassWithIdentifier(
+      [UIButton class], kBubbleViewCloseButtonIdentifier, bubble_view));
 }
 
-UILabel* GetTitleLabelFromBubbleView(BubbleView* bubbleView) {
-  return base::mac::ObjCCastStrict<UILabel>(GetViewOfClassWithIdentifier(
-      [UILabel class], kBubbleViewTitleLabelIdentifier, bubbleView));
+UILabel* GetTitleLabelFromBubbleView(BubbleView* bubble_view) {
+  return base::apple::ObjCCastStrict<UILabel>(GetViewOfClassWithIdentifier(
+      [UILabel class], kBubbleViewTitleLabelIdentifier, bubble_view));
 }
 
-UIImageView* GetImageViewFromBubbleView(BubbleView* bubbleView) {
-  return base::mac::ObjCCastStrict<UIImageView>(GetViewOfClassWithIdentifier(
-      [UIImageView class], kBubbleViewImageViewIdentifier, bubbleView));
+UIImageView* GetImageViewFromBubbleView(BubbleView* bubble_view) {
+  return base::apple::ObjCCastStrict<UIImageView>(GetViewOfClassWithIdentifier(
+      [UIImageView class], kBubbleViewImageViewIdentifier, bubble_view));
 }
 
-UIButton* GetSnoozeButtonFromBubbleView(BubbleView* bubbleView) {
-  return base::mac::ObjCCastStrict<UIButton>(GetViewOfClassWithIdentifier(
-      [UIButton class], kBubbleViewSnoozeButtonIdentifier, bubbleView));
+UIButton* GetSnoozeButtonFromBubbleView(BubbleView* bubble_view) {
+  return base::apple::ObjCCastStrict<UIButton>(GetViewOfClassWithIdentifier(
+      [UIButton class], kBubbleViewSnoozeButtonIdentifier, bubble_view));
 }
 
-UIView* GetArrowViewFromBubbleView(BubbleView* bubbleView) {
+UIView* GetArrowViewFromBubbleView(BubbleView* bubble_view) {
   return GetViewOfClassWithIdentifier(
-      [UIView class], kBubbleViewArrowViewIdentifier, bubbleView);
+      [UIView class], kBubbleViewArrowViewIdentifier, bubble_view);
 }

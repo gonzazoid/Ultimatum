@@ -10,8 +10,8 @@ import './settings_section.js';
 import '../strings.m.js';
 
 import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
@@ -157,7 +157,7 @@ export class PrintPreviewPagesSettingsElement extends
    * `PagesValue.ODDS` and `PagesValue.EVEN` become invalid due to a changed
    * page count.
    */
-  private resorationValue_: PagesValue = PagesValue.ALL;
+  private restorationValue_: PagesValue = PagesValue.ALL;
 
   override ready() {
     super.ready();
@@ -487,11 +487,11 @@ export class PrintPreviewPagesSettingsElement extends
     // they can be re-applied if the page count exceeds 1 again.
     if (this.selection_ !== PagesValue.CUSTOM) {
       if (current === 1) {
-        this.resorationValue_ = this.selection_;
+        this.restorationValue_ = this.selection_;
         this.setSelectedValue_(PagesValue.ALL);
       } else if (previous === 1) {
-        assert(this.resorationValue_ !== PagesValue.CUSTOM);
-        this.setSelectedValue_(this.resorationValue_);
+        assert(this.restorationValue_ !== PagesValue.CUSTOM);
+        this.setSelectedValue_(this.restorationValue_);
       }
     }
 

@@ -5,65 +5,55 @@
 #include "chrome/browser/ash/policy/enrollment/psm/rlwe_dmserver_client_impl.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/check.h"
-#include "base/guid.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
-#include "base/timer/timer.h"
-#include "chrome/browser/ash/policy/enrollment/psm/rlwe_client.h"
+#include "base/uuid.h"
 #include "chrome/browser/ash/policy/enrollment/psm/rlwe_dmserver_client.h"
-#include "chrome/browser/ash/policy/enrollment/psm/rlwe_id_provider.h"
-#include "chrome/common/pref_names.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/core/common/cloud/device_management_service.h"
 #include "components/policy/core/common/cloud/dmserver_job_configurations.h"
 #include "components/policy/core/common/cloud/enterprise_metrics.h"
 #include "components/policy/proto/device_management_backend.pb.h"
-#include "components/prefs/pref_service.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/private_membership/src/private_membership_rlwe.pb.h"
+#include "third_party/private_membership/src/private_membership_rlwe_client.h"
 
 namespace psm_rlwe = private_membership::rlwe;
 namespace em = enterprise_management;
 
 namespace policy::psm {
 
+// static
+std::unique_ptr<RlweDmserverClientImpl::RlweClient>
+RlweDmserverClientImpl::Create(private_membership::rlwe::RlweUseCase use_case,
+                               const psm_rlwe::RlwePlaintextId& plaintext_id) {
+  auto status_or_client = RlweClient::Create(use_case, {plaintext_id});
+  DCHECK(status_or_client.ok()) << status_or_client.status().message();
+
+  return std::move(status_or_client).value();
+}
+
 RlweDmserverClientImpl::RlweDmserverClientImpl(
     DeviceManagementService* device_management_service,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-    RlweClient::Factory* psm_rlwe_client_factory,
-    RlweIdProvider* psm_rlwe_id_provider)
-    : random_device_id_(base::GenerateGUID()),
+    const PlaintextId& plaintext_id,
+    RlweClientFactory rlwe_client_factory)
+    : plaintext_id_(plaintext_id),
+      psm_rlwe_client_(
+          rlwe_client_factory.Run(private_membership::rlwe::CROS_DEVICE_STATE,
+                                  plaintext_id)),
+      random_device_id_(base::Uuid::GenerateRandomV4().AsLowercaseString()),
       url_loader_factory_(url_loader_factory),
       device_management_service_(device_management_service) {
-  CHECK(device_management_service);
-  CHECK(psm_rlwe_client_factory);
-  CHECK(psm_rlwe_id_provider);
-
-  psm_rlwe_id_ = psm_rlwe_id_provider->ConstructRlweId();
-
-  // Create PSM client for |psm_rlwe_id_| with use case as CROS_DEVICE_STATE.
-  std::vector<psm_rlwe::RlwePlaintextId> psm_ids = {psm_rlwe_id_};
-  auto status_or_client = psm_rlwe_client_factory->Create(
-      psm_rlwe::RlweUseCase::CROS_DEVICE_STATE, psm_ids);
-  if (!status_or_client.ok()) {
-    // If the PSM RLWE client hasn't been created successfully, then report
-    // the error and don't run the protocol.
-    LOG(ERROR) << "PSM error: unexpected internal logic error during creating "
-                  "PSM RLWE client";
-    last_psm_execution_result_ =
-        ResultHolder(RlweResult::kCreateRlweClientLibraryError);
-    base::UmaHistogramEnumeration(kUMAPsmResult + uma_suffix_,
-                                  RlweResult::kCreateRlweClientLibraryError);
-    return;
-  }
-
-  psm_rlwe_client_ = std::move(status_or_client).value();
+  CHECK(psm_rlwe_client_);
+  CHECK(url_loader_factory_);
+  CHECK(device_management_service_);
 }
 
 RlweDmserverClientImpl::~RlweDmserverClientImpl() {
@@ -73,15 +63,6 @@ RlweDmserverClientImpl::~RlweDmserverClientImpl() {
 void RlweDmserverClientImpl::CheckMembership(CompletionCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(callback);
-
-  // Ignore new calls and execute `callback` with
-  // |last_psm_execution_result_|, in case any error occurred while running
-  // PSM previously.
-  if (last_psm_execution_result_ &&
-      last_psm_execution_result_.value().IsError()) {
-    std::move(callback).Run(last_psm_execution_result_.value());
-    return;
-  }
 
   // There should not be any pending PSM requests.
   CHECK(!psm_request_job_);
@@ -98,16 +79,15 @@ bool RlweDmserverClientImpl::IsCheckMembershipInProgress() const {
   return psm_request_job_ != nullptr;
 }
 
-void RlweDmserverClientImpl::StoreErrorAndStop(RlweResult psm_result) {
+void RlweDmserverClientImpl::RecordErrorAndStop(ResultHolder result) {
   // Note that kUMAPsmResult histogram is only using initial enrollment as a
   // suffix until PSM support FRE.
-  base::UmaHistogramEnumeration(kUMAPsmResult + uma_suffix_, psm_result);
+  base::UmaHistogramEnumeration(kUMAPsmResult + uma_suffix_, result.psm_result);
 
   // Stop the current |psm_request_job_|.
   psm_request_job_.reset();
 
-  last_psm_execution_result_ = ResultHolder(psm_result);
-  std::move(on_completion_callback_).Run(last_psm_execution_result_.value());
+  std::move(on_completion_callback_).Run(std::move(result));
 }
 
 void RlweDmserverClientImpl::SendRlweOprfRequest() {
@@ -120,7 +100,7 @@ void RlweDmserverClientImpl::SendRlweOprfRequest() {
     // the error and stop the protocol.
     LOG(ERROR) << "PSM error: unexpected internal logic error during creating "
                   "RLWE OPRF request";
-    StoreErrorAndStop(RlweResult::kCreateOprfRequestLibraryError);
+    RecordErrorAndStop(RlweResult::kCreateOprfRequestLibraryError);
     return;
   }
 
@@ -158,7 +138,7 @@ void RlweDmserverClientImpl::OnRlweOprfRequestCompletion(
                .rlwe_response()
                .has_oprf_response()) {
         LOG(ERROR) << "PSM error: empty OPRF RLWE response";
-        StoreErrorAndStop(RlweResult::kEmptyOprfResponseError);
+        RecordErrorAndStop(RlweResult::kEmptyOprfResponseError);
         return;
       }
 
@@ -171,12 +151,14 @@ void RlweDmserverClientImpl::OnRlweOprfRequestCompletion(
           << "PSM error: RLWE OPRF request failed due to connection error";
       base::UmaHistogramSparse(kUMAPsmNetworkErrorCode + uma_suffix_,
                                -result.net_error);
-      StoreErrorAndStop(RlweResult::kConnectionError);
+      RecordErrorAndStop(
+          AutoEnrollmentDMServerError::FromDMServerJobResult(result));
       return;
     }
     default: {
       LOG(ERROR) << "PSM error: RLWE OPRF request failed due to server error";
-      StoreErrorAndStop(RlweResult::kServerError);
+      RecordErrorAndStop(
+          AutoEnrollmentDMServerError::FromDMServerJobResult(result));
       return;
     }
   }
@@ -197,7 +179,7 @@ void RlweDmserverClientImpl::SendRlweQueryRequest(
     // the error and stop the protocol.
     LOG(ERROR) << "PSM error: unexpected internal logic error during creating "
                   "RLWE query request";
-    StoreErrorAndStop(RlweResult::kCreateQueryRequestLibraryError);
+    RecordErrorAndStop(RlweResult::kCreateQueryRequestLibraryError);
     return;
   }
 
@@ -234,75 +216,45 @@ void RlweDmserverClientImpl::OnRlweQueryRequestCompletion(
                .rlwe_response()
                .has_query_response()) {
         LOG(ERROR) << "PSM error: empty query RLWE response";
-        StoreErrorAndStop(RlweResult::kEmptyQueryResponseError);
+        RecordErrorAndStop(RlweResult::kEmptyQueryResponseError);
         return;
       }
 
-      const psm_rlwe::PrivateMembershipRlweQueryResponse query_response =
+      const auto responses = psm_rlwe_client_->ProcessQueryResponse(
           result.response.private_set_membership_response()
               .rlwe_response()
-              .query_response();
-
-      auto status_or_responses =
-          psm_rlwe_client_->ProcessQueryResponse(query_response);
-
-      if (!status_or_responses.ok()) {
+              .query_response());
+      if (!responses.ok()) {
         // If the RLWE query response hasn't processed successfully, then
         // report the error and stop the protocol.
         LOG(ERROR) << "PSM error: unexpected internal logic error during "
                       "processing the "
                       "RLWE query response";
-        StoreErrorAndStop(RlweResult::kProcessingQueryResponseLibraryError);
+        RecordErrorAndStop(RlweResult::kProcessingQueryResponseLibraryError);
         return;
       }
 
-      LOG(WARNING) << "PSM query request completed successfully";
+      DCHECK_EQ(responses->membership_responses_size(), 1);
+
+      const bool is_member =
+          responses->membership_responses(0).membership_response().is_member();
 
       base::UmaHistogramEnumeration(kUMAPsmResult + uma_suffix_,
                                     RlweResult::kSuccessfulDetermination);
       RecordPsmSuccessTimeHistogram();
 
-      // The RLWE query response has been processed successfully. Extract
-      // the membership response, and report the result.
-
-      psm_rlwe::RlweMembershipResponses rlwe_membership_responses =
-          std::move(status_or_responses).value();
-
-      // Ensure the existence of one membership response. Then, verify that it
-      // is regarding the current PSM ID.
-      if (rlwe_membership_responses.membership_responses_size() != 1 ||
-          rlwe_membership_responses.membership_responses(0)
-                  .plaintext_id()
-                  .sensitive_id() != psm_rlwe_id_.sensitive_id()) {
-        LOG(ERROR)
-            << "PSM error: RLWE membership responses are either empty or its "
-               "first response's ID is not the same as the current PSM ID.";
-        // TODO(crbug.com/1302982): Record that error separately and merge it
-        // with RlweResult.
-        StoreErrorAndStop(RlweResult::kEmptyQueryResponseError);
-        return;
-      }
-
-      const bool membership_result =
-          rlwe_membership_responses.membership_responses(0)
-              .membership_response()
-              .is_member();
-
       LOG(WARNING) << "PSM determination successful. Identifier "
-                   << (membership_result ? "" : "not ")
-                   << "present on the server";
+                   << plaintext_id_.sensitive_id() << (is_member ? "" : " not")
+                   << " present on the server";
 
       // Reset the |psm_request_job_| to allow another call to
       // CheckMembership.
       psm_request_job_.reset();
 
-      // Store the last PSM execution result.
-      last_psm_execution_result_ =
-          ResultHolder(RlweResult::kSuccessfulDetermination, membership_result,
-                       /*membership_determination_time=*/base::Time::Now());
-
       std::move(on_completion_callback_)
-          .Run(last_psm_execution_result_.value());
+          .Run(ResultHolder(
+              is_member,
+              /*membership_determination_time=*/base::Time::Now()));
       return;
     }
     case DM_STATUS_REQUEST_FAILED: {
@@ -310,12 +262,14 @@ void RlweDmserverClientImpl::OnRlweQueryRequestCompletion(
           << "PSM error: RLWE query request failed due to connection error";
       base::UmaHistogramSparse(kUMAPsmNetworkErrorCode + uma_suffix_,
                                -result.net_error);
-      StoreErrorAndStop(RlweResult::kConnectionError);
+      RecordErrorAndStop(
+          AutoEnrollmentDMServerError::FromDMServerJobResult(result));
       return;
     }
     default: {
       LOG(ERROR) << "PSM error: RLWE query request failed due to server error";
-      StoreErrorAndStop(RlweResult::kServerError);
+      RecordErrorAndStop(
+          AutoEnrollmentDMServerError::FromDMServerJobResult(result));
       return;
     }
   }
@@ -330,7 +284,7 @@ RlweDmserverClientImpl::CreatePsmRequestJobConfiguration(
           TYPE_PSM_HAS_DEVICE_STATE_REQUEST,
       random_device_id_,
       /*critical=*/true, DMAuth::NoAuth(),
-      /*oauth_token=*/absl::nullopt, url_loader_factory_, std::move(callback));
+      /*oauth_token=*/std::nullopt, url_loader_factory_, std::move(callback));
 }
 
 void RlweDmserverClientImpl::RecordPsmSuccessTimeHistogram() {

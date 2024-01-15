@@ -10,7 +10,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "third_party/blink/public/platform/media/multi_buffer.h"
@@ -18,6 +19,7 @@
 #include "third_party/blink/public/platform/web_url_request.h"
 #include "third_party/blink/public/web/web_associated_url_loader_client.h"
 #include "third_party/blink/public/web/web_frame.h"
+#include "third_party/blink/renderer/platform/allow_discouraged_type.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "url/gurl.h"
 
@@ -95,7 +97,7 @@ class PLATFORM_EXPORT ResourceMultiBufferDataProvider
   // We don't need (or want) a scoped_refptr for this one, because
   // we are owned by it. Note that we may change this when we encounter
   // a redirect because we actually change ownership.
-  UrlData* url_data_;
+  raw_ptr<UrlData, ExperimentalRenderer> url_data_;
 
   // Temporary storage for incoming data.
   std::list<scoped_refptr<media::DataBuffer>> fifo_;
@@ -109,14 +111,14 @@ class PLATFORM_EXPORT ResourceMultiBufferDataProvider
 
   // The origin for the initial request.
   // const to make it obvious that redirects cannot change it.
-  const GURL origin_;
+  const GURL origin_ ALLOW_DISCOURAGED_TYPE("Avoids conversion in media code");
 
   // Keeps track of an active WebAssociatedURLLoader.
   // Only valid while loading resource.
   std::unique_ptr<WebAssociatedURLLoader> active_loader_;
 
   // When we encounter a redirect, this is the source of the redirect.
-  GURL redirects_to_;
+  GURL redirects_to_ ALLOW_DISCOURAGED_TYPE("Avoids conversion in media code");
 
   // If the server tries to gives us more bytes than we want, this how
   // many bytes we need to discard before we get to the right place.

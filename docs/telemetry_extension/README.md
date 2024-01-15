@@ -43,7 +43,7 @@ extension type was declared, the ChromeOS System extension. In a ChromeOS
 System extension, the service worker has direct access to normal
 [web APIs](https://developer.mozilla.org/en-US/docs/Web/API). Most of the
 [common Chrome Extension APIs](https://developer.chrome.com/docs/extensions/reference/)
-are disabled (besides `chrome.runtime` to communicate with the PWA) and access
+are disabled (except `chrome.runtime` to communicate with the PWA) and access
 to the Telemetry API is granted either directly through `os.` or via DPSL.js
 the recommended way of using the API). Please note that each extension ID needs
 to be allowlisted by Google in the Chrome codebase to have access to APIs.
@@ -56,12 +56,15 @@ launch icon, UI, and access to web APIs.
 
 ## DPSL.js
 
+*The Company Products defined in Exhibit A will be granted the ability to call
+the Chrome OS Telemetry Extension APIs using the methods defined here.*
+
+**(Update: Google provides clients with the ability to query the API by calling
+chrome.os.\* directly. Migration guide can be found [here](dpsl_migration.md).)**
 DPSL.js stands for Diagnostic Processor Support Library for Javascript, it’s a
 JS wrapper around the underlying Telemetry Extensions APIs. It offers an
-abstracted way for querying the API and is supported and updated by Google to
-always support the latest APIs. DPSL.js is Google’s recommended way to interact
-with the telemetry extension APIs. The library is hosted on
-[Github](https://github.com/GoogleChromeLabs/telemetry-support-extension-for-chromeos)
+abstracted way for querying the API and is developed by Google. The library is
+hosted on [Github](https://github.com/GoogleChromeLabs/telemetry-support-extension-for-chromeos)
 and published to [npm](https://www.npmjs.com/package/cros-dpsl-js), please refer
 to the documentation.
 [These tables](https://github.com/GoogleChromeLabs/telemetry-support-extension-for-chromeos/tree/main/src#functions)
@@ -106,6 +109,30 @@ chrome.runtime.onMessageExternal.addListener(
  });
 ```
 
+[//]: <> (This section is part of the API terms of use, internal version is)
+[//]: <> (here go/telemetry-extension-tos. DO NOT EDIT unless changes in source)
+## Permission to API Functionality Mapping
+
+For an overview of all exposed function under `chrome.os.telemetry` and
+`chrome.os.diagnostics`, please visit
+[this page](https://github.com/GoogleChromeLabs/telemetry-support-extension-for-chromeos/blob/main/src/README.md#functions).
+Some telemetry data requires special permissions to be accessed:
+
+1. `VpdInfo.serialNumber` requires additional permission:
+"os.telemetry.serial_number" with string
+"Read Chrome OS device and component serial numbers"
+
+2. `OemData.oemData` requires additional permission:
+"os.telemetry.serial_number" with string
+"Read Chrome OS device and component serial numbers"
+
+3. `Batteryinfo.serialNumber` requires additional permission:
+"os.telemetry.serial_number" with string
+"Read Chrome OS device and component serial numbers"
+
+4. MAC Address in `InternetConnectivity` requires additional permission:
+“os.telemetry.network_info” with string “Read ChromeOS network information”
+
 # The Chrome extension
 
 In order for a Chrome extension to have access to telemetry and diagnostics
@@ -116,6 +143,8 @@ APIs, the following requirements need to be satisfied:
     a. managed and the Telemetry extension was force-installed via policy, or
 
     b. The user is the device owner (the first user of the device).
+
+    c. The user is in Shimless RMA flow.
 
 2. The PWA UI associated with the Telemetry extension must be opened for the
 extension to have access to APIs.
@@ -242,6 +271,41 @@ able to set the root CA. Just select the `Authorities` tab and click `Import`.
 Select the generated `CA.pem` file and click open. Now your Chrome instance
 and testing environment trust each other.
 
+[//]: <> (This section is part of the API terms of use, internal version is)
+[//]: <> (here go/telemetry-extension-tos. DO NOT EDIT unless changes in source)
+# Restrictions on Data Use
+
+Due to the powerful nature of this API there are limits on how the data can be
+utilized:
+
+1. This API can only be used to receive telemetry data and diagnostic
+information from ChromeOS-based devices to provide Customer Support Services.
+
+2. This API will only be used, access or otherwise process personal data or
+device identifiers at the Customer’s express direction in each instance.
+
+3. Company will not access the ChromeOS API on an ongoing basis, or at recurring
+intervals, without express direction by the Customer.
+
+4. Company will not store (on device or server), or use for geolocation
+purposes, the device SSID or BSSID.
+
+5. Company will not use data obtained through the API for marketing purposes.
+
+6. Company will provide and adhere to a privacy policy that clearly and
+accurately describes to Customers what data is collected and how the data is
+used and shared.
+
+# Further reads
+
+For information around configuration of certain cros-config values please visit:
+
+1. [Customization Guide - OEM Name](add_oem_name.md)
+
+2. [Customization Guide - Fingerprint Diagnostics](fingerprint_diag.md)
+
+3. [Telemetry Extension API overview](api_overview.md)
+
 # FAQs
 
 Q: I found a bug, how do I report it?<br>
@@ -251,4 +315,4 @@ and logs (if possible) on our
 You need a partner account to do that.
 
 Q: Have a question?<br>
-A: Please reach out to cros-oem-services-team@google.com.
+A: Please reach out to chromeos-oem-services@google.com.

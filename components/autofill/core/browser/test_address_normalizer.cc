@@ -8,8 +8,8 @@
 
 namespace autofill {
 
-TestAddressNormalizer::TestAddressNormalizer() {}
-TestAddressNormalizer::~TestAddressNormalizer() {}
+TestAddressNormalizer::TestAddressNormalizer() = default;
+TestAddressNormalizer::~TestAddressNormalizer() = default;
 
 void TestAddressNormalizer::NormalizeAddressAsync(
     const AutofillProfile& profile,
@@ -28,6 +28,13 @@ void TestAddressNormalizer::NormalizeAddressAsync(
 bool TestAddressNormalizer::NormalizeAddressSync(AutofillProfile* profile) {
   return true;
 }
+
+#if BUILDFLAG(IS_ANDROID)
+base::android::ScopedJavaLocalRef<jobject>
+TestAddressNormalizer::GetJavaObject() {
+  return base::android::ScopedJavaLocalRef<jobject>();
+}
+#endif  // BUILDFLAG(IS_ANDROID)
 
 void TestAddressNormalizer::DelayNormalization() {
   instantaneous_normalization_ = false;

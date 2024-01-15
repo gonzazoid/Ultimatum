@@ -10,7 +10,7 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_android.h"
@@ -96,14 +96,6 @@ class LogoObserverAndroid : public search_provider_logos::LogoObserver {
         JNI_LogoBridge_ConvertLogoToJavaObject(env, logo);
     Java_LogoObserver_onLogoAvailable(env, j_logo_observer_, j_logo,
                                       from_cache);
-  }
-
-  void OnCachedLogoRevalidated() override {
-    if (!logo_bridge_)
-      return;
-
-    JNIEnv* env = base::android::AttachCurrentThread();
-    Java_LogoObserver_onCachedLogoRevalidated(env, j_logo_observer_);
   }
 
   void OnObserverRemoved() override { delete this; }

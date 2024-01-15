@@ -7,9 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
+#include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "services/device/geolocation/fake_location_provider.h"
 #include "services/device/geolocation/fake_position_cache.h"
@@ -25,34 +27,28 @@ using ::testing::NiceMock;
 namespace device {
 namespace {
 
-std::unique_ptr<LocationProvider> GetCustomLocationProviderForTest(
-    std::unique_ptr<LocationProvider> provider) {
-  return provider;
+std::unique_ptr<LocationProvider> NullLocationProvider() {
+  return nullptr;
 }
 
 class MockLocationObserver {
  public:
   virtual ~MockLocationObserver() = default;
-  void InvalidateLastPosition() {
-    last_position_.latitude = 100;
-    last_position_.error_code = mojom::Geoposition::ErrorCode::NONE;
-    ASSERT_FALSE(ValidateGeoposition(last_position_));
-  }
   void OnLocationUpdate(const LocationProvider* provider,
-                        const mojom::Geoposition& position) {
-    last_position_ = position;
+                        mojom::GeopositionResultPtr result) {
+    last_result_ = std::move(result);
   }
 
-  mojom::Geoposition last_position() { return last_position_; }
+  const mojom::GeopositionResult* last_result() { return last_result_.get(); }
 
  private:
-  mojom::Geoposition last_position_;
+  mojom::GeopositionResultPtr last_result_;
 };
 
 double g_fake_time_now_secs = 1;
 
 base::Time GetTimeNowForTest() {
-  return base::Time::FromDoubleT(g_fake_time_now_secs);
+  return base::Time::FromSecondsSinceUnixEpoch(g_fake_time_now_secs);
 }
 
 void AdvanceTimeNow(const base::TimeDelta& delta) {
@@ -63,14 +59,15 @@ void SetPositionFix(FakeLocationProvider* provider,
                     double latitude,
                     double longitude,
                     double accuracy) {
-  mojom::Geoposition position;
-  position.error_code = mojom::Geoposition::ErrorCode::NONE;
+  auto result =
+      mojom::GeopositionResult::NewPosition(mojom::Geoposition::New());
+  auto& position = *result->get_position();
   position.latitude = latitude;
   position.longitude = longitude;
   position.accuracy = accuracy;
   position.timestamp = GetTimeNowForTest();
   ASSERT_TRUE(ValidateGeoposition(position));
-  provider->HandlePositionChanged(position);
+  provider->HandlePositionChanged(std::move(result));
 }
 
 // TODO(lethalantidote): Populate a Geoposition in the class from kConstants
@@ -84,16 +81,19 @@ void SetReferencePosition(FakeLocationProvider* provider) {
 class TestingLocationArbitrator : public LocationArbitrator {
  public:
   TestingLocationArbitrator(
-      const LocationProviderUpdateCallback& callback,
+      LocationProviderUpdateCallback callback,
       const CustomLocationProviderCallback& provider_getter,
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       bool should_use_system_location_provider = false)
-      : LocationArbitrator(provider_getter,
+      : LocationArbitrator(std::move(provider_getter),
                            /*geolocation_system_permission_manager=*/nullptr,
                            /*main_task_runner=*/nullptr,
                            std::move(url_loader_factory),
                            std::string() /* api_key */,
-                           std::make_unique<FakePositionCache>()),
+                           std::make_unique<FakePositionCache>(),
+                           /*internals_updated_closure=*/base::DoNothing(),
+                           /*network_request_callback=*/base::DoNothing(),
+                           /*network_response_callback=*/base::DoNothing()),
         should_use_system_location_provider_(
             should_use_system_location_provider) {
     SetUpdateCallback(callback);
@@ -104,8 +104,9 @@ class TestingLocationArbitrator : public LocationArbitrator {
   std::unique_ptr<LocationProvider> NewNetworkLocationProvider(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       const std::string& api_key) override {
-    network_location_provider_ = new FakeLocationProvider;
-    return base::WrapUnique(network_location_provider_.get());
+    auto provider = std::make_unique<FakeLocationProvider>();
+    network_location_provider_ = provider->GetWeakPtr();
+    return provider;
   }
 
   std::unique_ptr<LocationProvider> NewSystemLocationProvider() override {
@@ -117,7 +118,13 @@ class TestingLocationArbitrator : public LocationArbitrator {
     return base::WrapUnique(system_location_provider_.get());
   }
 
-  raw_ptr<FakeLocationProvider> network_location_provider_ = nullptr;
+  mojom::GeolocationDiagnostics::ProviderState state() {
+    mojom::GeolocationDiagnostics diagnostics;
+    FillDiagnostics(diagnostics);
+    return diagnostics.provider_state;
+  }
+
+  base::WeakPtr<FakeLocationProvider> network_location_provider_;
   raw_ptr<FakeLocationProvider> system_location_provider_ = nullptr;
   bool should_use_system_location_provider_;
 };
@@ -131,14 +138,14 @@ class GeolocationLocationArbitratorTest : public testing::Test {
   // Initializes |arbitrator_| with the specified |url_loader_factory|, which
   // may be null.
   void InitializeArbitrator(
-      const CustomLocationProviderCallback& provider_getter,
+      CustomLocationProviderCallback provider_getter,
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       bool should_use_system_location_provider = false) {
     const LocationProvider::LocationProviderUpdateCallback callback =
         base::BindRepeating(&MockLocationObserver::OnLocationUpdate,
                             base::Unretained(observer_.get()));
     arbitrator_ = std::make_unique<TestingLocationArbitrator>(
-        callback, provider_getter, std::move(url_loader_factory),
+        callback, std::move(provider_getter), std::move(url_loader_factory),
         should_use_system_location_provider);
   }
 
@@ -148,11 +155,14 @@ class GeolocationLocationArbitratorTest : public testing::Test {
   void CheckLastPositionInfo(double latitude,
                              double longitude,
                              double accuracy) {
-    mojom::Geoposition geoposition = observer_->last_position();
-    EXPECT_TRUE(ValidateGeoposition(geoposition));
-    EXPECT_DOUBLE_EQ(latitude, geoposition.latitude);
-    EXPECT_DOUBLE_EQ(longitude, geoposition.longitude);
-    EXPECT_DOUBLE_EQ(accuracy, geoposition.accuracy);
+    const auto* result = observer_->last_result();
+    EXPECT_TRUE(result && result->is_position());
+    if (result && result->is_position()) {
+      const mojom::Geoposition& geoposition = *result->get_position();
+      EXPECT_DOUBLE_EQ(latitude, geoposition.latitude);
+      EXPECT_DOUBLE_EQ(longitude, geoposition.longitude);
+      EXPECT_DOUBLE_EQ(accuracy, geoposition.accuracy);
+    }
   }
 
   base::TimeDelta SwitchOnFreshnessCliff() {
@@ -162,7 +172,7 @@ class GeolocationLocationArbitratorTest : public testing::Test {
   }
 
   FakeLocationProvider* network_location_provider() {
-    return arbitrator_->network_location_provider_;
+    return arbitrator_->network_location_provider_.get();
   }
 
   FakeLocationProvider* system_location_provider() {
@@ -177,17 +187,17 @@ class GeolocationLocationArbitratorTest : public testing::Test {
 
 // Basic test of the text fixture.
 TEST_F(GeolocationLocationArbitratorTest, CreateDestroy) {
-  InitializeArbitrator(
-      base::BindRepeating(&GetCustomLocationProviderForTest, nullptr), nullptr);
+  InitializeArbitrator(base::BindRepeating(&NullLocationProvider), nullptr);
   EXPECT_TRUE(arbitrator_);
+  EXPECT_EQ(arbitrator_->state(),
+            mojom::GeolocationDiagnostics::ProviderState::kStopped);
   arbitrator_.reset();
   SUCCEED();
 }
 
 // Tests OnPermissionGranted().
 TEST_F(GeolocationLocationArbitratorTest, OnPermissionGranted) {
-  InitializeArbitrator(
-      base::BindRepeating(&GetCustomLocationProviderForTest, nullptr), nullptr);
+  InitializeArbitrator(base::BindRepeating(&NullLocationProvider), nullptr);
   EXPECT_FALSE(arbitrator_->HasPermissionBeenGrantedForTest());
   arbitrator_->OnPermissionGranted();
   EXPECT_TRUE(arbitrator_->HasPermissionBeenGrantedForTest());
@@ -199,9 +209,8 @@ TEST_F(GeolocationLocationArbitratorTest, OnPermissionGranted) {
 
 // Tests basic operation (single position fix) network location provider.
 TEST_F(GeolocationLocationArbitratorTest, NormalUsageNetwork) {
-  InitializeArbitrator(
-      base::BindRepeating(&GetCustomLocationProviderForTest, nullptr),
-      url_loader_factory_);
+  InitializeArbitrator(base::BindRepeating(&NullLocationProvider),
+                       url_loader_factory_);
   ASSERT_TRUE(arbitrator_);
 
   EXPECT_FALSE(network_location_provider());
@@ -210,19 +219,19 @@ TEST_F(GeolocationLocationArbitratorTest, NormalUsageNetwork) {
 
   ASSERT_TRUE(network_location_provider());
   EXPECT_FALSE(system_location_provider());
-  EXPECT_EQ(FakeLocationProvider::LOW_ACCURACY,
-            network_location_provider()->state_);
-  EXPECT_FALSE(ValidateGeoposition(observer_->last_position()));
-  EXPECT_EQ(mojom::Geoposition::ErrorCode::NONE,
-            observer_->last_position().error_code);
+  EXPECT_EQ(mojom::GeolocationDiagnostics::ProviderState::kLowAccuracy,
+            network_location_provider()->state());
+  EXPECT_FALSE(observer_->last_result());
 
   SetReferencePosition(network_location_provider());
 
-  EXPECT_TRUE(ValidateGeoposition(observer_->last_position()) ||
-              observer_->last_position().error_code !=
-                  mojom::Geoposition::ErrorCode::NONE);
-  EXPECT_EQ(network_location_provider()->GetPosition().latitude,
-            observer_->last_position().latitude);
+  ASSERT_TRUE(observer_->last_result());
+  if (observer_->last_result()->is_position()) {
+    ASSERT_TRUE(network_location_provider()->GetPosition());
+    EXPECT_EQ(
+        network_location_provider()->GetPosition()->get_position()->latitude,
+        observer_->last_result()->get_position()->latitude);
+  }
 
   EXPECT_FALSE(network_location_provider()->is_permission_granted());
   EXPECT_FALSE(arbitrator_->HasPermissionBeenGrantedForTest());
@@ -233,9 +242,8 @@ TEST_F(GeolocationLocationArbitratorTest, NormalUsageNetwork) {
 
 // Tests basic operation (single position fix) system location provider.
 TEST_F(GeolocationLocationArbitratorTest, NormalUsageSystem) {
-  InitializeArbitrator(
-      base::BindRepeating(&GetCustomLocationProviderForTest, nullptr),
-      url_loader_factory_, true);
+  InitializeArbitrator(base::BindRepeating(&NullLocationProvider),
+                       url_loader_factory_, true);
   ASSERT_TRUE(arbitrator_);
 
   EXPECT_FALSE(network_location_provider());
@@ -244,19 +252,19 @@ TEST_F(GeolocationLocationArbitratorTest, NormalUsageSystem) {
 
   EXPECT_FALSE(network_location_provider());
   ASSERT_TRUE(system_location_provider());
-  EXPECT_EQ(FakeLocationProvider::LOW_ACCURACY,
-            system_location_provider()->state_);
-  EXPECT_FALSE(ValidateGeoposition(observer_->last_position()));
-  EXPECT_EQ(mojom::Geoposition::ErrorCode::NONE,
-            observer_->last_position().error_code);
+  EXPECT_EQ(mojom::GeolocationDiagnostics::ProviderState::kLowAccuracy,
+            system_location_provider()->state());
+  EXPECT_FALSE(observer_->last_result());
 
   SetReferencePosition(system_location_provider());
 
-  EXPECT_TRUE(ValidateGeoposition(observer_->last_position()) ||
-              observer_->last_position().error_code !=
-                  mojom::Geoposition::ErrorCode::NONE);
-  EXPECT_EQ(system_location_provider()->GetPosition().latitude,
-            observer_->last_position().latitude);
+  ASSERT_TRUE(observer_->last_result());
+  if (observer_->last_result()->is_position()) {
+    ASSERT_TRUE(system_location_provider()->GetPosition());
+    EXPECT_EQ(
+        system_location_provider()->GetPosition()->get_position()->latitude,
+        observer_->last_result()->get_position()->latitude);
+  }
 
   EXPECT_FALSE(system_location_provider()->is_permission_granted());
   EXPECT_FALSE(arbitrator_->HasPermissionBeenGrantedForTest());
@@ -268,11 +276,14 @@ TEST_F(GeolocationLocationArbitratorTest, NormalUsageSystem) {
 // Tests basic operation (single position fix) with no network location
 // provider, no system location provider and a custom system location provider.
 TEST_F(GeolocationLocationArbitratorTest, CustomSystemProviderOnly) {
-  auto provider = std::make_unique<FakeLocationProvider>();
-  auto* fake_location_provider = provider.get();
-  InitializeArbitrator(base::BindRepeating(&GetCustomLocationProviderForTest,
-                                           base::Passed(&provider)),
-                       nullptr, true);
+  FakeLocationProvider* fake_location_provider = nullptr;
+  InitializeArbitrator(
+      base::BindLambdaForTesting([&]() -> std::unique_ptr<LocationProvider> {
+        auto provider = std::make_unique<FakeLocationProvider>();
+        fake_location_provider = provider.get();
+        return provider;
+      }),
+      nullptr, true);
   ASSERT_TRUE(arbitrator_);
 
   EXPECT_FALSE(network_location_provider());
@@ -281,18 +292,18 @@ TEST_F(GeolocationLocationArbitratorTest, CustomSystemProviderOnly) {
 
   EXPECT_FALSE(network_location_provider());
   EXPECT_FALSE(system_location_provider());
-  EXPECT_EQ(FakeLocationProvider::LOW_ACCURACY, fake_location_provider->state_);
-  EXPECT_FALSE(ValidateGeoposition(observer_->last_position()));
-  EXPECT_EQ(mojom::Geoposition::ErrorCode::NONE,
-            observer_->last_position().error_code);
+  EXPECT_EQ(mojom::GeolocationDiagnostics::ProviderState::kLowAccuracy,
+            fake_location_provider->state());
+  EXPECT_FALSE(observer_->last_result());
 
   SetReferencePosition(fake_location_provider);
 
-  EXPECT_TRUE(ValidateGeoposition(observer_->last_position()) ||
-              observer_->last_position().error_code !=
-                  mojom::Geoposition::ErrorCode::NONE);
-  EXPECT_EQ(fake_location_provider->GetPosition().latitude,
-            observer_->last_position().latitude);
+  ASSERT_TRUE(observer_->last_result());
+  if (observer_->last_result()->is_position()) {
+    ASSERT_TRUE(fake_location_provider->GetPosition());
+    EXPECT_EQ(fake_location_provider->GetPosition()->get_position()->latitude,
+              observer_->last_result()->get_position()->latitude);
+  }
 
   EXPECT_FALSE(fake_location_provider->is_permission_granted());
   EXPECT_FALSE(arbitrator_->HasPermissionBeenGrantedForTest());
@@ -304,28 +315,26 @@ TEST_F(GeolocationLocationArbitratorTest, CustomSystemProviderOnly) {
 // Tests flipping from Low to High accuracy mode as requested by a location
 // observer.
 TEST_F(GeolocationLocationArbitratorTest, SetObserverOptions) {
-  InitializeArbitrator(
-      base::BindRepeating(&GetCustomLocationProviderForTest, nullptr),
-      url_loader_factory_);
+  InitializeArbitrator(base::BindRepeating(&NullLocationProvider),
+                       url_loader_factory_);
   arbitrator_->StartProvider(false);
   ASSERT_TRUE(network_location_provider());
   EXPECT_FALSE(system_location_provider());
-  EXPECT_EQ(FakeLocationProvider::LOW_ACCURACY,
-            network_location_provider()->state_);
+  EXPECT_EQ(mojom::GeolocationDiagnostics::ProviderState::kLowAccuracy,
+            network_location_provider()->state());
   SetReferencePosition(network_location_provider());
-  EXPECT_EQ(FakeLocationProvider::LOW_ACCURACY,
-            network_location_provider()->state_);
+  EXPECT_EQ(mojom::GeolocationDiagnostics::ProviderState::kLowAccuracy,
+            network_location_provider()->state());
   arbitrator_->StartProvider(true);
-  EXPECT_EQ(FakeLocationProvider::HIGH_ACCURACY,
-            network_location_provider()->state_);
+  EXPECT_EQ(mojom::GeolocationDiagnostics::ProviderState::kHighAccuracy,
+            network_location_provider()->state());
 }
 
 // Verifies that the arbitrator doesn't retain pointers to old providers after
 // it has stopped and then restarted (crbug.com/240956).
 TEST_F(GeolocationLocationArbitratorTest, TwoOneShotsIsNewPositionBetter) {
-  InitializeArbitrator(
-      base::BindRepeating(&GetCustomLocationProviderForTest, nullptr),
-      url_loader_factory_);
+  InitializeArbitrator(base::BindRepeating(&NullLocationProvider),
+                       url_loader_factory_);
   arbitrator_->StartProvider(false);
   ASSERT_TRUE(network_location_provider());
   EXPECT_FALSE(system_location_provider());

@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
+#include <sys/utsname.h>
 #include <unistd.h>
 
 #include "base/check_op.h"
@@ -69,11 +70,15 @@ enum class CrashType : uint32_t {
   kSimulated,
   kBuiltinTrap,
   kInfiniteRecursion,
+  kSegvWithTagBits,
+  // kFakeSegv is meant to simulate a MTE segv error.
+  kFakeSegv,
 };
 
 struct StartHandlerForSelfTestOptions {
   bool start_handler_at_crash;
   bool set_first_chance_handler;
+  bool set_last_chance_handler;
   bool crash_non_main_thread;
   bool client_uses_signals;
   bool gather_indirectly_referenced_memory;
@@ -82,7 +87,7 @@ struct StartHandlerForSelfTestOptions {
 
 class StartHandlerForSelfTest
     : public testing::TestWithParam<
-          std::tuple<bool, bool, bool, bool, bool, CrashType>> {
+          std::tuple<bool, bool, bool, bool, bool, bool, CrashType>> {
  public:
   StartHandlerForSelfTest() = default;
 
@@ -97,6 +102,7 @@ class StartHandlerForSelfTest
     memset(&options_, 0, sizeof(options_));
     std::tie(options_.start_handler_at_crash,
              options_.set_first_chance_handler,
+             options_.set_last_chance_handler,
              options_.crash_non_main_thread,
              options_.client_uses_signals,
              options_.gather_indirectly_referenced_memory,
@@ -170,6 +176,10 @@ void ValidateExtraMemory(const StartHandlerForSelfTestOptions& options,
     }
   }
   EXPECT_EQ(pc_found, options.gather_indirectly_referenced_memory);
+
+  if (options.crash_type == CrashType::kSegvWithTagBits) {
+    EXPECT_EQ(exception->ExceptionAddress(), 0xefull << 56);
+  }
 }
 
 void ValidateDump(const StartHandlerForSelfTestOptions& options,
@@ -213,6 +223,15 @@ void ValidateDump(const StartHandlerForSelfTestOptions& options,
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Winfinite-recursion"
+// Clang (masquerading as gcc) is too smart, and removes the recursion
+// otherwise. May need to change if either clang or another compiler becomes
+// smarter.
+#if defined(COMPILER_GCC)
+__attribute__((noinline))
+#endif
+#if defined(__clang__)
+__attribute__((optnone))
+#endif
 int RecurseInfinitely(int* ptr) {
   int buf[1 << 20];
   return *ptr + RecurseInfinitely(buf);
@@ -229,6 +248,10 @@ bool HandleCrashSuccessfully(int, siginfo_t*, ucontext_t*) {
 #pragma clang diagnostic pop
 }
 
+bool HandleCrashSuccessfullyAfterReporting(int, siginfo_t*, ucontext_t*) {
+  return true;
+}
+
 void DoCrash(const StartHandlerForSelfTestOptions& options,
              CrashpadClient* client) {
   if (sigsetjmp(do_crash_sigjmp_env, 1) != 0) {
@@ -236,16 +259,37 @@ void DoCrash(const StartHandlerForSelfTestOptions& options,
   }
 
   switch (options.crash_type) {
-    case CrashType::kSimulated:
+    case CrashType::kSimulated: {
       CRASHPAD_SIMULATE_CRASH();
       break;
+    }
 
-    case CrashType::kBuiltinTrap:
+    case CrashType::kBuiltinTrap: {
       __builtin_trap();
+    }
 
-    case CrashType::kInfiniteRecursion:
+    case CrashType::kInfiniteRecursion: {
       int val = 42;
       exit(RecurseInfinitely(&val));
+    }
+
+    case CrashType::kSegvWithTagBits: {
+      volatile char* x = nullptr;
+#ifdef __aarch64__
+      x += 0xefull << 56;
+#endif  // __aarch64__
+      *x;
+      break;
+    }
+
+    case CrashType::kFakeSegv: {
+      // With a regular SIGSEGV like null dereference, the signal gets reraised
+      // automatically, causing HandleOrReraiseSignal() to be called a second
+      // time, terminating the process with the signal regardless of the last
+      // chance handler.
+      raise(SIGSEGV);
+      break;
+    }
   }
 }
 
@@ -268,7 +312,7 @@ class ScopedAltSignalStack {
 
   void Initialize() {
     ScopedMmap local_stack_mem;
-    constexpr size_t stack_size = MINSIGSTKSZ;
+    const size_t stack_size = MINSIGSTKSZ;
     ASSERT_TRUE(local_stack_mem.ResetMmap(nullptr,
                                           stack_size,
                                           PROT_READ | PROT_WRITE,
@@ -376,6 +420,10 @@ CRASHPAD_CHILD_TEST_MAIN(StartHandlerForSelfTestChild) {
     client.SetFirstChanceExceptionHandler(HandleCrashSuccessfully);
   }
 
+  if (options.set_last_chance_handler) {
+    client.SetLastChanceExceptionHandler(HandleCrashSuccessfullyAfterReporting);
+  }
+
 #if BUILDFLAG(IS_ANDROID)
   if (android_set_abort_message) {
     android_set_abort_message(kTestAbortMessage);
@@ -410,6 +458,19 @@ class StartHandlerForSelfInChildTest : public MultiprocessExec {
           SetExpectedChildTermination(TerminationReason::kTerminationSignal,
                                       SIGSEGV);
           break;
+        case CrashType::kSegvWithTagBits:
+          SetExpectedChildTermination(TerminationReason::kTerminationSignal,
+                                      SIGSEGV);
+          break;
+        case CrashType::kFakeSegv:
+          if (!options.set_last_chance_handler) {
+            SetExpectedChildTermination(TerminationReason::kTerminationSignal,
+                                        SIGSEGV);
+          } else {
+            SetExpectedChildTermination(TerminationReason::kTerminationNormal,
+                                        EXIT_SUCCESS);
+          }
+          break;
       }
     }
   }
@@ -441,7 +502,11 @@ class StartHandlerForSelfInChildTest : public MultiprocessExec {
     writer.Close();
 
     if (options_.client_uses_signals && !options_.set_first_chance_handler &&
-        options_.crash_type != CrashType::kSimulated) {
+        options_.crash_type != CrashType::kSimulated &&
+        // The last chance handler will prevent the client handler from being
+        // called if crash type is kFakeSegv.
+        (!options_.set_last_chance_handler ||
+         options_.crash_type != CrashType::kFakeSegv)) {
       // Wait for child's client signal handler.
       char c;
       EXPECT_TRUE(LoggingReadFileExactly(ReadPipeHandle(), &c, sizeof(c)));
@@ -486,6 +551,36 @@ TEST_P(StartHandlerForSelfTest, StartHandlerInChild) {
     GTEST_SKIP();
   }
 #endif  // defined(ADDRESS_SANITIZER)
+
+  // kFakeSegv does raise(SIGSEGV) to simulate a MTE error which is a SEGSEGV
+  // that doesn't get reraised automatically, but this causes the child process
+  // to flakily terminate normally on some bots (e.g. android-nougat-x86-rel)
+  // for some reason so this is skipped.
+  if (!Options().set_last_chance_handler &&
+      Options().crash_type == CrashType::kFakeSegv) {
+    GTEST_SKIP();
+  }
+
+  if (Options().crash_type == CrashType::kSegvWithTagBits) {
+#if !defined(ARCH_CPU_ARM64)
+    GTEST_SKIP() << "Testing for tag bits only exists on aarch64.";
+#else
+    struct utsname uname_info;
+    ASSERT_EQ(uname(&uname_info), 0);
+    ASSERT_NE(uname_info.release, nullptr);
+
+    char* release = uname_info.release;
+    unsigned major = strtoul(release, &release, 10);
+    ASSERT_EQ(*release++, '.');
+    unsigned minor = strtoul(release, nullptr, 10);
+
+    if (major < 5 || (major == 5 && minor < 11)) {
+      GTEST_SKIP() << "Linux kernel v" << uname_info.release
+                   << " does not support SA_EXPOSE_TAGBITS";
+    }
+#endif  // !defined(ARCH_CPU_ARM64)
+  }
+
   StartHandlerForSelfInChildTest test(Options());
   test.Run();
 }
@@ -498,9 +593,12 @@ INSTANTIATE_TEST_SUITE_P(
                      testing::Bool(),
                      testing::Bool(),
                      testing::Bool(),
+                     testing::Bool(),
                      testing::Values(CrashType::kSimulated,
                                      CrashType::kBuiltinTrap,
-                                     CrashType::kInfiniteRecursion)));
+                                     CrashType::kInfiniteRecursion,
+                                     CrashType::kSegvWithTagBits,
+                                     CrashType::kFakeSegv)));
 
 // Test state for starting the handler for another process.
 class StartHandlerForClientTest {

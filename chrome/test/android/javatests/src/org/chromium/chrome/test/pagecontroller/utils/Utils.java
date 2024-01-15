@@ -5,19 +5,15 @@
 package org.chromium.chrome.test.pagecontroller.utils;
 
 import android.os.SystemClock;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import org.chromium.base.Log;
-
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Utility methods for Pagecontroller.
- */
-
+/** Utility methods for Pagecontroller. */
 public final class Utils {
     private static final String TAG = "PageController Utils";
 
@@ -65,7 +61,7 @@ public final class Utils {
      * @param index 0-based index into the list.
      * @return      The index-th item in the list or null if it's out of bounds.
      */
-    public static @Nullable<T> T nullableGet(@NonNull List<T> list, int index) {
+    public static @Nullable <T> T nullableGet(@NonNull List<T> list, int index) {
         return index >= list.size() ? null : list.get(index);
     }
 }

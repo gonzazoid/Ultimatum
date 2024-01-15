@@ -15,16 +15,13 @@ import java.util.Comparator;
 import java.util.Locale;
 import java.util.Objects;
 
-/**
- * Simple object representing the language item.
- */
+/** Simple object representing the language item. */
 public class LanguageItem {
-    /**
-     * Comparator for sorting LanguageItems alphabetically by display name.
-     */
-    public static final Comparator<LanguageItem> COMPARE_BY_DISPLAY_NAME = (l1, l2) -> {
-        return l1.getDisplayName().compareTo(l2.getDisplayName());
-    };
+    /** Comparator for sorting LanguageItems alphabetically by display name. */
+    public static final Comparator<LanguageItem> COMPARE_BY_DISPLAY_NAME =
+            (l1, l2) -> {
+                return l1.getDisplayName().compareTo(l2.getDisplayName());
+            };
 
     private final String mCode;
 
@@ -92,16 +89,19 @@ public class LanguageItem {
             return false;
         }
 
-        // Currently the only two country variants that are translateable are zh-CN and zh-TW.
-        if (TextUtils.equals(mCode, "zh-CN") || TextUtils.equals(mCode, "zh-TW")) {
-            return true;
+        switch (mCode) {
+            case "zh-CN":
+            case "zh-TW":
+            case "mni-Mtei":
+                // Cases with a variant that support translate
+                return true;
+            case "nb":
+                // Translate uses the macrolangauge code "no" instead of "nb".
+                return false;
+            default:
+                // If not a language with supported variants check that the code is a base language.
+                return !mCode.contains("-");
         }
-
-        // "no" is used by translate as the macrolanguage including "nb".
-        if (TextUtils.equals(mCode, "nb")) return false;
-
-        // If not a language with supported variants check that the code is a base language.
-        return !mCode.contains("-");
     }
 
     /**
@@ -127,17 +127,13 @@ public class LanguageItem {
         return Objects.hashCode(mCode);
     }
 
-    /**
-     * return String representation of the BCP-47 code for this language.
-     */
+    /** return String representation of the BCP-47 code for this language. */
     @Override
     public String toString() {
         return getCode();
     }
 
-    /**
-     * Two LanguageItems are equal if their language codes are equal.
-     */
+    /** Two LanguageItems are equal if their language codes are equal. */
     @Override
     public boolean equals(Object obj) {
         if (!(obj instanceof LanguageItem)) return false;
@@ -150,12 +146,18 @@ public class LanguageItem {
      * @return LanguageItem
      */
     public static LanguageItem makeFollowSystemLanguageItem() {
-        String displayName = ContextUtils.getApplicationContext().getResources().getString(
-                R.string.default_lang_subtitle);
+        String displayName =
+                ContextUtils.getApplicationContext()
+                        .getResources()
+                        .getString(R.string.default_lang_subtitle);
         String nativeName =
-                GlobalAppLocaleController.getInstance().getOriginalSystemLocale().getDisplayName(
-                        Locale.getDefault());
-        return new LanguageItem(AppLocaleUtils.APP_LOCALE_USE_SYSTEM_LANGUAGE, displayName,
-                nativeName, true /*supportTranslate*/);
+                GlobalAppLocaleController.getInstance()
+                        .getOriginalSystemLocale()
+                        .getDisplayName(Locale.getDefault());
+        return new LanguageItem(
+                AppLocaleUtils.APP_LOCALE_USE_SYSTEM_LANGUAGE,
+                displayName,
+                nativeName,
+                /* supportTranslate= */ true);
     }
 }

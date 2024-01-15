@@ -4,8 +4,8 @@
 
 #import "ios/components/security_interstitials/safe_browsing/safe_browsing_service_impl.h"
 
-#import "base/bind.h"
 #import "base/files/file_path.h"
+#import "base/functional/bind.h"
 #import "base/path_service.h"
 #import "build/branding_buildflags.h"
 #import "components/prefs/pref_change_registrar.h"
@@ -15,12 +15,14 @@
 #import "components/safe_browsing/core/browser/safe_browsing_metrics_collector.h"
 #import "components/safe_browsing/core/browser/safe_browsing_url_checker_impl.h"
 #import "components/safe_browsing/core/browser/url_checker_delegate.h"
+#import "components/safe_browsing/core/common/features.h"
 #import "components/safe_browsing/core/common/safebrowsing_constants.h"
 #import "ios/components/cookie_util/cookie_util.h"
 #import "ios/components/security_interstitials/safe_browsing/safe_browsing_client.h"
 #import "ios/components/security_interstitials/safe_browsing/url_checker_delegate_impl.h"
 #import "ios/net/cookies/system_cookie_store.h"
 #import "ios/web/common/user_agent.h"
+#import "ios/web/public/browser_state.h"
 #import "ios/web/public/thread/web_task_traits.h"
 #import "ios/web/public/thread/web_thread.h"
 #import "ios/web/public/web_client.h"
@@ -30,13 +32,38 @@
 #import "net/url_request/url_request_context_builder.h"
 #import "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 #pragma mark - SafeBrowsingServiceImpl
 
-SafeBrowsingServiceImpl::SafeBrowsingServiceImpl() = default;
+namespace {
+
+void StartSafeBrowsingDBManagerInternal(
+    scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager>
+        safe_browsing_db_manager,
+    scoped_refptr<network::WeakWrapperSharedURLLoaderFactory>
+        shared_url_loader_factory) {
+  std::string client_name;
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  client_name = "googlechrome";
+#else
+  client_name = "chromium";
+#endif
+
+  safe_browsing::V4ProtocolConfig config =
+      safe_browsing::GetV4ProtocolConfig(client_name,
+                                         /*disable_auto_update=*/false);
+
+  safe_browsing_db_manager->StartOnSBThread(shared_url_loader_factory, config);
+}
+
+}  // namespace
+
+SafeBrowsingServiceImpl::SafeBrowsingServiceImpl() {
+  url_loader_factory_pending_reciever_ =
+      url_loader_factory_.BindNewPipeAndPassReceiver();
+  shared_url_loader_factory_ =
+      base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
+          url_loader_factory_.get());
+}
 
 SafeBrowsingServiceImpl::~SafeBrowsingServiceImpl() = default;
 
@@ -57,7 +84,8 @@ void SafeBrowsingServiceImpl::Initialize(
   safe_browsing_db_manager_ = safe_browsing::V4LocalDatabaseManager::Create(
       safe_browsing_data_path, web::GetUIThreadTaskRunner({}),
       web::GetIOThreadTaskRunner({}),
-      safe_browsing::ExtendedReportingLevelCallback());
+      safe_browsing::ExtendedReportingLevelCallback(),
+      safe_browsing::V4LocalDatabaseManager::RecordMigrationMetricsCallback());
 
   io_thread_enabler_ =
       base::MakeRefCounted<IOThreadEnabler>(safe_browsing_db_manager_);
@@ -74,11 +102,8 @@ void SafeBrowsingServiceImpl::Initialize(
   url_loader_factory_params->process_id = network::mojom::kBrowserProcessId;
   url_loader_factory_params->is_corb_enabled = false;
   network_context_client_->CreateURLLoaderFactory(
-      url_loader_factory_.BindNewPipeAndPassReceiver(),
+      std::move(url_loader_factory_pending_reciever_),
       std::move(url_loader_factory_params));
-  shared_url_loader_factory_ =
-      base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
-          url_loader_factory_.get());
 
   // Watch for changes to the Safe Browsing opt-out preference.
   pref_change_registrar_ = std::make_unique<PrefChangeRegistrar>();
@@ -106,6 +131,11 @@ void SafeBrowsingServiceImpl::ShutDown() {
   web::GetIOThreadTaskRunner({})->PostTask(
       FROM_HERE,
       base::BindOnce(&IOThreadEnabler::ShutDown, io_thread_enabler_));
+  if (base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread) &&
+      enabled_) {
+    enabled_ = false;
+    safe_browsing_db_manager_->StopOnSBThread(true);
+  }
   network_context_client_.reset();
 }
 
@@ -118,16 +148,43 @@ SafeBrowsingServiceImpl::CreateUrlChecker(
       client->GetRealTimeUrlLookupService();
   bool can_perform_full_url_lookup =
       url_lookup_service && url_lookup_service->CanPerformFullURLLookup();
-  bool can_realtime_check_subresource_url =
+  bool can_url_realtime_check_subresource_url =
       url_lookup_service && url_lookup_service->CanCheckSubresourceURL();
   scoped_refptr<safe_browsing::UrlCheckerDelegate> url_checker_delegate =
       base::MakeRefCounted<UrlCheckerDelegateImpl>(safe_browsing_db_manager_,
                                                    client->AsWeakPtr());
+  safe_browsing::HashRealTimeService* hash_real_time_service =
+      client->GetHashRealTimeService();
+
+  safe_browsing::hash_realtime_utils::HashRealTimeSelection
+      hash_real_time_selection =
+          safe_browsing::hash_realtime_utils::DetermineHashRealTimeSelection(
+              web_state->GetBrowserState()->IsOffTheRecord(),
+              pref_change_registrar_->prefs(),
+              safe_browsing::hash_realtime_utils::GetCountryCode(
+                  client->GetVariationsService()),
+              /*log_usage_histograms=*/true);
+
   return std::make_unique<safe_browsing::SafeBrowsingUrlCheckerImpl>(
-      request_destination, url_checker_delegate, web_state->GetWeakPtr(),
-      can_perform_full_url_lookup, can_realtime_check_subresource_url,
+      /*headers=*/net::HttpRequestHeaders(), /*load_flags=*/0,
+      request_destination, /*has_user_gesture=*/false, url_checker_delegate,
+      /*web_contents_getter=*/
+      base::RepeatingCallback<content::WebContents*()>(),
+      web_state->GetWeakPtr(),
+      /*render_process_id=*/
+      security_interstitials::UnsafeResource::kNoRenderProcessId,
+      /*render_frame_token=*/std::nullopt,
+      /*frame_tree_node_id=*/
+      security_interstitials::UnsafeResource::kNoFrameTreeNodeId,
+      /*navigation_id=*/std::nullopt, can_perform_full_url_lookup,
+      can_url_realtime_check_subresource_url,
+      /*can_check_db=*/true, /*can_check_high_confidence_allowlist=*/true,
+      /*url_lookup_service_metric_suffix=*/"",
+      /*last_committed_url=*/web_state->GetLastCommittedURL(),
       web::GetUIThreadTaskRunner({}),
-      url_lookup_service ? url_lookup_service->GetWeakPtr() : nullptr);
+      url_lookup_service ? url_lookup_service->GetWeakPtr() : nullptr,
+      hash_real_time_service ? hash_real_time_service->GetWeakPtr() : nullptr,
+      hash_real_time_selection);
 }
 
 bool SafeBrowsingServiceImpl::CanCheckUrl(const GURL& url) const {
@@ -142,6 +199,10 @@ SafeBrowsingServiceImpl::GetURLLoaderFactory() {
 scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager>
 SafeBrowsingServiceImpl::GetDatabaseManager() {
   return safe_browsing_db_manager_;
+}
+
+network::mojom::NetworkContext* SafeBrowsingServiceImpl::GetNetworkContext() {
+  return network_context_client_.get();
 }
 
 void SafeBrowsingServiceImpl::ClearCookies(
@@ -167,9 +228,23 @@ void SafeBrowsingServiceImpl::SetUpURLLoaderFactory(
 void SafeBrowsingServiceImpl::UpdateSafeBrowsingEnabledState() {
   bool enabled =
       pref_change_registrar_->prefs()->GetBoolean(prefs::kSafeBrowsingEnabled);
-  web::GetIOThreadTaskRunner({})->PostTask(
-      FROM_HERE, base::BindOnce(&IOThreadEnabler::SetSafeBrowsingEnabled,
-                                io_thread_enabler_, enabled));
+  if (base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+    if (enabled_ == enabled) {
+      return;
+    }
+
+    enabled_ = enabled;
+    if (enabled_) {
+      StartSafeBrowsingDBManagerInternal(safe_browsing_db_manager_,
+                                         shared_url_loader_factory_);
+    } else {
+      safe_browsing_db_manager_->StopOnSBThread(false);
+    }
+  } else {
+    web::GetIOThreadTaskRunner({})->PostTask(
+        FROM_HERE, base::BindOnce(&IOThreadEnabler::SetSafeBrowsingEnabled,
+                                  io_thread_enabler_, enabled));
+  }
 }
 
 #pragma mark - SafeBrowsingServiceImpl::IOThreadEnabler
@@ -190,13 +265,17 @@ void SafeBrowsingServiceImpl::IOThreadEnabler::Initialize(
   network_context_ = std::make_unique<network::NetworkContext>(
       /*network_service=*/nullptr, std::move(network_context_receiver),
       url_request_context_.get(), cors_exempt_header_list);
-  SetUpURLLoaderFactory(safe_browsing_service);
+  if (!base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+    SetUpURLLoaderFactory(safe_browsing_service);
+  }
 }
 
 void SafeBrowsingServiceImpl::IOThreadEnabler::ShutDown() {
   DCHECK_CURRENTLY_ON(web::WebThread::IO);
   shutting_down_ = true;
-  SetSafeBrowsingEnabled(false);
+  if (!base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+    SetSafeBrowsingEnabled(false);
+  }
   url_loader_factory_.reset();
   network_context_.reset();
   shared_url_loader_factory_.reset();
@@ -206,6 +285,7 @@ void SafeBrowsingServiceImpl::IOThreadEnabler::ShutDown() {
 void SafeBrowsingServiceImpl::IOThreadEnabler::SetSafeBrowsingEnabled(
     bool enabled) {
   DCHECK_CURRENTLY_ON(web::WebThread::IO);
+  DCHECK(!base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread));
   if (enabled_ == enabled)
     return;
 
@@ -213,7 +293,7 @@ void SafeBrowsingServiceImpl::IOThreadEnabler::SetSafeBrowsingEnabled(
   if (enabled_)
     StartSafeBrowsingDBManager();
   else
-    safe_browsing_db_manager_->StopOnIOThread(shutting_down_);
+    safe_browsing_db_manager_->StopOnSBThread(shutting_down_);
 }
 
 void SafeBrowsingServiceImpl::IOThreadEnabler::ClearAllCookies(
@@ -228,18 +308,8 @@ void SafeBrowsingServiceImpl::IOThreadEnabler::ClearAllCookies(
 void SafeBrowsingServiceImpl::IOThreadEnabler::StartSafeBrowsingDBManager() {
   DCHECK_CURRENTLY_ON(web::WebThread::IO);
 
-  std::string client_name;
-#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  client_name = "googlechrome";
-#else
-  client_name = "chromium";
-#endif
-
-  safe_browsing::V4ProtocolConfig config = safe_browsing::GetV4ProtocolConfig(
-      client_name, /*disable_auto_update=*/false);
-
-  safe_browsing_db_manager_->StartOnIOThread(shared_url_loader_factory_,
-                                             config);
+  StartSafeBrowsingDBManagerInternal(safe_browsing_db_manager_,
+                                     shared_url_loader_factory_);
 }
 
 void SafeBrowsingServiceImpl::IOThreadEnabler::SetUpURLRequestContext(
@@ -254,8 +324,7 @@ void SafeBrowsingServiceImpl::IOThreadEnabler::SetUpURLRequestContext(
           cookie_util::CookieStoreConfig(
               cookie_file_path,
               cookie_util::CookieStoreConfig::RESTORED_SESSION_COOKIES,
-              cookie_util::CookieStoreConfig::COOKIE_MONSTER,
-              /*crypto_delegate=*/nullptr),
+              cookie_util::CookieStoreConfig::COOKIE_MONSTER),
           /*system_cookie_store=*/nullptr, net::NetLog::Get());
 
   builder.SetCookieStore(std::move(cookie_store));

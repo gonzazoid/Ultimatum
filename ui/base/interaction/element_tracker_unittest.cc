@@ -4,8 +4,8 @@
 
 #include "ui/base/interaction/element_tracker.h"
 
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/test/bind.h"
 #include "base/test/mock_callback.h"
@@ -28,6 +28,11 @@ DEFINE_LOCAL_ELEMENT_IDENTIFIER_VALUE(kElementIdentifier2);
 DEFINE_LOCAL_CUSTOM_ELEMENT_EVENT_TYPE(kCustomEventType1);
 const ElementContext kElementContext1(1);
 const ElementContext kElementContext2(2);
+
+struct EventTestStruct {
+  DECLARE_CLASS_CUSTOM_ELEMENT_EVENT_TYPE(kCustomEventType2);
+};
+DEFINE_CLASS_CUSTOM_ELEMENT_EVENT_TYPE(EventTestStruct, kCustomEventType2);
 
 }  // namespace
 
@@ -414,6 +419,29 @@ TEST(ElementTrackerTest, AddElementActivatedCallback) {
   e3->Activate();
 }
 
+TEST(ElementTrackerTest, AddElementActivatedInAnyContextCallback) {
+  UNCALLED_MOCK_CALLBACK(ElementTracker::Callback, callback);
+  auto subscription = ElementTracker::GetElementTracker()
+                          ->AddElementActivatedInAnyContextCallback(
+                              kElementIdentifier1, callback.Get());
+  test::TestElementPtr e1 = std::make_unique<test::TestElement>(
+      kElementIdentifier1, kElementContext1);
+  test::TestElementPtr e2 = std::make_unique<test::TestElementOtherFramework>(
+      kElementIdentifier2, kElementContext1);
+  test::TestElementPtr e3 = std::make_unique<test::TestElementOtherFramework>(
+      kElementIdentifier1, kElementContext2);
+  e1->Show();
+  e2->Show();
+  e3->Show();
+
+  // Two of these elements have the specified identifier, but in different
+  // contexts, while the other element does not share the identifier and should
+  // not trigger the callback.
+  EXPECT_CALL_IN_SCOPE(callback, Run(e1.get()), e1->Activate());
+  e2->Activate();
+  EXPECT_CALL_IN_SCOPE(callback, Run(e3.get()), e3->Activate());
+}
+
 TEST(ElementTrackerTest, AddElementHiddenCallback) {
   UNCALLED_MOCK_CALLBACK(ElementTracker::Callback, callback);
   auto subscription =
@@ -441,6 +469,29 @@ TEST(ElementTrackerTest, AddElementHiddenCallback) {
   EXPECT_CALL_IN_SCOPE(callback, Run(e1.get()), e1->Hide());
 }
 
+TEST(ElementTrackerTest, AddElementHiddenInAnyContextCallback) {
+  UNCALLED_MOCK_CALLBACK(ElementTracker::Callback, callback);
+  auto subscription =
+      ElementTracker::GetElementTracker()->AddElementHiddenInAnyContextCallback(
+          kElementIdentifier1, callback.Get());
+  test::TestElementPtr e1 = std::make_unique<test::TestElement>(
+      kElementIdentifier1, kElementContext1);
+  test::TestElementPtr e2 = std::make_unique<test::TestElementOtherFramework>(
+      kElementIdentifier2, kElementContext1);
+  test::TestElementPtr e3 = std::make_unique<test::TestElementOtherFramework>(
+      kElementIdentifier1, kElementContext2);
+  e1->Show();
+  e2->Show();
+  e3->Show();
+
+  // Two of these elements have the specified identifier, but in different
+  // contexts, while the other element does not share the identifier and should
+  // not trigger the callback.
+  EXPECT_CALL_IN_SCOPE(callback, Run(e1.get()), e1->Hide());
+  e2->Hide();
+  EXPECT_CALL_IN_SCOPE(callback, Run(e3.get()), e3->Hide());
+}
+
 TEST(ElementTrackerTest, AddCustomEventCallback) {
   UNCALLED_MOCK_CALLBACK(ElementTracker::Callback, callback);
   auto subscription =
@@ -448,11 +499,55 @@ TEST(ElementTrackerTest, AddCustomEventCallback) {
           kCustomEventType1, kElementContext1, callback.Get());
   test::TestElementPtr e1 = std::make_unique<test::TestElement>(
       kElementIdentifier1, kElementContext1);
+  test::TestElementPtr e2 = std::make_unique<test::TestElement>(
+      kElementIdentifier1, kElementContext2);
   e1->Show();
+  e2->Show();
   EXPECT_CALL_IN_SCOPE(
       callback, Run(e1.get()),
       ElementTracker::GetFrameworkDelegate()->NotifyCustomEvent(
           e1.get(), kCustomEventType1));
+  ElementTracker::GetFrameworkDelegate()->NotifyCustomEvent(e2.get(),
+                                                            kCustomEventType1);
+}
+
+TEST(ElementTrackerTest, AddCustomEventInAnyContextCallback) {
+  UNCALLED_MOCK_CALLBACK(ElementTracker::Callback, callback);
+  auto subscription =
+      ElementTracker::GetElementTracker()->AddCustomEventInAnyContextCallback(
+          kCustomEventType1, callback.Get());
+  test::TestElementPtr e1 = std::make_unique<test::TestElement>(
+      kElementIdentifier1, kElementContext1);
+  test::TestElementPtr e2 = std::make_unique<test::TestElement>(
+      kElementIdentifier1, kElementContext2);
+  e1->Show();
+  e2->Show();
+
+  // Two of these elements have the specified identifier, but in different
+  // contexts, while the other element does not share the identifier and should
+  // not trigger the callback.
+  EXPECT_CALL_IN_SCOPE(
+      callback, Run(e1.get()),
+      ElementTracker::GetFrameworkDelegate()->NotifyCustomEvent(
+          e1.get(), kCustomEventType1));
+  EXPECT_CALL_IN_SCOPE(
+      callback, Run(e2.get()),
+      ElementTracker::GetFrameworkDelegate()->NotifyCustomEvent(
+          e2.get(), kCustomEventType1));
+}
+
+TEST(ElementTrackerTest, AddClassCustomEventCallback) {
+  UNCALLED_MOCK_CALLBACK(ElementTracker::Callback, callback);
+  auto subscription =
+      ElementTracker::GetElementTracker()->AddCustomEventCallback(
+          EventTestStruct::kCustomEventType2, kElementContext1, callback.Get());
+  test::TestElementPtr e1 = std::make_unique<test::TestElement>(
+      kElementIdentifier1, kElementContext1);
+  e1->Show();
+  EXPECT_CALL_IN_SCOPE(
+      callback, Run(e1.get()),
+      ElementTracker::GetFrameworkDelegate()->NotifyCustomEvent(
+          e1.get(), EventTestStruct::kCustomEventType2));
 }
 
 TEST(ElementTrackerTest, MultipleCustomEventCallbacks) {
@@ -717,6 +812,89 @@ TEST(ElementTrackerTest, HideDuringShowCallbackMultipleListeners) {
   e1.Show();
   EXPECT_TRUE(called1);
   EXPECT_TRUE(called2);
+}
+
+TEST(ElementTrackerTest, GetAllContextsForTesting) {
+  test::TestElement e1(kElementIdentifier1, kElementContext1);
+  test::TestElement e2(kElementIdentifier1, kElementContext2);
+  test::TestElement e3(kElementIdentifier2, kElementContext2);
+
+  EXPECT_THAT(ElementTracker::GetElementTracker()->GetAllContextsForTesting(),
+              testing::IsEmpty());
+
+  e1.Show();
+  EXPECT_THAT(ElementTracker::GetElementTracker()->GetAllContextsForTesting(),
+              testing::UnorderedElementsAre(kElementContext1));
+
+  e2.Show();
+  e3.Show();
+  EXPECT_THAT(
+      ElementTracker::GetElementTracker()->GetAllContextsForTesting(),
+      testing::UnorderedElementsAre(kElementContext1, kElementContext2));
+
+  e1.Hide();
+  EXPECT_THAT(ElementTracker::GetElementTracker()->GetAllContextsForTesting(),
+              testing::UnorderedElementsAre(kElementContext2));
+}
+
+TEST(ElementTrackerTest, GetAllElementsForTestingInAnyContext) {
+  test::TestElement e1(kElementIdentifier1, kElementContext1);
+  test::TestElement e2(kElementIdentifier1, kElementContext2);
+  test::TestElement e3(kElementIdentifier2, kElementContext2);
+
+  EXPECT_THAT(ElementTracker::GetElementTracker()->GetAllElementsForTesting(),
+              testing::IsEmpty());
+
+  e1.Show();
+  EXPECT_THAT(ElementTracker::GetElementTracker()->GetAllElementsForTesting(),
+              testing::UnorderedElementsAre(&e1));
+
+  e2.Show();
+  e3.Show();
+  EXPECT_THAT(ElementTracker::GetElementTracker()->GetAllElementsForTesting(),
+              testing::UnorderedElementsAre(&e1, &e2, &e3));
+
+  e1.Hide();
+  EXPECT_THAT(ElementTracker::GetElementTracker()->GetAllElementsForTesting(),
+              testing::UnorderedElementsAre(&e2, &e3));
+}
+
+TEST(ElementTrackerTest, GetAllElementsForTestingInSpecificContexts) {
+  test::TestElement e1(kElementIdentifier1, kElementContext1);
+  test::TestElement e2(kElementIdentifier1, kElementContext2);
+  test::TestElement e3(kElementIdentifier2, kElementContext2);
+
+  EXPECT_THAT(ElementTracker::GetElementTracker()->GetAllElementsForTesting(
+                  kElementContext1),
+              testing::IsEmpty());
+  EXPECT_THAT(ElementTracker::GetElementTracker()->GetAllElementsForTesting(
+                  kElementContext2),
+              testing::IsEmpty());
+
+  e1.Show();
+  EXPECT_THAT(ElementTracker::GetElementTracker()->GetAllElementsForTesting(
+                  kElementContext1),
+              testing::UnorderedElementsAre(&e1));
+  EXPECT_THAT(ElementTracker::GetElementTracker()->GetAllElementsForTesting(
+                  kElementContext2),
+              testing::IsEmpty());
+
+  e2.Show();
+  e3.Show();
+  EXPECT_THAT(ElementTracker::GetElementTracker()->GetAllElementsForTesting(
+                  kElementContext1),
+              testing::UnorderedElementsAre(&e1));
+  EXPECT_THAT(ElementTracker::GetElementTracker()->GetAllElementsForTesting(
+                  kElementContext2),
+              testing::UnorderedElementsAre(&e2, &e3));
+
+  e1.Hide();
+  EXPECT_THAT(ElementTracker::GetElementTracker()->GetAllElementsForTesting(
+                  kElementContext1),
+              testing::IsEmpty());
+  EXPECT_THAT(ElementTracker::GetElementTracker()->GetAllElementsForTesting(
+                  kElementContext2),
+              testing::UnorderedElementsAre(&e2, &e3));
 }
 
 TEST(SafeElementReferenceTest, ElementRemainsVisible) {

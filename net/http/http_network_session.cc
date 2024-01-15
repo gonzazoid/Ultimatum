@@ -15,7 +15,6 @@
 #include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "net/base/features.h"
@@ -45,22 +44,23 @@ namespace net {
 const int32_t kSpdySessionMaxRecvWindowSize = 15 * 1024 * 1024;  // 15 MB
 const int32_t kSpdyStreamMaxRecvWindowSize = 6 * 1024 * 1024;    //  6 MB
 
+// Value of SETTINGS_ENABLE_PUSH reflecting that server push is not supported.
+const uint32_t kSpdyDisablePush = 0;
+
 namespace {
 
 // Keep all HTTP2 parameters in |http2_settings|, even the ones that are not
 // implemented, to be sent to the server.
 // Set default values for settings that |http2_settings| does not specify.
 spdy::SettingsMap AddDefaultHttp2Settings(spdy::SettingsMap http2_settings) {
-  // Set default values only if |http2_settings| does not have
-  // a value set for given setting.
+  // Server push is not supported.
+  http2_settings[spdy::SETTINGS_ENABLE_PUSH] = kSpdyDisablePush;
+
+  // For other setting parameters, set default values only if |http2_settings|
+  // does not have a value set for given setting.
   auto it = http2_settings.find(spdy::SETTINGS_HEADER_TABLE_SIZE);
   if (it == http2_settings.end())
     http2_settings[spdy::SETTINGS_HEADER_TABLE_SIZE] = kSpdyMaxHeaderTableSize;
-
-  it = http2_settings.find(spdy::SETTINGS_MAX_CONCURRENT_STREAMS);
-  if (it == http2_settings.end())
-    http2_settings[spdy::SETTINGS_MAX_CONCURRENT_STREAMS] =
-        kSpdyMaxConcurrentPushedStreams;
 
   it = http2_settings.find(spdy::SETTINGS_INITIAL_WINDOW_SIZE);
   if (it == http2_settings.end())
@@ -71,10 +71,6 @@ spdy::SettingsMap AddDefaultHttp2Settings(spdy::SettingsMap http2_settings) {
   if (it == http2_settings.end())
     http2_settings[spdy::SETTINGS_MAX_HEADER_LIST_SIZE] =
         kSpdyMaxHeaderListSize;
-
-  it = http2_settings.find(spdy::SETTINGS_ENABLE_PUSH);
-  if (it == http2_settings.end())
-    http2_settings[spdy::SETTINGS_ENABLE_PUSH] = kSpdyDisablePush;
 
   return http2_settings;
 }
@@ -101,7 +97,6 @@ HttpNetworkSessionContext::HttpNetworkSessionContext()
       host_resolver(nullptr),
       cert_verifier(nullptr),
       transport_security_state(nullptr),
-      ct_policy_enforcer(nullptr),
       sct_auditing_delegate(nullptr),
       proxy_resolution_service(nullptr),
       proxy_delegate(nullptr),
@@ -145,7 +140,6 @@ HttpNetworkSession::HttpNetworkSession(const HttpNetworkSessionParams& params,
       ssl_client_context_(context.ssl_config_service,
                           context.cert_verifier,
                           context.transport_security_state,
-                          context.ct_policy_enforcer,
                           &ssl_client_session_cache_,
                           context.sct_auditing_delegate),
       quic_stream_factory_(context.net_log,
@@ -154,7 +148,6 @@ HttpNetworkSession::HttpNetworkSession(const HttpNetworkSessionParams& params,
                            context.client_socket_factory,
                            context.http_server_properties,
                            context.cert_verifier,
-                           context.ct_policy_enforcer,
                            context.transport_security_state,
                            context.sct_auditing_delegate,
                            context.socket_performance_watcher_factory,
@@ -251,8 +244,8 @@ void HttpNetworkSession::RemoveResponseDrainer(
 
 ClientSocketPool* HttpNetworkSession::GetSocketPool(
     SocketPoolType pool_type,
-    const ProxyServer& proxy_server) {
-  return GetSocketPoolManager(pool_type)->GetSocketPool(proxy_server);
+    const ProxyChain& proxy_chain) {
+  return GetSocketPoolManager(pool_type)->GetSocketPool(proxy_chain);
 }
 
 base::Value HttpNetworkSession::SocketPoolInfoToValue() const {
@@ -298,8 +291,6 @@ base::Value HttpNetworkSession::QuicInfoToValue() const {
            static_cast<int>(quic_params->reduced_ping_timeout.InSeconds()));
   dict.Set("retry_without_alt_svc_on_quic_errors",
            quic_params->retry_without_alt_svc_on_quic_errors);
-  dict.Set("disable_bidirectional_streams",
-           quic_params->disable_bidirectional_streams);
   dict.Set("close_sessions_on_ip_change",
            quic_params->close_sessions_on_ip_change);
   dict.Set("goaway_sessions_on_ip_change",
@@ -325,10 +316,7 @@ base::Value HttpNetworkSession::QuicInfoToValue() const {
       "max_num_migrations_to_non_default_network_on_path_degrading",
       quic_params->max_migrations_to_non_default_network_on_path_degrading);
   dict.Set("allow_server_migration", quic_params->allow_server_migration);
-  dict.Set("race_stale_dns_on_connection",
-           quic_params->race_stale_dns_on_connection);
   dict.Set("estimate_initial_rtt", quic_params->estimate_initial_rtt);
-  dict.Set("server_push_cancellation", params_.enable_server_push_cancellation);
   dict.Set("initial_rtt_for_handshake_milliseconds",
            static_cast<int>(
                quic_params->initial_rtt_for_handshake.InMilliseconds()));
@@ -352,23 +340,16 @@ void HttpNetworkSession::CloseIdleConnections(const char* net_log_reason_utf8) {
   spdy_session_pool_.CloseCurrentIdleSessions(net_log_reason_utf8);
 }
 
-void HttpNetworkSession::SetServerPushDelegate(
-    std::unique_ptr<ServerPushDelegate> push_delegate) {
-  DCHECK(push_delegate);
-  if (!params_.enable_server_push_cancellation || push_delegate_)
-    return;
-
-  push_delegate_ = std::move(push_delegate);
-  spdy_session_pool_.set_server_push_delegate(push_delegate_.get());
-  quic_stream_factory_.set_server_push_delegate(push_delegate_.get());
-}
-
 bool HttpNetworkSession::IsQuicEnabled() const {
   return params_.enable_quic;
 }
 
 void HttpNetworkSession::DisableQuic() {
   params_.enable_quic = false;
+}
+
+void HttpNetworkSession::IgnoreCertificateErrorsForTesting() {
+  params_.ignore_certificate_errors = true;
 }
 
 void HttpNetworkSession::ClearSSLSessionCache() {
@@ -387,7 +368,9 @@ CommonConnectJobParams HttpNetworkSession::CreateCommonConnectJobParams(
       context_.http_user_agent_settings, &ssl_client_context_,
       context_.socket_performance_watcher_factory,
       context_.network_quality_estimator, context_.net_log,
-      for_websockets ? &websocket_endpoint_lock_manager_ : nullptr);
+      for_websockets ? &websocket_endpoint_lock_manager_ : nullptr,
+      context_.http_server_properties, &next_protos_, &application_settings_,
+      &params_.ignore_certificate_errors);
 }
 
 ClientSocketPoolManager* HttpNetworkSession::GetSocketPoolManager(

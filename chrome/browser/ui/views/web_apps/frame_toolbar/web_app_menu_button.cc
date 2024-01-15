@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ui/views/web_apps/frame_toolbar/web_app_menu_button.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
@@ -35,44 +35,31 @@ WebAppMenuButton::WebAppMenuButton(BrowserView* browser_view,
       browser_view_(browser_view) {
   views::SetHitTestComponent(this, static_cast<int>(HTCLIENT));
 
+  SetVectorIcons(kBrowserToolsIcon, kBrowserToolsTouchIcon);
+
   views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
-  views::InkDrop::Get(this)->SetBaseColorCallback(base::BindRepeating(
-      [](WebAppMenuButton* host) { return host->GetColor(); }, this));
 
   SetFocusBehavior(FocusBehavior::ALWAYS);
 
-  std::u16string application_name = accessible_name;
-  if (application_name.empty() && browser_view->browser()->app_controller()) {
-    application_name =
-        browser_view->browser()->app_controller()->GetAppShortName();
-  }
-
-  // Currently, |accessible_name| is ony set for custom tabs. Skip setting the
-  // tooltip because |IDS_WEB_APP_MENU_BUTTON_TOOLTIP| doesn't make sense
-  // combined with |accessible_name|.
+  // Currently, |accessible_name| is ony set for custom tabs for ARC apps on
+  // ChromeOS. Skip setting the tooltip because
+  // |IDS_WEB_APP_MENU_BUTTON_TOOLTIP| doesn't make sense combined with
+  // |accessible_name|.
   if (accessible_name.empty()) {
-    SetTooltipText(l10n_util::GetStringFUTF16(IDS_WEB_APP_MENU_BUTTON_TOOLTIP,
-                                              application_name));
+    DCHECK(browser_view->browser()->app_controller());
+    std::u16string application_name =
+        browser_view->browser()->app_controller()->GetAppShortName();
+
+    accessible_name = l10n_util::GetStringFUTF16(
+        IDS_WEB_APP_MENU_BUTTON_TOOLTIP, application_name);
+    SetTooltipText(accessible_name);
   }
 
-  SetAccessibleName(application_name);
+  SetAccessibleName(accessible_name);
   SetHorizontalAlignment(gfx::ALIGN_CENTER);
 }
 
 WebAppMenuButton::~WebAppMenuButton() = default;
-
-void WebAppMenuButton::SetColor(SkColor color) {
-  if (color_ == color)
-    return;
-  color_ = color;
-  SetImageModel(views::Button::STATE_NORMAL,
-                ui::ImageModel::FromVectorIcon(*icon_, color));
-  OnPropertyChanged(&color_, views::kPropertyEffectsNone);
-}
-
-SkColor WebAppMenuButton::GetColor() const {
-  return color_;
-}
 
 void WebAppMenuButton::StartHighlightAnimation() {
   views::InkDrop::Get(this)->GetInkDrop()->SetHoverHighlightFadeDuration(
@@ -100,6 +87,13 @@ void WebAppMenuButton::ButtonPressed(const ui::Event& event) {
       base::UserMetricsAction("HostedAppMenuButtonButton_Clicked"));
 }
 
+int WebAppMenuButton::GetIconSize() const {
+  // Rather than use the default toolbar icon size, use whatever icon size is
+  // embedded in the vector icon. This matches the behavior of
+  // BrowserAppMenuButton.
+  return 0;
+}
+
 void WebAppMenuButton::FadeHighlightOff() {
   if (!ShouldEnterHoveredState()) {
     views::InkDrop::Get(this)->GetInkDrop()->SetHoverHighlightFadeDuration(
@@ -111,6 +105,5 @@ void WebAppMenuButton::FadeHighlightOff() {
   }
 }
 
-BEGIN_METADATA(WebAppMenuButton, AppMenuButton)
-ADD_PROPERTY_METADATA(SkColor, Color, ui::metadata::SkColorConverter)
+BEGIN_METADATA(WebAppMenuButton)
 END_METADATA

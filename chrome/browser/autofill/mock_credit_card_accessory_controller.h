@@ -5,6 +5,8 @@
 #ifndef CHROME_BROWSER_AUTOFILL_MOCK_CREDIT_CARD_ACCESSORY_CONTROLLER_H_
 #define CHROME_BROWSER_AUTOFILL_MOCK_CREDIT_CARD_ACCESSORY_CONTROLLER_H_
 
+#include <optional>
+
 #include "chrome/browser/autofill/credit_card_accessory_controller.h"
 #include "components/autofill/core/browser/ui/accessory_sheet_data.h"
 #include "components/autofill/core/browser/ui/accessory_sheet_enums.h"
@@ -24,13 +26,17 @@ class MockCreditCardAccessoryController
               RegisterFillingSourceObserver,
               (FillingSourceObserver),
               (override));
-  MOCK_METHOD(absl::optional<autofill::AccessorySheetData>,
+  MOCK_METHOD(std::optional<autofill::AccessorySheetData>,
               GetSheetData,
               (),
               (const, override));
   MOCK_METHOD(void,
               OnFillingTriggered,
               (autofill::FieldGlobalId, const autofill::AccessorySheetField&),
+              (override));
+  MOCK_METHOD((void),
+              OnPasskeySelected,
+              (const std::vector<uint8_t>& credential_id),
               (override));
   MOCK_METHOD(void, OnOptionSelected, (autofill::AccessoryAction), (override));
   MOCK_METHOD(void,
@@ -39,12 +45,14 @@ class MockCreditCardAccessoryController
               (override));
   MOCK_METHOD(void, RefreshSuggestions, (), (override));
   MOCK_METHOD(void, OnPersonalDataChanged, (), (override));
-  MOCK_METHOD(void,
-              OnCreditCardFetched,
-              (autofill::CreditCardFetchResult,
-               const autofill::CreditCard*,
-               const std::u16string&),
-              (override));
+
+  base::WeakPtr<CreditCardAccessoryController> AsWeakPtr() override {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
+ private:
+  base::WeakPtrFactory<MockCreditCardAccessoryController> weak_ptr_factory_{
+      this};
 };
 
 #endif  // CHROME_BROWSER_AUTOFILL_MOCK_CREDIT_CARD_ACCESSORY_CONTROLLER_H_

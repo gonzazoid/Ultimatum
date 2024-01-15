@@ -9,20 +9,20 @@
   const TracingHelper = await testRunner.loadScript('../resources/tracing-test.js');
   const tracingHelper = new TracingHelper(testRunner, session);
 
+  await dp.Network.enable();
   await tracingHelper.startTracing();
-  dp.Network.enable();
 
-  const requestsFromNetorkDomain = new Map();
+  const requestsFromNetworkDomain = new Map();
 
   dp.Network.onRequestWillBeSent(event => {
-    requestsFromNetorkDomain.set(
+    requestsFromNetworkDomain.set(
       event.params.requestId,
       {
         url: event.params.request.url,
         // Timestamp from the network domain arrives in seconds.
         // We convert it to microseconds to compare it against
         // data coming from the tracing domain.
-        timestamp: Math.round(event.params.timestamp * 1000 * 1000)
+        timestamp: event.params.timestamp * 1000 * 1000
       });
   });
 
@@ -64,8 +64,10 @@
   });
 
   for (const [requestId, request] of sortedEvents) {
-    const networkEvent = requestsFromNetorkDomain.get(requestId);
-    testRunner.log(`Queueing times for URL ${networkEvent.url} match: ${networkEvent.timestamp === request.timestamp}`);
+    const networkEvent = requestsFromNetworkDomain.get(requestId);
+    // Compare at tenths-of-milliseconds resolution.
+    const diff = Math.floor(Math.abs(networkEvent.timestamp - request.timestamp)  / 100);
+    testRunner.log(`Queueing time difference of ${diff} for URL ${new URL(networkEvent.url).pathname}`);
   }
 
   testRunner.completeTest();

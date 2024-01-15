@@ -4,11 +4,7 @@
 
 #import "ios/web_view/internal/webui/web_view_sync_internals_ui.h"
 
-#include "components/sync/driver/sync_internals_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "components/sync/service/sync_internals_util.h"
 
 namespace ios_web_view {
 
@@ -24,7 +20,6 @@ bool WebViewSyncInternalsUI::OverrideHandleWebUIIOSMessage(
   // ios/web_view only supports sync in transport mode. Explicitly override sync
   // start and stop messages and perform a no op.
   return message == syncer::sync_ui_util::kRequestStart ||
-         message == syncer::sync_ui_util::kRequestStopKeepData ||
          message == syncer::sync_ui_util::kRequestStopClearData;
 }
 

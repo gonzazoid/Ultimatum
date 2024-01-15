@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "base/task/common/lazy_now.h"
 #include "base/task/sequence_manager/sequence_manager.h"
@@ -161,12 +161,12 @@ class IdleHelperForTest : public IdleHelper, public IdleHelper::Delegate {
   explicit IdleHelperForTest(
       SchedulerHelper* scheduler_helper,
       base::TimeDelta required_quiescence_duration_before_long_idle_period,
-      scoped_refptr<TaskQueue> idle_task_runner)
+      TaskQueue* idle_task_queue)
       : IdleHelper(scheduler_helper,
                    this,
                    "TestSchedulerIdlePeriod",
                    required_quiescence_duration_before_long_idle_period,
-                   idle_task_runner) {}
+                   idle_task_queue) {}
 
   ~IdleHelperForTest() override = default;
 
@@ -187,8 +187,12 @@ class BaseIdleHelperTest : public testing::Test {
       base::TimeDelta required_quiescence_duration_before_long_idle_period)
       : test_task_runner_(base::MakeRefCounted<base::TestMockTimeTaskRunner>(
             base::TestMockTimeTaskRunner::Type::kStandalone)) {
+    auto settings = base::sequence_manager::SequenceManager::Settings::Builder()
+                        .SetPrioritySettings(CreatePrioritySettings())
+                        .Build();
     sequence_manager_ = base::sequence_manager::SequenceManagerForTest::Create(
-        nullptr, test_task_runner_, test_task_runner_->GetMockTickClock());
+        nullptr, test_task_runner_, test_task_runner_->GetMockTickClock(),
+        std::move(settings));
     scheduler_helper_ = std::make_unique<NonMainThreadSchedulerHelper>(
         sequence_manager_.get(), nullptr, TaskType::kInternalTest);
     scheduler_helper_->AttachToCurrentThread();
@@ -221,6 +225,7 @@ class BaseIdleHelperTest : public testing::Test {
   void TearDown() override {
     EXPECT_CALL(*idle_helper_, OnIdlePeriodEnded()).Times(AnyNumber());
     idle_helper_->Shutdown();
+    idle_helper_queue_->ShutdownTaskQueue();
     test_task_runner_->FastForwardUntilNoTasksRemain();
   }
 
@@ -271,9 +276,7 @@ class BaseIdleHelperTest : public testing::Test {
                                idle_helper_->SchedulerIdlePeriodState()));
   }
 
-  const scoped_refptr<TaskQueue>& idle_queue() const {
-    return idle_helper_->idle_queue_;
-  }
+  const TaskQueue* idle_queue() const { return idle_helper_->idle_queue_; }
 
   scoped_refptr<base::TestMockTimeTaskRunner> test_task_runner_;
   std::unique_ptr<SequenceManager> sequence_manager_;

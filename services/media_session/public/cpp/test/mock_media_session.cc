@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/ranges/algorithm.h"
 
 namespace media_session {
@@ -67,6 +67,10 @@ void MockMediaSessionMojoObserver::MediaSessionInfoChanged(
       expected_controllable_ == session_info_->is_controllable) {
     run_loop_->Quit();
     expected_controllable_.reset();
+  } else if (expected_hide_metadata_.has_value() &&
+             expected_hide_metadata_ == session_info_->hide_metadata) {
+    run_loop_->Quit();
+    expected_hide_metadata_.reset();
   } else {
     if (wanted_state_ == session_info_->state ||
         session_info_->playback_state == wanted_playback_state_ ||
@@ -194,6 +198,16 @@ void MockMediaSessionMojoObserver::WaitForControllable(bool is_controllable) {
     return;
 
   expected_controllable_ = is_controllable;
+  StartWaiting();
+}
+
+void MockMediaSessionMojoObserver::WaitForExpectedHideMetadata(
+    bool hide_metadata) {
+  if (session_info_ && session_info_->hide_metadata == hide_metadata) {
+    return;
+  }
+
+  expected_hide_metadata_ = hide_metadata;
   StartWaiting();
 }
 
@@ -345,6 +359,10 @@ void MockMediaSession::PreviousTrack() {
 
 void MockMediaSession::NextTrack() {
   next_track_count_++;
+}
+
+void MockMediaSession::SkipAd() {
+  skip_ad_count_++;
 }
 
 void MockMediaSession::Seek(base::TimeDelta seek_time) {

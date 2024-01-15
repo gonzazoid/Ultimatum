@@ -34,6 +34,7 @@ class FakeProxy : public Proxy {
   void SetNeedsRedraw(const gfx::Rect& damage_rect) override {}
   void SetTargetLocalSurfaceId(
       const viz::LocalSurfaceId& target_local_surface_id) override {}
+  void DetachInputDelegateAndRenderFrameObserver() override {}
   bool RequestedAnimatePending() override;
   void SetDeferMainFrameUpdate(bool defer_main_frame_update) override {}
   bool StartDeferringCommits(base::TimeDelta timeout,
@@ -56,8 +57,12 @@ class FakeProxy : public Proxy {
       base::WritableSharedMemoryMapping ukm_smoothness_data) override {}
   void SetRenderFrameObserver(
       std::unique_ptr<RenderFrameMetadataObserver> observer) override {}
+  void CompositeImmediatelyForTest(base::TimeTicks frame_begin_time,
+                                   bool raster,
+                                   base::OnceClosure callback) override {}
   double GetPercentDroppedFrames() const override;
   void SetPauseRendering(bool pause_rendering) override {}
+  void SetInputResponsePending() override {}
 
  private:
   raw_ptr<LayerTreeHost> layer_tree_host_;

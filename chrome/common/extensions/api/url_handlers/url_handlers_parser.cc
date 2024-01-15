@@ -108,7 +108,7 @@ UrlHandlersParser::~UrlHandlersParser() {
 }
 
 bool ParseUrlHandler(const std::string& handler_id,
-                     const base::DictionaryValue& handler_info,
+                     const base::Value::Dict& handler_info,
                      std::vector<UrlHandlerInfo>* url_handlers,
                      std::u16string* error,
                      Extension* extension) {
@@ -118,22 +118,22 @@ bool ParseUrlHandler(const std::string& handler_id,
   handler.id = handler_id;
 
   if (const std::string* ptr =
-          handler_info.FindStringKey(mkeys::kUrlHandlerTitle)) {
+          handler_info.FindString(mkeys::kUrlHandlerTitle)) {
     handler.title = *ptr;
   } else {
     *error = merrors::kInvalidURLHandlerTitle;
     return false;
   }
 
-  const base::ListValue* manif_patterns = nullptr;
-  if (!handler_info.GetList(mkeys::kMatches, &manif_patterns) ||
-      manif_patterns->GetList().size() == 0) {
+  const base::Value::List* manif_patterns =
+      handler_info.FindList(mkeys::kMatches);
+  if (!manif_patterns || manif_patterns->empty()) {
     *error = ErrorUtils::FormatErrorMessageUTF16(
         merrors::kInvalidURLHandlerPattern, handler_id);
     return false;
   }
 
-  for (const auto& entry : manif_patterns->GetList()) {
+  for (const auto& entry : *manif_patterns) {
     std::string str_pattern =
         entry.is_string() ? entry.GetString() : std::string();
     // TODO(sergeygs): Limit this to non-top-level domains.
@@ -155,19 +155,19 @@ bool ParseUrlHandler(const std::string& handler_id,
 
 bool UrlHandlersParser::Parse(Extension* extension, std::u16string* error) {
   std::unique_ptr<UrlHandlers> info(new UrlHandlers);
-  const base::DictionaryValue* all_handlers = nullptr;
-  if (!extension->manifest()->GetDictionary(
-        mkeys::kUrlHandlers, &all_handlers)) {
+  const base::Value::Dict* all_handlers =
+      extension->manifest()->available_values().FindDict(mkeys::kUrlHandlers);
+  if (!all_handlers) {
     *error = merrors::kInvalidURLHandlers;
     return false;
   }
 
   DCHECK(extension->is_platform_app());
 
-  for (const auto item : all_handlers->GetDict()) {
+  for (const auto item : *all_handlers) {
     // A URL handler entry is a title and a list of URL patterns to handle.
-    const base::DictionaryValue* handler = nullptr;
-    if (!item.second.GetAsDictionary(&handler)) {
+    const base::Value::Dict* handler = item.second.GetIfDict();
+    if (!handler) {
       *error = merrors::kInvalidURLHandlerPatternElement16;
       return false;
     }

@@ -10,13 +10,12 @@
 #include "ash/public/cpp/ash_view_ids.h"
 #include "ash/public/cpp/login_screen_test_api.h"
 #include "ash/public/cpp/system_tray_test_api.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/login/lock/screen_locker.h"
 #include "chrome/browser/ash/login/lock/screen_locker_tester.h"
 #include "chrome/browser/ash/login/test/login_or_lock_screen_visible_waiter.h"
@@ -26,7 +25,6 @@
 #include "chrome/browser/ash/policy/core/device_policy_builder.h"
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
 #include "chrome/browser/ui/webui/ash/login/oobe_ui.h"
@@ -56,17 +54,17 @@ void WaitForShutdownButtonVisibility(bool visible) {
 
 }  // namespace
 
-class ShutdownPolicyBaseTest
-    : public policy::DevicePolicyCrosBrowserTest,
-      public DeviceSettingsService::Observer {
+class ShutdownPolicyBaseTest : public policy::DevicePolicyCrosBrowserTest,
+                               public DeviceSettingsService::Observer {
  protected:
   ShutdownPolicyBaseTest() {}
   ~ShutdownPolicyBaseTest() override {}
 
   // DeviceSettingsService::Observer:
   void DeviceSettingsUpdated() override {
-    if (run_loop_)
+    if (run_loop_) {
       run_loop_->Quit();
+    }
   }
 
   // policy::DevicePolicyCrosBrowserTest:
@@ -100,8 +98,9 @@ class ShutdownPolicyBaseTest
     ASSERT_TRUE(oobe_ui);
     base::RunLoop run_loop;
     const bool oobe_ui_ready = oobe_ui->IsJSReady(run_loop.QuitClosure());
-    if (!oobe_ui_ready)
+    if (!oobe_ui_ready) {
       run_loop.Run();
+    }
   }
 
   bool result_;
@@ -109,8 +108,7 @@ class ShutdownPolicyBaseTest
   std::unique_ptr<SystemTrayTestApi> tray_test_api_;
 };
 
-class ShutdownPolicyInSessionTest
-    : public ShutdownPolicyBaseTest {
+class ShutdownPolicyInSessionTest : public ShutdownPolicyBaseTest {
  public:
   ShutdownPolicyInSessionTest(const ShutdownPolicyInSessionTest&) = delete;
   ShutdownPolicyInSessionTest& operator=(const ShutdownPolicyInSessionTest&) =
@@ -128,16 +126,15 @@ class ShutdownPolicyInSessionTest
 
   // Returns true if the shutdown button's tooltip matches |tooltip|.
   bool HasShutdownButtonTooltip(const std::string& tooltip) {
-    std::u16string actual_tooltip =
-        tray_test_api_->GetBubbleViewTooltip(VIEW_ID_QS_POWER_BUTTON);
+    std::u16string actual_tooltip = tray_test_api_->GetShutdownButtonTooltip();
     return base::UTF8ToUTF16(tooltip) == actual_tooltip;
   }
 };
 
-// Tests that by default the shutdown button tooltip is "Shut down".
+// Tests that by default the shutdown button tooltip is "Power menu".
 IN_PROC_BROWSER_TEST_F(ShutdownPolicyInSessionTest, TestBasic) {
   OpenSystemTrayMenu();
-  EXPECT_TRUE(HasShutdownButtonTooltip("Shut down"));
+  EXPECT_TRUE(HasShutdownButtonTooltip("Power menu"));
   CloseSystemTrayMenu();
 }
 
@@ -252,7 +249,7 @@ class ShutdownPolicyLoginTest : public ShutdownPolicyBaseTest {
   void TearDownOnMainThread() override {
     // If the login display is still showing, exit gracefully.
     if (LoginDisplayHost::default_host()) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(&chrome::AttemptExit));
       RunUntilBrowserProcessQuits();
     }

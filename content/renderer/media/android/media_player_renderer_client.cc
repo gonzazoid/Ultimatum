@@ -6,7 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace content {
 
@@ -65,6 +67,10 @@ void MediaPlayerRendererClient::Initialize(
       base::BindOnce(
           &MediaPlayerRendererClient::OnStreamTextureWrapperInitialized,
           weak_factory_.GetWeakPtr(), media_resource));
+}
+
+media::RendererType MediaPlayerRendererClient::GetRendererType() {
+  return media::RendererType::kMediaPlayer;
 }
 
 void MediaPlayerRendererClient::OnStreamTextureWrapperInitialized(

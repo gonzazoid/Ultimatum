@@ -5,11 +5,15 @@
 #ifndef COMPONENTS_USER_EDUCATION_COMMON_FEATURE_PROMO_SPECIFICATION_H_
 #define COMPONENTS_USER_EDUCATION_COMMON_FEATURE_PROMO_SPECIFICATION_H_
 
+#include <functional>
+#include <initializer_list>
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/containers/flat_set.h"
+#include "base/containers/flat_tree.h"
 #include "base/feature_list.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "components/user_education/common/help_bubble_params.h"
 #include "components/user_education/common/tutorial_identifier.h"
@@ -30,10 +34,85 @@ class FeaturePromoHandle;
 // Specifies the parameters for a feature promo and its associated bubble.
 class FeaturePromoSpecification {
  public:
-  // The body text (specified by |bubble_body_string_id|) can have parameters
-  // that can be specified situationally. When specifying these parameters,
-  // use a |StringReplacements| object.
-  using StringReplacements = std::vector<std::u16string>;
+  // Provides metadata about an IPH. Metadata will be shown and used on the
+  // tester page, and also provides a information as to when an IPH was added to
+  // Chrome and by whom.
+  struct Metadata {
+    // The platform the IPH can be shown on.
+    //
+    // These are a subset of variations::Study::Platform.
+    //
+    // TODO(dfried): figure out how to unify a single list of platforms for all
+    // use cases; enums like this are scattered all over the codebase.
+    enum class Platforms {
+      kWindows = 0,
+      kMac = 1,
+      kLinux = 2,
+      kChromeOSAsh = 3,
+      kChromeOSLacros = 9,
+    };
+
+    // All desktop platforms.
+    static constexpr std::initializer_list<Platforms> kAllDesktopPlatforms{
+        Platforms::kWindows, Platforms::kMac, Platforms::kLinux,
+        Platforms::kChromeOSAsh, Platforms::kChromeOSLacros};
+
+    // Represents a callback that will be triggered when a user launches an IPH
+    // from the tester page, before the IPH is shown. This can get the browser
+    // into the proper state to demo the IPH.
+    //
+    // The `launch_context` is provided as a hint in case there are multiple
+    // windows. The function should return true on success; false if the
+    // required state cannot be set up.
+    using TesterPageLaunchCallback =
+        base::RepeatingCallback<bool(ui::ElementContext launch_context)>;
+
+    Metadata(int launch_milestone,
+             std::string owners,
+             std::string triggering_condition_description,
+             base::flat_set<const base::Feature*> required_features = {},
+             base::flat_set<Platforms> platforms = kAllDesktopPlatforms);
+    Metadata();
+    Metadata(Metadata&&) noexcept;
+    Metadata& operator=(Metadata&&) noexcept;
+    ~Metadata();
+
+    // The integer part of the launch milestone. For example, 118.
+    int launch_milestone = 0;
+
+    // The email, ldap, group name, team name, etc. of the owner(s) of the IPH.
+    // This is a display-only field on an internal page, so the format is up to
+    // the implementing team, but it is also metadata to track each IPH's
+    // lifecycle so be sure to specify it.
+    std::string owners;
+
+    // Description of when the IPH would be triggered. This is a display-only
+    // field on an internal page, so the format is up to the implementing team,
+    // but a good description will help other people understand how the IPH is
+    // implemented and when to expect it to appear.
+    std::string triggering_condition_description;
+
+    // The set of non-IPH features that must be enabled in order for the IPH to
+    // be displayed.
+    using FeatureSet = base::flat_set<const base::Feature*>;
+    FeatureSet required_features;
+
+    // The set of platforms the IPH can be displayed on.
+    base::flat_set<Platforms> platforms = kAllDesktopPlatforms;
+  };
+
+  // Provide different ways to specify parameters for title or body text.
+  struct NoSubstitution {};
+  using StringSubstitutions = std::vector<std::u16string>;
+  using FormatParameters = absl::variant<
+      // No substitutions; use the string as-is (default).
+      NoSubstitution,
+      // Use the following substitutions for the various substitution fields.
+      StringSubstitutions,
+      // Use a single string substitution. Included for convenience.
+      std::u16string,
+      // Specify a number of items in a singular/plural string.
+      int>;
 
   // Optional method that filters a set of potential `elements` to choose and
   // return the anchor element, or null if none of the inputs is appropriate.
@@ -56,22 +135,47 @@ class FeaturePromoSpecification {
       base::RepeatingCallback<void(ui::ElementContext context,
                                    FeaturePromoHandle promo_handle)>;
 
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
+  //
   // Describes the type of promo. Used to configure defaults for the promo's
   // bubble.
   enum class PromoType {
     // Uninitialized/invalid specification.
-    kUnspecifiied,
+    kUnspecified = 0,
     // A toast-style promo.
-    kToast,
+    kToast = 1,
     // A snooze-style promo.
-    kSnooze,
+    kSnooze = 2,
     // A tutorial promo.
-    kTutorial,
+    kTutorial = 3,
     // A promo where one button is replaced by a custom action.
-    kCustomAction,
+    kCustomAction = 4,
     // A simple promo that acts like a toast but without the required
     // accessibility data.
-    kLegacy,
+    kLegacy = 5,
+    kMaxValue = kLegacy
+  };
+
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
+  //
+  // Specifies the subtype of promo. Almost all promos will be `kNormal`; using
+  // some of the other special types requires being on an allowlist.
+  enum class PromoSubtype {
+    // A normal promo. Follows the default rules for when it can show.
+    kNormal = 0,
+    // A promo designed to be shown in multiple apps (or webapps). Can show once
+    // per app.
+    kPerApp = 1,
+    // A promo that must be able to be shown until explicitly acknowledged and
+    // dismissed by the user. This type requires being on an allowlist.
+    kLegalNotice = 2,
+    // A promo that must be able to be shown at most times, alerting the user
+    // that something important has happened, and offering them an opportunity
+    // to address it. This type requires being on an allowlist.
+    kActionableAlert = 3,
+    kMaxValue = kActionableAlert
   };
 
   // Represents a command or command accelerator. Can be valueless (falsy) if
@@ -84,11 +188,10 @@ class FeaturePromoSpecification {
 
     AcceleratorInfo();
     AcceleratorInfo(const AcceleratorInfo& other);
-    ~AcceleratorInfo();
-
     explicit AcceleratorInfo(ValueType value);
     AcceleratorInfo& operator=(ValueType value);
     AcceleratorInfo& operator=(const AcceleratorInfo& other);
+    ~AcceleratorInfo();
 
     explicit operator bool() const;
     bool operator!() const { return !static_cast<bool>(*this); }
@@ -100,29 +203,36 @@ class FeaturePromoSpecification {
     ValueType value_;
   };
 
-  struct DemoPageInfo {
-    std::string display_title;
-    std::string display_description;
-    base::RepeatingClosure setup_for_feature_promo_callback;
-
-    explicit DemoPageInfo(
-        std::string display_title_ = std::string(),
-        std::string display_description_ = std::string(),
-        base::RepeatingClosure setup_for_feature_promo_callback_ =
-            base::DoNothing());
-    ~DemoPageInfo();
-    DemoPageInfo(const DemoPageInfo& other);
-    DemoPageInfo& operator=(const DemoPageInfo& other);
-  };
-
   FeaturePromoSpecification();
-  FeaturePromoSpecification(FeaturePromoSpecification&& other);
+  FeaturePromoSpecification(FeaturePromoSpecification&& other) noexcept;
+  FeaturePromoSpecification& operator=(
+      FeaturePromoSpecification&& other) noexcept;
   ~FeaturePromoSpecification();
-  FeaturePromoSpecification& operator=(FeaturePromoSpecification&& other);
+
+  // Format a localized string with ID `string_id` based on the given
+  // `format_params`.
+  static std::u16string FormatString(int string_id,
+                                     const FormatParameters& format_params);
 
   // Specifies a standard toast promo.
-  // Because toasts are transient, they expect a separate screen reader prompt.
-  // It is recommended that the prompt include an
+  //
+  // Because toasts are transient and time out after a short period, it can be
+  // difficult for screen reader users to navigate to the UI they point to.
+  // Because of this, toasts require a screen reader prompt that is different
+  // from the bubble text. This prompt should fully describe the UI the toast is
+  // pointing to, and may include a single parameter, which is the accelerator
+  // that is used to open/access the UI.
+  //
+  // For example, for a promo for the bookmark star, you might have:
+  // Bubble text: "Click here to bookmark the current tab."
+  // Accessible text: "Press |<ph name="ACCEL">$1<ex>Ctrl+D</ex></ph>| "
+  //                  "to bookmark the current tab"
+  // Accelerator: AcceleratorInfo(IDC_BOOKMARK_THIS_TAB)
+  //
+  // In this case, the system-specific accelerator for IDC_BOOKMARK_THIS_TAB is
+  // retrieved and its text representation is injected into the accessible text
+  // for screen reader users. An empty `AcceleratorInfo()` can be used for cases
+  // where the accessible text does not require an accelerator.
   static FeaturePromoSpecification CreateForToastPromo(
       const base::Feature& feature,
       ui::ElementIdentifier anchor_element_id,
@@ -135,6 +245,15 @@ class FeaturePromoSpecification {
       const base::Feature& feature,
       ui::ElementIdentifier anchor_element_id,
       int body_text_string_id);
+
+  // Specifies a promo with snooze buttons, but with accessible text string id.
+  // See comments from `FeaturePromoSpecification::CreateForToastPromo()`.
+  static FeaturePromoSpecification CreateForSnoozePromo(
+      const base::Feature& feature,
+      ui::ElementIdentifier anchor_element_id,
+      int body_text_string_id,
+      int accessible_text_string_id,
+      AcceleratorInfo accessible_accelerator);
 
   // Specifies a promo that launches a tutorial.
   static FeaturePromoSpecification CreateForTutorialPromo(
@@ -171,6 +290,21 @@ class FeaturePromoSpecification {
   // Set the bubble arrow. Default is top-left.
   FeaturePromoSpecification& SetBubbleArrow(HelpBubbleArrow bubble_arrow);
 
+  // Overrides the default focus-on-show behavior for the bubble. By default
+  // bubbles with action buttons are focused to aid with accessibility. In
+  // unusual circumstances this allows the value to be overridden. However, it
+  // is almost always better to e.g. improve the promo trigger logic so it
+  // doesn't interrupt user workflow than it is to disable bubble auto-focus.
+  //
+  // You should document calls to this method with a reason and ideally a bug
+  // describing why the default a11y behavior needs to be overridden and what
+  // can be done to fix it.
+  FeaturePromoSpecification& OverrideFocusOnShow(bool focus_on_show);
+
+  // Set the promo subtype. Setting the subtype to LegalNotice requires being on
+  // an allowlist.
+  FeaturePromoSpecification& SetPromoSubtype(PromoSubtype promo_subtype);
+
   // Set the anchor element filter.
   FeaturePromoSpecification& SetAnchorElementFilter(
       AnchorElementFilter anchor_element_filter);
@@ -189,21 +323,23 @@ class FeaturePromoSpecification {
 
   const base::Feature* feature() const { return feature_; }
   PromoType promo_type() const { return promo_type_; }
+  PromoSubtype promo_subtype() const { return promo_subtype_; }
   ui::ElementIdentifier anchor_element_id() const { return anchor_element_id_; }
   const AnchorElementFilter& anchor_element_filter() const {
     return anchor_element_filter_;
   }
   bool in_any_context() const { return in_any_context_; }
   int bubble_body_string_id() const { return bubble_body_string_id_; }
-  const std::u16string& bubble_title_text() const { return bubble_title_text_; }
+  int bubble_title_string_id() const { return bubble_title_string_id_; }
   const gfx::VectorIcon* bubble_icon() const { return bubble_icon_; }
   HelpBubbleArrow bubble_arrow() const { return bubble_arrow_; }
+  const absl::optional<bool>& focus_on_show_override() const {
+    return focus_on_show_override_;
+  }
   int screen_reader_string_id() const { return screen_reader_string_id_; }
   const AcceleratorInfo& screen_reader_accelerator() const {
     return screen_reader_accelerator_;
   }
-  const DemoPageInfo& demo_page_info() const { return demo_page_info_; }
-  FeaturePromoSpecification& SetDemoPageInfo(DemoPageInfo demo_page_info);
   const TutorialIdentifier& tutorial_id() const { return tutorial_id_; }
   const std::u16string custom_action_caption() const {
     return custom_action_caption_;
@@ -226,6 +362,30 @@ class FeaturePromoSpecification {
     return custom_action_dismiss_string_id_;
   }
 
+  // Set menu item element identifiers that should be highlighted while
+  // this FeaturePromo is active.
+  FeaturePromoSpecification& SetHighlightedMenuItem(
+      const ui::ElementIdentifier highlighted_menu_identifier);
+  const ui::ElementIdentifier highlighted_menu_identifier() const {
+    return highlighted_menu_identifier_;
+  }
+
+  // Sets the metadata for this promotion.
+  FeaturePromoSpecification& SetMetadata(Metadata metadata);
+  const Metadata& metadata() const { return metadata_; }
+
+  // Argument-forwarding convenience version of SetMetadata() for constructing
+  // a Metadata object in-place.
+  template <typename... Args>
+  FeaturePromoSpecification& SetMetadata(Args&&... args) {
+    return SetMetadata(Metadata(std::forward<Args>(args)...));
+  }
+
+  // Force the subtype to a particular value, bypassing permission checks.
+  void set_promo_subtype_for_testing(PromoSubtype promo_subtype) {
+    promo_subtype_ = promo_subtype;
+  }
+
  private:
   static constexpr HelpBubbleArrow kDefaultBubbleArrow =
       HelpBubbleArrow::kTopRight;
@@ -238,7 +398,10 @@ class FeaturePromoSpecification {
   raw_ptr<const base::Feature> feature_ = nullptr;
 
   // The type of promo. A promo with type kUnspecified is not valid.
-  PromoType promo_type_ = PromoType::kUnspecifiied;
+  PromoType promo_type_ = PromoType::kUnspecified;
+
+  // The subtype of the promo.
+  PromoSubtype promo_subtype_ = PromoSubtype::kNormal;
 
   // The element identifier of the element to attach the promo to.
   ui::ElementIdentifier anchor_element_id_;
@@ -258,13 +421,18 @@ class FeaturePromoSpecification {
 
   // Optional text that is displayed at the top of the bubble, in a slightly
   // more prominent font.
-  std::u16string bubble_title_text_;
+  int bubble_title_string_id_ = 0;
 
   // Optional icon that is displayed next to bubble text.
   raw_ptr<const gfx::VectorIcon> bubble_icon_ = nullptr;
 
   // Optional arrow pointing to the promo'd element. Defaults to top left.
   HelpBubbleArrow bubble_arrow_ = kDefaultBubbleArrow;
+
+  // Overrides the default focus-on-show behavior for a bubble, which is to
+  // focus bubbles with action buttons, but not bubbles that only have a close
+  // button.
+  absl::optional<bool> focus_on_show_override_;
 
   // Optional screen reader announcement that replaces bubble text when the
   // bubble is first announced.
@@ -273,9 +441,6 @@ class FeaturePromoSpecification {
   // Accelerator that is used to fill in a parametric field in
   // screen_reader_string_id_.
   AcceleratorInfo screen_reader_accelerator_;
-
-  // Information to be displayed on the demo page
-  DemoPageInfo demo_page_info_;
 
   // Tutorial identifier if the user decides to view a tutorial.
   TutorialIdentifier tutorial_id_;
@@ -291,7 +456,19 @@ class FeaturePromoSpecification {
 
   // Dismiss string ID for the custom action promo.
   int custom_action_dismiss_string_id_;
+
+  // Identifier of the menu item that should be highlighted while
+  // FeaturePromo is active.
+  ui::ElementIdentifier highlighted_menu_identifier_;
+
+  // Metadata for this promo.
+  Metadata metadata_;
 };
+
+std::ostream& operator<<(std::ostream& oss,
+                         FeaturePromoSpecification::PromoType promo_type);
+std::ostream& operator<<(std::ostream& oss,
+                         FeaturePromoSpecification::PromoSubtype promo_subtype);
 
 }  // namespace user_education
 

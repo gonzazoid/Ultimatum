@@ -9,195 +9,415 @@
  * Methods for manipulating the state and the DOM of the page
  */
 
-/** @type {HTMLFormElement} Form with options and filters */
-const form = /** @type {HTMLFormElement} */ (
-    document.getElementById('options'));
+/**
+ * @typedef {string|number|boolean} StateValue
+ */
 
-/** @type {HTMLInputElement} */
-const methodCountInput = /** @type {HTMLInputElement} */ (
-    form.elements.namedItem('method_count'));
+/**
+ * @typedef {Object} HasValue
+ * @property {StateValue} value - Readable and writable value.
+ */
 
-/** Utilities for working with the DOM */
-const dom = {
+/**
+ * Encapsulation of an UI state, supporting observers on setting values.
+ */
+class UiState {
+  /** @param {!StateValue} defaultValue */
+  constructor(defaultValue) {
+    /** @protected {!StateValue} */
+    this.defaultValue = defaultValue;
+
+    /** @protected {!StateValue} */
+    this.value = this.defaultValue;
+
+    /** @private {!Array<!function(): *>} */
+    this.observers = [];
+  }
+
   /**
-   * Creates a document fragment from the given nodes.
-   * @param {Iterable<Node>} nodes
-   * @returns {DocumentFragment}
+   * @param {!function(): *} observer
+   * @public
    */
-  createFragment(nodes) {
-    const fragment = document.createDocumentFragment();
-    for (const node of nodes)
-      fragment.appendChild(node);
-    return fragment;
-  },
+  addObserver(observer) {
+    this.observers.push(observer);
+  }
+
+  /** @protected */
+  notifyObservers() {
+    for (const observer of this.observers) {
+      observer();
+    }
+  }
+
   /**
-   * Removes all the existing children of `parent` and inserts `newChild` in
-   * their place.
-   * @param {Node} parent
-   * @param {Node | null} newChild
+   * @return {!StateValue}
+   * @public
    */
-  replace(parent, newChild) {
-    while (parent.firstChild)
-      parent.removeChild(parent.firstChild);
-    if (newChild != null)
-      parent.appendChild(newChild);
-  },
+  get() {
+    return this.value;
+  }
+
   /**
-   * Builds a text element in a single statement.
-   * @param {string} tagName Type of the element, such as "span".
-   * @param {string} text Text content for the element.
-   * @param {string} [className] Class to apply to the element.
+   * @param {!StateValue} v
+   * @public
    */
-  textElement(tagName, text, className) {
-    const element = document.createElement(tagName);
-    element.textContent = text;
-    if (className)
-      element.className = className;
-    return element;
-  },
-};
+  set(v) {
+    this.value = v;
+    this.notifyObservers();
+  }
+}
+
+/**
+ * UiState supporting reads from / writes to a provided query param.
+ */
+class QueryParamUiState extends UiState {
+  /**
+   * @param {string} name
+   * @param {!StateValue} defaultValue
+   * @param {?function(string): StateValue} parser
+   * @param {boolean} isHash
+   */
+  constructor(name, defaultValue, parser, isHash) {
+    super(defaultValue);
+
+    /** @public @const {string} */
+    this.name = name;
+
+    /** @private @const {?function(string): StateValue} null = identity. */
+    this.parser = parser;
+
+    /** @public @const {boolean} */
+    this.isHash = isHash;
+
+    /** @public {string} */
+    this.hidden = false;
+  }
+
+  /**
+   * @param {!URLSearchParams} params
+   * @public
+   */
+  readFromSearchParams(params) {
+    if (params.has(this.name)) {
+      const s = params.get(this.name);
+      this.value = this.parser ? this.parser(s) : s;
+    } else {
+      this.value = this.defaultValue;
+    }
+    this.notifyObservers();
+  }
+
+  /**
+   * @param {!URLSearchParams} params
+   * @public
+   */
+  writeToSearchParams(params) {
+    if (this.hidden || this.value === this.defaultValue) {
+      params.delete(this.name);
+    } else {
+      const s = (this.value === true) ? 'on' : this.value.toString();
+      params.set(this.name, s);
+    }
+  }
+}
+
+/**
+ * QueryParamUiState that syncs with UI elements.
+ */
+class ElementUiState extends QueryParamUiState {
+  /**
+   * @param {string} name
+   * @param {!HasValue} elt
+   * @param {boolean} isHash
+   */
+  constructor(name, elt, isHash) {
+    let parser = null;
+    let readElt = () => elt.value;
+    let writeElt = (v) => {
+      elt.value = v;
+    };
+
+    // Define Element specific adapters for data access to concentrate the mess,
+    // and reduce boilerplate from defining stateful adapter classes.
+    if (elt instanceof HTMLInputElement) {
+      const input = /** @type {HTMLInputElement} */ (elt);
+      if (input.type === 'number') {
+        parser = (s) => {
+          const ret = parseInt(s, 10);
+          return isNaN(ret) ? this.defaultValue : ret;
+        };
+      } else if (input.type === 'checkbox') {
+        parser = (s) => s === 'on' || s === 'true' || s === '1';
+        readElt = () => elt.checked;
+        writeElt = (v) => {
+          elt.checked = v;
+        };
+      }
+    } else if (elt instanceof HTMLSelectElement) {
+      const sel = /** @type {!HTMLSelectElement} */ (elt);
+      const values =
+          new Set(Array.from(sel.querySelectorAll('option'), e => e.value));
+      parser = (s) => values.has(s) ? s : this.defaultValue;
+    } else if (elt instanceof RadioNodeList) {
+      const inputs = Array.from(
+          /** @type {!RadioNodeList} */ (elt),
+          e => /** @type {HTMLInputElement} */ (e));
+      assert(inputs.length > 0);
+      if (inputs[0].type === 'radio') {
+        const values = new Set(Array.from(inputs, e => e.value));
+        parser = (s) => values.has(s) ? s : this.defaultValue;
+      } else if (inputs[0].type === 'checkbox') {
+        readElt = () => {
+          return Array.from(inputs, e => e.checked ? e.value : '').join('');
+        };
+        writeElt = (s) => {
+          const values = new Set(Array.from(s));
+          for (const e of inputs) {
+            e.checked = values.has(e.value);
+          }
+        };
+      } else {
+        throw new Error(`Unknown RadioNodeList type: ${inputs[0].type}.`);
+      }
+    } else {
+      throw new Error('Unknown element type.');
+    }
+
+    super(name, readElt(), parser, isHash);
+
+    /** @private @const {function(): StateValue} */
+    this.readElt = readElt;
+
+    /** @private @const {function(): StateValue} */
+    this.writeElt = writeElt;
+  }
+
+  /**
+   * @param {!StateValue} v
+   * @public @override
+   */
+  set(v) {
+    super.set(v);
+    this.writeElt(/** @type {StateValue} */ (this.value));
+  }
+
+  /**
+   * @param {!URLSearchParams} params
+   * @public @override
+   */
+  readFromSearchParams(params) {
+    super.readFromSearchParams(params);
+    this.writeElt(/** @type {StateValue} */ (this.value));
+  }
+
+  /** @public */
+  syncFromElt() {
+    // Calling super.set() to avoid redundant writeElt() call in this.set().
+    super.set(/** @type {StateValue} */ (this.readElt()));
+  }
+}
 
 /** Build utilities for working with the state. */
-function _initState() {
-  const _DEFAULT_FORM = new FormData(form);
-
-  /**
-   * State is represented in the query string and can be manipulated by this
-   * object. Keys in the query match with input names.
-   */
-
-  /** @type {URLSearchParams} */
-  let _filterParams = new URLSearchParams(location.search.slice(1));
-  const typeList = _filterParams.getAll(_TYPE_STATE_KEY);
-  _filterParams.delete(_TYPE_STATE_KEY);
-  for (const type of types(typeList)) {
-    _filterParams.append(_TYPE_STATE_KEY, type);
-  }
-
-  const state = Object.freeze({
-    /**
-     * Returns a string from the current query string state.
-     * @param {string} key
-     * @returns {string | null}
-     */
-    get(key) {
-      return _filterParams.get(key);
-    },
+class MainState {
+  constructor() {
+    /** @private @const {!Array<!QueryParamUiState>} */
+    this.uiStates = [];
 
     /**
-     * Checks if a key is present in the query string state.
-     * @param {string} key
-     * @returns {boolean}
+     * Instantiation helper that also pushes object to |uiStates|.
+     * @param {string} name
+     * @param {?HasValue} elt
+     * @param {boolean=} isHash
      */
-    has(key) {
-      return _filterParams.has(key);
-    },
-
-    /**
-     * Formats the filter state as a string.
-     */
-    toString() {
-      const copy = new URLSearchParams(_filterParams);
-      const types = [...new Set(copy.getAll(_TYPE_STATE_KEY))];
-      if (types.length > 0) copy.set(_TYPE_STATE_KEY, types.join(''));
-
-      const queryString = copy.toString();
-      return queryString.length > 0 ? `?${queryString}` : '';
-    },
-
-    /**
-     * Saves a key and value into a temporary state not displayed in the URL.
-     * @param {string} key
-     * @param {string | null} value
-     */
-    set(key, value) {
-      if (value == null) {
-        _filterParams.delete(key);
+    const newUiState = (name, elt, isHash = false) => {
+      if (!elt) {
+        // Assume string value with defaultValue == ''.
+        this.uiStates.push(new QueryParamUiState(name, '', null, isHash));
       } else {
-        _filterParams.set(key, value);
+        this.uiStates.push(new ElementUiState(name, elt, isHash));
       }
-      // Passing empty `state` leads to no change, so use `location.pathname`.
-      history.replaceState(null, null, state.toString() || location.pathname);
-    },
-  });
+      return this.uiStates[this.uiStates.length - 1];
+    };
 
-  // Update form inputs to reflect the state from URL.
-  for (const element of
-      /** @type {Array<HTMLInputElement>} */ (Array.from(form.elements))) {
-    if (element.name) {
-      const input = /** @type {HTMLInputElement} */ (element);
-      const values = _filterParams.getAll(input.name);
-      const [value] = values;
-      if (value) {
-        switch (input.type) {
-          case 'checkbox':
-            input.checked = values.includes(input.value);
-            break;
-          case 'radio':
-            input.checked = value === input.value;
-            break;
-          default:
-            input.value = value;
-            break;
-        }
-      }
-    }
+    /**
+     * @public @const {!QueryParamUiState} Active "load" URL that gets updated
+     *   on "Upload data".
+     */
+    this.stLoadUrl = newUiState(STATE_KEY.LOAD_URL, null);
+
+    /**
+     * @public @const {!QueryParamUiState} "Before" URL that gets cleared on
+     *   "Upload data".
+     */
+    this.stBeforeUrl = newUiState(STATE_KEY.BEFORE_URL, null);
+
+    /** @public @const {!ElementUiState} */
+    this.stMethodCount = newUiState(STATE_KEY.METHOD_COUNT, g_el.cbMethodCount);
+
+    /** @public @const {!ElementUiState} */
+    this.stByteUnit = newUiState(STATE_KEY.BYTE_UNIT, g_el.selByteUnit);
+
+    /** @public @const {!ElementUiState} */
+    this.stGroupBy = newUiState(STATE_KEY.GROUP_BY, g_el.rnlGroupBy);
+
+    /** @public @const {!ElementUiState} */
+    this.stMinSize = newUiState(STATE_KEY.MIN_SIZE, g_el.nbMinSize);
+
+    /** @public @const {!ElementUiState} */
+    this.stInclude = newUiState(STATE_KEY.INCLUDE, g_el.tbIncludeRegex);
+
+    /** @public @const {!ElementUiState} */
+    this.stExclude = newUiState(STATE_KEY.EXCLUDE, g_el.tbExcludeRegex);
+
+    /** @public @const {!ElementUiState} */
+    this.stType = newUiState(STATE_KEY.TYPE, g_el.rnlType);
+
+    /** @public @const {!ElementUiState} */
+    this.stFlagFilter = newUiState(STATE_KEY.FLAG_FILTER, g_el.rnlFlagFilter);
+
+    /** @public @const {!QueryParamUiState} */
+    this.stFocus = newUiState(STATE_KEY.FOCUS, null, true);
+
+    /** @private {boolean} */
+    this.diffMode = false;
   }
 
   /**
-   * Yields only entries that have been modified relative to `_DEFAULT_FORM`.
-   * @generator
-   * @param {FormData} modifiedForm
-   * @yields {{key: string, value: FormDataEntryValue}}
+   * Formats the filter state as a string.
+   * @return {string}
+   * @private
    */
-  function* onlyChangedEntries(modifiedForm) {
-    // Remove default values
-    for (const key of modifiedForm.keys()) {
-      const modifiedValues = modifiedForm.getAll(key);
-      const defaultValues = _DEFAULT_FORM.getAll(key);
+  toString() {
+    const queryParams = new URLSearchParams();
+    const hashParams = new URLSearchParams();
+    for (const st of this.uiStates) {
+      st.writeToSearchParams(st.isHash ? hashParams : queryParams);
+    }
+    const queryString = queryParams.toString();
+    const hashString = hashParams.toString();
+    return (queryString.length > 0 ? `?${queryString}` : '') +
+        (hashString.length > 0 ? `#${hashString}` : '');
+  }
 
-      const valuesChanged =
-          (modifiedValues.length !== defaultValues.length) ||
-          modifiedValues.some((v, i) => v !== defaultValues[i]);
-      if (valuesChanged) {
-        for (const value of modifiedValues) {
-          yield {key, value};
+  /** @private */
+  updateUrlParams() {
+    // Passing empty `state` leads to no change, so use `location.pathname`.
+    history.replaceState(null, null, this.toString() || location.pathname);
+  }
+
+  /**
+   * @return {?function(string): boolean}
+   * @public
+   */
+  getFilter() {
+    const getRegExpOrNull = (s) => {
+      if (s) {
+        try {
+          return new RegExp(s);
+        } catch (err) {
         }
       }
+      return null;
+    };
+
+    const includeRE = getRegExpOrNull(this.stInclude.get());
+    const excludeRE = getRegExpOrNull(this.stExclude.get());
+    if (includeRE) {
+      return excludeRE ? (s) => includeRE.test(s) && !excludeRE.test(s) :
+                         (s) => includeRE.test(s);
     }
+    return excludeRE ? (s) => !excludeRE.test(s) : null;
   }
 
-  // Update the state when the form changes.
-  function _updateStateFromForm() {
-    _filterParams = new URLSearchParams();
-    const modifiedForm = new FormData(form);
-    for (const {key, value} of onlyChangedEntries(modifiedForm)) {
-      _filterParams.append(key, value.toString());
-    }
-    // Passing empty `state` leads to no change, so use `location.pathname`.
-    history.replaceState(null, null, state.toString() || location.pathname);
+  /**
+   * @return {boolean}
+   * @public
+   */
+  getDiffMode() {
+    return this.diffMode;
   }
 
-  form.addEventListener('change', _updateStateFromForm);
+  /**
+   * @param {boolean} diffMode
+   * @public
+   */
+  setDiffMode(diffMode) {
+    this.diffMode = diffMode;
+  }
 
-  return state;
+  /**
+   * @return {!BuildOptions}
+   * @public
+   */
+  exportToBuildOptions() {
+    const ret = /** @type {BuildOptions} */ ({});
+    ret.loadUrl = /** @type {string} */ (this.stLoadUrl.get());
+    ret.beforeUrl = /** @type {string} */ (this.stBeforeUrl.get());
+    ret.methodCountMode = /** @type {boolean} */ (this.stMethodCount.get());
+    // Skipping |this.stByteUnit|.
+    ret.minSymbolSize = /** @type {number} */ (this.stMinSize.value);
+    ret.groupBy = /** @type {string} */ (this.stGroupBy.get());
+    ret.includeRegex = /** @type {string} */ (this.stInclude.get());
+    ret.excludeRegex = /** @type {string} */ (this.stExclude.get());
+    if (ret.methodCountMode) {
+      ret.includeSections = _DEX_METHOD_SYMBOL_TYPE;
+    } else {
+      ret.includeSections = /** @type {string} */ (this.stType.get());
+    }
+    const flagToFilterStr = /** @type {string} */ (this.stFlagFilter.get());
+    ret.flagToFilter = _NAMES_TO_FLAGS[flagToFilterStr] ?? 0;
+    ret.nonOverhead = flagToFilterStr === 'nonoverhead';
+    ret.disassemblyMode = flagToFilterStr === 'disassembly';
+    return ret;
+  }
+
+  /** @public */
+  init() {
+    const queryParams = new URLSearchParams(location.search.slice(1));
+    const hashParams = new URLSearchParams(location.hash.slice(1));
+    for (const st of this.uiStates) {
+      st.readFromSearchParams(st.isHash ? hashParams : queryParams);
+    }
+    // At this point it's possible to update the URL to fix mistakes and
+    // canonicalize (e.g., param ordering). However, we choose to NOT do this
+    // since it's disconcerting for the user, as they might want to continue
+    // editing or tweaking the URL.
+
+    const loadUrl = /** @type {string} */ (this.stLoadUrl.get());
+    const beforeUrl = /** @type {string} */ (this.stBeforeUrl.get());
+    this.setDiffMode(
+        Boolean(loadUrl && (loadUrl.endsWith('.sizediff') || beforeUrl)));
+
+    // If load_url changes beyond initial load, clear before_url and hide both
+    // in query params.
+    this.stLoadUrl.addObserver(() => {
+      this.stBeforeUrl.set('');
+      if (!this.stLoadUrl.hidden) {
+        this.stLoadUrl.hidden = true;
+        this.stBeforeUrl.hidden = true;
+        this.updateUrlParams();
+      }
+    });
+
+    // Update states on form change.
+    g_el.frmOptions.addEventListener('change', (e) => {
+      for (const st of this.uiStates) {
+        if (st instanceof ElementUiState)
+          st.syncFromElt();
+      }
+      this.updateUrlParams();
+    });
+
+    this.stFocus.addObserver(() => this.updateUrlParams());
+  }
 }
 
 function _startListeners() {
   const _SHOW_OPTIONS_STORAGE_KEY = 'show-options';
 
-  /** @type {HTMLFieldSetElement} */
-  const typesFilterElement = /** @type {HTMLFieldSetElement} */ (
-      document.getElementById('types-filter'));
-  /** @type {HTMLFieldSetElement} */
-  const byteunit = /** @type {HTMLFieldSetElement} */ (
-      form.elements.namedItem('byteunit'));
   /** @type {RadioNodeList} */
   const typeCheckboxes = /** @type {RadioNodeList} */ (
-      form.elements.namedItem(_TYPE_STATE_KEY));
-  /** @type {HTMLSpanElement} */
-  const sizeHeader = /** @type {HTMLSpanElement} */ (
-      document.getElementById('size-header'));
+      g_el.frmOptions.elements.namedItem(STATE_KEY.TYPE));
 
   /**
    * The settings dialog on the side can be toggled on and off by elements with
@@ -207,40 +427,36 @@ function _startListeners() {
     const openedOptions = document.body.classList.toggle('show-options');
     localStorage.setItem(_SHOW_OPTIONS_STORAGE_KEY, openedOptions.toString());
   }
-  for (const button of document.getElementsByClassName('toggle-options')) {
-    button.addEventListener('click', _toggleOptions);
+  for (const node of g_el.nlShowOptions) {
+    node.addEventListener('click', _toggleOptions);
   }
   // Default to open if getItem returns null
   if (localStorage.getItem(_SHOW_OPTIONS_STORAGE_KEY) !== 'false') {
     document.body.classList.add('show-options');
   }
 
-  /**
-   * Disable some fields when method_count is set
-   */
+  /** Disables some fields when method_count is set. */
   function setMethodCountModeUI() {
-    if (methodCountInput.checked) {
-      byteunit.setAttribute('disabled', '');
-      typesFilterElement.setAttribute('disabled', '');
-      sizeHeader.textContent = 'Methods';
+    if (state.stMethodCount.get()) {
+      g_el.selByteUnit.setAttribute('disabled', '');
+      g_el.fsTypesFilter.setAttribute('disabled', '');
+      g_el.spanSizeHeader.textContent = 'Methods';
     } else {
-      byteunit.removeAttribute('disabled');
-      typesFilterElement.removeAttribute('disabled');
-      sizeHeader.textContent = 'Size';
+      g_el.selByteUnit.removeAttribute('disabled');
+      g_el.fsTypesFilter.removeAttribute('disabled');
+      g_el.spanSizeHeader.textContent = 'Size';
     }
   }
   setMethodCountModeUI();
-  methodCountInput.addEventListener('change', setMethodCountModeUI);
+  state.stMethodCount.addObserver(setMethodCountModeUI);
 
   /**
-   * Display error text on blur for regex inputs, if the input is invalid.
+   * Displays error text on blur for regex inputs, if the input is invalid.
    * @param {Event} event
    */
   function checkForRegExError(event) {
     const input = /** @type {HTMLInputElement} */ (event.currentTarget);
-    const errorBox = document.getElementById(
-      input.getAttribute('aria-describedby')
-    );
+    const errorBox = g_el.getAriaDescribedBy(input);
     try {
       new RegExp(input.value);
       errorBox.textContent = '';
@@ -250,60 +466,88 @@ function _startListeners() {
       input.setAttribute('aria-invalid', 'true');
     }
   }
-  for (const input of document.getElementsByClassName('input-regex')) {
+  for (const input of [g_el.tbIncludeRegex, g_el.tbExcludeRegex]) {
     input.addEventListener('blur', checkForRegExError);
     input.dispatchEvent(new Event('blur'));
   }
 
-  document.getElementById('type-all').addEventListener('click', () => {
+  g_el.btnTypeAll.addEventListener('click', () => {
     for (const checkbox of typeCheckboxes) {
       /** @type {HTMLInputElement} */ (checkbox).checked = true;
     }
-    form.dispatchEvent(new Event('change'));
+    g_el.frmOptions.dispatchEvent(new Event('change'));
   });
-  document.getElementById('type-none').addEventListener('click', () => {
+  g_el.btnTypeNone.addEventListener('click', () => {
     for (const checkbox of typeCheckboxes) {
       /** @type {HTMLInputElement} */ (checkbox).checked = false;
     }
-    form.dispatchEvent(new Event('change'));
+    g_el.frmOptions.dispatchEvent(new Event('change'));
+  });
+
+  // Outside of input, make pressing "?" open FAQ page.
+  window.addEventListener('keydown', event => {
+    if (event.key === '?' &&
+        /** @type {HTMLElement} */ (event.target).tagName !== 'INPUT') {
+      // Open help when "?" is pressed.
+      g_el.linkFaq.click();
+    }
   });
 }
 
 function _makeIconTemplateGetter() {
-  const _icons = document.getElementById('icons');
+  const getSymbolIcon = (q) => assertNotNull(g_el.divIcons.querySelector(q));
 
   /**
    * @type {{[type:string]: SVGSVGElement}} Icon elements
    * that correspond to each symbol type.
    */
   const symbolIcons = {
-    D: _icons.querySelector('.foldericon'),
-    G: _icons.querySelector('.groupicon'),
-    J: _icons.querySelector('.javaclassicon'),
-    F: _icons.querySelector('.fileicon'),
-    b: _icons.querySelector('.bssicon'),
-    d: _icons.querySelector('.dataicon'),
-    r: _icons.querySelector('.readonlyicon'),
-    t: _icons.querySelector('.codeicon'),
-    R: _icons.querySelector('.relroicon'),
-    '*': _icons.querySelector('.generatedicon'),
-    x: _icons.querySelector('.dexicon'),
-    m: _icons.querySelector('.dexmethodicon'),
-    p: _icons.querySelector('.localpakicon'),
-    P: _icons.querySelector('.nonlocalpakicon'),
-    o: _icons.querySelector('.othericon'),  // used as default icon
+    D: getSymbolIcon('.foldericon'),
+    G: getSymbolIcon('.groupicon'),
+    J: getSymbolIcon('.javaclassicon'),
+    F: getSymbolIcon('.fileicon'),
+    b: getSymbolIcon('.bssicon'),
+    d: getSymbolIcon('.dataicon'),
+    r: getSymbolIcon('.readonlyicon'),
+    t: getSymbolIcon('.codeicon'),
+    R: getSymbolIcon('.relroicon'),
+    x: getSymbolIcon('.dexothericon'),
+    m: getSymbolIcon('.dexmethodicon'),
+    p: getSymbolIcon('.localpakicon'),
+    P: getSymbolIcon('.nonlocalpakicon'),
+    a: getSymbolIcon('.arscicon'),
+    o: getSymbolIcon('.othericon'),  // used as default icon
+    '*': null,
   };
 
-  const _statuses = document.getElementById('symbol-diff-status-icons');
+  const getDiffStatusIcon = (q) => {
+    return assertNotNull(g_el.divDiffStatusIcons.querySelector(q));
+  };
   const statusIcons = {
-    added: _statuses.querySelector('.addedicon'),
-    removed: _statuses.querySelector('.removedicon'),
-    changed: _statuses.querySelector('.changedicon'),
-    unchanged: _statuses.querySelector('.unchangedicon'),
+    added: getDiffStatusIcon('.addedicon'),
+    removed: getDiffStatusIcon('.removedicon'),
+    changed: getDiffStatusIcon('.changedicon'),
+    unchanged: getDiffStatusIcon('.unchangedicon'),
   };
 
+  const getMiscIcon = (q) => {
+    return assertNotNull(g_el.divMiscIcons.querySelector(q))
+  };
+  const metricsIcons = {
+    group: getSymbolIcon('.groupicon'),  // Reuse.
+    elf: getMiscIcon('.elficon'),
+    dex: getMiscIcon('.dexicon'),
+    arsc: getSymbolIcon('.arscicon'),  // Reuse.
+    metrics: getMiscIcon('.metricsicon'),
+    other: getSymbolIcon('.othericon'),  // Reuse.
+  };
 
-  /** @type {Map<string, {color:string,description:string}>} */
+  const metadataIcons = {
+    root: getMiscIcon('.metadataicon'),
+    group: getSymbolIcon('.groupicon'),  // Reuse.
+  };
+
+  /** @type {Map<string, {color:string, description:string}>} */
   const iconInfoCache = new Map();
 
   /**
@@ -311,12 +555,23 @@ function _makeIconTemplateGetter() {
    * @param {string} type Symbol type character.
    * @param {boolean} readonly If true, the original template is returned.
    * If false, a copy is returned that can be modified.
-   * @returns {SVGSVGElement}
+   * @return {SVGSVGElement}
    */
   function getIconTemplate(type, readonly = false) {
     const iconTemplate = symbolIcons[type] || symbolIcons[_OTHER_SYMBOL_TYPE];
     return /** @type {SVGSVGElement} */ (
         readonly ? iconTemplate : iconTemplate.cloneNode(true));
+  }
+
+  /**
+   * @param {string} type Symbol type character.
+   * @param {?string} fill If non-null, fill color of icon.
+   */
+  function getIconTemplateWithFill(type, fill) {
+    const icon = getIconTemplate(type);
+    if (fill)
+      icon.setAttribute('fill', fill);
+    return icon;
   }
 
   /**
@@ -326,7 +581,7 @@ function _makeIconTemplateGetter() {
    */
   function getIconStyle(type) {
     let info = iconInfoCache.get(type);
-    if (info == null) {
+    if (!info) {
       const icon = getIconTemplate(type, true);
       info = {
         color: icon.getAttribute('fill'),
@@ -342,13 +597,13 @@ function _makeIconTemplateGetter() {
    * status of the node. Only valid for leaf nodes.
    * @param {TreeNode} node Leaf node whose diff status is used to select
    * template.
-   * @returns {SVGSVGElement}
+   * @return {SVGSVGElement}
    */
   function getDiffStatusTemplate(node) {
     const isLeaf = node.children && node.children.length === 0;
     const entries = Object.entries(node.childStats);
     let key = 'unchanged';
-    if (isLeaf && entries.length != 0) {
+    if (isLeaf && entries.length !== 0) {
       const statsEntry = entries[0][1];
       if (statsEntry.added) {
         key = 'added';
@@ -357,18 +612,57 @@ function _makeIconTemplateGetter() {
       } else if (statsEntry.changed) {
         key = 'changed';
       }
-    } else if (node.diffStatus == _DIFF_STATUSES.ADDED) {
+    } else if (node.diffStatus === _DIFF_STATUSES.ADDED) {
       key = 'added';
-    } else if (node.diffStatus == _DIFF_STATUSES.REMOVED) {
+    } else if (node.diffStatus === _DIFF_STATUSES.REMOVED) {
       key = 'removed';
     }
     return statusIcons[key].cloneNode(true);
   }
 
-  return {getIconTemplate, getIconStyle, getDiffStatusTemplate};
+  /**
+   * @param {string} key
+   * @return {SVGSVGElement}
+   */
+  function getMetricsIconTemplate(key) {
+    return metricsIcons[key].cloneNode(true);
+  }
+
+  /**
+   * @param {string} key
+   * @return {SVGSVGElement}
+   */
+  function getMetadataIconTemplate(key) {
+    return metadataIcons[key].cloneNode(true);
+  }
+
+  return {
+    getIconTemplate,
+    getIconTemplateWithFill,
+    getIconStyle,
+    getDiffStatusTemplate,
+    getMetricsIconTemplate,
+    getMetadataIconTemplate,
+  };
 }
 
 function _makeSizeTextGetter() {
+  /**
+   * @param {number} bytes
+   * @return {!DocumentFragment}
+   */
+  function makeBytesElement(bytes) {
+    const unit = /** @type {string} */ (state.stByteUnit.get());
+    const suffix = _BYTE_UNITS[unit];
+    // Format |bytes| as a number with 2 digits after the decimal point
+    const text = formatNumber(bytes / suffix, 2, 2);
+    const textNode = document.createTextNode(`${text} `);
+    // Display the suffix with a smaller font
+    const suffixElement = dom.textElement('small', unit);
+
+    return dom.createFragment([textNode, suffixElement]);
+  }
+
   /**
    * Create the contents for the size element of a tree node.
    * The unit to use is selected from the current state.
@@ -378,11 +672,11 @@ function _makeSizeTextGetter() {
    *
    * @param {TreeNode} node Node whose size is the number of bytes to use for
    * the size text
-   * @returns {GetSizeResult} Object with hover text title and size element
+   * @return {GetSizeResult} Object with hover text title and size element
    * body.
    */
   function getSizeContents(node) {
-    if (state.has('method_count')) {
+    if (state.stMethodCount.get()) {
       const {count: methodCount = 0} =
         node.childStats[_DEX_METHOD_SYMBOL_TYPE] || {};
       const methodStr = formatNumber(methodCount);
@@ -393,9 +687,12 @@ function _makeSizeTextGetter() {
       };
 
     } else {
+      const isLeaf = node.children && node.children.length === 0;
       const bytes = node.size;
       const descriptionToks = [];
-      if ('beforeSize' in node) {
+      // Show "before → after" only for leaf nodes, since group nodes'
+      // |beforeSize| would miss contributions from unchanged symbols.
+      if (isLeaf && ('beforeSize' in node)) {
         const before = formatNumber(node.beforeSize);
         const after = formatNumber(node.beforeSize + bytes);
         descriptionToks.push(`(${before} → ${after})`);  // '→' is '\u2192'.
@@ -405,17 +702,9 @@ function _makeSizeTextGetter() {
         descriptionToks.push(`for 1 of ${node.numAliases} aliases`);
       }
 
-      const unit = state.get('byteunit') || 'KiB';
-      const suffix = _BYTE_UNITS[unit];
-      // Format |bytes| as a number with 2 digits after the decimal point
-      const text = formatNumber(bytes / suffix, 2, 2);
-      const textNode = document.createTextNode(`${text} `);
-      // Display the suffix with a smaller font
-      const suffixElement = dom.textElement('small', unit);
-
       return {
         description: descriptionToks.join(' '),
-        element: dom.createFragment([textNode, suffixElement]),
+        element: makeBytesElement(bytes),
         value: bytes,
       };
     }
@@ -425,11 +714,11 @@ function _makeSizeTextGetter() {
    * Set classes on an element based on the size it represents.
    * @param {HTMLElement} sizeElement
    * @param {number} value
+   * @param {boolean} isCount Whether |value| is count (true) or byte (false).
    */
-  function setSizeClasses(sizeElement, value) {
-    const cutOff = methodCountInput.checked ? 10 : 50000;
-    const shouldHaveStyle =
-      state.has('diff_mode') && Math.abs(value) > cutOff;
+  function setSizeClasses(sizeElement, value, isCount) {
+    const cutOff = isCount ? 10 : 50000;
+    const shouldHaveStyle = state.getDiffMode() && Math.abs(value) > cutOff;
 
     if (shouldHaveStyle) {
       if (value < 0) {
@@ -444,12 +733,22 @@ function _makeSizeTextGetter() {
     }
   }
 
-  return {getSizeContents, setSizeClasses};
+  return {makeBytesElement, getSizeContents, setSizeClasses};
 }
 
+/** Global UI State. */
+const state = new MainState();
+state.init();
+
 /** Utilities for working with the state */
-const state = _initState();
-const {getIconTemplate, getIconStyle, getDiffStatusTemplate} =
-    _makeIconTemplateGetter();
-const {getSizeContents, setSizeClasses} = _makeSizeTextGetter();
+const {
+  getIconTemplate,
+  getIconTemplateWithFill,
+  getIconStyle,
+  getDiffStatusTemplate,
+  getMetricsIconTemplate,
+  getMetadataIconTemplate,
+} = _makeIconTemplateGetter();
+const {makeBytesElement, getSizeContents, setSizeClasses} =
+    _makeSizeTextGetter();
 _startListeners();

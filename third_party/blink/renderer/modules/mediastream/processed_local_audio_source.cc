@@ -7,12 +7,13 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "build/chromecast_buildflags.h"
 #include "media/audio/audio_source_parameters.h"
@@ -86,8 +87,7 @@ std::string GetAudioProcesingPropertiesLogString(
       "goog_experimental_echo_cancellation: %s, "
       "goog_noise_suppression: %s, "
       "goog_experimental_noise_suppression: %s, "
-      "goog_highpass_filter: %s, "
-      "goog_experimental_agc: %s, ",
+      "goog_highpass_filter: %s, ",
       aec_to_string(properties.echo_cancellation_type),
       bool_to_string(properties.disable_hw_noise_suppression),
       bool_to_string(properties.goog_audio_mirroring),
@@ -95,8 +95,7 @@ std::string GetAudioProcesingPropertiesLogString(
       bool_to_string(properties.goog_experimental_echo_cancellation),
       bool_to_string(properties.goog_noise_suppression),
       bool_to_string(properties.goog_experimental_noise_suppression),
-      bool_to_string(properties.goog_highpass_filter),
-      bool_to_string(properties.goog_experimental_auto_gain_control));
+      bool_to_string(properties.goog_highpass_filter));
   return str;
 }
 
@@ -311,6 +310,72 @@ bool ProcessedLocalAudioSource::EnsureSourceIsStarted() {
       device_is_modified = true;
     }
   }
+
+#if BUILDFLAG(IS_CHROMEOS)
+  if (base::FeatureList::IsEnabled(media::kCrOSSystemVoiceIsolationOption) &&
+      device().input.effects() &
+          media::AudioParameters::VOICE_ISOLATION_SUPPORTED) {
+    // Disable voice isolation on the device if browser-based echo
+    // cancellation is, since that otherwise breaks the AEC.
+    const bool browser_based_aec_active =
+        audio_processing_properties_.echo_cancellation_type ==
+        AudioProcessingProperties::EchoCancellationType::kEchoCancellationAec3;
+    const bool disable_system_voice_isolation_due_to_browser_aec =
+        browser_based_aec_active;
+
+    if (disable_system_voice_isolation_due_to_browser_aec ||
+        audio_processing_properties_.voice_isolation ==
+            AudioProcessingProperties::VoiceIsolationType::
+                kVoiceIsolationDisabled) {
+      // Force voice isolation to be disabled.
+      modified_device.input.set_effects(
+          modified_device.input.effects() |
+          media::AudioParameters::CLIENT_CONTROLLED_VOICE_ISOLATION);
+
+      modified_device.input.set_effects(
+          modified_device.input.effects() &
+          ~media::AudioParameters::VOICE_ISOLATION);
+    } else if (audio_processing_properties_.voice_isolation ==
+               AudioProcessingProperties::VoiceIsolationType::
+                   kVoiceIsolationEnabled) {
+      // Force voice isolation to be enabled.
+      modified_device.input.set_effects(
+          modified_device.input.effects() |
+          media::AudioParameters::CLIENT_CONTROLLED_VOICE_ISOLATION);
+
+      modified_device.input.set_effects(
+          modified_device.input.effects() |
+          media::AudioParameters::VOICE_ISOLATION);
+    } else {
+      // Turn off voice isolation control.
+      modified_device.input.set_effects(
+          modified_device.input.effects() &
+          ~media::AudioParameters::CLIENT_CONTROLLED_VOICE_ISOLATION);
+    }
+
+    if ((modified_device.input.effects() &
+         media::AudioParameters::CLIENT_CONTROLLED_VOICE_ISOLATION) !=
+            (device().input.effects() &
+             media::AudioParameters::CLIENT_CONTROLLED_VOICE_ISOLATION) ||
+        (modified_device.input.effects() &
+         media::AudioParameters::VOICE_ISOLATION) ||
+        (device().input.effects() & media::AudioParameters::VOICE_ISOLATION)) {
+      device_is_modified = true;
+    }
+  }
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS)
+  if (base::FeatureList::IsEnabled(media::kIgnoreUiGains)) {
+    // Ignore UI Gains if AGC is running in either browser or system
+    if (audio_processing_properties_.GainControlEnabled()) {
+      modified_device.input.set_effects(
+          modified_device.input.effects() |
+          media::AudioParameters::IGNORE_UI_GAINS);
+      device_is_modified = true;
+    }
+  }
+#endif
 
   if (device_is_modified)
     SetDevice(modified_device);

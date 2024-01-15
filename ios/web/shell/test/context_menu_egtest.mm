@@ -17,10 +17,6 @@
 #import "ios/web/shell/test/earl_grey/web_shell_test_case.h"
 #import "net/test/embedded_test_server/embedded_test_server.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using testing::ButtonWithAccessibilityLabel;
 using testing::ElementToDismissAlert;
 
@@ -36,8 +32,13 @@ const char kHtmlFile[] = "/context_menu.html";
 @implementation ContextMenuTestCase
 
 // Tests context menu appears on a regular link.
-// TODO(crbug.com/1379375)
-- (void)DISABLED_testContextMenu {
+// TODO(crbug.com/1421691): Test is flaky on iPad simulator. Re-enable the test.
+#if TARGET_OS_SIMULATOR
+#define MAYBE_testContextMenu FLAKY_testContextMenu
+#else
+#define MAYBE_testContextMenu testContextMenu
+#endif
+- (void)MAYBE_testContextMenu {
   const char linkID[] = "normal-link";
   NSString* const linkText = @"normal-link-text";
   const GURL pageURL = self.testServer->GetURL(kHtmlFile);
@@ -50,24 +51,22 @@ const char kHtmlFile[] = "/context_menu.html";
                         [ElementSelector selectorWithElementID:linkID])];
 
   id<GREYMatcher> copyItem = ButtonWithAccessibilityLabel(@"Copy Link");
+  id<GREYMatcher> cancelItem = ButtonWithAccessibilityLabel(@"Cancel");
 
   // Context menu should have a "copy link" item.
   [[EarlGrey selectElementWithMatcher:copyItem]
       assertWithMatcher:grey_notNil()];
 
   // Dismiss the context menu.
-  [[EarlGrey selectElementWithMatcher:ElementToDismissAlert(@"Cancel")]
-      performAction:grey_tap()];
+  [[EarlGrey selectElementWithMatcher:cancelItem] performAction:grey_tap()];
 
-  // Context menu should go away after the tap.
-  [[EarlGrey selectElementWithMatcher:copyItem] assertWithMatcher:grey_nil()];
+  // Wait for the context menu to be dismissed and check if it was.
+  [ShellEarlGrey waitForUIElementToDisappearWithMatcher:copyItem];
 }
 
 // Tests context menu on element that has WebkitTouchCallout set to none from an
 // ancestor and overridden.
-//
-// TODO(crbug.com/1087189): This test is flaky.
-- (void)DISABLED_testContextMenuWebkitTouchCalloutOverride {
+- (void)testContextMenuWebkitTouchCalloutOverride {
   const char linkID[] = "no-webkit-link";
   NSString* const linkText = @"no-webkit-link-text";
   const GURL pageURL = self.testServer->GetURL(kHtmlFile);
@@ -80,17 +79,17 @@ const char kHtmlFile[] = "/context_menu.html";
                         [ElementSelector selectorWithElementID:linkID])];
 
   id<GREYMatcher> copyItem = ButtonWithAccessibilityLabel(@"Copy Link");
+  id<GREYMatcher> cancelItem = ButtonWithAccessibilityLabel(@"Cancel");
 
   // Context menu should have a "copy link" item.
   [[EarlGrey selectElementWithMatcher:copyItem]
       assertWithMatcher:grey_notNil()];
 
   // Dismiss the context menu.
-  [[EarlGrey selectElementWithMatcher:ElementToDismissAlert(@"Cancel")]
-      performAction:grey_tap()];
+  [[EarlGrey selectElementWithMatcher:cancelItem] performAction:grey_tap()];
 
-  // Context menu should go away after the tap.
-  [[EarlGrey selectElementWithMatcher:copyItem] assertWithMatcher:grey_nil()];
+  // Wait for the context menu to be dismissed and check if it was.
+  [ShellEarlGrey waitForUIElementToDisappearWithMatcher:copyItem];
 }
 
 @end

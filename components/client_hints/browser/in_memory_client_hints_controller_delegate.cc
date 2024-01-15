@@ -6,7 +6,7 @@
 
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
 #include "third_party/blink/public/common/client_hints/enabled_client_hints.h"
 #include "url/origin.h"
@@ -57,7 +57,9 @@ void InMemoryClientHintsControllerDelegate::GetAllowedClientHintsFromSource(
     blink::EnabledClientHints* client_hints) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(client_hints);
-  DCHECK(network::IsOriginPotentiallyTrustworthy(origin));
+  if (!network::IsOriginPotentiallyTrustworthy(origin)) {
+    return;
+  }
 
   const auto& it = accept_ch_cache_.find(origin);
   if (it != accept_ch_cache_.end()) {
@@ -91,7 +93,8 @@ bool InMemoryClientHintsControllerDelegate::IsJavaScriptAllowed(
 }
 
 bool InMemoryClientHintsControllerDelegate::AreThirdPartyCookiesBlocked(
-    const GURL& url) {
+    const GURL& url,
+    content::RenderFrameHost* rfh) {
   return are_third_party_cookies_blocked_callback_.Run(url);
 }
 

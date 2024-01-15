@@ -5,6 +5,7 @@
 #ifndef SERVICES_VIDEO_CAPTURE_DEVICE_MEDIA_TO_MOJO_ADAPTER_H_
 #define SERVICES_VIDEO_CAPTURE_DEVICE_MEDIA_TO_MOJO_ADAPTER_H_
 
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -13,6 +14,7 @@
 #include "media/capture/video/video_capture_device_factory.h"
 #include "media/capture/video_capture_types.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
+#include "services/video_capture/device.h"
 #include "services/video_capture/public/mojom/device.mojom.h"
 #include "services/video_capture/public/mojom/video_frame_handler.mojom.h"
 
@@ -29,7 +31,7 @@ class ReceiverMojoToMediaAdapter;
 
 // Implementation of mojom::Device backed by a given instance of
 // media::VideoCaptureDevice.
-class DeviceMediaToMojoAdapter : public mojom::Device {
+class DeviceMediaToMojoAdapter : public Device {
  public:
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   DeviceMediaToMojoAdapter(
@@ -45,10 +47,16 @@ class DeviceMediaToMojoAdapter : public mojom::Device {
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   ~DeviceMediaToMojoAdapter() override;
 
-  // mojom::Device implementation.
+  // Device implementation.
   void Start(const media::VideoCaptureParams& requested_settings,
              mojo::PendingRemote<mojom::VideoFrameHandler>
                  handler_pending_remote) override;
+  void StartInProcess(
+      const media::VideoCaptureParams& requested_settings,
+      const base::WeakPtr<media::VideoFrameReceiver>& frame_handler,
+      mojo::PendingRemote<video_capture::mojom::VideoEffectsManager>
+          video_effects_manager) override;
+  void StopInProcess() override;
   void MaybeSuspend() override;
   void Resume() override;
   void GetPhotoState(GetPhotoStateCallback callback) override;
@@ -66,6 +74,15 @@ class DeviceMediaToMojoAdapter : public mojom::Device {
   static int max_buffer_pool_buffer_count();
 
  private:
+  void StartInternal(
+      const media::VideoCaptureParams& requested_settings,
+      absl::optional<mojo::PendingRemote<mojom::VideoFrameHandler>>
+          handler_pending_remote,
+      const base::WeakPtr<media::VideoFrameReceiver>& frame_handler,
+      bool start_in_process,
+      mojo::PendingRemote<video_capture::mojom::VideoEffectsManager>
+          video_effects_manager);
+
   const std::unique_ptr<media::VideoCaptureDevice> device_;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   const media::MojoMjpegDecodeAcceleratorFactoryCB

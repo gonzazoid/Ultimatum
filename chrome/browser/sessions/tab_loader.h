@@ -8,11 +8,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -83,7 +84,9 @@ class TabLoader : public base::RefCounted<TabLoader>,
   // loading timeout timer.
   struct LoadingTab {
     base::TimeTicks loading_start_time;
-    content::WebContents* contents;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #union
+    RAW_PTR_EXCLUSION content::WebContents* contents;
 
     // For use with sorted STL containers.
     bool operator<(const LoadingTab& rhs) const {

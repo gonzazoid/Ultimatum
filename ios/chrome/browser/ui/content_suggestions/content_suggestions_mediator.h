@@ -13,8 +13,13 @@
 #import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_gesture_commands.h"
 #import "ios/chrome/browser/ui/content_suggestions/content_suggestions_commands.h"
 #import "ios/chrome/browser/ui/content_suggestions/content_suggestions_consumer.h"
-#import "ios/chrome/browser/ui/content_suggestions/start_suggest_service_response_bridge.h"
+#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_image_data_source.h"
+#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_menu_provider.h"
 #import "ios/chrome/browser/ui/start_surface/start_surface_recent_tab_removal_observer_bridge.h"
+
+namespace commerce {
+class ShoppingService;
+}
 
 namespace favicon {
 class LargeIconService;
@@ -24,16 +29,37 @@ namespace ntp_tiles {
 class MostVisitedSites;
 }
 
+namespace segmentation_platform {
+class SegmentationPlatformService;
+}
+
+namespace signin {
+class IdentityManager;
+}
+
+namespace syncer {
+class SyncService;
+}  // namespace syncer
+
 namespace user_prefs {
 class PrefRegistrySyncable;
 }  // namespace user_prefs
 
 @protocol ApplicationCommands;
+class AuthenticationService;
 class Browser;
+@class BrowserActionFactory;
 @protocol BrowserCoordinatorCommands;
-@protocol FeedDelegate;
+@protocol ContentSuggestionsViewControllerAudience;
+@protocol ContentSuggestionsDelegate;
+@class ContentSuggestionsMetricsRecorder;
+enum class ContentSuggestionsModuleType;
 class GURL;
 class LargeIconCache;
+@protocol NewTabPageMetricsDelegate;
+@class ParcelTrackingItem;
+enum class ParcelType;
+class PromosManager;
 class ReadingListModel;
 @protocol SnackbarCommands;
 class WebStateList;
@@ -41,9 +67,10 @@ class WebStateList;
 // Mediator for ContentSuggestions.
 @interface ContentSuggestionsMediator
     : NSObject <ContentSuggestionsCommands,
+                ContentSuggestionsImageDataSource,
                 ContentSuggestionsGestureCommands,
-                StartSurfaceRecentTabObserving,
-                StartSuggestServiceResponseDelegating>
+                ContentSuggestionsMenuProvider,
+                StartSurfaceRecentTabObserving>
 
 // Default initializer.
 - (instancetype)
@@ -54,6 +81,10 @@ class WebStateList;
                  readingListModel:(ReadingListModel*)readingListModel
                       prefService:(PrefService*)prefService
     isGoogleDefaultSearchProvider:(BOOL)isGoogleDefaultSearchProvider
+                      syncService:(syncer::SyncService*)syncService
+            authenticationService:(AuthenticationService*)authService
+                  identityManager:(signin::IdentityManager*)identityManager
+                  shoppingService:(commerce::ShoppingService*)shoppingService
                           browser:(Browser*)browser NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)init NS_UNAVAILABLE;
@@ -71,14 +102,15 @@ class WebStateList;
     id<ContentSuggestionsCommands, ContentSuggestionsGestureCommands>
         commandHandler;
 
-// Delegate used to communicate to communicate events to the feed.
-@property(nonatomic, weak) id<FeedDelegate> feedDelegate;
+// Delegate used to communicate Content Suggestions events to the delegate.
+@property(nonatomic, weak) id<ContentSuggestionsDelegate> delegate;
+
+// Delegate for presentation actions.
+@property(nonatomic, weak) id<ContentSuggestionsViewControllerAudience>
+    presentationDelegate;
 
 // The consumer that will be notified when the data change.
 @property(nonatomic, weak) id<ContentSuggestionsConsumer> consumer;
-
-// YES if the Start Surface is being shown.
-@property(nonatomic, assign) BOOL showingStartSurface;
 
 // WebStateList associated with this mediator.
 @property(nonatomic, assign) WebStateList* webStateList;
@@ -86,11 +118,28 @@ class WebStateList;
 // The web state associated with this NTP.
 @property(nonatomic, assign) web::WebState* webState;
 
+// The promos manager to alert if the user uses What's New.
+@property(nonatomic, assign) PromosManager* promosManager;
+
+// Delegate for reporting content suggestions actions to the NTP metrics
+// recorder.
+@property(nonatomic, weak) id<NewTabPageMetricsDelegate> NTPMetricsDelegate;
+
+// Recorder for content suggestions metrics.
+@property(nonatomic, weak)
+    ContentSuggestionsMetricsRecorder* contentSuggestionsMetricsRecorder;
+
+// TODO(crbug.com/1462664): Move to initializer param once
+// kSegmentationPlatformIosModuleRanker is launched. Segmentation Platform
+// Service.
+@property(nonatomic, assign)
+    segmentation_platform::SegmentationPlatformService* segmentationService;
+
+// Action factory for mediator.
+@property(nonatomic, strong) BrowserActionFactory* actionFactory;
+
 // Disconnects the mediator.
 - (void)disconnect;
-
-// Reloads content suggestions with most updated model state.
-- (void)reloadAllData;
 
 // Trigger a refresh of the Content Suggestions Most Visited tiles.
 - (void)refreshMostVisitedTiles;
@@ -114,6 +163,33 @@ class WebStateList;
 
 // Indicates that the "Return to Recent Tab" tile should be hidden.
 - (void)hideRecentTabTile;
+
+// Disables and hide the Set Up List.
+- (void)disableSetUpList;
+
+// Disables the tab resumption tile.
+- (void)disableTabResumption;
+
+// Disables and hides the Safety Check module, `type`, in the Magic Stack.
+- (void)disableSafetyCheck:(ContentSuggestionsModuleType)type;
+
+// Disables and hides the parcel tracking module.
+- (void)disableParcelTracking;
+
+// Indicates that `parcelID` should be untracked.
+- (void)untrackParcel:(NSString*)parcelID;
+
+// Indicates that `parcelID` should be tracked.
+- (void)trackParcel:(NSString*)parcelID carrier:(ParcelType)carrier;
+
+// Returns all possible items in the Set Up List.
+- (NSArray<SetUpListItemViewData*>*)allSetUpListItems;
+
+// Returns the latest fetched tracked parcels.
+- (NSArray<ParcelTrackingItem*>*)parcelTrackingItems;
+
+// Logs a user Magic Stack engagement for module `type`.
+- (void)logMagicStackEngagementForType:(ContentSuggestionsModuleType)type;
 
 @end
 

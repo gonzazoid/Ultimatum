@@ -10,39 +10,23 @@ namespace blink {
 
 void FontFallbackMap::Trace(Visitor* visitor) const {
   visitor->Trace(font_selector_);
+  visitor->Trace(fallback_list_for_description_);
   FontCacheClient::Trace(visitor);
   FontSelectorClient::Trace(visitor);
 }
 
-FontFallbackMap::~FontFallbackMap() {
-  AutoLockForParallelTextShaping guard(lock_);
-  InvalidateAll();
-}
-
-scoped_refptr<FontFallbackList> FontFallbackMap::Get(
+FontFallbackList* FontFallbackMap::Get(
     const FontDescription& font_description) {
-  AutoLockForParallelTextShaping guard(lock_);
-  auto iter = fallback_list_for_description_.find(font_description);
-  if (iter != fallback_list_for_description_.end()) {
-    DCHECK(iter->value->IsValid());
-    return iter->value;
+  auto add_result =
+      fallback_list_for_description_.insert(font_description, nullptr);
+  if (add_result.is_new_entry) {
+    add_result.stored_value->value =
+        MakeGarbageCollected<FontFallbackList>(*this);
   }
-  auto add_result = fallback_list_for_description_.insert(
-      font_description, FontFallbackList::Create(*this));
   return add_result.stored_value->value;
 }
 
-void FontFallbackMap::Remove(const FontDescription& font_description) {
-  AutoLockForParallelTextShaping guard(lock_);
-  auto iter = fallback_list_for_description_.find(font_description);
-  DCHECK_NE(iter, fallback_list_for_description_.end());
-  DCHECK(iter->value->IsValid());
-  DCHECK(iter->value->HasOneRef());
-  fallback_list_for_description_.erase(iter);
-}
-
 void FontFallbackMap::InvalidateAll() {
-  lock_.AssertAcquired();
   for (auto& entry : fallback_list_for_description_)
     entry.value->MarkInvalid();
   fallback_list_for_description_.clear();
@@ -50,7 +34,6 @@ void FontFallbackMap::InvalidateAll() {
 
 template <typename Predicate>
 void FontFallbackMap::InvalidateInternal(Predicate predicate) {
-  lock_.AssertAcquired();
   Vector<FontDescription> invalidated;
   for (auto& entry : fallback_list_for_description_) {
     if (predicate(*entry.value)) {
@@ -63,7 +46,6 @@ void FontFallbackMap::InvalidateInternal(Predicate predicate) {
 
 void FontFallbackMap::FontsNeedUpdate(FontSelector*,
                                       FontInvalidationReason reason) {
-  AutoLockForParallelTextShaping guard(lock_);
   switch (reason) {
     case FontInvalidationReason::kFontFaceLoaded:
       InvalidateInternal([](const FontFallbackList& fallback_list) {
@@ -81,7 +63,6 @@ void FontFallbackMap::FontsNeedUpdate(FontSelector*,
 }
 
 void FontFallbackMap::FontCacheInvalidated() {
-  AutoLockForParallelTextShaping guard(lock_);
   InvalidateAll();
 }
 

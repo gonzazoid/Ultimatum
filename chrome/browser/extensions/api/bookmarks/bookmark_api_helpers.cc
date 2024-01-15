@@ -4,8 +4,6 @@
 
 #include "chrome/browser/extensions/api/bookmarks/bookmark_api_helpers.h"
 
-#include <math.h>  // For floor()
-
 #include <memory>
 #include <utility>
 #include <vector>
@@ -17,6 +15,7 @@
 #include "chrome/common/extensions/api/bookmarks.h"
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/bookmark_utils.h"
+#include "components/bookmarks/common/bookmark_metrics.h"
 #include "components/bookmarks/managed/managed_bookmark_service.h"
 
 using bookmarks::BookmarkModel;
@@ -70,24 +69,27 @@ void PopulateBookmarkTreeNode(
 
   if (!node->is_folder()) {
     out_bookmark_tree_node->url = node->url().spec();
+    base::Time t = node->date_last_used();
+    if (!t.is_null()) {
+      out_bookmark_tree_node->date_last_used = t.InMillisecondsSinceUnixEpoch();
+    }
   } else {
-    // Javascript Date wants milliseconds since the epoch, ToDoubleT is seconds.
     base::Time t = node->date_folder_modified();
     if (!t.is_null()) {
-      out_bookmark_tree_node->date_group_modified = floor(t.ToDoubleT() * 1000);
+      out_bookmark_tree_node->date_group_modified =
+          t.InMillisecondsSinceUnixEpoch();
     }
   }
 
   out_bookmark_tree_node->title = base::UTF16ToUTF8(node->GetTitle());
   if (!node->date_added().is_null()) {
-    // Javascript Date wants milliseconds since the epoch, ToDoubleT is seconds.
     out_bookmark_tree_node->date_added =
-        floor(node->date_added().ToDoubleT() * 1000);
+        node->date_added().InMillisecondsSinceUnixEpoch();
   }
 
   if (bookmarks::IsDescendantOf(node, managed->managed_node())) {
     out_bookmark_tree_node->unmodifiable =
-        api::bookmarks::BOOKMARK_TREE_NODE_UNMODIFIABLE_MANAGED;
+        api::bookmarks::BookmarkTreeNodeUnmodifiable::kManaged;
   }
 
   if (recurse && node->is_folder()) {
@@ -139,7 +141,7 @@ bool RemoveNode(BookmarkModel* model,
     return false;
   }
 
-  model->Remove(node);
+  model->Remove(node, bookmarks::metrics::BookmarkEditSource::kExtension);
   return true;
 }
 

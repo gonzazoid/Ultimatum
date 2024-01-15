@@ -11,11 +11,13 @@
 #include <string>
 #include <tuple>
 
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/scoped_observation.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ash/arc/accessibility/accessibility_helper_instance_remote_proxy.h"
-#include "chrome/browser/ash/arc/accessibility/ax_tree_source_arc.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/common/extensions/api/accessibility_private.h"
+#include "services/accessibility/android/ax_tree_source_android.h"
 #include "ui/aura/client/focus_change_observer.h"
 #include "ui/aura/env.h"
 #include "ui/aura/env_observer.h"
@@ -46,13 +48,15 @@ class ArcAccessibilityTreeTracker : public aura::EnvObserver {
   };
 
   using TreeKey = std::tuple<TreeKeyType, int32_t, std::string>;
-  using TreeMap = std::map<TreeKey, std::unique_ptr<AXTreeSourceArc>>;
+  using TreeMap =
+      std::map<TreeKey, std::unique_ptr<ax::android::AXTreeSourceAndroid>>;
 
-  ArcAccessibilityTreeTracker(AXTreeSourceArc::Delegate* tree_source_delegate_,
-                              Profile* const profile,
-                              const AccessibilityHelperInstanceRemoteProxy&
-                                  accessibility_helper_instance,
-                              ArcBridgeService* const arc_bridge_service);
+  ArcAccessibilityTreeTracker(
+      ax::android::AXTreeSourceAndroid::Delegate* tree_source_delegate_,
+      Profile* const profile,
+      const AccessibilityHelperInstanceRemoteProxy&
+          accessibility_helper_instance,
+      ArcBridgeService* const arc_bridge_service);
   ~ArcAccessibilityTreeTracker() override;
 
   ArcAccessibilityTreeTracker(ArcAccessibilityTreeTracker&&) = delete;
@@ -70,23 +74,25 @@ class ArcAccessibilityTreeTracker : public aura::EnvObserver {
 
   // To be called when enabled accessibility features are changed.
   void OnEnabledFeatureChanged(
-      arc::mojom::AccessibilityFilterType new_filter_type);
+      ax::android::mojom::AccessibilityFilterType new_filter_type);
 
   // Request to send the tree with the specified AXTreeID.
   bool EnableTree(const ui::AXTreeID& tree_id);
 
-  // Returns a pointer to the AXTreeSourceArc corresponding to the event
-  // source.
-  AXTreeSourceArc* OnAccessibilityEvent(
-      const mojom::AccessibilityEventData* const event_data);
+  // Returns a pointer to the ax::android::AXTreeSourceAndroid corresponding to
+  // the event source.
+  ax::android::AXTreeSourceAndroid* OnAccessibilityEvent(
+      const ax::android::mojom::AccessibilityEventData* const event_data);
 
   void OnNotificationSurfaceAdded(ash::ArcNotificationSurface* surface);
 
   void OnNotificationSurfaceRemoved(ash::ArcNotificationSurface* surface);
 
+  void OnNotificationWindowRemoved(aura::Window* window);
+
   void OnNotificationStateChanged(
       const std::string& notification_key,
-      const arc::mojom::AccessibilityNotificationStateType& state);
+      const ax::android::mojom::AccessibilityNotificationStateType& state);
 
   void OnAndroidVirtualKeyboardVisibilityChanged(bool visible);
 
@@ -102,10 +108,11 @@ class ArcAccessibilityTreeTracker : public aura::EnvObserver {
       std::unique_ptr<aura::WindowTracker> window_tracker,
       bool enabled,
       SetNativeChromeVoxCallback callback,
-      arc::mojom::SetNativeChromeVoxResponse response);
+      ax::android::mojom::SetNativeChromeVoxResponse response);
 
   // Returns a tree source for the specified AXTreeID.
-  AXTreeSourceArc* GetFromTreeId(const ui::AXTreeID& tree_id) const;
+  ax::android::AXTreeSourceAndroid* GetFromTreeId(
+      const ui::AXTreeID& tree_id) const;
 
   // Invalidates all trees (resets serializers).
   void InvalidateTrees();
@@ -122,20 +129,33 @@ class ArcAccessibilityTreeTracker : public aura::EnvObserver {
   // Start observing the given window.
   void TrackWindow(aura::Window* window);
 
+  // Start observing the given window as a children of the toplevel ARC window.
+  void TrackChildWindow(aura::Window* window);
+
  private:
   class FocusChangeObserver;
   class WindowsObserver;
+  class ChildWindowsObserver;
   class ArcInputMethodManagerServiceObserver;
   class MojoConnectionObserver;
-  class ArcNotificationSurfaceManagerObserver;
+  class NotificationObserver;
   class UmaRecorder;
 
-  AXTreeSourceArc* GetFromKey(const TreeKey&);
-  AXTreeSourceArc* CreateFromKey(TreeKey, aura::Window* window);
+  ax::android::AXTreeSourceAndroid* GetFromKey(const TreeKey&);
+  ax::android::AXTreeSourceAndroid* CreateFromKey(TreeKey,
+                                                  aura::Window* window);
 
-  // Update |window_id_to_task_id_| with a given window if necessary.
-  void UpdateWindowIdMapping(aura::Window* window);
+  // Updates task_id and window_id properties when properties of the toplevel
+  // ARC++ window change.
+  // As a side-effect, when a new task id is assigned to the window, it may
+  // also trigger updating child window ids.
+  void UpdateTopWindowIds(aura::Window* window);
 
+  // Updates task_id and window_id propertied when properties of child ARC++
+  // window change.
+  void UpdateChildWindowIds(aura::Window* window);
+
+  // Updates properties set to the given aura::Window.
   void UpdateWindowProperties(aura::Window* window);
 
   void StartTrackingWindows();
@@ -146,29 +166,32 @@ class ArcAccessibilityTreeTracker : public aura::EnvObserver {
   virtual void DispatchCustomSpokenFeedbackToggled(bool enabled);
   virtual aura::Window* GetFocusedArcWindow() const;
 
-  Profile* const profile_;
-  AXTreeSourceArc::Delegate* tree_source_delegate_;
-  const AccessibilityHelperInstanceRemoteProxy& accessibility_helper_instance_;
+  const raw_ptr<Profile> profile_;
+  raw_ptr<ax::android::AXTreeSourceAndroid::Delegate> tree_source_delegate_;
+  const raw_ref<const AccessibilityHelperInstanceRemoteProxy>
+      accessibility_helper_instance_;
 
   TreeMap trees_;
 
   std::unique_ptr<FocusChangeObserver> focus_change_observer_;
   std::unique_ptr<WindowsObserver> windows_observer_;
+  std::unique_ptr<ChildWindowsObserver> child_windows_observer_;
   std::unique_ptr<ArcInputMethodManagerServiceObserver>
       input_manager_service_observer_;
   std::unique_ptr<MojoConnectionObserver> connection_observer_;
-  std::unique_ptr<ArcNotificationSurfaceManagerObserver>
-      notification_surface_observer_;
+  std::unique_ptr<NotificationObserver> notification_observer_;
 
   std::unique_ptr<UmaRecorder> uma_recorder_;
 
   base::ScopedObservation<aura::Env, aura::EnvObserver> env_observation_{this};
 
+  // a11y window id (obtained from exo, put for each window) to task id.
   std::map<int32_t, int32_t> window_id_to_task_id_;
+  // task id to top aura::window.
   std::map<int32_t, aura::Window*> task_id_to_window_;
 
-  arc::mojom::AccessibilityFilterType filter_type_ =
-      arc::mojom::AccessibilityFilterType::OFF;
+  ax::android::mojom::AccessibilityFilterType filter_type_ =
+      ax::android::mojom::AccessibilityFilterType::OFF;
 
   // Set of task id where TalkBack is enabled. ChromeOS native accessibility
   // support should be disabled for these tasks.

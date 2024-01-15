@@ -3,9 +3,9 @@ include_rules = [
   "+ash/constants",
   "+ash/public/cpp",
   "+chromeos/ash/components/memory",
+  "+chromeos/ash/components/system",
   "+chromeos/components/sensors",
   "+chromeos/dbus",
-  "+chromeos/system",
   "+components/guest_os",
   "+components/account_id",
   "+components/exo",
@@ -47,9 +47,6 @@ specific_include_rules = {
   ],
   "arc_util_unittest.cc": [
     "+ui/aura",
-  ],
-  "arc_vm_client_adapter.cc": [
-    "+chromeos/components/sensors/buildflags.h",
   ],
   ".*_unittest.cc": [
     "+content/public/test/browser_task_environment.h"

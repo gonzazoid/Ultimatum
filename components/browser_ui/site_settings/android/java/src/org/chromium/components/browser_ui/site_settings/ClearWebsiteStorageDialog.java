@@ -13,12 +13,12 @@ import androidx.preference.Preference;
 import androidx.preference.PreferenceDialogFragmentCompat;
 
 import org.chromium.base.Callback;
+import org.chromium.ui.base.ViewUtils;
 
-/**
- * The fragment used to display the clear website storage confirmation dialog.
- */
+/** The fragment used to display the clear website storage confirmation dialog. */
 public class ClearWebsiteStorageDialog extends PreferenceDialogFragmentCompat {
     public static final String TAG = "ClearWebsiteStorageDialog";
+    private static final String IS_GROUP = "is_group";
 
     private static Callback<Boolean> sCallback;
 
@@ -26,11 +26,12 @@ public class ClearWebsiteStorageDialog extends PreferenceDialogFragmentCompat {
     private View mDialogView;
 
     public static ClearWebsiteStorageDialog newInstance(
-            Preference preference, Callback<Boolean> callback) {
+            Preference preference, Callback<Boolean> callback, boolean isGroup) {
         ClearWebsiteStorageDialog fragment = new ClearWebsiteStorageDialog();
         sCallback = callback;
-        Bundle bundle = new Bundle(1);
+        Bundle bundle = new Bundle(3);
         bundle.putString(PreferenceDialogFragmentCompat.ARG_KEY, preference.getKey());
+        bundle.putBoolean(IS_GROUP, isGroup);
         fragment.setArguments(bundle);
         return fragment;
     }
@@ -41,7 +42,8 @@ public class ClearWebsiteStorageDialog extends PreferenceDialogFragmentCompat {
 
         TextView signedOutView = view.findViewById(R.id.signed_out_text);
         TextView offlineTextView = view.findViewById(R.id.offline_text);
-        signedOutView.setText(ClearWebsiteStorage.getSignedOutText());
+        var isGroup = getArguments().getBoolean(IS_GROUP, false);
+        signedOutView.setText(ClearWebsiteStorage.getSignedOutText(isGroup));
         offlineTextView.setText(ClearWebsiteStorage.getOfflineText());
 
         super.onBindDialogView(view);
@@ -54,7 +56,14 @@ public class ClearWebsiteStorageDialog extends PreferenceDialogFragmentCompat {
             // When the device switches to multi-window in landscape mode, the height of the
             // offlineTextView is not calculated correctly (its height gets truncated) and a layout
             // pass is needed to fix it. See https://crbug.com/1072922.
-            mDialogView.getHandler().post(mDialogView::requestLayout);
+            mDialogView
+                    .getHandler()
+                    .post(
+                            () -> {
+                                ViewUtils.requestLayout(
+                                        mDialogView,
+                                        "ClearWebsiteStorageDialog.onConfigurationChanged Runnable");
+                            });
         }
     }
 

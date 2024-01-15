@@ -12,17 +12,17 @@ from telemetry.timeline import chrome_trace_category_filter
 from telemetry.web_perf import timeline_based_measurement
 
 
-@benchmark.Info(emails=['cbruni@chromium.org', 'leszeks@chromium.org'],
-                component='Blink>JavaScript')
+@benchmark.Info(
+    emails=['cbruni@chromium.org', 'leszeks@chromium.org', 'vahl@chromium.org'],
+    component='Blink>JavaScript')
 class V8Top25RuntimeStats(perf_benchmark.PerfBenchmark):
   """Runtime Stats benchmark for a 25 top V8 web pages.
 
   Designed to represent a mix between top websites and a set of pages that
   have unique V8 characteristics.
   """
-  # TODO(rmhasan): Remove the SUPPORTED_PLATFORMS lists.
-  # SUPPORTED_PLATFORMS is deprecated, please put system specifier tags
-  # from expectations.config in SUPPORTED_PLATFORM_TAGS.
+  # TODO(johnchen): Remove either the SUPPORTED_PLATFORMS or
+  # SUPPORTED_PLATFORMS_TAGS lists. Only one is necessary.
   SUPPORTED_PLATFORMS = [story.expectations.ALL_DESKTOP]
   SUPPORTED_PLATFORM_TAGS = [platforms.DESKTOP]
 

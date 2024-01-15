@@ -6,6 +6,7 @@
 #define CC_TREES_DRAW_PROPERTY_UTILS_H_
 
 #include <vector>
+#include "base/memory/raw_ptr.h"
 #include "cc/cc_export.h"
 #include "cc/layers/layer_collections.h"
 
@@ -49,9 +50,9 @@ UpdatePropertyTreesAndRenderSurfaces(LayerTreeImpl* layer_tree_impl,
 void CC_EXPORT FindLayersThatNeedUpdates(LayerTreeHost* layer_tree_host,
                                          LayerList* update_layer_list);
 
-void CC_EXPORT
-FindLayersThatNeedUpdates(LayerTreeImpl* layer_tree_impl,
-                          std::vector<LayerImpl*>* visible_layer_list);
+void CC_EXPORT FindLayersThatNeedUpdates(
+    LayerTreeImpl* layer_tree_impl,
+    std::vector<raw_ptr<LayerImpl, VectorExperimental>>* visible_layer_list);
 
 gfx::Transform CC_EXPORT DrawTransform(const LayerImpl* layer,
                                        const TransformTree& transform_tree,
@@ -75,13 +76,9 @@ bool CC_EXPORT LayerShouldBeSkippedForDrawPropertiesComputation(
     LayerImpl* layer,
     const PropertyTrees* property_trees);
 
-bool CC_EXPORT IsLayerBackFaceVisible(LayerImpl* layer,
-                                      int transform_tree_index,
-                                      const PropertyTrees* property_trees);
-
-bool CC_EXPORT IsLayerBackFaceVisible(Layer* layer,
-                                      int transform_tree_index,
-                                      const PropertyTrees* property_trees);
+bool CC_EXPORT
+IsLayerBackFaceVisibleForTesting(const LayerImpl* layer,
+                                 const PropertyTrees* property_trees);
 
 #if DCHECK_IS_ON()
 // Checks and logs if double background blur exists in any layers. Returns

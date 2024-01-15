@@ -7,9 +7,9 @@
 #include <vector>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
@@ -18,11 +18,11 @@
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/ash/components/settings/cros_settings_names.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
-#include "chromeos/system/statistics_provider.h"
 #include "chromeos/version/version_loader.h"
 #include "components/version_info/version_info.h"
 #include "device/bluetooth/bluetooth_adapter.h"
@@ -84,7 +84,9 @@ void VersionInfoUpdater::StartUpdate(bool is_chrome_branded) {
   policy::DeviceCloudPolicyManagerAsh* policy_manager =
       connector->GetDeviceCloudPolicyManager();
   if (policy_manager) {
-    policy_manager->core()->store()->AddObserver(this);
+    if (!policy_manager->core()->store()->HasObserver(this)) {
+      policy_manager->core()->store()->AddObserver(this);
+    }
 
     // Ensure that we have up-to-date enterprise info in case enterprise policy
     // is already fetched and has finished initialization.
@@ -113,13 +115,13 @@ void VersionInfoUpdater::StartUpdate(bool is_chrome_branded) {
   }
 }
 
-absl::optional<bool> VersionInfoUpdater::IsSystemInfoEnforced() const {
+std::optional<bool> VersionInfoUpdater::IsSystemInfoEnforced() const {
   bool is_system_info_enforced = false;
   if (cros_settings_->GetBoolean(kDeviceLoginScreenSystemInfoEnforced,
                                  &is_system_info_enforced)) {
     return is_system_info_enforced;
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 void VersionInfoUpdater::UpdateVersionLabel() {
@@ -161,32 +163,32 @@ std::string VersionInfoUpdater::GetDeviceIdsLabel() {
   std::string device_ids_text;
 
   // Get the attested device ID and add the ZTE indication and the ID if needed.
-  std::string attested_device_id;
-  system::StatisticsProvider::GetInstance()->GetMachineStatistic(
-      chromeos::system::kAttestedDeviceIdKey, &attested_device_id);
+  const std::optional<base::StringPiece> attested_device_id =
+      system::StatisticsProvider::GetInstance()->GetMachineStatistic(
+          system::kAttestedDeviceIdKey);
   // Start with the ZTE indication and the attested device ID if it exists.
-  if (!attested_device_id.empty()) {
+  if (attested_device_id && !attested_device_id->empty()) {
     device_ids_text.append(kZteReady);
     // Always append the attested device ID.
     device_ids_text.append(" ");
     device_ids_text.append(kAttestedDeviceIdPrefix);
-    device_ids_text.append(attested_device_id);
+    device_ids_text.append(std::string(attested_device_id.value()));
   }
 
   // Get the serial number and add it.
-  std::string serial_number =
-      system::StatisticsProvider::GetInstance()->GetEnterpriseMachineID();
-  if (!serial_number.empty()) {
+  const std::optional<base::StringPiece> serial_number =
+      system::StatisticsProvider::GetInstance()->GetMachineID();
+  if (serial_number && !serial_number->empty()) {
     if (!device_ids_text.empty())
       device_ids_text.append(" ");
     // Append the serial number.
     device_ids_text.append(kSerialNumberPrefix);
-    device_ids_text.append(serial_number);
+    device_ids_text.append(std::string(serial_number.value()));
   }
 
   return device_ids_text;
 }
-void VersionInfoUpdater::OnVersion(const absl::optional<std::string>& version) {
+void VersionInfoUpdater::OnVersion(const std::optional<std::string>& version) {
   version_text_ = version;
   UpdateVersionLabel();
 }

@@ -4,11 +4,11 @@
 
 #include "chrome/browser/ui/views/bluetooth_device_credentials_view.h"
 
-#include <cwctype>
-
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/ranges/algorithm.h"
+#include "base/strings/string_util.h"
+#include "chrome/browser/ui/bluetooth/bluetooth_dialogs.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/constrained_window/constrained_window_views.h"
@@ -24,8 +24,6 @@
 
 using content::BluetoothDelegate;
 
-namespace chrome {
-
 void ShowBluetoothDeviceCredentialsDialog(
     content::WebContents* web_contents,
     const std::u16string& device_identifier,
@@ -36,13 +34,11 @@ void ShowBluetoothDeviceCredentialsDialog(
   constrained_window::ShowWebModalDialogViews(dialog, web_contents);
 }
 
-}  // namespace chrome
-
 namespace {
 
 bool IsInputTextValid(const std::u16string& text) {
-  const size_t num_digits =
-      base::ranges::count_if(text, [](auto ch) { return std::iswdigit(ch); });
+  const size_t num_digits = base::ranges::count_if(
+      text, [](char16_t ch) { return base::IsAsciiDigit(ch); });
   // This dialog is currently only used to prompt for Bluetooth PINs which
   // are always six digit numeric values as per the spec. This function could
   // do a better job of validating input, but should also be accompanied by
@@ -145,7 +141,7 @@ void BluetoothDeviceCredentialsView::InitControls(
     passkey_text_->SetDefaultWidthInChars(kDefaultTextfieldNumChars);
     passkey_text_->SetMinimumWidthInChars(kMinimumTextfieldNumChars);
     passkey_text_->SetTextInputType(ui::TEXT_INPUT_TYPE_TEXT);
-    passkey_text_->SetAssociatedLabel(passkey_prompt_label_ptr);
+    passkey_text_->SetAccessibleName(passkey_prompt_label_ptr);
     // TODO(cmumford): Windows Narrator says "no item in view".
   }
 
@@ -196,5 +192,5 @@ void BluetoothDeviceCredentialsView::ContentsChanged(
   DialogModelChanged();
 }
 
-BEGIN_METADATA(BluetoothDeviceCredentialsView, views::DialogDelegateView)
+BEGIN_METADATA(BluetoothDeviceCredentialsView)
 END_METADATA

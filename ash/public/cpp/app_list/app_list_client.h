@@ -13,10 +13,11 @@
 
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/public/cpp/ash_public_export.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/time/time.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "ui/base/models/simple_menu_model.h"
+#include "url/gurl.h"
 
 namespace ash {
 
@@ -40,6 +41,12 @@ class ASH_PUBLIC_EXPORT AppListClient {
 
   //////////////////////////////////////////////////////////////////////////////
   // Interfaces on searching:
+
+  // Returns the search categories that are available for users to choose if
+  // they want to have the results in the categories displayed in launcher
+  // search.
+  virtual std::vector<AppListSearchControlCategory> GetToggleableCategories()
+      const = 0;
 
   // Refreshes the search zero-state suggestions and invokes `on_done` when
   // complete. The client must run `on_done` before `timeout` because this
@@ -73,20 +80,9 @@ class ASH_PUBLIC_EXPORT AppListClient {
   // Invokes a custom action |action| on a result with |result_id|.
   virtual void InvokeSearchResultAction(const std::string& result_id,
                                         SearchResultActionType action) = 0;
-  // Returns the context menu model for the search result with |result_id|, or
-  // an empty array if there is currently no menu for the result.
-  using GetSearchResultContextMenuModelCallback =
-      base::OnceCallback<void(std::unique_ptr<ui::SimpleMenuModel>)>;
-  virtual void GetSearchResultContextMenuModel(
-      const std::string& result_id,
-      GetSearchResultContextMenuModelCallback callback) = 0;
 
   //////////////////////////////////////////////////////////////////////////////
   // Interfaces on the app list UI:
-  // Invoked when the app list is shown in the display with |display_id|.
-  virtual void ViewShown(int64_t display_id) = 0;
-  // Invoked when the app list is closed.
-  virtual void ViewClosing() = 0;
   // Notifies target visibility changes of the app list.
   virtual void OnAppListVisibilityWillChange(bool visible) = 0;
   // Notifies visibility changes of the app list.
@@ -124,15 +120,22 @@ class ASH_PUBLIC_EXPORT AppListClient {
   // implementation, this can return nullptr.
   virtual AppListNotifier* GetNotifier() = 0;
 
+  // Recalculate whether launcher search IPH should be shown and update
+  // SearchBoxModel.
+  virtual void RecalculateWouldTriggerLauncherSearchIph() = 0;
+
+  // `feature_engagement::Tracker` needs to be initialized before this method
+  // gets called. Call `WouldTriggerLauncherSearchIph` to initialize it. This
+  // returns false if the tracker is not initialized yet.
+  virtual std::unique_ptr<ScopedIphSession>
+  CreateLauncherSearchIphSession() = 0;
+
   // Invoked to load an icon of the app identified by `app_id`.
   virtual void LoadIcon(int profile_id, const std::string& app_id) = 0;
 
   // Returns the sorting order that is saved in perf service and gets shared
   // among synced devices.
   virtual ash::AppListSortOrder GetPermanentSortingOrder() const = 0;
-
-  // Invoked to commit the app list temporary sort order.
-  virtual void CommitTemporarySortOrder() = 0;
 
  protected:
   virtual ~AppListClient() = default;

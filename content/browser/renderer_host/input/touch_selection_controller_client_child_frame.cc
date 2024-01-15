@@ -4,17 +4,17 @@
 
 #include "content/browser/renderer_host/input/touch_selection_controller_client_child_frame.h"
 
-#include "ash/constants/ash_features.h"
 #include "base/check.h"
 #include "base/notreached.h"
-#include "build/chromeos_buildflags.h"
 #include "content/browser/renderer_host/render_widget_host_delegate.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
 #include "content/browser/renderer_host/render_widget_host_view_child_frame.h"
 #include "content/public/browser/touch_selection_controller_client_manager.h"
+#include "third_party/blink/public/mojom/input/input_handler.mojom-shared.h"
 #include "ui/base/clipboard/clipboard.h"
 #include "ui/base/data_transfer_policy/data_transfer_endpoint.h"
 #include "ui/base/pointer/touch_editing_controller.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/gfx/geometry/point_conversions.h"
 #include "ui/strings/grit/ui_strings.h"
@@ -38,6 +38,18 @@ TouchSelectionControllerClientChildFrame::
 
 void TouchSelectionControllerClientChildFrame::DidStopFlinging() {
   manager_->DidStopFlinging();
+}
+
+void TouchSelectionControllerClientChildFrame::OnSwipeToMoveCursorBegin() {
+  manager_->OnSwipeToMoveCursorBegin();
+}
+
+void TouchSelectionControllerClientChildFrame::OnSwipeToMoveCursorEnd() {
+  manager_->OnSwipeToMoveCursorEnd();
+}
+
+void TouchSelectionControllerClientChildFrame::OnHitTestRegionUpdated() {
+  manager_->OnClientHitTestRegionUpdated(this);
 }
 
 void TouchSelectionControllerClientChildFrame::
@@ -159,7 +171,6 @@ bool TouchSelectionControllerClientChildFrame::IsCommandIdEnabled(
     int command_id) const {
   bool editable = rwhv_->GetTextInputType() != ui::TEXT_INPUT_TYPE_NONE;
   bool readable = rwhv_->GetTextInputType() != ui::TEXT_INPUT_TYPE_PASSWORD;
-
   bool has_selection = !rwhv_->GetSelectedText().empty();
   switch (command_id) {
     case ui::TouchEditable::kCut:
@@ -174,11 +185,20 @@ bool TouchSelectionControllerClientChildFrame::IsCommandIdEnabled(
           ui::ClipboardBuffer::kCopyPaste, &data_dst, &result);
       return editable && !result.empty();
     }
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    case ui::TouchEditable::kSelectAll:
-      return readable && base::FeatureList::IsEnabled(
-                             chromeos::features::kTouchTextEditingRedesign);
-#endif
+    case ui::TouchEditable::kSelectAll: {
+      gfx::Range text_range;
+      if (rwhv_->GetTextRange(&text_range)) {
+        return text_range.length() > rwhv_->GetSelectedText().length();
+      }
+      return true;
+    }
+    case ui::TouchEditable::kSelectWord: {
+      gfx::Range text_range;
+      if (rwhv_->GetTextRange(&text_range)) {
+        return readable && !has_selection && !text_range.is_empty();
+      }
+      return readable && !has_selection;
+    }
     default:
       return false;
   }
@@ -186,8 +206,12 @@ bool TouchSelectionControllerClientChildFrame::IsCommandIdEnabled(
 
 void TouchSelectionControllerClientChildFrame::ExecuteCommand(int command_id,
                                                               int event_flags) {
-  manager_->GetTouchSelectionController()
-      ->HideAndDisallowShowingAutomatically();
+  const bool should_dismiss_handles =
+      command_id != ui::TouchEditable::kSelectAll &&
+      command_id != ui::TouchEditable::kSelectWord;
+  manager_->GetTouchSelectionController()->OnMenuCommand(
+      should_dismiss_handles);
+
   RenderWidgetHostDelegate* host_delegate = rwhv_->host()->delegate();
   if (!host_delegate)
     return;
@@ -204,6 +228,12 @@ void TouchSelectionControllerClientChildFrame::ExecuteCommand(int command_id,
       break;
     case ui::TouchEditable::kSelectAll:
       host_delegate->SelectAll();
+      break;
+    case ui::TouchEditable::kSelectWord:
+      host_delegate->SelectAroundCaret(
+          blink::mojom::SelectionGranularity::kWord,
+          /*should_show_handle=*/true,
+          /*should_show_context_menu=*/false);
       break;
     default:
       NOTREACHED();

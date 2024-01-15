@@ -18,12 +18,14 @@
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/status_area_widget.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
-#include "base/bind.h"
-#include "base/cxx17_backports.h"
+#include "ash/wm/desks/desk_button/desk_button.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/i18n/rtl.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/animation_throughput_reporter.h"
 #include "ui/compositor/presentation_time_recorder.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
@@ -88,6 +90,8 @@ gfx::Insets GetMirroredInsets(const gfx::Insets& insets) {
 class ScrollableShelfView::ScrollableShelfArrowView
     : public ScrollArrowView,
       public views::ViewTargeterDelegate {
+  METADATA_HEADER(ScrollableShelfArrowView, ScrollArrowView)
+
  public:
   explicit ScrollableShelfArrowView(ArrowType arrow_type,
                                     bool is_horizontal_alignment,
@@ -141,13 +145,12 @@ class ScrollableShelfView::ScrollableShelfArrowView
   // ScrollableShelfContainerView. Then erase this empty function.
   void ScrollRectToVisible(const gfx::Rect& rect) override {}
 
-  const char* GetClassName() const override {
-    return "ScrollableShelfArrowView";
-  }
-
  private:
-  Shelf* const shelf_;
+  const raw_ptr<Shelf> shelf_;
 };
+
+BEGIN_METADATA(ScrollableShelfView, ScrollableShelfArrowView, ScrollArrowView)
+END_METADATA
 
 ////////////////////////////////////////////////////////////////////////////////
 // ScopedActiveInkDropCountImpl
@@ -155,13 +158,14 @@ class ScrollableShelfView::ScrollableShelfArrowView
 class ScrollableShelfView::ScopedActiveInkDropCountImpl
     : public ScrollableShelfView::ScopedActiveInkDropCount {
  public:
-  explicit ScopedActiveInkDropCountImpl(ScrollableShelfView* owner)
-      : owner_(owner) {
-    owner_->OnActiveInkDropChange(/*increase=*/true);
+  explicit ScopedActiveInkDropCountImpl(
+      base::RepeatingCallback<void(bool)> callback)
+      : on_active_ink_drop_change_callback_(callback) {
+    on_active_ink_drop_change_callback_.Run(/*increase=*/true);
   }
 
   ~ScopedActiveInkDropCountImpl() override {
-    owner_->OnActiveInkDropChange(/*increase=*/false);
+    on_active_ink_drop_change_callback_.Run(/*increase=*/false);
   }
 
   ScopedActiveInkDropCountImpl(const ScopedActiveInkDropCountImpl& rhs) =
@@ -170,7 +174,7 @@ class ScrollableShelfView::ScopedActiveInkDropCountImpl
       const ScopedActiveInkDropCountImpl& rhs) = delete;
 
  private:
-  ScrollableShelfView* owner_ = nullptr;
+  base::RepeatingCallback<void(bool)> on_active_ink_drop_change_callback_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -178,6 +182,8 @@ class ScrollableShelfView::ScopedActiveInkDropCountImpl
 
 class ScrollableShelfContainerView : public ShelfContainerView,
                                      public views::ViewTargeterDelegate {
+  METADATA_HEADER(ScrollableShelfContainerView, ShelfContainerView)
+
  public:
   explicit ScrollableShelfContainerView(
       ScrollableShelfView* scrollable_shelf_view)
@@ -203,7 +209,7 @@ class ScrollableShelfContainerView : public ShelfContainerView,
   bool DoesIntersectRect(const views::View* target,
                          const gfx::Rect& rect) const override;
 
-  ScrollableShelfView* scrollable_shelf_view_ = nullptr;
+  raw_ptr<ScrollableShelfView> scrollable_shelf_view_ = nullptr;
 };
 
 void ScrollableShelfContainerView::TranslateShelfView(
@@ -229,6 +235,9 @@ void ScrollableShelfContainerView::Layout() {
     shelf_view_bounds.set_y(ShelfConfig::Get()->GetAppIconEndPadding());
 
   shelf_view_->SetBoundsRect(shelf_view_bounds);
+  shelf_view_->shelf()
+      ->shelf_layout_manager()
+      ->HandleScrollableShelfContainerBoundsChange();
 }
 
 bool ScrollableShelfContainerView::DoesIntersectRect(
@@ -240,6 +249,9 @@ bool ScrollableShelfContainerView::DoesIntersectRect(
   views::View::ConvertRectToTarget(scrollable_shelf_view_, this, &bounds);
   return ToEnclosedRect(bounds).Contains(rect);
 }
+
+BEGIN_METADATA(ScrollableShelfContainerView)
+END_METADATA
 
 ////////////////////////////////////////////////////////////////////////////////
 // ScrollableShelfFocusSearch
@@ -304,7 +316,7 @@ class ScrollableShelfFocusSearch : public views::FocusSearch {
   }
 
  private:
-  ScrollableShelfView* scrollable_shelf_view_ = nullptr;
+  raw_ptr<ScrollableShelfView> scrollable_shelf_view_ = nullptr;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -572,6 +584,11 @@ gfx::Insets ScrollableShelfView::CalculateMirroredEdgePadding(
   return padding_insets;
 }
 
+bool ScrollableShelfView::CalculateShelfOverflowForAvailableLength(
+    int available_length) const {
+  return available_length < CalculateShelfIconsPreferredLength();
+}
+
 views::View* ScrollableShelfView::GetShelfContainerViewForTest() {
   return shelf_container_view_;
 }
@@ -621,7 +638,7 @@ float ScrollableShelfView::CalculateClampedScrollOffset(
     int available_space_for_icons) const {
   const float scroll_upper_bound =
       CalculateScrollUpperBound(available_space_for_icons);
-  scroll = base::clamp(scroll, 0.0f, scroll_upper_bound);
+  scroll = std::clamp(scroll, 0.0f, scroll_upper_bound);
   return scroll;
 }
 
@@ -655,7 +672,7 @@ void ScrollableShelfView::StartShelfScrollAnimation(float scroll_distance) {
 
   ui::AnimationThroughputReporter reporter(
       animation_settings.GetAnimator(),
-      metrics_util::ForSmoothness(
+      metrics_util::ForSmoothnessV3(
           base::BindRepeating(&ReportSmoothness, Shell::Get()->IsInTabletMode(),
                               Shell::Get()->app_list_controller()->IsVisible(
                                   GetDisplayIdForView(this)))));
@@ -864,8 +881,9 @@ void ScrollableShelfView::OnBoundsChanged(const gfx::Rect& previous_bounds) {
 
 void ScrollableShelfView::ViewHierarchyChanged(
     const views::ViewHierarchyChangedDetails& details) {
-  if (details.parent != shelf_view_)
+  if (details.parent != shelf_view_.get()) {
     return;
+  }
 
   shelf_view_->UpdateShelfItemViewsVisibility();
 
@@ -964,10 +982,6 @@ std::unique_ptr<ui::Layer> ScrollableShelfView::RecreateLayer() {
   return views::View::RecreateLayer();
 }
 
-const char* ScrollableShelfView::GetClassName() const {
-  return "ScrollableShelfView";
-}
-
 void ScrollableShelfView::OnShelfButtonAboutToRequestFocusFromTabTraversal(
     ShelfButton* button,
     bool reverse) {
@@ -981,7 +995,8 @@ void ScrollableShelfView::OnShelfButtonAboutToRequestFocusFromTabTraversal(
   // gets focused, it should update the visibility of the hotseat.
   if (Shell::Get()->IsInTabletMode() &&
       !shelf_widget->hotseat_widget()->IsExtended()) {
-    shelf_widget->shelf_layout_manager()->UpdateVisibilityState();
+    shelf_widget->shelf_layout_manager()->UpdateVisibilityState(
+        /*force_layout=*/false);
   }
 }
 
@@ -1000,7 +1015,8 @@ void ScrollableShelfView::HandleAccessibleActionScrollToMakeVisible(
     ShelfButton* button) {
   // Scrollable shelf can only be hidden in tablet mode.
   GetShelf()->hotseat_widget()->set_manually_extended(true);
-  GetShelf()->shelf_widget()->shelf_layout_manager()->UpdateVisibilityState();
+  GetShelf()->shelf_widget()->shelf_layout_manager()->UpdateVisibilityState(
+      /*force_layout=*/false);
 }
 
 void ScrollableShelfView::OnButtonWillBeRemoved() {
@@ -1018,11 +1034,11 @@ void ScrollableShelfView::OnButtonWillBeRemoved() {
   // both `first_tappable_app_index_` and `last_tappable_app_index_` are reset
   // to invalid values (see https://crbug.com/1300561).
   if (view_size_before_removal < 2) {
-    last_tappable_app_index_ = absl::nullopt;
+    last_tappable_app_index_ = std::nullopt;
   } else {
     last_tappable_app_index_ = std::min(
         last_tappable_app_index_,
-        absl::make_optional(static_cast<size_t>(view_size_before_removal - 2)));
+        std::make_optional(static_cast<size_t>(view_size_before_removal - 2)));
   }
   first_tappable_app_index_ =
       std::min(first_tappable_app_index_, last_tappable_app_index_);
@@ -1037,7 +1053,9 @@ ScrollableShelfView::CreateScopedActiveInkDropCount(const ShelfButton* sender) {
   if (!ShouldCountActivatedInkDrop(sender))
     return nullptr;
 
-  return std::make_unique<ScopedActiveInkDropCountImpl>(this);
+  return std::make_unique<ScopedActiveInkDropCountImpl>(
+      base::BindRepeating(&ScrollableShelfView::OnActiveInkDropChange,
+                          weak_ptr_factory_.GetWeakPtr()));
 }
 
 void ScrollableShelfView::ShowContextMenuForViewImpl(
@@ -1072,6 +1090,16 @@ bool ScrollableShelfView::ShouldShowTooltipForView(
   if (view == left_arrow_ || view == right_arrow_)
     return true;
 
+  // TODO(b/288898225): Move shelf tooltip manager delegate implementation
+  // outside of `ScrollableShelfView` now that it deals with views outside the
+  // `ScrollableShelfView`.
+  if (DeskButtonWidget* desk_button_widget = GetShelf()->desk_button_widget()) {
+    DeskButton* desk_button = desk_button_widget->GetDeskButton();
+    if (view == desk_button || view->parent() == desk_button) {
+      return true;
+    }
+  }
+
   if (view->parent() != shelf_view_)
     return false;
 
@@ -1087,8 +1115,15 @@ bool ScrollableShelfView::ShouldShowTooltipForView(
   return visible_bounds_in_screen.Contains(screen_bounds);
 }
 
-bool ScrollableShelfView::ShouldHideTooltip(
-    const gfx::Point& cursor_location) const {
+bool ScrollableShelfView::ShouldHideTooltip(const gfx::Point& cursor_location,
+                                            views::View* delegate_view) const {
+  if (DeskButtonWidget* desk_button_widget = GetShelf()->desk_button_widget()) {
+    DeskButton* desk_button = desk_button_widget->GetDeskButton();
+    if (delegate_view == desk_button) {
+      return !desk_button->GetLocalBounds().Contains(cursor_location);
+    }
+  }
+
   if ((ShouldShowLeftArrow() &&
        left_arrow_->GetMirroredBounds().Contains(cursor_location)) ||
       (ShouldShowRightArrow() &&
@@ -1102,7 +1137,7 @@ bool ScrollableShelfView::ShouldHideTooltip(
 
   gfx::Point location_in_shelf_view = cursor_location;
   views::View::ConvertPointToTarget(this, shelf_view_, &location_in_shelf_view);
-  return shelf_view_->ShouldHideTooltip(location_in_shelf_view);
+  return shelf_view_->ShouldHideTooltip(location_in_shelf_view, delegate_view);
 }
 
 const std::vector<aura::Window*> ScrollableShelfView::GetOpenWindowsForView(
@@ -1121,6 +1156,13 @@ std::u16string ScrollableShelfView::GetTitleForView(
   if (view->parent() == shelf_view_)
     return shelf_view_->GetTitleForView(view);
 
+  if (DeskButtonWidget* desk_button_widget = GetShelf()->desk_button_widget()) {
+    DeskButton* desk_button = desk_button_widget->GetDeskButton();
+    if (view == desk_button || view->parent() == desk_button) {
+      return desk_button->GetTitleForView(view);
+    }
+  }
+
   if (view == left_arrow_)
     return l10n_util::GetStringUTF16(IDS_SHELF_PREVIOUS);
 
@@ -1133,6 +1175,12 @@ std::u16string ScrollableShelfView::GetTitleForView(
 views::View* ScrollableShelfView::GetViewForEvent(const ui::Event& event) {
   if (event.target() == GetWidget()->GetNativeWindow())
     return this;
+
+  if (DeskButtonWidget* desk_button_widget = GetShelf()->desk_button_widget()) {
+    if (event.target() == desk_button_widget->GetNativeWindow()) {
+      return desk_button_widget->GetDeskButton();
+    }
+  }
 
   return nullptr;
 }
@@ -1765,14 +1813,14 @@ void ScrollableShelfView::UpdateTappableIconIndices() {
   last_tappable_app_index_ = tappable_indices.second;
 }
 
-std::pair<absl::optional<size_t>, absl::optional<size_t>>
+std::pair<std::optional<size_t>, std::optional<size_t>>
 ScrollableShelfView::CalculateTappableIconIndices(
     ScrollableShelfView::LayoutStrategy layout_strategy,
     int scroll_distance_on_main_axis) const {
   const auto& visible_views_indices = shelf_view_->visible_views_indices();
 
   if (visible_views_indices.empty() || visible_space_.IsEmpty())
-    return {absl::nullopt, absl::nullopt};
+    return {std::nullopt, std::nullopt};
 
   if (layout_strategy == ScrollableShelfView::kNotShowArrowButtons) {
     return {visible_views_indices.front(), visible_views_indices.back()};
@@ -1823,6 +1871,17 @@ ScrollableShelfView::CalculateTappableIconIndices(
 
   DCHECK_LT(first_visible_view_index, visible_views_indices.size());
   DCHECK_LT(last_visible_view_index, visible_views_indices.size());
+
+  // Ensure that each visible view index is within the bounds of
+  // `visible_views_indices`.
+  // TODO(b/268401797): Rewrite CalculateTappableIconIndices() as a more
+  // thorough fix for out of bound indices.
+  first_visible_view_index =
+      std::clamp(first_visible_view_index, static_cast<size_t>(0),
+                 visible_views_indices.size() - 1);
+  last_visible_view_index =
+      std::clamp(last_visible_view_index, first_visible_view_index,
+                 visible_views_indices.size() - 1);
 
   return {visible_views_indices[first_visible_view_index],
           visible_views_indices[last_visible_view_index]};
@@ -1983,7 +2042,7 @@ gfx::Rect ScrollableShelfView::CalculateVisibleSpace(
 
 gfx::Insets ScrollableShelfView::CalculateRipplePaddingInsets() const {
   // Indicates whether it is in tablet mode with hotseat enabled.
-  const bool in_tablet_mode = Shell::Get()->IsInTabletMode();
+  const bool in_tablet_mode = display::Screen::GetScreen()->InTabletMode();
 
   const int ripple_padding =
       ShelfConfig::Get()->scrollable_shelf_ripple_padding();
@@ -2002,16 +2061,9 @@ gfx::Insets ScrollableShelfView::CalculateRipplePaddingInsets() const {
 
 gfx::RoundedCornersF
 ScrollableShelfView::CalculateShelfContainerRoundedCorners() const {
-  // This function may access TabletModeController during destruction of
-  // Hotseat. However, TabletModeController is destructed before Hotseat. So
-  // check the pointer explicitly here.
-  // TODO(https://crbug.com/1067490): reorder the destruction order in
-  // Shell::~Shell then remove the explicit check.
-  const bool is_in_tablet_mode =
-      Shell::Get()->tablet_mode_controller() && Shell::Get()->IsInTabletMode();
-
-  if (!is_in_tablet_mode)
+  if (!display::Screen::GetScreen()->InTabletMode()) {
     return gfx::RoundedCornersF();
+  }
 
   const bool is_horizontal_alignment = GetShelf()->IsHorizontalAlignment();
   const float radius = (is_horizontal_alignment ? height() : width()) / 2.f;
@@ -2120,7 +2172,7 @@ void ScrollableShelfView::UpdateScrollOffset(float target_offset) {
   const bool strategy_needs_update = (layout_strategy_ != new_strategy);
   if (strategy_needs_update) {
     layout_strategy_ = new_strategy;
-    const bool has_gradient_zone = !layer()->gradient_mask().IsEmpty();
+    const bool has_gradient_zone = layer()->HasGradientMask();
     const bool should_have_gradient_zone = ShouldApplyMaskLayerGradientZone();
     if (has_gradient_zone && !should_have_gradient_zone) {
       layer()->SetGradientMask(gfx::LinearGradient::GetEmpty());
@@ -2195,12 +2247,9 @@ void ScrollableShelfView::EnableShelfRoundedCorners(bool enable) {
   // Only enable shelf rounded corners in tablet mode. Note that we allow
   // disabling rounded corners in clamshell. Because when switching to clamshell
   // from tablet, this method may be called after tablet mode ends.
-  // TODO(https://crbug.com/1067490): reorder the destruction order in
-  // Shell::~Shell then remove the explicit check.
-  const bool is_in_tablet_mode =
-      Shell::Get()->tablet_mode_controller() && Shell::Get()->IsInTabletMode();
-  if (enable && !is_in_tablet_mode)
+  if (enable && !display::Screen::GetScreen()->InTabletMode()) {
     return;
+  }
 
   ui::Layer* layer = shelf_container_view_->layer();
 
@@ -2248,14 +2297,10 @@ bool ScrollableShelfView::ShouldEnableLayerClip() const {
   if (layout_strategy_ != LayoutStrategy::kNotShowArrowButtons)
     return true;
 
-  // TODO(https://crbug.com/1067490): reorder the destruction order in
-  // Shell::~Shell then remove the explicit check.
-  const bool is_in_tablet_mode =
-      Shell::Get()->tablet_mode_controller() && Shell::Get()->IsInTabletMode();
-
   // In clamshell, only use layer clip in overflow mode.
-  if (!is_in_tablet_mode)
+  if (!display::Screen::GetScreen()->InTabletMode()) {
     return false;
+  }
 
   // In tablet mode, whether using layer clip in non-overflow mode depends on
   // |layer_clip_in_non_overflow_|.
@@ -2286,5 +2331,8 @@ int ScrollableShelfView::CalculateShelfIconsPreferredLength() const {
                                            : shelf_preferred_size.height());
   return preferred_length + 2 * ShelfConfig::Get()->GetAppIconEndPadding();
 }
+
+BEGIN_METADATA(ScrollableShelfView)
+END_METADATA
 
 }  // namespace ash

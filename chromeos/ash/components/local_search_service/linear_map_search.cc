@@ -4,6 +4,7 @@
 
 #include "chromeos/ash/components/local_search_service/linear_map_search.h"
 
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -13,7 +14,6 @@
 #include "chromeos/ash/components/local_search_service/search_utils.h"
 #include "chromeos/ash/components/string_matching/fuzzy_tokenized_string_match.h"
 #include "chromeos/ash/components/string_matching/tokenized_string.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash::local_search_service {
 
@@ -54,8 +54,9 @@ bool IsItemRelevant(const TokenizedString& query,
         match.Relevance(query, *(tag.second), true /* use_weighted_ratio */);
     if (relevance >= relevance_threshold) {
       *relevance_score = relevance;
-      Position position;
-      position.content_id = tag.first;
+      // Initialize the `length` and `start` to 0, as they are currently not
+      // in-use by linear map search.
+      Position position(tag.first, 0, 0);
       positions->push_back(position);
       return true;
     }
@@ -133,14 +134,14 @@ void LinearMapSearch::Find(const std::u16string& query,
   if (query.empty()) {
     const ResponseStatus status = ResponseStatus::kEmptyQuery;
     MaybeLogSearchResultsStats(status, 0u, base::TimeDelta());
-    std::move(callback).Run(status, absl::nullopt);
+    std::move(callback).Run(status, std::nullopt);
     return;
   }
 
   if (data_.empty()) {
     const ResponseStatus status = ResponseStatus::kEmptyIndex;
     MaybeLogSearchResultsStats(status, 0u, base::TimeDelta());
-    std::move(callback).Run(status, absl::nullopt);
+    std::move(callback).Run(status, std::nullopt);
     return;
   }
 

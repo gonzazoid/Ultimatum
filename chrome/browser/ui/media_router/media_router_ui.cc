@@ -7,8 +7,8 @@
 #include <utility>
 
 #include "base/atomic_sequence_num.h"
-#include "base/bind.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
@@ -17,9 +17,9 @@
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/media/router/media_router_feature.h"
 #include "chrome/browser/media/router/providers/wired_display/wired_display_media_route_provider.h"
 #include "chrome/browser/media/webrtc/desktop_media_picker_controller.h"
-#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/media_router/media_sink_with_cast_modes.h"
@@ -62,19 +62,20 @@ bool IssueMatches(const Issue& issue, const UIMediaSink& ui_sink) {
           issue.info().route_id == ui_sink.route->media_route_id());
 }
 
-std::u16string GetSinkFriendlyName(const MediaSink& sink) {
-  // Use U+2010 (HYPHEN) instead of ASCII hyphen to avoid problems with RTL
-  // languages.
-  const char* separator = " \u2010 ";
-  return base::UTF8ToUTF16(sink.description() ? sink.name() + separator +
-                                                    sink.description().value()
-                                              : sink.name());
-}
-
 void MaybeReportCastingSource(MediaCastMode cast_mode,
                               const RouteRequestResult& result) {
   if (result.result_code() == mojom::RouteRequestResultCode::OK)
     base::UmaHistogramSparse("MediaRouter.Source.CastingSource", cast_mode);
+}
+
+const CastModeSet CreateMediaCastModeSet(const MediaCastMode& cast_mode) {
+  if (base::FeatureList::IsEnabled(
+          media_router::kFallbackToAudioTabMirroring)) {
+    // On sinks that do not support remote playback or presentation, we allow
+    // falling back to tab mirroring.
+    return {cast_mode, MediaCastMode::TAB_MIRROR};
+  }
+  return {cast_mode};
 }
 
 }  // namespace
@@ -90,8 +91,12 @@ MediaRouterUI::MediaRouterUI(
 }
 
 MediaRouterUI::~MediaRouterUI() {
+  StopObservingMirroringMediaControllerHosts();
   if (media_route_starter_)
     DetachFromMediaRouteStarter();
+  for (CastDialogController::Observer& observer : observers_) {
+    observer.OnControllerDestroying();
+  }
 }
 
 // static
@@ -104,8 +109,8 @@ std::unique_ptr<MediaRouterUI> MediaRouterUI::CreateMediaRouterUI(
 
 std::unique_ptr<MediaRouterUI> MediaRouterUI::CreateWithDefaultMediaSource(
     content::WebContents* initiator) {
-  return CreateMediaRouterUI(
-      MediaRouterUIParameters({MediaCastMode::PRESENTATION}, initiator));
+  return CreateMediaRouterUI(MediaRouterUIParameters(
+      CreateMediaCastModeSet(MediaCastMode::PRESENTATION), initiator));
 }
 
 // static
@@ -125,7 +130,8 @@ MediaRouterUI::CreateWithStartPresentationContext(
     std::unique_ptr<StartPresentationContext> context) {
   DCHECK(context) << "context must not be null!";
   return CreateMediaRouterUI(MediaRouterUIParameters(
-      {MediaCastMode::PRESENTATION}, initiator, std::move(context)));
+      CreateMediaCastModeSet(MediaCastMode::PRESENTATION), initiator,
+      std::move(context)));
 }
 
 // static
@@ -148,15 +154,12 @@ MediaRouterUI::CreateWithMediaSessionRemotePlayback(
     media::AudioCodec audio_codec) {
   DCHECK(video_codec != media::VideoCodec::kUnknown) << "Unknown video codec.";
   DCHECK(audio_codec != media::AudioCodec::kUnknown) << "Unknown audio codec.";
-  return CreateMediaRouterUI(
-      MediaRouterUIParameters({MediaCastMode::REMOTE_PLAYBACK}, initiator,
-                              nullptr, video_codec, audio_codec));
+  return CreateMediaRouterUI(MediaRouterUIParameters(
+      CreateMediaCastModeSet(MediaCastMode::REMOTE_PLAYBACK), initiator,
+      nullptr, video_codec, audio_codec));
 }
 
 void MediaRouterUI::DetachFromMediaRouteStarter() {
-  for (CastDialogController::Observer& observer : observers_)
-    observer.OnControllerInvalidated();
-
   media_route_starter()->RemovePresentationRequestSourceObserver(this);
   media_route_starter()->RemoveMediaSinkWithCastModesObserver(this);
 }
@@ -188,10 +191,39 @@ void MediaRouterUI::ClearIssue(const Issue::Id& issue_id) {
   RemoveIssue(issue_id);
 }
 
+void MediaRouterUI::FreezeRoute(const std::string& route_id) {
+  MirroringMediaControllerHost* freeze_host =
+      GetMediaRouter()->GetMirroringMediaControllerHost(route_id);
+  if (!freeze_host) {
+    return;
+  }
+
+  freeze_host->Freeze();
+}
+
+void MediaRouterUI::UnfreezeRoute(const std::string& route_id) {
+  MirroringMediaControllerHost* freeze_host =
+      GetMediaRouter()->GetMirroringMediaControllerHost(route_id);
+  if (!freeze_host) {
+    return;
+  }
+
+  freeze_host->Unfreeze();
+}
+
 std::unique_ptr<MediaRouteStarter> MediaRouterUI::TakeMediaRouteStarter() {
   DCHECK(media_route_starter_) << "MediaRouteStarter already taken!";
   DetachFromMediaRouteStarter();
-  return std::move(media_route_starter_);
+  auto starter = std::move(media_route_starter_);
+  if (destructor_) {
+    std::move(destructor_).Run();  // May destroy `this`.
+  }
+  return starter;
+}
+
+void MediaRouterUI::RegisterDestructor(base::OnceClosure destructor) {
+  DCHECK(!destructor_);
+  destructor_ = std::move(destructor);
 }
 
 bool MediaRouterUI::CreateRoute(const MediaSink::Id& sink_id,
@@ -214,8 +246,11 @@ bool MediaRouterUI::CreateRoute(const MediaSink::Id& sink_id,
 
   GetIssueManager()->ClearAllIssues();
 
-  current_route_request_ = absl::make_optional(*params->request);
+  current_route_request_ = std::make_optional(*params->request);
 
+  // Note that `route_result_callbacks` don't get called when MediaRoterUI is
+  // destroyed before the route is created, e.g. when the Cast dialog is closed
+  // when the desktop picker is shown.
   params->route_result_callbacks.push_back(
       base::BindOnce(&MaybeReportCastingSource, cast_mode));
 
@@ -375,6 +410,12 @@ void MediaRouterUI::OnSourceUpdated(std::u16string& source_name) {
   UpdateModelHeader(source_name);
 }
 
+void MediaRouterUI::OnFreezeInfoChanged() {
+  // UpdateSinks regenerates the list of UIMediaSinks, and for each it queries
+  // the current freeze info.
+  UpdateSinks();
+}
+
 void MediaRouterUI::UpdateSinks() {
   std::vector<UIMediaSink> media_sinks;
   for (const MediaSinkWithCastModes& sink : GetEnabledSinks()) {
@@ -415,9 +456,7 @@ void MediaRouterUI::SendIssueForRouteTimeout(
       break;
   }
 
-  IssueInfo issue_info(issue_title, IssueInfo::Action::DISMISS,
-                       IssueInfo::Severity::NOTIFICATION);
-  issue_info.sink_id = sink_id;
+  IssueInfo issue_info(issue_title, IssueInfo::Severity::NOTIFICATION, sink_id);
   AddIssue(issue_info);
 }
 
@@ -425,7 +464,7 @@ std::u16string MediaRouterUI::GetSinkFriendlyNameFromId(
     const MediaSink::Id& sink_id) {
   for (const MediaSinkWithCastModes& sink : GetEnabledSinks()) {
     if (sink.sink.id() == sink_id) {
-      return GetSinkFriendlyName(sink.sink);
+      return base::UTF8ToUTF16(sink.sink.name());
     }
   }
   return std::u16string(u"Device");
@@ -435,9 +474,7 @@ void MediaRouterUI::SendIssueForUserNotAllowed(const MediaSink::Id& sink_id) {
   std::string issue_title = l10n_util::GetStringFUTF8(
       IDS_MEDIA_ROUTER_ISSUE_CREATE_ROUTE_USER_NOT_ALLOWED,
       GetSinkFriendlyNameFromId(sink_id));
-  IssueInfo issue_info(issue_title, IssueInfo::Action::DISMISS,
-                       IssueInfo::Severity::WARNING);
-  issue_info.sink_id = sink_id;
+  IssueInfo issue_info(issue_title, IssueInfo::Severity::WARNING, sink_id);
   AddIssue(issue_info);
 }
 
@@ -446,9 +483,7 @@ void MediaRouterUI::SendIssueForNotificationDisabled(
   std::string issue_title = l10n_util::GetStringFUTF8(
       IDS_MEDIA_ROUTER_ISSUE_CREATE_ROUTE_NOTIFICATION_DISABLED,
       GetSinkFriendlyNameFromId(sink_id));
-  IssueInfo issue_info(issue_title, IssueInfo::Action::DISMISS,
-                       IssueInfo::Severity::WARNING);
-  issue_info.sink_id = sink_id;
+  IssueInfo issue_info(issue_title, IssueInfo::Severity::WARNING, sink_id);
   AddIssue(issue_info);
 }
 
@@ -456,9 +491,7 @@ void MediaRouterUI::SendIssueForScreenPermission(const MediaSink::Id& sink_id) {
 #if BUILDFLAG(IS_MAC)
   std::string issue_title = l10n_util::GetStringUTF8(
       IDS_MEDIA_ROUTER_ISSUE_MAC_SCREEN_CAPTURE_PERMISSION_ERROR);
-  IssueInfo issue_info(issue_title, IssueInfo::Action::DISMISS,
-                       IssueInfo::Severity::WARNING);
-  issue_info.sink_id = sink_id;
+  IssueInfo issue_info(issue_title, IssueInfo::Severity::WARNING, sink_id);
   AddIssue(issue_info);
 #else
   NOTREACHED() << "Only valid for MAC OS!";
@@ -475,9 +508,7 @@ void MediaRouterUI::SendIssueForUnableToCast(MediaCastMode cast_mode,
                 IDS_MEDIA_ROUTER_ISSUE_UNABLE_TO_CAST_DESKTOP)
           : l10n_util::GetStringUTF8(
                 IDS_MEDIA_ROUTER_ISSUE_CREATE_ROUTE_TIMEOUT_FOR_TAB);
-  IssueInfo issue_info(issue_title, IssueInfo::Action::DISMISS,
-                       IssueInfo::Severity::WARNING);
-  issue_info.sink_id = sink_id;
+  IssueInfo issue_info(issue_title, IssueInfo::Severity::WARNING, sink_id);
   AddIssue(issue_info);
 }
 
@@ -485,8 +516,7 @@ void MediaRouterUI::SendIssueForTabAudioNotSupported(
     const MediaSink::Id& sink_id) {
   IssueInfo issue_info(
       l10n_util::GetStringUTF8(IDS_MEDIA_ROUTER_ISSUE_TAB_AUDIO_NOT_SUPPORTED),
-      IssueInfo::Action::DISMISS, IssueInfo::Severity::NOTIFICATION);
-  issue_info.sink_id = sink_id;
+      IssueInfo::Severity::NOTIFICATION, sink_id);
   AddIssue(issue_info);
 }
 
@@ -506,11 +536,12 @@ void MediaRouterUI::OnIssue(const Issue& issue) {
 }
 
 void MediaRouterUI::OnIssueCleared() {
-  issue_ = absl::nullopt;
+  issue_ = std::nullopt;
   UpdateSinks();
 }
 
 void MediaRouterUI::OnRoutesUpdated(const std::vector<MediaRoute>& routes) {
+  StopObservingMirroringMediaControllerHosts();
   routes_.clear();
 
   for (const MediaRoute& route : routes) {
@@ -525,6 +556,12 @@ void MediaRouterUI::OnRoutesUpdated(const std::vector<MediaRoute>& routes) {
     }
 #endif
     routes_.push_back(route);
+    MirroringMediaControllerHost* mirroring_controller_host =
+        GetMediaRouter()->GetMirroringMediaControllerHost(
+            route.media_route_id());
+    if (mirroring_controller_host) {
+      mirroring_controller_host->AddObserver(this);
+    }
   }
 
   if (terminating_route_id_ &&
@@ -567,6 +604,12 @@ void MediaRouterUI::OnRouteResponseReceived(
   }
 
   current_route_request_.reset();
+  if (result.result_code() == mojom::RouteRequestResultCode::OK) {
+    for (CastDialogController::Observer& observer : observers_) {
+      observer.OnCastingStarted();
+    }
+  }
+
   if (result.result_code() == mojom::RouteRequestResultCode::OK &&
       cast_mode == TAB_MIRROR && !base::TimeTicks::IsHighResolution()) {
     // When tab mirroring on a device without a high resolution clock, the audio
@@ -597,10 +640,10 @@ void MediaRouterUI::UpdateModelHeader(const std::u16string& source_name) {
 
 UIMediaSink MediaRouterUI::ConvertToUISink(const MediaSinkWithCastModes& sink,
                                            const MediaRoute* route,
-                                           const absl::optional<Issue>& issue) {
+                                           const std::optional<Issue>& issue) {
   UIMediaSink ui_sink{sink.sink.provider_id()};
   ui_sink.id = sink.sink.id();
-  ui_sink.friendly_name = GetSinkFriendlyName(sink.sink);
+  ui_sink.friendly_name = base::UTF8ToUTF16(sink.sink.name());
   ui_sink.icon_type = sink.sink.icon_type();
   ui_sink.cast_modes = sink.cast_modes;
 
@@ -614,6 +657,14 @@ UIMediaSink MediaRouterUI::ConvertToUISink(const MediaSinkWithCastModes& sink,
       ui_sink.state = UIMediaSinkState::CONNECTING;
     } else {
       ui_sink.state = UIMediaSinkState::CONNECTED;
+
+      MirroringMediaControllerHost* mirroring_controller_host =
+          GetMediaRouter()->GetMirroringMediaControllerHost(
+              route->media_route_id());
+      if (mirroring_controller_host) {
+        ui_sink.freeze_info.can_freeze = mirroring_controller_host->CanFreeze();
+        ui_sink.freeze_info.is_frozen = mirroring_controller_host->IsFrozen();
+      }
     }
   } else {
     ui_sink.state = current_route_request() &&
@@ -624,6 +675,19 @@ UIMediaSink MediaRouterUI::ConvertToUISink(const MediaSinkWithCastModes& sink,
   if (issue && IssueMatches(*issue, ui_sink))
     ui_sink.issue = issue;
   return ui_sink;
+}
+
+void MediaRouterUI::StopObservingMirroringMediaControllerHosts() {
+  for (const MediaRoute& route : routes_) {
+    MirroringMediaControllerHost* mirroring_controller_host =
+        GetMediaRouter()->GetMirroringMediaControllerHost(
+            route.media_route_id());
+    if (mirroring_controller_host) {
+      // It is safe to call RemoveObserver even if we are not observing a
+      // particular host.
+      mirroring_controller_host->RemoveObserver(this);
+    }
+  }
 }
 
 MediaRouter* MediaRouterUI::GetMediaRouter() const {

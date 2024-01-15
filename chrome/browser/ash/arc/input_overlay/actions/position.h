@@ -14,14 +14,13 @@
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/geometry/vector2d_f.h"
 
-namespace arc {
-namespace input_overlay {
+namespace arc::input_overlay {
 
-// Returns true if there is no value of |key| or there is positive value of the
-// |key|.
-bool ParsePositiveFraction(const base::Value& value,
+// Returns true if there is no value of `key` or there is positive value of the
+// `key`.
+bool ParsePositiveFraction(const base::Value::Dict& value,
                            const char* key,
-                           absl::optional<float>* output);
+                           std::optional<float>* output);
 
 // Position class for touch point.
 class Position {
@@ -33,12 +32,12 @@ class Position {
 
   static std::unique_ptr<Position> ConvertFromProto(const PositionProto& proto);
 
-  bool ParseFromJson(const base::Value& value);
-  // Return the position coords in |content_bounds|. |content_bounds| is bounds
+  bool ParseFromJson(const base::Value::Dict& value);
+  // Return the position coords in `content_bounds`. `content_bounds` is bounds
   // excluding caption if the caption shows.
   gfx::PointF CalculatePosition(const gfx::RectF& content_bounds) const;
-  // Normalize the |point| inside of |content_bounds|. |point| is relative
-  // position inside of |content_bounds|.
+  // Normalize the `point` inside of `content_bounds`. `point` is relative
+  // position inside of `content_bounds`.
   void Normalize(const gfx::Point& point, const gfx::RectF& content_bounds);
   std::unique_ptr<PositionProto> ConvertToProto() const;
 
@@ -52,9 +51,9 @@ class Position {
     anchor_to_target_ = points_vector;
   }
 
-  absl::optional<float> x_on_y() const { return x_on_y_; }
-  absl::optional<float> y_on_x() const { return y_on_x_; }
-  absl::optional<float> aspect_ratio() const { return aspect_ratio_; }
+  std::optional<float> x_on_y() const { return x_on_y_; }
+  std::optional<float> y_on_x() const { return y_on_x_; }
+  std::optional<float> aspect_ratio() const { return aspect_ratio_; }
 
  private:
   friend class PositionTest;
@@ -73,7 +72,7 @@ class Position {
   // "max_x": 50, // Optional.
   // "max_y": 50 // Optional.
   // }
-  bool ParseDefaultFromJson(const base::Value& value);
+  bool ParseDefaultFromJson(const base::Value::Dict& value);
   // Parse position from Json.
   // Json value format:
   // {
@@ -85,15 +84,15 @@ class Position {
   //   "aspect_ratio": 1.5 // Can be null for height- or width-dependent
   //                       // position.
   // }
-  bool ParseDependentFromJson(const base::Value& value);
+  bool ParseDependentFromJson(const base::Value::Dict& value);
 
   gfx::PointF CalculateDefaultPosition(const gfx::RectF& content_bounds) const;
   gfx::PointF CalculateDependentPosition(
       const gfx::RectF& content_bounds) const;
 
-  // kDefault: only |anchor_|, |anchor_to_target_|, |max_x_| and |max_y_| are
+  // kDefault: only `anchor_`, `anchor_to_target_`, `max_x_` and `max_y_` are
   // used for calculating position. kDependent: including above kDefault,
-  // |x_on_y_|, |y_on_x_| and |aspect_ratio_| are also involved for calculating
+  // `x_on_y_`, `y_on_x_` and `aspect_ratio_` are also involved for calculating
   // position.
   PositionType position_type_;
 
@@ -105,29 +104,28 @@ class Position {
   // position. The value may be negative if the direction is different from
   // original x and y.
   gfx::Vector2dF anchor_to_target_;
-  absl::optional<int> max_x_;
-  absl::optional<int> max_y_;
+  std::optional<int> max_x_;
+  std::optional<int> max_y_;
 
   // Below is for dependent position.
   // This is for height-dependent position.
   // The length on the direction X to the anchor depends on the direction Y to
   // the anchor. If both x_on_y_ and y_on_x_ are not set, x_on_y_ is set to
   // default -1.
-  absl::optional<float> x_on_y_;
+  std::optional<float> x_on_y_;
 
   // This is for width-dependent position.
   // The length on the direction Y to the anchor depends on the direction X to
   // the anchor.
-  absl::optional<float> y_on_x_;
+  std::optional<float> y_on_x_;
 
   // The is for aspect-ratio-dependent position. Both x_on_y_ and y_on_x_ should
   // be set if aspect_ratio_ is set. If the window aspect ratio >=
   // aspect_ratio_, it becomes height-dependent position. Otherwise, it is
   // width-dependent position.
-  absl::optional<float> aspect_ratio_;
+  std::optional<float> aspect_ratio_;
 };
 
-}  // namespace input_overlay
-}  // namespace arc
+}  // namespace arc::input_overlay
 
 #endif  // CHROME_BROWSER_ASH_ARC_INPUT_OVERLAY_ACTIONS_POSITION_H_

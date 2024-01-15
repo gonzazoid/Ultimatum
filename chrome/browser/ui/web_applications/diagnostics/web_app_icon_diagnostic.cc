@@ -1,11 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/web_applications/diagnostics/web_app_icon_diagnostic.h"
 
 #include "base/strings/utf_string_conversions.h"
-#include "chrome/browser/ui/web_applications/diagnostics/callback_utils.h"
+#include "chrome/browser/web_applications/callback_utils.h"
 #include "chrome/browser/web_applications/web_app.h"
 #include "chrome/browser/web_applications/web_app_icon_generator.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
@@ -14,16 +14,17 @@
 
 namespace web_app {
 
-WebAppIconDiagnostic::WebAppIconDiagnostic(Profile* profile, AppId app_id)
+WebAppIconDiagnostic::WebAppIconDiagnostic(Profile* profile,
+                                           webapps::AppId app_id)
     : profile_(profile),
       app_id_(std::move(app_id)),
       provider_(WebAppProvider::GetForLocalAppsUnchecked(profile_.get())),
-      app_(provider_->registrar().GetAppById(app_id_)) {}
+      app_(provider_->registrar_unsafe().GetAppById(app_id_)) {}
 
 WebAppIconDiagnostic::~WebAppIconDiagnostic() = default;
 
 void WebAppIconDiagnostic::Run(
-    base::OnceCallback<void(absl::optional<Result>)> result_callback) {
+    base::OnceCallback<void(std::optional<Result>)> result_callback) {
   result_callback_ = std::move(result_callback);
 
   if (!app_) {
@@ -116,6 +117,22 @@ void WebAppIconDiagnostic::DiagnoseEmptyOrMissingIconFiles(
   result_->has_empty_icon_file = icon_files_check.empty > 0;
   result_->has_missing_icon_file = icon_files_check.missing > 0;
   std::move(done_callback).Run();
+}
+
+std::ostream& operator<<(std::ostream& os,
+                         const WebAppIconDiagnostic::Result result) {
+  os << "has_empty_downloaded_icon_sizes: "
+     << result.has_empty_downloaded_icon_sizes << std::endl;
+  os << "has_generated_icon_flag: " << result.has_generated_icon_flag
+     << std::endl;
+  os << "has_generated_icon_flag_false_negative: "
+     << result.has_generated_icon_flag_false_negative << std::endl;
+  os << "has_generated_icon_bitmap: " << result.has_generated_icon_bitmap
+     << std::endl;
+  os << "has_empty_icon_bitmap: " << result.has_empty_icon_bitmap << std::endl;
+  os << "has_empty_icon_file: " << result.has_empty_icon_file << std::endl;
+  os << "has_missing_icon_file: " << result.has_missing_icon_file << std::endl;
+  return os;
 }
 
 }  // namespace web_app

@@ -12,17 +12,16 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/observer_list.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -73,6 +72,7 @@
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/constants/devicetype.h"
+#include "chromeos/ash/services/nearby/public/cpp/nearby_client_uuids.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 using device::BluetoothAdapter;
@@ -233,7 +233,7 @@ void BluetoothAdapterBlueZ::Initialize(base::OnceClosure callback) {
 
   // Can't initialize the adapter until DBus clients are ready.
   if (bluez::BluezDBusManager::Get()->IsObjectManagerSupportKnown()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&BluetoothAdapterBlueZ::Init,
                                   weak_ptr_factory_.GetWeakPtr()));
     return;
@@ -323,7 +323,7 @@ void BluetoothAdapterBlueZ::Shutdown() {
 
 BluetoothAdapterBlueZ::BluetoothAdapterBlueZ()
     : initialized_(false), dbus_is_shutdown_(false) {
-  ui_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  ui_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
   socket_thread_ = device::BluetoothSocketThread::Get();
 }
 
@@ -553,16 +553,16 @@ void BluetoothAdapterBlueZ::SetDiscoverable(bool discoverable,
                          std::move(error_callback)));
 }
 
-uint32_t BluetoothAdapterBlueZ::GetDiscoverableTimeout() const {
+base::TimeDelta BluetoothAdapterBlueZ::GetDiscoverableTimeout() const {
   if (!IsPresent())
-    return 0;
+    return base::Seconds(0);
 
   bluez::BluetoothAdapterClient::Properties* properties =
       bluez::BluezDBusManager::Get()
           ->GetBluetoothAdapterClient()
           ->GetProperties(object_path_);
 
-  return properties->discoverable_timeout.value();
+  return base::Seconds(properties->discoverable_timeout.value());
 }
 
 bool BluetoothAdapterBlueZ::IsDiscovering() const {
@@ -925,6 +925,9 @@ void BluetoothAdapterBlueZ::DevicePropertyChanged(
       property_name == properties->address.name() ||
       property_name == properties->name.name() ||
       property_name == properties->paired.name() ||
+#if BUILDFLAG(IS_CHROMEOS)
+      property_name == properties->bonded.name() ||
+#endif
       property_name == properties->trusted.name() ||
       property_name == properties->connected.name() ||
       property_name == properties->uuids.name() ||
@@ -959,14 +962,22 @@ void BluetoothAdapterBlueZ::DevicePropertyChanged(
     NotifyGattServicesDiscovered(device_bluez);
   }
 
-  // When a device becomes paired, mark it as trusted so that the user does
-  // not need to approve every incoming connection
   if (property_name == properties->paired.name()) {
-    if (properties->paired.value() && !properties->trusted.value()) {
-      device_bluez->SetTrusted();
-    }
     NotifyDevicePairedChanged(device_bluez, properties->paired.value());
   }
+
+// For CrOS, when a device becomes bonded, mark it as trusted so that the
+// user does not need to approve every incoming connection
+// This is not for other OS because,for non-CrOS, Chrome is not part of the OS.
+// Leave the decision to the real OS
+#if BUILDFLAG(IS_CHROMEOS)
+  if (property_name == properties->bonded.name()) {
+    if (properties->bonded.value() && !properties->trusted.value()) {
+      device_bluez->SetTrusted();
+    }
+    NotifyDeviceBondedChanged(device_bluez, properties->bonded.value());
+  }
+#endif
 
   // UMA connection counting
   if (property_name == properties->connected.name()) {
@@ -1144,14 +1155,25 @@ void BluetoothAdapterBlueZ::AuthorizeService(
     return;
   }
 
-  // We always set paired devices to Trusted, so the only reason that this
-  // method call would ever be called is in the case of a race condition where
-  // our "Set('Trusted', true)" method call is still pending in the Bluetooth
-  // daemon because it's busy handling the incoming connection.
-  if (device_bluez->IsPaired()) {
+  // For CrOS, we always set trusted when a device becomes bonded, so the only
+  // reason that this method call would ever be called is in the case of a
+  // race condition where our "Set('Trusted', true)" method call is still
+  // pending in the Bluetooth daemon because it's busy handling the incoming
+  // connection.
+#if BUILDFLAG(IS_CHROMEOS)
+  if (device_bluez->IsBonded()) {
     std::move(callback).Run(SUCCESS);
     return;
   }
+#endif
+
+  // Allow nearby connection from unbonded devices.
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  if (ash::nearby::IsNearbyClientUuid(BluetoothUUID(uuid))) {
+    std::move(callback).Run(SUCCESS);
+    return;
+  }
+#endif
 
   // TODO(keybuk): reject service authorizations when not paired, determine
   // whether this is acceptable long-term.
@@ -1707,7 +1729,10 @@ BluetoothAdapterBlueZ::GetLowEnergyScanSessionHardwareOffloadingStatus() {
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 void BluetoothAdapterBlueZ::SetStandardChromeOSAdapterName() {
-  DCHECK(IsPresent());
+  if (!IsPresent()) {
+    return;
+  }
+
   std::string alias = ash::GetDeviceBluetoothName(GetAddress());
   SetName(alias, base::DoNothing(), base::DoNothing());
 }
@@ -1770,7 +1795,7 @@ void BluetoothAdapterBlueZ::OnRegisterProfileError(
 void BluetoothAdapterBlueZ::OnSetDiscoverable(base::OnceClosure callback,
                                               ErrorCallback error_callback,
                                               bool success) {
-  if (!IsPresent()) {
+  if (!success || !IsPresent()) {
     std::move(error_callback).Run();
     return;
   }

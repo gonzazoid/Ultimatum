@@ -15,6 +15,7 @@
 #include "base/test/scoped_feature_list.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/unguessable_token.h"
+#include "chrome/browser/apps/app_service/app_registry_cache_waiter.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_base.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
@@ -27,11 +28,11 @@
 #include "chrome/browser/sharesheet/sharesheet_service.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
-#include "chrome/browser/web_applications/test/app_registry_cache_waiter.h"
 #include "chrome/browser/web_applications/test/profile_test_helper.h"
 #include "chrome/browser/web_applications/web_app_id_constants.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "chromeos/ash/components/standalone_browser/feature_refs.h"
 #include "chromeos/components/sharesheet/constants.h"
 #include "chromeos/crosapi/mojom/app_service_types.mojom.h"
 #include "components/exo/window_properties.h"
@@ -117,7 +118,7 @@ class SharesheetAshBrowserTest : public ash::SystemWebAppIntegrationTest {
  public:
   SharesheetAshBrowserTest() {
     scoped_feature_list_.InitWithFeatures(
-        {chromeos::features::kLacrosSupport, features::kWebAppsCrosapi}, {});
+        ash::standalone_browser::GetFeatureRefs(), {});
   }
   ~SharesheetAshBrowserTest() override = default;
 
@@ -127,14 +128,16 @@ class SharesheetAshBrowserTest : public ash::SystemWebAppIntegrationTest {
     WaitForTestSystemAppInstall();
 
     // When Lacros web apps are enabled, SWAs use kSystemWeb app type.
-    web_app::AppTypeInitializationWaiter(browser()->profile(),
-                                         apps::AppType::kSystemWeb)
+    apps::AppTypeInitializationWaiter(browser()->profile(),
+                                      apps::AppType::kSystemWeb)
         .Await();
 
     // The Sample System Web App will be automatically selected from the
     // Sharesheet bubble.
     sharesheet::SharesheetService::SetSelectedAppForTesting(
-        base::UTF8ToUTF16(web_app::kSampleSystemWebAppId));
+        base::UTF8ToUTF16(base::StringPiece{web_app::kSampleSystemWebAppId}));
+
+    ASSERT_TRUE(crosapi::browser_util::IsLacrosEnabled());
   }
   void TearDownOnMainThread() override {
     sharesheet::SharesheetService::SetSelectedAppForTesting(std::u16string());

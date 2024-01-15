@@ -7,7 +7,7 @@
 #include "ash/metrics/histogram_macros.h"
 #include "ash/public/cpp/metrics_util.h"
 #include "ash/wm/overview/overview_constants.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/time/time.h"
 #include "ui/aura/window.h"
@@ -43,6 +43,8 @@ constexpr base::TimeDelta kDropTargetFade = base::Milliseconds(250);
 // stops.
 constexpr base::TimeDelta kFadeInOnWindowDrag = base::Milliseconds(350);
 
+constexpr base::TimeDelta kWindowRestoreDuration = base::Milliseconds(350);
+
 base::TimeDelta GetAnimationDuration(OverviewAnimationType animation_type) {
   switch (animation_type) {
     case OVERVIEW_ANIMATION_NONE:
@@ -51,9 +53,10 @@ base::TimeDelta GetAnimationDuration(OverviewAnimationType animation_type) {
       return kFadeIn;
     case OVERVIEW_ANIMATION_EXIT_OVERVIEW_MODE_FADE_OUT:
       return kFadeOut;
+    case OVERVIEW_ANIMATION_LAYOUT_OVERVIEW_ITEMS_ON_EXIT:
+      return kWindowRestoreDuration;
     case OVERVIEW_ANIMATION_LAYOUT_OVERVIEW_ITEMS_ON_ENTER:
     case OVERVIEW_ANIMATION_LAYOUT_OVERVIEW_ITEMS_IN_OVERVIEW:
-    case OVERVIEW_ANIMATION_LAYOUT_OVERVIEW_ITEMS_ON_EXIT:
     case OVERVIEW_ANIMATION_RESTORE_WINDOW:
     case OVERVIEW_ANIMATION_RESTORE_WINDOW_ZERO:
     case OVERVIEW_ANIMATION_SPAWN_ITEM_IN_OVERVIEW:
@@ -71,11 +74,9 @@ base::TimeDelta GetAnimationDuration(OverviewAnimationType animation_type) {
       return kTransition;
     case OVERVIEW_ANIMATION_OPACITY_ON_WINDOW_DRAG:
       return kFadeInOnWindowDrag;
-    case OVERVIEW_ANIMATION_EXIT_OVERVIEW_MODE_DESKS_TEMPLATES_GRID_FADE_OUT:
+    case OVERVIEW_ANIMATION_EXIT_OVERVIEW_MODE_SAVED_DESK_GRID_FADE_OUT:
       return kFadeOut;
   }
-  NOTREACHED();
-  return base::TimeDelta();
 }
 
 void ReportCloseSmoothness(int smoothness) {
@@ -115,9 +116,13 @@ ScopedOverviewAnimationSettings::ScopedOverviewAnimationSettings(
       animation_settings_->SetPreemptionStrategy(
           ui::LayerAnimator::REPLACE_QUEUED_ANIMATIONS);
       break;
+    case OVERVIEW_ANIMATION_LAYOUT_OVERVIEW_ITEMS_ON_EXIT:
+      animation_settings_->SetTweenType(gfx::Tween::ACCEL_20_DECEL_100);
+      animation_settings_->SetPreemptionStrategy(
+          ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET);
+      break;
     case OVERVIEW_ANIMATION_LAYOUT_OVERVIEW_ITEMS_ON_ENTER:
     case OVERVIEW_ANIMATION_LAYOUT_OVERVIEW_ITEMS_IN_OVERVIEW:
-    case OVERVIEW_ANIMATION_LAYOUT_OVERVIEW_ITEMS_ON_EXIT:
     case OVERVIEW_ANIMATION_RESTORE_WINDOW:
     case OVERVIEW_ANIMATION_SPAWN_ITEM_IN_OVERVIEW:
       animation_settings_->SetTweenType(gfx::Tween::EASE_OUT);
@@ -163,7 +168,7 @@ ScopedOverviewAnimationSettings::ScopedOverviewAnimationSettings(
       animation_settings_->SetPreemptionStrategy(
           ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET);
       break;
-    case OVERVIEW_ANIMATION_EXIT_OVERVIEW_MODE_DESKS_TEMPLATES_GRID_FADE_OUT:
+    case OVERVIEW_ANIMATION_EXIT_OVERVIEW_MODE_SAVED_DESK_GRID_FADE_OUT:
       animation_settings_->SetTweenType(gfx::Tween::LINEAR);
       animation_settings_->SetPreemptionStrategy(
           ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET);
@@ -174,7 +179,7 @@ ScopedOverviewAnimationSettings::ScopedOverviewAnimationSettings(
   if (animation_type == OVERVIEW_ANIMATION_CLOSING_OVERVIEW_ITEM ||
       animation_type == OVERVIEW_ANIMATION_CLOSE_OVERVIEW_ITEM) {
     close_reporter_.emplace(animation_settings_->GetAnimator(),
-                            metrics_util::ForSmoothness(
+                            metrics_util::ForSmoothnessV3(
                                 base::BindRepeating(&ReportCloseSmoothness)));
   }
 }

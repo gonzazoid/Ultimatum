@@ -13,7 +13,6 @@
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/system/system_monitor.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "media/capture/video/fuchsia/video_capture_device_fuchsia.h"
 
@@ -172,9 +171,9 @@ void VideoCaptureDeviceFactoryFuchsia::OnDeviceWatcherDisconnected(
     zx_status_t status) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
-  // CastRunner may close the channel with ZX_ERR_UNAVAILABLE error code when
-  // none of the running applications have access to camera. No need to log the
-  // error in that case.
+  // When running on a device with no camera there may be no device-watcher
+  // service, in which case the device watcher channel will close with a well-
+  // defined error. There is no need to log the error in that case.
   if (status != ZX_ERR_UNAVAILABLE)
     ZX_LOG(ERROR, status) << "fuchsia.camera3.DeviceWatcher disconnected.";
 

@@ -7,8 +7,8 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/branding_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
@@ -24,7 +24,7 @@
 #include "content/public/browser/web_ui_data_source.h"
 #include "net/base/url_util.h"
 #include "ui/base/l10n/l10n_util.h"
-#include "ui/resources/grit/webui_generated_resources.h"
+#include "ui/resources/grit/webui_resources.h"
 #include "ui/strings/grit/ui_strings.h"
 #include "ui/web_dialogs/web_dialog_delegate.h"
 
@@ -67,7 +67,7 @@ class MigrationMessageHandler : public content::WebUIMessageHandler {
         ->ShowReauthAccountDialog(
             account_manager::AccountManagerFacade::AccountAdditionSource::
                 kAccountManagerMigrationWelcomeScreen,
-            account_email, base::OnceClosure());
+            account_email, base::DoNothing());
     HandleCloseDialog(args);
   }
 
@@ -84,9 +84,12 @@ class MigrationMessageHandler : public content::WebUIMessageHandler {
 
 AccountMigrationWelcomeUI::AccountMigrationWelcomeUI(content::WebUI* web_ui)
     : ui::WebDialogUI(web_ui) {
-  content::WebUIDataSource* html_source = content::WebUIDataSource::Create(
-      chrome::kChromeUIAccountMigrationWelcomeHost);
+  content::WebUIDataSource* html_source =
+      content::WebUIDataSource::CreateAndAdd(
+          Profile::FromWebUI(web_ui),
+          chrome::kChromeUIAccountMigrationWelcomeHost);
   webui::SetJSModuleDefaults(html_source);
+  webui::EnableTrustedTypesCSP(html_source);
 
   // Add localized strings.
   html_source->AddLocalizedString("welcomePageTitle",
@@ -104,7 +107,9 @@ AccountMigrationWelcomeUI::AccountMigrationWelcomeUI(content::WebUI* web_ui)
   // Add required resources.
   html_source->AddResourcePath("account_migration_welcome_app.js",
                                IDR_ACCOUNT_MIGRATION_WELCOME_APP_JS);
-  html_source->AddResourcePath("account_manager_shared_css.js",
+  html_source->AddResourcePath("account_migration_welcome_app.html.js",
+                               IDR_ACCOUNT_MIGRATION_WELCOME_APP_HTML_JS);
+  html_source->AddResourcePath("account_manager_shared.css.js",
                                IDR_ACCOUNT_MANAGER_SHARED_CSS_JS);
   html_source->AddResourcePath("account_manager_browser_proxy.js",
                                IDR_ACCOUNT_MANAGER_BROWSER_PROXY_JS);
@@ -121,9 +126,6 @@ AccountMigrationWelcomeUI::AccountMigrationWelcomeUI(content::WebUI* web_ui)
   web_ui->AddMessageHandler(std::make_unique<MigrationMessageHandler>(
       base::BindRepeating(&WebDialogUI::CloseDialog, weak_factory_.GetWeakPtr(),
                           base::Value::List() /* args */)));
-
-  Profile* profile = Profile::FromWebUI(web_ui);
-  content::WebUIDataSource::Add(profile, html_source);
 }
 
 AccountMigrationWelcomeUI::~AccountMigrationWelcomeUI() = default;

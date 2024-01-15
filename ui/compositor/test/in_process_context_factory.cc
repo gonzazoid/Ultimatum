@@ -7,16 +7,17 @@
 #include <limits>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "cc/base/switches.h"
+#include "cc/trees/raster_context_provider_wrapper.h"
 #include "components/viz/common/features.h"
 #include "components/viz/common/frame_sinks/begin_frame_args.h"
 #include "components/viz/common/frame_sinks/begin_frame_source.h"
@@ -34,14 +35,15 @@
 #include "components/viz/service/frame_sinks/frame_sink_manager_impl.h"
 #include "components/viz/service/gl/gpu_service_impl.h"
 #include "components/viz/test/test_gpu_service_holder.h"
+#include "components/viz/test/test_in_process_context_provider.h"
 #include "gpu/command_buffer/client/context_support.h"
 #include "gpu/command_buffer/client/gles2_interface.h"
+#include "gpu/command_buffer/client/raster_interface.h"
 #include "gpu/command_buffer/common/context_creation_attribs.h"
 #include "services/viz/privileged/mojom/compositing/display_private.mojom.h"
 #include "ui/compositor/compositor_switches.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/test/direct_layer_tree_frame_sink.h"
-#include "ui/compositor/test/in_process_context_provider.h"
 #include "ui/display/display_switches.h"
 #include "ui/gfx/buffer_format_util.h"
 #include "ui/gfx/geometry/skia_conversions.h"
@@ -50,12 +52,8 @@
 #include "ui/gl/gl_implementation.h"
 #include "ui/gl/test/gl_surface_test_support.h"
 
-#if BUILDFLAG(IS_APPLE)
+#if BUILDFLAG(IS_MAC)
 #include "ui/accelerated_widget_mac/ca_transaction_observer.h"
-#endif
-
-#if !defined(GPU_SURFACE_HANDLE_IS_ACCELERATED_WINDOW)
-#include "gpu/ipc/common/gpu_surface_tracker.h"
 #endif
 
 namespace ui {
@@ -99,6 +97,9 @@ class InProcessContextFactory::PerCompositorData
     vsync_interval_ = interval;
   }
   void SetOutputIsSecure(bool secure) override {}
+#if BUILDFLAG(IS_MAC)
+  void SetVSyncDisplayID(int64_t display_id) override {}
+#endif
   void ForceImmediateDrawAndSwapIfPossible() override {}
   void AddVSyncParameterObserver(
       mojo::PendingRemote<viz::mojom::VSyncParameterObserver> observer)
@@ -127,12 +128,17 @@ class InProcessContextFactory::PerCompositorData
   void SetDisplay(std::unique_ptr<viz::Display> display) {
     display_ = std::move(display);
   }
+  void SetMaxVrrInterval(
+      absl::optional<base::TimeDelta> max_vrr_interval) override {
+    max_vrr_interval_ = max_vrr_interval;
+  }
 
   void ResetDisplayOutputParameters() {
     output_color_matrix_ = SkM44();
     display_color_spaces_ = gfx::DisplayColorSpaces();
     vsync_timebase_ = base::TimeTicks();
     vsync_interval_ = base::TimeDelta();
+    max_vrr_interval_ = absl::nullopt;
   }
 
   void Bind(
@@ -153,6 +159,9 @@ class InProcessContextFactory::PerCompositorData
   }
   base::TimeTicks vsync_timebase() { return vsync_timebase_; }
   base::TimeDelta vsync_interval() { return vsync_interval_; }
+  absl::optional<base::TimeDelta> max_vrr_interval() {
+    return max_vrr_interval_;
+  }
 
  private:
   gpu::SurfaceHandle surface_handle_ = gpu::kNullSurfaceHandle;
@@ -163,6 +172,7 @@ class InProcessContextFactory::PerCompositorData
   gfx::DisplayColorSpaces display_color_spaces_;
   base::TimeTicks vsync_timebase_;
   base::TimeDelta vsync_interval_;
+  absl::optional<base::TimeDelta> max_vrr_interval_;
 
   mojo::AssociatedReceiver<viz::mojom::DisplayPrivate> receiver_{this};
 };
@@ -181,7 +191,7 @@ InProcessContextFactory::InProcessContextFactory(
   DCHECK_NE(gl::GetGLImplementation(), gl::kGLImplementationNone)
       << "If running tests, ensure that main() is calling "
       << "gl::GLSurfaceTestSupport::InitializeOneOff()";
-#if BUILDFLAG(IS_APPLE)
+#if BUILDFLAG(IS_MAC)
   renderer_settings_.release_overlay_resources_after_gpu_query = true;
   // Ensure that tests don't wait for frames that will never come.
   ui::CATransactionCoordinator::Get().DisableForTesting();
@@ -192,28 +202,39 @@ InProcessContextFactory::~InProcessContextFactory() {
   DCHECK(per_compositor_data_.empty());
 }
 
-void InProcessContextFactory::SetUseFastRefreshRateForTests() {
-  refresh_rate_ = 200.0;
+void InProcessContextFactory::SetRefreshRateForTests(double refresh_rate) {
+  refresh_rate_ = refresh_rate;
 }
 
 void InProcessContextFactory::CreateLayerTreeFrameSink(
     base::WeakPtr<Compositor> compositor) {
   // Try to reuse existing shared worker context provider.
   bool shared_worker_context_provider_lost = false;
-  if (shared_worker_context_provider_) {
+  if (shared_worker_context_provider_wrapper_) {
     // Note: If context is lost, delete reference after releasing the lock.
-    base::AutoLock lock(*shared_worker_context_provider_->GetLock());
-    if (shared_worker_context_provider_->RasterInterface()
-            ->GetGraphicsResetStatusKHR() != GL_NO_ERROR) {
+    const scoped_refptr<viz::RasterContextProvider>& worker_context =
+        shared_worker_context_provider_wrapper_->GetContext();
+    base::AutoLock lock(*worker_context->GetLock());
+    if (worker_context->RasterInterface()->GetGraphicsResetStatusKHR() !=
+        GL_NO_ERROR) {
       shared_worker_context_provider_lost = true;
     }
   }
-  if (!shared_worker_context_provider_ || shared_worker_context_provider_lost) {
-    shared_worker_context_provider_ = InProcessContextProvider::CreateOffscreen(
-        &gpu_memory_buffer_manager_, &image_factory_, /*is_worker=*/true);
-    auto result = shared_worker_context_provider_->BindToCurrentSequence();
-    if (result != gpu::ContextResult::kSuccess)
-      shared_worker_context_provider_ = nullptr;
+  if (!shared_worker_context_provider_wrapper_ ||
+      shared_worker_context_provider_lost) {
+    auto shared_worker_context_provider =
+        base::MakeRefCounted<viz::TestInProcessContextProvider>(
+            viz::TestContextType::kGpuRaster, /*support_locking=*/true);
+    auto result = shared_worker_context_provider->BindToCurrentSequence();
+    if (result != gpu::ContextResult::kSuccess) {
+      shared_worker_context_provider_wrapper_ = nullptr;
+    } else {
+      shared_worker_context_provider_wrapper_ =
+          base::MakeRefCounted<cc::RasterContextProviderWrapper>(
+              std::move(shared_worker_context_provider), nullptr,
+              cc::ImageDecodeCacheUtils::GetWorkingSetBytesForImageDecode(
+                  /*for_renderer=*/false));
+    }
   }
 
   PerCompositorData* data = per_compositor_data_[compositor.get()].get();
@@ -254,10 +275,11 @@ void InProcessContextFactory::CreateLayerTreeFrameSink(
       /*hint_session_factory=*/nullptr);
 
   data->SetDisplay(std::make_unique<viz::Display>(
-      &shared_bitmap_manager_, renderer_settings_, &debug_settings_,
-      compositor->frame_sink_id(), std::move(display_dependency),
-      std::move(output_surface), std::move(overlay_processor),
-      std::move(scheduler), compositor->task_runner()));
+      &shared_bitmap_manager_, &shared_image_manager_, &sync_point_manager_,
+      renderer_settings_, &debug_settings_, compositor->frame_sink_id(),
+      std::move(display_dependency), std::move(output_surface),
+      std::move(overlay_processor), std::move(scheduler),
+      compositor->task_runner()));
   frame_sink_manager_->RegisterBeginFrameSource(begin_frame_source.get(),
                                                 compositor->frame_sink_id());
   // Note that we are careful not to destroy a prior |data->begin_frame_source|
@@ -266,8 +288,9 @@ void InProcessContextFactory::CreateLayerTreeFrameSink(
 
   auto layer_tree_frame_sink = std::make_unique<DirectLayerTreeFrameSink>(
       compositor->frame_sink_id(), frame_sink_manager_, data->display(),
-      SharedMainThreadContextProvider(), shared_worker_context_provider_,
-      compositor->task_runner(), &gpu_memory_buffer_manager_);
+      SharedMainThreadRasterContextProvider(),
+      shared_worker_context_provider_wrapper_, compositor->task_runner(),
+      &gpu_memory_buffer_manager_);
   compositor->SetLayerTreeFrameSink(std::move(layer_tree_frame_sink),
                                     std::move(display_private));
 
@@ -276,25 +299,26 @@ void InProcessContextFactory::CreateLayerTreeFrameSink(
 
 scoped_refptr<viz::ContextProvider>
 InProcessContextFactory::SharedMainThreadContextProvider() {
-  if (shared_main_thread_contexts_ &&
-      shared_main_thread_contexts_->ContextGL()->GetGraphicsResetStatusKHR() ==
-          GL_NO_ERROR)
-    return shared_main_thread_contexts_;
-
-  shared_main_thread_contexts_ = InProcessContextProvider::CreateOffscreen(
-      &gpu_memory_buffer_manager_, &image_factory_, /*is_worker=*/false);
-  auto result = shared_main_thread_contexts_->BindToCurrentSequence();
-  if (result != gpu::ContextResult::kSuccess)
-    shared_main_thread_contexts_.reset();
-
-  return shared_main_thread_contexts_;
+  return nullptr;
 }
 
 scoped_refptr<viz::RasterContextProvider>
 InProcessContextFactory::SharedMainThreadRasterContextProvider() {
-  SharedMainThreadContextProvider();
-  DCHECK(!shared_main_thread_contexts_ ||
-         shared_main_thread_contexts_->RasterInterface());
+  if (shared_main_thread_contexts_ &&
+      shared_main_thread_contexts_->RasterInterface()
+              ->GetGraphicsResetStatusKHR() == GL_NO_ERROR) {
+    return shared_main_thread_contexts_;
+  }
+
+  shared_main_thread_contexts_ =
+      base::MakeRefCounted<viz::TestInProcessContextProvider>(
+          viz::TestContextType::kSoftwareRaster, /*support_locking=*/false);
+
+  auto result = shared_main_thread_contexts_->BindToCurrentSequence();
+  if (result != gpu::ContextResult::kSuccess) {
+    shared_main_thread_contexts_.reset();
+  }
+
   return shared_main_thread_contexts_;
 }
 
@@ -305,10 +329,6 @@ void InProcessContextFactory::RemoveCompositor(Compositor* compositor) {
   PerCompositorData* data = it->second.get();
   frame_sink_manager_->UnregisterBeginFrameSource(data->begin_frame_source());
   DCHECK(data);
-#if !defined(GPU_SURFACE_HANDLE_IS_ACCELERATED_WINDOW)
-  if (data->surface_handle())
-    gpu::GpuSurfaceTracker::Get()->RemoveSurface(data->surface_handle());
-#endif
   per_compositor_data_.erase(it);
 }
 
@@ -366,6 +386,15 @@ base::TimeDelta InProcessContextFactory::GetDisplayVSyncTimeInterval(
   return iter->second->vsync_interval();
 }
 
+absl::optional<base::TimeDelta> InProcessContextFactory::GetMaxVrrInterval(
+    Compositor* compositor) const {
+  auto iter = per_compositor_data_.find(compositor);
+  if (iter == per_compositor_data_.end()) {
+    return absl::nullopt;
+  }
+  return iter->second->max_vrr_interval();
+}
+
 void InProcessContextFactory::ResetDisplayOutputParameters(
     Compositor* compositor) {
   auto iter = per_compositor_data_.find(compositor);
@@ -386,20 +415,6 @@ InProcessContextFactory::CreatePerCompositorData(Compositor* compositor) {
   } else {
 #if defined(GPU_SURFACE_HANDLE_IS_ACCELERATED_WINDOW)
     data->SetSurfaceHandle(widget);
-#else
-    gpu::GpuSurfaceTracker* tracker = gpu::GpuSurfaceTracker::Get();
-    data->SetSurfaceHandle(tracker->AddSurfaceForNativeWidget(
-        gpu::GpuSurfaceTracker::SurfaceRecord(
-            widget
-#if BUILDFLAG(IS_ANDROID)
-            // We have to provide a surface too, but we don't have one.  For
-            // now, we don't proide it, since nobody should ask anyway.
-            // If we ever provide a valid surface here, then GpuSurfaceTracker
-            // can be more strict about enforcing it.
-            ,
-            nullptr, false /* can_be_used_with_surface_control */
-#endif
-            )));
 #endif
   }
 

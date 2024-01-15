@@ -2,57 +2,110 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// This enum defines item identifiers for Autofill popup controller.
-
 #ifndef COMPONENTS_AUTOFILL_CORE_BROWSER_UI_POPUP_ITEM_IDS_H_
 #define COMPONENTS_AUTOFILL_CORE_BROWSER_UI_POPUP_ITEM_IDS_H_
 
+#include "components/autofill/core/common/dense_set.h"
+
 namespace autofill {
 
+// This enum defines item identifiers for Autofill popup controller.
 // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.components.autofill
-// GENERATED_JAVA_PREFIX_TO_STRIP: POPUP_
-enum PopupItemId {
-  POPUP_ITEM_ID_AUTOCOMPLETE_ENTRY = 0,
-  POPUP_ITEM_ID_INSECURE_CONTEXT_PAYMENT_DISABLED_MESSAGE = -1,
-  POPUP_ITEM_ID_PASSWORD_ENTRY = -2,
-  POPUP_ITEM_ID_SEPARATOR = -3,
-  POPUP_ITEM_ID_CLEAR_FORM = -4,
-  POPUP_ITEM_ID_AUTOFILL_OPTIONS = -5,
-  POPUP_ITEM_ID_DATALIST_ENTRY = -6,
-  POPUP_ITEM_ID_SCAN_CREDIT_CARD = -7,
-  POPUP_ITEM_ID_TITLE = -8,
-  POPUP_ITEM_ID_CREDIT_CARD_SIGNIN_PROMO = -9,
-  POPUP_ITEM_ID_USERNAME_ENTRY = -11,
-  POPUP_ITEM_ID_ALL_SAVED_PASSWORDS_ENTRY = -13,
-  POPUP_ITEM_ID_GENERATE_PASSWORD_ENTRY = -14,
-  POPUP_ITEM_ID_SHOW_ACCOUNT_CARDS = -15,
-  POPUP_ITEM_ID_PASSWORD_ACCOUNT_STORAGE_OPT_IN = -16,
-  POPUP_ITEM_ID_USE_VIRTUAL_CARD = -18,
-  POPUP_ITEM_ID_PASSWORD_ACCOUNT_STORAGE_OPT_IN_AND_GENERATE = -21,
-  POPUP_ITEM_ID_ACCOUNT_STORAGE_PASSWORD_ENTRY = -22,
-  POPUP_ITEM_ID_ACCOUNT_STORAGE_USERNAME_ENTRY = -23,
-  POPUP_ITEM_ID_PASSWORD_ACCOUNT_STORAGE_RE_SIGNIN = -24,
-  POPUP_ITEM_ID_PASSWORD_ACCOUNT_STORAGE_EMPTY = -25,
-  POPUP_ITEM_ID_MIXED_FORM_MESSAGE = -26,
-  POPUP_ITEM_ID_VIRTUAL_CREDIT_CARD_ENTRY = -27,
-  POPUP_ITEM_ID_WEBAUTHN_CREDENTIAL = -28,
-  POPUP_ITEM_ID_MERCHANT_PROMO_CODE_ENTRY = -29,
-  POPUP_ITEM_ID_SEE_PROMO_CODE_DETAILS = -30,
-  POPUP_ITEM_ID_WEBAUTHN_SIGN_IN_WITH_ANOTHER_DEVICE = -31,
-  POPUP_ITEM_ID_IBAN_ENTRY = -32,
+enum class PopupItemId : int {
+  // Autocomplete suggestions.
+  kAutocompleteEntry,
+
+  // Autofill profile suggestions.
+  // Fill the whole for the current address. Triggered from the main/root
+  // popup suggestion.
+  kAddressEntry,
+  // Fills all address related fields, e.g ADDRESS_HOME_LINE1,
+  // ADDRESS_HOME_HOUSE_NUMBER etc.
+  kFillFullAddress,
+  // Fills all name related fields, e.g NAME_FIRST, NAME_MIDDLE, NAME_LAST
+  // etc.
+  kFillFullName,
+  // Same as above, however it is triggered from the subpopup. This option
+  // is displayed once the users is on group filling level or field by field
+  // level. It is used as a way to allow users to go back to filling the whole
+  // form. We need it as a separate id from `kAddressEntry` because it has a
+  // different UI and for logging.
+  kFillEverythingFromAddressProfile,
+  // When triggered from a phone number field this suggestion will fill every
+  // phone number field.
+  kFillFullPhoneNumber,
+  // Same as above, when triggered from an email address field this suggestion
+  // will fill every email field.
+  kFillFullEmail,
+  kAddressFieldByFieldFilling,
+  kEditAddressProfile,
+  kDeleteAddressProfile,
+  kAutofillOptions,
+
+  // Compose suggestions.
+  kCompose,
+
+  // Datalist suggestions.
+  kDatalistEntry,
+
+  // Password suggestions.
+  kPasswordEntry,
+  kUsernameEntry,
+  kAllSavedPasswordsEntry,
+  kGeneratePasswordEntry,
+  kShowAccountCards,
+  kPasswordAccountStorageOptIn,
+  kPasswordAccountStorageOptInAndGenerate,
+  kAccountStoragePasswordEntry,
+  kAccountStorageUsernameEntry,
+  kPasswordAccountStorageReSignin,
+  kPasswordAccountStorageEmpty,
+
+  // Payment suggestions.
+  kCreditCardEntry,
+  kInsecureContextPaymentDisabledMessage,
+  kScanCreditCard,
+  kVirtualCreditCardEntry,
+  kCreditCardFieldByFieldFilling,
+  kIbanEntry,
+
+  // Plus address suggestions.
+  kCreateNewPlusAddress,
+  kFillExistingPlusAddress,
+
+  // Promotion suggestions.
+  kMerchantPromoCodeEntry,
+  kSeePromoCodeDetails,
+
+  // Webauthn suggestions.
+  kWebauthnCredential,
+  kWebauthnSignInWithAnotherDevice,
+
+  // Other suggestions.
+  kSeparator,
+  kClearForm,
+  kMixedFormMessage,
+
+  // Top level suggestion rendered when test addresses are available. Shown only
+  // when DevTools is open.
+  kDevtoolsTestAddresses,
+  // Test address option that specifies a full address for a country
+  // so that users can test their form with it.
+  kDevtoolsTestAddressEntry,
+
+  kMaxValue = kDevtoolsTestAddressEntry
 };
 
-// List of `PopupItemId` that trigger filling a value into an input element
-// when the user selects the `PopupItemId`.
-constexpr PopupItemId kItemsTriggeringFieldFilling[] = {
-    POPUP_ITEM_ID_AUTOCOMPLETE_ENTRY,
-    POPUP_ITEM_ID_PASSWORD_ENTRY,
-    POPUP_ITEM_ID_DATALIST_ENTRY,
-    POPUP_ITEM_ID_USERNAME_ENTRY,
-    POPUP_ITEM_ID_ACCOUNT_STORAGE_PASSWORD_ENTRY,
-    POPUP_ITEM_ID_ACCOUNT_STORAGE_USERNAME_ENTRY,
-    POPUP_ITEM_ID_VIRTUAL_CREDIT_CARD_ENTRY,
-    POPUP_ITEM_ID_MERCHANT_PROMO_CODE_ENTRY};
+// Set of `PopupItemId`s that trigger filling a value into an input element
+// when the user selects a suggestion with that id.
+inline constexpr auto kItemsTriggeringFieldFilling = DenseSet<PopupItemId>(
+    {PopupItemId::kAccountStoragePasswordEntry,
+     PopupItemId::kAccountStorageUsernameEntry, PopupItemId::kAddressEntry,
+     PopupItemId::kAutocompleteEntry, PopupItemId::kCompose,
+     PopupItemId::kCreditCardEntry, PopupItemId::kDatalistEntry,
+     PopupItemId::kFillEverythingFromAddressProfile,
+     PopupItemId::kMerchantPromoCodeEntry, PopupItemId::kPasswordEntry,
+     PopupItemId::kUsernameEntry, PopupItemId::kVirtualCreditCardEntry});
 
 }  // namespace autofill
 

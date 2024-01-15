@@ -54,6 +54,7 @@ static_library("core") {
   ]
   deps = [
     "//base",
+    "//build:blink_buildflags",
     "//components/dom_distiller/core/mojom",
     "//components/leveldb_proto",
     "//components/pref_registry",
@@ -67,6 +68,7 @@ static_library("core") {
     "//ui/base",
     "//url",
   ]
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   if (is_android) {
     sources += [
@@ -76,10 +78,7 @@ static_library("core") {
       "dom_distiller_service_android.h",
       "url_utils_android.cc",
     ]
-    deps += [
-      ":jni_headers",
-      "//url:gurl_android",
-    ]
+    deps += [ "//components/dom_distiller/core/android:jni_headers" ]
   }
 }
 
@@ -152,14 +151,6 @@ source_set("unit_tests") {
 
 if (is_android) {
   import("//build/config/android/rules.gni")
-
-  generate_jni("jni_headers") {
-    sources = [
-      "android/java/src/org/chromium/components/dom_distiller/core/DistilledPagePrefs.java",
-      "android/java/src/org/chromium/components/dom_distiller/core/DomDistillerService.java",
-      "android/java/src/org/chromium/components/dom_distiller/core/DomDistillerUrlUtils.java",
-    ]
-  }
 
   java_cpp_enum("distiller_type_java") {
     sources = [ "experiments.h" ]

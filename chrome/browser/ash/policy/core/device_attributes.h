@@ -5,10 +5,10 @@
 #ifndef CHROME_BROWSER_ASH_POLICY_CORE_DEVICE_ATTRIBUTES_H_
 #define CHROME_BROWSER_ASH_POLICY_CORE_DEVICE_ATTRIBUTES_H_
 
+#include <optional>
 #include <string>
 
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace policy {
 
@@ -29,10 +29,6 @@ class DeviceAttributes {
   // identifies the SAML settings for the device.
   virtual std::string GetSSOProfile() const = 0;
 
-  // Returns the Kerberos realm (aka Windows Domain) if the device is managed by
-  // Active Directory.
-  virtual std::string GetRealm() const = 0;
-
   // Returns the device asset ID if it is set.
   virtual std::string GetDeviceAssetID() const = 0;
 
@@ -47,7 +43,7 @@ class DeviceAttributes {
 
   // Returns the device's hostname as set by DeviceHostnameTemplate policy or
   // null if no policy is set by admin.
-  virtual absl::optional<std::string> GetDeviceHostname() const = 0;
+  virtual std::optional<std::string> GetDeviceHostname() const = 0;
 
   // Returns the cloud directory API ID or an empty string if it is not set.
   virtual std::string GetDirectoryApiID() const = 0;

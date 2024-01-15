@@ -18,11 +18,59 @@ using CompletionCandidateDataView =
 using AssistiveSuggestionMode = ash::ime::AssistiveSuggestionMode;
 using SuggestionMode = ash::ime::mojom::SuggestionMode;
 using SuggestionType = ash::ime::mojom::SuggestionType;
+using SuggestionsTextContextDataView =
+    ash::ime::mojom::SuggestionsTextContextDataView;
+using SuggestionsTextContext = ash::ime::SuggestionsTextContext;
 using SuggestionCandidateDataView =
     ash::ime::mojom::SuggestionCandidateDataView;
 using DecoderCompletionCandidate = ash::ime::DecoderCompletionCandidate;
 using AssistiveSuggestionType = ash::ime::AssistiveSuggestionType;
 using AssistiveSuggestion = ash::ime::AssistiveSuggestion;
+using AutocorrectSuggestionProvider = ash::ime::AutocorrectSuggestionProvider;
+using AutocorrectSuggestionProviderMojo =
+    ash::ime::mojom::AutocorrectSuggestionProvider;
+
+// Returns the histogram with the given parameters.
+// If any of the parameters are invalid, returns nullptr.
+base::Histogram* GetHistogramStrict(
+    const std::string& name,
+    ash::ime::mojom::HistogramBucketType bucket_type,
+    const base::Histogram::Sample minimum,
+    const base::Histogram::Sample maximum,
+    const size_t bucket_count) {
+  // When `InspectConstructionArguments` receives certain invalid parameters, it
+  // will attempt to adjust them to be correct and return true. So in order to
+  // be strict about the validity of the parameters, ensure that the parameters
+  // are not adjusted by `InspectConstructionArguments`.
+  auto adjusted_minimum = minimum;
+  auto adjusted_maximum = maximum;
+  auto adjusted_bucket_count = bucket_count;
+  if (!base::Histogram::InspectConstructionArguments(
+          name, &adjusted_minimum, &adjusted_maximum, &adjusted_bucket_count)) {
+    return nullptr;
+  }
+  if (minimum != adjusted_minimum || maximum != adjusted_maximum ||
+      bucket_count != adjusted_bucket_count) {
+    return nullptr;
+  }
+
+  // Returns nullptr if validation failed in `FactoryGet`.
+  // This also relies on `Histogram::InspectConstructionArguments` called from
+  // `FactoryGet` to validate the bucket parameters a second time:
+  // https://source.chromium.org/chromium/chromium/src/+/main:base/metrics/histogram.cc;l=422
+  switch (bucket_type) {
+    case ash::ime::mojom::HistogramBucketType::kExponential:
+      return static_cast<base::Histogram*>(base::Histogram::FactoryGet(
+          name.data(), minimum, maximum, bucket_count,
+          base::HistogramBase::kUmaTargetedHistogramFlag));
+    case ash::ime::mojom::HistogramBucketType::kLinear:
+      return static_cast<base::Histogram*>(base::LinearHistogram::FactoryGet(
+          name.data(), minimum, maximum, bucket_count,
+          base::HistogramBase::kUmaTargetedHistogramFlag));
+    default:
+      return nullptr;
+  }
+}
 
 }  // namespace
 
@@ -112,6 +160,16 @@ bool StructTraits<SuggestionCandidateDataView, AssistiveSuggestion>::Read(
   return true;
 }
 
+bool StructTraits<SuggestionsTextContextDataView, SuggestionsTextContext>::Read(
+    SuggestionsTextContextDataView input,
+    SuggestionsTextContext* output) {
+  if (!input.ReadLastNChars(&output->last_n_chars)) {
+    return false;
+  }
+  output->surrounding_text_length = input.surrounding_text_length();
+  return true;
+}
+
 bool StructTraits<CompletionCandidateDataView, DecoderCompletionCandidate>::
     Read(CompletionCandidateDataView input,
          DecoderCompletionCandidate* output) {
@@ -178,6 +236,94 @@ bool StructTraits<AssistiveWindowDataView, AssistiveWindow>::Read(
     return false;
   if (!input.ReadCandidates(&output->candidates))
     return false;
+  return true;
+}
+
+AutocorrectSuggestionProviderMojo
+EnumTraits<AutocorrectSuggestionProviderMojo, AutocorrectSuggestionProvider>::
+    ToMojom(AutocorrectSuggestionProvider provider) {
+  switch (provider) {
+    case AutocorrectSuggestionProvider::kUsEnglishPrebundled:
+      return AutocorrectSuggestionProviderMojo::kUsEnglishPrebundled;
+    case AutocorrectSuggestionProvider::kUsEnglishDownloaded:
+      return AutocorrectSuggestionProviderMojo::kUsEnglishDownloaded;
+    case AutocorrectSuggestionProvider::kUsEnglish840:
+      return AutocorrectSuggestionProviderMojo::kUsEnglish840;
+    case AutocorrectSuggestionProvider::kUsEnglish840V2:
+      return AutocorrectSuggestionProviderMojo::kUsEnglish840V2;
+    default:
+      return AutocorrectSuggestionProviderMojo::kUnknown;
+  }
+}
+
+bool EnumTraits<AutocorrectSuggestionProviderMojo,
+                AutocorrectSuggestionProvider>::
+    FromMojom(AutocorrectSuggestionProviderMojo input,
+              AutocorrectSuggestionProvider* output) {
+  switch (input) {
+    case AutocorrectSuggestionProviderMojo::kUsEnglishPrebundled:
+      *output = AutocorrectSuggestionProvider::kUsEnglishPrebundled;
+      return true;
+    case AutocorrectSuggestionProviderMojo::kUsEnglishDownloaded:
+      *output = AutocorrectSuggestionProvider::kUsEnglishDownloaded;
+      return true;
+    case AutocorrectSuggestionProviderMojo::kUsEnglish840:
+      *output = AutocorrectSuggestionProvider::kUsEnglish840;
+      return true;
+    case AutocorrectSuggestionProviderMojo::kUsEnglish840V2:
+      *output = AutocorrectSuggestionProvider::kUsEnglish840V2;
+      return true;
+    default:
+      *output = AutocorrectSuggestionProvider::kUnknown;
+      return true;
+  }
+}
+
+bool StructTraits<
+    ash::ime::mojom::BucketedHistogramDataView,
+    base::Histogram*>::Read(ash::ime::mojom::BucketedHistogramDataView input,
+                            base::Histogram** output) {
+  std::string name;
+  if (!input.ReadName(&name)) {
+    return false;
+  }
+  if (!base::StartsWith(name, "Untrusted.")) {
+    DLOG(ERROR) << "Invalid histogram name: " << name
+                << ". BucketedHistogram name must begin with 'Untrusted.'.";
+    return false;
+  }
+
+  const auto minimum =
+      base::strict_cast<base::Histogram::Sample>(input.minimum());
+  const auto maximum =
+      base::strict_cast<base::Histogram::Sample>(input.maximum());
+  const auto bucket_count = base::strict_cast<size_t>(input.bucket_count());
+
+  base::Histogram* counter = GetHistogramStrict(name, input.bucket_type(),
+                                                minimum, maximum, bucket_count);
+
+  // `counter` will be nullptr if the parameters are invalid.
+  if (counter == nullptr) {
+    DLOG(ERROR) << "Invalid bucket parameters: bucket_type="
+                << static_cast<int>(input.bucket_type())
+                << ", minimum=" << minimum << ", maximum=" << maximum
+                << ", bucket_count=" << bucket_count;
+    return false;
+  }
+
+  // As a final defensive check, ensure that the constructed histogram has all
+  // the expected parameters as passed in.
+  if (!counter->HasConstructionArguments(minimum, maximum, bucket_count)) {
+    DLOG(ERROR) << "Invalid histogram. Expected histogram with minimum="
+                << minimum << ", maximum=" << maximum
+                << ", bucket_count=" << bucket_count
+                << ", but got minimum=" << counter->declared_min()
+                << ", maximum=" << counter->declared_max()
+                << ", bucket_count=" << counter->bucket_count();
+    return false;
+  }
+
+  *output = counter;
   return true;
 }
 

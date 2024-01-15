@@ -8,9 +8,9 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -93,11 +93,6 @@ class COMPONENT_EXPORT(DEVICE_FIDO) CredentialManagementHandler
   // will be sorted in ascending order by user name.
   void GetCredentials(GetCredentialsCallback callback);
 
-  // DeleteCredential attempts to delete the credential with the given
-  // |credential_id|.
-  void DeleteCredential(const PublicKeyCredentialDescriptor& credential_id,
-                        DeleteCredentialCallback callback);
-
   // DeleteCredentials deletes a list of credentials. Each entry in
   // |credential_ids| must be a CBOR-serialized credential_id.
   // If any individual deletion fails, |callback| is invoked with the
@@ -137,6 +132,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) CredentialManagementHandler
   void OnHavePIN(std::string pin);
   void OnHavePINToken(CtapDeviceResponseCode status,
                       absl::optional<pin::TokenResponse> response);
+  void OnInitFinished(CtapDeviceResponseCode status);
   void OnCredentialsMetadata(
       CtapDeviceResponseCode status,
       absl::optional<CredentialsMetadataResponse> response);

@@ -12,6 +12,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
 #include "components/autofill/core/browser/autofill_field.h"
+#include "components/autofill/core/browser/country_type.h"
 #include "components/autofill/core/browser/field_types.h"
 #include "components/autofill/core/browser/form_parsing/address_field.h"
 #include "components/autofill/core/browser/form_parsing/autofill_scanner.h"
@@ -51,58 +52,56 @@ class FormFieldTestBase {
  protected:
   // Add a field with |control_type|, the |name|, the |label| the expected
   // parsed type |expected_type|.
-  void AddFormFieldData(std::string control_type,
+  void AddFormFieldData(FormControlType control_type,
                         std::string name,
                         std::string label,
-                        ServerFieldType expected_type);
+                        FieldType expected_type);
 
   // Convenience wrapper for text control elements with a maximal length.
-  void AddFormFieldDataWithLength(std::string control_type,
+  void AddFormFieldDataWithLength(FormControlType control_type,
                                   std::string name,
                                   std::string label,
                                   int max_length,
-                                  ServerFieldType expected_type);
+                                  FieldType expected_type);
 
   // Convenience wrapper for text control elements.
   void AddTextFormFieldData(std::string name,
                             std::string label,
-                            ServerFieldType expected_classification);
-
-  // Convenience wrapper for 'select-one' elements with a max length.
-  void AddSelectOneFormFieldDataWithLength(
-      std::string name,
-      std::string label,
-      int max_length,
-      const std::vector<SelectOption>& options,
-      ServerFieldType expected_type);
+                            FieldType expected_type);
 
   // Convenience wrapper for 'select-one' elements.
   void AddSelectOneFormFieldData(std::string name,
                                  std::string label,
                                  const std::vector<SelectOption>& options,
-                                 ServerFieldType expected_type);
+                                 FieldType expected_type);
 
   // Apply parsing and verify the expected types.
   // |parsed| indicates if at least one field could be parsed successfully.
-  // |page_language| the language to be used for parsing, default empty value
-  // means the language is unknown and patterns of all languages are used.
-  void ClassifyAndVerify(ParseResult parse_result = ParseResult::PARSED,
-                         const LanguageCode& page_language = LanguageCode(""));
+  // |client_country| indicates the assumed country based on the geo ip.
+  // |page_language| indicates the language to be used for parsing, default
+  // empty value means the language is unknown and patterns of all languages are
+  // used.
+  void ClassifyAndVerify(
+      ParseResult parse_result = ParseResult::PARSED,
+      const GeoIpCountryCode& client_country = GeoIpCountryCode(""),
+      const LanguageCode& page_language = LanguageCode(""));
+
+  // Removes all the fields and resets the expectations.
+  void ClearFieldsAndExpectations();
 
   // Test the parsed verifications against the expectations.
   void TestClassificationExpectations();
 
   // Apply the parsing with a specific parser.
-  virtual std::unique_ptr<FormField> Parse(
-      AutofillScanner* scanner,
-      const LanguageCode& page_language) = 0;
+  virtual std::unique_ptr<FormField> Parse(ParsingContext& context,
+                                           AutofillScanner* scanner) = 0;
 
   FieldRendererId MakeFieldRendererId();
 
   std::vector<std::unique_ptr<AutofillField>> list_;
   std::unique_ptr<FormField> field_;
   FieldCandidatesMap field_candidates_map_;
-  std::map<FieldGlobalId, ServerFieldType> expected_classifications_;
+  std::map<FieldGlobalId, FieldType> expected_classifications_;
 
  private:
   base::test::ScopedFeatureList scoped_feature_list_;

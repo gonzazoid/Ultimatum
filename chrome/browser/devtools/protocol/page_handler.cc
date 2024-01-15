@@ -4,8 +4,11 @@
 
 #include "chrome/browser/devtools/protocol/page_handler.h"
 
+#include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/custom_handlers/protocol_handler_registry_factory.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
+#include "components/custom_handlers/protocol_handler_registry.h"
 #include "components/payments/content/payment_request_web_contents_manager.h"
 #include "components/subresource_filter/content/browser/devtools_interaction_tracker.h"
 #include "third_party/blink/public/common/manifest/manifest_util.h"
@@ -24,7 +27,7 @@
 
 template <typename T>
 absl::optional<T> OptionalFromMaybe(const protocol::Maybe<T>& maybe) {
-  return maybe.isJust() ? absl::optional<T>(maybe.fromJust()) : absl::nullopt;
+  return maybe.has_value() ? absl::optional<T>(maybe.value()) : absl::nullopt;
 }
 
 #if BUILDFLAG(ENABLE_PRINT_PREVIEW)
@@ -70,7 +73,7 @@ protocol::Response PageHandler::Enable() {
 protocol::Response PageHandler::Disable() {
   enabled_ = false;
   ToggleAdBlocking(false /* enable */);
-  SetSPCTransactionMode(protocol::Page::SetSPCTransactionMode::ModeEnum::None);
+  SetSPCTransactionMode(protocol::Page::AutoResponseModeEnum::None);
   // Do not mark the command as handled. Let it fall through instead, so that
   // the handler in content gets a chance to process the command.
   return protocol::Response::FallThrough();
@@ -89,12 +92,13 @@ protocol::Response PageHandler::SetSPCTransactionMode(
     return protocol::Response::ServerError("No web contents to host a dialog.");
 
   payments::SPCTransactionMode spc_mode = payments::SPCTransactionMode::NONE;
-  if (mode == protocol::Page::SetSPCTransactionMode::ModeEnum::Autoaccept) {
+  if (mode == protocol::Page::AutoResponseModeEnum::AutoAccept) {
     spc_mode = payments::SPCTransactionMode::AUTOACCEPT;
-  } else if (mode ==
-             protocol::Page::SetSPCTransactionMode::ModeEnum::Autoreject) {
+  } else if (mode == protocol::Page::AutoResponseModeEnum::AutoReject) {
     spc_mode = payments::SPCTransactionMode::AUTOREJECT;
-  } else if (mode != protocol::Page::SetSPCTransactionMode::ModeEnum::None) {
+  } else if (mode == protocol::Page::AutoResponseModeEnum::AutoOptOut) {
+    spc_mode = payments::SPCTransactionMode::AUTOOPTOUT;
+  } else if (mode != protocol::Page::AutoResponseModeEnum::None) {
     return protocol::Response::ServerError("Unrecognized mode value");
   }
 
@@ -102,6 +106,29 @@ protocol::Response PageHandler::SetSPCTransactionMode(
       payments::PaymentRequestWebContentsManager::GetOrCreateForWebContents(
           *web_contents_);
   payment_request_manager->SetSPCTransactionMode(spc_mode);
+  return protocol::Response::Success();
+}
+
+protocol::Response PageHandler::SetRPHRegistrationMode(
+    const protocol::String& mode) {
+  if (!web_contents_) {
+    return protocol::Response::ServerError("No web contents to host a dialog.");
+  }
+
+  custom_handlers::RphRegistrationMode rph_mode =
+      custom_handlers::RphRegistrationMode::kNone;
+  if (mode == protocol::Page::AutoResponseModeEnum::AutoAccept) {
+    rph_mode = custom_handlers::RphRegistrationMode::kAutoAccept;
+  } else if (mode == protocol::Page::AutoResponseModeEnum::AutoReject) {
+    rph_mode = custom_handlers::RphRegistrationMode::kAutoReject;
+  } else if (mode != protocol::Page::AutoResponseModeEnum::None) {
+    return protocol::Response::ServerError("Unrecognized mode value");
+  }
+
+  custom_handlers::ProtocolHandlerRegistry* registry =
+      ProtocolHandlerRegistryFactory::GetForBrowserContext(
+          web_contents_->GetBrowserContext());
+  registry->SetRphRegistrationMode(rph_mode);
   return protocol::Response::Success();
 }
 
@@ -170,8 +197,8 @@ void PageHandler::GotManifestIcons(
   protocol::Maybe<protocol::Binary> primaryIconAsBinary;
 
   if (primary_icon && !primary_icon->empty()) {
-    primaryIconAsBinary = std::move(protocol::Binary::fromRefCounted(
-        gfx::Image::CreateFrom1xBitmap(*primary_icon).As1xPNGBytes()));
+    primaryIconAsBinary = protocol::Binary::fromRefCounted(
+        gfx::Image::CreateFrom1xBitmap(*primary_icon).As1xPNGBytes());
   }
 
   callback->sendSuccess(std::move(primaryIconAsBinary));
@@ -192,6 +219,8 @@ void PageHandler::PrintToPDF(protocol::Maybe<bool> landscape,
                              protocol::Maybe<protocol::String> footer_template,
                              protocol::Maybe<bool> prefer_css_page_size,
                              protocol::Maybe<protocol::String> transfer_mode,
+                             protocol::Maybe<bool> generate_tagged_pdf,
+                             protocol::Maybe<bool> generate_document_outline,
                              std::unique_ptr<PrintToPDFCallback> callback) {
   DCHECK(callback);
 
@@ -217,7 +246,9 @@ void PageHandler::PrintToPDF(protocol::Maybe<bool> landscape,
           OptionalFromMaybe<double>(margin_right),
           OptionalFromMaybe<std::string>(header_template),
           OptionalFromMaybe<std::string>(footer_template),
-          OptionalFromMaybe<bool>(prefer_css_page_size));
+          OptionalFromMaybe<bool>(prefer_css_page_size),
+          OptionalFromMaybe<bool>(generate_tagged_pdf),
+          OptionalFromMaybe<bool>(generate_document_outline));
   if (absl::holds_alternative<std::string>(print_pages_params)) {
     callback->sendFailure(protocol::Response::InvalidParams(
         absl::get<std::string>(print_pages_params)));
@@ -228,17 +259,17 @@ void PageHandler::PrintToPDF(protocol::Maybe<bool> landscape,
       print_pages_params));
 
   bool return_as_stream =
-      transfer_mode.fromMaybe("") ==
+      transfer_mode.value_or("") ==
       protocol::Page::PrintToPDF::TransferModeEnum::ReturnAsStream;
 
   // First check if headless printer manager is active and use it if so.
-  // Note that headless mode uses alternae print manager that shortcuts
+  // Note that headless mode uses alternate print manager that shortcuts
   // most of the regular print manager calls providing only the PrintToPDF
   // functionality.
   if (auto* print_manager = headless::HeadlessPrintManager::FromWebContents(
           web_contents_.get())) {
     print_manager->PrintToPdf(
-        web_contents_->GetPrimaryMainFrame(), page_ranges.fromMaybe(""),
+        web_contents_->GetPrimaryMainFrame(), page_ranges.value_or(""),
         std::move(absl::get<printing::mojom::PrintPagesParamsPtr>(
             print_pages_params)),
         base::BindOnce(&PageHandler::OnPDFCreated,
@@ -252,7 +283,7 @@ void PageHandler::PrintToPDF(protocol::Maybe<bool> landscape,
   if (auto* print_manager =
           ActivePrintManager::FromWebContents(web_contents_.get())) {
     print_manager->PrintToPdf(
-        web_contents_->GetPrimaryMainFrame(), page_ranges.fromMaybe(""),
+        web_contents_->GetPrimaryMainFrame(), page_ranges.value_or(""),
         std::move(absl::get<printing::mojom::PrintPagesParamsPtr>(
             print_pages_params)),
         base::BindOnce(&PageHandler::OnPDFCreated,
@@ -286,18 +317,24 @@ void PageHandler::GetAppId(std::unique_ptr<GetAppIdCallback> callback) {
 
 void PageHandler::OnDidGetManifest(std::unique_ptr<GetAppIdCallback> callback,
                                    const webapps::InstallableData& data) {
-  if (blink::IsEmptyManifest(data.manifest)) {
+  if (blink::IsEmptyManifest(*data.manifest)) {
     callback->sendSuccess(protocol::Maybe<protocol::String>(),
                           protocol::Maybe<protocol::String>());
     return;
   }
-  absl::optional<std::string> id;
-  if (data.manifest.id.has_value()) {
-    id = base::UTF16ToUTF8(data.manifest.id.value());
+  // Either both the id and start_url are present, or they are both empty.
+  std::string current_app_id_str;
+  std::string recommended_manifest_id_path_only;
+  if (data.manifest->id.is_valid()) {
+    CHECK(data.manifest->start_url.is_valid());
+    current_app_id_str = data.manifest->id.spec();
+    recommended_manifest_id_path_only =
+        web_app::GenerateManifestIdFromStartUrlOnly(data.manifest->start_url)
+            .PathForRequest();
+  } else {
+    CHECK(!data.manifest->start_url.is_valid());
   }
-  callback->sendSuccess(
-      web_app::GenerateAppIdUnhashed(id, data.manifest.start_url),
-      web_app::GenerateRecommendedId(data.manifest.start_url));
+  callback->sendSuccess(current_app_id_str, recommended_manifest_id_path_only);
 }
 
 #if BUILDFLAG(ENABLE_PRINTING)

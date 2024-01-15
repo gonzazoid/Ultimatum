@@ -11,8 +11,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback_forward.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/scoped_refptr.h"
 #include "media/base/video_types.h"
 #include "media/filters/vp9_parser.h"
 #include "media/gpu/accelerated_video_decoder.h"
@@ -71,11 +71,19 @@ class MEDIA_GPU_EXPORT VP9Decoder : public AcceleratedVideoDecoder {
     // case and treat it as normal, returning kRanOutOfSurfaces from Decode().
     virtual scoped_refptr<VP9Picture> CreateVP9Picture() = 0;
 
+    // |secure_handle| is a reference to the corresponding secure memory when
+    // doing secure decoding on ARM. This is invoked instead of CreateAV1Picture
+    // when doing secure decoding on ARM. Default implementation returns
+    // nullptr.
+    // TODO(jkardatzke): Remove this once we move to the V4L2 flat stateless
+    // decoder and add a field to media::CodecPicture instead.
+    virtual scoped_refptr<VP9Picture> CreateVP9PictureSecure(
+        uint64_t secure_handle);
+
     // Submit decode for |pic| to be run in accelerator, taking as arguments
     // information contained in it, as well as current segmentation and loop
     // filter state in |segm_params| and |lf_params|, respectively, and using
     // pictures in |ref_pictures| for reference.
-    // If done_cb_ is not null, it will be run once decode is done in hardware.
     //
     // Note that returning from this method does not mean that the decode
     // process is finished, but the caller may drop its references to |pic|
@@ -83,13 +91,16 @@ class MEDIA_GPU_EXPORT VP9Decoder : public AcceleratedVideoDecoder {
     // |lf_params| does not need to remain valid after this method returns.
     //
     // Return true when successful, false otherwise.
-    virtual Status SubmitDecode(scoped_refptr<VP9Picture> pic,
-                                const Vp9SegmentationParams& segm_params,
-                                const Vp9LoopFilterParams& lf_params,
-                                const Vp9ReferenceFrameVector& reference_frames,
-                                const base::OnceClosure done_cb) = 0;
+    virtual Status SubmitDecode(
+        scoped_refptr<VP9Picture> pic,
+        const Vp9SegmentationParams& segm_params,
+        const Vp9LoopFilterParams& lf_params,
+        const Vp9ReferenceFrameVector& reference_frames) = 0;
 
     // Schedule output (display) of |pic|.
+    //
+    // If `show_existing_hdr` is not nullptr, then it contains the header of
+    // a show_existing_frame frame that requests the output of `pic`.
     //
     // Note that returning from this method does not mean that |pic| has already
     // been outputted (displayed), but guarantees that all pictures will be
@@ -104,16 +115,6 @@ class MEDIA_GPU_EXPORT VP9Decoder : public AcceleratedVideoDecoder {
     // Return true if the accelerator requires us to provide the compressed
     // header fully parsed.
     virtual bool NeedsCompressedHeaderParsed() const = 0;
-
-    // Set |frame_ctx| to the state after decoding |pic|, returning true on
-    // success, false otherwise.
-    virtual bool GetFrameContext(scoped_refptr<VP9Picture> pic,
-                                 Vp9FrameContext* frame_ctx) = 0;
-
-    // VP9Parser can update the context probabilities or can query the driver
-    // to get the updated numbers. By default drivers don't support it, and in
-    // particular it's true for legacy (unstable) V4L2 API versions.
-    virtual bool SupportsContextProbabilityReadback() const;
   };
 
   explicit VP9Decoder(
@@ -136,19 +137,20 @@ class MEDIA_GPU_EXPORT VP9Decoder : public AcceleratedVideoDecoder {
   VideoCodecProfile GetProfile() const override;
   uint8_t GetBitDepth() const override;
   VideoChromaSampling GetChromaSampling() const override;
+  VideoColorSpace GetVideoColorSpace() const override;
+  absl::optional<gfx::HDRMetadata> GetHDRMetadata() const override;
   size_t GetRequiredNumOfPictures() const override;
   size_t GetNumReferenceFrames() const override;
+
+  void set_ignore_resolution_changes_to_smaller_for_testing(bool value) {
+    ignore_resolution_changes_to_smaller_for_testing_ = value;
+  }
 
  private:
   // Decode and possibly output |pic| (if the picture is to be shown).
   // Return kOk on success, kTryAgain if this should be attempted again on the
   // next Decode call, and kFail otherwise.
   VP9Accelerator::Status DecodeAndOutputPicture(scoped_refptr<VP9Picture> pic);
-
-  // Get frame context state after decoding |pic| from the accelerator, and call
-  // |context_refresh_cb| with the acquired state.
-  void UpdateFrameContext(scoped_refptr<VP9Picture> pic,
-                          Vp9Parser::ContextRefreshCallback context_refresh_cb);
 
   // Called on error, when decoding cannot continue. Sets state_ to kError and
   // releases current state.
@@ -171,11 +173,23 @@ class MEDIA_GPU_EXPORT VP9Decoder : public AcceleratedVideoDecoder {
   // picture.
   std::unique_ptr<Vp9FrameHeader> curr_frame_hdr_;
   std::unique_ptr<DecryptConfig> decrypt_config_;
+
+  // Secure handle to pass through to the accelerator when doing secure playback
+  // on ARM.
+  uint64_t secure_handle_ = 0;
+
   // Current frame size that is necessary to decode |curr_frame_hdr_|.
   gfx::Size curr_frame_size_;
 
   // Color space provided by the container.
   const VideoColorSpace container_color_space_;
+
+  // For VP9 validation purposes, this class can be indicated that it's OK to
+  // keep the decoding reference frames etc when the resolution decreases
+  // without a keyframe; this is an arcane feature of VP9, and are rare in the
+  // wild, but part of VP9 verification sets (see[1] "frm_resize" and
+  // "sub8x8_sf"). [1] https://www.webmproject.org/vp9/levels/#test-descriptions
+  bool ignore_resolution_changes_to_smaller_for_testing_ = false;
 
   // Reference frames currently in use.
   Vp9ReferenceFrameVector ref_frames_;
@@ -190,6 +204,8 @@ class MEDIA_GPU_EXPORT VP9Decoder : public AcceleratedVideoDecoder {
   uint8_t bit_depth_ = 0;
   // Chroma subsampling format of input bitstream.
   VideoChromaSampling chroma_sampling_ = VideoChromaSampling::kUnknown;
+  // Video color space of input bitstream.
+  VideoColorSpace picture_color_space_;
 
   // Pending picture for decode when accelerator returns kTryAgain.
   scoped_refptr<VP9Picture> pending_pic_;

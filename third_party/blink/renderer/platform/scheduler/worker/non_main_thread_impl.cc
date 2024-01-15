@@ -5,8 +5,10 @@
 #include "third_party/blink/renderer/platform/scheduler/worker/non_main_thread_impl.h"
 
 #include <memory>
-#include "base/bind.h"
+
 #include "base/check.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/message_loop/message_pump.h"
@@ -17,11 +19,13 @@
 #include "base/task/sequence_manager/task_queue.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_tick_clock.h"
+#include "mojo/public/cpp/bindings/direct_receiver.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/platform/heap/blink_gc_memory_dump_provider.h"
 #include "third_party/blink/renderer/platform/instrumentation/memory_pressure_listener.h"
+#include "third_party/blink/renderer/platform/scheduler/common/task_priority.h"
 #include "third_party/blink/renderer/platform/scheduler/worker/worker_scheduler_proxy.h"
 #include "third_party/blink/renderer/platform/scheduler/worker/worker_thread_scheduler.h"
 
@@ -48,9 +52,16 @@ NonMainThreadImpl::NonMainThreadImpl(const ThreadCreationParams& params)
       supports_gc_(params.supports_gc) {
   base::SimpleThread::Options options;
   options.thread_type = params.base_thread_type;
+
+  base::MessagePumpType message_pump_type = base::MessagePumpType::DEFAULT;
+  if (params.thread_type == ThreadType::kCompositorThread &&
+      base::FeatureList::IsEnabled(features::kDirectCompositorThreadIpc) &&
+      mojo::IsDirectReceiverSupported()) {
+    message_pump_type = base::MessagePumpType::IO;
+  }
   thread_ = std::make_unique<SimpleThreadImpl>(
       params.name ? params.name : String(), options, supports_gc_,
-      const_cast<scheduler::NonMainThreadImpl*>(this));
+      const_cast<scheduler::NonMainThreadImpl*>(this), message_pump_type);
   if (supports_gc_) {
     MemoryPressureListenerRegistry::Instance().RegisterThread(
         const_cast<scheduler::NonMainThreadImpl*>(this));
@@ -89,11 +100,6 @@ scoped_refptr<base::SingleThreadTaskRunner> NonMainThreadImpl::GetTaskRunner()
   return thread_->GetDefaultTaskRunner();
 }
 
-scoped_refptr<base::SingleThreadTaskRunner>
-NonMainThreadImpl::GetDeprecatedTaskRunner() const {
-  return GetTaskRunner();
-}
-
 void NonMainThreadImpl::ShutdownOnThread() {
   thread_->ShutdownOnThread();
   Scheduler()->Shutdown();
@@ -103,16 +109,19 @@ NonMainThreadImpl::SimpleThreadImpl::SimpleThreadImpl(
     const WTF::String& name_prefix,
     const base::SimpleThread ::Options& options,
     bool supports_gc,
-    NonMainThreadImpl* worker_thread)
+    NonMainThreadImpl* worker_thread,
+    base::MessagePumpType message_pump_type)
     : SimpleThread(name_prefix.Utf8(), options),
+      message_pump_type_(message_pump_type),
       thread_(worker_thread),
       supports_gc_(supports_gc) {
   // TODO(alexclarke): Do we need to unify virtual time for workers and the main
   // thread?
   sequence_manager_ = base::sequence_manager::CreateUnboundSequenceManager(
       base::sequence_manager::SequenceManager::Settings::Builder()
-          .SetMessagePumpType(base::MessagePumpType::DEFAULT)
+          .SetMessagePumpType(message_pump_type)
           .SetRandomisedSamplingEnabled(true)
+          .SetPrioritySettings(CreatePrioritySettings())
           .Build());
   internal_task_queue_ = sequence_manager_->CreateTaskQueue(
       base::sequence_manager::TaskQueue::Spec(
@@ -138,7 +147,7 @@ NonMainThreadImpl::GCSupport::GCSupport(NonMainThreadImpl* thread) {
   ThreadState* thread_state = ThreadState::AttachCurrentThread();
   gc_task_runner_ = std::make_unique<GCTaskRunner>(thread);
   blink_gc_memory_dump_provider_ = std::make_unique<BlinkGCMemoryDumpProvider>(
-      thread_state, base::ThreadTaskRunnerHandle::Get(),
+      thread_state, base::SingleThreadTaskRunner::GetCurrentDefault(),
       BlinkGCMemoryDumpProvider::HeapType::kBlinkWorkerThread);
 }
 
@@ -162,7 +171,7 @@ void NonMainThreadImpl::SimpleThreadImpl::Run() {
   auto scoped_sequence_manager = std::move(sequence_manager_);
   auto scoped_internal_task_queue = std::move(internal_task_queue_);
   scoped_sequence_manager->BindToMessagePump(
-      base::MessagePump::Create(base::MessagePumpType::DEFAULT));
+      base::MessagePump::Create(message_pump_type_));
 
   base::RunLoop run_loop;
   run_loop_ = &run_loop;

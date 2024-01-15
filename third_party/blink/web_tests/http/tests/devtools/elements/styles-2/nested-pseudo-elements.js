@@ -2,9 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+
+import * as Common from 'devtools/core/common/common.js';
+import * as ElementsModule from 'devtools/panels/elements/elements.js';
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Tests that nested pseudo elements and their styles are handled properly.\n`);
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
       <style>
@@ -125,12 +131,12 @@
     function domCallback() {
       TestRunner.domModel.removeEventListener(eventName, domCallback, this);
       ElementsTestRunner.firstElementsTreeOutline().addEventListener(
-          Elements.ElementsTreeOutline.Events.ElementsTreeUpdated, treeCallback, this);
+          ElementsModule.ElementsTreeOutline.ElementsTreeOutline.Events.ElementsTreeUpdated, treeCallback, this);
     }
 
     function treeCallback() {
       ElementsTestRunner.firstElementsTreeOutline().removeEventListener(
-          Elements.ElementsTreeOutline.Events.ElementsTreeUpdated, treeCallback, this);
+          ElementsModule.ElementsTreeOutline.ElementsTreeOutline.Events.ElementsTreeUpdated, treeCallback, this);
       ElementsTestRunner.dumpElementsTree(containerNode);
       next();
     }

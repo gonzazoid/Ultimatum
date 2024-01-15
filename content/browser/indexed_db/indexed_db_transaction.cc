@@ -7,20 +7,23 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/trace_event/base_tracing.h"
 #include "content/browser/indexed_db/indexed_db_backing_store.h"
+#include "content/browser/indexed_db/indexed_db_bucket_context.h"
+#include "content/browser/indexed_db/indexed_db_bucket_context_handle.h"
+#include "content/browser/indexed_db/indexed_db_callback_helpers.h"
 #include "content/browser/indexed_db/indexed_db_cursor.h"
 #include "content/browser/indexed_db/indexed_db_database.h"
 #include "content/browser/indexed_db/indexed_db_database_callbacks.h"
+#include "storage/browser/blob/blob_storage_context.h"
 #include "third_party/blink/public/mojom/indexeddb/indexeddb.mojom.h"
 #include "third_party/leveldatabase/env_chromium.h"
 
@@ -49,6 +52,8 @@ std::string WriteBlobToFileResultToString(
 }
 
 const int64_t kInactivityTimeoutPeriodSeconds = 60;
+// Disabled in some tests.
+bool g_inactivity_timeout_enabled = true;
 
 // Used for UMA metrics - do not change values.
 enum UmaIDBException {
@@ -122,22 +127,31 @@ IndexedDBTransaction::IndexedDBTransaction(
     IndexedDBConnection* connection,
     const std::set<int64_t>& object_store_ids,
     blink::mojom::IDBTransactionMode mode,
-    TasksAvailableCallback tasks_available_callback,
-    TearDownCallback tear_down_callback,
+    IndexedDBBucketContextHandle bucket_context,
     IndexedDBBackingStore::Transaction* backing_store_transaction)
     : id_(id),
       object_store_ids_(object_store_ids),
       mode_(mode),
       connection_(connection->GetWeakPtr()),
-      run_tasks_callback_(std::move(tasks_available_callback)),
-      tear_down_callback_(std::move(tear_down_callback)),
-      transaction_(backing_store_transaction) {
+      bucket_context_(std::move(bucket_context)),
+      backing_store_transaction_(backing_store_transaction),
+      receiver_(this) {
   TRACE_EVENT_NESTABLE_ASYNC_BEGIN0("IndexedDB",
                                     "IndexedDBTransaction::lifetime", this);
-  callbacks_ = connection_->callbacks();
+
   database_ = connection_->database();
-  if (database_)
+  if (database_) {
     database_->TransactionCreated();
+
+    if (mode_ == blink::mojom::IDBTransactionMode::VersionChange) {
+      lock_ids_.insert(GetDatabaseLockId(database_->name()));
+    } else {
+      for (const PartitionedLockManager::PartitionedLockRequest& lock_request :
+           BuildLockRequests()) {
+        lock_ids_.insert(lock_request.lock_id);
+      }
+    }
+  }
 
   diagnostics_.tasks_scheduled = 0;
   diagnostics_.tasks_completed = 0;
@@ -157,9 +171,21 @@ IndexedDBTransaction::~IndexedDBTransaction() {
   DCHECK(!processing_event_queue_);
 }
 
+void IndexedDBTransaction::BindReceiver(
+    mojo::PendingAssociatedReceiver<blink::mojom::IDBTransaction>
+        mojo_receiver) {
+  receiver_.Bind(std::move(mojo_receiver));
+}
+
 void IndexedDBTransaction::SetCommitFlag() {
+  // The frontend suggests that we commit, but we may have previously initiated
+  // an abort.
+  if (!IsAcceptingRequests()) {
+    return;
+  }
+
   is_commit_pending_ = true;
-  run_tasks_callback_.Run();
+  bucket_context_->QueueRunTasks();
 }
 
 void IndexedDBTransaction::ScheduleTask(blink::mojom::IDBTaskType type,
@@ -176,7 +202,7 @@ void IndexedDBTransaction::ScheduleTask(blink::mojom::IDBTaskType type,
     preemptive_task_queue_.push(std::move(task));
   }
   if (state() == STARTED)
-    run_tasks_callback_.Run();
+    bucket_context_->QueueRunTasks();
 }
 
 void IndexedDBTransaction::ScheduleAbortTask(AbortOperation abort_task) {
@@ -200,9 +226,7 @@ leveldb::Status IndexedDBTransaction::Abort(
   state_ = FINISHED;
 
   if (backing_store_transaction_begun_) {
-    leveldb::Status status = transaction_->Rollback();
-    if (!status.ok())
-      return status;
+    backing_store_transaction_->Rollback();
   }
 
   // Run the abort tasks, if any.
@@ -212,22 +236,15 @@ leveldb::Status IndexedDBTransaction::Abort(
   preemptive_task_queue_.clear();
   pending_preemptive_events_ = 0;
 
+  task_queue_.clear();
+
   // Backing store resources (held via cursors) must be released
   // before script callbacks are fired, as the script callbacks may
   // release references and allow the backing store itself to be
   // released, and order is critical.
-  CloseOpenCursorBindings();
+  CloseOpenCursors();
 
-  // Open cursors have to be deleted before we clear the task queue.
-  // If we clear the task queue and closures exist in it that refer
-  // to callbacks associated with the cursor mojo bindings, the callback
-  // deletion will fail due to a mojo assert.  |CloseOpenCursorBindings()|
-  // above will clear the binding, which also deletes the owned
-  // |IndexedDBCursor| objects.  After that, we can safely clear the
-  // task queue.
-  task_queue_.clear();
-
-  transaction_->Reset();
+  backing_store_transaction_->Reset();
 
   // Transactions must also be marked as completed before the
   // front-end is notified, as the transaction completion unblocks
@@ -235,12 +252,12 @@ leveldb::Status IndexedDBTransaction::Abort(
   locks_receiver_.locks.clear();
   locks_receiver_.AbortLockRequest();
 
-  if (callbacks_.get())
-    callbacks_->OnAbort(*this, error);
+  callbacks()->OnAbort(*this, error);
 
   if (database_)
     database_->TransactionFinished(mode_, false);
-  run_tasks_callback_.Run();
+  bucket_context_->QueueRunTasks();
+  bucket_context_.Release();
   return leveldb::Status::OK();
 }
 
@@ -277,14 +294,199 @@ void IndexedDBTransaction::Start() {
   state_ = STARTED;
   DCHECK(!locks_receiver_.locks.empty());
   diagnostics_.start_time = base::Time::Now();
-  run_tasks_callback_.Run();
+
+  const base::TimeDelta time_queued =
+      diagnostics_.start_time - diagnostics_.creation_time;
+  switch (mode_) {
+    case blink::mojom::IDBTransactionMode::ReadOnly:
+      base::UmaHistogramMediumTimes(
+          "WebCore.IndexedDB.Transaction.ReadOnly.TimeQueued", time_queued);
+      break;
+    case blink::mojom::IDBTransactionMode::ReadWrite:
+      base::UmaHistogramMediumTimes(
+          "WebCore.IndexedDB.Transaction.ReadWrite.TimeQueued", time_queued);
+      break;
+    case blink::mojom::IDBTransactionMode::VersionChange:
+      base::UmaHistogramMediumTimes(
+          "WebCore.IndexedDB.Transaction.VersionChange.TimeQueued",
+          time_queued);
+      break;
+  }
+
+  bucket_context_->QueueRunTasks();
 }
 
-void IndexedDBTransaction::EnsureBackingStoreTransactionBegun() {
-  if (!backing_store_transaction_begun_) {
-    transaction_->Begin(std::move(locks_receiver_.locks));
-    backing_store_transaction_begun_ = true;
+// static
+void IndexedDBTransaction::DisableInactivityTimeoutForTesting() {
+  g_inactivity_timeout_enabled = false;
+}
+
+void IndexedDBTransaction::CreateObjectStore(
+    int64_t object_store_id,
+    const std::u16string& name,
+    const blink::IndexedDBKeyPath& key_path,
+    bool auto_increment) {
+  if (mode() != blink::mojom::IDBTransactionMode::VersionChange) {
+    mojo::ReportBadMessage(
+        "CreateObjectStore must be called from a version change transaction.");
+    return;
   }
+
+  if (!IsAcceptingRequests() || !connection()->IsConnected()) {
+    return;
+  }
+
+  ScheduleTask(
+      blink::mojom::IDBTaskType::Preemptive,
+      BindWeakOperation(&IndexedDBDatabase::CreateObjectStoreOperation,
+                        connection()->database()->AsWeakPtr(), object_store_id,
+                        name, key_path, auto_increment));
+}
+
+void IndexedDBTransaction::DeleteObjectStore(int64_t object_store_id) {
+  if (mode() != blink::mojom::IDBTransactionMode::VersionChange) {
+    mojo::ReportBadMessage(
+        "DeleteObjectStore must be called from a version change transaction.");
+    return;
+  }
+
+  if (!IsAcceptingRequests() || !connection()->IsConnected()) {
+    return;
+  }
+
+  ScheduleTask(BindWeakOperation(&IndexedDBDatabase::DeleteObjectStoreOperation,
+                                 connection()->database()->AsWeakPtr(),
+                                 object_store_id));
+}
+
+void IndexedDBTransaction::Put(
+    int64_t object_store_id,
+    blink::mojom::IDBValuePtr input_value,
+    const blink::IndexedDBKey& key,
+    blink::mojom::IDBPutMode mode,
+    const std::vector<blink::IndexedDBIndexKeys>& index_keys,
+    blink::mojom::IDBTransaction::PutCallback callback) {
+  if (!IsAcceptingRequests()) {
+    return;
+  }
+
+  if (!connection()->IsConnected()) {
+    IndexedDBDatabaseError error(blink::mojom::IDBException::kUnknownError,
+                                 "Not connected.");
+    std::move(callback).Run(
+        blink::mojom::IDBTransactionPutResult::NewErrorResult(
+            blink::mojom::IDBError::New(error.code(), error.message())));
+    return;
+  }
+
+  std::vector<IndexedDBExternalObject> external_objects;
+  uint64_t total_blob_size = 0;
+  if (!input_value->external_objects.empty()) {
+    total_blob_size = CreateExternalObjects(input_value, &external_objects);
+  }
+
+  // Increment the total transaction size by the size of this put.
+  preliminary_size_estimate_ +=
+      input_value->bits.size() + key.size_estimate() + total_blob_size;
+  // Warm up the disk space cache.
+  bucket_context()->CheckCanUseDiskSpace(preliminary_size_estimate_, {});
+
+  std::unique_ptr<IndexedDBDatabase::PutOperationParams> params(
+      std::make_unique<IndexedDBDatabase::PutOperationParams>());
+  IndexedDBValue& output_value = params->value;
+
+  // TODO(crbug.com/902498): Use mojom traits to map directly to
+  // std::string.
+  output_value.bits =
+      std::string(input_value->bits.begin(), input_value->bits.end());
+  // Release value->bits std::vector.
+  input_value->bits.clear();
+  swap(output_value.external_objects, external_objects);
+
+  blink::mojom::IDBTransaction::PutCallback aborting_callback =
+      CreateCallbackAbortOnDestruct<blink::mojom::IDBTransaction::PutCallback,
+                                    blink::mojom::IDBTransactionPutResultPtr>(
+          std::move(callback), AsWeakPtr());
+
+  params->object_store_id = object_store_id;
+  params->key = std::make_unique<blink::IndexedDBKey>(key);
+  params->put_mode = mode;
+  params->callback = std::move(aborting_callback);
+  params->index_keys = index_keys;
+  // This is decremented in IndexedDBDatabase::PutOperation.
+  in_flight_memory_ += output_value.SizeEstimate();
+  ScheduleTask(BindWeakOperation(&IndexedDBDatabase::PutOperation,
+                                 connection()->database()->AsWeakPtr(),
+                                 std::move(params)));
+}
+
+void IndexedDBTransaction::Commit(int64_t num_errors_handled) {
+  if (!IsAcceptingRequests() || !connection()->IsConnected()) {
+    return;
+  }
+
+  num_errors_handled_ = num_errors_handled;
+
+  // Always allow empty or delete-only transactions.
+  if (preliminary_size_estimate_ <= 0) {
+    SetCommitFlag();
+    return;
+  }
+
+  bucket_context()->CheckCanUseDiskSpace(
+      preliminary_size_estimate_,
+      base::BindOnce(&IndexedDBTransaction::OnQuotaCheckDone,
+                     ptr_factory_.GetWeakPtr()));
+}
+
+void IndexedDBTransaction::OnQuotaCheckDone(bool allowed) {
+  // May have disconnected while quota check was pending.
+  if (!connection()->IsConnected()) {
+    return;
+  }
+
+  if (allowed) {
+    SetCommitFlag();
+  } else {
+    connection()->AbortTransactionAndTearDownOnError(
+        this, IndexedDBDatabaseError(blink::mojom::IDBException::kQuotaError));
+  }
+}
+
+uint64_t IndexedDBTransaction::CreateExternalObjects(
+    blink::mojom::IDBValuePtr& value,
+    std::vector<IndexedDBExternalObject>* external_objects) {
+  // Should only be called if there are external objects to process.
+  CHECK(!value->external_objects.empty());
+
+  base::CheckedNumeric<uint64_t> total_blob_size = 0;
+  external_objects->resize(value->external_objects.size());
+  for (size_t i = 0; i < value->external_objects.size(); ++i) {
+    auto& object = value->external_objects[i];
+    switch (object->which()) {
+      case blink::mojom::IDBExternalObject::Tag::kBlobOrFile: {
+        blink::mojom::IDBBlobInfoPtr& info = object->get_blob_or_file();
+        uint64_t size = info->size;
+        total_blob_size += size;
+
+        if (info->file) {
+          DCHECK_NE(info->size, IndexedDBExternalObject::kUnknownSize);
+          (*external_objects)[i] = IndexedDBExternalObject(
+              std::move(info->blob), info->uuid, info->file->name,
+              info->mime_type, info->file->last_modified, info->size);
+        } else {
+          (*external_objects)[i] = IndexedDBExternalObject(
+              std::move(info->blob), info->uuid, info->mime_type, info->size);
+        }
+        break;
+      }
+      case blink::mojom::IDBExternalObject::Tag::kFileSystemAccessToken:
+        (*external_objects)[i] = IndexedDBExternalObject(
+            std::move(object->get_file_system_access_token()));
+        break;
+    }
+  }
+  return total_blob_size.ValueOrDie();
 }
 
 leveldb::Status IndexedDBTransaction::BlobWriteComplete(
@@ -303,13 +505,13 @@ leveldb::Status IndexedDBTransaction::BlobWriteComplete(
               "Failed to write blobs (%s)",
               WriteBlobToFileResultToString(error).c_str()))));
       if (!status.ok())
-        tear_down_callback_.Run(status);
+        bucket_context_->delegate().on_fatal_error.Run(status, {});
       // The result is ignored.
       return leveldb::Status::OK();
     }
     case BlobWriteResult::kRunPhaseTwoAsync:
       ScheduleTask(base::BindOnce(&CommitPhaseTwoProxy));
-      run_tasks_callback_.Run();
+      bucket_context_->QueueRunTasks();
       return leveldb::Status::OK();
     case BlobWriteResult::kRunPhaseTwoAndReturnResult: {
       return CommitPhaseTwo();
@@ -318,8 +520,9 @@ leveldb::Status IndexedDBTransaction::BlobWriteComplete(
   NOTREACHED();
 }
 
-leveldb::Status IndexedDBTransaction::Commit() {
-  TRACE_EVENT1("IndexedDB", "IndexedDBTransaction::Commit", "txn.id", id());
+leveldb::Status IndexedDBTransaction::DoPendingCommit() {
+  TRACE_EVENT1("IndexedDB", "IndexedDBTransaction::DoPendingCommit", "txn.id",
+               id());
 
   timeout_timer_.Stop();
 
@@ -362,7 +565,7 @@ leveldb::Status IndexedDBTransaction::Commit() {
   } else {
     // CommitPhaseOne will call the callback synchronously if there are no blobs
     // to write.
-    s = transaction_->CommitPhaseOne(base::BindOnce(
+    s = backing_store_transaction_->CommitPhaseOne(base::BindOnce(
         [](base::WeakPtr<IndexedDBTransaction> transaction,
            BlobWriteResult result,
            storage::mojom::WriteBlobToFileResult error) {
@@ -390,19 +593,34 @@ leveldb::Status IndexedDBTransaction::CommitPhaseTwo() {
   if (!used_) {
     committed = true;
   } else {
-    base::TimeDelta active_time = base::Time::Now() - diagnostics_.start_time;
-    uint64_t size_kb = transaction_->GetTransactionSize() / 1024;
-    // All histograms record 1KB to 1GB.
+    const base::TimeDelta active_time =
+        base::Time::Now() - diagnostics_.start_time;
+    uint64_t size_kb = backing_store_transaction_->GetTransactionSize() / 1024;
+
+    s = backing_store_transaction_->CommitPhaseTwo();
+
+    // This measurement includes the time it takes to commit to the backing
+    // store (i.e. LevelDB), not just the blobs. It should replace the
+    // `active_time` measurement.
+    const base::TimeDelta active_time2 =
+        base::Time::Now() - diagnostics_.start_time;
+
+    // SizeOnCommit2 histograms record 1KB to 1GB.
     switch (mode_) {
       case blink::mojom::IDBTransactionMode::ReadOnly:
         UMA_HISTOGRAM_MEDIUM_TIMES(
             "WebCore.IndexedDB.Transaction.ReadOnly.TimeActive", active_time);
+        base::UmaHistogramMediumTimes(
+            "WebCore.IndexedDB.Transaction.ReadOnly.TimeActive2", active_time2);
         UMA_HISTOGRAM_COUNTS_1M(
             "WebCore.IndexedDB.Transaction.ReadOnly.SizeOnCommit2", size_kb);
         break;
       case blink::mojom::IDBTransactionMode::ReadWrite:
         UMA_HISTOGRAM_MEDIUM_TIMES(
             "WebCore.IndexedDB.Transaction.ReadWrite.TimeActive", active_time);
+        base::UmaHistogramMediumTimes(
+            "WebCore.IndexedDB.Transaction.ReadWrite.TimeActive2",
+            active_time2);
         UMA_HISTOGRAM_COUNTS_1M(
             "WebCore.IndexedDB.Transaction.ReadWrite.SizeOnCommit2", size_kb);
         break;
@@ -410,6 +628,9 @@ leveldb::Status IndexedDBTransaction::CommitPhaseTwo() {
         UMA_HISTOGRAM_MEDIUM_TIMES(
             "WebCore.IndexedDB.Transaction.VersionChange.TimeActive",
             active_time);
+        base::UmaHistogramMediumTimes(
+            "WebCore.IndexedDB.Transaction.VersionChange.TimeActive2",
+            active_time2);
         UMA_HISTOGRAM_COUNTS_1M(
             "WebCore.IndexedDB.Transaction.VersionChange.SizeOnCommit2",
             size_kb);
@@ -418,7 +639,6 @@ leveldb::Status IndexedDBTransaction::CommitPhaseTwo() {
         NOTREACHED();
     }
 
-    s = transaction_->CommitPhaseTwo();
     committed = s.ok();
   }
 
@@ -427,7 +647,7 @@ leveldb::Status IndexedDBTransaction::CommitPhaseTwo() {
   // release references and allow the backing store itself to be
   // released, and order is critical.
   CloseOpenCursors();
-  transaction_->Reset();
+  backing_store_transaction_->Reset();
 
   // Transactions must also be marked as completed before the
   // front-end is notified, as the transaction completion unblocks
@@ -442,10 +662,20 @@ leveldb::Status IndexedDBTransaction::CommitPhaseTwo() {
           "IndexedDB",
           "IndexedDBTransaction::CommitPhaseTwo.TransactionCompleteCallbacks",
           "txn.id", id());
-      callbacks_->OnComplete(*this);
+      callbacks()->OnComplete(*this);
     }
-    if (database_)
+
+    if (mode() != blink::mojom::IDBTransactionMode::ReadOnly) {
+      const bool did_sync =
+          mode() == blink::mojom::IDBTransactionMode::VersionChange ||
+          backing_store_transaction_->durability() ==
+              blink::mojom::IDBTransactionDurability::Strict;
+      bucket_context_->delegate().on_writing_transaction_complete.Run(did_sync);
+    }
+
+    if (database_) {
       database_->TransactionFinished(mode_, true);
+    }
     return s;
   } else {
     while (!abort_task_stack_.empty())
@@ -460,7 +690,7 @@ leveldb::Status IndexedDBTransaction::CommitPhaseTwo() {
       error = IndexedDBDatabaseError(blink::mojom::IDBException::kUnknownError,
                                      "Internal error committing transaction.");
     }
-    callbacks_->OnAbort(*this, error);
+    callbacks()->OnAbort(*this, error);
     if (database_)
       database_->TransactionFinished(mode_, false);
   }
@@ -482,7 +712,7 @@ IndexedDBTransaction::RunTasks() {
   processing_event_queue_ = true;
 
   if (!backing_store_transaction_begun_) {
-    transaction_->Begin(std::move(locks_receiver_.locks));
+    backing_store_transaction_->Begin(std::move(locks_receiver_.locks));
     backing_store_transaction_begun_ = true;
   }
 
@@ -517,7 +747,7 @@ IndexedDBTransaction::RunTasks() {
   if (!HasPendingTasks() && state_ == STARTED && is_commit_pending_) {
     processing_event_queue_ = false;
     // This can delete |this|.
-    leveldb::Status result = Commit();
+    leveldb::Status result = DoPendingCommit();
     if (!result.ok())
       return {RunTasksResult::kError, result};
   }
@@ -536,8 +766,9 @@ IndexedDBTransaction::RunTasks() {
   // block other transactions, so don't time those out.
   if (!HasPendingTasks() &&
       mode_ != blink::mojom::IDBTransactionMode::ReadOnly &&
-      state_ == STARTED) {
-    timeout_timer_.Start(FROM_HERE, GetInactivityTimeout(),
+      state_ == STARTED && g_inactivity_timeout_enabled) {
+    timeout_timer_.Start(FROM_HERE,
+                         base::Seconds(kInactivityTimeoutPeriodSeconds),
                          base::BindOnce(&IndexedDBTransaction::Timeout,
                                         ptr_factory_.GetWeakPtr()));
   }
@@ -545,25 +776,12 @@ IndexedDBTransaction::RunTasks() {
   return {RunTasksResult::kNotFinished, leveldb::Status::OK()};
 }
 
-base::TimeDelta IndexedDBTransaction::GetInactivityTimeout() const {
-  return base::Seconds(kInactivityTimeoutPeriodSeconds);
-}
-
 void IndexedDBTransaction::Timeout() {
   leveldb::Status result = Abort(
       IndexedDBDatabaseError(blink::mojom::IDBException::kTimeoutError,
                              u"Transaction timed out due to inactivity."));
   if (!result.ok())
-    tear_down_callback_.Run(result);
-}
-
-void IndexedDBTransaction::CloseOpenCursorBindings() {
-  TRACE_EVENT1("IndexedDB", "IndexedDBTransaction::CloseOpenCursorBindings",
-               "txn.id", id());
-  std::vector<IndexedDBCursor*> cursor_ptrs(open_cursors_.begin(),
-                                            open_cursors_.end());
-  for (auto* cursor_ptr : cursor_ptrs)
-    cursor_ptr->RemoveBinding();
+    bucket_context_->delegate().on_fatal_error.Run(result, {});
 }
 
 void IndexedDBTransaction::CloseOpenCursors() {
@@ -576,6 +794,26 @@ void IndexedDBTransaction::CloseOpenCursors() {
   open_cursors_.clear();
   for (auto* cursor : open_cursors)
     cursor->Close();
+}
+
+std::vector<PartitionedLockManager::PartitionedLockRequest>
+IndexedDBTransaction::BuildLockRequests() const {
+  // Locks for version change transactions are covered by `ConnectionRequest`.
+  DCHECK_NE(mode(), blink::mojom::IDBTransactionMode::VersionChange);
+  std::vector<PartitionedLockManager::PartitionedLockRequest> lock_requests;
+  lock_requests.reserve(1 + scope().size());
+  lock_requests.emplace_back(GetDatabaseLockId(database_->name()),
+                             PartitionedLockManager::LockType::kShared);
+  const auto object_store_lock_type =
+      mode() == blink::mojom::IDBTransactionMode::ReadOnly
+          ? PartitionedLockManager::LockType::kShared
+          : PartitionedLockManager::LockType::kExclusive;
+  for (int64_t object_store : scope()) {
+    lock_requests.emplace_back(
+        GetObjectStoreLockId(database_->id(), object_store),
+        object_store_lock_type);
+  }
+  return lock_requests;
 }
 
 }  // namespace content

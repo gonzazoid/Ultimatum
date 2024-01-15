@@ -98,6 +98,7 @@
 <translation id="4141203561740478845">Angazia safu mlalo iliyo na sehemu ya anwani</translation>
 <translation id="4148761611071495477"><ph name="CTRL" /><ph name="SEPARATOR" /><ph name="G" /> au <ph name="ENTER" /></translation>
 <translation id="4240486403425279990">Hali ya muhtasari</translation>
+<translation id="4275283744500212192">Fungua chaguo za muundo wa dirisha</translation>
 <translation id="4382340674111381977">Rudi kwenye ukurasa uliotangulia</translation>
 <translation id="4458670250301149821">Sogeza aikoni ya programu nje au ndani ya folda katika gridi ya programu</translation>
 <translation id="4472417192667361414">Mipangilio ya Mwonekano na Mfumo</translation>
@@ -193,12 +194,13 @@
 <translation id="8388247778047144397">Buruta kiungo kwenye sehemu tupu katika ukanda wa vichupo</translation>
 <translation id="8389638407792712197">Fungua dirisha jipya</translation>
 <translation id="8429696719963529183">Tumia vitufe vya F (F1 hadi F12)</translation>
+<translation id="8539396513118402548">Orodha ya njia za mkato</translation>
 <translation id="85690795166292698">Fungua kiungo katika kichupo kipya</translation>
 <translation id="8609384513243082612">Fungua kichupo kipya</translation>
 <translation id="8644639153978066712">Onyesha faili zilizofichwa katika programu ya Faili</translation>
 <translation id="8717459106217102612">Chagua neno au herufi ya awali</translation>
 <translation id="8727232706774971183">Angalia arifa zako</translation>
-<translation id="8855548128280178372"><ph name="SHIFT" /><ph name="SEPARATOR1" /><ph name="SEARCH" /><ph name="SEPARATOR2" /> vitufe vya nambari moja hadi nane</translation>
+<translation id="8855548128280178372"><ph name="SHIFT" /><ph name="SEPARATOR1" /><ph name="SEARCH" /><ph name="SEPARATOR2" /> vitufe vya namba moja hadi nane</translation>
 <translation id="8881584919399569791">Sogeza dirisha linalotumika kwenye kiolesura cha kushoto</translation>
 <translation id="88986195241502842">Ukurasa mmoja chini</translation>
 <translation id="8924883688469390268">Nenda kwenye mtumiaji wa awali</translation>

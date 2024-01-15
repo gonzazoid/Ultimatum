@@ -118,16 +118,6 @@ enum class CookieAccessSemantics {
   LEGACY,
 };
 
-enum class CookieSamePartyStatus {
-  // Used when there should be no SameParty enforcement (either because the
-  // cookie is not marked SameParty, or the enforcement is irrelevant).
-  kNoSamePartyEnforcement = 0,
-  // Used when SameParty enforcement says to exclude the cookie.
-  kEnforceSamePartyExclude = 1,
-  // Used when SameParty enforcement says to include the cookie.
-  kEnforceSamePartyInclude = 2,
-};
-
 // What scheme was used in the setting of a cookie.
 // Do not renumber.
 enum class CookieSourceScheme {
@@ -297,7 +287,7 @@ enum class CookieSourceSchemeName {
   kHttpsScheme = 14,
   kJavaScriptScheme = 15,
   kMailToScheme = 16,
-  kQuicTransportScheme = 17,
+  kQuicTransportScheme_Obsoleted = 17,
   kTelScheme = 18,
   kUrnScheme = 19,
   kWsScheme = 20,
@@ -327,8 +317,7 @@ StringToCookieSameSite(const std::string& same_site,
                        CookieSameSiteString* samesite_string = nullptr);
 
 NET_EXPORT void RecordCookieSameSiteAttributeValueHistogram(
-    CookieSameSiteString value,
-    bool is_cookie_same_party = false);
+    CookieSameSiteString value);
 
 // This function reduces the 65535 available TCP port values down to a <100
 // potentially interesting values that cookies could be set by or sent to. This
@@ -360,6 +349,24 @@ enum class TruncatingCharacterInCookieStringType {
   kTruncatingCharLineFeed = 3,
 
   kMaxValue = kTruncatingCharLineFeed,  // Keep as the last value.
+};
+
+// Enum for measuring usage patterns of CookiesAllowedForUrls.
+// The policy supports wildcards in the primary or secondary content setting
+// pattern, and explicit patterns for both. Each variant of this enum represents
+// policies set with each possible combination of rule types. These values are
+// persisted to logs. Entries should not be renumbered and numeric values should
+// never be reused.
+enum class CookiesAllowedForUrlsUsage {
+  kExplicitOnly = 0,
+  kWildcardPrimaryOnly = 1,
+  kWildcardSecondaryOnly = 2,
+  kExplicitAndPrimaryWildcard = 3,
+  kExplicitAndSecondaryWildcard = 4,
+  kWildcardOnly = 5,
+  kAllPresent = 6,
+
+  kMaxValue = kAllPresent,
 };
 
 }  // namespace net

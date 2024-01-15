@@ -16,7 +16,6 @@ import static org.hamcrest.Matchers.anything;
 
 import android.content.Context;
 import android.content.Intent;
-import android.support.test.InstrumentationRegistry;
 
 import androidx.test.filters.MediumTest;
 
@@ -38,26 +37,27 @@ import org.chromium.base.ContextUtils;
 import org.chromium.base.FileUtils;
 import org.chromium.base.test.BaseActivityTestRule;
 import org.chromium.base.test.util.CallbackHelper;
+import org.chromium.base.test.util.DoNotBatch;
 import org.chromium.base.test.util.Feature;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
 import java.io.File;
 import java.util.concurrent.ExecutionException;
 
-/**
- * UI tests for the Components UI's Update Button.
- */
+/** UI tests for the Components UI's Update Button. */
 @RunWith(AwJUnit4ClassRunner.class)
+@DoNotBatch(reason = "Batching causes test failures.")
 public class ComponentsListFragmentUpdateButtonTest {
     @Rule
-    public BaseActivityTestRule mRule = new BaseActivityTestRule<MainActivity>(MainActivity.class);
+    public BaseActivityTestRule<MainActivity> mRule =
+            new BaseActivityTestRule<>(MainActivity.class);
 
     private static File sComponentsDownloadDir =
             new File(ComponentsProviderPathUtil.getComponentUpdateServiceDirectoryPath());
 
     @Before
     public void setUp() {
-        Context context = InstrumentationRegistry.getTargetContext();
+        Context context = ContextUtils.getApplicationContext();
         WebViewPackageHelper.setCurrentWebViewPackageForTesting(
                 WebViewPackageHelper.getContextPackageInfo(context));
     }
@@ -70,12 +70,15 @@ public class ComponentsListFragmentUpdateButtonTest {
     }
 
     private CallbackHelper getComponentInfoLoadedListener() throws ExecutionException {
-        return TestThreadUtils.runOnUiThreadBlocking(() -> {
-            final CallbackHelper helper = new CallbackHelper();
-            ComponentsListFragment.setComponentInfoLoadedListenerForTesting(
-                    () -> { helper.notifyCalled(); });
-            return helper;
-        });
+        return TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    final CallbackHelper helper = new CallbackHelper();
+                    ComponentsListFragment.setComponentInfoLoadedListenerForTesting(
+                            () -> {
+                                helper.notifyCalled();
+                            });
+                    return helper;
+                });
     }
 
     private void launchComponentsFragment() {
@@ -83,10 +86,11 @@ public class ComponentsListFragmentUpdateButtonTest {
         intent.putExtra(MainActivity.FRAGMENT_ID_INTENT_EXTRA, MainActivity.FRAGMENT_ID_COMPONENTS);
         mRule.launchActivity(intent);
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            ComponentsListFragment.setComponentUpdateServiceNameForTesting(
-                    "org.chromium.android_webview.test.services.MockAwComponentUpdateService");
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    ComponentsListFragment.setComponentUpdateServiceNameForTesting(
+                            "org.chromium.android_webview.test.services.MockAwComponentUpdateService");
+                });
         onView(withId(R.id.fragment_components_list)).check(matches(isDisplayed()));
     }
 
@@ -120,8 +124,12 @@ public class ComponentsListFragmentUpdateButtonTest {
         onData(anything())
                 .atPosition(0)
                 .onChildView(withId(android.R.id.text2))
-                .check(matches(withText(
-                        "Version: " + MockAwComponentUpdateService.MOCK_COMPONENT_A_VERSION)));
+                .check(
+                        matches(
+                                withText(
+                                        "Version: "
+                                                + MockAwComponentUpdateService
+                                                        .MOCK_COMPONENT_A_VERSION)));
 
         onData(anything())
                 .atPosition(1)
@@ -131,8 +139,12 @@ public class ComponentsListFragmentUpdateButtonTest {
         onData(anything())
                 .atPosition(1)
                 .onChildView(withId(android.R.id.text2))
-                .check(matches(withText(
-                        "Version: " + MockAwComponentUpdateService.MOCK_COMPONENT_B_VERSION)));
+                .check(
+                        matches(
+                                withText(
+                                        "Version: "
+                                                + MockAwComponentUpdateService
+                                                        .MOCK_COMPONENT_B_VERSION)));
     }
 
     /**

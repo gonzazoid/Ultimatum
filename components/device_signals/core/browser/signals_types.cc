@@ -24,6 +24,10 @@ const std::string ErrorToString(SignalCollectionError error) {
       return errors::kInvalidUser;
     case SignalCollectionError::kMissingParameters:
       return errors::kMissingParameters;
+    case SignalCollectionError::kParsingFailed:
+      return errors::kParsingFailed;
+    case SignalCollectionError::kUnexpectedValue:
+      return errors::kUnexpectedValue;
   }
 }
 
@@ -109,6 +113,15 @@ FileSystemInfoResponse& FileSystemInfoResponse::operator=(
 
 FileSystemInfoResponse::~FileSystemInfoResponse() = default;
 
+AgentSignalsResponse::AgentSignalsResponse() = default;
+AgentSignalsResponse::AgentSignalsResponse(const AgentSignalsResponse&) =
+    default;
+
+AgentSignalsResponse& AgentSignalsResponse::operator=(
+    const AgentSignalsResponse&) = default;
+
+AgentSignalsResponse::~AgentSignalsResponse() = default;
+
 SignalsAggregationRequest::SignalsAggregationRequest() = default;
 SignalsAggregationRequest::SignalsAggregationRequest(
     const SignalsAggregationRequest&) = default;
@@ -120,8 +133,9 @@ SignalsAggregationRequest::~SignalsAggregationRequest() = default;
 
 bool SignalsAggregationRequest::operator==(
     const SignalsAggregationRequest& other) const {
-  return user_context == other.user_context &&
-         signal_names == other.signal_names;
+  return signal_names == other.signal_names &&
+         file_system_signal_parameters == other.file_system_signal_parameters &&
+         settings_signal_parameters == other.settings_signal_parameters;
 }
 
 SignalsAggregationResponse::SignalsAggregationResponse() = default;

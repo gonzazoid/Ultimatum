@@ -5,8 +5,7 @@
 #ifndef CONTENT_WEB_TEST_BROWSER_WEB_TEST_DOWNLOAD_MANAGER_DELEGATE_H_
 #define CONTENT_WEB_TEST_BROWSER_WEB_TEST_DOWNLOAD_MANAGER_DELEGATE_H_
 
-#include "base/callback_forward.h"
-#include "base/memory/weak_ptr.h"
+#include "base/functional/callback_forward.h"
 #include "content/public/browser/download_manager_delegate.h"
 #include "content/shell/browser/shell_download_manager_delegate.h"
 
@@ -34,7 +33,7 @@ class WebTestDownloadManagerDelegate : public ShellDownloadManagerDelegate {
       const content::WebContents::Getter& web_contents_getter,
       const GURL& url,
       const std::string& request_method,
-      absl::optional<url::Origin> request_initiator,
+      std::optional<url::Origin> request_initiator,
       bool from_download_cross_origin_redirect,
       bool content_initiated,
       content::CheckDownloadAllowedCallback check_download_allowed_cb) override;

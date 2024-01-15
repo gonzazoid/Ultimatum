@@ -21,13 +21,19 @@
 #include "components/search_engines/template_url_data.h"
 #include "components/search_engines/template_url_service.h"
 #include "components/search_engines/template_url_starter_pack_data.h"
+#include "components/strings/grit/components_strings.h"
 #include "components/url_formatter/url_fixer.h"
 #include "third_party/metrics_proto/omnibox_focus_type.pb.h"
 #include "third_party/metrics_proto/omnibox_input_type.pb.h"
+#include "ui/base/l10n/l10n_util.h"
 #include "ui/base/page_transition_types.h"
 #include "url/url_constants.h"
 
 const int BuiltinProvider::kRelevance = 860;
+// Scored higher than history URL provider suggestions since inputs like '@b'
+// would default 'bing.com' instead (history URL provider seems to ignore '@'
+// prefix in the input).
+const int BuiltinProvider::kStarterPackRelevance = 1450;
 
 BuiltinProvider::BuiltinProvider(AutocompleteProviderClient* client)
     : AutocompleteProvider(AutocompleteProvider::TYPE_BUILTIN),
@@ -39,43 +45,41 @@ BuiltinProvider::BuiltinProvider(AutocompleteProviderClient* client)
 void BuiltinProvider::Start(const AutocompleteInput& input,
                             bool minimal_changes) {
   matches_.clear();
-  if (input.focus_type() != metrics::OmniboxFocusType::INTERACTION_DEFAULT ||
+  if (input.IsZeroSuggest() ||
       (input.type() == metrics::OmniboxInputType::EMPTY)) {
     return;
   }
 
-  const std::u16string text = input.text();
-  DoStarterPackAutocompletion(text);
-
   if (input.type() != metrics::OmniboxInputType::QUERY) {
-    DoBuiltinAutocompletion(text);
+    DoBuiltinAutocompletion(input.text());
+    UpdateRelevanceScores(input);
   }
 
-  UpdateRelevanceScores(input);
+  DoStarterPackAutocompletion(input);
 }
 
 BuiltinProvider::~BuiltinProvider() = default;
 
-void BuiltinProvider::DoStarterPackAutocompletion(const std::u16string& text) {
-  if (!OmniboxFieldTrial::IsSiteSearchStarterPackEnabled()) {
-    return;
-  }
-
+void BuiltinProvider::DoStarterPackAutocompletion(
+    const AutocompleteInput& input) {
+  // Custom search engines is not enabled on mobile.
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
   // When the user's input begins with '@', we want to prioritize providing
   // suggestions for all active starter pack search engines.
-  bool starts_with_starter_pack_symbol =
-      base::StartsWith(text, u"@", base::CompareCase::INSENSITIVE_ASCII);
+  bool starts_with_starter_pack_symbol = base::StartsWith(
+      input.text(), u"@", base::CompareCase::INSENSITIVE_ASCII);
 
   if (starts_with_starter_pack_symbol) {
-    TemplateURLService::TURLsAndMeaningfulLengths matches;
-    template_url_service_->AddMatchingKeywords(text, false, &matches);
-    for (auto match : matches) {
-      if (match.first->starter_pack_id() > 0 &&
-          match.first->is_active() == TemplateURLData::ActiveStatus::kTrue) {
-        AddStarterPackMatch(*match.first);
+    TemplateURLService::TemplateURLVector matches;
+    template_url_service_->AddMatchingKeywords(input.text(), false, &matches);
+    for (TemplateURL* match : matches) {
+      if (match->starter_pack_id() > 0 &&
+          match->is_active() == TemplateURLData::ActiveStatus::kTrue) {
+        AddStarterPackMatch(*match, input);
       }
     }
   }
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 }
 
 void BuiltinProvider::DoBuiltinAutocompletion(const std::u16string& text) {
@@ -192,6 +196,7 @@ void BuiltinProvider::AddBuiltinMatch(const std::u16string& match_string,
                                       const ACMatchClassifications& styles) {
   AutocompleteMatch match(this, kRelevance, false,
                           AutocompleteMatchType::NAVSUGGEST);
+  match.suggest_type = omnibox::TYPE_NAVIGATION;
   match.fill_into_edit = match_string;
   match.inline_autocompletion = inline_completion;
   match.destination_url = GURL(match_string);
@@ -200,7 +205,8 @@ void BuiltinProvider::AddBuiltinMatch(const std::u16string& match_string,
   matches_.push_back(match);
 }
 
-void BuiltinProvider::AddStarterPackMatch(const TemplateURL& template_url) {
+void BuiltinProvider::AddStarterPackMatch(const TemplateURL& template_url,
+                                          const AutocompleteInput& input) {
   // The history starter pack engine is disabled in incognito mode.
   if (client_->IsOffTheRecord() &&
       template_url.starter_pack_id() == TemplateURLStarterPackData::kHistory) {
@@ -213,22 +219,36 @@ void BuiltinProvider::AddStarterPackMatch(const TemplateURL& template_url) {
   // TODO(yoangela): This should be updated so the keyword chip only attaches to
   //  STARTER_PACK type suggestions rather than rely on out-scoring all other
   //  suggestions.
-  AutocompleteMatch match(
-      this, OmniboxFieldTrial::kSiteSearchStarterPackRelevanceScore.Get(),
-      false, AutocompleteMatchType::STARTER_PACK);
+  AutocompleteMatch match(this, kStarterPackRelevance, false,
+                          AutocompleteMatchType::STARTER_PACK);
 
   const std::u16string destination_url =
       TemplateURLStarterPackData::GetDestinationUrlForStarterPackID(
           template_url.starter_pack_id());
   match.fill_into_edit = template_url.keyword();
+  match.inline_autocompletion =
+      match.fill_into_edit.substr(input.text().length());
   match.destination_url = GURL(destination_url);
-  match.contents = destination_url;
-  match.contents_class.emplace_back(0, ACMatchClassification::URL);
-  match.description = template_url.short_name();
-  match.description_class.emplace_back(0, ACMatchClassification::NONE);
   match.transition = ui::PAGE_TRANSITION_GENERATED;
-  match.keyword = template_url.keyword();
-  match.allowed_to_be_default_match = true;
+  if (OmniboxFieldTrial::IsKeywordModeRefreshEnabled() &&
+      input.current_page_classification() !=
+          metrics::OmniboxEventProto::NTP_REALBOX &&
+      template_url.keyword().starts_with(u'@')) {
+    match.description = l10n_util::GetStringFUTF16(
+        IDS_OMNIBOX_INSTANT_KEYWORD_SEARCH_TEXT, template_url.short_name());
+    match.description_class.emplace_back(0, ACMatchClassification::NONE);
+    match.contents =
+        l10n_util::GetStringUTF16(IDS_OMNIBOX_INSTANT_KEYWORD_HELP);
+    match.contents_class.emplace_back(0, ACMatchClassification::DIM);
+    match.allowed_to_be_default_match = false;
+    match.keyword = template_url.keyword();
+  } else {
+    match.description = template_url.short_name();
+    match.description_class.emplace_back(0, ACMatchClassification::NONE);
+    match.contents = destination_url;
+    match.contents_class.emplace_back(0, ACMatchClassification::URL);
+    match.SetAllowedToBeDefault(input);
+  }
   matches_.push_back(match);
 }
 

@@ -13,6 +13,7 @@
 #include "chrome/browser/ash/settings/scoped_testing_cros_settings.h"
 #include "chrome/browser/ash/settings/stub_cros_settings_provider.h"
 #include "chrome/common/pref_names.h"
+#include "chromeos/printing/printer_configuration.h"
 #include "components/prefs/testing_pref_service.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -34,74 +35,59 @@ constexpr size_t kBlocklistPrinters = 2;
 constexpr char kBulkPolicyContentsJson[] = R"json(
 [
   {
-    "id": "First",
+    "guid": "First",
     "display_name": "LexaPrint",
     "description": "Laser on the test shelf",
-    "manufacturer": "LexaPrint, Inc.",
-    "model": "MS610de",
     "uri": "ipp://192.168.1.5",
     "ppd_resource": {
       "effective_model": "MS610de"
     }
   }, {
-    "id": "Second",
+    "guid": "Second",
     "display_name": "Color Laser",
     "description": "The printer next to the water cooler.",
-    "manufacturer": "Printer Manufacturer",
-    "model":"Color Laser 2004",
     "uri":"ipps://print-server.intranet.example.com:443/ipp/cl2k4",
-    "uuid":"1c395fdb-5d93-4904-b246-b2c046e79d12",
     "ppd_resource":{
-      "effective_manufacturer": "MakesPrinters",
       "effective_model": "ColorLaser2k4"
     }
   }, {
-    "id": "Third",
+    "guid": "Third",
     "display_name": "YaLP",
     "description": "Fancy Fancy Fancy",
-    "manufacturer": "LexaPrint, Inc.",
-    "model": "MS610de",
     "uri": "ipp://192.168.1.8",
     "ppd_resource": {
-      "effective_manufacturer": "LexaPrint",
       "effective_model": "MS610de"
     }
   }, {
-    "id": "Fourth",
+    "guid": "Fourth",
     "display_name": "Yon",
     "description": "Another printer",
-    "manufacturer": "CrosPrints",
-    "model": "1000d7",
     "uri": "ipp://192.168.1.9",
     "ppd_resource": {
-      "effective_manufacturer": "Printer",
       "effective_model": "Model"
     }
   }, {
-    "id": "Fifth",
+    "guid": "Fifth",
     "display_name": "ABCDE",
     "description": "Yep yep yep",
-    "manufacturer": "Ink and toner",
-    "model": "34343434l",
     "uri": "ipp://192.168.1.10",
     "ppd_resource": {
-      "effective_manufacturer": "Blah",
       "effective_model": "Blah blah Blah"
     }
   }
 ])json";
 
 template <class Container>
-std::unique_ptr<base::Value> StringsToList(Container container) {
+base::Value StringsToList(Container container) {
   auto first = container.begin();
   auto last = container.end();
-  auto list = std::make_unique<base::Value>(base::Value::Type::LIST);
+  base::Value::List list;
 
   while (first != last) {
-    list->Append(*first);
+    list.Append(*first);
     first++;
   }
-  return list;
+  return base::Value(std::move(list));
 }
 
 class CalculatorsPoliciesBinderTest : public testing::Test {
@@ -146,9 +132,9 @@ TEST_F(CalculatorsPoliciesBinderTest, PrefsAllAccess) {
   auto calculator = UserCalculator();
 
   // Set prefs to complete computation
-  prefs_.SetManagedPref(prefs::kRecommendedPrintersAccessMode,
-                        std::make_unique<base::Value>(
-                            BulkPrintersCalculator::AccessMode::ALL_ACCESS));
+  prefs_.SetManagedPref(
+      prefs::kRecommendedPrintersAccessMode,
+      base::Value(BulkPrintersCalculator::AccessMode::ALL_ACCESS));
 
   env_.RunUntilIdle();
   EXPECT_TRUE(calculator->IsComplete());
@@ -161,8 +147,7 @@ TEST_F(CalculatorsPoliciesBinderTest, PrefsAllowlist) {
   // Set prefs to complete computation
   prefs_.SetManagedPref(
       prefs::kRecommendedPrintersAccessMode,
-      std::make_unique<base::Value>(
-          BulkPrintersCalculator::AccessMode::ALLOWLIST_ONLY));
+      base::Value(BulkPrintersCalculator::AccessMode::ALLOWLIST_ONLY));
   prefs_.SetManagedPref(prefs::kRecommendedPrintersAllowlist,
                         StringsToList(kAllowlistIds));
 
@@ -177,8 +162,7 @@ TEST_F(CalculatorsPoliciesBinderTest, PrefsBlocklist) {
   // Set prefs to complete computation
   prefs_.SetManagedPref(
       prefs::kRecommendedPrintersAccessMode,
-      std::make_unique<base::Value>(
-          BulkPrintersCalculator::AccessMode::BLOCKLIST_ONLY));
+      base::Value(BulkPrintersCalculator::AccessMode::BLOCKLIST_ONLY));
   prefs_.SetManagedPref(prefs::kRecommendedPrintersBlocklist,
                         StringsToList(kBlocklistIds));
 
@@ -192,8 +176,7 @@ TEST_F(CalculatorsPoliciesBinderTest, PrefsBeforeBind) {
   // calculator is still properly populated.
   prefs_.SetManagedPref(
       prefs::kRecommendedPrintersAccessMode,
-      std::make_unique<base::Value>(
-          BulkPrintersCalculator::AccessMode::ALLOWLIST_ONLY));
+      base::Value(BulkPrintersCalculator::AccessMode::ALLOWLIST_ONLY));
   prefs_.SetManagedPref(prefs::kRecommendedPrintersAllowlist,
                         StringsToList(kAllowlistIds));
 
@@ -221,7 +204,7 @@ TEST_F(CalculatorsPoliciesBinderTest, SettingsAllowlist) {
   SetDeviceSetting(
       kDevicePrintersAccessMode,
       base::Value(BulkPrintersCalculator::AccessMode::ALLOWLIST_ONLY));
-  SetDeviceSetting(kDevicePrintersAllowlist, *StringsToList(kAllowlistIds));
+  SetDeviceSetting(kDevicePrintersAllowlist, StringsToList(kAllowlistIds));
 
   env_.RunUntilIdle();
   EXPECT_TRUE(calculator->IsComplete());
@@ -234,7 +217,7 @@ TEST_F(CalculatorsPoliciesBinderTest, SettingsBlocklist) {
   SetDeviceSetting(
       kDevicePrintersAccessMode,
       base::Value(BulkPrintersCalculator::AccessMode::BLOCKLIST_ONLY));
-  SetDeviceSetting(kDevicePrintersBlocklist, *StringsToList(kBlocklistIds));
+  SetDeviceSetting(kDevicePrintersBlocklist, StringsToList(kBlocklistIds));
 
   env_.RunUntilIdle();
   EXPECT_TRUE(calculator->IsComplete());

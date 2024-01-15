@@ -5,7 +5,6 @@
 package org.chromium.chrome.browser.contextualsearch;
 
 import android.app.Activity;
-import android.graphics.Point;
 import android.text.TextUtils;
 
 import androidx.annotation.IntDef;
@@ -32,11 +31,13 @@ import java.util.regex.Pattern;
  * while tracking the selection state.
  */
 public class ContextualSearchSelectionController {
-    /**
-     * The type of selection made by the user.
-     */
-    @IntDef({SelectionType.UNDETERMINED, SelectionType.TAP, SelectionType.LONG_PRESS,
-            SelectionType.RESOLVING_LONG_PRESS})
+    /** The type of selection made by the user. */
+    @IntDef({
+        SelectionType.UNDETERMINED,
+        SelectionType.TAP,
+        SelectionType.LONG_PRESS,
+        SelectionType.RESOLVING_LONG_PRESS
+    })
     @Retention(RetentionPolicy.SOURCE)
     public @interface SelectionType {
         int UNDETERMINED = 0;
@@ -53,8 +54,10 @@ public class ContextualSearchSelectionController {
     //   1+:   . followed by 1+ of any word char, _ or -
     //   0-1:  0+ of any word char or .,@?^=%&:/~#- followed by any word char or @?^-%&/~+#-
     // TODO(twellington): expand accepted schemes?
-    private static final Pattern URL_PATTERN = Pattern.compile("((http|https|file|ftp|ssh)://)"
-            + "([\\w_-]+(?:(?:\\.[\\w_-]+)+))([\\w.,@?^=%&:/~+#-]*[\\w@?^=%&/~+#-])?");
+    private static final Pattern URL_PATTERN =
+            Pattern.compile(
+                    "((http|https|file|ftp|ssh)://)"
+                            + "([\\w_-]+(?:(?:\\.[\\w_-]+)+))([\\w.,@?^=%&:/~+#-]*[\\w@?^=%&/~+#-])?");
 
     // Max selection length must be limited or the entire request URL can go past the 2K limit.
     private static final int MAX_SELECTION_LENGTH = 1000;
@@ -73,12 +76,13 @@ public class ContextualSearchSelectionController {
      * The current selected text, either from tap or longpress, or {@code null} when the selection
      * has been programatically cleared.
      */
-    @Nullable
-    private String mSelectedText;
+    @Nullable private String mSelectedText;
+
     /**
      * Identifies what caused the selection (Tap or Longpress) whenever the selection is not null.
      */
     private @SelectionType int mSelectionType;
+
     /**
      * A running tracker for the most recent valid selection type. This starts UNDETERMINED but
      * remains valid from then on.
@@ -94,9 +98,6 @@ public class ContextualSearchSelectionController {
     // Position of the selection.
     private float mX;
     private float mY;
-
-    // The time of the most last scroll activity, or 0 if none.
-    private long mLastScrollTimeNs;
 
     // When the last tap gesture happened.
     private long mTapTimeNanoseconds;
@@ -128,15 +129,7 @@ public class ContextualSearchSelectionController {
 
         @Override
         public void onScrollEnded(int scrollOffsetY, int scrollExtentY) {
-            mLastScrollTimeNs = System.nanoTime();
             mHandler.handleScrollEnd();
-        }
-
-        @Override
-        public void onScrollUpdateGestureConsumed(Point rootScrollOffset) {
-            // The onScrollEnded notification is unreliable, so mark time during scroll updates too.
-            // See crbug.com/600863.
-            mLastScrollTimeNs = System.nanoTime();
         }
 
         @Override
@@ -153,8 +146,10 @@ public class ContextualSearchSelectionController {
      * @param handler The handler for callbacks.
      * @param tabSupplier Access to the currently active tab.
      */
-    public ContextualSearchSelectionController(Activity activity,
-            ContextualSearchSelectionHandler handler, Supplier<Tab> tabSupplier) {
+    public ContextualSearchSelectionController(
+            Activity activity,
+            ContextualSearchSelectionHandler handler,
+            Supplier<Tab> tabSupplier) {
         mActivity = activity;
         mHandler = handler;
         mTabSupplier = tabSupplier;
@@ -170,16 +165,12 @@ public class ContextualSearchSelectionController {
         mPolicy = policy;
     }
 
-    /**
-     * Notifies that the base page has started loading a page.
-     */
+    /** Notifies that the base page has started loading a page. */
     void onBasePageLoadStarted() {
         resetAllStates();
     }
 
-    /**
-     * Notifies that a Context Menu has been shown.
-     */
+    /** Notifies that a Context Menu has been shown. */
     void onContextMenuShown() {
         // Hide the UX.
         mHandler.handleSelectionDismissal();
@@ -245,13 +236,6 @@ public class ContextualSearchSelectionController {
     }
 
     /**
-     * @return The time of the most recent scroll, or 0 if none.
-     */
-    long getLastScrollTime() {
-        return mLastScrollTimeNs;
-    }
-
-    /**
      * Returns whether the current selection has been adjusted or not.
      * If it has been adjusted we must request a resolve for this exact term rather than anything
      * that overlaps as is the behavior with normal expanding resolves.
@@ -261,9 +245,7 @@ public class ContextualSearchSelectionController {
         return mIsAdjustedSelection;
     }
 
-    /**
-     * Clears the selection.
-     */
+    /** Clears the selection. */
     void clearSelection() {
         if (mClearingSelection) return;
 
@@ -384,20 +366,15 @@ public class ContextualSearchSelectionController {
         mHandler.handleSelection(selection, isValidSelection, type, mX, mY);
     }
 
-    /**
-     * Resets all internal state of this class, including the tap state.
-     */
+    /** Resets all internal state of this class, including the tap state. */
     private void resetAllStates() {
         resetSelectionStates();
         mLastTapState = null;
-        mLastScrollTimeNs = 0;
         mTapTimeNanoseconds = 0;
         mDidExpandSelection = false;
     }
 
-    /**
-     * Resets all of the internal state of this class that handles the selection.
-     */
+    /** Resets all of the internal state of this class that handles the selection. */
     private void resetSelectionStates() {
         mSelectionType = SelectionType.UNDETERMINED;
         mSelectedText = null;
@@ -424,7 +401,8 @@ public class ContextualSearchSelectionController {
     void handleShowUnhandledTapUIIfNeeded(int x, int y) {
         mWasTapGestureDetected = false;
         // TODO(donnd): refactor to avoid needing a new handler API method as suggested by Pedro.
-        if (mSelectionType != SelectionType.LONG_PRESS && !mAreSelectionHandlesShown
+        if (mSelectionType != SelectionType.LONG_PRESS
+                && !mAreSelectionHandlesShown
                 && mLastValidSelectionType != SelectionType.LONG_PRESS
                 && mLastValidSelectionType != SelectionType.RESOLVING_LONG_PRESS) {
             mWasTapGestureDetected = true;
@@ -449,8 +427,9 @@ public class ContextualSearchSelectionController {
         int x = (int) mX;
         int y = (int) mY;
 
-        TapSuppressionHeuristics tapHeuristics = new TapSuppressionHeuristics(
-                this, mLastTapState, x, y, mWasSelectionEmptyBeforeTap);
+        TapSuppressionHeuristics tapHeuristics =
+                new TapSuppressionHeuristics(
+                        this, mLastTapState, x, y, mWasSelectionEmptyBeforeTap);
         // TODO(donnd): Move to be called when the panel closes to work with states that change.
         tapHeuristics.logConditionState();
 
@@ -563,8 +542,8 @@ public class ContextualSearchSelectionController {
      *         1+:   . followed by 1+ of any word char, _ or -
      *         0-1:  0+ of any word char or .,@?^=%&:/~#- followed by any word char or @?^-%&/~+#-
      */
-    public static boolean isSelectionPartOfUrl(String selectionContext, int startOffset,
-            int endOffset) {
+    public static boolean isSelectionPartOfUrl(
+            String selectionContext, int startOffset, int endOffset) {
         Matcher matcher = URL_PATTERN.matcher(selectionContext);
 
         // Starts are inclusive and ends are non-inclusive for both GSAContext & matcher.

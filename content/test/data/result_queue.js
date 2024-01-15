@@ -2,51 +2,38 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// Queue storing asynchronous results received from the Service Worker. Results
-// are sent to the test when requested.
+// Queue storing asynchronous results. Results are available via `pop` when
+// requested.
 function ResultQueue() {
-  // Invariant: this.queue.length == 0 || this.pendingGets == 0
+  // Invariant: this.queue.length == 0 || this.pendingGets.length == 0
   this.queue = [];
-  this.pendingGets = 0;
+  this.pendingGets = [];
 }
 
-// Adds a data item to the queue. Will be sent to the test if there are
-// pendingGets.
+// Adds a data item to the queue or sends it to the earliest pending `pop`
+// operation.
 ResultQueue.prototype.push = function(data) {
-  if (this.pendingGets > 0) {
-    this.pendingGets--;
-    sendResultToTest(data);
+  if (this.pendingGets.length > 0) {
+    const resolve = this.pendingGets.pop();
+    resolve(data);
   } else {
     this.queue.unshift(data);
   }
 };
 
-// Called by native. Sends the next data item to the test if it is available.
-// Otherwise increments pendingGets so it will be delivered when received.
+// Returns a promise that resolves with the next data item, when available.
 ResultQueue.prototype.pop = function() {
-  if (this.queue.length) {
-    sendResultToTest(this.queue.pop());
-  } else {
-    this.pendingGets++;
-  }
+  return new Promise((resolve) => {
+    if (this.queue.length) {
+      resolve(this.queue.pop());
+    } else {
+      this.pendingGets.unshift(resolve);
+    }
+  });
 };
 
-// Called by native. Immediately sends the next data item to the test if it is
-// available, otherwise sends null.
+// Immediately returns the next data item if it is available, otherwise returns
+// null.
 ResultQueue.prototype.popImmediately = function() {
-  sendResultToTest(this.queue.length ? this.queue.pop() : null);
+  return this.queue.length ? this.queue.pop() : null;
 };
-
-// Sends data back to the test. This must be in response to an earlier
-// request, but it's ok to respond asynchronously. The request blocks until
-// the response is sent.
-function sendResultToTest(result) {
-  console.log('sendResultToTest: ' + result);
-  if (window.domAutomationController) {
-    domAutomationController.send('' + result);
-  }
-}
-
-function sendErrorToTest(error) {
-  sendResultToTest(error.name + ' - ' + error.message);
-}

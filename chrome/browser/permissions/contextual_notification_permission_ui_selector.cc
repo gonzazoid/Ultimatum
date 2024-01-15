@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
@@ -41,12 +41,6 @@ void RecordNotificationUserExperienceQuality(
           NotificationUserExperienceQuality_ARRAYSIZE);
 }
 
-// Records a histogram sample for the |warning_only| bit.
-void RecordWarningOnlyState(bool value) {
-  base::UmaHistogramBoolean("Permissions.CrowdDeny.PreloadData.WarningOnly",
-                            value);
-}
-
 // Attempts to decide which UI to use based on preloaded site reputation data,
 // or returns absl::nullopt if not possible. |site_reputation| can be nullptr.
 absl::optional<Decision> GetDecisionBasedOnSiteReputation(
@@ -60,7 +54,6 @@ absl::optional<Decision> GetDecisionBasedOnSiteReputation(
 
   RecordNotificationUserExperienceQuality(
       site_reputation->notification_ux_quality());
-  RecordWarningOnlyState(site_reputation->warning_only());
 
   switch (site_reputation->notification_ux_quality()) {
     case CrowdDenyPreloadData::SiteReputation::ACCEPTABLE: {

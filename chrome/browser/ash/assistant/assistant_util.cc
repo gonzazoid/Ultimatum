@@ -14,6 +14,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_prefs.h"
+#include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "components/language/core/browser/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
@@ -37,7 +38,7 @@ bool HasPrimaryAccount(const Profile* profile) {
 }
 
 bool IsGoogleDevice() {
-  return g_override_is_google_device || chromeos::IsGoogleBrandedDevice();
+  return g_override_is_google_device || ash::IsGoogleBrandedDevice();
 }
 
 const user_manager::User* GetUser(const Profile* profile) {
@@ -60,19 +61,12 @@ AssistantAllowedState GetErrorForUserType(const Profile* profile) {
     case user_manager::USER_TYPE_WEB_KIOSK_APP:
       return AssistantAllowedState::DISALLOWED_BY_KIOSK_MODE;
 
-    case user_manager::USER_TYPE_ACTIVE_DIRECTORY:
-      return AssistantAllowedState::DISALLOWED_BY_ACCOUNT_TYPE;
-
     case user_manager::USER_TYPE_GUEST:
       return AssistantAllowedState::DISALLOWED_BY_ACCOUNT_TYPE;
 
     case user_manager::USER_TYPE_REGULAR:
     case user_manager::USER_TYPE_CHILD:
       // This method should only be called for disallowed user types.
-      NOTREACHED();
-      return AssistantAllowedState::DISALLOWED_BY_ACCOUNT_TYPE;
-
-    case user_manager::NUM_USER_TYPES:
       NOTREACHED();
       return AssistantAllowedState::DISALLOWED_BY_ACCOUNT_TYPE;
   }
@@ -132,6 +126,11 @@ bool HasDedicatedAssistantKey() {
 namespace assistant {
 
 AssistantAllowedState IsAssistantAllowedForProfile(const Profile* profile) {
+  // Disabled because the libassistant.so is not available.
+  if (!ash::assistant::features::IsLibAssistantDLCEnabled()) {
+    return AssistantAllowedState::DISALLOWED_BY_NO_BINARY;
+  }
+
   // Primary account might be missing during unittests.
   if (!HasPrimaryAccount(profile))
     return AssistantAllowedState::DISALLOWED_BY_NONPRIMARY_USER;

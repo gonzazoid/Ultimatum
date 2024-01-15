@@ -9,16 +9,14 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/strings/pattern.h"
 #include "base/strings/string_util.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/win/scoped_variant.h"
 #include "chrome/browser/win/automation_controller.h"
 #include "chrome/browser/win/ui_automation_util.h"
@@ -253,11 +251,12 @@ void SettingsAppMonitor::AutomationControllerDelegate::MaybeInvokeChooser(
 
   // Invoke the dialog and record whether it was successful.
   Microsoft::WRL::ComPtr<IUIAutomationInvokePattern> invoke_pattern;
-  bool succeeded = SUCCEEDED(browser_button->GetCachedPatternAs(
-                       UIA_InvokePatternId, IID_PPV_ARGS(&invoke_pattern))) &&
-                   invoke_pattern && SUCCEEDED(invoke_pattern->Invoke());
-
-  UMA_HISTOGRAM_BOOLEAN("DefaultBrowser.Win10ChooserInvoked", succeeded);
+  if (!invoke_pattern) {
+    return;
+  }
+  browser_button->GetCachedPatternAs(UIA_InvokePatternId,
+                                     IID_PPV_ARGS(&invoke_pattern));
+  invoke_pattern->Invoke();
 }
 
 SettingsAppMonitor::SettingsAppMonitor(Delegate* delegate)
@@ -266,7 +265,7 @@ SettingsAppMonitor::SettingsAppMonitor(Delegate* delegate)
   // AutomationControllerDelegate.
   auto automation_controller_delegate =
       std::make_unique<SettingsAppMonitor::AutomationControllerDelegate>(
-          base::SequencedTaskRunnerHandle::Get(),
+          base::SequencedTaskRunner::GetCurrentDefault(),
           weak_ptr_factory_.GetWeakPtr());
 
   automation_controller_ = std::make_unique<AutomationController>(

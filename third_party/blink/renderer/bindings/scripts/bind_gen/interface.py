@@ -26,6 +26,7 @@ from .code_node import WeakDependencyNode
 from .code_node_cxx import CxxBlockNode
 from .code_node_cxx import CxxBreakableBlockNode
 from .code_node_cxx import CxxClassDefNode
+from .code_node_cxx import CxxForLoopNode
 from .code_node_cxx import CxxFuncDeclNode
 from .code_node_cxx import CxxFuncDefNode
 from .code_node_cxx import CxxLikelyIfNode
@@ -67,7 +68,7 @@ def backward_compatible_api_func(cg_context):
     if name:
         pass
     elif cg_context.constructor:
-        if cg_context.is_named_constructor:
+        if cg_context.is_legacy_factory_function:
             name = "CreateForJSConstructor"
         else:
             name = "Create"
@@ -159,14 +160,14 @@ def callback_function_name(cg_context,
     elif cg_context.constant:
         kind = "Constant"
     elif cg_context.constructor_group:
-        if cg_context.is_named_constructor:
-            kind = "NamedConstructor"
+        if cg_context.is_legacy_factory_function:
+            kind = "LegacyFactoryFunction"
         else:
             property_name = ""
             kind = "Constructor"
     elif cg_context.exposed_construct:
-        if cg_context.is_named_constructor:
-            kind = "NamedConstructorProperty"
+        if cg_context.is_legacy_factory_function:
+            kind = "LegacyFactoryFunctionProperty"
         elif cg_context.legacy_window_alias:
             kind = "LegacyWindowAlias"
         else:
@@ -217,28 +218,6 @@ def constant_name(cg_context):
     property_name = cg_context.property_.identifier.lower()
 
     return name_style.constant(property_name)
-
-
-def custom_function_name(cg_context):
-    assert isinstance(cg_context, CodeGenContext)
-
-    if cg_context.named_property_getter:
-        return "NamedPropertyGetterCustom"
-    if cg_context.named_property_setter:
-        return "NamedPropertySetterCustom"
-    if cg_context.named_property_deleter:
-        return "NamedPropertyDeleterCustom"
-
-    if cg_context.attribute_get:
-        suffix = "AttributeGetterCustom"
-    elif cg_context.attribute_set:
-        suffix = "AttributeSetterCustom"
-    elif cg_context.operation_group:
-        suffix = "MethodCustom"
-    else:
-        assert False
-
-    return name_style.func(cg_context.property_.identifier, suffix)
 
 
 # ----------------------------------------------------------------------------
@@ -320,7 +299,10 @@ def bind_callback_local_vars(code_node, cg_context):
     local_vars.extend([
         S("blink_property_name",
           ("const AtomicString& ${blink_property_name} = "
-           "ToCoreAtomicString(${v8_property_name}.As<v8::String>());")),
+           "ToCoreAtomicString(${isolate}, ${v8_property_name});")),
+        S("blink_property_index",
+          ("const AtomicString& ${blink_property_index} = "
+           "AtomicString::Number(${index});")),
         S("class_like_name", ("const char* const ${class_like_name} = "
                               "\"${class_like.identifier}\";")),
         S("current_context", ("v8::Local<v8::Context> ${current_context} = "
@@ -396,30 +378,24 @@ def bind_callback_local_vars(code_node, cg_context):
     text = _format(pattern, _1=_1)
     local_vars.append(S("execution_context_of_document_tree", text))
 
-    # exception_state_context_type
-    pattern = (
-        "const ExceptionState::ContextType ${exception_state_context_type} = "
-        "{_1};")
+    # exception_context_type
+    pattern = ("const ExceptionContextType ${exception_context_type} = "
+               "{_1};")
     if cg_context.attribute_get:
-        _1 = "ExceptionContext::Context::kAttributeGet"
+        _1 = "ExceptionContextType::kAttributeGet"
     elif cg_context.attribute_set:
-        _1 = "ExceptionContext::Context::kAttributeSet"
+        _1 = "ExceptionContextType::kAttributeSet"
     elif cg_context.constructor_group:
-        _1 = "ExceptionContext::Context::kConstructorOperationInvoke"
-    elif cg_context.indexed_property_getter:
-        _1 = "ExceptionContext::Context::kIndexedPropertyGet"
-    elif cg_context.indexed_property_setter:
-        _1 = "ExceptionContext::Context::kIndexedPropertySet"
-    elif cg_context.named_property_getter:
-        _1 = "ExceptionContext::Context::kNamedPropertyGet"
-    elif cg_context.named_property_setter:
-        _1 = "ExceptionContext::Context::kNamedPropertySet"
-    elif cg_context.named_property_deleter:
-        _1 = "ExceptionContext::Context::kNamedPropertyDelete"
+        _1 = "ExceptionContextType::kConstructorOperationInvoke"
+    elif cg_context.indexed_interceptor_kind:
+        _1 = "ExceptionContextType::kIndexedProperty{}".format(
+            cg_context.indexed_interceptor_kind)
+    elif cg_context.named_interceptor_kind:
+        _1 = "ExceptionContextType::kNamedProperty{}".format(
+            cg_context.named_interceptor_kind)
     else:
-        _1 = "ExceptionContext::Context::kOperationInvoke"
-    local_vars.append(
-        S("exception_state_context_type", _format(pattern, _1=_1)))
+        _1 = "ExceptionContextType::kOperationInvoke"
+    local_vars.append(S("exception_context_type", _format(pattern, _1=_1)))
 
     # exception_state
     def create_exception_state(symbol_node):
@@ -427,7 +403,7 @@ def bind_callback_local_vars(code_node, cg_context):
         pattern = ("{exception_state_type} ${exception_state}({init_args});"
                    "{exception_to_reject_promise}")
         exception_state_type = "ExceptionState"
-        init_args = ["${isolate}", "${exception_state_context_type}"]
+        init_args = ["${isolate}", "${exception_context_type}"]
         exception_to_reject_promise = ""
         if (cg_context.no_alloc_direct_call
                 or cg_context.no_alloc_direct_call_for_testing):
@@ -437,12 +413,19 @@ def bind_callback_local_vars(code_node, cg_context):
                 CodeGenAccumulator.require_include_headers([
                     "third_party/blink/renderer/platform/bindings/no_alloc_direct_call_exception_state.h"
                 ]))
-        if cg_context.is_named_constructor:
+        if cg_context.is_legacy_factory_function:
             init_args.append("\"{}\"".format(cg_context.property_.identifier))
         else:
             init_args.append("${class_like_name}")
-        if (cg_context.property_ and cg_context.property_.identifier
-                and not cg_context.constructor_group):
+        if cg_context.indexed_interceptor_kind:
+            init_args.append("${blink_property_index}")
+            init_args.append("ExceptionState::kForInterceptor")
+        elif (cg_context.named_interceptor_kind
+              and cg_context.named_interceptor_kind != "Enumerator"):
+            init_args.append("${blink_property_name}")
+            init_args.append("ExceptionState::kForInterceptor")
+        elif (cg_context.property_ and cg_context.property_.identifier
+              and not cg_context.constructor_group):
             init_args.append("${property_name}")
         if cg_context.is_return_type_promise_type:
             exception_to_reject_promise = (
@@ -470,11 +453,15 @@ def bind_callback_local_vars(code_node, cg_context):
             text = ("DOMWindow* ${blink_receiver} = "
                     "${class_name}::ToWrappableUnsafe(${v8_receiver});")
         else:
-            text = ("LocalDOMWindow* ${blink_receiver} = To<LocalDOMWindow>("
-                    "${class_name}::ToWrappableUnsafe(${v8_receiver}));")
+            # ToWrappableUnsafe will always return non-null, so we can use
+            # UnsafeTo via a reference to avoid the nullptr check as well.
+            text = (
+                "LocalDOMWindow* ${blink_receiver} = &UnsafeTo<LocalDOMWindow>("
+                "*${class_name}::ToWrappableUnsafe(${v8_receiver}));")
     else:
-        pattern = ("{_1}* ${blink_receiver} = "
-                   "${class_name}::ToWrappableUnsafe(${v8_receiver});")
+        pattern = (
+            "{_1}* ${blink_receiver} = "
+            "${class_name}::ToWrappableUnsafe(${isolate}, ${v8_receiver});")
         _1 = blink_class_name(cg_context.class_like)
         text = _format(pattern, _1=_1)
     local_vars.append(S("blink_receiver", text))
@@ -519,18 +506,32 @@ def bind_callback_local_vars(code_node, cg_context):
     local_vars.append(
         S("v8_return_value", definition_constructor=create_v8_return_value))
 
-    # throw_security_error
-    template_vars["throw_security_error"] = T(
-        "BindingSecurity::FailedAccessCheckFor("
-        "${info}.GetIsolate(), "
-        "${class_name}::GetWrapperTypeInfo(), "
-        "${info}.Holder());")
-
     code_node.add_template_vars(template_vars)
     # Allow implementation-specific symbol definitions to have priority.
     for symbol_node in local_vars:
         if symbol_node.name not in code_node.own_template_vars:
             code_node.register_code_symbol(symbol_node)
+
+
+def _make_throw_security_error():
+    # CxxUnlikelyIfNode() is used here as a hint to the bindings generator that
+    # we are relatively unlikely to reach a security error, and therefore
+    # should prefer to scope variables inside the if(true). We want to lean
+    # toward creating the ExceptionState inside the if(true) because it is
+    # relatively expensive.
+    return SequenceNode([
+        TextNode("""\
+// if(true) is used as part of a hint to the bindings generator. See
+// _make_throw_security_error for details.\
+"""),
+        CxxUnlikelyIfNode(cond="true",
+                          body=TextNode(
+                              "BindingSecurity::FailedAccessCheckFor("
+                              "${isolate}, "
+                              "${class_name}::GetWrapperTypeInfo(), "
+                              "${info}.Holder(), "
+                              "${exception_state});"))
+    ])
 
 
 def _make_reflect_content_attribute_key(code_node, cg_context):
@@ -806,9 +807,10 @@ def bind_return_value(code_node, cg_context, overriding_args=None):
                                   overriding_args=overriding_args)))
 
         nodes = []
-        is_return_type_void = ((not cg_context.return_type
-                                or cg_context.return_type.unwrap().is_void) and
-                               not cg_context.does_override_idl_return_type)
+        is_return_type_void = (
+            (not cg_context.return_type
+             or cg_context.return_type.unwrap().is_undefined)
+            and not cg_context.does_override_idl_return_type)
         if not (is_return_type_void
                 or cg_context.does_override_idl_return_type):
             return_type = blink_type_info(cg_context.return_type).value_t
@@ -864,56 +866,27 @@ def bind_return_value(code_node, cg_context, overriding_args=None):
         SymbolNode("return_value", definition_constructor=create_definition))
 
 
-def get_js_api_identifier(cg_context):
+def _make_bindings_logging_id(cg_context):
     assert isinstance(cg_context, CodeGenContext)
-    js_identifier = "{}.{}".format(cg_context.class_like.identifier,
-                                   cg_context.property_.identifier)
-    if cg_context.attribute_get:
-        js_identifier = "{}.{}".format(js_identifier, "get")
-    elif cg_context.attribute_set:
-        js_identifier = "{}.{}".format(js_identifier, "set")
-    elif cg_context.constructor_group and not cg_context.is_named_constructor:
-        js_identifier = "{}.{}".format(cg_context.class_like.identifier,
-                                       "constructor")
 
-    return js_identifier
+    logging_id = "{}.{}".format(cg_context.class_like.identifier,
+                                cg_context.property_.identifier)
+    if cg_context.attribute_get:
+        logging_id = "{}.{}".format(logging_id, "get")
+    elif cg_context.attribute_set:
+        logging_id = "{}.{}".format(logging_id, "set")
+    elif (cg_context.constructor_group
+          and not cg_context.is_legacy_factory_function):
+        logging_id = "{}.{}".format(cg_context.class_like.identifier,
+                                    "constructor")
+    return logging_id
 
 
 def make_bindings_trace_event(cg_context):
+    assert isinstance(cg_context, CodeGenContext)
+
     return TextNode("BLINK_BINDINGS_TRACE_EVENT(\"{}\");".format(
-        get_js_api_identifier(cg_context)))
-
-
-def get_high_entropy_checked_ext_attrs(cg_context):
-    assert isinstance(cg_context, CodeGenContext)
-    target = cg_context.member_like or cg_context.property_
-    ext_attrs = target.extended_attributes
-    if cg_context.attribute_set or "HighEntropy" not in ext_attrs:
-        return None
-
-    return ext_attrs
-
-
-def make_high_entropy_trace_event(cg_context):
-    assert isinstance(cg_context, CodeGenContext)
-    if get_high_entropy_checked_ext_attrs(cg_context) == None:
-        return None
-
-    header_text = "// [HighEntropy]"
-
-    text = _format(
-        "{header_text}"
-        "const Dactyloscoper::HighEntropyTracer"
-        "  high_entropy_tracer(\"{js_api_id}\", ${info});",
-        header_text=header_text,
-        js_api_id=get_js_api_identifier(cg_context))
-
-    node = TextNode(text)
-    node.accumulate(
-        CodeGenAccumulator.require_include_headers([
-            "third_party/blink/renderer/core/frame/dactyloscoper.h",
-        ]))
-    return node
+        _make_bindings_logging_id(cg_context)))
 
 
 def make_check_argument_length(cg_context):
@@ -972,7 +945,7 @@ def make_check_constructor_call(cg_context):
                    "ExceptionMessages::ConstructorCalledAsFunction());\n"
                    "return;")),
     ])
-    if not cg_context.is_named_constructor:
+    if not cg_context.is_legacy_factory_function:
         node.append(
             CxxLikelyIfNode(
                 cond=("ConstructorMode::Current(${isolate}) == "
@@ -984,6 +957,42 @@ def make_check_constructor_call(cg_context):
             "third_party/blink/renderer/platform/bindings/v8_object_constructor.h"
         ]))
     return node
+
+
+def make_check_coop_restrict_properties_access(cg_context):
+    assert isinstance(cg_context, CodeGenContext)
+
+    T = TextNode
+
+    if cg_context.class_like.identifier != "Window":
+        return None
+
+    ext_attrs = cg_context.member_like.extended_attributes
+    if "CrossOrigin" not in ext_attrs:
+        return None
+
+    # COOP: restrict-properties never restricts postMessage() and closed
+    # accesses, which should still be possible across browsing context groups.
+    if cg_context.property_.identifier in ("postMessage", "closed"):
+        return None
+
+    values = ext_attrs.values_of("CrossOrigin")
+    if cg_context.attribute_get and not (not values or "Getter" in values):
+        return None
+    elif cg_context.attribute_set and not ("Setter" in values):
+        return None
+
+    return CxxUnlikelyIfNode(
+        cond=("UNLIKELY(${blink_receiver}->"
+              "IsAccessBlockedByCoopRestrictProperties(${isolate}))"),
+        body=[
+            T("""\
+${exception_state}.ThrowSecurityError(
+"Cross-Origin-Opener-Policy: 'restrict-properties' blocked the access.",
+"Cross-Origin-Opener-Policy: 'restrict-properties' blocked the access.");\
+"""),
+            T("return;"),
+        ])
 
 
 def make_check_receiver(cg_context):
@@ -1036,8 +1045,7 @@ def make_check_security_of_return_value(cg_context):
     use_counter = _format(
         "UseCounter::Count(${current_execution_context}, {});", web_feature)
     cond = T("!BindingSecurity::ShouldAllowAccessTo("
-             "ToLocalDOMWindow(${current_context}), ${return_value}, "
-             "BindingSecurity::ErrorReportOption::kDoNotReport)")
+             "ToLocalDOMWindow(${current_context}), ${return_value})")
     body = [
         T(use_counter),
         T("bindings::V8SetReturnValue(${info}, nullptr);\n"
@@ -1071,8 +1079,7 @@ def make_cooperative_scheduling_safepoint(cg_context):
 def make_log_activity(cg_context):
     assert isinstance(cg_context, CodeGenContext)
 
-    target = cg_context.member_like or cg_context.property_
-    ext_attrs = target.extended_attributes
+    ext_attrs = cg_context.logging_target.extended_attributes
     if "LogActivity" not in ext_attrs:
         return None
     target = ext_attrs.value_of("LogActivity")
@@ -1092,7 +1099,8 @@ def make_log_activity(cg_context):
         _1 = "${script_state}->World().IsIsolatedWorld() && "
     cond = _format(pattern, _1=_1)
 
-    pattern = "${per_context_data}->ActivityLogger()->{_1}(\"{_2}.{_3}\"{_4});"
+    pattern = ("${per_context_data}->ActivityLogger()->{_1}(${script_state}, "
+               "\"{_2}.{_3}\"{_4});")
     _2 = cg_context.class_like.identifier
     _3 = cg_context.property_.identifier
     if cg_context.attribute_get:
@@ -1106,7 +1114,8 @@ def make_log_activity(cg_context):
         _4 = ", ${info}"
     body = _format(pattern, _1=_1, _2=_2, _3=_3, _4=_4)
 
-    pattern = ("// [LogActivity], [LogAllWorlds]\n" "if ({_1}) {{ {_2} }}")
+    pattern = ("// [LogActivity], [LogAllWorlds]\n"
+               "if (UNLIKELY({_1})) {{ {_2} }}")
     node = TextNode(_format(pattern, _1=cond, _2=body))
     node.accumulate(
         CodeGenAccumulator.require_include_headers([
@@ -1398,8 +1407,8 @@ def make_report_coop_access(cg_context):
 def make_report_deprecate_as(cg_context):
     assert isinstance(cg_context, CodeGenContext)
 
-    target = cg_context.member_like or cg_context.property_
-    name = target.extended_attributes.value_of("DeprecateAs")
+    name = cg_context.logging_target.extended_attributes.value_of(
+        "DeprecateAs")
     if not name:
         return None
 
@@ -1418,8 +1427,7 @@ def make_report_deprecate_as(cg_context):
 def _make_measure_web_feature_constant(cg_context):
     assert isinstance(cg_context, CodeGenContext)
 
-    target = cg_context.member_like or cg_context.property_
-    ext_attrs = target.extended_attributes
+    ext_attrs = cg_context.logging_target.extended_attributes
 
     suffix = ""
     if cg_context.attribute_get:
@@ -1450,11 +1458,31 @@ def _make_measure_web_feature_constant(cg_context):
 def make_report_high_entropy(cg_context):
     assert isinstance(cg_context, CodeGenContext)
 
-    ext_attrs = get_high_entropy_checked_ext_attrs(cg_context)
-    if ext_attrs is None:
+    ext_attrs = cg_context.logging_target.extended_attributes
+    if "HighEntropy" not in ext_attrs:
         return None
 
+    node = SequenceNode([
+        TextNode("// [HighEntropy]"),
+        FormatNode(
+            "const Dactyloscoper::HighEntropyTracer"
+            "  high_entropy_tracer(\"{logging_id}\", ${info});",
+            logging_id=_make_bindings_logging_id(cg_context)),
+    ])
+    node.accumulate(
+        CodeGenAccumulator.require_include_headers([
+            "third_party/blink/renderer/core/frame/dactyloscoper.h",
+        ]))
+    return node
+
+
+def make_report_high_entropy_direct(cg_context):
+    assert isinstance(cg_context, CodeGenContext)
+
+    ext_attrs = cg_context.logging_target.extended_attributes
     if not ext_attrs.value_of("HighEntropy") == "Direct":
+        return None
+    if cg_context.attribute_set:
         return None
 
     assert "Measure" in ext_attrs or "MeasureAs" in ext_attrs, "{}: {}".format(
@@ -1462,14 +1490,14 @@ def make_report_high_entropy(cg_context):
         "[HighEntropy=Direct] must be specified with either [Measure] or "
         "[MeasureAs].")
 
-    text = _format(
-        "// [HighEntropy=Direct]\n"
-        "Dactyloscoper::RecordDirectSurface("
-        "${current_execution_context}, {measure_constant}, "
-        "${return_value});",
-        measure_constant=_make_measure_web_feature_constant(cg_context))
-
-    node = TextNode(text)
+    node = SequenceNode([
+        TextNode("// [HighEntropy=Direct]"),
+        FormatNode(
+            "Dactyloscoper::RecordDirectSurface("
+            "${current_execution_context}, {measure_constant}, "
+            "${return_value});",
+            measure_constant=_make_measure_web_feature_constant(cg_context)),
+    ])
     node.accumulate(
         CodeGenAccumulator.require_include_headers(
             ["third_party/blink/renderer/core/frame/dactyloscoper.h"]))
@@ -1479,8 +1507,7 @@ def make_report_high_entropy(cg_context):
 def make_report_measure_as(cg_context):
     assert isinstance(cg_context, CodeGenContext)
 
-    target = cg_context.member_like or cg_context.property_
-    ext_attrs = target.extended_attributes
+    ext_attrs = cg_context.logging_target.extended_attributes
     if not ("Measure" in ext_attrs or "MeasureAs" in ext_attrs):
         return None
 
@@ -1557,7 +1584,7 @@ def make_runtime_call_timer_scope(cg_context, overriding_name=None):
     assert isinstance(cg_context, CodeGenContext)
     assert _is_none_or_str(overriding_name)
 
-    target = cg_context.member_like or cg_context.property_
+    target = cg_context.logging_target
 
     suffix = ""
     if cg_context.attribute_get:
@@ -1669,7 +1696,8 @@ def make_v8_set_return_value(cg_context):
     if cg_context.does_override_idl_return_type:
         return T("bindings::V8SetReturnValue(${info}, ${return_value});")
 
-    if not cg_context.return_type or cg_context.return_type.unwrap().is_void:
+    if (not cg_context.return_type
+            or cg_context.return_type.unwrap().is_undefined):
         # Request a SymbolNode |return_value| to define itself without
         # rendering any text.
         return T("<% return_value.request_symbol_definition() %>")
@@ -1696,30 +1724,46 @@ def make_v8_set_return_value(cg_context):
     # and 'getSVGDocument' operation of HTML{IFrame,Frame,Object,Embed}Element
     # interfaces, and Window.frameElement attribute, so far.
     #
-    # All the interfaces above except for Window support 'contentWindow'
-    # attribute and that's the global object of the creation context of the
-    # returned V8 wrapper.  Window.frameElement is implemented with [Custom]
-    # for now and there is no need to support it.
-    #
     # Note that the global object has its own context and there is no need to
     # pass the creation context to ToV8.
     if (cg_context.member_like.extended_attributes.value_of("CheckSecurity") ==
             "ReturnValue"):
-        condition = F(
-            "!ToV8Traits<{}>::ToV8(ToScriptState(To<LocalFrame>("
-            "${blink_receiver}->contentWindow()->GetFrame()), "
-            "${script_state}->World()), ${return_value})"
-            ".ToLocal(&v8_value)", native_value_tag(return_type))
         node = CxxBlockNode([
             T("// [CheckSecurity=ReturnValue]"),
-            T("DCHECK(IsA<LocalFrame>("
-              "${blink_receiver}->contentWindow()->GetFrame()));"),
+            F(
+                "Frame* blink_frame = {};",
+                "${blink_receiver}->GetFrame()->Parent()"
+                if cg_context.member_like.identifier == "frameElement" else
+                "${blink_receiver}->contentWindow()->GetFrame()"),
+            T("DCHECK(IsA<LocalFrame>(blink_frame));"),
+            CxxUnlikelyIfNode(
+                cond=T("UNLIKELY(!blink_frame->IsAttached() && "
+                       "To<LocalFrame>(blink_frame)"
+                       "->WindowProxyMaybeUninitialized("
+                       "${script_state}->World())->ContextIfInitialized()"
+                       ".IsEmpty())"),
+                body=[
+                    T("""\
+// Don't wrap the return value if its frame is in the process of detaching and
+// has already invalidated its v8::Context, as it is not safe to
+// re-initialize the v8::Context in that state. Return null instead.\
+"""),
+                    T("bindings::V8SetReturnValue(${info}, nullptr);"),
+                    T("return;")
+                ]),
             T("v8::Local<v8::Value> v8_value;"),
-            CxxUnlikelyIfNode(cond=condition, body=T("return;")),
+            CxxUnlikelyIfNode(cond=F(
+                "!ToV8Traits<{}>::ToV8("
+                "ToScriptState(To<LocalFrame>(blink_frame), "
+                "${script_state}->World()),"
+                "${return_value}).ToLocal(&v8_value)",
+                native_value_tag(return_type)),
+                              body=T("return;")),
             T("bindings::V8SetReturnValue(${info}, v8_value);"),
         ])
         node.accumulate(
             CodeGenAccumulator.require_include_headers([
+                "third_party/blink/renderer/bindings/core/v8/local_window_proxy.h",
                 "third_party/blink/renderer/core/frame/local_frame.h",
             ]))
         return node
@@ -1760,9 +1804,10 @@ def make_v8_set_return_value(cg_context):
 
     if return_type_body.is_interface:
         args = ["${info}", "${return_value}"]
-        if return_type_body.identifier == "Window":
+        if (return_type_body.identifier == "Window"
+                or return_type_body.identifier == "Location"):
             args.append("${blink_receiver}")
-            args.append("bindings::V8ReturnValue::kMaybeCrossOriginWindow")
+            args.append("bindings::V8ReturnValue::kMaybeCrossOrigin")
         elif cg_context.constructor or cg_context.member_like.is_static:
             args.append("${creation_context}")
         elif cg_context.for_world == cg_context.MAIN_WORLD:
@@ -1776,9 +1821,18 @@ def make_v8_set_return_value(cg_context):
                  "(${info}, ${return_value}->GetExoticObject(), "
                  "${blink_receiver});")
 
+    if return_type_body.is_async_iterator or return_type_body.is_sync_iterator:
+        # Async iterator objects and sync iterator objects (default iterator
+        # objects, map iterator objects, and set iterator objects) are
+        # implemented as ScriptWrappable instances.
+        return T("bindings::V8SetReturnValue(${info}, ${return_value}, "
+                 "${blink_receiver});")
+
     if return_type.is_promise:
-        return T("bindings::V8SetReturnValue"
-                 "(${info}, ${return_value}.V8Value());")
+        return T("bindings::V8SetReturnValue(${info}, ${return_value});")
+
+    if return_type.is_any or return_type_body.is_object:
+        return T("bindings::V8SetReturnValue(${info}, ${return_value});")
 
     return T("bindings::V8SetReturnValue(${info}, ${v8_return_value});")
 
@@ -1847,27 +1901,19 @@ def make_attribute_get_callback_def(cg_context, function_name):
         EmptyNode(),
         make_runtime_call_timer_scope(cg_context),
         make_bindings_trace_event(cg_context),
-        make_high_entropy_trace_event(cg_context),
         make_report_coop_access(cg_context),
         make_report_deprecate_as(cg_context),
+        make_report_high_entropy(cg_context),
         make_report_measure_as(cg_context),
         make_log_activity(cg_context),
         EmptyNode(),
-    ])
-
-    if "Getter" in cg_context.property_.extended_attributes.values_of(
-            "Custom"):
-        text = _format("${class_name}::{}(${info});",
-                       custom_function_name(cg_context))
-        body.append(TextNode(text))
-        return func_def
-
-    body.extend([
+        make_check_coop_restrict_properties_access(cg_context),
+        EmptyNode(),
         make_return_value_cache_return_early(cg_context),
         EmptyNode(),
         make_check_security_of_return_value(cg_context),
         make_v8_set_return_value(cg_context),
-        make_report_high_entropy(cg_context),
+        make_report_high_entropy_direct(cg_context),
         make_return_value_cache_update_value(cg_context),
     ])
 
@@ -1898,17 +1944,11 @@ def make_attribute_set_callback_def(cg_context, function_name):
         make_runtime_call_timer_scope(cg_context),
         make_bindings_trace_event(cg_context),
         make_report_deprecate_as(cg_context),
+        make_report_high_entropy(cg_context),
         make_report_measure_as(cg_context),
         make_log_activity(cg_context),
         EmptyNode(),
     ])
-
-    if "Setter" in cg_context.property_.extended_attributes.values_of(
-            "Custom"):
-        text = _format("${class_name}::{}(${v8_property_value}, ${info});",
-                       custom_function_name(cg_context))
-        body.append(TextNode(text))
-        return func_def
 
     # Binary size reduction hack
     # 1. Drop the check of argument length although this is a violation of
@@ -1973,7 +2013,7 @@ EventListener* event_handler = JSEventHandler::CreateOrNull(
             func_name = "PerformAttributeSetCEReactionsReflectTypeBoolean"
         elif idl_type.type_name == "String":
             func_name = "PerformAttributeSetCEReactionsReflectTypeString"
-        elif idl_type.type_name == "StringTreatNullAs":
+        elif idl_type.type_name == "StringLegacyNullToEmptyString":
             func_name = ("PerformAttributeSetCEReactionsReflect"
                          "TypeStringLegacyNullToEmptyString")
         elif idl_type.type_name == "StringOrNull":
@@ -2052,11 +2092,9 @@ def make_constant_callback_def(cg_context, function_name):
     body.extend([
         make_runtime_call_timer_scope(cg_context),
         make_bindings_trace_event(cg_context),
-        make_high_entropy_trace_event(cg_context),
         logging_nodes,
         EmptyNode(),
         TextNode(v8_set_return_value),
-        make_report_high_entropy(cg_context),
     ])
 
     return func_def
@@ -2136,6 +2174,7 @@ def make_constructor_function_def(cg_context, function_name):
 
     body.extend([
         make_report_deprecate_as(cg_context),
+        make_report_high_entropy(cg_context),
         make_report_measure_as(cg_context),
         make_log_activity(cg_context),
         EmptyNode(),
@@ -2161,6 +2200,10 @@ def make_constructor_function_def(cg_context, function_name):
               "${return_value}->AssociateWithWrapper(${isolate}, "
               "${class_name}::GetWrapperTypeInfo(), ${v8_receiver});"))
         body.append(T("bindings::V8SetReturnValue(${info}, v8_wrapper);"))
+
+    body.extend([
+        make_report_high_entropy_direct(cg_context),
+    ])
 
     return func_def
 
@@ -2223,7 +2266,8 @@ def make_exposed_construct_callback_def(cg_context, function_name):
     return func_def
 
 
-def make_named_constructor_property_callback_def(cg_context, function_name):
+def make_legacy_factory_function_property_callback_def(cg_context,
+                                                       function_name):
     assert isinstance(cg_context, CodeGenContext)
     assert isinstance(function_name, str)
 
@@ -2243,32 +2287,34 @@ def make_named_constructor_property_callback_def(cg_context, function_name):
     assert isinstance(constructor_group, web_idl.ConstructorGroup)
     assert isinstance(constructor_group.owner, web_idl.Interface)
     named_ctor_v8_bridge = v8_bridge_class_name(constructor_group.owner)
-    cgc = CodeGenContext(
-        interface=constructor_group.owner,
-        constructor_group=constructor_group,
-        is_named_constructor=True,
-        class_name=named_ctor_v8_bridge)
+    cgc = CodeGenContext(interface=constructor_group.owner,
+                         constructor_group=constructor_group,
+                         is_legacy_factory_function=True,
+                         class_name=named_ctor_v8_bridge)
     named_ctor_name = callback_function_name(cgc)
     named_ctor_def = make_constructor_callback_def(cgc, named_ctor_name)
 
     return_value_cache_return_early = """\
-static const V8PrivateProperty::SymbolKey kPrivatePropertyNamedConstructor;
-auto&& v8_private_named_constructor =
-    V8PrivateProperty::GetSymbol(${isolate}, kPrivatePropertyNamedConstructor);
-v8::Local<v8::Value> v8_named_constructor;
-if (!v8_private_named_constructor.GetOrUndefined(${v8_receiver})
-         .ToLocal(&v8_named_constructor)) {
+static const V8PrivateProperty::SymbolKey
+    kPrivatePropertyLegacyFactoryFunction;
+auto&& v8_private_legacy_factory_function =
+    V8PrivateProperty::GetSymbol(
+        ${isolate},
+        kPrivatePropertyLegacyFactoryFunction);
+v8::Local<v8::Value> v8_legacy_factory_function;
+if (!v8_private_legacy_factory_function.GetOrUndefined(${v8_receiver})
+         .ToLocal(&v8_legacy_factory_function)) {
   return;
 }
-if (!v8_named_constructor->IsUndefined()) {
-  bindings::V8SetReturnValue(${info}, v8_named_constructor);
+if (!v8_legacy_factory_function->IsUndefined()) {
+  bindings::V8SetReturnValue(${info}, v8_legacy_factory_function);
   return;
 }
 """
 
     pattern = """\
 v8::Local<v8::Value> v8_value;
-if (!bindings::CreateNamedConstructorFunction(
+if (!bindings::CreateLegacyFactoryFunctionFunction(
          ${script_state},
          {callback},
          "{func_name}",
@@ -2279,7 +2325,7 @@ if (!bindings::CreateNamedConstructorFunction(
 }
 bindings::V8SetReturnValue(${info}, v8_value);
 """
-    create_named_constructor_function = _format(
+    create_legacy_factory_function_function = _format(
         pattern,
         callback=named_ctor_name,
         func_name=constructor_group.identifier,
@@ -2287,12 +2333,12 @@ bindings::V8SetReturnValue(${info}, v8_value);
         v8_bridge=named_ctor_v8_bridge)
 
     return_value_cache_update_value = """\
-v8_private_named_constructor.Set(${v8_receiver}, v8_value);
+v8_private_legacy_factory_function.Set(${v8_receiver}, v8_value);
 """
 
     body.extend([
         TextNode(return_value_cache_return_early),
-        TextNode(create_named_constructor_function),
+        TextNode(create_legacy_factory_function_function),
         TextNode(return_value_cache_update_value),
     ])
 
@@ -2307,9 +2353,10 @@ def list_no_alloc_direct_call_callbacks(cg_context):
 
     Example:
       Given the following Web IDL fragments,
-        void f(DOMString);                                             // (a)
-        [NoAllocDirectCall] void f(Node node);                         // (b)
-        [NoAllocDirectCall] void f(optional long a, optional long b);  // (c)
+        undefined f(DOMString);                            // (a)
+        [NoAllocDirectCall] undefined f(Node node);        // (b)
+        [NoAllocDirectCall] undefined f(optional long a,
+                                        optional long b);  // (c)
       the following callback functions should be generated,
         void F(v8::Local<v8::Value> node);  // (b)
         void F();                           // (c)
@@ -2486,7 +2533,7 @@ def make_no_alloc_direct_call_callback_def(cg_context, function_name,
         map(lambda arg: "{} {}".format(arg.v8_type, arg.v8_arg_name),
             arg_list)) +
                  ["v8::FastApiCallbackOptions& v8_arg_callback_options"])
-    return_type = ("void" if function_like.return_type.is_void else
+    return_type = ("void" if function_like.return_type.is_undefined else
                    blink_type_info(function_like.return_type).value_t)
 
     func_def = CxxFuncDefNode(name=function_name,
@@ -2651,21 +2698,14 @@ def make_operation_function_def(cg_context, function_name):
     body.extend([
         make_check_receiver(cg_context),
         EmptyNode(),
-        make_high_entropy_trace_event(cg_context),
         make_report_coop_access(cg_context),
         make_report_deprecate_as(cg_context),
+        make_report_high_entropy(cg_context),
         make_report_measure_as(cg_context),
         make_log_activity(cg_context),
         EmptyNode(),
-    ])
-
-    if "Custom" in cg_context.property_.extended_attributes:
-        text = _format("${class_name}::{}(${info});",
-                       custom_function_name(cg_context))
-        body.append(TextNode(text))
-        return func_def
-
-    body.extend([
+        make_check_coop_restrict_properties_access(cg_context),
+        EmptyNode(),
         make_no_alloc_direct_call_flush_deferred_actions(cg_context),
         EmptyNode(),
         make_check_argument_length(cg_context),
@@ -2676,7 +2716,7 @@ def make_operation_function_def(cg_context, function_name):
         EmptyNode(),
         make_check_security_of_return_value(cg_context),
         make_v8_set_return_value(cg_context),
-        make_report_high_entropy(cg_context),
+        make_report_high_entropy_direct(cg_context),
     ])
 
     return func_def
@@ -2687,9 +2727,6 @@ def make_operation_callback_def(cg_context, function_name):
     assert isinstance(function_name, str)
 
     operation_group = cg_context.operation_group
-
-    assert (not ("Custom" in operation_group.extended_attributes)
-            or len(operation_group) == 1)
 
     nodes = SequenceNode()
     if "NoAllocDirectCall" in operation_group.extended_attributes:
@@ -2816,16 +2853,56 @@ def _make_interceptor_callback_def(cg_context, function_name, arg_decls,
     return func_def
 
 
+def _make_interceptor_callback_args(cg_context, named_or_indexed,
+                                    callback_type):
+    arg_decls = []
+    arg_names = []
+
+    # name/index parameter is used for every interceptor except Enumerator.
+    if callback_type != "Enumerator":
+        if named_or_indexed == "Named":
+            arg_decls.append("v8::Local<v8::Name> v8_property_name")
+            arg_names.append("v8_property_name")
+        elif named_or_indexed == "Indexed":
+            arg_decls.append("uint32_t index")
+            arg_names.append("index")
+        else:
+            assert False
+
+    if callback_type == "Getter":
+        callback_info_type = "Value"
+    elif callback_type == "Setter":
+        arg_decls.append("v8::Local<v8::Value> v8_property_value")
+        arg_names.append("v8_property_value")
+        callback_info_type = "Value"
+    elif callback_type == "Query":
+        callback_info_type = "Integer"
+    elif callback_type == "Deleter":
+        callback_info_type = "Boolean"
+    elif callback_type == "Enumerator":
+        callback_info_type = "Array"
+    elif callback_type == "Definer":
+        arg_decls.append("const v8::PropertyDescriptor& v8_property_desc")
+        arg_names.append("v8_property_desc")
+        callback_info_type = "Value"
+    elif callback_type == "Descriptor":
+        callback_info_type = "Value"
+    else:
+        assert False
+    arg_decls.append(
+        _format("const v8::PropertyCallbackInfo<v8::{}>& info",
+                callback_info_type))
+    arg_names.append("info")
+
+    return arg_decls, arg_names
+
+
 def make_indexed_property_getter_callback(cg_context, function_name):
     assert isinstance(cg_context, CodeGenContext)
     assert isinstance(function_name, str)
 
-    arg_decls = [
-        "uint32_t index",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["index", "info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Indexed", "Getter")
     func_decl, func_def = _make_interceptor_callback(
         cg_context, function_name, arg_decls, arg_names, cg_context.class_name,
         "IndexedPropertyGetter")
@@ -2834,9 +2911,8 @@ def make_indexed_property_getter_callback(cg_context, function_name):
     if not cg_context.interface.indexed_and_named_properties.indexed_getter:
         body.append(
             TextNode("""\
-v8::Local<v8::String> property_name =
-    V8AtomicString(${isolate}, AtomicString::Number(${index}));
-${class_name}::NamedPropertyGetterCallback(property_name, ${info});
+${class_name}::NamedPropertyGetterCallback(
+    V8AtomicString(${isolate}, ${blink_property_index}), ${info});
 """))
         return func_decl, func_def
 
@@ -2861,13 +2937,8 @@ def make_indexed_property_setter_callback(cg_context, function_name):
     assert isinstance(cg_context, CodeGenContext)
     assert isinstance(function_name, str)
 
-    arg_decls = [
-        "uint32_t index",
-        "v8::Local<v8::Value> v8_property_value",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["index", "v8_property_value", "info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Indexed", "Setter")
     func_decl, func_def = _make_interceptor_callback(
         cg_context, function_name, arg_decls, arg_names, cg_context.class_name,
         "IndexedPropertySetter")
@@ -2876,31 +2947,28 @@ def make_indexed_property_setter_callback(cg_context, function_name):
     if not cg_context.interface.indexed_and_named_properties.indexed_getter:
         body.append(
             TextNode("""\
-v8::Local<v8::String> property_name =
-    V8AtomicString(${isolate}, AtomicString::Number(${index}));
 ${class_name}::NamedPropertySetterCallback(
-    property_name, ${v8_property_value}, ${info});
+    V8AtomicString(${isolate}, ${blink_property_index}), ${v8_property_value},
+    ${info});
 """))
         return func_decl, func_def
 
     if not cg_context.indexed_property_setter:
-        body.append(
+        body.extend([
             TextNode("""\
 // 3.9.2. [[Set]]
 // https://webidl.spec.whatwg.org/#legacy-platform-object-set
 // OrdinarySetWithOwnDescriptor will end up calling DefineOwnProperty,
 // which will fail when the receiver object is this legacy platform
-// object.
-bindings::V8SetReturnValue(${info}, nullptr);
-if (${info}.ShouldThrowOnError()) {
-  ExceptionState exception_state(
-      ${info}.GetIsolate(),
-      ExceptionContext::Context::kIndexedPropertySet,
-      "${interface.identifier}");
-  exception_state.ThrowTypeError(
-      "Indexed property setter is not supported.");
-}
-"""))
+// object.\
+"""),
+            TextNode("bindings::V8SetReturnValue(${info}, nullptr);"),
+            CxxLikelyIfNode(
+                cond="${info}.ShouldThrowOnError()",
+                body=TextNode(
+                    "${exception_state}.ThrowTypeError("
+                    "\"Indexed property setter is not supported.\");"))
+        ])
         return func_decl, func_def
 
     bind_return_value(
@@ -2945,12 +3013,8 @@ def make_indexed_property_deleter_callback(cg_context, function_name):
     assert isinstance(cg_context, CodeGenContext)
     assert isinstance(function_name, str)
 
-    arg_decls = [
-        "uint32_t index",
-        "const v8::PropertyCallbackInfo<v8::Boolean>& info",
-    ]
-    arg_names = ["index", "info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Indexed", "Deleter")
     func_decl, func_def = _make_interceptor_callback(
         cg_context, function_name, arg_decls, arg_names, cg_context.class_name,
         "IndexedPropertyDeleter")
@@ -2959,28 +3023,26 @@ def make_indexed_property_deleter_callback(cg_context, function_name):
     if not cg_context.interface.indexed_and_named_properties.indexed_getter:
         body.append(
             TextNode("""\
-v8::Local<v8::String> property_name =
-    V8AtomicString(${isolate}, AtomicString::Number(${index}));
-${class_name}::NamedPropertyDeleterCallback(property_name, ${info});
+${class_name}::NamedPropertyDeleterCallback(
+    V8AtomicString(${isolate}, ${blink_property_index}), ${info});
 """))
         return func_decl, func_def
 
-    body.append(
+    body.extend([
         TextNode("""\
 // 3.9.4. [[Delete]]
 // https://webidl.spec.whatwg.org/#legacy-platform-object-delete
 // step 1.2. If index is not a supported property index, then return true.
-// step 1.3. Return false.
-const bool is_supported = ${index} < ${blink_receiver}->length();
-bindings::V8SetReturnValue(${info}, !is_supported);
-if (is_supported and ${info}.ShouldThrowOnError()) {
-  ExceptionState exception_state(
-      ${info}.GetIsolate(),
-      ExceptionContext::Context::kIndexedPropertyDelete,
-      "${interface.identifier}");
-  exception_state.ThrowTypeError("Index property deleter is not supported.");
-}
-"""))
+// step 1.3. Return false.\
+"""),
+        TextNode("const bool is_supported = "
+                 "${index} < ${blink_receiver}->length();"),
+        TextNode("bindings::V8SetReturnValue(${info}, !is_supported);"),
+        CxxLikelyIfNode(cond="is_supported && ${info}.ShouldThrowOnError()",
+                        body=TextNode(
+                            "${exception_state}.ThrowTypeError("
+                            "\"Index property deleter is not supported.\");"))
+    ])
 
     return func_decl, func_def
 
@@ -2989,13 +3051,8 @@ def make_indexed_property_definer_callback(cg_context, function_name):
     assert isinstance(cg_context, CodeGenContext)
     assert isinstance(function_name, str)
 
-    arg_decls = [
-        "uint32_t index",
-        "const v8::PropertyDescriptor& v8_property_desc",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["index", "v8_property_desc", "info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Indexed", "Definer")
     func_decl, func_def = _make_interceptor_callback(
         cg_context, function_name, arg_decls, arg_names, cg_context.class_name,
         "IndexedPropertyDefiner")
@@ -3004,46 +3061,45 @@ def make_indexed_property_definer_callback(cg_context, function_name):
     if not cg_context.interface.indexed_and_named_properties.indexed_getter:
         body.append(
             TextNode("""\
-v8::Local<v8::String> property_name =
-    V8AtomicString(${isolate}, AtomicString::Number(${index}));
 ${class_name}::NamedPropertyDefinerCallback(
-    property_name, ${v8_property_desc}, ${info});
+    V8AtomicString(${isolate}, ${blink_property_index}), ${v8_property_desc},
+    ${info});
 """))
         return func_decl, func_def
 
-    body.append(
+    body.extend([
         TextNode("""\
 // 3.9.3. [[DefineOwnProperty]]
 // https://webidl.spec.whatwg.org/#legacy-platform-object-defineownproperty
 // step 1.1. If the result of calling IsDataDescriptor(Desc) is false, then
-//   return false.
-if (v8_property_desc.has_get() || v8_property_desc.has_set()) {
-  bindings::V8SetReturnValue(${info}, nullptr);
-  if (${info}.ShouldThrowOnError()) {
-    ExceptionState exception_state(
-        ${info}.GetIsolate(),
-        ExceptionContext::Context::kIndexedPropertySet,
-        "${interface.identifier}");
-    exception_state.ThrowTypeError("Accessor properties are not allowed.");
-  }
-  return;
-}
-"""))
+//   return false.\
+"""),
+        CxxUnlikelyIfNode(
+            cond="v8_property_desc.has_get() || v8_property_desc.has_set()",
+            body=[
+                TextNode("bindings::V8SetReturnValue(${info}, nullptr);"),
+                CxxLikelyIfNode(
+                    cond="${info}.ShouldThrowOnError()",
+                    body=TextNode(
+                        "${exception_state}.ThrowTypeError(\"Accessor"
+                        " properties are not allowed.\");")),
+                TextNode("return;")
+            ])
+    ])
 
     if not cg_context.interface.indexed_and_named_properties.indexed_setter:
-        body.append(
+        body.extend([
             TextNode("""\
 // step 1.2. If O does not implement an interface with an indexed property
-//   setter, then return false.
-bindings::V8SetReturnValue(${info}, nullptr);
-if (${info}.ShouldThrowOnError()) {
-  ExceptionState exception_state(
-      ${info}.GetIsolate(),
-      ExceptionContext::Context::kIndexedPropertySet,
-      "${interface.identifier}");
-  exception_state.ThrowTypeError("Index property setter is not supported.");
-}
-"""))
+//   setter, then return false.\
+"""),
+            TextNode("bindings::V8SetReturnValue(${info}, nullptr);"),
+            CxxLikelyIfNode(
+                cond="${info}.ShouldThrowOnError()",
+                body=TextNode(
+                    "${exception_state}.ThrowTypeError(\"Index property"
+                    " setter is not supported.\");"))
+        ])
     else:
         body.append(
             TextNode("""\
@@ -3063,12 +3119,8 @@ def make_indexed_property_descriptor_callback(cg_context, function_name):
     assert isinstance(cg_context, CodeGenContext)
     assert isinstance(function_name, str)
 
-    arg_decls = [
-        "uint32_t index",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["index", "info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Indexed", "Descriptor")
     func_decl, func_def = _make_interceptor_callback(
         cg_context, function_name, arg_decls, arg_names, cg_context.class_name,
         "IndexedPropertyDescriptor")
@@ -3077,9 +3129,8 @@ def make_indexed_property_descriptor_callback(cg_context, function_name):
     if not cg_context.interface.indexed_and_named_properties.indexed_getter:
         body.append(
             TextNode("""\
-v8::Local<v8::String> property_name =
-    V8AtomicString(${isolate}, AtomicString::Number(${index}));
-${class_name}::NamedPropertyDescriptorCallback(property_name, ${info});
+${class_name}::NamedPropertyDescriptorCallback(
+    V8AtomicString(${isolate}, ${blink_property_index}), ${info});
 """))
         return func_decl, func_def
 
@@ -3124,9 +3175,8 @@ def make_indexed_property_enumerator_callback(cg_context, function_name):
     if not cg_context.interface.indexed_and_named_properties.indexed_getter:
         return None, None
 
-    arg_decls = ["const v8::PropertyCallbackInfo<v8::Array>& info"]
-    arg_names = ["info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Indexed", "Enumerator")
     func_decl, func_def = _make_interceptor_callback(
         cg_context, function_name, arg_decls, arg_names, cg_context.class_name,
         "IndexedPropertyEnumerator")
@@ -3156,12 +3206,8 @@ def make_named_property_getter_callback(cg_context, function_name):
     assert isinstance(cg_context, CodeGenContext)
     assert isinstance(function_name, str)
 
-    arg_decls = [
-        "v8::Local<v8::Name> v8_property_name",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["v8_property_name", "info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Named", "Getter")
     func_decl, func_def = _make_interceptor_callback(
         cg_context, function_name, arg_decls, arg_names, cg_context.class_name,
         "NamedPropertyGetter")
@@ -3170,18 +3216,12 @@ def make_named_property_getter_callback(cg_context, function_name):
     bind_return_value(
         body, cg_context, overriding_args=["${blink_property_name}"])
 
-    if "Custom" in cg_context.named_property_getter.extended_attributes:
-        text = _format("${class_name}::{}(${blink_property_name}, ${info});",
-                       custom_function_name(cg_context))
-        body.append(TextNode(text))
-        return func_decl, func_def
-
     # The named property getter's implementation of Blink is not designed to
     # represent the property existence, and we have to determine the property
     # existence by heuristics.
     type = cg_context.return_type.unwrap()
     if type.is_any or type.is_object:
-        not_found_expr = "${return_value}.empty()"
+        not_found_expr = "${return_value}.IsEmpty()"
     elif type.is_string:
         not_found_expr = "${return_value}.IsNull()"
     elif type.is_interface:
@@ -3191,27 +3231,37 @@ def make_named_property_getter_callback(cg_context, function_name):
     else:
         assert False
 
+    if cg_context.class_like.identifier == "WindowProperties":
+        body.append(
+            TextNode("""\
+// 3.7.4.1. [[GetOwnProperty]]
+// https://webidl.spec.whatwg.org/#named-properties-object-getownproperty\
+"""))
+    else:
+        body.append(
+            TextNode("""\
+// LegacyPlatformObjectGetOwnProperty
+// https://webidl.spec.whatwg.org/#LegacyPlatformObjectGetOwnProperty\
+"""))
+
     body.extend([
         TextNode("""\
-// LegacyPlatformObjectGetOwnProperty
-// https://webidl.spec.whatwg.org/#LegacyPlatformObjectGetOwnProperty
-// step 2.1. If the result of running the named property visibility
-//   algorithm with property name P and object O is true, then:\
+// "If the result of running the named property visibility
+//  algorithm with property name P and object O is true, then:"\
 """),
         CxxUnlikelyIfNode(
             cond=not_found_expr,
             body=[
-                TextNode("// step 3. Return OrdinaryGetOwnProperty(O, P)."),
+                TextNode("// \"Return OrdinaryGetOwnProperty(O, P).\""),
                 TextNode("return;  // Do not intercept."),
             ]),
         TextNode("""\
-// step 2.1.3. If operation was defined without an identifier, then set
-//   value to the result of performing the steps listed in the interface
-//   description to determine the value of a named property with P as the
-//   name.
-// step 2.1.4. Otherwise, operation was defined with an identifier. Set
-//   value to the result of performing the steps listed in the description
-//   of operation with P as the only argument value.\
+// "If operation was defined without an identifier, then set value to the result
+//  of performing the steps listed in the interface description to determine the
+//  value of a named property with P as the name."
+// "Otherwise, operation was defined with an identifier. Set value to the result
+//  of performing the steps listed in the description of operation with P as the
+//  only argument value."\
 """),
         make_v8_set_return_value(cg_context),
     ])
@@ -3223,19 +3273,33 @@ def make_named_property_setter_callback(cg_context, function_name):
     assert isinstance(cg_context, CodeGenContext)
     assert isinstance(function_name, str)
 
-    arg_decls = [
-        "v8::Local<v8::Name> v8_property_name",
-        "v8::Local<v8::Value> v8_property_value",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["v8_property_name", "v8_property_value", "info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Named", "Setter")
     func_decl, func_def = _make_interceptor_callback(
         cg_context, function_name, arg_decls, arg_names, cg_context.class_name,
         "NamedPropertySetter")
     body = func_def.body
 
     if not cg_context.named_property_setter:
+        throw_error_nodes = [
+            TextNode("bindings::V8SetReturnValue(${info}, nullptr);"),
+            CxxLikelyIfNode(
+                cond="${info}.ShouldThrowOnError()",
+                body=TextNode(
+                    "${exception_state}.ThrowTypeError("
+                    "\"Named property setter is not supported.\");")),
+            TextNode("return;")
+        ]
+
+        if cg_context.class_like.identifier == "WindowProperties":
+            body.append(
+                TextNode("""\
+// 3.7.4.2. [[DefineOwnProperty]]
+// https://webidl.spec.whatwg.org/#named-properties-object-defineownproperty\
+"""))
+            body.extend(throw_error_nodes)
+            return func_decl, func_def
+
         body.append(
             TextNode("""\
 // 3.9.2. [[Set]]
@@ -3252,25 +3316,16 @@ if (${info}.Holder()->GetRealNamedPropertyAttributesInPrototypeChain(
   return;  // Fallback to the existing property.
 }
 """))
-        body.append(
+
+        body.extend([
             TextNode("""\
 ${class_name}::NamedPropertyGetterCallback(${v8_property_name}, ${info});
 const bool is_creating = ${info}.GetReturnValue().Get()->IsUndefined();
-if (!is_creating) {
-  bindings::V8SetReturnValue(${info}, nullptr);
-  if (${info}.ShouldThrowOnError()) {
-    ExceptionState exception_state(
-        ${info}.GetIsolate(),
-        ExceptionContext::Context::kNamedPropertySet,
-        "${interface.identifier}");
-    exception_state.ThrowTypeError(
-        "Named property setter is not supported.");
-  }
-  return;
-}
-
-// Do not intercept.  Fallback and let it define a new own property.
-"""))
+"""),
+            CxxUnlikelyIfNode(cond="!is_creating", body=throw_error_nodes),
+            TextNode("// Do not intercept. Fallback and let it define"
+                     " a new own property.")
+        ])
         return func_decl, func_def
 
     bind_return_value(
@@ -3283,14 +3338,6 @@ if (!is_creating) {
             "${v8_property_value}",
             cg_context.named_property_setter.arguments[1].idl_type,
             argument=cg_context.named_property_setter.arguments[1]))
-
-    if "Custom" in cg_context.named_property_setter.extended_attributes:
-        text = _format(
-            "${class_name}::{}"
-            "(${blink_property_name}, ${v8_property_value}, ${info});",
-            custom_function_name(cg_context))
-        body.append(TextNode(text))
-        return func_decl, func_def
 
     body.extend([
         TextNode("""\
@@ -3307,8 +3354,10 @@ if (!is_creating) {
                             EmptyNode(),
                             make_v8_set_return_value(cg_context),
                             TextNode("""\
-% if interface.identifier == "CSSStyleDeclaration":
-// CSSStyleDeclaration is abusing named properties.
+% if interface.identifier == "CSSStyleDeclaration" or \
+     interface.identifier == "HTMLEmbedElement" or \
+     interface.identifier == "HTMLObjectElement":
+// ${interface.identifier} is abusing named properties.
 // Do not intercept if the property is not found.
 % else:
 bindings::V8SetReturnValue(${info}, nullptr);
@@ -3328,18 +3377,33 @@ def make_named_property_deleter_callback(cg_context, function_name):
     assert isinstance(cg_context, CodeGenContext)
     assert isinstance(function_name, str)
 
-    arg_decls = [
-        "v8::Local<v8::Name> v8_property_name",
-        "const v8::PropertyCallbackInfo<v8::Boolean>& info",
-    ]
-    arg_names = ["v8_property_name", "info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Named", "Deleter")
     func_decl, func_def = _make_interceptor_callback(
         cg_context, function_name, arg_decls, arg_names, cg_context.class_name,
         "NamedPropertyDeleter")
     body = func_def.body
 
     props = cg_context.interface.indexed_and_named_properties
+
+    throw_error_nodes = [
+        TextNode("bindings::V8SetReturnValue(${info}, false);"),
+        CxxLikelyIfNode(cond="${info}.ShouldThrowOnError()",
+                        body=TextNode(
+                            "${exception_state}.ThrowTypeError(\""
+                            "Named property deleter is not supported.\");")),
+        TextNode("return;"),
+    ]
+
+    if cg_context.class_like.identifier == "WindowProperties":
+        body.append(
+            TextNode("""\
+// 3.7.4.3. [[Delete]]
+// https://webidl.spec.whatwg.org/#named-properties-object-delete\
+"""))
+        body.extend(throw_error_nodes)
+        return func_decl, func_def
+
     if (not cg_context.named_property_deleter
             and "NotEnumerable" in props.named_getter.extended_attributes):
         body.append(
@@ -3357,7 +3421,7 @@ def make_named_property_deleter_callback(cg_context, function_name):
         return func_decl, func_def
 
     if not cg_context.named_property_deleter:
-        body.append(
+        body.extend([
             TextNode("""\
 // 3.9.4. [[Delete]]
 // https://webidl.spec.whatwg.org/#legacy-platform-object-delete
@@ -3366,34 +3430,21 @@ def make_named_property_deleter_callback(cg_context, function_name):
 //   named property visibility algorithm with property name P and object O
 //   is true, then:
 // step 2.1. If O does not implement an interface with a named property
-//   deleter, then return false.
-ExceptionState exception_state(${info}.GetIsolate(),
-                               ExceptionContext::Context::kNamedPropertyDelete,
-                               "${interface.identifier}");
-bool does_exist = ${blink_receiver}->NamedPropertyQuery(
-    ${blink_property_name}, exception_state);
-if (UNLIKELY(exception_state.HadException()))
-  return;
-if (does_exist) {
-  bindings::V8SetReturnValue(${info}, false);
-  if (${info}.ShouldThrowOnError()) {
-    exception_state.ThrowTypeError("Named property deleter is not supported.");
-  }
-  return;
-}
-
-// Do not intercept.
-"""))
+//   deleter, then return false.\
+"""),
+            TextNode("bool does_exist = ${blink_receiver}->NamedPropertyQuery("
+                     "${blink_property_name}, ${exception_state});"),
+            CxxUnlikelyIfNode(
+                cond="UNLIKELY(${exception_state}.HadException())",
+                body=TextNode("return;")),
+            CxxUnlikelyIfNode(cond="does_exist", body=throw_error_nodes),
+            EmptyNode(),
+            TextNode("// Do not intercept.")
+        ])
         return func_decl, func_def
 
     bind_return_value(
         body, cg_context, overriding_args=["${blink_property_name}"])
-
-    if "Custom" in cg_context.named_property_deleter.extended_attributes:
-        text = _format("${class_name}::{}(${blink_property_name}, ${info});",
-                       custom_function_name(cg_context))
-        body.append(TextNode(text))
-        return func_decl, func_def
 
     body.extend([
         TextNode("""\
@@ -3403,17 +3454,15 @@ if (does_exist) {
         make_steps_of_ce_reactions(cg_context),
         EmptyNode(),
         make_v8_set_return_value(cg_context),
-        TextNode("""\
-if (${return_value} == NamedPropertyDeleterResult::kDidNotDelete) {
-  if (${info}.ShouldThrowOnError()) {
-    ExceptionState deletion_exception_state(
-        ${info}.GetIsolate(),
-        ExceptionContext::Context::kNamedPropertyDelete,
-        "${interface.identifier}");
-    deletion_exception_state.ThrowTypeError("Failed to delete a property.");
-  }
-  return;
-}"""),
+        CxxUnlikelyIfNode(
+            cond="${return_value} == NamedPropertyDeleterResult::kDidNotDelete",
+            body=[
+                CxxLikelyIfNode(cond="${info}.ShouldThrowOnError()",
+                                body=TextNode(
+                                    "${exception_state}.ThrowTypeError("
+                                    "\"Failed to delete a property.\");")),
+                TextNode("return;")
+            ])
     ])
 
     return func_decl, func_def
@@ -3423,17 +3472,30 @@ def make_named_property_definer_callback(cg_context, function_name):
     assert isinstance(cg_context, CodeGenContext)
     assert isinstance(function_name, str)
 
-    arg_decls = [
-        "v8::Local<v8::Name> v8_property_name",
-        "const v8::PropertyDescriptor& v8_property_desc",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["v8_property_name", "v8_property_desc", "info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Named", "Definer")
     func_decl, func_def = _make_interceptor_callback(
         cg_context, function_name, arg_decls, arg_names, cg_context.class_name,
         "NamedPropertyDefiner")
     body = func_def.body
+
+    throw_error_nodes = [
+        TextNode("bindings::V8SetReturnValue(${info}, nullptr);"),
+        CxxLikelyIfNode(cond="${info}.ShouldThrowOnError()",
+                        body=TextNode(
+                            "${exception_state}.ThrowTypeError("
+                            "\"Named property setter is not supported.\");")),
+        TextNode("return;")
+    ]
+
+    if cg_context.interface.identifier == "WindowProperties":
+        body.append(
+            TextNode("""\
+// 3.7.4.2. [[DefineOwnProperty]]
+// https://webidl.spec.whatwg.org/#named-properties-object-defineownproperty\
+"""))
+        body.extend(throw_error_nodes)
+        return func_decl, func_def
 
     if cg_context.interface.identifier == "CSSStyleDeclaration":
         body.append(
@@ -3449,32 +3511,26 @@ def make_named_property_definer_callback(cg_context, function_name):
 // Do not intercept.  Fallback to OrdinaryDefineOwnProperty.
 """))
     elif not cg_context.interface.indexed_and_named_properties.named_setter:
-        body.append(
+        body.extend([
             TextNode("""\
 // 3.9.3. [[DefineOwnProperty]]
 // https://webidl.spec.whatwg.org/#legacy-platform-object-defineownproperty
 // step 2.1. Let creating be true if P is not a supported property name, and
 //   false otherwise.
 // step 2.2.1. If creating is false and O does not implement an interface
-//   with a named property setter, then return false.
-${class_name}::NamedPropertyGetterCallback(${v8_property_name}, ${info});
-const bool is_creating = ${info}.GetReturnValue().Get()->IsUndefined();
-if (!is_creating) {
-  bindings::V8SetReturnValue(${info}, nullptr);
-  if (${info}.ShouldThrowOnError()) {
-    ExceptionState exception_state(
-        ${info}.GetIsolate(),
-        ExceptionContext::Context::kNamedPropertySet,
-        "${interface.identifier}");
-    exception_state.ThrowTypeError("Named property setter is not supported.");
-  }
-  return;
-}
-
-// Do not intercept.  Fallback to OrdinaryDefineOwnProperty.
-"""))
+//   with a named property setter, then return false.\
+"""),
+            TextNode("${class_name}::NamedPropertyGetterCallback("
+                     "${v8_property_name}, ${info});"),
+            TextNode("const bool is_creating = "
+                     "${info}.GetReturnValue().Get()->IsUndefined();"),
+            CxxUnlikelyIfNode(cond="!is_creating", body=throw_error_nodes),
+            EmptyNode(),
+            TextNode(
+                "// Do not intercept. Fallback to OrdinaryDefineOwnProperty.")
+        ])
     else:
-        body.append(
+        body.extend([
             TextNode("""\
 // 3.9.3. [[DefineOwnProperty]]
 // https://webidl.spec.whatwg.org/#legacy-platform-object-defineownproperty
@@ -3482,18 +3538,20 @@ if (!is_creating) {
 //   then:
 // step 2.2.2.1. If the result of calling IsDataDescriptor(Desc) is false,
 //   then return false.
-if (v8_property_desc.has_get() || v8_property_desc.has_set()) {
-  bindings::V8SetReturnValue(${info}, nullptr);
-  if (${info}.ShouldThrowOnError()) {
-    ExceptionState exception_state(
-        ${info}.GetIsolate(),
-        ExceptionContext::Context::kNamedPropertySet,
-        "${interface.identifier}");
-    exception_state.ThrowTypeError("Accessor properties are not allowed.");
-  }
-  return;
-}
-
+"""),
+            CxxUnlikelyIfNode(
+                cond="v8_property_desc.has_get() || v8_property_desc.has_set()",
+                body=[
+                    TextNode("bindings::V8SetReturnValue(${info}, nullptr);"),
+                    CxxLikelyIfNode(
+                        cond="${info}.ShouldThrowOnError()",
+                        body=TextNode(
+                            "${exception_state}.ThrowTypeError("
+                            "\"Accessor properties are not allowed.\");")),
+                    TextNode("return;")
+                ]),
+            EmptyNode(),
+            TextNode("""\
 // step 2.2.2.2. Invoke the named property setter with P and Desc.[[Value]].
 ${class_name}::NamedPropertySetterCallback(
     ${v8_property_name},
@@ -3502,7 +3560,8 @@ ${class_name}::NamedPropertySetterCallback(
         : v8::Undefined(${isolate}).As<v8::Value>(),
     ${info});
 bindings::V8SetReturnValue(${info}, nullptr);
-"""))
+""")
+        ])
 
     return func_decl, func_def
 
@@ -3511,75 +3570,83 @@ def make_named_property_descriptor_callback(cg_context, function_name):
     assert isinstance(cg_context, CodeGenContext)
     assert isinstance(function_name, str)
 
-    arg_decls = [
-        "v8::Local<v8::Name> v8_property_name",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["v8_property_name", "info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Named", "Descriptor")
     func_decl, func_def = _make_interceptor_callback(
         cg_context, function_name, arg_decls, arg_names, cg_context.class_name,
         "NamedPropertyDescriptor")
     body = func_def.body
 
-    body.append(
-        TextNode("""\
+    if cg_context.class_like.identifier == "WindowProperties":
+        body.append(
+            TextNode("""\
+// 3.7.4.1. [[GetOwnProperty]]
+// https://webidl.spec.whatwg.org/#named-properties-object-getownproperty
+"""))
+    else:
+        body.append(
+            TextNode("""\
 // LegacyPlatformObjectGetOwnProperty
-// https://webidl.spec.whatwg.org/#LegacyPlatformObjectGetOwnProperty\
+// https://webidl.spec.whatwg.org/#LegacyPlatformObjectGetOwnProperty
 """))
 
     if ("LegacyOverrideBuiltIns" not in
             cg_context.interface.extended_attributes):
-        body.append(
+        body.extend([
             TextNode("""\
-// step 2.1. If the result of running the named property visibility algorithm
-//   with property name P and object O is true, then:
+// "If the result of running the named property visibility algorithm with
+//  property name P and object O is true, then:"\
+"""),
+            TextNode("""\
 if (${v8_receiver}->GetRealNamedPropertyAttributesInPrototypeChain(
         ${current_context}, ${v8_property_name}).IsJust()) {
   return;  // Do not intercept.  Fallback to OrdinaryGetOwnProperty.
 }
-"""))
+""")
+        ])
 
     pattern = """\
-// step 2.1.3. If operation was defined without an identifier, then set
-//   value to the result of performing the steps listed in the interface
-//   description to determine the value of a named property with P as the
-//   name.
-// step 2.1.4. Otherwise, operation was defined with an identifier. Set
-//   value to the result of performing the steps listed in the description
-//   of operation with P as the only argument value.
+// "If operation was defined without an identifier, then set value to the result
+//  of performing the steps listed in the interface description to determine the
+//  value of a named property with P as the name."
+// "Otherwise, operation was defined with an identifier. Set value to the result
+//  of performing the steps listed in the description of operation with P as the
+//  only argument value."
 ${class_name}::NamedPropertyGetterCallback(${v8_property_name}, ${info});
 v8::Local<v8::Value> v8_value = ${info}.GetReturnValue().Get();
-// step 2.1. If the result of running the named property visibility
-//   algorithm with property name P and object O is true, then:
-// step 3. Return OrdinaryGetOwnProperty(O, P).
+// "Return OrdinaryGetOwnProperty(O, P)."
 if (v8_value->IsUndefined())
   return;  // Do not intercept.  Fallback to OrdinaryGetOwnProperty.
 
-// step 2.1.6. Set desc.[[Value]] to the result of converting value to an
-//   ECMAScript value.
-// step 2.1.7. If O implements an interface with a named property setter,
-//   then set desc.[[Writable]] to true, otherwise set it to false.
-// step 2.1.8. If O implements an interface with the
-//   [LegacyUnenumerableNamedProperties] extended attribute, then set
-//   desc.[[Enumerable]] to false, otherwise set it to true.
-// step 2.1.9. Set desc.[[Configurable]] to true.
+// "Let desc be a newly created Property Descriptor with no fields."
+// "Set desc.[[Value]] to the result of converting value to an ECMAScript
+//  value."
+// "If O implements an interface with a named property setter, then set
+//  desc.[[Writable]] to true, otherwise set it to false."
+// "If O implements an interface with the [LegacyUnenumerableNamedProperties]
+//  extended attribute, then set desc.[[Enumerable]] to false, otherwise set it
+//  to true."
+// "Set desc.[[Configurable]] to true."
+// "Return desc."
 v8::PropertyDescriptor desc(v8_value, /*writable=*/{cxx_writable});
 desc.set_enumerable({cxx_enumerable});
 desc.set_configurable(true);
 bindings::V8SetReturnValue(${info}, desc);
 """
     props = cg_context.interface.indexed_and_named_properties
-    writable = bool(props.named_setter)
+    # https://webidl.spec.whatwg.org/#named-properties-object-getownproperty
+    # sets [[Writable]] to true for the named properties object, which is called
+    # WindowProperties in our implementation.
+    writable = (bool(props.named_setter)
+                or cg_context.class_like.identifier == "WindowProperties")
     cxx_writable = "true" if writable else "false"
     enumerable = props.is_named_property_enumerable
     cxx_enumerable = "true" if enumerable else "false"
     body.append(
         TextNode(
-            _format(
-                pattern,
-                cxx_writable=cxx_writable,
-                cxx_enumerable=cxx_enumerable)))
+            _format(pattern,
+                    cxx_writable=cxx_writable,
+                    cxx_enumerable=cxx_enumerable)))
 
     return func_decl, func_def
 
@@ -3592,12 +3659,8 @@ def make_named_property_query_callback(cg_context, function_name):
     if "NotEnumerable" in props.named_getter.extended_attributes:
         return None, None
 
-    arg_decls = [
-        "v8::Local<v8::Name> v8_property_name",
-        "const v8::PropertyCallbackInfo<v8::Integer>& info",
-    ]
-    arg_names = ["v8_property_name", "info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Named", "Query")
     func_decl, func_def = _make_interceptor_callback(
         cg_context, function_name, arg_decls, arg_names, cg_context.class_name,
         "NamedPropertyQuery")
@@ -3616,15 +3679,10 @@ def make_named_property_query_callback(cg_context, function_name):
         property_attribute = " | ".join(flags)
 
     body.extend([
-        TextNode("""\
-ExceptionState exception_state(${isolate},
-                               ExceptionContext::Context::kNamedPropertyGet,
-                               "${interface.identifier}");
-bool does_exist = ${blink_receiver}->NamedPropertyQuery(
-    ${blink_property_name}, exception_state);
-if (!does_exist)
-  return;  // Do not intercept.
-"""),
+        TextNode("bool does_exist = ${blink_receiver}->NamedPropertyQuery("
+                 "${blink_property_name}, ${exception_state});"),
+        CxxLikelyIfNode(cond="!does_exist",
+                        body=TextNode("return;  // Do not intercept.")),
         TextNode(
             _format(
                 "bindings::V8SetReturnValue"
@@ -3643,359 +3701,34 @@ def make_named_property_enumerator_callback(cg_context, function_name):
     if "NotEnumerable" in props.named_getter.extended_attributes:
         return None, None
 
-    arg_decls = ["const v8::PropertyCallbackInfo<v8::Array>& info"]
-    arg_names = ["info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Named", "Enumerator")
     func_decl, func_def = _make_interceptor_callback(
         cg_context, function_name, arg_decls, arg_names, cg_context.class_name,
         "NamedPropertyEnumerator")
     body = func_def.body
 
-    body.append(
+    body.extend([
         TextNode("""\
 // 3.9.6. [[OwnPropertyKeys]]
 // https://webidl.spec.whatwg.org/#legacy-platform-object-ownpropertykeys
 // step 3. If O supports named properties, then for each P of O's supported
 //   property names that is visible according to the named property
-//   visibility algorithm, append P to keys.
-Vector<String> blink_property_names;
-ExceptionState exception_state(
-    ${info}.GetIsolate(),
-    ExceptionContext::Context::kNamedPropertyEnumerate,
-    "${interface.identifier}");
-${blink_receiver}->NamedPropertyEnumerator(
-    blink_property_names, exception_state);
-if (UNLIKELY(exception_state.HadException()))
-  return;
+//   visibility algorithm, append P to keys.\
+"""),
+        TextNode("Vector<String> blink_property_names;"),
+        TextNode("${blink_receiver}->NamedPropertyEnumerator("
+                 "blink_property_names, ${exception_state});"),
+        CxxUnlikelyIfNode(cond="UNLIKELY(${exception_state}.HadException())",
+                          body=TextNode("return;")),
+        TextNode("""\
 bindings::V8SetReturnValue(
     ${info},
     ToV8(blink_property_names, ${creation_context_object}, ${isolate}));
-"""))
+""")
+    ])
 
     return func_decl, func_def
-
-
-# ----------------------------------------------------------------------------
-# Callback functions of interceptors on named properties object
-# ----------------------------------------------------------------------------
-
-
-def make_named_props_obj_indexed_getter_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "uint32_t index",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["index", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "NamedPropertiesObject_IndexedPropertyGetter")
-    body = func_def.body
-
-    body.append(
-        TextNode("""\
-v8::Local<v8::String> property_name =
-    V8AtomicString(${isolate}, AtomicString::Number(${index}));
-NamedPropsObjNamedGetterCallback(property_name, ${info});
-"""))
-
-    return func_def
-
-
-def make_named_props_obj_indexed_setter_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "uint32_t index",
-        "v8::Local<v8::Value> v8_property_value",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["index", "v8_property_value", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "NamedPropertiesObject_IndexedPropertySetter")
-    body = func_def.body
-
-    body.append(
-        TextNode("""\
-// 3.6.4.2. [[DefineOwnProperty]]
-// https://webidl.spec.whatwg.org/#named-properties-object-defineownproperty
-bindings::V8SetReturnValue(${info}, nullptr);
-if (${info}.ShouldThrowOnError()) {
-  ExceptionState exception_state(
-      ${info}.GetIsolate(),
-      ExceptionContext::Context::kIndexedPropertySet,
-      "${interface.identifier}");
-  exception_state.ThrowTypeError("Named property setter is not supported.");
-}
-"""))
-
-    return func_def
-
-
-def make_named_props_obj_indexed_deleter_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "uint32_t index",
-        "const v8::PropertyCallbackInfo<v8::Boolean>& info",
-    ]
-    arg_names = ["index", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "NamedPropertiesObject_IndexedPropertyDeleter")
-    body = func_def.body
-
-    body.append(
-        TextNode("""\
-bindings::V8SetReturnValue(${info}, false);
-if (${info}.ShouldThrowOnError()) {
-  ExceptionState exception_state(
-      ${info}.GetIsolate(),
-      ExceptionContext::Context::kIndexedPropertyDelete,
-      "${interface.identifier}");
-  exception_state.ThrowTypeError("Named property deleter is not supported.");
-}
-"""))
-
-    return func_def
-
-
-def make_named_props_obj_indexed_definer_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "uint32_t index",
-        "const v8::PropertyDescriptor& v8_property_desc",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["index", "v8_property_desc", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "NamedPropertiesObject_IndexedPropertyDefiner")
-    body = func_def.body
-
-    body.append(
-        TextNode("""\
-// 3.6.4.2. [[DefineOwnProperty]]
-// https://webidl.spec.whatwg.org/#named-properties-object-defineownproperty
-bindings::V8SetReturnValue(${info}, nullptr);
-if (${info}.ShouldThrowOnError()) {
-  ExceptionState exception_state(
-      ${info}.GetIsolate(),
-      ExceptionContext::Context::kIndexedPropertySet,
-      "${interface.identifier}");
-  exception_state.ThrowTypeError("Named property setter is not supported.");
-}
-"""))
-
-    return func_def
-
-
-def make_named_props_obj_indexed_descriptor_callback(cg_context,
-                                                     function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "uint32_t index",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["index", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "NamedPropertiesObject_IndexedPropertyDescriptor")
-    body = func_def.body
-
-    body.append(
-        TextNode("""\
-v8::Local<v8::String> property_name =
-    V8AtomicString(${isolate}, AtomicString::Number(${index}));
-NamedPropsObjNamedDescriptorCallback(property_name, ${info});
-"""))
-
-    return func_def
-
-
-def make_named_props_obj_named_getter_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "v8::Local<v8::Name> v8_property_name",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["v8_property_name", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "NamedPropertiesObject_NamedPropertyGetter")
-    body = func_def.body
-
-    body.append(
-        TextNode("""\
-// 3.6.4.1. [[GetOwnProperty]]
-// https://webidl.spec.whatwg.org/#named-properties-object-getownproperty
-//
-// TODO(yukishiino): Update the following hard-coded call to an appropriate
-// one.
-V8Window::NamedPropertyGetterCustom(${blink_property_name}, ${info});
-"""))
-
-    return func_def
-
-
-def make_named_props_obj_named_setter_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "v8::Local<v8::Name> v8_property_name",
-        "v8::Local<v8::Value> v8_property_value",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["v8_property_name", "v8_property_value", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "NamedPropertiesObject_NamedPropertySetter")
-    body = func_def.body
-
-    body.append(
-        TextNode("""\
-// 3.6.4.2. [[DefineOwnProperty]]
-// https://webidl.spec.whatwg.org/#named-properties-object-defineownproperty
-bindings::V8SetReturnValue(${info}, nullptr);
-if (${info}.ShouldThrowOnError()) {
-  ExceptionState exception_state(${info}.GetIsolate(),
-                                 ExceptionContext::Context::kNamedPropertySet,
-                                 "${interface.identifier}");
-  exception_state.ThrowTypeError("Named property setter is not supported.");
-}
-"""))
-
-    return func_def
-
-
-def make_named_props_obj_named_deleter_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "v8::Local<v8::Name> v8_property_name",
-        "const v8::PropertyCallbackInfo<v8::Boolean>& info",
-    ]
-    arg_names = ["v8_property_name", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "NamedPropertiesObject_NamedPropertyDeleter")
-    body = func_def.body
-
-    body.append(
-        TextNode("""\
-// 3.6.4.3. [[Delete]]
-// https://webidl.spec.whatwg.org/#named-properties-object-delete
-bindings::V8SetReturnValue(${info}, false);
-if (${info}.ShouldThrowOnError()) {
-  ExceptionState exception_state(
-      ${info}.GetIsolate(),
-      ExceptionContext::Context::kNamedPropertyDelete,
-      "${interface.identifier}");
-  exception_state.ThrowTypeError("Named property deleter is not supported.");
-}
-"""))
-
-    return func_def
-
-
-def make_named_props_obj_named_definer_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "v8::Local<v8::Name> v8_property_name",
-        "const v8::PropertyDescriptor& v8_property_desc",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["v8_property_name", "v8_property_desc", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "NamedPropertiesObject_NamedPropertyDefiner")
-    body = func_def.body
-
-    body.append(
-        TextNode("""\
-// 3.6.4.2. [[DefineOwnProperty]]
-// https://webidl.spec.whatwg.org/#named-properties-object-defineownproperty
-bindings::V8SetReturnValue(${info}, nullptr);
-if (${info}.ShouldThrowOnError()) {
-  ExceptionState exception_state(${info}.GetIsolate(),
-                                 ExceptionContext::Context::kNamedPropertySet,
-                                 "${interface.identifier}");
-  exception_state.ThrowTypeError("Named property setter is not supported.");
-}
-"""))
-
-    return func_def
-
-
-def make_named_props_obj_named_descriptor_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "v8::Local<v8::Name> v8_property_name",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["v8_property_name", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "NamedPropertiesObject_NamedPropertyDescriptor")
-    body = func_def.body
-
-    body.append(
-        TextNode("""\
-// 3.6.4.1. [[GetOwnProperty]]
-// https://webidl.spec.whatwg.org/#named-properties-object-getownproperty
-// step 4. If the result of running the named property visibility algorithm
-//   with property name P and object object is true, then:
-if (${v8_receiver}->GetRealNamedPropertyAttributesInPrototypeChain(
-        ${current_context}, ${v8_property_name}).IsJust()) {
-  return;  // Do not intercept.  Fallback to OrdinaryGetOwnProperty.
-}
-
-// TODO(yukishiino): Update the following hard-coded call to an appropriate
-// one.
-V8Window::NamedPropertyGetterCustom(${blink_property_name}, ${info});
-v8::Local<v8::Value> v8_value = ${info}.GetReturnValue().Get();
-if (v8_value->IsUndefined())
-  return;  // Do not intercept.  Fallback to OrdinaryGetOwnProperty.
-
-// step 4.7. If A implements an interface with the
-//   [LegacyUnenumerableNamedProperties] extended attribute, then set
-//   desc.[[Enumerable]] to false, otherwise set it to true.
-// step 4.8. Set desc.[[Writable]] to true and desc.[[Configurable]] to
-//   true.
-v8::PropertyDescriptor desc(v8_value, /*writable=*/true);
-desc.set_enumerable(false);
-desc.set_configurable(true);
-bindings::V8SetReturnValue(${info}, desc);
-"""))
-
-    return func_def
 
 
 # ----------------------------------------------------------------------------
@@ -4033,9 +3766,44 @@ def make_cross_origin_access_check_callback(cg_context, function_name):
                 blink_class=blink_class)),
         TextNode("return BindingSecurity::ShouldAllowAccessTo("
                  "ToLocalDOMWindow(${accessing_context}), "
-                 "blink_accessed_object, "
-                 "BindingSecurity::ErrorReportOption::kDoNotReport);"),
+                 "blink_accessed_object);"),
     ])
+
+    return func_def
+
+
+def make_cross_origin_throwing_callback(cg_context):
+    """
+    This generates the following functions:
+    CrossOriginNamedDeleterCallback
+    CrossOriginNamedDefinerCallback
+    CrossOriginIndexedSetterCallback
+    CrossOriginIndexedDeleterCallback
+    CrossOriginIndexedDefinerCallback
+    """
+    assert isinstance(cg_context, CodeGenContext)
+    assert (cg_context.named_interceptor_kind
+            or cg_context.indexed_interceptor_kind)
+    assert (not cg_context.named_interceptor_kind
+            or not cg_context.indexed_interceptor_kind)
+
+    if cg_context.named_interceptor_kind:
+        named_or_indexed = "Named"
+        callback_type = cg_context.named_interceptor_kind
+    else:
+        named_or_indexed = "Indexed"
+        callback_type = cg_context.indexed_interceptor_kind
+
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, named_or_indexed, callback_type)
+    func_def = _make_interceptor_callback_def(
+        cg_context, "CrossOrigin{}{}Callback".format(named_or_indexed,
+                                                     callback_type), arg_decls,
+        arg_names, None,
+        "CrossOriginProperty_{}Property{}".format(named_or_indexed,
+                                                  callback_type))
+
+    func_def.body.append(_make_throw_security_error())
 
     return func_def
 
@@ -4044,94 +3812,33 @@ def make_cross_origin_indexed_getter_callback(cg_context, function_name):
     assert isinstance(cg_context, CodeGenContext)
     assert isinstance(function_name, str)
 
-    arg_decls = [
-        "uint32_t index",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["index", "info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Indexed", "Getter")
     func_def = _make_interceptor_callback_def(
         cg_context, function_name, arg_decls, arg_names, None,
         "CrossOriginProperty_IndexedPropertyGetter")
     body = func_def.body
 
     if cg_context.interface.identifier != "Window":
-        body.append(TextNode("${throw_security_error}"))
+        body.append(_make_throw_security_error())
         return func_def
 
     bind_return_value(body, cg_context, overriding_args=["${index}"])
 
+    # Do this before the index verification below, because we do not want to
+    # reveal any information about the number of frames in this window.
     body.extend([
-        TextNode("""\
-if (${index} >= ${blink_receiver}->length()) {
-  ${throw_security_error}
-  return;
-}
-"""),
-        make_v8_set_return_value(cg_context),
+        make_check_coop_restrict_properties_access(cg_context),
+        EmptyNode(),
     ])
 
-    return func_def
-
-
-def make_cross_origin_indexed_setter_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "uint32_t index",
-        "v8::Local<v8::Value> v8_property_value",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["index", "v8_property_value", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "CrossOriginProperty_IndexedPropertySetter")
-    body = func_def.body
-
-    body.append(TextNode("${throw_security_error}"))
-
-    return func_def
-
-
-def make_cross_origin_indexed_deleter_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "uint32_t index",
-        "const v8::PropertyCallbackInfo<v8::Boolean>& info",
-    ]
-    arg_names = ["index", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "CrossOriginProperty_IndexedPropertyDeleter")
-    body = func_def.body
-
-    body.append(TextNode("${throw_security_error}"))
-
-    return func_def
-
-
-def make_cross_origin_indexed_definer_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "uint32_t index",
-        "const v8::PropertyDescriptor& v8_property_desc",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["index", "v8_property_desc", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "CrossOriginProperty_IndexedPropertyDefiner")
-    body = func_def.body
-
-    body.append(TextNode("${throw_security_error}"))
+    body.extend([
+        CxxLikelyIfNode(
+            cond="${index} >= ${blink_receiver}->length()",
+            body=[_make_throw_security_error(),
+                  TextNode("return;")]),
+        make_v8_set_return_value(cg_context),
+    ])
 
     return func_def
 
@@ -4140,19 +3847,15 @@ def make_cross_origin_indexed_descriptor_callback(cg_context, function_name):
     assert isinstance(cg_context, CodeGenContext)
     assert isinstance(function_name, str)
 
-    arg_decls = [
-        "uint32_t index",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["index", "info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Indexed", "Descriptor")
     func_def = _make_interceptor_callback_def(
         cg_context, function_name, arg_decls, arg_names, None,
         "CrossOriginProperty_IndexedPropertyDescriptor")
     body = func_def.body
 
     if cg_context.interface.identifier != "Window":
-        body.append(TextNode("${throw_security_error}"))
+        body.append(_make_throw_security_error())
         return func_def
 
     body.append(
@@ -4177,9 +3880,8 @@ def make_cross_origin_indexed_enumerator_callback(cg_context, function_name):
     assert isinstance(cg_context, CodeGenContext)
     assert isinstance(function_name, str)
 
-    arg_decls = ["const v8::PropertyCallbackInfo<v8::Array>& info"]
-    arg_names = ["info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Indexed", "Enumerator")
     func_def = _make_interceptor_callback_def(
         cg_context, function_name, arg_decls, arg_names, None,
         "CrossOriginProperty_IndexedPropertyEnumerator")
@@ -4203,58 +3905,61 @@ def make_cross_origin_named_getter_callback(cg_context, function_name):
     assert isinstance(cg_context, CodeGenContext)
     assert isinstance(function_name, str)
 
-    arg_decls = [
-        "v8::Local<v8::Name> v8_property_name",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["v8_property_name", "info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Named", "Getter")
     func_def = _make_interceptor_callback_def(
         cg_context, function_name, arg_decls, arg_names, None,
         "CrossOriginProperty_NamedPropertyGetter")
     body = func_def.body
 
     string_case_body = []
-    string_case_body.append(
-        TextNode("""\
-for (const auto& attribute : kCrossOriginAttributeTable) {
-  if (${blink_property_name} != attribute.name)
-    continue;
-  if (UNLIKELY(!attribute.get_value)) {
-    ${throw_security_error}
-    return;
-  }
-  attribute.get_value(${v8_property_name}, ${info});
-  return;
-}
-for (const auto& operation : kCrossOriginOperationTable) {
-  if (${blink_property_name} != operation.name)
-    continue;
-  v8::Local<v8::Function> function;
-  if (bindings::GetCrossOriginFunction(
-          ${info}.GetIsolate(), operation.callback, operation.func_length,
-          ${class_name}::GetWrapperTypeInfo())
-          .ToLocal(&function)) {
-    bindings::V8SetReturnValue(${info}, function);
-  }
-  return;
-}
-"""))
+    string_case_body.extend([
+        CxxForLoopNode(
+            cond="const auto& attribute : kCrossOriginAttributeTable",
+            body=[
+                CxxLikelyIfNode(
+                    cond="${blink_property_name} != attribute.name",
+                    body=TextNode("continue;")),
+                CxxUnlikelyIfNode(
+                    cond="UNLIKELY(!attribute.get_value)",
+                    body=[_make_throw_security_error(),
+                          TextNode("return;")]),
+                TextNode("attribute.get_value(${v8_property_name}, ${info});"),
+                TextNode("return;")
+            ]),
+        CxxForLoopNode(
+            cond="const auto& operation : kCrossOriginOperationTable",
+            body=[
+                CxxLikelyIfNode(
+                    cond="${blink_property_name} != operation.name",
+                    body=TextNode("continue;")),
+                TextNode("v8::Local<v8::Function> function;"),
+                CxxLikelyIfNode(
+                    cond="bindings::GetCrossOriginFunction("
+                    "${isolate}, operation.callback, "
+                    "operation.func_length,"
+                    "${class_name}::GetWrapperTypeInfo())"
+                    ".ToLocal(&function)",
+                    body=TextNode(
+                        "bindings::V8SetReturnValue(${info}, function);")),
+                TextNode("return;")
+            ])
+    ])
     if cg_context.interface.identifier == "Window":
         string_case_body.append(
             TextNode("""\
 // Window object's document-tree child browsing context name property set
-//
-// TODO(yukishiino): Update the following hard-coded call to an appropriate
-// one.
-V8Window::NamedPropertyGetterCustom(${blink_property_name}, ${info});
-if (!${info}.GetReturnValue().Get()->IsUndefined())
+auto&& return_value = ${blink_receiver}->AnonymousNamedGetter(
+    ${blink_property_name});
+if (!return_value.IsEmpty()) {
+  bindings::V8SetReturnValue(${info}, return_value);
   return;
+}
 """))
 
     body.extend([
-        CxxLikelyIfNode(
-            cond="${v8_property_name}->IsString()", body=string_case_body),
+        CxxLikelyIfNode(cond="${v8_property_name}->IsString()",
+                        body=string_case_body),
         EmptyNode(),
         TextNode("""\
 // 7.2.3.2 CrossOriginPropertyFallback ( P )
@@ -4263,8 +3968,8 @@ if (bindings::IsSupportedInCrossOriginPropertyFallback(
         ${info}.GetIsolate(), ${v8_property_name})) {
   return ${info}.GetReturnValue().SetUndefined();
 }
-${throw_security_error}
 """),
+        _make_throw_security_error()
     ])
 
     return func_def
@@ -4274,13 +3979,8 @@ def make_cross_origin_named_setter_callback(cg_context, function_name):
     assert isinstance(cg_context, CodeGenContext)
     assert isinstance(function_name, str)
 
-    arg_decls = [
-        "v8::Local<v8::Name> v8_property_name",
-        "v8::Local<v8::Value> v8_property_value",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["v8_property_name", "v8_property_value", "info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Named", "Setter")
     func_def = _make_interceptor_callback_def(
         cg_context, function_name, arg_decls, arg_names, None,
         "CrossOriginProperty_NamedPropertySetter")
@@ -4298,52 +3998,11 @@ for (const auto& attribute : kCrossOriginAttributeTable) {
 """))
 
     body.extend([
-        CxxLikelyIfNode(
-            cond="${v8_property_name}->IsString()", body=string_case_body),
+        CxxLikelyIfNode(cond="${v8_property_name}->IsString()",
+                        body=string_case_body),
         EmptyNode(),
-        TextNode("${throw_security_error}"),
+        _make_throw_security_error(),
     ])
-
-    return func_def
-
-
-def make_cross_origin_named_deleter_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "v8::Local<v8::Name> v8_property_name",
-        "const v8::PropertyCallbackInfo<v8::Boolean>& info",
-    ]
-    arg_names = ["v8_property_name", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "CrossOriginProperty_NamedPropertyDeleter")
-    body = func_def.body
-
-    body.append(TextNode("${throw_security_error}"))
-
-    return func_def
-
-
-def make_cross_origin_named_definer_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "v8::Local<v8::Name> v8_property_name",
-        "const v8::PropertyDescriptor& v8_property_desc",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["v8_property_name", "v8_property_desc", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "CrossOriginProperty_NamedPropertyDefiner")
-    body = func_def.body
-
-    body.append(TextNode("${throw_security_error}"))
 
     return func_def
 
@@ -4352,12 +4011,8 @@ def make_cross_origin_named_descriptor_callback(cg_context, function_name):
     assert isinstance(cg_context, CodeGenContext)
     assert isinstance(function_name, str)
 
-    arg_decls = [
-        "v8::Local<v8::Name> v8_property_name",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["v8_property_name", "info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Named", "Descriptor")
     func_def = _make_interceptor_callback_def(
         cg_context, function_name, arg_decls, arg_names, None,
         "CrossOriginProperty_NamedPropertyDescriptor")
@@ -4410,13 +4065,10 @@ for (const auto& operation : kCrossOriginOperationTable) {
         string_case_body.append(
             TextNode("""\
 // Window object's document-tree child browsing context name property set
-//
-// TODO(yukishiino): Update the following hard-coded call to an appropriate
-// one.
-V8Window::NamedPropertyGetterCustom(${blink_property_name}, ${info});
-if (!${info}.GetReturnValue().Get()->IsUndefined()) {
-  v8::PropertyDescriptor desc(${info}.GetReturnValue().Get(),
-                              /*writable=*/false);
+auto&& return_value = ${blink_receiver}->AnonymousNamedGetter(
+    ${blink_property_name});
+if (!return_value.IsEmpty()) {
+  v8::PropertyDescriptor desc(return_value, /*writable=*/false);
   desc.set_enumerable(false);
   desc.set_configurable(true);
   bindings::V8SetReturnValue(${info}, desc);
@@ -4425,8 +4077,8 @@ if (!${info}.GetReturnValue().Get()->IsUndefined()) {
 """))
 
     body.extend([
-        CxxLikelyIfNode(
-            cond="${v8_property_name}->IsString()", body=string_case_body),
+        CxxLikelyIfNode(cond="${v8_property_name}->IsString()",
+                        body=string_case_body),
         EmptyNode(),
         TextNode("""\
 // 7.2.3.2 CrossOriginPropertyFallback ( P )
@@ -4440,8 +4092,8 @@ if (bindings::IsSupportedInCrossOriginPropertyFallback(
   bindings::V8SetReturnValue(${info}, desc);
   return;
 }
-${throw_security_error}
 """),
+        _make_throw_security_error()
     ])
 
     return func_def
@@ -4451,12 +4103,8 @@ def make_cross_origin_named_query_callback(cg_context, function_name):
     assert isinstance(cg_context, CodeGenContext)
     assert isinstance(function_name, str)
 
-    arg_decls = [
-        "v8::Local<v8::Name> v8_property_name",
-        "const v8::PropertyCallbackInfo<v8::Integer>& info",
-    ]
-    arg_names = ["v8_property_name", "info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Named", "Query")
     func_def = _make_interceptor_callback_def(
         cg_context, function_name, arg_decls, arg_names, None,
         "CrossOriginProperty_NamedPropertyQuery")
@@ -4508,9 +4156,8 @@ def make_cross_origin_named_enumerator_callback(cg_context, function_name):
     assert isinstance(cg_context, CodeGenContext)
     assert isinstance(function_name, str)
 
-    arg_decls = ["const v8::PropertyCallbackInfo<v8::Array>& info"]
-    arg_names = ["info"]
-
+    arg_decls, arg_names = _make_interceptor_callback_args(
+        cg_context, "Named", "Enumerator")
     func_def = _make_interceptor_callback_def(
         cg_context, function_name, arg_decls, arg_names, None,
         "CrossOriginProperty_NamedPropertyEnumerator")
@@ -4524,195 +4171,6 @@ bindings::V8SetReturnValue(
         ${isolate},
         kCrossOriginAttributeTable,
         kCrossOriginOperationTable));
-"""))
-
-    return func_def
-
-
-# ----------------------------------------------------------------------------
-# Callback functions of same origin interceptors
-# ----------------------------------------------------------------------------
-
-
-def make_same_origin_indexed_getter_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "uint32_t index",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["index", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "SameOriginProperty_IndexedPropertyGetter")
-    body = func_def.body
-
-    bind_return_value(body, cg_context, overriding_args=["${index}"])
-
-    body.extend([
-        TextNode("""\
-if (${index} >= ${blink_receiver}->length()) {
-  return;
-}
-"""),
-        make_v8_set_return_value(cg_context),
-    ])
-
-    return func_def
-
-
-def make_same_origin_indexed_setter_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "uint32_t index",
-        "v8::Local<v8::Value> v8_property_value",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["index", "v8_property_value", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "SameOriginProperty_IndexedPropertySetter")
-    body = func_def.body
-
-    body.append(
-        TextNode("""\
-bindings::V8SetReturnValue(${info}, nullptr);
-if (${info}.ShouldThrowOnError()) {
-  ExceptionState exception_state(
-      ${info}.GetIsolate(),
-      ExceptionContext::Context::kIndexedPropertySet,
-      "${interface.identifier}");
-  exception_state.ThrowTypeError(
-      "Indexed property setter is not supported.");
-}
-"""))
-
-    return func_def
-
-
-def make_same_origin_indexed_deleter_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "uint32_t index",
-        "const v8::PropertyCallbackInfo<v8::Boolean>& info",
-    ]
-    arg_names = ["index", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "SameOriginProperty_IndexedPropertyDeleter")
-    body = func_def.body
-
-    body.append(
-        TextNode("""\
-// 7.4.9 [[Delete]] ( P )
-// https://html.spec.whatwg.org/C/#windowproxy-delete
-const bool is_supported = ${index} < ${blink_receiver}->length();
-bindings::V8SetReturnValue(${info}, !is_supported);
-if (is_supported and ${info}.ShouldThrowOnError()) {
-  ExceptionState exception_state(
-      ${info}.GetIsolate(),
-      ExceptionContext::Context::kIndexedPropertyDelete,
-      "${interface.identifier}");
-  exception_state.ThrowTypeError("Index property deleter is not supported.");
-}
-"""))
-
-    return func_def
-
-
-def make_same_origin_indexed_definer_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "uint32_t index",
-        "const v8::PropertyDescriptor& v8_property_desc",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["index", "v8_property_desc", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "SameOriginProperty_IndexedPropertyDefiner")
-    body = func_def.body
-
-    body.append(
-        TextNode("""\
-// 7.4.6 [[DefineOwnProperty]] ( P, Desc )
-// https://html.spec.whatwg.org/C/#windowproxy-defineownproperty
-bindings::V8SetReturnValue(${info}, nullptr);
-if (${info}.ShouldThrowOnError()) {
-  ExceptionState exception_state(
-      ${info}.GetIsolate(),
-      ExceptionContext::Context::kIndexedPropertySet,
-      "${interface.identifier}");
-  exception_state.ThrowTypeError("Index property setter is not supported.");
-}
-"""))
-
-    return func_def
-
-
-def make_same_origin_indexed_descriptor_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = [
-        "uint32_t index",
-        "const v8::PropertyCallbackInfo<v8::Value>& info",
-    ]
-    arg_names = ["index", "info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "SameOriginProperty_IndexedPropertyDescriptor")
-    body = func_def.body
-
-    body.append(
-        TextNode("""\
-// 7.4.5 [[GetOwnProperty]] ( P )
-// https://html.spec.whatwg.org/C/#windowproxy-getownproperty
-SameOriginIndexedGetterCallback(${index}, ${info});
-v8::Local<v8::Value> v8_value = ${info}.GetReturnValue().Get();
-if (v8_value->IsUndefined()) {
-  return;  // Do not intercept.
-}
-
-v8::PropertyDescriptor desc(v8_value, /*writable=*/false);
-desc.set_enumerable(true);
-desc.set_configurable(true);
-bindings::V8SetReturnValue(${info}, desc);
-"""))
-
-    return func_def
-
-
-def make_same_origin_indexed_enumerator_callback(cg_context, function_name):
-    assert isinstance(cg_context, CodeGenContext)
-    assert isinstance(function_name, str)
-
-    arg_decls = ["const v8::PropertyCallbackInfo<v8::Array>& info"]
-    arg_names = ["info"]
-
-    func_def = _make_interceptor_callback_def(
-        cg_context, function_name, arg_decls, arg_names, None,
-        "SameOriginProperty_IndexedPropertyEnumerator")
-    body = func_def.body
-
-    body.append(
-        TextNode("""\
-uint32_t length = ${blink_receiver}->length();
-v8::Local<v8::Array> array =
-    bindings::EnumerateIndexedProperties(${isolate}, length);
-bindings::V8SetReturnValue(${info}, array);
 """))
 
     return func_def
@@ -4753,7 +4211,8 @@ def bind_installer_local_vars(code_node, cg_context):
     local_vars.extend([
         S("is_cross_origin_isolated",
           ("const bool ${is_cross_origin_isolated} = "
-           "${execution_context}->CrossOriginIsolatedCapability();")),
+           "${execution_context}"
+           "->CrossOriginIsolatedCapabilityOrDisabledWebSecurity();")),
         S("is_in_isolated_context",
           ("const bool ${is_in_isolated_context} = "
            "${execution_context}->IsIsolatedContext();")),
@@ -4768,7 +4227,8 @@ def bind_installer_local_vars(code_node, cg_context):
            "${class_name}::GetWrapperTypeInfo();")),
     ])
 
-    if cg_context.interface:
+    if (cg_context.interface or cg_context.async_iterator
+            or cg_context.sync_iterator):
         local_vars.extend([
             S("interface_function_template",
               ("v8::Local<v8::FunctionTemplate> "
@@ -4843,11 +4303,6 @@ def bind_installer_local_vars(code_node, cg_context):
     interface = cg_context.interface
     if not interface:
         _1 = ""
-    elif (interface and "Global" in interface.extended_attributes
-          and interface.indexed_and_named_properties
-          and interface.indexed_and_named_properties.has_named_properties):
-        # https://webidl.spec.whatwg.org/#named-properties-object
-        _1 = " = ${npo_interface_template}"  # npo = named properties object
     elif interface.inherited:
         _1 = (" = ${wrapper_type_info}->parent_class"
               "->GetV8ClassTemplate(${isolate}, ${world})"
@@ -4855,36 +4310,6 @@ def bind_installer_local_vars(code_node, cg_context):
     else:
         _1 = ""
     local_vars.append(S("parent_interface_template", _format(pattern, _1=_1)))
-
-    # npo_interface_template
-    # npo = named properties object
-    text = """\
-// Named properties object
-v8::Local<v8::FunctionTemplate> ${npo_interface_template} =
-    v8::FunctionTemplate::New(${isolate});
-v8::Local<v8::ObjectTemplate> ${npo_prototype_template} =
-    ${npo_interface_template}->PrototypeTemplate();
-${npo_interface_template}->Inherit(
-    ${wrapper_type_info}->parent_class
-    ->GetV8ClassTemplate(${isolate}, ${world}).As<v8::FunctionTemplate>());
-${npo_prototype_template}->SetImmutableProto();
-${npo_prototype_template}->Set(
-    v8::Symbol::GetToStringTag(${isolate}),
-    V8AtomicString(${isolate}, "${interface.identifier}Properties"),
-    static_cast<v8::PropertyAttribute>(v8::ReadOnly | v8::DontEnum));
-// Make the named properties object look like the global object.  Note that
-// the named properties object is _not_ a prototype object, plus, we'd like
-// the named properties object to behave just like the global object (= the
-// wrapper object of the global object) from the point of view of named
-// properties.
-// https://webidl.spec.whatwg.org/#named-properties-object
-${npo_prototype_template}->SetInternalFieldCount(
-    kV8DefaultWrapperInternalFieldCount);
-"""
-    local_vars.append(S("npo_interface_template", text))
-    local_vars.append(
-        S("npo_prototype_template",
-          "<% npo_interface_template.request_symbol_definition() %>"))
 
     # Arguments have priority over local vars.
     for symbol_node in local_vars:
@@ -5148,6 +4573,7 @@ def _make_operation_registration_table(table_name, operation_entries):
     no_alloc_direct_call_enabled = bool(no_alloc_direct_call_count)
 
     entry_nodes = []
+    entry_nodes_wo_nadc = []
     nadc_overload_nodes = ListNode()
     pattern = ("{{"
                "\"{property_name}\", "
@@ -5160,48 +4586,80 @@ def _make_operation_registration_table(table_name, operation_entries):
                "{cross_origin_check}, "
                "{v8_side_effect}"
                "}}, ")
+    pattern_wo_nadc = pattern
     if no_alloc_direct_call_enabled:
         pattern = ("{{" + pattern + "{v8_cfunction_table}, "
                    "std::size({v8_cfunction_table})}}, ")
+    has_no_alloc_direct_call_with_enforce_range = False
     for entry in operation_entries:
         if no_alloc_direct_call_enabled:
             nadc_overload_table_name = name_style.constant(
                 "no_alloc_direct_call_overloads_of_",
                 entry.property_.identifier)
+            nadc_overloads = []
+            for nadc_entry in entry.no_alloc_direct_call_callbacks:
+                nadc_arg_flags = ""
+                for arg in nadc_entry.operation.arguments:
+                    if arg.index >= nadc_entry.argument_count:
+                        break
+                    nadc_v8_type_info_flags = []
+                    if "AllowShared" in arg.idl_type.effective_annotations:
+                        nadc_v8_type_info_flags.append(
+                            "v8::CTypeInfo::Flags::kAllowSharedBit")
+                    if "Clamp" in arg.idl_type.effective_annotations:
+                        nadc_v8_type_info_flags.append(
+                            "v8::CTypeInfo::Flags::kClampBit")
+                    if "EnforceRange" in arg.idl_type.effective_annotations:
+                        nadc_v8_type_info_flags.append(
+                            "v8::CTypeInfo::Flags::kEnforceRangeBit")
+                        has_no_alloc_direct_call_with_enforce_range = True
+                    arg_type = arg.idl_type.unwrap()
+                    if arg_type.is_floating_point_numeric and (
+                            not arg_type.keyword_typename.startswith(
+                                "unrestricted ")):
+                        nadc_v8_type_info_flags.append(
+                            "v8::CTypeInfo::Flags::kIsRestrictedBit")
+                    if nadc_v8_type_info_flags:
+                        nadc_arg_flags += ".Arg<{index}, {flags}>()".format(
+                            index=arg.index + 1,
+                            flags=", ".join(nadc_v8_type_info_flags))
+                nadc_overloads.append(
+                    F("v8::CFunctionBuilder().Fn({}){}.Build(),",
+                      nadc_entry.callback_name, nadc_arg_flags))
             nadc_overload_nodes.append(
                 ListNode([
                     T("static const v8::CFunction " +
                       nadc_overload_table_name + "[] = {"),
-                    ListNode([
-                        F("v8::CFunctionBuilder().Fn({}).Build(),",
-                          nadc_entry.callback_name)
-                        for nadc_entry in entry.no_alloc_direct_call_callbacks
-                    ]),
+                    ListNode(nadc_overloads),
                     T("};"),
                 ]))
         else:
             nadc_overload_table_name = None
 
-        text = _format(
-            pattern,
-            property_name=entry.property_.identifier,
-            operation_callback=entry.op_callback_name,
-            function_length=entry.op_func_length,
-            v8_property_attribute=_make_property_entry_v8_property_attribute(
-                entry.property_),
-            location=_make_property_entry_location(entry.property_),
-            world=_make_property_entry_world(entry.world),
-            receiver_check=_make_property_entry_receiver_check(
-                entry.property_),
-            cross_origin_check=_make_property_entry_cross_origin_check(
-                entry.property_),
-            v8_side_effect=_make_property_entry_v8_side_effect(
-                entry.property_),
-            v8_cfunction_table=nadc_overload_table_name)
-        entry_nodes.append(T(text))
+        def get_formatted_text(input_pattern):
+            return _format(
+                input_pattern,
+                property_name=entry.property_.identifier,
+                operation_callback=entry.op_callback_name,
+                function_length=entry.op_func_length,
+                v8_property_attribute=
+                _make_property_entry_v8_property_attribute(entry.property_),
+                location=_make_property_entry_location(entry.property_),
+                world=_make_property_entry_world(entry.world),
+                receiver_check=_make_property_entry_receiver_check(
+                    entry.property_),
+                cross_origin_check=_make_property_entry_cross_origin_check(
+                    entry.property_),
+                v8_side_effect=_make_property_entry_v8_side_effect(
+                    entry.property_),
+                v8_cfunction_table=nadc_overload_table_name)
+
+        entry_nodes.append(T(get_formatted_text(pattern)))
+        entry_nodes_wo_nadc.append(T(get_formatted_text(pattern_wo_nadc)))
 
     table_decl_before_name = (
         "static const IDLMemberInstaller::OperationConfig")
+    table_decl_before_name_wo_nadc = table_decl_before_name
     if no_alloc_direct_call_enabled:
         table_decl_before_name = (
             "static const "
@@ -5217,6 +4675,26 @@ def _make_operation_registration_table(table_name, operation_entries):
         ListNode(entry_nodes),
         T("};"),
     ])
+
+    # Disable [NoAllocDirectCall] on x86 due to https://crbug.com/1433212
+    if has_no_alloc_direct_call_with_enforce_range:
+        node = ListNode([
+            T("// Disable [NoAllocDirectCall] on x86 due to "
+              "https://crbug.com/1433212"),
+            T("#if defined(ARCH_CPU_X86)"),
+            T(table_decl_before_name_wo_nadc + " " + table_name + "[] = {"),
+            ListNode(entry_nodes_wo_nadc),
+            T("};"),
+            T("// Disable compiler warnings for unused functions."),
+            ListNode([
+                F("std::ignore = {};", nadc_entry.callback_name)
+                for entry in operation_entries
+                for nadc_entry in entry.no_alloc_direct_call_callbacks
+            ]),
+            T("#else   // defined(ARCH_CPU_X86)"),
+            node,
+            T("#endif  // defined(ARCH_CPU_X86)"),
+        ])
     return node
 
 
@@ -5335,10 +4813,18 @@ def make_property_entries_and_callback_defs(cg_context, attribute_entries,
         for member in members:
             is_context_dependent = member.exposure.is_context_dependent(
                 global_names)
-            exposure_conditional = expr_from_exposure(
-                member.exposure,
-                global_names=global_names,
-                may_use_feature_selector=True)
+            if isinstance(member, web_idl.OverloadGroup):
+                exposure_conditional = expr_or([
+                    expr_from_exposure(overload.exposure,
+                                       global_names=global_names,
+                                       may_use_feature_selector=True)
+                    for overload in member
+                ])
+            else:
+                exposure_conditional = expr_from_exposure(
+                    member.exposure,
+                    global_names=global_names,
+                    may_use_feature_selector=True)
 
             if "PerWorldBindings" in member.extended_attributes:
                 worlds = (CodeGenContext.MAIN_WORLD,
@@ -5352,9 +4838,6 @@ def make_property_entries_and_callback_defs(cg_context, attribute_entries,
 
     def process_attribute(attribute, is_context_dependent,
                           exposure_conditional, world):
-        if "CSSProperty" in attribute.extended_attributes:
-            return  # [CSSProperty] will be installed in a special manner.
-
         cgc_attr = cg_context.make_copy(attribute=attribute, for_world=world)
         cgc = cgc_attr.make_copy(attribute_get=True)
         attr_get_callback_name = callback_function_name(cgc)
@@ -5470,17 +4953,18 @@ def make_property_entries_and_callback_defs(cg_context, attribute_entries,
                 exposed_construct=exposed_construct,
                 prop_callback_name=prop_callback_name))
 
-    def process_named_constructor_group(named_constructor_group,
-                                        is_context_dependent,
-                                        exposure_conditional, world):
+    def process_legacy_factory_function_group(legacy_factory_function_group,
+                                              is_context_dependent,
+                                              exposure_conditional, world):
         cgc = cg_context.make_copy(
-            exposed_construct=named_constructor_group,
-            is_named_constructor=True,
+            exposed_construct=legacy_factory_function_group,
+            is_legacy_factory_function=True,
             for_world=world,
             v8_callback_type=CodeGenContext.V8_ACCESSOR_NAME_GETTER_CALLBACK)
         prop_callback_name = callback_function_name(cgc)
-        prop_callback_node = make_named_constructor_property_callback_def(
-            cgc, prop_callback_name)
+        prop_callback_node = (
+            make_legacy_factory_function_property_callback_def(
+                cgc, prop_callback_name))
 
         callback_def_nodes.extend([
             prop_callback_node,
@@ -5492,7 +4976,7 @@ def make_property_entries_and_callback_defs(cg_context, attribute_entries,
                 is_context_dependent=is_context_dependent,
                 exposure_conditional=exposure_conditional,
                 world=world,
-                exposed_construct=named_constructor_group,
+                exposed_construct=legacy_factory_function_group,
                 prop_callback_name=prop_callback_name))
 
     def process_operation_group(operation_group, is_context_dependent,
@@ -5549,18 +5033,20 @@ def make_property_entries_and_callback_defs(cg_context, attribute_entries,
         iterate(interface.constructor_groups, process_constructor_group)
         iterate(interface.exposed_constructs, process_exposed_construct)
         iterate(interface.legacy_window_aliases, process_exposed_construct)
-        named_constructor_groups = [
+        legacy_factory_function_groups = [
             group for construct in interface.exposed_constructs
-            for group in construct.named_constructor_groups
-            if construct.named_constructor_groups
+            for group in construct.legacy_factory_function_groups
+            if construct.legacy_factory_function_groups
         ]
-        iterate(named_constructor_groups, process_named_constructor_group)
+        iterate(legacy_factory_function_groups,
+                process_legacy_factory_function_group)
     if not class_like.is_callback_interface:
         iterate(class_like.operation_groups, process_operation_group)
     if interface and interface.stringifier:
         iterate([interface.stringifier.operation], process_stringifier)
-    collectionlike = interface and (interface.iterable or interface.maplike
-                                    or interface.setlike)
+    collectionlike = (interface
+                      and (interface.async_iterable or interface.iterable
+                           or interface.maplike or interface.setlike))
     if collectionlike:
 
         def should_define(target):
@@ -5639,57 +5125,84 @@ ${prototype_object}->Delete(
     ${v8_context}, V8AtomicString(${isolate}, "constructor")).ToChecked();
 """))
 
-    collectionlike = interface and (interface.iterable or interface.maplike
-                                    or interface.setlike)
-    if collectionlike:
-        property_name = None
-        for operation_group in collectionlike.operation_groups:
-            if operation_group[0].is_iterator:
+    if interface and interface.iterable and not interface.iterable.key_type:
+        conditional = expr_from_exposure(interface.iterable.exposure)
+        if not conditional.is_always_true:
+            body = [
+                TextNode("""\
+// The value-iterator-returning properties of the intrinsic values can be
+// installed only per v8::Template (via
+// v8::Template::SetIntrinsicDataProperty). So the property installation
+// logic is reversed in this case like below.
+//   1. Unconditionally install the properties on prototype_object_template
+//      per V8 isolate in ${class_name}::InstallInterfaceTemplate.
+//   2. Conditionally remove the properties from prototype_object per V8
+//      context if they're not enabled.
+// https://webidl.spec.whatwg.org/#define-the-iteration-methods\
+""")
+            ]
+            body.extend([
+                FormatNode(
+                    "${prototype_object}->Delete("
+                    "${v8_context}, "
+                    "V8AtomicString(${isolate}, \"{property}\"))"
+                    ".ToChecked();",
+                    property=property)
+                for property in ("entries", "keys", "values", "forEach")
+            ])
+            nodes.append(
+                CxxUnlikelyIfNode(cond=expr_not(conditional), body=body))
+
+    # Install @@asyncIterator property.
+    if interface and interface.async_iterable:
+        for operation_group in interface.async_iterable.operation_groups:
+            if operation_group[0].is_async_iterator:
                 property_name = operation_group.identifier
                 break
-        if property_name:
-            pattern = """\
-// @@iterator == "{property_name}"
-{{
-  v8::Local<v8::Value> v8_value = ${prototype_object}->Get(
-      ${v8_context}, V8AtomicString(${isolate}, "{property_name}"))
-      .ToLocalChecked();
-  ${prototype_object}->DefineOwnProperty(
-      ${v8_context}, v8::Symbol::GetIterator(${isolate}), v8_value,
-      v8::DontEnum).ToChecked();
-}}
-"""
-            nodes.append(
-                TextNode(_format(pattern, property_name=property_name)))
-
-    if class_like.identifier == "FileSystemDirectoryHandle":
+        else:
+            assert False
         pattern = """\
-// Temporary @@asyncIterator support for FileSystemDirectoryHandle
-// TODO(https://crbug.com/1087157): Replace with proper bindings support.
 // @@asyncIterator == "{property_name}"
 {{
   v8::Local<v8::Value> v8_value = ${prototype_object}->Get(
       ${v8_context}, V8AtomicString(${isolate}, "{property_name}"))
       .ToLocalChecked();
-  ${prototype_object}->DefineOwnProperty(
-      ${v8_context}, v8::Symbol::GetAsyncIterator(${isolate}), v8_value,
-      v8::DontEnum).ToChecked();
+  // "{property_name}" may be hidden in this context.
+  if (!v8_value->IsUndefined()) {{
+    ${prototype_object}->DefineOwnProperty(
+        ${v8_context}, v8::Symbol::GetAsyncIterator(${isolate}), v8_value,
+        v8::DontEnum).ToChecked();
+  }}
 }}
 """
-        nodes.append(TextNode(_format(pattern, property_name="entries")))
+        nodes.append(FormatNode(pattern, property_name=property_name))
 
-    if ("Global" in class_like.extended_attributes
-            and class_like.indexed_and_named_properties
-            and class_like.indexed_and_named_properties.has_named_properties):
-        nodes.append(
-            TextNode("""\
-// https://webidl.spec.whatwg.org/#named-properties-object
-// V8 defines "constructor" property on the prototype object by default.
-// Named properties object is currently implemented as a prototype object
-// (implemented with v8::FunctionTemplate::PrototypeTemplate()).
-${prototype_object}->GetPrototype().As<v8::Object>()->Delete(
-    ${v8_context}, V8AtomicString(${isolate}, "constructor")).ToChecked();
-"""))
+    # Install @@iterator property.
+    if (interface and ((interface.iterable and interface.iterable.key_type)
+                       or interface.maplike or interface.setlike)):
+        collectionlike = (interface.iterable or interface.maplike
+                          or interface.setlike)
+        for operation_group in collectionlike.operation_groups:
+            if operation_group[0].is_iterator:
+                property_name = operation_group.identifier
+                break
+        else:
+            assert False
+        pattern = """\
+// @@iterator == "{property_name}"
+{{
+  v8::Local<v8::Value> v8_value = ${prototype_object}->Get(
+      ${v8_context}, V8AtomicString(${isolate}, "{property_name}"))
+      .ToLocalChecked();
+  // "{property_name}" may be hidden in this context.
+  if (!v8_value->IsUndefined()) {{
+    ${prototype_object}->DefineOwnProperty(
+        ${v8_context}, v8::Symbol::GetIterator(${isolate}), v8_value,
+        v8::DontEnum).ToChecked();
+  }}
+}}
+"""
+        nodes.append(FormatNode(pattern, property_name=property_name))
 
     return SequenceNode(nodes) if nodes else None
 
@@ -5789,6 +5302,38 @@ def make_install_interface_template(cg_context, function_name, class_name,
               "${interface_function_template});"),
             EmptyNode(),
         ])
+    elif cg_context.async_iterator or cg_context.sync_iterator:
+        iterator_interface = (cg_context.async_iterator
+                              or cg_context.sync_iterator).interface
+        if iterator_interface.async_iterable:
+            parent_intrinsic_prototype = (
+                "v8::Intrinsic::kAsyncIteratorPrototype")
+        elif iterator_interface.iterable:
+            parent_intrinsic_prototype = "v8::Intrinsic::kIteratorPrototype"
+        elif iterator_interface.maplike:
+            parent_intrinsic_prototype = "v8::Intrinsic::kMapIteratorPrototype"
+        elif iterator_interface.setlike:
+            parent_intrinsic_prototype = "v8::Intrinsic::kSetIteratorPrototype"
+        else:
+            assert False
+        if iterator_interface.async_iterable:
+            class_string = "{} AsyncIterator".format(
+                iterator_interface.identifier)
+        else:
+            class_string = "{} Iterator".format(iterator_interface.identifier)
+        body.extend([
+            FormatNode(
+                "bindings::SetupIDLIteratorTemplate("
+                "${isolate}, ${wrapper_type_info}, "
+                "${instance_object_template}, "
+                "${prototype_object_template}, "
+                "${interface_function_template}, "
+                "{parent_intrinsic_prototype}, "
+                "\"{class_string}\");",
+                parent_intrinsic_prototype=parent_intrinsic_prototype,
+                class_string=class_string),
+            EmptyNode(),
+        ])
     else:
         assert False
 
@@ -5821,29 +5366,6 @@ def make_install_interface_template(cg_context, function_name, class_name,
         EmptyNode(),
     ])
 
-    if class_like.identifier == "CSSStyleDeclaration":
-        css_properties = list(
-            filter(lambda attr: "CSSProperty" in attr.extended_attributes,
-                   class_like.attributes))
-        if css_properties:
-            prop_name_list = "".join(
-                map(lambda attr: "\"{}\", ".format(attr.identifier),
-                    css_properties))
-            body.append(
-                T("""\
-// CSSStyleDeclaration-specific settings
-// [CSSProperty]
-{
-  static constexpr const char* kCssProperties[] = {
-""" + prop_name_list + """
-  };
-  bindings::InstallCSSPropertyAttributes(
-      ${isolate}, ${world},
-      ${instance_template}, ${prototype_template}, ${interface_template},
-      ${signature}, kCssProperties);
-}
-"""))
-
     if class_like.identifier == "DOMException":
         body.append(
             T("""\
@@ -5861,50 +5383,13 @@ def make_install_interface_template(cg_context, function_name, class_name,
 }
 """))
 
-    if class_like.identifier == "FileSystemDirectoryIterator":
-        body.append(
-            T("""\
-// Temporary @@asyncIterator support for FileSystemDirectoryHandle
-// TODO(https://crbug.com/1087157): Replace with proper bindings support.
-{
-  v8::Local<v8::FunctionTemplate>
-      intrinsic_iterator_prototype_interface_template =
-      v8::FunctionTemplate::New(${isolate}, nullptr, v8::Local<v8::Value>(),
-                                v8::Local<v8::Signature>(), 0,
-                                v8::ConstructorBehavior::kThrow);
-  intrinsic_iterator_prototype_interface_template->SetIntrinsicDataProperty(
-      V8AtomicString(${isolate}, "prototype"), v8::kAsyncIteratorPrototype);
-  ${interface_function_template}->Inherit(
-      intrinsic_iterator_prototype_interface_template);
-}
-"""))
-
     if class_like.identifier == "HTMLAllCollection":
         body.append(
             T("""\
 // HTMLAllCollection-specific settings
 // https://html.spec.whatwg.org/C/#the-htmlallcollection-interface
-${instance_object_template}->SetCallAsFunctionHandler(
-    ${class_name}::LegacyCallCustom);
+${instance_object_template}->SetCallAsFunctionHandler(ItemOperationCallback);
 ${instance_object_template}->MarkAsUndetectable();
-"""))
-
-    if class_like.identifier == "Iterator":
-        body.append(
-            T("""\
-// Iterator-specific settings
-// https://webidl.spec.whatwg.org/#es-iterator-prototype-object
-{
-  v8::Local<v8::FunctionTemplate>
-      intrinsic_iterator_prototype_interface_template =
-      v8::FunctionTemplate::New(${isolate}, nullptr, v8::Local<v8::Value>(),
-                                v8::Local<v8::Signature>(), 0,
-                                v8::ConstructorBehavior::kThrow);
-  intrinsic_iterator_prototype_interface_template->SetIntrinsicDataProperty(
-      V8AtomicString(${isolate}, "prototype"), v8::kIteratorPrototype);
-  ${interface_function_template}->Inherit(
-      intrinsic_iterator_prototype_interface_template);
-}
 """))
 
     if class_like.identifier == "Location":
@@ -6296,11 +5781,9 @@ def make_indexed_and_named_property_callbacks_and_install_node(cg_context):
     install_node = SequenceNode()
 
     interface = cg_context.interface
-    if not (interface and interface.indexed_and_named_properties
-            and "Global" not in interface.extended_attributes):
+    if not (interface and interface.indexed_and_named_properties):
         return func_decls, func_defs, install_node
     props = interface.indexed_and_named_properties
-
     def add_callback(func_decl, func_def):
         func_decls.append(func_decl)
         if func_def:
@@ -6314,26 +5797,54 @@ def make_indexed_and_named_property_callbacks_and_install_node(cg_context):
     cg_context = cg_context.make_copy(
         v8_callback_type=CodeGenContext.V8_OTHER_CALLBACK)
 
-    if props.own_named_getter:
+    if cg_context.class_like.identifier == "WindowProperties":
+        install_node.extend([
+            TextNode("""\
+// Normally, prototype objects don't have internal fields (which are
+// primarily used to hold a ScriptWrapapble pointer) because a single
+// prototype object is shared by multiple platforms objects. However,
+// WindowProperties (also known as the "named properties object") is special.
+// It is always exactly 1:1 with a LocalDOMWindow, and we want the ability to
+// look up that LocalDOMWindow from the given prototype object
+// (V8's Holder()), so it is uniquely permitted to have internal fields on a
+// prototype object.\
+"""),
+            TextNode("${prototype_object_template}->SetInternalFieldCount("
+                     "kV8DefaultWrapperInternalFieldCount);")
+        ])
+
+    if props.own_named_getter and "Global" not in interface.extended_attributes:
         add_callback(*make_named_property_getter_callback(
-            cg_context.make_copy(named_property_getter=props.named_getter),
+            cg_context.make_copy(named_property_getter=props.named_getter,
+                                 named_interceptor_kind="Getter"),
             "NamedPropertyGetterCallback"))
         add_callback(*make_named_property_setter_callback(
-            cg_context.make_copy(named_property_setter=props.named_setter),
+            cg_context.make_copy(named_property_setter=props.named_setter,
+                                 named_interceptor_kind="Setter"),
             "NamedPropertySetterCallback"))
         add_callback(*make_named_property_deleter_callback(
-            cg_context.make_copy(named_property_deleter=props.named_deleter),
+            cg_context.make_copy(named_property_deleter=props.named_deleter,
+                                 named_interceptor_kind="Deleter"),
             "NamedPropertyDeleterCallback"))
         add_callback(*make_named_property_definer_callback(
-            cg_context, "NamedPropertyDefinerCallback"))
+            cg_context.make_copy(named_interceptor_kind="Definer"),
+            "NamedPropertyDefinerCallback"))
         add_callback(*make_named_property_descriptor_callback(
-            cg_context, "NamedPropertyDescriptorCallback"))
+            cg_context.make_copy(named_interceptor_kind="Descriptor"),
+            "NamedPropertyDescriptorCallback"))
         add_callback(*make_named_property_query_callback(
-            cg_context, "NamedPropertyQueryCallback"))
+            cg_context.make_copy(
+                named_interceptor_kind="Query"), "NamedPropertyQueryCallback"))
         add_callback(*make_named_property_enumerator_callback(
-            cg_context, "NamedPropertyEnumeratorCallback"))
+            cg_context.make_copy(named_interceptor_kind="Enumerator"),
+            "NamedPropertyEnumeratorCallback"))
 
-    if props.named_getter:
+    if cg_context.class_like.identifier == "WindowProperties":
+        interceptor_template = "${prototype_object_template}"
+    else:
+        interceptor_template = "${instance_object_template}"
+
+    if props.named_getter and "Global" not in interface.extended_attributes:
         impl_bridge = v8_bridge_class_name(
             most_derived_interface(
                 props.named_getter.owner, props.named_setter
@@ -6350,7 +5861,7 @@ def make_indexed_and_named_property_callbacks_and_install_node(cg_context):
                 map(lambda flag: "int32_t({})".format(flag), flags))))
         pattern = """\
 // Named interceptors
-${instance_object_template}->SetHandler(
+{interceptor_template}->SetHandler(
     v8::NamedPropertyHandlerConfiguration(
         {impl_bridge}::NamedPropertyGetterCallback,
         {impl_bridge}::NamedPropertySetterCallback,
@@ -6373,24 +5884,31 @@ interface.indexed_and_named_properties.named_getter.extended_attributes:
         {property_handler_flags}));"""
         install_node.append(
             F(pattern,
+              interceptor_template=interceptor_template,
               impl_bridge=impl_bridge,
               property_handler_flags=property_handler_flags))
 
     if props.own_indexed_getter or props.own_named_getter:
         add_callback(*make_indexed_property_getter_callback(
-            cg_context.make_copy(indexed_property_getter=props.indexed_getter),
+            cg_context.make_copy(indexed_property_getter=props.indexed_getter,
+                                 indexed_interceptor_kind="Getter"),
             "IndexedPropertyGetterCallback"))
         add_callback(*make_indexed_property_setter_callback(
-            cg_context.make_copy(indexed_property_setter=props.indexed_setter),
+            cg_context.make_copy(indexed_property_setter=props.indexed_setter,
+                                 indexed_interceptor_kind="Setter"),
             "IndexedPropertySetterCallback"))
         add_callback(*make_indexed_property_deleter_callback(
-            cg_context, "IndexedPropertyDeleterCallback"))
+            cg_context.make_copy(indexed_interceptor_kind="Deleter"),
+            "IndexedPropertyDeleterCallback"))
         add_callback(*make_indexed_property_definer_callback(
-            cg_context, "IndexedPropertyDefinerCallback"))
+            cg_context.make_copy(indexed_interceptor_kind="Definer"),
+            "IndexedPropertyDefinerCallback"))
         add_callback(*make_indexed_property_descriptor_callback(
-            cg_context, "IndexedPropertyDescriptorCallback"))
+            cg_context.make_copy(indexed_interceptor_kind="Descriptor"),
+            "IndexedPropertyDescriptorCallback"))
         add_callback(*make_indexed_property_enumerator_callback(
-            cg_context, "IndexedPropertyEnumeratorCallback"))
+            cg_context.make_copy(indexed_interceptor_kind="Enumerator"),
+            "IndexedPropertyEnumeratorCallback"))
 
     if props.indexed_getter or props.named_getter:
         impl_bridge = v8_bridge_class_name(
@@ -6410,7 +5928,7 @@ interface.indexed_and_named_properties.named_getter.extended_attributes:
         property_handler_flags = flags[0]
         pattern = """\
 // Indexed interceptors
-${instance_object_template}->SetHandler(
+{interceptor_template}->SetHandler(
     v8::IndexedPropertyHandlerConfiguration(
         {impl_bridge}::IndexedPropertyGetterCallback,
         {impl_bridge}::IndexedPropertySetterCallback,
@@ -6427,6 +5945,7 @@ ${instance_object_template}->SetHandler(
         {property_handler_flags}));"""
         install_node.append(
             F(pattern,
+              interceptor_template=interceptor_template,
               impl_bridge=impl_bridge,
               property_handler_flags=property_handler_flags))
 
@@ -6436,84 +5955,6 @@ ${instance_object_template}->SetHandler(
         ]))
 
     return func_decls, func_defs, install_node
-
-
-def make_named_properties_object_callbacks_and_install_node(cg_context):
-    """
-    Implements non-ordinary internal methods of named properties objects.
-    https://webidl.spec.whatwg.org/#named-properties-object
-    """
-
-    assert isinstance(cg_context, CodeGenContext)
-
-    callback_defs = []
-    install_node = SequenceNode()
-
-    interface = cg_context.interface
-    if not (interface and interface.indexed_and_named_properties
-            and interface.indexed_and_named_properties.named_getter
-            and "Global" in interface.extended_attributes):
-        return callback_defs, install_node
-
-    cg_context = cg_context.make_copy(
-        v8_callback_type=CodeGenContext.V8_OTHER_CALLBACK)
-
-    func_defs = [
-        make_named_props_obj_named_getter_callback(
-            cg_context, "NamedPropsObjNamedGetterCallback"),
-        make_named_props_obj_named_setter_callback(
-            cg_context, "NamedPropsObjNamedSetterCallback"),
-        make_named_props_obj_named_deleter_callback(
-            cg_context, "NamedPropsObjNamedDeleterCallback"),
-        make_named_props_obj_named_definer_callback(
-            cg_context, "NamedPropsObjNamedDefinerCallback"),
-        make_named_props_obj_named_descriptor_callback(
-            cg_context, "NamedPropsObjNamedDescriptorCallback"),
-        make_named_props_obj_indexed_getter_callback(
-            cg_context, "NamedPropsObjIndexedGetterCallback"),
-        make_named_props_obj_indexed_setter_callback(
-            cg_context, "NamedPropsObjIndexedSetterCallback"),
-        make_named_props_obj_indexed_deleter_callback(
-            cg_context, "NamedPropsObjIndexedDeleterCallback"),
-        make_named_props_obj_indexed_definer_callback(
-            cg_context, "NamedPropsObjIndexedDefinerCallback"),
-        make_named_props_obj_indexed_descriptor_callback(
-            cg_context, "NamedPropsObjIndexedDescriptorCallback"),
-    ]
-    for func_def in func_defs:
-        callback_defs.append(func_def)
-        callback_defs.append(EmptyNode())
-
-    text = """\
-// Named interceptors
-${npo_prototype_template}->SetHandler(
-    v8::NamedPropertyHandlerConfiguration(
-        NamedPropsObjNamedGetterCallback,
-        NamedPropsObjNamedSetterCallback,
-        nullptr,  // query
-        NamedPropsObjNamedDeleterCallback,
-        nullptr,  // enumerator
-        NamedPropsObjNamedDefinerCallback,
-        NamedPropsObjNamedDescriptorCallback,
-        v8::Local<v8::Value>(),
-        static_cast<v8::PropertyHandlerFlags>(
-            int32_t(v8::PropertyHandlerFlags::kNonMasking) |
-            int32_t(v8::PropertyHandlerFlags::kOnlyInterceptStrings))));
-// Indexed interceptors
-${npo_prototype_template}->SetHandler(
-    v8::IndexedPropertyHandlerConfiguration(
-        NamedPropsObjIndexedGetterCallback,
-        NamedPropsObjIndexedSetterCallback,
-        nullptr,  // query
-        NamedPropsObjIndexedDeleterCallback,
-        nullptr,  // enumerator
-        NamedPropsObjIndexedDefinerCallback,
-        NamedPropsObjIndexedDescriptorCallback,
-        v8::Local<v8::Value>(),
-        v8::PropertyHandlerFlags::kNone));"""
-    install_node.append(TextNode(text))
-
-    return callback_defs, install_node
 
 
 def make_cross_origin_property_callbacks_and_install_node(
@@ -6615,33 +6056,41 @@ def make_cross_origin_property_callbacks_and_install_node(
         make_cross_origin_access_check_callback(
             cg_context, "CrossOriginAccessCheckCallback"),
         make_cross_origin_named_getter_callback(
-            cg_context, "CrossOriginNamedGetterCallback"),
+            cg_context.make_copy(named_interceptor_kind="Getter"),
+            "CrossOriginNamedGetterCallback"),
         make_cross_origin_named_setter_callback(
-            cg_context, "CrossOriginNamedSetterCallback"),
-        make_cross_origin_named_deleter_callback(
-            cg_context, "CrossOriginNamedDeleterCallback"),
-        make_cross_origin_named_definer_callback(
-            cg_context, "CrossOriginNamedDefinerCallback"),
+            cg_context.make_copy(named_interceptor_kind="Setter"),
+            "CrossOriginNamedSetterCallback"),
+        make_cross_origin_throwing_callback(
+            cg_context.make_copy(named_interceptor_kind="Deleter")),
+        make_cross_origin_throwing_callback(
+            cg_context.make_copy(named_interceptor_kind="Definer")),
         make_cross_origin_named_descriptor_callback(
-            cg_context, "CrossOriginNamedDescriptorCallback"),
+            cg_context.make_copy(named_interceptor_kind="Descriptor"),
+            "CrossOriginNamedDescriptorCallback"),
         make_cross_origin_named_query_callback(
-            cg_context, "CrossOriginNamedQueryCallback"),
+            cg_context.make_copy(named_interceptor_kind="Query"),
+            "CrossOriginNamedQueryCallback"),
         make_cross_origin_named_enumerator_callback(
-            cg_context, "CrossOriginNamedEnumeratorCallback"),
+            cg_context.make_copy(named_interceptor_kind="Enumerator"),
+            "CrossOriginNamedEnumeratorCallback"),
         make_cross_origin_indexed_getter_callback(
             cg_context.make_copy(
-                indexed_property_getter=(props and props.indexed_getter)),
+                indexed_property_getter=(props and props.indexed_getter),
+                indexed_interceptor_kind="Getter"),
             "CrossOriginIndexedGetterCallback"),
-        make_cross_origin_indexed_setter_callback(
-            cg_context, "CrossOriginIndexedSetterCallback"),
-        make_cross_origin_indexed_deleter_callback(
-            cg_context, "CrossOriginIndexedDeleterCallback"),
-        make_cross_origin_indexed_definer_callback(
-            cg_context, "CrossOriginIndexedDefinerCallback"),
+        make_cross_origin_throwing_callback(
+            cg_context.make_copy(indexed_interceptor_kind="Setter")),
+        make_cross_origin_throwing_callback(
+            cg_context.make_copy(indexed_interceptor_kind="Deleter")),
+        make_cross_origin_throwing_callback(
+            cg_context.make_copy(indexed_interceptor_kind="Definer")),
         make_cross_origin_indexed_descriptor_callback(
-            cg_context, "CrossOriginIndexedDescriptorCallback"),
+            cg_context.make_copy(indexed_interceptor_kind="Descriptor"),
+            "CrossOriginIndexedDescriptorCallback"),
         make_cross_origin_indexed_enumerator_callback(
-            cg_context, "CrossOriginIndexedEnumeratorCallback"),
+            cg_context.make_copy(indexed_interceptor_kind="Enumerator"),
+            "CrossOriginIndexedEnumeratorCallback"),
     ]
     for func_def in func_defs:
         callback_defs.append(func_def)
@@ -6681,45 +6130,6 @@ ${instance_object_template}->SetAccessCheckCallbackAndHandler(
             "third_party/blink/renderer/bindings/core/v8/binding_security.h",
             "third_party/blink/renderer/platform/bindings/v8_cross_origin_property_support.h",
         ]))
-
-    if cg_context.interface.identifier != "Window":
-        return callback_defs, install_node
-
-    func_defs = [
-        make_same_origin_indexed_getter_callback(
-            cg_context.make_copy(
-                indexed_property_getter=(props and props.indexed_getter)),
-            "SameOriginIndexedGetterCallback"),
-        make_same_origin_indexed_setter_callback(
-            cg_context, "SameOriginIndexedSetterCallback"),
-        make_same_origin_indexed_deleter_callback(
-            cg_context, "SameOriginIndexedDeleterCallback"),
-        make_same_origin_indexed_definer_callback(
-            cg_context, "SameOriginIndexedDefinerCallback"),
-        make_same_origin_indexed_descriptor_callback(
-            cg_context, "SameOriginIndexedDescriptorCallback"),
-        make_same_origin_indexed_enumerator_callback(
-            cg_context, "SameOriginIndexedEnumeratorCallback"),
-    ]
-    for func_def in func_defs:
-        callback_defs.append(func_def)
-        callback_defs.append(EmptyNode())
-
-    text = """\
-// Same origin interceptors
-${instance_object_template}->SetHandler(
-    v8::IndexedPropertyHandlerConfiguration(
-        SameOriginIndexedGetterCallback,
-        SameOriginIndexedSetterCallback,
-        nullptr,  // query
-        SameOriginIndexedDeleterCallback,
-        SameOriginIndexedEnumeratorCallback,
-        SameOriginIndexedDefinerCallback,
-        SameOriginIndexedDescriptorCallback,
-        v8::Local<v8::Value>(),
-        v8::PropertyHandlerFlags::kNone));
-"""
-    install_node.append(TextNode(text))
 
     return callback_defs, install_node
 
@@ -6907,6 +6317,7 @@ const WrapperTypeInfo ${class_name}::wrapper_type_info_{{
     {wrapper_class_id},
     {active_script_wrappable_inheritance},
     {idl_definition_kind},
+    {is_skipped_in_interface_object_prototype_chain},
 }};
 
 #if defined(COMPONENT_BUILD) && defined(WIN32) && defined(__clang__)
@@ -6944,6 +6355,12 @@ const WrapperTypeInfo ${class_name}::wrapper_type_info_{{
         idl_definition_kind = "WrapperTypeInfo::kIdlNamespace"
     elif class_like.is_callback_interface:
         idl_definition_kind = "WrapperTypeInfo::kIdlCallbackInterface"
+    elif class_like.is_async_iterator or class_like.is_sync_iterator:
+        idl_definition_kind = "WrapperTypeInfo::kIdlAsyncOrSyncIterator"
+    else:
+        assert False
+    is_skipped_in_interface_object_prototype_chain = (
+        "true" if class_like.identifier == "WindowProperties" else "false")
     wrapper_type_info_def.append(
         F(pattern,
           install_interface_template_func=FN_INSTALL_INTERFACE_TEMPLATE,
@@ -6953,9 +6370,12 @@ const WrapperTypeInfo ${class_name}::wrapper_type_info_{{
           wrapper_class_id=wrapper_class_id,
           active_script_wrappable_inheritance=(
               active_script_wrappable_inheritance),
-          idl_definition_kind=idl_definition_kind))
+          idl_definition_kind=idl_definition_kind,
+          is_skipped_in_interface_object_prototype_chain=(
+              is_skipped_in_interface_object_prototype_chain)))
 
-    if class_like.is_interface:
+    if (class_like.is_interface or class_like.is_async_iterator
+            or class_like.is_sync_iterator):
         blink_class = blink_class_name(class_like)
         pattern = """\
 const WrapperTypeInfo& {blink_class}::wrapper_type_info_ =
@@ -6969,11 +6389,6 @@ const WrapperTypeInfo& {blink_class}::wrapper_type_info_ =
 static_assert(
     std::is_base_of<ActiveScriptWrappableBase, {blink_class}>::value,
     "{blink_class} does not inherit from ActiveScriptWrappable<> despite "
-    "the IDL has [ActiveScriptWrappable] extended attribute.");
-static_assert(
-    !std::is_same<decltype(&{blink_class}::HasPendingActivity),
-                  decltype(&ScriptWrappable::HasPendingActivity)>::value,
-    "{blink_class} is not overriding hasPendingActivity() despite "
     "the IDL has [ActiveScriptWrappable] extended attribute.");"""
     else:
         pattern = """\
@@ -6981,11 +6396,6 @@ static_assert(
 static_assert(
     !std::is_base_of<ActiveScriptWrappableBase, {blink_class}>::value,
     "{blink_class} inherits from ActiveScriptWrappable<> without "
-    "[ActiveScriptWrappable] extended attribute.");
-static_assert(
-    std::is_same<decltype(&{blink_class}::HasPendingActivity),
-                 decltype(&ScriptWrappable::HasPendingActivity)>::value,
-    "{blink_class} is overriding hasPendingActivity() without "
     "[ActiveScriptWrappable] extended attribute.");"""
     if class_like.is_interface:
         wrapper_type_info_def.append(F(pattern, blink_class=blink_class))
@@ -7001,7 +6411,7 @@ static_assert(
 def make_v8_context_snapshot_api(cg_context, component, attribute_entries,
                                  constant_entries, constructor_entries,
                                  exposed_construct_entries, operation_entries,
-                                 named_properties_object_callback_defs,
+                                 indexed_and_named_property_defs,
                                  cross_origin_property_callback_defs,
                                  install_context_independent_func_name):
     assert isinstance(cg_context, CodeGenContext)
@@ -7034,11 +6444,10 @@ def make_v8_context_snapshot_api(cg_context, component, attribute_entries,
         ])
 
     add_func(*_make_v8_context_snapshot_get_reference_table_function(
-        cg_context, name_style.func("GetRefTableOf",
-                                    cg_context.class_name), attribute_entries,
-        constant_entries, constructor_entries, exposed_construct_entries,
-        operation_entries, named_properties_object_callback_defs,
-        cross_origin_property_callback_defs))
+        cg_context, name_style.func("GetRefTableOf", cg_context.class_name),
+        attribute_entries, constant_entries, constructor_entries,
+        exposed_construct_entries, operation_entries,
+        indexed_and_named_property_defs, cross_origin_property_callback_defs))
 
     add_func(*_make_v8_context_snapshot_install_props_per_context_function(
         cg_context, name_style.func("InstallPropsOf",
@@ -7055,8 +6464,7 @@ def make_v8_context_snapshot_api(cg_context, component, attribute_entries,
 def _make_v8_context_snapshot_get_reference_table_function(
         cg_context, function_name, attribute_entries, constant_entries,
         constructor_entries, exposed_construct_entries, operation_entries,
-        named_properties_object_callback_defs,
-        cross_origin_property_callback_defs):
+        indexed_and_named_property_defs, cross_origin_property_callback_defs):
     callback_names = ["${class_name}::GetWrapperTypeInfo()"]
 
     for entry in attribute_entries:
@@ -7083,8 +6491,12 @@ def _make_v8_context_snapshot_get_reference_table_function(
             for child_node in node:
                 collect_callbacks(child_node)
 
-    collect_callbacks(named_properties_object_callback_defs)
     collect_callbacks(cross_origin_property_callback_defs)
+
+    for node in indexed_and_named_property_defs:
+        if isinstance(node, CxxFuncDefNode):
+            callback_names.append(
+                _format("${class_name}::{}", node.function_name))
 
     entry_nodes = list(
         map(
@@ -7186,9 +6598,11 @@ return ${class_name}::{func}(
 
 
 def _collect_include_headers(class_like):
-    assert isinstance(class_like, (web_idl.Interface, web_idl.Namespace))
+    assert isinstance(class_like,
+                      (web_idl.Interface, web_idl.Namespace,
+                       web_idl.AsyncIterator, web_idl.SyncIterator))
 
-    headers = set(class_like.code_generator_info.blink_headers)
+    headers = set(class_like.code_generator_info.blink_headers or [])
 
     def collect_from_idl_type(idl_type):
         idl_type.apply_to_all_composing_elements(add_include_headers)
@@ -7213,6 +6627,11 @@ def _collect_include_headers(class_like):
         union_def_obj = idl_type.union_definition_object
         if union_def_obj is not None:
             headers.add(PathManager(union_def_obj).api_path(ext="h"))
+            return
+
+        if idl_type.is_frozen_array:
+            headers.add(
+                "third_party/blink/renderer/bindings/core/v8/frozen_array.h")
 
     for attribute in class_like.attributes:
         collect_from_idl_type(attribute.idl_type)
@@ -7221,11 +6640,12 @@ def _collect_include_headers(class_like):
     operations.extend(class_like.constructors)
     operations.extend(class_like.operations)
     if class_like.is_interface:
-        for x in [class_like.iterable, class_like.maplike, class_like.setlike]:
+        for x in (class_like.async_iterable, class_like.iterable,
+                  class_like.maplike, class_like.setlike):
             if x:
                 operations.extend(x.operations)
         for exposed_construct in class_like.exposed_constructs:
-            operations.extend(exposed_construct.named_constructors)
+            operations.extend(exposed_construct.legacy_factory_functions)
     for operation in operations:
         collect_from_idl_type(operation.return_type)
         for argument in operation.arguments:
@@ -7252,8 +6672,11 @@ def _collect_include_headers(class_like):
     return headers
 
 
-def generate_class_like(class_like):
-    assert isinstance(class_like, (web_idl.Interface, web_idl.Namespace))
+def generate_class_like(class_like,
+                        generate_iterator_blink_impl_class_callback=None):
+    assert isinstance(class_like,
+                      (web_idl.Interface, web_idl.Namespace,
+                       web_idl.AsyncIterator, web_idl.SyncIterator))
 
     path_manager = PathManager(class_like)
     api_component = path_manager.api_component
@@ -7278,6 +6701,14 @@ def generate_class_like(class_like):
         namespace = class_like
         cg_context = CodeGenContext(namespace=namespace,
                                     class_name=api_class_name)
+    elif class_like.is_async_iterator:
+        cg_context = CodeGenContext(async_iterator=class_like,
+                                    class_name=api_class_name)
+    elif class_like.is_sync_iterator:
+        cg_context = CodeGenContext(sync_iterator=class_like,
+                                    class_name=api_class_name)
+    else:
+        assert False
 
     # Filepaths
     api_header_path = path_manager.api_path(ext="h")
@@ -7350,90 +6781,6 @@ def generate_class_like(class_like):
             constants_def.public_section.append(
                 make_constant_constant_def(cgc, constant_name(cgc)))
 
-    # Custom callback implementations
-    custom_callback_impl_decls = ListNode()
-
-    def add_custom_callback_impl_decl(**params):
-        arg_decls = params.pop("arg_decls")
-        name = params.pop("name", None)
-        if name is None:
-            name = custom_function_name(cg_context.make_copy(**params))
-        custom_callback_impl_decls.append(
-            CxxFuncDeclNode(
-                name=name,
-                arg_decls=arg_decls,
-                return_type="void",
-                static=True))
-
-    if class_like.identifier == "HTMLAllCollection":
-        add_custom_callback_impl_decl(
-            name=name_style.func("LegacyCallCustom"),
-            arg_decls=["const v8::FunctionCallbackInfo<v8::Value>&"])
-    for attribute in class_like.attributes:
-        custom_values = attribute.extended_attributes.values_of("Custom")
-        is_cross_origin = "CrossOrigin" in attribute.extended_attributes
-        cross_origin_values = attribute.extended_attributes.values_of(
-            "CrossOrigin")
-        if "Getter" in custom_values:
-            add_custom_callback_impl_decl(
-                attribute=attribute,
-                attribute_get=True,
-                arg_decls=["const v8::FunctionCallbackInfo<v8::Value>&"])
-            if is_cross_origin and (not cross_origin_values
-                                    or "Getter" in cross_origin_values):
-                add_custom_callback_impl_decl(
-                    attribute=attribute,
-                    attribute_get=True,
-                    arg_decls=["const v8::PropertyCallbackInfo<v8::Value>&"])
-        if "Setter" in custom_values:
-            add_custom_callback_impl_decl(
-                attribute=attribute,
-                attribute_set=True,
-                arg_decls=[
-                    "v8::Local<v8::Value>",
-                    "const v8::FunctionCallbackInfo<v8::Value>&",
-                ])
-            if is_cross_origin and "Setter" in cross_origin_values:
-                add_custom_callback_impl_decl(
-                    attribute=attribute,
-                    attribute_set=True,
-                    arg_decls=[
-                        "v8::Local<v8::Value>",
-                        "const v8::PropertyCallbackInfo<void>&",
-                    ])
-    for operation_group in class_like.operation_groups:
-        if "Custom" in operation_group.extended_attributes:
-            add_custom_callback_impl_decl(
-                operation_group=operation_group,
-                arg_decls=["const v8::FunctionCallbackInfo<v8::Value>&"])
-    if interface and interface.indexed_and_named_properties:
-        props = interface.indexed_and_named_properties
-        operation = props.own_named_getter
-        if operation and "Custom" in operation.extended_attributes:
-            add_custom_callback_impl_decl(
-                named_property_getter=operation,
-                arg_decls=[
-                    "const AtomicString& property_name",
-                    "const v8::PropertyCallbackInfo<v8::Value>&",
-                ])
-        operation = props.own_named_setter
-        if operation and "Custom" in operation.extended_attributes:
-            add_custom_callback_impl_decl(
-                named_property_setter=operation,
-                arg_decls=[
-                    "const AtomicString& property_name",
-                    "v8::Local<v8::Value> v8_property_value",
-                    "const v8::PropertyCallbackInfo<v8::Value>&",
-                ])
-        operation = props.own_named_deleter
-        if operation and "Custom" in operation.extended_attributes:
-            add_custom_callback_impl_decl(
-                named_property_deleter=operation,
-                arg_decls=[
-                    "const AtomicString& property_name",
-                    "const v8::PropertyCallbackInfo<v8::Value>&",
-                ])
-
     # Cross-component trampolines
     if is_cross_components:
         # tp_ = trampoline name
@@ -7463,22 +6810,6 @@ def generate_class_like(class_like):
         operation_entries=operation_entries)
     supplemental_install_node = SequenceNode()
 
-    # Indexed and named properties
-    # Shorten a function name to mitigate a style check error.
-    f = make_indexed_and_named_property_callbacks_and_install_node
-    (indexed_and_named_property_decls, indexed_and_named_property_defs,
-     indexed_and_named_property_install_node) = f(cg_context)
-    supplemental_install_node.append(indexed_and_named_property_install_node)
-    supplemental_install_node.append(EmptyNode())
-
-    # Named properties object
-    (named_properties_object_callback_defs,
-     named_properties_object_install_node) = (
-         make_named_properties_object_callbacks_and_install_node(cg_context))
-    callback_defs.extend(named_properties_object_callback_defs)
-    supplemental_install_node.append(named_properties_object_install_node)
-    supplemental_install_node.append(EmptyNode())
-
     # Cross origin properties
     (cross_origin_property_callback_defs,
      cross_origin_property_install_node) = (
@@ -7486,6 +6817,14 @@ def generate_class_like(class_like):
              cg_context, attribute_entries, operation_entries))
     callback_defs.extend(cross_origin_property_callback_defs)
     supplemental_install_node.append(cross_origin_property_install_node)
+    supplemental_install_node.append(EmptyNode())
+
+    # Indexed and named properties
+    # Shorten a function name to mitigate a style check error.
+    f = make_indexed_and_named_property_callbacks_and_install_node
+    (indexed_and_named_property_decls, indexed_and_named_property_defs,
+     indexed_and_named_property_install_node) = f(cg_context)
+    supplemental_install_node.append(indexed_and_named_property_install_node)
     supplemental_install_node.append(EmptyNode())
 
     # Installer functions
@@ -7601,8 +6940,7 @@ def generate_class_like(class_like):
      source_v8_context_snapshot_ns) = make_v8_context_snapshot_api(
          cg_context, impl_component, attribute_entries, constant_entries,
          constructor_entries, exposed_construct_entries, operation_entries,
-         named_properties_object_callback_defs,
-         cross_origin_property_callback_defs,
+         indexed_and_named_property_defs, cross_origin_property_callback_defs,
          (install_context_independent_props_def
           and FN_INSTALL_CONTEXT_INDEPENDENT_PROPS))
 
@@ -7663,14 +7001,21 @@ def generate_class_like(class_like):
             make_forward_declarations(impl_source_node.accumulator),
             EmptyNode(),
         ])
-    api_header_node.accumulator.add_class_decls([blink_class_name(class_like)])
+    if class_like.is_async_iterator or class_like.is_sync_iterator:
+        api_header_node.accumulator.add_class_decls(
+            [blink_class_name(class_like.interface)])
+    else:
+        api_header_node.accumulator.add_class_decls(
+            [blink_class_name(class_like)])
     api_header_node.accumulator.add_include_headers([
         component_export_header(api_component, for_testing),
         "third_party/blink/renderer/platform/bindings/v8_interface_bridge.h",
     ])
     api_source_node.accumulator.add_include_headers([
         # Blink implementation class' header (e.g. node.h for Node)
-        class_like.code_generator_info.blink_headers[0],
+        (class_like.code_generator_info.blink_headers
+         and class_like.code_generator_info.blink_headers[0]),
+        "third_party/blink/public/mojom/origin_trial_feature/origin_trial_feature.mojom-shared.h",
     ])
     if interface and interface.inherited:
         api_source_node.accumulator.add_include_headers(
@@ -7682,7 +7027,8 @@ def generate_class_like(class_like):
         ])
     impl_source_node.accumulator.add_include_headers([
         # Blink implementation class' header (e.g. node.h for Node)
-        class_like.code_generator_info.blink_headers[0],
+        (class_like.code_generator_info.blink_headers
+         and class_like.code_generator_info.blink_headers[0]),
         "third_party/blink/renderer/bindings/core/v8/generated_code_helper.h",
         "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h",
         "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h",
@@ -7691,11 +7037,22 @@ def generate_class_like(class_like):
         "third_party/blink/renderer/platform/bindings/idl_member_installer.h",
         "third_party/blink/renderer/platform/bindings/runtime_call_stats.h",
         "third_party/blink/renderer/platform/bindings/v8_binding.h",
+        "third_party/blink/public/mojom/origin_trial_feature/origin_trial_feature.mojom-shared.h",
     ])
     impl_source_node.accumulator.add_include_headers(
         _collect_include_headers(class_like))
 
     # Assemble the parts.
+    if generate_iterator_blink_impl_class_callback:
+        assert isinstance(class_like,
+                          (web_idl.AsyncIterator, web_idl.SyncIterator))
+        generate_iterator_blink_impl_class_callback(
+            iterator_class_like=class_like,
+            api_component=api_component,
+            for_testing=for_testing,
+            header_blink_ns=api_header_blink_ns,
+            source_blink_ns=api_source_blink_ns)
+
     api_header_blink_ns.body.extend([
         api_class_def,
         EmptyNode(),
@@ -7753,13 +7110,6 @@ def generate_class_like(class_like):
     else:
         api_class_def.public_section.append(installer_function_decls)
         api_class_def.public_section.append(EmptyNode())
-
-    if custom_callback_impl_decls:
-        api_class_def.public_section.extend([
-            TextNode("// Custom callback implementations"),
-            custom_callback_impl_decls,
-            EmptyNode(),
-        ])
 
     if indexed_and_named_property_decls:
         api_class_def.public_section.extend([
@@ -7866,7 +7216,7 @@ def generate_install_properties_per_feature(function_name,
     # Function nodes
     arg_decls = [
         "ScriptState* script_state",
-        "OriginTrialFeature feature",
+        "mojom::blink::OriginTrialFeature feature",
     ]
     func_decl = CxxFuncDeclNode(
         name=function_name, arg_decls=arg_decls, return_type="void")
@@ -7880,7 +7230,7 @@ def generate_install_properties_per_feature(function_name,
         name="InstallPropertiesPerFeatureInternal",
         arg_decls=[
             "ScriptState* script_state",
-            "OriginTrialFeature feature",
+            "mojom::blink::OriginTrialFeature feature",
             "base::span<const WrapperTypeInfo* const> wrapper_type_info_list",
         ],
         return_type="void")
@@ -7904,6 +7254,7 @@ def generate_install_properties_per_feature(function_name,
         "base/containers/span.h",
         "third_party/blink/renderer/platform/bindings/script_state.h",
         "third_party/blink/renderer/platform/bindings/v8_per_context_data.h",
+        "third_party/blink/public/mojom/origin_trial_feature/origin_trial_feature.mojom-shared.h",
     ])
     source_node.extend([
         make_copyright_header(),
@@ -7938,11 +7289,14 @@ def generate_install_properties_per_feature(function_name,
                                       class_like.constants,
                                       class_like.operation_groups,
                                       class_like.exposed_constructs):
-            features = list(
-                member.exposure.context_dependent_runtime_enabled_features)
+            features = list(member.exposure.origin_trial_features)
             for entry in member.exposure.global_names_and_features:
-                if entry.feature and entry.feature.is_context_dependent:
+                if entry.feature and entry.feature.is_origin_trial:
                     features.append(entry.feature)
+            for feature in (member.exposure.
+                            only_in_coi_contexts_or_runtime_enabled_features):
+                if feature.is_origin_trial:
+                    features.append(feature)
             for feature in features:
                 feature_to_class_likes.setdefault(feature,
                                                   set()).add(class_like)
@@ -7969,7 +7323,7 @@ def generate_install_properties_per_feature(function_name,
             TextNode("};"),
         ])
         switch_node.append(
-            case="OriginTrialFeature::k{}".format(feature),
+            case="mojom::blink::OriginTrialFeature::k{}".format(feature),
             body=[
                 table_def,
                 TextNode("selected_wti_list = wti_list;"),

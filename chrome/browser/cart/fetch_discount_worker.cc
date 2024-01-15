@@ -30,16 +30,17 @@ const char kOauthScopes[] = "https://www.googleapis.com/auth/chromememex";
 const char kEmptyToken[] = "";
 }  // namespace
 
-CartServiceDelegate::CartServiceDelegate(CartService* cart_service)
+CartDiscountServiceDelegate::CartDiscountServiceDelegate(
+    CartService* cart_service)
     : cart_service_(cart_service) {}
 
-CartServiceDelegate::~CartServiceDelegate() = default;
+CartDiscountServiceDelegate::~CartDiscountServiceDelegate() = default;
 
-void CartServiceDelegate::LoadAllCarts(CartDB::LoadCallback callback) {
+void CartDiscountServiceDelegate::LoadAllCarts(CartDB::LoadCallback callback) {
   cart_service_->LoadAllActiveCarts(std::move(callback));
 }
 
-void CartServiceDelegate::UpdateCart(
+void CartDiscountServiceDelegate::UpdateCart(
     const std::string& cart_url,
     const cart_db::ChromeCartContentProto new_proto,
     const bool is_tester) {
@@ -47,11 +48,11 @@ void CartServiceDelegate::UpdateCart(
                                  is_tester);
 }
 
-void CartServiceDelegate::RecordFetchTimestamp() {
+void CartDiscountServiceDelegate::RecordFetchTimestamp() {
   cart_service_->RecordFetchTimestamp();
 }
 
-void CartServiceDelegate::UpdateFreeListingCoupons(
+void CartDiscountServiceDelegate::UpdateFreeListingCoupons(
     const CouponService::CouponsMap& map) {
   cart_service_->UpdateFreeListingCoupons(map);
 }
@@ -60,12 +61,13 @@ FetchDiscountWorker::FetchDiscountWorker(
     scoped_refptr<network::SharedURLLoaderFactory>
         browserProcessURLLoaderFactory,
     std::unique_ptr<CartDiscountFetcherFactory> fetcher_factory,
-    std::unique_ptr<CartServiceDelegate> cart_service_delegate,
+    std::unique_ptr<CartDiscountServiceDelegate> cart_discount_service_delegate,
     signin::IdentityManager* const identity_manager,
     variations::VariationsClient* const chrome_variations_client)
     : browserProcessURLLoaderFactory_(browserProcessURLLoaderFactory),
       fetcher_factory_(std::move(fetcher_factory)),
-      cart_service_delegate_(std::move(cart_service_delegate)),
+      cart_discount_service_delegate_(
+          std::move(cart_discount_service_delegate)),
       identity_manager_(identity_manager),
       chrome_variations_client_(chrome_variations_client) {
   backend_task_runner_ = base::ThreadPool::CreateSequencedTaskRunner(
@@ -102,7 +104,8 @@ void FetchDiscountWorker::FetchOauthToken() {
       std::make_unique<signin::PrimaryAccountAccessTokenFetcher>(
           kOauthName, identity_manager_, signin::ScopeSet{kOauthScopes},
           std::move(token_callback),
-          signin::PrimaryAccountAccessTokenFetcher::Mode::kImmediate);
+          signin::PrimaryAccountAccessTokenFetcher::Mode::kImmediate,
+          signin::ConsentLevel::kSync);
 }
 
 void FetchDiscountWorker::OnAuthTokenFetched(
@@ -127,7 +130,8 @@ void FetchDiscountWorker::LoadAllActiveCarts(
   auto cart_loaded_callback = base::BindOnce(
       &FetchDiscountWorker::ReadyToFetch, weak_ptr_factory_.GetWeakPtr(),
       is_oauth_fetch, std::move(access_token_str));
-  cart_service_delegate_->LoadAllCarts(std::move(cart_loaded_callback));
+  cart_discount_service_delegate_->LoadAllCarts(
+      std::move(cart_loaded_callback));
 }
 
 void FetchDiscountWorker::ReadyToFetch(
@@ -143,7 +147,7 @@ void FetchDiscountWorker::ReadyToFetch(
       base::BindOnce(&FetchDiscountWorker::AfterDiscountFetched,
                      weak_ptr_factory_.GetWeakPtr());
 
-  cart_service_delegate_->RecordFetchTimestamp();
+  cart_discount_service_delegate_->RecordFetchTimestamp();
   // If there is no eligible merchant cart, don't fetch immediately; instead,
   // post another delayed fetch.
   bool has_partner_merchant = false;
@@ -152,15 +156,11 @@ void FetchDiscountWorker::ReadyToFetch(
     auto cart_url = pair.second.merchant_cart_url();
     bool is_partner_merchant = commerce::IsPartnerMerchant(GURL(cart_url));
     bool is_potential_merchant =
-        base::FeatureList::IsEnabled(commerce::kMerchantWidePromotion) &&
         !commerce::IsNoDiscountMerchant(GURL(cart_url));
     has_partner_merchant |= is_partner_merchant;
     has_potential_merchant |= is_potential_merchant;
   }
-  bool allow_to_fetch = base::GetFieldTrialParamByFeatureAsBool(
-      commerce::kMerchantWidePromotion,
-      commerce::kReadyToFetchMerchantWidePromotionParam, true);
-  if (has_partner_merchant || (has_potential_merchant && allow_to_fetch)) {
+  if (has_partner_merchant || has_potential_merchant) {
     backend_task_runner_->PostTask(
         FROM_HERE,
         base::BindOnce(
@@ -234,7 +234,8 @@ void FetchDiscountWorker::AfterDiscountFetched(
   auto update_discount_callback = base::BindOnce(
       &FetchDiscountWorker::OnUpdatingDiscounts, weak_ptr_factory_.GetWeakPtr(),
       std::move(discounts), is_tester);
-  cart_service_delegate_->LoadAllCarts(std::move(update_discount_callback));
+  cart_discount_service_delegate_->LoadAllCarts(
+      std::move(update_discount_callback));
 }
 
 void FetchDiscountWorker::OnUpdatingDiscounts(
@@ -247,7 +248,7 @@ void FetchDiscountWorker::OnUpdatingDiscounts(
     return;
   }
 
-  double current_timestamp = base::Time::Now().ToDoubleT();
+  double current_timestamp = base::Time::Now().InSecondsFSinceUnixEpoch();
 
   base::flat_map<GURL,
                  std::vector<std::unique_ptr<autofill::AutofillOfferData>>>
@@ -266,8 +267,8 @@ void FetchDiscountWorker::OnUpdatingDiscounts(
       cart_discount_proto->clear_discount_text();
       cart_discount_proto->clear_rule_discount_info();
       cart_discount_proto->clear_has_coupons();
-      cart_service_delegate_->UpdateCart(cart_url_str, std::move(cart_proto),
-                                         is_tester);
+      cart_discount_service_delegate_->UpdateCart(
+          cart_url_str, std::move(cart_proto), is_tester);
       continue;
     }
 
@@ -284,14 +285,15 @@ void FetchDiscountWorker::OnUpdatingDiscounts(
         discount_infos.begin(), discount_infos.end()};
     cart_discount_proto->set_has_coupons(merchant_discounts.has_coupons);
 
-    cart_service_delegate_->UpdateCart(cart_url_str, std::move(cart_proto),
-                                       is_tester);
+    cart_discount_service_delegate_->UpdateCart(
+        cart_url_str, std::move(cart_proto), is_tester);
 
     if (commerce::IsCouponWithCodeEnabled()) {
       for (const coupon_db::FreeListingCouponInfoProto& coupon_info :
            merchant_discounts.coupon_discounts) {
         int64_t offer_id = coupon_info.coupon_id();
-        base::Time expiry = base::Time::FromDoubleT(coupon_info.expiry_time());
+        base::Time expiry =
+            base::Time::FromSecondsSinceUnixEpoch(coupon_info.expiry_time());
         std::vector<GURL> merchant_origins;
         merchant_origins.emplace_back(cart_url_origin);
         GURL offer_details_url = GURL();
@@ -309,7 +311,7 @@ void FetchDiscountWorker::OnUpdatingDiscounts(
   }
 
   if (commerce::IsCouponWithCodeEnabled()) {
-    cart_service_delegate_->UpdateFreeListingCoupons(coupon_map);
+    cart_discount_service_delegate_->UpdateFreeListingCoupons(coupon_map);
   }
 
   if (commerce::IsCartDiscountFeatureEnabled()) {

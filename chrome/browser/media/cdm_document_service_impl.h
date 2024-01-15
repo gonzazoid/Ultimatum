@@ -5,9 +5,10 @@
 #ifndef CHROME_BROWSER_MEDIA_CDM_DOCUMENT_SERVICE_IMPL_H_
 #define CHROME_BROWSER_MEDIA_CDM_DOCUMENT_SERVICE_IMPL_H_
 
+#include <set>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "build/build_config.h"
@@ -96,8 +97,7 @@ class CdmDocumentServiceImpl final
 
 #if BUILDFLAG(IS_WIN)
   // See comments in OnCdmEvent() implementation.
-  bool has_reported_cdm_error_ = false;
-  bool has_reported_significant_playback_ = false;
+  std::set<media::CdmEvent> reported_cdm_event_;
 #endif
 
   base::WeakPtrFactory<CdmDocumentServiceImpl> weak_factory_{this};

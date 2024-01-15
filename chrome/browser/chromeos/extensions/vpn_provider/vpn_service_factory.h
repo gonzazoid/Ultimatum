@@ -6,7 +6,7 @@
 #define CHROME_BROWSER_CHROMEOS_EXTENSIONS_VPN_PROVIDER_VPN_SERVICE_FACTORY_H_
 
 #include "chrome/browser/chromeos/extensions/vpn_provider/vpn_service_interface.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace content {
 
@@ -16,7 +16,7 @@ class BrowserContext;
 
 namespace base {
 template <typename T>
-struct DefaultSingletonTraits;
+class NoDestructor;
 }
 
 namespace chromeos {
@@ -24,7 +24,7 @@ namespace chromeos {
 using VpnServiceInterface = extensions::api::VpnServiceInterface;
 
 // Factory to create VpnService.
-class VpnServiceFactory : public BrowserContextKeyedServiceFactory {
+class VpnServiceFactory : public ProfileKeyedServiceFactory {
  public:
   VpnServiceFactory(const VpnServiceFactory&) = delete;
   VpnServiceFactory& operator=(const VpnServiceFactory&) = delete;
@@ -34,7 +34,7 @@ class VpnServiceFactory : public BrowserContextKeyedServiceFactory {
   static VpnServiceFactory* GetInstance();
 
  private:
-  friend struct base::DefaultSingletonTraits<VpnServiceFactory>;
+  friend base::NoDestructor<VpnServiceFactory>;
 
   VpnServiceFactory();
   ~VpnServiceFactory() override;
@@ -47,10 +47,5 @@ class VpnServiceFactory : public BrowserContextKeyedServiceFactory {
 };
 
 }  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove when it moved to ash.
-namespace ash {
-using ::chromeos::VpnServiceFactory;
-}
 
 #endif  // CHROME_BROWSER_CHROMEOS_EXTENSIONS_VPN_PROVIDER_VPN_SERVICE_FACTORY_H_

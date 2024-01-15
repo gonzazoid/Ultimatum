@@ -4,10 +4,12 @@
 
 #include "ash/quick_pair/repository/fast_pair/saved_device_registry.h"
 
-#include "ash/quick_pair/common/logging.h"
+#include <string>
+
 #include "ash/quick_pair/common/quick_pair_browser_delegate.h"
 #include "base/base64.h"
 #include "base/containers/contains.h"
+#include "components/cross_device/logging/logging.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
@@ -33,32 +35,37 @@ void SavedDeviceRegistry::RegisterProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterDictionaryPref(kFastPairSavedDevicesPref);
 }
 
-void SavedDeviceRegistry::SaveAccountKey(
+bool SavedDeviceRegistry::SaveAccountAssociation(
     const std::string& mac_address,
     const std::vector<uint8_t>& account_key) {
   PrefService* pref_service =
       QuickPairBrowserDelegate::Get()->GetActivePrefService();
   if (!pref_service) {
-    QP_LOG(WARNING) << __func__ << ": No user pref service available.";
-    return;
+    CD_LOG(WARNING, Feature::FP)
+        << __func__
+        << ": No user pref service available. Failed to write "
+           "account association to Saved Device Registry.";
+    return false;
   }
   std::string encoded = base::Base64Encode(account_key);
   ScopedDictPrefUpdate update(pref_service, kFastPairSavedDevicesPref);
   update->Set(mac_address, encoded);
-  QP_LOG(INFO) << __func__ << ": Saved account key.";
+  CD_LOG(INFO, Feature::FP) << __func__ << ": Saved account key.";
+  return true;
 }
 
 bool SavedDeviceRegistry::DeleteAccountKey(const std::string& mac_address) {
   PrefService* pref_service =
       QuickPairBrowserDelegate::Get()->GetActivePrefService();
   if (!pref_service) {
-    QP_LOG(WARNING) << __func__ << ": No user pref service available.";
+    CD_LOG(WARNING, Feature::FP)
+        << __func__ << ": No user pref service available.";
     return false;
   }
 
   ScopedDictPrefUpdate update(pref_service, kFastPairSavedDevicesPref);
   if (!update->Remove(mac_address)) {
-    QP_LOG(WARNING)
+    CD_LOG(WARNING, Feature::FP)
         << __func__
         << ": Failed to delete mac address -> account key record from prefs";
     return false;
@@ -71,7 +78,8 @@ bool SavedDeviceRegistry::DeleteAccountKey(
   PrefService* pref_service =
       QuickPairBrowserDelegate::Get()->GetActivePrefService();
   if (!pref_service) {
-    QP_LOG(WARNING) << __func__ << ": No user pref service available.";
+    CD_LOG(WARNING, Feature::FP)
+        << __func__ << ": No user pref service available.";
     return false;
   }
 
@@ -85,32 +93,35 @@ bool SavedDeviceRegistry::DeleteAccountKey(
       return update->Remove(it.first);
     }
   }
-  QP_LOG(WARNING) << __func__
-                  << ": Failed to delete account key record from prefs: "
-                     "account key not found";
+  CD_LOG(WARNING, Feature::FP)
+      << __func__
+      << ": Failed to delete account key record from prefs: "
+         "account key not found";
   return false;
 }
 
-absl::optional<const std::vector<uint8_t>> SavedDeviceRegistry::GetAccountKey(
+std::optional<const std::vector<uint8_t>> SavedDeviceRegistry::GetAccountKey(
     const std::string& mac_address) {
   PrefService* pref_service =
       QuickPairBrowserDelegate::Get()->GetActivePrefService();
   if (!pref_service) {
-    QP_LOG(WARNING) << __func__ << ": No user pref service available.";
-    return absl::nullopt;
+    CD_LOG(WARNING, Feature::FP)
+        << __func__ << ": No user pref service available.";
+    return std::nullopt;
   }
 
-  const base::Value* result =
-      pref_service->GetValue(kFastPairSavedDevicesPref).FindKey(mac_address);
-  if (!result || !result->is_string()) {
-    return absl::nullopt;
+  const std::string* result = pref_service->GetValue(kFastPairSavedDevicesPref)
+                                  .GetDict()
+                                  .FindString(mac_address);
+  if (!result) {
+    return std::nullopt;
   }
 
   std::string decoded;
-  if (!base::Base64Decode(result->GetString(), &decoded)) {
-    QP_LOG(WARNING) << __func__
-                    << ": Failed to decode the account key from Base64.";
-    return absl::nullopt;
+  if (!base::Base64Decode(*result, &decoded)) {
+    CD_LOG(WARNING, Feature::FP)
+        << __func__ << ": Failed to decode the account key from Base64.";
+    return std::nullopt;
   }
 
   return std::vector<uint8_t>(decoded.begin(), decoded.end());
@@ -121,14 +132,16 @@ bool SavedDeviceRegistry::IsAccountKeySavedToRegistry(
   PrefService* pref_service =
       QuickPairBrowserDelegate::Get()->GetActivePrefService();
   if (!pref_service) {
-    QP_LOG(WARNING) << __func__ << ": No user pref service available.";
+    CD_LOG(WARNING, Feature::FP)
+        << __func__ << ": No user pref service available.";
     return false;
   }
 
   if (!has_updated_saved_devices_registry_) {
-    QP_LOG(INFO) << __func__
-                 << ": checking for changes to the registry by cross checking "
-                    "the adapter before continuing";
+    CD_LOG(INFO, Feature::FP)
+        << __func__
+        << ": checking for changes to the registry by cross checking "
+           "the adapter before continuing";
     RemoveDevicesIfRemovedFromDifferentUser(pref_service);
   }
 
@@ -153,8 +166,9 @@ void SavedDeviceRegistry::RemoveDevicesIfRemovedFromDifferentUser(
   // cross reference the registry for any devices that need to be removed.
   std::set<std::string> paired_devices;
   for (device::BluetoothDevice* device : adapter_->GetDevices()) {
-    if (device->IsPaired())
+    if (device->IsPaired()) {
       paired_devices.insert(device->GetAddress());
+    }
   }
 
   // Iterate over the list of devices in the registry, and if there are any in
@@ -167,9 +181,9 @@ void SavedDeviceRegistry::RemoveDevicesIfRemovedFromDifferentUser(
     if (!base::Contains(paired_devices, mac_address)) {
       ScopedDictPrefUpdate update(pref_service, kFastPairSavedDevicesPref);
       update->Remove(it.first);
-      QP_LOG(VERBOSE) << __func__
-                      << ": removed device from registry at address= "
-                      << mac_address;
+      CD_LOG(VERBOSE, Feature::FP)
+          << __func__
+          << ": removed device from registry at address= " << mac_address;
     }
   }
 

@@ -6,11 +6,11 @@
 
 #include <utility>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/values_util.h"
 #include "base/location.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/values.h"
 #include "components/prefs/pref_service.h"
 
@@ -46,8 +46,8 @@ void PrefMemberBase::Init(const std::string& pref_name, PrefService* prefs) {
 void PrefMemberBase::Destroy() {
   if (prefs_ && !pref_name_.empty()) {
     prefs_->RemovePrefObserver(pref_name_, this);
-    prefs_ = nullptr;
   }
+  prefs_ = nullptr;
 }
 
 void PrefMemberBase::MoveToSequence(
@@ -92,7 +92,7 @@ void PrefMemberBase::InvokeUnnamedCallback(
 }
 
 PrefMemberBase::Internal::Internal()
-    : owning_task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
+    : owning_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {}
 PrefMemberBase::Internal::~Internal() = default;
 
 bool PrefMemberBase::Internal::IsOnCorrectSequence() const {
@@ -218,11 +218,11 @@ bool PrefMember<base::FilePath>::Internal::UpdateValueInternal(
 template <>
 void PrefMember<std::vector<std::string> >::UpdatePref(
     const std::vector<std::string>& value) {
-  base::ListValue list_value;
+  base::Value::List list_value;
   for (const std::string& val : value)
     list_value.Append(val);
 
-  prefs()->Set(pref_name(), list_value);
+  prefs()->SetList(pref_name(), std::move(list_value));
 }
 
 template <>

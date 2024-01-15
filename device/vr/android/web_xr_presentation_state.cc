@@ -13,7 +13,6 @@
 #include "components/viz/common/frame_sinks/begin_frame_args.h"
 #include "gpu/ipc/common/gpu_memory_buffer_impl_android_hardware_buffer.h"
 #include "ui/gl/gl_fence.h"
-#include "ui/gl/gl_image_egl.h"
 
 namespace device {
 
@@ -102,7 +101,7 @@ std::string WebXrPresentationState::DebugState() const {
     case StateMachineType::kVizComposited: {
       if (rendering_frames_.size() > 0) {
         for (size_t i = 0; i < rendering_frames_.size(); i++) {
-          auto* frame = rendering_frames_[i];
+          auto* frame = rendering_frames_[i].get();
           ss << std::setw(3) << frame->index;
           ss << "(" << frame->shared_buffer->id << ", "
              << frame->camera_image_shared_buffer->id << ")";
@@ -173,7 +172,7 @@ void WebXrPresentationState::TransitionFrameProcessingToRendering() {
     // compositor. We need to wait until the viz compositor is done with a frame
     // before it can be recycled.
     case StateMachineType::kVizComposited: {
-      rendering_frames_.push_back(processing_frame_);
+      rendering_frames_.push_back(processing_frame_.get());
       break;
     }
   }
@@ -258,7 +257,7 @@ void WebXrPresentationState::EndPresentation() {
     idle_frames_.push(rendering_frame_);
     rendering_frame_ = nullptr;
   }
-  for (auto* frame : rendering_frames_) {
+  for (device::WebXrFrame* frame : rendering_frames_) {
     frame->Recycle();
     idle_frames_.push(frame);
   }

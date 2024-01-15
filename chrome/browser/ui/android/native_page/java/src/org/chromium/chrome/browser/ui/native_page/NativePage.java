@@ -16,9 +16,7 @@ import org.chromium.url.GURL;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
-/**
- * An interface for pages that will be using Android views instead of html/rendered Web content.
- */
+/** An interface for pages that will be using Android views instead of html/rendered Web content. */
 public interface NativePage {
     /**
      * @return The View to display the page. This is always non-null.
@@ -62,17 +60,7 @@ public interface NativePage {
         return defaultColor;
     }
 
-    /**
-     * @param defaultAlpha Default alpha if not customized.
-     * @return Alpha for the toolbar textbox.
-     */
-    default float getToolbarTextBoxAlpha(float defaultColor) {
-        return defaultColor;
-    }
-
-    /**
-     * Reloads the native page.
-     */
+    /** Reloads the native page. */
     default void reload() {}
 
     /**
@@ -80,9 +68,7 @@ public interface NativePage {
      */
     boolean needsToolbarShadow();
 
-    /**
-     * Updates the native page based on the given url.
-     */
+    /** Updates the native page based on the given url. */
     void updateForUrl(String url);
 
     /**
@@ -92,20 +78,23 @@ public interface NativePage {
         return false;
     }
 
-    /**
-     * Notify the native page that it is about to be navigated back or hidden by a back press.
-     */
+    /** Notify the native page that it is about to be navigated back or hidden by a back press. */
     default void notifyHidingWithBack() {}
 
-    /**
-     * Called after a page has been removed from the view hierarchy and will no longer be used.
-     */
+    /** Called after a page has been removed from the view hierarchy and will no longer be used. */
     void destroy();
 
-    @IntDef({NativePageType.NONE, NativePageType.CANDIDATE, NativePageType.NTP,
-            NativePageType.BOOKMARKS, NativePageType.RECENT_TABS, NativePageType.DOWNLOADS,
-            NativePageType.HISTORY, NativePageType.EXPLORE, NativePageType.LAUNCHPAD,
-            NativePageType.MANAGEMENT})
+    @IntDef({
+        NativePageType.NONE,
+        NativePageType.CANDIDATE,
+        NativePageType.NTP,
+        NativePageType.BOOKMARKS,
+        NativePageType.RECENT_TABS,
+        NativePageType.DOWNLOADS,
+        NativePageType.HISTORY,
+        NativePageType.EXPLORE,
+        NativePageType.MANAGEMENT
+    })
     @Retention(RetentionPolicy.SOURCE)
     public @interface NativePageType {
         int NONE = 0;
@@ -116,8 +105,7 @@ public interface NativePage {
         int DOWNLOADS = 5;
         int HISTORY = 6;
         int EXPLORE = 7;
-        int LAUNCHPAD = 8;
-        int MANAGEMENT = 9;
+        int MANAGEMENT = 8;
     }
 
     /**
@@ -129,13 +117,14 @@ public interface NativePage {
      *         native pages.
      */
     @Deprecated // Use GURL-variant instead.
-    public static boolean isNativePageUrl(String url, boolean isIncognito) {
+    static boolean isNativePageUrl(String url, boolean isIncognito) {
         return nativePageType(url, null, isIncognito) != NativePageType.NONE;
     }
 
-    public static boolean isNativePageUrl(GURL url, boolean isIncognito) {
+    static boolean isNativePageUrl(GURL url, boolean isIncognito) {
         return url != null
-                && nativePageType(url.getSpec(), null, isIncognito) != NativePageType.NONE;
+                && nativePageType(url.getHost(), url.getScheme(), null, isIncognito)
+                        != NativePageType.NONE;
     }
 
     /**
@@ -145,17 +134,26 @@ public interface NativePage {
      * @return Type of the native page defined in {@link NativePageType}.
      */
     // TODO(crbug/783819) - Convert to using GURL.
-    public static @NativePageType int nativePageType(
+    static @NativePageType int nativePageType(
             String url, NativePage candidatePage, boolean isIncognito) {
         if (url == null) return NativePageType.NONE;
 
         Uri uri = Uri.parse(url);
-        if (!UrlConstants.CHROME_NATIVE_SCHEME.equals(uri.getScheme())
-                && !UrlConstants.CHROME_SCHEME.equals(uri.getScheme())) {
+        return nativePageType(uri.getHost(), uri.getScheme(), candidatePage, isIncognito);
+    }
+
+    /**
+     * @param candidatePage NativePage to return as result if the host is matched.
+     * @param isIncognito Whether the page will be displayed in incognito mode.
+     * @return Type of the native page defined in {@link NativePageType}.
+     */
+    private static @NativePageType int nativePageType(
+            String host, String scheme, NativePage candidatePage, boolean isIncognito) {
+        if (!UrlConstants.CHROME_NATIVE_SCHEME.equals(scheme)
+                && !UrlConstants.CHROME_SCHEME.equals(scheme)) {
             return NativePageType.NONE;
         }
 
-        String host = uri.getHost();
         if (candidatePage != null && candidatePage.getHost().equals(host)) {
             return NativePageType.CANDIDATE;
         }
@@ -172,8 +170,6 @@ public interface NativePage {
             return NativePageType.RECENT_TABS;
         } else if (UrlConstants.EXPLORE_HOST.equals(host)) {
             return NativePageType.EXPLORE;
-        } else if (UrlConstants.LAUNCHPAD_HOST.equals(host)) {
-            return NativePageType.LAUNCHPAD;
         } else if (UrlConstants.MANAGEMENT_HOST.equals(host)) {
             return NativePageType.MANAGEMENT;
         } else {

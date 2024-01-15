@@ -2,6 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+
+import * as UIModule from 'devtools/ui/legacy/legacy.js';
+
 (async function() {
   TestRunner.addResult(`Tests tabbed pane tabs to show calculation.\n`);
 
@@ -18,12 +22,12 @@
     };
   }
 
-  var tabbedPane = new UI.TabbedPane();
+  var tabbedPane = new UIModule.TabbedPane.TabbedPane();
   tabbedPane.setAllowTabReorder(true, true);
 
   var dropDownButtonMeasuredWidth = 10;
   function getTabsToShowAndDumpResults(tabsOrdered, tabsHistory, totalWidth) {
-    var tabsToShowIndexes = UI.TabbedPane.prototype.tabsToShowIndexes.call(
+    var tabsToShowIndexes = UIModule.TabbedPane.TabbedPane.prototype.tabsToShowIndexes.call(
         tabbedPane, tabsOrdered, tabsHistory, totalWidth, dropDownButtonMeasuredWidth);
     TestRunner.addResult('    tabsToShowIndexes = [' + String(tabsToShowIndexes) + ']');
   }

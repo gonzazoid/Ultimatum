@@ -128,7 +128,7 @@ static const CSSValueList* CreateFontFaceValueWithPool(
     if (auto* parsed_value_list = DynamicTo<CSSValueList>(parsed_value))
       entry.stored_value->value = parsed_value_list;
   }
-  return entry.stored_value->value;
+  return entry.stored_value->value.Get();
 }
 
 bool HTMLFontElement::CssValueFromFontSizeNumber(const String& s,
@@ -189,7 +189,7 @@ void HTMLFontElement::CollectStyleForPresentationAttribute(
   } else if (name == html_names::kFaceAttr && !value.empty()) {
     if (const CSSValueList* font_face_value = CreateFontFaceValueWithPool(
             value, GetExecutionContext()->GetSecureContextMode())) {
-      style->SetProperty(CSSPropertyValue(
+      style->SetLonghandProperty(CSSPropertyValue(
           CSSPropertyName(CSSPropertyID::kFontFamily), *font_face_value));
     }
   } else {

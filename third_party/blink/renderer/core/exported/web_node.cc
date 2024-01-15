@@ -36,6 +36,7 @@
 #include "third_party/blink/public/web/web_dom_event.h"
 #include "third_party/blink/public/web/web_element.h"
 #include "third_party/blink/public/web/web_element_collection.h"
+#include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
 #include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/dom_node_ids.h"
@@ -122,6 +123,10 @@ bool WebNode::IsNull() const {
   return private_.IsNull();
 }
 
+bool WebNode::IsConnected() const {
+  return private_->isConnected();
+}
+
 bool WebNode::IsLink() const {
   return private_->IsLink();
 }
@@ -140,7 +145,8 @@ bool WebNode::IsFocusable() const {
     return false;
   if (!private_->GetDocument().HaveRenderBlockingResourcesLoaded())
     return false;
-  private_->GetDocument().UpdateStyleAndLayoutTreeForNode(private_.Get());
+  private_->GetDocument().UpdateStyleAndLayoutTreeForElement(
+      element, DocumentUpdateReason::kFocus);
   return element->IsFocusable();
 }
 
@@ -154,15 +160,16 @@ bool WebNode::IsInsideFocusableElementOrARIAWidget() const {
       *this->ConstUnwrap<Node>());
 }
 
-v8::Local<v8::Value> WebNode::ToV8Value(v8::Local<v8::Object> creation_context,
-                                        v8::Isolate* isolate) {
-  // We no longer use |creation_context| because it's often misused and points
-  // to a context faked by user script.
-  DCHECK(creation_context->GetCreationContextChecked() ==
-         isolate->GetCurrentContext());
+v8::Local<v8::Value> WebNode::ToV8Value(v8::Isolate* isolate) {
   if (!private_.Get())
     return v8::Local<v8::Value>();
-  return ToV8(private_.Get(), isolate->GetCurrentContext()->Global(), isolate);
+  v8::Local<v8::Value> value;
+  if (!ToV8Traits<Node>::ToV8(ScriptState::From(isolate->GetCurrentContext()),
+                              private_.Get())
+           .ToLocal(&value)) {
+    return v8::Local<v8::Value>();
+  }
+  return value;
 }
 
 bool WebNode::IsElementNode() const {
@@ -219,15 +226,21 @@ WebVector<WebElement> WebNode::QuerySelectorAll(
   return WebVector<WebElement>();
 }
 
+WebString WebNode::FindTextInElementWith(const WebString& substring) const {
+  ContainerNode* container_node =
+      blink::DynamicTo<ContainerNode>(private_.Get());
+  if (!container_node) {
+    return WebString();
+  }
+  return WebString(container_node->FindTextInElementWith(substring));
+}
+
 bool WebNode::Focused() const {
   return private_->IsFocused();
 }
 
-uint64_t WebNode::ScrollingElementIdForTesting() const {
-  return private_->GetLayoutBox()
-      ->GetScrollableArea()
-      ->GetScrollElementId()
-      .GetStableId();
+cc::ElementId WebNode::ScrollingElementIdForTesting() const {
+  return private_->GetLayoutBox()->GetScrollableArea()->GetScrollElementId();
 }
 
 WebPluginContainer* WebNode::PluginContainer() const {
@@ -247,8 +260,13 @@ WebNode::operator Node*() const {
   return private_.Get();
 }
 
-int WebNode::GetDevToolsNodeIdForTest() const {
-  return DOMNodeIds::IdForNode(private_.Get());
+int WebNode::GetDomNodeId() const {
+  return private_.Get()->GetDomNodeId();
+}
+
+// static
+WebNode WebNode::FromDomNodeId(int dom_node_id) {
+  return WebNode(Node::FromDomNodeId(dom_node_id));
 }
 
 }  // namespace blink

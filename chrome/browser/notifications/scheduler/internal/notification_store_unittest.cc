@@ -4,7 +4,7 @@
 
 #include "chrome/browser/notifications/scheduler/internal/notification_store.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/task_environment.h"
@@ -94,7 +94,9 @@ class NotificationStoreTest : public testing::Test {
   base::test::TaskEnvironment task_environment_;
 
   // Database test objects.
-  raw_ptr<FakeDB<proto::NotificationEntry, NotificationEntry>> db_;
+  raw_ptr<FakeDB<proto::NotificationEntry, NotificationEntry>,
+          DanglingUntriaged>
+      db_;
   std::map<std::string, proto::NotificationEntry> db_protos_;
 
   std::unique_ptr<CollectionStore<NotificationEntry>> store_;

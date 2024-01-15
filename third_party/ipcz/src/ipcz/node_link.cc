@@ -24,7 +24,6 @@
 #include "ipcz/node_messages.h"
 #include "ipcz/operation_context.h"
 #include "ipcz/parcel.h"
-#include "ipcz/portal.h"
 #include "ipcz/remote_router_link.h"
 #include "ipcz/router.h"
 #include "ipcz/router_link.h"
@@ -42,7 +41,8 @@ namespace {
 template <typename T>
 FragmentRef<T> MaybeAdoptFragmentRef(NodeLinkMemory& memory,
                                      const FragmentDescriptor& descriptor) {
-  if (descriptor.is_null() || descriptor.size() < sizeof(T)) {
+  if (descriptor.is_null() || descriptor.size() < sizeof(T) ||
+      descriptor.offset() % 8 != 0) {
     return {};
   }
 
@@ -203,6 +203,7 @@ void NodeLink::AcceptIntroduction(const NodeName& name,
   accept.params().name = name;
   accept.params().link_side = side;
   accept.params().remote_node_type = remote_node_type;
+  accept.params().padding = 0;
   accept.params().remote_protocol_version = remote_protocol_version;
   accept.params().transport =
       accept.AppendDriverObject(transport->TakeDriverObject());
@@ -270,6 +271,7 @@ void NodeLink::RequestMemory(size_t size, RequestMemoryCallback callback) {
 
   msg::RequestMemory request;
   request.params().size = size32;
+  request.params().padding = 0;
   Transmit(request);
 }
 
@@ -280,6 +282,7 @@ void NodeLink::RelayMessage(const NodeName& to_node, Message& message) {
   relay.params().destination = to_node;
   relay.params().data =
       relay.AllocateArray<uint8_t>(message.data_view().size());
+  relay.params().padding = 0;
   memcpy(relay.GetArrayData(relay.params().data), message.data_view().data(),
          message.data_view().size());
   relay.params().driver_objects =
@@ -370,10 +373,25 @@ bool NodeLink::OnReferNonBroker(msg::ReferNonBroker& refer) {
     return false;
   }
 
+  DriverMemoryWithMapping link_memory =
+      NodeLinkMemory::AllocateMemory(node()->driver());
+  DriverMemoryWithMapping client_link_memory =
+      NodeLinkMemory::AllocateMemory(node()->driver());
+  if (!link_memory.mapping.is_valid() ||
+      !client_link_memory.mapping.is_valid()) {
+    // Not a validation failure, but we can't accept the referral because we
+    // can't allocate link memory for one side or the other.
+    msg::NonBrokerReferralRejected rejected;
+    rejected.params().referral_id = refer.params().referral_id;
+    Transmit(rejected);
+    return true;
+  }
+
   return NodeConnector::HandleNonBrokerReferral(
       node(), refer.params().referral_id, refer.params().num_initial_portals,
       WrapRefCounted(this),
-      MakeRefCounted<DriverTransport>(std::move(transport)));
+      MakeRefCounted<DriverTransport>(std::move(transport)),
+      std::move(link_memory), std::move(client_link_memory));
 }
 
 bool NodeLink::OnNonBrokerReferralAccepted(
@@ -397,8 +415,9 @@ bool NodeLink::OnNonBrokerReferralAccepted(
       std::min(msg::kProtocolVersion, accepted.params().protocol_version);
   auto transport = MakeRefCounted<DriverTransport>(
       accepted.TakeDriverObject(accepted.params().transport));
-  DriverMemory buffer(accepted.TakeDriverObject(accepted.params().buffer));
-  if (!transport->driver_object().is_valid() || !buffer.is_valid()) {
+  DriverMemoryMapping mapping =
+      DriverMemory(accepted.TakeDriverObject(accepted.params().buffer)).Map();
+  if (!transport->driver_object().is_valid() || !mapping.is_valid()) {
     // Not quite a validation failure if the broker simply failed to allocate
     // resources for this link. Treat it like a connection failure.
     callback(/*link=*/nullptr, /*num_initial_portals=*/0);
@@ -408,7 +427,7 @@ bool NodeLink::OnNonBrokerReferralAccepted(
   Ref<NodeLink> link_to_referree = NodeLink::CreateInactive(
       node_, LinkSide::kA, local_node_name_, accepted.params().name,
       Node::Type::kNormal, protocol_version, std::move(transport),
-      NodeLinkMemory::Create(node_, buffer.Map()));
+      NodeLinkMemory::Create(node_, std::move(mapping)));
   callback(link_to_referree, accepted.params().num_initial_portals);
   link_to_referree->Activate();
   return true;
@@ -449,12 +468,8 @@ bool NodeLink::OnAcceptIntroduction(msg::AcceptIntroduction& accept) {
     return false;
   }
 
-  auto memory = DriverMemory(accept.TakeDriverObject(accept.params().memory));
-  if (!memory.is_valid()) {
-    return false;
-  }
-
-  auto mapping = memory.Map();
+  DriverMemoryMapping mapping =
+      DriverMemory(accept.TakeDriverObject(accept.params().memory)).Map();
   if (!mapping.is_valid()) {
     return false;
   }
@@ -491,16 +506,17 @@ bool NodeLink::OnRequestIndirectIntroduction(
 }
 
 bool NodeLink::OnAddBlockBuffer(msg::AddBlockBuffer& add) {
-  DriverMemory buffer(add.TakeDriverObject(add.params().buffer));
-  if (!buffer.is_valid()) {
+  DriverMemoryMapping mapping =
+      DriverMemory(add.TakeDriverObject(add.params().buffer)).Map();
+  if (!mapping.is_valid()) {
     return false;
   }
   return memory().AddBlockBuffer(add.params().id, add.params().block_size,
-                                 buffer.Map());
+                                 std::move(mapping));
 }
 
 bool NodeLink::OnAcceptParcel(msg::AcceptParcel& accept) {
-  absl::Span<const uint8_t> parcel_data =
+  absl::Span<uint8_t> parcel_data =
       accept.GetArrayView<uint8_t>(accept.params().parcel_data);
   absl::Span<const HandleType> handle_types =
       accept.GetArrayView<HandleType>(accept.params().handle_types);
@@ -528,12 +544,12 @@ bool NodeLink::OnAcceptParcel(msg::AcceptParcel& accept) {
           continue;
         }
 
-        objects[i] = MakeRefCounted<Portal>(node_, std::move(new_router));
+        objects[i] = std::move(new_router);
         new_routers.remove_prefix(1);
         break;
       }
 
-      case HandleType::kBox: {
+      case HandleType::kBoxedDriverObject: {
         if (driver_objects.empty()) {
           return false;
         }
@@ -543,10 +559,18 @@ bool NodeLink::OnAcceptParcel(msg::AcceptParcel& accept) {
         break;
       }
 
-      case HandleType::kRelayedBox: {
+      case HandleType::kRelayedBoxedDriverObject: {
         is_split_parcel = true;
         break;
       }
+
+      case HandleType::kBoxedSubparcel:
+        // Store a placeholder object for each expected subparcel. These will
+        // be filled in by AcceptCompleteParcel() once the last complete
+        // subparcel is accepted.
+        objects[i] =
+            MakeRefCounted<Box>(MakeRefCounted<ParcelWrapper>(nullptr));
+        break;
 
       default:
         parcel_valid = false;
@@ -560,9 +584,18 @@ bool NodeLink::OnAcceptParcel(msg::AcceptParcel& accept) {
     parcel_valid = false;
   }
 
+  const uint32_t num_subparcels = accept.params().num_subparcels;
+  const uint32_t subparcel_index = accept.params().subparcel_index;
+  if (num_subparcels > Parcel::kMaxSubparcelsPerParcel ||
+      subparcel_index >= num_subparcels) {
+    return false;
+  }
+
   const SublinkId for_sublink = accept.params().sublink;
-  Parcel parcel(accept.params().sequence_number);
-  parcel.SetObjects(std::move(objects));
+  auto parcel = std::make_unique<Parcel>(accept.params().sequence_number);
+  parcel->set_num_subparcels(num_subparcels);
+  parcel->set_subparcel_index(subparcel_index);
+  parcel->SetObjects(std::move(objects));
   if (!parcel_valid) {
     return false;
   }
@@ -574,36 +607,37 @@ bool NodeLink::OnAcceptParcel(msg::AcceptParcel& accept) {
     if (fragment.is_pending()) {
       // We don't have this buffer yet, but we expect to receive it ASAP. Defer
       // acceptance until then.
-      WaitForParcelFragmentToResolve(for_sublink, parcel, descriptor,
+      WaitForParcelFragmentToResolve(for_sublink, std::move(parcel), descriptor,
                                      is_split_parcel);
       return true;
     }
 
-    if (!parcel.AdoptDataFragment(WrapRefCounted(&memory()), fragment)) {
+    if (!parcel->AdoptDataFragment(WrapRefCounted(&memory()), fragment)) {
       return false;
     }
   } else {
-    // The parcel's data was inlined within the AcceptParcel message.
-    parcel.SetInlinedData(
-        std::vector<uint8_t>(parcel_data.begin(), parcel_data.end()));
+    // The parcel's data was inlined within the AcceptParcel message. Adopt the
+    // Message contents so our local Parcel doesn't need to copy any data.
+    parcel->SetDataFromMessage(std::move(accept).TakeReceivedData(),
+                               parcel_data);
   }
 
   if (is_split_parcel) {
-    return AcceptParcelWithoutDriverObjects(for_sublink, parcel);
+    return AcceptParcelWithoutDriverObjects(for_sublink, std::move(parcel));
   }
-  return AcceptCompleteParcel(for_sublink, parcel);
+  return AcceptCompleteParcel(for_sublink, std::move(parcel));
 }
 
 bool NodeLink::OnAcceptParcelDriverObjects(
     msg::AcceptParcelDriverObjects& accept) {
-  Parcel parcel(accept.params().sequence_number);
+  auto parcel = std::make_unique<Parcel>(accept.params().sequence_number);
   std::vector<Ref<APIObject>> objects;
   objects.reserve(accept.driver_objects().size());
   for (auto& object : accept.driver_objects()) {
     objects.push_back(MakeRefCounted<Box>(std::move(object)));
   }
-  parcel.SetObjects(std::move(objects));
-  return AcceptParcelDriverObjects(accept.params().sublink, parcel);
+  parcel->SetObjects(std::move(objects));
+  return AcceptParcelDriverObjects(accept.params().sublink, std::move(parcel));
 }
 
 bool NodeLink::OnRouteClosed(msg::RouteClosed& route_closed) {
@@ -633,14 +667,6 @@ bool NodeLink::OnRouteDisconnected(msg::RouteDisconnected& route_closed) {
   const OperationContext context{OperationContext::kTransportNotification};
   return sublink->receiver->AcceptRouteDisconnectedFrom(
       context, sublink->router_link->GetType());
-}
-
-bool NodeLink::OnSnapshotPeerQueueState(msg::SnapshotPeerQueueState& snapshot) {
-  const OperationContext context{OperationContext::kTransportNotification};
-  if (Ref<Router> router = GetRouter(snapshot.params().sublink)) {
-    router->SnapshotPeerQueueState(context);
-  }
-  return true;
 }
 
 bool NodeLink::OnBypassPeer(msg::BypassPeer& bypass) {
@@ -819,30 +845,23 @@ void NodeLink::HandleTransportError(const OperationContext& context) {
   }
 
   Ref<NodeLink> self = WrapRefCounted(this);
-  node_->DropConnection(context, remote_node_name_);
+  node_->DropConnection(context, *this);
 }
 
 void NodeLink::WaitForParcelFragmentToResolve(
     SublinkId for_sublink,
-    Parcel& parcel,
+    std::unique_ptr<Parcel> parcel,
     const FragmentDescriptor& descriptor,
     bool is_split_parcel) {
-  // ParcelWrapper wraps a Parcel in a RefCounted object so the reference can
-  // be captured by a copyable lambda below.
-  struct ParcelWrapper : public RefCounted {
-    explicit ParcelWrapper(Parcel parcel) : parcel(std::move(parcel)) {}
-    Parcel parcel;
-  };
-
   auto wrapper = MakeRefCounted<ParcelWrapper>(std::move(parcel));
   memory().WaitForBufferAsync(
       descriptor.buffer_id(), [this_link = WrapRefCounted(this), for_sublink,
                                is_split_parcel, wrapper, descriptor]() {
         Ref<NodeLinkMemory> memory = WrapRefCounted(&this_link->memory());
         const Fragment fragment = memory->GetFragment(descriptor);
-        Parcel& parcel = wrapper->parcel;
+        std::unique_ptr<Parcel> parcel = wrapper->TakeParcel();
         if (!fragment.is_addressable() ||
-            !parcel.AdoptDataFragment(std::move(memory), fragment)) {
+            !parcel->AdoptDataFragment(std::move(memory), fragment)) {
           // The fragment is out of bounds or had an invalid header. Either way
           // it doesn't look good for the remote node.
           this_link->OnTransportError();
@@ -850,19 +869,24 @@ void NodeLink::WaitForParcelFragmentToResolve(
         }
 
         if (is_split_parcel) {
-          this_link->AcceptParcelWithoutDriverObjects(for_sublink, parcel);
+          this_link->AcceptParcelWithoutDriverObjects(for_sublink,
+                                                      std::move(parcel));
         } else {
-          this_link->AcceptCompleteParcel(for_sublink, parcel);
+          this_link->AcceptCompleteParcel(for_sublink, std::move(parcel));
         }
       });
 }
 
-bool NodeLink::AcceptParcelWithoutDriverObjects(SublinkId for_sublink,
-                                                Parcel& parcel) {
-  const auto key = std::make_tuple(for_sublink, parcel.sequence_number());
-  Parcel parcel_with_driver_objects;
+bool NodeLink::AcceptParcelWithoutDriverObjects(
+    SublinkId for_sublink,
+    std::unique_ptr<Parcel> parcel) {
+  const auto key = std::make_tuple(for_sublink, parcel->sequence_number());
+  std::unique_ptr<Parcel> parcel_with_driver_objects;
   {
     absl::MutexLock lock(&mutex_);
+
+    // Note that `parcel` is not actually moved here unless try_emplace
+    // succeeds.
     auto [it, inserted] = partial_parcels_.try_emplace(key, std::move(parcel));
     if (inserted) {
       return true;
@@ -872,13 +896,14 @@ bool NodeLink::AcceptParcelWithoutDriverObjects(SublinkId for_sublink,
     partial_parcels_.erase(it);
   }
 
-  return AcceptSplitParcel(for_sublink, parcel, parcel_with_driver_objects);
+  return AcceptSplitParcel(for_sublink, std::move(parcel),
+                           std::move(parcel_with_driver_objects));
 }
 
 bool NodeLink::AcceptParcelDriverObjects(SublinkId for_sublink,
-                                         Parcel& parcel) {
-  const auto key = std::make_tuple(for_sublink, parcel.sequence_number());
-  Parcel parcel_without_driver_objects;
+                                         std::unique_ptr<Parcel> parcel) {
+  const auto key = std::make_tuple(for_sublink, parcel->sequence_number());
+  std::unique_ptr<Parcel> parcel_without_driver_objects;
   {
     absl::MutexLock lock(&mutex_);
     auto [it, inserted] = partial_parcels_.try_emplace(key, std::move(parcel));
@@ -890,24 +915,26 @@ bool NodeLink::AcceptParcelDriverObjects(SublinkId for_sublink,
     partial_parcels_.erase(it);
   }
 
-  return AcceptSplitParcel(for_sublink, parcel_without_driver_objects, parcel);
+  return AcceptSplitParcel(
+      for_sublink, std::move(parcel_without_driver_objects), std::move(parcel));
 }
 
-bool NodeLink::AcceptSplitParcel(SublinkId for_sublink,
-                                 Parcel& parcel_without_driver_objects,
-                                 Parcel& parcel_with_driver_objects) {
+bool NodeLink::AcceptSplitParcel(
+    SublinkId for_sublink,
+    std::unique_ptr<Parcel> parcel_without_driver_objects,
+    std::unique_ptr<Parcel> parcel_with_driver_objects) {
   // The parcel with no driver objects should still have an object attachemnt
   // slot reserved for every relayed driver object.
-  if (parcel_without_driver_objects.num_objects() <
-      parcel_with_driver_objects.num_objects()) {
+  if (parcel_without_driver_objects->num_objects() <
+      parcel_with_driver_objects->num_objects()) {
     return false;
   }
 
   // Fill in all the object gaps in the data-only parcel with the boxed objects
   // from the driver objects parcel.
-  Parcel& complete_parcel = parcel_without_driver_objects;
-  auto remaining_driver_objects = parcel_with_driver_objects.objects_view();
-  for (auto& object : complete_parcel.objects_view()) {
+  auto& complete_parcel = parcel_without_driver_objects;
+  auto remaining_driver_objects = parcel_with_driver_objects->objects_view();
+  for (auto& object : complete_parcel->objects_view()) {
     if (object) {
       continue;
     }
@@ -926,32 +953,93 @@ bool NodeLink::AcceptSplitParcel(SublinkId for_sublink,
     return false;
   }
 
-  return AcceptCompleteParcel(for_sublink, complete_parcel);
+  return AcceptCompleteParcel(for_sublink, std::move(complete_parcel));
 }
 
-bool NodeLink::AcceptCompleteParcel(SublinkId for_sublink, Parcel& parcel) {
+bool NodeLink::AcceptCompleteParcel(SublinkId for_sublink,
+                                    std::unique_ptr<Parcel> parcel) {
   const absl::optional<Sublink> sublink = GetSublink(for_sublink);
   if (!sublink) {
-    DVLOG(4) << "Dropping " << parcel.Describe() << " at "
+    DVLOG(4) << "Dropping " << parcel->Describe() << " at "
              << local_node_name_.ToString() << ", arriving from "
              << remote_node_name_.ToString() << " via unknown sublink "
              << for_sublink;
     return true;
   }
 
+  // Note that the common case is a standalone complete parcel, where the number
+  // of subparcels is 1. In that case no additional tracking is necessary and we
+  // immediately accept the parcel below.
+  const size_t num_subparcels = parcel->num_subparcels();
+  if (num_subparcels > 1) {
+    auto key = std::make_tuple(for_sublink, parcel->sequence_number());
+    absl::MutexLock lock(&mutex_);
+    auto [it, inserted] =
+        subparcel_trackers_.try_emplace(key, SubparcelTracker{});
+    SubparcelTracker& tracker = it->second;
+    if (inserted) {
+      tracker.subparcels.resize(num_subparcels);
+    }
+
+    // Note that `index` has already been validated against the expected number
+    // of subparcels in OnAcceptParcel().
+    const size_t index = parcel->subparcel_index();
+    ABSL_ASSERT(index < tracker.subparcels.size());
+    if (tracker.subparcels[index]) {
+      // Multiple subparcels claim the same index for this SequenceNumber. Bad.
+      return false;
+    }
+    tracker.subparcels[index] =
+        MakeRefCounted<ParcelWrapper>(std::move(parcel));
+    tracker.num_subparcels_received++;
+    if (tracker.num_subparcels_received < num_subparcels) {
+      // Still waiting for more subparcels.
+      return true;
+    }
+
+    // We have all subparcels for this SequenceNumber. Join them and proceed.
+    // We do this by iterating over the object attachments in subparcel 0,
+    // replacing any placeholder ParcelWrapper objects with our own real ones.
+    auto subparcels = std::move(tracker.subparcels);
+    subparcel_trackers_.erase(it);
+    parcel = subparcels[0]->TakeParcel();
+    absl::Span<Ref<ParcelWrapper>> remaining_subparcels =
+        absl::MakeSpan(subparcels).subspan(1);
+    for (auto& object : parcel->objects_view()) {
+      Box* box = Box::FromObject(object.get());
+      if (box && box->type() == Box::Type::kSubparcel) {
+        if (remaining_subparcels.empty()) {
+          // Too many placeholder objects in the main parcel. Bad.
+          return false;
+        }
+
+        ParcelWrapper* wrapper = box->subparcel().get();
+        wrapper->SetParcel(remaining_subparcels.front()->TakeParcel());
+        remaining_subparcels.remove_prefix(1);
+      }
+    }
+
+    if (!remaining_subparcels.empty()) {
+      // One or more subparcels unclaimed by the main parcel. Bad.
+      return false;
+    }
+  }
+
+  // At this point we've collected all expected subparcels and can pass the full
+  // parcel along to its receiver.
   const OperationContext context{OperationContext::kTransportNotification};
-  parcel.set_remote_source(WrapRefCounted(this));
+  parcel->set_remote_source(WrapRefCounted(this));
   const LinkType link_type = sublink->router_link->GetType();
   if (link_type.is_outward()) {
-    DVLOG(4) << "Accepting inbound " << parcel.Describe() << " at "
+    DVLOG(4) << "Accepting inbound " << parcel->Describe() << " at "
              << sublink->router_link->Describe();
-    return sublink->receiver->AcceptInboundParcel(context, parcel);
+    return sublink->receiver->AcceptInboundParcel(context, std::move(parcel));
   }
 
   ABSL_ASSERT(link_type.is_peripheral_inward());
-  DVLOG(4) << "Accepting outbound " << parcel.Describe() << " at "
+  DVLOG(4) << "Accepting outbound " << parcel->Describe() << " at "
            << sublink->router_link->Describe();
-  return sublink->receiver->AcceptOutboundParcel(context, parcel);
+  return sublink->receiver->AcceptOutboundParcel(context, std::move(parcel));
 }
 
 NodeLink::Sublink::Sublink(Ref<RemoteRouterLink> router_link,

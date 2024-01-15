@@ -10,8 +10,9 @@
 #include <vector>
 
 #include "base/memory/weak_ptr.h"
+#include "base/uuid.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
-#include "content/browser/service_worker/service_worker_context_core.h"
+#include "content/browser/service_worker/service_worker_version.h"
 #include "content/public/browser/hid_delegate.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -32,7 +33,7 @@ class CONTENT_EXPORT HidService : public blink::mojom::HidService,
                                   public HidDelegate::Observer {
  public:
   explicit HidService(RenderFrameHostImpl*);
-  HidService(base::WeakPtr<ServiceWorkerContextCore>, const url::Origin&);
+  HidService(base::WeakPtr<ServiceWorkerVersion>, const url::Origin&);
   HidService(HidService&) = delete;
   HidService& operator=(HidService&) = delete;
   ~HidService() override;
@@ -43,9 +44,15 @@ class CONTENT_EXPORT HidService : public blink::mojom::HidService,
 
   // Use this when creating from a service worker, which doesn't have
   // RenderFrameHost.
-  static void Create(base::WeakPtr<ServiceWorkerContextCore>,
+  static void Create(base::WeakPtr<ServiceWorkerVersion>,
                      const url::Origin&,
                      mojo::PendingReceiver<blink::mojom::HidService>);
+
+  // Removes reports from `device` if the report IDs match the IDs in the
+  // protected report ID lists. If all of the reports are removed from a
+  // collection, the collection is also removed.
+  static void RemoveProtectedReports(device::mojom::HidDeviceInfo& device,
+                                     bool is_fido_allowed);
 
   // blink::mojom::HidService:
   void RegisterClient(
@@ -71,14 +78,34 @@ class CONTENT_EXPORT HidService : public blink::mojom::HidService,
   void OnHidManagerConnectionError() override;
   void OnPermissionRevoked(const url::Origin& origin) override;
 
+  const mojo::AssociatedRemoteSet<device::mojom::HidManagerClient>& clients()
+      const {
+    return clients_;
+  }
+
+  base::WeakPtr<content::ServiceWorkerVersion> service_worker_version() {
+    return service_worker_version_;
+  }
+
+  const mojo::ReceiverSet<device::mojom::HidConnectionWatcher>&
+  GetWatchersForTesting() {
+    return watchers_;
+  }
+
  private:
   HidService(RenderFrameHostImpl* render_frame_host,
-             base::WeakPtr<ServiceWorkerContextCore> service_worker_context,
+             base::WeakPtr<ServiceWorkerVersion> service_worker_version,
              const url::Origin& origin);
 
-  void OnWatcherRemoved(bool cleanup_watcher_ids);
-  void IncrementActiveFrameCount();
-  void DecrementActiveFrameCount();
+  void OnWatcherRemoved(bool cleanup_watcher_ids, size_t watchers_removed);
+
+  // Increment the activity reference count of the associated frame or service
+  // worker.
+  void IncrementActivityCount();
+
+  // Decrement the activity reference count of the associated frame or service
+  // worker.
+  void DecrementActivityCount();
 
   void FinishGetDevices(GetDevicesCallback callback,
                         std::vector<device::mojom::HidDeviceInfoPtr> devices);
@@ -98,10 +125,12 @@ class CONTENT_EXPORT HidService : public blink::mojom::HidService,
   // |render_frame_host_| whenever it is not null.
   const raw_ptr<RenderFrameHostImpl> render_frame_host_;
 
-  // The ServiceWorkerContextCore of the service worker this HidService belongs
+  // The ServiceWorkerVersion of the service worker this HidService belongs
   // to.
-  const base::WeakPtr<content::ServiceWorkerContextCore>
-      service_worker_context_;
+  const base::WeakPtr<content::ServiceWorkerVersion> service_worker_version_;
+
+  // The request uuid for keeping service worker alive.
+  std::optional<base::Uuid> service_worker_activity_request_uuid_;
 
   // The last shown HID chooser UI.
   std::unique_ptr<HidChooser> chooser_;

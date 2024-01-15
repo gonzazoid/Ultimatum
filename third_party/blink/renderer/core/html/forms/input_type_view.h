@@ -49,6 +49,7 @@ namespace blink {
 class AXObject;
 class BeforeTextInsertedEvent;
 class ComputedStyle;
+class ComputedStyleBuilder;
 class Element;
 class Event;
 class FormControlState;
@@ -56,8 +57,8 @@ class HTMLFormElement;
 class HTMLInputElement;
 class KeyboardEvent;
 class LayoutObject;
-enum class LegacyLayout;
 class MouseEvent;
+class TextControlInnerEditorElement;
 
 class ClickHandlingState final : public EventDispatchHandlingState {
  public:
@@ -107,9 +108,12 @@ class CORE_EXPORT InputTypeView : public GarbageCollectedMixin {
   void DispatchSimulatedClickIfActive(KeyboardEvent&) const;
 
   virtual void SubtreeHasChanged();
-  virtual LayoutObject* CreateLayoutObject(const ComputedStyle&,
-                                           LegacyLayout) const;
-  virtual void CustomStyleForLayoutObject(ComputedStyle& style);
+  virtual LayoutObject* CreateLayoutObject(const ComputedStyle&) const;
+  // TODO(crbug.com/953707): Avoid marking style dirty in
+  // HTMLImageFallbackHelper and remove CustomStyleForLayoutObject.
+  virtual const ComputedStyle* CustomStyleForLayoutObject(
+      const ComputedStyle* original_style) const;
+  virtual void AdjustStyle(ComputedStyleBuilder&) {}
   virtual ControlPart AutoAppearance() const;
   virtual TextDirection ComputedTextDirection();
   virtual void OpenPopupView();
@@ -118,6 +122,9 @@ class CORE_EXPORT InputTypeView : public GarbageCollectedMixin {
 
   // Functions for shadow trees
 
+  TextControlInnerEditorElement* EnsureInnerEditorElement();
+  bool HasCreatedShadowSubtree() const { return has_created_shadow_subtree_; }
+  void CreateShadowSubtreeIfNeeded();
   virtual bool NeedsShadowSubtree() const;
   virtual void CreateShadowSubtree();
   virtual void DestroyShadowSubtree();
@@ -160,6 +167,7 @@ class CORE_EXPORT InputTypeView : public GarbageCollectedMixin {
   bool will_be_destroyed_ = false;
 
  private:
+  bool has_created_shadow_subtree_ = false;
   Member<HTMLInputElement> element_;
 };
 

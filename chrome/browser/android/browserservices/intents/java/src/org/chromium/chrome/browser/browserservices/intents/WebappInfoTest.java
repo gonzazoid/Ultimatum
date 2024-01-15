@@ -21,9 +21,7 @@ import org.chromium.components.webapps.ShortcutSource;
 import org.chromium.device.mojom.ScreenOrientationLockType;
 import org.chromium.ui.util.ColorUtils;
 
-/**
- * Tests the WebappInfo class's ability to parse various URLs.
- */
+/** Tests the WebappInfo class's ability to parse various URLs. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class WebappInfoTest {
@@ -147,15 +145,21 @@ public class WebappInfoTest {
         String shortName = "name";
         long toolbarColor = Color.argb(0xff, 0, 0xff, 0);
         long backgroundColor = Color.argb(0xff, 0, 0, 0xff);
+        long darkToolbarColor = Color.argb(0xff, 0xff, 0xff, 0);
+        long darkBackgroundColor = Color.argb(0xff, 0, 0xff, 0xff);
 
         Intent intent = createIntentWithUrlAndId();
         intent.putExtra(WebappConstants.EXTRA_NAME, name);
         intent.putExtra(WebappConstants.EXTRA_SHORT_NAME, shortName);
         intent.putExtra(WebappConstants.EXTRA_THEME_COLOR, toolbarColor);
         intent.putExtra(WebappConstants.EXTRA_BACKGROUND_COLOR, backgroundColor);
+        intent.putExtra(WebappConstants.EXTRA_DARK_THEME_COLOR, darkToolbarColor);
+        intent.putExtra(WebappConstants.EXTRA_DARK_BACKGROUND_COLOR, darkBackgroundColor);
         WebappInfo info = createWebappInfo(intent);
         Assert.assertEquals(toolbarColor, info.toolbarColor());
         Assert.assertEquals(backgroundColor, info.backgroundColor());
+        Assert.assertEquals(darkToolbarColor, info.darkToolbarColor());
+        Assert.assertEquals(darkBackgroundColor, info.darkBackgroundColor());
     }
 
     @Test
@@ -169,20 +173,28 @@ public class WebappInfoTest {
         WebappInfo info = createWebappInfo(intent);
         Assert.assertEquals(ColorUtils.INVALID_COLOR, info.toolbarColor());
         Assert.assertEquals(ColorUtils.INVALID_COLOR, info.backgroundColor());
+        Assert.assertEquals(ColorUtils.INVALID_COLOR, info.darkToolbarColor());
+        Assert.assertEquals(ColorUtils.INVALID_COLOR, info.darkBackgroundColor());
     }
 
     @Test
     public void testColorsIntentCreation() {
         long toolbarColor = Color.argb(0xff, 0, 0xff, 0);
         long backgroundColor = Color.argb(0xff, 0, 0, 0xff);
+        long darkToolbarColor = Color.argb(0xff, 0xff, 0xff, 0);
+        long darkBackgroundColor = Color.argb(0xff, 0, 0xff, 0xff);
 
         Intent intent = createIntentWithUrlAndId();
         intent.putExtra(WebappConstants.EXTRA_THEME_COLOR, toolbarColor);
         intent.putExtra(WebappConstants.EXTRA_BACKGROUND_COLOR, backgroundColor);
+        intent.putExtra(WebappConstants.EXTRA_DARK_THEME_COLOR, darkToolbarColor);
+        intent.putExtra(WebappConstants.EXTRA_DARK_BACKGROUND_COLOR, darkBackgroundColor);
 
         WebappInfo info = createWebappInfo(intent);
         Assert.assertEquals(toolbarColor, info.toolbarColor());
         Assert.assertEquals(backgroundColor, info.backgroundColor());
+        Assert.assertEquals(darkToolbarColor, info.darkToolbarColor());
+        Assert.assertEquals(darkBackgroundColor, info.darkBackgroundColor());
     }
 
     @Test
@@ -334,8 +346,8 @@ public class WebappInfoTest {
     }
 
     /**
-     * Test that {@link WebappInfo#shouldForceNavigation()} defaults to false when the
-     * {@link WebappConstants#EXTRA_FORCE_NAVIGATION} intent extra is not specified.
+     * Test that {@link WebappInfo#shouldForceNavigation()} defaults to false when the {@link
+     * WebappConstants#EXTRA_FORCE_NAVIGATION} intent extra is not specified.
      */
     @Test
     public void testForceNavigationNotSpecified() {
@@ -344,8 +356,7 @@ public class WebappInfoTest {
     }
 
     /**
-     * Creates intent with url and id. If the url or id are not set createWebappInfo() returns
-     * null.
+     * Creates intent with url and id. If the url or id are not set createWebappInfo() returns null.
      */
     private Intent createIntentWithUrlAndId() {
         Intent intent = new Intent();

@@ -12,9 +12,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/containers/span.h"
+#include "base/functional/callback.h"
 #include "device/fido/attested_credential_data.h"
 #include "device/fido/authenticator_data.h"
 #include "device/fido/fido_constants.h"
@@ -22,9 +22,7 @@
 #include "device/fido/p256_public_key.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace device {
-namespace fido {
-namespace mac {
+namespace device::fido::mac {
 
 // MakeAttestedCredentialData returns an AttestedCredentialData instance for
 // the Touch ID authenticator credential ID and public key or |absl::nullopt|
@@ -41,7 +39,8 @@ COMPONENT_EXPORT(DEVICE_FIDO)
 AuthenticatorData MakeAuthenticatorData(
     CredentialMetadata::SignCounter counter_type,
     const std::string& rp_id,
-    absl::optional<AttestedCredentialData> attested_credential_data);
+    absl::optional<AttestedCredentialData> attested_credential_data,
+    bool has_uv);
 
 // GenerateSignature signs the concatenation of the serialization of the given
 // authenticator data and the given client data hash, as required for
@@ -66,8 +65,13 @@ enum class CodeSigningState {
 // signed.
 CodeSigningState ProcessIsSigned();
 
-}  // namespace mac
-}  // namespace fido
-}  // namespace device
+// Returns whether biometrics are available for use. On macOS, this translates
+// to whether the device supports Touch ID, and whether the sensor is ready to
+// be used (i.e. not soft-locked from consecutive bad attempts; laptop lid not
+// closed).
+COMPONENT_EXPORT(DEVICE_FIDO)
+bool DeviceHasBiometricsAvailable();
+
+}  // namespace device::fido::mac
 
 #endif  // DEVICE_FIDO_MAC_UTIL_H_

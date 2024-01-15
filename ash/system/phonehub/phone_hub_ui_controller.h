@@ -6,16 +6,18 @@
 #define ASH_SYSTEM_PHONEHUB_PHONE_HUB_UI_CONTROLLER_H_
 
 #include "ash/ash_export.h"
-#include "ash/components/phonehub/feature_status_provider.h"
-#include "ash/components/phonehub/onboarding_ui_tracker.h"
-#include "ash/components/phonehub/phone_model.h"
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/system/phonehub/onboarding_view.h"
 #include "ash/system/phonehub/phone_hub_content_view.h"
 #include "ash/system/phonehub/phone_status_view.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "base/timer/timer.h"
+#include "chromeos/ash/components/phonehub/app_stream_launcher_data_model.h"
+#include "chromeos/ash/components/phonehub/feature_status_provider.h"
+#include "chromeos/ash/components/phonehub/onboarding_ui_tracker.h"
+#include "chromeos/ash/components/phonehub/phone_model.h"
 
 namespace views {
 class View;
@@ -33,6 +35,7 @@ class ASH_EXPORT PhoneHubUiController
     : public phonehub::FeatureStatusProvider::Observer,
       public phonehub::OnboardingUiTracker::Observer,
       public phonehub::PhoneModel::Observer,
+      public phonehub::AppStreamLauncherDataModel::Observer,
       public SessionObserver {
  public:
   class Observer : public base::CheckedObserver {
@@ -53,7 +56,8 @@ class ASH_EXPORT PhoneHubUiController
     kPhoneDisconnected,
     kPhoneConnected,
     kTetherConnectionPending,
-    kMaxValue = kTetherConnectionPending
+    kMiniLauncher,
+    kMaxValue = kMiniLauncher
   };
 
   PhoneHubUiController();
@@ -90,6 +94,9 @@ class ASH_EXPORT PhoneHubUiController
   // phonehub::OnboardingUiTracker::Observer:
   void OnShouldShowOnboardingUiChanged() override;
 
+  // phonehub::AppStreamLauncherDataModel::Observer:
+  void OnShouldShowMiniLauncherChanged() override;
+
   // phonehub::PhoneModel::Observer:
   void OnModelChanged() override;
 
@@ -102,6 +109,9 @@ class ASH_EXPORT PhoneHubUiController
   // Returns the UiState from the PhoneHubManager.
   UiState GetUiStateFromPhoneHubManager();
 
+  // Returns the UiState from the PhoneHubManager.
+  UiState GetUiStateFromPhoneHubManagerInternal();
+
   // Cleans up |phone_hub_manager_| by removing all observers.
   void CleanUpPhoneHubManager();
 
@@ -111,10 +121,10 @@ class ASH_EXPORT PhoneHubUiController
 
   void RecordStatusOnBubbleOpened();
   void OnGetHostLastSeenTimestamp(UiState ui_state_when_opened,
-                                  absl::optional<base::Time> timestamp);
+                                  std::optional<base::Time> timestamp);
 
   // The PhoneHubManager that provides data for the UI.
-  phonehub::PhoneHubManager* phone_hub_manager_ = nullptr;
+  raw_ptr<phonehub::PhoneHubManager> phone_hub_manager_ = nullptr;
 
   // The current UI state.
   UiState ui_state_ = UiState::kHidden;

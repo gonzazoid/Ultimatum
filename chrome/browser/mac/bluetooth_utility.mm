@@ -8,14 +8,15 @@
 #import <IOBluetooth/IOBluetooth.h>
 #include <IOKit/IOKitLib.h>
 
-#include "base/mac/foundation_util.h"
+#include "base/apple/bridging.h"
+#include "base/apple/foundation_util.h"
 #include "base/mac/mac_util.h"
 #include "base/mac/scoped_ioobject.h"
 
 namespace bluetooth_utility {
 
 BluetoothAvailability GetBluetoothAvailability() {
-  base::ScopedCFTypeRef<CFMutableDictionaryRef> matching_dict(
+  base::apple::ScopedCFTypeRef<CFMutableDictionaryRef> matching_dict(
       IOServiceMatching("IOBluetoothHCIController"));
   if (!matching_dict)
     return BLUETOOTH_AVAILABILITY_ERROR;
@@ -33,16 +34,15 @@ BluetoothAvailability GetBluetoothAvailability() {
   while (device.reset(IOIteratorNext(scoped_iter.get())), device) {
     bluetooth_available = true;
 
-    CFMutableDictionaryRef dict;
-    kr = IORegistryEntryCreateCFProperties(
-        device, &dict, kCFAllocatorDefault, kNilOptions);
+    base::apple::ScopedCFTypeRef<CFMutableDictionaryRef> dict;
+    kr = IORegistryEntryCreateCFProperties(device.get(), dict.InitializeInto(),
+                                           kCFAllocatorDefault, kNilOptions);
     if (kr != KERN_SUCCESS)
       continue;
-    base::ScopedCFTypeRef<CFMutableDictionaryRef> scoped_dict(dict);
 
-    NSDictionary* objc_dict = base::mac::CFToNSCast(scoped_dict.get());
+    NSDictionary* objc_dict = base::apple::CFToNSPtrCast(dict.get());
     NSNumber* lmp_version =
-        base::mac::ObjCCast<NSNumber>(objc_dict[@"LMPVersion"]);
+        base::apple::ObjCCast<NSNumber>(objc_dict[@"LMPVersion"]);
     if (!lmp_version)
       continue;
 
@@ -51,7 +51,7 @@ BluetoothAvailability GetBluetoothAvailability() {
       continue;
 
     NSData* data =
-        base::mac::ObjCCast<NSData>(objc_dict[@"HCISupportedFeatures"]);
+        base::apple::ObjCCast<NSData>(objc_dict[@"HCISupportedFeatures"]);
 
     NSUInteger supported_features_index = 4;
     NSUInteger length = [data length];

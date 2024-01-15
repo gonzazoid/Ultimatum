@@ -8,13 +8,13 @@
         "options": [
             {
                 "domain": "Page",
-                "include": [ "enable", "disable", "setAdBlockingEnabled", "getInstallabilityErrors", "getManifestIcons", "printToPDF", "getAppId", "setSPCTransactionMode" ],
+                "include": [ "enable", "disable", "setAdBlockingEnabled", "getInstallabilityErrors", "getManifestIcons", "printToPDF", "getAppId", "setSPCTransactionMode", "setRPHRegistrationMode" ],
                 "include_events": [],
                 "async": ["getInstallabilityErrors", "getManifestIcons", "printToPDF", "getAppId" ]
             },
             {
                 "domain": "Browser",
-                "include": [ "getWindowForTarget", "getWindowBounds", "setWindowBounds", "close", "setDockTile", "executeBrowserCommand" ],
+                "include": [ "getWindowForTarget", "getWindowBounds", "setWindowBounds", "close", "setDockTile", "executeBrowserCommand", "addPrivacySandboxEnrollmentOverride" ],
                 "include_events": []
             },
             {
@@ -37,6 +37,19 @@
                 "domain": "Security",
                 "include": [ "enable", "disable" ],
                 "include_events": [ "visibleSecurityStateChanged" ]
+            },
+            {
+                "domain": "Storage",
+                "include": ["runBounceTrackingMitigations"],
+                "async": ["runBounceTrackingMitigations"]
+            },
+            {
+                "domain": "SystemInfo",
+                "include": ["getFeatureState"]
+            },
+            {
+                "domain": "Autofill",
+                "async": [ "trigger", "setAddresses" ]
             }
         ]
     },

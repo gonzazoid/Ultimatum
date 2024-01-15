@@ -9,14 +9,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/net_errors.h"
 #include "remoting/protocol/message_serialization.h"
 #include "remoting/protocol/p2p_stream_socket.h"
@@ -64,7 +63,8 @@ struct ChannelMultiplexer::PendingChannel {
 
 class ChannelMultiplexer::MuxChannel {
  public:
-  MuxChannel(ChannelMultiplexer* multiplexer, const std::string& name,
+  MuxChannel(ChannelMultiplexer* multiplexer,
+             const std::string& name,
              int send_id);
 
   MuxChannel(const MuxChannel&) = delete;
@@ -176,8 +176,9 @@ void ChannelMultiplexer::MuxChannel::OnIncomingPacket(
 }
 
 void ChannelMultiplexer::MuxChannel::OnBaseChannelError(int error) {
-  if (socket_)
+  if (socket_) {
     socket_->OnBaseChannelError(error);
+  }
 }
 
 void ChannelMultiplexer::MuxChannel::OnSocketDestroyed() {
@@ -204,13 +205,14 @@ int ChannelMultiplexer::MuxChannel::DoRead(
   int pos = 0;
   while (buffer_len > 0 && !pending_packets_.empty()) {
     DCHECK(!pending_packets_.front()->is_empty());
-    int result = pending_packets_.front()->Read(
-        buffer->data() + pos, buffer_len);
+    int result =
+        pending_packets_.front()->Read(buffer->data() + pos, buffer_len);
     DCHECK_LE(result, buffer_len);
     pos += result;
     buffer_len -= pos;
-    if (pending_packets_.front()->is_empty())
+    if (pending_packets_.front()->is_empty()) {
       pending_packets_.pop_front();
+    }
   }
   return pos;
 }
@@ -232,8 +234,9 @@ int ChannelMultiplexer::MuxSocket::Read(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(read_callback_.is_null());
 
-  if (base_channel_error_ != net::OK)
+  if (base_channel_error_ != net::OK) {
     return base_channel_error_;
+  }
 
   int result = channel_->DoRead(buffer, buffer_len);
   if (result == 0) {
@@ -253,8 +256,9 @@ int ChannelMultiplexer::MuxSocket::Write(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(write_callback_.is_null());
 
-  if (base_channel_error_ != net::OK)
+  if (base_channel_error_ != net::OK) {
     return base_channel_error_;
+  }
 
   std::unique_ptr<MultiplexPacket> packet(new MultiplexPacket());
   size_t size = std::min(kMaxPacketSize, buffer_len);
@@ -280,8 +284,9 @@ int ChannelMultiplexer::MuxSocket::Write(
 
 void ChannelMultiplexer::MuxSocket::OnWriteComplete() {
   write_pending_ = false;
-  if (!write_callback_.is_null())
+  if (!write_callback_.is_null()) {
     std::move(write_callback_).Run(write_result_);
+  }
 }
 
 void ChannelMultiplexer::MuxSocket::OnBaseChannelError(int error) {
@@ -299,8 +304,9 @@ void ChannelMultiplexer::MuxSocket::OnBaseChannelError(int error) {
     return;
   }
 
-  if (!write_callback_.is_null())
+  if (!write_callback_.is_null()) {
     std::move(write_callback_).Run(error);
+  }
 }
 
 void ChannelMultiplexer::MuxSocket::OnPacketReceived() {
@@ -323,8 +329,9 @@ ChannelMultiplexer::~ChannelMultiplexer() {
   DCHECK(pending_channels_.empty());
 
   // Cancel creation of the base channel if it hasn't finished.
-  if (base_channel_factory_)
+  if (base_channel_factory_) {
     base_channel_factory_->CancelChannelCreation(base_channel_name_);
+  }
 }
 
 void ChannelMultiplexer::CreateChannel(const std::string& name,
@@ -383,22 +390,24 @@ void ChannelMultiplexer::OnBaseChannelReady(
 }
 
 void ChannelMultiplexer::DoCreatePendingChannels() {
-  if (pending_channels_.empty())
+  if (pending_channels_.empty()) {
     return;
+  }
 
   // Every time this function is called it connects a single channel and posts a
   // separate task to connect other channels. This is necessary because the
   // callback may destroy the multiplexer or somehow else modify
   // |pending_channels_| list (e.g. call CancelChannelCreation()).
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&ChannelMultiplexer::DoCreatePendingChannels,
                                 weak_factory_.GetWeakPtr()));
 
   PendingChannel c = std::move(pending_channels_.front());
   pending_channels_.erase(pending_channels_.begin());
   std::unique_ptr<P2PStreamSocket> socket;
-  if (base_channel_.get())
+  if (base_channel_.get()) {
     socket = GetOrCreateChannel(c.name)->CreateSocket();
+  }
   std::move(c.callback).Run(std::move(socket));
 }
 
@@ -414,10 +423,9 @@ ChannelMultiplexer::MuxChannel* ChannelMultiplexer::GetOrCreateChannel(
   return channel.get();
 }
 
-
 void ChannelMultiplexer::OnBaseChannelError(int error) {
   for (auto it = channels_.begin(); it != channels_.end(); ++it) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&ChannelMultiplexer::NotifyBaseChannelError,
                        weak_factory_.GetWeakPtr(), it->second->name(), error));
@@ -427,16 +435,18 @@ void ChannelMultiplexer::OnBaseChannelError(int error) {
 void ChannelMultiplexer::NotifyBaseChannelError(const std::string& name,
                                                 int error) {
   auto it = channels_.find(name);
-  if (it != channels_.end())
+  if (it != channels_.end()) {
     it->second->OnBaseChannelError(error);
+  }
 }
 
 void ChannelMultiplexer::OnIncomingPacket(
     std::unique_ptr<CompoundBuffer> buffer) {
   std::unique_ptr<MultiplexPacket> packet =
       ParseMessage<MultiplexPacket>(buffer.get());
-  if (!packet)
+  if (!packet) {
     return;
+  }
 
   DCHECK(packet->has_channel_id());
   if (!packet->has_channel_id()) {
@@ -453,7 +463,7 @@ void ChannelMultiplexer::OnIncomingPacket(
     // This is a new |channel_id| we haven't seen before. Look it up by name.
     if (!packet->has_channel_name()) {
       LOG(ERROR) << "Received packet with unknown channel_id and "
-          "without channel_name.";
+                    "without channel_name.";
       return;
     }
     channel = GetOrCreateChannel(packet->channel_name());

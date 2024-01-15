@@ -11,12 +11,10 @@
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/session_manager_state_waiter.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
-#include "chrome/browser/ash/login/ui/login_display_webui.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/policy/core/user_policy_test_helper.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/signin_screen_handler.h"
 #include "chromeos/ash/components/login/auth/public/user_context.h"
 #include "components/policy/proto/cloud_policy.pb.h"
 #include "google_apis/gaia/fake_gaia.h"
@@ -27,7 +25,6 @@ namespace policy {
 namespace {
 
 constexpr char kTestAuthCode[] = "fake-auth-code";
-constexpr char kTestGaiaUberToken[] = "fake-uber-token";
 constexpr char kTestAuthLoginAccessToken[] = "fake-access-token";
 constexpr char kTestRefreshToken[] = "fake-refresh-token";
 constexpr char kTestAuthSIDCookie[] = "fake-auth-SID-cookie";
@@ -66,14 +63,14 @@ void LoginPolicyTestBase::SetUpInProcessBrowserTestFixture() {
 }
 
 void LoginPolicyTestBase::SetUpOnMainThread() {
-  SetMergeSessionParams();
+  SetConfiguration();
   fake_gaia_.SetupFakeGaiaForLogin(account_id().GetUserEmail(),
                                    account_id().GetGaiaId(), kTestRefreshToken);
   OobeBaseTest::SetUpOnMainThread();
 
-  FakeGaia::MergeSessionParams params;
+  FakeGaia::Configuration params;
   params.id_token = GetIdToken();
-  fake_gaia_.fake_gaia()->UpdateMergeSessionParams(params);
+  fake_gaia_.fake_gaia()->UpdateConfiguration(params);
 }
 
 std::string LoginPolicyTestBase::GetIdToken() const {
@@ -92,19 +89,18 @@ Profile* LoginPolicyTestBase::GetProfileForActiveUser() {
 void LoginPolicyTestBase::GetPolicySettings(
     enterprise_management::CloudPolicySettings* settings) const {}
 
-void LoginPolicyTestBase::SetMergeSessionParams() {
-  FakeGaia::MergeSessionParams params;
+void LoginPolicyTestBase::SetConfiguration() {
+  FakeGaia::Configuration params;
   params.auth_sid_cookie = kTestAuthSIDCookie;
   params.auth_lsid_cookie = kTestAuthLSIDCookie;
   params.auth_code = kTestAuthCode;
   params.refresh_token = kTestRefreshToken;
   params.access_token = kTestAuthLoginAccessToken;
   params.id_token = GetIdToken();
-  params.gaia_uber_token = kTestGaiaUberToken;
   params.session_sid_cookie = kTestSessionSIDCookie;
   params.session_lsid_cookie = kTestSessionLSIDCookie;
   params.email = account_id().GetUserEmail();
-  fake_gaia_.fake_gaia()->SetMergeSessionParams(params);
+  fake_gaia_.fake_gaia()->SetConfiguration(params);
 }
 
 void LoginPolicyTestBase::SkipToLoginScreen() {

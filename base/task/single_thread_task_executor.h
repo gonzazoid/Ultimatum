@@ -10,7 +10,7 @@
 #include "base/base_export.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/message_loop/message_pump_type.h"
-#include "base/task/simple_task_executor.h"
+#include "base/task/sequence_manager/task_queue.h"
 #include "base/task/single_thread_task_runner.h"
 
 namespace base {
@@ -19,12 +19,10 @@ class MessagePump;
 
 namespace sequence_manager {
 class SequenceManager;
-class TaskQueue;
 }  // namespace sequence_manager
 
 // A simple single thread TaskExecutor intended for non-test usage. Tests should
 // generally use TaskEnvironment or BrowserTaskEnvironment instead.
-// TODO(alexclarke): Inherit from TaskExecutor to support base::Here().
 class BASE_EXPORT SingleThreadTaskExecutor {
  public:
   // For MessagePumpType::CUSTOM use the constructor that takes a pump.
@@ -58,9 +56,8 @@ class BASE_EXPORT SingleThreadTaskExecutor {
                                     std::unique_ptr<MessagePump> pump);
 
   std::unique_ptr<sequence_manager::SequenceManager> sequence_manager_;
-  scoped_refptr<sequence_manager::TaskQueue> default_task_queue_;
+  sequence_manager::TaskQueue::Handle default_task_queue_;
   MessagePumpType type_;
-  SimpleTaskExecutor simple_task_executor_;
 };
 
 }  // namespace base

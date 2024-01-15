@@ -4,17 +4,16 @@
 
 #include "chrome/browser/vr/elements/ui_element.h"
 
+#include <algorithm>
 #include <limits>
 
 #include "base/check_op.h"
 #include "base/containers/adapters.h"
-#include "base/cxx17_backports.h"
 #include "base/notreached.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_split.h"
 #include "base/strings/stringprintf.h"
 #include "base/time/time.h"
-#include "chrome/browser/vr/input_event.h"
 #include "chrome/browser/vr/model/camera_model.h"
 #include "device/vr/vr_gl_util.h"
 #include "third_party/skia/include/core/SkRRect.h"
@@ -154,10 +153,6 @@ void UiElement::Initialize(SkiaSurfaceProvider* provider) {}
 
 void UiElement::OnHoverEnter(const gfx::PointF& position,
                              base::TimeTicks timestamp) {
-  if (GetSounds().hover_enter != kSoundNone && audio_delegate_) {
-    audio_delegate_->PlaySound(GetSounds().hover_enter);
-  }
-
   if (event_handlers_.hover_enter) {
     event_handlers_.hover_enter.Run();
   } else if (parent() && bubble_events()) {
@@ -166,72 +161,12 @@ void UiElement::OnHoverEnter(const gfx::PointF& position,
 }
 
 void UiElement::OnHoverLeave(base::TimeTicks timestamp) {
-  if (GetSounds().hover_leave != kSoundNone && audio_delegate_) {
-    audio_delegate_->PlaySound(GetSounds().hover_leave);
-  }
   if (event_handlers_.hover_leave) {
     event_handlers_.hover_leave.Run();
   } else if (parent() && bubble_events()) {
     parent()->OnHoverLeave(timestamp);
   }
 }
-
-void UiElement::OnHoverMove(const gfx::PointF& position,
-                            base::TimeTicks timestamp) {
-  if (GetSounds().hover_move != kSoundNone && audio_delegate_) {
-    audio_delegate_->PlaySound(GetSounds().hover_move);
-  }
-  if (event_handlers_.hover_move) {
-    event_handlers_.hover_move.Run(position);
-  } else if (parent() && bubble_events()) {
-    parent()->OnHoverMove(position, timestamp);
-  }
-}
-
-void UiElement::OnButtonDown(const gfx::PointF& position,
-                             base::TimeTicks timestamp) {
-  if (GetSounds().button_down != kSoundNone && audio_delegate_) {
-    audio_delegate_->PlaySound(GetSounds().button_down);
-  }
-  if (event_handlers_.button_down) {
-    event_handlers_.button_down.Run();
-  } else if (parent() && bubble_events()) {
-    parent()->OnButtonDown(position, timestamp);
-  }
-}
-
-void UiElement::OnButtonUp(const gfx::PointF& position,
-                           base::TimeTicks timestamp) {
-  if (GetSounds().button_up != kSoundNone && audio_delegate_) {
-    audio_delegate_->PlaySound(GetSounds().button_up);
-  }
-  if (event_handlers_.button_up) {
-    event_handlers_.button_up.Run();
-  } else if (parent() && bubble_events()) {
-    parent()->OnButtonUp(position, timestamp);
-  }
-}
-
-void UiElement::OnTouchMove(const gfx::PointF& position,
-                            base::TimeTicks timestamp) {
-  if (GetSounds().touch_move != kSoundNone && audio_delegate_) {
-    audio_delegate_->PlaySound(GetSounds().touch_move);
-  }
-  if (event_handlers_.touch_move) {
-    event_handlers_.touch_move.Run(position);
-  } else if (parent() && bubble_events()) {
-    parent()->OnTouchMove(position, timestamp);
-  }
-}
-
-void UiElement::OnFlingCancel(std::unique_ptr<InputEvent> gesture,
-                              const gfx::PointF& position) {}
-void UiElement::OnScrollBegin(std::unique_ptr<InputEvent> gesture,
-                              const gfx::PointF& position) {}
-void UiElement::OnScrollUpdate(std::unique_ptr<InputEvent> gesture,
-                               const gfx::PointF& position) {}
-void UiElement::OnScrollEnd(std::unique_ptr<InputEvent> gesture,
-                            const gfx::PointF& position) {}
 
 void UiElement::OnFocusChanged(bool focused) {
   NOTREACHED();
@@ -660,11 +595,6 @@ void UiElement::DumpGeometry(std::ostringstream* os) const {
 }
 #endif
 
-void UiElement::SetSounds(Sounds sounds, AudioDelegate* delegate) {
-  sounds_ = sounds;
-  audio_delegate_ = delegate;
-}
-
 void UiElement::OnUpdatedWorldSpaceTransform() {}
 
 void UiElement::AddChild(std::unique_ptr<UiElement> child) {
@@ -762,7 +692,7 @@ bool UiElement::GetRayDistance(const gfx::Point3F& ray_origin,
 void UiElement::OnFloatAnimated(const float& value,
                                 int target_property_id,
                                 gfx::KeyframeModel* keyframe_model) {
-  opacity_ = base::clamp(value, 0.0f, 1.0f);
+  opacity_ = std::clamp(value, 0.0f, 1.0f);
 }
 
 void UiElement::OnTransformAnimated(const gfx::TransformOperations& operations,
@@ -869,11 +799,9 @@ gfx::RectF UiElement::ComputeContributingChildrenBounds() {
     gfx::RectF outer_bounds(child->size());
     gfx::RectF inner_bounds(child->size());
     if (!child->bounds_contain_padding_) {
-      // TODO(crbug.com/1312352): The order of bottom_padding_ and top_padding_
-      // seems incorrect.
       inner_bounds.Inset(
-          gfx::InsetsF::TLBR(child->bottom_padding_, child->left_padding_,
-                             child->top_padding_, child->right_padding_));
+          gfx::InsetsF::TLBR(child->top_padding_, child->left_padding_,
+                             child->bottom_padding_, child->right_padding_));
     }
     gfx::SizeF size = inner_bounds.size();
     if (size.IsEmpty())
@@ -896,10 +824,8 @@ gfx::RectF UiElement::ComputeContributingChildrenBounds() {
     bounds.Union(local_rect);
   }
 
-  // TODO(crbug.com/1312352): The order of bottom_padding_ and top_padding_
-  // seems incorrect.
-  bounds.Inset(gfx::InsetsF::TLBR(-bottom_padding_, -left_padding_,
-                                  -top_padding_, -right_padding_));
+  bounds.Inset(gfx::InsetsF::TLBR(-top_padding_, -left_padding_,
+                                  -bottom_padding_, -right_padding_));
   bounds.set_origin(bounds.CenterPoint());
   if (local_origin_ != bounds.origin()) {
     world_space_transform_dirty_ = true;
@@ -1067,10 +993,6 @@ gfx::Transform UiElement::LocalTransform() const {
 
 gfx::Transform UiElement::GetTargetLocalTransform() const {
   return layout_offset_.Apply() * GetTargetTransform().Apply();
-}
-
-const Sounds& UiElement::GetSounds() const {
-  return sounds_;
 }
 
 bool UiElement::ShouldUpdateWorldSpaceTransform(

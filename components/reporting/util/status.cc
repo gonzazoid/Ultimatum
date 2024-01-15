@@ -4,14 +4,15 @@
 
 #include "components/reporting/util/status.h"
 
-#include <stdio.h>
 #include <ostream>
 #include <string>
 #include <utility>
 
 #include "base/no_destructor.h"
 #include "base/strings/strcat.h"
-#include "components/reporting/util/status.pb.h"
+#include "base/strings/string_number_conversions.h"
+#include "base/strings/string_number_conversions_internal.h"
+#include "components/reporting/proto/synced/status.pb.h"
 
 namespace reporting {
 namespace error {
@@ -33,8 +34,6 @@ inline std::string CodeEnumToString(error::Code code) {
       return "ALREADY_EXISTS";
     case PERMISSION_DENIED:
       return "PERMISSION_DENIED";
-    case UNAUTHENTICATED:
-      return "UNAUTHENTICATED";
     case RESOURCE_EXHAUSTED:
       return "RESOURCE_EXHAUSTED";
     case FAILED_PRECONDITION:
@@ -51,11 +50,11 @@ inline std::string CodeEnumToString(error::Code code) {
       return "UNAVAILABLE";
     case DATA_LOSS:
       return "DATA_LOSS";
+    case UNAUTHENTICATED:
+      return "UNAUTHENTICATED";
+    default:
+      return base::StrCat({"ILLEGAL[", base::NumberToString(code), "]"});
   }
-
-  // No default clause, clang will abort if a code is missing from
-  // above switch.
-  return "UNKNOWN";
 }
 }  // namespace error.
 
@@ -66,21 +65,16 @@ const Status& Status::StatusOK() {
 
 Status::Status() : error_code_(error::OK) {}
 
-Status::Status(error::Code error_code, base::StringPiece error_message)
-    : error_code_(error_code) {
-  if (error_code != error::OK) {
-    error_message_ = std::string(error_message);
-  }
-}
+Status::Status(const Status&) = default;
+Status& Status::operator=(const Status&) = default;
+Status::Status(Status&&) = default;
+Status& Status::operator=(Status&&) = default;
+Status::~Status() = default;
 
-Status::Status(const Status& other)
-    : error_code_(other.error_code_), error_message_(other.error_message_) {}
-
-Status& Status::operator=(const Status& other) {
-  error_code_ = other.error_code_;
-  error_message_ = other.error_message_;
-  return *this;
-}
+Status::Status(error::Code error_code, std::string error_message)
+    : error_code_(error_code),
+      error_message_{error_code != error::OK ? std::move(error_message)
+                                             : std::string()} {}
 
 bool Status::operator==(const Status& x) const {
   return error_code_ == x.error_code_ && error_message_ == x.error_message_;

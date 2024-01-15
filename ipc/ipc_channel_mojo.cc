@@ -10,13 +10,14 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/lazy_instance.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ref.h"
 #include "base/process/process_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "ipc/ipc_listener.h"
 #include "ipc/ipc_logging.h"
@@ -29,7 +30,6 @@
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/generic_pending_associated_receiver.h"
-#include "mojo/public/cpp/bindings/lib/message_quota_checker.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/thread_safe_proxy.h"
 #include "mojo/public/cpp/system/platform_handle.h"
@@ -48,25 +48,18 @@ class MojoChannelFactory : public ChannelFactory {
       : handle_(std::move(handle)),
         mode_(mode),
         ipc_task_runner_(ipc_task_runner),
-        proxy_task_runner_(proxy_task_runner),
-        quota_checker_(mojo::internal::MessageQuotaChecker::MaybeCreate()) {}
+        proxy_task_runner_(proxy_task_runner) {}
 
   MojoChannelFactory(const MojoChannelFactory&) = delete;
   MojoChannelFactory& operator=(const MojoChannelFactory&) = delete;
 
   std::unique_ptr<Channel> BuildChannel(Listener* listener) override {
     return ChannelMojo::Create(std::move(handle_), mode_, listener,
-                               ipc_task_runner_, proxy_task_runner_,
-                               quota_checker_);
+                               ipc_task_runner_, proxy_task_runner_);
   }
 
   scoped_refptr<base::SingleThreadTaskRunner> GetIPCTaskRunner() override {
     return ipc_task_runner_;
-  }
-
-  scoped_refptr<mojo::internal::MessageQuotaChecker> GetQuotaChecker()
-      override {
-    return quota_checker_;
   }
 
  private:
@@ -74,7 +67,6 @@ class MojoChannelFactory : public ChannelFactory {
   const Channel::Mode mode_;
   scoped_refptr<base::SingleThreadTaskRunner> ipc_task_runner_;
   scoped_refptr<base::SingleThreadTaskRunner> proxy_task_runner_;
-  scoped_refptr<mojo::internal::MessageQuotaChecker> quota_checker_;
 };
 
 class ThreadSafeChannelProxy : public mojo::ThreadSafeProxy {
@@ -91,7 +83,7 @@ class ThreadSafeChannelProxy : public mojo::ThreadSafeProxy {
 
   // mojo::ThreadSafeProxy:
   void SendMessage(mojo::Message& message) override {
-    message.SerializeHandles(&group_controller_);
+    message.SerializeHandles(&*group_controller_);
     task_runner_->PostTask(FROM_HERE,
                            base::BindOnce(forwarder_, std::move(message)));
   }
@@ -108,7 +100,8 @@ class ThreadSafeChannelProxy : public mojo::ThreadSafeProxy {
 
   const scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
   const Forwarder forwarder_;
-  mojo::AssociatedGroupController& group_controller_;
+  const raw_ref<mojo::AssociatedGroupController, AcrossTasksDanglingUntriaged>
+      group_controller_;
 };
 
 base::ProcessId GetSelfPID() {
@@ -133,11 +126,9 @@ std::unique_ptr<ChannelMojo> ChannelMojo::Create(
     Mode mode,
     Listener* listener,
     const scoped_refptr<base::SingleThreadTaskRunner>& ipc_task_runner,
-    const scoped_refptr<base::SingleThreadTaskRunner>& proxy_task_runner,
-    const scoped_refptr<mojo::internal::MessageQuotaChecker>& quota_checker) {
+    const scoped_refptr<base::SingleThreadTaskRunner>& proxy_task_runner) {
   return base::WrapUnique(new ChannelMojo(std::move(handle), mode, listener,
-                                          ipc_task_runner, proxy_task_runner,
-                                          quota_checker));
+                                          ipc_task_runner, proxy_task_runner));
 }
 
 // static
@@ -165,12 +156,11 @@ ChannelMojo::ChannelMojo(
     Mode mode,
     Listener* listener,
     const scoped_refptr<base::SingleThreadTaskRunner>& ipc_task_runner,
-    const scoped_refptr<base::SingleThreadTaskRunner>& proxy_task_runner,
-    const scoped_refptr<mojo::internal::MessageQuotaChecker>& quota_checker)
+    const scoped_refptr<base::SingleThreadTaskRunner>& proxy_task_runner)
     : task_runner_(ipc_task_runner), pipe_(handle.get()), listener_(listener) {
   weak_ptr_ = weak_factory_.GetWeakPtr();
   bootstrap_ = MojoBootstrap::Create(std::move(handle), mode, ipc_task_runner,
-                                     proxy_task_runner, quota_checker);
+                                     proxy_task_runner);
 }
 
 void ChannelMojo::ForwardMessage(mojo::Message message) {
@@ -322,7 +312,7 @@ void ChannelMojo::OnBrokenDataReceived() {
 // static
 MojoResult ChannelMojo::ReadFromMessageAttachmentSet(
     Message* message,
-    absl::optional<std::vector<mojo::native::SerializedHandlePtr>>* handles) {
+    std::optional<std::vector<mojo::native::SerializedHandlePtr>>* handles) {
   DCHECK(!*handles);
 
   MojoResult result = MOJO_RESULT_OK;
@@ -351,7 +341,7 @@ MojoResult ChannelMojo::ReadFromMessageAttachmentSet(
 
 // static
 MojoResult ChannelMojo::WriteToMessageAttachmentSet(
-    absl::optional<std::vector<mojo::native::SerializedHandlePtr>> handles,
+    std::optional<std::vector<mojo::native::SerializedHandlePtr>> handles,
     Message* message) {
   if (!handles)
     return MOJO_RESULT_OK;
@@ -400,6 +390,10 @@ void ChannelMojo::GetRemoteAssociatedInterface(
     // dropped).
     mojo::AssociateWithDisconnectedPipe(receiver.PassHandle());
   }
+}
+
+void ChannelMojo::SetUrgentMessageObserver(UrgentMessageObserver* observer) {
+  bootstrap_->SetUrgentMessageObserver(observer);
 }
 
 }  // namespace IPC

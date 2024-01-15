@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "components/spellcheck/spellcheck_buildflags.h"
@@ -145,15 +145,13 @@ void GetPerLanguageSuggestions(PlatformSpellChecker* spell_checker_instance,
 #if BUILDFLAG(IS_WIN)
 // Records statistics about spell check support for the user's Chrome locales.
 void RecordChromeLocalesStats(PlatformSpellChecker* spell_checker_instance,
-                              const std::vector<std::string> chrome_locales,
-                              SpellCheckHostMetrics* metrics);
+                              const std::vector<std::string> chrome_locales);
 
 // Records statistics about which spell checker supports which of the user's
 // enabled spell check locales.
 void RecordSpellcheckLocalesStats(
     PlatformSpellChecker* spell_checker_instance,
-    const std::vector<std::string> spellcheck_locales,
-    SpellCheckHostMetrics* metrics);
+    const std::vector<std::string> spellcheck_locales);
 #endif  // BUILDFLAG(IS_WIN)
 
 // Internal state, to restore system state after testing.
@@ -166,7 +164,7 @@ class ScopedEnglishLanguageForTest {
   ScopedEnglishLanguageForTest();
   ~ScopedEnglishLanguageForTest();
  private:
-  raw_ptr<SpellcheckerStateInternal> state_;
+  raw_ptr<SpellcheckerStateInternal, DanglingUntriaged> state_;
 };
 
 }  // namespace spellcheck_platform

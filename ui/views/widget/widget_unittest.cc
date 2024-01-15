@@ -7,8 +7,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
@@ -20,9 +21,13 @@
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
 #include "ui/base/hit_test.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
+#include "ui/color/color_provider_key.h"
 #include "ui/color/color_provider_manager.h"
+#include "ui/color/color_recipe.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_observer.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
@@ -43,6 +48,8 @@
 #include "ui/views/event_monitor.h"
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/style/platform_style.h"
+#include "ui/views/test/mock_drag_controller.h"
+#include "ui/views/test/mock_native_widget.h"
 #include "ui/views/test/native_widget_factory.h"
 #include "ui/views/test/test_views.h"
 #include "ui/views/test/test_widget_observer.h"
@@ -53,7 +60,10 @@
 #include "ui/views/widget/native_widget_delegate.h"
 #include "ui/views/widget/native_widget_private.h"
 #include "ui/views/widget/root_view.h"
+#include "ui/views/widget/unique_widget_ptr.h"
+#include "ui/views/widget/widget_delegate.h"
 #include "ui/views/widget/widget_deletion_observer.h"
+#include "ui/views/widget/widget_interactive_uitest_utils.h"
 #include "ui/views/widget/widget_removals_observer.h"
 #include "ui/views/widget/widget_utils.h"
 #include "ui/views/window/dialog_delegate.h"
@@ -84,15 +94,12 @@
 #include "ui/views/widget/desktop_aura/desktop_native_widget_aura.h"
 #endif
 
-#if defined(USE_OZONE)
-#include "ui/ozone/public/ozone_platform.h"
-#include "ui/ozone/public/platform_gl_egl_utility.h"
-#endif
-
-namespace views {
-namespace test {
+namespace views::test {
 
 namespace {
+
+using ::testing::IsEmpty;
+using ::testing::Not;
 
 // TODO(tdanderson): This utility function is used in different unittest
 //                   files. Move to a common location to avoid
@@ -112,10 +119,11 @@ std::unique_ptr<ui::test::EventGenerator> CreateEventGenerator(
 }
 
 class TestBubbleDialogDelegateView : public BubbleDialogDelegateView {
+  METADATA_HEADER(TestBubbleDialogDelegateView, BubbleDialogDelegateView)
+
  public:
   explicit TestBubbleDialogDelegateView(View* anchor)
-      : BubbleDialogDelegateView(anchor, BubbleBorder::NONE),
-        reset_controls_called_(false) {}
+      : BubbleDialogDelegateView(anchor, BubbleBorder::NONE) {}
   ~TestBubbleDialogDelegateView() override = default;
 
   bool ShouldShowCloseButton() const override {
@@ -123,8 +131,11 @@ class TestBubbleDialogDelegateView : public BubbleDialogDelegateView {
     return true;
   }
 
-  mutable bool reset_controls_called_;
+  mutable bool reset_controls_called_ = false;
 };
+
+BEGIN_METADATA(TestBubbleDialogDelegateView)
+END_METADATA
 
 // Convenience to make constructing a GestureEvent simpler.
 ui::GestureEvent CreateTestGestureEvent(ui::EventType type, int x, int y) {
@@ -165,6 +176,8 @@ class TestWidgetRemovalsObserver : public WidgetRemovalsObserver {
 // A view that keeps track of the events it receives, and consumes all scroll
 // gesture events and ui::ET_SCROLL events.
 class ScrollableEventCountView : public EventCountView {
+  METADATA_HEADER(ScrollableEventCountView, EventCountView)
+
  public:
   ScrollableEventCountView() = default;
 
@@ -196,8 +209,13 @@ class ScrollableEventCountView : public EventCountView {
   }
 };
 
+BEGIN_METADATA(ScrollableEventCountView)
+END_METADATA
+
 // A view that implements GetMinimumSize.
 class MinimumSizeFrameView : public NativeFrameView {
+  METADATA_HEADER(MinimumSizeFrameView, NativeFrameView)
+
  public:
   explicit MinimumSizeFrameView(Widget* frame) : NativeFrameView(frame) {}
 
@@ -210,6 +228,9 @@ class MinimumSizeFrameView : public NativeFrameView {
   // Overridden from View:
   gfx::Size GetMinimumSize() const override { return gfx::Size(300, 400); }
 };
+
+BEGIN_METADATA(MinimumSizeFrameView)
+END_METADATA
 
 // An event handler that simply keeps a count of the different types of events
 // it receives.
@@ -284,12 +305,18 @@ TEST_F(WidgetWithCustomParamsTest, NamePropagatedFromDelegate) {
   EXPECT_EQ(delegate.internal_name(), widget->GetName());
 }
 
-TEST_F(WidgetWithCustomParamsTest, NamePropagatedFromContentsViewClassName) {
-  class ViewWithClassName : public View {
-   public:
-    const char* GetClassName() const override { return "ViewWithClassName"; }
-  };
+namespace {
 
+class ViewWithClassName : public View {
+  METADATA_HEADER(ViewWithClassName, View)
+};
+
+BEGIN_METADATA(ViewWithClassName)
+END_METADATA
+
+}  // namespace
+
+TEST_F(WidgetWithCustomParamsTest, NamePropagatedFromContentsViewClassName) {
   WidgetDelegate delegate;
   auto view = std::make_unique<ViewWithClassName>();
   auto* contents = delegate.SetContentsView(std::move(view));
@@ -303,45 +330,103 @@ TEST_F(WidgetWithCustomParamsTest, NamePropagatedFromContentsViewClassName) {
   EXPECT_EQ(contents->GetClassName(), widget->GetName());
 }
 
+namespace {
+
+class TestView : public View {
+  METADATA_HEADER(TestView, View)
+
+ public:
+  ~TestView() override = default;
+
+  void OnThemeChanged() override {
+    View::OnThemeChanged();
+    auto* native_theme = GetNativeTheme();
+    if (native_theme && native_theme->user_color()) {
+      user_color_ = *native_theme->user_color();
+    }
+  }
+
+  SkColor user_color() const { return user_color_; }
+
+ private:
+  SkColor user_color_ = SK_ColorWHITE;
+};
+
+BEGIN_METADATA(TestView)
+END_METADATA
+
+}  // namespace
+
+TEST_F(WidgetWithCustomParamsTest, InitWithNativeTheme) {
+  // Verify that `InitParams::native_theme` is applied during widget
+  // initialization.
+
+  const SkColor test_color = SkColorSetARGB(1, 2, 3, 4);
+
+  WidgetDelegate delegate;
+  auto view = std::make_unique<TestView>();
+  auto* view_raw_ptr = view.get();
+  delegate.SetContentsView(std::move(view));
+
+  ui::TestNativeTheme test_native_theme;
+  test_native_theme.set_user_color(test_color);
+
+  SetInitFunction(base::BindLambdaForTesting([&](Widget::InitParams* params) {
+    params->delegate = &delegate;
+    params->native_theme = &test_native_theme;
+  }));
+
+  std::unique_ptr<Widget> widget = CreateTestWidget();
+
+  EXPECT_EQ(view_raw_ptr->user_color(), test_color);
+}
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+namespace {
+struct SkottieColors {
+  bool operator==(const SkottieColors& other) const {
+    return color1 == other.color1 && color1_shade1 == other.color1_shade1 &&
+           color1_shade2 == other.color1_shade2 && color2 == other.color2 &&
+           color3 == other.color3 && color4 == other.color4 &&
+           color5 == other.color5 && color6 == other.color6 &&
+           base_color == other.base_color &&
+           secondary_color == other.secondary_color;
+  }
+  bool operator!=(const SkottieColors& other) const {
+    return !operator==(other);
+  }
+
+  SkColor color1, color1_shade1, color1_shade2, color2, color3, color4, color5,
+      color6, base_color, secondary_color;
+};
+
+class ViewObservingSkottieColors : public View {
+  METADATA_HEADER(ViewObservingSkottieColors, View)
+
+ public:
+  void OnThemeChanged() override {
+    View::OnThemeChanged();
+    const ui::ColorProvider* provider = GetColorProvider();
+    history.push_back({provider->GetColor(ui::kColorNativeColor1),
+                       provider->GetColor(ui::kColorNativeColor1Shade1),
+                       provider->GetColor(ui::kColorNativeColor1Shade2),
+                       provider->GetColor(ui::kColorNativeColor2),
+                       provider->GetColor(ui::kColorNativeColor3),
+                       provider->GetColor(ui::kColorNativeColor4),
+                       provider->GetColor(ui::kColorNativeColor5),
+                       provider->GetColor(ui::kColorNativeColor6),
+                       provider->GetColor(ui::kColorNativeBaseColor),
+                       provider->GetColor(ui::kColorNativeSecondaryColor)});
+  }
+
+  std::vector<SkottieColors> history;
+};
+
+BEGIN_METADATA(ViewObservingSkottieColors)
+END_METADATA
+}  // namespace
+
 TEST_F(WidgetWithCustomParamsTest, SkottieColorsTest) {
-  struct SkottieColors {
-    bool operator==(const SkottieColors& other) const {
-      return color1 == other.color1 && color1_shade1 == other.color1_shade1 &&
-             color1_shade2 == other.color1_shade2 && color2 == other.color2 &&
-             color3 == other.color3 && color4 == other.color4 &&
-             color5 == other.color5 && color6 == other.color6 &&
-             base_color == other.base_color &&
-             secondary_color == other.secondary_color;
-    }
-    bool operator!=(const SkottieColors& other) const {
-      return !operator==(other);
-    }
-
-    SkColor color1, color1_shade1, color1_shade2, color2, color3, color4,
-        color5, color6, base_color, secondary_color;
-  };
-
-  class ViewObservingSkottieColors : public View {
-   public:
-    void OnThemeChanged() override {
-      View::OnThemeChanged();
-      const ui::ColorProvider* provider = GetColorProvider();
-      history.push_back({provider->GetColor(ui::kColorNativeColor1),
-                         provider->GetColor(ui::kColorNativeColor1Shade1),
-                         provider->GetColor(ui::kColorNativeColor1Shade2),
-                         provider->GetColor(ui::kColorNativeColor2),
-                         provider->GetColor(ui::kColorNativeColor3),
-                         provider->GetColor(ui::kColorNativeColor4),
-                         provider->GetColor(ui::kColorNativeColor5),
-                         provider->GetColor(ui::kColorNativeColor6),
-                         provider->GetColor(ui::kColorNativeBaseColor),
-                         provider->GetColor(ui::kColorNativeSecondaryColor)});
-    }
-
-    std::vector<SkottieColors> history;
-  };
-
   // |widget1| has low background elevation and is created in light mode.
   ui::NativeTheme* theme = ui::NativeTheme::GetInstanceForNativeUi();
   theme->set_use_dark_colors(false);
@@ -350,8 +435,7 @@ TEST_F(WidgetWithCustomParamsTest, SkottieColorsTest) {
       delegate1.SetContentsView(std::make_unique<ViewObservingSkottieColors>());
   SetInitFunction(base::BindLambdaForTesting([&](Widget::InitParams* params) {
     params->delegate = &delegate1;
-    params->background_elevation =
-        ui::ColorProviderManager::ElevationMode::kLow;
+    params->background_elevation = ui::ColorProviderKey::ElevationMode::kLow;
   }));
   std::unique_ptr<Widget> widget1 = CreateTestWidget();
   ASSERT_EQ(1u, contents1->history.size());
@@ -362,8 +446,7 @@ TEST_F(WidgetWithCustomParamsTest, SkottieColorsTest) {
       delegate2.SetContentsView(std::make_unique<ViewObservingSkottieColors>());
   SetInitFunction(base::BindLambdaForTesting([&](Widget::InitParams* params) {
     params->delegate = &delegate2;
-    params->background_elevation =
-        ui::ColorProviderManager::ElevationMode::kHigh;
+    params->background_elevation = ui::ColorProviderKey::ElevationMode::kHigh;
   }));
   std::unique_ptr<Widget> widget2 = CreateTestWidget();
   ASSERT_EQ(1u, contents2->history.size());
@@ -377,7 +460,8 @@ TEST_F(WidgetWithCustomParamsTest, SkottieColorsTest) {
   // Check that |contents1| and |contents2| were notified of the theme update.
   ASSERT_EQ(2u, contents1->history.size());
   ASSERT_EQ(2u, contents2->history.size());
-  // Check that the Skottie colors were actually changed with the notification.
+  // Check that the Skottie colors were actually changed with the
+  // notification.
   EXPECT_NE(contents1->history[0u], contents1->history[1u]);
   EXPECT_NE(contents2->history[0u], contents2->history[1u]);
   // Check that |contents1| and |contents2| have different Skottie colors.
@@ -390,8 +474,7 @@ TEST_F(WidgetWithCustomParamsTest, SkottieColorsTest) {
       delegate3.SetContentsView(std::make_unique<ViewObservingSkottieColors>());
   SetInitFunction(base::BindLambdaForTesting([&](Widget::InitParams* params) {
     params->delegate = &delegate3;
-    params->background_elevation =
-        ui::ColorProviderManager::ElevationMode::kLow;
+    params->background_elevation = ui::ColorProviderKey::ElevationMode::kLow;
   }));
   std::unique_ptr<Widget> widget3 = CreateTestWidget();
   ASSERT_EQ(1u, contents3->history.size());
@@ -406,8 +489,7 @@ TEST_F(WidgetWithCustomParamsTest, SkottieColorsTest) {
       delegate4.SetContentsView(std::make_unique<ViewObservingSkottieColors>());
   SetInitFunction(base::BindLambdaForTesting([&](Widget::InitParams* params) {
     params->delegate = &delegate4;
-    params->background_elevation =
-        ui::ColorProviderManager::ElevationMode::kHigh;
+    params->background_elevation = ui::ColorProviderKey::ElevationMode::kHigh;
   }));
   std::unique_ptr<Widget> widget4 = CreateTestWidget();
   ASSERT_EQ(1u, contents4->history.size());
@@ -424,8 +506,9 @@ TEST_F(WidgetWithCustomParamsTest, SkottieColorsTest) {
   ASSERT_EQ(3u, contents2->history.size());
   ASSERT_EQ(2u, contents3->history.size());
   ASSERT_EQ(2u, contents4->history.size());
-  // Check that |contents1| and |contents2| are back to the Skottie colors they
-  // started with. It should not matter if dark mode is toggled on and back off.
+  // Check that |contents1| and |contents2| are back to the Skottie colors
+  // they started with. It should not matter if dark mode is toggled on and
+  // back off.
   EXPECT_EQ(contents1->history[0u], contents1->history[2u]);
   EXPECT_EQ(contents2->history[0u], contents2->history[2u]);
   // Check that |contents3| and |contents4| still have the same Skottie colors
@@ -435,6 +518,144 @@ TEST_F(WidgetWithCustomParamsTest, SkottieColorsTest) {
   EXPECT_EQ(contents2->history[2u], contents4->history[1u]);
 }
 #endif
+
+class WidgetColorModeTest : public WidgetTest {
+ public:
+  static constexpr SkColor kLightColor = SK_ColorWHITE;
+  static constexpr SkColor kDarkColor = SK_ColorBLACK;
+
+  WidgetColorModeTest() = default;
+  ~WidgetColorModeTest() override = default;
+
+  void SetUp() override {
+    WidgetTest::SetUp();
+
+    // Setup color provider for the ui::kColorSysPrimary color.
+    ui::ColorProviderManager& manager =
+        ui::ColorProviderManager::GetForTesting();
+    manager.AppendColorProviderInitializer(base::BindRepeating(&AddColor));
+  }
+
+  void TearDown() override {
+    ui::ColorProviderManager::ResetForTesting();
+    WidgetTest::TearDown();
+  }
+
+ private:
+  static void AddColor(ui::ColorProvider* provider,
+                       const ui::ColorProviderKey& key) {
+    ui::ColorMixer& mixer = provider->AddMixer();
+    mixer[ui::kColorSysPrimary] = {
+        key.color_mode == ui::ColorProviderKey::ColorMode::kDark ? kDarkColor
+                                                                 : kLightColor};
+  }
+};
+
+TEST_F(WidgetColorModeTest, ColorModeOverride_NoOverride) {
+  ui::TestNativeTheme test_theme;
+  WidgetAutoclosePtr widget(CreateTopLevelPlatformWidget());
+  test_theme.SetDarkMode(true);
+  widget->SetNativeThemeForTest(&test_theme);
+
+  widget->SetColorModeOverride({});
+  // Verify that we resolve the dark color when we don't override color mode.
+  EXPECT_EQ(kDarkColor,
+            widget->GetColorProvider()->GetColor(ui::kColorSysPrimary));
+}
+
+TEST_F(WidgetColorModeTest, ColorModeOverride_DarkOverride) {
+  ui::TestNativeTheme test_theme;
+  WidgetAutoclosePtr widget(CreateTopLevelPlatformWidget());
+  test_theme.SetDarkMode(false);
+  widget->SetNativeThemeForTest(&test_theme);
+
+  widget->SetColorModeOverride(ui::ColorProviderKey::ColorMode::kDark);
+  // Verify that we resolve the light color even though the theme is dark.
+  EXPECT_EQ(kDarkColor,
+            widget->GetColorProvider()->GetColor(ui::kColorSysPrimary));
+}
+
+TEST_F(WidgetColorModeTest, ColorModeOverride_LightOverride) {
+  ui::TestNativeTheme test_theme;
+  WidgetAutoclosePtr widget(CreateTopLevelPlatformWidget());
+  test_theme.SetDarkMode(true);
+  widget->SetNativeThemeForTest(&test_theme);
+
+  widget->SetColorModeOverride(ui::ColorProviderKey::ColorMode::kLight);
+  // Verify that we resolve the light color even though the theme is dark.
+  EXPECT_EQ(kLightColor,
+            widget->GetColorProvider()->GetColor(ui::kColorSysPrimary));
+}
+
+TEST_F(WidgetColorModeTest, ChildInheritsColorMode_NoOverrides) {
+  // Create the parent widget and set the native theme to dark.
+  ui::TestNativeTheme test_theme;
+  WidgetAutoclosePtr widget(CreateTopLevelPlatformWidget());
+  test_theme.SetDarkMode(true);
+  widget->SetNativeThemeForTest(&test_theme);
+
+  // Create the child widget.
+  Widget* widget_child = CreateChildPlatformWidget(widget->GetNativeView());
+
+  // Ensure neither has an override set. The child should inherit the color mode
+  // of the parent.
+  widget->SetColorModeOverride({});
+  widget_child->SetColorModeOverride({});
+  EXPECT_EQ(kDarkColor,
+            widget->GetColorProvider()->GetColor(ui::kColorSysPrimary));
+  EXPECT_EQ(kDarkColor,
+            widget_child->GetColorProvider()->GetColor(ui::kColorSysPrimary));
+
+  // Set the parent's native theme to light. The child should inherit the color
+  // mode of the parent.
+  test_theme.SetDarkMode(false);
+  EXPECT_EQ(kLightColor,
+            widget->GetColorProvider()->GetColor(ui::kColorSysPrimary));
+  EXPECT_EQ(kLightColor,
+            widget_child->GetColorProvider()->GetColor(ui::kColorSysPrimary));
+}
+
+TEST_F(WidgetColorModeTest, ChildInheritsColorMode_Overrides) {
+  // Create the parent widget and set the native theme to dark.
+  ui::TestNativeTheme test_theme;
+  WidgetAutoclosePtr widget(CreateTopLevelPlatformWidget());
+  test_theme.SetDarkMode(true);
+  widget->SetNativeThemeForTest(&test_theme);
+
+  // Create the child widget.
+  Widget* widget_child = CreateChildPlatformWidget(widget->GetNativeView());
+
+  // Ensure neither has an override set. The child should inherit the color mode
+  // of the parent.
+  widget->SetColorModeOverride({});
+  widget_child->SetColorModeOverride({});
+  EXPECT_EQ(kDarkColor,
+            widget->GetColorProvider()->GetColor(ui::kColorSysPrimary));
+  EXPECT_EQ(kDarkColor,
+            widget_child->GetColorProvider()->GetColor(ui::kColorSysPrimary));
+
+  // Set the parent's override to light, then back to dark. the child should
+  // follow the parent's overridden color mode.
+  widget->SetColorModeOverride(ui::ColorProviderKey::ColorMode::kLight);
+  EXPECT_EQ(kLightColor,
+            widget->GetColorProvider()->GetColor(ui::kColorSysPrimary));
+  EXPECT_EQ(kLightColor,
+            widget_child->GetColorProvider()->GetColor(ui::kColorSysPrimary));
+
+  widget->SetColorModeOverride(ui::ColorProviderKey::ColorMode::kDark);
+  EXPECT_EQ(kDarkColor,
+            widget->GetColorProvider()->GetColor(ui::kColorSysPrimary));
+  EXPECT_EQ(kDarkColor,
+            widget_child->GetColorProvider()->GetColor(ui::kColorSysPrimary));
+
+  // Override the child's color mode to light. The parent should continue to
+  // report a dark color mode.
+  widget_child->SetColorModeOverride(ui::ColorProviderKey::ColorMode::kLight);
+  EXPECT_EQ(kDarkColor,
+            widget->GetColorProvider()->GetColor(ui::kColorSysPrimary));
+  EXPECT_EQ(kLightColor,
+            widget_child->GetColorProvider()->GetColor(ui::kColorSysPrimary));
+}
 
 TEST_F(WidgetTest, NativeWindowProperty) {
   const char* key = "foo";
@@ -704,9 +925,17 @@ TEST_F(WidgetTest, ChildBoundsRelativeToParent) {
 // Widget ownership tests.
 //
 // Tests various permutations of Widget ownership specified in the
-// InitParams::Ownership param.
+// InitParams::Ownership param. Make sure that they are properly destructed
+// during shutdown.
 
-// A WidgetTest that supplies a toplevel widget for NativeWidget to parent to.
+// A bag of state to monitor destructions.
+struct OwnershipTestState {
+  OwnershipTestState() = default;
+
+  bool widget_deleted = false;
+  bool native_widget_deleted = false;
+};
+
 class WidgetOwnershipTest : public WidgetTest {
  public:
   WidgetOwnershipTest() = default;
@@ -716,26 +945,16 @@ class WidgetOwnershipTest : public WidgetTest {
 
   ~WidgetOwnershipTest() override = default;
 
-  void SetUp() override {
-    WidgetTest::SetUp();
-    desktop_widget_ = CreateTopLevelPlatformWidget();
-  }
-
   void TearDown() override {
-    desktop_widget_->CloseNow();
+    EXPECT_TRUE(state()->widget_deleted);
+    EXPECT_TRUE(state()->native_widget_deleted);
     WidgetTest::TearDown();
   }
 
+  OwnershipTestState* state() { return &state_; }
+
  private:
-  raw_ptr<Widget> desktop_widget_;
-};
-
-// A bag of state to monitor destructions.
-struct OwnershipTestState {
-  OwnershipTestState() = default;
-
-  bool widget_deleted = false;
-  bool native_widget_deleted = false;
+  OwnershipTestState state_;
 };
 
 // A Widget subclass that updates a bag of state when it is destroyed.
@@ -752,139 +971,186 @@ class OwnershipTestWidget : public Widget {
   raw_ptr<OwnershipTestState> state_;
 };
 
-// TODO(sky): add coverage of ownership for the desktop variants.
+class NativeWidgetDestroyedWaiter {
+ public:
+  explicit NativeWidgetDestroyedWaiter(OwnershipTestState* state)
+      : state_(state) {}
 
-// NativeWidget owns its Widget, part 1: NativeWidget is a platform-native
-// widget.
-TEST_F(WidgetOwnershipTest, Ownership_PlatformNativeWidgetOwnsWidget) {
-  OwnershipTestState state;
+  base::OnceClosure GetNativeWidgetDestroyedCallback() {
+    return base::BindOnce(
+        [](OwnershipTestState* state, base::RunLoop* run_loop) {
+          state->native_widget_deleted = true;
+          run_loop->Quit();
+        },
+        state_.get(), &run_loop_);
+  }
 
-  Widget* widget = new OwnershipTestWidget(&state);
+  void Wait() {
+    if (!state_->native_widget_deleted)
+      run_loop_.Run();
+  }
+
+ private:
+  base::RunLoop run_loop_;
+  raw_ptr<OwnershipTestState> state_;
+};
+
+using NativeWidgetOwnsWidgetTest = WidgetOwnershipTest;
+// NativeWidget owns its Widget, part 1.1: NativeWidget is a non-desktop
+// widget, CloseNow() destroys Widget and NativeWidget synchronously.
+TEST_F(NativeWidgetOwnsWidgetTest, NonDesktopWidget_CloseNow) {
+  Widget* widget = new OwnershipTestWidget(state());
   Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_POPUP);
   params.native_widget = CreatePlatformNativeWidgetImpl(
-      widget, kStubCapture, &state.native_widget_deleted);
+      widget, kStubCapture, &state()->native_widget_deleted);
   widget->Init(std::move(params));
 
-  // Now destroy the native widget.
   widget->CloseNow();
 
-  EXPECT_TRUE(state.widget_deleted);
-  EXPECT_TRUE(state.native_widget_deleted);
+  // Both widget and native widget should be deleted synchronously.
+  EXPECT_TRUE(state()->widget_deleted);
+  EXPECT_TRUE(state()->native_widget_deleted);
 }
 
-// NativeWidget owns its Widget, part 2: NativeWidget is a NativeWidget.
-TEST_F(WidgetOwnershipTest, Ownership_ViewsNativeWidgetOwnsWidget) {
-  OwnershipTestState state;
+// NativeWidget owns its Widget, part 1.2: NativeWidget is a non-desktop
+// widget, Close() destroys Widget and NativeWidget asynchronously.
+TEST_F(NativeWidgetOwnsWidgetTest, NonDesktopWidget_Close) {
+  NativeWidgetDestroyedWaiter waiter(state());
+  Widget* widget = new OwnershipTestWidget(state());
+  Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_POPUP);
+  params.native_widget = CreatePlatformNativeWidgetImpl(
+      widget, kStubCapture, waiter.GetNativeWidgetDestroyedCallback());
+  widget->Init(std::move(params));
 
+  widget->Close();
+  waiter.Wait();
+
+  EXPECT_TRUE(state()->widget_deleted);
+  EXPECT_TRUE(state()->native_widget_deleted);
+}
+
+// NativeWidget owns its Widget, part 1.3: NativeWidget is a desktop
+// widget, Close() destroys Widget and NativeWidget asynchronously.
+#if BUILDFLAG(ENABLE_DESKTOP_AURA)
+TEST_F(NativeWidgetOwnsWidgetTest, DesktopWidget_Close) {
+  NativeWidgetDestroyedWaiter waiter(state());
+  Widget* widget = new OwnershipTestWidget(state());
+  Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_POPUP);
+  params.native_widget = CreatePlatformDesktopNativeWidgetImpl(
+      widget, kStubCapture, waiter.GetNativeWidgetDestroyedCallback());
+  widget->Init(std::move(params));
+
+  widget->Close();
+  waiter.Wait();
+
+  EXPECT_TRUE(state()->widget_deleted);
+  EXPECT_TRUE(state()->native_widget_deleted);
+}
+#endif
+
+// NativeWidget owns its Widget, part 1.4: NativeWidget is a desktop
+// widget. Unlike desktop widget, CloseNow() might destroy Widget and
+// NativeWidget asynchronously.
+#if BUILDFLAG(ENABLE_DESKTOP_AURA)
+TEST_F(NativeWidgetOwnsWidgetTest, DesktopWidget_CloseNow) {
+  NativeWidgetDestroyedWaiter waiter(state());
+  Widget* widget = new OwnershipTestWidget(state());
+  Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_POPUP);
+  params.native_widget = CreatePlatformDesktopNativeWidgetImpl(
+      widget, kStubCapture, waiter.GetNativeWidgetDestroyedCallback());
+  widget->Init(std::move(params));
+
+  widget->CloseNow();
+  waiter.Wait();
+
+  EXPECT_TRUE(state()->widget_deleted);
+  EXPECT_TRUE(state()->native_widget_deleted);
+}
+#endif
+
+// NativeWidget owns its Widget, part 2.1: NativeWidget is a non-desktop
+// widget. CloseNow() the parent should destroy the child.
+TEST_F(NativeWidgetOwnsWidgetTest, NonDestkopWidget_CloseNowParent) {
+  NativeWidgetDestroyedWaiter waiter(state());
   Widget* toplevel = CreateTopLevelPlatformWidget();
-
-  Widget* widget = new OwnershipTestWidget(&state);
+  Widget* widget = new OwnershipTestWidget(state());
   Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_POPUP);
   params.parent = toplevel->GetNativeView();
   params.native_widget = CreatePlatformNativeWidgetImpl(
-      widget, kStubCapture, &state.native_widget_deleted);
+      widget, kStubCapture, waiter.GetNativeWidgetDestroyedCallback());
   widget->Init(std::move(params));
 
   // Now destroy the native widget. This is achieved by closing the toplevel.
   toplevel->CloseNow();
-
   // The NativeWidget won't be deleted until after a return to the message loop
   // so we have to run pending messages before testing the destruction status.
-  RunPendingMessages();
+  waiter.Wait();
 
-  EXPECT_TRUE(state.widget_deleted);
-  EXPECT_TRUE(state.native_widget_deleted);
+  EXPECT_TRUE(state()->widget_deleted);
+  EXPECT_TRUE(state()->native_widget_deleted);
 }
 
-// NativeWidget owns its Widget, part 3: NativeWidget is a platform-native
-// widget, destroyed out from under it by the OS.
-TEST_F(WidgetOwnershipTest,
-       Ownership_PlatformNativeWidgetOwnsWidget_NativeDestroy) {
-  OwnershipTestState state;
+// NativeWidget owns its Widget, part 2.2: NativeWidget is a desktop
+// widget. CloseNow() the parent should destroy the child.
+#if BUILDFLAG(ENABLE_DESKTOP_AURA)
+TEST_F(NativeWidgetOwnsWidgetTest, DestkopWidget_CloseNowParent) {
+  NativeWidgetDestroyedWaiter waiter(state());
+  Widget* toplevel = CreateTopLevelPlatformDesktopWidget();
+  Widget* widget = new OwnershipTestWidget(state());
+  Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_POPUP);
+  params.parent = toplevel->GetNativeView();
+  params.native_widget = CreatePlatformDesktopNativeWidgetImpl(
+      widget, kStubCapture, waiter.GetNativeWidgetDestroyedCallback());
+  widget->Init(std::move(params));
 
-  Widget* widget = new OwnershipTestWidget(&state);
+  // Now destroy the native widget. This is achieved by closing the toplevel.
+  toplevel->CloseNow();
+  // The NativeWidget won't be deleted until after a return to the message loop
+  // so we have to run pending messages before testing the destruction status.
+  waiter.Wait();
+
+  EXPECT_TRUE(state()->widget_deleted);
+  EXPECT_TRUE(state()->native_widget_deleted);
+}
+#endif
+
+// NativeWidget owns its Widget, part 3.1: NativeWidget is a non-desktop
+// widget, destroyed out from under it by the OS.
+TEST_F(NativeWidgetOwnsWidgetTest, NonDesktopWidget_NativeDestroy) {
+  Widget* widget = new OwnershipTestWidget(state());
   Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_POPUP);
   params.native_widget = CreatePlatformNativeWidgetImpl(
-      widget, kStubCapture, &state.native_widget_deleted);
+      widget, kStubCapture, &state()->native_widget_deleted);
   widget->Init(std::move(params));
 
   // Now simulate a destroy of the platform native widget from the OS:
   SimulateNativeDestroy(widget);
 
-  EXPECT_TRUE(state.widget_deleted);
-  EXPECT_TRUE(state.native_widget_deleted);
+  EXPECT_TRUE(state()->widget_deleted);
+  EXPECT_TRUE(state()->native_widget_deleted);
 }
 
-// NativeWidget owns its Widget, part 4: NativeWidget is a NativeWidget,
-// destroyed by the view hierarchy that contains it.
-TEST_F(WidgetOwnershipTest,
-       Ownership_ViewsNativeWidgetOwnsWidget_NativeDestroy) {
-  OwnershipTestState state;
-
-  Widget* toplevel = CreateTopLevelPlatformWidget();
-
-  Widget* widget = new OwnershipTestWidget(&state);
+#if BUILDFLAG(ENABLE_DESKTOP_AURA)
+// NativeWidget owns its Widget, part 3.2: NativeWidget is a desktop
+// widget, destroyed out from under it by the OS.
+TEST_F(NativeWidgetOwnsWidgetTest, DesktopWidget_NativeDestroy) {
+  NativeWidgetDestroyedWaiter waiter(state());
+  Widget* widget = new OwnershipTestWidget(state());
   Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_POPUP);
-  params.parent = toplevel->GetNativeView();
-  params.native_widget = CreatePlatformNativeWidgetImpl(
-      widget, kStubCapture, &state.native_widget_deleted);
+  params.native_widget = CreatePlatformDesktopNativeWidgetImpl(
+      widget, kStubCapture, waiter.GetNativeWidgetDestroyedCallback());
   widget->Init(std::move(params));
 
-  // Destroy the widget (achieved by closing the toplevel).
-  toplevel->CloseNow();
+  // Now simulate a destroy of the platform native widget from the OS:
+  SimulateDesktopNativeDestroy(widget);
+  waiter.Wait();
 
-  // The NativeWidget won't be deleted until after a return to the message loop
-  // so we have to run pending messages before testing the destruction status.
-  RunPendingMessages();
-
-  EXPECT_TRUE(state.widget_deleted);
-  EXPECT_TRUE(state.native_widget_deleted);
+  EXPECT_TRUE(state()->widget_deleted);
+  EXPECT_TRUE(state()->native_widget_deleted);
 }
+#endif
 
-// NativeWidget owns its Widget, part 5: NativeWidget is a NativeWidget,
-// we close it directly.
-TEST_F(WidgetOwnershipTest, Ownership_ViewsNativeWidgetOwnsWidget_Close) {
-  OwnershipTestState state;
-
-  Widget* toplevel = CreateTopLevelPlatformWidget();
-
-  Widget* widget = new OwnershipTestWidget(&state);
-  Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_POPUP);
-  params.parent = toplevel->GetNativeView();
-  params.native_widget = CreatePlatformNativeWidgetImpl(
-      widget, kStubCapture, &state.native_widget_deleted);
-  widget->Init(std::move(params));
-
-  // Destroy the widget.
-  widget->Close();
-  toplevel->CloseNow();
-
-  // The NativeWidget won't be deleted until after a return to the message loop
-  // so we have to run pending messages before testing the destruction status.
-  RunPendingMessages();
-
-  EXPECT_TRUE(state.widget_deleted);
-  EXPECT_TRUE(state.native_widget_deleted);
-}
-
-class WidgetOwnsNativeWidgetTest : public WidgetOwnershipTest {
- public:
-  WidgetOwnsNativeWidgetTest() = default;
-  ~WidgetOwnsNativeWidgetTest() override = default;
-
-  void TearDown() override {
-    EXPECT_TRUE(state_.widget_deleted);
-    EXPECT_TRUE(state_.native_widget_deleted);
-
-    WidgetOwnershipTest::TearDown();
-  }
-
-  OwnershipTestState* state() { return &state_; }
-
- private:
-  OwnershipTestState state_;
-};
-
+using WidgetOwnsNativeWidgetTest = WidgetOwnershipTest;
 // Widget owns its NativeWidget, part 1.
 TEST_F(WidgetOwnsNativeWidgetTest, Ownership) {
   auto widget = std::make_unique<OwnershipTestWidget>(state());
@@ -954,25 +1220,28 @@ TEST_F(WidgetOwnsNativeWidgetTest, IdempotentCloseNow) {
   RunPendingMessages();
 }
 
+// Widget owns its NativeWidget, part 5: Widget::Close should be idempotent.
+TEST_F(WidgetOwnsNativeWidgetTest, IdempotentClose) {
+  auto widget = std::make_unique<OwnershipTestWidget>(state());
+  Widget::InitParams params = CreateParamsForTestWidget();
+  params.native_widget = CreatePlatformNativeWidgetImpl(
+      widget.get(), kStubCapture, &state()->native_widget_deleted);
+  widget->Init(std::move(params));
+
+  // Now close the Widget, which should delete the NativeWidget.
+  widget->Close();
+
+  RunPendingMessages();
+
+  // Close the widget again should not crash.
+  widget->Close();
+
+  RunPendingMessages();
+}
+
 // Test for CLIENT_OWNS_WIDGET. The client holds a unique_ptr<Widget>.
 // The NativeWidget will be destroyed when the platform window is closed.
-class ClientOwnsWidgetTest : public WidgetOwnershipTest {
- public:
-  ClientOwnsWidgetTest() = default;
-  ~ClientOwnsWidgetTest() override = default;
-
-  void TearDown() override {
-    EXPECT_TRUE(state_.widget_deleted);
-    EXPECT_TRUE(state_.native_widget_deleted);
-
-    WidgetOwnershipTest::TearDown();
-  }
-
-  OwnershipTestState* state() { return &state_; }
-
- private:
-  OwnershipTestState state_;
-};
+using ClientOwnsWidgetTest = WidgetOwnershipTest;
 
 TEST_F(ClientOwnsWidgetTest, Ownership) {
   auto widget = std::make_unique<OwnershipTestWidget>(state());
@@ -988,254 +1257,41 @@ TEST_F(ClientOwnsWidgetTest, Ownership) {
   EXPECT_TRUE(state()->native_widget_deleted);
 }
 
-// TODO(crbug.com/1374015): These tests will not work properly until we decouple
-// the lifetime of NativeWidget and Widget and fix the way we check for a
-// destroyed NativeWidget. Enable these tests for all platforms afterwards.
-#if !(BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_FUCHSIA) || \
-      BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN))
-
-////////////////////////////////////////////////////////////////////////////////
-// This test simulates a widget existing with a destroyed NativeWidget.
-class WidgetWithDestroyedNativeWidgetTest : public ViewsTestBase {
- public:
-  WidgetWithDestroyedNativeWidgetTest() = default;
-  WidgetWithDestroyedNativeWidgetTest(
-      const WidgetWithDestroyedNativeWidgetTest&) = delete;
-  WidgetWithDestroyedNativeWidgetTest& operator=(
-      const WidgetWithDestroyedNativeWidgetTest&) = delete;
-  ~WidgetWithDestroyedNativeWidgetTest() override = default;
-  void SetUp() override {
-    ViewsTestBase::SetUp();
-    widget_ = CreateTestWidget();
-    widget_->Show();
-    native_widget_ = widget_->native_widget_private();
-    widget_->SetNativeWidgetForTesting(nullptr);
-  }
-
-  void TearDown() override {
-    ViewsTestBase::TearDown();
-    // Add the NativeWidget back to be destroyed. We should be able to directly
-    // tell the NativeWidget to be destroyed if we decouple the lifetime of
-    // Widget and NativeWidget.
-    widget_->SetNativeWidgetForTesting(native_widget_);
-  }
-
-  Widget* widget() { return widget_.get(); }
-
- private:
-  std::unique_ptr<Widget> widget_;
-  internal::NativeWidgetPrivate* native_widget_;
-};
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, Activate) {
-  widget()->Activate();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, Close) {
-  widget()->Close();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, Deactivate) {
-  widget()->Deactivate();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, FlashFrame) {
-  widget()->FlashFrame(true);
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, GetAccelerator) {
-  ui::Accelerator accelerator;
-  widget()->GetAccelerator(0, &accelerator);
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, GetClientAreaBoundsInScreen) {
-  widget()->GetClientAreaBoundsInScreen();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, GetFocusManager) {
-  widget()->GetFocusManager();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, GetFocusTraversable) {
-  widget()->GetFocusTraversable();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, GetLayer) {
-  widget()->GetLayer();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, GetNativeTheme) {
-  widget()->GetNativeTheme();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, GetNativeView) {
-  widget()->GetNativeView();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, GetNativeWindow) {
-  widget()->GetNativeWindow();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, GetNativeWindowProperty) {
-  widget()->GetNativeWindowProperty("xx");
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, GetThemeProvider) {
-  widget()->GetThemeProvider();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, GetTopLevelWidget) {
-  widget()->GetTopLevelWidget();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, GetWindowBoundsInScreen) {
-  widget()->GetWindowBoundsInScreen();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, GetWorkAreaBoundsInScreen) {
-  widget()->GetWorkAreaBoundsInScreen();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, HasCapture) {
-  widget()->HasCapture();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, HasFocusManager) {
-  widget()->HasFocusManager();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, HasHitTestMask) {
-  widget()->HasHitTestMask();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, HasObserver) {
-  TestWidgetObserver observer(widget());
-  widget()->HasObserver(&observer);
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, HasRemovalsObserver) {
-  TestWidgetRemovalsObserver observer;
-  widget()->HasRemovalsObserver(&observer);
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, Hide) {
-  widget()->Hide();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, IsActive) {
-  widget()->IsActive();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, IsClosed) {
-  widget()->IsClosed();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, IsFullscreen) {
-  widget()->IsFullscreen();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, IsMaximized) {
-  widget()->IsMaximized();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, IsMouseEventsEnabled) {
-  widget()->IsMouseEventsEnabled();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest,
-       IsTranslucentWindowOpacitySupported) {
-  widget()->IsTranslucentWindowOpacitySupported();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, IsVisible) {
-  widget()->IsVisible();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, Maximize) {
-  widget()->Maximize();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, Minimize) {
-  widget()->Minimize();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, ReleaseCapture) {
-  widget()->ReleaseCapture();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, ReorderNativeViews) {
-  widget()->ReorderNativeViews();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, Restore) {
-  widget()->Restore();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, SchedulePaintInRect) {
-  widget()->SchedulePaintInRect(gfx::Rect(0, 0, 1, 2));
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, SetBounds) {
-  widget()->SetBounds(gfx::Rect(0, 0, 100, 80));
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, SetBoundsConstrained) {
-  widget()->SetBoundsConstrained(gfx::Rect(0, 0, 120, 140));
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, SetCapture) {
-  widget()->SetCapture(widget()->GetRootView());
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, SetNativeWindowProperty) {
-  widget()->SetNativeWindowProperty("xx", widget());
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, SetOpacity) {
-  widget()->SetOpacity(0.f);
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, SetSize) {
-  widget()->SetSize(gfx::Size(10, 11));
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest,
-       SetVisibilityChangedAnimationsEnabled) {
-  widget()->SetVisibilityChangedAnimationsEnabled(false);
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, GetAndSetZOrderLevel) {
-  widget()->SetZOrderLevel(ui::ZOrderLevel::kNormal);
-  widget()->GetZOrderLevel();
-}
-
-TEST_F(WidgetWithDestroyedNativeWidgetTest, StackAtTop) {
-  widget()->StackAtTop();
-}
-
-#endif  // #if BUILDFLAG(IS_CHROMEOS_ASH) || BUILDFLAG(IS_FUCHSIA) ||
-        // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
-
 ////////////////////////////////////////////////////////////////////////////////
 // Test to verify using various Widget methods doesn't crash when the underlying
-// NativeView is destroyed.
+// NativeView and NativeWidget is destroyed. Currently, for
+// the WIDGET_OWNS_NATIVE_WIDGET ownership pattern, the NativeWidget will not be
+// destroyed, but |native_widget_| will still be set to nullptr.
 
-class WidgetWithDestroyedNativeViewTest
-    : public ViewsTestBaseWithNativeWidgetType {
+class WidgetWithDestroyedNativeViewOrNativeWidgetTest
+    : public ViewsTestBase,
+      public testing::WithParamInterface<
+          std::tuple<ViewsTestBase::NativeWidgetType,
+                     Widget::InitParams::Ownership>> {
  public:
-  WidgetWithDestroyedNativeViewTest() = default;
+  WidgetWithDestroyedNativeViewOrNativeWidgetTest() = default;
 
-  WidgetWithDestroyedNativeViewTest(const WidgetWithDestroyedNativeViewTest&) =
-      delete;
-  WidgetWithDestroyedNativeViewTest& operator=(
-      const WidgetWithDestroyedNativeViewTest&) = delete;
+  WidgetWithDestroyedNativeViewOrNativeWidgetTest(
+      const WidgetWithDestroyedNativeViewOrNativeWidgetTest&) = delete;
+  WidgetWithDestroyedNativeViewOrNativeWidgetTest& operator=(
+      const WidgetWithDestroyedNativeViewOrNativeWidgetTest&) = delete;
 
-  ~WidgetWithDestroyedNativeViewTest() override = default;
+  ~WidgetWithDestroyedNativeViewOrNativeWidgetTest() override = default;
 
-  // ViewsTestBaseWithNativeWidgetType:
+  // ViewsTestBase:
   void SetUp() override {
-    ViewsTestBaseWithNativeWidgetType::SetUp();
-    widget_ = CreateTestWidget();
+    set_native_widget_type(
+        std::get<ViewsTestBase::NativeWidgetType>(GetParam()));
+    ViewsTestBase::SetUp();
+    if (std::get<Widget::InitParams::Ownership>(GetParam()) ==
+        Widget::InitParams::CLIENT_OWNS_WIDGET) {
+      widget_ = std::make_unique<Widget>();
+      Widget::InitParams params = CreateParamsForTestWidget();
+      params.ownership = Widget::InitParams::CLIENT_OWNS_WIDGET;
+      widget_->Init(std::move(params));
+    } else {
+      widget_ = CreateTestWidget();
+    }
     widget()->Show();
     widget()->native_widget_private()->CloseNow();
     task_environment()->RunUntilIdle();
@@ -1243,609 +1299,806 @@ class WidgetWithDestroyedNativeViewTest
 
   Widget* widget() { return widget_.get(); }
 
+  static std::string PrintTestName(
+      const ::testing::TestParamInfo<
+          WidgetWithDestroyedNativeViewOrNativeWidgetTest::ParamType>& info) {
+    std::string test_name;
+    switch (std::get<ViewsTestBase::NativeWidgetType>(info.param)) {
+      case ViewsTestBase::NativeWidgetType::kDefault:
+        test_name += "DefaultNativeWidget";
+        break;
+      case ViewsTestBase::NativeWidgetType::kDesktop:
+        test_name += "DesktopNativeWidget";
+        break;
+    }
+    test_name += "_";
+    switch (std::get<Widget::InitParams::Ownership>(info.param)) {
+      case Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET:
+        test_name += "WidgetOwnsNativeWidget";
+        break;
+      case Widget::InitParams::CLIENT_OWNS_WIDGET:
+        test_name += "ClientOwnsNativeWidget";
+        break;
+      case Widget::InitParams::NATIVE_WIDGET_OWNS_WIDGET:
+        // Note: We don't test for this case in
+        // WidgetWithDestroyedNativeViewOrNativeWidgetTest.
+        test_name += "NativeWidgetOwnsWidget";
+        break;
+    }
+    return test_name;
+  }
+
  private:
   std::unique_ptr<Widget> widget_;
 };
 
-TEST_P(WidgetWithDestroyedNativeViewTest, Activate) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, Activate) {
   widget()->Activate();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, AddAndRemoveObserver) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, AddAndRemoveObserver) {
   // Constructor calls |AddObserver()|
   TestWidgetObserver observer(widget());
   widget()->RemoveObserver(&observer);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, AddAndRemoveRemovalsObserver) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       AddAndRemoveRemovalsObserver) {
   TestWidgetRemovalsObserver removals_observer;
   widget()->AddRemovalsObserver(&removals_observer);
   widget()->RemoveRemovalsObserver(&removals_observer);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, AsWidget) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, AsWidget) {
   widget()->AsWidget();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, CanActivate) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, CanActivate) {
   widget()->CanActivate();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, CenterWindow) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, CenterWindow) {
   widget()->CenterWindow(gfx::Size());
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, ClearNativeFocus) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, ClearNativeFocus) {
   widget()->ClearNativeFocus();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, ClientView) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, ClientView) {
   widget()->client_view();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, Close) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, Close) {
   widget()->Close();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, CloseAllSecondaryWidgets) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       CloseAllSecondaryWidgets) {
   widget()->CloseAllSecondaryWidgets();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, CloseNow) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, CloseNow) {
   widget()->CloseNow();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, ClosedReason) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, ClosedReason) {
   widget()->closed_reason();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, CloseWithReason) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, CloseWithReason) {
   widget()->CloseWithReason(views::Widget::ClosedReason::kUnspecified);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, CreateNonClientFrameView) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       CreateNonClientFrameView) {
   widget()->CreateNonClientFrameView();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, Deactivate) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, Deactivate) {
   widget()->Deactivate();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, DebugToggleFrameType) {
-  widget()->DebugToggleFrameType();
-}
-
-TEST_P(WidgetWithDestroyedNativeViewTest, DraggedView) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, DraggedView) {
   widget()->dragged_view();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, EndMoveLoop) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, EndMoveLoop) {
   widget()->EndMoveLoop();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, ExecuteCommand) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, ExecuteCommand) {
   widget()->ExecuteCommand(0);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, FlashFrame) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, FlashFrame) {
   widget()->FlashFrame(true);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, FrameType) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, FrameType) {
   widget()->frame_type();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, FrameTypeChanged) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, FrameTypeChanged) {
   widget()->FrameTypeChanged();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetAccelerator) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetAccelerator) {
   ui::Accelerator accelerator;
   widget()->GetAccelerator(0, &accelerator);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetAllChildWidgets) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetAllChildWidgets) {
   views::Widget::Widgets widgets;
   Widget::GetAllChildWidgets(widget()->GetNativeView(), &widgets);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetAllOwnedWidgets) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetAllOwnedWidgets) {
   views::Widget::Widgets widgets;
   Widget::GetAllOwnedWidgets(widget()->GetNativeView(), &widgets);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetClientAreaBoundsInScreen) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetAndSetZOrderLevel) {
+  widget()->SetZOrderLevel(ui::ZOrderLevel::kNormal);
+  widget()->GetZOrderLevel();
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       GetClientAreaBoundsInScreen) {
   widget()->GetClientAreaBoundsInScreen();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetColorProvider) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetColorProvider) {
   widget()->GetColorProvider();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetCompositor) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetCompositor) {
   widget()->GetCompositor();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetContentsView) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetContentsView) {
   widget()->GetContentsView();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetCustomTheme) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetCustomTheme) {
   widget()->GetCustomTheme();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetEventSink) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetEventSink) {
   widget()->GetEventSink();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetFocusSearch) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetFocusSearch) {
   widget()->GetFocusSearch();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetFocusManager) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetFocusManager) {
   widget()->GetFocusManager();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetFocusTraversable) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetFocusTraversable) {
   widget()->GetFocusTraversable();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetGestureConsumer) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetGestureConsumer) {
   widget()->GetGestureConsumer();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetGestureRecognizer) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetGestureRecognizer) {
   widget()->GetGestureRecognizer();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetHitTestMask) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetHitTestMask) {
   SkPath mask;
   widget()->GetHitTestMask(&mask);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetInputMethod) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetInputMethod) {
   widget()->GetInputMethod();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetLayer) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetLayer) {
   widget()->GetLayer();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetMinimumSize) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetMinimumSize) {
   widget()->GetMinimumSize();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetMaximumSize) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetMaximumSize) {
   widget()->GetMaximumSize();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetName) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetName) {
   widget()->GetName();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetNativeTheme) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetNativeTheme) {
   widget()->GetNativeTheme();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetNativeView) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetNativeView) {
   widget()->GetNativeView();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetNativeWindow) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetNativeWindow) {
   widget()->GetNativeWindow();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetNativeWindowProperty) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       GetNativeWindowProperty) {
   widget()->GetNativeWindowProperty("xx");
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetNonClientComponent) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetNonClientComponent) {
   gfx::Point point;
   widget()->GetNonClientComponent(point);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetPrimaryWindowWidget) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       GetPrimaryWindowWidget) {
   widget()->GetPrimaryWindowWidget();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetRestoredBounds) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetRestoredBounds) {
   widget()->GetRestoredBounds();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetRootView) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetRootView) {
   widget()->GetRootView();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetSublevelManager) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetSublevelManager) {
   widget()->GetSublevelManager();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetThemeProvider) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetThemeProvider) {
   widget()->GetThemeProvider();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetTooltipManager) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetTooltipManager) {
   widget()->GetTooltipManager();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetTopLevelWidget) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetTopLevelWidget) {
   widget()->GetTopLevelWidget();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetTopLevelWidgetForNativeView) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       GetTopLevelWidgetForNativeView) {
   Widget::GetTopLevelWidgetForNativeView(widget()->GetNativeView());
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetWeakPtr) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetWeakPtr) {
   widget()->GetWeakPtr();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetWidgetForNativeView) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       GetWidgetForNativeView) {
   Widget::GetWidgetForNativeView(widget()->GetNativeView());
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetWidgetForNativeWindow) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       GetWidgetForNativeWindow) {
   Widget::GetWidgetForNativeWindow(widget()->GetNativeWindow());
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetWindowBoundsInScreen) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       GetWindowBoundsInScreen) {
   widget()->GetWindowBoundsInScreen();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetWorkAreaBoundsInScreen) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       GetWorkAreaBoundsInScreen) {
   widget()->GetWorkAreaBoundsInScreen();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetWorkspace) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetWorkspace) {
   widget()->GetWorkspace();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetZOrderSublevel) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, GetZOrderSublevel) {
   widget()->GetZOrderSublevel();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, HasCapture) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, HasCapture) {
   widget()->HasCapture();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, HasFocusManager) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, HasFocusManager) {
   widget()->HasFocusManager();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, HasHitTestMask) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, HasHitTestMask) {
   widget()->HasHitTestMask();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, HasObserver) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, HasObserver) {
   TestWidgetObserver observer(widget());
   widget()->HasObserver(&observer);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, HasRemovalsObserver) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, HasRemovalsObserver) {
   TestWidgetRemovalsObserver observer;
   widget()->HasRemovalsObserver(&observer);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, Hide) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, Hide) {
   widget()->Hide();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, Init) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, Init) {
   Widget::InitParams params;
   EXPECT_DCHECK_DEATH(widget()->Init(std::move(params)));
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, is_secondary_widget) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, is_secondary_widget) {
   widget()->is_secondary_widget();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, IsActive) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, IsActive) {
   widget()->IsActive();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, IsClosed) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, IsClosed) {
   widget()->IsClosed();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, IsDialogBox) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, IsDialogBox) {
   widget()->IsDialogBox();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, IsFullscreen) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, IsFullscreen) {
   widget()->IsFullscreen();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, IsMaximized) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, IsMaximized) {
   widget()->IsMaximized();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, IsMinimized) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, IsMinimized) {
   widget()->IsMinimized();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, IsModal) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, IsModal) {
   widget()->IsModal();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, IsMouseEventsEnabled) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, IsMouseEventsEnabled) {
   widget()->IsMouseEventsEnabled();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, IsMoveLoopSupported) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, IsMoveLoopSupported) {
   widget()->IsMoveLoopSupported();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, IsNativeWidgetInitialized) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       IsNativeWidgetInitialized) {
   widget()->IsNativeWidgetInitialized();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, IsStackedAbove) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, IsStackedAbove) {
   std::unique_ptr<Widget> other_widget = CreateTestWidget();
   widget()->IsStackedAbove(other_widget->GetNativeView());
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, IsTranslucentWindowOpacitySupported) {
-  widget()->IsTranslucentWindowOpacitySupported();
-}
-
-TEST_P(WidgetWithDestroyedNativeViewTest, IsVisible) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, IsVisible) {
   widget()->IsVisible();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, IsVisibleOnAllWorkspaces) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       IsVisibleOnAllWorkspaces) {
   widget()->IsVisibleOnAllWorkspaces();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnGestureEvent) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, OnGestureEvent) {
   ui::GestureEvent event =
       CreateTestGestureEvent(ui::ET_GESTURE_SCROLL_BEGIN, 5, 5);
   widget()->OnGestureEvent(&event);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnKeyEvent) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, OnKeyEvent) {
   ui::KeyEvent event(ui::ET_KEY_PRESSED, ui::VKEY_RIGHT, ui::EF_NONE);
   widget()->OnKeyEvent(&event);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnMouseCaptureLost) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, OnMouseCaptureLost) {
   widget()->OnMouseCaptureLost();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnMouseEvent) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, OnMouseEvent) {
   gfx::Point p(200, 200);
   ui::MouseEvent event(ui::ET_MOUSE_MOVED, p, p, ui::EventTimeForNow(),
                        ui::EF_NONE, ui::EF_NONE);
   widget()->OnMouseEvent(&event);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnNativeBlur) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, OnNativeBlur) {
   widget()->OnNativeBlur();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnNativeFocus) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, OnNativeFocus) {
   widget()->OnNativeFocus();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnNativeThemeUpdated) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, OnNativeThemeUpdated) {
   ui::TestNativeTheme theme;
   widget()->OnNativeThemeUpdated(&theme);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnNativeWidgetActivationChanged) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       OnNativeWidgetActivationChanged) {
   widget()->OnNativeWidgetActivationChanged(false);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnNativeWidgetAddedToCompositor) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       OnNativeWidgetAddedToCompositor) {
   widget()->OnNativeWidgetAddedToCompositor();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnNativeWidgetBeginUserBoundsChange) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       OnNativeWidgetBeginUserBoundsChange) {
   widget()->OnNativeWidgetBeginUserBoundsChange();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnNativeWidgetCreated) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, OnNativeWidgetCreated) {
   EXPECT_DCHECK_DEATH(widget()->OnNativeWidgetCreated());
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnNativeWidgetDestroyed) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       OnNativeWidgetDestroyed) {
   widget()->OnNativeWidgetDestroyed();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnNativeWidgetDestroying) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       OnNativeWidgetDestroying) {
   EXPECT_DCHECK_DEATH(widget()->OnNativeWidgetDestroying());
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnNativeWidgetEndUserBoundsChange) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       OnNativeWidgetEndUserBoundsChange) {
   widget()->OnNativeWidgetEndUserBoundsChange();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnNativeWidgetMove) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, OnNativeWidgetMove) {
   widget()->OnNativeWidgetMove();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnNativeWidgetPaint) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, OnNativeWidgetPaint) {
   auto display_list = base::MakeRefCounted<cc::DisplayItemList>();
   widget()->OnNativeWidgetPaint(
       ui::PaintContext(display_list.get(), 1, gfx::Rect(), false));
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnNativeWidgetParentChanged) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       OnNativeWidgetParentChanged) {
   widget()->OnNativeWidgetParentChanged(nullptr);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest,
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
        OnNativeWidgetRemovingFromCompositor) {
   widget()->OnNativeWidgetRemovingFromCompositor();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnNativeWidgetSizeChanged) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       OnNativeWidgetSizeChanged) {
   widget()->OnNativeWidgetSizeChanged(gfx::Size());
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnNativeWidgetVisibilityChanged) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       OnNativeWidgetVisibilityChanged) {
   widget()->OnNativeWidgetVisibilityChanged(false);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest,
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
        OnNativeWidgetWindowShowStateChanged) {
   widget()->OnNativeWidgetWindowShowStateChanged();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnNativeWidgetWorkspaceChanged) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       OnNativeWidgetWorkspaceChanged) {
   widget()->OnNativeWidgetWorkspaceChanged();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnOwnerClosing) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, OnOwnerClosing) {
   widget()->OnOwnerClosing();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnParentShouldPaintAsActiveChanged) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       OnParentShouldPaintAsActiveChanged) {
   widget()->OnParentShouldPaintAsActiveChanged();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnScrollEvent) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, OnScrollEvent) {
   ui::ScrollEvent scroll(ui::ET_SCROLL, gfx::Point(65, 5),
                          ui::EventTimeForNow(), 0, 0, 20, 0, 20, 2);
   widget()->OnScrollEvent(&scroll);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, OnSizeConstraintsChanged) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       OnSizeConstraintsChanged) {
   widget()->OnSizeConstraintsChanged();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, LayerTreeChanged) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, LayerTreeChanged) {
   widget()->LayerTreeChanged();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, LayoutRootViewIfNecessary) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       LayoutRootViewIfNecessary) {
   widget()->LayoutRootViewIfNecessary();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, LockPaintAsActive) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, LockPaintAsActive) {
   widget()->LockPaintAsActive();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, Maximize) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, Maximize) {
   widget()->Maximize();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, Minimize) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, Minimize) {
   widget()->Minimize();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, movement_disabled) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, movement_disabled) {
   widget()->movement_disabled();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, native_widget_private) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, native_widget_private) {
   widget()->native_widget_private();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, native_widget) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, native_widget) {
   widget()->native_widget();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, non_client_view) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, non_client_view) {
   widget()->non_client_view();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, NotifyNativeViewHierarchyChanged) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       NotifyNativeViewHierarchyChanged) {
   widget()->NotifyNativeViewHierarchyChanged();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, NotifyNativeViewHierarchyWillChange) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       NotifyNativeViewHierarchyWillChange) {
   widget()->NotifyNativeViewHierarchyWillChange();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, NotifyWillRemoveView) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, NotifyWillRemoveView) {
   widget()->NotifyWillRemoveView(widget()->non_client_view());
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, parent) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, parent) {
   widget()->parent();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest,
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
        RegisterPaintAsActiveChangedCallback) {
   auto subscription =
       widget()->RegisterPaintAsActiveChangedCallback(base::DoNothing());
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, ReleaseCapture) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, ReleaseCapture) {
   widget()->ReleaseCapture();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, ReorderNativeViews) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, ReorderNativeViews) {
   widget()->ReorderNativeViews();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, ReparentNativeView) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, ReparentNativeView) {
   EXPECT_DCHECK_DEATH(
       Widget::ReparentNativeView(widget()->GetNativeView(), nullptr));
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, Restore) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, Restore) {
   widget()->Restore();
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, RunMoveLoop) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, RunMoveLoop) {
   widget()->RunMoveLoop(gfx::Vector2d(), views::Widget::MoveLoopSource::kMouse,
                         views::Widget::MoveLoopEscapeBehavior::kHide);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, RunShellDrag) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, RunShellDrag) {
   std::unique_ptr<OSExchangeData> data(std::make_unique<OSExchangeData>());
   widget()->RunShellDrag(nullptr, std::move(data), gfx::Point(), 0,
                          ui::mojom::DragEventSource::kMouse);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, SchedulePaintInRect) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, ScheduleLayout) {
+  widget()->ScheduleLayout();
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, SchedulePaintInRect) {
   widget()->SchedulePaintInRect(gfx::Rect(0, 0, 1, 2));
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, SetBounds) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, SetAspectRatio) {
+  widget()->SetAspectRatio(gfx::SizeF(1.0, 1.0));
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, SetBounds) {
   widget()->SetBounds(gfx::Rect(0, 0, 100, 80));
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, SetBoundsConstrained) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, SetBoundsConstrained) {
   widget()->SetBoundsConstrained(gfx::Rect(0, 0, 120, 140));
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, SetCapture) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       SetCanAppearInExistingFullscreenSpaces) {
+  widget()->SetCanAppearInExistingFullscreenSpaces(false);
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, SetCapture) {
   widget()->SetCapture(widget()->GetRootView());
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, SetNativeWindowProperty) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, SetContentsView) {
+  View view;
+  EXPECT_DCHECK_DEATH(widget()->SetContentsView(std::make_unique<View>()));
+  EXPECT_DCHECK_DEATH(widget()->SetContentsView(&view));
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, SetCursor) {
+  widget()->SetCursor(ui::Cursor());
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       SetFocusTraversableParent) {
+  std::unique_ptr<Widget> another_widget = CreateTestWidget();
+  widget()->SetFocusTraversableParent(another_widget->GetFocusTraversable());
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       SetFocusTraversableParentView) {
+  std::unique_ptr<Widget> another_widget = CreateTestWidget();
+  widget()->SetFocusTraversableParentView(another_widget->GetContentsView());
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, SetFullscreen) {
+  widget()->SetFullscreen(true);
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, SetInitialFocus) {
+  widget()->SetInitialFocus(ui::SHOW_STATE_INACTIVE);
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       SetNativeWindowProperty) {
   widget()->SetNativeWindowProperty("xx", widget());
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, SetOpacity) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, SetOpacity) {
   widget()->SetOpacity(0.f);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, SetSize) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, SetShape) {
+  auto rects = std::make_unique<Widget::ShapeRects>();
+  rects->emplace_back(40, 0, 20, 100);
+  rects->emplace_back(0, 40, 100, 20);
+  widget()->SetShape(std::move(rects));
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, SetSize) {
   widget()->SetSize(gfx::Size(10, 11));
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest,
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
        SetVisibilityChangedAnimationsEnabled) {
   widget()->SetVisibilityChangedAnimationsEnabled(false);
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, GetAndSetZOrderLevel) {
-  widget()->SetZOrderLevel(ui::ZOrderLevel::kNormal);
-  widget()->GetZOrderLevel();
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       SetVisibilityAnimationDuration) {
+  widget()->SetVisibilityAnimationDuration(base::Seconds(1));
 }
 
-TEST_P(WidgetWithDestroyedNativeViewTest, StackAtTop) {
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       SetVisibilityAnimationTransition) {
+  widget()->SetVisibilityAnimationTransition(Widget::ANIMATE_BOTH);
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, SetVisible) {
+  widget()->SetVisibilityAnimationTransition(Widget::ANIMATE_BOTH);
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       SetVisibleOnAllWorkspaces) {
+  widget()->SetVisibleOnAllWorkspaces(true);
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       ShouldDescendIntoChildForEventHandling) {
+  widget()->ShouldDescendIntoChildForEventHandling(nullptr, gfx::NativeView(),
+                                                   nullptr, gfx::Point(0, 0));
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       ShouldHandleNativeWidgetActivationChanged) {
+  widget()->ShouldHandleNativeWidgetActivationChanged(true);
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, ShouldPaintAsActive) {
+  widget()->ShouldPaintAsActive();
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, ShouldUseNativeFrame) {
+  widget()->ShouldUseNativeFrame();
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       ShouldWindowContentsBeTransparent) {
+  widget()->ShouldWindowContentsBeTransparent();
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, Show) {
+  widget()->Show();
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, ShowEmojiPanel) {
+  widget()->ShowEmojiPanel();
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, ShowInactive) {
+  widget()->ShowInactive();
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, StackAbove) {
+  std::unique_ptr<Widget> another_widget = CreateTestWidget();
+  widget()->StackAbove(another_widget->GetNativeView());
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, StackAboveWidget) {
+  std::unique_ptr<Widget> another_widget = CreateTestWidget();
+  widget()->StackAboveWidget(another_widget.get());
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, StackAtTop) {
   widget()->StackAtTop();
 }
 
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+       SynthesizeMouseMoveEvent) {
+  widget()->SynthesizeMouseMoveEvent();
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, ThemeChanged) {
+  widget()->ThemeChanged();
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, UnlockPaintAsActive) {
+  // UnlockPaintAsActive() is called in the destructor of PaintAsActiveLock.
+  // External invocation is not allowed.
+  EXPECT_DCHECK_DEATH(widget()->UnlockPaintAsActive());
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, UpdateWindowIcon) {
+  widget()->UpdateWindowIcon();
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, UpdateWindowTitle) {
+  widget()->UpdateWindowTitle();
+}
+
+TEST_P(WidgetWithDestroyedNativeViewOrNativeWidgetTest, ViewHierarchyChanged) {
+  widget()->ViewHierarchyChanged(
+      ViewHierarchyChangedDetails(true, nullptr, nullptr, nullptr));
+}
+
 INSTANTIATE_TEST_SUITE_P(
-    PlatformWidgetWithDestroyedNativeViewTest,
-    WidgetWithDestroyedNativeViewTest,
-    ::testing::Values(ViewsTestBase::NativeWidgetType::kDefault,
-                      ViewsTestBase::NativeWidgetType::kDesktop));
+    PlatformWidgetWithDestroyedNativeViewOrNativeWidgetTest,
+    WidgetWithDestroyedNativeViewOrNativeWidgetTest,
+    ::testing::Combine(
+        ::testing::Values(ViewsTestBase::NativeWidgetType::kDefault,
+                          ViewsTestBase::NativeWidgetType::kDesktop),
+        ::testing::Values(Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET,
+                          Widget::InitParams::CLIENT_OWNS_WIDGET)),
+    WidgetWithDestroyedNativeViewOrNativeWidgetTest::PrintTestName);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Widget observer tests.
@@ -1865,7 +2118,6 @@ class WidgetObserverTest : public WidgetTest, public WidgetObserver {
       active_ = nullptr;
     if (widget_activated_ == widget)
       widget_activated_ = nullptr;
-    widget_closed_ = widget;
   }
 
   void OnWidgetActivationChanged(Widget* widget, bool active) override {
@@ -1877,60 +2129,61 @@ class WidgetObserverTest : public WidgetTest, public WidgetObserver {
     } else {
       if (widget_activated_ == widget)
         widget_activated_ = nullptr;
-      widget_deactivated_ = widget;
+      widget_deactivated_ = widget->GetName();
     }
   }
 
   void OnWidgetVisibilityChanged(Widget* widget, bool visible) override {
     if (visible) {
-      widget_shown_ = widget;
+      widget_shown_ = widget->GetName();
       return;
     }
-    widget_hidden_ = widget;
+    widget_hidden_ = widget->GetName();
     if (widget_to_close_on_hide_) {
-      widget_to_close_on_hide_->Close();
-      widget_to_close_on_hide_ = nullptr;
+      std::exchange(widget_to_close_on_hide_, nullptr)->Close();
     }
   }
 
   void OnWidgetBoundsChanged(Widget* widget,
                              const gfx::Rect& new_bounds) override {
-    widget_bounds_changed_ = widget;
+    widget_bounds_changed_ = widget->GetName();
   }
 
   void reset() {
     active_ = nullptr;
-    widget_closed_ = nullptr;
     widget_activated_ = nullptr;
-    widget_deactivated_ = nullptr;
-    widget_shown_ = nullptr;
-    widget_hidden_ = nullptr;
-    widget_bounds_changed_ = nullptr;
+    widget_deactivated_.clear();
+    widget_shown_.clear();
+    widget_hidden_.clear();
+    widget_bounds_changed_.clear();
   }
 
-  Widget* NewWidget() {
-    Widget* widget = CreateTopLevelNativeWidget();
+  Widget* NewWidget(std::string name) {
+    Widget* widget = new Widget();
+    Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_WINDOW);
+    params.name = std::move(name);
+    widget->Init(std::move(params));
     widget->AddObserver(this);
     return widget;
   }
 
   const Widget* active() const { return active_; }
-  const Widget* widget_closed() const { return widget_closed_; }
   const Widget* widget_activated() const { return widget_activated_; }
-  const Widget* widget_deactivated() const { return widget_deactivated_; }
-  const Widget* widget_shown() const { return widget_shown_; }
-  const Widget* widget_hidden() const { return widget_hidden_; }
-  const Widget* widget_bounds_changed() const { return widget_bounds_changed_; }
+  const std::string& widget_deactivated() const { return widget_deactivated_; }
+  const std::string& widget_shown() const { return widget_shown_; }
+  const std::string& widget_hidden() const { return widget_hidden_; }
+  const std::string& widget_bounds_changed() const {
+    return widget_bounds_changed_;
+  }
 
  private:
   raw_ptr<Widget> active_ = nullptr;
-
-  raw_ptr<Widget> widget_closed_ = nullptr;
   raw_ptr<Widget> widget_activated_ = nullptr;
-  raw_ptr<Widget> widget_deactivated_ = nullptr;
-  raw_ptr<Widget> widget_shown_ = nullptr;
-  raw_ptr<Widget> widget_hidden_ = nullptr;
-  raw_ptr<Widget> widget_bounds_changed_ = nullptr;
+
+  std::string widget_deactivated_;
+  std::string widget_shown_;
+  std::string widget_hidden_;
+  std::string widget_bounds_changed_;
 
   raw_ptr<Widget> widget_to_close_on_hide_ = nullptr;
 };
@@ -1943,8 +2196,8 @@ class WidgetObserverTest : public WidgetTest, public WidgetObserver {
 #endif
 
 TEST_F(WidgetObserverTest, MAYBE_ActivationChange) {
-  WidgetAutoclosePtr toplevel1(NewWidget());
-  WidgetAutoclosePtr toplevel2(NewWidget());
+  WidgetAutoclosePtr toplevel1(NewWidget("top1"));
+  WidgetAutoclosePtr toplevel2(NewWidget("top2"));
 
   toplevel1->Show();
   toplevel2->Show();
@@ -1956,7 +2209,7 @@ TEST_F(WidgetObserverTest, MAYBE_ActivationChange) {
 
   toplevel2->Activate();
   RunPendingMessages();
-  EXPECT_EQ(toplevel1.get(), widget_deactivated());
+  EXPECT_EQ(toplevel1->GetName(), widget_deactivated());
   EXPECT_EQ(toplevel2.get(), widget_activated());
   EXPECT_EQ(toplevel2.get(), active());
 }
@@ -2029,8 +2282,8 @@ TEST_F(WidgetObserverTest, CloseReentrancy) {
 
 TEST_F(WidgetObserverTest, VisibilityChange) {
   WidgetAutoclosePtr toplevel(CreateTopLevelPlatformWidget());
-  WidgetAutoclosePtr child1(NewWidget());
-  WidgetAutoclosePtr child2(NewWidget());
+  WidgetAutoclosePtr child1(NewWidget("child1"));
+  WidgetAutoclosePtr child2(NewWidget("child2"));
 
   toplevel->Show();
   child1->Show();
@@ -2039,16 +2292,16 @@ TEST_F(WidgetObserverTest, VisibilityChange) {
   reset();
 
   child1->Hide();
-  EXPECT_EQ(child1.get(), widget_hidden());
+  EXPECT_EQ(child1->GetName(), widget_hidden());
 
   child2->Hide();
-  EXPECT_EQ(child2.get(), widget_hidden());
+  EXPECT_EQ(child2->GetName(), widget_hidden());
 
   child1->Show();
-  EXPECT_EQ(child1.get(), widget_shown());
+  EXPECT_EQ(child1->GetName(), widget_shown());
 
   child2->Show();
-  EXPECT_EQ(child2.get(), widget_shown());
+  EXPECT_EQ(child2->GetName(), widget_shown());
 }
 
 TEST_F(WidgetObserverTest, DestroyBubble) {
@@ -2071,20 +2324,20 @@ TEST_F(WidgetObserverTest, DestroyBubble) {
 }
 
 TEST_F(WidgetObserverTest, WidgetBoundsChanged) {
-  WidgetAutoclosePtr child1(NewWidget());
-  WidgetAutoclosePtr child2(NewWidget());
+  WidgetAutoclosePtr child1(NewWidget("child1"));
+  WidgetAutoclosePtr child2(NewWidget("child2"));
 
   child1->OnNativeWidgetMove();
-  EXPECT_EQ(child1.get(), widget_bounds_changed());
+  EXPECT_EQ(child1->GetName(), widget_bounds_changed());
 
   child2->OnNativeWidgetMove();
-  EXPECT_EQ(child2.get(), widget_bounds_changed());
+  EXPECT_EQ(child2->GetName(), widget_bounds_changed());
 
   child1->OnNativeWidgetSizeChanged(gfx::Size());
-  EXPECT_EQ(child1.get(), widget_bounds_changed());
+  EXPECT_EQ(child1->GetName(), widget_bounds_changed());
 
   child2->OnNativeWidgetSizeChanged(gfx::Size());
-  EXPECT_EQ(child2.get(), widget_bounds_changed());
+  EXPECT_EQ(child2->GetName(), widget_bounds_changed());
 }
 
 // An extension to WidgetBoundsChanged to ensure notifications are forwarded
@@ -2095,60 +2348,61 @@ TEST_F(WidgetObserverTest, WidgetBoundsChangedNative) {
   Widget* widget = new Widget();  // Note: owned by NativeWidget.
   widget->AddObserver(this);
 
-  EXPECT_FALSE(widget_bounds_changed());
+  EXPECT_THAT(widget_bounds_changed(), IsEmpty());
 
   Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_WINDOW);
 
   // Use an origin within the work area since platforms (e.g. Mac) may move a
   // window into the work area when showing, triggering a bounds change.
   params.bounds = gfx::Rect(50, 50, 100, 100);
+  params.name = "widget";
 
   // Init causes a bounds change, even while not showing. Note some platforms
   // cause a bounds change even when the bounds are empty. Mac does not.
   widget->Init(std::move(params));
-  EXPECT_TRUE(widget_bounds_changed());
+  EXPECT_THAT(widget_bounds_changed(), Not(IsEmpty()));
   reset();
 
   // Resizing while hidden, triggers a change.
   widget->SetSize(gfx::Size(160, 100));
   EXPECT_FALSE(widget->IsVisible());
-  EXPECT_TRUE(widget_bounds_changed());
+  EXPECT_THAT(widget_bounds_changed(), Not(IsEmpty()));
   reset();
 
   // Setting the same size does nothing.
   widget->SetSize(gfx::Size(160, 100));
-  EXPECT_FALSE(widget_bounds_changed());
+  EXPECT_THAT(widget_bounds_changed(), IsEmpty());
   reset();
 
   // Showing does nothing to the bounds.
   widget->Show();
   EXPECT_TRUE(widget->IsVisible());
-  EXPECT_FALSE(widget_bounds_changed());
+  EXPECT_THAT(widget_bounds_changed(), IsEmpty());
   reset();
 
   // Resizing while shown.
   widget->SetSize(gfx::Size(170, 100));
-  EXPECT_TRUE(widget_bounds_changed());
+  EXPECT_THAT(widget_bounds_changed(), Not(IsEmpty()));
   reset();
 
   // Resize to the same thing while shown does nothing.
   widget->SetSize(gfx::Size(170, 100));
-  EXPECT_FALSE(widget_bounds_changed());
+  EXPECT_THAT(widget_bounds_changed(), IsEmpty());
   reset();
 
   // Move, but don't change the size.
   widget->SetBounds(gfx::Rect(110, 110, 170, 100));
-  EXPECT_TRUE(widget_bounds_changed());
+  EXPECT_THAT(widget_bounds_changed(), Not(IsEmpty()));
   reset();
 
   // Moving to the same place does nothing.
   widget->SetBounds(gfx::Rect(110, 110, 170, 100));
-  EXPECT_FALSE(widget_bounds_changed());
+  EXPECT_THAT(widget_bounds_changed(), IsEmpty());
   reset();
 
   // No bounds change when closing.
-  widget->CloseNow();
-  EXPECT_FALSE(widget_bounds_changed());
+  std::exchange(widget, nullptr)->CloseNow();
+  EXPECT_THAT(widget_bounds_changed(), IsEmpty());
 }
 
 namespace {
@@ -2223,7 +2477,7 @@ TEST_F(DesktopWidgetObserverTest, OnWidgetMovedWhenOriginChangesNative) {
 // Test correct behavior when widgets close themselves in response to visibility
 // changes.
 TEST_F(WidgetObserverTest, ClosingOnHiddenParent) {
-  WidgetAutoclosePtr parent(NewWidget());
+  WidgetAutoclosePtr parent(NewWidget("parent"));
   Widget* child = CreateChildPlatformWidget(parent->GetNativeView());
 
   TestWidgetObserver child_observer(child);
@@ -2280,12 +2534,22 @@ TEST_F(DesktopWidgetTest, GetWindowPlacement) {
 #endif
   EXPECT_EQ(ui::SHOW_STATE_NORMAL, show_state);
 
+  views::test::PropertyWaiter minimize_waiter(
+      base::BindRepeating(&Widget::IsMinimized, base::Unretained(widget.get())),
+      true);
   widget->Minimize();
+  EXPECT_TRUE(minimize_waiter.Wait());
+
   native_widget->GetWindowPlacement(&restored_bounds, &show_state);
   EXPECT_EQ(ui::SHOW_STATE_MINIMIZED, show_state);
   EXPECT_EQ(expected_bounds, restored_bounds);
 
+  views::test::PropertyWaiter restore_waiter(
+      base::BindRepeating(&Widget::IsMinimized, base::Unretained(widget.get())),
+      false);
   widget->Restore();
+  EXPECT_TRUE(restore_waiter.Wait());
+
   native_widget->GetWindowPlacement(&restored_bounds, &show_state);
   EXPECT_EQ(ui::SHOW_STATE_NORMAL, show_state);
   EXPECT_EQ(expected_bounds, restored_bounds);
@@ -2616,14 +2880,30 @@ class DesktopAuraTestValidPaintWidget : public Widget, public WidgetObserver {
   base::ScopedObservation<Widget, WidgetObserver> observation_{this};
 };
 
+namespace {
+
+class ContentsView : public View {
+  METADATA_HEADER(ContentsView, View)
+  void GetAccessibleNodeData(ui::AXNodeData* node_data) override {
+    node_data->SetNameExplicitlyEmpty();
+    // Focusable Views need a valid role.
+    node_data->role = ax::mojom::Role::kDialog;
+  }
+};
+
+BEGIN_METADATA(ContentsView)
+END_METADATA
+
+}  // namespace
+
 class DesktopAuraPaintWidgetTest : public DesktopWidgetTest {
  public:
-  std::unique_ptr<views::Widget> CreateTestWidget(
+  std::unique_ptr<DesktopAuraTestValidPaintWidget>
+  CreateDesktopAuraTestValidPaintWidget(
       views::Widget::InitParams::Type type =
-          views::Widget::InitParams::TYPE_WINDOW_FRAMELESS) override {
+          views::Widget::InitParams::TYPE_WINDOW_FRAMELESS) {
     auto widget = std::make_unique<DesktopAuraTestValidPaintWidget>(
         CreateParamsForTestWidget(type));
-    paint_widget_ = widget.get();
 
     View* contents_view =
         widget->SetContentsView(std::make_unique<ContentsView>());
@@ -2634,41 +2914,28 @@ class DesktopAuraPaintWidgetTest : public DesktopWidgetTest {
 
     return widget;
   }
-
-  DesktopAuraTestValidPaintWidget* paint_widget() { return paint_widget_; }
-
- private:
-  class ContentsView : public View {
-    void GetAccessibleNodeData(ui::AXNodeData* node_data) override {
-      node_data->SetNameExplicitlyEmpty();
-      // Focusable Views need a valid role.
-      node_data->role = ax::mojom::Role::kDialog;
-    }
-  };
-
-  raw_ptr<DesktopAuraTestValidPaintWidget> paint_widget_ = nullptr;
 };
 
 TEST_F(DesktopAuraPaintWidgetTest, DesktopNativeWidgetNoPaintAfterCloseTest) {
-  std::unique_ptr<Widget> widget = CreateTestWidget();
-  paint_widget()->WaitUntilPaint();
-  EXPECT_TRUE(paint_widget()->ReadReceivedPaintAndReset());
+  auto widget = CreateDesktopAuraTestValidPaintWidget();
+  widget->WaitUntilPaint();
+  EXPECT_TRUE(widget->ReadReceivedPaintAndReset());
   widget->SchedulePaintInRect(widget->GetRestoredBounds());
   widget->Close();
   RunPendingMessages();
-  EXPECT_FALSE(paint_widget()->ReadReceivedPaintAndReset());
-  EXPECT_FALSE(paint_widget()->received_paint_while_hidden());
+  EXPECT_FALSE(widget->ReadReceivedPaintAndReset());
+  EXPECT_FALSE(widget->received_paint_while_hidden());
 }
 
 TEST_F(DesktopAuraPaintWidgetTest, DesktopNativeWidgetNoPaintAfterHideTest) {
-  std::unique_ptr<Widget> widget = CreateTestWidget();
-  paint_widget()->WaitUntilPaint();
-  EXPECT_TRUE(paint_widget()->ReadReceivedPaintAndReset());
+  auto widget = CreateDesktopAuraTestValidPaintWidget();
+  widget->WaitUntilPaint();
+  EXPECT_TRUE(widget->ReadReceivedPaintAndReset());
   widget->SchedulePaintInRect(widget->GetRestoredBounds());
   widget->Hide();
   RunPendingMessages();
-  EXPECT_FALSE(paint_widget()->ReadReceivedPaintAndReset());
-  EXPECT_FALSE(paint_widget()->received_paint_while_hidden());
+  EXPECT_FALSE(widget->ReadReceivedPaintAndReset());
+  EXPECT_FALSE(widget->received_paint_while_hidden());
   widget->Close();
 }
 
@@ -2964,9 +3231,8 @@ TEST_F(WidgetTest, MousePressCausesCapture) {
   event_count_view->SetBounds(0, 0, 300, 300);
 
   // No capture has been set.
-  EXPECT_EQ(
-      gfx::kNullNativeView,
-      internal::NativeWidgetPrivate::GetGlobalCapture(widget->GetNativeView()));
+  EXPECT_EQ(gfx::NativeView(), internal::NativeWidgetPrivate::GetGlobalCapture(
+                                   widget->GetNativeView()));
 
   MousePressEventConsumer consumer;
   event_count_view->AddPostTargetHandler(&consumer);
@@ -2986,17 +3252,16 @@ TEST_F(WidgetTest, MousePressCausesCapture) {
 
 namespace {
 
-// An EventHandler which shows a Wiget upon receiving a mouse event. The Widget
+// An EventHandler which shows a Widget upon receiving a mouse event. The Widget
 // proceeds to take capture.
 class CaptureEventConsumer : public ui::EventHandler {
  public:
-  explicit CaptureEventConsumer(Widget* widget)
-      : event_count_view_(new EventCountView()), widget_(widget) {}
+  explicit CaptureEventConsumer(Widget* widget) : widget_(widget) {}
 
   CaptureEventConsumer(const CaptureEventConsumer&) = delete;
   CaptureEventConsumer& operator=(const CaptureEventConsumer&) = delete;
 
-  ~CaptureEventConsumer() override { widget_->CloseNow(); }
+  ~CaptureEventConsumer() override { widget_.ExtractAsDangling()->CloseNow(); }
 
  private:
   // ui::EventHandler:
@@ -3006,13 +3271,13 @@ class CaptureEventConsumer : public ui::EventHandler {
       widget_->Show();
       widget_->SetSize(gfx::Size(200, 200));
 
-      event_count_view_->SetBounds(0, 0, 200, 200);
-      widget_->GetRootView()->AddChildView(event_count_view_.get());
-      widget_->SetCapture(event_count_view_);
+      auto event_count_view = std::make_unique<EventCountView>();
+      event_count_view->SetBounds(0, 0, 200, 200);
+      widget_->SetCapture(
+          widget_->GetRootView()->AddChildView(std::move(event_count_view)));
     }
   }
 
-  raw_ptr<EventCountView> event_count_view_;
   raw_ptr<Widget> widget_;
 };
 
@@ -3029,9 +3294,8 @@ TEST_F(WidgetTest, CaptureDuringMousePressNotOverridden) {
       widget->GetRootView()->AddChildView(std::make_unique<EventCountView>());
   event_count_view->SetBounds(0, 0, 300, 300);
 
-  EXPECT_EQ(
-      gfx::kNullNativeView,
-      internal::NativeWidgetPrivate::GetGlobalCapture(widget->GetNativeView()));
+  EXPECT_EQ(gfx::NativeView(), internal::NativeWidgetPrivate::GetGlobalCapture(
+                                   widget->GetNativeView()));
 
   Widget* widget2 = CreateTopLevelNativeWidget();
   // Gives explicit capture to |widget2|
@@ -3067,8 +3331,7 @@ class ClosingEventObserver : public ui::EventObserver {
   void OnEvent(const ui::Event& event) override {
     // Guard against attempting to close the widget twice.
     if (widget_)
-      widget_->CloseNow();
-    widget_ = nullptr;
+      widget_.ExtractAsDangling()->CloseNow();
   }
 
  private:
@@ -3076,6 +3339,8 @@ class ClosingEventObserver : public ui::EventObserver {
 };
 
 class ClosingView : public View {
+  METADATA_HEADER(ClosingView, View)
+
  public:
   explicit ClosingView(Widget* widget) : widget_(widget) {}
 
@@ -3095,6 +3360,9 @@ class ClosingView : public View {
  private:
   raw_ptr<Widget> widget_;
 };
+
+BEGIN_METADATA(ClosingView)
+END_METADATA
 
 // Ensures that when multiple objects are intercepting OS-level events, that one
 // can safely close a Widget that has capture.
@@ -3292,6 +3560,33 @@ TEST_F(DesktopWidgetTest,
   EXPECT_TRUE(top_level_widget->ShouldPaintAsActive());
   EXPECT_EQ(top_level_counter.CallCount(), 0);
   EXPECT_EQ(bubble_counter.CallCount(), 0);
+}
+
+// Tests that there is no crash when paint as active lock is removed for child
+// widget while its parent widget is being closed.
+TEST_F(DesktopWidgetTest, LockPaintAsActiveAndCloseParent) {
+  // Make sure that DesktopNativeWidgetAura is used for widgets.
+  test_views_delegate()->set_use_desktop_native_widgets(true);
+
+  std::unique_ptr<Widget> parent = CreateTestWidget();
+  parent->Show();
+
+  auto delegate = std::make_unique<TestDesktopWidgetDelegate>();
+  Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_WINDOW);
+  params.parent = parent->GetNativeView();
+  delegate->InitWidget(std::move(params));
+  delegate->RegisterDeleteDelegateCallback(
+      base::DoNothingWithBoundArgs(delegate->GetWidget()->LockPaintAsActive()));
+  base::WeakPtr<Widget> child = delegate->GetWidget()->GetWeakPtr();
+  child->ShowInactive();
+
+  // Child widget and its delegate are destroyed when the parent widget is being
+  // closed. PaintAsActiveTestDesktopWidgetDelegate::paint_as_active_lock_ is
+  // also deleted which should not cause a crash.
+  parent->CloseNow();
+
+  // Ensure that child widget has been destroyed.
+  ASSERT_FALSE(child);
 }
 
 // Widget used to destroy itself when OnNativeWidgetDestroyed is called.
@@ -3514,9 +3809,11 @@ bool RunGetNativeThemeFromDestructor(Widget::InitParams params,
 
 // See description of RunGetNativeThemeFromDestructor() for details.
 TEST_F(DesktopWidgetTest, GetNativeThemeFromDestructor) {
-  Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_POPUP);
-  if (RunGetNativeThemeFromDestructor(std::move(params), true))
-    RunGetNativeThemeFromDestructor(std::move(params), false);
+  if (RunGetNativeThemeFromDestructor(
+          CreateParams(Widget::InitParams::TYPE_POPUP), true)) {
+    RunGetNativeThemeFromDestructor(
+        CreateParams(Widget::InitParams::TYPE_POPUP), false);
+  }
 }
 
 // Used by HideCloseDestroy. Allows setting a boolean when the widget is
@@ -3717,6 +4014,8 @@ TEST_F(WidgetTest, NoCrashOnWidgetDeleteWithPendingEvents) {
 
 // A view that consumes mouse-pressed event and gesture-tap-down events.
 class RootViewTestView : public View {
+  METADATA_HEADER(RootViewTestView, View)
+
  public:
   RootViewTestView() = default;
 
@@ -3728,6 +4027,9 @@ class RootViewTestView : public View {
       event->SetHandled();
   }
 };
+
+BEGIN_METADATA(RootViewTestView)
+END_METADATA
 
 // Checks if RootView::*_handler_ fields are unset when widget is hidden.
 // Fails on chromium.webkit Windows bot, see crbug.com/264872.
@@ -4252,11 +4554,44 @@ TEST_F(WidgetTest, ScrollGestureEventDispatch) {
   widget->Close();
 }
 
+// TODO(b/271490637): on Mac a drag controller should still be notified when
+// drag will start. Figure out how to write a unit test for Mac. Then remove
+// this build flag check.
+#if !BUILDFLAG(IS_MAC)
+
+// Verifies that the drag controller is notified when the view drag will start.
+TEST_F(WidgetTest, NotifyDragControllerWhenDragWillStart) {
+  // Create a widget whose contents view is draggable.
+  UniqueWidgetPtr widget(std::make_unique<Widget>());
+  Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_POPUP);
+  params.bounds = gfx::Rect(/*width=*/650, /*height=*/650);
+  widget->Init(std::move(params));
+  widget->Show();
+  MockDragController mock_drag_controller;
+  views::View contents_view;
+  contents_view.set_drag_controller(&mock_drag_controller);
+  widget->SetContentsView(&contents_view);
+
+  // Expect the drag controller is notified of the drag start.
+  EXPECT_CALL(mock_drag_controller, OnWillStartDragForView(&contents_view));
+
+  // Drag-and-drop `contents_view` by mouse.
+  ui::test::EventGenerator generator(GetContext(), widget->GetNativeWindow());
+  generator.MoveMouseTo(contents_view.GetBoundsInScreen().CenterPoint());
+  generator.PressLeftButton();
+  generator.MoveMouseBy(/*x=*/200, /*y=*/0);
+  generator.ReleaseLeftButton();
+}
+
+#endif  // !BUILDFLAG(IS_MAC)
+
 // A class used in WidgetTest.GestureEventLocationWhileBubbling to verify
 // that when a gesture event bubbles up a View hierarchy, the location
 // of a gesture event seen by each View is in the local coordinate space
 // of that View.
 class GestureLocationView : public EventCountView {
+  METADATA_HEADER(GestureLocationView, EventCountView)
+
  public:
   GestureLocationView() = default;
 
@@ -4282,6 +4617,9 @@ class GestureLocationView : public EventCountView {
   // The expected location of a gesture event dispatched to |this|.
   gfx::Point expected_location_;
 };
+
+BEGIN_METADATA(GestureLocationView)
+END_METADATA
 
 // Verifies that the location of a gesture event is always in the local
 // coordinate space of the View receiving the event while bubbling.
@@ -4389,6 +4727,8 @@ TEST_F(WidgetTest, GetAllChildWidgets) {
 // Used by DestroyChildWidgetsInOrder. On destruction adds the supplied name to
 // a vector.
 class DestroyedTrackingView : public View {
+  METADATA_HEADER(DestroyedTrackingView, View)
+
  public:
   DestroyedTrackingView(const std::string& name,
                         std::vector<std::string>* add_to)
@@ -4403,6 +4743,9 @@ class DestroyedTrackingView : public View {
   const std::string name_;
   raw_ptr<std::vector<std::string>> add_to_;
 };
+
+BEGIN_METADATA(DestroyedTrackingView)
+END_METADATA
 
 class WidgetChildDestructionTest : public DesktopWidgetTest {
  public:
@@ -4538,9 +4881,10 @@ TEST_F(DesktopWidgetTest, MAYBE_DeleteInSetFullscreen) {
 namespace {
 
 class FullscreenAwareFrame : public views::NonClientFrameView {
+  METADATA_HEADER(FullscreenAwareFrame, views::NonClientFrameView)
+
  public:
-  explicit FullscreenAwareFrame(views::Widget* widget)
-      : widget_(widget), fullscreen_layout_called_(false) {}
+  explicit FullscreenAwareFrame(views::Widget* widget) : widget_(widget) {}
 
   FullscreenAwareFrame(const FullscreenAwareFrame&) = delete;
   FullscreenAwareFrame& operator=(const FullscreenAwareFrame&) = delete;
@@ -4570,8 +4914,11 @@ class FullscreenAwareFrame : public views::NonClientFrameView {
 
  private:
   raw_ptr<views::Widget> widget_;
-  bool fullscreen_layout_called_;
+  bool fullscreen_layout_called_ = false;
 };
+
+BEGIN_METADATA(FullscreenAwareFrame)
+END_METADATA
 
 }  // namespace
 
@@ -4635,7 +4982,7 @@ class ChildDesktopWidgetTest : public DesktopWidgetTest {
   }
 
  private:
-  gfx::NativeWindow context_ = nullptr;
+  gfx::NativeWindow context_ = gfx::NativeWindow();
 };
 
 // Verifies Widget::IsActive() invoked from
@@ -4925,6 +5272,8 @@ TEST_F(WidgetTest, ZOrderLevel) {
 namespace {
 
 class ScaleFactorView : public View {
+  METADATA_HEADER(ScaleFactorView, View)
+
  public:
   ScaleFactorView() = default;
 
@@ -4944,6 +5293,9 @@ class ScaleFactorView : public View {
  private:
   float last_scale_factor_ = 0.f;
 };
+
+BEGIN_METADATA(ScaleFactorView)
+END_METADATA
 
 }  // namespace
 
@@ -5045,6 +5397,101 @@ TEST_F(WidgetTest, MouseWheelEvent) {
   EXPECT_EQ(1, event_count_view->GetEventCount(ui::ET_MOUSEWHEEL));
 }
 
+// Test that ui::ET_MOUSE_ENTERED is dispatched even when not followed by
+// ui::ET_MOUSE_MOVED.
+TEST_F(WidgetTest, MouseEnteredWithoutMoved) {
+  WidgetAutoclosePtr widget(CreateTopLevelFramelessPlatformWidget());
+  widget->SetBounds(gfx::Rect(0, 0, 100, 100));
+
+  auto* root_view = static_cast<internal::RootView*>(widget->GetRootView());
+  auto* v1 = root_view->AddChildView(std::make_unique<EventCountView>());
+  v1->SetBounds(10, 10, 10, 10);
+  auto* v2 = root_view->AddChildView(std::make_unique<EventCountView>());
+  v2->SetBounds(20, 10, 10, 10);
+
+  widget->Show();
+
+  auto generator =
+      CreateEventGenerator(GetContext(), widget->GetNativeWindow());
+
+  // Enter |v1| and check that it received ui::ET_MOUSE_ENTERED.
+  auto enter_location = v1->GetBoundsInScreen().CenterPoint();
+  generator->set_current_screen_location(enter_location);
+  generator->SendMouseEnter();
+  EXPECT_EQ(v1, GetMouseMoveHandler(root_view));
+  EXPECT_EQ(1, v1->GetEventCount(ui::ET_MOUSE_ENTERED));
+  EXPECT_EQ(0, v1->GetEventCount(ui::ET_MOUSE_MOVED));
+  EXPECT_EQ(0, v1->GetEventCount(ui::ET_MOUSE_EXITED));
+  EXPECT_EQ(0, v2->GetEventCount(ui::ET_MOUSE_ENTERED));
+  EXPECT_EQ(0, v2->GetEventCount(ui::ET_MOUSE_MOVED));
+  EXPECT_EQ(0, v2->GetEventCount(ui::ET_MOUSE_EXITED));
+
+  // Enter |v2| and check that |v1| received ui::ET_MOUSE_EXITED and |v2|
+  // received ui::ET_MOUSE_ENTERED.
+  enter_location = v2->GetBoundsInScreen().CenterPoint();
+  generator->set_current_screen_location(enter_location);
+  generator->SendMouseEnter();
+  EXPECT_EQ(v2, GetMouseMoveHandler(root_view));
+  EXPECT_EQ(1, v1->GetEventCount(ui::ET_MOUSE_ENTERED));
+  EXPECT_EQ(0, v1->GetEventCount(ui::ET_MOUSE_MOVED));
+  EXPECT_EQ(1, v1->GetEventCount(ui::ET_MOUSE_EXITED));
+  EXPECT_EQ(1, v2->GetEventCount(ui::ET_MOUSE_ENTERED));
+  EXPECT_EQ(0, v2->GetEventCount(ui::ET_MOUSE_MOVED));
+  EXPECT_EQ(0, v2->GetEventCount(ui::ET_MOUSE_EXITED));
+
+  // Enter |root_view| and check that |v2| received ui::ET_MOUSE_EXITED.
+  enter_location = gfx::Point(0, 0);
+  generator->set_current_screen_location(enter_location);
+  generator->SendMouseEnter();
+  EXPECT_EQ(nullptr, GetMouseMoveHandler(root_view));
+  EXPECT_EQ(1, v1->GetEventCount(ui::ET_MOUSE_ENTERED));
+  EXPECT_EQ(0, v1->GetEventCount(ui::ET_MOUSE_MOVED));
+  EXPECT_EQ(1, v1->GetEventCount(ui::ET_MOUSE_EXITED));
+  EXPECT_EQ(1, v2->GetEventCount(ui::ET_MOUSE_ENTERED));
+  EXPECT_EQ(0, v2->GetEventCount(ui::ET_MOUSE_MOVED));
+  EXPECT_EQ(1, v2->GetEventCount(ui::ET_MOUSE_EXITED));
+}
+
+// Test that ui::ET_MOUSE_MOVED after ui::ET_MOUSE_ENTERED doesn't cause an
+// extra ui::ET_MOUSE_ENTERED.
+TEST_F(WidgetTest, MouseMovedAfterEnteredDoesntCauseEntered) {
+  WidgetAutoclosePtr widget(CreateTopLevelFramelessPlatformWidget());
+  widget->SetBounds(gfx::Rect(0, 0, 100, 100));
+
+  auto* root_view = widget->GetRootView();
+  auto* v = root_view->AddChildView(std::make_unique<EventCountView>());
+  v->SetBounds(10, 10, 10, 10);
+
+  widget->Show();
+
+  auto generator =
+      CreateEventGenerator(GetContext(), widget->GetNativeWindow());
+
+  // Enter |v|.
+  auto enter_location = v->GetBoundsInScreen().CenterPoint();
+  generator->set_current_screen_location(enter_location);
+  generator->SendMouseEnter();
+
+  // Send ui::ET_MOUSE_MOVED at the same location and check that it didn't
+  // generate ui::ET_MOUSE_ENTERED again.
+  generator->MoveMouseBy(0, 0);
+  EXPECT_EQ(1, v->GetEventCount(ui::ET_MOUSE_ENTERED));
+  EXPECT_EQ(1, v->GetEventCount(ui::ET_MOUSE_MOVED));
+
+  // Reset state by entering |root_view|.
+  generator->MoveMouseTo(0, 0);
+
+  // Enter |v| again.
+  generator->set_current_screen_location(enter_location);
+  generator->SendMouseEnter();
+
+  // Send ui::ET_MOUSE_MOVED at a slightly offset location and check that it
+  // didn't generate ui::ET_MOUSE_ENTERED again.
+  generator->MoveMouseBy(1, 1);
+  EXPECT_EQ(2, v->GetEventCount(ui::ET_MOUSE_ENTERED));
+  EXPECT_EQ(2, v->GetEventCount(ui::ET_MOUSE_MOVED));
+}
+
 class CloseFromClosingObserver : public WidgetObserver {
  public:
   ~CloseFromClosingObserver() override {
@@ -5126,6 +5573,88 @@ TEST_F(WidgetTest, ShouldSaveWindowPlacement) {
     EXPECT_EQ(save ? 1 : 0, widget_delegate.save_window_placement_count());
   }
 }
+
+// Parameterized test that verifies the behavior of SetAspectRatio with respect
+// to the excluded margin.
+class WidgetSetAspectRatioTest
+    : public ViewsTestBase,
+      public testing::WithParamInterface<gfx::Size /* margin */> {
+ public:
+  WidgetSetAspectRatioTest() : margin_(GetParam()) {}
+
+  WidgetSetAspectRatioTest(const WidgetSetAspectRatioTest&) = delete;
+  WidgetSetAspectRatioTest& operator=(const WidgetSetAspectRatioTest&) = delete;
+
+  ~WidgetSetAspectRatioTest() override = default;
+
+  // ViewsTestBase:
+  void SetUp() override {
+    ViewsTestBase::SetUp();
+    widget_ = std::make_unique<Widget>();
+    Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_WINDOW);
+    native_widget_ = std::make_unique<MockNativeWidget>(widget());
+    ON_CALL(*native_widget(), CreateNonClientFrameView).WillByDefault([this]() {
+      return std::make_unique<NonClientFrameViewWithFixedMargin>(margin());
+    });
+    params.native_widget = native_widget();
+    widget()->Init(std::move(params));
+    task_environment()->RunUntilIdle();
+  }
+
+  void TearDown() override {
+    native_widget_.reset();
+    widget()->Close();
+    widget_.reset();
+    ViewsTestBase::TearDown();
+  }
+
+  const gfx::Size& margin() const { return margin_; }
+  Widget* widget() { return widget_.get(); }
+  MockNativeWidget* native_widget() { return native_widget_.get(); }
+
+ private:
+  // Margin around the client view that should be excluded.
+  const gfx::Size margin_;
+  std::unique_ptr<Widget> widget_;
+  std::unique_ptr<MockNativeWidget> native_widget_;
+
+  // `NonClientFrameView` that pads the client view with a fixed-size margin,
+  // to leave room for drawing that's not included in the aspect ratio.
+  class NonClientFrameViewWithFixedMargin : public NonClientFrameView {
+   public:
+    // `margin` is the margin that we'll provide to our client view.
+    explicit NonClientFrameViewWithFixedMargin(const gfx::Size& margin)
+        : margin_(margin) {}
+
+    // NonClientFrameView
+    gfx::Rect GetBoundsForClientView() const override {
+      gfx::Rect r = bounds();
+      return gfx::Rect(r.x(), r.y(), r.width() - margin_.width(),
+                       r.height() - margin_.height());
+    }
+
+    const gfx::Size margin_;
+  };
+};
+
+TEST_P(WidgetSetAspectRatioTest, SetAspectRatioIncludesMargin) {
+  // Provide a nonzero size.  It doesn't particularly matter what, as long as
+  // it's larger than our margin.
+  const gfx::Rect root_view_bounds(0, 0, 100, 200);
+  ASSERT_GT(root_view_bounds.width(), margin().width());
+  ASSERT_GT(root_view_bounds.height(), margin().height());
+  widget()->non_client_view()->SetBoundsRect(root_view_bounds);
+
+  // Verify that the excluded margin matches the margin that our custom
+  // non-client frame provides.
+  const gfx::SizeF aspect_ratio(1.5f, 1.0f);
+  EXPECT_CALL(*native_widget(), SetAspectRatio(aspect_ratio, margin()));
+  widget()->SetAspectRatio(aspect_ratio);
+}
+
+INSTANTIATE_TEST_SUITE_P(WidgetSetAspectRatioTestInstantiation,
+                         WidgetSetAspectRatioTest,
+                         ::testing::Values(gfx::Size(15, 20), gfx::Size(0, 0)));
 
 class WidgetShadowTest : public WidgetTest {
  public:
@@ -5295,13 +5824,15 @@ TEST_F(DesktopWidgetTest, WindowModalOwnerDestroyedEnabledTest) {
             widget, false, nullptr);
     return init_params;
   };
-  Widget owner_dialog_widget(
+  Widget owner_dialog_widget;
+  owner_dialog_widget.Init(
       create_params(&owner_dialog_widget, top_level_widget->GetNativeView()));
   owner_dialog_widget.Show();
   HWND owner_hwnd = HWNDForWidget(&owner_dialog_widget);
 
   // Create the owned modal dialog.
-  Widget owned_dialog_widget(
+  Widget owned_dialog_widget;
+  owned_dialog_widget.Init(
       create_params(&owned_dialog_widget, owner_dialog_widget.GetNativeView()));
   owned_dialog_widget.Show();
   HWND owned_hwnd = HWNDForWidget(&owned_dialog_widget);
@@ -5344,11 +5875,14 @@ TEST_F(DesktopWidgetTest, StackAboveTest) {
   grandchild_two->ShowInactive();
 
   // Creates the following where Z-Order is from Left to Right.
-  //            Root_one                    Root_two
+  //            root_one                    root_two
   //             /    \                         /
-  //       child_one  child_one_b           child_two
-  //          /                               /
-  // grandchild_one                     grandchild_two
+  //       child_one_b  child_one           child_two
+  //                       /                  /
+  //                 grandchild_one    grandchild_two
+  //
+  // Note: child_one and grandchild_one were brought to front
+  //       when grandchild_one was shown.
 
   // Child elements are stacked above parent.
   EXPECT_TRUE(child_one->IsStackedAbove(root_one->GetNativeView()));
@@ -5357,8 +5891,8 @@ TEST_F(DesktopWidgetTest, StackAboveTest) {
   EXPECT_TRUE(grandchild_two->IsStackedAbove(root_two->GetNativeView()));
 
   // Siblings with higher z-order are stacked correctly.
-  EXPECT_TRUE(child_one_b->IsStackedAbove(child_one->GetNativeView()));
-  EXPECT_TRUE(child_one_b->IsStackedAbove(grandchild_one->GetNativeView()));
+  EXPECT_TRUE(child_one->IsStackedAbove(child_one_b->GetNativeView()));
+  EXPECT_TRUE(grandchild_one->IsStackedAbove(child_one_b->GetNativeView()));
 
   // Root elements are stacked above child of a root with lower z-order.
   EXPECT_TRUE(root_two->IsStackedAbove(root_one->GetNativeView()));
@@ -5378,7 +5912,7 @@ TEST_F(DesktopWidgetTest, StackAboveTest) {
   EXPECT_FALSE(child_one_b->IsStackedAbove(child_two->GetNativeView()));
   EXPECT_FALSE(grandchild_one->IsStackedAbove(grandchild_two->GetNativeView()));
   EXPECT_FALSE(grandchild_one->IsStackedAbove(root_two->GetNativeView()));
-  EXPECT_FALSE(grandchild_one->IsStackedAbove(child_one_b->GetNativeView()));
+  EXPECT_FALSE(child_one_b->IsStackedAbove(grandchild_one->GetNativeView()));
 }
 
 #endif  // BUILDFLAG(IS_WIN)
@@ -5386,28 +5920,6 @@ TEST_F(DesktopWidgetTest, StackAboveTest) {
 #if BUILDFLAG(ENABLE_DESKTOP_AURA) || BUILDFLAG(IS_MAC)
 
 namespace {
-
-bool CanHaveCompositingManager() {
-#if defined(USE_OZONE)
-  auto* const egl_utility =
-      ui::OzonePlatform::GetInstance()->GetPlatformGLEGLUtility();
-  return (egl_utility != nullptr) && egl_utility->HasVisualManager();
-#else
-  return false;
-#endif
-}
-
-bool ExpectWidgetTransparency(Widget::InitParams::WindowOpacity opacity) {
-  switch (opacity) {
-    case Widget::InitParams::WindowOpacity::kOpaque:
-      return false;
-    case Widget::InitParams::WindowOpacity::kTranslucent:
-      return true;
-    case Widget::InitParams::WindowOpacity::kInferred:
-      ADD_FAILURE() << "WidgetOpacity must be explicitly set";
-      return false;
-  }
-}
 
 class CompositingWidgetTest : public DesktopWidgetTest {
  public:
@@ -5467,13 +5979,6 @@ class CompositingWidgetTest : public DesktopWidgetTest {
 
       EXPECT_EQ(IsNativeWindowTransparent(widget->GetNativeWindow()),
                 should_be_transparent);
-
-      if (CanHaveCompositingManager()) {
-        if (HasCompositingManager() && ExpectWidgetTransparency(opacity))
-          EXPECT_TRUE(widget->IsTranslucentWindowOpacitySupported());
-        else
-          EXPECT_FALSE(widget->IsTranslucentWindowOpacitySupported());
-      }
     }
   }
 
@@ -5497,5 +6002,4 @@ TEST_F(CompositingWidgetTest, Transparency_DesktopWidgetTranslucent) {
 
 #endif  // BUILDFLAG(ENABLE_DESKTOP_AURA) || BUILDFLAG(IS_MAC)
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

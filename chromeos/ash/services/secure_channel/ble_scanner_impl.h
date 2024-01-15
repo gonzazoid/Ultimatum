@@ -8,11 +8,13 @@
 #include <memory>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/ash/services/secure_channel/ble_scanner.h"
 #include "chromeos/ash/services/secure_channel/bluetooth_helper.h"
 #include "device/bluetooth/bluetooth_adapter.h"
+#include "device/bluetooth/bluetooth_low_energy_scan_session.h"
 
 namespace device {
 class BluetoothDevice;
@@ -25,7 +27,8 @@ class BleSynchronizerBase;
 
 // Concrete BleScanner implementation.
 class BleScannerImpl : public BleScanner,
-                       public device::BluetoothAdapter::Observer {
+                       public device::BluetoothAdapter::Observer,
+                       public device::BluetoothLowEnergyScanSession::Delegate {
  public:
   class Factory {
    public:
@@ -72,10 +75,24 @@ class BleScannerImpl : public BleScanner,
   void HandleScanRequestChange() override;
 
   // device::BluetoothAdapter::Observer:
+  void AdapterPoweredChanged(device::BluetoothAdapter* adapter,
+                             bool powered) override;
   void DeviceAdvertisementReceived(device::BluetoothAdapter* adapter,
                                    device::BluetoothDevice* device,
                                    int16_t rssi,
                                    const std::vector<uint8_t>& eir) override;
+
+  // device::BluetoothLowEnergyScanSession::Delegate:
+  void OnDeviceFound(device::BluetoothLowEnergyScanSession* scan_session,
+                     device::BluetoothDevice* device) override;
+  void OnDeviceLost(device::BluetoothLowEnergyScanSession* scan_session,
+                    device::BluetoothDevice* device) override;
+  void OnSessionStarted(
+      device::BluetoothLowEnergyScanSession* scan_session,
+      std::optional<device::BluetoothLowEnergyScanSession::ErrorCode>
+          error_code) override;
+  void OnSessionInvalidated(
+      device::BluetoothLowEnergyScanSession* scan_session) override;
 
   void UpdateDiscoveryStatus();
   bool IsDiscoverySessionActive();
@@ -99,8 +116,8 @@ class BleScannerImpl : public BleScanner,
   void SetServiceDataProviderForTesting(
       std::unique_ptr<ServiceDataProvider> service_data_provider);
 
-  BluetoothHelper* bluetooth_helper_;
-  BleSynchronizerBase* ble_synchronizer_;
+  raw_ptr<BluetoothHelper> bluetooth_helper_;
+  raw_ptr<BleSynchronizerBase> ble_synchronizer_;
   scoped_refptr<device::BluetoothAdapter> adapter_;
 
   std::unique_ptr<ServiceDataProvider> service_data_provider_;
@@ -111,6 +128,8 @@ class BleScannerImpl : public BleScanner,
   std::unique_ptr<device::BluetoothDiscoverySession> discovery_session_;
   std::unique_ptr<base::WeakPtrFactory<device::BluetoothDiscoverySession>>
       discovery_session_weak_ptr_factory_;
+
+  std::unique_ptr<device::BluetoothLowEnergyScanSession> le_scan_session_;
 
   base::WeakPtrFactory<BleScannerImpl> weak_ptr_factory_{this};
 };

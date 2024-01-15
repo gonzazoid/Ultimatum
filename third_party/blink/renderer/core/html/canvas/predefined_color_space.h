@@ -9,17 +9,18 @@
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_types.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
+#include "ui/gfx/hdr_metadata.h"
 
 namespace blink {
 
+class CanvasHighDynamicRangeOptions;
 class V8PredefinedColorSpace;
 
 // Convert from a V8PredefinedColorSpace to a PredefinedColorSpace. Note that
 // some values for PredefinedColorSpace are specified in the IDL but are
-// supposed to be guarded behind the CanvasColorManagementV2 and
-// CanvasHDREnabled features. This function will return false and throw an
-// exception into `exception_state` if `color_space` is unsupported because
-// its runtime flag is not enabled.
+// supposed to be guarded behind the CanvasFloatingPoint and CanvasHDR features.
+// This function will return false and throw an exception into `exception_state`
+// if `color_space` is unsupported because its runtime flag is not enabled.
 bool CORE_EXPORT
 ValidateAndConvertColorSpace(const V8PredefinedColorSpace& v8_color_space,
                              PredefinedColorSpace& color_space,
@@ -28,6 +29,11 @@ ValidateAndConvertColorSpace(const V8PredefinedColorSpace& v8_color_space,
 // Convert from a PredefinedColorSpace to a V8PredefinedColorSpace.
 V8PredefinedColorSpace CORE_EXPORT
 PredefinedColorSpaceToV8(PredefinedColorSpace color_space);
+
+// Convert from CanvasHighDynamicRangeOptions to gfx::HDRMetadata.
+void CORE_EXPORT
+ParseCanvasHighDynamicRangeOptions(const CanvasHighDynamicRangeOptions* options,
+                                   gfx::HDRMetadata& hdr_metadata);
 
 }  // namespace blink
 

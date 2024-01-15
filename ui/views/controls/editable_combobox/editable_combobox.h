@@ -9,7 +9,8 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "build/build_config.h"
@@ -18,6 +19,7 @@
 #include "ui/base/ui_base_types.h"
 #include "ui/views/controls/textfield/textfield_controller.h"
 #include "ui/views/layout/animating_layout_manager.h"
+#include "ui/views/layout/box_layout_view.h"
 #include "ui/views/style/typography.h"
 #include "ui/views/view.h"
 #include "ui/views/view_observer.h"
@@ -31,6 +33,7 @@ class Range;
 namespace ui {
 class ComboboxModel;
 class Event;
+class MenuModel;
 }  // namespace ui
 
 namespace views {
@@ -40,18 +43,26 @@ class EditableComboboxPreTargetHandler;
 class MenuRunner;
 class Textfield;
 
+namespace test {
+class InteractionTestUtilSimulatorViews;
+}  // namespace test
+
 // Textfield that also shows a drop-down list with suggestions.
 class VIEWS_EXPORT EditableCombobox
     : public View,
       public TextfieldController,
       public ViewObserver,
       public views::AnimatingLayoutManager::Observer {
- public:
-  METADATA_HEADER(EditableCombobox);
+  METADATA_HEADER(EditableCombobox, View)
 
-  enum class Type {
-    kRegular,
-    kPassword,
+ public:
+  // A strategy that can be used to customize the display of the drop-down menu.
+  // It is only intended to be used by classes that extend `EditableCombobox`.
+  class MenuDecorationStrategy {
+   public:
+    virtual ~MenuDecorationStrategy() = default;
+
+    virtual std::u16string DecorateItemText(std::u16string text) const;
   };
 
   static constexpr int kDefaultTextContext = style::CONTEXT_BUTTON;
@@ -65,14 +76,12 @@ class VIEWS_EXPORT EditableCombobox
   // completions of the current textfield content.
   // |show_on_empty|: Whether to show the drop-down list when there is no
   // textfield content.
-  // |type|: The EditableCombobox type.
   // |text_context| and |text_style|: Together these indicate the font to use.
   // |display_arrow|: Whether to display an arrow in the combobox to indicate
   // that there is a drop-down list.
   explicit EditableCombobox(std::unique_ptr<ui::ComboboxModel> combobox_model,
                             bool filter_on_edit = false,
                             bool show_on_empty = true,
-                            Type type = Type::kRegular,
                             int text_context = kDefaultTextContext,
                             int text_style = kDefaultTextStyle,
                             bool display_arrow = true);
@@ -87,6 +96,9 @@ class VIEWS_EXPORT EditableCombobox
   const std::u16string& GetText() const;
   void SetText(const std::u16string& text);
 
+  const std::u16string& GetPlaceholderText() const;
+  void SetPlaceholderText(const std::u16string& text);
+
   const gfx::FontList& GetFontList() const;
 
   void SetCallback(base::RepeatingClosure callback) {
@@ -96,27 +108,35 @@ class VIEWS_EXPORT EditableCombobox
   // Selects the specified logical text range for the textfield.
   void SelectRange(const gfx::Range& range);
 
-  // Sets the accessible name. Use SetAssociatedLabel instead if there is a
-  // label associated with this combobox.
-  void SetAccessibleName(const std::u16string& name);
+ protected:
+  // Sets the menu decoration strategy. Setting it triggers an update to the
+  // menu.
+  void SetMenuDecorationStrategy(
+      std::unique_ptr<MenuDecorationStrategy> strategy);
 
-  // Sets the associated label; use this instead of SetAccessibleName if there
-  // is a label associated with this combobox.
-  void SetAssociatedLabel(View* labelling_view);
+  // Forces an update of the drop-down menu.
+  void UpdateMenu();
 
-  // For Type::kPassword, sets whether the textfield and
-  // drop-down menu will reveal their current content.
-  void RevealPasswords(bool revealed);
+  // Adds `view` to the set of controls. The ordering is such that views are
+  // added to the front (i.e. to the left in LTR set-ups).
+  template <typename T>
+  T* AddControlElement(std::unique_ptr<T> view) {
+    T* raw_view =
+        control_elements_container_->AddChildViewAt(std::move(view), 0);
+    UpdateTextfieldInsets();
+    return raw_view;
+  }
 
-  // Accessors of private members for tests.
-  ui::ComboboxModel* GetComboboxModelForTest() { return combobox_model_.get(); }
-  size_t GetItemCountForTest();
-  std::u16string GetItemForTest(size_t index);
-  ui::ImageModel GetIconForTest(size_t index);
-  MenuRunner* GetMenuRunnerForTest() { return menu_runner_.get(); }
-  Textfield* GetTextfieldForTest() { return textfield_; }
+  Textfield& GetTextfield() { return *textfield_; }
+
+  Button* GetArrowButtonForTesting() { return arrow_; }
 
  private:
+  friend class EditableComboboxTest;
+  friend class EditablePasswordComboboxTest;
+  friend class test::InteractionTestUtilSimulatorViews;
+  FRIEND_TEST_ALL_PREFIXES(EditableComboboxTest, AccessibleNameAndRole);
+
   class EditableComboboxMenuModel;
   class EditableComboboxPreTargetHandler;
 
@@ -134,12 +154,25 @@ class VIEWS_EXPORT EditableCombobox
   // Shows the drop-down menu.
   void ShowDropDownMenu(ui::MenuSourceType source_type = ui::MENU_SOURCE_NONE);
 
+  // Recalculates the extra insets of the textfield based on the size of the
+  // controls container.
+  void UpdateTextfieldInsets();
+
+  // These are for unit tests to get data from private implementation classes.
+  const ui::MenuModel* GetMenuModelForTesting() const;
+  std::u16string GetItemTextForTesting(size_t index) const;
+
+  // Returns the underlying combobox model. Used only by
+  // `ui::test::InteractionTestUtil`.
+  const ui::ComboboxModel* GetComboboxModel() const;
+
   // Overridden from View:
   void Layout() override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   void RequestFocus() override;
   bool GetNeedsNotificationWhenVisibleBoundsChange() const override;
   void OnVisibleBoundsChanged() override;
+  void OnAccessibleNameChanged(const std::u16string& new_name) override;
 
   // Overridden from TextfieldController:
   void ContentsChanged(Textfield* sender,
@@ -154,9 +187,11 @@ class VIEWS_EXPORT EditableCombobox
   void OnLayoutIsAnimatingChanged(views::AnimatingLayoutManager* source,
                                   bool is_animating) override;
 
+  bool ShouldApplyInkDropEffects();
+
   raw_ptr<Textfield> textfield_;
+  raw_ptr<BoxLayoutView> control_elements_container_ = nullptr;
   raw_ptr<Button> arrow_ = nullptr;
-  std::unique_ptr<ui::ComboboxModel> combobox_model_;
 
   // The EditableComboboxMenuModel used by |menu_runner_|.
   std::unique_ptr<EditableComboboxMenuModel> menu_model_;
@@ -174,22 +209,16 @@ class VIEWS_EXPORT EditableCombobox
   // shown in the drop-down menu.
   const int text_style_;
 
-  const Type type_;
-
   // Whether to adapt the items shown to the textfield content.
-  bool filter_on_edit_;
+  const bool filter_on_edit_;
 
   // Whether to show options when the textfield is empty.
-  bool show_on_empty_;
+  const bool show_on_empty_;
 
   // Set while the drop-down is showing.
   std::unique_ptr<MenuRunner> menu_runner_;
 
   base::RepeatingClosure content_changed_callback_;
-
-  // Whether we are currently showing the passwords for type
-  // Type::kPassword.
-  bool showing_password_text_;
 
   bool dropdown_blocked_for_animation_ = false;
 

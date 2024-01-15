@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env vpython3
 # Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -17,13 +17,15 @@ class MockInputApi(object):
 
     def __init__(self):
         self.affected_paths = []
+        self.sys = sys
         self.os_path = os.path
-        self.python_executable = sys.executable
+        self.python_executable = self.python3_executable = sys.executable
         self.subprocess = subprocess
         self.is_windows = sys.platform == 'win32'
         self.environ = os.environ
         self.logging = PrintLogger()
         self.change = MockChange()
+        self.no_diffs = False
 
     def AbsoluteLocalPaths(self):
         return self.affected_paths

@@ -42,6 +42,8 @@
 #include "third_party/blink/renderer/core/css/font_size_functions.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser.h"
 #include "third_party/blink/renderer/core/css/properties/css_property.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
+#include "third_party/blink/renderer/core/css/properties/shorthands.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/css/style_rule.h"
 #include "third_party/blink/renderer/core/dom/document.h"
@@ -78,20 +80,30 @@ namespace blink {
 // NOTE: Use either allEditingProperties() or inheritableEditingProperties() to
 // respect runtime enabling of properties.
 static const CSSPropertyID kStaticEditingProperties[] = {
-    CSSPropertyID::kBackgroundColor, CSSPropertyID::kColor,
-    CSSPropertyID::kFontFamily, CSSPropertyID::kFontSize,
-    CSSPropertyID::kFontStyle, CSSPropertyID::kFontVariantLigatures,
-    CSSPropertyID::kFontVariantCaps, CSSPropertyID::kFontWeight,
-    CSSPropertyID::kLetterSpacing, CSSPropertyID::kOrphans,
+    CSSPropertyID::kBackgroundColor,
+    CSSPropertyID::kColor,
+    CSSPropertyID::kFontFamily,
+    CSSPropertyID::kFontSize,
+    CSSPropertyID::kFontStyle,
+    CSSPropertyID::kFontVariantLigatures,
+    CSSPropertyID::kFontVariantCaps,
+    CSSPropertyID::kFontWeight,
+    CSSPropertyID::kLetterSpacing,
+    CSSPropertyID::kOrphans,
     CSSPropertyID::kTextAlign,
-    // FIXME: CSSPropertyID::kTextDecoration needs to be removed when CSS3 Text
-    // Decoration feature is no longer experimental.
-    CSSPropertyID::kTextDecoration, CSSPropertyID::kTextDecorationLine,
-    CSSPropertyID::kTextIndent, CSSPropertyID::kTextTransform,
-    CSSPropertyID::kWhiteSpace, CSSPropertyID::kWidows,
-    CSSPropertyID::kWordSpacing, CSSPropertyID::kWebkitTextDecorationsInEffect,
-    CSSPropertyID::kWebkitTextFillColor, CSSPropertyID::kWebkitTextStrokeColor,
-    CSSPropertyID::kWebkitTextStrokeWidth, CSSPropertyID::kCaretColor};
+    CSSPropertyID::kTextDecorationLine,
+    CSSPropertyID::kTextIndent,
+    CSSPropertyID::kTextTransform,
+    CSSPropertyID::kWidows,
+    CSSPropertyID::kWordSpacing,
+    CSSPropertyID::kWebkitTextDecorationsInEffect,
+    CSSPropertyID::kWebkitTextFillColor,
+    CSSPropertyID::kWebkitTextStrokeColor,
+    CSSPropertyID::kWebkitTextStrokeWidth,
+    CSSPropertyID::kCaretColor,
+    CSSPropertyID::kTextWrap,
+    CSSPropertyID::kWhiteSpaceCollapse,
+};
 
 enum EditingPropertiesType {
   kOnlyInheritableEditingProperties,
@@ -102,15 +114,10 @@ static const Vector<const CSSProperty*>& AllEditingProperties(
     const ExecutionContext* execution_context) {
   DEFINE_STATIC_LOCAL(Vector<const CSSProperty*>, properties, ());
   if (properties.empty()) {
+    properties.ReserveInitialCapacity(std::size(kStaticEditingProperties) + 2);
     CSSProperty::FilterWebExposedCSSPropertiesIntoVector(
         execution_context, kStaticEditingProperties,
         std::size(kStaticEditingProperties), properties);
-    for (wtf_size_t index = 0; index < properties.size(); index++) {
-      if (properties[index]->IDEquals(CSSPropertyID::kTextDecoration)) {
-        properties.EraseAt(index);
-        break;
-      }
-    }
   }
   return properties;
 }
@@ -119,15 +126,13 @@ static const Vector<const CSSProperty*>& InheritableEditingProperties(
     const ExecutionContext* execution_context) {
   DEFINE_STATIC_LOCAL(Vector<const CSSProperty*>, properties, ());
   if (properties.empty()) {
-    CSSProperty::FilterWebExposedCSSPropertiesIntoVector(
-        execution_context, kStaticEditingProperties,
-        std::size(kStaticEditingProperties), properties);
-    for (wtf_size_t index = 0; index < properties.size();) {
-      if (!properties[index]->IsInherited()) {
-        properties.EraseAt(index);
-        continue;
+    const Vector<const CSSProperty*>& all =
+        AllEditingProperties(execution_context);
+    properties.ReserveInitialCapacity(all.size());
+    for (const CSSProperty* property : all) {
+      if (property->IsInherited()) {
+        properties.push_back(property);
       }
-      ++index;
     }
   }
   return properties;
@@ -362,7 +367,7 @@ const CSSValue* HTMLAttributeEquivalent::AttributeValueAsCSSValue(
 
   auto* dummy_style =
       MakeGarbageCollected<MutableCSSPropertyValueSet>(kHTMLQuirksMode);
-  dummy_style->SetProperty(
+  dummy_style->ParseAndSetProperty(
       property_id_, value, /* important */ false,
       element->GetExecutionContext()->GetSecureContextMode());
   return dummy_style->GetPropertyCSSValue(property_id_);
@@ -400,9 +405,9 @@ const CSSValue* HTMLFontSizeEquivalent::AttributeValueAsCSSValue(
   return CSSIdentifierValue::Create(size);
 }
 
-EditingStyle::EditingStyle(ContainerNode* node,
+EditingStyle::EditingStyle(Element* element,
                            PropertiesToInclude properties_to_include) {
-  Init(node, properties_to_include);
+  Init(element, properties_to_include);
 }
 
 EditingStyle::EditingStyle(const Position& position,
@@ -517,6 +522,11 @@ static bool IsRedundantTextAlign(MutableCSSPropertyValueSet* style,
     return false;
   if (text_align == base_text_align)
     return true;
+  const ComputedStyle* node_style = node->GetComputedStyle();
+  if (!node_style) {
+    return true;
+  }
+  TextDirection node_direction = node_style->Direction();
   if (base_text_align == CSSValueID::kStart ||
       base_text_align == CSSValueID::kEnd) {
     // Returns true for "text-align:left" of <p>
@@ -528,8 +538,7 @@ static bool IsRedundantTextAlign(MutableCSSPropertyValueSet* style,
     //   <div style="text-align:start"><p dir="rtl" style="text-align:left">
     // because meaning of "text-align:start" in <p> is identical to
     // "text-align:right".
-    return TextAlignResolvingStartAndEnd(
-               base_text_align, node->EnsureComputedStyle()->Direction()) ==
+    return TextAlignResolvingStartAndEnd(base_text_align, node_direction) ==
            text_align;
   }
   if (text_align == CSSValueID::kStart || text_align == CSSValueID::kEnd) {
@@ -539,12 +548,27 @@ static bool IsRedundantTextAlign(MutableCSSPropertyValueSet* style,
     // Returns false for "text-align:start" of <p>
     //  <div style="text-align:left"><p dir="rtl" style="text-align:start">
     //  <div style="text-align:right"><p dir="ltr" style="text-align:start">
-    return TextAlignResolvingStartAndEnd(
-               text_align, node->EnsureComputedStyle()->Direction()) ==
+    return TextAlignResolvingStartAndEnd(text_align, node_direction) ==
            base_text_align;
   }
   return false;
 }
+
+namespace {
+
+Element* ElementFromStyledNode(Node* node) {
+  if (Element* element = DynamicTo<Element>(node)) {
+    return element;
+  }
+  if (node) {
+    // This should probably be FlatTreeTraversal::ParentElement() instead, but
+    // it breaks tests.
+    return node->ParentOrShadowHostElement();
+  }
+  return nullptr;
+}
+
+}  // namespace
 
 void EditingStyle::Init(Node* node, PropertiesToInclude properties_to_include) {
   if (IsTabHTMLSpanElementTextNode(node))
@@ -553,7 +577,8 @@ void EditingStyle::Init(Node* node, PropertiesToInclude properties_to_include) {
     node = node->parentNode();
   node_ = node;
   auto* computed_style_at_position =
-      MakeGarbageCollected<CSSComputedStyleDeclaration>(node);
+      MakeGarbageCollected<CSSComputedStyleDeclaration>(
+          ElementFromStyledNode(node));
   mutable_style_ =
       properties_to_include == kAllProperties && computed_style_at_position
           ? computed_style_at_position->CopyProperties()
@@ -563,23 +588,23 @@ void EditingStyle::Init(Node* node, PropertiesToInclude properties_to_include) {
   if (properties_to_include == kEditingPropertiesInEffect) {
     if (const CSSValue* value =
             EditingStyleUtilities::BackgroundColorValueInEffect(node)) {
-      mutable_style_->SetProperty(
+      mutable_style_->ParseAndSetProperty(
           CSSPropertyID::kBackgroundColor, value->CssText(),
           /* important */ false,
           node->GetExecutionContext()->GetSecureContextMode());
     }
     if (const CSSValue* value = computed_style_at_position->GetPropertyCSSValue(
             CSSPropertyID::kWebkitTextDecorationsInEffect)) {
-      mutable_style_->SetProperty(
+      mutable_style_->ParseAndSetProperty(
           CSSPropertyID::kTextDecoration, value->CssText(),
           /* important */ false,
           node->GetExecutionContext()->GetSecureContextMode());
     }
   }
 
-  if (node && node->EnsureComputedStyle()) {
-    const ComputedStyle* computed_style = node->EnsureComputedStyle();
-
+  const ComputedStyle* computed_style =
+      node ? node->GetComputedStyle() : nullptr;
+  if (computed_style) {
     // Fix for crbug.com/768261: due to text-autosizing, reading the current
     // computed font size and re-writing it to an element may actually cause the
     // font size to become larger (since the autosizer will run again on the new
@@ -588,7 +613,7 @@ void EditingStyle::Init(Node* node, PropertiesToInclude properties_to_include) {
     if (computed_style->ComputedFontSize() !=
         computed_style->SpecifiedFontSize()) {
       // ReplaceSelectionCommandTest_TextAutosizingDoesntInflateText gets here.
-      mutable_style_->SetProperty(
+      mutable_style_->ParseAndSetProperty(
           CSSPropertyID::kFontSize,
           CSSNumericLiteralValue::Create(computed_style->SpecifiedFontSize(),
                                          CSSPrimitiveValue::UnitType::kPixels)
@@ -596,7 +621,7 @@ void EditingStyle::Init(Node* node, PropertiesToInclude properties_to_include) {
           /* important */ false,
           node->GetExecutionContext()->GetSecureContextMode());
     }
-
+    RemoveForcedColorsIfNeeded(computed_style);
     RemoveInheritedColorsIfNeeded(computed_style);
     ReplaceFontSizeByKeywordIfPossible(
         computed_style, node->GetExecutionContext()->GetSecureContextMode(),
@@ -605,6 +630,16 @@ void EditingStyle::Init(Node* node, PropertiesToInclude properties_to_include) {
 
   is_monospace_font_ = computed_style_at_position->IsMonospaceFont();
   ExtractFontSizeDelta();
+}
+
+void EditingStyle::RemoveForcedColorsIfNeeded(
+    const ComputedStyle* computed_style) {
+  if (!computed_style->InForcedColorsMode()) {
+    return;
+  }
+  mutable_style_->RemoveProperty(CSSPropertyID::kColor);
+  mutable_style_->RemoveProperty(CSSPropertyID::kBackgroundColor);
+  mutable_style_->RemoveProperty(CSSPropertyID::kTextDecorationColor);
 }
 
 void EditingStyle::RemoveInheritedColorsIfNeeded(
@@ -635,8 +670,8 @@ void EditingStyle::SetProperty(CSSPropertyID property_id,
         MakeGarbageCollected<MutableCSSPropertyValueSet>(kHTMLQuirksMode);
   }
 
-  mutable_style_->SetProperty(property_id, value, important,
-                              secure_context_mode);
+  mutable_style_->ParseAndSetProperty(property_id, value, important,
+                                      secure_context_mode);
 }
 
 void EditingStyle::ReplaceFontSizeByKeywordIfPossible(
@@ -645,10 +680,12 @@ void EditingStyle::ReplaceFontSizeByKeywordIfPossible(
     CSSComputedStyleDeclaration* css_computed_style) {
   DCHECK(computed_style);
   if (computed_style->GetFontDescription().KeywordSize()) {
-    mutable_style_->SetProperty(
-        CSSPropertyID::kFontSize,
-        css_computed_style->GetFontSizeCSSValuePreferringKeyword()->CssText(),
-        /* important */ false, secure_context_mode);
+    if (const CSSValue* keyword =
+            css_computed_style->GetFontSizeCSSValuePreferringKeyword()) {
+      mutable_style_->ParseAndSetProperty(
+          CSSPropertyID::kFontSize, keyword->CssText(),
+          /* important */ false, secure_context_mode);
+    }
   }
 }
 
@@ -792,11 +829,11 @@ EditingStyle* EditingStyle::ExtractAndRemoveTextDirection(
   EditingStyle* text_direction = MakeGarbageCollected<EditingStyle>();
   text_direction->mutable_style_ =
       MakeGarbageCollected<MutableCSSPropertyValueSet>(kHTMLQuirksMode);
-  text_direction->mutable_style_->SetProperty(
+  text_direction->mutable_style_->SetLonghandProperty(
       CSSPropertyID::kUnicodeBidi, CSSValueID::kIsolate,
       mutable_style_->PropertyIsImportant(CSSPropertyID::kUnicodeBidi));
 
-  text_direction->mutable_style_->SetProperty(
+  text_direction->mutable_style_->ParseAndSetProperty(
       CSSPropertyID::kDirection,
       mutable_style_->GetPropertyValue(CSSPropertyID::kDirection),
       mutable_style_->PropertyIsImportant(CSSPropertyID::kDirection),
@@ -819,37 +856,41 @@ void EditingStyle::RemoveBlockProperties(
 }
 
 void EditingStyle::RemoveStyleAddedByElement(Element* element) {
-  if (!element || !element->parentNode())
+  if (!element || !element->parentElement()) {
     return;
-  MutableCSSPropertyValueSet* parent_style = CopyEditingProperties(
-      element->parentNode()->GetExecutionContext(),
-      MakeGarbageCollected<CSSComputedStyleDeclaration>(element->parentNode()),
-      kAllEditingProperties);
-  MutableCSSPropertyValueSet* node_style = CopyEditingProperties(
+  }
+  MutableCSSPropertyValueSet* parent_style =
+      CopyEditingProperties(element->parentElement()->GetExecutionContext(),
+                            MakeGarbageCollected<CSSComputedStyleDeclaration>(
+                                element->parentElement()),
+                            kAllEditingProperties);
+  MutableCSSPropertyValueSet* element_style = CopyEditingProperties(
       element->GetExecutionContext(),
       MakeGarbageCollected<CSSComputedStyleDeclaration>(element),
       kAllEditingProperties);
-  node_style->RemoveEquivalentProperties(parent_style);
-  mutable_style_->RemoveEquivalentProperties(node_style);
+  element_style->RemoveEquivalentProperties(parent_style);
+  mutable_style_->RemoveEquivalentProperties(element_style);
 }
 
 void EditingStyle::RemoveStyleConflictingWithStyleOfElement(Element* element) {
-  if (!element || !element->parentNode() || !mutable_style_)
+  if (!element || !element->parentElement() || !mutable_style_) {
     return;
+  }
 
-  MutableCSSPropertyValueSet* parent_style = CopyEditingProperties(
-      element->parentNode()->GetExecutionContext(),
-      MakeGarbageCollected<CSSComputedStyleDeclaration>(element->parentNode()),
-      kAllEditingProperties);
-  MutableCSSPropertyValueSet* node_style = CopyEditingProperties(
+  MutableCSSPropertyValueSet* parent_style =
+      CopyEditingProperties(element->parentElement()->GetExecutionContext(),
+                            MakeGarbageCollected<CSSComputedStyleDeclaration>(
+                                element->parentElement()),
+                            kAllEditingProperties);
+  MutableCSSPropertyValueSet* element_style = CopyEditingProperties(
       element->GetExecutionContext(),
       MakeGarbageCollected<CSSComputedStyleDeclaration>(element),
       kAllEditingProperties);
-  node_style->RemoveEquivalentProperties(parent_style);
+  element_style->RemoveEquivalentProperties(parent_style);
 
-  unsigned property_count = node_style->PropertyCount();
+  unsigned property_count = element_style->PropertyCount();
   for (unsigned i = 0; i < property_count; ++i)
-    mutable_style_->RemoveProperty(node_style->PropertyAt(i).Id());
+    mutable_style_->RemoveProperty(element_style->PropertyAt(i).Id());
 }
 
 void EditingStyle::CollapseTextDecorationProperties(
@@ -864,7 +905,7 @@ void EditingStyle::CollapseTextDecorationProperties(
     return;
 
   if (text_decorations_in_effect->IsValueList()) {
-    mutable_style_->SetProperty(
+    mutable_style_->ParseAndSetProperty(
         CSSPropertyID::kTextDecorationLine,
         text_decorations_in_effect->CssText(),
         mutable_style_->PropertyIsImportant(CSSPropertyID::kTextDecorationLine),
@@ -939,23 +980,27 @@ EditingTriState EditingStyle::TriStateOfStyle(
   bool node_is_start = true;
   for (Node& node : NodeTraversal::StartsAt(*selection.Start().AnchorNode())) {
     if (node.GetLayoutObject() && IsEditable(node)) {
-      auto* node_style =
-          MakeGarbageCollected<CSSComputedStyleDeclaration>(&node);
-      if (node_style) {
+      auto* computed_style = MakeGarbageCollected<CSSComputedStyleDeclaration>(
+          ElementFromStyledNode(&node));
+      CSSStyleDeclaration* node_style = computed_style;
+      if (computed_style) {
         // If the selected element has <sub> or <sup> ancestor element, apply
         // the corresponding style(vertical-align) to it so that
         // document.queryCommandState() works with the style. See bug
         // http://crbug.com/582225.
         if (is_vertical_align_ &&
-            GetIdentifierValue(node_style, CSSPropertyID::kVerticalAlign) ==
+            GetIdentifierValue(computed_style, CSSPropertyID::kVerticalAlign) ==
                 CSSValueID::kBaseline) {
           const auto* vertical_align =
               To<CSSIdentifierValue>(mutable_style_->GetPropertyCSSValue(
                   CSSPropertyID::kVerticalAlign));
           if (EditingStyleUtilities::HasAncestorVerticalAlignStyle(
                   node, vertical_align->GetValueID())) {
-            node.MutableComputedStyleForEditingDeprecated()->SetVerticalAlign(
-                vertical_align->ConvertTo<EVerticalAlign>());
+            auto* mutable_style = computed_style->CopyProperties();
+            mutable_style->SetProperty(CSSPropertyID::kVerticalAlign,
+                                       *vertical_align);
+            node_style = mutable_style->EnsureCSSStyleDeclaration(
+                node.GetExecutionContext());
           }
         }
 
@@ -996,11 +1041,23 @@ bool EditingStyle::ConflictsWithInlineStyleOfElement(
   for (unsigned i = 0; i < property_count; ++i) {
     CSSPropertyID property_id = mutable_style_->PropertyAt(i).Id();
 
-    // We don't override whitespace property of a tab span because that would
-    // collapse the tab into a space.
-    if (property_id == CSSPropertyID::kWhiteSpace &&
-        IsTabHTMLSpanElement(element))
+    // We don't override `white-space-collapse` property of a tab span because
+    // that would collapse the tab into a space.
+    //
+    // Logically speaking, only `white-space-collapse` is needed (i.e.,
+    // `text-wrap` is not needed.) But including other longhands helps producing
+    // `white-space` instead of `white-space-collapse`. Because the snippet
+    // produced by this logic may be sent to other browsers by copy&paste,
+    // e-mail, etc., `white-space` is more interoperable when
+    // `white-space-collapse` is not broadly supported. See crbug.com/1417543
+    // and `editing/pasteboard/pasting-tabs.html`.
+    DCHECK_NE(property_id, CSSPropertyID::kWhiteSpace);
+    const bool is_whitespace_property =
+        property_id == CSSPropertyID::kWhiteSpaceCollapse ||
+        property_id == CSSPropertyID::kTextWrap;
+    if (is_whitespace_property && IsTabHTMLSpanElement(element)) {
       continue;
+    }
 
     if (property_id == CSSPropertyID::kWebkitTextDecorationsInEffect &&
         inline_style->GetPropertyCSSValue(CSSPropertyID::kTextDecorationLine)) {
@@ -1209,10 +1266,10 @@ bool EditingStyle::ExtractConflictingImplicitStyleOfAttributes(
 
 bool EditingStyle::StyleIsPresentInComputedStyleOfNode(Node* node) const {
   return !mutable_style_ ||
-         GetPropertiesNotIn(
-             mutable_style_.Get(), node,
-             MakeGarbageCollected<CSSComputedStyleDeclaration>(node),
-             node->GetExecutionContext()->GetSecureContextMode())
+         GetPropertiesNotIn(mutable_style_.Get(), node,
+                            MakeGarbageCollected<CSSComputedStyleDeclaration>(
+                                ElementFromStyledNode(node)),
+                            node->GetExecutionContext()->GetSecureContextMode())
              ->IsEmpty();
 }
 
@@ -1314,12 +1371,13 @@ void EditingStyle::PrepareToApplyAt(
 
   if (auto* unicode_bidi_identifier_value =
           DynamicTo<CSSIdentifierValue>(unicode_bidi)) {
-    mutable_style_->SetProperty(CSSPropertyID::kUnicodeBidi,
-                                unicode_bidi_identifier_value->GetValueID());
+    mutable_style_->SetLonghandProperty(
+        CSSPropertyID::kUnicodeBidi,
+        unicode_bidi_identifier_value->GetValueID());
     if (auto* direction_identifier_value =
             DynamicTo<CSSIdentifierValue>(direction)) {
-      mutable_style_->SetProperty(CSSPropertyID::kDirection,
-                                  direction_identifier_value->GetValueID());
+      mutable_style_->SetLonghandProperty(
+          CSSPropertyID::kDirection, direction_identifier_value->GetValueID());
     }
   }
 }
@@ -1479,7 +1537,7 @@ void EditingStyle::MergeStyle(const CSSPropertyValueSet* style,
     }
 
     if (mode == kOverrideValues || (mode == kDoNotOverrideValues && !value)) {
-      mutable_style_->SetProperty(
+      mutable_style_->SetLonghandProperty(
           CSSPropertyValue(property.PropertyMetadata(), property.Value()));
     }
   }
@@ -1502,9 +1560,7 @@ static MutableCSSPropertyValueSet* StyleFromMatchedRulesForElement(
 
 void EditingStyle::MergeStyleFromRules(Element* element) {
   MutableCSSPropertyValueSet* style_from_matched_rules =
-      StyleFromMatchedRulesForElement(
-          element,
-          StyleResolver::kAuthorCSSRules | StyleResolver::kCrossOriginCSSRules);
+      StyleFromMatchedRulesForElement(element, StyleResolver::kAuthorCSSRules);
   // Styles from the inline style declaration, held in the variable "style",
   // take precedence over those from matched rules.
   if (mutable_style_)
@@ -1546,6 +1602,19 @@ void EditingStyle::MergeStyleFromRulesForSerialization(Element* element) {
     }
   }
   mutable_style_->MergeAndOverrideOnConflict(from_computed_style);
+
+ // There are some scenarios, like when copying rich text while in ForcedColors
+  // mode where we don't want to keep the ForcedColors styling, so that if it is
+  // pasted and sent to someone with no ForcedColors applied it does not affect
+  // their styling.
+  if (element->GetDocument().InForcedColorsMode()) {
+    mutable_style_->SetLonghandProperty(CSSPropertyID::kBackgroundColor,
+                                        CSSValueID::kInitial, false);
+    mutable_style_->SetLonghandProperty(CSSPropertyID::kColor,
+                                        CSSValueID::kInitial, false);
+    mutable_style_->SetLonghandProperty(CSSPropertyID::kTextDecorationColor,
+                                        CSSValueID::kInitial, false);
+  }
 }
 
 static void RemovePropertiesInStyle(
@@ -1563,7 +1632,7 @@ static void RemovePropertiesInStyle(
 }
 
 void EditingStyle::RemoveStyleFromRulesAndContext(Element* element,
-                                                  ContainerNode* context) {
+                                                  Element* context) {
   DCHECK(element);
   if (!mutable_style_)
     return;
@@ -1594,7 +1663,7 @@ void EditingStyle::RemoveStyleFromRulesAndContext(Element* element,
   if (computed_style->mutable_style_) {
     if (!computed_style->mutable_style_->GetPropertyCSSValue(
             CSSPropertyID::kBackgroundColor)) {
-      computed_style->mutable_style_->SetProperty(
+      computed_style->mutable_style_->SetLonghandProperty(
           CSSPropertyID::kBackgroundColor, CSSValueID::kTransparent);
     }
 
@@ -1637,8 +1706,8 @@ void EditingStyle::ForceInline() {
         MakeGarbageCollected<MutableCSSPropertyValueSet>(kHTMLQuirksMode);
   }
   const bool kPropertyIsImportant = true;
-  mutable_style_->SetProperty(CSSPropertyID::kDisplay, CSSValueID::kInline,
-                              kPropertyIsImportant);
+  mutable_style_->SetLonghandProperty(
+      CSSPropertyID::kDisplay, CSSValueID::kInline, kPropertyIsImportant);
 }
 
 int EditingStyle::LegacyFontSize(Document* document) const {
@@ -1666,9 +1735,9 @@ static void ReconcileTextDecorationProperties(
   // "web_tests/editing/execCommand/insert-list-and-strikethrough.html" makes
   // both |textDecorationsInEffect| and |textDecoration| non-null.
   if (text_decorations_in_effect) {
-    style->SetProperty(CSSPropertyID::kTextDecorationLine,
-                       text_decorations_in_effect->CssText(),
-                       /* important */ false, secure_context_mode);
+    style->ParseAndSetProperty(CSSPropertyID::kTextDecorationLine,
+                               text_decorations_in_effect->CssText(),
+                               /* important */ false, secure_context_mode);
     style->RemoveProperty(CSSPropertyID::kWebkitTextDecorationsInEffect);
     text_decoration = text_decorations_in_effect;
   }
@@ -1709,18 +1778,12 @@ StyleChange::StyleChange(EditingStyle* style, const Position& position)
     ExtractTextStyles(document, mutable_style,
                       computed_style->IsMonospaceFont());
 
-  // Changing the whitespace style in a tab span would collapse the tab into a
-  // space.
-  if (IsTabHTMLSpanElementTextNode(position.AnchorNode()) ||
-      IsTabHTMLSpanElement((position.AnchorNode())))
-    mutable_style->RemoveProperty(CSSPropertyID::kWhiteSpace);
-
   // If unicode-bidi is present in mutableStyle and direction is not, then add
   // direction to mutableStyle.
   // FIXME: Shouldn't this be done in getPropertiesNotIn?
   if (mutable_style->GetPropertyCSSValue(CSSPropertyID::kUnicodeBidi) &&
       !style->Style()->GetPropertyCSSValue(CSSPropertyID::kDirection)) {
-    mutable_style->SetProperty(
+    mutable_style->ParseAndSetProperty(
         CSSPropertyID::kDirection,
         style->Style()->GetPropertyValue(CSSPropertyID::kDirection),
         /* important */ false,
@@ -1736,9 +1799,9 @@ static void SetTextDecorationProperty(MutableCSSPropertyValueSet* style,
                                       CSSPropertyID property_id,
                                       SecureContextMode secure_context_mode) {
   if (new_text_decoration->length()) {
-    style->SetProperty(property_id, new_text_decoration->CssText(),
-                       style->PropertyIsImportant(property_id),
-                       secure_context_mode);
+    style->ParseAndSetProperty(property_id, new_text_decoration->CssText(),
+                               style->PropertyIsImportant(property_id),
+                               secure_context_mode);
   } else {
     // text-decoration: none is redundant since it does not remove any text
     // decorations.
@@ -1769,7 +1832,7 @@ void StyleChange::ExtractTextStyles(Document* document,
       GetPrimitiveValueNumber(style, CSSPropertyID::kFontWeight, weight);
   if (GetIdentifierValue(style, CSSPropertyID::kFontWeight) ==
           CSSValueID::kBold ||
-      (is_number && weight >= BoldThreshold())) {
+      (is_number && weight >= kBoldThreshold)) {
     style->RemoveProperty(CSSPropertyID::kFontWeight);
     apply_bold_ = true;
   }
@@ -1885,7 +1948,7 @@ static bool FontWeightIsBold(const CSSValue* font_weight) {
   }
 
   CHECK(To<CSSPrimitiveValue>(font_weight)->IsNumber());
-  return To<CSSPrimitiveValue>(font_weight)->GetFloatValue() >= BoldThreshold();
+  return To<CSSPrimitiveValue>(font_weight)->GetFloatValue() >= kBoldThreshold;
 }
 
 static bool FontWeightNeedsResolving(const CSSValue* font_weight) {

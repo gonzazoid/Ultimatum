@@ -75,9 +75,6 @@ void InkDropEventHandler::OnGestureEvent(ui::GestureEvent* event) {
       if (current_ink_drop_state == InkDropState::ACTIVATED)
         return;
       ink_drop_state = InkDropState::ACTION_PENDING;
-      // The ui::ET_GESTURE_TAP_DOWN event needs to be marked as handled so
-      // that subsequent events for the gesture are sent to |this|.
-      event->SetHandled();
       break;
     case ui::ET_GESTURE_LONG_PRESS:
       if (current_ink_drop_state == InkDropState::ACTIVATED)
@@ -173,6 +170,15 @@ void InkDropEventHandler::OnViewFocused(View* observed_view) {
 void InkDropEventHandler::OnViewBlurred(View* observed_view) {
   DCHECK_EQ(host_view_, observed_view);
   delegate_->GetInkDrop()->SetFocused(false);
+}
+
+void InkDropEventHandler::OnViewThemeChanged(View* observed_view) {
+  CHECK_EQ(host_view_, observed_view);
+  // The call to GetInkDrop() will lazily create the ink drop when called. We do
+  // not want to create the ink drop when view theme changed.
+  if (delegate_->HasInkDrop()) {
+    delegate_->GetInkDrop()->HostViewThemeChanged();
+  }
 }
 
 }  // namespace views

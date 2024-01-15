@@ -91,12 +91,10 @@ struct TestDoubleHashTraits : HashTraits<double> {
   static const unsigned kMinimumTableSize = 8;
 };
 
-using DoubleHashMap =
-    HashMap<double, int64_t, DefaultHash<double>, TestDoubleHashTraits>;
+using DoubleHashMap = HashMap<double, int64_t, TestDoubleHashTraits>;
 
 int BucketForKey(double key) {
-  return DefaultHash<double>::GetHash(key) &
-         (TestDoubleHashTraits::kMinimumTableSize - 1);
+  return WTF::GetHash(key) & (TestDoubleHashTraits::kMinimumTableSize - 1);
 }
 
 TEST(HashMapTest, DoubleHashCollisions) {
@@ -157,27 +155,27 @@ TEST(HashMapTest, OwnPtrAsValue) {
 TEST(HashMapTest, RefPtrAsKey) {
   bool is_deleted = false;
   DummyRefCounted::ref_invokes_count_ = 0;
-  scoped_refptr<DummyRefCounted> ptr =
+  scoped_refptr<DummyRefCounted> object =
       base::AdoptRef(new DummyRefCounted(is_deleted));
   EXPECT_EQ(0, DummyRefCounted::ref_invokes_count_);
   HashMap<scoped_refptr<DummyRefCounted>, int> map;
-  map.insert(ptr, 1);
+  map.insert(object, 1);
   // Referenced only once (to store a copy in the container).
   EXPECT_EQ(1, DummyRefCounted::ref_invokes_count_);
-  EXPECT_EQ(1, map.at(ptr));
+  EXPECT_EQ(1, map.at(object));
 
-  DummyRefCounted* raw_ptr = ptr.get();
+  DummyRefCounted* ptr = object.get();
 
-  EXPECT_TRUE(map.Contains(raw_ptr));
-  EXPECT_NE(map.end(), map.find(raw_ptr));
   EXPECT_TRUE(map.Contains(ptr));
   EXPECT_NE(map.end(), map.find(ptr));
+  EXPECT_TRUE(map.Contains(object));
+  EXPECT_NE(map.end(), map.find(object));
   EXPECT_EQ(1, DummyRefCounted::ref_invokes_count_);
 
-  ptr = nullptr;
+  object = nullptr;
   EXPECT_FALSE(is_deleted);
 
-  map.erase(raw_ptr);
+  map.erase(ptr);
   EXPECT_EQ(1, DummyRefCounted::ref_invokes_count_);
   EXPECT_TRUE(is_deleted);
   EXPECT_TRUE(map.empty());
@@ -190,16 +188,16 @@ TEST(HashMaptest, RemoveAdd) {
   typedef HashMap<int, scoped_refptr<DummyRefCounted>> Map;
   Map map;
 
-  scoped_refptr<DummyRefCounted> ptr =
+  scoped_refptr<DummyRefCounted> object =
       base::AdoptRef(new DummyRefCounted(is_deleted));
   EXPECT_EQ(0, DummyRefCounted::ref_invokes_count_);
 
-  map.insert(1, ptr);
+  map.insert(1, object);
   // Referenced only once (to store a copy in the container).
   EXPECT_EQ(1, DummyRefCounted::ref_invokes_count_);
-  EXPECT_EQ(ptr, map.at(1));
+  EXPECT_EQ(object, map.at(1));
 
-  ptr = nullptr;
+  object = nullptr;
   EXPECT_FALSE(is_deleted);
 
   map.erase(1);
@@ -627,15 +625,15 @@ TEST(HashMapTest, InitializerList) {
 }
 
 TEST(HashMapTest, IsValidKey) {
-  static_assert(DefaultHash<int>::safe_to_compare_to_empty_or_deleted,
+  static_assert(HashTraits<int>::kSafeToCompareToEmptyOrDeleted,
                 "type should be comparable to empty or deleted");
-  static_assert(DefaultHash<int*>::safe_to_compare_to_empty_or_deleted,
+  static_assert(HashTraits<int*>::kSafeToCompareToEmptyOrDeleted,
                 "type should be comparable to empty or deleted");
   static_assert(
-      DefaultHash<
-          scoped_refptr<DummyRefCounted>>::safe_to_compare_to_empty_or_deleted,
+      HashTraits<
+          scoped_refptr<DummyRefCounted>>::kSafeToCompareToEmptyOrDeleted,
       "type should be comparable to empty or deleted");
-  static_assert(!DefaultHash<AtomicString>::safe_to_compare_to_empty_or_deleted,
+  static_assert(!HashTraits<AtomicString>::kSafeToCompareToEmptyOrDeleted,
                 "type should not be comparable to empty or deleted");
 
   EXPECT_FALSE((HashMap<int, int>::IsValidKey(0)));

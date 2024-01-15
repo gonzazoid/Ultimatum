@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "build/chromeos_buildflags.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ui {
@@ -51,7 +50,6 @@ const std::string* GetShellStartupId(const aura::Window* window);
 // the titlebar and shelf are always hidden.
 void SetShellUseImmersiveForFullscreen(aura::Window* window, bool value);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 // Sets the client accessibility ID for the window. The accessibility ID
 // identifies the accessibility tree provided by client.
 void SetShellClientAccessibilityId(aura::Window* window,
@@ -70,7 +68,6 @@ ClientControlledShellSurface* GetShellClientControlledShellSurface(
 // Returns -1 for |index| when window is visible on all workspaces,
 // otherwise, 0-based indexing for desk index.
 int GetWindowDeskStateChanged(const aura::Window* window);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 // Sets the root surface to the property handler.
 void SetShellRootSurface(ui::PropertyHandler* property_handler,
@@ -82,7 +79,7 @@ Surface* GetShellRootSurface(const aura::Window* window);
 
 // Returns the ShellSurfaceBase for the given |window|, or nullptr if no such
 // surface exists.
-ShellSurfaceBase* GetShellSurfaceBaseForWindow(aura::Window* window);
+ShellSurfaceBase* GetShellSurfaceBaseForWindow(const aura::Window* window);
 
 // Returns the target surface for the located event |event|.  If an
 // event handling is grabbed by an window, it'll first examine that
@@ -111,7 +108,7 @@ void RevokePermissionToActivate(aura::Window* window);
 bool HasPermissionToActivate(aura::Window* window);
 
 // Returns true if event is/will be consumed by IME.
-bool ConsumedByIme(aura::Window* window, const ui::KeyEvent& event);
+bool ConsumedByIme(const ui::KeyEvent& event);
 
 // Set aura::client::kSkipImeProcessing to all Surface descendants.
 void SetSkipImeProcessingToDescendentSurfaces(aura::Window* window, bool value);

@@ -7,15 +7,24 @@
 #include <stdint.h>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/notreached.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
+#include "base/task/task_traits.h"
+#include "base/task/thread_pool.h"
 #include "base/time/time.h"
+#include "media/audio/audio_handler.h"
+#include "media/audio/flac_audio_handler.h"
 #include "media/audio/wav_audio_handler.h"
+#include "media/base/audio_codecs.h"
 #include "media/base/channel_layout.h"
 #include "media/mojo/mojom/audio_output_stream.mojom.h"
 #include "media/mojo/mojom/audio_stream_factory.mojom.h"
@@ -28,29 +37,22 @@ namespace {
 // Volume percent.
 const double kOutputVolumePercent = 0.8;
 
-// The number of frames each Render() call will request.
-const int kDefaultFrameCount = 1024;
-
 // Keep alive timeout for audio stream.
 const int kKeepAliveMs = 1500;
 
-AudioStreamHandler::TestObserver* g_observer_for_testing = NULL;
+AudioStreamHandler::TestObserver* g_observer_for_testing = nullptr;
 
 }  // namespace
 
 class AudioStreamHandler::AudioStreamContainer
     : public media::AudioRendererSink::RenderCallback {
  public:
-  explicit AudioStreamContainer(
-      SoundsManager::StreamFactoryBinder stream_factory_binder,
-      std::unique_ptr<media::WavAudioHandler> wav_audio)
-      : started_(false),
-        stream_factory_binder_(std::move(stream_factory_binder)),
-        cursor_(0),
-        delayed_stop_posted_(false),
-        wav_audio_(std::move(wav_audio)) {
-    DCHECK(wav_audio_);
-    task_runner_ = base::SequencedTaskRunnerHandle::Get();
+  AudioStreamContainer(SoundsManager::StreamFactoryBinder stream_factory_binder,
+                       std::unique_ptr<media::AudioHandler> audio_handler)
+      : stream_factory_binder_(std::move(stream_factory_binder)),
+        audio_handler_(std::move(audio_handler)) {
+    DCHECK(audio_handler_);
+    task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
   }
 
   AudioStreamContainer(const AudioStreamContainer&) = delete;
@@ -67,8 +69,9 @@ class AudioStreamHandler::AudioStreamContainer
     if (device_ == nullptr) {
       const media::AudioParameters params(
           media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
-          media::ChannelLayoutConfig::Guess(wav_audio_->num_channels()),
-          wav_audio_->sample_rate(), kDefaultFrameCount);
+          media::ChannelLayoutConfig::Guess(audio_handler_->GetNumChannels()),
+          audio_handler_->GetSampleRate(),
+          media::AudioHandler::kDefaultFrameCount);
       if (g_observer_for_testing) {
         g_observer_for_testing->Initialize(this, params);
       } else {
@@ -84,19 +87,20 @@ class AudioStreamHandler::AudioStreamContainer
       base::AutoLock al(state_lock_);
 
       delayed_stop_posted_ = false;
-      stop_closure_.Reset(base::BindRepeating(&AudioStreamContainer::StopStream,
+      stop_closure_.Reset(base::BindRepeating(&AudioStreamContainer::Stop,
                                               base::Unretained(this)));
 
       if (started_) {
-        if (wav_audio_->AtEnd(cursor_))
-          cursor_ = 0;
+        if (audio_handler_->AtEnd()) {
+          audio_handler_->Reset();
+        }
         return;
       } else {
         if (!g_observer_for_testing)
           device_->SetVolume(kOutputVolumePercent);
       }
 
-      cursor_ = 0;
+      audio_handler_->Reset();
     }
 
     started_ = true;
@@ -109,8 +113,18 @@ class AudioStreamHandler::AudioStreamContainer
   void Stop() {
     DCHECK(task_runner_->RunsTasksInCurrentSequence());
 
-    StopStream();
+    if (started_) {
+      // Do not hold the |state_lock_| while stopping the output stream.
+      if (g_observer_for_testing) {
+        g_observer_for_testing->OnStop();
+      } else {
+        device_->Pause();
+      }
+    }
+
+    started_ = false;
     stop_closure_.Cancel();
+    device_.reset();
   }
 
  private:
@@ -118,12 +132,12 @@ class AudioStreamHandler::AudioStreamContainer
   // Following methods could be called from *ANY* thread.
   int Render(base::TimeDelta /* delay */,
              base::TimeTicks /* delay_timestamp */,
-             int /* prior_frames_skipped */,
+             const media::AudioGlitchInfo& /* glitch_info */,
              media::AudioBus* dest) override {
     base::AutoLock al(state_lock_);
-    size_t bytes_written = 0;
-    if (wav_audio_->AtEnd(cursor_) ||
-        !wav_audio_->CopyTo(dest, cursor_, &bytes_written)) {
+    size_t frames_written = 0;
+    if (audio_handler_->AtEnd() ||
+        !audio_handler_->CopyTo(dest, &frames_written)) {
       if (delayed_stop_posted_)
         return 0;
       delayed_stop_posted_ = true;
@@ -131,108 +145,111 @@ class AudioStreamHandler::AudioStreamContainer
                                     base::Milliseconds(kKeepAliveMs));
       return 0;
     }
-    cursor_ += bytes_written;
     return dest->frames();
   }
 
   void OnRenderError() override {
-    task_runner_->PostTask(
-        FROM_HERE,
-        base::BindOnce(&AudioStreamContainer::Stop, base::Unretained(this)));
+    task_runner_->PostTask(FROM_HERE,
+                           base::BindOnce(&AudioStreamContainer::Stop,
+                                          weak_factory_.GetWeakPtr()));
   }
 
-  void StopStream() {
-    DCHECK(task_runner_->RunsTasksInCurrentSequence());
-
-    if (started_) {
-      // Do not hold the |state_lock_| while stopping the output stream.
-      if (g_observer_for_testing)
-        g_observer_for_testing->OnStop(cursor_);
-      else
-        device_->Pause();
-    }
-
-    started_ = false;
-  }
-
-  bool started_;
+  bool started_ = false;
   const SoundsManager::StreamFactoryBinder stream_factory_binder_;
   std::unique_ptr<audio::OutputDevice> device_;
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
 
   // All variables below must be accessed under |state_lock_| when |started_|.
   base::Lock state_lock_;
-  size_t cursor_;
-  bool delayed_stop_posted_;
-  std::unique_ptr<media::WavAudioHandler> wav_audio_;
+  bool delayed_stop_posted_ = false;
+  std::unique_ptr<media::AudioHandler> audio_handler_;
   base::CancelableRepeatingClosure stop_closure_;
+
+  base::WeakPtrFactory<AudioStreamHandler::AudioStreamContainer> weak_factory_{
+      this};
 };
 
 AudioStreamHandler::AudioStreamHandler(
     SoundsManager::StreamFactoryBinder stream_factory_binder,
-    const base::StringPiece& wav_data) {
-  task_runner_ = base::SequencedTaskRunnerHandle::Get();
-  std::unique_ptr<media::WavAudioHandler> wav_audio =
-      media::WavAudioHandler::Create(wav_data);
-  if (!wav_audio) {
-    LOG(ERROR) << "wav_data is not valid";
-    return;
+    std::string_view audio_data,
+    media::AudioCodec codec) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  std::unique_ptr<media::AudioHandler> audio_handler;
+  switch (codec) {
+    case media::AudioCodec::kPCM: {
+      audio_handler = media::WavAudioHandler::Create(audio_data);
+      if (!audio_handler || !audio_handler->Initialize()) {
+        LOG(ERROR) << "wav_data is not valid";
+        return;
+      }
+      break;
+    }
+    case media::AudioCodec::kFLAC: {
+      auto tmp_handler = std::make_unique<media::FlacAudioHandler>(audio_data);
+      if (!tmp_handler->Initialize()) {
+        LOG(ERROR) << "flac_data is not valid";
+        return;
+      }
+      audio_handler = std::move(tmp_handler);
+      break;
+    }
+    default:
+      NOTREACHED() << "Unsupported audio codec encountered: "
+                   << media::GetCodecName(codec);
+      break;
   }
 
+  // Check params.
   const media::AudioParameters params(
       media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
-      media::ChannelLayoutConfig::Guess(wav_audio->num_channels()),
-      wav_audio->sample_rate(), kDefaultFrameCount);
+      media::ChannelLayoutConfig::Guess(audio_handler->GetNumChannels()),
+      audio_handler->GetSampleRate(), media::AudioHandler::kDefaultFrameCount);
   if (!params.IsValid()) {
     LOG(ERROR) << "Audio params are invalid.";
     return;
   }
 
-  // Store the duration of the WAV data then pass the handler to |stream_|.
-  duration_ = wav_audio->GetDuration();
-  stream_ = std::make_unique<AudioStreamContainer>(
-      std::move(stream_factory_binder), std::move(wav_audio));
+  duration_ = audio_handler->GetDuration();
+  stream_ = base::SequenceBound<AudioStreamContainer>(
+      base::ThreadPool::CreateSequencedTaskRunner(
+          {base::MayBlock(), base::WithBaseSyncPrimitives(),
+           base::TaskPriority::USER_VISIBLE}),
+      std::move(stream_factory_binder), std::move(audio_handler));
 }
 
 AudioStreamHandler::~AudioStreamHandler() {
-  DCHECK(task_runner_->RunsTasksInCurrentSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (IsInitialized()) {
-    task_runner_->PostTask(FROM_HERE,
-                           base::BindOnce(&AudioStreamContainer::Stop,
-                                          base::Unretained(stream_.get())));
-    task_runner_->DeleteSoon(FROM_HERE, stream_.release());
+    stream_.AsyncCall(&AudioStreamContainer::Stop);
   }
 }
 
 bool AudioStreamHandler::IsInitialized() const {
-  DCHECK(task_runner_->RunsTasksInCurrentSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return !!stream_;
 }
 
 bool AudioStreamHandler::Play() {
-  DCHECK(task_runner_->RunsTasksInCurrentSequence());
-
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (!IsInitialized())
     return false;
 
-  task_runner_->PostTask(
-      FROM_HERE, base::BindOnce(base::IgnoreResult(&AudioStreamContainer::Play),
-                                base::Unretained(stream_.get())));
+  stream_.AsyncCall(&AudioStreamContainer::Play);
   return true;
 }
 
 void AudioStreamHandler::Stop() {
-  DCHECK(task_runner_->RunsTasksInCurrentSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (!IsInitialized())
     return;
 
-  task_runner_->PostTask(FROM_HERE,
-                         base::BindOnce(&AudioStreamContainer::Stop,
-                                        base::Unretained(stream_.get())));
+  stream_.AsyncCall(&AudioStreamContainer::Stop);
 }
 
 base::TimeDelta AudioStreamHandler::duration() const {
-  DCHECK(task_runner_->RunsTasksInCurrentSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK(IsInitialized());
   return duration_;
 }
 

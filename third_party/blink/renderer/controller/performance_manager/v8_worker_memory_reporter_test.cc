@@ -72,9 +72,12 @@ class MemoryUsageChecker {
     }
     called_ = true;
     if (callback_action_ == CallbackAction::kExitRunLoop) {
-      test::ExitRunLoop();
+      loop_.Quit();
     }
   }
+
+  void Run() { loop_.Run(); }
+
   bool IsCalled() { return called_; }
 
  private:
@@ -82,6 +85,7 @@ class MemoryUsageChecker {
   size_t worker_count_;
   size_t bytes_per_worker_lower_bound_;
   CallbackAction callback_action_;
+  base::RunLoop loop_;
 };
 
 TEST_F(V8WorkerMemoryReporterTest, OnMeasurementSuccess) {
@@ -170,7 +174,7 @@ TEST_F(V8WorkerMemoryReporterTestWithDedicatedWorker, GetMemoryUsage) {
   V8WorkerMemoryReporter::GetMemoryUsage(
       WTF::BindOnce(&MemoryUsageChecker::Callback, WTF::Unretained(&checker)),
       v8::MeasureMemoryExecution::kEager);
-  test::EnterRunLoop();
+  checker.Run();
   EXPECT_TRUE(checker.IsCalled());
 }
 
@@ -184,8 +188,8 @@ TEST_F(V8WorkerMemoryReporterTestWithMockPlatform, GetMemoryUsageTimeout) {
   V8WorkerMemoryReporter::GetMemoryUsage(
       WTF::BindOnce(&MemoryUsageChecker::Callback, WTF::Unretained(&checker)),
       v8::MeasureMemoryExecution::kEager);
-  platform()->RunForPeriodSeconds(V8WorkerMemoryReporter::kTimeout.InSeconds() +
-                                  1);
+  FastForwardBy(
+      base::Seconds(V8WorkerMemoryReporter::kTimeout.InSeconds() + 1));
   EXPECT_TRUE(checker.IsCalled());
 }
 

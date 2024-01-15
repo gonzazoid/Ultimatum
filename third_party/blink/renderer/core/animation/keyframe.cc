@@ -5,11 +5,17 @@
 #include "third_party/blink/renderer/core/animation/keyframe.h"
 
 #include "third_party/blink/renderer/bindings/core/v8/v8_object_builder.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_timeline_range_offset.h"
 #include "third_party/blink/renderer/core/animation/effect_model.h"
 #include "third_party/blink/renderer/core/animation/invalidatable_interpolation.h"
+#include "third_party/blink/renderer/core/animation/timeline_range.h"
+#include "third_party/blink/renderer/core/css/cssom/css_unit_value.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 namespace blink {
+
+const double Keyframe::kNullComputedOffset =
+    std::numeric_limits<double>::quiet_NaN();
 
 Keyframe::PropertySpecificKeyframe::PropertySpecificKeyframe(
     double offset,
@@ -32,14 +38,73 @@ Interpolation* Keyframe::PropertySpecificKeyframe::CreateInterpolation(
 
 void Keyframe::AddKeyframePropertiesToV8Object(V8ObjectBuilder& object_builder,
                                                Element* element) const {
-  if (offset_) {
-    object_builder.Add("offset", offset_.value());
+  // If the keyframe has a timeline offset add it instead of offset.
+  if (timeline_offset_) {
+    TimelineRangeOffset* timeline_range_offset = TimelineRangeOffset::Create();
+    timeline_range_offset->setRangeName(timeline_offset_->name);
+    DCHECK(timeline_offset_->offset.IsPercent());
+    timeline_range_offset->setOffset(
+        CSSUnitValue::Create(timeline_offset_->offset.Value(),
+                             CSSPrimitiveValue::UnitType::kPercentage));
+    object_builder.Add("offset", timeline_range_offset);
+  } else if (offset_) {
+    object_builder.AddNumber("offset", offset_.value());
   } else {
     object_builder.AddNull("offset");
   }
-  object_builder.Add("easing", easing_->ToString());
+  object_builder.AddString("easing", easing_->ToString());
   object_builder.AddString("composite",
                            EffectModel::CompositeOperationToString(composite_));
+}
+
+bool Keyframe::ResolveTimelineOffset(const TimelineRange& timeline_range,
+                                     double range_start,
+                                     double range_end) {
+  if (!timeline_offset_) {
+    return false;
+  }
+
+  double relative_offset =
+      timeline_range.ToFractionalOffset(timeline_offset_.value());
+  double range = range_end - range_start;
+  if (!range) {
+    if (offset_) {
+      offset_.reset();
+      computed_offset_ = kNullComputedOffset;
+      return true;
+    }
+  } else {
+    double resolved_offset = (relative_offset - range_start) / range;
+    if (!offset_ || offset_.value() != resolved_offset) {
+      offset_ = resolved_offset;
+      computed_offset_ = resolved_offset;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/* static */
+bool Keyframe::LessThan(const Member<Keyframe>& a, const Member<Keyframe>& b) {
+  absl::optional first =
+      a->ComputedOffset().has_value() ? a->ComputedOffset() : a->Offset();
+  absl::optional second =
+      b->ComputedOffset().has_value() ? b->ComputedOffset() : b->Offset();
+
+  if (first < second) {
+    return true;
+  }
+
+  if (first > second) {
+    return false;
+  }
+
+  if (a->original_index_ < b->original_index_) {
+    return true;
+  }
+
+  return false;
 }
 
 }  // namespace blink

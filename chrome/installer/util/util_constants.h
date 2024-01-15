@@ -125,7 +125,11 @@ enum InstallStatus {
   DELETE_DMTOKEN_FAILED = 74,     // Failed to delete DMToken from the registry.
   DELETE_DMTOKEN_SUCCESS = 75,    // Successfully deleted DMToken from the
                                   // registry.
-  MAX_INSTALL_STATUS = 76,  // When adding a new result, bump this and update
+  ROTATE_DTKEY_FAILED_PERMISSIONS = 76,  // Failed to rotate the device trust
+                                         // key due to missing permissions.
+  ROTATE_DTKEY_FAILED_CONFLICT = 77,  // Failed to rotate the device trust key
+                                      // due to a conflict during upload.
+  MAX_INSTALL_STATUS = 78,  // When adding a new result, bump this and update
                             // the SetupInstallResult enum in enums.xml.
 };
 
@@ -205,7 +209,6 @@ extern const char kShowEula[];
 extern const char kStoreDMToken[];
 extern const char kSystemLevel[];
 extern const char kTriggerActiveSetup[];
-extern const char kUncompressedArchive[];
 extern const char kUninstall[];
 extern const char kUpdateSetupExe[];
 extern const char kVerboseLogging[];
@@ -226,6 +229,8 @@ extern const wchar_t kChromeOldExe[];
 extern const wchar_t kChromeProxyExe[];
 extern const wchar_t kChromeProxyNewExe[];
 extern const wchar_t kChromeProxyOldExe[];
+extern const wchar_t kCmdAlternateRenameChromeExe[];
+extern const wchar_t kCmdRenameChromeExe[];
 extern const wchar_t kCmdOnOsUpgrade[];
 extern const wchar_t kCmdRotateDeviceTrustKey[];
 extern const wchar_t kCmdStoreDMToken[];
@@ -235,7 +240,6 @@ extern const wchar_t kInstallBinaryDir[];
 extern const wchar_t kInstallerDir[];
 extern const wchar_t kInstallTempDir[];
 extern const wchar_t kLnkExt[];
-extern const wchar_t kNaClExe[];
 extern const wchar_t kNotificationHelperExe[];
 extern const wchar_t kRegDowngradeVersion[];
 extern const wchar_t kSetupExe[];

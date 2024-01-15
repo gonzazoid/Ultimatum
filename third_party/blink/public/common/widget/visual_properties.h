@@ -10,6 +10,7 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/common_export.h"
 #include "third_party/blink/public/mojom/manifest/display_mode.mojom.h"
+#include "ui/base/ui_base_types.h"
 #include "ui/display/screen_infos.h"
 #include "ui/gfx/geometry/size.h"
 
@@ -88,6 +89,11 @@ struct BLINK_COMMON_EXPORT VisualProperties {
   // controls shrink blink size etc.
   cc::BrowserControlsParams browser_controls_params;
 
+  // If shown and resizing the renderer, returns the height of the virtual
+  // keyboard in physical pixels. Otherwise, returns 0. Always 0 in a
+  // non-outermost main frame.
+  int virtual_keyboard_resize_height_physical_px = 0;
+
   // Whether or not the focused node should be scrolled into view after the
   // resize.
   bool scroll_focused_node_into_view = false;
@@ -98,8 +104,14 @@ struct BLINK_COMMON_EXPORT VisualProperties {
   // Indicates whether tab-initiated fullscreen was granted.
   bool is_fullscreen_granted = false;
 
+  bool resizable = true;
+
   // The display mode.
   mojom::DisplayMode display_mode = mojom::DisplayMode::kUndefined;
+
+  // The window show state. Defaults to `SHOW_STATE_DEFAULT`.
+  ui::WindowShowState window_show_state =
+      ui::WindowShowState::SHOW_STATE_DEFAULT;
 
   // This represents the latest capture sequence number requested. When this is
   // incremented, that means the caller wants to synchronize surfaces which
@@ -117,6 +129,9 @@ struct BLINK_COMMON_EXPORT VisualProperties {
   // This represents the child frame's raster scale factor which takes into
   // account the transform from child frame space to main frame space.
   float compositing_scale_factor = 1.f;
+
+  // The OS cursor accessibility scale factor.
+  float cursor_accessibility_scale_factor = 1.f;
 
   // The logical segments of the root widget, in widget-relative DIPs. This
   // property is set by the root RenderWidget in the renderer process, then

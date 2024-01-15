@@ -23,7 +23,7 @@ chromium-metrics-reviews@google.com.
 <histograms>
 
 <histogram name="Kiosk.AppService.Launch.AppReadiness" enum="AppReadiness"
-    expires_after="2023-09-01">
+    expires_after="2024-08-01">
   <owner>yixie@chromium.org</owner>
   <owner>chromeos-kiosk-eng@google.com</owner>
   <summary>
@@ -33,7 +33,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Kiosk.AppService.WebApp.InstallResult"
-    enum="WebAppInstallResultCode" expires_after="2023-09-01">
+    enum="WebAppInstallResultCode" expires_after="2024-08-01">
   <owner>yixie@chromium.org</owner>
   <owner>chromeos-kiosk-eng@google.com</owner>
   <summary>
@@ -43,7 +43,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Kiosk.AppService.WebApp.IsPlaceholder" enum="BooleanYesNo"
-    expires_after="2023-09-01">
+    expires_after="2024-08-01">
   <owner>yixie@chromium.org</owner>
   <owner>chromeos-kiosk-eng@google.com</owner>
   <summary>
@@ -53,30 +53,92 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="Kiosk.ChromeApp.ExtensionUpdateDuration.{Result}" units="ms"
+    expires_after="2024-08-01">
+  <owner>yixie@chromium.org</owner>
+  <owner>chromeos-kiosk-eng@google.com</owner>
+  <summary>
+    ChromeOS only. Records the duration for checking updates of secondary apps
+    and extensions for a Kiosk Chrome app while launching.
+  </summary>
+  <token key="Result">
+    <variant name="HasUpdate" summary="found updates"/>
+    <variant name="NoUpdate" summary="no update found"/>
+  </token>
+</histogram>
+
+<histogram name="Kiosk.ChromeApp.ExtensionUpdateError"
+    enum="ExtensionInstallationFailureReason" expires_after="2024-08-01">
+  <owner>yixie@chromium.org</owner>
+  <owner>chromeos-kiosk-eng@google.com</owner>
+  <summary>
+    ChromeOS only. Records the reason for failed secondary apps and extensions
+    updates while a Kiosk Chrome app is launching.
+  </summary>
+</histogram>
+
+<histogram name="Kiosk.ChromeApp.ExternalUpdateSuccess" enum="BooleanYesNo"
+    expires_after="2024-08-01">
+  <owner>yixie@chromium.org</owner>
+  <owner>chromeos-kiosk-eng@google.com</owner>
+  <summary>
+    ChromeOS only. Records whether Kiosk Chrome app update via external USB
+    drive is successful.
+  </summary>
+</histogram>
+
+<histogram name="Kiosk.ChromeApp.PrimaryAppInSessionUpdate" units="times"
+    expires_after="2024-08-01">
+  <owner>yixie@chromium.org</owner>
+  <owner>chromeos-kiosk-eng@google.com</owner>
+  <summary>
+    ChromeOS only. Records count of in-session updates of primary Kiosk Chrome
+    app. A forced restart is scheduled in 24 hours.
+  </summary>
+</histogram>
+
+<histogram name="Kiosk.ChromeApp.PrimaryAppInstallError"
+    enum="KioskPrimaryAppDownloadResult" expires_after="2024-08-01">
+  <owner>yixie@chromium.org</owner>
+  <owner>chromeos-kiosk-eng@google.com</owner>
+  <summary>
+    ChromeOS only. Records error for failed initial install of primary Chrome
+    app in Kiosk.
+  </summary>
+</histogram>
+
+<histogram name="Kiosk.ChromeApp.PrimaryAppUpdateResult"
+    enum="KioskPrimaryAppDownloadResult" expires_after="2024-08-01">
+  <owner>yixie@chromium.org</owner>
+  <owner>chromeos-kiosk-eng@google.com</owner>
+  <summary>
+    ChromeOS only. Records the result for an update of primary Chrome app in
+    Kiosk.
+  </summary>
+</histogram>
+
 <histogram name="Kiosk.ChromeProcessCount" units="processes"
-    expires_after="2023-08-23">
+    expires_after="2024-08-01">
   <owner>vkovalova@chromium.org</owner>
   <owner>chromeos-kiosk-eng@google.com</owner>
   <summary>
     ChromeOS only. Records the number of processes on the machine that are
-    running from chrome during Kiosk session. Recorded once per hour. Kiosk
-    sessions shorter than one hour will have no emits.
+    running from chrome during Kiosk session. Recorded once per hour.
   </summary>
 </histogram>
 
 <histogram name="Kiosk.DiskUsagePercentage" units="%"
-    expires_after="2023-07-01">
+    expires_after="2024-08-01">
   <owner>vkovalova@chromium.org</owner>
   <owner>chromeos-kiosk-eng@google.com</owner>
   <summary>
     ChromeOS only. Records the percentage of disk space in use during Kiosk
-    session. Recorded once per hour. Kiosk sessions shorter than one hour will
-    have no emits.
+    session. Recorded once per hour.
   </summary>
 </histogram>
 
 <histogram name="Kiosk.Extensions.InstallDuration" units="ms"
-    expires_after="2023-08-10">
+    expires_after="2024-08-01">
   <owner>yixie@chromium.org</owner>
   <owner>chromeos-kiosk-eng@google.com</owner>
   <summary>
@@ -86,7 +148,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Kiosk.Extensions.InstallError.{InstallSource}"
-    enum="ExtensionInstallationFailureReason" expires_after="2023-08-24">
+    enum="ExtensionInstallationFailureReason" expires_after="2024-08-01">
   <owner>yixie@chromium.org</owner>
   <owner>chromeos-kiosk-eng@google.com</owner>
   <summary>
@@ -100,7 +162,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Kiosk.Extensions.InstallTimedOut" enum="BooleanYesNo"
-    expires_after="2023-08-10">
+    expires_after="2024-08-01">
   <owner>yixie@chromium.org</owner>
   <owner>chromeos-kiosk-eng@google.com</owner>
   <summary>
@@ -111,14 +173,14 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Kiosk.Launch.CryptohomeFailure" enum="LoginFailureReason"
-    expires_after="2023-04-16">
+    expires_after="2024-08-01">
   <owner>xiyuan@chromium.org</owner>
   <owner>apotapchuk@chromium.org</owner>
   <summary>Tracks cryptohome failure during kiosk launch.</summary>
 </histogram>
 
 <histogram name="Kiosk.Launch.Error" enum="KioskLaunchError"
-    expires_after="2023-04-16">
+    expires_after="2024-08-01">
   <owner>xiyuan@chromium.org</owner>
   <owner>apotapchuk@chromium.org</owner>
   <summary>
@@ -128,7 +190,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Kiosk.LaunchDuration.{KioskType}" units="ms"
-    expires_after="2023-08-10">
+    expires_after="2024-08-01">
   <owner>yixie@chromium.org</owner>
   <owner>chromeos-kiosk-eng@google.com</owner>
   <summary>Records the total duration it takes to launch a kiosk app.</summary>
@@ -140,7 +202,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Kiosk.LaunchType" enum="KioskLaunchType"
-    expires_after="2023-04-24">
+    expires_after="2024-08-01">
   <owner>xiyuan@chromium.org</owner>
   <owner>aghuie@chromium.org</owner>
   <summary>
@@ -150,28 +212,28 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Kiosk.NewBrowserWindow" enum="KioskBrowserWindowType"
-    expires_after="2023-10-07">
+    expires_after="2024-08-01">
   <owner>pbond@chromium.org</owner>
   <owner>chromeos-kiosk-eng@google.com</owner>
   <summary>
     ChromeOS only. Records a new browser window type once a new browser window
     is attempted to be shown in a kiosk session. Distinguishes settings page,
-    closed regular browser and opened regular browser.
+    closed regular browser, opened regular browser, troubleshooting tools and
+    system web app.
   </summary>
 </histogram>
 
-<histogram name="Kiosk.RamUsagePercentage" units="%" expires_after="2023-07-01">
+<histogram name="Kiosk.RamUsagePercentage" units="%" expires_after="2024-08-01">
   <owner>vkovalova@chromium.org</owner>
   <owner>chromeos-kiosk-eng@google.com</owner>
   <summary>
     ChromeOS only. Records the percentage of RAM in use during Kiosk session. Is
-    recorded once per hour. Kiosk sessions shorter than one hour will have no
-    emits.
+    recorded once per hour.
   </summary>
 </histogram>
 
 <histogram name="Kiosk.SecondaryApps.InstallSuccessful" enum="BooleanYesNo"
-    expires_after="2023-04-16">
+    expires_after="2024-08-01">
   <owner>yixie@chromium.org</owner>
   <owner>chromeos-kiosk-eng@google.com</owner>
   <summary>
@@ -181,7 +243,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Kiosk.Session.CountPerDay" units="sessions"
-    expires_after="2023-03-22">
+    expires_after="2024-08-01">
   <owner>pbond@chromium.org</owner>
   <owner>chromeos-kiosk-eng@chromium.org</owner>
   <summary>
@@ -191,7 +253,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Kiosk.Session.LowDiskHighestSeverity"
-    enum="KioskLowDiskSeverity" expires_after="2023-07-01">
+    enum="KioskLowDiskSeverity" expires_after="2024-08-01">
   <owner>pbond@chromium.org</owner>
   <owner>chromeos-kiosk-eng@chromium.org</owner>
   <summary>
@@ -202,7 +264,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Kiosk.Session.LowDiskSeverity" enum="KioskLowDiskSeverity"
-    expires_after="2023-07-01">
+    expires_after="2024-08-01">
   <owner>pbond@chromium.org</owner>
   <owner>chromeos-kiosk-eng@chromium.org</owner>
   <summary>
@@ -212,7 +274,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Kiosk.Session.NetworkDrops" units="network drops"
-    expires_after="2023-06-01">
+    expires_after="2024-08-01">
   <owner>pbond@chromium.org</owner>
   <owner>chromeos-kiosk-eng@chromium.org</owner>
   <summary>
@@ -222,7 +284,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Kiosk.SessionDuration.Crashed" units="ms"
-    expires_after="2023-04-20">
+    expires_after="2024-08-01">
   <owner>pbond@chromium.org</owner>
   <owner>chromeos-kiosk-eng@chromium.org</owner>
   <summary>
@@ -239,7 +301,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Kiosk.SessionDuration.Normal" units="ms"
-    expires_after="2023-04-20">
+    expires_after="2024-08-01">
   <owner>pbond@chromium.org</owner>
   <owner>chromeos-kiosk-eng@chromium.org</owner>
   <summary>
@@ -251,7 +313,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Kiosk.SessionDurationInDays.Crashed" units="days"
-    expires_after="2023-04-20">
+    expires_after="2024-08-01">
   <owner>pbond@chromium.org</owner>
   <owner>chromeos-kiosk-eng@chromium.org</owner>
   <summary>
@@ -266,7 +328,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Kiosk.SessionDurationInDays.Normal" units="days"
-    expires_after="2023-04-20">
+    expires_after="2024-08-01">
   <owner>pbond@chromium.org</owner>
   <owner>chromeos-kiosk-eng@chromium.org</owner>
   <summary>
@@ -275,8 +337,43 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="Kiosk.SessionRestart.InternetAccess"
+    enum="KioskInternetAccessInfo" expires_after="2024-08-01">
+  <owner>irfedorova@google.com</owner>
+  <owner>chromeos-kiosk-eng@google.com</owner>
+  <summary>
+    ChromeOS only. Records the Internet access info of the previous kiosk
+    session during the session restart. The Internet access info is saved to the
+    local state every hour. The Internet access info contains information
+    whether device is offline and kiosk session supports offline mode.
+  </summary>
+</histogram>
+
+<histogram name="Kiosk.SessionRestart.Reason" enum="KioskSessionRestartReason"
+    expires_after="2024-08-01">
+  <owner>irfedorova@google.com</owner>
+  <owner>chromeos-kiosk-eng@google.com</owner>
+  <summary>
+    ChromeOS only. Records the reason of a kiosk session restart. This metric is
+    recorded when a new kiosk session started. It is based on the previous kiosk
+    session end reason.
+  </summary>
+</histogram>
+
+<histogram name="Kiosk.SessionRestart.UserActivity" enum="KioskUserActivity"
+    expires_after="2024-08-01">
+  <owner>irfedorova@google.com</owner>
+  <owner>chromeos-kiosk-eng@google.com</owner>
+  <summary>
+    ChromeOS only. Records the last saved user activity of the previous kiosk
+    session. The user activity is saved to the local state every hour. It
+    contains information whether the user was actively using the device or the
+    device was idle during the last check-in.
+  </summary>
+</histogram>
+
 <histogram name="Kiosk.SessionState" enum="KioskSessionState"
-    expires_after="2023-03-22">
+    expires_after="2024-08-01">
   <owner>pbond@chromium.org</owner>
   <owner>chromeos-kiosk-eng@chromium.org</owner>
   <summary>
@@ -287,18 +384,17 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Kiosk.SwapUsagePercentage" units="%"
-    expires_after="2023-07-01">
+    expires_after="2024-08-01">
   <owner>vkovalova@chromium.org</owner>
   <owner>chromeos-kiosk-eng@google.com</owner>
   <summary>
     ChromeOS only. Records the percentage of swap memory in use during Kiosk
-    session. Recorded once per hour. Kiosk sessions shorter than one hour will
-    have no emits.
+    session. Recorded once per hour.
   </summary>
 </histogram>
 
 <histogram name="Kiosk.WebApp.InstallError" enum="WebAppInstallResultCode"
-    expires_after="2023-08-24">
+    expires_after="2024-08-01">
   <owner>yixie@chromium.org</owner>
   <owner>chromeos-kiosk-eng@google.com</owner>
   <summary>

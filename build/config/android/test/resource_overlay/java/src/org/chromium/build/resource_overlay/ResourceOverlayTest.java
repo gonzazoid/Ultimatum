@@ -7,8 +7,8 @@ package org.chromium.build.resource_overlay;
 import static org.junit.Assert.assertEquals;
 
 import android.content.res.Resources;
-import android.support.test.InstrumentationRegistry;
 
+import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.SmallTest;
 
 import org.junit.Test;
@@ -17,9 +17,7 @@ import org.junit.runner.RunWith;
 import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.base.test.util.Batch;
 
-/**
- * Test for resource_overlay parameter in android_resources() build rule.
- */
+/** Test for resource_overlay parameter in android_resources() build rule. */
 @RunWith(BaseJUnit4ClassRunner.class)
 @Batch(Batch.UNIT_TESTS)
 public class ResourceOverlayTest {

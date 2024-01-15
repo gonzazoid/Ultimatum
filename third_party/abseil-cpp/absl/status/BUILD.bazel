@@ -24,13 +24,21 @@ load(
     "ABSL_TEST_COPTS",
 )
 
-package(default_visibility = ["//visibility:public"])
+package(
+    default_visibility = ["//visibility:public"],
+    features = [
+        "header_modules",
+        "layering_check",
+        "parse_headers",
+    ],
+)
 
 licenses(["notice"])
 
 cc_library(
     name = "status",
     srcs = [
+        "internal/status_internal.cc",
         "internal/status_internal.h",
         "status.cc",
         "status_payload_printer.cc",
@@ -43,17 +51,22 @@ cc_library(
     linkopts = ABSL_DEFAULT_LINKOPTS,
     deps = [
         "//absl/base:atomic_hook",
+        "//absl/base:config",
         "//absl/base:core_headers",
+        "//absl/base:no_destructor",
+        "//absl/base:nullability",
         "//absl/base:raw_logging_internal",
         "//absl/base:strerror",
         "//absl/container:inlined_vector",
         "//absl/debugging:stacktrace",
         "//absl/debugging:symbolize",
         "//absl/functional:function_ref",
+        "//absl/memory",
         "//absl/strings",
         "//absl/strings:cord",
         "//absl/strings:str_format",
         "//absl/types:optional",
+        "//absl/types:span",
     ],
 )
 
@@ -61,9 +74,13 @@ cc_test(
     name = "status_test",
     srcs = ["status_test.cc"],
     copts = ABSL_TEST_COPTS,
+    linkopts = ABSL_DEFAULT_LINKOPTS,
     deps = [
         ":status",
         "//absl/strings",
+        "//absl/strings:cord",
+        "//absl/strings:str_format",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -82,10 +99,14 @@ cc_library(
     deps = [
         ":status",
         "//absl/base",
+        "//absl/base:config",
         "//absl/base:core_headers",
+        "//absl/base:nullability",
         "//absl/base:raw_logging_internal",
         "//absl/meta:type_traits",
         "//absl/strings",
+        "//absl/strings:has_ostream_operator",
+        "//absl/strings:str_format",
         "//absl/types:variant",
         "//absl/utility",
     ],
@@ -102,7 +123,9 @@ cc_test(
         "//absl/memory",
         "//absl/strings",
         "//absl/types:any",
+        "//absl/types:variant",
         "//absl/utility",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )

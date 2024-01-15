@@ -4,10 +4,13 @@
 
 #include "ash/system/unified/unified_notifier_settings_controller.h"
 
+#include <memory>
+
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/system/message_center/notifier_settings_view.h"
+#include "ash/system/notification_center/views/notifier_settings_view.h"
 #include "ash/system/tray/detailed_view_delegate.h"
 #include "ash/system/tray/tray_detailed_view.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/message_center_observer.h"
@@ -24,7 +27,7 @@ class UnifiedNotifierSettingsView
   explicit UnifiedNotifierSettingsView(DetailedViewDelegate* delegate)
       : TrayDetailedView(delegate), settings_view_(new NotifierSettingsView()) {
     CreateTitleRow(IDS_ASH_MESSAGE_CENTER_FOOTER_TITLE);
-    AddChildView(settings_view_);
+    AddChildView(settings_view_.get());
     box_layout()->SetFlexForView(settings_view_, 1);
     OnQuietModeChanged(message_center::MessageCenter::Get()->IsQuietMode());
     message_center::MessageCenter::Get()->AddObserver(this);
@@ -48,7 +51,7 @@ class UnifiedNotifierSettingsView
   }
 
  private:
-  NotifierSettingsView* const settings_view_;
+  const raw_ptr<NotifierSettingsView> settings_view_;
 };
 
 }  // namespace
@@ -61,8 +64,9 @@ UnifiedNotifierSettingsController::UnifiedNotifierSettingsController(
 UnifiedNotifierSettingsController::~UnifiedNotifierSettingsController() =
     default;
 
-views::View* UnifiedNotifierSettingsController::CreateView() {
-  return new UnifiedNotifierSettingsView(detailed_view_delegate_.get());
+std::unique_ptr<views::View> UnifiedNotifierSettingsController::CreateView() {
+  return std::make_unique<UnifiedNotifierSettingsView>(
+      detailed_view_delegate_.get());
 }
 
 std::u16string UnifiedNotifierSettingsController::GetAccessibleName() const {

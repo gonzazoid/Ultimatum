@@ -21,7 +21,7 @@
 #include "base/notreached.h"
 #include "base/observer_list.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/memory_usage_estimator.h"
@@ -129,7 +129,8 @@ TabRestoreServiceHelper::TabRestoreServiceHelper(
       time_factory_(time_factory) {
   DCHECK(tab_restore_service_);
   base::trace_event::MemoryDumpManager::GetInstance()->RegisterDumpProvider(
-      this, "TabRestoreServiceHelper", base::ThreadTaskRunnerHandle::Get());
+      this, "TabRestoreServiceHelper",
+      base::SingleThreadTaskRunner::GetCurrentDefault());
 }
 
 void TabRestoreServiceHelper::SetHelperObserver(Observer* observer) {
@@ -446,6 +447,13 @@ std::vector<LiveTab*> TabRestoreServiceHelper::RestoreEntryById(
   switch (entry.type) {
     case TabRestoreService::TAB: {
       auto& tab = static_cast<const Tab&>(entry);
+
+      if (tab.timestamp != base::Time() &&
+          !tab.timestamp.ToDeltaSinceWindowsEpoch().is_zero()) {
+        UMA_HISTOGRAM_LONG_TIMES("TabRestore.Tab.TimeBetweenClosedAndRestored",
+                                 TimeNow() - tab.timestamp);
+      }
+
       LiveTab* restored_tab = nullptr;
       context = RestoreTab(tab, context, disposition, &restored_tab);
       live_tabs.push_back(restored_tab);
@@ -455,6 +463,13 @@ std::vector<LiveTab*> TabRestoreServiceHelper::RestoreEntryById(
     case TabRestoreService::WINDOW: {
       LiveTabContext* current_context = context;
       auto& window = static_cast<Window&>(entry);
+
+      if (window.timestamp != base::Time() &&
+          !window.timestamp.ToDeltaSinceWindowsEpoch().is_zero()) {
+        UMA_HISTOGRAM_LONG_TIMES(
+            "TabRestore.Window.TimeBetweenClosedAndRestored",
+            TimeNow() - window.timestamp);
+      }
 
       // When restoring a window, either the entire window can be restored, or a
       // single tab within it. If the entry's ID matches the one to restore, or
@@ -577,6 +592,13 @@ std::vector<LiveTab*> TabRestoreServiceHelper::RestoreEntryById(
     }
     case TabRestoreService::GROUP: {
       auto& group = static_cast<Group&>(entry);
+
+      if (group.timestamp != base::Time() &&
+          !group.timestamp.ToDeltaSinceWindowsEpoch().is_zero()) {
+        UMA_HISTOGRAM_LONG_TIMES(
+            "TabRestore.Group.TimeBetweenClosedAndRestored",
+            TimeNow() - group.timestamp);
+      }
 
       // When restoring a group, either the entire group can be restored, or a
       // single tab within it. If the entry's ID matches the one to restore,

@@ -28,12 +28,11 @@ namespace blink {
 SVGTSpanElement::SVGTSpanElement(Document& document)
     : SVGTextPositioningElement(svg_names::kTSpanTag, document) {}
 
-LayoutObject* SVGTSpanElement::CreateLayoutObject(const ComputedStyle&,
-                                                  LegacyLayout) {
+LayoutObject* SVGTSpanElement::CreateLayoutObject(const ComputedStyle&) {
   return MakeGarbageCollected<LayoutSVGTSpan>(this);
 }
 
-bool SVGTSpanElement::LayoutObjectIsNeeded(const ComputedStyle& style) const {
+bool SVGTSpanElement::LayoutObjectIsNeeded(const DisplayStyle& style) const {
   if (parentNode() &&
       (IsA<SVGAElement>(*parentNode()) || IsA<SVGTextElement>(*parentNode()) ||
        IsA<SVGTextPathElement>(*parentNode()) ||

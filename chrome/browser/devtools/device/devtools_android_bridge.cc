@@ -13,10 +13,10 @@
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/lazy_instance.h"
 #include "base/memory/singleton.h"
@@ -86,7 +86,14 @@ DevToolsAndroidBridge* DevToolsAndroidBridge::Factory::GetForProfile(
 }
 
 DevToolsAndroidBridge::Factory::Factory()
-    : ProfileKeyedServiceFactory("DevToolsAndroidBridge") {}
+    : ProfileKeyedServiceFactory(
+          "DevToolsAndroidBridge",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 DevToolsAndroidBridge::Factory::~Factory() {}
 
@@ -165,11 +172,12 @@ DevToolsAndroidBridge::DevToolsAndroidBridge(Profile* profile)
       prefs::kDevToolsDiscoverTCPTargetsEnabled,
       base::BindRepeating(&DevToolsAndroidBridge::CreateDeviceProviders,
                           base::Unretained(this)));
-  base::Value target_discovery(base::Value::Type::LIST);
+  base::Value::List target_discovery;
   target_discovery.Append(kChromeDiscoveryURL);
   target_discovery.Append(kNodeDiscoveryURL);
-  profile->GetPrefs()->SetDefaultPrefValue(prefs::kDevToolsTCPDiscoveryConfig,
-                                           std::move(target_discovery));
+  profile->GetPrefs()->SetDefaultPrefValue(
+      prefs::kDevToolsTCPDiscoveryConfig,
+      base::Value(std::move(target_discovery)));
   CreateDeviceProviders();
 }
 
@@ -264,14 +272,17 @@ void DevToolsAndroidBridge::ReceivedDeviceList(
   }
 
   DeviceListListeners copy(device_list_listeners_);
-  for (auto* listener : copy)
+  for (DevToolsAndroidBridge::DeviceListListener* listener : copy) {
     listener->DeviceListChanged(remote_devices);
+  }
 
   ForwardingStatus status =
       port_forwarding_controller_->DeviceListChanged(complete_devices);
   PortForwardingListeners forwarding_listeners(port_forwarding_listeners_);
-  for (auto* listener : forwarding_listeners)
+  for (DevToolsAndroidBridge::PortForwardingListener* listener :
+       forwarding_listeners) {
     listener->PortStatusChanged(status);
+  }
 }
 
 void DevToolsAndroidBridge::StartDeviceCountPolling() {
@@ -298,8 +309,9 @@ void DevToolsAndroidBridge::ReceivedDeviceCount(int count) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   DeviceCountListeners copy(device_count_listeners_);
-  for (auto* listener : copy)
+  for (DevToolsAndroidBridge::DeviceCountListener* listener : copy) {
     listener->DeviceCountChanged(count);
+  }
 
   if (device_count_listeners_.empty())
     return;

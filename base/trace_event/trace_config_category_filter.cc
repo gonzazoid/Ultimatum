@@ -13,12 +13,19 @@
 #include "base/strings/stringprintf.h"
 #include "base/trace_event/trace_event.h"
 
-namespace base {
-namespace trace_event {
+namespace base::trace_event {
 
 namespace {
+
 const char kIncludedCategoriesParam[] = "included_categories";
 const char kExcludedCategoriesParam[] = "excluded_categories";
+
+bool AreStringListsEquivalent(const std::vector<std::string>& list1,
+                              const std::vector<std::string>& list2) {
+  std::unordered_set<std::string> set1(list1.begin(), list1.end());
+  std::unordered_set<std::string> set2(list2.begin(), list2.end());
+  return set1 == set2;
+}
 }
 
 TraceConfigCategoryFilter::TraceConfigCategoryFilter() = default;
@@ -30,6 +37,16 @@ TraceConfigCategoryFilter::~TraceConfigCategoryFilter() = default;
 
 TraceConfigCategoryFilter& TraceConfigCategoryFilter::operator=(
     const TraceConfigCategoryFilter& rhs) = default;
+
+bool TraceConfigCategoryFilter::IsEquivalentTo(
+    const TraceConfigCategoryFilter& other) const {
+  return AreStringListsEquivalent(included_categories_,
+                                  other.included_categories_) &&
+         AreStringListsEquivalent(disabled_categories_,
+                                  other.disabled_categories_) &&
+         AreStringListsEquivalent(excluded_categories_,
+                                  other.excluded_categories_);
+}
 
 void TraceConfigCategoryFilter::InitializeFromString(
     const StringPiece& category_filter_string) {
@@ -51,13 +68,14 @@ void TraceConfigCategoryFilter::InitializeFromString(
   }
 }
 
-void TraceConfigCategoryFilter::InitializeFromConfigDict(const Value& dict) {
-  const Value* included_category_list =
-      dict.FindListKey(kIncludedCategoriesParam);
+void TraceConfigCategoryFilter::InitializeFromConfigDict(
+    const Value::Dict& dict) {
+  const Value::List* included_category_list =
+      dict.FindList(kIncludedCategoriesParam);
   if (included_category_list)
     SetCategoriesFromIncludedList(*included_category_list);
-  const Value* excluded_category_list =
-      dict.FindListKey(kExcludedCategoriesParam);
+  const Value::List* excluded_category_list =
+      dict.FindList(kExcludedCategoriesParam);
   if (excluded_category_list)
     SetCategoriesFromExcludedList(*excluded_category_list);
 }
@@ -177,9 +195,9 @@ std::string TraceConfigCategoryFilter::ToFilterString() const {
 }
 
 void TraceConfigCategoryFilter::SetCategoriesFromIncludedList(
-    const Value& included_list) {
+    const Value::List& included_list) {
   included_categories_.clear();
-  for (const Value& item : included_list.GetList()) {
+  for (const Value& item : included_list) {
     if (!item.is_string())
       continue;
     const std::string& category = item.GetString();
@@ -193,9 +211,9 @@ void TraceConfigCategoryFilter::SetCategoriesFromIncludedList(
 }
 
 void TraceConfigCategoryFilter::SetCategoriesFromExcludedList(
-    const Value& excluded_list) {
+    const Value::List& excluded_list) {
   excluded_categories_.clear();
-  for (const Value& item : excluded_list.GetList()) {
+  for (const Value& item : excluded_list) {
     if (item.is_string())
       excluded_categories_.push_back(item.GetString());
   }
@@ -233,5 +251,4 @@ bool TraceConfigCategoryFilter::IsCategoryNameAllowed(StringPiece str) {
   return !str.empty() && str.front() != ' ' && str.back() != ' ';
 }
 
-}  // namespace trace_event
-}  // namespace base
+}  // namespace base::trace_event

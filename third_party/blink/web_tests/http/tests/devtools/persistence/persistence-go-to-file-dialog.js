@@ -2,11 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {SourcesTestRunner} from 'sources_test_runner';
+import {BindingsTestRunner} from 'bindings_test_runner';
+
+import * as QuickOpen from 'devtools/ui/legacy/components/quick_open/quick_open.js';
+import * as UIModule from 'devtools/ui/legacy/legacy.js';
+import * as Workspace from 'devtools/models/workspace/workspace.js';
+
 (async function() {
   TestRunner.addResult(`Verify that GoTo source dialog filters out mapped uiSourceCodes.\n`);
-  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
-  await TestRunner.loadTestModule('bindings_test_runner');
-  await TestRunner.loadLegacyModule('quick_open');
   await TestRunner.addScriptTag('resources/foo.js');
 
   var testMapping = BindingsTestRunner.initializeTestMapping();
@@ -18,8 +23,8 @@
     function waitForUISourceCodes(next) {
       Promise
           .all([
-            TestRunner.waitForUISourceCode('foo.js', Workspace.projectTypes.Network),
-            TestRunner.waitForUISourceCode('foo.js', Workspace.projectTypes.FileSystem)
+            TestRunner.waitForUISourceCode('foo.js', Workspace.Workspace.projectTypes.Network),
+            TestRunner.waitForUISourceCode('foo.js', Workspace.Workspace.projectTypes.FileSystem)
           ])
           .then(next);
     },
@@ -39,15 +44,15 @@
   ]);
 
   function dumpGoToSourceDialog(next) {
-    TestRunner.addSnifferPromise(QuickOpen.QuickOpen.prototype, 'providerLoadedForTest').then(provider => {
+    TestRunner.addSnifferPromise(QuickOpen.QuickOpen.QuickOpenImpl.prototype, 'providerLoadedForTest').then(provider => {
       var keys = [];
       for (var i = 0; i < provider.itemCount(); ++i)
         keys.push(provider.itemKeyAt(i));
       keys.sort();
       TestRunner.addResult(keys.join('\n'));
-      UI.Dialog.instance.hide();
+      UIModule.Dialog.Dialog.instance.hide();
       next();
     });
-    QuickOpen.QuickOpen.show('');
+    QuickOpen.QuickOpen.QuickOpenImpl.show('');
   }
 })();

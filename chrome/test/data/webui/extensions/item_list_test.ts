@@ -6,38 +6,34 @@
 import 'chrome://extensions/extensions.js';
 
 import {ExtensionsItemListElement} from 'chrome://extensions/extensions.js';
-import {assert} from 'chrome://resources/js/assert.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {assertEquals} from 'chrome://webui-test/chai_assert.js';
+
 import {createExtensionInfo, testVisible} from './test_util.js';
 
-const extension_item_list_tests = {
-  suiteName: 'ExtensionItemListTest',
-  TestNames: {
-    Filtering: 'item list filtering',
-    NoItemsMsg: 'empty item list',
-    NoSearchResultsMsg: 'empty item list filtering results',
-    LoadTimeData: 'loadTimeData contains isManaged and managedByOrg',
-  },
-};
-
-Object.assign(window, {extension_item_list_tests: extension_item_list_tests});
-
-suite(extension_item_list_tests.suiteName, function() {
+suite('ExtensionItemListTest', function() {
   let itemList: ExtensionsItemListElement;
   let boundTestVisible: (selector: string, visible: boolean, text?: string) =>
       void;
 
   // Initialize an extension item before each test.
   setup(function() {
+    setupElement();
+  });
+
+  function setupElement() {
     document.body.innerHTML = window.trustedTypes!.emptyHTML;
     itemList = document.createElement('extensions-item-list');
     boundTestVisible = testVisible.bind(null, itemList);
 
     const createExt = createExtensionInfo;
     const extensionItems = [
-      createExt({name: 'Alpha', id: 'a'.repeat(32)}),
+      createExt({
+        name: 'Alpha',
+        id: 'a'.repeat(32),
+        safetyCheckText: {panelString: 'This extension contains malware.'},
+      }),
       createExt({name: 'Bravo', id: 'b'.repeat(32)}),
       createExt({name: 'Charlie', id: 'c'.repeat(29) + 'wxy'}),
     ];
@@ -48,9 +44,9 @@ suite(extension_item_list_tests.suiteName, function() {
     itemList.apps = appItems;
     itemList.filter = '';
     document.body.appendChild(itemList);
-  });
+  }
 
-  test(assert(extension_item_list_tests.TestNames.Filtering), function() {
+  test('Filtering', function() {
     function itemLengthEquals(num: number) {
       flush();
       assertEquals(
@@ -102,7 +98,7 @@ suite(extension_item_list_tests.suiteName, function() {
         itemList.shadowRoot!.querySelector('extensions-item')!.data.name);
   });
 
-  test(assert(extension_item_list_tests.TestNames.NoItemsMsg), function() {
+  test('NoItems', function() {
     flush();
     boundTestVisible('#no-items', false);
     boundTestVisible('#no-search-results', false);
@@ -114,22 +110,54 @@ suite(extension_item_list_tests.suiteName, function() {
     boundTestVisible('#no-search-results', false);
   });
 
-  test(
-      assert(extension_item_list_tests.TestNames.NoSearchResultsMsg),
-      function() {
-        flush();
-        boundTestVisible('#no-items', false);
-        boundTestVisible('#no-search-results', false);
+  test('NoSearchResults', function() {
+    flush();
+    boundTestVisible('#no-items', false);
+    boundTestVisible('#no-search-results', false);
 
-        itemList.filter = 'non-existent name';
-        flush();
-        boundTestVisible('#no-items', false);
-        boundTestVisible('#no-search-results', true);
-      });
+    itemList.filter = 'non-existent name';
+    flush();
+    boundTestVisible('#no-items', false);
+    boundTestVisible('#no-search-results', true);
+  });
 
-  test(assert(extension_item_list_tests.TestNames.LoadTimeData), function() {
+  test('LoadTimeData', function() {
     // Check that loadTimeData contains these values.
     loadTimeData.getBoolean('isManaged');
     loadTimeData.getString('browserManagedByOrg');
+  });
+
+  test('SafetyCheckPanel', function() {
+    // The extension review panel should not be visible if
+    // safetyCheckShowReviewPanel and safetyHubShowReviewPanel are set to
+    // false.
+    loadTimeData.overrideValues({'safetyCheckShowReviewPanel': false});
+    loadTimeData.overrideValues({'safetyHubShowReviewPanel': false});
+
+    // set up the element again to capture the updated value of
+    // safetyCheckShowReviewPanel.
+    setupElement();
+
+    flush();
+    boundTestVisible('extensions-review-panel', false);
+    // The extension review panel should be visible if the feature flag is set
+    // to true.
+    loadTimeData.overrideValues({'safetyCheckShowReviewPanel': true});
+
+    // set up the element again to capture the updated value of
+    // safetyCheckShowReviewPanel.
+    setupElement();
+
+    flush();
+    boundTestVisible('extensions-review-panel', true);
+
+    // The extension review panel should  be visible if
+    // safetyHubShowReviewPanel is set to true.
+    loadTimeData.overrideValues({'safetyCheckShowReviewPanel': false});
+    loadTimeData.overrideValues({'safetyHubShowReviewPanel': true});
+    setupElement();
+
+    flush();
+    boundTestVisible('extensions-review-panel', true);
   });
 });

@@ -5,26 +5,28 @@
 #include "content/browser/private_aggregation/private_aggregation_budget_storage.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/timer/elapsed_timer.h"
 #include "components/sqlite_proto/key_value_data.h"
 #include "components/sqlite_proto/key_value_table.h"
 #include "components/sqlite_proto/proto_table_manager.h"
 #include "content/browser/private_aggregation/proto/private_aggregation_budgets.pb.h"
 #include "sql/database.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 
@@ -38,7 +40,13 @@ constexpr char kBudgetsTableName[] = "private_aggregation_api_budgets";
 // When updating the database's schema, please increment the schema version.
 // This will raze the database. This is not necessary for backwards-compatible
 // updates to the proto format.
-constexpr int kCurrentSchemaVersion = 1;
+constexpr int kCurrentSchemaVersion = 2;
+
+void RecordInitializationStatus(
+    PrivateAggregationBudgetStorage::InitStatus status) {
+  base::UmaHistogramEnumeration(
+      "PrivacySandbox.PrivateAggregation.BudgetStorage.InitStatus", status);
+}
 
 }  // namespace
 
@@ -50,6 +58,10 @@ base::OnceClosure PrivateAggregationBudgetStorage::CreateAsync(
     base::OnceCallback<void(std::unique_ptr<PrivateAggregationBudgetStorage>)>
         on_done_initializing) {
   DCHECK(on_done_initializing);
+  base::UmaHistogramBoolean(
+      "PrivacySandbox.PrivateAggregation.BudgetStorage."
+      "BeginInitializationCount",
+      /*sample=*/true);
   auto storage =
       base::WrapUnique(new PrivateAggregationBudgetStorage(db_task_runner));
   auto* raw_storage = storage.get();
@@ -68,7 +80,7 @@ base::OnceClosure PrivateAggregationBudgetStorage::CreateAsync(
       base::BindOnce(
           &PrivateAggregationBudgetStorage::FinishInitializationOnMainSequence,
           base::Unretained(raw_storage), std::move(storage),
-          std::move(on_done_initializing)));
+          std::move(on_done_initializing), base::ElapsedTimer()));
 
   return base::BindOnce(&PrivateAggregationBudgetStorage::Shutdown,
                         raw_storage->weak_factory_.GetWeakPtr());
@@ -84,13 +96,11 @@ PrivateAggregationBudgetStorage::PrivateAggregationBudgetStorage(
               kBudgetsTableName)),
       budgets_data_(table_manager_,
                     budgets_table_.get(),
-                    /*max_num_entries=*/absl::nullopt,
+                    /*max_num_entries=*/std::nullopt,
                     kFlushDelay),
       db_task_runner_(std::move(db_task_runner)),
       db_(std::make_unique<sql::Database>(
-          sql::DatabaseOptions{.exclusive_locking = true,
-                               .page_size = 4096,
-                               .cache_size = 32})) {}
+          sql::DatabaseOptions{.page_size = 4096, .cache_size = 32})) {}
 
 PrivateAggregationBudgetStorage::~PrivateAggregationBudgetStorage() {
   Shutdown();
@@ -109,6 +119,7 @@ bool PrivateAggregationBudgetStorage::InitializeOnDbSequence(
   // outcomes/errors.
   if (exclusively_run_in_memory) {
     if (!db->OpenInMemory()) {
+      RecordInitializationStatus(InitStatus::kFailedToOpenDbInMemory);
       return false;
     }
   } else {
@@ -116,10 +127,12 @@ bool PrivateAggregationBudgetStorage::InitializeOnDbSequence(
         base::DirectoryExists(path_to_db_dir) ||
         base::CreateDirectory(path_to_db_dir);
     if (!dir_exists_or_was_created) {
+      RecordInitializationStatus(InitStatus::kFailedToCreateDir);
       return false;
     }
     base::FilePath path_to_database = path_to_db_dir.Append(kDatabaseFilename);
     if (!db->Open(path_to_database)) {
+      RecordInitializationStatus(InitStatus::kFailedToOpenDbFile);
       return false;
     }
   }
@@ -129,6 +142,7 @@ bool PrivateAggregationBudgetStorage::InitializeOnDbSequence(
 
   budgets_data_.InitializeOnDBSequence();
 
+  RecordInitializationStatus(InitStatus::kSuccess);
   return true;
 }
 
@@ -169,9 +183,18 @@ void PrivateAggregationBudgetStorage::FinishInitializationOnMainSequence(
     std::unique_ptr<PrivateAggregationBudgetStorage> owned_this,
     base::OnceCallback<void(std::unique_ptr<PrivateAggregationBudgetStorage>)>
         on_done_initializing,
+    base::ElapsedTimer elapsed_timer,
     bool was_successful) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(owned_this);
+
+  base::UmaHistogramBoolean(
+      "PrivacySandbox.PrivateAggregation.BudgetStorage."
+      "ShutdownBeforeFinishingInitialization",
+      !db_);
+  base::UmaHistogramTimes(
+      "PrivacySandbox.PrivateAggregation.BudgetStorage.InitTime",
+      elapsed_timer.Elapsed());
 
   // If the initialization failed, `this` will be destroyed after its unique_ptr
   // passes out of scope here.

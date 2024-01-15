@@ -6,7 +6,9 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
@@ -16,9 +18,12 @@
 #include "chrome/browser/search_engines/chrome_template_url_service_client.h"
 #include "chrome/browser/search_engines/ui_thread_search_terms_data.h"
 #include "chrome/browser/web_data_service_factory.h"
+#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "components/omnibox/common/omnibox_features.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
 #include "components/search_engines/default_search_manager.h"
+#include "components/search_engines/enterprise_site_search_manager.h"
 #include "components/search_engines/search_engines_pref_names.h"
 #include "components/search_engines/template_url_service.h"
 #include "rlz/buildflags/buildflags.h"
@@ -31,15 +36,34 @@
 #include "components/rlz/rlz_tracker.h"  // nogncheck crbug.com/1125897
 #endif
 
+namespace {
+
+BASE_FEATURE(kProfileBasedTemplateURLService,
+             "ProfileBasedTemplateURLService",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+}  // namespace
+
 // static
 TemplateURLService* TemplateURLServiceFactory::GetForProfile(Profile* profile) {
+  TRACE_EVENT0("loading", "TemplateURLServiceFactory::GetForProfile");
+
+  if (base::FeatureList::IsEnabled(kProfileBasedTemplateURLService)) {
+    if (!profile->template_url_service()) {
+      profile->set_template_url_service(static_cast<TemplateURLService*>(
+          GetInstance()->GetServiceForBrowserContext(profile, true)));
+    }
+    return profile->template_url_service().value();
+  }
+
   return static_cast<TemplateURLService*>(
       GetInstance()->GetServiceForBrowserContext(profile, true));
 }
 
 // static
 TemplateURLServiceFactory* TemplateURLServiceFactory::GetInstance() {
-  return base::Singleton<TemplateURLServiceFactory>::get();
+  static base::NoDestructor<TemplateURLServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -51,7 +75,7 @@ std::unique_ptr<KeyedService> TemplateURLServiceFactory::BuildInstanceFor(
       base::IgnoreResult(&rlz::RLZTracker::RecordProductEvent), rlz_lib::CHROME,
       rlz::RLZTracker::ChromeOmnibox(), rlz_lib::SET_TO_GOOGLE);
 #endif
-  Profile* profile = static_cast<Profile*>(context);
+  Profile* profile = Profile::FromBrowserContext(context);
   return std::make_unique<TemplateURLService>(
       profile->GetPrefs(), std::make_unique<UIThreadSearchTermsData>(),
       WebDataServiceFactory::GetKeywordWebDataForProfile(
@@ -60,7 +84,11 @@ std::unique_ptr<KeyedService> TemplateURLServiceFactory::BuildInstanceFor(
           new ChromeTemplateURLServiceClient(
               HistoryServiceFactory::GetForProfile(
                   profile, ServiceAccessType::EXPLICIT_ACCESS))),
-      dsp_change_callback);
+      dsp_change_callback
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+      , profile->IsMainProfile()
+#endif  // BUIDFLAG(IS_CHROMEOS_LACROS)
+  );
 }
 
 TemplateURLServiceFactory::TemplateURLServiceFactory()
@@ -78,9 +106,10 @@ TemplateURLServiceFactory::TemplateURLServiceFactory()
   DependsOn(WebDataServiceFactory::GetInstance());
 }
 
-TemplateURLServiceFactory::~TemplateURLServiceFactory() {}
+TemplateURLServiceFactory::~TemplateURLServiceFactory() = default;
 
-KeyedService* TemplateURLServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+TemplateURLServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -92,21 +121,29 @@ KeyedService* TemplateURLServiceFactory::BuildServiceInstanceFor(
   // sign-in flow creates a window with a URL bar.  The URL bar code currently
   // assumes a template URL service exists.  (This is true even though the user
   // cannot search from the captive portal sign-in window.)
-  if (!chromeos::ProfileHelper::IsUserProfile(profile) &&
-      !chromeos::ProfileHelper::IsSigninProfile(profile)) {
+  if (!ash::ProfileHelper::IsUserProfile(profile) &&
+      !ash::ProfileHelper::IsSigninProfile(profile)) {
     return nullptr;
   }
 #endif
 
-  return BuildInstanceFor(profile).release();
+  return BuildInstanceFor(profile);
 }
 
 void TemplateURLServiceFactory::RegisterProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry) {
   DefaultSearchManager::RegisterProfilePrefs(registry);
+  EnterpriseSiteSearchManager::RegisterProfilePrefs(registry);
   TemplateURLService::RegisterProfilePrefs(registry);
 }
 
 bool TemplateURLServiceFactory::ServiceIsNULLWhileTesting() const {
   return true;
+}
+
+void TemplateURLServiceFactory::BrowserContextDestroyed(
+    content::BrowserContext* browser_context) {
+  Profile::FromBrowserContext(browser_context)
+      ->set_template_url_service(nullptr);
+  BrowserContextKeyedServiceFactory::BrowserContextDestroyed(browser_context);
 }

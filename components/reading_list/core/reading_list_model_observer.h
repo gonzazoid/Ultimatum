@@ -43,6 +43,12 @@ class ReadingListModelObserver {
   // Invoked when elements are about to be removed from the read or unread list.
   virtual void ReadingListWillRemoveEntry(const ReadingListModel* model,
                                           const GURL& url) {}
+
+  // Invoked when elements have been removed.
+  virtual void ReadingListDidRemoveEntry(const ReadingListModel* model,
+                                         const GURL& url) {}
+
+  // TODO(crbug.com/1424750): Update the below comment as it seems not accurate.
   // Invoked when elements |MarkEntryUpdated| is called on an entry. This means
   // that the order of the entry may change and read/unread list may change
   // too.
@@ -70,6 +76,10 @@ class ReadingListModelObserver {
   // Invoked when an entry is about to change.
   virtual void ReadingListWillUpdateEntry(const ReadingListModel* model,
                                           const GURL& url) {}
+
+  // Invoked when an entry is changed.
+  virtual void ReadingListDidUpdateEntry(const ReadingListModel* model,
+                                         const GURL& url) {}
 
   // Called after all the changes signaled by calls to the "Will" methods are
   // done. All the "Will" methods are called as necessary, then the changes

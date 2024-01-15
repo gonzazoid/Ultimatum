@@ -16,7 +16,6 @@
 #include "cc/test/pixel_comparator.h"
 #include "cc/trees/layer_tree_impl.h"
 #include "components/viz/test/test_in_process_context_provider.h"
-#include "gpu/command_buffer/client/gles2_interface.h"
 
 #if !BUILDFLAG(IS_ANDROID)
 
@@ -56,11 +55,13 @@ class PaintedScrollbar : public FakeScrollbar {
     flags.setColor(color_);
     gfx::Rect inset_rect = rect;
     while (!inset_rect.IsEmpty()) {
-      int big = paint_scale_ + 2;
-      int small = paint_scale_;
-      inset_rect.Inset(gfx::Insets::TLBR(big, big, small, small));
+      int big_rect = paint_scale_ + 2;
+      int small_rect = paint_scale_;
+      inset_rect.Inset(
+          gfx::Insets::TLBR(big_rect, big_rect, small_rect, small_rect));
       canvas->drawRect(RectToSkRect(inset_rect), flags);
-      inset_rect.Inset(gfx::Insets::TLBR(big, big, small, small));
+      inset_rect.Inset(
+          gfx::Insets::TLBR(big_rect, big_rect, small_rect, small_rect));
     }
   }
 
@@ -136,7 +137,8 @@ TEST_P(LayerTreeHostScrollbarsPixelTest, TransformScale) {
 }
 
 // Disabled on TSan due to frequent timeouts. crbug.com/848994
-#if defined(THREAD_SANITIZER)
+// TODO(crbug.com/1416306): currently do not pass on iOS.
+#if defined(THREAD_SANITIZER) || BUILDFLAG(IS_IOS)
 #define MAYBE_HugeTransformScale DISABLED_HugeTransformScale
 #else
 #define MAYBE_HugeTransformScale HugeTransformScale
@@ -153,17 +155,10 @@ TEST_P(LayerTreeHostScrollbarsPixelTest, MAYBE_HugeTransformScale) {
   layer->SetBounds(gfx::Size(10, 400));
   background->AddChild(layer);
 
-  auto context = base::MakeRefCounted<viz::TestInProcessContextProvider>(
-      viz::TestContextType::kGLES2, /*support_locking=*/false);
-  gpu::ContextResult result = context->BindToCurrentSequence();
-  DCHECK_EQ(result, gpu::ContextResult::kSuccess);
-  int max_texture_size = 0;
-  context->ContextGL()->GetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture_size);
-
   // We want a scale that creates a texture taller than the max texture size. If
   // there's no clamping, the texture will be invalid and we'll just get black.
   double scale = 64.0;
-  ASSERT_GT(scale * layer->bounds().height(), max_texture_size);
+  ASSERT_GT(scale * layer->bounds().height(), max_texture_size_);
 
   // Let's show the bottom right of the layer, so we know the texture wasn't
   // just cut off.
@@ -174,12 +169,18 @@ TEST_P(LayerTreeHostScrollbarsPixelTest, MAYBE_HugeTransformScale) {
   scale_transform.Scale(scale, scale);
   layer->SetTransform(scale_transform);
 
-  pixel_comparator_ = std::make_unique<FuzzyPixelOffByOneComparator>(true);
+  pixel_comparator_ =
+      std::make_unique<AlphaDiscardingFuzzyPixelOffByOneComparator>();
 
-  RunPixelTest(background,
-               base::FilePath(use_skia_vulkan()
-                                  ? FILE_PATH_LITERAL("spiral_64_scale_vk.png")
-                                  : FILE_PATH_LITERAL("spiral_64_scale.png")));
+  base::FilePath expected_result =
+      base::FilePath(FILE_PATH_LITERAL("spiral_64_scale.png"));
+  if (use_skia_graphite()) {
+    expected_result = expected_result.InsertBeforeExtensionASCII("_graphite");
+  }
+  if (use_skia_vulkan()) {
+    expected_result = expected_result.InsertBeforeExtensionASCII("_vk");
+  }
+  RunPixelTest(background, expected_result);
 }
 
 class LayerTreeHostOverlayScrollbarsPixelTest
@@ -201,7 +202,7 @@ class PaintedOverlayScrollbar : public FakeScrollbar {
   PaintedOverlayScrollbar() {
     set_should_paint(true);
     set_has_thumb(true);
-    set_orientation(ScrollbarOrientation::VERTICAL);
+    set_orientation(ScrollbarOrientation::kVertical);
     set_is_overlay(true);
     set_thumb_size(gfx::Size(15, 50));
     set_track_rect(gfx::Rect(0, 0, 15, 400));

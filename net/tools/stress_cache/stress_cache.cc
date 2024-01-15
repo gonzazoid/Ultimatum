@@ -18,11 +18,11 @@
 #include <vector>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/debug/debugger.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_type.h"
@@ -37,7 +37,6 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/platform_thread.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "net/base/io_buffer.h"
@@ -125,7 +124,7 @@ enum Operation { NONE, OPEN, CREATE, READ, WRITE, DOOM };
 class EntryWrapper {
  public:
   EntryWrapper() {
-    buffer_ = base::MakeRefCounted<net::IOBuffer>(kBufferSize);
+    buffer_ = base::MakeRefCounted<net::IOBufferWithSize>(kBufferSize);
     memset(buffer_->data(), 'k', kBufferSize);
   }
 
@@ -272,8 +271,8 @@ void EntryWrapper::DoIdle() {
   state_ = NONE;
   g_data->pendig_operations--;
   DCHECK(g_data->pendig_operations);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                base::BindOnce(&LoopTask));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&LoopTask));
 }
 
 // The task that keeps the main thread busy. Whenever an entry becomes idle this
@@ -293,8 +292,8 @@ void LoopTask() {
     g_data->entries[slot].DoOpen(key);
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                base::BindOnce(&LoopTask));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&LoopTask));
 }
 
 // This thread will loop forever, adding and removing entries from the cache.
@@ -336,8 +335,8 @@ void StressTheCache(int iteration) {
   for (auto& key : g_data->keys)
     key = GenerateStressKey();
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                base::BindOnce(&LoopTask));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&LoopTask));
   base::RunLoop().Run();
 }
 
@@ -350,7 +349,7 @@ void RunSoon(scoped_refptr<base::SingleThreadTaskRunner> task_runner);
 
 void CrashCallback() {
   // Keep trying to run.
-  RunSoon(base::ThreadTaskRunnerHandle::Get());
+  RunSoon(base::SingleThreadTaskRunner::GetCurrentDefault());
 
   if (g_crashing)
     return;

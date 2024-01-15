@@ -21,22 +21,30 @@ const char kTestCellularEid[] = "eid";
 
 const char kTestWifiDevicePath[] = "wifi_path";
 const char kTestWifiDeviceName[] = "wifi_name";
+const char kTestIpv6ConfigPath[] = "/ipconfig/wlan0_ipv6";
+const char kTestIpv4ConfigPath[] = "/ipconfig/wlan0_ipv4";
+const char kTestIpv4Address_1[] = "192.168.1.255";
+const char kTestIpv4Address_2[] = "192.168.1.123";
+const char kTestIpv6Address_1[] = "2600:1700:6900:f000:ab00:8a39:2099:72fd";
+const char kTestIpv6Address_2[] = "2600:1700:6900:f000:ab00:8a39:2099:12df";
 
 // Creates a list of cellular SIM slots with an eSIM and pSIM slot.
 base::Value GenerateTestSimSlotInfos() {
-  base::Value::List sim_slot_infos;
+  auto psim_slot_info =
+      base::Value::Dict()
+          .Set(shill::kSIMSlotInfoICCID, kTestCellularPSimIccid)
+          .Set(shill::kSIMSlotInfoEID, std::string())
+          .Set(shill::kSIMSlotInfoPrimary, true);
 
-  base::Value::Dict psim_slot_info;
-  psim_slot_info.Set(shill::kSIMSlotInfoICCID, kTestCellularPSimIccid);
-  psim_slot_info.Set(shill::kSIMSlotInfoEID, std::string());
-  psim_slot_info.Set(shill::kSIMSlotInfoPrimary, true);
-  sim_slot_infos.Append(std::move(psim_slot_info));
+  auto esim_slot_info =
+      base::Value::Dict()
+          .Set(shill::kSIMSlotInfoICCID, kTestCellularESimIccid)
+          .Set(shill::kSIMSlotInfoEID, kTestCellularEid)
+          .Set(shill::kSIMSlotInfoPrimary, false);
 
-  base::Value::Dict esim_slot_info;
-  esim_slot_info.Set(shill::kSIMSlotInfoICCID, kTestCellularESimIccid);
-  esim_slot_info.Set(shill::kSIMSlotInfoEID, kTestCellularEid);
-  esim_slot_info.Set(shill::kSIMSlotInfoPrimary, false);
-  sim_slot_infos.Append(std::move(esim_slot_info));
+  auto sim_slot_infos = base::Value::List()
+                            .Append(std::move(psim_slot_info))
+                            .Append(std::move(esim_slot_info));
 
   return base::Value(std::move(sim_slot_infos));
 }
@@ -66,6 +74,14 @@ class DeviceStateTest : public testing::Test {
 
   const DeviceState* GetWifiDevice() {
     return helper_.network_state_handler()->GetDeviceState(kTestWifiDevicePath);
+  }
+
+  void UpdateDeviceIpConfigProperties(const std::string& device_path,
+                                      const std::string& ip_config_path,
+                                      base::Value::Dict properties) {
+    helper_.network_state_handler()->UpdateIPConfigProperties(
+        ManagedState::MANAGED_TYPE_DEVICE, device_path, ip_config_path,
+        std::move(properties));
   }
 
   void SetIccid() {
@@ -114,6 +130,48 @@ TEST_F(DeviceStateTest, SimSlotInfo_Cellular) {
 TEST_F(DeviceStateTest, SimSlotInfo_Wifi) {
   // Default SIM slots should not be created for non-cellular.
   EXPECT_TRUE(GetWifiDevice()->GetSimSlotInfos().empty());
+}
+
+TEST_F(DeviceStateTest, DeviceIPAddress) {
+  auto dhcp_ip_config = base::Value::Dict()
+                            .Set(shill::kAddressProperty, kTestIpv4Address_1)
+                            .Set(shill::kMethodProperty, shill::kTypeDHCP);
+  UpdateDeviceIpConfigProperties(kTestWifiDevicePath, kTestIpv4ConfigPath,
+                                 std::move(dhcp_ip_config));
+  EXPECT_EQ(kTestIpv4Address_1,
+            GetWifiDevice()->GetIpAddressByType(shill::kTypeIPv4));
+  EXPECT_EQ(std::string(),
+            GetWifiDevice()->GetIpAddressByType(shill::kTypeIPv6));
+
+  auto ipv4_ip_config = base::Value::Dict()
+                            .Set(shill::kAddressProperty, kTestIpv4Address_2)
+                            .Set(shill::kMethodProperty, shill::kTypeIPv4);
+  UpdateDeviceIpConfigProperties(kTestWifiDevicePath, kTestIpv4ConfigPath,
+                                 std::move(ipv4_ip_config));
+  EXPECT_EQ(kTestIpv4Address_2,
+            GetWifiDevice()->GetIpAddressByType(shill::kTypeIPv4));
+  EXPECT_EQ(std::string(),
+            GetWifiDevice()->GetIpAddressByType(shill::kTypeIPv6));
+
+  auto slaac_ip_config = base::Value::Dict()
+                             .Set(shill::kAddressProperty, kTestIpv6Address_1)
+                             .Set(shill::kMethodProperty, shill::kTypeSLAAC);
+  UpdateDeviceIpConfigProperties(kTestWifiDevicePath, kTestIpv6ConfigPath,
+                                 std::move(slaac_ip_config));
+  EXPECT_EQ(kTestIpv4Address_2,
+            GetWifiDevice()->GetIpAddressByType(shill::kTypeIPv4));
+  EXPECT_EQ(kTestIpv6Address_1,
+            GetWifiDevice()->GetIpAddressByType(shill::kTypeIPv6));
+
+  auto ipv6_ip_config = base::Value::Dict()
+                            .Set(shill::kAddressProperty, kTestIpv6Address_2)
+                            .Set(shill::kMethodProperty, shill::kTypeIPv6);
+  UpdateDeviceIpConfigProperties(kTestWifiDevicePath, kTestIpv6ConfigPath,
+                                 std::move(ipv6_ip_config));
+  EXPECT_EQ(kTestIpv4Address_2,
+            GetWifiDevice()->GetIpAddressByType(shill::kTypeIPv4));
+  EXPECT_EQ(kTestIpv6Address_2,
+            GetWifiDevice()->GetIpAddressByType(shill::kTypeIPv6));
 }
 
 }  // namespace ash

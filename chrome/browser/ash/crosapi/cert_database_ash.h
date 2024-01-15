@@ -5,15 +5,16 @@
 #ifndef CHROME_BROWSER_ASH_CROSAPI_CERT_DATABASE_ASH_H_
 #define CHROME_BROWSER_ASH_CROSAPI_CERT_DATABASE_ASH_H_
 
+#include <optional>
+
 #include "base/memory/weak_ptr.h"
 #include "chromeos/ash/components/dbus/cryptohome/UserDataAuth.pb.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/components/certificate_provider/certificate_info.h"
 #include "chromeos/crosapi/mojom/cert_database.mojom.h"
-#include "chromeos/login/login_state/login_state.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace crosapi {
 
@@ -27,8 +28,7 @@ namespace crosapi {
 // API call will be resolved. If Lacros-Chrome is restarted, it will call
 // GetCertDatabaseInfo again and receive a cached result from the first call.
 // The cached result is reset on login state change (i.e. sign in / sign out).
-class CertDatabaseAsh : public mojom::CertDatabase,
-                        chromeos::LoginState::Observer {
+class CertDatabaseAsh : public mojom::CertDatabase, ash::LoginState::Observer {
  public:
   CertDatabaseAsh();
   CertDatabaseAsh(const CertDatabaseAsh&) = delete;
@@ -43,7 +43,8 @@ class CertDatabaseAsh : public mojom::CertDatabase,
   void GetCertDatabaseInfo(GetCertDatabaseInfoCallback callback) override;
 
   // mojom::CertDatabase
-  void OnCertsChangedInLacros() override;
+  void OnCertsChangedInLacros(
+      mojom::CertDatabaseChangeType change_type) override;
   void AddAshCertDatabaseObserver(
       mojo::PendingRemote<mojom::AshCertDatabaseObserver> observer) override;
   void SetCertsProvidedByExtension(
@@ -53,20 +54,20 @@ class CertDatabaseAsh : public mojom::CertDatabase,
 
   // Notifies observers that were added with `AddAshCertDatabaseObserver` about
   // cert changes in Ash.
-  void NotifyCertsChangedInAsh();
+  void NotifyCertsChangedInAsh(mojom::CertDatabaseChangeType change_type);
 
  private:
-  // chromeos::LoginState::Observer
+  // ash::LoginState::Observer
   void LoggedInStateChanged() override;
 
   void WaitForCertDatabaseReady(GetCertDatabaseInfoCallback callback);
   void OnCertDatabaseReady(GetCertDatabaseInfoCallback callback,
                            unsigned long private_slot_id,
-                           absl::optional<unsigned long> system_slot_id);
+                           std::optional<unsigned long> system_slot_id);
 
-  absl::optional<bool> is_cert_database_ready_;
+  std::optional<bool> is_cert_database_ready_;
   unsigned long private_slot_id_;
-  absl::optional<unsigned long> system_slot_id_;
+  std::optional<unsigned long> system_slot_id_;
 
   // The observers that will receive notifications about cert changes in Ash.
   mojo::RemoteSet<mojom::AshCertDatabaseObserver> observers_;

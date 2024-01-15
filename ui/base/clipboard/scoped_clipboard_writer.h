@@ -44,12 +44,19 @@ class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) ScopedClipboardWriter {
   // Sets the clipboard's source metadata.
   void SetDataSource(std::unique_ptr<DataTransferEndpoint> data_src);
 
+  // Set the clipboards source URL.
+  // Typically used for attributing content originally copied from a web page.
+  void SetDataSourceURL(const GURL& main_frame, const GURL& frame);
+
   // Converts |text| to UTF-8 and adds it to the clipboard.
   void WriteText(const std::u16string& text);
 
   // Adds HTML to the clipboard. The url parameter is optional, but especially
   // useful if the HTML fragment contains relative links.
-  void WriteHTML(const std::u16string& markup, const std::string& source_url);
+  // The `content_type` refers to the sanitization of the markup.
+  void WriteHTML(const std::u16string& markup,
+                 const std::string& source_url,
+                 ClipboardContentType content_type);
 
   // Adds SVG to the clipboard.
   void WriteSvg(const std::u16string& text);
@@ -111,14 +118,18 @@ class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) ScopedClipboardWriter {
   // The type is set at construction, and can be changed before committing.
   const ClipboardBuffer buffer_;
 
-  SkBitmap bitmap_;
-
   bool confidential_ = false;
 
   // The source of the data written in ScopedClipboardWriter, nullptr means it's
   // not set, or the source of the data can't be represented by
   // DataTransferEndpoint.
   std::unique_ptr<DataTransferEndpoint> data_src_;
+
+  // The URL of the mainframe the contents are from.
+  GURL main_frame_url_;
+
+  // The URL of the frame the contents are from.
+  GURL frame_url_;
 };
 
 }  // namespace ui

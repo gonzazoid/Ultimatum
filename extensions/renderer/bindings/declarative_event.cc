@@ -137,7 +137,7 @@ DeclarativeEvent::DeclarativeEvent(
   }
 }
 
-DeclarativeEvent::~DeclarativeEvent() {}
+DeclarativeEvent::~DeclarativeEvent() = default;
 
 gin::ObjectTemplateBuilder DeclarativeEvent::GetObjectTemplateBuilder(
     v8::Isolate* isolate) {
@@ -179,7 +179,7 @@ void DeclarativeEvent::HandleFunction(const std::string& signature_name,
   v8::HandleScope handle_scope(isolate);
   v8::Local<v8::Context> context = arguments->GetHolderCreationContext();
 
-  std::vector<v8::Local<v8::Value>> argument_list = arguments->GetAll();
+  v8::LocalVector<v8::Value> argument_list = arguments->GetAll();
 
   // The events API has two undocumented parameters for each function: the name
   // of the event, and the "webViewInstanceId". Currently, stub 0 for webview
@@ -202,7 +202,7 @@ void DeclarativeEvent::HandleFunction(const std::string& signature_name,
   DCHECK_NE(binding::AsyncResponseType::kPromise, parse_result.async_type);
 
   request_handler_->StartRequest(
-      context, request_name, std::move(parse_result.arguments_list),
+      context, request_name, std::move(*parse_result.arguments_list),
       parse_result.async_type, parse_result.callback, v8::Local<v8::Function>(),
       binding::ResultModifierFunction());
 }

@@ -4,12 +4,23 @@
 
 #include "components/browsing_data/content/fake_browsing_data_model.h"
 
-FakeBrowsingDataModel::FakeBrowsingDataModel() : BrowsingDataModel(nullptr) {}
+FakeBrowsingDataModel::FakeBrowsingDataModel()
+    : FakeBrowsingDataModel(/*delegate=*/nullptr) {}
+FakeBrowsingDataModel::FakeBrowsingDataModel(
+    std::unique_ptr<BrowsingDataModel::Delegate> delegate)
+    : BrowsingDataModel(nullptr, std::move(delegate)) {}
 FakeBrowsingDataModel::~FakeBrowsingDataModel() = default;
 
-void FakeBrowsingDataModel::RemoveBrowsingData(const std::string& primary_host,
+void FakeBrowsingDataModel::RemoveBrowsingData(const DataOwner& data_owner,
                                                base::OnceClosure completed) {
-  browsing_data_entries_.erase(primary_host);
+  browsing_data_entries_.erase(data_owner);
+}
+
+void FakeBrowsingDataModel::RemoveBrowsingDataEntriesFromDisk(
+    const DataKeyEntries& browsing_data_entries,
+    base::OnceClosure completed) {
+  // Fake browsing data model only works with in-memory entries.
+  std::move(completed).Run();
 }
 
 void FakeBrowsingDataModel::PopulateFromDisk(

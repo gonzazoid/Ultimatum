@@ -6,6 +6,7 @@ module blink.mojom;
 
 import "third_party/blink/public/mojom/permissions/permission_status.mojom";
 import "url/mojom/origin.mojom";
+import "ui/gfx/geometry/mojom/geometry.mojom";
 
 enum PermissionName {
   GEOLOCATION,
@@ -31,6 +32,8 @@ enum PermissionName {
   WINDOW_MANAGEMENT,
   LOCAL_FONTS,
   DISPLAY_CAPTURE,
+  TOP_LEVEL_STORAGE_ACCESS,
+  CAPTURED_SURFACE_CONTROL,
 };
 
 struct MidiPermissionDescriptor {
@@ -48,11 +51,12 @@ struct CameraDevicePermissionDescriptor {
   bool panTiltZoom;
 };
 
-struct StorageAccessPermissionDescriptor {
-  // Site vs Origin applicability is still in flux. The current naming indicates
-  // site, but origin is preferred as site can be derived from it and not vice-
-  // versa. See, e.g.: https://github.com/privacycg/storage-access/issues/113
-  url.mojom.Origin siteOverride;
+struct TopLevelStorageAccessPermissionDescriptor {
+  // Site vs Origin applicability is still in flux. Origin is preferred as site
+  // can be derived from it and not vice-versa, and because starting stricter
+  // is better for any future migration.
+  // See, e.g.: https://github.com/privacycg/storage-access/issues/113
+  url.mojom.Origin requestedOrigin;
 };
 
 // Union of possible extensions to the base PermissionDescriptor type.
@@ -60,7 +64,7 @@ union PermissionDescriptorExtension {
   MidiPermissionDescriptor midi;
   ClipboardPermissionDescriptor clipboard;
   CameraDevicePermissionDescriptor camera_device;
-  StorageAccessPermissionDescriptor storage_access;
+  TopLevelStorageAccessPermissionDescriptor top_level_storage_access;
 };
 
 // This struct roughly corresponds to the PermissionDescriptor dictionary as
@@ -75,11 +79,67 @@ interface PermissionObserver {
   OnPermissionStatusChange(PermissionStatus status);
 };
 
+// Interface that receives change events related to PEPC from the browser
+// process.
+interface EmbeddedPermissionControlClient {
+  // Callback triggered when <permission> element is registered from browser
+  // process, to indicate if PEPC is allowed to be created or not. If PEPC is
+  // allowed to be created, the callback will be invoked with the status of the
+  // respective permissions. If PEPC is NOT allowed (i.e. in fenced frames) the
+  // PEPC object will clean up itself.
+  OnEmbeddedPermissionControlRegistered(bool allow,
+                                        array<PermissionStatus>? statuses);
+};
+
+// Result code of embedded permission control operations.
+enum EmbeddedPermissionControlResult {
+  // Indicates user clicked on `X` button or closed the permission dialog
+  // explicitly.
+  kDismissed = 0,
+
+  // User interacted with permission: denied or granted.
+  kGranted = 1,
+  kDenied = 2,
+
+  // The request is not supported (for example, without feature enabled)
+  kNotSupported = 3,
+
+  // The permission UI was resolved without user gestures.
+  // Reserved value, which may not be used.
+  kResolvedNoUserGesture = 4,
+};
+
+// Holds information about the embedded permission request
+struct EmbeddedPermissionRequestDescriptor {
+  // Define the list of permissions we will request.
+  array<PermissionDescriptor> permissions;
+
+  // Element position (in screen coordinates), used to calculate position where
+  // the secondary prompt UI is expected to be shown
+  gfx.mojom.Rect element_position;
+};
+
 // The Permission service provides permission handling capabilities by exposing
 // methods to check, request, and revoke permissions. It also allows a client to
 // start listening to permission changes.
 interface PermissionService {
   HasPermission(PermissionDescriptor permission) => (PermissionStatus status);
+  // Calling this method is only possible when the type attribute of
+  // <permission> element is set. Provide a pending remote
+  // `EmbeddedPermissionControlClient` so that it can receive notifications
+  // registered later by the browser process. The browser process should be able
+  // to observe the lifetime of the mojo pipe and be aware when a PEPC remote
+  // object has been destroyed.
+  RegisterPageEmbeddedPermissionControl(
+    array<PermissionDescriptor> permissions,
+    pending_remote<EmbeddedPermissionControlClient> client);
+  // Calling this method indicates the user has explicitly requested the
+  // permission by clicking on the `HTMLPermissionElement`. Asks for a list of
+  // permissions and returns `EmbeddedPermissionControlResult` defined above
+  RequestPageEmbeddedPermission(EmbeddedPermissionRequestDescriptor descriptor)
+      => (EmbeddedPermissionControlResult status);
+  // Request permission for the given `PermissionDescriptor`, and returns
+  // permission status result.
   RequestPermission(PermissionDescriptor permission, bool user_gesture)
       => (PermissionStatus status);
   RequestPermissions(array<PermissionDescriptor> permission, bool user_gesture)
@@ -91,4 +151,8 @@ interface PermissionService {
   AddPermissionObserver(PermissionDescriptor permission,
                         PermissionStatus last_known_status,
                         pending_remote<PermissionObserver> observer);
+  // Notifies when an event listener with `event_type` was added to
+  // PermissionStatus.
+  NotifyEventListener(PermissionDescriptor permission, string event_type,
+                      bool is_added);
 };

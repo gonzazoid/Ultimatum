@@ -4,7 +4,9 @@
 
 #include "chrome/browser/webauthn/android/chrome_webauthn_client_android.h"
 
-#include "chrome/browser/webauthn/android/conditional_ui_delegate_android.h"
+#include "chrome/browser/webauthn/android/webauthn_request_delegate_android.h"
+#include "components/webauthn/android/webauthn_cred_man_delegate.h"
+#include "components/webauthn/android/webauthn_cred_man_delegate_factory.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 
@@ -15,17 +17,23 @@ ChromeWebAuthnClientAndroid::~ChromeWebAuthnClientAndroid() = default;
 void ChromeWebAuthnClientAndroid::OnWebAuthnRequestPending(
     content::RenderFrameHost* frame_host,
     const std::vector<device::DiscoverableCredentialMetadata>& credentials,
-    base::OnceCallback<void(const std::vector<uint8_t>& id)> callback) {
-  auto* delegate = ConditionalUiDelegateAndroid::GetConditionalUiDelegate(
-      content::WebContents::FromRenderFrameHost(frame_host));
+    bool is_conditional_request,
+    base::RepeatingCallback<void(const std::vector<uint8_t>& id)>
+        getAssertionCallback,
+    base::RepeatingCallback<void()> hybridCallback) {
+  WebAuthnRequestDelegateAndroid* delegate =
+      WebAuthnRequestDelegateAndroid::GetRequestDelegate(
+          content::WebContents::FromRenderFrameHost(frame_host));
 
-  delegate->OnWebAuthnRequestPending(frame_host, credentials,
-                                     std::move(callback));
+  delegate->OnWebAuthnRequestPending(
+      frame_host, credentials, is_conditional_request,
+      std::move(getAssertionCallback), std::move(hybridCallback));
 }
 
-void ChromeWebAuthnClientAndroid::CancelWebAuthnRequest(
+void ChromeWebAuthnClientAndroid::CleanupWebAuthnRequest(
     content::RenderFrameHost* frame_host) {
-  auto* delegate = ConditionalUiDelegateAndroid::GetConditionalUiDelegate(
-      content::WebContents::FromRenderFrameHost(frame_host));
-  delegate->CancelWebAuthnRequest(frame_host);
+  WebAuthnRequestDelegateAndroid* webauthn_request_delegate =
+      WebAuthnRequestDelegateAndroid::GetRequestDelegate(
+          content::WebContents::FromRenderFrameHost(frame_host));
+  webauthn_request_delegate->CleanupWebAuthnRequest(frame_host);
 }

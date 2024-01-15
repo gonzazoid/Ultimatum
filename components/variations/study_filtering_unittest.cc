@@ -10,16 +10,19 @@
 
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
+#include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/time/time.h"
+#include "client_filterable_state.h"
 #include "components/variations/client_filterable_state.h"
 #include "components/variations/processed_study.h"
 #include "components/variations/variations_layers.h"
+#include "components/variations/variations_test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace variations {
@@ -44,6 +47,13 @@ Study::Experiment* AddExperiment(const std::string& name,
 std::vector<std::string> SplitFilterString(const std::string& input) {
   return base::SplitString(input, ",", base::TRIM_WHITESPACE,
                            base::SPLIT_WANT_ALL);
+}
+
+ClientFilterableState ClientFilterableStateForGoogleGroups(
+    const base::flat_set<uint64_t> google_groups) {
+  return ClientFilterableState(
+      base::BindOnce([] { return false; }),
+      base::BindLambdaForTesting([=]() { return google_groups; }));
 }
 
 }  // namespace
@@ -90,9 +100,9 @@ TEST(VariationsStudyFilteringTest, CheckStudyChannel) {
 }
 
 TEST(VariationsStudyFilteringTest, CheckStudyFormFactor) {
-  const Study::FormFactor form_factors[] = {Study::DESKTOP, Study::PHONE,
-                                            Study::TABLET, Study::KIOSK,
-                                            Study::MEET_DEVICE};
+  const Study::FormFactor form_factors[] = {
+      Study::DESKTOP,     Study::PHONE, Study::TABLET,     Study::KIOSK,
+      Study::MEET_DEVICE, Study::TV,    Study::AUTOMOTIVE, Study::FOLDABLE};
 
   ASSERT_EQ(Study::FormFactor_ARRAYSIZE,
             static_cast<int>(std::size(form_factors)));
@@ -284,8 +294,11 @@ TEST(VariationsStudyFilteringTest, CheckStudyLowEndDevice) {
 TEST(VariationsStudyFilteringTest, CheckStudyEnterprise) {
   Study::Filter filter;
   ClientFilterableState client_non_enterprise(
-      base::BindOnce([] { return false; }));
-  ClientFilterableState client_enterprise(base::BindOnce([] { return true; }));
+      base::BindOnce([] { return false; }),
+      base::BindOnce([] { return base::flat_set<uint64_t>(); }));
+  ClientFilterableState client_enterprise(
+      base::BindOnce([] { return true; }),
+      base::BindOnce([] { return base::flat_set<uint64_t>(); }));
 
   // Check that if the filter is not set, study applies to both enterprise and
   // non-enterprise clients.
@@ -616,8 +629,10 @@ TEST(VariationsStudyFilteringTest, CheckStudyHardwareClass) {
     Study::Filter filter;
     for (const auto& hw_class : SplitFilterString(test.hardware_class))
       filter.add_hardware_class(hw_class);
-    for (const auto& hw_class : SplitFilterString(test.exclude_hardware_class))
+    for (const auto& hw_class :
+         SplitFilterString(test.exclude_hardware_class)) {
       filter.add_exclude_hardware_class(hw_class);
+    }
 
     EXPECT_EQ(test.expected_result, internal::CheckStudyHardwareClass(
                                         filter, test.actual_hardware_class))
@@ -671,6 +686,81 @@ TEST(VariationsStudyFilteringTest, CheckStudyCountry) {
   }
 }
 
+TEST(VariationsStudyFilteringTest, CheckStudyGoogleGroupFilterNotSet) {
+  Study::Filter filter;
+
+  // Check that if the filter is not set, the study always applies.
+  EXPECT_TRUE(internal::CheckStudyGoogleGroup(
+      filter,
+      ClientFilterableStateForGoogleGroups(base::flat_set<uint64_t>())));
+  EXPECT_TRUE(internal::CheckStudyGoogleGroup(
+      filter,
+      ClientFilterableStateForGoogleGroups(base::flat_set<uint64_t>({1}))));
+}
+
+TEST(VariationsStudyFilteringTest, CheckStudyGoogleGroupFilterSet) {
+  Study::Filter filter;
+
+  // Check that if a google_group filter is set, then only members of that group
+  // match.
+  filter.add_google_group(1);
+  filter.add_google_group(2);
+  EXPECT_FALSE(internal::CheckStudyGoogleGroup(
+      filter,
+      ClientFilterableStateForGoogleGroups(base::flat_set<uint64_t>())));
+  EXPECT_TRUE(internal::CheckStudyGoogleGroup(
+      filter,
+      ClientFilterableStateForGoogleGroups(base::flat_set<uint64_t>({1}))));
+  EXPECT_FALSE(internal::CheckStudyGoogleGroup(
+      filter,
+      ClientFilterableStateForGoogleGroups(base::flat_set<uint64_t>({3}))));
+  EXPECT_TRUE(internal::CheckStudyGoogleGroup(
+      filter,
+      ClientFilterableStateForGoogleGroups(base::flat_set<uint64_t>({1, 3}))));
+}
+
+TEST(VariationsStudyFilteringTest, CheckStudyExcludeGoogleGroupFilterSet) {
+  Study::Filter filter;
+
+  // Check that if an exclude_google_group filter is set, then only non-members
+  // of that group match.
+  filter.add_exclude_google_group(1);
+  filter.add_exclude_google_group(2);
+  EXPECT_TRUE(internal::CheckStudyGoogleGroup(
+      filter,
+      ClientFilterableStateForGoogleGroups(base::flat_set<uint64_t>())));
+  EXPECT_FALSE(internal::CheckStudyGoogleGroup(
+      filter,
+      ClientFilterableStateForGoogleGroups(base::flat_set<uint64_t>({1}))));
+  EXPECT_TRUE(internal::CheckStudyGoogleGroup(
+      filter,
+      ClientFilterableStateForGoogleGroups(base::flat_set<uint64_t>({3}))));
+  EXPECT_FALSE(internal::CheckStudyGoogleGroup(
+      filter,
+      ClientFilterableStateForGoogleGroups(base::flat_set<uint64_t>({1, 3}))));
+}
+
+TEST(VariationsStudyFilteringTest, CheckStudyBothGoogleGroupFiltersSet) {
+  Study::Filter filter;
+
+  // Check that both google_group and exclude_google_group filter is set, the
+  // study is filtered out.
+  filter.add_google_group(1);
+  filter.add_exclude_google_group(2);
+  EXPECT_FALSE(internal::CheckStudyGoogleGroup(
+      filter,
+      ClientFilterableStateForGoogleGroups(base::flat_set<uint64_t>())));
+  EXPECT_FALSE(internal::CheckStudyGoogleGroup(
+      filter,
+      ClientFilterableStateForGoogleGroups(base::flat_set<uint64_t>({1}))));
+  EXPECT_FALSE(internal::CheckStudyGoogleGroup(
+      filter,
+      ClientFilterableStateForGoogleGroups(base::flat_set<uint64_t>({2}))));
+  EXPECT_FALSE(internal::CheckStudyGoogleGroup(
+      filter,
+      ClientFilterableStateForGoogleGroups(base::flat_set<uint64_t>({1, 2}))));
+}
+
 TEST(VariationsStudyFilteringTest, FilterAndValidateStudies) {
   const std::string kTrial1Name = "A";
   const std::string kGroup1Name = "Group1";
@@ -694,16 +784,16 @@ TEST(VariationsStudyFilteringTest, FilterAndValidateStudies) {
   AddExperiment("A", 10, study3);
   AddExperiment("Default", 25, study3);
 
-  ClientFilterableState client_state(base::BindOnce([] { return false; }));
-  client_state.locale = "en-CA";
-  client_state.reference_date = base::Time::Now();
-  client_state.version = base::Version("20.0.0.0");
-  client_state.channel = Study::STABLE;
-  client_state.form_factor = Study::DESKTOP;
-  client_state.platform = Study::PLATFORM_ANDROID;
+  auto client_state = CreateDummyClientFilterableState();
+  client_state->locale = "en-CA";
+  client_state->reference_date = base::Time::Now();
+  client_state->version = base::Version("20.0.0.0");
+  client_state->channel = Study::STABLE;
+  client_state->form_factor = Study::DESKTOP;
+  client_state->platform = Study::PLATFORM_ANDROID;
 
   std::vector<ProcessedStudy> processed_studies =
-      FilterAndValidateStudies(seed, client_state, VariationsLayers());
+      FilterAndValidateStudies(seed, *client_state, VariationsLayers());
 
   // Check that only the first kTrial1Name study was kept.
   ASSERT_EQ(2U, processed_studies.size());
@@ -762,18 +852,18 @@ TEST(VariationsStudyFilteringTest, FilterAndValidateStudiesWithBadFilters) {
     study->mutable_filter()->set_max_os_version(versions[i]);
   }
 
-  ClientFilterableState client_state(base::BindOnce([] { return false; }));
-  client_state.locale = "en-CA";
-  client_state.reference_date = base::Time::Now();
-  client_state.version = base::Version("20.0.0.0");
-  client_state.channel = Study::STABLE;
-  client_state.form_factor = Study::DESKTOP;
-  client_state.platform = Study::PLATFORM_ANDROID;
-  client_state.os_version = base::Version("1.2.3");
+  auto client_state = CreateDummyClientFilterableState();
+  client_state->locale = "en-CA";
+  client_state->reference_date = base::Time::Now();
+  client_state->version = base::Version("20.0.0.0");
+  client_state->channel = Study::STABLE;
+  client_state->form_factor = Study::DESKTOP;
+  client_state->platform = Study::PLATFORM_ANDROID;
+  client_state->os_version = base::Version("1.2.3");
 
   base::HistogramTester histogram_tester;
   std::vector<ProcessedStudy> processed_studies =
-      FilterAndValidateStudies(seed, client_state, VariationsLayers());
+      FilterAndValidateStudies(seed, *client_state, VariationsLayers());
 
   ASSERT_EQ(0U, processed_studies.size());
   histogram_tester.ExpectTotalCount("Variations.InvalidStudyReason",
@@ -798,17 +888,17 @@ TEST(VariationsStudyFilteringTest, FilterAndValidateStudiesWithBlankStudyName) {
 
   study->mutable_filter()->add_platform(Study::PLATFORM_ANDROID);
 
-  ClientFilterableState client_state(base::BindOnce([] { return false; }));
-  client_state.locale = "en-CA";
-  client_state.reference_date = base::Time::Now();
-  client_state.version = base::Version("20.0.0.0");
-  client_state.channel = Study::STABLE;
-  client_state.form_factor = Study::PHONE;
-  client_state.platform = Study::PLATFORM_ANDROID;
+  auto client_state = CreateDummyClientFilterableState();
+  client_state->locale = "en-CA";
+  client_state->reference_date = base::Time::Now();
+  client_state->version = base::Version("20.0.0.0");
+  client_state->channel = Study::STABLE;
+  client_state->form_factor = Study::PHONE;
+  client_state->platform = Study::PLATFORM_ANDROID;
 
   base::HistogramTester histogram_tester;
   std::vector<ProcessedStudy> processed_studies =
-      FilterAndValidateStudies(seed, client_state, VariationsLayers());
+      FilterAndValidateStudies(seed, *client_state, VariationsLayers());
 
   ASSERT_EQ(0U, processed_studies.size());
   histogram_tester.ExpectUniqueSample("Variations.InvalidStudyReason", 8, 1);
@@ -855,43 +945,43 @@ TEST(VariationsStudyFilteringTest, FilterAndValidateStudiesWithCountry) {
     if (test.filter_exclude_country)
       study->mutable_filter()->add_exclude_country(test.filter_exclude_country);
 
-    ClientFilterableState client_state(base::BindOnce([] { return false; }));
-    client_state.locale = "en-CA";
-    client_state.reference_date = base::Time::Now();
-    client_state.version = base::Version("20.0.0.0");
-    client_state.channel = Study::STABLE;
-    client_state.form_factor = Study::PHONE;
-    client_state.platform = Study::PLATFORM_ANDROID;
-    client_state.session_consistency_country = kSessionCountry;
-    client_state.permanent_consistency_country = kPermanentCountry;
+    auto client_state = CreateDummyClientFilterableState();
+    client_state->locale = "en-CA";
+    client_state->reference_date = base::Time::Now();
+    client_state->version = base::Version("20.0.0.0");
+    client_state->channel = Study::STABLE;
+    client_state->form_factor = Study::PHONE;
+    client_state->platform = Study::PLATFORM_ANDROID;
+    client_state->session_consistency_country = kSessionCountry;
+    client_state->permanent_consistency_country = kPermanentCountry;
 
     std::vector<ProcessedStudy> processed_studies =
-        FilterAndValidateStudies(seed, client_state, VariationsLayers());
+        FilterAndValidateStudies(seed, *client_state, VariationsLayers());
 
     EXPECT_EQ(test.expect_study_kept, !processed_studies.empty());
   }
 }
 
 TEST(VariationsStudyFilteringTest, GetClientCountryForStudy_Session) {
-  ClientFilterableState client_state(base::BindOnce([] { return false; }));
-  client_state.session_consistency_country = "session_country";
-  client_state.permanent_consistency_country = "permanent_country";
+  auto client_state = CreateDummyClientFilterableState();
+  client_state->session_consistency_country = "session_country";
+  client_state->permanent_consistency_country = "permanent_country";
 
   Study study;
   study.set_consistency(Study::SESSION);
   EXPECT_EQ("session_country",
-            internal::GetClientCountryForStudy(study, client_state));
+            internal::GetClientCountryForStudy(study, *client_state));
 }
 
 TEST(VariationsStudyFilteringTest, GetClientCountryForStudy_Permanent) {
-  ClientFilterableState client_state(base::BindOnce([] { return false; }));
-  client_state.session_consistency_country = "session_country";
-  client_state.permanent_consistency_country = "permanent_country";
+  auto client_state = CreateDummyClientFilterableState();
+  client_state->session_consistency_country = "session_country";
+  client_state->permanent_consistency_country = "permanent_country";
 
   Study study;
   study.set_consistency(Study::PERMANENT);
   EXPECT_EQ("permanent_country",
-            internal::GetClientCountryForStudy(study, client_state));
+            internal::GetClientCountryForStudy(study, *client_state));
 }
 
 TEST(VariationsStudyFilteringTest, ValidateStudy) {

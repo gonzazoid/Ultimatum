@@ -51,7 +51,7 @@ class ShapeValue final : public GarbageCollected<ShapeValue> {
     kImage
   };
 
-  ShapeValue(scoped_refptr<BasicShape> shape, CSSBoxType css_box)
+  ShapeValue(scoped_refptr<const BasicShape> shape, CSSBoxType css_box)
       : type_(kShape), shape_(std::move(shape)), css_box_(css_box) {}
   ShapeValue(ShapeValueType type)
       : type_(type), css_box_(CSSBoxType::kMissing) {}
@@ -60,13 +60,14 @@ class ShapeValue final : public GarbageCollected<ShapeValue> {
   ShapeValue(CSSBoxType css_box) : type_(kBox), css_box_(css_box) {}
 
   ShapeValueType GetType() const { return type_; }
-  BasicShape* Shape() const { return shape_.get(); }
+  const BasicShape* Shape() const { return shape_.get(); }
 
   StyleImage* GetImage() const { return image_.Get(); }
   void SetImage(StyleImage* image) {
     DCHECK_EQ(GetType(), kImage);
-    if (image_ != image)
+    if (image_ != image) {
       image_ = image;
+    }
   }
   CSSBoxType CssBox() const { return css_box_; }
 
@@ -76,14 +77,15 @@ class ShapeValue final : public GarbageCollected<ShapeValue> {
 
  private:
   ShapeValueType type_;
-  scoped_refptr<BasicShape> shape_;
+  scoped_refptr<const BasicShape> shape_;
   Member<StyleImage> image_;
   CSSBoxType css_box_;
 };
 
 inline bool ShapeValue::operator==(const ShapeValue& other) const {
-  if (GetType() != other.GetType())
+  if (GetType() != other.GetType()) {
     return false;
+  }
 
   switch (GetType()) {
     case kShape:

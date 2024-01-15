@@ -11,6 +11,7 @@
 #include "gpu/command_buffer/service/shared_context_state.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
 #include "third_party/skia/include/core/SkImageInfo.h"
+#include "third_party/skia/include/gpu/graphite/BackendTexture.h"
 
 namespace viz {
 
@@ -30,15 +31,14 @@ class SkiaOutputDeviceOffscreen : public SkiaOutputDevice {
   ~SkiaOutputDeviceOffscreen() override;
 
   // SkiaOutputDevice implementation:
-  bool Reshape(const SkSurfaceCharacterization& characterization,
+  bool Reshape(const SkImageInfo& image_info,
                const gfx::ColorSpace& color_space,
+               int sample_count,
                float device_scale_factor,
                gfx::OverlayTransform transform) override;
-  void SwapBuffers(BufferPresentedCallback feedback,
-                   OutputSurfaceFrame frame) override;
-  void PostSubBuffer(const gfx::Rect& rect,
-                     BufferPresentedCallback feedback,
-                     OutputSurfaceFrame frame) override;
+  void Present(const absl::optional<gfx::Rect>& update_rect,
+               BufferPresentedCallback feedback,
+               OutputSurfaceFrame frame) override;
   void EnsureBackbuffer() override;
   void DiscardBackbuffer() override;
   SkSurface* BeginPaint(
@@ -50,6 +50,7 @@ class SkiaOutputDeviceOffscreen : public SkiaOutputDevice {
   const bool has_alpha_;
   sk_sp<SkSurface> sk_surface_;
   GrBackendTexture backend_texture_;
+  skgpu::graphite::BackendTexture graphite_texture_;
   bool supports_rgbx_ = true;
   gfx::Size size_;
   SkColorType sk_color_type_ = kUnknown_SkColorType;

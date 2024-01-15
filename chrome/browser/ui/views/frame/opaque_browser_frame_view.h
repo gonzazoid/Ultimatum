@@ -16,7 +16,6 @@
 #include "chrome/browser/ui/views/frame/opaque_browser_frame_view_layout_delegate.h"
 #include "chrome/browser/ui/views/tab_icon_view_model.h"
 #include "ui/base/metadata/metadata_header_macros.h"
-#include "ui/linux/linux_ui.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/window/caption_button_types.h"
 #include "ui/views/window/non_client_view.h"
@@ -38,13 +37,14 @@ namespace views {
 class Button;
 class FrameBackground;
 class Label;
-}
+}  // namespace views
 
 class OpaqueBrowserFrameView : public BrowserNonClientFrameView,
                                public TabIconViewModel,
                                public OpaqueBrowserFrameViewLayoutDelegate {
+  METADATA_HEADER(OpaqueBrowserFrameView, BrowserNonClientFrameView)
+
  public:
-  METADATA_HEADER(OpaqueBrowserFrameView);
   // Constructs a non-client view for an BrowserFrame.
   OpaqueBrowserFrameView(BrowserFrame* frame,
                          BrowserView* browser_view,
@@ -61,13 +61,15 @@ class OpaqueBrowserFrameView : public BrowserNonClientFrameView,
   // BrowserNonClientFrameView:
   gfx::Rect GetBoundsForTabStripRegion(
       const gfx::Size& tabstrip_minimum_size) const override;
+  gfx::Rect GetBoundsForWebAppFrameToolbar(
+      const gfx::Size& toolbar_preferred_size) const override;
+  void LayoutWebAppWindowTitle(const gfx::Rect& available_space,
+                               views::Label& window_title_label) const override;
   int GetTopInset(bool restored) const override;
-  int GetThemeBackgroundXInset() const override;
   void UpdateThrobber(bool running) override;
   void WindowControlsOverlayEnabledChanged() override;
   gfx::Size GetMinimumSize() const override;
   void PaintAsActiveChanged() override;
-  void UpdateFrameColor() override;
   void OnThemeChanged() override;
 
   // views::NonClientFrameView:
@@ -79,7 +81,6 @@ class OpaqueBrowserFrameView : public BrowserNonClientFrameView,
   void ResetWindowControls() override;
   void UpdateWindowIcon() override;
   void UpdateWindowTitle() override;
-  void SizeConstraintsChanged() override;
 
   // views::View:
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
@@ -102,6 +103,7 @@ class OpaqueBrowserFrameView : public BrowserNonClientFrameView,
   bool IsMinimized() const override;
   bool IsFullscreen() const override;
   bool IsTabStripVisible() const override;
+  bool GetBorderlessModeEnabled() const override;
   int GetTabStripHeight() const override;
   bool IsToolbarVisible() const override;
   gfx::Size GetTabstripMinimumSize() const override;
@@ -112,11 +114,11 @@ class OpaqueBrowserFrameView : public BrowserNonClientFrameView,
   FrameButtonStyle GetFrameButtonStyle() const override;
   void UpdateWindowControlsOverlay(
       const gfx::Rect& bounding_rect) const override;
-  bool IsTranslucentWindowOpacitySupported() const override;
   bool ShouldDrawRestoredFrameShadow() const override;
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
-  ui::WindowTiledEdges GetTiledEdges() const override;
+#if BUILDFLAG(IS_LINUX)
+  bool IsTiled() const override;
 #endif
+  int WebAppButtonHeight() const override;
 
  protected:
   views::Button* minimize_button() const { return minimize_button_; }

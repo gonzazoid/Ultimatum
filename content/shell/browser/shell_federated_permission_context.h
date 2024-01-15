@@ -9,10 +9,15 @@
 #include <set>
 #include <string>
 #include <tuple>
+#include <vector>
 
-#include "content/public/browser/federated_identity_active_session_permission_context_delegate.h"
+#include "base/functional/callback.h"
+#include "base/observer_list.h"
+#include "base/time/time.h"
 #include "content/public/browser/federated_identity_api_permission_context_delegate.h"
-#include "content/public/browser/federated_identity_sharing_permission_context_delegate.h"
+#include "content/public/browser/federated_identity_auto_reauthn_permission_context_delegate.h"
+#include "content/public/browser/federated_identity_permission_context_delegate.h"
+#include "url/gurl.h"
 
 namespace content {
 
@@ -21,8 +26,8 @@ namespace content {
 // can run wpt tests against it.
 class ShellFederatedPermissionContext
     : public FederatedIdentityApiPermissionContextDelegate,
-      public FederatedIdentityActiveSessionPermissionContextDelegate,
-      public FederatedIdentitySharingPermissionContextDelegate {
+      public FederatedIdentityAutoReauthnPermissionContextDelegate,
+      public FederatedIdentityPermissionContextDelegate {
  public:
   ShellFederatedPermissionContext();
   ~ShellFederatedPermissionContext() override;
@@ -34,33 +39,61 @@ class ShellFederatedPermissionContext
       const url::Origin& relying_party_embedder) override;
   void RemoveEmbargoAndResetCounts(
       const url::Origin& relying_party_embedder) override;
-  absl::optional<bool> GetIdpSigninStatus(
-      const url::Origin& idp_origin) override;
-  void SetIdpSigninStatus(const url::Origin& idp_origin,
-                          bool idp_signin_status) override;
+  bool ShouldCompleteRequestImmediately() const override;
+  bool HasThirdPartyCookiesAccess(
+      content::RenderFrameHost& host,
+      const GURL& provider_url,
+      const url::Origin& relying_party_embedder) const override;
 
-  // FederatedIdentitySharingPermissionContextDelegate
-  bool HasSharingPermission(const url::Origin& relying_party_requester,
-                            const url::Origin& relying_party_embedder,
-                            const url::Origin& identity_provider,
-                            const std::string& account_id) override;
+  // FederatedIdentityAutoReauthnPermissionContextDelegate
+  bool IsAutoReauthnSettingEnabled() override;
+  bool IsAutoReauthnEmbargoed(
+      const url::Origin& relying_party_embedder) override;
+  base::Time GetAutoReauthnEmbargoStartTime(
+      const url::Origin& relying_party_embedder) override;
+  void RecordEmbargoForAutoReauthn(
+      const url::Origin& relying_party_embedder) override;
+  void RemoveEmbargoForAutoReauthn(
+      const url::Origin& relying_party_embedder) override;
+  void SetRequiresUserMediation(const GURL& rp_url,
+                                bool requires_user_mediation) override;
+  bool RequiresUserMediation(const GURL& rp_url) override;
+
+  // FederatedIdentityPermissionContextDelegate
+  void AddIdpSigninStatusObserver(IdpSigninStatusObserver* observer) override;
+  void RemoveIdpSigninStatusObserver(
+      IdpSigninStatusObserver* observer) override;
+  bool HasSharingPermission(
+      const url::Origin& relying_party_requester,
+      const url::Origin& relying_party_embedder,
+      const url::Origin& identity_provider,
+      const std::optional<std::string>& account_id) override;
+  bool HasSharingPermission(
+      const url::Origin& relying_party_requester) override;
   void GrantSharingPermission(const url::Origin& relying_party_requester,
                               const url::Origin& relying_party_embedder,
                               const url::Origin& identity_provider,
                               const std::string& account_id) override;
+  void RevokeSharingPermission(const url::Origin& relying_party_requester,
+                               const url::Origin& relying_party_embedder,
+                               const url::Origin& identity_provider,
+                               const std::string& account_id) override;
+  std::optional<bool> GetIdpSigninStatus(
+      const url::Origin& idp_origin) override;
+  void SetIdpSigninStatus(const url::Origin& idp_origin,
+                          bool idp_signin_status) override;
 
-  // FederatedIdentityActiveSessionPermissionContextDelegate
-  bool HasActiveSession(const url::Origin& relying_party_requester,
-                        const url::Origin& identity_provider,
-                        const std::string& account_identifier) override;
-  void GrantActiveSession(const url::Origin& relying_party_requester,
-                          const url::Origin& identity_provider,
-                          const std::string& account_identifier) override;
-  void RevokeActiveSession(const url::Origin& relying_party_requester,
-                           const url::Origin& identity_provider,
-                           const std::string& account_identifier) override;
+  void RegisterIdP(const ::GURL&) override;
+  void UnregisterIdP(const ::GURL&) override;
+  std::vector<GURL> GetRegisteredIdPs() override;
 
-  bool ShouldCompleteRequestImmediately() const override;
+  void SetIdpStatusClosureForTesting(base::RepeatingClosure closure) {
+    idp_signin_status_closure_ = std::move(closure);
+  }
+
+  void SetHasThirdPartyCookiesAccessForTesting(
+      const std::string& identity_provider,
+      const std::string& relying_party_embedder);
 
  private:
   // Pairs of <RP embedder, IDP>
@@ -68,10 +101,25 @@ class ShellFederatedPermissionContext
   // Tuples of <RP requester, RP embedder, IDP, Account>
   std::set<std::tuple<std::string, std::string, std::string, std::string>>
       sharing_permissions_;
-  // Tuples of <RP requester, IDP, Account>
-  std::set<std::tuple<std::string, std::string, std::string>> active_sessions_;
   // Map of <IDP, IDPSigninStatus>
-  std::map<std::string, absl::optional<bool>> idp_signin_status_;
+  std::map<std::string, std::optional<bool>> idp_signin_status_;
+  // Pairs of <IDP, RP embedder>
+  std::set<std::pair<std::string, std::string>> has_third_party_cookies_access_;
+
+  base::ObserverList<IdpSigninStatusObserver> idp_signin_status_observer_list_;
+  base::RepeatingClosure idp_signin_status_closure_;
+
+  bool auto_reauthn_permission_{true};
+
+  // A vector of registered IdPs.
+  std::vector<GURL> idp_registry_;
+
+  // A set of embargoed origins which have a FedCM embargo. An origin is added
+  // to the set when the user dismisses the FedCM UI.
+  std::set<url::Origin> embargoed_origins_;
+
+  // A set of urls that require user mediation.
+  std::set<GURL> require_user_mediation_sites_;
 };
 
 }  // namespace content

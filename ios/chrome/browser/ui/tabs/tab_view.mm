@@ -6,15 +6,15 @@
 
 #import <MaterialComponents/MaterialActivityIndicator.h>
 
-#import "base/i18n/rtl.h"
 #import "base/ios/ios_util.h"
-#import "base/strings/sys_string_conversions.h"
-#import "ios/chrome/browser/flags/system_flags.h"
-#import "ios/chrome/browser/ui/elements/fade_truncating_label.h"
-#import "ios/chrome/browser/ui/icons/symbols.h"
-#import "ios/chrome/browser/ui/image_util/image_util.h"
-#import "ios/chrome/browser/ui/util/rtl_geometry.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/public/features/system_flags.h"
+#import "ios/chrome/browser/shared/ui/elements/fade_truncating_label.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/util/image/image_util.h"
+#import "ios/chrome/browser/shared/ui/util/rtl_geometry.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
+#import "ios/chrome/common/button_configuration_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/elements/highlight_button.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
@@ -25,10 +25,6 @@
 #import "ui/gfx/image/image.h"
 #import "ui/gfx/ios/uikit_util.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -86,8 +82,9 @@ UIImage* DefaultFaviconImage() {
   MDCActivityIndicator* _activityIndicator;
 
   // Adds hover interaction to background tabs.
-  API_AVAILABLE(ios(13.4)) UIPointerInteraction* _pointerInteraction;
+  UIPointerInteraction* _pointerInteraction;
 }
+
 @end
 
 @interface TabView (Private)
@@ -139,8 +136,9 @@ UIImage* DefaultFaviconImage() {
 }
 
 - (void)setCollapsed:(BOOL)collapsed {
-  if (_collapsed != collapsed)
+  if (_collapsed != collapsed) {
     [_closeButton setHidden:collapsed];
+  }
 
   _collapsed = collapsed;
 }
@@ -148,12 +146,6 @@ UIImage* DefaultFaviconImage() {
 - (void)setTitle:(NSString*)title {
   if ([_titleLabel.text isEqualToString:title])
     return;
-  if (base::i18n::GetStringDirection(base::SysNSStringToUTF16(title)) ==
-      base::i18n::RIGHT_TO_LEFT) {
-    _titleLabel.truncateMode = FadeTruncatingHead;
-  } else {
-    _titleLabel.truncateMode = FadeTruncatingTail;
-  }
   _titleLabel.text = title;
   [_closeButton setAccessibilityValue:title];
 }
@@ -216,8 +208,9 @@ UIImage* DefaultFaviconImage() {
     _layoutConstraintsInitialized = YES;
     [self addCommonConstraints];
     // Add buttons and labels constraints if needed.
-    if (_closeButton)
+    if (_closeButton) {
       [self addButtonsAndLabelConstraints];
+    }
   }
 }
 
@@ -270,17 +263,17 @@ UIImage* DefaultFaviconImage() {
 - (void)createButtonsAndLabel {
   _closeButton = [HighlightButton buttonWithType:UIButtonTypeCustom];
   [_closeButton setTranslatesAutoresizingMaskIntoConstraints:NO];
-  [_closeButton setContentEdgeInsets:UIEdgeInsetsMake(kTabCloseTopInset,
-                                                      kTabCloseLeftInset,
-                                                      kTabCloseBottomInset,
-                                                      kTabCloseRightInset)];
+
   UIImage* closeButton =
-      UseSymbols()
-          ? DefaultSymbolTemplateWithPointSize(kXMarkSymbol,
-                                               kXmarkSymbolPointSize)
-          : [[UIImage imageNamed:@"grid_cell_close_button"]
-                imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-  [_closeButton setImage:closeButton forState:UIControlStateNormal];
+      DefaultSymbolTemplateWithPointSize(kXMarkSymbol, kXmarkSymbolPointSize);
+  UIButtonConfiguration* buttonConfiguration =
+      [UIButtonConfiguration plainButtonConfiguration];
+  buttonConfiguration.contentInsets =
+      NSDirectionalEdgeInsetsMake(kTabCloseTopInset, kTabCloseLeftInset,
+                                  kTabCloseBottomInset, kTabCloseRightInset);
+  buttonConfiguration.image = closeButton;
+  _closeButton.configuration = buttonConfiguration;
+
   [_closeButton setAccessibilityLabel:l10n_util::GetNSString(
                                           IDS_IOS_TOOLS_MENU_CLOSE_TAB)];
   [_closeButton addTarget:self
@@ -294,7 +287,6 @@ UIImage* DefaultFaviconImage() {
   // Add fade truncating label.
   _titleLabel = [[FadeTruncatingLabel alloc] initWithFrame:CGRectZero];
   [_titleLabel setTranslatesAutoresizingMaskIntoConstraints:NO];
-  [_titleLabel setTextAlignment:NSTextAlignmentNatural];
   [self addSubview:_titleLabel];
 
   CGRect faviconFrame = CGRectMake(0, 0, kFaviconSize, kFaviconSize);
@@ -435,14 +427,12 @@ UIImage* DefaultFaviconImage() {
 
 - (UIPointerRegion*)pointerInteraction:(UIPointerInteraction*)interaction
                       regionForRequest:(UIPointerRegionRequest*)request
-                         defaultRegion:(UIPointerRegion*)defaultRegion
-    API_AVAILABLE(ios(13.4)) {
+                         defaultRegion:(UIPointerRegion*)defaultRegion {
   return defaultRegion;
 }
 
 - (UIPointerStyle*)pointerInteraction:(UIPointerInteraction*)interaction
-                       styleForRegion:(UIPointerRegion*)region
-    API_AVAILABLE(ios(13.4)) {
+                       styleForRegion:(UIPointerRegion*)region {
   // Hovering over this tab view and closing the tab simultaneously could result
   // in this tab view having been removed from the window at the beginning of
   // this method. If this tab view has already been removed from the view

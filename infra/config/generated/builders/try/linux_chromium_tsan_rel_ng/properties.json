@@ -1,10 +1,13 @@
 {
   "$build/chromium_orchestrator": {
     "compilator": "linux_chromium_tsan_rel_ng-compilator",
-    "compilator_watcher_git_revision": "7809a690bbd935bcb3b4d922e24cabe168aaabc8"
+    "compilator_watcher_git_revision": "27c191f304c8d7329a393d8a69020fc14032c3c3"
   },
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/try/linux_chromium_tsan_rel_ng/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
@@ -73,11 +76,12 @@
           "builder": "Linux TSan Tests",
           "project": "chromium"
         }
-      ],
-      "rts_config": {
-        "condition": "QUICK_RUN_ONLY"
-      }
+      ]
     }
+  },
+  "$build/flakiness": {
+    "check_for_flakiness": true,
+    "check_for_flakiness_with_resultdb": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],
@@ -87,5 +91,6 @@
     ]
   },
   "builder_group": "tryserver.chromium.linux",
+  "cq": "required",
   "recipe": "chromium/orchestrator"
 }

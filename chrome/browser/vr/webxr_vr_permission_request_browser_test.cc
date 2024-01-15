@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "chrome/browser/vr/test/multi_class_browser_test.h"
 #include "chrome/browser/vr/test/ui_utils.h"
@@ -38,9 +38,9 @@ WEBXR_VR_ALL_RUNTIMES_BROWSER_TEST_F(
       "navigator.geolocation.getCurrentPosition( ()=>{}, ()=>{} )");
   base::RunLoop().RunUntilIdle();
   auto utils = UiUtils::Create();
-  utils->PerformActionAndWaitForVisibilityStatus(
+  utils->WaitForVisibilityStatus(
       UserFriendlyElementName::kWebXrExternalPromptNotification,
-      true /* visible */, base::DoNothing());
+      true /* visible */);
 }
 
 // TODO(https://crbug.com/920697): Add tests verifying the notification

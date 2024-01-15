@@ -30,14 +30,9 @@ links: {
     alt: "Chrome perf dashboard"
   }
   links {
-    text: "flake-portal"
-    url: "https://analysis.chromium.org/p/chromium/flake-portal"
+    text: "LUCI Analysis"
+    url: "https://luci-analysis.appspot.com"
     alt: "New flake portal"
-  }
-  links {
-    text: "legacy-flakiness"
-    url: "https://test-results.appspot.com/dashboards/flakiness_dashboard.html"
-    alt: "Legacy flakiness dashboard"
   }
 }
 

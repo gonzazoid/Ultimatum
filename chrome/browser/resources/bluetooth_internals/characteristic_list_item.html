@@ -4,22 +4,9 @@
   }
 
   .info-container > h4,
-  .info-container > div {
+  .info-container > object-field-set,
+  .info-container > value-control {
     margin: 1em;
-  }
-
-  /* Value Control */
-  .value-control > div {
-    display: flex;
-    margin: 4px 0;
-  }
-
-  .value-control > div > input {
-    flex-grow: 1;
-  }
-
-  .value-control > div:nth-of-type(2) {
-    justify-content: flex-end;
   }
 
   button.show-all-properties {
@@ -40,7 +27,7 @@
   }
 
   button.show-all-properties:hover {
-    background-image: -webkit-linear-gradient(#f0f0f0, #f0f0f0 38%, #e0e0e0);
+    background-image: linear-gradient(#f0f0f0, #f0f0f0 38%, #e0e0e0);
     border-color: rgba(0, 0, 0, 0.3);
     box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12),
         inset 0 1px 2px rgba(255, 255, 255, 0.95);
@@ -48,7 +35,7 @@
   }
 
   button.show-all-properties:active {
-    background-image: -webkit-linear-gradient(#e7e7e7, #e7e7e7 38%, #d7d7d7);
+    background-image: linear-gradient(#e7e7e7, #e7e7e7 38%, #d7d7d7);
     box-shadow: none;
     text-shadow: none;
   }
@@ -58,12 +45,6 @@
     outline: none;
     /* OVERRIDE */
     transition: border-color 200ms;
-  }
-
-  h3 {
-    font-weight: normal;
-    line-height: 1;
-    user-select: none;
   }
 </style>
 <expandable-list-item>
@@ -76,8 +57,9 @@
     <object-field-set class="characteristics" show-all></object-field-set>
     <h4>Properties<button class="show-all-properties">Show All</button></h4>
     <object-field-set class="properties"></object-field-set>
+    <h4>Value</h4>
+    <value-control hidden></value-control>
     <h4>Descriptors</h4>
     <descriptor-list></descriptor-list>
-    <h4>Value</h4>
   </div>
 </expandable-list-item>

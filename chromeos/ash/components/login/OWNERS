@@ -1,2 +1,7 @@
-# Code is migrating from //chromeos/login, so share owners.
-file://chromeos/login/OWNERS
+# in CET
+antrim@chromium.org
+
+# in PST
+achuith@chromium.org
+alemate@chromium.org
+xiyuan@chromium.org

@@ -7,7 +7,7 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "content/public/browser/browser_thread.h"
@@ -41,8 +41,6 @@ net::NetworkAnonymizationKey GetPendingNetworkAnonymizationKey(
       .network_anonymization_key();
 }
 
-const int kDefaultPort = 80;
-
 // This class contains a std::unique_ptr of itself, it is passed in through
 // Start() method, and will be freed by the OnComplete() method when resolving
 // has completed or mojo connection error has happened.
@@ -50,10 +48,10 @@ class DnsLookupRequest : public network::ResolveHostClientBase {
  public:
   DnsLookupRequest(int render_process_id,
                    int render_frame_id,
-                   const std::string& hostname)
+                   const url::SchemeHostPort& url)
       : render_process_id_(render_process_id),
         render_frame_id_(render_frame_id),
-        hostname_(hostname) {}
+        url_(url) {}
 
   DnsLookupRequest(const DnsLookupRequest&) = delete;
   DnsLookupRequest& operator=(const DnsLookupRequest&) = delete;
@@ -76,7 +74,6 @@ class DnsLookupRequest : public network::ResolveHostClientBase {
     }
 
     DCHECK(!receiver_.is_bound());
-    net::HostPortPair host_port_pair(hostname_, kDefaultPort);
     network::mojom::ResolveHostParametersPtr resolve_host_parameters =
         network::mojom::ResolveHostParameters::New();
     // Lets the host resolver know it can be de-prioritized.
@@ -91,8 +88,7 @@ class DnsLookupRequest : public network::ResolveHostClientBase {
     render_frame_host->GetProcess()
         ->GetStoragePartition()
         ->GetNetworkContext()
-        ->ResolveHost(network::mojom::HostResolverHost::NewHostPortPair(
-                          std::move(host_port_pair)),
+        ->ResolveHost(network::mojom::HostResolverHost::NewSchemeHostPort(url_),
                       GetPendingNetworkAnonymizationKey(render_frame_host),
                       std::move(resolve_host_parameters),
                       receiver_.BindNewPipeAndPassRemote());
@@ -110,7 +106,7 @@ class DnsLookupRequest : public network::ResolveHostClientBase {
                   const absl::optional<net::AddressList>& resolved_addresses,
                   const absl::optional<net::HostResolverEndpointResults>&
                       endpoint_results_with_metadata) override {
-    VLOG(2) << __FUNCTION__ << ": " << hostname_
+    VLOG(2) << __FUNCTION__ << ": " << url_.Serialize()
             << ", result=" << resolve_error_info.error;
     request_.reset();
   }
@@ -118,7 +114,7 @@ class DnsLookupRequest : public network::ResolveHostClientBase {
   mojo::Receiver<network::mojom::ResolveHostClient> receiver_{this};
   const int render_process_id_;
   const int render_frame_id_;
-  const std::string hostname_;
+  const url::SchemeHostPort url_;
   std::unique_ptr<DnsLookupRequest> request_;
 };
 
@@ -145,20 +141,19 @@ void SimpleNetworkHintsHandlerImpl::Create(
 }
 
 void SimpleNetworkHintsHandlerImpl::PrefetchDNS(
-    const std::vector<std::string>& names) {
-  for (const std::string& hostname : names) {
+    const std::vector<url::SchemeHostPort>& urls) {
+  for (const url::SchemeHostPort& url : urls) {
     std::unique_ptr<DnsLookupRequest> request =
         std::make_unique<DnsLookupRequest>(render_process_id_, render_frame_id_,
-                                           hostname);
+                                           url);
     DnsLookupRequest* request_ptr = request.get();
     request_ptr->Start(std::move(request));
   }
 }
 
-void SimpleNetworkHintsHandlerImpl::Preconnect(const GURL& url,
+void SimpleNetworkHintsHandlerImpl::Preconnect(const url::SchemeHostPort& url,
                                                bool allow_credentials) {
-  if (!url.is_valid() || !url.has_host() || !url.has_scheme() ||
-      !url.SchemeIsHTTPOrHTTPS()) {
+  if (url.scheme() != url::kHttpScheme && url.scheme() != url::kHttpsScheme) {
     return;
   }
 
@@ -173,7 +168,7 @@ void SimpleNetworkHintsHandlerImpl::Preconnect(const GURL& url,
 
   render_frame_host->GetStoragePartition()
       ->GetNetworkContext()
-      ->PreconnectSockets(/*num_streams=*/1, url, allow_credentials,
+      ->PreconnectSockets(/*num_streams=*/1, url.GetURL(), allow_credentials,
                           network_anonymization_key);
 }
 

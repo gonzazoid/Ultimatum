@@ -42,7 +42,7 @@ class DesktopMediaListView
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
 
   // DesktopMediaListController::ListView:
-  absl::optional<content::DesktopMediaID> GetSelection() override;
+  std::optional<content::DesktopMediaID> GetSelection() override;
   DesktopMediaListController::SourceListListener* GetSourceListListener()
       override;
   void ClearSelection() override;
@@ -61,6 +61,10 @@ class DesktopMediaListView
   void SetStyle(DesktopMediaSourceViewStyle* style);
 
   DesktopMediaSourceView* GetSelectedView();
+
+  const int item_spacing_;
+  const int horizontal_margins_;
+  const int vertical_margins_;
 
   raw_ptr<DesktopMediaListController, DanglingUntriaged> controller_;
 

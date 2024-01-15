@@ -2,15 +2,17 @@
 <head>
 <script src="../../resources/js-test.js"></script>
 <script>
-if (window.testRunner)
+if (window.testRunner) {
     testRunner.dumpAsText();
+    testRunner.setDumpConsoleMessages(false);
+}
 
 window.onload = function() {
-  shouldBeTrue("(self.embedFrame1.document.getElementById('plugin').postMessage) != undefined");
-  shouldBeTrue("(self.embedFrame2.document.getElementById('plugin').postMessage) == undefined");
+  shouldBeTrue("(self.embedFrame1.document.getElementById('plugin').loaded) != undefined");
+  shouldBeTrue("(self.embedFrame2.document.getElementById('plugin').loaded) == undefined");
 
-  shouldBeTrue("(self.objectFrame1.document.getElementById('plugin').postMessage) != undefined");
-  shouldBeTrue("(self.objectFrame2.document.getElementById('plugin').postMessage) == undefined");
+  shouldBeTrue("(self.objectFrame1.document.getElementById('plugin').loaded) != undefined");
+  shouldBeTrue("(self.objectFrame2.document.getElementById('plugin').loaded) == undefined");
 
   isSuccessfullyParsed();
 }

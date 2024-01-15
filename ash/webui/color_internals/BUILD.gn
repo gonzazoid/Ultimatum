@@ -3,7 +3,7 @@
 # found in the LICENSE file.
 
 import("//build/config/chromeos/ui_mode.gni")
-import("//chrome/test/base/js2gtest.gni")
+import("//chrome/test/base/ash/js2gtest.gni")
 import("//third_party/closure_compiler/compile_js.gni")
 import("//ui/webui/resources/tools/generate_grd.gni")
 
@@ -15,17 +15,20 @@ static_library("color_internals") {
     "color_internals_ui.h",
     "url_constants.cc",
     "url_constants.h",
+    "wallpaper_colors_handler_impl.cc",
+    "wallpaper_colors_handler_impl.h",
   ]
 
   deps = [
-    "//ash/webui/resources:color_internals_resources",
+    "//ash/webui/color_internals/mojom",
+    "//ash/webui/color_internals/resources:resources",
     "//content/public/browser",
     "//ui/webui",
   ]
 }
 
 js2gtest("browser_tests_js") {
-  test_type = "mojo_lite_webui"
+  test_type = "mojo_webui"
 
   sources = [ "test/color_internals_browsertest.js" ]
 

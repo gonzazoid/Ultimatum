@@ -6,18 +6,19 @@
 
 #include <limits>
 #include <memory>
+#include <optional>
 
 #include "base/json/json_writer.h"
-#include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "base/time/time.h"
 #include "base/values.h"
+#include "chromeos/ash/components/mojo_service_manager/fake_mojo_service_manager.h"
 #include "chromeos/ash/services/cros_healthd/public/cpp/fake_cros_healthd.h"
 #include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd_diagnostics.mojom.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace policy {
 
@@ -65,24 +66,24 @@ em::RemoteCommand GenerateCommandProto(
     base::TimeDelta age_of_command,
     base::TimeDelta idleness_cutoff,
     bool terminate_upon_input,
-    absl::optional<int32_t> id,
-    absl::optional<ash::cros_healthd::mojom::DiagnosticRoutineCommandEnum>
+    std::optional<int32_t> id,
+    std::optional<ash::cros_healthd::mojom::DiagnosticRoutineCommandEnum>
         command,
-    absl::optional<bool> include_output) {
+    std::optional<bool> include_output) {
   em::RemoteCommand command_proto;
   command_proto.set_type(
       em::RemoteCommand_Type_DEVICE_GET_DIAGNOSTIC_ROUTINE_UPDATE);
   command_proto.set_command_id(unique_id);
   command_proto.set_age_of_command(age_of_command.InMilliseconds());
-  base::Value root_dict(base::Value::Type::DICTIONARY);
+  base::Value::Dict root_dict;
   if (id.has_value()) {
-    root_dict.SetIntKey(kIdFieldName, id.value());
+    root_dict.Set(kIdFieldName, id.value());
   }
   if (command.has_value()) {
-    root_dict.SetIntKey(kCommandFieldName, static_cast<int>(command.value()));
+    root_dict.Set(kCommandFieldName, static_cast<int>(command.value()));
   }
   if (include_output.has_value()) {
-    root_dict.SetBoolKey(kIncludeOutputFieldName, include_output.value());
+    root_dict.Set(kIncludeOutputFieldName, include_output.value());
   }
   std::string payload;
   base::JSONWriter::Write(root_dict, &payload);
@@ -92,17 +93,16 @@ em::RemoteCommand GenerateCommandProto(
 
 std::string CreateInteractivePayload(
     uint32_t progress_percent,
-    absl::optional<std::string> output,
+    std::optional<std::string> output,
     ash::cros_healthd::mojom::DiagnosticRoutineUserMessageEnum user_message) {
-  base::Value root_dict(base::Value::Type::DICTIONARY);
-  root_dict.SetIntKey(kProgressPercentFieldName,
-                      static_cast<int>(progress_percent));
-  if (output.has_value())
-    root_dict.SetStringKey(kOutputFieldName, std::move(output.value()));
-  base::Value interactive_dict(base::Value::Type::DICTIONARY);
-  interactive_dict.SetIntKey(kUserMessageFieldName,
-                             static_cast<int>(user_message));
-  root_dict.SetPath(kInteractiveUpdateFieldName, std::move(interactive_dict));
+  auto root_dict = base::Value::Dict().Set(kProgressPercentFieldName,
+                                           static_cast<int>(progress_percent));
+  if (output.has_value()) {
+    root_dict.Set(kOutputFieldName, std::move(output.value()));
+  }
+  auto interactive_dict = base::Value::Dict().Set(
+      kUserMessageFieldName, static_cast<int>(user_message));
+  root_dict.Set(kInteractiveUpdateFieldName, std::move(interactive_dict));
 
   std::string payload;
   base::JSONWriter::Write(root_dict, &payload);
@@ -111,19 +111,19 @@ std::string CreateInteractivePayload(
 
 std::string CreateNonInteractivePayload(
     uint32_t progress_percent,
-    absl::optional<std::string> output,
+    std::optional<std::string> output,
     ash::cros_healthd::mojom::DiagnosticRoutineStatusEnum status,
     const std::string& status_message) {
-  base::Value root_dict(base::Value::Type::DICTIONARY);
-  root_dict.SetIntKey(kProgressPercentFieldName,
-                      static_cast<int>(progress_percent));
-  if (output.has_value())
-    root_dict.SetStringKey(kOutputFieldName, std::move(output.value()));
-  base::Value noninteractive_dict(base::Value::Type::DICTIONARY);
-  noninteractive_dict.SetIntKey(kStatusFieldName, static_cast<int>(status));
-  noninteractive_dict.SetStringKey(kStatusMessageFieldName, status_message);
-  root_dict.SetPath(kNonInteractiveUpdateFieldName,
-                    std::move(noninteractive_dict));
+  auto root_dict = base::Value::Dict().Set(kProgressPercentFieldName,
+                                           static_cast<int>(progress_percent));
+  if (output.has_value()) {
+    root_dict.Set(kOutputFieldName, std::move(output.value()));
+  }
+  auto noninteractive_dict =
+      base::Value::Dict()
+          .Set(kStatusFieldName, static_cast<int>(status))
+          .Set(kStatusMessageFieldName, status_message);
+  root_dict.Set(kNonInteractiveUpdateFieldName, std::move(noninteractive_dict));
 
   std::string payload;
   base::JSONWriter::Write(root_dict, &payload);
@@ -153,6 +153,7 @@ class DeviceCommandGetRoutineUpdateJobTest : public testing::Test {
 
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
+  ::ash::mojo_service_manager::FakeMojoServiceManager fake_service_manager_;
 
   base::TimeTicks test_start_time_;
 };
@@ -217,7 +218,7 @@ TEST_F(DeviceCommandGetRoutineUpdateJobTest, CommandPayloadMissingId) {
           kUniqueID, base::TimeTicks::Now() - test_start_time_,
           base::Seconds(30),
           /*terminate_upon_input=*/false,
-          /*id=*/absl::nullopt,
+          /*id=*/std::nullopt,
           ash::cros_healthd::mojom::DiagnosticRoutineCommandEnum::kGetStatus,
           /*include_output=*/true),
       em::SignedData()));
@@ -236,7 +237,7 @@ TEST_F(DeviceCommandGetRoutineUpdateJobTest, CommandPayloadMissingCommand) {
       GenerateCommandProto(kUniqueID, base::TimeTicks::Now() - test_start_time_,
                            base::Seconds(30),
                            /*terminate_upon_input=*/false,
-                           /*id=*/1293, /*command=*/absl::nullopt,
+                           /*id=*/1293, /*command=*/std::nullopt,
                            /*include_output=*/true),
       em::SignedData()));
 
@@ -258,7 +259,7 @@ TEST_F(DeviceCommandGetRoutineUpdateJobTest,
           /*terminate_upon_input=*/false,
           /*id=*/457658,
           ash::cros_healthd::mojom::DiagnosticRoutineCommandEnum::kCancel,
-          /*include_output=*/absl::nullopt),
+          /*include_output=*/std::nullopt),
       em::SignedData()));
 
   EXPECT_EQ(kUniqueID, job->unique_id());
@@ -284,22 +285,18 @@ TEST_F(DeviceCommandGetRoutineUpdateJobTest,
                 /*terminate_upon_input=*/false, /*id=*/56923,
                 ash::cros_healthd::mojom::DiagnosticRoutineCommandEnum::kRemove,
                 /*include_output=*/true);
-  base::RunLoop run_loop;
-  bool success =
-      job->Run(base::Time::Now(), base::TimeTicks::Now(),
-               base::BindLambdaForTesting([&]() {
-                 EXPECT_EQ(job->status(), RemoteCommandJob::SUCCEEDED);
-                 std::unique_ptr<std::string> payload = job->GetResultPayload();
-                 EXPECT_TRUE(payload);
-                 // TODO(crbug.com/1056323): Verify output.
-                 EXPECT_EQ(CreateInteractivePayload(kProgressPercent,
-                                                    /*output=*/absl::nullopt,
-                                                    kUserMessage),
-                           *payload);
-                 run_loop.Quit();
-               }));
+  base::test::TestFuture<void> job_finished_future;
+  bool success = job->Run(base::Time::Now(), base::TimeTicks::Now(),
+                          job_finished_future.GetCallback());
   EXPECT_TRUE(success);
-  run_loop.Run();
+  ASSERT_TRUE(job_finished_future.Wait()) << "Job did not finish.";
+  EXPECT_EQ(job->status(), RemoteCommandJob::SUCCEEDED);
+  std::unique_ptr<std::string> payload = job->GetResultPayload();
+  EXPECT_TRUE(payload);
+  // TODO(crbug.com/1056323): Verify output.
+  EXPECT_EQ(CreateInteractivePayload(kProgressPercent,
+                                     /*output=*/std::nullopt, kUserMessage),
+            *payload);
 }
 
 TEST_F(DeviceCommandGetRoutineUpdateJobTest,
@@ -321,22 +318,19 @@ TEST_F(DeviceCommandGetRoutineUpdateJobTest,
                 /*terminate_upon_input=*/false, /*id=*/9812,
                 ash::cros_healthd::mojom::DiagnosticRoutineCommandEnum::kRemove,
                 /*include_output=*/true);
-  base::RunLoop run_loop;
-  bool success =
-      job->Run(base::Time::Now(), base::TimeTicks::Now(),
-               base::BindLambdaForTesting([&]() {
-                 EXPECT_EQ(job->status(), RemoteCommandJob::SUCCEEDED);
-                 std::unique_ptr<std::string> payload = job->GetResultPayload();
-                 EXPECT_TRUE(payload);
-                 // TODO(crbug.com/1056323): Verify output.
-                 EXPECT_EQ(CreateNonInteractivePayload(kProgressPercent,
-                                                       /*output=*/absl::nullopt,
-                                                       kStatus, kStatusMessage),
-                           *payload);
-                 run_loop.Quit();
-               }));
+  base::test::TestFuture<void> job_finished_future;
+  bool success = job->Run(base::Time::Now(), base::TimeTicks::Now(),
+                          job_finished_future.GetCallback());
   EXPECT_TRUE(success);
-  run_loop.Run();
+  ASSERT_TRUE(job_finished_future.Wait()) << "Job did not finish.";
+  EXPECT_EQ(job->status(), RemoteCommandJob::SUCCEEDED);
+  std::unique_ptr<std::string> payload = job->GetResultPayload();
+  EXPECT_TRUE(payload);
+  // TODO(crbug.com/1056323): Verify output.
+  EXPECT_EQ(CreateNonInteractivePayload(kProgressPercent,
+                                        /*output=*/std::nullopt, kStatus,
+                                        kStatusMessage),
+            *payload);
 }
 
 }  // namespace policy

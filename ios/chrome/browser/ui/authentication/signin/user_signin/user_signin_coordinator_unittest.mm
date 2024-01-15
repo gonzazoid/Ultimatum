@@ -7,10 +7,11 @@
 #import <UIKit/UIKit.h>
 
 #import "base/ios/block_types.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/main/test_browser.h"
-#import "ios/chrome/browser/signin/authentication_service_factory.h"
-#import "ios/chrome/browser/signin/authentication_service_fake.h"
+#import "base/run_loop.h"
+#import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
+#import "ios/chrome/browser/signin/model/fake_authentication_service_delegate.h"
 #import "ios/chrome/browser/ui/authentication/signin/user_signin/logging/user_signin_logger.h"
 #import "ios/chrome/browser/ui/authentication/signin/user_signin/user_signin_coordinator.h"
 #import "ios/chrome/browser/ui/authentication/signin/user_signin/user_signin_view_controller.h"
@@ -21,10 +22,6 @@
 #import "third_party/ocmock/OCMock/OCMock.h"
 #import "third_party/ocmock/gtest_support.h"
 #import "third_party/ocmock/ocmock_extensions.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface TestUserSigninCoordinator : UserSigninCoordinator
 
@@ -56,11 +53,12 @@ class UserSigninCoordinatorTest : public PlatformTest {
     TestChromeBrowserState::Builder builder;
     builder.AddTestingFactory(
         AuthenticationServiceFactory::GetInstance(),
-        base::BindRepeating(
-            &AuthenticationServiceFake::CreateAuthenticationService));
+        AuthenticationServiceFactory::GetDefaultFactory());
     browser_state_ = builder.Build();
+    AuthenticationServiceFactory::CreateAndInitializeForBrowserState(
+        browser_state_.get(),
+        std::make_unique<FakeAuthenticationServiceDelegate>());
     browser_ = std::make_unique<TestBrowser>(browser_state_.get());
-
     SetupLoggerMock();
     SetupUserSigninViewControllerMock();
     SetupBaseViewControllerMock();
@@ -69,7 +67,9 @@ class UserSigninCoordinatorTest : public PlatformTest {
                            browser:browser_.get()
                           identity:nil
                       signinIntent:UserSigninIntentUpgrade
-                            logger:logger_mock_];
+                            logger:logger_mock_
+                       accessPoint:signin_metrics::AccessPoint::
+                                       ACCESS_POINT_START_PAGE];
     coordinator_.userSigninViewControllerMock =
         user_signin_view_controller_mock_;
   }
@@ -78,6 +78,8 @@ class UserSigninCoordinatorTest : public PlatformTest {
     EXPECT_OCMOCK_VERIFY((id)base_view_controller_mock_);
     EXPECT_OCMOCK_VERIFY((id)logger_mock_);
     EXPECT_OCMOCK_VERIFY((id)user_signin_view_controller_mock_);
+    [coordinator_ stop];
+    coordinator_ = nil;
     PlatformTest::TearDown();
   }
 
@@ -85,6 +87,7 @@ class UserSigninCoordinatorTest : public PlatformTest {
   void SetupLoggerMock() {
     DCHECK(!logger_mock_);
     logger_mock_ = OCMStrictClassMock([UserSigninLogger class]);
+    OCMStub([logger_mock_ disconnect]);
     OCMStub([logger_mock_ promoAction])
         .andReturn(signin_metrics::PromoAction::PROMO_ACTION_WITH_DEFAULT);
     OCMStub([logger_mock_ accessPoint])
@@ -114,7 +117,6 @@ class UserSigninCoordinatorTest : public PlatformTest {
     user_signin_view_controller_mock_ =
         OCMStrictClassMock([UserSigninViewController class]);
     OCMExpect([user_signin_view_controller_mock_ setDelegate:[OCMArg any]]);
-    OCMExpect([user_signin_view_controller_mock_ setUseFirstRunSkipButton:NO]);
     OCMExpect([user_signin_view_controller_mock_
         setModalPresentationStyle:UIModalPresentationFormSheet]);
     // Method not used on iOS 12.
@@ -178,7 +180,7 @@ TEST_F(UserSigninCoordinatorTest, StartAndInterruptCoordinator) {
   EXPECT_NE(nil, coordinator_.unifiedConsentViewController);
   EXPECT_NE(nil, view_controller_present_completion_);
   [coordinator_
-      interruptWithAction:SigninCoordinatorInterruptActionDismissWithAnimation
+      interruptWithAction:SigninCoordinatorInterrupt::DismissWithAnimation
                completion:^{
                  EXPECT_TRUE(completion_done);
                  EXPECT_FALSE(interrupt_done);
@@ -189,6 +191,7 @@ TEST_F(UserSigninCoordinatorTest, StartAndInterruptCoordinator) {
   // Simulate the end of -[UIViewController
   // presentViewController:animated:completion] by calling the completion block.
   view_controller_present_completion_();
+  base::RunLoop().RunUntilIdle();
   EXPECT_FALSE(interrupt_done);
   EXPECT_FALSE(completion_done);
   // Dismiss method is expected to be called.

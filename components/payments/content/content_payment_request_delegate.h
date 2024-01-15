@@ -8,12 +8,19 @@
 #include <memory>
 #include <string>
 
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
+#include "base/unguessable_token.h"
 #include "components/payments/content/payment_request_display_manager.h"
 #include "components/payments/core/payment_request_delegate.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 template <class T>
 class scoped_refptr;
+
+namespace content {
+class RenderFrameHost;
+}  // namespace content
 
 namespace webauthn {
 class InternalAuthenticator;
@@ -30,7 +37,14 @@ class SecurePaymentConfirmationNoCreds;
 // The delegate for PaymentRequest that can use content.
 class ContentPaymentRequestDelegate : public PaymentRequestDelegate {
  public:
+  using GetTwaPackageNameCallback =
+      base::OnceCallback<void(const std::string& twa_package_name)>;
+
   ~ContentPaymentRequestDelegate() override;
+
+  // Returns the RenderFrameHost for the frame that initiated the
+  // PaymentRequest.
+  virtual content::RenderFrameHost* GetRenderFrameHost() const = 0;
 
   // Creates and returns an instance of the InternalAuthenticator interface for
   // communication with WebAuthn.
@@ -66,13 +80,9 @@ class ContentPaymentRequestDelegate : public PaymentRequestDelegate {
   // parameter will return an "Invalid certificate" error message.
   virtual std::string GetInvalidSslCertificateErrorMessage() = 0;
 
-  // Returns whether the UI should be skipped for a "basic-card" scenario. This
-  // will only be true in tests.
-  virtual bool SkipUiForBasicCard() const = 0;
-
-  // Returns the Android package name of the Trusted Web Activity that invoked
-  // this browser, if any. Otherwise, an empty string.
-  virtual std::string GetTwaPackageName() const = 0;
+  // Obtains the Android package name of the Trusted Web Activity that invoked
+  // this browser, if any. Otherwise, calls `callback` with an empty string.
+  virtual void GetTwaPackageName(GetTwaPackageNameCallback callback) const = 0;
 
   virtual PaymentRequestDialog* GetDialogForTesting() = 0;
   virtual SecurePaymentConfirmationNoCreds*
@@ -86,6 +96,13 @@ class ContentPaymentRequestDelegate : public PaymentRequestDelegate {
       const std::string& rp_id,
       base::OnceClosure response_callback,
       base::OnceClosure opt_out_callback) = 0;
+
+  // Returns an instance id for the TWA that invokes the payment app. The
+  // instance id is used to find the TWA window in the ash so that we can
+  // attach the payment dialog to it. This interface should only be used
+  // in ChromeOS.
+  virtual absl::optional<base::UnguessableToken> GetChromeOSTWAInstanceId()
+      const = 0;
 
   // Returns a weak pointer to this delegate.
   base::WeakPtr<ContentPaymentRequestDelegate> GetContentWeakPtr();

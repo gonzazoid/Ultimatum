@@ -7,10 +7,10 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
@@ -20,6 +20,7 @@
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/safe_browsing/document_analyzer_results.h"
 #include "chrome/services/file_util/document_analysis_service.h"
+#include "chrome/services/file_util/fake_document_analysis_service.h"
 #include "components/safe_browsing/core/common/features.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_utils.h"
@@ -29,6 +30,9 @@
 
 namespace safe_browsing {
 namespace {
+
+using ::testing::_;
+
 class SandboxedDocumentAnalyzerTest : public testing::Test {
  public:
   SandboxedDocumentAnalyzerTest()
@@ -41,10 +45,10 @@ class SandboxedDocumentAnalyzerTest : public testing::Test {
 
     base::RunLoop run_loop;
     ResultsGetter results_getter(run_loop.QuitClosure(), results);
-    scoped_refptr<SandboxedDocumentAnalyzer> analyzer(
-        new SandboxedDocumentAnalyzer(file_path, file_path,
-                                      results_getter.GetCallback(),
-                                      std::move(remote)));
+    std::unique_ptr<SandboxedDocumentAnalyzer, base::OnTaskRunnerDeleter>
+        analyzer = SandboxedDocumentAnalyzer::CreateAnalyzer(
+            file_path, file_path, results_getter.GetCallback(),
+            std::move(remote));
     analyzer->Start();
     run_loop.Run();
   }
@@ -91,7 +95,6 @@ class SandboxedDocumentAnalyzerTest : public testing::Test {
 TEST_F(SandboxedDocumentAnalyzerTest, AnalyzeDocumentWithMacros) {
   base::FilePath path;
   ASSERT_NO_FATAL_FAILURE(path = GetFilePath("doc_containing_macros.doc"));
-  base::File file(path, base::File::FLAG_OPEN | base::File::FLAG_READ);
 
   safe_browsing::DocumentAnalyzerResults results;
   AnalyzeDocument(path, &results);
@@ -106,7 +109,6 @@ TEST_F(SandboxedDocumentAnalyzerTest, AnalyzeDocumentWithMacros) {
 TEST_F(SandboxedDocumentAnalyzerTest, AnalyzeDocumentWithoutMacros) {
   base::FilePath path;
   ASSERT_NO_FATAL_FAILURE(path = GetFilePath("docx_without_macros.docx"));
-  base::File file(path, base::File::FLAG_OPEN | base::File::FLAG_READ);
 
   safe_browsing::DocumentAnalyzerResults results;
   AnalyzeDocument(path, &results);
@@ -122,7 +124,6 @@ TEST_F(SandboxedDocumentAnalyzerTest, AnalyzeUnsupportedFileType) {
   base::FilePath temp_path;
   base::CreateTemporaryFile(&temp_path);
   base::WriteFile(temp_path, "test");
-  base::File file(temp_path, base::File::FLAG_OPEN | base::File::FLAG_READ);
 
   safe_browsing::DocumentAnalyzerResults results;
   AnalyzeDocument(temp_path, &results);
@@ -142,7 +143,6 @@ TEST_F(SandboxedDocumentAnalyzerTest, AnalyzeUnsupportedFileType) {
 TEST_F(SandboxedDocumentAnalyzerTest, AnalyzeCorruptedArchive) {
   base::FilePath path;
   ASSERT_NO_FATAL_FAILURE(path = GetFilePath("txt_as_xlsx.xlsx"));
-  base::File file(path, base::File::FLAG_OPEN | base::File::FLAG_READ);
 
   safe_browsing::DocumentAnalyzerResults results;
   AnalyzeDocument(path, &results);
@@ -158,5 +158,42 @@ TEST_F(SandboxedDocumentAnalyzerTest, AnalyzeCorruptedArchive) {
       results.error_message);
   EXPECT_FALSE(results.has_macros);
 }
+
+TEST_F(SandboxedDocumentAnalyzerTest, CanDeleteDuringExecution) {
+  base::FilePath file_path;
+  ASSERT_NO_FATAL_FAILURE(file_path = GetFilePath("doc_containing_macros.doc"));
+  base::FilePath temp_path;
+  ASSERT_TRUE(base::CreateTemporaryFile(&temp_path));
+  ASSERT_TRUE(base::CopyFile(file_path, temp_path));
+
+  mojo::PendingRemote<chrome::mojom::DocumentAnalysisService> remote;
+  base::RunLoop run_loop;
+
+  FakeDocumentAnalysisService service(remote.InitWithNewPipeAndPassReceiver());
+  EXPECT_CALL(service.GetSafeDocumentAnalyzer(), AnalyzeDocument(_, _, _))
+      .WillOnce([&](base::File office_file, base::FilePath file_path,
+                    chrome::mojom::SafeDocumentAnalyzer::AnalyzeDocumentCallback
+                        callback) {
+        EXPECT_TRUE(base::DeleteFile(temp_path));
+        std::move(callback).Run(safe_browsing::DocumentAnalyzerResults());
+        run_loop.Quit();
+      });
+  std::unique_ptr<SandboxedDocumentAnalyzer, base::OnTaskRunnerDeleter>
+      analyzer = SandboxedDocumentAnalyzer::CreateAnalyzer(
+          file_path, temp_path, base::DoNothing(), std::move(remote));
+  analyzer->Start();
+  run_loop.Run();
+}
+
+TEST_F(SandboxedDocumentAnalyzerTest, InvalidPath) {
+  base::FilePath path;
+  ASSERT_NO_FATAL_FAILURE(path = GetFilePath("does_not_exist"));
+
+  safe_browsing::DocumentAnalyzerResults results;
+  AnalyzeDocument(path, &results);
+
+  EXPECT_FALSE(results.success);
+}
+
 }  // namespace
 }  // namespace safe_browsing

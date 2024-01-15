@@ -6,7 +6,8 @@ import './data_point.js';
 import './diagnostics_shared.css.js';
 
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {assert, assertNotReached} from 'chrome://resources/js/assert_ts.js';
+import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
+import {PolymerElementProperties} from 'chrome://resources/polymer/v3_0/polymer/interfaces.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './cellular_info.html.js';
@@ -22,15 +23,15 @@ import {LockType, Network, RoamingState} from './network_health_provider.mojom-w
 const CellularInfoElementBase = I18nMixin(PolymerElement);
 
 export class CellularInfoElement extends CellularInfoElementBase {
-  static get is() {
+  static get is(): string {
     return 'cellular-info';
   }
 
-  static get template() {
+  static get template(): HTMLTemplateElement {
     return getTemplate();
   }
 
-  static get properties() {
+  static get properties(): PolymerElementProperties {
     return {
       network: {
         type: Object,
@@ -43,7 +44,7 @@ export class CellularInfoElement extends CellularInfoElementBase {
   /**
    * Get correct display text for known cellular network technology.
    */
-  protected computeNetworkTechnologyText_(): string {
+  protected computeNetworkTechnologyText(): string {
     if (!this.network.typeProperties?.cellular) {
       return '';
     }
@@ -75,7 +76,7 @@ export class CellularInfoElement extends CellularInfoElementBase {
     assertNotReached();
   }
 
-  protected computeRoamingText_(): string {
+  protected computeRoamingText(): string {
     if (!this.network?.typeProperties?.cellular) {
       return '';
     }
@@ -96,7 +97,7 @@ export class CellularInfoElement extends CellularInfoElementBase {
     assertNotReached();
   }
 
-  protected computeSimLockedText_(): string {
+  protected computeSimLockedText(): string {
     if (!this.network?.typeProperties?.cellular) {
       return '';
     }
@@ -109,7 +110,7 @@ export class CellularInfoElement extends CellularInfoElementBase {
         this.i18n('networkSimUnlockedText');
   }
 
-  protected computeSignalStrength_(): string {
+  protected computeSignalStrength(): string {
     if (this.network?.typeProperties?.cellular) {
       return getSignalStrength(
           this.network.typeProperties.cellular.signalStrength);

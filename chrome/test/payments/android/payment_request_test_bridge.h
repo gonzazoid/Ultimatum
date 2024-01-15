@@ -5,7 +5,7 @@
 #ifndef CHROME_TEST_PAYMENTS_ANDROID_PAYMENT_REQUEST_TEST_BRIDGE_H_
 #define CHROME_TEST_PAYMENTS_ANDROID_PAYMENT_REQUEST_TEST_BRIDGE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/test/payments/payment_request_test_controller.h"
 
 namespace content {
@@ -41,9 +41,6 @@ bool ClickPaymentHandlerCloseButtonForTest();
 // Closes the payment dialog, if any. Returns true on success.
 bool CloseDialogForTest();
 
-// Returns true when running on Android M or L.
-bool IsAndroidMarshmallowOrLollipopForTest();
-
 // Clicks on the 'opt out' link in the SPC dialog, if available. Returns true on
 // success, false if the opt out link wasn't being shown.
 bool ClickSecurePaymentConfirmationOptOutForTest();
@@ -57,6 +54,8 @@ void SetUseNativeObserverOnPaymentRequestForTesting(
     base::RepeatingClosure on_has_enrolled_instrument_returned,
     base::RepeatingClosure on_show_instruments_ready,
     SetAppDescriptionsCallback set_app_descriptions,
+    base::RepeatingCallback<void(bool)> set_shipping_section_visible,
+    base::RepeatingCallback<void(bool)> set_contact_section_visible,
     base::RepeatingClosure on_error_displayed,
     base::RepeatingClosure on_not_supported_error,
     base::RepeatingClosure on_connection_terminated,

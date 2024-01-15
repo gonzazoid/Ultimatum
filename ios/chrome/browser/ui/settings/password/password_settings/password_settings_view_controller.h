@@ -7,7 +7,7 @@
 
 #import <UIKit/UIKit.h>
 
-#import "ios/chrome/browser/ui/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
 #import "ios/chrome/browser/ui/settings/password/password_settings/password_settings_consumer.h"
 #import "ios/chrome/browser/ui/settings/password/password_settings/password_settings_delegate.h"
 #import "ios/chrome/browser/ui/settings/settings_root_table_view_controller.h"
@@ -51,11 +51,16 @@
 
 - (instancetype)init;
 
+// Returns a rect suitable for anchoring the bulk move passwords to account
+// alert.
+- (CGRect)sourceRectForBulkMovePasswordsToAccount;
+
 // Returns a rect suitable for anchoring alerts in the password export flow.
 - (CGRect)sourceRectForPasswordExportAlerts;
 
-// Returns a view suitable for anchoring alerts in the password export flow.
-- (UIView*)sourceViewForPasswordExportAlerts;
+// Returns a view suitable for anchoring alerts in the password manager
+// settings.
+- (UIView*)sourceViewForAlerts;
 
 @end
 

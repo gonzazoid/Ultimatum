@@ -6,6 +6,8 @@ import("//build/config/chromeos/ui_mode.gni")
 
 component("user_manager") {
   sources = [
+    "multi_user/multi_user_sign_in_policy.cc",
+    "multi_user/multi_user_sign_in_policy.h",
     "user_info.cc",
     "user_info.h",
     "user_info_impl.cc",
@@ -13,6 +15,7 @@ component("user_manager") {
     "user_manager_export.h",
     "user_names.cc",
     "user_names.h",
+    "user_type.cc",
     "user_type.h",
   ]
 
@@ -32,9 +35,10 @@ component("user_manager") {
   if (is_chromeos_ash) {
     sources += [
       "common_types.h",
+      "include_exclude_account_id_filter.cc",
+      "include_exclude_account_id_filter.h",
       "known_user.cc",
       "known_user.h",
-      "remove_user_delegate.h",
       "scoped_user_manager.cc",
       "scoped_user_manager.h",
       "user.cc",
@@ -50,6 +54,7 @@ component("user_manager") {
     ]
 
     deps += [
+      "//ash/constants",
       "//components/prefs",
       "//skia",
       "//url",
@@ -70,13 +75,12 @@ if (is_chromeos_ash) {
       "//base",
       "//components/account_id",
     ]
-
-    deps = [ "//ash/constants" ]
   }
 
   source_set("unit_tests") {
     testonly = true
     sources = [
+      "include_exclude_account_id_filter_unittest.cc",
       "known_user_unittest.cc",
       "user_unittest.cc",
     ]

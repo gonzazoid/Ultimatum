@@ -4,48 +4,57 @@
 
 #include "ui/views/input_event_activation_protector.h"
 
+#include "base/command_line.h"
 #include "ui/events/event.h"
 #include "ui/views/metrics.h"
+#include "ui/views/views_switches.h"
 
 namespace views {
 
-namespace {
-bool g_disable_for_testing = false;
-}  // namespace
+InputEventActivationProtector::InputEventActivationProtector() {
+  WindowsStationarityMonitor::GetInstance()->AddObserver(this);
+}
+
+InputEventActivationProtector::~InputEventActivationProtector() {
+  WindowsStationarityMonitor::GetInstance()->RemoveObserver(this);
+}
 
 void InputEventActivationProtector::VisibilityChanged(bool is_visible) {
   if (is_visible)
-    view_shown_time_stamp_ = absl::make_optional<base::TimeTicks>();
+    view_protected_time_stamp_ = base::TimeTicks::Now();
 }
 
-void InputEventActivationProtector::UpdateViewShownTimeStamp() {
-  if (view_shown_time_stamp_.has_value())
-    view_shown_time_stamp_ = base::TimeTicks::Now();
+void InputEventActivationProtector::MaybeUpdateViewProtectedTimeStamp(
+    bool force) {
+  // The UI was never shown, ignore.
+  if (!force && view_protected_time_stamp_ == base::TimeTicks()) {
+    return;
+  }
+
+  view_protected_time_stamp_ = base::TimeTicks::Now();
 }
 
 bool InputEventActivationProtector::IsPossiblyUnintendedInteraction(
     const ui::Event& event) {
-  if (g_disable_for_testing)
+  if (UNLIKELY(base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kDisableInputEventActivationProtectionForTesting))) {
     return false;
+  }
 
-  if (!view_shown_time_stamp_.has_value()) {
+  if (view_protected_time_stamp_ == base::TimeTicks()) {
     // The UI was never shown, ignore. This can happen in tests.
     return false;
   }
 
-  // Input event in between of visibility state changed and actual frame
-  // presented.
-  if (view_shown_time_stamp_.value() == base::TimeTicks()) {
+  // Don't let key repeats close the dialog, they might've been held when the
+  // dialog pops up.
+  if (event.IsKeyEvent() && event.AsKeyEvent()->is_repeat()) {
     return true;
   }
 
-  // Don't let key repeats close the dialog, they might've been held when the
-  // dialog pops up.
-  if (event.IsKeyEvent() && event.AsKeyEvent()->is_repeat())
-    return true;
-
-  if (!event.IsMouseEvent() && !event.IsTouchEvent())
+  if (!event.IsMouseEvent() && !event.IsTouchEvent()) {
     return false;
+  }
 
   const base::TimeDelta kShortInterval =
       base::Milliseconds(GetDoubleClickInterval());
@@ -60,24 +69,18 @@ bool InputEventActivationProtector::IsPossiblyUnintendedInteraction(
   }
   repeated_event_count_ = 0;
 
-  // Unintended if the user clicked right after the UI showed.
-  return event.time_stamp() < view_shown_time_stamp_.value() + kShortInterval;
+  // Unintended if the user clicked right after the view was protected.
+  return event.time_stamp() < view_protected_time_stamp_ + kShortInterval;
+}
+
+void InputEventActivationProtector::OnWindowStationaryStateChanged() {
+  MaybeUpdateViewProtectedTimeStamp();
 }
 
 void InputEventActivationProtector::ResetForTesting() {
-  view_shown_time_stamp_.reset();
+  view_protected_time_stamp_ = base::TimeTicks();
   last_event_timestamp_ = base::TimeTicks();
   repeated_event_count_ = 0;
-}
-
-// static
-void InputEventActivationProtector::DisableForTesting() {
-  g_disable_for_testing = true;
-}
-
-// static
-bool InputEventActivationProtector::IsDisabledForTesting() {
-  return g_disable_for_testing;
 }
 
 }  // namespace views

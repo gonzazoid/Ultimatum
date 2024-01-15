@@ -15,13 +15,23 @@ const char kUserRejected[] = "The user did not approve access.";
 const char kUserNotSignedIn[] = "The user is not signed in.";
 const char kUserNonPrimary[] = "Only the primary user account is allowed";
 const char kBrowserSigninNotAllowed[] = "The user turned off browser signin";
-const char kInteractionRequired[] = "User interaction required.";
+const char kInteractionRequired[] =
+    "User interaction required. Try setting `abortOnLoadForNonInteractive` and "
+    "`timeoutMsForNonInteractive` if multiple navigations are required, or if "
+    "code is used for redirects in the authorization page after it's loaded.";
+const char kGetAuthTokenInteractivityDeniedError[] =
+    "User interaction blocked due to user inactivity.";
 const char kInvalidRedirect[] = "Did not redirect to the right URL.";
 const char kOffTheRecord[] = "Identity API is disabled in incognito windows.";
 const char kPageLoadFailure[] = "Authorization page could not be loaded.";
-const char kSetAccountsInCookieFailure[] = "Account cookies could not be set.";
+const char kPageLoadTimedOut[] = "Authorization page load timed out.";
 const char kInvalidConsentResult[] = "Returned an invalid consent result.";
 const char kCanceled[] = "canceled";
+const char kCannotCreateWindow[] =
+    "Couldn't create a browser window to display an authorization page.";
+const char kInvalidURLScheme[] =
+    "The auth url has an invalid scheme. Only http:// and https:// schemes are "
+    "allowed.";
 
 const int kCachedRemoteConsentTTLSeconds = 1;
 }  // namespace identity_constants

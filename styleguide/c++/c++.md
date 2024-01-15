@@ -22,7 +22,7 @@ Blink code in `third_party/blink` uses [Blink style](blink-c++.md).
 ## Modern C++ features
 
 Google and Chromium style
-[targets C++17](https://google.github.io/styleguide/cppguide.html#C++_Version).
+[targets C++20](https://google.github.io/styleguide/cppguide.html#C++_Version).
 Additionally, some features of supported C++ versions remain forbidden. The
 status of Chromium's C++ support is covered in more detail in
 [Modern C++ use in Chromium](c++-features.md).
@@ -39,7 +39,9 @@ status of Chromium's C++ support is covered in more detail in
     [PRESUBMIT.py](https://chromium.googlesource.com/chromium/src/+/main/PRESUBMIT.py).
     `ForTesting` is the conventional suffix although similar patterns, such as
     `ForTest`, are also accepted. These suffixes are checked at presubmit time
-    to ensure the functions are called only by test files.
+    to ensure the functions are called only by test files. In the rare case of
+    adding a test-only code path to an area where a testing suffix is not
+    possible, CHECK_IS_TEST() may be appropriate.
   * Classes used only for testing should be in a GN build target that is
     marked `testonly=true`. Tests can depend on such targets, but production
     code can not.
@@ -230,7 +232,7 @@ code when you find it, or at least not make such usage any more widespread.
 
 Use `const raw_ref<T>` or `raw_ptr<T>` for class and struct fields in place of a
 raw C++ reference `T&` or pointer `T*` whenever possible, except in paths that include
-`/renderer/` or `blink/public/web/`.  These a non-owning smart pointers that
+`/renderer/` or `blink/public/web/`.  These are non-owning smart pointers that
 have improved memory-safety over raw pointers and references, and can prevent
 exploitation of a significant percentage of Use-after-Free bugs.
 
@@ -246,6 +248,32 @@ Using `raw_ref<T>` or `raw_ptr<T>` may not be possible in rare cases for
 pointers).  Tooling will help to encourage use of these types in the future. See
 [raw_ptr.md](../../base/memory/raw_ptr.md#When-to-use-raw_ptr_T) for how to add
 exclusions.
+
+## thread_local variables
+
+Much code in Chrome needs to be "sequence-aware" rather than "thread-aware". If
+you need a sequence-local variable, see
+[`base::SequenceLocalStorageSlot`](../../base/threading/sequence_local_storage_slot.h).
+
+If you truly need a thread-local variable, then you can use a `thread_local`, as
+long as it complies with the following requirements:
+  * Its type must satisfy `std::is_trivially_destructible_v<T>`, due to past
+    problems with "spooky action at a distance" during destruction. Note that
+    `raw_ptr<T>` is not a trivially-destructible type and may not be contained
+    in `thread_locals`.
+  * It must not be exported (e.g. via `COMPONENT_EXPORT`), since this may result
+    in codegen bugs on Mac; and at least on Windows, this probably won't compile
+    in the component build anyway. As a workaround, create an exported getter
+    function that creates a `thread_local` internally and returns a ref to it.
+  * If it lives at class/namespace scope, it must be marked `ABSL_CONST_INIT`,
+    as specified in
+    [the Google C++ Style Guide](https://google.github.io/styleguide/cppguide.html#thread_local).
+  * It must not be constructed inside OOM handlers or any other code that cannot
+    allocate memory, since on POSIX, construction may alloc.
+
+If you can't comply with these requirements, consider
+[`base::ThreadLocalOwnedPointer`](../../base/threading/thread_local.h) or
+another nearby low-level utility.
 
 ## Forward declarations vs. #includes
 
@@ -284,59 +312,56 @@ sections on these for the naming convention). Do not use `#pragma once`;
 historically it was not supported on all platforms, and it does not seem to
 outperform #include guards even on platforms which do support it.
 
-## CHECK(), DCHECK(), and NOTREACHED()
+## CHECK(), DCHECK(), NOTREACHED_NORETURN() and NOTREACHED()
 
-The `CHECK()` macro will cause an immediate crash if its condition is not met.
-`DCHECK()` is like `CHECK()` but is only compiled in when `DCHECK_IS_ON` is true
-(debug builds and some bot configurations, but not end-user builds).
-`NOTREACHED()` is equivalent to `DCHECK(false)`. Here are some rules for using
-these:
-  * Use `DCHECK()` or `NOTREACHED()` as assertions, e.g. to document pre- and
-    post-conditions. A `DCHECK()` means "this condition must always be true",
-    not "this condition is normally true, but perhaps not in exceptional
-    cases." Things like disk corruption or strange network errors are examples
-    of exceptional circumstances that nevertheless should not result in
-    `DCHECK()` failure.
-  * A consequence of this is that you should not handle DCHECK() failures, even
-    if failure would result in a crash. Attempting to handle a `DCHECK()`
-    failure is a statement that the `DCHECK()` can fail, which contradicts the
-    point of writing the `DCHECK()`. In particular, do not write code like the
-    following:
-    ```c++
-      DCHECK(foo);
-      if (!foo)  // Eliminate this code.
-        ...
+Use the `CHECK()` family of macros to both document and verify invariants.
+  * Exception: If the invariant is known to be too expensive to verify in
+    production, you may fall back to `DCHECK()`. Do not do this unless
+    necessary.
+  * Exception: If your pre-stable coverage is too small to prevent a stability
+    risk once `CHECK()`s hit stable, and failure doesn't obviously result in a
+    crash or security risk, you may use `CHECK(Foo(),
+    base::NotFatalUntil::M120)` with a future milestone to gather non-fatal
+    diagnostics in stable before automatically turning fatal in a later
+    milestone.
+  * Historically, Chromium code used `DCHECK()` in most cases, so a great deal
+    of existing code uses `DCHECK()` instead of `CHECK()`. You are encouraged
+    to migrate to `CHECK()`s with a trailing `base::NotFatalUntil::M120`
+    argument, as there's stability risk given the under-tested invariant, or add
+    a comment explaining why DCHECK is appropriate given the current guidance.
 
-      if (!bar) {  // Replace this whole conditional with "DCHECK(bar);".
-        NOTREACHED();
-        return;
-      }
-    ```
-  * Use `CHECK()` if the consequence of a failed assertion would be a security
-    vulnerability, where crashing the browser is preferable. Because this takes
-    down the whole browser, sometimes there are better options than `CHECK()`.
-    For example, if a renderer sends the browser process a malformed IPC, an
-    attacker may control the renderer, but we can simply kill the offending
-    renderer instead of crashing the whole browser.
-  * You can temporarily use `CHECK()` instead of `DCHECK()` when trying to
-    force crashes in release builds to sniff out which of your assertions is
-    failing. Don't leave these in the codebase forever; remove them or change
-    them back once you've solved the problem.
-  * Don't use these macros in tests, as they crash the test binary and leave
-    bots in a bad state. Use the `ASSERT_xx()` and `EXPECT_xx()` family of
-    macros, which report failures gracefully and can continue running other
-    tests.
-  * Dereferencing a null pointer in C++ is generally UB (undefined behavior) as
-    the compiler is free to assume a dereference means the pointer is not null
-    and may apply optimizations based on that. As such, there is sometimes a
-    strong opinion to `CHECK()` pointers before dereference. Chromium builds
-    with the `no-delete-null-pointer-checks` Clang/GCC flag which prevents such
-    optimizations, meaning the side effect of a null dereference would just be
-    the use of 0x0 which will lead to a crash on all the platforms Chromium
-    supports. As such we do not use `CHECK()` to guard pointer deferences. A
-    `DCHECK()` can be used to document that a pointer is never null, and doing
-    so as early as possible can help with debugging, though our styleguide now
-    recommends using a reference instead of a pointer when it cannot be null.
+Use `NOTREACHED_NORETURN()` to indicate a piece of code is unreachable. Control
+flow does not leave this call, so there should be no executable statements after
+it (even return statements from non-void functions). The compiler will issue
+dead-code warnings.
+  * Prefer to unconditionally `CHECK()` instead of conditionally hitting a
+    `NOTREACHED[_NORETURN]()`, where feasible.
+  * Exception: If your pre-stable coverage is too small to prevent a stability
+    risk once `NOTREACHED_NORETURN()`s hit stable, and failure doesn't obviously
+    result in a crash or security risk, you may use `NOTREACHED(
+    base::NotFatalUntil::M120)` with a future milestone to gather non-fatal
+    diagnostics in stable before automatically turning fatal in a later
+    milestone.
+  * Historically, Chromium code used `NOTREACHED()` for this purpose.
+    [Migrating this code](https://crbug.com/851128) to be fatal (and
+    `[[noreturn]]`) is part of a `kNotReachedIsFatal` experiment.
+
+
+Use `base::ImmediateCrash()` in the rare case where it's necessary to terminate
+the current process for reasons outside its control, that are not violations of
+our invariants.
+
+Use `base::debug::DumpWithoutCrashing()` to generate a crash report but keep
+running in the case where you are investigating some failure but know that it's
+safe to continue execution.
+
+Use `DLOG(FATAL)` (does nothing in production) or `LOG(DFATAL)` (logs an error
+and continues running in production) if you need to log an error in tests from
+production code. From test code, use `ADD_FAILURE()` directly. Do not use these
+for invariant failures. Those should use `CHECK()` or `NOTREACHED_NORETURN()` as
+noted above.
+
+For more details, see [checks.md](checks.md).
 
 ## Test-only code paths in production code
 

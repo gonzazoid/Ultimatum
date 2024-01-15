@@ -7,19 +7,18 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "components/update_client/component_patcher_operation.h"
 #include "components/update_client/patcher.h"
 #include "components/update_client/update_client.h"
 #include "components/update_client/update_client_errors.h"
-#include "third_party/puffin/puffin/src/include/puffin/puffpatch.h"
+#include "third_party/puffin/src/include/puffin/puffpatch.h"
 
 namespace update_client {
 
@@ -47,7 +46,7 @@ void PuffinPatcher::Patch(
       base::WrapRefCounted(new PuffinPatcher(
           std::move(old_crx_file), std::move(puff_patch_file),
           std::move(new_crx_output), patcher, std::move(callback)));
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&PuffinPatcher::StartPatching, puffin_patcher));
 }
 

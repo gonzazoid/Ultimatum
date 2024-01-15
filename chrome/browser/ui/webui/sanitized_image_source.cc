@@ -7,6 +7,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include "base/containers/contains.h"
 #include "base/memory/ref_counted_memory.h"
@@ -46,26 +47,24 @@ namespace {
 const int64_t kMaxImageSizeInBytes =
     static_cast<int64_t>(IPC::Channel::kMaximumMessageSize);
 
-constexpr char kUrlKey[] = "url";
-constexpr char kStaticEncodeKey[] = "staticEncode";
+constexpr char kEncodeTypeKey[] = "encodeType";
 constexpr char kIsGooglePhotosKey[] = "isGooglePhotos";
+constexpr char kStaticEncodeKey[] = "staticEncode";
+constexpr char kUrlKey[] = "url";
 
-std::map<std::string, std::string> ParseParams(
-    const std::string& param_string) {
+std::map<std::string, std::string> ParseParams(std::string_view param_string) {
   url::Component query(0, param_string.size());
   url::Component key;
   url::Component value;
   constexpr int kMaxUriDecodeLen = 2048;
   std::map<std::string, std::string> params;
-  while (
-      url::ExtractQueryKeyValue(param_string.c_str(), &query, &key, &value)) {
+  while (url::ExtractQueryKeyValue(param_string.data(), &query, &key, &value)) {
     url::RawCanonOutputW<kMaxUriDecodeLen> output;
-    url::DecodeURLEscapeSequences(param_string.c_str() + value.begin, value.len,
+    url::DecodeURLEscapeSequences(param_string.substr(value.begin, value.len),
                                   url::DecodeURLMode::kUTF8OrIsomorphic,
                                   &output);
-    params.insert({param_string.substr(key.begin, key.len),
-                   base::UTF16ToUTF8(
-                       base::StringPiece16(output.data(), output.length()))});
+    params.insert({std::string(param_string.substr(key.begin, key.len)),
+                   base::UTF16ToUTF8(output.view())});
   }
   return params;
 }
@@ -85,6 +84,18 @@ bool IsGooglePhotosUrl(const GURL& url) {
 }
 
 }  // namespace
+
+void SanitizedImageSource::DataDecoderDelegate::DecodeImage(
+    const std::string& data,
+    DecodeImageCallback callback) {
+  base::span<const uint8_t> bytes = base::make_span(
+      reinterpret_cast<const uint8_t*>(data.data()), data.size());
+
+  data_decoder::DecodeImage(
+      &data_decoder_, bytes, data_decoder::mojom::ImageCodec::kDefault,
+      /*shrink_to_fit=*/true, data_decoder::kDefaultMaxSizeInBytes,
+      /*desired_image_frame_size=*/gfx::Size(), std::move(callback));
+}
 
 void SanitizedImageSource::DataDecoderDelegate::DecodeAnimation(
     const std::string& data,
@@ -125,7 +136,7 @@ void SanitizedImageSource::StartDataRequest(
   std::string image_url_or_params = url.query();
   if (url != GURL(base::StrCat(
                  {chrome::kChromeUIImageURL, "?", image_url_or_params}))) {
-    std::move(callback).Run(base::MakeRefCounted<base::RefCountedString>());
+    std::move(callback).Run(nullptr);
     return;
   }
 
@@ -138,7 +149,7 @@ void SanitizedImageSource::StartDataRequest(
 
     auto url_it = params.find(kUrlKey);
     if (url_it == params.end()) {
-      std::move(callback).Run(base::MakeRefCounted<base::RefCountedString>());
+      std::move(callback).Run(nullptr);
       return;
     }
     image_url = GURL(url_it->second);
@@ -148,12 +159,27 @@ void SanitizedImageSource::StartDataRequest(
       request_attributes.static_encode = static_encode_it->second == "true";
     }
 
+    auto encode_type_ir = params.find(kEncodeTypeKey);
+    if (encode_type_ir != params.end()) {
+      request_attributes.encode_type =
+          encode_type_ir->second == "webp"
+              ? RequestAttributes::EncodeType::kWebP
+              : RequestAttributes::EncodeType::kPng;
+    }
+
     auto google_photos_it = params.find(kIsGooglePhotosKey);
     if (google_photos_it != params.end() &&
         google_photos_it->second == "true" && IsGooglePhotosUrl(image_url)) {
       send_auth_token = true;
     }
   }
+
+  if (image_url.SchemeIs(url::kHttpScheme)) {
+    // Disallow any HTTP requests, treat them as a failure instead.
+    std::move(callback).Run(nullptr);
+    return;
+  }
+
   request_attributes.image_url = image_url;
 
   // Download the image body.
@@ -263,7 +289,16 @@ void SanitizedImageSource::OnImageLoaded(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (loader->NetError() != net::OK || !body) {
-    std::move(callback).Run(base::MakeRefCounted<base::RefCountedString>());
+    std::move(callback).Run(nullptr);
+    return;
+  }
+
+  if (request_attributes.static_encode) {
+    data_decoder_delegate_->DecodeImage(
+        *body,
+        base::BindOnce(&SanitizedImageSource::EncodeAndReplyStaticImage,
+                       weak_ptr_factory_.GetWeakPtr(),
+                       std::move(request_attributes), std::move(callback)));
     return;
   }
 
@@ -281,40 +316,45 @@ void SanitizedImageSource::OnAnimationDecoded(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (!mojo_frames.size()) {
-    std::move(callback).Run(base::MakeRefCounted<base::RefCountedString>());
+    std::move(callback).Run(nullptr);
     return;
   }
 
 #if BUILDFLAG(IS_CHROMEOS)
-  // Re-encode static image as PNG and send to requester.
-  if (request_attributes.static_encode || mojo_frames.size() == 1) {
-    EncodeAndReplyStaticImage(std::move(callback), mojo_frames[0]->bitmap);
+  if (mojo_frames.size() > 1) {
+    // The image is animated, re-encode as WebP animated image and send to
+    // requester.
+    EncodeAndReplyAnimatedImage(std::move(callback), std::move(mojo_frames));
     return;
   }
-
-  // The image is animated, re-encode as WebP animated image and send to
-  // requester.
-  EncodeAndReplyAnimatedImage(std::move(callback), std::move(mojo_frames));
-#else
-  // Re-encode as static image for non ChromeOS builds.
-  EncodeAndReplyStaticImage(std::move(callback), mojo_frames[0]->bitmap);
 #endif  // BUILDFLAG(IS_CHROMEOS)
+
+  // Re-encode as static image and send to requester.
+  EncodeAndReplyStaticImage(std::move(request_attributes), std::move(callback),
+                            mojo_frames[0]->bitmap);
 }
 
 void SanitizedImageSource::EncodeAndReplyStaticImage(
+    RequestAttributes request_attributes,
     content::URLDataSource::GotDataCallback callback,
     const SkBitmap& bitmap) {
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE,
       base::BindOnce(
-          [](const SkBitmap& bitmap) {
+          [](const SkBitmap& bitmap,
+             RequestAttributes::EncodeType encode_type) {
             auto encoded = base::MakeRefCounted<base::RefCountedBytes>();
-            return gfx::PNGCodec::EncodeBGRASkBitmap(
-                       bitmap, /*discard_transparency=*/false, &encoded->data())
-                       ? encoded
-                       : base::MakeRefCounted<base::RefCountedBytes>();
+            const bool success =
+                encode_type == RequestAttributes::EncodeType::kWebP
+                    ? gfx::WebpCodec::Encode(bitmap, /*quality=*/90,
+                                             &encoded->data())
+                    : gfx::PNGCodec::EncodeBGRASkBitmap(
+                          bitmap, /*discard_transparency=*/false,
+                          &encoded->data());
+            return success ? encoded
+                           : base::MakeRefCounted<base::RefCountedBytes>();
           },
-          bitmap),
+          bitmap, request_attributes.encode_type),
       std::move(callback));
   return;
 }

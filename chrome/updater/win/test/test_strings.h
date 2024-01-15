@@ -11,9 +11,9 @@ namespace updater {
 
 // Command line switches.
 
-// The switch to activate the sleeping action for specified delay in minutes
+// The switch to activate the sleeping action for specified delay in seconds
 // before killing the process.
-extern const char kTestSleepMinutesSwitch[];
+extern const char kTestSleepSecondsSwitch[];
 
 // The switch to signal the event with the name given as a switch value.
 extern const char kTestEventToSignal[];
@@ -27,6 +27,9 @@ extern const char kTestEventToWaitOn[];
 
 // Specifies an exit code that the test process exits with.
 extern const char kTestExitCode[];
+
+// Specifies the test name invoking the executable.
+extern const char kTestName[];
 
 }  // namespace updater
 

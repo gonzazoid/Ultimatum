@@ -13,8 +13,9 @@
 #include "ash/login/ui/pin_request_widget.h"
 #include "ash/login/ui/views_utils.h"
 #include "ash/public/cpp/child_accounts/parent_access_controller.h"
-#include "base/bind.h"
 #include "base/dcheck_is_on.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/time/time.h"
 #include "components/account_id/account_id.h"
@@ -126,7 +127,7 @@ class ParentAccessControllerImplTest : public LoginTestBase {
 
     const std::string all_results_histogram =
         ParentAccessControllerImpl::GetUMAParentCodeValidationResultHistorgam(
-            absl::nullopt);
+            std::nullopt);
 
     histogram_tester_.ExpectBucketCount(all_results_histogram, result,
                                         bucket_count);
@@ -163,7 +164,8 @@ class ParentAccessControllerImplTest : public LoginTestBase {
 
   base::HistogramTester histogram_tester_;
 
-  PinRequestView* view_ = nullptr;  // Owned by test widget view hierarchy.
+  raw_ptr<PinRequestView, DanglingUntriaged> view_ =
+      nullptr;  // Owned by test widget view hierarchy.
 };
 
 // Tests parent access dialog showing/hiding and focus behavior for parent

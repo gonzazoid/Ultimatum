@@ -8,9 +8,9 @@
 #include <utility>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
@@ -30,19 +30,19 @@ namespace ash {
 namespace secure_channel {
 namespace {
 
-using ::location::nearby::connections::mojom::BytesPayload;
-using ::location::nearby::connections::mojom::ConnectionInfoPtr;
-using ::location::nearby::connections::mojom::ConnectionOptions;
-using ::location::nearby::connections::mojom::DiscoveredEndpointInfoPtr;
-using ::location::nearby::connections::mojom::Medium;
-using ::location::nearby::connections::mojom::MediumSelection;
-using ::location::nearby::connections::mojom::NearbyConnections;
-using ::location::nearby::connections::mojom::Payload;
-using ::location::nearby::connections::mojom::PayloadContent;
-using ::location::nearby::connections::mojom::PayloadPtr;
-using ::location::nearby::connections::mojom::PayloadStatus;
-using ::location::nearby::connections::mojom::PayloadTransferUpdatePtr;
-using ::location::nearby::connections::mojom::Status;
+using ::nearby::connections::mojom::BytesPayload;
+using ::nearby::connections::mojom::ConnectionInfoPtr;
+using ::nearby::connections::mojom::ConnectionOptions;
+using ::nearby::connections::mojom::DiscoveredEndpointInfoPtr;
+using ::nearby::connections::mojom::Medium;
+using ::nearby::connections::mojom::MediumSelection;
+using ::nearby::connections::mojom::NearbyConnections;
+using ::nearby::connections::mojom::Payload;
+using ::nearby::connections::mojom::PayloadContent;
+using ::nearby::connections::mojom::PayloadPtr;
+using ::nearby::connections::mojom::PayloadStatus;
+using ::nearby::connections::mojom::PayloadTransferUpdatePtr;
+using ::nearby::connections::mojom::Status;
 
 NearbyConnectionBrokerImpl::Factory* g_test_factory = nullptr;
 
@@ -633,7 +633,7 @@ mojom::FileTransferStatus ConvertFileTransferStatus(PayloadStatus status) {
 
 void NearbyConnectionBrokerImpl::OnPayloadTransferUpdate(
     const std::string& endpoint_id,
-    location::nearby::connections::mojom::PayloadTransferUpdatePtr update) {
+    ::nearby::connections::mojom::PayloadTransferUpdatePtr update) {
   if (!ash::features::IsPhoneHubCameraRollEnabled()) {
     return;
   }

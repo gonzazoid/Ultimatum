@@ -5,9 +5,9 @@
 #include <memory>
 
 #include "chrome/app/chrome_command_ids.h"
-#include "chrome/browser/ui/ash/window_pin_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
+#include "chrome/browser/ui/chromeos/window_pin_util.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_test.h"
 #include "chrome/browser/ui/views/frame/browser_non_client_frame_view_chromeos.h"
 #include "chrome/browser/ui/views/frame/browser_non_client_frame_view_chromeos_test_utils.h"
@@ -113,7 +113,7 @@ IN_PROC_BROWSER_TEST_P(ImmersiveModeBrowserViewTestNoWebUiTabStrip,
                    ->GetBoundsForTabStripRegion(
                        browser_view->tab_strip_region_view()->GetMinimumSize())
                    .bottom());
-  EXPECT_FALSE(frame_view->caption_button_container_->GetVisible());
+  EXPECT_FALSE(frame_view->caption_button_container()->GetVisible());
 
   // Repeat test but without tab fullscreen.
   ExitFullscreenModeForTabAndWait(browser(), web_contents);
@@ -127,7 +127,7 @@ IN_PROC_BROWSER_TEST_P(ImmersiveModeBrowserViewTestNoWebUiTabStrip,
                    ->GetBoundsForTabStripRegion(
                        browser_view->tab_strip_region_view()->GetMinimumSize())
                    .bottom());
-  EXPECT_TRUE(frame_view->caption_button_container_->GetVisible());
+  EXPECT_TRUE(frame_view->caption_button_container()->GetVisible());
 
   // Ending the reveal. Immersive browser should have the same behavior as full
   // screen, i.e., having an origin of (0,0).
@@ -137,7 +137,7 @@ IN_PROC_BROWSER_TEST_P(ImmersiveModeBrowserViewTestNoWebUiTabStrip,
                    ->GetBoundsForTabStripRegion(
                        browser_view->tab_strip_region_view()->GetMinimumSize())
                    .bottom());
-  EXPECT_FALSE(frame_view->caption_button_container_->GetVisible());
+  EXPECT_FALSE(frame_view->caption_button_container()->GetVisible());
 
   // Exiting immersive fullscreen should make the caption buttons and the frame
   // visible again.
@@ -152,7 +152,7 @@ IN_PROC_BROWSER_TEST_P(ImmersiveModeBrowserViewTestNoWebUiTabStrip,
                    ->GetBoundsForTabStripRegion(
                        browser_view->tab_strip_region_view()->GetMinimumSize())
                    .bottom());
-  EXPECT_TRUE(frame_view->caption_button_container_->GetVisible());
+  EXPECT_TRUE(frame_view->caption_button_container()->GetVisible());
 }
 
 // Tests IDC_SELECT_TAB_0, IDC_SELECT_NEXT_TAB, IDC_SELECT_PREVIOUS_TAB and

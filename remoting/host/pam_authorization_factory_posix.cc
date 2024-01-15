@@ -8,9 +8,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/environment.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "remoting/base/logging.h"
 #include "remoting/host/base/username.h"
 #include "remoting/protocol/channel_authenticator.h"
@@ -69,8 +69,8 @@ bool PamAuthorizer::started() const {
   return underlying_->started();
 }
 
-protocol::Authenticator::RejectionReason
-PamAuthorizer::rejection_reason() const {
+protocol::Authenticator::RejectionReason PamAuthorizer::rejection_reason()
+    const {
   if (local_login_status_ == DISALLOWED) {
     return RejectionReason::INVALID_CREDENTIALS;
   } else {
@@ -93,7 +93,8 @@ void PamAuthorizer::OnMessageProcessed(base::OnceClosure resume_callback) {
 }
 
 std::unique_ptr<jingle_xmpp::XmlElement> PamAuthorizer::GetNextMessage() {
-  std::unique_ptr<jingle_xmpp::XmlElement> result(underlying_->GetNextMessage());
+  std::unique_ptr<jingle_xmpp::XmlElement> result(
+      underlying_->GetNextMessage());
   MaybeCheckLocalLogin();
   return result;
 }
@@ -114,21 +115,31 @@ void PamAuthorizer::MaybeCheckLocalLogin() {
 }
 
 bool PamAuthorizer::IsLocalLoginAllowed() {
+  HOST_LOG << "Running local login check.";
   std::string username = GetUsername();
   if (username.empty()) {
+    LOG(ERROR) << "Failed to get username.";
     return false;
   }
-  struct pam_conv conv = { PamConversation, nullptr };
+  struct pam_conv conv = {PamConversation, nullptr};
   pam_handle_t* handle = nullptr;
-  int result = pam_start("chrome-remote-desktop", username.c_str(),
-                         &conv, &handle);
-  if (result == PAM_SUCCESS) {
+  HOST_LOG << "Calling pam_start() with username " << username;
+  int result =
+      pam_start("chrome-remote-desktop", username.c_str(), &conv, &handle);
+  if (result != PAM_SUCCESS) {
+    LOG(ERROR) << "pam_start() returned error " << result;
+  } else {
+    HOST_LOG << "Calling pam_acct_mgmt()";
     result = pam_acct_mgmt(handle, 0);
+    if (result != PAM_SUCCESS) {
+      LOG(ERROR) << "pam_acct_mgmt() returned error " << result;
+    }
   }
+  HOST_LOG << "Calling pam_end()";
   pam_end(handle, result);
 
   HOST_LOG << "Local login check for " << username
-            << (result == PAM_SUCCESS ? " succeeded." : " failed.");
+           << (result == PAM_SUCCESS ? " succeeded." : " failed.");
 
   return result == PAM_SUCCESS;
 }

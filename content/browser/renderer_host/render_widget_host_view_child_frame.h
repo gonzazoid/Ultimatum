@@ -11,7 +11,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
@@ -23,16 +23,15 @@
 #include "components/viz/common/surfaces/surface_info.h"
 #include "components/viz/host/host_frame_sink_client.h"
 #include "content/browser/compositor/image_transport_factory.h"
-#include "content/browser/renderer_host/event_with_latency_info.h"
 #include "content/browser/renderer_host/render_widget_host_view_base.h"
 #include "content/common/content_export.h"
+#include "content/common/input/event_with_latency_info.h"
 #include "content/public/browser/touch_selection_controller_client_manager.h"
 #include "services/viz/public/mojom/compositing/compositor_frame_sink.mojom.h"
 #include "third_party/blink/public/common/widget/visual_properties.h"
 #include "third_party/blink/public/mojom/frame/intrinsic_sizing_info.mojom-forward.h"
 #include "third_party/blink/public/mojom/frame/viewport_intersection_state.mojom-forward.h"
 #include "third_party/blink/public/mojom/input/input_event_result.mojom-shared.h"
-#include "third_party/blink/public/mojom/input/input_handler.mojom-forward.h"
 #include "third_party/blink/public/mojom/widget/record_content_to_visible_time_request.mojom-forward.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/native_widget_types.h"
@@ -108,7 +107,7 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
   void InitAsPopup(RenderWidgetHostView* parent_host_view,
                    const gfx::Rect& bounds,
                    const gfx::Rect& anchor_rect) override;
-  void UpdateCursor(const WebCursor& cursor) override;
+  void UpdateCursor(const ui::Cursor& cursor) override;
   void UpdateScreenInfo() override;
   void SendInitialPropertiesIfNeeded() override;
   void SetIsLoading(bool is_loading) override;
@@ -119,10 +118,8 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
   void UpdateTooltipFromKeyboard(const std::u16string& tooltip_text,
                                  const gfx::Rect& bounds) override;
   void ClearKeyboardTriggeredTooltip() override;
-  void GestureEventAck(
-      const blink::WebGestureEvent& event,
-      blink::mojom::InputEventResultState ack_result,
-      blink::mojom::ScrollResultDataPtr scroll_result_data) override;
+  void GestureEventAck(const blink::WebGestureEvent& event,
+                       blink::mojom::InputEventResultState ack_result) override;
   // Since the URL of content rendered by this class is not displayed in
   // the URL bar, this method does not need an implementation.
   void ResetFallbackToFirstNavigationSurface() override {}
@@ -139,6 +136,8 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
   const viz::LocalSurfaceId& GetLocalSurfaceId() const override;
   void NotifyHitTestRegionUpdated(const viz::AggregatedHitTestRegion&) override;
   bool ScreenRectIsUnstableFor(const blink::WebInputEvent& event) override;
+  bool ScreenRectIsUnstableForIOv2For(
+      const blink::WebInputEvent& event) override;
   void PreProcessTouchEvent(const blink::WebTouchEvent& event) override;
   viz::FrameSinkId GetRootFrameSinkId() override;
   viz::SurfaceId GetCurrentSurfaceId() const override;
@@ -159,6 +158,7 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
   std::unique_ptr<SyntheticGestureTarget> CreateSyntheticGestureTarget()
       override;
   bool IsRenderWidgetHostViewChildFrame() override;
+  void InvalidateLocalSurfaceIdAndAllocationGroup() override;
 
 #if BUILDFLAG(IS_MAC)
   // RenderWidgetHostView implementation.
@@ -210,7 +210,7 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
 
   void UpdateViewportIntersection(
       const blink::mojom::ViewportIntersectionState& intersection_state,
-      const absl::optional<blink::VisualProperties>& visual_properties);
+      const std::optional<blink::VisualProperties>& visual_properties);
 
   // TODO(sunxd): Rename SetIsInert to UpdateIsInert.
   void SetIsInert();
@@ -219,6 +219,10 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
   void UpdateRenderThrottlingStatus();
 
   ui::TextInputType GetTextInputType() const;
+
+  // Retrieves the UTF-16 code unit range containing accessible text in the
+  // view. Returns false if the information cannot be retrieved right now.
+  bool GetTextRange(gfx::Range* range) const;
 
   RenderWidgetHostViewBase* GetRootRenderWidgetHostView() const;
 
@@ -243,15 +247,16 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
   void ProcessFrameSwappedCallbacks();
 
   // RenderWidgetHostViewBase:
+  void UpdateFrameSinkIdRegistration() override;
   void UpdateBackgroundColor() override;
-  absl::optional<DisplayFeature> GetDisplayFeature() override;
+  std::optional<DisplayFeature> GetDisplayFeature() override;
   void SetDisplayFeatureForTesting(
       const DisplayFeature* display_feature) override;
   void NotifyHostAndDelegateOnWasShown(
       blink::mojom::RecordContentToVisibleTimeRequestPtr) final;
-  void RequestPresentationTimeFromHostOrDelegate(
+  void RequestSuccessfulPresentationTimeFromHostOrDelegate(
       blink::mojom::RecordContentToVisibleTimeRequestPtr) final;
-  void CancelPresentationTimeRequestForHostAndDelegate() final;
+  void CancelSuccessfulPresentationTimeRequestForHostAndDelegate() final;
 
   void StopFlingingIfNecessary(
       const blink::WebGestureEvent& event,
@@ -300,11 +305,13 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
 
   void ProcessTouchpadZoomEventAckInRoot(
       const blink::WebGestureEvent& event,
-      blink::mojom::InputEventResultState ack_result,
-      blink::mojom::ScrollResultDataPtr scroll_result_data);
+      blink::mojom::InputEventResultState ack_result);
   void ForwardTouchpadZoomEventIfNecessary(
       const blink::WebGestureEvent& event,
       blink::mojom::InputEventResultState ack_result) override;
+
+  // Performs gesture ack handling needed for swipe-to-move-cursor gestures.
+  void HandleSwipeToMoveCursorGestureAck(const blink::WebGestureEvent& event);
 
   std::vector<base::OnceClosure> frame_swapped_callbacks_;
 
@@ -312,7 +319,9 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
   viz::FrameSinkId parent_frame_sink_id_;
 
   gfx::RectF last_stable_screen_rect_;
+  gfx::RectF last_stable_screen_rect_for_iov2_;
   base::TimeTicks screen_rect_stable_since_;
+  base::TimeTicks screen_rect_stable_since_for_iov2_;
 
   gfx::Insets insets_;
 
@@ -321,6 +330,9 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
 
   // True if there is currently a scroll sequence being bubbled to our parent.
   bool is_scroll_sequence_bubbling_ = false;
+
+  // Whether a swipe-to-move-cursor gesture is activated.
+  bool swipe_to_move_cursor_activated_ = false;
 
   // If a new RWHVCF is created for a cross-origin navigation, the parent
   // will typically not notice and will not transmit a full complement of

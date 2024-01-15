@@ -12,13 +12,12 @@
 
 #import <Cocoa/Cocoa.h>
 
-#include "base/allocator/early_zone_registration_mac.h"
+#include "base/allocator/early_zone_registration_apple.h"
+#include "base/apple/foundation_util.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
-#include "base/mac/foundation_util.h"
-#import "base/mac/launch_services_util.h"
 #include "base/process/launch.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/sys_string_conversions.h"
@@ -34,21 +33,20 @@ const int kErrorReturnValue = 1;
 typedef int (*StartFun)(const app_mode::ChromeAppModeInfo*);
 
 int LoadFrameworkAndStart(int argc, char** argv) {
-  using base::SysNSStringToUTF8;
   base::CommandLine command_line(argc, argv);
 
   @autoreleasepool {
     // Get the current main bundle, i.e., that of the app loader that's running.
-    NSBundle* app_bundle = [NSBundle mainBundle];
+    NSBundle* app_bundle = NSBundle.mainBundle;
     if (!app_bundle) {
       NSLog(@"Couldn't get loader bundle");
       return kErrorReturnValue;
     }
     const base::FilePath app_mode_bundle_path =
-        base::mac::NSStringToFilePath([app_bundle bundlePath]);
+        base::apple::NSStringToFilePath([app_bundle bundlePath]);
 
     // Get the bundle ID of the browser that created this app bundle.
-    NSString* cr_bundle_id = base::mac::ObjCCast<NSString>(
+    NSString* cr_bundle_id = base::apple::ObjCCast<NSString>(
         [app_bundle objectForInfoDictionaryKey:app_mode::kBrowserBundleIDKey]);
     if (!cr_bundle_id) {
       NSLog(@"Couldn't get browser bundle ID");
@@ -81,7 +79,7 @@ int LoadFrameworkAndStart(int argc, char** argv) {
     {
       // The user_data_dir for shims actually contains the app_data_path.
       // I.e. <user_data_dir>/<profile_dir>/Web Applications/_crx_extensionid/
-      base::FilePath app_data_dir = base::mac::NSStringToFilePath([app_bundle
+      base::FilePath app_data_dir = base::apple::NSStringToFilePath([app_bundle
           objectForInfoDictionaryKey:app_mode::kCrAppModeUserDataDirKey]);
       user_data_dir = app_data_dir.DirName().DirName().DirName();
       NSLog(@"Using user data dir %s", user_data_dir.value().c_str());
@@ -145,6 +143,12 @@ int LoadFrameworkAndStart(int argc, char** argv) {
       }
     }
 
+    // Check if `executable_path` was overridden by tests via the command line.
+    if (command_line.HasSwitch(app_mode::kLaunchChromeForTest)) {
+      executable_path =
+          command_line.GetSwitchValuePath(app_mode::kLaunchChromeForTest);
+    }
+
     // ** 4: Read information from the Info.plist.
     // Read information about the this app shortcut from the Info.plist.
     // Don't check for null-ness on optional items.
@@ -155,25 +159,25 @@ int LoadFrameworkAndStart(int argc, char** argv) {
     }
 
     const std::string app_mode_id =
-        SysNSStringToUTF8(info_plist[app_mode::kCrAppModeShortcutIDKey]);
+        base::SysNSStringToUTF8(info_plist[app_mode::kCrAppModeShortcutIDKey]);
     if (!app_mode_id.size()) {
       NSLog(@"Couldn't get app shortcut ID");
       return kErrorReturnValue;
     }
 
-    const std::string app_mode_name =
-        SysNSStringToUTF8(info_plist[app_mode::kCrAppModeShortcutNameKey]);
+    const std::string app_mode_name = base::SysNSStringToUTF8(
+        info_plist[app_mode::kCrAppModeShortcutNameKey]);
     const std::string app_mode_url =
-        SysNSStringToUTF8(info_plist[app_mode::kCrAppModeShortcutURLKey]);
+        base::SysNSStringToUTF8(info_plist[app_mode::kCrAppModeShortcutURLKey]);
 
-    base::FilePath plist_user_data_dir = base::mac::NSStringToFilePath(
+    base::FilePath plist_user_data_dir = base::apple::NSStringToFilePath(
         info_plist[app_mode::kCrAppModeUserDataDirKey]);
 
-    base::FilePath profile_dir = base::mac::NSStringToFilePath(
+    base::FilePath profile_dir = base::apple::NSStringToFilePath(
         info_plist[app_mode::kCrAppModeProfileDirKey]);
 
     // ** 5: Open the framework.
-    StartFun ChromeAppModeStart = NULL;
+    StartFun ChromeAppModeStart = nullptr;
     NSLog(@"Using framework path %s", framework_path.value().c_str());
     NSLog(@"Loading framework dylib %s", framework_dylib_path.value().c_str());
     void* cr_dylib = dlopen(framework_dylib_path.value().c_str(), RTLD_LAZY);
@@ -212,35 +216,37 @@ int LoadFrameworkAndStart(int argc, char** argv) {
       return ChromeAppModeStart(&info);
     }
 
-    NSLog(@"Loading Chrome failed, launching Chrome with command line");
+    // If the shim was launched by chrome, simply quit. Chrome will detect that
+    // the app shim has terminated, rebuild it (if it hadn't try to do so
+    // already), and launch it again.
+    if (executable_path.empty()) {
+      NSLog(@"Loading Chrome failed, terminating");
+      return kErrorReturnValue;
+    }
+
+    NSLog(@"Loading Chrome failed, launching Chrome with command line at %s",
+          executable_path.value().c_str());
     base::CommandLine cr_command_line(executable_path);
     // The user_data_dir from the plist is actually the app data dir.
     cr_command_line.AppendSwitchPath(
         switches::kUserDataDir,
         plist_user_data_dir.DirName().DirName().DirName());
-    if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-            app_mode::kLaunchedByChromeProcessId)) {
-      // Pass --app-shim-error to have Chrome rebuild this shim.
-      // If Chrome has rebuilt this shim once already, then rebuilding doesn't
-      // fix the problem, so don't try again.
-      if (!base::CommandLine::ForCurrentProcess()->HasSwitch(
-              app_mode::kLaunchedAfterRebuild)) {
-        cr_command_line.AppendSwitchPath(app_mode::kAppShimError,
-                                         app_mode_bundle_path);
-      }
-    } else {
-      // If the shim was launched directly (instead of by Chrome), first ask
-      // Chrome to launch the app. Chrome will launch the shim again, the same
-      // error will occur and be handled above. This approach allows the app to
-      // be started without blocking on fixing the shim and guarantees that the
-      // profile is loaded when Chrome receives --app-shim-error.
-      cr_command_line.AppendSwitchPath(switches::kProfileDirectory,
-                                       profile_dir);
-      cr_command_line.AppendSwitchASCII(switches::kAppId, app_mode_id);
+    // If the shim was launched directly (instead of by Chrome), first ask
+    // Chrome to launch the app. Chrome will launch the shim again, the same
+    // error might occur, after which chrome will try to regenerate the
+    // shim.
+    cr_command_line.AppendSwitchPath(switches::kProfileDirectory, profile_dir);
+    cr_command_line.AppendSwitchASCII(switches::kAppId, app_mode_id);
+
+    // If kLaunchChromeForTest was specified, this is a launch from a test.
+    // In this case make sure to tell chrome to use a mock keychain, as
+    // otherwise it might hang on startup.
+    if (command_line.HasSwitch(app_mode::kLaunchChromeForTest)) {
+      cr_command_line.AppendSwitch("use-mock-keychain");
     }
-    // Launch the executable directly since base::mac::OpenApplicationWithPath
-    // doesn't pass command line arguments if the application is already
-    // running.
+
+    // Launch the executable directly since base::mac::LaunchApplication doesn't
+    // pass command line arguments if the application is already running.
     if (!base::LaunchProcess(cr_command_line, base::LaunchOptions())
              .IsValid()) {
       NSLog(@"Could not launch Chrome: %s",

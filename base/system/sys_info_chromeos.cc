@@ -24,6 +24,9 @@
 
 namespace base {
 
+const char kLsbReleaseKey[] = "LSB_RELEASE";
+const char kLsbReleaseTimeKey[] = "LSB_RELEASE_TIME";  // Seconds since epoch
+
 namespace {
 
 const char* const kLinuxStandardBaseVersionKeys[] = {
@@ -38,12 +41,11 @@ const char* const kChromeOsReleaseNames[] = {
 
 const char kLinuxStandardBaseReleaseFile[] = "/etc/lsb-release";
 
-const char kLsbReleaseKey[] = "LSB_RELEASE";
-const char kLsbReleaseTimeKey[] = "LSB_RELEASE_TIME";  // Seconds since epoch
-
 const char kLsbReleaseSourceKey[] = "lsb-release";
 const char kLsbReleaseSourceEnv[] = "env";
 const char kLsbReleaseSourceFile[] = "file";
+
+}  // namespace
 
 class ChromeOSVersionInfo {
  public:
@@ -56,12 +58,12 @@ class ChromeOSVersionInfo {
     if (parsed_from_env) {
       double us = 0;
       if (StringToDouble(lsb_release_time_str, &us))
-        lsb_release_time_ = Time::FromDoubleT(us);
+        lsb_release_time_ = Time::FromSecondsSinceUnixEpoch(us);
     } else {
       // If the LSB_RELEASE and LSB_RELEASE_TIME environment variables are not
       // set, fall back to a blocking read of the lsb_release file. This should
       // only happen in non Chrome OS environments.
-      ThreadRestrictions::ScopedAllowIO allow_io;
+      ScopedAllowBlocking allow_blocking;
       FilePath path(kLinuxStandardBaseReleaseFile);
       ReadFileToString(path, &lsb_release);
       File::Info fileinfo;
@@ -167,11 +169,12 @@ ChromeOSVersionInfo& GetChromeOSVersionInfo() {
   return *version_info;
 }
 
-}  // namespace
-
 // static
 std::string SysInfo::HardwareModelName() {
   std::string board = GetLsbReleaseBoard();
+  if (board == "unknown") {
+    return "";
+  }
   // GetLsbReleaseBoard() may be suffixed with a "-signed-" and other extra
   // info. Strip it.
   const size_t index = board.find("-signed-");

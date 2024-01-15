@@ -5,6 +5,7 @@
 #include "chrome/browser/ash/input_method/ui/indexed_suggestion_candidate_button.h"
 
 #include "chrome/browser/ash/input_method/ui/colors.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/chromeos/styles/cros_styles.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/background.h"
@@ -13,20 +14,22 @@
 #include "ui/views/layout/flex_layout.h"
 
 namespace ui::ime {
-const int kPadding = 4;
-const int kBetweenSpacing = 8;
+const int kTopPadding = 4;
+const int kBottomPadding = 0;
+const int kLeftRightPadding = 2;
+const int kBetweenSpacing = 1;
 const int kBorderRadius = 2;
-const int kCandidateSquareSide = 20;
+const int kCandidateSquareSide = 24;
 const views::Label::CustomFont kCandidateTextFont = {
     .font_list = gfx::FontList(gfx::FontList({"Roboto"},
                                              gfx::Font::NORMAL,
-                                             13,
-                                             gfx::Font::Weight::NORMAL))};
+                                             16,
+                                             gfx::Font::Weight::MEDIUM))};
 const views::Label::CustomFont kIndexFont = {
     .font_list = gfx::FontList(gfx::FontList({"Roboto"},
                                              gfx::Font::NORMAL,
-                                             11,
-                                             gfx::Font::Weight::NORMAL))};
+                                             10,
+                                             gfx::Font::Weight::MEDIUM))};
 
 IndexedSuggestionCandidateButton::IndexedSuggestionCandidateButton(
     PressedCallback callback,
@@ -36,7 +39,10 @@ IndexedSuggestionCandidateButton::IndexedSuggestionCandidateButton(
     : views::Button(std::move(callback)) {
   SetAccessibleName(candidate_text);
   SetLayoutManager(std::make_unique<views::BoxLayout>(
-      views::BoxLayout::Orientation::kVertical, gfx::Insets(kPadding),
+      views::BoxLayout::Orientation::kVertical,
+      gfx::Insets()
+          .set_left_right(kLeftRightPadding, kLeftRightPadding)
+          .set_top_bottom(kTopPadding, kBottomPadding),
       /* between_child_spacing=*/kBetweenSpacing));
 
   if (create_legacy_candidate) {
@@ -91,11 +97,8 @@ void IndexedSuggestionCandidateButton::BuildCandidate(
       views::LayoutAlignment::kCenter);
   candidate_wrapper_layout->SetMainAxisAlignment(
       views::LayoutAlignment::kCenter);
-  candidate_wrapper->SetProperty(
-      views::kFlexBehaviorKey,
-      views::FlexSpecification(views::MinimumFlexSizeRule::kScaleToMinimum,
-                               views::MaximumFlexSizeRule::kUnbounded, false)
-          .WithAlignment(views::LayoutAlignment::kCenter));
+  candidate_wrapper->SetProperty(views::kBoxLayoutFlexKey,
+                                 views::BoxLayoutFlexSpecification());
   candidate_wrapper->SetPreferredSize(
       gfx::Size(kCandidateSquareSide, kCandidateSquareSide));
   candidate_wrapper->AddChildView(
@@ -107,9 +110,15 @@ void IndexedSuggestionCandidateButton::BuildCandidate(
   //   |   |
   //   | 1 | <-- label being created
   //   +---+
-  AddChildView(std::make_unique<views::Label>(index_text, kIndexFont));
+  auto* candidate_text_label =
+      AddChildView(std::make_unique<views::Label>(index_text, kIndexFont));
+  candidate_text_label->SetEnabledColor(
+      ResolveSemanticColor(cros_styles::ColorName::kTextColorSecondary));
 }
 
 IndexedSuggestionCandidateButton::~IndexedSuggestionCandidateButton() = default;
+
+BEGIN_METADATA(IndexedSuggestionCandidateButton)
+END_METADATA
 
 }  // namespace ui::ime

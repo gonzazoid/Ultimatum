@@ -14,11 +14,10 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/ash/input_method/assistive_prefs.h"
 #include "chrome/browser/ui/ash/keyboard/chrome_keyboard_controller_client.h"
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/ash/services/ime/constants.h"
@@ -37,6 +36,7 @@ namespace {
 using AssistiveSuggestion = ime::AssistiveSuggestion;
 using AssistiveSuggestionMode = ime::AssistiveSuggestionMode;
 using AssistiveSuggestionType = ime::AssistiveSuggestionType;
+using SuggestionsTextContext = ime::SuggestionsTextContext;
 
 constexpr char kEmojiSuggesterShowSettingCount[] =
     "emoji_suggester.show_setting_count";
@@ -164,7 +164,8 @@ void EmojiSuggester::OnBlur() {
 }
 
 void EmojiSuggester::OnExternalSuggestionsUpdated(
-    const std::vector<AssistiveSuggestion>& suggestions) {
+    const std::vector<AssistiveSuggestion>& suggestions,
+    const absl::optional<SuggestionsTextContext>& context) {
   // EmojiSuggester doesn't utilize any suggestions produced externally, so
   // ignore this call.
 }
@@ -226,9 +227,9 @@ bool EmojiSuggester::ShouldShowSuggestion(const std::u16string& text) {
   return false;
 }
 
-bool EmojiSuggester::TrySuggestWithSurroundingText(const std::u16string& text,
-                                                   int cursor_pos,
-                                                   int anchor_pos) {
+bool EmojiSuggester::TrySuggestWithSurroundingText(
+    const std::u16string& text,
+    const gfx::Range selection_range) {
   if (emoji_map_.empty() || !focused_context_id_.has_value())
     return false;
 
@@ -236,9 +237,10 @@ bool EmojiSuggester::TrySuggestWithSurroundingText(const std::u16string& text,
   // triggered.
   // eg. "wow |" where '|' denotes cursor position should trigger an emoji
   // suggestion.
-  int len = static_cast<int>(text.length());
-  if (!(len && cursor_pos == len     // text not empty and cursor is end of text
-        && cursor_pos == anchor_pos  // no selection
+  const uint32_t len = text.length();
+  const uint32_t cursor_pos = selection_range.start();
+  if (!(len && cursor_pos == len  // text not empty and cursor is end of text
+        && selection_range.is_empty()          // no selection
         && text[cursor_pos - 1] == kSpaceChar  // space before cursor
         )) {
     return false;
@@ -269,10 +271,10 @@ void EmojiSuggester::ShowSuggestion(const std::string& text) {
   properties_.announce_string =
       l10n_util::GetStringUTF16(IDS_SUGGESTION_EMOJI_SUGGESTED);
   properties_.show_setting_link =
-      GetPrefValue(kEmojiSuggesterShowSettingCount) <
+      GetPrefValue(kEmojiSuggesterShowSettingCount, *profile_) <
       kEmojiSuggesterShowSettingMaxCount;
-  IncrementPrefValueTilCapped(kEmojiSuggesterShowSettingCount,
-                              kEmojiSuggesterShowSettingMaxCount);
+  IncrementPrefValueUntilCapped(kEmojiSuggesterShowSettingCount,
+                                kEmojiSuggesterShowSettingMaxCount, *profile_);
   ShowSuggestionWindow();
 
   buttons_.clear();
@@ -313,7 +315,8 @@ bool EmojiSuggester::AcceptSuggestion(size_t index) {
   std::string error;
   suggestion_handler_->AcceptSuggestionCandidate(
       *focused_context_id_, candidates_[index],
-      /* delete_previous_utf16_len=*/0, &error);
+      /* delete_previous_utf16_len=*/0, /*use_replace_surrounding_text=*/false,
+      &error);
 
   if (!error.empty()) {
     LOG(ERROR) << "Failed to accept suggestion. " << error;
@@ -356,27 +359,6 @@ void EmojiSuggester::SetButtonHighlighted(
                                             highlighted, &error);
   if (!error.empty()) {
     LOG(ERROR) << "Failed to set button highlighted. " << error;
-  }
-}
-
-int EmojiSuggester::GetPrefValue(const std::string& pref_name) {
-  ScopedDictPrefUpdate update(profile_->GetPrefs(),
-                              prefs::kAssistiveInputFeatureSettings);
-  auto value = update->FindInt(pref_name);
-  if (!value.has_value()) {
-    update->Set(pref_name, 0);
-    return 0;
-  }
-  return *value;
-}
-
-void EmojiSuggester::IncrementPrefValueTilCapped(const std::string& pref_name,
-                                                 int max_value) {
-  int value = GetPrefValue(pref_name);
-  if (value < max_value) {
-    ScopedDictPrefUpdate update(profile_->GetPrefs(),
-                                prefs::kAssistiveInputFeatureSettings);
-    update->Set(pref_name, value + 1);
   }
 }
 

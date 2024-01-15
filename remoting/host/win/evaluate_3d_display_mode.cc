@@ -16,7 +16,6 @@
 #include "base/native_library.h"
 #include "base/scoped_native_library.h"
 #include "base/strings/string_util.h"
-#include "base/win/windows_version.h"
 #include "remoting/host/base/host_exit_codes.h"
 #include "remoting/host/base/switches.h"
 #include "remoting/host/evaluate_capability.h"
@@ -34,11 +33,6 @@ typedef HRESULT(WINAPI* CreateDXGIFactory2Function)(UINT Flags,
 }  // namespace
 
 int Evaluate3dDisplayMode() {
-  // CreateDXGIFactory2 does not exist prior to Win 8.1 but neither does 3D
-  // display mode.
-  if (base::win::GetVersion() < base::win::Version::WIN8_1)
-    return kSuccessExitCode;
-
   // We can't directly reference CreateDXGIFactory2 is it does not exist on
   // earlier Windows builds.  Therefore we need a LoadLibrary / GetProcAddress
   // dance.
@@ -63,16 +57,18 @@ int Evaluate3dDisplayMode() {
     return kInitializationFailed;
   }
 
-  if (factory->IsWindowedStereoEnabled())
+  if (factory->IsWindowedStereoEnabled()) {
     std::cout << k3dDisplayModeEnabled << std::endl;
+  }
 
   return kSuccessExitCode;
 }
 
 bool Get3dDisplayModeEnabled() {
   std::string output;
-  if (EvaluateCapability(kEvaluate3dDisplayMode, &output) != kSuccessExitCode)
+  if (EvaluateCapability(kEvaluate3dDisplayMode, &output) != kSuccessExitCode) {
     return false;
+  }
 
   base::TrimString(output, base::kWhitespaceASCII, &output);
 

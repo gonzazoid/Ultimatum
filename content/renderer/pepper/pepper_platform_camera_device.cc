@@ -6,14 +6,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/task/bind_post_task.h"
 #include "content/public/renderer/ppapi_gfx_conversion.h"
 #include "content/renderer/pepper/pepper_camera_device_host.h"
 #include "content/renderer/pepper/pepper_media_device_manager.h"
 #include "content/renderer/render_frame_impl.h"
 #include "content/renderer/render_thread_impl.h"
-#include "media/base/bind_to_current_loop.h"
 #include "third_party/blink/public/platform/modules/video_capture/web_video_capture_impl_manager.h"
 
 namespace content {
@@ -45,7 +45,7 @@ void PepperPlatformCameraDevice::GetSupportedVideoCaptureFormats() {
       RenderThreadImpl::current()->video_capture_impl_manager();
   manager->GetDeviceSupportedFormats(
       session_id_,
-      media::BindToCurrentLoop(base::BindOnce(
+      base::BindPostTaskToCurrentDefault(base::BindOnce(
           &PepperPlatformCameraDevice::OnDeviceSupportedFormatsEnumerated,
           weak_factory_.GetWeakPtr())));
 }

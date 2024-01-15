@@ -24,37 +24,26 @@ class VIZ_SERVICE_EXPORT OutputPresenterFuchsia : public OutputPresenter {
  public:
   static std::unique_ptr<OutputPresenterFuchsia> Create(
       ui::PlatformWindowSurface* window_surface,
-      SkiaOutputSurfaceDependency* deps,
-      gpu::SharedImageFactory* shared_image_factory,
-      gpu::SharedImageRepresentationFactory* representation_factory);
+      SkiaOutputSurfaceDependency* deps);
 
-  OutputPresenterFuchsia(
-      ui::PlatformWindowSurface* window_surface,
-      SkiaOutputSurfaceDependency* deps,
-      gpu::SharedImageFactory* shared_image_factory,
-      gpu::SharedImageRepresentationFactory* representation_factory);
+  OutputPresenterFuchsia(ui::PlatformWindowSurface* window_surface,
+                         SkiaOutputSurfaceDependency* deps);
   ~OutputPresenterFuchsia() override;
 
   // OutputPresenter implementation:
   void InitializeCapabilities(OutputSurface::Capabilities* capabilities) final;
-  bool Reshape(const SkSurfaceCharacterization& characterization,
+  bool Reshape(const SkImageInfo& image_info,
                const gfx::ColorSpace& color_space,
+               int sample_count,
                float device_scale_factor,
                gfx::OverlayTransform transform) final;
   std::vector<std::unique_ptr<Image>> AllocateImages(
       gfx::ColorSpace color_space,
       gfx::Size image_size,
       size_t num_images) final;
-  void SwapBuffers(SwapCompletionCallback completion_callback,
-                   BufferPresentedCallback presentation_callback,
-                   gl::FrameData data) final;
-  void PostSubBuffer(const gfx::Rect& rect,
-                     SwapCompletionCallback completion_callback,
-                     BufferPresentedCallback presentation_callback,
-                     gl::FrameData data) final;
-  void CommitOverlayPlanes(SwapCompletionCallback completion_callback,
-                           BufferPresentedCallback presentation_callback,
-                           gl::FrameData data) final;
+  void Present(SwapCompletionCallback completion_callback,
+               BufferPresentedCallback presentation_callback,
+               gfx::FrameData data) final;
   void SchedulePrimaryPlane(
       const OverlayProcessorInterface::OutputSurfaceOverlayPlane& plane,
       Image* image,
@@ -72,29 +61,18 @@ class VIZ_SERVICE_EXPORT OutputPresenterFuchsia : public OutputPresenter {
     PendingFrame(PendingFrame&&);
     PendingFrame& operator=(PendingFrame&&);
 
+    // Primary plane pixmap.
     scoped_refptr<gfx::NativePixmap> native_pixmap;
 
     std::vector<gfx::GpuFenceHandle> acquire_fences;
     std::vector<gfx::GpuFenceHandle> release_fences;
 
-    SwapCompletionCallback completion_callback;
-    BufferPresentedCallback presentation_callback;
-
     // Vector of overlays that are associated with this frame.
     std::vector<ui::OverlayPlane> overlays;
   };
 
-  void PresentNextFrame();
-
   ui::PlatformWindowSurface* const window_surface_;
   SkiaOutputSurfaceDependency* const dependency_;
-  gpu::SharedImageFactory* const shared_image_factory_;
-  gpu::SharedImageRepresentationFactory* const
-      shared_image_representation_factory_;
-
-  gfx::Size frame_size_;
-  SharedImageFormat si_format_ =
-      SharedImageFormat::SinglePlane(ResourceFormat::RGBA_8888);
 
   // The next frame to be submitted by SwapBuffers().
   absl::optional<PendingFrame> next_frame_;

@@ -4,23 +4,24 @@
 
 #import "ios/chrome/browser/ui/qr_scanner/qr_scanner_app_interface.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/strings/utf_string_conversions.h"
 #import "components/search_engines/template_url_service.h"
 #import "components/version_info/version_info.h"
 #import "ios/chrome/app/main_controller.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/search_engines/template_url_service_factory.h"
-#import "ios/chrome/browser/ui/icons/chrome_icon.h"
-#import "ios/chrome/browser/ui/location_bar/location_bar_coordinator.h"
+#import "ios/chrome/browser/search_engines/model/template_url_service_factory.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider_interface.h"
+#import "ios/chrome/browser/shared/ui/symbols/chrome_icon.h"
 #import "ios/chrome/browser/ui/location_bar/location_bar_url_loader.h"
 #import "ios/chrome/browser/ui/qr_scanner/qr_scanner_camera_controller.h"
 #import "ios/chrome/browser/ui/qr_scanner/qr_scanner_view_controller.h"
 #import "ios/chrome/browser/ui/scanner/camera_controller.h"
-#import "ios/chrome/browser/url_loading/url_loading_browser_agent.h"
-#import "ios/chrome/browser/url_loading/url_loading_params.h"
-#import "ios/chrome/grit/ios_chromium_strings.h"
+#import "ios/chrome/browser/url_loading/model/url_loading_browser_agent.h"
+#import "ios/chrome/browser/url_loading/model/url_loading_params.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/app/chrome_test_util.h"
 #import "ios/testing/nserror_util.h"
@@ -29,17 +30,14 @@
 #import "ui/base/l10n/l10n_util.h"
 #import "ui/base/l10n/l10n_util_mac.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using scanner::CameraState;
 
 @implementation QRScannerAppInterface
 
 + (UIViewController*)currentBrowserViewController {
   MainController* mainController = chrome_test_util::GetMainController();
-  return mainController.interfaceProvider.mainInterface.viewController;
+  return mainController.browserProviderInterface.mainBrowserProvider
+      .viewController;
 }
 
 + (NSString*)closeIconAccessibilityLabel {
@@ -211,7 +209,7 @@ using scanner::CameraState;
             (UIViewController*)qrScanner
                                                     isOn:(BOOL)isOn {
   QRScannerViewController* qrScannerViewController =
-      base::mac::ObjCCast<QRScannerViewController>(qrScanner);
+      base::apple::ObjCCast<QRScannerViewController>(qrScanner);
   [qrScannerViewController overrideVoiceOverCheck:isOn];
 }
 

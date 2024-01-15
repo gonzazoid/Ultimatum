@@ -7,8 +7,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/renderer.h"
 #include "media/base/renderer_factory.h"
 #include "ui/gfx/color_space.h"

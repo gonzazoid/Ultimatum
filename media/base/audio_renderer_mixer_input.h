@@ -18,7 +18,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
@@ -39,7 +39,7 @@ class MEDIA_EXPORT AudioRendererMixerInput
   AudioRendererMixerInput(AudioRendererMixerPool* mixer_pool,
                           const base::UnguessableToken& owner_token,
                           const std::string& device_id,
-                          AudioLatency::LatencyType latency);
+                          AudioLatency::Type latency);
 
   AudioRendererMixerInput(const AudioRendererMixerInput&) = delete;
   AudioRendererMixerInput& operator=(const AudioRendererMixerInput&) = delete;
@@ -89,7 +89,9 @@ class MEDIA_EXPORT AudioRendererMixerInput
   absl::optional<OutputDeviceInfo> device_info_;
 
   // AudioConverter::InputCallback implementation.
-  double ProvideInput(AudioBus* audio_bus, uint32_t frames_delayed) override;
+  double ProvideInput(AudioBus* audio_bus,
+                      uint32_t frames_delayed,
+                      const AudioGlitchInfo& glitch_info) override;
 
   void OnDeviceInfoReceived(OutputDeviceInfoCB info_cb,
                             OutputDeviceInfo device_info);
@@ -116,7 +118,7 @@ class MEDIA_EXPORT AudioRendererMixerInput
 
   const base::UnguessableToken owner_token_;
   std::string device_id_;  // ID of hardware device to use
-  const AudioLatency::LatencyType latency_;
+  const AudioLatency::Type latency_;
 
   // AudioRendererMixer obtained from mixer pool during Initialize(),
   // guaranteed to live (at least) until it is returned to the pool.

@@ -4,10 +4,12 @@
 
 #include "services/device/public/cpp/hid/hid_blocklist.h"
 
+#include <string_view>
+
 #include "base/command_line.h"
-#include "base/guid.h"
-#include "base/strings/string_piece.h"
+#include "base/memory/raw_ref.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/uuid.h"
 #include "services/device/public/cpp/hid/hid_switches.h"
 #include "services/device/public/cpp/test/hid_test_util.h"
 #include "services/device/public/cpp/test/test_report_descriptors.h"
@@ -34,9 +36,9 @@ class HidBlocklistTest : public testing::Test {
   HidBlocklistTest(HidBlocklistTest&) = delete;
   HidBlocklistTest& operator=(HidBlocklistTest&) = delete;
 
-  const HidBlocklist& list() { return blocklist_; }
+  const HidBlocklist& list() { return *blocklist_; }
 
-  void SetDynamicBlocklist(base::StringPiece list) {
+  void SetDynamicBlocklist(std::string_view list) {
     feature_list_.Reset();
 
     std::map<std::string, std::string> params;
@@ -44,7 +46,7 @@ class HidBlocklistTest : public testing::Test {
     feature_list_.InitWithFeaturesAndParameters({{kWebHidBlocklist, params}},
                                                 /*disabled_features=*/{});
 
-    blocklist_.ResetToDefaultValuesForTest();
+    blocklist_->ResetToDefaultValuesForTest();
   }
 
   mojom::HidDeviceInfoPtr CreateTestDeviceWithOneReport(
@@ -71,22 +73,22 @@ class HidBlocklistTest : public testing::Test {
       collection->feature_reports.push_back(std::move(report));
 
     auto device = mojom::HidDeviceInfo::New();
-    device->guid = base::GenerateGUID();
+    device->guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
     device->vendor_id = vendor_id;
     device->product_id = product_id;
     device->has_report_id = has_report_id;
     device->collections.push_back(std::move(collection));
-    device->protected_input_report_ids = blocklist_.GetProtectedReportIds(
+    device->protected_input_report_ids = blocklist_->GetProtectedReportIds(
         HidBlocklist::kReportTypeInput, vendor_id, product_id,
         device->collections);
-    device->protected_output_report_ids = blocklist_.GetProtectedReportIds(
+    device->protected_output_report_ids = blocklist_->GetProtectedReportIds(
         HidBlocklist::kReportTypeOutput, vendor_id, product_id,
         device->collections);
-    device->protected_feature_report_ids = blocklist_.GetProtectedReportIds(
+    device->protected_feature_report_ids = blocklist_->GetProtectedReportIds(
         HidBlocklist::kReportTypeFeature, vendor_id, product_id,
         device->collections);
     device->is_excluded_by_blocklist =
-        blocklist_.IsVendorProductBlocked(vendor_id, product_id);
+        blocklist_->IsVendorProductBlocked(vendor_id, product_id);
     return device;
   }
 
@@ -124,22 +126,22 @@ class HidBlocklistTest : public testing::Test {
     }
 
     auto device = mojom::HidDeviceInfo::New();
-    device->guid = base::GenerateGUID();
+    device->guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
     device->vendor_id = vendor_id;
     device->product_id = product_id;
     device->has_report_id = true;
     device->collections = std::move(collections);
-    device->protected_input_report_ids = blocklist_.GetProtectedReportIds(
+    device->protected_input_report_ids = blocklist_->GetProtectedReportIds(
         HidBlocklist::kReportTypeInput, vendor_id, product_id,
         device->collections);
-    device->protected_output_report_ids = blocklist_.GetProtectedReportIds(
+    device->protected_output_report_ids = blocklist_->GetProtectedReportIds(
         HidBlocklist::kReportTypeOutput, vendor_id, product_id,
         device->collections);
-    device->protected_feature_report_ids = blocklist_.GetProtectedReportIds(
+    device->protected_feature_report_ids = blocklist_->GetProtectedReportIds(
         HidBlocklist::kReportTypeFeature, vendor_id, product_id,
         device->collections);
     device->is_excluded_by_blocklist =
-        blocklist_.IsVendorProductBlocked(vendor_id, product_id);
+        blocklist_->IsVendorProductBlocked(vendor_id, product_id);
     return device;
   }
 
@@ -148,11 +150,11 @@ class HidBlocklistTest : public testing::Test {
     // Because HidBlocklist is a singleton it must be cleared after tests run
     // to prevent leakage between tests.
     feature_list_.Reset();
-    blocklist_.ResetToDefaultValuesForTest();
+    blocklist_->ResetToDefaultValuesForTest();
   }
 
   base::test::ScopedFeatureList feature_list_;
-  HidBlocklist& blocklist_;
+  const raw_ref<HidBlocklist> blocklist_;
 };
 
 }  // namespace
@@ -222,7 +224,7 @@ TEST_F(HidBlocklistTest, UnexcludedDevice) {
 
 TEST_F(HidBlocklistTest, UnexcludedDeviceWithNoCollections) {
   auto device = mojom::HidDeviceInfo::New();
-  device->guid = base::GenerateGUID();
+  device->guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
   device->vendor_id = kTestVendorId;
   device->product_id = kTestProductId;
   EXPECT_FALSE(device->is_excluded_by_blocklist);

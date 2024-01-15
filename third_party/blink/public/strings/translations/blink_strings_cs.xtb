@@ -16,6 +16,7 @@
 <translation id="1729654308190250600">Vyplňte e-mailovou adresu.</translation>
 <translation id="1758486001363313524">Jiné…</translation>
 <translation id="1787192514241997742">celkový čas: <ph name="REMAINING_TIME" /></translation>
+<translation id="1800494066469288780">Povolit fotoaparát</translation>
 <translation id="1822429046913737220">AM/PM</translation>
 <translation id="1832974991323546415">přehrát ve vzdáleném zařízení</translation>
 <translation id="1921819250265091946">dd</translation>
@@ -24,11 +25,12 @@
 <translation id="1993104285338243655">Přepnuto na zrcadlení</translation>
 <translation id="2031987842108996681">Kanál červené</translation>
 <translation id="2060505056492490888">Znak <ph name="DOT" /> v doméně <ph name="INVALIDDOMAIN" /> není použitý správně.</translation>
+<translation id="2068711044993563745">Minimální hodnota (<ph name="MINIMUM" />) musí být nižší než maximální hodnota (<ph name="MAXIMUM" />).</translation>
 <translation id="2148716181193084225">Dnes</translation>
 <translation id="2226276347425096477">Zkraťte prosím tento text na <ph name="MAX_CHARACTERS" /> znaků nebo méně. (Aktuálně má <ph name="CURRENT_LENGTH" /> znaků.)</translation>
-<translation id="2246498165605549352">Místní soubor</translation>
 <translation id="2247351761944213033"><ph name="WEEKNUMBER" />. týden, <ph name="YEAR" /></translation>
 <translation id="2277199496770840904">Stopa <ph name="NUMBER" /></translation>
+<translation id="2353297238722298836">Kamera a mikrofon jsou povoleny</translation>
 <translation id="2393030564806080191">Hexadecimální hodnota barvy</translation>
 <translation id="2398813069815436052">dialogové okno je otevřeno.</translation>
 <translation id="245932805758469625">zbývající čas videa v sekundách</translation>
@@ -45,11 +47,13 @@
 <translation id="2761667185364618470">Chcete-li pokračovat, zaškrtněte toto políčko.</translation>
 <translation id="2908441821576996758">Zadejte seznam e-mailových adres oddělených čárkami.</translation>
 <translation id="3049748772180311791"><ph name="QUANTITY" /> MB</translation>
+<translation id="3053226512517284904">Zobrazit nabídku hlasových popisů</translation>
 <translation id="3075154866155599887">Zadejte prosím platnou hodnotu. Pole obsahuje neúplnou hodnotu nebo neplatné datum.</translation>
 <translation id="310520048233152454">Zadejte prosím adresu URL.</translation>
 <translation id="3220661731597678625">aktuální krok</translation>
 <translation id="3321030238473337787">Rychlost přehrávání</translation>
 <translation id="3329013043687509092">Sytost</translation>
+<translation id="3377518164566272702">Povolit mikrofon a fotoaparát</translation>
 <translation id="3450233048674729344">Hodnota musí být menší nebo rovna <ph name="MAXIMUM" />.</translation>
 <translation id="3732799496749320381">mm</translation>
 <translation id="3754210790023674521">Ukončit režim obrazu v obraze</translation>
@@ -57,14 +61,17 @@
 <translation id="3822383571486410024">Prodlužte prosím tento text na <ph name="MIN_CHARACTERS" /> či více znaků. (Aktuálně má <ph name="CURRENT_LENGTH" /> znaků.)</translation>
 <translation id="383465348367842624">Část před znakem <ph name="ATSIGN" /> nesmí obsahovat znak <ph name="INVALIDCHARACTER" />.</translation>
 <translation id="3846214748874656680">Ukončit režim na celou obrazovku</translation>
+<translation id="4031179711345676612">Mikrofon je povolen</translation>
 <translation id="4103419683916926126">Milisekundy</translation>
 <translation id="4201051445878709314">Zobrazit předchozí měsíc</translation>
 <translation id="4360991593054037559">Zadejte platnou hodnotu. Dvě nejbližší hodnoty jsou <ph name="VALID_VALUE_LOW" /> a <ph name="VALID_VALUE_HIGHER" />.</translation>
 <translation id="4522570452068850558">Podrobnosti</translation>
+<translation id="4663373278480897665">Kamera je povolena</translation>
 <translation id="4664250907885839816">Část za znakem <ph name="ATSIGN" /> nesmí obsahovat znak <ph name="INVALIDCHARACTER" />.</translation>
 <translation id="4718048029184481307">Video se přehrává v režimu obrazu v obraze</translation>
 <translation id="4748357248530471599">přepnout výřez displeje na celou obrazovku</translation>
 <translation id="4763480195061959176">video</translation>
+<translation id="4792862212177489858">Sdílet polohu</translation>
 <translation id="4812940957355064477">Zadejte prosím číslo.</translation>
 <translation id="4912200001568447310">aktuální položka</translation>
 <translation id="4915360478455618802">Zobrazit výběr času</translation>
@@ -74,11 +81,13 @@
 <translation id="4975562563186953947">Vybráno: <ph name="SELECTED_COUNT" /></translation>
 <translation id="4992066212339426712">Zapnout zvuk</translation>
 <translation id="49969490063480558">Zadejte část za znakem <ph name="ATSIGN" />. Adresa <ph name="INVALIDADDRESS" /> není úplná.</translation>
+<translation id="5037575921016181960">Silné heslo</translation>
 <translation id="5090250355906949916">posuvník času videa</translation>
 <translation id="509897012892853729">Kanál modré</translation>
 <translation id="5117590920725113268">Zobrazit další měsíc</translation>
 <translation id="5164977714490026579">Hodnota musí být větší nebo rovna <ph name="MINIMUM" />.</translation>
 <translation id="5196716972587102051">2</translation>
+<translation id="5199514351668672591">zpět na možnosti</translation>
 <translation id="520299402983819650"><ph name="QUANTITY" /> PB</translation>
 <translation id="5272594226096532950">Nezaškrtnuto. Ve skupině, možnost <ph name="INDEX" /> z <ph name="COUNT" />.</translation>
 <translation id="5307600278924710095">Zadejte část před znakem <ph name="ATSIGN" />. Adresa <ph name="INVALIDADDRESS" /> není úplná.</translation>
@@ -88,6 +97,7 @@
 <translation id="5425179576310518467">aktuální datum</translation>
 <translation id="5466621249238537318">Vyberte prosím jeden nebo více souborů.</translation>
 <translation id="5468998798572797635">ukončit režim celé obrazovky</translation>
+<translation id="5514612371225420585">Soubor v zařízení</translation>
 <translation id="5516235301412634559">0,75</translation>
 <translation id="5537725057119320332">Odeslat</translation>
 <translation id="5546461542133609677">zapnout zvuk</translation>
@@ -112,10 +122,11 @@
 <translation id="6398862346408813489">Zobrazit panel pro výběr měsíců</translation>
 <translation id="6404546809543547843">posuvník času zvuku</translation>
 <translation id="6443871981718447451">zobrazit nabídku skrytých titulků</translation>
+<translation id="6484738902856791350">Naformátovat</translation>
 <translation id="6550675742724504774">Možnosti</translation>
 <translation id="6572309429103589720">Neplatná gramatika</translation>
 <translation id="658823671542763450">přejít do režimu celé obrazovky</translation>
-<translation id="6606094904835912297">Barvy systému</translation>
+<translation id="6606094904835912297">Systémové barvy</translation>
 <translation id="6643016212128521049">Vymazat</translation>
 <translation id="668171684555832681">Další...</translation>
 <translation id="6709093583001123835">Hodnota musí být <ph name="VALUE" />.</translation>
@@ -129,6 +140,7 @@
 <translation id="6941933287844615239">stáhnout média</translation>
 <translation id="698788488269350478">rozbaleno.</translation>
 <translation id="6989848892321993519">Prodlužte prosím tento text na <ph name="MIN_CHARACTERS" /> či více znaků. (Aktuálně má 1 znak.)</translation>
+<translation id="7080893216867146095">Sdílení polohy povoleno</translation>
 <translation id="709897737746224366">Zadejte hodnotu, která odpovídá požadovanému formátu.</translation>
 <translation id="7102274145889307184">aktuální poloha</translation>
 <translation id="7263440858009898357">Vyberte prosím v seznamu některou položku.</translation>
@@ -175,6 +187,7 @@
 <translation id="9132465097189459683">Jiné…</translation>
 <translation id="9155987714137265666"><ph name="WEEK" />, začíná <ph name="WEEK_START_DATE" /></translation>
 <translation id="916607977885256133">Obraz v obraze</translation>
+<translation id="918430632320614861">Povolit mikrofon</translation>
 <translation id="945780513535800434">Částečně zaškrtnuto</translation>
 <translation id="954003015749068518">spustit režim obrazu v obraze</translation>
 </translationbundle>

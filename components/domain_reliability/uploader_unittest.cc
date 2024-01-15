@@ -9,13 +9,13 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/domain_reliability/test_util.h"
 #include "net/base/isolation_info.h"
 #include "net/base/load_flags.h"
@@ -189,6 +189,8 @@ class DomainReliabilityUploaderTest : public testing::Test {
         uploader_(
             DomainReliabilityUploader::Create(&time_,
                                               url_request_context_.get())) {
+    expected_isolation_info_ = net::IsolationInfo::CreateTransient();
+
     auto interceptor =
         std::make_unique<UploadInterceptor>(expected_isolation_info_);
     interceptor_ = interceptor.get();
@@ -198,6 +200,7 @@ class DomainReliabilityUploaderTest : public testing::Test {
   }
 
   ~DomainReliabilityUploaderTest() override {
+    interceptor_ = nullptr;
     net::URLRequestFilter::GetInstance()->ClearHandlers();
   }
 
@@ -215,8 +218,7 @@ class DomainReliabilityUploaderTest : public testing::Test {
   base::test::SingleThreadTaskEnvironment task_environment_{
       base::test::SingleThreadTaskEnvironment::MainThreadType::IO};
 
-  const net::IsolationInfo expected_isolation_info_ =
-      net::IsolationInfo::CreateTransient();
+  net::IsolationInfo expected_isolation_info_;
 
   std::unique_ptr<net::URLRequestContext> url_request_context_;
   raw_ptr<UploadInterceptor> interceptor_;

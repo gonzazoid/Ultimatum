@@ -21,6 +21,9 @@ mojom("mojom") {
 
   webui_module_path = "/"
 
+  # Blink requires legacy JS bindings.
+  generate_legacy_js_bindings = true
+
   # The blink variant of the Device Service mojom are depended on by the
   # blink platform target. All blink variant mojoms use WTF types, which are
   # part of the blink platform component. In order to avoid a dependency cycle,

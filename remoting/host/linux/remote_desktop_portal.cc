@@ -14,10 +14,11 @@
 #include "base/strings/stringprintf.h"
 #include "base/time/time.h"
 #include "remoting/base/logging.h"
-#include "third_party/webrtc/modules/desktop_capture/linux/wayland/xdg_desktop_portal_utils.h"
+#include "remoting/host/linux/clipboard_portal.h"
+#include "remoting/host/linux/wayland_manager.h"
+#include "third_party/webrtc/modules/portal/xdg_desktop_portal_utils.h"
 
-namespace remoting {
-namespace xdg_portal {
+namespace remoting::xdg_portal {
 namespace {
 
 constexpr char kRemoteDesktopInterfaceName[] =
@@ -39,11 +40,13 @@ void UnsubscribeSignalHandler(GDBusConnection* connection, guint& signal_id) {
 }  // namespace
 
 RemoteDesktopPortal::RemoteDesktopPortal(
-    webrtc::ScreenCastPortal::PortalNotifier* notifier)
+    webrtc::ScreenCastPortal::PortalNotifier* notifier,
+    bool prefer_cursor_embedded)
     : notifier_(notifier) {
   screencast_portal_ = std::make_unique<webrtc::ScreenCastPortal>(
       webrtc::CaptureType::kScreen, this, OnScreenCastPortalProxyRequested,
-      OnSourcesRequestResponseSignal, this);
+      OnSourcesRequestResponseSignal, this, prefer_cursor_embedded);
+  clipboard_portal_ = std::make_unique<xdg_portal::ClipboardPortal>(this);
   DETACH_FROM_SEQUENCE(sequence_checker_);
 }
 
@@ -57,8 +60,12 @@ void RemoteDesktopPortal::Stop() {
     g_main_context_pop_thread_default(context_);
     g_main_context_unref(context_);
   }
-  if (screencast_portal_)
+  if (screencast_portal_) {
     screencast_portal_.reset();
+  }
+  if (clipboard_portal_) {
+    clipboard_portal_.reset();
+  }
   UnsubscribeSignalHandlers();
   webrtc::xdg_portal::TearDownSession(std::move(session_handle_), proxy_,
                                       cancellable_, connection_);
@@ -88,6 +95,8 @@ void RemoteDesktopPortal::Start() {
   cancellable_ = g_cancellable_new();
   screencast_portal_->SetSessionDetails({.cancellable = cancellable_});
   screencast_portal_->Start();
+  clipboard_portal_->SetSessionDetails({.cancellable = cancellable_});
+  clipboard_portal_->Start();
 
   HOST_LOG << "Starting remote desktop portal";
   webrtc::xdg_portal::RequestSessionProxy(kRemoteDesktopInterfaceName,
@@ -128,8 +137,9 @@ void RemoteDesktopPortal::OnProxyRequested(GObject* gobject,
   // posted task on the task runner can start/finish).
   GDBusProxy* proxy = g_dbus_proxy_new_finish(result, error.receive());
   if (!proxy) {
-    if (g_error_matches(error.get(), G_IO_ERROR, G_IO_ERROR_CANCELLED))
+    if (g_error_matches(error.get(), G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
       return;
+    }
     LOG(ERROR) << "Failed to get a proxy for the portal: " << error->message;
     that->OnPortalDone(RequestResponse::kError);
     return;
@@ -148,8 +158,9 @@ void RemoteDesktopPortal::OnScreenCastPortalProxyRequested(GObject* /*object*/,
   Scoped<GError> error;
   GDBusProxy* proxy = g_dbus_proxy_new_finish(result, error.receive());
   if (!proxy) {
-    if (g_error_matches(error.get(), G_IO_ERROR, G_IO_ERROR_CANCELLED))
+    if (g_error_matches(error.get(), G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
       return;
+    }
     LOG(ERROR) << "Failed to create a proxy for the screen cast portal: "
                << error->message;
     that->OnPortalDone(RequestResponse::kError);
@@ -182,10 +193,11 @@ void RemoteDesktopPortal::OnSessionRequested(GDBusProxy* proxy,
 }
 
 // static
-void RemoteDesktopPortal::OnDevicesRequested(GDBusProxy* proxy,
+void RemoteDesktopPortal::OnDevicesRequested(GObject* object,
                                              GAsyncResult* result,
                                              gpointer user_data) {
-  RemoteDesktopPortal* that = static_cast<RemoteDesktopPortal*>(user_data);
+  auto* proxy = reinterpret_cast<GDBusProxy*>(object);
+  auto* that = static_cast<RemoteDesktopPortal*>(user_data);
   DCHECK(that);
   DCHECK_CALLED_ON_VALID_SEQUENCE(that->sequence_checker_);
 
@@ -216,6 +228,11 @@ void RemoteDesktopPortal::RequestSources() {
   screencast_portal_->SourcesRequest();
 }
 
+void RemoteDesktopPortal::RequestClipboard() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  clipboard_portal_->RequestClipboard();
+}
+
 // static
 void RemoteDesktopPortal::OnDevicesRequestImpl(GDBusConnection* connection,
                                                const gchar* sender_name,
@@ -236,7 +253,7 @@ void RemoteDesktopPortal::OnDevicesRequestImpl(GDBusConnection* connection,
     return;
   }
 
-  that->RequestSources();
+  that->RequestClipboard();
 }
 
 void RemoteDesktopPortal::SelectDevices() {
@@ -260,8 +277,8 @@ void RemoteDesktopPortal::SelectDevices() {
   g_dbus_proxy_call(
       proxy_, "SelectDevices",
       g_variant_new("(oa{sv})", session_handle_.c_str(), &builder),
-      G_DBUS_CALL_FLAGS_NONE, /*timeout=*/-1, cancellable_,
-      reinterpret_cast<GAsyncReadyCallback>(OnDevicesRequested), this);
+      G_DBUS_CALL_FLAGS_NONE, /*timeout=*/-1, cancellable_, OnDevicesRequested,
+      this);
 }
 
 // static
@@ -282,6 +299,9 @@ void RemoteDesktopPortal::OnSessionRequestResponseSignal(
       that->session_handle_, that->session_closed_signal_id_);
   that->screencast_portal_->SetSessionDetails(
       {.session_handle = that->session_handle_});
+  that->clipboard_portal_->SetSessionDetails(
+      {.session_handle = that->session_handle_});
+
   that->SelectDevices();
 }
 
@@ -423,5 +443,17 @@ void RemoteDesktopPortal::OnScreenCastSessionClosed() {
   notifier_->OnScreenCastSessionClosed();
 }
 
-}  // namespace xdg_portal
-}  // namespace remoting
+void RemoteDesktopPortal::OnClipboardPortalDone(
+    webrtc::xdg_portal::RequestResponse result) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  clipboard_portal_status_ = result;
+
+  if (result == RequestResponse::kSuccess) {
+    WaylandManager::Get()->OnClipboardMetadata(
+        {.session_details = clipboard_portal_->GetSessionDetails()});
+  }
+
+  RequestSources();
+}
+
+}  // namespace remoting::xdg_portal

@@ -7,62 +7,33 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/metrics/histogram_functions.h"
+#include "base/uuid.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/service_worker_context.h"
 #include "content/public/browser/service_worker_external_request_result.h"
+#include "extensions/browser/event_router.h"
 
 namespace extensions {
 
-namespace {
-// Information about an unacked event.
-struct EventInfo {
-  // GUID of the Service Worker's external request for the event.
-  std::string request_uuid;
-  // RenderProcessHost id.
-  int render_process_id;
-  // Whether or not StartExternalRequest succeeded.
-  bool start_ok;
-};
-}  // namespace
+EventAckData::EventAckData() = default;
 
-// Class that holds map of unacked event information keyed by event id, accessed
-// on the UI thread.
-// TODO(crbug.com/824858): This shouldn't be needed since ServiceWorkerContext
-// moved to the UI thread.
-// TODO(lazyboy): Could this potentially be owned exclusively (and deleted) on
-// the UI thread, thus not requiring RefCounted?
-class EventAckData::CoreThreadEventInfo
-    : public base::RefCountedThreadSafe<CoreThreadEventInfo> {
- public:
-  CoreThreadEventInfo() = default;
-
-  CoreThreadEventInfo(const CoreThreadEventInfo&) = delete;
-  CoreThreadEventInfo& operator=(const CoreThreadEventInfo&) = delete;
-
-  // Map of event information keyed by event_id.
-  std::map<int, EventInfo> event_map;
-
- private:
-  friend class base::RefCountedThreadSafe<CoreThreadEventInfo>;
-  ~CoreThreadEventInfo() = default;
-};
-
-EventAckData::EventAckData()
-    : unacked_events_(base::MakeRefCounted<CoreThreadEventInfo>()) {}
 EventAckData::~EventAckData() = default;
 
 void EventAckData::IncrementInflightEvent(
     content::ServiceWorkerContext* context,
     int render_process_id,
     int64_t version_id,
-    int event_id) {
+    int event_id,
+    base::TimeTicks dispatch_start_time,
+    EventDispatchSource dispatch_source,
+    bool lazy_background_active_on_dispatch) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  std::string request_uuid = base::GenerateGUID();
+  base::Uuid request_uuid = base::Uuid::GenerateRandomV4();
   bool start_ok = true;
 
   content::ServiceWorkerExternalRequestResult result =
@@ -70,6 +41,9 @@ void EventAckData::IncrementInflightEvent(
           version_id,
           content::ServiceWorkerExternalRequestTimeoutType::kDefault,
           request_uuid);
+  base::UmaHistogramEnumeration(
+      "Extensions.ServiceWorkerBackground.StartingExternalRequest_Result",
+      result);
   if (result != content::ServiceWorkerExternalRequestResult::kOk) {
     LOG(ERROR) << "StartExternalRequest failed: " << static_cast<int>(result);
     start_ok = false;
@@ -77,10 +51,71 @@ void EventAckData::IncrementInflightEvent(
 
   // TODO(lazyboy): Clean up |unacked_events_| if RenderProcessHost died before
   // it got a chance to ack |event_id|. This shouldn't happen in common cases.
-  std::map<int, EventInfo>& unacked_events_map = unacked_events_->event_map;
-  auto insert_result = unacked_events_map.insert(std::make_pair(
-      event_id, EventInfo{request_uuid, render_process_id, start_ok}));
+  auto insert_result = unacked_events_.try_emplace(
+      event_id,
+      EventInfo{request_uuid, render_process_id, start_ok, dispatch_start_time,
+                dispatch_source, lazy_background_active_on_dispatch});
   DCHECK(insert_result.second) << "EventAckData: Duplicate event_id.";
+
+  if (dispatch_source == EventDispatchSource::kDispatchEventToProcess) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+        FROM_HERE,
+        base::BindOnce(&EventAckData::EmitLateAckedEventTask,
+                       weak_factory_.GetWeakPtr(), event_id),
+        kEventAckMetricTimeLimit);
+  }
+}
+
+void EventAckData::EmitLateAckedEventTask(int event_id) {
+  // If the event is still present then we haven't received the ack yet in
+  // `EventAckData::DecrementInflightEvent()`.
+  if (unacked_events_.contains(event_id)) {
+    base::UmaHistogramBoolean(
+        "Extensions.Events.DidDispatchToAckSucceed.ExtensionServiceWorker2",
+        false);
+  }
+}
+
+// static
+void EventAckData::EmitDispatchTimeMetrics(EventInfo& event_info) {
+  // Only emit events that use the EventRouter::DispatchEventToProcess() event
+  // routing flow since EventRouter::DispatchEventToSender() uses a different
+  // flow that doesn't include dispatch start and service worker start time.
+  if (event_info.dispatch_source ==
+      EventDispatchSource::kDispatchEventToProcess) {
+    base::UmaHistogramCustomMicrosecondsTimes(
+        "Extensions.Events.DispatchToAckTime.ExtensionServiceWorker2",
+        /*sample=*/base::TimeTicks::Now() - event_info.dispatch_start_time,
+        /*min=*/base::Microseconds(1), /*max=*/base::Minutes(5),
+        /*buckets=*/100);
+    const char* active_metric_name =
+        event_info.lazy_background_active_on_dispatch
+            ? "Extensions.Events.DispatchToAckTime.ExtensionServiceWorker2."
+              "Active"
+            : "Extensions.Events.DispatchToAckTime.ExtensionServiceWorker2."
+              "Inactive";
+    base::UmaHistogramCustomMicrosecondsTimes(
+        active_metric_name,
+        /*sample=*/base::TimeTicks::Now() - event_info.dispatch_start_time,
+        /*min=*/base::Microseconds(1), /*max=*/base::Minutes(5),
+        /*buckets=*/100);
+
+    base::UmaHistogramCustomTimes(
+        "Extensions.Events.DispatchToAckLongTime.ExtensionServiceWorker2",
+        /*sample=*/base::TimeTicks::Now() - event_info.dispatch_start_time,
+        /*min=*/base::Seconds(1), /*max=*/base::Days(1),
+        /*buckets=*/100);
+
+    // Emit only if we're within the expected event ack time limit. We'll take
+    // care of the emit for a late ack via a delayed task.
+    bool late_ack = (base::TimeTicks::Now() - event_info.dispatch_start_time) >
+                    kEventAckMetricTimeLimit;
+    if (!late_ack) {
+      base::UmaHistogramBoolean(
+          "Extensions.Events.DidDispatchToAckSucceed.ExtensionServiceWorker2",
+          true);
+    }
+  }
 }
 
 void EventAckData::DecrementInflightEvent(
@@ -92,28 +127,49 @@ void EventAckData::DecrementInflightEvent(
     base::OnceClosure failure_callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  std::map<int, EventInfo>& unacked_events_map = unacked_events_->event_map;
-  auto request_info_iter = unacked_events_map.find(event_id);
-  if (request_info_iter == unacked_events_map.end() ||
+  auto request_info_iter = unacked_events_.find(event_id);
+  if (request_info_iter == unacked_events_.end() ||
       request_info_iter->second.render_process_id != render_process_id) {
     std::move(failure_callback).Run();
     return;
   }
 
-  std::string request_uuid = std::move(request_info_iter->second.request_uuid);
-  bool start_ok = request_info_iter->second.start_ok;
-  unacked_events_map.erase(request_info_iter);
+  EventInfo& event_info = request_info_iter->second;
+
+  EmitDispatchTimeMetrics(event_info);
+
+  base::Uuid request_uuid = std::move(event_info.request_uuid);
+  bool start_ok = event_info.start_ok;
+  unacked_events_.erase(request_info_iter);
 
   content::ServiceWorkerExternalRequestResult result =
       context->FinishedExternalRequest(version_id, request_uuid);
+  base::UmaHistogramEnumeration(
+      "Extensions.ServiceWorkerBackground.FinishedExternalRequest_Result",
+      result);
   // If the worker was already stopped or StartExternalRequest didn't succeed,
   // the FinishedExternalRequest will legitimately fail.
   if (worker_stopped || !start_ok)
     return;
 
-  if (result != content::ServiceWorkerExternalRequestResult::kOk) {
-    LOG(ERROR) << "FinishExternalRequest failed: " << static_cast<int>(result);
-    std::move(failure_callback).Run();
+  base::UmaHistogramEnumeration(
+      "Extensions.ServiceWorkerBackground.FinishedExternalRequest_Result_"
+      "PostReturn",
+      result);
+
+  switch (result) {
+    case content::ServiceWorkerExternalRequestResult::kOk:
+    // Metrics have shown us that it is possible that a worker may not be found
+    // or not running at this point.
+    case content::ServiceWorkerExternalRequestResult::kWorkerNotFound:
+    case content::ServiceWorkerExternalRequestResult::kWorkerNotRunning:
+      break;
+    case content::ServiceWorkerExternalRequestResult::kBadRequestId:
+    case content::ServiceWorkerExternalRequestResult::kNullContext:
+      LOG(ERROR) << "FinishExternalRequest failed: "
+                 << static_cast<int>(result);
+      std::move(failure_callback).Run();
+      break;
   }
 }
 

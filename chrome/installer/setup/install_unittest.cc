@@ -16,7 +16,7 @@
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/path_service.h"
-#include "base/strings/stringprintf.h"
+#include "base/strings/strcat_win.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_path_override.h"
 #include "base/test/test_shortcut_win.h"
@@ -87,17 +87,17 @@ class CreateVisualElementsManifestTest
   // Creates a dummy test file at |path|.
   void CreateTestFile(const base::FilePath& path) {
     static constexpr char kBlah[] = "blah";
-    ASSERT_EQ(static_cast<int>(std::size(kBlah) - 1),
-              base::WriteFile(path, &kBlah[0], std::size(kBlah) - 1));
+    ASSERT_TRUE(base::WriteFile(path, kBlah));
   }
 
   // Creates the VisualElements directory and a light asset, if testing such.
   void PrepareTestVisualElementsDirectory() {
     base::FilePath visual_elements_dir =
-        version_dir_.Append(installer::kVisualElements);
+        version_dir_.AppendASCII(installer::kVisualElements);
     ASSERT_TRUE(base::CreateDirectory(visual_elements_dir));
-    std::wstring light_logo_file_name = base::StringPrintf(
-        L"Logo%ls.png", install_static::InstallDetails::Get().logo_suffix());
+    std::wstring light_logo_file_name = base::StrCat(
+        {L"Logo", install_static::InstallDetails::Get().logo_suffix(),
+         L".png"});
     ASSERT_NO_FATAL_FAILURE(
         CreateTestFile(visual_elements_dir.Append(light_logo_file_name)));
   }
@@ -197,6 +197,13 @@ INSTANTIATE_TEST_SUITE_P(
     CreateVisualElementsManifestTest,
     testing::Combine(testing::Values(install_static::CANARY_INDEX),
                      testing::Values(kExpectedCanaryManifest)));
+#elif BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
+INSTANTIATE_TEST_SUITE_P(
+    ChromeForTesting,
+    CreateVisualElementsManifestTest,
+    testing::Combine(
+        testing::Values(install_static::GOOGLE_CHROME_FOR_TESTING_INDEX),
+        testing::Values(kExpectedPrimaryManifest)));
 #else
 INSTANTIATE_TEST_SUITE_P(
     Chromium,
@@ -211,7 +218,7 @@ class InstallShortcutTest : public testing::Test {
     ASSERT_TRUE(com_initializer_.Succeeded());
     ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
     chrome_exe_ = temp_dir_.GetPath().Append(installer::kChromeExe);
-    EXPECT_EQ(0, base::WriteFile(chrome_exe_, "", 0));
+    EXPECT_TRUE(base::WriteFile(chrome_exe_, ""));
 
     ShellUtil::ShortcutProperties chrome_properties(ShellUtil::CURRENT_USER);
     ShellUtil::AddDefaultShortcutProperties(chrome_exe_, &chrome_properties);
@@ -225,7 +232,7 @@ class InstallShortcutTest : public testing::Test {
     expected_start_menu_properties_ = expected_properties_;
     expected_start_menu_properties_.set_dual_mode(false);
 
-    prefs_.reset(GetFakeMasterPrefs(false, false));
+    prefs_.reset(GetFakeInitialPrefs(false, false));
 
     ASSERT_TRUE(fake_user_desktop_.CreateUniqueTempDir());
     ASSERT_TRUE(fake_common_desktop_.CreateUniqueTempDir());
@@ -274,7 +281,7 @@ class InstallShortcutTest : public testing::Test {
     UnpinShortcutFromTaskbar(system_start_menu_subdir_shortcut_);
   }
 
-  installer::InitialPreferences* GetFakeMasterPrefs(
+  installer::InitialPreferences* GetFakeInitialPrefs(
       bool do_not_create_desktop_shortcut,
       bool do_not_create_quick_launch_shortcut) {
     const struct {
@@ -377,7 +384,7 @@ TEST_F(InstallShortcutTest, CreateAllShortcutsSystemLevel) {
 
 TEST_F(InstallShortcutTest, CreateAllShortcutsButDesktopShortcut) {
   std::unique_ptr<installer::InitialPreferences> prefs_no_desktop(
-      GetFakeMasterPrefs(true, false));
+      GetFakeInitialPrefs(true, false));
   installer::CreateOrUpdateShortcuts(chrome_exe_, *prefs_no_desktop,
                                      installer::CURRENT_USER,
                                      installer::INSTALL_SHORTCUT_CREATE_ALL);
@@ -390,7 +397,7 @@ TEST_F(InstallShortcutTest, CreateAllShortcutsButDesktopShortcut) {
 
 TEST_F(InstallShortcutTest, CreateAllShortcutsButQuickLaunchShortcut) {
   std::unique_ptr<installer::InitialPreferences> prefs_no_ql(
-      GetFakeMasterPrefs(false, true));
+      GetFakeInitialPrefs(false, true));
   installer::CreateOrUpdateShortcuts(chrome_exe_, *prefs_no_ql,
                                      installer::CURRENT_USER,
                                      installer::INSTALL_SHORTCUT_CREATE_ALL);

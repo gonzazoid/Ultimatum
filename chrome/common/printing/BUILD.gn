@@ -4,6 +4,7 @@
 
 import("//build/buildflag_header.gni")
 import("//build/config/chromeos/ui_mode.gni")
+import("//printing/buildflags/buildflags.gni")
 if (is_chromeos) {
   import("//printing/backend/tools/code_generator.gni")
 }
@@ -33,11 +34,11 @@ if (is_chromeos) {
 
 source_set("printing") {
   sources = [
-    "printer_capabilities.cc",
-    "printer_capabilities.h",
     "printing_init.cc",
     "printing_init.h",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   public_deps = [
     ":printing_buildflags",
@@ -53,14 +54,8 @@ source_set("printing") {
     "//printing",
     "//printing/mojom",
     "//ui/base",
+    "//ui/gfx/geometry",
   ]
-
-  if (is_mac) {
-    sources += [
-      "printer_capabilities_mac.h",
-      "printer_capabilities_mac.mm",
-    ]
-  }
 
   if (is_chromeos) {
     deps += [ ":ipp_l10n_generate" ]
@@ -73,6 +68,7 @@ source_set("printing") {
 
   if (enable_print_media_l10n) {
     deps += [
+      "//base:i18n",
       "//components/device_event_log",
       "//third_party/re2",
     ]
@@ -82,27 +78,46 @@ source_set("printing") {
       "print_media_l10n.h",
     ]
   }
+
+  if (enable_print_preview) {
+    sources += [
+      "printer_capabilities.cc",
+      "printer_capabilities.h",
+    ]
+
+    deps += [ "//components/device_event_log" ]
+
+    if (is_mac) {
+      sources += [
+        "printer_capabilities_mac.h",
+        "printer_capabilities_mac.mm",
+      ]
+    }
+  }
 }
 
 source_set("unit_tests") {
   testonly = true
-  sources = [ "printer_capabilities_unittest.cc" ]
+  sources = []
 
   deps = [
     "//base",
     "//build:chromeos_buildflags",
     "//chrome/common/printing",
-    "//components/printing/browser",
     "//content/test:test_support",
     "//printing:test_support",
     "//testing/gtest",
   ]
 
-  if (is_mac) {
-    sources += [ "printer_capabilities_mac_unittest.mm" ]
-  }
-
   if (enable_print_media_l10n) {
     sources += [ "print_media_l10n_unittest.cc" ]
+  }
+
+  if (enable_print_preview) {
+    sources += [ "printer_capabilities_unittest.cc" ]
+
+    if (is_mac) {
+      sources += [ "printer_capabilities_mac_unittest.mm" ]
+    }
   }
 }

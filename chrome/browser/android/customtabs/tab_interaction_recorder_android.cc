@@ -5,9 +5,10 @@
 #include "chrome/browser/android/customtabs/tab_interaction_recorder_android.h"
 
 #include <memory>
+#include <string>
 
 #include "base/android/jni_android.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/android/chrome_jni_headers/TabInteractionRecorder_jni.h"
 #include "chrome/browser/android/customtabs/custom_tab_session_state_tracker.h"
@@ -15,7 +16,10 @@
 #include "chrome/browser/flags/android/chrome_feature_list.h"
 #include "components/autofill/content/browser/content_autofill_driver.h"
 #include "components/autofill/core/browser/autofill_manager.h"
+#include "components/autofill/core/common/unique_ids.h"
+#include "content/public/browser/document_user_data.h"
 #include "content/public/browser/global_routing_id.h"
+#include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
@@ -25,6 +29,7 @@ namespace customtabs {
 using autofill::AutofillManager;
 using base::android::JavaParamRef;
 using base::android::ScopedJavaLocalRef;
+using content::GlobalRenderFrameHostId;
 using content::RenderFrameHost;
 
 namespace {
@@ -34,21 +39,16 @@ AutofillManager* GetAutofillManager(RenderFrameHost* render_frame_host) {
       autofill::ContentAutofillDriver::GetForRenderFrameHost(render_frame_host);
   if (!autofill_driver)
     return nullptr;
-  return autofill_driver->autofill_manager();
+  return &autofill_driver->GetAutofillManager();
 }
-
-bool IsCctRetainingStateEnabled() {
-  static bool enabled =
-      base::FeatureList::IsEnabled(chrome::android::kCCTRetainingState);
-  return enabled;
-}
-
 }  // namespace
 
 AutofillObserverImpl::AutofillObserverImpl(
+    GlobalRenderFrameHostId id,
     autofill::AutofillManager* autofill_manager,
     OnFormInteractionCallback form_interaction_callback)
-    : autofill_manager_(autofill_manager),
+    : global_id_(id),
+      autofill_manager_(autofill_manager),
       form_interaction_callback_(std::move(form_interaction_callback)) {
   autofill_manager->AddObserver(this);
 }
@@ -57,20 +57,66 @@ AutofillObserverImpl::~AutofillObserverImpl() {
   Invalidate();
 }
 
-void AutofillObserverImpl::OnFormSubmitted() {
+void AutofillObserverImpl::OnFormSubmitted(autofill::AutofillManager&,
+                                           autofill::FormGlobalId) {
   OnFormInteraction();
 }
 
-void AutofillObserverImpl::OnSelectControlDidChange() {
+void AutofillObserverImpl::OnAfterSelectControlDidChange(
+    autofill::AutofillManager&,
+    autofill::FormGlobalId,
+    autofill::FieldGlobalId) {
   OnFormInteraction();
 }
 
-void AutofillObserverImpl::OnTextFieldDidChange() {
+void AutofillObserverImpl::OnAfterTextFieldDidChange(autofill::AutofillManager&,
+                                                     autofill::FormGlobalId,
+                                                     autofill::FieldGlobalId,
+                                                     const std::u16string&) {
   OnFormInteraction();
 }
 
-void AutofillObserverImpl::OnTextFieldDidScroll() {
+void AutofillObserverImpl::OnAfterTextFieldDidScroll(autofill::AutofillManager&,
+                                                     autofill::FormGlobalId,
+                                                     autofill::FieldGlobalId) {
   OnFormInteraction();
+}
+
+void AutofillObserverImpl::OnAfterFormsSeen(
+    AutofillManager& manager,
+    base::span<const autofill::FormGlobalId> forms) {
+  RenderFrameHost* rfh = RenderFrameHost::FromID(global_id_);
+  // Only mark has form associated data for the RFH observed. This is to
+  // metigate the fact that AutofillManager will dispatch |OnAfterFormsSeen| to
+  // *all* observers regardless where the RFH the observer lives in has a form.
+  if (!rfh) {
+    return;
+  }
+
+  // Check whether the form seen lives in the observed RFH.
+  bool forms_in_rfh = false;
+  for (auto form_id : forms) {
+    if (form_id.frame_token ==
+        autofill::LocalFrameToken(rfh->GetFrameToken().value())) {
+      forms_in_rfh = true;
+      break;
+    }
+  }
+  if (!forms_in_rfh) {
+    return;
+  }
+
+  // Set the had form data associated value in the page's
+  // BackForwardCacheMetrics. Note that this means that if |rfh| is a subframe
+  // it's possible that the page will still be marked as having a form data
+  // associated with it even though |rfh| had navigated to another document and
+  // there is no longer any document with forms in the page.
+  content::BackForwardCache::SetHadFormDataAssociated(rfh->GetPage());
+
+  // Create the form interaction user data meaning the page has seen a form
+  // attached.
+  FormInteractionData::GetOrCreateForCurrentDocument(
+      rfh->GetOutermostMainFrame());
 }
 
 void AutofillObserverImpl::Invalidate() {
@@ -83,7 +129,22 @@ void AutofillObserverImpl::Invalidate() {
 
 void AutofillObserverImpl::OnFormInteraction() {
   Invalidate();
-  std::move(form_interaction_callback_).Run();
+  std::move(form_interaction_callback_).Run(global_id_);
+}
+
+DOCUMENT_USER_DATA_KEY_IMPL(FormInteractionData);
+
+FormInteractionData::~FormInteractionData() = default;
+
+FormInteractionData::FormInteractionData(RenderFrameHost* rfh)
+    : DocumentUserData<FormInteractionData>(rfh) {}
+
+void FormInteractionData::SetHasFormInteractionData() {
+  had_form_interaction_data_ = true;
+}
+
+bool FormInteractionData::GetHasFormInteractionData() {
+  return had_form_interaction_data_;
 }
 
 TabInteractionRecorderAndroid::~TabInteractionRecorderAndroid() = default;
@@ -99,27 +160,48 @@ bool TabInteractionRecorderAndroid::HasNavigatedFromFirstPage() const {
          web_contents()->GetController().CanGoForward();
 }
 
+bool TabInteractionRecorderAndroid::HasActiveFormInteraction() const {
+  bool interaction = false;
+  web_contents()->GetPrimaryMainFrame()->ForEachRenderFrameHostWithAction(
+      [&interaction](RenderFrameHost* rfh) {
+        if (!FormInteractionData::GetForCurrentDocument(rfh)) {
+          return RenderFrameHost::FrameIterationAction::kContinue;
+        }
+        if (FormInteractionData::GetForCurrentDocument(rfh)
+                ->GetHasFormInteractionData()) {
+          interaction = true;
+          return RenderFrameHost::FrameIterationAction::kStop;
+        }
+        return RenderFrameHost::FrameIterationAction::kContinue;
+      });
+  return interaction;
+}
+
+void TabInteractionRecorderAndroid::ResetImpl() {
+  has_form_interactions_in_session_ = false;
+  did_get_user_interaction_ = false;
+  web_contents()->GetPrimaryMainFrame()->ForEachRenderFrameHost(
+      [](RenderFrameHost* rfh) {
+        if (FormInteractionData::GetForCurrentDocument(rfh)) {
+          FormInteractionData::DeleteForCurrentDocument(rfh);
+        }
+      });
+}
+
 // content::WebContentsObserver:
 void TabInteractionRecorderAndroid::RenderFrameHostStateChanged(
     RenderFrameHost* render_frame_host,
     RenderFrameHost::LifecycleState old_state,
     RenderFrameHost::LifecycleState new_state) {
-  if (!IsCctRetainingStateEnabled())
-    return;
   if (old_state == RenderFrameHost::LifecycleState::kActive) {
     rfh_observer_map_.erase(render_frame_host->GetGlobalId());
-  } else if (new_state == RenderFrameHost::LifecycleState::kActive &&
-             !has_form_interactions_) {
+  } else if (new_state == RenderFrameHost::LifecycleState::kActive) {
     StartObservingFrame(render_frame_host);
   }
 }
 
 void TabInteractionRecorderAndroid::DidFinishNavigation(
     content::NavigationHandle* navigation_handle) {
-  if (!IsCctRetainingStateEnabled())
-    return;
-  if (has_form_interactions_)
-    return;
   if (!navigation_handle->IsSameDocument() &&
       navigation_handle->HasCommitted() &&
       navigation_handle->GetRenderFrameHost()->IsActive())
@@ -138,8 +220,15 @@ void TabInteractionRecorderAndroid::DidGetUserInteraction(
       .OnUserInteraction();
 }
 
-void TabInteractionRecorderAndroid::SetHasFormInteractions() {
-  has_form_interactions_ = true;
+void TabInteractionRecorderAndroid::SetHasFormInteractions(
+    GlobalRenderFrameHostId id) {
+  if (RenderFrameHost::FromID(id)) {
+    FormInteractionData::GetOrCreateForCurrentDocument(
+        RenderFrameHost::FromID(id))
+        ->SetHasFormInteractionData();
+  }
+
+  has_form_interactions_in_session_ = true;
   rfh_observer_map_.clear();
 }
 
@@ -157,7 +246,7 @@ void TabInteractionRecorderAndroid::StartObservingFrame(
 
   rfh_observer_map_[render_frame_host->GetGlobalId()] =
       std::make_unique<AutofillObserverImpl>(
-          autofill_manager,
+          render_frame_host->GetGlobalId(), autofill_manager,
           base::BindOnce(&TabInteractionRecorderAndroid::SetHasFormInteractions,
                          weak_factory_.GetWeakPtr()));
 }
@@ -170,9 +259,23 @@ jboolean TabInteractionRecorderAndroid::DidGetUserInteraction(
   return did_get_user_interaction_;
 }
 
-jboolean TabInteractionRecorderAndroid::HadInteraction(JNIEnv* env) const {
-  bool has_interaction = has_form_interactions() || HasNavigatedFromFirstPage();
-  return static_cast<jboolean>(has_interaction);
+jboolean TabInteractionRecorderAndroid::HadFormInteractionInSession(
+    JNIEnv* env) const {
+  return has_form_interactions_in_session();
+}
+
+jboolean TabInteractionRecorderAndroid::HadNavigationInteraction(
+    JNIEnv* env) const {
+  return did_get_user_interaction_ && HasNavigatedFromFirstPage();
+}
+
+jboolean TabInteractionRecorderAndroid::HadFormInteractionInActivePage(
+    JNIEnv* env) const {
+  return HasActiveFormInteraction();
+}
+
+void TabInteractionRecorderAndroid::Reset(JNIEnv* env) {
+  ResetImpl();
 }
 
 ScopedJavaLocalRef<jobject> JNI_TabInteractionRecorder_GetFromTab(

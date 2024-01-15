@@ -5,11 +5,14 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_SPEECH_SPEECH_SYNTHESIS_BASE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_SPEECH_SPEECH_SYNTHESIS_BASE_H_
 
+#include "base/functional/callback.h"
 #include "third_party/blink/renderer/core/core_export.h"
-#include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/wtf/forward.h"
 
 namespace blink {
+
+class LocalDOMWindow;
 
 // SpeechSynthesisBase is the parent class of SpeechSynthesis in /modules. The
 // primary function of this class is to make SpeechSynthesis methods accessible

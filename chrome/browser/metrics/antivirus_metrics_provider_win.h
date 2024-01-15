@@ -9,13 +9,14 @@
 
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/feature_list.h"
+#include "base/functional/callback_forward.h"
 #include "base/sequence_checker.h"
 #include "chrome/services/util_win/public/mojom/util_win.mojom.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/metrics_proto/system_profile.pb.h"
 
+// As discussed on http://crbug/1488597#c1, retain this feature.
 BASE_DECLARE_FEATURE(kReportFullAVProductDetails);
 
 // AntiVirusMetricsProvider is responsible for adding antivirus information to

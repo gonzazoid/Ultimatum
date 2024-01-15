@@ -4,6 +4,8 @@
 
 #include "cc/paint/decode_stashing_image_provider.h"
 
+#include <utility>
+
 namespace cc {
 DecodeStashingImageProvider::DecodeStashingImageProvider(
     ImageProvider* source_provider)
@@ -23,12 +25,12 @@ ImageProvider::ScopedResult DecodeStashingImageProvider::GetRasterContent(
   // No need to add any destruction callback to the returned image. The images
   // decoded here match the lifetime of this provider.
   auto result = ScopedResult(decode.decoded_image());
-  decoded_images_->push_back(std::move(decode));
+  decoded_images_.push_back(std::move(decode));
   return result;
 }
 
 void DecodeStashingImageProvider::Reset() {
-  decoded_images_->clear();
+  decoded_images_.clear();
 }
 
 }  // namespace cc

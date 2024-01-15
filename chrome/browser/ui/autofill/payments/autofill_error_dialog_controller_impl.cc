@@ -8,6 +8,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "components/autofill/core/browser/payments/autofill_error_dialog_context.h"
 #include "components/strings/grit/components_strings.h"
+#include "content/public/browser/web_contents.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace autofill {
@@ -27,7 +28,8 @@ void AutofillErrorDialogControllerImpl::Show(
 
   DCHECK(autofill_error_dialog_view_ == nullptr);
   error_dialog_context_ = autofill_error_dialog_context;
-  autofill_error_dialog_view_ = AutofillErrorDialogView::CreateAndShow(this);
+  autofill_error_dialog_view_ =
+      AutofillErrorDialogView::CreateAndShow(this, web_contents_);
 
   base::UmaHistogramEnumeration("Autofill.ErrorDialogShown",
                                 autofill_error_dialog_context.type);
@@ -67,6 +69,15 @@ const std::u16string AutofillErrorDialogControllerImpl::GetTitle() {
     case AutofillErrorDialogType::kVirtualCardNotEligibleError:
       return l10n_util::GetStringUTF16(
           IDS_AUTOFILL_VIRTUAL_CARD_NOT_ELIGIBLE_ERROR_TITLE);
+    case AutofillErrorDialogType::
+        kMaskedServerCardRiskBasedUnmaskingNetworkError:
+    case AutofillErrorDialogType::
+        kMaskedServerCardRiskBasedUnmaskingPermanentError:
+      return l10n_util::GetStringUTF16(
+          IDS_AUTOFILL_MASKED_SERVER_CARD_RISK_BASED_UNMASKING_ERROR_TITLE);
+    case AutofillErrorDialogType::kMaskedServerIbanUnmaskingTemporaryError:
+      return l10n_util::GetStringUTF16(
+          IDS_AUTOFILL_IBAN_UNMASK_ERROR_DIALOG_TITLE);
     case AutofillErrorDialogType::kTypeUnknown:
       NOTREACHED();
       return std::u16string();
@@ -94,6 +105,17 @@ const std::u16string AutofillErrorDialogControllerImpl::GetDescription() {
     case AutofillErrorDialogType::kVirtualCardNotEligibleError:
       return l10n_util::GetStringUTF16(
           IDS_AUTOFILL_VIRTUAL_CARD_NOT_ELIGIBLE_ERROR_DESCRIPTION);
+    case AutofillErrorDialogType::
+        kMaskedServerCardRiskBasedUnmaskingNetworkError:
+      return l10n_util::GetStringUTF16(
+          IDS_AUTOFILL_CARD_UNMASK_PROMPT_ERROR_NETWORK);
+    case AutofillErrorDialogType::
+        kMaskedServerCardRiskBasedUnmaskingPermanentError:
+      return l10n_util::GetStringUTF16(
+          IDS_AUTOFILL_CARD_UNMASK_PROMPT_ERROR_PERMANENT);
+    case AutofillErrorDialogType::kMaskedServerIbanUnmaskingTemporaryError:
+      return l10n_util::GetStringUTF16(
+          IDS_AUTOFILL_IBAN_UNMASK_ERROR_DIALOG_MESSAGE);
     case AutofillErrorDialogType::kTypeUnknown:
       NOTREACHED();
       return std::u16string();
@@ -103,10 +125,6 @@ const std::u16string AutofillErrorDialogControllerImpl::GetDescription() {
 const std::u16string AutofillErrorDialogControllerImpl::GetButtonLabel() {
   return l10n_util::GetStringUTF16(
       IDS_AUTOFILL_ERROR_DIALOG_NEGATIVE_BUTTON_LABEL);
-}
-
-content::WebContents* AutofillErrorDialogControllerImpl::GetWebContents() {
-  return web_contents_;
 }
 
 void AutofillErrorDialogControllerImpl::Dismiss() {

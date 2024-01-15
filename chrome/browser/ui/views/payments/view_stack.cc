@@ -133,7 +133,7 @@ void ViewStack::UpdateAnimatorBounds(
   // If an animator is currently animating, figure out which views and update
   // their target bounds.
   if (animator->IsAnimating()) {
-    for (auto* view : stack_) {
+    for (views::View* view : stack_) {
       if (animator->IsAnimating(view)) {
         animator->SetTargetBounds(view, target);
       }
@@ -146,14 +146,13 @@ void ViewStack::OnBoundsAnimatorDone(views::BoundsAnimator* animator) {
     RemoveChildViewT(stack_.back());
     stack_.pop_back();
     DCHECK(!stack_.empty()) << "State stack should never be empty";
-  } else if (animator == slide_in_animator_.get()) {
-    HideCoveredViews();
   } else {
-    NOTREACHED();
+    CHECK_EQ(animator, slide_in_animator_.get());
+    HideCoveredViews();
   }
   RequestFocus();
 }
 
-BEGIN_METADATA(ViewStack, views::View)
+BEGIN_METADATA(ViewStack)
 ADD_READONLY_PROPERTY_METADATA(size_t, Size)
 END_METADATA

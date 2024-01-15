@@ -4,13 +4,12 @@
 
 #include "extensions/browser/api/system_display/display_info_provider.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "extensions/browser/api/extensions_api_client.h"
 #include "extensions/browser/extensions_browser_client.h"
-#include "extensions/common/api/system_display.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 
@@ -39,7 +38,7 @@ int RotationToDegrees(display::Display::Rotation rotation) {
 }  // namespace
 
 DisplayInfoProvider::DisplayInfoProvider(display::Screen* screen)
-    : screen_(screen ? screen : display::Screen::GetScreen()) {
+    : provided_screen_(screen) {
   // Do not use/call on the screen object in this constructor yet because a
   // subclass may pass not-yet-initialized screen instance.
 }
@@ -80,6 +79,9 @@ api::system_display::DisplayUnitInfo DisplayInfoProvider::CreateDisplayUnitInfo(
   unit.id = base::NumberToString(display.id());
   unit.is_primary = (display.id() == primary_display_id);
   unit.is_internal = display.IsInternal();
+  unit.active_state = display.detected()
+                          ? api::system_display::ActiveState::kActive
+                          : api::system_display::ActiveState::kInactive;
   unit.is_enabled = true;
   unit.is_unified = false;
   unit.rotation = RotationToDegrees(display.rotation());
@@ -131,9 +133,10 @@ DisplayInfoProvider::GetAllDisplaysInfoList(
 void DisplayInfoProvider::GetAllDisplaysInfo(
     bool /* single_unified*/,
     base::OnceCallback<void(DisplayUnitInfoList result)> callback) {
-  int64_t primary_id = screen_->GetPrimaryDisplay().id();
-  std::vector<display::Display> displays = screen_->GetAllDisplays();
-  DisplayUnitInfoList all_displays;
+  const display::Screen* screen =
+      provided_screen_ ? provided_screen_.get() : display::Screen::GetScreen();
+  int64_t primary_id = screen->GetPrimaryDisplay().id();
+  std::vector<display::Display> displays = screen->GetAllDisplays();
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE,
       base::BindOnce(&DisplayInfoProvider::GetAllDisplaysInfoList,
@@ -145,7 +148,7 @@ void DisplayInfoProvider::GetAllDisplaysInfo(
 void DisplayInfoProvider::GetDisplayLayout(
     base::OnceCallback<void(DisplayLayoutList result)> callback) {
   NOTREACHED();  // Implemented on Chrome OS only in override.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), DisplayLayoutList()));
 }
 
@@ -201,7 +204,7 @@ void DisplayInfoProvider::SetMirrorMode(
     const api::system_display::MirrorModeInfo& info,
     ErrorCallback callback) {
   NOTREACHED();  // Implemented on Chrome OS only in override.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), "Not supported"));
 }
 

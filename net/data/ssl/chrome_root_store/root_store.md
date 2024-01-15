@@ -1,13 +1,12 @@
 <!-- mdformat off(generated) -->
 <!-- mdlint off(generated) -->
-Version: 8
+Version: 14
 
 SHA 256 Hash | Subject | NotBefore | NotAfter
 ---|---|---|---
 55926084ec963a64b96e2abe01ce0ba86a64fbfebcc7aab5afc155b37fd76066 | CN=Actalis Authentication Root CA,O=Actalis S.p.A./03358520967,L=Milan,C=IT | 2011-09-22 | 2030-09-22
 18ce6cfe7bf14e60b2e347b8dfe868cb31d02ebb3ada271569f50343b46db3a4 | CN=Amazon Root CA 3,O=Amazon,C=US | 2015-05-26 | 2040-05-26
 1ba5b2aa8c65401a82960118f80bec4f62304d83cec4713a19c39c011ea46db4 | CN=Amazon Root CA 2,O=Amazon,C=US | 2015-05-26 | 2040-05-26
-568d6905a2c88708a4b3025190edcfedb1974a606a13c6e5290fcb2ae63edab5 | CN=Starfield Services Root Certificate Authority - G2,O=Starfield Technologies\, Inc.,L=Scottsdale,ST=Arizona,C=US | 2009-09-01 | 2037-12-31
 8ecde6884f3d87b1125ba31ac3fcb13d7016de7f57cc904fe1cb97c6ae98196e | CN=Amazon Root CA 1,O=Amazon,C=US | 2015-05-26 | 2038-01-17
 e35d28419ed02025cfa69038cd623962458da5c695fbdea3c22b0bfb25897092 | CN=Amazon Root CA 4,O=Amazon,C=US | 2015-05-26 | 2040-05-26
 5c58468d55f58e497e743982d2b50010b6d165374acf83a7d4a32db768c4408e | CN=Certum Trusted Network CA,OU=Certum Certification Authority,O=Unizeto Technologies S.A.,C=PL | 2008-10-22 | 2029-12-31
@@ -37,7 +36,6 @@ e3b6a2db2ed7ce48842f7ac53241c7b71d54144bfb40c11f3f1d0b42f5eea12d | CN=Certigna,O
 7e37cb8b4c47090cab36551ba6f45db840680fba166a952db100717f43053fc2 | CN=DigiCert Assured ID Root G3,OU=www.digicert.com,O=DigiCert Inc,C=US | 2013-08-01 | 2038-01-15
 cb3ccbb76031e5e0138f8dd39a23f9de47ffc35e43c1144cea27d46a5ab1cb5f | CN=DigiCert Global Root G2,OU=www.digicert.com,O=DigiCert Inc,C=US | 2013-08-01 | 2038-01-15
 e23d4a036d7b70e9f595b1422079d2b91edfbb1fb651a0633eaa8a9dc5f80703 | CN=CA Disig Root R2,O=Disig a.s.,L=Bratislava,C=SK | 2012-07-19 | 2042-07-19
-b0bfd52bb0d7d9bd92bf5d4dc13da255c02c542f378365ea893911f55e55f23c | CN=E-Tugra Certification Authority,OU=E-Tugra Sertifikasyon Merkezi,O=E-Tuğra EBG Bilişim Teknolojileri ve Hizmetleri A.Ş.,L=Ankara,C=TR | 2013-03-05 | 2023-03-03
 125609aa301da0a249b97a8239cb6a34216f44dcac9f3954b14292f2e8c8608f | CN=emSign Root CA - C1,OU=emSign PKI,O=eMudhra Inc,C=US | 2018-02-18 | 2043-02-18
 40f6af0346a99aa1cd1d555a4e9cce62c7f9634603ee406615833dc8c8d00367 | CN=emSign Root CA - G1,OU=emSign PKI,O=eMudhra Technologies Limited,C=IN | 2018-02-18 | 2043-02-18
 86a1ecba089c4a8d3bbe2734c612ba341d813e043cf9e8a862cd5c57a36bbe6b | CN=emSign ECC Root CA - G3,OU=emSign PKI,O=eMudhra Technologies Limited,C=IN | 2018-02-18 | 2043-02-18
@@ -66,10 +64,8 @@ d947432abde7b7fa90fc2e6b59101b1280e0e1c7e4e40fa3c6887fff57a7f4cf | CN=GTS Root R
 b085d70b964f191a73e4af0d54ae7a0e07aafdaf9b71dd0862138ab7325a24a2 | CN=GlobalSign,OU=GlobalSign ECC Root CA - R4,O=GlobalSign | 2012-11-13 | 2038-01-19
 8d25cd97229dbf70356bda4eb3cc734031e24cf00fafcfd32dc76eb5841c7ea8 | CN=GTS Root R2,O=Google Trust Services LLC,C=US | 2016-06-22 | 2036-06-22
 5a2fc03f0c83b090bbfa40604b0988446c7636183df9846e17101a447fb8efd6 | CN=Hongkong Post Root CA 3,O=Hongkong Post,L=Hong Kong,ST=Hong Kong,C=HK | 2017-06-03 | 2042-06-03
-f9e67d336c51002ac054c632022d66dda2e7e3fff10ad061ed31d8bbb410cfb2 | CN=Hongkong Post Root CA 1,O=Hongkong Post,C=HK | 2003-05-15 | 2023-05-15
 9a6ec012e1a7da9dbe34194d478ad7c0db1822fb071df12981496ed104384113 | CN=ACCVRAIZ1,OU=PKIACCV,O=ACCV,C=ES | 2011-05-05 | 2030-12-31
 ebc5570c29018c4d67b1aa127baf12f703b4611ebc17b7dab5573894179b93fa | OU=AC RAIZ FNMT-RCM,O=FNMT-RCM,C=ES | 2008-10-29 | 2030-01-01
-4d2491414cfe956746ec4cefa6cf6f72e28a1329432f9d8a907ac4cb5dadc15a | CN=Staat der Nederlanden EV Root CA,O=Staat der Nederlanden,C=NL | 2010-12-08 | 2022-12-08
 46edc3689046d53a453fb3104ab80dcaec658b2660ea1629dd7e867990648716 | CN=TUBITAK Kamu SM SSL Kok Sertifikasi - Surum 1,OU=Kamu Sertifikasyon Merkezi - Kamu SM,O=Turkiye Bilimsel ve Teknolojik Arastirma Kurumu - TUBITAK,L=Gebze - Kocaeli,C=TR | 2013-11-25 | 2043-10-25
 44b545aa8a25e65a73ca15dc27fc36d24c1cb9953a066539b11582dc487b4833 | CN=Hellenic Academic and Research Institutions ECC RootCA 2015,O=Hellenic Academic and Research Institutions Cert. Authority,L=Athens,C=GR | 2015-07-07 | 2040-06-30
 a040929a02ce53b4acf4f2ffc6981ce4496f755e6d45fe0b2a692bcd52523f36 | CN=Hellenic Academic and Research Institutions RootCA 2015,O=Hellenic Academic and Research Institutions Cert. Authority,L=Athens,C=GR | 2015-07-07 | 2040-06-30
@@ -115,10 +111,6 @@ be6c4da2bbb9ba59b6f3939768374246c3c005993fa98f020d1dedbed48a81d5 | CN=SwissSign 
 59769007f7685d0fcd50872f9f95d5755a5b2b457d81f3692b610a98672f0e1b | CN=TWCA Global Root CA,OU=Root CA,O=TAIWAN-CA,C=TW | 2012-06-27 | 2030-12-31
 bfd88fe1101c41ae3e801bf8be56350ee9bad1a6b9bd515edc5c6d5b8711ac44 | CN=TWCA Root Certification Authority,OU=Root CA,O=TAIWAN-CA,C=TW | 2008-08-28 | 2030-12-31
 dd6936fe21f8f077c123a1a521c12224f72255b73e03a7260693e8a24b0fa389 | CN=TeliaSonera Root CA v1,O=TeliaSonera | 2007-10-18 | 2032-10-18
-0753e940378c1bd5e3836e395daea5cb839e5046f1bd0eae1951cf10fec7c965 | CN=TrustCor RootCert CA-2,OU=TrustCor Certificate Authority,O=TrustCor Systems S. de R.L.,L=Panama City,ST=Panama,C=PA | 2016-02-04 | 2034-12-31
-5a885db19c01d912c5759388938cafbbdf031ab2d48e91ee15589b42971d039c | CN=TrustCor ECA-1,OU=TrustCor Certificate Authority,O=TrustCor Systems S. de R.L.,L=Panama City,ST=Panama,C=PA | 2016-02-04 | 2029-12-31
-d40e9c86cd8fe468c1776959f49ea774fa548684b6c406f3909261f4dce2575c | CN=TrustCor RootCert CA-1,OU=TrustCor Certificate Authority,O=TrustCor Systems S. de R.L.,L=Panama City,ST=Panama,C=PA | 2016-02-04 | 2029-12-31
-001686cd181f83a1b1217d305b365c41e3470a78a1d37b134a98cd547b92dab3 | CN=Network Solutions Certificate Authority,O=Network Solutions L.L.C.,C=US | 2011-01-01 | 2030-12-31
 6b328085625318aa50d173c98d8bda09d57e27413d114cf787a0f5d06c030cf6 | CN=Certum EC-384 CA,OU=Certum Certification Authority,O=Asseco Data Systems S.A.,C=PL | 2018-03-26 | 2043-03-26
 fe7696573855773e37a95e7ad4d9cc96c30157c15d31765ba9b15704e1ae78fd | CN=Certum Trusted Root CA,OU=Certum Certification Authority,O=Asseco Data Systems S.A.,C=PL | 2018-03-16 | 2043-03-16
 e59aaa816009c22bff5b25bad37df306f049797c1f81d85ab089e657bd8f0044 | CN=D-TRUST BR Root CA 1 2020,O=D-Trust GmbH,C=DE | 2020-02-11 | 2035-02-11
@@ -138,9 +130,11 @@ b4585f22e4ac756a4e8612a1361c5d9d031a93fd84febb778fa3068b0fc42dc2 | CN=Certainly 
 77b82cd8644c4305f7acc5cb156b45675004033d51c60c6202a8e0c33467d3a0 | CN=Certainly Root R1,O=Certainly,C=US | 2021-04-01 | 2046-04-01
 554153b13d2cf9ddb753bfbe1a4e0ae08d0aa4187058fe60a2b862b2e4b87bcb | CN=AC RAIZ FNMT-RCM SERVIDORES SEGUROS,OU=Ceres,O=FNMT-RCM,C=ES,2.5.4.97=#130f56415445532d51323832363030344a | 2018-12-20 | 2043-12-20
 fb8fec759169b9106b1e511644c618c51304373f6c0643088d8beffd1b997599 | SERIALNUMBER=G63287510,CN=ANF Secure Server Root CA,OU=ANF CA Raiz,O=ANF Autoridad de Certificacion,C=ES | 2019-09-04 | 2039-08-30
-873f4685fa7f563625252e6d36bcd7f16fc24951f264e47e1b954f4908cdca13 | CN=E-Tugra Global Root CA ECC v3,OU=E-Tugra Trust Center,O=E-Tugra EBG A.S.,L=Ankara,C=TR | 2020-03-18 | 2045-03-12
-ef66b0b10a3cdb9f2e3648c76bd2af18ead2bfe6f117655e28c4060da1a3f4c2 | CN=E-Tugra Global Root CA RSA v3,OU=E-Tugra Trust Center,O=E-Tugra EBG A.S.,L=Ankara,C=TR | 2020-03-18 | 2045-03-12
 e74fbda55bd564c473a36b441aa799c8a68e077440e8288b9fa1e50e4bbaca11 | CN=Security Communication ECC RootCA1,O=SECOM Trust Systems CO.\,LTD.,C=JP | 2016-06-16 | 2038-01-18
 2e44102ab58cb85419451c8e19d9acf3662cafbc614b6a53960a30f7d0e2eb41 | CN=TunTrust Root CA,O=Agence Nationale de Certification Electronique,C=TN | 2019-04-26 | 2044-04-26
 30fbba2c32238e2a98547af97931e550428b9b3f1c8eeb6633dcfa86c5b27dd3 | CN=vTrus ECC Root CA,O=iTrusChina Co.\,Ltd.,C=CN | 2018-07-31 | 2043-07-31
 8a71de6559336f426c26e53880d00d88a18da4c6a91f0dcb6194e206c5c96387 | CN=vTrus Root CA,O=iTrusChina Co.\,Ltd.,C=CN | 2018-07-31 | 2043-07-31
+b2fae53e14ccd7ab9212064701ae279c1d8988facb775fa8a008914e663988a8 | CN=Atos TrustedRoot Root CA ECC TLS 2021,O=Atos,C=DE | 2021-04-22 | 2041-04-17
+81a9088ea59fb364c548a6f85559099b6f0405efbf18e5324ec9f457ba00112f | CN=Atos TrustedRoot Root CA RSA TLS 2021,O=Atos,C=DE | 2021-04-22 | 2041-04-17
+c90f26f0fb1b4018b22227519b5ca2b53e2ca5b3be5cf18efe1bef47380c5383 | CN=Sectigo Public Server Authentication Root E46,O=Sectigo Limited,C=GB | 2021-03-22 | 2046-03-21
+7bb647a62aeeac88bf257aa522d01ffea395e0ab45c73f93f65654ec38f25a06 | CN=Sectigo Public Server Authentication Root R46,O=Sectigo Limited,C=GB | 2021-03-22 | 2046-03-21

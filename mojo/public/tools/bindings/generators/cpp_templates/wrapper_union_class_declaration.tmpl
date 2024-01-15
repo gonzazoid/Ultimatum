@@ -22,9 +22,9 @@ class {{export_attribute}} {{union.name}} {
   // Construct an instance holding |{{field.name}}|.
   static {{union.name}}Ptr
   New{{field.name|under_to_camel}}(
-      {{field.kind|cpp_wrapper_param_type_new}} {{field.name}}) {
+      {{field.kind|cpp_wrapper_param_type_new}} value) {
     auto result = {{union.name}}Ptr(absl::in_place);
-    result->set_{{field.name}}(std::move({{field.name}}));
+    result->set_{{field.name}}(std::move(value));
     return result;
   }
 {%- endfor %}
@@ -41,6 +41,13 @@ class {{export_attribute}} {{union.name}} {
 
   {{union.name}}();
   ~{{union.name}}();
+
+{%- if not union|should_inline_union %}
+  // Delete the copy constructor and copy assignment operators because `data_`
+  // contains raw pointers that must not be copied.
+  {{union.name}}(const {{union.name}}& other) = delete;
+  {{union.name}}& operator=(const {{union.name}}& other) = delete;
+{%- endif %}
 
   // Clone() is a template so it is only instantiated if it is used. Thus, the
   // bindings generator does not need to know whether Clone() or copy

@@ -2,10 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {SourcesTestRunner} from 'sources_test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+
+import * as Root from 'devtools/core/root/root.js';
+import * as UI from 'devtools/ui/legacy/legacy.js';
+import * as Sources from 'devtools/panels/sources/sources.js';
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Tests selected call frame does not change when pretty-print is toggled.\n`);
-  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('sources');
   await TestRunner.evaluateInPagePromise(`
       function testFunction()
@@ -22,11 +29,11 @@
   `);
 
   SourcesTestRunner.startDebuggerTest(step1);
-  var panel = UI.panels.sources;
+  var panel = Sources.SourcesPanel.SourcesPanel.instance();
   var sourceFrame;
 
   function step1() {
-    var testName = Root.Runtime.queryParam('test');
+    var testName = Root.Runtime.Runtime.queryParam('test');
     testName = testName.substring(testName.lastIndexOf('/') + 1);
     SourcesTestRunner.showScriptSource(testName, step2);
   }
@@ -44,7 +51,7 @@
   }
 
   function step4() {
-    TestRunner.assertEquals('testFunction', UI.context.flavor(SDK.DebuggerModel.CallFrame).functionName);
+    TestRunner.assertEquals('testFunction', UI.Context.Context.instance().flavor(SDK.DebuggerModel.CallFrame).functionName);
     sourceFrame.toggleFormatSource(step5);
   }
 

@@ -17,7 +17,6 @@
       "name": "LayoutNGBlockFlow (positioned) DIV",
       "position": [8, 0],
       "bounds": [200, 200],
-      "contentsOpaqueForText": true,
       "drawsContent": false
     },
     {
@@ -45,8 +44,7 @@
     {
       "name": "Scroll corner of LayoutView #document",
       "position": [785, 585],
-      "bounds": [15, 15],
-      "contentsOpaqueForText": true
+      "bounds": [15, 15]
     }
   ],
   "transforms": [

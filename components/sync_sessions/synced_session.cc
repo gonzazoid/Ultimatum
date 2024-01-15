@@ -8,8 +8,10 @@
 
 #include "base/strings/utf_string_conversions.h"
 #include "components/sessions/core/serialized_navigation_driver.h"
+#include "components/sync/base/features.h"
 #include "components/sync/base/page_transition_conversion.h"
 #include "components/sync/base/time.h"
+#include "components/sync_device_info/device_info_proto_enum_util.h"
 #include "ui/base/page_transition_types.h"
 
 namespace sync_sessions {
@@ -84,17 +86,6 @@ SerializedNavigationEntry SessionNavigationFromSyncData(
 
   navigation.set_http_status_code(sync_data.http_status_code());
 
-  if (sync_data.has_replaced_navigation()) {
-    SerializedNavigationEntry::ReplacedNavigationEntryData replaced_entry_data;
-    replaced_entry_data.first_committed_url =
-        GURL(sync_data.replaced_navigation().first_committed_url());
-    replaced_entry_data.first_timestamp = syncer::ProtoTimeToTime(
-        sync_data.replaced_navigation().first_timestamp_msec());
-    replaced_entry_data.first_transition_type = syncer::FromSyncPageTransition(
-        sync_data.replaced_navigation().first_page_transition());
-    navigation.set_replaced_entry_data(replaced_entry_data);
-  }
-
   sessions::SerializedNavigationDriver::Get()->Sanitize(&navigation);
 
   navigation.set_is_restored(true);
@@ -143,46 +134,8 @@ sync_pb::TabNavigation SessionNavigationToSyncData(
     sync_data.set_favicon_url(navigation.favicon_url().spec());
   }
 
-  if (navigation.blocked_state() != SerializedNavigationEntry::STATE_INVALID) {
-    sync_data.set_blocked_state(
-        static_cast<sync_pb::TabNavigation_BlockedState>(
-            navigation.blocked_state()));
-  }
-
   sync_data.set_password_state(static_cast<sync_pb::SyncEnums_PasswordState>(
       navigation.password_state()));
-
-  // Copy all redirect chain entries except the last URL (which should match
-  // the virtual_url).
-  const std::vector<GURL>& redirect_chain = navigation.redirect_chain();
-  if (redirect_chain.size() > 1) {  // Single entry chains have no redirection.
-    size_t last_entry = redirect_chain.size() - 1;
-    for (size_t i = 0; i < last_entry; i++) {
-      sync_pb::NavigationRedirect* navigation_redirect =
-          sync_data.add_navigation_redirect();
-      navigation_redirect->set_url(redirect_chain[i].spec());
-    }
-    // If the last URL didn't match the virtual_url, record it separately.
-    if (sync_data.virtual_url() != redirect_chain[last_entry].spec()) {
-      sync_data.set_last_navigation_redirect_url(
-          redirect_chain[last_entry].spec());
-    }
-  }
-
-  const absl::optional<SerializedNavigationEntry::ReplacedNavigationEntryData>&
-      replaced_entry_data = navigation.replaced_entry_data();
-  if (replaced_entry_data.has_value()) {
-    sync_pb::ReplacedNavigation* replaced_navigation =
-        sync_data.mutable_replaced_navigation();
-    replaced_navigation->set_first_committed_url(
-        replaced_entry_data->first_committed_url.spec());
-    replaced_navigation->set_first_timestamp_msec(
-        syncer::TimeToProtoTime(replaced_entry_data->first_timestamp));
-    replaced_navigation->set_first_page_transition(syncer::ToSyncPageTransition(
-        replaced_entry_data->first_transition_type));
-  }
-
-  sync_data.set_is_restored(navigation.is_restored());
 
   return sync_data;
 }
@@ -199,6 +152,11 @@ void SetSessionTabFromSyncData(const sync_pb::SessionTab& sync_data,
   tab->extension_app_id = sync_data.extension_app_id();
   tab->user_agent_override = sessions::SerializedUserAgentOverride();
   tab->timestamp = timestamp;
+  if (base::FeatureList::IsEnabled(syncer::kSyncSessionOnVisibilityChanged)) {
+    tab->last_active_time =
+        base::Time::UnixEpoch() +
+        base::Milliseconds(sync_data.last_active_time_unix_epoch_millis());
+  }
   tab->navigations.clear();
   tab->navigations.reserve(sync_data.navigation_size());
   for (int i = 0; i < sync_data.navigation_size(); ++i) {
@@ -218,6 +176,10 @@ sync_pb::SessionTab SessionTabToSyncData(
   sync_data.set_current_navigation_index(tab.current_navigation_index);
   sync_data.set_pinned(tab.pinned);
   sync_data.set_extension_app_id(tab.extension_app_id);
+  if (base::FeatureList::IsEnabled(syncer::kSyncSessionOnVisibilityChanged)) {
+    sync_data.set_last_active_time_unix_epoch_millis(
+        (tab.last_active_time - base::Time::UnixEpoch()).InMilliseconds());
+  }
   for (const SerializedNavigationEntry& navigation : tab.navigations) {
     SessionNavigationToSyncData(navigation).Swap(sync_data.add_navigation());
   }
@@ -245,9 +207,44 @@ sync_pb::SessionWindow SyncedSessionWindow::ToSessionWindowProto() const {
 }
 
 SyncedSession::SyncedSession()
-    : session_tag("invalid"), device_type(sync_pb::SyncEnums::TYPE_UNSET) {}
+    : session_tag_("invalid"), device_type(sync_pb::SyncEnums::TYPE_UNSET) {}
 
 SyncedSession::~SyncedSession() = default;
+
+void SyncedSession::SetSessionTag(const std::string& session_tag) {
+  session_tag_ = session_tag;
+}
+
+const std::string& SyncedSession::GetSessionTag() const {
+  return session_tag_;
+}
+
+void SyncedSession::SetSessionName(const std::string& session_name) {
+  session_name_ = session_name;
+}
+
+const std::string& SyncedSession::GetSessionName() const {
+  return session_name_;
+}
+
+void SyncedSession::SetModifiedTime(const base::Time& modified_time) {
+  modified_time_ = modified_time;
+}
+
+const base::Time& SyncedSession::GetModifiedTime() const {
+  return modified_time_;
+}
+
+void SyncedSession::SetDeviceTypeAndFormFactor(
+    const sync_pb::SyncEnums::DeviceType& local_device_type,
+    const syncer::DeviceInfo::FormFactor& local_device_form_factor) {
+  device_type = local_device_type;
+  device_form_factor = local_device_form_factor;
+}
+
+syncer::DeviceInfo::FormFactor SyncedSession::GetDeviceFormFactor() const {
+  return device_form_factor;
+}
 
 sync_pb::SessionHeader SyncedSession::ToSessionHeaderProto() const {
   sync_pb::SessionHeader header;
@@ -255,8 +252,9 @@ sync_pb::SessionHeader SyncedSession::ToSessionHeaderProto() const {
     sync_pb::SessionWindow* w = header.add_window();
     w->CopyFrom(window->ToSessionWindowProto());
   }
-  header.set_client_name(session_name);
+  header.set_client_name(session_name_);
   header.set_device_type(device_type);
+  header.set_device_form_factor(ToDeviceFormFactorProto(device_form_factor));
   return header;
 }
 

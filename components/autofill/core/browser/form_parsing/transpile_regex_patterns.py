@@ -7,9 +7,26 @@
 import argparse
 from collections import defaultdict
 import io
-import json
+import os
 import re
 import sys
+
+_FILE_PATH = os.path.dirname(os.path.realpath(__file__))
+
+_JSON5_PATH = os.path.join(
+    _FILE_PATH,
+    os.pardir,
+    os.pardir,
+    os.pardir,
+    os.pardir,
+    os.pardir,
+    "third_party",
+    "pyjson5",
+    "src",
+)
+sys.path.insert(1, _JSON5_PATH)
+
+import json5 as json
 
 # Generates a set of C++ constexpr constants to facilitate lookup of a set of
 # MatchingPatterns by a given tuple (pattern name, language code).
@@ -73,7 +90,7 @@ def generate_cpp_constants(id_to_name_to_lang_to_patterns):
           r'(^|_)([a-z])', lambda matched: matched.group(2).upper(),
           json.lower())
     cpp_enum_values = [json_to_cpp_constant_symbol(c) for c in json_enum_values]
-    return (f'DenseSet<{cpp_enum_type}>{{' + ','.join(cpp_enum_values) + f'}}')
+    return f'DenseSet<{cpp_enum_type}>{{' + ','.join(cpp_enum_values) + f'}}'
 
   # Maps a list of strings to a DenseSet<MatchAttribute> expression.
   # The strings must be the names of MatchAttribute constants, e.g., NAME.
@@ -81,11 +98,11 @@ def generate_cpp_constants(id_to_name_to_lang_to_patterns):
   def json_to_cpp_match_field_attributes(enum_values):
     return json_to_cpp_dense_set(enum_values, 'MatchAttribute')
 
-  # Maps a list of strings to a DenseSet<MatchFieldType> expression.
-  # The strings must be the names of MatchFieldType constants, e.g., TEXT_AREA.
+  # Maps a list of strings to a DenseSet<FormControlType> expression.
+  # The strings must be the names of FormControlType constants, e.g., TEXT_AREA.
   # They're mapped to C++ constants, e.g., kTextArea.
-  def json_to_cpp_match_field_input_types(enum_values):
-    return json_to_cpp_dense_set(enum_values, 'MatchFieldType')
+  def json_to_cpp_form_control_types(enum_values):
+    return json_to_cpp_dense_set(enum_values, 'FormControlType')
 
   # Maps a JSON object representing a pattern to a C++ MatchingPattern
   # expression.
@@ -95,14 +112,14 @@ def generate_cpp_constants(id_to_name_to_lang_to_patterns):
     positive_score = json['positive_score']
     match_field_attributes = json_to_cpp_match_field_attributes(
         json['match_field_attributes'])
-    match_field_input_types = json_to_cpp_match_field_input_types(
-        json['match_field_input_types'])
+    form_control_types = json_to_cpp_form_control_types(
+        json['form_control_types'])
     return f'MatchingPattern{{\n' \
            f'  .positive_pattern = {positive_pattern},\n' \
            f'  .negative_pattern = {negative_pattern},\n' \
            f'  .positive_score = {positive_score},\n' \
            f'  .match_field_attributes = {match_field_attributes},\n' \
-           f'  .match_field_input_types = {match_field_input_types},\n' \
+           f'  .form_control_types = {form_control_types},\n' \
            f'}}'
 
   # Name of the auxiliary C++ constant.

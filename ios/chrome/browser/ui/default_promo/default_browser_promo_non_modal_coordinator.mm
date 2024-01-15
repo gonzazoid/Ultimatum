@@ -5,23 +5,20 @@
 #import "ios/chrome/browser/ui/default_promo/default_browser_promo_non_modal_coordinator.h"
 
 #import "base/notreached.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
+#import "components/feature_engagement/public/tracker.h"
+#import "ios/chrome/browser/default_browser/model/utils.h"
+#import "ios/chrome/browser/feature_engagement/model/tracker_factory.h"
+#import "ios/chrome/browser/shared/coordinator/default_browser_promo/non_modal_default_browser_promo_scheduler_scene_agent.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
 #import "ios/chrome/browser/ui/default_promo/default_browser_promo_non_modal_commands.h"
-#import "ios/chrome/browser/ui/default_promo/default_browser_promo_non_modal_scheduler.h"
 #import "ios/chrome/browser/ui/infobars/banners/infobar_banner_view_controller.h"
 #import "ios/chrome/browser/ui/infobars/coordinators/infobar_coordinator+subclassing.h"
 #import "ios/chrome/browser/ui/infobars/coordinators/infobar_coordinator_implementation.h"
-#import "ios/chrome/browser/ui/main/default_browser_scene_agent.h"
-#import "ios/chrome/browser/ui/main/scene_state_browser_agent.h"
-#import "ios/chrome/grit/ios_google_chrome_strings.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/public/provider/chrome/browser/branded_images/branded_images_api.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface DefaultBrowserPromoNonModalCoordinator ()
 // InfobarBannerViewController owned by this Coordinator.
@@ -70,6 +67,7 @@
     [self.bannerViewController setIconImage:image];
     [self.bannerViewController setUseIconBackgroundTint:NO];
     [self.bannerViewController setPresentsModal:NO];
+    [self recordDefaultBrowserPromoShown];
   }
 }
 
@@ -112,20 +110,16 @@
 
 - (void)performInfobarAction {
   self.infobarAccepted = YES;
-  SceneState* sceneState =
-      SceneStateBrowserAgent::FromBrowser(self.browser)->GetSceneState();
-  DefaultBrowserSceneAgent* agent =
-      [DefaultBrowserSceneAgent agentFromScene:sceneState];
-  [agent.nonModalScheduler logUserPerformedPromoAction];
+  SceneState* sceneState = self.browser->GetSceneState();
+  [[NonModalDefaultBrowserPromoSchedulerSceneAgent agentFromScene:sceneState]
+      logUserPerformedPromoAction];
 }
 
 - (void)infobarBannerWillBeDismissed:(BOOL)userInitiated {
   if (userInitiated) {
-    SceneState* sceneState =
-        SceneStateBrowserAgent::FromBrowser(self.browser)->GetSceneState();
-    DefaultBrowserSceneAgent* agent =
-        [DefaultBrowserSceneAgent agentFromScene:sceneState];
-    [agent.nonModalScheduler logUserDismissedPromo];
+    SceneState* sceneState = self.browser->GetSceneState();
+    [[NonModalDefaultBrowserPromoSchedulerSceneAgent agentFromScene:sceneState]
+        logUserDismissedPromo];
   }
 }
 
@@ -141,6 +135,15 @@
   // The non-modal promo should never have a modal.
   NOTREACHED();
   return 0;
+}
+
+#pragma mark - private
+
+// Records that a default browser promo has been shown.
+- (void)recordDefaultBrowserPromoShown {
+  ChromeBrowserState* browserState = self.browser->GetBrowserState();
+  LogToFETDefaultBrowserPromoShown(
+      feature_engagement::TrackerFactory::GetForBrowserState(browserState));
 }
 
 @end

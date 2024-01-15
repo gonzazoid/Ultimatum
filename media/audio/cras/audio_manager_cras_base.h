@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "base/compiler_specific.h"
-#include "base/memory/ref_counted.h"
 #include "media/audio/audio_manager_base.h"
 
 namespace media {
@@ -20,7 +19,7 @@ namespace media {
 class MEDIA_EXPORT AudioManagerCrasBase : public AudioManagerBase {
  public:
   AudioManagerCrasBase(std::unique_ptr<AudioThread> audio_thread,
-                   AudioLogFactory* audio_log_factory);
+                       AudioLogFactory* audio_log_factory);
 
   AudioManagerCrasBase(const AudioManagerCrasBase&) = delete;
   AudioManagerCrasBase& operator=(const AudioManagerCrasBase&) = delete;
@@ -67,11 +66,13 @@ class MEDIA_EXPORT AudioManagerCrasBase : public AudioManagerBase {
  protected:
   // Called by MakeLinearOutputStream and MakeLowLatencyOutputStream.
   AudioOutputStream* MakeOutputStream(const AudioParameters& params,
-                                      const std::string& device_id);
+                                      const std::string& device_id,
+                                      const LogCallback& log_callback);
 
   // Called by MakeLinearInputStream and MakeLowLatencyInputStream.
   AudioInputStream* MakeInputStream(const AudioParameters& params,
-                                    const std::string& device_id);
+                                    const std::string& device_id,
+                                    const LogCallback& log_callback);
 
  private:
   // Manages starting / stopping of aecdump recording.

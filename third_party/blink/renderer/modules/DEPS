@@ -1,6 +1,7 @@
 include_rules = [
     "+base/atomic_sequence_num.h",
     "+base/memory/scoped_refptr.h",
+    "+mojo/public/cpp/base",
     "+mojo/public/cpp/bindings",
     "+mojo/public/cpp/system",
     "+net/base/net_errors.h",
@@ -36,6 +37,9 @@ specific_include_rules = {
         "+testing/libfuzzer/proto/lpm_interface.h",
         "+third_party/protobuf/src/google/protobuf/repeated_field.h",
     ],
+    "modules_initializer.cc": [
+        "+cc/raster/categorized_worker_pool.h",
+    ],
     ".*_decoder_fuzzer.cc": [
         "+base/run_loop.h",
     ],
@@ -57,13 +61,15 @@ specific_include_rules = {
     ],
 
     "tcp_writable_stream_wrapper.h": [
-        "+base/allocator/partition_allocator/partition_root.h",
+        "+base/allocator/partition_allocator/src/partition_alloc/partition_root.h",
     ],
     ".*_stream_wrapper.cc": [
         "+net/base/ip_endpoint.h",
     ],
     ".*socket.cc": [
-        "+base/barrier_callback.h",
         "+base/functional/identity.h",
     ],
+    "web_printing_manager.cc": [
+      "+printing/buildflags/buildflags.h",
+    ]
 }

@@ -6,8 +6,11 @@
 
 #include <jni.h>
 #include "base/android/jni_array.h"
+#include "chrome/browser/android/android_theme_resources.h"
+#include "chrome/browser/android/resource_mapper.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/page_info/about_this_site_service_factory.h"
+#include "chrome/browser/page_info/about_this_site_tab_helper.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/page_info/core/about_this_site_service.h"
 #include "components/page_info/core/features.h"
@@ -23,6 +26,12 @@ static jboolean JNI_PageInfoAboutThisSiteController_IsFeatureEnabled(
       g_browser_process->GetApplicationLocale());
 }
 
+static jint JNI_PageInfoAboutThisSiteController_GetJavaDrawableIconId(
+    JNIEnv* env) {
+  return ResourceMapper::MapToJavaDrawableId(
+      IDR_ANDROID_ABOUT_THIS_SITE_LOGO_24DP);
+}
+
 static base::android::ScopedJavaLocalRef<jbyteArray>
 JNI_PageInfoAboutThisSiteController_GetSiteInfo(
     JNIEnv* env,
@@ -35,10 +44,10 @@ JNI_PageInfoAboutThisSiteController_GetSiteInfo(
   if (!service)
     return nullptr;
   auto url = url::GURLAndroid::ToNativeGURL(env, j_url);
-  auto source_id = content::WebContents::FromJavaWebContents(j_webContents)
-                       ->GetPrimaryMainFrame()
-                       ->GetPageUkmSourceId();
-  auto info = service->GetAboutThisSiteInfo(*url, source_id);
+  auto* web_contents = content::WebContents::FromJavaWebContents(j_webContents);
+  auto source_id = web_contents->GetPrimaryMainFrame()->GetPageUkmSourceId();
+  auto* tab_helper = AboutThisSiteTabHelper::FromWebContents(web_contents);
+  auto info = service->GetAboutThisSiteInfo(*url, source_id, tab_helper);
   if (!info)
     return nullptr;
 

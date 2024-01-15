@@ -25,11 +25,10 @@ import org.chromium.ui.widget.Toast;
 import java.util.List;
 
 /**
- * Bottom sheet content to display a list of devices a user can send a tab to after they have
- * chosen to share it with themselves through the send-tab-to-self feature.
- * TODO(crbug.com/1219434): Make this and other helper UI bits package-private.
+ * Bottom sheet content to display a list of devices a user can send a tab to after they have chosen
+ * to share it with themselves through the send-tab-to-self feature.
  */
-public class DevicePickerBottomSheetContent implements BottomSheetContent, OnItemClickListener {
+class DevicePickerBottomSheetContent implements BottomSheetContent, OnItemClickListener {
     private final Context mContext;
     private final BottomSheetController mController;
     private ViewGroup mToolbarView;
@@ -39,10 +38,12 @@ public class DevicePickerBottomSheetContent implements BottomSheetContent, OnIte
     private final String mUrl;
     private final String mTitle;
 
-    private static final int ACCOUNT_AVATAR_SIZE_DP = 24;
-
-    public DevicePickerBottomSheetContent(Context context, String url, String title,
-            BottomSheetController controller, List<TargetDeviceInfo> targetDevices,
+    public DevicePickerBottomSheetContent(
+            Context context,
+            String url,
+            String title,
+            BottomSheetController controller,
+            List<TargetDeviceInfo> targetDevices,
             Profile profile) {
         mContext = context;
         mController = controller;
@@ -56,21 +57,26 @@ public class DevicePickerBottomSheetContent implements BottomSheetContent, OnIte
     }
 
     private void createToolbarView() {
-        mToolbarView = (ViewGroup) LayoutInflater.from(mContext).inflate(
-                R.layout.send_tab_to_self_device_picker_toolbar, null);
+        mToolbarView =
+                (ViewGroup)
+                        LayoutInflater.from(mContext)
+                                .inflate(R.layout.send_tab_to_self_device_picker_toolbar, null);
         TextView toolbarText = mToolbarView.findViewById(R.id.device_picker_toolbar);
         toolbarText.setText(R.string.send_tab_to_self_sheet_toolbar);
     }
 
     private void createContentView() {
-        mContentView = (ViewGroup) LayoutInflater.from(mContext).inflate(
-                R.layout.send_tab_to_self_device_picker_list, null);
+        mContentView =
+                (ViewGroup)
+                        LayoutInflater.from(mContext)
+                                .inflate(R.layout.send_tab_to_self_device_picker_list, null);
         ListView listView = mContentView.findViewById(R.id.device_picker_list);
         listView.setAdapter(mAdapter);
         listView.setOnItemClickListener(this);
 
-        listView.addFooterView(LayoutInflater.from(mContext).inflate(
-                R.layout.send_tab_to_self_device_picker_footer, null));
+        listView.addFooterView(
+                LayoutInflater.from(mContext)
+                        .inflate(R.layout.send_tab_to_self_device_picker_footer, null));
     }
 
     @Override
@@ -145,8 +151,7 @@ public class DevicePickerBottomSheetContent implements BottomSheetContent, OnIte
 
         Resources res = mContext.getResources();
 
-        if (ChromeFeatureList.isEnabled(ChromeFeatureList.SEND_TAB_TO_SELF_V2)
-                || ChromeFeatureList.isEnabled(ChromeFeatureList.UPCOMING_SHARING_FEATURES)) {
+        if (ChromeFeatureList.isEnabled(ChromeFeatureList.SEND_TAB_TO_SELF_V2)) {
             String deviceType = res.getString(R.string.send_tab_to_self_device_type_generic);
             if (targetDeviceInfo.formFactor == FormFactor.PHONE) {
                 deviceType = res.getString(R.string.send_tab_to_self_device_type_phone);

@@ -21,8 +21,7 @@
 
 namespace ash {
 
-SystemWebAppIntegrationTest::SystemWebAppIntegrationTest()
-    : SystemWebAppManagerBrowserTest(false /* install_mock */) {}
+SystemWebAppIntegrationTest::SystemWebAppIntegrationTest() = default;
 
 SystemWebAppIntegrationTest::~SystemWebAppIntegrationTest() = default;
 
@@ -43,12 +42,12 @@ void SystemWebAppIntegrationTest::ExpectSystemWebAppValid(
   Browser* app_browser;
   LaunchAppWithoutWaiting(app_type, &app_browser);
 
-  web_app::AppId app_id = app_browser->app_controller()->app_id();
+  webapps::AppId app_id = app_browser->app_controller()->app_id();
   EXPECT_EQ(GetManager().GetAppIdForSystemApp(app_type), app_id);
   EXPECT_TRUE(GetManager().IsSystemWebApp(app_id));
 
   web_app::WebAppRegistrar& registrar =
-      web_app::WebAppProvider::GetForTest(profile())->registrar();
+      web_app::WebAppProvider::GetForTest(profile())->registrar_unsafe();
   EXPECT_EQ(title, registrar.GetAppShortName(app_id));
   EXPECT_EQ(base::ASCIIToUTF16(title),
             app_browser->window()->GetNativeWindow()->GetTitle());

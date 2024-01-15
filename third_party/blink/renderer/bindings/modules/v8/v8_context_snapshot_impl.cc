@@ -10,6 +10,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_html_document.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_initializer.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_node.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_window_properties.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_document.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_window.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -21,6 +22,7 @@
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
 #include "third_party/blink/renderer/platform/bindings/v8_private_property.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
+#include "tools/v8_context_snapshot/buildflags.h"
 
 #if defined(V8_USE_EXTERNAL_STARTUP_DATA)
 #include "gin/public/v8_snapshot_file_type.h"
@@ -30,13 +32,13 @@ namespace blink {
 namespace {
 
 bool IsUsingContextSnapshot() {
-#if defined(USE_V8_CONTEXT_SNAPSHOT)
+#if BUILDFLAG(USE_V8_CONTEXT_SNAPSHOT)
   if (Platform::Current()->IsTakingV8ContextSnapshot() ||
       gin::GetLoadedSnapshotFileType() ==
           gin::V8SnapshotFileType::kWithAdditionalContext) {
     return true;
   }
-#endif  // USE_V8_CONTEXT_SNAPSHOT
+#endif  // BUILDFLAG(USE_V8_CONTEXT_SNAPSHOT)
   return false;
 }
 
@@ -71,10 +73,10 @@ constexpr const size_t kNumOfWorlds = 2;
 
 inline scoped_refptr<DOMWrapperWorld> IndexToWorld(v8::Isolate* isolate,
                                                    size_t index) {
-  return index == 0
-             ? scoped_refptr<DOMWrapperWorld>(&DOMWrapperWorld::MainWorld())
-             : DOMWrapperWorld::EnsureIsolatedWorld(
-                   isolate, DOMWrapperWorld::WorldId::kMainWorldId + 1);
+  return index == 0 ? scoped_refptr<DOMWrapperWorld>(
+                          &DOMWrapperWorld::MainWorld(isolate))
+                    : DOMWrapperWorld::EnsureIsolatedWorld(
+                          isolate, DOMWrapperWorld::WorldId::kMainWorldId + 1);
 }
 
 inline int WorldToIndex(const DOMWrapperWorld& world) {
@@ -122,6 +124,10 @@ const struct {
     {V8Window::GetWrapperTypeInfo(),
      bindings::v8_context_snapshot::InstallPropsOfV8Window,
      bindings::v8_context_snapshot::InstallPropsOfV8Window,
+     {true, true}},
+    {V8WindowProperties::GetWrapperTypeInfo(),
+     bindings::v8_context_snapshot::InstallPropsOfV8WindowProperties,
+     bindings::v8_context_snapshot::InstallPropsOfV8WindowProperties,
      {true, true}},
     {V8HTMLDocument::GetWrapperTypeInfo(),
      bindings::v8_context_snapshot::InstallPropsOfV8HTMLDocument,
@@ -416,8 +422,7 @@ void V8ContextSnapshotImpl::InstallInterfaceTemplates(v8::Isolate* isolate) {
   }
 }
 
-v8::StartupData V8ContextSnapshotImpl::TakeSnapshot() {
-  v8::Isolate* isolate = V8PerIsolateData::MainThreadIsolate();
+v8::StartupData V8ContextSnapshotImpl::TakeSnapshot(v8::Isolate* isolate) {
   CHECK(isolate);
   CHECK(isolate->IsCurrent());
   V8PerIsolateData* per_isolate_data = V8PerIsolateData::From(isolate);
@@ -473,6 +478,7 @@ const intptr_t* V8ContextSnapshotImpl::GetReferenceTable() {
       bindings::v8_context_snapshot::GetRefTableOfV8HTMLDocument(),
       bindings::v8_context_snapshot::GetRefTableOfV8Node(),
       bindings::v8_context_snapshot::GetRefTableOfV8Window(),
+      bindings::v8_context_snapshot::GetRefTableOfV8WindowProperties(),
       last_table,
   };
   DCHECK_EQ(std::size(tables), std::size(type_info_table) + 1);

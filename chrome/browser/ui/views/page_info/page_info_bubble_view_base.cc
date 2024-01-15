@@ -67,7 +67,7 @@ void PageInfoBubbleViewBase::OnWidgetDestroying(views::Widget* widget) {
 
 void PageInfoBubbleViewBase::RenderFrameDeleted(
     content::RenderFrameHost* render_frame_host) {
-  if (render_frame_host == web_contents()->GetPrimaryMainFrame()) {
+  if (render_frame_host->IsInPrimaryMainFrame()) {
     GetWidget()->Close();
   }
 }
@@ -91,5 +91,5 @@ void PageInfoBubbleViewBase::WebContentsDestroyed() {
   GetWidget()->Close();
 }
 
-BEGIN_METADATA(PageInfoBubbleViewBase, views::BubbleDialogDelegateView)
+BEGIN_METADATA(PageInfoBubbleViewBase)
 END_METADATA

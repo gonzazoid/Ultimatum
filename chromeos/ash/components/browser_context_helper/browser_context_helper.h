@@ -11,9 +11,15 @@
 #include "base/files/file_path.h"
 #include "base/strings/string_piece.h"
 
+class AccountId;
+
 namespace content {
 class BrowserContext;
 }  // namespace content
+
+namespace user_manager {
+class User;
+}  // namespace user_manager
 
 namespace ash {
 
@@ -42,10 +48,27 @@ class COMPONENT_EXPORT(ASH_BROWSER_CONTEXT_HELPER) BrowserContextHelper {
     virtual content::BrowserContext* DeprecatedGetBrowserContext(
         const base::FilePath& path) = 0;
 
+    // Returns the primary off-the-record BrowserContext instance corresponding
+    // to the given `browser_context`. If there is not, creates the one.
+    virtual content::BrowserContext* GetOrCreatePrimaryOTRBrowserContext(
+        content::BrowserContext* browser_context) = 0;
+
+    // Returns the original BrowserContext instance. If the given
+    // `browser_context` is not an off-the-record browser context, itself will
+    // be returned.
+    virtual content::BrowserContext* GetOriginalBrowserContext(
+        content::BrowserContext* browser_context) = 0;
+
     // Returns the path to the user data directory.
     // If the system is not initialized, returns nullptr (for unittests).
     virtual const base::FilePath* GetUserDataDir() = 0;
   };
+
+  // Legacy profile dir that was used when only one cryptohome has been mounted.
+  static const char kLegacyBrowserContextDirName[];
+
+  // This must be kept in sync with TestingProfile::kTestUserProfileDir.
+  static const char kTestUserBrowserContextDirName[];
 
   explicit BrowserContextHelper(std::unique_ptr<Delegate> delegate);
   BrowserContextHelper(const BrowserContextHelper&) = delete;
@@ -61,11 +84,20 @@ class COMPONENT_EXPORT(ASH_BROWSER_CONTEXT_HELPER) BrowserContextHelper {
   static std::string GetUserIdHashFromBrowserContext(
       content::BrowserContext* browser_context);
 
-  // Legacy profile dir that was used when only one cryptohome has been mounted.
-  static const char kLegacyBrowserContextDirName[];
+  // Returns BrowserContext instance of the user associated with |account_id|
+  // if it is created and fully initialized. Otherwise, returns nullptr.
+  content::BrowserContext* GetBrowserContextByAccountId(
+      const AccountId& account_id);
 
-  // This must be kept in sync with TestingProfile::kTestUserProfileDir.
-  static const char kTestUserBrowserContextDirName[];
+  // Returns BrowserContext instance of the |user| if it is created and fully
+  // initialized. Otherwise, returns nullptr.
+  content::BrowserContext* GetBrowserContextByUser(
+      const user_manager::User* user);
+
+  // Returns User instance of the given |browser_context|. If not found,
+  // returns nullptr.
+  const user_manager::User* GetUserByBrowserContext(
+      content::BrowserContext* browser_context);
 
   // Returns user browser context dir in a format of "u-${user_id_hash}".
   static std::string GetUserBrowserContextDirName(
@@ -74,6 +106,31 @@ class COMPONENT_EXPORT(ASH_BROWSER_CONTEXT_HELPER) BrowserContextHelper {
   // Returns browser context path that corresponds to the given |user_id_hash|.
   base::FilePath GetBrowserContextPathByUserIdHash(
       base::StringPiece user_id_hash);
+
+  // Returns the path of signin browser context.
+  base::FilePath GetSigninBrowserContextPath() const;
+
+  // Returns signin browser context instance. If not yet created, returns
+  // nullptr. Note that returned instance is off-the-record one.
+  content::BrowserContext* GetSigninBrowserContext();
+
+  // DEPRECATED. Please use GetSinginBrowserContext() instead.
+  // Similar to GetSigninBrowserContext, but if not yet created,
+  // this loads the BrowserContext instance, instead of returning nullptr.
+  content::BrowserContext* DeprecatedGetOrCreateSigninBrowserContext();
+
+  // Returns the path of lock-screen-app browser context.
+  base::FilePath GetLockScreenAppBrowserContextPath() const;
+
+  // Returns the path of lock-screen browser context.
+  base::FilePath GetLockScreenBrowserContextPath() const;
+
+  // Returns lock-screen browser context instance. If not yet created,
+  // returns nullptr. Note that returned instance is off-the-record one.
+  content::BrowserContext* GetLockScreenBrowserContext();
+
+  // Returns the path of shimless-rma-app browser context.
+  base::FilePath GetShimlessRmaAppBrowserContextPath() const;
 
  private:
   // This is only for graceful migration.

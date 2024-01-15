@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/infobars/confirm_infobar_creator.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -32,7 +32,6 @@ class GlobalConfirmInfoBar::DelegateProxy : public ConfirmInfoBarDelegate {
   infobars::InfoBarDelegate::InfoBarIdentifier GetIdentifier() const override;
   std::u16string GetLinkText() const override;
   GURL GetLinkURL() const override;
-  bool LinkClicked(WindowOpenDisposition disposition) override;
   void InfoBarDismissed() override;
   std::u16string GetMessageText() const override;
   gfx::ElideBehavior GetMessageElideBehavior() const override;
@@ -41,8 +40,8 @@ class GlobalConfirmInfoBar::DelegateProxy : public ConfirmInfoBarDelegate {
   bool Accept() override;
   bool Cancel() override;
   bool IsCloseable() const override;
+  bool ShouldAnimate() const override;
 
-  infobars::InfoBar* info_bar_ = nullptr;
   base::WeakPtr<GlobalConfirmInfoBar> global_info_bar_;
 };
 
@@ -73,11 +72,9 @@ bool GlobalConfirmInfoBar::DelegateProxy::IsCloseable() const {
                           : ConfirmInfoBarDelegate::IsCloseable();
 }
 
-bool GlobalConfirmInfoBar::DelegateProxy::LinkClicked(
-    WindowOpenDisposition disposition) {
-  return global_info_bar_
-             ? global_info_bar_->delegate_->LinkClicked(disposition)
-             : ConfirmInfoBarDelegate::LinkClicked(disposition);
+bool GlobalConfirmInfoBar::DelegateProxy::ShouldAnimate() const {
+  return global_info_bar_ ? global_info_bar_->delegate_->ShouldAnimate()
+                          : ConfirmInfoBarDelegate::ShouldAnimate();
 }
 
 void GlobalConfirmInfoBar::DelegateProxy::InfoBarDismissed() {
@@ -88,7 +85,7 @@ void GlobalConfirmInfoBar::DelegateProxy::InfoBarDismissed() {
   // Furthermore, letting GlobalConfirmInfoBar close the current InfoBar can
   // cause memory corruption when InfoBar animation is disabled.
   if (info_bar) {
-    info_bar->OnInfoBarRemoved(info_bar_, false);
+    info_bar->OnInfoBarRemoved(infobar(), false);
     info_bar->delegate_->InfoBarDismissed();
     // Check the pointer again in case it's now destroyed.
     // TODO(pkasting): We should audit callees for these sorts of methods
@@ -136,7 +133,7 @@ bool GlobalConfirmInfoBar::DelegateProxy::Accept() {
     // handle it appropriately.  We also need to worry about side effects like
     // navigating the current tab and whether that can corrupt state or result
     // in double-frees.
-    info_bar->OnInfoBarRemoved(info_bar_, false);
+    info_bar->OnInfoBarRemoved(infobar(), false);
     info_bar->delegate_->Accept();
     if (info_bar)
       info_bar->Close();
@@ -150,7 +147,7 @@ bool GlobalConfirmInfoBar::DelegateProxy::Cancel() {
   // See comments in InfoBarDismissed().
   if (info_bar) {
     // See comments in Accept().
-    info_bar->OnInfoBarRemoved(info_bar_, false);
+    info_bar->OnInfoBarRemoved(infobar(), false);
     info_bar->delegate_->Cancel();
     if (info_bar)
       info_bar->Close();
@@ -181,7 +178,7 @@ GlobalConfirmInfoBar::~GlobalConfirmInfoBar() {
     auto it = proxies_.begin();
     it->second->Detach();
     it->first->RemoveObserver(this);
-    it->first->RemoveInfoBar(it->second->info_bar_);
+    it->first->RemoveInfoBar(it->second->infobar());
     proxies_.erase(it);
   }
 }
@@ -206,7 +203,7 @@ void GlobalConfirmInfoBar::OnInfoBarRemoved(infobars::InfoBar* info_bar,
                                             bool animate) {
   // Do not process alien infobars.
   for (const auto& it : proxies_) {
-    if (it.second->info_bar_ == info_bar) {
+    if (it.second->infobar() == info_bar) {
       OnManagerShuttingDown(info_bar->owner());
       break;
     }
@@ -251,13 +248,12 @@ void GlobalConfirmInfoBar::MaybeAddInfoBar(content::WebContents* web_contents) {
   if (!added_bar) {
     is_closing_ = true;
 
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&GlobalConfirmInfoBar::Close,
                                   weak_factory_.GetWeakPtr()));
     return;
   }
 
-  proxy_ptr->info_bar_ = added_bar;
   proxies_[infobar_manager] = proxy_ptr;
   infobar_manager->AddObserver(this);
 }

@@ -4,7 +4,6 @@
 
 #include <vector>
 
-#include "base/logging.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -37,8 +36,8 @@ class VKMSTest : public testing::Test {
         drm_device_.BindNewPipeAndPassReceiver());
     run_loop.Run();
 
-    auto [path, file] = ui::test::FindDrmDriverOrDie("vkms");
-    drm_device_->AddGraphicsDevice(path, std::move(file));
+    auto [path, fd] = ui::test::FindDrmDriverOrDie("vkms");
+    drm_device_->AddGraphicsDevice(path, mojo::PlatformHandle(std::move(fd)));
   }
 
  protected:
@@ -134,8 +133,9 @@ TEST_F(VKMSTest, SinglePlanePageFlip) {
       /*flags=*/0, &buffer, &framebuffer);
 
   auto planes = std::vector<ui::DrmOverlayPlane>();
-  planes.emplace_back(framebuffer,
-                      std::make_unique<gfx::GpuFence>(gfx::GpuFenceHandle()));
+  planes.push_back(ui::DrmOverlayPlane::TestPlane(
+      framebuffer, gfx::ColorSpace::CreateSRGB(),
+      std::make_unique<gfx::GpuFence>(gfx::GpuFenceHandle())));
 
   base::RunLoop run_loop;
   auto submission_callback =

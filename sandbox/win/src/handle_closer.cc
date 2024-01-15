@@ -10,8 +10,8 @@
 
 #include "base/check_op.h"
 #include "base/memory/free_deleter.h"
+#include "base/numerics/checked_math.h"
 #include "base/ranges/algorithm.h"
-#include "base/win/windows_version.h"
 #include "sandbox/win/src/win_utils.h"
 
 namespace {
@@ -51,10 +51,14 @@ ResultCode HandleCloser::AddHandle(const wchar_t* handle_type,
 
   std::wstring resolved_name;
   if (handle_name) {
-    resolved_name = handle_name;
-    if (handle_type == std::wstring(L"Key"))
-      if (!ResolveRegistryName(resolved_name, &resolved_name))
+    if (handle_type == std::wstring(L"Key")) {
+      auto resolved_reg_path = ResolveRegistryName(handle_name);
+      if (!resolved_reg_path)
         return SBOX_ERROR_BAD_PARAMS;
+      resolved_name = resolved_reg_path.value();
+    } else {
+      resolved_name = handle_name;
+    }
   }
 
   HandleMap::iterator names = handles_to_close_.find(handle_type);
@@ -142,8 +146,8 @@ bool HandleCloser::SetupHandleList(void* buffer, size_t buffer_bytes) {
     i->first.copy(output, i->first.size());
     *(output += i->first.size()) = L'\0';
     output++;
-    list_entry->offset_to_names =
-        reinterpret_cast<char*>(output) - reinterpret_cast<char*>(list_entry);
+    list_entry->offset_to_names = base::checked_cast<size_t>(
+        reinterpret_cast<char*>(output) - reinterpret_cast<char*>(list_entry));
     list_entry->name_count = i->second.size();
 
     // Copy the handle names.
@@ -154,8 +158,8 @@ bool HandleCloser::SetupHandleList(void* buffer, size_t buffer_bytes) {
 
     // Round up to the nearest multiple of sizeof(size_t).
     output = RoundUpToWordSize(output);
-    list_entry->record_bytes =
-        reinterpret_cast<char*>(output) - reinterpret_cast<char*>(list_entry);
+    list_entry->record_bytes = static_cast<size_t>(
+        reinterpret_cast<char*>(output) - reinterpret_cast<char*>(list_entry));
   }
 
   DCHECK_EQ(reinterpret_cast<size_t>(output), reinterpret_cast<size_t>(end));

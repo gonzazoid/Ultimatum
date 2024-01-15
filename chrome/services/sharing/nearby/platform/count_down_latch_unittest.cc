@@ -6,9 +6,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/synchronization/lock.h"
 #include "base/task/task_runner.h"
@@ -22,7 +22,6 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -81,7 +80,7 @@ class CountDownLatchTest : public testing::Test {
     base::AutoLock al(map_lock_);
     ASSERT_TRUE(base::Contains(id_to_result_map_, id));
     ASSERT_TRUE(id_to_result_map_[id]);
-    EXPECT_TRUE(id_to_result_map_[id]->ok());
+    EXPECT_EQ(expected_result, id_to_result_map_[id]->ok());
     EXPECT_EQ(expected_result, id_to_result_map_[id]->result());
   }
 
@@ -217,4 +216,3 @@ TEST_F(CountDownLatchTest, InitializeCount2_LongerTimedAwaitDoesNotTimeOut) {
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

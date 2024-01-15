@@ -9,27 +9,26 @@
 #import "base/metrics/user_metrics.h"
 #import "base/notreached.h"
 #import "base/time/time.h"
-#import "ios/chrome/browser/ui/commands/browser_commands.h"
-#import "ios/chrome/browser/ui/commands/omnibox_commands.h"
-#import "ios/chrome/browser/ui/icons/symbols.h"
-#import "ios/chrome/browser/ui/popup_menu/public/popup_menu_long_press_delegate.h"
+#import "ios/chrome/browser/shared/public/commands/omnibox_commands.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/util/animation_util.h"
+#import "ios/chrome/browser/shared/ui/util/layout_guide_names.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/ui/fullscreen/fullscreen_animator.h"
 #import "ios/chrome/browser/ui/toolbar/adaptive_toolbar_menus_provider.h"
 #import "ios/chrome/browser/ui/toolbar/adaptive_toolbar_view.h"
+#import "ios/chrome/browser/ui/toolbar/adaptive_toolbar_view_controller_delegate.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_button.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_button_factory.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_configuration.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_tab_grid_button.h"
-#import "ios/chrome/browser/ui/toolbar/buttons/toolbar_tools_menu_button.h"
 #import "ios/chrome/browser/ui/toolbar/public/toolbar_constants.h"
-#import "ios/chrome/browser/ui/util/animation_util.h"
-#import "ios/chrome/browser/ui/util/force_touch_long_press_gesture_recognizer.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/ui/toolbar/public/toolbar_utils.h"
 #import "ios/chrome/common/material_timing.h"
+#import "ios/chrome/common/ui/util/ui_util.h"
+#import "third_party/material_color_utilities/src/cpp/palettes/core.h"
 #import "ui/base/device_form_factor.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 const CGFloat kRotationInRadians = 5.0 / 180 * M_PI;
@@ -40,6 +39,9 @@ const CGFloat kTabGridAnimationsTotalDuration = 0.5;
 NSString* const kContextMenuActionIdentifier = @"kContextMenuActionIdentifier";
 // The duration of the slide in animation.
 const base::TimeDelta kToobarSlideInAnimationDuration = base::Milliseconds(500);
+// Progress of fullscreen when the toolbars are fully visible.
+const CGFloat kFullscreenProgressFullyExpanded = 1.0;
+
 }  // namespace
 
 @interface AdaptiveToolbarViewController ()
@@ -49,6 +51,13 @@ const base::TimeDelta kToobarSlideInAnimationDuration = base::Milliseconds(500);
 // Whether a page is loading.
 @property(nonatomic, assign, getter=isLoading) BOOL loading;
 @property(nonatomic, assign) BOOL isNTP;
+// The last progress of fullscreen registered. The progress range is between 0
+// and 1.
+@property(nonatomic, assign) CGFloat previousFullscreenProgress;
+// The page's theme color.
+@property(nonatomic, strong) UIColor* pageThemeColor;
+// The under page background color.
+@property(nonatomic, strong) UIColor* underPageBackgroundColor;
 
 @end
 
@@ -56,13 +65,16 @@ const base::TimeDelta kToobarSlideInAnimationDuration = base::Milliseconds(500);
 
 @dynamic view;
 @synthesize buttonFactory = _buttonFactory;
-@synthesize longPressDelegate = _longPressDelegate;
 @synthesize loading = _loading;
 @synthesize isNTP = _isNTP;
 
 #pragma mark - Public
 
-- (void)updateForSideSwipeSnapshotOnNTP:(BOOL)onNTP {
+- (ToolbarButton*)toolsMenuButton {
+  return self.view.toolsMenuButton;
+}
+
+- (void)updateForSideSwipeSnapshot:(BOOL)onNonIncognitoNTP {
   self.view.progressBar.hidden = YES;
   self.view.progressBar.alpha = 0;
 }
@@ -97,6 +109,30 @@ const base::TimeDelta kToobarSlideInAnimationDuration = base::Milliseconds(500);
                         completion:nil];
 }
 
+- (void)setTabGridButtonIPHHighlighted:(BOOL)iphHighlighted {
+  self.view.tabGridButton.iphHighlighted = iphHighlighted;
+}
+
+- (void)setNewTabButtonIPHHighlighted:(BOOL)iphHighlighted {
+  self.view.openNewTabButton.iphHighlighted = iphHighlighted;
+}
+
+- (void)showPrerenderingAnimation {
+  __weak __typeof__(self) weakSelf = self;
+  [self.view.progressBar setProgress:0];
+  if (self.hasOmnibox) {
+    [self.view.progressBar setHidden:NO
+                            animated:YES
+                          completion:^(BOOL finished) {
+                            [weakSelf stopProgressBar];
+                          }];
+  }
+}
+
+- (BOOL)hasOmnibox {
+  return self.locationBarViewController != nil;
+}
+
 #pragma mark - UIViewController
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -106,14 +142,11 @@ const base::TimeDelta kToobarSlideInAnimationDuration = base::Milliseconds(500);
 
 - (void)viewDidLoad {
   [super viewDidLoad];
-  [self addStandardActionsForAllButtons];
 
-  [[NSNotificationCenter defaultCenter]
-      addObserver:self
-         selector:@selector(voiceOverChanged:)
-             name:UIAccessibilityVoiceOverStatusDidChangeNotification
-           object:nil];
-  [self makeViewAccessibilityTraitsContainer];
+  // The first time, the toolbar is fully displayed.
+  self.previousFullscreenProgress = kFullscreenProgressFullyExpanded;
+
+  [self addStandardActionsForAllButtons];
 
   // Add the layout guide names to the buttons.
   self.view.toolsMenuButton.guideName = kToolsMenuGuide;
@@ -121,33 +154,56 @@ const base::TimeDelta kToobarSlideInAnimationDuration = base::Milliseconds(500);
   self.view.openNewTabButton.guideName = kNewTabButtonGuide;
   self.view.forwardButton.guideName = kForwardButtonGuide;
   self.view.backButton.guideName = kBackButtonGuide;
+  self.view.shareButton.guideName = kShareButtonGuide;
 
   [self addLayoutGuideCenterToButtons];
 
   // Add navigation popup menu triggers.
-  if (UseSymbols()) {
-    [self configureMenuProviderForButton:self.view.backButton
-                              buttonType:AdaptiveToolbarButtonTypeBack];
-    [self configureMenuProviderForButton:self.view.forwardButton
-                              buttonType:AdaptiveToolbarButtonTypeForward];
-    [self configureMenuProviderForButton:self.view.openNewTabButton
-                              buttonType:AdaptiveToolbarButtonTypeNewTab];
-    [self configureMenuProviderForButton:self.view.tabGridButton
-                              buttonType:AdaptiveToolbarButtonTypeTabGrid];
-  } else {
-    [self addLongPressGestureToView:self.view.backButton];
-    [self addLongPressGestureToView:self.view.forwardButton];
-    [self addLongPressGestureToView:self.view.openNewTabButton];
-    [self addLongPressGestureToView:self.view.tabGridButton];
-    [self addLongPressGestureToView:self.view.toolsMenuButton];
-  }
+  [self configureMenuProviderForButton:self.view.backButton
+                            buttonType:AdaptiveToolbarButtonTypeBack];
+  [self configureMenuProviderForButton:self.view.forwardButton
+                            buttonType:AdaptiveToolbarButtonTypeForward];
+  [self configureMenuProviderForButton:self.view.openNewTabButton
+                            buttonType:AdaptiveToolbarButtonTypeNewTab];
+  [self configureMenuProviderForButton:self.view.tabGridButton
+                            buttonType:AdaptiveToolbarButtonTypeTabGrid];
 
-  [self updateLayoutBasedOnTraitCollection];
+  // LocationBarContainer initial fullscreen progress.
+  [self updateLocationBarHeightForFullscreenProgress:
+            kFullscreenProgressFullyExpanded];
+
+  // CollapsedToolbarButton exit fullscreen.
+  [self.view.collapsedToolbarButton
+             addTarget:self
+                action:@selector(collapsedToolbarButtonTapped)
+      forControlEvents:UIControlEventTouchUpInside];
+  UIHoverGestureRecognizer* hoverGestureRecognizer =
+      [[UIHoverGestureRecognizer alloc]
+          initWithTarget:self
+                  action:@selector(exitFullscreen)];
+  [self.view.collapsedToolbarButton
+      addGestureRecognizer:hoverGestureRecognizer];
+
+  [self traitCollectionDidChange:nil];
 }
 
 - (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
   [super traitCollectionDidChange:previousTraitCollection];
-  [self updateLayoutBasedOnTraitCollection];
+
+  // Progress bar and buttons visibility.
+  [self updateAllButtonsVisibility];
+  if (IsRegularXRegularSizeClass(self)) {
+    [self.view.progressBar setHidden:YES animated:NO completion:nil];
+  } else if (self.loading) {
+    [self.view.progressBar setHidden:NO animated:NO completion:nil];
+  }
+
+  // Restore locationBarContainer height with previous fullscreen progress.
+  if (previousTraitCollection.preferredContentSizeCategory !=
+      self.traitCollection.preferredContentSizeCategory) {
+    [self updateLocationBarHeightForFullscreenProgress:
+              self.previousFullscreenProgress];
+  }
 }
 
 - (void)viewDidLayoutSubviews {
@@ -162,11 +218,7 @@ const base::TimeDelta kToobarSlideInAnimationDuration = base::Milliseconds(500);
   [self updateAllButtonsVisibility];
 }
 
-#pragma mark - Public
-
-- (ToolbarButton*)toolsMenuButton {
-  return self.view.toolsMenuButton;
-}
+#pragma mark - Public Properties
 
 - (void)setLayoutGuideCenter:(LayoutGuideCenter*)layoutGuideCenter {
   _layoutGuideCenter = layoutGuideCenter;
@@ -174,6 +226,25 @@ const base::TimeDelta kToobarSlideInAnimationDuration = base::Milliseconds(500);
   if (self.isViewLoaded) {
     [self addLayoutGuideCenterToButtons];
   }
+}
+
+- (void)setLocationBarViewController:
+    (UIViewController*)locationBarViewController {
+  _locationBarViewController = locationBarViewController;
+  if (locationBarViewController) {
+    [self addChildViewController:locationBarViewController];
+    [locationBarViewController didMoveToParentViewController:self];
+    [self.view setLocationBarView:locationBarViewController.view];
+    self.view.locationBarContainer.hidden = NO;
+    // Update the constraint of the location bar view to make sure the text is
+    // centered.
+    [locationBarViewController.view updateConstraintsIfNeeded];
+  } else {
+    CHECK(IsBottomOmniboxSteadyStateEnabled());
+    [self.view setLocationBarView:nil];
+    self.view.locationBarContainer.hidden = YES;
+  }
+  [self updateProgressBarVisibility];
 }
 
 #pragma mark - ToolbarConsumer
@@ -264,103 +335,161 @@ const base::TimeDelta kToobarSlideInAnimationDuration = base::Milliseconds(500);
   _isNTP = isNTP;
 }
 
+- (void)setPageThemeColor:(UIColor*)pageThemeColor {
+  if ([_pageThemeColor isEqual:pageThemeColor]) {
+    return;
+  }
+  _pageThemeColor = pageThemeColor;
+  [self updateBackgroundColor];
+}
+
+- (void)setUnderPageBackgroundColor:(UIColor*)underPageBackgroundColor {
+  if ([_underPageBackgroundColor isEqual:underPageBackgroundColor]) {
+    return;
+  }
+  _underPageBackgroundColor = underPageBackgroundColor;
+  [self updateBackgroundColor];
+}
+
 #pragma mark - NewTabPageControllerDelegate
 
 - (void)setScrollProgressForTabletOmnibox:(CGFloat)progress {
   // No-op, should be handled by the primary toolbar.
 }
 
+#pragma mark - FullscreenUIElement
+
+- (void)updateForFullscreenProgress:(CGFloat)progress {
+  self.previousFullscreenProgress = progress;
+
+  const CGFloat alphaValue = fmax(progress * 2 - 1, 0);
+
+  [self updateLocationBarHeightForFullscreenProgress:progress];
+  self.view.locationBarContainer.backgroundColor =
+      [self.buttonFactory.toolbarConfiguration
+          locationBarBackgroundColorWithVisibility:alphaValue];
+  self.view.collapsedToolbarButton.hidden = progress > 0.05;
+}
+
+- (void)updateForFullscreenEnabled:(BOOL)enabled {
+  if (!enabled) {
+    [self updateForFullscreenProgress:kFullscreenProgressFullyExpanded];
+  }
+}
+
+- (void)animateFullscreenWithAnimator:(FullscreenAnimator*)animator {
+  CGFloat finalProgress = animator.finalProgress;
+  // Using the animator doesn't work as the animation doesn't trigger a relayout
+  // of the constraints (see crbug.com/978462, crbug.com/950994).
+  [UIView animateWithDuration:animator.duration
+                   animations:^{
+                     [self updateForFullscreenProgress:finalProgress];
+                     [self.view layoutIfNeeded];
+                   }];
+}
+
 #pragma mark - Protected
 
 - (void)stopProgressBar {
   __weak AdaptiveToolbarViewController* weakSelf = self;
-  [self.view.progressBar setProgress:1
+  [self.view.progressBar setProgress:kFullscreenProgressFullyExpanded
                             animated:YES
                           completion:^(BOOL finished) {
                             [weakSelf updateProgressBarVisibility];
                           }];
 }
 
+- (void)collapsedToolbarButtonTapped {
+  base::RecordAction(base::UserMetricsAction("MobileFullscreenExitedManually"));
+  [self exitFullscreen];
+}
+
+- (void)updateBackgroundColor {
+  UIColor* colorToTransform = nil;
+  if (base::FeatureList::IsEnabled(kDynamicThemeColor) &&
+      [self isValidColorForDynamicBackground:self.pageThemeColor]) {
+    colorToTransform = self.pageThemeColor;
+  } else if (base::FeatureList::IsEnabled(kDynamicBackgroundColor) &&
+             [self isValidColorForDynamicBackground:
+                       self.underPageBackgroundColor]) {
+    colorToTransform = self.underPageBackgroundColor;
+  }
+
+  UIColor* backgroundColor =
+      self.buttonFactory.toolbarConfiguration.backgroundColor;
+
+  if (colorToTransform) {
+    CGFloat alpha;
+    CGFloat red;
+    CGFloat green;
+    CGFloat blue;
+    [colorToTransform getRed:&red green:&green blue:&blue alpha:&alpha];
+    int alphaInt = alpha * 255;
+    int redInt = red * 255;
+    int greenInt = green * 255;
+    int blueInt = blue * 255;
+    int ARGB = ((alphaInt & 0xff) << 24) | ((redInt & 0xff) << 16) |
+               ((greenInt & 0xff) << 8) | (blueInt & 0xff);
+    // TODO(crbug.com/1496866): Remove the dependency on
+    // material_color_utilities in #imports, BUILD.gn deps and DEPS file if this
+    // code is removed.
+    material_color_utilities::TonalPalette palette =
+        material_color_utilities::CorePalette::Of(ARGB).secondary();
+    backgroundColor = [UIColor
+        colorWithDynamicProvider:^UIColor*(UITraitCollection* traitCollection) {
+          if (traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark) {
+            return UIColorFromRGB(palette.get(30));
+          }
+          return UIColorFromRGB(palette.get(90));
+        }];
+  }
+
+  self.view.backgroundColor = backgroundColor;
+}
+
 #pragma mark - PopupMenuUIUpdating
 
-- (void)updateUIForMenuDisplayed:(PopupMenuType)popupType {
-  ToolbarButton* selectedButton = nil;
-  switch (popupType) {
-    case PopupMenuTypeNavigationForward:
-      selectedButton = self.view.forwardButton;
-      break;
-    case PopupMenuTypeNavigationBackward:
-      selectedButton = self.view.backButton;
-      break;
-    case PopupMenuTypeNewTab:
-      selectedButton = self.view.openNewTabButton;
-      break;
-    case PopupMenuTypeTabGrid:
-      selectedButton = self.view.tabGridButton;
-      break;
-    case PopupMenuTypeToolsMenu:
-      selectedButton = self.view.toolsMenuButton;
-      break;
-    case PopupMenuTypeTabStripTabGrid:
-      // ignore
-      break;
-  }
-
-  selectedButton.spotlighted = YES;
-
-  for (ToolbarButton* button in self.view.allButtons) {
-    button.dimmed = YES;
-  }
+- (void)updateUIForOverflowMenuIPHDisplayed {
+  self.view.toolsMenuButton.iphHighlighted = YES;
 }
 
-- (void)updateUIForMenuDismissed {
-  self.view.backButton.spotlighted = NO;
-  self.view.forwardButton.spotlighted = NO;
-  self.view.openNewTabButton.spotlighted = NO;
-  self.view.tabGridButton.spotlighted = NO;
-  self.view.toolsMenuButton.spotlighted = NO;
-
-  for (ToolbarButton* button in self.view.allButtons) {
-    button.dimmed = NO;
-  }
-}
-
-#pragma mark - Accessibility
-
-// Callback called when the voice over value is changed.
-- (void)voiceOverChanged:(NSNotification*)notification {
-  if (!UIAccessibilityIsVoiceOverRunning())
-    return;
-
-  __weak AdaptiveToolbarViewController* weakSelf = self;
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)),
-                 dispatch_get_main_queue(), ^{
-                   // The accessibility traits of the UIToolbar is only
-                   // available after a certain amount of time after voice over
-                   // activation.
-                   [weakSelf makeViewAccessibilityTraitsContainer];
-                 });
-}
-
-// Updates the accessibility traits of the view to have it interpreted as a
-// container by voice over.
-- (void)makeViewAccessibilityTraitsContainer {
-  if (self.view.accessibilityTraits == UIAccessibilityTraitNone) {
-    // TODO(crbug.com/857475): Remove this workaround once it is possible to set
-    // elements as voice over container. For now, set the accessibility traits
-    // of the toolbar to the accessibility traits of a UIToolbar allows it to
-    // act as a voice over container.
-    UIToolbar* toolbar = [[UIToolbar alloc] init];
-    self.view.accessibilityTraits = toolbar.accessibilityTraits;
-  }
+- (void)updateUIForIPHDismissed {
+  self.view.backButton.iphHighlighted = NO;
+  self.view.forwardButton.iphHighlighted = NO;
+  self.view.openNewTabButton.iphHighlighted = NO;
+  self.view.tabGridButton.iphHighlighted = NO;
+  self.view.toolsMenuButton.iphHighlighted = NO;
 }
 
 #pragma mark - Private
+
+// Updates `locationBarContainer` height and adjusts its corner radius for the
+// fullscreen `progress`
+- (void)updateLocationBarHeightForFullscreenProgress:(CGFloat)progress {
+  const CGFloat expandedHeight =
+      LocationBarHeight(self.traitCollection.preferredContentSizeCategory);
+  const CGFloat collapsedHeight =
+      ToolbarCollapsedHeight(self.traitCollection.preferredContentSizeCategory);
+  const CGFloat expandedCollapsedDelta = expandedHeight - collapsedHeight;
+
+  const CGFloat height =
+      AlignValueToPixel(collapsedHeight + expandedCollapsedDelta * progress);
+
+  self.view.locationBarContainerHeight.constant = height;
+  self.view.locationBarContainer.layer.cornerRadius = height / 2;
+}
 
 // Makes sure that the visibility of the progress bar is matching the one which
 // is expected.
 - (void)updateProgressBarVisibility {
   __weak __typeof(self) weakSelf = self;
+
+  BOOL hasOmnibox = self.locationBarViewController != nil;
+  if (!hasOmnibox) {
+    self.view.progressBar.hidden = YES;
+    return;
+  }
+
   if (self.loading && self.view.progressBar.hidden) {
     [self.view.progressBar setHidden:NO
                             animated:YES
@@ -420,52 +549,9 @@ const base::TimeDelta kToobarSlideInAnimationDuration = base::Milliseconds(500);
     base::RecordAction(base::UserMetricsAction("MobileToolbarShareMenu"));
   } else if (sender == self.view.openNewTabButton) {
     base::RecordAction(base::UserMetricsAction("MobileToolbarNewTabShortcut"));
+    base::RecordAction(base::UserMetricsAction("MobileTabNewTab"));
   } else {
     NOTREACHED();
-  }
-}
-
-// Adds a LongPressGesture to the `view`, with target on -`handleLongPress:`.
-- (void)addLongPressGestureToView:(UIView*)view {
-  ForceTouchLongPressGestureRecognizer* gestureRecognizer =
-      [[ForceTouchLongPressGestureRecognizer alloc]
-          initWithTarget:self
-                  action:@selector(handleGestureRecognizer:)];
-  gestureRecognizer.forceThreshold = 0.8;
-  [view addGestureRecognizer:gestureRecognizer];
-}
-
-// Handles the gseture recognizer on the views.
-- (void)handleGestureRecognizer:(UILongPressGestureRecognizer*)gesture {
-  if (gesture.state == UIGestureRecognizerStateBegan) {
-    if (gesture.view == self.view.backButton) {
-      [self.popupMenuCommandsHandler showNavigationHistoryBackPopupMenu];
-    } else if (gesture.view == self.view.forwardButton) {
-      [self.popupMenuCommandsHandler showNavigationHistoryForwardPopupMenu];
-    } else if (gesture.view == self.view.openNewTabButton) {
-      [self.popupMenuCommandsHandler showNewTabButtonPopup];
-    } else if (gesture.view == self.view.tabGridButton) {
-      [self.popupMenuCommandsHandler showTabGridButtonPopup];
-    } else if (gesture.view == self.view.toolsMenuButton) {
-      base::RecordAction(base::UserMetricsAction("MobileToolbarShowMenu"));
-      [self.popupMenuCommandsHandler showToolsMenuPopup];
-    }
-    TriggerHapticFeedbackForImpact(UIImpactFeedbackStyleHeavy);
-  } else if (gesture.state == UIGestureRecognizerStateEnded) {
-    [self.longPressDelegate
-        longPressEndedAtPoint:[gesture locationOfTouch:0 inView:nil]];
-  } else if (gesture.state == UIGestureRecognizerStateChanged) {
-    [self.longPressDelegate
-        longPressFocusPointChangedTo:[gesture locationOfTouch:0 inView:nil]];
-  }
-}
-
-- (void)updateLayoutBasedOnTraitCollection {
-  [self updateAllButtonsVisibility];
-  if (IsRegularXRegularSizeClass(self)) {
-    [self.view.progressBar setHidden:YES animated:NO completion:nil];
-  } else if (self.loading) {
-    [self.view.progressBar setHidden:NO animated:NO completion:nil];
   }
 }
 
@@ -490,6 +576,7 @@ const base::TimeDelta kToobarSlideInAnimationDuration = base::Milliseconds(500);
               handler:^(UIAction* uiAction) {
                 base::RecordAction(
                     base::UserMetricsAction("MobileMenuToolbarMenuTriggered"));
+                TriggerHapticFeedbackForImpact(UIImpactFeedbackStyleHeavy);
                 weakButton.menu =
                     [weakSelf.menuProvider menuForButtonOfType:buttonType];
               }];
@@ -502,6 +589,28 @@ const base::TimeDelta kToobarSlideInAnimationDuration = base::Milliseconds(500);
   self.view.openNewTabButton.layoutGuideCenter = self.layoutGuideCenter;
   self.view.forwardButton.layoutGuideCenter = self.layoutGuideCenter;
   self.view.backButton.layoutGuideCenter = self.layoutGuideCenter;
+  self.view.shareButton.layoutGuideCenter = self.layoutGuideCenter;
+}
+
+// Exits fullscreen.
+- (void)exitFullscreen {
+  [self.adaptiveDelegate exitFullscreen];
+}
+
+// Whether the color is valid to use as dynamic background color.
+- (BOOL)isValidColorForDynamicBackground:(UIColor*)color {
+  if (!color) {
+    return NO;
+  }
+
+  // White is not considered valid as the default toolbar color is prefered in
+  // that case.
+  CGFloat alpha;
+  CGFloat red;
+  CGFloat green;
+  CGFloat blue;
+  [color getRed:&red green:&green blue:&blue alpha:&alpha];
+  return alpha != 1 || red != 1 || green != 1 || blue != 1;
 }
 
 @end

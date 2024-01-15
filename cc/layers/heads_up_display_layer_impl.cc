@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <iomanip>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -38,30 +39,30 @@
 #include "cc/trees/layer_tree_host_impl.h"
 #include "cc/trees/layer_tree_impl.h"
 #include "components/viz/common/frame_sinks/begin_frame_args.h"
-#include "components/viz/common/gpu/context_provider.h"
+#include "components/viz/common/gpu/raster_context_provider.h"
 #include "components/viz/common/quads/solid_color_draw_quad.h"
 #include "components/viz/common/quads/texture_draw_quad.h"
 #include "components/viz/common/resources/bitmap_allocation.h"
 #include "components/viz/common/resources/platform_color.h"
-#include "components/viz/common/resources/resource_format_utils.h"
+#include "components/viz/common/resources/shared_image_format.h"
 #include "gpu/GLES2/gl2extchromium.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
 #include "gpu/command_buffer/client/context_support.h"
-#include "gpu/command_buffer/client/gles2_interface.h"
 #include "gpu/command_buffer/client/raster_interface.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
 #include "gpu/command_buffer/common/shared_image_trace_utils.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
 #include "gpu/config/gpu_feature_info.h"
+#include "gpu/ipc/client/client_shared_image_interface.h"
 #include "skia/ext/legacy_display_globals.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/khronos/GLES2/gl2.h"
-#include "third_party/khronos/GLES2/gl2ext.h"
 #include "third_party/skia/include/core/SkFont.h"
 #include "third_party/skia/include/core/SkPaint.h"
 #include "third_party/skia/include/core/SkPath.h"
+#include "third_party/skia/include/core/SkSurface.h"
 #include "third_party/skia/include/core/SkTextBlob.h"
 #include "third_party/skia/include/core/SkTypeface.h"
 #include "third_party/skia/include/gpu/GrDirectContext.h"
+#include "ui/gfx/buffer_format_util.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/geometry/size_conversions.h"
@@ -146,12 +147,15 @@ std::unique_ptr<LayerImpl> HeadsUpDisplayLayerImpl::CreateLayerImpl(
 class HudGpuBacking : public ResourcePool::GpuBacking {
  public:
   ~HudGpuBacking() override {
-    if (mailbox.IsZero())
+    if (!shared_image) {
       return;
+    }
     if (returned_sync_token.HasData())
-      shared_image_interface->DestroySharedImage(returned_sync_token, mailbox);
+      shared_image_interface->DestroySharedImage(returned_sync_token,
+                                                 std::move(shared_image));
     else if (mailbox_sync_token.HasData())
-      shared_image_interface->DestroySharedImage(mailbox_sync_token, mailbox);
+      shared_image_interface->DestroySharedImage(mailbox_sync_token,
+                                                 std::move(shared_image));
   }
 
   void OnMemoryDump(
@@ -159,10 +163,11 @@ class HudGpuBacking : public ResourcePool::GpuBacking {
       const base::trace_event::MemoryAllocatorDumpGuid& buffer_dump_guid,
       uint64_t tracing_process_id,
       int importance) const override {
-    if (mailbox.IsZero())
+    if (!shared_image) {
       return;
+    }
 
-    auto tracing_guid = gpu::GetSharedImageGUIDForTracing(mailbox);
+    auto tracing_guid = shared_image->GetGUIDForTracing();
     pmd->CreateSharedGlobalAllocatorDump(tracing_guid);
     pmd->AddOwnershipEdge(buffer_dump_guid, tracing_guid, importance);
   }
@@ -173,7 +178,15 @@ class HudGpuBacking : public ResourcePool::GpuBacking {
 class HudSoftwareBacking : public ResourcePool::SoftwareBacking {
  public:
   ~HudSoftwareBacking() override {
-    layer_tree_frame_sink->DidDeleteSharedBitmap(shared_bitmap_id);
+    if (shared_image) {
+      auto* sii = layer_tree_frame_sink->shared_image_interface();
+      if (sii) {
+        scoped_mapping.reset();
+        sii->DestroySharedImage(mailbox_sync_token, std::move(shared_image));
+      }
+    } else {
+      layer_tree_frame_sink->DidDeleteSharedBitmap(shared_bitmap_id);
+    }
   }
 
   void OnMemoryDump(
@@ -181,12 +194,20 @@ class HudSoftwareBacking : public ResourcePool::SoftwareBacking {
       const base::trace_event::MemoryAllocatorDumpGuid& buffer_dump_guid,
       uint64_t tracing_process_id,
       int importance) const override {
-    pmd->CreateSharedMemoryOwnershipEdge(buffer_dump_guid,
-                                         shared_mapping.guid(), importance);
+    if (shared_image) {
+      scoped_mapping->OnMemoryDump(pmd, buffer_dump_guid, tracing_process_id,
+                                   importance);
+    } else {
+      pmd->CreateSharedMemoryOwnershipEdge(buffer_dump_guid,
+                                           shared_mapping.guid(), importance);
+    }
   }
 
   raw_ptr<LayerTreeFrameSink> layer_tree_frame_sink;
+  // Used for SharedImage.
   base::WritableSharedMemoryMapping shared_mapping;
+  // Used for SharedBitmap
+  std::unique_ptr<gpu::ClientSharedImage::ScopedMapping> scoped_mapping;
 };
 
 bool HeadsUpDisplayLayerImpl::WillDraw(
@@ -226,41 +247,46 @@ void HeadsUpDisplayLayerImpl::AppendQuads(
   quad->SetNew(shared_quad_state, quad_rect, quad_rect, SkColors::kTransparent,
                false);
   ValidateQuadResources(quad);
-  current_quad_ = quad;
+  placeholder_quad_ = quad;
 }
 
 void HeadsUpDisplayLayerImpl::UpdateHudTexture(
     DrawMode draw_mode,
     LayerTreeFrameSink* layer_tree_frame_sink,
     viz::ClientResourceProvider* resource_provider,
-    bool gpu_raster,
+    const RasterCapabilities& raster_caps,
     const viz::CompositorRenderPassList& list) {
-  if (draw_mode == DRAW_MODE_RESOURCELESS_SOFTWARE)
+  viz::DrawQuad* hud_quad = placeholder_quad_;
+  // The `placeholder_quad_` is only valid for the currently drawing RenderPass,
+  // and we need to get a new pointer for the next frame. It would become
+  // dangling after drawing completes.
+  placeholder_quad_ = nullptr;
+
+  if (draw_mode == DRAW_MODE_RESOURCELESS_SOFTWARE) {
     return;
+  }
 
   // Update state that will be drawn.
   UpdateHudContents();
 
   viz::RasterContextProvider* raster_context_provider = nullptr;
-  absl::optional<viz::RasterContextProvider::ScopedRasterContextLock> lock;
-  if (gpu_raster) {
+  std::optional<viz::RasterContextProvider::ScopedRasterContextLock> lock;
+  if (draw_mode == DRAW_MODE_HARDWARE) {
     // TODO(penghuang): It would be better to use context_provider() instead of
     // worker_context_provider() if/when it's switched to RasterContextProvider.
     raster_context_provider = layer_tree_frame_sink->worker_context_provider();
-    DCHECK(raster_context_provider);
+    CHECK(raster_context_provider);
     lock.emplace(raster_context_provider);
-    DCHECK(raster_context_provider->ContextCapabilities().supports_oop_raster);
   }
 
-  auto* context_provider = layer_tree_frame_sink->context_provider();
   if (!pool_) {
     scoped_refptr<base::SingleThreadTaskRunner> task_runner =
         layer_tree_impl()->task_runner_provider()->HasImplThread()
             ? layer_tree_impl()->task_runner_provider()->ImplThreadTaskRunner()
             : layer_tree_impl()->task_runner_provider()->MainThreadTaskRunner();
     pool_ = std::make_unique<ResourcePool>(
-        resource_provider, context_provider, std::move(task_runner),
-        ResourcePool::kDefaultExpirationDelay,
+        resource_provider, layer_tree_frame_sink->context_provider(),
+        std::move(task_runner), ResourcePool::kDefaultExpirationDelay,
         layer_tree_impl()->settings().disallow_non_exact_resource_reuse);
   }
 
@@ -276,159 +302,146 @@ void HeadsUpDisplayLayerImpl::UpdateHudTexture(
   ResourcePool::InUsePoolResource pool_resource;
   bool needs_clear = false;
   if (draw_mode == DRAW_MODE_HARDWARE) {
-    const auto& caps = gpu_raster
-                           ? raster_context_provider->ContextCapabilities()
-                           : context_provider->ContextCapabilities();
-    viz::ResourceFormat format =
-        gpu_raster ? viz::PlatformColor::BestSupportedRenderBufferFormat(caps)
-                   : viz::PlatformColor::BestSupportedTextureFormat(caps);
-    pool_resource = pool_->AcquireResource(internal_content_bounds_, format,
-                                           gfx::ColorSpace());
+    pool_resource = pool_->AcquireResource(
+        internal_content_bounds_, raster_caps.tile_format, gfx::ColorSpace());
 
     if (!pool_resource.gpu_backing()) {
       auto backing = std::make_unique<HudGpuBacking>();
-      auto* sii = gpu_raster ? raster_context_provider->SharedImageInterface()
-                             : context_provider->SharedImageInterface();
+      auto* sii = raster_context_provider->SharedImageInterface();
       backing->shared_image_interface = sii;
-      backing->InitOverlayCandidateAndTextureTarget(
-          pool_resource.format(), caps,
-          layer_tree_impl()
-              ->settings()
-              .resource_settings.use_gpu_memory_buffer_resources);
+      backing->overlay_candidate = raster_caps.tile_overlay_candidate;
+      backing->texture_target = raster_caps.tile_texture_target;
 
-      uint32_t flags = gpu::SHARED_IMAGE_USAGE_DISPLAY_READ;
-      if (gpu_raster) {
-        flags |= gpu::SHARED_IMAGE_USAGE_RASTER |
-                 gpu::SHARED_IMAGE_USAGE_OOP_RASTERIZATION;
-      } else {
-        flags |= gpu::SHARED_IMAGE_USAGE_GLES2;
+      uint32_t flags =
+          gpu::SHARED_IMAGE_USAGE_DISPLAY_READ | gpu::SHARED_IMAGE_USAGE_RASTER;
+      if (raster_caps.use_gpu_rasterization) {
+        flags |= gpu::SHARED_IMAGE_USAGE_OOP_RASTERIZATION;
       }
-      if (backing->overlay_candidate)
+      if (backing->overlay_candidate) {
         flags |= gpu::SHARED_IMAGE_USAGE_SCANOUT;
-      backing->mailbox = sii->CreateSharedImage(
+      }
+      backing->shared_image = sii->CreateSharedImage(
           pool_resource.format(), pool_resource.size(),
           pool_resource.color_space(), kTopLeft_GrSurfaceOrigin,
-          kPremul_SkAlphaType, flags, gpu::kNullSurfaceHandle);
-      if (gpu_raster) {
-        auto* ri = raster_context_provider->RasterInterface();
-        ri->WaitSyncTokenCHROMIUM(sii->GenUnverifiedSyncToken().GetConstData());
-      } else {
-        auto* gl = context_provider->ContextGL();
-        gl->WaitSyncTokenCHROMIUM(sii->GenUnverifiedSyncToken().GetConstData());
-      }
+          kPremul_SkAlphaType, flags, "HeadsUpDisplayLayer",
+          gpu::kNullSurfaceHandle);
+      CHECK(backing->shared_image);
+      auto* ri = raster_context_provider->RasterInterface();
+      ri->WaitSyncTokenCHROMIUM(sii->GenUnverifiedSyncToken().GetConstData());
       pool_resource.set_gpu_backing(std::move(backing));
       needs_clear = true;
     } else if (pool_resource.gpu_backing()->returned_sync_token.HasData()) {
-      if (gpu_raster) {
-        auto* ri = raster_context_provider->RasterInterface();
-        ri->WaitSyncTokenCHROMIUM(
-            pool_resource.gpu_backing()->returned_sync_token.GetConstData());
-      } else {
-        auto* gl = context_provider->ContextGL();
-        gl->WaitSyncTokenCHROMIUM(
-            pool_resource.gpu_backing()->returned_sync_token.GetConstData());
-      }
+      auto* ri = raster_context_provider->RasterInterface();
+      ri->WaitSyncTokenCHROMIUM(
+          pool_resource.gpu_backing()->returned_sync_token.GetConstData());
       pool_resource.gpu_backing()->returned_sync_token = gpu::SyncToken();
     }
   } else {
     DCHECK_EQ(draw_mode, DRAW_MODE_SOFTWARE);
 
-    pool_resource = pool_->AcquireResource(internal_content_bounds_,
-                                           viz::RGBA_8888, gfx::ColorSpace());
+    auto* sii = layer_tree_frame_sink->shared_image_interface();
+    if (sii) {
+      pool_resource = pool_->AcquireResource(internal_content_bounds_,
+                                             viz::SinglePlaneFormat::kBGRA_8888,
+                                             gfx::ColorSpace());
 
-    if (!pool_resource.software_backing()) {
-      auto backing = std::make_unique<HudSoftwareBacking>();
-      backing->layer_tree_frame_sink = layer_tree_frame_sink;
-      backing->shared_bitmap_id = viz::SharedBitmap::GenerateId();
-      base::MappedReadOnlyRegion shm =
-          viz::bitmap_allocation::AllocateSharedBitmap(pool_resource.size(),
-                                                       pool_resource.format());
-      backing->shared_mapping = std::move(shm.mapping);
+      if (!pool_resource.software_backing()) {
+        auto backing = std::make_unique<HudSoftwareBacking>();
+        backing->layer_tree_frame_sink = layer_tree_frame_sink;
+        backing->shared_image = sii->CreateSharedImage(
+            pool_resource.format(), pool_resource.size(),
+            pool_resource.color_space(), kTopLeft_GrSurfaceOrigin,
+            kPremul_SkAlphaType, gpu::SHARED_IMAGE_USAGE_CPU_WRITE,
+            "HeadsUpDisplayLayer");
+        CHECK(backing->shared_image);
+        backing->scoped_mapping = backing->shared_image->Map();
+        CHECK(backing->scoped_mapping);
+        pool_resource.set_software_backing(std::move(backing));
+      }
 
-      layer_tree_frame_sink->DidAllocateSharedBitmap(std::move(shm.region),
-                                                     backing->shared_bitmap_id);
+    } else {
+      pool_resource = pool_->AcquireResource(internal_content_bounds_,
+                                             viz::SinglePlaneFormat::kRGBA_8888,
+                                             gfx::ColorSpace());
+      if (!pool_resource.software_backing()) {
+        auto backing = std::make_unique<HudSoftwareBacking>();
+        backing->layer_tree_frame_sink = layer_tree_frame_sink;
+        backing->shared_bitmap_id = viz::SharedBitmap::GenerateId();
+        base::MappedReadOnlyRegion shm =
+            viz::bitmap_allocation::AllocateSharedBitmap(
+                pool_resource.size(), pool_resource.format());
+        backing->shared_mapping = std::move(shm.mapping);
 
-      pool_resource.set_software_backing(std::move(backing));
+        layer_tree_frame_sink->DidAllocateSharedBitmap(
+            std::move(shm.region), backing->shared_bitmap_id);
+        pool_resource.set_software_backing(std::move(backing));
+      }
     }
   }
 
-  if (gpu_raster) {
-    // If using |gpu_raster| we DrawHudContents() directly to a gpu texture,
-    // which is wrapped in an SkSurface.
-    DCHECK_EQ(draw_mode, DRAW_MODE_HARDWARE);
+  if (draw_mode == DRAW_MODE_HARDWARE) {
     DCHECK(pool_resource.gpu_backing());
     auto* backing = static_cast<HudGpuBacking*>(pool_resource.gpu_backing());
-
-    const auto& size = pool_resource.size();
-    auto display_item_list = base::MakeRefCounted<DisplayItemList>(
-        DisplayItemList::kTopLevelDisplayItemList);
-    RecordPaintCanvas canvas(display_item_list.get(),
-                             SkRect::MakeIWH(size.width(), size.height()));
-    display_item_list->StartPaint();
-    DrawHudContents(&canvas);
-    display_item_list->EndPaintOfUnpaired(gfx::Rect(size));
-    display_item_list->Finalize();
-
     auto* ri = raster_context_provider->RasterInterface();
-    constexpr SkColor4f background_color = SkColors::kTransparent;
-    constexpr GLuint msaa_sample_count = -1;
-    constexpr bool can_use_lcd_text = true;
-    ri->BeginRasterCHROMIUM(background_color, needs_clear, msaa_sample_count,
-                            gpu::raster::kNoMSAA, can_use_lcd_text,
-                            /*visible=*/true, gfx::ColorSpace::CreateSRGB(),
-                            backing->mailbox.name);
-    constexpr gfx::Vector2dF post_translate(0.f, 0.f);
-    constexpr gfx::Vector2dF post_scale(1.f, 1.f);
-    DummyImageProvider image_provider;
-    size_t max_op_size_limit =
-        gpu::raster::RasterInterface::kDefaultMaxOpSizeHint;
-    ri->RasterCHROMIUM(display_item_list.get(), &image_provider, size,
-                       gfx::Rect(size), gfx::Rect(size), post_translate,
-                       post_scale, /*requires_clear=*/false,
-                       &max_op_size_limit);
-    ri->EndRasterCHROMIUM();
-    backing->mailbox_sync_token =
-        viz::ClientResourceProvider::GenerateSyncTokenHelper(ri);
-  } else if (draw_mode == DRAW_MODE_HARDWARE) {
-    // If not using |gpu_raster| but using gpu compositing, we DrawHudContents()
-    // into a software bitmap and upload it to a texture for compositing.
-    DCHECK(pool_resource.gpu_backing());
-    auto* backing = static_cast<HudGpuBacking*>(pool_resource.gpu_backing());
-    gpu::gles2::GLES2Interface* gl = context_provider->ContextGL();
 
-    if (!staging_surface_ ||
-        gfx::SkISizeToSize(staging_surface_->getCanvas()->getBaseLayerSize()) !=
-            pool_resource.size()) {
-      SkSurfaceProps props = skia::LegacyDisplayGlobals::GetSkSurfaceProps();
-      staging_surface_ = SkSurface::MakeRasterN32Premul(
-          pool_resource.size().width(), pool_resource.size().height(), &props);
+    if (raster_caps.use_gpu_rasterization) {
+      // If using |gpu_raster|, DrawHudContents() directly to a gpu texture
+      // which is wrapped in an SkSurface.
+      const auto& size = pool_resource.size();
+      RecordPaintCanvas canvas;
+      DrawHudContents(&canvas);
+      auto display_item_list = base::MakeRefCounted<DisplayItemList>();
+      display_item_list->StartPaint();
+      display_item_list->push<DrawRecordOp>(canvas.ReleaseAsRecord());
+      display_item_list->EndPaintOfUnpaired(gfx::Rect(size));
+      display_item_list->Finalize();
+
+      constexpr SkColor4f background_color = SkColors::kTransparent;
+      constexpr GLuint msaa_sample_count = -1;
+      constexpr bool can_use_lcd_text = true;
+      ri->BeginRasterCHROMIUM(background_color, needs_clear, msaa_sample_count,
+                              gpu::raster::kNoMSAA, can_use_lcd_text,
+                              /*visible=*/true, gfx::ColorSpace::CreateSRGB(),
+                              /*hdr_headroom=*/1.f,
+                              backing->shared_image->mailbox().name);
+      constexpr gfx::Vector2dF post_translate(0.f, 0.f);
+      constexpr gfx::Vector2dF post_scale(1.f, 1.f);
+      DummyImageProvider image_provider;
+      size_t max_op_size_limit =
+          gpu::raster::RasterInterface::kDefaultMaxOpSizeHint;
+      ri->RasterCHROMIUM(display_item_list.get(), &image_provider, size,
+                         gfx::Rect(size), gfx::Rect(size), post_translate,
+                         post_scale, /*requires_clear=*/false,
+                         &max_op_size_limit);
+      ri->EndRasterCHROMIUM();
+    } else {
+      // If not using |gpu_raster| but using gpu compositing, DrawHudContents()
+      // into a software bitmap and upload it to a texture for compositing.
+      if (!staging_surface_ ||
+          gfx::SkISizeToSize(
+              staging_surface_->getCanvas()->getBaseLayerSize()) !=
+              pool_resource.size()) {
+        SkSurfaceProps props = skia::LegacyDisplayGlobals::GetSkSurfaceProps();
+        staging_surface_ = SkSurfaces::Raster(
+            SkImageInfo::MakeN32Premul(pool_resource.size().width(),
+                                       pool_resource.size().height()),
+            &props);
+      }
+
+      SkiaPaintCanvas canvas(staging_surface_->getCanvas());
+      DrawHudContents(&canvas);
+
+      TRACE_EVENT0("cc", "UploadHudTexture");
+      SkPixmap pixmap;
+      staging_surface_->peekPixels(&pixmap);
+
+      ri->WritePixels(backing->shared_image->mailbox(), /*dst_x_offset=*/0,
+                      /*dst_y_offset=*/0,
+                      /*dst_plane_index=*/0, backing->texture_target, pixmap);
     }
 
-    SkiaPaintCanvas canvas(staging_surface_->getCanvas());
-    DrawHudContents(&canvas);
-
-    TRACE_EVENT0("cc", "UploadHudTexture");
-    SkPixmap pixmap;
-    staging_surface_->peekPixels(&pixmap);
-
-    GLuint mailbox_texture_id =
-        gl->CreateAndTexStorage2DSharedImageCHROMIUM(backing->mailbox.name);
-    gl->BeginSharedImageAccessDirectCHROMIUM(
-        mailbox_texture_id, GL_SHARED_IMAGE_ACCESS_MODE_READWRITE_CHROMIUM);
-
-    gl->BindTexture(backing->texture_target, mailbox_texture_id);
-    DCHECK(GLSupportsFormat(pool_resource.format()));
-    // We should use gl compatible format for skia SW rasterization.
-    constexpr GLenum format = SK_B32_SHIFT ? GL_RGBA : GL_BGRA_EXT;
-    constexpr GLenum type = GL_UNSIGNED_BYTE;
-    gl->TexSubImage2D(
-        backing->texture_target, 0, 0, 0, pool_resource.size().width(),
-        pool_resource.size().height(), format, type, pixmap.addr());
-
-    gl->EndSharedImageAccessDirectCHROMIUM(mailbox_texture_id);
-    gl->DeleteTextures(1, &mailbox_texture_id);
     backing->mailbox_sync_token =
-        viz::ClientResourceProvider::GenerateSyncTokenHelper(gl);
+        viz::ClientResourceProvider::GenerateSyncTokenHelper(ri);
   } else {
     // If not using gpu compositing, we DrawHudContents() directly into a shared
     // memory bitmap, wrapped in an SkSurface, that can be shared to the display
@@ -441,16 +454,26 @@ void HeadsUpDisplayLayerImpl::UpdateHudTexture(
     auto* backing =
         static_cast<HudSoftwareBacking*>(pool_resource.software_backing());
     SkSurfaceProps props = skia::LegacyDisplayGlobals::GetSkSurfaceProps();
-    sk_sp<SkSurface> surface = SkSurface::MakeRasterDirect(
-        info, backing->shared_mapping.memory(), info.minRowBytes(), &props);
+    void* pixels = backing->scoped_mapping ? backing->scoped_mapping->Memory(0)
+                                           : backing->shared_mapping.memory();
+    sk_sp<SkSurface> surface =
+        SkSurfaces::WrapPixels(info, pixels, info.minRowBytes(), &props);
 
     SkiaPaintCanvas canvas(surface->getCanvas());
     DrawHudContents(&canvas);
+
+    if (backing->shared_image) {
+      backing->mailbox_sync_token =
+          layer_tree_frame_sink->shared_image_interface()
+              ->GenVerifiedSyncToken();
+    }
   }
 
   // Exports the backing to the ResourceProvider, giving it a ResourceId that
   // can be used in a DrawQuad.
-  bool exported = pool_->PrepareForExport(pool_resource);
+  bool exported = pool_->PrepareForExport(
+      pool_resource,
+      viz::TransferableResource::ResourceSource::kHeadsUpDisplay);
   DCHECK(exported);
   viz::ResourceId resource_id = pool_resource.resource_id_for_export();
 
@@ -464,11 +487,10 @@ void HeadsUpDisplayLayerImpl::UpdateHudTexture(
   auto& render_pass = list.back();
   for (auto it = render_pass->quad_list.begin();
        it != render_pass->quad_list.end(); ++it) {
-    if (*it == current_quad_) {
-      const viz::SharedQuadState* sqs = current_quad_->shared_quad_state;
-      gfx::Rect quad_rect = current_quad_->rect;
-      gfx::Rect visible_rect = current_quad_->visible_rect;
-      current_quad_ = nullptr;
+    if (*it == hud_quad) {
+      const viz::SharedQuadState* sqs = hud_quad->shared_quad_state;
+      gfx::Rect quad_rect = hud_quad->rect;
+      gfx::Rect visible_rect = hud_quad->visible_rect;
 
       auto* quad =
           render_pass->quad_list.ReplaceExistingElement<viz::TextureDrawQuad>(
@@ -486,12 +508,11 @@ void HeadsUpDisplayLayerImpl::UpdateHudTexture(
             static_cast<double>(internal_content_bounds_.height()) /
             static_cast<double>(in_flight_resource_.size().height()));
       }
-      const float vertex_opacity[] = {1.f, 1.f, 1.f, 1.f};
       quad->SetNew(sqs, quad_rect, visible_rect, /*needs_blending=*/true,
                    resource_id, /*premultiplied_alpha=*/true,
                    /*uv_top_left=*/gfx::PointF(),
                    /*uv_bottom_right=*/uv_bottom_right,
-                   /*background_color=*/SkColors::kTransparent, vertex_opacity,
+                   /*background_color=*/SkColors::kTransparent,
                    /*flipped=*/false,
                    /*nearest_neighbor=*/false, /*secure_output_only=*/false,
                    gfx::ProtectedVideoType::kClear);
@@ -499,10 +520,6 @@ void HeadsUpDisplayLayerImpl::UpdateHudTexture(
       break;
     }
   }
-  // If this fails, we didn't find |current_quad_| in the root RenderPass, so we
-  // didn't append it for the frame (why are we here then?), or it landed in
-  // some other RenderPass, both of which are unexpected.
-  DCHECK(!current_quad_);
 }
 
 void HeadsUpDisplayLayerImpl::ReleaseResources() {
@@ -768,7 +785,7 @@ SkRect HeadsUpDisplayLayerImpl::DrawFrameThroughputDisplay(
   SkPath good_path;
   SkPath dropped_path;
   SkPath partial_path;
-  for (auto it = --dropped_frame_counter->end(); it; --it) {
+  for (auto it = dropped_frame_counter->End(); it; --it) {
     const auto state = **it;
     int x = graph_bounds.left() + it.index();
     SkPath& path = state == DroppedFrameCounter::kFrameStateDropped
@@ -869,7 +886,7 @@ SkRect HeadsUpDisplayLayerImpl::DrawMemoryDisplay(PaintCanvas* canvas,
 
   // Draw current status.
   flags.setStyle(PaintFlags::kStroke_Style);
-  flags.setAlpha(32);
+  flags.setAlphaf(32.0f / 255.0f);
   flags.setStrokeWidth(4);
   DrawArc(canvas, oval, 180, angle, flags);
 
@@ -887,19 +904,12 @@ SkRect HeadsUpDisplayLayerImpl::DrawGpuRasterizationStatus(PaintCanvas* canvas,
                                                            int width) const {
   std::string status;
   SkColor color = SK_ColorRED;
-  switch (layer_tree_impl()->GetGpuRasterizationStatus()) {
-    case GpuRasterizationStatus::ON:
-      status = "on";
-      color = SK_ColorGREEN;
-      break;
-    case GpuRasterizationStatus::OFF_FORCED:
-      status = "off (forced)";
-      color = SK_ColorRED;
-      break;
-    case GpuRasterizationStatus::OFF_DEVICE:
-      status = "off (device)";
-      color = SK_ColorRED;
-      break;
+  if (layer_tree_impl()->use_gpu_rasterization()) {
+    status = "on";
+    color = SK_ColorGREEN;
+  } else {
+    status = "off";
+    color = SK_ColorRED;
   }
 
   if (status.empty())

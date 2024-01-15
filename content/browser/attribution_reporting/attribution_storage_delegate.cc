@@ -5,8 +5,17 @@
 #include "content/browser/attribution_reporting/attribution_storage_delegate.h"
 
 #include "base/check.h"
+#include "base/notreached.h"
+#include "components/attribution_reporting/source_type.mojom.h"
+#include "content/browser/attribution_reporting/attribution_config.h"
+#include "content/browser/attribution_reporting/attribution_reporting.mojom.h"
 
 namespace content {
+
+namespace {
+using ::attribution_reporting::mojom::SourceType;
+
+}  // namespace
 
 AttributionStorageDelegate::AttributionStorageDelegate(
     const AttributionConfig& config)
@@ -14,16 +23,7 @@ AttributionStorageDelegate::AttributionStorageDelegate(
   DCHECK(config_.Validate());
 }
 
-int AttributionStorageDelegate::GetMaxAttributionsPerSource(
-    AttributionSourceType source_type) const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  switch (source_type) {
-    case AttributionSourceType::kNavigation:
-      return config_.event_level_limit.max_attributions_per_navigation_source;
-    case AttributionSourceType::kEvent:
-      return config_.event_level_limit.max_attributions_per_event_source;
-  }
-}
+AttributionStorageDelegate::~AttributionStorageDelegate() = default;
 
 int AttributionStorageDelegate::GetMaxSourcesPerOrigin() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -31,75 +31,50 @@ int AttributionStorageDelegate::GetMaxSourcesPerOrigin() const {
 }
 
 int AttributionStorageDelegate::GetMaxReportsPerDestination(
-    AttributionReport::Type report_type) const {
+    attribution_reporting::mojom::ReportType report_type) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   switch (report_type) {
-    case AttributionReport::Type::kEventLevel:
+    case attribution_reporting::mojom::ReportType::kEventLevel:
       return config_.event_level_limit.max_reports_per_destination;
-    case AttributionReport::Type::kAggregatableAttribution:
+    case attribution_reporting::mojom::ReportType::kAggregatableAttribution:
       return config_.aggregate_limit.max_reports_per_destination;
+    case attribution_reporting::mojom::ReportType::kNullAggregatable:
+      NOTREACHED_NORETURN();
   }
 }
 
-int AttributionStorageDelegate::GetMaxDestinationsPerSourceSiteReportingOrigin()
+int AttributionStorageDelegate::GetMaxDestinationsPerSourceSiteReportingSite()
     const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return config_.max_destinations_per_source_site_reporting_origin;
+  return config_.max_destinations_per_source_site_reporting_site;
 }
 
-AttributionConfig::RateLimitConfig AttributionStorageDelegate::GetRateLimits()
-    const {
+const AttributionConfig::RateLimitConfig&
+AttributionStorageDelegate::GetRateLimits() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return config_.rate_limit;
 }
 
-double AttributionStorageDelegate::GetRandomizedResponseRate(
-    AttributionSourceType source_type) const {
+double AttributionStorageDelegate::GetMaxChannelCapacity(
+    SourceType source_type) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
   switch (source_type) {
-    case AttributionSourceType::kNavigation:
-      return config_.event_level_limit
-          .navigation_source_randomized_response_rate;
-    case AttributionSourceType::kEvent:
-      return config_.event_level_limit.event_source_randomized_response_rate;
+    case SourceType::kNavigation:
+      return config_.event_level_limit.max_navigation_info_gain;
+    case SourceType::kEvent:
+      return config_.event_level_limit.max_event_info_gain;
   }
 }
 
-int64_t AttributionStorageDelegate::GetAggregatableBudgetPerSource() const {
+int AttributionStorageDelegate::GetMaxAggregatableReportsPerSource() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  return config_.aggregate_limit.aggregatable_budget_per_source;
+  return config_.aggregate_limit.max_aggregatable_reports_per_source;
 }
 
-uint64_t AttributionStorageDelegate::SanitizeTriggerData(
-    uint64_t trigger_data,
-    AttributionSourceType source_type) const {
+AttributionConfig::DestinationRateLimit
+AttributionStorageDelegate::GetDestinationRateLimit() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  const uint64_t cardinality = TriggerDataCardinality(source_type);
-  return trigger_data % cardinality;
-}
-
-uint64_t AttributionStorageDelegate::SanitizeSourceEventId(
-    uint64_t source_event_id) const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  if (!config_.source_event_id_cardinality)
-    return source_event_id;
-
-  return source_event_id % *config_.source_event_id_cardinality;
-}
-
-uint64_t AttributionStorageDelegate::TriggerDataCardinality(
-    AttributionSourceType source_type) const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  switch (source_type) {
-    case AttributionSourceType::kNavigation:
-      return config_.event_level_limit
-          .navigation_source_trigger_data_cardinality;
-    case AttributionSourceType::kEvent:
-      return config_.event_level_limit.event_source_trigger_data_cardinality;
-  }
+  return config_.destination_rate_limit;
 }
 
 }  // namespace content

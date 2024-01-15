@@ -36,7 +36,7 @@
 #include "third_party/blink/renderer/core/html/forms/form_controller.h"
 #include "third_party/blink/renderer/core/html/forms/html_form_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_input_element.h"
-#include "third_party/blink/renderer/core/layout/layout_object.h"
+#include "third_party/blink/renderer/core/layout/layout_ng_block_flow.h"
 
 namespace blink {
 
@@ -79,8 +79,9 @@ void InputTypeView::DispatchSimulatedClickIfActive(KeyboardEvent& event) const {
 }
 
 void InputTypeView::AccessKeyAction(SimulatedClickCreationScope) {
-  GetElement().Focus(FocusParams(SelectionBehaviorOnFocus::kReset,
-                                 mojom::blink::FocusType::kNone, nullptr));
+  GetElement().Focus(FocusParams(
+      SelectionBehaviorOnFocus::kReset, mojom::blink::FocusType::kNone, nullptr,
+      FocusOptions::Create(), FocusTrigger::kUserGesture));
 }
 
 bool InputTypeView::ShouldSubmitImplicitly(const Event& event) {
@@ -93,12 +94,20 @@ HTMLFormElement* InputTypeView::FormForSubmission() const {
   return GetElement().Form();
 }
 
-LayoutObject* InputTypeView::CreateLayoutObject(const ComputedStyle& style,
-                                                LegacyLayout legacy) const {
-  return LayoutObject::CreateObject(&GetElement(), style, legacy);
+LayoutObject* InputTypeView::CreateLayoutObject(
+    const ComputedStyle& style) const {
+  // Avoid LayoutInline, which can be split to multiple lines.
+  if (RuntimeEnabledFeatures::DateInputInlineBlockEnabled() &&
+      style.IsDisplayInlineType() && !style.IsDisplayReplacedType()) {
+    return MakeGarbageCollected<LayoutNGBlockFlow>(&GetElement());
+  }
+  return LayoutObject::CreateObject(&GetElement(), style);
 }
 
-void InputTypeView::CustomStyleForLayoutObject(ComputedStyle&) {}
+const ComputedStyle* InputTypeView::CustomStyleForLayoutObject(
+    const ComputedStyle* original_style) const {
+  return original_style;
+}
 
 ControlPart InputTypeView::AutoAppearance() const {
   return kNoControlPart;
@@ -132,7 +141,21 @@ bool InputTypeView::NeedsShadowSubtree() const {
   return true;
 }
 
+TextControlInnerEditorElement* InputTypeView::EnsureInnerEditorElement() {
+  CreateShadowSubtreeIfNeeded();
+  return GetElement().InnerEditorElement();
+}
+
 void InputTypeView::CreateShadowSubtree() {}
+
+void InputTypeView::CreateShadowSubtreeIfNeeded() {
+  if (has_created_shadow_subtree_ || !NeedsShadowSubtree()) {
+    return;
+  }
+  GetElement().EnsureUserAgentShadowRoot();
+  has_created_shadow_subtree_ = true;
+  CreateShadowSubtree();
+}
 
 void InputTypeView::DestroyShadowSubtree() {
   if (ShadowRoot* root = GetElement().UserAgentShadowRoot())

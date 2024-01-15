@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "net/base/hash_value.h"
@@ -110,8 +109,6 @@ struct URLRequestContextConfig {
 
   // Enable QUIC.
   const bool enable_quic;
-  // QUIC User Agent ID.
-  const std::string quic_user_agent_id;
   // Enable SPDY.
   const bool enable_spdy;
   // Enable Brotli.
@@ -169,7 +166,6 @@ struct URLRequestContextConfig {
 
   // Optional network thread priority.
   // On Android, corresponds to android.os.Process.setThreadPriority() values.
-  // On iOS, corresponds to NSThread::setThreadPriority values.
   const absl::optional<double> network_thread_priority;
 
   // Whether the connection status of active bidirectional streams should be
@@ -179,9 +175,6 @@ struct URLRequestContextConfig {
   // period of the heartbeat signal.
   base::TimeDelta heartbeat_interval;
 
-  // Whether Cronet's logging should be skipped or not.
-  bool skip_logging;
-
   static bool ExperimentalOptionsParsingIsAllowedToFail() {
     return DCHECK_IS_ON();
   }
@@ -189,8 +182,6 @@ struct URLRequestContextConfig {
   static std::unique_ptr<URLRequestContextConfig> CreateURLRequestContextConfig(
       // Enable QUIC.
       bool enable_quic,
-      // QUIC User Agent ID.
-      const std::string& quic_user_agent_id,
       // Enable SPDY.
       bool enable_spdy,
       // Enable Brotli.
@@ -218,16 +209,13 @@ struct URLRequestContextConfig {
       bool bypass_public_key_pinning_for_local_trust_anchors,
       // Optional network thread priority.
       // On Android, corresponds to android.os.Process.setThreadPriority()
-      // values. On iOS, corresponds to NSThread::setThreadPriority values. Do
-      // not specify for other targets.
+      // values. Do not specify for other targets.
       absl::optional<double> network_thread_priority);
 
  private:
   URLRequestContextConfig(
       // Enable QUIC.
       bool enable_quic,
-      // QUIC User Agent ID.
-      const std::string& quic_user_agent_id,
       // Enable SPDY.
       bool enable_spdy,
       // Enable Brotli.
@@ -255,8 +243,7 @@ struct URLRequestContextConfig {
       bool bypass_public_key_pinning_for_local_trust_anchors,
       // Optional network thread priority.
       // On Android, corresponds to android.os.Process.setThreadPriority()
-      // values. On iOS, corresponds to NSThread::setThreadPriority values. Do
-      // not specify for other targets.
+      // values. Do not specify for other targets.
       absl::optional<double> network_thread_priority);
 
   // Parses experimental options from their JSON format to the format used
@@ -296,8 +283,6 @@ struct URLRequestContextConfigBuilder {
 
   // Enable QUIC.
   bool enable_quic = true;
-  // QUIC User Agent ID.
-  std::string quic_user_agent_id = "";
   // Enable SPDY.
   bool enable_spdy = true;
   // Enable Brotli.
@@ -335,7 +320,6 @@ struct URLRequestContextConfigBuilder {
 
   // Optional network thread priority.
   // On Android, corresponds to android.os.Process.setThreadPriority() values.
-  // On iOS, corresponds to NSThread::setThreadPriority values.
   // Do not specify for other targets.
   absl::optional<double> network_thread_priority;
 };

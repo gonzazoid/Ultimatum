@@ -4,24 +4,30 @@
 
 #include "third_party/blink/renderer/platform/loader/fetch/url_loader/navigation_body_loader.h"
 
-#include "base/bind.h"
+#include <algorithm>
+
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "services/network/public/cpp/features.h"
+#include "services/network/public/cpp/record_ontransfersizeupdate_utils.h"
 #include "services/network/public/cpp/url_loader_completion_status.h"
 #include "services/network/public/mojom/early_hints.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/loader/referrer_utils.h"
-#include "third_party/blink/public/mojom/loader/code_cache.mojom.h"
+#include "third_party/blink/public/mojom/loader/code_cache.mojom-blink.h"
 #include "third_party/blink/public/mojom/navigation/navigation_params.mojom.h"
 #include "third_party/blink/public/platform/resource_load_info_notifier_wrapper.h"
-#include "third_party/blink/public/platform/web_code_cache_loader.h"
-#include "third_party/blink/public/platform/web_url_loader.h"
+#include "third_party/blink/public/platform/web_url_error.h"
+#include "third_party/blink/public/platform/web_url_response.h"
 #include "third_party/blink/public/web/web_navigation_params.h"
 #include "third_party/blink/renderer/platform/loader/fetch/body_text_decoder.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
@@ -30,7 +36,9 @@
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier_std.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
+#include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
+#include "third_party/ced/src/compact_enc_det/compact_enc_det.h"
 
 namespace blink {
 namespace {
@@ -39,6 +47,14 @@ bool ShouldSendDirectlyToPreloadScanner() {
   static const base::FeatureParam<bool> kSendToScannerParam{
       &features::kThreadedBodyLoader, "send-to-scanner", true};
   return kSendToScannerParam.Get();
+}
+
+// Returns the maximum data size to process in TakeData(). Returning 0 means
+// process all the data available.
+size_t GetMaxDataToProcessPerTask() {
+  static const base::FeatureParam<int> kMaxDataToProcessParam{
+      &features::kThreadedBodyLoader, "max-data-to-process", 0};
+  return kMaxDataToProcessParam.Get();
 }
 
 // A chunk of data read by the OffThreadBodyReader. This will be created on a
@@ -131,10 +147,26 @@ class NavigationBodyLoader::OffThreadBodyReader : public BodyReader {
     DCHECK(reader_task_runner_->RunsTasksInCurrentSequence());
   }
 
-  std::vector<DataChunk> TakeData() {
+  Vector<DataChunk> TakeData(size_t max_data_to_process) {
     DCHECK(IsMainThread());
     base::AutoLock lock(lock_);
-    return std::move(data_chunks_);
+    if (max_data_to_process == 0)
+      return std::move(data_chunks_);
+
+    Vector<DataChunk> data;
+    size_t data_processed = 0;
+    while (!data_chunks_.empty() && data_processed < max_data_to_process) {
+      data.emplace_back(std::move(data_chunks_.front()));
+      data_processed += data.back().encoded_data_size;
+      data_chunks_.erase(data_chunks_.begin());
+    }
+    if (!data_chunks_.empty()) {
+      PostCrossThreadTask(
+          *main_thread_task_runner_, FROM_HERE,
+          CrossThreadBindOnce(&NavigationBodyLoader::ProcessOffThreadData,
+                              body_loader_));
+    }
+    return data;
   }
 
   void StoreProcessBackgroundDataCallback(Client* client) {
@@ -211,7 +243,7 @@ class NavigationBodyLoader::OffThreadBodyReader : public BodyReader {
     // Avoid copying the encoded data unless the caller needs it.
     if (should_keep_encoded_data_) {
       encoded_data_copy = std::make_unique<char[]>(size);
-      memcpy(encoded_data_copy.get(), encoded_data, size);
+      std::copy_n(encoded_data, size, encoded_data_copy.get());
     }
 
     bool post_task;
@@ -254,7 +286,7 @@ class NavigationBodyLoader::OffThreadBodyReader : public BodyReader {
   bool background_callback_set_ = false;
   Client::ProcessBackgroundDataCallback process_background_data_callback_
       GUARDED_BY(lock_);
-  std::vector<DataChunk> data_chunks_ GUARDED_BY(lock_);
+  Vector<DataChunk> data_chunks_ GUARDED_BY(lock_);
 };
 
 void NavigationBodyLoader::OffThreadBodyReaderDeleter::operator()(
@@ -289,7 +321,7 @@ class NavigationBodyLoader::MainThreadBodyReader : public BodyReader {
   }
 
  private:
-  NavigationBodyLoader* loader_;
+  raw_ptr<NavigationBodyLoader, DanglingUntriaged> loader_;
 };
 
 NavigationBodyLoader::NavigationBodyLoader(
@@ -311,7 +343,8 @@ NavigationBodyLoader::NavigationBodyLoader(
           std::move(resource_load_info_notifier_wrapper)),
       original_url_(original_url),
       should_send_directly_to_preload_scanner_(
-          ShouldSendDirectlyToPreloadScanner()) {}
+          ShouldSendDirectlyToPreloadScanner()),
+      max_data_to_process_per_task_(GetMaxDataToProcessPerTask()) {}
 
 NavigationBodyLoader::~NavigationBodyLoader() {
   if (!has_received_completion_ || !has_seen_end_of_data_) {
@@ -349,6 +382,8 @@ void NavigationBodyLoader::OnUploadProgress(int64_t current_position,
 }
 
 void NavigationBodyLoader::OnTransferSizeUpdated(int32_t transfer_size_diff) {
+  network::RecordOnTransferSizeUpdatedUMA(
+      network::OnTransferSizeUpdatedFrom::kNavigationBodyLoader);
   resource_load_info_notifier_wrapper_->NotifyResourceTransferSizeUpdated(
       transfer_size_diff);
 }
@@ -395,6 +430,12 @@ void NavigationBodyLoader::StartLoadingBodyInBackground(
     bool should_keep_encoded_data) {
   if (!response_body_)
     return;
+
+  // Initializing the map used when detecting encodings is not thread safe.
+  // Initialize on the main thread here to avoid races.
+  // TODO(crbug.com/1384221): Consider making the map thread safe in
+  // third_party/ced/src/util/encodings/encodings.cc.
+  EncodingNameAliasToEncoding("");
 
   off_thread_body_reader_.reset(new OffThreadBodyReader(
       std::move(response_body_), std::move(decoder), weak_factory_.GetWeakPtr(),
@@ -448,7 +489,8 @@ void NavigationBodyLoader::ProcessOffThreadData() {
     return;
   }
 
-  auto chunks = off_thread_body_reader_->TakeData();
+  auto chunks =
+      off_thread_body_reader_->TakeData(max_data_to_process_per_task_);
   auto weak_self = weak_factory_.GetWeakPtr();
   for (const auto& chunk : chunks) {
     client_->DecodedBodyDataReceived(
@@ -466,10 +508,10 @@ void NavigationBodyLoader::ProcessOffThreadData() {
       break;
     }
   }
-  NotifyCompletionIfAppropriate();
-
   if (weak_self && should_send_directly_to_preload_scanner_)
     off_thread_body_reader_->StoreProcessBackgroundDataCallback(client_);
+
+  NotifyCompletionIfAppropriate();
 }
 
 void NavigationBodyLoader::ReadFromDataPipe() {
@@ -488,7 +530,7 @@ void NavigationBodyLoader::NotifyCompletionIfAppropriate() {
 
   absl::optional<WebURLError> error;
   if (status_.error_code != net::OK) {
-    error = WebURLLoader::PopulateURLError(status_, original_url_);
+    error = WebURLError::Create(status_, original_url_);
   }
 
   resource_load_info_notifier_wrapper_->NotifyResourceLoadCompleted(status_);
@@ -501,16 +543,13 @@ void NavigationBodyLoader::NotifyCompletionIfAppropriate() {
   client_ = nullptr;
   client->BodyLoadingFinished(
       status_.completion_time, status_.encoded_data_length,
-      status_.encoded_body_length, status_.decoded_body_length,
-      status_.should_report_corb_blocking, error);
+      status_.encoded_body_length, status_.decoded_body_length, error);
 }
 
 void NavigationBodyLoader::
     BindURLLoaderAndStartLoadingResponseBodyIfPossible() {
-  if (!response_body_ && !off_thread_body_reader_) {
-    DCHECK(base::FeatureList::IsEnabled(features::kEarlyBodyLoad));
+  if (!response_body_ && !off_thread_body_reader_)
     return;
-  }
   // Bind the mojo::URLLoaderClient interface in advance, because we will start
   // to read from the data pipe immediately which may potentially postpone the
   // method calls from the remote. That causes the flakiness of some layout
@@ -553,7 +592,8 @@ void WebNavigationBodyLoader::FillNavigationParamsResponseAndBodyLoader(
     std::unique_ptr<ResourceLoadInfoNotifierWrapper>
         resource_load_info_notifier_wrapper,
     bool is_main_frame,
-    WebNavigationParams* navigation_params) {
+    WebNavigationParams* navigation_params,
+    bool is_ad_frame) {
   // Use the original navigation url to start with. We'll replay the
   // redirects afterwards and will eventually arrive to the final url.
   const KURL original_url = !commit_params->original_url.is_empty()
@@ -565,16 +605,15 @@ void WebNavigationBodyLoader::FillNavigationParamsResponseAndBodyLoader(
       !commit_params->original_method.empty() ? commit_params->original_method
                                               : common_params->method,
       common_params->referrer->url, common_params->request_destination,
-      is_main_frame ? net::HIGHEST : net::LOWEST);
+      is_main_frame ? net::HIGHEST : net::LOWEST, is_ad_frame);
   size_t redirect_count = commit_params->redirect_response.size();
 
   if (redirect_count != commit_params->redirects.size()) {
     // We currently incorrectly send empty redirect_response and redirect_infos
-    // on frame reloads and some cases involving throttles.
+    // on frame reloads and some cases involving throttles. There are also other
+    // reports of non-empty cases, so further investigation is still needed.
     // TODO(https://crbug.com/1171225): Fix this.
-    DCHECK_EQ(0u, redirect_count);
-    DCHECK_EQ(0u, commit_params->redirect_infos.size());
-    DCHECK_NE(0u, commit_params->redirects.size());
+    redirect_count = std::min(redirect_count, commit_params->redirects.size());
   }
   navigation_params->redirects.reserve(redirect_count);
   navigation_params->redirects.resize(redirect_count);
@@ -583,9 +622,9 @@ void WebNavigationBodyLoader::FillNavigationParamsResponseAndBodyLoader(
         navigation_params->redirects[i];
     auto& redirect_info = commit_params->redirect_infos[i];
     auto& redirect_response = commit_params->redirect_response[i];
-    WebURLLoader::PopulateURLResponse(
-        url, *redirect_response, &redirect.redirect_response,
-        response_head->ssl_info.has_value(), request_id);
+    redirect.redirect_response =
+        WebURLResponse::Create(url, *redirect_response,
+                               response_head->ssl_info.has_value(), request_id);
     resource_load_info_notifier_wrapper->NotifyResourceRedirectReceived(
         redirect_info, std::move(redirect_response));
     if (url.ProtocolIsData())
@@ -601,9 +640,8 @@ void WebNavigationBodyLoader::FillNavigationParamsResponseAndBodyLoader(
     url = KURL(redirect_info.new_url);
   }
 
-  WebURLLoader::PopulateURLResponse(
-      url, *response_head, &navigation_params->response,
-      response_head->ssl_info.has_value(), request_id);
+  navigation_params->response = WebURLResponse::Create(
+      url, *response_head, response_head->ssl_info.has_value(), request_id);
   if (url.ProtocolIsData())
     navigation_params->response.SetHttpStatusCode(200);
 

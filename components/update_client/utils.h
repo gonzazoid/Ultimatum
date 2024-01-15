@@ -9,16 +9,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback_forward.h"
+#include "base/values.h"
 #include "components/update_client/update_client.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class GURL;
-
-namespace base {
-class Value;
-}
 
 namespace update_client {
 
@@ -42,8 +39,15 @@ bool IsHttpServerError(int status_code);
 
 // Deletes the file and its directory, if the directory is empty. If the
 // parent directory is not empty, the function ignores deleting the directory.
-// Returns true if the file and the empty directory are deleted.
+// Returns true if the file and the empty directory are deleted,
+// or if the file was deleted and the directory was not empty.
 bool DeleteFileAndEmptyParentDirectory(const base::FilePath& filepath);
+
+// Deletes the given directory, if the directory is empty. If the
+// directory is not empty, the function ignores deleting the directory.
+// Returns true if the directory is not empty or if the directory was empty
+// and successfully deleted.
+bool DeleteEmptyDirectory(const base::FilePath& filepath);
 
 // Returns the component id of the |component|. The component id is either the
 // app_id, if the member is set, or a string value derived from the public
@@ -51,7 +55,7 @@ bool DeleteFileAndEmptyParentDirectory(const base::FilePath& filepath);
 std::string GetCrxComponentID(const CrxComponent& component);
 
 // Returns a CRX id from a public key hash.
-std::string GetCrxIdFromPublicKeyHash(const std::vector<uint8_t>& pk_hash);
+std::string GetCrxIdFromPublicKeyHash(base::span<const uint8_t> pk_hash);
 
 // Returns true if the actual SHA-256 hash of the |filepath| matches the
 // |expected_hash|.
@@ -75,9 +79,10 @@ CrxInstaller::Result InstallFunctionWrapper(
     base::OnceCallback<bool()> callback);
 
 // Deserializes the CRX manifest. The top level must be a dictionary.
-// Returns a base::Value object of type dictionary on success, or another type
+// Returns a base::Value::Dict object of type dictionary on success, or nullopt
 // on failure.
-base::Value ReadManifest(const base::FilePath& unpack_path);
+absl::optional<base::Value::Dict> ReadManifest(
+    const base::FilePath& unpack_path);
 
 // Converts a custom, specific installer error (and optionally extended error)
 // to an installer result.
@@ -90,11 +95,6 @@ CrxInstaller::Result ToInstallerResult(const T& error, int extended_error = 0) {
           static_cast<int>(error),
       extended_error);
 }
-
-// Creates a unique temporary directory. For Windows, the directory is created
-// under %ProgramFiles% if the caller is admin, so it is secure.
-bool CreateSecureTempDirectory(const base::FilePath::StringType& prefix,
-                               base::FilePath* temp_dir);
 
 // Returns a string representation of the processor architecture. Uses
 // `base::win::OSInfo::IsWowX86OnARM64` and

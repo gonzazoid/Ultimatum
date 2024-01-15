@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_timeouts.h"
 #include "build/build_config.h"
@@ -60,7 +61,7 @@ cart_db::ChromeCartContentProto BuildProto(const char* domain,
   proto.set_key(domain);
   proto.set_merchant(domain);
   proto.set_merchant_cart_url(cart_url);
-  proto.set_timestamp(base::Time::Now().ToDoubleT());
+  proto.set_timestamp(base::Time::Now().InSecondsFSinceUnixEpoch());
   return proto;
 }
 
@@ -164,7 +165,7 @@ std::unique_ptr<net::test_server::HttpResponse> BasicResponse(
     return nullptr;
   if (request.relative_url == "/shopping-cart.html")
     return nullptr;
-  if (request.relative_url == "/cart-in-portal.html")
+  if (request.relative_url == "/product-page.html")
     return nullptr;
 
   auto response = std::make_unique<net::test_server::BasicHttpResponse>();
@@ -179,6 +180,7 @@ class CommerceHintAgentTest : public PlatformBrowserTest {
   using FormSubmittedEntry = ukm::builders::Shopping_FormSubmitted;
   using XHREntry = ukm::builders::Shopping_WillSendRequest;
   using ExtractionEntry = ukm::builders::Shopping_CartExtraction;
+  using AddToCartEntry = ukm::builders::Shopping_AddToCartDetection;
 
   CommerceHintAgentTest() = default;
 
@@ -200,12 +202,12 @@ class CommerceHintAgentTest : public PlatformBrowserTest {
     // HTTPS server only serves a valid cert for localhost, so this is needed
     // to load pages from other hosts without an error.
     command_line->AppendSwitch(switches::kIgnoreCertificateErrors);
+    // TODO(crbug.com/1491942): This fails with the field trial testing config.
+    command_line->AppendSwitch("disable-field-trial-config");
   }
 
   void SetUpOnMainThread() override {
     PlatformBrowserTest::SetUpOnMainThread();
-    commerce_hint_service_ =
-        cart::CommerceHintService::FromWebContents(web_contents());
 #if !BUILDFLAG(IS_ANDROID)
     Profile* profile =
         Profile::FromBrowserContext(web_contents()->GetBrowserContext());
@@ -393,7 +395,7 @@ class CommerceHintAgentTest : public PlatformBrowserTest {
                       int expected_count) {
     auto entries = ukm_recorder()->GetEntriesByName(entry_name);
     int count = 0;
-    for (const auto* const entry : entries) {
+    for (const ukm::mojom::UkmEntry* const entry : entries) {
       if (ukm_recorder()->GetEntryMetric(entry, metric_name)) {
         count += 1;
       }
@@ -438,9 +440,8 @@ class CommerceHintAgentTest : public PlatformBrowserTest {
 
   base::test::ScopedFeatureList scoped_feature_list_;
 #if !BUILDFLAG(IS_ANDROID)
-  CartService* service_;
+  raw_ptr<CartService, ExperimentalRenderer> service_;
 #endif
-  cart::CommerceHintService* commerce_hint_service_;
   net::EmbeddedTestServer https_server_{net::EmbeddedTestServer::TYPE_HTTPS};
   std::unique_ptr<ukm::TestAutoSetUkmRecorder> ukm_recorder_;
   bool satisfied_;
@@ -506,7 +507,7 @@ IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest, AddToCartByURL_XHR) {
 
 IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest, SkipAddToCart_FromComponent) {
   bool is_populated =
-      commerce_hint_service_->InitializeCommerceHeuristicsForTesting(
+      cart::CommerceHintService::InitializeCommerceHeuristicsForTesting(
           base::Version("0.0.0.1"), R"###(
           {
             "guitarcenter.com": {
@@ -548,7 +549,7 @@ IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest, MAYBE_VisitCart) {
 IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest,
                        VisitCart_GeneralPattern_FromComponent) {
   bool is_populated =
-      commerce_hint_service_->InitializeCommerceHeuristicsForTesting(
+      cart::CommerceHintService::InitializeCommerceHeuristicsForTesting(
           base::Version("0.0.0.1"), "{}", R"###(
           {
             "cart_page_url_regex": "(special|lol)"
@@ -570,7 +571,7 @@ IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest,
 IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest,
                        VisitCart_PerDomain_FromComponent) {
   bool is_populated =
-      commerce_hint_service_->InitializeCommerceHeuristicsForTesting(
+      cart::CommerceHintService::InitializeCommerceHeuristicsForTesting(
           base::Version("0.0.0.1"), R"###(
           {
             "guitarcenter.com": {
@@ -645,7 +646,7 @@ IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest, ExtractCart_ScriptFromComponent) {
   )###";
   std::string product_id_json = "{\"foo.com\": \"test\"}";
   bool is_populated =
-      commerce_hint_service_->InitializeCommerceHeuristicsForTesting(
+      cart::CommerceHintService::InitializeCommerceHeuristicsForTesting(
           base::Version("0.0.0.1"), "{}", "{}", std::move(product_id_json),
           std::move(extraction_script));
   DCHECK(is_populated);
@@ -685,7 +686,7 @@ IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest,
     }
   )###";
   bool is_populated =
-      commerce_hint_service_->InitializeCommerceHeuristicsForTesting(
+      cart::CommerceHintService::InitializeCommerceHeuristicsForTesting(
           base::Version("0.0.0.1"), "{}", global_heuristics,
           std::move(product_id_json), "");
   DCHECK(is_populated);
@@ -710,7 +711,7 @@ IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest,
 
 IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest, AddCartFromComponent) {
   bool is_populated =
-      commerce_hint_service_->InitializeCommerceHeuristicsForTesting(
+      cart::CommerceHintService::InitializeCommerceHeuristicsForTesting(
           base::Version("0.0.0.1"), R"###(
           {
             "guitarcenter.com": {
@@ -771,12 +772,13 @@ IN_PROC_BROWSER_TEST_F(CommerceHintNoRateControlTest, DISABLED_CartPriority) {
 #endif  // !BUILDFLAG(IS_ANDROID)
 
 IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest, VisitCheckout) {
+  GURL example_url = GURL("https://www.guitarcenter.com/");
 #if !BUILDFLAG(IS_ANDROID)
-  service_->AddCart(kMockExample, absl::nullopt, kMockExampleProto);
+  service_->AddCart(example_url, absl::nullopt, kMockExampleProto);
   WaitForCartCount(kExpectedExampleFallbackCart);
 #endif
 
-  NavigateToURL("https://www.guitarcenter.com/");
+  NavigateToURL(example_url.spec());
   NavigateToURL("https://www.guitarcenter.com/123/checkout/456");
   // URL is checked against checkout twice.
   WaitForUmaCount("Commerce.Carts.VisitCheckout", 2);
@@ -786,12 +788,13 @@ IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest, VisitCheckout) {
 }
 
 IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest, PurchaseByURL) {
+  GURL amazon_url = GURL("https://www.amazon.com/");
 #if !BUILDFLAG(IS_ANDROID)
-  service_->AddCart(kMockAmazon, absl::nullopt, kMockAmazonProto);
+  service_->AddCart(amazon_url, absl::nullopt, kMockAmazonProto);
   WaitForCartCount(kExpectedAmazon);
 #endif
 
-  NavigateToURL("http://amazon.com/");
+  NavigateToURL(amazon_url.spec());
   NavigateToURL(
       "http://amazon.com/gp/buy/spc/handlers/static-submit-decoupled.html");
   WaitForUmaCount("Commerce.Carts.PurchaseByURL", 1);
@@ -801,8 +804,9 @@ IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest, PurchaseByURL) {
 }
 
 IN_PROC_BROWSER_TEST_F(CommerceHintAgentTest, PurchaseByForm) {
+  GURL example_url = GURL("https://www.guitarcenter.com/");
 #if !BUILDFLAG(IS_ANDROID)
-  service_->AddCart(kMockExample, absl::nullopt, kMockExampleProto);
+  service_->AddCart(example_url, absl::nullopt, kMockExampleProto);
   WaitForCartCount(kExpectedExampleFallbackCart);
 #endif
 
@@ -891,9 +895,15 @@ class CommerceHintCacaoTest : public CommerceHintAgentTest {
  public:
   void SetUpInProcessBrowserTestFixture() override {
     scoped_feature_list_.InitWithFeatures(
-        {ntp_features::kNtpChromeCartModule,
-         optimization_guide::features::kOptimizationHints},
-        {});
+        {
+#if !BUILDFLAG(IS_ANDROID)
+          ntp_features::kNtpChromeCartModule,
+#else
+          commerce::kCommerceHintAndroid,
+#endif
+              optimization_guide::features::kOptimizationHints
+        },
+        {commerce::kChromeCartDomBasedHeuristics});
   }
 
  private:
@@ -945,47 +955,6 @@ IN_PROC_BROWSER_TEST_F(CommerceHintCacaoTest, Rejected) {
   WaitForCartCount(kEmptyExpected);
 #endif
   WaitForUmaCount("Commerce.Carts.VisitCart", 0);
-}
-
-class CommerceHintOptimizeRendererDisabledTest : public CommerceHintAgentTest {
- public:
-  void SetUpInProcessBrowserTestFixture() override {
-    scoped_feature_list_.InitWithFeaturesAndParameters(
-        {{
-#if !BUILDFLAG(IS_ANDROID)
-             ntp_features::kNtpChromeCartModule,
-#else
-             commerce::kCommerceHintAndroid,
-#endif
-             {{"optimize-renderer-signal", "false"}}},
-         {optimization_guide::features::kOptimizationHints, {{}}}},
-        {});
-  }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-};
-
-// If command line argument "optimization_guide_hints_override" is not given,
-// nothing is specified in AddHintForTesting(), and the real hints are not
-// downloaded, all the URLs are considered non-shopping.
-IN_PROC_BROWSER_TEST_F(CommerceHintOptimizeRendererDisabledTest, Rejected) {
-  NavigateToURL("https://www.guitarcenter.com/");
-  SendXHR("/add-to-cart", "product: 123");
-  base::PlatformThread::Sleep(TestTimeouts::tiny_timeout() * 30);
-#if !BUILDFLAG(IS_ANDROID)
-  WaitForCartCount(kEmptyExpected);
-#endif
-  // The cart won't be added on browser side because of Cacao rejection either
-  // way, but when optimize-renderer-signal is disabled, renderer will still
-  // observer and process commerce signals on this site.
-  WaitForUmaCount("Commerce.Carts.AddToCartByURL", 1);
-
-  NavigateToURL("https://www.guitarcenter.com/cart.html");
-#if !BUILDFLAG(IS_ANDROID)
-  WaitForCartCount(kEmptyExpected);
-#endif
-  WaitForUmaCount("Commerce.Carts.VisitCart", 1);
 }
 
 #if !BUILDFLAG(IS_ANDROID)
@@ -1605,39 +1574,6 @@ IN_PROC_BROWSER_TEST_F(CommerceHintAgentFencedFrameTest,
   WaitForUmaCount("Commerce.Carts.VisitCart", 1);
 }
 
-class CommerceHintAgentPortalBrowserTest : public CommerceHintAgentTest {
- public:
-  void SetUpInProcessBrowserTestFixture() override {
-    scoped_feature_list_.InitWithFeaturesAndParameters(
-        {{blink::features::kPortals, {}},
-         {blink::features::kPortalsCrossOrigin, {}},
-         {
-#if !BUILDFLAG(IS_ANDROID)
-             ntp_features::kNtpChromeCartModule,
-#else
-             commerce::kCommerceHintAndroid,
-#endif
-             {{"product-skip-pattern", "(^|\\W)(?i)(skipped)(\\W|$)"},
-              // Extend timeout to avoid flakiness.
-              {"cart-extraction-timeout", "1m"}}}},
-        {optimization_guide::features::kOptimizationHints});
-  }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-};
-
-IN_PROC_BROWSER_TEST_F(CommerceHintAgentPortalBrowserTest, VisitCartInPortal) {
-  // For add-to-cart by URL, normally a URL in that domain has already been
-  // committed.
-  NavigateToURL("https://www.guitarcenter.com/cart-in-portal.html");
-  WaitForUmaCount("Commerce.Carts.VisitCart", 1);
-
-  EXPECT_EQ(true, content::EvalJs(web_contents(), "loadPromise"));
-
-  EXPECT_EQ(true, content::EvalJs(web_contents(), "activate()"));
-  WaitForUmaCount("Commerce.Carts.VisitCart", 1);
-}
 #endif  // !BUILDFLAG(IS_CHROMEOS)
 
 #if !BUILDFLAG(IS_ANDROID)
@@ -1695,5 +1631,234 @@ IN_PROC_BROWSER_TEST_F(CommerceHintFeatureDefaultWithGeoTest, EnableWithGeo) {
 #endif
 }
 #endif
+
+class CommerceHintDOMBasedHeuristicsTest : public CommerceHintAgentTest {
+ public:
+  void SetUpInProcessBrowserTestFixture() override {
+    scoped_feature_list_.InitWithFeaturesAndParameters(
+        {{
+#if !BUILDFLAG(IS_ANDROID)
+             ntp_features::kNtpChromeCartModule,
+#else
+             commerce::kCommerceHintAndroid,
+#endif
+             {}},
+         {commerce::kChromeCartDomBasedHeuristics,
+          {{"add-to-cart-button-active-time", "2s"},
+           {"heuristics-execution-gap-time", "0s"}}}},
+        {optimization_guide::features::kOptimizationHints});
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(CommerceHintDOMBasedHeuristicsTest,
+                       DetectionRequiresAddToCartActive) {
+  NavigateToURL("https://www.guitarcenter.com/product-page.html");
+  // AddToCart requests without active AddToCart button focus.
+  SendXHR("/wp-admin/admin-ajax.php", "action: woocommerce_add_to_cart");
+
+#if !BUILDFLAG(IS_ANDROID)
+  WaitForCartCount(kEmptyExpected);
+#endif
+  WaitForUmaCount("Commerce.Carts.AddToCartByPOST", 0);
+
+  // Focus on an AddToCart button and then send AddToCart requests.
+  EXPECT_EQ(nullptr,
+            content::EvalJs(web_contents(), "focusElement(\"buttonOne\")"));
+  SendXHR("/wp-admin/admin-ajax.php", "action: woocommerce_add_to_cart");
+
+#if !BUILDFLAG(IS_ANDROID)
+  WaitForCartCount(kExpectedExampleFallbackCart);
+#endif
+  WaitForUmaCount("Commerce.Carts.AddToCartByPOST", 1);
+  WaitForUmaCount("Commerce.Carts.AddToCartButtonDetection", 1);
+  ExpectUKMCount(AddToCartEntry::kEntryName, "HeuristicsExecutionTime", 1);
+}
+
+IN_PROC_BROWSER_TEST_F(CommerceHintDOMBasedHeuristicsTest,
+                       DetectionInactiveForWrongButton) {
+  NavigateToURL("https://www.guitarcenter.com/product-page.html");
+
+  // Focus on a non-AddToCart button and then send AddToCart requests.
+  EXPECT_EQ(nullptr,
+            content::EvalJs(web_contents(), "focusElement(\"buttonTwo\")"));
+  SendXHR("/wp-admin/admin-ajax.php", "action: woocommerce_add_to_cart");
+
+#if !BUILDFLAG(IS_ANDROID)
+  WaitForCartCount(kEmptyExpected);
+#endif
+  WaitForUmaCount("Commerce.Carts.AddToCartByPOST", 0);
+  WaitForUmaCount("Commerce.Carts.AddToCartButtonDetection", 1);
+  ExpectUKMCount(AddToCartEntry::kEntryName, "HeuristicsExecutionTime", 1);
+
+  // Focus on an AddToCart button and then send AddToCart requests.
+  EXPECT_EQ(nullptr,
+            content::EvalJs(web_contents(), "focusElement(\"buttonOne\")"));
+  SendXHR("/wp-admin/admin-ajax.php", "action: woocommerce_add_to_cart");
+
+#if !BUILDFLAG(IS_ANDROID)
+  WaitForCartCount(kExpectedExampleFallbackCart);
+#endif
+  WaitForUmaCount("Commerce.Carts.AddToCartByPOST", 1);
+  WaitForUmaCount("Commerce.Carts.AddToCartButtonDetection", 2);
+  ExpectUKMCount(AddToCartEntry::kEntryName, "HeuristicsExecutionTime", 2);
+}
+
+IN_PROC_BROWSER_TEST_F(CommerceHintDOMBasedHeuristicsTest,
+                       AddToCartActiveExpires) {
+  NavigateToURL("https://www.guitarcenter.com/product-page.html");
+
+  // Focus on an AddToCart button, but wait until it's no longer active and then
+  // send AddToCart requests.
+  EXPECT_EQ(nullptr,
+            content::EvalJs(web_contents(), "focusElement(\"buttonOne\")"));
+  base::PlatformThread::Sleep(base::Seconds(2));
+  SendXHR("/wp-admin/admin-ajax.php", "action: woocommerce_add_to_cart");
+
+#if !BUILDFLAG(IS_ANDROID)
+  WaitForCartCount(kEmptyExpected);
+#endif
+  WaitForUmaCount("Commerce.Carts.AddToCartByPOST", 0);
+
+  // Focus on an AddToCart button and then send AddToCart requests.
+  EXPECT_EQ(nullptr,
+            content::EvalJs(web_contents(), "focusElement(\"buttonTwo\")"));
+  EXPECT_EQ(nullptr,
+            content::EvalJs(web_contents(), "focusElement(\"buttonOne\")"));
+  SendXHR("/wp-admin/admin-ajax.php", "action: woocommerce_add_to_cart");
+
+#if !BUILDFLAG(IS_ANDROID)
+  WaitForCartCount(kExpectedExampleFallbackCart);
+#endif
+  WaitForUmaCount("Commerce.Carts.AddToCartByPOST", 1);
+  WaitForUmaCount("Commerce.Carts.AddToCartButtonDetection", 3);
+  ExpectUKMCount(AddToCartEntry::kEntryName, "HeuristicsExecutionTime", 3);
+}
+
+IN_PROC_BROWSER_TEST_F(CommerceHintDOMBasedHeuristicsTest,
+                       TestAddToCartPattern) {
+  NavigateToURL("https://www.guitarcenter.com/product-page.html");
+  // Focus on an AddToCart button and then send AddToCart requests.
+  EXPECT_EQ(nullptr,
+            content::EvalJs(web_contents(), "focusElement(\"buttonOne\")"));
+  SendXHR("/wp-admin/admin-ajax.php", "{\"sku\": \"123\", \"quantity\":1");
+
+#if !BUILDFLAG(IS_ANDROID)
+  WaitForCartCount(kExpectedExampleFallbackCart);
+#endif
+  WaitForUmaCount("Commerce.Carts.AddToCartByPOST", 1);
+  WaitForUmaCount("Commerce.Carts.AddToCartButtonDetection", 1);
+}
+
+class CommerceHintDOMBasedHeuristicsSkipTest : public CommerceHintAgentTest {
+ public:
+  void SetUpInProcessBrowserTestFixture() override {
+    scoped_feature_list_.InitWithFeaturesAndParameters(
+        {{
+#if !BUILDFLAG(IS_ANDROID)
+             ntp_features::kNtpChromeCartModule,
+#else
+             commerce::kCommerceHintAndroid,
+#endif
+             {}},
+         {commerce::kChromeCartDomBasedHeuristics,
+          {{"skip-heuristics-domain-pattern", "guitarcenter"},
+           {"add-to-cart-button-active-time", "0s"}}}},
+        {optimization_guide::features::kOptimizationHints});
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(CommerceHintDOMBasedHeuristicsSkipTest,
+                       SkipDOMBasedHeuristics) {
+  // Send AddToCart requests on a skipped domain without active AddToCart
+  // button.
+  NavigateToURL("https://www.guitarcenter.com/product-page.html");
+  SendXHR("/wp-admin/admin-ajax.php", "action: woocommerce_add_to_cart");
+
+#if !BUILDFLAG(IS_ANDROID)
+  WaitForCartCount(kExpectedExampleFallbackCart);
+#endif
+  WaitForUmaCount("Commerce.Carts.AddToCartByPOST", 1);
+
+  // Send AddToCart requests on a skipped domain after focusing on a invalid
+  // AddToCart button.
+  EXPECT_EQ(nullptr,
+            content::EvalJs(web_contents(), "focusElement(\"buttonTwo\")"));
+  SendXHR("/wp-admin/admin-ajax.php", "action: woocommerce_add_to_cart");
+
+#if !BUILDFLAG(IS_ANDROID)
+  WaitForCartCount(kExpectedExampleFallbackCart);
+#endif
+  WaitForUmaCount("Commerce.Carts.AddToCartByPOST", 2);
+  WaitForUmaCount("Commerce.Carts.AddToCartButtonDetection", 0);
+
+  // Send AddToCart requests on a non-skipped domain without active AddToCart
+  // button.
+  NavigateToURL("https://www.example.com/product-page.html");
+  SendXHR("/wp-admin/admin-ajax.php", "action: woocommerce_add_to_cart");
+
+#if !BUILDFLAG(IS_ANDROID)
+  WaitForCartCount(kExpectedExampleFallbackCart);
+#endif
+  WaitForUmaCount("Commerce.Carts.AddToCartByPOST", 2);
+  WaitForUmaCount("Commerce.Carts.AddToCartButtonDetection", 0);
+  ExpectUKMCount(AddToCartEntry::kEntryName, "HeuristicsExecutionTime", 0);
+}
+
+class CommerceHintDOMBasedHeuristicsGapTimeTest : public CommerceHintAgentTest {
+ public:
+  void SetUpInProcessBrowserTestFixture() override {
+    scoped_feature_list_.InitWithFeaturesAndParameters(
+        {{
+#if !BUILDFLAG(IS_ANDROID)
+             ntp_features::kNtpChromeCartModule,
+#else
+             commerce::kCommerceHintAndroid,
+#endif
+             {}},
+         {commerce::kChromeCartDomBasedHeuristics,
+          {{"add-to-cart-button-active-time", "2s"},
+           {"heuristics-execution-gap-time", "100s"}}}},
+        {optimization_guide::features::kOptimizationHints});
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(CommerceHintDOMBasedHeuristicsGapTimeTest,
+                       EnforceExecutionTimeGap) {
+  NavigateToURL("https://www.guitarcenter.com/product-page.html");
+
+  // Focus on a non-AddToCart button and then send AddToCart requests.
+  EXPECT_EQ(nullptr,
+            content::EvalJs(web_contents(), "focusElement(\"buttonTwo\")"));
+  SendXHR("/wp-admin/admin-ajax.php", "action: woocommerce_add_to_cart");
+
+#if !BUILDFLAG(IS_ANDROID)
+  WaitForCartCount(kEmptyExpected);
+#endif
+  WaitForUmaCount("Commerce.Carts.AddToCartByPOST", 0);
+  WaitForUmaCount("Commerce.Carts.AddToCartButtonDetection", 1);
+  ExpectUKMCount(AddToCartEntry::kEntryName, "HeuristicsExecutionTime", 1);
+
+  // Focus on an AddToCart button and then send AddToCart requests. Since the
+  // gap time is shorter than the threshold, this focus event will be ignored.
+  EXPECT_EQ(nullptr,
+            content::EvalJs(web_contents(), "focusElement(\"buttonOne\")"));
+  SendXHR("/wp-admin/admin-ajax.php", "action: woocommerce_add_to_cart");
+
+#if !BUILDFLAG(IS_ANDROID)
+  WaitForCartCount(kEmptyExpected);
+#endif
+  WaitForUmaCount("Commerce.Carts.AddToCartByPOST", 0);
+  WaitForUmaCount("Commerce.Carts.AddToCartButtonDetection", 1);
+  ExpectUKMCount(AddToCartEntry::kEntryName, "HeuristicsExecutionTime", 1);
+}
 
 }  // namespace

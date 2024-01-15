@@ -15,12 +15,16 @@
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
+namespace network {
+struct ResourceRequest;
+}  // namespace network
+
 namespace blink {
 
 class AlternateSignedExchangeResourceInfo;
 class LocalFrame;
-class WebURLLoader;
-class WebURLRequest;
+class URLLoader;
+class URLLoaderThrottle;
 
 // This class holds the prefetched signed exchange info and will returns
 // loaders for matching requests.
@@ -61,8 +65,9 @@ class PrefetchedSignedExchangeManager final
   //
   // The returned loader doesn't start loading until
   // StartPrefetchedLinkHeaderPreloads() will be called.
-  std::unique_ptr<WebURLLoader> MaybeCreateURLLoader(
-      const WebURLRequest& request);
+  std::unique_ptr<URLLoader> MaybeCreateURLLoader(
+      const network::ResourceRequest& request,
+      Vector<std::unique_ptr<URLLoaderThrottle>>& throttles);
 
   // If the all loaders which have been created by MaybeCreateURLLoader() have
   // a matching "alternate" link header in the outer response and the matching
@@ -83,10 +88,12 @@ class PrefetchedSignedExchangeManager final
   class PrefetchedSignedExchangeLoader;
 
   void TriggerLoad();
-  std::unique_ptr<WebURLLoader> CreateDefaultURLLoader(
-      const WebURLRequest& request);
-  std::unique_ptr<WebURLLoader> CreatePrefetchedSignedExchangeURLLoader(
-      const WebURLRequest& request,
+  std::unique_ptr<URLLoader> CreateDefaultURLLoader(
+      const network::ResourceRequest& request,
+      Vector<std::unique_ptr<URLLoaderThrottle>> throttles);
+  std::unique_ptr<URLLoader> CreatePrefetchedSignedExchangeURLLoader(
+      const network::ResourceRequest& request,
+      Vector<std::unique_ptr<URLLoaderThrottle>> throttles,
       mojo::PendingRemote<network::mojom::blink::URLLoaderFactory>
           loader_factory);
 
@@ -96,7 +103,7 @@ class PrefetchedSignedExchangeManager final
       prefetched_exchanges_map_;
   bool started_ = false;
 
-  WTF::Vector<base::WeakPtr<PrefetchedSignedExchangeLoader>> loaders_;
+  Vector<base::WeakPtr<PrefetchedSignedExchangeLoader>> loaders_;
 };
 
 }  // namespace blink

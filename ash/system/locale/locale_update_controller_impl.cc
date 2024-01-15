@@ -45,8 +45,8 @@ class LocaleNotificationDelegate : public message_center::NotificationDelegate {
 
   // message_center::NotificationDelegate overrides:
   void Close(bool by_user) override;
-  void Click(const absl::optional<int>& button_index,
-             const absl::optional<std::u16string>& reply) override;
+  void Click(const std::optional<int>& button_index,
+             const std::optional<std::u16string>& reply) override;
 
  private:
   base::OnceCallback<void(LocaleNotificationResult)> callback_;
@@ -71,8 +71,8 @@ void LocaleNotificationDelegate::Close(bool by_user) {
 }
 
 void LocaleNotificationDelegate::Click(
-    const absl::optional<int>& button_index,
-    const absl::optional<std::u16string>& reply) {
+    const std::optional<int>& button_index,
+    const std::optional<std::u16string>& reply) {
   if (!callback_)
     return;
 
@@ -114,7 +114,7 @@ void LocaleUpdateControllerImpl::ConfirmLocaleChange(
   for (auto& observer : observers_)
     observer.OnLocaleChanged();
 
-  std::unique_ptr<Notification> notification = CreateSystemNotification(
+  std::unique_ptr<Notification> notification = CreateSystemNotificationPtr(
       message_center::NOTIFICATION_TYPE_SIMPLE, kLocaleChangeNotificationId,
       l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_LOCALE_CHANGE_TITLE),
       l10n_util::GetStringFUTF16(IDS_ASH_STATUS_TRAY_LOCALE_CHANGE_MESSAGE,

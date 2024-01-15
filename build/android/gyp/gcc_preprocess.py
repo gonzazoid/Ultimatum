@@ -12,6 +12,8 @@ import sys
 import zipfile
 
 from util import build_utils
+import action_helpers  # build_utils adds //build to sys.path.
+import zip_helpers
 
 
 def _ParsePackageName(data):
@@ -32,8 +34,8 @@ def main(args):
   parser.add_argument('templates', nargs='+', help='Template files.')
   options = parser.parse_args(args)
 
-  options.defines = build_utils.ParseGnList(options.defines)
-  options.include_dirs = build_utils.ParseGnList(options.include_dirs)
+  options.defines = action_helpers.parse_gn_list(options.defines)
+  options.include_dirs = action_helpers.parse_gn_list(options.include_dirs)
 
   gcc_cmd = [
       'gcc',
@@ -46,7 +48,7 @@ def main(args):
   gcc_cmd.extend('-D' + x for x in options.defines)
   gcc_cmd.extend('-I' + x for x in options.include_dirs)
 
-  with build_utils.AtomicOutput(options.output) as f:
+  with action_helpers.atomic_output(options.output) as f:
     with zipfile.ZipFile(f, 'w') as z:
       for template in options.templates:
         data = build_utils.CheckOutput(gcc_cmd + [template])
@@ -56,7 +58,7 @@ def main(args):
         zip_path = posixpath.join(
             package_name.replace('.', '/'),
             os.path.splitext(os.path.basename(template))[0]) + '.java'
-        build_utils.AddToZipHermetic(z, zip_path, data=data)
+        zip_helpers.add_to_zip_hermetic(z, zip_path, data=data)
 
 
 if __name__ == '__main__':

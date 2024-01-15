@@ -8,6 +8,7 @@
 
 #if BUILDFLAG(IS_WIN)
 #include <io.h>
+#include <stdlib.h>
 #include <windows.h>
 #else
 #include <sys/socket.h>
@@ -19,11 +20,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
-#include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/memory/ref_counted_memory.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/strings/string_util.h"
 #include "base/synchronization/atomic_flag.h"
@@ -39,8 +38,6 @@
 
 const size_t kReceiveBufferSizeForDevTools = 100 * 1024 * 1024;  // 100Mb
 const size_t kWritePacketSize = 1 << 16;
-const int kReadFD = 3;
-const int kWriteFD = 4;
 
 // Our CBOR (RFC 7049) based format starts with a tag 24 indicating
 // an envelope, that is, a byte string which as payload carries the
@@ -93,6 +90,41 @@ class PipeIOBase {
   std::unique_ptr<base::Thread> thread_;
   base::AtomicFlag shutting_down_;
 };
+
+#if BUILDFLAG(IS_WIN)
+// Temporary CRT parameter validation error handler override that allows
+//  _get_osfhandle() to return INVALID_HANDLE_VALUE instead of crashing.
+class ScopedInvalidParameterHandlerOverride {
+ public:
+  ScopedInvalidParameterHandlerOverride()
+      : prev_invalid_parameter_handler_(
+            _set_thread_local_invalid_parameter_handler(
+                InvalidParameterHandler)) {}
+
+  ScopedInvalidParameterHandlerOverride(
+      const ScopedInvalidParameterHandlerOverride&) = delete;
+  ScopedInvalidParameterHandlerOverride& operator=(
+      const ScopedInvalidParameterHandlerOverride&) = delete;
+
+  ~ScopedInvalidParameterHandlerOverride() {
+    _set_thread_local_invalid_parameter_handler(
+        prev_invalid_parameter_handler_);
+  }
+
+ private:
+  // A do nothing invalid parameter handler that causes CRT routine to return
+  // error to the caller.
+  static void InvalidParameterHandler(const wchar_t* expression,
+                                      const wchar_t* function,
+                                      const wchar_t* file,
+                                      unsigned int line,
+                                      uintptr_t reserved) {}
+
+  const _invalid_parameter_handler prev_invalid_parameter_handler_;
+};
+
+#endif  // BUILDFLAG(IS_WIN)
+
 }  // namespace
 
 class PipeReaderBase : public PipeIOBase {
@@ -100,11 +132,11 @@ class PipeReaderBase : public PipeIOBase {
   PipeReaderBase(base::WeakPtr<DevToolsPipeHandler> devtools_handler,
                  int read_fd)
       : PipeIOBase("DevToolsPipeHandlerReadThread"),
-        devtools_handler_(std::move(devtools_handler)) {
+        devtools_handler_(std::move(devtools_handler)),
+        read_fd_(read_fd) {
 #if BUILDFLAG(IS_WIN)
+    ScopedInvalidParameterHandlerOverride invalid_parameter_handler_override;
     read_handle_ = reinterpret_cast<HANDLE>(_get_osfhandle(read_fd));
-#else
-    read_fd_ = read_fd;
 #endif
   }
 
@@ -120,7 +152,9 @@ class PipeReaderBase : public PipeIOBase {
 #if BUILDFLAG(IS_WIN)
     // Cancel pending synchronous read.
     CancelIoEx(read_handle_, nullptr);
-    CloseHandle(read_handle_);
+    ScopedInvalidParameterHandlerOverride invalid_parameter_handler_override;
+    _close(read_fd_);
+    read_handle_ = INVALID_HANDLE_VALUE;
 #else
     shutdown(read_fd_, SHUT_RDWR);
 #endif
@@ -174,21 +208,19 @@ class PipeReaderBase : public PipeIOBase {
   }
 
   base::WeakPtr<DevToolsPipeHandler> devtools_handler_;
+  int read_fd_;
 #if BUILDFLAG(IS_WIN)
   HANDLE read_handle_;
-#else
-  int read_fd_;
 #endif
 };
 
 class PipeWriterBase : public PipeIOBase {
  public:
   explicit PipeWriterBase(int write_fd)
-      : PipeIOBase("DevToolsPipeHandlerWriteThread") {
+      : PipeIOBase("DevToolsPipeHandlerWriteThread"), write_fd_(write_fd) {
 #if BUILDFLAG(IS_WIN)
+    ScopedInvalidParameterHandlerOverride invalid_parameter_handler_override;
     write_handle_ = reinterpret_cast<HANDLE>(_get_osfhandle(write_fd));
-#else
-    write_fd_ = write_fd;
 #endif
   }
 
@@ -203,7 +235,9 @@ class PipeWriterBase : public PipeIOBase {
  protected:
   void ClosePipe() override {
 #if BUILDFLAG(IS_WIN)
-    CloseHandle(write_handle_);
+    ScopedInvalidParameterHandlerOverride invalid_parameter_handler_override;
+    _close(write_fd_);
+    write_handle_ = INVALID_HANDLE_VALUE;
 #else
     shutdown(write_fd_, SHUT_RDWR);
 #endif
@@ -238,10 +272,9 @@ class PipeWriterBase : public PipeIOBase {
   }
 
  private:
+  int write_fd_;
 #if BUILDFLAG(IS_WIN)
   HANDLE write_handle_;
-#else
-  int write_fd_;
 #endif
 };
 
@@ -349,10 +382,12 @@ class PipeReaderCBOR : public PipeReaderBase {
 
 // DevToolsPipeHandler ---------------------------------------------------
 
-DevToolsPipeHandler::DevToolsPipeHandler(base::OnceClosure on_disconnect)
+DevToolsPipeHandler::DevToolsPipeHandler(int read_fd,
+                                         int write_fd,
+                                         base::OnceClosure on_disconnect)
     : on_disconnect_(std::move(on_disconnect)),
-      read_fd_(kReadFD),
-      write_fd_(kWriteFD) {
+      read_fd_(read_fd),
+      write_fd_(write_fd) {
   browser_target_ = DevToolsAgentHost::CreateForBrowser(
       nullptr, DevToolsAgentHost::CreateServerSocketCallback());
   browser_target_->AttachClient(this);

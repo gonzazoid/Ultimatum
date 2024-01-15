@@ -40,7 +40,6 @@
       "name": "Scroll corner of LayoutNGBlockFlow DIV id='container'",
       "position": [385, 285],
       "bounds": [15, 15],
-      "contentsOpaqueForText": true,
       "transform": 1
     }
   ],

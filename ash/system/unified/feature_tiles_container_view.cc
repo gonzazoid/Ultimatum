@@ -7,197 +7,321 @@
 #include "ash/public/cpp/pagination/pagination_controller.h"
 #include "ash/public/cpp/pagination/pagination_model.h"
 #include "ash/system/tray/tray_constants.h"
-#include "ash/system/unified/feature_pod_button.h"
+#include "ash/system/unified/feature_tile.h"
 #include "ash/system/unified/unified_system_tray_controller.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
-#include "ui/views/background.h"
-#include "ui/views/controls/label.h"
 #include "ui/views/layout/flex_layout.h"
 #include "ui/views/layout/flex_layout_view.h"
-
-using views::FlexLayout;
-using views::FlexLayoutView;
+#include "ui/views/view_utils.h"
 
 namespace ash {
 
 namespace {
 
-constexpr gfx::Size kFeatureTileRowSize(440, kFeatureTileHeight);
-constexpr gfx::Size kFeatureTileDefaultSize(200, kFeatureTileHeight);
-constexpr gfx::Size kFeatureTileCompactSize(96, kFeatureTileHeight);
-constexpr gfx::Insets kFeatureTileRowMargins = gfx::Insets::VH(4, 0);
+// Size constants
+constexpr gfx::Size kRowContainerSize(kWideTrayMenuWidth, kFeatureTileHeight);
+constexpr gfx::Insets kFeatureTileContainerInteriorMargin =
+    gfx::Insets::VH(16, 0);
+constexpr gfx::Insets kRowContainerInteriorMargin = gfx::Insets::VH(0, 16);
+constexpr gfx::Insets kRowContainerMargins = gfx::Insets::VH(4, 0);
 constexpr gfx::Insets kFeatureTileMargins = gfx::Insets::VH(0, 4);
-constexpr gfx::Insets kFeatureTileRowPadding = gfx::Insets::VH(0, 16);
-constexpr gfx::Insets kFeatureTileContainerPadding = gfx::Insets::VH(16, 0);
 
-class FeatureTileRow : public views::FlexLayoutView {
- public:
-  METADATA_HEADER(FeatureTileRow);
+// `RowContainer` weight constants
+constexpr int kCompactTileWeight = 1;
+constexpr int kPrimaryTileWeight = 2;
+constexpr int kMaxRowWeight = 4;
 
-  FeatureTileRow() {
-    SetPreferredSize(kFeatureTileRowSize);
-    SetDefault(views::kMarginsKey, kFeatureTileMargins);
-    SetIgnoreDefaultMainAxisMargins(true);
-    SetInteriorMargin(kFeatureTileRowPadding);
+int GetTileWeight(FeatureTile::TileType type) {
+  switch (type) {
+    case FeatureTile::TileType::kPrimary:
+      return kPrimaryTileWeight;
+    case FeatureTile::TileType::kCompact:
+      return kCompactTileWeight;
+    default:
+      NOTREACHED();
   }
-
-  FeatureTileRow(const FeatureTileRow&) = delete;
-  FeatureTileRow& operator=(const FeatureTileRow&) = delete;
-  ~FeatureTileRow() override = default;
-};
-
-BEGIN_METADATA(FeatureTileRow, views::FlexLayoutView)
-END_METADATA
-
-// Temp class for prototyping.
-class FeatureTile : public views::Label {
- public:
-  METADATA_HEADER(FeatureTile);
-
-  explicit FeatureTile(bool compact = false) {
-    SetPreferredSize(compact ? kFeatureTileCompactSize
-                             : kFeatureTileDefaultSize);
-    SetBackground(views::CreateSolidBackground(SK_ColorGRAY));
-  }
-
-  FeatureTile(const FeatureTile&) = delete;
-  FeatureTile& operator=(const FeatureTile&) = delete;
-  ~FeatureTile() override = default;
-};
-
-BEGIN_METADATA(FeatureTile, views::Label)
-END_METADATA
+}
 
 }  // namespace
+
+// The row container that holds `FeatureTile` elements. Can hold a single
+// primary tile, two primary tiles, or a primary and two compact tiles.
+class FeatureTilesContainerView::RowContainer : public views::FlexLayoutView {
+ public:
+  METADATA_HEADER(RowContainer);
+  explicit RowContainer(FeatureTilesContainerView* container)
+      : container_(container) {
+    DCHECK(container_);
+    SetPreferredSize(kRowContainerSize);
+    SetInteriorMargin(kRowContainerInteriorMargin);
+    SetDefault(views::kMarginsKey, kFeatureTileMargins);
+    SetIgnoreDefaultMainAxisMargins(true);
+  }
+  RowContainer(const RowContainer&) = delete;
+  RowContainer& operator=(const RowContainer&) = delete;
+  ~RowContainer() override = default;
+
+  // views::View:
+  void ChildVisibilityChanged(views::View* child) override {
+    views::FlexLayoutView::ChildVisibilityChanged(child);
+    container_->RelayoutTiles();
+  }
+
+ private:
+  const raw_ptr<FeatureTilesContainerView> container_;
+};
+
+BEGIN_METADATA(FeatureTilesContainerView, RowContainer, views::FlexLayoutView)
+END_METADATA
+
+// The page container that holds `RowContainer` elements. Can hold from one up
+// to four rows depending on the available space. More pages will be created if
+// the available tiles do not fit a single page.
+class FeatureTilesContainerView::PageContainer : public views::FlexLayoutView {
+ public:
+  METADATA_HEADER(PageContainer);
+  PageContainer() {
+    SetOrientation(views::LayoutOrientation::kVertical);
+    SetCrossAxisAlignment(views::LayoutAlignment::kCenter);
+    SetInteriorMargin(kFeatureTileContainerInteriorMargin);
+    SetDefault(views::kMarginsKey, kRowContainerMargins);
+    SetIgnoreDefaultMainAxisMargins(true);
+  }
+  PageContainer(const PageContainer&) = delete;
+  PageContainer& operator=(const PageContainer&) = delete;
+  ~PageContainer() override = default;
+};
+
+BEGIN_METADATA(FeatureTilesContainerView, PageContainer, views::FlexLayoutView)
+END_METADATA
 
 FeatureTilesContainerView::FeatureTilesContainerView(
     UnifiedSystemTrayController* controller)
     : controller_(controller),
       pagination_model_(controller->model()->pagination_model()),
-      feature_tile_rows_(kFeatureTileMaxRows) {
+      displayable_rows_(kFeatureTileMaxRows) {
   DCHECK(pagination_model_);
   DCHECK(controller_);
   pagination_model_->AddObserver(this);
-
-  SetLayoutManager(std::make_unique<FlexLayout>())
-      ->SetOrientation(views::LayoutOrientation::kVertical)
-      .SetDefault(views::kMarginsKey, kFeatureTileRowMargins)
-      .SetIgnoreDefaultMainAxisMargins(true)
-      .SetInteriorMargin(kFeatureTileContainerPadding)
-      .SetCrossAxisAlignment(views::LayoutAlignment::kCenter);
-
-  // Adds four rows with placeholder FeatureTile elements.
-  AddPlaceholderFeatureTiles();
+  SetLayoutManager(std::make_unique<views::FlexLayout>())
+      ->SetOrientation(views::LayoutOrientation::kHorizontal);
 }
 
 FeatureTilesContainerView::~FeatureTilesContainerView() {
+  DCHECK(pagination_model_);
   pagination_model_->RemoveObserver(this);
 }
 
-void FeatureTilesContainerView::AddPlaceholderFeatureTiles() {
-  // TODO: add child rows based on `feature_tile_rows`.
-  FeatureTileRow* row1 = AddChildView(std::make_unique<FeatureTileRow>());
-  FeatureTileRow* row2 = AddChildView(std::make_unique<FeatureTileRow>());
-  FeatureTileRow* row3 = AddChildView(std::make_unique<FeatureTileRow>());
-  FeatureTileRow* row4 = AddChildView(std::make_unique<FeatureTileRow>());
+void FeatureTilesContainerView::AddTiles(
+    std::vector<std::unique_ptr<FeatureTile>> tiles) {
+  // A `RowContainer` can hold a combination of primary and compact tiles
+  // depending on the added tile weights.
+  int row_weight = 0;
+  bool create_row = true;
 
-  row1->AddChildView(std::make_unique<FeatureTile>());
-  row1->AddChildView(std::make_unique<FeatureTile>(/*compact=*/true));
-  row1->AddChildView(std::make_unique<FeatureTile>(/*compact=*/true));
+  if (tiles.size() > 0) {
+    pages_.push_back(AddChildView(std::make_unique<PageContainer>()));
+  }
 
-  row2->AddChildView(std::make_unique<FeatureTile>());
-  row2->AddChildView(std::make_unique<FeatureTile>());
+  for (auto& tile : tiles) {
+    if (create_row && (tile->GetVisible() || rows_.empty())) {
+      int current_page_rows = pages_.back()->children().size();
+      // Add a new page if we have reached the max displayable rows per page.
+      if (current_page_rows == displayable_rows_) {
+        pages_.push_back(AddChildView(std::make_unique<PageContainer>()));
+      }
 
-  row3->AddChildView(std::make_unique<FeatureTile>());
-  row3->AddChildView(std::make_unique<FeatureTile>());
+      rows_.push_back(
+          pages_.back()->AddChildView(std::make_unique<RowContainer>(this)));
+      create_row = false;
+    }
+    // Invisible tiles don't take any weight.
+    if (tile->GetVisible()) {
+      row_weight += GetTileWeight(tile->tile_type());
+    }
+    DCHECK_LE(row_weight, kMaxRowWeight);
+    rows_.back()->AddChildView(std::move(tile));
 
-  row4->AddChildView(std::make_unique<FeatureTile>());
-  row4->AddChildView(std::make_unique<FeatureTile>());
+    if (row_weight == kMaxRowWeight) {
+      row_weight = 0;
+      create_row = true;
+    }
+  }
+
+  UpdateTotalPages();
+}
+
+void FeatureTilesContainerView::RelayoutTiles() {
+  // Tile visibility or UI size changes may change the number of required pages
+  // and rows so we have to rebuild them from scratch.
+  std::vector<std::unique_ptr<FeatureTile>> tiles;
+  for (PageContainer* page : pages_) {
+    for (views::View* row : page->children()) {
+      // Copy the list of children since it will be modified during iteration.
+      std::vector<raw_ptr<views::View, VectorExperimental>> children =
+          row->children();
+      for (views::View* child : children) {
+        DCHECK(views::IsViewClass<FeatureTile>(child));
+        FeatureTile* tile = static_cast<FeatureTile*>(child);
+        // Transfer ownership of each `FeatureTile` to `tiles`.
+        tiles.push_back(row->RemoveChildViewT(tile));
+      }
+    }
+    // Remove current page and child rows. It will be re-built by `AddTiles()`.
+    page->RemoveAllChildViews();
+    RemoveChildViewT(page);
+  }
+  pages_.clear();
+  rows_.clear();
+
+  // Re-add tiles to container.
+  AddTiles(std::move(tiles));
+
+  // Update bubble height in case number of rows changed.
+  controller_->UpdateBubble();
 }
 
 void FeatureTilesContainerView::SetRowsFromHeight(int max_height) {
-  int feature_tile_rows = CalculateRowsFromHeight(max_height);
-
-  if (feature_tile_rows_ != feature_tile_rows) {
-    feature_tile_rows_ = feature_tile_rows;
-    UpdateTotalPages();
+  int displayable_rows = CalculateRowsFromHeight(max_height);
+  if (displayable_rows_ != displayable_rows) {
+    displayable_rows_ = displayable_rows;
+    RelayoutTiles();
   }
 }
 
-// TODO(crbug/1371668): Update pagination.
-void FeatureTilesContainerView::ShowPageWithButton(views::View* button) {
-  auto index = visible_buttons_.GetIndexOfView(button->parent());
-  if (!index.has_value())
-    return;
-
-  int tiles_per_page = GetTilesPerPage();
-  size_t first_index = pagination_model_->selected_page() * tiles_per_page;
-  size_t last_index =
-      ((pagination_model_->selected_page() + 1) * tiles_per_page) - 1;
-  if (index.value() < first_index || index.value() > last_index) {
-    int page = ((index.value() + 1) / tiles_per_page) +
-               ((index.value() + 1) % tiles_per_page ? 1 : 0) - 1;
-
-    pagination_model_->SelectPage(page, true /*animate*/);
+void FeatureTilesContainerView::AdjustRowsForMediaViewVisibility(
+    bool visible,
+    int max_height) {
+  if (is_media_view_shown_ != visible) {
+    is_media_view_shown_ = visible;
+    SetRowsFromHeight(max_height);
   }
 }
 
-// TODO(crbug/1371668): Update pagination.
 void FeatureTilesContainerView::SelectedPageChanged(int old_selected,
                                                     int new_selected) {
-  PaginationModelObserver::SelectedPageChanged(old_selected, new_selected);
-  InvalidateLayout();
+  const int origin = kWideTrayMenuWidth * -old_selected;
+  const int selection_offset =
+      kWideTrayMenuWidth * (old_selected - new_selected);
+
+  for (size_t i = 0; i < pages_.size(); ++i) {
+    const int page_offset = i * kWideTrayMenuWidth;
+    const int final_x = origin + page_offset + selection_offset;
+    pages_[i]->SetX(final_x);
+  }
 }
 
-// TODO(crbug/1371668): Update pagination.
-void FeatureTilesContainerView::OnGestureEvent(ui::GestureEvent* event) {}
+void FeatureTilesContainerView::TransitionChanged() {
+  const int target_page = pagination_model_->transition().target_page;
+  if (pagination_model_->is_valid_page(target_page)) {
+    UpdateAnimatingPagesBounds(pagination_model_->selected_page(), target_page);
+  }
+}
 
-// TODO(crbug/1371668): Update pagination.
-void FeatureTilesContainerView::OnScrollEvent(ui::ScrollEvent* event) {}
+void FeatureTilesContainerView::OnGestureEvent(ui::GestureEvent* event) {
+  if (controller_->pagination_controller()->OnGestureEvent(
+          *event, GetContentsBounds())) {
+    event->SetHandled();
+  }
+}
 
-// TODO(crbug/1371668): Update pagination.
+void FeatureTilesContainerView::OnScrollEvent(ui::ScrollEvent* event) {
+  controller_->pagination_controller()->OnScroll(
+      gfx::Vector2d(event->x_offset(), event->y_offset()), event->type());
+  event->SetHandled();
+}
+
 bool FeatureTilesContainerView::OnMouseWheel(const ui::MouseWheelEvent& event) {
-  return false;
+  return controller_->pagination_controller()->OnScroll(event.offset(),
+                                                        event.type());
 }
 
-// TODO(crbug/1371668): Update pagination.
+void FeatureTilesContainerView::Layout() {
+  views::View::Layout();
+
+  // `SelectedPageChanged` is called to recalculate the pages bounds after a
+  // Layout (e.g. when changing the UI scale).
+  SelectedPageChanged(0, pagination_model_->selected_page());
+}
+
+void FeatureTilesContainerView::UpdateAnimatingPagesBounds(int old_selected,
+                                                           int new_selected) {
+  DCHECK(pagination_model_->is_valid_page(old_selected));
+  DCHECK(pagination_model_->is_valid_page(new_selected));
+
+  // Transition to next page means negative offset.
+  const int direction = new_selected > old_selected ? -1 : 1;
+
+  const int page_offset = kWideTrayMenuWidth * direction;
+  const int transition_offset =
+      pagination_model_->transition().progress * page_offset;
+  pages_[old_selected]->SetX(transition_offset);
+  pages_[new_selected]->SetX(transition_offset - page_offset);
+}
+
+void FeatureTilesContainerView::AddedToWidget() {
+  GetFocusManager()->AddFocusChangeListener(this);
+}
+
+void FeatureTilesContainerView::RemovedFromWidget() {
+  GetFocusManager()->RemoveFocusChangeListener(this);
+}
+
+void FeatureTilesContainerView::OnWillChangeFocus(views::View* before,
+                                                  views::View* now) {}
+
+void FeatureTilesContainerView::OnDidChangeFocus(views::View* before,
+                                                 views::View* now) {
+  if (!now || !views::IsViewClass<FeatureTile>(now) || !Contains(now)) {
+    return;
+  }
+
+  auto* current_page = now->parent()->parent();
+  DCHECK(views::IsViewClass<PageContainer>(current_page));
+  auto page_index = GetIndexOf(current_page);
+  if (!page_index.has_value()) {
+    return;
+  }
+  if (pagination_model_->selected_page() !=
+      static_cast<int>(page_index.value())) {
+    pagination_model_->SelectPage(page_index.value(), false /*animate*/);
+  }
+}
+
 int FeatureTilesContainerView::CalculateRowsFromHeight(int height) {
-  int row_height = kFeatureTileRowSize.height();
+  int row_height = kRowContainerSize.height();
 
   // Uses the max number of rows with the space available.
-  int rows = kFeatureTileMaxRows;
-  while (height < (rows * row_height) && rows > kFeatureTileMinRows)
+  int rows = is_media_view_shown_ ? kFeatureTileMaxRowsWhenMediaViewIsShowing
+                                  : kFeatureTileMaxRows;
+  while (height < (rows * row_height) && rows > kFeatureTileMinRows) {
     rows--;
+  }
   return rows;
 }
 
-// TODO(crbug/1371668): Update pagination.
-int FeatureTilesContainerView::GetTilesPerPage() const {
-  return kFeatureTileItemsInRow * feature_tile_rows_;
-}
-
-// TODO(crbug/1371668): Update pagination.
 void FeatureTilesContainerView::UpdateTotalPages() {
-  int total_pages = 0;
-
-  size_t total_visible = visible_buttons_.view_size();
-  int tiles_per_page = GetTilesPerPage();
-
-  if (total_visible == 0 || tiles_per_page == 0) {
-    total_pages = 0;
-  } else {
-    total_pages = (total_visible / tiles_per_page) +
-                  (total_visible % tiles_per_page ? 1 : 0);
-  }
+  const int total_rows = rows_.size();
+  int total_pages = (total_rows / displayable_rows_) +
+                    (total_rows % displayable_rows_ ? 1 : 0);
   pagination_model_->SetTotalPages(total_pages);
+  pagination_model_->SelectPage(0, false /*animate*/);
 }
 
-// TODO(crbug/1371668): Update pagination.
-void FeatureTilesContainerView::TransitionChanged() {
-  const PaginationModel::Transition& transition =
-      pagination_model_->transition();
-  if (pagination_model_->is_valid_page(transition.target_page))
-    Layout();
+int FeatureTilesContainerView::GetVisibleFeatureTileCount() const {
+  int count = 0;
+  for (PageContainer* page : pages_) {
+    for (views::View* row : page->children()) {
+      for (views::View* child : row->children()) {
+        DCHECK(views::IsViewClass<FeatureTile>(child));
+        if (child->GetVisible()) {
+          ++count;
+        }
+      }
+    }
+  }
+  return count;
 }
 
 BEGIN_METADATA(FeatureTilesContainerView, views::View)

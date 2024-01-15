@@ -7,9 +7,9 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/cronet/native/generated/cronet.idl_c.h"
 #include "net/base/net_errors.h"
 #include "net/cert/mock_cert_verifier.h"
@@ -20,7 +20,7 @@ void TestExecutor_Execute(Cronet_ExecutorPtr self,
                           Cronet_RunnablePtr runnable) {
   CHECK(self);
   DVLOG(1) << "Post Task";
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, cronet::test::RunnableWrapper::CreateOnceClosure(runnable));
 }
 
@@ -58,7 +58,7 @@ Cronet_EnginePtr CreateTestEngine(int quic_server_port) {
   // Add Host Resolver Rules.
   std::string host_resolver_rules = base::StringPrintf(
       "MAP test.example.com 127.0.0.1:%d,"
-      "MAP notfound.example.com ~NOTFOUND",
+      "MAP notfound.example.com ^NOTFOUND",
       quic_server_port);
   Cronet_EngineParams_experimental_options_set(
       engine_params,

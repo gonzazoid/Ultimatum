@@ -4,11 +4,12 @@
 
 #include "ash/frame/snap_controller_impl.h"
 
-#include "ash/utility/haptics_util.h"
 #include "ash/wm/window_positioning_utils.h"
 #include "ash/wm/window_state.h"
 #include "ash/wm/wm_event.h"
+#include "ash/wm/wm_metrics.h"
 #include "ash/wm/workspace/phantom_window_controller.h"
+#include "chromeos/utils/haptics_util.h"
 #include "ui/aura/window.h"
 #include "ui/events/devices/haptic_touchpad_effects.h"
 #include "ui/wm/core/coordinate_conversion.h"
@@ -17,18 +18,6 @@ namespace ash {
 
 SnapControllerImpl::SnapControllerImpl() = default;
 SnapControllerImpl::~SnapControllerImpl() = default;
-
-WindowSnapWMEvent::SnapRatio GetWMEventSnapRatio(
-    chromeos::SnapRatio snap_ratio) {
-  switch (snap_ratio) {
-    case chromeos::SnapRatio::kDefaultSnapRatio:
-      return WindowSnapWMEvent::SnapRatio::kDefaultSnapRatio;
-    case chromeos::SnapRatio::kOneThirdSnapRatio:
-      return WindowSnapWMEvent::SnapRatio::kOneThirdSnapRatio;
-    case chromeos::SnapRatio::kTwoThirdSnapRatio:
-      return WindowSnapWMEvent::SnapRatio::kTwoThirdSnapRatio;
-  }
-}
 
 bool SnapControllerImpl::CanSnap(aura::Window* window) {
   return WindowState::Get(window)->CanSnap();
@@ -63,7 +52,7 @@ void SnapControllerImpl::ShowSnapPreview(aura::Window* window,
 
   // Fire a haptic event if necessary.
   if (need_haptic_feedback) {
-    haptics_util::PlayHapticTouchpadEffect(
+    chromeos::haptics_util::PlayHapticTouchpadEffect(
         ui::HapticTouchpadEffect::kSnap,
         ui::HapticTouchpadEffectStrength::kMedium);
   }
@@ -71,20 +60,33 @@ void SnapControllerImpl::ShowSnapPreview(aura::Window* window,
 
 void SnapControllerImpl::CommitSnap(aura::Window* window,
                                     chromeos::SnapDirection snap,
-                                    chromeos::SnapRatio snap_ratio) {
+                                    float snap_ratio,
+                                    SnapRequestSource snap_request_source) {
   phantom_window_controller_.reset();
-  if (snap == chromeos::SnapDirection::kNone)
+  if (snap == chromeos::SnapDirection::kNone) {
     return;
+  }
 
-  WindowState* window_state = WindowState::Get(window);
-  window_state->set_snap_action_source(
-      WindowSnapActionSource::kUseCaptionButtonToSnap);
+  WindowSnapActionSource snap_action_source =
+      WindowSnapActionSource::kNotSpecified;
+  switch (snap_request_source) {
+    case SnapRequestSource::kSnapButton:
+      snap_action_source =
+          WindowSnapActionSource::kLongPressCaptionButtonToSnap;
+      break;
+    case SnapRequestSource::kWindowLayoutMenu:
+      snap_action_source = WindowSnapActionSource::kSnapByWindowLayoutMenu;
+      break;
+    case SnapRequestSource::kFromLacrosSnapButtonOrWindowLayoutMenu:
+      // TODO: handle the lacros snap request.
+      break;
+  }
 
   const WindowSnapWMEvent snap_event(snap == chromeos::SnapDirection::kPrimary
                                          ? WM_EVENT_SNAP_PRIMARY
                                          : WM_EVENT_SNAP_SECONDARY,
-                                     GetWMEventSnapRatio(snap_ratio));
-  window_state->OnWMEvent(&snap_event);
+                                     snap_ratio, snap_action_source);
+  WindowState::Get(window)->OnWMEvent(&snap_event);
 }
 
 }  // namespace ash

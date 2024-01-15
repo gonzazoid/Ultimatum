@@ -24,12 +24,16 @@ struct WebPolicyContainerPolicies {
   network::mojom::ReferrerPolicy referrer_policy =
       network::mojom::ReferrerPolicy::kDefault;
   WebVector<WebContentSecurityPolicy> content_security_policies;
-  bool is_anonymous = false;
+  bool is_credentialless = false;
   network::mojom::WebSandboxFlags sandbox_flags =
       network::mojom::WebSandboxFlags::kNone;
   network::mojom::IPAddressSpace ip_address_space =
       network::mojom::IPAddressSpace::kUnknown;
   bool can_navigate_top_without_user_gesture = true;
+  // An extra bit ensuring that the document cannot be cross-origin-isolated
+  // when it's false. Note that it is a necessary condition but not a sufficient
+  // condition on its own.
+  bool allow_cross_origin_isolation = false;
 };
 
 // TODO(antoniosartori): Remove this when CommitNavigation IPC will be handled

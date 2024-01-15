@@ -58,11 +58,18 @@ void PerformMediaSessionAction(
     case mojom::MediaSessionAction::kRaise:
       media_controller_remote->Raise();
       break;
-    case mojom::MediaSessionAction::kSetMute:
+    case mojom::MediaSessionAction::kEnterAutoPictureInPicture:
+      media_controller_remote->EnterAutoPictureInPicture();
+      break;
     case mojom::MediaSessionAction::kSkipAd:
+      media_controller_remote->SkipAd();
+      break;
+    case mojom::MediaSessionAction::kSetMute:
     case mojom::MediaSessionAction::kSeekTo:
     case mojom::MediaSessionAction::kScrubTo:
     case mojom::MediaSessionAction::kSwitchAudioDevice:
+    case mojom::MediaSessionAction::kPreviousSlide:
+    case mojom::MediaSessionAction::kNextSlide:
       break;
   }
 }

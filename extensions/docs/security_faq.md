@@ -141,6 +141,11 @@ could be installed (without user consent) when the user visits a malicious site,
 this would be considered a security bug. Please report any such bugs
 [here][new-security-bug].
 
+### I've found / written an extension that can make the browser unusable once installed (i.e. constantly reload pages, close every new window). Is this a security bug?
+
+No. Annoyance extensions like this are treated similarly to [Denial of Service
+issues][denial-of-service] rather than as security vulnerabilities.
+
 ### What is our stance on unpacked extensions?
 
 Attacks that involve loading an unpacked extension are _typically_ not security
@@ -171,7 +176,7 @@ extensions to access powerful APIs.
 This is not considered a security bug ([example](https://crbug.com/1301966)).
 See above for [our stance on unpacked extensions][unpacked-extensions-stance].
 The addition of access to private APIs does not change this stance, as it is
-still most similar to a phyiscally-local attack or devtools execution in a
+still most similar to a physically-local attack or devtools execution in a
 trusted context (for instance, inspecting a component extension allows access
 to trusted APIs).
 
@@ -459,3 +464,4 @@ information.
 [devtools-execution]: https://chromium.googlesource.com/chromium/src/+/main/docs/security/faq.md#Does-entering-JavaScript_URLs-in-the-URL-bar-or-running-script-in-the-developer-tools-mean-there_s-an-XSS-vulnerability
 [setting-unpacked-id]: https://developer.chrome.com/docs/extensions/mv3/manifest/key/
 [unpacked-extensions-stance]: https://chromium.googlesource.com/chromium/src/+/main/extensions/docs/security_faq.md#what-is-our-stance-on-unpacked-extensions
+[denial-of-service]: https://chromium.googlesource.com/chromium/src/+/main/docs/security/faq.md#Are-denial-of-service-issues-considered-security-bugs

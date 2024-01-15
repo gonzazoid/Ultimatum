@@ -5,11 +5,13 @@
 #include "chrome/browser/ui/ash/ash_web_view_impl.h"
 
 #include "ash/public/cpp/window_properties.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "content/public/browser/focused_node_details.h"
 #include "content/public/browser/host_zoom_map.h"
+#include "content/public/browser/page.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/render_widget_host_view.h"
@@ -18,6 +20,7 @@
 #include "third_party/blink/public/common/renderer_preferences/renderer_preferences.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom.h"
 #include "ui/aura/window.h"
+#include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/views/controls/webview/web_contents_set_background_color.h"
 #include "ui/views/controls/webview/webview.h"
 #include "ui/views/focus/focus_manager.h"
@@ -25,12 +28,10 @@
 #include "ui/views/widget/widget.h"
 
 namespace {
-void FixZoomLevelToOne(content::WebContents* web_contents,
-                       content::RenderViewHost* render_view_host) {
+void FixZoomLevelToOne(content::RenderFrameHost* render_frame_host) {
   content::HostZoomMap* zoom_map =
-      content::HostZoomMap::GetForWebContents(web_contents);
-  zoom_map->SetTemporaryZoomLevel(render_view_host->GetProcess()->GetID(),
-                                  render_view_host->GetRoutingID(), 1.0);
+      content::HostZoomMap::Get(render_frame_host->GetSiteInstance());
+  zoom_map->SetTemporaryZoomLevel(render_frame_host->GetGlobalId(), 1.0);
 }
 }  // namespace
 
@@ -83,6 +84,14 @@ void AshWebViewImpl::Navigate(const GURL& url) {
   web_contents_->GetController().LoadURLWithParams(params);
 }
 
+const GURL& AshWebViewImpl::GetVisibleURL() {
+  return web_contents_->GetVisibleURL();
+}
+
+bool AshWebViewImpl::IsErrorDocument() {
+  return web_contents_->GetPrimaryMainFrame()->IsErrorDocument();
+}
+
 views::View* AshWebViewImpl::GetInitiallyFocusedView() {
   return web_view_;
 }
@@ -90,6 +99,12 @@ views::View* AshWebViewImpl::GetInitiallyFocusedView() {
 void AshWebViewImpl::AddedToWidget() {
   UpdateMinimizeOnBackProperty();
   AshWebView::AddedToWidget();
+
+  // Apply rounded corners. This can't be done earlier since it
+  // requires `web_view_->holder()->native_view()` to be initialized.
+  if (params_.rounded_corners.has_value()) {
+    web_view_->holder()->SetCornerRadii(params_.rounded_corners.value());
+  }
 }
 
 bool AshWebViewImpl::IsWebContentsCreationOverridden(
@@ -130,8 +145,9 @@ bool AshWebViewImpl::TakeFocus(content::WebContents* web_contents,
                                bool reverse) {
   DCHECK_EQ(web_contents_.get(), web_contents);
   auto* focus_manager = GetFocusManager();
-  if (focus_manager)
+  if (focus_manager) {
     focus_manager->ClearNativeFocus();
+  }
   return false;
 }
 
@@ -159,17 +175,19 @@ void AshWebViewImpl::RequestMediaAccessPermission(
 
 bool AshWebViewImpl::CheckMediaAccessPermission(
     content::RenderFrameHost* render_frame_host,
-    const GURL& security_origin,
+    const url::Origin& security_origin,
     blink::mojom::MediaStreamType type) {
-  if (!params_.can_record_media)
+  if (!params_.can_record_media) {
     return false;
+  }
   return MediaCaptureDevicesDispatcher::GetInstance()
       ->CheckMediaAccessPermission(render_frame_host, security_origin, type);
 }
 
 void AshWebViewImpl::DidStopLoading() {
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.DidStopLoading();
+  }
 }
 
 void AshWebViewImpl::OnFocusChangedInPage(
@@ -178,31 +196,45 @@ void AshWebViewImpl::OnFocusChangedInPage(
   // as needed. This is a workaround to get a non-empty rect of the focused
   // node. See details in b/177047240.
   auto* native_view = web_contents_->GetContentNativeView();
-  if (native_view && !native_view->HasFocus())
+  if (native_view && !native_view->HasFocus()) {
     web_contents_->Focus();
+  }
 
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.DidChangeFocusedNode(details->node_bounds_in_screen);
+  }
 }
 
-void AshWebViewImpl::RenderViewHostChanged(content::RenderViewHost* old_host,
-                                           content::RenderViewHost* new_host) {
-  if (!web_contents_->GetRenderWidgetHostView())
+void AshWebViewImpl::RenderFrameHostChanged(
+    content::RenderFrameHost* old_host,
+    content::RenderFrameHost* new_host) {
+  if (new_host != new_host->GetOutermostMainFrame()) {
     return;
+  }
+  if (params_.fix_zoom_level_to_one) {
+    FixZoomLevelToOne(new_host);
+  }
+}
 
-  if (params_.fix_zoom_level_to_one)
-    FixZoomLevelToOne(web_contents_.get(), new_host);
-
-  if (!params_.enable_auto_resize)
+void AshWebViewImpl::PrimaryPageChanged(content::Page& page) {
+  DCHECK_EQ(&page.GetMainDocument(), web_contents_->GetPrimaryMainFrame());
+  if (!web_contents_->GetRenderWidgetHostView()) {
     return;
+  }
+
+  if (!params_.enable_auto_resize) {
+    return;
+  }
 
   gfx::Size min_size(1, 1);
-  if (params_.min_size)
+  if (params_.min_size) {
     min_size.SetToMax(params_.min_size.value());
+  }
 
   gfx::Size max_size(INT_MAX, INT_MAX);
-  if (params_.max_size)
+  if (params_.max_size) {
     max_size.SetToMin(params_.max_size.value());
+  }
 
   web_contents_->GetRenderWidgetHostView()->EnableAutoResize(min_size,
                                                              max_size);
@@ -213,9 +245,10 @@ void AshWebViewImpl::NavigationEntriesDeleted() {
 }
 
 void AshWebViewImpl::InitWebContents(Profile* profile) {
-  web_contents_ =
-      content::WebContents::Create(content::WebContents::CreateParams(
-          profile, content::SiteInstance::Create(profile)));
+  auto web_contents_params = content::WebContents::CreateParams(
+      profile, content::SiteInstance::Create(profile));
+  web_contents_params.enable_wake_locks = params_.enable_wake_locks;
+  web_contents_ = content::WebContents::Create(web_contents_params);
 
   web_contents_->SetDelegate(this);
   Observe(web_contents_.get());
@@ -231,12 +264,14 @@ void AshWebViewImpl::InitWebContents(Profile* profile) {
     web_contents_->SyncRendererPrefs();
   }
 
-  if (params_.fix_zoom_level_to_one)
-    FixZoomLevelToOne(web_contents_.get(), web_contents_->GetRenderViewHost());
+  if (params_.fix_zoom_level_to_one) {
+    FixZoomLevelToOne(web_contents_->GetPrimaryMainFrame());
+  }
 }
 
 void AshWebViewImpl::InitLayout(Profile* profile) {
   web_view_ = AddChildView(std::make_unique<views::WebView>(profile));
+  web_view_->SetID(ash::kAshWebViewChildWebViewId);
   web_view_->SetWebContents(web_contents_.get());
 }
 
@@ -247,7 +282,7 @@ void AshWebViewImpl::NotifyDidSuppressNavigation(
   // Note that we post notification to |observers_| as an observer may cause
   // |this| to be deleted during handling of the event which is unsafe to do
   // until the original navigation sequence has been completed.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           [](const base::WeakPtr<AshWebViewImpl>& self, GURL url,
@@ -259,8 +294,9 @@ void AshWebViewImpl::NotifyDidSuppressNavigation(
 
                 // We need to check |self| to confirm that |observer| did not
                 // delete |this|. If |this| is deleted, we quit.
-                if (!self)
+                if (!self) {
                   return;
+                }
               }
             }
           },
@@ -269,15 +305,17 @@ void AshWebViewImpl::NotifyDidSuppressNavigation(
 
 void AshWebViewImpl::UpdateCanGoBack() {
   const bool can_go_back = web_contents_->GetController().CanGoBack();
-  if (can_go_back_ == can_go_back)
+  if (can_go_back_ == can_go_back) {
     return;
+  }
 
   can_go_back_ = can_go_back;
 
   UpdateMinimizeOnBackProperty();
 
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.DidChangeCanGoBack(can_go_back_);
+  }
 }
 
 void AshWebViewImpl::UpdateMinimizeOnBackProperty() {

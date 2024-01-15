@@ -37,7 +37,7 @@ class GeneratedResolveTimezoneByGeolocationOnOff
   ~GeneratedResolveTimezoneByGeolocationOnOff() override;
 
   // GeneratedPref implementation:
-  std::unique_ptr<settings_api::PrefObject> GetPrefObject() const override;
+  settings_api::PrefObject GetPrefObject() const override;
   SetPrefResult SetPref(const base::Value* value) override;
 };
 
@@ -48,18 +48,18 @@ GeneratedResolveTimezoneByGeolocationOnOff::
 GeneratedResolveTimezoneByGeolocationOnOff::
     ~GeneratedResolveTimezoneByGeolocationOnOff() = default;
 
-std::unique_ptr<settings_api::PrefObject>
+settings_api::PrefObject
 GeneratedResolveTimezoneByGeolocationOnOff::GetPrefObject() const {
-  std::unique_ptr<settings_api::PrefObject> pref_object =
-      std::make_unique<settings_api::PrefObject>();
+  settings_api::PrefObject pref_object;
 
-  pref_object->key = pref_name_;
-  pref_object->type = settings_api::PREF_TYPE_BOOLEAN;
-  pref_object->value = base::Value(g_browser_process->platform_part()
-                                       ->GetTimezoneResolverManager()
-                                       ->TimeZoneResolverShouldBeRunning());
+  pref_object.key = pref_name_;
+  pref_object.type = settings_api::PrefType::kBoolean;
+  pref_object.value =
+      base::Value(g_browser_process->platform_part()
+                      ->GetTimezoneResolverManager()
+                      ->TimeZoneResolverAllowedByTimeZoneConfigData());
 
-  UpdateTimeZonePrefControlledBy(pref_object.get());
+  UpdateTimeZonePrefControlledBy(&pref_object);
 
   return pref_object;
 }
@@ -71,24 +71,25 @@ SetPrefResult GeneratedResolveTimezoneByGeolocationOnOff::SetPref(
 
   // Check if preference is policy or primary-user controlled, and therefore
   // cannot deactivate automatic timezone.
-  if (chromeos::system::TimeZoneResolverManager::
+  if (ash::system::TimeZoneResolverManager::
           IsTimeZoneResolutionPolicyControlled() ||
       !profile_->IsSameOrParent(ProfileManager::GetPrimaryUserProfile())) {
     return SetPrefResult::PREF_NOT_MODIFIABLE;
   }
 
   const bool new_value = value->GetBool();
-  const bool current_value = g_browser_process->platform_part()
-                                 ->GetTimezoneResolverManager()
-                                 ->TimeZoneResolverShouldBeRunning();
+  const bool current_value =
+      g_browser_process->platform_part()
+          ->GetTimezoneResolverManager()
+          ->TimeZoneResolverAllowedByTimeZoneConfigData();
   if (new_value == current_value)
     return SetPrefResult::SUCCESS;
 
   profile_->GetPrefs()->SetInteger(
       ::prefs::kResolveTimezoneByGeolocationMethod,
-      static_cast<int>(new_value ? chromeos::system::TimeZoneResolverManager::
+      static_cast<int>(new_value ? ash::system::TimeZoneResolverManager::
                                        TimeZoneResolveMethod::IP_ONLY
-                                 : chromeos::system::TimeZoneResolverManager::
+                                 : ash::system::TimeZoneResolverManager::
                                        TimeZoneResolveMethod::DISABLED));
 
   return SetPrefResult::SUCCESS;

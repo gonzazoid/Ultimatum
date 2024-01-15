@@ -23,8 +23,6 @@
 #include "base/threading/hang_watcher.h"
 #include "base/threading/platform_thread.h"
 #include "base/threading/sequence_local_storage_map.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "base/time/time.h"
 #include "build/build_config.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -64,7 +62,6 @@ class BASE_EXPORT ThreadControllerWithMessagePumpImpl
   void ScheduleWork() override;
   void SetNextDelayedDoWork(LazyNow* lazy_now,
                             absl::optional<WakeUp> wake_up) override;
-  void SetTimerSlack(TimerSlack timer_slack) override;
   bool RunsTasksInCurrentSequence() override;
   void SetDefaultTaskRunner(
       scoped_refptr<SingleThreadTaskRunner> task_runner) override;
@@ -76,7 +73,6 @@ class BASE_EXPORT ThreadControllerWithMessagePumpImpl
   bool IsTaskExecutionAllowed() const override;
   MessagePump* GetBoundMessagePump() const override;
   void PrioritizeYieldingToNative(base::TimeTicks prioritize_until) override;
-  void EnablePeriodicYieldingToNative(base::TimeDelta delta) override;
 #if BUILDFLAG(IS_IOS) || BUILDFLAG(IS_ANDROID)
   void AttachToMessagePump() override;
 #endif
@@ -95,13 +91,15 @@ class BASE_EXPORT ThreadControllerWithMessagePumpImpl
 
   // MessagePump::Delegate implementation.
   void OnBeginWorkItem() override;
-  void OnEndWorkItem() override;
+  void OnEndWorkItem(int run_level_depth) override;
   void BeforeWait() override;
+  void BeginNativeWorkBeforeDoWork() override;
   MessagePump::Delegate::NextWorkInfo DoWork() override;
   bool DoIdleWork() override;
+  int RunDepth() override;
 
   void OnBeginWorkItemImpl(LazyNow& lazy_now);
-  void OnEndWorkItemImpl(LazyNow& lazy_now);
+  void OnEndWorkItemImpl(LazyNow& lazy_now, int run_level_depth);
 
   // RunLoop::Delegate implementation.
   void Run(bool application_tasks_allowed, TimeDelta timeout) override;
@@ -114,7 +112,8 @@ class BASE_EXPORT ThreadControllerWithMessagePumpImpl
 
     raw_ptr<SequencedTaskSource> task_source = nullptr;            // Not owned.
     raw_ptr<RunLoop::NestingObserver> nesting_observer = nullptr;  // Not owned.
-    std::unique_ptr<ThreadTaskRunnerHandle> thread_task_runner_handle;
+    std::unique_ptr<SingleThreadTaskRunner::CurrentDefaultHandle>
+        thread_task_runner_handle;
 
     // Indicates that we should yield DoWork between each task to let a possibly
     // nested RunLoop exit.
@@ -126,12 +125,11 @@ class BASE_EXPORT ThreadControllerWithMessagePumpImpl
     // Number of tasks processed in a single DoWork invocation.
     int work_batch_size = 1;
 
+    bool can_change_batch_size = true;
+
     // While Now() is less than |yield_to_native_after_batch| we will request a
     // yield to the MessagePump after |work_batch_size| work items.
     base::TimeTicks yield_to_native_after_batch = base::TimeTicks();
-
-    // When the next scheduled delayed work should run, if any.
-    TimeTicks next_delayed_do_work = TimeTicks::Max();
 
     // The time after which the runloop should quit.
     TimeTicks quit_runloop_after = TimeTicks::Max();
@@ -151,18 +149,15 @@ class BASE_EXPORT ThreadControllerWithMessagePumpImpl
   friend class DoWorkScope;
   friend class RunScope;
 
-  // Returns a WorkDetails which has WakeUp for the next pending task,
-  // is_immediate() if the next task can run immediately, or nullopt if there
-  // are no more immediate tasks or delayed, also has |work_interval| which
-  // represents the time it took to execute the current batch in the looper.
-  WorkDetails DoWorkImpl(LazyNow* continuation_lazy_now);
+  // Returns a WakeUp for the next pending task, is_immediate() if the next task
+  // can run immediately, or nullopt if there are no more immediate or delayed
+  // tasks.
+  absl::optional<WakeUp> DoWorkImpl(LazyNow* continuation_lazy_now);
 
-  void InitializeThreadTaskRunnerHandle()
+  bool RunsTasksByBatches() const;
+
+  void InitializeSingleThreadTaskRunnerCurrentDefaultHandle()
       EXCLUSIVE_LOCKS_REQUIRED(task_runner_lock_);
-
-  // Returns the rate at which the thread controller should alternate between
-  // work batches and yielding to the MessagePump.
-  base::TimeDelta GetAlternationInterval();
 
   MainThreadOnly& main_thread_only() {
     DCHECK_CALLED_ON_VALID_THREAD(associated_thread_->thread_checker);
@@ -181,13 +176,9 @@ class BASE_EXPORT ThreadControllerWithMessagePumpImpl
       GUARDED_BY(task_runner_lock_);
 
   WorkDeduplicator work_deduplicator_;
+  bool in_native_work_batch_ = false;
 
   ThreadControllerPowerMonitor power_monitor_;
-
-  // Can only be set once (just before calling
-  // work_deduplicator_.BindToCurrentThread()). After that only read access is
-  // allowed.
-  std::unique_ptr<MessagePump> pump_;
 
   TaskAnnotator task_annotator_;
 
@@ -204,17 +195,24 @@ class BASE_EXPORT ThreadControllerWithMessagePumpImpl
       base::internal::ScopedSetSequenceLocalStorageMapForCurrentThread>
       scoped_set_sequence_local_storage_map_for_current_thread_;
 
+  // Whether tasks can run by batches (i.e. multiple tasks run between each
+  // check for native work). Tasks will only run by batches if this is true and
+  // the "RunTasksByBatches" feature is enabled.
+  bool can_run_tasks_by_batches_ = false;
+
   // Reset at the start & end of each unit of work to cover the work itself and
   // the overhead between each work item (no-op if HangWatcher is not enabled
   // on this thread). Cleared when going to sleep and at the end of a Run()
   // (i.e. when Quit()). Nested runs override their parent.
   absl::optional<WatchHangsInScope> hang_watch_scope_;
 
-  // This time delta represents the interval after which the scheduler will
-  // yield to the native OS looper if we keep getting immediate tasks
-  // if kBrowserPeriodicYieldingToNative finch experiment is enabled.
-  base::TimeDelta periodic_yielding_to_native_interval_ =
-      base::TimeDelta::Max();
+  // Can only be set once (just before calling
+  // work_deduplicator_.BindToCurrentThread()). After that only read access is
+  // allowed.
+  // NOTE: |pump_| accesses other members but other members should not access
+  // |pump_|. This means that it should be destroyed first. This member cannot
+  // be moved up.
+  std::unique_ptr<MessagePump> pump_;
 };
 
 }  // namespace internal

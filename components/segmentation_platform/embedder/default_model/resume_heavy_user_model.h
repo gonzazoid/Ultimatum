@@ -14,23 +14,22 @@ struct Config;
 // Segmentation resume heavy user model provider. Provides a default model and
 // metadata for the resume heavy user segment.
 // TODO(shaktisahu): Find signals for desktop users.
-class ResumeHeavyUserModel : public ModelProvider {
+class ResumeHeavyUserModel : public DefaultModelProvider {
  public:
   ResumeHeavyUserModel();
   ~ResumeHeavyUserModel() override = default;
 
   // Disallow copy/assign.
-  ResumeHeavyUserModel(ResumeHeavyUserModel&) = delete;
-  ResumeHeavyUserModel& operator=(ResumeHeavyUserModel&) = delete;
+  ResumeHeavyUserModel(const ResumeHeavyUserModel&) = delete;
+  ResumeHeavyUserModel& operator=(const ResumeHeavyUserModel&) = delete;
 
   static std::unique_ptr<Config> GetConfig();
 
   // ModelProvider implementation.
-  void InitAndFetchModel(
-      const ModelUpdatedCallback& model_updated_callback) override;
-  void ExecuteModelWithInput(const std::vector<float>& inputs,
+  std::unique_ptr<ModelConfig> GetModelConfig() override;
+
+  void ExecuteModelWithInput(const ModelProvider::Request& inputs,
                              ExecutionCallback callback) override;
-  bool ModelAvailable() override;
 };
 
 }  // namespace segmentation_platform

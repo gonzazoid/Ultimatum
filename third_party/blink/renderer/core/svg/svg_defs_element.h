@@ -31,10 +31,10 @@ class SVGDefsElement final : public SVGGraphicsElement {
  public:
   explicit SVGDefsElement(Document&);
 
-  bool SupportsFocus() const override { return false; }
-
  private:
-  LayoutObject* CreateLayoutObject(const ComputedStyle&, LegacyLayout) override;
+  bool SupportsFocus(UpdateBehavior) const override { return false; }
+
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) override;
 };
 
 }  // namespace blink

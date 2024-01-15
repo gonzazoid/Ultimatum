@@ -15,6 +15,7 @@
 #include "ash/shell.h"
 #include "ash/wallpaper/wallpaper_controller_impl.h"
 #include "base/strings/strcat.h"
+#include "chromeos/ash/components/login/auth/auth_events_recorder.h"
 #include "components/user_manager/known_user.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
@@ -23,7 +24,9 @@ namespace ash {
 
 LoginTestBase::LoginTestBase()
     : NoSessionAshTestBase(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {
-  user_manager::KnownUser::RegisterPrefs(local_state()->registry());
+  auth_events_recorder_ = ash::AuthEventsRecorder::CreateForTesting();
+  AuthEventsRecorder::Get()->OnAuthenticationSurfaceChange(
+      AuthEventsRecorder::AuthenticationSurface::kLogin);
 }
 
 LoginTestBase::~LoginTestBase() = default;
@@ -42,8 +45,9 @@ void LoginTestBase::ShowLoginScreen(bool set_wallpaper) {
   GetSessionControllerClient()->SetSessionState(
       session_manager::SessionState::LOGIN_PRIMARY);
   // The login screen can't be shown without a wallpaper.
-  if (set_wallpaper)
+  if (set_wallpaper) {
     Shell::Get()->wallpaper_controller()->ShowDefaultWallpaperForTesting();
+  }
 
   Shell::Get()->login_screen_controller()->ShowLoginScreen();
   // Allow focus to reach the appropriate View.
@@ -129,12 +133,13 @@ void LoginTestBase::AddChildUsers(size_t num_users) {
 }
 
 void LoginTestBase::RemoveUser(const AccountId& account_id) {
-  for (auto it = users().cbegin(); it != users().cend(); ++it)
+  for (auto it = users().cbegin(); it != users().cend(); ++it) {
     if (it->basic_user_info.account_id == account_id) {
       users().erase(it);
       DataDispatcher()->SetUserList(users());
       return;
     }
+  }
   ADD_FAILURE() << "User not found: " << account_id.Serialize();
 }
 
@@ -143,10 +148,11 @@ LoginDataDispatcher* LoginTestBase::DataDispatcher() {
 }
 
 void LoginTestBase::TearDown() {
-  widget_.reset();
-
-  if (LockScreen::HasInstance())
+  if (LockScreen::HasInstance()) {
     LockScreen::Get()->Destroy();
+  }
+
+  widget_.reset();
 
   AshTestBase::TearDown();
 }

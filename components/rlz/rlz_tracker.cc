@@ -11,8 +11,7 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -178,7 +177,8 @@ class RLZTracker::WrapperURLLoaderFactory
   explicit WrapperURLLoaderFactory(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory)
       : url_loader_factory_(std::move(url_loader_factory)),
-        main_thread_task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
+        main_thread_task_runner_(
+            base::SequencedTaskRunner::GetCurrentDefault()) {}
 
   WrapperURLLoaderFactory(const WrapperURLLoaderFactory&) = delete;
   WrapperURLLoaderFactory& operator=(const WrapperURLLoaderFactory&) = delete;
@@ -218,7 +218,8 @@ class RLZTracker::WrapperURLLoaderFactory
 
 // static
 RLZTracker* RLZTracker::GetInstance() {
-  return tracker_ ? tracker_ : base::Singleton<RLZTracker>::get();
+  static base::NoDestructor<RLZTracker> instance;
+  return tracker_ ? tracker_ : instance.get();
 }
 
 RLZTracker::RLZTracker()
@@ -287,7 +288,7 @@ bool RLZTracker::Init(bool first_run,
   if (delegate_->ShouldEnableZeroDelayForTesting())
     EnableZeroDelayForTesting();
 
-  delay = base::clamp(delay, min_init_delay_, kMaxInitDelay);
+  delay = std::clamp(delay, min_init_delay_, kMaxInitDelay);
 
   if (delegate_->GetBrand(&brand_) && !delegate_->IsBrandOrganic(brand_)) {
     // Register for notifications from the omnibox so that we can record when

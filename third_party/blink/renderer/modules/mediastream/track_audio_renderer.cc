@@ -6,12 +6,11 @@
 
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/synchronization/lock.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/trace_event.h"
 #include "media/audio/audio_sink_parameters.h"
 #include "media/base/audio_bus.h"
@@ -40,12 +39,6 @@ struct CrossThreadCopier<media::AudioParameters> {
 namespace blink {
 
 namespace {
-
-enum LocalRendererSinkStates {
-  kSinkStarted = 0,
-  kSinkNeverStarted,
-  kSinkStatesMax  // Must always be last!
-};
 
 // Translates |num_samples_rendered| into a TimeDelta duration and adds it to
 // |prior_elapsed_render_time|.
@@ -99,7 +92,7 @@ TrackAudioRenderer::PendingReconfig::PendingReconfig(
 // media::AudioRendererSink::RenderCallback implementation
 int TrackAudioRenderer::Render(base::TimeDelta delay,
                                base::TimeTicks delay_timestamp,
-                               int prior_frames_skipped,
+                               const media::AudioGlitchInfo& glitch_info,
                                media::AudioBus* audio_bus) {
   TRACE_EVENT2("audio", "TrackAudioRenderer::Render", "delay (ms)",
                delay.InMillisecondsF(), "delay_timestamp (ms)",
@@ -200,12 +193,10 @@ void TrackAudioRenderer::OnSetFormat(const media::AudioParameters& params) {
 TrackAudioRenderer::TrackAudioRenderer(
     MediaStreamComponent* audio_component,
     LocalFrame& playout_frame,
-    const base::UnguessableToken& session_id,
     const String& device_id,
     base::RepeatingClosure on_render_error_callback)
     : audio_component_(audio_component),
       playout_frame_(playout_frame),
-      session_id_(session_id),
       task_runner_(
           playout_frame.GetTaskRunner(blink::TaskType::kInternalMedia)),
       on_render_error_callback_(std::move(on_render_error_callback)),
@@ -233,7 +224,8 @@ void TrackAudioRenderer::Start() {
   DCHECK(!sink_);
   sink_ = Platform::Current()->NewAudioRendererSink(
       WebAudioDeviceSourceType::kNonRtcAudioTrack,
-      ToWebLocalFrame(playout_frame_), {session_id_, output_device_id_.Utf8()});
+      ToWebLocalFrame(playout_frame_),
+      {base::UnguessableToken(), output_device_id_.Utf8()});
 
   base::AutoLock auto_lock(thread_lock_);
   prior_elapsed_render_time_ = base::TimeDelta();
@@ -254,10 +246,6 @@ void TrackAudioRenderer::Stop() {
     sink_ = nullptr;
   }
 
-  if (!sink_started_ && IsLocalRenderer()) {
-    UMA_HISTOGRAM_ENUMERATION("Media.LocalRendererSinkStates",
-                              kSinkNeverStarted, kSinkStatesMax);
-  }
   sink_started_ = false;
 
   // Ensure that the capturer stops feeding us with captured audio.
@@ -312,11 +300,6 @@ base::TimeDelta TrackAudioRenderer::GetCurrentRenderTime() {
   return prior_elapsed_render_time_;
 }
 
-bool TrackAudioRenderer::IsLocalRenderer() {
-  DCHECK(task_runner_->BelongsToCurrentThread());
-  return MediaStreamAudioTrack::From(audio_component_.Get())->is_local_track();
-}
-
 void TrackAudioRenderer::SwitchOutputDevice(
     const std::string& device_id,
     media::OutputDeviceStatusCB callback) {
@@ -331,7 +314,8 @@ void TrackAudioRenderer::SwitchOutputDevice(
   scoped_refptr<media::AudioRendererSink> new_sink =
       Platform::Current()->NewAudioRendererSink(
           WebAudioDeviceSourceType::kNonRtcAudioTrack,
-          ToWebLocalFrame(playout_frame_), {session_id_, device_id});
+          ToWebLocalFrame(playout_frame_),
+          {base::UnguessableToken(), device_id});
 
   media::OutputDeviceStatus new_sink_status =
       new_sink->GetOutputDeviceInfo().device_status();
@@ -407,10 +391,6 @@ void TrackAudioRenderer::MaybeStartSink(bool reconfiguring) {
   sink_->SetVolume(volume_);
   sink_->Play();  // Not all the sinks play on start.
   sink_started_ = true;
-  if (IsLocalRenderer()) {
-    UMA_HISTOGRAM_ENUMERATION("Media.LocalRendererSinkStates", kSinkStarted,
-                              kSinkStatesMax);
-  }
 }
 
 void TrackAudioRenderer::ReconfigureSink(
@@ -468,7 +448,8 @@ void TrackAudioRenderer::ReconfigureSink(
   sink_started_ = false;
   sink_ = Platform::Current()->NewAudioRendererSink(
       WebAudioDeviceSourceType::kNonRtcAudioTrack,
-      ToWebLocalFrame(playout_frame_), {session_id_, output_device_id_.Utf8()});
+      ToWebLocalFrame(playout_frame_),
+      {base::UnguessableToken(), output_device_id_.Utf8()});
   MaybeStartSink(/*reconfiguring=*/true);
 
   {

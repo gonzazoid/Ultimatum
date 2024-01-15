@@ -6,13 +6,21 @@
 
 #include <memory>
 
+#include "ash/constants/ash_features.h"
+#include "ash/constants/ash_pref_names.h"
+#include "base/json/json_reader.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/feature_usage/feature_usage_metrics.h"
+#include "chromeos/ash/components/install_attributes/install_attributes.h"
+#include "chromeos/ash/components/install_attributes/stub_install_attributes.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/network/cellular_esim_profile.h"
+#include "chromeos/ash/components/network/cellular_esim_profile_handler_impl.h"
 #include "chromeos/ash/components/network/cellular_inhibitor.h"
 #include "chromeos/ash/components/network/mock_managed_network_configuration_handler.h"
 #include "chromeos/ash/components/network/network_connection_handler.h"
@@ -20,8 +28,8 @@
 #include "chromeos/ash/components/network/network_state_test_helper.h"
 #include "chromeos/ash/components/network/network_ui_data.h"
 #include "chromeos/ash/components/network/test_cellular_esim_profile_handler.h"
-#include "chromeos/login/login_state/login_state.h"
-#include "chromeos/services/network_config/public/cpp/cros_network_config_test_helper.h"
+#include "chromeos/ash/services/network_config/public/cpp/cros_network_config_test_helper.h"
+#include "components/prefs/testing_pref_service.h"
 #include "dbus/object_path.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
@@ -44,9 +52,28 @@ const char kTestESimCellularServicePath[] = "/service/cellular1";
 const char kTestESimPolicyCellularServicePath[] = "/service/cellular2";
 const char kTestEthServicePath[] = "/service/eth0";
 
+const char kTestDomain[] = "test_domain";
+const char kTestDeviceId[] = "test_device_id";
+
+constexpr char kEnterpriseESimPolicy[] = R"({
+  "NetworkConfigurations": [
+    {
+      "GUID": "cellular",
+      "Type": "Cellular",
+      "Name": "Test-Cellular",
+      "Cellular": {}
+    }
+  ],
+  "Type": "UnencryptedConfiguration"
+})";
+
 const char kESimFeatureUsageMetric[] = "ChromeOS.FeatureUsage.ESim";
 const char kESimFeatureUsageUsetimeMetric[] =
     "ChromeOS.FeatureUsage.ESim.Usetime";
+const char kEnterpriseESimFeatureUsageMetric[] =
+    "ChromeOS.FeatureUsage.EnterpriseESim";
+const char kEnterpriseESimFeatureUsageUsetimeMetric[] =
+    "ChromeOS.FeatureUsage.EnterpriseESim.Usetime";
 
 const char kPSimUsageCountHistogram[] = "Network.Cellular.PSim.Usage.Count";
 const char kESimUsageCountHistogram[] = "Network.Cellular.ESim.Usage.Count";
@@ -83,7 +110,7 @@ const char kESimPolicyDisconnectionsHistogram[] =
 
 }  // namespace
 
-class CellularMetricsLoggerTest : public testing::Test {
+class CellularMetricsLoggerTest : public ::testing::Test {
  public:
   CellularMetricsLoggerTest()
       : task_environment_(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
@@ -99,12 +126,12 @@ class CellularMetricsLoggerTest : public testing::Test {
     LoginState::Initialize();
 
     cellular_inhibitor_ = std::make_unique<CellularInhibitor>();
-    mock_managed_network_configuration_manager_ = base::WrapUnique(
-        new testing::NiceMock<MockManagedNetworkConfigurationHandler>);
+    mock_managed_network_configuration_handler_ = base::WrapUnique(
+        new ::testing::NiceMock<MockManagedNetworkConfigurationHandler>);
     cellular_esim_profile_handler_ =
         std::make_unique<TestCellularESimProfileHandler>();
-    network_config_helper_ = std::make_unique<
-        chromeos::network_config::CrosNetworkConfigTestHelper>();
+    network_config_helper_ =
+        std::make_unique<network_config::CrosNetworkConfigTestHelper>();
 
     network_state_test_helper_.hermes_manager_test()->AddEuicc(
         dbus::ObjectPath(kTestEuiccPath), kTestEidName, /*is_active=*/true,
@@ -115,21 +142,43 @@ class CellularMetricsLoggerTest : public testing::Test {
     base::RunLoop().RunUntilIdle();
   }
 
-  void SetUpMetricsLogger() {
+  void InitMetricsLogger(bool check_esim_feature_eligible = true,
+                         bool check_enterprise_esim_feature_eligible = false) {
     cellular_metrics_logger_.reset(new CellularMetricsLogger());
     cellular_metrics_logger_->Init(
         network_state_test_helper_.network_state_handler(),
-        /* network_connection_handler */ nullptr,
+        /*network_connection_handler=*/nullptr,
         cellular_esim_profile_handler_.get(),
-        mock_managed_network_configuration_manager_.get());
+        mock_managed_network_configuration_handler_.get());
 
-    histogram_tester_->ExpectTotalCount(kESimFeatureUsageMetric, 0);
+    if (check_esim_feature_eligible) {
+      histogram_tester_->ExpectTotalCount(kESimFeatureUsageMetric, 0);
+    }
+    if (ash::features::IsSmdsSupportEnabled() &&
+        check_enterprise_esim_feature_eligible &&
+        InstallAttributes::IsInitialized() &&
+        InstallAttributes::Get()->IsEnterpriseManaged()) {
+      histogram_tester_->ExpectTotalCount(kEnterpriseESimFeatureUsageMetric, 0);
+    }
     task_environment_.FastForwardBy(
         feature_usage::FeatureUsageMetrics::kInitialInterval);
-    histogram_tester_->ExpectBucketCount(
-        kESimFeatureUsageMetric,
-        static_cast<int>(feature_usage::FeatureUsageMetrics::Event::kEligible),
-        1);
+    if (check_esim_feature_eligible) {
+      histogram_tester_->ExpectBucketCount(
+          kESimFeatureUsageMetric,
+          static_cast<int>(
+              feature_usage::FeatureUsageMetrics::Event::kEligible),
+          1);
+    }
+    if (ash::features::IsSmdsSupportEnabled() &&
+        check_enterprise_esim_feature_eligible &&
+        InstallAttributes::IsInitialized() &&
+        InstallAttributes::Get()->IsEnterpriseManaged()) {
+      histogram_tester_->ExpectBucketCount(
+          kEnterpriseESimFeatureUsageMetric,
+          static_cast<int>(
+              feature_usage::FeatureUsageMetrics::Event::kEligible),
+          1);
+    }
   }
 
   void TearDown() override {
@@ -201,8 +250,8 @@ class CellularMetricsLoggerTest : public testing::Test {
   }
 
   void SetCellularSimLock(const std::string lock_type) {
-    base::Value::Dict sim_lock_status;
-    sim_lock_status.Set(shill::kSIMLockTypeProperty, lock_type);
+    auto sim_lock_status =
+        base::Value::Dict().Set(shill::kSIMLockTypeProperty, lock_type);
     network_config_helper_->network_state_helper()
         .device_test()
         ->SetDeviceProperty(
@@ -221,6 +270,13 @@ class CellularMetricsLoggerTest : public testing::Test {
     base::RunLoop().RunUntilIdle();
   }
 
+  void RemoveCellularService(const std::string& service_path) {
+    ShillServiceClient::TestInterface* service_test =
+        network_state_test_helper_.service_test();
+    service_test->RemoveService(service_path);
+    base::RunLoop().RunUntilIdle();
+  }
+
   void AddESimProfile(hermes::profile::State state,
                       const std::string& service_path) {
     network_state_test_helper_.hermes_euicc_test()->AddCarrierProfile(
@@ -236,6 +292,16 @@ class CellularMetricsLoggerTest : public testing::Test {
   void ClearEuicc() {
     network_state_test_helper_.hermes_euicc_test()->ClearEuicc(
         dbus::ObjectPath(kTestEuiccPath));
+    base::RunLoop().RunUntilIdle();
+  }
+
+  void RemoveEuicc() {
+    network_state_test_helper_.hermes_manager_test()->ClearEuiccs();
+    base::RunLoop().RunUntilIdle();
+  }
+
+  void MarkEnterpriseEnrolled() {
+    stub_install_attributes_.Get()->SetCloudManaged(kTestDomain, kTestDeviceId);
     base::RunLoop().RunUntilIdle();
   }
 
@@ -268,23 +334,56 @@ class CellularMetricsLoggerTest : public testing::Test {
         kUnrestrictedPSimServiceAtLoginHistogram, unrestricted_count);
   }
 
+  ash::ScopedStubInstallAttributes stub_install_attributes_;
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<base::HistogramTester> histogram_tester_;
   NetworkStateTestHelper network_state_test_helper_{
       false /* use_default_devices_and_services */};
-  std::unique_ptr<chromeos::network_config::CrosNetworkConfigTestHelper>
+  std::unique_ptr<network_config::CrosNetworkConfigTestHelper>
       network_config_helper_;
   std::unique_ptr<CellularInhibitor> cellular_inhibitor_;
   std::unique_ptr<TestCellularESimProfileHandler>
       cellular_esim_profile_handler_;
   std::unique_ptr<CellularMetricsLogger> cellular_metrics_logger_;
   std::unique_ptr<MockManagedNetworkConfigurationHandler>
-      mock_managed_network_configuration_manager_;
+      mock_managed_network_configuration_handler_;
 };
+
+TEST_F(CellularMetricsLoggerTest, NoEuiccCachedProfiles) {
+  base::test::ScopedFeatureList feature_list;
+
+  // Chrome caches eSIM profile information from Hermes so that this information
+  // is available even when Hermes is not. Simulate the situation where Chrome
+  // has eSIM information cached in prefs and Hermes being unavailable and
+  // confirm that ESimFeatureUsageMetrics still behaves as expected. This is a
+  // regression test for b/291812699.
+  const CellularESimProfile esim_profile(
+      CellularESimProfile::State::kActive, dbus::ObjectPath("profile_path"),
+      std::string("eid"), std::string("iccid"), std::u16string(u"name"),
+      std::u16string(u"nickname"), std::u16string(u"service_provider"),
+      std::string("activation_code"));
+  auto esim_profiles =
+      base::Value::List().Append(esim_profile.ToDictionaryValue());
+
+  TestingPrefServiceSimple device_prefs;
+  CellularESimProfileHandlerImpl::RegisterLocalStatePrefs(
+      device_prefs.registry());
+  device_prefs.Set(prefs::kESimProfiles, base::Value(std::move(esim_profiles)));
+
+  ClearEuicc();
+
+  InitMetricsLogger();
+
+  histogram_tester_->ExpectTotalCount(kESimFeatureUsageMetric, 1);
+  histogram_tester_->ExpectBucketCount(
+      kESimFeatureUsageMetric,
+      static_cast<int>(feature_usage::FeatureUsageMetrics::Event::kEligible),
+      1);
+}
 
 TEST_F(CellularMetricsLoggerTest, ActiveProfileExists) {
   AddESimProfile(hermes::profile::State::kActive, kTestESimCellularServicePath);
-  SetUpMetricsLogger();
+  InitMetricsLogger();
   histogram_tester_->ExpectTotalCount(kESimFeatureUsageMetric, 2);
   histogram_tester_->ExpectBucketCount(
       kESimFeatureUsageMetric,
@@ -292,9 +391,9 @@ TEST_F(CellularMetricsLoggerTest, ActiveProfileExists) {
 }
 
 TEST_F(CellularMetricsLoggerTest, CellularServiceAtLoginWithRestrictedSimLock) {
-  SetUpMetricsLogger();
-  ON_CALL(*mock_managed_network_configuration_manager_, AllowCellularSimLock())
-      .WillByDefault(testing::Return(false));
+  InitMetricsLogger();
+  ON_CALL(*mock_managed_network_configuration_handler_, AllowCellularSimLock())
+      .WillByDefault(::testing::Return(false));
 
   LoginState::Get()->SetLoggedInState(
       LoginState::LoggedInState::LOGGED_IN_ACTIVE,
@@ -307,9 +406,9 @@ TEST_F(CellularMetricsLoggerTest, CellularServiceAtLoginWithRestrictedSimLock) {
 }
 
 TEST_F(CellularMetricsLoggerTest, CellularServiceAtLoginTest) {
-  SetUpMetricsLogger();
-  ON_CALL(*mock_managed_network_configuration_manager_, AllowCellularSimLock())
-      .WillByDefault(testing::Return(true));
+  InitMetricsLogger();
+  ON_CALL(*mock_managed_network_configuration_handler_, AllowCellularSimLock())
+      .WillByDefault(::testing::Return(true));
 
   // Should defer logging when there are no cellular networks.
   LoginState::Get()->SetLoggedInState(
@@ -346,7 +445,7 @@ TEST_F(CellularMetricsLoggerTest, CellularServiceAtLoginTest) {
 }
 
 TEST_F(CellularMetricsLoggerTest, CellularUsageCountTest) {
-  SetUpMetricsLogger();
+  InitMetricsLogger();
 
   InitEthernet();
   InitCellular();
@@ -525,7 +624,7 @@ TEST_F(CellularMetricsLoggerTest, CellularUsageCountTest) {
 }
 
 TEST_F(CellularMetricsLoggerTest, CellularUsageCountDongleTest) {
-  SetUpMetricsLogger();
+  InitMetricsLogger();
 
   InitEthernet();
   static const base::Value kTestOnlineStateValue(shill::kStateOnline);
@@ -576,7 +675,7 @@ TEST_F(CellularMetricsLoggerTest, CellularUsageCountDongleTest) {
 }
 
 TEST_F(CellularMetricsLoggerTest, CellularESimProfileStatusAtLoginTest) {
-  SetUpMetricsLogger();
+  InitMetricsLogger();
 
   // Should defer logging when there are no cellular networks.
   LoginState::Get()->SetLoggedInState(
@@ -637,7 +736,7 @@ TEST_F(CellularMetricsLoggerTest, CellularESimProfileStatusAtLoginTest) {
 }
 
 TEST_F(CellularMetricsLoggerTest, CellularPSimActivationStateAtLoginTest) {
-  SetUpMetricsLogger();
+  InitMetricsLogger();
 
   // Should defer logging when there are no cellular networks.
   LoginState::Get()->SetLoggedInState(
@@ -678,7 +777,7 @@ TEST_F(CellularMetricsLoggerTest, CellularPSimActivationStateAtLoginTest) {
 }
 
 TEST_F(CellularMetricsLoggerTest, CellularConnectResult) {
-  SetUpMetricsLogger();
+  InitMetricsLogger();
 
   InitCellular();
 
@@ -787,13 +886,13 @@ TEST_F(CellularMetricsLoggerTest, CellularConnectResult) {
   // Set cellular networks to disconnected state.
   service_client_test()->SetServiceProperty(kTestPSimCellularServicePath,
                                             shill::kStateProperty,
-                                            base::Value(shill::kStateOffline));
+                                            base::Value(shill::kStateIdle));
   service_client_test()->SetServiceProperty(kTestESimCellularServicePath,
                                             shill::kStateProperty,
-                                            base::Value(shill::kStateOffline));
+                                            base::Value(shill::kStateIdle));
   service_client_test()->SetServiceProperty(kTestESimPolicyCellularServicePath,
                                             shill::kStateProperty,
-                                            base::Value(shill::kStateOffline));
+                                            base::Value(shill::kStateIdle));
   base::RunLoop().RunUntilIdle();
 
   // A connected to disconnected state change should not impact connection
@@ -845,7 +944,7 @@ TEST_F(CellularMetricsLoggerTest, CellularConnectResult) {
 }
 
 TEST_F(CellularMetricsLoggerTest, CancellationDuringConnecting) {
-  SetUpMetricsLogger();
+  InitMetricsLogger();
   InitCellular();
   ResetHistogramTester();
   base::RunLoop().RunUntilIdle();
@@ -930,7 +1029,7 @@ TEST_F(CellularMetricsLoggerTest, CancellationDuringConnecting) {
 }
 
 TEST_F(CellularMetricsLoggerTest, UserInitiatedConnectionResult) {
-  SetUpMetricsLogger();
+  InitMetricsLogger();
   InitCellular();
   ResetHistogramTester();
   base::RunLoop().RunUntilIdle();
@@ -962,15 +1061,15 @@ TEST_F(CellularMetricsLoggerTest, UserInitiatedConnectionResult) {
 }
 
 TEST_F(CellularMetricsLoggerTest, SwitchActiveNetworkOnManagedDevice) {
-  SetUpMetricsLogger();
+  InitMetricsLogger();
 
   InitCellular();
   const base::Value kOnlineStateValue(shill::kStateOnline);
-  const base::Value kOfflineStateValue(shill::kStateOffline);
+  const base::Value kIdleStateValue(shill::kStateIdle);
   const base::Value kFailedToConnect(shill::kStateFailure);
 
-  ON_CALL(*mock_managed_network_configuration_manager_, AllowCellularSimLock())
-      .WillByDefault(testing::Return(false));
+  ON_CALL(*mock_managed_network_configuration_handler_, AllowCellularSimLock())
+      .WillByDefault(::testing::Return(false));
 
   ResetHistogramTester();
   AddESimProfile(hermes::profile::State::kActive, kTestESimCellularServicePath);
@@ -979,7 +1078,7 @@ TEST_F(CellularMetricsLoggerTest, SwitchActiveNetworkOnManagedDevice) {
   service_client_test()->SetServiceProperty(
       kTestESimCellularServicePath, shill::kStateProperty, kOnlineStateValue);
   service_client_test()->SetServiceProperty(
-      kTestPSimCellularServicePath, shill::kStateProperty, kOfflineStateValue);
+      kTestPSimCellularServicePath, shill::kStateProperty, kIdleStateValue);
   base::RunLoop().RunUntilIdle();
   histogram_tester_->ExpectTotalCount(
       CellularMetricsLogger::kRestrictedActiveNetworkSIMLockStatus, 1);
@@ -991,13 +1090,13 @@ TEST_F(CellularMetricsLoggerTest, SwitchActiveNetworkOnManagedDevice) {
 
   // Unlocked ESIM connection -> PSIM connection -> PinLocked ESiM connection
   service_client_test()->SetServiceProperty(
-      kTestESimCellularServicePath, shill::kStateProperty, kOfflineStateValue);
+      kTestESimCellularServicePath, shill::kStateProperty, kIdleStateValue);
   service_client_test()->SetServiceProperty(
       kTestPSimCellularServicePath, shill::kStateProperty, kOnlineStateValue);
   base::RunLoop().RunUntilIdle();
 
   service_client_test()->SetServiceProperty(
-      kTestPSimCellularServicePath, shill::kStateProperty, kOfflineStateValue);
+      kTestPSimCellularServicePath, shill::kStateProperty, kIdleStateValue);
   SetCellularSimLock(shill::kSIMLockPin);
   service_client_test()->SetServiceProperty(
       kTestESimCellularServicePath, shill::kStateProperty, kFailedToConnect);
@@ -1008,13 +1107,13 @@ TEST_F(CellularMetricsLoggerTest, SwitchActiveNetworkOnManagedDevice) {
 
   // PinLocked ESIM -> PSIM connection -> PukBlocked ESIM
   service_client_test()->SetServiceProperty(
-      kTestESimCellularServicePath, shill::kStateProperty, kOfflineStateValue);
+      kTestESimCellularServicePath, shill::kStateProperty, kIdleStateValue);
   service_client_test()->SetServiceProperty(
       kTestPSimCellularServicePath, shill::kStateProperty, kOnlineStateValue);
   base::RunLoop().RunUntilIdle();
 
   service_client_test()->SetServiceProperty(
-      kTestPSimCellularServicePath, shill::kStateProperty, kOfflineStateValue);
+      kTestPSimCellularServicePath, shill::kStateProperty, kIdleStateValue);
   SetCellularSimLock(shill::kSIMLockPuk);
   service_client_test()->SetServiceProperty(
       kTestESimCellularServicePath, shill::kStateProperty, kFailedToConnect);
@@ -1022,17 +1121,27 @@ TEST_F(CellularMetricsLoggerTest, SwitchActiveNetworkOnManagedDevice) {
   histogram_tester_->ExpectBucketCount(
       CellularMetricsLogger::kRestrictedActiveNetworkSIMLockStatus,
       CellularMetricsLogger::SimPinLockType::kPukLocked, 1);
+
+  service_client_test()->SetServiceProperty(
+      kTestESimCellularServicePath, shill::kStateProperty, kIdleStateValue);
+  SetCellularSimLock(shill::kSIMLockNetworkPin);
+  service_client_test()->SetServiceProperty(
+      kTestPSimCellularServicePath, shill::kStateProperty, kFailedToConnect);
+  base::RunLoop().RunUntilIdle();
+  histogram_tester_->ExpectBucketCount(
+      CellularMetricsLogger::kRestrictedActiveNetworkSIMLockStatus,
+      CellularMetricsLogger::SimPinLockType::kCarrierLocked, 1);
 }
 
 TEST_F(CellularMetricsLoggerTest, SwitchActiveNetworkOnUnmanagedDevice) {
-  SetUpMetricsLogger();
+  InitMetricsLogger();
 
   InitCellular();
   const base::Value kOnlineStateValue(shill::kStateOnline);
-  const base::Value kOfflineStateValue(shill::kStateOffline);
+  const base::Value kIdleStateValue(shill::kStateIdle);
 
-  ON_CALL(*mock_managed_network_configuration_manager_, AllowCellularSimLock())
-      .WillByDefault(testing::Return(true));
+  ON_CALL(*mock_managed_network_configuration_handler_, AllowCellularSimLock())
+      .WillByDefault(::testing::Return(true));
 
   ResetHistogramTester();
   AddESimProfile(hermes::profile::State::kActive, kTestESimCellularServicePath);
@@ -1054,7 +1163,7 @@ TEST_F(CellularMetricsLoggerTest, SwitchActiveNetworkOnUnmanagedDevice) {
   service_client_test()->SetServiceProperty(
       kTestESimCellularServicePath, shill::kStateProperty, kOnlineStateValue);
   service_client_test()->SetServiceProperty(
-      kTestPSimCellularServicePath, shill::kStateProperty, kOfflineStateValue);
+      kTestPSimCellularServicePath, shill::kStateProperty, kIdleStateValue);
   base::RunLoop().RunUntilIdle();
   histogram_tester_->ExpectTotalCount(
       CellularMetricsLogger::kUnrestrictedActiveNetworkSIMLockStatus, 1);
@@ -1063,7 +1172,7 @@ TEST_F(CellularMetricsLoggerTest, SwitchActiveNetworkOnUnmanagedDevice) {
 
   // ESIM connection -> PSIM connection
   service_client_test()->SetServiceProperty(
-      kTestESimCellularServicePath, shill::kStateProperty, kOfflineStateValue);
+      kTestESimCellularServicePath, shill::kStateProperty, kIdleStateValue);
   service_client_test()->SetServiceProperty(
       kTestPSimCellularServicePath, shill::kStateProperty, kOnlineStateValue);
   base::RunLoop().RunUntilIdle();
@@ -1072,16 +1181,16 @@ TEST_F(CellularMetricsLoggerTest, SwitchActiveNetworkOnUnmanagedDevice) {
 
   // PSIM connection -> No connection
   service_client_test()->SetServiceProperty(
-      kTestESimCellularServicePath, shill::kStateProperty, kOfflineStateValue);
+      kTestESimCellularServicePath, shill::kStateProperty, kIdleStateValue);
   service_client_test()->SetServiceProperty(
-      kTestPSimCellularServicePath, shill::kStateProperty, kOfflineStateValue);
+      kTestPSimCellularServicePath, shill::kStateProperty, kIdleStateValue);
   base::RunLoop().RunUntilIdle();
   histogram_tester_->ExpectTotalCount(
       CellularMetricsLogger::kUnrestrictedActiveNetworkSIMLockStatus, 2);
 
   // No connection -> PSIM connection
   service_client_test()->SetServiceProperty(
-      kTestESimCellularServicePath, shill::kStateProperty, kOfflineStateValue);
+      kTestESimCellularServicePath, shill::kStateProperty, kIdleStateValue);
   service_client_test()->SetServiceProperty(
       kTestPSimCellularServicePath, shill::kStateProperty, kOnlineStateValue);
   base::RunLoop().RunUntilIdle();
@@ -1090,7 +1199,7 @@ TEST_F(CellularMetricsLoggerTest, SwitchActiveNetworkOnUnmanagedDevice) {
 }
 
 TEST_F(CellularMetricsLoggerTest, CellularTimeToConnectedTest) {
-  SetUpMetricsLogger();
+  InitMetricsLogger();
 
   constexpr base::TimeDelta kTestConnectionTime = base::Milliseconds(321);
   InitCellular();
@@ -1140,7 +1249,7 @@ TEST_F(CellularMetricsLoggerTest, CellularTimeToConnectedTest) {
 }
 
 TEST_F(CellularMetricsLoggerTest, CellularDisconnectionsTest) {
-  SetUpMetricsLogger();
+  InitMetricsLogger();
 
   InitCellular();
   base::Value kOnlineStateValue(shill::kStateOnline);
@@ -1257,6 +1366,189 @@ TEST_F(CellularMetricsLoggerTest, CellularDisconnectionsTest) {
   histogram_tester_->ExpectBucketCount(
       kESimPolicyDisconnectionsHistogram,
       CellularMetricsLogger::ConnectionState::kDisconnected, 2);
+}
+
+TEST_F(CellularMetricsLoggerTest,
+       EnterpriseESimFeatureUsageMetrics_NotEnrolled) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(ash::features::kSmdsSupport);
+
+  TestingPrefServiceSimple device_prefs;
+  CellularESimProfileHandlerImpl::RegisterLocalStatePrefs(
+      device_prefs.registry());
+
+  // Any cellular service that is considered enterprise enrolled will result in
+  // enterprise eSIM feature usage being considered enabled.
+  RemoveCellularService(kTestESimPolicyCellularServicePath);
+
+  InitMetricsLogger(/*check_esim_feature_eligible=*/false,
+                    /*check_enterprise_esim_feature_eligible=*/false);
+
+  histogram_tester_->ExpectTotalCount(kEnterpriseESimFeatureUsageMetric, 0);
+}
+
+TEST_F(CellularMetricsLoggerTest,
+       EnterpriseESimFeatureUsageMetrics_NotEligible) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(ash::features::kSmdsSupport);
+
+  MarkEnterpriseEnrolled();
+
+  TestingPrefServiceSimple device_prefs;
+  CellularESimProfileHandlerImpl::RegisterLocalStatePrefs(
+      device_prefs.registry());
+
+  RemoveEuicc();
+  RemoveCellularService(kTestESimPolicyCellularServicePath);
+
+  InitMetricsLogger(/*check_esim_feature_eligible=*/false,
+                    /*check_enterprise_esim_feature_eligible=*/false);
+
+  histogram_tester_->ExpectTotalCount(kEnterpriseESimFeatureUsageMetric, 0);
+}
+
+TEST_F(CellularMetricsLoggerTest,
+       EnterpriseESimFeatureUsageMetrics_EligibleViaEuicc) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(ash::features::kSmdsSupport);
+
+  MarkEnterpriseEnrolled();
+
+  TestingPrefServiceSimple device_prefs;
+  CellularESimProfileHandlerImpl::RegisterLocalStatePrefs(
+      device_prefs.registry());
+
+  InitCellular();
+
+  // Explicitly remove the managed cellular service.
+  RemoveCellularService(kTestESimPolicyCellularServicePath);
+
+  InitMetricsLogger(/*check_esim_feature_eligible=*/false,
+                    /*check_enterprise_esim_feature_eligible=*/true);
+
+  histogram_tester_->ExpectTotalCount(kEnterpriseESimFeatureUsageMetric, 1);
+  histogram_tester_->ExpectBucketCount(
+      kEnterpriseESimFeatureUsageMetric,
+      static_cast<int>(feature_usage::FeatureUsageMetrics::Event::kEligible),
+      1);
+  histogram_tester_->ExpectBucketCount(
+      kEnterpriseESimFeatureUsageMetric,
+      static_cast<int>(feature_usage::FeatureUsageMetrics::Event::kAccessible),
+      0);
+}
+
+TEST_F(CellularMetricsLoggerTest,
+       EnterpriseESimFeatureUsageMetrics_Accessible) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(ash::features::kSmdsSupport);
+
+  MarkEnterpriseEnrolled();
+
+  TestingPrefServiceSimple device_prefs;
+  CellularESimProfileHandlerImpl::RegisterLocalStatePrefs(
+      device_prefs.registry());
+
+  const std::optional<base::Value::Dict> policy =
+      base::JSONReader::ReadDict(kEnterpriseESimPolicy);
+  ASSERT_TRUE(policy.has_value());
+
+  EXPECT_CALL(*mock_managed_network_configuration_handler_,
+              GetGlobalConfigFromPolicy(::testing::_))
+      .WillRepeatedly(::testing::Return(&policy.value()));
+
+  InitCellular();
+
+  // Explicitly remove the managed cellular service.
+  RemoveCellularService(kTestESimPolicyCellularServicePath);
+
+  InitMetricsLogger(/*check_esim_feature_eligible=*/false,
+                    /*check_enterprise_esim_feature_eligible=*/true);
+
+  histogram_tester_->ExpectTotalCount(kEnterpriseESimFeatureUsageMetric, 2);
+  histogram_tester_->ExpectBucketCount(
+      kEnterpriseESimFeatureUsageMetric,
+      static_cast<int>(feature_usage::FeatureUsageMetrics::Event::kEligible),
+      1);
+  histogram_tester_->ExpectBucketCount(
+      kEnterpriseESimFeatureUsageMetric,
+      static_cast<int>(feature_usage::FeatureUsageMetrics::Event::kAccessible),
+      1);
+  histogram_tester_->ExpectBucketCount(
+      kEnterpriseESimFeatureUsageMetric,
+      static_cast<int>(feature_usage::FeatureUsageMetrics::Event::kEnabled), 0);
+}
+
+TEST_F(CellularMetricsLoggerTest,
+       EnterpriseESimFeatureUsageMetrics_EnabledViaService) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(ash::features::kSmdsSupport);
+
+  MarkEnterpriseEnrolled();
+
+  TestingPrefServiceSimple device_prefs;
+  CellularESimProfileHandlerImpl::RegisterLocalStatePrefs(
+      device_prefs.registry());
+
+  InitCellular();
+
+  InitMetricsLogger(/*check_esim_feature_eligible=*/false,
+                    /*check_enterprise_esim_feature_eligible=*/true);
+
+  histogram_tester_->ExpectTotalCount(kEnterpriseESimFeatureUsageMetric, 3);
+  histogram_tester_->ExpectBucketCount(
+      kEnterpriseESimFeatureUsageMetric,
+      static_cast<int>(feature_usage::FeatureUsageMetrics::Event::kEnabled), 1);
+}
+
+TEST_F(CellularMetricsLoggerTest,
+       EnterpriseESimFeatureUsageMetrics_EnabledAndUsage) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(ash::features::kSmdsSupport);
+
+  MarkEnterpriseEnrolled();
+
+  TestingPrefServiceSimple device_prefs;
+  CellularESimProfileHandlerImpl::RegisterLocalStatePrefs(
+      device_prefs.registry());
+
+  const std::optional<base::Value::Dict> policy =
+      base::JSONReader::ReadDict(kEnterpriseESimPolicy);
+  ASSERT_TRUE(policy.has_value());
+
+  EXPECT_CALL(*mock_managed_network_configuration_handler_,
+              GetGlobalConfigFromPolicy(::testing::_))
+      .WillRepeatedly(::testing::Return(&policy.value()));
+
+  InitCellular();
+
+  AddESimProfile(hermes::profile::State::kActive,
+                 kTestESimPolicyCellularServicePath);
+
+  InitMetricsLogger(/*check_esim_feature_eligible=*/false,
+                    /*check_enterprise_esim_feature_eligible=*/true);
+
+  histogram_tester_->ExpectTotalCount(kEnterpriseESimFeatureUsageMetric, 3);
+  histogram_tester_->ExpectBucketCount(
+      kEnterpriseESimFeatureUsageMetric,
+      static_cast<int>(feature_usage::FeatureUsageMetrics::Event::kEnabled), 1);
+
+  // Connect to the enterprise eSIM service for 10 minutes and check that the
+  // correct usage duration is reported.
+  service_client_test()->SetServiceProperty(kTestESimPolicyCellularServicePath,
+                                            shill::kStateProperty,
+                                            base::Value(shill::kStateOnline));
+  base::RunLoop().RunUntilIdle();
+
+  const base::TimeDelta kTimeSpentOnline = base::Minutes(10);
+  task_environment_.FastForwardBy(kTimeSpentOnline);
+  service_client_test()->SetServiceProperty(kTestESimPolicyCellularServicePath,
+                                            shill::kStateProperty,
+                                            base::Value(shill::kStateIdle));
+  base::RunLoop().RunUntilIdle();
+
+  histogram_tester_->ExpectTotalCount(kEnterpriseESimFeatureUsageMetric, 4);
+  histogram_tester_->ExpectTimeBucketCount(
+      kEnterpriseESimFeatureUsageUsetimeMetric, kTimeSpentOnline, 1);
 }
 
 }  // namespace ash

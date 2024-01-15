@@ -4,7 +4,7 @@
 
 package org.chromium.chrome.browser.offlinepages;
 
-import android.os.Bundle;
+import android.os.PersistableBundle;
 import android.text.format.DateUtils;
 
 import org.chromium.base.ContextUtils;
@@ -12,9 +12,7 @@ import org.chromium.components.background_task_scheduler.BackgroundTaskScheduler
 import org.chromium.components.background_task_scheduler.TaskIds;
 import org.chromium.components.background_task_scheduler.TaskInfo;
 
-/**
- * Class responsible for scheduling and canceling offline page related background tasks.
- */
+/** Class responsible for scheduling and canceling offline page related background tasks. */
 public class BackgroundScheduler {
     static final long NO_DELAY = 0;
     private static final boolean OVERWRITE = true;
@@ -30,8 +28,10 @@ public class BackgroundScheduler {
 
     /** Cancels a background tasks. */
     public void cancel() {
-        BackgroundTaskSchedulerFactory.getScheduler().cancel(
-                ContextUtils.getApplicationContext(), TaskIds.OFFLINE_PAGES_BACKGROUND_JOB_ID);
+        BackgroundTaskSchedulerFactory.getScheduler()
+                .cancel(
+                        ContextUtils.getApplicationContext(),
+                        TaskIds.OFFLINE_PAGES_BACKGROUND_JOB_ID);
     }
 
     /** Schedules a background task for provided triggering conditions. */
@@ -50,28 +50,22 @@ public class BackgroundScheduler {
         scheduleImpl(triggerConditions, delayStartMs, DateUtils.WEEK_IN_MILLIS, !OVERWRITE);
     }
 
-    /**
-     * Method for rescheduling a background task for offline pages in the event of OS upgrade or
-     * GooglePlayServices upgrade.
-     * We use the least restrictive trigger conditions.  A wakeup will cause the queue to be
-     * checked, and the trigger conditions will be replaced by the current trigger conditions
-     * needed.
-     */
-    public void reschedule() {
-        TriggerConditions triggerConditions = new TriggerConditions(false, 0, false);
-        scheduleBackup(triggerConditions, DateUtils.MINUTE_IN_MILLIS * 5);
-    }
-
-    protected void scheduleImpl(TriggerConditions triggerConditions, long delayStartMs,
-            long executionDeadlineMs, boolean overwrite) {
-        Bundle taskExtras = new Bundle();
+    protected void scheduleImpl(
+            TriggerConditions triggerConditions,
+            long delayStartMs,
+            long executionDeadlineMs,
+            boolean overwrite) {
+        PersistableBundle taskExtras = new PersistableBundle();
         TaskExtrasPacker.packTimeInBundle(taskExtras);
         TaskExtrasPacker.packTriggerConditionsInBundle(taskExtras, triggerConditions);
 
         TaskInfo taskInfo =
-                TaskInfo.createOneOffTask(TaskIds.OFFLINE_PAGES_BACKGROUND_JOB_ID, delayStartMs,
+                TaskInfo.createOneOffTask(
+                                TaskIds.OFFLINE_PAGES_BACKGROUND_JOB_ID,
+                                delayStartMs,
                                 executionDeadlineMs)
-                        .setRequiredNetworkType(triggerConditions.requireUnmeteredNetwork()
+                        .setRequiredNetworkType(
+                                triggerConditions.requireUnmeteredNetwork()
                                         ? TaskInfo.NetworkType.UNMETERED
                                         : TaskInfo.NetworkType.ANY)
                         .setUpdateCurrent(overwrite)
@@ -80,7 +74,7 @@ public class BackgroundScheduler {
                         .setRequiresCharging(triggerConditions.requirePowerConnected())
                         .build();
 
-        BackgroundTaskSchedulerFactory.getScheduler().schedule(
-                ContextUtils.getApplicationContext(), taskInfo);
+        BackgroundTaskSchedulerFactory.getScheduler()
+                .schedule(ContextUtils.getApplicationContext(), taskInfo);
     }
 }

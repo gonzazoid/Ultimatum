@@ -7,7 +7,7 @@
 #import <WebKit/WebKit.h>
 
 #import "base/memory/ptr_util.h"
-#import "ios/web/js_messaging/page_script_util.h"
+#import "ios/web/public/js_messaging/content_world.h"
 #import "ios/web/public/js_messaging/java_script_feature.h"
 #import "ios/web/public/test/fakes/fake_browser_state.h"
 #import "ios/web/public/test/fakes/fake_web_client.h"
@@ -17,26 +17,6 @@
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-namespace {
-
-// Returns the WKUserScript from `user_scripts` which contains `script_string`
-// or null if no such script is found.
-WKUserScript* FindWKUserScriptContaining(NSArray<WKUserScript*>* user_scripts,
-                                         NSString* script_string) {
-  for (WKUserScript* user_script in user_scripts) {
-    if ([user_script.source containsString:script_string]) {
-      return user_script;
-    }
-  }
-  return nil;
-}
-
-}  // namespace
 
 namespace web {
 namespace {
@@ -146,59 +126,6 @@ TEST_F(WKWebViewConfigurationProviderTest, Purge) {
   EXPECT_FALSE(config);
 }
 
-// Tests that configuration's userContentController has only one script with the
-// same content as web::GetDocumentStartScriptForMainFrame() returns.
-TEST_F(WKWebViewConfigurationProviderTest, UserScript) {
-  WKUserContentController* user_content_controller =
-      GetProvider().GetWebViewConfiguration().userContentController;
-
-  WKUserScript* early_all_user_script = FindWKUserScriptContaining(
-      user_content_controller.userScripts,
-      GetDocumentStartScriptForAllFrames(&browser_state_));
-  ASSERT_TRUE(early_all_user_script);
-  EXPECT_FALSE(early_all_user_script.isForMainFrameOnly);
-
-  WKUserScript* main_frame_script = FindWKUserScriptContaining(
-      user_content_controller.userScripts,
-      GetDocumentStartScriptForMainFrame(&browser_state_));
-  ASSERT_TRUE(main_frame_script);
-  EXPECT_TRUE(main_frame_script.isForMainFrameOnly);
-}
-
-// Tests that configuration's userContentController has different scripts after
-// the scripts are updated.
-TEST_F(WKWebViewConfigurationProviderTest, UpdateScripts) {
-  FakeWebClient* client = GetWebClient();
-  client->SetEarlyPageScript(@"var test = 4;");
-
-  WKUserContentController* user_content_controller =
-      GetProvider().GetWebViewConfiguration().userContentController;
-
-  NSString* initial_main_frame_script =
-      GetDocumentStartScriptForMainFrame(&browser_state_);
-  WKUserScript* initial_script = FindWKUserScriptContaining(
-      user_content_controller.userScripts, initial_main_frame_script);
-  EXPECT_TRUE(initial_script);
-
-  client->SetEarlyPageScript(@"var test = 3;");
-  GetProvider().UpdateScripts();
-
-  NSString* updated_main_frame_script =
-      GetDocumentStartScriptForMainFrame(&browser_state_);
-  WKUserScript* updated_script = FindWKUserScriptContaining(
-      user_content_controller.userScripts, updated_main_frame_script);
-  EXPECT_TRUE(updated_script);
-
-  EXPECT_NE(updated_main_frame_script, initial_main_frame_script);
-  EXPECT_NE(initial_script.source, updated_script.source);
-  EXPECT_LT(
-      0U,
-      [updated_script.source rangeOfString:updated_main_frame_script].length);
-  EXPECT_EQ(
-      0U,
-      [initial_script.source rangeOfString:updated_main_frame_script].length);
-}
-
 // Tests that configuration's userContentController has additional scripts
 // injected for JavaScriptFeatures configured through the WebClient.
 TEST_F(WKWebViewConfigurationProviderTest, JavaScriptFeatureInjection) {
@@ -211,14 +138,13 @@ TEST_F(WKWebViewConfigurationProviderTest, JavaScriptFeatureInjection) {
 
   std::vector<const web::JavaScriptFeature::FeatureScript> feature_scripts = {
       web::JavaScriptFeature::FeatureScript::CreateWithFilename(
-          "cookie_test",
+          "java_script_feature_test_inject_once",
           web::JavaScriptFeature::FeatureScript::InjectionTime::kDocumentStart,
           web::JavaScriptFeature::FeatureScript::TargetFrames::kAllFrames)};
 
   std::unique_ptr<web::JavaScriptFeature> feature =
       std::make_unique<web::JavaScriptFeature>(
-          web::JavaScriptFeature::ContentWorld::kPageContentWorld,
-          feature_scripts);
+          web::ContentWorld::kPageContentWorld, feature_scripts);
 
   client->SetJavaScriptFeatures({feature.get()});
   GetProvider().UpdateScripts();

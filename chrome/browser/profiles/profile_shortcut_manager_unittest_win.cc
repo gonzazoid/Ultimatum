@@ -8,13 +8,12 @@
 #include <string>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/strings/string_util.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
 #include "base/test/scoped_path_override.h"
 #include "base/test/test_shortcut_win.h"
@@ -27,7 +26,7 @@
 #include "chrome/browser/profiles/profile_shortcut_manager.h"
 #include "chrome/browser/profiles/profile_shortcut_manager_win.h"
 #include "chrome/browser/shell_integration_win.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/installer/util/install_util.h"
 #include "chrome/installer/util/shell_util.h"
 #include "chrome/test/base/testing_browser_process.h"
@@ -275,13 +274,14 @@ class ProfileShortcutManagerTest : public testing::Test {
       const base::Location& location,
       ShellUtil::ShortcutLocation shortcut_location,
       const ShellUtil::ShortcutProperties& properties) {
-    base::PostTaskAndReplyWithResult(
-        base::ThreadPool::CreateCOMSTATaskRunner({base::MayBlock()}).get(),
-        location,
-        base::BindOnce(&ShellUtil::CreateOrUpdateShortcut, shortcut_location,
-                       properties, ShellUtil::SHELL_SHORTCUT_CREATE_ALWAYS,
-                       /*pinned=*/nullptr),
-        base::BindOnce([](bool succeeded) { EXPECT_TRUE(succeeded); }));
+    base::ThreadPool::CreateCOMSTATaskRunner({base::MayBlock()})
+        ->PostTaskAndReplyWithResult(
+            location,
+            base::BindOnce(&ShellUtil::CreateOrUpdateShortcut,
+                           shortcut_location, properties,
+                           ShellUtil::SHELL_SHORTCUT_CREATE_ALWAYS,
+                           /*pinned=*/nullptr),
+            base::BindOnce([](bool succeeded) { EXPECT_TRUE(succeeded); }));
     task_environment_.RunUntilIdle();
   }
 

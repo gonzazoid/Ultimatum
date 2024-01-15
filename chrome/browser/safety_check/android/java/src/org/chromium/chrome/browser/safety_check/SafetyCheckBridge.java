@@ -4,7 +4,8 @@
 
 package org.chromium.chrome.browser.safety_check;
 
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.content_public.browser.BrowserContextHandle;
 
@@ -13,9 +14,7 @@ import org.chromium.content_public.browser.BrowserContextHandle;
  * //components/safety_check.
  */
 public class SafetyCheckBridge {
-    /**
-     * Returns whether the user is signed in for the purposes of password check.
-     */
+    /** Returns whether the user is signed in for the purposes of password check. */
     static boolean userSignedIn() {
         return SafetyCheckBridgeJni.get().userSignedIn(Profile.getLastUsedRegularProfile());
     }
@@ -30,12 +29,11 @@ public class SafetyCheckBridge {
         return SafetyCheckBridgeJni.get().checkSafeBrowsing(Profile.getLastUsedRegularProfile());
     }
 
-    /**
-     * C++ method signatures.
-     */
+    /** C++ method signatures. */
     @NativeMethods
     interface Natives {
         boolean userSignedIn(BrowserContextHandle browserContext);
+
         int checkSafeBrowsing(BrowserContextHandle browserContext);
     }
 }

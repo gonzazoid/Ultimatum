@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/ash/platform_keys/key_permissions/key_permissions_manager.h"
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -61,11 +61,11 @@ class UserPrivateTokenKeyPermissionsManagerServiceFactory
   ~UserPrivateTokenKeyPermissionsManagerServiceFactory() override;
 
  private:
-  friend struct base::DefaultSingletonTraits<
+  friend base::NoDestructor<
       UserPrivateTokenKeyPermissionsManagerServiceFactory>;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
   bool ServiceIsNULLWhileTesting() const override;

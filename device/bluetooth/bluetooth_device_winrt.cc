@@ -9,11 +9,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/win/core_winrt_util.h"
 #include "base/win/post_async_results.h"
 #include "base/win/scoped_hstring.h"
@@ -62,7 +63,7 @@ using Microsoft::WRL::ComPtr;
 
 void PostTask(BluetoothPairingWinrt::ConnectCallback callback,
               absl::optional<BluetoothDevice::ConnectErrorCode> error_code) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), error_code));
 }
 
@@ -493,7 +494,7 @@ void BluetoothDeviceWinrt::NotifyGattConnectFailure() {
   // UpgradeToFullDiscovery() doesn't mistakenly believe GATT discovery is
   // imminent and therefore avoids starting one itself.
   pending_gatt_service_discovery_start_ = false;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&BluetoothDeviceWinrt::DidConnectGatt,
                                 weak_ptr_factory_.GetWeakPtr(),
                                 ConnectErrorCode::ERROR_FAILED));

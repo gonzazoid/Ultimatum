@@ -115,10 +115,7 @@ void MathMLOperatorElement::ParseAttribute(
              param.name == mathml_names::kRspaceAttr ||
              param.name == mathml_names::kMinsizeAttr ||
              param.name == mathml_names::kMaxsizeAttr) {
-    needs_layout = param.new_value != param.old_value;
-    if (needs_layout && GetLayoutObject()) {
-      // TODO(crbug.com/1121113): Isn't it enough to set needs style recalc and
-      // let the style system perform proper layout and paint invalidation?
+    if (param.new_value != param.old_value) {
       SetNeedsStyleRecalc(
           kLocalStyleChange,
           StyleChangeReasonForTracing::Create(style_change_reason::kAttribute));
@@ -256,38 +253,38 @@ void MathMLOperatorElement::SetOperatorFormDirty() {
 }
 
 void MathMLOperatorElement::AddMathLSpaceIfNeeded(
-    ComputedStyle& style,
+    ComputedStyleBuilder& builder,
     const CSSToLengthConversionData& conversion_data) {
   if (auto length_or_percentage_value = AddMathLengthToComputedStyle(
           conversion_data, mathml_names::kLspaceAttr)) {
-    style.SetMathLSpace(std::move(*length_or_percentage_value));
+    builder.SetMathLSpace(std::move(*length_or_percentage_value));
   }
 }
 
 void MathMLOperatorElement::AddMathRSpaceIfNeeded(
-    ComputedStyle& style,
+    ComputedStyleBuilder& builder,
     const CSSToLengthConversionData& conversion_data) {
   if (auto length_or_percentage_value = AddMathLengthToComputedStyle(
           conversion_data, mathml_names::kRspaceAttr)) {
-    style.SetMathRSpace(std::move(*length_or_percentage_value));
+    builder.SetMathRSpace(std::move(*length_or_percentage_value));
   }
 }
 
 void MathMLOperatorElement::AddMathMinSizeIfNeeded(
-    ComputedStyle& style,
+    ComputedStyleBuilder& builder,
     const CSSToLengthConversionData& conversion_data) {
   if (auto length_or_percentage_value = AddMathLengthToComputedStyle(
           conversion_data, mathml_names::kMinsizeAttr)) {
-    style.SetMathMinSize(std::move(*length_or_percentage_value));
+    builder.SetMathMinSize(std::move(*length_or_percentage_value));
   }
 }
 
 void MathMLOperatorElement::AddMathMaxSizeIfNeeded(
-    ComputedStyle& style,
+    ComputedStyleBuilder& builder,
     const CSSToLengthConversionData& conversion_data) {
   if (auto length_or_percentage_value = AddMathLengthToComputedStyle(
           conversion_data, mathml_names::kMaxsizeAttr)) {
-    style.SetMathMaxSize(std::move(*length_or_percentage_value));
+    builder.SetMathMaxSize(std::move(*length_or_percentage_value));
   }
 }
 

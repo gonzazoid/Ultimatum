@@ -22,6 +22,7 @@
 #include "components/content_settings/core/browser/content_settings_origin_identifier_value_map.h"
 #include "components/content_settings/core/browser/content_settings_registry.h"
 #include "components/content_settings/core/browser/content_settings_rule.h"
+#include "components/content_settings/core/browser/content_settings_uma_util.h"
 #include "components/content_settings/core/browser/content_settings_utils.h"
 #include "components/content_settings/core/browser/website_settings_info.h"
 #include "components/content_settings/core/common/content_settings.h"
@@ -30,6 +31,7 @@
 #include "components/permissions/features.h"
 #include "content/public/browser/browser_thread.h"
 #include "extensions/browser/api/content_settings/content_settings_helpers.h"
+#include "extensions/common/api/types.h"
 
 using content::BrowserThread;
 using content_settings::ConcatenationIterator;
@@ -70,10 +72,7 @@ std::unique_ptr<RuleIterator> ContentSettingsStore::GetRuleIterator(
     bool incognito) const {
   std::vector<std::unique_ptr<RuleIterator>> iterators;
 
-  // The individual |RuleIterators| shouldn't lock; pass |lock_| to the
-  // |ConcatenationIterator| in a locked state.
-  std::unique_ptr<base::AutoLock> auto_lock =
-      std::make_unique<base::AutoLock>(lock_);
+  base::AutoLock auto_lock(lock_);
 
   // Iterate the extensions based on install time (most-recently installed
   // items first).
@@ -83,16 +82,14 @@ std::unique_ptr<RuleIterator> ContentSettingsStore::GetRuleIterator(
 
     std::unique_ptr<RuleIterator> rule_it;
     if (incognito) {
-      rule_it =
-          entry->incognito_session_only_settings.GetRuleIterator(type, nullptr);
+      rule_it = entry->incognito_session_only_settings.GetRuleIterator(type);
       if (rule_it)
         iterators.push_back(std::move(rule_it));
-      rule_it =
-          entry->incognito_persistent_settings.GetRuleIterator(type, nullptr);
+      rule_it = entry->incognito_persistent_settings.GetRuleIterator(type);
       if (rule_it)
         iterators.push_back(std::move(rule_it));
     } else {
-      rule_it = entry->settings.GetRuleIterator(type, nullptr);
+      rule_it = entry->settings.GetRuleIterator(type);
       if (rule_it)
         iterators.push_back(std::move(rule_it));
     }
@@ -100,8 +97,7 @@ std::unique_ptr<RuleIterator> ContentSettingsStore::GetRuleIterator(
   if (iterators.empty())
     return nullptr;
 
-  return std::make_unique<ConcatenationIterator>(std::move(iterators),
-                                                 auto_lock.release());
+  return std::make_unique<ConcatenationIterator>(std::move(iterators));
 }
 
 void ContentSettingsStore::SetExtensionContentSetting(
@@ -110,10 +106,41 @@ void ContentSettingsStore::SetExtensionContentSetting(
     const ContentSettingsPattern& secondary_pattern,
     ContentSettingsType type,
     ContentSetting setting,
-    ExtensionPrefsScope scope) {
+    ChromeSettingScope scope) {
+  if (primary_pattern == ContentSettingsPattern::Wildcard()) {
+    if (secondary_pattern == ContentSettingsPattern::Wildcard()) {
+      content_settings_uma_util::RecordContentSettingsHistogram(
+          "Extensions.ContentSettings."
+          "PrimaryPatternWildcardSecondaryPatternWildcard",
+          type);
+    } else {
+      content_settings_uma_util::RecordContentSettingsHistogram(
+          "Extensions.ContentSettings."
+          "PrimaryPatternWildcardSecondaryPatternUnique",
+          type);
+    }
+  } else {  // primary_pattern != Wildcard
+    if (secondary_pattern == ContentSettingsPattern::Wildcard()) {
+      content_settings_uma_util::RecordContentSettingsHistogram(
+          "Extensions.ContentSettings."
+          "PrimaryPatternUniqueSecondaryPatternWildcard",
+          type);
+    } else if (secondary_pattern == primary_pattern) {
+      content_settings_uma_util::RecordContentSettingsHistogram(
+          "Extensions.ContentSettings."
+          "PrimaryPatternUniqueSecondaryPatternIdentical",
+          type);
+    } else {
+      content_settings_uma_util::RecordContentSettingsHistogram(
+          "Extensions.ContentSettings."
+          "PrimaryPatternUniqueSecondaryPatternDifferent",
+          type);
+    }
+  }
   {
     base::AutoLock lock(lock_);
     OriginIdentifierValueMap* map = GetValueMap(ext_id, scope);
+    base::AutoLock map_lock(map->GetLock());
     if (setting == CONTENT_SETTING_DEFAULT) {
       map->DeleteValue(primary_pattern, secondary_pattern, type);
     } else {
@@ -126,8 +153,7 @@ void ContentSettingsStore::SetExtensionContentSetting(
   // Send notification that content settings changed. (Note: This is responsible
   // for updating the pref store, so cannot be skipped even if the setting would
   // be masked by another extension.)
-  NotifyOfContentSettingChanged(ext_id,
-                                scope != kExtensionPrefsScopeRegular);
+  NotifyOfContentSettingChanged(ext_id, scope != ChromeSettingScope::kRegular);
 }
 
 void ContentSettingsStore::RegisterExtension(
@@ -167,16 +193,31 @@ void ContentSettingsStore::UnregisterExtension(
     auto i = FindIterator(ext_id);
     if (i == entries_.end())
       return;
-    notify = !(*i)->settings.empty();
-    notify_incognito = !(*i)->incognito_persistent_settings.empty() ||
-                       !(*i)->incognito_session_only_settings.empty();
 
+    ShouldNotifyForEntry(**i, &notify, &notify_incognito);
     entries_.erase(i);
   }
   if (notify)
     NotifyOfContentSettingChanged(ext_id, false);
   if (notify_incognito)
     NotifyOfContentSettingChanged(ext_id, true);
+}
+
+void ContentSettingsStore::ShouldNotifyForEntry(const ExtensionEntry& entry,
+                                                bool* notify,
+                                                bool* notify_incognito) {
+  {
+    base::AutoLock map_lock(entry.settings.GetLock());
+    *notify = !entry.settings.empty();
+  }
+  {
+    base::AutoLock map_lock(entry.incognito_persistent_settings.GetLock());
+    *notify_incognito = !entry.incognito_persistent_settings.empty();
+  }
+  if (!*notify_incognito) {
+    base::AutoLock map_lock(entry.incognito_session_only_settings.GetLock());
+    *notify_incognito = !entry.incognito_session_only_settings.empty();
+  }
 }
 
 void ContentSettingsStore::SetExtensionState(
@@ -189,10 +230,7 @@ void ContentSettingsStore::SetExtensionState(
     if (!entry)
       return;
 
-    notify = !entry->settings.empty();
-    notify_incognito = !entry->incognito_persistent_settings.empty() ||
-                       !entry->incognito_session_only_settings.empty();
-
+    ShouldNotifyForEntry(*entry, &notify, &notify_incognito);
     entry->enabled = is_enabled;
   }
   if (notify)
@@ -203,7 +241,7 @@ void ContentSettingsStore::SetExtensionState(
 
 OriginIdentifierValueMap* ContentSettingsStore::GetValueMap(
     const std::string& ext_id,
-    ExtensionPrefsScope scope) {
+    ChromeSettingScope scope) {
   const OriginIdentifierValueMap* result =
       static_cast<const ContentSettingsStore*>(this)->GetValueMap(ext_id,
                                                                   scope);
@@ -212,22 +250,24 @@ OriginIdentifierValueMap* ContentSettingsStore::GetValueMap(
 
 const OriginIdentifierValueMap* ContentSettingsStore::GetValueMap(
     const std::string& ext_id,
-    ExtensionPrefsScope scope) const {
+    ChromeSettingScope scope) const {
   ExtensionEntry* entry = FindEntry(ext_id);
   if (!entry)
     return nullptr;
 
   switch (scope) {
-    case kExtensionPrefsScopeRegular:
-      return &(entry->settings);
-    case kExtensionPrefsScopeRegularOnly:
+    case ChromeSettingScope::kRegular:
+      return &entry->settings;
+    case ChromeSettingScope::kRegularOnly:
       // TODO(bauerb): Implement regular-only content settings.
       NOTREACHED();
       return nullptr;
-    case kExtensionPrefsScopeIncognitoPersistent:
-      return &(entry->incognito_persistent_settings);
-    case kExtensionPrefsScopeIncognitoSessionOnly:
-      return &(entry->incognito_session_only_settings);
+    case ChromeSettingScope::kIncognitoPersistent:
+      return &entry->incognito_persistent_settings;
+    case ChromeSettingScope::kIncognitoSessionOnly:
+      return &entry->incognito_session_only_settings;
+    case ChromeSettingScope::kNone:
+      break;
   }
 
   NOTREACHED();
@@ -236,64 +276,76 @@ const OriginIdentifierValueMap* ContentSettingsStore::GetValueMap(
 
 void ContentSettingsStore::ClearContentSettingsForExtension(
     const std::string& ext_id,
-    ExtensionPrefsScope scope) {
+    ChromeSettingScope scope) {
   bool notify = false;
   {
     base::AutoLock lock(lock_);
     OriginIdentifierValueMap* map = GetValueMap(ext_id, scope);
     DCHECK(map);
+    base::AutoLock map_lock(map->GetLock());
     notify = !map->empty();
     map->clear();
   }
   if (notify) {
-    NotifyOfContentSettingChanged(ext_id, scope != kExtensionPrefsScopeRegular);
+    NotifyOfContentSettingChanged(ext_id,
+                                  scope != ChromeSettingScope::kRegular);
   }
 }
 
 void ContentSettingsStore::ClearContentSettingsForExtensionAndContentType(
     const std::string& ext_id,
-    ExtensionPrefsScope scope,
+    ChromeSettingScope scope,
     ContentSettingsType content_type) {
   {
     base::AutoLock lock(lock_);
     OriginIdentifierValueMap* map = GetValueMap(ext_id, scope);
     DCHECK(map);
 
+    base::AutoLock map_lock(map->GetLock());
     if (map->find(content_type) == map->end())
       return;
 
     map->DeleteValues(content_type);
   }
-    NotifyOfContentSettingChanged(ext_id, scope != kExtensionPrefsScopeRegular);
+  NotifyOfContentSettingChanged(ext_id, scope != ChromeSettingScope::kRegular);
 }
 
 base::Value::List ContentSettingsStore::GetSettingsForExtension(
     const std::string& extension_id,
-    ExtensionPrefsScope scope) const {
+    ChromeSettingScope scope) const {
   base::AutoLock lock(lock_);
   const OriginIdentifierValueMap* map = GetValueMap(extension_id, scope);
   if (!map)
     return {};
-
+  std::vector<ContentSettingsType> keys;
+  {
+    // Grab the set of keys first as OriginIdentifierValueMap::GetRuleIterator
+    // requires that the lock isn't already held.
+    base::AutoLock map_lock(map->GetLock());
+    // Range-based for loops break locking annotations.
+    // https://github.com/llvm/llvm-project/issues/62497
+    // NOLINTNEXTLINE(modernize-loop-convert)
+    for (auto it = map->begin(); it != map->end(); it++) {
+      keys.push_back(it->first);
+    }
+  }
   base::Value::List settings;
-  for (const auto& it : *map) {
-    const auto& key = it.first;
-    std::unique_ptr<RuleIterator> rule_iterator(
-        map->GetRuleIterator(key,
-                             nullptr));  // We already hold the lock.
+  for (ContentSettingsType key : keys) {
+    std::unique_ptr<RuleIterator> rule_iterator(map->GetRuleIterator(key));
     if (!rule_iterator)
       continue;
 
     while (rule_iterator->HasNext()) {
-      const Rule& rule = rule_iterator->Next();
+      std::unique_ptr<Rule> rule = rule_iterator->Next();
       base::Value::Dict setting_dict;
-      setting_dict.Set(kPrimaryPatternKey, rule.primary_pattern.ToString());
-      setting_dict.Set(kSecondaryPatternKey, rule.secondary_pattern.ToString());
+      setting_dict.Set(kPrimaryPatternKey, rule->primary_pattern.ToString());
+      setting_dict.Set(kSecondaryPatternKey,
+                       rule->secondary_pattern.ToString());
       setting_dict.Set(
           kContentSettingsTypeKey,
           content_settings_helpers::ContentSettingsTypeToString(key));
       ContentSetting content_setting =
-          content_settings::ValueToContentSetting(rule.value);
+          content_settings::ValueToContentSetting(rule->value);
       DCHECK_NE(CONTENT_SETTING_DEFAULT, content_setting);
 
       std::string setting_string =
@@ -314,7 +366,7 @@ base::Value::List ContentSettingsStore::GetSettingsForExtension(
 void ContentSettingsStore::SetExtensionContentSettingFromList(
     const std::string& extension_id,
     const base::Value::List& list,
-    ExtensionPrefsScope scope) {
+    ChromeSettingScope scope) {
   for (const base::Value& value : list) {
     if (!value.is_dict()) {
       LOG_INVALID_EXTENSION_PREFERENCE_DETAILS;

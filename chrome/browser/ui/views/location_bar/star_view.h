@@ -5,8 +5,6 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_LOCATION_BAR_STAR_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_LOCATION_BAR_STAR_VIEW_H_
 
-#include <memory>
-
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/page_action/page_action_icon_view.h"
 #include "components/prefs/pref_member.h"
@@ -18,8 +16,9 @@ class CommandUpdater;
 
 // The star icon to show a bookmark bubble.
 class StarView : public PageActionIconView {
+  METADATA_HEADER(StarView, PageActionIconView)
+
  public:
-  METADATA_HEADER(StarView);
   StarView(CommandUpdater* command_updater,
            Browser* browser,
            IconLabelBubbleView::Delegate* icon_label_bubble_delegate,

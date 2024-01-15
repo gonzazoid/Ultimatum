@@ -8,8 +8,8 @@ import android.graphics.Bitmap;
 
 import androidx.annotation.Nullable;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.NativeMethods;
 
 /**
  * A Java API for calling the native QR Code Generator service.
@@ -24,9 +24,7 @@ public class QRCodeGenerationRequest {
     // Stores the callback that will be invoked on request completion.
     private QRCodeServiceCallback mCallback;
 
-    /**
-     * Callback for use with this class.
-     */
+    /** Callback for use with this class. */
     public interface QRCodeServiceCallback {
         /**
          * Called when the QR Code is generated.
@@ -64,6 +62,7 @@ public class QRCodeGenerationRequest {
     @NativeMethods
     interface Natives {
         long init(QRCodeGenerationRequest caller, String data);
+
         void destroy(long nativeQRCodeGenerationRequest);
     }
 }

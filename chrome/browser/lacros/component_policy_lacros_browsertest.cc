@@ -2,8 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/test/repeating_test_future.h"
 #include "base/test/values_test_util.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
@@ -86,15 +87,15 @@ class TestPolicyServiceObserver : public policy::PolicyService::Observer {
   void OnPolicyUpdated(const policy::PolicyNamespace& nsp,
                        const policy::PolicyMap& previous,
                        const policy::PolicyMap& current) override {
-    run_loop_.Quit();
+    policy_updated_future_.AddValue(true);
   }
 
-  void WaitForUpdate() { run_loop_.Run(); }
+  void WaitForUpdate() { policy_updated_future_.Take(); }
 
   const raw_ptr<policy::PolicyService> policy_service_;
   const policy::PolicyDomain policy_domain_;
 
-  base::RunLoop run_loop_;
+  base::test::RepeatingTestFuture<bool> policy_updated_future_;
 };
 
 class ComponentPolicyLacrosBrowserTest : public InProcessBrowserTest {
@@ -113,9 +114,15 @@ class ComponentPolicyLacrosBrowserTest : public InProcessBrowserTest {
   }
 };
 
+// TODO(crbug.com/1447850) This test constantly fail for internal builder.
+#if BUILDFLAG(IS_CHROMEOS_LACROS) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
+#define MAYBE_BasicInitParamsSuccess DISABLED_BasicInitParamsSuccess
+#else
+#define MAYBE_BasicInitParamsSuccess HandlesUncleanExit
+#endif
 // Test to check the initial component policy received from Ash.
 IN_PROC_BROWSER_TEST_F(ComponentPolicyLacrosBrowserTest,
-                       BasicInitParamsSuccess) {
+                       MAYBE_BasicInitParamsSuccess) {
   auto* profile = ProfileManager::GetPrimaryUserProfile();
 
   auto* registry = profile->GetPolicySchemaRegistryService()->registry();
@@ -131,8 +138,15 @@ IN_PROC_BROWSER_TEST_F(ComponentPolicyLacrosBrowserTest,
   VerifyMap(map_size_test1, list_size_test1);
 }
 
+// TODO(crbug.com/1447850) This test constantly fail for internal builder.
+#if BUILDFLAG(IS_CHROMEOS_LACROS) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
+#define MAYBE_BasicUpdateSuccess DISABLED_BasicUpdateSuccess
+#else
+#define MAYBE_BasicUpdateSuccess BasicUpdateSuccess
+#endif
 // Test to check the update of component policy received from Ash.
-IN_PROC_BROWSER_TEST_F(ComponentPolicyLacrosBrowserTest, BasicUpdateSuccess) {
+IN_PROC_BROWSER_TEST_F(ComponentPolicyLacrosBrowserTest,
+                       MAYBE_BasicUpdateSuccess) {
   auto* profile = ProfileManager::GetPrimaryUserProfile();
 
   auto* registry = profile->GetPolicySchemaRegistryService()->registry();

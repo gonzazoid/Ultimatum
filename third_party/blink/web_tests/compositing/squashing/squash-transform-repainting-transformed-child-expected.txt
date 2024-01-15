@@ -15,10 +15,9 @@ CASE 1, original layer tree
       "transform": 1
     },
     {
-      "name": "LayoutNGBlockFlow (positioned) DIV class='box middle'",
+      "name": "LayoutNGBlockFlow (positioned, children-inline) DIV class='box middle'",
       "position": [4, 4],
-      "bounds": [146, 146],
-      "contentsOpaqueForText": true
+      "bounds": [146, 146]
     }
   ],
   "transforms": [
@@ -51,10 +50,9 @@ CASE 2, hovering over the outer div
       "transform": 1
     },
     {
-      "name": "LayoutNGBlockFlow (positioned) DIV class='box middle'",
+      "name": "LayoutNGBlockFlow (positioned, children-inline) DIV class='box middle'",
       "position": [4, 4],
       "bounds": [146, 146],
-      "contentsOpaqueForText": true,
       "invalidations": [
         [0, 0, 132, 132]
       ]
@@ -90,10 +88,9 @@ CASE 3, hovering over the inner div
       "transform": 1
     },
     {
-      "name": "LayoutNGBlockFlow (positioned) DIV class='box middle'",
+      "name": "LayoutNGBlockFlow (positioned, children-inline) DIV class='box middle'",
       "position": [4, 4],
       "bounds": [146, 146],
-      "contentsOpaqueForText": true,
       "invalidations": [
         [46, 46, 100, 100]
       ]

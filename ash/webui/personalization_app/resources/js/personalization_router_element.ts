@@ -10,13 +10,18 @@
 import 'chrome://resources/polymer/v3_0/iron-location/iron-location.js';
 import 'chrome://resources/polymer/v3_0/iron-location/iron-query-params.js';
 
-import {assert} from 'chrome://resources/js/assert.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {assert} from 'chrome://resources/ash/common/assert.js';
+import {isSeaPenEnabled} from 'chrome://resources/ash/common/sea_pen/load_time_booleans.js';
+import {SeaPenQueryParams} from 'chrome://resources/ash/common/sea_pen/sea_pen_router_element.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {GooglePhotosAlbum, TopicSource, WallpaperCollection} from './personalization_app.mojom-webui.js';
+import {GooglePhotosAlbum, TopicSource, WallpaperCollection} from '../personalization_app.mojom-webui.js';
+
+import {isAmbientModeAllowed} from './load_time_booleans.js';
 import {logPersonalizationPathUMA} from './personalization_metrics_logger.js';
 import {getTemplate} from './personalization_router_element.html.js';
+import {WallpaperObserver} from './wallpaper/wallpaper_observer.js';
 
 export enum Paths {
   AMBIENT = '/ambient',
@@ -26,11 +31,22 @@ export enum Paths {
   GOOGLE_PHOTOS_COLLECTION = '/wallpaper/google-photos',
   LOCAL_COLLECTION = '/wallpaper/local',
   ROOT = '/',
+  SEA_PEN_COLLECTION = '/wallpaper/sea-pen',
+  SEA_PEN_RESULTS = '/wallpaper/sea-pen/results',
   USER = '/user',
 }
 
-export function isAmbientModeAllowed(): boolean {
-  return loadTimeData.getBoolean('isAmbientModeAllowed');
+export enum ScrollableTarget {
+  TOPIC_SOURCE_LIST = 'topic-source-list'
+}
+
+export interface QueryParams extends SeaPenQueryParams {
+  id?: string;
+  googlePhotosAlbumId?: string;
+  // If present, expected to always be 'true'.
+  googlePhotosAlbumIsShared?: 'true';
+  topicSource?: string;
+  scrollTo?: ScrollableTarget;
 }
 
 export function isPathValid(path: string|null): boolean {
@@ -49,7 +65,15 @@ export function isAmbientPathNotAllowed(path: string|null): boolean {
   return isAmbientPath(path) && !isAmbientModeAllowed();
 }
 
-export class PersonalizationRouter extends PolymerElement {
+export function isSeaPenPath(path: string|null): boolean {
+  return !!path && path.startsWith(Paths.SEA_PEN_COLLECTION);
+}
+
+export function isSeaPenPathNotAllowed(path: string|null): boolean {
+  return isSeaPenPath(path) && !isSeaPenEnabled();
+}
+
+export class PersonalizationRouterElement extends PolymerElement {
   static get is() {
     return 'personalization-router';
   }
@@ -72,16 +96,23 @@ export class PersonalizationRouter extends PolymerElement {
       queryParams_: {
         type: Object,
       },
+
+      seaPenBasePath_: {
+        type: String,
+        value() {
+          return Paths.SEA_PEN_COLLECTION;
+        },
+      },
     };
   }
   private path_: string;
   private query_: string;
-  private queryParams_:
-      {id?: string, googlePhotosAlbumId?: string, topicSource?: string};
+  private queryParams_: QueryParams;
+  private seaPenBasePath_: string;
 
-  static instance(): PersonalizationRouter {
-    return document.querySelector(PersonalizationRouter.is) as
-        PersonalizationRouter;
+  static instance(): PersonalizationRouterElement {
+    return document.querySelector(PersonalizationRouterElement.is) as
+        PersonalizationRouterElement;
   }
 
   static reloadAtRoot() {
@@ -104,6 +135,7 @@ export class PersonalizationRouter extends PolymerElement {
 
   override connectedCallback() {
     super.connectedCallback();
+    WallpaperObserver.initWallpaperObserverIfNeeded();
   }
 
   get collectionId() {
@@ -125,7 +157,13 @@ export class PersonalizationRouter extends PolymerElement {
   /** Navigate to a specific album in the Google Photos collection page. */
   selectGooglePhotosAlbum(album: GooglePhotosAlbum) {
     this.goToRoute(
-        Paths.GOOGLE_PHOTOS_COLLECTION, {googlePhotosAlbumId: album.id});
+        Paths.GOOGLE_PHOTOS_COLLECTION,
+        {
+          googlePhotosAlbumId: album.id,
+          // Only include key if album is shared.
+          ...(album.isShared ? {googlePhotosAlbumIsShared: 'true'} : false),
+        },
+    );
   }
 
   /** Navigate to albums subpage of specific topic source. */
@@ -133,7 +171,7 @@ export class PersonalizationRouter extends PolymerElement {
     this.goToRoute(Paths.AMBIENT_ALBUMS, {topicSource: topicSource.toString()});
   }
 
-  goToRoute(path: Paths, queryParams: Object = {}) {
+  goToRoute(path: Paths, queryParams: QueryParams = {}) {
     this.setProperties({path_: path, queryParams_: queryParams});
   }
 
@@ -152,7 +190,12 @@ export class PersonalizationRouter extends PolymerElement {
   }
 
   private shouldShowWallpaperSubpage_(path: string|null): boolean {
-    return !!path && path.startsWith(Paths.COLLECTIONS);
+    return !!path && path.startsWith(Paths.COLLECTIONS) &&
+        !path.startsWith(Paths.SEA_PEN_COLLECTION);
+  }
+
+  private shouldShowSeaPen_(path: string|null): boolean {
+    return isSeaPenEnabled() && isSeaPenPath(path);
   }
 
   private shouldShowBreadcrumb_(path: string|null): boolean {
@@ -167,7 +210,8 @@ export class PersonalizationRouter extends PolymerElement {
     // Navigates to the top of the subpage.
     window.scrollTo(0, 0);
 
-    if (!isPathValid(path) || isAmbientPathNotAllowed(path)) {
+    if (!isPathValid(path) || isAmbientPathNotAllowed(path) ||
+        isSeaPenPathNotAllowed(path)) {
       // Reset the path to root.
       this.setProperties({path_: Paths.ROOT, queryParams_: {}});
     }
@@ -198,6 +242,14 @@ export class PersonalizationRouter extends PolymerElement {
         }
         break;
       }
+      case Paths.GOOGLE_PHOTOS_COLLECTION: {
+        document.title = loadTimeData.getString('googlePhotosLabel');
+        break;
+      }
+      case Paths.LOCAL_COLLECTION: {
+        document.title = loadTimeData.getString('myImagesLabel');
+        break;
+      }
       case Paths.USER:
         document.title = loadTimeData.getString('avatarLabel');
         break;
@@ -205,4 +257,5 @@ export class PersonalizationRouter extends PolymerElement {
   }
 }
 
-customElements.define(PersonalizationRouter.is, PersonalizationRouter);
+customElements.define(
+    PersonalizationRouterElement.is, PersonalizationRouterElement);

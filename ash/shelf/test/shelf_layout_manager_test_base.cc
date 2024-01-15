@@ -13,7 +13,7 @@
 #include "ash/wm/window_state.h"
 #include "ash/wm/wm_event.h"
 #include "ash/wm/workspace_controller.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chromeos/ui/base/window_properties.h"
 #include "components/prefs/pref_service.h"
 #include "ui/aura/client/aura_constants.h"
@@ -171,7 +171,7 @@ class ShelfDragCallback {
 
 void ShelfLayoutManagerTestBase::SetState(ShelfLayoutManager* layout_manager,
                                           ShelfVisibilityState state) {
-  layout_manager->SetState(state);
+  layout_manager->SetState(state, /*force_layout=*/false);
 }
 
 void ShelfLayoutManagerTestBase::UpdateAutoHideStateNow() {
@@ -193,7 +193,8 @@ aura::Window* ShelfLayoutManagerTestBase::CreateTestWindowInParent(
   window->SetProperty(aura::client::kShowStateKey, ui::SHOW_STATE_NORMAL);
   window->SetType(aura::client::WINDOW_TYPE_NORMAL);
   window->Init(ui::LAYER_TEXTURED);
-  aura::client::ParentWindowWithContext(window, root_window, gfx::Rect());
+  aura::client::ParentWindowWithContext(window, root_window, gfx::Rect(),
+                                        display::kInvalidDisplayId);
   return window;
 }
 
@@ -358,7 +359,7 @@ void ShelfLayoutManagerTestBase::MouseDragShelfTo(const gfx::Point& start,
 }
 
 // Move mouse to show Shelf in auto-hide mode.
-void ShelfLayoutManagerTestBase::MouseMouseToShowAutoHiddenShelf() {
+void ShelfLayoutManagerTestBase::MoveMouseToShowAutoHiddenShelf() {
   display::Display display = display::Screen::GetScreen()->GetPrimaryDisplay();
   const int display_bottom = display.bounds().bottom();
   GetEventGenerator()->MoveMouseTo(1, display_bottom - 1);
@@ -452,7 +453,7 @@ void ShelfLayoutManagerTestBase::RunGestureDragTests(
   WindowState* window_state = WindowState::Get(window);
   window_state->SetHideShelfWhenFullscreen(false);
   window->SetProperty(kImmersiveIsActive, true);
-  layout_manager->UpdateVisibilityState();
+  layout_manager->UpdateVisibilityState(/*force_layout=*/false);
   EXPECT_EQ(SHELF_AUTO_HIDE, shelf->GetVisibilityState());
   EXPECT_EQ(SHELF_AUTO_HIDE_HIDDEN, shelf->GetAutoHideState());
   EXPECT_EQ(ShelfAutoHideBehavior::kNever, shelf->auto_hide_behavior());
@@ -614,7 +615,7 @@ void ShelfLayoutManagerTestBase::RunGestureDragTests(
   // is fullscreen. (eg browser immersive fullscreen).
   widget->SetFullscreen(true);
   WindowState::Get(window)->SetHideShelfWhenFullscreen(false);
-  layout_manager->UpdateVisibilityState();
+  layout_manager->UpdateVisibilityState(/*force_layout=*/false);
 
   gfx::Rect window_bounds_fullscreen = window->bounds();
   EXPECT_TRUE(widget->IsFullscreen());
@@ -658,7 +659,7 @@ void ShelfLayoutManagerTestBase::RunGestureDragTests(
   // with or without immersive browser fullscreen).
   WindowState::Get(window)->SetHideShelfWhenFullscreen(true);
 
-  layout_manager->UpdateVisibilityState();
+  layout_manager->UpdateVisibilityState(/*force_layout=*/false);
   EXPECT_EQ(SHELF_HIDDEN, shelf->GetVisibilityState());
   EXPECT_EQ(ShelfAutoHideBehavior::kAlways, shelf->auto_hide_behavior());
 

@@ -6,12 +6,17 @@
 
 #include <utility>
 
+#include "components/attribution_reporting/suitable_origin.h"
+
 namespace content {
 
-AttributionInfo::AttributionInfo(StoredSource source,
-                                 base::Time time,
-                                 absl::optional<uint64_t> debug_key)
-    : source(std::move(source)), time(time), debug_key(debug_key) {}
+AttributionInfo::AttributionInfo(
+    base::Time time,
+    std::optional<uint64_t> debug_key,
+    attribution_reporting::SuitableOrigin context_origin)
+    : time(time),
+      debug_key(debug_key),
+      context_origin(std::move(context_origin)) {}
 
 AttributionInfo::~AttributionInfo() = default;
 

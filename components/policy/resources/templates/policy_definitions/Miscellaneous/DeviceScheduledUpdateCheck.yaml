@@ -15,8 +15,9 @@ features:
   dynamic_refresh: true
   per_profile: false
 owners:
-- abhishekbh@chromium.org
-- pmarko@chromium.org
+- asumaneev@google.com
+- crisguerrero@google.com
+- chromeos-commercial-remote-management@google.com
 schema:
   properties:
     day_of_month:
@@ -46,8 +47,6 @@ schema:
   - update_check_time
   - frequency
   type: object
-supported_chrome_os_management:
-- google_cloud
 supported_on:
 - chrome_os:75-
 tags: []

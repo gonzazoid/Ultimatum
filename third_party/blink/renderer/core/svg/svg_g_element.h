@@ -33,10 +33,10 @@ class CORE_EXPORT SVGGElement final : public SVGGraphicsElement {
   explicit SVGGElement(Document&, ConstructionType = kCreateSVGElement);
 
  protected:
-  LayoutObject* CreateLayoutObject(const ComputedStyle&, LegacyLayout) override;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) override;
 
  private:
-  bool LayoutObjectIsNeeded(const ComputedStyle&) const override;
+  bool LayoutObjectIsNeeded(const DisplayStyle&) const override;
 };
 
 }  // namespace blink

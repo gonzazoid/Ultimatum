@@ -5,29 +5,41 @@
 #include "content/browser/interest_group/interest_group_manager_impl.h"
 
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/containers/flat_set.h"
 #include "base/containers/span.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
+#include "base/json/values_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/observer_list.h"
 #include "base/strings/strcat.h"
-#include "base/task/task_traits.h"
-#include "base/task/thread_pool.h"
-#include "base/threading/sequence_bound.h"
+#include "base/strings/to_string.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
+#include "base/types/expected.h"
+#include "base/unguessable_token.h"
+#include "content/browser/devtools/devtools_instrumentation.h"
+#include "content/browser/devtools/network_service_devtools_observer.h"
+#include "content/browser/interest_group/interest_group_caching_storage.h"
 #include "content/browser/interest_group/interest_group_storage.h"
 #include "content/browser/interest_group/interest_group_update.h"
-#include "content/services/auction_worklet/public/mojom/bidder_worklet.mojom.h"
+#include "content/browser/renderer_host/frame_tree_node.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
+#include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/mojom/client_security_state.mojom.h"
+#include "services/network/public/mojom/url_response_head.mojom.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/interest_group/interest_group.h"
 #include "url/gurl.h"
+#include "url/origin.h"
 
 namespace content {
 
@@ -66,15 +78,31 @@ constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
             "These requests are triggered by a website."
         })");
 
-// Makes an uncredentialed request and creates a SimpleURLLoader for it. Returns
-// the SimpleURLLoader which will be used to report the result of an in-browser
-// interest group based ad auction to an auction participant.
-std::unique_ptr<network::SimpleURLLoader> BuildSimpleUrlLoader(
-    const GURL& url,
+mojo::PendingRemote<network::mojom::DevToolsObserver> CreateDevtoolsObserver(
+    int frame_tree_node_id) {
+  if (frame_tree_node_id != FrameTreeNode::kFrameTreeNodeInvalidId) {
+    FrameTreeNode* initiator_frame_tree_node =
+        FrameTreeNode::GloballyFindByID(frame_tree_node_id);
+
+    if (initiator_frame_tree_node) {
+      return NetworkServiceDevToolsObserver::MakeSelfOwned(
+          initiator_frame_tree_node);
+    }
+  }
+  return mojo::PendingRemote<network::mojom::DevToolsObserver>();
+}
+
+// Creates an uncredentialed request to use for the SimpleURLLoader and
+// reporting to devtools.
+std::unique_ptr<network::ResourceRequest> BuildUncredentialedRequest(
+    GURL url,
     const url::Origin& frame_origin,
-    network::mojom::ClientSecurityStatePtr client_security_state) {
+    int frame_tree_node_id,
+    const network::mojom::ClientSecurityState& client_security_state) {
   auto resource_request = std::make_unique<network::ResourceRequest>();
-  resource_request->url = url;
+  resource_request->url = std::move(url);
+  resource_request->devtools_request_id =
+      base::UnguessableToken::Create().ToString();
   resource_request->redirect_mode = network::mojom::RedirectMode::kError;
   resource_request->credentials_mode = network::mojom::CredentialsMode::kOmit;
   resource_request->request_initiator = frame_origin;
@@ -82,27 +110,71 @@ std::unique_ptr<network::SimpleURLLoader> BuildSimpleUrlLoader(
   resource_request->trusted_params->isolation_info =
       net::IsolationInfo::CreateTransient();
   resource_request->trusted_params->client_security_state =
-      std::move(client_security_state);
+      client_security_state.Clone();
+
+  bool network_instrumentation_enabled = false;
+  if (frame_tree_node_id != FrameTreeNode::kFrameTreeNodeInvalidId) {
+    FrameTreeNode* frame_tree_node =
+        FrameTreeNode::GloballyFindByID(frame_tree_node_id);
+
+    if (frame_tree_node != nullptr) {
+      devtools_instrumentation::ApplyAuctionNetworkRequestOverrides(
+          frame_tree_node, resource_request.get(),
+          &network_instrumentation_enabled);
+    }
+  }
+  if (network_instrumentation_enabled) {
+    resource_request->enable_load_timing = true;
+    resource_request->trusted_params->devtools_observer =
+        CreateDevtoolsObserver(frame_tree_node_id);
+  }
+
+  return resource_request;
+}
+
+// Makes a SimpleURLLoader for a given request. Returns the SimpleURLLoader
+// which will be used to report the result of an in-browser interest group based
+// ad auction to an auction participant.
+std::unique_ptr<network::SimpleURLLoader> BuildSimpleUrlLoader(
+    std::unique_ptr<network::ResourceRequest> resource_request) {
   auto simple_url_loader = network::SimpleURLLoader::Create(
       std::move(resource_request), kTrafficAnnotation);
   simple_url_loader->SetTimeoutDuration(base::Seconds(30));
+
+  simple_url_loader->SetAllowHttpErrorResults(true);
+
   return simple_url_loader;
+}
+
+std::vector<InterestGroupManager::InterestGroupDataKey>
+ConvertOwnerJoinerPairsToDataKeys(
+    std::vector<std::pair<url::Origin, url::Origin>> owner_joiner_pairs) {
+  std::vector<InterestGroupManager::InterestGroupDataKey> data_keys;
+  for (auto& key : owner_joiner_pairs) {
+    data_keys.emplace_back(
+        InterestGroupManager::InterestGroupDataKey{key.first, key.second});
+  }
+  return data_keys;
 }
 }  // namespace
 
 InterestGroupManagerImpl::ReportRequest::ReportRequest() = default;
 InterestGroupManagerImpl::ReportRequest::~ReportRequest() = default;
 
+InterestGroupManagerImpl::AdAuctionDataLoaderState::AdAuctionDataLoaderState()
+    : start_time(base::TimeTicks::Now()) {}
+InterestGroupManagerImpl::AdAuctionDataLoaderState::AdAuctionDataLoaderState(
+    AdAuctionDataLoaderState&& state) = default;
+InterestGroupManagerImpl::AdAuctionDataLoaderState::
+    ~AdAuctionDataLoaderState() = default;
+
 InterestGroupManagerImpl::InterestGroupManagerImpl(
     const base::FilePath& path,
     bool in_memory,
     ProcessMode process_mode,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-    KAnonymityServiceDelegate* k_anonymity_service)
-    : impl_(base::ThreadPool::CreateSequencedTaskRunner(
-                {base::MayBlock(), base::TaskPriority::USER_VISIBLE,
-                 base::TaskShutdownBehavior::BLOCK_SHUTDOWN}),
-            in_memory ? base::FilePath() : path),
+    GetKAnonymityServiceDelegateCallback k_anonymity_service_callback)
+    : caching_storage_(path, in_memory),
       auction_process_manager_(
           base::WrapUnique(process_mode == ProcessMode::kDedicated
                                ? static_cast<AuctionProcessManager*>(
@@ -111,7 +183,7 @@ InterestGroupManagerImpl::InterestGroupManagerImpl(
       update_manager_(this, std::move(url_loader_factory)),
       k_anonymity_manager_(std::make_unique<InterestGroupKAnonymityManager>(
           this,
-          k_anonymity_service)),
+          std::move(k_anonymity_service_callback))),
       max_active_report_requests_(kMaxActiveReportRequests),
       max_report_queue_length_(kMaxReportQueueLength),
       reporting_interval_(kReportingInterval),
@@ -121,8 +193,21 @@ InterestGroupManagerImpl::~InterestGroupManagerImpl() = default;
 
 void InterestGroupManagerImpl::GetAllInterestGroupJoiningOrigins(
     base::OnceCallback<void(std::vector<url::Origin>)> callback) {
-  impl_.AsyncCall(&InterestGroupStorage::GetAllInterestGroupJoiningOrigins)
-      .Then(std::move(callback));
+  caching_storage_.GetAllInterestGroupJoiningOrigins(std::move(callback));
+}
+
+void InterestGroupManagerImpl::GetAllInterestGroupDataKeys(
+    base::OnceCallback<void(std::vector<InterestGroupDataKey>)> callback) {
+  caching_storage_.GetAllInterestGroupOwnerJoinerPairs(
+      base::BindOnce(&ConvertOwnerJoinerPairsToDataKeys)
+          .Then(std::move(callback)));
+}
+
+void InterestGroupManagerImpl::RemoveInterestGroupsByDataKey(
+    InterestGroupDataKey data_key,
+    base::OnceClosure callback) {
+  caching_storage_.RemoveInterestGroupsMatchingOwnerAndJoiner(
+      data_key.owner, data_key.joining_origin, std::move(callback));
 }
 
 void InterestGroupManagerImpl::CheckPermissionsAndJoinInterestGroup(
@@ -132,6 +217,7 @@ void InterestGroupManagerImpl::CheckPermissionsAndJoinInterestGroup(
     const net::NetworkIsolationKey& network_isolation_key,
     bool report_result_only,
     network::mojom::URLLoaderFactory& url_loader_factory,
+    AreReportingOriginsAttestedCallback attestation_callback,
     blink::mojom::AdAuctionService::JoinInterestGroupCallback callback) {
   url::Origin interest_group_owner = group.owner;
   permissions_checker_.CheckPermissions(
@@ -140,7 +226,8 @@ void InterestGroupManagerImpl::CheckPermissionsAndJoinInterestGroup(
       base::BindOnce(
           &InterestGroupManagerImpl::OnJoinInterestGroupPermissionsChecked,
           base::Unretained(this), std::move(group), joining_url,
-          report_result_only, std::move(callback)));
+          report_result_only, std::move(attestation_callback),
+          std::move(callback)));
 }
 
 void InterestGroupManagerImpl::CheckPermissionsAndLeaveInterestGroup(
@@ -160,124 +247,188 @@ void InterestGroupManagerImpl::CheckPermissionsAndLeaveInterestGroup(
           std::move(callback)));
 }
 
+void InterestGroupManagerImpl::
+    CheckPermissionsAndClearOriginJoinedInterestGroups(
+        const url::Origin& owner,
+        const std::vector<std::string>& interest_groups_to_keep,
+        const url::Origin& main_frame_origin,
+        const url::Origin& frame_origin,
+        const net::NetworkIsolationKey& network_isolation_key,
+        bool report_result_only,
+        network::mojom::URLLoaderFactory& url_loader_factory,
+        blink::mojom::AdAuctionService::LeaveInterestGroupCallback callback) {
+  permissions_checker_.CheckPermissions(
+      InterestGroupPermissionsChecker::Operation::kLeave, frame_origin, owner,
+      network_isolation_key, url_loader_factory,
+      base::BindOnce(&InterestGroupManagerImpl::
+                         OnClearOriginJoinedInterestGroupsPermissionsChecked,
+                     base::Unretained(this), owner,
+                     std::set<std::string>(interest_groups_to_keep.begin(),
+                                           interest_groups_to_keep.end()),
+                     main_frame_origin, report_result_only,
+                     std::move(callback)));
+}
+
 void InterestGroupManagerImpl::JoinInterestGroup(blink::InterestGroup group,
                                                  const GURL& joining_url) {
-  NotifyInterestGroupAccessed(InterestGroupObserverInterface::kJoin,
-                              group.owner.Serialize(), group.name);
+  // Create notify callback first.
+  base::OnceClosure notify_callback = CreateNotifyInterestGroupAccessedCallback(
+      InterestGroupObserver::kJoin, group.owner, group.name);
+
   blink::InterestGroupKey group_key(group.owner, group.name);
-  impl_.AsyncCall(&InterestGroupStorage::JoinInterestGroup)
-      .WithArgs(std::move(group), std::move(joining_url));
+  caching_storage_.JoinInterestGroup(group, joining_url,
+                                     std::move(notify_callback));
   // This needs to happen second so that the DB row is created.
-  GetInterestGroup(
-      group_key,
-      base::BindOnce(
-          &InterestGroupManagerImpl::
-              QueueKAnonymityUpdateForInterestGroupFromJoinInterestGroup,
-          weak_factory_.GetWeakPtr()));
+  QueueKAnonymityUpdateForInterestGroup(group_key);
 }
 
 void InterestGroupManagerImpl::LeaveInterestGroup(
     const blink::InterestGroupKey& group_key,
     const ::url::Origin& main_frame) {
-  NotifyInterestGroupAccessed(InterestGroupObserverInterface::kLeave,
-                              group_key.owner.Serialize(), group_key.name);
-  impl_.AsyncCall(&InterestGroupStorage::LeaveInterestGroup)
-      .WithArgs(group_key, main_frame);
+  caching_storage_.LeaveInterestGroup(
+      group_key, main_frame,
+      CreateNotifyInterestGroupAccessedCallback(
+          InterestGroupObserver::kLeave, group_key.owner, group_key.name));
+}
+
+void InterestGroupManagerImpl::ClearOriginJoinedInterestGroups(
+    const url::Origin& owner,
+    std::set<std::string> interest_groups_to_keep,
+    url::Origin main_frame_origin) {
+  caching_storage_.ClearOriginJoinedInterestGroups(
+      owner, interest_groups_to_keep, main_frame_origin,
+      base::BindOnce(
+          &InterestGroupManagerImpl::OnClearOriginJoinedInterestGroupsComplete,
+          weak_factory_.GetWeakPtr(), owner));
+}
+
+void InterestGroupManagerImpl::OnClearOriginJoinedInterestGroupsComplete(
+    const url::Origin& owner,
+    std::vector<std::string> left_interest_group_names) {
+  for (const auto& name : left_interest_group_names) {
+    NotifyInterestGroupAccessed(InterestGroupObserver::kClear, owner, name);
+  }
 }
 
 void InterestGroupManagerImpl::UpdateInterestGroupsOfOwner(
     const url::Origin& owner,
-    network::mojom::ClientSecurityStatePtr client_security_state) {
-  update_manager_.UpdateInterestGroupsOfOwner(owner,
-                                              std::move(client_security_state));
+    network::mojom::ClientSecurityStatePtr client_security_state,
+    AreReportingOriginsAttestedCallback callback) {
+  update_manager_.UpdateInterestGroupsOfOwner(
+      owner, std::move(client_security_state), std::move(callback));
 }
 
 void InterestGroupManagerImpl::UpdateInterestGroupsOfOwners(
-    base::span<url::Origin> owners,
-    network::mojom::ClientSecurityStatePtr client_security_state) {
+    std::vector<url::Origin> owners,
+    network::mojom::ClientSecurityStatePtr client_security_state,
+    AreReportingOriginsAttestedCallback callback) {
   update_manager_.UpdateInterestGroupsOfOwners(
-      owners, std::move(client_security_state));
+      owners, std::move(client_security_state), std::move(callback));
+}
+
+void InterestGroupManagerImpl::UpdateInterestGroupsOfOwnersWithDelay(
+    std::vector<url::Origin> owners,
+    network::mojom::ClientSecurityStatePtr client_security_state,
+    AreReportingOriginsAttestedCallback callback,
+    const base::TimeDelta& delay) {
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(&InterestGroupManagerImpl::UpdateInterestGroupsOfOwners,
+                     weak_factory_.GetWeakPtr(), std::move(owners),
+                     std::move(client_security_state), std::move(callback)),
+      delay);
 }
 
 void InterestGroupManagerImpl::RecordInterestGroupBids(
     const blink::InterestGroupSet& group_keys) {
-  for (const auto& group_key : group_keys) {
-    NotifyInterestGroupAccessed(InterestGroupObserverInterface::kBid,
-                                group_key.owner.Serialize(), group_key.name);
+  if (group_keys.empty()) {
+    return;
   }
-  impl_.AsyncCall(&InterestGroupStorage::RecordInterestGroupBids)
-      .WithArgs(group_keys);
+  caching_storage_.RecordInterestGroupBids(group_keys);
 }
 
 void InterestGroupManagerImpl::RecordInterestGroupWin(
     const blink::InterestGroupKey& group_key,
     const std::string& ad_json) {
-  NotifyInterestGroupAccessed(InterestGroupObserverInterface::kWin,
-                              group_key.owner.Serialize(), group_key.name);
-  impl_.AsyncCall(&InterestGroupStorage::RecordInterestGroupWin)
-      .WithArgs(group_key, std::move(ad_json));
+  caching_storage_.RecordInterestGroupWin(group_key, ad_json);
 }
 
-void InterestGroupManagerImpl::RegisterAdAsWon(const GURL& render_url) {
-  k_anonymity_manager_->RegisterAdAsWon(render_url);
+void InterestGroupManagerImpl::RecordDebugReportLockout(
+    base::Time last_report_sent_time) {
+  caching_storage_.RecordDebugReportLockout(last_report_sent_time);
+}
+
+void InterestGroupManagerImpl::RecordDebugReportCooldown(
+    const url::Origin& origin,
+    base::Time cooldown_start,
+    DebugReportCooldownType cooldown_type) {
+  caching_storage_.RecordDebugReportCooldown(origin, cooldown_start,
+                                             cooldown_type);
+}
+
+void InterestGroupManagerImpl::RegisterAdKeysAsJoined(
+    base::flat_set<std::string> keys) {
+  k_anonymity_manager_->RegisterAdKeysAsJoined(std::move(keys));
 }
 
 void InterestGroupManagerImpl::GetInterestGroup(
     const url::Origin& owner,
     const std::string& name,
-    base::OnceCallback<void(absl::optional<StorageInterestGroup>)> callback) {
+    base::OnceCallback<void(std::optional<SingleStorageInterestGroup>)>
+        callback) {
   GetInterestGroup(blink::InterestGroupKey(owner, name), std::move(callback));
 }
 void InterestGroupManagerImpl::GetInterestGroup(
     const blink::InterestGroupKey& group_key,
-    base::OnceCallback<void(absl::optional<StorageInterestGroup>)> callback) {
-  impl_.AsyncCall(&InterestGroupStorage::GetInterestGroup)
-      .WithArgs(group_key)
-      .Then(std::move(callback));
+    base::OnceCallback<void(std::optional<SingleStorageInterestGroup>)>
+        callback) {
+  caching_storage_.GetInterestGroup(group_key, std::move(callback));
 }
 
 void InterestGroupManagerImpl::GetAllInterestGroupOwners(
     base::OnceCallback<void(std::vector<url::Origin>)> callback) {
-  impl_.AsyncCall(&InterestGroupStorage::GetAllInterestGroupOwners)
-      .Then(std::move(callback));
+  caching_storage_.GetAllInterestGroupOwners(std::move(callback));
 }
 
 void InterestGroupManagerImpl::GetInterestGroupsForOwner(
     const url::Origin& owner,
-    base::OnceCallback<void(std::vector<StorageInterestGroup>)> callback) {
-  impl_.AsyncCall(&InterestGroupStorage::GetInterestGroupsForOwner)
-      .WithArgs(owner)
-      .Then(std::move(callback));
+    base::OnceCallback<void(scoped_refptr<StorageInterestGroups>)> callback) {
+  caching_storage_.GetInterestGroupsForOwner(
+      owner,
+      base::BindOnce(&InterestGroupManagerImpl::OnGetInterestGroupsComplete,
+                     weak_factory_.GetWeakPtr(), std::move(callback)));
 }
 
 void InterestGroupManagerImpl::DeleteInterestGroupData(
     StoragePartition::StorageKeyMatcherFunction storage_key_matcher,
     base::OnceClosure completion_callback) {
-  impl_.AsyncCall(&InterestGroupStorage::DeleteInterestGroupData)
-      .WithArgs(std::move(storage_key_matcher))
-      .Then(std::move(completion_callback));
+  caching_storage_.DeleteInterestGroupData(storage_key_matcher,
+                                           std::move(completion_callback));
 }
 
 void InterestGroupManagerImpl::DeleteAllInterestGroupData(
     base::OnceClosure completion_callback) {
-  impl_.AsyncCall(&InterestGroupStorage::DeleteAllInterestGroupData)
-      .Then(std::move(completion_callback));
+  caching_storage_.DeleteAllInterestGroupData(std::move(completion_callback));
 }
 
 void InterestGroupManagerImpl::GetLastMaintenanceTimeForTesting(
     base::RepeatingCallback<void(base::Time)> callback) const {
-  impl_.AsyncCall(&InterestGroupStorage::GetLastMaintenanceTimeForTesting)
-      .Then(std::move(callback));
+  caching_storage_.GetLastMaintenanceTimeForTesting(  // IN-TEST
+      std::move(callback));
 }
 
 void InterestGroupManagerImpl::EnqueueReports(
-    const std::vector<GURL>& report_urls,
-    const std::vector<GURL>& debug_win_report_urls,
-    const std::vector<GURL>& debug_loss_report_urls,
+    ReportType report_type,
+    std::vector<GURL> report_urls,
+    int frame_tree_node_id,
     const url::Origin& frame_origin,
-    network::mojom::ClientSecurityStatePtr client_security_state,
+    const network::mojom::ClientSecurityState& client_security_state,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory) {
-  // For memory usage reasons, purge the queue if it has no less than
+  if (report_urls.empty()) {
+    return;
+  }
+
+  // For memory usage reasons, purge the queue if it has at least
   // `max_report_queue_length_` entries at the time we're about to add new
   // entries.
   if (report_requests_.size() >=
@@ -285,24 +436,42 @@ void InterestGroupManagerImpl::EnqueueReports(
     report_requests_.clear();
   }
 
-  HandleReports(std::move(report_urls), frame_origin,
-                client_security_state.Clone(), "SendReportToReport",
-                url_loader_factory);
-  HandleReports(std::move(debug_loss_report_urls), frame_origin,
-                client_security_state.Clone(), "DebugLossReport",
-                url_loader_factory);
-  HandleReports(std::move(debug_win_report_urls), frame_origin,
-                client_security_state.Clone(), "DebugWinReport",
-                url_loader_factory);
-  if (!report_requests_.empty())
-    SendReports();
+  const char* report_type_name;
+  switch (report_type) {
+    case ReportType::kSendReportTo:
+      report_type_name = "SendReportToReport";
+      break;
+    case ReportType::kDebugWin:
+      report_type_name = "DebugWinReport";
+      break;
+    case ReportType::kDebugLoss:
+      report_type_name = "DebugLossReport";
+      break;
+  }
+
+  for (GURL& report_url : report_urls) {
+    auto report_request = std::make_unique<ReportRequest>();
+    report_request->request_url_size_bytes = report_url.spec().size();
+    report_request->report_url = std::move(report_url);
+    report_request->frame_origin = frame_origin;
+    report_request->client_security_state = client_security_state;
+    report_request->name = report_type_name;
+    report_request->url_loader_factory = url_loader_factory;
+    report_request->frame_tree_node_id = frame_tree_node_id;
+    report_requests_.emplace_back(std::move(report_request));
+  }
+
+  while (!report_requests_.empty() &&
+         num_active_ < max_active_report_requests_) {
+    ++num_active_;
+    TrySendingOneReport();
+  }
 }
 
 void InterestGroupManagerImpl::SetInterestGroupPriority(
     const blink::InterestGroupKey& group_key,
     double priority) {
-  impl_.AsyncCall(&InterestGroupStorage::SetInterestGroupPriority)
-      .WithArgs(group_key, priority);
+  caching_storage_.SetInterestGroupPriority(group_key, priority);
 }
 
 void InterestGroupManagerImpl::UpdateInterestGroupPriorityOverrides(
@@ -310,8 +479,8 @@ void InterestGroupManagerImpl::UpdateInterestGroupPriorityOverrides(
     base::flat_map<std::string,
                    auction_worklet::mojom::PrioritySignalsDoublePtr>
         update_priority_signals_overrides) {
-  impl_.AsyncCall(&InterestGroupStorage::UpdateInterestGroupPriorityOverrides)
-      .WithArgs(group_key, std::move(update_priority_signals_overrides));
+  caching_storage_.UpdateInterestGroupPriorityOverrides(
+      group_key, std::move(update_priority_signals_overrides));
 }
 
 void InterestGroupManagerImpl::ClearPermissionsCache() {
@@ -319,34 +488,89 @@ void InterestGroupManagerImpl::ClearPermissionsCache() {
 }
 
 void InterestGroupManagerImpl::QueueKAnonymityUpdateForInterestGroup(
-    const StorageInterestGroup& group) {
-  k_anonymity_manager_->QueryKAnonymityForInterestGroup(group);
-  k_anonymity_manager_->RegisterInterestGroupAsJoined(group.interest_group);
+    const blink::InterestGroupKey& group_key) {
+  k_anonymity_manager_->QueryKAnonymityForInterestGroup(group_key);
 }
 
 void InterestGroupManagerImpl::UpdateKAnonymity(
     const StorageInterestGroup::KAnonymityData& data) {
-  impl_.AsyncCall(&InterestGroupStorage::UpdateKAnonymity).WithArgs(data);
+  caching_storage_.UpdateKAnonymity(data);
 }
 
 void InterestGroupManagerImpl::GetLastKAnonymityReported(
     const std::string& key,
-    base::OnceCallback<void(absl::optional<base::Time>)> callback) {
-  impl_.AsyncCall(&InterestGroupStorage::GetLastKAnonymityReported)
-      .WithArgs(key)
-      .Then(std::move(callback));
+    base::OnceCallback<void(std::optional<base::Time>)> callback) {
+  caching_storage_.GetLastKAnonymityReported(key, std::move(callback));
 }
 
 void InterestGroupManagerImpl::UpdateLastKAnonymityReported(
     const std::string& key) {
-  impl_.AsyncCall(&InterestGroupStorage::UpdateLastKAnonymityReported)
-      .WithArgs(key);
+  caching_storage_.UpdateLastKAnonymityReported(key);
+}
+
+void InterestGroupManagerImpl::GetInterestGroupAdAuctionData(
+    url::Origin top_level_origin,
+    base::Uuid generation_id,
+    base::OnceCallback<void(BiddingAndAuctionData)> callback) {
+  AdAuctionDataLoaderState state;
+  state.serializer.SetPublisher(top_level_origin.host());
+  state.serializer.SetGenerationId(std::move(generation_id));
+  state.callback = std::move(callback);
+  GetAllInterestGroupOwners(base::BindOnce(
+      &InterestGroupManagerImpl::LoadNextInterestGroupAdAuctionData,
+      weak_factory_.GetWeakPtr(), std::move(state)));
+}
+
+void InterestGroupManagerImpl::LoadNextInterestGroupAdAuctionData(
+    AdAuctionDataLoaderState state,
+    std::vector<url::Origin> owners) {
+  if (!owners.empty()) {
+    url::Origin next_owner = std::move(owners.back());
+    owners.pop_back();
+    GetInterestGroupsForOwner(
+        next_owner,
+        base::BindOnce(
+            &InterestGroupManagerImpl::OnLoadedNextInterestGroupAdAuctionData,
+            weak_factory_.GetWeakPtr(), std::move(state), std::move(owners),
+            next_owner));
+    return;
+  }
+  // Loading is finished.
+  OnAdAuctionDataLoadComplete(std::move(state));
+}
+
+void InterestGroupManagerImpl::OnLoadedNextInterestGroupAdAuctionData(
+    AdAuctionDataLoaderState state,
+    std::vector<url::Origin> owners,
+    url::Origin owner,
+    scoped_refptr<StorageInterestGroups> groups) {
+  state.serializer.AddGroups(std::move(owner), std::move(groups));
+  LoadNextInterestGroupAdAuctionData(std::move(state), std::move(owners));
+}
+
+void InterestGroupManagerImpl::OnAdAuctionDataLoadComplete(
+    AdAuctionDataLoaderState state) {
+  BiddingAndAuctionData data = state.serializer.Build();
+  base::UmaHistogramTimes(
+      "Ads.InterestGroup.ServerAuction.AdAuctionDataLoadTime",
+      base::TimeTicks::Now() - state.start_time);
+  std::move(state.callback).Run(std::move(data));
+}
+
+void InterestGroupManagerImpl::GetBiddingAndAuctionServerKey(
+    network::mojom::URLLoaderFactory* loader,
+    std::optional<url::Origin> coordinator,
+    base::OnceCallback<void(
+        base::expected<BiddingAndAuctionServerKey, std::string>)> callback) {
+  ba_key_fetcher_.GetOrFetchKey(loader, std::move(coordinator),
+                                std::move(callback));
 }
 
 void InterestGroupManagerImpl::OnJoinInterestGroupPermissionsChecked(
     blink::InterestGroup group,
     const GURL& joining_url,
     bool report_result_only,
+    AreReportingOriginsAttestedCallback attestation_callback,
     blink::mojom::AdAuctionService::JoinInterestGroupCallback callback,
     bool can_join) {
   // Invoke callback before calling JoinInterestGroup(), which posts a task to
@@ -357,8 +581,26 @@ void InterestGroupManagerImpl::OnJoinInterestGroupPermissionsChecked(
   // invoking the callback may potentially leak whether the user was previously
   // in the InterestGroup through timing differences.
   std::move(callback).Run(/*failed_well_known_check=*/!can_join);
-  if (!report_result_only && can_join)
+
+  if (!report_result_only && can_join) {
+    // All ads' allowed reporting origins must be attested. Otherwise don't
+    // join.
+    if (group.ads) {
+      for (auto& ad : *group.ads) {
+        if (ad.allowed_reporting_origins) {
+          // Sort and de-duplicate by passing it through a flat_set.
+          ad.allowed_reporting_origins =
+              base::flat_set<url::Origin>(
+                  std::move(ad.allowed_reporting_origins.value()))
+                  .extract();
+          if (!attestation_callback.Run(ad.allowed_reporting_origins.value())) {
+            return;
+          }
+        }
+      }
+    }
     JoinInterestGroup(std::move(group), joining_url);
+  }
 }
 
 void InterestGroupManagerImpl::OnLeaveInterestGroupPermissionsChecked(
@@ -375,104 +617,136 @@ void InterestGroupManagerImpl::OnLeaveInterestGroupPermissionsChecked(
   // invoking the callback may potentially leak whether the user was previously
   // in the InterestGroup through timing differences.
   std::move(callback).Run(/*failed_well_known_check=*/!can_leave);
-  if (!report_result_only && can_leave)
+  if (!report_result_only && can_leave) {
     LeaveInterestGroup(group_key, main_frame);
+  }
+}
+
+void InterestGroupManagerImpl::
+    OnClearOriginJoinedInterestGroupsPermissionsChecked(
+        url::Origin owner,
+        std::set<std::string> interest_groups_to_keep,
+        url::Origin main_frame_origin,
+        bool report_result_only,
+        blink::mojom::AdAuctionService::LeaveInterestGroupCallback callback,
+        bool can_leave) {
+  // Invoke callback before calling ClearOriginJoinedInterestGroups(), which
+  // posts a task to another thread. Any FLEDGE call made from the renderer will
+  // need to pass through the UI thread and then bounce over the database
+  // thread, so it will see the new InterestGroup, so it's not necessary to
+  // actually wait for the database to be updated before invoking the callback.
+  // Waiting before invoking the callback may potentially leak whether the user
+  // was previously in the InterestGroup through timing differences.
+  std::move(callback).Run(/*failed_well_known_check=*/!can_leave);
+
+  if (!report_result_only && can_leave) {
+    ClearOriginJoinedInterestGroups(std::move(owner),
+                                    std::move(interest_groups_to_keep),
+                                    std::move(main_frame_origin));
+  }
 }
 
 void InterestGroupManagerImpl::GetInterestGroupsForUpdate(
     const url::Origin& owner,
     int groups_limit,
-    base::OnceCallback<void(std::vector<StorageInterestGroup>)> callback) {
-  impl_.AsyncCall(&InterestGroupStorage::GetInterestGroupsForUpdate)
-      .WithArgs(owner, groups_limit)
-      .Then(std::move(callback));
+    base::OnceCallback<void(std::vector<InterestGroupUpdateParameter>)>
+        callback) {
+  caching_storage_.GetInterestGroupsForUpdate(owner, groups_limit,
+                                              std::move(callback));
+}
+
+void InterestGroupManagerImpl::GetKAnonymityDataForUpdate(
+    const blink::InterestGroupKey& group_key,
+    base::OnceCallback<void(
+        const std::vector<StorageInterestGroup::KAnonymityData>&)> callback) {
+  caching_storage_.GetKAnonymityDataForUpdate(group_key, std::move(callback));
+}
+
+void InterestGroupManagerImpl::GetDebugReportLockoutAndCooldowns(
+    base::flat_set<url::Origin> origins,
+    base::OnceCallback<void(std::optional<DebugReportLockoutAndCooldowns>)>
+        callback) {
+  caching_storage_.GetDebugReportLockoutAndCooldowns(std::move(origins),
+                                                     std::move(callback));
 }
 
 void InterestGroupManagerImpl::UpdateInterestGroup(
     const blink::InterestGroupKey& group_key,
     InterestGroupUpdate update,
     base::OnceCallback<void(bool)> callback) {
-  NotifyInterestGroupAccessed(InterestGroupObserverInterface::kUpdate,
-                              group_key.owner.Serialize(), group_key.name);
-  impl_.AsyncCall(&InterestGroupStorage::UpdateInterestGroup)
-      .WithArgs(group_key, std::move(update))
-      .Then(std::move(callback));
+  NotifyInterestGroupAccessed(InterestGroupObserver::kUpdate, group_key.owner,
+                              group_key.name);
+  caching_storage_.UpdateInterestGroup(
+      group_key, std::move(update),
+      base::BindOnce(&InterestGroupManagerImpl::OnUpdateComplete,
+                     weak_factory_.GetWeakPtr(), group_key.owner,
+                     group_key.name, std::move(callback)));
+}
+
+void InterestGroupManagerImpl::OnUpdateComplete(
+    const url::Origin& owner_origin,
+    const std::string& name,
+    base::OnceCallback<void(bool)> callback,
+    bool success) {
+  NotifyInterestGroupAccessed(InterestGroupObserver::kUpdate, owner_origin,
+                              name);
+  std::move(callback).Run(success);
 }
 
 void InterestGroupManagerImpl::ReportUpdateFailed(
     const blink::InterestGroupKey& group_key,
     bool parse_failure) {
-  impl_.AsyncCall(&InterestGroupStorage::ReportUpdateFailed)
-      .WithArgs(group_key, parse_failure);
+  caching_storage_.ReportUpdateFailed(group_key, parse_failure);
+}
+
+void InterestGroupManagerImpl::OnGetInterestGroupsComplete(
+    base::OnceCallback<void(scoped_refptr<StorageInterestGroups>)> callback,
+    scoped_refptr<StorageInterestGroups> groups) {
+  for (const SingleStorageInterestGroup& group : groups->GetInterestGroups()) {
+    NotifyInterestGroupAccessed(InterestGroupObserver::kLoaded,
+                                group->interest_group.owner,
+                                group->interest_group.name);
+  }
+  std::move(callback).Run(std::move(groups));
 }
 
 void InterestGroupManagerImpl::NotifyInterestGroupAccessed(
-    InterestGroupObserverInterface::AccessType type,
-    const std::string& owner_origin,
+    InterestGroupObserver::AccessType type,
+    const url::Origin& owner_origin,
     const std::string& name) {
   // Don't bother getting the time if there are no observers.
-  if (observers_.empty())
+  if (observers_.empty()) {
     return;
+  }
   base::Time now = base::Time::Now();
-  for (InterestGroupObserverInterface& observer : observers_) {
+  for (InterestGroupObserver& observer : observers_) {
     observer.OnInterestGroupAccessed(now, type, owner_origin, name);
   }
 }
 
-void InterestGroupManagerImpl::HandleReports(
-    const std::vector<GURL>& report_urls,
-    const url::Origin& frame_origin,
-    network::mojom::ClientSecurityStatePtr client_security_state,
-    const std::string& name,
-    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory) {
-  for (const GURL& report_url : report_urls) {
-    auto report_request = std::make_unique<ReportRequest>();
-    report_request->simple_url_loader = BuildSimpleUrlLoader(
-        report_url, frame_origin, client_security_state.Clone());
-    report_request->name = name;
-    report_request->url_loader_factory = url_loader_factory;
-    report_request->request_url_size_bytes = report_url.spec().size();
-    report_requests_.emplace_back(std::move(report_request));
-  }
-}
-
-void InterestGroupManagerImpl::SendReports() {
-  if (reporting_started_ == base::TimeTicks::Min()) {
-    // It appears we're staring a new reporting round; mark the time we started
-    // the round.
-    reporting_started_ = base::TimeTicks::Now();
-  }
-
-  while (!report_requests_.empty() &&
-         num_active_ < max_active_report_requests_) {
-    num_active_++;
-    TrySendingOneReport();
-  }
-}
-
 void InterestGroupManagerImpl::TrySendingOneReport() {
-  if (base::TimeTicks::Now() - reporting_started_ >
-      max_reporting_round_duration_) {
-    // We've been reporting for too long; delete all pending reports in the
-    // queue.
-    // TODO(qingxinwu): maybe add UMA metrics to learn how often this happens.
-    report_requests_.clear();
-    reporting_started_ = base::TimeTicks::Min();
-  }
+  DCHECK_GT(num_active_, 0);
 
   if (report_requests_.empty()) {
-    DCHECK_GT(num_active_, 0);
-    num_active_--;
+    --num_active_;
     if (num_active_ == 0) {
-      // This reporting round is finished, there's no more work to do.
-      reporting_started_ = base::TimeTicks::Min();
+      timeout_timer_.Stop();
     }
     return;
+  }
+
+  if (!timeout_timer_.IsRunning()) {
+    timeout_timer_.Start(
+        FROM_HERE, max_reporting_round_duration_,
+        base::BindOnce(&InterestGroupManagerImpl::TimeoutReports,
+                       base::Unretained(this)));
   }
 
   std::unique_ptr<ReportRequest> report_request =
       std::move(report_requests_.front());
   report_requests_.pop_front();
+
+  int frame_tree_node_id = report_request->frame_tree_node_id;
 
   base::UmaHistogramCounts100000(
       base::StrCat(
@@ -483,42 +757,74 @@ void InterestGroupManagerImpl::TrySendingOneReport() {
           {"Ads.InterestGroup.Net.ResponseSizeBytes.", report_request->name}),
       0);
 
-  network::SimpleURLLoader* simple_url_loader_ptr =
-      report_request->simple_url_loader.get();
+  std::unique_ptr<network::ResourceRequest> resource_request =
+      BuildUncredentialedRequest(report_request->report_url,
+                                 report_request->frame_origin,
+                                 report_request->frame_tree_node_id,
+                                 report_request->client_security_state);
+
+  std::string devtools_request_id =
+      resource_request->devtools_request_id.value();
+
+  devtools_instrumentation::OnAuctionWorkletNetworkRequestWillBeSent(
+      report_request->frame_tree_node_id, *resource_request,
+      base::TimeTicks::Now());
+
+  std::unique_ptr<network::SimpleURLLoader> simple_url_loader =
+      BuildSimpleUrlLoader(std::move(resource_request));
+
   // Pass simple_url_loader to keep it alive until the request fails or succeeds
   // to prevent cancelling the request.
+  network::SimpleURLLoader* simple_url_loader_ptr = simple_url_loader.get();
   simple_url_loader_ptr->DownloadHeadersOnly(
       report_request->url_loader_factory.get(),
       base::BindOnce(&InterestGroupManagerImpl::OnOneReportSent,
-                     weak_factory_.GetWeakPtr(),
-                     std::move(report_request->simple_url_loader)));
+                     weak_factory_.GetWeakPtr(), std::move(simple_url_loader),
+                     frame_tree_node_id, std::move(devtools_request_id)));
 }
 
 void InterestGroupManagerImpl::OnOneReportSent(
     std::unique_ptr<network::SimpleURLLoader> simple_url_loader,
+    int frame_tree_node_id,
+    const std::string& devtools_request_id,
     scoped_refptr<net::HttpResponseHeaders> response_headers) {
   DCHECK_GT(num_active_, 0);
 
-  if (!report_requests_.empty()) {
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
-        FROM_HERE,
-        base::BindOnce(&InterestGroupManagerImpl::TrySendingOneReport,
-                       weak_factory_.GetWeakPtr()),
-        reporting_interval_);
-    return;
+  network::URLLoaderCompletionStatus completion_status =
+      network::URLLoaderCompletionStatus(simple_url_loader->NetError());
+
+  if (simple_url_loader->CompletionStatus()) {
+    completion_status = simple_url_loader->CompletionStatus().value();
   }
-  num_active_--;
+
+  if (simple_url_loader->ResponseInfo() != nullptr) {
+    devtools_instrumentation::OnAuctionWorkletNetworkResponseReceived(
+        frame_tree_node_id, devtools_request_id, devtools_request_id,
+        simple_url_loader->GetFinalURL(), *simple_url_loader->ResponseInfo());
+  }
+
+  devtools_instrumentation::OnAuctionWorkletNetworkRequestComplete(
+      frame_tree_node_id, devtools_request_id, completion_status);
+
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(&InterestGroupManagerImpl::TrySendingOneReport,
+                     weak_factory_.GetWeakPtr()),
+      reporting_interval_);
 }
 
-void InterestGroupManagerImpl::
-    QueueKAnonymityUpdateForInterestGroupFromJoinInterestGroup(
-        absl::optional<StorageInterestGroup> maybe_group) {
-  // We just joined the group, so it must exist.
-  // We don't need to worry about the DB size limit, since older groups
-  // are removed first.
-  DCHECK(maybe_group);
-  if (maybe_group)
-    QueueKAnonymityUpdateForInterestGroup(*maybe_group);
+void InterestGroupManagerImpl::TimeoutReports() {
+  // TODO(qingxinwu): maybe add UMA metrics to learn how often this happens.
+  report_requests_.clear();
+}
+
+base::OnceClosure
+InterestGroupManagerImpl::CreateNotifyInterestGroupAccessedCallback(
+    InterestGroupObserver::AccessType type,
+    const url::Origin& owner_origin,
+    const std::string& name) {
+  return base::BindOnce(&InterestGroupManagerImpl::NotifyInterestGroupAccessed,
+                        weak_factory_.GetWeakPtr(), type, owner_origin, name);
 }
 
 }  // namespace content

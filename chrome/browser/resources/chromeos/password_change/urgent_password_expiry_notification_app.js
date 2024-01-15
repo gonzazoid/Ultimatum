@@ -17,9 +17,11 @@ import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import './strings.m.js';
 
 import {I18nBehavior} from 'chrome://resources/ash/common/i18n_behavior.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
 import {WebUIListenerBehavior} from 'chrome://resources/ash/common/web_ui_listener_behavior.js';
-import {html, Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {getTemplate} from './urgent_password_expiry_notification_app.html.js';
 
 const ONE_SECOND_IN_MS = 1000;
 const ONE_MINUTE_IN_MS = ONE_SECOND_IN_MS * 60;
@@ -28,7 +30,7 @@ const ONE_HOUR_IN_MS = ONE_MINUTE_IN_MS * 60;
 Polymer({
   is: 'urgent-password-expiry-notification',
 
-  _template: html`{__html_template__}`,
+  _template: getTemplate(),
 
   behaviors: [I18nBehavior, WebUIListenerBehavior],
 
@@ -70,7 +72,7 @@ Polymer({
 
   /** @private */
   ensureCountDownCalledOftenEnough_() {
-    var nowMs = Date.now();
+    const nowMs = Date.now();
     if (nowMs > this.expirationTime_) {
       // Already expired - no need to keep updating UI.
       this.stopCountDownCalls_();

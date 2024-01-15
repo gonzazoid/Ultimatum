@@ -2,10 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {SourcesTestRunner} from 'sources_test_runner';
+import {SDKTestRunner} from 'sdk_test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+import * as Sources from 'devtools/panels/sources/sources.js';
+import * as UI from 'devtools/ui/legacy/legacy.js';
+import * as Workspace from 'devtools/models/workspace/workspace.js';
+
 (async function() {
   TestRunner.addResult(`Tests that scripts panel UI elements work as intended.\n`);
-  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
-  await TestRunner.loadTestModule('sdk_test_runner');
   await TestRunner.showPanel('sources');
 
   function dumpNavigator(sourcesNavigatorView) {
@@ -14,12 +21,12 @@
   }
 
   function createNavigatorView() {
-    var navigatorView = new Sources.NetworkNavigatorView();
-    navigatorView.show(UI.inspectorView.element);
+    var navigatorView = new Sources.SourcesNavigator.NetworkNavigatorView();
+    navigatorView.show(UI.InspectorView.InspectorView.instance().element);
     return navigatorView;
   }
 
-  TestRunner.addSniffer(Workspace.UISourceCode.prototype, 'requestContent', onRequestContent, true);
+  TestRunner.addSniffer(Workspace.UISourceCode.UISourceCode.prototype, 'requestContent', onRequestContent, true);
 
   function onRequestContent() {
     TestRunner.addResult('Source requested for ' + this.url());
@@ -35,7 +42,7 @@
 
   function reload() {
     page.reload();
-    return new Promise(fulfill => TestRunner.addSniffer(SDK.ResourceTreeModel.prototype, 'frameNavigated', fulfill));
+    return new Promise(fulfill => TestRunner.addSniffer(SDK.ResourceTreeModel.ResourceTreeModel.prototype, 'frameNavigated', fulfill));
   }
 
   TestRunner.runTestSuite([

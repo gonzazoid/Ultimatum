@@ -10,33 +10,45 @@
 #import "base/metrics/histogram_functions.h"
 #import "base/metrics/histogram_macros.h"
 #import "base/strings/sys_string_conversions.h"
+#import "components/feature_engagement/public/tracker.h"
 #import "components/omnibox/browser/location_bar_model_impl.h"
 #import "components/omnibox/browser/omnibox_edit_model.h"
 #import "components/omnibox/browser/omnibox_view.h"
 #import "components/open_from_clipboard/clipboard_recent_content.h"
+#import "components/prefs/pref_service.h"
 #import "components/profile_metrics/browser_profile_type.h"
 #import "components/search_engines/util.h"
 #import "components/strings/grit/components_strings.h"
-#import "ios/chrome/browser/autocomplete/autocomplete_scheme_classifier_impl.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/browser_state_metrics/browser_state_metrics.h"
-#import "ios/chrome/browser/drag_and_drop/drag_item_util.h"
-#import "ios/chrome/browser/drag_and_drop/url_drag_drop_handler.h"
-#import "ios/chrome/browser/infobars/infobar_metrics_recorder.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/ntp/new_tab_page_tab_helper.h"
-#import "ios/chrome/browser/overlays/public/overlay_presenter.h"
-#import "ios/chrome/browser/search_engines/template_url_service_factory.h"
+#import "ios/chrome/browser/autocomplete/model/autocomplete_scheme_classifier_impl.h"
+#import "ios/chrome/browser/browser_state_metrics/model/browser_state_metrics.h"
+#import "ios/chrome/browser/default_browser/model/utils.h"
+#import "ios/chrome/browser/drag_and_drop/model/drag_item_util.h"
+#import "ios/chrome/browser/drag_and_drop/model/url_drag_drop_handler.h"
+#import "ios/chrome/browser/feature_engagement/model/tracker_factory.h"
+#import "ios/chrome/browser/infobars/model/infobar_metrics_recorder.h"
+#import "ios/chrome/browser/ntp/model/new_tab_page_tab_helper.h"
+#import "ios/chrome/browser/ntp/model/new_tab_page_util.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_presenter.h"
+#import "ios/chrome/browser/search_engines/model/template_url_service_factory.h"
+#import "ios/chrome/browser/shared/coordinator/default_browser_promo/default_browser_promo_scene_agent_utils.h"
+#import "ios/chrome/browser/shared/coordinator/layout_guide/layout_guide_util.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/public/commands/browser_coordinator_commands.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/help_commands.h"
+#import "ios/chrome/browser/shared/public/commands/lens_commands.h"
+#import "ios/chrome/browser/shared/public/commands/load_query_commands.h"
+#import "ios/chrome/browser/shared/public/commands/search_image_with_lens_command.h"
+#import "ios/chrome/browser/shared/ui/util/pasteboard_util.h"
 #import "ios/chrome/browser/ui/badges/badge_button_factory.h"
 #import "ios/chrome/browser/ui/badges/badge_delegate.h"
 #import "ios/chrome/browser/ui/badges/badge_mediator.h"
 #import "ios/chrome/browser/ui/badges/badge_view_controller.h"
-#import "ios/chrome/browser/ui/commands/browser_coordinator_commands.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
-#import "ios/chrome/browser/ui/commands/load_query_commands.h"
-#import "ios/chrome/browser/ui/default_promo/default_browser_promo_non_modal_scheduler.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_controller.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_ui_updater.h"
+#import "ios/chrome/browser/ui/lens/lens_entrypoint.h"
 #import "ios/chrome/browser/ui/location_bar/location_bar_constants.h"
 #import "ios/chrome/browser/ui/location_bar/location_bar_consumer.h"
 #import "ios/chrome/browser/ui/location_bar/location_bar_mediator.h"
@@ -45,23 +57,18 @@
 #import "ios/chrome/browser/ui/location_bar/location_bar_steady_view_mediator.h"
 #import "ios/chrome/browser/ui/location_bar/location_bar_url_loader.h"
 #import "ios/chrome/browser/ui/location_bar/location_bar_view_controller.h"
-#import "ios/chrome/browser/ui/main/default_browser_scene_agent.h"
-#import "ios/chrome/browser/ui/main/layout_guide_util.h"
-#import "ios/chrome/browser/ui/main/scene_state_browser_agent.h"
-#import "ios/chrome/browser/ui/ntp/ntp_util.h"
-#import "ios/chrome/browser/ui/omnibox/location_bar_delegate.h"
+#import "ios/chrome/browser/ui/omnibox/omnibox_controller_delegate.h"
 #import "ios/chrome/browser/ui/omnibox/omnibox_coordinator.h"
+#import "ios/chrome/browser/ui/omnibox/omnibox_focus_delegate.h"
 #import "ios/chrome/browser/ui/omnibox/omnibox_text_field_ios.h"
 #import "ios/chrome/browser/ui/omnibox/popup/omnibox_popup_coordinator.h"
-#import "ios/chrome/browser/ui/omnibox/web_omnibox_edit_controller_impl.h"
-#import "ios/chrome/browser/ui/toolbar/toolbar_coordinator_delegate.h"
-#import "ios/chrome/browser/ui/util/pasteboard_util.h"
-#import "ios/chrome/browser/url_loading/image_search_param_generator.h"
-#import "ios/chrome/browser/url_loading/url_loading_browser_agent.h"
-#import "ios/chrome/browser/url_loading/url_loading_params.h"
-#import "ios/chrome/browser/url_loading/url_loading_util.h"
-#import "ios/chrome/browser/web/web_navigation_util.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/ui/omnibox/web_location_bar_impl.h"
+#import "ios/chrome/browser/url_loading/model/image_search_param_generator.h"
+#import "ios/chrome/browser/url_loading/model/url_loading_browser_agent.h"
+#import "ios/chrome/browser/url_loading/model/url_loading_params.h"
+#import "ios/chrome/browser/url_loading/model/url_loading_util.h"
+#import "ios/chrome/browser/web/model/web_navigation_util.h"
+#import "ios/public/provider/chrome/browser/lens/lens_api.h"
 #import "ios/public/provider/chrome/browser/voice_search/voice_search_api.h"
 #import "ios/web/public/navigation/navigation_manager.h"
 #import "ios/web/public/navigation/referrer.h"
@@ -70,22 +77,22 @@
 #import "ui/base/device_form_factor.h"
 #import "url/gurl.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+BASE_FEATURE(kEnableFocusOmniboxWorkaround,
+             "EnableFocusOmniboxWorkaround",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 namespace {
 const size_t kMaxURLDisplayChars = 32 * 1024;
 }  // namespace
 
 @interface LocationBarCoordinator () <LoadQueryCommands,
-                                      LocationBarDelegate,
                                       LocationBarViewControllerDelegate,
                                       LocationBarConsumer,
                                       LocationBarSteadyViewConsumer,
+                                      OmniboxControllerDelegate,
                                       URLDragDataSource> {
   // API endpoint for omnibox.
-  std::unique_ptr<WebOmniboxEditControllerImpl> _editController;
+  std::unique_ptr<WebLocationBarImpl> _locationBar;
   // Observer that updates `viewController` for fullscreen events.
   std::unique_ptr<FullscreenUIUpdater> _omniboxFullscreenUIUpdater;
   // Observer that updates BadgeViewController for fullscreen events.
@@ -98,8 +105,6 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
 }
 // Whether the coordinator is started.
 @property(nonatomic, assign, getter=isStarted) BOOL started;
-// Coordinator for the omnibox popup.
-@property(nonatomic, strong) OmniboxPopupCoordinator* omniboxPopupCoordinator;
 // Mediator for the badges displayed in the LocationBar.
 @property(nonatomic, strong) BadgeMediator* badgeMediator;
 // ViewController for the badges displayed in the LocationBar.
@@ -139,6 +144,11 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
   return self.viewController;
 }
 
+- (instancetype)initWithBrowser:(Browser*)browser {
+  CHECK(browser);
+  return [super initWithBaseViewController:nil browser:browser];
+}
+
 - (void)start {
   DCHECK(self.browser);
 
@@ -154,6 +164,9 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
 
   BOOL isIncognito = self.browserState->IsOffTheRecord();
 
+  PrefService* originalPrefs = self.browser->GetBrowserState()
+                                   ->GetOriginalChromeBrowserState()
+                                   ->GetPrefs();
   self.viewController = [[LocationBarViewController alloc] init];
   self.viewController.incognito = isIncognito;
   self.viewController.delegate = self;
@@ -167,40 +180,49 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
       ios::provider::IsVoiceSearchEnabled();
   self.viewController.layoutGuideCenter =
       LayoutGuideCenterForBrowser(self.browser);
+  self.viewController.originalPrefService = originalPrefs;
 
-  _editController = std::make_unique<WebOmniboxEditControllerImpl>(self);
-  _editController->SetURLLoader(self);
+  _locationBar = std::make_unique<WebLocationBarImpl>(self, self.delegate);
+  _locationBar->SetURLLoader(self);
+  _locationBarModelDelegate.reset(new LocationBarModelDelegateIOS(
+      self.browser->GetWebStateList(), self.browserState));
+  _locationBarModel = std::make_unique<LocationBarModelImpl>(
+      _locationBarModelDelegate.get(), kMaxURLDisplayChars);
 
   self.omniboxCoordinator =
       [[OmniboxCoordinator alloc] initWithBaseViewController:nil
                                                      browser:self.browser];
-  self.omniboxCoordinator.editController = _editController.get();
+  self.omniboxCoordinator.bubblePresenter = self.bubblePresenter;
+  self.omniboxCoordinator.locationBar = _locationBar.get();
+  self.omniboxCoordinator.presenterDelegate = self.popupPresenterDelegate;
   [self.omniboxCoordinator start];
 
   [self.omniboxCoordinator.managedViewController
       willMoveToParentViewController:self.viewController];
   [self.viewController
       addChildViewController:self.omniboxCoordinator.managedViewController];
-  [self.viewController
-      setEditView:self.omniboxCoordinator.managedViewController.view];
+  [self.viewController setEditView:self.omniboxCoordinator.editView];
   [self.omniboxCoordinator.managedViewController
       didMoveToParentViewController:self.viewController];
   self.viewController.offsetProvider = [self.omniboxCoordinator offsetProvider];
-
-  self.omniboxPopupCoordinator = [self.omniboxCoordinator
-      createPopupCoordinator:self.popupPresenterDelegate];
-  [self.omniboxPopupCoordinator start];
 
   // Create button factory that wil be used by the ViewController to get
   // BadgeButtons for a BadgeType.
   BadgeButtonFactory* buttonFactory = [[BadgeButtonFactory alloc] init];
   self.badgeViewController =
       [[BadgeViewController alloc] initWithButtonFactory:buttonFactory];
+  self.badgeViewController.layoutGuideCenter =
+      LayoutGuideCenterForBrowser(self.browser);
   [self.viewController addChildViewController:self.badgeViewController];
   [self.viewController setBadgeView:self.badgeViewController.view];
   [self.badgeViewController didMoveToParentViewController:self.viewController];
   // Create BadgeMediator and set the viewController as its consumer.
-  self.badgeMediator = [[BadgeMediator alloc] initWithBrowser:self.browser];
+  OverlayPresenter* overlayPresenter = OverlayPresenter::FromBrowser(
+      self.browser, OverlayModality::kInfobarBanner);
+  self.badgeMediator =
+      [[BadgeMediator alloc] initWithWebStateList:self.webStateList
+                                 overlayPresenter:overlayPresenter
+                                      isIncognito:isIncognito];
   self.badgeMediator.consumer = self.badgeViewController;
   // TODO(crbug.com/1045047): Use HandlerForProtocol after commands protocol
   // clean up.
@@ -217,11 +239,6 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
       ios::TemplateURLServiceFactory::GetForBrowserState(self.browserState);
   self.mediator.consumer = self;
   self.mediator.webStateList = self.webStateList;
-
-  _locationBarModelDelegate.reset(
-      new LocationBarModelDelegateIOS(self.browser->GetWebStateList()));
-  _locationBarModel = std::make_unique<LocationBarModelImpl>(
-      _locationBarModelDelegate.get(), kMaxURLDisplayChars);
 
   self.steadyViewMediator = [[LocationBarSteadyViewMediator alloc]
       initWithLocationBarModel:[self locationBarModel]];
@@ -244,16 +261,20 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
     return;
   [self.browser->GetCommandDispatcher() stopDispatchingToTarget:self];
   // The popup has to be destroyed before the location bar.
-  [self.omniboxPopupCoordinator stop];
   [self.omniboxCoordinator stop];
   [self.badgeMediator disconnect];
   self.badgeMediator = nil;
-  _editController.reset();
+  _locationBar.reset();
 
   self.viewController = nil;
   [self.mediator disconnect];
+  self.mediator.templateURLService = nil;
+  self.mediator.consumer = nil;
   self.mediator = nil;
   [self.steadyViewMediator disconnect];
+  self.steadyViewMediator.webStateList = nullptr;
+  self.steadyViewMediator.webContentAreaOverlayPresenter = nil;
+  self.steadyViewMediator.consumer = nil;
   self.steadyViewMediator = nil;
 
   _locationBarModel = nullptr;
@@ -265,11 +286,11 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
 }
 
 - (BOOL)omniboxPopupHasAutocompleteResults {
-  return self.omniboxPopupCoordinator.hasResults;
+  return self.omniboxCoordinator.popupCoordinator.hasResults;
 }
 
 - (BOOL)showingOmniboxPopup {
-  return self.omniboxPopupCoordinator.isOpen;
+  return self.omniboxCoordinator.popupCoordinator.isOpen;
 }
 
 - (BOOL)isOmniboxFirstResponder {
@@ -288,6 +309,11 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
   return self.omniboxCoordinator.scribbleInput;
 }
 
+// Returns the toolbar omnibox consumer.
+- (id<ToolbarOmniboxConsumer>)toolbarOmniboxConsumer {
+  return self.omniboxCoordinator.toolbarOmniboxConsumer;
+}
+
 #pragma mark - LoadQueryCommands
 
 - (void)loadQuery:(NSString*)query immediately:(BOOL)immediately {
@@ -298,7 +324,12 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
   if (immediately) {
     [self loadURLForQuery:sanitizedQuery];
   } else {
-    [self.omniboxCoordinator focusOmnibox];
+    // TODO(crbug.com/1463766): Clean up the kill switch and else branch.
+    if (base::FeatureList::IsEnabled(kEnableFocusOmniboxWorkaround)) {
+      [self focusOmnibox];
+    } else {
+      [self.omniboxCoordinator focusOmnibox];
+    }
     [self.omniboxCoordinator
         insertTextToOmnibox:base::SysUTF16ToNSString(sanitizedQuery)];
   }
@@ -326,7 +357,7 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
     if (destination_url_entered_without_scheme) {
       web_params.https_upgrade_type = web::HttpsUpgradeType::kOmnibox;
     }
-    NSMutableDictionary* combinedExtraHeaders =
+    NSMutableDictionary<NSString*, NSString*>* combinedExtraHeaders =
         [web_navigation_util::VariationHeadersForURL(
             url, self.browserState->IsOffTheRecord()) mutableCopy];
     [combinedExtraHeaders addEntriesFromDictionary:web_params.extra_headers];
@@ -345,17 +376,10 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
 }
 
 - (void)focusOmnibox {
-  // TODO(crbug.com/931284): Temporary workaround for intermediate broken state
-  // in the NTP.  Remove this once crbug.com/899827 is fixed.
-  if (self.webState) {
-    NewTabPageTabHelper* NTPHelper =
-        NewTabPageTabHelper::FromWebState(self.webState);
-    if (NTPHelper && NTPHelper->IsActive() && NTPHelper->IgnoreLoadRequests()) {
-      return;
-    }
-  }
+#if !defined(__IPHONE_16_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_16_0
   // Dismiss the edit menu.
   [[UIMenuController sharedMenuController] hideMenu];
+#endif
 
   // When the NTP and fakebox are visible, make the fakebox animates into place
   // before focusing the omnibox.
@@ -379,15 +403,7 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
   self.isCancellingOmniboxEdit = NO;
 }
 
-#pragma mark - LocationBarDelegate
-
-- (void)locationBarHasBecomeFirstResponder {
-  [self.delegate locationBarDidBecomeFirstResponder];
-}
-
-- (void)locationBarHasResignedFirstResponder {
-  [self.delegate locationBarDidResignFirstResponder];
-}
+#pragma mark - OmniboxControllerDelegate
 
 - (web::WebState*)webState {
   return self.webStateList->GetActiveWebState();
@@ -395,10 +411,6 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
 
 - (LocationBarModel*)locationBarModel {
   return _locationBarModel.get();
-}
-
-- (void)locationBarRequestScribbleTargetFocus {
-  [self.omniboxCoordinator focusOmniboxForScribble];
 }
 
 #pragma mark - LocationBarViewControllerDelegate
@@ -409,6 +421,13 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
 
 - (void)locationBarCopyTapped {
   StoreURLInPasteboard(self.webState->GetVisibleURL());
+  id<HelpCommands> helpHandler =
+      HandlerForProtocol(self.browser->GetCommandDispatcher(), HelpCommands);
+  [helpHandler presentShareButtonHelpBubbleIfEligible];
+}
+
+- (void)locationBarRequestScribbleTargetFocus {
+  [self.omniboxCoordinator focusOmniboxForScribble];
 }
 
 - (void)recordShareButtonPressed {
@@ -427,29 +446,26 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
     return;
   }
 
-  SceneState* sceneState =
-      SceneStateBrowserAgent::FromBrowser(self.browser)->GetSceneState();
-  DefaultBrowserSceneAgent* agent =
-      [DefaultBrowserSceneAgent agentFromScene:sceneState];
-  [agent.nonModalScheduler logUserPastedInOmnibox];
+  SceneState* sceneState = self.browser->GetSceneState();
+  NotifyDefaultBrowserPromoUserPastedInOmnibox(sceneState);
+  LogToFETUserPastedURLIntoOmnibox(
+      feature_engagement::TrackerFactory::GetForBrowserState(
+          self.browser->GetBrowserState()));
 }
 
 - (void)searchCopiedImage {
+  __weak LocationBarCoordinator* weakSelf = self;
   ClipboardRecentContent::GetInstance()->GetRecentImageFromClipboard(
-      base::BindOnce(^(absl::optional<gfx::Image> optionalImage) {
-        if (!optionalImage) {
-          return;
-        }
-        UIImage* image = optionalImage.value().ToUIImage();
-        web::NavigationManager::WebLoadParams webParams =
-            ImageSearchParamGenerator::LoadParamsForImage(
-                image, ios::TemplateURLServiceFactory::GetForBrowserState(
-                           self.browser->GetBrowserState()));
-        UrlLoadParams params = UrlLoadParams::InCurrentTab(webParams);
+      base::BindOnce(^(std::optional<gfx::Image> image) {
+        [weakSelf searchImage:std::move(image) usingLens:NO];
+      }));
+}
 
-        UrlLoadingBrowserAgent::FromBrowser(self.browser)->Load(params);
-
-        [self cancelOmniboxEdit];
+- (void)lensCopiedImage {
+  __weak LocationBarCoordinator* weakSelf = self;
+  ClipboardRecentContent::GetInstance()->GetRecentImageFromClipboard(
+      base::BindOnce(^(std::optional<gfx::Image> image) {
+        [weakSelf searchImage:std::move(image) usingLens:YES];
       }));
 }
 
@@ -461,6 +477,10 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
 
 - (void)updateSearchByImageSupported:(BOOL)searchByImageSupported {
   self.viewController.searchByImageEnabled = searchByImageSupported;
+}
+
+- (void)updateLensImageSupported:(BOOL)lensImageSupported {
+  self.viewController.lensImageEnabled = lensImageSupported;
 }
 
 #pragma mark - LocationBarSteadyViewConsumer
@@ -487,6 +507,11 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
 #pragma mark - URLDragDataSource
 
 - (URLInfo*)URLInfoForView:(UIView*)view {
+  // Disable drag and drop when the omnibox is focused, as it interferes with
+  // text interactions like moving the cursor (crbug.com/1502538).
+  if ([self isOmniboxFirstResponder]) {
+    return nil;
+  }
   return [[URLInfo alloc]
       initWithURL:self.webState->GetVisibleURL()
             title:base::SysUTF16ToNSString(self.webState->GetTitle())];
@@ -540,6 +565,37 @@ const size_t kMaxURLDisplayChars = 32 * 1024;
   [self.viewController.view
       addInteraction:[[UIDragInteraction alloc]
                          initWithDelegate:self.dragDropHandler]];
+}
+
+- (void)searchImage:(std::optional<gfx::Image>)optionalImage
+          usingLens:(BOOL)usingLens {
+  if (!optionalImage)
+    return;
+
+  // If the Browser has been destroyed, then the UI should
+  // no longer be active. Return early to avoid crashing.
+  Browser* browser = self.browser;
+  if (!browser)
+    return;
+
+  UIImage* image = optionalImage->ToUIImage();
+  if (usingLens) {
+    id<LensCommands> handler =
+        HandlerForProtocol(browser->GetCommandDispatcher(), LensCommands);
+    SearchImageWithLensCommand* command = [[SearchImageWithLensCommand alloc]
+        initWithImage:image
+           entryPoint:LensEntrypoint::OmniboxPostCapture];
+    [handler searchImageWithLens:command];
+  } else {
+    web::NavigationManager::WebLoadParams webParams =
+        ImageSearchParamGenerator::LoadParamsForImage(
+            image, ios::TemplateURLServiceFactory::GetForBrowserState(
+                       browser->GetBrowserState()));
+    UrlLoadParams params = UrlLoadParams::InCurrentTab(webParams);
+    UrlLoadingBrowserAgent::FromBrowser(browser)->Load(params);
+  }
+
+  [self cancelOmniboxEdit];
 }
 
 @end

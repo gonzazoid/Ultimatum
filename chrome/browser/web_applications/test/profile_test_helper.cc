@@ -6,6 +6,7 @@
 
 #include <vector>
 
+#include "base/containers/extend.h"
 #include "base/notreached.h"
 #include "chrome/common/chrome_features.h"
 
@@ -13,6 +14,7 @@
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
 #include "chrome/common/chrome_features.h"
+#include "chromeos/ash/components/standalone_browser/feature_refs.h"
 #include "components/account_id/account_id.h"
 #include "components/user_manager/user_names.h"
 #endif
@@ -34,14 +36,11 @@ std::string TestProfileTypeToString(
 
   if (info.param.crosapi_state == web_app::test::CrosapiParam::kEnabled) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-    result += "Crosapi";
+    result += "_Crosapi";
 #else
     NOTREACHED();
 #endif
   }
-
-  if (info.param.external_pref_migration_enabled)
-    result += "External_Pref_Migration_Enabled";
 
   return result;
 }
@@ -60,25 +59,17 @@ void ConfigureCommandLineForGuestMode(base::CommandLine* command_line) {
 
 void InitCrosapiFeaturesForParam(
     web_app::test::CrosapiParam crosapi_state,
-    base::test::ScopedFeatureList* scoped_feature_list,
-    bool external_pref_migration_enabled) {
+    base::test::ScopedFeatureList* scoped_feature_list) {
   std::vector<base::test::FeatureRef> enabled_features;
   std::vector<base::test::FeatureRef> disabled_features;
-  if (external_pref_migration_enabled)
-    enabled_features.push_back(features::kUseWebAppDBInsteadOfExternalPrefs);
-  else
-    disabled_features.push_back(features::kUseWebAppDBInsteadOfExternalPrefs);
-  if (crosapi_state == web_app::test::CrosapiParam::kEnabled) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-    enabled_features.push_back(features::kWebAppsCrosapi);
+  if (crosapi_state == web_app::test::CrosapiParam::kEnabled) {
+    base::Extend(enabled_features, ash::standalone_browser::GetFeatureRefs());
+  } else {
+    base::Extend(disabled_features, ash::standalone_browser::GetFeatureRefs());
+  }
 #else
     NOTREACHED();
 #endif
-  } else {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    disabled_features.push_back(features::kWebAppsCrosapi);
-    disabled_features.push_back(chromeos::features::kLacrosPrimary);
-#endif
-  }
   scoped_feature_list->InitWithFeatures(enabled_features, disabled_features);
 }

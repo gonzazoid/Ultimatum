@@ -4,24 +4,49 @@
 
 #import "ios/chrome/browser/ui/browser_view/tab_lifecycle_mediator.h"
 
-#import "ios/chrome/browser/download/download_manager_tab_helper.h"
-#import "ios/chrome/browser/overscroll_actions/overscroll_actions_tab_helper.h"
-#import "ios/chrome/browser/passwords/password_tab_helper.h"
-#import "ios/chrome/browser/prerender/prerender_service.h"
-#import "ios/chrome/browser/snapshots/snapshot_tab_helper.h"
+#import "ios/chrome/browser/app_launcher/model/app_launcher_tab_helper.h"
+#import "ios/chrome/browser/autofill/model/autofill_tab_helper.h"
+#import "ios/chrome/browser/autofill/model/bottom_sheet/autofill_bottom_sheet_tab_helper.h"
+#import "ios/chrome/browser/commerce/model/price_notifications/price_notifications_iph_presenter.h"
+#import "ios/chrome/browser/commerce/model/price_notifications/price_notifications_tab_helper.h"
+#import "ios/chrome/browser/download/model/download_manager_tab_helper.h"
+#import "ios/chrome/browser/download/model/pass_kit_tab_helper.h"
+#import "ios/chrome/browser/follow/model/follow_iph_presenter.h"
+#import "ios/chrome/browser/follow/model/follow_tab_helper.h"
+#import "ios/chrome/browser/itunes_urls/model/itunes_urls_handler_tab_helper.h"
+#import "ios/chrome/browser/lens/model/lens_tab_helper.h"
+#import "ios/chrome/browser/ntp/model/new_tab_page_tab_helper.h"
+#import "ios/chrome/browser/overscroll_actions/model/overscroll_actions_tab_helper.h"
+#import "ios/chrome/browser/parcel_tracking/parcel_tracking_prefs.h"
+#import "ios/chrome/browser/parcel_tracking/parcel_tracking_util.h"
+#import "ios/chrome/browser/passwords/model/password_tab_helper.h"
+#import "ios/chrome/browser/prerender/model/prerender_service.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/public/commands/autofill_bottom_sheet_commands.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/lens_commands.h"
+#import "ios/chrome/browser/shared/public/commands/mini_map_commands.h"
+#import "ios/chrome/browser/shared/public/commands/parcel_tracking_opt_in_commands.h"
+#import "ios/chrome/browser/shared/public/commands/unit_conversion_commands.h"
+#import "ios/chrome/browser/shared/public/commands/web_content_commands.h"
+#import "ios/chrome/browser/snapshots/model/snapshot_tab_helper.h"
+#import "ios/chrome/browser/ssl/model/captive_portal_tab_helper.h"
+#import "ios/chrome/browser/tab_insertion/model/tab_insertion_browser_agent.h"
 #import "ios/chrome/browser/ui/download/download_manager_coordinator.h"
-#import "ios/chrome/browser/ui/side_swipe/side_swipe_controller.h"
-#import "ios/chrome/browser/web_state_list/web_state_dependency_installation_observer.h"
-#import "ios/chrome/browser/web_state_list/web_state_dependency_installer_bridge.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
-#import "ios/chrome/browser/webui/net_export_tab_helper.h"
-#import "ios/chrome/browser/webui/net_export_tab_helper_delegate.h"
-#import "ios/web/public/deprecated/crw_web_controller_util.h"
+#import "ios/chrome/browser/ui/ntp/new_tab_page_coordinator.h"
+#import "ios/chrome/browser/ui/print/print_coordinator.h"
+#import "ios/chrome/browser/ui/side_swipe/side_swipe_mediator.h"
+#import "ios/chrome/browser/web/model/annotations/annotations_tab_helper.h"
+#import "ios/chrome/browser/web/model/print/print_tab_helper.h"
+#import "ios/chrome/browser/web/model/repost_form_tab_helper.h"
+#import "ios/chrome/browser/web/model/repost_form_tab_helper_delegate.h"
+#import "ios/chrome/browser/web_state_list/model/web_state_dependency_installation_observer.h"
+#import "ios/chrome/browser/web_state_list/model/web_state_dependency_installer_bridge.h"
+#import "ios/chrome/browser/webui/model/net_export_tab_helper.h"
+#import "ios/chrome/browser/webui/model/net_export_tab_helper_delegate.h"
+#import "ios/public/provider/chrome/browser/lens/lens_api.h"
 #import "ui/base/device_form_factor.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface TabLifecycleMediator () <DependencyInstalling>
 @end
@@ -29,40 +54,10 @@
 @implementation TabLifecycleMediator {
   // Bridge to observe the web state list from Objective-C.
   std::unique_ptr<WebStateDependencyInstallerBridge> _dependencyInstallerBridge;
-
-  // Delegate object for many tab helpers.
-  __weak id<CommonTabHelperDelegate> _delegate;
-
-  // Delegate object for Snapshot Generator.
-  __weak id<SnapshotGeneratorDelegate> _snapshotGeneratorDelegate;
-
-  // Other tab helper dependencies.
-  PrerenderService* _prerenderService;
-  __weak SideSwipeController* _sideSwipeController;
-  __weak DownloadManagerCoordinator* _downloadManagerCoordinator;
-  __weak UIViewController* _baseViewController;
-  __weak CommandDispatcher* _commandDispatcher;
-  __weak id<NetExportTabHelperDelegate> _tabHelperDelegate;
 }
 
-- (instancetype)initWithWebStateList:(WebStateList*)webStateList
-                            delegate:(id<CommonTabHelperDelegate>)delegate
-           snapshotGeneratorDelegate:
-               (id<SnapshotGeneratorDelegate>)snapshotGeneratorDelegate
-                        dependencies:(TabLifecycleDependencies)dependencies {
+- (instancetype)initWithWebStateList:(WebStateList*)webStateList {
   if (self = [super init]) {
-    _prerenderService = dependencies.prerenderService;
-    _sideSwipeController = dependencies.sideSwipeController;
-    _downloadManagerCoordinator = dependencies.downloadManagerCoordinator;
-    _baseViewController = dependencies.baseViewController;
-    _commandDispatcher = dependencies.commandDispatcher;
-    _tabHelperDelegate = dependencies.tabHelperDelegate;
-
-    // Set the delegate before any of the dependency observers, because they
-    // will do delegate installation on creation.
-    _delegate = delegate;
-    _snapshotGeneratorDelegate = snapshotGeneratorDelegate;
-
     _dependencyInstallerBridge =
         std::make_unique<WebStateDependencyInstallerBridge>(self, webStateList);
   }
@@ -85,28 +80,95 @@
   // Only realized webstates should have dependencies installed.
   DCHECK(webState->IsRealized());
 
+  DCHECK(_snapshotGeneratorDelegate);
   SnapshotTabHelper::FromWebState(webState)->SetDelegate(
       _snapshotGeneratorDelegate);
 
-  if (PasswordTabHelper* passwordTabHelper =
-          PasswordTabHelper::FromWebState(webState)) {
-    passwordTabHelper->SetBaseViewController(_baseViewController);
-    passwordTabHelper->SetPasswordControllerDelegate(_delegate);
-    passwordTabHelper->SetDispatcher(_commandDispatcher);
+  PasswordTabHelper* passwordTabHelper =
+      PasswordTabHelper::FromWebState(webState);
+  DCHECK(_passwordControllerDelegate);
+  DCHECK(_commandDispatcher);
+  passwordTabHelper->SetPasswordControllerDelegate(_passwordControllerDelegate);
+  passwordTabHelper->SetDispatcher(_commandDispatcher);
+
+  AutofillBottomSheetTabHelper* bottomSheetTabHelper =
+      AutofillBottomSheetTabHelper::FromWebState(webState);
+  bottomSheetTabHelper->SetAutofillBottomSheetHandler(
+      HandlerForProtocol(_commandDispatcher, AutofillBottomSheetCommands));
+
+  if (ios::provider::IsLensSupported()) {
+    LensTabHelper* lensTabHelper = LensTabHelper::FromWebState(webState);
+    lensTabHelper->SetLensCommandsHandler(
+        HandlerForProtocol(_commandDispatcher, LensCommands));
   }
 
-  if (ui::GetDeviceFormFactor() != ui::DEVICE_FORM_FACTOR_TABLET) {
-    OverscrollActionsTabHelper::FromWebState(webState)->SetDelegate(_delegate);
-  }
-
-  web_deprecated::SetSwipeRecognizerProvider(webState, _sideSwipeController);
+  DCHECK(_overscrollActionsDelegate);
+  OverscrollActionsTabHelper::FromWebState(webState)->SetDelegate(
+      _overscrollActionsDelegate);
 
   // DownloadManagerTabHelper cannot function without its delegate.
-  DCHECK(_downloadManagerCoordinator);
+  DCHECK(_downloadManagerTabHelperDelegate);
   DownloadManagerTabHelper::FromWebState(webState)->SetDelegate(
-      _downloadManagerCoordinator);
+      _downloadManagerTabHelperDelegate);
 
+  DCHECK(_tabHelperDelegate);
   NetExportTabHelper::FromWebState(webState)->SetDelegate(_tabHelperDelegate);
+
+  id<WebContentCommands> webContentsHandler =
+      HandlerForProtocol(_commandDispatcher, WebContentCommands);
+  DCHECK(webContentsHandler);
+  ITunesUrlsHandlerTabHelper::FromWebState(webState)->SetWebContentsHandler(
+      webContentsHandler);
+  PassKitTabHelper::FromWebState(webState)->SetWebContentsHandler(
+      webContentsHandler);
+
+  DCHECK(_baseViewController);
+  AutofillTabHelper::FromWebState(webState)->SetBaseViewController(
+      _baseViewController);
+
+  DCHECK(_printCoordinator);
+  PrintTabHelper::FromWebState(webState)->set_printer(_printCoordinator);
+
+  RepostFormTabHelper::FromWebState(webState)->SetDelegate(_repostFormDelegate);
+
+  FollowTabHelper* followTabHelper = FollowTabHelper::FromWebState(webState);
+  if (followTabHelper) {
+    DCHECK(_followIPHPresenter);
+    followTabHelper->set_follow_iph_presenter(_followIPHPresenter);
+  }
+
+  DCHECK(_tabInsertionBrowserAgent);
+  CaptivePortalTabHelper::FromWebState(webState)->SetTabInsertionBrowserAgent(
+      _tabInsertionBrowserAgent);
+
+  NewTabPageTabHelper::FromWebState(webState)->SetDelegate(
+      _NTPTabHelperDelegate);
+
+  AnnotationsTabHelper* annotationsTabHelper =
+      AnnotationsTabHelper::FromWebState(webState);
+  if (annotationsTabHelper) {
+    DCHECK(_baseViewController);
+    annotationsTabHelper->SetBaseViewController(_baseViewController);
+    annotationsTabHelper->SetMiniMapCommands(
+        HandlerForProtocol(_commandDispatcher, MiniMapCommands));
+    annotationsTabHelper->SetUnitConversionCommands(
+        HandlerForProtocol(_commandDispatcher, UnitConversionCommands));
+    if (IsIOSParcelTrackingEnabled() &&
+        !IsParcelTrackingDisabled(GetApplicationContext()->GetLocalState())) {
+      annotationsTabHelper->SetParcelTrackingOptInCommands(
+          HandlerForProtocol(_commandDispatcher, ParcelTrackingOptInCommands));
+    }
+  }
+
+  PriceNotificationsTabHelper* priceNotificationsTabHelper =
+      PriceNotificationsTabHelper::FromWebState(webState);
+  if (priceNotificationsTabHelper) {
+    DCHECK(_priceNotificationsIPHPresenter);
+    priceNotificationsTabHelper->SetPriceNotificationsIPHPresenter(
+        _priceNotificationsIPHPresenter);
+  }
+  AppLauncherTabHelper::FromWebState(webState)->SetBrowserPresentationProvider(
+      _appLauncherBrowserPresentationProvider);
 }
 
 - (void)uninstallDependencyForWebState:(web::WebState*)webState {
@@ -117,22 +179,58 @@
   // shutdown.
   SnapshotTabHelper::FromWebState(webState)->SetDelegate(nil);
 
-  if (PasswordTabHelper* passwordTabHelper =
-          PasswordTabHelper::FromWebState(webState)) {
-    passwordTabHelper->SetBaseViewController(nil);
-    passwordTabHelper->SetPasswordControllerDelegate(nil);
-    passwordTabHelper->SetDispatcher(nil);
+  PasswordTabHelper* passwordTabHelper =
+      PasswordTabHelper::FromWebState(webState);
+  passwordTabHelper->SetPasswordControllerDelegate(nil);
+  passwordTabHelper->SetDispatcher(nil);
+
+  AutofillBottomSheetTabHelper* bottomSheetTabHelper =
+      AutofillBottomSheetTabHelper::FromWebState(webState);
+  bottomSheetTabHelper->SetAutofillBottomSheetHandler(nil);
+
+  LensTabHelper* lensTabHelper = LensTabHelper::FromWebState(webState);
+  if (lensTabHelper) {
+    lensTabHelper->SetLensCommandsHandler(nil);
   }
 
-  if (ui::GetDeviceFormFactor() != ui::DEVICE_FORM_FACTOR_TABLET) {
-    OverscrollActionsTabHelper::FromWebState(webState)->SetDelegate(nil);
-  }
-
-  web_deprecated::SetSwipeRecognizerProvider(webState, nil);
+  OverscrollActionsTabHelper::FromWebState(webState)->SetDelegate(nil);
 
   DownloadManagerTabHelper::FromWebState(webState)->SetDelegate(nil);
 
   NetExportTabHelper::FromWebState(webState)->SetDelegate(nil);
+
+  AutofillTabHelper::FromWebState(webState)->SetBaseViewController(nil);
+
+  PrintTabHelper::FromWebState(webState)->set_printer(nil);
+
+  RepostFormTabHelper::FromWebState(webState)->SetDelegate(nil);
+
+  FollowTabHelper* followTabHelper = FollowTabHelper::FromWebState(webState);
+  if (followTabHelper) {
+    followTabHelper->set_follow_iph_presenter(nil);
+  }
+
+  CaptivePortalTabHelper::FromWebState(webState)->SetTabInsertionBrowserAgent(
+      nil);
+
+  NewTabPageTabHelper::FromWebState(webState)->SetDelegate(nil);
+
+  AnnotationsTabHelper* annotationsTabHelper =
+      AnnotationsTabHelper::FromWebState(webState);
+  if (annotationsTabHelper) {
+    annotationsTabHelper->SetBaseViewController(nil);
+    annotationsTabHelper->SetMiniMapCommands(nil);
+    annotationsTabHelper->SetUnitConversionCommands(nil);
+  }
+
+  PriceNotificationsTabHelper* priceNotificationsTabHelper =
+      PriceNotificationsTabHelper::FromWebState(webState);
+  if (priceNotificationsTabHelper) {
+    priceNotificationsTabHelper->SetPriceNotificationsIPHPresenter(nil);
+  }
+
+  AppLauncherTabHelper::FromWebState(webState)->SetBrowserPresentationProvider(
+      nil);
 }
 
 @end

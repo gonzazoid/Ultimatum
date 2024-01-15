@@ -39,18 +39,18 @@ class PaymentRequestCanMakePaymentMetricsTest
 
     // Choosing nickpay for its JIT installation support.
     nickpay_server_.ServeFilesFromSourceDirectory(
-        "components/test/data/payments/nickpay.com/");
+        "components/test/data/payments/");
 
     ASSERT_TRUE(nickpay_server_.Start());
   }
 
   void InstallTwoPaymentHandlersAndQueryShow() {
     std::string a_method_name;
-    InstallPaymentApp("a.com", "payment_request_success_responder.js",
+    InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                       &a_method_name);
 
     std::string b_method_name;
-    InstallPaymentApp("b.com", "payment_request_success_responder.js",
+    InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                       &b_method_name);
 
     NavigateTo("c.com", "/payment_request_can_make_payment_metrics_test.html");
@@ -68,7 +68,7 @@ class PaymentRequestCanMakePaymentMetricsTest
                                   "queryShowWithMethods([{supportedMethods:$1}"
                                   ", {supportedMethods:$2}])",
                                   a_method_name, b_method_name)));
-    WaitForObservedEvent();
+    ASSERT_TRUE(WaitForObservedEvent());
 
     // Flushing the PaymentRequest::AreRequestedMethodsSupportedCallback()
     // callback so that EVENT_SHOWN/SKIPPED_SHOW will be recorded.
@@ -77,11 +77,11 @@ class PaymentRequestCanMakePaymentMetricsTest
 
   void InstallTwoPaymentHandlersAndNoQueryShow() {
     std::string a_method_name;
-    InstallPaymentApp("a.com", "payment_request_success_responder.js",
+    InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                       &a_method_name);
 
     std::string b_method_name;
-    InstallPaymentApp("b.com", "payment_request_success_responder.js",
+    InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                       &b_method_name);
 
     NavigateTo("c.com", "/payment_request_can_make_payment_metrics_test.html");
@@ -93,7 +93,7 @@ class PaymentRequestCanMakePaymentMetricsTest
                                  "noQueryShowWithMethods([{supportedMethods:$1}"
                                  ", {supportedMethods:$2}])",
                                  a_method_name, b_method_name)));
-    WaitForObservedEvent();
+    ASSERT_TRUE(WaitForObservedEvent());
 
     // Flushing the PaymentRequest::AreRequestedMethodsSupportedCallback()
     // callback so that EVENT_SHOWN/SKIPPED_SHOW will be recorded.
@@ -105,11 +105,10 @@ class PaymentRequestCanMakePaymentMetricsTest
 
 IN_PROC_BROWSER_TEST_F(PaymentRequestCanMakePaymentMetricsTest,
                        Called_True_NotShown) {
-  NavigateTo("a.com", "/payment_handler_installer.html");
   base::HistogramTester histogram_tester;
 
   std::string a_method_name;
-  InstallPaymentApp("a.com", "can_make_payment_true_responder.js",
+  InstallPaymentApp("a.com", "/can_make_payment_true_responder.js",
                     &a_method_name);
 
   NavigateTo("b.com", "/payment_request_can_make_payment_metrics_test.html");
@@ -165,9 +164,9 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCanMakePaymentMetricsTest,
                                DialogEvent::CAN_MAKE_PAYMENT_RETURNED,
                                DialogEvent::HAS_ENROLLED_INSTRUMENT_CALLED,
                                DialogEvent::HAS_ENROLLED_INSTRUMENT_RETURNED});
-  ASSERT_TRUE(content::ExecuteScript(GetActiveWebContents(),
-                                     "queryNoShowWithUrlMethods();"));
-  WaitForObservedEvent();
+  ASSERT_TRUE(
+      content::ExecJs(GetActiveWebContents(), "queryNoShowWithUrlMethods();"));
+  ASSERT_TRUE(WaitForObservedEvent());
 
   // Navigate away to trigger the log.
   NavigateTo("/payment_request_email_test.html");
@@ -206,9 +205,9 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCanMakePaymentMetricsTest,
   base::HistogramTester histogram_tester;
 
   std::string nickpay_method_name =
-      nickpay_server_.GetURL("nickpay.com", "/pay").spec();
+      nickpay_server_.GetURL("nickpay.test", "/nickpay.test/pay").spec();
   std::string nickpay2_method_name =
-      nickpay_server_.GetURL("nickpay2.com", "/pay").spec();
+      nickpay_server_.GetURL("nickpay2.test", "/nickpay.test/pay").spec();
 
   ResetEventWaiterForSequence({DialogEvent::CAN_MAKE_PAYMENT_CALLED,
                                DialogEvent::CAN_MAKE_PAYMENT_RETURNED,
@@ -224,7 +223,7 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCanMakePaymentMetricsTest,
                 content::JsReplace("queryShowWithMethods([{supportedMethods:$1}"
                                    ",{supportedMethods:$2}]);",
                                    nickpay_method_name, nickpay2_method_name)));
-  WaitForObservedEvent();
+  ASSERT_TRUE(WaitForObservedEvent());
 
   // Flushing the PaymentRequest::AreRequestedMethodsSupportedCallback()
   // callback so that EVENT_SHOWN/SKIPPED_SHOW will be recorded.
@@ -268,9 +267,9 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCanMakePaymentMetricsTest,
   base::HistogramTester histogram_tester;
 
   std::string nickpay_method_name =
-      nickpay_server_.GetURL("nickpay.com", "/pay").spec();
+      nickpay_server_.GetURL("nickpay.test", "/nickpay.test/pay").spec();
   std::string nickpay2_method_name =
-      nickpay_server_.GetURL("nickpay2.com", "/pay").spec();
+      nickpay_server_.GetURL("nickpay2.test", "/nickpay.test/pay").spec();
 
   ResetEventWaiterForSequence({DialogEvent::CAN_MAKE_PAYMENT_CALLED,
                                DialogEvent::CAN_MAKE_PAYMENT_RETURNED,
@@ -286,7 +285,7 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCanMakePaymentMetricsTest,
                 content::JsReplace("queryShowWithMethods([{supportedMethods:$1}"
                                    ",{supportedMethods:$2}]);",
                                    nickpay_method_name, nickpay2_method_name)));
-  WaitForObservedEvent();
+  ASSERT_TRUE(WaitForObservedEvent());
 
   // Flushing the PaymentRequest::AreRequestedMethodsSupportedCallback()
   // callback so that EVENT_SHOWN/SKIPPED_SHOW will be recorded.
@@ -297,9 +296,8 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCanMakePaymentMetricsTest,
       {DialogEvent::ABORT_CALLED, DialogEvent::DIALOG_CLOSED});
   const std::string click_buy_button_js =
       "(function() { document.getElementById('abort').click(); })();";
-  ASSERT_TRUE(
-      content::ExecuteScript(GetActiveWebContents(), click_buy_button_js));
-  WaitForObservedEvent();
+  ASSERT_TRUE(content::ExecJs(GetActiveWebContents(), click_buy_button_js));
+  ASSERT_TRUE(WaitForObservedEvent());
 
   // Make sure the correct events were logged.
   std::vector<base::Bucket> buckets =
@@ -335,9 +333,9 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCanMakePaymentMetricsTest,
   base::HistogramTester histogram_tester;
 
   std::string nickpay_method_name =
-      nickpay_server_.GetURL("nickpay.com", "/pay").spec();
+      nickpay_server_.GetURL("nickpay.test", "/nickpay.test/pay").spec();
   std::string nickpay2_method_name =
-      nickpay_server_.GetURL("nickpay2.com", "/pay").spec();
+      nickpay_server_.GetURL("nickpay2.test", "/nickpay.test/pay").spec();
 
   ResetEventWaiterForSequence({DialogEvent::CAN_MAKE_PAYMENT_CALLED,
                                DialogEvent::CAN_MAKE_PAYMENT_RETURNED,
@@ -353,7 +351,7 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCanMakePaymentMetricsTest,
                 content::JsReplace("queryShowWithMethods([{supportedMethods:$1}"
                                    ",{supportedMethods:$2}]);",
                                    nickpay_method_name, nickpay2_method_name)));
-  WaitForObservedEvent();
+  ASSERT_TRUE(WaitForObservedEvent());
 
   // Flushing the PaymentRequest::AreRequestedMethodsSupportedCallback()
   // callback so that EVENT_SHOWN/SKIPPED_SHOW will be recorded.
@@ -395,7 +393,7 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCanMakePaymentMetricsTest,
   base::HistogramTester histogram_tester;
 
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
 
   NavigateTo("b.com", "/payment_request_can_make_payment_metrics_test.html");
@@ -451,9 +449,8 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCanMakePaymentMetricsTest,
       {DialogEvent::ABORT_CALLED, DialogEvent::DIALOG_CLOSED});
   const std::string click_buy_button_js =
       "(function() { document.getElementById('abort').click(); })();";
-  ASSERT_TRUE(
-      content::ExecuteScript(GetActiveWebContents(), click_buy_button_js));
-  WaitForObservedEvent();
+  ASSERT_TRUE(content::ExecJs(GetActiveWebContents(), click_buy_button_js));
+  ASSERT_TRUE(WaitForObservedEvent());
 
   // Make sure the correct events were logged.
   std::vector<base::Bucket> buckets =
@@ -567,9 +564,8 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCanMakePaymentMetricsTest,
       {DialogEvent::ABORT_CALLED, DialogEvent::DIALOG_CLOSED});
   const std::string click_buy_button_js =
       "(function() { document.getElementById('abort').click(); })();";
-  ASSERT_TRUE(
-      content::ExecuteScript(GetActiveWebContents(), click_buy_button_js));
-  WaitForObservedEvent();
+  ASSERT_TRUE(content::ExecJs(GetActiveWebContents(), click_buy_button_js));
+  ASSERT_TRUE(WaitForObservedEvent());
 
   // Make sure that no canMakePayment events were logged.
   std::vector<base::Bucket> buckets =
@@ -646,7 +642,7 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCanMakePaymentMetricsTest,
   GURL other_origin_url =
       https_server()->GetURL("b.com", "/payment_request_email_test.html");
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), other_origin_url));
-  WaitForObservedEvent();
+  ASSERT_TRUE(WaitForObservedEvent());
 
   // Make sure the correct events were logged.
   std::vector<base::Bucket> buckets =
@@ -686,7 +682,7 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCanMakePaymentMetricsTest,
   // different page on the same origin.
   ResetEventWaiterForSequence({DialogEvent::DIALOG_CLOSED});
   NavigateTo("c.com", "/payment_request_email_test.html");
-  WaitForObservedEvent();
+  ASSERT_TRUE(WaitForObservedEvent());
 
   // Make sure the correct events were logged.
   std::vector<base::Bucket> buckets =
@@ -725,7 +721,7 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCanMakePaymentMetricsTest,
   // Simulate that the user reloads the page containing the Payment Request.
   ResetEventWaiterForSequence({DialogEvent::DIALOG_CLOSED});
   chrome::Reload(browser(), WindowOpenDisposition::CURRENT_TAB);
-  WaitForObservedEvent();
+  ASSERT_TRUE(WaitForObservedEvent());
 
   // Make sure the correct events were logged.
   std::vector<base::Bucket> buckets =
@@ -764,7 +760,7 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestCanMakePaymentMetricsTest,
   // Simulate that the user closes the tab containing the Payment Request.
   ResetEventWaiterForSequence({DialogEvent::DIALOG_CLOSED});
   chrome::CloseTab(browser());
-  WaitForObservedEvent();
+  ASSERT_TRUE(WaitForObservedEvent());
 
   // Make sure the correct events were logged.
   std::vector<base::Bucket> buckets =

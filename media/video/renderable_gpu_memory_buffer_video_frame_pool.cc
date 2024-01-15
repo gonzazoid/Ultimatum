@@ -10,17 +10,19 @@
 #include <list>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/bits.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/task/bind_post_task.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "gpu/GLES2/gl2extchromium.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
 #include "gpu/command_buffer/client/gpu_memory_buffer_manager.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
 #include "gpu/command_buffer/common/gpu_memory_buffer_support.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
+#include "media/base/media_switches.h"
 #include "media/base/video_frame.h"
 
 namespace media {
@@ -69,6 +71,7 @@ class FrameResources {
   const gfx::ColorSpace color_space_;
   std::unique_ptr<gfx::GpuMemoryBuffer> gpu_memory_buffer_;
   gpu::MailboxHolder mailbox_holders_[VideoFrame::kMaxPlanes];
+  scoped_refptr<gpu::ClientSharedImage> shared_images_[VideoFrame::kMaxPlanes];
 };
 
 // The owner of the RenderableGpuMemoryBufferVideoFramePool::Client needs to be
@@ -150,10 +153,12 @@ FrameResources::FrameResources(scoped_refptr<InternalRefCountedPool> pool,
 
 FrameResources::~FrameResources() {
   auto* context = pool_->GetContext();
-  for (auto& holder : mailbox_holders_) {
-    if (holder.mailbox.IsZero())
+  for (unsigned int i = 0; i < VideoFrame::kMaxPlanes; ++i) {
+    if (!shared_images_[i]) {
       continue;
-    context->DestroySharedImage(holder.sync_token, holder.mailbox);
+    }
+    context->DestroySharedImage(mailbox_holders_[i].sync_token,
+                                std::move(shared_images_[i]));
   }
 }
 
@@ -172,11 +177,12 @@ bool FrameResources::Initialize() {
 
   // Align number of rows to 2, because it's required by YUV_420_BIPLANAR
   // buffer allocation code.
-  // Align buffer stride to 4, because our rendering code at
-  // GLImageMemory::Initialize() requires it, since it sometimes treats
-  // Y-planes are 4 bytes per pixel textures.
-  gfx::Size buffer_size_in_pixels(base::bits::AlignUp(coded_size_.width(), 4),
-                                  base::bits::AlignUp(coded_size_.height(), 2));
+  // Align buffer stride to 4, because our SharedImage shared memory backing
+  // code requires it, since it sometimes treats Y-planes are 4 bytes per pixel
+  // textures.
+  gfx::Size buffer_size_in_pixels(
+      base::bits::AlignUpDeprecatedDoNotUse(coded_size_.width(), 4),
+      base::bits::AlignUpDeprecatedDoNotUse(coded_size_.height(), 2));
 
   // Create the GpuMemoryBuffer.
   gpu_memory_buffer_ = context->CreateGpuMemoryBuffer(
@@ -188,29 +194,55 @@ bool FrameResources::Initialize() {
     return false;
   }
 
+#if BUILDFLAG(IS_MAC)
   gpu_memory_buffer_->SetColorSpace(color_space_);
+#endif
 
-  // Bind SharedImages to each plane.
-  constexpr size_t kNumPlanes = 2;
-  constexpr gfx::BufferPlane kPlanes[kNumPlanes] = {gfx::BufferPlane::Y,
-                                                    gfx::BufferPlane::UV};
   constexpr uint32_t kSharedImageUsage =
 #if BUILDFLAG(IS_MAC)
       gpu::SHARED_IMAGE_USAGE_MACOS_VIDEO_TOOLBOX |
 #endif
-      gpu::SHARED_IMAGE_USAGE_GLES2 | gpu::SHARED_IMAGE_USAGE_RASTER |
-      gpu::SHARED_IMAGE_USAGE_DISPLAY_READ | gpu::SHARED_IMAGE_USAGE_SCANOUT;
+      // These SharedImages, like most/all SharedImages created to back
+      // VideoFrames, can be read via GLES2 to be exported for WebGL usage.
+      // Unusually for such SharedImages, they are also written via raster for
+      // WebGL and WebRTC use cases in which RGBA textures are imported into the
+      // VideoFrames (this is what "renderable" means in this context). Hence,
+      // GLES2_WRITE is required for raster-over-GLES.
+      gpu::SHARED_IMAGE_USAGE_GLES2_READ | gpu::SHARED_IMAGE_USAGE_GLES2_WRITE |
+      gpu::SHARED_IMAGE_USAGE_RASTER | gpu::SHARED_IMAGE_USAGE_DISPLAY_READ |
+      gpu::SHARED_IMAGE_USAGE_SCANOUT;
 
   uint32_t texture_target = GL_TEXTURE_2D;
 #if BUILDFLAG(IS_MAC)
   // TODO(https://crbug.com/1311844): Use gpu::GetBufferTextureTarget() instead.
   texture_target = gpu::GetPlatformSpecificTextureTarget();
 #endif
+
+  if (IsMultiPlaneFormatForHardwareVideoEnabled()) {
+    shared_images_[0] = context->CreateSharedImage(
+        gpu_memory_buffer_.get(), viz::MultiPlaneFormat::kNV12, color_space_,
+        kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType, kSharedImageUsage,
+        mailbox_holders_[0].sync_token);
+    if (shared_images_[0]) {
+      mailbox_holders_[0].mailbox = shared_images_[0]->mailbox();
+    }
+    mailbox_holders_[0].texture_target = texture_target;
+    return true;
+  }
+
+  // Bind SharedImages to each plane.
+  constexpr size_t kNumPlanes = 2;
+  constexpr gfx::BufferPlane kPlanes[kNumPlanes] = {gfx::BufferPlane::Y,
+                                                    gfx::BufferPlane::UV};
+
   for (size_t plane = 0; plane < kNumPlanes; ++plane) {
-    context->CreateSharedImage(
+    shared_images_[plane] = context->CreateSharedImage(
         gpu_memory_buffer_.get(), kPlanes[plane], color_space_,
         kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType, kSharedImageUsage,
-        mailbox_holders_[plane].mailbox, mailbox_holders_[plane].sync_token);
+        mailbox_holders_[plane].sync_token);
+    if (shared_images_[plane]) {
+      mailbox_holders_[plane].mailbox = shared_images_[plane]->mailbox();
+    }
     mailbox_holders_[plane].texture_target = texture_target;
   }
   return true;
@@ -238,6 +270,15 @@ FrameResources::CreateVideoFrameAndTakeGpuMemoryBuffer() {
   // TODO(https://crbug.com/1191956): This should depend on the platform and
   // format.
   video_frame->metadata().allow_overlay = true;
+
+  if (IsMultiPlaneFormatForHardwareVideoEnabled()) {
+    // Tag this frame as having used a single SharedImage for multiplanar
+    // formats (by default it sets this field to `kLegacy`, which causes the
+    // rest of the system to assume that this frame has been created with one
+    // SharedImage per plane for multiplanar formats).
+    video_frame->set_shared_image_format_type(
+        SharedImageFormatType::kSharedImageFormat);
+  }
 
   // Only native (non shared memory) GMBs require waiting on GPU fences.
   const bool has_native_gmb =
@@ -299,8 +340,8 @@ scoped_refptr<VideoFrame> InternalRefCountedPool::MaybeCreateVideoFrame(
   // this on the calling thread.
   auto callback = base::BindOnce(&InternalRefCountedPool::OnVideoFrameDestroyed,
                                  this, std::move(frame_resources));
-  video_frame->SetReleaseMailboxAndGpuMemoryBufferCB(base::BindPostTask(
-      base::SequencedTaskRunnerHandle::Get(), std::move(callback), FROM_HERE));
+  video_frame->SetReleaseMailboxAndGpuMemoryBufferCB(
+      base::BindPostTaskToCurrentDefault(std::move(callback), FROM_HERE));
   return video_frame;
 }
 

@@ -20,9 +20,10 @@ namespace android_webview {
 
 bool IsBackgroundTracingCommandLine() {
   auto tracing_mode = tracing::GetBackgroundTracingSetupMode();
-  if (tracing_mode == tracing::BackgroundTracingSetupMode::kFromConfigFile ||
+  if (tracing_mode ==
+          tracing::BackgroundTracingSetupMode::kFromJsonConfigFile ||
       tracing_mode ==
-          tracing::BackgroundTracingSetupMode::kFromFieldTrialLocalOutput) {
+          tracing::BackgroundTracingSetupMode::kFromProtoConfigFile) {
     return true;
   }
   return false;
@@ -36,14 +37,29 @@ void AwTracingDelegate::RegisterPrefs(PrefRegistrySimple* registry) {
   registry->RegisterDictionaryPref(tracing::kBackgroundTracingSessionState);
 }
 
-bool AwTracingDelegate::IsAllowedToBeginBackgroundScenario(
-    const content::BackgroundTracingConfig& config,
-    bool requires_anonymized_data) {
+bool AwTracingDelegate::IsAllowedToStartScenario() const {
   // If the background tracing is specified on the command-line, we allow
   // any scenario to be traced and uploaded.
-  if (IsBackgroundTracingCommandLine())
+  if (IsBackgroundTracingCommandLine()) {
     return true;
+  }
 
+  tracing::BackgroundTracingStateManager& state =
+      tracing::BackgroundTracingStateManager::GetInstance();
+
+  // Don't start a new trace if the previous trace did not end.
+  if (state.DidLastSessionEndUnexpectedly()) {
+    tracing::RecordDisallowedMetric(
+        tracing::TracingFinalizationDisallowedReason::
+            kLastTracingSessionDidNotEnd);
+    return false;
+  }
+
+  return true;
+}
+
+bool AwTracingDelegate::OnBackgroundTracingActive(
+    bool requires_anonymized_data) {
   // We call Initialize() only when a tracing scenario tries to start, and
   // unless this happens we never save state. In particular, if the background
   // tracing experiment is disabled, Initialize() will never be called, and we
@@ -57,42 +73,22 @@ bool AwTracingDelegate::IsAllowedToBeginBackgroundScenario(
       tracing::BackgroundTracingStateManager::GetInstance();
   state.Initialize(AwBrowserProcess::GetInstance()->local_state());
 
-  // Don't start a new trace if the previous trace did not end.
-  if (state.DidLastSessionEndUnexpectedly()) {
-    tracing::RecordDisallowedMetric(
-        tracing::TracingFinalizationDisallowedReason::
-            kLastTracingSessionDidNotEnd);
+  if (!IsAllowedToStartScenario()) {
     return false;
   }
 
-  // TODO(crbug.com/1290887): check the trace limit per week (to be implemented
-  // later)
-
-  state.NotifyTracingStarted();
+  state.OnTracingStarted();
   return true;
 }
 
-bool AwTracingDelegate::IsAllowedToEndBackgroundScenario(
-    const content::BackgroundTracingConfig& config,
-    bool requires_anonymized_data,
-    bool is_crash_scenario) {
-  // If the background tracing is specified on the command-line, we allow
-  // any scenario to be traced and uploaded.
-  if (IsBackgroundTracingCommandLine())
-    return true;
-
+bool AwTracingDelegate::OnBackgroundTracingIdle(bool requires_anonymized_data) {
   tracing::BackgroundTracingStateManager& state =
       tracing::BackgroundTracingStateManager::GetInstance();
-  state.NotifyFinalizationStarted();
-
-  // TODO(crbug.com/1290887): check the trace limit per week (to be implemented
-  // later)
-
-  state.OnScenarioUploaded(config.scenario_name());
+  state.OnTracingStopped();
   return true;
 }
 
-absl::optional<base::Value::Dict> AwTracingDelegate::GenerateMetadataDict() {
+std::optional<base::Value::Dict> AwTracingDelegate::GenerateMetadataDict() {
   base::Value::Dict metadata_dict;
   metadata_dict.Set("revision", version_info::GetLastChange());
   return metadata_dict;

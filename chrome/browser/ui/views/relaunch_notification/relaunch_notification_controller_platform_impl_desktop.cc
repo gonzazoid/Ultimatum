@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ui/views/relaunch_notification/relaunch_notification_controller_platform_impl_desktop.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
@@ -17,12 +17,10 @@ namespace {
 
 // Returns the last active tabbed browser.
 Browser* FindLastActiveTabbedBrowser() {
-  BrowserList* browser_list = BrowserList::GetInstance();
-  const auto end = browser_list->end_browsers_ordered_by_activation();
-  for (auto scan = browser_list->begin_browsers_ordered_by_activation();
-       scan != end; ++scan) {
-    if ((*scan)->is_type_normal())
-      return *scan;
+  for (Browser* browser : BrowserList::GetInstance()->OrderedByActivation()) {
+    if (browser->is_type_normal()) {
+      return browser;
+    }
   }
   return nullptr;
 }
@@ -37,7 +35,8 @@ RelaunchNotificationControllerPlatformImpl::
   DCHECK(!widget_);
   if (on_visible_)
     BrowserList::RemoveObserver(this);
-  CHECK(!IsInObserverList());
+  CHECK(!WidgetObserver::IsInObserverList());
+  CHECK(!BrowserListObserver::IsInObserverList());
 }
 
 void RelaunchNotificationControllerPlatformImpl::NotifyRelaunchRecommended(

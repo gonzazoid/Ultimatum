@@ -8,11 +8,11 @@
 // TODO(hidehiko): Rename this file to dbus_callback.h, when we fully
 // get rid of DBusMethodCallStatus enum defined below.
 
+#include <optional>
 #include <string>
 
-#include "base/callback.h"
 #include "base/component_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/functional/callback.h"
 
 namespace dbus {
 
@@ -27,7 +27,7 @@ namespace chromeos {
 // In case of error, nullopt should be passed.
 template <typename ResultType>
 using DBusMethodCallback =
-    base::OnceCallback<void(absl::optional<ResultType> result)>;
+    base::OnceCallback<void(std::optional<ResultType> result)>;
 
 // Callback to handle response of methods without result.
 // |result| is true if the method call is successfully completed, otherwise

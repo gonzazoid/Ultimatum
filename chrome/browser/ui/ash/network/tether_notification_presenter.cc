@@ -4,20 +4,22 @@
 
 #include "chrome/browser/ui/ash/network/tether_notification_presenter.h"
 
+#include <algorithm>
 #include <string>
 
+#include "ash/constants/ash_features.h"
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/network_icon_image_source.h"
 #include "ash/public/cpp/notification_utils.h"
-#include "base/bind.h"
-#include "base/cxx17_backports.h"
+#include "ash/webui/settings/public/constants/routes.mojom.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/notifications/notification_display_service.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/generated_resources.h"
@@ -85,12 +87,12 @@ class SettingsUiDelegateImpl
 const gfx::ImageSkia GetImageForSignalStrength(int signal_strength) {
   // Convert the [0, 100] range to [0, 4], since there are 5 distinct signal
   // strength icons (0 bars to 4 bars).
-  int normalized_signal_strength = base::clamp(signal_strength / 25, 0, 4);
+  int normalized_signal_strength = std::clamp(signal_strength / 25, 0, 4);
 
   return gfx::CanvasImageSource::MakeImageSkia<
       network_icon::SignalStrengthImageSource>(
       network_icon::BARS, gfx::kGoogleBlue500, kTetherSignalIconSize,
-      normalized_signal_strength);
+      normalized_signal_strength, 5);
 }
 
 }  // namespace
@@ -217,7 +219,7 @@ void TetherNotificationPresenter::NotifyConnectionToHostFailed() {
   PA_LOG(VERBOSE) << "Displaying \"connection attempt failed\" notification. "
                   << "Notification ID = " << id;
 
-  ShowNotification(CreateSystemNotification(
+  ShowNotification(CreateSystemNotificationPtr(
       message_center::NotificationType::NOTIFICATION_TYPE_SIMPLE, id,
       l10n_util::GetStringUTF16(
           IDS_TETHER_NOTIFICATION_CONNECTION_FAILED_TITLE),
@@ -241,7 +243,7 @@ void TetherNotificationPresenter::RemoveConnectionToHostFailedNotification() {
 
 void TetherNotificationPresenter::OnNotificationClicked(
     const std::string& notification_id,
-    absl::optional<int> button_index) {
+    std::optional<int> button_index) {
   if (button_index) {
     DCHECK_EQ(kPotentialHotspotNotificationId, notification_id);
     DCHECK_EQ(0, *button_index);
@@ -320,6 +322,9 @@ TetherNotificationPresenter::CreateNotification(
               &TetherNotificationPresenter::OnNotificationClosed,
               weak_ptr_factory_.GetWeakPtr(), id)));
   notification->set_small_image(gfx::Image(small_image));
+  if (base::FeatureList::IsEnabled(ash::features::kInstantHotspotRebrand)) {
+    notification->set_never_timeout(true);
+  }
   return notification;
 }
 

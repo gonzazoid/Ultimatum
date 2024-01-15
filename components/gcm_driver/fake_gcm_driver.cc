@@ -4,10 +4,10 @@
 
 #include "components/gcm_driver/fake_gcm_driver.h"
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace gcm {
 
@@ -25,14 +25,8 @@ void FakeGCMDriver::ValidateRegistration(
     const std::vector<std::string>& sender_ids,
     const std::string& registration_id,
     ValidateRegistrationCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true /* is_valid */));
-}
-
-void FakeGCMDriver::OnSignedIn() {
-}
-
-void FakeGCMDriver::OnSignedOut() {
 }
 
 void FakeGCMDriver::AddConnectionObserver(GCMConnectionObserver* observer) {

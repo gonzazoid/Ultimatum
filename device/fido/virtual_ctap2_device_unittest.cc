@@ -5,9 +5,10 @@
 #include "device/fido/virtual_ctap2_device.h"
 
 #include <memory>
+#include <string_view>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -19,9 +20,11 @@
 #include "device/fido/device_response_converter.h"
 #include "device/fido/fido_parsing_utils.h"
 #include "device/fido/fido_test_data.h"
+#include "device/fido/large_blob.h"
 #include "device/fido/test_callback_receiver.h"
 #include "net/cert/asn1_util.h"
 #include "net/cert/x509_certificate.h"
+#include "net/cert/x509_util.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -209,13 +212,13 @@ TEST_F(VirtualCtap2DeviceTest, AttestationCertificateIsValid) {
 
   bool present;
   bool critical;
-  base::StringPiece contents;
+  std::string_view contents;
   ASSERT_TRUE(net::asn1::ExtractExtensionFromDERCert(
       net::x509_util::CryptoBufferAsStringPiece(cert->cert_buffer()),
-      base::StringPiece("\x55\x1d\x13"), &present, &critical, &contents));
+      std::string_view("\x55\x1d\x13"), &present, &critical, &contents));
   EXPECT_TRUE(present);
   EXPECT_TRUE(critical);
-  EXPECT_EQ(base::StringPiece("\x30\x00", 2), contents);
+  EXPECT_EQ(std::string_view("\x30\x00", 2), contents);
 }
 
 TEST_F(VirtualCtap2DeviceTest, RejectsCredentialsWithExtraKeys) {
@@ -434,6 +437,42 @@ TEST_F(VirtualCtap2DeviceTest, OnMakeCredentialUnsetUVBit) {
 
   EXPECT_FALSE(response->attestation_object.authenticator_data()
                    .obtained_user_verification());
+}
+
+// Tests injecting and getting a large blob.
+TEST_F(VirtualCtap2DeviceTest, InjectLargeBlob) {
+  MakeDevice();
+  std::vector<uint8_t> credential1 = {1, 2, 3, 4};
+  ASSERT_TRUE(device_->mutable_state()->InjectResidentKey(
+      credential1, test_data::kRelyingPartyId, std::vector<uint8_t>{5, 6, 7, 8},
+      absl::nullopt, absl::nullopt));
+
+  std::vector<uint8_t> credential2 = {5, 6, 7, 8};
+  ASSERT_TRUE(device_->mutable_state()->InjectResidentKey(
+      credential2, test_data::kRelyingPartyId, std::vector<uint8_t>{9, 0, 1, 2},
+      absl::nullopt, absl::nullopt));
+
+  // Inject two large blobs.
+  LargeBlob blob1({'b', 'l', 'o', 'b', '1'}, 5);
+  device_->mutable_state()->InjectLargeBlob(
+      &device_->mutable_state()->registrations.at(credential1), blob1);
+
+  LargeBlob blob2({'b', 'l', 'o', 'b', '2'}, 5);
+  device_->mutable_state()->InjectLargeBlob(
+      &device_->mutable_state()->registrations.at(credential2), blob2);
+
+  // Replace the first one with a new one.
+  LargeBlob blob3({'b', 'l', 'o', 'b', '3'}, 5);
+  device_->mutable_state()->InjectLargeBlob(
+      &device_->mutable_state()->registrations.at(credential1), blob3);
+
+  absl::optional<LargeBlob> blob_cred1 = device_->mutable_state()->GetLargeBlob(
+      device_->mutable_state()->registrations.at(credential1));
+  EXPECT_EQ(*blob_cred1, blob3);
+
+  absl::optional<LargeBlob> blob_cred2 = device_->mutable_state()->GetLargeBlob(
+      device_->mutable_state()->registrations.at(credential2));
+  EXPECT_EQ(*blob_cred2, blob2);
 }
 
 }  // namespace device

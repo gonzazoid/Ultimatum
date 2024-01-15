@@ -9,7 +9,6 @@ android_library("java") {
     ":*",
     "../test:*",
     "//chrome/android:chrome_all_java",
-    "//weblayer/browser/java:java",
   ]
 
   sources = [
@@ -28,9 +27,10 @@ android_library("java") {
     "//components/browser_ui/styles/android:java_resources",
     "//components/browser_ui/widget/android:java",
     "//third_party/androidx:androidx_annotation_annotation_java",
+    "//ui/accessibility:ax_base_java",
     "//ui/android:ui_java",
   ]
-  resources_package = "org.chromium.components.browser_ui.bottomsheet.internal"
+  resources_package = "org.chromium.components.browser_ui.bottomsheet"
 }
 
 robolectric_library("junit_tests") {

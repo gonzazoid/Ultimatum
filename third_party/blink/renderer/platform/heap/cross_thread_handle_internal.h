@@ -1,11 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_CROSS_THREAD_HANDLE_INTERNAL_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_CROSS_THREAD_HANDLE_INTERNAL_H_
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/threading/platform_thread.h"
 #include "third_party/blink/renderer/platform/heap/heap_buildflags.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier.h"
@@ -70,6 +70,9 @@ class BasicCrossThreadHandle {
     return ref_.Get();
   }
 
+  // Clears the stored object.
+  void Clear() { ref_.Clear(); }
+
  private:
   template <typename U, typename V>
   friend class blink::BasicUnwrappingCrossThreadHandle;
@@ -106,6 +109,9 @@ class BasicUnwrappingCrossThreadHandle final
 
   // Re-expose the actual getter for the underlying object.
   using Base::GetOnCreationThread;
+
+  // Re-expose the clear method for the underlying object.
+  using Base::Clear;
 
   // Returns whether a value is set.  May only be accessed on the thread the
   // original CrossThreadHandle object was created.

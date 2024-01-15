@@ -32,8 +32,6 @@ inspector_protocol_generate("protocol_sources") {
 
 source_set("auction_worklet") {
   sources = [
-    "auction_downloader.cc",
-    "auction_downloader.h",
     "auction_v8_devtools_agent.cc",
     "auction_v8_devtools_agent.h",
     "auction_v8_devtools_session.cc",
@@ -44,6 +42,8 @@ source_set("auction_worklet") {
     "auction_v8_inspector_util.h",
     "auction_worklet_service_impl.cc",
     "auction_worklet_service_impl.h",
+    "bidder_lazy_filler.cc",
+    "bidder_lazy_filler.h",
     "bidder_worklet.cc",
     "bidder_worklet.h",
     "context_recycler.cc",
@@ -58,6 +58,8 @@ source_set("auction_worklet") {
     "private_aggregation_bindings.h",
     "register_ad_beacon_bindings.cc",
     "register_ad_beacon_bindings.h",
+    "register_ad_macro_bindings.cc",
+    "register_ad_macro_bindings.h",
     "report_bindings.cc",
     "report_bindings.h",
     "seller_worklet.cc",
@@ -68,10 +70,14 @@ source_set("auction_worklet") {
     "set_priority_bindings.h",
     "set_priority_signals_override_bindings.cc",
     "set_priority_signals_override_bindings.h",
+    "shared_storage_bindings.cc",
+    "shared_storage_bindings.h",
     "trusted_signals.cc",
     "trusted_signals.h",
     "trusted_signals_request_manager.cc",
     "trusted_signals_request_manager.h",
+    "webidl_compat.cc",
+    "webidl_compat.h",
     "worklet_loader.cc",
     "worklet_loader.h",
   ]
@@ -89,7 +95,6 @@ source_set("auction_worklet") {
     "//base",
     "//content:export",
     "//content/common",
-    "//content/services/worklet_utils",
     "//gin",
     "//mojo/public/cpp/bindings",
     "//net",
@@ -100,7 +105,10 @@ source_set("auction_worklet") {
     "//v8",
   ]
 
-  public_deps = [ "public/mojom" ]
+  public_deps = [
+    "public/cpp",
+    "public/mojom",
+  ]
 }
 
 # See comment at the top of //content/BUILD.gn for how this works.
@@ -125,24 +133,31 @@ source_set("tests") {
   }
 
   sources = [
-    "auction_downloader_unittest.cc",
-    "auction_v8_helper_unittest.cc",
     "auction_v8_inspector_util_unittest.cc",
-    "bidder_worklet_unittest.cc",
     "context_recycler_unittest.cc",
     "debug_command_queue_unittest.cc",
     "direct_from_seller_signals_requester_unittest.cc",
+    "public/cpp/auction_downloader_unittest.cc",
     "seller_worklet_unittest.cc",
     "trusted_signals_request_manager_unittest.cc",
     "trusted_signals_unittest.cc",
+    "webidl_compat_unittest.cc",
     "worklet_devtools_debug_test_util.cc",
     "worklet_devtools_debug_test_util.h",
-    "worklet_loader_unittest.cc",
     "worklet_test_util.cc",
     "worklet_test_util.h",
     "worklet_v8_debug_test_util.cc",
     "worklet_v8_debug_test_util.h",
   ]
+
+  # TODO(crbug.com/1413818): These tests depend on WASM.
+  if (!is_ios) {
+    sources += [
+      "auction_v8_helper_unittest.cc",
+      "bidder_worklet_unittest.cc",
+      "worklet_loader_unittest.cc",
+    ]
+  }
 
   deps = [
     "//base",
@@ -163,10 +178,6 @@ source_set("tests") {
 
   if (v8_use_external_startup_data) {
     deps += [ "//gin" ]
-  }
-
-  if (is_android) {
-    deps += [ "//v8:v8_external_startup_data_assets" ]
   }
 
   configs += [ "//v8:external_startup_data" ]

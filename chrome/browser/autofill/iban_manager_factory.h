@@ -5,40 +5,38 @@
 #ifndef CHROME_BROWSER_AUTOFILL_IBAN_MANAGER_FACTORY_H_
 #define CHROME_BROWSER_AUTOFILL_IBAN_MANAGER_FACTORY_H_
 
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 namespace base {
 template <typename T>
-struct DefaultSingletonTraits;
+class NoDestructor;
 }
 
 class Profile;
 
 namespace autofill {
 
-class IBANManager;
+class IbanManager;
 
-// Singleton that owns all IBANManagers and associates them with Profiles.
-class IBANManagerFactory : public BrowserContextKeyedServiceFactory {
+// Singleton that owns all IbanManagers and associates them with Profiles.
+class IbanManagerFactory : public ProfileKeyedServiceFactory {
  public:
-  // Returns the IBANManager for |profile|, creating it if it is not yet
+  // Returns the IbanManager for |profile|, creating it if it is not yet
   // created.
-  static IBANManager* GetForProfile(Profile* profile);
+  static IbanManager* GetForProfile(Profile* profile);
 
-  static IBANManagerFactory* GetInstance();
+  static IbanManagerFactory* GetInstance();
 
  private:
-  friend struct base::DefaultSingletonTraits<IBANManagerFactory>;
+  friend base::NoDestructor<IbanManagerFactory>;
 
-  IBANManagerFactory();
-  ~IBANManagerFactory() override;
+  IbanManagerFactory();
+  ~IbanManagerFactory() override;
 
   // BrowserContextKeyedServiceFactory:
   KeyedService* BuildServiceInstanceFor(
       content::BrowserContext* profile) const override;
-  content::BrowserContext* GetBrowserContextToUse(
-      content::BrowserContext* context) const override;
 };
 
 }  // namespace autofill

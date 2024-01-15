@@ -100,11 +100,14 @@ IN_PROC_BROWSER_TEST_F(
                        .Build())
           .AddStep(ui::InteractionSequence::StepBuilder()
                        .SetType(ui::InteractionSequence::StepType::kShown)
-                       .SetElementID(kAppMenuButtonElementId)
+                       .SetElementID(kToolbarAppMenuButtonElementId)
                        .SetStartCallback(base::BindLambdaForTesting(
-                           [&](ui::InteractionSequence*,
+                           [&](ui::InteractionSequence* seq,
                                ui::TrackedElement* element) {
-                             test_util_.PressButton(element);
+                             if (test_util_.PressButton(element) !=
+                                 ui::test::ActionResult::kSucceeded) {
+                               seq->FailForTesting();
+                             }
                            }))
                        .Build())
           .AddStep(ui::InteractionSequence::StepBuilder()
@@ -112,9 +115,12 @@ IN_PROC_BROWSER_TEST_F(
                        .SetElementID(AppMenuModel::kDownloadsMenuItem)
                        .SetMustRemainVisible(false)
                        .SetStartCallback(base::BindLambdaForTesting(
-                           [&](ui::InteractionSequence*,
+                           [&](ui::InteractionSequence* seq,
                                ui::TrackedElement* element) {
-                             test_util_.SelectMenuItem(element);
+                             if (test_util_.SelectMenuItem(element) !=
+                                 ui::test::ActionResult::kSucceeded) {
+                               seq->FailForTesting();
+                             }
                            }))
                        .Build())
           .AddStep(ui::InteractionSequence::StepBuilder()
@@ -170,7 +176,7 @@ IN_PROC_BROWSER_TEST_F(WebContentsInteractionTestUtilInteractiveUiTest,
   // Poke into the doc to find something that's not at the top level, just to
   // verify we can.
   const WebContentsInteractionTestUtil::DeepQuery kTabSearchListQuery = {
-      "tab-search-app", "#tabsList"};
+      "tab-search-app", "tab-search-page"};
 
   DEFINE_LOCAL_CUSTOM_ELEMENT_EVENT_TYPE(kMinimumSizeEvent);
 
@@ -183,9 +189,12 @@ IN_PROC_BROWSER_TEST_F(WebContentsInteractionTestUtilInteractiveUiTest,
                        .SetType(ui::InteractionSequence::StepType::kShown)
                        .SetElementID(kTabSearchButtonElementId)
                        .SetStartCallback(base::BindLambdaForTesting(
-                           [&](ui::InteractionSequence*,
+                           [&](ui::InteractionSequence* seq,
                                ui::TrackedElement* element) {
-                             test_util_.PressButton(element);
+                             if (test_util_.PressButton(element) !=
+                                 ui::test::ActionResult::kSucceeded) {
+                               seq->FailForTesting();
+                             }
                            }))
                        .Build())
           .AddStep(
@@ -242,7 +251,7 @@ IN_PROC_BROWSER_TEST_F(WebContentsInteractionTestUtilInteractiveUiTest,
 
   std::unique_ptr<WebContentsInteractionTestUtil> tab_search_page;
   const ui::ElementContext context = browser()->window()->GetElementContext();
-  base::raw_ptr<WebUIBubbleDialogView> bubble_view = nullptr;
+  raw_ptr<WebUIBubbleDialogView> bubble_view = nullptr;
 
   auto sequence =
       ui::InteractionSequence::Builder()
@@ -253,9 +262,12 @@ IN_PROC_BROWSER_TEST_F(WebContentsInteractionTestUtilInteractiveUiTest,
                        .SetType(ui::InteractionSequence::StepType::kShown)
                        .SetElementID(kTabSearchButtonElementId)
                        .SetStartCallback(base::BindLambdaForTesting(
-                           [&](ui::InteractionSequence*,
+                           [&](ui::InteractionSequence* seq,
                                ui::TrackedElement* element) {
-                             test_util_.PressButton(element);
+                             if (test_util_.PressButton(element) !=
+                                 ui::test::ActionResult::kSucceeded) {
+                               seq->FailForTesting();
+                             }
                            }))
                        .Build())
           .AddStep(
@@ -335,11 +347,14 @@ IN_PROC_BROWSER_TEST_F(WebContentsInteractionTestUtilInteractiveUiTest,
                        .Build())
           .AddStep(ui::InteractionSequence::StepBuilder()
                        .SetType(ui::InteractionSequence::StepType::kShown)
-                       .SetElementID(kAppMenuButtonElementId)
+                       .SetElementID(kToolbarAppMenuButtonElementId)
                        .SetStartCallback(base::BindLambdaForTesting(
-                           [&](ui::InteractionSequence*,
+                           [&](ui::InteractionSequence* seq,
                                ui::TrackedElement* element) {
-                             test_util_.PressButton(element);
+                             if (test_util_.PressButton(element) !=
+                                 ui::test::ActionResult::kSucceeded) {
+                               seq->FailForTesting();
+                             }
                            }))
                        .Build())
           .AddStep(ui::InteractionSequence::StepBuilder()
@@ -347,9 +362,12 @@ IN_PROC_BROWSER_TEST_F(WebContentsInteractionTestUtilInteractiveUiTest,
                        .SetElementID(AppMenuModel::kDownloadsMenuItem)
                        .SetMustRemainVisible(false)
                        .SetStartCallback(base::BindLambdaForTesting(
-                           [&](ui::InteractionSequence*,
+                           [&](ui::InteractionSequence* seq,
                                ui::TrackedElement* element) {
-                             test_util_.SelectMenuItem(element);
+                             if (test_util_.SelectMenuItem(element) !=
+                                 ui::test::ActionResult::kSucceeded) {
+                               seq->FailForTesting();
+                             }
                            }))
                        .Build())
           .AddStep(ui::InteractionSequence::StepBuilder()
@@ -420,11 +438,14 @@ IN_PROC_BROWSER_TEST_F(WebContentsInteractionTestUtilInteractiveUiTest,
                        .Build())
           .AddStep(ui::InteractionSequence::StepBuilder()
                        .SetType(ui::InteractionSequence::StepType::kShown)
-                       .SetElementID(kAppMenuButtonElementId)
+                       .SetElementID(kToolbarAppMenuButtonElementId)
                        .SetStartCallback(base::BindLambdaForTesting(
-                           [&](ui::InteractionSequence*,
+                           [&](ui::InteractionSequence* seq,
                                ui::TrackedElement* element) {
-                             test_util_.PressButton(element);
+                             if (test_util_.PressButton(element) !=
+                                 ui::test::ActionResult::kSucceeded) {
+                               seq->FailForTesting();
+                             }
                            }))
                        .Build())
           .AddStep(ui::InteractionSequence::StepBuilder()
@@ -432,9 +453,12 @@ IN_PROC_BROWSER_TEST_F(WebContentsInteractionTestUtilInteractiveUiTest,
                        .SetElementID(AppMenuModel::kDownloadsMenuItem)
                        .SetMustRemainVisible(false)
                        .SetStartCallback(base::BindLambdaForTesting(
-                           [&](ui::InteractionSequence*,
+                           [&](ui::InteractionSequence* seq,
                                ui::TrackedElement* element) {
-                             test_util_.SelectMenuItem(element);
+                             if (test_util_.SelectMenuItem(element) !=
+                                 ui::test::ActionResult::kSucceeded) {
+                               seq->FailForTesting();
+                             }
                            }))
                        .Build())
           .AddStep(ui::InteractionSequence::StepBuilder()

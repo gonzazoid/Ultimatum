@@ -15,10 +15,6 @@
 #import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
 // Text values for the tapped element triggering the context menu.
 const char kLinkUrl[] = "http://link.url/";
@@ -62,15 +58,16 @@ TEST_F(ContextMenuParamsUtilsTest, EmptyParams) {
 
 // Tests the parsing of the element NSDictionary.
 TEST_F(ContextMenuParamsUtilsTest, DictionaryConstructorTest) {
-  base::Value element_dict(base::Value::Type::DICTIONARY);
-  element_dict.SetStringKey(kContextMenuElementHyperlink, kLinkUrl);
-  element_dict.SetStringKey(kContextMenuElementSource, kSrcUrl);
-  element_dict.SetStringKey(kContextMenuElementTitle, kTitle);
-  element_dict.SetStringKey(kContextMenuElementReferrerPolicy, kReferrerPolicy);
-  element_dict.SetStringKey(kContextMenuElementInnerText, kLinkText);
-  element_dict.SetStringKey(kContextMenuElementAlt, kAlt);
+  auto element_dict =
+      base::Value::Dict()
+          .Set(kContextMenuElementHyperlink, kLinkUrl)
+          .Set(kContextMenuElementSource, kSrcUrl)
+          .Set(kContextMenuElementTitle, kTitle)
+          .Set(kContextMenuElementReferrerPolicy, kReferrerPolicy)
+          .Set(kContextMenuElementInnerText, kLinkText)
+          .Set(kContextMenuElementAlt, kAlt);
   ContextMenuParams params =
-      ContextMenuParamsFromElementDictionary(&element_dict);
+      ContextMenuParamsFromElementDictionary(element_dict);
 
   EXPECT_TRUE(params.is_main_frame);
   EXPECT_EQ(params.link_url, GURL(kLinkUrl));

@@ -4,9 +4,11 @@
 
 #include "chrome/browser/ash/system_logs/crosapi_system_log_source.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "chrome/browser/ash/crosapi/fake_browser_manager.h"
+#include "chrome/test/base/testing_browser_process.h"
+#include "chrome/test/base/testing_profile_manager.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -14,16 +16,25 @@ namespace system_logs {
 
 class CrosapiSystemLogSourceTest : public ::testing::Test {
  public:
-  CrosapiSystemLogSourceTest()
-      : browser_manager_(std::make_unique<crosapi::FakeBrowserManager>()) {}
+  CrosapiSystemLogSourceTest() = default;
   CrosapiSystemLogSourceTest(const CrosapiSystemLogSourceTest&) = delete;
   CrosapiSystemLogSourceTest& operator=(const CrosapiSystemLogSourceTest&) =
       delete;
   ~CrosapiSystemLogSourceTest() override = default;
 
   void SetUp() override {
+    profile_manager_ = std::make_unique<TestingProfileManager>(
+        TestingBrowserProcess::GetGlobal());
+    ASSERT_TRUE(profile_manager_->SetUp());
+
     // Set Lacros in running state by default.
-    browser_manager_->set_is_running(true);
+    browser_manager_ = std::make_unique<crosapi::FakeBrowserManager>();
+    browser_manager_->StartRunning();
+  }
+
+  void TearDown() override {
+    browser_manager_.reset();
+    profile_manager_.reset();
   }
 
  protected:
@@ -32,13 +43,13 @@ class CrosapiSystemLogSourceTest : public ::testing::Test {
                           base::Unretained(this));
   }
 
-  void SetupBrowserManagerResponse(base::Value response) {
+  void SetupBrowserManagerResponse(base::Value::Dict response) {
     browser_manager_->SetGetFeedbackDataResponse(std::move(response));
   }
 
   void SignalMojoDisconnected() { browser_manager_->SignalMojoDisconnected(); }
 
-  void SetLacrosNotRunning() { browser_manager_->set_is_running(false); }
+  void SetLacrosNotRunning() { browser_manager_->StopRunning(); }
 
   void SetWaitForMojoDisconnect() {
     browser_manager_->set_wait_for_mojo_disconnect(true);
@@ -56,6 +67,8 @@ class CrosapiSystemLogSourceTest : public ::testing::Test {
   // Creates the necessary browser threads.
   content::BrowserTaskEnvironment task_environment_;
 
+  std::unique_ptr<TestingProfileManager> profile_manager_;
+
   std::unique_ptr<crosapi::FakeBrowserManager> browser_manager_;
 
   // Used to verify that OnGetFeedbackData was called the correct number of
@@ -69,8 +82,8 @@ class CrosapiSystemLogSourceTest : public ::testing::Test {
 TEST_F(CrosapiSystemLogSourceTest, OnFeedbackData) {
   // Set up FakeBrowserManager to send log data with 1 log entry for
   // the log source.
-  base::Value system_log_entries(base::Value::Type::DICTIONARY);
-  system_log_entries.SetStringKey("testing log key", "testing log content");
+  base::Value::Dict system_log_entries;
+  system_log_entries.Set("testing log key", "testing log content");
   SetupBrowserManagerResponse(std::move(system_log_entries));
 
   // Fetch log data and wait until fetch_callback() is called.

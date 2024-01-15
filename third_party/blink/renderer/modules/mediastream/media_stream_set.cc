@@ -4,19 +4,41 @@
 
 #include "third_party/blink/renderer/modules/mediastream/media_stream_set.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream.h"
 #include "third_party/blink/renderer/modules/mediastream/screen_capture_media_stream_track.h"
 #include "third_party/blink/renderer/modules/mediastream/user_media_request.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
-#include "third_party/blink/renderer/modules/screen_enumeration/screen_detailed.h"
-#include "third_party/blink/renderer/modules/screen_enumeration/screen_details.h"
+#include "third_party/blink/renderer/modules/screen_details/screen_detailed.h"
+#include "third_party/blink/renderer/modules/screen_details/screen_details.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/blink/renderer/platform/wtf/wtf_size_t.h"
+#include "ui/display/types/display_constants.h"
 
 namespace blink {
+
+namespace {
+
+ScreenDetailed* FindScreenDetailedByDisplayId(
+    ScreenDetails* screen_details,
+    absl::optional<int64_t> display_id) {
+  if (display_id == display::kInvalidDisplayId) {
+    return nullptr;
+  }
+
+  auto* const screen_iterator = base::ranges::find_if(
+      screen_details->screens(),
+      [display_id](const ScreenDetailed* screen_detailed) {
+        return *display_id == screen_detailed->DisplayId();
+      });
+
+  return (screen_iterator != screen_details->screens().end()) ? *screen_iterator
+                                                              : nullptr;
+}
+
+}  // namespace
 
 MediaStreamSet* MediaStreamSet::Create(
     ExecutionContext* context,
@@ -39,8 +61,8 @@ MediaStreamSet::MediaStreamSet(
       media_streams_initialized_callback_(std::move(callback)) {
   DCHECK(IsMainThread());
 
-  if (request_type == UserMediaRequestType::kDisplayMediaSet) {
-    InitializeGetDisplayMediaSetStreams(context, stream_descriptors);
+  if (request_type == UserMediaRequestType::kAllScreensMedia) {
+    InitializeGetAllScreensMediaStreams(context, stream_descriptors);
     return;
   }
 
@@ -71,7 +93,7 @@ void MediaStreamSet::Trace(Visitor* visitor) const {
   ExecutionContextClient::Trace(visitor);
 }
 
-void MediaStreamSet::InitializeGetDisplayMediaSetStreams(
+void MediaStreamSet::InitializeGetAllScreensMediaStreams(
     ExecutionContext* context,
     const MediaStreamDescriptorVector& stream_descriptors) {
   DCHECK(IsMainThread());
@@ -81,7 +103,7 @@ void MediaStreamSet::InitializeGetDisplayMediaSetStreams(
 
   // TODO(crbug.com/1358949): Move the generation of the |ScreenDetails| object
   // next to the generation of the descriptors and store them as members to
-  // avoid race conditions. Further, match the getDisplayMediaSet API and the
+  // avoid race conditions. Further, match the getAllScreensMedia API and the
   // window placement API by unique IDs instead of assuming the same order.
   ScreenDetails* const screen_details =
       MakeGarbageCollected<ScreenDetails>(window);
@@ -92,13 +114,15 @@ void MediaStreamSet::InitializeGetDisplayMediaSetStreams(
     MediaStreamDescriptor* const descriptor = stream_descriptors[stream_index];
     DCHECK_EQ(1u, descriptor->NumberOfVideoComponents());
 
+    ScreenDetailed* screen = FindScreenDetailedByDisplayId(
+        screen_details,
+        descriptor->VideoComponent(0u)->Source()->GetDisplayId());
+
     MediaStreamTrack* video_track =
         MakeGarbageCollected<ScreenCaptureMediaStreamTrack>(
             context, descriptor->VideoComponent(0u),
             screen_details_match_descriptors ? screen_details : nullptr,
-            screen_details_match_descriptors
-                ? screen_details->screens()[stream_index]
-                : nullptr);
+            screen);
     initialized_media_streams_.push_back(
         MediaStream::Create(context, descriptor, {}, {video_track}));
   }
@@ -116,7 +140,7 @@ void MediaStreamSet::OnMediaStreamSetInitialized() {
 }
 
 // TODO(crbug.com/1300883): Clean up other streams if one stream capture
-// results in an error. This is only required for getDisplayMediaSet.
+// results in an error. This is only required for getAllScreensMedia.
 // Currently existing functionality generates only one stream which is not
 // affected by this change.
 void MediaStreamSet::OnMediaStreamInitialized(

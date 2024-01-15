@@ -6,6 +6,7 @@
 #define UI_EVENTS_DEVICES_INPUT_DEVICE_H_
 
 #include <stdint.h>
+#include <ostream>
 #include <string>
 
 #include "base/files/file_path.h"
@@ -19,6 +20,9 @@ enum InputDeviceType {
   INPUT_DEVICE_BLUETOOTH,  // Known externally connected bluetooth input device.
   INPUT_DEVICE_UNKNOWN,    // Device that may or may not be an external device.
 };
+
+EVENTS_DEVICES_EXPORT std::ostream& operator<<(std::ostream& os,
+                                               const InputDeviceType value);
 
 // Represents an input device state.
 struct EVENTS_DEVICES_EXPORT InputDevice {
@@ -57,9 +61,11 @@ struct EVENTS_DEVICES_EXPORT InputDevice {
   // If the device is enabled, and whether events should be dispatched to UI.
   bool enabled = true;
 
-  // If the device is suspected to be identifying as another device type
-  // (Currently only applies to Mice pretending to be keyboards).
-  bool suspected_imposter = false;
+  // If the device is suspected to be falsely identifying as a keyboard.
+  bool suspected_keyboard_imposter = false;
+
+  // If the device is suspected to be falsely identifying as a mouse.
+  bool suspected_mouse_imposter = false;
 
   // The path to the input device in the sysfs filesystem.
   base::FilePath sys_path;
@@ -68,6 +74,9 @@ struct EVENTS_DEVICES_EXPORT InputDevice {
   uint16_t vendor_id;
   uint16_t product_id;
   uint16_t version;
+
+  // Describe internal state for system log.
+  virtual std::ostream& DescribeForLog(std::ostream& os) const;
 };
 
 }  // namespace ui

@@ -238,7 +238,7 @@ class BidirectionalStreamSpdyImplTest : public testing::TestWithParam<bool>,
       : default_url_(kDefaultUrl),
         host_port_pair_(HostPortPair::FromURL(default_url_)),
         key_(host_port_pair_,
-             ProxyServer::Direct(),
+             ProxyChain::Direct(),
              PRIVACY_MODE_DISABLED,
              SpdySessionKey::IsProxySession::kFalse,
              SocketTag(),
@@ -317,8 +317,7 @@ TEST_F(BidirectionalStreamSpdyImplTest, SimplePostRequest) {
   request_info.extra_headers.SetHeader(net::HttpRequestHeaders::kContentLength,
                                        base::NumberToString(kBodyDataSize));
 
-  scoped_refptr<IOBuffer> read_buffer =
-      base::MakeRefCounted<IOBuffer>(kReadBufferSize);
+  auto read_buffer = base::MakeRefCounted<IOBufferWithSize>(kReadBufferSize);
   auto delegate = std::make_unique<TestDelegateBase>(
       session_, read_buffer.get(), kReadBufferSize);
   delegate->SetRunUntilCompletion(true);
@@ -369,10 +368,8 @@ TEST_F(BidirectionalStreamSpdyImplTest, LoadTimingTwoRequests) {
   request_info.url = default_url_;
   request_info.end_stream_on_headers = true;
 
-  scoped_refptr<IOBuffer> read_buffer =
-      base::MakeRefCounted<IOBuffer>(kReadBufferSize);
-  scoped_refptr<IOBuffer> read_buffer2 =
-      base::MakeRefCounted<IOBuffer>(kReadBufferSize);
+  auto read_buffer = base::MakeRefCounted<IOBufferWithSize>(kReadBufferSize);
+  auto read_buffer2 = base::MakeRefCounted<IOBufferWithSize>(kReadBufferSize);
   auto delegate = std::make_unique<TestDelegateBase>(
       session_, read_buffer.get(), kReadBufferSize);
   auto delegate2 = std::make_unique<TestDelegateBase>(
@@ -419,8 +416,7 @@ TEST_F(BidirectionalStreamSpdyImplTest, SendDataAfterStreamFailed) {
   request_info.extra_headers.SetHeader(net::HttpRequestHeaders::kContentLength,
                                        base::NumberToString(kBodyDataSize * 3));
 
-  scoped_refptr<IOBuffer> read_buffer =
-      base::MakeRefCounted<IOBuffer>(kReadBufferSize);
+  auto read_buffer = base::MakeRefCounted<IOBufferWithSize>(kReadBufferSize);
   auto delegate = std::make_unique<TestDelegateBase>(
       session_, read_buffer.get(), kReadBufferSize);
   delegate->SetRunUntilCompletion(true);
@@ -441,7 +437,7 @@ TEST_F(BidirectionalStreamSpdyImplTest, SendDataAfterStreamFailed) {
   EXPECT_EQ(kProtoHTTP2, delegate->GetProtocol());
   // BidirectionalStreamSpdyStreamJob does not count the bytes sent for |rst|
   // because it is sent after SpdyStream::Delegate::OnClose is called.
-  EXPECT_EQ(CountWriteBytes(base::make_span(writes, 1)),
+  EXPECT_EQ(CountWriteBytes(base::make_span(writes, 1u)),
             delegate->GetTotalSentBytes());
   EXPECT_EQ(0, delegate->GetTotalReceivedBytes());
 }
@@ -473,8 +469,7 @@ TEST_P(BidirectionalStreamSpdyImplTest, RstWithNoErrorBeforeSendIsComplete) {
   request_info.extra_headers.SetHeader(net::HttpRequestHeaders::kContentLength,
                                        base::NumberToString(kBodyDataSize * 3));
 
-  scoped_refptr<IOBuffer> read_buffer =
-      base::MakeRefCounted<IOBuffer>(kReadBufferSize);
+  auto read_buffer = base::MakeRefCounted<IOBufferWithSize>(kReadBufferSize);
   auto delegate = std::make_unique<TestDelegateBase>(
       session_, read_buffer.get(), kReadBufferSize);
   delegate->SetRunUntilCompletion(true);
@@ -515,7 +510,7 @@ TEST_P(BidirectionalStreamSpdyImplTest, RstWithNoErrorBeforeSendIsComplete) {
   EXPECT_EQ(1, delegate->on_data_read_count());
   EXPECT_EQ(is_test_sendv ? 2 : 4, delegate->on_data_sent_count());
   EXPECT_EQ(kProtoHTTP2, delegate->GetProtocol());
-  EXPECT_EQ(CountWriteBytes(base::make_span(writes, 1)),
+  EXPECT_EQ(CountWriteBytes(base::make_span(writes, 1u)),
             delegate->GetTotalSentBytes());
   // Should not count RST stream.
   EXPECT_EQ(CountReadBytes(base::make_span(reads).first(std::size(reads) - 2)),
@@ -565,8 +560,7 @@ TEST_F(BidirectionalStreamSpdyImplTest, RequestDetectBrokenConnection) {
   request_info.detect_broken_connection = true;
   request_info.heartbeat_interval = base::Seconds(1);
 
-  scoped_refptr<IOBuffer> read_buffer =
-      base::MakeRefCounted<IOBuffer>(kReadBufferSize);
+  auto read_buffer = base::MakeRefCounted<IOBufferWithSize>(kReadBufferSize);
   auto delegate = std::make_unique<TestDelegateBase>(
       session_, read_buffer.get(), kReadBufferSize);
   delegate->SetRunUntilCompletion(true);

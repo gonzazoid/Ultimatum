@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "ash/system/unified/detailed_view_controller.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -28,14 +29,14 @@ class UnifiedLocaleDetailedViewController : public DetailedViewController {
 
   ~UnifiedLocaleDetailedViewController() override;
 
-  // DetailedViewControllerBase:
-  views::View* CreateView() override;
+  // DetailedViewController:
+  std::unique_ptr<views::View> CreateView() override;
   std::u16string GetAccessibleName() const override;
 
  private:
   const std::unique_ptr<DetailedViewDelegate> detailed_view_delegate_;
 
-  LocaleDetailedView* view_ = nullptr;
+  raw_ptr<LocaleDetailedView, DanglingUntriaged> view_ = nullptr;
 };
 
 }  // namespace ash

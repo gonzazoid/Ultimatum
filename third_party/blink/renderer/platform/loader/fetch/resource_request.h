@@ -36,15 +36,17 @@
 #include "net/cookies/site_for_cookies.h"
 #include "net/filter/source_stream.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
-#include "services/network/public/mojom/chunked_data_pipe_getter.mojom-blink.h"
+#include "services/network/public/cpp/attribution_reporting_runtime_features.h"
+#include "services/network/public/mojom/attribution.mojom-blink.h"
+#include "services/network/public/mojom/chunked_data_pipe_getter.mojom-blink-forward.h"
 #include "services/network/public/mojom/cors.mojom-blink-forward.h"
-#include "services/network/public/mojom/fetch_api.mojom-blink-forward.h"
+#include "services/network/public/mojom/fetch_api.mojom-blink.h"
 #include "services/network/public/mojom/ip_address_space.mojom-blink-forward.h"
 #include "services/network/public/mojom/trust_tokens.mojom-blink.h"
-#include "services/network/public/mojom/url_loader.mojom-blink.h"
 #include "services/network/public/mojom/web_bundle_handle.mojom-blink.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink-forward.h"
+#include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom-blink-forward.h"
 #include "third_party/blink/public/platform/resource_request_blocked_reason.h"
 #include "third_party/blink/public/platform/web_url_request_extra_data.h"
 #include "third_party/blink/renderer/platform/loader/fetch/render_blocking_behavior.h"
@@ -59,6 +61,7 @@
 namespace blink {
 
 class EncodedFormData;
+class PermissionsPolicy;
 
 // ResourceRequestHead represents request without request body.
 // See ResourceRequest below to see what request is.
@@ -227,9 +230,6 @@ class PLATFORM_EXPORT ResourceRequestHead {
     SetHttpHeaderField(http_names::kAccept, http_accept);
   }
 
-  bool AllowStoredCredentials() const;
-  void SetAllowStoredCredentials(bool allow_credentials);
-
   // The initial priority for the request.
   ResourceLoadPriority InitialPriority() const;
 
@@ -243,6 +243,13 @@ class PLATFORM_EXPORT ResourceRequestHead {
   void SetPriority(ResourceLoadPriority, int intra_priority_value = 0);
 
   bool IsConditional() const;
+
+  // Incremental property of HTTP Extensible Priorities which specifies that
+  // responses can be delivered concurrently if they are the same priority on
+  // a connection that supports multiplexing (HTTP/3 primarily).
+  // https://www.rfc-editor.org/rfc/rfc9218
+  bool PriorityIncremental() const;
+  void SetPriorityIncremental(bool);
 
   // Whether the associated ResourceHandleClient needs to be notified of
   // upload progress made for that resource.
@@ -274,6 +281,41 @@ class PLATFORM_EXPORT ResourceRequestHead {
   // True if the request can work after the fetch group is terminated.
   bool GetKeepalive() const { return keepalive_; }
   void SetKeepalive(bool keepalive) { keepalive_ = keepalive; }
+
+  // True if the request should be considered for computing and attaching the
+  // topics headers.
+  bool GetBrowsingTopics() const { return browsing_topics_; }
+  void SetBrowsingTopics(bool browsing_topics) {
+    browsing_topics_ = browsing_topics;
+  }
+
+  // True if this is an ad auction request eligible for attaching the
+  // `Sec-Ad-Auction-Fetch` request header and processing the
+  // `X-Ad-Auction-Result` response header.
+  bool GetAdAuctionHeaders() const { return ad_auction_headers_; }
+  void SetAdAuctionHeaders(bool ad_auction_headers) {
+    ad_auction_headers_ = ad_auction_headers;
+  }
+
+  // True if the original request included the required attribute for the
+  // response to be eligible to write to shared storage, pending a
+  // `PermissionsPolicy` check.
+  bool GetSharedStorageWritableOptedIn() const {
+    return shared_storage_writable_opted_in_;
+  }
+  void SetSharedStorageWritableOptedIn(bool shared_storage_writable_opted_in) {
+    shared_storage_writable_opted_in_ = shared_storage_writable_opted_in;
+  }
+
+  // True if the current request should have the
+  // `http_names::kSecSharedStorageWritable` header attached and is eligible to
+  // write to shared storage from response headers.
+  bool GetSharedStorageWritableEligible() const {
+    return shared_storage_writable_eligible_;
+  }
+  void SetSharedStorageWritableEligible(bool shared_storage_writable_eligible) {
+    shared_storage_writable_eligible_ = shared_storage_writable_eligible;
+  }
 
   // True if service workers should not get events for the request.
   bool GetSkipServiceWorker() const { return skip_service_worker_; }
@@ -417,10 +459,8 @@ class PLATFORM_EXPORT ResourceRequestHead {
     devtools_accepted_stream_types_ = types;
   }
 
-  const absl::optional<String>& GetDevToolsId() const { return devtools_id_; }
-  void SetDevToolsId(const absl::optional<String>& devtools_id) {
-    devtools_id_ = devtools_id;
-  }
+  const String& GetDevToolsId() const { return devtools_id_; }
+  void SetDevToolsId(const String devtools_id) { devtools_id_ = devtools_id; }
 
   void SetRequestedWithHeader(const String& value) {
     requested_with_header_ = value;
@@ -482,6 +522,9 @@ class PLATFORM_EXPORT ResourceRequestHead {
 
   void SetFetchLikeAPI(bool enabled) { is_fetch_like_api_ = enabled; }
 
+  bool IsFetchLaterAPI() const { return is_fetch_later_api_; }
+  void SetFetchLaterAPI(bool enabled) { is_fetch_later_api_ = enabled; }
+
   bool IsFavicon() const { return is_favicon_; }
 
   void SetFavicon(bool enabled) { is_favicon_ = enabled; }
@@ -533,6 +576,72 @@ class PLATFORM_EXPORT ResourceRequestHead {
     return render_blocking_behavior_;
   }
 
+  void SetHasStorageAccess(bool has_storage_access) {
+    has_storage_access_ = has_storage_access;
+  }
+  bool GetHasStorageAccess() const { return has_storage_access_; }
+
+  network::mojom::AttributionSupport GetAttributionReportingSupport() const {
+    return attribution_reporting_support_;
+  }
+
+  void SetAttributionReportingSupport(
+      network::mojom::AttributionSupport attribution_support) {
+    attribution_reporting_support_ = attribution_support;
+  }
+
+  network::mojom::AttributionReportingEligibility
+  GetAttributionReportingEligibility() const {
+    return attribution_reporting_eligibility_;
+  }
+
+  void SetAttributionReportingEligibility(
+      network::mojom::AttributionReportingEligibility eligibility) {
+    attribution_reporting_eligibility_ = eligibility;
+  }
+
+  const network::AttributionReportingRuntimeFeatures&
+  GetAttributionReportingRuntimeFeatures() const {
+    return attribution_reporting_runtime_features_;
+  }
+
+  void SetAttributionReportingRuntimeFeatures(
+      network::AttributionReportingRuntimeFeatures runtime_features) {
+    attribution_reporting_runtime_features_ = runtime_features;
+  }
+
+  const absl::optional<base::UnguessableToken>& GetAttributionSrcToken() const {
+    return attribution_reporting_src_token_;
+  }
+
+  void SetAttributionReportingSrcToken(
+      absl::optional<base::UnguessableToken> src_token) {
+    attribution_reporting_src_token_ = src_token;
+  }
+
+  bool SharedDictionaryWriterEnabled() const {
+    return shared_dictionary_writer_enabled_;
+  }
+
+  void SetSharedDictionaryWriterEnabled(bool shared_dictionary_writer_enabled) {
+    shared_dictionary_writer_enabled_ = shared_dictionary_writer_enabled;
+  }
+
+  const absl::optional<base::UnguessableToken>&
+  GetServiceWorkerRaceNetworkRequestToken() const {
+    return service_worker_race_network_request_token_;
+  }
+
+  void SetServiceWorkerRaceNetworkRequestToken(
+      const base::UnguessableToken& token) {
+    // TODO(crbug.com/1492640) Consider using base::TokenType not to include
+    // null token by strong typing.
+    if (token.is_empty()) {
+      return;
+    }
+    service_worker_race_network_request_token_ = token;
+  }
+
  private:
   const CacheControlHeader& GetCacheControlHeader() const;
 
@@ -551,19 +660,23 @@ class PLATFORM_EXPORT ResourceRequestHead {
 
   AtomicString http_method_;
   HTTPHeaderMap http_header_fields_;
-  bool allow_stored_credentials_ : 1;
   bool report_upload_progress_ : 1;
   bool has_user_gesture_ : 1;
   bool has_text_fragment_token_ : 1;
   bool download_to_blob_ : 1;
   bool use_stream_on_response_ : 1;
   bool keepalive_ : 1;
+  bool browsing_topics_ : 1;
+  bool ad_auction_headers_ : 1;
+  bool shared_storage_writable_opted_in_ : 1;
+  bool shared_storage_writable_eligible_ : 1;
   bool allow_stale_response_ : 1;
   mojom::blink::FetchCacheMode cache_mode_;
   bool skip_service_worker_ : 1;
   bool download_to_cache_only_ : 1;
   bool site_for_cookies_set_ : 1;
   bool is_form_submission_ : 1;
+  bool priority_incremental_ : 1;
   ResourceLoadPriority initial_priority_;
   ResourceLoadPriority priority_;
   int intra_priority_value_;
@@ -596,7 +709,7 @@ class PLATFORM_EXPORT ResourceRequestHead {
   bool is_automatic_upgrade_ = false;
 
   absl::optional<base::UnguessableToken> devtools_token_;
-  absl::optional<String> devtools_id_;
+  String devtools_id_;
   String requested_with_header_;
   String client_data_header_;
   String purpose_header_;
@@ -615,6 +728,11 @@ class PLATFORM_EXPORT ResourceRequestHead {
   bool is_from_origin_dirty_style_sheet_ = false;
 
   bool is_fetch_like_api_ = false;
+
+  // Indicates that this ResourceRequest represents the requestObject for a
+  // JS fetchLater() call.
+  // https://whatpr.org/fetch/1647/094ea69...152d725.html#fetch-later-method
+  bool is_fetch_later_api_ = false;
 
   bool is_favicon_ = false;
 
@@ -648,6 +766,29 @@ class PLATFORM_EXPORT ResourceRequestHead {
   scoped_refptr<
       base::RefCountedData<base::flat_set<net::SourceStream::SourceType>>>
       devtools_accepted_stream_types_;
+
+  bool has_storage_access_ = false;
+
+  network::mojom::AttributionSupport attribution_reporting_support_ =
+      network::mojom::AttributionSupport::kWeb;
+
+  network::mojom::AttributionReportingEligibility
+      attribution_reporting_eligibility_ =
+          network::mojom::AttributionReportingEligibility::kUnset;
+
+  network::AttributionReportingRuntimeFeatures
+      attribution_reporting_runtime_features_;
+
+  absl::optional<base::UnguessableToken> attribution_reporting_src_token_;
+
+  // Indicate the state of CompressionDictionaryTransport feature. When it is
+  // true, `use-as-dictionary` response HTTP header may be processed.
+  // TODO(crbug.com/1413922): Remove this flag when we launch
+  // CompressionDictionaryTransport feature.
+  bool shared_dictionary_writer_enabled_ = false;
+
+  absl::optional<base::UnguessableToken>
+      service_worker_race_network_request_token_;
 };
 
 class PLATFORM_EXPORT ResourceRequestBody {
@@ -689,7 +830,7 @@ class PLATFORM_EXPORT ResourceRequestBody {
 // A ResourceRequest is a "request" object for ResourceLoader. Conceptually
 // it is https://fetch.spec.whatwg.org/#concept-request, but it contains
 // a lot of blink specific fields. WebURLRequest is the "public version"
-// of this class and WebURLLoader needs it. See WebURLRequest and
+// of this class and URLLoader needs it. See WebURLRequest and
 // WrappedResourceRequest.
 //
 // This class is thread-bound. Do not copy/pass an instance across threads.
@@ -722,6 +863,16 @@ class PLATFORM_EXPORT ResourceRequest final : public ResourceRequestHead {
   void SetHttpBody(scoped_refptr<EncodedFormData>);
 
   ResourceRequestBody& MutableBody() { return body_; }
+
+  // `PermissionsPolicy` is in blink/public and hence cannot access
+  // `ResourceRequest`. We implement this method here and make `ResourceRequest`
+  // a forward-declared friend class to `PermissionsPolicy` in order to keep
+  // `PermissionsPolicy::IsFeatureEnabledForSubresourceRequestAssumingOptIn()`
+  // private for safety.
+  bool IsFeatureEnabledForSubresourceRequestAssumingOptIn(
+      const PermissionsPolicy* policy,
+      mojom::blink::PermissionsPolicyFeature feature,
+      const url::Origin& origin);
 
  private:
   ResourceRequestBody body_;

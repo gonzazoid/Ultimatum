@@ -9,7 +9,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -52,10 +52,10 @@ class SyncableServiceBasedBridge : public ModelTypeSyncBridge {
 
   // ModelTypeSyncBridge implementation.
   std::unique_ptr<MetadataChangeList> CreateMetadataChangeList() override;
-  absl::optional<ModelError> MergeSyncData(
+  absl::optional<ModelError> MergeFullSyncData(
       std::unique_ptr<MetadataChangeList> metadata_change_list,
       EntityChangeList entity_change_list) override;
-  absl::optional<ModelError> ApplySyncChanges(
+  absl::optional<ModelError> ApplyIncrementalSyncChanges(
       std::unique_ptr<MetadataChangeList> metadata_change_list,
       EntityChangeList entity_change_list) override;
   void GetData(StorageKeyList storage_keys, DataCallback callback) override;
@@ -67,7 +67,7 @@ class SyncableServiceBasedBridge : public ModelTypeSyncBridge {
   ConflictResolution ResolveConflict(
       const std::string& storage_key,
       const EntityData& remote_data) const override;
-  void ApplyStopSyncChanges(
+  void ApplyDisableSyncChanges(
       std::unique_ptr<MetadataChangeList> delete_metadata_change_list) override;
   size_t EstimateSyncOverheadMemoryUsage() const override;
 
@@ -105,11 +105,14 @@ class SyncableServiceBasedBridge : public ModelTypeSyncBridge {
   const raw_ptr<SyncableService> syncable_service_;
 
   std::unique_ptr<ModelTypeStore> store_;
-  bool syncable_service_started_;
+  bool syncable_service_started_ = false;
 
   // In-memory copy of |store_|, needed for remote deletions, because we need to
   // provide specifics of the deleted entity to the SyncableService.
   InMemoryStore in_memory_store_;
+
+  // Time when this object was created, and store creation/loading was started.
+  base::Time init_start_time_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 

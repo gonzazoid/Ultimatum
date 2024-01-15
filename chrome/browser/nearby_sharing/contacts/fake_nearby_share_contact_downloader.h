@@ -8,7 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/nearby_sharing/contacts/nearby_share_contact_downloader.h"
 #include "chrome/browser/nearby_sharing/contacts/nearby_share_contact_downloader_impl.h"
@@ -30,7 +31,8 @@ class FakeNearbyShareContactDownloader : public NearbyShareContactDownloader {
 
     // Returns all FakeNearbyShareContactDownloader instances created by
     // CreateInstance().
-    std::vector<FakeNearbyShareContactDownloader*>& instances() {
+    std::vector<raw_ptr<FakeNearbyShareContactDownloader, VectorExperimental>>&
+    instances() {
       return instances_;
     }
 
@@ -49,9 +51,10 @@ class FakeNearbyShareContactDownloader : public NearbyShareContactDownloader {
         SuccessCallback success_callback,
         FailureCallback failure_callback) override;
 
-    std::vector<FakeNearbyShareContactDownloader*> instances_;
+    std::vector<raw_ptr<FakeNearbyShareContactDownloader, VectorExperimental>>
+        instances_;
     base::TimeDelta latest_timeout_;
-    NearbyShareClientFactory* latest_client_factory_;
+    raw_ptr<NearbyShareClientFactory> latest_client_factory_;
   };
 
   FakeNearbyShareContactDownloader(const std::string& device_id,

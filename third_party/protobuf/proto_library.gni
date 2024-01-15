@@ -35,10 +35,6 @@
 #       Generates a "_py_runtime"-suffixed target for test targets that need the
 #       Python stubs available at runtime.
 #
-#   TODO(crbug.com/1237958): Remove allow_optional when proto rolls to 3.15.
-#   allow_optional (optional, default false)
-#       Enables experimental_allow_proto3_optional.
-#
 #   cc_generator_options (optional)
 #       List of extra flags passed to the protocol compiler.  If you need to
 #       add an EXPORT macro to a protobuf's C++ header, set the
@@ -80,6 +76,11 @@
 #   proto_deps (optional)
 #       Additional dependencies required before running protoc.
 #       e.g. proto file generating action.
+#
+#   proto_data_sources (optional)
+#       Additional proto sources that will only be used for references
+#       and will not be compiled.
+#       This should be used in conjunction with import_dirs.
 #
 #   use_protobuf_full (optional)
 #       If adding protobuf library would be required, adds protobuf_full to deps
@@ -387,9 +388,6 @@ template("proto_library") {
           invoker.cc_generator_options,
         ]
       }
-      if (defined(invoker.allow_optional) && invoker.allow_optional == true) {
-        args += [ "--allow-optional" ]
-      }
       if (defined(invoker.cc_include)) {
         args += [
           "--include",
@@ -443,6 +441,10 @@ template("proto_library") {
         rel_depfile,
       ]
     }
+    inputs = []
+    if (defined(invoker.proto_data_sources)) {
+      inputs += invoker.proto_data_sources
+    }
 
     if (defined(invoker.import_dirs)) {
       foreach(path, invoker.import_dirs) {
@@ -451,7 +453,7 @@ template("proto_library") {
     }
 
     # System protoc is not used so it's necessary to build a chromium one.
-    inputs = [ _protoc_path ]
+    inputs += [ _protoc_path ]
     deps = [ _protoc_label ]
 
     if (generate_with_plugin) {

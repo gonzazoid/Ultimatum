@@ -5,43 +5,24 @@
 #ifndef UI_ACCESSIBILITY_PLATFORM_INSPECT_AX_CALL_STATEMENT_INVOKER_WIN_H_
 #define UI_ACCESSIBILITY_PLATFORM_INSPECT_AX_CALL_STATEMENT_INVOKER_WIN_H_
 
-#include <oleacc.h>
-
+#include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
-#include "third_party/abseil-cpp/absl/types/variant.h"
-#include "ui/accessibility/ax_export.h"
 #include "ui/accessibility/platform/inspect/ax_optional.h"
+#include "ui/accessibility/platform/inspect/ax_property_node.h"
+#include "ui/accessibility/platform/inspect/ax_target_win.h"
 #include "ui/accessibility/platform/inspect/ax_tree_indexer_win.h"
 
 namespace ui {
 
-class AXPropertyNode;
-
-using IAccessibleComPtr = Microsoft::WRL::ComPtr<IAccessible>;
-using IA2ComPtr = Microsoft::WRL::ComPtr<IAccessible2>;
-using IA2HypertextComPtr = Microsoft::WRL::ComPtr<IAccessibleHypertext>;
-using IA2TableComPtr = Microsoft::WRL::ComPtr<IAccessibleTable>;
-using IA2TableCellComPtr = Microsoft::WRL::ComPtr<IAccessibleTableCell>;
-using IA2TextComPtr = Microsoft::WRL::ComPtr<IAccessibleText>;
-using IA2ValueComPtr = Microsoft::WRL::ComPtr<IAccessibleValue>;
-using Target = absl::variant<absl::monostate,
-                             std::string,
-                             int,
-                             IAccessibleComPtr,
-                             IA2ComPtr,
-                             IA2HypertextComPtr,
-                             IA2TableComPtr,
-                             IA2TableCellComPtr,
-                             IA2TextComPtr,
-                             IA2ValueComPtr>;
-
 // Optional tri-state object.
-using AXOptionalObject = ui::AXOptional<Target>;
+using AXOptionalObject = ui::AXOptional<AXTargetWin>;
 
 // Invokes a script instruction describing a call unit which represents
 // a sequence of calls.
-class AX_EXPORT AXCallStatementInvokerWin final {
+class COMPONENT_EXPORT(AX_PLATFORM) AXCallStatementInvokerWin final {
  public:
+  using Target = AXTargetWin;
+
   // All calls are executed in the context of property nodes.
   // Note: both |indexer| and |storage| must outlive this object.
   AXCallStatementInvokerWin(const AXTreeIndexerWin* indexer,
@@ -50,11 +31,11 @@ class AX_EXPORT AXCallStatementInvokerWin final {
   // Invokes an attribute matching a property filter.
   AXOptionalObject Invoke(const AXPropertyNode& property_node) const;
 
-  static std::string ToString(AXOptionalObject& optional);
+  static std::string ToString(const AXOptionalObject& optional);
 
  private:
   // Invokes a property node for a given target.
-  AXOptionalObject InvokeFor(const Target target,
+  AXOptionalObject InvokeFor(const Target& target,
                              const AXPropertyNode& property_node) const;
 
   // Invokes a property node for a given AXElement.
@@ -73,10 +54,17 @@ class AX_EXPORT AXCallStatementInvokerWin final {
   AXOptionalObject InvokeForIA2TableCell(
       IA2TableCellComPtr target,
       const AXPropertyNode& property_node) const;
+  AXOptionalObject InvokeForIA2TextSelectionContainer(
+      IA2TextSelectionContainerComPtr target,
+      const AXPropertyNode& property_node) const;
   AXOptionalObject InvokeForIA2Text(IA2TextComPtr target,
                                     const AXPropertyNode& property_node) const;
   AXOptionalObject InvokeForIA2Value(IA2ValueComPtr target,
                                      const AXPropertyNode& property_node) const;
+
+  // IUnknown functionality.
+  AXOptionalObject QueryInterface(const IAccessibleComPtr target,
+                                  std::string interface_name) const;
 
   // IAccessible functionality.
   AXOptionalObject GetRole(IAccessibleComPtr target) const;
@@ -84,22 +72,54 @@ class AX_EXPORT AXCallStatementInvokerWin final {
   AXOptionalObject GetDescription(const IAccessibleComPtr target) const;
   AXOptionalObject HasState(const IAccessibleComPtr target,
                             std::string state) const;
-  AXOptionalObject GetInterface(const IAccessibleComPtr target,
-                                std::string interface_name) const;
 
   // IAccessible2 functionality.
+  AXOptionalObject GetIA2Role(IA2ComPtr target) const;
   AXOptionalObject GetIA2Attribute(const IA2ComPtr target,
-                                   std::string attribute) const;
-  AXOptionalObject HasIA2State(const IA2ComPtr target, std::string state) const;
+                                   const AXPropertyNode& property_node) const;
+  AXOptionalObject HasIA2State(const IA2ComPtr target,
+                               const AXPropertyNode& property_node) const;
 
-  bool IsIAccessibleAndNotNull(Target target) const;
+  // AccessibleTable functionality
+  AXOptionalObject GetSelectedColumns(const IA2TableComPtr target) const;
+
+  // IAccessibleSelectionContainer functionality.
+  AXOptionalObject GetSelections(
+      const IA2TextSelectionContainerComPtr target) const;
+  AXOptionalObject SetSelections(const IA2TextSelectionContainerComPtr target,
+                                 const AXPropertyNode& property_node) const;
+
+  bool IsIAccessibleAndNotNull(const Target& target) const;
+
+  // PropertyNode conversion methods.
+  template <typename Interface>
+  Microsoft::WRL::ComPtr<Interface> PropertyNodeToIAccessible(
+      const AXPropertyNode& node) const {
+    Microsoft::WRL::ComPtr<IAccessible> accessible =
+        indexer_->NodeBy(node.name_or_value);
+    if (!accessible) {
+      return nullptr;
+    }
+    Microsoft::WRL::ComPtr<Interface> queried_accessible;
+    HRESULT hr = accessible->QueryInterface(IID_PPV_ARGS(&queried_accessible));
+    if (FAILED(hr)) {
+      return nullptr;
+    }
+    return queried_accessible;
+  }
+
+  absl::optional<IA2TextSelection> PropertyNodeToIA2TextSelection(
+      const AXPropertyNode& node) const;
+
+  std::vector<IA2TextSelection> PropertyNodeToIA2TextSelectionArray(
+      const AXPropertyNode& node) const;
 
   // Map between IAccessible objects and their DOMIds/accessible tree
   // line numbers. Owned by the caller and outlives this object.
-  const base::raw_ptr<const AXTreeIndexerWin> indexer_;
+  const raw_ptr<const AXTreeIndexerWin> indexer_;
 
   // Variables storage. Owned by the caller and outlives this object.
-  const base::raw_ptr<std::map<std::string, Target>> storage_;
+  const raw_ptr<std::map<std::string, Target>> storage_;
 };
 
 }  // namespace ui

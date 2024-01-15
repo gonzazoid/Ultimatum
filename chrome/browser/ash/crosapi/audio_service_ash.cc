@@ -4,17 +4,14 @@
 
 #include "chrome/browser/ash/crosapi/audio_service_ash.h"
 
-#include <algorithm>
-
 #include "base/check.h"
 #include "base/logging.h"
+#include "base/ranges/algorithm.h"
 #include "chrome/browser/profiles/profile.h"
 #include "extensions/browser/api/audio/audio_device_id_calculator.h"
 #include "extensions/browser/api/audio/audio_service_utils.h"
 
 namespace crosapi {
-
-// TODO: Add unit tests for AudioServiceAsh (b/235565865).
 
 AudioServiceAsh::Observer::Observer() = default;
 AudioServiceAsh::Observer::~Observer() = default;
@@ -41,8 +38,8 @@ void AudioServiceAsh::Observer::OnDevicesChanged(
     const extensions::DeviceInfoList& devices) {
   for (auto& observer : observers_) {
     std::vector<mojom::AudioDeviceInfoPtr> result;
-    std::transform(devices.begin(), devices.end(), std::back_inserter(result),
-                   extensions::ConvertAudioDeviceInfoToMojom);
+    base::ranges::transform(devices, std::back_inserter(result),
+                            extensions::ConvertAudioDeviceInfoToMojom);
     observer->OnDeviceListChanged(std::move(result));
   }
 }
@@ -57,12 +54,9 @@ AudioServiceAsh::AudioServiceAsh() = default;
 AudioServiceAsh::~AudioServiceAsh() = default;
 
 void AudioServiceAsh::Initialize(Profile* profile) {
-  DCHECK(profile);
+  CHECK(profile);
   if (stable_id_calculator_) {
-    // TODO: investigate why crosapi ash object inits are called more than once.
-    // (b/235203815)
-    LOG(WARNING)
-        << "AudioServiceAsh was already initialized. Not initializing again.";
+    VLOG(1) << "AudioServiceAsh is already initialized. Skip init.";
     return;
   }
 
@@ -88,14 +82,14 @@ void AudioServiceAsh::GetDevices(mojom::DeviceFilterPtr filter,
   auto extapi_callback = base::BindOnce(
       [](GetDevicesCallback crosapi_callback, bool success,
          std::vector<extensions::api::audio::AudioDeviceInfo> devices_src) {
-        absl::optional<std::vector<mojom::AudioDeviceInfoPtr>> result;
+        std::optional<std::vector<mojom::AudioDeviceInfoPtr>> result;
 
         if (success) {
           result.emplace();  // construct empty vector in-place
           result->reserve(devices_src.size());
-          std::transform(devices_src.begin(), devices_src.end(),
-                         std::back_inserter(result.value()),
-                         extensions::ConvertAudioDeviceInfoToMojom);
+          base::ranges::transform(devices_src,
+                                  std::back_inserter(result.value()),
+                                  extensions::ConvertAudioDeviceInfoToMojom);
         }
 
         std::move(crosapi_callback).Run(std::move(result));

@@ -5,7 +5,8 @@
 #include "chrome/browser/ash/guest_os/guest_os_terminal.h"
 
 #include "ash/public/cpp/app_menu_constants.h"
-#include "base/bind.h"
+#include "ash/webui/system_apps/public/system_web_app_type.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/metrics/histogram_functions.h"
@@ -25,7 +26,6 @@
 #include "chrome/browser/ash/guest_os/public/guest_os_service.h"
 #include "chrome/browser/ash/guest_os/public/guest_os_terminal_provider.h"
 #include "chrome/browser/ash/guest_os/public/types.h"
-#include "chrome/browser/ash/system_web_apps/types/system_web_app_type.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -37,7 +37,6 @@
 #include "components/app_restore/app_launch_info.h"
 #include "components/app_restore/full_restore_save_handler.h"
 #include "components/app_restore/full_restore_utils.h"
-#include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "components/services/app_service/public/cpp/intent_util.h"
 #include "components/services/app_service/public/cpp/menu.h"
@@ -140,11 +139,6 @@ void LaunchTerminalImpl(Profile* profile,
 
 }  // namespace
 
-void RemoveTerminalFromRegistry(PrefService* prefs) {
-  ScopedDictPrefUpdate update(prefs, guest_os::prefs::kGuestOsRegistry);
-  update->Remove(kTerminalSystemAppId);
-}
-
 const std::string& GetTerminalHomeUrl() {
   static const base::NoDestructor<std::string> url(
       base::StrCat({chrome::kChromeUIUntrustedTerminalURL, kTerminalHomePath}));
@@ -198,15 +192,17 @@ void LaunchTerminal(Profile* profile,
                     const std::vector<std::string>& terminal_args) {
   GURL url = GenerateTerminalURL(profile, /*settings_profile=*/std::string(),
                                  container_id, cwd, terminal_args);
-  LaunchTerminalWithUrl(profile, display_id, url);
+  LaunchTerminalWithUrl(profile, display_id, /*restore_id=*/0, url);
 }
 
-void LaunchTerminalHome(Profile* profile, int64_t display_id) {
-  LaunchTerminalWithUrl(profile, display_id, GURL(GetTerminalHomeUrl()));
+void LaunchTerminalHome(Profile* profile, int64_t display_id, int restore_id) {
+  LaunchTerminalWithUrl(profile, display_id, restore_id,
+                        GURL(GetTerminalHomeUrl()));
 }
 
 void LaunchTerminalWithUrl(Profile* profile,
                            int64_t display_id,
+                           int restore_id,
                            const GURL& url) {
   if (url.DeprecatedGetOriginAsURL() != chrome::kChromeUIUntrustedTerminalURL) {
     LOG(ERROR) << "Trying to launch terminal with an invalid url: " << url;
@@ -224,6 +220,8 @@ void LaunchTerminalWithUrl(Profile* profile,
 
   // Terminal Home page will be restored by app service.
   params->omit_from_session_restore = true;
+
+  params->restore_id = restore_id;
 
   // Always launch asynchronously to avoid disturbing the caller. See
   // https://crbug.com/1262890#c12 for more details.
@@ -268,8 +266,10 @@ void LaunchTerminalWithIntent(
       // would bring up the installer, so keep that behaviour. Only applies to
       // the default Crostini VM, anything else is only accessible if the target
       // VM is installed.
-      crostini::CrostiniInstaller::GetForProfile(profile)->ShowDialog(
-          crostini::CrostiniUISurface::kAppList);
+      auto* installer = crostini::CrostiniInstaller::GetForProfile(profile);
+      if (installer) {
+        installer->ShowDialog(crostini::CrostiniUISurface::kAppList);
+      }
       return std::move(callback).Run(false, "Crostini not installed");
     } else {
       // Could happen if, e.g. a guest got disabled between listing and
@@ -290,14 +290,14 @@ void LaunchTerminalWithIntent(
     storage::ExternalMountPoints* mount_points =
         storage::ExternalMountPoints::GetSystemInstance();
     storage::FileSystemURL url = mount_points->CrackURL(
-        gurl, blink::StorageKey(url::Origin::Create(gurl)));
+        gurl, blink::StorageKey::CreateFirstParty(url::Origin::Create(gurl)));
 
     cwd = provider->PrepareCwd(url);
   }
 
   GURL url = GenerateTerminalURL(profile, settings_profile, guest_id, cwd,
                                  /*terminal_args=*/{});
-  LaunchTerminalWithUrl(profile, display_id, url);
+  LaunchTerminalWithUrl(profile, display_id, /*restore_id=*/0, url);
   std::move(callback).Run(true, "");
 }
 
@@ -401,6 +401,14 @@ void RecordTerminalSettingsChangesUMAs(Profile* profile) {
       {"allow-images-inline", TerminalSetting::kAllowImagesInline},
       {"theme", TerminalSetting::kTheme},
       {"theme-variations", TerminalSetting::kThemeVariations},
+      {"find-result-color", TerminalSetting::kFindResultColor},
+      {"find-result-selected-color", TerminalSetting::kFindResultSelectedColor},
+      {"line-height-padding-size", TerminalSetting::kLineHeightPaddingSize},
+      {"keybindings-os-defaults", TerminalSetting::kKeybindingsOsDefaults},
+      {"screen-padding-size", TerminalSetting::kScreenPaddingSize},
+      {"screen-border-size", TerminalSetting::kScreenBorderSize},
+      {"screen-border-color", TerminalSetting::kScreenBorderColor},
+      {"line-height", TerminalSetting::kLineHeight},
   });
 
   const base::Value::Dict& settings =
@@ -456,9 +464,9 @@ bool GetTerminalSettingPassCtrlW(Profile* profile) {
 }
 
 std::string ShortcutIdForSSH(const std::string& profileId) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetKey(kShortcutKey, base::Value(kShortcutValueSSH));
-  dict.SetKey(kProfileIdKey, base::Value(profileId));
+  base::Value::Dict dict;
+  dict.Set(kShortcutKey, base::Value(kShortcutValueSSH));
+  dict.Set(kProfileIdKey, base::Value(profileId));
   std::string shortcut_id;
   base::JSONWriter::Write(dict, &shortcut_id);
   return shortcut_id;
@@ -497,9 +505,9 @@ std::string ShortcutIdFromContainerId(Profile* profile,
 }
 
 base::flat_map<std::string, std::string> ExtrasFromShortcutId(
-    const base::Value& shortcut) {
+    const base::Value::Dict& shortcut) {
   base::flat_map<std::string, std::string> extras;
-  for (const auto it : shortcut.DictItems()) {
+  for (const auto it : shortcut) {
     if (it.second.is_string()) {
       extras[it.first] = it.second.GetString();
     }
@@ -545,9 +553,11 @@ void AddTerminalMenuShortcuts(
     std::vector<gfx::ImageSkia> images) {
   ui::ColorProvider* color_provider =
       ui::ColorProviderManager::Get().GetColorProviderFor(
-          ui::NativeTheme::GetInstanceForWeb()->GetColorProviderKey(nullptr));
+          ui::NativeTheme::GetInstanceForNativeUi()->GetColorProviderKey(
+              nullptr));
   auto icon = [color_provider](const gfx::VectorIcon& icon) {
-    return ui::ImageModel::FromVectorIcon(icon, ui::kColorMenuIcon,
+    return ui::ImageModel::FromVectorIcon(icon,
+                                          apps::GetColorIdForMenuItemIcon(),
                                           apps::kAppShortcutIconSizeDip)
         .Rasterize(color_provider);
   };
@@ -581,13 +591,14 @@ void AddTerminalMenuShortcuts(
 bool ExecuteTerminalMenuShortcutCommand(Profile* profile,
                                         const std::string& shortcut_id,
                                         int64_t display_id) {
-  auto shortcut = base::JSONReader::Read(shortcut_id);
-  if (!shortcut || !shortcut->is_dict()) {
+  absl::optional<base::Value::Dict> shortcut =
+      base::JSONReader::ReadDict(shortcut_id);
+  if (!shortcut) {
     return false;
   }
-  const std::string* shortcut_value = shortcut->FindStringKey(kShortcutKey);
+  const std::string* shortcut_value = shortcut->FindString(kShortcutKey);
   if (shortcut_value && *shortcut_value == kShortcutValueSSH) {
-    const std::string* profileId = shortcut->FindStringKey(kProfileIdKey);
+    const std::string* profileId = shortcut->FindString(kProfileIdKey);
     if (!profileId) {
       return false;
     }
@@ -605,7 +616,7 @@ bool ExecuteTerminalMenuShortcutCommand(Profile* profile,
           {"?", kSettingsProfileUrlParam, "=", escape(*settings_profile)});
     }
     LaunchTerminalWithUrl(
-        profile, display_id,
+        profile, display_id, /*restore_id=*/0,
         GURL(base::StrCat({chrome::kChromeUIUntrustedTerminalURL,
                            "html/terminal_ssh.html", settings_profile_param,
                            "#profile-id:", escape(*profileId)})));
@@ -616,7 +627,7 @@ bool ExecuteTerminalMenuShortcutCommand(Profile* profile,
     return false;
   }
   auto intent = std::make_unique<apps::Intent>(apps_util::kIntentActionView);
-  intent->extras = ExtrasFromShortcutId(std::move(*shortcut));
+  intent->extras = ExtrasFromShortcutId(*shortcut);
   LaunchTerminalWithIntent(profile, display_id, std::move(intent),
                            base::DoNothing());
   return true;

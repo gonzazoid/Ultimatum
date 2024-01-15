@@ -22,25 +22,54 @@ class COMPONENT_EXPORT(UI_BASE) TouchEditable
     : public ui::SimpleMenuModel::Delegate {
  public:
   // Commands that all TouchEditables support:
+  // TODO(b/263419885): Rewrite MenuCommands as an enum class.
   enum MenuCommands {
     // Don't use command ID 0 - a lot of tests use 0 for "no command".
     kCut = 1,
     kCopy,
     kPaste,
     kSelectAll,
-    kLastTouchEditableCommandId = kSelectAll,
+    kSelectWord,
+    kLastTouchEditableCommandId = kSelectWord,
   };
 
-  // TODO(mohsen): Consider switching from local coordinates to screen
+  // TODO(b/266345972): Consider switching from local coordinates to screen
   // coordinates in this interface and see if it will simplify things.
 
-  // Select everything between start and end (points are in view's local
-  // coordinate system). |start| is the logical start and |end| is the logical
-  // end of selection. Visually, |start| may lie after |end|.
-  virtual void SelectRect(const gfx::Point& start, const gfx::Point& end) = 0;
+  // Moves the caret to |position|. |position| is in local coordinates.
+  virtual void MoveCaret(const gfx::Point& position) = 0;
 
-  // Move the caret to |point|. |point| is in local coordinates.
-  virtual void MoveCaretTo(const gfx::Point& point) = 0;
+  // Moves the logical end of the selection according to |extent| while keeping
+  // the logical start of the selection fixed. Here, |extent| corresponds to the
+  // position (in local coordinates) of the touch handle being dragged to update
+  // the selection range.
+  //
+  // Note that the resultant end of the selection depends on the behaviour of
+  // the TouchEditable, e.g. for "expand by word, shrink by character", the
+  // selection end can move to the character or word boundary nearest to
+  // |extent| depending on the previous extent position:
+  // ____________________________________
+  // | textf|ield wit|h selected text   |
+  // ------------------------------------
+  //                 ^extent
+  //        ^start   ^end
+  //
+  // ____________________________________
+  // | textf|ield with selec|ted| text   |
+  // ------------------------------------
+  //                        ^extent
+  //        ^start              ^end
+  //
+  virtual void MoveRangeSelectionExtent(const gfx::Point& extent) = 0;
+
+  // Sets the logical start and end of the selection according to |base| and
+  // |extent|. |base| corresponds to the position of the fixed touch handle and
+  // determines the logical start of the selection. |extent| corresponds to the
+  // position of the currently dragging handle and determines the logical end of
+  // the selection, which may be visually before, on, or after the logical start
+  // of the selection. Both |base| and |start| are in local coordinates.
+  virtual void SelectBetweenCoordinates(const gfx::Point& base,
+                                        const gfx::Point& extent) = 0;
 
   // Gets the end points of the current selection. The end points |anchor| and
   // |focus| must be the cursor rect for the logical start and logical end of
@@ -61,13 +90,15 @@ class COMPONENT_EXPORT(UI_BASE) TouchEditable
   // Gets the NativeView hosting the client.
   virtual gfx::NativeView GetNativeView() const = 0;
 
+  // Checks whether the client is currently in a selection dragging state, i.e.
+  // whether it is currently handling scroll gestures to adjust the cursor or
+  // selection. If so, selection changes will notify the controller to update
+  // the quick menu and touch selection magnifier without showing touch handles.
+  virtual bool IsSelectionDragging() const = 0;
+
   // Converts a point to/from screen coordinates from/to client view.
   virtual void ConvertPointToScreen(gfx::Point* point) = 0;
   virtual void ConvertPointFromScreen(gfx::Point* point) = 0;
-
-  // Returns true if the editable draws its own handles (hence, the
-  // TouchEditingControllerDeprecated need not draw handles).
-  virtual bool DrawsHandles() = 0;
 
   // Tells the editable to open context menu.
   virtual void OpenContextMenu(const gfx::Point& anchor) = 0;
@@ -78,30 +109,6 @@ class COMPONENT_EXPORT(UI_BASE) TouchEditable
 
  protected:
   ~TouchEditable() override {}
-};
-
-// This defines the callback interface for other code to be notified of changes
-// in the state of a TouchEditable.
-class COMPONENT_EXPORT(UI_BASE) TouchEditingControllerDeprecated {
- public:
-  virtual ~TouchEditingControllerDeprecated() {}
-
-  // Creates a TouchEditingControllerDeprecated. Caller owns the returned
-  // object.
-  static TouchEditingControllerDeprecated* Create(TouchEditable* client_view);
-
-  // Notifies the controller that the selection has changed.
-  virtual void SelectionChanged() = 0;
-};
-
-class COMPONENT_EXPORT(UI_BASE) TouchEditingControllerFactory {
- public:
-  virtual ~TouchEditingControllerFactory() {}
-
-  static void SetInstance(TouchEditingControllerFactory* instance);
-
-  virtual TouchEditingControllerDeprecated* Create(
-      TouchEditable* client_view) = 0;
 };
 
 }  // namespace ui

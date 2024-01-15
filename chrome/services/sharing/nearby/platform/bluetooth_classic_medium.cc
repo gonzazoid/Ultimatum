@@ -11,7 +11,6 @@
 #include "chrome/services/sharing/nearby/platform/bluetooth_socket.h"
 #include "device/bluetooth/public/cpp/bluetooth_uuid.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -134,6 +133,10 @@ std::unique_ptr<api::BluetoothSocket> BluetoothClassicMedium::ConnectToService(
     api::BluetoothDevice& remote_device,
     const std::string& service_uuid,
     CancellationFlag* cancellation_flag) {
+  if (cancellation_flag && cancellation_flag->Cancelled()) {
+    return nullptr;
+  }
+
   const std::string& address = remote_device.GetMacAddress();
 
   auto start_time = base::TimeTicks::Now();
@@ -171,6 +174,13 @@ BluetoothClassicMedium::ListenForService(const std::string& service_name,
   return nullptr;
 }
 
+std::unique_ptr<api::BluetoothPairing>
+BluetoothClassicMedium::CreatePairing(api::BluetoothDevice& remote_device) {
+  // TODO(b/280656073): Add Chromium implementation for BluetoothPairing.
+  NOTIMPLEMENTED();
+  return nullptr;
+}
+
 BluetoothDevice* BluetoothClassicMedium::GetRemoteDevice(
     const std::string& mac_address) {
   auto it = discovered_bluetooth_devices_map_.find(mac_address);
@@ -189,9 +199,6 @@ BluetoothDevice* BluetoothClassicMedium::GetRemoteDevice(
 }
 
 void BluetoothClassicMedium::PresentChanged(bool present) {
-  // TODO(crbug.com/1191815): Remove this ASAP.
-  VLOG(1) << __func__ << ": " << present;
-
   // TODO(hansberry): It is unclear to me how the API implementation can signal
   // to Core that |present| has become unexpectedly false. Need to ask
   // Nearby team.
@@ -200,9 +207,6 @@ void BluetoothClassicMedium::PresentChanged(bool present) {
 }
 
 void BluetoothClassicMedium::PoweredChanged(bool powered) {
-  // TODO(crbug.com/1191815): Remove this ASAP.
-  VLOG(1) << __func__ << ": " << powered;
-
   // TODO(hansberry): It is unclear to me how the API implementation can signal
   // to Core that |powered| has become unexpectedly false. Need to ask
   // Nearby team.
@@ -211,17 +215,12 @@ void BluetoothClassicMedium::PoweredChanged(bool powered) {
 }
 
 void BluetoothClassicMedium::DiscoverableChanged(bool discoverable) {
-  // TODO(crbug.com/1191815): Remove this ASAP.
-  VLOG(1) << __func__ << ": " << discoverable;
-
   // Do nothing. BluetoothClassicMedium is not responsible for managing
   // discoverable state.
+  NOTIMPLEMENTED();
 }
 
 void BluetoothClassicMedium::DiscoveringChanged(bool discovering) {
-  // TODO(crbug.com/1191815): Remove this ASAP.
-  VLOG(1) << __func__ << ": " << discovering;
-
   // TODO(hansberry): It is unclear to me how the API implementation can signal
   // to Core that |discovering| has become unexpectedly false. Need to ask
   // Nearby team.
@@ -237,19 +236,14 @@ void BluetoothClassicMedium::DeviceAdded(
     return;
   }
 
-  // TODO(crbug.com/1191815): Remove these logs. They are temporary logs used
-  // to debug this issue.
-  VLOG(1) << "Device added or changed. Address: " << device->address
-          << ", Name: '" << (device->name ? device->name_for_display : "<None>")
-          << "'";
-
   // Best-effort attempt to filter out BLE advertisements. BLE advertisements
   // represented as "devices" may have their |name| set if the system has
   // created a GATT connection to the advertiser, but all BT Classic devices
   // that we are interested in must have their |name| set. See BleMedium
   // for separate discovery of BLE advertisements (BlePeripherals).
-  if (!device->name)
+  if (!device->name) {
     return;
+  }
 
   const std::string& address = device->address;
   if (base::Contains(discovered_bluetooth_devices_map_, address)) {
@@ -310,4 +304,3 @@ void BluetoothClassicMedium::RemoveStaleBluetoothDevices() {
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

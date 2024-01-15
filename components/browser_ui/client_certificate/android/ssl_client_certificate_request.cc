@@ -12,10 +12,10 @@
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/compiler_specific.h"
 #include "base/containers/queue.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "components/browser_ui/client_certificate/android/jni_headers/SSLClientCertificateRequest_jni.h"
@@ -29,7 +29,6 @@
 #include "net/cert/cert_database.h"
 #include "net/cert/x509_certificate.h"
 #include "net/ssl/ssl_cert_request_info.h"
-#include "net/ssl/ssl_client_cert_type.h"
 #include "net/ssl/ssl_platform_key_android.h"
 #include "net/ssl/ssl_private_key.h"
 #include "ui/android/view_android.h"
@@ -162,22 +161,8 @@ static void StartClientCertificateRequest(
   }
 
   // Build the |key_types| JNI parameter, as a String[]
-  std::vector<std::string> key_types;
-  for (size_t n = 0; n < request->cert_request_info()->cert_key_types.size();
-       ++n) {
-    switch (request->cert_request_info()->cert_key_types[n]) {
-      case net::CLIENT_CERT_RSA_SIGN:
-        key_types.push_back("RSA");
-        break;
-      case net::CLIENT_CERT_ECDSA_SIGN:
-        key_types.push_back("EC");
-        break;
-      default:
-        // Ignore unknown types.
-        break;
-    }
-  }
-
+  std::vector<std::string> key_types = net::SignatureAlgorithmsToJavaKeyTypes(
+      request->cert_request_info()->signature_algorithms);
   JNIEnv* env = base::android::AttachCurrentThread();
   ScopedJavaLocalRef<jobjectArray> key_types_ref =
       base::android::ToJavaArrayOfStrings(env, key_types);
@@ -374,7 +359,7 @@ static void JNI_SSLClientCertificateRequest_OnSystemRequestCompletion(
 }
 
 static void NotifyClientCertificatesChanged() {
-  net::CertDatabase::GetInstance()->NotifyObserversCertDBChanged();
+  net::CertDatabase::GetInstance()->NotifyObserversClientCertStoreChanged();
 }
 
 static void

@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ash/crostini/throttle/crostini_throttle.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "chrome/browser/ash/concierge_helper_service.h"
 #include "chrome/browser/ash/crostini/throttle/crostini_active_window_throttle_observer.h"
@@ -29,7 +30,7 @@ class DefaultDelegateImpl : public CrostiniThrottle::Delegate {
   }
 
  private:
-  content::BrowserContext* context_;
+  raw_ptr<content::BrowserContext> context_;
 };
 
 class CrostiniThrottleFactory : public ProfileKeyedServiceFactory {
@@ -53,7 +54,14 @@ class CrostiniThrottleFactory : public ProfileKeyedServiceFactory {
   friend class base::NoDestructor<CrostiniThrottleFactory>;
 
   CrostiniThrottleFactory()
-      : ProfileKeyedServiceFactory("CrostiniThrottleFactory") {}
+      : ProfileKeyedServiceFactory(
+            "CrostiniThrottleFactory",
+            ProfileSelections::Builder()
+                .WithRegular(ProfileSelection::kOriginalOnly)
+                // TODO(crbug.com/1418376): Check if this service is needed in
+                // Guest mode.
+                .WithGuest(ProfileSelection::kOriginalOnly)
+                .Build()) {}
   ~CrostiniThrottleFactory() override = default;
 
   // BrowserContextKeyedServiceFactory:
@@ -86,6 +94,11 @@ void CrostiniThrottle::Shutdown() {
 
 void CrostiniThrottle::ThrottleInstance(bool should_throttle) {
   delegate_->SetCpuRestriction(should_throttle);
+}
+
+// static
+void CrostiniThrottle::EnsureFactoryBuilt() {
+  CrostiniThrottleFactory::GetInstance();
 }
 
 }  // namespace crostini

@@ -12,8 +12,13 @@ Are you a Google employee? See
 
 ## System requirements
 
-* A 64-bit Mac running 11.3 or later.
-* [Xcode](https://developer.apple.com/xcode) 13.1 or higher.
+* A 64-bit Mac capable of running the required version of Xcode.
+* [Xcode](https://developer.apple.com/xcode) 15.0 or higher.
+
+Note: after installing Xcode, you need to launch it and to let it install
+the iOS simulator. This is required as part of the build, see [this discussion](
+https://groups.google.com/a/chromium.org/g/chromium-dev/c/98d6MyLoYHM/m/A_HyOGxPAgAJ)
+on chromium-dev.
 
 ## Install `depot_tools`
 
@@ -131,6 +136,22 @@ You can also follow the manual instructions on the
 [Mac page](../mac_build_instructions.md), but make sure you set the
 GN arg `target_os="ios"`.
 
+### Faster builds
+
+This section contains some things you can change to speed up your builds,
+sorted so that the things that make the biggest difference are first.
+
+#### Use Reclient
+
+Google employees should use Reclient, a distributed compilation system. Detailed
+information is available internally but the relevant gn arg is:
+* `use_remoteexec = true`
+
+Google employees can visit
+[go/building-chrome-mac#using-remote-execution](https://goto.google.com/building-chrome-mac#using-remote-execution)
+for more information. For external contributors, Reclient does not support iOS
+builds.
+
 ## Building for device
 
 To be able to build and run Chromium and the tests for devices, you need to
@@ -171,7 +192,7 @@ application extensions:
 -   `${prefix}.chrome.ios.dev.ContentTodayExtension`
 -   `${prefix}.chrome.ios.dev.CredentialProviderExtension`
 -   `${prefix}.chrome.ios.dev.IntentsExtension`
--   `${prefix}.chrome.ios.dev.SearchTodayExtension`
+-   `${prefix}.chrome.ios.dev.OpenExtension`
 -   `${prefix}.chrome.ios.dev.ShareExtension`
 -   `${prefix}.chrome.ios.dev.TodayExtension`
 -   `${prefix}.chrome.ios.dev.WidgetKitExtension`
@@ -188,7 +209,8 @@ to share files and configurations while the `group.${prefix}.common` is shared
 with Chromium and other applications from the same organisation and can be used
 to send commands to Chromium.
 
-`${prefix}.chrome.ios.dev.CredentialProviderExtension` needs the AutoFill
+`${prefix}.chrome.ios.dev` and
+`${prefix}.chrome.ios.dev.CredentialProviderExtension` need the AutoFill
 Credential Provider Entitlement, which corresponds to the key
 `com.apple.developer.authentication-services.autofill-credential-provider`
 Please refer to Apple's documentation on how to set this up.
@@ -199,7 +221,7 @@ In addition to that, you need a different provisioning profile for each
 test application. Those provisioning profile will have a bundle identifier
 matching the following pattern `${prefix}.gtest.${test-suite-name}` where
 `${test-suite-name}` is the name of the test suite with underscores changed
-to dashes (e.g. `base_unittests` app will use `${prefix}.gest.base-unittests`
+to dashes (e.g. `base_unittests` app will use `${prefix}.gtest.base-unittests`
 as bundle identifier).
 
 To be able to run the EarlGrey tests on a device, you'll need two provisioning
@@ -247,6 +269,26 @@ then it will be impossible to install the application on a device (Xcode will
 display an error stating that "The application was signed with invalid
 entitlements").
 
+## Building Blink for iOS
+
+The iOS build supports compiling the blink web platform. To compile blink
+set a gn arg in your `.setup-gn` file. Note the blink web platform is
+experimental code and should only be used for analysis.
+
+```
+[gn_args]
+use_blink = true
+```
+Note that only certain targets support blink. `content_shell` being the
+most useful.
+
+```shell
+$ autoninja -C out/Debug-iphonesimulator content_shell
+```
+
+To run on a live device you will need to set the
+`com.apple.developer.kernel.extended-virtual-addressing` entitlement.
+
 ## Running apps from the command line
 
 Any target that is built and runs on the bots (see [below](#Troubleshooting))
@@ -255,10 +297,10 @@ command line, you can use `iossim`. For example, to run a debug build of
 `Chromium`:
 
 ```shell
-$ out/Debug-iphonesimulator/iossim out/Debug-iphonesimulator/Chromium.app
+$ out/Debug-iphonesimulator/iossim -i out/Debug-iphonesimulator/Chromium.app
 ```
 
-With Xcode 9, `iossim` no longer automatically launches the Simulator. This must now
+From Xcode 9 on, `iossim` no longer automatically launches the Simulator. This must now
 be done manually from within Xcode (`Xcode > Open Developer Tool > Simulator`), and
 also must be done *after* running `iossim`.
 
@@ -268,7 +310,7 @@ Arguments needed to be passed to the test application through `iossim`, such as
 `--gtest_filter=SomeTest.FooBar` should be passed through the `-c` flag:
 
 ```shell
-$ out/Debug-iphonesimulator/iossim \
+$ out/Debug-iphonesimulator/iossim -i \
     -c "--gtest_filter=SomeTest.FooBar --gtest_repeat=3" \
     out/Debug-iphonesimulator/base_unittests.app
 ```
@@ -280,9 +322,29 @@ XCTest bundle that is injected into the target application. Therefore you must
 also pass in the test bundle:
 
 ```shell
-$ out/Debug-iphonesimulator/iossim \
+$ out/Debug-iphonesimulator/iossim -i \
     out/Debug-iphonesimulator/ios_chrome_ui_egtests.app \
     out/Debug-iphonesimulator/ios_chrome_ui_egtests.app/PlugIns/ios_chrome_ui_egtests_module.xctest
+```
+
+### Running Web Tests on Blink for iOS
+
+The current Blink for iOS only supports running Web Tests on the simulator
+environment now. Before you run the web tests, you need to build the blink_tests
+target to get content_shell and all of the other needed binaries for the
+simulator test environment.
+
+```shell
+$ autoninja -C out/Debug-iphonesimulator blink_tests
+```
+
+When the blink_tests target is complete you can then run the test runner script
+(third_party/blink/tools/run_web_tests.py) as below. See [Web Tests](https://chromium.googlesource.com/chromium/src/+/HEAD/docs/testing/web_tests.md) document
+for more information.
+
+```shell
+$ third_party/blink/tools/run_web_tests.py -t Debug-iphonesimulator \
+    --platform ios
 ```
 
 ### Running on specific simulator
@@ -295,7 +357,7 @@ For example, to run the tests on a simulated iPhone 6s running iOS 10.0,
 you would invoke `iossim` like this.
 
 ```shell
-$ out/Debug-iphonesimulator/iossim -d 'iPhone 6s' -s '10.0' \
+$ out/Debug-iphonesimulator/iossim -i -d 'iPhone 6s' -s '10.0' \
     out/Debug-iphonesimulator/base_unittests.app
 ```
 
@@ -306,6 +368,23 @@ an older version of Xcode) to be able to run on a specific configuration.
 Go to "Preferences > Components" tab in Xcode to install other simulator images
 (this is the location the setting is in Xcode 9.2; it may be different in other
 version of the tool).
+
+### Remote debugging with DevTools (on Blink for iOS)
+
+Developers are able to remotely use DevTools in a host machine (e.g. Mac) and
+inspect `content_shell` for development.
+
+On the simulator, one just needs to pass the `--remote-debugging-port=9222`
+argument for `content_shell` and in the host machine access it via
+`chrome://inspect`. It is possible to change the default port listening (9222)
+and configure another one via the  "Configure…" button and then "Target
+discovery settings" dialog.
+
+To use DevTools in the remote device it is necessary to also pass the remote
+debugging address argument to `content-shell` so any address could bind for
+debugging: ` --remote-debugging-address=0.0.0.0 --remote-debugging-port=9222`.
+Then in the host machine one needs to configure the IP address of the device in
+the "Target discovery settings" dialog e.g. `192.168.0.102:9222`.
 
 ## Update your checkout
 
@@ -393,7 +472,7 @@ debugging and follow them.
 If you use `xcode-select` to switch between multiple version of Xcode,
 you will have to follow the same steps.
 
-### Improving performance of `git status`
+### Improving performance of git commands
 
 #### Increase the vnode cache size
 
@@ -425,7 +504,7 @@ Or edit the file directly.
 
 #### Configure git to use an untracked cache
 
-If `git --version` reports 2.8 or higher, try running
+Try running
 
 ```shell
 $ git update-index --test-untracked-cache
@@ -438,10 +517,16 @@ If the output ends with `OK`, then the following may also improve performance of
 $ git config core.untrackedCache true
 ```
 
-If `git --version` reports 2.6 or higher, but below 2.8, you can instead run
+#### Configure git to use fsmonitor
+
+You can significantly speed up git by using [fsmonitor.](https://github.blog/2022-06-29-improve-git-monorepo-performance-with-a-file-system-monitor/)
+You should enable fsmonitor in large repos, such as Chromium and v8. Enabling
+it globally will launch many processes and probably isn't worthwhile. Be sure
+you have at least version 2.43 (fsmonitor on the Mac is broken before then). The
+command to enable fsmonitor in the current repo is:
 
 ```shell
-$ git update-index --untracked-cache
+$ git config core.fsmonitor true
 ```
 
 ### Xcode license agreement

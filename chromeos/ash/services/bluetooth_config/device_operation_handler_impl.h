@@ -5,6 +5,7 @@
 #ifndef CHROMEOS_ASH_SERVICES_BLUETOOTH_CONFIG_DEVICE_OPERATION_HANDLER_IMPL_H_
 #define CHROMEOS_ASH_SERVICES_BLUETOOTH_CONFIG_DEVICE_OPERATION_HANDLER_IMPL_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chromeos/ash/services/bluetooth_config/adapter_state_controller.h"
@@ -37,18 +38,18 @@ class DeviceOperationHandlerImpl : public DeviceOperationHandler {
       const std::string& device_id) const override;
   void RecordUserInitiatedReconnectionMetrics(
       const device::BluetoothTransport transport,
-      absl::optional<base::Time> reconnection_attempt_start,
-      absl::optional<device::BluetoothDevice::ConnectErrorCode> error_code)
+      std::optional<base::Time> reconnection_attempt_start,
+      std::optional<device::BluetoothDevice::ConnectErrorCode> error_code)
       const override;
 
   // device::BluetoothDevice::Connect() callback.
   void OnDeviceConnect(
       device::BluetoothTransport transport,
-      absl::optional<device::BluetoothDevice::ConnectErrorCode> error_code);
+      std::optional<device::BluetoothDevice::ConnectErrorCode> error_code);
 
   scoped_refptr<device::BluetoothAdapter> bluetooth_adapter_;
-  DeviceNameManager* device_name_manager_;
-  FastPairDelegate* fast_pair_delegate_;
+  raw_ptr<DeviceNameManager> device_name_manager_;
+  raw_ptr<FastPairDelegate> fast_pair_delegate_;
 
   base::Time last_reconnection_attempt_start_;
 

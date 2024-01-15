@@ -11,7 +11,6 @@ import android.view.ViewGroup.LayoutParams;
 import android.view.ViewGroup.MarginLayoutParams;
 import android.widget.TextView;
 
-import androidx.annotation.VisibleForTesting;
 import androidx.appcompat.widget.AppCompatTextView;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -22,14 +21,10 @@ import org.chromium.chrome.browser.xsurface.ListContentManagerObserver;
 import org.chromium.chrome.browser.xsurface.ListLayoutHelper;
 import org.chromium.ui.base.ViewUtils;
 
-/**
- * Implementation of {@link HybridListRenderer} for list consisting all native views.
- */
+/** Implementation of {@link HybridListRenderer} for list consisting all native views. */
 public class NativeViewListRenderer extends RecyclerView.Adapter<NativeViewListRenderer.ViewHolder>
         implements HybridListRenderer, ListContentManagerObserver {
-    /**
-     * A ViewHolder for the underlying RecyclerView.
-     */
+    /** A ViewHolder for the underlying RecyclerView. */
     public static class ViewHolder extends RecyclerView.ViewHolder {
         ViewHolder(View v) {
             super(v);
@@ -111,7 +106,6 @@ public class NativeViewListRenderer extends RecyclerView.Adapter<NativeViewListR
     @Override
     public void onItemRangeRemoved(int startIndex, int count) {
         notifyItemRangeRemoved(startIndex, count);
-        ;
     }
 
     @Override
@@ -129,7 +123,6 @@ public class NativeViewListRenderer extends RecyclerView.Adapter<NativeViewListR
         return mLayoutHelper;
     }
 
-    @VisibleForTesting
     RecyclerView getListViewForTest() {
         return mView;
     }
@@ -171,9 +164,9 @@ public class NativeViewListRenderer extends RecyclerView.Adapter<NativeViewListR
         }
 
         @Override
-        public void setSpanCount(int spanCount) {
-            throw new UnsupportedOperationException(
-                    "Cannot set span count when using linear layout.");
+        public boolean setColumnCount(int columnCount) {
+            // no-op operation for LinearLayout. Consider as success.
+            return true;
         }
     }
 }

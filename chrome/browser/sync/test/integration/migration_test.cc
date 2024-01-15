@@ -5,7 +5,6 @@
 #include <memory>
 #include <vector>
 
-#include "base/compiler_specific.h"
 #include "base/containers/circular_deque.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sync/test/integration/bookmarks_helper.h"
@@ -14,9 +13,8 @@
 #include "chrome/browser/sync/test/integration/preferences_helper.h"
 #include "chrome/browser/sync/test/integration/sync_test.h"
 #include "chrome/common/pref_names.h"
-#include "components/prefs/scoped_user_pref_update.h"
-#include "components/sync/driver/sync_service_impl.h"
-#include "components/translate/core/browser/translate_prefs.h"
+#include "components/sync/base/features.h"
+#include "components/sync/service/sync_service_impl.h"
 #include "content/public/test/browser_test.h"
 
 using bookmarks_helper::AddURL;
@@ -31,12 +29,14 @@ namespace {
 // Utility functions to make a model type set out of a small number of
 // model types.
 
+// TODO(crbug/1444105): MakeSet() seems pretty redundant, can be replaced with
+// its body.
 syncer::ModelTypeSet MakeSet(syncer::ModelType type) {
-  return syncer::ModelTypeSet(type);
+  return {type};
 }
 
 syncer::ModelTypeSet MakeSet(syncer::ModelType type1, syncer::ModelType type2) {
-  return syncer::ModelTypeSet(type1, type2);
+  return {type1, type2};
 }
 
 // An ordered list of model types sets to migrate.  Used by
@@ -190,7 +190,7 @@ class MigrationTest : public SyncTest {
     }
 
     // Phase 3: Wait for all clients to catch up.
-    AwaitQuiescence();
+    ASSERT_TRUE(AwaitQuiescence());
   }
 
  private:

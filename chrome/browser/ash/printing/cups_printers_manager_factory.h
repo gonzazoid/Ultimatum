@@ -14,7 +14,7 @@ class BrowserContext;
 
 namespace base {
 template <typename T>
-struct DefaultSingletonTraits;
+class NoDestructor;
 }
 
 namespace ash {
@@ -37,13 +37,13 @@ class CupsPrintersManagerFactory : public ProfileKeyedServiceFactory {
   CupsPrintersManagerProxy* GetProxy();
 
  private:
-  friend struct base::DefaultSingletonTraits<CupsPrintersManagerFactory>;
+  friend base::NoDestructor<CupsPrintersManagerFactory>;
 
   CupsPrintersManagerFactory();
   ~CupsPrintersManagerFactory() override;
 
   // BrowserContextKeyedServiceFactory overrides:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   void BrowserContextShutdown(content::BrowserContext* context) override;
   bool ServiceIsCreatedWithBrowserContext() const override;
@@ -54,10 +54,5 @@ class CupsPrintersManagerFactory : public ProfileKeyedServiceFactory {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::CupsPrintersManagerFactory;
-}
 
 #endif  // CHROME_BROWSER_ASH_PRINTING_CUPS_PRINTERS_MANAGER_FACTORY_H_

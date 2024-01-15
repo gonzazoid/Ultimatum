@@ -6,11 +6,11 @@
 
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chromeos/ash/components/dbus/biod/test_utils.h"
 #include "dbus/object_path.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -34,7 +34,7 @@ class FakeBiodClientTest : public testing::Test {
  public:
   FakeBiodClientTest()
       : task_runner_(new base::TestSimpleTaskRunner),
-        task_runner_handle_(task_runner_) {}
+        task_runner_current_default_handle_(task_runner_) {}
 
   FakeBiodClientTest(const FakeBiodClientTest&) = delete;
   FakeBiodClientTest& operator=(const FakeBiodClientTest&) = delete;
@@ -45,9 +45,18 @@ class FakeBiodClientTest : public testing::Test {
   // TestGetRecordsForUser.
   std::vector<dbus::ObjectPath> GetRecordsForUser(const std::string& user_id) {
     std::vector<dbus::ObjectPath> enrollment_paths;
+    bool enrollment_success = false;
+    auto enrollment_callback =
+        [](std::vector<dbus::ObjectPath>& enrollment_paths,
+           bool& enrollment_success, const std::vector<dbus::ObjectPath>& paths,
+           bool success) {
+          test_utils::CopyObjectPathArray(&enrollment_paths, paths);
+          enrollment_success = success;
+        };
+
     fake_biod_client_.GetRecordsForUser(
-        user_id,
-        base::BindOnce(&test_utils::CopyObjectPathArray, &enrollment_paths));
+        user_id, base::BindOnce(enrollment_callback, std::ref(enrollment_paths),
+                                std::ref(enrollment_success)));
     task_runner_->RunUntilIdle();
     return enrollment_paths;
   }
@@ -104,7 +113,8 @@ class FakeBiodClientTest : public testing::Test {
  protected:
   FakeBiodClient fake_biod_client_;
   scoped_refptr<base::TestSimpleTaskRunner> task_runner_;
-  base::ThreadTaskRunnerHandle task_runner_handle_;
+  base::SingleThreadTaskRunner::CurrentDefaultHandle
+      task_runner_current_default_handle_;
 
   // This number is incremented each time GenerateTestFingerprint is called to
   // ensure each fingerprint is unique.
@@ -307,12 +317,8 @@ TEST_F(FakeBiodClientTest, TestGetAndSetRecordLabels) {
 
   EnrollFingerprint(kTestUserId, kLabelOne, GenerateTestFingerprint(2));
   EnrollFingerprint(kTestUserId, kLabelTwo, GenerateTestFingerprint(2));
-  EXPECT_EQ(2u, GetRecordsForUser(kTestUserId).size());
-  std::vector<dbus::ObjectPath> enrollment_paths;
-  fake_biod_client_.GetRecordsForUser(
-      kTestUserId,
-      base::BindOnce(&test_utils::CopyObjectPathArray, &enrollment_paths));
-  task_runner_->RunUntilIdle();
+  std::vector<dbus::ObjectPath> enrollment_paths =
+      GetRecordsForUser(kTestUserId);
   EXPECT_EQ(2u, enrollment_paths.size());
 
   // Verify the labels we get using GetLabel are the same as the one we

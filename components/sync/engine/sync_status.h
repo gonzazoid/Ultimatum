@@ -11,8 +11,8 @@
 #include "components/sync/base/model_type.h"
 #include "components/sync/base/passphrase_enums.h"
 #include "components/sync/engine/sync_encryption_handler.h"
+#include "components/sync/engine/sync_protocol_error.h"
 #include "components/sync/protocol/nigori_specifics.pb.h"
-#include "components/sync/protocol/sync_protocol_error.h"
 
 namespace syncer {
 
@@ -21,7 +21,7 @@ namespace syncer {
 // This struct is closely tied to the AllStatus object which uses instances of
 // it to track and report on the sync engine's internal state, and the functions
 // in sync_ui_util.cc which convert the contents of this struct into a
-// DictionaryValue used to populate the chrome://sync-internals summary tab.
+// base::Value::Dict used to populate the chrome://sync-internals summary tab.
 struct SyncStatus {
   SyncStatus();
   SyncStatus(const SyncStatus& other);
@@ -72,8 +72,8 @@ struct SyncStatus {
 
   std::string cache_guid;
 
-  // The unique identifier for the invalidation client.
-  std::string invalidator_client_id;
+  // Data types having pending invalidations.
+  ModelTypeSet invalidated_data_types;
 
   // Time of next retry if sync scheduler is throttled or in backoff.
   base::Time retry_time;

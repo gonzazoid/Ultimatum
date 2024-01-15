@@ -6,12 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chromecast/media/api/decoder_buffer_base.h"
 #include "chromecast/media/base/decrypt_context_impl.h"
 #include "chromecast/media/cdm/cast_cdm_context.h"
@@ -22,7 +21,6 @@
 #include "chromecast/media/cma/pipeline/decrypt_util.h"
 #include "chromecast/public/media/cast_decrypt_config.h"
 #include "media/base/audio_decoder_config.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/decrypt_config.h"
 #include "media/base/timestamp_constants.h"
 
@@ -89,7 +87,7 @@ bool AvPipelineImpl::StartPlayingFrom(
   // Discard any previously pushed buffer and start feeding the pipeline.
   pushed_buffer_ = nullptr;
   enable_feeding_ = true;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&AvPipelineImpl::FetchBuffer, weak_this_));
 
   set_state(kPlaying);
@@ -289,7 +287,7 @@ void AvPipelineImpl::OnBufferDecrypted(bool success,
 
   // Decryptor needs more data.
   if (buffers.empty()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&AvPipelineImpl::FetchBuffer, weak_this_));
     return;
   }
@@ -308,7 +306,7 @@ void AvPipelineImpl::OnPushBufferComplete(BufferStatus status) {
     return;
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       ready_buffers_.empty()
           ? base::BindOnce(&AvPipelineImpl::FetchBuffer, weak_this_)

@@ -6,8 +6,7 @@
 
 #include "third_party/blink/renderer/bindings/core/v8/v8_computed_effect_timing.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_effect_timing.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_timeline_offset.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_timeline_offset_phase.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_timeline_range_offset.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_cssnumericvalue_double.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_cssnumericvalue_string_unrestricteddouble.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_double_string.h"
@@ -16,40 +15,9 @@
 
 namespace blink {
 
-String TimelineNamedPhaseString(Timing::TimelineNamedPhase phase) {
-  switch (phase) {
-    case Timing::TimelineNamedPhase::kNone:
-      return "none";
-
-    case Timing::TimelineNamedPhase::kCover:
-      return "cover";
-
-    case Timing::TimelineNamedPhase::kContain:
-      return "contain";
-
-    case Timing::TimelineNamedPhase::kEnter:
-      return "enter";
-
-    case Timing::TimelineNamedPhase::kExit:
-      return "exit";
-  }
-}
-
-V8UnionDoubleOrTimelineOffset* Timing::Delay::ToV8UnionDoubleOrTimelineOffset()
-    const {
-  if (phase == Timing::TimelineNamedPhase::kNone) {
-    return MakeGarbageCollected<V8UnionDoubleOrTimelineOffset>(
-        AsTimeValue().InMillisecondsF());
-  } else {
-    TimelineOffset* timeline_offset = TimelineOffset::Create();
-    absl::optional<V8TimelineOffsetPhase> timeline_offset_phase =
-        V8TimelineOffsetPhase::Create(TimelineNamedPhaseString(phase));
-    if (timeline_offset_phase)
-      timeline_offset->setPhase(timeline_offset_phase.value());
-    timeline_offset->setPercent(CSSUnitValues::percent(100 * relative_offset));
-
-    return MakeGarbageCollected<V8UnionDoubleOrTimelineOffset>(timeline_offset);
-  }
+Timing::V8Delay* Timing::Delay::ToV8Delay() const {
+  // TODO(crbug.com/1216527) support delay as percentage.
+  return MakeGarbageCollected<V8Delay>(AsTimeValue().InMillisecondsF());
 }
 
 String Timing::FillModeString(FillMode fill_mode) {
@@ -111,8 +79,8 @@ EffectTiming* Timing::ConvertToEffectTiming() const {
   EffectTiming* effect_timing = EffectTiming::Create();
 
   // Specified values used here so that inputs match outputs for JS API calls
-  effect_timing->setDelay(start_delay.ToV8UnionDoubleOrTimelineOffset());
-  effect_timing->setEndDelay(end_delay.ToV8UnionDoubleOrTimelineOffset());
+  effect_timing->setDelay(start_delay.ToV8Delay());
+  effect_timing->setEndDelay(end_delay.ToV8Delay());
   effect_timing->setFill(FillModeString(fill_mode));
   effect_timing->setIterationStart(iteration_start);
   effect_timing->setIterations(iteration_count);
@@ -183,8 +151,8 @@ ComputedEffectTiming* Timing::getComputedTiming(
 
   // TODO(crbug.com/1216527): Animation effect timing members start_delay and
   // end_delay should be CSSNumberish
-  computed_timing->setDelay(start_delay.ToV8UnionDoubleOrTimelineOffset());
-  computed_timing->setEndDelay(end_delay.ToV8UnionDoubleOrTimelineOffset());
+  computed_timing->setDelay(start_delay.ToV8Delay());
+  computed_timing->setEndDelay(end_delay.ToV8Delay());
   computed_timing->setFill(
       Timing::FillModeString(ResolvedFillMode(is_keyframe_effect)));
   computed_timing->setIterationStart(iteration_start);
@@ -215,7 +183,7 @@ ComputedEffectTiming* Timing::getComputedTiming(
 
 Timing::CalculatedTiming Timing::CalculateTimings(
     absl::optional<AnimationTimeDelta> local_time,
-    bool at_progress_timeline_boundary,
+    bool is_idle,
     const NormalizedTiming& normalized_timing,
     AnimationDirection animation_direction,
     bool is_keyframe_effect,
@@ -223,46 +191,54 @@ Timing::CalculatedTiming Timing::CalculateTimings(
   const AnimationTimeDelta active_duration = normalized_timing.active_duration;
   const AnimationTimeDelta duration = normalized_timing.iteration_duration;
 
-  Timing::Phase current_phase =
-      CalculatePhase(normalized_timing, local_time,
-                     at_progress_timeline_boundary, animation_direction);
+  Timing::Phase current_phase = TimingCalculations::CalculatePhase(
+      normalized_timing, local_time, animation_direction);
 
-  const absl::optional<AnimationTimeDelta> active_time = CalculateActiveTime(
-      normalized_timing, ResolvedFillMode(is_keyframe_effect), local_time,
-      current_phase);
+  const absl::optional<AnimationTimeDelta> active_time =
+      TimingCalculations::CalculateActiveTime(
+          normalized_timing, ResolvedFillMode(is_keyframe_effect), local_time,
+          current_phase);
 
   absl::optional<double> progress;
 
-  const absl::optional<double> overall_progress = CalculateOverallProgress(
-      current_phase, active_time, duration, iteration_count, iteration_start);
+  const absl::optional<double> overall_progress =
+      TimingCalculations::CalculateOverallProgress(current_phase, active_time,
+                                                   duration, iteration_count,
+                                                   iteration_start);
   const absl::optional<double> simple_iteration_progress =
-      CalculateSimpleIterationProgress(current_phase, overall_progress,
-                                       iteration_start, active_time,
-                                       active_duration, iteration_count);
+      TimingCalculations::CalculateSimpleIterationProgress(
+          current_phase, overall_progress, iteration_start, active_time,
+          active_duration, iteration_count);
   const absl::optional<double> current_iteration =
-      CalculateCurrentIteration(current_phase, active_time, iteration_count,
-                                overall_progress, simple_iteration_progress);
+      TimingCalculations::CalculateCurrentIteration(
+          current_phase, active_time, iteration_count, overall_progress,
+          simple_iteration_progress);
   const bool current_direction_is_forwards =
-      IsCurrentDirectionForwards(current_iteration, direction);
-  const absl::optional<double> directed_progress = CalculateDirectedProgress(
-      simple_iteration_progress, current_iteration, direction);
+      TimingCalculations::IsCurrentDirectionForwards(current_iteration,
+                                                     direction);
+  const absl::optional<double> directed_progress =
+      TimingCalculations::CalculateDirectedProgress(
+          simple_iteration_progress, current_iteration, direction);
 
-  progress = CalculateTransformedProgress(current_phase, directed_progress,
-                                          current_direction_is_forwards,
-                                          timing_function);
+  progress = TimingCalculations::CalculateTransformedProgress(
+      current_phase, directed_progress, current_direction_is_forwards,
+      timing_function);
 
   AnimationTimeDelta time_to_next_iteration = AnimationTimeDelta::Max();
   // Conditionally compute the time to next iteration, which is only
   // applicable if the iteration duration is non-zero.
   if (!duration.is_zero()) {
     const AnimationTimeDelta start_offset =
-        MultiplyZeroAlwaysGivesZero(duration, iteration_start);
+        TimingCalculations::MultiplyZeroAlwaysGivesZero(duration,
+                                                        iteration_start);
     DCHECK_GE(start_offset, AnimationTimeDelta());
     const absl::optional<AnimationTimeDelta> offset_active_time =
-        CalculateOffsetActiveTime(active_duration, active_time, start_offset);
+        TimingCalculations::CalculateOffsetActiveTime(
+            active_duration, active_time, start_offset);
     const absl::optional<AnimationTimeDelta> iteration_time =
-        CalculateIterationTime(duration, active_duration, offset_active_time,
-                               start_offset, current_phase, *this);
+        TimingCalculations::CalculateIterationTime(
+            duration, active_duration, offset_active_time, start_offset,
+            current_phase, *this);
     if (iteration_time) {
       // active_time cannot be null if iteration_time is not null.
       DCHECK(active_time);
@@ -282,12 +258,15 @@ Timing::CalculatedTiming Timing::CalculateTimings(
   DCHECK(!calculated.is_in_effect ||
          (current_iteration.has_value() && progress.has_value()));
   calculated.is_in_play = calculated.phase == Timing::kPhaseActive;
+
   // https://w3.org/TR/web-animations-1/#current
   calculated.is_current = calculated.is_in_play ||
                           (playback_rate.has_value() && playback_rate > 0 &&
                            calculated.phase == Timing::kPhaseBefore) ||
                           (playback_rate.has_value() && playback_rate < 0 &&
-                           calculated.phase == Timing::kPhaseAfter);
+                           calculated.phase == Timing::kPhaseAfter) ||
+                          (!is_idle && normalized_timing.timeline_duration);
+
   calculated.local_time = local_time;
   calculated.time_to_next_iteration = time_to_next_iteration;
 

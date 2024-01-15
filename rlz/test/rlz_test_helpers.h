@@ -21,7 +21,7 @@
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/system/fake_statistics_provider.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
 #endif
 
 // A test helper class that constructs and destructs platform dependent machine
@@ -60,8 +60,7 @@ class RlzLibTestBase : public RlzLibTestNoMachineState {
   void TearDown() override;
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  std::unique_ptr<chromeos::system::FakeStatisticsProvider>
-      statistics_provider_;
+  std::unique_ptr<ash::system::FakeStatisticsProvider> statistics_provider_;
 #endif
 };
 

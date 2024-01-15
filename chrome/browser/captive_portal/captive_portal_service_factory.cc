@@ -4,10 +4,8 @@
 
 #include "chrome/browser/captive_portal/captive_portal_service_factory.h"
 
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/captive_portal/content/captive_portal_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 // static
 captive_portal::CaptivePortalService*
@@ -18,24 +16,25 @@ CaptivePortalServiceFactory::GetForProfile(Profile* profile) {
 
 // static
 CaptivePortalServiceFactory* CaptivePortalServiceFactory::GetInstance() {
-  return base::Singleton<CaptivePortalServiceFactory>::get();
+  static base::NoDestructor<CaptivePortalServiceFactory> instance;
+  return instance.get();
 }
 
 CaptivePortalServiceFactory::CaptivePortalServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "captive_portal::CaptivePortalService",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {}
 
-CaptivePortalServiceFactory::~CaptivePortalServiceFactory() {
-}
+CaptivePortalServiceFactory::~CaptivePortalServiceFactory() = default;
 
-KeyedService* CaptivePortalServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+CaptivePortalServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* profile) const {
-  return new captive_portal::CaptivePortalService(
+  return std::make_unique<captive_portal::CaptivePortalService>(
       profile, static_cast<Profile*>(profile)->GetPrefs());
-}
-
-content::BrowserContext* CaptivePortalServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
 }

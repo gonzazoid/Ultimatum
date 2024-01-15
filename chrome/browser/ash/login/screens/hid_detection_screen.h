@@ -9,17 +9,15 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/elapsed_timer.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ash/login/wizard_context.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
 #include "chrome/browser/ui/webui/ash/login/hid_detection_screen_handler.h"
 #include "chromeos/ash/components/hid_detection/hid_detection_manager.h"
 #include "device/bluetooth/bluetooth_adapter.h"
@@ -28,7 +26,6 @@
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/device/public/mojom/input_service.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -81,7 +78,7 @@ class HIDDetectionScreen : public BaseScreen,
           hid_detection_manager);
 
   void InputDeviceAddedForTesting(InputDeviceInfoPtr info);
-  const absl::optional<Result>& get_exit_result_for_testing() const {
+  const std::optional<Result>& get_exit_result_for_testing() const {
     return exit_result_for_testing_;
   }
 
@@ -203,7 +200,7 @@ class HIDDetectionScreen : public BaseScreen,
       const std::string& address,
       device::BluetoothDeviceType device_type,
       uint16_t device_id,
-      absl::optional<device::BluetoothDevice::ConnectErrorCode> error_code);
+      std::optional<device::BluetoothDevice::ConnectErrorCode> error_code);
 
   // Sends a notification to the Web UI of the status of available Bluetooth/USB
   // pointing device.
@@ -228,7 +225,7 @@ class HIDDetectionScreen : public BaseScreen,
   base::WeakPtr<HIDDetectionView> view_;
 
   const ScreenExitCallback exit_callback_;
-  absl::optional<Result> exit_result_for_testing_;
+  std::optional<Result> exit_result_for_testing_;
 
   // Default bluetooth adapter, used for all operations.
   scoped_refptr<device::BluetoothAdapter> adapter_;
@@ -282,17 +279,5 @@ class HIDDetectionScreen : public BaseScreen,
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::HIDDetectionScreen;
-}
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace ash {
-using ::chromeos::HIDDetectionScreen;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_HID_DETECTION_SCREEN_H_

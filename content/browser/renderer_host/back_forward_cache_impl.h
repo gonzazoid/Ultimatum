@@ -11,11 +11,14 @@
 #include <unordered_set>
 
 #include "base/feature_list.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
+#include "base/types/expected.h"
 #include "content/browser/renderer_host/back_forward_cache_can_store_document_result.h"
 #include "content/browser/renderer_host/back_forward_cache_metrics.h"
 #include "content/browser/renderer_host/page_impl.h"
@@ -32,6 +35,7 @@
 #include "net/cookies/canonical_cookie.h"
 #include "services/network/public/mojom/cookie_manager.mojom.h"
 #include "third_party/blink/public/mojom/back_forward_cache_not_restored_reasons.mojom.h"
+#include "third_party/blink/public/mojom/frame/back_forward_cache_controller.mojom.h"
 #include "third_party/blink/public/mojom/page/page.mojom.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 #include "url/gurl.h"
@@ -55,26 +59,28 @@ BASE_FEATURE(kBackForwardCacheNoTimeEviction,
              "BackForwardCacheNoTimeEviction",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-// Allows pages with cache-control:no-store to enter the back/forward cache.
-// Feature params can specify whether pages with cache-control:no-store can be
-// restored if cookies change / if HTTPOnly cookies change.
-// TODO(crbug.com/1228611): Enable this feature.
-BASE_FEATURE(kCacheControlNoStoreEnterBackForwardCache,
-             "CacheControlNoStoreEnterBackForwardCache",
+// Feature to allow exposing cross-origin subframes' NotRestoredReasons.
+BASE_FEATURE(kAllowCrossOriginNotRestoredReasons,
+             "AllowCrossOriginNotRestoredReasons",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-// Enables controlling the time to live for pages in the backforward cache.
-// The time to live is defined by the param 'time_to_live_seconds'; if this
-// param is not specified then this feature is ignored and the default is used.
-BASE_FEATURE(kBackForwardCacheTimeToLiveControl,
-             "BackForwardCacheTimeToLiveControl",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kBackForwardCacheSize);
+CONTENT_EXPORT extern const base::FeatureParam<int>
+    kBackForwardCacheSizeCacheSize;
+CONTENT_EXPORT extern const base::FeatureParam<int>
+    kBackForwardCacheSizeForegroundCacheSize;
 
-// Allows overriding the sizes of back/forward cache.
-// Sizes set via this feature's parameters take precedence over others.
-BASE_FEATURE(kBackForwardCacheSize,
-             "BackForwardCacheSize",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+// Controls the interaction between back/forward cache and
+// unload. When enabled, pages with unload handlers may enter the
+// cache.
+BASE_FEATURE(kBackForwardCacheUnloadAllowed,
+             "BackForwardCacheUnloadAllowed",
+#if BUILDFLAG(IS_ANDROID)
+             base::FEATURE_ENABLED_BY_DEFAULT
+#else
+             base::FEATURE_DISABLED_BY_DEFAULT
+#endif
+);
 
 // Combines a flattened list and a tree of the reasons why each document cannot
 // enter the back/forward cache (might be empty if it can). The tree saves the
@@ -86,6 +92,8 @@ struct CONTENT_EXPORT BackForwardCacheCanStoreDocumentResultWithTree {
   BackForwardCacheCanStoreDocumentResultWithTree(
       BackForwardCacheCanStoreDocumentResult& flattened_reasons,
       std::unique_ptr<BackForwardCacheCanStoreTreeResult> tree_reasons);
+  BackForwardCacheCanStoreDocumentResultWithTree(
+      BackForwardCacheCanStoreDocumentResultWithTree&& other);
   ~BackForwardCacheCanStoreDocumentResultWithTree();
 
   BackForwardCacheCanStoreDocumentResult flattened_reasons;
@@ -104,6 +112,27 @@ struct CONTENT_EXPORT BackForwardCacheCanStoreDocumentResultWithTree {
 // frozen state and is kept in this object. They can potentially be reused
 // after an history navigation. Reusing a document means swapping it back with
 // the current_frame_host.
+//
+//
+// BackForwardCache Size & Pruning Logic:
+//
+// 1. `EnforceCacheSizeLimit()` is called to prune the cache size down on
+//    storing a new cache entry, or when the renderer process's
+//    `IsProcessBackgrounded()` state changes.
+//    A. [Android-only] The number of entries where `HasForegroundedProcess()`
+//       is true is pruned to `GetForegroundedEntriesCacheSize()`.
+//    B. Prunes to `GetCacheSize()` entries no matter what kinds of tabs
+//       BackForwardCache is in.
+//    C. When a `RenderFrameHost` enters BackForwardCache, it schedules a task
+//       in `RenderFrameHostImpl::StartBackForwardCacheEvictionTimer()` to
+//       evicts the outermost frame after
+//       `kDefaultTimeToLiveInBackForwardCacheInSeconds` seconds.
+// 2. In `performance_manager::policies::BFCachePolicy`:
+//    A. [Desktop-only] On moderate memory pressure, the number of entries in a
+//       visible tab's cache is pruned to
+//       `ForegroundCacheSizeOnModeratePressure()`. The number in a non-visible
+//       tab is pruned to `BackgroundCacheSizeOnModeratePressure()`.
+//    B. [Desktop-only] On critical memory pressure, the cache is cleared.
 class CONTENT_EXPORT BackForwardCacheImpl
     : public BackForwardCache,
       public RenderProcessHostInternalObserver,
@@ -122,15 +151,12 @@ class CONTENT_EXPORT BackForwardCacheImpl
   GetChannelAssociatedMessageHandlingPolicy();
 
   // BackForwardCache entry, consisting of the page and associated metadata.
-  class Entry : public ::network::mojom::CookieChangeListener {
+  class Entry {
    public:
     explicit Entry(std::unique_ptr<StoredPage> stored_page);
-    ~Entry() override;
+    ~Entry();
 
     void WriteIntoTrace(perfetto::TracedValue context);
-
-    // Starts monitoring the cookie change in this entry.
-    void StartMonitoringCookieChange();
 
     // Indicates whether or not all the |render_view_hosts| in this entry have
     // received the acknowledgement from renderer that it finished running
@@ -147,6 +173,11 @@ class CONTENT_EXPORT BackForwardCacheImpl
 
     void SetStoredPageDelegate(StoredPage::Delegate* delegate) {
       stored_page_->SetDelegate(delegate);
+    }
+
+    void SetViewTransitionState(
+        std::optional<blink::ViewTransitionState> view_transition_state) {
+      stored_page_->SetViewTransitionState(std::move(view_transition_state));
     }
 
     // The main document being stored.
@@ -167,27 +198,10 @@ class CONTENT_EXPORT BackForwardCacheImpl
    private:
     friend class BackForwardCacheImpl;
 
-    // ::network::mojom::CookieChangeListener
-    void OnCookieChange(const net::CookieChangeInfo& change) override;
-
-    mojo::Receiver<::network::mojom::CookieChangeListener>
-        cookie_listener_receiver_{this};
-
-    struct CookieModified {
-      // Indicates whether or not cookie on the bfcache entry has been modified
-      // while the entry is in bfcache.
-      bool cookie_modified = false;
-      // Indicates whether or not HTTPOnly cookie on the bfcache entry
-      // has been modified while the entry is in bfcache.
-      bool http_only_cookie_modified = false;
-    };
-    // Only populated when |AllowStoringPagesWithCacheControlNoStore()| is true.
-    absl::optional<CookieModified> cookie_modified_;
-
     std::unique_ptr<StoredPage> stored_page_;
   };
 
-  BackForwardCacheImpl();
+  explicit BackForwardCacheImpl(BrowserContext* browser_context);
 
   BackForwardCacheImpl(const BackForwardCacheImpl&) = delete;
   BackForwardCacheImpl& operator=(const BackForwardCacheImpl&) = delete;
@@ -200,6 +214,19 @@ class CONTENT_EXPORT BackForwardCacheImpl
   // Returns whether back/forward cache is enabled for screen reader users.
   static bool IsScreenReaderAllowed();
 
+  // Returns where back/forward cache is allowed for pages with unload handlers.
+  static bool IsUnloadAllowed();
+
+  // Log an unexpected message from the renderer. Doing it here so that it is
+  // grouped with other back/forward cache vlogging and e.g. will show up in
+  // test logs. `message_name` varies in each build however when a test failure
+  // occurs, it should be possible to recreate the build and find which message
+  // corresponds to this the value.
+  static void VlogUnexpectedRendererToBrowserMessage(
+      const char* interface_name_,
+      uint32_t message_name,
+      RenderFrameHostImpl* rfh);
+
   // Returns the reasons (if any) why this document and its children cannot
   // enter the back/forward cache. Depends on the |render_frame_host| and its
   // children's state. Should only be called after we've navigated away from
@@ -207,13 +234,18 @@ class CONTENT_EXPORT BackForwardCacheImpl
   // of blocklisted features, pending navigations, load state, etc.) anymore.
   // Note that criteria for storing and restoring can be different, i.e.
   // |CanStore()| and |CanRestore()| might give different results.
+  // Note that the returned result will not include non-sticky features if the
+  // browser has not received an IPC ACK from the renderer. See also the
+  // comments for |RequestedFeatures|. If you always want to include non-sticky
+  // features, use GetCompleteBackForwardCacheEligibilityForReporting() instead.
   BackForwardCacheCanStoreDocumentResultWithTree
   GetCurrentBackForwardCacheEligibility(RenderFrameHostImpl* render_frame_host);
 
   // Whether a RenderFrameHost could be stored into the BackForwardCache at some
   // point in the future. Different than GetCurrentBackForwardCacheEligibility()
-  // above, we won't check for properties of |render_frame_host| that might
-  // change in the future such as usage of certain APIs, loading state,
+  // above and GetCompleteBackForwardCacheEligibilityForReporting() below, we
+  // won't check for properties of |render_frame_host| that might change in the
+  // future such as usage of certain APIs (non-sticky features), loading state,
   // existence of pending navigation requests, etc. This should be treated as a
   // "best guess" on whether a page still has a chance to be stored in the
   // back-forward cache later on, and should not be used as a final check before
@@ -221,6 +253,16 @@ class CONTENT_EXPORT BackForwardCacheImpl
   // GetCurrentBackForwardCacheEligibility() instead).
   BackForwardCacheCanStoreDocumentResultWithTree
   GetFutureBackForwardCacheEligibilityPotential(
+      RenderFrameHostImpl* render_frame_host);
+
+  // This will return all the reasons present at the point of calling that could
+  // block back/forward cache, including both sticky and non-sticky features,
+  // regardless of the IPC ack status (unlike
+  // GetCurrentBackForwardCacheEligibility()). Note that non-sticky features
+  // might get cleaned in pagehide handlers and might not block back/forward
+  // cache, and this result will include them anyway.
+  BackForwardCacheCanStoreDocumentResultWithTree
+  GetCompleteBackForwardCacheEligibilityForReporting(
       RenderFrameHostImpl* render_frame_host);
 
   // Moves the specified BackForwardCache entry into the BackForwardCache. It
@@ -234,15 +276,38 @@ class CONTENT_EXPORT BackForwardCacheImpl
   // those events are depends on the cache limit policy.
   void EnforceCacheSizeLimit();
 
+  enum GetEntryFailureCase {
+    // No matched BFCache entry is found.
+    kEntryNotFound,
+    // BFCache entry is found, but it was evicted before the `GetOrEvictEntry()`
+    // call.
+    kEntryEvictedBefore,
+    // BFCache entry is found and not evicted, but it's no longer eligible for
+    // BFCache, and gets evicted in the `GetOrEvictEntry()` call.
+    kEntryIneligibleAndEvicted,
+  };
+
   // Returns a pointer to a cached BackForwardCache entry matching
-  // |navigation_entry_id| if it exists in the BackForwardCache. Returns nullptr
-  // if no matching entry is found.
-  //
+  // `navigation_entry_id`.
+  // Returns nullptr if no matching entry is found or if the entry is evicted.
+  // If the returned entry is null, this method will also return a
+  // `BackForwardCacheImpl::GetEntryResult`, which contains information about
+  // whether it's because a matching entry was found or the entry was evicted.
+
   // Note: The returned pointer should be used temporarily only within the
   // execution of a single task on the event loop. Beyond that, there is no
   // guarantee the pointer will be valid, because the document may be
   // removed/evicted from the cache.
-  Entry* GetEntry(int navigation_entry_id);
+
+  // WARNING: Calling this method may result in the eviction of the BFCache
+  // entry if it is no longer eligible for the BFCache but has not been evicted
+  // yet. If the eviction is triggered while there is an ongoing BFCache
+  // restore, the caller must discard the NavigationRequest that is about to
+  // commit the restore, otherwise the NavigationRequest may try to access the
+  // RenderFrameHost after it has been deleted.
+  base::expected<BackForwardCacheImpl::Entry*,
+                 BackForwardCacheImpl::GetEntryFailureCase>
+  GetOrEvictEntry(int navigation_entry_id);
 
   // During a history navigation, moves an entry out of the BackForwardCache
   // knowing its |navigation_entry_id|. |page_restore_params| includes
@@ -267,11 +332,22 @@ class CONTENT_EXPORT BackForwardCacheImpl
   // marked as evicted.
   void PostTaskToDestroyEvictedFrames();
 
+  // This enum indicates if the method is called from a "Cache-Control:
+  // no-store" context, i.e. the page's same-origin main document has
+  // "Cache-Control: no-store" header.
+  enum CacheControlNoStoreContext {
+    kInCCNSContext,
+    kNotInCCNSContext,
+  };
+
   // Storing frames in back-forward cache is not supported indefinitely
   // due to potential privacy issues and memory leaks. Instead we are evicting
   // the frame from the cache after the time to live, which can be controlled
   // via experiment.
-  static base::TimeDelta GetTimeToLiveInBackForwardCache();
+  // The return value may vary depending on if the main frame of the cached page
+  // has "Cache-Control: no-store" header.
+  static base::TimeDelta GetTimeToLiveInBackForwardCache(
+      CacheControlNoStoreContext ccns_context);
 
   // Gets the maximum number of entries the BackForwardCache can hold per tab.
   static size_t GetCacheSize();
@@ -302,8 +378,9 @@ class CONTENT_EXPORT BackForwardCacheImpl
 
   // Returns the task runner that should be used by the eviction timer.
   scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunner() {
-    return task_runner_for_testing_ ? task_runner_for_testing_
-                                    : base::ThreadTaskRunnerHandle::Get();
+    return task_runner_for_testing_
+               ? task_runner_for_testing_
+               : base::SingleThreadTaskRunner::GetCurrentDefault();
   }
 
   // Inject task runner for precise timing control in browser tests.
@@ -313,11 +390,22 @@ class CONTENT_EXPORT BackForwardCacheImpl
   }
 
   const std::list<std::unique_ptr<Entry>>& GetEntries();
+  std::list<Entry*> GetEntriesForRenderViewHostImpl(
+      const RenderViewHostImpl* rvhi) const;
 
   // BackForwardCache overrides:
   void Flush() override;
   void Prune(size_t limit) override;
   void DisableForTesting(DisableForTestingReason reason) override;
+
+  // Evict all entries from the BackForwardCache that match the removal filter.
+  void Flush(
+      const StoragePartition::StorageKeyMatcherFunction& storage_key_filter);
+
+  // Evict all entries from the BackForwardCache that were loaded with
+  // "Cache-Control: no-store" header and match the removal filter.
+  void FlushCacheControlNoStoreEntries(
+      const StoragePartition::StorageKeyMatcherFunction& storage_key_filter);
 
   // RenderProcessHostInternalObserver methods
   void RenderProcessBackgroundedChanged(RenderProcessHostImpl* host) override;
@@ -350,9 +438,11 @@ class CONTENT_EXPORT BackForwardCacheImpl
       RenderFrameHostImpl& rfh,
       BackForwardCacheCanStoreDocumentResult& eviction_reason);
 
- private:
-  FRIEND_TEST_ALL_PREFIXES(BackForwardCacheMetricsTest, AllFeaturesCovered);
+  bool should_allow_storing_pages_with_cache_control_no_store() {
+    return should_allow_storing_pages_with_cache_control_no_store_;
+  }
 
+ private:
   // Destroys all evicted frames in the BackForwardCache.
   void DestroyEvictedFrames();
 
@@ -362,36 +452,29 @@ class CONTENT_EXPORT BackForwardCacheImpl
       BackForwardCacheCanStoreDocumentResult& result,
       RenderFrameHostImpl* render_frame_host);
 
-  // Populates `result` with the blocking reasons for this document. If
-  // "include_non_sticky" is true, it includes non-sticky reasons.
-  void PopulateReasonsForDocument(
-      BackForwardCacheCanStoreDocumentResult& result,
-      RenderFrameHostImpl* rfh,
-      bool include_non_sticky);
+  // This enum indicates what features to include when recording
+  // NotRestoredReasons.
+  enum RequestedFeatures {
+    // Report only sticky reasons.
+    kOnlySticky,
+    // If the entry has received an IPC ack from the renderer, report all the
+    // reasons. Otherwise only include sticky features, because non-sticky
+    // features might be removed by the renderer when the browser signals it is
+    // about to put the page into BFCache.
+    kAllIfAcked,
+    // Regardless of the ack status, report all the reasons.
+    kAll,
+  };
 
   // Populates the reasons why this |rfh| and its subframes cannot enter the
   // back/forward cache in a flat list through |flattened_result| and as a tree
   // through its return value.
-  // |include_non_sticky| controls whether we include non-sticky reasons in the
+  // |requested_features| controls whether we include non-sticky reasons in the
   // result.
-  std::unique_ptr<BackForwardCacheCanStoreTreeResult> PopulateReasonsForPage(
+  BackForwardCacheCanStoreDocumentResultWithTree PopulateReasonsForPage(
       RenderFrameHostImpl* rfh,
       BackForwardCacheCanStoreDocumentResult& flattened_result,
-      bool include_non_sticky);
-
-  // Populates the sticky reasons for `rfh` without recursing into subframes.
-  // Sticky features can't be unregistered and remain active for the rest of the
-  // lifetime of the page.
-  void PopulateStickyReasonsForDocument(
-      BackForwardCacheCanStoreDocumentResult& result,
-      RenderFrameHostImpl* rfh);
-
-  // Populates the non-sticky reasons for `rfh` without recursing into
-  // subframes. Non-sticky reasons mean the reasons that may be resolved later
-  // such as when the page releases blocking resources in pagehide.
-  void PopulateNonStickyReasonsForDocument(
-      BackForwardCacheCanStoreDocumentResult& result,
-      RenderFrameHostImpl* rfh);
+      RequestedFeatures requested_features);
 
   // Updates the result to include CacheControlNoStore reasons if the flag is
   // on.
@@ -422,15 +505,13 @@ class CONTENT_EXPORT BackForwardCacheImpl
   void AddProcessesForEntry(Entry& entry);
   void RemoveProcessesForEntry(Entry& entry);
 
-  // Returns true if the flag is on for pages with cache-control:no-store to
-  // get restored from back/forward cache unless cookies change.
-  static bool AllowStoringPagesWithCacheControlNoStore();
-
-  enum RequestedFeatures { kAll, kOnlySticky };
   static BlockListedFeatures GetAllowedFeatures(
-      RequestedFeatures requested_features);
+      RequestedFeatures requested_features,
+      CacheControlNoStoreContext ccns_context);
+
   static BlockListedFeatures GetDisallowedFeatures(
-      RequestedFeatures requested_features);
+      RequestedFeatures requested_features,
+      CacheControlNoStoreContext ccns_context);
 
   // Contains the set of stored Entries.
   // Invariant:
@@ -445,7 +526,11 @@ class CONTENT_EXPORT BackForwardCacheImpl
   // RenderViewHost in the Entry and so will be valid.
   std::multiset<RenderProcessHost*> observed_processes_;
 
-  // Only used in tests. Whether the BackforwardCached has been disabled for
+  // Whether the BackForwardCache has been enabled for pages loaded with
+  // "Cache-Control: no-store" header.
+  bool should_allow_storing_pages_with_cache_control_no_store_;
+
+  // Only used in tests. Whether the BackforwardCache has been disabled for
   // testing.
   bool is_disabled_for_testing_ = false;
 
@@ -457,24 +542,24 @@ class CONTENT_EXPORT BackForwardCacheImpl
   // the field trial parameter "allowed_websites". This is represented here by a
   // set of host and path prefix. When |allowed_urls_| is empty, it means there
   // are no restrictions on URLs.
-  const std::map<std::string,              // URL's host,
-                 std::vector<std::string>  // URL's path prefix
-                 >
+  const base::flat_map<std::string,              // URL's host,
+                       std::vector<std::string>  // URL's path prefix
+                       >
       allowed_urls_;
 
   // This is an emergency kill switch per url to stop BFCache. The data will be
   // provided via the field trial parameter "blocked_websites".
   // "blocked_websites" have priority over "allowed_websites". This is
   // represented here by a set of host and path prefix.
-  const std::map<std::string,              // URL's host,
-                 std::vector<std::string>  // URL's path prefix
-                 >
+  const base::flat_map<std::string,              // URL's host,
+                       std::vector<std::string>  // URL's path prefix
+                       >
       blocked_urls_;
 
   // Data provided from the "blocked_cgi_params" feature param. If any of these
   // occur in the query of the URL then the page is not eligible for caching.
   // See |IsQueryAllowed|.
-  const std::unordered_set<std::string> blocked_cgi_params_;
+  const base::flat_set<std::string> blocked_cgi_params_;
 
   // Helper class to iterate through the frame tree in the page and populate the
   // NotRestoredReasons.
@@ -485,7 +570,7 @@ class CONTENT_EXPORT BackForwardCacheImpl
     // |root_rfh| represents the root document of the page. |include_non_sticky|
     // controls whether or not we should record non-sticky reasons in the tree.
     NotRestoredReasonBuilder(RenderFrameHostImpl* root_rfh,
-                             bool include_non_sticky);
+                             RequestedFeatures requested_features);
 
     // Struct for containing the RenderFrameHostImpl that is going to be
     // evicted if applicable. |reasons| represent why |rfh_to_be_evicted| will
@@ -494,13 +579,17 @@ class CONTENT_EXPORT BackForwardCacheImpl
       EvictionInfo(RenderFrameHostImpl& rfh,
                    BackForwardCacheCanStoreDocumentResult* reasons)
           : rfh_to_be_evicted(&rfh), reasons(reasons) {}
-      RenderFrameHostImpl* const rfh_to_be_evicted;
-      const BackForwardCacheCanStoreDocumentResult* reasons;
+      // This field is not a raw_ptr<> because it was filtered by the rewriter
+      // for: #union
+      RAW_PTR_EXCLUSION RenderFrameHostImpl* const rfh_to_be_evicted;
+      // This field is not a raw_ptr<> because it was filtered by the rewriter
+      // for: #union
+      RAW_PTR_EXCLUSION const BackForwardCacheCanStoreDocumentResult* reasons;
     };
 
     NotRestoredReasonBuilder(RenderFrameHostImpl* root_rfh,
-                             bool include_non_sticky,
-                             absl::optional<EvictionInfo> eviction_info);
+                             RequestedFeatures requested_features,
+                             std::optional<EvictionInfo> eviction_info);
 
     ~NotRestoredReasonBuilder();
 
@@ -514,6 +603,28 @@ class CONTENT_EXPORT BackForwardCacheImpl
       return std::move(tree_result_);
     }
 
+    // Populates `result` with the blocking reasons for this document. If
+    // "include_non_sticky" is true, it includes non-sticky reasons.
+    void PopulateReasonsForDocument(
+        BackForwardCacheCanStoreDocumentResult& result,
+        RenderFrameHostImpl* rfh,
+        RequestedFeatures requested_features);
+
+    // Populates the sticky reasons for `rfh` without recursing into subframes.
+    // Sticky features can't be unregistered and remain active for the rest of
+    // the lifetime of the page.
+    void PopulateStickyReasonsForDocument(
+        BackForwardCacheCanStoreDocumentResult& result,
+        RenderFrameHostImpl* rfh);
+
+    // Populates the non-sticky reasons for `rfh` without recursing into
+    // subframes. Non-sticky reasons mean the reasons that may be resolved later
+    // such as when the page releases blocking resources in pagehide.
+    void PopulateNonStickyReasonsForDocument(
+        BackForwardCacheCanStoreDocumentResult& result,
+        RenderFrameHostImpl* rfh,
+        RequestedFeatures requested_features);
+
    private:
     // Populate NotRestoredReasons for the `rfh` by
     // iterating the frame tree and populating NotRestoredReasons in
@@ -524,23 +635,29 @@ class CONTENT_EXPORT BackForwardCacheImpl
     // Root document of the tree.
     const raw_ptr<RenderFrameHostImpl> root_rfh_;
     // BackForwardCacheImpl instance to access eligibility check functions.
-    BackForwardCacheImpl& bfcache_;
+    const raw_ref<BackForwardCacheImpl> bfcache_;
     // Flattened list of NotRestoredReasons for the tree. This is empty at the
     // start and has to be merged using |GetFlattenedResult()|.
     BackForwardCacheCanStoreDocumentResult flattened_result_;
     // Tree result of NotRestoredReasons. This is populated in the constructor.
     std::unique_ptr<BackForwardCacheCanStoreTreeResult> tree_result_;
-    // If true, check both non-sticky reasons and sticky reasons. If false,
-    // check only sticky reasons.
-    const bool include_non_sticky_;
+    // See |RequestedFeatures|.
+    const RequestedFeatures requested_features_;
     // Contains the information of the RenderFrameHost that causes eviction, if
     // applicable. If set, the result returned by the builder will only contain
     // the NotRestoredReason for the RenderFrameHost that causes eviction
     // (instead of the reasons for the whole tree).
-    absl::optional<EvictionInfo> eviction_info_;
+    std::optional<EvictionInfo> eviction_info_;
   };
 
   base::WeakPtrFactory<BackForwardCacheImpl> weak_factory_;
+
+  // For testing:
+  FRIEND_TEST_ALL_PREFIXES(BackForwardCacheMetricsTest, AllFeaturesCovered);
+  FRIEND_TEST_ALL_PREFIXES(BackForwardCacheActiveSizeTest, ActiveCacheSize);
+  FRIEND_TEST_ALL_PREFIXES(BackForwardCacheOverwriteSizeTest,
+                           OverwrittenCacheSize);
+  FRIEND_TEST_ALL_PREFIXES(BackForwardCacheDefaultSizeTest, DefaultCacheSize);
 };
 
 // Allow external code to be notified when back-forward cache is disabled for a
@@ -584,9 +701,21 @@ class CONTENT_EXPORT BackForwardCacheCanStoreTreeResult {
     return document_result_;
   }
 
+  // The blocking details map for this subtree's root document.
+  const BackForwardCacheCanStoreDocumentResult::BlockingDetailsMap&
+  GetBlockingDetailsMap() const {
+    return document_result_.blocking_details_map();
+  }
+
   // Populate NotRestoredReasons mojom struct based on the existing tree of
-  // reason to report to the renderer. This will not contain cross-origin
-  // subtree's information to avoid cross-origin information leak.
+  // reason to report to the renderer.
+  // This should be called only when the root document is outermost main
+  // document.
+  // We have access to attributes of cross-origin iframes that are children of
+  // same-origin iframes. This method's purpose is to ensure that we only return
+  // the information that should be exposed based on origin. (i.e. we only
+  // include information iframes that are direct children of same-origin
+  // frames).
   blink::mojom::BackForwardCacheNotRestoredReasonsPtr
   GetWebExposedNotRestoredReasons();
 
@@ -609,16 +738,40 @@ class CONTENT_EXPORT BackForwardCacheCanStoreTreeResult {
   // Creates and returns an empty tree.
   static std::unique_ptr<BackForwardCacheCanStoreTreeResult> CreateEmptyTree(
       RenderFrameHostImpl* rfh);
-  // Creates and returns an empty tree before committing navigation.
   static std::unique_ptr<BackForwardCacheCanStoreTreeResult>
-  CreateEmptyTreeBeforeCommit(NavigationRequest* navigation);
+  CreateEmptyTreeForNavigation(NavigationRequest* navigation);
 
  private:
+  friend class BackForwardCacheImplTest;
+  FRIEND_TEST_ALL_PREFIXES(BackForwardCacheImplTest,
+                           CrossOriginReachableFrameCount);
+  FRIEND_TEST_ALL_PREFIXES(BackForwardCacheImplTest, CrossOriginAllMasked);
+  FRIEND_TEST_ALL_PREFIXES(BackForwardCacheImplTestExposeCrossOrigin,
+                           FirstCrossOriginReachable);
+  FRIEND_TEST_ALL_PREFIXES(BackForwardCacheImplTestExposeCrossOrigin,
+                           SecondCrossOriginReachable);
+  // This constructor is for creating a tree for |rfh| as the subtree's root
+  // document's frame.
   BackForwardCacheCanStoreTreeResult(
       RenderFrameHostImpl* rfh,
       const url::Origin& main_document_origin,
       const GURL& url,
       BackForwardCacheCanStoreDocumentResult& result_for_this_document);
+
+  // Creates an empty placeholder tree with the empty result.
+  BackForwardCacheCanStoreTreeResult(bool is_same_origin, const GURL& url);
+
+  // Helper function for |GetWebExposedNotRestoredReasons()|. |index| is the
+  // random index of the cross-origin iframe that we decided to report
+  // from all the reachable cross-origin iframes. We decrement this count
+  // every time we call this function, and report only when |index| is 0 so
+  // that reporting happens only for randomly picked one of such iframes.
+  blink::mojom::BackForwardCacheNotRestoredReasonsPtr
+  GetWebExposedNotRestoredReasonsInternal(int& index);
+
+  // Count the number of cross-origin frames that are direct children of
+  // same-origin frames, including the main frame, in the tree.
+  uint32_t GetCrossOriginReachableFrameCount();
 
   void FlattenTreeHelper(
       BackForwardCacheCanStoreDocumentResult* document_result);
@@ -633,11 +786,14 @@ class CONTENT_EXPORT BackForwardCacheCanStoreTreeResult {
 
   // See |IsSameOrigin|
   const bool is_same_origin_;
+  // Whether or not the root document of this tree is the outermoust main
+  // frame's document.
+  const bool is_root_outermost_main_frame_;
   // The id, name and src attribute of the frame owner of this subtree's root
   // document.
-  const std::string id_;
-  const std::string name_;
-  const std::string src_;
+  const std::optional<std::string> id_;
+  const std::optional<std::string> name_;
+  const std::optional<std::string> src_;
   // See |GetUrl|
   const GURL url_;
 };

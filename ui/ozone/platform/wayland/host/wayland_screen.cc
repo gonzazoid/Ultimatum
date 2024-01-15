@@ -12,7 +12,9 @@
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "components/device_event_log/device_event_log.h"
 #include "ui/base/linux/linux_desktop.h"
+#include "ui/base/pointer/touch_ui_controller.h"
 #include "ui/display/display.h"
 #include "ui/display/display_finder.h"
 #include "ui/display/display_list.h"
@@ -24,6 +26,7 @@
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/native_widget_types.h"
+#include "ui/ozone/platform/wayland/host/dump_util.h"
 #include "ui/ozone/platform/wayland/host/org_kde_kwin_idle.h"
 #include "ui/ozone/platform/wayland/host/wayland_buffer_manager_host.h"
 #include "ui/ozone/platform/wayland/host/wayland_connection.h"
@@ -32,6 +35,7 @@
 #include "ui/ozone/platform/wayland/host/wayland_output_manager.h"
 #include "ui/ozone/platform/wayland/host/wayland_window.h"
 #include "ui/ozone/platform/wayland/host/wayland_zcr_color_management_output.h"
+#include "ui/ozone/platform/wayland/host/wayland_zcr_color_manager.h"
 #include "ui/ozone/platform/wayland/host/zwp_idle_inhibit_manager.h"
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -97,7 +101,10 @@ WaylandScreen::WaylandScreen(WaylandConnection* connection)
       // Enable that back when the issue is resolved.
 #endif  // !BUILDFLAG(IS_CHROMEOS_LACROS)
 
-    if (format == gfx::BufferFormat::RGBA_1010102)
+    if (format == gfx::BufferFormat::RGBA_F16)
+      image_format_hdr_ = format;
+
+    if (!image_format_hdr_ && format == gfx::BufferFormat::RGBA_1010102)
       image_format_hdr_ = format;
 
     if (!image_format_alpha_ && format == gfx::BufferFormat::BGRA_8888)
@@ -125,103 +132,141 @@ WaylandScreen::WaylandScreen(WaylandConnection* connection)
 
 WaylandScreen::~WaylandScreen() = default;
 
-void WaylandScreen::OnOutputAddedOrUpdated(WaylandOutput::Id output_id,
-                                           const gfx::Point& origin,
-                                           const gfx::Size& logical_size,
-                                           const gfx::Size& physical_size,
-                                           const gfx::Insets& insets,
-                                           float scale,
-                                           int32_t panel_transform,
-                                           int32_t logical_transform,
-                                           const std::string& label) {
-  AddOrUpdateDisplay(output_id, origin, logical_size, physical_size, insets,
-                     scale, panel_transform, logical_transform, label);
+void WaylandScreen::OnOutputAddedOrUpdated(
+    const WaylandOutput::Metrics& metrics) {
+  WaylandOutput::Metrics copy = metrics;
+
+  if (metrics.display_id == display::kInvalidDisplayId) {
+    DCHECK(display_id_map_.contains(metrics.output_id));
+    copy.display_id = display_id_map_[metrics.output_id];
+  }
+
+  AddOrUpdateDisplay(copy);
+
+  DISPLAY_LOG(EVENT) << "Displays updated, count: "
+                     << display_list_.displays().size();
+  for (const auto& display : display_list_.displays()) {
+    DISPLAY_LOG(EVENT) << display.ToString();
+  }
 }
 
 void WaylandScreen::OnOutputRemoved(WaylandOutput::Id output_id) {
-  if (output_id == GetPrimaryDisplay().id()) {
+  DCHECK(display_id_map_.contains(output_id));
+  auto iter = display_id_map_.find(output_id);
+  if (iter == display_id_map_.end()) {
+    return;
+  }
+
+  int64_t display_id = iter->second;
+  if (display_id == GetPrimaryDisplay().id()) {
     // First, set a new primary display as required by the |display_list_|. It's
     // safe to set any of the displays to be a primary one. Once the output is
     // completely removed, Wayland updates geometry of other displays. And a
     // display, which became the one to be nearest to the origin will become a
     // primary one.
+    // TODO(oshima): The server should send this info.
     for (const auto& display : display_list_.displays()) {
-      if (display.id() != output_id) {
+      if (display.id() != display_id) {
         display_list_.AddOrUpdateDisplay(display,
                                          display::DisplayList::Type::PRIMARY);
         break;
       }
     }
   }
-  auto it = display_list_.FindDisplayById(output_id);
+
+  // The `display_id_map_` and the `display_list_` must be updated at the same
+  // time to ensure internal display state is consistent. Code may otherwise
+  // draw different conclusions on the availability of a display depending on
+  // which of these structures are queried (see crbug.com/1408304).
+  display_id_map_.erase(iter);
+
+  auto it = display_list_.FindDisplayById(display_id);
   if (it != display_list_.displays().end())
-    display_list_.RemoveDisplay(output_id);
+    display_list_.RemoveDisplay(display_id);
+
+  DISPLAY_LOG(EVENT) << "Displays updated, count: "
+                     << display_list_.displays().size();
+  for (const auto& display : display_list_.displays()) {
+    DISPLAY_LOG(EVENT) << display.ToString();
+  }
 }
 
-void WaylandScreen::AddOrUpdateDisplay(WaylandOutput::Id output_id,
-                                       const gfx::Point& origin,
-                                       const gfx::Size& logical_size,
-                                       const gfx::Size& physical_size,
-                                       const gfx::Insets& insets,
-                                       float scale_factor,
-                                       int32_t panel_transform,
-                                       int32_t logical_transform,
-                                       const std::string& label) {
-  display::Display changed_display(output_id);
+void WaylandScreen::AddOrUpdateDisplay(const WaylandOutput::Metrics& metrics) {
+  DCHECK_NE(metrics.display_id, display::kInvalidDisplayId);
+  display::Display changed_display(metrics.display_id);
 
-  DCHECK_GE(panel_transform, WL_OUTPUT_TRANSFORM_NORMAL);
-  DCHECK_LE(panel_transform, WL_OUTPUT_TRANSFORM_FLIPPED_270);
+  DCHECK_GE(metrics.panel_transform, WL_OUTPUT_TRANSFORM_NORMAL);
+  DCHECK_LE(metrics.panel_transform, WL_OUTPUT_TRANSFORM_FLIPPED_270);
   display::Display::Rotation panel_rotation =
-      WaylandTransformToRotation(panel_transform);
+      WaylandTransformToRotation(metrics.panel_transform);
   changed_display.set_panel_rotation(panel_rotation);
 
-  DCHECK_GE(logical_transform, WL_OUTPUT_TRANSFORM_NORMAL);
-  DCHECK_LE(logical_transform, WL_OUTPUT_TRANSFORM_FLIPPED_270);
+  DCHECK_GE(metrics.logical_transform, WL_OUTPUT_TRANSFORM_NORMAL);
+  DCHECK_LE(metrics.logical_transform, WL_OUTPUT_TRANSFORM_FLIPPED_270);
   display::Display::Rotation rotation =
-      WaylandTransformToRotation(logical_transform);
+      WaylandTransformToRotation(metrics.logical_transform);
   changed_display.set_rotation(rotation);
 
-  gfx::Size size_in_pixels(physical_size);
+  gfx::Size size_in_pixels(metrics.physical_size);
   if (panel_rotation == display::Display::Rotation::ROTATE_90 ||
       panel_rotation == display::Display::Rotation::ROTATE_270) {
     size_in_pixels.Transpose();
   }
+  size_in_pixels.Enlarge(-metrics.physical_overscan_insets.width(),
+                         -metrics.physical_overscan_insets.height());
   changed_display.set_size_in_pixels(size_in_pixels);
 
-  if (!logical_size.IsEmpty()) {
-    changed_display.set_bounds(gfx::Rect(origin, logical_size));
-    changed_display.SetScale(scale_factor);
+  if (!metrics.logical_size.IsEmpty()) {
+    changed_display.set_bounds(gfx::Rect(metrics.origin, metrics.logical_size));
+    changed_display.SetScale(metrics.scale_factor);
   } else {
     // Fallback to calculating using physical size.
     // This can happen if xdg_output.logical_size was not sent.
-    changed_display.SetScaleAndBounds(scale_factor, gfx::Rect(size_in_pixels));
+    changed_display.SetScaleAndBounds(metrics.scale_factor,
+                                      gfx::Rect(size_in_pixels));
     gfx::Rect new_bounds(changed_display.bounds());
-    new_bounds.set_origin(origin);
+    new_bounds.set_origin(metrics.origin);
     changed_display.set_bounds(new_bounds);
   }
-  changed_display.UpdateWorkAreaFromInsets(insets);
+  changed_display.UpdateWorkAreaFromInsets(metrics.insets);
 
   gfx::DisplayColorSpaces color_spaces;
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  auto* wayland_output =
-      connection_->wayland_output_manager()->GetOutput(output_id);
-  auto* color_management_output =
-      wayland_output ? wayland_output->color_management_output() : nullptr;
-
-  if (color_management_output && color_management_output->gfx_color_space()) {
-    auto* gfx_color = color_management_output->gfx_color_space();
-    color_spaces = display::CreateDisplayColorSpaces(
-        *gfx_color, image_format_hdr_ == gfx::BufferFormat::RGBA_1010102, {});
-  } else {
-    color_spaces.SetOutputBufferFormats(image_format_no_alpha_.value(),
-                                        image_format_alpha_.value());
-  }
-#else
   color_spaces.SetOutputBufferFormats(image_format_no_alpha_.value(),
                                       image_format_alpha_.value());
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  auto* wayland_output =
+      connection_->wayland_output_manager()->GetOutput(metrics.output_id);
+  auto* color_management_output =
+      wayland_output ? wayland_output->color_management_output() : nullptr;
+  auto srgb_hdr_supported =
+      connection_->zcr_color_manager()->GetVersion() >=
+      ZCR_COLOR_MANAGER_V1_EOTF_NAMES_SRGB_HDR_SINCE_VERSION;
+  if (srgb_hdr_supported && color_management_output &&
+      color_management_output->gfx_color_space() &&
+      color_management_output->gfx_color_space()->IsHDR()) {
+    // Only use display color space to determine if HDR is supported.
+    // LaCrOS will use generic color spaces for blending and compositing.
+    color_spaces.SetOutputColorSpaceAndBufferFormat(
+        gfx::ContentColorUsage::kHDR, true,
+        gfx::ColorSpace::CreateExtendedSRGB10Bit(), *image_format_hdr_);
+    color_spaces.SetOutputColorSpaceAndBufferFormat(
+        gfx::ContentColorUsage::kHDR, false,
+        gfx::ColorSpace::CreateExtendedSRGB10Bit(), *image_format_hdr_);
+    color_spaces.SetOutputColorSpaceAndBufferFormat(
+        gfx::ContentColorUsage::kWideColorGamut, true,
+        gfx::ColorSpace::CreateDisplayP3D65(), image_format_alpha_.value());
+    color_spaces.SetOutputColorSpaceAndBufferFormat(
+        gfx::ContentColorUsage::kWideColorGamut, false,
+        gfx::ColorSpace::CreateDisplayP3D65(), image_format_no_alpha_.value());
+    // While SRGB10bit is designed to have a relative luminance of 5x,
+    // Ash does not rely on this EOTF when finally composited. A value of 10x
+    // is consistent with what is used by Ash in display_util.cc
+    // CreateDisplayColorSpaces()
+    color_spaces.SetHDRMaxLuminanceRelative(10);
+  }
 #endif
 
-  changed_display.set_color_spaces(color_spaces);
+  changed_display.SetColorSpaces(color_spaces);
 
   // There are 2 cases where |changed_display| must be set as primary:
   // 1. When it is the first one being added to the |display_list_|. Or
@@ -241,8 +286,14 @@ void WaylandScreen::AddOrUpdateDisplay(WaylandOutput::Id output_id,
       type = display::DisplayList::Type::PRIMARY;
   }
 
-  changed_display.set_label(label);
-
+  changed_display.set_label(metrics.description);
+  if (display_id_map_.find(metrics.output_id) == display_id_map_.end()) {
+    display_id_map_.emplace(metrics.output_id, metrics.display_id);
+  } else {
+    // TODO(oshima): Change to DCHECK if stabilized.
+    CHECK_EQ(display_id_map_[metrics.output_id], metrics.display_id);
+  }
+  display_id_map_[metrics.output_id] = metrics.display_id;
   display_list_.AddOrUpdateDisplay(changed_display, type);
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -251,14 +302,27 @@ void WaylandScreen::AddOrUpdateDisplay(WaylandOutput::Id output_id,
 #endif
 }
 
-void WaylandScreen::OnTabletStateChanged(display::TabletState tablet_state) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  tablet_state_ = tablet_state;
-#endif
+WaylandOutput::Id WaylandScreen::GetOutputIdForDisplayId(int64_t display_id) {
+  auto iter = std::find_if(
+      display_id_map_.begin(), display_id_map_.end(),
+      [display_id](auto pair) { return pair.second == display_id; });
+  if (iter != display_id_map_.end())
+    return iter->first;
+  return 0;
+}
 
-  auto* observer_list = display_list_.observers();
-  for (auto& observer : *observer_list)
-    observer.OnDisplayTabletStateChanged(tablet_state);
+WaylandOutput* WaylandScreen::GetWaylandOutputForDisplayId(int64_t display_id) {
+  if (display_id == display::kInvalidDisplayId) {
+    return nullptr;
+  }
+
+  auto* output_manager = connection_->wayland_output_manager();
+  return output_manager->GetOutput(GetOutputIdForDisplayId(display_id));
+}
+
+WaylandOutput::Id WaylandScreen::GetOutputIdMatching(const gfx::Rect& bounds) {
+  int64_t display_id = GetDisplayMatching(bounds).id();
+  return GetOutputIdForDisplayId(display_id);
 }
 
 base::WeakPtr<WaylandScreen> WaylandScreen::GetWeakPtr() {
@@ -278,7 +342,7 @@ display::Display WaylandScreen::GetPrimaryDisplay() const {
 
 display::Display WaylandScreen::GetDisplayForAcceleratedWidget(
     gfx::AcceleratedWidget widget) const {
-  auto* window = connection_->wayland_window_manager()->GetWindow(widget);
+  auto* window = connection_->window_manager()->GetWindow(widget);
   // A window might be destroyed by this time on shutting down the browser.
   if (!window)
     return GetPrimaryDisplay();
@@ -295,9 +359,17 @@ display::Display WaylandScreen::GetDisplayForAcceleratedWidget(
   if (!entered_output_id.has_value())
     return GetPrimaryDisplay();
 
+  if (display_id_map_.find(entered_output_id.value()) ==
+      display_id_map_.end()) {
+    NOTREACHED();
+    return GetPrimaryDisplay();
+  }
+
+  int64_t display_id = display_id_map_.find(entered_output_id.value())->second;
+
   DCHECK(!display_list_.displays().empty());
   for (const auto& display : display_list_.displays()) {
-    if (display.id() == entered_output_id.value())
+    if (display.id() == display_id)
       return display;
   }
 
@@ -315,8 +387,7 @@ gfx::Point WaylandScreen::GetCursorScreenPoint() const {
   // If a pointer is located in any of the existing wayland windows, return
   // the last known cursor position.
   auto* cursor_position = connection_->wayland_cursor_position();
-  if (connection_->wayland_window_manager()
-          ->GetCurrentPointerOrTouchFocusedWindow() &&
+  if (connection_->window_manager()->GetCurrentPointerOrTouchFocusedWindow() &&
       cursor_position)
     return cursor_position->GetCursorSurfacePoint();
 
@@ -324,8 +395,7 @@ gfx::Point WaylandScreen::GetCursorScreenPoint() const {
   // outside of largest window bounds.
   // TODO(oshima): Change this for the case that screen coordinates is
   // available.
-  auto* window =
-      connection_->wayland_window_manager()->GetWindowWithLargestBounds();
+  auto* window = connection_->window_manager()->GetWindowWithLargestBounds();
   DCHECK(window);
   const gfx::Rect bounds = window->GetBoundsInDIP();
   return gfx::Point(bounds.width() + 10, bounds.height() + 10);
@@ -335,8 +405,8 @@ gfx::AcceleratedWidget WaylandScreen::GetAcceleratedWidgetAtScreenPoint(
     const gfx::Point& point) const {
   // It is safe to check only for focused windows and test if they contain the
   // point or not.
-  auto* window = connection_->wayland_window_manager()
-                     ->GetCurrentPointerOrTouchFocusedWindow();
+  auto* window =
+      connection_->window_manager()->GetCurrentPointerOrTouchFocusedWindow();
   if (window && window->GetBoundsInDIP().Contains(point))
     return window->GetWidget();
   return gfx::kNullAcceleratedWidget;
@@ -411,7 +481,7 @@ bool WaylandScreen::SetScreenSaverSuspended(bool suspend) {
     // We assume that the idle lock is initiated by the user, and therefore the
     // surface that we should use is the one owned by the window that is focused
     // currently.
-    const auto* window_manager = connection_->wayland_window_manager();
+    const auto* window_manager = connection_->window_manager();
     DCHECK(window_manager);
     const auto* current_window = window_manager->GetCurrentFocusedWindow();
     if (!current_window) {
@@ -481,9 +551,64 @@ base::Value::List WaylandScreen::GetGpuExtraInfo(
 }
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
+void WaylandScreen::OnTabletStateChanged(display::TabletState tablet_state) {
+  tablet_state_ = tablet_state;
+
+  ui::TouchUiController::Get()->OnTabletModeToggled(
+      tablet_state == display::TabletState::kInTabletMode ||
+      tablet_state == display::TabletState::kEnteringTabletMode);
+
+  auto* observer_list = display_list_.observers();
+  for (auto& observer : *observer_list)
+    observer.OnDisplayTabletStateChanged(tablet_state);
+}
+
 display::TabletState WaylandScreen::GetTabletState() const {
   return tablet_state_;
 }
 #endif
+
+bool WaylandScreen::VerifyOutputStateConsistentForTesting() const {
+  // The number of displays tracked by the display_list_ and the display_id_map_
+  // should match.
+  const auto& displays = display_list_.displays();
+  if (display_id_map_.size() != displays.size()) {
+    return false;
+  }
+
+  // Both the display_list_ and the display_id_map_ should be tracking the same
+  // displays.
+  for (const auto& pair : display_id_map_) {
+    if (base::ranges::find(displays, pair.second, &display::Display::id) ==
+        displays.end()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+void WaylandScreen::DumpState(std::ostream& out) const {
+  out << "WaylandScreen:" << std::endl;
+  for (const auto& display : display_list_.displays()) {
+    out << "  display[" << display.id() << "]:" << display.ToString()
+        << std::endl;
+  }
+  out << "  id_map=";
+  for (const auto& id_pair : display_id_map_) {
+    out << "[" << id_pair.second << ":" << id_pair.first << "] ";
+  }
+  out << std::endl;
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  constexpr auto kTabletStateToStringMap =
+      base::MakeFixedFlatMap<display::TabletState, const char*>(
+          {{display::TabletState::kInClamshellMode, "clamshell"},
+           {display::TabletState::kEnteringTabletMode, "entering_tablet"},
+           {display::TabletState::kInTabletMode, "tablet"},
+           {display::TabletState::kExitingTabletMode, "exiting_tablet"}});
+  out << "  tablet_state="
+      << GetMapValueOrDefault(kTabletStateToStringMap, tablet_state_);
+#endif
+  out << ", screen_saver_suspension_count=" << screen_saver_suspension_count_;
+}
 
 }  // namespace ui

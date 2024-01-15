@@ -42,16 +42,16 @@ namespace debug {
 // Note: Calls to this function will not be throttled. To avoid performance
 // problems if this is called many times in quick succession, prefer using one
 // of the below variants.
-BASE_EXPORT bool NOT_TAIL_CALLED DumpWithoutCrashingUnthrottled();
+NOT_TAIL_CALLED BASE_EXPORT bool DumpWithoutCrashingUnthrottled();
 
 // Handler to silently dump the current process without crashing, that keeps
 // track of call location so some throttling can be applied to avoid very
 // frequent dump captures, which can have side-effects.
 // `location` Location of the file from where the function is called.
 // `time_between_dumps` Time until the next dump should be captured.
-BASE_EXPORT bool NOT_TAIL_CALLED
-DumpWithoutCrashing(const base::Location& location = base::Location::Current(),
-                    base::TimeDelta time_between_dumps = base::Minutes(5));
+NOT_TAIL_CALLED BASE_EXPORT bool DumpWithoutCrashing(
+    const base::Location& location = base::Location::Current(),
+    base::TimeDelta time_between_dumps = base::Days(1));
 
 // Handler to silently dump the current process without crashing that takes a
 // location and unique id to keep a track and apply throttling. This function
@@ -65,17 +65,23 @@ DumpWithoutCrashing(const base::Location& location = base::Location::Current(),
 // using base::FastHash to generate the hash.
 // `location` Location of the file from where the function is called.
 // `time_between_dumps` Time until the next dump should be captured.
-// Note: The unique identifier, as of now, is not comparable across different
-// runs or builds and is stable only for a process lifetime.
-BASE_EXPORT bool NOT_TAIL_CALLED DumpWithoutCrashingWithUniqueId(
+// Note:
+// - The unique identifier, as of now, is not comparable across different
+//   runs or builds and is stable only for a process lifetime.
+// - The unique identifier is not recorded in the crash report. See
+//   crash_logging.h for such a purpose.
+NOT_TAIL_CALLED BASE_EXPORT bool DumpWithoutCrashingWithUniqueId(
     size_t unique_identifier,
     const base::Location& location = base::Location::Current(),
-    base::TimeDelta time_between_dumps = base::Minutes(5));
+    base::TimeDelta time_between_dumps = base::Days(1));
 
 // Sets a function that'll be invoked to dump the current process when
 // DumpWithoutCrashing* is called. May be called with null to remove a
 // previously set function.
 BASE_EXPORT void SetDumpWithoutCrashingFunction(void (CDECL *function)());
+
+// Clear both maps used to throttle calls to DumpWithoutCrashing for testing.
+BASE_EXPORT void ClearMapsForTesting();
 
 }  // namespace debug
 }  // namespace base

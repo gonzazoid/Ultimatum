@@ -7,10 +7,10 @@
 #include <limits>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/callback.h"
 #include "base/ranges/algorithm.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "cc/benchmarks/invalidation_benchmark.h"
 #include "cc/benchmarks/rasterize_and_record_benchmark.h"
@@ -26,7 +26,7 @@ namespace {
 
 std::unique_ptr<MicroBenchmark> CreateBenchmark(
     const std::string& name,
-    base::Value settings,
+    base::Value::Dict settings,
     MicroBenchmark::DoneCallback callback) {
   if (name == "invalidation_benchmark") {
     return std::make_unique<InvalidationBenchmark>(std::move(settings),
@@ -45,9 +45,10 @@ std::unique_ptr<MicroBenchmark> CreateBenchmark(
 
 MicroBenchmarkController::MicroBenchmarkController(LayerTreeHost* host)
     : host_(host),
-      main_controller_task_runner_(base::ThreadTaskRunnerHandle::IsSet()
-                                       ? base::ThreadTaskRunnerHandle::Get()
-                                       : nullptr) {
+      main_controller_task_runner_(
+          base::SingleThreadTaskRunner::HasCurrentDefault()
+              ? base::SingleThreadTaskRunner::GetCurrentDefault()
+              : nullptr) {
   DCHECK(host_);
 }
 
@@ -55,7 +56,7 @@ MicroBenchmarkController::~MicroBenchmarkController() = default;
 
 int MicroBenchmarkController::ScheduleRun(
     const std::string& micro_benchmark_name,
-    base::Value settings,
+    base::Value::Dict settings,
     MicroBenchmark::DoneCallback callback) {
   std::unique_ptr<MicroBenchmark> benchmark = CreateBenchmark(
       micro_benchmark_name, std::move(settings), std::move(callback));
@@ -77,7 +78,7 @@ int MicroBenchmarkController::GetNextIdAndIncrement() {
   return id;
 }
 
-bool MicroBenchmarkController::SendMessage(int id, base::Value message) {
+bool MicroBenchmarkController::SendMessage(int id, base::Value::Dict message) {
   auto it = base::ranges::find(benchmarks_, id, &MicroBenchmark::id);
   if (it == benchmarks_.end())
     return false;

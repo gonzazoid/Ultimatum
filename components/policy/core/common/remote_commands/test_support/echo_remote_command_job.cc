@@ -7,12 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 
 namespace policy {
 
@@ -22,24 +21,6 @@ namespace em = enterprise_management;
 
 const char EchoRemoteCommandJob::kMalformedCommandPayload[] =
     "_MALFORMED_COMMAND_PAYLOAD_";
-
-class EchoRemoteCommandJob::EchoPayload
-    : public RemoteCommandJob::ResultPayload {
- public:
-  explicit EchoPayload(const std::string& payload) : payload_(payload) {}
-  EchoPayload(const EchoPayload&) = delete;
-  EchoPayload& operator=(const EchoPayload&) = delete;
-
-  // RemoteCommandJob::ResultPayload:
-  std::unique_ptr<std::string> Serialize() override;
-
- private:
-  const std::string payload_;
-};
-
-std::unique_ptr<std::string> EchoRemoteCommandJob::EchoPayload::Serialize() {
-  return std::make_unique<std::string>(payload_);
-}
 
 EchoRemoteCommandJob::EchoRemoteCommandJob(bool succeed,
                                            base::TimeDelta execution_duration)
@@ -64,15 +45,12 @@ bool EchoRemoteCommandJob::IsExpired(base::TimeTicks now) {
          now > issued_time() + base::Hours(kCommandExpirationTimeInHours);
 }
 
-void EchoRemoteCommandJob::RunImpl(CallbackWithResult succeed_callback,
-                                   CallbackWithResult failed_callback) {
-  std::unique_ptr<ResultPayload> echo_payload(
-      new EchoPayload(command_payload_));
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+void EchoRemoteCommandJob::RunImpl(CallbackWithResult result_callback) {
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
-      base::BindOnce(
-          succeed_ ? std::move(succeed_callback) : std::move(failed_callback),
-          std::move(echo_payload)),
+      base::BindOnce(std::move(result_callback),
+                     succeed_ ? ResultType::kSuccess : ResultType::kFailure,
+                     command_payload_),
       execution_duration_);
 }
 

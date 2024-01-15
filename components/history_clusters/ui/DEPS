@@ -1,0 +1,5 @@
+include_rules = [
+  "+components/history/core",
+  "+components/history_clusters/core",
+  "+components/page_image_service",
+]

@@ -91,7 +91,7 @@ class FakeFontCollection : public blink::mojom::DWriteFontProxy {
     kFindFamily,
     kGetFamilyCount,
     kGetFamilyNames,
-    kGetFontFiles,
+    kGetFontFileHandles,
     kMapCharacters
   };
   FakeFontCollection();
@@ -115,8 +115,8 @@ class FakeFontCollection : public blink::mojom::DWriteFontProxy {
   void GetFamilyCount(GetFamilyCountCallback callback) override;
   void GetFamilyNames(uint32_t family_index,
                       GetFamilyNamesCallback callback) override;
-  void GetFontFiles(uint32_t family_index,
-                    GetFontFilesCallback callback) override;
+  void GetFontFileHandles(uint32_t family_index,
+                          GetFontFileHandlesCallback callback) override;
   void MapCharacters(const std::u16string& text,
                      blink::mojom::DWriteFontStylePtr font_style,
                      const std::u16string& locale_name,
@@ -125,17 +125,6 @@ class FakeFontCollection : public blink::mojom::DWriteFontProxy {
                      MapCharactersCallback callback) override;
   void MatchUniqueFont(const std::u16string& unique_font_name,
                        MatchUniqueFontCallback callback) override;
-  void GetUniqueFontLookupMode(
-      GetUniqueFontLookupModeCallback callback) override;
-  void GetUniqueNameLookupTableIfAvailable(
-      GetUniqueNameLookupTableIfAvailableCallback callback) override;
-  void GetUniqueNameLookupTable(
-      GetUniqueNameLookupTableCallback callback) override;
-  void FallbackFamilyAndStyleForCodepoint(
-      const std::string& base_family_name,
-      const std::string& locale_name,
-      uint32_t codepoint,
-      FallbackFamilyAndStyleForCodepointCallback callback) override;
 
  private:
   std::vector<FakeFont> fonts_;

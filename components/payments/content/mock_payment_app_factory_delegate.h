@@ -51,21 +51,20 @@ class MockPaymentAppFactoryDelegate : public PaymentAppFactory::Delegate {
   base::WeakPtr<PaymentRequestSpec> GetSpec() const override {
     return spec_->AsWeakPtr();
   }
-  MOCK_CONST_METHOD0(GetTwaPackageName, std::string());
+  MOCK_METHOD1(GetTwaPackageName, void(GetTwaPackageNameCallback));
   MOCK_METHOD0(ShowProcessingSpinner, void());
-  MOCK_METHOD0(GetBillingProfiles,
-               const std::vector<autofill::AutofillProfile*>&());
-  MOCK_METHOD0(IsRequestedAutofillDataAvailable, bool());
   MOCK_CONST_METHOD0(GetPaymentRequestDelegate,
                      base::WeakPtr<ContentPaymentRequestDelegate>());
   MOCK_METHOD1(OnPaymentAppCreated, void(std::unique_ptr<PaymentApp> app));
   MOCK_METHOD2(OnPaymentAppCreationError,
                void(const std::string& error_message,
                     AppCreationFailureReason reason));
-  MOCK_CONST_METHOD0(SkipCreatingNativePaymentApps, bool());
   MOCK_METHOD0(OnDoneCreatingPaymentApps, void());
   MOCK_METHOD0(SetCanMakePaymentEvenWithoutApps, void());
   MOCK_METHOD0(GetCSPChecker, base::WeakPtr<CSPChecker>());
+  MOCK_METHOD0(SetOptOutOffered, void());
+  MOCK_CONST_METHOD0(GetChromeOSTWAInstanceId,
+                     absl::optional<base::UnguessableToken>());
 
   base::WeakPtr<PaymentAppFactory::Delegate> GetWeakPtr() {
     return weak_ptr_factory_.GetWeakPtr();

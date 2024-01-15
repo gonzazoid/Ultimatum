@@ -7,6 +7,7 @@
 
 #include <map>
 
+#include "base/memory/raw_ptr.h"
 #include "components/flags_ui/pref_service_flags_storage.h"
 
 class PrefService;
@@ -36,7 +37,8 @@ class OwnerFlagsStorage : public ::flags_ui::PrefServiceFlagsStorage {
   bool SetFlags(const std::set<std::string>& flags) override;
 
  private:
-  ownership::OwnerSettingsService* owner_settings_service_;
+  raw_ptr<ownership::OwnerSettingsService, DanglingUntriaged>
+      owner_settings_service_;
 };
 
 // FlagsStorage implementation for Chrome OS startup. It is backed by a set of
@@ -61,6 +63,10 @@ class ReadOnlyFlagsStorage : public ::flags_ui::FlagsStorage {
       const std::string& internal_entry_name) const override;
   void SetOriginListFlag(const std::string& internal_entry_name,
                          const std::string& origin_list_value) override;
+  std::string GetStringFlag(
+      const std::string& internal_entry_name) const override;
+  void SetStringFlag(const std::string& internal_entry_name,
+                     const std::string& string_value) override;
 
  private:
   std::set<std::string> flags_;
@@ -94,14 +100,5 @@ class FeatureFlagsUpdate {
 
 }  // namespace about_flags
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when Chrome OS code migration is
-// done.
-namespace chromeos {
-namespace about_flags {
-using ::ash::about_flags::OwnerFlagsStorage;
-using ::ash::about_flags::ReadOnlyFlagsStorage;
-}  // namespace about_flags
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_SETTINGS_ABOUT_FLAGS_H_

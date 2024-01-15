@@ -7,6 +7,7 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/observer_list.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -20,6 +21,10 @@ class PrimaryAccountAccessTokenFetcher;
 }
 
 class PrefService;
+FORWARD_DECLARE_TEST(GeneratedHttpsFirstModePrefTest,
+                     AdvancedProtectionStatusChange_InitiallySignedIn);
+FORWARD_DECLARE_TEST(GeneratedHttpsFirstModePrefTest,
+                     AdvancedProtectionStatusChange_InitiallyNotSignedIn);
 
 namespace safe_browsing {
 
@@ -33,6 +38,36 @@ class AdvancedProtectionStatusManager
     : public KeyedService,
       public signin::IdentityManager::Observer {
  public:
+  // Tracks Advanced Protection status. Might be recorded multiple times for
+  // the same user. Recorded in histograms, do not reorder or delete items.
+  enum class UmaEvent {
+    kNone = 0,
+    // Advanced Protection is disabled. Either the user hasn't signed in or
+    // the signed-in user isn't under AP.
+    kDisabled = 1,
+    // Advanced Protection is enabled for the signed-in user.
+    kEnabled = 2,
+    // Advanced Protection was enabled for the user, but is now disabled.
+    // This is only recorded within a browser session and is only a rough count.
+    // If the user unenrolls from AP and closes Chrome before the next refresh,
+    // we'll record kDisabled on startup instead of kDisabledAfterEnabled.
+    kDisabledAfterEnabled = 3,
+    // Advanced Protection was disabled for the user, but is now enabled.
+    // Also a rough count. If the user enrolls to AP and closes Chrome before
+    // the next refresh, we'll record kEnabled on startup instead of
+    // kEnabledAfterDisabled.
+    kEnabledAfterDisabled = 4,
+    kMaxValue = kEnabledAfterDisabled,
+  };
+
+  // Observer to track changes in the enabled/disabled status of Advanced
+  // Protection. Observers must use IsUnderAdvancedProtection() to check the
+  // status.
+  class StatusChangedObserver : public base::CheckedObserver {
+   public:
+    virtual void OnAdvancedProtectionStatusChanged(bool enabled) {}
+  };
+
   AdvancedProtectionStatusManager(PrefService* pref_service,
                                   signin::IdentityManager* identity_manager);
 
@@ -53,6 +88,10 @@ class AdvancedProtectionStatusManager
   bool IsRefreshScheduled();
 
   void SetAdvancedProtectionStatusForTesting(bool enrolled);
+
+  // Adds and removes observers to observe enabled/disabled status changes.
+  void AddObserver(StatusChangedObserver* observer);
+  void RemoveObserver(StatusChangedObserver* observer);
 
  private:
   FRIEND_TEST_ALL_PREFIXES(AdvancedProtectionStatusManagerTest,
@@ -80,6 +119,10 @@ class AdvancedProtectionStatusManager
                            StartupAfterLongWaitRefreshesImmediately);
   FRIEND_TEST_ALL_PREFIXES(AdvancedProtectionStatusManagerTest,
                            TracksUnconsentedPrimaryAccount);
+  FRIEND_TEST_ALL_PREFIXES(::GeneratedHttpsFirstModePrefTest,
+                           AdvancedProtectionStatusChange_InitiallySignedIn);
+  FRIEND_TEST_ALL_PREFIXES(::GeneratedHttpsFirstModePrefTest,
+                           AdvancedProtectionStatusChange_InitiallyNotSignedIn);
 
   void Initialize();
 
@@ -132,6 +175,8 @@ class AdvancedProtectionStatusManager
   // Returns an empty string if user is not signed in.
   CoreAccountId GetUnconsentedPrimaryAccountId() const;
 
+  void NotifyStatusChanged();
+
   // Only called in tests to set a customized minimum delay.
   AdvancedProtectionStatusManager(PrefService* pref_service,
                                   signin::IdentityManager* identity_manager,
@@ -150,6 +195,7 @@ class AdvancedProtectionStatusManager
   base::OneShotTimer timer_;
   base::Time last_refreshed_;
   base::TimeDelta minimum_delay_;
+  base::ObserverList<StatusChangedObserver> observers_;
 };
 
 }  // namespace safe_browsing

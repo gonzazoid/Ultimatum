@@ -32,6 +32,11 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantManagerService
     std::string access_token;
   };
 
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
+  // If any value is added, please update enums.xml
+  // `AssistantServiceState`.
+  // Enumeration of possible assistant manager service states.
   enum State {
     // Initial state, the service is created but not started yet.
     STOPPED = 0,
@@ -49,7 +54,11 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantManagerService
     // Stop has been called but `assistant_manager` has not been destroyed. It
     // is possible that some functions will call back to the browser thread,
     // e.g. the audio output.
-    STOPPING = 4
+    STOPPING = 4,
+    // The libassistant mojom service is disconnected, e.g. process crashes.
+    DISCONNECTED = 5,
+
+    kMaxValue = DISCONNECTED
   };
 
   ~AssistantManagerService() override = default;
@@ -58,7 +67,7 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantManagerService
   // If the user is nullopt, the service will be started in signed-out mode.
   // If you want to know when the service is started, use
   // |AddAndFireStateObserver| to add an observer.
-  virtual void Start(const absl::optional<UserInfo>& user,
+  virtual void Start(const std::optional<UserInfo>& user,
                      bool enable_hotword) = 0;
 
   // Stop the Assistant.
@@ -70,7 +79,7 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantManagerService
   // Set user information for Assistant. Passing a nullopt will reconfigure
   // Libassistant to run in signed-out mode, and passing a valid non-empty value
   // will switch the mode back to normal.
-  virtual void SetUser(const absl::optional<UserInfo>& user) = 0;
+  virtual void SetUser(const std::optional<UserInfo>& user) = 0;
 
   // Turn on / off all listening, including hotword and voice query.
   virtual void EnableListening(bool enable) = 0;
@@ -122,6 +131,7 @@ class AuthenticationStateObserver
 
   mojo::PendingRemote<libassistant::mojom::AuthenticationStateObserver>
   BindNewPipeAndPassRemote();
+  void ResetAuthenticationStateObserver();
 
  private:
   mojo::Receiver<libassistant::mojom::AuthenticationStateObserver> receiver_{

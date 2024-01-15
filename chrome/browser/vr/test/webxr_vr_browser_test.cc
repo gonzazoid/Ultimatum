@@ -11,6 +11,10 @@
 #include "content/public/test/browser_test_utils.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
+#if BUILDFLAG(ENABLE_VR)
+#include "device/vr/public/cpp/features.h"
+#endif
+
 using testing::_;
 using testing::Invoke;
 
@@ -29,7 +33,7 @@ void WebXrVrBrowserTestBase::EnterSessionWithUserGesture(
   GetPermissionRequestManager()->set_auto_response_for_test(
       permission_auto_response_);
 
-  // ExecuteScript runs with a user gesture, so we can just directly call
+  // ExecJs runs with a user gesture, so we can just directly call
   // requestSession instead of having to do the hacky workaround the
   // instrumentation tests use of actually sending a click event to the canvas.
   RunJavaScriptOrFail("onRequestSession()", web_contents);
@@ -92,7 +96,7 @@ WebXrVrRuntimelessBrowserTestSensorless::
   // WebXrOrientationSensorDevice is only defined when the enable_vr flag is
   // set.
 #if BUILDFLAG(ENABLE_VR)
-  disable_features_.push_back(device::kWebXrOrientationSensorDevice);
+  disable_features_.push_back(device::features::kWebXrOrientationSensorDevice);
 #endif  // BUILDFLAG(ENABLE_VR)
 }
 

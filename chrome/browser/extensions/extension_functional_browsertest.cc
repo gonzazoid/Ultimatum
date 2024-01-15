@@ -5,6 +5,7 @@
 #include <stddef.h>
 
 #include "base/files/file_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/test_future.h"
 #include "build/build_config.h"
@@ -121,20 +122,14 @@ IN_PROC_BROWSER_TEST_F(ExtensionFunctionalTest,
       tab1->GetSiteInstance()->IsRelatedSiteInstance(tab2->GetSiteInstance()));
 
   // Name the 2 frames.
-  EXPECT_TRUE(content::ExecuteScript(tab1, "window.name = 'tab1';"));
-  EXPECT_TRUE(content::ExecuteScript(tab2, "window.name = 'tab2';"));
+  EXPECT_TRUE(content::ExecJs(tab1, "window.name = 'tab1';"));
+  EXPECT_TRUE(content::ExecJs(tab2, "window.name = 'tab2';"));
 
   // Open a new window from tab1 and store it in tab1_popup.
   content::RenderFrameHost* tab1_popup = nullptr;
   {
     content::WebContentsAddedObserver new_window_observer;
-    bool did_create_popup = false;
-    ASSERT_TRUE(ExecuteScriptAndExtractBool(
-        tab1,
-        "window.domAutomationController.send("
-        "    !!window.open('about:blank', 'new_popup'));",
-        &did_create_popup));
-    ASSERT_TRUE(did_create_popup);
+    ASSERT_EQ(true, EvalJs(tab1, "!!window.open('about:blank', 'new_popup');"));
     content::WebContents* popup_window = new_window_observer.GetWebContents();
     EXPECT_TRUE(WaitForLoadStop(popup_window));
     tab1_popup = popup_window->GetPrimaryMainFrame();
@@ -143,12 +138,11 @@ IN_PROC_BROWSER_TEST_F(ExtensionFunctionalTest,
 
   // Verify that |tab1_popup| can find unrelated frames from the same extension
   // (i.e. that it can find |tab2|.
-  std::string location_of_opened_window;
-  EXPECT_TRUE(ExecuteScriptAndExtractString(
-      tab1_popup,
-      "var w = window.open('', 'tab2');\n"
-      "window.domAutomationController.send(w.location.href);",
-      &location_of_opened_window));
+  std::string location_of_opened_window =
+      EvalJs(tab1_popup,
+             "var w = window.open('', 'tab2');\n"
+             "w.location.href;")
+          .ExtractString();
   EXPECT_EQ(tab2->GetLastCommittedURL(), location_of_opened_window);
 }
 
@@ -160,7 +154,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionFunctionalTest, DownloadExtensionResource) {
   ASSERT_TRUE(LoadExtension(test_data_dir_.AppendASCII("download")));
   download_observer.WaitForFinished();
 
-  std::vector<download::DownloadItem*> download_items;
+  std::vector<raw_ptr<download::DownloadItem, VectorExperimental>>
+      download_items;
   download_manager->GetAllDownloads(&download_items);
 
   base::ScopedAllowBlockingForTesting allow_blocking;

@@ -4,10 +4,9 @@
 
 #include "components/policy/core/browser/policy_conversions_client.h"
 
-#include "base/bind.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
-#include "base/logging.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
@@ -15,6 +14,7 @@
 #include "components/policy/core/browser/configuration_policy_handler_list.h"
 #include "components/policy/core/browser/policy_error_map.h"
 #include "components/policy/core/common/policy_details.h"
+#include "components/policy/core/common/policy_logger.h"
 #include "components/policy/core/common/policy_merger.h"
 #include "components/policy/core/common/policy_service.h"
 #include "components/policy/core/common/schema.h"
@@ -29,6 +29,14 @@
 using base::Value;
 
 namespace policy {
+
+namespace {
+const char* USER_SCOPE = "user";
+const char* DEVICE_SCOPE = "machine";
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+const char* ALL_USERS_SCOPE = "allUsers";
+#endif
+}  // namespace
 
 PolicyConversionsClient::PolicyConversionsClient() = default;
 PolicyConversionsClient::~PolicyConversionsClient() = default;
@@ -78,7 +86,6 @@ base::Value::Dict PolicyConversionsClient::GetChromePolicies() {
 
   auto* schema_registry = GetPolicySchemaRegistry();
   if (!schema_registry) {
-    LOG(ERROR) << "Cannot dump Chrome policies, no schema registry";
     return Value::Dict();
   }
 
@@ -101,6 +108,10 @@ base::Value::Dict PolicyConversionsClient::GetChromePolicies() {
   // Convert dictionary values to strings for display.
   handler_list->PrepareForDisplaying(&map);
 
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  PopulatePerProfileMap();
+#endif
+
   return GetPolicyValues(map, &errors, deprecated_policies, future_policies,
                          GetKnownPolicies(schema_map, policy_namespace));
 }
@@ -108,6 +119,8 @@ base::Value::Dict PolicyConversionsClient::GetChromePolicies() {
 base::Value::Dict PolicyConversionsClient::GetPrecedencePolicies() {
   DCHECK(HasUserPolicies());
 
+  VLOG_POLICY(3, POLICY_FETCHING) << "Client has user policies; getting "
+                                     "precedence-related policies for Chrome";
   PolicyNamespace policy_namespace =
       PolicyNamespace(POLICY_DOMAIN_CHROME, std::string());
   const PolicyMap& chrome_policies =
@@ -115,7 +128,8 @@ base::Value::Dict PolicyConversionsClient::GetPrecedencePolicies() {
 
   auto* schema_registry = GetPolicySchemaRegistry();
   if (!schema_registry) {
-    LOG(ERROR) << "Cannot dump Chrome precedence policies, no schema registry";
+    LOG_POLICY(ERROR, POLICY_PROCESSING)
+        << "Cannot retrieve Chrome precedence policies, no schema registry";
     return Value::Dict();
   }
 
@@ -243,8 +257,7 @@ Value::Dict PolicyConversionsClient::GetPolicyValue(
   value.Set("value",
             CopyAndMaybeConvert(*policy.value_unsafe(), known_policy_schema));
   if (convert_types_enabled_) {
-    value.Set("scope",
-              (policy.scope == POLICY_SCOPE_USER) ? "user" : "machine");
+    value.Set("scope", GetPolicyScope(policy_name, policy.scope));
     value.Set("level", (policy.level == POLICY_LEVEL_RECOMMENDED)
                            ? "recommended"
                            : "mandatory");
@@ -299,8 +312,11 @@ Value::Dict PolicyConversionsClient::GetPolicyValue(
       error = base::JoinString(
           {policy_map_errors, errors->GetErrorMessages(policy_name)}, u"\n");
   }
-  if (!error.empty())
+  if (!error.empty()) {
     value.Set("error", error);
+    LOG_POLICY(ERROR, POLICY_PROCESSING)
+        << policy_name << " has an error of type: " << error;
+  }
 
   std::u16string warning = policy.GetLocalizedMessages(
       PolicyMap::MessageType::kWarning,
@@ -364,6 +380,8 @@ Value::Dict PolicyConversionsClient::GetPolicyValues(
     const PoliciesSet& future_policies,
     const absl::optional<PolicyConversions::PolicyToSchemaMap>&
         known_policy_schemas) const {
+  DVLOG_POLICY(2, POLICY_PROCESSING) << "Retrieving map of policy values";
+
   base::Value::Dict values;
   for (const auto& entry : map) {
     const std::string& policy_name = entry.first;
@@ -434,5 +452,52 @@ Value::Dict PolicyConversionsClient::ConvertUpdaterPolicies(
                          PoliciesSet(), updater_policy_schemas);
 }
 #endif  // BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
+
+std::string PolicyConversionsClient::GetPolicyScope(
+    const std::string& policy_name,
+    const PolicyScope& policy_scope) const {
+  if (policy_scope != POLICY_SCOPE_USER) {
+    return DEVICE_SCOPE;
+  }
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  if (per_profile_map_) {
+    auto it = per_profile_map_->find(policy_name);
+    if (it != per_profile_map_->end()) {
+      return it->second ? USER_SCOPE : ALL_USERS_SCOPE;
+    }
+  }
+#endif
+
+  // In Lacros case, this policy is missing from the policy templates.
+  // Which means it's a policy for apps/extensions.
+  return USER_SCOPE;
+}
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+void PolicyConversionsClient::PopulatePerProfileMap() {
+  if (per_profile_map_) {
+    return;
+  }
+
+  per_profile_map_ = std::make_unique<std::map<std::string, bool>>();
+  for (const BooleanPolicyAccess& access : kBooleanPolicyAccess) {
+    per_profile_map_->emplace(std::string(access.policy_key),
+                              access.per_profile);
+  }
+  for (const IntegerPolicyAccess& access : kIntegerPolicyAccess) {
+    per_profile_map_->emplace(std::string(access.policy_key),
+                              access.per_profile);
+  }
+  for (const StringPolicyAccess& access : kStringPolicyAccess) {
+    per_profile_map_->emplace(std::string(access.policy_key),
+                              access.per_profile);
+  }
+  for (const StringListPolicyAccess& access : kStringListPolicyAccess) {
+    per_profile_map_->emplace(std::string(access.policy_key),
+                              access.per_profile);
+  }
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
 }  // namespace policy

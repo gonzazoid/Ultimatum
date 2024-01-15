@@ -6,9 +6,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/no_destructor.h"
 #include "chrome/browser/enterprise/util/affiliation.h"
 #include "chrome/browser/extensions/component_loader.h"
@@ -47,7 +47,14 @@ class ContactCenterInsightsExtensionManagerFactory
 
 ContactCenterInsightsExtensionManagerFactory::
     ContactCenterInsightsExtensionManagerFactory()
-    : ProfileKeyedServiceFactory("ContactCenterInsightsExtensionManager") {}
+    : ProfileKeyedServiceFactory(
+          "ContactCenterInsightsExtensionManager",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 ContactCenterInsightsExtensionManagerFactory::
     ~ContactCenterInsightsExtensionManagerFactory() = default;
@@ -171,6 +178,11 @@ void ContactCenterInsightsExtensionManager::RemoveExtensionIfInstalled() {
   if (delegate_->IsExtensionInstalled(component_loader_)) {
     delegate_->UninstallExtension(component_loader_);
   }
+}
+
+// static
+void ContactCenterInsightsExtensionManager::EnsureFactoryBuilt() {
+  ContactCenterInsightsExtensionManager::GetFactory();
 }
 
 }  // namespace chromeos

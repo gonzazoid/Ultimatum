@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include <optional>
 #include "apps/saved_files_service_factory.h"
 #include "base/json/values_util.h"
 #include "base/memory/raw_ptr.h"
@@ -21,6 +22,7 @@
 #include "extensions/browser/extension_host.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_system.h"
+#include "extensions/common/extension_id.h"
 #include "extensions/common/permissions/api_permission.h"
 #include "extensions/common/permissions/permission_set.h"
 #include "extensions/common/permissions/permissions_data.h"
@@ -63,17 +65,15 @@ void AddSavedFileEntry(ExtensionPrefs* prefs,
   ExtensionPrefs::ScopedDictionaryUpdate update(
       prefs, extension_id, kFileEntries);
   auto file_entries = update.Create();
-  DCHECK(!file_entries->GetDictionaryWithoutPathExpansion(file_entry.id, NULL));
+  DCHECK(
+      !file_entries->GetDictionaryWithoutPathExpansion(file_entry.id, nullptr));
 
-  std::unique_ptr<base::DictionaryValue> file_entry_dict =
-      std::make_unique<base::DictionaryValue>();
-  file_entry_dict->SetKey(kFileEntryPath,
-                          base::FilePathToValue(file_entry.path));
-  file_entry_dict->SetBoolean(kFileEntryIsDirectory, file_entry.is_directory);
-  file_entry_dict->SetInteger(kFileEntrySequenceNumber,
-                              file_entry.sequence_number);
-  file_entries->SetWithoutPathExpansion(file_entry.id,
-                                        std::move(file_entry_dict));
+  base::Value::Dict file_entry_dict;
+  file_entry_dict.Set(kFileEntryPath, base::FilePathToValue(file_entry.path));
+  file_entry_dict.Set(kFileEntryIsDirectory, file_entry.is_directory);
+  file_entry_dict.Set(kFileEntrySequenceNumber, file_entry.sequence_number);
+  file_entries->SetDictionaryWithoutPathExpansion(file_entry.id,
+                                                  std::move(file_entry_dict));
 }
 
 // Updates the sequence_number of a SavedFileEntry persisted in ExtensionPrefs.
@@ -105,7 +105,7 @@ void RemoveSavedFileEntry(ExtensionPrefs* prefs,
 // Clears all SavedFileEntry for the app from ExtensionPrefs.
 void ClearSavedFileEntries(ExtensionPrefs* prefs,
                            const std::string& extension_id) {
-  prefs->UpdateExtensionPref(extension_id, kFileEntries, nullptr);
+  prefs->UpdateExtensionPref(extension_id, kFileEntries, std::nullopt);
 }
 
 // Returns all SavedFileEntries for the app.
@@ -127,13 +127,13 @@ std::vector<SavedFileEntry> GetSavedFileEntries(
     const base::Value* path_value = file_entry->Find(kFileEntryPath);
     if (!path_value)
       continue;
-    absl::optional<base::FilePath> file_path =
+    std::optional<base::FilePath> file_path =
         base::ValueToFilePath(*path_value);
     if (!file_path)
       continue;
     bool is_directory =
         file_entry->FindBool(kFileEntryIsDirectory).value_or(false);
-    const absl::optional<int> sequence_number =
+    const std::optional<int> sequence_number =
         file_entry->FindInt(kFileEntrySequenceNumber);
     if (!sequence_number || sequence_number.value() == 0)
       continue;
@@ -169,7 +169,7 @@ class SavedFilesService::SavedFiles {
   void LoadSavedFileEntriesFromPreferences();
 
   raw_ptr<content::BrowserContext> context_;
-  const std::string extension_id_;
+  const extensions::ExtensionId extension_id_;
 
   // Contains all file entries that have been registered, keyed by ID.
   std::unordered_map<std::string, std::unique_ptr<SavedFileEntry>>

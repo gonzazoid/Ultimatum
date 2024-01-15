@@ -5,7 +5,6 @@
 import("//build/config/chrome_build.gni")
 
 source_set("consistency_account_chooser") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "consistency_account_chooser_consumer.h",
     "consistency_account_chooser_coordinator.h",
@@ -23,24 +22,22 @@ source_set("consistency_account_chooser") {
   ]
   deps = [
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/main:public",
-    "//ios/chrome/browser/net:crurl",
-    "//ios/chrome/browser/signin",
-    "//ios/chrome/browser/signin:system_identity",
-    "//ios/chrome/browser/ui:feature_flags",
+    "//ios/chrome/browser/net/model:crurl",
+    "//ios/chrome/browser/shared/coordinator/chrome_coordinator",
+    "//ios/chrome/browser/shared/model/browser",
+    "//ios/chrome/browser/shared/model/url:constants",
+    "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/shared/public/features",
+    "//ios/chrome/browser/shared/ui/table_view",
+    "//ios/chrome/browser/shared/ui/table_view:utils",
+    "//ios/chrome/browser/signin/model",
+    "//ios/chrome/browser/signin/model:system_identity",
     "//ios/chrome/browser/ui/authentication",
     "//ios/chrome/browser/ui/authentication/cells",
     "//ios/chrome/browser/ui/authentication/enterprise:enterprise_utils",
     "//ios/chrome/browser/ui/authentication/signin/consistency_promo_signin:layout",
     "//ios/chrome/browser/ui/authentication/signin/consistency_promo_signin/consistency_sheet",
-    "//ios/chrome/browser/ui/commands",
-    "//ios/chrome/browser/ui/coordinators:chrome_coordinators",
-    "//ios/chrome/browser/ui/table_view",
-    "//ios/chrome/browser/ui/table_view:utils",
-    "//ios/chrome/browser/url:constants",
     "//ios/chrome/common/ui/colors",
-    "//ios/public/provider/chrome/browser",
-    "//ios/public/provider/chrome/browser/signin",
     "//ui/base",
   ]
 }

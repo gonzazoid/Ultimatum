@@ -4,8 +4,8 @@
 
 #include "ui/base/x/test/x11_ui_controls_test_helper.h"
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "ui/base/x/x11_util.h"
 #include "ui/events/keycodes/keyboard_code_conversion_x.h"
@@ -13,7 +13,6 @@
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/x/keysyms/keysyms.h"
 #include "ui/gfx/x/xproto.h"
-#include "ui/gfx/x/xproto_util.h"
 
 namespace ui {
 namespace {
@@ -31,24 +30,23 @@ unsigned button_down_mask = 0;
 // The root and time fields of |xevent| may be modified.
 template <typename T>
 void PostEventToWindowTreeHost(gfx::AcceleratedWidget widget, T* xevent) {
-  auto* connection = x11::Connection::Get();
   x11::Window xwindow = static_cast<x11::Window>(widget);
   xevent->event = xwindow;
 
-  xevent->root = connection->default_root();
+  xevent->root = x11::Connection::Get()->default_root();
   xevent->time = x11::Time::CurrentTime;
 
-  x11::SendEvent(*xevent, xwindow, x11::EventMask::NoEvent);
-  connection->Flush();
+  x11::Connection::Get()->SendEvent(*xevent, xwindow, x11::EventMask::NoEvent);
+  x11::Connection::Get()->Flush();
 }
 
 }  // namespace
 
 X11UIControlsTestHelper::X11UIControlsTestHelper()
-    : connection_(x11::Connection::Get()),
+    : connection_(*x11::Connection::Get()),
       x_root_window_(ui::GetX11RootWindow()),
-      x_window_(
-          x11::CreateDummyWindow("Chromium X11UIControlsTestHelper Window")) {}
+      x_window_(connection_->CreateDummyWindow(
+          "Chromium X11UIControlsTestHelper Window")) {}
 
 X11UIControlsTestHelper::~X11UIControlsTestHelper() {
   connection_->DestroyWindow({x_window_});
@@ -58,41 +56,58 @@ unsigned X11UIControlsTestHelper::ButtonDownMask() const {
   return button_down_mask;
 }
 
-void X11UIControlsTestHelper::SendKeyPressEvent(gfx::AcceleratedWidget widget,
-                                                ui::KeyboardCode key,
-                                                bool control,
-                                                bool shift,
-                                                bool alt,
-                                                bool command,
-                                                base::OnceClosure closure) {
+void X11UIControlsTestHelper::SendKeyEvents(gfx::AcceleratedWidget widget,
+                                            ui::KeyboardCode key,
+                                            int key_event_types,
+                                            int accelerator_state,
+                                            base::OnceClosure closure) {
+  bool press = key_event_types & ui_controls::kKeyPress;
+  bool release = key_event_types & ui_controls::kKeyRelease;
+
+  bool control = accelerator_state & ui_controls::kControl;
+  bool shift = accelerator_state & ui_controls::kShift;
+  bool alt = accelerator_state & ui_controls::kAlt;
+
   x11::KeyEvent xevent;
-  xevent.opcode = x11::KeyEvent::Press;
-  if (control) {
-    SetKeycodeAndSendThenMask(widget, &xevent, XK_Control_L,
-                              x11::KeyButMask::Control);
+
+  // Send key press events.
+  if (press) {
+    xevent.opcode = x11::KeyEvent::Press;
+    if (control) {
+      SetKeycodeAndSendThenMask(widget, &xevent, XK_Control_L,
+                                x11::KeyButMask::Control);
+    }
+    if (shift) {
+      SetKeycodeAndSendThenMask(widget, &xevent, XK_Shift_L,
+                                x11::KeyButMask::Shift);
+    }
+    if (alt) {
+      SetKeycodeAndSendThenMask(widget, &xevent, XK_Alt_L,
+                                x11::KeyButMask::Mod1);
+    }
+    xevent.detail = x11::Connection::Get()->KeysymToKeycode(
+        ui::XKeysymForWindowsKeyCode(key, shift));
+    PostEventToWindowTreeHost(widget, &xevent);
   }
-  if (shift)
-    SetKeycodeAndSendThenMask(widget, &xevent, XK_Shift_L,
-                              x11::KeyButMask::Shift);
-  if (alt)
-    SetKeycodeAndSendThenMask(widget, &xevent, XK_Alt_L, x11::KeyButMask::Mod1);
-  xevent.detail = x11::Connection::Get()->KeysymToKeycode(
-      ui::XKeysymForWindowsKeyCode(key, shift));
-  PostEventToWindowTreeHost(widget, &xevent);
 
   // Send key release events.
-  xevent.opcode = x11::KeyEvent::Release;
-  PostEventToWindowTreeHost(widget, &xevent);
-  if (alt)
-    UnmaskAndSetKeycodeThenSend(widget, &xevent, x11::KeyButMask::Mod1,
-                                XK_Alt_L);
-  if (shift)
-    UnmaskAndSetKeycodeThenSend(widget, &xevent, x11::KeyButMask::Shift,
-                                XK_Shift_L);
-  if (control)
-    UnmaskAndSetKeycodeThenSend(widget, &xevent, x11::KeyButMask::Control,
-                                XK_Control_L);
-  DCHECK_EQ(xevent.state, x11::KeyButMask{});
+  if (release) {
+    xevent.opcode = x11::KeyEvent::Release;
+    PostEventToWindowTreeHost(widget, &xevent);
+    if (alt) {
+      UnmaskAndSetKeycodeThenSend(widget, &xevent, x11::KeyButMask::Mod1,
+                                  XK_Alt_L);
+    }
+    if (shift) {
+      UnmaskAndSetKeycodeThenSend(widget, &xevent, x11::KeyButMask::Shift,
+                                  XK_Shift_L);
+    }
+    if (control) {
+      UnmaskAndSetKeycodeThenSend(widget, &xevent, x11::KeyButMask::Control,
+                                  XK_Control_L);
+    }
+  }
+
   RunClosureAfterAllPendingUIEvents(std::move(closure));
   return;
 }
@@ -100,11 +115,11 @@ void X11UIControlsTestHelper::SendKeyPressEvent(gfx::AcceleratedWidget widget,
 void X11UIControlsTestHelper::SendMouseMotionNotifyEvent(
     gfx::AcceleratedWidget widget,
     const gfx::Point& mouse_loc,
-    const gfx::Point& mouse_root_loc,
+    const gfx::Point& mouse_loc_in_connection_px,
     base::OnceClosure closure) {
   x11::MotionNotifyEvent xevent{
-      .root_x = static_cast<int16_t>(mouse_root_loc.x()),
-      .root_y = static_cast<int16_t>(mouse_root_loc.y()),
+      .root_x = static_cast<int16_t>(mouse_loc_in_connection_px.x()),
+      .root_y = static_cast<int16_t>(mouse_loc_in_connection_px.y()),
       .event_x = static_cast<int16_t>(mouse_loc.x()),
       .event_y = static_cast<int16_t>(mouse_loc.y()),
       .state = static_cast<x11::KeyButMask>(button_down_mask),
@@ -116,18 +131,19 @@ void X11UIControlsTestHelper::SendMouseMotionNotifyEvent(
   return;
 }
 
-void X11UIControlsTestHelper::SendMouseEvent(gfx::AcceleratedWidget widget,
-                                             MouseButton type,
-                                             int button_state,
-                                             int accelerator_state,
-                                             const gfx::Point& mouse_loc,
-                                             const gfx::Point& mouse_root_loc,
-                                             base::OnceClosure closure) {
+void X11UIControlsTestHelper::SendMouseEvent(
+    gfx::AcceleratedWidget widget,
+    MouseButton type,
+    int button_state,
+    int accelerator_state,
+    const gfx::Point& mouse_loc,
+    const gfx::Point& mouse_loc_in_connection_px,
+    base::OnceClosure closure) {
   x11::ButtonEvent xevent;
   xevent.event_x = mouse_loc.x();
   xevent.event_y = mouse_loc.y();
-  xevent.root_x = mouse_root_loc.x();
-  xevent.root_y = mouse_root_loc.y();
+  xevent.root_x = mouse_loc_in_connection_px.x();
+  xevent.root_y = mouse_loc_in_connection_px.y();
   switch (type) {
     case LEFT:
       xevent.detail = static_cast<x11::Button>(1);

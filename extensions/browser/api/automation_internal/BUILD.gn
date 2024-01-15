@@ -18,12 +18,18 @@ source_set("automation_internal") {
     "automation_internal_api_delegate.h",
   ]
 
-  public_deps = [ "//extensions/browser:browser_sources" ]
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
+  public_deps = [
+    "//extensions/browser:browser_sources",
+    "//extensions/browser/api/app_runtime:app_runtime",
+    "//services/accessibility/public/mojom:automation",
+  ]
 
   deps = [
     "//build:chromeos_buildflags",
     "//components/prefs",
-    "//extensions/browser/api",
+    "//content/public/browser",
     "//extensions/common",
     "//extensions/common/api",
   ]

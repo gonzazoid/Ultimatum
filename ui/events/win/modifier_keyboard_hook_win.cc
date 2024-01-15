@@ -188,7 +188,7 @@ bool ModifierKeyboardHookWinImpl::Register() {
 void ModifierKeyboardHookWinImpl::ClearModifierStates() {
   BYTE keyboard_state[kKeyboardStateArraySize] = {0};
   if (!GetKeyboardState(keyboard_state)) {
-    DPLOG(ERROR) << "GetKeyboardState() failed: ";
+    PLOG(ERROR) << "GetKeyboardState() failed: ";
     return;
   }
 
@@ -203,7 +203,7 @@ void ModifierKeyboardHookWinImpl::ClearModifierStates() {
   keyboard_state[VK_RWIN] = kKeyUp;
 
   if (!SetKeyboardState(keyboard_state))
-    DPLOG(ERROR) << "SetKeyboardState() failed: ";
+    PLOG(ERROR) << "SetKeyboardState() failed: ";
 }
 
 bool ModifierKeyboardHookWinImpl::ProcessKeyEventMessage(WPARAM w_param,
@@ -272,7 +272,7 @@ bool ModifierKeyboardHookWinImpl::ProcessKeyEventMessage(WPARAM w_param,
   std::unique_ptr<KeyEvent> key_event =
       std::make_unique<KeyEvent>(KeyEventFromMSG(msg));
   if (is_repeat)
-    key_event->set_flags(key_event->flags() | EF_IS_REPEAT);
+    key_event->SetFlags(key_event->flags() | EF_IS_REPEAT);
   ForwardCapturedKeyEvent(key_event.get());
 
   return true;
@@ -282,7 +282,7 @@ void ModifierKeyboardHookWinImpl::UpdateModifierState(DWORD vk,
                                                       bool is_key_down) {
   BYTE keyboard_state[kKeyboardStateArraySize] = {0};
   if (!GetKeyboardState(keyboard_state)) {
-    DPLOG(ERROR) << "GetKeyboardState() failed: ";
+    PLOG(ERROR) << "GetKeyboardState() failed: ";
     return;
   }
 

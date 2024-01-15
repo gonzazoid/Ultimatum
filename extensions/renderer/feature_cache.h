@@ -10,8 +10,11 @@
 #include <utility>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
+#include "extensions/common/context_data.h"
 #include "extensions/common/extension_id.h"
 #include "extensions/common/features/feature.h"
+#include "extensions/common/mojom/context_type.mojom-forward.h"
 #include "url/gurl.h"
 
 namespace extensions {
@@ -38,22 +41,27 @@ class FeatureCache {
   // |extension|, and |url| in a lexicographically sorted vector.
   // Note: these contexts should be valid, so WebUI contexts should have no
   // extensions, extension should be non-null for extension contexts, etc.
-  FeatureNameVector GetAvailableFeatures(Feature::Context context_type,
+  FeatureNameVector GetAvailableFeatures(mojom::ContextType context_type,
                                          const Extension* extension,
-                                         const GURL& url);
+                                         const GURL& url,
+                                         const ContextData& context_data);
 
   // Returns the names of features restricted to developer mode in a
   // lexicographically sorted vector.
   FeatureNameVector GetDeveloperModeRestrictedFeatures(
-      Feature::Context context_type,
+      mojom::ContextType context_type,
       const Extension* extension,
-      const GURL& url);
+      const GURL& url,
+      const ContextData& context_data);
 
   // Invalidates the cache for the specified extension.
   void InvalidateExtension(const ExtensionId& extension_id);
 
+  // Invalidates the cache for all extensions.
+  void InvalidateAllExtensions();
+
  private:
-  using FeatureVector = std::vector<const Feature*>;
+  using FeatureVector = std::vector<raw_ptr<const Feature, VectorExperimental>>;
   struct ExtensionFeatureData {
    public:
     ExtensionFeatureData();
@@ -66,11 +74,12 @@ class FeatureCache {
     FeatureVector available_features;
   };
 
-  // Note: We use a key of ExtensionId, Feature::Context to maximize cache hits.
-  // Unfortunately, this won't always be perfectly accurate, since some features
-  // may have other context-dependent restrictions (such as URLs), but caching
-  // by extension id + context + url would result in significantly fewer hits.
-  using ExtensionCacheMapKey = std::pair<ExtensionId, Feature::Context>;
+  // Note: We use a key of ExtensionId, mojom::ContextType to maximize cache
+  // hits. Unfortunately, this won't always be perfectly accurate, since some
+  // features may have other context-dependent restrictions (such as URLs), but
+  // caching by extension id + context + url would result in significantly fewer
+  // hits.
+  using ExtensionCacheMapKey = std::pair<ExtensionId, mojom::ContextType>;
   using ExtensionCacheMap =
       std::map<ExtensionCacheMapKey, ExtensionFeatureData>;
 
@@ -80,17 +89,19 @@ class FeatureCache {
   // Returns the features available to the given context from the cache,
   // creating a new entry if one doesn't exist.
   const ExtensionFeatureData& GetFeaturesFromCache(
-      Feature::Context context_type,
+      mojom::ContextType context_type,
       const Extension* extension,
       const GURL& origin,
-      int context_id);
+      int context_id,
+      const ContextData& context_data);
 
   // Creates ExtensionFeatureData to be entered into a cache for the specified
   // context data.
-  ExtensionFeatureData CreateCacheEntry(Feature::Context context_type,
+  ExtensionFeatureData CreateCacheEntry(mojom::ContextType context_type,
                                         const Extension* extension,
                                         const GURL& origin,
-                                        int context_id);
+                                        int context_id,
+                                        const ContextData& context_data);
 
   // The cache of extension-related contexts. These may be invalidated, since
   // extension permissions change.

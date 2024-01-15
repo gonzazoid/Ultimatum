@@ -7,6 +7,7 @@
 #include "build/build_config.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
+#include "chrome/browser/apps/app_service/browser_app_launcher.h"
 #include "chrome/browser/policy/extension_policy_test_base.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
@@ -120,8 +121,8 @@ IN_PROC_BROWSER_TEST_F(FullscreenPolicyTest, FullscreenAllowedApp) {
 
   // Verify that the window cannot be toggled into fullscreen mode via apps
   // APIs.
-  EXPECT_TRUE(content::ExecuteScript(
-      window->web_contents(), "chrome.app.window.current().fullscreen();"));
+  EXPECT_TRUE(content::ExecJs(window->web_contents(),
+                              "chrome.app.window.current().fullscreen();"));
   EXPECT_FALSE(window->GetBaseWindow()->IsFullscreen());
 
   // Verify that the window cannot be toggled into fullscreen mode from within

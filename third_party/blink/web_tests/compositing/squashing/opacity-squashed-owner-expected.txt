@@ -16,8 +16,7 @@
     {
       "name": "LayoutNGBlockFlow (positioned) DIV class='squashed'",
       "position": [16, 4],
-      "bounds": [40, 90],
-      "contentsOpaqueForText": true
+      "bounds": [40, 90]
     }
   ],
   "transforms": [

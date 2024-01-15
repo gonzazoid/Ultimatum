@@ -5,11 +5,12 @@
 #ifndef UI_EVENTS_OZONE_EVDEV_EVENT_FACTORY_EVDEV_H_
 #define UI_EVENTS_OZONE_EVDEV_EVENT_FACTORY_EVDEV_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/task_runner.h"
 #include "ui/events/event_modifiers.h"
 #include "ui/events/ozone/device/device_event_observer.h"
@@ -34,9 +35,11 @@ class CursorDelegateEvdev;
 class DeviceManager;
 class InputDeviceFactoryEvdev;
 class InputDeviceFactoryEvdevProxy;
+struct KeyboardDevice;
+struct TouchpadDevice;
 class SystemInputInjector;
 class GamepadProviderOzone;
-enum class DomCode;
+enum class DomCode : uint32_t;
 enum class StylusState;
 
 #if !defined(USE_EVDEV)
@@ -59,6 +62,10 @@ class COMPONENT_EXPORT(EVDEV) EventFactoryEvdev : public DeviceEventObserver,
 
   ~EventFactoryEvdev() override;
 
+  // Must be called before Init().
+  void SetUserInputTaskRunner(
+      scoped_refptr<base::SingleThreadTaskRunner> user_input_task_runner);
+
   // Initialize. Must be called with a valid message loop.
   void Init();
 
@@ -80,20 +87,25 @@ class COMPONENT_EXPORT(EVDEV) EventFactoryEvdev : public DeviceEventObserver,
 
   // Device lifecycle events.
   void DispatchKeyboardDevicesUpdated(
-      const std::vector<InputDevice>& devices,
+      const std::vector<KeyboardDevice>& devices,
       base::flat_map<int, std::vector<uint64_t>> key_bits_mapping);
   void DispatchTouchscreenDevicesUpdated(
       const std::vector<TouchscreenDevice>& devices);
   void DispatchMouseDevicesUpdated(const std::vector<InputDevice>& devices,
-                                   bool has_mouse,
-                                   bool has_pointing_stick);
-  void DispatchTouchpadDevicesUpdated(const std::vector<InputDevice>& devices,
-                                      bool has_haptic_touchpad);
+                                   bool has_mouse);
+  void DispatchPointingStickDevicesUpdated(
+      const std::vector<InputDevice>& devices);
+  void DispatchTouchpadDevicesUpdated(
+      const std::vector<TouchpadDevice>& devices,
+      bool has_haptic_touchpad);
+  void DispatchGraphicsTabletDevicesUpdated(
+      const std::vector<InputDevice>& devices);
   void DispatchUncategorizedDevicesUpdated(
       const std::vector<InputDevice>& devices);
   void DispatchDeviceListsComplete();
   void DispatchStylusStateChanged(StylusState stylus_state);
   void DispatchMicrophoneMuteSwitchValueChanged(bool muted);
+  void DispatchAnyKeysPressedUpdated(bool any);
 
   // Gamepad event and gamepad device event. These events are dispatched to
   // GamepadObserver through GamepadProviderOzone.
@@ -163,6 +175,8 @@ class COMPONENT_EXPORT(EVDEV) EventFactoryEvdev : public DeviceEventObserver,
 
   // Touch event id generator.
   SequentialIDGenerator touch_id_generator_;
+
+  scoped_refptr<base::SingleThreadTaskRunner> user_input_task_runner_;
 
   // Support weak pointers for attach & detach callbacks.
   base::WeakPtrFactory<EventFactoryEvdev> weak_ptr_factory_{this};

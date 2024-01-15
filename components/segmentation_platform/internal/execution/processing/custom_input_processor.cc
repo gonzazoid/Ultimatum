@@ -4,13 +4,20 @@
 
 #include "components/segmentation_platform/internal/execution/processing/custom_input_processor.h"
 
+#include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/system/sys_info.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/segmentation_platform/internal/database/ukm_types.h"
 #include "components/segmentation_platform/internal/execution/processing/feature_processor_state.h"
+#include "components/segmentation_platform/internal/execution/processing/processing_utils.h"
 #include "components/segmentation_platform/internal/metadata/metadata_utils.h"
 #include "components/segmentation_platform/public/input_delegate.h"
 #include "components/segmentation_platform/public/proto/model_metadata.pb.h"
+
+#if BUILDFLAG(IS_ANDROID)
+#include "components/segmentation_platform/internal/android/execution/processing/custom_device_utils.h"
+#endif  // BUILDFLAG(IS_ANDROID)
 
 namespace segmentation_platform::processing {
 
@@ -57,18 +64,18 @@ CustomInputProcessor::CustomInputProcessor(
 CustomInputProcessor::~CustomInputProcessor() = default;
 
 void CustomInputProcessor::Process(
-    std::unique_ptr<FeatureProcessorState> feature_processor_state,
+    FeatureProcessorState& feature_processor_state,
     QueryProcessorCallback callback) {
   auto result = std::make_unique<base::flat_map<FeatureIndex, Tensor>>();
   ProcessIndexType<FeatureIndex>(std::move(custom_inputs_),
-                                 std::move(feature_processor_state),
-                                 std::move(result), std::move(callback));
+                                 feature_processor_state, std::move(result),
+                                 std::move(callback));
 }
 
 template <typename IndexType>
 void CustomInputProcessor::ProcessIndexType(
     base::flat_map<IndexType, proto::CustomInput> custom_inputs,
-    std::unique_ptr<FeatureProcessorState> feature_processor_state,
+    FeatureProcessorState& feature_processor_state,
     std::unique_ptr<base::flat_map<IndexType, Tensor>> result,
     TemplateCallback<IndexType> callback) {
   bool success = true;
@@ -88,13 +95,12 @@ void CustomInputProcessor::ProcessIndexType(
       // If a delegate is available then use it to process the input. All the
       // state in this method is moved, so it is ok even if the client ran the
       // callback without posting it.
-      const FeatureProcessorState& state = *feature_processor_state;
       input_delegate->Process(
-          custom_input, state,
+          custom_input, feature_processor_state,
           base::BindOnce(
               &CustomInputProcessor::OnGotProcessedValue<IndexType>,
               weak_ptr_factory_.GetWeakPtr(), std::move(custom_inputs),
-              std::move(feature_processor_state), std::move(result),
+              feature_processor_state.GetWeakPtr(), std::move(result),
               std::move(callback), index, custom_input.tensor_length()));
       return;
     }
@@ -107,27 +113,25 @@ void CustomInputProcessor::ProcessIndexType(
       success = false;
     } else {
       (*result)[index] =
-          ProcessSingleCustomInput(custom_input, feature_processor_state.get());
+          ProcessSingleCustomInput(custom_input, feature_processor_state);
     }
   }
 
   // Processing of the feature list has completed.
   DCHECK(custom_inputs.empty());
-  if (!success || feature_processor_state->error()) {
+  if (!success || feature_processor_state.error()) {
     result->clear();
-    feature_processor_state->SetError(
+    feature_processor_state.SetError(
         stats::FeatureProcessingError::kCustomInputError);
   }
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE,
-      base::BindOnce(std::move(callback), std::move(feature_processor_state),
-                     std::move(*result)));
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback), std::move(*result)));
 }
 
 template <typename IndexType>
 void CustomInputProcessor::OnGotProcessedValue(
     base::flat_map<IndexType, proto::CustomInput> custom_inputs,
-    std::unique_ptr<FeatureProcessorState> feature_processor_state,
+    base::WeakPtr<FeatureProcessorState> feature_processor_state,
     std::unique_ptr<base::flat_map<IndexType, Tensor>> result,
     TemplateCallback<IndexType> callback,
     IndexType current_index,
@@ -142,20 +146,20 @@ void CustomInputProcessor::OnGotProcessedValue(
   }
   (*result)[current_index] = std::move(current_value);
   ProcessIndexType<IndexType>(std::move(custom_inputs),
-                              std::move(feature_processor_state),
-                              std::move(result), std::move(callback));
+                              *feature_processor_state, std::move(result),
+                              std::move(callback));
 }
 
 using SqlCustomInputIndex = std::pair<int, int>;
 template void CustomInputProcessor::ProcessIndexType(
     base::flat_map<SqlCustomInputIndex, proto::CustomInput> custom_inputs,
-    std::unique_ptr<FeatureProcessorState> feature_processor_state,
+    FeatureProcessorState& feature_processor_state,
     std::unique_ptr<base::flat_map<SqlCustomInputIndex, Tensor>> result,
     TemplateCallback<std::pair<int, int>> callback);
 
 template void CustomInputProcessor::OnGotProcessedValue(
     base::flat_map<SqlCustomInputIndex, proto::CustomInput> custom_inputs,
-    std::unique_ptr<FeatureProcessorState> feature_processor_state,
+    base::WeakPtr<FeatureProcessorState> feature_processor_state,
     std::unique_ptr<base::flat_map<SqlCustomInputIndex, Tensor>> result,
     TemplateCallback<SqlCustomInputIndex> callback,
     SqlCustomInputIndex current_index,
@@ -165,7 +169,7 @@ template void CustomInputProcessor::OnGotProcessedValue(
 
 QueryProcessor::Tensor CustomInputProcessor::ProcessSingleCustomInput(
     const proto::CustomInput& custom_input,
-    FeatureProcessorState* feature_processor_state) {
+    FeatureProcessorState& feature_processor_state) {
   std::vector<ProcessedValue> tensor_result;
   if (custom_input.fill_policy() == proto::CustomInput::UNKNOWN_FILL_POLICY) {
     // When parsing a CustomInput object, if the fill policy is not
@@ -179,24 +183,47 @@ QueryProcessor::Tensor CustomInputProcessor::ProcessSingleCustomInput(
   } else if (custom_input.fill_policy() ==
              proto::CustomInput::FILL_PREDICTION_TIME) {
     if (!AddPredictionTime(custom_input, tensor_result))
-      feature_processor_state->SetError(
+      feature_processor_state.SetError(
           stats::FeatureProcessingError::kCustomInputError);
   } else if (custom_input.fill_policy() ==
              proto::CustomInput::TIME_RANGE_BEFORE_PREDICTION) {
     if (!AddTimeRangeBeforePrediction(custom_input, tensor_result))
-      feature_processor_state->SetError(
+      feature_processor_state.SetError(
           stats::FeatureProcessingError::kCustomInputError);
   } else if (custom_input.fill_policy() ==
              proto::CustomInput::FILL_FROM_INPUT_CONTEXT) {
     if (!AddFromInputContext(custom_input, feature_processor_state,
                              tensor_result))
-      feature_processor_state->SetError(
+      feature_processor_state.SetError(
           stats::FeatureProcessingError::kCustomInputError);
   } else if (custom_input.fill_policy() ==
+             proto::CustomInput::FILL_DEVICE_RAM_MB) {
+    if (!AddDeviceRAMInMB(custom_input, tensor_result)) {
+      feature_processor_state.SetError(
+          stats::FeatureProcessingError::kCustomInputError);
+    }
+  } else if (custom_input.fill_policy() ==
+             proto::CustomInput::FILL_DEVICE_OS_VERSION_NUMBER) {
+    if (!AddDeviceOSVersionNumber(custom_input, tensor_result)) {
+      feature_processor_state.SetError(
+          stats::FeatureProcessingError::kCustomInputError);
+    }
+  } else if (custom_input.fill_policy() ==
+             proto::CustomInput::FILL_DEVICE_PPI) {
+    if (!AddDevicePPI(custom_input, tensor_result)) {
+      feature_processor_state.SetError(
+          stats::FeatureProcessingError::kCustomInputError);
+    }
+  } else if (custom_input.fill_policy() ==
              proto::CustomInput::PRICE_TRACKING_HINTS) {
-    feature_processor_state->SetError(
+    feature_processor_state.SetError(
         stats::FeatureProcessingError::kCustomInputError);
     NOTREACHED() << "InputDelegate is not found";
+  } else if (custom_input.fill_policy() == proto::CustomInput::FILL_RANDOM) {
+    if (!AddRandom(custom_input, tensor_result)) {
+      feature_processor_state.SetError(
+          stats::FeatureProcessingError::kCustomInputError);
+    }
   }
 
   return tensor_result;
@@ -204,24 +231,33 @@ QueryProcessor::Tensor CustomInputProcessor::ProcessSingleCustomInput(
 
 bool CustomInputProcessor::AddFromInputContext(
     const proto::CustomInput& custom_input,
-    FeatureProcessorState* feature_processor_state,
+    FeatureProcessorState& feature_processor_state,
     std::vector<ProcessedValue>& out_tensor) {
   if (custom_input.tensor_length() != 1) {
     return false;
   }
-  const auto& input_context = feature_processor_state->input_context();
+  scoped_refptr<InputContext> input_context =
+      feature_processor_state.input_context();
+  std::string input_name = custom_input.name();
   auto custom_input_iter = custom_input.additional_args().find("name");
-  if (custom_input_iter == custom_input.additional_args().end()) {
+  if (custom_input_iter != custom_input.additional_args().end()) {
+    input_name = custom_input_iter->second;
+  }
+
+  absl::optional<processing::ProcessedValue> input_context_value;
+  if (input_context) {
+    input_context_value = input_context->GetMetadataArgument(input_name);
+  }
+
+  if (!input_context || !input_context_value.has_value()) {
+    feature_processor_state.SetError(
+        stats::FeatureProcessingError::kCustomInputError,
+        "The model expects an input '" + input_name +
+            "' which wasn't found in the input context.");
     return false;
   }
 
-  auto input_context_iter =
-      input_context->metadata_args.find(custom_input_iter->second);
-  if (input_context_iter == input_context->metadata_args.end()) {
-    return false;
-  }
-
-  out_tensor.emplace_back(input_context_iter->second);
+  out_tensor.emplace_back(input_context_value.value());
   return true;
 }
 
@@ -257,4 +293,50 @@ bool CustomInputProcessor::AddTimeRangeBeforePrediction(
   return true;
 }
 
+bool CustomInputProcessor::AddDeviceRAMInMB(
+    const proto::CustomInput& custom_input,
+    std::vector<ProcessedValue>& out_tensor) {
+  if (custom_input.tensor_length() != 1) {
+    return false;
+  }
+  float device_ram_in_mb = base::SysInfo::AmountOfPhysicalMemoryMB();
+  out_tensor.emplace_back(device_ram_in_mb);
+  return true;
+}
+
+bool CustomInputProcessor::AddDeviceOSVersionNumber(
+    const proto::CustomInput& custom_input,
+    std::vector<ProcessedValue>& out_tensor) {
+  if (custom_input.tensor_length() != 1) {
+    return false;
+  }
+  std::string os_version = base::SysInfo::OperatingSystemVersion();
+  float device_os_version = processing::ProcessOsVersionString(os_version);
+  out_tensor.emplace_back(device_os_version);
+  return true;
+}
+
+bool CustomInputProcessor::AddDevicePPI(
+    const proto::CustomInput& custom_input,
+    std::vector<ProcessedValue>& out_tensor) {
+  if (custom_input.tensor_length() != 1) {
+    return false;
+  }
+#if BUILDFLAG(IS_ANDROID)
+  float device_ppi = CustomDeviceUtils::GetDevicePPI();
+  out_tensor.emplace_back(device_ppi);
+  return true;
+#else
+  return false;
+#endif  // BUILDFLAG(IS_ANDROID)
+}
+
+bool CustomInputProcessor::AddRandom(const proto::CustomInput& custom_input,
+                                     std::vector<ProcessedValue>& out_tensor) {
+  if (custom_input.tensor_length() != 1) {
+    return false;
+  }
+  out_tensor.emplace_back(base::RandFloat());
+  return true;
+}
 }  // namespace segmentation_platform::processing

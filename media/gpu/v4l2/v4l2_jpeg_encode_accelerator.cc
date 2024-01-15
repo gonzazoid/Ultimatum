@@ -9,15 +9,16 @@
 #include <string.h>
 #include <sys/mman.h>
 
+#include <algorithm>
 #include <memory>
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "media/base/bind_to_current_loop.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/task/thread_pool.h"
 #include "media/gpu/chromeos/fourcc.h"
 #include "media/gpu/chromeos/platform_video_frame_utils.h"
 #include "media/gpu/macros.h"
@@ -91,7 +92,7 @@ V4L2JpegEncodeAccelerator::JobRecord::JobRecord(
 
 V4L2JpegEncodeAccelerator::JobRecord::~JobRecord() {}
 
-V4L2JpegEncodeAccelerator::EncodedInstance::EncodedInstance(
+V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::EncodedInstanceDmaBuf(
     V4L2JpegEncodeAccelerator* parent)
     : parent_(parent),
       input_streamon_(false),
@@ -100,10 +101,10 @@ V4L2JpegEncodeAccelerator::EncodedInstance::EncodedInstance(
       input_buffer_num_planes_(0),
       output_buffer_pixelformat_(0) {}
 
-V4L2JpegEncodeAccelerator::EncodedInstance::~EncodedInstance() {}
+V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::~EncodedInstanceDmaBuf() {}
 
-void V4L2JpegEncodeAccelerator::EncodedInstance::DestroyTask() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
+void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::DestroyTask() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_->encoder_sequence_);
   while (!input_job_queue_.empty())
     input_job_queue_.pop();
   while (!running_job_queue_.empty())
@@ -113,15 +114,11 @@ void V4L2JpegEncodeAccelerator::EncodedInstance::DestroyTask() {
   DestroyOutputBuffers();
 }
 
-bool V4L2JpegEncodeAccelerator::EncodedInstance::Initialize() {
-  device_ = V4L2Device::Create();
-
-  if (!device_) {
-    VLOGF(1) << "Failed to Create V4L2Device";
-    return false;
-  }
-
-  output_buffer_pixelformat_ = V4L2_PIX_FMT_JPEG_RAW;
+bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::Initialize() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_->encoder_sequence_);
+  device_ = base::MakeRefCounted<V4L2Device>();
+  gpu_memory_buffer_support_ = std::make_unique<gpu::GpuMemoryBufferSupport>();
+  output_buffer_pixelformat_ = V4L2_PIX_FMT_JPEG;
   if (!device_->Open(V4L2Device::Type::kJpegEncoder,
                      output_buffer_pixelformat_)) {
     VLOGF(1) << "Failed to open device";
@@ -145,1001 +142,10 @@ bool V4L2JpegEncodeAccelerator::EncodedInstance::Initialize() {
   return true;
 }
 
-// static
-void V4L2JpegEncodeAccelerator::EncodedInstance::FillQuantizationTable(
-    int quality,
-    const uint8_t* basic_table,
-    uint8_t* dst_table) {
-  unsigned int temp;
-
-  if (quality < 50)
-    quality = 5000 / quality;
-  else
-    quality = 200 - quality * 2;
-
-  for (size_t i = 0; i < kDctSize; i++) {
-    temp = ((unsigned int)basic_table[kZigZag8x8[i]] * quality + 50) / 100;
-    /* limit the values to the valid range */
-    dst_table[i] = base::clamp(temp, 1u, 255u);
-  }
-}
-
-void V4L2JpegEncodeAccelerator::EncodedInstance::PrepareJpegMarkers(
-    gfx::Size coded_size) {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
-  // Quantization Tables.
-  // i = 0 for Luminance
-  // i = 1 for Chrominance
-  const int kNumDQT = 2;
-  for (size_t i = 0; i < kNumDQT; ++i) {
-    const uint8_t kQuantSegment[] = {
-        0xFF, JPEG_DQT, 0x00,
-        0x03 + kDctSize,         // Segment length:67 (2-byte).
-        static_cast<uint8_t>(i)  // Precision (4-bit high) = 0,
-                                 // Index (4-bit low) = i.
-    };
-    for (size_t j = 0; j < sizeof(kQuantSegment); ++j) {
-      jpeg_markers_.push_back(kQuantSegment[j]);
-    }
-
-    for (size_t j = 0; j < kDctSize; ++j) {
-      jpeg_markers_.push_back(quantization_table_[i].value[j]);
-    }
-  }
-
-  // Start of Frame - Baseline.
-  const int kNumOfComponents = 3;
-  const uint8_t kStartOfFrame[] = {
-      0xFF,
-      JPEG_SOF0,  // Baseline.
-      0x00,
-      0x11,  // Segment length:17 (2-byte).
-      8,     // Data precision.
-      static_cast<uint8_t>((coded_size.height() >> 8) & 0xFF),
-      static_cast<uint8_t>(coded_size.height() & 0xFF),
-      static_cast<uint8_t>((coded_size.width() >> 8) & 0xFF),
-      static_cast<uint8_t>(coded_size.width() & 0xFF),
-      kNumOfComponents,
-  };
-  for (size_t i = 0; i < sizeof(kStartOfFrame); ++i) {
-    jpeg_markers_.push_back(kStartOfFrame[i]);
-  }
-  // i = 0 for Y Plane
-  // i = 1 for U Plane
-  // i = 2 for V Plane
-  for (size_t i = 0; i < kNumOfComponents; ++i) {
-    // These are the values for U and V planes.
-    uint8_t h_sample_factor = 1;
-    uint8_t v_sample_factor = 1;
-    uint8_t quant_table_number = 1;
-    if (!i) {
-      // These are the values for Y plane.
-      h_sample_factor = 2;
-      v_sample_factor = 2;
-      quant_table_number = 0;
-    }
-
-    jpeg_markers_.push_back(i + 1);
-    // Horizontal Sample Factor (4-bit high),
-    // Vertical Sample Factor (4-bit low).
-    jpeg_markers_.push_back((h_sample_factor << 4) | v_sample_factor);
-    jpeg_markers_.push_back(quant_table_number);
-  }
-
-  // Huffman Tables.
-  static const uint8_t kDcSegment[] = {
-      0xFF, JPEG_DHT, 0x00,
-      0x1F,  // Segment length:31 (2-byte).
-  };
-  static const uint8_t kAcSegment[] = {
-      0xFF, JPEG_DHT, 0x00,
-      0xB5,  // Segment length:181 (2-byte).
-  };
-
-  // i = 0 for Luminance
-  // i = 1 for Chrominance
-  const int kNumHuffmanTables = 2;
-  for (size_t i = 0; i < kNumHuffmanTables; ++i) {
-    // DC Table.
-    for (size_t j = 0; j < sizeof(kDcSegment); ++j) {
-      jpeg_markers_.push_back(kDcSegment[j]);
-    }
-
-    // Type (4-bit high) = 0:DC, Index (4-bit low).
-    jpeg_markers_.push_back(static_cast<uint8_t>(i));
-
-    const JpegHuffmanTable& dcTable = kDefaultDcTable[i];
-    for (size_t j = 0; j < kNumDcRunSizeBits; ++j)
-      jpeg_markers_.push_back(dcTable.code_length[j]);
-    for (size_t j = 0; j < kNumDcCodeWordsHuffVal; ++j)
-      jpeg_markers_.push_back(dcTable.code_value[j]);
-
-    // AC Table.
-    for (size_t j = 0; j < sizeof(kAcSegment); ++j) {
-      jpeg_markers_.push_back(kAcSegment[j]);
-    }
-
-    // Type (4-bit high) = 1:AC, Index (4-bit low).
-    jpeg_markers_.push_back(0x10 | static_cast<uint8_t>(i));
-
-    const JpegHuffmanTable& acTable = kDefaultAcTable[i];
-    for (size_t j = 0; j < kNumAcRunSizeBits; ++j)
-      jpeg_markers_.push_back(acTable.code_length[j]);
-    for (size_t j = 0; j < kNumAcCodeWordsHuffVal; ++j)
-      jpeg_markers_.push_back(acTable.code_value[j]);
-  }
-
-  // Start of Scan.
-  static const uint8_t kStartOfScan[] = {
-      0xFF, JPEG_SOS, 0x00,
-      0x0C,  // Segment Length:12 (2-byte).
-      0x03   // Number of components in scan.
-  };
-  for (size_t i = 0; i < sizeof(kStartOfScan); ++i) {
-    jpeg_markers_.push_back(kStartOfScan[i]);
-  }
-
-  // i = 0 for Y Plane
-  // i = 1 for U Plane
-  // i = 2 for V Plane
-  for (uint8_t i = 0; i < kNumOfComponents; ++i) {
-    uint8_t dc_table_number = 1;
-    uint8_t ac_table_number = 1;
-    if (!i) {
-      dc_table_number = 0;
-      ac_table_number = 0;
-    }
-
-    jpeg_markers_.push_back(i + 1);
-    // DC Table Selector (4-bit high), AC Table Selector (4-bit low).
-    jpeg_markers_.push_back((dc_table_number << 4) | ac_table_number);
-  }
-  jpeg_markers_.push_back(0x00);  // 0 for Baseline.
-  jpeg_markers_.push_back(0x3F);  // 63 for Baseline.
-  jpeg_markers_.push_back(0x00);  // 0 for Baseline.
-}
-
-bool V4L2JpegEncodeAccelerator::EncodedInstance::SetUpJpegParameters(
-    int quality,
-    gfx::Size coded_size) {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
-
-  struct v4l2_ext_controls ctrls;
-  struct v4l2_ext_control ctrl;
-
-  memset(&ctrls, 0, sizeof(ctrls));
-  memset(&ctrl, 0, sizeof(ctrl));
-
-  ctrls.ctrl_class = V4L2_CTRL_CLASS_JPEG;
-  ctrls.controls = &ctrl;
-  ctrls.count = 1;
-
-  switch (output_buffer_pixelformat_) {
-    case V4L2_PIX_FMT_JPEG_RAW:
-      FillQuantizationTable(quality, kDefaultQuantTable[0].value,
-                            quantization_table_[0].value);
-      FillQuantizationTable(quality, kDefaultQuantTable[1].value,
-                            quantization_table_[1].value);
-
-      ctrl.id = V4L2_CID_JPEG_LUMA_QUANTIZATION;
-      ctrl.size = kDctSize;
-      ctrl.ptr = quantization_table_[0].value;
-      IOCTL_OR_ERROR_RETURN_FALSE(VIDIOC_S_EXT_CTRLS, &ctrls);
-
-      ctrl.id = V4L2_CID_JPEG_CHROMA_QUANTIZATION;
-      ctrl.size = kDctSize;
-      ctrl.ptr = quantization_table_[1].value;
-      IOCTL_OR_ERROR_RETURN_FALSE(VIDIOC_S_EXT_CTRLS, &ctrls);
-
-      // We need to prepare our own JPEG Markers.
-      PrepareJpegMarkers(coded_size);
-      break;
-
-    default:
-      NOTREACHED();
-  }
-
-  return true;
-}
-
-size_t V4L2JpegEncodeAccelerator::EncodedInstance::InputBufferQueuedCount() {
-  return input_buffer_map_.size() - free_input_buffers_.size();
-}
-
-size_t V4L2JpegEncodeAccelerator::EncodedInstance::OutputBufferQueuedCount() {
-  return output_buffer_map_.size() - free_output_buffers_.size();
-}
-
-bool V4L2JpegEncodeAccelerator::EncodedInstance::CreateBuffers(
-    gfx::Size coded_size,
-    size_t output_buffer_size) {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
-
-  // The order of set output/input formats matters.
-  // rk3399 reset input format when we set output format.
-  if (!SetOutputBufferFormat(coded_size, output_buffer_size)) {
-    return false;
-  }
-
-  if (!SetInputBufferFormat(coded_size)) {
-    return false;
-  }
-
-  if (!RequestInputBuffers()) {
-    return false;
-  }
-
-  if (!RequestOutputBuffers()) {
-    return false;
-  }
-
-  return true;
-}
-
-bool V4L2JpegEncodeAccelerator::EncodedInstance::SetInputBufferFormat(
-    gfx::Size coded_size) {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
-  DCHECK(!input_streamon_);
-  DCHECK(input_job_queue_.empty());
-
-  constexpr uint32_t input_pix_fmt_candidates[] = {
-      V4L2_PIX_FMT_YUV420M,
-      V4L2_PIX_FMT_YUV420,
-  };
-
-  struct v4l2_format format;
-  input_buffer_pixelformat_ = 0;
-  for (const auto input_pix_fmt : input_pix_fmt_candidates) {
-    DCHECK_EQ(Fourcc::FromV4L2PixFmt(input_pix_fmt)->ToVideoPixelFormat(),
-              PIXEL_FORMAT_I420);
-    memset(&format, 0, sizeof(format));
-    format.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-    format.fmt.pix_mp.num_planes = kMaxI420Plane;
-    format.fmt.pix_mp.pixelformat = input_pix_fmt;
-    format.fmt.pix_mp.field = V4L2_FIELD_ANY;
-    format.fmt.pix_mp.width = coded_size.width();
-    format.fmt.pix_mp.height = coded_size.height();
-
-    if (device_->Ioctl(VIDIOC_S_FMT, &format) == 0 &&
-        format.fmt.pix_mp.pixelformat == input_pix_fmt) {
-      // Save V4L2 returned values.
-      input_buffer_pixelformat_ = format.fmt.pix_mp.pixelformat;
-      input_buffer_num_planes_ = format.fmt.pix_mp.num_planes;
-      input_buffer_height_ = format.fmt.pix_mp.height;
-      break;
-    }
-  }
-
-  if (input_buffer_pixelformat_ == 0) {
-    VLOGF(1) << "Neither YUV420 nor YUV420M is supported.";
-    return false;
-  }
-
-  if (format.fmt.pix_mp.width != static_cast<uint32_t>(coded_size.width()) ||
-      format.fmt.pix_mp.height != static_cast<uint32_t>(coded_size.height())) {
-    VLOGF(1) << "Width " << coded_size.width() << "->"
-             << format.fmt.pix_mp.width << ",Height " << coded_size.height()
-             << "->" << format.fmt.pix_mp.height;
-    return false;
-  }
-  for (int i = 0; i < format.fmt.pix_mp.num_planes; i++) {
-    bytes_per_line_[i] = format.fmt.pix_mp.plane_fmt[i].bytesperline;
-    VLOGF(3) << "Bytes Per Line:" << bytes_per_line_[i];
-  }
-
-  return true;
-}
-
-bool V4L2JpegEncodeAccelerator::EncodedInstance::SetOutputBufferFormat(
-    gfx::Size coded_size,
-    size_t buffer_size) {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
-  DCHECK(!output_streamon_);
-  DCHECK(running_job_queue_.empty());
-
-  struct v4l2_format format;
-  memset(&format, 0, sizeof(format));
-  format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-  format.fmt.pix_mp.num_planes = kMaxJpegPlane;
-  format.fmt.pix_mp.pixelformat = output_buffer_pixelformat_;
-  format.fmt.pix_mp.field = V4L2_FIELD_ANY;
-  format.fmt.pix_mp.plane_fmt[0].sizeimage = buffer_size;
-  format.fmt.pix_mp.width = coded_size.width();
-  format.fmt.pix_mp.height = coded_size.height();
-  IOCTL_OR_ERROR_RETURN_FALSE(VIDIOC_S_FMT, &format);
-  DCHECK_EQ(format.fmt.pix_mp.pixelformat, output_buffer_pixelformat_);
-
-  return true;
-}
-
-bool V4L2JpegEncodeAccelerator::EncodedInstance::RequestInputBuffers() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
-  struct v4l2_format format;
-  memset(&format, 0, sizeof(format));
-  format.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-  format.fmt.pix_mp.pixelformat = input_buffer_pixelformat_;
-  IOCTL_OR_ERROR_RETURN_FALSE(VIDIOC_G_FMT, &format);
-
-  struct v4l2_requestbuffers reqbufs;
-  memset(&reqbufs, 0, sizeof(reqbufs));
-  reqbufs.count = kBufferCount;
-  reqbufs.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-  reqbufs.memory = V4L2_MEMORY_MMAP;
-  IOCTL_OR_ERROR_RETURN_FALSE(VIDIOC_REQBUFS, &reqbufs);
-
-  DCHECK(input_buffer_map_.empty());
-  input_buffer_map_.resize(reqbufs.count);
-
-  for (size_t i = 0; i < input_buffer_map_.size(); ++i) {
-    free_input_buffers_.push_back(i);
-
-    struct v4l2_buffer buffer;
-    struct v4l2_plane planes[kMaxI420Plane];
-    memset(&buffer, 0, sizeof(buffer));
-    memset(planes, 0, sizeof(planes));
-    buffer.index = i;
-    buffer.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-    buffer.memory = V4L2_MEMORY_MMAP;
-    buffer.m.planes = planes;
-    buffer.length = std::size(planes);
-    IOCTL_OR_ERROR_RETURN_FALSE(VIDIOC_QUERYBUF, &buffer);
-
-    if (input_buffer_num_planes_ != buffer.length) {
-      return false;
-    }
-    for (size_t j = 0; j < buffer.length; ++j) {
-      if (base::checked_cast<int64_t>(planes[j].length) <
-          VideoFrame::PlaneSize(
-              PIXEL_FORMAT_I420, j,
-              gfx::Size(format.fmt.pix_mp.width, format.fmt.pix_mp.height))
-              .GetArea()) {
-        return false;
-      }
-      void* address =
-          device_->Mmap(NULL, planes[j].length, PROT_READ | PROT_WRITE,
-                        MAP_SHARED, planes[j].m.mem_offset);
-      if (address == MAP_FAILED) {
-        VPLOGF(1) << "mmap() failed";
-        return false;
-      }
-      input_buffer_map_[i].address[j] = address;
-      input_buffer_map_[i].length[j] = planes[j].length;
-    }
-  }
-
-  return true;
-}
-
-bool V4L2JpegEncodeAccelerator::EncodedInstance::RequestOutputBuffers() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
-  struct v4l2_requestbuffers reqbufs;
-  memset(&reqbufs, 0, sizeof(reqbufs));
-  reqbufs.count = kBufferCount;
-  reqbufs.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-  reqbufs.memory = V4L2_MEMORY_MMAP;
-  IOCTL_OR_ERROR_RETURN_FALSE(VIDIOC_REQBUFS, &reqbufs);
-
-  DCHECK(output_buffer_map_.empty());
-  output_buffer_map_.resize(reqbufs.count);
-
-  for (size_t i = 0; i < output_buffer_map_.size(); ++i) {
-    free_output_buffers_.push_back(i);
-
-    struct v4l2_buffer buffer;
-    struct v4l2_plane planes[kMaxJpegPlane];
-    memset(&buffer, 0, sizeof(buffer));
-    memset(planes, 0, sizeof(planes));
-    buffer.index = i;
-    buffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-    buffer.m.planes = planes;
-    buffer.length = std::size(planes);
-    buffer.memory = V4L2_MEMORY_MMAP;
-    IOCTL_OR_ERROR_RETURN_FALSE(VIDIOC_QUERYBUF, &buffer);
-    if (buffer.length != kMaxJpegPlane) {
-      return false;
-    }
-    void* address =
-        device_->Mmap(NULL, planes[0].length, PROT_READ | PROT_WRITE,
-                      MAP_SHARED, planes[0].m.mem_offset);
-    if (address == MAP_FAILED) {
-      VPLOGF(1) << "mmap() failed";
-      return false;
-    }
-    output_buffer_map_[i].address[0] = address;
-    output_buffer_map_[i].length[0] = planes[0].length;
-  }
-
-  return true;
-}
-
-void V4L2JpegEncodeAccelerator::EncodedInstance::DestroyInputBuffers() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
-  free_input_buffers_.clear();
-
-  if (input_buffer_map_.empty())
-    return;
-
-  if (input_streamon_) {
-    __u32 type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-    IOCTL_OR_ERROR_RETURN(VIDIOC_STREAMOFF, &type);
-    input_streamon_ = false;
-  }
-
-  for (const auto& [address, length, at_device] : input_buffer_map_) {
-    for (size_t i = 0; i < input_buffer_num_planes_; ++i) {
-      device_->Munmap(address[i], length[i]);
-    }
-  }
-
-  struct v4l2_requestbuffers reqbufs;
-  memset(&reqbufs, 0, sizeof(reqbufs));
-  reqbufs.count = 0;
-  reqbufs.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-  reqbufs.memory = V4L2_MEMORY_MMAP;
-  IOCTL_OR_LOG_ERROR(VIDIOC_REQBUFS, &reqbufs);
-
-  input_buffer_map_.clear();
-  input_buffer_num_planes_ = 0;
-}
-
-void V4L2JpegEncodeAccelerator::EncodedInstance::DestroyOutputBuffers() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
-  free_output_buffers_.clear();
-
-  if (output_buffer_map_.empty())
-    return;
-
-  if (output_streamon_) {
-    __u32 type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-    IOCTL_OR_ERROR_RETURN(VIDIOC_STREAMOFF, &type);
-    output_streamon_ = false;
-  }
-
-  for (const auto& output_record : output_buffer_map_) {
-    device_->Munmap(output_record.address[0], output_record.length[0]);
-  }
-
-  struct v4l2_requestbuffers reqbufs;
-  memset(&reqbufs, 0, sizeof(reqbufs));
-  reqbufs.count = 0;
-  reqbufs.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-  reqbufs.memory = V4L2_MEMORY_MMAP;
-  IOCTL_OR_LOG_ERROR(VIDIOC_REQBUFS, &reqbufs);
-
-  output_buffer_map_.clear();
-}
-
-void V4L2JpegEncodeAccelerator::EncodedInstance::ServiceDevice() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
-
-  if (!running_job_queue_.empty()) {
-    Dequeue();
-  }
-
-  EnqueueInput();
-  EnqueueOutput();
-
-  DVLOGF(3) << "buffer counts: INPUT[" << input_job_queue_.size()
-            << "] => DEVICE[" << free_input_buffers_.size() << "/"
-            << input_buffer_map_.size() << "->" << free_output_buffers_.size()
-            << "/" << output_buffer_map_.size() << "]";
-}
-
-void V4L2JpegEncodeAccelerator::EncodedInstance::EnqueueInput() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
-  while (!input_job_queue_.empty() && !free_input_buffers_.empty()) {
-    if (!EnqueueInputRecord())
-      return;
-  }
-
-  if (!input_streamon_ && InputBufferQueuedCount()) {
-    __u32 type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-    IOCTL_OR_ERROR_RETURN(VIDIOC_STREAMON, &type);
-    input_streamon_ = true;
-  }
-}
-
-void V4L2JpegEncodeAccelerator::EncodedInstance::EnqueueOutput() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
-  while (running_job_queue_.size() > OutputBufferQueuedCount() &&
-         !free_output_buffers_.empty()) {
-    if (!EnqueueOutputRecord())
-      return;
-  }
-
-  if (!output_streamon_ && OutputBufferQueuedCount()) {
-    __u32 type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-    IOCTL_OR_ERROR_RETURN(VIDIOC_STREAMON, &type);
-    output_streamon_ = true;
-  }
-}
-
-bool V4L2JpegEncodeAccelerator::EncodedInstance::EnqueueInputRecord() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
-  DCHECK(!input_job_queue_.empty());
-  DCHECK(!free_input_buffers_.empty());
-
-  // Enqueue an input (VIDEO_OUTPUT) buffer for an input video frame.
-  std::unique_ptr<JobRecord> job_record = std::move(input_job_queue_.front());
-  input_job_queue_.pop();
-  const int index = free_input_buffers_.back();
-  I420BufferRecord& input_record = input_buffer_map_[index];
-  DCHECK(!input_record.at_device);
-
-  // Copy image from user memory to MMAP memory.
-  const uint8_t* src_y = job_record->input_frame->data(VideoFrame::kYPlane);
-  const uint8_t* src_u = job_record->input_frame->data(VideoFrame::kUPlane);
-  const uint8_t* src_v = job_record->input_frame->data(VideoFrame::kVPlane);
-  size_t src_y_stride = job_record->input_frame->stride(VideoFrame::kYPlane);
-  size_t src_u_stride = job_record->input_frame->stride(VideoFrame::kUPlane);
-  size_t src_v_stride = job_record->input_frame->stride(VideoFrame::kVPlane);
-
-  size_t input_coded_width = job_record->input_frame->coded_size().width();
-  size_t input_coded_height = job_record->input_frame->coded_size().height();
-
-  size_t dst_y_stride = bytes_per_line_[0];
-  size_t dst_u_stride;
-  size_t dst_v_stride;
-
-  uint8_t* dst_y = static_cast<uint8_t*>(input_record.address[0]);
-  uint8_t* dst_u;
-  uint8_t* dst_v;
-
-  if (input_buffer_num_planes_ == 1) {
-    dst_u_stride = dst_y_stride / 2;
-    dst_v_stride = dst_y_stride / 2;
-    dst_u = dst_y + dst_y_stride * input_buffer_height_;
-    dst_v = dst_u + dst_u_stride * input_buffer_height_ / 2;
-  } else {
-    DCHECK(input_buffer_num_planes_ == 3);
-
-    dst_u_stride = bytes_per_line_[1];
-    dst_v_stride = bytes_per_line_[2];
-
-    dst_u = static_cast<uint8_t*>(input_record.address[1]);
-    dst_v = static_cast<uint8_t*>(input_record.address[2]);
-  }
-
-  if (libyuv::I420Copy(src_y, src_y_stride, src_u, src_u_stride, src_v,
-                       src_v_stride, dst_y, dst_y_stride, dst_u, dst_u_stride,
-                       dst_v, dst_v_stride, input_coded_width,
-                       input_coded_height)) {
-    VLOGF(1) << "I420Copy failed";
-    return false;
-  }
-
-  struct v4l2_buffer qbuf;
-  struct v4l2_plane planes[kMaxI420Plane];
-  memset(&qbuf, 0, sizeof(qbuf));
-  memset(planes, 0, sizeof(planes));
-  qbuf.index = index;
-  qbuf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-  qbuf.memory = V4L2_MEMORY_MMAP;
-  qbuf.length = std::size(planes);
-  for (size_t i = 0; i < input_buffer_num_planes_; i++) {
-    // sets this to 0 means the size of the plane.
-    planes[i].bytesused = 0;
-  }
-  qbuf.m.planes = planes;
-  IOCTL_OR_ERROR_RETURN_FALSE(VIDIOC_QBUF, &qbuf);
-  input_record.at_device = true;
-  running_job_queue_.push(std::move(job_record));
-  free_input_buffers_.pop_back();
-
-  DVLOGF(3) << "enqueued frame id=" << job_record->task_id << " to device.";
-  return true;
-}
-
-bool V4L2JpegEncodeAccelerator::EncodedInstance::EnqueueOutputRecord() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
-  DCHECK(!free_output_buffers_.empty());
-
-  // Enqueue an output (VIDEO_CAPTURE) buffer.
-  const int index = free_output_buffers_.back();
-  JpegBufferRecord& output_record = output_buffer_map_[index];
-  DCHECK(!output_record.at_device);
-  struct v4l2_buffer qbuf;
-  struct v4l2_plane planes[kMaxJpegPlane];
-  memset(&qbuf, 0, sizeof(qbuf));
-  memset(planes, 0, sizeof(planes));
-  qbuf.index = index;
-  qbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-  qbuf.memory = V4L2_MEMORY_MMAP;
-  qbuf.length = std::size(planes);
-  qbuf.m.planes = planes;
-  IOCTL_OR_ERROR_RETURN_FALSE(VIDIOC_QBUF, &qbuf);
-  output_record.at_device = true;
-  free_output_buffers_.pop_back();
-  return true;
-}
-
-size_t V4L2JpegEncodeAccelerator::EncodedInstance::FinalizeJpegImage(
-    uint8_t* dst_ptr,
-    const JpegBufferRecord& output_buffer,
-    size_t buffer_size,
-    base::WritableSharedMemoryMapping exif_mapping) {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
-  size_t idx;
-
-  // Fill SOI and EXIF markers.
-  dst_ptr[0] = 0xFF;
-  dst_ptr[1] = JPEG_SOI;
-  idx = 2;
-
-  if (exif_mapping.IsValid()) {
-    uint8_t* exif_buffer = exif_mapping.GetMemoryAs<uint8_t>();
-    size_t exif_buffer_size = exif_mapping.size();
-    // Application Segment for Exif data.
-    uint16_t exif_segment_size = static_cast<uint16_t>(exif_buffer_size + 2);
-    const uint8_t kAppSegment[] = {
-        0xFF, JPEG_APP1, static_cast<uint8_t>(exif_segment_size / 256),
-        static_cast<uint8_t>(exif_segment_size % 256)};
-    memcpy(dst_ptr + idx, kAppSegment, sizeof(kAppSegment));
-    idx += sizeof(kAppSegment);
-    memcpy(dst_ptr + idx, exif_buffer, exif_buffer_size);
-    idx += exif_buffer_size;
-  } else {
-    // Application Segment - JFIF standard 1.01.
-    static const uint8_t kAppSegment[] = {
-        0xFF, JPEG_APP0, 0x00,
-        0x10,  // Segment length:16 (2-byte).
-        0x4A,  // J
-        0x46,  // F
-        0x49,  // I
-        0x46,  // F
-        0x00,  // 0
-        0x01,  // Major version.
-        0x01,  // Minor version.
-        0x01,  // Density units 0:no units, 1:pixels per inch,
-               // 2: pixels per cm.
-        0x00,
-        0x48,  // X density (2-byte).
-        0x00,
-        0x48,  // Y density (2-byte).
-        0x00,  // Thumbnail width.
-        0x00   // Thumbnail height.
-    };
-    memcpy(dst_ptr + idx, kAppSegment, sizeof(kAppSegment));
-    idx += sizeof(kAppSegment);
-  }
-
-  switch (output_buffer_pixelformat_) {
-    case V4L2_PIX_FMT_JPEG_RAW:
-      // Fill the other jpeg markers for RAW JPEG.
-      memcpy(dst_ptr + idx, jpeg_markers_.data(), jpeg_markers_.size());
-      idx += jpeg_markers_.size();
-      // Fill Compressed stream.
-      memcpy(dst_ptr + idx, output_buffer.address[0], buffer_size);
-      idx += buffer_size;
-      // Fill EOI. Before Fill EOI we checked if the V4L2 device filled EOI
-      // first.
-      if (dst_ptr[idx - 2] != 0xFF && dst_ptr[idx - 1] != JPEG_EOI) {
-        dst_ptr[idx] = 0xFF;
-        dst_ptr[idx + 1] = JPEG_EOI;
-        idx += 2;
-      }
-      break;
-
-    default:
-      NOTREACHED() << "Unsupported output pixel format";
-  }
-
-  return idx;
-}
-
-void V4L2JpegEncodeAccelerator::EncodedInstance::Dequeue() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
-  // Dequeue completed input (VIDEO_OUTPUT) buffers,
-  // and recycle to the free list.
-  struct v4l2_buffer dqbuf;
-  struct v4l2_plane planes[kMaxI420Plane];
-  while (InputBufferQueuedCount() > 0) {
-    DCHECK(input_streamon_);
-    memset(&dqbuf, 0, sizeof(dqbuf));
-    memset(planes, 0, sizeof(planes));
-    dqbuf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-    dqbuf.memory = V4L2_MEMORY_MMAP;
-    dqbuf.length = std::size(planes);
-    dqbuf.m.planes = planes;
-    if (device_->Ioctl(VIDIOC_DQBUF, &dqbuf) != 0) {
-      if (errno == EAGAIN) {
-        // EAGAIN if we're just out of buffers to dequeue.
-        break;
-      }
-      VPLOGF(1) << "ioctl() failed: input buffer VIDIOC_DQBUF failed.";
-      NotifyError(kInvalidBitstreamBufferId, PLATFORM_FAILURE);
-      return;
-    }
-    I420BufferRecord& input_record = input_buffer_map_[dqbuf.index];
-    DCHECK(input_record.at_device);
-    input_record.at_device = false;
-    free_input_buffers_.push_back(dqbuf.index);
-
-    if (dqbuf.flags & V4L2_BUF_FLAG_ERROR) {
-      VLOGF(1) << "Error in dequeued input buffer.";
-      NotifyError(kInvalidBitstreamBufferId, PARSE_IMAGE_FAILED);
-      running_job_queue_.pop();
-    }
-  }
-
-  // Dequeue completed output (VIDEO_CAPTURE) buffers, recycle to the free list.
-  // Return the finished buffer to the client via the job ready callback.
-  // If dequeued input buffer has an error, the error frame has removed from
-  // |running_job_queue_|. We only have to dequeue output buffer when we
-  // actually have pending frames in |running_job_queue_| and also enqueued
-  // output buffers.
-  while (!running_job_queue_.empty() && OutputBufferQueuedCount() > 0) {
-    DCHECK(output_streamon_);
-    memset(&dqbuf, 0, sizeof(dqbuf));
-    memset(planes, 0, sizeof(planes));
-    dqbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-    dqbuf.memory = V4L2_MEMORY_MMAP;
-    dqbuf.length = std::size(planes);
-    dqbuf.m.planes = planes;
-    if (device_->Ioctl(VIDIOC_DQBUF, &dqbuf) != 0) {
-      if (errno == EAGAIN) {
-        // EAGAIN if we're just out of buffers to dequeue.
-        break;
-      }
-      VPLOGF(1) << "ioctl() failed: output buffer VIDIOC_DQBUF failed.";
-      NotifyError(kInvalidBitstreamBufferId, PLATFORM_FAILURE);
-      return;
-    }
-    JpegBufferRecord& output_record = output_buffer_map_[dqbuf.index];
-    DCHECK(output_record.at_device);
-    output_record.at_device = false;
-    free_output_buffers_.push_back(dqbuf.index);
-
-    // Jobs are always processed in FIFO order.
-    std::unique_ptr<JobRecord> job_record =
-        std::move(running_job_queue_.front());
-    running_job_queue_.pop();
-
-    if (dqbuf.flags & V4L2_BUF_FLAG_ERROR) {
-      VLOGF(1) << "Error in dequeued output buffer.";
-      NotifyError(kInvalidBitstreamBufferId, PARSE_IMAGE_FAILED);
-      return;
-    }
-
-    size_t jpeg_size = FinalizeJpegImage(
-        job_record->output_mapping.GetMemoryAs<uint8_t>(), output_record,
-        planes[0].bytesused, std::move(job_record->exif_mapping));
-    if (!jpeg_size) {
-      NotifyError(job_record->task_id, PLATFORM_FAILURE);
-      return;
-    }
-    DVLOGF(4) << "Encoding finished, returning bitstream buffer, id="
-              << job_record->task_id;
-
-    parent_->VideoFrameReady(job_record->task_id, jpeg_size);
-  }
-}
-
-void V4L2JpegEncodeAccelerator::EncodedInstance::NotifyError(int32_t task_id,
-                                                             Status status) {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
-  parent_->NotifyError(task_id, status);
-}
-
-V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::EncodedInstanceDmaBuf(
-    V4L2JpegEncodeAccelerator* parent)
-    : parent_(parent),
-      input_streamon_(false),
-      output_streamon_(false),
-      input_buffer_pixelformat_(0),
-      input_buffer_num_planes_(0),
-      output_buffer_pixelformat_(0) {}
-
-V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::~EncodedInstanceDmaBuf() {}
-
-void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::DestroyTask() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
-  while (!input_job_queue_.empty())
-    input_job_queue_.pop();
-  while (!running_job_queue_.empty())
-    running_job_queue_.pop();
-
-  DestroyInputBuffers();
-  DestroyOutputBuffers();
-}
-
-bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::Initialize() {
-  device_ = V4L2Device::Create();
-  gpu_memory_buffer_support_ = std::make_unique<gpu::GpuMemoryBufferSupport>();
-
-  if (!device_) {
-    VLOGF(1) << "Failed to Create V4L2Device";
-    return false;
-  }
-
-  // We prefer V4L2_PIX_FMT_JPEG because V4L2_PIX_FMT_JPEG_RAW was rejected
-  // upstream.
-  output_buffer_pixelformat_ = V4L2_PIX_FMT_JPEG;
-  if (!device_->Open(V4L2Device::Type::kJpegEncoder,
-                     output_buffer_pixelformat_)) {
-    output_buffer_pixelformat_ = V4L2_PIX_FMT_JPEG_RAW;
-    if (!device_->Open(V4L2Device::Type::kJpegEncoder,
-                       output_buffer_pixelformat_)) {
-      VLOGF(1) << "Failed to open device";
-      return false;
-    }
-  }
-
-  // Capabilities check.
-  struct v4l2_capability caps;
-  const __u32 kCapsRequired = V4L2_CAP_STREAMING | V4L2_CAP_VIDEO_M2M_MPLANE;
-  memset(&caps, 0, sizeof(caps));
-  if (device_->Ioctl(VIDIOC_QUERYCAP, &caps) != 0) {
-    VPLOGF(1) << "ioctl() failed: VIDIOC_QUERYCAP";
-    return false;
-  }
-  if ((caps.capabilities & kCapsRequired) != kCapsRequired) {
-    VLOGF(1) << "VIDIOC_QUERYCAP, caps check failed: 0x" << std::hex
-             << caps.capabilities;
-    return false;
-  }
-
-  return true;
-}
-
-// static
-void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::FillQuantizationTable(
-    int quality,
-    const uint8_t* basic_table,
-    uint8_t* dst_table) {
-  unsigned int temp;
-
-  if (quality < 50)
-    quality = 5000 / quality;
-  else
-    quality = 200 - quality * 2;
-
-  for (size_t i = 0; i < kDctSize; i++) {
-    temp = ((unsigned int)basic_table[kZigZag8x8[i]] * quality + 50) / 100;
-    /* limit the values to the valid range */
-    dst_table[i] = base::clamp(temp, 1u, 255u);
-  }
-}
-
-void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::PrepareJpegMarkers(
-    gfx::Size coded_size) {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
-  // Quantization Tables.
-  // i = 0 for Luminance
-  // i = 1 for Chrominance
-  const int kNumDQT = 2;
-  for (size_t i = 0; i < kNumDQT; ++i) {
-    const uint8_t kQuantSegment[] = {
-        0xFF, JPEG_DQT, 0x00,
-        0x03 + kDctSize,         // Segment length:67 (2-byte).
-        static_cast<uint8_t>(i)  // Precision (4-bit high) = 0,
-                                 // Index (4-bit low) = i.
-    };
-    for (size_t j = 0; j < sizeof(kQuantSegment); ++j) {
-      jpeg_markers_.push_back(kQuantSegment[j]);
-    }
-
-    for (size_t j = 0; j < kDctSize; ++j) {
-      jpeg_markers_.push_back(quantization_table_[i].value[j]);
-    }
-  }
-
-  // Start of Frame - Baseline.
-  const int kNumOfComponents = 3;
-  const uint8_t kStartOfFrame[] = {
-      0xFF,
-      JPEG_SOF0,  // Baseline.
-      0x00,
-      0x11,  // Segment length:17 (2-byte).
-      8,     // Data precision.
-      static_cast<uint8_t>((coded_size.height() >> 8) & 0xFF),
-      static_cast<uint8_t>(coded_size.height() & 0xFF),
-      static_cast<uint8_t>((coded_size.width() >> 8) & 0xFF),
-      static_cast<uint8_t>(coded_size.width() & 0xFF),
-      kNumOfComponents,
-  };
-  for (size_t i = 0; i < sizeof(kStartOfFrame); ++i) {
-    jpeg_markers_.push_back(kStartOfFrame[i]);
-  }
-  // i = 0 for Y Plane
-  // i = 1 for U Plane
-  // i = 2 for V Plane
-  for (size_t i = 0; i < kNumOfComponents; ++i) {
-    // These are the values for U and V planes.
-    uint8_t h_sample_factor = 1;
-    uint8_t v_sample_factor = 1;
-    uint8_t quant_table_number = 1;
-    if (!i) {
-      // These are the values for Y plane.
-      h_sample_factor = 2;
-      v_sample_factor = 2;
-      quant_table_number = 0;
-    }
-
-    jpeg_markers_.push_back(i + 1);
-    // Horizontal Sample Factor (4-bit high),
-    // Vertical Sample Factor (4-bit low).
-    jpeg_markers_.push_back((h_sample_factor << 4) | v_sample_factor);
-    jpeg_markers_.push_back(quant_table_number);
-  }
-
-  // Huffman Tables.
-  static const uint8_t kDcSegment[] = {
-      0xFF, JPEG_DHT, 0x00,
-      0x1F,  // Segment length:31 (2-byte).
-  };
-  static const uint8_t kAcSegment[] = {
-      0xFF, JPEG_DHT, 0x00,
-      0xB5,  // Segment length:181 (2-byte).
-  };
-
-  // i = 0 for Luminance
-  // i = 1 for Chrominance
-  const int kNumHuffmanTables = 2;
-  for (size_t i = 0; i < kNumHuffmanTables; ++i) {
-    // DC Table.
-    for (size_t j = 0; j < sizeof(kDcSegment); ++j) {
-      jpeg_markers_.push_back(kDcSegment[j]);
-    }
-
-    // Type (4-bit high) = 0:DC, Index (4-bit low).
-    jpeg_markers_.push_back(static_cast<uint8_t>(i));
-
-    const JpegHuffmanTable& dcTable = kDefaultDcTable[i];
-    for (size_t j = 0; j < kNumDcRunSizeBits; ++j)
-      jpeg_markers_.push_back(dcTable.code_length[j]);
-    for (size_t j = 0; j < kNumDcCodeWordsHuffVal; ++j)
-      jpeg_markers_.push_back(dcTable.code_value[j]);
-
-    // AC Table.
-    for (size_t j = 0; j < sizeof(kAcSegment); ++j) {
-      jpeg_markers_.push_back(kAcSegment[j]);
-    }
-
-    // Type (4-bit high) = 1:AC, Index (4-bit low).
-    jpeg_markers_.push_back(0x10 | static_cast<uint8_t>(i));
-
-    const JpegHuffmanTable& acTable = kDefaultAcTable[i];
-    for (size_t j = 0; j < kNumAcRunSizeBits; ++j)
-      jpeg_markers_.push_back(acTable.code_length[j]);
-    for (size_t j = 0; j < kNumAcCodeWordsHuffVal; ++j)
-      jpeg_markers_.push_back(acTable.code_value[j]);
-  }
-
-  // Start of Scan.
-  static const uint8_t kStartOfScan[] = {
-      0xFF, JPEG_SOS, 0x00,
-      0x0C,  // Segment Length:12 (2-byte).
-      0x03   // Number of components in scan.
-  };
-  for (size_t i = 0; i < sizeof(kStartOfScan); ++i) {
-    jpeg_markers_.push_back(kStartOfScan[i]);
-  }
-
-  // i = 0 for Y Plane
-  // i = 1 for U Plane
-  // i = 2 for V Plane
-  for (uint8_t i = 0; i < kNumOfComponents; ++i) {
-    uint8_t dc_table_number = 1;
-    uint8_t ac_table_number = 1;
-    if (!i) {
-      dc_table_number = 0;
-      ac_table_number = 0;
-    }
-
-    jpeg_markers_.push_back(i + 1);
-    // DC Table Selector (4-bit high), AC Table Selector (4-bit low).
-    jpeg_markers_.push_back((dc_table_number << 4) | ac_table_number);
-  }
-  jpeg_markers_.push_back(0x00);  // 0 for Baseline.
-  jpeg_markers_.push_back(0x3F);  // 63 for Baseline.
-  jpeg_markers_.push_back(0x00);  // 0 for Baseline.
-}
-
 bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::SetUpJpegParameters(
     int quality,
     gfx::Size coded_size) {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_->encoder_sequence_);
 
   struct v4l2_ext_controls ctrls;
   struct v4l2_ext_control ctrl;
@@ -1149,31 +155,17 @@ bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::SetUpJpegParameters(
   memset(&ctrl, 0, sizeof(ctrl));
   memset(&queryctrl, 0, sizeof(queryctrl));
 
-  ctrls.ctrl_class = V4L2_CTRL_CLASS_JPEG;
+  ctrls.which = V4L2_CTRL_WHICH_CUR_VAL;
+  ctrls.count = 0;
+  const bool use_modern_s_ext_ctrls =
+      device_->Ioctl(VIDIOC_S_EXT_CTRLS, &ctrls) == 0;
+
+  ctrls.which =
+      use_modern_s_ext_ctrls ? V4L2_CTRL_WHICH_CUR_VAL : V4L2_CTRL_CLASS_JPEG;
   ctrls.controls = &ctrl;
   ctrls.count = 1;
 
   switch (output_buffer_pixelformat_) {
-    case V4L2_PIX_FMT_JPEG_RAW:
-      FillQuantizationTable(quality, kDefaultQuantTable[0].value,
-                            quantization_table_[0].value);
-      FillQuantizationTable(quality, kDefaultQuantTable[1].value,
-                            quantization_table_[1].value);
-
-      ctrl.id = V4L2_CID_JPEG_LUMA_QUANTIZATION;
-      ctrl.size = kDctSize;
-      ctrl.ptr = quantization_table_[0].value;
-      IOCTL_OR_ERROR_RETURN_FALSE(VIDIOC_S_EXT_CTRLS, &ctrls);
-
-      ctrl.id = V4L2_CID_JPEG_CHROMA_QUANTIZATION;
-      ctrl.size = kDctSize;
-      ctrl.ptr = quantization_table_[1].value;
-      IOCTL_OR_ERROR_RETURN_FALSE(VIDIOC_S_EXT_CTRLS, &ctrls);
-
-      // We need to prepare our own JPEG Markers.
-      PrepareJpegMarkers(coded_size);
-      break;
-
     case V4L2_PIX_FMT_JPEG:
       queryctrl.id = V4L2_CID_JPEG_COMPRESSION_QUALITY;
       queryctrl.type = V4L2_CTRL_TYPE_INTEGER;
@@ -1226,7 +218,7 @@ bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::CreateBuffers(
     gfx::Size coded_size,
     const VideoFrameLayout& input_layout,
     size_t output_buffer_size) {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_->encoder_sequence_);
 
   // The order of set output/input formats matters.
   // rk3399 reset input format when we set output format.
@@ -1252,7 +244,7 @@ bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::CreateBuffers(
 bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::SetInputBufferFormat(
     gfx::Size coded_size,
     const VideoFrameLayout& input_layout) {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_->encoder_sequence_);
   DCHECK(!input_streamon_);
   DCHECK(input_job_queue_.empty());
 
@@ -1283,7 +275,7 @@ bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::SetInputBufferFormat(
 
     if (device_->Ioctl(VIDIOC_S_FMT, &format) == 0 &&
         format.fmt.pix_mp.pixelformat == input_pix_fmt) {
-      device_input_layout_ = V4L2Device::V4L2FormatToVideoFrameLayout(format);
+      device_input_layout_ = V4L2FormatToVideoFrameLayout(format);
 
       // Save V4L2 returned values.
       input_buffer_pixelformat_ = format.fmt.pix_mp.pixelformat;
@@ -1346,7 +338,7 @@ bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::SetInputBufferFormat(
 bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::SetOutputBufferFormat(
     gfx::Size coded_size,
     size_t buffer_size) {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_->encoder_sequence_);
   DCHECK(!output_streamon_);
   DCHECK(running_job_queue_.empty());
 
@@ -1367,7 +359,7 @@ bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::SetOutputBufferFormat(
 }
 
 bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::RequestInputBuffers() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_->encoder_sequence_);
   struct v4l2_format format;
   memset(&format, 0, sizeof(format));
   format.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
@@ -1390,7 +382,7 @@ bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::RequestInputBuffers() {
 }
 
 bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::RequestOutputBuffers() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_->encoder_sequence_);
   struct v4l2_requestbuffers reqbufs;
   memset(&reqbufs, 0, sizeof(reqbufs));
   reqbufs.count = kBufferCount;
@@ -1407,7 +399,7 @@ bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::RequestOutputBuffers() {
 }
 
 void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::DestroyInputBuffers() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_->encoder_sequence_);
   free_input_buffers_.clear();
 
   if (input_streamon_) {
@@ -1427,7 +419,7 @@ void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::DestroyInputBuffers() {
 }
 
 void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::DestroyOutputBuffers() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_->encoder_sequence_);
   free_output_buffers_.clear();
 
   if (output_streamon_) {
@@ -1445,7 +437,7 @@ void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::DestroyOutputBuffers() {
 }
 
 void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::ServiceDevice() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_->encoder_sequence_);
 
   if (!running_job_queue_.empty()) {
     Dequeue();
@@ -1460,7 +452,7 @@ void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::ServiceDevice() {
 }
 
 void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::EnqueueInput() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_->encoder_sequence_);
   while (!input_job_queue_.empty() && !free_input_buffers_.empty()) {
     if (!EnqueueInputRecord())
       return;
@@ -1474,7 +466,7 @@ void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::EnqueueInput() {
 }
 
 void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::EnqueueOutput() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_->encoder_sequence_);
   while (running_job_queue_.size() > OutputBufferQueuedCount() &&
          !free_output_buffers_.empty()) {
     if (!EnqueueOutputRecord())
@@ -1489,7 +481,7 @@ void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::EnqueueOutput() {
 }
 
 bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::EnqueueInputRecord() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_->encoder_sequence_);
   DCHECK(!input_job_queue_.empty());
   DCHECK(!free_input_buffers_.empty());
 
@@ -1509,6 +501,8 @@ bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::EnqueueInputRecord() {
   qbuf.m.planes = planes;
 
   const auto& frame = job_record->input_frame;
+  const auto num_fds = frame->NumDmabufFds();
+  DCHECK(num_fds > 0);
   for (size_t i = 0; i < input_buffer_num_planes_; i++) {
     if (device_input_layout_->is_multi_planar()) {
       qbuf.m.planes[i].bytesused = base::checked_cast<__u32>(
@@ -1520,9 +514,11 @@ bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::EnqueueInputRecord() {
           frame->format(), device_input_layout_->coded_size());
     }
 
-    const auto& fds = frame->DmabufFds();
+    // If there are fewer FD's than planes, then re-use the last FD for the
+    // additional planes.
+    const size_t dmabuf_index = std::min<size_t>(i, num_fds - 1);
     const auto& layout_planes = frame->layout().planes();
-    qbuf.m.planes[i].m.fd = (i < fds.size()) ? fds[i].get() : fds.back().get();
+    qbuf.m.planes[i].m.fd = frame->GetDmabufFd(dmabuf_index);
     qbuf.m.planes[i].data_offset = layout_planes[i].offset;
     qbuf.m.planes[i].bytesused += qbuf.m.planes[i].data_offset;
     qbuf.m.planes[i].length =
@@ -1536,7 +532,7 @@ bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::EnqueueInputRecord() {
 }
 
 bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::EnqueueOutputRecord() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_->encoder_sequence_);
   DCHECK(!free_output_buffers_.empty());
 
   // Enqueue an output (VIDEO_CAPTURE) buffer.
@@ -1553,7 +549,7 @@ bool V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::EnqueueOutputRecord() {
 
   auto& job_record = running_job_queue_.back();
   for (size_t i = 0; i < qbuf.length; i++) {
-    planes[i].m.fd = job_record->output_frame->DmabufFds()[i].get();
+    planes[i].m.fd = job_record->output_frame->GetDmabufFd(i);
   }
   IOCTL_OR_ERROR_RETURN_FALSE(VIDIOC_QBUF, &qbuf);
   free_output_buffers_.pop_back();
@@ -1564,7 +560,7 @@ size_t V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::FinalizeJpegImage(
     scoped_refptr<VideoFrame> output_frame,
     size_t buffer_size,
     base::WritableSharedMemoryMapping exif_mapping) {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_->encoder_sequence_);
   size_t idx = 0;
 
   auto output_gmb_handle = CreateGpuMemoryBufferHandle(output_frame.get());
@@ -1582,6 +578,10 @@ size_t V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::FinalizeJpegImage(
           std::move(output_gmb_handle), output_gmb_buffer_size,
           gfx::BufferFormat::R_8, gfx::BufferUsage::SCANOUT_CAMERA_READ_WRITE,
           base::DoNothing());
+  if (!output_gmb_buffer) {
+    VLOGF(1) << "Failed to import gmb buffer";
+    return 0;
+  }
 
   bool isMapped = output_gmb_buffer->Map();
   if (!isMapped) {
@@ -1602,44 +602,32 @@ size_t V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::FinalizeJpegImage(
         0xFF, JPEG_APP1, static_cast<uint8_t>(exif_segment_size / 256),
         static_cast<uint8_t>(exif_segment_size % 256)};
 
-    if (output_buffer_pixelformat_ == V4L2_PIX_FMT_JPEG_RAW) {
-      // Move compressed data first.
-      size_t compressed_data_offset = sizeof(kJpegStart) + sizeof(kAppSegment) +
-                                      exif_buffer_size + jpeg_markers_.size();
-      if (buffer_size + compressed_data_offset > output_buffer_sizeimage_) {
-        LOG(WARNING) << "JPEG buffer is too small for the EXIF metadata";
+    // V4L2_PIX_FMT_JPEG refers to a valid JPEG bitstream. It does not
+    // imply a standard JFIF bitstream with JFIF-APP0 markers.
+    // Move data after SOI to make room for APP1 marker and EXIF data.
+    // If an APP0 marker is found directly after the SOI marker, skip
+    // over it.
+    // The JPEG from V4L2_PIX_FMT_JPEG is
+    // SOI-marker1-marker2-...-SOS-compressed stream-EOI
+    // |......| <- src_data_offset = len(SOI) + len(APP0) (if APP0 found)
+    // |...................| <- data_offset = len(SOI) + len(APP1)
+    size_t data_offset =
+        sizeof(kJpegStart) + sizeof(kAppSegment) + exif_buffer_size;
+    size_t src_data_offset = sizeof(kJpegStart);
+    // Check for APP0 segment following SOI marker and skip over it if found
+    if (dst_ptr[2] == JPEG_MARKER_PREFIX && dst_ptr[3] == JPEG_APP0) {
+      src_data_offset += 2 + ((dst_ptr[4] << 8) | dst_ptr[5]);
+      if (src_data_offset >= buffer_size) {
+        LOG(WARNING) << "APP0 segment from encoder extends beyond JPEG buffer";
         return 0;
       }
-      memmove(dst_ptr + compressed_data_offset, dst_ptr, buffer_size);
-    } else if (output_buffer_pixelformat_ == V4L2_PIX_FMT_JPEG) {
-      // V4L2_PIX_FMT_JPEG refers to a valid JPEG bitstream. It does not
-      // imply a standard JFIF bitstream with JFIF-APP0 markers.
-      // Move data after SOI to make room for APP1 marker and EXIF data.
-      // If an APP0 marker is found directly after the SOI marker, skip
-      // over it.
-      // The JPEG from V4L2_PIX_FMT_JPEG is
-      // SOI-marker1-marker2-...-SOS-compressed stream-EOI
-      // |......| <- src_data_offset = len(SOI) + len(APP0) (if APP0 found)
-      // |...................| <- data_offset = len(SOI) + len(APP1)
-      size_t data_offset =
-          sizeof(kJpegStart) + sizeof(kAppSegment) + exif_buffer_size;
-      size_t src_data_offset = sizeof(kJpegStart);
-      // Check for APP0 segment following SOI marker and skip over it if found
-      if (dst_ptr[2] == JPEG_MARKER_PREFIX && dst_ptr[3] == JPEG_APP0) {
-        src_data_offset += 2 + ((dst_ptr[4] << 8) | dst_ptr[5]);
-        if (src_data_offset >= buffer_size) {
-          LOG(WARNING)
-              << "APP0 segment from encoder extends beyond JPEG buffer";
-          return 0;
-        }
-      }
-      buffer_size -= src_data_offset;
-      if (buffer_size + data_offset > output_buffer_sizeimage_) {
-        LOG(WARNING) << "JPEG buffer is too small for the EXIF metadata";
-        return 0;
-      }
-      memmove(dst_ptr + data_offset, dst_ptr + src_data_offset, buffer_size);
     }
+    buffer_size -= src_data_offset;
+    if (buffer_size + data_offset > output_buffer_sizeimage_) {
+      LOG(WARNING) << "JPEG buffer is too small for the EXIF metadata";
+      return 0;
+    }
+    memmove(dst_ptr + data_offset, dst_ptr + src_data_offset, buffer_size);
 
     memcpy(dst_ptr, kJpegStart, sizeof(kJpegStart));
     idx += sizeof(kJpegStart);
@@ -1647,59 +635,9 @@ size_t V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::FinalizeJpegImage(
     idx += sizeof(kAppSegment);
     memcpy(dst_ptr + idx, exif_buffer, exif_buffer_size);
     idx += exif_buffer_size;
-  } else if (output_buffer_pixelformat_ == V4L2_PIX_FMT_JPEG_RAW) {
-    // For no exif_shm we don't need to do anything for V4L2_PIX_FMT_JPEG.
-    // So we only need to know if the format is V4L2_PIX_FMT_JPEG_RAW.
-
-    // Application Segment - JFIF standard 1.01.
-    static const uint8_t kAppSegment[] = {
-        0xFF, JPEG_APP0, 0x00,
-        0x10,  // Segment length:16 (2-byte).
-        0x4A,  // J
-        0x46,  // F
-        0x49,  // I
-        0x46,  // F
-        0x00,  // 0
-        0x01,  // Major version.
-        0x01,  // Minor version.
-        0x01,  // Density units 0:no units, 1:pixels per inch,
-               // 2: pixels per cm.
-        0x00,
-        0x48,  // X density (2-byte).
-        0x00,
-        0x48,  // Y density (2-byte).
-        0x00,  // Thumbnail width.
-        0x00   // Thumbnail height.
-    };
-
-    // Move compressed data first.
-    size_t compressed_data_offset =
-        sizeof(kJpegStart) + sizeof(kAppSegment) + jpeg_markers_.size();
-    memmove(dst_ptr + compressed_data_offset, dst_ptr, buffer_size);
-
-    memcpy(dst_ptr, kJpegStart, sizeof(kJpegStart));
-    idx += sizeof(kJpegStart);
-
-    memcpy(dst_ptr + idx, kAppSegment, sizeof(kAppSegment));
-    idx += sizeof(kAppSegment);
   }
 
   switch (output_buffer_pixelformat_) {
-    case V4L2_PIX_FMT_JPEG_RAW:
-      // Fill the other jpeg markers for RAW JPEG.
-      memcpy(dst_ptr + idx, jpeg_markers_.data(), jpeg_markers_.size());
-      idx += jpeg_markers_.size();
-      // We already moved the compressed data.
-      idx += buffer_size;
-      // Fill EOI. Before Fill EOI we checked if the V4L2 device filled EOI
-      // first.
-      if (dst_ptr[idx - 2] != 0xFF && dst_ptr[idx - 1] != JPEG_EOI) {
-        dst_ptr[idx] = 0xFF;
-        dst_ptr[idx + 1] = JPEG_EOI;
-        idx += 2;
-      }
-      break;
-
     case V4L2_PIX_FMT_JPEG:
       idx += buffer_size;
       break;
@@ -1714,7 +652,7 @@ size_t V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::FinalizeJpegImage(
 }
 
 void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::Dequeue() {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_->encoder_sequence_);
   // Dequeue completed input (VIDEO_OUTPUT) buffers,
   // and recycle to the free list.
   struct v4l2_buffer dqbuf;
@@ -1799,50 +737,52 @@ void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::Dequeue() {
 void V4L2JpegEncodeAccelerator::EncodedInstanceDmaBuf::NotifyError(
     int32_t task_id,
     Status status) {
-  DCHECK(parent_->encoder_task_runner_->BelongsToCurrentThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_->encoder_sequence_);
   parent_->NotifyError(task_id, status);
 }
 
 V4L2JpegEncodeAccelerator::V4L2JpegEncodeAccelerator(
     const scoped_refptr<base::SingleThreadTaskRunner>& io_task_runner)
-    : child_task_runner_(base::ThreadTaskRunnerHandle::Get()),
-      io_task_runner_(io_task_runner),
+    : io_task_runner_(io_task_runner),
       client_(nullptr),
-      encoder_thread_("V4L2JpegEncodeThread"),
+      weak_factory_for_encoder_(this),
       weak_factory_(this) {
+  DCHECK(io_task_runner_->BelongsToCurrentThread());
+  DETACH_FROM_SEQUENCE(encoder_sequence_);
   weak_ptr_ = weak_factory_.GetWeakPtr();
+  weak_ptr_for_encoder_ = weak_factory_for_encoder_.GetWeakPtr();
 }
 
 V4L2JpegEncodeAccelerator::~V4L2JpegEncodeAccelerator() {
-  DCHECK(child_task_runner_->BelongsToCurrentThread());
+  DCHECK(io_task_runner_->BelongsToCurrentThread());
 
-  if (encoder_thread_.IsRunning()) {
+  if (encoder_task_runner_) {
+    base::WaitableEvent waiter;
+    // base::Unretained(this) is safe because we wait DestroyTask() is done.
     encoder_task_runner_->PostTask(
         FROM_HERE, base::BindOnce(&V4L2JpegEncodeAccelerator::DestroyTask,
-                                  base::Unretained(this)));
-    encoder_thread_.Stop();
+                                  base::Unretained(this), &waiter));
+    waiter.Wait();
   }
   weak_factory_.InvalidateWeakPtrs();
 }
 
-void V4L2JpegEncodeAccelerator::DestroyTask() {
-  DCHECK(encoder_task_runner_->BelongsToCurrentThread());
-
-  while (!encoded_instances_.empty()) {
-    encoded_instances_.front()->DestroyTask();
-    encoded_instances_.pop();
-  }
+void V4L2JpegEncodeAccelerator::DestroyTask(base::WaitableEvent* waiter) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(encoder_sequence_);
 
   while (!encoded_instances_dma_buf_.empty()) {
     encoded_instances_dma_buf_.front()->DestroyTask();
     encoded_instances_dma_buf_.pop();
   }
+
+  weak_factory_for_encoder_.InvalidateWeakPtrs();
+  waiter->Signal();
 }
 
 void V4L2JpegEncodeAccelerator::VideoFrameReady(int32_t task_id,
                                                 size_t encoded_picture_size) {
-  if (!child_task_runner_->BelongsToCurrentThread()) {
-    child_task_runner_->PostTask(
+  if (!io_task_runner_->BelongsToCurrentThread()) {
+    io_task_runner_->PostTask(
         FROM_HERE, base::BindOnce(&V4L2JpegEncodeAccelerator::VideoFrameReady,
                                   weak_ptr_, task_id, encoded_picture_size));
     return;
@@ -1853,8 +793,8 @@ void V4L2JpegEncodeAccelerator::VideoFrameReady(int32_t task_id,
 }
 
 void V4L2JpegEncodeAccelerator::NotifyError(int32_t task_id, Status status) {
-  if (!child_task_runner_->BelongsToCurrentThread()) {
-    child_task_runner_->PostTask(
+  if (!io_task_runner_->BelongsToCurrentThread()) {
+    io_task_runner_->PostTask(
         FROM_HERE, base::BindOnce(&V4L2JpegEncodeAccelerator::NotifyError,
                                   weak_ptr_, task_id, status));
 
@@ -1864,13 +804,12 @@ void V4L2JpegEncodeAccelerator::NotifyError(int32_t task_id, Status status) {
   client_->NotifyError(task_id, status);
 }
 
-void V4L2JpegEncodeAccelerator::InitializeOnTaskRunner(
+void V4L2JpegEncodeAccelerator::InitializeTask(
     chromeos_camera::JpegEncodeAccelerator::Client* client,
     chromeos_camera::JpegEncodeAccelerator::InitCB init_cb) {
-  DCHECK(child_task_runner_->BelongsToCurrentThread());
-  std::unique_ptr<EncodedInstanceDmaBuf> encoded_device(
-      new EncodedInstanceDmaBuf(this));
+  DCHECK_CALLED_ON_VALID_SEQUENCE(encoder_sequence_);
 
+  auto encoded_device = std::make_unique<EncodedInstanceDmaBuf>(this);
   // We just check if we can initialize device here.
   if (!encoded_device->Initialize()) {
     VLOGF(1) << "Failed to initialize device";
@@ -1878,29 +817,30 @@ void V4L2JpegEncodeAccelerator::InitializeOnTaskRunner(
     return;
   }
 
-  if (!encoder_thread_.Start()) {
-    VLOGF(1) << "encoder thread failed to start";
-    std::move(init_cb).Run(THREAD_CREATION_FAILED);
-    return;
-  }
-
-  client_ = client;
-  encoder_task_runner_ = encoder_thread_.task_runner();
-
   VLOGF(2) << "V4L2JpegEncodeAccelerator initialized.";
   std::move(init_cb).Run(ENCODE_OK);
-  return;
 }
 
 void V4L2JpegEncodeAccelerator::InitializeAsync(
     chromeos_camera::JpegEncodeAccelerator::Client* client,
     chromeos_camera::JpegEncodeAccelerator::InitCB init_cb) {
-  DCHECK(child_task_runner_->BelongsToCurrentThread());
+  DCHECK(io_task_runner_->BelongsToCurrentThread());
 
-  child_task_runner_->PostTask(
+  client_ = client;
+
+  // base::WithBaseSyncPrimitives() and base::MayBlock() are necessary to
+  // synchronously destroy encoder variables on |encoder_task_runner_| in
+  // dedestructor.
+  encoder_task_runner_ = base::ThreadPool::CreateSequencedTaskRunner(
+      {base::TaskPriority::BEST_EFFORT, base::WithBaseSyncPrimitives(),
+       base::MayBlock()});
+  DCHECK(encoder_task_runner_);
+
+  encoder_task_runner_->PostTask(
       FROM_HERE,
-      base::BindOnce(&V4L2JpegEncodeAccelerator::InitializeOnTaskRunner,
-                     weak_ptr_, client, BindToCurrentLoop(std::move(init_cb))));
+      base::BindOnce(&V4L2JpegEncodeAccelerator::InitializeTask,
+                     weak_ptr_for_encoder_, client,
+                     base::BindPostTaskToCurrentDefault(std::move(init_cb))));
 }
 
 size_t V4L2JpegEncodeAccelerator::GetMaxCodedBufferSize(
@@ -1913,57 +853,7 @@ void V4L2JpegEncodeAccelerator::Encode(
     int quality,
     BitstreamBuffer* exif_buffer,
     BitstreamBuffer output_buffer) {
-  DCHECK(io_task_runner_->BelongsToCurrentThread());
-
-  DVLOGF(4) << "task_id=" << output_buffer.id()
-            << ", size=" << output_buffer.size();
-
-  if (quality <= 0 || quality > 100) {
-    VLOGF(1) << "quality is not in range. " << quality;
-    NotifyError(output_buffer.id(), INVALID_ARGUMENT);
-    return;
-  }
-
-  if (video_frame->format() != VideoPixelFormat::PIXEL_FORMAT_I420) {
-    VLOGF(1) << "Format is not I420";
-    NotifyError(output_buffer.id(), INVALID_ARGUMENT);
-    return;
-  }
-
-  base::WritableSharedMemoryMapping exif_mapping;
-  if (exif_buffer) {
-    VLOGF(4) << "EXIF size " << exif_buffer->size();
-    if (exif_buffer->size() > kMaxMarkerSizeAllowed) {
-      NotifyError(output_buffer.id(), INVALID_ARGUMENT);
-      return;
-    }
-
-    base::UnsafeSharedMemoryRegion exif_region = exif_buffer->TakeRegion();
-    exif_mapping =
-        exif_region.MapAt(exif_buffer->offset(), exif_buffer->size());
-    if (!exif_mapping.IsValid()) {
-      VPLOGF(1) << "could not map exif bitstream_buffer";
-      NotifyError(output_buffer.id(), PLATFORM_FAILURE);
-      return;
-    }
-  }
-
-  base::UnsafeSharedMemoryRegion output_region = output_buffer.TakeRegion();
-  base::WritableSharedMemoryMapping output_mapping =
-      output_region.MapAt(output_buffer.offset(), output_buffer.size());
-  if (!output_mapping.IsValid()) {
-    VPLOGF(1) << "could not map I420 bitstream_buffer";
-    NotifyError(output_buffer.id(), PLATFORM_FAILURE);
-    return;
-  }
-
-  std::unique_ptr<JobRecord> job_record(
-      new JobRecord(video_frame, quality, output_buffer.id(),
-                    std::move(exif_mapping), std::move(output_mapping)));
-
-  encoder_task_runner_->PostTask(
-      FROM_HERE, base::BindOnce(&V4L2JpegEncodeAccelerator::EncodeTaskLegacy,
-                                base::Unretained(this), std::move(job_record)));
+  NOTIMPLEMENTED_LOG_ONCE();
 }
 
 void V4L2JpegEncodeAccelerator::EncodeWithDmaBuf(
@@ -2009,57 +899,12 @@ void V4L2JpegEncodeAccelerator::EncodeWithDmaBuf(
 
   encoder_task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&V4L2JpegEncodeAccelerator::EncodeTask,
-                                base::Unretained(this), std::move(job_record)));
-}
-
-void V4L2JpegEncodeAccelerator::EncodeTaskLegacy(
-    std::unique_ptr<JobRecord> job_record) {
-  DCHECK(encoder_task_runner_->BelongsToCurrentThread());
-
-  // Check if the parameters of input frame changes.
-  // If it changes, we open a new device and put the job in it.
-  // If it doesn't change, we use the same device as last used.
-  gfx::Size coded_size = job_record->input_frame->coded_size();
-  if (latest_input_buffer_coded_size_legacy_ != coded_size ||
-      latest_quality_legacy_ != job_record->quality) {
-    std::unique_ptr<EncodedInstance> encoded_device(new EncodedInstance(this));
-    VLOGF(1) << "Open Device for quality " << job_record->quality
-             << ", width: " << coded_size.width()
-             << ", height: " << coded_size.height();
-    if (!encoded_device->Initialize()) {
-      VLOGF(1) << "Failed to initialize device";
-      NotifyError(job_record->task_id, PLATFORM_FAILURE);
-      return;
-    }
-
-    if (!encoded_device->SetUpJpegParameters(job_record->quality, coded_size)) {
-      VLOGF(1) << "SetUpJpegParameters failed";
-      NotifyError(job_record->task_id, PLATFORM_FAILURE);
-      return;
-    }
-
-    if (!encoded_device->CreateBuffers(coded_size,
-                                       job_record->output_mapping.size())) {
-      VLOGF(1) << "Create buffers failed.";
-      NotifyError(job_record->task_id, PLATFORM_FAILURE);
-      return;
-    }
-
-    latest_input_buffer_coded_size_legacy_ = coded_size;
-    latest_quality_legacy_ = job_record->quality;
-
-    encoded_instances_.push(std::move(encoded_device));
-  }
-
-  // Always use latest opened device for new job.
-  encoded_instances_.back()->input_job_queue_.push(std::move(job_record));
-
-  ServiceDeviceTaskLegacy();
+                                weak_ptr_for_encoder_, std::move(job_record)));
 }
 
 void V4L2JpegEncodeAccelerator::EncodeTask(
     std::unique_ptr<JobRecord> job_record) {
-  DCHECK(encoder_task_runner_->BelongsToCurrentThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(encoder_sequence_);
 
   // Check if the parameters of input frame changes.
   // If it changes, we open a new device and put the job in it.
@@ -2106,32 +951,8 @@ void V4L2JpegEncodeAccelerator::EncodeTask(
   ServiceDeviceTask();
 }
 
-void V4L2JpegEncodeAccelerator::ServiceDeviceTaskLegacy() {
-  DCHECK(encoder_task_runner_->BelongsToCurrentThread());
-
-  // Always service the first device to keep the input order.
-  encoded_instances_.front()->ServiceDevice();
-
-  // If we have more than 1 devices, we can remove the oldest one after all jobs
-  // finished.
-  if (encoded_instances_.size() > 1) {
-    if (encoded_instances_.front()->running_job_queue_.empty() &&
-        encoded_instances_.front()->input_job_queue_.empty()) {
-      encoded_instances_.pop();
-    }
-  }
-
-  if (!encoded_instances_.front()->running_job_queue_.empty() ||
-      !encoded_instances_.front()->input_job_queue_.empty()) {
-    encoder_task_runner_->PostTask(
-        FROM_HERE,
-        base::BindOnce(&V4L2JpegEncodeAccelerator::ServiceDeviceTaskLegacy,
-                       base::Unretained(this)));
-  }
-}
-
 void V4L2JpegEncodeAccelerator::ServiceDeviceTask() {
-  DCHECK(encoder_task_runner_->BelongsToCurrentThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(encoder_sequence_);
 
   // Always service the first device to keep the input order.
   encoded_instances_dma_buf_.front()->ServiceDevice();
@@ -2149,7 +970,7 @@ void V4L2JpegEncodeAccelerator::ServiceDeviceTask() {
       !encoded_instances_dma_buf_.front()->input_job_queue_.empty()) {
     encoder_task_runner_->PostTask(
         FROM_HERE, base::BindOnce(&V4L2JpegEncodeAccelerator::ServiceDeviceTask,
-                                  base::Unretained(this)));
+                                  weak_ptr_for_encoder_));
   }
 }
 

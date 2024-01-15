@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/crosapi/mojom/launcher_search.mojom.h"
 #include "mojo/public/cpp/bindings/associated_receiver_set.h"
@@ -69,7 +69,9 @@ class SearchProviderAsh : public mojom::SearchResultsPublisher,
   // mojom::SearchResultsPublisher overrides:
   void OnSearchResultsReceived(
       mojom::SearchStatus status,
-      absl::optional<std::vector<mojom::SearchResultPtr>> results) override;
+      std::optional<std::vector<mojom::SearchResultPtr>> results) override;
+
+  bool IsSearchControllerConnected() const;
 
  private:
   void BindPublisher(

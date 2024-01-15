@@ -4,7 +4,6 @@
 
 package org.chromium.chrome.browser.payments.ui;
 
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.payments.PaymentPreferencesUtil;
 import org.chromium.components.autofill.Completable;
 import org.chromium.components.payments.PaymentApp;
@@ -12,9 +11,10 @@ import org.chromium.components.payments.PaymentRequestParams;
 import org.chromium.payments.mojom.PaymentOptions;
 
 import java.util.Comparator;
+
 /**
-   A comparator that is used to rank the payment apps to be listed on the PaymentRequest
-   UI.
+ * A comparator that is used to rank the payment apps to be listed on the PaymentRequest
+ * UI.
  */
 /* package */ class PaymentAppComparator implements Comparator<PaymentApp> {
     private final PaymentRequestParams mParams;
@@ -58,24 +58,6 @@ import java.util.Comparator;
      */
     private static double getRankingScore(int count, long date) {
         long currentTime = System.currentTimeMillis();
-        if (ChromeFeatureList.isEnabled(ChromeFeatureList.AUTOFILL_ENABLE_RANKING_FORMULA)) {
-            int usageHalfLife = ChromeFeatureList.getFieldTrialParamByFeatureAsInt(
-                    ChromeFeatureList.AUTOFILL_ENABLE_RANKING_FORMULA,
-                    ChromeFeatureList.AUTOFILL_RANKING_FORMULA_USAGE_HALF_LIFE, 20);
-
-            // Ensure the usage half life is not zero to avoid division by zero errors;
-            if (usageHalfLife == 0) {
-                // Set to default value of 20.
-                usageHalfLife = 20;
-            }
-
-            // Exponentially decay the use count by the days since the data model was
-            // last used.
-            return Math.log10(count + 1)
-                    * Math.exp(((currentTime - date) / (24 * 60 * 60 * 1000)) / usageHalfLife);
-        }
-
-        // Default to legacy frecency scoring.
         return -Math.log((currentTime - date) / (24 * 60 * 60 * 1000) + 2) / Math.log(count + 2);
     }
 
@@ -120,8 +102,9 @@ import java.util.Comparator;
                 if (b.handlesPayerPhone()) bSupportedContactDelegationsNum++;
             }
             if (bSupportedContactDelegationsNum != aSupportedContactDelegationsNum) {
-                return bSupportedContactDelegationsNum - aSupportedContactDelegationsNum > 0 ? 1
-                                                                                             : -1;
+                return bSupportedContactDelegationsNum - aSupportedContactDelegationsNum > 0
+                        ? 1
+                        : -1;
             }
         }
 

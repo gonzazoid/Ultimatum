@@ -5,12 +5,10 @@
 #include "base/command_line.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/metrics/user_action_tester.h"
-#include "base/test/scoped_feature_list.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/test/test_browser_dialog.h"
 #include "chrome/browser/ui/views/safe_browsing/tailored_security_desktop_dialog_manager.h"
-#include "chrome/common/chrome_features.h"
 #include "components/safe_browsing/core/browser/tailored_security_service/tailored_security_outcome.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
@@ -72,11 +70,6 @@ class TailoredSecurityDesktopDialogManagerTest
   TailoredSecurityDesktopDialogManagerTest() {
     dialog_manager_ =
         std::make_unique<safe_browsing::TailoredSecurityDesktopDialogManager>();
-    if (GetParam().use_dark_theme) {
-      features_.InitAndEnableFeature(features::kWebUIDarkMode);
-    } else {
-      features_.Init();
-    }
   }
 
   TailoredSecurityDesktopDialogManagerTest(
@@ -124,7 +117,6 @@ class TailoredSecurityDesktopDialogManagerTest
   }
 
  private:
-  base::test::ScopedFeatureList features_;
   std::unique_ptr<safe_browsing::TailoredSecurityDesktopDialogManager>
       dialog_manager_;
 };
@@ -181,6 +173,37 @@ IN_PROC_BROWSER_TEST_P(TailoredSecurityDesktopDialogManagerTest,
 }
 
 IN_PROC_BROWSER_TEST_P(TailoredSecurityDesktopDialogManagerTest,
+                       EnabledDialogRecordsUserActionOnShow) {
+  base::UserActionTester uat;
+  EXPECT_EQ(
+      uat.GetActionCount("SafeBrowsing.AccountIntegration.EnabledDialog.Shown"),
+      0);
+
+  ShowTailoredSecurityEnabledDialog(browser());
+
+  EXPECT_EQ(
+      uat.GetActionCount("SafeBrowsing.AccountIntegration.EnabledDialog.Shown"),
+      1);
+}
+
+IN_PROC_BROWSER_TEST_P(TailoredSecurityDesktopDialogManagerTest,
+                       EnabledDialogOkButtonRecordsUserAction) {
+  base::UserActionTester uat;
+  auto* dialog = ShowTailoredSecurityEnabledDialog(browser());
+  auto* bubble_delegate = dialog->widget_delegate()->AsBubbleDialogDelegate();
+  EXPECT_EQ(
+      uat.GetActionCount(
+          "SafeBrowsing.AccountIntegration.EnabledDialog.OkButtonClicked"),
+      0);
+
+  ClickButton(bubble_delegate, bubble_delegate->GetOkButton());
+  EXPECT_EQ(
+      uat.GetActionCount(
+          "SafeBrowsing.AccountIntegration.EnabledDialog.OkButtonClicked"),
+      1);
+}
+
+IN_PROC_BROWSER_TEST_P(TailoredSecurityDesktopDialogManagerTest,
                        EnabledDialogCancelButtonRecordsUserAction) {
   base::UserActionTester uat;
   auto* dialog = ShowTailoredSecurityEnabledDialog(browser());
@@ -234,6 +257,35 @@ IN_PROC_BROWSER_TEST_P(TailoredSecurityDesktopDialogManagerTest,
                 ->GetActiveWebContents()
                 ->GetLastCommittedURL(),
             GURL(kEnhancedProtectionSettingsUrl));
+}
+
+IN_PROC_BROWSER_TEST_P(TailoredSecurityDesktopDialogManagerTest,
+                       DisabledDialogRecordsUserActionOnShow) {
+  base::UserActionTester uat;
+  EXPECT_EQ(uat.GetActionCount(
+                "SafeBrowsing.AccountIntegration.DisabledDialog.Shown"),
+            0);
+
+  ShowTailoredSecurityDisabledDialog(browser());
+
+  EXPECT_EQ(uat.GetActionCount(
+                "SafeBrowsing.AccountIntegration.DisabledDialog.Shown"),
+            1);
+}
+
+IN_PROC_BROWSER_TEST_P(TailoredSecurityDesktopDialogManagerTest,
+                       DisabledDialogOkButtonRecordsUserAction) {
+  base::UserActionTester uat;
+  auto* dialog = ShowTailoredSecurityDisabledDialog(browser());
+  auto* bubble_delegate = dialog->widget_delegate()->AsBubbleDialogDelegate();
+  EXPECT_EQ(uat.GetActionCount("SafeBrowsing.AccountIntegration.DisabledDialog."
+                               "OkButtonClicked"),
+            0);
+
+  ClickButton(bubble_delegate, bubble_delegate->GetOkButton());
+  EXPECT_EQ(uat.GetActionCount("SafeBrowsing.AccountIntegration.DisabledDialog."
+                               "OkButtonClicked"),
+            1);
 }
 
 IN_PROC_BROWSER_TEST_P(TailoredSecurityDesktopDialogManagerTest,

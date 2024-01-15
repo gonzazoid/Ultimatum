@@ -5,16 +5,17 @@
 #ifndef CHROME_BROWSER_ASH_NET_NETWORK_DIAGNOSTICS_NETWORK_DIAGNOSTICS_H_
 #define CHROME_BROWSER_ASH_NET_NETWORK_DIAGNOSTICS_NETWORK_DIAGNOSTICS_H_
 
+#include <optional>
 #include <string>
 
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/net/network_diagnostics/network_diagnostics_routine.h"
 #include "chromeos/ash/components/mojo_service_manager/mojom/mojo_service_manager.mojom.h"
 #include "chromeos/services/network_health/public/mojom/network_diagnostics.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -37,7 +38,7 @@ class NetworkDiagnostics
           chromeos::network_diagnostics::mojom::NetworkDiagnosticsRoutines>
           receiver);
 
-  // mojom::NetworkDiagnostics
+  // chromeos::network_diagnostics::mojom::NetworkDiagnostics
   void GetResult(const chromeos::network_diagnostics::mojom::RoutineType type,
                  GetResultCallback callback) override;
   void GetAllResults(GetAllResultsCallback callback) override;
@@ -53,7 +54,7 @@ class NetworkDiagnostics
   void RunDnsResolution(RunDnsResolutionCallback callback) override;
   void RunCaptivePortal(RunCaptivePortalCallback callback) override;
   void RunHttpsLatency(RunHttpsLatencyCallback callback) override;
-  void RunVideoConferencing(const absl::optional<std::string>& stun_server_name,
+  void RunVideoConferencing(const std::optional<std::string>& stun_server_name,
                             RunVideoConferencingCallback callback) override;
   void RunArcHttp(RunArcHttpCallback callback) override;
   void RunArcDnsResolution(RunArcDnsResolutionCallback callback) override;
@@ -72,7 +73,7 @@ class NetworkDiagnostics
       RoutineResultCallback callback,
       chromeos::network_diagnostics::mojom::RoutineResultPtr result);
   // An unowned pointer to the DebugDaemonClient instance.
-  DebugDaemonClient* debug_daemon_client_;
+  raw_ptr<DebugDaemonClient, LeakedDanglingUntriaged> debug_daemon_client_;
   // Receiver for mojo service manager service provider.
   mojo::Receiver<chromeos::mojo_service_manager::mojom::ServiceProvider>
       provider_receiver_{this};

@@ -6,8 +6,8 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/strcat.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -132,60 +132,10 @@ TEST(MediaRouterMetricsTest, RecordMediaRouterDialogActivationLocation) {
                   Bucket(static_cast<int>(activation_location2), 1)));
 }
 
-TEST(MediaRouterMetricsTest, RecordMediaRouterDialogPaint) {
-  TestRecordTimeDeltaMetric(
-      base::BindRepeating(&MediaRouterMetrics::RecordMediaRouterDialogPaint),
-      MediaRouterMetrics::kHistogramUiDialogPaint);
-}
-
 TEST(MediaRouterMetricsTest, RecordMediaRouterDialogLoaded) {
   TestRecordTimeDeltaMetric(
       base::BindRepeating(&MediaRouterMetrics::RecordMediaRouterDialogLoaded),
       MediaRouterMetrics::kHistogramUiDialogLoadedWithData);
-}
-
-TEST(MediaRouterMetricsTest, RecordCloseDialogLatency) {
-  TestRecordTimeDeltaMetric(
-      base::BindRepeating(&MediaRouterMetrics::RecordCloseDialogLatency),
-      MediaRouterMetrics::kHistogramCloseLatency);
-}
-
-TEST(MediaRouterMetricsTest, RecordMediaRouterInitialUserAction) {
-  base::HistogramTester tester;
-  const MediaRouterUserAction action1 = MediaRouterUserAction::START_LOCAL;
-  const MediaRouterUserAction action2 = MediaRouterUserAction::CLOSE;
-  const MediaRouterUserAction action3 = MediaRouterUserAction::STATUS_REMOTE;
-
-  tester.ExpectTotalCount(MediaRouterMetrics::kHistogramUiFirstAction, 0);
-  MediaRouterMetrics::RecordMediaRouterInitialUserAction(action3);
-  MediaRouterMetrics::RecordMediaRouterInitialUserAction(action2);
-  MediaRouterMetrics::RecordMediaRouterInitialUserAction(action3);
-  MediaRouterMetrics::RecordMediaRouterInitialUserAction(action1);
-  tester.ExpectTotalCount(MediaRouterMetrics::kHistogramUiFirstAction, 4);
-  EXPECT_THAT(tester.GetAllSamples(MediaRouterMetrics::kHistogramUiFirstAction),
-              ElementsAre(Bucket(static_cast<int>(action1), 1),
-                          Bucket(static_cast<int>(action2), 1),
-                          Bucket(static_cast<int>(action3), 2)));
-}
-
-TEST(MediaRouterMetricsTest, RecordRouteCreationOutcome) {
-  base::HistogramTester tester;
-  const MediaRouterRouteCreationOutcome outcome1 =
-      MediaRouterRouteCreationOutcome::SUCCESS;
-  const MediaRouterRouteCreationOutcome outcome2 =
-      MediaRouterRouteCreationOutcome::FAILURE_NO_ROUTE;
-
-  tester.ExpectTotalCount(MediaRouterMetrics::kHistogramRouteCreationOutcome,
-                          0);
-  MediaRouterMetrics::RecordRouteCreationOutcome(outcome2);
-  MediaRouterMetrics::RecordRouteCreationOutcome(outcome1);
-  MediaRouterMetrics::RecordRouteCreationOutcome(outcome2);
-  tester.ExpectTotalCount(MediaRouterMetrics::kHistogramRouteCreationOutcome,
-                          3);
-  EXPECT_THAT(
-      tester.GetAllSamples(MediaRouterMetrics::kHistogramRouteCreationOutcome),
-      ElementsAre(Bucket(static_cast<int>(outcome1), 1),
-                  Bucket(static_cast<int>(outcome2), 2)));
 }
 
 TEST(MediaRouterMetricsTest, RecordPresentationUrlType) {
@@ -247,56 +197,10 @@ TEST(MediaRouterMetricsTest, RecordDeviceCount) {
               ElementsAre(Bucket(0, 1), Bucket(30, 1)));
 }
 
-TEST(MediaRouterMetricsTest, RecordStartRouteDeviceIndex) {
-  base::HistogramTester tester;
-  tester.ExpectTotalCount(MediaRouterMetrics::kHistogramStartLocalPosition, 0);
-
-  MediaRouterMetrics::RecordStartRouteDeviceIndex(30);
-  MediaRouterMetrics::RecordStartRouteDeviceIndex(0);
-
-  tester.ExpectTotalCount(MediaRouterMetrics::kHistogramStartLocalPosition, 2);
-  EXPECT_THAT(
-      tester.GetAllSamples(MediaRouterMetrics::kHistogramStartLocalPosition),
-      ElementsAre(Bucket(0, 1), Bucket(30, 1)));
-}
-
-TEST(MediaRouterMetricsTest, RecordStartLocalSessionLatency) {
-  TestRecordTimeDeltaMetric(
-      base::BindRepeating(&MediaRouterMetrics::RecordStartLocalSessionLatency),
-      MediaRouterMetrics::kHistogramStartLocalLatency);
-}
-
-TEST(MediaRouterMetricsTest, RecordStartLocalSessionSuccessful) {
-  TestRecordBooleanMetric(
-      base::BindRepeating(
-          &MediaRouterMetrics::RecordStartLocalSessionSuccessful),
-      MediaRouterMetrics::kHistogramStartLocalSessionSuccessful);
-}
-
-TEST(MediaRouterMetricsTest, RecordStopRoute) {
-  base::HistogramTester tester;
-  tester.ExpectTotalCount(MediaRouterMetrics::kHistogramStopRoute, 0);
-
-  MediaRouterMetrics::RecordStopLocalRoute();
-  MediaRouterMetrics::RecordStopRemoteRoute();
-  MediaRouterMetrics::RecordStopLocalRoute();
-
-  tester.ExpectTotalCount(MediaRouterMetrics::kHistogramStopRoute, 3);
-  EXPECT_THAT(tester.GetAllSamples(MediaRouterMetrics::kHistogramStopRoute),
-              ElementsAre(Bucket(/* Local route */ 0, 2),
-                          Bucket(/* Remote route */ 1, 1)));
-}
-
 TEST(MediaRouterMetricsTest, RecordIconStateAtDialogOpen) {
   TestRecordBooleanMetric(
       base::BindRepeating(&MediaRouterMetrics::RecordIconStateAtDialogOpen),
       MediaRouterMetrics::kHistogramUiDialogIconStateAtOpen);
-}
-
-TEST(MediaRouterMetricsTest, RecordIconStateAtInit) {
-  TestRecordBooleanMetric(
-      base::BindRepeating(&MediaRouterMetrics::RecordIconStateAtInit),
-      MediaRouterMetrics::kHistogramUiIconStateAtInit);
 }
 
 TEST(MediaRouterMetricsTest, RecordCreateRouteResultCode) {

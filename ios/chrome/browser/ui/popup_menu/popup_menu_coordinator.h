@@ -7,14 +7,13 @@
 
 #import <UIKit/UIKit.h>
 
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
-#import "ios/chrome/browser/ui/popup_menu/public/popup_menu_long_press_delegate.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
 
 @class BubblePresenter;
 @protocol PopupMenuUIUpdating;
 
 // Coordinator for the popup menu, handling the commands.
-@interface PopupMenuCoordinator : ChromeCoordinator<PopupMenuLongPressDelegate>
+@interface PopupMenuCoordinator : ChromeCoordinator
 
 // Initializes this Coordinator with its `browser` and a nil base view
 // controller.

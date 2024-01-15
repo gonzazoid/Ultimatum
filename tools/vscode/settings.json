@@ -11,6 +11,27 @@
   "editor.detectIndentation": false,
   // Add a line at 80 characters.
   "editor.rulers": [80],
+
+  // Except for Java where we add a line at 100 characters per that style guide
+  // and the tab width should be 4 spaces.
+  // The chrome java style guide:
+  // https://chromium.googlesource.com/chromium/src/+/main/styleguide/java/java.md
+  // does not override this and defers to the android style guide:
+  // https://source.android.com/docs/setup/contribute/code-style
+  "[java]": {
+    "editor.rulers": [100],
+    "editor.tabSize": 4
+  },
+
+  "extensions": {
+    "recommendations": [
+      // The GN language server from Microsoft.
+      //
+      // Provides support for .gn and .gni files.
+      "msedge-dev.gnls",
+    ],
+  },
+
   // Forces LF instead of "auto" which uses CRLF on Windows.
   "files.eol": "\n",
   // Trim tailing whitespace on save.
@@ -22,12 +43,6 @@
   "files.associations": {
     // Adds xml syntax highlighting for grd files.
     "*.grd" : "xml",
-    // Optional: .gn and .gni are not JavaScript, but at least it gives some
-    // approximate syntax highlighting. Ignore the linter warnings!
-    // There's an extension for these files, excluding the linter headaches.
-    // https://marketplace.visualstudio.com/items?itemName=npclaudiu.vscode-gn
-    "*.gni" : "javascript",
-    "*.gn" : "javascript"
   },
 
   "files.exclude": {

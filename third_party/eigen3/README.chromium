@@ -1,11 +1,12 @@
 Name: Eigen
 Short Name: eigen3
-URL: http://eigen.tuxfamily.org/
-Version: 3bb6a48d8c171cf20b5f8e48bfb4e424fbd4f79e
-Date: 2022/10/19
+URL: https://gitlab.com/libeigen/eigen
+Version: 454f89af9d6f3525b1df5f9ef9c86df58bf2d4d3
+Date: 2023-12-11
 License: MPL 2
 License File: LICENSE
 Security Critical: Yes
+Shipped: yes
 CPEPrefix: unknown
 
 Description:

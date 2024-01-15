@@ -5,16 +5,13 @@
 #ifndef COMPONENTS_REMOTE_COCOA_APP_SHIM_MOUSE_CAPTURE_H_
 #define COMPONENTS_REMOTE_COCOA_APP_SHIM_MOUSE_CAPTURE_H_
 
+#import <Cocoa/Cocoa.h>
+
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "components/remote_cocoa/app_shim/remote_cocoa_app_shim_export.h"
-
-#if defined(__OBJC__)
-@class NSWindow;
-#else
-class NSWindow;
-#endif
 
 namespace remote_cocoa {
 
@@ -52,6 +49,8 @@ class REMOTE_COCOA_APP_SHIM_EXPORT CocoaMouseCapture {
   // The active event tap for this capture. Owned by this, but can be cleared
   // out early if another instance of CocoaMouseCapture is created.
   std::unique_ptr<ActiveEventTap> active_handle_;
+
+  base::WeakPtrFactory<CocoaMouseCapture> factory_{this};
 };
 
 }  // namespace remote_cocoa

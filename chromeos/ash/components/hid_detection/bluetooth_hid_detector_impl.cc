@@ -19,8 +19,8 @@ using bluetooth_config::mojom::DeviceType;
 using bluetooth_config::mojom::KeyEnteredHandler;
 
 // Returns the BluetoothHidType corresponding with |device|'s device type, or
-// absl::nullopt if |device| is not a HID.
-absl::optional<BluetoothHidDetector::BluetoothHidType> GetBluetoothHidType(
+// std::nullopt if |device| is not a HID.
+std::optional<BluetoothHidDetector::BluetoothHidType> GetBluetoothHidType(
     const BluetoothDevicePropertiesPtr& device) {
   switch (device->device_type) {
     case DeviceType::kMouse:
@@ -32,7 +32,7 @@ absl::optional<BluetoothHidDetector::BluetoothHidType> GetBluetoothHidType(
     case DeviceType::kKeyboardMouseCombo:
       return BluetoothHidDetector::BluetoothHidType::kKeyboardPointerCombo;
     default:
-      return absl::nullopt;
+      return std::nullopt;
   }
 }
 
@@ -56,7 +56,7 @@ void BluetoothHidDetectorImpl::SetInputDevicesStatus(
   if (!current_pairing_device_)
     return;
 
-  absl::optional<BluetoothHidDetector::BluetoothHidType>
+  std::optional<BluetoothHidDetector::BluetoothHidType>
       current_pairing_device_hid_type =
           GetBluetoothHidType(current_pairing_device_.value());
   DCHECK(current_pairing_device_hid_type)
@@ -88,18 +88,18 @@ const BluetoothHidDetector::BluetoothHidDetectionStatus
 BluetoothHidDetectorImpl::GetBluetoothHidDetectionStatus() {
   if (!current_pairing_device_.has_value()) {
     return BluetoothHidDetectionStatus(
-        /*current_pairing_device*/ absl::nullopt,
-        /*pairing_state=*/absl::nullopt);
+        /*current_pairing_device*/ std::nullopt,
+        /*pairing_state=*/std::nullopt);
   }
 
-  absl::optional<BluetoothHidPairingState> pairing_state;
+  std::optional<BluetoothHidPairingState> pairing_state;
   if (current_pairing_state_.has_value()) {
     pairing_state = BluetoothHidPairingState{
         current_pairing_state_.value().code,
         current_pairing_state_.value().num_keys_entered};
   }
 
-  absl::optional<BluetoothHidType> hid_type =
+  std::optional<BluetoothHidType> hid_type =
       GetBluetoothHidType(current_pairing_device_.value());
   DCHECK(hid_type) << " |current_pairing_device_| has an invalid HID type";
 
@@ -318,7 +318,7 @@ bool BluetoothHidDetectorImpl::IsHidTypeMissing(
 
 bool BluetoothHidDetectorImpl::ShouldAttemptToPairWithDevice(
     const BluetoothDevicePropertiesPtr& device) {
-  absl::optional<BluetoothHidDetector::BluetoothHidType> hid_type =
+  std::optional<BluetoothHidDetector::BluetoothHidType> hid_type =
       GetBluetoothHidType(device);
   if (!hid_type)
     return false;
@@ -355,10 +355,14 @@ void BluetoothHidDetectorImpl::ProcessQueue() {
   HID_LOG(EVENT) << "Pairing with device with id: "
                  << current_pairing_device_.value()->id;
   ++num_pairing_attempts_;
+
+  // Start a timer to make sure that the queue never gets stuck, such as in
+  // b/242358619.
   current_pairing_timer_.Start(
       FROM_HERE, kMaxPairingSessionDuration,
-      base::BindOnce(&BluetoothHidDetectorImpl::ClearCurrentPairingState,
+      base::BindOnce(&BluetoothHidDetectorImpl::OnPairingTimeout,
                      weak_ptr_factory_.GetWeakPtr()));
+
   device_pairing_handler_remote_->PairDevice(
       current_pairing_device_.value()->id,
       device_pairing_delegate_receiver_.BindNewPipeAndPassRemote(),
@@ -394,6 +398,13 @@ void BluetoothHidDetectorImpl::OnPairDevice(
 
   HID_LOG(ERROR) << "Pairing failed, clearing current pairing state and "
                  << "processing the next device in queue.";
+  ClearCurrentPairingState();
+}
+
+void BluetoothHidDetectorImpl::OnPairingTimeout() {
+  HID_LOG(ERROR) << "Pairing session has timed out, clearing current pairing "
+                 << "state.";
+  hid_detection::RecordPairingTimeoutExceeded();
   ClearCurrentPairingState();
 }
 

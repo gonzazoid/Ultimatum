@@ -4,8 +4,8 @@
 
 package org.chromium.chrome.browser.metrics;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -22,16 +22,12 @@ import org.chromium.base.Callback;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.JniMocker;
 
-/**
- * Tests for VariationsSession
- */
+/** Tests for VariationsSession */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class VariationsSessionTest {
-    @Rule
-    public JniMocker mocker = new JniMocker();
-    @Mock
-    private VariationsSession.Natives mVariationsSessionJniMock;
+    @Rule public JniMocker mocker = new JniMocker();
+    @Mock private VariationsSession.Natives mVariationsSessionJniMock;
 
     private TestVariationsSession mSession;
 
@@ -68,10 +64,11 @@ public class VariationsSessionTest {
 
     @Test
     public void testGetRestrictModeValue() {
-        mSession.getRestrictModeValue(new Callback<String>() {
-            @Override
-            public void onResult(String restrictMode) {}
-        });
+        mSession.getRestrictModeValue(
+                new Callback<String>() {
+                    @Override
+                    public void onResult(String restrictMode) {}
+                });
         String restrictValue = "test";
         mSession.runCallback(restrictValue);
         verify(mVariationsSessionJniMock, never())

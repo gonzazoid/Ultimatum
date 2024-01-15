@@ -5,15 +5,12 @@
 #import <UIKit/UIKit.h>
 #import <XCTest/XCTest.h>
 
-#import "base/bind.h"
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
+#import "base/functional/bind.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
 #import "components/strings/grit/components_strings.h"
-#import "components/url_param_filter/core/features.h"
-#import "components/url_param_filter/core/url_param_filter_test_helper.h"
-#import "ios/chrome/browser/metrics/metrics_app_interface.h"
-#import "ios/chrome/browser/ui/fullscreen/fullscreen_features.h"
+#import "ios/chrome/browser/tabs/model/inactive_tabs/features.h"
 #import "ios/chrome/browser/ui/fullscreen/test/fullscreen_app_interface.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_actions.h"
@@ -24,22 +21,19 @@
 #import "ios/chrome/test/earl_grey/chrome_xcui_actions.h"
 #import "ios/chrome/test/earl_grey/scoped_block_popups_pref.h"
 #import "ios/chrome/test/scoped_eg_synchronization_disabler.h"
+#import "ios/testing/earl_grey/app_launch_configuration.h"
+#import "ios/testing/earl_grey/app_launch_manager.h"
 #import "ios/testing/earl_grey/disabled_test_macros.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #import "ios/web/common/features.h"
 #import "ios/web/public/test/element_selector.h"
-#import "net/http/http_util.h"
 #import "net/test/embedded_test_server/embedded_test_server.h"
 #import "net/test/embedded_test_server/http_request.h"
 #import "net/test/embedded_test_server/http_response.h"
 #import "url/gurl.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-using chrome_test_util::ButtonWithAccessibilityLabelId;
 using chrome_test_util::ContextMenuCopyButton;
+using chrome_test_util::ContextMenuItemWithAccessibilityLabelId;
 using chrome_test_util::OmniboxText;
 using chrome_test_util::OpenLinkInNewTabButton;
 using chrome_test_util::SystemSelectionCalloutCopyButton;
@@ -84,35 +78,6 @@ const char kInitialPageHtml[] =
 const char kInitialPageDestinationLinkId[] = "link";
 // The text of the link to the destination page.
 const char kInitialPageDestinationLinkText[] = "link";
-
-// URL to a page with a link to the destination page.
-const char kDecoratedLinkSourcePageUrl[] = "/scenarioContextMenuDecoratedLink";
-// HTML content of a page with a link to the destination page.
-const char kDecoratedLinkSourcePageHtml[] =
-    "<html><head><meta name='viewport' content='width=device-width, "
-    "initial-scale=1.0, maximum-scale=1.0, user-scalable=no' /></head><body><a "
-    "style='margin-left:150px' href='/destination?clid=123&nice_param=456' "
-    "id='link'>"
-    "decorated link</a></body></html>";
-// Destination link with decorated parameters.
-const char kDecoratedDestinationLink[] = "/destination?clid=123&nice_param=456";
-// HTML content of a page that is navigated to via link with decoration.
-const char kDecoratedDestinationPageHtml[] =
-    "<html><head><meta name='viewport' content='width=device-width, "
-    "initial-scale=1.0, maximum-scale=1.0, user-scalable=no' "
-    "/></head><body><script>document.title='new doc'</script>"
-    "<center><span id=\"message\">Decorated destination!</span></center>"
-    "</body></html>";
-// Destination link with decorated parameters removed.
-const char kFilteredDestinationLink[] = "/destination?nice_param=456";
-// HTML content of a page that is navigated to via link with decoration
-// filtered.
-const char kFilteredDestinationPageHtml[] =
-    "<html><head><meta name='viewport' content='width=device-width, "
-    "initial-scale=1.0, maximum-scale=1.0, user-scalable=no' "
-    "/></head><body><script>document.title='new doc'</script>"
-    "<center><span id=\"message\">Filtered destination!</span></center>"
-    "</body></html>";
 
 // URL to a page with a link with a javascript: scheme.
 const char kJavaScriptPageUrl[] = "/scenarionContextMenuJavaScript";
@@ -190,12 +155,13 @@ NSString* const kLongImgTitle =
 
 // Matcher for the open image button in the context menu.
 id<GREYMatcher> OpenImageButton() {
-  return ButtonWithAccessibilityLabelId(IDS_IOS_CONTENT_CONTEXT_OPENIMAGE);
+  return ContextMenuItemWithAccessibilityLabelId(
+      IDS_IOS_CONTENT_CONTEXT_OPENIMAGE);
 }
 
 // Matcher for the open image in new tab button in the context menu.
 id<GREYMatcher> OpenImageInNewTabButton() {
-  return ButtonWithAccessibilityLabelId(
+  return ContextMenuItemWithAccessibilityLabelId(
       IDS_IOS_CONTENT_CONTEXT_OPENIMAGENEWTAB);
 }
 
@@ -233,12 +199,6 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
                                    kInitialPageDestinationLinkId,
                                    kShortImgTitle, kLogoPageChromiumImageId];
     http_response->set_content(base::SysNSStringToUTF8(content));
-  } else if (request.relative_url == kDecoratedLinkSourcePageUrl) {
-    http_response->set_content(kDecoratedLinkSourcePageHtml);
-  } else if (request.relative_url == kDecoratedDestinationLink) {
-    http_response->set_content(kDecoratedDestinationPageHtml);
-  } else if (request.relative_url == kFilteredDestinationLink) {
-    http_response->set_content(kFilteredDestinationPageHtml);
   } else {
     return nullptr;
   }
@@ -269,6 +229,16 @@ void TapOnContextMenuButton(id<GREYMatcher> context_menu_item_button) {
       performAction:grey_tap()];
 }
 
+void RelaunchAppWithInactiveTabs2WeeksEnabled() {
+  AppLaunchConfiguration config;
+  config.relaunch_policy = ForceRelaunchByCleanShutdown;
+  config.additional_args.push_back(
+      "--enable-features=" + std::string(kTabInactivityThreshold.name) + ":" +
+      kTabInactivityThresholdParameterName + "/" +
+      kTabInactivityThresholdTwoWeeksParam);
+  [[AppLaunchManager sharedManager] ensureAppLaunchedWithConfiguration:config];
+}
+
 }  // namespace
 
 // Context menu tests for Chrome.
@@ -283,8 +253,7 @@ void TapOnContextMenuButton(id<GREYMatcher> context_menu_item_button) {
 - (AppLaunchConfiguration)appConfigurationForTestCase {
   AppLaunchConfiguration config;
 
-  config.features_disabled.push_back(
-      fullscreen::features::kSmoothScrollingDefault);
+  config.features_disabled.push_back(web::features::kSmoothScrollingDefault);
   return config;
 }
 
@@ -469,7 +438,9 @@ void TapOnContextMenuButton(id<GREYMatcher> context_menu_item_button) {
       assertWithMatcher:grey_nil()];
 
   // Verify that system text selection callout is displayed.
-  [[EarlGrey selectElementWithMatcher:SystemSelectionCalloutCopyButton()]
+  [[EarlGrey
+      selectElementWithMatcher:grey_allOf(SystemSelectionCalloutCopyButton(),
+                                          grey_sufficientlyVisible(), nil)]
       assertWithMatcher:grey_notNil()];
 
   // TODO(crbug.com/1233056): Tap to dismiss the system selection callout
@@ -536,20 +507,19 @@ void TapOnContextMenuButton(id<GREYMatcher> context_menu_item_button) {
 
   // Check the different buttons.
   [[EarlGrey
-      selectElementWithMatcher:chrome_test_util::ButtonWithAccessibilityLabelId(
+      selectElementWithMatcher:ContextMenuItemWithAccessibilityLabelId(
                                    IDS_IOS_CONTENT_CONTEXT_OPENLINKNEWTAB)]
       assertWithMatcher:grey_sufficientlyVisible()];
   [[EarlGrey
-      selectElementWithMatcher:chrome_test_util::ButtonWithAccessibilityLabelId(
+      selectElementWithMatcher:ContextMenuItemWithAccessibilityLabelId(
                                    IDS_IOS_OPEN_IN_INCOGNITO_ACTION_TITLE)]
       assertWithMatcher:grey_sufficientlyVisible()];
   [[EarlGrey
-      selectElementWithMatcher:chrome_test_util::ButtonWithAccessibilityLabelId(
+      selectElementWithMatcher:ContextMenuItemWithAccessibilityLabelId(
                                    IDS_IOS_CONTENT_CONTEXT_ADDTOREADINGLIST)]
       assertWithMatcher:grey_sufficientlyVisible()];
-  [[EarlGrey
-      selectElementWithMatcher:chrome_test_util::ButtonWithAccessibilityLabelId(
-                                   IDS_IOS_COPY_LINK_ACTION_TITLE)]
+  [[EarlGrey selectElementWithMatcher:ContextMenuItemWithAccessibilityLabelId(
+                                          IDS_IOS_COPY_LINK_ACTION_TITLE)]
       assertWithMatcher:grey_sufficientlyVisible()];
 }
 
@@ -625,15 +595,13 @@ void TapOnContextMenuButton(id<GREYMatcher> context_menu_item_button) {
   LongPressElement(kInitialPageDestinationLinkId);
 
   // Check the different buttons.
-  [[EarlGrey
-      selectElementWithMatcher:chrome_test_util::ButtonWithAccessibilityLabelId(
-                                   IDS_IOS_COPY_LINK_ACTION_TITLE)]
+  [[EarlGrey selectElementWithMatcher:ContextMenuItemWithAccessibilityLabelId(
+                                          IDS_IOS_COPY_LINK_ACTION_TITLE)]
       assertWithMatcher:grey_sufficientlyVisible()];
 
   // Make sure that the open action is not displayed.
-  [[EarlGrey
-      selectElementWithMatcher:chrome_test_util::ButtonWithAccessibilityLabelId(
-                                   IDS_IOS_CONTENT_CONTEXT_OPEN)]
+  [[EarlGrey selectElementWithMatcher:ContextMenuItemWithAccessibilityLabelId(
+                                          IDS_IOS_CONTENT_CONTEXT_OPEN)]
       assertWithMatcher:grey_nil()];
 }
 
@@ -645,250 +613,47 @@ void TapOnContextMenuButton(id<GREYMatcher> context_menu_item_button) {
   LongPressElement(kInitialPageDestinationLinkId);
 
   // Check the different buttons.
-  [[EarlGrey
-      selectElementWithMatcher:chrome_test_util::ButtonWithAccessibilityLabelId(
-                                   IDS_IOS_COPY_LINK_ACTION_TITLE)]
+  [[EarlGrey selectElementWithMatcher:ContextMenuItemWithAccessibilityLabelId(
+                                          IDS_IOS_COPY_LINK_ACTION_TITLE)]
       assertWithMatcher:grey_sufficientlyVisible()];
 }
 
-@end
+// Checks that opening a tab in the background doesn't mark it as inactive.
+// This is a regression test against crbug.com/1490604, where background tabs
+// had an unset last active time, and thus were considered inactive on the next
+// launch.
+- (void)testOpenedInBackgroundStaysActiveAfterRelaunch {
+  const GURL initialURL = self.testServer->GetURL(kInitialPageUrl);
+  [ChromeEarlGrey loadURL:initialURL];
+  [ChromeEarlGrey
+      waitForWebStateContainingText:kInitialPageDestinationLinkText];
+  [ChromeEarlGrey waitForWebStateZoomScale:1.0];
 
-@interface FilterWhenEnteringIncognitoDisabled : ChromeTestCase {
-  std::unique_ptr<ScopedBlockPopupsPref> _blockPopupsPref;
-}
-
-@end
-
-@implementation FilterWhenEnteringIncognitoDisabled
-
-- (AppLaunchConfiguration)appConfigurationForTestCase {
-  AppLaunchConfiguration config;
-
-  config.features_disabled.push_back(
-      url_param_filter::features::kIncognitoParamFilterEnabled);
-  return config;
-}
-
-- (void)setUp {
-  [super setUp];
-  _blockPopupsPref =
-      std::make_unique<ScopedBlockPopupsPref>(CONTENT_SETTING_ALLOW);
-  self.testServer->RegisterRequestHandler(
-      base::BindRepeating(&StandardResponse));
-  GREYAssertTrue(self.testServer->Start(), @"Server did not start.");
-}
-
-// Checks that a decorated link isn't filtered when "Open in Incognito" is
-// pressed and the kIncognitoParamFilterEnabled feature is disabled.
-- (void)testOpenIncognitoLinkDoesntFilterUrlTestCase {
-  // Loads url in first window.
-  const GURL initialURL = self.testServer->GetURL(kDecoratedLinkSourcePageUrl);
-  [ChromeEarlGrey loadURL:initialURL inWindowWithNumber:0];
-
-  [ChromeEarlGrey waitForWebStateContainingText:kInitialPageDestinationLinkText
-                             inWindowWithNumber:0];
-
-  // Display the context menu.
   LongPressElement(kInitialPageDestinationLinkId);
+  TapOnContextMenuButton(OpenLinkInNewTabButton());
 
-  // Open link in Incognito.
-  [[EarlGrey
-      selectElementWithMatcher:chrome_test_util::OpenLinkInIncognitoButton()]
-      performAction:grey_tap()];
+  [ChromeEarlGrey waitForMainTabCount:2];
 
-  // Assert that "clid" was not filtered from the loaded URL.
-  [ChromeEarlGrey waitForWebStateContainingText:"Decorated destination!"
-                             inWindowWithNumber:0];
-  GREYAssertEqual([ChromeEarlGrey webStateLastCommittedURL],
-                  self.testServer->GetURL(kDecoratedDestinationLink),
-                  @"URL was filtered when it shouldn't have been");
-}
+  // There should be 2 active tabs and no inactive tab.
+  GREYAssertTrue([ChromeEarlGrey mainTabCount] == 2,
+                 @"Main tab count should be 2");
+  GREYAssertTrue([ChromeEarlGrey incognitoTabCount] == 0,
+                 @"Incognito tab count should be 0");
+  GREYAssertTrue([ChromeEarlGrey inactiveTabCount] == 0,
+                 @"Inactive tab count should be 0");
 
-@end
+  RelaunchAppWithInactiveTabs2WeeksEnabled();
 
-// The IncognitoParamFilterExperiment feature is enabled, but the should_filter
-// param is false. The expected behavior is that params aren't be filtered from
-// URLs, but metrics are logged.
-@interface FilterWhenEnteringIncognitoPartiallyEnabled : ChromeTestCase {
-  std::unique_ptr<ScopedBlockPopupsPref> _blockPopupsPref;
-}
+  // Open the Tab Grid.
+  [ChromeEarlGreyUI openTabGrid];
 
-@end
-
-@implementation FilterWhenEnteringIncognitoPartiallyEnabled
-
-- (AppLaunchConfiguration)appConfigurationForTestCase {
-  AppLaunchConfiguration config;
-  config.additional_args.push_back(
-      "--enable-features=" +
-      std::string(
-          url_param_filter::features::kIncognitoParamFilterEnabled.name) +
-      ":should_filter/false");
-  return config;
-}
-
-- (void)setUp {
-  [super setUp];
-  _blockPopupsPref =
-      std::make_unique<ScopedBlockPopupsPref>(CONTENT_SETTING_ALLOW);
-  self.testServer->RegisterRequestHandler(
-      base::BindRepeating(&StandardResponse));
-  GREYAssertTrue(self.testServer->Start(), @"Server did not start.");
-  GREYAssertNil([MetricsAppInterface setupHistogramTester],
-                @"Failed to set up histogram tester.");
-  // Set 127.0.0.1,clid as a (site,param) source classification for Url Param
-  // Filtering.
-  std::string test_contents =
-      url_param_filter::CreateSerializedUrlParamFilterClassificationForTesting(
-          {{"127.0.0.1", {"clid"}}}, {}, {"default"});
-  [ChromeEarlGrey setUrlParamClassifications:test_contents];
-}
-
-- (void)tearDown {
-  GREYAssertNil([MetricsAppInterface releaseHistogramTester],
-                @"Cannot reset histogram tester.");
-  [super tearDown];
-  [ChromeEarlGrey resetUrlParamClassifications];
-}
-
-// Checks that a decorated link isn't filtered when "Open in Incognito" is
-// pressed and the kIncognitoParamFilterEnabled feature is disabled.
-- (void)testOpenIncognitoLinkDoesntFilterUrlTestCase {
-  // Loads url in first window.
-  const GURL initialURL = self.testServer->GetURL(kDecoratedLinkSourcePageUrl);
-  [ChromeEarlGrey loadURL:initialURL inWindowWithNumber:0];
-
-  [ChromeEarlGrey waitForWebStateContainingText:kInitialPageDestinationLinkText
-                             inWindowWithNumber:0];
-
-  // Display the context menu.
-  LongPressElement(kInitialPageDestinationLinkId);
-
-  // Open link in Incognito.
-  [[EarlGrey
-      selectElementWithMatcher:chrome_test_util::OpenLinkInIncognitoButton()]
-      performAction:grey_tap()];
-
-  // Assert that "clid" was not filtered from the loaded URL.
-  [ChromeEarlGrey waitForWebStateContainingText:"Decorated destination!"
-                             inWindowWithNumber:0];
-  GREYAssertEqual([ChromeEarlGrey webStateLastCommittedURL],
-                  self.testServer->GetURL(kDecoratedDestinationLink),
-                  @"URL was filtered when it shouldn't have been");
-
-  // Reload the page once.
-  [ChromeEarlGrey reloadAndWaitForCompletion:true];
-
-  // Close the tab to check that the tab helper logged metrics when destroyed.
-  [ChromeEarlGrey closeCurrentTab];
-
-  // Ensure that UMA was logged correctly.
-  NSError* error = [MetricsAppInterface
-      expectUniqueSampleWithCount:1
-                        forBucket:net::HttpUtil::MapStatusCodeForHistogram(200)
-                     forHistogram:
-                         @"Navigation.CrossOtr.ContextMenu.ResponseCode"];
-  if (error) {
-    GREYFail([error description]);
-  }
-  error = [MetricsAppInterface
-      expectTotalCount:1
-          forHistogram:@"Navigation.CrossOtr.ContextMenu.RefreshCount"];
-  if (error) {
-    GREYFail([error description]);
-  }
-}
-
-@end
-
-@interface FilterWhenEnteringIncognitoFullyEnabled : ChromeTestCase {
-  std::unique_ptr<ScopedBlockPopupsPref> _blockPopupsPref;
-}
-
-@end
-
-@implementation FilterWhenEnteringIncognitoFullyEnabled
-
-- (AppLaunchConfiguration)appConfigurationForTestCase {
-  AppLaunchConfiguration config;
-  config.additional_args.push_back(
-      "--enable-features=" +
-      std::string(
-          url_param_filter::features::kIncognitoParamFilterEnabled.name) +
-      ":should_filter/true");
-  return config;
-}
-
-- (void)setUp {
-  [super setUp];
-  _blockPopupsPref =
-      std::make_unique<ScopedBlockPopupsPref>(CONTENT_SETTING_ALLOW);
-  self.testServer->RegisterRequestHandler(
-      base::BindRepeating(&StandardResponse));
-  GREYAssertTrue(self.testServer->Start(), @"Server did not start.");
-  GREYAssertNil([MetricsAppInterface setupHistogramTester],
-                @"Failed to set up histogram tester.");
-  // Set 127.0.0.1,clid as a (site,param) source classification for Url Param
-  // Filtering.
-  std::string test_contents =
-      url_param_filter::CreateSerializedUrlParamFilterClassificationForTesting(
-          {{"127.0.0.1", {"clid"}}}, {}, {"default"});
-  [ChromeEarlGrey setUrlParamClassifications:test_contents];
-}
-
-- (void)tearDown {
-  GREYAssertNil([MetricsAppInterface releaseHistogramTester],
-                @"Cannot reset histogram tester.");
-  [super tearDown];
-  [ChromeEarlGrey resetUrlParamClassifications];
-}
-
-// Checks that a decorated link is filtered when "Open in Incognito" is pressed
-// and the kIncognitoParamFilterEnabled feature is enabled.
-- (void)testOpenIncognitoLinkDoesFilterUrlTestCase {
-  // Loads url in first window.
-  const GURL initialURL = self.testServer->GetURL(kDecoratedLinkSourcePageUrl);
-  [ChromeEarlGrey loadURL:initialURL inWindowWithNumber:0];
-
-  [ChromeEarlGrey waitForWebStateContainingText:kInitialPageDestinationLinkText
-                             inWindowWithNumber:0];
-
-  // Display the context menu.
-  LongPressElement(kInitialPageDestinationLinkId);
-
-  // Open link in new window.
-  [[EarlGrey
-      selectElementWithMatcher:chrome_test_util::OpenLinkInIncognitoButton()]
-      performAction:grey_tap()];
-
-  // Assert that "clid" was filtered from the loaded URL.
-  [ChromeEarlGrey waitForWebStateContainingText:"Filtered destination!"
-                             inWindowWithNumber:0];
-  GREYAssertEqual([ChromeEarlGrey webStateLastCommittedURL],
-                  self.testServer->GetURL(kFilteredDestinationLink),
-                  @"URL wasn't filtered when it should've been");
-
-  // Reload the page once.
-  [ChromeEarlGrey reloadAndWaitForCompletion:true];
-
-  // Close the tab to check that the tab helper logged metrics when destroyed.
-  [ChromeEarlGrey closeCurrentTab];
-
-  // Ensure that UMA was logged correctly.
-  NSError* error = [MetricsAppInterface
-      expectUniqueSampleWithCount:1
-                        forBucket:net::HttpUtil::MapStatusCodeForHistogram(200)
-                     forHistogram:
-                         @"Navigation.CrossOtr.ContextMenu.ResponseCode"];
-  if (error) {
-    GREYFail([error description]);
-  }
-  error = [MetricsAppInterface
-      expectTotalCount:1
-          forHistogram:@"Navigation.CrossOtr.ContextMenu.RefreshCount"];
-  if (error) {
-    GREYFail([error description]);
-  }
+  // There should still be 2 active tabs and no inactive tab.
+  GREYAssertTrue([ChromeEarlGrey mainTabCount] == 2,
+                 @"Main tab count should be 2");
+  GREYAssertTrue([ChromeEarlGrey incognitoTabCount] == 0,
+                 @"Incognito tab count should be 0");
+  GREYAssertTrue([ChromeEarlGrey inactiveTabCount] == 0,
+                 @"Inactive tab count should be 0");
 }
 
 @end

@@ -9,7 +9,7 @@
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
-#include "third_party/blink/renderer/platform/weborigin/security_origin_hash.h"
+#include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
 namespace blink {
@@ -63,25 +63,10 @@ class WindowAgentFactory final : public GarbageCollected<WindowAgentFactory> {
         : scheme(scheme), registrable_domain(registrable_domain) {}
   };
 
-  struct SchemeAndRegistrableDomainHash {
-    STATIC_ONLY(SchemeAndRegistrableDomainHash);
-    static const bool safe_to_compare_to_empty_or_deleted = false;
-
-    static unsigned GetHash(const SchemeAndRegistrableDomain&);
-    static bool Equal(const SchemeAndRegistrableDomain&,
-                      const SchemeAndRegistrableDomain&);
-  };
-
   struct SchemeAndRegistrableDomainTraits
-      : SimpleClassHashTraits<SchemeAndRegistrableDomain> {
-    STATIC_ONLY(SchemeAndRegistrableDomainTraits);
-    static const bool kHasIsEmptyValueFunction = true;
-
-    static bool IsEmptyValue(const SchemeAndRegistrableDomain&);
-    static bool IsDeletedValue(const SchemeAndRegistrableDomain& value);
-    static void ConstructDeletedValue(SchemeAndRegistrableDomain& slot,
-                                      bool zero_value);
-  };
+      : TwoFieldsHashTraits<SchemeAndRegistrableDomain,
+                            &SchemeAndRegistrableDomain::scheme,
+                            &SchemeAndRegistrableDomain::registrable_domain> {};
 
   // Use a shared instance of Agent for all frames if a frame may have the
   // universal access privilege.
@@ -92,24 +77,19 @@ class WindowAgentFactory final : public GarbageCollected<WindowAgentFactory> {
   WeakMember<WindowAgent> file_url_agent_;
 
   // Use the SecurityOrigin itself as the key for opaque origins.
-  HeapHashMap<scoped_refptr<const SecurityOrigin>,
-              WeakMember<WindowAgent>,
-              SecurityOriginHash>
+  HeapHashMap<scoped_refptr<const SecurityOrigin>, WeakMember<WindowAgent>>
       opaque_origin_agents_;
 
   // Use the SecurityOrigin itself as the key for origin-keyed origins.
   // TODO(wjmaclean,domenic): In future when logical cross-origin-isolation
   // (COI) is implemented, we should unify it with logical-OAC so that all the
   // origin-keyed isolation relies on a single mechanism.
-  HeapHashMap<scoped_refptr<const SecurityOrigin>,
-              WeakMember<WindowAgent>,
-              SecurityOriginHash>
+  HeapHashMap<scoped_refptr<const SecurityOrigin>, WeakMember<WindowAgent>>
       origin_keyed_agent_cluster_agents_;
 
   // Use registerable domain as the key for general tuple origins.
   using TupleOriginAgents = HeapHashMap<SchemeAndRegistrableDomain,
                                         WeakMember<WindowAgent>,
-                                        SchemeAndRegistrableDomainHash,
                                         SchemeAndRegistrableDomainTraits>;
   TupleOriginAgents tuple_origin_agents_;
   Member<AgentGroupScheduler> agent_group_scheduler_;

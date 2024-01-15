@@ -6,7 +6,7 @@
 
 #include "base/test/bind.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
-#include "chrome/browser/ui/views/hover_button.h"
+#include "chrome/browser/ui/views/controls/hover_button.h"
 #include "chrome/test/interaction/interaction_test_util_browser.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/interaction/element_identifier.h"
@@ -63,8 +63,8 @@ class InteractionTestUtilBrowserTest : public views::ViewsTestBase {
   }
 
   void TearDown() override {
-    widget_.reset();
     contents_ = nullptr;
+    widget_.reset();
     layout_provider_.reset();
     ViewsTestBase::TearDown();
   }
@@ -77,17 +77,18 @@ class InteractionTestUtilBrowserTest : public views::ViewsTestBase {
 };
 
 TEST_F(InteractionTestUtilBrowserTest, PressHoverButton) {
-  base::raw_ptr<HoverButton> hover_button;
+  raw_ptr<HoverButton> hover_button;
   auto pressed = base::BindLambdaForTesting([&]() {
-    hover_button->parent()->RemoveChildViewT(hover_button);
-    hover_button = nullptr;
+    HoverButton* button = hover_button.ExtractAsDangling();
+    button->parent()->RemoveChildViewT(button);
   });
   hover_button = contents_->AddChildView(std::make_unique<HoverButton>(
       views::Button::PressedCallback(pressed), u"Button"));
   widget_->LayoutRootViewIfNecessary();
-  test_util_.PressButton(
-      views::ElementTrackerViews::GetInstance()->GetElementForView(hover_button,
-                                                                   true),
-      ui::test::InteractionTestUtil::InputType::kKeyboard);
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util_.PressButton(
+                views::ElementTrackerViews::GetInstance()->GetElementForView(
+                    hover_button, true),
+                ui::test::InteractionTestUtil::InputType::kKeyboard));
   EXPECT_EQ(nullptr, hover_button);
 }

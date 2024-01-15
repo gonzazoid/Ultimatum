@@ -8,14 +8,11 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
-#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/storage_pressure_bubble.h"
 #include "chrome/common/chrome_switches.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
-
-#if !BUILDFLAG(IS_ANDROID)
-#include "chrome/browser/ui/storage_pressure_bubble.h"
-#endif
+#include "third_party/blink/public/common/storage_key/storage_key.h"
 
 namespace {
 
@@ -44,7 +41,7 @@ StorageNotificationServiceImpl::CreateThreadSafePressureNotificationCallback() {
       &StorageNotificationServiceImpl::MaybeShowStoragePressureNotification,
       weak_ptr_factory_.GetWeakPtr());
   return base::BindRepeating(
-      [](StoragePressureNotificationCallback cb, blink::StorageKey key) {
+      [](StoragePressureNotificationCallback cb, const blink::StorageKey& key) {
         content::GetUIThreadTaskRunner({})->PostTask(
             FROM_HERE,
             base::BindOnce([](StoragePressureNotificationCallback callback,
@@ -55,7 +52,7 @@ StorageNotificationServiceImpl::CreateThreadSafePressureNotificationCallback() {
 }
 
 void StorageNotificationServiceImpl::MaybeShowStoragePressureNotification(
-    const blink::StorageKey storage_key) {
+    const blink::StorageKey& storage_key) {
   auto origin = storage_key.origin();
   if (!disk_pressure_notification_last_sent_at_.is_null() &&
       base::TimeTicks::Now() - disk_pressure_notification_last_sent_at_ <

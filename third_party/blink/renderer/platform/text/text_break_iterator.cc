@@ -293,6 +293,53 @@ inline bool NeedsLineBreakIterator(UChar ch) {
   return ch > kAsciiLineBreakTableLastChar && ch != kNoBreakSpaceCharacter;
 }
 
+template <typename CharacterType>
+struct LazyLineBreakIterator::Context {
+  STACK_ALLOCATED();
+
+ public:
+  struct ContextChar {
+    STACK_ALLOCATED();
+
+   public:
+    ContextChar() = default;
+    explicit ContextChar(UChar ch) : ch(ch), is_space(IsBreakableSpace(ch)) {}
+
+    UChar ch = 0;
+    bool is_space = false;
+  };
+
+  Context(const CharacterType* str, int len, unsigned start_offset, int index) {
+    CHECK_GE(index, 0);
+    DCHECK_GE(static_cast<unsigned>(index), start_offset);
+    CHECK_LE(index, len);
+    if (index > 0) {
+      last = ContextChar(str[index - 1]);
+      if (index > 1) {
+        last_last_ch = str[index - 2];
+      }
+    }
+  }
+
+  bool Fetch(const CharacterType* str, int len, int index) {
+    if (UNLIKELY(index >= len)) {
+      return false;
+    }
+    current = ContextChar(str[index]);
+    return true;
+  }
+
+  void Advance(int& index) {
+    ++index;
+    last_last_ch = last.ch;
+    last = current;
+  }
+
+  ContextChar current;
+  ContextChar last;
+  CharacterType last_last_ch = 0;
+};
+
 template <typename CharacterType,
           LineBreakType lineBreakType,
           BreakSpaceType break_space>
@@ -300,90 +347,88 @@ inline int LazyLineBreakIterator::NextBreakablePosition(
     int pos,
     const CharacterType* str,
     int len) const {
-  CHECK_GE(pos, 0);
-  DCHECK_GE(static_cast<unsigned>(pos), start_offset_);
-  CHECK_LE(pos, len);
+  Context<CharacterType> context(str, len, start_offset_, pos);
   int next_break = -1;
-  UChar last_last_ch = pos > 1 ? str[pos - 2] : SecondToLastCharacter();
-  UChar last_ch = pos > 0 ? str[pos - 1] : LastCharacter();
-  bool is_last_space = IsBreakableSpace(last_ch);
   ULineBreak last_line_break;
-  if (lineBreakType == LineBreakType::kBreakAll)
-    last_line_break = LineBreakPropertyValue(last_last_ch, last_ch);
-  PriorContext prior_context = GetPriorContext();
-  CharacterType ch;
-  bool is_space;
-  for (int i = pos; i < len;
-       i++, last_last_ch = last_ch, last_ch = ch, is_last_space = is_space) {
-    ch = str[i];
-
-    is_space = IsBreakableSpace(ch);
+  if (lineBreakType == LineBreakType::kBreakAll) {
+    last_line_break =
+        LineBreakPropertyValue(context.last_last_ch, context.last.ch);
+  }
+  for (int i = pos; context.Fetch(str, len, i); context.Advance(i)) {
     switch (break_space) {
-      case BreakSpaceType::kBeforeEverySpace:
-        if (is_space || IsOtherSpaceSeparator<CharacterType>(ch))
-          return i;
-        break;
-      case BreakSpaceType::kBeforeSpaceRun:
-        // Theoritically, preserved newline characters are different from space
-        // and tab characters. The difference is not implemented because the
-        // LayoutNG line breaker handles preserved newline characters by itself.
-        if (is_space) {
-          if (!is_last_space)
-            return i;
+      case BreakSpaceType::kAfterSpaceRun:
+        if (context.current.is_space) {
           continue;
         }
-        break;
-      case BreakSpaceType::kAfterSpaceRun:
-        if (is_space)
-          continue;
-        if (is_last_space)
+        if (context.last.is_space) {
           return i;
+        }
         break;
       case BreakSpaceType::kAfterEverySpace:
-        if (is_last_space || IsOtherSpaceSeparator<CharacterType>(last_ch))
+        if (context.last.is_space ||
+            IsOtherSpaceSeparator<CharacterType>(context.last.ch)) {
           return i;
-        if ((is_space || IsOtherSpaceSeparator<CharacterType>(ch)) &&
-            i + 1 < len)
+        }
+        if ((context.current.is_space ||
+             IsOtherSpaceSeparator<CharacterType>(context.current.ch)) &&
+            i + 1 < len) {
           return i + 1;
+        }
         break;
     }
 
-    if (ShouldBreakAfter(last_last_ch, last_ch, ch))
+    if (ShouldBreakAfter(context.last_last_ch, context.last.ch,
+                         context.current.ch)) {
       return i;
+    }
 
-    if (lineBreakType == LineBreakType::kBreakAll && !U16_IS_LEAD(ch)) {
-      ULineBreak line_break = LineBreakPropertyValue(last_ch, ch);
+    if (lineBreakType == LineBreakType::kBreakAll &&
+        !U16_IS_LEAD(context.current.ch)) {
+      ULineBreak line_break =
+          LineBreakPropertyValue(context.last.ch, context.current.ch);
       if (ShouldBreakAfterBreakAll(last_line_break, line_break))
-        return i > pos && U16_IS_TRAIL(ch) ? i - 1 : i;
+        return i > pos && U16_IS_TRAIL(context.current.ch) ? i - 1 : i;
       if (line_break != U_LB_COMBINING_MARK)
         last_line_break = line_break;
     }
 
     if (lineBreakType == LineBreakType::kKeepAll &&
-        ShouldKeepAfterKeepAll(last_last_ch, last_ch, ch)) {
+        ShouldKeepAfterKeepAll(context.last_last_ch, context.last.ch,
+                               context.current.ch)) {
       // word-break:keep-all prevents breaks between East Asian ideographic.
       continue;
     }
 
-    if (NeedsLineBreakIterator(ch) || NeedsLineBreakIterator(last_ch)) {
+    if (NeedsLineBreakIterator(context.current.ch) ||
+        NeedsLineBreakIterator(context.last.ch)) {
       if (next_break < i) {
-        // Don't break if positioned at start of primary context and there is no
-        // prior context.
-        if (i || prior_context.length) {
-          if (TextBreakIterator* break_iterator = GetIterator(prior_context)) {
-            // Adjust the offset by |start_offset_| because |break_iterator| has
-            // text after |start_offset_|.
-            DCHECK_GE(i + prior_context.length, start_offset_);
-            next_break = break_iterator->following(
-                i - 1 + prior_context.length - start_offset_);
-            if (next_break >= 0) {
-              next_break = next_break + start_offset_ - prior_context.length;
+        // Don't break if positioned at start of primary context.
+        if (i) {
+          if (TextBreakIterator* break_iterator = GetIterator()) {
+            next_break = i - 1;
+            for (;;) {
+              // Adjust the offset by |start_offset_| because |break_iterator|
+              // has text after |start_offset_|.
+              // TODO(crbug.com/1500931): `+1` below shouldn't be there, but it
+              // was so before and removing it hits. This is to be investigated.
+              DCHECK_GE(next_break + 1u, start_offset_);
+              next_break =
+                  break_iterator->following(next_break - start_offset_);
+              if (next_break >= 0) {
+                next_break = next_break + start_offset_;
+                if (UNLIKELY(disable_soft_hyphen_) && next_break > 0 &&
+                    UNLIKELY(str[next_break - 1] == kSoftHyphenCharacter)) {
+                  continue;
+                }
+              }
+              break;
             }
           }
         }
       }
-      if (i == next_break && !is_last_space)
+      if (i == next_break && !context.last.is_space) {
         return i;
+      }
     }
   }
 
@@ -396,14 +441,6 @@ inline int LazyLineBreakIterator::NextBreakablePosition(
     const CharacterType* str,
     int len) const {
   switch (break_space_) {
-    case BreakSpaceType::kBeforeEverySpace:
-      return NextBreakablePosition<CharacterType, lineBreakType,
-                                   BreakSpaceType::kBeforeEverySpace>(pos, str,
-                                                                      len);
-    case BreakSpaceType::kBeforeSpaceRun:
-      return NextBreakablePosition<CharacterType, lineBreakType,
-                                   BreakSpaceType::kBeforeSpaceRun>(pos, str,
-                                                                    len);
     case BreakSpaceType::kAfterSpaceRun:
       return NextBreakablePosition<CharacterType, lineBreakType,
                                    BreakSpaceType::kAfterSpaceRun>(pos, str,
@@ -415,8 +452,7 @@ inline int LazyLineBreakIterator::NextBreakablePosition(
   }
   NOTREACHED();
   return NextBreakablePosition<CharacterType, lineBreakType,
-                               BreakSpaceType::kBeforeEverySpace>(pos, str,
-                                                                  len);
+                               BreakSpaceType::kAfterSpaceRun>(pos, str, len);
 }
 
 template <LineBreakType lineBreakType>
@@ -443,10 +479,10 @@ int LazyLineBreakIterator::NextBreakablePositionBreakCharacter(int pos) const {
 }
 
 int LazyLineBreakIterator::NextBreakablePosition(int pos,
-                                                 LineBreakType line_break_type,
                                                  int len) const {
-  switch (line_break_type) {
+  switch (break_type_) {
     case LineBreakType::kNormal:
+    case LineBreakType::kPhrase:
       return NextBreakablePosition<LineBreakType::kNormal>(pos, len);
     case LineBreakType::kBreakAll:
       return NextBreakablePosition<LineBreakType::kBreakAll>(pos, len);
@@ -456,19 +492,12 @@ int LazyLineBreakIterator::NextBreakablePosition(int pos,
       return NextBreakablePositionBreakCharacter(pos);
   }
   NOTREACHED();
-  return NextBreakablePosition(pos, LineBreakType::kNormal);
-}
-
-int LazyLineBreakIterator::NextBreakablePosition(
-    int pos,
-    LineBreakType line_break_type) const {
-  return NextBreakablePosition(pos, line_break_type,
-                               static_cast<int>(string_.length()));
+  return NextBreakablePosition<LineBreakType::kNormal>(pos, len);
 }
 
 unsigned LazyLineBreakIterator::NextBreakOpportunity(unsigned offset) const {
   DCHECK_LE(offset, string_.length());
-  int next_break = NextBreakablePosition(offset, break_type_);
+  int next_break = NextBreakablePosition(offset, string_.length());
   DCHECK_GE(next_break, 0);
   return next_break;
 }
@@ -477,7 +506,7 @@ unsigned LazyLineBreakIterator::NextBreakOpportunity(unsigned offset,
                                                      unsigned len) const {
   DCHECK_LE(offset, string_.length());
   DCHECK_LE(len, string_.length());
-  int next_break = NextBreakablePosition(offset, break_type_, len);
+  int next_break = NextBreakablePosition(offset, len);
   DCHECK_GE(next_break, 0);
   return next_break;
 }
@@ -488,7 +517,7 @@ unsigned LazyLineBreakIterator::PreviousBreakOpportunity(unsigned offset,
   // +2 to ensure at least one code point is included.
   unsigned end = std::min(pos + 2, string_.length());
   while (pos > min) {
-    int next_break = NextBreakablePosition(pos, break_type_, end);
+    int next_break = NextBreakablePosition(pos, end);
     DCHECK_GE(next_break, 0);
     if (static_cast<unsigned>(next_break) == pos)
       return next_break;
@@ -513,6 +542,8 @@ std::ostream& operator<<(std::ostream& ostream, LineBreakType line_break_type) {
       return ostream << "BreakCharacter";
     case LineBreakType::kKeepAll:
       return ostream << "KeepAll";
+    case LineBreakType::kPhrase:
+      return ostream << "Phrase";
   }
   NOTREACHED();
   return ostream << "LineBreakType::" << static_cast<int>(line_break_type);
@@ -520,14 +551,10 @@ std::ostream& operator<<(std::ostream& ostream, LineBreakType line_break_type) {
 
 std::ostream& operator<<(std::ostream& ostream, BreakSpaceType break_space) {
   switch (break_space) {
-    case BreakSpaceType::kBeforeEverySpace:
-      return ostream << "kBeforeEverySpace";
-    case BreakSpaceType::kAfterEverySpace:
-      return ostream << "kAfterEverySpace";
-    case BreakSpaceType::kBeforeSpaceRun:
-      return ostream << "kBeforeSpaceRun";
     case BreakSpaceType::kAfterSpaceRun:
       return ostream << "kAfterSpaceRun";
+    case BreakSpaceType::kAfterEverySpace:
+      return ostream << "kAfterEverySpace";
   }
   NOTREACHED();
   return ostream << "BreakSpaceType::" << static_cast<int>(break_space);

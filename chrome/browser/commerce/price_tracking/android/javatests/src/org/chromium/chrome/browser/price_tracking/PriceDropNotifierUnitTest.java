@@ -18,7 +18,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -50,9 +49,7 @@ import org.chromium.components.image_fetcher.ImageFetcher;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Unit test for {@link PriceDropNotifier}.
- */
+/** Unit test for {@link PriceDropNotifier}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class PriceDropNotifierUnitTest {
@@ -69,7 +66,9 @@ public class PriceDropNotifierUnitTest {
         private final ImageFetcher mMockImageFetcher;
         private final NotificationWrapperBuilder mMockNotificationBuilder;
 
-        TestPriceDropNotifier(Context context, ImageFetcher imageFetcher,
+        TestPriceDropNotifier(
+                Context context,
+                ImageFetcher imageFetcher,
                 NotificationWrapperBuilder notificationBuilder,
                 NotificationManagerProxy notificationManager) {
             super(context, notificationManager);
@@ -89,24 +88,16 @@ public class PriceDropNotifierUnitTest {
         }
     }
 
-    @Rule
-    public MockitoRule mMockitoRule = MockitoJUnit.rule();
+    @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule();
 
-    @Mock
-    private ImageFetcher mImageFetcher;
-    @Mock
-    private NotificationWrapperBuilder mNotificationBuilder;
-    @Mock
-    private NotificationManagerProxy mNotificationManagerProxy;
-    @Mock
-    private ChromeBrowserInitializer mChromeInitializer;
-    @Mock
-    private NotificationWrapper mNotificationWrapper;
-    @Mock
-    private PriceDropNotificationManager mPriceDropNotificationManager;
+    @Mock private ImageFetcher mImageFetcher;
+    @Mock private NotificationWrapperBuilder mNotificationBuilder;
+    @Mock private NotificationManagerProxy mNotificationManagerProxy;
+    @Mock private ChromeBrowserInitializer mChromeInitializer;
+    @Mock private NotificationWrapper mNotificationWrapper;
+    @Mock private PriceDropNotificationManager mPriceDropNotificationManager;
 
-    @Captor
-    ArgumentCaptor<Callback<Bitmap>> mBitmapCallbackCaptor;
+    @Captor ArgumentCaptor<Callback<Bitmap>> mBitmapCallbackCaptor;
 
     PriceDropNotifier mPriceDropNotifier;
     Intent mIntent;
@@ -114,8 +105,12 @@ public class PriceDropNotifierUnitTest {
     @Before
     public void setUp() {
         ShadowLog.stream = System.out;
-        mPriceDropNotifier = new TestPriceDropNotifier(ContextUtils.getApplicationContext(),
-                mImageFetcher, mNotificationBuilder, mNotificationManagerProxy);
+        mPriceDropNotifier =
+                new TestPriceDropNotifier(
+                        ContextUtils.getApplicationContext(),
+                        mImageFetcher,
+                        mNotificationBuilder,
+                        mNotificationManagerProxy);
         mPriceDropNotifier.setPriceDropNotificationManagerForTesting(mPriceDropNotificationManager);
         mIntent = new Intent();
         ChromeBrowserInitializer.setForTesting(mChromeInitializer);
@@ -131,24 +126,27 @@ public class PriceDropNotifierUnitTest {
                 .getNotificationActionClickIntent(any(), any(), any(), any(), anyInt());
     }
 
-    @After
-    public void tearDown() {
-        mPriceDropNotifier = null;
-        ChromeBrowserInitializer.setForTesting(null);
-    }
-
     private void showNotification() {
         List<ActionData> actionDataList = new ArrayList<>();
-        actionDataList.add(new ActionData(
-                PriceDropNotificationManagerImpl.ACTION_ID_VISIT_SITE, ACTION_TEXT_0));
-        actionDataList.add(new ActionData(
-                PriceDropNotificationManagerImpl.ACTION_ID_TURN_OFF_ALERT, ACTION_TEXT_1));
+        actionDataList.add(
+                new ActionData(
+                        PriceDropNotificationManagerImpl.ACTION_ID_VISIT_SITE, ACTION_TEXT_0));
+        actionDataList.add(
+                new ActionData(
+                        PriceDropNotificationManagerImpl.ACTION_ID_TURN_OFF_ALERT, ACTION_TEXT_1));
         showNotification(actionDataList);
     }
 
     private void showNotification(List<ActionData> actionDataList) {
-        PriceDropNotifier.NotificationData data = new NotificationData(TITLE, TEXT, ICON_URL,
-                DESTINATION_URL, OFFER_ID, PRODUCT_CLUSTER_ID, actionDataList);
+        PriceDropNotifier.NotificationData data =
+                new NotificationData(
+                        TITLE,
+                        TEXT,
+                        ICON_URL,
+                        DESTINATION_URL,
+                        OFFER_ID,
+                        PRODUCT_CLUSTER_ID,
+                        actionDataList);
         mPriceDropNotifier.showNotification(data);
     }
 
@@ -160,8 +158,8 @@ public class PriceDropNotifierUnitTest {
     private void sendPendingIntent(PendingIntent pendingIntent) {
         // Simulate to send a PendingIntent by manually starting the TrampolineActivity.
         ShadowPendingIntent shadowPendingIntent = Shadows.shadowOf(pendingIntent);
-        Robolectric
-                .buildActivity(PriceDropNotificationManagerImpl.TrampolineActivity.class,
+        Robolectric.buildActivity(
+                        PriceDropNotificationManagerImpl.TrampolineActivity.class,
                         shadowPendingIntent.getSavedIntent())
                 .create();
     }
@@ -177,7 +175,7 @@ public class PriceDropNotifierUnitTest {
 
     @Test
     public void testShowNotificationImageFetcherFailure() {
-        showNotification(/*actionDataList=*/null);
+        showNotification(/* actionDataList= */ null);
         invokeImageFetcherCallback(null);
         verify(mNotificationBuilder, times(0)).setLargeIcon(any());
         verifySetNotificationProperties();
@@ -189,8 +187,15 @@ public class PriceDropNotifierUnitTest {
 
     @Test
     public void testShowNotificationNoIconURL() {
-        PriceDropNotifier.NotificationData data = new NotificationData(
-                TITLE, TEXT, /*iconUrl=*/null, DESTINATION_URL, OFFER_ID, PRODUCT_CLUSTER_ID, null);
+        PriceDropNotifier.NotificationData data =
+                new NotificationData(
+                        TITLE,
+                        TEXT,
+                        /* iconUrl= */ null,
+                        DESTINATION_URL,
+                        OFFER_ID,
+                        PRODUCT_CLUSTER_ID,
+                        null);
         mPriceDropNotifier.showNotification(data);
         verify(mNotificationBuilder, times(0)).setLargeIcon(any());
         verify(mNotificationBuilder, times(0)).setBigPictureStyle(any(), any());
@@ -219,7 +224,7 @@ public class PriceDropNotifierUnitTest {
         doReturn(true)
                 .when(mPriceDropNotificationManager)
                 .hasReachedMaxAllowedNotificationNumber(anyInt());
-        showNotification(/*actionDataList=*/null);
+        showNotification(/* actionDataList= */ null);
         invokeImageFetcherCallback(null);
         verify(mNotificationManagerProxy, times(0)).notify(any());
         verify(mPriceDropNotificationManager, times(0))

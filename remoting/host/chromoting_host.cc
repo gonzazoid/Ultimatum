@@ -9,13 +9,17 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/ranges/algorithm.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
+#include "components/named_mojo_ipc_server/connection_info.h"
+#include "components/named_mojo_ipc_server/endpoint_options.h"
+#include "components/named_mojo_ipc_server/named_mojo_ipc_server.h"
 #include "components/webrtc/thread_wrapper.h"
 #include "remoting/base/constants.h"
 #include "remoting/base/logging.h"
@@ -24,7 +28,6 @@
 #include "remoting/host/input_injector.h"
 #include "remoting/host/ipc_constants.h"
 #include "remoting/host/mojo_caller_security_checker.h"
-#include "remoting/host/mojo_ipc/mojo_ipc_server.h"
 #include "remoting/protocol/client_stub.h"
 #include "remoting/protocol/host_stub.h"
 #include "remoting/protocol/ice_connection_to_client.h"
@@ -34,6 +37,9 @@
 
 #if BUILDFLAG(IS_WIN)
 #include <windows.h>
+
+#include "base/strings/stringprintf.h"
+#include "base/win/win_util.h"
 #endif
 
 using remoting::protocol::ConnectionToClient;
@@ -44,29 +50,29 @@ namespace remoting {
 namespace {
 
 const net::BackoffEntry::Policy kDefaultBackoffPolicy = {
-  // Number of initial errors (in sequence) to ignore before applying
-  // exponential back-off rules.
-  5,
+    // Number of initial errors (in sequence) to ignore before applying
+    // exponential back-off rules.
+    5,
 
-  // Initial delay for exponential back-off in ms.
-  2000,
+    // Initial delay for exponential back-off in ms.
+    2000,
 
-  // Factor by which the waiting time will be multiplied.
-  2,
+    // Factor by which the waiting time will be multiplied.
+    2,
 
-  // Fuzzing percentage. ex: 10% will spread requests randomly
-  // between 90%-100% of the calculated time.
-  0,
+    // Fuzzing percentage. ex: 10% will spread requests randomly
+    // between 90%-100% of the calculated time.
+    0,
 
-  // Maximum amount of time we are willing to delay our request in ms.
-  -1,
+    // Maximum amount of time we are willing to delay our request in ms.
+    -1,
 
-  // Time to keep an entry from being discarded even when it
-  // has no significant state, -1 to never discard.
-  -1,
+    // Time to keep an entry from being discarded even when it
+    // has no significant state, -1 to never discard.
+    -1,
 
-  // Don't use initial delay unless the last request was an error.
-  false,
+    // Don't use initial delay unless the last request was an error.
+    false,
 };
 
 }  // namespace
@@ -103,8 +109,9 @@ ChromotingHost::~ChromotingHost() {
 
   // Notify observers.
   if (started_) {
-    for (auto& observer : status_monitor_->observers())
+    for (auto& observer : status_monitor_->observers()) {
       observer.OnHostShutdown();
+    }
   }
 }
 
@@ -114,26 +121,31 @@ void ChromotingHost::Start(const std::string& host_owner_email) {
 
   HOST_LOG << "Starting host";
   started_ = true;
-  for (auto& observer : status_monitor_->observers())
+  for (auto& observer : status_monitor_->observers()) {
     observer.OnHostStarted(host_owner_email);
+  }
 
   session_manager_->AcceptIncoming(base::BindRepeating(
       &ChromotingHost::OnIncomingSession, base::Unretained(this)));
 }
 
+#if BUILDFLAG(IS_LINUX)
 void ChromotingHost::StartChromotingHostServices() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!ipc_server_);
 
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
-  ipc_server_ = std::make_unique<MojoIpcServer<mojom::ChromotingHostServices>>(
-      GetChromotingHostServicesServerName(), this,
-      base::BindRepeating(&IsTrustedMojoEndpoint));
+  ipc_server_ =
+      std::make_unique<ChromotingHostServicesServer>(base::BindRepeating(
+          &ChromotingHost::BindChromotingHostServices, base::Unretained(this)));
   ipc_server_->StartServer();
   HOST_LOG << "ChromotingHostServices IPC server has been started.";
-#else
-  NOTIMPLEMENTED();
+}
 #endif
+
+void ChromotingHost::BindChromotingHostServices(
+    mojo::PendingReceiver<mojom::ChromotingHostServices> receiver,
+    base::ProcessId peer_pid) {
+  receivers_.Add(this, std::move(receiver), peer_pid);
 }
 
 void ChromotingHost::AddExtension(std::unique_ptr<HostExtension> extension) {
@@ -159,7 +171,8 @@ void ChromotingHost::OnSessionAuthenticating(ClientSession* client) {
   // authenticates. This allows the backoff to protect from parallel
   // connection attempts as well as sequential ones.
   if (login_backoff_.ShouldRejectRequest()) {
-    LOG(WARNING) << "Disconnecting client " << client->client_jid() << " due to"
+    LOG(WARNING) << "Disconnecting client " << client->client_jid()
+                 << " due to"
                     " an overload of failed login attempts.";
     client->DisconnectSession(protocol::HOST_OVERLOAD);
     return;
@@ -179,8 +192,9 @@ void ChromotingHost::OnSessionAuthenticated(ClientSession* client) {
         protocol::OK);
 
     // Quit if the host was destroyed.
-    if (!self)
+    if (!self) {
       return;
+    }
   }
 
   // Disconnects above must have destroyed all other clients.
@@ -188,24 +202,27 @@ void ChromotingHost::OnSessionAuthenticated(ClientSession* client) {
   DCHECK(clients_.front().get() == client);
 
   // Notify observers that there is at least one authenticated client.
-  for (auto& observer : status_monitor_->observers())
+  for (auto& observer : status_monitor_->observers()) {
     observer.OnClientAuthenticated(client->client_jid());
+  }
 }
 
 void ChromotingHost::OnSessionChannelsConnected(ClientSession* client) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   // Notify observers.
-  for (auto& observer : status_monitor_->observers())
+  for (auto& observer : status_monitor_->observers()) {
     observer.OnClientConnected(client->client_jid());
+  }
 }
 
 void ChromotingHost::OnSessionAuthenticationFailed(ClientSession* client) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   // Notify observers.
-  for (auto& observer : status_monitor_->observers())
+  for (auto& observer : status_monitor_->observers()) {
     observer.OnClientAccessDenied(client->client_jid());
+  }
 }
 
 void ChromotingHost::OnSessionClosed(ClientSession* client) {
@@ -220,8 +237,9 @@ void ChromotingHost::OnSessionClosed(ClientSession* client) {
   clients_.erase(it);
 
   if (was_authenticated) {
-    for (auto& observer : status_monitor_->observers())
+    for (auto& observer : status_monitor_->observers()) {
       observer.OnClientDisconnected(jid);
+    }
   }
 }
 
@@ -230,8 +248,9 @@ void ChromotingHost::OnSessionRouteChange(
     const std::string& channel_name,
     const protocol::TransportRoute& route) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  for (auto& observer : status_monitor_->observers())
+  for (auto& observer : status_monitor_->observers()) {
     observer.OnClientRouteChange(session->client_jid(), channel_name, route);
+  }
 }
 
 void ChromotingHost::BindSessionServices(
@@ -246,8 +265,7 @@ void ChromotingHost::BindSessionServices(
   }
 #if BUILDFLAG(IS_WIN)
   DWORD peer_session_id;
-  if (!ProcessIdToSessionId(ipc_server_->current_peer_pid(),
-                            &peer_session_id)) {
+  if (!ProcessIdToSessionId(receivers_.current_context(), &peer_session_id)) {
     PLOG(ERROR) << "Session services bind request rejected: "
                    "ProcessIdToSessionId failed";
     return;
@@ -261,12 +279,12 @@ void ChromotingHost::BindSessionServices(
 #endif
   connected_client->BindReceiver(std::move(receiver));
   VLOG(1) << "Session services bound for receiver ID: "
-          << ipc_server_->current_receiver();
+          << receivers_.current_receiver();
 }
 
 void ChromotingHost::OnIncomingSession(
-      protocol::Session* session,
-      protocol::SessionManager::IncomingSessionResponse* response) {
+    protocol::Session* session,
+    protocol::SessionManager::IncomingSessionResponse* response) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(started_);
 
@@ -295,9 +313,10 @@ void ChromotingHost::OnIncomingSession(
   }
 
   // Create a ClientSession object.
-  std::vector<HostExtension*> extension_ptrs;
-  for (const auto& extension : extensions_)
+  std::vector<raw_ptr<HostExtension, VectorExperimental>> extension_ptrs;
+  for (const auto& extension : extensions_) {
     extension_ptrs.push_back(extension.get());
+  }
   clients_.push_back(std::make_unique<ClientSession>(
       this, std::move(connection), desktop_environment_factory_,
       desktop_environment_options_, max_session_duration_, pairing_registry_,

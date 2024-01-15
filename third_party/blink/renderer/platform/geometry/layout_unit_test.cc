@@ -102,6 +102,8 @@ TEST(LayoutUnitTest, LayoutUnitFloat) {
   const float kTolerance = 1.0f / kFixedPointDenominator;
   EXPECT_FLOAT_EQ(1.0f, LayoutUnit(1.0f).ToFloat());
   EXPECT_FLOAT_EQ(1.25f, LayoutUnit(1.25f).ToFloat());
+  EXPECT_EQ(LayoutUnit(1.25f), LayoutUnit(1.25f + kTolerance / 2));
+  EXPECT_EQ(LayoutUnit(-2.0f), LayoutUnit(-2.0f - kTolerance / 2));
   EXPECT_NEAR(LayoutUnit(1.1f).ToFloat(), 1.1f, kTolerance);
   EXPECT_NEAR(LayoutUnit(1.33f).ToFloat(), 1.33f, kTolerance);
   EXPECT_NEAR(LayoutUnit(1.3333f).ToFloat(), 1.3333f, kTolerance);
@@ -120,6 +122,64 @@ TEST(LayoutUnitTest, LayoutUnitFloat) {
   EXPECT_EQ(LayoutUnit::Min(), LayoutUnit(-Limits::infinity()));
 
   EXPECT_EQ(LayoutUnit(), LayoutUnit::Clamp(Limits::quiet_NaN()));
+}
+
+TEST(LayoutUnitTest, FromFloatCeil) {
+  const float kTolerance = 1.0f / kFixedPointDenominator;
+  EXPECT_EQ(LayoutUnit(1.25f), LayoutUnit::FromFloatCeil(1.25f));
+  EXPECT_EQ(LayoutUnit(1.25f + kTolerance),
+            LayoutUnit::FromFloatCeil(1.25f + kTolerance / 2));
+  EXPECT_EQ(LayoutUnit(), LayoutUnit::FromFloatCeil(-kTolerance / 2));
+
+  using Limits = std::numeric_limits<float>;
+  // Larger than Max()
+  EXPECT_EQ(LayoutUnit::Max(), LayoutUnit::FromFloatCeil(Limits::max()));
+  EXPECT_EQ(LayoutUnit::Max(), LayoutUnit::FromFloatCeil(Limits::infinity()));
+  // Smaller than Min()
+  EXPECT_EQ(LayoutUnit::Min(), LayoutUnit::FromFloatCeil(Limits::lowest()));
+  EXPECT_EQ(LayoutUnit::Min(), LayoutUnit::FromFloatCeil(-Limits::infinity()));
+
+  EXPECT_EQ(LayoutUnit(), LayoutUnit::FromFloatCeil(Limits::quiet_NaN()));
+}
+
+TEST(LayoutUnitTest, FromFloatFloor) {
+  const float kTolerance = 1.0f / kFixedPointDenominator;
+  EXPECT_EQ(LayoutUnit(1.25f), LayoutUnit::FromFloatFloor(1.25f));
+  EXPECT_EQ(LayoutUnit(1.25f),
+            LayoutUnit::FromFloatFloor(1.25f + kTolerance / 2));
+  EXPECT_EQ(LayoutUnit(-kTolerance),
+            LayoutUnit::FromFloatFloor(-kTolerance / 2));
+
+  using Limits = std::numeric_limits<float>;
+  // Larger than Max()
+  EXPECT_EQ(LayoutUnit::Max(), LayoutUnit::FromFloatFloor(Limits::max()));
+  EXPECT_EQ(LayoutUnit::Max(), LayoutUnit::FromFloatFloor(Limits::infinity()));
+  // Smaller than Min()
+  EXPECT_EQ(LayoutUnit::Min(), LayoutUnit::FromFloatFloor(Limits::lowest()));
+  EXPECT_EQ(LayoutUnit::Min(), LayoutUnit::FromFloatFloor(-Limits::infinity()));
+
+  EXPECT_EQ(LayoutUnit(), LayoutUnit::FromFloatFloor(Limits::quiet_NaN()));
+}
+
+TEST(LayoutUnitTest, FromFloatRound) {
+  const float kTolerance = 1.0f / kFixedPointDenominator;
+  EXPECT_EQ(LayoutUnit(1.25f), LayoutUnit::FromFloatRound(1.25f));
+  EXPECT_EQ(LayoutUnit(1.25f),
+            LayoutUnit::FromFloatRound(1.25f + kTolerance / 4));
+  EXPECT_EQ(LayoutUnit(1.25f + kTolerance),
+            LayoutUnit::FromFloatRound(1.25f + kTolerance * 3 / 4));
+  EXPECT_EQ(LayoutUnit(-kTolerance),
+            LayoutUnit::FromFloatRound(-kTolerance * 3 / 4));
+
+  using Limits = std::numeric_limits<float>;
+  // Larger than Max()
+  EXPECT_EQ(LayoutUnit::Max(), LayoutUnit::FromFloatRound(Limits::max()));
+  EXPECT_EQ(LayoutUnit::Max(), LayoutUnit::FromFloatRound(Limits::infinity()));
+  // Smaller than Min()
+  EXPECT_EQ(LayoutUnit::Min(), LayoutUnit::FromFloatRound(Limits::lowest()));
+  EXPECT_EQ(LayoutUnit::Min(), LayoutUnit::FromFloatRound(-Limits::infinity()));
+
+  EXPECT_EQ(LayoutUnit(), LayoutUnit::FromFloatRound(Limits::quiet_NaN()));
 }
 
 TEST(LayoutUnitTest, LayoutUnitRounding) {
@@ -236,6 +296,15 @@ TEST(LayoutUnitTest, LayoutUnitMultiplication) {
             (overflow_int_size_t * LayoutUnit(4)).ToInt());
   EXPECT_EQ(kIntMaxForLayoutUnit,
             (LayoutUnit(4) * overflow_int_size_t).ToInt());
+
+  {
+    // Multiple by float 1.0 can produce a different value.
+    LayoutUnit source = LayoutUnit::FromRawValue(2147483009);
+    EXPECT_NE(source, LayoutUnit(source * 1.0f));
+    LayoutUnit updated = source;
+    updated *= 1.0f;
+    EXPECT_NE(source, updated);
+  }
 }
 
 TEST(LayoutUnitTest, LayoutUnitDivision) {
@@ -378,20 +447,6 @@ TEST(LayoutUnitTest, IntMod) {
   EXPECT_EQ(LayoutUnit(1.25), IntMod(LayoutUnit(7.5), LayoutUnit(3.125)));
   EXPECT_EQ(LayoutUnit(), IntMod(LayoutUnit(7.5), LayoutUnit(2.5)));
   EXPECT_EQ(LayoutUnit(), IntMod(LayoutUnit(), LayoutUnit(123)));
-}
-
-TEST(LayoutUnitTest, LayoutMod) {
-#define CHECK_LAYOUT_MOD(a, b) EXPECT_EQ(a, (a / b) * b + LayoutMod(a, b))
-  CHECK_LAYOUT_MOD(LayoutUnit(55), LayoutUnit(10));
-  CHECK_LAYOUT_MOD(LayoutUnit(1234), LayoutUnit(789));
-  CHECK_LAYOUT_MOD(LayoutUnit::Max(), LayoutUnit::Max());
-  CHECK_LAYOUT_MOD(LayoutUnit::Max(), LayoutUnit::Min());
-  CHECK_LAYOUT_MOD(LayoutUnit::Min(), LayoutUnit::Max());
-  CHECK_LAYOUT_MOD(LayoutUnit::Min(), LayoutUnit::Min());
-
-  EXPECT_EQ(LayoutUnit(), LayoutMod(LayoutUnit(123), 2));
-  EXPECT_EQ(LayoutUnit(LayoutUnit::Epsilon()),
-            LayoutMod(LayoutUnit(123 + LayoutUnit::Epsilon()), 2));
 }
 
 TEST(LayoutUnitTest, Fraction) {

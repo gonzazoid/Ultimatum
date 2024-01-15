@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/config/chromecast_build.gni")
+import("//build/config/cast.gni")
 import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/linux/pkg_config.gni")
 import("//build/config/logging.gni")
@@ -12,13 +12,6 @@ import("//testing/test.gni")
 
 visibility = [ "//ui/ozone/*" ]
 
-declare_args() {
-  # Enables commiting of CRTC properties on page flip events.
-  # This is not enabled by default because of a bug on Intel:
-  # https://crbug.com/854753
-  drm_commit_properties_on_page_flip = false
-}
-
 source_set("gbm") {
   sources = [
     "client_native_pixmap_factory_drm.cc",
@@ -26,6 +19,8 @@ source_set("gbm") {
     "common/display_types.h",
     "common/drm_util.cc",
     "common/drm_util.h",
+    "common/drm_wrapper.cc",
+    "common/drm_wrapper.h",
     "common/scoped_drm_types.cc",
     "common/scoped_drm_types.h",
     "gpu/crtc_commit_request.cc",
@@ -100,8 +95,6 @@ source_set("gbm") {
     "host/drm_cursor.h",
     "host/drm_device_connector.cc",
     "host/drm_device_connector.h",
-    "host/drm_device_handle.cc",
-    "host/drm_device_handle.h",
     "host/drm_display_host.cc",
     "host/drm_display_host.h",
     "host/drm_display_host_manager.cc",
@@ -179,16 +172,12 @@ source_set("gbm") {
 
   public_configs = [ "//third_party/khronos:khronos_headers" ]
 
-  defines = [ "OZONE_IMPLEMENTATION" ]
+  defines = [
+    "OZONE_IMPLEMENTATION",
 
-  if (drm_commit_properties_on_page_flip) {
-    defines += [ "COMMIT_PROPERTIES_ON_PAGE_FLIP" ]
-  }
-
-  if (!use_runtime_vlog) {
-    # Enable VLOG(1) when using build time VLOG.
-    defines += [ "ENABLED_VLOG_LEVEL=1" ]
-  }
+    # Enable VLOG(1) so that they are included in field feedbacks.
+    "ENABLED_VLOG_LEVEL=1",
+  ]
 }
 
 source_set("gbm_unittests") {
@@ -196,14 +185,19 @@ source_set("gbm_unittests") {
   sources = [
     "common/drm_util_unittest.cc",
     "gpu/drm_display_unittest.cc",
+    "gpu/drm_gpu_display_manager_unittest.cc",
     "gpu/drm_overlay_manager_unittest.cc",
     "gpu/drm_overlay_validator_unittest.cc",
     "gpu/drm_thread_unittest.cc",
     "gpu/drm_window_unittest.cc",
+    "gpu/fake_drm_device_generator.cc",
+    "gpu/fake_drm_device_generator.h",
     "gpu/hardware_display_controller_unittest.cc",
     "gpu/hardware_display_plane_manager_unittest.cc",
     "gpu/mock_drm_device.cc",
     "gpu/mock_drm_device.h",
+    "gpu/mock_drm_modifiers_filter.cc",
+    "gpu/mock_drm_modifiers_filter.h",
     "gpu/proxy_helpers_unittest.cc",
     "gpu/screen_manager_unittest.cc",
   ]
@@ -219,6 +213,7 @@ source_set("gbm_unittests") {
     # the system.
     "//third_party/libdrm",
     "//ui/base/ime",
+    "//ui/display:test_support",
     "//ui/gfx",
     "//ui/gfx/linux:drm",
     "//ui/gfx/linux:gbm",
@@ -226,10 +221,6 @@ source_set("gbm_unittests") {
     "//ui/ozone:platform",
     "//ui/ozone/common",
   ]
-
-  if (drm_commit_properties_on_page_flip) {
-    defines = [ "COMMIT_PROPERTIES_ON_PAGE_FLIP" ]
-  }
 }
 
 source_set("drm_integration_tests") {

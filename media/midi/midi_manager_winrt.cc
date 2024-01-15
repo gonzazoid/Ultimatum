@@ -27,7 +27,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/scoped_generic.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -821,16 +821,6 @@ void MidiManagerWinrt::InitializeOnComRunner() {
   base::AutoLock auto_lock(lazy_init_member_lock_);
 
   DCHECK(service()->task_service()->IsOnTaskRunner(kComTaskRunner));
-
-  bool preload_success = base::win::ResolveCoreWinRTDelayload() &&
-                         ScopedHString::ResolveCoreWinRTStringDelayload();
-  if (!preload_success) {
-    service()->task_service()->PostBoundTask(
-        kDefaultTaskRunner,
-        base::BindOnce(&MidiManagerWinrt::CompleteInitialization,
-                       base::Unretained(this), Result::INITIALIZATION_ERROR));
-    return;
-  }
 
   port_manager_in_ = std::make_unique<MidiInPortManager>(this);
   port_manager_out_ = std::make_unique<MidiOutPortManager>(this);

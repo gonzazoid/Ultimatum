@@ -7,7 +7,7 @@
 #include "ash/shell.h"
 #include "ash/shell_delegate.h"
 #include "ash/system/media/unified_media_controls_view.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "services/media_session/public/cpp/util.h"
 #include "services/media_session/public/mojom/media_session.mojom.h"
@@ -82,13 +82,15 @@ void UnifiedMediaControlsController::MediaSessionInfoChanged(
 }
 
 void UnifiedMediaControlsController::MediaSessionMetadataChanged(
-    const absl::optional<media_session::MediaMetadata>& metadata) {
+    const std::optional<media_session::MediaMetadata>& metadata) {
   pending_metadata_ = metadata.value_or(media_session::MediaMetadata());
   if (freeze_session_timer_->IsRunning())
     return;
 
   session_metadata_ = *pending_metadata_;
-  media_controls_->SetTitle(pending_metadata_->title);
+  media_controls_->SetTitle(pending_metadata_->title.empty()
+                                ? pending_metadata_->source_title
+                                : pending_metadata_->title);
   media_controls_->SetArtist(pending_metadata_->artist);
   pending_metadata_.reset();
   MaybeShowMediaControlsOrEmptyState();
@@ -109,7 +111,7 @@ void UnifiedMediaControlsController::MediaSessionActionsChanged(
 }
 
 void UnifiedMediaControlsController::MediaSessionChanged(
-    const absl::optional<base::UnguessableToken>& request_id) {
+    const std::optional<base::UnguessableToken>& request_id) {
   // If previous session resumes, stop freeze timer if necessary and discard
   // any pending data.
   if (request_id == media_session_id_) {
@@ -160,8 +162,9 @@ void UnifiedMediaControlsController::MediaControllerImageChanged(
 void UnifiedMediaControlsController::UpdateSession() {
   media_session_id_ = pending_session_id_;
 
-  if (media_session_id_ == absl::nullopt)
+  if (media_session_id_ == std::nullopt) {
     ResetPendingData();
+  }
 
   if (pending_session_info_.has_value()) {
     media_controls_->SetIsPlaying(
@@ -173,7 +176,9 @@ void UnifiedMediaControlsController::UpdateSession() {
   }
 
   if (pending_metadata_.has_value()) {
-    media_controls_->SetTitle(pending_metadata_->title);
+    media_controls_->SetTitle(pending_metadata_->title.empty()
+                                  ? pending_metadata_->source_title
+                                  : pending_metadata_->title);
     media_controls_->SetArtist(pending_metadata_->artist);
   }
   session_metadata_ =
@@ -222,7 +227,7 @@ void UnifiedMediaControlsController::UpdateArtwork(
     return;
 
   if (!should_start_hide_timer) {
-    media_controls_->SetArtwork(absl::nullopt);
+    media_controls_->SetArtwork(std::nullopt);
     return;
   }
 
@@ -232,7 +237,7 @@ void UnifiedMediaControlsController::UpdateArtwork(
     hide_artwork_timer_->Start(
         FROM_HERE, kHideArtworkDelay,
         base::BindOnce(&UnifiedMediaControlsView::SetArtwork,
-                       base::Unretained(media_controls_), absl::nullopt));
+                       base::Unretained(media_controls_), std::nullopt));
   }
 }
 
@@ -259,13 +264,7 @@ void UnifiedMediaControlsController::ResetPendingData() {
 }
 
 bool UnifiedMediaControlsController::ShouldShowMediaControls() const {
-  if (!session_info_ || !session_info_->is_controllable)
-    return false;
-
-  if (session_metadata_.title.empty())
-    return false;
-
-  return true;
+  return session_info_ && session_info_->is_controllable;
 }
 
 void UnifiedMediaControlsController::MaybeShowMediaControlsOrEmptyState() {

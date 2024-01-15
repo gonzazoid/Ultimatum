@@ -5,7 +5,6 @@
 import("//build/config/chrome_build.gni")
 
 source_set("cells") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "signin_promo_view.h",
     "signin_promo_view.mm",
@@ -15,6 +14,8 @@ source_set("cells") {
     "signin_promo_view_delegate.h",
     "table_view_account_item.h",
     "table_view_account_item.mm",
+    "table_view_central_account_item.h",
+    "table_view_central_account_item.mm",
     "table_view_identity_cell.h",
     "table_view_identity_cell.mm",
     "table_view_identity_item.h",
@@ -26,14 +27,16 @@ source_set("cells") {
     "//base",
     "//build:branding_buildflags",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/signin:constants",
-    "//ios/chrome/browser/signin:signin_util",
-    "//ios/chrome/browser/ui:feature_flags",
+    "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/shared/public/features",
+    "//ios/chrome/browser/shared/ui/symbols",
+    "//ios/chrome/browser/shared/ui/table_view:styler",
+    "//ios/chrome/browser/signin/model:constants",
+    "//ios/chrome/browser/signin/model:signin_util",
     "//ios/chrome/browser/ui/authentication/views",
-    "//ios/chrome/browser/ui/collection_view/cells",
-    "//ios/chrome/browser/ui/commands",
+    "//ios/chrome/browser/ui/ntp",
     "//ios/chrome/browser/ui/settings/cells:public",
-    "//ios/chrome/browser/ui/table_view:styler",
+    "//ios/chrome/common:button_config",
     "//ios/chrome/common/ui/colors",
     "//ios/chrome/common/ui/table_view:cells_constants",
     "//ios/chrome/common/ui/util",
@@ -43,18 +46,18 @@ source_set("cells") {
   ]
   public_deps = [
     ":constants",
+    "//ios/chrome/browser/shared/ui/table_view/cells",
     "//ios/chrome/browser/ui/authentication/views:views_constants",
-    "//ios/chrome/browser/ui/table_view/cells",
   ]
   frameworks = [ "UIKit.framework" ]
 }
 
 source_set("unit_tests") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   sources = [
     "signin_promo_view_unittest.mm",
     "table_view_account_item_unittest.mm",
+    "table_view_central_account_item_unittest.mm",
   ]
   deps = [
     ":cells",
@@ -66,22 +69,20 @@ source_set("unit_tests") {
     "//components/sync_preferences",
     "//components/sync_preferences:test_support",
     "//components/version_info",
-    "//ios/chrome/browser/browser_state:test_support",
-    "//ios/chrome/browser/infobars",
-    "//ios/chrome/browser/prefs:browser_prefs",
-    "//ios/chrome/browser/signin",
-    "//ios/chrome/browser/signin:test_support",
-    "//ios/chrome/browser/sync",
-    "//ios/chrome/browser/ui:feature_flags",
-    "//ios/chrome/browser/ui/commands",
-    "//ios/chrome/browser/ui/table_view:styler",
-    "//ios/chrome/browser/ui/table_view/cells",
+    "//ios/chrome/browser/infobars/model",
+    "//ios/chrome/browser/shared/model/browser_state:test_support",
+    "//ios/chrome/browser/shared/model/prefs:browser_prefs",
+    "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/shared/public/features",
+    "//ios/chrome/browser/shared/ui/table_view:styler",
+    "//ios/chrome/browser/shared/ui/table_view/cells",
+    "//ios/chrome/browser/signin/model",
+    "//ios/chrome/browser/signin/model:test_support",
+    "//ios/chrome/browser/sync/model",
     "//ios/chrome/common/ui/colors",
     "//ios/chrome/common/ui/util:image_util",
     "//ios/chrome/test:test_support",
-    "//ios/public/provider/chrome/browser/signin",
     "//ios/public/provider/chrome/browser/signin:signin_resources_api",
-    "//ios/public/provider/chrome/browser/signin:test_support",
     "//ios/third_party/material_components_ios",
     "//ios/web/public/test",
     "//testing/gtest",
@@ -91,7 +92,6 @@ source_set("unit_tests") {
 }
 
 source_set("constants") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "signin_promo_view_constants.h",
     "signin_promo_view_constants.mm",

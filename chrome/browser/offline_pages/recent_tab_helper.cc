@@ -7,13 +7,13 @@
 #include <queue>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/system/sys_info.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/offline_pages/offline_page_mhtml_archiver.h"
 #include "chrome/browser/offline_pages/offline_page_model_factory.h"
 #include "chrome/browser/offline_pages/offline_page_utils.h"
@@ -167,7 +167,7 @@ bool RecentTabHelper::EnsureInitialized() {
     return snapshots_enabled_;
 
   snapshot_controller_ = std::make_unique<SnapshotController>(
-      base::ThreadTaskRunnerHandle::Get(), this);
+      base::SingleThreadTaskRunner::GetCurrentDefault(), this);
   snapshot_controller_->Stop();  // It is reset when navigation commits.
 
   int tab_id_number = 0;
@@ -340,23 +340,6 @@ void RecentTabHelper::WebContentsWasHidden() {
       base::BindOnce(&RecentTabHelper::ContinueSnapshotWithIdsToPurge,
                      weak_ptr_factory_.GetWeakPtr(),
                      last_n_ongoing_snapshot_info_.get()));
-
-  IsSavingSamePageEnum saving_same_page_value = IsSavingSamePageEnum::kNewPage;
-  if (last_n_latest_saved_snapshot_info_) {
-    // If there was a previously saved snapshot for the current page we are
-    // saving a new one for the same page.
-    // Note: there might be a difference in page quality between here and when
-    // it's assessed again in ContinueSnapshotAfterPurge but this is not
-    // expected to happen often.
-    if (last_n_latest_saved_snapshot_info_->expected_page_quality ==
-        snapshot_controller_->current_page_quality()) {
-      saving_same_page_value = IsSavingSamePageEnum::kSamePageSameQuality;
-    } else {
-      saving_same_page_value = IsSavingSamePageEnum::kSamePageBetterQuality;
-    }
-  }
-  UMA_HISTOGRAM_ENUMERATION("OfflinePages.LastN.IsSavingSamePage",
-                            saving_same_page_value);
 
   last_n_latest_saved_snapshot_info_.reset();
 }

@@ -8,9 +8,11 @@
 #include <stdint.h>
 
 #include "base/compiler_specific.h"
+#include "base/metrics/histogram_macros.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
+#include "base/trace_event/typed_macros.h"
 #include "media/audio/audio_device_description.h"
 #include "media/audio/audio_manager_base.h"
 #include "media/audio/pulse/pulse_util.h"
@@ -60,7 +62,10 @@ PulseAudioOutputStream::PulseAudioOutputStream(
       pa_stream_(nullptr),
       volume_(1.0f),
       source_callback_(nullptr),
-      buffer_size_(params_.GetBytesPerBuffer(kSampleFormatF32)) {
+      buffer_size_(params_.GetBytesPerBuffer(kSampleFormatF32)),
+      peak_detector_(base::BindRepeating(&AudioManager::TraceAmplitudePeak,
+                                         base::Unretained(manager_),
+                                         /*trace_start=*/false)) {
   CHECK(params_.IsValid());
   SendLogMessage("%s({device_id=%s}, {params=[%s]})", __func__,
                  device_id.c_str(), params.AsHumanReadableString().c_str());
@@ -110,20 +115,20 @@ void PulseAudioOutputStream::Reset() {
       pa_stream_disconnect(pa_stream_);
       pa_stream_set_write_callback(pa_stream_, nullptr, nullptr);
       pa_stream_set_state_callback(pa_stream_, nullptr, nullptr);
-      pa_stream_unref(pa_stream_);
+      pa_stream_unref(pa_stream_.ExtractAsDangling());
       pa_stream_ = nullptr;
     }
 
     if (pa_context_) {
       pa_context_disconnect(pa_context_);
       pa_context_set_state_callback(pa_context_, nullptr, nullptr);
-      pa_context_unref(pa_context_);
+      pa_context_unref(pa_context_.ExtractAsDangling());
       pa_context_ = nullptr;
     }
   }
 
   pa_threaded_mainloop_stop(pa_mainloop_);
-  pa_threaded_mainloop_free(pa_mainloop_);
+  pa_threaded_mainloop_free(pa_mainloop_.ExtractAsDangling());
   pa_mainloop_ = nullptr;
 }
 
@@ -153,6 +158,14 @@ void PulseAudioOutputStream::SendLogMessage(const char* format, ...) {
 }
 
 void PulseAudioOutputStream::FulfillWriteRequest(size_t requested_bytes) {
+  TRACE_EVENT("audio", "PulseAudioOutputStream::FulfillWriteRequest",
+              [&](perfetto::EventContext ctx) {
+                auto* event =
+                    ctx.event<perfetto::protos::pbzero::ChromeTrackEvent>();
+                auto* data = event->set_linux_pulse_output();
+                data->set_stream_request_bytes(requested_bytes);
+                data->set_sample_rate(params_.sample_rate());
+              });
   int bytes_remaining = requested_bytes;
   while (bytes_remaining > 0) {
     void* pa_buffer = nullptr;
@@ -168,9 +181,19 @@ void PulseAudioOutputStream::FulfillWriteRequest(size_t requested_bytes) {
     }
 
     size_t unwritten_frames_in_bus = audio_bus_->frames();
+    size_t frame_size = buffer_size_ / unwritten_frames_in_bus;
+    const base::TimeDelta delay = pulse::GetHardwareLatency(pa_stream_);
+    UMA_HISTOGRAM_COUNTS_1000("Media.Audio.Render.SystemDelay",
+                              delay.InMilliseconds());
+    TRACE_EVENT("audio", "source request", [&](perfetto::EventContext ctx) {
+      auto* event = ctx.event<perfetto::protos::pbzero::ChromeTrackEvent>();
+      auto* data = event->set_linux_pulse_output();
+      data->set_source_request_playout_delay_us(delay.InMicroseconds());
+      data->set_input_buffer_size_frames(params_.frames_per_buffer());
+      data->set_frame_size_bytes(frame_size);
+    });
     size_t frames_filled = source_callback_->OnMoreData(
-        pulse::GetHardwareLatency(pa_stream_), base::TimeTicks::Now(), 0,
-        audio_bus_.get());
+        BoundedDelay(delay), base::TimeTicks::Now(), {}, audio_bus_.get());
 
     // Zero any unfilled data so it plays back as silence.
     if (frames_filled < unwritten_frames_in_bus) {
@@ -178,9 +201,13 @@ void PulseAudioOutputStream::FulfillWriteRequest(size_t requested_bytes) {
                                     unwritten_frames_in_bus - frames_filled);
     }
 
+    // TODO(tguilbert): Consider moving this before each of the individual
+    // `pa_stream_write()` calls in the loop below, to improve the accuracy of
+    // the latency measurements.
+    peak_detector_.FindPeak(audio_bus_.get());
+
     audio_bus_->Scale(volume_);
 
-    size_t frame_size = buffer_size_ / unwritten_frames_in_bus;
     size_t frames_to_copy = pa_buffer_size / frame_size;
     size_t frame_offset_in_bus = 0;
     do {

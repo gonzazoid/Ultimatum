@@ -41,17 +41,12 @@ void PasswordManagerErrorMessageDelegate::MaybeDisplayErrorMessage(
     base::OnceCallback<void()> dismissal_callback) {
   DCHECK(web_contents);
 
-  if (!helper_bridge_->ShouldShowErrorUI()) {
+  if (!helper_bridge_->ShouldShowErrorUI(web_contents)) {
     // Even if no message was technically shown, the owner of `this` should know
     // that it has served its purpose and can be safely destroyed.
     std::move(dismissal_callback).Run();
     return;
   }
-
-  int times_shown = pref_service->GetInteger(
-      password_manager::prefs::kTimesUPMAuthErrorShown);
-  pref_service->SetInteger(password_manager::prefs::kTimesUPMAuthErrorShown,
-                           times_shown + 1);
 
   DCHECK(!message_);
 
@@ -60,7 +55,7 @@ void PasswordManagerErrorMessageDelegate::MaybeDisplayErrorMessage(
   messages::MessageDispatcherBridge::Get()->EnqueueMessage(
       message_.get(), web_contents, messages::MessageScopeType::WEB_CONTENTS,
       messages::MessagePriority::kUrgent);
-  helper_bridge_->SaveErrorUIShownTimestamp();
+  helper_bridge_->SaveErrorUIShownTimestamp(web_contents);
   dismissal_callback_ = std::move(dismissal_callback);
 }
 

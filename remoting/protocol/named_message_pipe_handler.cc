@@ -8,7 +8,6 @@
 
 #include "base/check.h"
 #include "base/location.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "remoting/base/compound_buffer.h"
 
 namespace remoting::protocol {
@@ -16,8 +15,7 @@ namespace remoting::protocol {
 NamedMessagePipeHandler::NamedMessagePipeHandler(
     const std::string& name,
     std::unique_ptr<MessagePipe> pipe)
-    : name_(name),
-      pipe_(std::move(pipe)) {
+    : name_(name), pipe_(std::move(pipe)) {
   DCHECK(pipe_);
   pipe_->Start(this);
 }

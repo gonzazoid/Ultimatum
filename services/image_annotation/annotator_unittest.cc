@@ -6,9 +6,9 @@
 
 #include <cstring>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/strings/stringprintf.h"
@@ -363,8 +363,7 @@ class TestServerURLLoaderFactory {
 // Returns a "canonically" formatted version of a JSON string by parsing and
 // then rewriting it.
 std::string ReformatJson(const std::string& in) {
-  const std::unique_ptr<base::Value> json =
-      base::JSONReader::ReadDeprecated(in);
+  const absl::optional<base::Value> json = base::JSONReader::Read(in);
   CHECK(json);
 
   std::string out;

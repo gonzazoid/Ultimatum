@@ -45,7 +45,7 @@ if the current texture for the frame was acquired but not rendered to.
         device: device,
         format: 'bgra8unorm',
         usage: GPUTextureUsage.RENDER_ATTACHMENT,
-        compositingAlphaMode: 'premultiplied',
+        alphaMode: 'premultiplied',
       });
 
       let framesToRender = 30;
@@ -56,14 +56,16 @@ if the current texture for the frame was acquired but not rendered to.
             colorAttachments: [
               {
                 view: context.getCurrentTexture().createView(),
-                loadValue: { r: 1.0, g: 0.0, b: 0.0, a: 1.0 },
+                loadOp: 'clear',
+                clearValue: { r: 1.0, g: 0.0, b: 0.0, a: 1.0 },
+                storeOp: 'store',
               },
             ],
           };
 
           const commandEncoder = device.createCommandEncoder();
           const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
-          passEncoder.endPass();
+          passEncoder.end();
           device.queue.submit([commandEncoder.finish()]);
 
           window.requestAnimationFrame(renderCallback);

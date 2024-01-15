@@ -10,14 +10,9 @@
 #import "ios/chrome/browser/ui/incognito_interstitial/incognito_interstitial_coordinator_delegate.h"
 #import "ios/chrome/browser/ui/incognito_interstitial/incognito_interstitial_view_controller.h"
 #import "ios/chrome/browser/ui/incognito_interstitial/incognito_interstitial_view_controller_delegate.h"
-#import "ios/chrome/browser/ui/incognito_reauth/incognito_reauth_scene_agent.h"
-#import "ios/chrome/browser/ui/main/scene_state_browser_agent.h"
+#import "ios/chrome/browser/ui/ntp/incognito/incognito_view_util.h"
 #import "ios/chrome/browser/ui/ntp/new_tab_page_url_loader_delegate.h"
-#import "ios/chrome/browser/url_loading/url_loading_browser_agent.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/url_loading/model/url_loading_browser_agent.h"
 
 @interface IncognitoInterstitialCoordinator () <
     IncognitoInterstitialViewControllerDelegate,
@@ -48,10 +43,12 @@
                    animated:YES
                  completion:nil];
 
-  // The default recorded action is "Cancel".
-  // This value is changed right before the "Open in Chrome Incognito" or
-  // "Open in Chrome" action buttons trigger the dismissal of the interstitial.
-  self.incognitoInterstitialAction = IncognitoInterstitialActions::kCancel;
+  // The default recorded action is "External dismissed".
+  // This value is changed right before the "Open in Chrome Incognito", "Open in
+  // Chrome", "Cancel" action buttons or the "Learn more about Incognito" link
+  // trigger the dismissal of the interstitial.
+  self.incognitoInterstitialAction =
+      IncognitoInterstitialActions::kExternalDismissed;
 }
 
 - (void)stop {
@@ -67,34 +64,13 @@
 
 - (void)didTapPrimaryActionButton {
   // Dismiss modals (including interstitial) and open link in incognito tab.
-  __weak __typeof(self) weakSelf = self;
-  UrlLoadParams copyOfUrlLoadParams = self.urlLoadParams;
-  void (^dismissModalsAndOpenTab)() = ^{
-    __typeof(self) strongSelf = weakSelf;
-    strongSelf.incognitoInterstitialAction =
-        IncognitoInterstitialActions::kOpenInChromeIncognito;
-    [strongSelf.tabOpener
-        dismissModalsAndMaybeOpenSelectedTabInMode:
-            ApplicationModeForTabOpening::INCOGNITO
-                                 withUrlLoadParams:copyOfUrlLoadParams
-                                    dismissOmnibox:YES
-                                        completion:nil];
-  };
-
-  SceneState* sceneState =
-      SceneStateBrowserAgent::FromBrowser(self.browser)->GetSceneState();
-  IncognitoReauthSceneAgent* reauthAgent =
-      [IncognitoReauthSceneAgent agentFromScene:sceneState];
-  if (reauthAgent.authenticationRequired) {
-    [reauthAgent
-        authenticateIncognitoContentWithCompletionBlock:^(BOOL success) {
-          if (success) {
-            dismissModalsAndOpenTab();
-          }
-        }];
-  } else {
-    dismissModalsAndOpenTab();
-  }
+  self.incognitoInterstitialAction =
+      IncognitoInterstitialActions::kOpenInChromeIncognito;
+  [self.tabOpener dismissModalsAndMaybeOpenSelectedTabInMode:
+                      ApplicationModeForTabOpening::INCOGNITO
+                                           withUrlLoadParams:self.urlLoadParams
+                                              dismissOmnibox:YES
+                                                  completion:nil];
 }
 
 - (void)didTapSecondaryActionButton {
@@ -109,17 +85,19 @@
 }
 
 - (void)didTapCancelButton {
+  self.incognitoInterstitialAction = IncognitoInterstitialActions::kCancel;
   [self.delegate shouldStopIncognitoInterstitial:self];
 }
 
 #pragma mark - NewTabPageURLLoaderDelegate
 
 - (void)loadURLInTab:(const GURL&)URL {
+  DCHECK(URL == GetLearnMoreIncognitoUrl());
+  self.incognitoInterstitialAction = IncognitoInterstitialActions::kLearnMore;
   [self.tabOpener
       dismissModalsAndMaybeOpenSelectedTabInMode:ApplicationModeForTabOpening::
-                                                     INCOGNITO
-                               withUrlLoadParams:UrlLoadParams::InCurrentTab(
-                                                     URL)
+                                                     NORMAL
+                               withUrlLoadParams:UrlLoadParams::InNewTab(URL)
                                   dismissOmnibox:YES
                                       completion:nil];
 }

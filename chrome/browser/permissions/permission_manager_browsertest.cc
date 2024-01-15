@@ -4,10 +4,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
-#include "build/build_config.h"
 #include "chrome/browser/geolocation/geolocation_permission_context_delegate.h"
 #include "chrome/browser/permissions/permission_manager_factory.h"
 #include "chrome/browser/profiles/profile.h"
@@ -16,7 +15,6 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/permissions/permission_manager.h"
 #include "content/public/browser/browser_context.h"
-#include "content/public/browser/notification_types.h"
 #include "content/public/common/url_constants.h"
 #include "content/public/test/browser_test.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
@@ -54,7 +52,7 @@ class SubscriptionInterceptingPermissionManager
     callback_ = std::move(callback);
   }
 
-  SubscriptionId SubscribePermissionStatusChange(
+  SubscriptionId SubscribeToPermissionStatusChange(
       blink::PermissionType permission,
       content::RenderProcessHost* render_process_host,
       content::RenderFrameHost* render_frame_host,
@@ -62,7 +60,7 @@ class SubscriptionInterceptingPermissionManager
       base::RepeatingCallback<void(blink::mojom::PermissionStatus)> callback)
       override {
     SubscriptionId result =
-        permissions::PermissionManager::SubscribePermissionStatusChange(
+        permissions::PermissionManager::SubscribeToPermissionStatusChange(
             permission, render_process_host, render_frame_host,
             requesting_origin, callback);
     std::move(callback_).Run();
@@ -105,7 +103,7 @@ class PermissionManagerBrowserTest : public InProcessBrowserTest {
   Browser* incognito_browser() { return incognito_browser_; }
 
  private:
-  raw_ptr<Browser, DanglingUntriaged> incognito_browser_ = nullptr;
+  raw_ptr<Browser, AcrossTasksDanglingUntriaged> incognito_browser_ = nullptr;
 };
 
 IN_PROC_BROWSER_TEST_F(PermissionManagerBrowserTest,
@@ -127,17 +125,8 @@ IN_PROC_BROWSER_TEST_F(PermissionManagerBrowserTest,
   // browser explicitly.
 }
 
-// Disable the test as it's flaky on Win7 dbg.
-// crbug.com/1068190
-#if BUILDFLAG(IS_WIN) && !defined(NDEBUG)
-#define MAYBE_ServiceWorkerPermissionAfterRendererCrash \
-  DISABLED_ServiceWorkerPermissionAfterRendererCrash
-#else
-#define MAYBE_ServiceWorkerPermissionAfterRendererCrash \
-  ServiceWorkerPermissionAfterRendererCrash
-#endif
 IN_PROC_BROWSER_TEST_F(PermissionManagerBrowserTest,
-                       MAYBE_ServiceWorkerPermissionAfterRendererCrash) {
+                       ServiceWorkerPermissionAfterRendererCrash) {
   content::ScopedAllowRendererCrashes scoped_allow_renderer_crashes_;
 
   content::RenderProcessHostWatcher crash_observer(

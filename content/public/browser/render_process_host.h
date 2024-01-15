@@ -14,12 +14,16 @@
 #include "base/callback_list.h"
 #include "base/clang_profiling_buildflags.h"
 #include "base/containers/id_map.h"
+#include "base/functional/function_ref.h"
+#include "base/memory/safety_checks.h"
 #include "base/process/kill.h"
 #include "base/process/process.h"
 #include "base/supports_user_data.h"
 #include "base/tracing/protos/chrome_track_event.pbzero.h"
 #include "build/build_config.h"
+#include "content/common/buildflags.h"
 #include "content/common/content_export.h"
+#include "content/public/browser/web_exposed_isolation_level.h"
 #include "ipc/ipc_listener.h"
 #include "ipc/ipc_sender.h"
 #include "media/media_buildflags.h"
@@ -35,11 +39,10 @@
 #include "third_party/blink/public/mojom/background_sync/background_sync.mojom.h"
 #include "third_party/blink/public/mojom/buckets/bucket_manager_host.mojom-forward.h"
 #include "third_party/blink/public/mojom/cache_storage/cache_storage.mojom-forward.h"
-#include "third_party/blink/public/mojom/file_system_access/file_system_access_manager.mojom-forward.h"
+#include "third_party/blink/public/mojom/file_system_access/file_system_access_manager.mojom.h"
 #include "third_party/blink/public/mojom/filesystem/file_system.mojom-forward.h"
 #include "third_party/blink/public/mojom/indexeddb/indexeddb.mojom-forward.h"
 #include "third_party/blink/public/mojom/locks/lock_manager.mojom-forward.h"
-#include "third_party/blink/public/mojom/native_io/native_io.mojom-forward.h"
 #include "third_party/blink/public/mojom/notifications/notification_service.mojom-forward.h"
 #include "third_party/blink/public/mojom/payments/payment_app.mojom-forward.h"
 #include "third_party/blink/public/mojom/permissions/permission.mojom-forward.h"
@@ -53,9 +56,13 @@
 #include "content/public/browser/android/child_process_importance.h"
 #endif
 
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#if BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
 #include "media/mojo/mojom/stable/stable_video_decoder.mojom-forward.h"
-#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#endif  // BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
+
+#if BUILDFLAG(IS_FUCHSIA)
+#include "media/mojo/mojom/fuchsia_media.mojom-forward.h"
+#endif
 
 class GURL;
 
@@ -92,7 +99,6 @@ class Origin;
 
 namespace content {
 class BrowserContext;
-class BrowserMessageFilter;
 class BucketContext;
 class IsolationContext;
 class ProcessLock;
@@ -105,6 +111,9 @@ struct GlobalRenderFrameHostId;
 #if BUILDFLAG(IS_ANDROID)
 enum class ChildProcessImportance;
 #endif
+#if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
+class BrowserMessageFilter;
+#endif
 
 namespace mojom {
 class Renderer;
@@ -116,6 +125,10 @@ class Renderer;
 class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
                                          public IPC::Listener,
                                          public base::SupportsUserData {
+  // Do not remove this macro!
+  // The macro is maintained by the memory safety team.
+  ADVANCED_MEMORY_SAFETY_CHECKS();
+
  public:
   using iterator = base::IDMap<RenderProcessHost*>::iterator;
 
@@ -295,8 +308,10 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
   // Returns the renderer channel.
   virtual IPC::ChannelProxy* GetChannel() = 0;
 
+#if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
   // Adds a message filter to the IPC channel.
   virtual void AddFilter(BrowserMessageFilter* filter) = 0;
+#endif
 
   // Sets whether this render process is blocked. This means that input events
   // should not be sent to it, nor other timely signs of life expected from it.
@@ -356,10 +371,23 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
   // 10 milliseconds.
   virtual base::TimeDelta GetChildProcessIdleTime() = 0;
 
-  // Checks that the given renderer can request |url|, if not it sets it to
-  // about:blank.
-  // |empty_allowed| must be set to false for navigations for security reasons.
-  virtual void FilterURL(bool empty_allowed, GURL* url) = 0;
+  // Checks that the given renderer is allowed to request `url`; if not, `url`
+  // will be set to "about:blank#blocked".
+  //
+  // `empty_allowed` must be `false` when filtering URLs for navigations. The
+  // browser typically treats a navigation to an empty URL as a navigation to
+  // the home page, but this is often a privileged page, e.g. chrome://newtab/,
+  // which is a security problem that this method is specifically trying to
+  // block.
+  //
+  // This method return whether or not the URL was blocked so that callers can
+  // distinguish between the blocked case and a literal request to navigate to
+  // "about:blank#blocked".
+  enum class FilterURLResult {
+    kAllowed,
+    kBlocked,
+  };
+  virtual FilterURLResult FilterURL(bool empty_allowed, GURL* url) = 0;
 
   virtual void EnableAudioDebugRecordings(const base::FilePath& file) = 0;
   virtual void DisableAudioDebugRecordings() = 0;
@@ -387,7 +415,7 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
   //   1. IO thread, |ChildProcessImpl::BindReceiver()| (child_thread_impl.cc)
   //   2. IO thread ,|ContentClient::BindChildProcessInterface()|
   //   3. Main thread, |ChildThreadImpl::OnBindReceiver()| (virtual)
-  //   4. Possibly more stpes, depending on the ChildThreadImpl subclass.
+  //   4. Possibly more steps, depending on the ChildThreadImpl subclass.
   virtual void BindReceiver(mojo::GenericPendingReceiver receiver) = 0;
 
   // Extracts any persistent-memory-allocator used for renderer metrics.
@@ -449,7 +477,7 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
   // Calls |on_frame| for every RenderFrameHost whose frames live in this
   // process. Note that speculative RenderFrameHosts will be skipped.
   virtual void ForEachRenderFrameHost(
-      base::RepeatingCallback<void(RenderFrameHost*)> on_frame) = 0;
+      base::FunctionRef<void(RenderFrameHost*)> on_frame) = 0;
 
   // Register/unregister a RenderFrameHost instance whose frame lives in this
   // process. RegisterRenderFrameHost and UnregisterRenderFrameHost are the
@@ -492,6 +520,15 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
   //    Keeps the renderer alive if there are any worklets using it.
   virtual void IncrementWorkerRefCount() = 0;
   virtual void DecrementWorkerRefCount() = 0;
+
+  // "Pending reuse" ref count may be used to keep a process alive because we
+  // know that it will be reused soon.  Unlike the keep alive ref count, it is
+  // not time-based, and unlike the worker ref count above, it is not used for
+  // workers.  It is intentionally kept separate from the other ref counts to
+  // ease debugging, so that it's easier to tell what kept a particular process
+  // alive.
+  virtual void IncrementPendingReuseRefCount() = 0;
+  virtual void DecrementPendingReuseRefCount() = 0;
 
   // Sets all the various process lifetime ref counts to zero (e.g., keep alive,
   // worker, etc). Called when the browser context will be destroyed so this
@@ -545,6 +582,9 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
   // crbug.com/738634.
   virtual bool HostHasNotBeenUsed() = 0;
 
+  // Returns true if this is a spare RenderProcessHost.
+  virtual bool IsSpare() const = 0;
+
   // Locks this RenderProcessHost to documents compatible with |process_lock|.
   // This method is public so that it can be called from within //content, and
   // used by MockRenderProcessHost. It isn't meant to be called outside of
@@ -582,9 +622,13 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
       const blink::StorageKey& storage_key,
       mojo::PendingReceiver<blink::mojom::FileSystemAccessManager>
           receiver) = 0;
-
+  virtual void GetSandboxedFileSystemForBucket(
+      const storage::BucketLocator& bucket_locator,
+      blink::mojom::FileSystemAccessManager::GetSandboxedFileSystemCallback
+          callback) = 0;
   virtual void BindIndexedDB(
       const blink::StorageKey& storage_key,
+      const GlobalRenderFrameHostId& rfh_id,
       mojo::PendingReceiver<blink::mojom::IDBFactory> receiver) = 0;
   virtual void BindBucketManagerHost(
       base::WeakPtr<BucketContext> bucket_context,
@@ -595,6 +639,11 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
           receiver) = 0;
   virtual void BindVideoDecodePerfHistory(
       mojo::PendingReceiver<media::mojom::VideoDecodePerfHistory> receiver) = 0;
+#if BUILDFLAG(IS_FUCHSIA)
+  virtual void BindMediaCodecProvider(
+      mojo::PendingReceiver<media::mojom::FuchsiaMediaCodecProvider>
+          receiver) = 0;
+#endif
   virtual void CreateOneShotSyncService(
       const url::Origin& origin,
       mojo::PendingReceiver<blink::mojom::OneShotBackgroundSyncService>
@@ -615,28 +664,57 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
   virtual void CreatePaymentManagerForOrigin(
       const url::Origin& origin,
       mojo::PendingReceiver<payments::mojom::PaymentManager> receiver) = 0;
-  // `rfh` is the document associated with the `receiver` if the notification
-  // service is created by a document, or the ancestor document of the worker if
-  // the notification service is created by a dedicated worker, or `nullptr`
-  // otherwise.
+  // `rfh_id` is the id for RenderFrameHost for the `receiver` if
+  // the notification service is created by a document, or the id for the
+  // ancestor RenderFrameHost of the worker if the notification service is
+  // created by a dedicated worker, or empty value otherwise.
   virtual void CreateNotificationService(
-      RenderFrameHost* rfh,
+      GlobalRenderFrameHostId rfh_id,
       NotificationServiceCreatorType creator_type,
-      const url::Origin& origin,
+      const blink::StorageKey& storage_key,
       mojo::PendingReceiver<blink::mojom::NotificationService> receiver) = 0;
   virtual void CreateWebSocketConnector(
       const blink::StorageKey& storage_key,
       mojo::PendingReceiver<blink::mojom::WebSocketConnector> receiver) = 0;
 
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#if BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
   virtual void CreateStableVideoDecoder(
       mojo::PendingReceiver<media::stable::mojom::StableVideoDecoder>
           receiver) = 0;
-#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#endif  // BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
 
   // Returns the current number of active views in this process.  Excludes
   // any RenderViewHosts that are swapped out.
   size_t GetActiveViewCount();
+
+  // Returns the cross-origin isolation mode used by content in this process.
+  //
+  // This returns the kMaybe* enum values because it can't take Permissions
+  // Policy into account. A frame's isolation capability may be kNotIsolated
+  // even if it is running in a kMaybeIsolated process if the
+  // "cross-origin-isolated" feature was not delegated to the frame. Because
+  // of this, not all frames or workers in the same process will share the same
+  // isolation capability.
+  //
+  // Additionally, unlike WebExposedIsolationInfo, this is not guaranteed to be
+  // the same for all processes in a BrowsingInstance; content that is
+  // cross-origin to a kMaybeIsolatedApplication main frame will return
+  // kMaybeIsolated, as the application isolation level cannot be inherited
+  // cross-origin.
+  //
+  // RenderFrameHost::GetWebExposedIsolationLevel() should typically be used
+  // instead of this function if running in the context a frame so that
+  // Permissions Policy can be taken into account. This function should be used
+  // in contexts that don't have an associated frame like shared/service
+  // workers. Once Permissions Policy applies to workers, a worker-specific
+  // API to access isolation capability may need to be introduced which should
+  // be used instead of this.
+  //
+  // Note that this function doesn't account for API availability for certain
+  // documents and URLs that might be force-enabled by the embedder even if they
+  // lack the necessary privilege; in order for this matter to be taken into
+  // consideration, use content::IsIsolatedContext(RenderProcessHost*).
+  WebExposedIsolationLevel GetWebExposedIsolationLevel();
 
   // Posts |task|, if this RenderProcessHost is ready or when it becomes ready
   // (see RenderProcessHost::IsReady method).  The |task| might not run at all
@@ -671,6 +749,12 @@ class CONTENT_EXPORT RenderProcessHost : public IPC::Sender,
   virtual void ReinitializeLogging(uint32_t logging_dest,
                                    base::ScopedFD log_file_descriptor) = 0;
 #endif
+
+  // Asks the renderer process to prioritize energy efficiency because the
+  // embedder is in battery saver mode. This signal is propagated to blink and
+  // v8. The default state is `false`, meaning the power/speed tuning is left up
+  // to the different components to figure out.
+  virtual void SetBatterySaverMode(bool battery_saver_mode_enabled) = 0;
 
   // Static management functions -----------------------------------------------
 

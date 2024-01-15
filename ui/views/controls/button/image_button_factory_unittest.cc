@@ -14,7 +14,7 @@
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/views/animation/ink_drop.h"
-#include "ui/views/animation/test/ink_drop_host_view_test_api.h"
+#include "ui/views/animation/test/ink_drop_host_test_api.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/controls/button/image_button.h"
 #include "ui/views/test/views_test_base.h"
@@ -58,18 +58,18 @@ class ImageButtonFactoryWidgetTest : public ViewsTestBase {
     ViewsTestBase::TearDown();
   }
 
-  ImageButton* AddImageButton(std::unique_ptr<ImageButton> button) {
-    button_ = widget_->SetContentsView(std::move(button));
-    return button_;
+  void AddImageButton(std::unique_ptr<ImageButton> button) {
+    widget_->SetContentsView(std::move(button));
   }
 
  protected:
   Widget* widget() { return widget_.get(); }
-  ImageButton* button() { return button_; }
+  ImageButton* button() {
+    return static_cast<ImageButton*>(widget_->GetContentsView());
+  }
 
  private:
   std::unique_ptr<Widget> widget_;
-  raw_ptr<ImageButton> button_ = nullptr;  // owned by |widget_|.
 };
 
 TEST_F(ImageButtonFactoryWidgetTest, SetImageFromVectorIconWithColor) {

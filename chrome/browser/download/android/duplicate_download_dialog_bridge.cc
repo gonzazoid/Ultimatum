@@ -12,6 +12,7 @@
 #include "base/files/file_path.h"
 #include "base/memory/singleton.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/android/chrome_jni_headers/DuplicateDownloadDialogBridge_jni.h"
 #include "chrome/browser/android/android_theme_resources.h"
 #include "chrome/browser/download/android/download_dialog_utils.h"
@@ -53,7 +54,7 @@ void DuplicateDownloadDialogBridge::Show(
   base::android::ScopedJavaLocalRef<jobject> j_otr_profile_id;
   ui::WindowAndroid* window_android = web_contents->GetTopLevelNativeWindow();
   if (!window_android) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), false));
     return;
   }

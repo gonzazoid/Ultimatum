@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/callback_list.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/sequence_checker.h"
 #include "build/build_config.h"
@@ -75,7 +75,7 @@ class DualMediaSinkService {
 
   void RemoveLogger(LoggerImpl* logger_impl);
 
-  virtual void OnUserGesture();
+  virtual void DiscoverSinksNow();
 
 #if BUILDFLAG(IS_WIN)
   // Starts mDNS discovery on |cast_media_sink_service_| if it is not already

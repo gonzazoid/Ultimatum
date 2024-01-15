@@ -33,7 +33,7 @@
 
 #include "base/check_op.h"
 #include "base/dcheck_is_on.h"
-#include "third_party/blink/renderer/core/style/grid_positions_resolver.h"
+#include "third_party/blink/renderer/core/style/grid_enums.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
@@ -87,14 +87,25 @@ struct GridSpan {
   bool Contains(wtf_size_t line) const {
     DCHECK(IsTranslatedDefinite());
     DCHECK_GE(start_line_, 0);
-    DCHECK_GE(end_line_, 0);
+    DCHECK_LT(start_line_, end_line_);
     return line >= static_cast<wtf_size_t>(start_line_) &&
            line <= static_cast<wtf_size_t>(end_line_);
   }
 
+  bool Intersects(GridSpan span) const {
+    DCHECK(IsTranslatedDefinite());
+    DCHECK(span.IsTranslatedDefinite());
+    DCHECK_GE(start_line_, 0);
+    DCHECK_LT(start_line_, end_line_);
+    DCHECK_GE(span.start_line_, 0);
+    DCHECK_LT(span.start_line_, span.end_line_);
+
+    return start_line_ < span.end_line_ && end_line_ >= span.start_line_;
+  }
+
   wtf_size_t IntegerSpan() const {
     DCHECK(IsTranslatedDefinite());
-    DCHECK_GT(end_line_, start_line_);
+    DCHECK_LT(start_line_, end_line_);
     return end_line_ - start_line_;
   }
 
@@ -159,22 +170,37 @@ struct GridSpan {
         GridSpan(start_line_ + offset, end_line_ + offset, kTranslatedDefinite);
   }
 
+  void SetStart(int start_line) {
+    DCHECK_NE(type_, kIndefinite);
+    *this = GridSpan(start_line, end_line_, kTranslatedDefinite);
+  }
+
+  void SetEnd(int end_line) {
+    DCHECK_NE(type_, kIndefinite);
+    *this = GridSpan(start_line_, end_line, kTranslatedDefinite);
+  }
+
+  void Intersect(int start_line, int end_line) {
+    DCHECK_NE(type_, kIndefinite);
+    *this = GridSpan(std::max(start_line_, start_line),
+                     std::min(end_line_, end_line), kTranslatedDefinite);
+  }
+
  private:
   enum GridSpanType { kUntranslatedDefinite, kTranslatedDefinite, kIndefinite };
 
   template <typename T>
   GridSpan(T start_line, T end_line, GridSpanType type) : type_(type) {
-    const int grid_max_tracks = RuntimeEnabledFeatures::LayoutNGEnabled()
-                                    ? kGridMaxTracks
-                                    : kLegacyGridMaxTracks;
+    const int grid_max_tracks = kGridMaxTracks;
     start_line_ =
         ClampTo<int>(start_line, -grid_max_tracks, grid_max_tracks - 1);
     end_line_ = ClampTo<int>(end_line, start_line_ + 1, grid_max_tracks);
 
 #if DCHECK_IS_ON()
     DCHECK_LT(start_line_, end_line_);
-    if (type == kTranslatedDefinite)
+    if (type == kTranslatedDefinite) {
       DCHECK_GE(start_line_, 0);
+    }
 #endif
   }
 
@@ -200,10 +226,11 @@ struct GridArea {
   }
 
   void SetSpan(const GridSpan& span, GridTrackSizingDirection track_direction) {
-    if (track_direction == kForColumns)
+    if (track_direction == kForColumns) {
       columns = span;
-    else
+    } else {
       rows = span;
+    }
   }
 
   wtf_size_t StartLine(GridTrackSizingDirection track_direction) const {
@@ -217,6 +244,8 @@ struct GridArea {
   wtf_size_t SpanSize(GridTrackSizingDirection track_direction) const {
     return Span(track_direction).IntegerSpan();
   }
+
+  void Transpose() { std::swap(columns, rows); }
 
   bool operator==(const GridArea& o) const {
     return columns == o.columns && rows == o.rows;

@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_number_conversions.h"
 #include "content/browser/service_worker/service_worker_cache_writer.h"
 #include "content/browser/service_worker/service_worker_consts.h"
@@ -194,7 +194,7 @@ void ServiceWorkerScriptLoaderFactory::CopyScript(
     int64_t resource_id,
     base::OnceCallback<void(int64_t, net::Error)> callback,
     int64_t new_resource_id) {
-  if (!context_) {
+  if (!context_ || !worker_host_) {
     std::move(callback).Run(new_resource_id, net::ERR_FAILED);
     return;
   }
@@ -236,12 +236,15 @@ void ServiceWorkerScriptLoaderFactory::OnCopyScriptFinished(
   }
 
   int64_t resource_size = cache_writer_->bytes_written();
+  DCHECK_EQ(cache_writer_->checksum_update_timing(),
+            ServiceWorkerCacheWriter::ChecksumUpdateTiming::kCacheMismatch);
+  std::string sha256_checksum = cache_writer_->GetSha256Checksum();
   cache_writer_.reset();
   scoped_refptr<ServiceWorkerVersion> version = worker_host_->version();
 
   if (error != net::OK) {
     version->script_cache_map()->NotifyFinishedCaching(
-        resource_request.url, resource_size, error,
+        resource_request.url, resource_size, sha256_checksum, error,
         ServiceWorkerConsts::kServiceWorkerCopyScriptError);
 
     mojo::Remote<network::mojom::URLLoaderClient>(std::move(client))
@@ -252,7 +255,8 @@ void ServiceWorkerScriptLoaderFactory::OnCopyScriptFinished(
   // The copy operation is successful, add the newly copied resource record to
   // the script cache map to identify that the script is installed.
   version->script_cache_map()->NotifyFinishedCaching(
-      resource_request.url, resource_size, net::OK, std::string());
+      resource_request.url, resource_size, sha256_checksum, net::OK,
+      std::string());
 
   // Use ServiceWorkerInstalledScriptLoader to load the new copy.
   mojo::Remote<storage::mojom::ServiceWorkerResourceReader> resource_reader;

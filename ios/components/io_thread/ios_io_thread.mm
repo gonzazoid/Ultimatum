@@ -9,18 +9,18 @@
 #import <utility>
 #import <vector>
 
-#import "base/bind.h"
-#import "base/callback_helpers.h"
 #import "base/check_op.h"
 #import "base/command_line.h"
-#import "base/compiler_specific.h"
 #import "base/environment.h"
+#import "base/functional/bind.h"
+#import "base/functional/callback_helpers.h"
 #import "base/metrics/field_trial.h"
 #import "base/strings/string_number_conversions.h"
 #import "base/strings/string_split.h"
 #import "base/strings/string_util.h"
 #import "base/task/single_thread_task_runner.h"
 #import "base/threading/thread.h"
+#import "base/threading/thread_restrictions.h"
 #import "base/time/time.h"
 #import "base/trace_event/trace_event.h"
 #import "components/network_session_configurator/browser/network_session_configurator.h"
@@ -64,10 +64,6 @@
 #import "net/url_request/url_request_context_getter.h"
 #import "net/url_request/url_request_job_factory.h"
 #import "url/url_constants.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 // The IOSIOThread object must outlive any tasks posted to the IO thread before
 // the Quit task, so base::Bind{Once,Repeating}() calls are not refcounted.
@@ -184,6 +180,13 @@ IOSIOThread::Globals* IOSIOThread::globals() {
   return globals_;
 }
 
+void IOSIOThread::InitOnIO() {
+  DCHECK_CURRENTLY_ON(web::WebThread::IO);
+  // Allow blocking calls while initializing the IO thread.
+  base::ScopedAllowBlocking allow_blocking_for_init;
+  Init();
+}
+
 void IOSIOThread::SetGlobalsForTesting(Globals* globals) {
   DCHECK_CURRENTLY_ON(web::WebThread::IO);
   DCHECK(!globals || !globals_);
@@ -231,19 +234,10 @@ void IOSIOThread::Init() {
   params_.ignore_certificate_errors = false;
   params_.enable_user_alternate_protocol_ports = false;
 
-  std::string quic_user_agent_id = GetChannelString();
-  if (!quic_user_agent_id.empty())
-    quic_user_agent_id.push_back(' ');
-  quic_user_agent_id.append(
-      version_info::GetProductNameAndVersionForUserAgent());
-  quic_user_agent_id.push_back(' ');
-  quic_user_agent_id.append(web::BuildOSCpuInfo());
-
   // Set up field trials, ignoring debug command line options.
   network_session_configurator::ParseCommandLineAndFieldTrials(
       base::CommandLine(base::CommandLine::NO_PROGRAM),
-      /*is_quic_force_disabled=*/false, quic_user_agent_id, &params_,
-      &quic_params_);
+      /*is_quic_force_disabled=*/false, &params_, &quic_params_);
 
   globals_->system_request_context = ConstructSystemRequestContext();
 }

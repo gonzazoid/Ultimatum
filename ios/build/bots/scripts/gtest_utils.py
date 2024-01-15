@@ -153,6 +153,7 @@ class GTestLogParser(object):
     self._current_test = ''
     self._failure_description = []
     self._parsing_failures = False
+    self._spawning_launcher = False
 
     # Line number currently being processed.
     self._line_number = 0
@@ -191,6 +192,12 @@ class GTestLogParser(object):
     self._test_ok = re.compile(r'\[\s+OK\s+\] ' + test_name_regexp)
     self._test_fail = re.compile(r'\[\s+FAILED\s+\] ' + test_name_regexp)
     self._test_passed = re.compile(r'\[\s+PASSED\s+\] \d+ tests?.')
+    self._spawning_test_launcher = re.compile(r'Using \d+ parallel jobs?.')
+    self._test_run_spawning = re.compile(r'\[\d+\/\d+\] ' + test_name_regexp +
+                                         ' \([0-9]+ ms\)')
+    self._test_passed_spawning = re.compile(r'Tests took \d+ seconds?.')
+    self._test_retry_spawning = re.compile(
+        r'Retrying \d+ test[s]? \(retry #\d+\)')
     self._test_skipped = re.compile(r'\[\s+SKIPPED\s+\] ' + test_name_regexp)
     self._run_test_cases_line = re.compile(
         r'\[\s*\d+\/\d+\]\s+[0-9\.]+s ' + test_name_regexp + ' .+')
@@ -202,7 +209,7 @@ class GTestLogParser(object):
     self._retry_message = re.compile('RETRYING FAILED TESTS:')
     self.retrying_failed = False
 
-    self._compiled_tests_file_path = re.compile(
+    self._compiled_tests_file_path_re = re.compile(
         '.*Wrote compiled tests to file: (\S+)')
 
     self.TEST_STATUS_MAP = {
@@ -212,6 +219,9 @@ class GTestLogParser(object):
         'timeout': TEST_TIMEOUT_LABEL,
         'warning': TEST_WARNING_LABEL
     }
+
+    self.compiled_tests_file_path = None
+    self._tests_loc_map = {}
 
   def GetCurrentTest(self):
     return self._current_test
@@ -384,6 +394,10 @@ class GTestLogParser(object):
         self._test_fail,
         self._test_passed,
         self._test_skipped,
+        self._spawning_test_launcher,
+        self._test_run_spawning,
+        self._test_passed_spawning,
+        self._test_retry_spawning,
     ]
 
     for regexp in gtest_regexps:
@@ -427,6 +441,49 @@ class GTestLogParser(object):
       self._current_test = ''
       self._failure_description = []
       return
+
+    # Is it a line declaring spawning test runner? If so then
+    # we really don't need to parse any of the test cases since 1) they are
+    # in a different format 2) retries happen inside the test launcher itself.
+    results = self._spawning_test_launcher.match(line)
+    if results:
+      self._spawning_launcher = True
+      self._result_collection.spawning_test_launcher = True
+      return
+
+    # With the spawning test launcher the log format is slightly different.
+    # On failures the original gtest log format will be spit out to stdout
+    # from the subprocess and the regular log parsing will be used. If all
+    # tests succeeded in the subprocess only completion lines will be written
+    # out.
+    if self._spawning_launcher:
+      results = self._test_passed_spawning.match(line)
+      if results:
+        self.completed = True
+        self._current_test = ''
+        return
+      results = self._test_run_spawning.match(line)
+      if results:
+        test_name = results.group(1)
+        duration = self._ParseDuration(line)
+        status = self._StatusOfTest(test_name)
+        # If we encountered this line and it is not known then we know it
+        # passed.
+        if status in ('started', 'not known'):
+          self._test_status[test_name] = ('OK', [])
+          self._result_collection.add_test_result(
+              TestResult(test_name, TestStatus.PASS, duration=duration))
+          self._failure_description = []
+          self._current_test = ''
+        return
+      results = self._test_retry_spawning.match(line)
+      # We are retrying failed tests so mark them all as started again
+      # so that we will be in the correct state when we either see
+      # a failure or a completion result.
+      if results:
+        for test in self.FailedTests():
+          self._test_status[test] = ('started', [DID_NOT_COMPLETE])
+        self.retrying_failed = True
 
     # Is it a line declaring all tests passed?
     results = self._test_passed.match(line)
@@ -572,7 +629,11 @@ class GTestLogParser(object):
       logs = self._failure_description + ['Killed (timed out).']
       self._test_status[test_name] = ('timeout', logs)
       self._result_collection.add_test_result(
-          TestResult(test_name, TestStatus.ABORT, test_log='\n'.join(logs)))
+          TestResult(
+              test_name,
+              TestStatus.ABORT,
+              test_log='\n'.join(logs),
+          ))
       self._failure_description = []
       self._current_test = ''
       return
@@ -584,34 +645,11 @@ class GTestLogParser(object):
       return
 
     # Is it the line containing path to the compiled tests json file?
-    results = self._compiled_tests_file_path.match(line)
+    results = self._compiled_tests_file_path_re.match(line)
     if results:
-      path = results.group(1)
-      LOGGER.info('Compiled tests json file path: %s' % path)
-      try:
-        # TODO(crbug.com/1091345): Read the file when running on device.
-        with open(path) as f:
-          disabled_tests_from_json = []
-          compiled_tests = json.load(f)
-          for single_test in compiled_tests:
-            test_case_name = single_test.get('test_case_name')
-            test_name = single_test.get('test_name')
-            if test_case_name and test_name and test_name.startswith(
-                'DISABLED_'):
-              full_test_name = str('%s/%s' % (test_case_name, test_name))
-              disabled_tests_from_json.append(full_test_name)
-              self._result_collection.add_test_result(
-                  TestResult(
-                      test_name,
-                      TestStatus.SKIP,
-                      expected_status=TestStatus.SKIP,
-                      test_log='Test disabled.'))
-          self._disabled_tests_from_compiled_tests_file = (
-              disabled_tests_from_json)
-      except Exception as e:
-        LOGGER.warning(
-            'Error when finding disabled tests in compiled tests json file: %s'
-            % e)
+      self.compiled_tests_file_path = results.group(1)
+      LOGGER.info('Compiled tests json file path: %s' %
+                  self.compiled_tests_file_path)
       return
 
     # Random line: if we're in a test, collect it for the failure description.
@@ -638,3 +676,55 @@ class GTestLogParser(object):
         self._parsing_failures = False
     elif line.startswith('Failing tests:'):
       self._parsing_failures = True
+
+  # host_test_file_path is compiled_tests_file_path by default on simulators.
+  # However, for device tests,
+  # it needs to be overridden with a path that exists on the host because
+  # compiled_tests_file_path is the path on the device in this case
+  def ParseAndPopulateTestResultLocations(self,
+                                          test_repo,
+                                          output_disabled_tests,
+                                          host_test_file_path=None):
+    try:
+      # TODO(crbug.com/1091345): Read the file when running on device.
+      # Parse compiled test file first. If output_disabled_tests is true,
+      # then include disabled tests in the test results.
+      if host_test_file_path is None:
+        host_test_file_path = self.compiled_tests_file_path
+      if host_test_file_path is None:
+        return
+      with open(host_test_file_path) as f:
+        disabled_tests_from_json = []
+        compiled_tests = json.load(f)
+        for single_test in compiled_tests:
+          test_case_name = single_test.get('test_case_name')
+          test_name = single_test.get('test_name')
+          test_file = single_test.get('file')
+          test_file = test_file.replace('../../', '//')
+          full_test_name = str('%s.%s' % (test_case_name, test_name))
+          self._tests_loc_map[full_test_name] = test_file
+          if test_case_name and test_name and test_name.startswith('DISABLED_'):
+            if output_disabled_tests:
+              test_loc = {'repo': test_repo, 'fileName': test_file}
+              disabled_tests_from_json.append(full_test_name)
+              self._result_collection.add_test_result(
+                  TestResult(
+                      full_test_name,
+                      TestStatus.SKIP,
+                      expected_status=TestStatus.SKIP,
+                      test_log='Test disabled.',
+                      test_loc=test_loc))
+        self._disabled_tests_from_compiled_tests_file = (
+            disabled_tests_from_json)
+
+      # Populate location info for test results in result collections
+      for test_result in self._result_collection.test_results:
+        test_file = self._tests_loc_map.get(test_result.name, None)
+        if test_file:
+          test_loc = {'repo': test_repo, 'fileName': test_file}
+          test_result.test_loc = test_loc
+    except Exception as e:
+      LOGGER.warning(
+          'Error when finding disabled tests in compiled tests json file: %s' %
+          e)
+    return

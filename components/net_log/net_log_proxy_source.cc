@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "components/net_log/net_log_proxy_source.h"
+#include "base/task/sequenced_task_runner.h"
 
 namespace net_log {
 
@@ -12,7 +13,7 @@ NetLogProxySource::NetLogProxySource(
     mojo::Remote<network::mojom::NetLogProxySink> proxy_sink_remote)
     : proxy_source_receiver_(this, std::move(proxy_source_receiver)),
       proxy_sink_remote_(std::move(proxy_sink_remote)),
-      task_runner_(base::SequencedTaskRunnerHandle::Get()) {
+      task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {
   // Initialize a WeakPtr instance that can be safely referred to from other
   // threads when binding tasks posted back to this thread.
   weak_this_ = weak_factory_.GetWeakPtr();
@@ -34,15 +35,13 @@ void NetLogProxySource::ShutDown() {
 
 void NetLogProxySource::OnAddEntry(const net::NetLogEntry& entry) {
   if (task_runner_->RunsTasksInCurrentSequence()) {
-    SendNetLogEntry(entry.type, entry.source.type, entry.source.id,
-                    entry.source.start_time, entry.phase, entry.time,
+    SendNetLogEntry(entry.type, entry.source, entry.phase, entry.time,
                     entry.params.Clone());
   } else {
     task_runner_->PostTask(
         FROM_HERE,
         base::BindOnce(&NetLogProxySource::SendNetLogEntry, weak_this_,
-                       entry.type, entry.source.type, entry.source.id,
-                       entry.source.start_time, entry.phase, entry.time,
+                       entry.type, entry.source, entry.phase, entry.time,
                        entry.params.Clone()));
   }
 }
@@ -89,15 +88,12 @@ void NetLogProxySource::UpdateCaptureModes(
 }
 
 void NetLogProxySource::SendNetLogEntry(net::NetLogEventType type,
-                                        net::NetLogSourceType source_type,
-                                        uint32_t source_id,
-                                        base::TimeTicks source_start_time,
+                                        const net::NetLogSource& net_log_source,
                                         net::NetLogEventPhase phase,
                                         base::TimeTicks time,
-                                        base::Value params) {
-  proxy_sink_remote_->AddEntry(
-      static_cast<uint32_t>(type), static_cast<uint32_t>(source_type),
-      source_id, source_start_time, phase, time, std::move(params));
+                                        base::Value::Dict params) {
+  proxy_sink_remote_->AddEntry(static_cast<uint32_t>(type), net_log_source,
+                               phase, time, std::move(params));
 }
 
 }  // namespace net_log

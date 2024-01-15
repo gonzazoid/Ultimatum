@@ -7,8 +7,10 @@
 
 #include <string>
 
+#include <optional>
 #include "cc/paint/paint_export.h"
 #include "ui/gfx/color_space.h"
+#include "ui/gfx/hdr_metadata.h"
 
 namespace cc {
 
@@ -33,9 +35,6 @@ struct CC_PAINT_EXPORT TargetColorParams {
   // luminance (a non-HDR-capable display will have a value of 1).
   float hdr_max_luminance_relative = 1.f;
 
-  // Whether or not tone mapping should be applied.
-  bool enable_tone_mapping = true;
-
   bool operator==(const TargetColorParams& other) const {
     return color_space == other.color_space &&
            sdr_max_luminance_nits == other.sdr_max_luminance_nits &&
@@ -43,12 +42,6 @@ struct CC_PAINT_EXPORT TargetColorParams {
   }
   bool operator!=(const TargetColorParams& other) const {
     return !(*this == other);
-  }
-  bool operator<(const TargetColorParams& other) const {
-    return std::tie(color_space, sdr_max_luminance_nits,
-                    hdr_max_luminance_relative) <
-           std::tie(other.color_space, other.sdr_max_luminance_nits,
-                    other.hdr_max_luminance_relative);
   }
   size_t GetHash() const;
   std::string ToString() const;

@@ -12,8 +12,6 @@
 #include "base/feature_list.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
-#include "base/memory/weak_ptr.h"
 #include "build/build_config.h"
 #include "build/buildflag.h"
 #include "chrome/browser/extensions/api/identity/identity_clear_all_cached_auth_tokens_function.h"
@@ -42,9 +40,6 @@ namespace extensions {
 class IdentityAPI : public BrowserContextKeyedAPI,
                     public signin::IdentityManager::Observer {
  public:
-  using OnSetConsentResultSignature = void(const std::string&,
-                                           const std::string&);
-
   explicit IdentityAPI(content::BrowserContext* context);
   ~IdentityAPI() override;
 
@@ -64,12 +59,6 @@ class IdentityAPI : public BrowserContextKeyedAPI,
   // If refresh tokens have been loaded, erases GAIA ids of accounts that are no
   // longer signed in to Chrome for all extensions.
   void EraseStaleGaiaIdsForAllExtensions();
-
-  // Consent result.
-  void SetConsentResult(const std::string& result,
-                        const std::string& window_id);
-  base::CallbackListSubscription RegisterOnSetConsentResultCallback(
-      const base::RepeatingCallback<OnSetConsentResultSignature>& callback);
 
   // BrowserContextKeyedAPI:
   void Shutdown() override;
@@ -128,8 +117,6 @@ class IdentityAPI : public BrowserContextKeyedAPI,
 
   OnSignInChangedCallback on_signin_changed_callback_for_testing_;
 
-  base::RepeatingCallbackList<OnSetConsentResultSignature>
-      on_set_consent_result_callback_list_;
   base::OnceCallbackList<void()> on_shutdown_callback_list_;
 };
 

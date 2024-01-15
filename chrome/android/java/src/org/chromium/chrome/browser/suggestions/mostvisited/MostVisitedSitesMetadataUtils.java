@@ -11,6 +11,7 @@ import androidx.core.util.AtomicFile;
 
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.StreamUtil;
 import org.chromium.base.StrictModeContext;
 import org.chromium.base.task.AsyncTask;
@@ -29,9 +30,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * This class provides methods to write/read most visited sites related info to devices.
- */
+/** This class provides methods to write/read most visited sites related info to devices. */
 public class MostVisitedSitesMetadataUtils {
     private static final String TAG = "TopSites";
 
@@ -230,7 +229,8 @@ public class MostVisitedSitesMetadataUtils {
                 stream = file.startWrite();
                 stream.write(listData, 0, listData.length);
                 file.finishWrite(stream);
-                Log.i(TAG,
+                Log.i(
+                        TAG,
                         "Finished saving top sites list to file:" + metadataFile.getAbsolutePath());
             } catch (IOException e) {
                 if (stream != null) file.failWrite(stream);
@@ -266,8 +266,9 @@ public class MostVisitedSitesMetadataUtils {
         try (StrictModeContext ignored = StrictModeContext.allowDiskWrites()) {
             synchronized (DIR_CREATION_LOCK) {
                 if (sStateDirectory == null) {
-                    sStateDirectory = ContextUtils.getApplicationContext().getDir(
-                            sStateDirName, Context.MODE_PRIVATE);
+                    sStateDirectory =
+                            ContextUtils.getApplicationContext()
+                                    .getDir(sStateDirName, Context.MODE_PRIVATE);
                 }
             }
             return sStateDirectory;
@@ -283,22 +284,22 @@ public class MostVisitedSitesMetadataUtils {
         }
     }
 
-    @VisibleForTesting
     public Runnable getCurrentTaskForTesting() {
         return mCurrentTask;
     }
 
-    @VisibleForTesting
     public void setCurrentTaskForTesting(Runnable currentTask) {
+        var oldValue = mCurrentTask;
         mCurrentTask = currentTask;
+        ResettersForTesting.register(() -> mCurrentTask = oldValue);
     }
 
-    @VisibleForTesting
     public void setPendingTaskForTesting(Runnable pendingTask) {
+        var oldValue = mPendingTask;
         mPendingTask = pendingTask;
+        ResettersForTesting.register(() -> mPendingTask = oldValue);
     }
 
-    @VisibleForTesting
     public int getPendingTaskTilesNumForTesting() {
         return mPendingTaskTilesNumForTesting;
     }

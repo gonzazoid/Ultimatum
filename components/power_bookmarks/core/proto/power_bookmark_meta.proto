@@ -15,11 +15,13 @@ import "components/power_bookmarks/core/proto/shopping_specifics.proto";
 
 // Used to query specific bookmark verticals.
 enum PowerBookmarkType {
+  UNKNOWN = 0;
   SHOPPING = 1;
 }
 
 // This message is used to store the extra information associated with a
 // bookmark. This information is stored with and synced with bookmarks.
+// DEPRECATED: Use power_bookmark_specifics.proto instead.
 message PowerBookmarkMeta {
   // Generic properties
 

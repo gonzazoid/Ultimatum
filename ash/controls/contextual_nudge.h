@@ -6,7 +6,8 @@
 #define ASH_CONTROLS_CONTEXTUAL_NUDGE_H_
 
 #include "ash/ash_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 #include "ui/views/controls/label.h"
 
@@ -52,12 +53,11 @@ class ASH_EXPORT ContextualNudge : public views::BubbleDialogDelegateView {
   // BubbleDialogDelegateView:
   ui::LayerType GetLayerType() const override;
   void OnGestureEvent(ui::GestureEvent* event) override;
-  void OnThemeChanged() override;
 
  private:
   base::RepeatingClosure tap_callback_;
 
-  views::Label* label_;
+  raw_ptr<views::Label> label_;
 };
 
 }  // namespace ash

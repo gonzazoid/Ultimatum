@@ -17,6 +17,12 @@ export interface GetColorsCSSOptions {
    * mode values and ignores the documents prefers-color-scheme.
    */
   lockTheme?: 'light' | 'dark';
+  /**
+   * Opt into using material 3 color tokens (see go/cros-tokens). If true any
+   * legacy mappings specified in the input json5 files will be added into the
+   * document.
+   */
+  useDynamicColors?: boolean;
 }
 
 // Use a ternary expression that can only be evaluated at runtime here to force
@@ -48,8 +54,7 @@ const DARK_MODE_OVERRIDES_CSS = window ? `
   --cros-toggle-color-rgb: var(--cros-text-color-primary-rgb);
   --cros-toggle-color: rgba(var(--cros-toggle-color-rgb), var(--cros-disabled-opacity));
 
-  --cros-bg-color-elevation-1-rgb: 41, 42, 45;
-  --cros-bg-color-elevation-1: rgb(var(--cros-bg-color-elevation-1-rgb));
+  --cros-bg-color-elevation-1: color-mix(in srgb, rgb(255, 255, 255) 4.0%, var(--google-grey-900));
 
   --cros-reference-opacity: 1;
 ` : '';
@@ -62,6 +67,18 @@ const UNTYPED_CSS = window ? `
 
 const TYPOGRAPHY_CSS = window ? `` : '';
 
+const LEGACY_MAPPINGS_CSS = window ? `
+    --cros-legacy-color-rgb: var(--cros-text-color-primary-rgb);
+    --cros-legacy-color: var(--cros-text-color-primary);
+    --cros-legacy-color-light: var(--cros-text-color-primary);
+    --cros-legacy-color-dark: var(--cros-text-color-primary);
+
+    --cros-legacy-color-w-opacity-rgb: var(--cros-text-color-primary-rgb);
+    --cros-legacy-color-w-opacity: rgba(var(--cros-legacy-color-w-opacity-rgb), 0.3);
+    --cros-legacy-color-w-opacity-light: rgba(var(--cros-legacy-color-w-opacity-rgb), 0.3);
+    --cros-legacy-color-w-opacity-dark: rgba(var(--cros-legacy-color-w-opacity-rgb), 0.3);
+` : '';
+
 /**
  * Returns a string containing all semantic colors exported in this file as
  * css variables. This string an be used to construct a stylesheet which can be
@@ -71,10 +88,25 @@ const TYPOGRAPHY_CSS = window ? `` : '';
  * that all TS constant references resolve correctly.
  */
 export function getColorsCSS(options?: GetColorsCSSOptions) {
-  let cssString;
-  if (options?.lockTheme === 'light') {
-    // Tag strings which are safe with a special comment so copybara can add
-    // the right safety wrappers whem moving this code into Google3.
+  // Tag strings which are safe with a special comment so copybara can add
+  // the right safety wrappers whem moving this code into Google3.
+  let cssString = /* SAFE */ ("");
+
+  if (options?.lockTheme === 'light' && !!options?.useDynamicColors === true) {
+    cssString = /* SAFE */ (`
+      html:not(body), :host {
+        ${DEFAULT_CSS}
+        ${UNTYPED_CSS}
+        ${TYPOGRAPHY_CSS}
+        ${LEGACY_MAPPINGS_CSS}
+      }
+      :host([inverted-colors]) {
+        ${DARK_MODE_OVERRIDES_CSS}
+      }
+
+    `);
+  }
+  if (options?.lockTheme === 'light' && !!options?.useDynamicColors === false) {
     cssString = /* SAFE */ (`
       html:not(body), :host {
         ${DEFAULT_CSS}
@@ -84,8 +116,25 @@ export function getColorsCSS(options?: GetColorsCSSOptions) {
       :host([inverted-colors]) {
         ${DARK_MODE_OVERRIDES_CSS}
       }
+
     `);
-  } else if (options?.lockTheme === 'dark') {
+  }
+  if (options?.lockTheme === 'dark' && !!options?.useDynamicColors === true) {
+    cssString = /* SAFE */ (`
+      html:not(body), :host {
+        ${DEFAULT_CSS}
+        ${UNTYPED_CSS}
+        ${TYPOGRAPHY_CSS}
+        ${DARK_MODE_OVERRIDES_CSS}
+        ${LEGACY_MAPPINGS_CSS}
+      }
+      :host([inverted-colors]) {
+        ${DEFAULT_CSS}
+      }
+
+    `);
+  }
+  if (options?.lockTheme === 'dark' && !!options?.useDynamicColors === false) {
     cssString = /* SAFE */ (`
       html:not(body), :host {
         ${DEFAULT_CSS}
@@ -96,8 +145,33 @@ export function getColorsCSS(options?: GetColorsCSSOptions) {
       :host([inverted-colors]) {
         ${DEFAULT_CSS}
       }
+
     `);
-  } else {
+  }
+  if (options?.lockTheme === undefined && !!options?.useDynamicColors === true) {
+    cssString = /* SAFE */ (`
+      html:not(body), :host {
+        ${DEFAULT_CSS}
+        ${UNTYPED_CSS}
+        ${TYPOGRAPHY_CSS}
+        ${LEGACY_MAPPINGS_CSS}
+      }
+      :host([inverted-colors]) {
+        ${DARK_MODE_OVERRIDES_CSS}
+      }
+
+      @media (prefers-color-scheme: dark) {
+        html:not(body), :host {
+          ${DARK_MODE_OVERRIDES_CSS}
+          ${LEGACY_MAPPINGS_CSS}
+        }
+        :host([inverted-colors]) {
+          ${DEFAULT_CSS}
+        }
+      }
+    `);
+  }
+  if (options?.lockTheme === undefined && !!options?.useDynamicColors === false) {
     cssString = /* SAFE */ (`
       html:not(body), :host {
         ${DEFAULT_CSS}
@@ -118,7 +192,6 @@ export function getColorsCSS(options?: GetColorsCSSOptions) {
       }
     `);
   }
-
   return cssString;
 }
 

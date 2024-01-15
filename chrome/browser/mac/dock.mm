@@ -11,11 +11,12 @@
 
 #include <tuple>
 
+#include "base/apple/bridging.h"
+#include "base/apple/bundle_locations.h"
+#include "base/apple/foundation_util.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/logging.h"
-#include "base/mac/bundle_locations.h"
-#include "base/mac/foundation_util.h"
 #include "base/mac/launchd.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "build/branding_buildflags.h"
 
 extern "C" {
@@ -49,32 +50,27 @@ NSString* const kDockPersistentAppsKey = @"persistent-apps";
 // A wrapper around _CFURLCopyPropertyListRepresentation that operates on
 // Foundation data types and returns an autoreleased NSDictionary.
 NSDictionary* DockFileDataDictionaryForURL(NSURL* url) {
-  base::ScopedCFTypeRef<CFPropertyListRef> property_list(
-      _CFURLCopyPropertyListRepresentation(base::mac::NSToCFCast(url)));
+  base::apple::ScopedCFTypeRef<CFPropertyListRef> property_list(
+      _CFURLCopyPropertyListRepresentation(base::apple::NSToCFPtrCast(url)));
   CFDictionaryRef dictionary =
-      base::mac::CFCast<CFDictionaryRef>(property_list);
+      base::apple::CFCast<CFDictionaryRef>(property_list.get());
   if (!dictionary)
     return nil;
 
-  // It would be desirable to pipe the released object from the ScopedCFTypeRef
-  // directly into autorelease, as URLFromDockFileDataDictionary does below.
-  // However, this can't be done because CFPropertyListRef isn't bridgeable.
-  // Therefore, separate the release of the ownership of the ScopedCFTypeRef
-  // and the autorelease on the next line.
-  std::ignore = property_list.release();
-  return [base::mac::CFToNSCast(dictionary) autorelease];
+  return base::apple::CFToNSOwnershipCast(
+      (CFDictionaryRef)property_list.release());
 }
 
 // A wrapper around _CFURLCreateFromPropertyListRepresentation that operates
 // on Foundation data types and returns an autoreleased NSURL.
 NSURL* URLFromDockFileDataDictionary(NSDictionary* dictionary) {
-  base::ScopedCFTypeRef<CFURLRef> url(
+  base::apple::ScopedCFTypeRef<CFURLRef> url(
       _CFURLCreateFromPropertyListRepresentation(
-          kCFAllocatorDefault, base::mac::NSToCFCast(dictionary)));
+          kCFAllocatorDefault, base::apple::NSToCFPtrCast(dictionary)));
   if (!url)
     return nil;
 
-  return [base::mac::CFToNSCast(url.release()) autorelease];
+  return base::apple::CFToNSOwnershipCast(url.release());
 }
 
 // Returns an array parallel to |persistent_apps| containing only the
@@ -132,7 +128,7 @@ BOOL IsAppAtPathAWebBrowser(NSString* app_path) {
   if (!app_bundle)
     return NO;
 
-  NSArray* activities = base::mac::ObjCCast<NSArray>(
+  NSArray* activities = base::apple::ObjCCast<NSArray>(
       [app_bundle objectForInfoDictionaryKey:@"NSUserActivityTypes"]);
   if (!activities)
     return NO;
@@ -190,7 +186,7 @@ ChromeInDockStatus ChromeIsInTheDock() {
     return ChromeInDockFailure;
   }
 
-  NSString* launch_path = [base::mac::OuterBundle() bundlePath];
+  NSString* launch_path = [base::apple::OuterBundle() bundlePath];
 
   return [PersistentAppPaths(persistent_apps) containsObject:launch_path]
              ? ChromeInDockTrue

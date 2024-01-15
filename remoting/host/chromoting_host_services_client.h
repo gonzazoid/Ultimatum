@@ -7,22 +7,17 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/sequence_checker.h"
 #include "base/thread_annotations.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "mojo/public/cpp/platform/named_platform_channel.h"
 #include "remoting/host/chromoting_host_services_provider.h"
 #include "remoting/host/mojom/chromoting_host_services.mojom.h"
 
 namespace base {
 class Environment;
 }  // namespace base
-
-namespace mojo {
-class IsolatedConnection;
-}  // namespace mojo
 
 namespace remoting {
 
@@ -55,14 +50,16 @@ class ChromotingHostServicesClient final
  private:
   friend class ChromotingHostServicesClientTest;
 
+  using ConnectToServerCallback = base::RepeatingCallback<
+      mojo::PendingRemote<mojom::ChromotingHostServices>()>;
+
 #if BUILDFLAG(IS_LINUX)
   static constexpr char kChromeRemoteDesktopSessionEnvVar[] =
       "CHROME_REMOTE_DESKTOP_SESSION";
 #endif
 
-  ChromotingHostServicesClient(
-      std::unique_ptr<base::Environment> environment,
-      const mojo::NamedPlatformChannel::ServerName& server_name);
+  ChromotingHostServicesClient(std::unique_ptr<base::Environment> environment,
+                               ConnectToServerCallback connect_to_server);
 
   // Attempts to connect to the IPC server if the connection has not been
   // established. Returns a boolean indicating whether there is a valid IPC
@@ -77,9 +74,7 @@ class ChromotingHostServicesClient final
   SEQUENCE_CHECKER(sequence_checker_);
 
   std::unique_ptr<base::Environment> environment_;
-  mojo::NamedPlatformChannel::ServerName server_name_;
-  std::unique_ptr<mojo::IsolatedConnection> connection_
-      GUARDED_BY_CONTEXT(sequence_checker_);
+  ConnectToServerCallback connect_to_server_;
   mojo::Remote<mojom::ChromotingHostServices> remote_
       GUARDED_BY_CONTEXT(sequence_checker_);
   mojo::Remote<mojom::ChromotingSessionServices> session_services_remote_

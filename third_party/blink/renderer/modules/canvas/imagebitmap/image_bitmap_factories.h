@@ -31,16 +31,14 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_CANVAS_IMAGEBITMAP_IMAGE_BITMAP_FACTORIES_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_CANVAS_IMAGEBITMAP_IMAGE_BITMAP_FACTORIES_H_
 
-#include <memory>
-
 #include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_image_bitmap_options.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_typedefs.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
+#include "third_party/blink/renderer/core/fileapi/file_reader_client.h"
 #include "third_party/blink/renderer/core/fileapi/file_reader_loader.h"
-#include "third_party/blink/renderer/core/fileapi/file_reader_loader_client.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/workers/worker_global_scope.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
@@ -67,7 +65,7 @@ class MODULES_EXPORT ImageBitmapFactories final
  public:
   static const char kSupplementName[];
 
-  ImageBitmapFactories();
+  explicit ImageBitmapFactories(ExecutionContext& context);
 
   static ScriptPromise CreateImageBitmap(ScriptState*,
                                          const V8ImageBitmapSource*,
@@ -146,7 +144,7 @@ class MODULES_EXPORT ImageBitmapFactories final
 
   class ImageBitmapLoader final : public GarbageCollected<ImageBitmapLoader>,
                                   public ExecutionContextLifecycleObserver,
-                                  public FileReaderLoaderClient {
+                                  public FileReaderAccumulator {
    public:
     static ImageBitmapLoader* Create(ImageBitmapFactories& factory,
                                      absl::optional<gfx::Rect> crop_rect,
@@ -185,13 +183,11 @@ class MODULES_EXPORT ImageBitmapFactories final
     // ExecutionContextLifecycleObserver
     void ContextDestroyed() override;
 
-    // FileReaderLoaderClient
-    void DidStartLoading() override {}
-    void DidReceiveData() override {}
-    void DidFinishLoading() override;
+    // FileReaderClient
+    void DidFinishLoading(FileReaderData) override;
     void DidFail(FileErrorCode) override;
 
-    std::unique_ptr<FileReaderLoader> loader_;
+    Member<FileReaderLoader> loader_;
     Member<ImageBitmapFactories> factory_;
     Member<ScriptPromiseResolver> resolver_;
     absl::optional<gfx::Rect> crop_rect_;

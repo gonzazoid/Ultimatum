@@ -10,9 +10,9 @@ dictionary GPUSamplerDescriptor : GPUObjectDescriptorBase {
     GPUAddressMode addressModeW = "clamp-to-edge";
     GPUFilterMode magFilter = "nearest";
     GPUFilterMode minFilter = "nearest";
-    GPUFilterMode mipmapFilter = "nearest";
+    GPUMipmapFilterMode mipmapFilter = "nearest";
     float lodMinClamp = 0;
-    float lodMaxClamp = 0xffffffff;
+    float lodMaxClamp = 32;
     GPUCompareFunction compare;
     [Clamp] unsigned short maxAnisotropy = 1;
 };
@@ -24,6 +24,11 @@ enum GPUAddressMode {
 };
 
 enum GPUFilterMode {
+    "nearest",
+    "linear"
+};
+
+enum GPUMipmapFilterMode {
     "nearest",
     "linear"
 };

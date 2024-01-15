@@ -9,17 +9,13 @@
 #import "components/version_info/version_info.h"
 #import "components/version_ui/version_handler_helper.h"
 #import "components/version_ui/version_ui_constants.h"
-#import "ios/chrome/browser/application_context/application_context.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
 #import "ios/chrome/common/channel_info.h"
 #import "ios/web/public/web_client.h"
 #import "ios/web/public/web_state.h"
 #import "ios/web/public/webui/web_ui_ios.h"
 #import "ios/web/public/webui/web_ui_ios_data_source.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using autofill::LogRouter;
 
@@ -34,13 +30,15 @@ web::WebUIIOSDataSource* CreateInternalsHTMLSource(
                           IDR_AUTOFILL_AND_PASSWORD_MANAGER_INTERNALS_JS);
   source->SetDefaultResource(IDR_AUTOFILL_AND_PASSWORD_MANAGER_INTERNALS_HTML);
   // Data strings:
-  source->AddString(version_ui::kVersion, version_info::GetVersionNumber());
+  source->AddString(version_ui::kVersion,
+                    std::string(version_info::GetVersionNumber()));
   source->AddString(version_ui::kOfficial, version_info::IsOfficialBuild()
                                                ? "official"
                                                : "Developer build");
   source->AddString(version_ui::kVersionModifier,
-                    GetChannelString(GetChannel()));
-  source->AddString(version_ui::kCL, version_info::GetLastChange());
+                    std::string(GetChannelString(GetChannel())));
+  source->AddString(version_ui::kCL,
+                    std::string(version_info::GetLastChange()));
   source->AddString(version_ui::kUserAgent, web::GetWebClient()->GetUserAgent(
                                                 web::UserAgentType::MOBILE));
   source->AddString("app_locale",

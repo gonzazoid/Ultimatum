@@ -3,7 +3,6 @@
 # found in the LICENSE file.
 
 source_set("lookalikes") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "lookalike_url_blocking_page.h",
     "lookalike_url_blocking_page.mm",
@@ -21,8 +20,7 @@ source_set("lookalikes") {
   deps = [
     "//base",
     "//components/lookalikes/core",
-    "//components/lookalikes/core:features",
-    "//components/reputation/core",
+    "//components/lookalikes/core:safety_tips",
     "//components/security_interstitials/core",
     "//components/ukm/ios",
     "//components/url_formatter/spoof_checks/top_domains:common",
@@ -35,7 +33,6 @@ source_set("lookalikes") {
 }
 
 source_set("unit_tests") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   sources = [
     "lookalike_url_blocking_page_unittest.mm",
@@ -45,8 +42,7 @@ source_set("unit_tests") {
     ":lookalikes",
     "//base/test:test_support",
     "//components/lookalikes/core",
-    "//components/lookalikes/core:features",
-    "//components/reputation/core",
+    "//components/lookalikes/core:safety_tips",
     "//components/security_interstitials/core",
     "//components/ukm:test_support",
     "//components/ukm/ios",

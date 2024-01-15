@@ -20,10 +20,10 @@ class CSSPropertyNamesWriter(json5_generator.Writer):
         self._css_properties = css_properties.CSSProperties(json5_file_path)
 
     def _enum_declaration(self, property_):
-        return "    %(enum_key)s = %(enum_value)s," % property_
+        return f"    {property_.enum_key} = {property_.enum_value},"
 
     def _array_item(self, property_):
-        return "    CSSPropertyID::%(enum_key)s," % property_
+        return f"    CSSPropertyID::{property_.enum_key},"
 
     @template_expander.use_jinja(
         'core/css/templates/css_property_names.h.tmpl')
@@ -55,6 +55,8 @@ class CSSPropertyNamesWriter(json5_generator.Writer):
             self._css_properties.property_id_bit_length,
             'max_name_length':
             max(map(len, self._css_properties.properties_by_id)),
+            'max_shorthand_expansion':
+            self._css_properties.max_shorthand_expansion,
         }
 
     @gperf.use_jinja_gperf_template(
@@ -63,8 +65,8 @@ class CSSPropertyNamesWriter(json5_generator.Writer):
     def generate_implementation(self):
         enum_value_to_name = {}
         for property_ in self._css_properties.properties_including_aliases:
-            enum_value_to_name[property_['enum_value']] = \
-                property_['name'].original
+            enum_value_to_name[property_.enum_value] = \
+                property_.name.original
         property_offsets = []
         property_names = []
         current_offset = 0
@@ -76,14 +78,15 @@ class CSSPropertyNamesWriter(json5_generator.Writer):
                 property_names.append(name)
                 current_offset += len(name) + 1
 
+        # This is the input to gperf.
         css_name_and_enum_pairs = [
-            (property_['name'].original,
-             'static_cast<int>(CSSPropertyID::' + property_['enum_key'] + ')')
-            for property_ in self._css_properties.properties_including_aliases
+            (property_.name.original,
+             f'static_cast<int>(CSSPropertyID::{property_.enum_key})')
+            for property_ in self._css_properties.gperf_properties
         ]
 
-        property_keys = [
-            property_['enum_key']
+        css_sample_id_pairs = [
+            (property_.enum_key, property_.css_sample_id)
             for property_ in self._css_properties.properties_including_aliases
         ]
 
@@ -96,8 +99,10 @@ class CSSPropertyNamesWriter(json5_generator.Writer):
             'CSSPropertyNames',
             'file_basename':
             self.file_basename,
-            'property_keys':
-            property_keys,
+            'properties_with_alternatives':
+            self._css_properties.properties_with_alternatives,
+            'css_sample_id_pairs':
+            css_sample_id_pairs,
             'property_names':
             property_names,
             'property_offsets':

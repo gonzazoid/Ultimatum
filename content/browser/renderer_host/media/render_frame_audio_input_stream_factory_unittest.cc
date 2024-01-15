@@ -8,8 +8,8 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -141,7 +141,7 @@ class MAYBE_RenderFrameAudioInputStreamFactoryTest
             client_receiver,
         media::mojom::ReadOnlyAudioDataPipePtr data_pipe,
         bool initially_muted,
-        const absl::optional<base::UnguessableToken>& stream_id) override {}
+        const std::optional<base::UnguessableToken>& stream_id) override {}
   };
 
   AudioInputDeviceManager* audio_input_device_manager() {

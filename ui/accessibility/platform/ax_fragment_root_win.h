@@ -5,8 +5,9 @@
 #ifndef UI_ACCESSIBILITY_PLATFORM_AX_FRAGMENT_ROOT_WIN_H_
 #define UI_ACCESSIBILITY_PLATFORM_AX_FRAGMENT_ROOT_WIN_H_
 
+#include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
-#include "ui/accessibility/platform/ax_platform_node_delegate_base.h"
+#include "ui/accessibility/platform/ax_platform_node_delegate.h"
 
 #include <wrl/client.h>
 
@@ -27,7 +28,8 @@ class AXFragmentRootPlatformNodeWin;
 // Since UIA derives some information from the underlying HWND hierarchy, we
 // expose one fragment root per HWND. The class that owns the HWND is expected
 // to own the corresponding AXFragmentRootWin.
-class AX_EXPORT AXFragmentRootWin : public ui::AXPlatformNodeDelegateBase {
+class COMPONENT_EXPORT(AX_PLATFORM) AXFragmentRootWin
+    : public ui::AXPlatformNodeDelegate {
  public:
   AXFragmentRootWin(gfx::AcceleratedWidget widget,
                     AXFragmentRootDelegateWin* delegate);
@@ -60,9 +62,9 @@ class AX_EXPORT AXFragmentRootWin : public ui::AXPlatformNodeDelegateBase {
   // AXPlatformNodeDelegate overrides.
   gfx::NativeViewAccessible GetParent() const override;
   size_t GetChildCount() const override;
-  gfx::NativeViewAccessible ChildAtIndex(size_t index) override;
-  gfx::NativeViewAccessible GetNextSibling() override;
-  gfx::NativeViewAccessible GetPreviousSibling() override;
+  gfx::NativeViewAccessible ChildAtIndex(size_t index) const override;
+  gfx::NativeViewAccessible GetNextSibling() const override;
+  gfx::NativeViewAccessible GetPreviousSibling() const override;
   gfx::NativeViewAccessible HitTestSync(int x, int y) const override;
   gfx::NativeViewAccessible GetFocus() const override;
   const ui::AXUniqueId& GetUniqueId() const override;

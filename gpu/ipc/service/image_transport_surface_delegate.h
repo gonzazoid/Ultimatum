@@ -5,7 +5,7 @@
 #ifndef GPU_IPC_SERVICE_IMAGE_TRANSPORT_SURFACE_DELEGATE_H_
 #define GPU_IPC_SERVICE_IMAGE_TRANSPORT_SURFACE_DELEGATE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
 #include "components/viz/common/gpu/gpu_vsync_callback.h"
 #include "gpu/ipc/common/surface_handle.h"
@@ -22,11 +22,9 @@ class FeatureInfo;
 class GPU_IPC_SERVICE_EXPORT ImageTransportSurfaceDelegate {
  public:
 #if BUILDFLAG(IS_WIN)
-  // Tells the delegate that a child window was created with the provided
-  // SurfaceHandle.
-  virtual void DidCreateAcceleratedSurfaceChildWindow(
-      SurfaceHandle parent_window,
-      SurfaceHandle child_window) = 0;
+  // Sends the created child window to the browser process so that it can be
+  // parented to the browser process window
+  virtual void AddChildWindowToBrowser(gpu::SurfaceHandle child_window) = 0;
 #endif
 
   // Returns the features available for the ContextGroup.
@@ -36,9 +34,6 @@ class GPU_IPC_SERVICE_EXPORT ImageTransportSurfaceDelegate {
 
   // Callback for GPU vsync signal.  May be called on a different thread.
   virtual viz::GpuVSyncCallback GetGpuVSyncCallback() = 0;
-
-  // Returns how long GpuThread was blocked since last swap. Used for metrics.
-  virtual base::TimeDelta GetGpuBlockedTimeSinceLastSwap() = 0;
 
  protected:
   virtual ~ImageTransportSurfaceDelegate() = default;

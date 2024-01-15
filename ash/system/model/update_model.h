@@ -36,8 +36,7 @@ class UpdateModel {
   // changing the icon, color, and tooltip.
   void SetUpdateAvailable(UpdateSeverity severity,
                           bool factory_reset_required,
-                          bool rollback,
-                          UpdateType update_type);
+                          bool rollback);
 
   // Stores the state of the notification according to the RelaunchNotification
   // policy. State persists until reboot or another call to this function.
@@ -53,6 +52,9 @@ class UpdateModel {
   // If `deferred` is true, an update is downloaded but deferred.
   void SetUpdateDeferred(DeferredUpdateState state);
 
+  // Whether a notice about the device reaching end of life should be shown.
+  void SetShowEolNotice(bool show);
+
   UpdateSeverity GetSeverity() const;
 
   // Sets |update_required_| back to false.
@@ -61,7 +63,6 @@ class UpdateModel {
   bool update_required() const { return update_required_; }
   bool factory_reset_required() const { return factory_reset_required_; }
   bool rollback() const { return rollback_; }
-  UpdateType update_type() const { return update_type_; }
   const RelaunchNotificationState& relaunch_notification_state() const {
     return relaunch_notification_state_;
   }
@@ -70,6 +71,8 @@ class UpdateModel {
   }
   DeferredUpdateState update_deferred() const { return update_deferred_; }
 
+  bool show_eol_notice() const { return show_eol_notice_; }
+
  private:
   void NotifyUpdateAvailable();
 
@@ -77,10 +80,10 @@ class UpdateModel {
   UpdateSeverity severity_ = UpdateSeverity::kNone;
   bool factory_reset_required_ = false;
   bool rollback_ = false;
-  UpdateType update_type_ = UpdateType::kSystem;
   RelaunchNotificationState relaunch_notification_state_;
   bool update_over_cellular_available_ = false;
   DeferredUpdateState update_deferred_ = DeferredUpdateState::kNone;
+  bool show_eol_notice_ = false;
 
   base::ObserverList<UpdateObserver>::Unchecked observers_;
 };

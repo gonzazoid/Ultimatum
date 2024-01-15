@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
@@ -78,12 +78,12 @@ class SyncManagerImpl
   std::string cache_guid() override;
   std::string birthday() override;
   std::string bag_of_chips() override;
+  ModelTypeSet GetTypesWithUnsyncedData() override;
   bool HasUnsyncedItemsForTest() override;
   SyncEncryptionHandler* GetEncryptionHandler() override;
   std::vector<std::unique_ptr<ProtocolEvent>> GetBufferedProtocolEvents()
       override;
   void OnCookieJarChanged(bool account_mismatch) override;
-  void UpdateInvalidationClientId(const std::string& client_id) override;
   void UpdateActiveDevicesInvalidationInfo(
       ActiveDevicesInvalidationInfo active_devices_invalidation_info) override;
 
@@ -103,7 +103,7 @@ class SyncManagerImpl
 
   // SyncEngineEventListener implementation.
   void OnSyncCycleEvent(const SyncCycleEvent& event) override;
-  void OnActionableError(const SyncProtocolError& error) override;
+  void OnActionableProtocolError(const SyncProtocolError& error) override;
   void OnRetryTimeChanged(base::Time retry_time) override;
   void OnThrottledTypesChanged(ModelTypeSet throttled_types) override;
   void OnBackedOffTypesChanged(ModelTypeSet backed_off_types) override;
@@ -130,7 +130,7 @@ class SyncManagerImpl
 
   const std::string name_;
 
-  raw_ptr<network::NetworkConnectionTracker> network_connection_tracker_;
+  const raw_ptr<network::NetworkConnectionTracker> network_connection_tracker_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 
@@ -157,16 +157,16 @@ class SyncManagerImpl
   std::unique_ptr<SyncStatusTracker> sync_status_tracker_;
 
   // Set to true once Init has been called.
-  bool initialized_;
+  bool initialized_ = false;
 
-  bool observing_network_connectivity_changes_;
+  bool observing_network_connectivity_changes_ = false;
 
   // This is for keeping track of client events to send to the server.
   DebugInfoEventListener debug_info_event_listener_;
 
   ProtocolEventBuffer protocol_event_buffer_;
 
-  raw_ptr<SyncEncryptionHandler> sync_encryption_handler_;
+  raw_ptr<SyncEncryptionHandler> sync_encryption_handler_ = nullptr;
 
   std::unique_ptr<SyncEncryptionHandler::Observer> encryption_observer_proxy_;
 

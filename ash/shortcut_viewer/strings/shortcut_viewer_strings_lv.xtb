@@ -59,7 +59,7 @@
 <translation id="2872353916818027657">Samainīt galveno monitoru</translation>
 <translation id="2914313326123580426">Rādīt vai paslēpt izstrādātāja rīku paneli</translation>
 <translation id="292495055542441795">Pārslēgt pilnekrāna režīmu</translation>
-<translation id="3020183492814296499">Īsinājumtaustiņi</translation>
+<translation id="3020183492814296499">Saīsnes</translation>
 <translation id="3084301071537457911">Izcelt nākamo plauktā esošo vienumu</translation>
 <translation id="309173601632226815">Izcelt palaišanas programmas pogu plauktā</translation>
 <translation id="3140353188828248647">Iezīmēt adreses joslu</translation>
@@ -98,6 +98,7 @@
 <translation id="4141203561740478845">Izcelt rindu ar adreses joslu</translation>
 <translation id="4148761611071495477"><ph name="CTRL" /><ph name="SEPARATOR" /><ph name="G" /> vai <ph name="ENTER" /></translation>
 <translation id="4240486403425279990">Pārskata režīms</translation>
+<translation id="4275283744500212192">Atvērt logu izkārtojuma opcijas</translation>
 <translation id="4382340674111381977">Pāriet atpakaļ uz iepriekšējo lapu</translation>
 <translation id="4458670250301149821">Pārvietojiet lietotnes ikonu uz/no mapes lietotņu režģī</translation>
 <translation id="4472417192667361414">Sistēmas un attēlojuma iestatījumi</translation>
@@ -193,6 +194,7 @@
 <translation id="8388247778047144397">Vilkt saiti uz tukšu apgabalu ciļņu joslā</translation>
 <translation id="8389638407792712197">Atvērt jaunu logu</translation>
 <translation id="8429696719963529183">Izmantot funkcionālos taustiņus (no F1 līdz F12)</translation>
+<translation id="8539396513118402548">Īsinājumtaustiņu saraksts</translation>
 <translation id="85690795166292698">Atvērt saiti jaunā cilnē</translation>
 <translation id="8609384513243082612">Atvērt jaunu cilni</translation>
 <translation id="8644639153978066712">Rādīt paslēptos failus lietotnē Faili</translation>

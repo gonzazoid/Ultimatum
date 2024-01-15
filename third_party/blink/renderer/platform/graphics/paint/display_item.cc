@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/platform/graphics/paint/display_item.h"
 
 #include <cinttypes>
+
 #include "third_party/blink/renderer/platform/graphics/paint/drawing_display_item.h"
 #include "third_party/blink/renderer/platform/graphics/paint/foreign_layer_display_item.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_artifact.h"
@@ -14,7 +15,7 @@
 namespace blink {
 
 struct SameSizeAsDisplayItem {
-  void* pointer;
+  uintptr_t pointer_as_id;
   gfx::Rect rect;
   uint32_t i1;
   uint32_t i2;
@@ -116,24 +117,18 @@ static WTF::String PaintPhaseAsDebugString(int paint_phase) {
 static WTF::String SpecialDrawingTypeAsDebugString(DisplayItem::Type type) {
   switch (type) {
     DEBUG_STRING_CASE(BoxDecorationBackground);
+    DEBUG_STRING_CASE(FixedAttachmentBackground);
     DEBUG_STRING_CASE(Caret);
     DEBUG_STRING_CASE(CapsLockIndicator);
-    DEBUG_STRING_CASE(ClippingMask);
     DEBUG_STRING_CASE(ColumnRules);
-    DEBUG_STRING_CASE(DebugDrawing);
     DEBUG_STRING_CASE(DocumentRootBackdrop);
     DEBUG_STRING_CASE(DocumentBackground);
-    DEBUG_STRING_CASE(DragImage);
     DEBUG_STRING_CASE(DragCaret);
     DEBUG_STRING_CASE(ForcedColorsModeBackplate);
     DEBUG_STRING_CASE(SVGImage);
-    DEBUG_STRING_CASE(LinkHighlight);
     DEBUG_STRING_CASE(ImageAreaFocusRing);
     DEBUG_STRING_CASE(OverflowControls);
     DEBUG_STRING_CASE(FrameOverlay);
-    DEBUG_STRING_CASE(PopupContainerBorder);
-    DEBUG_STRING_CASE(PopupListBoxBackground);
-    DEBUG_STRING_CASE(PopupListBoxRow);
     DEBUG_STRING_CASE(PrintedContentDestinationLocations);
     DEBUG_STRING_CASE(PrintedContentPDFURLRect);
     DEBUG_STRING_CASE(ReflectionMask);
@@ -146,8 +141,6 @@ static WTF::String SpecialDrawingTypeAsDebugString(DisplayItem::Type type) {
     DEBUG_STRING_CASE(ScrollCorner);
     DEBUG_STRING_CASE(SelectionTint);
     DEBUG_STRING_CASE(TableCollapsedBorders);
-    DEBUG_STRING_CASE(VideoBitmap);
-    DEBUG_STRING_CASE(WebFont);
     DEBUG_STRING_CASE(WebPlugin);
 
     DEFAULT_CASE;
@@ -169,7 +162,7 @@ static String ForeignLayerTypeAsDebugString(DisplayItem::Type type) {
     DEBUG_STRING_CASE(ForeignLayerLinkHighlight);
     DEBUG_STRING_CASE(ForeignLayerViewportScroll);
     DEBUG_STRING_CASE(ForeignLayerViewportScrollbar);
-    DEBUG_STRING_CASE(ForeignLayerDocumentTransitionContent);
+    DEBUG_STRING_CASE(ForeignLayerViewTransitionContent);
     DEFAULT_CASE;
   }
 }
@@ -188,6 +181,7 @@ WTF::String DisplayItem::TypeAsDebugString(Type type) {
 
   switch (type) {
     DEBUG_STRING_CASE(HitTest);
+    DEBUG_STRING_CASE(WebPluginHitTest);
     DEBUG_STRING_CASE(RegionCapture);
     DEBUG_STRING_CASE(ScrollHitTest);
     DEBUG_STRING_CASE(ResizerScrollHitTest);

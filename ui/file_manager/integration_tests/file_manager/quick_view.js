@@ -2,15 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert.js';
+import {assert} from 'chrome://resources/ash/common/assert.js';
 
 import {DialogType} from '../dialog_type.js';
 import {ExecuteScriptError} from '../remote_call.js';
-import {addEntries, ENTRIES, EntryType, getCaller, getHistogramCount, pending, repeatUntil, RootPath, sendTestMessage, TestEntryInfo, wait} from '../test_util.js';
+import {addEntries, ENTRIES, EntryType, getCaller, getHistogramCount, pending, repeatUntil, RootPath, sanitizeDate, sendTestMessage, TestEntryInfo, wait} from '../test_util.js';
 import {testcase} from '../testcase.js';
 
-import {mountCrostini, mountGuestOs, navigateWithDirectoryTree, openNewWindow, remoteCall, setupAndWaitUntilReady} from './background.js';
-import {BASIC_ANDROID_ENTRY_SET, BASIC_FAKE_ENTRY_SET, BASIC_LOCAL_ENTRY_SET, BASIC_ZIP_ENTRY_SET, MODIFIED_ENTRY_SET} from './test_data.js';
+import {mountCrostini, mountGuestOs, openNewWindow, remoteCall, setupAndWaitUntilReady} from './background.js';
+import {DirectoryTreePageObject} from './page_objects/directory_tree.js';
+import {BASIC_ANDROID_ENTRY_SET, BASIC_FAKE_ENTRY_SET, BASIC_LOCAL_ENTRY_SET, MODIFIED_ENTRY_SET} from './test_data.js';
 
 /**
  * The tag used to create a safe environment to display the preview.
@@ -50,71 +51,6 @@ async function isDarkModeEnabled() {
 }
 
 /**
- * Returns the $i18n{} label for the Quick View item |text| if devtools code
- * coverage is enabled. Otherwise, returns |text|.
- *
- * @param {string} text Quick View item text.
- * @return {!Promise<string>}
- */
-async function i18nQuickViewLabelText(text) {
-  const isDevtoolsCoverageActive =
-      await sendTestMessage({name: 'isDevtoolsCoverageActive'});
-
-  if (isDevtoolsCoverageActive !== 'true') {
-    return text;
-  }
-
-  /** @const {!Object<string, string>} */
-  const i18nQuickViewItemTextLabels = {
-    // Quick View toolbar button items.
-    'Back': 'QUICK_VIEW_CLOSE_BUTTON_LABEL',
-    'Delete': 'QUICK_VIEW_DELETE_BUTTON_LABEL',
-    'File info': 'QUICK_VIEW_TOGGLE_METADATA_BOX_BUTTON_LABEL',
-    'Open': 'QUICK_VIEW_OPEN_IN_NEW_BUTTON_LABEL',
-
-    // Quick View content panel items.
-    'No preview available': 'QUICK_VIEW_NO_PREVIEW_AVAILABLE',
-
-    // Quick View metadata box items.
-    'Album': 'METADATA_BOX_ALBUM_TITLE',
-    'Artist': 'METADATA_BOX_MEDIA_ARTIST',
-    'Audio info': 'METADATA_BOX_AUDIO_INFO',
-    'Codec': 'METADATA_BOX_CODEC',
-    'Created by': 'METADATA_BOX_CREATED_BY',
-    'Created time': 'METADATA_BOX_CREATION_TIME',
-    'Date modified': 'METADATA_BOX_MODIFICATION_TIME',
-    'Device model': 'METADATA_BOX_EXIF_DEVICE_MODEL',
-    'Device settings': 'METADATA_BOX_EXIF_DEVICE_SETTINGS',
-    'Dimensions': 'METADATA_BOX_DIMENSION',
-    'Duration': 'METADATA_BOX_DURATION',
-    'File location': 'METADATA_BOX_FILE_LOCATION',
-    'Frame rate': 'METADATA_BOX_FRAME_RATE',
-    'General info': 'METADATA_BOX_GENERAL_INFO',
-    'Genre': 'METADATA_BOX_GENRE',
-    'Geography': 'METADATA_BOX_EXIF_GEOGRAPHY',
-    'Original location': 'METADATA_BOX_ORIGINAL_LOCATION',
-    'Image info': 'METADATA_BOX_IMAGE_INFO',
-    'Modified by': 'METADATA_BOX_MODIFIED_BY',
-    'Page count': 'METADATA_BOX_PAGE_COUNT',
-    'Path': 'METADATA_BOX_FILE_PATH',
-    'Size': 'METADATA_BOX_FILE_SIZE',
-    'Source': 'METADATA_BOX_SOURCE',
-    'Title': 'METADATA_BOX_MEDIA_TITLE',
-    'Track': 'METADATA_BOX_TRACK',
-    'Type': 'METADATA_BOX_MEDIA_MIME_TYPE',
-    'Video info': 'METADATA_BOX_VIDEO_INFO',
-    'Year recorded': 'METADATA_BOX_YEAR_RECORDED',
-  };
-
-  // Verify |text| has an $i18n{} label in |i18nQuickViewItemTextLabels|.
-  const label = i18nQuickViewItemTextLabels[text];
-  chrome.test.assertEq('string', typeof label, `Missing: ${text}`);
-
-  // Return the $i18n{} label of |text|.
-  return `$i18n{${label}}`;
-}
-
-/**
  * Waits for Quick View dialog to be open.
  *
  * @param {string} appId Files app windowId.
@@ -148,7 +84,7 @@ async function waitQuickViewClose(appId) {
 
   function checkQuickViewElementsDisplayNone(elements) {
     chrome.test.assertTrue(Array.isArray(elements));
-    if (elements.length == 0 || elements[0].styles.display !== 'none') {
+    if (elements.length === 0 || elements[0].styles.display !== 'none') {
       return pending(caller, 'Waiting for Quick View to close.');
     }
   }
@@ -241,19 +177,12 @@ async function openQuickViewMultipleSelection(appId, names) {
  * @param {string} appId Files app windowId.
  */
 async function mountAndSelectUsb(appId) {
-  const USB_VOLUME_QUERY = '#directory-tree [volume-type-icon="removable"]';
-
   // Mount a USB volume.
   await sendTestMessage({name: 'mountFakeUsb'});
 
-  // Wait for the USB volume to mount.
-  await remoteCall.waitForElement(appId, USB_VOLUME_QUERY);
-
-  // Click to open the USB volume.
-  chrome.test.assertTrue(
-      !!await remoteCall.callRemoteTestUtil(
-          'fakeMouseClick', appId, [USB_VOLUME_QUERY]),
-      'fakeMouseClick failed');
+  // Wait for the USB volume to mount and click to open the USB volume.
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.selectItemByType('removable');
 
   // Check: the USB files should appear in the file list.
   const files = TestEntryInfo.getExpectedRows(BASIC_FAKE_ENTRY_SET);
@@ -325,8 +254,7 @@ async function getQuickViewMetadataBoxField(appId, name, hidden = '') {
    * The <files-metadata-entry key="name"> element resides in the shadow DOM
    * of the <files-metadata-box>.
    */
-  const nameText = await i18nQuickViewLabelText(name);
-  quickViewQuery.push(`files-metadata-entry[key="${nameText}"]`);
+  quickViewQuery.push(`files-metadata-entry[key="${name}"]`);
 
   /**
    * It has a #value div child in its shadow DOM containing the field value,
@@ -339,7 +267,11 @@ async function getQuickViewMetadataBoxField(appId, name, hidden = '') {
   }
 
   const element = await remoteCall.waitForElement(appId, quickViewQuery);
-  return element.text;
+  if (name === 'Date modified') {
+    return sanitizeDate(element.text || '');
+  } else {
+    return element.text;
+  }
 }
 
 /**
@@ -470,8 +402,6 @@ testcase.openQuickViewDrive = async () => {
  * Tests opening Quick View on a Smbfs file.
  */
 testcase.openQuickViewSmbfs = async () => {
-  const SMBFS_VOLUME_QUERY = '#directory-tree [volume-type-icon="smb"]';
-
   // Open Files app on Downloads containing ENTRIES.photos.
   const appId =
       await setupAndWaitUntilReady(RootPath.DOWNLOADS, [ENTRIES.photos], []);
@@ -482,14 +412,9 @@ testcase.openQuickViewSmbfs = async () => {
   // Mount Smbfs volume.
   await sendTestMessage({name: 'mountSmbfs'});
 
-  // Wait for the Smbfs volume to mount.
-  await remoteCall.waitForElement(appId, SMBFS_VOLUME_QUERY);
-
-  // Click to open the Smbfs volume.
-  chrome.test.assertTrue(
-      !!await remoteCall.callRemoteTestUtil(
-          'fakeMouseClick', appId, [SMBFS_VOLUME_QUERY]),
-      'fakeMouseClick failed');
+  // Wait for the Smbfs volume to mount and click to open the Smbfs volume.
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.selectItemByType('smb');
 
   const files = TestEntryInfo.getExpectedRows(BASIC_LOCAL_ENTRY_SET);
   await remoteCall.waitForFiles(appId, files, {ignoreLastModifiedTime: true});
@@ -515,10 +440,6 @@ testcase.openQuickViewUsb = async () => {
  * Tests opening Quick View on a removable partition.
  */
 testcase.openQuickViewRemovablePartitions = async () => {
-  const PARTITION_QUERY =
-      '#directory-tree .tree-children [volume-type-icon="removable"]';
-  const caller = getCaller();
-
   // Open Files app on Downloads containing ENTRIES.photos.
   const appId =
       await setupAndWaitUntilReady(RootPath.DOWNLOADS, [ENTRIES.photos], []);
@@ -527,27 +448,16 @@ testcase.openQuickViewRemovablePartitions = async () => {
   await sendTestMessage({name: 'mountUsbWithPartitions'});
 
   // Wait for the USB root to be available.
-  await remoteCall.waitForElement(
-      appId, '#directory-tree [entry-label="Drive Label"]');
-  await navigateWithDirectoryTree(appId, '/Drive Label');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.waitForItemByLabel('Drive Label');
+  await directoryTree.navigateToPath('/Drive Label');
 
   // Wait for 2 removable partitions to appear in the directory tree.
-  await repeatUntil(async () => {
-    const partitions = await remoteCall.callRemoteTestUtil(
-        'queryAllElements', appId, [PARTITION_QUERY]);
-
-    if (partitions.length == 2) {
-      return true;
-    }
-    return pending(
-        caller, 'Found %d partitions, waiting for 2.', partitions.length);
-  });
+  await directoryTree.expandTreeItemByLabel('Drive Label');
+  await directoryTree.waitForChildItemsCountByLabel('Drive Label', 2);
 
   // Click to open the first partition.
-  chrome.test.assertTrue(
-      !!await remoteCall.callRemoteTestUtil(
-          'fakeMouseClick', appId, [PARTITION_QUERY]),
-      'fakeMouseClick failed');
+  await directoryTree.selectItemByType('removable');
 
   // Check: the USB files should appear in the file list.
   const files = TestEntryInfo.getExpectedRows(BASIC_FAKE_ENTRY_SET);
@@ -575,7 +485,8 @@ testcase.openQuickViewTrash = async () => {
       appId, '#file-list [file-name="hello.txt"]');
 
   // Navigate to /Trash and ensure the file is shown.
-  await navigateWithDirectoryTree(appId, '/Trash');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath('/Trash');
   await remoteCall.waitAndClickElement(
       appId, '#file-list [file-name="hello.txt"]');
 
@@ -593,8 +504,7 @@ testcase.openQuickViewTrash = async () => {
  * Tests seeing dashes for an empty last_modified for DocumentsProvider.
  */
 testcase.openQuickViewLastModifiedMetaData = async () => {
-  const documentsProviderVolumeQuery =
-      '[has-children="true"] [volume-type-icon="documents_provider"]';
+  const documentsProviderVolumeType = 'documents_provider';
 
   // Add files to the DocumentsProvider volume.
   await addEntries(['documents_provider'], MODIFIED_ENTRY_SET);
@@ -604,7 +514,10 @@ testcase.openQuickViewLastModifiedMetaData = async () => {
 
   // Wait for the DocumentsProvider volume to mount and then click to open
   // DocumentsProvider Volume.
-  await remoteCall.waitAndClickElement(appId, documentsProviderVolumeQuery);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.waitForItemToHaveChildrenByType(
+      documentsProviderVolumeType, /* hasChildren= */ true);
+  await directoryTree.selectItemByType(documentsProviderVolumeType);
 
   // Check: the DocumentsProvider files should appear in the file list.
   const files = TestEntryInfo.getExpectedRows(MODIFIED_ENTRY_SET);
@@ -632,8 +545,6 @@ testcase.openQuickViewLastModifiedMetaData = async () => {
  * Tests opening Quick View on an MTP file.
  */
 testcase.openQuickViewMtp = async () => {
-  const MTP_VOLUME_QUERY = '#directory-tree [volume-type-icon="mtp"]';
-
   // Open Files app on Downloads containing ENTRIES.photos.
   const appId =
       await setupAndWaitUntilReady(RootPath.DOWNLOADS, [ENTRIES.photos], []);
@@ -641,14 +552,9 @@ testcase.openQuickViewMtp = async () => {
   // Mount a non-empty MTP volume.
   await sendTestMessage({name: 'mountFakeMtp'});
 
-  // Wait for the MTP volume to mount.
-  await remoteCall.waitForElement(appId, MTP_VOLUME_QUERY);
-
-  // Click to open the MTP volume.
-  chrome.test.assertTrue(
-      !!await remoteCall.callRemoteTestUtil(
-          'fakeMouseClick', appId, [MTP_VOLUME_QUERY]),
-      'fakeMouseClick failed');
+  // Wait for the MTP volume to mount and click to open the MTP volume.
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.selectItemByType('mtp');
 
   // Check: the MTP files should appear in the file list.
   const files = TestEntryInfo.getExpectedRows(BASIC_FAKE_ENTRY_SET);
@@ -703,7 +609,8 @@ testcase.openQuickViewAndroid = async () => {
   await remoteCall.waitForFiles(appId, files, {ignoreLastModifiedTime: true});
 
   // Navigate to the Android files '/Documents' directory.
-  await navigateWithDirectoryTree(appId, '/My files/Play files/Documents');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath('/My files/Play files/Documents');
 
   // Check: the 'android.txt' file should appear in the file list.
   files = [ENTRIES.documentsText.getExpectedRow()];
@@ -733,7 +640,8 @@ testcase.openQuickViewAndroidGuestOs = async () => {
   await remoteCall.waitForFiles(appId, files, {ignoreLastModifiedTime: true});
 
   // Navigate to the Android files '/Documents' directory.
-  await navigateWithDirectoryTree(appId, '/My files/Play files/Documents');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath('/My files/Play files/Documents');
 
   // Check: the 'android.txt' file should appear in the file list.
   files = [ENTRIES.documentsText.getExpectedRow()];
@@ -748,8 +656,7 @@ testcase.openQuickViewAndroidGuestOs = async () => {
  * Tests opening Quick View on a DocumentsProvider root.
  */
 testcase.openQuickViewDocumentsProvider = async () => {
-  const DOCUMENTS_PROVIDER_VOLUME_QUERY =
-      '[has-children="true"] [volume-type-icon="documents_provider"]';
+  const DOCUMENTS_PROVIDER_VOLUME_TYPE = 'documents_provider';
 
   // Add files to the DocumentsProvider volume.
   await addEntries(['documents_provider'], BASIC_LOCAL_ENTRY_SET);
@@ -758,13 +665,12 @@ testcase.openQuickViewDocumentsProvider = async () => {
   const appId = await openNewWindow(RootPath.DOWNLOADS);
 
   // Wait for the DocumentsProvider volume to mount.
-  await remoteCall.waitForElement(appId, DOCUMENTS_PROVIDER_VOLUME_QUERY);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.waitForItemToHaveChildrenByType(
+      DOCUMENTS_PROVIDER_VOLUME_TYPE, /* hasChildren= */ true);
 
   // Click to open the DocumentsProvider volume.
-  chrome.test.assertTrue(
-      !!await remoteCall.callRemoteTestUtil(
-          'fakeMouseClick', appId, [DOCUMENTS_PROVIDER_VOLUME_QUERY]),
-      'fakeMouseClick failed');
+  await directoryTree.selectItemByType(DOCUMENTS_PROVIDER_VOLUME_TYPE);
 
   // Check: the DocumentsProvider files should appear in the file list.
   const files = TestEntryInfo.getExpectedRows(BASIC_LOCAL_ENTRY_SET);
@@ -939,8 +845,7 @@ testcase.openQuickViewUtf8Text = async () => {
         appId, preview, getTextContent);
 
     // Check: the content of ENTRIES.utf8Text should be shown.
-    if (!text || !text[0] ||
-        !text[0].includes('їсти मुझे |∊☀✌✂♁ 🙂\n')) {
+    if (!text || !text[0] || !text[0].includes('їсти मुझे |∊☀✌✂♁ 🙂\n')) {
       return pending(caller, 'Waiting for preview content.');
     }
   });
@@ -1159,10 +1064,6 @@ testcase.openQuickViewPdfPreviewsDisabled = async () => {
   // Open the file in Quick View.
   await openQuickView(appId, ENTRIES.tallPdf.nameText);
 
-  // Get the content panel 'No preview available' item text.
-  const noPreviewAvailableText =
-      await i18nQuickViewLabelText('No preview available');
-
   // Wait for the innerContentPanel to load and display its content.
   function checkInnerContentPanel(elements) {
     const haveElements = Array.isArray(elements) && elements.length === 1;
@@ -1170,7 +1071,7 @@ testcase.openQuickViewPdfPreviewsDisabled = async () => {
       return pending(caller, 'Waiting for inner content panel to load.');
     }
     // Check: the PDF preview should not be shown.
-    chrome.test.assertEq(noPreviewAvailableText, elements[0].text);
+    chrome.test.assertEq('No preview available', elements[0].text);
     return;
   }
   await repeatUntil(async () => {
@@ -1309,9 +1210,9 @@ testcase.openQuickViewBackgroundColorHtml = async () => {
   /**
    * The preview resides in the <files-safe-media type="html"> shadow DOM,
    * which is a child of the #quick-view shadow DOM. This test only needs to
-   * examine the <files-safe-media> element.
+   * examine the <files-safe-media>'s iframe element.
    */
-  const fileSafeMedia = ['#quick-view', 'files-safe-media[type="html"]'];
+  const preview = ['#quick-view', 'files-safe-media[type="html"]', previewTag];
 
   // Open Files app on Downloads containing ENTRIES.tallHtml.
   const appId =
@@ -1320,29 +1221,29 @@ testcase.openQuickViewBackgroundColorHtml = async () => {
   // Open the file in Quick View.
   await openQuickView(appId, ENTRIES.tallHtml.nameText);
 
-  // Get the <files-safe-media type='html'> backgroundColor style.
-  function getFileSafeMediaBackgroundColor(elements) {
+  // Wait for the Quick View preview to load and display its content.
+  function checkPreviewHtmlLoaded(elements) {
     let haveElements = Array.isArray(elements) && elements.length === 1;
     if (haveElements) {
       haveElements = elements[0].styles.display.includes('block');
     }
-    if (!haveElements || !elements[0].styles.backgroundColor) {
-      return pending(caller, 'Waiting for <files-safe-media> element.');
+    if (!haveElements || elements[0].attributes.loaded !== '') {
+      return pending(caller, `Waiting for ${previewTag} to load.`);
     }
-    return elements[0].styles.backgroundColor;
+    return;
   }
-  const backgroundColor = await repeatUntil(async () => {
-    const styles = ['display', 'backgroundColor'];
-    return getFileSafeMediaBackgroundColor(await remoteCall.callRemoteTestUtil(
-        'deepQueryAllElements', appId, [fileSafeMedia, styles]));
+  await repeatUntil(async () => {
+    return checkPreviewHtmlLoaded(await remoteCall.callRemoteTestUtil(
+        'deepQueryAllElements', appId, [preview, ['display']]));
   });
 
-  // Check: the <files-safe-media> backgroundColor: var(--cros-bg-color).
-  if (await isDarkModeEnabled()) {
-    chrome.test.assertEq('rgb(32, 33, 36)', backgroundColor);
-  } else {
-    chrome.test.assertEq('rgb(255, 255, 255)', backgroundColor);
-  }
+  // Get the preview document.body backgroundColor style.
+  const getBackgroundStyle =
+      'window.getComputedStyle(document.body).backgroundColor';
+  const backgroundColor = await remoteCall.executeJsInPreviewTag(
+      appId, preview, getBackgroundStyle);
+
+  chrome.test.assertEq('rgba(0, 0, 0, 0)', backgroundColor[0]);
 };
 
 /**
@@ -1400,8 +1301,13 @@ testcase.openQuickViewAudio = async () => {
   const backgroundColor = await remoteCall.executeJsInPreviewTag(
       appId, preview, getBackgroundStyle);
 
-  // Check: the preview body backgroundColor should be transparent black.
-  chrome.test.assertEq('rgba(0, 0, 0, 0)', backgroundColor[0]);
+  if (await isDarkModeEnabled()) {
+    // Check: the preview body backgroundColor should be black.
+    chrome.test.assertEq('rgb(0, 0, 0)', backgroundColor[0]);
+  } else {
+    // Check: the preview body backgroundColor should be transparent black.
+    chrome.test.assertEq('rgba(0, 0, 0, 0)', backgroundColor[0]);
+  }
 
   // Check: the correct mimeType should be displayed.
   const mimeType = await getQuickViewMetadataBoxField(appId, 'Type');
@@ -1449,8 +1355,13 @@ testcase.openQuickViewAudioOnDrive = async () => {
   const backgroundColor = await remoteCall.executeJsInPreviewTag(
       appId, preview, getBackgroundStyle);
 
-  // Check: the preview body backgroundColor should be transparent black.
-  chrome.test.assertEq('rgba(0, 0, 0, 0)', backgroundColor[0]);
+  if (await isDarkModeEnabled()) {
+    // Check: the preview body backgroundColor should be black.
+    chrome.test.assertEq('rgb(0, 0, 0)', backgroundColor[0]);
+  } else {
+    // Check: the preview body backgroundColor should be transparent black.
+    chrome.test.assertEq('rgba(0, 0, 0, 0)', backgroundColor[0]);
+  }
 };
 
 /**
@@ -1553,8 +1464,13 @@ testcase.openQuickViewImageJpg = async () => {
   const backgroundColor = await remoteCall.executeJsInPreviewTag(
       appId, preview, getBackgroundStyle);
 
-  // Check: the preview body backgroundColor should be transparent black.
-  chrome.test.assertEq('rgba(0, 0, 0, 0)', backgroundColor[0]);
+  if (await isDarkModeEnabled()) {
+    // Check: the preview body backgroundColor should be black.
+    chrome.test.assertEq('rgb(0, 0, 0)', backgroundColor[0]);
+  } else {
+    // Check: the preview body backgroundColor should be transparent black.
+    chrome.test.assertEq('rgba(0, 0, 0, 0)', backgroundColor[0]);
+  }
 
   // Check: the correct mimeType should be displayed.
   const mimeType = await getQuickViewMetadataBoxField(appId, 'Type');
@@ -1602,8 +1518,13 @@ testcase.openQuickViewImageJpeg = async () => {
   const backgroundColor = await remoteCall.executeJsInPreviewTag(
       appId, preview, getBackgroundStyle);
 
-  // Check: the preview body backgroundColor should be transparent black.
-  chrome.test.assertEq('rgba(0, 0, 0, 0)', backgroundColor[0]);
+  if (await isDarkModeEnabled()) {
+    // Check: the preview body backgroundColor should be black.
+    chrome.test.assertEq('rgb(0, 0, 0)', backgroundColor[0]);
+  } else {
+    // Check: the preview body backgroundColor should be transparent black.
+    chrome.test.assertEq('rgba(0, 0, 0, 0)', backgroundColor[0]);
+  }
 
   // Check: the correct mimeType should be displayed.
   const mimeType = await getQuickViewMetadataBoxField(appId, 'Type');
@@ -1894,11 +1815,12 @@ testcase.openQuickViewBrokenImage = async () => {
 
   /**
    * The [generic-thumbnail] element resides in the #quick-view shadow DOM
-   * as a sibling of the files-safe-media[type="image"] element.
+   * as a child of .no-preview-container which is a sibling of the
+   * files-safe-media[type="image"] element.
    */
   const genericThumbnail = [
     '#quick-view',
-    'files-safe-media[type="image"][hidden] + [generic-thumbnail="image"]',
+    'files-safe-media[type="image"][hidden] + .no-preview-container > [generic-thumbnail="image"]',
   ];
 
   // Open Files app on Downloads containing ENTRIES.brokenJpeg.
@@ -1968,8 +1890,13 @@ testcase.openQuickViewVideo = async () => {
   const backgroundColor = await remoteCall.executeJsInPreviewTag(
       appId, preview, getBackgroundStyle);
 
-  // Check: the preview body backgroundColor should be transparent black.
-  chrome.test.assertEq('rgba(0, 0, 0, 0)', backgroundColor[0]);
+  if (await isDarkModeEnabled()) {
+    // Check: the preview body backgroundColor should be black.
+    chrome.test.assertEq('rgb(0, 0, 0)', backgroundColor[0]);
+  } else {
+    // Check: the preview body backgroundColor should be transparent black.
+    chrome.test.assertEq('rgba(0, 0, 0, 0)', backgroundColor[0]);
+  }
 
   // Check: the correct mimeType should be displayed.
   const mimeType = await getQuickViewMetadataBoxField(appId, 'Type');
@@ -1978,10 +1905,9 @@ testcase.openQuickViewVideo = async () => {
   // Close Quick View.
   await closeQuickView(appId);
 
-  // Check quickview video <files-safe-media> has no "src", so it stops
-  // playing the video. crbug.com/970192
-  const noSrcFilesSafeMedia = ['#quick-view', '#videoSafeMedia[src=""]'];
-  await remoteCall.waitForElement(appId, noSrcFilesSafeMedia);
+  // Check: closing Quick View should remove the video <files-safe-media>
+  // preview element, so it stops playing the video. crbug.com/970192
+  await remoteCall.waitForElementLost(appId, preview);
 };
 
 /**
@@ -2025,8 +1951,13 @@ testcase.openQuickViewVideoOnDrive = async () => {
   const backgroundColor = await remoteCall.executeJsInPreviewTag(
       appId, preview, getBackgroundStyle);
 
-  // Check: the preview body backgroundColor should be transparent black.
-  chrome.test.assertEq('rgba(0, 0, 0, 0)', backgroundColor[0]);
+  if (await isDarkModeEnabled()) {
+    // Check: the preview body backgroundColor should be black.
+    chrome.test.assertEq('rgb(0, 0, 0)', backgroundColor[0]);
+  } else {
+    // Check: the preview body backgroundColor should be transparent black.
+    chrome.test.assertEq('rgba(0, 0, 0, 0)', backgroundColor[0]);
+  }
 
   // Check: the correct mimeType should be displayed.
   const mimeType = await getQuickViewMetadataBoxField(appId, 'Type');
@@ -2035,10 +1966,9 @@ testcase.openQuickViewVideoOnDrive = async () => {
   // Close Quick View.
   await closeQuickView(appId);
 
-  // Check quickview video <files-safe-media> has no "src", so it stops
-  // playing the video. crbug.com/970192
-  const noSrcFilesSafeMedia = ['#quick-view', '#videoSafeMedia[src=""]'];
-  await remoteCall.waitForElement(appId, noSrcFilesSafeMedia);
+  // Check: closing Quick View should remove the video <files-safe-media>
+  // preview element, so it stops playing the video. crbug.com/970192
+  await remoteCall.waitForElementLost(appId, preview);
 };
 
 /**
@@ -2651,7 +2581,6 @@ testcase.openQuickViewWithMultipleFilesKeyboardLeftRight = async () => {
 
   // Wait until the preview displays that file's content.
   await repeatUntil(async () => {
-
     const getTextContent = contentWindowQuery + '.document.body.textContent';
     const text = await executeJsInPreviewTagAndCatchErrors(
         appId, preview, getTextContent);
@@ -2716,10 +2645,11 @@ testcase.openQuickViewFromDirectoryTree = async () => {
       await setupAndWaitUntilReady(RootPath.DOWNLOADS, [ENTRIES.hello], []);
 
   // Focus Directory Tree.
-  await remoteCall.focus(appId, ['#directory-tree']);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.focusTree();
 
   // Ctrl+A to select the only file.
-  const ctrlA = ['#directory-tree', 'a', true, false, false];
+  const ctrlA = [directoryTree.rootSelector, 'a', true, false, false];
   await remoteCall.fakeKeyDown(appId, ...ctrlA);
 
   // Use selection menu button to open Quick View.
@@ -2754,18 +2684,12 @@ testcase.openQuickViewFromDirectoryTree = async () => {
  * shown in Quick View.
  */
 testcase.openQuickViewTabIndexImage = async () => {
-  // Get tab-index focus query item texts.
-  const backText = await i18nQuickViewLabelText('Back');
-  const openText = await i18nQuickViewLabelText('Open');
-  const deleteText = await i18nQuickViewLabelText('Delete');
-  const fileInfoText = await i18nQuickViewLabelText('File info');
-
   // Prepare a list of tab-index focus queries.
   const tabQueries = [
-    {'query': ['#quick-view', `[aria-label="${backText}"]:focus`]},
-    {'query': ['#quick-view', `[aria-label="${openText}"]:focus`]},
-    {'query': ['#quick-view', `[aria-label="${deleteText}"]:focus`]},
-    {'query': ['#quick-view', `[aria-label="${fileInfoText}"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="Back"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="Open"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="Delete"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="File info"]:focus`]},
   ];
 
   // Open Files app on Downloads containing ENTRIES.smallJpeg.
@@ -2796,20 +2720,14 @@ testcase.openQuickViewTabIndexImage = async () => {
  * shown in Quick View.
  */
 testcase.openQuickViewTabIndexText = async () => {
-  // Get tab-index focus query item texts.
-  const backText = await i18nQuickViewLabelText('Back');
-  const openText = await i18nQuickViewLabelText('Open');
-  const deleteText = await i18nQuickViewLabelText('Delete');
-  const fileInfoText = await i18nQuickViewLabelText('File info');
-
   // Prepare a list of tab-index focus queries.
   const tabQueries = [
-    {'query': ['#quick-view', `[aria-label="${backText}"]:focus`]},
-    {'query': ['#quick-view', `[aria-label="${openText}"]:focus`]},
-    {'query': ['#quick-view', `[aria-label="${deleteText}"]:focus`]},
-    {'query': ['#quick-view', `[aria-label="${fileInfoText}"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="Back"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="Open"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="Delete"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="File info"]:focus`]},
     {'query': ['#quick-view']},  // Tab past the content panel.
-    {'query': ['#quick-view', `[aria-label="${backText}"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="Back"]:focus`]},
   ];
 
   // Open Files app on Downloads containing ENTRIES.tallText.
@@ -2840,18 +2758,12 @@ testcase.openQuickViewTabIndexText = async () => {
  * shown in Quick View.
  */
 testcase.openQuickViewTabIndexHtml = async () => {
-  // Get tab-index focus query item texts.
-  const backText = await i18nQuickViewLabelText('Back');
-  const openText = await i18nQuickViewLabelText('Open');
-  const deleteText = await i18nQuickViewLabelText('Delete');
-  const fileInfoText = await i18nQuickViewLabelText('File info');
-
   // Prepare a list of tab-index focus queries.
   const tabQueries = [
-    {'query': ['#quick-view', `[aria-label="${backText}"]:focus`]},
-    {'query': ['#quick-view', `[aria-label="${openText}"]:focus`]},
-    {'query': ['#quick-view', `[aria-label="${deleteText}"]:focus`]},
-    {'query': ['#quick-view', `[aria-label="${fileInfoText}"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="Back"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="Open"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="Delete"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="File info"]:focus`]},
   ];
 
   // Open Files app on Downloads containing ENTRIES.tallHtml.
@@ -2889,18 +2801,12 @@ testcase.openQuickViewTabIndexAudio = async () => {
   // Open the file in Quick View.
   await openQuickView(appId, ENTRIES.beautiful.nameText);
 
-  // Get tab-index focus query item texts.
-  const backText = await i18nQuickViewLabelText('Back');
-  const openText = await i18nQuickViewLabelText('Open');
-  const deleteText = await i18nQuickViewLabelText('Delete');
-  const fileInfoText = await i18nQuickViewLabelText('File info');
-
   // Prepare a list of tab-index focus queries.
   const tabQueries = [
-    {'query': ['#quick-view', `[aria-label="${backText}"]:focus`]},
-    {'query': ['#quick-view', `[aria-label="${openText}"]:focus`]},
-    {'query': ['#quick-view', `[aria-label="${deleteText}"]:focus`]},
-    {'query': ['#quick-view', `[aria-label="${fileInfoText}"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="Back"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="Open"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="Delete"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="File info"]:focus`]},
   ];
 
   for (const query of tabQueries) {
@@ -2933,7 +2839,7 @@ testcase.openQuickViewTabIndexAudio = async () => {
     // Check: back should eventually get the focus again.
     const activeElement =
         await remoteCall.callRemoteTestUtil('deepGetActiveElement', appId, []);
-    if (activeElement.attributes['aria-label'] === backText) {
+    if (activeElement.attributes['aria-label'] === 'Back') {
       break;
     }
   }
@@ -2951,18 +2857,12 @@ testcase.openQuickViewTabIndexVideo = async () => {
   // Open the file in Quick View.
   await openQuickView(appId, ENTRIES.webm.nameText);
 
-  // Get tab-index focus query item texts.
-  const backText = await i18nQuickViewLabelText('Back');
-  const openText = await i18nQuickViewLabelText('Open');
-  const deleteText = await i18nQuickViewLabelText('Delete');
-  const fileInfoText = await i18nQuickViewLabelText('File info');
-
   // Prepare a list of tab-index focus queries.
   const tabQueries = [
-    {'query': ['#quick-view', `[aria-label="${backText}"]:focus`]},
-    {'query': ['#quick-view', `[aria-label="${openText}"]:focus`]},
-    {'query': ['#quick-view', `[aria-label="${deleteText}"]:focus`]},
-    {'query': ['#quick-view', `[aria-label="${fileInfoText}"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="Back"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="Open"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="Delete"]:focus`]},
+    {'query': ['#quick-view', `[aria-label="File info"]:focus`]},
   ];
 
   for (const query of tabQueries) {
@@ -2995,7 +2895,7 @@ testcase.openQuickViewTabIndexVideo = async () => {
     // Check: back should eventually get the focus again.
     const activeElement =
         await remoteCall.callRemoteTestUtil('deepGetActiveElement', appId, []);
-    if (activeElement.attributes['aria-label'] === backText) {
+    if (activeElement.attributes['aria-label'] === 'Back') {
       break;
     }
   }
@@ -3065,20 +2965,6 @@ testcase.openQuickViewAndDeleteSingleSelection = async () => {
       await remoteCall.callRemoteTestUtil('fakeKeyDown', appId, deleteKey),
       'Pressing Delete failed.');
 
-  if (await sendTestMessage({name: 'isTrashEnabled'}) !== 'true') {
-    // Check: the delete confirm dialog should focus the 'Cancel' button.
-    let defaultDialogButton = ['#quick-view', '.cr-dialog-cancel:focus'];
-    defaultDialogButton =
-        await remoteCall.waitForElement(appId, defaultDialogButton);
-    chrome.test.assertEq('Cancel', defaultDialogButton.text);
-
-    // Click the delete confirm dialog 'Delete' button.
-    let deleteDialogButton = ['#quick-view', '.cr-dialog-ok:not([hidden])'];
-    deleteDialogButton =
-        await remoteCall.waitAndClickElement(appId, deleteDialogButton);
-    chrome.test.assertEq('Delete', deleteDialogButton.text);
-  }
-
   // Check: |hello.txt| should have been deleted.
   await remoteCall.waitForElementLost(
       appId, '#file-list [file-name="hello.txt"]');
@@ -3123,20 +3009,6 @@ testcase.openQuickViewAndDeleteCheckSelection = async () => {
   chrome.test.assertTrue(
       await remoteCall.callRemoteTestUtil('fakeKeyDown', appId, deleteKey),
       'Pressing Delete failed.');
-
-  if (await sendTestMessage({name: 'isTrashEnabled'}) !== 'true') {
-    // Check: the delete confirm dialog should focus the 'Cancel' button.
-    let defaultDialogButton = ['#quick-view', '.cr-dialog-cancel:focus'];
-    defaultDialogButton =
-        await remoteCall.waitForElement(appId, defaultDialogButton);
-    chrome.test.assertEq('Cancel', defaultDialogButton.text);
-
-    // Click the delete confirm dialog 'Delete' button.
-    let deleteDialogButton = ['#quick-view', '.cr-dialog-ok:not([hidden])'];
-    deleteDialogButton =
-        await remoteCall.waitAndClickElement(appId, deleteDialogButton);
-    chrome.test.assertEq('Delete', deleteDialogButton.text);
-  }
 
   // Check: |hello.txt| should have been deleted.
   await remoteCall.waitForElementLost(
@@ -3232,12 +3104,6 @@ testcase.openQuickViewDeleteEntireCheckSelection = async () => {
       await remoteCall.callRemoteTestUtil('fakeKeyDown', appId, deleteKey),
       'Pressing Delete failed.');
 
-  // Click the delete confirm dialog OK button.
-  const deleteConfirm = ['#quick-view', '.cr-dialog-ok:not([hidden])'];
-  if (await sendTestMessage({name: 'isTrashEnabled'}) !== 'true') {
-    await remoteCall.waitAndClickElement(appId, deleteConfirm);
-  }
-
   // Check: |Beautiful Song.ogg| should have been deleted.
   await remoteCall.waitForElementLost(
       appId, '#file-list [file-name="Beautiful Song.ogg"]');
@@ -3270,11 +3136,6 @@ testcase.openQuickViewDeleteEntireCheckSelection = async () => {
       await remoteCall.callRemoteTestUtil('fakeKeyDown', appId, deleteKey),
       'Pressing Delete failed.');
 
-  // Click the delete confirm dialog OK button.
-  if (await sendTestMessage({name: 'isTrashEnabled'}) !== 'true') {
-    await remoteCall.waitAndClickElement(appId, deleteConfirm);
-  }
-
   // Check: |My Desktop Background.png| should have been deleted.
   await remoteCall.waitForElementLost(
       appId, '#file-list [file-name="My Desktop Background.png"]');
@@ -3297,12 +3158,6 @@ testcase.openQuickViewClickDeleteButton = async () => {
   // Click the Quick View delete button.
   const quickViewDeleteButton = ['#quick-view', '#delete-button:not([hidden])'];
   await remoteCall.waitAndClickElement(appId, quickViewDeleteButton);
-
-  // Click the delete confirm dialog OK button.
-  if (await sendTestMessage({name: 'isTrashEnabled'}) !== 'true') {
-    const deleteConfirm = ['#quick-view', '.cr-dialog-ok:not([hidden])'];
-    await remoteCall.waitAndClickElement(appId, deleteConfirm);
-  }
 
   // Check: |hello.txt| should have been deleted.
   await remoteCall.waitForElementLost(
@@ -3436,7 +3291,7 @@ testcase.openQuickViewUmaViaSelectionMenu = async () => {
   // Wait until the selection menu is visible.
   function checkElementsDisplayVisible(elements) {
     chrome.test.assertTrue(Array.isArray(elements));
-    if (elements.length == 0 || elements[0].styles.display === 'none') {
+    if (elements.length === 0 || elements[0].styles.display === 'none') {
       return pending(caller, 'Waiting for Selection Menu to be visible.');
     }
   }
@@ -3518,7 +3373,7 @@ testcase.openQuickViewUmaViaSelectionMenuKeyboard = async () => {
   // Wait until the selection menu is visible.
   function checkElementsDisplayVisible(elements) {
     chrome.test.assertTrue(Array.isArray(elements));
-    if (elements.length == 0 || elements[0].styles.display === 'none') {
+    if (elements.length === 0 || elements[0].styles.display === 'none') {
       return pending(caller, 'Waiting for Selection Menu to be visible.');
     }
   }
@@ -3601,4 +3456,42 @@ testcase.openQuickViewUmaViaSelectionMenuKeyboard = async () => {
   chrome.test.assertEq(
       selectionMenuUMAValueAfterOpening,
       selectionMenuUMAValueBeforeOpening + 1);
+};
+
+/**
+ * Tests that Quick View does not display a CSE file preview.
+ */
+testcase.openQuickViewEncryptedFile = async () => {
+  const caller = getCaller();
+
+  /**
+   * The #innerContentPanel resides in the #quick-view shadow DOM as a child
+   * of the #dialog element, and contains the file preview result.
+   */
+  const contentPanel = ['#quick-view', '#dialog[open] #innerContentPanel'];
+
+  const appId =
+      await setupAndWaitUntilReady(RootPath.DRIVE, [], [ENTRIES.testCSEFile]);
+
+  // Open the file in Quick View.
+  await openQuickView(appId, ENTRIES.testCSEFile.nameText);
+
+  // Wait for the innerContentPanel to load and display its content.
+  function checkInnerContentPanel(elements) {
+    const haveElements = Array.isArray(elements) && elements.length === 1;
+    if (!haveElements || elements[0].styles.display !== 'flex') {
+      return pending(caller, 'Waiting for inner content panel to load.');
+    }
+    // Check: the preview should not be shown.
+    chrome.test.assertEq('No preview available', elements[0].innerText);
+    return;
+  }
+  await repeatUntil(async () => {
+    return checkInnerContentPanel(await remoteCall.callRemoteTestUtil(
+        'deepQueryAllElements', appId, [contentPanel, ['display']]));
+  });
+
+  // Check: the correct file mimeType should be displayed.
+  const mimeType = await getQuickViewMetadataBoxField(appId, 'Type');
+  chrome.test.assertEq('Encrypted text/plain', mimeType);
 };

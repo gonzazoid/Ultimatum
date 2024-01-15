@@ -10,10 +10,10 @@
 #include <vector>
 
 #include "ash/components/arc/arc_prefs.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 #include "chromeos/ash/components/dbus/upstart/fake_upstart_client.h"
 #include "components/account_id/account_id.h"
@@ -35,7 +35,7 @@ class TestUpstartClient : public ash::FakeUpstartClient {
   void StartJob(const std::string& job,
                 const std::vector<std::string>& upstart_env,
                 chromeos::VoidDBusMethodCallback callback) override {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), arc_available_));
   }
 
@@ -81,8 +81,8 @@ TEST_F(ArcDataRemoverTest, NotScheduled) {
 
   base::RunLoop loop;
   data_remover.Run(base::BindOnce(
-      [](base::RunLoop* loop, absl::optional<bool> result) {
-        EXPECT_EQ(result, absl::nullopt);
+      [](base::RunLoop* loop, std::optional<bool> result) {
+        EXPECT_EQ(result, std::nullopt);
         loop->Quit();
       },
       &loop));
@@ -97,8 +97,8 @@ TEST_F(ArcDataRemoverTest, Success) {
 
   base::RunLoop loop;
   data_remover.Run(base::BindOnce(
-      [](base::RunLoop* loop, absl::optional<bool> result) {
-        EXPECT_EQ(result, absl::make_optional(true));
+      [](base::RunLoop* loop, std::optional<bool> result) {
+        EXPECT_EQ(result, std::make_optional(true));
         loop->Quit();
       },
       &loop));
@@ -111,8 +111,8 @@ TEST_F(ArcDataRemoverTest, Fail) {
 
   base::RunLoop loop;
   data_remover.Run(base::BindOnce(
-      [](base::RunLoop* loop, absl::optional<bool> result) {
-        EXPECT_EQ(result, absl::make_optional(false));
+      [](base::RunLoop* loop, std::optional<bool> result) {
+        EXPECT_EQ(result, std::make_optional(false));
         loop->Quit();
       },
       &loop));

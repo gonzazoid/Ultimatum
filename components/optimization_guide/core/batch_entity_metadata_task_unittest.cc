@@ -4,9 +4,10 @@
 
 #include "components/optimization_guide/core/batch_entity_metadata_task.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/optimization_guide/core/entity_metadata_provider.h"
+#include "components/optimization_guide/core/optimization_guide_features.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace optimization_guide {
@@ -43,6 +44,8 @@ class TestEntityMetadataProvider : public EntityMetadataProvider {
 
 class BatchEntityMetadataTaskTest : public testing::Test {
  public:
+  BatchEntityMetadataTaskTest() = default;
+
   void SetUp() override {
     entity_metadata_provider_ = std::make_unique<TestEntityMetadataProvider>(
         task_environment_.GetMainThreadTaskRunner());

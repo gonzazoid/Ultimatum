@@ -11,7 +11,6 @@ import static org.mockito.Mockito.verify;
 import android.graphics.drawable.Animatable2;
 import android.graphics.drawable.AnimatedVectorDrawable;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -22,14 +21,11 @@ import org.robolectric.annotation.LooperMode;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
 
-/**
- * Test AnimationLooper class.
- */
+/** Test AnimationLooper class. */
 @RunWith(BaseRobolectricTestRunner.class)
 @LooperMode(LooperMode.Mode.LEGACY)
 public class AnimationLooperTest {
-    @Mock
-    private AnimatedVectorDrawable mAnimatableMock;
+    @Mock private AnimatedVectorDrawable mAnimatableMock;
 
     private AnimationLooper mAnimationLooper;
 
@@ -37,11 +33,6 @@ public class AnimationLooperTest {
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         mAnimationLooper = new AnimationLooper(mAnimatableMock);
-    }
-
-    @After
-    public void tearDown() {
-        AnimationLooper.setAreAnimatorsEnabledForTests(null);
     }
 
     @Test

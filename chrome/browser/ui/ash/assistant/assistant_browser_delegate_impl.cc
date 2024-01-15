@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/assistant/assistant_interface_binder.h"
 #include "ash/public/cpp/assistant/controller/assistant_interaction_controller.h"
@@ -81,7 +82,7 @@ void AssistantBrowserDelegateImpl::MaybeInit(Profile* profile) {
 
   service_ = std::make_unique<ash::assistant::Service>(
       profile->GetURLLoaderFactory()->Clone(),
-      IdentityManagerFactory::GetForProfile(profile));
+      IdentityManagerFactory::GetForProfile(profile), profile->GetPrefs());
   service_->Init();
 
   assistant_setup_ = std::make_unique<AssistantSetup>();
@@ -156,12 +157,8 @@ void AssistantBrowserDelegateImpl::RequestNetworkConfig(
 }
 
 void AssistantBrowserDelegateImpl::OpenUrl(GURL url) {
-  if (crosapi::browser_util::IsLacrosPrimaryBrowser() &&
-      ChromeWebUIControllerFactory::GetInstance()->CanHandleUrl(
-          crosapi::gurl_os_handler_utils::SanitizeAshURL(url))) {
-    // Note that the unsanitized URL is passed to OpenUrl here, since OpenUrl
-    // internally does sanitization again if needed, but CanHandleUrl requires
-    // a sanitized URL to be passed in.
+  if (crosapi::browser_util::IsLacrosEnabled() &&
+      ChromeWebUIControllerFactory::GetInstance()->CanHandleUrl(url)) {
     crosapi::UrlHandlerAsh().OpenUrl(url);
   } else {
     // The new tab should be opened with a user activation since the user
@@ -205,6 +202,10 @@ void AssistantBrowserDelegateImpl::OnUserProfileLoaded(
 }
 
 void AssistantBrowserDelegateImpl::OnUserSessionStarted(bool is_primary_user) {
+  if (ash::features::IsOobeSkipAssistantEnabled()) {
+    return;
+  }
+
   // Disable the handling for browser tests to prevent the Assistant being
   // enabled unexpectedly.
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();

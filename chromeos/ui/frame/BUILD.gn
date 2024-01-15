@@ -30,10 +30,14 @@ source_set("frame") {
     "desks/move_to_desks_menu_delegate.h",
     "desks/move_to_desks_menu_model.cc",
     "desks/move_to_desks_menu_model.h",
+    "frame_color_metrics_helper.cc",
+    "frame_color_metrics_helper.h",
     "frame_header.cc",
     "frame_header.h",
     "frame_utils.cc",
     "frame_utils.h",
+    "header_view.cc",
+    "header_view.h",
     "highlight_border_overlay.cc",
     "highlight_border_overlay.h",
     "immersive/immersive_context.cc",
@@ -54,26 +58,46 @@ source_set("frame") {
     "multitask_menu/multitask_menu.cc",
     "multitask_menu/multitask_menu.h",
     "multitask_menu/multitask_menu_constants.h",
+    "multitask_menu/multitask_menu_metrics.cc",
+    "multitask_menu/multitask_menu_metrics.h",
+    "multitask_menu/multitask_menu_nudge_controller.cc",
+    "multitask_menu/multitask_menu_nudge_controller.h",
     "multitask_menu/multitask_menu_view.cc",
     "multitask_menu/multitask_menu_view.h",
     "multitask_menu/split_button_view.cc",
     "multitask_menu/split_button_view.h",
+    "non_client_frame_view_base.cc",
+    "non_client_frame_view_base.h",
   ]
 
   deps = [
     "//base",
+    "//chromeos/constants/",
     "//chromeos/strings:strings_grit",
     "//chromeos/ui/base",
     "//chromeos/ui/vector_icons",
     "//chromeos/ui/wm",
+    "//chromeos/utils",
+    "//components/prefs",
     "//skia",
     "//ui/aura",
     "//ui/base",
+    "//ui/chromeos/styles:cros_tokens_color_mappings_generator",
+    "//ui/color",
+    "//ui/events/devices:devices",
+    "//ui/platform_window",
     "//ui/strings:ui_strings_grit",
     "//ui/views",
     "//ui/views/window/vector_icons",
     "//ui/wm/public",
   ]
+
+  if (is_chromeos_ash) {
+    deps += [
+      "//ash/constants",
+      "//components/user_manager",
+    ]
+  }
 }
 
 source_set("test_support") {
@@ -81,6 +105,8 @@ source_set("test_support") {
   sources = [
     "immersive/immersive_fullscreen_controller_test_api.cc",
     "immersive/immersive_fullscreen_controller_test_api.h",
+    "multitask_menu/multitask_menu_view_test_api.cc",
+    "multitask_menu/multitask_menu_view_test_api.h",
   ]
 
   deps = [

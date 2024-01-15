@@ -6,12 +6,13 @@
 #define MOJO_PUBLIC_CPP_BINDINGS_REMOTE_SET_H_
 
 #include <iterator>
+#include <optional>
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/types/id_type.h"
@@ -19,6 +20,7 @@
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "mojo/public/cpp/bindings/runtime_features.h"
 
 namespace mojo {
 
@@ -95,29 +97,60 @@ class RemoteSetImpl {
 
   // Adds a new remote to this set and returns a unique ID that can be used to
   // identify the remote later.
-  RemoteSetElementId Add(RemoteType<Interface> remote) {
-    DCHECK(remote.is_bound());
-    auto id = GenerateNextElementId();
-    remote.set_disconnect_handler(base::BindOnce(&RemoteSetImpl::OnDisconnect,
-                                                 base::Unretained(this), id));
-    auto result = storage_.emplace(id, std::move(remote));
-    DCHECK(result.second);
-    return id;
+  RemoteSetElementId Add(RemoteType<Interface> remote)
+    requires(!internal::kIsRuntimeFeatureGuarded<Interface>)
+  {
+    return AddImpl(std::move(remote));
   }
 
-  // Same as above but for the equivalent pending remote type. If |task_runner|
-  // is null, the value of |base::SequencedTaskRunnerHandle::Get()| at the time
-  // of the |Add()| call will be used to run scheduled tasks for the remote.
+  // Adds a new remote to this set and returns a unique ID that can be used to
+  // identify the remote later.
   RemoteSetElementId Add(
       PendingRemoteType<Interface> remote,
-      scoped_refptr<base::SequencedTaskRunner> task_runner = nullptr) {
-    DCHECK(remote.is_valid());
-    return Add(
-        RemoteType<Interface>(std::move(remote), std::move(task_runner)));
+      scoped_refptr<base::SequencedTaskRunner> task_runner = nullptr)
+    requires(!internal::kIsRuntimeFeatureGuarded<Interface>)
+  {
+    return AddImpl(std::move(remote), std::move(task_runner));
+  }
+
+  // Adds a new remote to this set if the remote is runtime enabled and returns
+  // a unique ID that can be used to identify the remote later.
+  std::optional<RemoteSetElementId> Add(RemoteType<Interface> remote)
+    requires(internal::kIsRuntimeFeatureGuarded<Interface>)
+  {
+    if (!internal::GetRuntimeFeature_ExpectEnabled<Interface>()) {
+      return std::nullopt;
+    }
+    return AddImpl(std::move(remote));
+  }
+
+  // Adds a new remote to this set if the remote is runtime enabled and returns
+  // a unique ID that can be used to identify the remote later.
+  std::optional<RemoteSetElementId> Add(
+      PendingRemoteType<Interface> remote,
+      scoped_refptr<base::SequencedTaskRunner> task_runner = nullptr)
+    requires(internal::kIsRuntimeFeatureGuarded<Interface>)
+  {
+    if (!internal::GetRuntimeFeature_ExpectEnabled<Interface>()) {
+      return std::nullopt;
+    }
+    return AddImpl(std::move(remote), std::move(task_runner));
   }
 
   // Removes a remote from the set given |id|, if present.
   void Remove(RemoteSetElementId id) { storage_.erase(id); }
+  // Similar to the method above, but also specifies a disconnect reason.
+  void RemoveWithReason(RemoteSetElementId id,
+                        uint32_t custom_reason_code,
+                        const std::string& description) {
+    auto it = storage_.find(id);
+    if (it == storage_.end()) {
+      return;
+    }
+
+    it->second.ResetWithReason(custom_reason_code, description);
+    storage_.erase(it);
+  }
 
   // Indicates whether a remote with the given ID is present in the set.
   bool Contains(RemoteSetElementId id) { return base::Contains(storage_, id); }
@@ -135,11 +168,30 @@ class RemoteSetImpl {
   // Note that the remote in question is already removed from the set by the
   // time the callback is run for its disconnection.
   using DisconnectHandler = base::RepeatingCallback<void(RemoteSetElementId)>;
+  using DisconnectWithReasonHandler =
+      base::RepeatingCallback<void(RemoteSetElementId,
+                                   uint32_t /* custom_reason */,
+                                   const std::string& /* description */)>;
+
   void set_disconnect_handler(DisconnectHandler handler) {
     disconnect_handler_ = std::move(handler);
+    disconnect_with_reason_handler_.Reset();
+  }
+
+  void set_disconnect_with_reason_handler(DisconnectWithReasonHandler handler) {
+    disconnect_with_reason_handler_ = std::move(handler);
+    disconnect_handler_.Reset();
   }
 
   void Clear() { storage_.clear(); }
+  void ClearWithReason(uint32_t custom_reason_code,
+                       const std::string& description) {
+    for (auto& [_, remote] : storage_) {
+      remote.ResetWithReason(custom_reason_code, description);
+    }
+
+    Clear();
+  }
 
   bool empty() const { return storage_.empty(); }
   size_t size() const { return storage_.size(); }
@@ -156,19 +208,49 @@ class RemoteSetImpl {
   }
 
  private:
+  // Adds a new remote to this set and returns a unique ID that can be used to
+  // identify the remote later.
+  RemoteSetElementId AddImpl(RemoteType<Interface> remote) {
+    DCHECK(remote.is_bound());
+    auto id = GenerateNextElementId();
+    remote.set_disconnect_with_reason_handler(base::BindOnce(
+        &RemoteSetImpl::OnDisconnect, base::Unretained(this), id));
+    auto result = storage_.emplace(id, std::move(remote));
+    DCHECK(result.second);
+    return id;
+  }
+
+  // Same as above but for the equivalent pending remote type. If |task_runner|
+  // is null, the value of |base::SequencedTaskRunner::GetCurrentDefault()| at
+  // the time of the |Add()| call will be used to run scheduled tasks for the
+  // remote.
+  RemoteSetElementId AddImpl(
+      PendingRemoteType<Interface> remote,
+      scoped_refptr<base::SequencedTaskRunner> task_runner = nullptr) {
+    DCHECK(remote.is_valid());
+    return AddImpl(
+        RemoteType<Interface>(std::move(remote), std::move(task_runner)));
+  }
+
   RemoteSetElementId GenerateNextElementId() {
     return remote_set_element_id_generator_.GenerateNextId();
   }
 
-  void OnDisconnect(RemoteSetElementId id) {
+  void OnDisconnect(RemoteSetElementId id,
+                    uint32_t custom_reason_code,
+                    const std::string& description) {
     Remove(id);
     if (disconnect_handler_)
       disconnect_handler_.Run(id);
+    else if (disconnect_with_reason_handler_) {
+      disconnect_with_reason_handler_.Run(id, custom_reason_code, description);
+    }
   }
 
   RemoteSetElementId::Generator remote_set_element_id_generator_;
   Storage storage_;
   DisconnectHandler disconnect_handler_;
+  DisconnectWithReasonHandler disconnect_with_reason_handler_;
 };
 
 template <typename Interface>

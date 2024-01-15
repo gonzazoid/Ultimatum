@@ -8,15 +8,14 @@
 #import "base/strings/utf_string_conversions.h"
 #import "components/security_state/core/security_state.h"
 #import "components/ssl_errors/error_info.h"
-#import "components/strings/grit/components_chromium_strings.h"
-#import "components/strings/grit/components_google_chrome_strings.h"
+#import "components/strings/grit/components_branded_strings.h"
 #import "components/strings/grit/components_strings.h"
-#import "ios/chrome/browser/reading_list/offline_page_tab_helper.h"
-#import "ios/chrome/browser/ui/icons/symbols.h"
+#import "ios/chrome/browser/reading_list/model/offline_page_tab_helper.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
 #import "ios/chrome/browser/ui/page_info/page_info_site_security_description.h"
-#import "ios/chrome/browser/url/chrome_url_constants.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
-#import "ios/chrome/grit/ios_chromium_strings.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/components/webui/web_ui_url_constants.h"
 #import "ios/web/public/navigation/navigation_item.h"
@@ -26,15 +25,7 @@
 #import "ui/base/l10n/l10n_util.h"
 #import "url/gurl.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
-
-// TODO(crbug.com/1315544): Remove this once symbols are shipped.
-NSString* kSecurityIconDangerous = @"security_icon_dangerous";
-NSString* kSecurityIconSecure = @"security_icon_secure";
 
 CGFloat kSymbolSize = 18;
 
@@ -113,17 +104,12 @@ NSString* BuildMessage(NSArray<NSString*>* messageComponents) {
 
   // Summary and details.
   if (!status.certificate) {
-    // Not HTTPS. This maps to the WARNING security level. Show the grey
+    // Not HTTPS. This maps to the WARNING security level. Show the red
     // triangle icon in page info based on the same logic used to determine
     // the iconography in the omnibox.
-    if (UseSymbols()) {
-      dataHolder.iconImage =
-          DefaultSymbolTemplateWithPointSize(kWarningSymbol, kSymbolSize);
-      dataHolder.iconBackgroundColor = [UIColor colorNamed:kRed500Color];
-
-    } else {
-      dataHolder.iconImage = [UIImage imageNamed:kSecurityIconDangerous];
-    }
+    dataHolder.iconImage =
+        DefaultSymbolTemplateWithPointSize(kWarningSymbol, kSymbolSize);
+    dataHolder.iconBackgroundColor = [UIColor colorNamed:kRed500Color];
 
     dataHolder.message =
         [NSString stringWithFormat:@"%@ BEGIN_LINK %@ END_LINK",
@@ -142,13 +128,9 @@ NSString* BuildMessage(NSArray<NSString*>* messageComponents) {
   if (net::IsCertStatusError(status.cert_status) ||
       status.security_style == web::SECURITY_STYLE_AUTHENTICATION_BROKEN) {
     // HTTPS with major errors
-    if (UseSymbols()) {
-      dataHolder.iconImage =
-          DefaultSymbolTemplateWithPointSize(kWarningSymbol, kSymbolSize);
-      dataHolder.iconBackgroundColor = [UIColor colorNamed:kRed500Color];
-    } else {
-      dataHolder.iconImage = [UIImage imageNamed:kSecurityIconDangerous];
-    }
+    dataHolder.iconImage =
+        DefaultSymbolTemplateWithPointSize(kWarningSymbol, kSymbolSize);
+    dataHolder.iconBackgroundColor = [UIColor colorNamed:kRed500Color];
 
     NSString* certificateDetails = BuildCertificateDetailString(status, URL);
 
@@ -179,15 +161,11 @@ NSString* BuildMessage(NSArray<NSString*>* messageComponents) {
   if (status.content_status == web::SSLStatus::DISPLAYED_INSECURE_CONTENT) {
     // HTTPS with mixed content. This maps to the WARNING security level in M80,
     // so assume the WARNING state when determining whether to swap the icon for
-    // a grey triangle. This will result in an inconsistency between the omnibox
+    // a red triangle. This will result in an inconsistency between the omnibox
     // and page info if the mixed content WARNING feature is disabled.
-    if (UseSymbols()) {
-      dataHolder.iconImage =
-          DefaultSymbolTemplateWithPointSize(kWarningSymbol, kSymbolSize);
-      dataHolder.iconBackgroundColor = [UIColor colorNamed:kRed500Color];
-    } else {
-      dataHolder.iconImage = [UIImage imageNamed:kSecurityIconDangerous];
-    }
+    dataHolder.iconImage =
+        DefaultSymbolTemplateWithPointSize(kWarningSymbol, kSymbolSize);
+    dataHolder.iconBackgroundColor = [UIColor colorNamed:kRed500Color];
 
     dataHolder.message = BuildMessage(@[
       [NSString stringWithFormat:@"%@ BEGIN_LINK %@ END_LINK",
@@ -203,13 +181,8 @@ NSString* BuildMessage(NSArray<NSString*>* messageComponents) {
   // Valid HTTPS
   dataHolder.status =
       l10n_util::GetNSString(IDS_IOS_PAGE_INFO_SECURITY_STATUS_SECURE);
-  if (UseSymbols()) {
-    dataHolder.iconImage =
-        DefaultSymbolTemplateWithPointSize(kSecureSymbol, kSymbolSize);
-    dataHolder.iconBackgroundColor = [UIColor colorNamed:kGreen500Color];
-  } else {
-    dataHolder.iconImage = [UIImage imageNamed:kSecurityIconSecure];
-  }
+  dataHolder.iconImage = nil;
+  dataHolder.iconBackgroundColor = [UIColor colorNamed:kGreen500Color];
 
   dataHolder.message = BuildMessage(@[
     [NSString

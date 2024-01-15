@@ -14,6 +14,7 @@
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "build/build_config.h"
+#include "mojo/buildflags.h"
 #include "mojo/core/configuration.h"
 #include "mojo/core/node_controller.h"
 #include "mojo/core/options_validation.h"
@@ -145,7 +146,8 @@ scoped_refptr<SharedBufferDispatcher> SharedBufferDispatcher::Deserialize(
   }
 
   PlatformHandle handles[2];
-#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID) && \
+    !BUILDFLAG(MOJO_USE_APPLE_CHANNEL)
   if (serialized_state->access_mode ==
       MOJO_PLATFORM_SHARED_MEMORY_REGION_ACCESS_MODE_WRITABLE) {
     if (num_platform_handles != 2)
@@ -163,8 +165,13 @@ scoped_refptr<SharedBufferDispatcher> SharedBufferDispatcher::Deserialize(
 #endif
   handles[0] = std::move(platform_handles[0]);
 
-  base::UnguessableToken guid = base::UnguessableToken::Deserialize(
-      serialized_state->guid_high, serialized_state->guid_low);
+  std::optional<base::UnguessableToken> guid =
+      base::UnguessableToken::Deserialize(serialized_state->guid_high,
+                                          serialized_state->guid_low);
+  if (!guid.has_value()) {
+    AssertNotExtractingHandlesFromMessage();
+    return nullptr;
+  }
 
   base::subtle::PlatformSharedMemoryRegion::Mode mode;
   switch (serialized_state->access_mode) {
@@ -186,7 +193,7 @@ scoped_refptr<SharedBufferDispatcher> SharedBufferDispatcher::Deserialize(
   auto region = base::subtle::PlatformSharedMemoryRegion::Take(
       CreateSharedMemoryRegionHandleFromPlatformHandles(std::move(handles[0]),
                                                         std::move(handles[1])),
-      mode, static_cast<size_t>(serialized_state->num_bytes), guid);
+      mode, static_cast<size_t>(serialized_state->num_bytes), guid.value());
   if (!region.IsValid()) {
     AssertNotExtractingHandlesFromMessage();
     LOG(ERROR)
@@ -318,7 +325,8 @@ void SharedBufferDispatcher::StartSerialize(uint32_t* num_bytes,
   *num_bytes = sizeof(SerializedState);
   *num_ports = 0;
   *num_platform_handles = 1;
-#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID) && \
+    !BUILDFLAG(MOJO_USE_APPLE_CHANNEL)
   if (region_.GetMode() ==
       base::subtle::PlatformSharedMemoryRegion::Mode::kWritable) {
     *num_platform_handles = 2;
@@ -357,7 +365,8 @@ bool SharedBufferDispatcher::EndSerialize(void* destination,
   serialized_state->padding = 0;
 
   auto region = std::move(region_);
-#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID) && \
+    !BUILDFLAG(MOJO_USE_APPLE_CHANNEL)
   if (region.GetMode() ==
       base::subtle::PlatformSharedMemoryRegion::Mode::kWritable) {
     PlatformHandle platform_handles[2];

@@ -25,10 +25,11 @@ class IsPossibleUsernameValidTest : public testing::Test {
   PossibleUsernameData possible_username_data_{
       "https://example.com/" /* submitted_signon_realm */,
       autofill::FieldRendererId(1u),
-      u"username_field" /* field name */,
       kUser /* value */,
       base::Time::Now() /* last_change */,
-      10 /* driver_id */};
+      /*driver_id=*/10,
+      /*autocomplete_attribute_has_username=*/false,
+      /*is_likely_otp=*/false};
 };
 
 // Check that if more than |kPossibleUsernameExpirationTimeout| time has

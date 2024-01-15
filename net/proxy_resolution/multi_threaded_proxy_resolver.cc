@@ -8,9 +8,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
@@ -19,7 +19,6 @@
 #include "base/threading/thread.h"
 #include "base/threading/thread_checker.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/net_errors.h"
 #include "net/base/network_anonymization_key.h"
 #include "net/log/net_log.h"
@@ -262,7 +261,7 @@ class CreateResolverJob : public Job {
   }
 
   const scoped_refptr<PacFileData> script_data_;
-  raw_ptr<ProxyResolverFactory, DanglingUntriaged> factory_;
+  raw_ptr<ProxyResolverFactory, AcrossTasksDanglingUntriaged> factory_;
   std::unique_ptr<ProxyResolver> resolver_;
 };
 
@@ -371,7 +370,8 @@ void Executor::StartJob(scoped_refptr<Job> job) {
   job->FinishedWaitingForThread();
   thread_->task_runner()->PostTask(
       FROM_HERE,
-      base::BindOnce(&Job::Run, job, base::ThreadTaskRunnerHandle::Get()));
+      base::BindOnce(&Job::Run, job,
+                     base::SingleThreadTaskRunner::GetCurrentDefault()));
 }
 
 void Executor::OnJobCompleted(Job* job) {

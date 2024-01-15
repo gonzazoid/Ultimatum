@@ -40,6 +40,7 @@ var UNIT_TEST_RESULT_HEADER = 'UNIT_TEST_RESULT';
 var WIDEVINE_KEYSYSTEM = 'com.widevine.alpha';
 var CLEARKEY = 'org.w3.clearkey';
 var EXTERNAL_CLEARKEY = 'org.chromium.externalclearkey';
+var MEDIAFOUNDATION_CLEARKEY = 'org.chromium.externalclearkey.mediafoundation';
 var MESSAGE_TYPE_TEST_KEYSYSTEM =
     'org.chromium.externalclearkey.messagetypetest';
 var FILE_IO_TEST_KEYSYSTEM = 'org.chromium.externalclearkey.fileiotest';
@@ -56,7 +57,8 @@ var STORAGE_ID_TEST_KEYSYSTEM = 'org.chromium.externalclearkey.storageidtest';
 var KEY_SYSTEMS = {
   'Widevine': WIDEVINE_KEYSYSTEM,
   'Clearkey': CLEARKEY,
-  'External Clearkey': EXTERNAL_CLEARKEY
+  'External Clearkey': EXTERNAL_CLEARKEY,
+  'MediaFoundation Clearkey': MEDIAFOUNDATION_CLEARKEY
 };
 
 var CONFIG_CHANGE_TYPE = {
@@ -72,7 +74,9 @@ var MEDIA_TYPES = {
   'WebM - Video Only': 'video/webm; codecs="vp8"',
   'WebM - Audio Only': 'video/webm; codecs="vorbis"',
   'MP4 - Video Only': 'video/mp4; codecs="avc1.4D000C"',
-  'MP4 - Audio Only': 'audio/mp4; codecs="mp4a.40.2"'
+  'MP4 - Audio Only': 'audio/mp4; codecs="mp4a.40.2"',
+  'MP4 - Video Only': 'video/mp4; codecs="avc1.64001E"',
+  'MP4 - Audio Video': 'video/mp4; codecs="mp4a.40.2, avc1.64001E"'
 };
 
 // Global document elements ID's.
@@ -82,7 +86,7 @@ var LICENSE_SERVER_ELEMENT_ID = 'licenseServer';
 var KEYSYSTEM_ELEMENT_ID = 'keySystemList';
 var MEDIA_TYPE_ELEMENT_ID = 'mediaTypeList';
 var USE_MSE_ELEMENT_ID = 'useMSE';
-var USE_PLAY_TWICE_ELEMENT_ID = 'playTwice';
+var USE_PLAY_COUNT_ELEMENT_ID = 'playCount';
 
 // These variables get updated every second, so better to have global pointers.
 var decodedFPSElement = document.getElementById('decodedFPS');

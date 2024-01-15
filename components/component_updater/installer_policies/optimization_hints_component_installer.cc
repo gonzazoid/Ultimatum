@@ -6,12 +6,13 @@
 
 #include <utility>
 
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/path_service.h"
+#include "base/values.h"
 #include "base/version.h"
 #include "components/component_updater/component_updater_paths.h"
 #include "components/optimization_guide/core/optimization_guide_constants.h"
@@ -63,7 +64,7 @@ bool OptimizationHintsComponentInstallerPolicy::RequiresNetworkEncryption()
 
 update_client::CrxInstaller::Result
 OptimizationHintsComponentInstallerPolicy::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   return update_client::CrxInstaller::Result(0);  // Nothing custom here.
 }
@@ -73,21 +74,9 @@ void OptimizationHintsComponentInstallerPolicy::OnCustomUninstall() {}
 void OptimizationHintsComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value manifest) {
+    base::Value::Dict manifest) {
   DCHECK(!install_dir.empty());
   DVLOG(1) << "Optimization Hints Version Ready: " << version.GetString();
-  std::string* ruleset_format =
-      manifest.FindStringKey(kManifestRulesetFormatKey);
-  if (!ruleset_format) {
-    DVLOG(1) << "No ruleset_format present in manifest";
-    return;
-  }
-  base::Version ruleset_format_version = base::Version(*ruleset_format);
-  if (!ruleset_format_version.IsValid() ||
-      ruleset_format_version.CompareTo(ruleset_format_version_) > 0) {
-    DVLOG(1) << "Got incompatible ruleset_format. Bailing out.";
-    return;
-  }
   optimization_guide::OptimizationHintsComponentUpdateListener*
       update_listener = optimization_guide::
           OptimizationHintsComponentUpdateListener::GetInstance();
@@ -102,7 +91,7 @@ void OptimizationHintsComponentInstallerPolicy::ComponentReady(
 
 // Called during startup and installation before ComponentReady().
 bool OptimizationHintsComponentInstallerPolicy::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
   return base::PathExists(install_dir);
 }
@@ -131,8 +120,9 @@ OptimizationHintsComponentInstallerPolicy::GetInstallerAttributes() const {
 }
 
 void RegisterOptimizationHintsComponent(ComponentUpdateService* cus) {
-  if (!optimization_guide::features::IsOptimizationHintsEnabled())
+  if (!optimization_guide::features::IsOptimizationHintsEnabled()) {
     return;
+  }
 
   auto installer = base::MakeRefCounted<ComponentInstaller>(
       std::make_unique<OptimizationHintsComponentInstallerPolicy>());

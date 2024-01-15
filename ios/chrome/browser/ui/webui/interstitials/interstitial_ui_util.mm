@@ -14,14 +14,14 @@
 #import "components/security_interstitials/core/ssl_error_options_mask.h"
 #import "components/security_interstitials/core/unsafe_resource.h"
 #import "crypto/rsa_private_key.h"
-#import "ios/chrome/browser/application_context/application_context.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/safe_browsing/safe_browsing_blocking_page.h"
-#import "ios/chrome/browser/ssl/ios_captive_portal_blocking_page.h"
-#import "ios/chrome/browser/ssl/ios_ssl_blocking_page.h"
+#import "ios/chrome/browser/safe_browsing/model/safe_browsing_blocking_page.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/ssl/model/ios_captive_portal_blocking_page.h"
+#import "ios/chrome/browser/ssl/model/ios_ssl_blocking_page.h"
 #import "ios/chrome/browser/ui/webui/interstitials/interstitial_ui_constants.h"
 #import "ios/chrome/browser/ui/webui/interstitials/interstitial_ui_util.h"
-#import "ios/chrome/browser/url/chrome_url_constants.h"
 #import "ios/components/security_interstitials/ios_blocking_page_controller_client.h"
 #import "ios/components/security_interstitials/ios_blocking_page_metrics_helper.h"
 #import "ios/components/security_interstitials/safe_browsing/safe_browsing_service.h"
@@ -32,10 +32,6 @@
 #import "net/base/url_util.h"
 #import "net/cert/x509_certificate.h"
 #import "net/cert/x509_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -173,9 +169,6 @@ CreateSafeBrowsingBlockingPage(web::WebState* web_state, const GURL& url) {
       threat_type = safe_browsing::SB_THREAT_TYPE_URL_PHISHING;
     } else if (type_param == kChromeInterstitialSafeBrowsingTypeUnwantedValue) {
       threat_type = safe_browsing::SB_THREAT_TYPE_URL_UNWANTED;
-    } else if (type_param ==
-               kChromeInterstitialSafeBrowsingTypeClientsideMalwareValue) {
-      threat_type = safe_browsing::SB_THREAT_TYPE_URL_CLIENT_SIDE_MALWARE;
     } else if (type_param ==
                kChromeInterstitialSafeBrowsingTypeClientsidePhishingValue) {
       threat_type = safe_browsing::SB_THREAT_TYPE_URL_CLIENT_SIDE_PHISHING;

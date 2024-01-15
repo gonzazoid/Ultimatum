@@ -4,7 +4,6 @@
 
 module cert_verifier.mojom;
 
-import "mojo/public/mojom/base/big_buffer.mojom";
 import "mojo/public/mojom/base/byte_string.mojom";
 import "mojo/public/mojom/base/time.mojom";
 import "services/network/public/mojom/network_param.mojom";
@@ -21,14 +20,27 @@ struct RequestParams {
 
 // Temporary config struct--this should eventually be deleted as the network
 // service has no reason to know about this config.
+// TODO(https://crbug.com/1427326): remove this.
 struct CertVerifierConfig {
   bool enable_rev_checking;
   bool require_rev_checking_local_anchors;
   bool enable_sha1_local_anchors;
   bool disable_symantec_enforcement;
-  mojo_base.mojom.BigBuffer crl_set;
-  array<network.mojom.X509Certificate> additional_trust_anchors;
-  array<network.mojom.X509Certificate> additional_untrusted_authorities;
+};
+
+struct AdditionalCertificates {
+  // TODO(crbug.com/1477317): store these as bytestrings to avoid the extra
+  // overhead of parsing these with X509Certificate on both sides of the
+  // mojo interface.
+
+  // List of untrusted certificates, which will be used during path building.
+  array<network.mojom.X509Certificate> all_certificates;
+
+  // List of additional trust anchors.
+  array<network.mojom.X509Certificate> trust_anchors;
+
+  // List of SPKIs that are explicitly distrusted.
+  array<array<uint8>> distrusted_spkis;
 };
 
 // Allows the CertVerifierService to connect a new URLLoaderFactory if its
@@ -55,13 +67,27 @@ interface CertVerifierService {
   // Mojo IPC used to verify a certificate. Sends results to the
   // |cert_verifier_request| interface when verification is complete.
   Verify(RequestParams params,
-         /*NetLogSourceType*/ uint32 netlog_source_type,
-         uint32 netlog_source_id,
-         mojo_base.mojom.TimeTicks netlog_source_start_time,
+         network.mojom.NetLogSource net_log_source,
          pending_remote<CertVerifierRequest> cert_verifier_request);
-  // Sets the config for the underlying CertVerifier. Can serialize very large
-  // net::CertVerifier::Config's due to the CRLSet.
+  // Sets the config for the underlying CertVerifier.
   SetConfig(CertVerifierConfig config);
+};
+
+// Updates a Cert Verifier with new parameters.
+interface CertVerifierServiceUpdater {
+  // Called when trust parameters change for Cert Verification.  All parameters
+  // will override any previously provided parameters that were provide (either
+  // via previous calls to UpdateCertVerifier or that were specified in
+  // cert_verifier.mojom.CertVerifierCreationParams.
+  UpdateAdditionalCertificates(AdditionalCertificates certificates);
+};
+
+// Receives events from the CertVerifierService.
+interface CertVerifierServiceClient {
+  // Called when the certificate verifier changes internal configuration.
+  // Observers can use this method to invalidate caches that incorporate
+  // previous trust decisions.
+  OnCertVerifierChanged();
 };
 
 // An interface for a CertVerifierService to pass results to the client of the

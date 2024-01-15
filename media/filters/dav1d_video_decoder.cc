@@ -8,14 +8,14 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/bits.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "media/base/bind_to_current_loop.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/decoder_buffer.h"
 #include "media/base/limits.h"
 #include "media/base/media_log.h"
@@ -142,9 +142,9 @@ SupportedVideoDecoderConfigs Dav1dVideoDecoder::SupportedConfigs() {
            /*require_encrypted=*/false}};
 }
 
-Dav1dVideoDecoder::Dav1dVideoDecoder(MediaLog* media_log,
+Dav1dVideoDecoder::Dav1dVideoDecoder(std::unique_ptr<MediaLog> media_log,
                                      OffloadState offload_state)
-    : media_log_(media_log),
+    : media_log_(std::move(media_log)),
       bind_callbacks_(offload_state == OffloadState::kNormal) {
   DETACH_FROM_SEQUENCE(sequence_checker_);
 }
@@ -167,8 +167,9 @@ void Dav1dVideoDecoder::Initialize(const VideoDecoderConfig& config,
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(config.IsValidConfig());
 
-  InitCB bound_init_cb = bind_callbacks_ ? BindToCurrentLoop(std::move(init_cb))
-                                         : std::move(init_cb);
+  InitCB bound_init_cb =
+      bind_callbacks_ ? base::BindPostTaskToCurrentDefault(std::move(init_cb))
+                      : std::move(init_cb);
   if (config.is_encrypted()) {
     std::move(bound_init_cb)
         .Run(DecoderStatus::Codes::kUnsupportedEncryptionMode);
@@ -212,9 +213,14 @@ void Dav1dVideoDecoder::Initialize(const VideoDecoderConfig& config,
   s.frame_size_limit = limits::kMaxCanvas;
 
   // TODO(tmathmeyer) write the dav1d error into the data for the media error.
-  if (dav1d_open(&dav1d_decoder_, &s) < 0) {
-    std::move(bound_init_cb).Run(DecoderStatus::Codes::kFailedToCreateDecoder);
-    return;
+  {
+    Dav1dContext* decoder = nullptr;
+    if (dav1d_open(&decoder, &s) < 0) {
+      std::move(bound_init_cb)
+          .Run(DecoderStatus::Codes::kFailedToCreateDecoder);
+      return;
+    }
+    dav1d_decoder_.reset(decoder);
   }
 
   config_ = config;
@@ -231,9 +237,9 @@ void Dav1dVideoDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
   DCHECK_NE(state_, DecoderState::kUninitialized)
       << "Called Decode() before successful Initialize()";
 
-  DecodeCB bound_decode_cb = bind_callbacks_
-                                 ? BindToCurrentLoop(std::move(decode_cb))
-                                 : std::move(decode_cb);
+  DecodeCB bound_decode_cb =
+      bind_callbacks_ ? base::BindPostTaskToCurrentDefault(std::move(decode_cb))
+                      : std::move(decode_cb);
 
   if (state_ == DecoderState::kError) {
     std::move(bound_decode_cb).Run(DecoderStatus::Codes::kFailed);
@@ -253,11 +259,11 @@ void Dav1dVideoDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
 void Dav1dVideoDecoder::Reset(base::OnceClosure reset_cb) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   state_ = DecoderState::kNormal;
-  dav1d_flush(dav1d_decoder_);
+  dav1d_flush(dav1d_decoder_.get());
 
   if (bind_callbacks_)
-    base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                     std::move(reset_cb));
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(reset_cb));
   else
     std::move(reset_cb).Run();
 }
@@ -274,12 +280,13 @@ void Dav1dVideoDecoder::Detach() {
   DETACH_FROM_SEQUENCE(sequence_checker_);
 }
 
+void Dav1dVideoDecoder::Dav1dContextDeleter::operator()(Dav1dContext* ptr) {
+  dav1d_close(&ptr);
+}
+
 void Dav1dVideoDecoder::CloseDecoder() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (!dav1d_decoder_)
-    return;
-  dav1d_close(&dav1d_decoder_);
-  DCHECK(!dav1d_decoder_);
+  dav1d_decoder_.reset();
 }
 
 bool Dav1dVideoDecoder::DecodeBuffer(scoped_refptr<DecoderBuffer> buffer) {
@@ -305,7 +312,7 @@ bool Dav1dVideoDecoder::DecodeBuffer(scoped_refptr<DecoderBuffer> buffer) {
 
   while (!input_buffer || input_buffer->sz) {
     if (input_buffer) {
-      const int res = dav1d_send_data(dav1d_decoder_, input_buffer.get());
+      const int res = dav1d_send_data(dav1d_decoder_.get(), input_buffer.get());
       if (res < 0 && res != -EAGAIN) {
         MEDIA_LOG(ERROR, media_log_) << "dav1d_send_data() failed on "
                                      << buffer->AsHumanReadableString();
@@ -322,7 +329,7 @@ bool Dav1dVideoDecoder::DecodeBuffer(scoped_refptr<DecoderBuffer> buffer) {
         std::unique_ptr<Dav1dPicture, ScopedDav1dPictureFree>;
     ScopedPtrDav1dPicture p(new Dav1dPicture{0});
 
-    const int res = dav1d_get_picture(dav1d_decoder_, p.get());
+    const int res = dav1d_get_picture(dav1d_decoder_.get(), p.get());
     if (res < 0) {
       if (res != -EAGAIN) {
         MEDIA_LOG(ERROR, media_log_) << "dav1d_get_picture() failed on "
@@ -354,10 +361,12 @@ bool Dav1dVideoDecoder::DecodeBuffer(scoped_refptr<DecoderBuffer> buffer) {
                                 : gfx::ColorSpace::RangeID::LIMITED);
 
     // If the frame doesn't specify a color space, use the container's.
-    if (!color_space.IsSpecified())
-      color_space = config_.color_space_info();
+    auto gfx_cs = color_space.ToGfxColorSpace();
+    if (!gfx_cs.IsValid()) {
+      gfx_cs = config_.color_space_info().ToGfxColorSpace();
+    }
 
-    frame->set_color_space(color_space.ToGfxColorSpace());
+    frame->set_color_space(gfx_cs);
     frame->metadata().power_efficient = false;
     frame->set_hdr_metadata(config_.hdr_metadata());
 
@@ -387,7 +396,8 @@ scoped_refptr<VideoFrame> Dav1dVideoDecoder::BindImageToVideoFrame(
   const bool needs_fake_uv_planes = pic->p.layout == DAV1D_PIXEL_LAYOUT_I400;
   if (needs_fake_uv_planes) {
     // UV planes are half the size of the Y plane.
-    uv_plane_stride = base::bits::AlignUp(pic->stride[0] / 2, ptrdiff_t{2});
+    uv_plane_stride =
+        base::bits::AlignUpDeprecatedDoNotUse(pic->stride[0] / 2, ptrdiff_t{2});
     const auto uv_plane_height = (pic->p.h + 1) / 2;
     const size_t size_needed = uv_plane_stride * uv_plane_height;
 

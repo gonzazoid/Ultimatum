@@ -4,44 +4,39 @@
 
 #import "ios/chrome/browser/ui/first_run/signin/signin_screen_coordinator.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "base/strings/sys_string_conversions.h"
-#import "ios/chrome/browser/application_context/application_context.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/first_run/first_run_metrics.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/signin/authentication_service.h"
-#import "ios/chrome/browser/signin/authentication_service_factory.h"
-#import "ios/chrome/browser/signin/chrome_account_manager_service.h"
-#import "ios/chrome/browser/signin/chrome_account_manager_service_factory.h"
-#import "ios/chrome/browser/signin/identity_manager_factory.h"
-#import "ios/chrome/browser/sync/sync_service_factory.h"
+#import "ios/chrome/browser/first_run/model/first_run_metrics.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/public/commands/browsing_data_commands.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/tos_commands.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
+#import "ios/chrome/browser/signin/model/chrome_account_manager_service.h"
+#import "ios/chrome/browser/signin/model/chrome_account_manager_service_factory.h"
+#import "ios/chrome/browser/signin/model/identity_manager_factory.h"
+#import "ios/chrome/browser/sync/model/sync_service_factory.h"
 #import "ios/chrome/browser/ui/authentication/authentication_flow.h"
 #import "ios/chrome/browser/ui/authentication/signin/signin_coordinator.h"
 #import "ios/chrome/browser/ui/authentication/unified_consent/identity_chooser/identity_chooser_coordinator.h"
 #import "ios/chrome/browser/ui/authentication/unified_consent/identity_chooser/identity_chooser_coordinator_delegate.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
-#import "ios/chrome/browser/ui/commands/tos_commands.h"
 #import "ios/chrome/browser/ui/first_run/first_run_constants.h"
 #import "ios/chrome/browser/ui/first_run/first_run_screen_delegate.h"
 #import "ios/chrome/browser/ui/first_run/first_run_util.h"
 #import "ios/chrome/browser/ui/first_run/signin/signin_screen_consumer.h"
 #import "ios/chrome/browser/ui/first_run/signin/signin_screen_mediator.h"
 #import "ios/chrome/browser/ui/first_run/signin/signin_screen_view_controller.h"
+#import "ios/chrome/browser/ui/first_run/tos/tos_coordinator.h"
 #import "ios/chrome/browser/ui/first_run/uma/uma_coordinator.h"
-#import "ios/chrome/browser/ui/first_run/welcome/tos_coordinator.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface SigninScreenCoordinator () <IdentityChooserCoordinatorDelegate,
                                        SigninScreenViewControllerDelegate,
                                        TOSCommands,
                                        UMACoordinatorDelegate>
 
-// Show FRE consent.
-@property(nonatomic, assign) BOOL showFREConsent;
 // First run screen delegate.
 @property(nonatomic, weak) id<FirstRunScreenDelegate> delegate;
 // Sign-in screen view controller.
@@ -65,24 +60,29 @@
 
 @end
 
-@implementation SigninScreenCoordinator
+@implementation SigninScreenCoordinator {
+  signin_metrics::AccessPoint _accessPoint;
+  signin_metrics::PromoAction _promoAction;
+}
 
 @synthesize baseNavigationController = _baseNavigationController;
 
-- (instancetype)initWithBaseNavigationController:
-                    (UINavigationController*)navigationController
-                                         browser:(Browser*)browser
-                                  showFREConsent:(BOOL)showFREConsent
-                                        delegate:(id<FirstRunScreenDelegate>)
-                                                     delegate {
+- (instancetype)
+    initWithBaseNavigationController:
+        (UINavigationController*)navigationController
+                             browser:(Browser*)browser
+                            delegate:(id<FirstRunScreenDelegate>)delegate
+                         accessPoint:(signin_metrics::AccessPoint)accessPoint
+                         promoAction:(signin_metrics::PromoAction)promoAction {
   self = [super initWithBaseViewController:navigationController
                                    browser:browser];
   if (self) {
     DCHECK(!browser->GetBrowserState()->IsOffTheRecord());
     _baseNavigationController = navigationController;
-    _showFREConsent = showFREConsent;
     _delegate = delegate;
     _UMAReportingUserChoice = kDefaultMetricsReportingCheckboxValue;
+    _accessPoint = accessPoint;
+    _promoAction = promoAction;
   }
   return self;
 }
@@ -96,11 +96,16 @@
   self.viewController = [[SigninScreenViewController alloc] init];
   self.viewController.TOSHandler = TOSHandler;
   self.viewController.delegate = self;
-  self.viewController.modalInPresentation = YES;
 
   ChromeBrowserState* browserState = self.browser->GetBrowserState();
   self.authenticationService =
       AuthenticationServiceFactory::GetForBrowserState(browserState);
+  if (self.authenticationService->GetPrimaryIdentity(
+          signin::ConsentLevel::kSignin)) {
+    // Don't show the sign-in screen since the user is already signed in.
+    [_delegate screenWillFinishPresenting];
+    return;
+  }
   self.accountManagerService =
       ChromeAccountManagerServiceFactory::GetForBrowserState(browserState);
   signin::IdentityManager* identityManager =
@@ -117,8 +122,12 @@
                    localPrefService:localPrefService
                         prefService:prefService
                         syncService:syncService
-                     showFREConsent:self.showFREConsent];
+                        accessPoint:_accessPoint
+                        promoAction:_promoAction];
   self.mediator.consumer = self.viewController;
+  if (self.mediator.ignoreDismissGesture) {
+    self.viewController.modalInPresentation = YES;
+  }
   BOOL animated = self.baseNavigationController.topViewController != nil;
   [self.baseNavigationController setViewControllers:@[ self.viewController ]
                                            animated:animated];
@@ -132,18 +141,16 @@
   self.mediator = nil;
   self.accountManagerService = nil;
   self.authenticationService = nil;
-}
-
-#pragma mark - InterruptibleChromeCoordinator
-
-- (void)interruptWithAction:(SigninCoordinatorInterruptAction)action
-                 completion:(ProceduralBlock)completion {
-  // This coordinator should be used only for FRE or force sign-in. Those cases
-  // should not be interrupted.
-  NOTREACHED();
+  [super stop];
 }
 
 #pragma mark - Private
+
+- (void)stopUMACoordinator {
+  [self.UMACoordinator stop];
+  self.UMACoordinator.delegate = nil;
+  self.UMACoordinator = nil;
+}
 
 // Starts the coordinator to present the Add Account module.
 - (void)triggerAddAccount {
@@ -151,8 +158,7 @@
   self.addAccountSigninCoordinator = [SigninCoordinator
       addAccountCoordinatorWithBaseViewController:self.viewController
                                           browser:self.browser
-                                      accessPoint:signin_metrics::AccessPoint::
-                                                      ACCESS_POINT_START_PAGE];
+                                      accessPoint:_accessPoint];
   __weak __typeof(self) weakSelf = self;
   self.addAccountSigninCoordinator.signinCompletion =
       ^(SigninCoordinatorResult signinResult,
@@ -183,8 +189,11 @@
   AuthenticationFlow* authenticationFlow =
       [[AuthenticationFlow alloc] initWithBrowser:self.browser
                                          identity:self.mediator.selectedIdentity
-                                 postSignInAction:POST_SIGNIN_ACTION_NONE
+                                      accessPoint:_accessPoint
+                                 postSignInAction:PostSignInAction::kNone
                          presentingViewController:self.viewController];
+  authenticationFlow.dispatcher = HandlerForProtocol(
+      self.browser->GetCommandDispatcher(), BrowsingDataCommands);
   __weak __typeof(self) weakSelf = self;
   ProceduralBlock completion = ^() {
     [weakSelf finishPresentingWithSignIn:YES];
@@ -275,6 +284,7 @@
 #pragma mark - SigninScreenViewControllerDelegate
 
 - (void)showAccountPickerFromPoint:(CGPoint)point {
+  DCHECK(!self.identityChooserCoordinator);
   self.identityChooserCoordinator = [[IdentityChooserCoordinator alloc]
       initWithBaseViewController:self.viewController
                          browser:self.browser];
@@ -283,24 +293,6 @@
   [self.identityChooserCoordinator start];
   self.identityChooserCoordinator.selectedIdentity =
       self.mediator.selectedIdentity;
-}
-
-- (void)logScrollButtonVisible:(BOOL)scrollButtonVisible
-            withIdentityPicker:(BOOL)identityPickerVisible
-                     andFooter:(BOOL)footerVisible {
-  first_run::FirstRunScreenType screenType;
-  if (identityPickerVisible && footerVisible) {
-    screenType =
-        first_run::FirstRunScreenType::kSignInScreenWithFooterAndIdentityPicker;
-  } else if (identityPickerVisible) {
-    screenType = first_run::FirstRunScreenType::kSignInScreenWithIdentityPicker;
-  } else if (footerVisible) {
-    screenType = first_run::FirstRunScreenType::kSignInScreenWithFooter;
-  } else {
-    screenType = first_run::FirstRunScreenType::
-        kSignInScreenWithoutFooterOrIdentityPicker;
-  }
-  RecordFirstRunScrollButtonVisibilityMetrics(screenType, scrollButtonVisible);
 }
 
 #pragma mark - TOSCommands
@@ -326,7 +318,7 @@
                         UMAReportingUserChoice:(BOOL)UMAReportingUserChoice {
   DCHECK(self.UMACoordinator);
   DCHECK_EQ(self.UMACoordinator, coordinator);
-  self.UMACoordinator = nil;
+  [self stopUMACoordinator];
   DCHECK(self.mediator);
   self.mediator.UMAReportingUserChoice = UMAReportingUserChoice;
 }

@@ -1,9 +1,11 @@
 <!doctype html>
-<html dir="$i18n{textdirection}" lang="$i18n{language}">
+<html dir="$i18n{textdirection}" lang="$i18n{language}"
+    $i18n{chromeRefresh2023Attribute}>
 <head>
   <meta charset="utf-8">
   <title>$i18n{bookmarksTabTitle}</title>
   <meta name="color-scheme" content="light dark">
+  <link rel="stylesheet" href="chrome://theme/colors.css?sets=ui,chrome">
   <link rel="stylesheet" href="chrome://resources/css/text_defaults_md.css">
   <link rel="stylesheet" href="chrome://resources/css/md_colors.css">
   <style>
@@ -26,10 +28,14 @@
         background: var(--google-grey-900);
       }
     }
+
+    html[chrome-refresh-2023] body {
+      background: var(--color-side-panel-content-background);
+    }
   </style>
 </head>
 <body>
   <power-bookmarks-list></power-bookmarks-list>
-  <script type="module" src="bookmarks/power_bookmarks_list.js"></script>
+  <script type="module" src="power_bookmarks_list.js"></script>
 </body>
 </html>

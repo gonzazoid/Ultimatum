@@ -4,12 +4,8 @@
 
 #import "ios/chrome/browser/ui/passwords/password_breach_app_interface.h"
 
-#import "ios/chrome/browser/ui/commands/password_breach_commands.h"
+#import "ios/chrome/browser/shared/public/commands/password_breach_commands.h"
 #import "ios/chrome/test/app/chrome_test_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @implementation PasswordBreachAppInterface
 
@@ -18,8 +14,7 @@
   auto leakType = password_manager::CreateLeakType(
       password_manager::IsSaved(true),
       password_manager::IsReused(checkButtonPresent),
-      password_manager::IsSyncing(true),
-      password_manager::HasChangeScript(false));
+      password_manager::IsSyncing(true));
   [(id<PasswordBreachCommands>)handler showPasswordBreachForLeakType:leakType];
 }
 

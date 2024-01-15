@@ -14,8 +14,7 @@
 #include "ui/views/controls/menu/menu_closure_animation_mac.h"
 #endif
 
-namespace views {
-namespace test {
+namespace views::test {
 
 // TestMenuDelegate -----------------------------------------------------------
 
@@ -66,8 +65,10 @@ bool TestMenuDelegate::ShouldExecuteCommandWithoutClosingMenu(
   return should_execute_command_without_closing_menu_;
 }
 
-void TestMenuDelegate::PerformDrop(const ui::DropTargetEvent& event,
-                                   ui::mojom::DragOperation& output_drag_op) {
+void TestMenuDelegate::PerformDrop(
+    const ui::DropTargetEvent& event,
+    ui::mojom::DragOperation& output_drag_op,
+    std::unique_ptr<ui::LayerTreeOwner> drag_image_layer_owner) {
   is_drop_performed_ = true;
   output_drag_op = ui::mojom::DragOperation::kCopy;
 }
@@ -115,5 +116,4 @@ void ReleaseRefTestViewsDelegate::ReleaseRef() {
     release_ref_callback_.Run();
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

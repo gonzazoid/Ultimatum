@@ -32,6 +32,8 @@
 
 #include "third_party/blink/renderer/core/editing/editing_utilities.h"
 #include "third_party/blink/renderer/core/editing/ephemeral_range.h"
+#include "third_party/blink/renderer/core/editing/iterators/text_iterator.h"
+#include "third_party/blink/renderer/core/editing/text_offset_mapping.h"
 #include "third_party/blink/renderer/core/editing/text_segments.h"
 #include "third_party/blink/renderer/core/editing/visible_position.h"
 #include "third_party/blink/renderer/core/layout/layout_block_flow.h"
@@ -88,6 +90,11 @@ PositionInFlatTree EndOfWordPositionInternal(const PositionInFlatTree& position,
   return TextSegments::FindBoundaryForward(position, &finder);
 }
 
+// IMPORTANT: If you update the logic of this algorithm, please also update the
+// one in `AbstractInlineTextBox::GetWordBoundariesForText`. The word offsets
+// computed over there needs to stay in sync with the ones computed here in
+// order for screen readers to announce the right words when using caret
+// navigation (ctrl + left/right arrow).
 PositionInFlatTree NextWordPositionInternal(
     const PositionInFlatTree& position,
     PlatformWordBehavior platform_word_behavior) {
@@ -290,6 +297,8 @@ Position EndOfWordPosition(const Position& position, WordSide side) {
 PositionInFlatTreeWithAffinity NextWordPosition(
     const PositionInFlatTree& start,
     PlatformWordBehavior platform_word_behavior) {
+  if (start.IsNull())
+    return PositionInFlatTreeWithAffinity();
   const PositionInFlatTree next =
       NextWordPositionInternal(start, platform_word_behavior);
   // Note: The word boundary can not be upstream position.
@@ -310,6 +319,8 @@ PositionWithAffinity NextWordPosition(
 
 PositionInFlatTreeWithAffinity PreviousWordPosition(
     const PositionInFlatTree& start) {
+  if (start.IsNull())
+    return PositionInFlatTreeWithAffinity();
   const PositionInFlatTree prev = PreviousWordPositionInternal(start);
   return AdjustBackwardPositionToAvoidCrossingEditingBoundaries(
       PositionInFlatTreeWithAffinity(prev), start);
@@ -332,6 +343,36 @@ PositionInFlatTree StartOfWordPosition(const PositionInFlatTree& position,
 Position StartOfWordPosition(const Position& position, WordSide side) {
   return ToPositionInDOMTree(
       StartOfWordPosition(ToPositionInFlatTree(position), side));
+}
+
+PositionInFlatTree MiddleOfWordPosition(const PositionInFlatTree& word_start,
+                                        const PositionInFlatTree& word_end) {
+  if (word_start >= word_end) {
+    return PositionInFlatTree(nullptr, 0);
+  }
+  unsigned middle =
+      TextIteratorAlgorithm<EditingInFlatTreeStrategy>::RangeLength(word_start,
+                                                                    word_end) /
+      2;
+  TextOffsetMapping::ForwardRange range =
+      TextOffsetMapping::ForwardRangeOf(word_start);
+  middle += TextOffsetMapping(*range.begin()).ComputeTextOffset(word_start);
+  for (auto inline_contents : range) {
+    const TextOffsetMapping mapping(inline_contents);
+    unsigned length = mapping.GetText().length();
+    if (middle < length) {
+      return mapping.GetPositionBefore(middle);
+    }
+    middle -= length;
+  }
+  NOTREACHED();
+  return PositionInFlatTree(nullptr, 0);
+}
+
+Position MiddleOfWordPosition(const Position& word_start,
+                              const Position& word_end) {
+  return ToPositionInDOMTree(MiddleOfWordPosition(
+      ToPositionInFlatTree(word_start), ToPositionInFlatTree(word_end)));
 }
 
 bool IsWordBreak(UChar ch) {

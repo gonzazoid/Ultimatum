@@ -5,7 +5,9 @@
 #include "components/autofill/core/browser/payments/payments_requests/migrate_cards_request.h"
 
 #include <string>
+#include <utility>
 
+#include "base/containers/span.h"
 #include "base/json/json_writer.h"
 #include "base/strings/escape.h"
 #include "base/strings/utf_string_conversions.h"
@@ -14,20 +16,21 @@
 namespace autofill::payments {
 
 namespace {
-const char kMigrateCardsRequestPath[] =
+constexpr char kMigrateCardsRequestPath[] =
     "payments/apis-secure/chromepaymentsservice/migratecards"
     "?s7e_suffix=chromewallet";
-const char kMigrateCardsRequestFormat[] =
+constexpr char kMigrateCardsRequestFormat[] =
     "requestContentType=application/json; charset=utf-8&request=%s";
 }  // namespace
 
 MigrateCardsRequest::MigrateCardsRequest(
-    const PaymentsClient::MigrationRequestDetails& request_details,
-    const std::vector<MigratableCreditCard>& migratable_credit_cards,
+    const PaymentsNetworkInterface::MigrationRequestDetails& request_details,
+    base::span<const MigratableCreditCard> migratable_credit_cards,
     const bool full_sync_enabled,
     MigrateCardsCallback callback)
     : request_details_(request_details),
-      migratable_credit_cards_(migratable_credit_cards),
+      migratable_credit_cards_(migratable_credit_cards.begin(),
+                               migratable_credit_cards.end()),
       full_sync_enabled_(full_sync_enabled),
       callback_(std::move(callback)) {}
 
@@ -61,7 +64,6 @@ std::string MigrateCardsRequest::GetRequestContent() {
   base::Value::Dict chrome_user_context;
   chrome_user_context.Set("full_sync_enabled", full_sync_enabled_);
   request_dict.Set("chrome_user_context", std::move(chrome_user_context));
-
   request_dict.Set("context_token", request_details_.context_token);
 
   std::string all_pans_data;
@@ -87,18 +89,17 @@ std::string MigrateCardsRequest::GetRequestContent() {
   return request_content;
 }
 
-void MigrateCardsRequest::ParseResponse(const base::Value& response) {
-  const auto* found_list =
-      response.FindKeyOfType("save_result", base::Value::Type::LIST);
+void MigrateCardsRequest::ParseResponse(const base::Value::Dict& response) {
+  const auto* found_list = response.FindList("save_result");
   if (!found_list)
     return;
 
   save_result_ =
       std::make_unique<std::unordered_map<std::string, std::string>>();
-  for (const base::Value& result : found_list->GetList()) {
+  for (const base::Value& result : *found_list) {
     if (result.is_dict()) {
-      const std::string* unique_id = result.FindStringKey("unique_id");
-      const std::string* status = result.FindStringKey("status");
+      const std::string* unique_id = result.GetDict().FindString("unique_id");
+      const std::string* status = result.GetDict().FindString("status");
       save_result_->insert(
           std::make_pair(unique_id ? *unique_id : std::string(),
                          status ? *status : std::string()));
@@ -106,7 +107,7 @@ void MigrateCardsRequest::ParseResponse(const base::Value& response) {
   }
 
   const std::string* display_text =
-      response.FindStringKey("value_prop_display_text");
+      response.FindString("value_prop_display_text");
   display_text_ = display_text ? *display_text : std::string();
 }
 

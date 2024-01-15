@@ -48,10 +48,9 @@ public class Snackbar {
      */
     public static final int TYPE_PERSISTENT = 2;
 
-    /**
-     * UMA Identifiers of features using snackbar. See SnackbarIdentifier enum in histograms.
-     */
+    /** UMA Identifiers of features using snackbar. See SnackbarIdentifier enum in histograms. */
     public static final int UMA_TEST_SNACKBAR = -2;
+
     public static final int UMA_UNKNOWN = -1;
     public static final int UMA_BOOKMARK_ADDED = 0;
     public static final int UMA_BOOKMARK_DELETE_UNDO = 1;
@@ -88,7 +87,7 @@ public class Snackbar {
     public static final int UMA_TAB_GROUP_MANUAL_CREATION_UNDO = 32;
     public static final int UMA_TWA_PRIVACY_DISCLOSURE_V2 = 33;
     public static final int UMA_HOMEPAGE_PROMO_CHANGED_UNDO = 34;
-    public static final int UMA_CONDITIONAL_TAB_STRIP_DISMISS_UNDO = 35;
+    // Obsolete; don't use: UMA_CONDITIONAL_TAB_STRIP_DISMISS_UNDO = 35;
     public static final int UMA_PAINT_PREVIEW_UPGRADE_NOTIFICATION = 36;
     public static final int UMA_READING_LIST_BOOKMARK_ADDED = 37;
     public static final int UMA_PRIVACY_SANDBOX_PAGE_OPEN = 38;
@@ -107,6 +106,14 @@ public class Snackbar {
     public static final int UMA_BAD_FLAGS = 51;
     public static final int UMA_DOWNLOAD_INTERSTITIAL_DOWNLOAD_DELETED = 52;
     public static final int UMA_INCOGNITO_REAUTH_ENABLED_FROM_PROMO = 53;
+    public static final int UMA_PRIVACY_SANDBOX_ADD_SITE = 54;
+    public static final int UMA_PRIVACY_SANDBOX_REMOVE_SITE = 55;
+    public static final int UMA_CREATOR_FOLLOW_SUCCESS = 56;
+    public static final int UMA_CREATOR_FOLLOW_FAILURE = 57;
+    public static final int UMA_CREATOR_UNFOLLOW_SUCCESS = 58;
+    public static final int UMA_CREATOR_UNFOLLOW_FAILURE = 59;
+    public static final int UMA_QUICK_DELETE = 60;
+    public static final int UMA_AUTO_TRANSLATE = 61;
 
     private @Nullable SnackbarController mController;
     private CharSequence mText;
@@ -121,8 +128,7 @@ public class Snackbar {
     private Drawable mProfileImage;
     private int mType;
     private int mIdentifier = UMA_UNKNOWN;
-    @Theme
-    private int mTheme = Theme.BASIC;
+    private @Theme int mTheme = Theme.BASIC;
 
     @IntDef({Theme.BASIC, Theme.GOOGLE})
     @Retention(RetentionPolicy.SOURCE)
@@ -220,9 +226,7 @@ public class Snackbar {
         return this;
     }
 
-    /**
-     * Sets the background color for the snackbar. If 0, the snackbar will use default color.
-     */
+    /** Sets the background color for the snackbar. If 0, the snackbar will use default color. */
     // TODO(fgorski): Clean up background color and text appearance -- transition all the consumers
     // to the Theme based styling.
     public Snackbar setBackgroundColor(int color) {
@@ -288,16 +292,12 @@ public class Snackbar {
         return mIdentifier;
     }
 
-    /**
-     * If method returns zero, then default color for snackbar will be used.
-     */
+    /** If method returns zero, then default color for snackbar will be used. */
     int getBackgroundColor() {
         return mBackgroundColor;
     }
 
-    /**
-     * If method returns zero, then default text appearance for snackbar will be used.
-     */
+    /** If method returns zero, then default text appearance for snackbar will be used. */
     int getTextAppearance() {
         return mTextApperanceResId;
     }
@@ -311,9 +311,7 @@ public class Snackbar {
         return mTheme;
     }
 
-    /**
-     * If method returns null, then no profileImage will be shown in snackbar.
-     */
+    /** If method returns null, then no profileImage will be shown in snackbar. */
     Drawable getProfileImage() {
         return mProfileImage;
     }
@@ -333,17 +331,14 @@ public class Snackbar {
     }
 
     /** So tests can trigger a press on a Snackbar. */
-    @VisibleForTesting
     public Object getActionDataForTesting() {
         return mActionData;
     }
 
-    @VisibleForTesting
     public int getIdentifierForTesting() {
         return mIdentifier;
     }
 
-    @VisibleForTesting
     public CharSequence getTextForTesting() {
         return mText;
     }

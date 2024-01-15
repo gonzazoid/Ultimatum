@@ -9,25 +9,34 @@
 
 #include <string>
 
-#include "chrome/updater/win/installer/exit_code.h"
-
 using UINT = unsigned int;
 
 namespace updater {
+
+// Returns the preferred language of the updater.
+std::wstring GetPreferredLanguage();
 
 // Given the base message id of a string, return the localized string based on
 // the language tag. The string is read from the binary's string table, and the
 // localized message id of the string will be calculated based off of the
 // language offsets defined in updater_installer_strings.h.
-std::wstring GetLocalizedString(UINT base_message_id);
+std::wstring GetLocalizedString(
+    UINT base_message_id,
+    const std::wstring& lang = GetPreferredLanguage());
+
 // Returns a formatted version of the localized string in which there is only
 // one replacement.
-std::wstring GetLocalizedStringF(UINT base_message_id,
-                                 const std::wstring& replacement);
+std::wstring GetLocalizedStringF(
+    UINT base_message_id,
+    const std::wstring& replacement,
+    const std::wstring& lang = GetPreferredLanguage());
+
 // Multivariatic version of GetLocalizedStringF, which can format multiple
 // arguments.
-std::wstring GetLocalizedStringF(UINT base_message_id,
-                                 std::vector<std::wstring> replacements);
+std::wstring GetLocalizedStringF(
+    UINT base_message_id,
+    std::vector<std::wstring> replacements,
+    const std::wstring& lang = GetPreferredLanguage());
 
 // Returns a localized version of the error message associated with an exit
 // code.

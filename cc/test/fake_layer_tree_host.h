@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "cc/benchmarks/micro_benchmark_controller.h"
 #include "cc/test/fake_impl_task_runner_provider.h"
 #include "cc/test/fake_layer_tree_host_client.h"
@@ -126,12 +127,6 @@ class FakeLayerTreeHost : private TaskRunnerProviderHolder,
                     LayerTreeHost::InitParams params,
                     CompositorMode mode);
 
- protected:
-  raw_ptr<FakeLayerTreeHostClient> client_ = nullptr;
-  raw_ptr<FakeLayerTreeHostImpl> host_impl_ = nullptr;
-
-  bool needs_commit_ = false;
-
  private:
   // Used only if created via CreateFakeLayerTreeHostImpl to provide ownership
   // and lifetime management. Normally the Proxy object owns the LTHI which
@@ -141,6 +136,11 @@ class FakeLayerTreeHost : private TaskRunnerProviderHolder,
   // class will own that object. Calls should be made on the |host_impl_|
   // pointer as that'll always be set to the correct object.
   std::unique_ptr<FakeLayerTreeHostImpl> owned_host_impl_;
+
+  raw_ptr<FakeLayerTreeHostClient> client_ = nullptr;
+  raw_ptr<FakeLayerTreeHostImpl> host_impl_ = nullptr;
+
+  bool needs_commit_ = false;
 };
 
 }  // namespace cc

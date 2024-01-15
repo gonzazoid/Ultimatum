@@ -34,6 +34,7 @@
 #include "third_party/blink/renderer/core/dom/parser_content_policy.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_hash.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_position.h"
 
 namespace blink {
@@ -80,16 +81,6 @@ class CORE_EXPORT ScriptableDocumentParser : public DecodedDataDocumentParser {
   InlineScriptStreamer* TakeInlineScriptStreamer(const String& source);
   bool HasInlineScriptStreamerForTesting(const String& source);
 
-  // Adds a tokenizer for |source| which can be later retrieved with
-  // TakeCSSTokenizer(). This may be called on any thread.
-  void AddCSSTokenizer(const String& source,
-                       std::unique_ptr<CachedCSSTokenizer> tokenizer);
-
-  // Takes ownership of a tokenizer previously added with AddCSSTokenizer().
-  // The returned tokenizer is guaranteed to be correct for CSS text that
-  // matches the passed in |source|.
-  std::unique_ptr<CachedCSSTokenizer> TakeCSSTokenizer(const String& source);
-
  protected:
   explicit ScriptableDocumentParser(
       Document&,
@@ -105,10 +96,6 @@ class CORE_EXPORT ScriptableDocumentParser : public DecodedDataDocumentParser {
   base::Lock streamers_lock_;
   HashMap<String, scoped_refptr<BackgroundInlineScriptStreamer>>
       inline_script_streamers_ GUARDED_BY(streamers_lock_);
-
-  base::Lock tokenizers_lock_;
-  HashMap<String, std::unique_ptr<CachedCSSTokenizer>> inline_css_tokenizers_
-      GUARDED_BY(tokenizers_lock_);
 };
 
 }  // namespace blink

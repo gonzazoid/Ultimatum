@@ -6,6 +6,7 @@ import './data_point.js';
 import './diagnostics_shared.css.js';
 
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {PolymerElementProperties} from 'chrome://resources/polymer/v3_0/polymer/interfaces.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './ethernet_info.html.js';
@@ -20,25 +21,25 @@ import {AuthenticationType, Network} from './network_health_provider.mojom-webui
 const EthernetInfoElementBase = I18nMixin(PolymerElement);
 
 export class EthernetInfoElement extends EthernetInfoElementBase {
-  static get is() {
+  static get is(): string {
     return 'ethernet-info';
   }
 
-  static get template() {
+  static get template(): HTMLTemplateElement {
     return getTemplate();
   }
 
-  static get properties() {
+  static get properties(): PolymerElementProperties {
     return {
-      authentication_: {
+      authentication: {
         type: String,
-        computed: 'computeAuthentication_(network.typeProperties.ethernet.' +
+        computed: 'computeAuthentication(network.typeProperties.ethernet.' +
             'authentication)',
       },
 
-      ipAddress_: {
+      ipAddress: {
         type: String,
-        computed: 'computeIpAddress_(network.ipConfig.ipAddress)',
+        computed: 'computeIpAddress(network.ipConfig.ipAddress)',
       },
 
       network: {
@@ -48,10 +49,10 @@ export class EthernetInfoElement extends EthernetInfoElementBase {
   }
 
   network: Network;
-  protected authentication_: string;
-  protected ipAddress_: string;
+  protected authentication: string;
+  protected ipAddress: string;
 
-  protected computeAuthentication_() {
+  protected computeAuthentication(): string {
     if (this.network?.typeProperties?.ethernet) {
       const authentication: AuthenticationType =
           this.network.typeProperties.ethernet.authentication;
@@ -67,7 +68,7 @@ export class EthernetInfoElement extends EthernetInfoElementBase {
     return '';
   }
 
-  protected computeIpAddress_(): string {
+  protected computeIpAddress(): string {
     return this.network?.ipConfig?.ipAddress || '';
   }
 }

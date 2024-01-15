@@ -9,12 +9,13 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_service_test_base.h"
 #include "chrome/browser/profiles/profile.h"
@@ -32,12 +33,11 @@
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_builder.h"
 #include "extensions/common/extension_set.h"
-#include "extensions/common/value_builder.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/metrics_proto/extension_install.pb.h"
 #include "third_party/metrics_proto/system_profile.pb.h"
 
-using extensions::DictionaryBuilder;
 using extensions::Extension;
 using extensions::ExtensionBuilder;
 using extensions::Manifest;
@@ -58,38 +58,30 @@ class TestExtensionsMetricsProvider : public ExtensionsMetricsProvider {
  protected:
   // Override the GetInstalledExtensions method to return a set of extensions
   // for tests.
-  std::unique_ptr<extensions::ExtensionSet> GetInstalledExtensions(
+  absl::optional<extensions::ExtensionSet> GetInstalledExtensions(
       Profile* profile) override {
-    std::unique_ptr<extensions::ExtensionSet> extensions(
-        new extensions::ExtensionSet());
-    scoped_refptr<const extensions::Extension> extension;
-    extension = extensions::ExtensionBuilder()
-                    .SetManifest(extensions::DictionaryBuilder()
-                                     .Set("name", "Test extension")
-                                     .Set("version", "1.0.0")
-                                     .Set("manifest_version", 2)
-                                     .Build())
-                    .SetID("ahfgeienlihckogmohjhadlkjgocpleb")
-                    .Build();
-    extensions->Insert(extension);
-    extension = extensions::ExtensionBuilder()
-                    .SetManifest(extensions::DictionaryBuilder()
-                                     .Set("name", "Test extension 2")
-                                     .Set("version", "1.0.0")
-                                     .Set("manifest_version", 2)
-                                     .Build())
-                    .SetID("pknkgggnfecklokoggaggchhaebkajji")
-                    .Build();
-    extensions->Insert(extension);
-    extension = extensions::ExtensionBuilder()
-                    .SetManifest(extensions::DictionaryBuilder()
-                                     .Set("name", "Colliding Extension")
-                                     .Set("version", "1.0.0")
-                                     .Set("manifest_version", 2)
-                                     .Build())
-                    .SetID("mdhofdjgenpkhlmddfaegdjddcecipmo")
-                    .Build();
-    extensions->Insert(extension);
+    extensions::ExtensionSet extensions;
+    extensions.Insert(extensions::ExtensionBuilder()
+                          .SetManifest(base::Value::Dict()
+                                           .Set("name", "Test extension")
+                                           .Set("version", "1.0.0")
+                                           .Set("manifest_version", 2))
+                          .SetID("ahfgeienlihckogmohjhadlkjgocpleb")
+                          .Build());
+    extensions.Insert(extensions::ExtensionBuilder()
+                          .SetManifest(base::Value::Dict()
+                                           .Set("name", "Test extension 2")
+                                           .Set("version", "1.0.0")
+                                           .Set("manifest_version", 2))
+                          .SetID("pknkgggnfecklokoggaggchhaebkajji")
+                          .Build());
+    extensions.Insert(extensions::ExtensionBuilder()
+                          .SetManifest(base::Value::Dict()
+                                           .Set("name", "Colliding Extension")
+                                           .Set("version", "1.0.0")
+                                           .Set("manifest_version", 2))
+                          .SetID("mdhofdjgenpkhlmddfaegdjddcecipmo")
+                          .Build());
     return extensions;
   }
 
@@ -326,15 +318,15 @@ TEST_F(ExtensionMetricsProviderInstallsTest, TestProtoConstruction) {
 
   {
     // Test that event pages are reported correctly.
-    DictionaryBuilder background;
-    background.Set("persistent", false)
-        .Set("scripts", extensions::ListBuilder().Append("script.js").Build());
+    auto background =
+        base::Value::Dict()
+            .Set("persistent", false)
+            .Set("scripts", base::Value::List().Append("script.js"));
     scoped_refptr<const Extension> extension =
         ExtensionBuilder("event_page")
             .SetLocation(ManifestLocation::kInternal)
-            .MergeManifest(DictionaryBuilder()
-                               .Set("background", background.Build())
-                               .Build())
+            .MergeManifest(
+                base::Value::Dict().Set("background", std::move(background)))
             .Build();
     add_extension(extension.get());
     ExtensionInstallProto install = ConstructProto(*extension);
@@ -344,15 +336,15 @@ TEST_F(ExtensionMetricsProviderInstallsTest, TestProtoConstruction) {
 
   {
     // Test that persistent background pages are reported correctly.
-    DictionaryBuilder background;
-    background.Set("persistent", true)
-        .Set("scripts", extensions::ListBuilder().Append("script.js").Build());
+    auto background =
+        base::Value::Dict()
+            .Set("persistent", true)
+            .Set("scripts", base::Value::List().Append("script.js"));
     scoped_refptr<const Extension> extension =
         ExtensionBuilder("persisent_background")
             .SetLocation(ManifestLocation::kInternal)
-            .MergeManifest(DictionaryBuilder()
-                               .Set("background", background.Build())
-                               .Build())
+            .MergeManifest(
+                base::Value::Dict().Set("background", std::move(background)))
             .Build();
     add_extension(extension.get());
     ExtensionInstallProto install = ConstructProto(*extension);

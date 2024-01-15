@@ -8,12 +8,15 @@
 #include <cstring>
 
 #include "base/big_endian.h"
+#include "base/check.h"
+#include "base/check_op.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/notreached.h"
 #include "base/sys_byteorder.h"
 #include "build/build_config.h"
 #include "media/base/audio_bus.h"
+#include "media/base/audio_timestamp_helper.h"
 #include "media/base/limits.h"
 
 namespace media {
@@ -75,7 +78,7 @@ bool ParamsAreValid(const WavAudioParameters& params) {
 
 // Reads an integer from |data| with |offset|.
 template <typename T>
-T ReadInt(const base::StringPiece& data, size_t offset) {
+T ReadInt(std::string_view data, size_t offset) {
   CHECK_LE(offset + sizeof(T), data.size());
   T result;
   memcpy(&result, data.data() + offset, sizeof(T));
@@ -86,7 +89,7 @@ T ReadInt(const base::StringPiece& data, size_t offset) {
 }
 
 // Parse a "fmt " chunk from wav data into its parameters.
-bool ParseFmtChunk(const base::StringPiece data, WavAudioParameters* params) {
+bool ParseFmtChunk(const std::string_view data, WavAudioParameters* params) {
   DCHECK(params);
 
   // If the chunk is too small, return false.
@@ -120,8 +123,8 @@ bool ParseFmtChunk(const base::StringPiece data, WavAudioParameters* params) {
   return true;
 }
 
-bool ParseWavData(const base::StringPiece wav_data,
-                  base::StringPiece* audio_data_out,
+bool ParseWavData(const std::string_view wav_data,
+                  std::string_view* audio_data_out,
                   WavAudioParameters* params_out) {
   DCHECK(audio_data_out);
   DCHECK(params_out);
@@ -130,7 +133,7 @@ bool ParseWavData(const base::StringPiece wav_data,
   auto reader = base::BigEndianReader::FromStringPiece(wav_data);
 
   // Read the chunk ID and compare to "RIFF".
-  base::StringPiece chunk_id;
+  std::string_view chunk_id;
   if (!reader.ReadPiece(&chunk_id, 4) || chunk_id != kChunkId) {
     DLOG(ERROR) << "missing or incorrect chunk ID in wav header";
     return false;
@@ -141,7 +144,7 @@ bool ParseWavData(const base::StringPiece wav_data,
     return false;
   }
   // Read format and compare to "WAVE".
-  base::StringPiece format;
+  std::string_view format;
   if (!reader.ReadPiece(&format, 4) || format != kFormat) {
     DLOG(ERROR) << "missing or incorrect format ID in wav header";
     return false;
@@ -153,14 +156,14 @@ bool ParseWavData(const base::StringPiece wav_data,
   while (reader.remaining() >= kChunkHeaderSize) {
     // We should be at the beginning of a subsection. The next 8 bytes are the
     // header and should look like: "|f|m|t| |1|2|3|4|" or "|d|a|t|a|1|2|3|4|".
-    base::StringPiece chunk_fmt;
+    std::string_view chunk_fmt;
     uint32_t chunk_length;
     if (!reader.ReadPiece(&chunk_fmt, 4) || !reader.ReadU32(&chunk_length))
       break;
     chunk_length = base::ByteSwap(chunk_length);
     // Read |chunk_length| bytes of payload. If that is impossible, try to read
     // all remaining bytes as the payload.
-    base::StringPiece chunk_payload;
+    std::string_view chunk_payload;
     if (!reader.ReadPiece(&chunk_payload, chunk_length) &&
         !reader.ReadPiece(&chunk_payload, reader.remaining())) {
       break;
@@ -198,12 +201,12 @@ bool ParseWavData(const base::StringPiece wav_data,
 
 }  // namespace
 
-WavAudioHandler::WavAudioHandler(base::StringPiece audio_data,
+WavAudioHandler::WavAudioHandler(std::string_view audio_data,
                                  uint16_t num_channels,
                                  uint32_t sample_rate,
                                  uint16_t bits_per_sample,
                                  AudioFormat audio_format)
-    : data_(audio_data),
+    : audio_data_(audio_data),
       num_channels_(num_channels),
       sample_rate_(sample_rate),
       bits_per_sample_(bits_per_sample),
@@ -211,16 +214,15 @@ WavAudioHandler::WavAudioHandler(base::StringPiece audio_data,
   DCHECK_NE(num_channels_, 0u);
   DCHECK_NE(sample_rate_, 0u);
   DCHECK_NE(bits_per_sample_, 0u);
-  total_frames_ = data_.size() * 8 / num_channels_ / bits_per_sample_;
+  total_frames_ = audio_data_.size() * 8 / num_channels_ / bits_per_sample_;
 }
-
 WavAudioHandler::~WavAudioHandler() = default;
 
 // static
 std::unique_ptr<WavAudioHandler> WavAudioHandler::Create(
-    const base::StringPiece wav_data) {
+    std::string_view wav_data) {
   WavAudioParameters params;
-  base::StringPiece audio_data;
+  std::string_view audio_data;
 
   // Attempt to parse the WAV data.
   if (!ParseWavData(wav_data, &audio_data, &params))
@@ -231,27 +233,34 @@ std::unique_ptr<WavAudioHandler> WavAudioHandler::Create(
                           params.bits_per_sample, params.audio_format));
 }
 
-bool WavAudioHandler::AtEnd(size_t cursor) const {
-  return data_.size() <= cursor;
+bool WavAudioHandler::Initialize() {
+  return true;
 }
 
-bool WavAudioHandler::CopyTo(AudioBus* bus,
-                             size_t cursor,
-                             size_t* bytes_written) const {
-  if (!bus)
-    return false;
-  if (bus->channels() != num_channels_) {
-    DVLOG(1) << "Number of channels mismatch.";
-    return false;
-  }
-  if (AtEnd(cursor)) {
+int WavAudioHandler::GetNumChannels() const {
+  return static_cast<int>(num_channels_);
+}
+
+int WavAudioHandler::GetSampleRate() const {
+  return static_cast<int>(sample_rate_);
+}
+
+bool WavAudioHandler::AtEnd() const {
+  return audio_data_.size() <= cursor_;
+}
+
+bool WavAudioHandler::CopyTo(AudioBus* bus, size_t* frames_written) {
+  DCHECK(bus);
+  DCHECK_EQ(bus->channels(), num_channels_);
+
+  if (AtEnd()) {
     bus->Zero();
     return true;
   }
   const int bytes_per_frame = num_channels_ * bits_per_sample_ / 8;
-  const int remaining_frames = (data_.size() - cursor) / bytes_per_frame;
+  const int remaining_frames = (audio_data_.size() - cursor_) / bytes_per_frame;
   const int frames = std::min(bus->frames(), remaining_frames);
-  const auto* source = data_.data() + cursor;
+  const auto* source = audio_data_.data() + cursor_;
 
   switch (audio_format_) {
     case AudioFormat::kAudioFormatPCM:
@@ -297,14 +306,18 @@ bool WavAudioHandler::CopyTo(AudioBus* bus,
                    << static_cast<uint16_t>(audio_format_);
       bus->ZeroFrames(frames);
   }
-
-  *bytes_written = frames * bytes_per_frame;
+  *frames_written = frames;
+  cursor_ += frames * bytes_per_frame;
   bus->ZeroFramesPartial(frames, bus->frames() - frames);
   return true;
 }
 
 base::TimeDelta WavAudioHandler::GetDuration() const {
-  return base::Seconds(total_frames_ / static_cast<double>(sample_rate_));
+  return AudioTimestampHelper::FramesToTime(total_frames_, sample_rate_);
+}
+
+void WavAudioHandler::Reset() {
+  cursor_ = 0;
 }
 
 }  // namespace media

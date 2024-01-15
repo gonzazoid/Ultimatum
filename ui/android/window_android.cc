@@ -18,6 +18,7 @@
 #include "ui/android/window_android_compositor.h"
 #include "ui/android/window_android_observer.h"
 #include "ui/base/ui_base_features.h"
+#include "ui/gfx/display_color_spaces.h"
 
 namespace ui {
 
@@ -234,6 +235,15 @@ void WindowAndroid::OnOverlayTransformUpdated(
     compositor_->OnUpdateOverlayTransform();
 }
 
+void WindowAndroid::SendUnfoldLatencyBeginTimestamp(JNIEnv* env,
+                                                    jlong begin_time) {
+  base::TimeTicks begin_timestamp =
+      base::TimeTicks::FromUptimeMillis(begin_time);
+  for (WindowAndroidObserver& observer : observer_list_) {
+    observer.OnUnfoldStarted(begin_timestamp);
+  }
+}
+
 void WindowAndroid::SetWideColorEnabled(bool enabled) {
   JNIEnv* env = AttachCurrentThread();
   Java_WindowAndroid_setWideColorEnabled(env, GetJavaObject(), enabled);
@@ -264,7 +274,9 @@ display::Display WindowAndroid::GetDisplayWithWindowColorSpace() {
   DisplayAndroidManager::DoUpdateDisplay(
       &display, display.GetSizeInPixel(), display.device_scale_factor(),
       display.RotationAsDegree(), display.color_depth(),
-      display.depth_per_component(), window_is_wide_color_gamut_);
+      display.depth_per_component(), window_is_wide_color_gamut_,
+      display.GetColorSpaces().SupportsHDR(),
+      display.GetColorSpaces().GetHDRMaxLuminanceRelative());
   return display;
 }
 

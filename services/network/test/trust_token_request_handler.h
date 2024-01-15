@@ -7,15 +7,15 @@
 
 #include <set>
 #include <string>
+#include <string_view>
 
-#include "base/strings/string_piece.h"
 #include "base/synchronization/lock.h"
 #include "base/time/time.h"
 #include "net/http/http_request_headers.h"
 #include "services/network/public/mojom/trust_tokens.mojom.h"
+#include "services/network/trust_tokens/types.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
-
 namespace network {
 namespace test {
 
@@ -58,7 +58,8 @@ class TrustTokenRequestHandler {
 
     // The protocol version with which to parameterize the server-side
     // cryptographic logic. We return this value in key commitment results.
-    std::string protocol_version = "TrustTokenV3PMB";
+    std::string protocol_version = internal::ProtocolVersionToString(
+        mojom::TrustTokenProtocolVersion::kTrustTokenV3Pmb);
 
     // The key commitment ID.
     int id = 1;
@@ -101,12 +102,12 @@ class TrustTokenRequestHandler {
 
   // Given a base64-encoded issuance request, processes the
   // request and returns either nullopt (on error) or a base64-encoded response.
-  absl::optional<std::string> Issue(base::StringPiece issuance_request);
+  absl::optional<std::string> Issue(std::string_view issuance_request);
 
   // Given a base64-encoded redemption request, processes the
   // request and returns either nullopt (on error) or a string containing
   // the metadata values.
-  absl::optional<std::string> Redeem(base::StringPiece redemption_request);
+  absl::optional<std::string> Redeem(std::string_view redemption_request);
 
   // Stores a representation of a signed request with the given destination and
   // headers in a manner that can be retrieved for inspection by calling

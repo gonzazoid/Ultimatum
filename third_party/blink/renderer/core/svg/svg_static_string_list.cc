@@ -61,16 +61,7 @@ bool SVGStaticStringList::IsAnimating() const {
   return false;
 }
 
-SVGPropertyBase* SVGStaticStringList::CreateAnimatedValue() {
-  NOTREACHED();
-  return nullptr;
-}
-
 void SVGStaticStringList::SetAnimatedValue(SVGPropertyBase*) {
-  NOTREACHED();
-}
-
-void SVGStaticStringList::AnimationEnded() {
   NOTREACHED();
 }
 

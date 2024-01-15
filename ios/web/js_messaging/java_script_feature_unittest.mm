@@ -8,13 +8,10 @@
 
 #import "base/strings/sys_string_conversions.h"
 #import "ios/web/js_messaging/page_script_util.h"
+#import "ios/web/public/js_messaging/content_world.h"
 #import "ios/web/public/test/js_test_util.h"
 #import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 typedef PlatformTest JavaScriptFeatureTest;
 
@@ -44,6 +41,22 @@ TEST_F(JavaScriptFeatureTest, CreateFeatureScript) {
   EXPECT_EQ(target_frames_main, feature_script2.GetTargetFrames());
   EXPECT_TRUE(
       [feature_script2.GetScriptString() containsString:@"__gCrWeb.common"]);
+}
+
+// Tests the creation of FeatureScripts with a script string.
+TEST_F(JavaScriptFeatureTest, CreateFeatureScriptWithScriptString) {
+  auto document_start_injection_time =
+      web::JavaScriptFeature::FeatureScript::InjectionTime::kDocumentStart;
+  auto target_frames_all =
+      web::JavaScriptFeature::FeatureScript::TargetFrames::kAllFrames;
+  auto feature_script = web::JavaScriptFeature::FeatureScript::CreateWithString(
+      "window.__scriptStringObject = {};", document_start_injection_time,
+      target_frames_all);
+
+  EXPECT_EQ(document_start_injection_time, feature_script.GetInjectionTime());
+  EXPECT_EQ(target_frames_all, feature_script.GetTargetFrames());
+  EXPECT_TRUE([feature_script.GetScriptString()
+      containsString:@"__scriptStringObject"]);
 }
 
 // Tests the creation of FeatureScripts with different reinjection behaviors.
@@ -108,8 +121,7 @@ TEST_F(JavaScriptFeatureTest, CreateFeature) {
       web::JavaScriptFeature::FeatureScript::CreateWithFilename(
           "gcrweb", document_start_injection_time, target_frames_all);
 
-  auto any_content_world =
-      web::JavaScriptFeature::ContentWorld::kAnyContentWorld;
+  auto any_content_world = web::ContentWorld::kPageContentWorld;
   web::JavaScriptFeature feature(any_content_world, {feature_script});
 
   EXPECT_EQ(any_content_world, feature.GetSupportedContentWorld());
@@ -119,46 +131,6 @@ TEST_F(JavaScriptFeatureTest, CreateFeature) {
   ASSERT_EQ(1ul, feature_scripts.size());
   EXPECT_NSEQ(feature_script.GetScriptString(),
               feature_scripts[0].GetScriptString());
-}
-
-// Tests creating a JavaScriptFeature with replacements dictionary.
-TEST_F(JavaScriptFeatureTest, CreateFeatureWithPlaceholder) {
-  auto document_end_injection_time =
-      web::JavaScriptFeature::FeatureScript::InjectionTime::kDocumentEnd;
-  auto target_frames_all =
-      web::JavaScriptFeature::FeatureScript::TargetFrames::kAllFrames;
-
-  NSString* placeholder = @"$(PLUGIN_NOT_SUPPORTED_TEXT)";
-  NSString* replacement = @"TEST_PLACEHOLDER_VALUE";
-
-  const web::JavaScriptFeature::FeatureScript feature_script =
-      web::JavaScriptFeature::FeatureScript::CreateWithFilename(
-          "plugin_placeholder", document_end_injection_time, target_frames_all,
-          web::JavaScriptFeature::FeatureScript::ReinjectionBehavior::
-              kReinjectOnDocumentRecreation,
-          base::BindRepeating(^NSDictionary<NSString*, NSString*>*() {
-            return @{placeholder : replacement};
-          }));
-
-  auto any_content_world =
-      web::JavaScriptFeature::ContentWorld::kAnyContentWorld;
-  web::JavaScriptFeature feature(any_content_world, {feature_script});
-
-  EXPECT_EQ(any_content_world, feature.GetSupportedContentWorld());
-  EXPECT_EQ(0ul, feature.GetDependentFeatures().size());
-  auto feature_scripts = feature.GetScripts();
-  ASSERT_EQ(1ul, feature_scripts.size());
-  NSString* original_script = web::GetPageScript(@"plugin_placeholder");
-  NSString* final_script = feature_scripts[0].GetScriptString();
-
-  EXPECT_NSEQ(feature_script.GetScriptString(), final_script);
-  NSRange placeholder_range = [original_script rangeOfString:placeholder
-                                                     options:NSLiteralSearch];
-  EXPECT_TRUE(placeholder_range.location != NSNotFound);
-  EXPECT_FALSE([final_script containsString:placeholder]);
-  NSRange replacement_range = [final_script rangeOfString:replacement
-                                                  options:NSLiteralSearch];
-  EXPECT_EQ(placeholder_range.location, replacement_range.location);
 }
 
 // Tests creating a JavaScriptFeature which relies on a dependent feature.
@@ -179,8 +151,7 @@ TEST_F(JavaScriptFeatureTest, CreateFeatureWithDependentFeature) {
       web::JavaScriptFeature::FeatureScript::CreateWithFilename(
           "common", document_end_injection_time, target_frames_main);
 
-  auto page_content_world =
-      web::JavaScriptFeature::ContentWorld::kPageContentWorld;
+  auto page_content_world = web::ContentWorld::kPageContentWorld;
   web::JavaScriptFeature dependent_feature(page_content_world,
                                            {dependent_feature_script});
   web::JavaScriptFeature feature(page_content_world, {feature_script},

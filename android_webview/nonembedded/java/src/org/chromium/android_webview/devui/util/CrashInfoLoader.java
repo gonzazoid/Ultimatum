@@ -4,13 +4,11 @@
 
 package org.chromium.android_webview.devui.util;
 
-import org.chromium.android_webview.common.crash.CrashInfo;
+import org.chromium.android_webview.nonembedded.crash.CrashInfo;
 
 import java.util.List;
 
-/**
- * An abstract class that collects info about WebView crashes.
- */
+/** An abstract class that collects info about WebView crashes. */
 public abstract class CrashInfoLoader {
     /**
      * Loads all crashes info from source.

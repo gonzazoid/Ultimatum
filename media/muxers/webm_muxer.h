@@ -5,32 +5,16 @@
 #ifndef MEDIA_MUXERS_WEBM_MUXER_H_
 #define MEDIA_MUXERS_WEBM_MUXER_H_
 
-#include <stdint.h>
-
+#include <cstdint>
 #include <memory>
+#include <string>
 
-#include "base/callback.h"
 #include "base/containers/circular_deque.h"
-#include "base/numerics/safe_math.h"
-#include "base/sequence_checker.h"
-#include "base/strings/string_piece.h"
-#include "base/time/time.h"
-#include "base/timer/elapsed_timer.h"
-#include "media/base/audio_codecs.h"
-#include "media/base/media_export.h"
-#include "media/base/video_codecs.h"
-#include "media/base/video_color_space.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "media/muxers/muxer.h"
 #include "third_party/libwebm/source/mkvmuxer.hpp"
-#include "ui/gfx/geometry/size.h"
-
-namespace gfx {
-class Size;
-}  // namespace gfx
 
 namespace media {
 
-class VideoFrame;
 class AudioParameters;
 
 // Adapter class to manage a WebM container [1], a simplified version of a
@@ -44,7 +28,7 @@ class AudioParameters;
 // WebmMuxer is designed for use on a single thread.
 // [1] http://www.webmproject.org/docs/container/
 // [2] http://www.matroska.org/technical/specs/index.html
-class MEDIA_EXPORT WebmMuxer {
+class MEDIA_EXPORT WebmMuxer : public Muxer {
  public:
   // Defines an interface for delegates of WebmMuxer which should define how to
   // implement the |mkvmuxer::IMkvWriter| APIs (e.g. whether to support
@@ -83,68 +67,24 @@ class MEDIA_EXPORT WebmMuxer {
         GUARDED_BY_CONTEXT(sequence_checker_);
   };
 
-  // Container for the parameters that muxer uses that is extracted from
-  // media::VideoFrame.
-  struct MEDIA_EXPORT VideoParameters {
-    explicit VideoParameters(scoped_refptr<media::VideoFrame> frame);
-    VideoParameters(gfx::Size visible_rect_size,
-                    double frame_rate,
-                    VideoCodec codec,
-                    absl::optional<gfx::ColorSpace> color_space);
-    VideoParameters(const VideoParameters&);
-    ~VideoParameters();
-    gfx::Size visible_rect_size;
-    double frame_rate;
-    VideoCodec codec;
-    absl::optional<gfx::ColorSpace> color_space;
-  };
-
-  // |audio_codec| should coincide with whatever is sent in OnEncodedAudio(),
+  // `audio_codec` should coincide with whatever is sent in OnEncodedAudio(),
+  // If set, `max_data_output_interval` indicates the allowed maximum time for
+  // data output into the delegate provided frames are provided.
   WebmMuxer(AudioCodec audio_codec,
             bool has_video_,
             bool has_audio_,
-            std::unique_ptr<Delegate> delegate);
+            std::unique_ptr<Delegate> delegate,
+            absl::optional<base::TimeDelta> max_data_output_interval);
 
   WebmMuxer(const WebmMuxer&) = delete;
   WebmMuxer& operator=(const WebmMuxer&) = delete;
-
-  ~WebmMuxer();
-
-  // Sets the maximum duration interval to cause data output on
-  // |write_data_callback|, provided frames are delivered. The WebM muxer can
-  // hold on to audio frames almost indefinitely in the case video is recorded
-  // and video frames are temporarily not delivered. When this method is used, a
-  // new WebM cluster is forced when the next frame arrives |duration| after the
-  // last write.
-  // The maximum duration between forced clusters is internally limited to not
-  // go below 100 ms.
-  void SetMaximumDurationToForceDataOutput(base::TimeDelta interval);
-
-  // Functions to add video and audio frames with |encoded_data.data()|
-  // to WebM Segment. Either one returns true on success.
-  // |encoded_alpha| represents the encode output of alpha channel when
-  // available, can be nullptr otherwise.
-  bool OnEncodedVideo(const VideoParameters& params,
-                      std::string encoded_data,
-                      std::string encoded_alpha,
-                      base::TimeTicks timestamp,
-                      bool is_key_frame);
-  bool OnEncodedAudio(const media::AudioParameters& params,
-                      std::string encoded_data,
-                      base::TimeTicks timestamp);
-
-  // WebmMuxer may hold on to data. Make sure it gets out on the next frame.
-  void ForceDataOutputOnNextFrame();
-
-  // Call to handle mute and tracks getting disabled.
-  void SetLiveAndEnabled(bool track_live_and_enabled, bool is_video);
-
-  void Pause();
-  void Resume();
+  ~WebmMuxer() override;
 
   // Drains and writes out all buffered frames and finalizes the segment.
   // Returns true on success, false otherwise.
-  bool Flush();
+  bool Flush() override;
+  bool PutFrame(EncodedFrame frame,
+                base::TimeDelta relative_timestamp) override;
 
   void ForceOneLibWebmErrorForTesting() { force_one_libwebm_error_ = true; }
 
@@ -159,32 +99,9 @@ class MEDIA_EXPORT WebmMuxer {
   void AddVideoTrack(const gfx::Size& frame_size,
                      double frame_rate,
                      const absl::optional<gfx::ColorSpace>& color_space);
-  void AddAudioTrack(const media::AudioParameters& params);
+  void AddAudioTrack(const AudioParameters& params);
+  bool WriteWebmFrame(EncodedFrame frame, base::TimeDelta relative_timestamp);
 
-  // Adds all currently buffered frames to the mkvmuxer in timestamp order,
-  // until the queues are depleted.
-  void FlushQueues();
-  // Flushes out frames to the mkvmuxer while ensuring monotonically increasing
-  // timestamps as per the WebM specification,
-  // https://www.webmproject.org/docs/container/. Returns true on success and
-  // false on mkvmuxer failure.
-  //
-  // Note that frames may still be around in the queues after this call. The
-  // method stops flushing when timestamp monotonicity can't be guaranteed
-  // anymore.
-  bool PartiallyFlushQueues();
-  // Flushes out the next frame in timestamp order from the queues. Returns true
-  // on success and false on mkvmuxer failure.
-  //
-  // Note: it's assumed that at least one video or audio frame is queued.
-  bool FlushNextFrame();
-  // Calculates a monotonically increasing timestamp from an input |timestamp|
-  // and a pointer to a previously stored |last_timestamp| by taking the maximum
-  // of |timestamp| and *|last_timestamp|. Updates *|last_timestamp| if
-  // |timestamp| is greater.
-  base::TimeTicks UpdateLastTimestampMonotonically(
-      base::TimeTicks timestamp,
-      base::TimeTicks* last_timestamp);
   // Forces data output from |segment_| on the next frame if recording video,
   // and |min_data_output_interval_| was configured and has passed since the
   // last received video frame.
@@ -193,33 +110,27 @@ class MEDIA_EXPORT WebmMuxer {
   // Audio codec configured on construction. Video codec is taken from first
   // received frame.
   const AudioCodec audio_codec_;
-  VideoCodec video_codec_;
+  VideoCodec video_codec_ = VideoCodec::kUnknown;
 
   // Caller-side identifiers to interact with |segment_|, initialised upon
   // first frame arrival to Add{Video, Audio}Track().
-  uint8_t video_track_index_;
-  uint8_t audio_track_index_;
-
-  // Origin of times for frame timestamps.
-  base::TimeTicks first_frame_timestamp_video_;
-  base::TimeTicks last_frame_timestamp_video_;
-  base::TimeTicks first_frame_timestamp_audio_;
-  base::TimeTicks last_frame_timestamp_audio_;
-
-  // Variables to measure and accumulate, respectively, the time in pause state.
-  std::unique_ptr<base::ElapsedTimer> elapsed_time_in_pause_;
-  base::TimeDelta total_time_in_pause_;
+  uint8_t video_track_index_ = 0;
+  uint8_t audio_track_index_ = 0;
 
   // TODO(ajose): Change these when support is added for multiple tracks.
   // http://crbug.com/528523
   const bool has_video_;
   const bool has_audio_;
 
-  // Variables to track live and enabled state of audio and video.
-  bool video_track_live_and_enabled_ = true;
-  bool audio_track_live_and_enabled_ = true;
-
-  // Maximum interval between data output callbacks (given frames arriving)
+  // Maximum interval between data output callbacks (given frames arriving).
+  // The muxer can hold on to audio frames almost indefinitely in the case video
+  // is recorded and video frames are temporarily not delivered. When this
+  // method is used, a new WebM cluster is forced when the next frame arrives
+  // |duration| after the last write.
+  // The maximum duration between forced clusters is internally limited to not
+  // go below 100 ms.
+  // TODO(crbug.com/1381323): consider if cluster output should be based on
+  // media timestamps.
   base::TimeDelta max_data_output_interval_;
 
   // Last timestamp written into the segment.
@@ -230,23 +141,11 @@ class MEDIA_EXPORT WebmMuxer {
   // The MkvMuxer active element.
   mkvmuxer::Segment segment_;
   // Flag to force the next call to a |segment_| method to return false.
-  bool force_one_libwebm_error_;
+  bool force_one_libwebm_error_ = false;
 
-  struct EncodedFrame {
-    std::string data;
-    std::string alpha_data;
-    base::TimeDelta
-        relative_timestamp;  // relative to first_frame_timestamp_xxx_
-    bool is_keyframe;
-  };
-
-  // The following two queues hold frames to ensure that monotonically
-  // increasing timestamps are stored in the resulting webm file without
-  // modifying the timestamps.
-  base::circular_deque<EncodedFrame> audio_frames_;
-  // If muxing audio and video, this queue holds frames until the first audio
-  // frame appears.
-  base::circular_deque<EncodedFrame> video_frames_;
+  // Frames held until all track headers have been written.
+  base::circular_deque<std::tuple<EncodedFrame, base::TimeDelta>>
+      buffered_frames_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 };

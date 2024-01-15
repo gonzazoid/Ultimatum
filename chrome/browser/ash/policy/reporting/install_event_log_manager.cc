@@ -5,15 +5,14 @@
 #include "chrome/browser/ash/policy/reporting/install_event_log_manager.h"
 
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chrome/browser/profiles/profile.h"
 
@@ -98,7 +97,7 @@ void InstallEventLogManagerBase::LogUpload::OnLogChange(
 
   if (!store_scheduled_) {
     store_scheduled_ = true;
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&InstallEventLogManagerBase::LogUpload::StoreLog,
                        store_weak_factory_.GetWeakPtr()),
@@ -126,7 +125,7 @@ void InstallEventLogManagerBase::LogUpload::EnsureUpload(bool expedited) {
   if (FastUploadForTestsEnabled())
     upload_delay = kFastUploadDelay;
 
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&InstallEventLogManagerBase::LogUpload::RequestUpload,
                      upload_weak_factory_.GetWeakPtr()),

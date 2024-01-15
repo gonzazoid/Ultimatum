@@ -6,6 +6,9 @@ found in the LICENSE file.
 -->
 
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Surface tint -->
+    <color name="gm3_baseline_surface_tint">@color/gm3_baseline_surface_tint_light</color>
+
     <!-- Text colors -->
     <color name="default_primary_color">#F2F2F2</color>
     <color name="input_underline_error_color">#D32F2F</color>
@@ -23,12 +26,6 @@ found in the LICENSE file.
     <color name="control_highlight_color" tools:ignore="UnusedResources">
         @color/default_control_color_highlight_light
     </color>
-    <color name="switch_enabled_unchecked_color_baseline_dark" tools:ignore="UnusedResources">@color/baseline_neutral_variant_500</color>
-    <color name="switch_enabled_unchecked_color_baseline_light">@color/baseline_neutral_100</color>
-    <color name="switch_track_disabled_color_baseline" tools:ignore="UnusedResources">@color/baseline_neutral_900</color>
-    <color name="switch_track_disabled_color_baseline_light">@color/baseline_neutral_100</color>
-    <color name="switch_thumb_disabled_color_baseline" tools:ignore="UnusedResources">@color/baseline_neutral_50</color>
-    <color name="switch_thumb_disabled_color_baseline_dark">@color/baseline_neutral_800</color>
 
     <!-- Favicons -->
     <color name="default_favicon_background_color">@color/default_control_color_normal_light</color>
@@ -48,4 +45,11 @@ found in the LICENSE file.
 
     <!-- Chip Colors -->
     <macro name="default_chip_assistive_text_color_secondary" tools:ignore="UnusedResources">@macro/default_text_color_secondary</macro>
+
+    <!-- Clank Empty States Colors-->
+    <color name="empty_state_icon_bg_color">@color/material_primary_95</color>
+    <color name="empty_state_icon_bg_background_color">@color/material_primary_95</color>
+    <color name="empty_state_icon_bg_foreground_color">@color/material_primary_90</color>
+    <color name="empty_state_icon_color">@color/material_primary_40</color>
+    <color name="empty_state_icon_tabswitcher_bg_color">@color/material_primary_95</color>
 </resources>

@@ -5,17 +5,18 @@
 package org.chromium.android_webview.test;
 
 import android.os.Looper;
-import android.support.test.InstrumentationRegistry;
 
+import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.MediumTest;
 import androidx.test.filters.SmallTest;
 
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.UseParametersRunnerFactory;
 
 import org.chromium.android_webview.AwBrowserProcess;
 import org.chromium.android_webview.AwContents;
@@ -33,37 +34,34 @@ import org.chromium.net.test.util.TestWebServer;
  * This tests various cases around ordering of calls to CookieManager at startup, and thus is
  * separate from the normal CookieManager tests so it can control call ordering carefully.
  */
-@RunWith(AwJUnit4ClassRunner.class)
-public class CookieManagerStartupTest {
-    @Rule
-    public AwActivityTestRule mActivityTestRule = new AwActivityTestRule() {
-        @Override
-        public boolean needsAwBrowserContextCreated() {
-            return false;
-        }
+@RunWith(Parameterized.class)
+@UseParametersRunnerFactory(AwJUnit4ClassRunnerWithParameters.Factory.class)
+public class CookieManagerStartupTest extends AwParameterizedTest {
+    @Rule public AwActivityTestRule mActivityTestRule;
 
-        @Override
-        public boolean needsBrowserProcessStarted() {
-            return false;
-        }
-    };
+    public CookieManagerStartupTest(AwSettingsMutation param) {
+        mActivityTestRule =
+                new AwActivityTestRule(param.getMutation()) {
+                    @Override
+                    public boolean needsAwBrowserContextCreated() {
+                        return false;
+                    }
+
+                    @Override
+                    public boolean needsBrowserProcessStarted() {
+                        return false;
+                    }
+                };
+    }
 
     private TestAwContentsClient mContentsClient;
     private AwContents mAwContents;
 
     @Before
     public void setUp() {
-        ThreadUtils.setUiThread(null);
-        ThreadUtils.setWillOverrideUiThread(true);
-
         // CookieManager assumes that native is loaded, but webview browser should not be loaded for
         // these tests as webview is not necessarily loaded when CookieManager is called.
         AwBrowserProcess.loadLibrary(null);
-    }
-
-    @After
-    public void tearDown() {
-        ThreadUtils.setWillOverrideUiThread(false);
     }
 
     /**
@@ -95,6 +93,7 @@ public class CookieManagerStartupTest {
     @MediumTest
     @Feature({"AndroidWebView"})
     public void testStartup() throws Throwable {
+        ThreadUtils.setWillOverrideUiThread();
         TestWebServer webServer = TestWebServer.start();
         try {
             String path = "/cookie_test.html";
@@ -117,7 +116,9 @@ public class CookieManagerStartupTest {
             startChromium();
             mActivityTestRule.loadUrlSync(
                     mAwContents, mContentsClient.getOnPageFinishedHelper(), url);
-            mActivityTestRule.executeJavaScriptAndWaitForResult(mAwContents, mContentsClient,
+            mActivityTestRule.executeJavaScriptAndWaitForResult(
+                    mAwContents,
+                    mContentsClient,
                     "var c=document.cookie.split('=');document.cookie=c[0]+'='+(1+(+c[1]));");
 
             // Verify that the cookie value we set before was successfully passed through to the
@@ -157,15 +158,18 @@ public class CookieManagerStartupTest {
     @MediumTest
     @Feature({"AndroidWebView"})
     public void testShouldInterceptRequestDeadlock() throws Throwable {
+        ThreadUtils.setWillOverrideUiThread();
         ThreadUtils.setUiThread(Looper.getMainLooper());
         String url = "http://www.example.com";
-        TestAwContentsClient contentsClient = new TestAwContentsClient() {
-            @Override
-            public WebResourceResponseInfo shouldInterceptRequest(AwWebResourceRequest request) {
-                (new AwCookieManager()).getCookie("www.example.com");
-                return null;
-            }
-        };
+        TestAwContentsClient contentsClient =
+                new TestAwContentsClient() {
+                    @Override
+                    public WebResourceResponseInfo shouldInterceptRequest(
+                            AwWebResourceRequest request) {
+                        (new AwCookieManager()).getCookie("www.example.com");
+                        return null;
+                    }
+                };
         startChromiumWithClient(contentsClient);
         mActivityTestRule.loadUrlSync(mAwContents, contentsClient.getOnPageFinishedHelper(), url);
     }

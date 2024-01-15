@@ -20,6 +20,50 @@ using testing::ElementsAre;
 
 namespace blink {
 
+PaintControllerTestBase::DrawResult PaintControllerTestBase::Draw(
+    GraphicsContext& context,
+    const DisplayItemClient& client,
+    DisplayItem::Type type,
+    base::FunctionRef<void()> draw_function) {
+  if (DrawingRecorder::UseCachedDrawingIfPossible(context, client, type)) {
+    return kCached;
+  }
+
+  auto& paint_controller = context.GetPaintController();
+  auto* matching_cached_item =
+      paint_controller.MatchingCachedItemToBeRepainted();
+  PaintRecord old_record;
+  if (matching_cached_item) {
+    EXPECT_EQ(
+        matching_cached_item->GetId(),
+        DisplayItem::Id(client.Id(), type, paint_controller.CurrentFragment()));
+    old_record = To<DrawingDisplayItem>(matching_cached_item)->GetPaintRecord();
+  }
+
+  bool would_be_cached =
+      context.GetPaintController().IsCheckingUnderInvalidationForTesting();
+
+  draw_function();
+
+  if (would_be_cached) {
+    DCHECK(!matching_cached_item);
+    return kCached;
+  }
+
+  if (matching_cached_item) {
+    // We should reused the cached paint record and paint into it.
+    PaintRecord new_record =
+        To<DrawingDisplayItem>(paint_controller.GetNewPaintArtifactShared()
+                                   ->GetDisplayItemList()
+                                   .back())
+            .GetPaintRecord();
+    EXPECT_NE(&old_record.GetFirstOp(), &new_record.GetFirstOp());
+    EXPECT_EQ(old_record.bytes_used(), new_record.bytes_used());
+    return kRepaintedCachedItem;
+  }
+  return kPaintedNew;
+}
+
 // Tests using this class will be tested with under-invalidation-checking
 // enabled and disabled.
 class PaintControllerTest : public PaintTestConfigurations,
@@ -42,7 +86,8 @@ TEST_P(PaintControllerTest, NestedRecorders) {
     CommitCycleScope cycle_scope(GetPaintController());
     InitRootChunk();
 
-    DrawRect(context, client, kBackgroundType, gfx::Rect(100, 100, 200, 200));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, client, kBackgroundType,
+                                    gfx::Rect(100, 100, 200, 200)));
   }
 
   EXPECT_THAT(GetPaintController().GetDisplayItemList(),
@@ -60,9 +105,12 @@ TEST_P(PaintControllerTest, UpdateBasic) {
     CommitCycleScope cycle_scope(GetPaintController());
     InitRootChunk();
 
-    DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 300, 300));
-    DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 200, 200));
-    DrawRect(context, first, kForegroundType, gfx::Rect(100, 100, 300, 300));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, first, kBackgroundType,
+                                    gfx::Rect(100, 100, 300, 300)));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, second, kBackgroundType,
+                                    gfx::Rect(100, 100, 200, 200)));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, first, kForegroundType,
+                                    gfx::Rect(100, 100, 300, 300)));
 
     EXPECT_EQ(0u, NumCachedNewItems());
     EXPECT_EQ(0u, NumCachedNewSubsequences());
@@ -77,8 +125,10 @@ TEST_P(PaintControllerTest, UpdateBasic) {
   {
     CommitCycleScope cycle_scope(GetPaintController());
     InitRootChunk();
-    DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 300, 300));
-    DrawRect(context, first, kForegroundType, gfx::Rect(100, 100, 300, 300));
+    EXPECT_EQ(kCached, DrawRect(context, first, kBackgroundType,
+                                gfx::Rect(100, 100, 300, 300)));
+    EXPECT_EQ(kCached, DrawRect(context, first, kForegroundType,
+                                gfx::Rect(100, 100, 300, 300)));
 
     EXPECT_EQ(2u, NumCachedNewItems());
     EXPECT_EQ(0u, NumCachedNewSubsequences());
@@ -107,12 +157,18 @@ TEST_P(PaintControllerTest, UpdateSwapOrder) {
     CommitCycleScope cycle_scope(GetPaintController());
     InitRootChunk();
 
-    DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 100, 100));
-    DrawRect(context, first, kForegroundType, gfx::Rect(100, 100, 100, 100));
-    DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 50, 200));
-    DrawRect(context, second, kForegroundType, gfx::Rect(100, 100, 50, 200));
-    DrawRect(context, unaffected, kBackgroundType, gfx::Rect(300, 300, 10, 10));
-    DrawRect(context, unaffected, kForegroundType, gfx::Rect(300, 300, 10, 10));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, first, kBackgroundType,
+                                    gfx::Rect(100, 100, 100, 100)));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, first, kForegroundType,
+                                    gfx::Rect(100, 100, 100, 100)));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, second, kBackgroundType,
+                                    gfx::Rect(100, 100, 50, 200)));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, second, kForegroundType,
+                                    gfx::Rect(100, 100, 50, 200)));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, unaffected, kBackgroundType,
+                                    gfx::Rect(300, 300, 10, 10)));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, unaffected, kForegroundType,
+                                    gfx::Rect(300, 300, 10, 10)));
   }
 
   EXPECT_THAT(GetPaintController().GetDisplayItemList(),
@@ -126,12 +182,18 @@ TEST_P(PaintControllerTest, UpdateSwapOrder) {
   {
     CommitCycleScope cycle_scope(GetPaintController());
     InitRootChunk();
-    DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 50, 200));
-    DrawRect(context, second, kForegroundType, gfx::Rect(100, 100, 50, 200));
-    DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 100, 100));
-    DrawRect(context, first, kForegroundType, gfx::Rect(100, 100, 100, 100));
-    DrawRect(context, unaffected, kBackgroundType, gfx::Rect(300, 300, 10, 10));
-    DrawRect(context, unaffected, kForegroundType, gfx::Rect(300, 300, 10, 10));
+    EXPECT_EQ(kCached, DrawRect(context, second, kBackgroundType,
+                                gfx::Rect(100, 100, 50, 200)));
+    EXPECT_EQ(kCached, DrawRect(context, second, kForegroundType,
+                                gfx::Rect(100, 100, 50, 200)));
+    EXPECT_EQ(kCached, DrawRect(context, first, kBackgroundType,
+                                gfx::Rect(100, 100, 100, 100)));
+    EXPECT_EQ(kCached, DrawRect(context, first, kForegroundType,
+                                gfx::Rect(100, 100, 100, 100)));
+    EXPECT_EQ(kCached, DrawRect(context, unaffected, kBackgroundType,
+                                gfx::Rect(300, 300, 10, 10)));
+    EXPECT_EQ(kCached, DrawRect(context, unaffected, kForegroundType,
+                                gfx::Rect(300, 300, 10, 10)));
 
     EXPECT_EQ(6u, NumCachedNewItems());
     EXPECT_EQ(0u, NumCachedNewSubsequences());
@@ -165,12 +227,18 @@ TEST_P(PaintControllerTest, UpdateSwapOrderWithInvalidation) {
     CommitCycleScope cycle_scope(GetPaintController());
     InitRootChunk();
 
-    DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 100, 100));
-    DrawRect(context, first, kForegroundType, gfx::Rect(100, 100, 100, 100));
-    DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 50, 200));
-    DrawRect(context, second, kForegroundType, gfx::Rect(100, 100, 50, 200));
-    DrawRect(context, unaffected, kBackgroundType, gfx::Rect(300, 300, 10, 10));
-    DrawRect(context, unaffected, kForegroundType, gfx::Rect(300, 300, 10, 10));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, first, kBackgroundType,
+                                    gfx::Rect(100, 100, 100, 100)));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, first, kForegroundType,
+                                    gfx::Rect(100, 100, 100, 100)));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, second, kBackgroundType,
+                                    gfx::Rect(100, 100, 50, 200)));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, second, kForegroundType,
+                                    gfx::Rect(100, 100, 50, 200)));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, unaffected, kBackgroundType,
+                                    gfx::Rect(300, 300, 10, 10)));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, unaffected, kForegroundType,
+                                    gfx::Rect(300, 300, 10, 10)));
   }
 
   EXPECT_THAT(GetPaintController().GetDisplayItemList(),
@@ -185,19 +253,25 @@ TEST_P(PaintControllerTest, UpdateSwapOrderWithInvalidation) {
     CommitCycleScope cycle_scope(GetPaintController());
     InitRootChunk();
     first.Invalidate();
-    DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 50, 200));
-    DrawRect(context, second, kForegroundType, gfx::Rect(100, 100, 50, 200));
-    DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 100, 100));
-    DrawRect(context, first, kForegroundType, gfx::Rect(100, 100, 100, 100));
-    DrawRect(context, unaffected, kBackgroundType, gfx::Rect(300, 300, 10, 10));
-    DrawRect(context, unaffected, kForegroundType, gfx::Rect(300, 300, 10, 10));
+    EXPECT_EQ(kCached, DrawRect(context, second, kBackgroundType,
+                                gfx::Rect(100, 100, 50, 200)));
+    EXPECT_EQ(kCached, DrawRect(context, second, kForegroundType,
+                                gfx::Rect(100, 100, 50, 200)));
+    EXPECT_EQ(kRepaintedCachedItem, DrawRect(context, first, kBackgroundType,
+                                             gfx::Rect(100, 100, 100, 100)));
+    EXPECT_EQ(kRepaintedCachedItem, DrawRect(context, first, kForegroundType,
+                                             gfx::Rect(100, 100, 100, 100)));
+    EXPECT_EQ(kCached, DrawRect(context, unaffected, kBackgroundType,
+                                gfx::Rect(300, 300, 10, 10)));
+    EXPECT_EQ(kCached, DrawRect(context, unaffected, kForegroundType,
+                                gfx::Rect(300, 300, 10, 10)));
 
     EXPECT_EQ(4u, NumCachedNewItems());
     EXPECT_EQ(0u, NumCachedNewSubsequences());
 #if DCHECK_IS_ON()
     EXPECT_EQ(2u, NumIndexedItems());
-    EXPECT_EQ(4u, NumSequentialMatches());  // second, unaffected
-    EXPECT_EQ(0u, NumOutOfOrderMatches());
+    EXPECT_EQ(5u, NumSequentialMatches());
+    EXPECT_EQ(1u, NumOutOfOrderMatches());
 #endif
   }
 
@@ -223,8 +297,10 @@ TEST_P(PaintControllerTest, UpdateNewItemInMiddle) {
     CommitCycleScope cycle_scope(GetPaintController());
     InitRootChunk();
 
-    DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 100, 100));
-    DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 50, 200));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, first, kBackgroundType,
+                                    gfx::Rect(100, 100, 100, 100)));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, second, kBackgroundType,
+                                    gfx::Rect(100, 100, 50, 200)));
   }
 
   EXPECT_THAT(GetPaintController().GetDisplayItemList(),
@@ -235,9 +311,12 @@ TEST_P(PaintControllerTest, UpdateNewItemInMiddle) {
     CommitCycleScope cycle_scope(GetPaintController());
     InitRootChunk();
 
-    DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 100, 100));
-    DrawRect(context, third, kBackgroundType, gfx::Rect(125, 100, 200, 50));
-    DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 50, 200));
+    EXPECT_EQ(kCached, DrawRect(context, first, kBackgroundType,
+                                gfx::Rect(100, 100, 100, 100)));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, third, kBackgroundType,
+                                    gfx::Rect(125, 100, 200, 50)));
+    EXPECT_EQ(kCached, DrawRect(context, second, kBackgroundType,
+                                gfx::Rect(100, 100, 50, 200)));
 
     EXPECT_EQ(2u, NumCachedNewItems());
     EXPECT_EQ(0u, NumCachedNewSubsequences());
@@ -288,18 +367,24 @@ TEST_P(PaintControllerTest, UpdateInvalidationWithPhases) {
     InitRootChunk();
 
     second.Invalidate();
-    DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 100, 100));
-    DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 50, 200));
-    DrawRect(context, third, kBackgroundType, gfx::Rect(300, 100, 50, 50));
-    DrawRect(context, first, kForegroundType, gfx::Rect(100, 100, 100, 100));
-    DrawRect(context, second, kForegroundType, gfx::Rect(100, 100, 50, 200));
-    DrawRect(context, third, kForegroundType, gfx::Rect(300, 100, 50, 50));
+    EXPECT_EQ(kCached, DrawRect(context, first, kBackgroundType,
+                                gfx::Rect(100, 100, 100, 100)));
+    EXPECT_EQ(kRepaintedCachedItem, DrawRect(context, second, kBackgroundType,
+                                             gfx::Rect(100, 100, 50, 200)));
+    EXPECT_EQ(kCached, DrawRect(context, third, kBackgroundType,
+                                gfx::Rect(300, 100, 50, 50)));
+    EXPECT_EQ(kCached, DrawRect(context, first, kForegroundType,
+                                gfx::Rect(100, 100, 100, 100)));
+    EXPECT_EQ(kRepaintedCachedItem, DrawRect(context, second, kForegroundType,
+                                             gfx::Rect(100, 100, 50, 200)));
+    EXPECT_EQ(kCached, DrawRect(context, third, kForegroundType,
+                                gfx::Rect(300, 100, 50, 50)));
 
     EXPECT_EQ(4u, NumCachedNewItems());
     EXPECT_EQ(0u, NumCachedNewSubsequences());
 #if DCHECK_IS_ON()
-    EXPECT_EQ(2u, NumIndexedItems());
-    EXPECT_EQ(4u, NumSequentialMatches());
+    EXPECT_EQ(0u, NumIndexedItems());
+    EXPECT_EQ(6u, NumSequentialMatches());
     EXPECT_EQ(0u, NumOutOfOrderMatches());
 #endif
   }
@@ -338,10 +423,14 @@ TEST_P(PaintControllerTest, UpdateAddFirstOverlap) {
 
     first.Invalidate();
     second.Invalidate();
-    DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 150, 150));
-    DrawRect(context, first, kForegroundType, gfx::Rect(100, 100, 150, 150));
-    DrawRect(context, second, kBackgroundType, gfx::Rect(150, 250, 100, 100));
-    DrawRect(context, second, kForegroundType, gfx::Rect(150, 250, 100, 100));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, first, kBackgroundType,
+                                    gfx::Rect(100, 100, 150, 150)));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, first, kForegroundType,
+                                    gfx::Rect(100, 100, 150, 150)));
+    EXPECT_EQ(kRepaintedCachedItem, DrawRect(context, second, kBackgroundType,
+                                             gfx::Rect(150, 250, 100, 100)));
+    EXPECT_EQ(kRepaintedCachedItem, DrawRect(context, second, kForegroundType,
+                                             gfx::Rect(150, 250, 100, 100)));
     EXPECT_EQ(0u, NumCachedNewItems());
     EXPECT_EQ(0u, NumCachedNewSubsequences());
   }
@@ -356,8 +445,10 @@ TEST_P(PaintControllerTest, UpdateAddFirstOverlap) {
   {
     CommitCycleScope cycle_scope(GetPaintController());
     InitRootChunk();
-    DrawRect(context, second, kBackgroundType, gfx::Rect(150, 250, 100, 100));
-    DrawRect(context, second, kForegroundType, gfx::Rect(150, 250, 100, 100));
+    EXPECT_EQ(kCached, DrawRect(context, second, kBackgroundType,
+                                gfx::Rect(150, 250, 100, 100)));
+    EXPECT_EQ(kCached, DrawRect(context, second, kForegroundType,
+                                gfx::Rect(150, 250, 100, 100)));
 
     EXPECT_EQ(2u, NumCachedNewItems());
     EXPECT_EQ(0u, NumCachedNewSubsequences());
@@ -398,10 +489,14 @@ TEST_P(PaintControllerTest, UpdateAddLastOverlap) {
 
     first.Invalidate();
     second.Invalidate();
-    DrawRect(context, first, kBackgroundType, gfx::Rect(150, 150, 100, 100));
-    DrawRect(context, first, kForegroundType, gfx::Rect(150, 150, 100, 100));
-    DrawRect(context, second, kBackgroundType, gfx::Rect(200, 200, 50, 50));
-    DrawRect(context, second, kForegroundType, gfx::Rect(200, 200, 50, 50));
+    EXPECT_EQ(kRepaintedCachedItem, DrawRect(context, first, kBackgroundType,
+                                             gfx::Rect(150, 150, 100, 100)));
+    EXPECT_EQ(kRepaintedCachedItem, DrawRect(context, first, kForegroundType,
+                                             gfx::Rect(150, 150, 100, 100)));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, second, kBackgroundType,
+                                    gfx::Rect(200, 200, 50, 50)));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, second, kForegroundType,
+                                    gfx::Rect(200, 200, 50, 50)));
     EXPECT_EQ(0u, NumCachedNewItems());
     EXPECT_EQ(0u, NumCachedNewSubsequences());
   }
@@ -418,8 +513,10 @@ TEST_P(PaintControllerTest, UpdateAddLastOverlap) {
     InitRootChunk();
     first.Invalidate();
     second.Invalidate();
-    DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 150, 150));
-    DrawRect(context, first, kForegroundType, gfx::Rect(100, 100, 150, 150));
+    EXPECT_EQ(kRepaintedCachedItem, DrawRect(context, first, kBackgroundType,
+                                             gfx::Rect(100, 100, 150, 150)));
+    EXPECT_EQ(kRepaintedCachedItem, DrawRect(context, first, kForegroundType,
+                                             gfx::Rect(100, 100, 150, 150)));
     EXPECT_EQ(0u, NumCachedNewItems());
     EXPECT_EQ(0u, NumCachedNewSubsequences());
   }
@@ -449,12 +546,6 @@ TEST_P(PaintControllerTest, CachedDisplayItems) {
                           IsSameId(second.Id(), kBackgroundType)));
   EXPECT_TRUE(ClientCacheIsValid(first));
   EXPECT_TRUE(ClientCacheIsValid(second));
-  sk_sp<const PaintRecord> first_paint_record =
-      To<DrawingDisplayItem>(GetPaintController().GetDisplayItemList()[0])
-          .GetPaintRecord();
-  sk_sp<const PaintRecord> second_paint_record =
-      To<DrawingDisplayItem>(GetPaintController().GetDisplayItemList()[1])
-          .GetPaintRecord();
 
   first.Invalidate();
   EXPECT_FALSE(ClientCacheIsValid(first));
@@ -463,24 +554,15 @@ TEST_P(PaintControllerTest, CachedDisplayItems) {
   {
     CommitCycleScope cycle_scope(GetPaintController());
     InitRootChunk();
-    DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 150, 150));
-    DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 150, 150));
+    EXPECT_EQ(kRepaintedCachedItem, DrawRect(context, first, kBackgroundType,
+                                             gfx::Rect(100, 100, 150, 150)));
+    EXPECT_EQ(kCached, DrawRect(context, second, kBackgroundType,
+                                gfx::Rect(100, 100, 150, 150)));
   }
 
   EXPECT_THAT(GetPaintController().GetDisplayItemList(),
               ElementsAre(IsSameId(first.Id(), kBackgroundType),
                           IsSameId(second.Id(), kBackgroundType)));
-  // The first display item should be updated.
-  EXPECT_NE(first_paint_record,
-            To<DrawingDisplayItem>(GetPaintController().GetDisplayItemList()[0])
-                .GetPaintRecord());
-  // The second display item should be cached.
-  if (!RuntimeEnabledFeatures::PaintUnderInvalidationCheckingEnabled()) {
-    EXPECT_EQ(
-        second_paint_record,
-        To<DrawingDisplayItem>(GetPaintController().GetDisplayItemList()[1])
-            .GetPaintRecord());
-  }
   EXPECT_TRUE(ClientCacheIsValid(first));
   EXPECT_TRUE(ClientCacheIsValid(second));
 
@@ -533,18 +615,22 @@ TEST_P(PaintControllerTest, UpdateSwapOrderWithChildren) {
 
     // Simulate the situation when |container1| gets a z-index that is greater
     // than that of |container2|.
-    DrawRect(context, container2, kBackgroundType,
-             gfx::Rect(100, 200, 100, 100));
-    DrawRect(context, content2, kBackgroundType, gfx::Rect(100, 200, 50, 200));
-    DrawRect(context, content2, kForegroundType, gfx::Rect(100, 200, 50, 200));
-    DrawRect(context, container2, kForegroundType,
-             gfx::Rect(100, 200, 100, 100));
-    DrawRect(context, container1, kBackgroundType,
-             gfx::Rect(100, 100, 100, 100));
-    DrawRect(context, content1, kBackgroundType, gfx::Rect(100, 100, 50, 200));
-    DrawRect(context, content1, kForegroundType, gfx::Rect(100, 100, 50, 200));
-    DrawRect(context, container1, kForegroundType,
-             gfx::Rect(100, 100, 100, 100));
+    EXPECT_EQ(kCached, DrawRect(context, container2, kBackgroundType,
+                                gfx::Rect(100, 200, 100, 100)));
+    EXPECT_EQ(kCached, DrawRect(context, content2, kBackgroundType,
+                                gfx::Rect(100, 200, 50, 200)));
+    EXPECT_EQ(kCached, DrawRect(context, content2, kForegroundType,
+                                gfx::Rect(100, 200, 50, 200)));
+    EXPECT_EQ(kCached, DrawRect(context, container2, kForegroundType,
+                                gfx::Rect(100, 200, 100, 100)));
+    EXPECT_EQ(kCached, DrawRect(context, container1, kBackgroundType,
+                                gfx::Rect(100, 100, 100, 100)));
+    EXPECT_EQ(kCached, DrawRect(context, content1, kBackgroundType,
+                                gfx::Rect(100, 100, 50, 200)));
+    EXPECT_EQ(kCached, DrawRect(context, content1, kForegroundType,
+                                gfx::Rect(100, 100, 50, 200)));
+    EXPECT_EQ(kCached, DrawRect(context, container1, kForegroundType,
+                                gfx::Rect(100, 100, 100, 100)));
   }
 
   EXPECT_THAT(GetPaintController().GetDisplayItemList(),
@@ -604,18 +690,24 @@ TEST_P(PaintControllerTest, UpdateSwapOrderWithChildrenAndInvalidation) {
     // Simulate the situation when |container1| gets a z-index that is greater
     // than that of |container2|, and |container1| is invalidated.
     container1.Invalidate();
-    DrawRect(context, container2, kBackgroundType,
-             gfx::Rect(100, 200, 100, 100));
-    DrawRect(context, content2, kBackgroundType, gfx::Rect(100, 200, 50, 200));
-    DrawRect(context, content2, kForegroundType, gfx::Rect(100, 200, 50, 200));
-    DrawRect(context, container2, kForegroundType,
-             gfx::Rect(100, 200, 100, 100));
-    DrawRect(context, container1, kBackgroundType,
-             gfx::Rect(100, 100, 100, 100));
-    DrawRect(context, content1, kBackgroundType, gfx::Rect(100, 100, 50, 200));
-    DrawRect(context, content1, kForegroundType, gfx::Rect(100, 100, 50, 200));
-    DrawRect(context, container1, kForegroundType,
-             gfx::Rect(100, 100, 100, 100));
+    EXPECT_EQ(kCached, DrawRect(context, container2, kBackgroundType,
+                                gfx::Rect(100, 200, 100, 100)));
+    EXPECT_EQ(kCached, DrawRect(context, content2, kBackgroundType,
+                                gfx::Rect(100, 200, 50, 200)));
+    EXPECT_EQ(kCached, DrawRect(context, content2, kForegroundType,
+                                gfx::Rect(100, 200, 50, 200)));
+    EXPECT_EQ(kCached, DrawRect(context, container2, kForegroundType,
+                                gfx::Rect(100, 200, 100, 100)));
+    EXPECT_EQ(kRepaintedCachedItem,
+              DrawRect(context, container1, kBackgroundType,
+                       gfx::Rect(100, 100, 100, 100)));
+    EXPECT_EQ(kCached, DrawRect(context, content1, kBackgroundType,
+                                gfx::Rect(100, 100, 50, 200)));
+    EXPECT_EQ(kCached, DrawRect(context, content1, kForegroundType,
+                                gfx::Rect(100, 100, 50, 200)));
+    EXPECT_EQ(kRepaintedCachedItem,
+              DrawRect(context, container1, kForegroundType,
+                       gfx::Rect(100, 100, 100, 100)));
   }
 
   EXPECT_THAT(GetPaintController().GetDisplayItemList(),
@@ -677,9 +769,11 @@ TEST_P(PaintControllerTest, CachedSubsequenceForcePaintChunk) {
     CommitCycleScope cycle_scope(GetPaintController());
     GetPaintController().UpdateCurrentPaintChunkProperties(root_id, root,
                                                            root_properties);
-    DrawRect(context, root, kBackgroundType, gfx::Rect(100, 100, 100, 100));
+    EXPECT_EQ(kCached, DrawRect(context, root, kBackgroundType,
+                                gfx::Rect(100, 100, 100, 100)));
     EXPECT_TRUE(GetPaintController().UseCachedSubsequenceIfPossible(container));
-    DrawRect(context, root, kForegroundType, gfx::Rect(100, 100, 100, 100));
+    EXPECT_EQ(kCached, DrawRect(context, root, kForegroundType,
+                                gfx::Rect(100, 100, 100, 100)));
   }
 
   // |container| should still receive its own PaintChunk because it is a cached
@@ -782,14 +876,14 @@ TEST_P(PaintControllerTest, CachedSubsequenceSwapOrder) {
             container2_id, container2, container2_properties);
 
         SubsequenceRecorder r(context, container2);
-        DrawRect(context, container2, kBackgroundType,
-                 gfx::Rect(100, 200, 100, 100));
-        DrawRect(context, content2, kBackgroundType,
-                 gfx::Rect(100, 200, 50, 200));
-        DrawRect(context, content2, kForegroundType,
-                 gfx::Rect(100, 200, 50, 200));
-        DrawRect(context, container2, kForegroundType,
-                 gfx::Rect(100, 200, 100, 100));
+        EXPECT_EQ(kCached, DrawRect(context, container2, kBackgroundType,
+                                    gfx::Rect(100, 200, 100, 100)));
+        EXPECT_EQ(kCached, DrawRect(context, content2, kBackgroundType,
+                                    gfx::Rect(100, 200, 50, 200)));
+        EXPECT_EQ(kCached, DrawRect(context, content2, kForegroundType,
+                                    gfx::Rect(100, 200, 50, 200)));
+        EXPECT_EQ(kCached, DrawRect(context, container2, kForegroundType,
+                                    gfx::Rect(100, 200, 100, 100)));
       }
       EXPECT_FALSE(SubsequenceRecorder::UseCachedSubsequenceIfPossible(
           context, container1));
@@ -798,14 +892,14 @@ TEST_P(PaintControllerTest, CachedSubsequenceSwapOrder) {
             container1_id, container1, container1_properties);
 
         SubsequenceRecorder r(context, container1);
-        DrawRect(context, container1, kBackgroundType,
-                 gfx::Rect(100, 100, 100, 100));
-        DrawRect(context, content1, kBackgroundType,
-                 gfx::Rect(100, 100, 50, 200));
-        DrawRect(context, content1, kForegroundType,
-                 gfx::Rect(100, 100, 50, 200));
-        DrawRect(context, container1, kForegroundType,
-                 gfx::Rect(100, 100, 100, 100));
+        EXPECT_EQ(kCached, DrawRect(context, container1, kBackgroundType,
+                                    gfx::Rect(100, 100, 100, 100)));
+        EXPECT_EQ(kCached, DrawRect(context, content1, kBackgroundType,
+                                    gfx::Rect(100, 100, 50, 200)));
+        EXPECT_EQ(kCached, DrawRect(context, content1, kForegroundType,
+                                    gfx::Rect(100, 100, 50, 200)));
+        EXPECT_EQ(kCached, DrawRect(context, container1, kForegroundType,
+                                    gfx::Rect(100, 100, 100, 100)));
       }
     } else {
       EXPECT_TRUE(SubsequenceRecorder::UseCachedSubsequenceIfPossible(
@@ -911,19 +1005,19 @@ TEST_P(PaintControllerTest, CachedSubsequenceAndDisplayItemsSwapOrder) {
           context, container2));
       {
         SubsequenceRecorder r(context, container2);
-        DrawRect(context, container2, kBackgroundType,
-                 gfx::Rect(100, 200, 100, 100));
-        DrawRect(context, content2, kBackgroundType,
-                 gfx::Rect(100, 200, 50, 200));
-        DrawRect(context, content2, kForegroundType,
-                 gfx::Rect(100, 200, 50, 200));
-        DrawRect(context, container2, kForegroundType,
-                 gfx::Rect(100, 200, 100, 100));
+        EXPECT_EQ(kCached, DrawRect(context, container2, kBackgroundType,
+                                    gfx::Rect(100, 200, 100, 100)));
+        EXPECT_EQ(kCached, DrawRect(context, content2, kBackgroundType,
+                                    gfx::Rect(100, 200, 50, 200)));
+        EXPECT_EQ(kCached, DrawRect(context, content2, kForegroundType,
+                                    gfx::Rect(100, 200, 50, 200)));
+        EXPECT_EQ(kCached, DrawRect(context, container2, kForegroundType,
+                                    gfx::Rect(100, 200, 100, 100)));
       }
-      DrawRect(context, content1, kBackgroundType,
-               gfx::Rect(100, 100, 50, 200));
-      DrawRect(context, content1, kForegroundType,
-               gfx::Rect(100, 100, 50, 200));
+      EXPECT_EQ(kCached, DrawRect(context, content1, kBackgroundType,
+                                  gfx::Rect(100, 100, 50, 200)));
+      EXPECT_EQ(kCached, DrawRect(context, content1, kForegroundType,
+                                  gfx::Rect(100, 100, 50, 200)));
     } else {
       EXPECT_TRUE(SubsequenceRecorder::UseCachedSubsequenceIfPossible(
           context, container2));
@@ -1009,19 +1103,20 @@ TEST_P(PaintControllerTest, DisplayItemSwapOrderBeforeCachedSubsequence) {
     if (RuntimeEnabledFeatures::PaintUnderInvalidationCheckingEnabled()) {
       EXPECT_FALSE(DrawingRecorder::UseCachedDrawingIfPossible(
           context, content1b, kBackgroundType));
-      DrawRect(context, content1b, kBackgroundType, rect);
+      EXPECT_EQ(kCached, DrawRect(context, content1b, kBackgroundType, rect));
       EXPECT_FALSE(DrawingRecorder::UseCachedDrawingIfPossible(
           context, content1a, kBackgroundType));
-      DrawRect(context, content1a, kBackgroundType, rect);
+      EXPECT_EQ(kCached, DrawRect(context, content1a, kBackgroundType, rect));
       {
         EXPECT_FALSE(SubsequenceRecorder::UseCachedSubsequenceIfPossible(
             context, container2));
         SubsequenceRecorder r(context, container2);
-        DrawRect(context, container2, kBackgroundType, rect);
+        EXPECT_EQ(kCached,
+                  DrawRect(context, container2, kBackgroundType, rect));
       }
       EXPECT_FALSE(DrawingRecorder::UseCachedDrawingIfPossible(
           context, content3, kBackgroundType));
-      DrawRect(context, content3, kBackgroundType, rect);
+      EXPECT_EQ(kCached, DrawRect(context, content3, kBackgroundType, rect));
     } else {
       EXPECT_TRUE(DrawingRecorder::UseCachedDrawingIfPossible(
           context, content1b, kBackgroundType));
@@ -1102,7 +1197,8 @@ TEST_P(PaintControllerTest, CachedSubsequenceContainingFragments) {
     ScopedPaintChunkProperties root_chunk_properties(
         GetPaintController(), DefaultPaintChunkProperties(), root,
         kBackgroundType);
-    DrawRect(context, root, kBackgroundType, gfx::Rect(100, 100, 100, 100));
+    EXPECT_EQ(kCached, DrawRect(context, root, kBackgroundType,
+                                gfx::Rect(100, 100, 100, 100)));
 
     if (RuntimeEnabledFeatures::PaintUnderInvalidationCheckingEnabled()) {
       EXPECT_FALSE(
@@ -1112,7 +1208,8 @@ TEST_P(PaintControllerTest, CachedSubsequenceContainingFragments) {
       EXPECT_TRUE(
           GetPaintController().UseCachedSubsequenceIfPossible(container));
     }
-    DrawRect(context, root, kForegroundType, gfx::Rect(100, 100, 100, 100));
+    EXPECT_EQ(kCached, DrawRect(context, root, kForegroundType,
+                                gfx::Rect(100, 100, 100, 100)));
   }
 
   // The second paint should produce the exactly same results.
@@ -1170,14 +1267,16 @@ TEST_P(PaintControllerTest, UpdateSwapOrderCrossingChunks) {
     CommitCycleScope cycle_scope(GetPaintController());
     GetPaintController().UpdateCurrentPaintChunkProperties(
         container1_id, container1, container1_properties);
-    DrawRect(context, container1, kBackgroundType,
-             gfx::Rect(100, 100, 100, 100));
-    DrawRect(context, content1, kBackgroundType, gfx::Rect(100, 100, 50, 200));
-    DrawRect(context, content2, kBackgroundType, gfx::Rect(100, 200, 50, 200));
+    EXPECT_EQ(kCached, DrawRect(context, container1, kBackgroundType,
+                                gfx::Rect(100, 100, 100, 100)));
+    EXPECT_EQ(kCached, DrawRect(context, content1, kBackgroundType,
+                                gfx::Rect(100, 100, 50, 200)));
+    EXPECT_EQ(kCached, DrawRect(context, content2, kBackgroundType,
+                                gfx::Rect(100, 200, 50, 200)));
     GetPaintController().UpdateCurrentPaintChunkProperties(
         container2_id, container2, container2_properties);
-    DrawRect(context, container2, kBackgroundType,
-             gfx::Rect(100, 200, 100, 100));
+    EXPECT_EQ(kCached, DrawRect(context, container2, kBackgroundType,
+                                gfx::Rect(100, 200, 100, 100)));
 
     EXPECT_EQ(4u, NumCachedNewItems());
     EXPECT_EQ(0u, NumCachedNewSubsequences());
@@ -1225,10 +1324,14 @@ TEST_P(PaintControllerTest, OutOfOrderNoCrash) {
   {
     CommitCycleScope cycle_scope(GetPaintController());
     InitRootChunk();
-    DrawRect(context, client, kType2, gfx::Rect(100, 100, 50, 200));
-    DrawRect(context, client, kType3, gfx::Rect(100, 100, 50, 200));
-    DrawRect(context, client, kType1, gfx::Rect(100, 100, 100, 100));
-    DrawRect(context, client, kType4, gfx::Rect(100, 100, 100, 100));
+    EXPECT_EQ(kCached,
+              DrawRect(context, client, kType2, gfx::Rect(100, 100, 50, 200)));
+    EXPECT_EQ(kCached,
+              DrawRect(context, client, kType3, gfx::Rect(100, 100, 50, 200)));
+    EXPECT_EQ(kCached,
+              DrawRect(context, client, kType1, gfx::Rect(100, 100, 100, 100)));
+    EXPECT_EQ(kCached,
+              DrawRect(context, client, kType4, gfx::Rect(100, 100, 100, 100)));
   }
 }
 
@@ -1349,8 +1452,8 @@ TEST_P(PaintControllerTest, CachedNestedSubsequenceUpdate) {
       SubsequenceRecorder r(context, content2);
       GetPaintController().UpdateCurrentPaintChunkProperties(
           content2_id, content2, content2_properties);
-      DrawRect(context, content2, kForegroundType,
-               gfx::Rect(100, 200, 50, 200));
+      EXPECT_EQ(kPaintedNew, DrawRect(context, content2, kForegroundType,
+                                      gfx::Rect(100, 200, 50, 200)));
     }
     // Repaint container1 with foreground only.
     {
@@ -1367,10 +1470,10 @@ TEST_P(PaintControllerTest, CachedNestedSubsequenceUpdate) {
         SubsequenceRecorder inner_r(context, content1);
         GetPaintController().UpdateCurrentPaintChunkProperties(
             content1_id, content1, content1_properties);
-        DrawRect(context, content1, kBackgroundType,
-                 gfx::Rect(100, 100, 50, 200));
-        DrawRect(context, content1, kForegroundType,
-                 gfx::Rect(100, 100, 50, 200));
+        EXPECT_EQ(kCached, DrawRect(context, content1, kBackgroundType,
+                                    gfx::Rect(100, 100, 50, 200)));
+        EXPECT_EQ(kCached, DrawRect(context, content1, kForegroundType,
+                                    gfx::Rect(100, 100, 50, 200)));
       } else {
         EXPECT_TRUE(SubsequenceRecorder::UseCachedSubsequenceIfPossible(
             context, content1));
@@ -1378,16 +1481,17 @@ TEST_P(PaintControllerTest, CachedNestedSubsequenceUpdate) {
       GetPaintController().UpdateCurrentPaintChunkProperties(
           container1_foreground_id, container1,
           container1_foreground_properties);
-      DrawRect(context, container1, kForegroundType,
-               gfx::Rect(100, 100, 100, 100));
+      EXPECT_EQ(kRepaintedCachedItem,
+                DrawRect(context, container1, kForegroundType,
+                         gfx::Rect(100, 100, 100, 100)));
     }
 
     EXPECT_EQ(2u, NumCachedNewItems());
     EXPECT_EQ(1u, NumCachedNewSubsequences());
 #if DCHECK_IS_ON()
-    EXPECT_EQ(0u, NumIndexedItems());
+    EXPECT_EQ(6u, NumIndexedItems());
     EXPECT_EQ(0u, NumSequentialMatches());
-    EXPECT_EQ(0u, NumOutOfOrderMatches());
+    EXPECT_EQ(1u, NumOutOfOrderMatches());
 #endif
   }
 
@@ -1606,13 +1710,6 @@ TEST_P(PaintControllerTest, SkipCache) {
               ElementsAre(IsSameId(multicol.Id(), kBackgroundType),
                           IsSameId(content.Id(), kForegroundType),
                           IsSameId(content.Id(), kForegroundType)));
-  sk_sp<const PaintRecord> record1 =
-      To<DrawingDisplayItem>(GetPaintController().GetDisplayItemList()[1])
-          .GetPaintRecord();
-  sk_sp<const PaintRecord> record2 =
-      To<DrawingDisplayItem>(GetPaintController().GetDisplayItemList()[2])
-          .GetPaintRecord();
-  EXPECT_NE(record1, record2);
   EXPECT_DEFAULT_ROOT_CHUNK(3);
 
   {
@@ -1620,11 +1717,12 @@ TEST_P(PaintControllerTest, SkipCache) {
     InitRootChunk();
     // Draw again with nothing invalidated.
     EXPECT_TRUE(ClientCacheIsValid(multicol));
-    DrawRect(context, multicol, kBackgroundType, gfx::Rect(100, 200, 100, 100));
+    EXPECT_EQ(kCached, DrawRect(context, multicol, kBackgroundType,
+                                gfx::Rect(100, 200, 100, 100)));
 
     GetPaintController().BeginSkippingCache();
-    DrawRect(context, content, kForegroundType, rect1);
-    DrawRect(context, content, kForegroundType, rect2);
+    EXPECT_EQ(kPaintedNew, DrawRect(context, content, kForegroundType, rect1));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, content, kForegroundType, rect2));
     GetPaintController().EndSkippingCache();
 
     EXPECT_EQ(1u, NumCachedNewItems());
@@ -1640,12 +1738,6 @@ TEST_P(PaintControllerTest, SkipCache) {
               ElementsAre(IsSameId(multicol.Id(), kBackgroundType),
                           IsSameId(content.Id(), kForegroundType),
                           IsSameId(content.Id(), kForegroundType)));
-  EXPECT_NE(record1,
-            To<DrawingDisplayItem>(GetPaintController().GetDisplayItemList()[1])
-                .GetPaintRecord());
-  EXPECT_NE(record2,
-            To<DrawingDisplayItem>(GetPaintController().GetDisplayItemList()[2])
-                .GetPaintRecord());
   EXPECT_DEFAULT_ROOT_CHUNK(3);
 
   {
@@ -1653,12 +1745,13 @@ TEST_P(PaintControllerTest, SkipCache) {
     InitRootChunk();
     // Now the multicol becomes 3 columns and repaints.
     multicol.Invalidate();
-    DrawRect(context, multicol, kBackgroundType, gfx::Rect(100, 100, 100, 100));
+    EXPECT_EQ(kRepaintedCachedItem, DrawRect(context, multicol, kBackgroundType,
+                                             gfx::Rect(100, 100, 100, 100)));
 
     GetPaintController().BeginSkippingCache();
-    DrawRect(context, content, kForegroundType, rect1);
-    DrawRect(context, content, kForegroundType, rect2);
-    DrawRect(context, content, kForegroundType, rect3);
+    EXPECT_EQ(kPaintedNew, DrawRect(context, content, kForegroundType, rect1));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, content, kForegroundType, rect2));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, content, kForegroundType, rect3));
     GetPaintController().EndSkippingCache();
 
     // We should repaint everything on invalidation of the scope container.
@@ -1669,10 +1762,6 @@ TEST_P(PaintControllerTest, SkipCache) {
                             IsSameId(content.Id(), kForegroundType),
                             IsSameId(content.Id(), kForegroundType),
                             IsSameId(content.Id(), kForegroundType)));
-    EXPECT_NE(record1,
-              To<DrawingDisplayItem>(display_item_list[1]).GetPaintRecord());
-    EXPECT_NE(record2,
-              To<DrawingDisplayItem>(display_item_list[2]).GetPaintRecord());
   }
   EXPECT_DEFAULT_ROOT_CHUNK(4);
 }
@@ -1700,16 +1789,6 @@ TEST_P(PaintControllerTest, PartialSkipCache) {
               ElementsAre(IsSameId(content.Id(), kBackgroundType),
                           IsSameId(content.Id(), kForegroundType),
                           IsSameId(content.Id(), kForegroundType)));
-  sk_sp<const PaintRecord> record0 =
-      To<DrawingDisplayItem>(GetPaintController().GetDisplayItemList()[0])
-          .GetPaintRecord();
-  sk_sp<const PaintRecord> record1 =
-      To<DrawingDisplayItem>(GetPaintController().GetDisplayItemList()[1])
-          .GetPaintRecord();
-  sk_sp<const PaintRecord> record2 =
-      To<DrawingDisplayItem>(GetPaintController().GetDisplayItemList()[2])
-          .GetPaintRecord();
-  EXPECT_NE(record1, record2);
 
   // Content's cache is invalid because it has display items skipped cache.
   EXPECT_FALSE(ClientCacheIsValid(content));
@@ -1720,11 +1799,11 @@ TEST_P(PaintControllerTest, PartialSkipCache) {
     CommitCycleScope cycle_scope(GetPaintController());
     InitRootChunk();
     // Draw again with nothing invalidated.
-    DrawRect(context, content, kBackgroundType, rect1);
+    EXPECT_EQ(kPaintedNew, DrawRect(context, content, kBackgroundType, rect1));
     GetPaintController().BeginSkippingCache();
-    DrawRect(context, content, kForegroundType, rect2);
+    EXPECT_EQ(kPaintedNew, DrawRect(context, content, kForegroundType, rect2));
     GetPaintController().EndSkippingCache();
-    DrawRect(context, content, kForegroundType, rect3);
+    EXPECT_EQ(kPaintedNew, DrawRect(context, content, kForegroundType, rect3));
 
     EXPECT_EQ(0u, NumCachedNewItems());
     EXPECT_EQ(0u, NumCachedNewSubsequences());
@@ -1739,15 +1818,6 @@ TEST_P(PaintControllerTest, PartialSkipCache) {
               ElementsAre(IsSameId(content.Id(), kBackgroundType),
                           IsSameId(content.Id(), kForegroundType),
                           IsSameId(content.Id(), kForegroundType)));
-  EXPECT_NE(record0,
-            To<DrawingDisplayItem>(GetPaintController().GetDisplayItemList()[0])
-                .GetPaintRecord());
-  EXPECT_NE(record1,
-            To<DrawingDisplayItem>(GetPaintController().GetDisplayItemList()[1])
-                .GetPaintRecord());
-  EXPECT_NE(record2,
-            To<DrawingDisplayItem>(GetPaintController().GetDisplayItemList()[2])
-                .GetPaintRecord());
 }
 
 TEST_P(PaintControllerTest, SkipCacheDuplicatedItemAndChunkIds) {
@@ -1902,8 +1972,10 @@ TEST_P(PaintControllerTest, InsertValidItemInFront) {
   {
     CommitCycleScope cycle_scope(GetPaintController());
     InitRootChunk();
-    DrawRect(context, third, kBackgroundType, gfx::Rect(100, 100, 100, 100));
-    DrawRect(context, fourth, kBackgroundType, gfx::Rect(100, 100, 50, 50));
+    EXPECT_EQ(kCached, DrawRect(context, third, kBackgroundType,
+                                gfx::Rect(100, 100, 100, 100)));
+    EXPECT_EQ(kCached, DrawRect(context, fourth, kBackgroundType,
+                                gfx::Rect(100, 100, 50, 50)));
 
     EXPECT_EQ(2u, NumCachedNewItems());
     EXPECT_EQ(0u, NumCachedNewSubsequences());
@@ -1926,10 +1998,14 @@ TEST_P(PaintControllerTest, InsertValidItemInFront) {
   {
     CommitCycleScope cycle_scope(GetPaintController());
     InitRootChunk();
-    DrawRect(context, first, kBackgroundType, gfx::Rect(100, 100, 300, 300));
-    DrawRect(context, second, kBackgroundType, gfx::Rect(100, 100, 200, 200));
-    DrawRect(context, third, kBackgroundType, gfx::Rect(100, 100, 100, 100));
-    DrawRect(context, fourth, kBackgroundType, gfx::Rect(100, 100, 50, 50));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, first, kBackgroundType,
+                                    gfx::Rect(100, 100, 300, 300)));
+    EXPECT_EQ(kPaintedNew, DrawRect(context, second, kBackgroundType,
+                                    gfx::Rect(100, 100, 200, 200)));
+    EXPECT_EQ(kCached, DrawRect(context, third, kBackgroundType,
+                                gfx::Rect(100, 100, 100, 100)));
+    EXPECT_EQ(kCached, DrawRect(context, fourth, kBackgroundType,
+                                gfx::Rect(100, 100, 50, 50)));
 
     EXPECT_EQ(2u, NumCachedNewItems());
     EXPECT_EQ(0u, NumCachedNewSubsequences());

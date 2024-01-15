@@ -35,6 +35,7 @@ class MediaToolbarButtonContextualMenu : public ui::SimpleMenuModel::Delegate {
 
   // ui::SimpleMenuModel::Delegate:
   bool IsCommandIdChecked(int command_id) const override;
+  bool IsCommandIdEnabled(int command_id) const override;
   void ExecuteCommand(int command_id, int event_flags) override;
   void MenuClosed(ui::SimpleMenuModel* source) override;
 
@@ -45,7 +46,8 @@ class MediaToolbarButtonContextualMenu : public ui::SimpleMenuModel::Delegate {
   void ReportIssue();
 #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
 
-  const raw_ptr<Browser> browser_;
-  const raw_ptr<global_media_controls::MediaItemManager> item_manager_;
+  const raw_ptr<Browser, DanglingUntriaged> browser_;
+  const raw_ptr<global_media_controls::MediaItemManager, DanglingUntriaged>
+      item_manager_;
 };
 #endif  // CHROME_BROWSER_UI_VIEWS_GLOBAL_MEDIA_CONTROLS_MEDIA_TOOLBAR_BUTTON_CONTEXTUAL_MENU_H_

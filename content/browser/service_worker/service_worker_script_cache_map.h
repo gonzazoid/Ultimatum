@@ -37,23 +37,30 @@ class CONTENT_EXPORT ServiceWorkerScriptCacheMap {
       delete;
 
   int64_t LookupResourceId(const GURL& url);
+  std::optional<std::string> LookupSha256Checksum(const GURL& url);
 
   // Used during the initial run of a new version to build the map
   // of resources ids.
   void NotifyStartedCaching(const GURL& url, int64_t resource_id);
   void NotifyFinishedCaching(const GURL& url,
                              int64_t size_bytes,
+                             const std::string& sha256_checksum,
                              net::Error net_error,
                              const std::string& status_message);
 
   // Used to retrieve the results of the initial run of a new version.
-  void GetResources(
-      std::vector<storage::mojom::ServiceWorkerResourceRecordPtr>* resources);
+  std::vector<storage::mojom::ServiceWorkerResourceRecordPtr> GetResources()
+      const;
 
   // Used when loading an existing version.
   void SetResources(
       const std::vector<storage::mojom::ServiceWorkerResourceRecordPtr>&
           resources);
+
+  // Updates sha256_checksum to the resource. sha256_checksum can be updated
+  // after the update check process.
+  void UpdateSha256Checksum(const GURL& url,
+                            const std::string& sha256_checksum);
 
   // Writes the metadata of the existing script.
   void WriteMetadata(const GURL& url,

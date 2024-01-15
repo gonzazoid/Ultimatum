@@ -5,13 +5,17 @@ found in the LICENSE file.
 -->
 <style>
   .container {
-    --cr-toast-background: var(--cros-bg-color-elevation-2-inverted);
+    --cr-toast-background: var(--cros-sys-base_elevated);
+    --cr-toast-button-color: var(--cros-sys-primary);
+    --cr-toast-text-color: var(--cros-sys-on_surface);
+    border-radius: 8px;
     box-shadow: var(--cros-elevation-2-shadow);
+    font: var(--cros-body-2-font);
     justify-content: space-between;
     max-width: 336px;
     min-height: 48px;
     min-width: 256px;
-    padding: 0;
+    padding: 14px 0;
   }
 
   :host-context(:root[dir=ltr]) .container {
@@ -27,18 +31,17 @@ found in the LICENSE file.
   .text {
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
-    --cr-toast-text-color: var(--cros-toast-text-color);
     display: -webkit-box;
-    line-height: 20px;
-    margin: 14px 16px;
+    margin-inline-start: 24px;
     overflow: hidden;
   }
 
   .action {
-    --cr-toast-button-color: var(--cros-toast-button-color);
-    --ink-color: var(--cros-toast-button-color);
-    --paper-ripple-opacity: var(--cros-button-secondary-ripple-opacity);
-    margin: 0 8px !important;
+    --ink-color: var(--cros-sys-ripple_neutral_on_subtle);
+    --paper-ripple-opacity: 100%;
+    border-radius: 18px;
+    height: 36px;
+    margin-inline-end: 12px;
   }
 
   .action:active {
@@ -47,10 +50,10 @@ found in the LICENSE file.
 
   :host-context(.focus-outline-visible) .action:focus {
     --focus-shadow-color: none;
-    outline: 2px solid var(--cros-toast-button-color);
+    outline: 2px solid var(--cros-sys-focus_ring);
   }
 </style>
 <cr-toast class="container" id="container" duration="5000">
   <div class="text" id="text"></div>
-  <cr-button class="action" id="action" on-tap="onActionTapped_"></cr-button>
+  <cr-button class="action" id="action" on-click="onActionClicked_"></cr-button>
 </cr-toast>

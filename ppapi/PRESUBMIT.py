@@ -19,10 +19,6 @@ import sys
 # TODO: Investigate the incompatibility of `input_api.python3_executable` on
 # Windows, for this particular PRESUBMIT script.
 
-
-USE_PYTHON3 = True
-
-
 def RunCmdAndCheck(cmd, err_string, output_api, cwd=None, warning=False):
   results = []
   p = subprocess.Popen(cmd, cwd=cwd,
@@ -168,7 +164,7 @@ def CheckUpdatedNaClSDK(input_api, output_api):
   #     The command line is too long.
   files_per_command = 25 if input_api.is_windows else 1000
   results = []
-  for i in range(len(nacl_sdk_files), files_per_command):
+  for i in range(0, len(nacl_sdk_files), files_per_command):
     cmd = [sys.executable, verify_ppapi_py
            ] + nacl_sdk_files[i:i + files_per_command]
     results.extend(

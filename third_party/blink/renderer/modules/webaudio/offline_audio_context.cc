@@ -30,7 +30,6 @@
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_offline_audio_context_options.h"
-#include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
@@ -102,9 +101,9 @@ OfflineAudioContext* OfflineAudioContext::Create(
 
   SCOPED_UMA_HISTOGRAM_TIMER("WebAudio.OfflineAudioContext.CreateTime");
   OfflineAudioContext* audio_context =
-      MakeGarbageCollected<OfflineAudioContext>(
-          window->document(), number_of_channels, number_of_frames, sample_rate,
-          exception_state);
+      MakeGarbageCollected<OfflineAudioContext>(window, number_of_channels,
+                                                number_of_frames, sample_rate,
+                                                exception_state);
   audio_context->UpdateStateIfNeeded();
 
 #if DEBUG_AUDIONODE_REFERENCES
@@ -125,12 +124,12 @@ OfflineAudioContext* OfflineAudioContext::Create(
   return offline_context;
 }
 
-OfflineAudioContext::OfflineAudioContext(Document* document,
+OfflineAudioContext::OfflineAudioContext(LocalDOMWindow* window,
                                          unsigned number_of_channels,
                                          uint32_t number_of_frames,
                                          float sample_rate,
                                          ExceptionState& exception_state)
-    : BaseAudioContext(document, kOfflineContext),
+    : BaseAudioContext(window, kOfflineContext),
       total_render_frames_(number_of_frames) {
   destination_node_ = OfflineAudioDestinationNode::Create(
       this, number_of_channels, number_of_frames, sample_rate);
@@ -185,8 +184,8 @@ ScriptPromise OfflineAudioContext::startOfflineRendering(
 
   DCHECK(!is_rendering_started_);
 
-  complete_resolver_ =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  complete_resolver_ = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
 
   // Allocate the AudioBuffer to hold the rendered result.
   float sample_rate = DestinationHandler().SampleRate();
@@ -295,7 +294,8 @@ ScriptPromise OfflineAudioContext::suspendContext(
       return ScriptPromise();
     }
 
-    auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+    auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+        script_state, exception_state.GetContext());
     promise = resolver->Promise();
 
     scheduled_suspends_.insert(frame, resolver);
@@ -398,7 +398,7 @@ bool OfflineAudioContext::HandlePreRenderTasks(
   {
     // OfflineGraphAutoLocker here locks the audio graph for this scope.
     OfflineGraphAutoLocker locker(this);
-    listener()->UpdateState();
+    listener()->Handler().UpdateState();
     GetDeferredTaskHandler().HandleDeferredTasks();
     HandleStoppableSourceNodes();
   }

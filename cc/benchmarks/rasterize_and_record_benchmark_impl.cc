@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/timer/lap_timer.h"
 #include "base/values.h"
 #include "cc/layers/layer_impl.h"
@@ -62,7 +63,7 @@ void RunBenchmark(RasterSource* raster_source,
 
       // Pass an empty settings to make sure that the decode cache is used to
       // replace all images.
-      absl::optional<PlaybackImageProvider::Settings> image_settings;
+      std::optional<PlaybackImageProvider::Settings> image_settings;
       image_settings.emplace();
       image_settings->images_to_skip = {};
       image_settings->image_to_current_frame_index = {};
@@ -159,31 +160,30 @@ void RasterizeAndRecordBenchmarkImpl::DidCompleteCommit(
     layer->RunMicroBenchmark(this);
   }
 
-  base::Value result(base::Value::Type::DICTIONARY);
-  result.SetDoubleKey("rasterize_time_ms",
-                      rasterize_results_.total_best_time.InMillisecondsF());
-  result.SetIntKey("pixels_rasterized", rasterize_results_.pixels_rasterized);
-  result.SetIntKey("pixels_rasterized_with_non_solid_color",
-                   rasterize_results_.pixels_rasterized_with_non_solid_color);
-  result.SetIntKey("pixels_rasterized_as_opaque",
-                   rasterize_results_.pixels_rasterized_as_opaque);
-  result.SetIntKey("total_layers", rasterize_results_.total_layers);
-  result.SetIntKey("total_picture_layers",
-                   rasterize_results_.total_picture_layers);
-  result.SetIntKey("total_picture_layers_with_no_content",
-                   rasterize_results_.total_picture_layers_with_no_content);
-  result.SetIntKey("total_picture_layers_off_screen",
-                   rasterize_results_.total_picture_layers_off_screen);
+  base::Value::Dict result;
+  result.Set("rasterize_time_ms",
+             rasterize_results_.total_best_time.InMillisecondsF());
+  result.Set("pixels_rasterized", rasterize_results_.pixels_rasterized);
+  result.Set("pixels_rasterized_with_non_solid_color",
+             rasterize_results_.pixels_rasterized_with_non_solid_color);
+  result.Set("pixels_rasterized_as_opaque",
+             rasterize_results_.pixels_rasterized_as_opaque);
+  result.Set("total_layers", rasterize_results_.total_layers);
+  result.Set("total_picture_layers", rasterize_results_.total_picture_layers);
+  result.Set("total_picture_layers_with_no_content",
+             rasterize_results_.total_picture_layers_with_no_content);
+  result.Set("total_picture_layers_off_screen",
+             rasterize_results_.total_picture_layers_off_screen);
 
-  base::Value lcd_text_pixels(base::Value::Type::DICTIONARY);
+  base::Value::Dict lcd_text_pixels;
   for (size_t i = 0; i < kLCDTextDisallowedReasonCount; i++) {
-    lcd_text_pixels.SetIntKey(
+    lcd_text_pixels.Set(
         LCDTextDisallowedReasonToString(
             static_cast<LCDTextDisallowedReason>(i)),
         rasterize_results_.visible_pixels_by_lcd_text_disallowed_reason[i]);
   }
-  result.SetKey("visible_pixels_by_lcd_text_disallowed_reason",
-                std::move(lcd_text_pixels));
+  result.Set("visible_pixels_by_lcd_text_disallowed_reason",
+             std::move(lcd_text_pixels));
 
   NotifyDone(std::move(result));
 }

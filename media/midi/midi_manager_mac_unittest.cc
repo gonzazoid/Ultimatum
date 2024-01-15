@@ -133,7 +133,6 @@ class MidiManagerMacTest : public ::testing::Test {
   base::test::SingleThreadTaskEnvironment task_environment_;
 };
 
-
 TEST_F(MidiManagerMacTest, MidiNotification) {
   std::unique_ptr<FakeMidiManagerClient> client(new FakeMidiManagerClient);
   StartSession(client.get());

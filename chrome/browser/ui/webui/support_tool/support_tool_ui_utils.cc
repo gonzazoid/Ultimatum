@@ -5,6 +5,7 @@
 #include "chrome/browser/ui/webui/support_tool/support_tool_ui_utils.h"
 
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -12,38 +13,21 @@
 #include "base/base64url.h"
 #include "base/check.h"
 #include "base/containers/contains.h"
-#include "base/files/file_path.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
-#include "base/time/time.h"
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/support_tool/data_collection_module.pb.h"
 #include "chrome/browser/support_tool/data_collector.h"
 #include "chrome/browser/support_tool/support_tool_util.h"
-#include "components/feedback/pii_types.h"
+#include "chrome/grit/branded_strings.h"
+#include "chrome/grit/generated_resources.h"
+#include "components/feedback/redaction_tool/pii_types.h"
 #include "net/base/url_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/l10n/l10n_util.h"
 #include "url/gurl.h"
 
 namespace support_tool_ui {
-
-const char kAndroidAppInfo[] = "Android App Information";
-const char kSSID[] = "WiFi SSID";
-const char kLocationInfo[] = "Location Info";
-const char kEmail[] = "Email Address";
-const char kGAIA[] = "Google Account ID";
-const char kStableIdentifier[] =
-    "Other Stable Identifiers (e.g., Hashes or UUIDs)";
-const char kIPPAddress[] = "Printing IPP Address";
-const char kIPAddress[] = "IP Address";
-const char kMACAddress[] = "Network MAC Address";
-const char kWindowTitle[] = "Window Titles";
-const char kURL[] = "URLs";
-const char kSerial[] = "Device & Component Serial Numbers";
-const char kRemovableStorage[] = "Removable Storage Names";
-const char kEAP[] = "EAP Network Authentication Information";
 
 const char kPiiItemDescriptionKey[] = "piiTypeDescription";
 const char kPiiItemDetectedDataKey[] = "detectedData";
@@ -58,92 +42,76 @@ const char kDataCollectorName[] = "name";
 const char kDataCollectorProtoEnum[] = "protoEnum";
 const char kDataCollectorIncluded[] = "isIncluded";
 
-const char kUrlGenerationResultSuccess[] = "success";
-const char kUrlGenerationResultUrl[] = "url";
-const char kUrlGenerationResultErrorMessage[] = "errorMessage";
+const char kSupportTokenGenerationResultSuccess[] = "success";
+const char kSupportTokenGenerationResultToken[] = "token";
+const char kSupportTokenGenerationResultErrorMessage[] = "errorMessage";
 
 }  // namespace support_tool_ui
 
 namespace {
 
 // Returns the human readable name corresponding to `data_collector_type`.
-std::string GetPIITypeDescription(feedback::PIIType type_enum) {
-  // This function will return translatable strings in future. For now, return
-  // string constants until we have the translatable strings ready.
-  switch (type_enum) {
-    case feedback::PIIType::kAndroidAppStoragePath:
-      // App storage path is part of information about an Android app.
-      return support_tool_ui::kAndroidAppInfo;
-    case feedback::PIIType::kEmail:
-      return support_tool_ui::kEmail;
-    case feedback::PIIType::kGaiaID:
-      return support_tool_ui::kGAIA;
-    case feedback::PIIType::kIPPAddress:
-      return support_tool_ui::kIPPAddress;
-    case feedback::PIIType::kIPAddress:
-      return support_tool_ui::kIPAddress;
-    case feedback::PIIType::kLocationInfo:
-      return support_tool_ui::kLocationInfo;
-    case feedback::PIIType::kMACAddress:
-      return support_tool_ui::kMACAddress;
-    case feedback::PIIType::kUIHierarchyWindowTitles:
-      return support_tool_ui::kWindowTitle;
-    case feedback::PIIType::kURL:
-      return support_tool_ui::kURL;
-    case feedback::PIIType::kSerial:
-      return support_tool_ui::kSerial;
-    case feedback::PIIType::kSSID:
-      return support_tool_ui::kSSID;
-    case feedback::PIIType::kStableIdentifier:
-      return support_tool_ui::kStableIdentifier;
-    case feedback::PIIType::kVolumeLabel:
-      // Volume labels are a part of removable storage paths in various logs.
-      return support_tool_ui::kRemovableStorage;
-    default:
-      return "Error: Undefined";
-  }
-}
-
-// Returns the human readable name corresponding to `data_collector_type`.
 std::string GetDataCollectorName(
     support_tool::DataCollectorType data_collector_type) {
-  // This function will return translatable strings in future. For now, return
-  // string constants until we have the translatable strings ready.
   switch (data_collector_type) {
     case support_tool::CHROME_INTERNAL:
-      return "Chrome System Information";
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_CHROME_SYSTEM_INFO);
     case support_tool::CRASH_IDS:
-      return "Crash IDs";
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_CRASH_IDS);
     case support_tool::MEMORY_DETAILS:
-      return "Memory Details";
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_MEMORY_DETAILS);
     case support_tool::CHROMEOS_UI_HIERARCHY:
-      return "UI Hierarchy";
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_UI_HIEARCHY);
     case support_tool::CHROMEOS_COMMAND_LINE:
-      return "Additional Chrome OS Platform Logs";
+      return l10n_util::GetStringUTF8(
+          IDS_SUPPORT_TOOL_ADDITIONAL_CROS_PLATFROM_LOGS);
     case support_tool::CHROMEOS_DEVICE_EVENT:
-      return "Device Event";
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_DEVICE_EVENT);
     case support_tool::CHROMEOS_IWL_WIFI_DUMP:
-      return "Intel WiFi NICs Debug Dump";
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_INTEL_WIFI_DEBUG_DUMP);
     case support_tool::CHROMEOS_TOUCH_EVENTS:
-      return "Touch Events";
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_TOUCH_EVENTS);
     case support_tool::CHROMEOS_CROS_API:
-      return "LaCrOS System Information";
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_LACROS_SYSTEM_INFO);
     case support_tool::CHROMEOS_LACROS:
-      return "LaCrOS";
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_LACROS);
     case support_tool::CHROMEOS_REVEN:
-      return "Chrome OS Flex Logs";
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_CHROMEOS_FLEX_LOGS);
     case support_tool::CHROMEOS_DBUS:
-      return "DBus Details";
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_DBUS_DETAILS);
     case support_tool::CHROMEOS_NETWORK_ROUTES:
-      return "Chrome OS Network Routes";
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_CHROMEOS_NETWORK_ROUTES);
     case support_tool::CHROMEOS_SHILL:
-      return "Chrome OS Shill (Connection Manager) Logs";
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_CHROMEOS_SHILL_LOGS);
     case support_tool::POLICIES:
-      return "Policies";
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_POLICIES);
     case support_tool::CHROMEOS_SYSTEM_STATE:
-      return "Chrome OS System State and Logs";
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_CHROMEOS_SYSTEM_STATE);
     case support_tool::CHROMEOS_SYSTEM_LOGS:
-      return "ChromeOS System Logs";
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_CHROMEOS_SYSTEM_LOGS);
+    case support_tool::CHROMEOS_CHROME_USER_LOGS:
+      return l10n_util::GetStringUTF8(
+          IDS_SUPPORT_TOOL_CHROMEOS_CHROME_USER_LOGS);
+    case support_tool::CHROMEOS_BLUETOOTH_FLOSS:
+      return l10n_util::GetStringUTF8(
+          IDS_SUPPORT_TOOL_CHROMEOS_BLUETOOTH_FLOSS);
+    case support_tool::CHROMEOS_CONNECTED_INPUT_DEVICES:
+      return l10n_util::GetStringUTF8(
+          IDS_SUPPORT_TOOL_CHROMEOS_CONNECTED_INPUT_DEVICES);
+    case support_tool::CHROMEOS_TRAFFIC_COUNTERS:
+      return l10n_util::GetStringUTF8(
+          IDS_SUPPORT_TOOL_CHROMEOS_TRAFFIC_COUNTERS);
+    case support_tool::CHROMEOS_VIRTUAL_KEYBOARD:
+      return l10n_util::GetStringUTF8(
+          IDS_SUPPORT_TOOL_CHROMEOS_VIRTUAL_KEYBOARD);
+    case support_tool::CHROMEOS_NETWORK_HEALTH:
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_CHROMEOS_NETWORK_HEALTH);
+    case support_tool::SIGN_IN_STATE:
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_SIGN_IN);
+    case support_tool::PERFORMANCE:
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_PERFORMANCE);
+    case support_tool::CHROMEOS_APP_SERVICE:
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_CHROMEOS_APP_SERVICE);
     default:
       return "Error: Undefined";
   }
@@ -186,14 +154,6 @@ base::Value::Dict GetDataCollectorItemForType(
   return dict;
 }
 
-// Returns the current time in YYYY_MM_DD_HH_mm format.
-std::string GetTimestampString(base::Time timestamp) {
-  base::Time::Exploded tex;
-  timestamp.LocalExplode(&tex);
-  return base::StringPrintf("%04d_%02d_%02d_%02d_%02d", tex.year, tex.month,
-                            tex.day_of_month, tex.hour, tex.minute);
-}
-
 std::string GetDataCollectionModuleQuery(
     std::set<support_tool::DataCollectorType> included_data_collectors) {
   support_tool::DataCollectionModule module;
@@ -210,24 +170,64 @@ std::string GetDataCollectionModuleQuery(
 }
 
 // Returns a URL generation result in the type Support Tool UI expects.
-// type UrlGenerationResult = {
+// type SupportTokenGenerationResult = {
 //   success: boolean,
-//   url: string,
+//   token: string,
 //   errorMessage: string,
 // }
-base::Value::Dict GetURLGenerationResult(bool success,
-                                         std::string url,
-                                         std::string error_message) {
+base::Value::Dict GetSupportTokenGenerationResult(bool success,
+                                                  std::string result,
+                                                  std::string error_message) {
   base::Value::Dict url_generation_response;
-  url_generation_response.Set(support_tool_ui::kUrlGenerationResultSuccess,
-                              success);
-  url_generation_response.Set(support_tool_ui::kUrlGenerationResultUrl, url);
-  url_generation_response.Set(support_tool_ui::kUrlGenerationResultErrorMessage,
-                              error_message);
+  url_generation_response.Set(
+      support_tool_ui::kSupportTokenGenerationResultSuccess, success);
+  url_generation_response.Set(
+      support_tool_ui::kSupportTokenGenerationResultToken, result);
+  url_generation_response.Set(
+      support_tool_ui::kSupportTokenGenerationResultErrorMessage,
+      error_message);
   return url_generation_response;
 }
 
 }  // namespace
+
+// Returns the human readable name corresponding to `type_enum`.
+std::string GetPIITypeDescription(redaction::PIIType type_enum) {
+  switch (type_enum) {
+    case redaction::PIIType::kAndroidAppStoragePath:
+      // App storage path is part of information about an Android app.
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_ANDROID_APP_INFO);
+    case redaction::PIIType::kEmail:
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_EMAIL_ADDRESS);
+    case redaction::PIIType::kGaiaID:
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_GAIA_ID);
+    case redaction::PIIType::kIPPAddress:
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_PRINTING_IPP_ADDRESS);
+    case redaction::PIIType::kIPAddress:
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_IP_ADDRESS);
+    case redaction::PIIType::kCellularLocationInfo:
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_CELLULAR_LOCATION_INFO);
+    case redaction::PIIType::kMACAddress:
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_MAC_ADDRESS);
+    case redaction::PIIType::kUIHierarchyWindowTitles:
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_WINDOW_TITLES);
+    case redaction::PIIType::kURL:
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_URLS);
+    case redaction::PIIType::kSerial:
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_SERIAL_NUMBERS);
+    case redaction::PIIType::kSSID:
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_WIFI_SSID);
+    case redaction::PIIType::kStableIdentifier:
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_STABLE_IDENTIDIERS);
+    case redaction::PIIType::kVolumeLabel:
+      // Volume labels are a part of removable storage paths in various logs.
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_REMOVABLE_STORAGE_NAMES);
+    case redaction::PIIType::kEAP:
+      return l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_EAP);
+    default:
+      return "Error: Undefined";
+  }
+}
 
 // type PIIDataItem = {
 //   piiTypeDescription: string,
@@ -262,16 +262,16 @@ base::Value::List GetDetectedPIIDataItems(const PIIMap& detected_pii) {
   return detected_pii_data_items;
 }
 
-std::set<feedback::PIIType> GetPIITypesToKeep(
+std::set<redaction::PIIType> GetPIITypesToKeep(
     const base::Value::List* pii_items) {
-  std::set<feedback::PIIType> pii_to_keep;
+  std::set<redaction::PIIType> pii_to_keep;
   for (const auto& item : *pii_items) {
     const base::Value::Dict* item_as_dict = item.GetIfDict();
     DCHECK(item_as_dict);
-    absl::optional<bool> keep =
+    std::optional<bool> keep =
         item_as_dict->FindBool(support_tool_ui::kPiiItemKeepKey);
     if (keep && keep.value()) {
-      pii_to_keep.insert(static_cast<feedback::PIIType>(
+      pii_to_keep.insert(static_cast<redaction::PIIType>(
           item_as_dict->FindInt(support_tool_ui::kPiiItemPIITypeKey).value()));
     }
   }
@@ -291,51 +291,25 @@ base::Value::List GetDataCollectorItemsInQuery(std::string module_query) {
   base::Value::List data_collector_list;
   support_tool::DataCollectionModule module;
   InitDataCollectionModuleFromURLQuery(&module, module_query);
-  for (const auto& type : kDataCollectors) {
+  for (const auto& type : GetAllAvailableDataCollectorsOnDevice()) {
     data_collector_list.Append(GetDataCollectorItemForType(module, type));
   }
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  for (const auto& type : kDataCollectorsChromeosAsh) {
-    data_collector_list.Append(GetDataCollectorItemForType(module, type));
-  }
-#if BUILDFLAG(IS_CHROMEOS_WITH_HW_DETAILS)
-  for (const auto& type : kDataCollectorsChromeosHwDetails) {
-    data_collector_list.Append(GetDataCollectorItemForType(module, type));
-  }
-#endif  // BUILDFLAG(IS_CHROMEOS_WITH_HW_DETAILS)
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   return data_collector_list;
 }
 
-base::Value::List GetAllDataCollectors() {
+base::Value::List GetAllDataCollectorItems() {
   base::Value::List data_collector_list;
-  for (const auto& type : kDataCollectors) {
-    data_collector_list.Append(GetDataCollectorItemForType(type));
-  }
-  for (const auto& type : kDataCollectorsChromeosAsh) {
-    data_collector_list.Append(GetDataCollectorItemForType(type));
-  }
-  for (const auto& type : kDataCollectorsChromeosHwDetails) {
+  for (const auto& type : GetAllDataCollectors()) {
     data_collector_list.Append(GetDataCollectorItemForType(type));
   }
   return data_collector_list;
 }
 
-base::Value::List GetAllDataCollectorsForDevice() {
+base::Value::List GetAllDataCollectorItemsForDeviceForTesting() {
   base::Value::List data_collector_list;
-  for (const auto& type : kDataCollectors) {
+  for (const auto& type : GetAllAvailableDataCollectorsOnDevice()) {
     data_collector_list.Append(GetDataCollectorItemForType(type));
   }
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  for (const auto& type : kDataCollectorsChromeosAsh) {
-    data_collector_list.Append(GetDataCollectorItemForType(type));
-  }
-#if BUILDFLAG(IS_CHROMEOS_WITH_HW_DETAILS)
-  for (const auto& type : kDataCollectorsChromeosHwDetails) {
-    data_collector_list.Append(GetDataCollectorItemForType(type));
-  }
-#endif  // BUILDFLAG(IS_CHROMEOS_WITH_HW_DETAILS)
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   return data_collector_list;
 }
 
@@ -345,7 +319,7 @@ std::set<support_tool::DataCollectorType> GetIncludedDataCollectorTypes(
   for (const auto& item : *data_collector_items) {
     const base::Value::Dict* item_as_dict = item.GetIfDict();
     DCHECK(item_as_dict);
-    absl::optional<bool> isIncluded = item_as_dict->FindBool("isIncluded");
+    std::optional<bool> isIncluded = item_as_dict->FindBool("isIncluded");
     if (isIncluded && isIncluded.value()) {
       included_data_collectors.insert(
           static_cast<support_tool::DataCollectorType>(
@@ -356,23 +330,11 @@ std::set<support_tool::DataCollectorType> GetIncludedDataCollectorTypes(
 }
 
 base::Value::Dict GetStartDataCollectionResult(bool success,
-                                               std::string error_message) {
+                                               std::u16string error_message) {
   base::Value::Dict result;
   result.Set("success", success);
   result.Set("errorMessage", error_message);
   return result;
-}
-
-base::FilePath GetDefaultFileToExport(base::FilePath suggested_path,
-                                      const std::string& case_id,
-                                      base::Time timestamp) {
-  std::string timestamp_string = GetTimestampString(timestamp);
-  std::string filename =
-      case_id.empty()
-          ? base::StringPrintf("support_packet_%s", timestamp_string.c_str())
-          : base::StringPrintf("support_packet_%s_%s", case_id.c_str(),
-                               timestamp_string.c_str());
-  return suggested_path.AppendASCII(filename);
 }
 
 base::Value::Dict GenerateCustomizedURL(
@@ -383,9 +345,9 @@ base::Value::Dict GenerateCustomizedURL(
       GetIncludedDataCollectorTypes(data_collector_items);
   if (included_data_collectors.empty()) {
     // If there's no selected data collector to add, consider this as an error.
-    return GetURLGenerationResult(
-        /*success=*/false, /*url=*/std::string(), /*error_message=*/
-        "No data collectors included. Please select a data collector.");
+    return GetSupportTokenGenerationResult(
+        /*success=*/false, /*result=*/std::string(), /*error_message=*/
+        l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_SELECT_DATA_COLLECTOR_ERROR));
   }
   GURL customized_url("chrome://support-tool");
   if (!case_id.empty()) {
@@ -395,6 +357,23 @@ base::Value::Dict GenerateCustomizedURL(
   customized_url = net::AppendQueryParameter(
       customized_url, support_tool_ui::kModuleQuery,
       GetDataCollectionModuleQuery(included_data_collectors));
-  return GetURLGenerationResult(/*success=*/true, /*url=*/customized_url.spec(),
-                                /*error_message=*/std::string());
+  return GetSupportTokenGenerationResult(/*success=*/true,
+                                         /*result=*/customized_url.spec(),
+                                         /*error_message=*/std::string());
+}
+
+base::Value::Dict GenerateSupportToken(
+    const base::Value::List* data_collector_items) {
+  base::Value::Dict url_generation_response;
+  std::set<support_tool::DataCollectorType> included_data_collectors =
+      GetIncludedDataCollectorTypes(data_collector_items);
+  if (included_data_collectors.empty()) {
+    // If there's no selected data collector to add, consider this as an error.
+    return GetSupportTokenGenerationResult(
+        /*success=*/false, /*result=*/std::string(), /*error_message=*/
+        l10n_util::GetStringUTF8(IDS_SUPPORT_TOOL_SELECT_DATA_COLLECTOR_ERROR));
+  }
+  return GetSupportTokenGenerationResult(
+      /*success=*/true, GetDataCollectionModuleQuery(included_data_collectors),
+      /*error_message=*/std::string());
 }

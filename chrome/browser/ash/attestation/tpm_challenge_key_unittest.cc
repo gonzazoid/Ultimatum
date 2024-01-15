@@ -4,7 +4,8 @@
 
 #include "chrome/browser/ash/attestation/tpm_challenge_key.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/gmock_callback_support.h"
 #include "chrome/browser/ash/attestation/mock_tpm_challenge_key_subtle.h"
@@ -61,7 +62,8 @@ class TpmChallengeKeyTest : public ::testing::Test {
   content::BrowserTaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
 
-  MockTpmChallengeKeySubtle* mock_tpm_challenge_key_subtle_ = nullptr;
+  raw_ptr<MockTpmChallengeKeySubtle, DanglingUntriaged>
+      mock_tpm_challenge_key_subtle_ = nullptr;
   std::unique_ptr<TpmChallengeKey> challenge_key_;
   // In the current implementation of TpmChallengeKey the profile is just
   // forwarded, so actual value does not matter.
@@ -89,27 +91,28 @@ class CallbackObserver {
   }
 
   base::RunLoop loop_;
-  absl::optional<TpmChallengeKeyResult> result_;
+  std::optional<TpmChallengeKeyResult> result_;
 };
 
 TEST_F(TpmChallengeKeyTest, PrepareKeyFailed) {
-  const AttestationKeyType kKeyType = KEY_DEVICE;
+  const ::attestation::VerifiedAccessFlow kFlowType =
+      ::attestation::ENTERPRISE_MACHINE;
   const bool kRegisterKey = false;
   const char* const kKeyName = kEmptyKeyName;
 
   EXPECT_CALL(
       *mock_tpm_challenge_key_subtle_,
-      StartPrepareKeyStep(kKeyType, kRegisterKey, ::attestation::KEY_TYPE_RSA,
+      StartPrepareKeyStep(kFlowType, kRegisterKey, ::attestation::KEY_TYPE_RSA,
                           kKeyName, &profile_,
                           /*callback=*/_, /*signals=*/_))
       .WillOnce(RunOnceCallback<5>(TpmChallengeKeyResult::MakeError(
           TpmChallengeKeyResultCode::kGetCertificateFailedError)));
 
   CallbackObserver callback_observer;
-  challenge_key_->BuildResponse(kKeyType, &profile_,
+  challenge_key_->BuildResponse(kFlowType, &profile_,
                                 callback_observer.GetCallback(), GetChallenge(),
                                 kRegisterKey, ::attestation::KEY_TYPE_RSA,
-                                kKeyName, /*signals=*/absl::nullopt);
+                                kKeyName, /*signals=*/std::nullopt);
   callback_observer.WaitForCallback();
 
   EXPECT_EQ(callback_observer.GetResult(),
@@ -118,13 +121,14 @@ TEST_F(TpmChallengeKeyTest, PrepareKeyFailed) {
 }
 
 TEST_F(TpmChallengeKeyTest, SignChallengeFailed) {
-  const AttestationKeyType kKeyType = KEY_USER;
+  const ::attestation::VerifiedAccessFlow kFlowType =
+      ::attestation::ENTERPRISE_USER;
   const bool kRegisterKey = true;
   const char* const kKeyName = kNonDefaultKeyName;
 
   EXPECT_CALL(
       *mock_tpm_challenge_key_subtle_,
-      StartPrepareKeyStep(kKeyType, kRegisterKey, ::attestation::KEY_TYPE_RSA,
+      StartPrepareKeyStep(kFlowType, kRegisterKey, ::attestation::KEY_TYPE_RSA,
                           kKeyName, &profile_,
                           /*callback=*/_, /*signals=*/_))
       .WillOnce(RunOnceCallback<5>(
@@ -136,10 +140,10 @@ TEST_F(TpmChallengeKeyTest, SignChallengeFailed) {
           TpmChallengeKeyResultCode::kSignChallengeFailedError)));
 
   CallbackObserver callback_observer;
-  challenge_key_->BuildResponse(kKeyType, &profile_,
+  challenge_key_->BuildResponse(kFlowType, &profile_,
                                 callback_observer.GetCallback(), GetChallenge(),
                                 kRegisterKey, ::attestation::KEY_TYPE_RSA,
-                                kKeyName, /*signals=*/absl::nullopt);
+                                kKeyName, /*signals=*/std::nullopt);
   callback_observer.WaitForCallback();
 
   EXPECT_EQ(callback_observer.GetResult(),
@@ -148,13 +152,14 @@ TEST_F(TpmChallengeKeyTest, SignChallengeFailed) {
 }
 
 TEST_F(TpmChallengeKeyTest, RegisterKeyFailed) {
-  const AttestationKeyType kKeyType = KEY_USER;
+  const ::attestation::VerifiedAccessFlow kFlowType =
+      ::attestation::ENTERPRISE_USER;
   const bool kRegisterKey = true;
   const char* const kKeyName = kNonDefaultKeyName;
 
   EXPECT_CALL(
       *mock_tpm_challenge_key_subtle_,
-      StartPrepareKeyStep(kKeyType, kRegisterKey, ::attestation::KEY_TYPE_RSA,
+      StartPrepareKeyStep(kFlowType, kRegisterKey, ::attestation::KEY_TYPE_RSA,
                           kKeyName, &profile_,
                           /*callback=*/_, /*signals=*/_))
       .WillOnce(RunOnceCallback<5>(
@@ -171,10 +176,10 @@ TEST_F(TpmChallengeKeyTest, RegisterKeyFailed) {
           TpmChallengeKeyResultCode::kKeyRegistrationFailedError)));
 
   CallbackObserver callback_observer;
-  challenge_key_->BuildResponse(kKeyType, &profile_,
+  challenge_key_->BuildResponse(kFlowType, &profile_,
                                 callback_observer.GetCallback(), GetChallenge(),
                                 kRegisterKey, ::attestation::KEY_TYPE_RSA,
-                                kKeyName, /*signals=*/absl::nullopt);
+                                kKeyName, /*signals=*/std::nullopt);
   callback_observer.WaitForCallback();
 
   EXPECT_EQ(callback_observer.GetResult(),
@@ -183,13 +188,14 @@ TEST_F(TpmChallengeKeyTest, RegisterKeyFailed) {
 }
 
 TEST_F(TpmChallengeKeyTest, DontRegisterSuccess) {
-  const AttestationKeyType kKeyType = KEY_USER;
+  const ::attestation::VerifiedAccessFlow kFlowType =
+      ::attestation::ENTERPRISE_USER;
   const bool kRegisterKey = false;
   const char* const kKeyName = kEmptyKeyName;
 
   EXPECT_CALL(
       *mock_tpm_challenge_key_subtle_,
-      StartPrepareKeyStep(kKeyType, kRegisterKey, ::attestation::KEY_TYPE_RSA,
+      StartPrepareKeyStep(kFlowType, kRegisterKey, ::attestation::KEY_TYPE_RSA,
                           kKeyName, &profile_,
                           /*callback=*/_, /*signals=*/_))
       .WillOnce(RunOnceCallback<5>(
@@ -205,10 +211,10 @@ TEST_F(TpmChallengeKeyTest, DontRegisterSuccess) {
       .Times(0);
 
   CallbackObserver callback_observer;
-  challenge_key_->BuildResponse(kKeyType, &profile_,
+  challenge_key_->BuildResponse(kFlowType, &profile_,
                                 callback_observer.GetCallback(), GetChallenge(),
                                 kRegisterKey, ::attestation::KEY_TYPE_RSA,
-                                kKeyName, /*signals=*/absl::nullopt);
+                                kKeyName, /*signals=*/std::nullopt);
   callback_observer.WaitForCallback();
 
   EXPECT_EQ(
@@ -217,13 +223,14 @@ TEST_F(TpmChallengeKeyTest, DontRegisterSuccess) {
 }
 
 TEST_F(TpmChallengeKeyTest, RegisterSuccess) {
-  const AttestationKeyType kKeyType = KEY_USER;
+  const ::attestation::VerifiedAccessFlow kFlowType =
+      ::attestation::ENTERPRISE_USER;
   const bool kRegisterKey = true;
   const char* const kKeyName = kEmptyKeyName;
 
   EXPECT_CALL(
       *mock_tpm_challenge_key_subtle_,
-      StartPrepareKeyStep(kKeyType, kRegisterKey, ::attestation::KEY_TYPE_RSA,
+      StartPrepareKeyStep(kFlowType, kRegisterKey, ::attestation::KEY_TYPE_RSA,
                           kKeyName, &profile_,
                           /*callback=*/_, /*signals=*/_))
       .WillOnce(RunOnceCallback<5>(
@@ -239,10 +246,10 @@ TEST_F(TpmChallengeKeyTest, RegisterSuccess) {
       .WillOnce(RunOnceCallback<0>(TpmChallengeKeyResult::MakeSuccess()));
 
   CallbackObserver callback_observer;
-  challenge_key_->BuildResponse(kKeyType, &profile_,
+  challenge_key_->BuildResponse(kFlowType, &profile_,
                                 callback_observer.GetCallback(), GetChallenge(),
                                 kRegisterKey, ::attestation::KEY_TYPE_RSA,
-                                kKeyName, /*signals=*/absl::nullopt);
+                                kKeyName, /*signals=*/std::nullopt);
   callback_observer.WaitForCallback();
 
   EXPECT_EQ(

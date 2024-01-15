@@ -17,12 +17,14 @@
 #include "chrome/test/base/testing_profile_manager.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "content/public/test/browser_task_environment.h"
+#include "net/base/host_port_pair.h"
 #include "net/cert/x509_certificate.h"
 #include "net/ssl/client_cert_identity_test_util.h"
 #include "net/test/cert_test_util.h"
 #include "net/test/test_data_directory.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "url/gurl.h"
 
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
 #include "base/values.h"
@@ -59,6 +61,13 @@ TEST(ManagedBrowserUtils, HasManagedConnector) {
 
   std::unique_ptr<TestingProfile> profile = builder.Build();
   EXPECT_TRUE(chrome::enterprise_util::IsBrowserManaged(profile.get()));
+}
+
+TEST(ManagedBrowserUtils, GetRequestingUrl) {
+  GURL expected("https://hostname:1234");
+  net::HostPortPair host_port_pair("hostname", 1234);
+  EXPECT_EQ(expected,
+            chrome::enterprise_util::GetRequestingUrl(host_port_pair));
 }
 
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
@@ -133,21 +142,17 @@ class AutoSelectCertificateTest : public testing::Test {
         base::Value(std::move(root)));
   }
 
-  base::Value CreateFilterValue(const std::string& issuer,
-                                const std::string& subject) {
+  base::Value::Dict CreateFilterValue(const std::string& issuer,
+                                      const std::string& subject) {
     EXPECT_FALSE(issuer.empty() && subject.empty());
 
-    base::Value filter(base::Value::Type::DICTIONARY);
+    base::Value::Dict filter;
     if (!issuer.empty()) {
-      base::Value issuer_value(base::Value::Type::DICTIONARY);
-      issuer_value.SetStringKey("CN", issuer);
-      filter.SetKey("ISSUER", std::move(issuer_value));
+      filter.Set("ISSUER", base::Value::Dict().Set("CN", issuer));
     }
 
     if (!subject.empty()) {
-      base::Value subject_value(base::Value::Type::DICTIONARY);
-      subject_value.SetStringKey("CN", subject);
-      filter.SetKey("SUBJECT", std::move(subject_value));
+      filter.Set("SUBJECT", base::Value::Dict().Set("CN", subject));
     }
 
     return filter;
@@ -164,7 +169,7 @@ class AutoSelectCertificateTest : public testing::Test {
   scoped_refptr<net::X509Certificate> client_1_;
   scoped_refptr<net::X509Certificate> client_2_;
 
-  raw_ptr<TestingProfile> profile_;
+  raw_ptr<TestingProfile, DanglingUntriaged> profile_;
   std::unique_ptr<TestingProfileManager> profile_manager_;
 };
 

@@ -5,10 +5,12 @@
 #ifndef CC_TILES_RASTER_TILE_PRIORITY_QUEUE_ALL_H_
 #define CC_TILES_RASTER_TILE_PRIORITY_QUEUE_ALL_H_
 
+#include <memory>
 #include <set>
 #include <utility>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "cc/cc_export.h"
 #include "cc/layers/picture_layer_impl.h"
 #include "cc/tiles/raster_tile_priority_queue.h"
@@ -33,8 +35,10 @@ class CC_EXPORT RasterTilePriorityQueueAll : public RasterTilePriorityQueue {
  private:
   friend class RasterTilePriorityQueue;
 
-  void Build(const std::vector<PictureLayerImpl*>& active_layers,
-             const std::vector<PictureLayerImpl*>& pending_layers,
+  void Build(const std::vector<raw_ptr<PictureLayerImpl, VectorExperimental>>&
+                 active_layers,
+             const std::vector<raw_ptr<PictureLayerImpl, VectorExperimental>>&
+                 pending_layers,
              TreePriority tree_priority);
 
   std::vector<std::unique_ptr<TilingSetRasterQueueAll>>& GetNextQueues();

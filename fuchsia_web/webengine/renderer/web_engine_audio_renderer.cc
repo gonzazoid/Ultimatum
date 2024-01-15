@@ -6,17 +6,16 @@
 
 #include <lib/sys/cpp/component_context.h>
 
-#include "base/bind.h"
 #include "base/fuchsia/fuchsia_logging.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/notreached.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "media/base/cdm_context.h"
 #include "media/base/decoder_buffer.h"
 #include "media/base/renderer_client.h"
-#include "media/fuchsia/cdm/fuchsia_cdm_context.h"
+#include "media/cdm/fuchsia/fuchsia_cdm_context.h"
 #include "media/fuchsia/common/decrypting_sysmem_buffer_stream.h"
 #include "media/fuchsia/common/passthrough_sysmem_buffer_stream.h"
 
@@ -24,7 +23,7 @@ namespace {
 
 // nullopt is returned in case the codec is not supported. nullptr is returned
 // for uncompressed PCM streams.
-absl::optional<std::unique_ptr<fuchsia::media::Compression>>
+std::optional<std::unique_ptr<fuchsia::media::Compression>>
 GetFuchsiaCompressionFromDecoderConfig(media::AudioDecoderConfig config) {
   auto compression = std::make_unique<fuchsia::media::Compression>();
   switch (config.codec()) {
@@ -50,7 +49,7 @@ GetFuchsiaCompressionFromDecoderConfig(media::AudioDecoderConfig config) {
       break;
 
     default:
-      return absl::nullopt;
+      return std::nullopt;
   }
 
   if (!config.extra_data().empty()) {
@@ -60,7 +59,7 @@ GetFuchsiaCompressionFromDecoderConfig(media::AudioDecoderConfig config) {
   return std::move(compression);
 }
 
-absl::optional<fuchsia::media::AudioSampleFormat>
+std::optional<fuchsia::media::AudioSampleFormat>
 GetFuchsiaSampleFormatFromSampleFormat(media::SampleFormat sample_format) {
   switch (sample_format) {
     case media::kSampleFormatU8:
@@ -73,7 +72,7 @@ GetFuchsiaSampleFormatFromSampleFormat(media::SampleFormat sample_format) {
       return fuchsia::media::AudioSampleFormat::FLOAT;
 
     default:
-      return absl::nullopt;
+      return std::nullopt;
   }
 }
 
@@ -254,7 +253,7 @@ void WebEngineAudioRenderer::InitializeStreamSink() {
 
   // Set sample_format for uncompressed streams.
   if (!compression.value()) {
-    absl::optional<fuchsia::media::AudioSampleFormat> sample_format =
+    std::optional<fuchsia::media::AudioSampleFormat> sample_format =
         GetFuchsiaSampleFormatFromSampleFormat(config.sample_format());
     if (!sample_format) {
       LOG(ERROR) << "Unsupported sample format: "
@@ -276,7 +275,31 @@ void WebEngineAudioRenderer::InitializeStreamSink() {
   if (GetPlaybackState() == PlaybackState::kStartPending)
     StartAudioConsumer();
 
-  ScheduleReadDemuxerStream();
+  ScheduleBufferTimers();
+}
+
+void WebEngineAudioRenderer::UpdatePlaybackRate() {
+  float target_rate =
+      (GetPlaybackState() == PlaybackState::kPaused) ? 0.0 : playback_rate_;
+
+  audio_consumer_->SetRate(target_rate);
+
+  // AudioConsumer will update media timeline asynchronously. That update is
+  // processed in OnAudioConsumerStatusChanged(). This might cause the clock to
+  // go back. It's not desirable, e.g. because VideoRenderer could drop some
+  // video frames that should be shown when the stream is resumed. To avoid this
+  // issue, update the timeline synchronously. OnAudioConsumerStatusChanged()
+  // will still process the update from AudioConsumer to save the position when
+  // the stream was actually paused, but that update would not move the clock
+  // backward.
+  if (target_rate != 0.0) {
+    return;
+  }
+
+  base::AutoLock lock(timeline_lock_);
+  media_pos_ = CurrentMediaTimeLocked();
+  reference_time_ = base::TimeTicks::Now();
+  media_delta_ = 0;
 }
 
 media::TimeSource* WebEngineAudioRenderer::GetTimeSource() {
@@ -296,7 +319,7 @@ void WebEngineAudioRenderer::StartPlaying() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
   renderer_started_ = true;
-  ScheduleReadDemuxerStream();
+  ScheduleBufferTimers();
 }
 
 void WebEngineAudioRenderer::SetVolume(float volume) {
@@ -307,7 +330,7 @@ void WebEngineAudioRenderer::SetVolume(float volume) {
 }
 
 void WebEngineAudioRenderer::SetLatencyHint(
-    absl::optional<base::TimeDelta> latency_hint) {
+    std::optional<base::TimeDelta> latency_hint) {
   // TODO(crbug.com/1131116): Implement at some later date after we've vetted
   // the API shape and usefulness outside of fuchsia.
   NOTIMPLEMENTED();
@@ -328,11 +351,33 @@ void WebEngineAudioRenderer::SetWasPlayedWithUserActivation(
 void WebEngineAudioRenderer::StartTicking() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
+  switch (GetPlaybackState()) {
+    case PlaybackState::kStopped: {
+      base::AutoLock lock(timeline_lock_);
+      SetPlaybackState(PlaybackState::kStartPending);
+      break;
+    }
+
+    case PlaybackState::kStartPending:
+    case PlaybackState::kStarting:
+    case PlaybackState::kPlaying:
+      NOTREACHED_NORETURN();
+
+    case PlaybackState::kPaused: {
+      // If the stream was paused then we can unpause it without restarting
+      // AudioConsumer.
+      {
+        base::AutoLock lock(timeline_lock_);
+        SetPlaybackState(PlaybackState::kPlaying);
+      }
+      UpdatePlaybackRate();
+      return;
+    }
+  }
+
   // If StreamSink hasn't been created yet, then delay starting AudioConsumer
   // until StreamSink is created.
   if (!stream_sink_) {
-    base::AutoLock lock(timeline_lock_);
-    SetPlaybackState(PlaybackState::kStartPending);
     return;
   }
 
@@ -341,22 +386,11 @@ void WebEngineAudioRenderer::StartTicking() {
 
 void WebEngineAudioRenderer::StartAudioConsumer() {
   DCHECK(stream_sink_);
+  DCHECK_EQ(GetPlaybackState(), PlaybackState::kStartPending);
 
   fuchsia::media::AudioConsumerStartFlags flags{};
   if (demuxer_stream_->liveness() == media::StreamLiveness::kLive) {
     flags = fuchsia::media::AudioConsumerStartFlags::LOW_LATENCY;
-  }
-
-  // Stop the AudioConsumer if it's been started.
-  switch (GetPlaybackState()) {
-    case PlaybackState::kStopped:
-    case PlaybackState::kStartPending:
-      break;
-
-    case PlaybackState::kStarting:
-    case PlaybackState::kPlaying:
-      audio_consumer_->Stop();
-      break;
   }
 
   base::TimeDelta media_pos;
@@ -368,44 +402,58 @@ void WebEngineAudioRenderer::StartAudioConsumer() {
 
   audio_consumer_->Start(flags, fuchsia::media::NO_TIMESTAMP,
                          media_pos.ToZxDuration());
+  UpdatePlaybackRate();
 }
 
 void WebEngineAudioRenderer::StopTicking() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(GetPlaybackState() != PlaybackState::kStopped);
 
-  audio_consumer_->Stop();
+  switch (GetPlaybackState()) {
+    case PlaybackState::kStopped:
+    case PlaybackState::kPaused:
+      NOTREACHED();
+      break;
 
-  base::AutoLock lock(timeline_lock_);
-  UpdateTimelineOnStop();
-  SetPlaybackState(PlaybackState::kStopped);
+    case PlaybackState::kStartPending: {
+      base::AutoLock lock(timeline_lock_);
+      SetPlaybackState(PlaybackState::kStopped);
+      break;
+    }
+
+    case PlaybackState::kStarting:
+    case PlaybackState::kPlaying: {
+      {
+        base::AutoLock lock(timeline_lock_);
+        SetPlaybackState(PlaybackState::kPaused);
+      }
+      UpdatePlaybackRate();
+      break;
+    }
+  }
 }
 
 void WebEngineAudioRenderer::SetPlaybackRate(double playback_rate) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
-  audio_consumer_->SetRate(playback_rate);
-
-  // AudioConsumer will update media timeline asynchronously. That update is
-  // processed in OnAudioConsumerStatusChanged(). This might cause the clock to
-  // go back. It's not desirable, e.g. because VideoRenderer could drop some
-  // video frames that should be shown when the stream is resumed. To avoid this
-  // issue update the timeline synchronously. OnAudioConsumerStatusChanged()
-  // will still process the update from AudioConsumer to save the position when
-  // the stream was actually paused, but that update would not move the clock
-  // backward.
-  if (playback_rate == 0.0) {
-    base::AutoLock lock(timeline_lock_);
-    UpdateTimelineOnStop();
-  }
+  playback_rate_ = playback_rate;
+  UpdatePlaybackRate();
 }
 
 void WebEngineAudioRenderer::SetMediaTime(base::TimeDelta time) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK(GetPlaybackState() == PlaybackState::kStopped);
+
+  bool stop_audio_consumer = false;
 
   {
     base::AutoLock lock(timeline_lock_);
+
+    if (GetPlaybackState() == PlaybackState::kPaused) {
+      SetPlaybackState(PlaybackState::kStopped);
+      stop_audio_consumer = true;
+    }
+    DCHECK(GetPlaybackState() == PlaybackState::kStopped);
+
     media_pos_ = time;
 
     // Reset reference timestamp. This is necessary to ensure that the correct
@@ -415,8 +463,12 @@ void WebEngineAudioRenderer::SetMediaTime(base::TimeDelta time) {
     reference_time_ = base::TimeTicks();
   }
 
+  if (stop_audio_consumer) {
+    audio_consumer_->Stop();
+  }
+
   FlushInternal();
-  ScheduleReadDemuxerStream();
+  ScheduleBufferTimers();
 }
 
 base::TimeDelta WebEngineAudioRenderer::CurrentMediaTime() {
@@ -431,29 +483,27 @@ bool WebEngineAudioRenderer::GetWallClockTimes(
     const std::vector<base::TimeDelta>& media_timestamps,
     std::vector<base::TimeTicks>* wall_clock_times) {
   wall_clock_times->reserve(media_timestamps.size());
-  auto now = base::TimeTicks::Now();
 
   base::AutoLock lock(timeline_lock_);
 
   const bool is_time_moving = IsTimeMoving();
 
   if (media_timestamps.empty()) {
-    wall_clock_times->push_back(is_time_moving ? now : reference_time_);
+    wall_clock_times->push_back(is_time_moving ? base::TimeTicks::Now()
+                                               : reference_time_);
     return is_time_moving;
   }
 
-  base::TimeTicks wall_clock_base = is_time_moving ? reference_time_ : now;
+  base::TimeTicks wall_clock_base =
+      is_time_moving ? reference_time_ : base::TimeTicks::Now();
 
   for (base::TimeDelta timestamp : media_timestamps) {
-    base::TimeTicks wall_clock_time;
-
     auto relative_pos = timestamp - media_pos_;
     if (is_time_moving) {
       // See https://fuchsia.dev/reference/fidl/fuchsia.media#formulas .
       relative_pos = relative_pos * reference_delta_ / media_delta_;
     }
-    wall_clock_time = wall_clock_base + relative_pos;
-    wall_clock_times->push_back(wall_clock_time);
+    wall_clock_times->push_back(wall_clock_base + relative_pos);
   }
 
   return is_time_moving;
@@ -476,6 +526,9 @@ void WebEngineAudioRenderer::OnError(media::PipelineStatus status) {
   audio_consumer_.Unbind();
   stream_sink_.Unbind();
   sysmem_buffer_stream_.reset();
+  read_timer_.Stop();
+  out_of_buffer_timer_.Stop();
+  renderer_started_ = false;
 
   if (is_demuxer_read_pending_) {
     drop_next_demuxer_read_result_ = true;
@@ -504,7 +557,7 @@ void WebEngineAudioRenderer::OnAudioConsumerStatusChanged(
     return;
   }
 
-  bool reschedule_read_timer = false;
+  bool reschedule_timers = false;
 
   if (status.has_presentation_timeline()) {
     if (GetPlaybackState() != PlaybackState::kStopped) {
@@ -519,7 +572,7 @@ void WebEngineAudioRenderer::OnAudioConsumerStatusChanged(
       reference_delta_ = status.presentation_timeline().reference_delta;
       media_delta_ = status.presentation_timeline().subject_delta;
 
-      reschedule_read_timer = true;
+      reschedule_timers = true;
     }
   }
 
@@ -529,7 +582,7 @@ void WebEngineAudioRenderer::OnAudioConsumerStatusChanged(
     DCHECK(!new_min_lead_time.is_zero());
     if (new_min_lead_time != min_lead_time_) {
       min_lead_time_ = new_min_lead_time;
-      reschedule_read_timer = true;
+      reschedule_timers = true;
     }
   }
   if (status.has_max_lead_time()) {
@@ -538,49 +591,80 @@ void WebEngineAudioRenderer::OnAudioConsumerStatusChanged(
     DCHECK(!new_max_lead_time.is_zero());
     if (new_max_lead_time != max_lead_time_) {
       max_lead_time_ = new_max_lead_time;
-      reschedule_read_timer = true;
+      reschedule_timers = true;
     }
   }
 
-  if (reschedule_read_timer) {
-    read_timer_.Stop();
-    ScheduleReadDemuxerStream();
+  if (reschedule_timers) {
+    ScheduleBufferTimers();
   }
 
   RequestAudioConsumerStatus();
 }
 
-void WebEngineAudioRenderer::ScheduleReadDemuxerStream() {
+void WebEngineAudioRenderer::ScheduleBufferTimers() {
+  std::vector<base::TimeDelta> media_timestamps;
+  if (!last_packet_timestamp_.is_min()) {
+    media_timestamps.push_back(last_packet_timestamp_);
+  }
+  std::vector<base::TimeTicks> wall_clock_times;
+  bool is_time_moving = GetWallClockTimes(media_timestamps, &wall_clock_times);
+
+  ScheduleReadDemuxerStream(is_time_moving, wall_clock_times[0]);
+  ScheduleOutOfBufferTimer(is_time_moving, wall_clock_times[0]);
+}
+
+void WebEngineAudioRenderer::ScheduleReadDemuxerStream(
+    bool is_time_moving,
+    base::TimeTicks end_of_buffer_time) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
-  if (!renderer_started_ || !demuxer_stream_ || read_timer_.IsRunning() ||
-      is_demuxer_read_pending_ || is_at_end_of_stream_) {
+  read_timer_.Stop();
+
+  if (!renderer_started_ || !demuxer_stream_ || is_demuxer_read_pending_ ||
+      is_at_end_of_stream_) {
     return;
   }
 
-  base::TimeDelta next_read_delay;
-  if (!last_packet_timestamp_.is_min()) {
-    std::vector<base::TimeTicks> wall_clock_times;
-    bool is_time_moving =
-        GetWallClockTimes({last_packet_timestamp_}, &wall_clock_times);
-    base::TimeDelta relative_buffer_pos =
-        wall_clock_times[0] - base::TimeTicks::Now();
+  base::TimeTicks next_read_time;
 
+  // If playback is not active then there is no need to buffer more.
+  if (!is_time_moving) {
     // Check if we have buffered more than |max_lead_time_|.
-    if (relative_buffer_pos >= max_lead_time_) {
-      // If playback is not active then there is no need to buffer more.
-      if (!is_time_moving)
-        return;
-
-      // If the buffer is larger than |max_lead_time_|, then the next read
-      // should be delayed.
-      next_read_delay = relative_buffer_pos - max_lead_time_;
+    if (end_of_buffer_time >= base::TimeTicks::Now() + max_lead_time_) {
+      return;
     }
   }
 
-  read_timer_.Start(FROM_HERE, next_read_delay,
+  // Schedule the next read at the time when the buffer size will be below
+  // `max_lead_time_` (may be in the past).
+  next_read_time = end_of_buffer_time - max_lead_time_;
+
+  read_timer_.Start(FROM_HERE, next_read_time,
                     base::BindOnce(&WebEngineAudioRenderer::ReadDemuxerStream,
                                    base::Unretained(this)));
+}
+
+void WebEngineAudioRenderer::ScheduleOutOfBufferTimer(
+    bool is_time_moving,
+    base::TimeTicks end_of_buffer_time) {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+
+  out_of_buffer_timer_.Stop();
+
+  if (buffer_state_ == media::BUFFERING_HAVE_NOTHING || !is_time_moving ||
+      is_at_end_of_stream_) {
+    return;
+  }
+
+  // Time when the `stream_sink_` will run out of buffer.
+  base::TimeTicks out_of_buffer_time = end_of_buffer_time - min_lead_time_;
+
+  out_of_buffer_timer_.Start(
+      FROM_HERE, out_of_buffer_time,
+      base::BindOnce(&WebEngineAudioRenderer::SetBufferState,
+                     base::Unretained(this), media::BUFFERING_HAVE_NOTHING),
+      base::subtle::DelayPolicy::kFlexibleNoSooner);
 }
 
 void WebEngineAudioRenderer::ReadDemuxerStream() {
@@ -590,21 +674,22 @@ void WebEngineAudioRenderer::ReadDemuxerStream() {
 
   is_demuxer_read_pending_ = true;
   demuxer_stream_->Read(
-      base::BindOnce(&WebEngineAudioRenderer::OnDemuxerStreamReadDone,
-                     weak_factory_.GetWeakPtr()));
+      1, base::BindOnce(&WebEngineAudioRenderer::OnDemuxerStreamReadDone,
+                        weak_factory_.GetWeakPtr()));
 }
-
 void WebEngineAudioRenderer::OnDemuxerStreamReadDone(
     media::DemuxerStream::Status read_status,
-    scoped_refptr<media::DecoderBuffer> buffer) {
+    media::DemuxerStream::DecoderBufferVector buffers) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(is_demuxer_read_pending_);
+  DCHECK_LE(buffers.size(), 1u)
+      << "ReadDemuxerStream() only reads a single buffer.";
 
   is_demuxer_read_pending_ = false;
 
   if (drop_next_demuxer_read_result_) {
     drop_next_demuxer_read_result_ = false;
-    ScheduleReadDemuxerStream();
+    ScheduleBufferTimers();
     return;
   }
 
@@ -619,7 +704,7 @@ void WebEngineAudioRenderer::OnDemuxerStreamReadDone(
 
       // Continue reading the stream. Decryptor won't finish output buffer
       // initialization until it starts receiving data on the input.
-      ScheduleReadDemuxerStream();
+      ScheduleBufferTimers();
 
       client_->OnAudioConfigChange(demuxer_stream_->audio_decoder_config());
     } else {
@@ -627,6 +712,9 @@ void WebEngineAudioRenderer::OnDemuxerStreamReadDone(
     }
     return;
   }
+
+  scoped_refptr<media::DecoderBuffer> buffer = std::move(buffers[0]);
+  DCHECK(buffer);
 
   if (buffer->end_of_stream()) {
     is_at_end_of_stream_ = true;
@@ -654,7 +742,7 @@ void WebEngineAudioRenderer::OnDemuxerStreamReadDone(
 
   sysmem_buffer_stream_->EnqueueBuffer(std::move(buffer));
 
-  ScheduleReadDemuxerStream();
+  ScheduleBufferTimers();
 }
 
 void WebEngineAudioRenderer::SendInputPacket(
@@ -692,11 +780,14 @@ void WebEngineAudioRenderer::OnStreamSendDone(
     GetWallClockTimes({packet->timestamp()}, &wall_clock_times);
     base::TimeDelta relative_buffer_pos =
         wall_clock_times[0] - base::TimeTicks::Now();
-    if (relative_buffer_pos >= min_lead_time_)
+    if (relative_buffer_pos >= min_lead_time_) {
       SetBufferState(media::BUFFERING_HAVE_ENOUGH);
-  }
 
-  ScheduleReadDemuxerStream();
+      // Reschedule timers to ensure that the state is changed back to
+      // `BUFFERING_HAVE_NOTHING` when necessary.
+      ScheduleBufferTimers();
+    }
+  }
 }
 
 void WebEngineAudioRenderer::SetBufferState(
@@ -710,7 +801,8 @@ void WebEngineAudioRenderer::SetBufferState(
 
 void WebEngineAudioRenderer::FlushInternal() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK(GetPlaybackState() == PlaybackState::kStopped || is_at_end_of_stream_);
+  DCHECK(GetPlaybackState() == PlaybackState::kStopped ||
+         GetPlaybackState() == PlaybackState::kPaused || is_at_end_of_stream_);
 
   if (stream_sink_)
     stream_sink_->DiscardAllPacketsNoReply();
@@ -718,6 +810,7 @@ void WebEngineAudioRenderer::FlushInternal() {
   SetBufferState(media::BUFFERING_HAVE_NOTHING);
   last_packet_timestamp_ = base::TimeDelta::Min();
   read_timer_.Stop();
+  out_of_buffer_timer_.Stop();
   is_at_end_of_stream_ = false;
 
   if (is_demuxer_read_pending_) {
@@ -734,18 +827,7 @@ bool WebEngineAudioRenderer::IsTimeMoving() {
   return state_ == PlaybackState::kPlaying && media_delta_ > 0;
 }
 
-void WebEngineAudioRenderer::UpdateTimelineOnStop() {
-  if (!IsTimeMoving())
-    return;
-
-  media_pos_ = CurrentMediaTimeLocked();
-  reference_time_ = base::TimeTicks::Now();
-  media_delta_ = 0;
-}
-
 base::TimeDelta WebEngineAudioRenderer::CurrentMediaTimeLocked() {
-  DCHECK(IsTimeMoving());
-
   // Calculate media position using formula specified by the TimelineFunction.
   // See https://fuchsia.dev/reference/fidl/fuchsia.media#formulas .
   return media_pos_ + (base::TimeTicks::Now() - reference_time_) *
@@ -782,8 +864,6 @@ void WebEngineAudioRenderer::OnSysmemBufferStreamOutputPacket(
     // The packet will be sent after StreamSink is connected.
     delayed_packets_.push_back(std::move(packet));
   }
-
-  ScheduleReadDemuxerStream();
 }
 
 void WebEngineAudioRenderer::OnSysmemBufferStreamEndOfStream() {

@@ -14,8 +14,9 @@
 #include "ash/public/cpp/arc_resize_lock_type.h"
 #include "ash/public/cpp/resize_shadow_type.h"
 #include "ash/public/cpp/window_properties.h"
-#include "base/bind.h"
-#include "base/callback_forward.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
@@ -65,8 +66,7 @@ class TestCompatModeButtonController : public CompatModeButtonController {
   }
 
   // CompatModeButtonController:
-  void Update(ArcResizeLockPrefDelegate* pref_delegate,
-              aura::Window* window) override {
+  void Update(aura::Window* window) override {
     update_compat_mode_button_called.insert(window);
   }
 
@@ -150,7 +150,7 @@ class ArcResizeLockManagerTest : public CompatModeTestBase {
   TestArcResizeLockManager arc_resize_lock_manager_;
 
   // Owned by |arc_resize_lock_manager_|.
-  TestCompatModeButtonController* test_compat_mode_button_controller_;
+  raw_ptr<TestCompatModeButtonController> test_compat_mode_button_controller_;
 };
 
 TEST_F(ArcResizeLockManagerTest, ConstructDestruct) {}

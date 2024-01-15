@@ -25,32 +25,25 @@ import org.chromium.base.Callback;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.browser.share.long_screenshots.bitmap_generation.LongScreenshotsEntry.EntryStatus;
 import org.chromium.chrome.browser.tab.Tab;
-import org.chromium.components.paintpreview.player.CompositorStatus;
 
 /** Tests for the LongScreenshotsEntry. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class LongScreenshotsEntryTest {
-    @Mock
-    private Context mContext;
+    @Mock private Context mContext;
 
-    @Mock
-    private Tab mTab;
+    @Mock private Tab mTab;
 
-    @Mock
-    private LongScreenshotsCompositor mCompositor;
+    @Mock private LongScreenshotsCompositor mCompositor;
 
-    @Mock
-    private LongScreenshotsTabService mTabService;
+    @Mock private LongScreenshotsTabService mTabService;
 
-    @Mock
-    private ScreenshotBoundsManager mBoundsManager;
+    @Mock private ScreenshotBoundsManager mBoundsManager;
 
     private Bitmap mTestBitmap = Bitmap.createBitmap(512, 1024, Bitmap.Config.ARGB_8888);
 
     class TestEntryListener implements LongScreenshotsEntry.EntryListener {
-        @EntryStatus
-        int mReturnedStatus;
+        @EntryStatus int mReturnedStatus;
 
         @Override
         public void onResult(@EntryStatus int status) {
@@ -72,14 +65,6 @@ public class LongScreenshotsEntryTest {
 
         void throwErrorOnComposite() {
             mThrowErrorOnComposite = true;
-        }
-
-        public void setCompositorStatus(@CompositorStatus int status) {
-            mGeneratorCallBack.onCompositorResult(status);
-        }
-
-        public void setCaptureStatus(@Status int status) {
-            mGeneratorCallBack.onCaptureResult(status);
         }
 
         @Override
@@ -105,13 +90,16 @@ public class LongScreenshotsEntryTest {
     public void testSuccessfulEntry() {
         TestBitmapGenerator testGenerator = new TestBitmapGenerator(new Rect(0, 0, 200, 1000));
 
-        LongScreenshotsEntry entry = new LongScreenshotsEntry(
-                testGenerator, new Rect(0, 1000, 0, 2000), new Callback<Integer>() {
-                    @Override
-                    public void onResult(Integer result) {
-                        assertEquals((int) result, 2097152);
-                    }
-                });
+        LongScreenshotsEntry entry =
+                new LongScreenshotsEntry(
+                        testGenerator,
+                        new Rect(0, 1000, 0, 2000),
+                        new Callback<Integer>() {
+                            @Override
+                            public void onResult(Integer result) {
+                                assertEquals((int) result, 2097152);
+                            }
+                        });
         TestEntryListener entryListener = new TestEntryListener();
         entry.setListener(entryListener);
         entry.generateBitmap();
@@ -126,13 +114,16 @@ public class LongScreenshotsEntryTest {
         TestBitmapGenerator testGenerator = new TestBitmapGenerator(new Rect(0, 0, 200, 1000));
         testGenerator.throwErrorOnComposite();
 
-        LongScreenshotsEntry entry = new LongScreenshotsEntry(
-                testGenerator, new Rect(0, 1000, 0, 2000), new Callback<Integer>() {
-                    @Override
-                    public void onResult(Integer result) {
-                        fail("MemoryUsage should not be called");
-                    }
-                });
+        LongScreenshotsEntry entry =
+                new LongScreenshotsEntry(
+                        testGenerator,
+                        new Rect(0, 1000, 0, 2000),
+                        new Callback<Integer>() {
+                            @Override
+                            public void onResult(Integer result) {
+                                fail("MemoryUsage should not be called");
+                            }
+                        });
         TestEntryListener entryListener = new TestEntryListener();
         entry.setListener(entryListener);
         entry.generateBitmap();

@@ -27,7 +27,7 @@ void HostStopper::StopLocalHost(std::string access_token,
       base::BindOnce(&HostStopper::OnConfigLoaded, weak_ptr_));
 }
 
-void HostStopper::OnConfigLoaded(absl::optional<base::Value::Dict> config) {
+void HostStopper::OnConfigLoaded(std::optional<base::Value::Dict> config) {
   const std::string* hostId = nullptr;
   if (!config || !(hostId = config->FindString("host_id"))) {
     std::move(on_done_).Run();
@@ -48,16 +48,19 @@ void HostStopper::OnStopped(DaemonController::AsyncResult) {
   for (auto i = 0; !stopped && i < 10; i++) {
     stopped =
         (daemon_controller_->GetState() == DaemonController::STATE_STOPPED);
-    if (!stopped)
+    if (!stopped) {
       base::PlatformThread::Sleep(base::Seconds(1));
+    }
   }
-  if (!stopped)
+  if (!stopped) {
     LOG(WARNING) << "Unable to stop existing host process. Setup will "
                  << "continue, but you may need to reboot to complete it.";
+  }
   std::move(on_done_).Run();
 }
 
-void HostStopper::OnHostRegistered(const std::string& authorization_code) {
+void HostStopper::OnHostRegistered(const std::string& host_id,
+                                   const std::string& authorization_code) {
   NOTREACHED();
 }
 

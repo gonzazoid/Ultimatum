@@ -5,27 +5,25 @@
 #include "mojo/core/request_context.h"
 
 #include "base/check.h"
-#include "base/lazy_instance.h"
-#include "base/threading/thread_local.h"
+#include "third_party/abseil-cpp/absl/base/attributes.h"
 
 namespace mojo {
 namespace core {
 
 namespace {
 
-base::LazyInstance<base::ThreadLocalPointer<RequestContext>>::Leaky
-    g_current_context = LAZY_INSTANCE_INITIALIZER;
+ABSL_CONST_INIT thread_local RequestContext* current_context = nullptr;
 
 }  // namespace
 
 RequestContext::RequestContext() : RequestContext(Source::LOCAL_API_CALL) {}
 
-RequestContext::RequestContext(Source source)
-    : source_(source), tls_context_(g_current_context.Pointer()) {
+RequestContext::RequestContext(Source source) : source_(source) {
   // We allow nested RequestContexts to exist as long as they aren't actually
   // used for anything.
-  if (!tls_context_->Get())
-    tls_context_->Set(this);
+  if (!current_context) {
+    current_context = this;
+  }
 }
 
 RequestContext::~RequestContext() {
@@ -34,7 +32,7 @@ RequestContext::~RequestContext() {
     // EDK requests on this thread, so we need to reset the thread-local context
     // pointer before calling them. We persist the original notification source
     // since we're starting over at the bottom of the stack.
-    tls_context_->Set(nullptr);
+    current_context = nullptr;
 
     MojoTrapEventFlags flags = MOJO_TRAP_EVENT_FLAG_NONE;
     if (source_ == Source::LOCAL_API_CALL)
@@ -50,8 +48,7 @@ RequestContext::~RequestContext() {
     // fire. Because notifications on a single Watch are mutually exclusive,
     // this is sufficient to guarantee that MOJO_RESULT_CANCELLED is the last
     // notification received; which is the guarantee the API makes.
-    for (const scoped_refptr<Watch>& watch :
-         watch_cancel_finalizers_.container()) {
+    for (const scoped_refptr<Watch>& watch : watch_cancel_finalizers_) {
       static const HandleSignalsState closed_state = {0, 0};
 
       // Establish a new RequestContext to capture and run any new notifications
@@ -66,39 +63,38 @@ RequestContext::~RequestContext() {
       watch->InvokeCallback(MOJO_RESULT_CANCELLED, closed_state, flags);
     }
 
-    for (const WatchNotifyFinalizer& watch :
-         watch_notify_finalizers_.container()) {
+    for (const WatchNotifyFinalizer& watch : watch_notify_finalizers_) {
       RequestContext inner_context(source_);
       watch.watch->InvokeCallback(watch.result, watch.state, flags);
     }
   } else {
     // It should be impossible for nested contexts to have finalizers.
-    DCHECK(watch_notify_finalizers_.container().empty());
-    DCHECK(watch_cancel_finalizers_.container().empty());
+    DCHECK(watch_notify_finalizers_.empty());
+    DCHECK(watch_cancel_finalizers_.empty());
   }
 }
 
 // static
 RequestContext* RequestContext::current() {
-  DCHECK(g_current_context.Pointer()->Get());
-  return g_current_context.Pointer()->Get();
+  DCHECK(current_context);
+  return current_context;
 }
 
 void RequestContext::AddWatchNotifyFinalizer(scoped_refptr<Watch> watch,
                                              MojoResult result,
                                              const HandleSignalsState& state) {
   DCHECK(IsCurrent());
-  watch_notify_finalizers_->push_back(
+  watch_notify_finalizers_.push_back(
       WatchNotifyFinalizer(std::move(watch), result, state));
 }
 
 void RequestContext::AddWatchCancelFinalizer(scoped_refptr<Watch> watch) {
   DCHECK(IsCurrent());
-  watch_cancel_finalizers_->push_back(std::move(watch));
+  watch_cancel_finalizers_.push_back(std::move(watch));
 }
 
 bool RequestContext::IsCurrent() const {
-  return tls_context_->Get() == this;
+  return current_context == this;
 }
 
 RequestContext::WatchNotifyFinalizer::WatchNotifyFinalizer(

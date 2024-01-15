@@ -6,15 +6,17 @@
 
 #include <set>
 
-#include "base/allocator/buildflags.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_buildflags.h"
 #include "base/feature_list.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/trace_event_analyzer.h"
+#include "base/threading/thread_restrictions.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/trace_config_memory_test_util.h"
 #include "build/build_config.h"
@@ -23,9 +25,8 @@
 #include "chrome/test/base/tracing.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/ukm/test_ukm_recorder.h"
-#include "content/public/browser/notification_service.h"
+#include "content/public/browser/network_service_util.h"
 #include "content/public/browser/render_process_host.h"
-#include "content/public/common/network_service_util.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/buildflags/buildflags.h"
@@ -81,8 +82,8 @@ int GetNumRenderers(Browser* browser) {
 void RequestGlobalDumpCallback(base::OnceClosure quit_closure,
                                bool success,
                                uint64_t) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                std::move(quit_closure));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, std::move(quit_closure));
   ASSERT_TRUE(success);
 }
 
@@ -91,8 +92,8 @@ void OnStartTracingDoneCallback(
     base::OnceClosure quit_closure) {
   memory_instrumentation::MemoryInstrumentation::GetInstance()
       ->RequestGlobalDumpAndAppendToTrace(
-          MemoryDumpType::PERIODIC_INTERVAL, dump_type,
-          MemoryDumpDeterminism::NONE,
+          MemoryDumpType::kPeriodicInterval, dump_type,
+          MemoryDumpDeterminism::kNone,
           BindOnce(&RequestGlobalDumpCallback, std::move(quit_closure)));
 }
 
@@ -227,6 +228,8 @@ void CheckExperimentalMemoryMetrics(
   CheckMemoryMetric("Memory.Experimental.Browser2.Malloc", histogram_tester,
                     count, ValueRestriction::ABOVE_ZERO);
 #endif
+  CheckMemoryMetric("Memory.Experimental.Browser2.Custom.AXPlatformNodeCount",
+                    histogram_tester, count, ValueRestriction::ABOVE_ZERO);
   if (number_of_renderer_processes) {
     CheckExperimentalMemoryMetricsForProcessType(
         histogram_tester, count, "Renderer", number_of_renderer_processes);
@@ -282,19 +285,12 @@ void CheckStableMemoryMetrics(const base::HistogramTester& histogram_tester,
     CheckMemoryMetric("Memory.Extension.PrivateMemoryFootprint",
                       histogram_tester, count, ValueRestriction::ABOVE_ZERO,
                       number_of_extension_processes);
-    // Shared memory footprint can be below 1 MB, which is reported as zero.
-    CheckMemoryMetric("Memory.Extension.SharedMemoryFootprint",
-                      histogram_tester, count, ValueRestriction::NONE,
-                      number_of_extension_processes);
     CheckMemoryMetric("Memory.Extension.PrivateSwapFootprint", histogram_tester,
                       count_for_private_swap_footprint, ValueRestriction::NONE,
                       number_of_extension_processes);
   }
 
   int number_of_ns_processes = content::IsOutOfProcessNetworkService() ? 1 : 0;
-  CheckMemoryMetric("Memory.NetworkService.ResidentSet", histogram_tester,
-                    count_for_resident_set, ValueRestriction::ABOVE_ZERO,
-                    number_of_ns_processes);
   CheckMemoryMetric("Memory.NetworkService.PrivateMemoryFootprint",
                     histogram_tester, count, ValueRestriction::ABOVE_ZERO,
                     number_of_ns_processes);
@@ -314,7 +310,12 @@ void CheckStableMemoryMetrics(const base::HistogramTester& histogram_tester,
                     histogram_tester, count, ValueRestriction::ABOVE_ZERO);
   CheckMemoryMetric("Memory.Total.RendererMalloc", histogram_tester, count,
                     ValueRestriction::ABOVE_ZERO);
-  // Shared memory footprint can be below 1 MB, which is reported as zero.
+  CheckMemoryMetric("Memory.Total.RendererBlinkGC", histogram_tester, count,
+                    ValueRestriction::ABOVE_ZERO);
+  // Can be below 1 MB, which is reported as zero.
+  CheckMemoryMetric("Memory.Total.RendererBlinkGC.Fragmentation",
+                    histogram_tester, count, ValueRestriction::NONE);
+  // Can be below 1 MB, which is reported as zero.
   CheckMemoryMetric("Memory.Total.SharedMemoryFootprint", histogram_tester,
                     count, ValueRestriction::NONE);
   CheckMemoryMetric("Memory.Total.TileMemory", histogram_tester, count,
@@ -405,7 +406,7 @@ class ProcessMemoryMetricsEmitterTest
     size_t renderer_entry_count = 0;
     size_t total_entry_count = 0;
 
-    for (const auto* entry : entries) {
+    for (const ukm::mojom::UkmEntry* entry : entries) {
       if (ProcessHasTypeForEntry(entry, ProcessType::BROWSER)) {
         browser_entry_count++;
         CheckUkmBrowserEntry(entry);
@@ -493,7 +494,7 @@ class ProcessMemoryMetricsEmitterTest
         test_ukm_recorder_->GetEntriesByName(UkmEntry::kEntryName);
     size_t found_count = false;
     const ukm::mojom::UkmEntry* last_entry = nullptr;
-    for (const auto* entry : entries) {
+    for (const ukm::mojom::UkmEntry* entry : entries) {
       const ukm::UkmSource* source =
           test_ukm_recorder_->GetSourceForSourceId(entry->source_id);
       if (!source || source->url() != url)
@@ -514,7 +515,7 @@ class ProcessMemoryMetricsEmitterTest
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   // Create an barebones extension with a background page for the given name.
   const Extension* CreateExtension(const std::string& name) {
-    auto dir = std::make_unique<TestExtensionDir>();
+    TestExtensionDir dir;
     constexpr char kManifestTemplate[] =
         R"({
              "name": "%s",
@@ -522,10 +523,10 @@ class ProcessMemoryMetricsEmitterTest
              "manifest_version": 2,
              "background": {"page": "bg.html"}
            })";
-    dir->WriteManifest(base::StringPrintf(kManifestTemplate, name.c_str()));
-    dir->WriteFile(FILE_PATH_LITERAL("bg.html"), "");
+    dir.WriteManifest(base::StringPrintf(kManifestTemplate, name.c_str()));
+    dir.WriteFile(FILE_PATH_LITERAL("bg.html"), "");
 
-    const Extension* extension = LoadExtension(dir->UnpackedPath());
+    const Extension* extension = LoadExtension(dir.UnpackedPath());
     EXPECT_TRUE(extension);
     temp_dirs_.push_back(std::move(dir));
     return extension;
@@ -533,7 +534,7 @@ class ProcessMemoryMetricsEmitterTest
 
   const Extension* CreateHostedApp(const std::string& name,
                                    const GURL& app_url) {
-    auto dir = std::make_unique<TestExtensionDir>();
+    TestExtensionDir dir;
     constexpr char kManifestTemplate[] =
         R"({
              "name": "%s",
@@ -541,11 +542,11 @@ class ProcessMemoryMetricsEmitterTest
              "manifest_version": 2,
              "app": {"urls": ["%s"], "launch": {"web_url": "%s"}}
            })";
-    dir->WriteManifest(base::StringPrintf(kManifestTemplate, name.c_str(),
-                                          app_url.spec().c_str(),
-                                          app_url.spec().c_str()));
+    dir.WriteManifest(base::StringPrintf(kManifestTemplate, name.c_str(),
+                                         app_url.spec().c_str(),
+                                         app_url.spec().c_str()));
 
-    const Extension* extension = LoadExtension(dir->UnpackedPath());
+    const Extension* extension = LoadExtension(dir.UnpackedPath());
     EXPECT_TRUE(extension);
     temp_dirs_.push_back(std::move(dir));
     return extension;
@@ -556,19 +557,14 @@ class ProcessMemoryMetricsEmitterTest
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
 #if BUILDFLAG(ENABLE_EXTENSIONS)
-  std::vector<std::unique_ptr<TestExtensionDir>> temp_dirs_;
+  std::vector<TestExtensionDir> temp_dirs_;
 #endif
 };
 
 // TODO(crbug.com/732501): Re-enable on Win and Mac once not flaky.
-#if defined(ADDRESS_SANITIZER) || defined(MEMORY_SANITIZER) || \
-    BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
-#define MAYBE_FetchAndEmitMetrics DISABLED_FetchAndEmitMetrics
-#else
-#define MAYBE_FetchAndEmitMetrics FetchAndEmitMetrics
-#endif
 IN_PROC_BROWSER_TEST_F(ProcessMemoryMetricsEmitterTest,
-                       MAYBE_FetchAndEmitMetrics) {
+                       // TODO(crbug.com/1459385): Re-enable this test
+                       DISABLED_FetchAndEmitMetrics) {
   ASSERT_TRUE(embedded_test_server()->Start());
   const GURL url = embedded_test_server()->GetURL("foo.com", "/empty.html");
   ui_test_utils::NavigateToURLWithDisposition(
@@ -704,19 +700,14 @@ IN_PROC_BROWSER_TEST_F(ProcessMemoryMetricsEmitterTest,
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 // TODO(crbug.com/989810): Re-enable on Win and Mac once not flaky.
-#if defined(ADDRESS_SANITIZER) || defined(MEMORY_SANITIZER) || \
-    BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
-#define MAYBE_FetchDuringTrace DISABLED_FetchDuringTrace
-#else
-#define MAYBE_FetchDuringTrace FetchDuringTrace
-#endif
 IN_PROC_BROWSER_TEST_F(ProcessMemoryMetricsEmitterTest,
-                       MAYBE_FetchDuringTrace) {
+                       DISABLED_FetchDuringTrace) {
   ASSERT_TRUE(embedded_test_server()->Start());
   const GURL url = embedded_test_server()->GetURL("foo.com", "/empty.html");
   ui_test_utils::NavigateToURLWithDisposition(
       browser(), url, WindowOpenDisposition::NEW_FOREGROUND_TAB,
       ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP);
+  // TODO(crbug.com/1459385): Re-enable this test
 
   base::HistogramTester histogram_tester;
 
@@ -729,7 +720,7 @@ IN_PROC_BROWSER_TEST_F(ProcessMemoryMetricsEmitterTest,
     ASSERT_TRUE(tracing::BeginTracingWithTraceConfig(
         trace_config,
         BindOnce(&OnStartTracingDoneCallback,
-                 base::trace_event::MemoryDumpLevelOfDetail::DETAILED,
+                 base::trace_event::MemoryDumpLevelOfDetail::kDetailed,
                  run_loop.QuitClosure())));
     run_loop.Run();
   }
@@ -757,7 +748,7 @@ IN_PROC_BROWSER_TEST_F(ProcessMemoryMetricsEmitterTest,
   ASSERT_GT(events.size(), 1u);
   ASSERT_TRUE(trace_analyzer::CountMatches(
       events, trace_analyzer::Query::EventNameIs(
-                  MemoryDumpTypeToString(MemoryDumpType::PERIODIC_INTERVAL))));
+                  MemoryDumpTypeToString(MemoryDumpType::kPeriodicInterval))));
 
   constexpr int kNumRenderers = 2;
   EXPECT_EQ(kNumRenderers, GetNumRenderers(browser()));
@@ -869,6 +860,10 @@ IN_PROC_BROWSER_TEST_F(ProcessMemoryMetricsEmitterTest, MAYBE_RendererBuildId) {
            content::RenderProcessHost::AllHostsIterator();
        !rph_iter.IsAtEnd(); rph_iter.Advance()) {
     const base::Process& process = rph_iter.GetCurrentValue()->GetProcess();
+    // The main module's path might be a relative one, e.g. browser_tests.
+    // To match with the memory maps, need to convert it to absolute path,
+    // which may hit ScopedBlockingCall.
+    base::ScopedAllowBlockingForTesting allow_blocking;
     auto maps =
         memory_instrumentation::OSMetrics::GetProcessMemoryMaps(process.Pid());
     bool found = false;

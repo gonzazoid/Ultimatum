@@ -10,7 +10,7 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/rand_util.h"
 #include "base/time/time.h"
@@ -25,10 +25,12 @@
 #include "remoting/protocol/session_options_provider.h"
 #include "remoting/protocol/socket_util.h"
 #include "remoting/protocol/stream_packet_socket.h"
+#include "third_party/webrtc/api/units/timestamp.h"
 #include "third_party/webrtc/media/base/rtp_utils.h"
+#include "third_party/webrtc/rtc_base/async_dns_resolver.h"
 #include "third_party/webrtc/rtc_base/async_packet_socket.h"
-#include "third_party/webrtc/rtc_base/async_resolver.h"
 #include "third_party/webrtc/rtc_base/net_helpers.h"
+#include "third_party/webrtc/rtc_base/network/received_packet.h"
 #include "third_party/webrtc/rtc_base/socket.h"
 
 namespace remoting::protocol {
@@ -141,8 +143,7 @@ UdpPacketSocket::UdpPacketSocket()
     : state_(STATE_CLOSED),
       error_(0),
       send_pending_(false),
-      send_queue_size_(0) {
-}
+      send_queue_size_(0) {}
 
 UdpPacketSocket::~UdpPacketSocket() {
   Close();
@@ -205,14 +206,16 @@ rtc::SocketAddress UdpPacketSocket::GetRemoteAddress() const {
   return rtc::SocketAddress();
 }
 
-int UdpPacketSocket::Send(const void* data, size_t data_size,
+int UdpPacketSocket::Send(const void* data,
+                          size_t data_size,
                           const rtc::PacketOptions& options) {
   // UDP sockets are not connected - this method should never be called.
   NOTREACHED();
   return EWOULDBLOCK;
 }
 
-int UdpPacketSocket::SendTo(const void* data, size_t data_size,
+int UdpPacketSocket::SendTo(const void* data,
+                            size_t data_size,
                             const rtc::SocketAddress& address,
                             const rtc::PacketOptions& options) {
   if (state_ != STATE_BOUND) {
@@ -309,12 +312,13 @@ void UdpPacketSocket::SetError(int error) {
 }
 
 void UdpPacketSocket::DoSend() {
-  if (send_pending_ || send_queue_.empty())
+  if (send_pending_ || send_queue_.empty()) {
     return;
+  }
 
   PendingPacket& packet = send_queue_.front();
   cricket::ApplyPacketOptions(
-      reinterpret_cast<uint8_t*>(packet.data->data()), packet.data->size(),
+      packet.data->bytes(), packet.data->size(),
       packet.options.packet_time_params,
       (base::TimeTicks::Now() - base::TimeTicks()).InMicroseconds());
   int result =
@@ -365,7 +369,8 @@ void UdpPacketSocket::OnSendCompleted(int result) {
 void UdpPacketSocket::DoRead() {
   int result = 0;
   while (result >= 0) {
-    receive_buffer_ = base::MakeRefCounted<net::IOBuffer>(kReceiveBufferSize);
+    receive_buffer_ =
+        base::MakeRefCounted<net::IOBufferWithSize>(kReceiveBufferSize);
     result = socket_->RecvFrom(receive_buffer_.get(), kReceiveBufferSize,
                                &receive_address_,
                                base::BindOnce(&UdpPacketSocket::OnReadCompleted,
@@ -393,8 +398,10 @@ void UdpPacketSocket::HandleReadResult(int result) {
       LOG(ERROR) << "Failed to convert address received from RecvFrom().";
       return;
     }
-    SignalReadPacket(this, receive_buffer_->data(), result, address,
-                     rtc::TimeMicros());
+    rtc::ReceivedPacket packet(
+        rtc::MakeArrayView(receive_buffer_->bytes(), result), address,
+        webrtc::Timestamp::Micros(rtc::TimeMicros()));
+    NotifyPacketReceived(packet);
   } else {
     LOG(ERROR) << "Received error when reading from UDP socket: " << result;
   }
@@ -420,8 +427,9 @@ rtc::AsyncPacketSocket* ChromiumPacketSocketFactory::CreateUdpSocket(
     return nullptr;
   }
   std::unique_ptr<UdpPacketSocket> result(new UdpPacketSocket());
-  if (!result->Init(local_address, min_port, max_port))
+  if (!result->Init(local_address, min_port, max_port)) {
     return nullptr;
+  }
   return result.release();
 }
 
@@ -442,13 +450,6 @@ rtc::AsyncPacketSocket* ChromiumPacketSocketFactory::CreateClientTcpSocket(
     const rtc::ProxyInfo& proxy_info,
     const std::string& user_agent,
     const rtc::PacketSocketTcpOptions& opts) {
-  if (session_options_provider_ &&
-      session_options_provider_->session_options().GetBoolValue(
-          "Disable-TCP")) {
-    HOST_LOG << "Disable-TCP experiment is enabled. Client TCP socket won't be "
-             << "created.";
-    return nullptr;
-  }
   auto socket = std::make_unique<StreamPacketSocket>();
   if (!socket->InitClientTcp(local_address, remote_address, proxy_info,
                              user_agent, opts)) {
@@ -457,9 +458,9 @@ rtc::AsyncPacketSocket* ChromiumPacketSocketFactory::CreateClientTcpSocket(
   return socket.release();
 }
 
-rtc::AsyncResolverInterface*
-ChromiumPacketSocketFactory::CreateAsyncResolver() {
-  return new rtc::AsyncResolver();
+std::unique_ptr<webrtc::AsyncDnsResolverInterface>
+ChromiumPacketSocketFactory::CreateAsyncDnsResolver() {
+  return std::make_unique<webrtc::AsyncDnsResolver>();
 }
 
 }  // namespace remoting::protocol

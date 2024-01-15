@@ -11,14 +11,15 @@
 
 #include "base/barrier_callback.h"
 #include "base/barrier_closure.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/containers/span.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
 #include "components/services/storage/public/cpp/buckets/bucket_locator.h"
+#include "mojo/public/cpp/bindings/callback_helpers.h"
 #include "storage/browser/file_system/file_system_backend.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/common/file_system/file_system_types.h"
@@ -67,7 +68,7 @@ base::span<const FileSystemType> QuotaStorageTypeToFileSystemTypes(
     case StorageType::kSyncable:
       return kSyncable;
     case StorageType::kDeprecatedQuotaNotManaged:
-    case StorageType::kPersistent:
+    case StorageType::kDeprecatedPersistent:
     case StorageType::kUnknown:
       NOTREACHED();
       return {};
@@ -196,6 +197,8 @@ void FileSystemQuotaClient::DeleteBucketData(
   base::span<const FileSystemType> fs_types =
       QuotaStorageTypeToFileSystemTypes(bucket.type);
 
+  auto wrapped_callback = mojo::WrapCallbackWithDefaultInvokeIfNotRun(
+      std::move(callback), blink::mojom::QuotaStatusCode::kUnknown);
   base::RepeatingCallback<void(blink::mojom::QuotaStatusCode)> barrier =
       base::BarrierCallback<blink::mojom::QuotaStatusCode>(
           fs_types.size(),
@@ -206,7 +209,7 @@ void FileSystemQuotaClient::DeleteBucketData(
                 return status;
             }
             return blink::mojom::QuotaStatusCode::kOk;
-          }).Then(std::move(callback)));
+          }).Then(std::move(wrapped_callback)));
 
   for (const auto fs_type : fs_types) {
     file_task_runner()->PostTaskAndReplyWithResult(

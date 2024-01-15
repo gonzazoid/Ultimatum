@@ -2,6 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Tests that elements panel search is returning proper results.\n`);
   await TestRunner.showPanel('elements');
@@ -54,7 +58,7 @@
   async function searchCallback(next, resultCount) {
     if (resultCount == 0) {
       TestRunner.addResult('Nothing found');
-      SDK.DOMModel.cancelSearch();
+      SDK.DOMModel.DOMModel.cancelSearch();
       next();
       return;
     }
@@ -67,7 +71,7 @@
       TestRunner.addResult(markupVa_lue.split('').join(' '));
     }
 
-    SDK.DOMModel.cancelSearch();
+    SDK.DOMModel.DOMModel.cancelSearch();
     next();
   }
 

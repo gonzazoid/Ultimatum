@@ -37,6 +37,9 @@ LiveTranslateControllerFactory::LiveTranslateControllerFactory()
               .WithGuest(ProfileSelection::kOffTheRecordOnly)
               // No service for system profile.
               .WithSystem(ProfileSelection::kNone)
+              // ChromeOS creates various profiles (login, lock screen...) that
+              // do not need the Live Translate controller.
+              .WithAshInternals(ProfileSelection::kNone)
               .Build()) {}
 
 LiveTranslateControllerFactory::~LiveTranslateControllerFactory() = default;
@@ -46,18 +49,12 @@ bool LiveTranslateControllerFactory::ServiceIsCreatedWithBrowserContext()
   return true;
 }
 
-KeyedService* LiveTranslateControllerFactory::BuildServiceInstanceFor(
-    content::BrowserContext* context) const {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // ChromeOS creates various profiles (login, lock screen...) that do
-  // not need the Live Translate controller.
-  Profile* profile = Profile::FromBrowserContext(context);
-  if (!chromeos::ProfileHelper::IsUserProfile(profile))
-    return nullptr;
-#endif
-
-  return new LiveTranslateController(
-      Profile::FromBrowserContext(context)->GetPrefs());
+std::unique_ptr<KeyedService>
+LiveTranslateControllerFactory::BuildServiceInstanceForBrowserContext(
+    content::BrowserContext* browser_context) const {
+  return std::make_unique<LiveTranslateController>(
+      Profile::FromBrowserContext(browser_context)->GetPrefs(),
+      browser_context);
 }
 
 }  // namespace captions

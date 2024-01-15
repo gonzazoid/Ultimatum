@@ -5,12 +5,11 @@
 #ifndef IOS_CHROME_BROWSER_UI_PERMISSIONS_PERMISSIONS_DELEGATE_H_
 #define IOS_CHROME_BROWSER_UI_PERMISSIONS_PERMISSIONS_DELEGATE_H_
 
-#import "ios/chrome/browser/ui/infobars/modals/infobar_modal_delegate.h"
+#import <Foundation/Foundation.h>
 
 @class PermissionInfo;
 
 // Delegate to handle permissions actions.
-API_AVAILABLE(ios(15.0))
 @protocol PermissionsDelegate <NSObject>
 
 // Method invoked when the user taps a switch.

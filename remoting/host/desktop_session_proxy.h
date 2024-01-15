@@ -10,8 +10,9 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include <optional>
 #include "base/callback_list.h"
+#include "base/functional/callback.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
@@ -36,7 +37,6 @@
 #include "remoting/protocol/clipboard_stub.h"
 #include "remoting/protocol/desktop_capturer.h"
 #include "remoting/protocol/errors.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capturer.h"
 
 namespace base {
@@ -155,7 +155,7 @@ class DesktopSessionProxy
   // changes. Called on the |caller_task_runner_| thread.
   void SetKeyboardLayoutMonitor(
       const base::WeakPtr<IpcKeyboardLayoutMonitor>& keyboard_layout_monitor);
-  const absl::optional<protocol::KeyboardLayout>& GetKeyboardCurrentLayout()
+  const std::optional<protocol::KeyboardLayout>& GetKeyboardCurrentLayout()
       const;
 
   // APIs used to implement the InputInjector interface.
@@ -210,7 +210,7 @@ class DesktopSessionProxy
 
   class IpcSharedBufferCore;
   class IpcSharedBuffer;
-  typedef std::map<int, scoped_refptr<IpcSharedBufferCore> > SharedBuffers;
+  typedef std::map<int, scoped_refptr<IpcSharedBufferCore>> SharedBuffers;
 
   ~DesktopSessionProxy() override;
 
@@ -302,7 +302,7 @@ class DesktopSessionProxy
 
   // Caches the last keyboard layout received so it can be provided when Start
   // is called on IpcKeyboardLayoutMonitor.
-  absl::optional<protocol::KeyboardLayout> keyboard_layout_;
+  std::optional<protocol::KeyboardLayout> keyboard_layout_;
 
   // Used to notify registered handlers when the IPC channel is disconnected.
   base::OnceClosureList disconnect_handlers_;

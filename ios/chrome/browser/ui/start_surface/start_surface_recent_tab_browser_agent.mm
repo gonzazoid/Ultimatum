@@ -4,13 +4,10 @@
 
 #import "ios/chrome/browser/ui/start_surface/start_surface_recent_tab_browser_agent.h"
 
-#import "ios/chrome/browser/ui/main/scene_state_browser_agent.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_constants.h"
+#import "ios/chrome/browser/ui/ntp/metrics/home_metrics.h"
 #import "ios/chrome/browser/ui/start_surface/start_surface_util.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 #pragma mark - StartSurfaceBrowserAgent
 
@@ -32,6 +29,7 @@ void StartSurfaceRecentTabBrowserAgent::SaveMostRecentTab() {
   web::WebState* active_web_state =
       browser_->GetWebStateList()->GetActiveWebState();
   if (most_recent_tab_ != active_web_state) {
+    RecordModuleFreshnessSignal(ContentSuggestionsModuleType::kTabResumption);
     most_recent_tab_ = active_web_state;
     DCHECK(favicon::WebFaviconDriver::FromWebState(most_recent_tab_));
     if (favicon_driver_observer_.IsObserving()) {
@@ -68,22 +66,41 @@ void StartSurfaceRecentTabBrowserAgent::BrowserDestroyed(Browser* browser) {
 
 #pragma mark - WebStateListObserver
 
-void StartSurfaceRecentTabBrowserAgent::WebStateDetachedAt(
+void StartSurfaceRecentTabBrowserAgent::WebStateListDidChange(
     WebStateList* web_state_list,
-    web::WebState* web_state,
-    int index) {
-  if (!most_recent_tab_) {
-    return;
-  }
+    const WebStateListChange& change,
+    const WebStateListStatus& status) {
+  switch (change.type()) {
+    case WebStateListChange::Type::kStatusOnly:
+      // Do nothing when a WebState is selected and its status is updated.
+      break;
+    case WebStateListChange::Type::kDetach: {
+      if (!most_recent_tab_) {
+        return;
+      }
 
-  if (most_recent_tab_ == web_state) {
-    for (auto& observer : observers_) {
-      observer.MostRecentTabRemoved(most_recent_tab_);
+      const WebStateListChangeDetach& detach_change =
+          change.As<WebStateListChangeDetach>();
+      if (most_recent_tab_ == detach_change.detached_web_state()) {
+        for (auto& observer : observers_) {
+          observer.MostRecentTabRemoved(most_recent_tab_);
+        }
+        favicon_driver_observer_.Reset();
+        web_state_observation_.Reset();
+        most_recent_tab_ = nullptr;
+        return;
+      }
+      break;
     }
-    favicon_driver_observer_.Reset();
-    web_state_observation_.Reset();
-    most_recent_tab_ = nullptr;
-    return;
+    case WebStateListChange::Type::kMove:
+      // Do nothing when a WebState is moved.
+      break;
+    case WebStateListChange::Type::kReplace:
+      // Do nothing when a WebState is replaced.
+      break;
+    case WebStateListChange::Type::kInsert:
+      // Do nothing when a WebState is inserted.
+      break;
   }
 }
 
@@ -106,7 +123,8 @@ void StartSurfaceRecentTabBrowserAgent::OnFaviconUpdated(
     gfx::Image favicon = driver->GetFavicon();
     if (!favicon.IsEmpty()) {
       for (auto& observer : observers_) {
-        observer.MostRecentTabFaviconUpdated(favicon.ToUIImage());
+        observer.MostRecentTabFaviconUpdated(most_recent_tab_,
+                                             favicon.ToUIImage());
       }
     }
   }
@@ -114,6 +132,6 @@ void StartSurfaceRecentTabBrowserAgent::OnFaviconUpdated(
 
 void StartSurfaceRecentTabBrowserAgent::TitleWasSet(web::WebState* web_state) {
   for (auto& observer : observers_) {
-    observer.MostRecentTabTitleUpdated(web_state->GetTitle());
+    observer.MostRecentTabTitleUpdated(web_state, web_state->GetTitle());
   }
 }

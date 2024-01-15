@@ -12,13 +12,15 @@ blink_core_sources("v8") {
   visibility = []
   visibility = [ "//third_party/blink/renderer/core" ]
 
-  sources = generated_callback_function_sources_in_core +
+  sources = generated_async_iterator_sources_in_core +
+            generated_callback_function_sources_in_core +
             generated_callback_interface_sources_in_core +
             generated_dictionary_sources_in_core +
             generated_enumeration_sources_in_core +
             generated_interface_sources_in_core +
             generated_namespace_sources_in_core +
             generated_observable_array_sources_in_core +
+            generated_sync_iterator_sources_in_core +
             generated_typedef_sources_in_core + generated_union_sources_in_core
 
   deps = [
@@ -60,8 +62,10 @@ group("generated") {
     "//third_party/blink/renderer/core/*",
   ]
 
-  public_deps =
-      [ "//third_party/blink/renderer/bindings:generate_bindings_all" ]
+  public_deps = [
+    "//components/miracle_parameter/common",
+    "//third_party/blink/renderer/bindings:generate_bindings_all",
+  ]
 }
 
 fuzzer_test("v8_serialized_script_value_fuzzer") {

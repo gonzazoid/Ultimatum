@@ -6,21 +6,20 @@
 #define UI_BASE_IME_ASH_MOCK_INPUT_METHOD_MANAGER_H_
 
 #include "base/component_export.h"
+#include "base/containers/span.h"
 #include "base/observer_list.h"
 #include "ui/base/ime/ash/input_method_manager.h"
-// TODO(https://crbug.com/1164001): remove and use forward declaration.
-#include "ui/base/ime/ash/input_method_util.h"
 #include "ui/base/ime/virtual_keyboard_controller.h"
 #include "ui/base/ime/virtual_keyboard_controller_observer.h"
 
 namespace ash {
 namespace input_method {
+
 class ImeKeyboard;
 
 // The mock InputMethodManager for testing.
 class COMPONENT_EXPORT(UI_BASE_IME_ASH) MockInputMethodManager
-    : public InputMethodManager,
-      public ui::VirtualKeyboardController {
+    : public InputMethodManager {
  public:
  public:
   class State : public InputMethodManager::State {
@@ -33,7 +32,7 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) MockInputMethodManager
     scoped_refptr<InputMethodManager::State> Clone() const override;
     void AddInputMethodExtension(const std::string& extension_id,
                                  const InputMethodDescriptors& descriptors,
-                                 ui::TextInputMethod* instance) override;
+                                 TextInputMethod* instance) override;
     void RemoveInputMethodExtension(const std::string& extension_id) override;
     void ChangeInputMethod(const std::string& input_method_id,
                            bool show_message) override;
@@ -47,15 +46,14 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) MockInputMethodManager
         const std::vector<std::string>& initial_layouts) override;
     void DisableNonLockScreenLayouts() override;
     void GetInputMethodExtensions(InputMethodDescriptors* result) override;
-    std::unique_ptr<InputMethodDescriptors>
-    GetEnabledInputMethodsSortedByLocalizedDisplayNames() const override;
-    std::unique_ptr<InputMethodDescriptors> GetEnabledInputMethods()
+    InputMethodDescriptors GetEnabledInputMethodsSortedByLocalizedDisplayNames()
         const override;
+    InputMethodDescriptors GetEnabledInputMethods() const override;
     const std::vector<std::string>& GetEnabledInputMethodIds() const override;
     const InputMethodDescriptor* GetInputMethodFromId(
         const std::string& input_method_id) const override;
     size_t GetNumEnabledInputMethods() const override;
-    void SetEnabledExtensionImes(std::vector<std::string>* ids) override;
+    void SetEnabledExtensionImes(base::span<const std::string> ids) override;
     void SetInputMethodLoginDefault() override;
     void SetInputMethodLoginDefaultFromVPD(const std::string& locale,
                                            const std::string& layout) override;
@@ -96,10 +94,6 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) MockInputMethodManager
 
   ~MockInputMethodManager() override;
 
-  void SetVirtualKeyboardEnabled(bool enabled) {
-    virtual_keyboard_enabled_ = enabled;
-  }
-
   // InputMethodManager:
   void AddObserver(InputMethodManager::Observer* observer) override;
   void AddCandidateWindowObserver(
@@ -121,6 +115,8 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) MockInputMethodManager
   InputMethodUtil* GetInputMethodUtil() override;
   ComponentExtensionIMEManager* GetComponentExtensionIMEManager() override;
   bool IsLoginKeyboard(const std::string& layout) const override;
+  std::string GetMigratedInputMethodID(
+      const std::string& input_method_id) override;
   bool MigrateInputMethods(std::vector<std::string>* input_method_ids) override;
   scoped_refptr<InputMethodManager::State> CreateNewState(
       Profile* profile) override;
@@ -135,25 +131,14 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) MockInputMethodManager
   void SetImeMenuFeatureEnabled(ImeMenuFeature feature, bool enabled) override;
   bool GetImeMenuFeatureEnabled(ImeMenuFeature feature) const override;
   void NotifyObserversImeExtraInputStateChange() override;
-  ui::VirtualKeyboardController* GetVirtualKeyboardController() override;
   void NotifyInputMethodExtensionAdded(
       const std::string& extension_id) override;
   void NotifyInputMethodExtensionRemoved(
       const std::string& extension_id) override;
 
-  // ui::VirtualKeyboardController overrides.
-  bool DisplayVirtualKeyboard() override;
-  void DismissVirtualKeyboard() override;
-  void AddObserver(ui::VirtualKeyboardControllerObserver* observer) override;
-  void RemoveObserver(ui::VirtualKeyboardControllerObserver* observer) override;
-  bool IsKeyboardVisible() override;
-
  private:
   scoped_refptr<State> state_;
   uint32_t features_enabled_state_;
-  bool virtual_keyboard_enabled_ = true;
-  base::ObserverList<ui::VirtualKeyboardControllerObserver>::Unchecked
-      observer_list_;
 };
 
 }  // namespace input_method

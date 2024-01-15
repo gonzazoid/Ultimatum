@@ -8,8 +8,10 @@
 #include <memory>
 
 #include "ash/ash_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
+#include "ui/color/color_provider.h"
 #include "ui/compositor/layer_animation_observer.h"
 #include "ui/compositor/layer_delegate.h"
 #include "ui/views/view.h"
@@ -77,9 +79,9 @@ class ASH_EXPORT HoldingSpaceTrayIconPreview
 
   ui::Layer* layer() { return layer_owner_.layer(); }
 
-  const absl::optional<size_t>& index() const { return index_; }
+  const std::optional<size_t>& index() const { return index_; }
 
-  const absl::optional<size_t>& pending_index() const { return pending_index_; }
+  const std::optional<size_t>& pending_index() const { return pending_index_; }
   void set_pending_index(size_t index) { pending_index_ = index; }
 
  private:
@@ -124,12 +126,15 @@ class ASH_EXPORT HoldingSpaceTrayIconPreview
   // alignment in LTR and will be adjusted for vertical alignment and/or RTL.
   void AdjustForShelfAlignmentAndTextDirection(gfx::Vector2dF* vector_2df);
 
+  // Returns the color resolved for the specified `color_id`.
+  SkColor GetColor(ui::ColorId color_id) const;
+
   // The shelf whose holding space tray icon this preview belongs.
-  Shelf* const shelf_;
+  const raw_ptr<Shelf> shelf_;
 
   // The view that contains all preview layers belonging to the holding space
   // icon.
-  views::View* const container_;
+  const raw_ptr<views::View> container_;
 
   // Owns the `ui::Layer` which paints the image representation of the
   // associated holding space item.
@@ -161,11 +166,11 @@ class ASH_EXPORT HoldingSpaceTrayIconPreview
 
   // If set, the preview index within the holding space tray icon. May be unset
   // during icon update transition before the preview is animated in.
-  absl::optional<size_t> index_;
+  std::optional<size_t> index_;
 
   // If set, the index within the holding space tray icon to which the preview
   // is about to move. Set while the holding space tray icon is updating.
-  absl::optional<size_t> pending_index_;
+  std::optional<size_t> pending_index_;
 
   // The `layer()` for this preview is parented by `container_`'s layer. It is
   // necessary to observe and react to bounds changes in `container_` to keep

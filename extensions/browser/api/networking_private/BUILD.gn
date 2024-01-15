@@ -25,11 +25,13 @@ source_set("networking_private") {
     "networking_private_event_router_factory.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
     "//build:chromeos_buildflags",
     "//components/keyed_service/content",
     "//components/onc",
-    "//extensions/browser/api",
+    "//content/public/browser",
     "//extensions/common",
     "//extensions/common/api",
     "//net",
@@ -73,10 +75,10 @@ source_set("networking_private") {
                 "networking_private_event_router_chromeos.cc",
               ]
     deps += [
+      "//chromeos/ash/components/login/login_state",
       "//chromeos/ash/components/network",
       "//chromeos/ash/components/network/portal_detector",
       "//chromeos/components/onc",
-      "//chromeos/login/login_state",
       "//components/proxy_config",
     ]
   } else {

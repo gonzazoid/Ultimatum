@@ -7,21 +7,9 @@
       "backgroundColor": "#FFFFFF"
     },
     {
-      "name": "HorizontalScrollbar",
-      "position": [15, 385],
-      "bounds": [385, 15],
-      "contentsOpaque": true
-    },
-    {
-      "name": "VerticalScrollbar",
-      "bounds": [15, 385],
-      "contentsOpaque": true
-    },
-    {
-      "name": "Scroll corner of LayoutView #document",
-      "position": [0, 385],
-      "bounds": [15, 15],
-      "contentsOpaque": true
+      "name": "LayoutIFrame (positioned, block) IFRAME",
+      "bounds": [400, 400],
+      "drawsContent": false
     },
     {
       "name": "Scrolling background of LayoutView #document",
@@ -37,6 +25,23 @@
       "contentsOpaque": true,
       "backgroundColor": "#008000",
       "transform": 2
+    },
+    {
+      "name": "HorizontalScrollbar",
+      "position": [15, 385],
+      "bounds": [385, 15],
+      "contentsOpaque": true
+    },
+    {
+      "name": "VerticalScrollbar",
+      "bounds": [15, 385],
+      "contentsOpaque": true
+    },
+    {
+      "name": "Scroll corner of LayoutView #document",
+      "position": [0, 385],
+      "bounds": [15, 15],
+      "contentsOpaque": true
     }
   ],
   "transforms": [

@@ -13,8 +13,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/thread_pool.h"
@@ -29,12 +29,12 @@
 #include "media/base/limits.h"
 #include "media/webrtc/constants.h"
 #include "media/webrtc/helpers.h"
+#include "media/webrtc/webrtc_features.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/webrtc/modules/audio_processing/include/audio_processing.h"
 #include "third_party/webrtc_overrides/task_queue_factory.h"
 
 namespace media {
-
 namespace {
 constexpr int kBuffersPerSecond = 100;  // 10 ms per buffer.
 
@@ -69,6 +69,28 @@ int GetCaptureBufferSize(bool need_webrtc_processing,
   // a fall-back.
   return buffer_size_10_ms;
 #endif
+}
+
+bool ApmNeedsPlayoutReference(const webrtc::AudioProcessing* apm,
+                              const AudioProcessingSettings& settings) {
+  if (!base::FeatureList::IsEnabled(
+          features::kWebRtcApmTellsIfPlayoutReferenceIsNeeded)) {
+    return settings.NeedPlayoutReference();
+  }
+  if (!apm) {
+    // APM is not available; hence, observing the playout reference is not
+    // needed.
+    return false;
+  }
+  // TODO(crbug.com/1410129): Move the logic below into WebRTC APM since APM may
+  // use injected sub-modules the usage of which is not reflected in the APM
+  // config (e.g., render side processing).
+  const webrtc::AudioProcessing::Config config = apm->GetConfig();
+  const bool aec = config.echo_canceller.enabled;
+  const bool legacy_agc =
+      config.gain_controller1.enabled &&
+      !config.gain_controller1.analog_gain_controller.enabled;
+  return aec || legacy_agc;
 }
 }  // namespace
 
@@ -227,7 +249,8 @@ std::unique_ptr<AudioProcessor> AudioProcessor::Create(
   return std::make_unique<AudioProcessor>(
       std::move(deliver_processed_audio_callback), std::move(log_callback),
       input_format, output_format, std::move(webrtc_audio_processing),
-      settings.stereo_mirroring);
+      settings.stereo_mirroring,
+      ApmNeedsPlayoutReference(webrtc_audio_processing.get(), settings));
 }
 
 AudioProcessor::AudioProcessor(
@@ -236,9 +259,11 @@ AudioProcessor::AudioProcessor(
     const media::AudioParameters& input_format,
     const media::AudioParameters& output_format,
     rtc::scoped_refptr<webrtc::AudioProcessing> webrtc_audio_processing,
-    bool stereo_mirroring)
+    bool stereo_mirroring,
+    bool needs_playout_reference)
     : webrtc_audio_processing_(webrtc_audio_processing),
       stereo_mirroring_(stereo_mirroring),
+      needs_playout_reference_(needs_playout_reference),
       log_callback_(std::move(log_callback)),
       input_format_(input_format),
       output_format_(output_format),
@@ -358,8 +383,8 @@ void AudioProcessor::OnStartDump(base::File dump_file) {
 
   if (webrtc_audio_processing_) {
     if (!worker_queue_) {
-      worker_queue_ = std::make_unique<rtc::TaskQueue>(
-          CreateWebRtcTaskQueue(rtc::TaskQueue::Priority::LOW));
+      worker_queue_ =
+          CreateWebRtcTaskQueue(webrtc::TaskQueueFactory::Priority::LOW);
     }
     // Here tasks will be posted on the |worker_queue_|. It must be
     // kept alive until media::StopEchoCancellationDump is called or the
@@ -380,7 +405,7 @@ void AudioProcessor::OnStopDump() {
     return;
   if (webrtc_audio_processing_)
     media::StopEchoCancellationDump(webrtc_audio_processing_.get());
-  worker_queue_.reset(nullptr);
+  worker_queue_ = nullptr;
 }
 
 void AudioProcessor::OnPlayoutData(const AudioBus& audio_bus,
@@ -648,4 +673,5 @@ AudioParameters AudioProcessor::GetDefaultOutputFormat(
       output_frames);
   return output_format;
 }
+
 }  // namespace media

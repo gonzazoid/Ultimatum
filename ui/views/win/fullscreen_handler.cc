@@ -7,7 +7,6 @@
 #include <memory>
 
 #include "base/win/win_util.h"
-#include "ui/base/win/shell.h"
 #include "ui/display/types/display_constants.h"
 #include "ui/display/win/screen_win.h"
 #include "ui/display/win/screen_win_display.h"
@@ -62,12 +61,6 @@ void FullscreenHandler::ProcessFullscreen(bool fullscreen,
                                           int64_t target_display_id) {
   std::unique_ptr<ScopedFullscreenVisibility> visibility;
 
-  // With Aero enabled disabling the visibility causes the window to disappear
-  // for several frames, which looks worse than doing other updates
-  // non-atomically.
-  if (!ui::win::IsAeroGlassEnabled())
-    visibility = std::make_unique<ScopedFullscreenVisibility>(hwnd_);
-
   // Save current window state if not already fullscreen.
   if (!fullscreen_) {
     saved_window_info_.style = GetWindowLong(hwnd_, GWL_STYLE);
@@ -114,9 +107,10 @@ void FullscreenHandler::ProcessFullscreen(bool fullscreen,
                  SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
   } else {
     // Restore the window style and bounds saved prior to entering fullscreen.
+    // Use WS_VISIBLE for windows shown after SetFullscreen: crbug.com/1062251.
     // Making multiple window adjustments here is ugly, but if SetWindowPos()
     // doesn't redraw, the taskbar won't be repainted.
-    SetWindowLong(hwnd_, GWL_STYLE, saved_window_info_.style);
+    SetWindowLong(hwnd_, GWL_STYLE, saved_window_info_.style | WS_VISIBLE);
     SetWindowLong(hwnd_, GWL_EXSTYLE, saved_window_info_.ex_style);
 
     gfx::Rect window_rect(saved_window_info_.rect);

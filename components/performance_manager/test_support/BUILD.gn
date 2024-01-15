@@ -11,10 +11,25 @@ source_set("test_support_common") {
   sources = [
     "decorators_utils.h",
     "graph_impl.h",
+    "resource_attribution/gtest_util.h",
+    "run_in_graph.cc",
+    "run_in_graph.h",
+    "test_browser_child_process.cc",
+    "test_browser_child_process.h",
     "test_harness_helper.cc",
     "test_harness_helper.h",
     "voting.h",
   ]
+
+  # The site data database isn't supported on Android.
+  if (!is_android) {
+    sources += [
+      "persistence/test_site_data_reader.cc",
+      "persistence/test_site_data_reader.h",
+      "persistence/unittest_utils.cc",
+      "persistence/unittest_utils.h",
+    ]
+  }
 
   deps = [
     "//base/test:test_support",
@@ -34,6 +49,8 @@ source_set("test_support") {
     "mock_graphs.h",
     "performance_manager_test_harness.cc",
     "performance_manager_test_harness.h",
+    "resource_attribution/measurement_delegates.cc",
+    "resource_attribution/measurement_delegates.h",
     "test_worker_node_factory.cc",
     "test_worker_node_factory.h",
   ]

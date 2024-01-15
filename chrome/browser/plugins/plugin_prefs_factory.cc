@@ -16,7 +16,8 @@
 
 // static
 PluginPrefsFactory* PluginPrefsFactory::GetInstance() {
-  return base::Singleton<PluginPrefsFactory>::get();
+  static base::NoDestructor<PluginPrefsFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -36,9 +37,14 @@ PluginPrefsFactory::CreateForTestingProfile(content::BrowserContext* profile) {
 PluginPrefsFactory::PluginPrefsFactory()
     : RefcountedProfileKeyedServiceFactory(
           "PluginPrefs",
-          ProfileSelections::BuildRedirectedInIncognito()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {}
 
-PluginPrefsFactory::~PluginPrefsFactory() {}
+PluginPrefsFactory::~PluginPrefsFactory() = default;
 
 scoped_refptr<RefcountedKeyedService>
 PluginPrefsFactory::BuildServiceInstanceFor(
@@ -52,11 +58,6 @@ PluginPrefsFactory::BuildServiceInstanceFor(
 
 void PluginPrefsFactory::RegisterProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry) {
-  base::FilePath internal_dir;
-  base::PathService::Get(chrome::DIR_INTERNAL_PLUGINS, &internal_dir);
-  registry->RegisterFilePathPref(prefs::kPluginsLastInternalDirectory,
-                                 internal_dir);
-  registry->RegisterListPref(prefs::kPluginsPluginsList);
   registry->RegisterBooleanPref(
       prefs::kPluginsAlwaysOpenPdfExternally, false,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);

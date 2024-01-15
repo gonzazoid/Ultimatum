@@ -8,12 +8,13 @@
 #include <ostream>
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/function_ref.h"
 #include "components/performance_manager/public/freezing/freezing.h"
 #include "components/performance_manager/public/graph/node.h"
 #include "components/performance_manager/public/mojom/coordination_unit.mojom.h"
 #include "components/performance_manager/public/mojom/lifecycle.mojom.h"
+#include "components/performance_manager/public/resource_attribution/page_context.h"
 #include "components/performance_manager/public/web_contents_proxy.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -39,7 +40,7 @@ enum class PageType {
 // Extensions.
 class PageNode : public Node {
  public:
-  using FrameNodeVisitor = base::RepeatingCallback<bool(const FrameNode*)>;
+  using FrameNodeVisitor = base::FunctionRef<bool(const FrameNode*)>;
   using LifecycleState = mojom::LifecycleState;
   using Observer = PageNodeObserver;
   class ObserverDefaultImpl;
@@ -120,12 +121,19 @@ class PageNode : public Node {
   // lifetime of this page. See "OnEmbedderFrameNodeChanged".
   virtual const FrameNode* GetEmbedderFrameNode() const = 0;
 
+  // Gets the unique token identifying this node for resource attribution. This
+  // token will not be reused after the node is destroyed.
+  virtual resource_attribution::PageContext GetResourceContext() const = 0;
+
   // Returns the type of relationship this node has with its embedder, if it has
   // an embedder.
   virtual EmbeddingType GetEmbeddingType() const = 0;
 
   // Returns the type of the page.
   virtual PageType GetType() const = 0;
+
+  // Returns true if this page has the focus.
+  virtual bool IsFocused() const = 0;
 
   // Returns true if this page is currently visible, false otherwise.
   // See PageNodeObserver::OnIsVisibleChanged.
@@ -138,6 +146,17 @@ class PageNode : public Node {
   // Returns true if this page is currently audible, false otherwise.
   // See PageNodeObserver::OnIsAudibleChanged.
   virtual bool IsAudible() const = 0;
+
+  // Returns the time since the last audible change. Unlike
+  // GetTimeSinceLastVisibilityChange(), this returns nullopt for a node which
+  // has never been audible. If a node is audible when created, it is considered
+  // to change from inaudible to audible at that point.
+  virtual absl::optional<base::TimeDelta> GetTimeSinceLastAudibleChange()
+      const = 0;
+
+  // Returns true if this page is displaying content in a picture-in-picture
+  // window, false otherwise.
+  virtual bool HasPictureInPicture() const = 0;
 
   // Returns the page's loading state.
   virtual LoadingState GetLoadingState() const = 0;
@@ -195,9 +214,19 @@ class PageNode : public Node {
   // See PageNodeObserver::OnMainFrameNavigationCommitted.
   virtual const GURL& GetMainFrameUrl() const = 0;
 
+  // Returns the private memory footprint size of the main frame and its
+  // children. This differs from EstimatePrivateFootprintSize which includes
+  // all the frames under the page node.
+  virtual uint64_t EstimateMainFramePrivateFootprintSize() const = 0;
+
   // Indicates if at least one of the frames in the page has received some form
   // interactions.
   virtual bool HadFormInteraction() const = 0;
+
+  // Indicates if at least one of the frames in the page has received
+  // user-initiated edits. This is a superset of `HadFormInteraction()` that
+  // also includes changes to `contenteditable` elements.
+  virtual bool HadUserEdits() const = 0;
 
   // Returns the web contents associated with this page node. It is valid to
   // call this function on any thread but the weak pointer must only be
@@ -218,6 +247,8 @@ class PageNode : public Node {
   virtual PageState GetPageState() const = 0;
 
   virtual uint64_t EstimateResidentSetSize() const = 0;
+
+  virtual uint64_t EstimatePrivateFootprintSize() const = 0;
 };
 
 // Pure virtual observer interface. Derive from this if you want to be forced to
@@ -268,11 +299,25 @@ class PageNodeObserver {
   virtual void OnTypeChanged(const PageNode* page_node,
                              PageType previous_type) = 0;
 
+  // Invoked when the IsFocused property changes.
+  virtual void OnIsFocusedChanged(const PageNode* page_node) = 0;
+
   // Invoked when the IsVisible property changes.
+  //
+  // GetTimeSinceLastVisibilityChange() will return the time since the previous
+  // IsVisible change. After all observers have fired it will return the time of
+  // this property change.
   virtual void OnIsVisibleChanged(const PageNode* page_node) = 0;
 
   // Invoked when the IsAudible property changes.
+  //
+  // GetTimeSinceLastAudibleChange() will return the time since the previous
+  // IsAudible change. After all observers have fired it will return the time of
+  // this property change.
   virtual void OnIsAudibleChanged(const PageNode* page_node) = 0;
+
+  // Invoked when the HasPictureInPicture property changes.
+  virtual void OnHasPictureInPictureChanged(const PageNode* page_node) = 0;
 
   // Invoked when the GetLoadingState property changes.
   virtual void OnLoadingStateChanged(const PageNode* page_node,
@@ -302,6 +347,9 @@ class PageNodeObserver {
   // Invoked when the HadFormInteraction property changes.
   virtual void OnHadFormInteractionChanged(const PageNode* page_node) = 0;
 
+  // Invoked when the HadUserEdits property changes.
+  virtual void OnHadUserEditsChanged(const PageNode* page_node) = 0;
+
   // Invoked when the page state changes. See `PageState` for the valid
   // transitions.
   virtual void OnPageStateChanged(const PageNode* page_node,
@@ -316,6 +364,12 @@ class PageNodeObserver {
   // Fired when the favicon associated with a page is updated. This property is
   // not directly reflected on the node.
   virtual void OnFaviconUpdated(const PageNode* page_node) = 0;
+
+  // Fired after `new_page_node` is created but before `page_node` is deleted
+  // from being discarded. See the equivalent function on `WebContentsObserver`
+  // for more detail.
+  virtual void OnAboutToBeDiscarded(const PageNode* page_node,
+                                    const PageNode* new_page_node) = 0;
 
   // Called every time the aggregated freezing vote changes or gets invalidated.
   virtual void OnFreezingVoteChanged(
@@ -348,8 +402,10 @@ class PageNode::ObserverDefaultImpl : public PageNodeObserver {
       EmbeddingType previous_embedding_type) override {}
   void OnTypeChanged(const PageNode* page_node,
                      PageType previous_type) override {}
+  void OnIsFocusedChanged(const PageNode* page_node) override {}
   void OnIsVisibleChanged(const PageNode* page_node) override {}
   void OnIsAudibleChanged(const PageNode* page_node) override {}
+  void OnHasPictureInPictureChanged(const PageNode* page_node) override {}
   void OnLoadingStateChanged(const PageNode* page_node,
                              PageNode::LoadingState previous_state) override {}
   void OnUkmSourceIdChanged(const PageNode* page_node) override {}
@@ -360,8 +416,11 @@ class PageNode::ObserverDefaultImpl : public PageNodeObserver {
   void OnMainFrameUrlChanged(const PageNode* page_node) override {}
   void OnMainFrameDocumentChanged(const PageNode* page_node) override {}
   void OnHadFormInteractionChanged(const PageNode* page_node) override {}
+  void OnHadUserEditsChanged(const PageNode* page_node) override {}
   void OnTitleUpdated(const PageNode* page_node) override {}
   void OnFaviconUpdated(const PageNode* page_node) override {}
+  void OnAboutToBeDiscarded(const PageNode* page_node,
+                            const PageNode* new_page_node) override {}
   void OnFreezingVoteChanged(
       const PageNode* page_node,
       absl::optional<freezing::FreezingVote> previous_vote) override {}

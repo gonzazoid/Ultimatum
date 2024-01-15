@@ -7,7 +7,7 @@
 #include <limits>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "build/build_config.h"
@@ -17,6 +17,7 @@
 #include "net/base/load_flags.h"
 #include "net/base/load_states.h"
 #include "net/base/net_errors.h"
+#include "net/base/proxy_chain.h"
 #include "net/base/proxy_server.h"
 #include "net/base/request_priority.h"
 #include "net/base/upload_data_stream.h"
@@ -39,9 +40,13 @@ namespace {
 // Returns the string representation of the HostPortPair of the proxy server
 // that was used to fetch the response.
 std::string GetProxy(const net::HttpResponseInfo& info) {
-  if (!info.proxy_server.is_valid() || info.proxy_server.is_direct())
+  if (!info.proxy_chain.IsValid() || info.proxy_chain.is_direct()) {
     return net::HostPortPair().ToString();
-  return info.proxy_server.host_port_pair().ToString();
+  }
+  CHECK(info.proxy_chain.is_single_proxy());
+  return info.proxy_chain.GetProxyServer(/*chain_index=*/0)
+      .host_port_pair()
+      .ToString();
 }
 
 int CalculateLoadFlags(int load_flags,
@@ -143,6 +148,10 @@ void CronetURLRequest::FollowDeferredRedirect() {
 }
 
 bool CronetURLRequest::ReadData(net::IOBuffer* raw_read_buffer, int max_size) {
+  // TODO(https://crbug.com/1335423): Change to DCHECK() or remove after bug
+  // is fixed.
+  CHECK(max_size == 0 || (raw_read_buffer && raw_read_buffer->data()));
+
   scoped_refptr<net::IOBuffer> read_buffer(raw_read_buffer);
   context_->PostTaskToNetworkThread(
       FROM_HERE,

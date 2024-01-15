@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/autofill/core/browser/address_normalizer.h"
@@ -58,7 +58,7 @@ AddressNormalizationManager::AddressNormalizationManager(
   DCHECK(address_normalizer_);
 }
 
-AddressNormalizationManager::~AddressNormalizationManager() {}
+AddressNormalizationManager::~AddressNormalizationManager() = default;
 
 void AddressNormalizationManager::NormalizeAddressUntilFinalized(
     AutofillProfile* profile) {

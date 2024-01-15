@@ -7,7 +7,7 @@ module viz.mojom;
 import "mojo/public/mojom/base/unguessable_token.mojom";
 import "services/viz/public/mojom/compositing/compositor_render_pass_id.mojom";
 import "services/viz/public/mojom/compositing/resource_id.mojom";
-import "services/viz/public/mojom/compositing/shared_element_resource_id.mojom";
+import "services/viz/public/mojom/compositing/view_transition_element_resource_id.mojom";
 import "services/viz/public/mojom/compositing/shared_quad_state.mojom";
 import "services/viz/public/mojom/compositing/surface_range.mojom";
 import "skia/public/mojom/skcolor4f.mojom";
@@ -26,6 +26,11 @@ enum OverlayPriority {
   kLow,
   kRegular,
   kRequired
+};
+
+struct RoundedDisplayMasksInfo {
+  bool is_horizontally_positioned;
+  array<uint8, 2> radii;
 };
 
 struct DebugBorderQuadState {
@@ -91,10 +96,12 @@ struct TextureQuadState {
   bool secure_output_only;
   bool is_stream_video;
   bool is_video_frame;
+  bool force_rgbx;
   ProtectedVideoState protected_video_type;
-  gfx.mojom.HDRMetadata? hdr_metadata;
+  gfx.mojom.HDRMetadata hdr_metadata;
   gfx.mojom.Rect? damage_rect;
   OverlayPriority overlay_priority_hint;
+  RoundedDisplayMasksInfo rounded_display_masks_info;
 };
 
 struct TileQuadState {
@@ -120,7 +127,7 @@ struct YUVVideoQuadState {
   uint32 bits_per_channel;
   gfx.mojom.ColorSpace video_color_space;
   ProtectedVideoState protected_video_type;
-  gfx.mojom.HDRMetadata? hdr_metadata;
+  gfx.mojom.HDRMetadata hdr_metadata;
   gfx.mojom.Rect? damage_rect;
 };
 
@@ -129,7 +136,7 @@ struct VideoHoleQuadState {
 };
 
 struct SharedElementQuadState {
-  SharedElementResourceId resource_id;
+  ViewTransitionElementResourceId resource_id;
 };
 
 union DrawQuadState {

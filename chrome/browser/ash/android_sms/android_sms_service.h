@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/android_sms/android_sms_app_manager_impl.h"
 #include "chrome/browser/ash/android_sms/android_sms_pairing_state_tracker_impl.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -73,8 +74,8 @@ class AndroidSmsService : public KeyedService,
   // session_manager::SessionManagerObserver
   void OnSessionStateChanged() override;
 
-  Profile* profile_;
-  multidevice_setup::MultiDeviceSetupClient* multidevice_setup_client_;
+  raw_ptr<Profile> profile_;
+  raw_ptr<multidevice_setup::MultiDeviceSetupClient> multidevice_setup_client_;
 
   std::unique_ptr<AndroidSmsAppSetupController>
       andoid_sms_app_setup_controller_;
@@ -86,12 +87,5 @@ class AndroidSmsService : public KeyedService,
 
 }  // namespace android_sms
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace chromeos {
-namespace android_sms {
-using ::ash::android_sms::AndroidSmsService;
-}
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_ANDROID_SMS_ANDROID_SMS_SERVICE_H_

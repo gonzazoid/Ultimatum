@@ -9,6 +9,7 @@
 
 #include "base/files/scoped_temp_dir.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "components/services/storage/service_worker/service_worker_storage_control_impl.h"
@@ -20,6 +21,7 @@
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_browser_context.h"
 #include "net/base/features.h"
+#include "net/base/schemeful_site.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration.mojom.h"
@@ -94,7 +96,7 @@ class ServiceWorkerContextWrapperTest : public testing::Test {
     blink::ServiceWorkerStatusCode result;
     base::RunLoop loop;
     registry()->DeleteRegistration(
-        registration, registration->key(),
+        registration,
         base::BindLambdaForTesting([&](blink::ServiceWorkerStatusCode status) {
           result = status;
           loop.Quit();
@@ -110,7 +112,8 @@ class ServiceWorkerContextWrapperTest : public testing::Test {
     storage_control_ =
         std::make_unique<storage::ServiceWorkerStorageControlImpl>(
             user_data_directory_.GetPath(),
-            /*database_task_runner=*/base::ThreadTaskRunnerHandle::Get(),
+            /*database_task_runner=*/
+            base::SingleThreadTaskRunner::GetCurrentDefault(),
             std::move(receiver));
   }
 
@@ -126,7 +129,8 @@ class ServiceWorkerContextWrapperTest : public testing::Test {
 TEST_F(ServiceWorkerContextWrapperTest, HasRegistration) {
   // Make a service worker.
   GURL scope("https://example.com/");
-  blink::StorageKey key(url::Origin::Create(scope));
+  const blink::StorageKey key =
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(scope));
   GURL script("https://example.com/sw.js");
   scoped_refptr<ServiceWorkerRegistration> registration =
       CreateServiceWorkerRegistrationAndVersion(context(), scope, script, key,
@@ -153,7 +157,7 @@ TEST_F(ServiceWorkerContextWrapperTest, HasRegistration) {
   wrapper_->context()->WaitForRegistrationsInitializedForTest();
   EXPECT_TRUE(wrapper_->MaybeHasRegistrationForStorageKey(key));
   EXPECT_FALSE(wrapper_->MaybeHasRegistrationForStorageKey(
-      blink::StorageKey(url::Origin::Create(GURL("https://example.org")))));
+      blink::StorageKey::CreateFromStringForTesting("https://example.org")));
 }
 
 // This test involves storing two registrations for the same key to storage
@@ -166,7 +170,8 @@ TEST_F(ServiceWorkerContextWrapperTest, DeleteRegistrationsForSameKey) {
 
   // Make two registrations for same origin.
   GURL scope1("https://example1.com/abc/");
-  blink::StorageKey key(url::Origin::Create(scope1));
+  const blink::StorageKey key =
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(scope1));
   GURL script1("https://example1.com/abc/sw.js");
   scoped_refptr<ServiceWorkerRegistration> registration1 =
       CreateServiceWorkerRegistrationAndVersion(context(), scope1, script1, key,
@@ -220,17 +225,19 @@ TEST_F(ServiceWorkerContextWrapperTest, DeleteRegistrationsForPartitionedKeys) {
 
   // Make two registrations for same origin, but different top-level site.
   GURL scope("https://example1.com/abc/");
-  url::Origin site1 = url::Origin::Create(GURL("https://site1.example"));
+  net::SchemefulSite site1 = net::SchemefulSite(GURL("https://site1.example"));
   blink::StorageKey key1 =
-      blink::StorageKey::CreateForTesting(url::Origin::Create(scope), site1);
+      blink::StorageKey::Create(url::Origin::Create(scope), site1,
+                                blink::mojom::AncestorChainBit::kCrossSite);
   GURL script("https://example1.com/abc/sw.js");
   scoped_refptr<ServiceWorkerRegistration> registration1 =
       CreateServiceWorkerRegistrationAndVersion(context(), scope, script, key1,
                                                 /*resource_id=*/1);
 
-  url::Origin site2 = url::Origin::Create(GURL("https://site2.example"));
+  net::SchemefulSite site2 = net::SchemefulSite(GURL("https://site2.example"));
   blink::StorageKey key2 =
-      blink::StorageKey::CreateForTesting(url::Origin::Create(scope), site2);
+      blink::StorageKey::Create(url::Origin::Create(scope), site2,
+                                blink::mojom::AncestorChainBit::kCrossSite);
   scoped_refptr<ServiceWorkerRegistration> registration2 =
       CreateServiceWorkerRegistrationAndVersion(context(), scope, script, key2,
                                                 2);
@@ -276,7 +283,8 @@ TEST_F(ServiceWorkerContextWrapperTest, DeleteRegistration) {
 
   // Make registration.
   GURL scope1("https://example2.com/");
-  blink::StorageKey key(url::Origin::Create(scope1));
+  const blink::StorageKey key =
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(scope1));
   GURL script1("https://example2.com/");
   scoped_refptr<ServiceWorkerRegistration> registration =
       CreateServiceWorkerRegistrationAndVersion(context(), scope1, script1, key,

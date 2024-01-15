@@ -7,10 +7,11 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 
-#include "base/callback.h"
 #include "base/clang_profiling_buildflags.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/observer_list.h"
@@ -21,16 +22,19 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
+#include "base/trace_event/memory_dump_provider.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/viz/service/display_embedder/compositor_gpu_thread.h"
 #include "components/viz/service/viz_service_export.h"
 #include "gpu/command_buffer/client/gpu_memory_buffer_manager.h"
-#include "gpu/command_buffer/common/activity_flags.h"
+#include "gpu/command_buffer/common/shm_count.h"
 #include "gpu/command_buffer/service/sequence_id.h"
 #include "gpu/config/gpu_info.h"
 #include "gpu/config/gpu_preferences.h"
+#include "gpu/ipc/common/client_gmb_interface.mojom.h"
 #include "gpu/ipc/common/gpu_disk_cache_type.h"
+#include "gpu/ipc/common/gpu_memory_buffer_support.h"
 #include "gpu/ipc/common/surface_handle.h"
 #include "gpu/ipc/service/gpu_channel.h"
 #include "gpu/ipc/service/gpu_channel_manager.h"
@@ -40,6 +44,7 @@
 #include "gpu/vulkan/buildflags.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
+#include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/shared_remote.h"
 #include "services/viz/privileged/mojom/gl/gpu_host.mojom.h"
@@ -51,7 +56,12 @@
 
 #if BUILDFLAG(IS_WIN)
 #include "ui/gl/direct_composition_support.h"
-#endif
+
+#if !BUILDFLAG(IS_CHROMEOS)
+#include "services/webnn/public/mojom/webnn_context_provider.mojom.h"
+#endif  // !BUILDFLAG(IS_CHROMEOS)
+
+#endif  // BUILDFLAG(IS_WIN)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 namespace arc {
@@ -60,6 +70,7 @@ class ProtectedBufferManager;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 namespace gpu {
+class DawnContextProvider;
 class GpuMemoryBufferFactory;
 class GpuWatchdogThread;
 class ImageDecodeAcceleratorWorker;
@@ -70,6 +81,10 @@ class SyncPointManager;
 class VulkanImplementation;
 }  // namespace gpu
 
+namespace gpu::webgpu {
+class DawnCachingInterfaceFactory;
+}  // namespace gpu::webgpu
+
 namespace media {
 class MediaGpuChannelManager;
 }  // namespace media
@@ -78,7 +93,6 @@ namespace viz {
 
 class VulkanContextProvider;
 class MetalContextProvider;
-class DawnContextProvider;
 
 enum class ExitCode {
   // Matches service_manager::ResultCode::RESULT_CODE_NORMAL_EXIT
@@ -119,7 +133,7 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl
 
   void InitializeWithHost(
       mojo::PendingRemote<mojom::GpuHost> gpu_host,
-      gpu::GpuProcessActivityFlags activity_flags,
+      gpu::GpuProcessShmCount use_shader_cache_shm_count,
       scoped_refptr<gl::GLSurface> default_offscreen_surface,
       gpu::SyncPointManager* sync_point_manager = nullptr,
       gpu::SharedImageManager* shared_image_manager = nullptr,
@@ -187,6 +201,18 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl
   void CreateVideoEncodeAcceleratorProvider(
       mojo::PendingReceiver<media::mojom::VideoEncodeAcceleratorProvider>
           vea_provider_receiver) override;
+
+#if !BUILDFLAG(IS_CHROMEOS)
+  void BindWebNNContextProvider(
+      mojo::PendingReceiver<webnn::mojom::WebNNContextProvider>
+          pending_receiver,
+      int client_id) override;
+#endif  // !BUILDFLAG(IS_CHROMEOS)
+
+  void BindClientGmbInterface(
+      mojo::PendingReceiver<gpu::mojom::ClientGmbInterface> pending_receiver,
+      int client_id) override;
+
   void CreateGpuMemoryBuffer(gfx::GpuMemoryBufferId id,
                              const gfx::Size& size,
                              gfx::BufferFormat format,
@@ -195,8 +221,7 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl
                              gpu::SurfaceHandle surface_handle,
                              CreateGpuMemoryBufferCallback callback) override;
   void DestroyGpuMemoryBuffer(gfx::GpuMemoryBufferId id,
-                              int client_id,
-                              const gpu::SyncToken& sync_token) override;
+                              int client_id) override;
   void CopyGpuMemoryBuffer(gfx::GpuMemoryBufferHandle buffer_handle,
                            base::UnsafeSharedMemoryRegion shared_memory,
                            CopyGpuMemoryBufferCallback callback) override;
@@ -243,10 +268,9 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl
   void DidDestroyChannel(int client_id) override;
   void DidDestroyAllChannels() override;
   void DidDestroyOffscreenContext(const GURL& active_url) override;
-  void DidLoseContext(bool offscreen,
-                      gpu::error::ContextLostReason reason,
+  void DidLoseContext(gpu::error::ContextLostReason reason,
                       const GURL& active_url) override;
-  void GetDawnInfo(GetDawnInfoCallback callback) override;
+  void GetDawnInfo(bool collect_metrics, GetDawnInfoCallback callback) override;
 
   void GetIsolationKey(int client_id,
                        const blink::WebGPUExecutionContextToken& token,
@@ -255,16 +279,17 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl
                        const std::string& key,
                        const std::string& shader) override;
 
-  // Attempts to atomically shut down the process but only if not running in
-  // host process. An error message will be logged.
-  void MaybeExitOnContextLost() override;
+  // Attempts to atomically shut down the process. Only does so if (a) not
+  // running in host process or (b) the context loss is irrecoverable and an
+  // immediate crash is better than entering a context loss loop. An error
+  // message will be logged.
+  void MaybeExitOnContextLost(
+      bool synthetic_loss,
+      gpu::error::ContextLostReason context_lost_reason) override;
   bool IsExiting() const override;
   gpu::Scheduler* GetGpuScheduler() override;
 
 #if BUILDFLAG(IS_WIN)
-  void SendCreatedChildWindow(gpu::SurfaceHandle parent_window,
-                              gpu::SurfaceHandle child_window) override;
-
   // DirectCompositionOverlayCapsObserver implementation.
   // Update overlay info and HDR status on the GPU process and send the updated
   // info back to the browser process if there is a change.
@@ -295,7 +320,6 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl
     return compositor_gpu_thread_.get();
   }
 
-  gpu::ImageFactory* gpu_image_factory();
   gpu::GpuMemoryBufferFactory* gpu_memory_buffer_factory() {
     return gpu_memory_buffer_factory_.get();
   }
@@ -349,26 +373,27 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl
   }
 
 #if BUILDFLAG(ENABLE_VULKAN)
-  bool is_using_vulkan() const {
-    return !!vulkan_context_provider_ &&
-           gpu_preferences_.gr_context_type == gpu::GrContextType::kVulkan;
-  }
-  VulkanContextProvider* vulkan_context_provider() {
+  VulkanContextProvider* vulkan_context_provider() const {
     return vulkan_context_provider_.get();
   }
 #else
-  bool is_using_vulkan() const { return false; }
-  VulkanContextProvider* vulkan_context_provider() { return nullptr; }
+  VulkanContextProvider* vulkan_context_provider() const { return nullptr; }
+#endif
+
+#if BUILDFLAG(SKIA_USE_METAL)
+  MetalContextProvider* metal_context_provider() const {
+    return metal_context_provider_.get();
+  }
+#else
+  MetalContextProvider* metal_context_provider() const { return nullptr; }
 #endif
 
 #if BUILDFLAG(SKIA_USE_DAWN)
-  bool is_using_dawn() const { return !!dawn_context_provider_; }
-  DawnContextProvider* dawn_context_provider() {
+  gpu::DawnContextProvider* dawn_context_provider() const {
     return dawn_context_provider_.get();
   }
 #else
-  bool is_using_dawn() const { return false; }
-  DawnContextProvider* dawn_context_provider() { return nullptr; }
+  gpu::DawnContextProvider* dawn_context_provider() const { return nullptr; }
 #endif
 
   base::ProcessId host_process_id() const { return host_process_id_; }
@@ -382,6 +407,68 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl
   void SetVisibilityChangedCallback(VisibilityChangedCallback);
 
  private:
+  // This class is used to receive direct IPCs for GMB from renderers without
+  // needing to go/route via the browser process.
+  class ClientGmbInterfaceImpl : public gpu::mojom::ClientGmbInterface,
+                                 public base::trace_event::MemoryDumpProvider {
+   public:
+    ClientGmbInterfaceImpl(
+        int client_id,
+        mojo::PendingReceiver<gpu::mojom::ClientGmbInterface> pending_receiver,
+        raw_ptr<GpuServiceImpl> gpu_service,
+        scoped_refptr<base::SingleThreadTaskRunner> io_runner);
+    ~ClientGmbInterfaceImpl() override;
+
+    // mojom::ClientGmbInterface override
+    void CreateGpuMemoryBuffer(gfx::GpuMemoryBufferId id,
+                               const gfx::Size& size,
+                               gfx::BufferFormat format,
+                               gfx::BufferUsage usage,
+                               gpu::SurfaceHandle surface_handle,
+                               CreateGpuMemoryBufferCallback callback) override;
+    void DestroyGpuMemoryBuffer(gfx::GpuMemoryBufferId id) override;
+    void CopyGpuMemoryBuffer(gfx::GpuMemoryBufferHandle buffer_handle,
+                             base::UnsafeSharedMemoryRegion shared_memory,
+                             CopyGpuMemoryBufferCallback callback) override;
+
+    // Overridden from base::trace_event::MemoryDumpProvider:
+    bool OnMemoryDump(const base::trace_event::MemoryDumpArgs& args,
+                      base::trace_event::ProcessMemoryDump* pmd) override;
+
+    void OnConnectionError();
+    void OnGpuMemoryBufferAllocated(gfx::GpuMemoryBufferId id,
+                                    gfx::GpuMemoryBufferHandle handle);
+    void DestroyAllGpuMemoryBuffers();
+
+   private:
+    struct PendingBufferInfo {
+      PendingBufferInfo();
+      PendingBufferInfo(PendingBufferInfo&&);
+      ~PendingBufferInfo();
+
+      gfx::Size size;
+      gfx::BufferFormat format;
+      base::OnceCallback<void(gfx::GpuMemoryBufferHandle)> callback;
+    };
+
+    const int client_id_;
+    raw_ptr<GpuServiceImpl> gpu_service_;
+    mojo::Receiver<gpu::mojom::ClientGmbInterface> receiver_{this};
+    std::unordered_map<gfx::GpuMemoryBufferId,
+                       PendingBufferInfo,
+                       std::hash<gfx::GpuMemoryBufferId>>
+        pending_buffers_;
+    std::unordered_map<gfx::GpuMemoryBufferId,
+                       gpu::AllocatedBufferInfo,
+                       std::hash<gfx::GpuMemoryBufferId>>
+        allocated_buffers_;
+
+    base::WeakPtr<ClientGmbInterfaceImpl> weak_ptr_;
+    base::WeakPtrFactory<ClientGmbInterfaceImpl> weak_ptr_factory_{this};
+  };
+
+  bool IsNativeBufferSupported(gfx::BufferFormat format,
+                               gfx::BufferUsage usage);
   void RecordLogMessage(int severity,
                         const std::string& header,
                         const std::string& message);
@@ -426,10 +513,28 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl
   void UpdateOverlayAndDXGIInfo();
 #endif
 
-  void GetDawnInfoOnMain(GetDawnInfoCallback callback);
+  void GetDawnInfoOnMain(bool collect_metrics, GetDawnInfoCallback callback);
+
+  void RemoveGmbClient(int client_id);
+
+  std::string GetShaderPrefixKey();
+
+  gpu::webgpu::DawnCachingInterfaceFactory* dawn_caching_interface_factory() {
+#if BUILDFLAG(USE_DAWN) || BUILDFLAG(SKIA_USE_DAWN)
+    return dawn_caching_interface_factory_.get();
+#else
+    return nullptr;
+#endif
+  }
 
   scoped_refptr<base::SingleThreadTaskRunner> main_runner_;
   scoped_refptr<base::SingleThreadTaskRunner> io_runner_;
+
+#if BUILDFLAG(IS_FUCHSIA)
+  // TODO(crbug.com/1340041): Fuchsia does not support FIDL communication from
+  // ThreadPool's worker threads.
+  std::unique_ptr<base::Thread> vea_thread_;
+#endif
 
   // Do not change the class member order here. watchdog_thread_ should be the
   // last one to be destroyed before main_runner_ and io_runner_.
@@ -473,13 +578,20 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl
   std::unique_ptr<gpu::Scheduler> owned_scheduler_;
   raw_ptr<gpu::Scheduler, DanglingUntriaged> scheduler_;
 
+#if BUILDFLAG(USE_DAWN) || BUILDFLAG(SKIA_USE_DAWN)
+  std::unique_ptr<gpu::webgpu::DawnCachingInterfaceFactory>
+      dawn_caching_interface_factory_;
+#endif
+
 #if BUILDFLAG(ENABLE_VULKAN)
   raw_ptr<gpu::VulkanImplementation> vulkan_implementation_;
   scoped_refptr<VulkanContextProvider> vulkan_context_provider_;
 #endif
+#if BUILDFLAG(SKIA_USE_METAL)
   std::unique_ptr<MetalContextProvider> metal_context_provider_;
+#endif
 #if BUILDFLAG(SKIA_USE_DAWN)
-  std::unique_ptr<DawnContextProvider> dawn_context_provider_;
+  std::unique_ptr<gpu::DawnContextProvider> dawn_context_provider_;
 #endif
 
   std::unique_ptr<gpu::GpuMemoryBufferFactory> gpu_memory_buffer_factory_;
@@ -505,6 +617,12 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl
   // Should only be accessed on the IO thread after creation.
   mojo::Receiver<mojom::GpuService> receiver_{this};
 
+  gpu::GpuMemoryBufferConfigurationSet supported_gmb_configurations_;
+  bool supported_gmb_configurations_inited_ = false;
+
+  // Map of client_id to ClientGmbInterfaceImpl object.
+  std::unordered_map<int, std::unique_ptr<ClientGmbInterfaceImpl>> gmb_clients_;
+
 #if BUILDFLAG(IS_CHROMEOS_ASH) && BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
   scoped_refptr<arc::ProtectedBufferManager> protected_buffer_manager_;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH) &&
@@ -515,6 +633,8 @@ class VIZ_SERVICE_EXPORT GpuServiceImpl
   base::ProcessId host_process_id_ = base::kNullProcessId;
 
   base::RepeatingClosure wake_up_closure_;
+
+  std::string shader_prefix_key_;
 
   base::WeakPtr<GpuServiceImpl> weak_ptr_;
   base::WeakPtrFactory<GpuServiceImpl> weak_ptr_factory_{this};

@@ -33,6 +33,7 @@
 
 #include <memory>
 
+#include "base/debug/stack_trace.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/observer_list.h"
@@ -42,6 +43,7 @@
 #include "mojo/public/cpp/bindings/remote_set.h"
 #include "third_party/blink/public/common/input/web_gesture_event.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
+#include "third_party/blink/public/common/page/browsing_context_group_info.h"
 #include "third_party/blink/public/common/renderer_preferences/renderer_preferences.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/mojom/frame/frame.mojom-blink.h"
@@ -89,6 +91,7 @@ class WebViewHelper;
 }
 
 class BrowserControls;
+struct ColorProviderColorMaps;
 class DevToolsEmulator;
 class Frame;
 class FullscreenController;
@@ -119,14 +122,16 @@ class CORE_EXPORT WebViewImpl final : public WebView,
       mojom::blink::PageVisibilityState visibility,
       bool is_prerendering,
       bool is_inside_portal,
-      absl::optional<mojom::blink::FencedFrameMode> fenced_frame_mode,
+      absl::optional<blink::FencedFrame::DeprecatedFencedFrameMode>
+          fenced_frame_mode,
       bool compositing_enabled,
       bool widgets_never_composited,
       WebViewImpl* opener,
       mojo::PendingAssociatedReceiver<mojom::blink::PageBroadcast> page_handle,
       scheduler::WebAgentGroupScheduler& agent_group_scheduler,
       const SessionStorageNamespaceId& session_storage_namespace_id,
-      absl::optional<SkColor> page_base_background_color);
+      absl::optional<SkColor> page_base_background_color,
+      const BrowsingContextGroupInfo& browsing_context_group_info);
 
   // All calls to Create() should be balanced with a call to Close(). This
   // synchronously destroys the WebViewImpl.
@@ -218,6 +223,8 @@ class CORE_EXPORT WebViewImpl final : public WebView,
   void SetDeviceColorSpaceForTesting(
       const gfx::ColorSpace& color_space) override;
   void PaintContent(cc::PaintCanvas*, const gfx::Rect&) override;
+  void SetColorProviders(
+      const ColorProviderColorMaps& color_provider_colors) override;
   void RegisterRendererPreferenceWatcher(
       CrossVariantMojoRemote<mojom::RendererPreferenceWatcherInterfaceBase>
           watcher) override;
@@ -234,6 +241,7 @@ class CORE_EXPORT WebViewImpl final : public WebView,
   int32_t HistoryListLength() const { return history_list_length_; }
   const SessionStorageNamespaceId& GetSessionStorageNamespaceId() override;
   bool IsFencedFrameRoot() const override;
+  void SetSupportsAppRegion(bool supports_app_region) override;
 
   // Functions to add and remove observers for this object.
   void AddObserver(WebViewObserver* observer);
@@ -298,7 +306,6 @@ class CORE_EXPORT WebViewImpl final : public WebView,
       mojom::blink::PrerenderPageActivationParamsPtr
           prerender_page_activation_params,
       ActivatePrerenderedPageCallback callback) override;
-  void SetInsidePortal(bool is_inside_portal) override;
   void UpdateWebPreferences(
       const blink::web_pref::WebPreferences& preferences) override;
   void UpdateRendererPreferences(
@@ -310,10 +317,17 @@ class CORE_EXPORT WebViewImpl final : public WebView,
       const RemoteFrameToken& frame_token,
       const absl::optional<FrameToken>& opener_frame_token,
       mojom::blink::FrameReplicationStatePtr replicated_state,
+      bool is_loading,
       const base::UnguessableToken& devtools_frame_token,
       mojom::blink::RemoteFrameInterfacesFromBrowserPtr remote_frame_interfaces,
       mojom::blink::RemoteMainFrameInterfacesPtr remote_main_frame_interfaces)
       override;
+  void UpdatePageBrowsingContextGroup(
+      const BrowsingContextGroupInfo& browsing_context_group_info) override;
+  void SetPageAttributionSupport(
+      network::mojom::AttributionSupport support) override;
+  void UpdateColorProviders(
+      const ColorProviderColorMaps& color_provider_colors) override;
 
   void DispatchPersistedPageshow(base::TimeTicks navigation_start);
   void DispatchPagehide(mojom::blink::PagehideDispatch pagehide_dispatch);
@@ -331,7 +345,7 @@ class CORE_EXPORT WebViewImpl final : public WebView,
 
   void SetZoomFactorOverride(float);
   void SetCompositorDeviceScaleFactorOverride(float);
-  TransformationMatrix GetDeviceEmulationTransform() const;
+  gfx::Transform GetDeviceEmulationTransform() const;
   void EnableAutoResizeMode(const gfx::Size& min_viewport_size,
                             const gfx::Size& max_viewport_size);
   void DisableAutoResizeMode();
@@ -510,7 +524,7 @@ class CORE_EXPORT WebViewImpl final : public WebView,
 
   void AddAutoplayFlags(int32_t) override;
   void ClearAutoplayFlags() override;
-  int32_t AutoplayFlagsForTest() override;
+  int32_t AutoplayFlagsForTest() const override;
   gfx::Size GetPreferredSizeForTest() override;
 
   gfx::Size Size();
@@ -520,9 +534,7 @@ class CORE_EXPORT WebViewImpl final : public WebView,
 
   gfx::Vector2dF ElasticOverscroll() const { return elastic_overscroll_; }
 
-  class ChromeClient& GetChromeClient() const {
-    return *chrome_client_.Get();
-  }
+  class ChromeClient& GetChromeClient() const { return *chrome_client_.Get(); }
 
   // Allows main frame updates to occur if they were previously blocked. They
   // are blocked during loading a navigation, to allow Blink to proceed without
@@ -541,7 +553,7 @@ class CORE_EXPORT WebViewImpl final : public WebView,
   // Called when some JS code has instructed the window associated to the main
   // frame to close, which will result in a request to the browser to close the
   // Widget associated to it.
-  void CloseWindowSoon();
+  void CloseWindow();
 
   // Controls whether pressing Tab key advances focus to links.
   bool TabsToLinks() const;
@@ -589,6 +601,15 @@ class CORE_EXPORT WebViewImpl final : public WebView,
   // Tells the browser that another page has accessed the DOM of the initial
   // empty document of a main frame.
   void DidAccessInitialMainDocument();
+
+  // Sends window.minimize() requests to the browser window.
+  void Minimize();
+  // Sends window.maximize() requests to the browser window.
+  void Maximize();
+  // Sends window.restore() requests to the browser window.
+  void Restore();
+  // Sends window.setResizable() requests to the browser window.
+  void SetResizable(bool resizable);
 
   // TODO(crbug.com/1149992): This is called from the associated widget and this
   // code should eventually move out of WebView into somewhere else.
@@ -655,6 +676,12 @@ class CORE_EXPORT WebViewImpl final : public WebView,
       mojom::blink::PageLifecycleStatePtr new_state,
       mojom::blink::PageRestoreParamsPtr page_restore_params);
 
+  // Updates the main frame's view transition state.
+  void UpdateViewTransitionState(
+      bool restoring_from_bfcache,
+      bool storing_in_bfcache,
+      const mojom::blink::PageRestoreParamsPtr& page_restore_params);
+
   float MaximumLegiblePageScale() const;
   void RefreshPageScaleFactor();
   gfx::Size ContentsSize() const;
@@ -676,14 +703,16 @@ class CORE_EXPORT WebViewImpl final : public WebView,
       mojom::blink::PageVisibilityState visibility,
       bool is_prerendering,
       bool is_inside_portal,
-      absl::optional<mojom::blink::FencedFrameMode> fenced_frame_mode,
+      absl::optional<blink::FencedFrame::DeprecatedFencedFrameMode>
+          fenced_frame_mode,
       bool does_composite,
       bool widgets_never_composite,
       WebViewImpl* opener,
       mojo::PendingAssociatedReceiver<mojom::blink::PageBroadcast> page_handle,
       scheduler::WebAgentGroupScheduler& agent_group_scheduler,
       const SessionStorageNamespaceId& session_storage_namespace_id,
-      absl::optional<SkColor> page_base_background_color);
+      absl::optional<SkColor> page_base_background_color,
+      const BrowsingContextGroupInfo& browsing_context_group_info);
   ~WebViewImpl() override;
 
   void ConfigureAutoResizeMode();
@@ -691,7 +720,7 @@ class CORE_EXPORT WebViewImpl final : public WebView,
   void DoComposite();
   void ReallocateRenderer();
 
-  void SetDeviceEmulationTransform(const TransformationMatrix&);
+  void SetDeviceEmulationTransform(const gfx::Transform&);
   void UpdateDeviceEmulationTransform();
 
   // Helper function: Widens the width of |source| by the specified margins
@@ -840,7 +869,7 @@ class CORE_EXPORT WebViewImpl final : public WebView,
   bool fake_page_scale_animation_use_anchor_ = false;
 
   float compositor_device_scale_factor_override_ = 0.f;
-  TransformationMatrix device_emulation_transform_;
+  gfx::Transform device_emulation_transform_;
 
   // The offset of the current item in the history list.
   // The initial value is -1 since the offset should be lower than
@@ -960,6 +989,11 @@ class CORE_EXPORT WebViewImpl final : public WebView,
       ui::mojom::blink::VirtualKeyboardMode::kUnset;
 
   scheduler::WebAgentGroupScheduler& web_agent_group_scheduler_;
+
+  // TODO(crbug.com/1499519): Remove this temporary debugging.
+  absl::optional<base::debug::StackTrace> close_task_posted_stack_trace_;
+  absl::optional<base::debug::StackTrace> close_called_stack_trace_;
+  absl::optional<base::debug::StackTrace> close_window_called_stack_trace_;
 
   // All the registered observers.
   base::ObserverList<WebViewObserver> observers_;

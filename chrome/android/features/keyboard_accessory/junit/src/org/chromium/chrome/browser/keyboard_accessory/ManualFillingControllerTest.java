@@ -6,12 +6,14 @@ package org.chromium.chrome.browser.keyboard_accessory;
 
 import static android.content.res.Configuration.HARDKEYBOARDHIDDEN_UNDEFINED;
 
+import static androidx.test.espresso.matcher.ViewMatchers.assertThat;
+
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
-import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -31,6 +33,7 @@ import static org.chromium.chrome.browser.keyboard_accessory.ManualFillingProper
 import static org.chromium.chrome.browser.keyboard_accessory.ManualFillingProperties.KeyboardExtensionState.HIDDEN;
 import static org.chromium.chrome.browser.keyboard_accessory.ManualFillingProperties.KeyboardExtensionState.REPLACING_KEYBOARD;
 import static org.chromium.chrome.browser.keyboard_accessory.ManualFillingProperties.KeyboardExtensionState.WAITING_TO_REPLACE;
+import static org.chromium.chrome.browser.keyboard_accessory.ManualFillingProperties.SHOULD_EXTEND_KEYBOARD;
 import static org.chromium.chrome.browser.keyboard_accessory.ManualFillingProperties.SHOW_WHEN_VISIBLE;
 import static org.chromium.chrome.browser.tab.Tab.INVALID_TAB_ID;
 import static org.chromium.chrome.browser.tab.TabLaunchType.FROM_BROWSER_ACTIONS;
@@ -49,6 +52,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.robolectric.RuntimeEnvironment;
@@ -63,9 +67,9 @@ import org.chromium.chrome.browser.ChromeWindow;
 import org.chromium.chrome.browser.app.ChromeActivity;
 import org.chromium.chrome.browser.back_press.BackPressManager;
 import org.chromium.chrome.browser.compositor.CompositorViewHolder;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.fullscreen.BrowserControlsManager;
 import org.chromium.chrome.browser.fullscreen.FullscreenManager;
+import org.chromium.chrome.browser.fullscreen.FullscreenOptions;
 import org.chromium.chrome.browser.keyboard_accessory.ManualFillingComponent.UpdateAccessorySheetDelegate;
 import org.chromium.chrome.browser.keyboard_accessory.bar_component.KeyboardAccessoryCoordinator;
 import org.chromium.chrome.browser.keyboard_accessory.data.KeyboardAccessoryData;
@@ -82,67 +86,58 @@ import org.chromium.chrome.browser.tab.TabCreationState;
 import org.chromium.chrome.browser.tab.TabHidingType;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
-import org.chromium.components.browser_ui.widget.InsetObserverView;
-import org.chromium.components.browser_ui.widget.InsetObserverViewSupplier;
+import org.chromium.components.browser_ui.widget.InsetObserver;
+import org.chromium.components.browser_ui.widget.InsetObserverSupplier;
 import org.chromium.components.browser_ui.widget.gesture.BackPressHandler;
 import org.chromium.components.embedder_support.view.ContentView;
 import org.chromium.content_public.browser.WebContents;
+import org.chromium.ui.base.ApplicationViewportInsetSupplier;
 import org.chromium.ui.display.DisplayAndroid;
 import org.chromium.ui.modelutil.PropertyModel;
+import org.chromium.ui.mojom.VirtualKeyboardMode;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicReference;
 
-/**
- * Controller tests for the root controller for interactions with the manual filling UI.
- */
+/** Controller tests for the root controller for interactions with the manual filling UI. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
-@EnableFeatures({ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY,
-        ChromeFeatureList.AUTOFILL_MANUAL_FALLBACK_ANDROID})
 public class ManualFillingControllerTest {
-    @Mock
-    private ChromeWindow mMockWindow;
-    @Mock
-    private ChromeActivity mMockActivity;
-    private WebContents mLastMockWebContents;
-    @Mock
-    private ContentView mMockContentView;
-    @Mock
-    private TabModelSelector mMockTabModelSelector;
-    @Mock
-    private android.content.res.Resources mMockResources;
-    @Mock
-    private KeyboardAccessoryCoordinator mMockKeyboardAccessory;
-    @Mock
-    private AccessorySheetCoordinator mMockAccessorySheet;
-    @Mock
-    private CompositorViewHolder mMockCompositorViewHolder;
-    @Mock
-    private BottomSheetController mMockBottomSheetController;
-    @Mock
-    private ManualFillingComponent.SoftKeyboardDelegate mMockSoftKeyboardDelegate;
-    @Mock
-    private ConfirmationDialogHelper mMockConfirmationHelper;
-    @Mock
-    private FullscreenManager mMockFullscreenManager;
-    @Mock
-    private InsetObserverView mInsetObserver;
-    @Mock
-    private BackPressManager mMockBackPressManager;
+    private static final int sKeyboardHeightDp = 100;
+    private static final int sAccessoryHeightDp = 48;
 
-    @Rule
-    public Features.JUnitProcessor mFeaturesProcessor = new Features.JUnitProcessor();
+    @Mock private ChromeWindow mMockWindow;
+    @Mock private ChromeActivity mMockActivity;
+    private WebContents mLastMockWebContents;
+    @Mock private ContentView mMockContentView;
+    @Mock private TabModelSelector mMockTabModelSelector;
+    @Mock private android.content.res.Resources mMockResources;
+    @Mock private KeyboardAccessoryCoordinator mMockKeyboardAccessory;
+    @Mock private AccessorySheetCoordinator mMockAccessorySheet;
+    @Mock private CompositorViewHolder mMockCompositorViewHolder;
+    @Mock private BottomSheetController mMockBottomSheetController;
+    @Mock private ManualFillingComponent.SoftKeyboardDelegate mMockSoftKeyboardDelegate;
+    @Mock private ConfirmationDialogHelper mMockConfirmationHelper;
+    @Mock private FullscreenManager mMockFullscreenManager;
+    @Mock private InsetObserver mInsetObserver;
+    @Mock private BackPressManager mMockBackPressManager;
+
+    @Rule public Features.JUnitProcessor mFeaturesProcessor = new Features.JUnitProcessor();
+
+    @Captor ArgumentCaptor<FullscreenManager.Observer> mFullscreenObserverCaptor;
 
     private final ManualFillingCoordinator mController = new ManualFillingCoordinator();
     private final ManualFillingMediator mMediator = mController.getMediatorForTesting();
     private final ManualFillingStateCache mCache = mMediator.getStateCacheForTesting();
     private final PropertyModel mModel = mMediator.getModelForTesting();
     private final UserDataHost mUserDataHost = new UserDataHost();
+    private final ApplicationViewportInsetSupplier mInsetSupplier =
+            ApplicationViewportInsetSupplier.createForTests();
+    private final ObservableSupplierImpl<Integer> mKeyboardInsetSupplier =
+            new ObservableSupplierImpl<>();
 
     private static class MockActivityTabProvider extends ActivityTabProvider {
         public Tab mTab;
@@ -156,7 +151,7 @@ public class ManualFillingControllerTest {
         public Tab get() {
             return mTab;
         }
-    };
+    }
 
     private final MockActivityTabProvider mActivityTabProvider = new MockActivityTabProvider();
 
@@ -176,8 +171,9 @@ public class ManualFillingControllerTest {
                 new AtomicReference<>();
 
         /**
-         * Can be used to capture data from an observer. Retrieve the last captured data with
-         * {@link #getRecordedActions()} and {@link #getFirstRecordedAction()}.
+         * Can be used to capture data from an observer. Retrieve the last captured data with {@link
+         * #getRecordedActions()} and {@link #getFirstRecordedAction()}.
+         *
          * @param unusedTypeId Unused but necessary to enable use as method reference.
          * @param item The {@link Action[]} provided by a {@link PropertyProvider<Action[]>}.
          */
@@ -188,8 +184,9 @@ public class ManualFillingControllerTest {
         }
 
         /**
-         * Can be used to capture data from an observer. Retrieve the last captured data with
-         * {@link #getRecordedSheetData()} and {@link #getFirstRecordedPassword()}.
+         * Can be used to capture data from an observer. Retrieve the last captured data with {@link
+         * #getRecordedSheetData()} and {@link #getFirstRecordedPassword()}.
+         *
          * @param unusedTypeId Unused but necessary to enable use as method reference.
          * @param data The {@link AccessorySheetData} provided by a {@link PropertyProvider}.
          */
@@ -199,15 +196,16 @@ public class ManualFillingControllerTest {
 
         /**
          * Uses the provider as returned by {@link #getActionListProvider()} to provide an Action.
-         * @param actionCaption The caption for the provided generation action.
+         *
+         * @param actionType The type for the provided generation action.
          */
-        void provideAction(String actionCaption) {
-            provideActions(new Action[] {
-                    new Action(actionCaption, GENERATE_PASSWORD_AUTOMATIC, action -> {})});
+        void provideAction(@AccessoryAction int actionType) {
+            provideActions(new Action[] {new Action(actionType, action -> {})});
         }
 
         /**
          * Uses the provider as returned by {@link #getActionListProvider()} to provide Actions.
+         *
          * @param actions The {@link Action}s to provide.
          */
         void provideActions(Action[] actions) {
@@ -217,6 +215,7 @@ public class ManualFillingControllerTest {
         /**
          * Uses the provider as returned by {@link #getSheetDataProvider()} to provide an simple
          * password sheet with one credential pair.
+         *
          * @param passwordString The only provided password in the new sheet.
          */
         void providePasswordSheet(String passwordString) {
@@ -224,8 +223,9 @@ public class ManualFillingControllerTest {
                     new AccessorySheetData(AccessoryTabType.PASSWORDS, "Passwords", "");
             UserInfo userInfo = new UserInfo("", false);
             userInfo.addField(
-                    new UserInfoField("(No username)", "No username", /*id=*/"", false, null));
-            userInfo.addField(new UserInfoField(passwordString, "Password", /*id=*/"", true, null));
+                    new UserInfoField("(No username)", "No username", /* id= */ "", false, null));
+            userInfo.addField(
+                    new UserInfoField(passwordString, "Password", /* id= */ "", true, null));
             sheetData.getUserInfoList().add(userInfo);
             mAccessorySheetDataProvider.notifyObservers(sheetData);
         }
@@ -234,10 +234,7 @@ public class ManualFillingControllerTest {
          * @return The {@link Action} last captured with {@link #record(int, Action[])}.
          */
         Action getFirstRecordedAction() {
-            int firstNonTabLayoutAction = 1;
-            if (ChromeFeatureList.isEnabled(ChromeFeatureList.AUTOFILL_KEYBOARD_ACCESSORY)) {
-                firstNonTabLayoutAction = 0;
-            }
+            int firstNonTabLayoutAction = 0;
             assert mRecordedActions.size() >= firstNonTabLayoutAction;
             return mRecordedActions.get(firstNonTabLayoutAction);
         }
@@ -278,6 +275,7 @@ public class ManualFillingControllerTest {
 
         /**
          * The returned provider is the same used by {@link #provideActions(Action[])}.
+         *
          * @return A {@link PropertyProvider}.
          */
         PropertyProvider<Action[]> getActionListProvider() {
@@ -286,6 +284,7 @@ public class ManualFillingControllerTest {
 
         /**
          * The returned provider is the same used by {@link #providePasswordSheet(String)}.
+         *
          * @return A {@link PropertyProvider}.
          */
         PropertyProvider<AccessorySheetData> getSheetDataProvider() {
@@ -298,20 +297,17 @@ public class ManualFillingControllerTest {
         UmaRecorderHolder.resetForTesting();
         MockitoAnnotations.initMocks(this);
         when(mMockWindow.getActivity()).thenReturn(new WeakReference<>(mMockActivity));
+        mInsetSupplier.setKeyboardInsetSupplier(mKeyboardInsetSupplier);
+        mInsetSupplier.setKeyboardAccessoryInsetSupplier(mController.getBottomInsetSupplier());
+        when(mMockWindow.getApplicationBottomInsetSupplier()).thenReturn(mInsetSupplier);
         when(mMockSoftKeyboardDelegate.calculateSoftKeyboardHeight(any())).thenReturn(0);
         when(mMockActivity.getTabModelSelector()).thenReturn(mMockTabModelSelector);
         when(mMockActivity.getActivityTabProvider()).thenReturn(mActivityTabProvider);
-        BrowserControlsManager browserControlsManager = new BrowserControlsManager(
-                mMockActivity, 0) {
-            @Override
-            protected boolean isInVr() {
-                return false;
-            }
-            @Override
-            protected void rawTopContentOffsetChangedForVr() {}
-        };
+        BrowserControlsManager browserControlsManager =
+                new BrowserControlsManager(mMockActivity, 0);
         when(mMockActivity.getBrowserControlsManager()).thenReturn(browserControlsManager);
         when(mMockActivity.getFullscreenManager()).thenReturn(mMockFullscreenManager);
+        doNothing().when(mMockFullscreenManager).addObserver(mFullscreenObserverCaptor.capture());
         ObservableSupplierImpl<CompositorViewHolder> compositorViewHolderSupplier =
                 new ObservableSupplierImpl<>();
         compositorViewHolderSupplier.set(mMockCompositorViewHolder);
@@ -324,8 +320,9 @@ public class ManualFillingControllerTest {
         when(mMockContentView.getRootView()).thenReturn(mock(View.class));
         mLastMockWebContents = mock(WebContents.class);
         when(mMockActivity.getCurrentWebContents()).then(i -> mLastMockWebContents);
-        InsetObserverViewSupplier.setInstanceForTesting(mInsetObserver);
-        setContentAreaDimensions(2.f, 80, 300);
+        InsetObserverSupplier.setInstanceForTesting(mInsetObserver);
+        simulateLayoutSizeChange(
+                2.f, 80, 128, /* keyboardShown= */ false, VirtualKeyboardMode.RESIZES_VISUAL);
         Configuration config = new Configuration();
         config.hardKeyboardHidden = HARDKEYBOARDHIDDEN_UNDEFINED;
         when(mMockResources.getConfiguration()).thenReturn(config);
@@ -333,8 +330,13 @@ public class ManualFillingControllerTest {
         doNothing()
                 .when(mMockBackPressManager)
                 .addHandler(any(), eq(BackPressHandler.Type.MANUAL_FILLING));
-        mController.initialize(mMockWindow, mMockKeyboardAccessory, mMockAccessorySheet,
-                mMockBottomSheetController, mMockBackPressManager, mMockSoftKeyboardDelegate,
+        mController.initialize(
+                mMockWindow,
+                mMockKeyboardAccessory,
+                mMockAccessorySheet,
+                mMockBottomSheetController,
+                mMockBackPressManager,
+                mMockSoftKeyboardDelegate,
                 mMockConfirmationHelper);
     }
 
@@ -399,7 +401,9 @@ public class ManualFillingControllerTest {
 
         // Simulate opening a new tab which automatically triggers the registration:
         Tab firstTab = addBrowserTab(mMediator, 1111, null);
-        mController.registerSheetDataProvider(mLastMockWebContents, AccessoryTabType.PASSWORDS,
+        mController.registerSheetDataProvider(
+                mLastMockWebContents,
+                AccessoryTabType.PASSWORDS,
                 firstTabHelper.getSheetDataProvider());
         mController.registerSheetUpdateDelegate(mLastMockWebContents, firstSheetUpdater);
         getStateForBrowserTab()
@@ -410,7 +414,9 @@ public class ManualFillingControllerTest {
 
         // Simulate creating a second tab:
         Tab secondTab = addBrowserTab(mMediator, 2222, firstTab);
-        mController.registerSheetDataProvider(mLastMockWebContents, AccessoryTabType.PASSWORDS,
+        mController.registerSheetDataProvider(
+                mLastMockWebContents,
+                AccessoryTabType.PASSWORDS,
                 secondTabHelper.getSheetDataProvider());
         mController.registerSheetUpdateDelegate(mLastMockWebContents, secondSheetUpdater);
         getStateForBrowserTab()
@@ -420,14 +426,14 @@ public class ManualFillingControllerTest {
         assertThat(secondTabHelper.getFirstRecordedPassword(), is("SecondPassword"));
 
         // Simulate switching back to the first tab:
-        switchBrowserTab(mMediator, /*from=*/secondTab, /*to=*/firstTab);
+        switchBrowserTab(mMediator, /* from= */ secondTab, /* to= */ firstTab);
         // Wiring affects the same sheet only and is triggered after switching
         verify(firstSheetUpdater).requestSheet(AccessoryTabType.PASSWORDS);
         firstTabHelper.providePasswordSheet("FirstPassword");
         assertThat(firstTabHelper.getFirstRecordedPassword(), is("FirstPassword"));
 
         // And back to the second:
-        switchBrowserTab(mMediator, /*from=*/firstTab, /*to=*/secondTab);
+        switchBrowserTab(mMediator, /* from= */ firstTab, /* to= */ secondTab);
         // Wiring affects the same sheet only and is triggered after switching
         verify(secondSheetUpdater).requestSheet(AccessoryTabType.PASSWORDS);
         secondTabHelper.providePasswordSheet("SecondPassword");
@@ -444,8 +450,10 @@ public class ManualFillingControllerTest {
         mController.registerActionProvider(
                 mLastMockWebContents, firstTabHelper.getActionListProvider());
         getStateForBrowserTab().getActionsProvider().addObserver(firstTabHelper::record);
-        firstTabHelper.provideAction("Generate Password");
-        assertThat(firstTabHelper.getFirstRecordedAction().getCaption(), is("Generate Password"));
+        firstTabHelper.provideAction(AccessoryAction.GENERATE_PASSWORD_AUTOMATIC);
+        assertThat(
+                firstTabHelper.getFirstRecordedAction().getActionType(),
+                is(AccessoryAction.GENERATE_PASSWORD_AUTOMATIC));
 
         // Simulate creating a second tab:
         Tab secondTab = addBrowserTab(mMediator, 2222, firstTab);
@@ -456,11 +464,13 @@ public class ManualFillingControllerTest {
         assertThat(secondTabHelper.getRecordedActions().size(), is(0));
 
         // Simulate switching back to the first tab:
-        switchBrowserTab(mMediator, /*from=*/secondTab, /*to=*/firstTab);
-        assertThat(firstTabHelper.getFirstRecordedAction().getCaption(), is("Generate Password"));
+        switchBrowserTab(mMediator, /* from= */ secondTab, /* to= */ firstTab);
+        assertThat(
+                firstTabHelper.getFirstRecordedAction().getActionType(),
+                is(AccessoryAction.GENERATE_PASSWORD_AUTOMATIC));
 
         // And back to the second:
-        switchBrowserTab(mMediator, /*from=*/firstTab, /*to=*/secondTab);
+        switchBrowserTab(mMediator, /* from= */ firstTab, /* to= */ secondTab);
         assertThat(secondTabHelper.getRecordedActions().size(), is(0));
     }
 
@@ -481,10 +491,10 @@ public class ManualFillingControllerTest {
         Tab secondTab = addBrowserTab(mMediator, 2222, firstTab);
 
         // Simulate switching back to the first tab:
-        switchBrowserTab(mMediator, /*from=*/secondTab, /*to=*/firstTab);
+        switchBrowserTab(mMediator, /* from= */ secondTab, /* to= */ firstTab);
 
         // And back to the second:
-        switchBrowserTab(mMediator, /*from=*/firstTab, /*to=*/secondTab);
+        switchBrowserTab(mMediator, /* from= */ firstTab, /* to= */ secondTab);
 
         ArgumentCaptor<KeyboardAccessoryData.Tab[]> barTabCaptor =
                 ArgumentCaptor.forClass(KeyboardAccessoryData.Tab[].class);
@@ -543,7 +553,8 @@ public class ManualFillingControllerTest {
         WebContents oldWebContents = mLastMockWebContents;
         closeBrowserTab(mMediator, tab);
         // The state should be cleaned up, now that it was committed.
-        assertThat(mMediator.getStateCacheForTesting().getStateFor(oldWebContents).getTabs().length,
+        assertThat(
+                mMediator.getStateCacheForTesting().getStateFor(oldWebContents).getTabs().length,
                 is(0));
 
         ArgumentCaptor<KeyboardAccessoryData.Tab[]> barTabCaptor =
@@ -587,8 +598,10 @@ public class ManualFillingControllerTest {
         mController.registerActionProvider(
                 mLastMockWebContents, secondTabHelper.getActionListProvider());
         getStateForBrowserTab().getActionsProvider().addObserver(secondTabHelper::record);
-        secondTabHelper.provideAction("Test Action");
-        assertThat(secondTabHelper.getFirstRecordedAction().getCaption(), is("Test Action"));
+        secondTabHelper.provideAction(AccessoryAction.CREDMAN_CONDITIONAL_UI_REENTRY);
+        assertThat(
+                secondTabHelper.getFirstRecordedAction().getActionType(),
+                is(AccessoryAction.CREDMAN_CONDITIONAL_UI_REENTRY));
 
         // Switching back should notify the accessory about the still empty state of the accessory.
         switchBrowserTab(mMediator, secondTab, tab);
@@ -616,18 +629,22 @@ public class ManualFillingControllerTest {
         getStateForBrowserTab().getActionsProvider().addObserver(secondTabHelper::record);
 
         // And provide data to the active browser tab.
-        secondTabHelper.provideAction("Test Action");
+        secondTabHelper.provideAction(AccessoryAction.CREDMAN_CONDITIONAL_UI_REENTRY);
         // Now, have the delayed provider provide data for the backgrounded browser tab.
-        delayedTabHelper.provideAction("Delayed");
+        delayedTabHelper.provideAction(AccessoryAction.GENERATE_PASSWORD_AUTOMATIC);
 
         // The current tab should not be influenced by the delayed provider.
         assertThat(secondTabHelper.getRecordedActions().size(), is(1));
-        assertThat(secondTabHelper.getFirstRecordedAction().getCaption(), is("Test Action"));
+        assertThat(
+                secondTabHelper.getFirstRecordedAction().getActionType(),
+                is(AccessoryAction.CREDMAN_CONDITIONAL_UI_REENTRY));
 
         // Switching tabs back should only show the action that was received in the background.
         switchBrowserTab(mMediator, secondTab, delayedTab);
         assertThat(delayedTabHelper.getRecordedActions().size(), is(1));
-        assertThat(delayedTabHelper.getFirstRecordedAction().getCaption(), is("Delayed"));
+        assertThat(
+                delayedTabHelper.getFirstRecordedAction().getActionType(),
+                is(AccessoryAction.GENERATE_PASSWORD_AUTOMATIC));
     }
 
     @Test
@@ -641,7 +658,9 @@ public class ManualFillingControllerTest {
 
         // Simulate opening a new tab:
         Tab firstTab = addBrowserTab(mMediator, 1111, null);
-        mController.registerSheetDataProvider(mLastMockWebContents, AccessoryTabType.PASSWORDS,
+        mController.registerSheetDataProvider(
+                mLastMockWebContents,
+                AccessoryTabType.PASSWORDS,
                 firstTabHelper.getSheetDataProvider());
         mController.registerActionProvider(
                 mLastMockWebContents, firstTabHelper.getActionListProvider());
@@ -650,11 +669,13 @@ public class ManualFillingControllerTest {
                 .addObserver(firstTabHelper::record);
         getStateForBrowserTab().getActionsProvider().addObserver(firstTabHelper::record);
         firstTabHelper.providePasswordSheet("FirstPassword");
-        firstTabHelper.provideAction("2BDestroyed");
+        firstTabHelper.provideAction(AccessoryAction.CREDMAN_CONDITIONAL_UI_REENTRY);
 
         // Create and switch to a new tab: (because destruction shouldn't rely on tab to be active)
         Tab secondTab = addBrowserTab(mMediator, 2222, firstTab);
-        mController.registerSheetDataProvider(mLastMockWebContents, AccessoryTabType.PASSWORDS,
+        mController.registerSheetDataProvider(
+                mLastMockWebContents,
+                AccessoryTabType.PASSWORDS,
                 secondTabHelper.getSheetDataProvider());
         mController.registerSheetUpdateDelegate(mLastMockWebContents, secondSheetUpdater);
         mController.registerActionProvider(
@@ -664,11 +685,13 @@ public class ManualFillingControllerTest {
                 .addObserver(secondTabHelper::record);
         getStateForBrowserTab().getActionsProvider().addObserver(secondTabHelper::record);
         secondTabHelper.providePasswordSheet("SecondPassword");
-        secondTabHelper.provideAction("2BKept");
+        secondTabHelper.provideAction(AccessoryAction.CREDMAN_CONDITIONAL_UI_REENTRY);
 
         // The newly created tab should be valid.
         assertThat(secondTabHelper.getFirstRecordedPassword(), is("SecondPassword"));
-        assertThat(secondTabHelper.getFirstRecordedAction().getCaption(), is("2BKept"));
+        assertThat(
+                secondTabHelper.getFirstRecordedAction().getActionType(),
+                is(AccessoryAction.CREDMAN_CONDITIONAL_UI_REENTRY));
 
         // Request destruction of the first Tab:
         mMediator.getTabObserverForTesting().onDestroyed(firstTab);
@@ -678,7 +701,9 @@ public class ManualFillingControllerTest {
         verify(secondSheetUpdater).requestSheet(AccessoryTabType.PASSWORDS);
         secondTabHelper.providePasswordSheet("SecondPassword");
         assertThat(secondTabHelper.getFirstRecordedPassword(), is("SecondPassword"));
-        assertThat(secondTabHelper.getFirstRecordedAction().getCaption(), is("2BKept"));
+        assertThat(
+                secondTabHelper.getFirstRecordedAction().getActionType(),
+                is(AccessoryAction.CREDMAN_CONDITIONAL_UI_REENTRY));
         assertThat(getStateForBrowserTab(), is(mCache.getStateFor(secondTab)));
         // ... but the other tab's data should be gone.
         assertThat(mCache.getStateFor(firstTab).getActionsProvider(), nullValue());
@@ -694,14 +719,44 @@ public class ManualFillingControllerTest {
         mController.registerSheetDataProvider(
                 mLastMockWebContents, AccessoryTabType.PASSWORDS, tabHelper.getSheetDataProvider());
         when(mMockSoftKeyboardDelegate.isSoftKeyboardShowing(any(), any())).thenReturn(true);
+        mKeyboardInsetSupplier.set(sKeyboardHeightDp * /* density= */ 2);
+        when(mMockSoftKeyboardDelegate.calculateSoftKeyboardHeight(any()))
+                .thenReturn(sKeyboardHeightDp * /* density= */ 2);
         when(mMockKeyboardAccessory.empty()).thenReturn(false);
 
         // Show the accessory bar for the default dimensions (300x128@2.f).
-        mController.showWhenKeyboardIsVisible();
+        mController.show(true);
         verify(mMockKeyboardAccessory).show();
 
         // The accessory is shown and the content area plus bar size don't exceed the threshold.
-        simulateLayoutSizeChange(3.f, 180, 128);
+        simulateLayoutSizeChange(
+                2.f, 180, 128, /* keyboardShown= */ true, VirtualKeyboardMode.RESIZES_VISUAL);
+
+        verify(mMockKeyboardAccessory, never()).dismiss();
+    }
+
+    @Test
+    public void testDisplaysAccessoryOnlyWhenSpaceIsSufficient_KeyboardResizesContent() {
+        mInsetSupplier.setVirtualKeyboardMode(VirtualKeyboardMode.RESIZES_CONTENT);
+        reset(mMockKeyboardAccessory);
+
+        addBrowserTab(mMediator, 1234, null);
+        SheetProviderHelper tabHelper = new SheetProviderHelper();
+        mController.registerSheetDataProvider(
+                mLastMockWebContents, AccessoryTabType.PASSWORDS, tabHelper.getSheetDataProvider());
+        when(mMockSoftKeyboardDelegate.isSoftKeyboardShowing(any(), any())).thenReturn(true);
+        mKeyboardInsetSupplier.set(sKeyboardHeightDp * /* density= */ 2);
+        when(mMockSoftKeyboardDelegate.calculateSoftKeyboardHeight(any()))
+                .thenReturn(sKeyboardHeightDp * /* density= */ 2);
+        when(mMockKeyboardAccessory.empty()).thenReturn(false);
+
+        // Show the accessory bar for the default dimensions (300x128@2.f).
+        mController.show(true);
+        verify(mMockKeyboardAccessory).show();
+
+        // The accessory is shown and the content area plus bar size don't exceed the threshold.
+        simulateLayoutSizeChange(
+                2.f, 180, 128, /* keyboardShown= */ true, VirtualKeyboardMode.RESIZES_CONTENT);
 
         verify(mMockKeyboardAccessory, never()).dismiss();
     }
@@ -717,7 +772,7 @@ public class ManualFillingControllerTest {
         when(mMockSoftKeyboardDelegate.isSoftKeyboardShowing(any(), any())).thenReturn(true);
         when(mMockKeyboardAccessory.empty()).thenReturn(false);
 
-        mController.showWhenKeyboardIsVisible();
+        mController.show(true);
         setContentAreaDimensions(2.f, 180, 220);
         mMediator.onLayoutChange(mMockContentView, 0, 0, 540, 360, 0, 0, 640, 360);
         verify(mMockKeyboardAccessory).show();
@@ -731,6 +786,7 @@ public class ManualFillingControllerTest {
 
     @Test
     public void testDisplaysAccessoryOnlyWhenVerticalSpaceIsSufficient() {
+        mInsetSupplier.setVirtualKeyboardMode(VirtualKeyboardMode.RESIZES_CONTENT);
         reset(mMockKeyboardAccessory);
         addBrowserTab(mMediator, 1234, null);
         SheetProviderHelper tabHelper = new SheetProviderHelper();
@@ -738,21 +794,38 @@ public class ManualFillingControllerTest {
                 mLastMockWebContents, AccessoryTabType.PASSWORDS, tabHelper.getSheetDataProvider());
         when(mMockSoftKeyboardDelegate.isSoftKeyboardShowing(eq(mMockActivity), any()))
                 .thenReturn(true);
+        mKeyboardInsetSupplier.set(sKeyboardHeightDp * /* density= */ 2);
+        when(mMockSoftKeyboardDelegate.calculateSoftKeyboardHeight(any()))
+                .thenReturn(sKeyboardHeightDp * /* density= */ 2);
         when(mMockKeyboardAccessory.empty()).thenReturn(false);
 
         // Show the accessory bar for the dimensions exactly at the threshold: 300x128@2.f.
-        simulateLayoutSizeChange(2.0f, 300, 128);
-        mController.showWhenKeyboardIsVisible();
+        simulateLayoutSizeChange(
+                2.0f, 300, 128, /* keyboardShown= */ true, VirtualKeyboardMode.RESIZES_CONTENT);
+        mController.show(true);
         assertThat(mModel.get(KEYBOARD_EXTENSION_STATE), not(is(HIDDEN)));
         verify(mMockKeyboardAccessory).show();
 
         // The height is now reduced by the 48dp high accessory -- it should remain visible.
-        simulateLayoutSizeChange(2.0f, 300, 80);
+        simulateLayoutSizeChange(
+                2.0f, 300, 128, /* keyboardShown= */ true, VirtualKeyboardMode.RESIZES_CONTENT);
         assertThat(mModel.get(KEYBOARD_EXTENSION_STATE), not(is(HIDDEN)));
 
         // Use a height that is too small but with a valid width (e.g. resized multi-window window).
-        simulateLayoutSizeChange(2.0f, 300, 79);
+        simulateLayoutSizeChange(
+                2.0f, 300, 127, /* keyboardShown= */ true, VirtualKeyboardMode.RESIZES_CONTENT);
         assertThat(mModel.get(KEYBOARD_EXTENSION_STATE), is(HIDDEN));
+
+        // Also test in RESIZES_VISUAL mode where the keyboard and accessory won't resize the
+        // WebContents.
+        mInsetSupplier.setVirtualKeyboardMode(VirtualKeyboardMode.RESIZES_VISUAL);
+        simulateLayoutSizeChange(
+                2.0f, 300, 127, /* keyboardShown= */ true, VirtualKeyboardMode.RESIZES_VISUAL);
+        assertThat(mModel.get(KEYBOARD_EXTENSION_STATE), is(HIDDEN));
+
+        simulateLayoutSizeChange(
+                2.0f, 300, 128, /* keyboardShown= */ true, VirtualKeyboardMode.RESIZES_VISUAL);
+        assertThat(mModel.get(KEYBOARD_EXTENSION_STATE), not(is(HIDDEN)));
     }
 
     @Test
@@ -768,26 +841,45 @@ public class ManualFillingControllerTest {
         when(mMockKeyboardAccessory.empty()).thenReturn(false);
 
         // Show the accessory bar for the dimensions exactly at the threshold: 180x128@2.f.
-        simulateLayoutSizeChange(2.0f, 180, 128);
-        mController.showWhenKeyboardIsVisible();
+        simulateLayoutSizeChange(
+                2.0f, 180, 128, /* keyboardShown= */ true, VirtualKeyboardMode.RESIZES_VISUAL);
+        mController.show(true);
         assertThat(mModel.get(KEYBOARD_EXTENSION_STATE), not(is(HIDDEN)));
 
         // Use a width that is too small but with a valid height (e.g. resized multi-window window).
-        simulateLayoutSizeChange(2.0f, 179, 128);
+        simulateLayoutSizeChange(
+                2.0f, 179, 128, /* keyboardShown= */ true, VirtualKeyboardMode.RESIZES_VISUAL);
         assertThat(mModel.get(KEYBOARD_EXTENSION_STATE), is(HIDDEN));
     }
 
+    /**
+     * This tests the case where an accessory sheet is showing instead of a keyboard. The screen is
+     * rotated so that the amount of vertical space shrinks below the minimum allowed. Confirm that
+     * the accessory sheet's height is shrunken.
+     */
     @Test
     public void testRestrictsSheetSizeIfVerticalSpaceChanges() {
-        addBrowserTab(mMediator, 1234, null);
-        // Resize the screen from 300x128@2.f to 300x200@2.f.
-        setContentAreaDimensions(2.f, 200, 300);
-        mMediator.onLayoutChange(mMockContentView, 0, 0, 400, 600, 0, 0, 256, 600);
+        final int density = 2;
+        final int accessorySheetHeightDp = 100; // The height of a large keyboard.
+        final int minimumVisibleHeightDp = 128; // This is a constant from ManualFillingMediator.
+        final int initialWidthDp = 200;
+        final int initialHeightDp = 300;
 
+        addBrowserTab(mMediator, 1234, null);
+
+        // Resize the screen to 200x300@2.f.
+        simulateLayoutSizeChange(
+                density,
+                initialWidthDp,
+                initialHeightDp,
+                /* keyboardShown= */ false,
+                VirtualKeyboardMode.RESIZES_VISUAL);
+
+        // Now simulate showing the accessory sheet.
         when(mMockKeyboardAccessory.empty()).thenReturn(false);
         when(mMockKeyboardAccessory.isShown()).thenReturn(true);
         when(mMockKeyboardAccessory.hasActiveTab()).thenReturn(true);
-        when(mMockAccessorySheet.getHeight()).thenReturn(200); // Return height of a large keyboard.
+        when(mMockAccessorySheet.getHeight()).thenReturn(accessorySheetHeightDp * density);
         mModel.set(SHOW_WHEN_VISIBLE, true);
         mModel.set(KEYBOARD_EXTENSION_STATE, FLOATING_SHEET);
         mController.registerSheetDataProvider(
@@ -798,12 +890,115 @@ public class ManualFillingControllerTest {
         when(mMockKeyboardAccessory.isShown()).thenReturn(true);
         when(mMockKeyboardAccessory.hasActiveTab()).thenReturn(true);
         when(mMockAccessorySheet.isShown()).thenReturn(true);
-        when(mMockAccessorySheet.getHeight()).thenReturn(200); // Return height of a large keyboard.
+        when(mMockAccessorySheet.getHeight()).thenReturn(accessorySheetHeightDp * density);
 
-        // Set layout as if it was rotated: 200x300@2f minus the 100dp+48dp high filling ui.
-        setContentAreaDimensions(2.f, 300, 52);
-        mMediator.onLayoutChange(mMockContentView, 0, 0, 600, 104, 0, 0, 400, 600);
-        verify(mMockAccessorySheet).setHeight(144); // == 2f * (200dp - 128dp)
+        // Set layout as if it was rotated: 300x200@2f. The sheet does not inset WebContents since
+        // we're in the default RESIZES_VISUAL VirtualKeyboardMode. Even though contentsHeightDp >
+        // minimumVisibleHeightDp, test that the visible area is correctly deduced to be 200 - 100 <
+        // minimumVisibleHeightDp so the sheet should be restricted in height.
+        assertEquals(
+                (int) mController.getBottomInsetSupplier().get(), accessorySheetHeightDp * density);
+        simulateLayoutSizeChange(
+                density,
+                initialHeightDp,
+                initialWidthDp,
+                /* keyboardShown= */ false,
+                VirtualKeyboardMode.RESIZES_VISUAL);
+        assertEquals(mLastMockWebContents.getHeight(), initialWidthDp);
+
+        // 200 - 128 = 72
+        int expectedSheetHeightDp = initialWidthDp - minimumVisibleHeightDp;
+        verify(mMockAccessorySheet).setHeight(density * expectedSheetHeightDp);
+    }
+
+    /**
+     * This tests the case where an accessory sheet is showing instead of a keyboard. The screen is
+     * rotated so that the amount of vertical space shrinks below the minimum allowed. Confirm that
+     * the accessory sheet's height is shrunken.
+     *
+     * <p>This is the same test as above but with the keyboard in RESIZES_CONTENT mode, so that the
+     * WebContents height is insetted by the keyboard and its accessories.
+     */
+    @Test
+    public void testRestrictsSheetSizeIfVerticalSpaceChangesWithResizesContent() {
+        final int density = 2;
+        final int accessorySheetHeightDp = 100; // The height of a large keyboard.
+        final int minimumVisibleHeightDp = 128; // This is a constant from ManualFillingMediator.
+        final int initialWidthDp = 200;
+        final int initialHeightDp = 300;
+
+        mInsetSupplier.setVirtualKeyboardMode(VirtualKeyboardMode.RESIZES_CONTENT);
+        addBrowserTab(mMediator, 1234, null);
+        // Resize the screen to 200x300@2.f.
+        simulateLayoutSizeChange(
+                density,
+                initialWidthDp,
+                initialHeightDp,
+                /* keyboardShown= */ false,
+                VirtualKeyboardMode.RESIZES_CONTENT);
+
+        // Now simulate showing the accessory sheet.
+        when(mMockKeyboardAccessory.empty()).thenReturn(false);
+        when(mMockKeyboardAccessory.isShown()).thenReturn(true);
+        when(mMockKeyboardAccessory.hasActiveTab()).thenReturn(true);
+        when(mMockAccessorySheet.getHeight()).thenReturn(accessorySheetHeightDp * density);
+        mModel.set(SHOW_WHEN_VISIBLE, true);
+        mModel.set(KEYBOARD_EXTENSION_STATE, FLOATING_SHEET);
+        mController.registerSheetDataProvider(
+                mLastMockWebContents, AccessoryTabType.PASSWORDS, new PropertyProvider<>());
+        reset(mMockKeyboardAccessory, mMockAccessorySheet);
+
+        when(mMockKeyboardAccessory.empty()).thenReturn(false);
+        when(mMockKeyboardAccessory.isShown()).thenReturn(true);
+        when(mMockKeyboardAccessory.hasActiveTab()).thenReturn(true);
+        when(mMockAccessorySheet.isShown()).thenReturn(true);
+        when(mMockAccessorySheet.getHeight()).thenReturn(accessorySheetHeightDp * density);
+
+        // Set layout as if it was rotated: 300x200@2f. Since we're in RESIZES_CONTENT mode, the
+        // sheet will cause a resize to the web contents.  WebContents.getHeight <
+        // minimumVisibleHeightDp so the sheet should be restricted in height.
+        assertEquals(
+                (int) mController.getBottomInsetSupplier().get(), accessorySheetHeightDp * density);
+        simulateLayoutSizeChange(
+                density,
+                initialHeightDp,
+                initialWidthDp,
+                /* keyboardShown= */ false,
+                VirtualKeyboardMode.RESIZES_CONTENT);
+        assertEquals(mLastMockWebContents.getHeight(), initialWidthDp - accessorySheetHeightDp);
+
+        // 200 - 128 = 72
+        int expectedSheetHeightDp = initialWidthDp - minimumVisibleHeightDp;
+        verify(mMockAccessorySheet).setHeight(density * expectedSheetHeightDp);
+    }
+
+    @Test
+    public void testAdjustsOffsetAndHeightForFullscreen() {
+        final int density = 2;
+
+        mInsetSupplier.setVirtualKeyboardMode(VirtualKeyboardMode.RESIZES_CONTENT);
+        Tab tab = addBrowserTab(mMediator, 1234, null);
+
+        // Now simulate showing the accessory bar.
+        when(mMockKeyboardAccessory.empty()).thenReturn(false);
+        when(mMockKeyboardAccessory.isShown()).thenReturn(true);
+        when(mMockKeyboardAccessory.hasActiveTab()).thenReturn(false);
+        mModel.set(SHOW_WHEN_VISIBLE, true);
+        mModel.set(KEYBOARD_EXTENSION_STATE, EXTENDING_KEYBOARD);
+
+        // Ensure it's bottom-aligned and insetting the page with its height.
+        assertEquals(
+                (int) mController.getBottomInsetSupplier().get(), sAccessoryHeightDp * density);
+        verify(mMockKeyboardAccessory).setBottomOffset(0);
+        reset(mMockKeyboardAccessory, mMockAccessorySheet);
+
+        // Simulate entering fullscreen mode (which makes the keyboard overlaying.
+        mFullscreenObserverCaptor
+                .getValue()
+                .onEnterFullscreen(tab, new FullscreenOptions(false, false));
+
+        // Ensure it's not insetting the page.
+        assertEquals((int) mController.getBottomInsetSupplier().get(), 0);
     }
 
     @Test
@@ -881,7 +1076,26 @@ public class ManualFillingControllerTest {
     }
 
     @Test
-    public void testTransitionToFloatingSheetShowsBarAndSheet() {
+    public void testTransitionToFloatingBarWithShouldExtendKeyboardFalse() {
+        addBrowserTab(mMediator, 1111, null);
+        mModel.set(SHOW_WHEN_VISIBLE, true);
+        // Make sure the model is in a non-FLOATING_BAR state first.
+        mModel.set(KEYBOARD_EXTENSION_STATE, HIDDEN);
+        reset(mMockKeyboardAccessory, mMockAccessorySheet);
+
+        // Set the model FLOATING_BAR but not extend the keyboard with SHOULD_EXTEND_KEYBOARD
+        mModel.set(SHOULD_EXTEND_KEYBOARD, false);
+        mModel.set(KEYBOARD_EXTENSION_STATE, FLOATING_BAR);
+        assertThat(mModel.get(KEYBOARD_EXTENSION_STATE), is(FLOATING_BAR));
+
+        verify(mMockSoftKeyboardDelegate, never()).showSoftKeyboard(any());
+        verify(mMockAccessorySheet).hide();
+        verify(mMockKeyboardAccessory).closeActiveTab();
+        verify(mMockKeyboardAccessory).show();
+    }
+
+    @Test
+    public void testTransitionToFloatingSheetShowsSheet() {
         addBrowserTab(mMediator, 1111, null);
         // Make sure the model is in a non-FLOATING_SHEET state first.
         mModel.set(KEYBOARD_EXTENSION_STATE, HIDDEN);
@@ -893,11 +1107,11 @@ public class ManualFillingControllerTest {
 
         verify(mMockSoftKeyboardDelegate).showSoftKeyboard(any());
         verify(mMockAccessorySheet).show();
-        verify(mMockKeyboardAccessory).show();
+        verify(mMockKeyboardAccessory, never()).show();
     }
 
     @Test
-    public void testTransitionToReplacingShowsBarAndSheet() {
+    public void testTransitionToReplacingShowsSheet() {
         addBrowserTab(mMediator, 1111, null);
         // Make sure the model is in a non-REPLACING_KEYBOARD state first.
         mModel.set(KEYBOARD_EXTENSION_STATE, HIDDEN);
@@ -908,11 +1122,11 @@ public class ManualFillingControllerTest {
         assertThat(mModel.get(KEYBOARD_EXTENSION_STATE), is(REPLACING_KEYBOARD));
 
         verify(mMockAccessorySheet).show();
-        verify(mMockKeyboardAccessory).show();
+        verify(mMockKeyboardAccessory, never()).show();
     }
 
     @Test
-    public void testTransitionToWaitingHidesKeyboardAndShowsBarAndSheet() {
+    public void testTransitionToWaitingHidesKeyboardAndShowsSheet() {
         addBrowserTab(mMediator, 1111, null);
         // Make sure the model is in a non-REPLACING_KEYBOARD state first.
         mModel.set(KEYBOARD_EXTENSION_STATE, HIDDEN);
@@ -925,7 +1139,7 @@ public class ManualFillingControllerTest {
         verify(mMockSoftKeyboardDelegate).hideSoftKeyboardOnly(any());
         verify(mMockAccessorySheet, never()).hide();
         verify(mMockKeyboardAccessory, never()).closeActiveTab();
-        verify(mMockKeyboardAccessory).show();
+        verify(mMockKeyboardAccessory, never()).show();
     }
 
     @Test
@@ -958,7 +1172,7 @@ public class ManualFillingControllerTest {
         when(mMockSoftKeyboardDelegate.isSoftKeyboardShowing(any(), any())).thenReturn(true);
 
         // Showing the keyboard should now trigger a transition into EXTENDING state.
-        mController.showWhenKeyboardIsVisible();
+        mController.show(true);
 
         assertThat(mModel.get(KEYBOARD_EXTENSION_STATE), is(EXTENDING_KEYBOARD));
     }
@@ -974,7 +1188,7 @@ public class ManualFillingControllerTest {
         when(mMockKeyboardAccessory.empty()).thenReturn(false);
 
         // Showing the keyboard should now trigger a transition into EXTENDING state.
-        mController.showWhenKeyboardIsVisible();
+        mController.show(true);
 
         assertThat(mModel.get(KEYBOARD_EXTENSION_STATE), is(FLOATING_BAR));
     }
@@ -1098,10 +1312,23 @@ public class ManualFillingControllerTest {
 
     @Test
     public void testCallsHelperToConfirmDeletion() {
-        Runnable testRunnable = () -> {};
-        mMediator.confirmOperation("Suggestion", "Delete it?", testRunnable);
+        Runnable testConfirmRunnable = () -> {};
+        Runnable testDeclineRunnable = () -> {};
+        mMediator.confirmOperation(
+                "Suggestion", "Delete it?", testConfirmRunnable, testDeclineRunnable);
         verify(mMockConfirmationHelper)
-                .showConfirmation("Suggestion", "Delete it?", R.string.ok, testRunnable);
+                .showConfirmation(
+                        "Suggestion",
+                        "Delete it?",
+                        R.string.ok,
+                        testConfirmRunnable,
+                        testDeclineRunnable);
+    }
+
+    @Test
+    public void testScrollsPageUpAfterBarIsFullyShown() {
+        mMediator.onBarFadeInAnimationEnd();
+        verify(mLastMockWebContents).scrollFocusedEditableNodeIntoView();
     }
 
     @Test
@@ -1130,6 +1357,7 @@ public class ManualFillingControllerTest {
 
     /**
      * Creates a tab and calls the observer events as if it was just created and switched to.
+     *
      * @param mediator The {@link ManualFillingMediator} whose observers should be triggered.
      * @param id The id of the new browser tab.
      * @param lastTab A previous mocked {@link Tab} to be hidden. Needs |getId()|. May be null.
@@ -1151,16 +1379,19 @@ public class ManualFillingControllerTest {
         when(tab.getContentView()).thenReturn(mMockContentView);
         when(mMockTabModelSelector.getCurrentTab()).thenReturn(tab);
         mActivityTabProvider.set(tab);
-        mediator.getTabModelObserverForTesting().didAddTab(
-                tab, FROM_BROWSER_ACTIONS, TabCreationState.LIVE_IN_FOREGROUND);
+        mediator.getTabModelObserverForTesting()
+                .didAddTab(tab, FROM_BROWSER_ACTIONS, TabCreationState.LIVE_IN_FOREGROUND, false);
         mediator.getTabObserverForTesting().onShown(tab, FROM_NEW);
         mediator.getTabModelObserverForTesting().didSelectTab(tab, FROM_NEW, lastId);
-        setContentAreaDimensions(2.f, 300, 128);
+        mInsetSupplier.setVirtualKeyboardMode(VirtualKeyboardMode.RESIZES_CONTENT);
+        simulateLayoutSizeChange(
+                2.f, 300, 128, /* keyboardShown= */ true, VirtualKeyboardMode.RESIZES_VISUAL);
         return tab;
     }
 
     /**
      * Simulates switching to a different tab by calling observer events on the given |mediator|.
+     *
      * @param mediator The mediator providing the observer instances.
      * @param from The mocked {@link Tab} to be switched from. Needs |getId()|. May be null.
      * @param to The mocked {@link Tab} to be switched to. Needs |getId()|.
@@ -1181,6 +1412,7 @@ public class ManualFillingControllerTest {
 
     /**
      * Simulates destroying the given tab by calling observer events on the given |mediator|.
+     *
      * @param mediator The mediator providing the observer instances.
      * @param tabToBeClosed The mocked {@link Tab} to be closed. Needs |getId()|.
      */
@@ -1193,6 +1425,10 @@ public class ManualFillingControllerTest {
         mediator.getTabObserverForTesting().onDestroyed(tabToBeClosed);
     }
 
+    /**
+     * Prefer to use simulateLayoutSizeChange which more faithfully sets the WebContents and layout
+     * sizes in the presence of a keyboard.
+     */
     private void setContentAreaDimensions(float density, int widthDp, int heightDp) {
         setContentAreaDimensions(density, widthDp, heightDp, Surface.ROTATION_0);
     }
@@ -1210,18 +1446,45 @@ public class ManualFillingControllerTest {
 
     /**
      * This function initializes mocks and then calls the given mediator events in the order of a
-     * layout resize event (e.g. when extending/shrinking a multi-window window).
-     * It mains sets the {@link WebContents} size and calls |onLayoutChange| with the new bounds.
+     * layout resize event (e.g. when extending/shrinking a multi-window window). It sets the
+     * correct {@link WebContents} size according to the current VirtualKeyboardMode and calls
+     * |onLayoutChange| with the new bounds.
+     *
      * @param density The logical screen density (e.g. 1.f).
-     * @param width The new {@link WebContents} width in dp.
-     * @param height The new {@link WebContents} height in dp.
+     * @param width The new mediator layout width in dp.
+     * @param height The new mediator layout height in dp.
+     * @param keyboardShown Whether the keyboard is considered shown - if true, the WebContents will
+     *     be adjusted by the sKeyboardHeightDp depending on the vkMode.
+     * @param vkMode The current virtual keyboard mode, affecting how WebContents reacts to the View
+     *     size.
      */
-    private void simulateLayoutSizeChange(float density, int width, int height) {
+    private void simulateLayoutSizeChange(
+            float density,
+            int width,
+            int height,
+            boolean keyboardShown,
+            @VirtualKeyboardMode.EnumType int vkMode) {
+        mInsetSupplier.setVirtualKeyboardMode(vkMode);
         int oldHeight = mLastMockWebContents.getHeight();
         int oldWidth = mLastMockWebContents.getWidth();
+
+        int webContentsHeight = height;
+        // In VISUAL/OVERLAYS, the keyboard shouldn't resize the WebContents so it must be
+        // outsetted from the layout height by the keyboard. Otherwise, we must add to the
+        // View's existing keyboard inset by insetting the accessory height as well. See
+        // ApplicationViewportInsetSupplier for details on how this works.
+        if (vkMode == VirtualKeyboardMode.RESIZES_VISUAL
+                || vkMode == VirtualKeyboardMode.OVERLAYS_CONTENT) {
+            webContentsHeight += keyboardShown ? sKeyboardHeightDp : 0;
+        } else {
+            int manualFillingInset =
+                    Math.round(mController.getBottomInsetSupplier().get() / density);
+            webContentsHeight -= manualFillingInset;
+        }
+        setContentAreaDimensions(2.f, width, webContentsHeight);
+
         int newHeight = (int) (density * height);
         int newWidth = (int) (density * width);
-        setContentAreaDimensions(2.f, width, height);
         mMediator.onLayoutChange(
                 mMockContentView, 0, 0, newWidth, newHeight, 0, 0, oldWidth, oldHeight);
     }

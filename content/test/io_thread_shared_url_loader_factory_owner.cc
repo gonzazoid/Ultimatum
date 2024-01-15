@@ -4,10 +4,10 @@
 
 #include "content/test/io_thread_shared_url_loader_factory_owner.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "content/browser/url_loader_factory_getter.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/test/simple_url_loader_test_helper.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "services/network/public/cpp/resource_request.h"
@@ -40,10 +40,10 @@ void InitializeSharedFactoryOnIOThread(
   run_loop.Run();
 }
 
-network::SimpleURLLoader::BodyAsStringCallback RunOnUIThread(
-    network::SimpleURLLoader::BodyAsStringCallback ui_callback) {
+network::SimpleURLLoader::BodyAsStringCallbackDeprecated RunOnUIThread(
+    network::SimpleURLLoader::BodyAsStringCallbackDeprecated ui_callback) {
   return base::BindOnce(
-      [](network::SimpleURLLoader::BodyAsStringCallback callback,
+      [](network::SimpleURLLoader::BodyAsStringCallbackDeprecated callback,
          std::unique_ptr<std::string> response_body) {
         DCHECK_CURRENTLY_ON(BrowserThread::IO);
         GetUIThreadTaskRunner({})->PostTask(
@@ -107,17 +107,18 @@ int IOThreadSharedURLLoaderFactoryOwner::LoadBasicRequestOnIOThread(
                                        TRAFFIC_ANNOTATION_FOR_TESTS);
 
   GetIOThreadTaskRunner({})->PostTask(
-      FROM_HERE, base::BindOnce(
-                     [](network::SimpleURLLoader* loader,
-                        network::mojom::URLLoaderFactory* factory,
-                        network::SimpleURLLoader::BodyAsStringCallback
-                            body_as_string_callback) {
-                       loader->DownloadToStringOfUnboundedSizeUntilCrashAndDie(
-                           factory, std::move(body_as_string_callback));
-                     },
-                     base::Unretained(simple_loader.get()),
-                     base::Unretained(shared_url_loader_factory_.get()),
-                     RunOnUIThread(simple_loader_helper.GetCallback())));
+      FROM_HERE,
+      base::BindOnce(
+          [](network::SimpleURLLoader* loader,
+             network::mojom::URLLoaderFactory* factory,
+             network::SimpleURLLoader::BodyAsStringCallbackDeprecated
+                 body_as_string_callback) {
+            loader->DownloadToStringOfUnboundedSizeUntilCrashAndDie(
+                factory, std::move(body_as_string_callback));
+          },
+          base::Unretained(simple_loader.get()),
+          base::Unretained(shared_url_loader_factory_.get()),
+          RunOnUIThread(simple_loader_helper.GetCallbackDeprecated())));
 
   simple_loader_helper.WaitForCallback();
   return simple_loader->NetError();

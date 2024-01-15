@@ -34,12 +34,14 @@ class FakeAudioRenderCallback : public AudioRendererSink::RenderCallback,
   // is set, will only fill half the buffer.
   int Render(base::TimeDelta delay,
              base::TimeTicks delay_timestamp,
-             int prior_frames_skipped,
+             const AudioGlitchInfo& glitch_info,
              AudioBus* audio_bus) override;
   MOCK_METHOD0(OnRenderError, void());
 
   // AudioConverter::InputCallback implementation.
-  double ProvideInput(AudioBus* audio_bus, uint32_t frames_delayed) override;
+  double ProvideInput(AudioBus* audio_bus,
+                      uint32_t frames_delayed,
+                      const AudioGlitchInfo& glitch_info) override;
 
   // Toggles only filling half the requested amount during Render().
   void set_half_fill(bool half_fill) { half_fill_ = half_fill; }
@@ -58,6 +60,10 @@ class FakeAudioRenderCallback : public AudioRendererSink::RenderCallback,
 
   int last_channel_count() const { return last_channel_count_; }
 
+  media::AudioGlitchInfo cumulative_glitch_info() const {
+    return cumulative_glitch_info_;
+  }
+
  private:
   int RenderInternal(AudioBus* audio_bus, base::TimeDelta delay, double volume);
 
@@ -69,6 +75,7 @@ class FakeAudioRenderCallback : public AudioRendererSink::RenderCallback,
   double volume_;
   int sample_rate_;
   bool needs_fade_in_ = false;
+  media::AudioGlitchInfo cumulative_glitch_info_;
 };
 
 }  // namespace media

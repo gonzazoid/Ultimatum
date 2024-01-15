@@ -10,15 +10,15 @@
 #include <vector>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/notreached.h"
 #include "base/task/sequenced_task_runner.h"
+#include "chromeos/ash/components/standalone_browser/standalone_browser_features.h"
 #include "chromeos/ash/services/ime/constants.h"
 #include "chromeos/ash/services/ime/decoder/decoder_engine.h"
 #include "chromeos/ash/services/ime/decoder/system_engine.h"
-#include "chromeos/ash/services/ime/rule_based_engine.h"
 #include "mojo/public/c/system/thunks.h"
 
 namespace ash {
@@ -52,11 +52,11 @@ std::string FieldTrialParamsRetrieverImpl::GetFieldTrialParamValueByFeature(
 
 ImeService::ImeService(
     mojo::PendingReceiver<mojom::ImeService> receiver,
-    ImeDecoder* ime_decoder,
+    ImeSharedLibraryWrapper* ime_shared_library_wrapper,
     std::unique_ptr<FieldTrialParamsRetriever> field_trial_params_retriever)
     : receiver_(this, std::move(receiver)),
-      main_task_runner_(base::SequencedTaskRunnerHandle::Get()),
-      ime_decoder_(ime_decoder),
+      main_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()),
+      ime_shared_library_(ime_shared_library_wrapper),
       field_trial_params_retriever_(std::move(field_trial_params_retriever)) {}
 
 ImeService::~ImeService() = default;
@@ -72,9 +72,8 @@ void ImeService::BindInputEngineManager(
 }
 
 void ImeService::ResetAllBackendConnections() {
-  decoder_engine_.reset();
-  system_engine_.reset();
-  connection_factory_.reset();
+  proto_mode_shared_lib_engine_.reset();
+  mojo_mode_shared_lib_engine_.reset();
 }
 
 void ImeService::ConnectToImeEngine(
@@ -92,55 +91,31 @@ void ImeService::ConnectToImeEngine(
   //
   // The extension will only use ConnectToImeEngine, and NativeInputMethodEngine
   // will only use ConnectToInputMethod.
-  if ((connection_factory_ && connection_factory_->IsConnected()) ||
-      (system_engine_ && system_engine_->IsConnected())) {
+  if (mojo_mode_shared_lib_engine_ &&
+      mojo_mode_shared_lib_engine_->IsConnected()) {
     std::move(callback).Run(/*bound=*/false);
     return;
   }
 
   ResetAllBackendConnections();
 
-  decoder_engine_ = std::make_unique<DecoderEngine>(
-      this, ime_decoder_->MaybeLoadThenReturnEntryPoints());
-  bool bound = decoder_engine_->BindRequest(
+  proto_mode_shared_lib_engine_ = std::make_unique<DecoderEngine>(
+      this, ime_shared_library_->MaybeLoadThenReturnEntryPoints());
+  bool bound = proto_mode_shared_lib_engine_->BindRequest(
       ime_spec, std::move(to_engine_request), std::move(from_engine), extra);
   std::move(callback).Run(bound);
 }
 
-void ImeService::ConnectToInputMethod(
-    const std::string& ime_spec,
-    mojo::PendingReceiver<mojom::InputMethod> input_method,
-    mojo::PendingRemote<mojom::InputMethodHost> input_method_host,
-    ConnectToInputMethodCallback callback) {
-  // This method is now deprecated and should not be used to connect to an
-  // input method.
-  std::move(callback).Run(/*bound=*/false);
-}
-
 void ImeService::InitializeConnectionFactory(
     mojo::PendingReceiver<mojom::ConnectionFactory> connection_factory,
-    mojom::ConnectionTarget connection_target,
     InitializeConnectionFactoryCallback callback) {
   ResetAllBackendConnections();
 
-  switch (connection_target) {
-    case mojom::ConnectionTarget::kImeService: {
-      connection_factory_ =
-          std::make_unique<ConnectionFactory>(std::move(connection_factory));
-      std::move(callback).Run(/*success=*/true);
-      break;
-    }
-    case mojom::ConnectionTarget::kDecoder: {
-      system_engine_ = std::make_unique<SystemEngine>(
-          this, ime_decoder_->MaybeLoadThenReturnEntryPoints());
-      bool bound =
-          system_engine_->BindConnectionFactory(std::move(connection_factory));
-      std::move(callback).Run(bound);
-      break;
-    }
-    default:
-      break;
-  }
+  mojo_mode_shared_lib_engine_ = std::make_unique<SystemEngine>(
+      this, ime_shared_library_->MaybeLoadThenReturnEntryPoints());
+  bool bound = mojo_mode_shared_lib_engine_->BindConnectionFactory(
+      std::move(connection_factory));
+  std::move(callback).Run(bound);
 }
 
 const char* ImeService::GetImeBundleDir() {
@@ -163,40 +138,41 @@ void ImeService::RunInMainSequence(ImeSequencedTask task, int task_id) {
   main_task_runner_->PostTask(FROM_HERE, base::BindOnce(task, task_id));
 }
 
-// TODO(b/218815885): Use consistent feature flag names as in CrOS
-// base::Feature::name (instead of slightly-different bespoke names), and always
-// wire 1:1 to CrOS feature flags (instead of having any extra logic).
 bool ImeService::IsFeatureEnabled(const char* feature_name) {
-  if (strcmp(feature_name, "AssistiveEmojiEnhanced") == 0) {
-    return base::FeatureList::IsEnabled(
-        chromeos::features::kAssistEmojiEnhanced);
+  static const base::Feature* kConsideredFeatures[] = {
+      &features::kAssistEmojiEnhanced,
+      &features::kAssistMultiWord,
+      &features::kAutocorrectParamsTuning,
+      &features::kFirstPartyVietnameseInput,
+      &ash::standalone_browser::features::kLacrosOnly,
+      &features::kSystemJapanesePhysicalTyping,
+      &features::kImeDownloaderUpdate,
+      &features::kImeKoreanOnlyModeSwitchOnRightAlt,
+      &features::kImeUsEnglishModelUpdate,
+      &features::kImeFstDecoderParamsUpdate,
+      &features::kAutocorrectByDefault,
+      &features::kAutocorrectUseReplaceSurroundingText,
+      &features::kInputMethodKoreanRightAltKeyDownFix,
+      &features::kImeKoreanModeSwitchDebug,
+  };
+
+  // Use consistent feature flag names as in CrOS base::Feature::name and always
+  // wire 1:1 to CrOS feature flags without extra logic.
+  for (const base::Feature* feature : kConsideredFeatures) {
+    if (strcmp(feature_name, feature->name) == 0) {
+      return base::FeatureList::IsEnabled(*feature);
+    }
   }
-  if (strcmp(feature_name, "AssistiveMultiWord") == 0) {
-    return chromeos::features::IsAssistiveMultiWordEnabled();
-  }
-  if (strcmp(feature_name, "AssistiveMultiWordLacrosSupport") == 0) {
-    return true;
-  }
-  if (strcmp(feature_name, chromeos::features::kAutocorrectParamsTuning.name) ==
-      0) {
-    return base::FeatureList::IsEnabled(
-        chromeos::features::kAutocorrectParamsTuning);
-  }
+
+  // For backwards-compatibility, check for the "LacrosSupport" flag, which was
+  // replaced by LacrosOnly.
+  // TODO(b/290714161): Remove this once the shared library no longer uses
+  // LacrosSupport.
   if (strcmp(feature_name, "LacrosSupport") == 0) {
-    return base::FeatureList::IsEnabled(chromeos::features::kLacrosSupport);
-  }
-  if (strcmp(feature_name, "SystemChinesePhysicalTyping") == 0) {
     return base::FeatureList::IsEnabled(
-        chromeos::features::kSystemChinesePhysicalTyping);
+        ash::standalone_browser::features::kLacrosOnly);
   }
-  if (strcmp(feature_name, "SystemJapanesePhysicalTyping") == 0) {
-    return base::FeatureList::IsEnabled(
-        chromeos::features::kSystemJapanesePhysicalTyping);
-  }
-  if (strcmp(feature_name, "SystemTransliterationPhysicalTyping") == 0) {
-    return base::FeatureList::IsEnabled(
-        chromeos::features::kSystemTransliterationPhysicalTyping);
-  }
+
   return false;
 }
 
@@ -205,11 +181,10 @@ const char* ImeService::GetFieldTrialParamValueByFeature(
     const char* param_name) {
   char* c_string_value;
 
-  if (strcmp(feature_name, chromeos::features::kAutocorrectParamsTuning.name) ==
-      0) {
+  if (strcmp(feature_name, features::kAutocorrectParamsTuning.name) == 0) {
     std::string string_value =
         field_trial_params_retriever_->GetFieldTrialParamValueByFeature(
-            chromeos::features::kAutocorrectParamsTuning, param_name);
+            features::kAutocorrectParamsTuning, param_name);
     c_string_value =
         new char[string_value.length() + 1];  // extra slot for NULL '\0' char
     strcpy(c_string_value, string_value.c_str());

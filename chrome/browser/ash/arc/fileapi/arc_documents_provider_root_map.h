@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 class Profile;
@@ -34,6 +35,9 @@ class ArcFileSystemOperationRunner;
 // All member function must be called on the UI thread.
 class ArcDocumentsProviderRootMap : public KeyedService {
  public:
+  // This constructor should not be used. It is public for the sake of
+  // compatibility with std::make_unique.
+  explicit ArcDocumentsProviderRootMap(Profile* profile);
   ArcDocumentsProviderRootMap(const ArcDocumentsProviderRootMap&) = delete;
   ArcDocumentsProviderRootMap& operator=(const ArcDocumentsProviderRootMap&) =
       delete;
@@ -48,12 +52,9 @@ class ArcDocumentsProviderRootMap : public KeyedService {
   // Returns an instance for the browser context associated with ARC, or nullptr
   // if ARC is not allowed.
   // TODO(nya): Remove this function when we support multi-user ARC. For now,
-  // it is okay to call this function only from chromeos::FileSystemBackend and
+  // it is okay to call this function only from ash::FileSystemBackend and
   // its delegates.
   static ArcDocumentsProviderRootMap* GetForArcBrowserContext();
-
-  // Checks if a given document provider root is read only or not.
-  static bool IsDocumentProviderRootReadOnly();
 
   // Looks up a root corresponding to |url|.
   // |path| is set to the remaining path part of |url|.
@@ -83,12 +84,10 @@ class ArcDocumentsProviderRootMap : public KeyedService {
  private:
   friend class ArcDocumentsProviderRootMapFactory;
 
-  explicit ArcDocumentsProviderRootMap(Profile* profile);
-
   // |runner_| outlives |this| and ArcDocumentsProviderRoot instances in |map_|
   // as this service has explicit dependency on ArcFileSystemOperationRunner in
   // the BrowserContextKeyedServiceFactory dependency graph.
-  ArcFileSystemOperationRunner* const runner_;
+  const raw_ptr<ArcFileSystemOperationRunner> runner_;
 
   // Key is (authority, root_document_id).
   using Key = std::pair<std::string, std::string>;

@@ -38,7 +38,6 @@ class TestHelpBubbleDelegate : public HelpBubbleDelegate {
   // typography system.
   int GetTitleTextContext() const override;
   int GetBodyTextContext() const override;
-  int GetButtonTextContext() const override;
 
   // These methods return color codes that will be handled by the app's theming
   // system.
@@ -81,4 +80,4 @@ class TestThemedWidget : public views::Widget {
 
 }  // namespace user_education::test
 
-#endif  // COMPONENTS_USER_EDUCATION_VIEWS_HELP_BUBBLE_FACTORY_VIEWS_TEST_UTIL_H_
+#endif  // COMPONENTS_USER_EDUCATION_VIEWS_HELP_BUBBLE_VIEWS_TEST_UTIL_H_

@@ -20,6 +20,7 @@ import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import static org.chromium.base.test.util.CallbackHelper.WAIT_TIMEOUT_SECONDS;
 import static org.chromium.base.test.util.CriteriaHelper.DEFAULT_MAX_TIME_TO_POLL;
@@ -28,8 +29,8 @@ import static org.chromium.components.browser_ui.widget.RecyclerViewTestUtils.wa
 
 import android.app.Activity;
 import android.content.Context;
+import android.graphics.drawable.BitmapDrawable;
 import android.provider.Settings;
-import android.support.test.InstrumentationRegistry;
 import android.view.View;
 import android.view.ViewGroup;
 
@@ -37,6 +38,7 @@ import androidx.annotation.ColorInt;
 import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
 import androidx.core.view.ViewCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.test.espresso.NoMatchingRootException;
 import androidx.test.espresso.NoMatchingViewException;
@@ -48,15 +50,21 @@ import androidx.test.espresso.action.GeneralSwipeAction;
 import androidx.test.espresso.action.Press;
 import androidx.test.espresso.action.Swipe;
 import androidx.test.espresso.contrib.RecyclerViewActions;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.hamcrest.Matcher;
 
 import org.chromium.base.ContextUtils;
 import org.chromium.base.test.util.ApplicationTestUtils;
+import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.base.test.util.Criteria;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.chrome.browser.ChromeTabbedActivity;
+import org.chromium.chrome.browser.compositor.layouts.Layout;
+import org.chromium.chrome.browser.compositor.layouts.LayoutManagerChrome;
 import org.chromium.chrome.browser.compositor.layouts.content.TabContentManager;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.chrome.browser.layouts.LayoutStateProvider.LayoutStateObserver;
 import org.chromium.chrome.browser.layouts.LayoutTestUtils;
 import org.chromium.chrome.browser.layouts.LayoutType;
 import org.chromium.chrome.browser.tab.Tab;
@@ -66,6 +74,7 @@ import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tasks.ReturnToChromeUtil;
 import org.chromium.chrome.browser.tasks.pseudotab.PseudoTab;
 import org.chromium.chrome.browser.tasks.tab_groups.TabGroupModelFilter;
+import org.chromium.chrome.features.start_surface.TabSwitcherAndStartSurfaceLayout;
 import org.chromium.chrome.tab_ui.R;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.util.ChromeTabUtils;
@@ -79,11 +88,10 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
-/**
- * Utilities helper class for tab grid/group tests.
- */
+/** Utilities helper class for tab grid/group tests. */
 public class TabUiTestHelper {
     /**
      * Create {@code tabsCount} tabs for {@code cta} in certain tab model based on {@code
@@ -109,11 +117,15 @@ public class TabUiTestHelper {
      */
     public static void addBlankTabs(ChromeTabbedActivity cta, boolean incognito, int count) {
         for (int i = 0; i < count; i++) {
-            TestThreadUtils.runOnUiThreadBlocking(() -> {
-                cta.getTabCreator(incognito).createNewTab(
-                        new LoadUrlParams(ContentUrlConstants.ABOUT_BLANK_DISPLAY_URL),
-                        TabLaunchType.FROM_CHROME_UI, null);
-            });
+            TestThreadUtils.runOnUiThreadBlocking(
+                    () -> {
+                        cta.getTabCreator(incognito)
+                                .createNewTab(
+                                        new LoadUrlParams(
+                                                ContentUrlConstants.ABOUT_BLANK_DISPLAY_URL),
+                                        TabLaunchType.FROM_CHROME_UI,
+                                        null);
+                    });
         }
     }
 
@@ -125,7 +137,9 @@ public class TabUiTestHelper {
         assertFalse(cta.getLayoutManager().isLayoutVisible(LayoutType.TAB_SWITCHER));
         // TODO(crbug.com/1145271): Replace this with clicking tab switcher button via espresso.
         TestThreadUtils.runOnUiThreadBlocking(
-                () -> { cta.findViewById(R.id.tab_switcher_button).performClick(); });
+                () -> {
+                    cta.findViewById(R.id.tab_switcher_button).performClick();
+                });
         LayoutTestUtils.waitForLayout(cta.getLayoutManager(), LayoutType.TAB_SWITCHER);
     }
 
@@ -134,9 +148,35 @@ public class TabUiTestHelper {
      * @param cta  The current running activity.
      */
     public static void leaveTabSwitcher(ChromeTabbedActivity cta) {
-        assertTrue(cta.getLayoutManager().isLayoutVisible(LayoutType.TAB_SWITCHER));
-        TestThreadUtils.runOnUiThreadBlocking(() -> cta.onBackPressed());
+        LayoutManagerChrome layoutManager = cta.getLayoutManager();
+        LayoutTestUtils.waitForLayout(layoutManager, LayoutType.TAB_SWITCHER);
+        // Back press may resolve differently during the show/hide animations. Don't call this until
+        // we are certain the layout is visible.
+        CallbackHelper finishedHidingCallbackHelper = new CallbackHelper();
+        LayoutStateObserver observer =
+                new LayoutStateObserver() {
+                    @Override
+                    public void onFinishedHiding(int layoutType) {
+                        if (layoutType != LayoutType.TAB_SWITCHER) return;
+
+                        finishedHidingCallbackHelper.notifyCalled();
+                    }
+                };
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    layoutManager.addObserver(observer);
+                    cta.onBackPressed();
+                });
         LayoutTestUtils.waitForLayout(cta.getLayoutManager(), LayoutType.BROWSING);
+        try {
+            finishedHidingCallbackHelper.waitForFirst();
+        } catch (TimeoutException e) {
+            fail("LayoutType.TAB_SWITCHER never finished hiding.");
+        }
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    layoutManager.removeObserver(observer);
+                });
     }
 
     /**
@@ -161,7 +201,7 @@ public class TabUiTestHelper {
     private static void clickTabSwitcherCardWithParent(
             ChromeTabbedActivity cta, int index, int parentId) {
         assertTrue(cta.getLayoutManager().isLayoutVisible(LayoutType.TAB_SWITCHER));
-        onView(allOf(withParent(withId(parentId)), withId(R.id.tab_list_view)))
+        onView(allOf(withParent(withId(parentId)), withId(R.id.tab_list_recycler_view)))
                 .perform(RecyclerViewActions.actionOnItemAtPosition(index, click()));
     }
 
@@ -179,7 +219,10 @@ public class TabUiTestHelper {
      * @param index The index of the target tab.
      */
     static void clickNthTabInDialog(ChromeTabbedActivity cta, int index) {
-        onView(allOf(withId(R.id.tab_list_view), withParent(withId(R.id.dialog_container_view))))
+        onView(
+                        allOf(
+                                withId(R.id.tab_list_recycler_view),
+                                withParent(withId(R.id.dialog_container_view))))
                 .perform(RecyclerViewActions.actionOnItemAtPosition(index, click()));
         LayoutTestUtils.waitForLayout(cta.getLayoutManager(), LayoutType.BROWSING);
     }
@@ -197,27 +240,31 @@ public class TabUiTestHelper {
      * @param index The index of the target tab to close.
      */
     static void closeNthTabInDialog(int index) {
-        onView(allOf(withId(R.id.tab_list_view), withParent(withId(R.id.dialog_container_view))))
-                .perform(new ViewAction() {
-                    @Override
-                    public Matcher<View> getConstraints() {
-                        return isDisplayed();
-                    }
+        onView(
+                        allOf(
+                                withId(R.id.tab_list_recycler_view),
+                                withParent(withId(R.id.dialog_container_view))))
+                .perform(
+                        new ViewAction() {
+                            @Override
+                            public Matcher<View> getConstraints() {
+                                return isDisplayed();
+                            }
 
-                    @Override
-                    public String getDescription() {
-                        return "close tab with index " + String.valueOf(index);
-                    }
+                            @Override
+                            public String getDescription() {
+                                return "close tab with index " + String.valueOf(index);
+                            }
 
-                    @Override
-                    public void perform(UiController uiController, View view) {
-                        RecyclerView recyclerView = (RecyclerView) view;
-                        RecyclerView.ViewHolder viewHolder =
-                                recyclerView.findViewHolderForAdapterPosition(index);
-                        assert viewHolder != null;
-                        viewHolder.itemView.findViewById(R.id.action_button).performClick();
-                    }
-                });
+                            @Override
+                            public void perform(UiController uiController, View view) {
+                                RecyclerView recyclerView = (RecyclerView) view;
+                                RecyclerView.ViewHolder viewHolder =
+                                        recyclerView.findViewHolderForAdapterPosition(index);
+                                assert viewHolder != null;
+                                viewHolder.itemView.findViewById(R.id.action_button).performClick();
+                            }
+                        });
     }
 
     /** Close the first tab in grid tab switcher. */
@@ -231,28 +278,31 @@ public class TabUiTestHelper {
      * @param index The index of the target tab to close.
      */
     static void closeNthTabInTabSwitcher(Context context, int index) {
-        onView(allOf(withParent(withId(getTabSwitcherParentId(context))),
-                       withId(R.id.tab_list_view)))
-                .perform(new ViewAction() {
-                    @Override
-                    public Matcher<View> getConstraints() {
-                        return isDisplayed();
-                    }
+        onView(
+                        allOf(
+                                withParent(withId(getTabSwitcherParentId(context))),
+                                withId(R.id.tab_list_recycler_view)))
+                .perform(
+                        new ViewAction() {
+                            @Override
+                            public Matcher<View> getConstraints() {
+                                return isDisplayed();
+                            }
 
-                    @Override
-                    public String getDescription() {
-                        return "close tab with index " + String.valueOf(index);
-                    }
+                            @Override
+                            public String getDescription() {
+                                return "close tab with index " + String.valueOf(index);
+                            }
 
-                    @Override
-                    public void perform(UiController uiController, View view) {
-                        RecyclerView recyclerView = (RecyclerView) view;
-                        RecyclerView.ViewHolder viewHolder =
-                                recyclerView.findViewHolderForAdapterPosition(index);
-                        assert viewHolder != null;
-                        viewHolder.itemView.findViewById(R.id.action_button).performClick();
-                    }
-                });
+                            @Override
+                            public void perform(UiController uiController, View view) {
+                                RecyclerView recyclerView = (RecyclerView) view;
+                                RecyclerView.ViewHolder viewHolder =
+                                        recyclerView.findViewHolderForAdapterPosition(index);
+                                assert viewHolder != null;
+                                viewHolder.itemView.findViewById(R.id.action_button).performClick();
+                            }
+                        });
     }
 
     /**
@@ -264,7 +314,7 @@ public class TabUiTestHelper {
     static boolean isPopupTabListCompletelyShowing(ChromeTabbedActivity cta) {
         boolean isShowing = true;
         try {
-            onView(withId(R.id.tab_list_view))
+            onView(withId(R.id.tab_list_recycler_view))
                     .inRoot(withDecorView(not(cta.getWindow().getDecorView())))
                     .check(matches(isCompletelyDisplayed()))
                     .check((v, e) -> assertEquals(1f, v.getAlpha(), 0.0));
@@ -285,7 +335,7 @@ public class TabUiTestHelper {
     static boolean isPopupTabListCompletelyHidden(ChromeTabbedActivity cta) {
         boolean isHidden = false;
         try {
-            onView(withId(R.id.tab_list_view))
+            onView(withId(R.id.tab_list_recycler_view))
                     .inRoot(withDecorView(not(cta.getWindow().getDecorView())))
                     .check(matches(isDisplayed()));
         } catch (NoMatchingRootException e) {
@@ -302,7 +352,7 @@ public class TabUiTestHelper {
      * @param count The count of the tabs in the tab list.
      */
     static void verifyShowingPopupTabList(ChromeTabbedActivity cta, int count) {
-        onView(withId(R.id.tab_list_view))
+        onView(withId(R.id.tab_list_recycler_view))
                 .inRoot(withDecorView(not(cta.getWindow().getDecorView())))
                 .check(ChildrenCountAssertion.havingTabCount(count));
     }
@@ -335,11 +385,14 @@ public class TabUiTestHelper {
             tabGroup.add(tabModel.getTabAt(i));
         }
         createTabGroup(cta, isIncognito, tabGroup);
-        assertTrue(cta.getTabModelSelector().getTabModelFilterProvider().getCurrentTabModelFilter()
-                           instanceof TabGroupModelFilter);
-        TabGroupModelFilter filter = (TabGroupModelFilter) cta.getTabModelSelector()
-                                             .getTabModelFilterProvider()
-                                             .getTabModelFilter(isIncognito);
+        assertTrue(
+                cta.getTabModelSelector().getTabModelFilterProvider().getCurrentTabModelFilter()
+                        instanceof TabGroupModelFilter);
+        TabGroupModelFilter filter =
+                (TabGroupModelFilter)
+                        cta.getTabModelSelector()
+                                .getTabModelFilterProvider()
+                                .getTabModelFilter(isIncognito);
         assertEquals(1, filter.getCount());
     }
 
@@ -351,14 +404,16 @@ public class TabUiTestHelper {
      */
     public static void verifyTabModelTabCount(
             ChromeTabbedActivity cta, int normalTabs, int incognitoTabs) {
-        CriteriaHelper.pollUiThread(() -> {
-            Criteria.checkThat(
-                    cta.getTabModelSelector().getModel(false).getCount(), is(normalTabs));
-        });
-        CriteriaHelper.pollUiThread(() -> {
-            Criteria.checkThat(
-                    cta.getTabModelSelector().getModel(true).getCount(), is(incognitoTabs));
-        });
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    Criteria.checkThat(
+                            cta.getTabModelSelector().getModel(false).getCount(), is(normalTabs));
+                });
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    Criteria.checkThat(
+                            cta.getTabModelSelector().getModel(true).getCount(), is(incognitoTabs));
+                });
     }
 
     /**
@@ -369,7 +424,7 @@ public class TabUiTestHelper {
     public static void verifyTabSwitcherCardCount(ChromeTabbedActivity cta, int count) {
         assertTrue(cta.getLayoutManager().isLayoutVisible(LayoutType.TAB_SWITCHER));
         int viewHolder = getTabSwitcherParentId(cta);
-        onView(allOf(withParent(withId(viewHolder)), withId(R.id.tab_list_view)))
+        onView(allOf(withParent(withId(viewHolder)), withId(R.id.tab_list_recycler_view)))
                 .check(ChildrenCountAssertion.havingTabCount(count));
     }
 
@@ -379,14 +434,16 @@ public class TabUiTestHelper {
      * @return View Id of GTS parent view.
      */
     public static int getTabSwitcherParentId(Context context) {
-        int viewHolder = getIsStartSurfaceEnabledFromUIThread(context)
-                ? org.chromium.chrome.R.id.tasks_surface_body
-                : org.chromium.chrome.R.id.compositor_view_holder;
-        if (DeviceFormFactor.isNonMultiDisplayContextOnTablet(context)
-                && TabUiFeatureUtilities.isTabletGridTabSwitcherPolishEnabled(context)) {
-            viewHolder = R.id.grid_tab_switcher_view_holder;
+        if (DeviceFormFactor.isNonMultiDisplayContextOnTablet(context)) {
+            return R.id.tab_switcher_view_holder;
         }
-        return viewHolder;
+
+        if (getIsStartSurfaceEnabledFromUIThread(context)
+                && !getIsStartSurfaceRefactorEnabledFromUIThread(context)) {
+            return R.id.tasks_surface_body;
+        }
+
+        return R.id.compositor_view_holder;
     }
 
     private static boolean getIsStartSurfaceEnabledFromUIThread(Context context) {
@@ -396,6 +453,16 @@ public class TabUiTestHelper {
         return isStartSurfaceEnabled.get();
     }
 
+    public static boolean getIsStartSurfaceRefactorEnabledFromUIThread(Context context) {
+        AtomicReference<Boolean> isStartSurfaceRefactorEnabled = new AtomicReference<>();
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    isStartSurfaceRefactorEnabled.set(
+                            ReturnToChromeUtil.isStartSurfaceRefactorEnabled(context));
+                });
+        return isStartSurfaceRefactorEnabled.get();
+    }
+
     /**
      * Verify there are correct number of favicons in tab strip.
      * @param cta       The current running activity.
@@ -403,7 +470,10 @@ public class TabUiTestHelper {
      */
     static void verifyTabStripFaviconCount(ChromeTabbedActivity cta, int count) {
         assertFalse(cta.getLayoutManager().isLayoutVisible(LayoutType.TAB_SWITCHER));
-        onView(allOf(withParent(withId(R.id.toolbar_container_view)), withId(R.id.tab_list_view)))
+        onView(
+                        allOf(
+                                withParent(withId(R.id.toolbar_container_view)),
+                                withId(R.id.tab_list_recycler_view)))
                 .check(ChildrenCountAssertion.havingTabCount(count));
     }
 
@@ -417,10 +487,12 @@ public class TabUiTestHelper {
             ChromeTabbedActivity cta, boolean isIncognito, List<Tab> tabs) {
         if (tabs.size() == 0) return;
         assert cta.getTabModelSelector().getTabModelFilterProvider().getCurrentTabModelFilter()
-                        instanceof TabGroupModelFilter;
-        TabGroupModelFilter filter = (TabGroupModelFilter) cta.getTabModelSelector()
-                                             .getTabModelFilterProvider()
-                                             .getTabModelFilter(isIncognito);
+                instanceof TabGroupModelFilter;
+        TabGroupModelFilter filter =
+                (TabGroupModelFilter)
+                        cta.getTabModelSelector()
+                                .getTabModelFilterProvider()
+                                .getTabModelFilter(isIncognito);
         Tab rootTab = tabs.get(0);
         for (int i = 1; i < tabs.size(); i++) {
             Tab tab = tabs.get(i);
@@ -439,8 +511,10 @@ public class TabUiTestHelper {
         // defined.
         final float defaultScale = 1f;
         float durationScale =
-                Settings.Global.getFloat(ContextUtils.getApplicationContext().getContentResolver(),
-                        Settings.Global.ANIMATOR_DURATION_SCALE, defaultScale);
+                Settings.Global.getFloat(
+                        ContextUtils.getApplicationContext().getContentResolver(),
+                        Settings.Global.ANIMATOR_DURATION_SCALE,
+                        defaultScale);
         return !(durationScale == 0.0);
     }
 
@@ -452,8 +526,11 @@ public class TabUiTestHelper {
      * @param numIncognitoTabs The number of incognito tabs.
      * @param url The URL to load.
      */
-    public static void prepareTabsWithThumbnail(ChromeTabbedActivityTestRule rule, int numTabs,
-            int numIncognitoTabs, @Nullable String url) {
+    public static void prepareTabsWithThumbnail(
+            ChromeTabbedActivityTestRule rule,
+            int numTabs,
+            int numIncognitoTabs,
+            @Nullable String url) {
         assertTrue(numTabs >= 1);
         assertTrue(numIncognitoTabs >= 0);
 
@@ -468,7 +545,8 @@ public class TabUiTestHelper {
         if (numIncognitoTabs > 0) createTabsWithThumbnail(rule, numIncognitoTabs, url, true);
 
         assertEquals(numTabs, rule.getActivity().getTabModelSelector().getModel(false).getCount());
-        assertEquals(numIncognitoTabs,
+        assertEquals(
+                numIncognitoTabs,
                 rule.getActivity().getTabModelSelector().getModel(true).getCount());
         if (url != null) {
             verifyAllTabsHaveUrl(rule.getActivity().getTabModelSelector().getModel(false), url);
@@ -493,8 +571,11 @@ public class TabUiTestHelper {
      *            be saved.
      * @param isIncognito Whether the tab is incognito tab.
      */
-    private static void createTabsWithThumbnail(ChromeTabbedActivityTestRule rule, int numTabs,
-            @Nullable String url, boolean isIncognito) {
+    public static void createTabsWithThumbnail(
+            ChromeTabbedActivityTestRule rule,
+            int numTabs,
+            @Nullable String url,
+            boolean isIncognito) {
         assertTrue(numTabs >= 1);
 
         int previousTabCount =
@@ -505,8 +586,11 @@ public class TabUiTestHelper {
             int previousTabIndex = previousTabModel.index();
             Tab previousTab = previousTabModel.getTabAt(previousTabIndex);
 
-            ChromeTabUtils.newTabFromMenu(InstrumentationRegistry.getInstrumentation(),
-                    rule.getActivity(), isIncognito, url == null);
+            ChromeTabUtils.newTabFromMenu(
+                    InstrumentationRegistry.getInstrumentation(),
+                    rule.getActivity(),
+                    isIncognito,
+                    url == null);
 
             if (url != null) rule.loadUrl(url);
 
@@ -514,41 +598,42 @@ public class TabUiTestHelper {
             int currentTabIndex = currentTabModel.index();
 
             boolean fixPendingReadbacks =
-                    rule.getActivity().getTabContentManager().getPendingReadbacksForTesting() != 0;
+                    rule.getActivity().getTabContentManager().getInFlightCapturesForTesting() != 0;
 
             // When there are pending readbacks due to detached Tabs, try to fix it by switching
             // back to that tab.
             if (fixPendingReadbacks && previousTabIndex != TabModel.INVALID_TAB_INDEX) {
-                // clang-format off
-                TestThreadUtils.runOnUiThreadBlocking(() ->
-                        previousTabModel.setIndex(
-                            previousTabIndex, TabSelectionType.FROM_USER, false)
-                );
-                // clang-format on
+                TestThreadUtils.runOnUiThreadBlocking(
+                        () ->
+                                previousTabModel.setIndex(
+                                        previousTabIndex, TabSelectionType.FROM_USER, false));
             }
 
             checkThumbnailsExist(previousTab);
 
             if (fixPendingReadbacks) {
-                // clang-format off
-                TestThreadUtils.runOnUiThreadBlocking(() -> currentTabModel.setIndex(
-                        currentTabIndex, TabSelectionType.FROM_USER, false)
-                );
-                // clang-format on
+                TestThreadUtils.runOnUiThreadBlocking(
+                        () ->
+                                currentTabModel.setIndex(
+                                        currentTabIndex, TabSelectionType.FROM_USER, false));
             }
         }
 
         ChromeTabUtils.waitForTabPageLoaded(
                 rule.getActivity().getActivityTab(), null, null, WAIT_TIMEOUT_SECONDS * 3);
 
-        assertEquals(numTabs + previousTabCount,
+        assertEquals(
+                numTabs + previousTabCount,
                 rule.getActivity().getTabModelSelector().getModel(isIncognito).getCount());
 
-        CriteriaHelper.pollUiThread(() -> {
-            Criteria.checkThat(
-                    rule.getActivity().getTabContentManager().getPendingReadbacksForTesting(),
-                    is(0));
-        });
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    Criteria.checkThat(
+                            rule.getActivity()
+                                    .getTabContentManager()
+                                    .getInFlightCapturesForTesting(),
+                            is(0));
+                });
     }
 
     public static void verifyAllTabsHaveThumbnail(TabModel tabModel) {
@@ -557,21 +642,56 @@ public class TabUiTestHelper {
         }
     }
 
+    public static void waitForThumbnailsToFetch(RecyclerView recyclerView) {
+        assertTrue(recyclerView instanceof TabListRecyclerView);
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    boolean allFetched = true;
+                    int i = 0;
+                    LinearLayoutManager layoutManager =
+                            (LinearLayoutManager) recyclerView.getLayoutManager();
+                    for (i = layoutManager.findFirstVisibleItemPosition();
+                            i <= layoutManager.findLastVisibleItemPosition();
+                            i++) {
+                        View v = layoutManager.findViewByPosition(i);
+                        TabThumbnailView thumbnail = v.findViewById(R.id.tab_thumbnail);
+
+                        // Some items may not be cards or may not have thumbnails.
+                        if (thumbnail == null) continue;
+
+                        if (thumbnail.isPlaceholder()
+                                || !(thumbnail.getDrawable() instanceof BitmapDrawable)
+                                || ((BitmapDrawable) thumbnail.getDrawable()).getBitmap() == null) {
+                            allFetched = false;
+                            break;
+                        }
+                    }
+                    Criteria.checkThat(
+                            "The thumbnail for card at position " + i + " is missing.",
+                            allFetched,
+                            is(true));
+                });
+    }
+
     public static void checkThumbnailsExist(Tab tab) {
         File etc1File = TabContentManager.getTabThumbnailFileEtc1(tab);
-        CriteriaHelper.pollInstrumentationThread(etc1File::exists,
+        CriteriaHelper.pollInstrumentationThread(
+                etc1File::exists,
                 "The thumbnail " + etc1File.getName() + " is not found",
-                DEFAULT_MAX_TIME_TO_POLL * 10, DEFAULT_POLLING_INTERVAL);
+                DEFAULT_MAX_TIME_TO_POLL * 10,
+                DEFAULT_POLLING_INTERVAL);
 
         File jpegFile = TabContentManager.getTabThumbnailFileJpeg(tab.getId());
-        CriteriaHelper.pollInstrumentationThread(jpegFile::exists,
+        CriteriaHelper.pollInstrumentationThread(
+                jpegFile::exists,
                 "The thumbnail " + jpegFile.getName() + " is not found",
-                DEFAULT_MAX_TIME_TO_POLL * 10, DEFAULT_POLLING_INTERVAL);
+                DEFAULT_MAX_TIME_TO_POLL * 10,
+                DEFAULT_POLLING_INTERVAL);
     }
 
     /**
      * Verify that the snack bar is showing and click on the snack bar button. Right now it is only
-     * used for undoing a tab closure. This should be used with
+     * used for undoing a tab closure or undoing a tab group merge. This should be used with
      * CriteriaHelper.pollInstrumentationThread().
      * @return whether the visibility checking and the clicking have finished or not.
      */
@@ -596,11 +716,17 @@ public class TabUiTestHelper {
      */
     public static GeneralSwipeAction getSwipeToDismissAction(boolean isLeftToRight) {
         if (isLeftToRight) {
-            return new GeneralSwipeAction(Swipe.FAST, GeneralLocation.CENTER_LEFT,
-                    GeneralLocation.CENTER_RIGHT, Press.FINGER);
+            return new GeneralSwipeAction(
+                    Swipe.FAST,
+                    GeneralLocation.CENTER_LEFT,
+                    GeneralLocation.CENTER_RIGHT,
+                    Press.FINGER);
         } else {
-            return new GeneralSwipeAction(Swipe.FAST, GeneralLocation.CENTER_RIGHT,
-                    GeneralLocation.CENTER_LEFT, Press.FINGER);
+            return new GeneralSwipeAction(
+                    Swipe.FAST,
+                    GeneralLocation.CENTER_RIGHT,
+                    GeneralLocation.CENTER_LEFT,
+                    Press.FINGER);
         }
     }
 
@@ -621,16 +747,20 @@ public class TabUiTestHelper {
         assertTrue(isIncognito != cta.getTabModelSelector().isIncognitoSelected());
         assertTrue(cta.getLayoutManager().isLayoutVisible(LayoutType.TAB_SWITCHER));
 
-        onView(withContentDescription(isIncognito
-                               ? R.string.accessibility_tab_switcher_incognito_stack
-                               : R.string.accessibility_tab_switcher_standard_stack))
+        onView(
+                        withContentDescription(
+                                isIncognito
+                                        ? R.string.accessibility_tab_switcher_incognito_stack
+                                        : R.string.accessibility_tab_switcher_standard_stack))
                 .perform(click());
 
-        CriteriaHelper.pollUiThread(() -> {
-            Criteria.checkThat(cta.getTabModelSelector().isIncognitoSelected(), is(isIncognito));
-        });
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    Criteria.checkThat(
+                            cta.getTabModelSelector().isIncognitoSelected(), is(isIncognito));
+                });
         // Wait for tab list recyclerView to finish animation after tab model switch.
-        RecyclerView recyclerView = cta.findViewById(R.id.tab_list_view);
+        RecyclerView recyclerView = cta.findViewById(R.id.tab_list_recycler_view);
         waitForStableRecyclerView(recyclerView);
     }
 
@@ -645,8 +775,9 @@ public class TabUiTestHelper {
         View cardView = holder.findViewById(R.id.card_view);
         final @ColorInt int actualColor =
                 ViewCompat.getBackgroundTintList(cardView).getDefaultColor();
-        final @ColorInt int selectedColor = TabUiThemeProvider.getCardViewBackgroundColor(
-                holder.getContext(), /*isIncognito*/ false, /*isSelected*/ true);
+        final @ColorInt int selectedColor =
+                TabUiThemeProvider.getCardViewBackgroundColor(
+                        holder.getContext(), /* isIncognito= */ false, /* isSelected= */ true);
         return actualColor == selectedColor;
     }
 
@@ -663,8 +794,7 @@ public class TabUiTestHelper {
         }
 
         private int mExpectedCount;
-        @ChildrenType
-        private int mExpectedChildrenType;
+        @ChildrenType private int mExpectedChildrenType;
 
         public static ChildrenCountAssertion havingTabCount(int tabCount) {
             return new ChildrenCountAssertion(ChildrenType.TAB, tabCount);
@@ -731,6 +861,76 @@ public class TabUiTestHelper {
                 }
             }
             assertEquals(mExpectedCount, tabSuggestionMessageCount);
+        }
+    }
+
+    /**
+     * Verifies whether the correct layout is created for the tab switcher in LayoutManagerChrome.
+     */
+    public static void verifyTabSwitcherLayoutType(ChromeTabbedActivity cta) {
+        boolean isStartSurfaceRefactorEnabled = ChromeFeatureList.sStartSurfaceRefactor.isEnabled();
+        getTabSwitcherLayoutAndVerify(cta, isStartSurfaceRefactorEnabled);
+    }
+
+    /**
+     * Gets the tab switcher layout depends on whether the refactoring is enabled and verifies its
+     * type. If refactoring is enabled this will trigger lazy init of the tab switcher layout.
+     */
+    public static Layout getTabSwitcherLayoutAndVerify(
+            ChromeTabbedActivity cta, boolean isStartSurfaceRefactorEnabled) {
+        final LayoutManagerChrome layoutManager = cta.getLayoutManager();
+        Layout layout;
+        if (isStartSurfaceRefactorEnabled) {
+            layout = layoutManager.getTabSwitcherLayoutForTesting();
+            if (layout == null) {
+                TestThreadUtils.runOnUiThreadBlocking(
+                        () -> {
+                            layoutManager.initTabSwitcherLayoutForTesting();
+                        });
+            }
+            layout = layoutManager.getTabSwitcherLayoutForTesting();
+            assertTrue(layout instanceof TabSwitcherLayout);
+        } else {
+            layout = layoutManager.getOverviewLayout();
+            assertTrue(layout instanceof TabSwitcherAndStartSurfaceLayout);
+        }
+        return layout;
+    }
+
+    /**
+     * Presses the back button on the Tab switcher.
+     * @param isStartSurfaceRefactorEnabled Whether Start surface refactoring is enabled.
+     * @param tabSwitcherLayout The {@link TabSwitcherLayout} when the refactoring is enabled.
+     * @param tabSwitcherAndStartSurfaceLayout The {@link TabSwitcherAndStartSurfaceLayout} which
+     *                                         handles the back operations of Tab switcher before
+     *                                         the refactoring is enabled.
+     */
+    public static void pressBackOnTabSwitcher(
+            boolean isStartSurfaceRefactorEnabled,
+            @Nullable TabSwitcherLayout tabSwitcherLayout,
+            @Nullable TabSwitcherAndStartSurfaceLayout tabSwitcherAndStartSurfaceLayout)
+            throws InterruptedException {
+        if (isStartSurfaceRefactorEnabled) {
+            assert tabSwitcherLayout != null;
+            Thread.sleep(1000);
+            TestThreadUtils.runOnUiThreadBlocking(
+                    () -> {
+                        tabSwitcherLayout
+                                .getTabSwitcherForTesting()
+                                .getController()
+                                .onBackPressed();
+                    });
+            Thread.sleep(1000);
+        } else {
+            assert tabSwitcherAndStartSurfaceLayout != null;
+            Thread.sleep(1000);
+            TestThreadUtils.runOnUiThreadBlocking(
+                    () -> {
+                        tabSwitcherAndStartSurfaceLayout
+                                .getStartSurfaceForTesting()
+                                .onBackPressed();
+                    });
+            Thread.sleep(1000);
         }
     }
 }

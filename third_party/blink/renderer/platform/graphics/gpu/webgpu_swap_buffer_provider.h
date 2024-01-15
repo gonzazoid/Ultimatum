@@ -5,10 +5,13 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_GPU_WEBGPU_SWAP_BUFFER_PROVIDER_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_GPU_WEBGPU_SWAP_BUFFER_PROVIDER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "cc/layers/texture_layer.h"
 #include "cc/layers/texture_layer_client.h"
+#include "components/viz/common/resources/shared_image_format.h"
 #include "gpu/command_buffer/common/mailbox.h"
 #include "gpu/command_buffer/common/sync_token.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/graphics/gpu/dawn_control_client_holder.h"
 #include "third_party/blink/renderer/platform/graphics/gpu/webgpu_mailbox_texture.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_types_3d.h"
@@ -17,6 +20,7 @@
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/ref_counted.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/gfx/hdr_metadata.h"
 
 namespace blink {
 
@@ -40,10 +44,12 @@ class PLATFORM_EXPORT WebGPUSwapBufferProvider
       scoped_refptr<DawnControlClientHolder> dawn_control_client,
       WGPUDevice device,
       WGPUTextureUsage usage,
-      WGPUTextureFormat format);
+      WGPUTextureFormat format,
+      PredefinedColorSpace color_space,
+      const gfx::HDRMetadata& hdr_metadata);
   ~WebGPUSwapBufferProvider() override;
 
-  viz::ResourceFormat Format() const;
+  viz::SharedImageFormat Format() const;
   const gfx::Size& Size() const;
   cc::Layer* CcLayer();
   void SetFilterQuality(cc::PaintFlags::FilterQuality);
@@ -106,7 +112,7 @@ class PLATFORM_EXPORT WebGPUSwapBufferProvider
   struct SwapBuffer : WTF::RefCounted<SwapBuffer> {
     SwapBuffer(
         base::WeakPtr<WebGraphicsContext3DProviderWrapper> context_provider,
-        gpu::Mailbox mailbox,
+        scoped_refptr<gpu::ClientSharedImage> shared_image,
         gpu::SyncToken creation_token,
         gfx::Size size);
     SwapBuffer(const SwapBuffer&) = delete;
@@ -114,7 +120,7 @@ class PLATFORM_EXPORT WebGPUSwapBufferProvider
     ~SwapBuffer();
 
     gfx::Size size;
-    gpu::Mailbox mailbox;
+    scoped_refptr<gpu::ClientSharedImage> shared_image;
     scoped_refptr<WebGPUMailboxTexture> mailbox_texture;
 
     // A weak ptr to the context provider so that the destructor can
@@ -150,7 +156,7 @@ class PLATFORM_EXPORT WebGPUSwapBufferProvider
   void ReleaseWGPUTextureAccessIfNeeded();
 
   scoped_refptr<DawnControlClientHolder> dawn_control_client_;
-  Client* client_;
+  raw_ptr<Client, ExperimentalRenderer> client_;
   WGPUDevice device_;
   scoped_refptr<cc::TextureLayer> layer_;
   bool neutered_ = false;
@@ -161,8 +167,10 @@ class PLATFORM_EXPORT WebGPUSwapBufferProvider
 
   WTF::Vector<scoped_refptr<SwapBuffer>> unused_swap_buffers_;
   scoped_refptr<SwapBuffer> last_swap_buffer_;
-  viz::ResourceFormat format_;
-  WGPUTextureUsage usage_;
+  const viz::SharedImageFormat format_;
+  const WGPUTextureUsage usage_;
+  const PredefinedColorSpace color_space_;
+  int max_texture_size_;
 
   scoped_refptr<SwapBuffer> current_swap_buffer_;
 };

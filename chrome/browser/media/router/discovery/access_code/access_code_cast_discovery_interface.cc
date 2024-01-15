@@ -7,12 +7,12 @@
 #include <cstddef>
 #include <string>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/strcat.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/strings/stringprintf.h"
 #include "base/time/time.h"
 #include "chrome/browser/media/router/discovery/access_code/access_code_cast_constants.h"
 #include "chrome/browser/profiles/profile.h"
@@ -87,18 +87,6 @@ std::string GetDiscoveryUrl() {
   return std::string(kDefaultDiscoveryEndpoint) + kDiscoveryServicePath;
 }
 
-bool HasAuthenticationError(const std::string& response) {
-  return response == "There was an authentication error";
-}
-
-bool HasServerError(const std::string& response) {
-  return response == "There was a response error";
-}
-
-bool HasSyncError(const std::string& response) {
-  return response == "No primary accounts found";
-}
-
 }  // namespace
 
 AccessCodeCastDiscoveryInterface::AccessCodeCastDiscoveryInterface(
@@ -131,24 +119,28 @@ AccessCodeCastDiscoveryInterface::AccessCodeCastDiscoveryInterface(
 
 AccessCodeCastDiscoveryInterface::~AccessCodeCastDiscoveryInterface() = default;
 
-void AccessCodeCastDiscoveryInterface::ReportError(AddSinkResultCode error) {
+void AccessCodeCastDiscoveryInterface::ReportErrorViaCallback(
+    AddSinkResultCode error) {
+  if (callback_.is_null()) {
+    return;
+  }
   std::move(callback_).Run(absl::nullopt, error);
 }
 
 AddSinkResultCode AccessCodeCastDiscoveryInterface::GetErrorFromResponse(
     const base::Value& response) {
-  const base::Value* error = response.FindKey(kJsonError);
+  const base::Value::Dict* error = response.GetDict().FindDict(kJsonError);
   if (!error) {
     return AddSinkResultCode::OK;
   }
 
   // Get the HTTP code
-  absl::optional<int> http_code = error->FindIntKey(kJsonErrorCode);
+  absl::optional<int> http_code = error->FindInt(kJsonErrorCode);
   if (!http_code) {
     return AddSinkResultCode::RESPONSE_MALFORMED;
   }
 
-  const std::string* error_message = error->FindStringKey(kJsonErrorMessage);
+  const std::string* error_message = error->FindString(kJsonErrorMessage);
 
   logger_->LogError(
       mojom::LogCategory::kDiscovery, kLoggerComponent,
@@ -214,7 +206,7 @@ AddSinkResultCode AccessCodeCastDiscoveryInterface::IsResponseValid(
     return AddSinkResultCode::RESPONSE_MALFORMED;
   }
 
-  if (response->DictEmpty()) {
+  if (response->GetDict().empty()) {
     logger_->LogError(mojom::LogCategory::kDiscovery, kLoggerComponent,
                       "The response from the server does not have a value. "
                       "Server response is: " +
@@ -266,13 +258,15 @@ AccessCodeCastDiscoveryInterface::CreateEndpointFetcher(
   std::vector<std::string> discovery_scopes;
   discovery_scopes.push_back(kDiscoveryOAuth2Scope);
 
+  // TODO(crbug.com/1466447): ConsentLevel::kSync is deprecated and should be
+  //     removed. See ConsentLevel::kSync documentation for details.
   return std::make_unique<EndpointFetcher>(
       profile_->GetDefaultStoragePartition()
           ->GetURLLoaderFactoryForBrowserProcess(),
       kDiscoveryOAuthConsumerName,
       GURL(base::StrCat({GetDiscoveryUrl(), "/", access_code})), kGetMethod,
       kContentType, discovery_scopes, kTimeoutMs, kEmptyPostData,
-      kTrafficAnnotation, identity_manager_);
+      kTrafficAnnotation, identity_manager_, signin::ConsentLevel::kSync);
 }
 
 void AccessCodeCastDiscoveryInterface::ValidateDiscoveryAccessCode(
@@ -289,28 +283,8 @@ void AccessCodeCastDiscoveryInterface::ValidateDiscoveryAccessCode(
 
 void AccessCodeCastDiscoveryInterface::HandleServerResponse(
     std::unique_ptr<EndpointResponse> response) {
-  const std::string& response_string = response->response;
-  if (HasAuthenticationError(response_string)) {
-    logger_->LogError(mojom::LogCategory::kDiscovery, kLoggerComponent,
-                      "The request to the server failed to be authenticated.",
-                      "", "", "");
-    ReportError(AddSinkResultCode::AUTH_ERROR);
-    return;
-  }
-
-  if (HasServerError(response_string)) {
-    logger_->LogError(mojom::LogCategory::kDiscovery, kLoggerComponent,
-                      "Did not receive a response from server while "
-                      "attempting to validate discovery device.",
-                      "", "", "");
-    ReportError(AddSinkResultCode::SERVER_ERROR);
-    return;
-  }
-
-  if (HasSyncError(response_string)) {
-    logger_->LogError(mojom::LogCategory::kDiscovery, kLoggerComponent,
-                      "The account needs to have sync enabled.", "", "", "");
-    ReportError(AddSinkResultCode::PROFILE_SYNC_ERROR);
+  if (response->error_type.has_value()) {
+    HandleServerError(std::move(response));
     return;
   }
 
@@ -322,7 +296,7 @@ void AccessCodeCastDiscoveryInterface::HandleServerResponse(
     logger_->LogError(mojom::LogCategory::kDiscovery, kLoggerComponent,
                       "The response string from the server was not valid", "",
                       "", "");
-    ReportError(result_code);
+    ReportErrorViaCallback(result_code);
     return;
   }
 
@@ -333,29 +307,82 @@ void AccessCodeCastDiscoveryInterface::HandleServerResponse(
                            construction_result.second);
 }
 
+void AccessCodeCastDiscoveryInterface::HandleServerError(
+    std::unique_ptr<EndpointResponse> response) {
+  if (!response->error_type.has_value()) {
+    return;
+  }
+
+  auto error_type = response->error_type.value();
+
+  switch (error_type) {
+    case FetchErrorType::kAuthError:
+      if (response->response == "No primary accounts found") {
+        logger_->LogError(mojom::LogCategory::kDiscovery, kLoggerComponent,
+                          "The account needs to have sync enabled.", "", "",
+                          "");
+        ReportErrorViaCallback(AddSinkResultCode::PROFILE_SYNC_ERROR);
+      } else {
+        logger_->LogError(
+            mojom::LogCategory::kDiscovery, kLoggerComponent,
+            "The request to the server failed to be authenticated.", "", "",
+            "");
+        ReportErrorViaCallback(AddSinkResultCode::AUTH_ERROR);
+      }
+      break;
+
+    case FetchErrorType::kNetError:
+      logger_->LogError(mojom::LogCategory::kDiscovery, kLoggerComponent,
+                        "Did not receive a response from server while "
+                        "attempting to validate discovery device.",
+                        "", "", "");
+      ReportErrorViaCallback(AddSinkResultCode::SERVER_ERROR);
+      break;
+
+    case FetchErrorType::kResultParseError:
+      logger_->LogError(
+          mojom::LogCategory::kDiscovery, kLoggerComponent,
+          "The server response was incorrectly formatted/malformed "
+          "and we are not able to use it.",
+          "", "", "");
+      ReportErrorViaCallback(AddSinkResultCode::RESPONSE_MALFORMED);
+      break;
+
+    default:
+      logger_->LogError(
+          mojom::LogCategory::kDiscovery, kLoggerComponent,
+          base::StringPrintf("An unknown error occurred. HTTP Status "
+                             "of the response is: %d",
+                             response->http_status_code),
+          "", "", "");
+      ReportErrorViaCallback(AddSinkResultCode::SERVER_ERROR);
+  }
+}
+
 std::pair<absl::optional<AccessCodeCastDiscoveryInterface::DiscoveryDevice>,
           AccessCodeCastDiscoveryInterface::AddSinkResultCode>
 AccessCodeCastDiscoveryInterface::ConstructDiscoveryDeviceFromJson(
     base::Value json_response) {
   DiscoveryDevice discovery_device;
 
-  base::Value* device = json_response.FindKey(kJsonDevice);
+  base::Value::Dict* device = json_response.GetDict().FindDict(kJsonDevice);
   if (!device) {
     return std::make_pair(absl::nullopt, AddSinkResultCode::RESPONSE_MALFORMED);
   }
 
-  std::string* display_name = device->FindStringKey(kJsonDisplayName);
+  std::string* display_name = device->FindString(kJsonDisplayName);
   if (!display_name) {
     return std::make_pair(absl::nullopt, AddSinkResultCode::RESPONSE_MALFORMED);
   }
 
-  std::string* sink_id = device->FindStringKey(kJsonId);
+  std::string* sink_id = device->FindString(kJsonId);
   if (!sink_id) {
     return std::make_pair(absl::nullopt, AddSinkResultCode::RESPONSE_MALFORMED);
   }
 
   chrome_browser_media::proto::DeviceCapabilities device_capabilities_proto;
-  base::Value* device_capabilities = device->FindKey(kJsonDeviceCapabilities);
+  base::Value::Dict* device_capabilities =
+      device->FindDict(kJsonDeviceCapabilities);
   if (!device_capabilities) {
     return std::make_pair(absl::nullopt, AddSinkResultCode::RESPONSE_MALFORMED);
   }
@@ -364,11 +391,11 @@ AccessCodeCastDiscoveryInterface::ConstructDiscoveryDeviceFromJson(
 
   for (auto* const capability_key : capability_keys) {
     absl::optional<bool> capability =
-        device_capabilities->FindBoolKey(capability_key);
+        device_capabilities->FindBool(capability_key);
     if (capability.has_value()) {
       SetDeviceCapabilitiesField(&device_capabilities_proto, capability.value(),
                                  capability_key);
-    } else if (device_capabilities->FindKey(capability_key)) {
+    } else if (device_capabilities->contains(capability_key)) {
       // It's ok if the capability isn't present, but if it is, it must be a
       // bool
       return std::make_pair(absl::nullopt,
@@ -377,14 +404,14 @@ AccessCodeCastDiscoveryInterface::ConstructDiscoveryDeviceFromJson(
   }
 
   chrome_browser_media::proto::NetworkInfo network_info_proto;
-  base::Value* network_info = device->FindKey(kJsonNetworkInfo);
+  base::Value::Dict* network_info = device->FindDict(kJsonNetworkInfo);
   if (!network_info) {
     return std::make_pair(absl::nullopt, AddSinkResultCode::RESPONSE_MALFORMED);
   }
   const auto network_keys = {kJsonHostName, kJsonPort, kJsonIpV4Address,
                              kJsonIpV6Address};
   for (auto* const network_key : network_keys) {
-    std::string* network_value = network_info->FindStringKey(network_key);
+    std::string* network_value = network_info->FindString(network_key);
     if (network_value) {
       SetNetworkInfoField(&network_info_proto, *network_value, network_key);
     }

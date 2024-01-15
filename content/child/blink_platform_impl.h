@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/timer/timer.h"
 #include "build/build_config.h"
@@ -17,7 +18,6 @@
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/web_url_error.h"
 #include "third_party/blink/public/public_buildflags.h"
-#include "ui/base/layout.h"
 
 namespace content {
 
@@ -50,11 +50,15 @@ class CONTENT_EXPORT BlinkPlatformImpl : public blink::Platform {
   blink::ThreadSafeBrowserInterfaceBrokerProxy* GetBrowserInterfaceBroker()
       override;
   scoped_refptr<base::SingleThreadTaskRunner> GetIOTaskRunner() const override;
+  scoped_refptr<base::SequencedTaskRunner>
+  GetMediaStreamVideoSourceVideoTaskRunner() const override;
   std::unique_ptr<NestedMessageLoopRunner> CreateNestedMessageLoopRunner()
       const override;
 
  private:
   scoped_refptr<base::SingleThreadTaskRunner> io_thread_task_runner_;
+  scoped_refptr<base::SequencedTaskRunner>
+      media_stream_video_source_video_task_runner_;
   const scoped_refptr<blink::ThreadSafeBrowserInterfaceBrokerProxy>
       browser_interface_broker_proxy_;
   webcrypto::WebCryptoImpl web_crypto_;

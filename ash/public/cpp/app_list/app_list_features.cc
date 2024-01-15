@@ -10,15 +10,6 @@
 
 namespace app_list_features {
 
-BASE_FEATURE(kEnableAppRanker,
-             "EnableAppRanker",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-BASE_FEATURE(kEnableZeroStateAppsRanker,
-             "EnableZeroStateAppsRanker",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-BASE_FEATURE(kEnableZeroStateMixedTypesRanker,
-             "EnableZeroStateMixedTypesRanker",
-             base::FEATURE_ENABLED_BY_DEFAULT);
 BASE_FEATURE(kEnableAppReinstallZeroState,
              "EnableAppReinstallZeroState",
              base::FEATURE_DISABLED_BY_DEFAULT);
@@ -32,36 +23,19 @@ BASE_FEATURE(kEnableExactMatchForNonLatinLocale,
 BASE_FEATURE(kForceShowContinueSection,
              "ForceShowContinueSection",
              base::FEATURE_DISABLED_BY_DEFAULT);
-BASE_FEATURE(kSearchResultInlineIcon,
-             "SearchResultInlineIcon",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-BASE_FEATURE(kQuickActionShowBubbleLauncher,
-             "QuickActionShowBubbleLauncher",
-             base::FEATURE_DISABLED_BY_DEFAULT);
 BASE_FEATURE(kDynamicSearchUpdateAnimation,
              "DynamicSearchUpdateAnimation",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-BASE_FEATURE(kCompactBubbleLauncher,
-             "CompactBubbleLauncher",
              base::FEATURE_ENABLED_BY_DEFAULT);
 BASE_FEATURE(kLauncherPlayStoreSearch,
              "LauncherPlayStoreSearch",
              base::FEATURE_ENABLED_BY_DEFAULT);
-BASE_FEATURE(kAnimateScaleOnTabletModeTransition,
-             "AnimateScaleOnTabletModeTransition",
+BASE_FEATURE(kDragAndDropRefactor,
+             "AppListDragAndDropRefactor",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kContinueSectionWithRecents,
+             "ContinueSectionWithRecents",
              base::FEATURE_DISABLED_BY_DEFAULT);
-
-bool IsAppRankerEnabled() {
-  return base::FeatureList::IsEnabled(kEnableAppRanker);
-}
-
-bool IsZeroStateAppsRankerEnabled() {
-  return base::FeatureList::IsEnabled(kEnableZeroStateAppsRanker);
-}
-
-bool IsZeroStateMixedTypesRankerEnabled() {
-  return base::FeatureList::IsEnabled(kEnableZeroStateMixedTypesRanker);
-}
 
 bool IsAppReinstallZeroStateEnabled() {
   return base::FeatureList::IsEnabled(kEnableAppReinstallZeroState);
@@ -71,25 +45,8 @@ bool IsExactMatchForNonLatinLocaleEnabled() {
   return base::FeatureList::IsEnabled(kEnableExactMatchForNonLatinLocale);
 }
 
-std::string AppSearchResultRankerPredictorName() {
-  const std::string predictor_name = base::GetFieldTrialParamValueByFeature(
-      kEnableZeroStateAppsRanker, "app_search_result_ranker_predictor_name");
-  if (!predictor_name.empty())
-    return predictor_name;
-  return std::string("MrfuAppLaunchPredictor");
-}
-
 bool IsAppListLaunchRecordingEnabled() {
   return base::FeatureList::IsEnabled(kEnableAppListLaunchRecording);
-}
-
-bool IsSearchResultInlineIconEnabled() {
-  // Inline Icons are only supported for categorical search.
-  return base::FeatureList::IsEnabled(kSearchResultInlineIcon);
-}
-
-bool IsQuickActionShowBubbleLauncherEnabled() {
-  return base::FeatureList::IsEnabled(kQuickActionShowBubbleLauncher);
 }
 
 bool IsDynamicSearchUpdateAnimationEnabled() {
@@ -107,16 +64,16 @@ bool IsForceShowContinueSectionEnabled() {
   return base::FeatureList::IsEnabled(kForceShowContinueSection);
 }
 
-bool IsCompactBubbleLauncherEnabled() {
-  return base::FeatureList::IsEnabled(kCompactBubbleLauncher);
-}
-
 bool IsLauncherPlayStoreSearchEnabled() {
   return base::FeatureList::IsEnabled(kLauncherPlayStoreSearch);
 }
 
-bool IsAnimateScaleOnTabletModeTransitionEnabled() {
-  return base::FeatureList::IsEnabled(kAnimateScaleOnTabletModeTransition);
+bool IsDragAndDropRefactorEnabled() {
+  return base::FeatureList::IsEnabled(kDragAndDropRefactor);
+}
+
+bool IsContinueSectionWithRecentsEnabled() {
+  return base::FeatureList::IsEnabled(kContinueSectionWithRecents);
 }
 
 }  // namespace app_list_features

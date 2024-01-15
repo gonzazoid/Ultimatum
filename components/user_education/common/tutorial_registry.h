@@ -28,11 +28,12 @@ class TutorialRegistry {
 
   // Returns a list of Tutorial Identifiers if the tutorial registry exists.
   // If RegisterTutorials has not been called this returns an empty vector.
-  const std::vector<TutorialIdentifier> GetTutorialIdentifiers();
+  const std::vector<TutorialIdentifier> GetTutorialIdentifiers() const;
 
   // Gets the TutorialDescription from the registry. Returns nullptr if
   // there is no registered tutorial under the given ID.
-  TutorialDescription* GetTutorialDescription(TutorialIdentifier id);
+  const TutorialDescription* GetTutorialDescription(
+      TutorialIdentifier id) const;
 
   // Adds a TutorialID, TutorialDescription pair to the registry. This should
   // be used by the RegisterTutorials method to Add Tutorials.
@@ -43,7 +44,9 @@ class TutorialRegistry {
   void RemoveTutorialForTesting(TutorialIdentifier id);
 
  private:
-  std::map<TutorialIdentifier, TutorialDescription> tutorial_registry_;
+  using Registry = std::map<TutorialIdentifier, TutorialDescription>;
+
+  Registry tutorial_registry_;
 };
 
 }  // namespace user_education

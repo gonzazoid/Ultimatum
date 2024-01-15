@@ -53,22 +53,28 @@ AXObject* AXMenuListOption::ComputeParentAXMenuPopupFor(
   DCHECK(option);
 
   HTMLSelectElement* select = option->OwnerSelectElement();
-  if (!select || !select->UsesMenuList()) {
+  if (!select || !AXObjectCacheImpl::ShouldCreateAXMenuListFor(
+                     select->GetLayoutObject())) {
     // If it's an <option> that is not inside of a menulist, we want it to
     // return to the caller and use the default logic.
     return nullptr;
   }
 
   // If there is a <select> ancestor, return the popup for it, if rendered.
-  if (AXObject* select_ax_object = cache.GetOrCreate(select)) {
-    if (auto* menu_list = DynamicTo<AXMenuList>(select_ax_object))
-      return menu_list->GetOrCreateMockPopupChild();
+  AXObject* select_ax_object = cache.Get(select);
+  if (!select_ax_object) {
+    return nullptr;
   }
 
-  // Otherwise, just return an AXObject for the parent node.
+  if (auto* menu_list = DynamicTo<AXMenuList>(select_ax_object)) {
+    // Return the popup.
+    return menu_list->GetOrCreateMockPopupChild();
+  }
+
+  // Otherwise, just return the AXObject for the parent <select>.
   // This could be the <select> if it was not rendered.
   // Or, any parent node if the <option> was not inside an AXMenuList.
-  return cache.GetOrCreate(select);
+  return select_ax_object;
 }
 
 bool AXMenuListOption::IsVisible() const {
@@ -137,6 +143,9 @@ bool AXMenuListOption::OnNativeSetSelectedAction(bool b) {
   return true;
 }
 
+// TODO(aleventhal) This override could go away, but it will cause a lot of
+// test changes, as invisible options inside of a collapsed <select> will become
+// ignored since they have no layout object.
 bool AXMenuListOption::ComputeAccessibilityIsIgnored(
     IgnoredReasons* ignored_reasons) const {
   if (IsDetached()) {
@@ -148,7 +157,15 @@ bool AXMenuListOption::ComputeAccessibilityIsIgnored(
           html_names::kHiddenAttr))
     return true;
 
-  return AccessibilityIsIgnoredByDefault(ignored_reasons);
+  if (IsAriaHidden()) {
+    if (ignored_reasons) {
+      ComputeIsAriaHidden(ignored_reasons);
+    }
+    return true;
+  }
+
+  return !ParentObject() ||
+         ParentObject()->ComputeAccessibilityIsIgnored(ignored_reasons);
 }
 
 void AXMenuListOption::GetRelativeBounds(
@@ -163,23 +180,37 @@ void AXMenuListOption::GetRelativeBounds(
 
   // When a <select> is collapsed, the bounds of its options are the same as
   // that of the containing <select>.
-  // It is not necessary to compute the bounds of options in an expanded select.
   // On Mac and Android, the menu list is native and already accessible; those
   // are the platforms where we need AXMenuList so that the options can be part
   // of the accessibility tree when collapsed, and there's never going to be a
   // need to expose the bounds of options on those platforms.
-  // On Windows and Linux, AXObjectCacheImpl::UseAXMenuList() will return false,
-  // and therefore this code should not be reached.
 
   auto* select = To<HTMLOptionElement>(GetNode())->OwnerSelectElement();
-  AXObject* ax_menu_list = AXObjectCache().GetOrCreate(select);
+  AXObject* ax_menu_list = AXObjectCache().Get(select);
   if (!ax_menu_list)
     return;
   DCHECK(ax_menu_list->IsMenuList());
   DCHECK(ax_menu_list->GetLayoutObject());
-  if (ax_menu_list->GetLayoutObject()) {
-    ax_menu_list->GetRelativeBounds(out_container, out_bounds_in_container,
-                                    out_container_transform, clips_children);
+  WTF::Vector<gfx::Rect> options_bounds =
+      To<AXMenuList>(ax_menu_list)->GetOptionsBounds();
+  // TODO(lusanpad): Update fix once we figure out what is causing
+  // https://crbug.com/1429881.
+  unsigned int index =
+      static_cast<unsigned int>(To<HTMLOptionElement>(GetNode())->index());
+  if (options_bounds.size() && index < options_bounds.size()) {
+    out_bounds_in_container = gfx::RectF(options_bounds.at(index));
+  } else {
+#if defined(ADDRESS_SANITIZER)
+    if (options_bounds.size() && index >= options_bounds.size()) {
+      LOG(FATAL) << "Out of bounds option index=" << index
+                 << " should be less than " << options_bounds.size()
+                 << "\n* Object = " << ToString(true, true);
+    }
+#endif
+    if (ax_menu_list->GetLayoutObject()) {
+      ax_menu_list->GetRelativeBounds(out_container, out_bounds_in_container,
+                                      out_container_transform, clips_children);
+    }
   }
 }
 

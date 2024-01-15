@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_ASH_APP_RESTORE_ARC_GHOST_WINDOW_VIEW_H_
 
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/services/app_service/public/cpp/icon_types.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -55,6 +56,7 @@ class ArcGhostWindowView : public views::View {
 
  private:
   FRIEND_TEST_ALL_PREFIXES(ArcGhostWindowViewTest, IconLoadTest);
+  FRIEND_TEST_ALL_PREFIXES(ArcGhostWindowViewTest, EmptyViewIconLoadTest);
   FRIEND_TEST_ALL_PREFIXES(ArcGhostWindowViewTest, FixupMessageTest);
 
   // Callback function for loading icon from App service.
@@ -69,7 +71,7 @@ class ArcGhostWindowView : public views::View {
   gfx::ImageSkia icon_raw_data_;
   arc::GhostWindowType ghost_window_type_;
 
-  ArcGhostWindowShellSurface* shell_surface_ = nullptr;
+  raw_ptr<ArcGhostWindowShellSurface> shell_surface_ = nullptr;
   base::OnceCallback<void(apps::IconValuePtr icon_value)>
       icon_loaded_cb_for_testing_;
 

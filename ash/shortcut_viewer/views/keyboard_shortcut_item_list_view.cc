@@ -4,11 +4,13 @@
 
 #include "ash/shortcut_viewer/views/keyboard_shortcut_item_list_view.h"
 
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/style/color_provider.h"
 #include "ash/shortcut_viewer/views/keyboard_shortcut_item_view.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/default_style.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/gfx/canvas.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -25,6 +27,8 @@ constexpr SkColor kSeparatorColorLight = SkColorSetARGB(0x0F, 0x00, 0x00, 0x00);
 
 // A horizontal line to separate the KeyboardShortcutItemView.
 class HorizontalSeparator : public views::View {
+  METADATA_HEADER(HorizontalSeparator, views::View)
+
  public:
   explicit HorizontalSeparator(int preferred_width)
       : preferred_width_(preferred_width) {
@@ -57,14 +61,16 @@ class HorizontalSeparator : public views::View {
 
   bool ShouldUseDarkModeColors() {
     DCHECK(color_provider_);
-    return ash::features::IsDarkLightModeEnabled() &&
-           ash::DarkLightModeControllerImpl::Get()->IsDarkModeEnabled();
+    return ash::DarkLightModeControllerImpl::Get()->IsDarkModeEnabled();
   }
 
  private:
   const int preferred_width_;
-  ash::ColorProvider* color_provider_;
+  raw_ptr<ash::ColorProvider> color_provider_;
 };
+
+BEGIN_METADATA(HorizontalSeparator)
+END_METADATA
 
 }  // namespace
 
@@ -79,7 +85,7 @@ KeyboardShortcutItemListView::KeyboardShortcutItemListView() {
   SetLayoutManager(std::move(layout));
   SetBorder(views::CreateEmptyBorder(
       gfx::Insets::TLBR(0, kLeftPadding, 0, kRightPadding)));
-  GetViewAccessibility().OverrideRole(ax::mojom::Role::kList);
+  SetAccessibilityProperties(ax::mojom::Role::kList);
 }
 
 void KeyboardShortcutItemListView::AddCategoryLabel(
@@ -104,5 +110,8 @@ void KeyboardShortcutItemListView::AddCategoryLabel(
 void KeyboardShortcutItemListView::AddHorizontalSeparator() {
   AddChildView(std::make_unique<HorizontalSeparator>(bounds().width()));
 }
+
+BEGIN_METADATA(KeyboardShortcutItemListView)
+END_METADATA
 
 }  // namespace keyboard_shortcut_viewer

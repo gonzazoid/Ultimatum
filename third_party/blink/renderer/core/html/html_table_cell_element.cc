@@ -33,7 +33,7 @@
 #include "third_party/blink/renderer/core/html/parser/html_parser_idioms.h"
 #include "third_party/blink/renderer/core/html/table_constants.h"
 #include "third_party/blink/renderer/core/html_names.h"
-#include "third_party/blink/renderer/core/layout/layout_table_cell.h"
+#include "third_party/blink/renderer/core/layout/table/layout_table_cell.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 
 namespace blink {
@@ -49,15 +49,6 @@ unsigned HTMLTableCellElement::colSpan() const {
   if (!ParseHTMLClampedNonNegativeInteger(col_span_value, kMinColSpan,
                                           kMaxColSpan, value))
     return kDefaultColSpan;
-  // Counting for https://github.com/whatwg/html/issues/1198
-  UseCounter::Count(GetDocument(), WebFeature::kHTMLTableCellElementColspan);
-  if (value > 8190) {
-    UseCounter::Count(GetDocument(),
-                      WebFeature::kHTMLTableCellElementColspanGreaterThan8190);
-  } else if (value > 1000) {
-    UseCounter::Count(GetDocument(),
-                      WebFeature::kHTMLTableCellElementColspanGreaterThan1000);
-  }
   return value;
 }
 
@@ -98,7 +89,10 @@ void HTMLTableCellElement::CollectStyleForPresentationAttribute(
     const AtomicString& value,
     MutableCSSPropertyValueSet* style) {
   if (name == html_names::kNowrapAttr) {
-    AddPropertyToPresentationAttributeStyle(style, CSSPropertyID::kWhiteSpace,
+    // Longhands of `white-space: nowrap`.
+    AddPropertyToPresentationAttributeStyle(
+        style, CSSPropertyID::kWhiteSpaceCollapse, CSSValueID::kCollapse);
+    AddPropertyToPresentationAttributeStyle(style, CSSPropertyID::kTextWrap,
                                             CSSValueID::kNowrap);
   } else if (name == html_names::kWidthAttr) {
     if (!value.empty()) {
@@ -120,9 +114,8 @@ void HTMLTableCellElement::ParseAttribute(
     const AttributeModificationParams& params) {
   if (params.name == html_names::kRowspanAttr ||
       params.name == html_names::kColspanAttr) {
-    if (GetLayoutObject() && GetLayoutObject()->IsTableCell()) {
-      ToInterface<LayoutNGTableCellInterface>(GetLayoutObject())
-          ->ColSpanOrRowSpanChanged();
+    if (auto* cell = DynamicTo<LayoutTableCell>(GetLayoutObject())) {
+      cell->ColSpanOrRowSpanChanged();
     }
   } else {
     HTMLTablePartElement::ParseAttribute(params);
@@ -146,12 +139,6 @@ bool HTMLTableCellElement::HasLegalLinkAttribute(
   return (HasTagName(html_names::kTdTag) &&
           name == html_names::kBackgroundAttr) ||
          HTMLTablePartElement::HasLegalLinkAttribute(name);
-}
-
-const QualifiedName& HTMLTableCellElement::SubResourceAttributeName() const {
-  return HasTagName(html_names::kTdTag)
-             ? html_names::kBackgroundAttr
-             : HTMLTablePartElement::SubResourceAttributeName();
 }
 
 const AtomicString& HTMLTableCellElement::Abbr() const {

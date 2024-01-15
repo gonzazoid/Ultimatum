@@ -20,6 +20,9 @@ message TrustToken {
   // are only provided to servers while their commitment keys
   // remain active.
   optional bytes signing_key = 2;  // required
+
+  // Creation time of the token.
+  optional Timestamp creation_time = 3;
 }
 
 // A TrustTokenRedemptionRecord message stores state associated with a single
@@ -37,4 +40,12 @@ message TrustTokenRedemptionRecord {
   // lifetime many seconds after redemption. When omitted, a record is expired
   // when the relevant key is expired.
   optional uint64 lifetime = 5;
+
+  // Creation time of the redemption record.
+  optional Timestamp creation_time = 6;
+}
+
+message Timestamp {
+  // Represents microseconds since the Windows epoch.
+  required int64 micros = 1;
 }

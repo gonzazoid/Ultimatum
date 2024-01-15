@@ -7,8 +7,8 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "base/observer_list_types.h"
 #include "chromeos/ash/services/libassistant/public/mojom/speaker_id_enrollment_controller.mojom.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -78,7 +78,8 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC) AssistantSettings {
 
 }  // namespace ash::assistant
 
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
+// TODO(b/258750971): remove when internal assistant codes are migrated to
+// namespace ash.
 namespace chromeos::assistant {
 using ::ash::assistant::AssistantSettings;
 using ::ash::assistant::SpeakerIdEnrollmentClient;

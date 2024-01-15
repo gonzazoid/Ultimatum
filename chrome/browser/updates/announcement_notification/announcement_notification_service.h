@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "base/feature_list.h"
-#include "base/memory/weak_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "url/gurl.h"
 
@@ -83,7 +82,7 @@ class AnnouncementNotificationService : public KeyedService {
   };
 
   static void RegisterProfilePrefs(PrefRegistrySimple* registry);
-  static AnnouncementNotificationService* Create(
+  static std::unique_ptr<AnnouncementNotificationService> Create(
       Profile* profile,
       PrefService* pref_service,
       std::unique_ptr<Delegate> delegate,

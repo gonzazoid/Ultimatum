@@ -4,22 +4,27 @@
 
 #include "chrome/browser/ui/webui/settings/settings_security_key_handler.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/contains.h"
-#include "base/metrics/histogram_functions.h"
+#include "base/containers/cxx20_erase_vector.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "build/build_config.h"
+#include "chrome/browser/platform_util.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/browser_finder.h"
+#include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/webui/settings/settings_page_ui_handler.h"
 #include "chrome/browser/webauthn/cablev2_devices.h"
 #include "chrome/browser/webauthn/local_credential_management.h"
+#include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/generated_resources.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_contents.h"
@@ -32,7 +37,6 @@
 #include "device/fido/public_key_credential_user_entity.h"
 #include "device/fido/reset_request_handler.h"
 #include "device/fido/set_pin_request_handler.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/icu/source/common/unicode/locid.h"
 #include "ui/base/l10n/l10n_util.h"
 
@@ -143,7 +147,7 @@ void SecurityKeysPINHandler::HandleStartSetPIN(const base::Value::List& args) {
 
 void SecurityKeysPINHandler::OnGatherPIN(uint32_t current_min_pin_length,
                                          uint32_t new_min_pin_length,
-                                         absl::optional<int64_t> num_retries) {
+                                         std::optional<int64_t> num_retries) {
   DCHECK_EQ(State::kStartSetPIN, state_);
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
@@ -488,9 +492,9 @@ void SecurityKeysCredentialHandler::OnCredentialManagementReady() {
 
 void SecurityKeysCredentialHandler::OnHaveCredentials(
     device::CtapDeviceResponseCode status,
-    absl::optional<std::vector<device::AggregatedEnumerateCredentialsResponse>>
+    std::optional<std::vector<device::AggregatedEnumerateCredentialsResponse>>
         responses,
-    absl::optional<size_t> remaining_credentials) {
+    std::optional<size_t> remaining_credentials) {
   DCHECK_EQ(State::kGettingCredentials, state_);
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(credential_management_);
@@ -836,7 +840,7 @@ void SecurityKeysBioEnrollmentHandler::HandleEnumerate(
 
 void SecurityKeysBioEnrollmentHandler::OnHaveEnumeration(
     device::CtapDeviceResponseCode code,
-    absl::optional<std::map<std::vector<uint8_t>, std::string>> enrollments) {
+    std::optional<std::map<std::vector<uint8_t>, std::string>> enrollments) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(!callback_id_.empty());
   DCHECK_EQ(state_, State::kEnumerating);
@@ -903,7 +907,7 @@ void SecurityKeysBioEnrollmentHandler::OnEnrollmentFinished(
 void SecurityKeysBioEnrollmentHandler::OnHavePostEnrollmentEnumeration(
     std::vector<uint8_t> enrolled_template_id,
     device::CtapDeviceResponseCode code,
-    absl::optional<std::map<std::vector<uint8_t>, std::string>> enrollments) {
+    std::optional<std::map<std::vector<uint8_t>, std::string>> enrollments) {
   DCHECK_EQ(state_, State::kEnrolling);
   DCHECK(!callback_id_.empty());
   state_ = State::kReady;
@@ -1057,13 +1061,11 @@ void SecurityKeysPhonesHandler::HandleRename(const base::Value::List& args) {
           Profile::FromBrowserContext(browser_ctx));
 
   // Remove the device that is getting renamed from the set of linked devices.
-  auto new_end = std::remove_if(
-      known_devices->linked_devices.begin(),
-      known_devices->linked_devices.end(),
-      [&public_key](const std::unique_ptr<device::cablev2::Pairing>& device)
-          -> bool { return device->peer_public_key_x962 == public_key; });
-  known_devices->linked_devices.erase(new_end,
-                                      known_devices->linked_devices.end());
+  base::EraseIf(
+      known_devices->linked_devices,
+      [&public_key](const std::unique_ptr<device::cablev2::Pairing>& device) {
+        return device->peer_public_key_x962 == public_key;
+      });
 
   PrefService* const prefs =
       Profile::FromBrowserContext(browser_ctx)->GetPrefs();
@@ -1081,7 +1083,7 @@ void SecurityKeysPhonesHandler::DoEnumerate(const base::Value& callback_id) {
 
   base::Value::List synced;
   base::Value::List linked;
-  absl::optional<std::string> last_synced_device_name;
+  std::optional<std::string> last_synced_device_name;
   for (const auto& pairing : pairings) {
     base::Value::Dict dict;
     dict.Set("name", pairing->name);
@@ -1119,12 +1121,18 @@ PasskeysHandler::PasskeysHandler(
 PasskeysHandler::~PasskeysHandler() = default;
 
 void PasskeysHandler::OnJavascriptAllowed() {}
-void PasskeysHandler::OnJavascriptDisallowed() {}
+void PasskeysHandler::OnJavascriptDisallowed() {
+  weak_factory_.InvalidateWeakPtrs();
+}
 
 void PasskeysHandler::RegisterMessages() {
   web_ui()->RegisterMessageCallback(
       "passkeysHasPasskeys",
       base::BindRepeating(&PasskeysHandler::HandleHasPasskeys,
+                          base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "passkeysManagePasskeys",
+      base::BindRepeating(&PasskeysHandler::HandleManagePasskeys,
                           base::Unretained(this)));
   web_ui()->RegisterMessageCallback(
       "passkeysEnumerate",
@@ -1159,6 +1167,30 @@ void PasskeysHandler::OnHasPasskeysComplete(std::string callback_id,
                             base::Value(has_passkeys));
 }
 
+void PasskeysHandler::HandleManagePasskeys(const base::Value::List& args) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK_EQ(0u, args.size());
+
+  AllowJavascript();
+
+#if BUILDFLAG(IS_WIN)
+  auto* windows_api = device::WinWebAuthnApi::GetDefault();
+  // webauthn.dll version six includes management support, so if at least that
+  // version is found then Windows does management natively.
+  constexpr int kWebAuthnDLLWithManagementSupport = 6;
+  if (windows_api->IsAvailable() &&
+      windows_api->Version() >= kWebAuthnDLLWithManagementSupport) {
+    platform_util::OpenExternal(GURL("ms-settings:savedpasskeys"));
+    return;
+  }
+#endif
+
+  // If no system management exists, fall back to Chrome's own settings UI.
+  chrome::ShowSettingsSubPage(
+      chrome::FindBrowserWithTab(web_ui()->GetWebContents()),
+      chrome::kPasskeysSubPage);
+}
+
 void PasskeysHandler::HandleEnumerate(const base::Value::List& args) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK_EQ(1u, args.size());
@@ -1175,7 +1207,7 @@ void PasskeysHandler::DoEnumerate(std::string callback_id) {
 
 void PasskeysHandler::OnEnumerateComplete(
     std::string callback_id,
-    absl::optional<std::vector<device::DiscoverableCredentialMetadata>>
+    std::optional<std::vector<device::DiscoverableCredentialMetadata>>
         credentials) {
   base::Value result;
 
@@ -1207,6 +1239,7 @@ void PasskeysHandler::HandleDelete(const base::Value::List& args) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK_EQ(2u, args.size());
 
+  AllowJavascript();
   std::vector<uint8_t> credential_id;
   const bool ok = base::HexStringToBytes(args[1].GetString(), &credential_id);
   DCHECK(ok);
@@ -1218,7 +1251,6 @@ void PasskeysHandler::HandleDelete(const base::Value::List& args) {
 }
 
 void PasskeysHandler::OnDeleteComplete(std::string callback_id, bool ok) {
-  base::UmaHistogramBoolean("WebAuthentication.PasskeyManagement.Delete", ok);
   // The ok parameter is ignored. If it were false, it would mean
   // Windows/Mac failed to delete the passkey. This can happen if API support
   // is missing but no passkeys will be shown at all in that case so that
@@ -1232,6 +1264,7 @@ void PasskeysHandler::HandleEdit(const base::Value::List& args) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK_EQ(3u, args.size());
 
+  AllowJavascript();
   std::vector<uint8_t> credential_id;
   const bool ok = base::HexStringToBytes(args[1].GetString(), &credential_id);
   DCHECK(ok);
@@ -1244,7 +1277,6 @@ void PasskeysHandler::HandleEdit(const base::Value::List& args) {
 }
 
 void PasskeysHandler::OnEditComplete(std::string callback_id, bool ok) {
-  base::UmaHistogramBoolean("WebAuthentication.PasskeyManagement.Edit", ok);
   // The ok parameter is ignored. If it were false, it would mean
   // Windows/Mac failed to edit the passkey.
   DoEnumerate(std::move(callback_id));

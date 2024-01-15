@@ -5,8 +5,7 @@
 #ifndef COMPONENTS_MEMORY_PRESSURE_SYSTEM_MEMORY_PRESSURE_EVALUATOR_WIN_H_
 #define COMPONENTS_MEMORY_PRESSURE_SYSTEM_MEMORY_PRESSURE_EVALUATOR_WIN_H_
 
-#include "base/base_export.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -66,10 +65,6 @@ class SystemMemoryPressureEvaluator
   SystemMemoryPressureEvaluator(const SystemMemoryPressureEvaluator&) = delete;
   SystemMemoryPressureEvaluator& operator=(
       const SystemMemoryPressureEvaluator&) = delete;
-
-  // Schedules a memory pressure check to run soon. This must be called on the
-  // same sequence where the monitor was instantiated.
-  void CheckMemoryPressureSoon();
 
   // Returns the moderate pressure level free memory threshold, in MB.
   int moderate_threshold_mb() const { return moderate_threshold_mb_; }

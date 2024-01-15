@@ -4,9 +4,8 @@
 
 #include "ash/system/cast/unified_cast_detailed_view_controller.h"
 
-#include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/system/cast/tray_cast.h"
+#include "ash/system/cast/cast_detailed_view.h"
 #include "ash/system/tray/detailed_view_delegate.h"
 #include "ui/base/l10n/l10n_util.h"
 
@@ -20,10 +19,11 @@ UnifiedCastDetailedViewController::UnifiedCastDetailedViewController(
 UnifiedCastDetailedViewController::~UnifiedCastDetailedViewController() =
     default;
 
-views::View* UnifiedCastDetailedViewController::CreateView() {
+std::unique_ptr<views::View> UnifiedCastDetailedViewController::CreateView() {
   DCHECK(!view_);
-  view_ = new CastDetailedView(detailed_view_delegate_.get());
-  return view_;
+  auto view = std::make_unique<CastDetailedView>(detailed_view_delegate_.get());
+  view_ = view.get();
+  return view;
 }
 
 std::u16string UnifiedCastDetailedViewController::GetAccessibleName() const {

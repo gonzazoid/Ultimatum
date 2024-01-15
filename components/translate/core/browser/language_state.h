@@ -8,6 +8,8 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "components/language/core/common/language_util.h"
+#include "components/translate/core/browser/translate_metrics_logger.h"
 
 namespace translate {
 
@@ -39,10 +41,10 @@ class LanguageState {
                    bool navigation_from_google);
 
   // Should be called when the language of the page has been determined.
-  // |page_level_translation_critiera_met| when false indicates that the browser
+  // |page_level_translation_criteria_met| when false indicates that the browser
   // should not offer to translate the page.
   void LanguageDetermined(const std::string& page_language,
-                          bool page_level_translation_critiera_met);
+                          bool page_level_translation_criteria_met);
 
   // Returns the language the current page should be translated to, based on the
   // previous page languages and the transition.  This should be called after
@@ -66,8 +68,8 @@ class LanguageState {
   const std::string& current_language() const { return current_lang_; }
   void SetCurrentLanguage(const std::string& language);
 
-  bool page_level_translation_critiera_met() const {
-    return page_level_translation_critiera_met_;
+  bool page_level_translation_criteria_met() const {
+    return page_level_translation_criteria_met_;
   }
 
   // Whether the page is currently in the process of being translated.
@@ -86,6 +88,10 @@ class LanguageState {
   bool translate_enabled() const { return translate_enabled_; }
   void SetTranslateEnabled(bool value);
 
+  // The type of the last translation that was initiated, if any.
+  TranslationType translation_type() const { return translation_type_; }
+  void SetTranslationType(TranslationType type) { translation_type_ = type; }
+
   // Whether the current page's language is different from the previous
   // language.
   bool HasLanguageChanged() const;
@@ -99,6 +105,7 @@ class LanguageState {
   void SetPredefinedTargetLanguage(const std::string& language,
                                    bool should_auto_translate) {
     predefined_target_language_ = language;
+    language::ToTranslateLanguageSynonym(&predefined_target_language_);
     should_auto_translate_to_predefined_target_language_ =
         should_auto_translate;
   }
@@ -133,7 +140,7 @@ class LanguageState {
   // explicitly specify that they should not be translated by the browser (this
   // is the case for GMail for example, which provides its own translation
   // features).
-  bool page_level_translation_critiera_met_;
+  bool page_level_translation_criteria_met_;
 
   // Whether a translation is currently pending.
   // This is needed to avoid sending duplicate translate requests to a page.
@@ -156,6 +163,9 @@ class LanguageState {
 
   // Whether the Translate is enabled.
   bool translate_enabled_;
+
+  // The type of the current translation or uninitialized if there is none.
+  TranslationType translation_type_;
 
   // The value of the hrefTranslate attribute on the link that initiated the
   // current navigation, if it was specified.

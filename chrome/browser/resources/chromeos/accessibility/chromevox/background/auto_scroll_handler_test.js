@@ -3,24 +3,27 @@
 // found in the LICENSE file.
 
 // Include test fixture.
-GEN_INCLUDE(['../testing/chromevox_next_e2e_test_base.js']);
+GEN_INCLUDE(['../testing/chromevox_e2e_test_base.js']);
 
 /**
  * Test fixture for AutoScrollHandler.
  */
-ChromeVoxAutoScrollHandlerTest = class extends ChromeVoxNextE2ETest {
+ChromeVoxAutoScrollHandlerTest = class extends ChromeVoxE2ETest {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
 
-    // Alphabetical based on file path.
-    await importModule(
-        'AutoScrollHandler', '/chromevox/background/auto_scroll_handler.js');
-    await importModule(
-        'ChromeVoxState', '/chromevox/background/chromevox_state.js');
-    await importModule('CursorRange', '/common/cursors/range.js');
+    await Promise.all([
+      // Alphabetical based on file path.
+      importModule(
+          'AutoScrollHandler', '/chromevox/background/auto_scroll_handler.js'),
+      importModule(
+          'ChromeVoxRange', '/chromevox/background/chromevox_range.js'),
+      importModule('CursorRange', '/common/cursors/range.js'),
+    ]);
 
-    window.EventType = chrome.automation.EventType;
+    globalThis.EventType = chrome.automation.EventType;
+    globalThis.RoleType = chrome.automation.RoleType;
     this.forceContextualLastOutput();
   }
 
@@ -125,6 +128,7 @@ ChromeVoxAutoScrollHandlerTest = class extends ChromeVoxNextE2ETest {
           [chrome.automation.ActionType.SCROLL_FORWARD,
            chrome.automation.ActionType.SCROLL_BACKWARD],
     });
+    AutoScrollHandler.instance.allowWebContentsForTesting_ = true;
 
     // Create a fake addEventListener to dispatch an event listener of
     // SCROLL_POSITION_CHANGED.
@@ -151,6 +155,7 @@ ChromeVoxAutoScrollHandlerTest = class extends ChromeVoxNextE2ETest {
           return;
         }
         list.removeEventListener(EventType.CHILDREN_CHANGED, listener, true);
+        assertEquals('function', typeof eventListener);
         eventListener();
       };
       list.addEventListener(EventType.CHILDREN_CHANGED, listener, true);
@@ -176,7 +181,7 @@ AX_TEST_F(
       const firstItemCursor = CursorRange.fromNode(list.firstChild);
       const lastItemCursor = CursorRange.fromNode(list.lastChild);
 
-      ChromeVoxState.instance.navigateToRange(firstItemCursor);
+      ChromeVoxRange.navigateTo(firstItemCursor);
 
       assertTrue(handler.onCommandNavigation(
           lastItemCursor, constants.Dir.FORWARD, /*pred=*/ null,
@@ -188,13 +193,14 @@ AX_TEST_F(
     async function() {
       const root = await this.runWithFakeArcSimpleScrollable();
       const handler = new AutoScrollHandler();
+      handler.allowWebContentsForTesting_ = true;
 
       const list = root.find({role: RoleType.LIST});
       const rootCursor = CursorRange.fromNode(root);
       const firstItemCursor = CursorRange.fromNode(list.firstChild);
       const lastItemCursor = CursorRange.fromNode(list.lastChild);
 
-      ChromeVoxState.instance.navigateToRange(lastItemCursor);
+      ChromeVoxRange.navigateTo(lastItemCursor);
 
       // Make scrolling action void, so that the second invocation should be
       // ignored.
@@ -321,5 +327,35 @@ AX_TEST_F(
           .expectSpeech('3rd item')
           .call(doCmd('previousSimilarItem'))  // scroll backward
           .expectSpeech('2nd item');
+      await mockFeedback.replay();
+    });
+
+AX_TEST_F(
+    'ChromeVoxAutoScrollHandlerTest', 'DontScrollInWebContents',
+    async function() {
+      const mockFeedback = this.createMockFeedback();
+      // Tests for fix to b/284050731.
+      const site = `
+        <div style="width:100px">
+            <a href="#" autofocus>Before</a>
+            <div role="list"
+                 style="display: flex; overflow-x: scroll; overflow-y: hidden;">
+                <div role="listitem" style="flex:0 0 150px">
+                    <a href="#">Card 1</a>
+                </div>
+                <div role="listitem" style="flex:0 0 150px">
+                    <a href="#">Card 2</a>
+                </div>
+            </div>
+            <a href="#">After</a>
+        </div>`;
+      await this.runWithLoadedTree(site);
+      mockFeedback.expectSpeech('Before')
+          .call(doCmd('nextObject'))
+          .expectSpeech('Card 1')
+          .call(doCmd('nextObject'))
+          .expectSpeech('Card 2')
+          .call(doCmd('nextObject'))
+          .expectSpeech('After');
       await mockFeedback.replay();
     });

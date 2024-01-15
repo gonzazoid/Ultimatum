@@ -8,15 +8,16 @@ import android.text.TextUtils;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 import androidx.collection.ArraySet;
 import androidx.core.util.ObjectsCompat;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.chrome.browser.omnibox.MatchClassificationStyle;
-import org.chromium.chrome.browser.omnibox.OmniboxSuggestionType;
 import org.chromium.components.omnibox.GroupsProto.GroupId;
-import org.chromium.components.omnibox.action.OmniboxPedal;
+import org.chromium.components.omnibox.action.OmniboxAction;
 import org.chromium.components.query_tiles.QueryTile;
 import org.chromium.url.GURL;
 
@@ -26,28 +27,20 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Container class with information about each omnibox suggestion item.
- */
+/** Container class with information about each omnibox suggestion item. */
 public class AutocompleteMatch {
     public static final int INVALID_GROUP = GroupId.GROUP_INVALID_VALUE;
     public static final int INVALID_TYPE = -1;
 
-    /**
-     * Specifies an individual tile for TILE_NAVSUGGEST suggestions.
-     */
+    /** Specifies an individual tile for TILE_NAVSUGGEST suggestions. */
     public static class SuggestTile {
-        /**
-         * Title of the website the tile points to.
-         */
+        /** Title of the website the tile points to. */
         public final String title;
-        /**
-         * URL of the website the tile points to.
-         */
+
+        /** URL of the website the tile points to. */
         public final GURL url;
-        /**
-         * Whether the tile is a Search tile.
-         */
+
+        /** Whether the tile is a Search tile. */
         public final boolean isSearch;
 
         public SuggestTile(String title, GURL url, boolean isSearch) {
@@ -59,17 +52,16 @@ public class AutocompleteMatch {
 
     /**
      * Specifies the style of portions of the suggestion text.
-     * <p>
-     * ACMatchClassification (as defined in C++) further describes the fields and usage.
+     *
+     * <p>ACMatchClassification (as defined in C++) further describes the fields and usage.
      */
     public static class MatchClassification {
-        /**
-         * The offset into the text where this classification begins.
-         */
+        /** The offset into the text where this classification begins. */
         public final int offset;
 
         /**
          * A bitfield that determines the style of this classification.
+         *
          * @see MatchClassificationStyle
          */
         public final int style;
@@ -110,16 +102,32 @@ public class AutocompleteMatch {
     private boolean mHasTabMatch;
     private final @Nullable List<SuggestTile> mSuggestTiles;
     private long mNativeMatch;
-    private final @Nullable OmniboxPedal mOmniboxPedal;
+    private final @NonNull List<OmniboxAction> mActions;
 
-    public AutocompleteMatch(int nativeType, Set<Integer> subtypes, boolean isSearchType,
-            int relevance, int transition, String displayText,
-            List<MatchClassification> displayTextClassifications, String description,
-            List<MatchClassification> descriptionClassifications, SuggestionAnswer answer,
-            String fillIntoEdit, GURL url, GURL imageUrl, String imageDominantColor,
-            boolean isDeletable, String postContentType, byte[] postData, int groupId,
-            List<QueryTile> queryTiles, byte[] clipboardImageData, boolean hasTabMatch,
-            List<SuggestTile> suggestTiles, OmniboxPedal omniboxPedal) {
+    public AutocompleteMatch(
+            int nativeType,
+            Set<Integer> subtypes,
+            boolean isSearchType,
+            int relevance,
+            int transition,
+            String displayText,
+            List<MatchClassification> displayTextClassifications,
+            String description,
+            List<MatchClassification> descriptionClassifications,
+            SuggestionAnswer answer,
+            String fillIntoEdit,
+            GURL url,
+            GURL imageUrl,
+            String imageDominantColor,
+            boolean isDeletable,
+            String postContentType,
+            byte[] postData,
+            int groupId,
+            List<QueryTile> queryTiles,
+            byte[] clipboardImageData,
+            boolean hasTabMatch,
+            List<SuggestTile> suggestTiles,
+            @Nullable List<OmniboxAction> actions) {
         if (subtypes == null) {
             subtypes = Collections.emptySet();
         }
@@ -147,32 +155,54 @@ public class AutocompleteMatch {
         mClipboardImageData = clipboardImageData;
         mHasTabMatch = hasTabMatch;
         mSuggestTiles = suggestTiles;
-        mOmniboxPedal = omniboxPedal;
+        mActions = actions != null ? actions : Arrays.asList();
     }
 
     @CalledByNative
-    private static AutocompleteMatch build(long nativeObject, int nativeType, int[] nativeSubtypes,
-            boolean isSearchType, int relevance, int transition, String contents,
-            int[] contentClassificationOffsets, int[] contentClassificationStyles,
-            String description, int[] descriptionClassificationOffsets,
-            int[] descriptionClassificationStyles, SuggestionAnswer answer, String fillIntoEdit,
-            GURL url, GURL imageUrl, String imageDominantColor, boolean isDeletable,
-            String postContentType, byte[] postData, int groupId, List<QueryTile> tiles,
-            byte[] clipboardImageData, boolean hasTabMatch, String[] suggestTileTitles,
-            GURL[] suggestTileUrls, int[] suggestTileTypes, OmniboxPedal omniboxPedal) {
+    private static AutocompleteMatch build(
+            long nativeObject,
+            int nativeType,
+            int[] nativeSubtypes,
+            boolean isSearchType,
+            int relevance,
+            int transition,
+            String contents,
+            int[] contentClassificationOffsets,
+            int[] contentClassificationStyles,
+            String description,
+            int[] descriptionClassificationOffsets,
+            int[] descriptionClassificationStyles,
+            SuggestionAnswer answer,
+            String fillIntoEdit,
+            GURL url,
+            GURL imageUrl,
+            String imageDominantColor,
+            boolean isDeletable,
+            String postContentType,
+            byte[] postData,
+            int groupId,
+            List<QueryTile> tiles,
+            byte[] clipboardImageData,
+            boolean hasTabMatch,
+            String[] suggestTileTitles,
+            GURL[] suggestTileUrls,
+            int[] suggestTileTypes,
+            @Nullable OmniboxAction[] actions) {
         assert contentClassificationOffsets.length == contentClassificationStyles.length;
         List<MatchClassification> contentClassifications = new ArrayList<>();
         for (int i = 0; i < contentClassificationOffsets.length; i++) {
-            contentClassifications.add(new MatchClassification(
-                    contentClassificationOffsets[i], contentClassificationStyles[i]));
+            contentClassifications.add(
+                    new MatchClassification(
+                            contentClassificationOffsets[i], contentClassificationStyles[i]));
         }
 
         assert suggestTileUrls.length == suggestTileTitles.length;
         assert suggestTileTypes.length == suggestTileTitles.length;
         List<SuggestTile> suggestTiles = new ArrayList<>();
         for (int i = 0; i < suggestTileTitles.length; i++) {
-            suggestTiles.add(new SuggestTile(
-                    suggestTileTitles[i], suggestTileUrls[i], suggestTileTypes[i] != 0));
+            suggestTiles.add(
+                    new SuggestTile(
+                            suggestTileTitles[i], suggestTileUrls[i], suggestTileTypes[i] != 0));
         }
 
         Set<Integer> subtypes = new ArraySet(nativeSubtypes.length);
@@ -180,11 +210,31 @@ public class AutocompleteMatch {
             subtypes.add(nativeSubtypes[i]);
         }
 
-        AutocompleteMatch match = new AutocompleteMatch(nativeType, subtypes, isSearchType,
-                relevance, transition, contents, contentClassifications, description,
-                new ArrayList<>(), answer, fillIntoEdit, url, imageUrl, imageDominantColor,
-                isDeletable, postContentType, postData, groupId, tiles, clipboardImageData,
-                hasTabMatch, suggestTiles, omniboxPedal);
+        AutocompleteMatch match =
+                new AutocompleteMatch(
+                        nativeType,
+                        subtypes,
+                        isSearchType,
+                        relevance,
+                        transition,
+                        contents,
+                        contentClassifications,
+                        description,
+                        new ArrayList<>(),
+                        answer,
+                        fillIntoEdit,
+                        url,
+                        imageUrl,
+                        imageDominantColor,
+                        isDeletable,
+                        postContentType,
+                        postData,
+                        groupId,
+                        tiles,
+                        clipboardImageData,
+                        hasTabMatch,
+                        suggestTiles,
+                        actions == null ? null : Arrays.asList(actions));
         match.updateNativeObjectRef(nativeObject);
         match.setDescription(
                 description, descriptionClassificationOffsets, descriptionClassificationStyles);
@@ -192,13 +242,14 @@ public class AutocompleteMatch {
     }
 
     @CalledByNative
-    private void updateNativeObjectRef(long nativeMatch) {
+    @VisibleForTesting
+    public void updateNativeObjectRef(long nativeMatch) {
         assert nativeMatch != 0 : "Invalid native object.";
         mNativeMatch = nativeMatch;
     }
 
     /** Returns a reference to Native AutocompleteMatch object. */
-    long getNativeObjectRef() {
+    public long getNativeObjectRef() {
         return mNativeMatch;
     }
 
@@ -212,8 +263,12 @@ public class AutocompleteMatch {
      * @param clipboardImageData Clipboard image data content (if any).
      */
     @CalledByNative
-    private void updateClipboardContent(String contents, GURL url, @Nullable String postContentType,
-            @Nullable byte[] postData, @Nullable byte[] clipboardImageData) {
+    private void updateClipboardContent(
+            String contents,
+            GURL url,
+            @Nullable String postContentType,
+            @Nullable byte[] postData,
+            @Nullable byte[] clipboardImageData) {
         mDisplayText = contents;
         mUrl = url;
         mPostContentType = postContentType;
@@ -237,14 +292,18 @@ public class AutocompleteMatch {
     }
 
     @CalledByNative
-    private void setDescription(String description, int[] descriptionClassificationOffsets,
+    private void setDescription(
+            String description,
+            int[] descriptionClassificationOffsets,
             int[] descriptionClassificationStyles) {
         assert descriptionClassificationOffsets.length == descriptionClassificationStyles.length;
         mDescription = description;
         mDescriptionClassifications.clear();
         for (int i = 0; i < descriptionClassificationOffsets.length; i++) {
-            mDescriptionClassifications.add(new MatchClassification(
-                    descriptionClassificationOffsets[i], descriptionClassificationStyles[i]));
+            mDescriptionClassifications.add(
+                    new MatchClassification(
+                            descriptionClassificationOffsets[i],
+                            descriptionClassificationStyles[i]));
         }
     }
 
@@ -302,9 +361,7 @@ public class AutocompleteMatch {
         return mImageDominantColor;
     }
 
-    /**
-     * @return Whether the suggestion is a search suggestion.
-     */
+    /** @return Whether the suggestion is a search suggestion. */
     public boolean isSearchSuggestion() {
         return mIsSearchType;
     }
@@ -329,30 +386,26 @@ public class AutocompleteMatch {
         return mHasTabMatch;
     }
 
-    @Nullable
-    public OmniboxPedal getOmniboxPedal() {
-        return mOmniboxPedal;
+    @NonNull
+    public List<OmniboxAction> getActions() {
+        return mActions;
     }
 
     /**
      * @return The image data for the image clipbaord suggestion. This data has already been
-     *         validated in C++ and is safe to use in the browser process.
+     *     validated in C++ and is safe to use in the browser process.
      */
     @Nullable
     public byte[] getClipboardImageData() {
         return mClipboardImageData;
     }
 
-    /**
-     * @return The relevance score of this suggestion.
-     */
+    /** @return The relevance score of this suggestion. */
     public int getRelevance() {
         return mRelevance;
     }
 
-    /**
-     * @return Set of suggestion subtypes.
-     */
+    /** @return Set of suggestion subtypes. */
     public @NonNull Set<Integer> getSubtypes() {
         return mSubtypes;
     }
@@ -361,8 +414,11 @@ public class AutocompleteMatch {
     public int hashCode() {
         final int displayTextHash = mDisplayText != null ? mDisplayText.hashCode() : 0;
         final int fillIntoEditHash = mFillIntoEdit != null ? mFillIntoEdit.hashCode() : 0;
-        int hash = 37 * mType + 2017 * displayTextHash + 1901 * fillIntoEditHash
-                + (mIsDeletable ? 1 : 0);
+        int hash =
+                37 * mType
+                        + 2017 * displayTextHash
+                        + 1901 * fillIntoEditHash
+                        + (mIsDeletable ? 1 : 0);
         if (mAnswer != null) hash = hash + mAnswer.hashCode();
         return hash;
     }
@@ -374,7 +430,8 @@ public class AutocompleteMatch {
         }
 
         AutocompleteMatch suggestion = (AutocompleteMatch) obj;
-        return mType == suggestion.mType && mNativeMatch == suggestion.mNativeMatch
+        return mType == suggestion.mType
+                && mNativeMatch == suggestion.mNativeMatch
                 && ObjectsCompat.equals(mSubtypes, suggestion.mSubtypes)
                 && TextUtils.equals(mFillIntoEdit, suggestion.mFillIntoEdit)
                 && TextUtils.equals(mDisplayText, suggestion.mDisplayText)
@@ -383,34 +440,33 @@ public class AutocompleteMatch {
                 && TextUtils.equals(mDescription, suggestion.mDescription)
                 && ObjectsCompat.equals(
                         mDescriptionClassifications, suggestion.mDescriptionClassifications)
-                && mIsDeletable == suggestion.mIsDeletable && mRelevance == suggestion.mRelevance
+                && mIsDeletable == suggestion.mIsDeletable
+                && mRelevance == suggestion.mRelevance
                 && ObjectsCompat.equals(mAnswer, suggestion.mAnswer)
                 && TextUtils.equals(mPostContentType, suggestion.mPostContentType)
-                && Arrays.equals(mPostData, suggestion.mPostData) && mGroupId == suggestion.mGroupId
+                && Arrays.equals(mPostData, suggestion.mPostData)
+                && mGroupId == suggestion.mGroupId
                 && ObjectsCompat.equals(mQueryTiles, suggestion.mQueryTiles);
     }
 
     /**
-     * @return ID of the group this suggestion is associated with, or null, if the suggestion is
-     *         not associated with any group, or INVALID_GROUP if suggestion is not associated with
-     *         any group.
+     * @return ID of the group this suggestion is associated with, or null, if the suggestion is not
+     *     associated with any group, or INVALID_GROUP if suggestion is not associated with any
+     *     group.
      */
     public int getGroupId() {
         return mGroupId;
     }
 
-    /**
-     * @return List of tiles for TILE_NAVSUGGEST suggestion.
-     */
+    /** @return List of tiles for TILE_NAVSUGGEST suggestion. */
     public @Nullable List<SuggestTile> getSuggestTiles() {
         return mSuggestTiles;
     }
 
     /**
-     * Retrieve the clipboard information and update this instance of AutocompleteMatch.
-     * Will terminate immediately if the native counterpart of the AutocompleteMatch object does not
-     * exist.
-     * The callback is guaranteed to be executed at all times.
+     * Retrieve the clipboard information and update this instance of AutocompleteMatch. Will
+     * terminate immediately if the native counterpart of the AutocompleteMatch object does not
+     * exist. The callback is guaranteed to be executed at all times.
      *
      * @param callback The callback to run when update completes.
      */
@@ -425,15 +481,26 @@ public class AutocompleteMatch {
 
     @Override
     public String toString() {
-        List<String> pieces = Arrays.asList("mType=" + mType, "mSubtypes=" + mSubtypes.toString(),
-                "mIsSearchType=" + mIsSearchType, "mDisplayText=" + mDisplayText,
-                "mDescription=" + mDescription, "mFillIntoEdit=" + mFillIntoEdit, "mUrl=" + mUrl,
-                "mImageUrl=" + mImageUrl, "mImageDominatColor=" + mImageDominantColor,
-                "mRelevance=" + mRelevance, "mTransition=" + mTransition,
-                "mIsDeletable=" + mIsDeletable, "mPostContentType=" + mPostContentType,
-                "mPostData=" + Arrays.toString(mPostData), "mGroupId=" + mGroupId,
-                "mDisplayTextClassifications=" + mDisplayTextClassifications,
-                "mDescriptionClassifications=" + mDescriptionClassifications, "mAnswer=" + mAnswer);
+        List<String> pieces =
+                Arrays.asList(
+                        "mType=" + mType,
+                        "mSubtypes=" + mSubtypes.toString(),
+                        "mIsSearchType=" + mIsSearchType,
+                        "mDisplayText=" + mDisplayText,
+                        "mDescription=" + mDescription,
+                        "mFillIntoEdit=" + mFillIntoEdit,
+                        "mUrl=" + mUrl,
+                        "mImageUrl=" + mImageUrl,
+                        "mImageDominatColor=" + mImageDominantColor,
+                        "mRelevance=" + mRelevance,
+                        "mTransition=" + mTransition,
+                        "mIsDeletable=" + mIsDeletable,
+                        "mPostContentType=" + mPostContentType,
+                        "mPostData=" + Arrays.toString(mPostData),
+                        "mGroupId=" + mGroupId,
+                        "mDisplayTextClassifications=" + mDisplayTextClassifications,
+                        "mDescriptionClassifications=" + mDescriptionClassifications,
+                        "mAnswer=" + mAnswer);
         return pieces.toString();
     }
 

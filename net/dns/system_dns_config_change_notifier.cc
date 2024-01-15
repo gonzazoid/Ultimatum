@@ -7,8 +7,8 @@
 #include <map>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -17,7 +17,6 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "net/dns/dns_config_service.h"
 
 namespace net {
@@ -29,7 +28,7 @@ namespace {
 class WrappedObserver {
  public:
   explicit WrappedObserver(SystemDnsConfigChangeNotifier::Observer* observer)
-      : task_runner_(base::SequencedTaskRunnerHandle::Get()),
+      : task_runner_(base::SequencedTaskRunner::GetCurrentDefault()),
         observer_(observer) {}
 
   WrappedObserver(const WrappedObserver&) = delete;
@@ -128,12 +127,20 @@ class SystemDnsConfigChangeNotifier::Core {
   }
 
   void SetDnsConfigServiceForTesting(
-      std::unique_ptr<DnsConfigService> dns_config_service) {
+      std::unique_ptr<DnsConfigService> dns_config_service,
+      base::OnceClosure done_cb) {
     DCHECK(dns_config_service);
     task_runner_->PostTask(FROM_HERE,
                            base::BindOnce(&Core::SetAndStartDnsConfigService,
                                           weak_ptr_factory_.GetWeakPtr(),
                                           std::move(dns_config_service)));
+    if (done_cb) {
+      task_runner_->PostTaskAndReply(
+          FROM_HERE,
+          base::BindOnce(&Core::TriggerRefreshConfig,
+                         weak_ptr_factory_.GetWeakPtr()),
+          std::move(done_cb));
+    }
   }
 
  private:
@@ -218,11 +225,13 @@ void SystemDnsConfigChangeNotifier::RefreshConfig() {
 }
 
 void SystemDnsConfigChangeNotifier::SetDnsConfigServiceForTesting(
-    std::unique_ptr<DnsConfigService> dns_config_service) {
+    std::unique_ptr<DnsConfigService> dns_config_service,
+    base::OnceClosure done_cb) {
   DCHECK(core_);
   DCHECK(dns_config_service);
 
-  core_->SetDnsConfigServiceForTesting(std::move(dns_config_service));
+  core_->SetDnsConfigServiceForTesting(  // IN-TEST
+      std::move(dns_config_service), std::move(done_cb));
 }
 
 }  // namespace net

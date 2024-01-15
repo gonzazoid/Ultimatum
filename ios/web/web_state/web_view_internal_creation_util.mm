@@ -5,13 +5,19 @@
 #import "ios/web/web_state/web_view_internal_creation_util.h"
 
 #import "base/check_op.h"
+#import "base/metrics/histogram_functions.h"
 #import "base/strings/sys_string_conversions.h"
+#import "ios/web/common/features.h"
 #import "ios/web/public/web_client.h"
 #import "ios/web/web_state/crw_web_view.h"
 #import "ios/web/web_state/ui/wk_web_view_configuration_provider.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
+// Allow usage of iOS 16.4's `inspectable` property on WKWebView in pre-16.4
+// SDK builds.
+#if !defined(__IPHONE_16_4) || __IPHONE_OS_VERSION_MAX_ALLOWED < __IPHONE_16_4
+@interface WKWebView (Additions)
+@property BOOL inspectable API_AVAILABLE(ios(16.4));
+@end
 #endif
 
 namespace web {
@@ -60,9 +66,14 @@ WKWebView* BuildWKWebView(CGRect frame,
         web::GetWebClient()->GetUserAgent(user_agent_type));
   }
 
-  // By default the web view uses a very sluggish scroll speed. Set it to a more
-  // reasonable value.
-  web_view.scrollView.decelerationRate = UIScrollViewDecelerationRateNormal;
+  if (@available(iOS 16.4, *)) {
+    bool enable_web_inspector =
+        web::GetWebClient()->EnableWebInspector(browser_state);
+    if (enable_web_inspector) {
+      web_view.inspectable = YES;
+    }
+    base::UmaHistogramBoolean("IOS.WebInspector.Enabled", enable_web_inspector);
+  }
 
   return web_view;
 }

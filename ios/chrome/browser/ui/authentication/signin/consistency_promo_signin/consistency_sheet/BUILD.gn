@@ -5,7 +5,6 @@
 import("//build/config/chrome_build.gni")
 
 source_set("consistency_sheet") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "child_consistency_sheet_view_controller.h",
     "consistency_sheet_constants.h",
@@ -18,13 +17,13 @@ source_set("consistency_sheet") {
     "consistency_sheet_slide_transition_animator.mm",
   ]
   deps = [
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/main:public",
-    "//ios/chrome/browser/signin",
+    "//ios/chrome/browser/shared/model/browser",
+    "//ios/chrome/browser/shared/model/browser_state",
+    "//ios/chrome/browser/shared/ui/util",
+    "//ios/chrome/browser/shared/ui/util/image",
+    "//ios/chrome/browser/signin/model",
     "//ios/chrome/browser/ui/authentication/signin:signin_protected",
     "//ios/chrome/browser/ui/authentication/signin/consistency_promo_signin:layout",
-    "//ios/chrome/browser/ui/image_util",
-    "//ios/chrome/browser/ui/util",
     "//ios/chrome/common/ui/colors",
     "//ios/chrome/common/ui/util",
   ]

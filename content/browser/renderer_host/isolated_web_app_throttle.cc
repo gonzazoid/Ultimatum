@@ -10,6 +10,7 @@
 #include "content/browser/web_exposed_isolation_info.h"
 #include "content/common/navigation_params_utils.h"
 #include "content/public/browser/content_browser_client.h"
+#include "content/public/browser/isolated_web_apps_policy.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_frame_host.h"
@@ -45,22 +46,22 @@ class WebContentsIsolationInfo
  private:
   friend class WebContentsUserData<WebContentsIsolationInfo>;
   explicit WebContentsIsolationInfo(WebContents* web_contents,
-                                    absl::optional<url::Origin> isolated_origin)
+                                    std::optional<url::Origin> isolated_origin)
       : WebContentsUserData<WebContentsIsolationInfo>(*web_contents),
         isolated_origin_(isolated_origin) {}
 
-  absl::optional<url::Origin> isolated_origin_;
+  std::optional<url::Origin> isolated_origin_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };
 WEB_CONTENTS_USER_DATA_KEY_IMPL(WebContentsIsolationInfo);
 
-absl::optional<url::SchemeHostPort> GetTupleFromOptionalOrigin(
-    const absl::optional<url::Origin>& origin) {
+std::optional<url::SchemeHostPort> GetTupleFromOptionalOrigin(
+    const std::optional<url::Origin>& origin) {
   if (origin.has_value()) {
     return origin->GetTupleOrPrecursorTupleIfOpaque();
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 }  // namespace
@@ -68,7 +69,13 @@ absl::optional<url::SchemeHostPort> GetTupleFromOptionalOrigin(
 // static
 std::unique_ptr<IsolatedWebAppThrottle>
 IsolatedWebAppThrottle::MaybeCreateThrottleFor(NavigationHandle* handle) {
-  if (base::FeatureList::IsEnabled(features::kIsolatedWebApps)) {
+  BrowserContext* browser_context = NavigationRequest::From(handle)
+                                        ->frame_tree_node()
+                                        ->navigator()
+                                        .controller()
+                                        .GetBrowserContext();
+
+  if (IsolatedWebAppsPolicy::AreIsolatedWebAppsEnabled(browser_context)) {
     return std::make_unique<IsolatedWebAppThrottle>(handle);
   }
   return nullptr;
@@ -93,8 +100,8 @@ IsolatedWebAppThrottle::WillStartRequest() {
   if (!web_contents_isolation_info) {
     WebContentsIsolationInfo::CreateForWebContents(
         navigation_handle()->GetWebContents(),
-        requests_app_isolation ? absl::make_optional(dest_origin_)
-                               : absl::nullopt);
+        requests_app_isolation ? std::make_optional(dest_origin_)
+                               : std::nullopt);
   }
 
   FrameTreeNode* frame_tree_node = navigation_request->frame_tree_node();
@@ -118,15 +125,19 @@ IsolatedWebAppThrottle::WillRedirectRequest() {
 
 NavigationThrottle::ThrottleCheckResult
 IsolatedWebAppThrottle::WillProcessResponse() {
-  // Update |dest_origin_| to point to the final origin, which may have changed
-  // since the last WillStartRequest/WillRedirectRequest call.
   auto* navigation_request = NavigationRequest::From(navigation_handle());
-  dest_origin_ = navigation_request->GetOriginToCommit();
   auto* assigned_rfh = static_cast<RenderFrameHostImpl*>(
       navigation_request->GetRenderFrameHost());
+  // Allow downloads and 204s (for these GetOriginToCommit returns nullopt).
+  if (!assigned_rfh) {
+    return NavigationThrottle::PROCEED;
+  }
+
+  // Update |dest_origin_| to point to the final origin, which may have changed
+  // since the last WillStartRequest/WillRedirectRequest call.
+  dest_origin_ = navigation_request->GetOriginToCommit().value();
   const WebExposedIsolationInfo& assigned_isolation_info =
       assigned_rfh->GetSiteInstance()->GetWebExposedIsolationInfo();
-
   return DoThrottle(assigned_isolation_info.is_isolated_application(),
                     NavigationThrottle::BLOCK_RESPONSE);
 }
@@ -151,7 +162,7 @@ bool IsolatedWebAppThrottle::OpenUrlExternal(const GURL& url) {
           ? ui::PageTransition::PAGE_TRANSITION_SERVER_REDIRECT
           : ui::PageTransition::PAGE_TRANSITION_LINK,
       navigation_request->HasUserGesture(),
-      /*initiating_origin=*/absl::nullopt,
+      /*initiating_origin=*/std::nullopt,
       /*initiator_document=*/nullptr, &loader_factory);
 }
 
@@ -194,7 +205,7 @@ NavigationThrottle::ThrottleCheckResult IsolatedWebAppThrottle::DoThrottle(
   // Block renderer-initiated iframe navigations into the app that were
   // initiated by a non-app frame. This ensures that all iframe navigations into
   // the app come from the app itself.
-  absl::optional<url::SchemeHostPort> prev_tuple =
+  std::optional<url::SchemeHostPort> prev_tuple =
       GetTupleFromOptionalOrigin(prev_origin_);
   if (prev_tuple.has_value() &&
       prev_tuple.value() != web_contents_isolation_tuple &&
@@ -219,17 +230,28 @@ NavigationThrottle::ThrottleCheckResult IsolatedWebAppThrottle::DoThrottle(
     return block_action;
   }
 
-  // Block iframe navigations to the app's origin if the parent frame doesn't
-  // belong to the app. This prevents non-app frames from having access to an
-  // app frame.
   if (!navigation_handle()->IsInMainFrame()) {
-    const url::SchemeHostPort& parent_tuple =
-        navigation_handle()
-            ->GetParentFrame()
-            ->GetLastCommittedOrigin()
-            .GetTupleOrPrecursorTupleIfOpaque();
-    if (parent_tuple != web_contents_isolation_tuple) {
-      return block_action;
+    {
+      // Block iframe navigations to the app's origin if the parent frame
+      // doesn't belong to the app. This prevents non-app frames from having
+      // access to an app frame.
+      const url::SchemeHostPort& parent_tuple =
+          navigation_handle()
+              ->GetParentFrame()
+              ->GetLastCommittedOrigin()
+              .GetTupleOrPrecursorTupleIfOpaque();
+      if (parent_tuple != web_contents_isolation_tuple) {
+        return block_action;
+      }
+    }
+
+    // Allow iframe same-origin navigations to blob: and data: URLs
+    // (cross-origin iframe navigation are already allowed and handled further
+    // up as part of the `dest_tuple != web_contents_isolation_tuple`
+    // condition).
+    if (navigation_handle()->GetURL().SchemeIs(url::kDataScheme) ||
+        navigation_handle()->GetURL().SchemeIsBlob()) {
+      return NavigationThrottle::PROCEED;
     }
   }
 

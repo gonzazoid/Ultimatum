@@ -7,10 +7,7 @@ package org.chromium.components.browser_ui.widget;
 import android.content.Context;
 import android.util.AttributeSet;
 import android.view.View;
-import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.ImageButton;
-
-import androidx.annotation.VisibleForTesting;
 
 /**
  * <p>
@@ -84,10 +81,14 @@ public class RadioButtonWithDescriptionAndAuxButton extends RadioButtonWithDescr
         // Space between the radio container and the separator. The padding is added in the radio
         // container instead of the separator, because the padding needs to be highlighted when the
         // radio container is clicked.
-        final int radioContainerEndPadding = getResources().getDimensionPixelSize(
-                R.dimen.radio_button_with_description_and_aux_button_spacing);
-        radioContainer.setPaddingRelative(radioContainer.getPaddingStart(),
-                radioContainer.getPaddingTop(), radioContainerEndPadding,
+        final int radioContainerEndPadding =
+                getResources()
+                        .getDimensionPixelSize(
+                                R.dimen.radio_button_with_description_and_aux_button_spacing);
+        radioContainer.setPaddingRelative(
+                radioContainer.getPaddingStart(),
+                radioContainer.getPaddingTop(),
+                radioContainerEndPadding,
                 radioContainer.getPaddingBottom());
     }
 
@@ -95,6 +96,7 @@ public class RadioButtonWithDescriptionAndAuxButton extends RadioButtonWithDescr
     protected void setViewsInternal() {
         super.setViewsInternal();
         mAuxButton = findViewById(R.id.expand_arrow);
+        getPrimaryTextView().setLabelFor(mAuxButton.getId());
     }
 
     /**
@@ -116,12 +118,6 @@ public class RadioButtonWithDescriptionAndAuxButton extends RadioButtonWithDescr
         setAuxButtonEnabled(enabled);
     }
 
-    @Override
-    public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
-        super.onInitializeAccessibilityNodeInfo(info);
-        info.setLabeledBy(mAuxButton);
-    }
-
     /**
      * Sets the enabled state of the aux button alone. This can be used if you want the aux button
      * to be enabled while the other child views are disabled or vice versa.
@@ -140,18 +136,7 @@ public class RadioButtonWithDescriptionAndAuxButton extends RadioButtonWithDescr
         mAuxButton.setOnClickListener(v -> mListener.onAuxButtonClicked(getId()));
     }
 
-    /**
-     * Set the aux button content description.
-     * @param contentDescription for aux button, used for accessibility purposes.
-     */
-    public void setAuxButtonContentDescription(String contentDescription) {
-        mAuxButton.setContentDescription(contentDescription);
-    }
-
-    /**
-     * @return the aux button living inside this widget.
-     */
-    @VisibleForTesting
+    /** @return the aux button living inside this widget. */
     public ImageButton getAuxButtonForTests() {
         return mAuxButton;
     }

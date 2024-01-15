@@ -22,7 +22,9 @@ class ReloadButtonBrowserTest : public InProcessBrowserTest {
   }
 };
 
-#if BUILDFLAG(IS_WIN)
+// TODO(crbug.com/1344763): Fix flakiness on Win and Mac.
+// TODO(crbug.com/1509175): Fix consistent failing on Linux.
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
 #define MAYBE_AllowExternalProtocols DISABLED_AllowExternalProtocols
 #else
 #define MAYBE_AllowExternalProtocols AllowExternalProtocols

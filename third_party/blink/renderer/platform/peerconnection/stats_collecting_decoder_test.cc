@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/test/task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -72,7 +73,7 @@ class MockDecoder : public webrtc::VideoDecoder {
                  int64_t render_time_ms) override {
     webrtc::VideoFrame video_frame =
         CreateMockFrame(input_image._encodedWidth, input_image._encodedHeight,
-                        input_image.Timestamp());
+                        input_image.RtpTimestamp());
     callback_->Decoded(video_frame, absl::nullopt, absl::nullopt);
     return WEBRTC_VIDEO_CODEC_OK;
   }
@@ -92,8 +93,8 @@ class MockDecoder : public webrtc::VideoDecoder {
   }
 
  private:
-  bool* const is_hw_accelerated_;
-  webrtc::DecodedImageCallback* callback_;
+  const raw_ptr<bool, ExperimentalRenderer> is_hw_accelerated_;
+  raw_ptr<webrtc::DecodedImageCallback, ExperimentalRenderer> callback_;
 };
 
 class MockDecodedImageCallback : public webrtc::DecodedImageCallback {
@@ -170,7 +171,7 @@ class StatsCollectingDecoderTest : public ::testing::Test {
       webrtc::EncodedImage encoded_frame;
       encoded_frame._encodedWidth = width;
       encoded_frame._encodedHeight = height;
-      encoded_frame.SetTimestamp(
+      encoded_frame.SetRtpTimestamp(
           90000 * frame_counter /
           frame_rate);  // RTP timestamp using 90 kHz clock.
       encoded_frame._frameType = frame_counter % key_frame_interval == 0

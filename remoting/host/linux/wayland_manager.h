@@ -9,13 +9,14 @@
 
 #include <xkbcommon/xkbcommon.h>
 
-#include "base/callback.h"
 #include "base/callback_list.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "remoting/host/base/screen_resolution.h"
 #include "remoting/host/linux/wayland_connection.h"
 #include "remoting/host/linux/wayland_display.h"
+#include "remoting/host/linux/wayland_seat.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capture_metadata.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capture_types.h"
 
@@ -37,6 +38,10 @@ class WaylandManager {
   using KeyboardModifiersCallbackSignature = void(uint32_t group);
   using KeyboardModifiersCallback =
       base::RepeatingCallback<KeyboardModifiersCallbackSignature>;
+  using ClipboardMetadataCallbackSignature =
+      void(webrtc::DesktopCaptureMetadata);
+  using ClipboardMetadataCallback =
+      base::RepeatingCallback<ClipboardMetadataCallbackSignature>;
 
   WaylandManager();
   ~WaylandManager();
@@ -45,6 +50,9 @@ class WaylandManager {
 
   static WaylandManager* Get();
 
+  // Cleans up reference to runner. (Needed only for testing)
+  void CleanupRunnerForTest();
+
   // The singleton instance should be initialized by the host process on the
   // UI thread right after creation.
   void Init(scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner);
@@ -52,8 +60,25 @@ class WaylandManager {
   // Adds callback to be invoked when a desktop capturer has metadata available.
   void AddCapturerMetadataCallback(DesktopMetadataCallback callback);
 
+  // Adds callback to be invoked when a desktop capturer is destroyed.
+  // TODO(crbug/1442000): This would need to be enhanced when supporting
+  // multiple desktops/capturers.
+  void AddCapturerDestroyedCallback(base::OnceClosure callback);
+
   // Invoked by the desktop capturer(s), upon successful start.
   void OnDesktopCapturerMetadata(webrtc::DesktopCaptureMetadata metadata);
+
+  // Invoked by the desktop capturer(s), upon destruction.
+  // TODO(crbug/1442000): This would need to be enhanced when supporting
+  // multiple desktops/capturers and is likely going to notify the listener only
+  // when the last desktop capturer is destroyed.
+  void OnDesktopCapturerDestroyed();
+
+  // Adds callback to be invoked when clipboard has metadata available.
+  void AddClipboardMetadataCallback(DesktopMetadataCallback callback);
+
+  // Invoked by the clipboard portal upon a successful start.
+  void OnClipboardMetadata(webrtc::DesktopCaptureMetadata metadata);
 
   // Adds callback to be invoked when screen resolution is updated by the
   // desktop resizer.
@@ -82,7 +107,24 @@ class WaylandManager {
   // Gets the current information about displays available on the host.
   DesktopDisplayInfo GetCurrentDisplayInfo();
 
+  void SetSeatPresentCallback(WaylandSeat::OnSeatPresentCallback callback);
+
+  // Sets callback to be invoked when the associated seat gains a keyboard or
+  // pointer capability.
+  void SetCapabilityCallbacks(base::OnceClosure keyboard_capability_callback,
+                              base::OnceClosure pointer_capability_callback);
+
  private:
+  friend class WaylandSeat;
+
+  // Invoked by wayland seat when wayland keyboard capability changes.
+  void OnSeatKeyboardCapability();
+  void OnSeatKeyboardCapabilityRevoked();
+
+  // Invoked by wayland seat when wayland pointer capability changes.
+  void OnSeatPointerCapability();
+  void OnSeatPointerCapabilityRevoked();
+
   SEQUENCE_CHECKER(sequence_checker_);
 
   scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner_;
@@ -95,10 +137,24 @@ class WaylandManager {
       GUARDED_BY_CONTEXT(sequence_checker_);
   base::RepeatingCallbackList<KeyboardModifiersCallbackSignature>
       keyboard_modifier_callbacks_ GUARDED_BY_CONTEXT(sequence_checker_);
+  ClipboardMetadataCallback clipboard_metadata_callback_
+      GUARDED_BY_CONTEXT(sequence_checker_);
+  base::OnceClosure keyboard_capability_callback_
+      GUARDED_BY_CONTEXT(sequence_checker_);
+  base::OnceClosure pointer_capability_callback_
+      GUARDED_BY_CONTEXT(sequence_checker_);
+  base::OnceClosure capturer_destroyed_callback_
+      GUARDED_BY_CONTEXT(sequence_checker_);
 
   // Keeps track of the latest keymap for the case where the keyboard layout
   // monitor has not yet registered a callback.
   XkbKeyMapUniquePtr keymap_ GUARDED_BY_CONTEXT(sequence_checker_) = nullptr;
+
+  bool is_keyboard_capability_acquired_ GUARDED_BY_CONTEXT(sequence_checker_) =
+      false;
+
+  bool is_pointer_capability_acquired_ GUARDED_BY_CONTEXT(sequence_checker_) =
+      false;
 };
 
 }  // namespace remoting

@@ -5,6 +5,7 @@
 #include "chromecast/renderer/feature_manager_on_associated_interface.h"
 
 #include "base/check.h"
+#include "base/containers/contains.h"
 #include "base/logging.h"
 #include "base/values.h"
 #include "chromecast/base/cast_features.h"
@@ -48,16 +49,16 @@ void FeatureManagerOnAssociatedInterface::ConfigureFeatures(
     std::string app_id("MissingAppId");
     auto& feature =
         GetFeature(feature::kEnableTrackControlAppRendererFeatureUse);
-    std::string* app_id_received =
-        feature->config.FindStringPath(feature::kKeyAppId);
+    const std::string* app_id_received =
+        feature->config.FindString(feature::kKeyAppId);
     if (app_id_received) {
       app_id = *app_id_received;
     } else {
       LOG(ERROR) << __func__ << " failed to receive valid app_id";
     }
     bool allow_insecure_content = false;
-    absl::optional<bool> allow_insecure_content_received =
-        feature->config.FindBoolPath(feature::kKeyAllowInsecureContent);
+    std::optional<bool> allow_insecure_content_received =
+        feature->config.FindBool(feature::kKeyAllowInsecureContent);
     if (allow_insecure_content_received) {
       allow_insecure_content = *allow_insecure_content_received;
     } else {
@@ -78,7 +79,7 @@ void FeatureManagerOnAssociatedInterface::OnFeatureManagerAssociatedRequest(
 
 bool FeatureManagerOnAssociatedInterface::FeatureEnabled(
     const std::string& feature) const {
-  return features_map_.find(feature) != features_map_.end();
+  return base::Contains(features_map_, feature);
 }
 
 const chromecast::shell::mojom::FeaturePtr&

@@ -9,7 +9,6 @@
 #include "base/metrics/field_trial_params.h"
 #include "base/strings/string_number_conversions.h"
 #include "components/contextual_search/core/browser/public.h"
-#include "components/variations/variations_associated_data.h"
 
 namespace {
 
@@ -32,10 +31,6 @@ const int kContextualSearchDefaultContentSize = 1536;
 const int
     ContextualSearchFieldTrial::kContextualSearchDefaultSampleSurroundingSize =
         400;
-
-BASE_FEATURE(kContextualSearchDebug,
-             "ContextualSearchDebug",
-             base::FEATURE_DISABLED_BY_DEFAULT);
 
 ContextualSearchFieldTrial::ContextualSearchFieldTrial()
     : is_resolver_url_prefix_cached_(false),
@@ -134,6 +129,6 @@ std::string ContextualSearchFieldTrial::GetSwitch(const std::string& name) {
 }
 
 std::string ContextualSearchFieldTrial::GetParam(const std::string& name) {
-  return variations::GetVariationParamValue(
+  return base::GetFieldTrialParamValue(
       contextual_search::kContextualSearchFieldTrialName, name);
 }

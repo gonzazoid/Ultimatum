@@ -8,7 +8,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
@@ -16,7 +16,6 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chromecast/media/cma/base/balanced_media_task_runner_factory.h"
 #include "chromecast/media/cma/base/media_task_runner.h"
@@ -86,6 +85,8 @@ class BalancedMediaTaskRunnerTest : public testing::Test {
   // For each media task runner, keep a track of which task has already been
   // scheduled.
   std::vector<MediaTaskRunnerTestContext> contexts_;
+
+  base::OnceClosure quit_closure_;
 };
 
 BalancedMediaTaskRunnerTest::BalancedMediaTaskRunnerTest() {
@@ -110,7 +111,7 @@ void BalancedMediaTaskRunnerTest::SetupTest(
   for (size_t k = 0; k < n; k++) {
     contexts_[k].media_task_runner =
         media_task_runner_factory_->CreateMediaTaskRunner(
-            base::ThreadTaskRunnerHandle::Get());
+            base::SingleThreadTaskRunner::GetCurrentDefault());
     contexts_[k].is_pending_task = false;
     contexts_[k].task_index = 0;
     contexts_[k].task_timestamp_list.resize(
@@ -129,12 +130,15 @@ void BalancedMediaTaskRunnerTest::SetupTest(
 }
 
 void BalancedMediaTaskRunnerTest::ProcessAllTasks() {
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&BalancedMediaTaskRunnerTest::OnTestTimeout,
                      base::Unretained(this)),
       base::Seconds(5));
   ScheduleTask();
+  base::RunLoop loop;
+  quit_closure_ = loop.QuitWhenIdleClosure();
+  loop.Run();
 }
 
 void BalancedMediaTaskRunnerTest::ScheduleTask() {
@@ -144,7 +148,7 @@ void BalancedMediaTaskRunnerTest::ScheduleTask() {
       has_task = true;
   }
   if (!has_task) {
-    base::RunLoop::QuitCurrentWhenIdleDeprecated();
+    std::move(quit_closure_).Run();
     return;
   }
 
@@ -159,7 +163,7 @@ void BalancedMediaTaskRunnerTest::ScheduleTask() {
   if (context.task_index >= context.task_timestamp_list.size() ||
       context.is_pending_task) {
     pattern_index_ = next_pattern_index;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&BalancedMediaTaskRunnerTest::ScheduleTask,
                                   base::Unretained(this)));
     return;
@@ -185,7 +189,7 @@ void BalancedMediaTaskRunnerTest::ScheduleTask() {
 
   context.task_index++;
   pattern_index_ = next_pattern_index;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&BalancedMediaTaskRunnerTest::ScheduleTask,
                                 base::Unretained(this)));
 }
@@ -208,8 +212,7 @@ void BalancedMediaTaskRunnerTest::Task(
 
 void BalancedMediaTaskRunnerTest::OnTestTimeout() {
   ADD_FAILURE() << "Test timed out";
-  if (base::CurrentThread::Get())
-    base::RunLoop::QuitCurrentWhenIdleDeprecated();
+  std::move(quit_closure_).Run();
 }
 
 TEST_F(BalancedMediaTaskRunnerTest, OneTaskRunner) {
@@ -234,7 +237,6 @@ TEST_F(BalancedMediaTaskRunnerTest, OneTaskRunner) {
   SetupTest(base::Milliseconds(30), timestamps_ms, scheduling_pattern,
             expected_timestamps_ms);
   ProcessAllTasks();
-  base::RunLoop().Run();
   EXPECT_TRUE(expected_task_timestamps_.empty());
 }
 
@@ -265,7 +267,6 @@ TEST_F(BalancedMediaTaskRunnerTest, TwoTaskRunnerUnbalanced) {
   SetupTest(base::Milliseconds(30), timestamps_ms, scheduling_pattern,
             expected_timestamps_ms);
   ProcessAllTasks();
-  base::RunLoop().Run();
   EXPECT_TRUE(expected_task_timestamps_.empty());
 }
 
@@ -289,7 +290,6 @@ TEST_F(BalancedMediaTaskRunnerTest, TwoStreamsOfDifferentLength) {
   SetupTest(base::Milliseconds(30), timestamps, scheduling_pattern,
             expected_timestamps);
   ProcessAllTasks();
-  base::RunLoop().Run();
   EXPECT_TRUE(expected_task_timestamps_.empty());
 }
 

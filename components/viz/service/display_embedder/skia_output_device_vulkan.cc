@@ -14,19 +14,30 @@
 #include "components/viz/common/gpu/vulkan_context_provider.h"
 #include "gpu/command_buffer/service/memory_tracking.h"
 #include "gpu/config/gpu_finch_features.h"
-#include "gpu/ipc/common/gpu_surface_lookup.h"
+#include "gpu/vulkan/vulkan_fence_helper.h"
 #include "gpu/vulkan/vulkan_function_pointers.h"
 #include "gpu/vulkan/vulkan_implementation.h"
 #include "gpu/vulkan/vulkan_surface.h"
+#include "third_party/skia/include/core/SkColorType.h"
+#include "third_party/skia/include/core/SkImageInfo.h"
 #include "third_party/skia/include/core/SkSurface.h"
+#include "third_party/skia/include/core/SkSurfaceProps.h"
 #include "third_party/skia/include/gpu/GrBackendSemaphore.h"
 #include "third_party/skia/include/gpu/GrBackendSurface.h"
 #include "third_party/skia/include/gpu/GrDirectContext.h"
+#include "third_party/skia/include/gpu/GrRecordingContext.h"
+#include "third_party/skia/include/gpu/GrTypes.h"
+#include "third_party/skia/include/gpu/MutableTextureState.h"
+#include "third_party/skia/include/gpu/ganesh/SkSurfaceGanesh.h"
+#include "third_party/skia/include/gpu/ganesh/vk/GrVkBackendSemaphore.h"
+#include "third_party/skia/include/gpu/ganesh/vk/GrVkBackendSurface.h"
 #include "third_party/skia/include/gpu/vk/GrVkTypes.h"
 #include "ui/gfx/presentation_feedback.h"
 
 #if BUILDFLAG(IS_ANDROID)
-#include <android/native_window_jni.h>
+#include "gpu/ipc/common/gpu_surface_lookup.h"
+#include "ui/gl/android/scoped_a_native_window.h"
+#include "ui/gl/android/scoped_java_surface.h"
 #endif
 
 namespace viz {
@@ -52,6 +63,7 @@ SkiaOutputDeviceVulkan::SkiaOutputDeviceVulkan(
     gpu::MemoryTracker* memory_tracker,
     DidSwapBufferCompleteCallback did_swap_buffer_complete_callback)
     : SkiaOutputDevice(context_provider->GetGrContext(),
+                       /*graphite_context=*/nullptr,
                        memory_tracker,
                        did_swap_buffer_complete_callback),
       context_provider_(context_provider),
@@ -68,13 +80,9 @@ SkiaOutputDeviceVulkan::~SkiaOutputDeviceVulkan() {
   if (UNLIKELY(!vulkan_surface_))
     return;
 
-  {
-    base::ScopedBlockingCall scoped_blocking_call(
-        FROM_HERE, base::BlockingType::MAY_BLOCK);
-    vkQueueWaitIdle(context_provider_->GetDeviceQueue()->GetVulkanQueue());
-  }
-
-  vulkan_surface_->Destroy();
+  auto* fence_helper = context_provider_->GetDeviceQueue()->GetFenceHelper();
+  fence_helper->EnqueueVulkanObjectCleanupForSubmittedWork(
+      std::move(vulkan_surface_));
 }
 
 #if BUILDFLAG(IS_WIN)
@@ -85,17 +93,17 @@ gpu::SurfaceHandle SkiaOutputDeviceVulkan::GetChildSurfaceHandle() {
 }
 #endif
 
-bool SkiaOutputDeviceVulkan::Reshape(
-    const SkSurfaceCharacterization& characterization,
-    const gfx::ColorSpace& color_space,
-    float device_scale_factor,
-    gfx::OverlayTransform transform) {
+bool SkiaOutputDeviceVulkan::Reshape(const SkImageInfo& image_info,
+                                     const gfx::ColorSpace& color_space,
+                                     int sample_count,
+                                     float device_scale_factor,
+                                     gfx::OverlayTransform transform) {
   DCHECK(!scoped_write_);
 
   if (UNLIKELY(!vulkan_surface_))
     return false;
 
-  return RecreateSwapChain(characterization, transform);
+  return RecreateSwapChain(image_info, sample_count, transform);
 }
 
 void SkiaOutputDeviceVulkan::Submit(bool sync_cpu, base::OnceClosure callback) {
@@ -105,23 +113,23 @@ void SkiaOutputDeviceVulkan::Submit(bool sync_cpu, base::OnceClosure callback) {
     DCHECK(sk_surface);
     auto queue_index =
         context_provider_->GetDeviceQueue()->GetVulkanQueueIndex();
-    GrBackendSurfaceMutableState state(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                                       queue_index);
-    sk_surface->flush({}, &state);
+    skgpu::MutableTextureState state(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                                     queue_index);
+    if (GrDirectContext* direct_context =
+            GrAsDirectContext(sk_surface->recordingContext())) {
+      direct_context->flush(sk_surface.get(), {}, &state);
+    }
   }
 
   SkiaOutputDevice::Submit(sync_cpu, std::move(callback));
 }
 
-void SkiaOutputDeviceVulkan::SwapBuffers(BufferPresentedCallback feedback,
-                                         OutputSurfaceFrame frame) {
-  PostSubBuffer(gfx::Rect(vulkan_surface_->image_size()), std::move(feedback),
-                std::move(frame));
-}
-
-void SkiaOutputDeviceVulkan::PostSubBuffer(const gfx::Rect& rect,
-                                           BufferPresentedCallback feedback,
-                                           OutputSurfaceFrame frame) {
+void SkiaOutputDeviceVulkan::Present(
+    const absl::optional<gfx::Rect>& update_rect,
+    BufferPresentedCallback feedback,
+    OutputSurfaceFrame frame) {
+  gfx::Rect rect =
+      update_rect.value_or(gfx::Rect(vulkan_surface_->image_size()));
   // Reshape should have been called first.
   DCHECK(vulkan_surface_);
   DCHECK(!scoped_write_);
@@ -184,7 +192,7 @@ SkSurface* SkiaOutputDeviceVulkan::BeginPaint(
       sk_surface_size_pairs_[scoped_write.image_index()].sk_surface;
 
   if (UNLIKELY(!sk_surface)) {
-    SkSurfaceProps surface_props{0, kUnknown_SkPixelGeometry};
+    SkSurfaceProps surface_props;
     const auto surface_format = vulkan_surface_->surface_format().format;
     DCHECK(surface_format == VK_FORMAT_B8G8R8A8_UNORM ||
            surface_format == VK_FORMAT_R8G8B8A8_UNORM);
@@ -199,8 +207,8 @@ SkSurface* SkiaOutputDeviceVulkan::BeginPaint(
     vk_image_info.fCurrentQueueFamily = VK_QUEUE_FAMILY_IGNORED;
     vk_image_info.fProtected = GrProtected::kNo;
     const auto& vk_image_size = vulkan_surface_->image_size();
-    GrBackendTexture backend_texture(vk_image_size.width(),
-                                     vk_image_size.height(), vk_image_info);
+    GrBackendTexture backend_texture = GrBackendTextures::MakeVk(
+        vk_image_size.width(), vk_image_size.height(), vk_image_info);
 
     // Estimate size of GPU memory needed for the GrBackendRenderTarget.
     VkMemoryRequirements requirements;
@@ -210,7 +218,7 @@ SkSurface* SkiaOutputDeviceVulkan::BeginPaint(
     sk_surface_size_pairs_[scoped_write.image_index()].bytes_allocated =
         requirements.size;
     memory_type_tracker_->TrackMemAlloc(requirements.size);
-    sk_surface = SkSurface::MakeFromBackendTexture(
+    sk_surface = SkSurfaces::WrapBackendTexture(
         context_provider_->GetGrContext(), backend_texture,
         kTopLeft_GrSurfaceOrigin, sample_count_, color_type_, color_space_,
         &surface_props);
@@ -218,15 +226,15 @@ SkSurface* SkiaOutputDeviceVulkan::BeginPaint(
       return nullptr;
     }
   } else {
-    auto backend = sk_surface->getBackendRenderTarget(
-        SkSurface::kFlushRead_BackendHandleAccess);
-    backend.setVkImageLayout(scoped_write.image_layout());
+    auto backend = SkSurfaces::GetBackendRenderTarget(
+        sk_surface.get(), SkSurfaces::BackendHandleAccess::kFlushRead);
+    GrBackendRenderTargets::SetVkImageLayout(&backend,
+                                             scoped_write.image_layout());
   }
 
   VkSemaphore vk_semaphore = scoped_write.begin_semaphore();
   DCHECK(vk_semaphore != VK_NULL_HANDLE);
-  GrBackendSemaphore semaphore;
-  semaphore.initVulkan(vk_semaphore);
+  GrBackendSemaphore semaphore = GrBackendSemaphores::MakeVk(vk_semaphore);
   auto result =
       sk_surface->wait(1, &semaphore, /*deleteSemaphoresAfterWait=*/false);
   if (UNLIKELY(!result)) {
@@ -234,8 +242,8 @@ SkSurface* SkiaOutputDeviceVulkan::BeginPaint(
   }
 
   DCHECK(scoped_write.end_semaphore() != VK_NULL_HANDLE);
-  GrBackendSemaphore end_semaphore;
-  end_semaphore.initVulkan(scoped_write.end_semaphore());
+  GrBackendSemaphore end_semaphore =
+      GrBackendSemaphores::MakeVk(scoped_write.end_semaphore());
   end_semaphores->push_back(std::move(end_semaphore));
 
   scoped_write_ = std::move(scoped_write);
@@ -247,12 +255,17 @@ void SkiaOutputDeviceVulkan::EndPaint() {
 
   auto& sk_surface =
       sk_surface_size_pairs_[scoped_write_->image_index()].sk_surface;
-  auto backend = sk_surface->getBackendRenderTarget(
-      SkSurface::kFlushRead_BackendHandleAccess);
+  auto backend = SkSurfaces::GetBackendRenderTarget(
+        sk_surface.get(), SkSurfaces::BackendHandleAccess::kFlushRead);
+#if DCHECK_IS_ON()
   GrVkImageInfo vk_image_info;
-  if (UNLIKELY(!backend.getVkImageInfo(&vk_image_info)))
+  if (UNLIKELY(
+          !context_provider_->GetGrContext()->abandoned() &&
+          !GrBackendRenderTargets::GetVkImageInfo(backend, &vk_image_info))) {
     NOTREACHED() << "Failed to get the image info.";
+  }
   DCHECK_EQ(vk_image_info.fImageLayout, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+#endif
   scoped_write_.reset();
 #if DCHECK_IS_ON()
   image_modified_ = true;
@@ -263,15 +276,16 @@ bool SkiaOutputDeviceVulkan::Initialize() {
   gfx::AcceleratedWidget accelerated_widget = gfx::kNullAcceleratedWidget;
 #if BUILDFLAG(IS_ANDROID)
   bool can_be_used_with_surface_control = false;
-  accelerated_widget =
-      gpu::GpuSurfaceLookup::GetInstance()->AcquireNativeWidget(
+  auto surface_variant =
+      gpu::GpuSurfaceLookup::GetInstance()->AcquireJavaSurface(
           surface_handle_, &can_be_used_with_surface_control);
-  base::ScopedClosureRunner release_runner(base::BindOnce(
-      [](gfx::AcceleratedWidget widget) {
-        if (widget)
-          ANativeWindow_release(widget);
-      },
-      accelerated_widget));
+  // Should only reach here if surface control is disabled. In which case
+  // browser should not be sending ScopedJavaSurfaceControl variant.
+  CHECK(absl::holds_alternative<gl::ScopedJavaSurface>(surface_variant));
+  gl::ScopedJavaSurface& scoped_java_surface =
+      absl::get<gl::ScopedJavaSurface>(surface_variant);
+  gl::ScopedANativeWindow window(scoped_java_surface);
+  accelerated_widget = window.a_native_window();
 #else
   accelerated_widget = surface_handle_;
 #endif
@@ -334,20 +348,22 @@ bool SkiaOutputDeviceVulkan::Initialize() {
 }
 
 bool SkiaOutputDeviceVulkan::RecreateSwapChain(
-    const SkSurfaceCharacterization& characterization,
+    const SkImageInfo& image_info,
+    int sample_count,
     gfx::OverlayTransform transform) {
   auto generation = vulkan_surface_->swap_chain_generation();
 
   // Call vulkan_surface_->Reshape() will recreate vulkan swapchain if it is
   // necessary.
   if (UNLIKELY(!vulkan_surface_->Reshape(
-          gfx::SkISizeToSize(characterization.dimensions()), transform)))
+          gfx::SkISizeToSize(image_info.dimensions()), transform))) {
     return false;
+  }
 
-  bool recreate = vulkan_surface_->swap_chain_generation() != generation ||
-                  !SkColorSpace::Equals(characterization.colorSpace(),
-                                        color_space_.get()) ||
-                  sample_count_ != characterization.sampleCount();
+  bool recreate =
+      vulkan_surface_->swap_chain_generation() != generation ||
+      !SkColorSpace::Equals(image_info.colorSpace(), color_space_.get()) ||
+      sample_count_ != sample_count;
   if (LIKELY(recreate)) {
     // swapchain is changed, we need recreate all cached sk surfaces.
     for (const auto& sk_surface_size_pair : sk_surface_size_pairs_) {
@@ -356,9 +372,9 @@ bool SkiaOutputDeviceVulkan::RecreateSwapChain(
     auto num_images = vulkan_surface_->swap_chain()->num_images();
     sk_surface_size_pairs_.clear();
     sk_surface_size_pairs_.resize(num_images);
-    color_type_ = characterization.colorType();
-    color_space_ = characterization.refColorSpace();
-    sample_count_ = characterization.sampleCount();
+    color_type_ = image_info.colorType();
+    color_space_ = image_info.refColorSpace();
+    sample_count_ = sample_count;
     damage_of_images_.resize(num_images);
     for (auto& damage : damage_of_images_)
       damage = gfx::Rect(vulkan_surface_->image_size());

@@ -21,7 +21,10 @@ namespace ash {
 struct ASH_PUBLIC_EXPORT WallpaperInfo {
   WallpaperInfo();
 
-  explicit WallpaperInfo(const OnlineWallpaperParams& online_wallpaper_params);
+  // `target_variant` should match one of the
+  // `online_wallpaper_params.variants`.
+  explicit WallpaperInfo(const OnlineWallpaperParams& online_wallpaper_params,
+                         const OnlineWallpaperVariant& target_variant);
   explicit WallpaperInfo(
       const GooglePhotosWallpaperParams& google_photos_wallpaper_params);
 
@@ -37,9 +40,15 @@ struct ASH_PUBLIC_EXPORT WallpaperInfo {
   WallpaperInfo(WallpaperInfo&& other);
   WallpaperInfo& operator=(WallpaperInfo&& other);
 
-  bool operator==(const WallpaperInfo& other) const;
-
-  bool operator!=(const WallpaperInfo& other) const;
+  // MatchesAsset() takes the current wallpaper variant into account, whereas
+  // MatchesSelection() doesn't. For example if WallpaperInfo A has theme X with
+  // variant 1, and WallpaperInfo B has theme X with variant 2,
+  // MatchesSelection() will be true and MatchesAsset() will be false. Put
+  // differently, MatchesSelection() tells whether the same wallpaper has been
+  // selected, whereas MatchesAsset() tells whether the exact same wallpaper
+  // image is active.
+  bool MatchesSelection(const WallpaperInfo& other) const;
+  bool MatchesAsset(const WallpaperInfo& other) const;
 
   ~WallpaperInfo();
 
@@ -54,17 +63,28 @@ struct ASH_PUBLIC_EXPORT WallpaperInfo {
   std::string user_file_path;
   WallpaperLayout layout;
   WallpaperType type;
+  // The timestamp at which this wallpaper was first rendered. This is usually
+  // synonymous with the user selecting it unless there were delays or
+  // unexpected errors when trying to download/decode the wallpaper before it's
+  // actually rendered.
+  //
+  // Note the following do not affect this timestamp:
+  // a) Re-rendering this wallpaper (ex: after a reboot/re-login)
+  // b) Rendering a different variant of this wallpaper
+  //    (ex: dark/light mode changes).
   base::Time date;
 
   // These fields are applicable if |type| == WallpaperType::kOnceGooglePhotos
   // or WallpaperType::kDailyGooglePhotos.
-  absl::optional<std::string> dedup_key;
+  std::optional<std::string> dedup_key;
 
   // These fields are applicable if |type| == WallpaperType::kOnline or
   // WallpaperType::kDaily.
-  absl::optional<uint64_t> asset_id;
+  // TODO(b/279781227): Remove this field in favor of |unit_id|. Note: Do *not*
+  // read |asset_id| to make migration easier.
+  std::optional<uint64_t> asset_id;
   std::string collection_id;
-  absl::optional<uint64_t> unit_id;
+  std::optional<uint64_t> unit_id;
   std::vector<OnlineWallpaperVariant> variants;
 
   // Not empty if type == WallpaperType::kOneShot.

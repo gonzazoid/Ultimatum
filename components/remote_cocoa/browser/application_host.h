@@ -25,11 +25,12 @@ class REMOTE_COCOA_BROWSER_EXPORT ApplicationHost {
     virtual void OnApplicationHostDestroying(ApplicationHost* host) = 0;
 
    protected:
-    ~Observer() override {}
+    ~Observer() override = default;
   };
 
-  ApplicationHost(
-      mojo::PendingAssociatedReceiver<mojom::Application>* receiver);
+  explicit ApplicationHost(
+      mojo::PendingAssociatedReceiver<mojom::Application>* receiver,
+      const std::string& bundle_id);
   ~ApplicationHost();
 
   mojom::Application* GetApplication();
@@ -39,8 +40,11 @@ class REMOTE_COCOA_BROWSER_EXPORT ApplicationHost {
 
   static ApplicationHost* GetForNativeView(gfx::NativeView view);
 
+  const std::string& bundle_id() const { return bundle_id_; }
+
  private:
   mojo::AssociatedRemote<mojom::Application> application_remote_;
+  const std::string bundle_id_;
   base::ObserverList<Observer> observers_;
 };
 

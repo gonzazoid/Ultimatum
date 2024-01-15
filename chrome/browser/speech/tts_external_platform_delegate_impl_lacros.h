@@ -25,6 +25,9 @@ class ExternalPlatformDelegateImplLacros
       const GURL& source_url,
       std::vector<content::VoiceData>* out_voices) override;
   void Enqueue(std::unique_ptr<content::TtsUtterance> utterance) override;
+  void Stop(const GURL& source_url) override;
+  void Pause() override;
+  void Resume() override;
 
  private:
   friend class base::NoDestructor<ExternalPlatformDelegateImplLacros>;

@@ -8,23 +8,31 @@
 #import <UIKit/UIKit.h>
 
 #import "base/ios/block_types.h"
+#import "ios/chrome/browser/ui/lens/lens_entrypoint.h"
 #import "ios/chrome/browser/ui/menu/action_factory.h"
 #import "ios/chrome/browser/ui/menu/menu_action_type.h"
-#import "ios/chrome/browser/window_activities/window_activity_helpers.h"
+#import "ios/chrome/browser/window_activities/model/window_activity_helpers.h"
 
 class Browser;
 class GURL;
 
+namespace web {
+class WebState;
+}
+
 // Factory providing methods to create UIActions that depends on the provided
-// browser with consistent titles, images and metrics structure.
+// browser with consistent titles, images and metrics structure. When using any
+// action from this class, an histogram will be recorded on
+// Mobile.ContextMenu.<Scenario>.Action.
 @interface BrowserActionFactory : ActionFactory
 
 // Initializes a factory instance for the current `browser` to create action
 // instances for the given `scenario`. `browser` can be nil, and in that case
 // only actions that doesn't require browser will work, and other actions will
-// return nil;
+// return nil; `scenario` is used to choose the histogram in which to record the
+// actions.
 - (instancetype)initWithBrowser:(Browser*)browser
-                       scenario:(MenuScenario)scenario;
+                       scenario:(MenuScenarioHistogram)scenario;
 
 // Creates a UIAction instance configured for opening the `URL` in a new tab and
 // which will invoke the given `completion` block after execution.
@@ -62,6 +70,17 @@ class GURL;
 - (UIAction*)actionOpenImageInNewTabWithUrlLoadParams:(UrlLoadParams)params
                                            completion:
                                                (ProceduralBlock)completion;
+
+// Creates a UIAction instance for searching with Lens.
+- (UIAction*)actionToSearchWithLensWithEntryPoint:(LensEntrypoint)entryPoint;
+
+// Creates a UIAction instance for saving an image to Photos. `block` will be
+// executed if the action is triggered to perform any additional action before
+// the Save to Photos UI is started.
+- (UIAction*)actionToSaveToPhotosWithImageURL:(const GURL&)url
+                                     referrer:(const web::Referrer&)referrer
+                                     webState:(web::WebState*)webState
+                                        block:(ProceduralBlock)block;
 
 // Creates a UIAction instance for opening a new tab.
 - (UIAction*)actionToOpenNewTab;

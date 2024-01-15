@@ -6,10 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
 #include "base/containers/adapters.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/notreached.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/protocol/data_type_progress_marker.pb.h"
@@ -18,19 +18,47 @@
 
 namespace syncer {
 
+namespace {
+
+class ForwardingCommitQueue : public CommitQueue {
+ public:
+  explicit ForwardingCommitQueue(base::WeakPtr<CommitQueue> other)
+      : other_(std::move(other)) {}
+  ~ForwardingCommitQueue() override = default;
+
+  void NudgeForCommit() override {
+    if (other_) {
+      other_->NudgeForCommit();
+    }
+  }
+
+ private:
+  const base::WeakPtr<CommitQueue> other_;
+};
+
+}  // namespace
+
 MockModelTypeWorker::MockModelTypeWorker(
     const sync_pb::ModelTypeState& model_type_state,
     ModelTypeProcessor* processor)
     : model_type_state_(model_type_state), processor_(processor) {
-  model_type_state_.set_initial_sync_done(true);
+  model_type_state_.set_initial_sync_state(
+      sync_pb::ModelTypeState_InitialSyncState_INITIAL_SYNC_DONE);
 }
 
 MockModelTypeWorker::~MockModelTypeWorker() = default;
 
+std::unique_ptr<CommitQueue> MockModelTypeWorker::MakeForwardingCommitQueue() {
+  return std::make_unique<ForwardingCommitQueue>(
+      weak_ptr_factory_.GetWeakPtr());
+}
+
 void MockModelTypeWorker::NudgeForCommit() {
-  processor_->GetLocalChanges(
-      INT_MAX, base::BindRepeating(&MockModelTypeWorker::LocalChangesReceived,
-                                   weak_ptr_factory_.GetWeakPtr()));
+  if (get_local_changes_upon_nudge_enabled_) {
+    processor_->GetLocalChanges(
+        INT_MAX, base::BindRepeating(&MockModelTypeWorker::LocalChangesReceived,
+                                     weak_ptr_factory_.GetWeakPtr()));
+  }
 }
 
 void MockModelTypeWorker::LocalChangesReceived(
@@ -198,9 +226,10 @@ syncer::UpdateResponseData MockModelTypeWorker::GenerateUpdateData(
 syncer::UpdateResponseData MockModelTypeWorker::GenerateTypeRootUpdateData(
     const ModelType& model_type) {
   syncer::EntityData data;
-  data.id = syncer::ModelTypeToRootTag(model_type);
+  data.id = syncer::ModelTypeToProtocolRootTag(model_type);
   data.legacy_parent_id = "r";
-  data.server_defined_unique_tag = syncer::ModelTypeToRootTag(model_type);
+  data.server_defined_unique_tag =
+      syncer::ModelTypeToProtocolRootTag(model_type);
   syncer::AddDefaultFieldValue(model_type, &data.specifics);
   // These elements should have no effect on behavior, but we set them anyway
   // so we can test they are properly copied around the system if we want to.
@@ -344,6 +373,10 @@ void MockModelTypeWorker::UpdateWithGarbageCollection(
     UpdateResponseDataList update,
     const sync_pb::GarbageCollectionDirective& gcd) {
   processor_->OnUpdateReceived(model_type_state_, std::move(update), gcd);
+}
+
+void MockModelTypeWorker::DisableGetLocalChangesUponNudge() {
+  get_local_changes_upon_nudge_enabled_ = false;
 }
 
 std::string MockModelTypeWorker::GenerateId(const ClientTagHash& tag_hash) {

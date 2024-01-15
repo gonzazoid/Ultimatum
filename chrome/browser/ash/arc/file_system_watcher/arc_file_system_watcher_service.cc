@@ -13,18 +13,18 @@
 #include "ash/components/arc/arc_browser_context_keyed_service_factory_base.h"
 #include "ash/components/arc/mojom/file_system.mojom.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_path_watcher.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/singleton.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/arc/file_system_watcher/arc_file_system_watcher_util.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
@@ -306,7 +306,7 @@ void ArcFileSystemWatcherService::FileSystemWatcher::OnFilePathChanged(
   }
   if (!outstanding_task_) {
     outstanding_task_ = true;
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&FileSystemWatcher::DelayBuildTimestampMap,
                        weak_ptr_factory_.GetWeakPtr()),
@@ -487,8 +487,7 @@ void ArcFileSystemWatcherService::StopWatchingRemovableMedia(
     const std::string& mount_path) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   if (!removable_media_watchers_.count(mount_path)) {
-    LOG(ERROR) << "Unmounting non-existing volume with mount path: "
-               << mount_path;
+    VLOG(1) << "Unmounting non-existing volume with mount path: " << mount_path;
     return;
   }
   file_task_runner_->DeleteSoon(
@@ -499,6 +498,11 @@ void ArcFileSystemWatcherService::StopWatchingRemovableMedia(
 void ArcFileSystemWatcherService::TriggerSendAllMountEvents() const {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   ArcVolumeMounterBridge::GetForBrowserContext(context_)->SendAllMountEvents();
+}
+
+// static
+void ArcFileSystemWatcherService::EnsureFactoryBuilt() {
+  ArcFileSystemWatcherServiceFactory::GetInstance();
 }
 
 }  // namespace arc

@@ -15,12 +15,6 @@ namespace ash {
 namespace {
 
 class AudioDeviceSelectionGeneratedTest : public AudioDeviceSelectionTestBase {
- public:
-  AudioDeviceSelectionGeneratedTest()
-      : feature_list_(ash::features::kRobustAudioDeviceSelectLogic) {}
-
- private:
-  base::test::ScopedFeatureList feature_list_;
 };
 
 TEST_F(AudioDeviceSelectionGeneratedTest, BandDocScenario1Input) {
@@ -1527,6 +1521,43 @@ TEST_F(AudioDeviceSelectionGeneratedTest, SimpleOutput) {
   // Devices: [usb1* usb2] usb3
   // List: usb2 < usb3 < usb1
   EXPECT_EQ(ActiveOutputNodeId(), usb1.id);
+}
+
+TEST_F(AudioDeviceSelectionGeneratedTest,
+       PersistActiveUsbHeadphoneAcrossRebootUsbComeLater) {
+  AudioNode internal1 = NewOutputNode("INTERNAL_SPEAKER");
+  AudioNode usb2 = NewOutputNode("USB");
+  AudioNode headphone3 = NewOutputNode("HEADPHONE");
+
+  Plug(internal1);
+  // Devices: [internal1*] usb2 headphone3
+  // List: internal1
+  EXPECT_EQ(ActiveOutputNodeId(), internal1.id);
+
+  Plug(usb2);
+  // Devices: [internal1 usb2*] headphone3
+  // List: internal1 < usb2
+  EXPECT_EQ(ActiveOutputNodeId(), usb2.id);
+
+  Plug(headphone3);
+  // Devices: [internal1 usb headphone3*]
+  // List: internal1 < usb2 < headphone3
+  EXPECT_EQ(ActiveOutputNodeId(), headphone3.id);
+
+  Select(usb2);
+  // Devices: [internal1 usb2* headphone3]
+  // List: internal1 <  headphone3 < usb2
+  EXPECT_EQ(ActiveOutputNodeId(), usb2.id);
+
+  Unplug(usb2);
+  // Devices: [internal1 headphone3*] usb2*
+  // List: internal1 <  headphone3 < usb2
+  EXPECT_EQ(ActiveOutputNodeId(), headphone3.id);
+
+  Plug(usb2);
+  // Devices: [internal1 usb2* headphone3]
+  // List: internal1 <  headphone3 < usb2
+  EXPECT_EQ(ActiveOutputNodeId(), usb2.id);
 }
 
 }  // namespace

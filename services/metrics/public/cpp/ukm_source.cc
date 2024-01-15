@@ -10,6 +10,7 @@
 #include "base/check_op.h"
 #include "base/hash/hash.h"
 #include "base/notreached.h"
+#include "services/metrics/public/cpp/ukm_source_id.h"
 #include "third_party/metrics_proto/ukm/source.pb.h"
 
 namespace ukm {
@@ -51,7 +52,7 @@ SourceType ToProtobufSourceType(SourceIdType source_id_type) {
       return SourceType::WEBAPK_ID;
     case SourceIdType::PAYMENT_APP_ID:
       return SourceType::PAYMENT_APP_ID;
-    case SourceIdType::DESKTOP_WEB_APP_ID:
+    case SourceIdType::DEPRECATED_DESKTOP_WEB_APP_ID:
       return SourceType::DESKTOP_WEB_APP_ID;
     case SourceIdType::WORKER_ID:
       return SourceType::WORKER_ID;
@@ -61,6 +62,10 @@ SourceType ToProtobufSourceType(SourceIdType source_id_type) {
       return SourceType::REDIRECT_ID;
     case SourceIdType::WEB_IDENTITY_ID:
       return SourceType::WEB_IDENTITY_ID;
+    case SourceIdType::CHROMEOS_WEBSITE_ID:
+      return SourceType::CHROMEOS_WEBSITE_ID;
+    case SourceIdType::EXTENSION_ID:
+      return SourceType::EXTENSION_ID;
   }
 }
 
@@ -151,8 +156,6 @@ void UkmSource::UpdateUrl(const GURL& new_url) {
 void UkmSource::PopulateProto(Source* proto_source) const {
   DCHECK(!proto_source->has_id());
   DCHECK(!proto_source->has_type());
-  DCHECK(!proto_source->has_url());
-  DCHECK(!proto_source->has_initial_url());
 
   proto_source->set_id(id_);
   proto_source->set_type(ToProtobufSourceType(type_));
@@ -185,13 +188,14 @@ void UkmSource::PopulateProto(Source* proto_source) const {
   if (navigation_data_.is_same_document_navigation)
     proto_source->set_is_same_document_navigation(true);
 
-  ukm::Source_SameOriginStatus status = ukm::Source::UNSET;
+  ukm::SameOriginStatus status = ukm::SAME_ORIGIN_STATUS_UNSET;
   if (navigation_data_.same_origin_status ==
-      UkmSource::NavigationData::SameOriginStatus::SAME_ORIGIN) {
-    status = ukm::Source::SAME_ORIGIN;
+      UkmSource::NavigationData::SourceSameOriginStatus::SOURCE_SAME_ORIGIN) {
+    status = ukm::SAME_ORIGIN;
   } else if (navigation_data_.same_origin_status ==
-             UkmSource::NavigationData::SameOriginStatus::CROSS_ORIGIN) {
-    status = ukm::Source::CROSS_ORIGIN;
+             UkmSource::NavigationData::SourceSameOriginStatus::
+                 SOURCE_CROSS_ORIGIN) {
+    status = ukm::CROSS_ORIGIN;
   }
 
   proto_source->mutable_navigation_metadata()->set_same_origin_status(status);

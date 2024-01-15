@@ -2,10 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ConsoleTestRunner} from 'console_test_runner';
+
+import * as Console from 'devtools/panels/console/console.js';
+import * as ObjectUI from 'devtools/ui/legacy/components/object_ui/object_ui.js';
+
 (async function() {
   TestRunner.addResult('Tests that console logging dumps large arrays properly.\n');
 
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('console_test_runner');
   await TestRunner.showPanel('console');
 
   await TestRunner.evaluateInPagePromise(`
@@ -62,8 +67,8 @@
     })();
   `);
 
-  ObjectUI.ArrayGroupingTreeElement.bucketThreshold = 20;
-  var messages = Console.ConsoleView.instance().visibleViewMessages;
+  ObjectUI.ObjectPropertiesSection.ArrayGroupingTreeElement.bucketThreshold = 20;
+  var messages = Console.ConsoleView.ConsoleView.instance().visibleViewMessages;
   var sections = [];
 
   for (var i = 0; i < messages.length; ++i) {
@@ -83,7 +88,7 @@
     }
   }
 
-  TestRunner.addSniffer(ObjectUI.ArrayGroupingTreeElement.prototype, 'onpopulate', populateCalled, true);
+  TestRunner.addSniffer(ObjectUI.ObjectPropertiesSection.ArrayGroupingTreeElement.prototype, 'onpopulate', populateCalled, true);
   var populated = false;
 
   function populateCalled() {

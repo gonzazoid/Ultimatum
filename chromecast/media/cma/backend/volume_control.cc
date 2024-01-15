@@ -11,13 +11,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/containers/contains.h"
 #include "base/containers/flat_map.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/important_file_writer.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_writer.h"
 #include "base/location.h"
 #include "base/logging.h"
@@ -87,8 +87,8 @@ class VolumeControlInternal : public SystemVolumeControl::Delegate {
         LoadSavedVolumes(storage_path_);
     for (auto type : {AudioContentType::kMedia, AudioContentType::kAlarm,
                       AudioContentType::kCommunication}) {
-      stored_values_.SetDoublePath(ContentTypeToDbFSPath(type),
-                                   saved_volumes[type]);
+      stored_values_.SetByDottedPath(ContentTypeToDbFSPath(type),
+                                     saved_volumes[type]);
     }
 
     base::Thread::Options options;
@@ -131,7 +131,7 @@ class VolumeControlInternal : public SystemVolumeControl::Delegate {
       return;
     }
 
-    level = base::clamp(level, 0.0f, 1.0f);
+    level = std::clamp(level, 0.0f, 1.0f);
     thread_.task_runner()->PostTask(
         FROM_HERE, base::BindOnce(&VolumeControlInternal::SetVolumeOnThread,
                                   base::Unretained(this), source, type, level,
@@ -203,8 +203,8 @@ class VolumeControlInternal : public SystemVolumeControl::Delegate {
 
     for (auto type : {AudioContentType::kMedia, AudioContentType::kAlarm,
                       AudioContentType::kCommunication}) {
-      absl::optional<double> dbfs =
-          stored_values_.FindDoubleKey(ContentTypeToDbFSPath(type));
+      std::optional<double> dbfs =
+          stored_values_.FindDouble(ContentTypeToDbFSPath(type));
       CHECK(dbfs);
       volumes_[type] = VolumeControl::DbFSToVolume(*dbfs);
       volume_multipliers_[type] = 1.0f;
@@ -246,7 +246,7 @@ class VolumeControlInternal : public SystemVolumeControl::Delegate {
     DCHECK(thread_.task_runner()->BelongsToCurrentThread());
     DCHECK_NE(AudioContentType::kOther, type);
     DCHECK(!from_system || type == AudioContentType::kMedia);
-    DCHECK(volume_multipliers_.find(type) != volume_multipliers_.end());
+    DCHECK(base::Contains(volume_multipliers_, type));
 
     {
       base::AutoLock lock(volume_lock_);
@@ -276,7 +276,7 @@ class VolumeControlInternal : public SystemVolumeControl::Delegate {
       }
     }
 
-    stored_values_.SetDoublePath(ContentTypeToDbFSPath(type), dbfs);
+    stored_values_.SetByDottedPath(ContentTypeToDbFSPath(type), dbfs);
     std::string output_js;
     base::JSONWriter::Write(stored_values_, &output_js);
     saved_volumes_writer_->WriteNow(std::make_unique<std::string>(output_js));
@@ -333,7 +333,7 @@ class VolumeControlInternal : public SystemVolumeControl::Delegate {
     }
 
 #if !BUILDFLAG(SYSTEM_OWNS_VOLUME)
-    limit = base::clamp(limit, 0.0f, 1.0f);
+    limit = std::clamp(limit, 0.0f, 1.0f);
     mixer_->SetVolumeLimit(type,
                            DbFsToScale(VolumeControl::VolumeToDbFS(limit)));
 
@@ -360,7 +360,7 @@ class VolumeControlInternal : public SystemVolumeControl::Delegate {
   }
 
   base::FilePath storage_path_;
-  base::DictionaryValue stored_values_;
+  base::Value::Dict stored_values_;
 
   base::Lock volume_lock_;
   base::flat_map<AudioContentType, float> volumes_;

@@ -11,49 +11,46 @@
 #import "components/omnibox/browser/test_location_bar_model.h"
 #import "components/variations/scoped_variations_ids_provider.h"
 #import "components/variations/variations_ids_provider.h"
-#import "ios/chrome/browser/autocomplete/autocomplete_classifier_factory.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/autocomplete/model/autocomplete_classifier_factory.h"
 #import "ios/chrome/browser/favicon/favicon_service_factory.h"
 #import "ios/chrome/browser/favicon/ios_chrome_favicon_loader_factory.h"
 #import "ios/chrome/browser/favicon/ios_chrome_large_icon_service_factory.h"
-#import "ios/chrome/browser/history/history_service_factory.h"
-#import "ios/chrome/browser/main/test_browser.h"
-#import "ios/chrome/browser/search_engines/template_url_service_factory.h"
-#import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
-#import "ios/chrome/browser/ui/commands/lens_commands.h"
-#import "ios/chrome/browser/ui/commands/qr_scanner_commands.h"
-#import "ios/chrome/browser/ui/main/scene_state.h"
-#import "ios/chrome/browser/ui/main/scene_state_browser_agent.h"
-#import "ios/chrome/browser/ui/toolbar/toolbar_coordinator_delegate.h"
-#import "ios/chrome/browser/url_loading/fake_url_loading_browser_agent.h"
-#import "ios/chrome/browser/url_loading/url_loading_notifier_browser_agent.h"
-#import "ios/chrome/browser/url_loading/url_loading_params.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
-#import "ios/chrome/browser/web_state_list/web_state_opener.h"
+#import "ios/chrome/browser/history/model/history_service_factory.h"
+#import "ios/chrome/browser/search_engines/model/template_url_service_factory.h"
+#import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_opener.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/help_commands.h"
+#import "ios/chrome/browser/shared/public/commands/lens_commands.h"
+#import "ios/chrome/browser/shared/public/commands/qr_scanner_commands.h"
+#import "ios/chrome/browser/shared/public/commands/toolbar_commands.h"
+#import "ios/chrome/browser/ui/omnibox/omnibox_focus_delegate.h"
+#import "ios/chrome/browser/url_loading/model/fake_url_loading_browser_agent.h"
+#import "ios/chrome/browser/url_loading/model/url_loading_notifier_browser_agent.h"
+#import "ios/chrome/browser/url_loading/model/url_loading_params.h"
+#import "ios/chrome/test/ios_chrome_scoped_testing_local_state.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
 #import "ios/web/public/test/web_task_environment.h"
 #import "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 #import "third_party/ocmock/gtest_support.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using variations::VariationsIdsProvider;
 
-@interface TestToolbarCoordinatorDelegate : NSObject<ToolbarCoordinatorDelegate>
+@interface TestOmniboxFocusDelegate : NSObject <OmniboxFocusDelegate>
 
 @end
 
-@implementation TestToolbarCoordinatorDelegate {
+@implementation TestOmniboxFocusDelegate {
   std::unique_ptr<LocationBarModel> _model;
 }
 
-- (void)locationBarDidBecomeFirstResponder {
+- (void)omniboxDidBecomeFirstResponder {
 }
-- (void)locationBarDidResignFirstResponder {
+- (void)omniboxDidResignFirstResponder {
 }
 
 - (LocationBarModel*)locationBarModel {
@@ -70,8 +67,7 @@ namespace {
 
 class LocationBarCoordinatorTest : public PlatformTest {
  protected:
-  LocationBarCoordinatorTest()
-      : scene_state_([[SceneState alloc] initWithAppState:nil]) {}
+  LocationBarCoordinatorTest() {}
 
   void SetUp() override {
     PlatformTest::SetUp();
@@ -103,8 +99,6 @@ class LocationBarCoordinatorTest : public PlatformTest {
     UrlLoadingNotifierBrowserAgent::CreateForBrowser(browser_.get());
     FakeUrlLoadingBrowserAgent::InjectForBrowser(browser_.get());
 
-    SceneStateBrowserAgent::CreateForBrowser(browser_.get(), scene_state_);
-
     auto web_state = std::make_unique<web::FakeWebState>();
     web_state->SetBrowserState(browser_state_.get());
     web_state->SetCurrentURL(GURL("http://test/"));
@@ -121,6 +115,12 @@ class LocationBarCoordinatorTest : public PlatformTest {
     id mockLensCommandsHandler = OCMProtocolMock(@protocol(LensCommands));
     [dispatcher startDispatchingToTarget:mockLensCommandsHandler
                              forProtocol:@protocol(LensCommands)];
+    id mockHelpCommandsHandler = OCMProtocolMock(@protocol(HelpCommands));
+    [dispatcher startDispatchingToTarget:mockHelpCommandsHandler
+                             forProtocol:@protocol(HelpCommands)];
+    id mockToolbarCommandsHandler = OCMProtocolMock(@protocol(ToolbarCommands));
+    [dispatcher startDispatchingToTarget:mockToolbarCommandsHandler
+                             forProtocol:@protocol(ToolbarCommands)];
 
     // Set up ApplicationCommands mock. Because ApplicationCommands conforms
     // to ApplicationSettingsCommands, that needs to be mocked and dispatched
@@ -135,11 +135,11 @@ class LocationBarCoordinatorTest : public PlatformTest {
         startDispatchingToTarget:mockApplicationSettingsCommandHandler
                      forProtocol:@protocol(ApplicationSettingsCommands)];
 
-    delegate_ = [[TestToolbarCoordinatorDelegate alloc] init];
+    delegate_ = [[TestOmniboxFocusDelegate alloc] init];
 
     coordinator_ = [[LocationBarCoordinator alloc]
-        initWithBaseViewController:nil
-                           browser:browser_.get()];
+
+        initWithBrowser:browser_.get()];
     coordinator_.delegate = delegate_;
   }
 
@@ -151,13 +151,13 @@ class LocationBarCoordinatorTest : public PlatformTest {
   }
 
   web::WebTaskEnvironment task_environment_;
+  IOSChromeScopedTestingLocalState scoped_testing_local_state_;
   variations::ScopedVariationsIdsProvider scoped_variations_ids_provider_{
       variations::VariationsIdsProvider::Mode::kUseSignedInState};
   LocationBarCoordinator* coordinator_;
   std::unique_ptr<TestChromeBrowserState> browser_state_;
   std::unique_ptr<Browser> browser_;
-  SceneState* scene_state_;
-  TestToolbarCoordinatorDelegate* delegate_;
+  TestOmniboxFocusDelegate* delegate_;
 };
 
 TEST_F(LocationBarCoordinatorTest, Stops) {

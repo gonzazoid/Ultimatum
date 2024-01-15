@@ -98,9 +98,10 @@
 <translation id="4141203561740478845">Дарек тилкесиндеги сапты бөлүп көрсөтүү</translation>
 <translation id="4148761611071495477"><ph name="CTRL" /><ph name="SEPARATOR" /><ph name="G" /> же <ph name="ENTER" /></translation>
 <translation id="4240486403425279990">Сереп салуу режими</translation>
+<translation id="4275283744500212192">Терезе калыбынын параметрлерин ачуу</translation>
 <translation id="4382340674111381977">Мурунку баракка кайтуу</translation>
 <translation id="4458670250301149821">Колдонмонун сүрөтчөсүн колдонмонун торчосунда киргизүү/чыгаруу</translation>
-<translation id="4472417192667361414">Тутум жана дисплей жөндөөлөрү</translation>
+<translation id="4472417192667361414">Система жана дисплей параметрлери</translation>
 <translation id="449214506787633354"><ph name="CTRL" />, андан соң <ph name="LEFT" /> же <ph name="RIGHT" /> же <ph name="UP" /> же <ph name="DOWN" /></translation>
 <translation id="4556221320735744018">Тез баскыч жардамчысын көрүү</translation>
 <translation id="4609344656788228519"><ph name="CTRL1" /><ph name="SEPARATOR1" /><ph name="BACK1" /> же <ph name="CTRL2" /><ph name="SEPARATOR2" /><ph name="SHIFT" /><ph name="SEPARATOR3" /><ph name="BACK2" /></translation>
@@ -183,7 +184,7 @@
 <translation id="7730490981846175479"><ph name="SHIFT" /><ph name="SEPARATOR1" /><ph name="ALT" /><ph name="SEPARATOR2" /><ph name="L" />, андан кийин <ph name="SPACE" /> же <ph name="ENTER" /></translation>
 <translation id="7787242579016742662">Файлды серепчиде ачуу</translation>
 <translation id="7952165122793773711">1ден 8ге чейинки өтмөктөргө өтүү</translation>
-<translation id="8026334261755873520">Серептөө дайындарын тазалап салуу</translation>
+<translation id="8026334261755873520">Серепчиден көрүлгөн нерселерди тазалап салуу</translation>
 <translation id="8130528849632411619">Документтин башына өтүү</translation>
 <translation id="8147954207400281792"><ph name="CTRL" /><ph name="SEPARATOR" /><ph name="K" /> же <ph name="E" /></translation>
 <translation id="8234414138295101081">Экранды 90 градуска буруу</translation>
@@ -193,6 +194,7 @@
 <translation id="8388247778047144397">Шилтемени өтмөк тасмасындагы бош жерге сүйрөңүз</translation>
 <translation id="8389638407792712197">Жаңы терезе ачуу</translation>
 <translation id="8429696719963529183">F баскычтарын колдонуу (F1'ден F12'ге чейин)</translation>
+<translation id="8539396513118402548">Ыкчам баскычтардын тизмеси</translation>
 <translation id="85690795166292698">Шилтемени жаңы өтмөктө ачуу</translation>
 <translation id="8609384513243082612">Жаңы өтмөк ачуу</translation>
 <translation id="8644639153978066712">Жашырылган файлдарды Файлдар колдонмосунда көрсөтүү</translation>

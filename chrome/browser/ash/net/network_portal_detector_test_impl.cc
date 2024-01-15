@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_state.h"
@@ -63,10 +63,10 @@ bool NetworkPortalDetectorTestImpl::IsEnabled() {
 void NetworkPortalDetectorTestImpl::Enable() {
   DVLOG(1) << "NetworkPortalDetectorTestImpl: Enabled.";
   enabled_ = true;
-  if (NetworkHandler::IsInitialized()) {
-    NetworkHandler::Get()->network_state_handler()->SetCheckPortalList(
-        NetworkStateHandler::kDefaultCheckPortalList);
-  }
+}
+
+void NetworkPortalDetectorTestImpl::RequestCaptivePortalDetection() {
+  NetworkHandler::Get()->network_state_handler()->RequestPortalDetection();
 }
 
 }  // namespace ash

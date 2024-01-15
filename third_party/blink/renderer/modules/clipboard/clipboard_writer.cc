@@ -4,8 +4,11 @@
 
 #include "third_party/blink/renderer/modules/clipboard/clipboard_writer.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/clipboard/clipboard.mojom-blink.h"
+#include "third_party/blink/public/platform/platform.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_parse_from_string_options.h"
 #include "third_party/blink/renderer/core/clipboard/clipboard_mime_types.h"
 #include "third_party/blink/renderer/core/clipboard/system_clipboard.h"
 #include "third_party/blink/renderer/core/dom/document_fragment.h"
@@ -16,6 +19,7 @@
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/imagebitmap/image_bitmap.h"
 #include "third_party/blink/renderer/core/typed_arrays/array_buffer/array_buffer_contents.h"
+#include "third_party/blink/renderer/core/xml/dom_parser.h"
 #include "third_party/blink/renderer/modules/clipboard/clipboard.h"
 #include "third_party/blink/renderer/platform/heap/cross_thread_handle.h"
 #include "third_party/blink/renderer/platform/image-decoders/image_decoder.h"
@@ -63,12 +67,14 @@ class ClipboardImageWriter final : public ClipboardWriter {
     std::unique_ptr<ImageDecoder> decoder = ImageDecoder::Create(
         SegmentReader::CreateFromSkData(
             SkData::MakeWithoutCopy(png_data.Data(), png_data.DataLength())),
-        true, ImageDecoder::kAlphaPremultiplied, ImageDecoder::kDefaultBitDepth,
-        ColorBehavior::Tag());
+        /*data_complete=*/true, ImageDecoder::kAlphaPremultiplied,
+        ImageDecoder::kDefaultBitDepth, ColorBehavior::kTag,
+        Platform::GetMaxDecodedImageBytes());
     sk_sp<SkImage> image = nullptr;
     // `decoder` is nullptr if `png_data` doesn't begin with the PNG signature.
-    if (decoder)
+    if (decoder) {
       image = ImageBitmap::GetSkImageFromDecoder(std::move(decoder));
+    }
 
     PostCrossThreadTask(
         *task_runner, FROM_HERE,
@@ -82,8 +88,9 @@ class ClipboardImageWriter final : public ClipboardWriter {
       promise_->RejectFromReadOrDecodeFailure();
       return;
     }
-    if (!promise_->GetLocalFrame())
+    if (!promise_->GetLocalFrame()) {
       return;
+    }
     SkBitmap bitmap;
     image->asLegacyBitmap(&bitmap);
     system_clipboard()->WriteImage(std::move(bitmap));
@@ -130,8 +137,9 @@ class ClipboardTextWriter final : public ClipboardWriter {
   }
   void Write(const String& text) {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-    if (!promise_->GetLocalFrame())
+    if (!promise_->GetLocalFrame()) {
       return;
+    }
     system_clipboard()->WritePlainText(text);
 
     promise_->CompleteWriteRepresentation();
@@ -154,28 +162,38 @@ class ClipboardHtmlWriter final : public ClipboardWriter {
 
     LocalFrame* local_frame = promise_->GetLocalFrame();
     auto* execution_context = promise_->GetExecutionContext();
-    if (!local_frame || !execution_context)
+    if (!local_frame || !execution_context) {
       return;
-    execution_context->CountUse(WebFeature::kHtmlClipboardApiWrite);
-
-    // Sanitizing on the main thread because HTML DOM nodes can only be used
-    // on the main thread.
+    }
     String html_string =
         String::FromUTF8(reinterpret_cast<const LChar*>(html_data->Data()),
                          html_data->ByteLength());
-    KURL url;
-    unsigned fragment_start = 0;
-    unsigned fragment_end = html_string.length();
+    const KURL& url = local_frame->GetDocument()->Url();
+    if (RuntimeEnabledFeatures::
+            ClipboardWellFormedHtmlSanitizationWriteEnabled()) {
+      DOMParser* dom_parser =
+          blink::DOMParser::Create(promise_->GetScriptState());
+      ParseFromStringOptions* options = blink::ParseFromStringOptions::Create();
+      const Document* doc =
+          dom_parser->parseFromString(html_string, "text/html", options);
+      DCHECK(doc);
+      String serialized_html = CreateMarkup(doc, kIncludeNode, kResolveAllURLs);
+      Write(serialized_html, url);
+      return;
+    }
+    // Sanitizing on the main thread because HTML DOM nodes can only be used on
+    // the main thread.
     Document* document = local_frame->GetDocument();
     String sanitized_html = CreateSanitizedMarkupWithContext(
-        *document, html_string, fragment_start, fragment_end, url, kIncludeNode,
+        *document, html_string, /*fragment_start=*/0,
+        /*fragment_end=*/html_string.length(), url, kIncludeNode,
         kResolveAllURLs);
     Write(sanitized_html, url);
   }
 
-  void Write(const String& sanitized_html, KURL url) {
+  void Write(const String& serialized_html, const KURL& url) {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-    system_clipboard()->WriteHTML(sanitized_html, url);
+    system_clipboard()->WriteHTML(serialized_html, url);
     promise_->CompleteWriteRepresentation();
   }
 };
@@ -205,8 +223,9 @@ class ClipboardSvgWriter final : public ClipboardWriter {
     unsigned fragment_end = svg_string.length();
 
     LocalFrame* local_frame = promise_->GetLocalFrame();
-    if (!local_frame)
+    if (!local_frame) {
       return;
+    }
     Document* document = local_frame->GetDocument();
     String sanitized_svg = CreateSanitizedMarkupWithContext(
         *document, svg_string, fragment_start, fragment_end, url, kIncludeNode,
@@ -240,8 +259,9 @@ class ClipboardCustomFormatWriter final : public ClipboardWriter {
 
   void Write(DOMArrayBuffer* custom_format_data) {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-    if (!promise_->GetLocalFrame())
+    if (!promise_->GetLocalFrame()) {
       return;
+    }
     if (custom_format_data->ByteLength() >=
         mojom::blink::ClipboardHost::kMaxDataSize) {
       promise_->RejectFromReadOrDecodeFailure();
@@ -268,8 +288,7 @@ ClipboardWriter* ClipboardWriter::Create(SystemClipboard* system_clipboard,
                                          ClipboardPromise* promise) {
   DCHECK(ClipboardWriter::IsValidType(mime_type));
   String web_custom_format = Clipboard::ParseWebCustomFormat(mime_type);
-  if (RuntimeEnabledFeatures::ClipboardCustomFormatsEnabled() &&
-      !web_custom_format.empty()) {
+  if (!web_custom_format.empty()) {
     // We write the custom MIME type without the "web " prefix into the web
     // custom format map so native applications don't have to add any string
     // parsing logic to read format from clipboard.
@@ -282,11 +301,13 @@ ClipboardWriter* ClipboardWriter::Create(SystemClipboard* system_clipboard,
                                                       promise);
   }
 
-  if (mime_type == kMimeTypeTextPlain)
+  if (mime_type == kMimeTypeTextPlain) {
     return MakeGarbageCollected<ClipboardTextWriter>(system_clipboard, promise);
+  }
 
-  if (mime_type == kMimeTypeTextHTML)
+  if (mime_type == kMimeTypeTextHTML) {
     return MakeGarbageCollected<ClipboardHtmlWriter>(system_clipboard, promise);
+  }
 
   if (mime_type == kMimeTypeImageSvg &&
       RuntimeEnabledFeatures::ClipboardSvgEnabled()) {
@@ -307,18 +328,16 @@ ClipboardWriter::ClipboardWriter(SystemClipboard* system_clipboard,
           TaskType::kFileReading)),
       system_clipboard_(system_clipboard) {}
 
-ClipboardWriter::~ClipboardWriter() {
-  DCHECK(!file_reader_);
-}
+ClipboardWriter::~ClipboardWriter() = default;
 
 // static
 bool ClipboardWriter::IsValidType(const String& type) {
-  if (RuntimeEnabledFeatures::ClipboardCustomFormatsEnabled() &&
-      !Clipboard::ParseWebCustomFormat(type).empty()) {
+  if (!Clipboard::ParseWebCustomFormat(type).empty()) {
     return type.length() < mojom::blink::ClipboardHost::kMaxFormatSize;
   }
-  if (type == kMimeTypeImageSvg)
+  if (type == kMimeTypeImageSvg) {
     return RuntimeEnabledFeatures::ClipboardSvgEnabled();
+  }
 
   // TODO(https://crbug.com/1029857): Add support for other types.
   return type == kMimeTypeImagePng || type == kMimeTypeTextPlain ||
@@ -328,37 +347,35 @@ bool ClipboardWriter::IsValidType(const String& type) {
 void ClipboardWriter::WriteToSystem(Blob* blob) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!file_reader_);
-  file_reader_ = std::make_unique<FileReaderLoader>(
-      FileReaderLoader::kReadAsArrayBuffer, this,
-      std::move(file_reading_task_runner_));
+  file_reader_ = MakeGarbageCollected<FileReaderLoader>(
+      this, std::move(file_reading_task_runner_));
   file_reader_->Start(blob->GetBlobDataHandle());
 }
 
-// FileReaderLoaderClient implementation.
-
-void ClipboardWriter::DidStartLoading() {}
-void ClipboardWriter::DidReceiveData() {}
-
-void ClipboardWriter::DidFinishLoading() {
+// FileReaderClient implementation.
+void ClipboardWriter::DidFinishLoading(FileReaderData contents) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DOMArrayBuffer* array_buffer = file_reader_->ArrayBufferResult();
+  DOMArrayBuffer* array_buffer = std::move(contents).AsDOMArrayBuffer();
   DCHECK(array_buffer);
 
-  file_reader_.reset();
   self_keep_alive_.Clear();
+  file_reader_ = nullptr;
 
   StartWrite(array_buffer, clipboard_task_runner_);
 }
 
 void ClipboardWriter::DidFail(FileErrorCode error_code) {
-  file_reader_.reset();
+  FileReaderAccumulator::DidFail(error_code);
   self_keep_alive_.Clear();
+  file_reader_ = nullptr;
   promise_->RejectFromReadOrDecodeFailure();
 }
 
 void ClipboardWriter::Trace(Visitor* visitor) const {
+  FileReaderAccumulator::Trace(visitor);
   visitor->Trace(promise_);
   visitor->Trace(system_clipboard_);
+  visitor->Trace(file_reader_);
 }
 
 }  // namespace blink

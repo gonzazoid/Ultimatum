@@ -6,9 +6,11 @@
 
 #include <string>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/json/json_reader.h"
+#include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
 #include "build/build_config.h"
@@ -35,8 +37,7 @@ bool ZipString(const base::FilePath& filename,
   // another temporary file to receive the zip file in.
   if (!temp_dir.CreateUniqueTempDir())
     return false;
-  if (base::WriteFile(temp_dir.GetPath().Append(filename), data.c_str(),
-                      data.size()) == -1) {
+  if (!base::WriteFile(temp_dir.GetPath().Append(filename), data)) {
     return false;
   }
 
@@ -79,6 +80,27 @@ std::string LogsToString(const FeedbackCommon::SystemLogsMap& sys_info) {
     }
   }
   return syslogs_string;
+}
+
+void RemoveUrlsFromAutofillData(std::string& autofill_metadata) {
+  absl::optional<base::Value::Dict> autofill_data = base::JSONReader::ReadDict(
+      autofill_metadata, base::JSON_ALLOW_TRAILING_COMMAS);
+
+  if (!autofill_data) {
+    LOG(ERROR) << "base::JSONReader::Read failed to translate to JSON";
+    return;
+  }
+
+  if (base::Value::List* form_structures =
+          autofill_data->FindList("formStructures")) {
+    for (base::Value& item : *form_structures) {
+      auto& dict = item.GetDict();
+      dict.Remove("sourceUrl");
+      dict.Remove("mainFrameUrl");
+    }
+  }
+  base::JSONWriter::Write(*autofill_data, &autofill_metadata);
+  return;
 }
 
 // Note: This function is excluded from win build because its unit tests do

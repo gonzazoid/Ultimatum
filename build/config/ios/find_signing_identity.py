@@ -2,7 +2,6 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-from __future__ import print_function
 
 import argparse
 import os
@@ -45,7 +44,8 @@ def ListIdentities():
 def FindValidIdentity(pattern):
   """Find all identities matching the pattern."""
   lines = list(l.strip() for l in ListIdentities().splitlines())
-  # Look for something like "2) XYZ "iPhone Developer: Name (ABC)""
+  # Look for something like
+  # 1) 123ABC123ABC123ABC****** "iPhone Developer: DeveloperName (Team)"
   regex = re.compile('[0-9]+\) ([A-F0-9]+) "([^"(]*) \(([^)"]*)\)"')
 
   result = []
@@ -53,8 +53,9 @@ def FindValidIdentity(pattern):
     res = regex.match(line)
     if res is None:
       continue
-    if pattern is None or pattern in res.group(2):
-      result.append(Identity(*res.groups()))
+    identifier, developer_name, team = res.groups()
+    if pattern is None or pattern in '%s (%s)' % (developer_name, team):
+      result.append(Identity(identifier, developer_name, team))
   return result
 
 

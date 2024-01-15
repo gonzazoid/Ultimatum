@@ -7,17 +7,14 @@
 #import "base/memory/singleton.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
+#import "base/time/time.h"
 #import "components/reading_list/core/reading_list_model.h"
-#import "ios/chrome/browser/reading_list/reading_list_model_factory.h"
+#import "ios/chrome/browser/reading_list/model/reading_list_model_factory.h"
 #import "ios/chrome/test/app/chrome_test_util.h"
 #import "ios/chrome/test/app/tab_test_util.h"
 #import "ios/testing/nserror_util.h"
 #import "net/base/mac/url_conversions.h"
 #import "net/base/network_change_notifier.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 // Returns the reading list model.
@@ -25,7 +22,7 @@ ReadingListModel* GetReadingListModel(NSError** error) {
   ReadingListModel* model =
       ReadingListModelFactory::GetInstance()->GetForBrowserState(
           chrome_test_util::GetOriginalBrowserState());
-  if (!base::test::ios::WaitUntilConditionOrTimeout(2, ^{
+  if (!base::test::ios::WaitUntilConditionOrTimeout(base::Seconds(2), ^{
         return model->loaded();
       })) {
     *error = testing::NSErrorWithLocalizedDescription(
@@ -89,8 +86,9 @@ class ConnectionTypeOverrider {
   if (error) {
     return error;
   }
-  for (const GURL& url : model->Keys())
+  for (const GURL& url : model->GetKeys()) {
     model->RemoveEntryByURL(url);
+  }
   return nil;
 }
 
@@ -100,10 +98,12 @@ class ConnectionTypeOverrider {
   if (error) {
     return error;
   }
-  model->AddEntry(net::GURLWithNSURL(url), base::SysNSStringToUTF8(title),
-                  reading_list::ADDED_VIA_CURRENT_APP);
+  model->AddOrReplaceEntry(net::GURLWithNSURL(url),
+                           base::SysNSStringToUTF8(title),
+                           reading_list::ADDED_VIA_CURRENT_APP,
+                           /*estimated_read_time=*/base::TimeDelta());
   if (read) {
-    model->SetReadStatus(net::GURLWithNSURL(url), true);
+    model->SetReadStatusIfExists(net::GURLWithNSURL(url), true);
   }
   return error;
 }

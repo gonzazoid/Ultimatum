@@ -7,9 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/cdm_context.h"
 #include "media/base/demuxer_stream.h"
 #include "media/base/media_log.h"
@@ -28,7 +30,7 @@ DecryptingMediaResource::DecryptingMediaResource(
       media_log_(media_log),
       task_runner_(task_runner) {
   DCHECK(media_resource);
-  DCHECK_EQ(MediaResource::STREAM, media_resource->GetType());
+  DCHECK_EQ(MediaResource::Type::kStream, media_resource->GetType());
   DCHECK(cdm_context_);
   DCHECK(cdm_context_->GetDecryptor());
   DCHECK(cdm_context_->GetDecryptor()->CanAlwaysDecrypt());
@@ -39,11 +41,12 @@ DecryptingMediaResource::DecryptingMediaResource(
 DecryptingMediaResource::~DecryptingMediaResource() = default;
 
 MediaResource::Type DecryptingMediaResource::GetType() const {
-  DCHECK_EQ(MediaResource::STREAM, media_resource_->GetType());
-  return MediaResource::STREAM;
+  DCHECK_EQ(MediaResource::Type::kStream, media_resource_->GetType());
+  return MediaResource::Type::kStream;
 }
 
-std::vector<DemuxerStream*> DecryptingMediaResource::GetAllStreams() {
+std::vector<raw_ptr<DemuxerStream, VectorExperimental>>
+DecryptingMediaResource::GetAllStreams() {
   if (streams_.size())
     return streams_;
 
@@ -60,7 +63,7 @@ void DecryptingMediaResource::Initialize(InitCB init_cb, WaitingCB waiting_cb) {
   init_cb_ = std::move(init_cb);
   num_dds_pending_init_ = streams.size();
 
-  for (auto* stream : streams) {
+  for (media::DemuxerStream* stream : streams) {
     auto decrypting_demuxer_stream = std::make_unique<DecryptingDemuxerStream>(
         task_runner_, media_log_, waiting_cb);
 

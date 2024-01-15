@@ -11,9 +11,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/small_map.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
@@ -29,7 +29,7 @@
 #include "components/media_router/browser/presentation/local_presentation_manager.h"
 #include "components/media_router/browser/presentation/local_presentation_manager_factory.h"
 #include "components/media_router/browser/presentation/presentation_media_sinks_observer.h"
-#include "components/media_router/browser/route_message_observer.h"
+#include "components/media_router/browser/presentation_connection_message_observer.h"
 #include "components/media_router/common/media_route.h"
 #include "components/media_router/common/media_sink.h"
 #include "components/media_router/common/media_source.h"
@@ -42,12 +42,6 @@
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "url/gurl.h"
-
-#if !BUILDFLAG(IS_ANDROID)
-#include "components/media_router/common/pref_names.h"
-#include "components/prefs/pref_service.h"
-#include "components/user_prefs/user_prefs.h"
-#endif
 
 using blink::mojom::PresentationConnection;
 using blink::mojom::PresentationError;
@@ -212,7 +206,11 @@ bool PresentationFrame::HasScreenAvailabilityListenerForTest(
 }
 
 void PresentationFrame::Reset() {
-  for (const auto& pid_route : presentation_id_to_route_) {
+  // Create a copy here to avoid `pid_route` being invalidated while iterating.
+  // `router->DetachRoute()` might cause a Presentation route to be terminated
+  // and removed from `presentation_id_to_route_`.
+  auto presentation_id_to_route_copy(presentation_id_to_route_);
+  for (const auto& pid_route : presentation_id_to_route_copy) {
     if (pid_route.second.is_local_presentation()) {
       auto* local_presentation_manager =
           LocalPresentationManagerFactory::GetOrCreateForWebContents(
@@ -512,16 +510,6 @@ void PresentationServiceDelegateImpl::ReconnectPresentation(
     return;
   }
 
-#if !BUILDFLAG(IS_ANDROID)
-  if (IsAutoJoinPresentationId(presentation_id) &&
-      ShouldCancelAutoJoinForOrigin(request.frame_origin)) {
-    std::move(error_cb).Run(
-        PresentationError(PresentationErrorType::PRESENTATION_REQUEST_CANCELLED,
-                          "Auto-join request cancelled by user preferences."));
-    return;
-  }
-#endif  // !BUILDFLAG(IS_ANDROID)
-
   auto* local_presentation_manager =
       LocalPresentationManagerFactory::GetOrCreateForWebContents(
           &GetWebContents());
@@ -540,9 +528,8 @@ void PresentationServiceDelegateImpl::ReconnectPresentation(
                         std::move(error_cb),
                         mojom::RoutePresentationConnectionPtr(), *result);
   } else {
-    // TODO(crbug.com/627655): Handle multiple URLs.
+    // TODO(crbug.com/1418744): Handle multiple URLs.
     const GURL& presentation_url = presentation_urls[0];
-    bool incognito = GetWebContents().GetBrowserContext()->IsOffTheRecord();
     router_->JoinRoute(
         MediaSource::ForPresentationUrl(presentation_url).id(), presentation_id,
         request.frame_origin, &GetWebContents(),
@@ -550,7 +537,7 @@ void PresentationServiceDelegateImpl::ReconnectPresentation(
                        weak_factory_.GetWeakPtr(), render_frame_host_id,
                        presentation_url, presentation_id, std::move(success_cb),
                        std::move(error_cb)),
-        base::TimeDelta(), incognito);
+        base::TimeDelta());
   }
 }
 
@@ -719,16 +706,6 @@ MediaRoute::Id PresentationServiceDelegateImpl::GetRouteId(
              : MediaRoute::Id();
 }
 
-#if !BUILDFLAG(IS_ANDROID)
-bool PresentationServiceDelegateImpl::ShouldCancelAutoJoinForOrigin(
-    const url::Origin& origin) {
-  const base::Value::List& origins =
-      user_prefs::UserPrefs::Get(GetWebContents().GetBrowserContext())
-          ->GetList(prefs::kMediaRouterTabMirroringSources);
-  return base::Contains(origins, base::Value(origin.Serialize()));
-}
-#endif  // !BUILDFLAG(IS_ANDROID)
-
 void PresentationServiceDelegateImpl::EnsurePresentationConnection(
     const content::GlobalRenderFrameHostId& render_frame_host_id,
     const PresentationInfo& presentation_info,
@@ -758,6 +735,7 @@ void PresentationServiceDelegateImpl::NotifyDefaultPresentationChanged(
 
 void PresentationServiceDelegateImpl::NotifyMediaRoutesChanged() {
   auto routes = GetMediaRoutes();
+
   for (auto& presentation_observer : presentation_observers_)
     presentation_observer.OnPresentationsChanged(!routes.empty());
 }

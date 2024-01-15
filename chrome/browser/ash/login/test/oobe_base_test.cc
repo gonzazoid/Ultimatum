@@ -6,14 +6,12 @@
 
 #include <memory>
 
-#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/login/session/user_session_manager.h"
 #include "chrome/browser/ash/login/session/user_session_manager_test_api.h"
 #include "chrome/browser/ash/login/test/login_or_lock_screen_visible_waiter.h"
@@ -27,12 +25,10 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
-#include "chrome/browser/ui/webui/ash/login/eula_screen_handler.h"
 #include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
 #include "chrome/browser/ui/webui/ash/login/oobe_ui.h"
-#include "chrome/browser/ui/webui/chromeos/login/signin_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/update_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/user_creation_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/update_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/user_creation_screen_handler.h"
 #include "chrome/browser/ui/webui/signin/signin_utils.h"
 #include "chrome/common/chrome_switches.h"
 #include "chromeos/ash/components/dbus/dbus_thread_manager.h"
@@ -138,7 +134,9 @@ void OobeBaseTest::SetUpInProcessBrowserTestFixture() {
 }
 
 void OobeBaseTest::SetUpOnMainThread() {
-  ShillManagerClient::Get()->GetTestInterface()->SetupDefaultEnvironment();
+  if (!needs_network_screen_skip_check_) {
+    ShillManagerClient::Get()->GetTestInterface()->SetupDefaultEnvironment();
+  }
 
   host_resolver()->AddRule("*", "127.0.0.1");
 
@@ -205,7 +203,7 @@ void OobeBaseTest::WaitForSigninScreen() {
 }
 
 void OobeBaseTest::CheckJsExceptionErrors(int number) {
-  test::OobeJS().ExpectEQ("cr.ErrorStore.getInstance().length", number);
+  test::OobeJS().ExpectEQ("OobeErrorStore.length", number);
 }
 
 test::JSChecker OobeBaseTest::SigninFrameJS() {
@@ -223,12 +221,6 @@ OobeScreenId OobeBaseTest::GetFirstSigninScreen() {
                                   ->IsDeviceEnterpriseManaged();
   return isEnterpriseManaged ? UserCreationView::kScreenId
                              : GaiaView::kScreenId;
-}
-
-// static
-OobeScreenId OobeBaseTest::GetScreenAfterNetworkScreen() {
-  bool consolidated_enabled = features::IsOobeConsolidatedConsentEnabled();
-  return consolidated_enabled ? UpdateView::kScreenId : EulaView::kScreenId;
 }
 
 void OobeBaseTest::MaybeWaitForLoginScreenLoad() {

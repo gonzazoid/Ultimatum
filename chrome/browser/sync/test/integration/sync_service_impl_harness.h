@@ -9,13 +9,13 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/sync/base/user_selectable_type.h"
-#include "components/sync/driver/sync_service_impl.h"
 #include "components/sync/engine/cycle/sync_cycle_snapshot.h"
+#include "components/sync/service/sync_service_impl.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Profile;
@@ -56,7 +56,8 @@ class SyncServiceImplHarness {
   SyncServiceImplHarness& operator=(const SyncServiceImplHarness&) = delete;
 
   // Signs in to a primary account without actually enabling sync the feature.
-  bool SignInPrimaryAccount();
+  [[nodiscard]] bool SignInPrimaryAccount(
+      signin::ConsentLevel consent_level = signin::ConsentLevel::kSignin);
 
   // This is similar to click the reset button on chrome.google.com/sync.
   void ResetSyncForPrimaryAccount();
@@ -65,12 +66,16 @@ class SyncServiceImplHarness {
   // Signs out of the primary account. ChromeOS doesn't have the concept of
   // sign-out, so this only exists on other platforms.
   void SignOutPrimaryAccount();
-#endif
+#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
+  // The underlying implementation for mimic-ing persistent auth errors isn't
+  // implemented on Android, see https://crbug.com/1373448.
+#if !BUILDFLAG(IS_ANDROID)
   // Enters/exits the "Sync paused" state, which in real life happens if a
   // syncing user signs out of the content area.
   void EnterSyncPausedStateForPrimaryAccount();
-  void ExitSyncPausedStateForPrimaryAccount();
+  bool ExitSyncPausedStateForPrimaryAccount();
+#endif  // !BUILDFLAG(IS_ANDROID)
 
   // Enables and configures sync for all available datatypes. Returns true only
   // after sync has been fully initialized and authenticated, and we are ready
@@ -78,8 +83,8 @@ class SyncServiceImplHarness {
   // |user_settings_callback| will be called once the engine is initialized, but
   // before actually starting sync, to give the caller a chance to modify sync
   // settings (mostly the selected data types).
-  bool SetupSync(SetUserSettingsCallback user_settings_callback =
-                     SetUserSettingsCallback());
+  [[nodiscard]] bool SetupSync(SetUserSettingsCallback user_settings_callback =
+                                   SetUserSettingsCallback());
 
   // Enables and configures sync.
   // Does not wait for sync to be ready to process changes -- callers need to
@@ -89,40 +94,14 @@ class SyncServiceImplHarness {
   // before actually starting sync, to give the caller a chance to modify sync
   // settings (mostly the selected data types).
   // Returns true on success.
-  bool SetupSyncNoWaitForCompletion(
+  [[nodiscard]] bool SetupSyncNoWaitForCompletion(
       SetUserSettingsCallback user_settings_callback =
           SetUserSettingsCallback());
-
-  // Same as SetupSyncNoWaitForCompletion(), but also sets the given encryption
-  // passphrase during setup.
-  bool SetupSyncWithEncryptionPassphraseNoWaitForCompletion(
-      const std::string& passphrase);
-
-  // Same as SetupSyncNoWaitForCompletion(), but also sets the given decryption
-  // passphrase during setup.
-  bool SetupSyncWithDecryptionPassphraseNoWaitForCompletion(
-      const std::string& passphrase);
 
   // Signals that sync setup is complete, and that PSS may begin syncing.
   // Typically SetupSync does this automatically, but if that returned false,
   // then setup may have been left incomplete.
   void FinishSyncSetup();
-
-  // Methods to stop and restart the sync service.
-  //
-  // For example, this can be used to simulate a sign-in/sign-out or can be
-  // useful to recover from a lost birthday.
-  // To start from a clear slate, clear server data first, then call
-  // StopSyncServiceAndClearData() followed by StartSyncService().
-  // To simulate the user being offline for a while, call
-  // StopSyncServiceWithoutClearingData() followed by StartSyncService().
-
-  // Stops the sync service and clears all local sync data.
-  void StopSyncServiceAndClearData();
-  // Stops the sync service but keeps all local sync data around.
-  void StopSyncServiceWithoutClearingData();
-  // Starts the sync service after a previous stop.
-  bool StartSyncService();
 
   // Calling this acts as a barrier and blocks the caller until |this| and
   // |partner| have both completed a sync cycle.  When calling this method,
@@ -131,30 +110,34 @@ class SyncServiceImplHarness {
   // from the message queue. Returns true if two sync cycles have completed.
   // Note: Use this method when exactly one client makes local change(s), and
   // exactly one client is waiting to receive those changes.
-  bool AwaitMutualSyncCycleCompletion(SyncServiceImplHarness* partner);
+  [[nodiscard]] bool AwaitMutualSyncCycleCompletion(
+      SyncServiceImplHarness* partner);
 
   // Blocks the caller until every client in |clients| completes its ongoing
   // sync cycle and all the clients' progress markers match.  Note: Use this
   // method when more than one client makes local change(s), and more than one
   // client is waiting to receive those changes.
-  static bool AwaitQuiescence(
+  [[nodiscard]] static bool AwaitQuiescence(
       const std::vector<SyncServiceImplHarness*>& clients);
 
   // Blocks the caller until the sync engine is initialized or some end state
   // (e.g., auth error) is reached. Returns true only if the engine initialized
   // successfully. See SyncService::IsEngineInitialized() for the definition
   // of engine initialization.
-  bool AwaitEngineInitialization();
+  [[nodiscard]] bool AwaitEngineInitialization();
 
   // Blocks the caller until sync setup is complete, and sync-the-feature is
   // active. Returns true if and only if sync setup completed successfully. Make
   // sure to actually start sync setup (usually by calling SetupSync() or one of
   // its variants) before.
-  bool AwaitSyncSetupCompletion();
+  [[nodiscard]] bool AwaitSyncSetupCompletion();
 
   // Blocks the caller until the sync transport layer is active. Returns true if
   // successful.
-  bool AwaitSyncTransportActive();
+  [[nodiscard]] bool AwaitSyncTransportActive();
+
+  // Blocks the caller until invalidations are enabled or disabled.
+  [[nodiscard]] bool AwaitInvalidationsStatus(bool expected_status);
 
   // Returns the SyncServiceImpl member of the sync client.
   syncer::SyncServiceImpl* service() { return service_; }
@@ -165,48 +148,26 @@ class SyncServiceImplHarness {
 
   // Enables sync for a particular selectable sync type (will enable sync for
   // all corresponding datatypes). Returns true on success.
-  bool EnableSyncForType(syncer::UserSelectableType type);
+  [[nodiscard]] bool EnableSyncForType(syncer::UserSelectableType type);
 
   // Disables sync for a particular selectable sync type (will enable sync for
   // all corresponding datatypes). Returns true on success.
-  bool DisableSyncForType(syncer::UserSelectableType type);
+  [[nodiscard]] bool DisableSyncForType(syncer::UserSelectableType type);
 
   // Enables sync for all registered sync datatypes. Returns true on success.
-  bool EnableSyncForRegisteredDatatypes();
+  [[nodiscard]] bool EnableSyncForRegisteredDatatypes();
 
   // Disables sync for all sync datatypes. Returns true on success.
-  bool DisableSyncForAllDatatypes();
+  [[nodiscard]] bool DisableSyncForAllDatatypes();
 
   // Returns a snapshot of the current sync session.
   syncer::SyncCycleSnapshot GetLastCycleSnapshot() const;
 
  private:
-  enum class EncryptionSetupMode {
-    kNoEncryption,  // Setup sync without encryption support.
-    kDecryption,    // Setup sync with only decryption support. This only
-                    // supports cases where there's already encrypted data on
-                    // the server. Turning on custom passphrase encryption on
-                    // this client is not supported.
-    kEncryption     // Setup sync with full encryption support. This includes
-                    // turning on custom passphrase encryption on the client.
-  };
-
   SyncServiceImplHarness(Profile* profile,
                          const std::string& username,
                          const std::string& password,
                          SigninType signin_type);
-
-  // Sets up sync with custom passphrase support as specified by
-  // |encryption_mode|.
-  // If |encryption_mode| is kDecryption or kEncryption, |encryption_passphrase|
-  // has to have a value which will be used to properly setup sync.
-  // |user_settings_callback| will be called once the engine is initialized, but
-  // before actually starting sync, to give the caller a chance to modify sync
-  // settings (mostly the selected data types).
-  bool SetupSyncImpl(EncryptionSetupMode encryption_mode,
-                     const absl::optional<std::string>& encryption_passphrase,
-                     SetUserSettingsCallback user_settings_callback =
-                         SetUserSettingsCallback());
 
   // Gets detailed status from |service_| in pretty-printable form.
   std::string GetServiceStatus();
@@ -220,10 +181,10 @@ class SyncServiceImplHarness {
   bool IsSyncEnabledByUser() const;
 
   // Profile associated with this sync client.
-  const raw_ptr<Profile, DanglingUntriaged> profile_;
+  const raw_ptr<Profile, AcrossTasksDanglingUntriaged> profile_;
 
   // SyncServiceImpl object associated with |profile_|.
-  const raw_ptr<syncer::SyncServiceImpl, DanglingUntriaged> service_;
+  const raw_ptr<syncer::SyncServiceImpl, AcrossTasksDanglingUntriaged> service_;
 
   // Prevents Sync from running until configuration is complete.
   std::unique_ptr<syncer::SyncSetupInProgressHandle> sync_blocker_;

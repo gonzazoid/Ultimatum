@@ -8,6 +8,7 @@
 #include "chrome/browser/ui/find_bar/find_bar.h"
 #include "chrome/browser/ui/find_bar/find_bar_controller.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/omnibox/browser/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -24,6 +25,8 @@ FindBarIcon::FindBarIcon(
                          "Find"),
       browser_(browser) {
   DCHECK(browser_);
+  SetAccessibilityProperties(/*role*/ std::nullopt,
+                             l10n_util::GetStringUTF16(IDS_TOOLTIP_FIND));
 }
 
 FindBarIcon::~FindBarIcon() {}
@@ -46,10 +49,6 @@ void FindBarIcon::SetActive(bool activate, bool should_animate) {
   }
 }
 
-std::u16string FindBarIcon::GetTextForTooltipAndAccessibleName() const {
-  return l10n_util::GetStringUTF16(IDS_TOOLTIP_FIND);
-}
-
 void FindBarIcon::OnExecuting(ExecuteSource execute_source) {}
 
 views::BubbleDialogDelegate* FindBarIcon::GetBubble() const {
@@ -57,7 +56,9 @@ views::BubbleDialogDelegate* FindBarIcon::GetBubble() const {
 }
 
 const gfx::VectorIcon& FindBarIcon::GetVectorIcon() const {
-  return omnibox::kFindInPageIcon;
+  return OmniboxFieldTrial::IsChromeRefreshIconsEnabled()
+             ? omnibox::kFindInPageChromeRefreshIcon
+             : omnibox::kFindInPageIcon;
 }
 
 void FindBarIcon::UpdateImpl() {
@@ -71,5 +72,5 @@ void FindBarIcon::UpdateImpl() {
   SetActive(GetVisible(), was_visible != GetVisible());
 }
 
-BEGIN_METADATA(FindBarIcon, PageActionIconView)
+BEGIN_METADATA(FindBarIcon)
 END_METADATA

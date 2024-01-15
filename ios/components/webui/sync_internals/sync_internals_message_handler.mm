@@ -7,26 +7,22 @@
 #import <utility>
 #import <vector>
 
-#import "base/bind.h"
 #import "base/command_line.h"
+#import "base/functional/bind.h"
 #import "base/logging.h"
 #import "base/values.h"
 #import "components/sync/base/command_line_switches.h"
 #import "components/sync/base/weak_handle.h"
-#import "components/sync/driver/sync_internals_util.h"
-#import "components/sync/driver/sync_service.h"
-#import "components/sync/driver/sync_user_settings.h"
 #import "components/sync/engine/events/protocol_event.h"
 #import "components/sync/invalidations/sync_invalidations_service.h"
 #import "components/sync/model/type_entities_count.h"
 #import "components/sync/protocol/sync_invalidations_payload.pb.h"
+#import "components/sync/service/sync_internals_util.h"
+#import "components/sync/service/sync_service.h"
+#import "components/sync/service/sync_user_settings.h"
 #import "ios/components/webui/web_ui_provider.h"
 #import "ios/web/public/thread/web_thread.h"
 #import "ios/web/public/webui/web_ui_ios.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -90,12 +86,6 @@ void SyncInternalsMessageHandler::RegisterMessages() {
       syncer::sync_ui_util::kRequestStart,
       base::BindRepeating(&SyncInternalsMessageHandler::HandleRequestStart,
                           base::Unretained(this)));
-
-  web_ui()->RegisterMessageCallback(
-      syncer::sync_ui_util::kRequestStopKeepData,
-      base::BindRepeating(
-          &SyncInternalsMessageHandler::HandleRequestStopKeepData,
-          base::Unretained(this)));
 
   web_ui()->RegisterMessageCallback(
       syncer::sync_ui_util::kRequestStopClearData,
@@ -190,24 +180,12 @@ void SyncInternalsMessageHandler::HandleRequestStart(
     return;
   }
 
-  service->GetUserSettings()->SetSyncRequested(true);
+  service->SetSyncFeatureRequested();
   // If the service was previously stopped with CLEAR_DATA, then the
   // "first-setup-complete" bit was also cleared, and now the service wouldn't
   // fully start up. So set that too.
-  service->GetUserSettings()->SetFirstSetupComplete(
+  service->GetUserSettings()->SetInitialSyncFeatureSetupComplete(
       syncer::SyncFirstSetupCompleteSource::BASIC_FLOW);
-}
-
-void SyncInternalsMessageHandler::HandleRequestStopKeepData(
-    const base::Value::List& args) {
-  DCHECK_EQ(0U, args.size());
-
-  syncer::SyncService* service = GetSyncService();
-  if (!service) {
-    return;
-  }
-
-  service->GetUserSettings()->SetSyncRequested(false);
 }
 
 void SyncInternalsMessageHandler::HandleRequestStopClearData(

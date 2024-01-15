@@ -8,7 +8,6 @@
 #include "base/check_op.h"
 #include "base/notreached.h"
 #include "base/trace_event/trace_event.h"
-#include "ui/base/cocoa/cocoa_base_utils.h"
 #import "ui/base/cocoa/user_interface_item_command_handler.h"
 
 // Expose -[NSWindow hasKeyAppearance], which determines whether the traffic
@@ -22,47 +21,43 @@ namespace {
 
 // Duplicate the given key event, but changing the associated window.
 NSEvent* KeyEventForWindow(NSWindow* window, NSEvent* event) {
-  NSEventType event_type = [event type];
+  NSEventType event_type = event.type;
 
   // Convert the event's location from the original window's coordinates into
   // our own.
-  NSPoint location = [event locationInWindow];
-  location = ui::ConvertPointFromWindowToScreen([event window], location);
-  location = ui::ConvertPointFromScreenToWindow(window, location);
+  NSPoint location = event.locationInWindow;
+  location = [event.window convertPointToScreen:location];
+  location = [window convertPointFromScreen:location];
 
   // Various things *only* apply to key down/up.
   bool is_a_repeat = false;
   NSString* characters = nil;
-  NSString* charactors_ignoring_modifiers = nil;
+  NSString* characters_ignoring_modifiers = nil;
   if (event_type == NSEventTypeKeyDown || event_type == NSEventTypeKeyUp) {
-    is_a_repeat = [event isARepeat];
-    characters = [event characters];
-    charactors_ignoring_modifiers = [event charactersIgnoringModifiers];
+    is_a_repeat = event.ARepeat;
+    characters = event.characters;
+    characters_ignoring_modifiers = event.charactersIgnoringModifiers;
   }
 
-  // This synthesis may be slightly imperfect: we provide nil for the context,
-  // since I (viettrungluu) am sceptical that putting in the original context
-  // (if one is given) is valid.
   return [NSEvent keyEventWithType:event_type
                           location:location
-                     modifierFlags:[event modifierFlags]
-                         timestamp:[event timestamp]
-                      windowNumber:[window windowNumber]
+                     modifierFlags:event.modifierFlags
+                         timestamp:event.timestamp
+                      windowNumber:window.windowNumber
                            context:nil
                         characters:characters
-       charactersIgnoringModifiers:charactors_ignoring_modifiers
+       charactersIgnoringModifiers:characters_ignoring_modifiers
                          isARepeat:is_a_repeat
-                           keyCode:[event keyCode]];
+                           keyCode:event.keyCode];
 }
 
 }  // namespace
 
 @implementation CommandDispatcher {
- @private
   BOOL _eventHandled;
   BOOL _isRedispatchingKeyEvent;
 
-  NSWindow<CommandDispatchingWindow>* _owner;  // Weak, owns us.
+  NSWindow<CommandDispatchingWindow>* __weak _owner;  // Weak, owns us.
 }
 
 @synthesize delegate = _delegate;
@@ -87,14 +82,14 @@ NSEvent* KeyEventForWindow(NSWindow* window, NSEvent* event) {
   return NO;
 }
 
-// |delegate_| may be nil in this method. Rather than adding nil checks to every
+// |_delegate| may be nil in this method. Rather than adding nil checks to every
 // call, we rely on the fact that method calls to nil return nil, and that nil
 // == ui::PerformKeyEquivalentResult::kUnhandled;
 - (BOOL)performKeyEquivalent:(NSEvent*)event {
   // TODO(bokan): Tracing added temporarily to diagnose crbug.com/1039833.
   TRACE_EVENT2("ui", "CommandDispatcher::performKeyEquivalent", "window num",
-               [_owner windowNumber], "is keyWin", [NSApp keyWindow] == _owner);
-  DCHECK_EQ(NSEventTypeKeyDown, [event type]);
+               _owner.windowNumber, "is keyWin", NSApp.keyWindow == _owner);
+  DCHECK_EQ(NSEventTypeKeyDown, event.type);
 
   // If the event is being redispatched, then this is the second time
   // performKeyEquivalent: is being called on the event. The first time, a
@@ -119,7 +114,7 @@ NSEvent* KeyEventForWindow(NSWindow* window, NSEvent* event) {
       return YES;
     if (result == ui::PerformKeyEquivalentResult::kPassToMainMenu)
       return NO;
-    return [[self bubbleParent] performKeyEquivalent:event];
+    return [_owner.commandDispatchParent performKeyEquivalent:event];
   }
 
   // First, give the delegate an opportunity to consume this event.
@@ -151,7 +146,7 @@ NSEvent* KeyEventForWindow(NSWindow* window, NSEvent* event) {
 
   // Allow commands to "bubble up" to CommandDispatchers in parent windows, if
   // they were not handled here.
-  return [[self bubbleParent] performKeyEquivalent:event];
+  return [_owner.commandDispatchParent performKeyEquivalent:event];
 }
 
 - (BOOL)validateUserInterfaceItem:(id<NSValidatedUserInterfaceItem>)item
@@ -159,8 +154,8 @@ NSEvent* KeyEventForWindow(NSWindow* window, NSEvent* event) {
   // Since this class implements these selectors, |super| will always say they
   // are enabled. Only use [super] to validate other selectors. If there is no
   // command handler, defer to AppController.
-  if ([item action] == @selector(commandDispatch:) ||
-      [item action] == @selector(commandDispatchUsingKeyModifiers:)) {
+  if (item.action == @selector(commandDispatch:) ||
+      item.action == @selector(commandDispatchUsingKeyModifiers:)) {
     if (handler) {
       // -dispatch:.. can't later decide to bubble events because
       // -commandDispatch:.. is assumed to always succeed. So, if there is a
@@ -175,28 +170,31 @@ NSEvent* KeyEventForWindow(NSWindow* window, NSEvent* event) {
       return YES;
   }
 
-  // Note this may validate an action bubbled up from a child window. However,
-  // if the child window also -respondsToSelector: (but validated it `NO`), the
-  // action will be dispatched to the child only, which may NSBeep().
-  // TODO(tapted): Fix this. E.g. bubble up validation via the bubbleParent's
-  // CommandDispatcher rather than the NSUserInterfaceValidations protocol, so
-  // that this step can be skipped.
-  if ([_owner defaultValidateUserInterfaceItem:item])
-    return YES;
+  // -defaultValidateUserInterfaceItem: in most cases will return YES. If
+  // there is a command dispatch parent give it a chance to validate the item.
+  if (!_owner.commandDispatchParent) {
+    // Note this may validate an action bubbled up from a child window. However,
+    // if the child window also -respondsToSelector: (but validated it `NO`),
+    // the action will be dispatched to the child only, which may NSBeep().
+    // TODO(tapted): Fix this. E.g. bubble up validation via the
+    // commandDispatchParent's CommandDispatcher rather than the
+    // NSUserInterfaceValidations protocol, so that this step can be skipped.
+    return [_owner defaultValidateUserInterfaceItem:item];
+  }
 
-  return [[self bubbleParent] validateUserInterfaceItem:item];
+  return [_owner.commandDispatchParent validateUserInterfaceItem:item];
 }
 
 - (BOOL)redispatchKeyEvent:(NSEvent*)event {
   // TODO(bokan): Tracing added temporarily to diagnose crbug.com/1039833.
   TRACE_EVENT2("ui", "CommandDispatcher::redispatchKeyEvent", "window num",
-               [_owner windowNumber], "event window num",
-               [[event window] windowNumber]);
+               _owner.windowNumber, "event window num",
+               event.window.windowNumber);
   DCHECK(!_isRedispatchingKeyEvent);
   base::AutoReset<BOOL> resetter(&_isRedispatchingKeyEvent, YES);
 
   DCHECK(event);
-  NSEventType eventType = [event type];
+  NSEventType eventType = event.type;
   if (eventType != NSEventTypeKeyDown && eventType != NSEventTypeKeyUp &&
       eventType != NSEventTypeFlagsChanged) {
     NOTREACHED();
@@ -208,8 +206,9 @@ NSEvent* KeyEventForWindow(NSWindow* window, NSEvent* event) {
   // up the native event to reference the correct window. Failure to do this can
   // cause infinite redispatch loops; see https://crbug.com/1085578 for more
   // details.
-  if ([event window] != _owner)
+  if (event.window != _owner) {
     event = KeyEventForWindow(_owner, event);
+  }
 
   // Redispatch the event.
   _eventHandled = YES;
@@ -224,14 +223,14 @@ NSEvent* KeyEventForWindow(NSWindow* window, NSEvent* event) {
 - (BOOL)preSendEvent:(NSEvent*)event {
   // TODO(bokan): Tracing added temporarily to diagnose crbug.com/1039833.
   TRACE_EVENT2("ui", "CommandDispatcher::preSendEvent", "window num",
-               [_owner windowNumber], "event window num",
-               [[event window] windowNumber]);
+               _owner.windowNumber, "event window num",
+               event.window.windowNumber);
 
   // AppKit does not call performKeyEquivalent: if the event only has the
   // NSEventModifierFlagOption modifier. However, Chrome wants to treat these
   // events just like keyEquivalents, since they can be consumed by extensions.
-  if ([event type] == NSEventTypeKeyDown &&
-      ([event modifierFlags] & NSEventModifierFlagOption)) {
+  if (event.type == NSEventTypeKeyDown &&
+      (event.modifierFlags & NSEventModifierFlagOption)) {
     BOOL handled = [self performKeyEquivalent:event];
     if (handled)
       return YES;
@@ -252,7 +251,7 @@ NSEvent* KeyEventForWindow(NSWindow* window, NSEvent* event) {
   if (handler)
     [handler commandDispatch:sender window:_owner];
   else
-    [[self bubbleParent] commandDispatch:sender];
+    [_owner.commandDispatchParent commandDispatch:sender];
 }
 
 - (void)dispatchUsingKeyModifiers:(id)sender
@@ -260,15 +259,7 @@ NSEvent* KeyEventForWindow(NSWindow* window, NSEvent* event) {
   if (handler)
     [handler commandDispatchUsingKeyModifiers:sender window:_owner];
   else
-    [[self bubbleParent] commandDispatchUsingKeyModifiers:sender];
-}
-
-- (NSWindow<CommandDispatchingWindow>*)bubbleParent {
-  NSWindow* parent = [_owner parentWindow];
-  if (parent && [parent hasKeyAppearance] &&
-      [parent conformsToProtocol:@protocol(CommandDispatchingWindow)])
-    return static_cast<NSWindow<CommandDispatchingWindow>*>(parent);
-  return nil;
+    [_owner.commandDispatchParent commandDispatchUsingKeyModifiers:sender];
 }
 
 @end

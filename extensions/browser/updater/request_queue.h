@@ -8,15 +8,14 @@
 #include <stddef.h>
 
 #include <memory>
+#include <optional>
 #include <utility>
-
-#include "base/callback.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "net/base/backoff_entry.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace extensions {
 
@@ -51,7 +50,7 @@ class RequestQueue {
 
   class iterator;
 
-  RequestQueue(const net::BackoffEntry::Policy* backoff_policy,
+  RequestQueue(net::BackoffEntry::Policy backoff_policy,
                const base::RepeatingClosure& start_request_callback);
   ~RequestQueue();
 
@@ -100,7 +99,7 @@ class RequestQueue {
       const base::RepeatingCallback<bool(const T&)> condition);
 
   // Change the backoff policy used by the queue.
-  void set_backoff_policy(const net::BackoffEntry::Policy* backoff_policy);
+  void set_backoff_policy(net::BackoffEntry::Policy backoff_policy);
 
  private:
   // Compares the release time of two pending requests.
@@ -110,7 +109,7 @@ class RequestQueue {
   void PushImpl(Request request);
 
   // The backoff policy used to determine backoff delays.
-  raw_ptr<const net::BackoffEntry::Policy> backoff_policy_;
+  net::BackoffEntry::Policy backoff_policy_;
 
   // Callback to call when a new request has become the active request.
   base::RepeatingClosure start_request_callback_;
@@ -120,7 +119,7 @@ class RequestQueue {
   base::circular_deque<Request> pending_requests_;
 
   // Active entry with its associated backoff.
-  absl::optional<Request> active_request_;
+  std::optional<Request> active_request_;
 
   // Timer to schedule calls to StartNextRequest, if the first pending request
   // hasn't passed its release time yet.
@@ -144,7 +143,7 @@ class RequestQueue<T>::iterator {
 
  private:
   friend class RequestQueue<T>;
-  typedef base::circular_deque<typename RequestQueue<T>::Request> Container;
+  using Container = base::circular_deque<typename RequestQueue<T>::Request>;
 
   explicit iterator(const typename Container::iterator& it) : it_(it) {}
 

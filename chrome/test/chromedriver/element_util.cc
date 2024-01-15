@@ -11,7 +11,6 @@
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
 #include "base/values.h"
@@ -55,8 +54,9 @@ const char kFindSubFrameScript[] =
 bool ParseFromValue(base::Value* value, WebPoint* point) {
   if (!value->is_dict())
     return false;
-  auto x = value->FindDoubleKey("x");
-  auto y = value->FindDoubleKey("y");
+  base::Value::Dict& dict = value->GetDict();
+  auto x = dict.FindDouble("x");
+  auto y = dict.FindDouble("y");
   if (!x.has_value() || !y.has_value())
     return false;
   point->x = x.value();
@@ -67,8 +67,9 @@ bool ParseFromValue(base::Value* value, WebPoint* point) {
 bool ParseFromValue(base::Value* value, WebSize* size) {
   if (!value->is_dict())
     return false;
-  auto width = value->FindDoubleKey("width");
-  auto height = value->FindDoubleKey("height");
+  base::Value::Dict& dict = value->GetDict();
+  auto width = dict.FindDouble("width");
+  auto height = dict.FindDouble("height");
   if (!width.has_value() || !height.has_value())
     return false;
   size->width = width.value();
@@ -79,10 +80,11 @@ bool ParseFromValue(base::Value* value, WebSize* size) {
 bool ParseFromValue(base::Value* value, WebRect* rect) {
   if (!value->is_dict())
     return false;
-  auto x = value->FindDoubleKey("left");
-  auto y = value->FindDoubleKey("top");
-  auto width = value->FindDoubleKey("width");
-  auto height = value->FindDoubleKey("height");
+  base::Value::Dict& dict = value->GetDict();
+  auto x = dict.FindDouble("left");
+  auto y = dict.FindDouble("top");
+  auto width = dict.FindDouble("width");
+  auto height = dict.FindDouble("height");
   if (!x.has_value() || !y.has_value() || !width.has_value() ||
       !height.has_value())
     return false;
@@ -93,12 +95,12 @@ bool ParseFromValue(base::Value* value, WebRect* rect) {
   return true;
 }
 
-std::unique_ptr<base::DictionaryValue> CreateValueFrom(const WebRect& rect) {
-  std::unique_ptr<base::DictionaryValue> dict(new base::DictionaryValue());
-  dict->SetIntKey("left", rect.X());
-  dict->SetIntKey("top", rect.Y());
-  dict->SetIntKey("width", rect.Width());
-  dict->SetIntKey("height", rect.Height());
+base::Value::Dict CreateValueFrom(const WebRect& rect) {
+  base::Value::Dict dict;
+  dict.Set("left", static_cast<int>(rect.X()));
+  dict.Set("top", static_cast<int>(rect.Y()));
+  dict.Set("width", static_cast<int>(rect.Width()));
+  dict.Set("height", static_cast<int>(rect.Height()));
   return dict;
 }
 
@@ -111,26 +113,21 @@ Status CallAtomsJs(const std::string& frame,
       frame, webdriver::atoms::asString(atom_function), args, result);
 }
 
-Status VerifyElementClickable(
-    const std::string& frame,
-    WebView* web_view,
-    const std::string& element_id,
-    const WebPoint& location) {
-  Status status = CheckElement(element_id);
-  if (status.IsError())
-    return status;
+Status VerifyElementClickable(const std::string& frame,
+                              WebView* web_view,
+                              const std::string& element_id,
+                              const WebPoint& location) {
   base::Value::List args;
   args.Append(CreateElement(element_id));
-  args.Append(base::Value::FromUniquePtrValue(CreateValueFrom(location)));
+  args.Append(CreateValueFrom(location));
   std::unique_ptr<base::Value> result;
-  status = CallAtomsJs(
-      frame, web_view, webdriver::atoms::IS_ELEMENT_CLICKABLE,
-      args, &result);
+  Status status = CallAtomsJs(
+      frame, web_view, webdriver::atoms::IS_ELEMENT_CLICKABLE, args, &result);
   if (status.IsError())
     return status;
   absl::optional<bool> is_clickable = absl::nullopt;
   if (result->is_dict())
-    is_clickable = result->FindBoolKey("clickable");
+    is_clickable = result->GetDict().FindBool("clickable");
   if (!is_clickable.has_value()) {
     return Status(kUnknownError,
                   "failed to parse value of IS_ELEMENT_CLICKABLE");
@@ -138,7 +135,7 @@ Status VerifyElementClickable(
 
   if (!is_clickable.value()) {
     std::string message;
-    const std::string* maybe_message = result->FindStringKey("message");
+    const std::string* maybe_message = result->GetDict().FindString("message");
     if (!maybe_message)
       message = "element click intercepted";
     else
@@ -156,16 +153,13 @@ Status ScrollElementRegionIntoViewHelper(
     bool center,
     const std::string& clickable_element_id,
     WebPoint* location) {
-  Status status = CheckElement(element_id);
-  if (status.IsError())
-    return status;
   WebPoint tmp_location = *location;
   base::Value::List args;
   args.Append(CreateElement(element_id));
   args.Append(center);
-  args.Append(base::Value::FromUniquePtrValue(CreateValueFrom(region)));
+  args.Append(CreateValueFrom(region));
   std::unique_ptr<base::Value> result;
-  status = web_view->CallFunction(
+  Status status = web_view->CallFunction(
       frame, webdriver::atoms::asString(webdriver::atoms::GET_LOCATION_IN_VIEW),
       args, &result);
   if (status.IsError())
@@ -212,20 +206,16 @@ Status ScrollElementRegionIntoViewHelper(
   return Status(kOk);
 }
 
-Status GetElementEffectiveStyle(
-    const std::string& frame,
-    WebView* web_view,
-    const std::string& element_id,
-    const std::string& property,
-    std::string* value) {
-  Status status = CheckElement(element_id);
-  if (status.IsError())
-    return status;
+Status GetElementEffectiveStyle(const std::string& frame,
+                                WebView* web_view,
+                                const std::string& element_id,
+                                const std::string& property,
+                                std::string* value) {
   base::Value::List args;
   args.Append(CreateElement(element_id));
   args.Append(property);
   std::unique_ptr<base::Value> result;
-  status = web_view->CallFunction(
+  Status status = web_view->CallFunction(
       frame, webdriver::atoms::asString(webdriver::atoms::GET_EFFECTIVE_STYLE),
       args, &result);
   if (status.IsError())
@@ -282,14 +272,11 @@ Status GetElementLocationInViewCenterHelper(const std::string& frame,
                                             const std::string& element_id,
                                             bool center,
                                             WebPoint* location) {
-  Status status = CheckElement(element_id);
-  if (status.IsError())
-    return status;
   base::Value::List args;
   args.Append(CreateElement(element_id));
   args.Append(center);
   std::unique_ptr<base::Value> result;
-  status =
+  Status status =
       web_view->CallFunction(frame, kGetElementLocationScript, args, &result);
   if (status.IsError())
     return status;
@@ -310,36 +297,11 @@ std::string GetElementKey() {
     return kElementKey;
 }
 
-// example of element_id - d9cf1666-0066-4c07-bb86-03edcbab6680
-// should contain only 0-9 or a-f
-// format xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-Status CheckElement(const std::string& element_id) {
-  Session* session = GetThreadLocalSession();
-  if (session && session->w3c_compliant) {
-    if (element_id.length()!=36)
-      return Status(kNoSuchElement, "Element_id length is invalid");
-
-    for (std::string::size_type i=0; i<element_id.length(); ++i) {
-      if (i==8 || i == 13 || i == 18 || i == 23) {
-        if (element_id[i] != '-')
-          return Status(kNoSuchElement, "Element_id format is invalid");
-      } else {
-        if (!(element_id[i] >='0' && element_id[i] <= '9') &&
-            !(element_id[i] >='a' && element_id[i] <= 'f'))
-          return Status(kNoSuchElement,
-                        "Element_id contains invalid letter on position: " +
-                         std::to_string(i) );
-      }
-    }
-  }
-  return Status(kOk);
-}
-
 base::Value CreateElementCommon(const std::string& key,
                                 const std::string& value) {
-  base::Value element(base::Value::Type::DICTIONARY);
-  element.SetStringPath(key, value);
-  return element;
+  base::Value::Dict element;
+  element.SetByDottedPath(key, value);
+  return base::Value(std::move(element));
 }
 
 base::Value CreateElement(const std::string& element_id) {
@@ -350,10 +312,10 @@ base::Value CreateShadowRoot(const std::string& shadow_root_id) {
   return CreateElementCommon(kShadowRootKey, shadow_root_id);
 }
 
-std::unique_ptr<base::DictionaryValue> CreateValueFrom(const WebPoint& point) {
-  std::unique_ptr<base::DictionaryValue> dict(new base::DictionaryValue());
-  dict->SetIntKey("x", point.x);
-  dict->SetIntKey("y", point.y);
+base::Value::Dict CreateValueFrom(const WebPoint& point) {
+  base::Value::Dict dict;
+  dict.Set("x", static_cast<int>(point.x));
+  dict.Set("y", static_cast<int>(point.y));
   return dict;
 }
 
@@ -364,7 +326,7 @@ Status FindElementCommon(int interval_ms,
                          WebView* web_view,
                          const base::Value::Dict& params,
                          std::unique_ptr<base::Value>* value,
-                         bool isShadowRoot) {
+                         bool is_shadow_root) {
   const std::string* strategy = params.FindString("using");
   if (!strategy)
     return Status(kInvalidArgument, "'using' must be a string");
@@ -380,7 +342,7 @@ Status FindElementCommon(int interval_ms,
    * We have them disabled for now.
    * https://github.com/w3c/webdriver/issues/1610
    */
-  if (isShadowRoot && (*strategy == "tag name" || *strategy == "xpath")) {
+  if (is_shadow_root && (*strategy == "tag name" || *strategy == "xpath")) {
     return Status(kInvalidArgument, "invalid locator");
   }
 
@@ -398,7 +360,7 @@ Status FindElementCommon(int interval_ms,
   base::Value::List arguments;
   arguments.Append(std::move(locator));
   if (root_element_id) {
-    if (isShadowRoot)
+    if (is_shadow_root)
       arguments.Append(CreateShadowRoot(*root_element_id));
     else
       arguments.Append(CreateElement(*root_element_id));
@@ -411,11 +373,10 @@ Status FindElementCommon(int interval_ms,
     Status status = web_view->CallFunction(
         session->GetCurrentFrameId(), script, arguments, &temp);
 
-    // A "Cannot find context" error can occur due to transition from in-process
-    // iFrame to OOPIF. Retry a couple of times.
+    // A NoSuchExecutionContext error can occur due to transition from
+    // in-process iFrame to OOPIF. Retry a couple of times.
     if (status.IsError() &&
-        (status.message().find("Cannot find context") == std::string::npos ||
-         ++context_retry > 2)) {
+        (status.code() != kNoSuchExecutionContext || ++context_retry > 2)) {
       return status;
     }
 
@@ -486,7 +447,7 @@ Status GetActiveElement(Session* session,
   return status;
 }
 
-Status HasFocus(Session* session, WebView* web_view, bool* hasFocus) {
+Status HasFocus(Session* session, WebView* web_view, bool* has_focus) {
   std::unique_ptr<base::Value> value;
   Status status = web_view->EvaluateScript(
       session->GetCurrentFrameId(), "document.hasFocus()", false, &value);
@@ -494,7 +455,7 @@ Status HasFocus(Session* session, WebView* web_view, bool* hasFocus) {
     return status;
   if (!value->is_bool())
     return Status(kUnknownError, "document.hasFocus() returns non-boolean");
-  *hasFocus = value->GetBool();
+  *has_focus = value->GetBool();
   return Status(kOk);
 }
 
@@ -540,9 +501,6 @@ Status GetElementAttribute(Session* session,
                            const std::string& element_id,
                            const std::string& attribute_name,
                            std::unique_ptr<base::Value>* value) {
-  Status status = CheckElement(element_id);
-  if (status.IsError())
-    return status;
   base::Value::List args;
   args.Append(CreateElement(element_id));
   args.Append(attribute_name);
@@ -600,9 +558,6 @@ Status GetElementClickableLocation(
         "  }"
         "  throw new Error('no img is found for the area');"
         "}";
-    status = CheckElement(element_id);
-    if (status.IsError())
-      return status;
     base::Value::List args;
     args.Append(CreateElement(element_id));
     std::unique_ptr<base::Value> result;
@@ -612,7 +567,7 @@ Status GetElementClickableLocation(
       return status;
     std::string* maybe_target_element_id = nullptr;
     if (result->is_dict())
-      maybe_target_element_id = result->FindStringKey(GetElementKey());
+      maybe_target_element_id = result->GetDict().FindString(GetElementKey());
     if (!maybe_target_element_id)
       return Status(kUnknownError, "no element reference returned by script");
     target_element_id = *maybe_target_element_id;
@@ -661,18 +616,14 @@ Status GetElementEffectiveStyle(
 
 // Wrapper to JavaScript code in js/get_element_region.js. See comments near the
 // beginning of that file for what is returned.
-Status GetElementRegion(
-    Session* session,
-    WebView* web_view,
-    const std::string& element_id,
-    WebRect* rect) {
-  Status status = CheckElement(element_id);
-  if (status.IsError())
-    return status;
+Status GetElementRegion(Session* session,
+                        WebView* web_view,
+                        const std::string& element_id,
+                        WebRect* rect) {
   base::Value::List args;
   args.Append(CreateElement(element_id));
   std::unique_ptr<base::Value> result;
-  status = web_view->CallFunction(
+  Status status = web_view->CallFunction(
       session->GetCurrentFrameId(), kGetElementRegionScript, args, &result);
   if (status.IsError())
     return status;
@@ -683,21 +634,16 @@ Status GetElementRegion(
   return Status(kOk);
 }
 
-Status GetElementTagName(
-    Session* session,
-    WebView* web_view,
-    const std::string& element_id,
-    std::string* name) {
-  Status status = CheckElement(element_id);
-  if (status.IsError())
-    return status;
+Status GetElementTagName(Session* session,
+                         WebView* web_view,
+                         const std::string& element_id,
+                         std::string* name) {
   base::Value::List args;
   args.Append(CreateElement(element_id));
   std::unique_ptr<base::Value> result;
-  status = web_view->CallFunction(
+  Status status = web_view->CallFunction(
       session->GetCurrentFrameId(),
-      "function(elem) { return elem.tagName.toLowerCase(); }",
-      args, &result);
+      "function(elem) { return elem.tagName.toLowerCase(); }", args, &result);
   if (status.IsError())
     return status;
   if (!result->is_string())
@@ -706,20 +652,15 @@ Status GetElementTagName(
   return Status(kOk);
 }
 
-Status GetElementSize(
-    Session* session,
-    WebView* web_view,
-    const std::string& element_id,
-    WebSize* size) {
-  Status status = CheckElement(element_id);
-  if (status.IsError())
-    return status;
+Status GetElementSize(Session* session,
+                      WebView* web_view,
+                      const std::string& element_id,
+                      WebSize* size) {
   base::Value::List args;
   args.Append(CreateElement(element_id));
   std::unique_ptr<base::Value> result;
-  status = CallAtomsJs(
-      session->GetCurrentFrameId(), web_view, webdriver::atoms::GET_SIZE,
-      args, &result);
+  Status status = CallAtomsJs(session->GetCurrentFrameId(), web_view,
+                              webdriver::atoms::GET_SIZE, args, &result);
   if (status.IsError())
     return status;
   if (!ParseFromValue(result.get(), size))
@@ -727,22 +668,17 @@ Status GetElementSize(
   return Status(kOk);
 }
 
-Status IsElementDisplayed(
-    Session* session,
-    WebView* web_view,
-    const std::string& element_id,
-    bool ignore_opacity,
-    bool* is_displayed) {
-  Status status = CheckElement(element_id);
-  if (status.IsError())
-    return status;
+Status IsElementDisplayed(Session* session,
+                          WebView* web_view,
+                          const std::string& element_id,
+                          bool ignore_opacity,
+                          bool* is_displayed) {
   base::Value::List args;
   args.Append(CreateElement(element_id));
   args.Append(ignore_opacity);
   std::unique_ptr<base::Value> result;
-  status = CallAtomsJs(
-      session->GetCurrentFrameId(), web_view, webdriver::atoms::IS_DISPLAYED,
-      args, &result);
+  Status status = CallAtomsJs(session->GetCurrentFrameId(), web_view,
+                              webdriver::atoms::IS_DISPLAYED, args, &result);
   if (status.IsError())
     return status;
   if (!result->is_bool())
@@ -751,20 +687,15 @@ Status IsElementDisplayed(
   return Status(kOk);
 }
 
-Status IsElementEnabled(
-    Session* session,
-    WebView* web_view,
-    const std::string& element_id,
-    bool* is_enabled) {
-  Status status = CheckElement(element_id);
-  if (status.IsError())
-    return status;
+Status IsElementEnabled(Session* session,
+                        WebView* web_view,
+                        const std::string& element_id,
+                        bool* is_enabled) {
   base::Value::List args;
   args.Append(CreateElement(element_id));
   std::unique_ptr<base::Value> result;
-  status = CallAtomsJs(
-      session->GetCurrentFrameId(), web_view, webdriver::atoms::IS_ENABLED,
-      args, &result);
+  Status status = CallAtomsJs(session->GetCurrentFrameId(), web_view,
+                              webdriver::atoms::IS_ENABLED, args, &result);
   if (status.IsError())
     return status;
   if (!result->is_bool())
@@ -773,20 +704,15 @@ Status IsElementEnabled(
   return Status(kOk);
 }
 
-Status IsOptionElementSelected(
-    Session* session,
-    WebView* web_view,
-    const std::string& element_id,
-    bool* is_selected) {
-  Status status = CheckElement(element_id);
-  if (status.IsError())
-    return status;
+Status IsOptionElementSelected(Session* session,
+                               WebView* web_view,
+                               const std::string& element_id,
+                               bool* is_selected) {
   base::Value::List args;
   args.Append(CreateElement(element_id));
   std::unique_ptr<base::Value> result;
-  status = CallAtomsJs(
-      session->GetCurrentFrameId(), web_view, webdriver::atoms::IS_SELECTED,
-      args, &result);
+  Status status = CallAtomsJs(session->GetCurrentFrameId(), web_view,
+                              webdriver::atoms::IS_SELECTED, args, &result);
   if (status.IsError())
     return status;
   if (!result->is_bool())
@@ -795,20 +721,16 @@ Status IsOptionElementSelected(
   return Status(kOk);
 }
 
-Status IsOptionElementTogglable(
-    Session* session,
-    WebView* web_view,
-    const std::string& element_id,
-    bool* is_togglable) {
-  Status status = CheckElement(element_id);
-  if (status.IsError())
-    return status;
+Status IsOptionElementTogglable(Session* session,
+                                WebView* web_view,
+                                const std::string& element_id,
+                                bool* is_togglable) {
   base::Value::List args;
   args.Append(CreateElement(element_id));
   std::unique_ptr<base::Value> result;
-  status = web_view->CallFunction(
-      session->GetCurrentFrameId(), kIsOptionElementToggleableScript,
-      args, &result);
+  Status status =
+      web_view->CallFunction(session->GetCurrentFrameId(),
+                             kIsOptionElementToggleableScript, args, &result);
   if (status.IsError())
     return status;
   if (!result->is_bool())
@@ -817,14 +739,10 @@ Status IsOptionElementTogglable(
   return Status(kOk);
 }
 
-Status SetOptionElementSelected(
-    Session* session,
-    WebView* web_view,
-    const std::string& element_id,
-    bool selected) {
-  Status status = CheckElement(element_id);
-  if (status.IsError())
-    return status;
+Status SetOptionElementSelected(Session* session,
+                                WebView* web_view,
+                                const std::string& element_id,
+                                bool selected) {
   // TODO(171034): need to fix throwing error if an alert is triggered.
   base::Value::List args;
   args.Append(CreateElement(element_id));
@@ -909,7 +827,7 @@ Status ScrollElementRegionIntoView(
     if (!result->is_dict())
       return Status(kUnknownError, "no element reference returned by script");
     std::string* maybe_frame_element_id =
-        result->FindStringKey(GetElementKey());
+        result->GetDict().FindString(GetElementKey());
     if (!maybe_frame_element_id)
       return Status(kUnknownError, "failed to locate a sub frame");
     std::string frame_element_id = *maybe_frame_element_id;
@@ -956,7 +874,7 @@ Status GetElementLocationInViewCenter(Session* session,
     if (!result->is_dict())
       return Status(kUnknownError, "no element reference returned by script");
     std::string* maybe_frame_element_id =
-        result->FindStringKey(GetElementKey());
+        result->GetDict().FindString(GetElementKey());
     if (!maybe_frame_element_id)
       return Status(kUnknownError, "failed to locate a sub frame");
     std::string frame_element_id = *maybe_frame_element_id;
@@ -986,14 +904,10 @@ Status GetAXNodeByElementId(Session* session,
                             WebView* web_view,
                             const std::string& element_id,
                             std::unique_ptr<base::Value>* axNode) {
-  Status status = CheckElement(element_id);
-  if (status.IsError())
-    return status;
-
   base::Value element(CreateElement(element_id));
   int backend_node_id;
-  status = web_view->GetBackendNodeIdByElement(session->GetCurrentFrameId(),
-                                               element, &backend_node_id);
+  Status status = web_view->GetBackendNodeIdByElement(
+      session->GetCurrentFrameId(), element, &backend_node_id);
 
   if (status.IsError())
     return status;
@@ -1009,7 +923,7 @@ Status GetAXNodeByElementId(Session* session,
   if (status.IsError())
     return status;
 
-  absl::optional<base::Value> nodes = result->ExtractKey("nodes");
+  absl::optional<base::Value> nodes = result->GetDict().Extract("nodes");
   if (!nodes)
     return Status(kUnknownError, "No `nodes` found in CDP response");
 

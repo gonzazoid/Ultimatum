@@ -6,11 +6,15 @@
 
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/services/sharing/nearby/decoder/nearby_decoder.h"
 #include "chrome/services/sharing/nearby/nearby_connections.h"
+#include "chrome/services/sharing/nearby/nearby_presence.h"
+#include "chrome/services/sharing/nearby/quick_start_decoder/quick_start_decoder.h"
 #include "chromeos/ash/services/nearby/public/mojom/nearby_decoder.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/quick_start_decoder.mojom.h"
 
 namespace sharing {
 
@@ -23,19 +27,22 @@ SharingImpl::SharingImpl(
 SharingImpl::~SharingImpl() {
   // No need to call DoShutDown() from the destructor because SharingImpl should
   // only be destroyed after SharingImpl::ShutDown() has been called.
-  DCHECK(!nearby_connections_ && !nearby_decoder_);
+  CHECK(!nearby_connections_ && !nearby_presence_ && !nearby_decoder_);
 }
 
 void SharingImpl::Connect(
     NearbyDependenciesPtr deps,
     mojo::PendingReceiver<NearbyConnectionsMojom> connections_receiver,
+    mojo::PendingReceiver<NearbyPresenceMojom> presence_receiver,
     mojo::PendingReceiver<sharing::mojom::NearbySharingDecoder>
-        decoder_receiver) {
-  DCHECK(!nearby_connections_);
-  DCHECK(!nearby_decoder_);
+        decoder_receiver,
+    mojo::PendingReceiver<ash::quick_start::mojom::QuickStartDecoder>
+        quick_start_decoder_receiver) {
+  CHECK(!nearby_connections_);
+  CHECK(!nearby_presence_);
+  CHECK(!nearby_decoder_);
 
-  location::nearby::api::LogMessage::Severity min_log_severity =
-      deps->min_log_severity;
+  nearby::api::LogMessage::Severity min_log_severity = deps->min_log_severity;
 
   InitializeNearbySharedRemotes(std::move(deps));
 
@@ -44,8 +51,20 @@ void SharingImpl::Connect(
       base::BindOnce(&SharingImpl::OnDisconnect, weak_ptr_factory_.GetWeakPtr(),
                      MojoDependencyName::kNearbyConnections));
 
-  nearby_decoder_ =
-      std::make_unique<NearbySharingDecoder>(std::move(decoder_receiver));
+  nearby_presence_ = std::make_unique<NearbyPresence>(
+      std::move(presence_receiver),
+      base::BindOnce(&SharingImpl::OnDisconnect, weak_ptr_factory_.GetWeakPtr(),
+                     MojoDependencyName::kNearbyPresence));
+
+  nearby_decoder_ = std::make_unique<NearbySharingDecoder>(
+      std::move(decoder_receiver),
+      base::BindOnce(&SharingImpl::OnDisconnect, weak_ptr_factory_.GetWeakPtr(),
+                     MojoDependencyName::kNearbyShareDecoder));
+
+  quick_start_decoder_ = std::make_unique<ash::quick_start::QuickStartDecoder>(
+      std::move(quick_start_decoder_receiver),
+      base::BindOnce(&SharingImpl::OnDisconnect, weak_ptr_factory_.GetWeakPtr(),
+                     MojoDependencyName::kQuickStartDecoder));
 }
 
 void SharingImpl::ShutDown(ShutDownCallback callback) {
@@ -54,12 +73,14 @@ void SharingImpl::ShutDown(ShutDownCallback callback) {
 }
 
 void SharingImpl::DoShutDown(bool is_expected) {
-  location::nearby::NearbySharedRemotes::SetInstance(nullptr);
+  nearby::NearbySharedRemotes::SetInstance(nullptr);
 
-  if (!nearby_connections_ && !nearby_decoder_)
+  if (!nearby_connections_ && !nearby_presence_ && !nearby_decoder_) {
     return;
+  }
 
   nearby_connections_.reset();
+  nearby_presence_.reset();
   nearby_decoder_.reset();
 
   // Leave |receiver_| valid. Its disconnection is reserved as a signal that the
@@ -80,10 +101,8 @@ void SharingImpl::OnDisconnect(MojoDependencyName mojo_dependency_name) {
 }
 
 void SharingImpl::InitializeNearbySharedRemotes(NearbyDependenciesPtr deps) {
-  nearby_shared_remotes_ =
-      std::make_unique<location::nearby::NearbySharedRemotes>();
-  location::nearby::NearbySharedRemotes::SetInstance(
-      nearby_shared_remotes_.get());
+  nearby_shared_remotes_ = std::make_unique<nearby::NearbySharedRemotes>();
+  nearby::NearbySharedRemotes::SetInstance(nearby_shared_remotes_.get());
 
   if (deps->bluetooth_adapter) {
     nearby_shared_remotes_->bluetooth_adapter.Bind(
@@ -92,7 +111,18 @@ void SharingImpl::InitializeNearbySharedRemotes(NearbyDependenciesPtr deps) {
         base::BindOnce(&SharingImpl::OnDisconnect,
                        weak_ptr_factory_.GetWeakPtr(),
                        MojoDependencyName::kBluetoothAdapter),
-        base::SequencedTaskRunnerHandle::Get());
+        base::SequencedTaskRunner::GetCurrentDefault());
+  }
+
+  if (deps->nearby_presence_credential_storage) {
+    nearby_shared_remotes_->nearby_presence_credential_storage.Bind(
+        std::move(deps->nearby_presence_credential_storage), io_task_runner_);
+    nearby_shared_remotes_->nearby_presence_credential_storage
+        .set_disconnect_handler(
+            base::BindOnce(
+                &SharingImpl::OnDisconnect, weak_ptr_factory_.GetWeakPtr(),
+                MojoDependencyName::kNearbyPresenceCredentialStorage),
+            base::SequencedTaskRunner::GetCurrentDefault());
   }
 
   nearby_shared_remotes_->socket_manager.Bind(
@@ -100,7 +130,7 @@ void SharingImpl::InitializeNearbySharedRemotes(NearbyDependenciesPtr deps) {
   nearby_shared_remotes_->socket_manager.set_disconnect_handler(
       base::BindOnce(&SharingImpl::OnDisconnect, weak_ptr_factory_.GetWeakPtr(),
                      MojoDependencyName::kSocketManager),
-      base::SequencedTaskRunnerHandle::Get());
+      base::SequencedTaskRunner::GetCurrentDefault());
 
   nearby_shared_remotes_->mdns_responder_factory.Bind(
       std::move(deps->webrtc_dependencies->mdns_responder_factory),
@@ -108,7 +138,7 @@ void SharingImpl::InitializeNearbySharedRemotes(NearbyDependenciesPtr deps) {
   nearby_shared_remotes_->mdns_responder_factory.set_disconnect_handler(
       base::BindOnce(&SharingImpl::OnDisconnect, weak_ptr_factory_.GetWeakPtr(),
                      MojoDependencyName::kMdnsResponder),
-      base::SequencedTaskRunnerHandle::Get());
+      base::SequencedTaskRunner::GetCurrentDefault());
 
   nearby_shared_remotes_->ice_config_fetcher.Bind(
       std::move(deps->webrtc_dependencies->ice_config_fetcher),
@@ -116,14 +146,14 @@ void SharingImpl::InitializeNearbySharedRemotes(NearbyDependenciesPtr deps) {
   nearby_shared_remotes_->ice_config_fetcher.set_disconnect_handler(
       base::BindOnce(&SharingImpl::OnDisconnect, weak_ptr_factory_.GetWeakPtr(),
                      MojoDependencyName::kIceConfigFetcher),
-      base::SequencedTaskRunnerHandle::Get());
+      base::SequencedTaskRunner::GetCurrentDefault());
 
   nearby_shared_remotes_->webrtc_signaling_messenger.Bind(
       std::move(deps->webrtc_dependencies->messenger), io_task_runner_);
   nearby_shared_remotes_->webrtc_signaling_messenger.set_disconnect_handler(
       base::BindOnce(&SharingImpl::OnDisconnect, weak_ptr_factory_.GetWeakPtr(),
                      MojoDependencyName::kWebRtcSignalingMessenger),
-      base::SequencedTaskRunnerHandle::Get());
+      base::SequencedTaskRunner::GetCurrentDefault());
 
   // TODO(https://crbug.com/1261238): This should always be true when the
   // WifiLan feature flag is enabled. Remove when flag is enabled by default.
@@ -135,7 +165,7 @@ void SharingImpl::InitializeNearbySharedRemotes(NearbyDependenciesPtr deps) {
         base::BindOnce(&SharingImpl::OnDisconnect,
                        weak_ptr_factory_.GetWeakPtr(),
                        MojoDependencyName::kCrosNetworkConfig),
-        base::SequencedTaskRunnerHandle::Get());
+        base::SequencedTaskRunner::GetCurrentDefault());
 
     nearby_shared_remotes_->firewall_hole_factory.Bind(
         std::move(deps->wifilan_dependencies->firewall_hole_factory),
@@ -144,7 +174,7 @@ void SharingImpl::InitializeNearbySharedRemotes(NearbyDependenciesPtr deps) {
         base::BindOnce(&SharingImpl::OnDisconnect,
                        weak_ptr_factory_.GetWeakPtr(),
                        MojoDependencyName::kFirewallHoleFactory),
-        base::SequencedTaskRunnerHandle::Get());
+        base::SequencedTaskRunner::GetCurrentDefault());
 
     nearby_shared_remotes_->tcp_socket_factory.Bind(
         std::move(deps->wifilan_dependencies->tcp_socket_factory),
@@ -153,7 +183,7 @@ void SharingImpl::InitializeNearbySharedRemotes(NearbyDependenciesPtr deps) {
         base::BindOnce(&SharingImpl::OnDisconnect,
                        weak_ptr_factory_.GetWeakPtr(),
                        MojoDependencyName::kTcpSocketFactory),
-        base::SequencedTaskRunnerHandle::Get());
+        base::SequencedTaskRunner::GetCurrentDefault());
   }
 }
 
@@ -178,6 +208,14 @@ std::string SharingImpl::GetMojoDependencyName(
       return "Firewall Hole Factory";
     case MojoDependencyName::kTcpSocketFactory:
       return "TCP socket Factory";
+    case MojoDependencyName::kNearbyPresence:
+      return "Nearby Presence";
+    case MojoDependencyName::kNearbyShareDecoder:
+      return "Decoder";
+    case MojoDependencyName::kQuickStartDecoder:
+      return "Quick Start Decoder";
+    case MojoDependencyName::kNearbyPresenceCredentialStorage:
+      return "Nearby Presence Credential Storage";
   }
 }
 

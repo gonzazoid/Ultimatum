@@ -22,6 +22,12 @@ class URLLoaderContextForTests : public URLLoaderContext {
   URLLoaderContextForTests(const URLLoaderContextForTests&) = delete;
   URLLoaderContextForTests& operator=(const URLLoaderContextForTests&) = delete;
 
+  void Detach() {
+    network_context_client_ = nullptr;
+    url_request_context_ = nullptr;
+    resource_scheduler_client_ = nullptr;
+  }
+
   // Accessors to let tests configure some aspects of `this` object.
   mojom::URLLoaderFactoryParams& mutable_factory_params() {
     return factory_params_;
@@ -38,10 +44,11 @@ class URLLoaderContextForTests : public URLLoaderContext {
   }
 
   // URLLoaderContext implementation.
-  bool ShouldRequireNetworkIsolationKey() const override;
+  bool ShouldRequireIsolationInfo() const override;
   const cors::OriginAccessList& GetOriginAccessList() const override;
   const mojom::URLLoaderFactoryParams& GetFactoryParams() const override;
   mojom::CookieAccessObserver* GetCookieAccessObserver() const override;
+  mojom::TrustTokenAccessObserver* GetTrustTokenAccessObserver() const override;
   mojom::CrossOriginEmbedderPolicyReporter* GetCoepReporter() const override;
   mojom::DevToolsObserver* GetDevToolsObserver() const override;
   mojom::NetworkContextClient* GetNetworkContextClient() const override;
@@ -53,6 +60,7 @@ class URLLoaderContextForTests : public URLLoaderContext {
   scoped_refptr<ResourceSchedulerClient> GetResourceSchedulerClient()
       const override;
   corb::PerFactoryState& GetMutableCorbState() override;
+  bool DataUseUpdatesEnabled() override;
 
  private:
   mojom::URLLoaderFactoryParams factory_params_;

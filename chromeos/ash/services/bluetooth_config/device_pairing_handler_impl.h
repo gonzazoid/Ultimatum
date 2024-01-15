@@ -5,7 +5,8 @@
 #ifndef CHROMEOS_ASH_SERVICES_BLUETOOTH_CONFIG_DEVICE_PAIRING_HANDLER_IMPL_H_
 #define CHROMEOS_ASH_SERVICES_BLUETOOTH_CONFIG_DEVICE_PAIRING_HANDLER_IMPL_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/ash/services/bluetooth_config/adapter_state_controller.h"
 #include "chromeos/ash/services/bluetooth_config/device_pairing_handler.h"
@@ -60,7 +61,7 @@ class DevicePairingHandlerImpl
                    FetchDeviceCallback callback) override;
   void PerformPairDevice(const std::string& device_id) override;
   void PerformFinishCurrentPairingRequest(
-      absl::optional<device::ConnectionFailureReason> failure_reason,
+      std::optional<device::ConnectionFailureReason> failure_reason,
       base::TimeDelta duration) override;
   void CancelPairing() override;
   void OnRequestPinCode(const std::string& pin_code) override;
@@ -81,7 +82,7 @@ class DevicePairingHandlerImpl
 
   // device::BluetoothDevice::Connect() callback.
   void OnDeviceConnect(
-      absl::optional<device::BluetoothDevice::ConnectErrorCode> error_code);
+      std::optional<device::BluetoothDevice::ConnectErrorCode> error_code);
   void HandlePairingFailed(
       device::BluetoothDevice::ConnectErrorCode error_code);
 
@@ -93,7 +94,7 @@ class DevicePairingHandlerImpl
   bool is_canceling_pairing_ = false;
 
   scoped_refptr<device::BluetoothAdapter> bluetooth_adapter_;
-  FastPairDelegate* fast_pair_delegate_;
+  raw_ptr<FastPairDelegate> fast_pair_delegate_;
 
   base::WeakPtrFactory<DevicePairingHandlerImpl> weak_ptr_factory_{this};
 };

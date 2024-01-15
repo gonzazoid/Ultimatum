@@ -8,9 +8,11 @@
 #include <string>
 #include <utility>
 
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "services/device/wake_lock/wake_lock.h"
+#include "services/device/wake_lock/wake_lock_context.h"
 
 namespace device {
 
@@ -76,8 +78,8 @@ void WakeLockProvider::GetWakeLockWithoutContext(
       std::make_unique<WakeLock>(std::move(receiver), type, reason, description,
                                  WakeLockContext::WakeLockInvalidContextId,
                                  native_view_getter_, file_task_runner_, this);
-  GetWakeLockDataPerType(type).wake_locks[wake_lock.get()] =
-      std::move(wake_lock);
+  WakeLock* const key = wake_lock.get();
+  GetWakeLockDataPerType(type).wake_locks[key] = std::move(wake_lock);
 }
 
 void WakeLockProvider::NotifyOnWakeLockDeactivation(

@@ -5,18 +5,19 @@
 #include "chrome/browser/ui/startup/web_app_startup_utils.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/containers/fixed_flat_map.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -31,17 +32,17 @@
 #include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/browser_dialogs.h"
 #include "chrome/browser/ui/startup/infobar_utils.h"
 #include "chrome/browser/ui/startup/launch_mode_recorder.h"
 #include "chrome/browser/ui/startup/startup_browser_creator.h"
 #include "chrome/browser/ui/startup/startup_browser_creator_impl.h"
 #include "chrome/browser/ui/startup/startup_types.h"
+#include "chrome/browser/ui/web_applications/web_app_dialogs.h"
 #include "chrome/browser/web_applications/os_integration/os_integration_manager.h"
 #include "chrome/browser/web_applications/os_integration/web_app_file_handler_manager.h"
 #include "chrome/browser/web_applications/web_app.h"
 #include "chrome/browser/web_applications/web_app_command_scheduler.h"
-#include "chrome/browser/web_applications/web_app_id.h"
+#include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/browser/web_applications/web_app_registry_update.h"
@@ -49,8 +50,10 @@
 #include "chrome/browser/web_applications/web_app_utils.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_switches.h"
+#include "components/keep_alive_registry/keep_alive_registry.h"
 #include "components/keep_alive_registry/keep_alive_types.h"
 #include "components/keep_alive_registry/scoped_keep_alive.h"
+#include "components/webapps/common/web_app_id.h"
 #include "third_party/blink/public/common/custom_handlers/protocol_handler_utils.h"
 #include "third_party/blink/public/common/security/protocol_handler_security_level.h"
 #include "url/gurl.h"
@@ -98,9 +101,23 @@ class StartupWebAppCreator
     if (app_id.empty())
       return false;
 
-    base::AdoptRef(new StartupWebAppCreator(command_line, cur_dir, profile,
-                                            is_first_run, app_id))
-        ->Start();
+    // Ensure keep alive registry is available and is not shutting down before
+    // attempting a web apps launch.
+    KeepAliveRegistry* keep_alive_registry = KeepAliveRegistry::GetInstance();
+    if (!keep_alive_registry || keep_alive_registry->IsShuttingDown()) {
+      return false;
+    }
+
+    scoped_refptr<StartupWebAppCreator> web_app_startup =
+        base::AdoptRef(new StartupWebAppCreator(command_line, cur_dir, profile,
+                                                is_first_run, app_id));
+    // Even though the launch commands can be scheduled before the provider is
+    // started, there is logic filtering out incorrect file & protocol launches
+    // that happens without locks first, and that has to wait until the database
+    // is loaded.
+    WebAppProvider::GetForWebApps(profile)->on_registry_ready().Post(
+        FROM_HERE,
+        base::BindOnce(&StartupWebAppCreator::Start, web_app_startup));
     return true;
   }
 
@@ -118,18 +135,20 @@ class StartupWebAppCreator
                        const base::FilePath& cur_dir,
                        Profile* profile,
                        chrome::startup::IsFirstRun is_first_run,
-                       const AppId& app_id)
+                       const webapps::AppId& app_id)
       : command_line_(command_line),
         cur_dir_(cur_dir),
         profile_(profile),
         is_first_run_(is_first_run),
         app_id_(app_id),
-        web_app_launch_manager_(profile),
+        provider_(WebAppProvider::GetForWebApps(profile_)),
         profile_keep_alive_(
             profile,
             ProfileKeepAliveOrigin::kWebAppPermissionDialogWindow),
         keep_alive_(KeepAliveOrigin::WEB_APP_INTENT_PICKER,
-                    KeepAliveRestartOption::DISABLED) {}
+                    KeepAliveRestartOption::DISABLED) {
+    DCHECK(provider_);
+  }
 
   ~StartupWebAppCreator() {
     auto startup_done = std::move(GetStartupDoneCallback());
@@ -138,14 +157,6 @@ class StartupWebAppCreator
   }
 
   void Start() {
-    WebAppProvider* const provider = WebAppProvider::GetForWebApps(profile_);
-    DCHECK(provider);
-    provider->on_registry_ready().Post(
-        FROM_HERE, base::BindOnce(&StartupWebAppCreator::OnAppRegistryReady,
-                                  base::WrapRefCounted(this)));
-  }
-
-  void OnAppRegistryReady() {
     if (MaybeLaunchProtocolHandler() == LaunchResult::kHandled)
       return;
 
@@ -165,24 +176,23 @@ class StartupWebAppCreator
 
   void LaunchApp() {
     if (file_launch_infos_.empty()) {
-      absl::optional<GURL> protocol;
+      std::optional<GURL> protocol;
       if (!protocol_url_.is_empty())
         protocol = protocol_url_;
-
-      web_app_launch_manager_.LaunchApplication(
+      provider_->scheduler().LaunchApp(
           app_id_, command_line_, cur_dir_,
-          /*url_handler_launch_url=*/absl::nullopt, protocol,
-          /*file_launch_url=*/absl::nullopt, /*launch_files=*/{},
+          /*url_handler_launch_url=*/std::nullopt, protocol,
+          /*file_launch_url=*/std::nullopt, /*launch_files=*/{},
           base::BindOnce(&StartupWebAppCreator::OnAppLaunched,
                          base::WrapRefCounted(this)));
       return;
     }
 
     for (const auto& [url, paths] : file_launch_infos_) {
-      web_app_launch_manager_.LaunchApplication(
+      provider_->scheduler().LaunchApp(
           app_id_, command_line_, cur_dir_,
-          /*url_handler_launch_url=*/absl::nullopt,
-          /*protocol_handler_launch_url=*/absl::nullopt,
+          /*url_handler_launch_url=*/std::nullopt,
+          /*protocol_handler_launch_url=*/std::nullopt,
           /*file_launch_url=*/url, /*launch_files=*/paths,
           base::BindOnce(&StartupWebAppCreator::OnAppLaunched,
                          base::WrapRefCounted(this)));
@@ -221,7 +231,7 @@ class StartupWebAppCreator
     // by the application.
     WebAppProvider* const provider = WebAppProvider::GetForWebApps(profile_);
     DCHECK(provider->on_registry_ready().is_signaled());
-    WebAppRegistrar& registrar = provider->registrar();
+    WebAppRegistrar& registrar = provider->registrar_unsafe();
     if (registrar.IsDisallowedLaunchProtocol(app_id_, protocol_url.scheme())) {
       // If disallowed, return `kHandled` to signal that the launch is spoken
       // for, but do not launch a browser or app window. `this` will be deleted.
@@ -244,8 +254,8 @@ class StartupWebAppCreator
       std::move(launch_callback)
           .Run(/*allowed=*/true, /*remember_user_choice=*/false);
     } else {
-      chrome::ShowWebAppProtocolLaunchDialog(protocol_url_, profile_, app_id_,
-                                             std::move(launch_callback));
+      ShowWebAppProtocolLaunchDialog(protocol_url_, profile_, app_id_,
+                                     std::move(launch_callback));
     }
     return LaunchResult::kHandled;
   }
@@ -258,14 +268,13 @@ class StartupWebAppCreator
     if (launch_files.empty())
       return LaunchResult::kNotHandled;
 
-    WebAppProvider* const provider = WebAppProvider::GetForWebApps(profile_);
-    file_launch_infos_ = provider->os_integration_manager()
+    file_launch_infos_ = provider_->os_integration_manager()
                              .file_handler_manager()
                              .GetMatchingFileHandlerUrls(app_id_, launch_files);
     if (file_launch_infos_.empty())
       return LaunchResult::kNotHandled;
 
-    const WebApp* web_app = provider->registrar().GetAppById(app_id_);
+    const WebApp* web_app = provider_->registrar_unsafe().GetAppById(app_id_);
     DCHECK(web_app);
 
     // `this` will stay alive until `launch_callback` is executed or destroyed.
@@ -275,8 +284,8 @@ class StartupWebAppCreator
 
     switch (web_app->file_handler_approval_state()) {
       case ApiApprovalState::kRequiresPrompt:
-        chrome::ShowWebAppFileLaunchDialog(launch_files, profile_, app_id_,
-                                           std::move(launch_callback));
+        ShowWebAppFileLaunchDialog(launch_files, profile_, app_id_,
+                                   std::move(launch_callback));
         break;
       case ApiApprovalState::kAllowed:
         std::move(launch_callback)
@@ -305,27 +314,31 @@ class StartupWebAppCreator
 
     if (remember_user_choice) {
       if (!protocol_url_.is_empty()) {
-        PersistProtocolHandlersUserChoice(profile_, app_id_, protocol_url_,
-                                          allowed, std::move(persist_callback));
+        ApiApprovalState approval_state = allowed
+                                              ? ApiApprovalState::kAllowed
+                                              : ApiApprovalState::kDisallowed;
+        provider_->scheduler().UpdateProtocolHandlerUserApproval(
+            app_id_, protocol_url_.scheme(), approval_state,
+            std::move(persist_callback));
       } else {
         DCHECK(!file_launch_infos_.empty());
-        WebAppProvider::GetForWebApps(profile_)
-            ->scheduler()
-            .PersistFileHandlersUserChoice(app_id_, allowed,
-                                           std::move(persist_callback));
+        provider_->scheduler().PersistFileHandlersUserChoice(
+            app_id_, allowed, std::move(persist_callback));
       }
     } else {
       std::move(persist_callback).Run();
     }
   }
 
-  void OnAppLaunched(Browser* browser, apps::LaunchContainer container) {
+  void OnAppLaunched(base::WeakPtr<Browser> browser,
+                     base::WeakPtr<content::WebContents> web_contents,
+                     apps::LaunchContainer container) {
     // The finalization step should only occur for the first app launch.
     if (app_window_has_been_launched_)
       return;
 
-    FinalizeWebAppLaunch(open_mode_, command_line_, is_first_run_, browser,
-                         container);
+    FinalizeWebAppLaunch(open_mode_, command_line_, is_first_run_,
+                         browser.get(), container);
     app_window_has_been_launched_ = true;
   }
 
@@ -336,16 +349,16 @@ class StartupWebAppCreator
   chrome::startup::IsFirstRun is_first_run_;
 
   // The app id for this launch, corresponding to --app-id on the command line.
-  const AppId app_id_;
+  const webapps::AppId app_id_;
 
-  WebAppLaunchManager web_app_launch_manager_;
+  raw_ptr<WebAppProvider> provider_;
 
   // This object keeps the profile and browser process alive while determining
   // whether to launch a window.
   ScopedProfileKeepAlive profile_keep_alive_;
   ScopedKeepAlive keep_alive_;
 
-  absl::optional<OpenMode> open_mode_;
+  std::optional<OpenMode> open_mode_;
 
   // At most one of the following members should be non-empty.
   // If non-empty, this launch will be treated as a protocol handler launch.
@@ -368,7 +381,7 @@ bool MaybeHandleWebAppLaunch(const base::CommandLine& command_line,
                                                        profile, is_first_run);
 }
 
-void FinalizeWebAppLaunch(absl::optional<OpenMode> app_open_mode,
+void FinalizeWebAppLaunch(std::optional<OpenMode> app_open_mode,
                           const base::CommandLine& command_line,
                           chrome::startup::IsFirstRun is_first_run,
                           Browser* browser,

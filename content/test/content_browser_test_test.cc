@@ -7,9 +7,13 @@
 #include <string>
 
 #include "base/base_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/containers/contains.h"
+#include "base/files/file_path.h"
+#include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/path_service.h"
 #include "base/process/launch.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
@@ -21,8 +25,8 @@
 #include "base/test/test_switches.h"
 #include "base/test/test_timeouts.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
+#include "content/public/browser/network_service_util.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
@@ -39,7 +43,7 @@
 #include "testing/gtest/include/gtest/gtest-spi.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/ozone/public/ozone_switches.h"
 #endif
 
@@ -60,13 +64,12 @@ namespace {
 base::CommandLine CreateCommandLine() {
   const base::CommandLine& cmdline = *base::CommandLine::ForCurrentProcess();
   base::CommandLine command_line = base::CommandLine(cmdline.GetProgram());
-#if defined(USE_OZONE)
-  const char* kSwitchesToCopy[] = {
+#if BUILDFLAG(IS_OZONE)
+  static const char* const kSwitchesToCopy[] = {
       // Keep the kOzonePlatform switch that the Ozone must use.
       switches::kOzonePlatform,
   };
-  command_line.CopySwitchesFrom(cmdline, kSwitchesToCopy,
-                                std::size(kSwitchesToCopy));
+  command_line.CopySwitchesFrom(cmdline, kSwitchesToCopy);
 #endif
   return command_line;
 }
@@ -135,7 +138,7 @@ IN_PROC_BROWSER_TEST_F(ContentBrowserTest, MAYBE_RendererCrashCallStack) {
       "#0 ";
 #endif
 
-  if (output.find(crash_string) == std::string::npos) {
+  if (!base::Contains(output, crash_string)) {
     GTEST_FAIL() << "Couldn't find\n" << crash_string << "\n in output\n "
                  << output;
   }
@@ -172,8 +175,7 @@ IN_PROC_BROWSER_TEST_F(ContentBrowserTest, MAYBE_BrowserCrashCallStack) {
   // A browser process immediate crash can race the initialization of the
   // network service process and leave the process hanging, so run the network
   // service in-process.
-  new_test.AppendSwitchASCII(switches::kEnableFeatures,
-                             features::kNetworkServiceInProcess.name);
+  ForceInProcessNetworkService();
 
   std::string output;
   base::GetAppOutputAndError(new_test, &output);
@@ -189,9 +191,9 @@ IN_PROC_BROWSER_TEST_F(ContentBrowserTest, MAYBE_BrowserCrashCallStack) {
       "#0 ";
 #endif
 
-  if (output.find(crash_string) == std::string::npos) {
-    GTEST_FAIL() << "Couldn't find\n" << crash_string << "\n in output\n "
-                 << output;
+  if (!base::Contains(output, crash_string)) {
+    GTEST_FAIL() << "Couldn't find\n"
+                 << crash_string << "\n in output\n " << output;
   }
 }
 
@@ -209,7 +211,7 @@ IN_PROC_BROWSER_TEST_F(MockContentBrowserTest, DISABLED_FailTest) {
 }
 // Basic Test to crash
 IN_PROC_BROWSER_TEST_F(MockContentBrowserTest, DISABLED_CrashTest) {
-  IMMEDIATE_CRASH();
+  base::ImmediateCrash();
 }
 
 // This is disabled due to flakiness: https://crbug.com/1086372
@@ -241,7 +243,7 @@ IN_PROC_BROWSER_TEST_F(ContentBrowserTest, MAYBE_RunMockTests) {
   base::GetAppOutputAndError(command_line, &output);
 
   // Validate the resulting JSON file is the expected output.
-  absl::optional<base::Value::Dict> root =
+  std::optional<base::Value::Dict> root =
       base::test_launcher_utils::ReadSummary(path);
   ASSERT_TRUE(root);
 
@@ -374,7 +376,7 @@ void CallbackChecker(bool* non_nested_task_ran) {
 
 IN_PROC_BROWSER_TEST_F(ContentBrowserTest, NonNestableTask) {
   bool non_nested_task_ran = false;
-  base::ThreadTaskRunnerHandle::Get()->PostNonNestableTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostNonNestableTask(
       FROM_HERE, base::BindOnce(&CallbackChecker, &non_nested_task_ran));
   content::RunAllPendingInMessageLoop();
   ASSERT_TRUE(non_nested_task_ran);
@@ -390,18 +392,76 @@ IN_PROC_BROWSER_TEST_F(ContentBrowserTest, RunTimeoutInstalled) {
 
   static auto& static_on_timeout_cb = run_timeout->on_timeout;
 #if defined(__clang__) && defined(_MSC_VER)
-  EXPECT_FATAL_FAILURE(static_on_timeout_cb.Run(FROM_HERE),
-                       "RunLoop::Run() timed out. Timeout set at "
-                       // We don't test the line number but it would be present.
-                       "ProxyRunTestOnMainThreadLoop@content\\public\\test\\"
-                       "browser_test_base.cc:");
+  EXPECT_NONFATAL_FAILURE(
+      static_on_timeout_cb.Run(FROM_HERE),
+      "RunLoop::Run() timed out. Timeout set at "
+      // We don't test the line number but it would be present.
+      "ProxyRunTestOnMainThreadLoop@content\\public\\test\\"
+      "browser_test_base.cc:");
 #else
-  EXPECT_FATAL_FAILURE(static_on_timeout_cb.Run(FROM_HERE),
-                       "RunLoop::Run() timed out. Timeout set at "
-                       // We don't test the line number but it would be present.
-                       "ProxyRunTestOnMainThreadLoop@content/public/test/"
-                       "browser_test_base.cc:");
+  EXPECT_NONFATAL_FAILURE(
+      static_on_timeout_cb.Run(FROM_HERE),
+      "RunLoop::Run() timed out. Timeout set at "
+      // We don't test the line number but it would be present.
+      "ProxyRunTestOnMainThreadLoop@content/public/test/"
+      "browser_test_base.cc:");
 #endif
+}
+
+enum class SkipLocation {
+  kSetUpInProcessBrowserTestFixture,
+  kSetUpCommandLine,
+  kSetUpOnMainThread,
+};
+
+class SkipFixtureBrowserTest
+    : public ContentBrowserTest,
+      public ::testing::WithParamInterface<SkipLocation> {
+ public:
+  void SetUpInProcessBrowserTestFixture() override {
+    if (GetParam() == SkipLocation::kSetUpInProcessBrowserTestFixture) {
+      GTEST_SKIP();
+    }
+  }
+
+  void SetUpCommandLine(base::CommandLine*) override {
+    if (GetParam() == SkipLocation::kSetUpCommandLine) {
+      GTEST_SKIP();
+    }
+  }
+
+  void SetUpOnMainThread() override {
+    if (GetParam() == SkipLocation::kSetUpOnMainThread) {
+      GTEST_SKIP();
+    }
+  }
+};
+
+IN_PROC_BROWSER_TEST_P(SkipFixtureBrowserTest, Skip) {
+  EXPECT_TRUE(false);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    ,
+    SkipFixtureBrowserTest,
+    ::testing::Values(SkipLocation::kSetUpInProcessBrowserTestFixture,
+                      SkipLocation::kSetUpCommandLine,
+                      SkipLocation::kSetUpOnMainThread));
+
+// This test verifies that CreateUniqueTempDir always creates a dir underneath
+// the temp directory when running in a browser test. This is needed because, on
+// Windows, when running elevated, CreateUniqueTempDir would normally create a
+// temp dir in a secure location (e.g. %systemroot%\SystemTemp) but, for browser
+// tests, this behavior is explicitly overridden to avoid leaving temp files in
+// this system dir after tests complete. See BrowserTestBase::BrowserTestBase.
+IN_PROC_BROWSER_TEST_F(ContentBrowserTest, TempPathLocation) {
+  base::ScopedAllowBlockingForTesting allow_blocking;
+
+  base::ScopedTempDir scoped_dir;
+  EXPECT_TRUE(scoped_dir.CreateUniqueTempDir());
+
+  base::FilePath temp_path = base::PathService::CheckedGet(base::DIR_TEMP);
+  EXPECT_TRUE(temp_path.IsParent(scoped_dir.GetPath()));
 }
 
 }  // namespace content

@@ -44,7 +44,19 @@ def _run_ls_files_command(subdirectory: Optional[str],
   command = _build_ls_files_command(subdirectory)
   filepath_str = run_command(command, cwd=git_src)
   result = []
-  for relative_filepath in filepath_str.split('\n'):
+  for l in filepath_str.split('\n'):
+    # git ls-files -s produces output in the format:
+    #
+    # [mode bits] [hash]            [merge stage] [file path]
+    # 100644      0123456789abcdef  0             chrome/browser/Foo.java
+    #
+    # The first three octal numbers of |mode bits| are '100' for files, and
+    # checking that allows skipping gitlinks ('160') and symlinks ('120').
+    if not l.startswith('100'):
+      # ls-files returns all git files, such as files and gitlinks. Return only
+      # files, which start with 100.
+      continue
+    relative_filepath = l.split(maxsplit=3)[-1]
     if relative_filepath:
       absolute_filepath = os.path.join(git_src, relative_filepath)
       result.append(absolute_filepath)
@@ -53,22 +65,58 @@ def _run_ls_files_command(subdirectory: Optional[str],
 
 def _build_ls_files_command(subdirectory: Optional[str]) -> List[str]:
   if subdirectory:
-    return ['git', 'ls-files', '--', subdirectory]
+    return ['git', 'ls-files', '-s', '--', subdirectory]
   else:
-    return ['git', 'ls-files']
+    return ['git', 'ls-files', '-s']
 
 
-def get_log(git_src: str, subdirectory: str, trailing_days: int) -> str:
-  '''Gets the git log for a given directory.'''
+def _get_last_commit_in_dir(git_src: str, subdirectory: str,
+                            trailing_days: int):
+  '''Returns the last commit hash for a given directory.'''
   return run_command([
+      'git', 'log', '-1', f'--since=\"{trailing_days} days ago\"',
+      '--pretty=format:%H', '--', subdirectory
+  ],
+                     cwd=git_src)
+
+
+def get_log(git_src: str, subdirectory: str, trailing_days: int, follow: bool,
+            cache_dir: Optional[str]) -> str:
+  '''Gets the git log for a given directory.'''
+  if cache_dir is not None:
+    key = subdirectory.replace(os.sep, '_')
+    cache_file_name = os.path.join(cache_dir, key)
+    cache_log_file_name = cache_file_name + '.log'
+    last_commit = _get_last_commit_in_dir(git_src, subdirectory, trailing_days)
+    if os.path.exists(cache_file_name):
+      with open(cache_file_name) as f:
+        cached_commit = f.read().strip()
+      # Cache hit.
+      if cached_commit == last_commit and os.path.exists(cache_log_file_name):
+        with open(cache_log_file_name) as f:
+          return f.read()
+
+  cmd = [
       'git',
       'log',
-      '--follow',
+  ]
+  if follow:
+    cmd.append('--follow')
+  cmd.extend([
       f'--since=\"{trailing_days} days ago\"',
       '--',
       subdirectory,
-  ],
-                     cwd=git_src)
+  ])
+  git_log_output = run_command(cmd, cwd=git_src)
+
+  # No cache hit, need to update cache.
+  if cache_dir is not None:
+    with open(cache_file_name, 'w') as f:
+      f.write(last_commit)
+    with open(cache_log_file_name, 'w') as f:
+      f.write(git_log_output)
+
+  return git_log_output
 
 
 def run_command(command: List[str], cwd: str) -> str:

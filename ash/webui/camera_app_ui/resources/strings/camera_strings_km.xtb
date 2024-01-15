@@ -5,15 +5,9 @@
 <translation id="1076394037877376434">លុបទំព័រទី <ph name="PAGE_NUMBER" /></translation>
 <translation id="1113173431709655881">មុខងារ​កាមេរ៉ា</translation>
 <translation id="1153190633558910465">បិទ​ក្រឡា</translation>
-<translation id="1175958423215084756">បានរកឃើញ​តំណ។ <ph name="HOSTNAME" /></translation>
 <translation id="1197694886744716213">បានលុបទំព័រទី <ph name="PAGE_NUMBER" /></translation>
 <translation id="1258009455399840361">បង្វិល 90 ដឺក្រេ​ស្របទ្រនិច​នាឡិកា</translation>
-<translation id="1276998909102132017">រូបភាព​ក្នុងសាលរូបភាព</translation>
-<translation id="1300209025925956156">ស្កេន​ឯកសារ​របស់អ្នក</translation>
-<translation id="1309250603447638106">កំពុងទាញយកកំណែ​ថ្មីសម្រាប់ការស្កេនឯកសារ</translation>
-<translation id="137991641490787891"><ph name="ASPECT_RATIO_WIDTH" />។ Search + ព្រួញទៅ​ឆ្វេង ដើម្បីចូលប្រើ។</translation>
 <translation id="1417314334557041815">កែ​ទំព័រទី <ph name="INDEX" /></translation>
-<translation id="1430915738399379752">បោះពុម្ព</translation>
 <translation id="1467231725790366244"><ph name="CAMERA" /> ត្រូវបានផ្ដាច់។</translation>
 <translation id="1473110567575736769">កម្មវិធីកំណត់ម៉ោងរាប់ថយក្រោយ 3 វិនាទី</translation>
 <translation id="148783771699678004">កំពុងផ្លាស់ទី​ក្នុងទិសដៅ​ខាងស្ដាំផ្នែកខាងលើ</translation>
@@ -26,90 +20,82 @@
 <translation id="1664224225747386870">មិនបានថត​អ្វី​សោះ</translation>
 <translation id="1838104802459806957">ផ្អៀង​ឡើងលើ</translation>
 <translation id="1843105061469674856">ស្កេនទំព័របន្ថែម</translation>
-<translation id="1851169887664797861">មាន​ការគ្រប់គ្រង​កាមេរ៉ាបន្ថែម</translation>
 <translation id="1851616744363735765">បាន​ផ្អាក</translation>
-<translation id="1862930711583847113">មិនអាច​នាំចេញ <ph name="FILE" /> បានទេ</translation>
 <translation id="1899697626337024495">កម្រិតច្បាស់នៃរូបថត</translation>
 <translation id="1925845977604399247">ចូលទៅ​កាន់សាលរូបភាព</translation>
-<translation id="2022953316617983419">​កូដ QR</translation>
+<translation id="199526504800285197">ការថត​ត្រូវបាន​បញ្ឈប់</translation>
+<translation id="1995951722691075581">ការថត​របស់អ្នក​បានឈប់ ដោយសារ​ទំហំផ្ទុក​របស់ឧបករណ៍​នៅសល់តិច។ ដើម្បីថត​វីដេអូ​ច្រើនទៀត អ្នកត្រូវតែ​សម្អាតទំហំផ្ទុក​​នៅលើ​ឧបករណ៍​របស់អ្នក។</translation>
 <translation id="2036868001356139588">រយៈពេល​កម្មវិធី​កំណត់ម៉ោង</translation>
-<translation id="2050339315714019657">បញ្ឈរ</translation>
 <translation id="2064538373111010176"><ph name="CAMERA" /> ដំណើរការ</translation>
 <translation id="2134029355740465625">ការកំណត់​វីដេអូ</translation>
 <translation id="2144806332417375165">ប៉ារ៉ាម៉ែត្រវីដេអូផ្ទាល់ខ្លួន</translation>
 <translation id="2175927920773552910">កូដ QR</translation>
 <translation id="2244252133441425811">បើកផ្ទាំងជ្រើសរើស FPS នៃវីដេអូ</translation>
 <translation id="2271433936731426666">បើកការសង្ខេប​អំពីវីដេអូ​ដែលមានទំហំពេញ</translation>
-<translation id="229579744168541441">នាំចេញ​ទៅក្នុងថាស</translation>
 <translation id="2320741269052147773">រំកិល​ទៅឆ្វេង</translation>
 <translation id="2501278716633472235">ត្រលប់ក្រោយ</translation>
 <translation id="2501853267655415902">បាន​បញ្ឈប់​ការ​ថត</translation>
-<translation id="2501953888035679275">ថតរូប និង​ថតវីដេអូ​ដោយ​ប្រើ​កាមេរ៉ា​របស់អ្នក។</translation>
 <translation id="2517472476991765520">ស្កេន</translation>
 <translation id="2549985041256363841">ចាប់​ផ្តើម​ថត</translation>
+<translation id="2577915835281444458">ការថត​នឹង​ឈប់​ក្នុងពេល​ឆាប់ៗនេះ។ សូមចូលទៅ​កាន់​ទំហំផ្ទុក​ឧបករណ៍ ដើម្បី​សម្អាតទំហំផ្ទុក។</translation>
 <translation id="2599796128805996109">កាមេរ៉ាក្រោយ</translation>
 <translation id="2759905922487820242"><ph name="CURRENT" /> / <ph name="MAXIMAL" /> វិ</translation>
 <translation id="2761536921376153655">ប្រភេទនៃការស្កេន</translation>
 <translation id="28682968802727151">ការមើល​កញ្ចក់​សាកល្បង</translation>
 <translation id="2879583609344924966"><ph name="CAMERA" /> ត្រូវបានភ្ជាប់។</translation>
-<translation id="2904654629665923749">អាចប្រើការស្កេនឯកសារបាន</translation>
-<translation id="2968794441791257519">រូបថត និង​វីដេអូ​ដែល​ថត​ដោយប្រើកាមេរ៉ា​​នឹងផ្លាស់ទី​ទៅក្នុង​ថត​ទាញយក។ អ្នកអាច​ចូលប្រើរូបថត និងវីដេអូទាំងនោះ​នៅក្នុង​កម្មវិធី Files ។
-
-        កម្មវិធី​ដែលមាន​ការអនុញ្ញាត​ចូលប្រើ​ទំហំផ្ទុកនឹងមាន​សិទ្ធិ​ចូលប្រើ​រូបថត​ និងវីដេអូ​របស់អ្នក។</translation>
 <translation id="3067436040345934772">រំកិល​ទៅស្ដាំ</translation>
 <translation id="3081586908890909590">ប្ដូរទៅ​ថត​វីដេអូ</translation>
 <translation id="313467653172006084">30 FPS</translation>
-<translation id="3183731565330012717">ប្រភេទក្រឡា</translation>
+<translation id="3158534262962737808">ចូលរួម "<ph name="WIFINAME" />"</translation>
 <translation id="3227137524299004712">ម៉ៃក្រូហ្វូន</translation>
 <translation id="3240426699337459095">បានចម្លងតំណ</translation>
-<translation id="3259149966178251584">កម្រិតច្បាស់កាមេរ៉ា</translation>
-<translation id="3305962767867348165">កែ</translation>
 <translation id="3354465018370944241">ការកំណត់​រូបថត</translation>
 <translation id="3411958449466169012">បិទកម្មវិធី​កំណត់ម៉ោង</translation>
 <translation id="3448774564454087943">វីដេអូមិនត្រូវ​បានរក្សាទុក​ទេ ដោយសារ​វាខ្លីពេក</translation>
 <translation id="346539236881580388">ថតឡើងវិញ</translation>
 <translation id="3517926952904427380">មិនអាច​ថតរូប​បញ្ឈរ​បានទេ</translation>
 <translation id="3566302376254083266">កំពុងផ្លាស់ទី​ក្នុងទិសដៅ​ខាងឆ្វេងផ្នែកខាងលើ</translation>
-<translation id="3569311554794739032">តើអ្នកពិតជា​ចង់លុប <ph name="FILE" /> មែនឬ?</translation>
 <translation id="3573890771273113519">ប្ដូរទៅ​មុខងារ​ស្កេន</translation>
 <translation id="3583444040776960729">ជ្រុងខាងក្រោមផ្នែកខាងឆ្វេងនៃឯកសារ</translation>
+<translation id="3642192109456033823">កំពុងដំណើរការវីដេអូ...</translation>
 <translation id="3789724198583203151">បង្វិល 90 ដឺក្រេ​បញ្ច្រាស​ទ្រនិច​នាឡិកា</translation>
 <translation id="3810838688059735925">វីដេអូ</translation>
-<translation id="3838931309141338733">ស្កេន​បារកូដ</translation>
-<translation id="3892148308691398805">ចម្លង​អត្ថបទ</translation>
+<translation id="4060608699153044055">អ្នកមិនអាច​ថត​បានទេ ដោយសារ​ទំហំផ្ទុក​របស់​ឧបករណ៍​នៅសល់តិច។ ដើម្បីចាប់ផ្ដើម​ថត អ្នកត្រូវ​សម្អាតទំហំផ្ទុក​នៅលើ​ឧបករណ៍​របស់អ្នក។</translation>
 <translation id="4061162772429051350"><ph name="MAGAPIXELS_AMOUNT" /> MP</translation>
 <translation id="4118525110028899586">ផ្អាក​ការថត</translation>
 <translation id="4121305183798804752">បានរកឃើញ​ឯកសារ</translation>
 <translation id="414641094616694804">កាមេរ៉ានេះ​មិនអាចប្ដូរ​កម្រិតគុណភាព​បានទេ</translation>
-<translation id="4269820728363426813">ចម្លងអាសយដ្ឋានតំណ</translation>
-<translation id="4281620174117014503">កម្រិតគុណភាព​មធ្យម</translation>
+<translation id="4176463684765177261">បានបិទដំណើរការ</translation>
 <translation id="428234092390943511">រូបក្របតំណាងទំព័រ</translation>
-<translation id="4329152592498422850">ប្ដូរទៅ​ថតរូប​ទម្រង់ការ៉េ</translation>
-<translation id="4340659173795395806">ឥឡូវនេះ អ្នក​អាច​បង្កើត PDF ច្រើន​ទំព័រ​បានហើយ</translation>
+<translation id="4349714250734879769">កំណត់​មាត្រដ្ឋាន​ស៊ុមដោយ Chrome</translation>
 <translation id="4383571725254449280">កំណត់​ហេតុប្រតិបត្តិការនៃការបោះពុម្ព</translation>
 <translation id="4445542136948522167">ឈប់ថតរូប</translation>
-<translation id="4497569853498380347">(<ph name="ASPECT_RATIO_WIDTH" />:<ph name="ASPECT_RATIO_HEIGHT" />) <ph name="MEGAPIXEL" /> មេហ្គាភីកសែល</translation>
 <translation id="4570032796877367747">កាមេរ៉ាមុខ</translation>
+<translation id="4598556348158889687">ការគ្រប់គ្រងទំហំផ្ទុក</translation>
 <translation id="4620818268515773682">ប៊ូតុងបិទ/បើកសំឡេងមីក្រូហ្វូន។ ការបិទសំឡេង​ត្រូវបានបិទ</translation>
 <translation id="4628948037717959914">រូបថត</translation>
 <translation id="4649291346448517080">មិន​អាច​រក្សាទុក​ឯកសារបាន​ទេ</translation>
 <translation id="4695379108709712600">កំពុងផ្លាស់ទី​ក្នុងទិសដៅ​ខាងលើ</translation>
 <translation id="4705093842003735294">កម្រិតគុណភាព​ពេញលេញ</translation>
+<translation id="4864143361253542638">បញ្ជីទំព័រស្កេន</translation>
 <translation id="4890010094662541459">3 x 3</translation>
+<translation id="4892746741161549733">ចម្លងអាសយដ្ឋានតំណ <ph name="URL" /></translation>
 <translation id="491895758387112773">ផ្សាយការថត​វីដេអូ​ទៅបណ្ដាញច្រើន</translation>
+<translation id="495170559598752135">សកម្មភាព</translation>
 <translation id="4984613436295737187">Quad HD (1440p)</translation>
 <translation id="5034763830503483128">សមាមាត្រ​រូបថត</translation>
 <translation id="5057360777601936059">កាមេរ៉ារបស់អ្នកមិន​អាច​ប្រើបានទេនៅពេលនេះ។
         សូមពិនិត្យមើល​ថាតើ​កាមេរ៉ា​ត្រូវបាន​ភ្ជាប់​ត្រឹមត្រូវ​ឬអត់។</translation>
+<translation id="5157591164390831335">បាន​រកឃើញ URL។</translation>
 <translation id="5163387177077603948">កំពុងផ្លាស់ទី​ក្នុងទិសដៅ​ខាងស្ដាំ</translation>
 <translation id="5235304959032763950">16:9</translation>
 <translation id="5266635337630551423">ជ្រុងខាងលើផ្នែកខាងឆ្វេងនៃឯកសារ</translation>
 <translation id="5317780077021120954">រក្សាទុក</translation>
 <translation id="5320594929574852403">កំពុងផ្លាស់ទី​ក្នុងទិសដៅ​ខាងឆ្វេង</translation>
 <translation id="5374917190292010970">4K (2160p)</translation>
-<translation id="5444515100983837161">ដាក់គែម​ឯកសារ​ទាំងអស់​នៅក្នុងស៊ុម។ ការស្កេន​ដំណើរការ​បានល្អបំផុត ប្រសិនបើ​ឯកសារ និង​ផ្ទៃខាងក្រោយ​មានពណ៌ខុសគ្នា​។</translation>
 <translation id="5662366948659129155">កំពុង​ស្កេន​ទំព័រទី <ph name="COUNT" /></translation>
 <translation id="5671277269877808209">ការ៉េ</translation>
+<translation id="574392208103952083">មធ្យម</translation>
 <translation id="5746169159649715125">រក្សាទុកជា PDF</translation>
 <translation id="5753488212459587150">បើកមុខងារសម្រាប់អ្នកជំនាញ</translation>
 <translation id="5759254179196327752">ស្កេន​ឯកសារ</translation>
@@ -127,7 +113,7 @@
 <translation id="6353688143752491039">សូមអរគុណសម្រាប់ការផ្ដល់មតិកែលម្អចំពោះកម្មវិធីកាមេរ៉ា។
 
 ប្រសិនបើមតិកែលម្អរបស់អ្នកពាក់ព័ន្ធនឹងគុណភាពរូបភាព ឬវីដេអូ សូមភ្ជាប់ជាមួយសំណាករូបថត ឬវីដេអូ និងរៀបរាប់ថាមានបញ្ហាអ្វី។ (ឧទាហរណ៍ រូបថតងងឹតជ្រុល ឬមានលក្ខណៈព្រាល។)</translation>
-<translation id="6420689864531458495">(<ph name="ASPECT_RATIO_WIDTH" />:<ph name="ASPECT_RATIO_HEIGHT" /> - <ph name="WIDTH" />x<ph name="HEIGHT" />) <ph name="MEGAPIXEL" /> មេហ្គាភីកសែល</translation>
+<translation id="6519884562954018934">ចូលរួម <ph name="WIFINAME" /></translation>
 <translation id="6527303717912515753">ចែករំលែក</translation>
 <translation id="6617916774429601017">បង្ហាញកម្រិតគុណភាពទាំងអស់</translation>
 <translation id="6631515515009660915">បិទ​កញ្ចក់</translation>
@@ -138,8 +124,8 @@
 <translation id="6888362557094394345">កំពុងផ្លាស់ទី​ក្នុងទិសដៅ​ខាងក្រោម</translation>
 <translation id="695140971690006676">កំណត់​ឡើងវិញ​ទាំងអស់</translation>
 <translation id="6965382102122355670">យល់ព្រម</translation>
+<translation id="6965830616442491568">ព្រាលផ្ទៃខាងក្រោយ</translation>
 <translation id="698156982839284926">3 វិនាទី</translation>
-<translation id="712848772518857951">តើអ្នក​ពិតជា​ចង់​លុប​ធាតុ <ph name="COUNT" /> មែនឬ?</translation>
 <translation id="7134221860976209830">កម្មវិធីកំណត់ម៉ោងរាប់ថយក្រោយ 10 វិនាទី</translation>
 <translation id="7191890674911603392">ប្រភេទនៃការថត</translation>
 <translation id="7243947652761655814">កម្រិតច្បាស់នៃ​វីដេអូ</translation>
@@ -147,6 +133,7 @@
 <translation id="7450541714075000668">បាន​ចម្លង​អត្ថបទ</translation>
 <translation id="7488619942230388918">ថតវីដេអូ GIF</translation>
 <translation id="7557677699350329807">ប្ដូរទៅ​កាមេរ៉ាបន្ទាប់</translation>
+<translation id="7562584071994185503">ចម្លង​អក្សរ <ph name="TEXT" /></translation>
 <translation id="7607002721634913082">បានផ្អាក</translation>
 <translation id="7608223098072244877">4 គុណ​នឹង 4</translation>
 <translation id="761421184377987513">កំពុងផ្លាស់ទី​ក្នុងទិសដៅ​ខាងឆ្វេងផ្នែកខាងក្រោម</translation>
@@ -154,25 +141,27 @@
 <translation id="7658239707568436148">បដិសេធ</translation>
 <translation id="7670511624014457267">60 FPS</translation>
 <translation id="7671804233658741790">ជ្រុងខាងក្រោមផ្នែកខាងស្ដាំនៃឯកសារ</translation>
+<translation id="7684446460490665873">ថត​វីដេអូដែលមាន​ពេលដើរលឿន</translation>
 <translation id="7692090236657809299">បើកមុខងារ​ចាប់​អូស ផ្អៀង ពង្រីកបង្រួម</translation>
 <translation id="7726641833034062494">ថតវីដេអូ​ធម្មតា</translation>
 <translation id="7748344063862150053">ជ្រុងខាងលើផ្នែកខាងស្ដាំនៃឯកសារ</translation>
 <translation id="7933675232020478311">កំពុងផ្លាស់ទី​ក្នុងទិសដៅ​ខាងស្ដាំ​ផ្នែកខាងក្រោម</translation>
 <translation id="7983668134180549431">បានរកឃើញ​អត្ថបទ។</translation>
+<translation id="8079255378695216066">មិនអាចចាប់ផ្ដើមថតបានទេ</translation>
 <translation id="8120146556401698679">រំកិល ផ្អៀង ពង្រីកបង្រួម</translation>
 <translation id="8131740175452115882">អះអាង</translation>
 <translation id="8145038249676204903">ប្ដូរទៅថតរូប</translation>
 <translation id="8167081290930651932">រក្សាទុកជារូបថត</translation>
 <translation id="8239780215768881278">ថតវីដេអូខ្លី</translation>
-<translation id="8261506727792406068">លុប</translation>
+<translation id="8346544573713510785">កំណត់​មាត្រដ្ឋាន​ស៊ុមដោយ Camera HAL</translation>
 <translation id="8425673304802773841">ផ្អៀង​ចុះក្រោម</translation>
 <translation id="8428213095426709021">ការកំណត់</translation>
+<translation id="8609951387004618906">បើក <ph name="URL" /></translation>
 <translation id="8629662593426079630">360p</translation>
-<translation id="8687491812650032292">HD <ph name="HEIGHT" />p (<ph name="WIDTH" />:<ph name="HEIGHT" />)</translation>
 <translation id="8711011893539266636">ប៊ូតុងបិទ/បើកសំឡេងមីក្រូហ្វូន។ ការបិទសំឡេង​ត្រូវបានបើក</translation>
-<translation id="8712637175834984815">យល់ហើយ</translation>
 <translation id="8730621377337864115">រួចរាល់</translation>
 <translation id="8732462232047530626">មើលទិន្នន័យ​មេតាសាកល្បង</translation>
+<translation id="874854738381978209">បានរកឃើញ​បណ្ដាញ Wi-Fi។</translation>
 <translation id="8815966864175525708">ប្ដូរទៅ​ថតរូប​បញ្ឈរ</translation>
 <translation id="8828441885228359828">បន្ត​ការថត</translation>
 <translation id="8870695351537079478">មិន​អាច​ចាប់ផ្ដើម​ថត​បាន​ទេ</translation>
@@ -181,6 +170,7 @@
 <translation id="9045010116236796332">ដាក់គែមទាំងអស់​របស់ឯកសារ​នៅក្នុងស៊ុម</translation>
 <translation id="9045155556724273246">10 វិនាទី</translation>
 <translation id="906331135292332864">កំពុង​ដំណើរការ​រូបភាព...</translation>
+<translation id="9161584225258678723">ពេលដើរលឿន</translation>
 <translation id="922762992951083513">បើក​កញ្ចក់</translation>
 <translation id="945522503751344254">ផ្ញើមតិ</translation>
 </translationbundle>

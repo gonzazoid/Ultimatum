@@ -63,7 +63,9 @@ namespace blink {
 
 HTMLDocument::HTMLDocument(const DocumentInit& initializer,
                            DocumentClassFlags extended_document_classes)
-    : Document(initializer, kHTMLDocumentClass | extended_document_classes) {
+    : Document(initializer,
+               base::Union(DocumentClassFlags({DocumentClass::kHTML}),
+                           extended_document_classes)) {
   ClearXMLVersion();
   if (IsSrcdocDocument()) {
     DCHECK(InNoQuirksMode());
@@ -96,7 +98,7 @@ void HTMLDocument::AddNamedItem(const AtomicString& name) {
   named_item_counts_.insert(name);
   if (LocalDOMWindow* window = domWindow()) {
     window->GetScriptController()
-        .WindowProxy(DOMWrapperWorld::MainWorld())
+        .WindowProxy(DOMWrapperWorld::MainWorld(window->GetIsolate()))
         ->NamedItemAdded(this, name);
   }
 }
@@ -107,7 +109,7 @@ void HTMLDocument::RemoveNamedItem(const AtomicString& name) {
   named_item_counts_.erase(name);
   if (LocalDOMWindow* window = domWindow()) {
     window->GetScriptController()
-        .WindowProxy(DOMWrapperWorld::MainWorld())
+        .WindowProxy(DOMWrapperWorld::MainWorld(window->GetIsolate()))
         ->NamedItemRemoved(this, name);
   }
 }

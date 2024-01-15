@@ -8,8 +8,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/profiler/module_cache.h"
 #include "base/profiler/stack_sampling_profiler_test_util.h"
@@ -540,8 +540,8 @@ TEST(V8UnwinderTest, CanUnwindFrom_NullModule) {
 }
 
 // Checks that unwinding from C++ through JavaScript and back into C++ succeeds.
-// NB: unwinding is only supported for 64 bit Windows and Intel macOS.
-#if (BUILDFLAG(IS_WIN) && defined(ARCH_CPU_64_BITS)) || BUILDFLAG(IS_MAC)
+#if (BUILDFLAG(IS_WIN) && defined(ARCH_CPU_64_BITS)) || BUILDFLAG(IS_MAC) || \
+    (BUILDFLAG(IS_ANDROID) && defined(ARCH_CPU_ARMEL))
 #define MAYBE_UnwindThroughV8Frames UnwindThroughV8Frames
 #else
 #define MAYBE_UnwindThroughV8Frames DISABLED_UnwindThroughV8Frames

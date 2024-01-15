@@ -4,7 +4,9 @@
 
 #include "chrome/browser/first_party_sets/first_party_sets_policy_service.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "base/notreached.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_future.h"
@@ -14,37 +16,50 @@
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
 #include "components/privacy_sandbox/privacy_sandbox_prefs.h"
+#include "components/privacy_sandbox/tracking_protection_prefs.h"
 #include "content/public/browser/first_party_sets_handler.h"
 #include "content/public/common/content_features.h"
 #include "content/public/test/browser_task_environment.h"
+#include "mojo/public/cpp/bindings/receiver.h"
+#include "net/base/features.h"
 #include "net/base/schemeful_site.h"
 #include "net/first_party_sets/first_party_set_entry.h"
+#include "net/first_party_sets/first_party_set_entry_override.h"
 #include "net/first_party_sets/first_party_set_metadata.h"
 #include "net/first_party_sets/first_party_sets_context_config.h"
 #include "net/first_party_sets/global_first_party_sets.h"
 #include "services/network/public/mojom/first_party_sets_access_delegate.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "url/gurl.h"
 
 using ::testing::_;
 using ::testing::Eq;
+using ::testing::IsEmpty;
 using ::testing::Not;
 using ::testing::Optional;
 using ::testing::Pair;
+using ::testing::UnorderedElementsAre;
 
 MATCHER_P(CarryingConfig, config, "") {
-  if (arg.is_null())
+  if (arg.is_null()) {
     return false;
+  }
   return ExplainMatchResult(testing::Eq(config), arg->config, result_listener);
 }
 
 MATCHER_P2(CarryingConfigAndCacheFilter, config, cache_filter, "") {
-  if (arg.is_null())
+  if (arg.is_null()) {
     return false;
+  }
   return arg->config == config && arg->cache_filter == cache_filter;
 }
 
 namespace first_party_sets {
+
+namespace {
+const base::Version kVersion("1.2.3");
+}
 
 class MockFirstPartySetsAccessDelegate
     : public network::mojom::FirstPartySetsAccessDelegate {
@@ -103,8 +118,6 @@ TEST_F(DefaultFirstPartySetsPolicyServiceTest, DisabledByFeature) {
 }
 
 TEST_F(DefaultFirstPartySetsPolicyServiceTest, GuestProfiles) {
-  base::test::ScopedFeatureList features;
-  features.InitAndEnableFeature(features::kFirstPartySets);
   TestingProfile::Builder builder;
   builder.SetGuestSession();
   std::unique_ptr<TestingProfile> profile = builder.Build();
@@ -125,8 +138,6 @@ TEST_F(DefaultFirstPartySetsPolicyServiceTest, GuestProfiles) {
 }
 
 TEST_F(DefaultFirstPartySetsPolicyServiceTest, EnabledForLegitProfile) {
-  base::test::ScopedFeatureList features;
-  features.InitAndEnableFeature(features::kFirstPartySets);
   TestingProfile profile;
   FirstPartySetsPolicyService* service =
       FirstPartySetsPolicyServiceFactory::GetForBrowserContext(&profile);
@@ -146,16 +157,10 @@ TEST_F(DefaultFirstPartySetsPolicyServiceTest, EnabledForLegitProfile) {
 class FirstPartySetsPolicyServiceTest
     : public DefaultFirstPartySetsPolicyServiceTest {
  public:
-  FirstPartySetsPolicyServiceTest() {
-    // Enable base::Feature for all tests since only the pref can change
-    // whether the service is enabled.
-    features_.InitAndEnableFeature(features::kFirstPartySets);
-  }
+  FirstPartySetsPolicyServiceTest() = default;
 
   void SetUp() override {
     DefaultFirstPartySetsPolicyServiceTest::SetUp();
-    content::FirstPartySetsHandler::GetInstance()->SetInstanceForTesting(
-        &first_party_sets_handler_);
 
     profile_manager_ = std::make_unique<TestingProfileManager>(
         TestingBrowserProcess::GetGlobal());
@@ -178,13 +183,11 @@ class FirstPartySetsPolicyServiceTest
   }
 
   void TearDown() override {
-    DCHECK(service_);
+    CHECK(service_);
     // Even though we reassign this in SetUp, service may be persisted between
     // tests if the factory has already created a service for the testing
     // profile being used.
     service_->ResetForTesting();
-    content::FirstPartySetsHandler::GetInstance()->SetInstanceForTesting(
-        nullptr);
     profile_manager_->DeleteAllTestingProfiles();
     profile_manager_.reset();
   }
@@ -201,11 +204,6 @@ class FirstPartySetsPolicyServiceTest
     first_party_sets_handler_.SetGlobalSets(std::move(global_sets));
   }
 
-  void SetEnabledPref(bool enabled) {
-    profile()->GetPrefs()->SetBoolean(
-        prefs::kPrivacySandboxFirstPartySetsEnabled, enabled);
-  }
-
   void SetInvokeCallbacksAsynchronously(bool asynchronous) {
     first_party_sets_handler_.set_invoke_callbacks_asynchronously(asynchronous);
   }
@@ -217,9 +215,8 @@ class FirstPartySetsPolicyServiceTest
  private:
   ScopedMockFirstPartySetsHandler first_party_sets_handler_;
   std::unique_ptr<TestingProfileManager> profile_manager_;
-  Profile* profile_;
-  base::test::ScopedFeatureList features_;
-  FirstPartySetsPolicyService* service_;
+  raw_ptr<Profile, DanglingUntriaged> profile_;
+  raw_ptr<FirstPartySetsPolicyService, DanglingUntriaged> service_;
 };
 
 TEST_F(FirstPartySetsPolicyServiceTest, IsSiteInManagedSet_WithoutConfig) {
@@ -230,9 +227,9 @@ TEST_F(FirstPartySetsPolicyServiceTest, IsSiteInManagedSet_WithoutConfig) {
 TEST_F(FirstPartySetsPolicyServiceTest, IsSiteInManagedSet_SiteNotInConfig) {
   SetContextConfig(net::FirstPartySetsContextConfig(
       {{net::SchemefulSite(GURL("https://example.test")),
-        {net::FirstPartySetEntry(
+        net::FirstPartySetEntryOverride(net::FirstPartySetEntry(
             net::SchemefulSite(GURL("https://primary.test")),
-            net::SiteType::kAssociated, absl::nullopt)}}}));
+            net::SiteType::kAssociated, absl::nullopt))}}));
   service()->InitForTesting();
 
   EXPECT_FALSE(service()->IsSiteInManagedSet(
@@ -243,8 +240,8 @@ TEST_F(FirstPartySetsPolicyServiceTest, IsSiteInManagedSet_SiteNotInConfig) {
 TEST_F(FirstPartySetsPolicyServiceTest,
        IsSiteInManagedSet_SiteInConfig_AsDeletion) {
   net::SchemefulSite example_site(GURL("https://example.test"));
-  SetContextConfig(
-      net::FirstPartySetsContextConfig({{example_site, {absl::nullopt}}}));
+  SetContextConfig(net::FirstPartySetsContextConfig(
+      {{example_site, net::FirstPartySetEntryOverride()}}));
   service()->InitForTesting();
   EXPECT_FALSE(service()->IsSiteInManagedSet(example_site));
   env().RunUntilIdle();
@@ -254,47 +251,79 @@ TEST_F(FirstPartySetsPolicyServiceTest,
        IsSiteInManagedSet_SiteInConfig_AsModification) {
   net::SchemefulSite example_site(GURL("https://example.test"));
   SetContextConfig(net::FirstPartySetsContextConfig(
-      {{example_site,
-        {net::FirstPartySetEntry(
-            net::SchemefulSite(GURL("https://primary.test")),
-            net::SiteType::kAssociated, absl::nullopt)}}}));
+      {{example_site, net::FirstPartySetEntryOverride(net::FirstPartySetEntry(
+                          net::SchemefulSite(GURL("https://primary.test")),
+                          net::SiteType::kAssociated, absl::nullopt))}}));
   service()->InitForTesting();
   EXPECT_TRUE(service()->IsSiteInManagedSet(example_site));
   env().RunUntilIdle();
 }
 
 TEST_F(FirstPartySetsPolicyServiceTest,
+       OnFirstPartySetsEnabledChanged_EnabledByBlock3pcToggle) {
+  profile()->GetPrefs()->SetBoolean(prefs::kTrackingProtection3pcdEnabled,
+                                    true);
+  profile()->GetPrefs()->SetBoolean(prefs::kBlockAll3pcToggleEnabled, false);
+
+  service()->OnFirstPartySetsEnabledChanged(false);
+  EXPECT_TRUE(service()->is_enabled());
+
+  service()->OnFirstPartySetsEnabledChanged(true);
+  EXPECT_TRUE(service()->is_enabled());
+}
+
+TEST_F(FirstPartySetsPolicyServiceTest,
+       OnFirstPartySetsEnabledChanged_DisabledByBlock3pcToggle) {
+  profile()->GetPrefs()->SetBoolean(prefs::kTrackingProtection3pcdEnabled,
+                                    true);
+  profile()->GetPrefs()->SetBoolean(prefs::kBlockAll3pcToggleEnabled, true);
+
+  service()->OnFirstPartySetsEnabledChanged(false);
+  EXPECT_FALSE(service()->is_enabled());
+
+  service()->OnFirstPartySetsEnabledChanged(true);
+  EXPECT_FALSE(service()->is_enabled());
+}
+
+// Parameterized test class that controls whether the enabled pref status we are
+// setting is for the existing pref or the 3PCD prefs.
+class FirstPartySetsPolicyServicePrefTest
+    : public FirstPartySetsPolicyServiceTest,
+      public testing::WithParamInterface</*enable_3pcd=*/bool> {
+ public:
+  void SetRwsEnabledViaPref(bool enabled) {
+    bool enable_3pcd = GetParam();
+    if (enable_3pcd) {
+      profile()->GetPrefs()->SetBoolean(prefs::kTrackingProtection3pcdEnabled,
+                                        true);
+      profile()->GetPrefs()->SetBoolean(prefs::kBlockAll3pcToggleEnabled,
+                                        !enabled);
+    } else {
+      profile()->GetPrefs()->SetBoolean(
+          prefs::kPrivacySandboxRelatedWebsiteSetsEnabled, enabled);
+    }
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(All,
+                         FirstPartySetsPolicyServicePrefTest,
+                         testing::Bool());
+
+TEST_P(FirstPartySetsPolicyServicePrefTest,
        IsSiteInManagedSet_SiteInConfig_PrefDisabled) {
   net::SchemefulSite example_site(GURL("https://example.test"));
   SetContextConfig(net::FirstPartySetsContextConfig(
-      {{example_site,
-        {net::FirstPartySetEntry(
-            net::SchemefulSite(GURL("https://primary.test")),
-            net::SiteType::kAssociated, absl::nullopt)}}}));
-  SetEnabledPref(false);
+      {{example_site, net::FirstPartySetEntryOverride(net::FirstPartySetEntry(
+                          net::SchemefulSite(GURL("https://primary.test")),
+                          net::SiteType::kAssociated, absl::nullopt))}}));
+  SetRwsEnabledViaPref(false);
   service()->InitForTesting();
   EXPECT_FALSE(service()->IsSiteInManagedSet(example_site));
   env().RunUntilIdle();
 }
 
-TEST_F(FirstPartySetsPolicyServiceTest,
-       IsSiteInManagedSet_SiteInConfig_FeatureDisabled) {
-  base::test::ScopedFeatureList features;
-  features.InitAndDisableFeature(features::kFirstPartySets);
-  net::SchemefulSite example_site(GURL("https://example.test"));
-  SetContextConfig(net::FirstPartySetsContextConfig(
-      {{example_site,
-        {net::FirstPartySetEntry(
-            net::SchemefulSite(GURL("https://primary.test")),
-            net::SiteType::kAssociated, absl::nullopt)}}}));
-  service()->InitForTesting();
-  EXPECT_FALSE(service()->IsSiteInManagedSet(example_site));
-  env().RunUntilIdle();
-}
-
-TEST_F(FirstPartySetsPolicyServiceTest, FindEntry_FpsDisabledByFeature) {
+TEST_P(FirstPartySetsPolicyServicePrefTest, FindEntry_FpsDisabledByPref) {
   base::HistogramTester histogram_tester;
-  base::test::ScopedFeatureList features;
   net::SchemefulSite primary_site(GURL("https://primary.test"));
   net::SchemefulSite associate1_site(GURL("https://associate1.test"));
 
@@ -302,41 +331,13 @@ TEST_F(FirstPartySetsPolicyServiceTest, FindEntry_FpsDisabledByFeature) {
   // { primary: "https://primary.test",
   // associatedSites: ["https://associate1.test"}
   SetGlobalSets(net::GlobalFirstPartySets(
-      {{associate1_site,
-        {net::FirstPartySetEntry(primary_site, net::SiteType::kAssociated,
-                                 0)}}},
-      {}));
-  // Simulate the profile set overrides are empty.
-  service()->InitForTesting();
-
-  // Simulate First-Party Sets disabled by the feature.
-  features.InitAndDisableFeature(features::kFirstPartySets);
-  SetEnabledPref(true);
-  // Verify that FindEntry doesn't return associate1's entry when FPS is off.
-  EXPECT_FALSE(service()->FindEntry(associate1_site));
-  histogram_tester.ExpectUniqueSample(
-      "Cookie.FirstPartySets.NumBrowserQueriesBeforeInitialization", 0, 1);
-  env().RunUntilIdle();
-}
-
-TEST_F(FirstPartySetsPolicyServiceTest, FindEntry_FpsDisabledByPref) {
-  base::HistogramTester histogram_tester;
-  base::test::ScopedFeatureList features;
-  net::SchemefulSite primary_site(GURL("https://primary.test"));
-  net::SchemefulSite associate1_site(GURL("https://associate1.test"));
-
-  // Create Global First-Party Sets with the following set:
-  // { primary: "https://primary.test",
-  // associatedSites: ["https://associate1.test"}
-  SetGlobalSets(net::GlobalFirstPartySets(
+      kVersion,
       {{associate1_site,
         {net::FirstPartySetEntry(primary_site, net::SiteType::kAssociated,
                                  0)}}},
       {}));
 
-  // Simulate First-Party Sets disabled by the preference.
-  features.InitAndEnableFeature(features::kFirstPartySets);
-  SetEnabledPref(false);
+  SetRwsEnabledViaPref(false);
 
   service()->InitForTesting();
 
@@ -347,17 +348,14 @@ TEST_F(FirstPartySetsPolicyServiceTest, FindEntry_FpsDisabledByPref) {
   env().RunUntilIdle();
 }
 
-TEST_F(FirstPartySetsPolicyServiceTest,
+TEST_P(FirstPartySetsPolicyServicePrefTest,
        FindEntry_FpsEnabled_ReturnsEmptyUntilAllSetsReady) {
-  base::test::ScopedFeatureList features;
   net::SchemefulSite primary_site(GURL("https://primary.test"));
   net::SchemefulSite associate1_site(GURL("https://associate1.test"));
   net::FirstPartySetEntry associate1_entry(
       net::FirstPartySetEntry(primary_site, net::SiteType::kAssociated, 0));
 
-  // Fully enable First-Party Sets.
-  features.InitAndEnableFeature(features::kFirstPartySets);
-  SetEnabledPref(true);
+  SetRwsEnabledViaPref(true);
   // Verify that FindEntry returns empty if the global sets and profile sets
   // aren't ready yet.
   EXPECT_FALSE(service()->FindEntry(associate1_site));
@@ -365,8 +363,8 @@ TEST_F(FirstPartySetsPolicyServiceTest,
   // Simulate the global First-Party Sets with the following set:
   // { primary: "https://primary.test",
   // associatedSites: ["https://associate1.test"}
-  SetGlobalSets(
-      net::GlobalFirstPartySets({{associate1_site, {associate1_entry}}}, {}));
+  SetGlobalSets(net::GlobalFirstPartySets(
+      kVersion, {{associate1_site, {associate1_entry}}}, {}));
 
   // Verify that FindEntry returns empty if both sources of sets aren't ready
   // yet.
@@ -380,19 +378,16 @@ TEST_F(FirstPartySetsPolicyServiceTest,
   env().RunUntilIdle();
 }
 
-TEST_F(FirstPartySetsPolicyServiceTest,
+TEST_P(FirstPartySetsPolicyServicePrefTest,
        FindEntry_NumQueriesRecorded_BeforeConfigReady) {
   base::HistogramTester histogram_tester;
-  base::test::ScopedFeatureList features;
 
   net::SchemefulSite primary_site(GURL("https://primary.test"));
   net::SchemefulSite associate_site(GURL("https://associate.test"));
   net::FirstPartySetEntry associate_entry(
       net::FirstPartySetEntry(primary_site, net::SiteType::kAssociated, 0));
 
-  // Fully enable First-Party Sets.
-  features.InitAndEnableFeature(features::kFirstPartySets);
-  SetEnabledPref(true);
+  SetRwsEnabledViaPref(true);
 
   // Simulate 3 FindEntry queries which all should return empty.
   EXPECT_FALSE(service()->FindEntry(associate_site));
@@ -402,8 +397,8 @@ TEST_F(FirstPartySetsPolicyServiceTest,
   // Simulate the global First-Party Sets with the following set:
   // { primary: "https://primary.test",
   // associatedSites: ["https://associate.test"}
-  SetGlobalSets(
-      net::GlobalFirstPartySets({{associate_site, {associate_entry}}}, {}));
+  SetGlobalSets(net::GlobalFirstPartySets(
+      kVersion, {{associate_site, {associate_entry}}}, {}));
 
   // Simulate the profile set overrides are empty.
   service()->InitForTesting();
@@ -424,25 +419,22 @@ TEST_F(FirstPartySetsPolicyServiceTest,
   env().RunUntilIdle();
 }
 
-TEST_F(FirstPartySetsPolicyServiceTest,
+TEST_P(FirstPartySetsPolicyServicePrefTest,
        FindEntry_NumQueriesRecorded_AfterConfigReady) {
   base::HistogramTester histogram_tester;
-  base::test::ScopedFeatureList features;
 
   net::SchemefulSite primary_site(GURL("https://primary.test"));
   net::SchemefulSite associate_site(GURL("https://associate.test"));
   net::FirstPartySetEntry associate_entry(
       net::FirstPartySetEntry(primary_site, net::SiteType::kAssociated, 0));
 
-  // Fully enable First-Party Sets.
-  features.InitAndEnableFeature(features::kFirstPartySets);
-  SetEnabledPref(true);
+  SetRwsEnabledViaPref(true);
 
   // Simulate the global First-Party Sets with the following set:
   // { primary: "https://primary.test",
   // associatedSites: ["https://associate.test"}
-  SetGlobalSets(
-      net::GlobalFirstPartySets({{associate_site, {associate_entry}}}, {}));
+  SetGlobalSets(net::GlobalFirstPartySets(
+      kVersion, {{associate_site, {associate_entry}}}, {}));
 
   // Simulate the profile set overrides are empty.
   service()->InitForTesting();
@@ -458,25 +450,132 @@ TEST_F(FirstPartySetsPolicyServiceTest,
       "Cookie.FirstPartySets.NumBrowserQueriesBeforeInitialization", 0, 1);
 }
 
-class FirstPartySetsPolicyServicePrefObserverTest
-    : public FirstPartySetsPolicyServiceTest {
- public:
-  FirstPartySetsPolicyServicePrefObserverTest() {
-    // Enable base::Feature for all tests since only the pref can change
-    // whether the service is enabled.
-    features_.InitAndEnableFeature(features::kFirstPartySets);
-  }
+TEST_P(FirstPartySetsPolicyServicePrefTest,
+       ForEachEffectiveSetEntry_FPSDisabledByPref) {
+  net::SchemefulSite primary_site(GURL("https://primary.test"));
+  net::SchemefulSite associate_site(GURL("https://associate.test"));
 
- private:
-  base::test::ScopedFeatureList features_;
-};
+  // Create Global First-Party Sets with the following set:
+  // { primary: "https://primary.test",
+  // associatedSites: ["https://associate.test"}
+  SetGlobalSets(net::GlobalFirstPartySets(
+      kVersion,
+      {{associate_site,
+        {net::FirstPartySetEntry(primary_site, net::SiteType::kAssociated,
+                                 0)}}},
+      {}));
 
-TEST_F(FirstPartySetsPolicyServicePrefObserverTest,
+  // Simulate First-Party Sets disabled by the user pref.
+  SetRwsEnabledViaPref(false);
+
+  service()->InitForTesting();
+
+  // Verify that ForEachEffectiveSetEntry returns false when FPS is off.
+  EXPECT_FALSE(service()->ForEachEffectiveSetEntry(
+      [&](const net::SchemefulSite& site,
+          const net::FirstPartySetEntry& entry) {
+        NOTREACHED_NORETURN();
+        return true;
+      }));
+}
+
+TEST_P(FirstPartySetsPolicyServicePrefTest,
+       ForEachEffectiveSetEntry_ReturnsEmptyUntilAllSetsReady) {
+  net::SchemefulSite primary_site(GURL("https://primary.test"));
+  net::SchemefulSite associate_site(GURL("https://associate.test"));
+  net::FirstPartySetEntry primary_entry(net::FirstPartySetEntry(
+      primary_site, net::SiteType::kPrimary, absl::nullopt));
+  net::FirstPartySetEntry associate_entry(
+      net::FirstPartySetEntry(primary_site, net::SiteType::kAssociated, 0));
+
+  SetRwsEnabledViaPref(true);
+  // Verify that ForEachEffectiveSetEntry returns false if FPS is not
+  // initialized.
+  EXPECT_FALSE(service()->ForEachEffectiveSetEntry(
+      [&](const net::SchemefulSite& site,
+          const net::FirstPartySetEntry& entry) {
+        NOTREACHED_NORETURN();
+        return true;
+      }));
+
+  // Create the global First-Party Sets with the following set:
+  // { primary: "https://primary.test",
+  // associatedSites: ["https://associate.test"}
+  SetGlobalSets(net::GlobalFirstPartySets(
+      kVersion,
+      {{primary_site, {primary_entry}}, {associate_site, {associate_entry}}},
+      {}));
+
+  // Verify that ForEachEffectiveSetEntry returns false if service is not ready.
+  EXPECT_FALSE(service()->ForEachEffectiveSetEntry(
+      [&](const net::SchemefulSite& site,
+          const net::FirstPartySetEntry& entry) {
+        NOTREACHED_NORETURN();
+        return true;
+      }));
+
+  // Simulate the profile set overrides are empty.
+  service()->InitForTesting();
+
+  std::vector<std::pair<net::SchemefulSite, net::FirstPartySetEntry>>
+      set_entries;
+  EXPECT_TRUE(service()->ForEachEffectiveSetEntry(
+      [&](const net::SchemefulSite& site,
+          const net::FirstPartySetEntry& entry) {
+        set_entries.emplace_back(site, entry);
+        return true;
+      }));
+  EXPECT_THAT(set_entries,
+              UnorderedElementsAre(Pair(primary_site, primary_entry),
+                                   Pair(associate_site, associate_entry)));
+}
+
+TEST_P(FirstPartySetsPolicyServicePrefTest,
+       ForEachEffectiveSetEntry_WithNonEmptyConfig) {
+  net::SchemefulSite primary_site(GURL("https://primary.test"));
+  net::SchemefulSite associate_site(GURL("https://associate.test"));
+  net::SchemefulSite service_site(GURL("https://service.test"));
+  net::FirstPartySetEntry primary_entry(net::FirstPartySetEntry(
+      primary_site, net::SiteType::kPrimary, absl::nullopt));
+  net::FirstPartySetEntry associate_entry(
+      net::FirstPartySetEntry(primary_site, net::SiteType::kAssociated, 0));
+  net::FirstPartySetEntry override_entry(net::FirstPartySetEntry(
+      primary_site, net::SiteType::kService, absl::nullopt));
+
+  // Create the global First-Party Sets with the following set:
+  // { primary: "https://primary.test",
+  // associatedSites: ["https://associate.test"}
+  SetGlobalSets(net::GlobalFirstPartySets(
+      kVersion,
+      {{primary_site, {primary_entry}}, {associate_site, {associate_entry}}},
+      {}));
+  // The context config adds a service site to the above set.
+  SetContextConfig(net::FirstPartySetsContextConfig(
+      {{service_site, net::FirstPartySetEntryOverride(override_entry)}}));
+  SetRwsEnabledViaPref(true);
+  service()->InitForTesting();
+
+  std::vector<std::pair<net::SchemefulSite, net::FirstPartySetEntry>>
+      set_entries;
+  EXPECT_TRUE(service()->ForEachEffectiveSetEntry(
+      [&](const net::SchemefulSite& site,
+          const net::FirstPartySetEntry& entry) {
+        set_entries.emplace_back(site, entry);
+        return true;
+      }));
+  EXPECT_THAT(set_entries,
+              UnorderedElementsAre(Pair(primary_site, primary_entry),
+                                   Pair(associate_site, associate_entry),
+                                   Pair(service_site, override_entry)));
+}
+
+TEST_F(FirstPartySetsPolicyServicePrefTest,
        OnProfileConfigReady_InitDisabled_NotifiesReadyWithConfig) {
   net::SchemefulSite test_primary(GURL("https://a.test"));
   net::FirstPartySetEntry test_entry(test_primary, net::SiteType::kPrimary,
                                      absl::nullopt);
-  net::FirstPartySetsContextConfig test_config({{test_primary, {test_entry}}});
+  net::FirstPartySetsContextConfig test_config(
+      {{test_primary, net::FirstPartySetEntryOverride(test_entry)}});
   SetContextConfig(test_config.Clone());
 
   service()->InitForTesting();
@@ -487,7 +586,7 @@ TEST_F(FirstPartySetsPolicyServicePrefObserverTest,
   env().RunUntilIdle();
 }
 
-TEST_F(FirstPartySetsPolicyServicePrefObserverTest,
+TEST_F(FirstPartySetsPolicyServicePrefTest,
        OnFirstPartySetsEnabledChanged_Default_WithConfig) {
   service()->InitForTesting();
 
@@ -497,7 +596,7 @@ TEST_F(FirstPartySetsPolicyServicePrefObserverTest,
   env().RunUntilIdle();
 }
 
-TEST_F(FirstPartySetsPolicyServicePrefObserverTest,
+TEST_F(FirstPartySetsPolicyServicePrefTest,
        OnFirstPartySetsEnabledChanged_Default_WithoutConfig) {
   EXPECT_CALL(mock_delegate, SetEnabled(_)).Times(1);
   EXPECT_CALL(mock_delegate, NotifyReady(_)).Times(0);
@@ -505,7 +604,7 @@ TEST_F(FirstPartySetsPolicyServicePrefObserverTest,
   env().RunUntilIdle();
 }
 
-TEST_F(FirstPartySetsPolicyServicePrefObserverTest,
+TEST_F(FirstPartySetsPolicyServicePrefTest,
        OnFirstPartySetsEnabledChanged_Disables_WithConfig) {
   service()->InitForTesting();
   EXPECT_CALL(mock_delegate, SetEnabled(true)).Times(1);
@@ -518,7 +617,7 @@ TEST_F(FirstPartySetsPolicyServicePrefObserverTest,
   env().RunUntilIdle();
 }
 
-TEST_F(FirstPartySetsPolicyServicePrefObserverTest,
+TEST_F(FirstPartySetsPolicyServicePrefTest,
        OnFirstPartySetsEnabledChanged_Disables_WithoutConfig) {
   EXPECT_CALL(mock_delegate, SetEnabled(true)).Times(1);
 
@@ -530,12 +629,13 @@ TEST_F(FirstPartySetsPolicyServicePrefObserverTest,
   env().RunUntilIdle();
 }
 
-TEST_F(FirstPartySetsPolicyServicePrefObserverTest,
+TEST_F(FirstPartySetsPolicyServicePrefTest,
        OnFirstPartySetsEnabledChanged_Enables_WithConfig) {
   net::SchemefulSite test_primary(GURL("https://a.test"));
   net::FirstPartySetEntry test_entry(test_primary, net::SiteType::kPrimary,
                                      absl::nullopt);
-  net::FirstPartySetsContextConfig test_config({{test_primary, {test_entry}}});
+  net::FirstPartySetsContextConfig test_config(
+      {{test_primary, net::FirstPartySetEntryOverride(test_entry)}});
   SetContextConfig(test_config.Clone());
 
   service()->InitForTesting();
@@ -551,7 +651,7 @@ TEST_F(FirstPartySetsPolicyServicePrefObserverTest,
   env().RunUntilIdle();
 }
 
-TEST_F(FirstPartySetsPolicyServicePrefObserverTest,
+TEST_F(FirstPartySetsPolicyServicePrefTest,
        OnFirstPartySetsEnabledChanged_Enables_WithoutConfig) {
   service()->OnFirstPartySetsEnabledChanged(true);
 
@@ -562,11 +662,45 @@ TEST_F(FirstPartySetsPolicyServicePrefObserverTest,
   env().RunUntilIdle();
 }
 
+TEST_F(FirstPartySetsPolicyServicePrefTest,
+       OnFirstPartySetsEnabledChanged_OTRProfile) {
+  testing::NiceMock<MockFirstPartySetsAccessDelegate> mock_delegate;
+  EXPECT_CALL(mock_delegate, SetEnabled(false)).Times(1);
+  EXPECT_CALL(mock_delegate, SetEnabled(true)).Times(0);
+  EXPECT_CALL(mock_delegate, NotifyReady(_)).Times(1);
+  mojo::Receiver<network::mojom::FirstPartySetsAccessDelegate>
+      mock_delegate_receiver{&mock_delegate};
+  mojo::Remote<network::mojom::FirstPartySetsAccessDelegate>
+      mock_delegate_remote;
+
+  mock_delegate_receiver.Bind(
+      mock_delegate_remote.BindNewPipeAndPassReceiver());
+
+  FirstPartySetsPolicyService* otr_service =
+      FirstPartySetsPolicyServiceFactory::GetForBrowserContext(
+          profile()->GetOffTheRecordProfile(
+              Profile::OTRProfileID::CreateUniqueForTesting(),
+              /*create_if_needed=*/true));
+  otr_service->ResetForTesting();
+
+  otr_service->InitForTesting();
+  otr_service->AddRemoteAccessDelegate(std::move(mock_delegate_remote));
+
+  ASSERT_FALSE(otr_service->is_enabled());
+  env().RunUntilIdle();
+
+  otr_service->OnFirstPartySetsEnabledChanged(true);
+  EXPECT_FALSE(otr_service->is_enabled());
+
+  env().RunUntilIdle();
+}
+
 TEST_F(FirstPartySetsPolicyServiceTest, NotifiesReadyWithConfigAndCacheFilter) {
   net::SchemefulSite test_primary(GURL("https://a.test"));
   net::FirstPartySetEntry test_entry(test_primary, net::SiteType::kPrimary,
                                      absl::nullopt);
-  net::FirstPartySetsContextConfig test_config({{test_primary, {test_entry}}});
+  net::FirstPartySetsContextConfig test_config(
+      {{test_primary, net::FirstPartySetEntryOverride(test_entry)}});
   net::FirstPartySetsCacheFilter test_cache_filter({{test_primary, 1}},
                                                    /*browser_run_id=*/1);
   SetContextConfig(test_config.Clone());
@@ -586,11 +720,11 @@ TEST_F(FirstPartySetsPolicyServiceTest,
   net::SchemefulSite test_primary(GURL("https://a.test"));
   net::FirstPartySetEntry test_entry(test_primary, net::SiteType::kPrimary,
                                      absl::nullopt);
-  net::FirstPartySetsContextConfig test_config({{test_primary, {test_entry}}});
+  net::FirstPartySetsContextConfig test_config(
+      {{test_primary, net::FirstPartySetEntryOverride(test_entry)}});
 
   base::test::TestFuture<net::FirstPartySetMetadata> future;
   service()->ComputeFirstPartySetMetadata(test_primary, &test_primary,
-                                          /*party_context=*/{},
                                           future.GetCallback());
   EXPECT_FALSE(future.IsReady());
 
@@ -606,7 +740,8 @@ TEST_F(FirstPartySetsPolicyServiceTest,
   net::SchemefulSite test_primary(GURL("https://a.test"));
   net::FirstPartySetEntry test_entry(test_primary, net::SiteType::kPrimary,
                                      absl::nullopt);
-  net::FirstPartySetsContextConfig test_config({{test_primary, {test_entry}}});
+  net::FirstPartySetsContextConfig test_config(
+      {{test_primary, net::FirstPartySetEntryOverride(test_entry)}});
 
   SetContextConfig(test_config.Clone());
   SetInvokeCallbacksAsynchronously(/*asynchronous=*/true);
@@ -614,7 +749,6 @@ TEST_F(FirstPartySetsPolicyServiceTest,
 
   base::test::TestFuture<net::FirstPartySetMetadata> future;
   service()->ComputeFirstPartySetMetadata(test_primary, &test_primary,
-                                          /*party_context=*/{},
                                           future.GetCallback());
   EXPECT_NE(future.Take(), net::FirstPartySetMetadata());
 }
@@ -624,7 +758,8 @@ TEST_F(FirstPartySetsPolicyServiceTest,
   net::SchemefulSite test_primary(GURL("https://a.test"));
   net::FirstPartySetEntry test_entry(test_primary, net::SiteType::kPrimary,
                                      absl::nullopt);
-  net::FirstPartySetsContextConfig test_config({{test_primary, {test_entry}}});
+  net::FirstPartySetsContextConfig test_config(
+      {{test_primary, net::FirstPartySetEntryOverride(test_entry)}});
 
   SetContextConfig(test_config.Clone());
   SetInvokeCallbacksAsynchronously(/*asynchronous=*/false);
@@ -632,81 +767,94 @@ TEST_F(FirstPartySetsPolicyServiceTest,
 
   base::test::TestFuture<net::FirstPartySetMetadata> future;
   service()->ComputeFirstPartySetMetadata(test_primary, &test_primary,
-                                          /*party_context=*/{},
                                           future.GetCallback());
   EXPECT_TRUE(future.IsReady());
   EXPECT_NE(future.Take(), net::FirstPartySetMetadata());
 }
 
-TEST_F(FirstPartySetsPolicyServiceTest,
+TEST_P(FirstPartySetsPolicyServicePrefTest,
        ComputeFirstPartySetMetadata_PrefDisabled) {
   net::SchemefulSite test_primary(GURL("https://a.test"));
   net::FirstPartySetEntry test_entry(test_primary, net::SiteType::kPrimary,
                                      absl::nullopt);
-  net::FirstPartySetsContextConfig test_config({{test_primary, {test_entry}}});
+  net::FirstPartySetsContextConfig test_config(
+      {{test_primary, net::FirstPartySetEntryOverride(test_entry)}});
 
   SetContextConfig(test_config.Clone());
   SetInvokeCallbacksAsynchronously(/*asynchronous=*/false);
-  SetEnabledPref(false);
+  SetRwsEnabledViaPref(false);
 
   service()->InitForTesting();
 
   base::test::TestFuture<net::FirstPartySetMetadata> future;
   service()->ComputeFirstPartySetMetadata(test_primary, &test_primary,
-                                          /*party_context=*/{},
                                           future.GetCallback());
   EXPECT_TRUE(future.IsReady());
   EXPECT_EQ(future.Take(), net::FirstPartySetMetadata());
 }
 
-namespace {
-
-enum PrefState { kDefault, kDisabled, kEnabled };
-
-}  // namespace
-
-class FirstPartySetsPolicyServiceResumeThrottleTest
-    : public FirstPartySetsPolicyServiceTest,
-      public ::testing::WithParamInterface<std::tuple<bool, bool, PrefState>> {
- public:
-  FirstPartySetsPolicyServiceResumeThrottleTest() {
-    if (IsFeatureEnabled()) {
-      features_.InitAndEnableFeatureWithParameters(
-          features::kFirstPartySets,
-          {{features::kFirstPartySetsClearSiteDataOnChangedSets.name,
-            IsClearingFeatureEnabled() ? "true" : "false"}});
-    } else {
-      features_.InitAndDisableFeature(features::kFirstPartySets);
-    }
+class ThirdPartyCookieBlockingFirstPartySetsPolicyServiceTest
+    : public DefaultFirstPartySetsPolicyServiceTest {
+ protected:
+  ThirdPartyCookieBlockingFirstPartySetsPolicyServiceTest() {
+    features_.InitWithFeatures(
+        {
+            net::features::kForceThirdPartyCookieBlocking,
+        },
+        {});
   }
 
-  bool IsPrefEnabled() { return GetPrefState() == PrefState::kEnabled; }
+ private:
+  base::test::ScopedFeatureList features_;
+};
+
+TEST_F(ThirdPartyCookieBlockingFirstPartySetsPolicyServiceTest, EnabledAtInit) {
+  EXPECT_CALL(mock_delegate, SetEnabled(true)).Times(1);
+
+  TestingProfile profile;
+  FirstPartySetsPolicyService* service =
+      FirstPartySetsPolicyServiceFactory::GetForBrowserContext(&profile);
+  service->AddRemoteAccessDelegate(std::move(mock_delegate_remote_));
+
+  env().RunUntilIdle();
+}
+
+TEST_F(ThirdPartyCookieBlockingFirstPartySetsPolicyServiceTest, AlwaysEnabled) {
+  // The mock method is called once during the service construction.
+  EXPECT_CALL(mock_delegate, SetEnabled(true)).Times(1);
+
+  TestingProfile profile;
+  FirstPartySetsPolicyService* service =
+      FirstPartySetsPolicyServiceFactory::GetForBrowserContext(&profile);
+  service->AddRemoteAccessDelegate(std::move(mock_delegate_remote_));
+
+  // These changes should not be forwarded to the delegate.
+  service->OnFirstPartySetsEnabledChanged(false);
+  service->OnFirstPartySetsEnabledChanged(true);
+
+  env().RunUntilIdle();
+}
+
+class FirstPartySetsPolicyServiceResumeThrottleTest
+    : public FirstPartySetsPolicyServiceTest {
+ public:
+  FirstPartySetsPolicyServiceResumeThrottleTest() {
+    features_.InitAndEnableFeatureWithParameters(
+        net::features::kWaitForFirstPartySetsInit, {});
+  }
 
  private:
-  bool IsFeatureEnabled() { return std::get<0>(GetParam()); }
-  bool IsClearingFeatureEnabled() { return std::get<1>(GetParam()); }
-  PrefState GetPrefState() { return std::get<2>(GetParam()); }
-
   base::test::ScopedFeatureList features_;
 };
 
 // Verify the throttle resume callback is always invoked.
-TEST_P(FirstPartySetsPolicyServiceResumeThrottleTest,
-       MaybeAddNavigationThrottleResumeCallback) {
-  SetEnabledPref(IsPrefEnabled());
+TEST_F(FirstPartySetsPolicyServiceResumeThrottleTest,
+       RegisterThrottleResumeCallback) {
+  SetInvokeCallbacksAsynchronously(true);
+  service()->InitForTesting();
   base::RunLoop run_loop;
   service()->RegisterThrottleResumeCallback(run_loop.QuitClosure());
-  service()->InitForTesting();
   run_loop.Run();
 }
-
-INSTANTIATE_TEST_SUITE_P(
-    All,
-    FirstPartySetsPolicyServiceResumeThrottleTest,
-    ::testing::Combine(::testing::Bool(),
-                       ::testing::Bool(),
-                       ::testing::Values(PrefState::kDefault,
-                                         PrefState::kDisabled,
-                                         PrefState::kEnabled)));
 
 }  // namespace first_party_sets

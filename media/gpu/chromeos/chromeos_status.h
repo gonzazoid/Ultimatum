@@ -20,12 +20,14 @@ enum class ChromeosStatusCode : StatusCodeType {
   kResetRequired = 7,
   kInvalidLayoutSize = 8,
   kFailedToChangeResolution = 9,
+  kInsufficientFramePoolSize = 10,
+  kUnableToAllocateSecureBuffer = 11,
+  kSecureBufferPoolEmpty = 12,
 };
 
 struct CroStatusTraits {
   using Codes = ChromeosStatusCode;
   static constexpr StatusGroupType Group() { return "ChromeosStatusCode"; }
-  static constexpr ChromeosStatusCode DefaultEnumValue() { return Codes::kOk; }
 };
 using CroStatus = TypedStatus<CroStatusTraits>;
 

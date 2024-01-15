@@ -25,6 +25,7 @@ class OverlaysInfoProvider {
   virtual bool IsFrameSinkOverlayed(viz::FrameSinkId frame_sink_id) = 0;
 };
 
+// Lifetime: WebView
 class DisplaySchedulerWebView : public viz::DisplaySchedulerBase,
                                 public viz::SurfaceObserver,
                                 public viz::FrameSinkObserver {
@@ -40,11 +41,12 @@ class DisplaySchedulerWebView : public viz::DisplaySchedulerBase,
   void DidSwapBuffers() override;
   void DidReceiveSwapBuffersAck() override {}
   void OutputSurfaceLost() override;
-  void ReportFrameTime(
-      base::TimeDelta frame_time,
-      base::flat_set<base::PlatformThreadId> thread_ids) override {}
+  void ReportFrameTime(base::TimeDelta frame_time,
+                       base::flat_set<base::PlatformThreadId> thread_ids,
+                       base::TimeTicks draw_start,
+                       viz::HintSession::BoostType boost_type) override {}
 
-  // DisplayDamageTrackerObserver implementation.
+  // DisplayDamageTracker::Delegate implementation.
   void OnDisplayDamaged(viz::SurfaceId surface_id) override;
   void OnRootFrameMissing(bool missing) override {}
   void OnPendingSurfacesChanged() override {}
@@ -85,7 +87,8 @@ class DisplaySchedulerWebView : public viz::DisplaySchedulerBase,
 
   // Due to destruction order in viz::Display this might be not safe to use in
   // destructor of this class.
-  const raw_ptr<OverlaysInfoProvider> overlays_info_provider_;
+  const raw_ptr<OverlaysInfoProvider, DanglingUntriaged>
+      overlays_info_provider_;
 
   base::ScopedObservation<viz::SurfaceManager, viz::SurfaceObserver>
       surface_manager_observation_{this};

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include <memory>
 
 #include "base/memory/ptr_util.h"
-#include "chrome/browser/web_applications/isolation_data.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_user_data.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -57,18 +56,18 @@ IsolatedWebAppPendingInstallInfo::FromWebContents(
 IsolatedWebAppPendingInstallInfo::IsolatedWebAppPendingInstallInfo() = default;
 IsolatedWebAppPendingInstallInfo::~IsolatedWebAppPendingInstallInfo() = default;
 
-void IsolatedWebAppPendingInstallInfo::set_isolation_data(
-    const IsolationData& isolation_data) {
-  isolation_data_ = isolation_data;
+void IsolatedWebAppPendingInstallInfo::set_isolated_web_app_location(
+    const IsolatedWebAppLocation& location) {
+  location_ = location;
 }
 
-const absl::optional<IsolationData>&
-IsolatedWebAppPendingInstallInfo::isolation_data() const {
-  return isolation_data_;
+const absl::optional<IsolatedWebAppLocation>&
+IsolatedWebAppPendingInstallInfo::location() const {
+  return location_;
 }
 
-void IsolatedWebAppPendingInstallInfo::ResetIsolationData() {
-  isolation_data_ = absl::nullopt;
+void IsolatedWebAppPendingInstallInfo::ResetIsolatedWebAppLocation() {
+  location_ = absl::nullopt;
 }
 
 }  // namespace web_app

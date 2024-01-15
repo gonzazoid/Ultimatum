@@ -10,16 +10,16 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 
-import org.chromium.base.Consumer;
 import org.chromium.base.Log;
 import org.chromium.chromecast.base.Both;
 import org.chromium.chromecast.base.Controller;
 import org.chromium.chromecast.base.Observable;
 import org.chromium.chromecast.base.Observer;
-import org.chromium.chromecast.base.Observers;
 import org.chromium.chromecast.base.Unit;
 import org.chromium.content.browser.MediaSessionImpl;
 import org.chromium.content_public.browser.WebContents;
+
+import java.util.function.Consumer;
 
 /**
  * A util class for CastWebContentsActivity to show WebContents on its views.
@@ -51,14 +51,14 @@ class CastWebContentsSurfaceHelper {
     public static class StartParams {
         public final Uri uri;
         public final WebContents webContents;
-        public final boolean isRemoteControlMode;
+        public final boolean shouldRequestAudioFocus;
         public final boolean touchInputEnabled;
 
-        public StartParams(Uri uri, WebContents webContents, boolean isRemoteControlMode,
+        public StartParams(Uri uri, WebContents webContents, boolean shouldRequestAudioFocus,
                 boolean touchInputEnabled) {
             this.uri = uri;
             this.webContents = webContents;
-            this.isRemoteControlMode = isRemoteControlMode;
+            this.shouldRequestAudioFocus = shouldRequestAudioFocus;
             this.touchInputEnabled = touchInputEnabled;
         }
 
@@ -67,7 +67,7 @@ class CastWebContentsSurfaceHelper {
             if (other instanceof StartParams) {
                 StartParams that = (StartParams) other;
                 return this.uri.equals(that.uri) && this.webContents.equals(that.webContents)
-                        && this.isRemoteControlMode == that.isRemoteControlMode
+                        && this.shouldRequestAudioFocus == that.shouldRequestAudioFocus
                         && this.touchInputEnabled == that.touchInputEnabled;
             }
             return false;
@@ -91,10 +91,10 @@ class CastWebContentsSurfaceHelper {
                 return null;
             }
 
-            final boolean isRemoteControlMode =
-                    CastWebContentsIntentUtils.isRemoteControlMode(bundle);
+            final boolean shouldRequestAudioFocus =
+                    CastWebContentsIntentUtils.shouldRequestAudioFocus(bundle);
             final boolean touchInputEnabled = CastWebContentsIntentUtils.isTouchable(bundle);
-            return new StartParams(uri, webContents, isRemoteControlMode, touchInputEnabled);
+            return new StartParams(uri, webContents, shouldRequestAudioFocus, touchInputEnabled);
         }
     }
 
@@ -102,8 +102,8 @@ class CastWebContentsSurfaceHelper {
      * @param webContentsView A Observer that displays incoming WebContents.
      * @param finishCallback Invoked to tell host to finish.
      */
-    CastWebContentsSurfaceHelper(
-            Observer<WebContents> webContentsView, Consumer<Uri> finishCallback) {
+    CastWebContentsSurfaceHelper(Observer<WebContents> webContentsView,
+            Consumer<Uri> finishCallback, Observable<Unit> surfaceAvailable) {
         Handler handler = new Handler();
 
         mMediaSessionGetter =
@@ -112,8 +112,8 @@ class CastWebContentsSurfaceHelper {
         Observable<Uri> uriState = mStartParamsState.map(params -> params.uri);
         Controller<WebContents> webContentsState = new Controller<>();
         mStartParamsState.map(params -> params.webContents)
-                .subscribe(Observers.onEnter(webContentsState::set));
-        mCreatedState.subscribe(Observers.onExit(x -> webContentsState.reset()));
+                .subscribe(Observer.onOpen(webContentsState::set));
+        mCreatedState.subscribe(Observer.onClose(x -> webContentsState.reset()));
 
         // Receive broadcasts indicating the screen turned off while we have active WebContents.
         uriState.subscribe((Uri uri) -> {
@@ -161,22 +161,28 @@ class CastWebContentsSurfaceHelper {
 
         // webContentsView is responsible for displaying each new WebContents.
         webContentsState.subscribe(webContentsView);
+        webContentsState.and(surfaceAvailable)
+                .map(Both::getFirst)
+                .subscribe(Observer.onClose(WebContents::tearDownDialogOverlays));
 
-        // Take audio focus when receiving new WebContents if not the remote control app.
-        mStartParamsState.filter(params -> !params.isRemoteControlMode)
+        // Take audio focus when receiving new WebContents if requested. In most cases, we do want
+        // to take audio focus when starting the Cast UI, but there are some exceptions, such as
+        // when launching a remote control app or when starting an app by voice request, when the
+        // TTS may still be retaining audio focus.
+        mStartParamsState.filter(params -> params.shouldRequestAudioFocus)
                 .map(params -> mMediaSessionGetter.get(params.webContents))
-                .subscribe(Observers.onEnter(MediaSessionImpl::requestSystemAudioFocus));
+                .subscribe(Observer.onOpen(MediaSessionImpl::requestSystemAudioFocus));
 
         // When onDestroy() is called after onNewStartParams(), log and reset StartParams states.
         uriState.andThen(Observable.not(mCreatedState))
                 .map(Both::getFirst)
-                .subscribe(Observers.onEnter((Uri uri) -> {
+                .subscribe(Observer.onOpen((Uri uri) -> {
                     Log.d(TAG, "onDestroy: " + uri);
                     mStartParamsState.reset();
                 }));
 
         // Cache relevant fields from StartParams in instance variables.
-        mStartParamsState.subscribe(Observers.onEnter(params -> {
+        mStartParamsState.subscribe(Observer.onOpen(params -> {
             mTouchInputEnabled = params.touchInputEnabled;
             mSessionId = params.uri.getPath();
         }));

@@ -4,16 +4,16 @@
 
 #include "chrome/services/media_gallery_util/ipc_data_source.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/ranges/algorithm.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 
 IPCDataSource::IPCDataSource(
     mojo::PendingRemote<chrome::mojom::MediaDataSource> media_data_source,
     int64_t total_size)
     : media_data_source_(std::move(media_data_source)),
       total_size_(total_size),
-      utility_task_runner_(base::ThreadTaskRunnerHandle::Get()) {
+      utility_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {
   DETACH_FROM_THREAD(data_source_thread_checker_);
 }
 
@@ -83,4 +83,20 @@ void IPCDataSource::ReadDone(uint8_t* destination,
 
   base::ranges::copy(data, destination);
   std::move(callback).Run(data.size());
+}
+
+bool IPCDataSource::PassedTimingAllowOriginCheck() {
+  // The mojo ipc channel doesn't support this yet, so cautiously return false,
+  // for now.
+  // TODO(crbug/1377053): Rework this method to be asynchronous, if possible,
+  // so that the mojo interface can be queried.
+  return false;
+}
+
+bool IPCDataSource::WouldTaintOrigin() {
+  // The mojo ipc channel doesn't support this yet, so cautiously return true,
+  // for now.
+  // TODO(crbug/1377053): Rework this method to be asynchronous, if possible,
+  // so that the mojo interface can be queried.
+  return true;
 }

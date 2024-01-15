@@ -7,6 +7,8 @@
 
 #include <string>
 
+#include "base/strings/string_piece.h"
+#include "components/metrics/metrics_log.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace metrics {
@@ -43,14 +45,18 @@ class LogStore {
   // Will trigger a DCHECK if there is no staged log.
   virtual absl::optional<uint64_t> staged_log_user_id() const = 0;
 
+  // LogMetadata associated with the staged log.
+  virtual const LogMetadata staged_log_metadata() const = 0;
+
   // Populates staged_log() with the next stored log to send.
   // The order in which logs are staged is up to the implementor.
   // The staged_log must remain the same even if additional logs are added.
   // Should only be called if has_unsent_logs() is true.
   virtual void StageNextLog() = 0;
 
-  // Discards the staged log.
-  virtual void DiscardStagedLog() = 0;
+  // Discards the staged log. |reason| is the reason why the log was discarded
+  // (used for debugging through chrome://metrics-internals).
+  virtual void DiscardStagedLog(base::StringPiece reason = "") = 0;
 
   // Marks the staged log as sent, DiscardStagedLog() shall still be called if
   // the staged log needs discarded.

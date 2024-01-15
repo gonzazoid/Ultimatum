@@ -5,43 +5,30 @@
 #include "chrome/browser/ash/policy/enrollment/psm/rlwe_dmserver_client_impl.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/check.h"
-#include "base/files/file_path.h"
-#include "base/files/file_util.h"
-#include "base/metrics/histogram_functions.h"
-#include "base/path_service.h"
 #include "base/run_loop.h"
-#include "base/sequence_checker.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/test_future.h"
 #include "base/time/time.h"
-#include "chrome/browser/ash/policy/enrollment/psm/rlwe_client.h"
-#include "chrome/browser/ash/policy/enrollment/psm/rlwe_id_provider.h"
-#include "chrome/browser/ash/policy/enrollment/psm/testing_rlwe_client.h"
-#include "chrome/browser/ash/policy/enrollment/psm/testing_rlwe_id_provider.h"
-#include "chrome/common/pref_names.h"
-#include "chrome/test/base/testing_browser_process.h"
+#include "chrome/browser/ash/policy/enrollment/psm/rlwe_dmserver_client.h"
+#include "chrome/browser/ash/policy/enrollment/psm/rlwe_test_support.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/core/common/cloud/device_management_service.h"
-#include "components/policy/core/common/cloud/dmserver_job_configurations.h"
 #include "components/policy/core/common/cloud/enterprise_metrics.h"
 #include "components/policy/core/common/cloud/mock_device_management_service.h"
 #include "components/policy/proto/device_management_backend.pb.h"
-#include "components/prefs/pref_service.h"
-#include "components/prefs/testing_pref_service.h"
 #include "content/public/test/browser_task_environment.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/private_membership/src/internal/testing/regression_test_data/regression_test_data.pb.h"
 #include "third_party/private_membership/src/private_membership_rlwe.pb.h"
-#include "third_party/shell-encryption/src/testing/status_testing.h"
+#include "third_party/private_membership/src/private_membership_rlwe_client.h"
 
 namespace psm_rlwe = private_membership::rlwe;
 namespace em = enterprise_management;
@@ -51,7 +38,6 @@ using PsmExecutionResult = em::DeviceRegisterRequest::PsmExecutionResult;
 
 namespace policy::psm {
 
-namespace {
 // A struct reporesents the PSM execution result params.
 using PsmResultHolder = RlweDmserverClient::ResultHolder;
 
@@ -61,47 +47,17 @@ using ::testing::InSequence;
 using ::testing::InvokeWithoutArgs;
 using ::testing::Mock;
 using ::testing::SaveArg;
+using ::testing::StrictMock;
 
-// Number of test cases exist in cros_test_data.binarypb file, which is part of
-// private_membership third_party library.
-const int kNumberOfPsmTestCases = 10;
-
-// PrivateSetMembership regression tests maximum file size which is 4MB.
-const size_t kMaxFileSizeInBytes = 4 * 1024 * 1024;
-
-bool ParseProtoFromFile(const base::FilePath& file_path,
-                        google::protobuf::MessageLite* out_proto) {
-  DCHECK(out_proto);
-
-  if (!base::PathExists(file_path))
-    return false;
-
-  std::string file_content;
-  if (!base::ReadFileToStringWithMaxSize(file_path, &file_content,
-                                         kMaxFileSizeInBytes)) {
-    return false;
-  }
-
-  return out_proto->ParseFromString(file_content);
-}
-
-}  // namespace
-
-// The integer parameter represents the index of PSM test case.
-class RlweDmserverClientImplTest : public testing::TestWithParam<int> {
+class RlweDmserverClientImplTest
+    : public ::testing::TestWithParam</*is_member*/ bool> {
  public:
   RlweDmserverClientImplTest() {
-    // Create PSM test case, before PSM client to construct the
-    // PSM RLWE testing client factory and its RLWE ID.
-    CreatePsmTestCase();
-
     // Create PSM RLWE DMServer client.
     CreateClient();
   }
 
   ~RlweDmserverClientImplTest() override = default;
-
-  int GetPsmTestCaseIndex() const { return GetParam(); }
 
   void CreateClient() {
     service_ =
@@ -112,44 +68,11 @@ class RlweDmserverClientImplTest : public testing::TestWithParam<int> {
         base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
             &url_loader_factory_);
 
+    const bool is_member = GetParam();
+    psm_test_case_ = testing::LoadTestCase(is_member);
     psm_client_ = std::make_unique<RlweDmserverClientImpl>(
         service_.get(), shared_url_loader_factory_,
-        psm_rlwe_test_client_factory_.get(),
-        testing_psm_rlwe_id_provider_.get());
-  }
-
-  void CreatePsmTestCase() {
-    // Verify PSM test case index is valid.
-    ASSERT_GE(GetPsmTestCaseIndex(), 0);
-
-    // Retrieve the PSM test case.
-    base::FilePath src_root_dir;
-    EXPECT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &src_root_dir));
-    const base::FilePath kPsmTestDataPath =
-        src_root_dir.AppendASCII("third_party")
-            .AppendASCII("private_membership")
-            .AppendASCII("src")
-            .AppendASCII("internal")
-            .AppendASCII("testing")
-            .AppendASCII("regression_test_data")
-            .AppendASCII("test_data.binarypb");
-    psm_rlwe::PrivateMembershipRlweClientRegressionTestData test_data;
-    ASSERT_TRUE(ParseProtoFromFile(kPsmTestDataPath, &test_data));
-    EXPECT_EQ(test_data.test_cases_size(), kNumberOfPsmTestCases);
-    psm_test_case_ = test_data.test_cases(GetPsmTestCaseIndex());
-
-    std::vector<private_membership::rlwe::RlwePlaintextId> plaintext_ids{
-        psm_test_case_.plaintext_id()};
-
-    // Sets the PSM RLWE client factory to testing client.
-    psm_rlwe_test_client_factory_ =
-        std::make_unique<TestingRlweClient::FactoryImpl>(
-            psm_test_case_.ec_cipher_key(), psm_test_case_.seed(),
-            plaintext_ids);
-
-    // Sets the PSM RLWE ID.
-    testing_psm_rlwe_id_provider_ =
-        std::make_unique<TestingRlweIdProvider>(psm_test_case_.plaintext_id());
+        psm_test_case_.plaintext_id(), testing::CreateClientFactory(is_member));
   }
 
   // Start the `RlweDmserverClient` to retrieve the device state.
@@ -162,14 +85,10 @@ class RlweDmserverClientImplTest : public testing::TestWithParam<int> {
   void VerifyResultHolder(PsmResultHolder expected_result_holder) {
     PsmResultHolder psm_params = future_result_holder_.Take();
     EXPECT_EQ(expected_result_holder.psm_result, psm_params.psm_result);
-    if (expected_result_holder.membership_result.has_value()) {
-      EXPECT_EQ(expected_result_holder.membership_result.value(),
-                psm_params.membership_result.value());
-    }
-    if (expected_result_holder.membership_determination_time.has_value()) {
-      EXPECT_EQ(expected_result_holder.membership_determination_time.value(),
-                psm_params.membership_determination_time.value());
-    }
+    EXPECT_EQ(expected_result_holder.membership_result,
+              psm_params.membership_result);
+    EXPECT_EQ(expected_result_holder.membership_determination_time,
+              psm_params.membership_determination_time);
   }
 
   void ServerWillReplyWithPsmOprfResponse() {
@@ -301,16 +220,13 @@ class RlweDmserverClientImplTest : public testing::TestWithParam<int> {
 
   // Sets which PSM RLWE client will be created, depending on the factory. It
   // is only used for PSM during creating the client for initial enrollment.
-  std::unique_ptr<TestingRlweClient::FactoryImpl> psm_rlwe_test_client_factory_;
-
-  // Sets the PSM RLWE ID directly for testing.
-  std::unique_ptr<TestingRlweIdProvider> testing_psm_rlwe_id_provider_;
+  std::unique_ptr<RlweDmserverClientImpl::RlweClient> psm_rlwe_test_client_;
 
   base::HistogramTester histogram_tester_;
   std::unique_ptr<FakeDeviceManagementService> service_;
   network::TestURLLoaderFactory url_loader_factory_;
   scoped_refptr<network::SharedURLLoaderFactory> shared_url_loader_factory_;
-  testing::StrictMock<MockJobCreationHandler> job_creation_handler_;
+  StrictMock<MockJobCreationHandler> job_creation_handler_;
   base::RunLoop run_loop_;
 
   DeviceManagementService::JobConfiguration::JobType psm_last_job_type_ =
@@ -336,8 +252,7 @@ TEST_P(RlweDmserverClientImplTest, MembershipRetrievedSuccessfully) {
 
   ASSERT_NO_FATAL_FAILURE(CheckMembershipWithRlweClient());
 
-  VerifyResultHolder(PsmResultHolder(psm::RlweResult::kSuccessfulDetermination,
-                                     kExpectedMembershipResult,
+  VerifyResultHolder(PsmResultHolder(kExpectedMembershipResult,
                                      kExpectedPsmDeterminationTimestamp));
 
   ExpectPsmHistograms(psm::RlweResult::kSuccessfulDetermination,
@@ -389,7 +304,8 @@ TEST_P(RlweDmserverClientImplTest, ConnectionErrorForRlweQueryResponse) {
 
   ASSERT_NO_FATAL_FAILURE(CheckMembershipWithRlweClient());
 
-  VerifyResultHolder(PsmResultHolder(psm::RlweResult::kConnectionError));
+  VerifyResultHolder(PsmResultHolder(AutoEnrollmentDMServerError{
+      .dm_error = DM_STATUS_SUCCESS, .network_error = net::ERR_FAILED}));
 
   ExpectPsmHistograms(psm::RlweResult::kConnectionError,
                       /*success_time_recorded=*/false);
@@ -408,7 +324,8 @@ TEST_P(RlweDmserverClientImplTest, ConnectionErrorForRlweOprfResponse) {
 
   ASSERT_NO_FATAL_FAILURE(CheckMembershipWithRlweClient());
 
-  VerifyResultHolder(PsmResultHolder(psm::RlweResult::kConnectionError));
+  VerifyResultHolder(PsmResultHolder(AutoEnrollmentDMServerError{
+      .dm_error = DM_STATUS_SUCCESS, .network_error = net::ERR_FAILED}));
 
   ExpectPsmHistograms(psm::RlweResult::kConnectionError,
                       /*success_time_recorded=*/false);
@@ -425,7 +342,8 @@ TEST_P(RlweDmserverClientImplTest, NetworkFailureForRlweOprfResponse) {
 
   ASSERT_NO_FATAL_FAILURE(CheckMembershipWithRlweClient());
 
-  VerifyResultHolder(PsmResultHolder(psm::RlweResult::kServerError));
+  VerifyResultHolder(PsmResultHolder(
+      AutoEnrollmentDMServerError{.dm_error = DM_STATUS_HTTP_STATUS_ERROR}));
 
   ExpectPsmHistograms(psm::RlweResult::kServerError,
                       /*success_time_recorded=*/false);
@@ -441,7 +359,8 @@ TEST_P(RlweDmserverClientImplTest, NetworkFailureForRlweQueryResponse) {
 
   ASSERT_NO_FATAL_FAILURE(CheckMembershipWithRlweClient());
 
-  VerifyResultHolder(PsmResultHolder(psm::RlweResult::kServerError));
+  VerifyResultHolder(PsmResultHolder(
+      AutoEnrollmentDMServerError{.dm_error = DM_STATUS_HTTP_STATUS_ERROR}));
 
   ExpectPsmHistograms(psm::RlweResult::kServerError,
                       /*success_time_recorded=*/false);
@@ -455,8 +374,6 @@ TEST_P(RlweDmserverClientImplTest, NetworkFailureForRlweQueryResponse) {
 
 INSTANTIATE_TEST_SUITE_P(RlweDmserverClientImplTest,
                          RlweDmserverClientImplTest,
-                         // Loop over all indices starting from 0, and smaller
-                         // than `kNumberOfPsmTestCases`.
-                         ::testing::Range(0, kNumberOfPsmTestCases));
+                         /*is_member=*/::testing::Bool());
 
 }  // namespace policy::psm

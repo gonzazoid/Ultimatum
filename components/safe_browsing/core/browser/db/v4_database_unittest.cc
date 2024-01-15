@@ -5,12 +5,14 @@
 #include <unordered_map>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/debug/leak_annotations.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "base/test/test_simple_task_runner.h"
 #include "components/safe_browsing/core/browser/db/v4_database.h"
 #include "components/safe_browsing/core/browser/db/v4_store.h"
@@ -25,11 +27,12 @@ class FakeV4Store : public V4Store {
               const bool hash_prefix_matches)
       : V4Store(
             task_runner,
-            base::FilePath(store_path.value() + FILE_PATH_LITERAL(".store"))),
+            base::FilePath(store_path.value() + FILE_PATH_LITERAL(".store")),
+            std::make_unique<InMemoryHashPrefixMap>()),
         hash_prefix_should_match_(hash_prefix_matches) {}
 
-  HashPrefix GetMatchingHashPrefix(const FullHash& full_hash) override {
-    return hash_prefix_should_match_ ? full_hash : HashPrefix();
+  HashPrefixStr GetMatchingHashPrefix(const FullHashStr& full_hash) override {
+    return hash_prefix_should_match_ ? full_hash : HashPrefixStr();
   }
 
   bool HasValidData() override { return true; }
@@ -50,11 +53,12 @@ class FakeV4StoreFactory : public V4StoreFactory {
   explicit FakeV4StoreFactory(bool hash_prefix_matches)
       : hash_prefix_should_match_(hash_prefix_matches) {}
 
-  std::unique_ptr<V4Store> CreateV4Store(
+  V4StorePtr CreateV4Store(
       const scoped_refptr<base::SequencedTaskRunner>& task_runner,
       const base::FilePath& store_path) override {
-    return std::make_unique<FakeV4Store>(task_runner, store_path,
-                                         hash_prefix_should_match_);
+    return V4StorePtr(
+        new FakeV4Store(task_runner, store_path, hash_prefix_should_match_),
+        V4StoreDeleter(task_runner));
   }
 
  private:
@@ -132,7 +136,7 @@ class V4DatabaseTest : public PlatformTest {
     ASSERT_EQ(expected_identifiers_.size(), v4_database->store_map_->size());
     for (size_t i = 0; i < expected_identifiers_.size(); i++) {
       const auto& expected_identifier = expected_identifiers_[i];
-      const auto& store = (*v4_database->store_map_)[expected_identifier];
+      const auto& store = v4_database->store_map_->at(expected_identifier);
       ASSERT_TRUE(store);
       const auto& expected_store_path = expected_store_paths_[i];
       EXPECT_EQ(expected_store_path, store->store_path());
@@ -359,9 +363,12 @@ TEST_F(V4DatabaseTest, TestAllStoresMatchFullHash) {
   EXPECT_EQ(true, created_and_called_back_);
 
   StoresToCheck stores_to_check({linux_malware_id_, win_malware_id_});
-  StoreAndHashPrefixes store_and_hash_prefixes;
-  v4_database_->GetStoresMatchingFullHash("anything", stores_to_check,
-                                          &store_and_hash_prefixes);
+  base::test::TestFuture<FullHashToStoreAndHashPrefixesMap> results;
+  v4_database_->GetStoresMatchingFullHash({"anything"}, stores_to_check,
+                                          results.GetCallback());
+  WaitForTasksOnTaskRunner();
+  FullHashToStoreAndHashPrefixesMap map = results.Get();
+  StoreAndHashPrefixes store_and_hash_prefixes = map["anything"];
   EXPECT_EQ(2u, store_and_hash_prefixes.size());
   StoresToCheck stores_found;
   for (const auto& it : store_and_hash_prefixes) {
@@ -381,10 +388,13 @@ TEST_F(V4DatabaseTest, TestNoStoreMatchesFullHash) {
   WaitForTasksOnTaskRunner();
   EXPECT_EQ(true, created_and_called_back_);
 
-  StoreAndHashPrefixes store_and_hash_prefixes;
+  base::test::TestFuture<FullHashToStoreAndHashPrefixesMap> results;
   v4_database_->GetStoresMatchingFullHash(
-      "anything", StoresToCheck({linux_malware_id_, win_malware_id_}),
-      &store_and_hash_prefixes);
+      {"anything"}, StoresToCheck({linux_malware_id_, win_malware_id_}),
+      results.GetCallback());
+  WaitForTasksOnTaskRunner();
+  FullHashToStoreAndHashPrefixesMap map = results.Get();
+  StoreAndHashPrefixes store_and_hash_prefixes = map["anything"];
   EXPECT_TRUE(store_and_hash_prefixes.empty());
 }
 
@@ -405,10 +415,13 @@ TEST_F(V4DatabaseTest, TestSomeStoresMatchFullHash) {
       v4_database_->store_map_->at(win_malware_id_).get());
   store->set_hash_prefix_matches(true);
 
-  StoreAndHashPrefixes store_and_hash_prefixes;
+  base::test::TestFuture<FullHashToStoreAndHashPrefixesMap> results;
   v4_database_->GetStoresMatchingFullHash(
-      "anything", StoresToCheck({linux_malware_id_, win_malware_id_}),
-      &store_and_hash_prefixes);
+      {"anything"}, StoresToCheck({linux_malware_id_, win_malware_id_}),
+      results.GetCallback());
+  WaitForTasksOnTaskRunner();
+  FullHashToStoreAndHashPrefixesMap map = results.Get();
+  StoreAndHashPrefixes store_and_hash_prefixes = map["anything"];
   EXPECT_EQ(1u, store_and_hash_prefixes.size());
   EXPECT_EQ(store_and_hash_prefixes.begin()->list_id, win_malware_id_);
   EXPECT_FALSE(store_and_hash_prefixes.begin()->hash_prefix.empty());
@@ -428,9 +441,12 @@ TEST_F(V4DatabaseTest, TestSomeStoresMatchFullHashBecauseOfStoresToMatch) {
   EXPECT_EQ(true, created_and_called_back_);
 
   // Don't add win_malware_id_ to the StoresToCheck.
-  StoreAndHashPrefixes store_and_hash_prefixes;
+  base::test::TestFuture<FullHashToStoreAndHashPrefixesMap> results;
   v4_database_->GetStoresMatchingFullHash(
-      "anything", StoresToCheck({linux_malware_id_}), &store_and_hash_prefixes);
+      {"anything"}, StoresToCheck({linux_malware_id_}), results.GetCallback());
+  WaitForTasksOnTaskRunner();
+  FullHashToStoreAndHashPrefixesMap map = results.Get();
+  StoreAndHashPrefixes store_and_hash_prefixes = map["anything"];
   EXPECT_EQ(1u, store_and_hash_prefixes.size());
   EXPECT_EQ(store_and_hash_prefixes.begin()->list_id, linux_malware_id_);
   EXPECT_FALSE(store_and_hash_prefixes.begin()->hash_prefix.empty());
@@ -493,7 +509,7 @@ TEST_F(V4DatabaseTest, TestStoresAvailable) {
 
   // Doesn't exist in out list
   const ListIdentifier bogus_id(LINUX_PLATFORM, CHROME_EXTENSION,
-                                CSD_WHITELIST);
+                                CSD_ALLOWLIST);
 
   EXPECT_TRUE(v4_database_->AreAllStoresAvailable(
       StoresToCheck({linux_malware_id_, win_malware_id_})));

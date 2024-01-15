@@ -25,109 +25,113 @@ namespace ash::onc {
 namespace test_utils = ::chromeos::onc::test_utils;
 
 TEST(ONCUtils, ProxySettingsToProxyConfig) {
-  base::Value list_of_tests = test_utils::ReadTestJson("proxy_config.json");
-  ASSERT_TRUE(list_of_tests.is_list());
+  base::Value::List list_of_tests =
+      test_utils::ReadTestList("proxy_config.json");
 
   // Additional ONC -> ProxyConfig test cases to test fixup.
-  base::Value additional_tests =
-      test_utils::ReadTestJson("proxy_config_from_onc.json");
-  ASSERT_TRUE(additional_tests.is_list());
-  for (const base::Value& value : additional_tests.GetList())
+  base::Value::List additional_tests =
+      test_utils::ReadTestList("proxy_config_from_onc.json");
+  for (const base::Value& value : additional_tests) {
     list_of_tests.Append(value.Clone());
+  }
 
   int index = 0;
-  for (const base::Value& test_case : list_of_tests.GetList()) {
+  for (const base::Value& test_case : list_of_tests) {
     SCOPED_TRACE("Test case #" + base::NumberToString(index++));
+    const base::Value::Dict& test_case_dict = test_case.GetDict();
 
-    ASSERT_TRUE(test_case.is_dict());
-
-    const base::Value* expected_proxy_config = test_case.FindKey("ProxyConfig");
+    const base::Value* expected_proxy_config =
+        test_case_dict.Find("ProxyConfig");
     ASSERT_TRUE(expected_proxy_config);
 
-    const base::Value* onc_proxy_settings =
-        test_case.FindKey("ONC_ProxySettings");
+    const base::Value::Dict* onc_proxy_settings =
+        test_case_dict.FindDict("ONC_ProxySettings");
     ASSERT_TRUE(onc_proxy_settings);
 
-    base::Value::Dict actual_proxy_config =
+    std::optional<base::Value::Dict> actual_proxy_config =
         ConvertOncProxySettingsToProxyConfig(*onc_proxy_settings);
+    ASSERT_TRUE(actual_proxy_config.has_value());
     EXPECT_EQ(*expected_proxy_config, actual_proxy_config);
   }
 }
 
 TEST(ONCUtils, ProxyConfigToOncProxySettings) {
-  base::Value list_of_tests = test_utils::ReadTestJson("proxy_config.json");
-  ASSERT_TRUE(list_of_tests.is_list());
+  base::Value::List list_of_tests =
+      test_utils::ReadTestList("proxy_config.json");
 
   int index = 0;
-  for (const base::Value& test_case : list_of_tests.GetList()) {
+  for (const base::Value& test_case : list_of_tests) {
     SCOPED_TRACE("Test case #" + base::NumberToString(index++));
+    const base::Value::Dict& test_case_dict = test_case.GetDict();
 
-    const base::Value* shill_proxy_config = test_case.FindKey("ProxyConfig");
+    const base::Value::Dict* shill_proxy_config =
+        test_case_dict.FindDict("ProxyConfig");
     ASSERT_TRUE(shill_proxy_config);
 
-    const base::Value* onc_proxy_settings =
-        test_case.FindKey("ONC_ProxySettings");
+    const base::Value::Dict* onc_proxy_settings =
+        test_case_dict.FindDict("ONC_ProxySettings");
     ASSERT_TRUE(onc_proxy_settings);
 
-    base::Value actual_proxy_settings =
+    std::optional<base::Value::Dict> actual_proxy_settings =
         ConvertProxyConfigToOncProxySettings(*shill_proxy_config);
-    EXPECT_TRUE(test_utils::Equals(onc_proxy_settings, &actual_proxy_settings));
+    ASSERT_TRUE(actual_proxy_settings.has_value());
+    EXPECT_TRUE(
+        test_utils::Equals(onc_proxy_settings, &actual_proxy_settings.value()));
   }
 }
 
 TEST(ONCPasswordVariable, PasswordAvailable) {
-  const auto wifi_onc = test_utils::ReadTestDictionaryValue(
+  const auto wifi_onc = test_utils::ReadTestDictionary(
       "wifi_eap_ttls_with_password_variable.onc");
 
-  EXPECT_TRUE(HasUserPasswordSubsitutionVariable(
-      chromeos::onc::kNetworkConfigurationSignature, &wifi_onc));
+  EXPECT_TRUE(HasUserPasswordSubstitutionVariable(
+      chromeos::onc::kNetworkConfigurationSignature, wifi_onc));
 }
 
 TEST(ONCPasswordVariable, PasswordNotAvailable) {
-  const auto wifi_onc =
-      test_utils::ReadTestDictionaryValue("wifi_eap_ttls.onc");
+  const auto wifi_onc = test_utils::ReadTestDictionary("wifi_eap_ttls.onc");
 
-  EXPECT_FALSE(HasUserPasswordSubsitutionVariable(
-      chromeos::onc::kNetworkConfigurationSignature, &wifi_onc));
+  EXPECT_FALSE(HasUserPasswordSubstitutionVariable(
+      chromeos::onc::kNetworkConfigurationSignature, wifi_onc));
 }
 
-TEST(ONCPasswordVariable, PasswordHarcdoded) {
-  const auto wifi_onc = test_utils::ReadTestDictionaryValue(
+TEST(ONCPasswordVariable, PasswordHardcoded) {
+  const auto wifi_onc = test_utils::ReadTestDictionary(
       "wifi_eap_ttls_with_hardcoded_password.onc");
 
-  EXPECT_FALSE(HasUserPasswordSubsitutionVariable(
-      chromeos::onc::kNetworkConfigurationSignature, &wifi_onc));
+  EXPECT_FALSE(HasUserPasswordSubstitutionVariable(
+      chromeos::onc::kNetworkConfigurationSignature, wifi_onc));
 }
 
 TEST(ONCPasswordVariable, MultipleNetworksPasswordAvailable) {
-  const auto network_dictionary = test_utils::ReadTestDictionaryValue(
+  const auto network_dictionary = test_utils::ReadTestDictionary(
       "managed_toplevel_with_password_variable.onc");
-  const base::Value* network_list =
-      network_dictionary.FindListKey("NetworkConfigurations");
+  const base::Value::List* network_list =
+      network_dictionary.FindList("NetworkConfigurations");
   ASSERT_TRUE(network_list);
 
-  EXPECT_TRUE(HasUserPasswordSubsitutionVariable(network_list));
+  EXPECT_TRUE(HasUserPasswordSubstitutionVariable(*network_list));
 }
 
 TEST(ONCPasswordVariable, MultipleNetworksPasswordNotAvailable) {
-  const auto network_dictionary = test_utils::ReadTestDictionaryValue(
+  const auto network_dictionary = test_utils::ReadTestDictionary(
       "managed_toplevel_with_no_password_variable.onc");
 
-  const base::Value* network_list =
-      network_dictionary.FindListKey("NetworkConfigurations");
+  const base::Value::List* network_list =
+      network_dictionary.FindList("NetworkConfigurations");
   ASSERT_TRUE(network_list);
 
-  EXPECT_FALSE(HasUserPasswordSubsitutionVariable(network_list));
+  EXPECT_FALSE(HasUserPasswordSubstitutionVariable(*network_list));
 }
 
 TEST(ONCPasswordVariable, MultipleNetworksPasswordAvailableForL2tpVpn) {
-  const auto network_dictionary = test_utils::ReadTestDictionaryValue(
+  const auto network_dictionary = test_utils::ReadTestDictionary(
       "managed_toplevel_with_password_variable_in_l2tp_vpn.onc");
-  const base::Value* network_list =
-      network_dictionary.FindListKey("NetworkConfigurations");
+  const base::Value::List* network_list =
+      network_dictionary.FindList("NetworkConfigurations");
   ASSERT_TRUE(network_list);
 
-  EXPECT_TRUE(HasUserPasswordSubsitutionVariable(network_list));
+  EXPECT_TRUE(HasUserPasswordSubstitutionVariable(*network_list));
 }
 
 }  // namespace ash::onc

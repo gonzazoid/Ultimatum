@@ -4,7 +4,7 @@
 
 #include "components/mirroring/service/video_capture_client.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/run_loop.h"
@@ -111,8 +111,7 @@ class VideoCaptureClientTest : public ::testing::Test,
     EXPECT_CALL(*host_impl_, ReleaseBuffer(_, 0, kFeedback))
         .WillOnce(InvokeWithoutArgs(&run_loop, &base::RunLoop::Quit));
     client_->OnBufferReady(media::mojom::ReadyBuffer::New(
-                               buffer_id, GetVideoFrameInfo(frame_size)),
-                           {});
+        buffer_id, GetVideoFrameInfo(frame_size)));
     run_loop.Run();
     task_environment_.RunUntilIdle();
   }

@@ -95,6 +95,7 @@
 
 #include <Audioclient.h>
 #include <MMDeviceAPI.h>
+#include <audiopolicy.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <wrl/client.h>
@@ -121,6 +122,7 @@ namespace media {
 
 class AudioManagerWin;
 class AudioSessionEventListener;
+class AmplitudePeakDetector;
 
 // AudioOutputStream implementation using Windows Core Audio APIs.
 class MEDIA_EXPORT WASAPIAudioOutputStream
@@ -185,6 +187,13 @@ class MEDIA_EXPORT WASAPIAudioOutputStream
   // Reports audio stream glitch stats and resets them to their initial values.
   void ReportAndResetStats();
 
+  // Start or stop listening for Windows audio session disconnected events. Uses
+  // `audio_session_control_` to call
+  // IAudioSessionControl::Register/UnregisterAudioSessionNotification() with
+  // `session_listener_` as the event target.
+  void StartAudioSessionEventListener();
+  void StopAudioSessionEventListener();
+
   // Called by AudioSessionEventListener() when a device change occurs.
   void OnDeviceChanged();
 
@@ -197,6 +206,8 @@ class MEDIA_EXPORT WASAPIAudioOutputStream
   // Used to aggregate and report glitch metrics to UMA (periodically) and to
   // text logs (when a stream ends).
   SystemGlitchReporter glitch_reporter_;
+
+  std::unique_ptr<AmplitudePeakDetector> peak_detector_;
 
   // Rendering is driven by this thread (which has no message loop).
   // All OnMoreData() callbacks will be called from this thread.
@@ -245,10 +256,10 @@ class MEDIA_EXPORT WASAPIAudioOutputStream
   // Counts the number of audio frames written to the endpoint buffer.
   UINT64 num_written_frames_;
 
-  // The position read during the last call to RenderAudioFromSource
+  // The position read during the last call to RenderAudioFromSource.
   UINT64 last_position_ = 0;
 
-  // The performance counter read during the last call to RenderAudioFromSource
+  // The performance counter read during the last call to RenderAudioFromSource.
   UINT64 last_qpc_position_ = 0;
 
   // Pointer to the client that will deliver audio samples to be played out.
@@ -278,7 +289,10 @@ class MEDIA_EXPORT WASAPIAudioOutputStream
   Microsoft::WRL::ComPtr<IAudioClock> audio_clock_;
 
   bool device_changed_ = false;
-  std::unique_ptr<AudioSessionEventListener> session_listener_;
+
+  // Generates Windows audio session events for `session_listener_` to handle.
+  Microsoft::WRL::ComPtr<IAudioSessionControl> audio_session_control_;
+  Microsoft::WRL::ComPtr<AudioSessionEventListener> session_listener_;
 
   // Since AudioSessionEventListener needs to posts tasks back to the audio
   // thread, it's possible to end up in a state where that task would execute

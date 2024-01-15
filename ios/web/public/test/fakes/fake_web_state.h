@@ -10,18 +10,17 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-#include "ios/web/public/deprecated/url_verification_constants.h"
 #import "ios/web/public/favicon/favicon_status.h"
 #import "ios/web/public/navigation/navigation_manager.h"
 #import "ios/web/public/navigation/web_state_policy_decider.h"
 #import "ios/web/public/permissions/permissions.h"
 #import "ios/web/public/web_state.h"
 #include "ios/web/public/web_state_observer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 class SessionCertificatePolicyCache;
@@ -31,12 +30,15 @@ namespace web {
 // Minimal implementation of WebState, to be used in tests.
 class FakeWebState : public WebState {
  public:
-  explicit FakeWebState(NSString* stable_identifier = nil);
+  FakeWebState();
+  explicit FakeWebState(WebStateID unique_identifier);
   ~FakeWebState() override;
 
   // WebState implementation.
+  void SerializeToProto(proto::WebStateStorage& storage) const override;
   WebStateDelegate* GetDelegate() override;
   void SetDelegate(WebStateDelegate* delegate) override;
+  std::unique_ptr<WebState> Clone() const override;
   bool IsRealized() const final;
   WebState* ForceRealized() final;
   bool IsWebUsageEnabled() const override;
@@ -53,25 +55,23 @@ class FakeWebState : public WebState {
   base::WeakPtr<WebState> GetWeakPtr() override;
   void OpenURL(const OpenURLParams& params) override {}
   void LoadSimulatedRequest(const GURL& url,
-                            NSString* response_html_string) override
-      API_AVAILABLE(ios(15.0));
+                            NSString* response_html_string) override;
   void LoadSimulatedRequest(const GURL& url,
                             NSData* response_data,
-                            NSString* mime_type) override
-      API_AVAILABLE(ios(15.0));
+                            NSString* mime_type) override;
   void Stop() override {}
   const NavigationManager* GetNavigationManager() const override;
   NavigationManager* GetNavigationManager() override;
-  const WebFramesManager* GetWebFramesManager() const override;
-  WebFramesManager* GetWebFramesManager() override;
+  WebFramesManager* GetPageWorldWebFramesManager() override;
+  WebFramesManager* GetWebFramesManager(ContentWorld world) override;
   const SessionCertificatePolicyCache* GetSessionCertificatePolicyCache()
       const override;
   SessionCertificatePolicyCache* GetSessionCertificatePolicyCache() override;
-  CRWSessionStorage* BuildSessionStorage() override;
-  CRWJSInjectionReceiver* GetJSInjectionReceiver() const override;
+  CRWSessionStorage* BuildSessionStorage() const override;
   void LoadData(NSData* data, NSString* mime_type, const GURL& url) override;
   void ExecuteUserJavaScript(NSString* javaScript) override;
   NSString* GetStableIdentifier() const override;
+  WebStateID GetUniqueIdentifier() const override;
   const std::string& GetContentsMimeType() const override;
   bool ContentIsHTML() const override;
   const std::u16string& GetTitle() const override;
@@ -81,15 +81,13 @@ class FakeWebState : public WebState {
   bool IsCrashed() const override;
   bool IsEvicted() const override;
   bool IsBeingDestroyed() const override;
+  bool IsWebPageInFullscreenMode() const override;
   const FaviconStatus& GetFaviconStatus() const final;
   void SetFaviconStatus(const FaviconStatus& favicon_status) final;
   int GetNavigationItemCount() const override;
   const GURL& GetVisibleURL() const override;
   const GURL& GetLastCommittedURL() const override;
-  GURL GetCurrentURL(URLVerificationTrustLevel* trust_level) const override;
-  base::CallbackListSubscription AddScriptCommandCallback(
-      const ScriptCommandCallback& callback,
-      const std::string& command_prefix) override;
+  std::optional<GURL> GetLastCommittedURLIfTrusted() const override;
   CRWWebViewProxyType GetWebViewProxy() const override;
 
   void AddObserver(WebStateObserver* observer) override;
@@ -101,17 +99,21 @@ class FakeWebState : public WebState {
   bool SetSessionStateData(NSData* data) override;
   NSData* SessionStateData() override;
 
-  PermissionState GetStateForPermission(Permission permission) const override
-      API_AVAILABLE(ios(15.0));
+  PermissionState GetStateForPermission(Permission permission) const override;
   void SetStateForPermission(PermissionState state,
-                             Permission permission) override
-      API_AVAILABLE(ios(15.0));
+                             Permission permission) override;
   NSDictionary<NSNumber*, NSNumber*>* GetStatesForAllPermissions()
-      const override API_AVAILABLE(ios(15.0));
+      const override;
   void DownloadCurrentPage(NSString* destination_file,
                            id<CRWWebViewDownloadDelegate> delegate,
-                           void (^handler)(id<CRWWebViewDownload>)) override
-      API_AVAILABLE(ios(14.5));
+                           void (^handler)(id<CRWWebViewDownload>)) override;
+  bool IsFindInteractionSupported() final;
+  bool IsFindInteractionEnabled() final;
+  void SetFindInteractionEnabled(bool enabled) final;
+  id<CRWFindInteraction> GetFindInteraction() final API_AVAILABLE(ios(16));
+  id GetActivityItem() API_AVAILABLE(ios(16.4)) final;
+  UIColor* GetThemeColor() final;
+  UIColor* GetUnderPageBackgroundColor() final;
 
   void AddPolicyDecider(WebStatePolicyDecider* decider) override;
   void RemovePolicyDecider(WebStatePolicyDecider* decider) override;
@@ -119,7 +121,7 @@ class FakeWebState : public WebState {
   bool HasOpener() const override;
   void SetHasOpener(bool has_opener) override;
   bool CanTakeSnapshot() const override;
-  void TakeSnapshot(const gfx::RectF& rect, SnapshotCallback callback) override;
+  void TakeSnapshot(const CGRect rect, SnapshotCallback callback) override;
   void CreateFullPagePdf(base::OnceCallback<void(NSData*)> callback) override;
   void CloseMediaPresentations() override;
 
@@ -134,16 +136,20 @@ class FakeWebState : public WebState {
   void SetCurrentURL(const GURL& url);
   void SetNavigationItemCount(int count);
   void SetVisibleURL(const GURL& url);
-  void SetTrustLevel(URLVerificationTrustLevel trust_level);
   void SetNavigationManager(
       std::unique_ptr<NavigationManager> navigation_manager);
   void SetWebFramesManager(
+      std::unique_ptr<WebFramesManager> web_frames_manager);
+  void SetWebFramesManager(
+      ContentWorld content_world,
       std::unique_ptr<WebFramesManager> web_frames_manager);
   void SetView(UIView* view);
   void SetIsCrashed(bool value);
   void SetIsEvicted(bool value);
   void SetWebViewProxy(CRWWebViewProxyType web_view_proxy);
   void SetCanTakeSnapshot(bool can_take_snapshot);
+  void SetFindInteraction(id<CRWFindInteraction> find_interaction)
+      API_AVAILABLE(ios(16));
 
   // Getters for test data.
   // Uses `policy_deciders` to determine whether the navigation corresponding to
@@ -160,9 +166,6 @@ class FakeWebState : public WebState {
       NSURLResponse* response,
       WebStatePolicyDecider::ResponseInfo response_info,
       WebStatePolicyDecider::PolicyDecisionCallback callback);
-  // Returns a copy of the last added callback, if one has been added.
-  absl::optional<ScriptCommandCallback> GetLastAddedCallback() const;
-  std::string GetLastCommandPrefix() const;
   NSData* GetLastLoadedData() const;
   bool IsClosed() const;
 
@@ -174,12 +177,11 @@ class FakeWebState : public WebState {
   void OnRenderProcessGone();
   void OnBackForwardStateChanged();
   void OnVisibleSecurityStateChanged();
-  void OnWebFrameDidBecomeAvailable(WebFrame* frame);
-  void OnWebFrameWillBecomeUnavailable(WebFrame* frame);
 
  private:
   BrowserState* browser_state_ = nullptr;
   NSString* stable_identifier_ = nil;
+  const WebStateID unique_identifier_;
   bool web_usage_enabled_ = true;
   bool is_realized_ = true;
   bool is_loading_ = false;
@@ -189,25 +191,24 @@ class FakeWebState : public WebState {
   bool has_opener_ = false;
   bool can_take_snapshot_ = false;
   bool is_closed_ = false;
+  bool is_find_interaction_enabled_ = false;
   base::Time last_active_time_ = base::Time::Now();
   base::Time creation_time_ = base::Time::Now();
   int navigation_item_count_ = 0;
   FaviconStatus favicon_status_;
   GURL url_;
   std::u16string title_;
-  URLVerificationTrustLevel trust_level_ = kAbsolute;
   bool content_is_html_ = true;
   std::string mime_type_;
   std::unique_ptr<NavigationManager> navigation_manager_;
-  std::unique_ptr<WebFramesManager> web_frames_manager_;
+  std::map<ContentWorld, std::unique_ptr<WebFramesManager>>
+      web_frames_managers_;
   UIView* view_ = nil;
   CRWWebViewProxyType web_view_proxy_;
   NSData* last_loaded_data_ = nil;
-  base::RepeatingCallbackList<ScriptCommandCallbackSignature> callback_list_;
-  absl::optional<ScriptCommandCallback> last_added_callback_;
-  std::string last_command_prefix_;
   PermissionState camera_permission_state_ = PermissionStateNotAccessible;
   PermissionState microphone_permission_state_ = PermissionStateNotAccessible;
+  id<CRWFindInteraction> find_interaction_ API_AVAILABLE(ios(16));
 
   // A list of observers notified when page state changes. Weak references.
   base::ObserverList<WebStateObserver, true> observers_;

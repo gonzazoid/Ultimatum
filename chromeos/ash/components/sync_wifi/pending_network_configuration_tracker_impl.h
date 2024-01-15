@@ -5,6 +5,8 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_SYNC_WIFI_PENDING_NETWORK_CONFIGURATION_TRACKER_IMPL_H_
 #define CHROMEOS_ASH_COMPONENTS_SYNC_WIFI_PENDING_NETWORK_CONFIGURATION_TRACKER_IMPL_H_
 
+#include "base/memory/raw_ptr.h"
+#include "base/values.h"
 #include "chromeos/ash/components/sync_wifi/pending_network_configuration_tracker.h"
 #include "components/prefs/pref_service.h"
 
@@ -33,20 +35,20 @@ class PendingNetworkConfigurationTrackerImpl
   // sync_wifi::PendingNetworkConfigurationTracker::
   std::string TrackPendingUpdate(
       const NetworkIdentifier& id,
-      const absl::optional<sync_pb::WifiConfigurationSpecifics>& specifics)
+      const std::optional<sync_pb::WifiConfigurationSpecifics>& specifics)
       override;
   void MarkComplete(const std::string& change_guid,
                     const NetworkIdentifier& id) override;
   void IncrementCompletedAttempts(const std::string& change_guid,
                                   const NetworkIdentifier& id) override;
   std::vector<PendingNetworkConfigurationUpdate> GetPendingUpdates() override;
-  absl::optional<PendingNetworkConfigurationUpdate> GetPendingUpdate(
+  std::optional<PendingNetworkConfigurationUpdate> GetPendingUpdate(
       const std::string& change_guid,
       const NetworkIdentifier& id) override;
 
  private:
-  PrefService* pref_service_;
-  base::Value dict_;
+  raw_ptr<PrefService> pref_service_;
+  base::Value::Dict dict_;
 };
 
 }  // namespace ash::sync_wifi

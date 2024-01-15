@@ -44,27 +44,36 @@ class DocumentFragment;
 class Element;
 class HTMLDocument;
 class HTMLDocumentParser;
-class HTMLTokenProducer;
 
 class HTMLTreeBuilder final : public GarbageCollected<HTMLTreeBuilder> {
  public:
-  // HTMLTreeBuilder can be created for non-HTMLDocument (XHTMLDocument) from
-  // editing code.
-  // TODO(kouhei): Fix editing code to always invoke HTML parser on
-  // HTMLDocument.
+  // This constructor is used for main document parsing.
+  // TODO(kouhei): HTMLTreeBuilder can be created for non-HTMLDocument
+  // (XHTMLDocument) from editing code. Fix editing code to always invoke HTML
+  // parser on HTMLDocument.
   HTMLTreeBuilder(HTMLDocumentParser*,
                   Document&,
                   ParserContentPolicy,
                   const HTMLParserOptions&,
-                  bool include_shadow_roots,
-                  HTMLTokenProducer* token_producer);
+                  bool include_shadow_roots);
+  // This constructor is used for fragment parsing.
   HTMLTreeBuilder(HTMLDocumentParser*,
                   DocumentFragment*,
                   Element* context_element,
                   ParserContentPolicy,
                   const HTMLParserOptions&,
+                  bool include_shadow_roots);
+
+ private:
+  HTMLTreeBuilder(HTMLDocumentParser*,
+                  Document&,
+                  ParserContentPolicy,
+                  const HTMLParserOptions&,
                   bool include_shadow_roots,
-                  HTMLTokenProducer* token_producer);
+                  DocumentFragment* for_fragment,
+                  Element* fragment_context_element);
+
+ public:
   HTMLTreeBuilder(const HTMLTreeBuilder&) = delete;
   HTMLTreeBuilder& operator=(const HTMLTreeBuilder&) = delete;
   ~HTMLTreeBuilder();
@@ -80,11 +89,18 @@ class HTMLTreeBuilder final : public GarbageCollected<HTMLTreeBuilder> {
     return IsParsingFragment() || IsParsingTemplateContents();
   }
 
+  void SetDOMPartsAllowedState(DOMPartsAllowed state) {
+    DCHECK(RuntimeEnabledFeatures::DOMPartsAPIEnabled());
+    tree_.SetDOMPartsAllowedState(state);
+  }
+
   void Detach();
 
   void ConstructTree(AtomicHTMLToken*);
 
-  bool HasParserBlockingScript() const { return !!script_to_process_; }
+  ALWAYS_INLINE bool HasParserBlockingScript() const {
+    return !!script_to_process_;
+  }
   // Must be called to take the parser-blocking script before calling the parser
   // again.
   Element* TakeScriptToProcess(TextPosition& script_start_position);
@@ -141,6 +157,7 @@ class HTMLTreeBuilder final : public GarbageCollected<HTMLTreeBuilder> {
   void ProcessComment(AtomicHTMLToken*);
   void ProcessCharacter(AtomicHTMLToken*);
   void ProcessEndOfFile(AtomicHTMLToken*);
+  void ProcessDOMPart(AtomicHTMLToken*);
 
   bool ProcessStartTagForInHead(AtomicHTMLToken*);
   void ProcessStartTagForInBody(AtomicHTMLToken*);
@@ -215,7 +232,7 @@ class HTMLTreeBuilder final : public GarbageCollected<HTMLTreeBuilder> {
     FragmentParsingContext& operator=(const FragmentParsingContext&) = delete;
     void Init(DocumentFragment*, Element* context_element);
 
-    DocumentFragment* Fragment() const { return fragment_; }
+    DocumentFragment* Fragment() const { return fragment_.Get(); }
     Element* ContextElement() const {
       DCHECK(fragment_);
       return context_element_stack_item_->GetElement();
@@ -268,10 +285,6 @@ class HTMLTreeBuilder final : public GarbageCollected<HTMLTreeBuilder> {
   TextPosition script_to_process_start_position_;
 
   HTMLParserOptions options_;
-
-  // This is owned by HTMLDocumentParser, kept as a member as needed quite
-  // frequently.
-  HTMLTokenProducer* token_producer_;
 };
 
 }  // namespace blink

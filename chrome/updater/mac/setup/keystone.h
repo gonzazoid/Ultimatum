@@ -5,15 +5,19 @@
 #ifndef CHROME_UPDATER_MAC_SETUP_KEYSTONE_H_
 #define CHROME_UPDATER_MAC_SETUP_KEYSTONE_H_
 
-#include <string>
-#include <vector>
-
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "chrome/updater/updater_scope.h"
+
+namespace base {
+class FilePath;
+}  // namespace base
 
 namespace updater {
 
 struct RegistrationRequest;
+
+// Create a plist file with an empty dictionary.
+bool CreateEmptyPlistFile(const base::FilePath& file_path);
 
 // Installs Keystone and the necessary supporting files.
 bool InstallKeystone(UpdaterScope scope);
@@ -23,18 +27,12 @@ bool InstallKeystone(UpdaterScope scope);
 void UninstallKeystone(UpdaterScope scope);
 
 // `Calls register_callback` with data from Keystone's ticket store if needed.
-// This is a best-effort operation, tickets with errors are not migrated.
-void MigrateKeystoneTickets(
-    UpdaterScope scope,
+// This is a best-effort operation, tickets with errors are not migrated, but
+// a complete parsing failure will be result in returning false.
+bool MigrateKeystoneApps(
+    const base::FilePath& keystone_path,
     base::RepeatingCallback<void(const RegistrationRequest&)>
         register_callback);
-
-namespace internal {
-
-std::vector<RegistrationRequest> TicketsToMigrate(
-    const std::string& ksadmin_tickets);
-
-}  // namespace internal
 
 }  // namespace updater
 

@@ -8,14 +8,11 @@ import("//testing/test.gni")
 
 group("sync") {
   public_deps = [
-    "//components/sync/driver",
     "//components/sync/engine",
     "//components/sync/model",
     "//components/sync/nigori",
+    "//components/sync/service",
   ]
-  if (!is_android) {
-    public_deps += [ "//components/sync/trusted_vault" ]
-  }
   if (is_chromeos) {
     public_deps += [ "//components/sync/chromeos" ]
   }
@@ -69,6 +66,8 @@ static_library("test_support") {
     "test/fake_sync_service.h",
     "test/forwarding_model_type_change_processor.cc",
     "test/forwarding_model_type_change_processor.h",
+    "test/mock_commit_queue.cc",
+    "test/mock_commit_queue.h",
     "test/mock_connection_manager.cc",
     "test/mock_connection_manager.h",
     "test/mock_debug_info_getter.cc",
@@ -79,6 +78,8 @@ static_library("test_support") {
     "test/mock_invalidation_tracker.h",
     "test/mock_model_type_change_processor.cc",
     "test/mock_model_type_change_processor.h",
+    "test/mock_model_type_controller_delegate.cc",
+    "test/mock_model_type_controller_delegate.h",
     "test/mock_model_type_processor.cc",
     "test/mock_model_type_processor.h",
     "test/mock_model_type_worker.cc",
@@ -91,8 +92,6 @@ static_library("test_support") {
     "test/mock_sync_invalidations_service.h",
     "test/mock_sync_service.cc",
     "test/mock_sync_service.h",
-    "test/mock_trusted_vault_client.cc",
-    "test/mock_trusted_vault_client.h",
     "test/mock_update_handler.cc",
     "test/mock_update_handler.h",
     "test/model_type_store_test_util.cc",
@@ -111,10 +110,6 @@ static_library("test_support") {
     "test/sync_change_processor_wrapper_for_test.h",
     "test/sync_client_mock.cc",
     "test/sync_client_mock.h",
-    "test/sync_engine_host_stub.cc",
-    "test/sync_engine_host_stub.h",
-    "test/sync_error_factory_mock.cc",
-    "test/sync_error_factory_mock.h",
     "test/sync_service_impl_bundle.cc",
     "test/sync_service_impl_bundle.h",
     "test/sync_user_settings_mock.cc",
@@ -136,6 +131,7 @@ static_library("test_support") {
     ":sync",
     "//base",
     "//components/sync/invalidations",
+    "//components/trusted_vault:test_support",
     "//services/network:test_support",
     "//testing/gmock",
     "//testing/gtest",
@@ -147,7 +143,6 @@ static_library("test_support") {
     "//base/test:test_support",
     "//build:chromeos_buildflags",
     "//components/bookmarks/browser",
-    "//components/invalidation/impl:test_support",
     "//components/pref_registry",
     "//components/prefs:test_support",
     "//components/signin/public/base",
@@ -166,13 +161,6 @@ static_library("test_support") {
 
   configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
-  if (!is_android) {
-    sources += [
-      "test/fake_security_domains_server.cc",
-      "test/fake_security_domains_server.h",
-    ]
-  }
-
   if (is_chromeos_lacros) {
     sources += [
       "test/fake_sync_explicit_passphrase_client_ash.cc",
@@ -181,6 +169,8 @@ static_library("test_support") {
       "test/fake_sync_mojo_service.h",
       "test/fake_sync_user_settings_client_ash.cc",
       "test/fake_sync_user_settings_client_ash.h",
+      "test/fake_synced_session_client_ash.cc",
+      "test/fake_synced_session_client_ash.h",
     ]
 
     public_deps += [
@@ -198,27 +188,9 @@ source_set("unit_tests") {
     "base/model_type_unittest.cc",
     "base/page_transition_conversion_unittest.cc",
     "base/protobuf_unittest.cc",
-    "base/sync_prefs_unittest.cc",
     "base/sync_util_unittest.cc",
     "base/unique_position_unittest.cc",
     "base/weak_handle_unittest.cc",
-    "driver/backend_migrator_unittest.cc",
-    "driver/data_type_manager_impl_unittest.cc",
-    "driver/glue/sync_engine_impl_unittest.cc",
-    "driver/glue/sync_transport_data_prefs_unittest.cc",
-    "driver/model_load_manager_unittest.cc",
-    "driver/model_type_controller_unittest.cc",
-    "driver/passphrase_type_metrics_provider_unittest.cc",
-    "driver/startup_controller_unittest.cc",
-    "driver/sync_auth_manager_unittest.cc",
-    "driver/sync_internals_util_unittest.cc",
-    "driver/sync_service_crypto_unittest.cc",
-    "driver/sync_service_impl_startup_unittest.cc",
-    "driver/sync_service_impl_unittest.cc",
-    "driver/sync_service_utils_unittest.cc",
-    "driver/sync_session_durations_metrics_recorder_unittest.cc",
-    "driver/sync_stopped_reporter_unittest.cc",
-    "driver/sync_user_settings_impl_unittest.cc",
     "engine/backoff_delay_provider_unittest.cc",
     "engine/bookmark_update_preprocessing_unittest.cc",
     "engine/cancelation_signal_unittest.cc",
@@ -240,13 +212,15 @@ source_set("unit_tests") {
     "engine/model_type_worker_unittest.cc",
     "engine/net/http_bridge_unittest.cc",
     "engine/net/sync_server_connection_manager_unittest.cc",
+    "engine/nigori/cross_user_sharing_public_key_unittest.cc",
+    "engine/nigori/cross_user_sharing_public_private_key_pair_unittest.cc",
     "engine/nigori/nigori_unittest.cc",
     "engine/sync_manager_impl_unittest.cc",
     "engine/sync_scheduler_impl_unittest.cc",
     "engine/syncer_proto_util_unittest.cc",
     "engine/syncer_unittest.cc",
     "invalidations/fcm_handler_unittest.cc",
-    "invalidations/interested_data_types_manager_unittest.cc",
+    "invalidations/sync_invalidations_service_impl_unittest.cc",
     "model/client_tag_based_model_type_processor_unittest.cc",
     "model/client_tag_based_remote_update_handler_unittest.cc",
     "model/in_memory_metadata_change_list_unittest.cc",
@@ -262,6 +236,7 @@ source_set("unit_tests") {
     "model/sync_data_unittest.cc",
     "model/sync_error_unittest.cc",
     "model/syncable_service_based_bridge_unittest.cc",
+    "nigori/cross_user_sharing_keys_unittest.cc",
     "nigori/cryptographer_impl_unittest.cc",
     "nigori/keystore_keys_cryptographer_unittest.cc",
     "nigori/nigori_key_bag_unittest.cc",
@@ -270,24 +245,28 @@ source_set("unit_tests") {
     "nigori/nigori_storage_impl_unittest.cc",
     "nigori/nigori_sync_bridge_impl_unittest.cc",
     "protocol/entity_data_unittest.cc",
+    "protocol/model_type_state_helper_unittest.cc",
     "protocol/proto_enum_conversions_unittest.cc",
     "protocol/proto_value_conversions_unittest.cc",
+    "service/backend_migrator_unittest.cc",
+    "service/data_type_manager_impl_unittest.cc",
+    "service/glue/sync_engine_impl_unittest.cc",
+    "service/glue/sync_transport_data_prefs_unittest.cc",
+    "service/model_load_manager_unittest.cc",
+    "service/model_type_controller_unittest.cc",
+    "service/passphrase_type_metrics_provider_unittest.cc",
+    "service/sync_auth_manager_unittest.cc",
+    "service/sync_feature_status_for_migrations_recorder_unittest.cc",
+    "service/sync_internals_util_unittest.cc",
+    "service/sync_prefs_unittest.cc",
+    "service/sync_service_crypto_unittest.cc",
+    "service/sync_service_impl_startup_unittest.cc",
+    "service/sync_service_impl_unittest.cc",
+    "service/sync_service_utils_unittest.cc",
+    "service/sync_session_durations_metrics_recorder_unittest.cc",
+    "service/sync_stopped_reporter_unittest.cc",
+    "service/sync_user_settings_impl_unittest.cc",
   ]
-
-  if (!is_android) {
-    sources += [
-      "trusted_vault/download_keys_response_handler_unittest.cc",
-      "trusted_vault/proto_string_bytes_conversion_unittest.cc",
-      "trusted_vault/securebox_unittest.cc",
-      "trusted_vault/standalone_trusted_vault_backend_unittest.cc",
-      "trusted_vault/trusted_vault_access_token_fetcher_frontend_unittest.cc",
-      "trusted_vault/trusted_vault_connection_impl_unittest.cc",
-      "trusted_vault/trusted_vault_crypto_unittest.cc",
-      "trusted_vault/trusted_vault_degraded_recoverability_handler_unittest.cc",
-      "trusted_vault/trusted_vault_request_unittest.cc",
-      "trusted_vault/trusted_vault_server_constants_unittest.cc",
-    ]
-  }
 
   if (is_chromeos) {
     sources += [ "chromeos/explicit_passphrase_mojo_utils_unittest.cc" ]
@@ -307,12 +286,13 @@ source_set("unit_tests") {
     "//base/test:test_support",
     "//build:chromeos_buildflags",
     "//components/gcm_driver:test_support",
-    "//components/invalidation/impl",
-    "//components/os_crypt",
-    "//components/os_crypt:test_support",
+    "//components/os_crypt/sync",
+    "//components/os_crypt/sync:test_support",
+    "//components/password_manager/core/browser/features:password_features",
     "//components/prefs:test_support",
     "//components/signin/public/base:test_support",
     "//components/signin/public/identity_manager:test_support",
+    "//components/trusted_vault:test_support",
     "//components/variations:test_support",
     "//components/version_info",
     "//components/version_info:generate_version_info",
@@ -340,14 +320,10 @@ source_set("unit_tests") {
   }
 
   if (!is_ios) {
-    sources += [ "driver/sync_policy_handler_unittest.cc" ]
+    sources += [ "service/sync_policy_handler_unittest.cc" ]
     deps += [
       "//components/policy:generated",
       "//components/policy/core/browser",
     ]
-  }
-
-  if (is_chromeos_ash) {
-    deps += [ "//ash/constants" ]
   }
 }

@@ -5,6 +5,7 @@
 #ifndef ASH_ACCESSIBILITY_AUTOCLICK_AUTOCLICK_RING_HANDLER_H_
 #define ASH_ACCESSIBILITY_AUTOCLICK_AUTOCLICK_RING_HANDLER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "ui/gfx/animation/linear_animation.h"
@@ -41,8 +42,8 @@ class AutoclickRingHandler : public gfx::LinearAnimation {
   const int kAutoclickRingInnerRadius = 20;
 
   enum class AnimationType {
-    NONE,
-    GROW_ANIMATION,
+    kNone,
+    kGrowAnimation,
   };
 
   void StartAnimation(base::TimeDelta duration);
@@ -52,12 +53,12 @@ class AutoclickRingHandler : public gfx::LinearAnimation {
   void AnimateToState(double state) override;
   void AnimationStopped() override;
 
-  AutoclickRingView* view_ = nullptr;
-  views::Widget* ring_widget_ = nullptr;
+  raw_ptr<AutoclickRingView, DanglingUntriaged> view_ = nullptr;
+  raw_ptr<views::Widget> ring_widget_ = nullptr;
   // Location of the simulated mouse event from auto click in screen
   // coordinates.
   gfx::Point tap_down_location_;
-  AnimationType current_animation_type_ = AnimationType::NONE;
+  AnimationType current_animation_type_ = AnimationType::kNone;
   base::TimeDelta animation_duration_;
   int radius_ = kAutoclickRingInnerRadius;
 };

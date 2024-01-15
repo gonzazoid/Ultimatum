@@ -4,7 +4,8 @@
 
 #include "components/download/internal/common/download_db_cache.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/download/database/download_db.h"
 #include "components/download/database/download_db_conversions.h"
 #include "components/download/database/download_db_entry.h"
@@ -38,9 +39,6 @@ ShouldUpdateDownloadDBResult ShouldUpdateDownloadDB(
   base::FilePath previous_path =
       previous_info ? previous_info->current_path : base::FilePath();
 
-  download::DownloadItemRerouteInfo previous_reroute_info;
-  if (previous_info)
-    previous_reroute_info = previous_info->reroute_info;
   bool previous_paused = previous_info ? previous_info->paused : false;
 
   absl::optional<InProgressInfo> current_info;
@@ -48,14 +46,12 @@ ShouldUpdateDownloadDBResult ShouldUpdateDownloadDB(
     current_info = current.download_info->in_progress_info;
 
   base::FilePath current_path;
-  download::DownloadItemRerouteInfo reroute_info;
   bool paused = false;
   GURL url;
   DownloadItem::DownloadState state = DownloadItem::DownloadState::IN_PROGRESS;
   DownloadInterruptReason interrupt_reason = DOWNLOAD_INTERRUPT_REASON_NONE;
   if (current_info) {
     current_path = current_info->current_path;
-    reroute_info = current_info->reroute_info;
     paused = current_info->paused;
     if (!current_info->url_chain.empty())
       url = current_info->url_chain.back();
@@ -66,9 +62,7 @@ ShouldUpdateDownloadDBResult ShouldUpdateDownloadDB(
   // When download path is determined, Chrome should commit the history
   // immediately. Otherwise the file will be left permanently on the external
   // storage if Chrome crashes right away.
-  if (current_path != previous_path ||
-      !RerouteInfosEqual(reroute_info, previous_reroute_info) ||
-      paused != previous_paused) {
+  if (current_path != previous_path || paused != previous_paused) {
     return ShouldUpdateDownloadDBResult::UPDATE_IMMEDIATELY;
   }
 
@@ -204,12 +198,10 @@ void DownloadDBCache::OnDownloadDBInitialized(
     InitializeCallback callback,
     bool success) {
   if (success) {
-    RecordInProgressDBCount(kInitializationSucceededCount);
     download_db_->LoadEntries(
         base::BindOnce(&DownloadDBCache::OnDownloadDBEntriesLoaded,
                        weak_factory_.GetWeakPtr(), std::move(callback)));
   } else {
-    RecordInProgressDBCount(kInitializationFailedCount);
     std::move(callback).Run(false,
                             std::make_unique<std::vector<DownloadDBEntry>>());
   }
@@ -220,7 +212,6 @@ void DownloadDBCache::OnDownloadDBEntriesLoaded(
     bool success,
     std::unique_ptr<std::vector<DownloadDBEntry>> entries) {
   initialized_ = success;
-  RecordInProgressDBCount(success ? kLoadSucceededCount : kLoadFailedCount);
   for (auto& entry : *entries) {
     // If the entry is from the metadata cache migration, just remove it from
     // DB as the data is not being cleaned up properly.

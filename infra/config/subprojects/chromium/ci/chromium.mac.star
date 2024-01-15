@@ -6,27 +6,35 @@
 load("//lib/args.star", "args")
 load("//lib/branches.star", "branches")
 load("//lib/builder_config.star", "builder_config")
-load("//lib/builders.star", "cpu", "goma", "os", "reclient", "sheriff_rotations", "xcode")
+load("//lib/builder_health_indicators.star", "health_spec")
+load("//lib/builders.star", "cpu", "os", "reclient", "sheriff_rotations", "xcode")
 load("//lib/ci.star", "ci")
 load("//lib/consoles.star", "consoles")
+load("//lib/gn_args.star", "gn_args")
 
 ci.defaults.set(
-    builder_group = "chromium.mac",
     executable = ci.DEFAULT_EXECUTABLE,
-    execution_timeout = ci.DEFAULT_EXECUTION_TIMEOUT,
-    goma_backend = goma.backend.RBE_PROD,
-    main_console_view = "main",
-    os = os.MAC_DEFAULT,
+    builder_group = "chromium.mac",
     pool = ci.DEFAULT_POOL,
-    service_account = ci.DEFAULT_SERVICE_ACCOUNT,
+    os = os.MAC_DEFAULT,
     sheriff_rotations = sheriff_rotations.CHROMIUM,
-    thin_tester_cores = 8,
     tree_closing = True,
+    main_console_view = "main",
+    execution_timeout = ci.DEFAULT_EXECUTION_TIMEOUT,
+    health_spec = health_spec.DEFAULT,
+    reclient_instance = reclient.instance.DEFAULT_TRUSTED,
+    reclient_jobs = reclient.jobs.DEFAULT,
+    service_account = ci.DEFAULT_SERVICE_ACCOUNT,
+    shadow_service_account = ci.DEFAULT_SHADOW_SERVICE_ACCOUNT,
+    thin_tester_cores = 8,
 )
 
 consoles.console_view(
     name = "chromium.mac",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
+    branch_selector = [
+        branches.selector.IOS_BRANCHES,
+        branches.selector.MAC_BRANCHES,
+    ],
     ordering = {
         None: ["release"],
         "release": consoles.ordering(short_names = ["bld"]),
@@ -48,12 +56,12 @@ consoles.console_view(
 
 def ios_builder(*, name, **kwargs):
     kwargs.setdefault("sheriff_rotations", sheriff_rotations.IOS)
-    kwargs.setdefault("xcode", xcode.x14main)
+    kwargs.setdefault("xcode", xcode.xcode_default)
     return ci.builder(name = name, **kwargs)
 
 ci.builder(
     name = "Mac Builder",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
+    branch_selector = branches.selector.MAC_BRANCHES,
     builder_spec = builder_config.builder_spec(
         gclient_config = builder_config.gclient_config(
             config = "chromium",
@@ -65,27 +73,38 @@ ci.builder(
             config = "chromium",
             apply_configs = [
                 "mb",
-                "goma_use_local",  # to mitigate compile step timeout (crbug.com/1056935)
             ],
             build_config = builder_config.build_config.RELEASE,
+            target_arch = builder_config.target_arch.INTEL,
             target_bits = 64,
             target_platform = builder_config.target_platform.MAC,
         ),
         build_gs_bucket = "chromium-mac-archive",
     ),
+    gn_args = gn_args.config(
+        configs = [
+            "gpu_tests",
+            "release_builder",
+            "reclient",
+            "minimal_symbols",
+            "disable_nacl",
+            "x64",
+        ],
+    ),
+    cpu = cpu.ARM64,
     console_view_entry = consoles.console_view_entry(
         category = "release",
         short_name = "bld",
     ),
     cq_mirrors_console_view = "mirrors",
-    goma_backend = None,
+    contact_team_email = "bling-engprod@google.com",
     reclient_instance = reclient.instance.DEFAULT_TRUSTED,
     reclient_jobs = reclient.jobs.DEFAULT,
 )
 
 ci.builder(
     name = "Mac Builder (dbg)",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
+    branch_selector = branches.selector.MAC_BRANCHES,
     builder_spec = builder_config.builder_spec(
         gclient_config = builder_config.gclient_config(
             config = "chromium",
@@ -96,20 +115,28 @@ ci.builder(
                 "mb",
             ],
             build_config = builder_config.build_config.DEBUG,
+            target_arch = builder_config.target_arch.INTEL,
             target_bits = 64,
             target_platform = builder_config.target_platform.MAC,
         ),
         build_gs_bucket = "chromium-mac-archive",
     ),
+    gn_args = gn_args.config(
+        configs = [
+            "gpu_tests",
+            "debug_builder",
+            "reclient",
+            "x64",
+        ],
+    ),
+    os = os.MAC_ANY,
+    cpu = cpu.ARM64,
     console_view_entry = consoles.console_view_entry(
         category = "debug",
         short_name = "bld",
     ),
     cq_mirrors_console_view = "mirrors",
-    os = os.MAC_ANY,
-    goma_backend = None,
-    reclient_instance = reclient.instance.DEFAULT_TRUSTED,
-    reclient_jobs = reclient.jobs.DEFAULT,
+    contact_team_email = "bling-engprod@google.com",
 )
 
 ci.builder(
@@ -117,7 +144,7 @@ ci.builder(
 
     # TODO(crbug.com/1186823): Expand to more branches when all M1 bots are
     # rosettaless.
-    branch_selector = branches.MAIN,
+    # branch_selector = branches.selector.MAC_BRANCHES,
     builder_spec = builder_config.builder_spec(
         gclient_config = builder_config.gclient_config(
             config = "chromium",
@@ -132,20 +159,58 @@ ci.builder(
             target_bits = 64,
         ),
     ),
+    gn_args = gn_args.config(
+        configs = [
+            "release_builder",
+            "reclient",
+            "arm64",
+        ],
+    ),
+    os = os.MAC_DEFAULT,
+    cpu = cpu.ARM64,
     console_view_entry = consoles.console_view_entry(
         category = "release|arm64",
         short_name = "a64",
     ),
-    cpu = cpu.ARM64,
+    contact_team_email = "bling-engprod@google.com",
+)
+
+ci.builder(
+    name = "mac-arm64-dbg",
+    builder_spec = builder_config.builder_spec(
+        gclient_config = builder_config.gclient_config(
+            config = "chromium",
+        ),
+        chromium_config = builder_config.chromium_config(
+            config = "chromium",
+            apply_configs = [
+                "mb",
+            ],
+            build_config = builder_config.build_config.DEBUG,
+            target_arch = builder_config.target_arch.ARM,
+            target_bits = 64,
+            target_platform = builder_config.target_platform.MAC,
+        ),
+    ),
+    gn_args = gn_args.config(
+        configs = [
+            "debug_builder",
+            "reclient",
+            "arm64",
+        ],
+    ),
     os = os.MAC_DEFAULT,
-    goma_backend = None,
-    reclient_instance = reclient.instance.DEFAULT_TRUSTED,
-    reclient_jobs = reclient.jobs.DEFAULT,
+    cpu = cpu.ARM64,
+    console_view_entry = consoles.console_view_entry(
+        category = "debug|arm64",
+        short_name = "bld",
+    ),
+    contact_team_email = "bling-engprod@google.com",
 )
 
 ci.builder(
     name = "mac-arm64-rel",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
+    branch_selector = branches.selector.MAC_BRANCHES,
     builder_spec = builder_config.builder_spec(
         gclient_config = builder_config.gclient_config(
             config = "chromium",
@@ -161,19 +226,61 @@ ci.builder(
             target_platform = builder_config.target_platform.MAC,
         ),
     ),
+    gn_args = gn_args.config(
+        configs = [
+            "arm64",
+            "gpu_tests",
+            "release_builder",
+            "reclient",
+            "minimal_symbols",
+            "disable_nacl",
+        ],
+    ),
+    os = os.MAC_DEFAULT,
+    cpu = cpu.ARM64,
     console_view_entry = consoles.console_view_entry(
         category = "release|arm64",
         short_name = "bld",
     ),
+    contact_team_email = "bling-engprod@google.com",
+)
+
+ci.builder(
+    name = "mac-intel-on-arm64-rel",
+    builder_spec = builder_config.builder_spec(
+        gclient_config = builder_config.gclient_config(
+            config = "chromium",
+        ),
+        chromium_config = builder_config.chromium_config(
+            config = "chromium",
+            apply_configs = [
+                "mb",
+            ],
+            build_config = builder_config.build_config.RELEASE,
+            target_bits = 64,
+        ),
+    ),
+    gn_args = gn_args.config(
+        configs = [
+            "release_builder",
+            "reclient",
+            "x64",
+        ],
+    ),
     os = os.MAC_DEFAULT,
-    goma_backend = None,
-    reclient_instance = reclient.instance.DEFAULT_TRUSTED,
-    reclient_jobs = reclient.jobs.DEFAULT,
+    cpu = cpu.ARM64,
+    sheriff_rotations = args.ignore_default(None),
+    tree_closing = False,
+    console_view_entry = consoles.console_view_entry(
+        category = "release",
+        short_name = "a64",
+    ),
 )
 
 ci.thin_tester(
     name = "mac11-arm64-rel-tests",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
+    branch_selector = branches.selector.MAC_BRANCHES,
+    triggered_by = ["ci/mac-arm64-rel"],
     builder_spec = builder_config.builder_spec(
         execution_mode = builder_config.execution_mode.TEST,
         gclient_config = builder_config.gclient_config(
@@ -190,17 +297,18 @@ ci.thin_tester(
             target_platform = builder_config.target_platform.MAC,
         ),
     ),
+    tree_closing = False,
     console_view_entry = consoles.console_view_entry(
         category = "release|arm64",
         short_name = "11",
     ),
-    tree_closing = False,
-    triggered_by = ["ci/mac-arm64-rel"],
+    contact_team_email = "bling-engprod@google.com",
 )
 
 ci.thin_tester(
     name = "mac12-arm64-rel-tests",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
+    branch_selector = branches.selector.MAC_BRANCHES,
+    triggered_by = ["ci/mac-arm64-rel"],
     builder_spec = builder_config.builder_spec(
         execution_mode = builder_config.execution_mode.TEST,
         gclient_config = builder_config.gclient_config(
@@ -217,76 +325,46 @@ ci.thin_tester(
             target_platform = builder_config.target_platform.MAC,
         ),
     ),
+    tree_closing = False,
     console_view_entry = consoles.console_view_entry(
         category = "release|arm64",
         short_name = "12",
     ),
-    tree_closing = False,
-    triggered_by = ["ci/mac-arm64-rel"],
+    contact_team_email = "bling-engprod@google.com",
 )
 
 ci.thin_tester(
-    name = "Mac10.13 Tests",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
+    name = "mac13-arm64-rel-tests",
+    branch_selector = branches.selector.MAC_BRANCHES,
+    triggered_by = ["ci/mac-arm64-rel"],
     builder_spec = builder_config.builder_spec(
         execution_mode = builder_config.execution_mode.TEST,
         gclient_config = builder_config.gclient_config(
             config = "chromium",
-            apply_configs = [
-                "use_clang_coverage",
-            ],
         ),
         chromium_config = builder_config.chromium_config(
             config = "chromium",
             apply_configs = [
                 "mb",
-                "goma_use_local",  # to mitigate compile step timeout (crbug.com/1056935)
             ],
             build_config = builder_config.build_config.RELEASE,
+            target_arch = builder_config.target_arch.ARM,
             target_bits = 64,
             target_platform = builder_config.target_platform.MAC,
         ),
-        build_gs_bucket = "chromium-mac-archive",
     ),
+    tree_closing = False,
     console_view_entry = consoles.console_view_entry(
-        category = "release",
+        category = "release|arm64",
         short_name = "13",
     ),
-    cq_mirrors_console_view = "mirrors",
-    triggered_by = ["ci/Mac Builder"],
-)
-
-ci.thin_tester(
-    name = "Mac10.14 Tests",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
-    builder_spec = builder_config.builder_spec(
-        execution_mode = builder_config.execution_mode.TEST,
-        gclient_config = builder_config.gclient_config(
-            config = "chromium",
-        ),
-        chromium_config = builder_config.chromium_config(
-            config = "chromium",
-            apply_configs = [
-                "mb",
-                "goma_use_local",  # to mitigate compile step timeout (crbug.com/1056935)
-            ],
-            build_config = builder_config.build_config.RELEASE,
-            target_bits = 64,
-            target_platform = builder_config.target_platform.MAC,
-        ),
-        build_gs_bucket = "chromium-mac-archive",
-    ),
-    console_view_entry = consoles.console_view_entry(
-        category = "release",
-        short_name = "14",
-    ),
-    cq_mirrors_console_view = "mirrors",
-    triggered_by = ["ci/Mac Builder"],
+    contact_team_email = "bling-engprod@google.com",
 )
 
 ci.thin_tester(
     name = "Mac10.15 Tests",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
+    branch_selector = branches.selector.MAC_BRANCHES,
+    triggered_by = ["ci/Mac Builder"],
     builder_spec = builder_config.builder_spec(
         execution_mode = builder_config.execution_mode.TEST,
         gclient_config = builder_config.gclient_config(
@@ -296,7 +374,6 @@ ci.thin_tester(
             config = "chromium",
             apply_configs = [
                 "mb",
-                "goma_use_local",  # to mitigate compile step timeout (crbug.com/1056935)
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
@@ -309,12 +386,13 @@ ci.thin_tester(
         short_name = "15",
     ),
     cq_mirrors_console_view = "mirrors",
-    triggered_by = ["ci/Mac Builder"],
+    contact_team_email = "bling-engprod@google.com",
 )
 
 ci.thin_tester(
     name = "Mac11 Tests",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
+    branch_selector = branches.selector.MAC_BRANCHES,
+    triggered_by = ["ci/Mac Builder"],
     builder_spec = builder_config.builder_spec(
         execution_mode = builder_config.execution_mode.TEST,
         gclient_config = builder_config.gclient_config(
@@ -324,7 +402,6 @@ ci.thin_tester(
             config = "chromium",
             apply_configs = [
                 "mb",
-                "goma_use_local",  # to mitigate compile step timeout (crbug.com/1056935)
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
@@ -335,12 +412,13 @@ ci.thin_tester(
         category = "mac",
         short_name = "11",
     ),
-    triggered_by = ["ci/Mac Builder"],
+    contact_team_email = "bling-engprod@google.com",
 )
 
 ci.thin_tester(
     name = "Mac12 Tests",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
+    branch_selector = branches.selector.MAC_BRANCHES,
+    triggered_by = ["ci/Mac Builder"],
     builder_spec = builder_config.builder_spec(
         execution_mode = builder_config.execution_mode.TEST,
         gclient_config = builder_config.gclient_config(
@@ -350,7 +428,6 @@ ci.thin_tester(
             config = "chromium",
             apply_configs = [
                 "mb",
-                "goma_use_local",  # to mitigate compile step timeout (crbug.com/1056935)
             ],
             build_config = builder_config.build_config.RELEASE,
             target_bits = 64,
@@ -361,12 +438,38 @@ ci.thin_tester(
         category = "mac",
         short_name = "12",
     ),
-    triggered_by = ["ci/Mac Builder"],
+    contact_team_email = "bling-engprod@google.com",
 )
 
 ci.thin_tester(
-    name = "Mac12 Tests (dbg)",
-    branch_selector = branches.DESKTOP_EXTENDED_STABLE_MILESTONE,
+    name = "Mac13 Tests",
+    branch_selector = branches.selector.MAC_BRANCHES,
+    triggered_by = ["ci/Mac Builder"],
+    builder_spec = builder_config.builder_spec(
+        execution_mode = builder_config.execution_mode.TEST,
+        gclient_config = builder_config.gclient_config(
+            config = "chromium",
+        ),
+        chromium_config = builder_config.chromium_config(
+            config = "chromium",
+            apply_configs = [
+                "mb",
+            ],
+            build_config = builder_config.build_config.RELEASE,
+            target_bits = 64,
+            target_platform = builder_config.target_platform.MAC,
+        ),
+    ),
+    console_view_entry = consoles.console_view_entry(
+        category = "mac",
+        short_name = "13",
+    ),
+)
+
+ci.thin_tester(
+    name = "Mac13 Tests (dbg)",
+    branch_selector = branches.selector.MAC_BRANCHES,
+    triggered_by = ["ci/Mac Builder (dbg)"],
     builder_spec = builder_config.builder_spec(
         execution_mode = builder_config.execution_mode.TEST,
         gclient_config = builder_config.gclient_config(
@@ -378,18 +481,18 @@ ci.thin_tester(
                 "mb",
             ],
             build_config = builder_config.build_config.DEBUG,
+            target_arch = builder_config.target_arch.INTEL,
             target_bits = 64,
             target_platform = builder_config.target_platform.MAC,
         ),
         build_gs_bucket = "chromium-mac-archive",
     ),
+    sheriff_rotations = args.ignore_default(None),
     console_view_entry = consoles.console_view_entry(
         category = "debug",
-        short_name = "12",
+        short_name = "13",
     ),
     cq_mirrors_console_view = "mirrors",
-    sheriff_rotations = args.ignore_default(None),
-    triggered_by = ["ci/Mac Builder (dbg)"],
 )
 
 ios_builder(
@@ -412,21 +515,32 @@ ios_builder(
         ),
         build_gs_bucket = "chromium-mac-archive",
     ),
+    gn_args = gn_args.config(
+        configs = [
+            "compile_only",
+            "debug_static_builder",
+            "reclient",
+            "ios_catalyst",
+            "x64",
+            "asan",
+            "libfuzzer",
+            "no_dsyms",
+            "no_remoting",
+        ],
+    ),
+    tree_closing = False,
     console_view_entry = [
         consoles.console_view_entry(
             category = "ios|default",
             short_name = "ctl",
         ),
         consoles.console_view_entry(
-            branch_selector = branches.MAIN,
+            branch_selector = branches.selector.MAIN,
             console_view = "sheriff.ios",
             category = "chromium.mac",
             short_name = "ctl",
         ),
     ],
-    goma_backend = None,
-    reclient_instance = reclient.instance.DEFAULT_TRUSTED,
-    reclient_jobs = reclient.jobs.DEFAULT,
 )
 
 ios_builder(
@@ -447,28 +561,35 @@ ios_builder(
         ),
         build_gs_bucket = "chromium-mac-archive",
     ),
+    gn_args = gn_args.config(
+        configs = [
+            "compile_only",
+            "ios_device",
+            "arm64",
+            "ios_google_cert",
+            "ios_disable_code_signing",
+            "release_builder",
+            "reclient",
+        ],
+    ),
+    cpu = cpu.ARM64,
     console_view_entry = [
         consoles.console_view_entry(
             category = "ios|default",
             short_name = "dev",
         ),
         consoles.console_view_entry(
-            branch_selector = branches.MAIN,
+            branch_selector = branches.selector.MAIN,
             console_view = "sheriff.ios",
             category = "chromium.mac",
             short_name = "dev",
         ),
     ],
-    goma_backend = None,
-    reclient_instance = reclient.instance.DEFAULT_TRUSTED,
-    reclient_jobs = reclient.jobs.DEFAULT,
-    # We don't have necessary capacity to run this configuration in CQ, but it
-    # is part of the main waterfall
 )
 
 ios_builder(
     name = "ios-simulator",
-    branch_selector = branches.STANDARD_MILESTONE,
+    branch_selector = branches.selector.IOS_BRANCHES,
     builder_spec = builder_config.builder_spec(
         gclient_config = builder_config.gclient_config(
             config = "ios",
@@ -488,27 +609,34 @@ ios_builder(
         ),
         build_gs_bucket = "chromium-mac-archive",
     ),
+    gn_args = gn_args.config(
+        configs = [
+            "debug_static_builder",
+            "reclient",
+            "ios_simulator",
+            "x64",
+            "xctest",
+        ],
+    ),
+    cpu = cpu.ARM64,
     console_view_entry = [
         consoles.console_view_entry(
             category = "ios|default",
             short_name = "sim",
         ),
         consoles.console_view_entry(
-            branch_selector = branches.MAIN,
+            branch_selector = branches.selector.MAIN,
             console_view = "sheriff.ios",
             category = "chromium.mac",
             short_name = "sim",
         ),
     ],
     cq_mirrors_console_view = "mirrors",
-    goma_backend = None,
-    reclient_instance = reclient.instance.DEFAULT_TRUSTED,
-    reclient_jobs = reclient.jobs.DEFAULT,
 )
 
 ios_builder(
     name = "ios-simulator-full-configs",
-    branch_selector = branches.STANDARD_MILESTONE,
+    branch_selector = branches.selector.IOS_BRANCHES,
     builder_spec = builder_config.builder_spec(
         gclient_config = builder_config.gclient_config(
             config = "ios",
@@ -528,22 +656,29 @@ ios_builder(
         ),
         build_gs_bucket = "chromium-mac-archive",
     ),
+    gn_args = gn_args.config(
+        configs = [
+            "debug_static_builder",
+            "reclient",
+            "ios_simulator",
+            "x64",
+            "xctest",
+        ],
+    ),
+    cpu = cpu.ARM64,
     console_view_entry = [
         consoles.console_view_entry(
             category = "ios|default",
             short_name = "ful",
         ),
         consoles.console_view_entry(
-            branch_selector = branches.MAIN,
+            branch_selector = branches.selector.MAIN,
             console_view = "sheriff.ios",
             category = "chromium.mac",
             short_name = "ful",
         ),
     ],
     cq_mirrors_console_view = "mirrors",
-    goma_backend = None,
-    reclient_instance = reclient.instance.DEFAULT_TRUSTED,
-    reclient_jobs = reclient.jobs.DEFAULT,
 )
 
 ios_builder(
@@ -564,22 +699,26 @@ ios_builder(
         ),
         build_gs_bucket = "chromium-mac-archive",
     ),
+    gn_args = gn_args.config(
+        configs = [
+            "debug_static_builder",
+            "reclient",
+            "ios_simulator",
+            "x64",
+            "xctest",
+        ],
+    ),
+    cpu = cpu.ARM64,
     console_view_entry = [
         consoles.console_view_entry(
             category = "ios|default",
             short_name = "non",
         ),
         consoles.console_view_entry(
-            branch_selector = branches.MAIN,
+            branch_selector = branches.selector.MAIN,
             console_view = "sheriff.ios",
             category = "chromium.mac",
             short_name = "non",
         ),
     ],
-    # We don't have necessary capacity to run this configuration in CQ, but it
-    # is part of the main waterfall
-    xcode = xcode.x14main,
-    goma_backend = None,
-    reclient_instance = reclient.instance.DEFAULT_TRUSTED,
-    reclient_jobs = reclient.jobs.DEFAULT,
 )

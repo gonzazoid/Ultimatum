@@ -5,9 +5,9 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_ASSISTANT_TEST_SUPPORT_EXPECT_UTILS_H_
 #define CHROMEOS_ASH_COMPONENTS_ASSISTANT_TEST_SUPPORT_EXPECT_UTILS_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/run_loop.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace ash {
@@ -26,7 +26,7 @@ void CheckResult(base::OnceClosure quit,
   }
 
   // Check again in the future
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(CheckResult<T>, std::move(quit), expected_value,
                      value_callback),
@@ -66,10 +66,5 @@ void ExpectResult(T expected_value,
 }  // namespace test
 }  // namespace assistant
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos::assistant::test {
-using ::ash::assistant::test::ExpectResult;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_ASSISTANT_TEST_SUPPORT_EXPECT_UTILS_H_

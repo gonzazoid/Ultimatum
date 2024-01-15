@@ -25,16 +25,18 @@ class ExtensionOptionsGuest
   ExtensionOptionsGuest& operator=(const ExtensionOptionsGuest&) = delete;
 
   static std::unique_ptr<GuestViewBase> Create(
-      content::WebContents* owner_web_contents);
+      content::RenderFrameHost* owner_rfh);
 
  private:
-  explicit ExtensionOptionsGuest(content::WebContents* owner_web_contents);
+  explicit ExtensionOptionsGuest(content::RenderFrameHost* owner_rfh);
 
   // GuestViewBase implementation.
   void CreateWebContents(std::unique_ptr<GuestViewBase> owned_this,
                          const base::Value::Dict& create_params,
                          WebContentsCreatedCallback callback) final;
   void DidInitialize(const base::Value::Dict& create_params) final;
+  void MaybeRecreateGuestContents(
+      content::RenderFrameHost* outer_contents_frame) final;
   void GuestViewDidStopLoading() final;
   const char* GetAPINamespace() const final;
   int GetTaskPrefix() const final;
@@ -55,6 +57,7 @@ class ExtensionOptionsGuest
   void CloseContents(content::WebContents* source) final;
   bool HandleContextMenu(content::RenderFrameHost& render_frame_host,
                          const content::ContextMenuParams& params) final;
+  bool ShouldResumeRequestsForCreatedWindow() override;
   bool IsWebContentsCreationOverridden(
       content::SiteInstance* source_site_instance,
       content::mojom::WindowContainerType window_container_type,

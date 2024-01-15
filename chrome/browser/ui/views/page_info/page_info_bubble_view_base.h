@@ -27,9 +27,9 @@ class Widget;
 // Common class to |PageInfoBubbleView| and |InternalPageInfoBubbleView|.
 class PageInfoBubbleViewBase : public views::BubbleDialogDelegateView,
                                public content::WebContentsObserver {
- public:
-  METADATA_HEADER(PageInfoBubbleViewBase);
+  METADATA_HEADER(PageInfoBubbleViewBase, views::BubbleDialogDelegateView)
 
+ public:
   // Type of the bubble being displayed.
   enum BubbleType {
     BUBBLE_NONE,
@@ -39,8 +39,6 @@ class PageInfoBubbleViewBase : public views::BubbleDialogDelegateView,
     BUBBLE_INTERNAL_PAGE,
     // Custom bubble for displaying safety tips.
     BUBBLE_SAFETY_TIP,
-    // Custom bubble for displaying accuracy tips.
-    BUBBLE_ACCURACY_TIP,
   };
 
   PageInfoBubbleViewBase(const PageInfoBubbleViewBase&) = delete;

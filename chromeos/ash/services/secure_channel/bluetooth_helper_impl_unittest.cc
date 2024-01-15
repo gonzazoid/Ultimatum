@@ -7,6 +7,8 @@
 #include <memory>
 
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/multidevice/remote_device_cache.h"
@@ -61,15 +63,17 @@ std::vector<multidevice::BeaconSeed> CreateFakeBeaconSeeds(int id) {
 
   multidevice::BeaconSeed seed1(
       fake_beacon_seed1_data + id_str /* data */,
-      base::Time::FromJavaTime(fake_beacon_seed1_start_ms *
-                               id) /* start_time */,
-      base::Time::FromJavaTime(fake_beacon_seed1_end_ms * id) /* end_time */);
+      base::Time::FromMillisecondsSinceUnixEpoch(fake_beacon_seed1_start_ms *
+                                                 id) /* start_time */,
+      base::Time::FromMillisecondsSinceUnixEpoch(fake_beacon_seed1_end_ms *
+                                                 id) /* end_time */);
 
   multidevice::BeaconSeed seed2(
       fake_beacon_seed2_data + id_str /* data */,
-      base::Time::FromJavaTime(fake_beacon_seed2_start_ms *
-                               id) /* start_time */,
-      base::Time::FromJavaTime(fake_beacon_seed2_end_ms * id) /* end_time */);
+      base::Time::FromMillisecondsSinceUnixEpoch(fake_beacon_seed2_start_ms *
+                                                 id) /* start_time */,
+      base::Time::FromMillisecondsSinceUnixEpoch(fake_beacon_seed2_end_ms *
+                                                 id) /* end_time */);
 
   std::vector<multidevice::BeaconSeed> seeds = {seed1, seed2};
   return seeds;
@@ -136,9 +140,9 @@ class SecureChannelBluetoothHelperImplTest : public testing::Test {
         *multidevice::GetMutableRemoteDevice(test_local_device_1_));
     devices.push_back(
         *multidevice::GetMutableRemoteDevice(test_local_device_2_));
-    std::transform(
-        test_remote_devices_.begin(), test_remote_devices_.end(),
-        std::back_inserter(devices), [](auto remote_device_ref) {
+    base::ranges::transform(
+        test_remote_devices_, std::back_inserter(devices),
+        [](auto remote_device_ref) {
           return *multidevice::GetMutableRemoteDevice(remote_device_ref);
         });
     remote_device_cache_->SetRemoteDevices(devices);
@@ -156,8 +160,10 @@ class SecureChannelBluetoothHelperImplTest : public testing::Test {
 
   std::unique_ptr<FakeBleAdvertisementGenerator>
       fake_ble_advertisement_generator_;
-  MockForegroundEidGenerator* mock_foreground_eid_generator_;
-  FakeBackgroundEidGenerator* fake_background_eid_generator_;
+  raw_ptr<MockForegroundEidGenerator, DanglingUntriaged>
+      mock_foreground_eid_generator_;
+  raw_ptr<FakeBackgroundEidGenerator, DanglingUntriaged>
+      fake_background_eid_generator_;
 
   std::unique_ptr<multidevice::RemoteDeviceCache> remote_device_cache_;
 

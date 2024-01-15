@@ -7,6 +7,7 @@
 #include "base/check_op.h"
 #include "base/notreached.h"
 #include "base/trace_event/trace_event.h"
+#include "ui/gl/android/scoped_a_native_window.h"
 #include "ui/gl/gl_bindings.h"
 #include "ui/gl/gl_context.h"
 #include "ui/gl/gl_context_egl.h"
@@ -34,15 +35,15 @@ class GLNonOwnedContext : public GLContextReal {
   GLNonOwnedContext& operator=(const GLNonOwnedContext&) = delete;
 
   // Implement GLContext.
-  bool Initialize(GLSurface* compatible_surface,
-                  const GLContextAttribs& attribs) override;
+  bool InitializeImpl(GLSurface* compatible_surface,
+                      const GLContextAttribs& attribs) override;
   bool MakeCurrentImpl(GLSurface* surface) override;
   void ReleaseCurrent(GLSurface* surface) override {}
   bool IsCurrent(GLSurface* surface) override;
   void* GetHandle() override { return nullptr; }
 
  protected:
-  ~GLNonOwnedContext() override {}
+  ~GLNonOwnedContext() override { OnContextWillDestroy(); }
 
  private:
   EGLDisplay display_;
@@ -51,8 +52,8 @@ class GLNonOwnedContext : public GLContextReal {
 GLNonOwnedContext::GLNonOwnedContext(GLShareGroup* share_group)
     : GLContextReal(share_group), display_(nullptr) {}
 
-bool GLNonOwnedContext::Initialize(GLSurface* compatible_surface,
-                                   const GLContextAttribs& attribs) {
+bool GLNonOwnedContext::InitializeImpl(GLSurface* compatible_surface,
+                                       const GLContextAttribs& attribs) {
   display_ = eglGetDisplay(EGL_DEFAULT_DISPLAY);
   return true;
 }
@@ -72,8 +73,8 @@ bool GLNonOwnedContext::IsCurrent(GLSurface* surface) {
 
 std::vector<GLImplementationParts> GetAllowedGLImplementations() {
   std::vector<GLImplementationParts> impls;
-  impls.emplace_back(GLImplementationParts(kGLImplementationEGLGLES2));
-  impls.emplace_back(GLImplementationParts(kGLImplementationEGLANGLE));
+  impls.emplace_back(kGLImplementationEGLGLES2);
+  impls.emplace_back(kGLImplementationEGLANGLE);
   return impls;
 }
 
@@ -125,7 +126,8 @@ scoped_refptr<GLSurface> CreateViewGLSurface(GLDisplay* display,
     case kGLImplementationEGLANGLE:
       if (window != gfx::kNullAcceleratedWidget) {
         return InitializeGLSurface(new NativeViewGLSurfaceEGL(
-            display->GetAs<gl::GLDisplayEGL>(), window, nullptr));
+            display->GetAs<gl::GLDisplayEGL>(),
+            ScopedANativeWindow::Wrap(window), nullptr));
       } else {
         return InitializeGLSurface(new GLSurfaceStub());
       }
@@ -135,10 +137,8 @@ scoped_refptr<GLSurface> CreateViewGLSurface(GLDisplay* display,
   }
 }
 
-scoped_refptr<GLSurface> CreateOffscreenGLSurfaceWithFormat(
-    GLDisplay* display,
-    const gfx::Size& size,
-    GLSurfaceFormat format) {
+scoped_refptr<GLSurface> CreateOffscreenGLSurface(GLDisplay* display,
+                                                  const gfx::Size& size) {
   TRACE_EVENT0("gpu", "gl::init::CreateOffscreenGLSurface");
   CHECK_NE(kGLImplementationNone, GetGLImplementation());
   switch (GetGLImplementation()) {
@@ -147,16 +147,14 @@ scoped_refptr<GLSurface> CreateOffscreenGLSurfaceWithFormat(
       GLDisplayEGL* display_egl = display->GetAs<gl::GLDisplayEGL>();
       if (display_egl->IsEGLSurfacelessContextSupported() &&
           (size.width() == 0 && size.height() == 0)) {
-        return InitializeGLSurfaceWithFormat(
-            new SurfacelessEGL(display_egl, size), format);
+        return InitializeGLSurface(new SurfacelessEGL(display_egl, size));
       } else {
-        return InitializeGLSurfaceWithFormat(
-            new PbufferGLSurfaceEGL(display_egl, size), format);
+        return InitializeGLSurface(new PbufferGLSurfaceEGL(display_egl, size));
       }
     }
     case kGLImplementationMockGL:
     case kGLImplementationStubGL:
-      return new GLSurfaceStub;
+      return InitializeGLSurface(new GLSurfaceStub());
     default:
       NOTREACHED();
       return nullptr;

@@ -6,14 +6,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
+#include "base/uuid.h"
 #include "components/offline_items_collection/core/fail_state.h"
 #include "components/offline_pages/core/background/request_coordinator.h"
 #include "components/offline_pages/core/background/request_notifier.h"
@@ -107,23 +107,10 @@ void DownloadUIAdapter::OfflinePageAdded(OfflinePageModel* model,
   if (!delegate_->IsVisibleInUI(added_page.client_id))
     return;
 
-  const bool is_suggested =
-      GetPolicy(added_page.client_id.name_space).is_suggested;
-
   OfflineItem offline_item(
-      OfflineItemConversions::CreateOfflineItem(added_page, is_suggested));
+      OfflineItemConversions::CreateOfflineItem(added_page));
 
-  // We assume the pages which are non-suggested and shown in Download Home UI
-  // should be coming from requests, so their corresponding offline items should
-  // have been added to the UI when their corresponding requests were created.
-  // So OnItemUpdated is used for non-suggested pages.
-  // Otherwise, for pages of suggested articles, they'll be added to the UI
-  // since they're added to Offline Page database directly, so OnItemsAdded is
-  // used.
-  if (!is_suggested)
-    NotifyItemUpdated(offline_item, absl::nullopt);
-  else
-    NotifyItemsAdded({offline_item});
+  NotifyItemUpdated(offline_item, absl::nullopt);
 }
 
 // OfflinePageModel::Observer
@@ -237,31 +224,16 @@ void DownloadUIAdapter::OnPageGetForVisuals(
     VisualsCallback visuals_callback,
     const std::vector<OfflinePageItem>& pages) {
   if (pages.empty()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(visuals_callback), id, nullptr));
     return;
   }
-  const OfflinePageItem* page = &pages[0];
-  VisualResultCallback callback =
-      base::BindOnce(std::move(visuals_callback), id);
-  if (page->client_id.name_space == kSuggestedArticlesNamespace) {
-    // Report PrefetchedItemHasThumbnail along with result callback.
-    auto report_and_callback =
-        [](VisualResultCallback result_callback,
-           std::unique_ptr<offline_items_collection::OfflineItemVisuals>
-               visuals) {
-          UMA_HISTOGRAM_BOOLEAN(
-              "OfflinePages.DownloadUI.PrefetchedItemHasThumbnail",
-              visuals && !visuals->icon.IsEmpty());
-          std::move(result_callback).Run(std::move(visuals));
-        };
-    callback = base::BindOnce(report_and_callback, std::move(callback));
-  }
 
   model_->GetVisualsByOfflineId(
-      page->offline_id, base::BindOnce(&DownloadUIAdapter::OnVisualsLoaded,
-                                       weak_ptr_factory_.GetWeakPtr(), options,
-                                       std::move(callback)));
+      pages[0].offline_id,
+      base::BindOnce(&DownloadUIAdapter::OnVisualsLoaded,
+                     weak_ptr_factory_.GetWeakPtr(), options,
+                     base::BindOnce(std::move(visuals_callback), id)));
 }
 
 void DownloadUIAdapter::OnVisualsLoaded(
@@ -325,8 +297,7 @@ void DownloadUIAdapter::OnPageGetForThumbnailAdded(
   if (!page)
     return;
 
-  auto offline_item = OfflineItemConversions::CreateOfflineItem(
-      *page, GetPolicy(page->client_id.name_space).is_suggested);
+  auto offline_item = OfflineItemConversions::CreateOfflineItem(*page);
 
   offline_items_collection::UpdateDelta update_delta;
   update_delta.visuals_changed = true;
@@ -354,12 +325,10 @@ void DownloadUIAdapter::OnPageGetForGetItem(
     const std::vector<OfflinePageItem>& pages) {
   if (!pages.empty()) {
     const OfflinePageItem* page = &pages[0];
-    const bool is_suggested =
-        GetPolicy(page->client_id.name_space).is_suggested;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE, base::BindOnce(std::move(callback),
-                                  OfflineItemConversions::CreateOfflineItem(
-                                      *page, is_suggested)));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE,
+        base::BindOnce(std::move(callback),
+                       OfflineItemConversions::CreateOfflineItem(*page)));
     return;
   }
   request_coordinator_->GetAllRequests(
@@ -376,7 +345,7 @@ void DownloadUIAdapter::OnAllRequestsGetForGetItem(
     if (request->client_id().id == id.id)
       offline_item = OfflineItemConversions::CreateOfflineItem(*request);
   }
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), offline_item));
 }
 
@@ -396,9 +365,7 @@ void DownloadUIAdapter::OnPageGetForOpenItem(
   if (pages.empty())
     return;
   const OfflinePageItem* page = &pages[0];
-  const bool is_suggested = GetPolicy(page->client_id.name_space).is_suggested;
-  OfflineItem item =
-      OfflineItemConversions::CreateOfflineItem(*page, is_suggested);
+  OfflineItem item = OfflineItemConversions::CreateOfflineItem(*page);
   delegate_->OpenItem(item, page->offline_id, open_params);
 }
 
@@ -431,17 +398,12 @@ void DownloadUIAdapter::PauseDownloadContinuation(
       FilterRequestsByGuid(std::move(requests), guid));
 }
 
-void DownloadUIAdapter::ResumeDownload(const ContentId& id,
-                                       bool has_user_gesture) {
+void DownloadUIAdapter::ResumeDownload(const ContentId& id) {
   // TODO(fgorski): Clean this up in a way where 2 round trips + GetAllRequests
   // is not necessary.
-  if (has_user_gesture) {
-    request_coordinator_->GetAllRequests(
-        base::BindOnce(&DownloadUIAdapter::ResumeDownloadContinuation,
-                       weak_ptr_factory_.GetWeakPtr(), id.id));
-  } else {
-    request_coordinator_->StartImmediateProcessing(base::DoNothing());
-  }
+  request_coordinator_->GetAllRequests(
+      base::BindOnce(&DownloadUIAdapter::ResumeDownloadContinuation,
+                     weak_ptr_factory_.GetWeakPtr(), id.id));
 }
 
 void DownloadUIAdapter::ResumeDownloadContinuation(
@@ -458,8 +420,7 @@ void DownloadUIAdapter::OnOfflinePagesLoaded(
   for (const auto& page : pages) {
     if (delegate_->IsVisibleInUI(page.client_id)) {
       std::string guid = page.client_id.id;
-      offline_items->push_back(OfflineItemConversions::CreateOfflineItem(
-          page, GetPolicy(page.client_id.name_space).is_suggested));
+      offline_items->push_back(OfflineItemConversions::CreateOfflineItem(page));
     }
   }
   request_coordinator_->GetAllRequests(base::BindOnce(
@@ -480,7 +441,7 @@ void DownloadUIAdapter::OnRequestsLoaded(
   }
 
   OfflineContentProvider::OfflineItemList list = *offline_items;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), list));
 }
 

@@ -27,8 +27,7 @@
 #include "ui/views/widget/widget.h"
 #include "ui/views/window/dialog_delegate.h"
 
-namespace views {
-namespace examples {
+namespace views::examples {
 namespace {
 
 constexpr size_t kFakeModeless = ui::MODAL_TYPE_SYSTEM + 1;
@@ -44,6 +43,8 @@ class DialogExample::Delegate : public virtual DialogType {
                                    parent_->ok_button_label_->GetText());
     DialogDelegate::SetButtonLabel(ui::DIALOG_BUTTON_CANCEL,
                                    parent_->cancel_button_label_->GetText());
+    DialogDelegate::SetCloseCallback(base::BindRepeating(
+        &DialogExample::OnCloseCallback, base::Unretained(parent_)));
     WidgetDelegate::SetModalType(parent_->GetModalType());
   }
 
@@ -211,7 +212,7 @@ void DialogExample::StartTextfieldRow(View* parent,
   auto textfield = std::make_unique<Textfield>();
   textfield->set_controller(this);
   textfield->SetText(value);
-  textfield->SetAssociatedLabel(row_label);
+  textfield->SetAccessibleName(row_label);
   *member = parent->AddChildView(std::move(textfield));
   if (pad_last_col)
     parent->AddChildView(std::make_unique<View>());
@@ -224,7 +225,7 @@ void DialogExample::AddCheckbox(View* parent, Checkbox** member, Label* label) {
       std::u16string(), base::BindRepeating(callback, base::Unretained(this)));
   checkbox->SetChecked(true);
   if (label)
-    checkbox->SetAssociatedLabel(label);
+    checkbox->SetAccessibleName(label);
   *member = parent->AddChildView(std::move(checkbox));
 }
 
@@ -248,6 +249,10 @@ int DialogExample::GetDialogButtons() const {
   if (has_cancel_button_->GetChecked())
     buttons |= ui::DIALOG_BUTTON_CANCEL;
   return buttons;
+}
+
+void DialogExample::OnCloseCallback() {
+  AllowDialogClose(false);
 }
 
 bool DialogExample::AllowDialogClose(bool accept) {
@@ -286,7 +291,7 @@ void DialogExample::ShowButtonPressed() {
 
     // constrained_window::CreateBrowserModalDialogViews() allows dialogs to
     // be created as MODAL_TYPE_WINDOW without specifying a parent.
-    gfx::NativeView parent = nullptr;
+    gfx::NativeView parent = gfx::NativeView();
     if (mode_->GetSelectedIndex() != kFakeModeless)
       parent = example_view()->GetWidget()->GetNativeView();
 
@@ -352,5 +357,4 @@ void DialogExample::OnPerformAction() {
     LogStatus("MODAL_TYPE_SYSTEM isn't supported on Mac.");
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

@@ -11,6 +11,7 @@ import "components/mirroring/mojom/session_parameters.mojom";
 import "sandbox/policy/mojom/context.mojom";
 import "sandbox/policy/mojom/sandbox.mojom";
 import "ui/gfx/geometry/mojom/geometry.mojom";
+import "mojo/public/mojom/base/values.mojom";
 
 [EnableIf=is_mac]
 const sandbox.mojom.Sandbox kMirroringSandbox
@@ -34,4 +35,11 @@ interface MirroringService {
         pending_remote<ResourceProvider> resource_provider,
         pending_remote<CastMessageChannel> outbound_channel,
         pending_receiver<CastMessageChannel> inbound_channel);
+
+  // Switch the source tab of the current mirroring session.
+  SwitchMirroringSourceTab();
+
+  // Fetches the current RTCP stats of the current mirroring session.
+  // The stats are returned as base::Value::Dict.
+  GetMirroringStats() => (mojo_base.mojom.Value json_stats);
 };

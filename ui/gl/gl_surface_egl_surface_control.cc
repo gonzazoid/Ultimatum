@@ -9,19 +9,21 @@
 #include "base/android/android_hardware_buffer_compat.h"
 #include "base/android/build_info.h"
 #include "base/android/scoped_hardware_buffer_fence_sync.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/strings/strcat.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "cc/base/math_util.h"
 #include "ui/gfx/geometry/rect_conversions.h"
+#include "ui/gfx/overlay_plane_data.h"
 #include "ui/gfx/overlay_transform_utils.h"
+#include "ui/gl/android/scoped_a_native_window.h"
+#include "ui/gl/android/scoped_java_surface_control.h"
 #include "ui/gl/egl_util.h"
 #include "ui/gl/gl_context.h"
 #include "ui/gl/gl_features.h"
 #include "ui/gl/gl_fence_android_native_fence_sync.h"
-#include "ui/gl/gl_image.h"
 #include "ui/gl/gl_utils.h"
 
 namespace gl {
@@ -56,14 +58,25 @@ base::TimeTicks GetSignalTime(const base::ScopedFD& fence) {
 }  // namespace
 
 GLSurfaceEGLSurfaceControl::GLSurfaceEGLSurfaceControl(
-    GLDisplayEGL* display,
-    ANativeWindow* window,
+    gl::ScopedANativeWindow window,
     scoped_refptr<base::SingleThreadTaskRunner> task_runner)
-    : GLSurfaceEGL(display),
-      root_surface_name_(BuildSurfaceName(kRootSurfaceName)),
-      child_surface_name_(BuildSurfaceName(kChildSurfaceName)),
-      root_surface_(
-          new gfx::SurfaceControl::Surface(window, root_surface_name_.c_str())),
+    : GLSurfaceEGLSurfaceControl(
+          base::MakeRefCounted<gfx::SurfaceControl::Surface>(
+              window.a_native_window(),
+              BuildSurfaceName(kRootSurfaceName).c_str()),
+          std::move(task_runner)) {}
+
+GLSurfaceEGLSurfaceControl::GLSurfaceEGLSurfaceControl(
+    gl::ScopedJavaSurfaceControl scoped_java_surface_control,
+    scoped_refptr<base::SingleThreadTaskRunner> task_runner)
+    : GLSurfaceEGLSurfaceControl(scoped_java_surface_control.MakeSurface(),
+                                 std::move(task_runner)) {}
+
+GLSurfaceEGLSurfaceControl::GLSurfaceEGLSurfaceControl(
+    scoped_refptr<gfx::SurfaceControl::Surface> root_surface,
+    scoped_refptr<base::SingleThreadTaskRunner> task_runner)
+    : child_surface_name_(BuildSurfaceName(kChildSurfaceName)),
+      root_surface_(std::move(root_surface)),
       transaction_ack_timeout_manager_(task_runner),
       gpu_task_runner_(std::move(task_runner)),
       use_target_deadline_(features::IsAndroidFrameDeadlineEnabled()),
@@ -74,44 +87,11 @@ GLSurfaceEGLSurfaceControl::~GLSurfaceEGLSurfaceControl() {
   Destroy();
 }
 
-int GLSurfaceEGLSurfaceControl::GetBufferCount() const {
-  // Triple buffering to match framework's BufferQueue.
-  return 3;
-}
-
-bool GLSurfaceEGLSurfaceControl::Initialize(GLSurfaceFormat format) {
+bool GLSurfaceEGLSurfaceControl::Initialize() {
   if (!root_surface_->surface())
     return false;
 
-  format_ = format;
-
-  // Surfaceless is always disabled on Android so we create a 1x1 pbuffer
-  // surface.
-  if (!offscreen_surface_) {
-    if (!display_->GetDisplay()) {
-      LOG(ERROR) << "Trying to create surface with invalid display.";
-      return false;
-    }
-
-    EGLint pbuffer_attribs[] = {
-        EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE,
-    };
-    offscreen_surface_ = eglCreatePbufferSurface(display_->GetDisplay(),
-                                                 GetConfig(), pbuffer_attribs);
-    if (!offscreen_surface_) {
-      LOG(ERROR) << "eglCreatePbufferSurface failed with error "
-                 << ui::GetLastEGLErrorString();
-      return false;
-    }
-  }
-
   return true;
-}
-
-void GLSurfaceEGLSurfaceControl::PrepareToDestroy(bool have_context) {
-  // Drop all transaction callbacks since its not possible to make the context
-  // current after this point.
-  weak_factory_.InvalidateWeakPtrs();
 }
 
 void GLSurfaceEGLSurfaceControl::PreserveChildSurfaceControls() {
@@ -135,14 +115,6 @@ void GLSurfaceEGLSurfaceControl::Destroy() {
   pending_transaction_.reset();
   surface_list_.clear();
   root_surface_.reset();
-
-  if (offscreen_surface_) {
-    if (!eglDestroySurface(display_->GetDisplay(), offscreen_surface_)) {
-      LOG(ERROR) << "eglDestroySurface failed with error "
-                 << ui::GetLastEGLErrorString();
-    }
-    offscreen_surface_ = nullptr;
-  }
 }
 
 bool GLSurfaceEGLSurfaceControl::Resize(const gfx::Size& size,
@@ -154,59 +126,10 @@ bool GLSurfaceEGLSurfaceControl::Resize(const gfx::Size& size,
   return true;
 }
 
-bool GLSurfaceEGLSurfaceControl::IsOffscreen() {
-  return false;
-}
-
-gfx::SwapResult GLSurfaceEGLSurfaceControl::SwapBuffers(
-    PresentationCallback callback,
-    FrameData data) {
-  NOTREACHED();
-  return gfx::SwapResult::SWAP_FAILED;
-}
-
-gfx::SwapResult GLSurfaceEGLSurfaceControl::CommitOverlayPlanes(
-    PresentationCallback callback,
-    FrameData data) {
-  NOTREACHED();
-  return gfx::SwapResult::SWAP_FAILED;
-}
-
-gfx::SwapResult GLSurfaceEGLSurfaceControl::PostSubBuffer(
-    int x,
-    int y,
-    int width,
-    int height,
-    PresentationCallback callback,
-    FrameData data) {
-  NOTREACHED();
-  return gfx::SwapResult::SWAP_FAILED;
-}
-
-void GLSurfaceEGLSurfaceControl::SwapBuffersAsync(
+void GLSurfaceEGLSurfaceControl::Present(
     SwapCompletionCallback completion_callback,
     PresentationCallback presentation_callback,
-    FrameData data) {
-  CommitPendingTransaction(std::move(completion_callback),
-                           std::move(presentation_callback));
-}
-
-void GLSurfaceEGLSurfaceControl::CommitOverlayPlanesAsync(
-    SwapCompletionCallback completion_callback,
-    PresentationCallback presentation_callback,
-    FrameData data) {
-  CommitPendingTransaction(std::move(completion_callback),
-                           std::move(presentation_callback));
-}
-
-void GLSurfaceEGLSurfaceControl::PostSubBufferAsync(
-    int x,
-    int y,
-    int width,
-    int height,
-    SwapCompletionCallback completion_callback,
-    PresentationCallback presentation_callback,
-    FrameData data) {
+    gfx::FrameData data) {
   CommitPendingTransaction(std::move(completion_callback),
                            std::move(presentation_callback));
 }
@@ -298,24 +221,15 @@ void GLSurfaceEGLSurfaceControl::CommitPendingTransaction(
   pending_surfaces_count_ = 0u;
   frame_rate_update_pending_ = false;
 
-  if (transaction_ack_pending_ && !use_target_deadline_) {
+  if (num_transaction_commit_or_ack_pending_ && !use_target_deadline_) {
     pending_transaction_queue_.push(std::move(pending_transaction_).value());
   } else {
-    transaction_ack_pending_ = true;
+    num_transaction_commit_or_ack_pending_++;
     pending_transaction_->Apply();
     transaction_ack_timeout_manager_.ScheduleHangDetection();
   }
 
   pending_transaction_.reset();
-}
-
-gfx::Size GLSurfaceEGLSurfaceControl::GetSize() {
-  return gfx::Size(0, 0);
-}
-
-bool GLSurfaceEGLSurfaceControl::OnMakeCurrent(GLContext* context) {
-  context_ = context;
-  return true;
 }
 
 bool GLSurfaceEGLSurfaceControl::ScheduleOverlayPlane(
@@ -348,6 +262,10 @@ bool GLSurfaceEGLSurfaceControl::ScheduleOverlayPlane(
     surface_state.z_order = overlay_plane_data.z_order;
     pending_transaction_->SetZOrder(*surface_state.surface,
                                     overlay_plane_data.z_order);
+  }
+
+  if (uninitialized && use_target_deadline_) {
+    pending_transaction_->SetEnableBackPressure(*surface_state.surface, true);
   }
 
   AHardwareBuffer* hardware_buffer = nullptr;
@@ -384,7 +302,7 @@ bool GLSurfaceEGLSurfaceControl::ScheduleOverlayPlane(
     if (gpu_fence && surface_state.hardware_buffer) {
       auto fence_handle = gpu_fence->GetGpuFenceHandle().Clone();
       DCHECK(!fence_handle.is_null());
-      fence_fd = std::move(fence_handle.owned_fd);
+      fence_fd = fence_handle.Release();
     }
 
     if (is_primary_plane) {
@@ -431,13 +349,15 @@ bool GLSurfaceEGLSurfaceControl::ScheduleOverlayPlane(
     // can become larger then a buffer so we clip it here. See crbug.com/1083412
     src.Intersect(gfx::Rect(buffer_size));
 
+    auto transform =
+        absl::get<gfx::OverlayTransform>(overlay_plane_data.plane_transform);
     if (uninitialized || surface_state.src != src || surface_state.dst != dst ||
-        surface_state.transform != overlay_plane_data.plane_transform) {
+        surface_state.transform != transform) {
       surface_state.src = src;
       surface_state.dst = dst;
-      surface_state.transform = overlay_plane_data.plane_transform;
+      surface_state.transform = transform;
       pending_transaction_->SetGeometry(*surface_state.surface, src, dst,
-                                        overlay_plane_data.plane_transform);
+                                        transform);
     }
   }
 
@@ -453,19 +373,12 @@ bool GLSurfaceEGLSurfaceControl::ScheduleOverlayPlane(
                 << image_color_space.ToString();
   }
 
-  if (uninitialized || surface_state.color_space != image_color_space) {
-    surface_state.color_space = image_color_space;
-    pending_transaction_->SetColorSpace(*surface_state.surface,
-                                        image_color_space);
-  }
-
-  if (uninitialized ||
+  if (uninitialized || surface_state.color_space != image_color_space ||
       surface_state.hdr_metadata != overlay_plane_data.hdr_metadata) {
-    DCHECK(!overlay_plane_data.hdr_metadata ||
-           surface_state.color_space.IsHDR());
+    surface_state.color_space = image_color_space;
     surface_state.hdr_metadata = overlay_plane_data.hdr_metadata;
-    pending_transaction_->SetHDRMetadata(*surface_state.surface,
-                                         surface_state.hdr_metadata);
+    pending_transaction_->SetColorSpace(
+        *surface_state.surface, image_color_space, surface_state.hdr_metadata);
   }
 
   if (frame_rate_update_pending_)
@@ -474,27 +387,7 @@ bool GLSurfaceEGLSurfaceControl::ScheduleOverlayPlane(
   return true;
 }
 
-bool GLSurfaceEGLSurfaceControl::IsSurfaceless() const {
-  return true;
-}
-
-void* GLSurfaceEGLSurfaceControl::GetHandle() {
-  return offscreen_surface_;
-}
-
-bool GLSurfaceEGLSurfaceControl::SupportsPostSubBuffer() {
-  return true;
-}
-
-bool GLSurfaceEGLSurfaceControl::SupportsAsyncSwap() {
-  return true;
-}
-
 bool GLSurfaceEGLSurfaceControl::SupportsPlaneGpuFences() const {
-  return true;
-}
-
-bool GLSurfaceEGLSurfaceControl::SupportsCommitOverlayPlanes() {
   return true;
 }
 
@@ -554,6 +447,10 @@ void GLSurfaceEGLSurfaceControl::OnTransactionAckOnGpuThread(
   pending_cb.callback = std::move(presentation_callback);
   pending_presentation_callback_queue_.push(std::move(pending_cb));
 
+  if (!using_on_commit_callback_) {
+    CHECK(num_transaction_commit_or_ack_pending_);
+    num_transaction_commit_or_ack_pending_--;
+  }
   CheckPendingPresentationCallbacks();
 
   // If we don't use OnCommit, we advance transaction queue after we received
@@ -566,15 +463,14 @@ void GLSurfaceEGLSurfaceControl::OnTransactionCommittedOnGpuThread() {
   TRACE_EVENT0("gpu",
                "GLSurfaceEGLSurfaceControl::OnTransactionCommittedOnGpuThread");
   DCHECK(using_on_commit_callback_);
+  CHECK(num_transaction_commit_or_ack_pending_);
+  num_transaction_commit_or_ack_pending_--;
   AdvanceTransactionQueue();
 }
 
 void GLSurfaceEGLSurfaceControl::AdvanceTransactionQueue() {
-  DCHECK(transaction_ack_pending_);
-  transaction_ack_pending_ = false;
-
   if (!pending_transaction_queue_.empty()) {
-    transaction_ack_pending_ = true;
+    num_transaction_commit_or_ack_pending_++;
     pending_transaction_queue_.front().Apply();
     pending_transaction_queue_.pop();
     transaction_ack_timeout_manager_.ScheduleHangDetection();
@@ -621,8 +517,12 @@ void GLSurfaceEGLSurfaceControl::CheckPendingPresentationCallbacks() {
   // If there are unsignaled fences and we don't have any pending transactions,
   // schedule a task to poll the fences again. If there is a pending transaction
   // already, then we'll poll when that transaction is acked.
+  // Note this check is interested in pending ack, not pending commit. However
+  // pending commit always implies pending ack, so there is no false negative
+  // where a recheck is necessary but not posted.
   if (!pending_presentation_callback_queue_.empty() &&
-      pending_transaction_queue_.empty()) {
+      pending_transaction_queue_.empty() &&
+      !num_transaction_commit_or_ack_pending_) {
     check_pending_presentation_callback_queue_task_.Reset(base::BindOnce(
         &GLSurfaceEGLSurfaceControl::CheckPendingPresentationCallbacks,
         weak_factory_.GetWeakPtr()));
@@ -630,17 +530,6 @@ void GLSurfaceEGLSurfaceControl::CheckPendingPresentationCallbacks() {
         FROM_HERE, check_pending_presentation_callback_queue_task_.callback(),
         base::Seconds(1) / 60);
   }
-}
-
-void GLSurfaceEGLSurfaceControl::SetDisplayTransform(
-    gfx::OverlayTransform transform) {
-  display_transform_ = transform;
-}
-
-gfx::SurfaceOrigin GLSurfaceEGLSurfaceControl::GetOrigin() const {
-  // GLSurfaceEGLSurfaceControl's y-axis is flipped compare to GL - (0,0) is at
-  // top left corner.
-  return gfx::SurfaceOrigin::kTopLeft;
 }
 
 void GLSurfaceEGLSurfaceControl::SetFrameRate(float frame_rate) {

@@ -16,6 +16,7 @@
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/json/json_writer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
@@ -31,12 +32,12 @@
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/user_manager/scoped_user_manager.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/browser/external_install_info.h"
 #include "extensions/browser/external_provider_interface.h"
-#include "extensions/browser/notification_types.h"
+#include "extensions/browser/updater/extension_downloader.h"
+#include "extensions/browser/updater/extension_update_found_test_observer.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/manifest.h"
 #include "services/data_decoder/public/cpp/test_support/in_process_data_decoder.h"
@@ -142,10 +143,9 @@ class TestExternalProviderVisitor
 class DemoExtensionsExternalLoaderTest : public testing::Test {
  public:
   DemoExtensionsExternalLoaderTest()
-      : test_shared_loader_factory_(
-            base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
-                &test_url_loader_factory_)),
-        scoped_user_manager_(std::make_unique<FakeChromeUserManager>()) {}
+      : fake_user_manager_(std::make_unique<FakeChromeUserManager>()),
+        test_shared_loader_factory_(
+            test_url_loader_factory_.GetSafeWeakWrapper()) {}
 
   DemoExtensionsExternalLoaderTest(const DemoExtensionsExternalLoaderTest&) =
       delete;
@@ -159,6 +159,9 @@ class DemoExtensionsExternalLoaderTest : public testing::Test {
     TestingBrowserProcess::GetGlobal()->SetSharedURLLoaderFactory(
         test_shared_loader_factory_);
     profile_ = std::make_unique<TestingProfile>();
+    profile_->ScopedCrosSettingsTestHelper()
+        ->InstallAttributes()
+        ->SetDemoMode();
   }
 
   void TearDown() override {
@@ -173,7 +176,7 @@ class DemoExtensionsExternalLoaderTest : public testing::Test {
         .value();
   }
 
-  bool SetExtensionsConfig(const base::Value& config) {
+  bool SetExtensionsConfig(const base::Value::Dict& config) {
     std::string config_str;
     if (!base::JSONWriter::Write(config, &config_str))
       return false;
@@ -185,21 +188,19 @@ class DemoExtensionsExternalLoaderTest : public testing::Test {
   }
 
   void AddExtensionToConfig(const std::string& id,
-                            const absl::optional<std::string>& version,
-                            const absl::optional<std::string>& path,
-                            base::Value* config) {
-    ASSERT_TRUE(config->is_dict());
-
-    base::Value extension(base::Value::Type::DICTIONARY);
+                            const std::optional<std::string>& version,
+                            const std::optional<std::string>& path,
+                            base::Value::Dict& config) {
+    base::Value::Dict extension;
     if (version.has_value()) {
-      extension.SetKey(extensions::ExternalProviderImpl::kExternalVersion,
-                       base::Value(version.value()));
+      extension.Set(extensions::ExternalProviderImpl::kExternalVersion,
+                    version.value());
     }
     if (path.has_value()) {
-      extension.SetKey(extensions::ExternalProviderImpl::kExternalCrx,
-                       base::Value(path.value()));
+      extension.Set(extensions::ExternalProviderImpl::kExternalCrx,
+                    path.value());
     }
-    config->SetKey(id, std::move(extension));
+    config.Set(id, std::move(extension));
   }
 
   std::unique_ptr<extensions::ExternalProviderImpl> CreateExternalProvider(
@@ -216,6 +217,9 @@ class DemoExtensionsExternalLoaderTest : public testing::Test {
 
   TestExternalProviderVisitor external_provider_visitor_;
 
+  user_manager::TypedScopedUserManager<FakeChromeUserManager>
+      fake_user_manager_;
+
   std::unique_ptr<TestingProfile> profile_;
 
   network::TestURLLoaderFactory test_url_loader_factory_;
@@ -230,8 +234,6 @@ class DemoExtensionsExternalLoaderTest : public testing::Test {
 
   data_decoder::test::InProcessDataDecoder in_process_data_decoder_;
   content::InProcessUtilityThreadHelper in_process_utility_thread_helper_;
-
-  user_manager::ScopedUserManager scoped_user_manager_;
 };
 
 TEST_F(DemoExtensionsExternalLoaderTest, NoDemoExtensionsConfig) {
@@ -250,7 +252,10 @@ TEST_F(DemoExtensionsExternalLoaderTest, NoDemoExtensionsConfig) {
 TEST_F(DemoExtensionsExternalLoaderTest, InvalidDemoExtensionsConfig) {
   demo_mode_test_helper_->InitializeSession();
 
-  ASSERT_TRUE(SetExtensionsConfig(base::Value("invalid_config")));
+  base::Value::Dict config;
+  config.Set("invalid_config", "invalid_config");
+
+  ASSERT_TRUE(SetExtensionsConfig(config));
 
   std::unique_ptr<extensions::ExternalProviderImpl> external_provider =
       CreateExternalProvider(&external_provider_visitor_);
@@ -265,9 +270,9 @@ TEST_F(DemoExtensionsExternalLoaderTest, InvalidDemoExtensionsConfig) {
 TEST_F(DemoExtensionsExternalLoaderTest, SingleDemoExtension) {
   demo_mode_test_helper_->InitializeSession();
 
-  base::Value config = base::Value(base::Value::Type::DICTIONARY);
-  AddExtensionToConfig(std::string(32, 'a'), absl::make_optional("1.0.0"),
-                       absl::make_optional("extensions/a.crx"), &config);
+  base::Value::Dict config;
+  AddExtensionToConfig(std::string(32, 'a'), std::make_optional("1.0.0"),
+                       std::make_optional("extensions/a.crx"), config);
   ASSERT_TRUE(SetExtensionsConfig(std::move(config)));
 
   std::unique_ptr<extensions::ExternalProviderImpl> external_provider =
@@ -286,13 +291,13 @@ TEST_F(DemoExtensionsExternalLoaderTest, SingleDemoExtension) {
 TEST_F(DemoExtensionsExternalLoaderTest, MultipleDemoExtension) {
   demo_mode_test_helper_->InitializeSession();
 
-  base::Value config = base::Value(base::Value::Type::DICTIONARY);
-  AddExtensionToConfig(std::string(32, 'a'), absl::make_optional("1.0.0"),
-                       absl::make_optional("extensions/a.crx"), &config);
-  AddExtensionToConfig(std::string(32, 'b'), absl::make_optional("1.1.0"),
-                       absl::make_optional("b.crx"), &config);
-  AddExtensionToConfig(std::string(32, 'c'), absl::make_optional("2.0.0"),
-                       absl::make_optional("c.crx"), &config);
+  base::Value::Dict config;
+  AddExtensionToConfig(std::string(32, 'a'), std::make_optional("1.0.0"),
+                       std::make_optional("extensions/a.crx"), config);
+  AddExtensionToConfig(std::string(32, 'b'), std::make_optional("1.1.0"),
+                       std::make_optional("b.crx"), config);
+  AddExtensionToConfig(std::string(32, 'c'), std::make_optional("2.0.0"),
+                       std::make_optional("c.crx"), config);
   ASSERT_TRUE(SetExtensionsConfig(std::move(config)));
 
   std::unique_ptr<extensions::ExternalProviderImpl> external_provider =
@@ -317,12 +322,12 @@ TEST_F(DemoExtensionsExternalLoaderTest, MultipleDemoExtension) {
 TEST_F(DemoExtensionsExternalLoaderTest, CrxPathWithAbsolutePath) {
   demo_mode_test_helper_->InitializeSession();
 
-  base::Value config = base::Value(base::Value::Type::DICTIONARY);
-  AddExtensionToConfig(std::string(32, 'a'), absl::make_optional("1.0.0"),
-                       absl::make_optional("a.crx"), &config);
-  AddExtensionToConfig(std::string(32, 'b'), absl::make_optional("1.1.0"),
-                       absl::make_optional(GetTestResourcePath("b.crx")),
-                       &config);
+  base::Value::Dict config;
+  AddExtensionToConfig(std::string(32, 'a'), std::make_optional("1.0.0"),
+                       std::make_optional("a.crx"), config);
+  AddExtensionToConfig(std::string(32, 'b'), std::make_optional("1.1.0"),
+                       std::make_optional(GetTestResourcePath("b.crx")),
+                       config);
   ASSERT_TRUE(SetExtensionsConfig(std::move(config)));
 
   std::unique_ptr<extensions::ExternalProviderImpl> external_provider =
@@ -343,11 +348,11 @@ TEST_F(DemoExtensionsExternalLoaderTest, CrxPathWithAbsolutePath) {
 TEST_F(DemoExtensionsExternalLoaderTest, ExtensionWithPathMissing) {
   demo_mode_test_helper_->InitializeSession();
 
-  base::Value config = base::Value(base::Value::Type::DICTIONARY);
-  AddExtensionToConfig(std::string(32, 'a'), absl::make_optional("1.0.0"),
-                       absl::make_optional("a.crx"), &config);
-  AddExtensionToConfig(std::string(32, 'b'), absl::make_optional("1.1.0"),
-                       absl::nullopt, &config);
+  base::Value::Dict config;
+  AddExtensionToConfig(std::string(32, 'a'), std::make_optional("1.0.0"),
+                       std::make_optional("a.crx"), config);
+  AddExtensionToConfig(std::string(32, 'b'), std::make_optional("1.1.0"),
+                       std::nullopt, config);
   ASSERT_TRUE(SetExtensionsConfig(std::move(config)));
 
   std::unique_ptr<extensions::ExternalProviderImpl> external_provider =
@@ -368,11 +373,11 @@ TEST_F(DemoExtensionsExternalLoaderTest, ExtensionWithPathMissing) {
 TEST_F(DemoExtensionsExternalLoaderTest, ExtensionWithVersionMissing) {
   demo_mode_test_helper_->InitializeSession();
 
-  base::Value config = base::Value(base::Value::Type::DICTIONARY);
-  AddExtensionToConfig(std::string(32, 'a'), absl::make_optional("1.0.0"),
-                       absl::make_optional("a.crx"), &config);
-  AddExtensionToConfig(std::string(32, 'b'), absl::nullopt,
-                       absl::make_optional("b.crx"), &config);
+  base::Value::Dict config;
+  AddExtensionToConfig(std::string(32, 'a'), std::make_optional("1.0.0"),
+                       std::make_optional("a.crx"), config);
+  AddExtensionToConfig(std::string(32, 'b'), std::nullopt,
+                       std::make_optional("b.crx"), config);
   ASSERT_TRUE(SetExtensionsConfig(std::move(config)));
 
   std::unique_ptr<extensions::ExternalProviderImpl> external_provider =
@@ -406,9 +411,9 @@ TEST_F(DemoExtensionsExternalLoaderTest,
        StartLoaderBeforeOfflineResourcesLoaded) {
   demo_mode_test_helper_->InitializeSessionWithPendingComponent();
 
-  base::Value config = base::Value(base::Value::Type::DICTIONARY);
-  AddExtensionToConfig(std::string(32, 'a'), absl::make_optional("1.0.0"),
-                       absl::make_optional("a.crx"), &config);
+  base::Value::Dict config;
+  AddExtensionToConfig(std::string(32, 'a'), std::make_optional("1.0.0"),
+                       std::make_optional("a.crx"), config);
   ASSERT_TRUE(SetExtensionsConfig(std::move(config)));
 
   std::unique_ptr<extensions::ExternalProviderImpl> external_provider =
@@ -430,9 +435,9 @@ TEST_F(DemoExtensionsExternalLoaderTest,
        StartLoaderBeforeOfflineResourcesLoadFails) {
   demo_mode_test_helper_->InitializeSessionWithPendingComponent();
 
-  base::Value config = base::Value(base::Value::Type::DICTIONARY);
-  AddExtensionToConfig(std::string(32, 'a'), absl::make_optional("1.0.0"),
-                       absl::make_optional("a.crx"), &config);
+  base::Value::Dict config;
+  AddExtensionToConfig(std::string(32, 'a'), std::make_optional("1.0.0"),
+                       std::make_optional("a.crx"), config);
   ASSERT_TRUE(SetExtensionsConfig(std::move(config)));
 
   std::unique_ptr<extensions::ExternalProviderImpl> external_provider =
@@ -447,6 +452,7 @@ TEST_F(DemoExtensionsExternalLoaderTest,
 }
 
 TEST_F(DemoExtensionsExternalLoaderTest, LoadApp) {
+  extensions::ExtensionUpdateFoundTestObserver extension_update_found_observer;
   demo_mode_test_helper_->InitializeSession();
 
   // Create a temporary cache directory.
@@ -485,10 +491,7 @@ TEST_F(DemoExtensionsExternalLoaderTest, LoadApp) {
       manifest);
 
   // Wait for the manifest to be parsed.
-  content::WindowedNotificationObserver(
-      extensions::NOTIFICATION_EXTENSION_UPDATE_FOUND,
-      content::NotificationService::AllSources())
-      .Wait();
+  extension_update_found_observer.Wait();
 
   // Verify that the downloader is attempting to download a CRX file.
   task_environment_.RunUntilIdle();
@@ -518,10 +521,7 @@ TEST_F(DemoExtensionsExternalLoaderTest, LoadApp) {
 class ShouldCreateDemoExtensionsExternalLoaderTest : public testing::Test {
  public:
   ShouldCreateDemoExtensionsExternalLoaderTest() {
-    auto fake_user_manager = std::make_unique<FakeChromeUserManager>();
-    user_manager_ = fake_user_manager.get();
-    scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
-        std::move(fake_user_manager));
+    fake_user_manager_.Reset(std::make_unique<ash::FakeChromeUserManager>());
   }
 
   ShouldCreateDemoExtensionsExternalLoaderTest(
@@ -541,8 +541,8 @@ class ShouldCreateDemoExtensionsExternalLoaderTest : public testing::Test {
   std::unique_ptr<TestingProfile> AddTestUser(const AccountId& account_id) {
     auto profile = std::make_unique<TestingProfile>();
     profile->set_profile_name(account_id.GetUserEmail());
-    user_manager_->AddUser(account_id);
-    user_manager_->LoginUser(account_id);
+    fake_user_manager_->AddUser(account_id);
+    fake_user_manager_->LoginUser(account_id);
     return profile;
   }
 
@@ -551,39 +551,42 @@ class ShouldCreateDemoExtensionsExternalLoaderTest : public testing::Test {
     demo_mode_test_helper_->InitializeSession();
   }
 
-  // Owned by scoped_user_manager_.
-  FakeChromeUserManager* user_manager_ = nullptr;
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_;
 
  private:
   content::BrowserTaskEnvironment task_environment_;
-  std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
   std::unique_ptr<DemoModeTestHelper> demo_mode_test_helper_;
 };
 
 TEST_F(ShouldCreateDemoExtensionsExternalLoaderTest, PrimaryDemoProfile) {
-  StartDemoSession(DemoSession::DemoModeConfig::kOnline);
-
   std::unique_ptr<TestingProfile> profile = AddTestUser(
       AccountId::FromUserEmailGaiaId("primary@test.com", "primary_user"));
+  profile->ScopedCrosSettingsTestHelper()->InstallAttributes()->SetDemoMode();
+  StartDemoSession(DemoSession::DemoModeConfig::kOnline);
 
   EXPECT_TRUE(DemoExtensionsExternalLoader::SupportedForProfile(profile.get()));
 }
 
 TEST_F(ShouldCreateDemoExtensionsExternalLoaderTest, ProfileWithNoUser) {
-  StartDemoSession(DemoSession::DemoModeConfig::kOnline);
   TestingProfile profile;
+  profile.ScopedCrosSettingsTestHelper()->InstallAttributes()->SetDemoMode();
+  StartDemoSession(DemoSession::DemoModeConfig::kOnline);
 
   EXPECT_FALSE(DemoExtensionsExternalLoader::SupportedForProfile(&profile));
 }
 
 TEST_F(ShouldCreateDemoExtensionsExternalLoaderTest, MultiProfile) {
-  StartDemoSession(DemoSession::DemoModeConfig::kOnline);
-
   std::unique_ptr<TestingProfile> primary_profile = AddTestUser(
       AccountId::FromUserEmailGaiaId("primary@test.com", "primary_user"));
+  primary_profile->ScopedCrosSettingsTestHelper()
+      ->InstallAttributes()
+      ->SetDemoMode();
 
   std::unique_ptr<TestingProfile> secondary_profile = AddTestUser(
       AccountId::FromUserEmailGaiaId("secondary@test.com", "secondary_user"));
+
+  StartDemoSession(DemoSession::DemoModeConfig::kOnline);
 
   EXPECT_TRUE(
       DemoExtensionsExternalLoader::SupportedForProfile(primary_profile.get()));

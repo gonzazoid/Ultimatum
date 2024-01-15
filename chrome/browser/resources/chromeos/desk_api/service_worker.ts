@@ -8,8 +8,8 @@
  */
 
 import {DeskApiBridgeRequest, DeskApiBridgeResponse, MessageSender, ServiceWorker} from './desk_api_types';
-import {RequestType, ResponseType} from './message_type';
-import {DeskApi, LaunchOptions, NotificationApi, NotificationOptions, RemoveDeskOperands, SwitchDeskOperands, WindowProperties} from './types';
+import {EventType, RequestType, ResponseType} from './message_type';
+import {Desk, DeskApi, GetDeskByIdOperands, LaunchOptions, NotificationApi, NotificationOptions, RemoveDeskOperands, SwitchDeskOperands, WindowProperties} from './types';
 
 
 /**
@@ -52,6 +52,15 @@ class ServiceWorkerImpl implements ServiceWorker {
       return Promise.reject({message: 'The desk can not be found.'});
     }
 
+    if (operands.options) {
+      if (operands.options.allowUndo && operands.options.combineDesks) {
+        return Promise.reject({
+          message:
+              'Unsupported behavior: allowUndo and combineDesks are both true.',
+        });
+      }
+    }
+
     if (operands.skipConfirmation) {
       return this.removeDeskInternalPromise(operands);
     }
@@ -75,32 +84,55 @@ class ServiceWorkerImpl implements ServiceWorker {
             {title: operands.confirmationSetting.rejectMessage},
           ],
         };
+
+    return new Promise<DeskApiBridgeResponse>((resolve, reject) => {
+      // First, check if the desk is able to be obtained.
+      this.getDeskByIdPromise({deskId: operands.deskId})
+          .then(() => {
+            resolve(this.removeDeskNotificationPromise(
+                operands, notificationOptions, notificationId));
+          })
+          .catch(error => {
+            reject(error);
+          });
+    });
+  }
+
+  removeDeskNotificationPromise(
+      operands: RemoveDeskOperands, notificationOptions: NotificationOptions,
+      notificationId: string) {
     return new Promise<DeskApiBridgeResponse>((resolve, reject) => {
       try {
-        // Create a pop up window
-        // Set notificationId so that the same notification needs to be
-        // cancelled before the new notification can be created
+        //  Create a pop up window
+        //  Set notificationId so that the same notification needs to be
+        //  cancelled before the new notification can be created
         this.notificationApi.create(notificationId, notificationOptions, () => {
-          this.notificationApi.addClickEventListener(
-              (notificationId, buttonIndex) => {
-                if (buttonIndex === 0) {
-                  this.removeDeskInternalPromise(operands)
-                      .then((result) => {
-                        resolve(result);
-                      })
-                      .catch(error => {
-                        reject(error);
-                      });
-                } else {
-                  reject(new Error('User cancelled desk removal operation'));
-                }
-                this.notificationApi.clear(notificationId);
-              });
+          resolve(this.removeDeskAddNotificationListenerPromise(operands));
         });
       } catch (error: unknown) {
         this.notificationApi.clear(notificationId);
         reject(error);
       }
+    });
+  }
+
+  removeDeskAddNotificationListenerPromise(operands: RemoveDeskOperands) {
+    return new Promise<DeskApiBridgeResponse>((resolve, reject) => {
+      this.notificationApi.addClickEventListener(
+          (notificationId, buttonIndex) => {
+            if (buttonIndex === 0) {
+              this.removeDeskInternalPromise(operands)
+                  .then((result) => {
+                    resolve(result);
+                  })
+                  .catch(error => {
+                    reject(error);
+                  });
+            } else {
+              reject(new Error('User cancelled desk removal operation'));
+            }
+            this.notificationApi.clear(notificationId);
+          });
     });
   }
 
@@ -177,6 +209,25 @@ class ServiceWorkerImpl implements ServiceWorker {
       }
     });
   }
+
+  getDeskByIdPromise(operands: GetDeskByIdOperands) {
+    return new Promise<DeskApiBridgeResponse>((resolve, reject) => {
+      try {
+        this.deskApi.getDeskById(operands.deskId, (desk: Desk) => {
+          if (!this.isTest && chrome.runtime.lastError) {
+            reject(chrome.runtime.lastError);
+            return;
+          }
+          resolve({
+            messageType: ResponseType.OPERATION_SUCCESS,
+            operands: {'deskUuid': desk.deskUuid, 'deskName': desk.deskName},
+          });
+        });
+      } catch (error: unknown) {
+        reject(error);
+      }
+    });
+  }
   /**
    * This function handles a message and returns a promise containing
    * the result of the operation called for by the RequestType field.
@@ -195,9 +246,33 @@ class ServiceWorkerImpl implements ServiceWorker {
         return this.getActiveDeskPromise();
       case RequestType.SWITCH_DESK:
         return this.switchDeskPromise(message.operands as SwitchDeskOperands);
+      case RequestType.GET_DESK_BY_ID:
+        return this.getDeskByIdPromise(message.operands as GetDeskByIdOperands);
       default:
         throw new Error(`message of unknown type: ${message.messageType}!`);
     }
+  }
+
+  /**
+   * This function register listener for desk events.
+   * @param port port for communicating with web page
+   */
+  //@ts-ignore
+  registerEventsListener(port: chrome.runtime.Port): void {
+    this.deskApi.addDeskAddedListener((id: string, fromUndo = false) => {
+      const eventType = fromUndo ? EventType.DESK_UNDONE : EventType.DESK_ADDED;
+      port.postMessage({'eventName': eventType, 'data': {'deskId': id}});
+    });
+    this.deskApi.addDeskRemovedListener((id: string) => {
+      port.postMessage(
+          {'eventName': EventType.DESK_REMOVED, 'data': {'deskId': id}});
+    });
+    this.deskApi.addDeskSwitchedListener((a: string, d: string) => {
+      port.postMessage({
+        'eventName': EventType.DESK_SWITCHED,
+        'data': {'activated': a, 'deactivated': d},
+      });
+    });
   }
 }
 

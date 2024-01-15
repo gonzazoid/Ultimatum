@@ -3,12 +3,15 @@ include_rules = [
   "+components/content_settings/core/common",
   "+components/cookie_config",
   "+components/domain_reliability",
+  "+components/miracle_parameter",
   "+components/network_session_configurator",
-  "+components/os_crypt",
+  "+components/os_crypt/async",
+  "+components/os_crypt/sync",
   # Prefs are used to create an independent file with a persisted key:value
   # store for networking-related data (Like which servers support QUIC), rather
   # than to store user preferences.
   "+components/prefs",
+  "+components/privacy_sandbox/masked_domain_list",
   "+components/url_matcher",
   "+components/version_info",
   "+components/web_package",
@@ -22,6 +25,7 @@ include_rules = [
   "+services/proxy_resolver_win/public/mojom",
   "+services/service_manager/public",
   "+third_party/boringssl/src/include",
+  "+third_party/boringssl/src/pki",
   "+url",
 ]
 

@@ -13,17 +13,13 @@ import androidx.annotation.VisibleForTesting;
 import org.chromium.base.Log;
 import org.chromium.base.ThreadUtils;
 
-/**
- * VisibleNetworksTracker keeps track of the visible networks.
- */
+/** VisibleNetworksTracker keeps track of the visible networks. */
 class VisibleNetworksTracker {
     private static final String TAG = "VNTracker";
 
-    @VisibleForTesting
-    static final int AGE_THRESHOLD = 5 * 60 * 1000; // 5 min
+    @VisibleForTesting static final int AGE_THRESHOLD = 5 * 60 * 1000; // 5 min
 
-    @Nullable
-    private static VisibleNetworks sVisibleNetworks;
+    @Nullable private static VisibleNetworks sVisibleNetworks;
     private static long sVisibleNetworksTime = Long.MAX_VALUE;
 
     private static boolean sOngoingRefresh;
@@ -36,8 +32,7 @@ class VisibleNetworksTracker {
      * computes the simplest possible visibleNetworks fast, and triggers a background asynchronous
      * refresh. Might return null if visible networks cannot be computed.
      */
-    @Nullable
-    static VisibleNetworks getLastKnownVisibleNetworks(final Context context) {
+    static @Nullable VisibleNetworks getLastKnownVisibleNetworks(final Context context) {
         if (sUseVisibleNetworksForTesting) return sVisibleNetworksForTesting;
 
         if (isValidCachedVisibleNetworks()) return getCachedVisibleNetworks();
@@ -88,7 +83,6 @@ class VisibleNetworksTracker {
         sVisibleNetworksTime = Long.MAX_VALUE;
     }
 
-    @VisibleForTesting
     static void setVisibleNetworksForTesting(VisibleNetworks visibleNetworksForTesting) {
         sVisibleNetworksForTesting = visibleNetworksForTesting;
         sUseVisibleNetworksForTesting = true;
@@ -102,7 +96,8 @@ class VisibleNetworksTracker {
     }
 
     private static boolean isValidCachedVisibleNetworks() {
-        return sVisibleNetworks != null && sVisibleNetworksTime != Long.MAX_VALUE
+        return sVisibleNetworks != null
+                && sVisibleNetworksTime != Long.MAX_VALUE
                 && !sVisibleNetworks.isEmpty()
                 && SystemClock.elapsedRealtime() - sVisibleNetworksTime < AGE_THRESHOLD;
     }

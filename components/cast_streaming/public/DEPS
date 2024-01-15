@@ -1,6 +1,0 @@
-include_rules = [
-  "+media/base",
-  "+third_party/openscreen/src/cast/streaming",
-  "+ui/gfx/geometry",
-  "+url",
-]

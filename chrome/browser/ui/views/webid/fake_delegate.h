@@ -21,13 +21,15 @@ class FakeDelegate : public AccountSelectionView::Delegate {
 
   void OnDismiss(content::IdentityRequestDialogController::DismissReason
                      dismiss_reason) override {}
+  void OnLoginToIdP(const GURL& idp_login_url) override {}
+  void OnMoreDetails() override {}
 
   // AccountSelectionView::Delegate
   gfx::NativeView GetNativeView() override;
   content::WebContents* GetWebContents() override;
 
  private:
-  raw_ptr<content::WebContents, DanglingUntriaged> web_contents_;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> web_contents_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_WEBID_FAKE_DELEGATE_H_

@@ -11,6 +11,7 @@
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
+#include "media/base/media_serializers.h"
 #include "media/formats/hls/items.h"
 #include "media/formats/hls/parse_status.h"
 #include "media/formats/hls/source_string.h"
@@ -92,7 +93,11 @@ OkTestResult<T> OkTest(absl::optional<std::string> content,
                                       SourceString::CreateForTesting(*source))
                     : TagItem::CreateEmpty(ToTagName(T::kName), 1);
   auto result = T::Parse(tag, variable_dict, sub_buffer);
-  CHECK(result.has_value()) << from.ToString();
+  if (!result.has_value()) {
+    CHECK(false) << from.ToString() << "\n"
+                 << MediaSerialize(std::move(result).error());
+    NOTREACHED_NORETURN();
+  }
   return OkTestResult<T>{.tag = std::move(result).value(),
                          .source = std::move(source)};
 }
@@ -179,6 +184,7 @@ VariableDictionary CreateBasicDictionary(
   EXPECT_TRUE(dict.Insert(CreateVarName("FOO"), "bar")) << from.ToString();
   EXPECT_TRUE(dict.Insert(CreateVarName("BAR"), "baz")) << from.ToString();
   EXPECT_TRUE(dict.Insert(CreateVarName("EMPTY"), "")) << from.ToString();
+  EXPECT_TRUE(dict.Insert(CreateVarName("BAZ"), "foo")) << from.ToString();
 
   return dict;
 }
@@ -1197,7 +1203,28 @@ TEST(HlsTagsTest, ParseXStreamInfTag) {
   EXPECT_EQ(result.tag.codecs, absl::nullopt);
   EXPECT_EQ(result.tag.resolution, absl::nullopt);
   ASSERT_TRUE(result.tag.audio.has_value());
+  ASSERT_FALSE(result.tag.video.has_value());
   EXPECT_EQ(result.tag.audio->Str(), "barbaz");
+
+  // "VIDEO" must be a valid quoted-string
+  ErrorTest<XStreamInfTag>(R"(BANDWIDTH=1010,VIDEO=1)", variable_dict,
+                           sub_buffer, ParseStatusCode::kMalformedTag);
+  ErrorTest<XStreamInfTag>(R"(BANDWIDTH=1010,VIDEO="")", variable_dict,
+                           sub_buffer, ParseStatusCode::kMalformedTag);
+  ErrorTest<XStreamInfTag>(R"(BANDWIDTH=1010,VIDEO=stereo)", variable_dict,
+                           sub_buffer, ParseStatusCode::kMalformedTag);
+
+  // "VIDEO" is subject to variable substitution
+  result = OkTest<XStreamInfTag>(R"(BANDWIDTH=1010,VIDEO="{$BAZ}{$FOO}")",
+                                 variable_dict, sub_buffer);
+  EXPECT_EQ(result.tag.bandwidth, 1010u);
+  EXPECT_EQ(result.tag.average_bandwidth, absl::nullopt);
+  EXPECT_EQ(result.tag.score, absl::nullopt);
+  EXPECT_EQ(result.tag.codecs, absl::nullopt);
+  EXPECT_EQ(result.tag.resolution, absl::nullopt);
+  ASSERT_TRUE(result.tag.video.has_value());
+  ASSERT_FALSE(result.tag.audio.has_value());
+  EXPECT_EQ(result.tag.video->Str(), "foobar");
 }
 
 TEST(HlsTagsTest, ParseInfTag) {
@@ -1226,12 +1253,18 @@ TEST(HlsTagsTest, ParseInfTag) {
   EXPECT_TRUE(RoughlyEqual(result.tag.duration, base::Seconds(12.0)));
   EXPECT_EQ(result.tag.title.Str(), "asdfsdf   ");
 
+  // By Spec, this should be an error, but alas, feral manifests exists and
+  // often lack the trailing comma emblematic of their domesticated brethren.
+  // ErrorTest<InfTag>("123", ParseStatusCode::kMalformedTag);
+  result = OkTest<InfTag>("123");
+  EXPECT_TRUE(RoughlyEqual(result.tag.duration, base::Seconds(123)));
+  EXPECT_EQ(result.tag.title.Str(), "");
+
   // Test some invalid tags
   ErrorTest<InfTag>(absl::nullopt, ParseStatusCode::kMalformedTag);
   ErrorTest<InfTag>("", ParseStatusCode::kMalformedTag);
   ErrorTest<InfTag>(",", ParseStatusCode::kMalformedTag);
   ErrorTest<InfTag>("-123,", ParseStatusCode::kMalformedTag);
-  ErrorTest<InfTag>("123", ParseStatusCode::kMalformedTag);
   ErrorTest<InfTag>("asdf,", ParseStatusCode::kMalformedTag);
 
   // Test max value
@@ -1703,10 +1736,47 @@ TEST(HlsTagsTest, ParseXServerControlTag) {
 }
 
 TEST(HlsTagsTest, ParseXSkipTag) {
-  RunTagIdenficationTest(ToTagName(MediaPlaylistTagName::kXSkip),
-                         "#EXT-X-SKIP:SKIPPED-SEGMENTS=10\n",
-                         "SKIPPED-SEGMENTS=10");
-  // TODO(crbug.com/1266991): Implement the EXT-X-SKIP tag.
+  RunTagIdenficationTest<XSkipTag>("#EXT-X-SKIP:SKIPPED-SEGMENTS=10\n",
+                                   "SKIPPED-SEGMENTS=10");
+
+  VariableDictionary variable_dict = CreateBasicDictionary();
+  VariableDictionary::SubstitutionBuffer sub_buffer;
+
+  ErrorTest<XSkipTag>(absl::nullopt, variable_dict, sub_buffer,
+                      ParseStatusCode::kMalformedTag);
+  ErrorTest<XSkipTag>("-1", variable_dict, sub_buffer,
+                      ParseStatusCode::kMalformedTag);
+  ErrorTest<XSkipTag>("UNKNOWN=10", variable_dict, sub_buffer,
+                      ParseStatusCode::kMalformedTag);
+  ErrorTest<XSkipTag>("SKIPPED-SEGMENTS=f", variable_dict, sub_buffer,
+                      ParseStatusCode::kMalformedTag);
+  ErrorTest<XSkipTag>("RECENTLY-REMOVED-DATERANGES=\"\"", variable_dict,
+                      sub_buffer, ParseStatusCode::kMalformedTag);
+  ErrorTest<XSkipTag>("SKIPPED-SEGMENTS=1,RECENTLY-REMOVED-DATERANGES=hello",
+                      variable_dict, sub_buffer,
+                      ParseStatusCode::kMalformedTag);
+  ErrorTest<XSkipTag>("SKIPPED-SEGMENTS=1,RECENTLY-REMOVED-DATERANGES=\"\t\"",
+                      variable_dict, sub_buffer,
+                      ParseStatusCode::kMalformedTag);
+
+  auto result =
+      OkTest<XSkipTag>("SKIPPED-SEGMENTS=10", variable_dict, sub_buffer);
+  EXPECT_EQ(result.tag.skipped_segments, 10u);
+  EXPECT_EQ(result.tag.recently_removed_dateranges, std::nullopt);
+
+  auto with_empty_ranges =
+      OkTest<XSkipTag>("SKIPPED-SEGMENTS=10,RECENTLY-REMOVED-DATERANGES=\"\"",
+                       variable_dict, sub_buffer);
+  EXPECT_EQ(with_empty_ranges.tag.skipped_segments, 10u);
+  EXPECT_TRUE(with_empty_ranges.tag.recently_removed_dateranges.has_value());
+  EXPECT_EQ(with_empty_ranges.tag.recently_removed_dateranges->size(), 0u);
+
+  auto with_some_ranges = OkTest<XSkipTag>(
+      "SKIPPED-SEGMENTS=10,RECENTLY-REMOVED-DATERANGES=\"F\tT\"", variable_dict,
+      sub_buffer);
+  EXPECT_EQ(with_some_ranges.tag.skipped_segments, 10u);
+  EXPECT_TRUE(with_some_ranges.tag.recently_removed_dateranges.has_value());
+  EXPECT_EQ(with_some_ranges.tag.recently_removed_dateranges->size(), 2u);
 }
 
 TEST(HlsTagsTest, ParseXTargetDurationTag) {

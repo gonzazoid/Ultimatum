@@ -9,15 +9,15 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/observer_list_types.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
-#include "chrome/browser/platform_keys/extension_key_permissions_service.h"
+#include "chrome/browser/chromeos/platform_keys/extension_key_permissions_service.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 #include "components/policy/core/common/policy_namespace.h"
 #include "components/policy/core/common/policy_service.h"
 #include "components/policy/policy_constants.h"
@@ -226,7 +226,7 @@ void SystemTokenArcKpmDelegate::SetPrimaryUserArcKpmDelegate(
 
   primary_user_arc_usage_manager_ = primary_user_arc_usage_manager;
   primary_user_arc_usage_manager_delegate_observation_.Observe(
-      primary_user_arc_usage_manager_);
+      primary_user_arc_usage_manager_.get());
   OnArcUsageAllowanceForCorporateKeysChanged(
       primary_user_arc_usage_manager_->AreCorporateKeysAllowedForArcUsage());
 }
@@ -237,7 +237,7 @@ void SystemTokenArcKpmDelegate::ClearPrimaryUserArcKpmDelegate() {
   }
 
   DCHECK(primary_user_arc_usage_manager_delegate_observation_.IsObservingSource(
-      primary_user_arc_usage_manager_));
+      primary_user_arc_usage_manager_.get()));
   primary_user_arc_usage_manager_delegate_observation_.Reset();
   primary_user_arc_usage_manager_ = nullptr;
   OnArcUsageAllowanceForCorporateKeysChanged(false);

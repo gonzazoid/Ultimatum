@@ -81,34 +81,45 @@ bool ShouldPermissionBubbleExpand(
 }  // namespace
 
 PermissionPromptChipModel::PermissionPromptChipModel(
-    permissions::PermissionPrompt::Delegate* delegate)
+    base::WeakPtr<permissions::PermissionPrompt::Delegate> delegate)
     : delegate_(delegate),
-      allowed_icon_(GetPermissionIconId(delegate)),
-      blocked_icon_(GetBlockedPermissionIconId(delegate)) {
+      allowed_icon_(GetPermissionIconId(delegate.get())),
+      blocked_icon_(GetBlockedPermissionIconId(delegate.get())) {
   DCHECK(delegate_);
 
-  if (delegate_.value()->ShouldCurrentRequestUseQuietUI()) {
+  if (delegate_->ShouldCurrentRequestUseQuietUI()) {
     prompt_style_ = PermissionPromptStyle::kQuietChip;
     should_bubble_start_open_ = false;
+    should_display_blocked_icon_ = true;
     should_expand_ =
-        ShouldPermissionBubbleExpand(delegate_.value(), prompt_style_) &&
+        ShouldPermissionBubbleExpand(delegate_.get(), prompt_style_) &&
         (should_bubble_start_open_ ||
-         (!delegate_.value()->WasCurrentRequestAlreadyDisplayed()));
+         (!delegate_->WasCurrentRequestAlreadyDisplayed()));
 
-    chip_text_ = GetQuietPermissionMessage(delegate_.value());
+    chip_text_ = GetQuietPermissionMessage(delegate_.get());
     chip_theme_ = OmniboxChipTheme::kLowVisibility;
   } else {
     prompt_style_ = PermissionPromptStyle::kChip;
     should_bubble_start_open_ = true;
-
+    should_display_blocked_icon_ = false;
     should_expand_ = true;
 
-    chip_text_ = GetLoudPermissionMessage(delegate_.value());
+    chip_text_ = GetLoudPermissionMessage(delegate_.get());
     chip_theme_ = OmniboxChipTheme::kNormalVisibility;
   }
   accessibility_chip_text_ = l10n_util::GetStringUTF16(
       IDS_PERMISSIONS_REQUESTED_SCREENREADER_ANNOUNCEMENT);
+
+  if (delegate->Requests().size() > 1) {
+    // Multiple requests allowed for `MEDIASTREAM_CAMERA` and `MEDIASTREAM_MIC`.
+    // In that case we show only a camera indicator.
+    content_settings_type_ = ContentSettingsType::MEDIASTREAM_CAMERA;
+  } else {
+    content_settings_type_ = delegate->Requests()[0]->GetContentSettingsType();
+  }
 }
+
+PermissionPromptChipModel::~PermissionPromptChipModel() = default;
 
 void PermissionPromptChipModel::UpdateAutoCollapsePromptChipState(
     bool is_collapsed) {
@@ -117,67 +128,64 @@ void PermissionPromptChipModel::UpdateAutoCollapsePromptChipState(
 }
 
 bool PermissionPromptChipModel::IsExpandAnimationAllowed() {
-  return ShouldExpand() &&
-         (ShouldBubbleStartOpen() || !WasRequestAlreadyDisplayed());
+  return ShouldExpand() && (ShouldBubbleStartOpen() ||
+                            !delegate_->WasCurrentRequestAlreadyDisplayed());
 }
 
 void PermissionPromptChipModel::UpdateWithUserDecision(
     permissions::PermissionAction user_decision) {
-  DCHECK(delegate_.has_value());
-  absl::optional<std::u16string> chip_text_opt;
-  absl::optional<std::u16string> accessibility_chip_text_opt;
+  permissions::PermissionRequest::ChipTextType chip_text_type;
+  permissions::PermissionRequest::ChipTextType accessibility_text_type;
+  user_decision_ = user_decision;
 
-  switch (user_decision) {
+  int cam_mic_combo_accessibility_text_id;
+  switch (user_decision_) {
     case permissions::PermissionAction::GRANTED:
+      should_display_blocked_icon_ = false;
+      chip_theme_ = OmniboxChipTheme::kNormalVisibility;
+      chip_text_type =
+          permissions::PermissionRequest::ChipTextType::ALLOW_CONFIRMATION;
+      accessibility_text_type = permissions::PermissionRequest::ChipTextType::
+          ACCESSIBILITY_ALLOWED_CONFIRMATION;
+      cam_mic_combo_accessibility_text_id =
+          IDS_PERMISSIONS_CAMERA_AND_MICROPHONE_ALLOWED_CONFIRMATION_SCREENREADER_ANNOUNCEMENT;
+      break;
     case permissions::PermissionAction::GRANTED_ONCE:
       should_display_blocked_icon_ = false;
       chip_theme_ = OmniboxChipTheme::kNormalVisibility;
-      chip_text_ =
-          delegate_.value()
-              ->Requests()[0]
-              ->GetRequestChipText(permissions::PermissionRequest::
-                                       ChipTextType::ALLOW_CONFIRMATION)
-              .value_or(u"");
-      if (delegate_.value()->Requests().size() == 1) {
-        accessibility_chip_text_ =
-            delegate_.value()
-                ->Requests()[0]
-                ->GetRequestChipText(
-                    permissions::PermissionRequest::ChipTextType::
-                        ACCESSIBILITY_ALLOWED_CONFIRMATION)
-                .value_or(u"");
-      } else {
-        accessibility_chip_text_ = l10n_util::GetStringUTF16(
-            IDS_PERMISSIONS_CAMERA_AND_MICROPHONE_ALLOWED_CONFIRMATION_SCREENREADER_ANNOUNCEMENT);
-      }
+      chip_text_type =
+          permissions::PermissionRequest::ChipTextType::ALLOW_ONCE_CONFIRMATION;
+      accessibility_text_type = permissions::PermissionRequest::ChipTextType::
+          ACCESSIBILITY_ALLOWED_ONCE_CONFIRMATION;
+      cam_mic_combo_accessibility_text_id =
+          IDS_PERMISSIONS_CAMERA_AND_MICROPHONE_ALLOWED_ONCE_CONFIRMATION_SCREENREADER_ANNOUNCEMENT;
       break;
     case permissions::PermissionAction::DENIED:
     case permissions::PermissionAction::DISMISSED:
     case permissions::PermissionAction::IGNORED:
     case permissions::PermissionAction::REVOKED:
       should_display_blocked_icon_ = true;
-      chip_text_ =
-          delegate_.value()
-              ->Requests()[0]
-              ->GetRequestChipText(permissions::PermissionRequest::
-                                       ChipTextType::BLOCKED_CONFIRMATION)
-              .value_or(u"");
-      if (delegate_.value()->Requests().size() == 1) {
-        accessibility_chip_text_ =
-            delegate_.value()
-                ->Requests()[0]
-                ->GetRequestChipText(
-                    permissions::PermissionRequest::ChipTextType::
-                        ACCESSIBILITY_BLOCKED_CONFIRMATION)
-                .value_or(u"");
-      } else {
-        accessibility_chip_text_ = l10n_util::GetStringUTF16(
-            IDS_PERMISSIONS_CAMERA_AND_MICROPHONE_NOT_ALLOWED_CONFIRMATION_SCREENREADER_ANNOUNCEMENT);
-      }
       chip_theme_ = OmniboxChipTheme::kLowVisibility;
+      chip_text_type =
+          permissions::PermissionRequest::ChipTextType::BLOCKED_CONFIRMATION;
+      accessibility_text_type = permissions::PermissionRequest::ChipTextType::
+          ACCESSIBILITY_BLOCKED_CONFIRMATION;
+      cam_mic_combo_accessibility_text_id =
+          IDS_PERMISSIONS_CAMERA_AND_MICROPHONE_NOT_ALLOWED_CONFIRMATION_SCREENREADER_ANNOUNCEMENT;
       break;
     case permissions::PermissionAction::NUM:
-      NOTREACHED();
-      break;
+      NOTREACHED_NORETURN();
+  }
+
+  chip_text_ = delegate_->Requests()[0]
+                   ->GetRequestChipText(chip_text_type)
+                   .value_or(u"");
+  if (delegate_->Requests().size() == 1) {
+    accessibility_chip_text_ = delegate_->Requests()[0]
+                                   ->GetRequestChipText(accessibility_text_type)
+                                   .value_or(u"");
+  } else {
+    accessibility_chip_text_ =
+        l10n_util::GetStringUTF16(cam_mic_combo_accessibility_text_id);
   }
 }

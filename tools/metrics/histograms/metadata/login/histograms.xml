@@ -37,18 +37,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Login.ArcBugReportBackupTime" units="ms"
-    expires_after="2022-12-25">
-  <owner>mhasank@google.com</owner>
-  <owner>arc-core@google.com</owner>
-  <summary>
-    Tracks the time to back up ARC bug reports when starting ARC fails. This is
-    emitted when we upgrade the ARC container from mini to full.
-  </summary>
-</histogram>
-
 <histogram name="Login.ArcContinueBootImpulseStatus"
-    enum="ArcContinueBootImpulseStatus" expires_after="2023-04-16">
+    enum="ArcContinueBootImpulseStatus" expires_after="2024-02-25">
   <owner>vsomani@google.com</owner>
   <owner>arc-core@google.com</owner>
   <summary>
@@ -57,35 +47,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Login.ArcContinueBootImpulseTime" units="ms"
-    expires_after="2022-03-30">
-  <obsolete>
-    Removed 2022/02, replaced with ArcContinueBootImpulseTime2.
-  </obsolete>
-  <owner>mhasank@google.com</owner>
-  <owner>arc-core@google.com</owner>
-  <summary>
-    Tracks the time to execute arc-boot-continue impulse. This is emitted when
-    we successfully upgrade the ARC container from mini to full.
-  </summary>
-</histogram>
-
-<histogram name="Login.ArcContinueBootImpulseTime2" units="ms"
-    expires_after="2023-02-12">
-  <obsolete>
-    Removed 2022/09, replaced with ArcContinueBootImpulseTime3.
-  </obsolete>
-  <owner>mhasank@google.com</owner>
-  <owner>arc-core@google.com</owner>
-  <summary>
-    Tracks the time to execute arc-boot-continue impulse. This is emitted when
-    we successfully upgrade the ARC container from mini to full. This metrics
-    increases the number of buckets to 50 and a maximum duration of 60 seconds.
-  </summary>
-</histogram>
-
 <histogram name="Login.ArcContinueBootImpulseTime3" units="ms"
-    expires_after="2023-09-12">
+    expires_after="2024-03-17">
   <owner>mhasank@google.com</owner>
   <owner>arc-core@google.com</owner>
   <summary>
@@ -96,7 +59,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Login.BrowserShutdownTime" units="ms"
-    expires_after="2023-04-23">
+    expires_after="2024-05-19">
   <owner>xiyuan@chromium.org</owner>
   <owner>cros-oac@google.com</owner>
   <summary>
@@ -106,14 +69,26 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Login.ConsumerNewUsersAllowed" enum="LoginConsumerWhitelist"
-    expires_after="M77">
-  <owner>cmasone@chromium.org</owner>
-  <owner>sumit@chromium.org</owner>
+<histogram name="Login.CryptohomeRecoveryDuration.{Result}" units="ms"
+    expires_after="2024-06-30">
+  <owner>yunkez@google.com</owner>
+  <owner>cros-lurs@google.com</owner>
   <summary>
-    Chrome OS histogram tracking, per consumer sign-in, whether the device owner
-    is allowing arbitrary accounts to be used on the device, or only those on a
-    specific whitelist.
+    Records the time taken for the Cryptohome recovery when it {Result}.
+  </summary>
+  <token key="Result">
+    <variant name="Failure" summary="failed"/>
+    <variant name="Success" summary="succeeded"/>
+  </token>
+</histogram>
+
+<histogram name="Login.CryptohomeRecoveryResult"
+    enum="CryptohomeRecoveryResult" expires_after="2024-06-30">
+  <owner>yunkez@google.com</owner>
+  <owner>cros-lurs@google.com</owner>
+  <summary>
+    Tracks the result of the cryptohome recovery and the failure reason.
+    Recorded when the recovery attempt finished.
   </summary>
 </histogram>
 
@@ -131,8 +106,19 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="Login.DevicePolicyState" enum="DevicePoliciesState"
+    expires_after="2024-06-09">
+  <owner>igorcov@chromium.org</owner>
+  <owner>chromeos-commercial-remote-management@chromium.org</owner>
+  <summary>
+    Reports the device ownership, the state of the device policy and the state
+    of the owner key. Logged only for the devices that have ownership taken as
+    per install attributes. Is logged at every device policy load.
+  </summary>
+</histogram>
+
 <histogram name="Login.FailureReason" enum="LoginFailureReason"
-    expires_after="2023-04-05">
+    expires_after="2024-06-30">
   <owner>achuith@chromium.org</owner>
   <owner>antrim@chromium.org</owner>
   <owner>cros-lurs@google.com</owner>
@@ -140,8 +126,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Login.Flow.{UserVisibility}.{UserCount}"
-    enum="LoginFlowUserLoginType" expires_after="2022-12-15">
-  <owner>sherrilin@google.com</owner>
+    enum="LoginFlowUserLoginType" expires_after="2024-06-30">
+  <owner>anastasiian@chromium.org</owner>
   <owner>cros-lurs@google.com</owner>
   <summary>
     Report the type of user login and the number of it on a device. It is
@@ -161,7 +147,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Login.InvalidCombinationsOfAllowedUsersPolicies"
-    enum="AllowedUsersPoliciesInvalidState" expires_after="2023-04-17">
+    enum="AllowedUsersPoliciesInvalidState" expires_after="2024-02-25">
   <owner>emaamari@google.com</owner>
   <owner>src/chromeos/ash/components/policy/OWNERS</owner>
   <summary>
@@ -171,15 +157,17 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Login.LeastUsedAccountDays" units="days" expires_after="M77">
-  <obsolete>
-    Removed in M103.
-  </obsolete>
-  <owner>achuith@chromium.org</owner>
-  <owner>omrilio@chromium.org</owner>
+<histogram name="Login.IsTokenHandleInSyncWithRefreshToken" enum="Boolean"
+    expires_after="2024-01-31">
+  <owner>sinhak@chromium.org</owner>
+  <owner>cros-lurs@google.com</owner>
   <summary>
-    Chrome OS histogram that keeps track of the days since the least frequently
-    used account signed in. Reported on every boot and once a day after that.
+    Boolean histogram that indicates if token handle is in sync with the user's
+    current refresh token - i.e. if token handle checks are performed for token
+    handles that actually belong to the user's current refresh token. If this is
+    not the case, it can result in users getting unnecessary logout
+    notifications. This histogram is logged once at the start of a user's
+    session.
   </summary>
 </histogram>
 
@@ -199,7 +187,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Login.NumberOfUsersOnLoginScreen" units="units"
-    expires_after="2023-04-16">
+    expires_after="2024-06-30">
   <owner>mslus@chromium.org</owner>
   <owner>chromeos-commercial-identity@google.com</owner>
   <summary>
@@ -210,7 +198,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Login.OfflineLoginWithHiddenUserPods"
-    enum="ChromeOSHiddenUserPodsOfflineLogin" expires_after="2023-02-19">
+    enum="ChromeOSHiddenUserPodsOfflineLogin" expires_after="2023-12-24">
   <owner>mslus@chromium.org</owner>
   <owner>chromeos-commercial-identity@google.com</owner>
   <summary>
@@ -218,30 +206,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Login.OfflineSuccess.Attempts" units="units"
-    expires_after="2023-04-05">
-  <obsolete>
-    Removed 03/2022
-  </obsolete>
-  <owner>antrim@chromium.org</owner>
-  <owner>cros-lurs@google.com</owner>
-  <summary>
-    On offline login success, records number of attempts, including success.
-  </summary>
-</histogram>
-
-<histogram name="Login.PageLoad.DetectionType" enum="LoginDetectionType"
-    expires_after="2022-11-30">
-  <owner>rajendrant@chromium.org</owner>
-  <owner>mcrouse@chromium.org</owner>
-  <summary>
-    Type of login detected for a page load based on different heuristics.
-    Recorded once per page load.
-  </summary>
-</histogram>
-
 <histogram name="Login.PasswordChanged.ReauthReason" enum="LoginReauthReasons"
-    expires_after="2023-04-05">
+    expires_after="2024-06-30">
   <owner>antrim@chromium.org</owner>
   <owner>cros-lurs@google.com</owner>
   <summary>
@@ -251,7 +217,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Login.PasswordNotChanged.ReauthReason"
-    enum="LoginReauthReasons" expires_after="2023-04-05">
+    enum="LoginReauthReasons" expires_after="2024-06-30">
   <owner>antrim@chromium.org</owner>
   <owner>cros-lurs@google.com</owner>
   <summary>
@@ -272,14 +238,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Login.PolicyFilesStatePerBoot" enum="LoginPolicyFilesState"
-    expires_after="M100">
-  <owner>mpolzer@google.com</owner>
-  <summary>The state of Chrome OS owner key and device policy files.</summary>
-</histogram>
-
 <histogram name="Login.PromptToCompleteLoginTime" units="ms"
-    expires_after="2023-04-05">
+    expires_after="2024-06-30">
   <owner>antrim@chromium.org</owner>
   <owner>achuith@chromium.org</owner>
   <owner>cros-lurs@google.com</owner>
@@ -289,9 +249,8 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Login.PromptToLoginTime" units="ms" expires_after="2023-04-05">
-  <owner>elijahtaylor@google.com</owner>
-  <owner>yusukes@chromium.org</owner>
+<histogram name="Login.PromptToLoginTime" units="ms" expires_after="2024-06-30">
+  <owner>khmel@chromium.org</owner>
   <owner>antrim@chromium.org</owner>
   <owner>cros-lurs@google.com</owner>
   <summary>
@@ -301,7 +260,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Login.ReauthToken.FetchDuration.{Result}" units="ms"
-    expires_after="2023-08-18">
+    expires_after="2024-06-30">
   <owner>yunkez@google.com</owner>
   <owner>cros-lurs@google.com</owner>
   <summary>
@@ -319,7 +278,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Login.SessionExitType" enum="LoginSessionExitType"
-    expires_after="2023-03-19">
+    expires_after="2024-06-30">
   <owner>iby@chromium.org</owner>
   <summary>
     Tracks whether a ChromeOS user was logged out because Chrome repeatedly
@@ -328,13 +287,24 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Login.StateKeyGenerationStatus"
-    enum="LoginStateKeyGenerationStatus" expires_after="M77">
-  <owner>mnissler@chromium.org</owner>
-  <summary>Result of a state key generation operation.</summary>
+    enum="LoginStateKeyGenerationStatus" expires_after="2024-06-01">
+  <owner>sergiyb@chromium.org</owner>
+  <owner>chromeos-commercial-remote-management@chromium.org</owner>
+  <summary>
+    Result of a state key generation operation.
+
+    Warning: this histogram was expired from 2019-10-29 (M78) to 2023-02-09
+    (M110); data may be missing.
+
+    Starting in 2023-08-22 (M116), the value MISSING_IDENTIFIERS is no longer
+    reported. Instead we report MISSING_MACHINE_SERIAL_NUMBER or
+    MISSING_DISK_SERIAL_NUMBER when only one of the identifiers is missing, or
+    MISSING_ALL_IDENTIFIERS when all are missing.
+  </summary>
 </histogram>
 
 <histogram name="Login.SuccessReason" enum="LoginSuccessReason"
-    expires_after="2023-04-05">
+    expires_after="2024-06-30">
   <owner>achuith@chromium.org</owner>
   <owner>antrim@chromium.org</owner>
   <owner>cros-lurs@google.com</owner>
@@ -355,7 +325,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Login.TokenCheckResponseTime" units="ms"
-    expires_after="2023-04-05">
+    expires_after="2024-05-19">
   <owner>antrim@chromium.org</owner>
   <owner>cros-lurs@google.com</owner>
   <summary>
@@ -365,76 +335,15 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Login.TokenObtainResponseTime" units="ms"
-    expires_after="2021-04-01">
-  <owner>raleksandrov@google.com</owner>
+    expires_after="2024-12-01">
   <owner>antrim@chromium.org</owner>
-  <owner>rsorokin@chromium.org</owner>
-  <owner>cros-oac@google.com</owner>
+  <owner>cros-lurs@google.com</owner>
   <summary>
     Time between sending a request to, and receiving a reply from, GAIA token
     endpoint to obtain TokenInfo.
-  </summary>
-</histogram>
 
-<histogram name="Login.UsersActive28Days" units="users"
-    expires_after="2022-04-10">
-  <obsolete>
-    Removed in M103.
-  </obsolete>
-  <owner>alemate@chromium.org</owner>
-  <owner>achuith@chromium.org</owner>
-  <summary>
-    Chrome OS histogram that keeps track of number of users who have logged in
-    in the last 28 days. Reported on every boot and once a day after that.
-  </summary>
-</histogram>
-
-<histogram name="Login.UsersActiveDaily" units="users"
-    expires_after="2022-04-03">
-  <obsolete>
-    Removed in M103.
-  </obsolete>
-  <owner>alemate@chromium.org</owner>
-  <owner>achuith@chromium.org</owner>
-  <summary>
-    Chrome OS histogram that keeps track of number of users who have logged in
-    in the last day. Reported on every boot and once a day after that.
-  </summary>
-</histogram>
-
-<histogram name="Login.UsersActiveWeekly" units="users"
-    expires_after="2022-04-24">
-  <obsolete>
-    Removed in M103.
-  </obsolete>
-  <owner>alemate@chromium.org</owner>
-  <owner>achuith@chromium.org</owner>
-  <summary>
-    Chrome OS histogram that keeps track of number of users who have logged in
-    in the last 7 days. Reported on every boot and once a day after that.
-  </summary>
-</histogram>
-
-<histogram name="Login.UsersActiveWeekly.Percent" units="%"
-    expires_after="2020-12-01">
-  <obsolete>
-    Removed in M103.
-  </obsolete>
-  <owner>alemate@chromium.org</owner>
-  <owner>achuith@chromium.org</owner>
-  <summary>
-    Chrome OS histogram that keeps track of percentage of local users who have
-    logged in in the last 7 days. Reported on every boot and once a day after
-    that.
-  </summary>
-</histogram>
-
-<histogram name="Login.UserType" enum="LoginUserType"
-    expires_after="2022-04-17">
-  <owner>cmasone@chromium.org</owner>
-  <summary>
-    Chrome OS histogram that keeps track of the way a user logs in and whether
-    Chrome OS is running normal or developer mode.
+    Warning: this histogram was expired from 2021-04-01 to 2023-12-05, data may
+    be missing.
   </summary>
 </histogram>
 

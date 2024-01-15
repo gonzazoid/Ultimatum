@@ -7,9 +7,11 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "base/mac/foundation_util.h"
-#include "base/mac/scoped_nsobject.h"
+#include "base/apple/bridging.h"
+#include "base/apple/foundation_util.h"
+#include "base/containers/contains.h"
 #include "base/strings/sys_string_conversions.h"
+#import "base/task/sequenced_task_runner.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "device/gamepad/gamepad_blocklist.h"
@@ -33,8 +35,8 @@ const uint16_t kMultiAxisUsageNumber = 0x08;
 
 NSDictionary* DeviceMatching(uint32_t usage_page, uint32_t usage) {
   return @{
-    base::mac::CFToNSCast(CFSTR(kIOHIDDeviceUsagePageKey)) : @(usage_page),
-    base::mac::CFToNSCast(CFSTR(kIOHIDDeviceUsageKey)) : @(usage)
+    @kIOHIDDeviceUsagePageKey : @(usage_page),
+    @kIOHIDDeviceUsageKey : @(usage)
   };
 }
 
@@ -49,47 +51,45 @@ GamepadSource GamepadPlatformDataFetcherMac::source() {
 void GamepadPlatformDataFetcherMac::OnAddedToProvider() {
   hid_manager_ref_.reset(
       IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone));
-  if (CFGetTypeID(hid_manager_ref_) != IOHIDManagerGetTypeID()) {
+  if (CFGetTypeID(hid_manager_ref_.get()) != IOHIDManagerGetTypeID()) {
     enabled_ = false;
     return;
   }
 
-  base::scoped_nsobject<NSArray> criteria(
-      [[NSArray alloc] initWithObjects:DeviceMatching(kGenericDesktopUsagePage,
-                                                      kJoystickUsageNumber),
-                                       DeviceMatching(kGenericDesktopUsagePage,
-                                                      kGameUsageNumber),
-                                       DeviceMatching(kGenericDesktopUsagePage,
-                                                      kMultiAxisUsageNumber),
-                                       nil]);
-  IOHIDManagerSetDeviceMatchingMultiple(hid_manager_ref_,
-                                        base::mac::NSToCFCast(criteria));
+  NSArray* criteria = @[
+    DeviceMatching(kGenericDesktopUsagePage, kJoystickUsageNumber),
+    DeviceMatching(kGenericDesktopUsagePage, kGameUsageNumber),
+    DeviceMatching(kGenericDesktopUsagePage, kMultiAxisUsageNumber),
+  ];
+  IOHIDManagerSetDeviceMatchingMultiple(hid_manager_ref_.get(),
+                                        base::apple::NSToCFPtrCast(criteria));
 
   RegisterForNotifications();
 }
 
 void GamepadPlatformDataFetcherMac::RegisterForNotifications() {
   // Register for plug/unplug notifications.
-  IOHIDManagerRegisterDeviceMatchingCallback(hid_manager_ref_,
+  IOHIDManagerRegisterDeviceMatchingCallback(hid_manager_ref_.get(),
                                              DeviceAddCallback, this);
-  IOHIDManagerRegisterDeviceRemovalCallback(hid_manager_ref_,
+  IOHIDManagerRegisterDeviceRemovalCallback(hid_manager_ref_.get(),
                                             DeviceRemoveCallback, this);
 
   // Register for value change notifications.
-  IOHIDManagerRegisterInputValueCallback(hid_manager_ref_, ValueChangedCallback,
-                                         this);
+  IOHIDManagerRegisterInputValueCallback(hid_manager_ref_.get(),
+                                         ValueChangedCallback, this);
 
-  IOHIDManagerScheduleWithRunLoop(hid_manager_ref_, CFRunLoopGetCurrent(),
+  IOHIDManagerScheduleWithRunLoop(hid_manager_ref_.get(), CFRunLoopGetCurrent(),
                                   kCFRunLoopDefaultMode);
 
-  const auto result = IOHIDManagerOpen(hid_manager_ref_, kIOHIDOptionsTypeNone);
+  const auto result =
+      IOHIDManagerOpen(hid_manager_ref_.get(), kIOHIDOptionsTypeNone);
   enabled_ = (result == kIOReturnSuccess || result == kIOReturnExclusiveAccess);
 }
 
 void GamepadPlatformDataFetcherMac::UnregisterFromNotifications() {
-  IOHIDManagerUnscheduleFromRunLoop(hid_manager_ref_, CFRunLoopGetCurrent(),
-                                    kCFRunLoopDefaultMode);
-  IOHIDManagerClose(hid_manager_ref_, kIOHIDOptionsTypeNone);
+  IOHIDManagerUnscheduleFromRunLoop(
+      hid_manager_ref_.get(), CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
+  IOHIDManagerClose(hid_manager_ref_.get(), kIOHIDOptionsTypeNone);
 }
 
 void GamepadPlatformDataFetcherMac::PauseHint(bool pause) {
@@ -141,27 +141,28 @@ GamepadDeviceMac* GamepadPlatformDataFetcherMac::GetGamepadFromHidDevice(
 }
 
 void GamepadPlatformDataFetcherMac::DeviceAdd(IOHIDDeviceRef device) {
-  using base::mac::CFToNSCast;
-  using base::mac::CFCastStrict;
+  using base::apple::CFCastStrict;
+  using base::apple::CFToNSPtrCast;
 
-  if (!enabled_)
+  if (!enabled_) {
     return;
+  }
 
-  NSNumber* location_id = CFToNSCast(CFCastStrict<CFNumberRef>(
+  NSNumber* location_id = CFToNSPtrCast(CFCastStrict<CFNumberRef>(
       IOHIDDeviceGetProperty(device, CFSTR(kIOHIDLocationIDKey))));
-  int location_int = [location_id intValue];
+  int location_int = location_id.intValue;
 
-  NSNumber* vendor_id = CFToNSCast(CFCastStrict<CFNumberRef>(
+  NSNumber* vendor_id = CFToNSPtrCast(CFCastStrict<CFNumberRef>(
       IOHIDDeviceGetProperty(device, CFSTR(kIOHIDVendorIDKey))));
-  NSNumber* product_id = CFToNSCast(CFCastStrict<CFNumberRef>(
+  NSNumber* product_id = CFToNSPtrCast(CFCastStrict<CFNumberRef>(
       IOHIDDeviceGetProperty(device, CFSTR(kIOHIDProductIDKey))));
-  NSNumber* version_number = CFToNSCast(CFCastStrict<CFNumberRef>(
+  NSNumber* version_number = CFToNSPtrCast(CFCastStrict<CFNumberRef>(
       IOHIDDeviceGetProperty(device, CFSTR(kIOHIDVersionNumberKey))));
-  NSString* product = CFToNSCast(CFCastStrict<CFStringRef>(
+  NSString* product = CFToNSPtrCast(CFCastStrict<CFStringRef>(
       IOHIDDeviceGetProperty(device, CFSTR(kIOHIDProductKey))));
-  uint16_t vendor_int = [vendor_id intValue];
-  uint16_t product_int = [product_id intValue];
-  uint16_t version_int = [version_number intValue];
+  uint16_t vendor_int = vendor_id.intValue;
+  uint16_t product_int = product_id.intValue;
+  uint16_t version_int = version_number.intValue;
   std::string product_name = base::SysNSStringToUTF8(product);
 
   // Filter out devices that have gamepad-like HID usages but aren't gamepads.
@@ -172,8 +173,9 @@ void GamepadPlatformDataFetcherMac::DeviceAdd(IOHIDDeviceRef device) {
   DCHECK_EQ(kXInputTypeNone,
             gamepad_id_list.GetXInputType(vendor_int, product_int));
 
-  if (devices_.find(location_int) != devices_.end())
+  if (base::Contains(devices_, location_int)) {
     return;
+  }
 
   const GamepadId gamepad_id =
       gamepad_id_list.GetGamepadId(product_name, vendor_int, product_int);

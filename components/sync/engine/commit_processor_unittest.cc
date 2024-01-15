@@ -39,7 +39,7 @@ class FakeCommitContribution : public CommitContribution {
   SyncerError ProcessCommitResponse(
       const sync_pb::ClientToServerResponse& response,
       StatusController* status) override {
-    return SyncerError();
+    return SyncerError::Success();
   }
   void ProcessCommitFailure(SyncCommitError commit_error) override {}
   size_t GetNumEntries() const override { return num_entries_; }
@@ -71,8 +71,8 @@ class CommitProcessorTest : public testing::Test {
                          {PREFERENCES, &preference_contributor_},
                          {HISTORY, &history_contributor_}},
         processor_(
-            /*commit_types=*/ModelTypeSet{NIGORI, SHARING_MESSAGE, BOOKMARKS,
-                                          PREFERENCES, HISTORY},
+            /*commit_types=*/{NIGORI, SHARING_MESSAGE, BOOKMARKS, PREFERENCES,
+                              HISTORY},
             &contributor_map_) {
     EXPECT_TRUE(HighPriorityUserTypes().Has(SHARING_MESSAGE));
     EXPECT_FALSE(HighPriorityUserTypes().Has(BOOKMARKS));

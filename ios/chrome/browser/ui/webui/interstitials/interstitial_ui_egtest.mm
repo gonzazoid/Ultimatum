@@ -4,8 +4,9 @@
 
 #import <XCTest/XCTest.h>
 
+#import "components/safe_browsing/core/common/features.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
 #import "ios/chrome/browser/ui/webui/interstitials/interstitial_ui_constants.h"
-#import "ios/chrome/browser/url/chrome_url_constants.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
@@ -17,10 +18,6 @@
 #import "ui/base/l10n/l10n_util.h"
 #import "url/url_util.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 // Test case for chrome://interstitials WebUI page.
 @interface InterstitialWebUITestCase : ChromeTestCase {
   std::unique_ptr<url::ScopedSchemeRegistryForTests> _schemeRegistry;
@@ -29,6 +26,12 @@
 @end
 
 @implementation InterstitialWebUITestCase
+
+- (AppLaunchConfiguration)appConfigurationForTestCase {
+  AppLaunchConfiguration config;
+  config.features_enabled.push_back(safe_browsing::kRedInterstitialFacelift);
+  return config;
+}
 
 - (void)setUp {
   [super setUp];
@@ -78,8 +81,7 @@
       kChromeInterstitialSafeBrowsingTypeMalwareValue);
   [ChromeEarlGrey loadURL:safeBrowsingURL];
 
-  [ChromeEarlGrey
-      waitForWebStateContainingText:"The site ahead contains malware"];
+  [ChromeEarlGrey waitForWebStateContainingText:"Dangerous site"];
 }
 
 // Tests that chrome://interstitials/safe_browsing?type=phishing loads
@@ -92,7 +94,7 @@
       kChromeInterstitialSafeBrowsingTypePhishingValue);
   [ChromeEarlGrey loadURL:safeBrowsingURL];
 
-  [ChromeEarlGrey waitForWebStateContainingText:"Deceptive site ahead"];
+  [ChromeEarlGrey waitForWebStateContainingText:"Dangerous site"];
 }
 
 // Tests that chrome://interstitials/safe_browsing?type=unwanted loads
@@ -105,22 +107,7 @@
       kChromeInterstitialSafeBrowsingTypeUnwantedValue);
   [ChromeEarlGrey loadURL:safeBrowsingURL];
 
-  [ChromeEarlGrey
-      waitForWebStateContainingText:"The site ahead contains harmful programs"];
-}
-
-// Tests that chrome://interstitials/safe_browsing?type=clientside_malware loads
-// correctly.
-- (void)testLoadSafeBrowsingClientsideMalwareInterstitialUI {
-  GURL safeBrowsingURL = GURL(kChromeUIIntersitialsURL)
-                             .Resolve(kChromeInterstitialSafeBrowsingPath);
-  safeBrowsingURL = net::AppendQueryParameter(
-      safeBrowsingURL, kChromeInterstitialSafeBrowsingTypeQueryKey,
-      kChromeInterstitialSafeBrowsingTypeClientsideMalwareValue);
-  [ChromeEarlGrey loadURL:safeBrowsingURL];
-
-  [ChromeEarlGrey
-      waitForWebStateContainingText:"The site ahead contains malware"];
+  [ChromeEarlGrey waitForWebStateContainingText:"Dangerous site"];
 }
 
 // Tests that chrome://interstitials/safe_browsing?type=clientside_phishing
@@ -133,7 +120,7 @@
       kChromeInterstitialSafeBrowsingTypeClientsidePhishingValue);
   [ChromeEarlGrey loadURL:safeBrowsingURL];
 
-  [ChromeEarlGrey waitForWebStateContainingText:"Deceptive site ahead"];
+  [ChromeEarlGrey waitForWebStateContainingText:"Dangerous site"];
 }
 
 // Tests that chrome://interstitials/safe_browsing?type=billing loads correctly.

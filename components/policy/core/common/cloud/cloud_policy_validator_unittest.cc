@@ -10,12 +10,11 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
@@ -67,7 +66,8 @@ class CloudPolicyValidatorTest : public testing::Test {
   CloudPolicyValidatorTest()
       : task_environment_(
             base::test::SingleThreadTaskEnvironment::MainThreadType::UI),
-        timestamp_(base::Time::FromJavaTime(PolicyBuilder::kFakeTimestamp)),
+        timestamp_(base::Time::FromMillisecondsSinceUnixEpoch(
+            PolicyBuilder::kFakeTimestamp)),
         timestamp_option_(CloudPolicyValidatorBase::TIMESTAMP_VALIDATED),
         dm_token_option_(CloudPolicyValidatorBase::DM_TOKEN_REQUIRED),
         device_id_option_(CloudPolicyValidatorBase::DEVICE_ID_REQUIRED),
@@ -112,7 +112,8 @@ class CloudPolicyValidatorTest : public testing::Test {
     EXPECT_FALSE(public_key.empty());
 
     auto validator = std::make_unique<UserCloudPolicyValidator>(
-        std::move(policy_response), base::ThreadTaskRunnerHandle::Get());
+        std::move(policy_response),
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     validator->ValidateTimestamp(timestamp_, timestamp_option_);
     if (validate_by_gaia_id_) {
       validator->ValidateUsernameAndGaiaId(
@@ -298,7 +299,7 @@ TEST_F(CloudPolicyValidatorTest, IgnoreMissingTimestamp) {
 
 TEST_F(CloudPolicyValidatorTest, ErrorOldTimestamp) {
   base::Time timestamp(timestamp_ - base::Minutes(5));
-  policy_.policy_data().set_timestamp(timestamp.ToJavaTime());
+  policy_.policy_data().set_timestamp(timestamp.InMillisecondsSinceUnixEpoch());
   Validate(CheckStatus(CloudPolicyValidatorBase::VALIDATION_BAD_TIMESTAMP));
 }
 

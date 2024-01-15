@@ -15,22 +15,17 @@
 #import "base/test/ios/wait_util.h"
 #import "base/test/metrics/histogram_tester.h"
 #import "base/test/task_environment.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/download/ar_quick_look_tab_helper.h"
-#import "ios/chrome/browser/download/ar_quick_look_tab_helper_delegate.h"
-#import "ios/chrome/browser/download/download_test_util.h"
-#import "ios/chrome/browser/main/test_browser.h"
-#import "ios/chrome/browser/web_state_list/fake_web_state_list_delegate.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
-#import "ios/chrome/browser/web_state_list/web_state_opener.h"
+#import "ios/chrome/browser/download/model/ar_quick_look_tab_helper.h"
+#import "ios/chrome/browser/download/model/ar_quick_look_tab_helper_delegate.h"
+#import "ios/chrome/browser/download/model/download_test_util.h"
+#import "ios/chrome/browser/shared/model/browser/test/test_browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_opener.h"
 #import "ios/chrome/test/scoped_key_window.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::test::ios::WaitUntilConditionOrTimeout;
 using base::test::ios::kWaitForUIElementTimeout;
@@ -40,7 +35,7 @@ namespace {
 // Returns the absolute path for the test file in the test data directory.
 base::FilePath GetTestFilePath() {
   base::FilePath file_path;
-  base::PathService::Get(base::DIR_MODULE, &file_path);
+  base::PathService::Get(base::DIR_ASSETS, &file_path);
   file_path = file_path.Append(FILE_PATH_LITERAL(testing::kUsdzFilePath));
   return file_path;
 }

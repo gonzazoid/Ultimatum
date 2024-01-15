@@ -4,12 +4,10 @@
 
 #include "chrome/browser/sharing/sharing_utils.h"
 
-#include "base/feature_list.h"
-#include "chrome/browser/sharing/features.h"
 #include "chrome/browser/sharing/proto/sharing_message.pb.h"
 #include "chrome/browser/sharing/sharing_constants.h"
-#include "components/sync/driver/sync_service.h"
 #include "components/sync/protocol/sync_enums.pb.h"
+#include "components/sync/service/sync_service.h"
 #include "components/sync_device_info/device_info.h"
 
 namespace {
@@ -37,8 +35,7 @@ bool CanSendViaVapid(syncer::SyncService* sync_service) {
 }
 
 bool CanSendViaSenderID(syncer::SyncService* sync_service) {
-  return base::FeatureList::IsEnabled(kSharingSendViaSync) &&
-         sync_service->GetActiveDataTypes().Has(syncer::SHARING_MESSAGE);
+  return sync_service->GetActiveDataTypes().Has(syncer::SHARING_MESSAGE);
 }
 
 bool IsSyncEnabledForSharing(syncer::SyncService* sync_service) {

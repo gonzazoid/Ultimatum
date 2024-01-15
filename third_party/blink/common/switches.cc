@@ -8,9 +8,21 @@ namespace blink {
 namespace switches {
 
 // Allows processing of input before a frame has been committed.
-// TODO(schenney): crbug.com/987626. Used by headless. Look for a way not
+// TODO(crbug.com/987626): Used by headless. Look for a way not
 // involving a command line switch.
 const char kAllowPreCommitInput[] = "allow-pre-commit-input";
+
+// Used to communicate managed policy for the
+// BeforeunloadEventCancelByPreventDefault feature. This feature is typically
+// controlled by base::Feature (see blink/common/features.*) but requires an
+// enterprise policy override. This is implicitly a tri-state, and can be either
+// unset, or set to "1" for force enable, or "0" for force disable.
+extern const char kBeforeunloadEventCancelByPreventDefaultPolicy[] =
+    "beforeunload-event-cancel-by-prevent-default-policy";
+extern const char
+    kBeforeunloadEventCancelByPreventDefaultPolicy_ForceDisable[] = "0";
+extern const char kBeforeunloadEventCancelByPreventDefaultPolicy_ForceEnable[] =
+    "1";
 
 // Set blink settings. Format is <name>[=<value],<name>[=<value>],...
 // The names are declared in Settings.json5. For boolean type, use "true",
@@ -29,9 +41,16 @@ const char kBlinkSettings[] = "blink-settings";
 // the contrast.
 const char kDarkModeSettings[] = "dark-mode-settings";
 
+// Overrides data: URLs in SVGUseElement deprecation through enterprise policy.
+const char kDataUrlInSvgUseEnabled[] = "data-url-in-svg-use-enabled";
+
 // Sets the tile size used by composited layers.
 const char kDefaultTileWidth[] = "default-tile-width";
 const char kDefaultTileHeight[] = "default-tile-height";
+
+// If set, the unload event cannot be disabled by default by Permissions-Policy.
+const char kForcePermissionPolicyUnloadDefaultEnabled[] =
+    "force-permission-policy-unload-default-enabled";
 
 // Disallow image animations to be reset to the beginning to avoid skipping
 // many frames. Only effective if compositor image animations are enabled.
@@ -41,6 +60,10 @@ const char kDisableImageAnimationResync[] = "disable-image-animation-resync";
 // less power, particularly during animations, but more white may be seen
 // during fast scrolling especially on slower devices.
 const char kDisableLowResTiling[] = "disable-low-res-tiling";
+
+// Disallow use of the feature NewBaseUrlInheritanceBehavior.
+const char kDisableNewBaseUrlInheritanceBehavior[] =
+    "disable-new-base-url-inheritance-behavior";
 
 // Disable partial raster in the renderer. Disabling this switch also disables
 // the use of persistent gpu memory buffers.
@@ -52,9 +75,6 @@ const char kDisablePreferCompositingToLCDText[] =
 
 // Disables RGBA_4444 textures.
 const char kDisableRGBA4444Textures[] = "disable-rgba-4444-textures";
-
-// Disable multithreaded, compositor scrolling of web content.
-const char kDisableThreadedScrolling[] = "disable-threaded-scrolling";
 
 // Disable rasterizer that writes directly to GPU memory associated with tiles.
 const char kDisableZeroCopy[] = "disable-zero-copy";
@@ -100,6 +120,11 @@ extern const char kIntensiveWakeUpThrottlingPolicy[] =
 extern const char kIntensiveWakeUpThrottlingPolicy_ForceDisable[] = "0";
 extern const char kIntensiveWakeUpThrottlingPolicy_ForceEnable[] = "1";
 
+// A command line to indicate if there ia any legacy tech report urls being set.
+// If so, we will send report from blink to browser process.
+extern const char kLegacyTechReportPolicyEnabled[] =
+    "legacy-tech-report-policy-enabled";
+
 // Sets the width and height above which a composited layer will get tiled.
 const char kMaxUntiledLayerHeight[] = "max-untiled-layer-height";
 const char kMaxUntiledLayerWidth[] = "max-untiled-layer-width";
@@ -114,9 +139,6 @@ const char kMinHeightForGpuRasterTile[] = "min-height-for-gpu-raster-tile";
 // signal to dismiss a splash screen.
 const char kNetworkQuietTimeout[] = "network-quiet-timeout";
 
-// Number of worker threads used to rasterize content.
-const char kNumRasterThreads[] = "num-raster-threads";
-
 // Visibly render a border around layout shift rects in the web page to help
 // debug and study layout shifts.
 const char kShowLayoutShiftRegions[] = "show-layout-shift-regions";
@@ -125,32 +147,17 @@ const char kShowLayoutShiftRegions[] = "show-layout-shift-regions";
 // and study painting behavior.
 const char kShowPaintRects[] = "show-paint-rects";
 
+// Used to override the ThrottleDisplayNoneAndVisibilityHiddenCrossOrigin
+// feature from an enterprise policy.
+const char kDisableThrottleNonVisibleCrossOriginIframes[] =
+    "disable-throttle-non-visible-cross-origin-iframes";
+
 // Controls how text selection granularity changes when touch text selection
 // handles are dragged. Should be "character" or "direction". If not specified,
 // the platform default is used.
 const char kTouchTextSelectionStrategy[] = "touch-selection-strategy";
 const char kTouchTextSelectionStrategy_Character[] = "character";
 const char kTouchTextSelectionStrategy_Direction[] = "direction";
-
-// Used to communicate managed policy for the SetTimeoutWithoutClamp feature.
-// This feature is typically controlled by base::Feature (see
-// blink/common/features.*) but requires an enterprise policy override.
-// This is implicitly a tri-state, and can be either unset, or
-// set to "1" for force enable, or "0" for force disable.
-extern const char kSetTimeoutWithout1MsClampPolicy[] =
-    "set-timeout-without-1ms-clamp-policy";
-extern const char kSetTimeoutWithout1MsClampPolicy_ForceDisable[] = "0";
-extern const char kSetTimeoutWithout1MsClampPolicy_ForceEnable[] = "1";
-
-// Used to communicate managed policy for the MaxUnthrottledTimeoutNestingLevel
-// feature. This feature is typically controlled by base::Feature (see
-// blink/common/features.*) but requires an enterprise policy override. This is
-// implicitly a tri-state, and can be either unset, or set to "1" for force
-// enable, or "0" for force disable.
-extern const char kUnthrottledNestedTimeoutPolicy[] =
-    "unthrottled-nested-timeout-level-policy";
-extern const char kUnthrottledNestedTimeoutPolicy_ForceDisable[] = "0";
-extern const char kUnthrottledNestedTimeoutPolicy_ForceEnable[] = "1";
 
 // Comma-separated list of origins that can use SharedArrayBuffer without
 // enabling cross-origin isolation.
@@ -165,22 +172,6 @@ const char kJavaScriptFlags[] = "js-flags";
 
 // Controls whether WebSQL is force enabled.
 const char kWebSQLAccess[] = "web-sql-access";
-
-// Controls whether WebSQL for non-secure context is force enabled.
-const char kWebSQLNonSecureContextEnabled[] =
-    "web-sql-non-secure-context-enabled";
-
-// Used to communicate managed policy for the EventPath feature. This feature is
-// typically controlled by base::Feature (see blink/common/features.*) but
-// requires an enterprise policy override. This is implicitly a tri-state, and
-// can be either unset, or set to "1" for force enable, or "0" for force
-// disable.
-extern const char kEventPathPolicy[] = "event-path-policy";
-extern const char kEventPathPolicy_ForceDisable[] = "0";
-extern const char kEventPathPolicy_ForceEnable[] = "1";
-
-// Controls whether legacy quota API webkitStorageInfo is forced enabled.
-const char kPrefixedStorageInfoEnabled[] = "prefixed-storage-info-enabled";
 
 }  // namespace switches
 }  // namespace blink

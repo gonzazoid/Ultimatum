@@ -6,12 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
-#include "build/build_config.h"
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
+#include "third_party/blink/public/mojom/input/handwriting_gesture_result.mojom-blink.h"
 #include "third_party/blink/public/platform/scheduler/web_thread_scheduler.h"
 #include "third_party/blink/renderer/platform/widget/frame_widget.h"
 #include "third_party/blink/renderer/platform/widget/input/ime_event_guard.h"
@@ -107,6 +108,21 @@ void FrameWidgetInputHandlerImpl::ExtendSelectionAndDelete(int32_t before,
       main_thread_frame_widget_input_handler_, before, after));
 }
 
+void FrameWidgetInputHandlerImpl::ExtendSelectionAndReplace(
+    uint32_t before,
+    uint32_t after,
+    const String& replacement_text) {
+  RunOnMainThread(base::BindOnce(
+      [](base::WeakPtr<mojom::blink::FrameWidgetInputHandler> handler,
+         uint32_t before, uint32_t after, const String& replacement_text) {
+        if (handler) {
+          handler->ExtendSelectionAndReplace(before, after, replacement_text);
+        }
+      },
+      main_thread_frame_widget_input_handler_, before, after,
+      replacement_text));
+}
+
 void FrameWidgetInputHandlerImpl::DeleteSurroundingText(int32_t before,
                                                         int32_t after) {
   RunOnMainThread(base::BindOnce(
@@ -146,14 +162,34 @@ void FrameWidgetInputHandlerImpl::SetEditableSelectionOffsets(int32_t start,
 }
 
 void FrameWidgetInputHandlerImpl::HandleStylusWritingGestureAction(
-    mojom::blink::StylusWritingGestureDataPtr gesture_data) {
+    mojom::blink::StylusWritingGestureDataPtr gesture_data,
+    HandleStylusWritingGestureActionCallback callback) {
+  if (ThreadedCompositingEnabled()) {
+    callback = base::BindOnce(
+        [](scoped_refptr<base::SingleThreadTaskRunner> callback_task_runner,
+           HandleStylusWritingGestureActionCallback callback,
+           mojom::blink::HandwritingGestureResult result) {
+          callback_task_runner->PostTask(
+              FROM_HERE,
+              base::BindOnce(std::move(callback), std::move(result)));
+        },
+        base::SingleThreadTaskRunner::GetCurrentDefault(), std::move(callback));
+  }
+
   RunOnMainThread(base::BindOnce(
       [](base::WeakPtr<mojom::blink::FrameWidgetInputHandler> handler,
-         mojom::blink::StylusWritingGestureDataPtr gesture_data) {
-        if (handler)
-          handler->HandleStylusWritingGestureAction(std::move(gesture_data));
+         mojom::blink::StylusWritingGestureDataPtr gesture_data,
+         HandleStylusWritingGestureActionCallback callback) {
+        if (handler) {
+          handler->HandleStylusWritingGestureAction(std::move(gesture_data),
+                                                    std::move(callback));
+        } else {
+          std::move(callback).Run(
+              mojom::blink::HandwritingGestureResult::kFailed);
+        }
       },
-      main_thread_frame_widget_input_handler_, std::move(gesture_data)));
+      main_thread_frame_widget_input_handler_, std::move(gesture_data),
+      std::move(callback)));
 }
 
 void FrameWidgetInputHandlerImpl::ExecuteEditCommand(const String& command,
@@ -194,10 +230,22 @@ void FrameWidgetInputHandlerImpl::Copy() {
 }
 
 void FrameWidgetInputHandlerImpl::CopyToFindPboard() {
+#if BUILDFLAG(IS_MAC)
   RunOnMainThread(base::BindOnce(
       [](base::WeakPtr<mojom::blink::FrameWidgetInputHandler> handler) {
         if (handler)
           handler->CopyToFindPboard();
+      },
+      main_thread_frame_widget_input_handler_));
+#endif
+}
+
+void FrameWidgetInputHandlerImpl::CenterSelection() {
+  RunOnMainThread(base::BindOnce(
+      [](base::WeakPtr<mojom::blink::FrameWidgetInputHandler> handler) {
+        if (handler) {
+          handler->CenterSelection();
+        }
       },
       main_thread_frame_widget_input_handler_));
 }
@@ -280,8 +328,6 @@ void FrameWidgetInputHandlerImpl::SelectRange(const gfx::Point& base,
       widget_, main_thread_frame_widget_input_handler_, base, extent));
 }
 
-#if BUILDFLAG(IS_ANDROID)
-
 void FrameWidgetInputHandlerImpl::SelectAroundCaret(
     mojom::blink::SelectionGranularity granularity,
     bool should_show_handle,
@@ -299,7 +345,7 @@ void FrameWidgetInputHandlerImpl::SelectAroundCaret(
               FROM_HERE,
               base::BindOnce(std::move(callback), std::move(result)));
         },
-        base::ThreadTaskRunnerHandle::Get(), std::move(callback));
+        base::SingleThreadTaskRunner::GetCurrentDefault(), std::move(callback));
   }
 
   RunOnMainThread(base::BindOnce(
@@ -318,7 +364,6 @@ void FrameWidgetInputHandlerImpl::SelectAroundCaret(
       main_thread_frame_widget_input_handler_, granularity, should_show_handle,
       should_show_context_menu, std::move(callback)));
 }
-#endif  // BUILDFLAG(IS_ANDROID)
 
 void FrameWidgetInputHandlerImpl::AdjustSelectionByCharacterOffset(
     int32_t start,
@@ -378,7 +423,7 @@ void FrameWidgetInputHandlerImpl::WaitForPageScaleAnimationForTesting(
           callback_task_runner->PostTask(FROM_HERE,
                                          base::BindOnce(std::move(callback)));
         },
-        base::ThreadTaskRunnerHandle::Get(), std::move(callback));
+        base::SingleThreadTaskRunner::GetCurrentDefault(), std::move(callback));
   }
 
   RunOnMainThread(base::BindOnce(

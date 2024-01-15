@@ -4,7 +4,7 @@
 
 #include "chromeos/components/quick_answers/utils/language_detector.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/metrics/field_trial_params.h"
 #include "ui/base/l10n/l10n_util.h"
 
@@ -15,7 +15,7 @@ constexpr double kSelectedTextConfidenceThreshold = 0.9;
 
 constexpr double kSurroundingTextConfidenceThreshold = 0.9;
 
-absl::optional<std::string> GetLanguageWithConfidence(
+std::optional<std::string> GetLanguageWithConfidence(
     const std::vector<chromeos::machine_learning::mojom::TextLanguagePtr>&
         languages,
     double confidence_threshold) {
@@ -25,7 +25,7 @@ absl::optional<std::string> GetLanguageWithConfidence(
       languages.front()->confidence > confidence_threshold) {
     return l10n_util::GetLanguage(languages.front()->locale);
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 }  // namespace

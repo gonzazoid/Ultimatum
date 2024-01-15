@@ -6,6 +6,7 @@
 
 #include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
+#include "chromeos/ash/components/network/metrics/connection_results.h"
 #include "chromeos/ash/components/network/metrics/network_metrics_helper.h"
 #include "chromeos/ash/components/network/network_connection_handler.h"
 #include "chromeos/ash/components/network/network_state.h"
@@ -15,8 +16,11 @@
 namespace ash {
 
 ConnectionInfoMetricsLogger::ConnectionInfo::ConnectionInfo(
-    const NetworkState* network)
-    : guid(network->guid()), shill_error(network->GetError()) {
+    const NetworkState* network,
+    bool is_user_initiated)
+    : guid(network->guid()),
+      shill_error(network->GetError()),
+      is_user_initiated(is_user_initiated) {
   if (network->IsConnectedState())
     status = Status::kConnected;
   else if (network->IsConnectingState())
@@ -32,14 +36,13 @@ ConnectionInfoMetricsLogger::ConnectionInfo::~ConnectionInfo() = default;
 bool ConnectionInfoMetricsLogger::ConnectionInfo::operator==(
     const ConnectionInfoMetricsLogger::ConnectionInfo& other) const {
   return status == other.status && guid == other.guid &&
+         is_user_initiated == other.is_user_initiated &&
          shill_error == other.shill_error;
 }
 
 ConnectionInfoMetricsLogger::ConnectionInfoMetricsLogger() = default;
 
 ConnectionInfoMetricsLogger::~ConnectionInfoMetricsLogger() {
-  if (network_state_handler_)
-    network_state_handler_->RemoveObserver(this, FROM_HERE);
   if (network_connection_handler_)
     network_connection_handler_->RemoveObserver(this);
 }
@@ -54,7 +57,7 @@ void ConnectionInfoMetricsLogger::Init(
 
   if (network_state_handler) {
     network_state_handler_ = network_state_handler;
-    network_state_handler_->AddObserver(this, FROM_HERE);
+    network_state_handler_observer_.Observe(network_state_handler_.get());
     NetworkListChanged();
   }
 }
@@ -95,6 +98,28 @@ void ConnectionInfoMetricsLogger::NetworkConnectionStateChanged(
   UpdateConnectionInfo(network);
 }
 
+void ConnectionInfoMetricsLogger::ConnectToNetworkRequested(
+    const std::string& service_path) {
+  if (!network_state_handler_) {
+    return;
+  }
+
+  const NetworkState* network =
+      network_state_handler_->GetNetworkState(service_path);
+
+  if (!network) {
+    return;
+  }
+
+  guid_to_connection_info_.insert_or_assign(
+      network->guid(), ConnectionInfo(network,
+                                      /*is_user_initiated=*/true));
+}
+
+void ConnectionInfoMetricsLogger::OnShuttingDown() {
+  network_state_handler_observer_.Reset();
+}
+
 void ConnectionInfoMetricsLogger::ConnectSucceeded(
     const std::string& service_path) {
   const NetworkState* network =
@@ -103,6 +128,10 @@ void ConnectionInfoMetricsLogger::ConnectSucceeded(
   if (!network)
     return;
 
+  // Update the connection request to no longer be "user initiated" so that we
+  // don't continue to emit subsequent connections as user initiated.
+  guid_to_connection_info_.insert_or_assign(
+      network->guid(), ConnectionInfo(network, /*is_user_initiated=*/false));
   NetworkMetricsHelper::LogUserInitiatedConnectionResult(network->guid());
 }
 
@@ -114,23 +143,29 @@ void ConnectionInfoMetricsLogger::ConnectFailed(const std::string& service_path,
   if (!network)
     return;
 
+  // Update the connection request to no longer be "user initiated" so that we
+  // don't continue to emit subsequent connections as user initiated.
+  guid_to_connection_info_.insert_or_assign(
+      network->guid(), ConnectionInfo(network, /*is_user_initiated=*/false));
   NetworkMetricsHelper::LogUserInitiatedConnectionResult(network->guid(),
                                                          error_name);
 }
 
 void ConnectionInfoMetricsLogger::UpdateConnectionInfo(
     const NetworkState* network) {
-  const absl::optional<ConnectionInfo> prev_info =
+  const std::optional<ConnectionInfo> prev_info =
       GetCachedInfo(network->guid());
-  const ConnectionInfo& curr_info = ConnectionInfo(network);
+  // If a connect has been requested, maintain the connect request until the
+  // connect succeeded or failed.
+  const ConnectionInfo curr_info =
+      ConnectionInfo(network, prev_info && prev_info->is_user_initiated);
 
   // No updates if the ConnectionInfo did not change.
   if (prev_info == curr_info)
     return;
 
   // If the connection status has changed, attempt to log automatic connection
-  // and disconnection metrics. Otherwise, if a disconnect has been requested,
-  // maintain the request until the status changes.
+  // and disconnection metrics.
   if (!prev_info || prev_info->status != curr_info.status) {
     ConnectionAttemptFinished(prev_info, curr_info);
     AttemptLogConnectionStateResult(prev_info, curr_info);
@@ -139,13 +174,15 @@ void ConnectionInfoMetricsLogger::UpdateConnectionInfo(
 }
 
 void ConnectionInfoMetricsLogger::ConnectionAttemptFinished(
-    const absl::optional<ConnectionInfo>& prev_info,
+    const std::optional<ConnectionInfo>& prev_info,
     const ConnectionInfo& curr_info) const {
   DCHECK(!prev_info || prev_info && prev_info->guid == curr_info.guid);
 
   if (curr_info.status == ConnectionInfo::Status::kConnected) {
-    NetworkMetricsHelper::LogAllConnectionResult(curr_info.guid);
-    NotifyConnectionResult(curr_info.guid, /*shill_error=*/absl::nullopt);
+    NetworkMetricsHelper::LogAllConnectionResult(curr_info.guid,
+                                                 !curr_info.is_user_initiated,
+                                                 /*is_repeated_error=*/false);
+    NotifyConnectionResult(curr_info.guid, /*shill_error=*/std::nullopt);
   }
 
   // If the network goes from connecting or disconnecting state to the
@@ -155,18 +192,21 @@ void ConnectionInfoMetricsLogger::ConnectionAttemptFinished(
        prev_info->status == ConnectionInfo::Status::kDisconnecting) &&
       curr_info.status == ConnectionInfo::Status::kDisconnected &&
       NetworkState::ErrorIsValid(curr_info.shill_error)) {
-    NetworkMetricsHelper::LogAllConnectionResult(curr_info.guid,
-                                                 curr_info.shill_error);
+    NetworkMetricsHelper::LogAllConnectionResult(
+        curr_info.guid, !curr_info.is_user_initiated,
+        /*is_repeated_error=*/prev_info->shill_error == curr_info.shill_error,
+        curr_info.shill_error);
     NotifyConnectionResult(curr_info.guid, curr_info.shill_error);
   }
 }
 
 void ConnectionInfoMetricsLogger::AttemptLogConnectionStateResult(
-    const absl::optional<ConnectionInfo>& prev_info,
+    const std::optional<ConnectionInfo>& prev_info,
     const ConnectionInfo& curr_info) const {
   if (curr_info.status == ConnectionInfo::Status::kConnected) {
     NetworkMetricsHelper::LogConnectionStateResult(
-        curr_info.guid, NetworkMetricsHelper::ConnectionState::kConnected);
+        curr_info.guid, NetworkMetricsHelper::ConnectionState::kConnected,
+        /*shill_error=*/std::nullopt);
     return;
   }
 
@@ -178,22 +218,23 @@ void ConnectionInfoMetricsLogger::AttemptLogConnectionStateResult(
       NetworkState::ErrorIsValid(curr_info.shill_error)) {
     NetworkMetricsHelper::LogConnectionStateResult(
         curr_info.guid,
-        NetworkMetricsHelper::ConnectionState::kDisconnectedWithoutUserAction);
+        NetworkMetricsHelper::ConnectionState::kDisconnectedWithoutUserAction,
+        ShillErrorToConnectResult(curr_info.shill_error));
     return;
   }
 }
 
-absl::optional<ConnectionInfoMetricsLogger::ConnectionInfo>
+std::optional<ConnectionInfoMetricsLogger::ConnectionInfo>
 ConnectionInfoMetricsLogger::GetCachedInfo(const std::string& guid) const {
   const auto prev_info_it = guid_to_connection_info_.find(guid);
   if (prev_info_it == guid_to_connection_info_.end())
-    return absl::nullopt;
+    return std::nullopt;
   return prev_info_it->second;
 }
 
 void ConnectionInfoMetricsLogger::NotifyConnectionResult(
     const std::string& guid,
-    const absl::optional<std::string>& shill_error) const {
+    const std::optional<std::string>& shill_error) const {
   for (auto& observer : observers_)
     observer.OnConnectionResult(guid, shill_error);
 }

@@ -2,8 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "build/build_config.h"
 #include "ui/gfx/switches.h"
+
+#include "base/command_line.h"
+#include "build/build_config.h"
 
 namespace switches {
 
@@ -39,7 +41,7 @@ const char kNoXshm[] = "no-xshm";
 namespace features {
 BASE_FEATURE(kOddHeightMultiPlanarBuffers,
              "OddHeightMultiPlanarBuffers",
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
              base::FEATURE_ENABLED_BY_DEFAULT
 #else
              base::FEATURE_DISABLED_BY_DEFAULT
@@ -48,11 +50,26 @@ BASE_FEATURE(kOddHeightMultiPlanarBuffers,
 
 BASE_FEATURE(kOddWidthMultiPlanarBuffers,
              "OddWidthMultiPlanarBuffers",
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
              base::FEATURE_ENABLED_BY_DEFAULT
 #else
              base::FEATURE_DISABLED_BY_DEFAULT
 #endif
 );
+
+BASE_FEATURE(kUseSmartRefForGPUFenceHandle,
+             "UseSmartRefForGPUFenceHandle",
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+             base::FEATURE_ENABLED_BY_DEFAULT
+#else
+             base::FEATURE_DISABLED_BY_DEFAULT
+#endif
+);
+
+#if BUILDFLAG(IS_CHROMEOS)
+BASE_FEATURE(kEnableIntelMediaCompression,
+             "EnableIntelMediaCompression",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+#endif
 
 }  // namespace features

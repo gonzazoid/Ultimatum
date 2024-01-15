@@ -7,13 +7,7 @@
 
 #import <UIKit/UIKit.h>
 
-@protocol ApplicationCommands;
-@protocol BrowserCommands;
 @class LayoutGuideCenter;
-@protocol LensCommands;
-@class OmniboxTextFieldIOS;
-@protocol QRScannerCommands;
-class TemplateURLService;
 
 // Delegate protocol for the KeyboardAccessoryView.
 @protocol OmniboxAssistiveKeyboardDelegate
@@ -21,9 +15,8 @@ class TemplateURLService;
 // The layout guide center for the current scene.
 @property(nonatomic, strong) LayoutGuideCenter* layoutGuideCenter;
 
-// The templateURLService used by this mediator to extract whether the default
-// search engine is Google.
-@property(nonatomic, assign) TemplateURLService* templateURLService;
+// The lens button, which may be nil.
+@property(nonatomic, strong) UIButton* lensButton;
 
 // Notifies the delegate that the Voice Search button was tapped.
 - (void)keyboardAccessoryVoiceSearchTapped:(id)sender;
@@ -34,21 +27,11 @@ class TemplateURLService;
 // Notifies the delegate that the Lens button was tapped.
 - (void)keyboardAccessoryLensTapped;
 
+// Notifies the delegate that the Debugger button was tapped.
+- (void)keyboardAccessoryDebuggerTapped;
+
 // Notifies the delegate that a key with the title `title` was pressed.
 - (void)keyPressed:(NSString*)title;
-
-@end
-
-// TODO(crbug.com/784819): Move this code to omnibox.
-// Implementation of the OmniboxAssistiveKeyboardDelegate.
-@interface OmniboxAssistiveKeyboardDelegateImpl
-    : NSObject <OmniboxAssistiveKeyboardDelegate>
-
-@property(nonatomic, weak) id<ApplicationCommands> applicationCommandsHandler;
-@property(nonatomic, weak) id<BrowserCommands> browserCommandsHandler;
-@property(nonatomic, weak) id<LensCommands> lensCommandsHandler;
-@property(nonatomic, weak) id<QRScannerCommands> qrScannerCommandsHandler;
-@property(nonatomic, weak) OmniboxTextFieldIOS* omniboxTextField;
 
 @end
 

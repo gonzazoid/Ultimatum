@@ -8,10 +8,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/process/process.h"
 #include "base/task/current_thread.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/version.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/geometry/rrect_f.h"
 #include "ui/gfx/linux/drm_util_linux.h"
@@ -25,17 +26,20 @@
 #if defined(WAYLAND_GBM)
 #include "ui/gfx/linux/gbm_wrapper.h"  // nogncheck
 #include "ui/ozone/platform/wayland/gpu/drm_render_node_handle.h"
-#include "ui/ozone/platform/wayland/gpu/drm_render_node_path_finder.h"
 #endif
 
 namespace ui {
 
-WaylandBufferManagerGpu::WaylandBufferManagerGpu() {
+WaylandBufferManagerGpu::WaylandBufferManagerGpu()
+    : WaylandBufferManagerGpu(base::FilePath()) {}
+
+WaylandBufferManagerGpu::WaylandBufferManagerGpu(
+    const base::FilePath& drm_node_path) {
 #if defined(WAYLAND_GBM)
   // The path_finder and the handle do syscalls, which are permitted before
   // the sandbox entry. After the gpu enters the sandbox, they fail. Thus,
-  // open the handle early and store it.
-  OpenAndStoreDrmRenderNodeFd();
+  // we get node path from the platform instance and get a handle for that here.
+  OpenAndStoreDrmRenderNodeFd(drm_node_path);
 #endif
 
   // The WaylandBufferManagerGpu takes the task runner where it was created.
@@ -45,8 +49,8 @@ WaylandBufferManagerGpu::WaylandBufferManagerGpu() {
   // happen, and a surface will never be registered. Thus, the following two
   // cases are possible:
   // 1) The WaylandBufferManagerGpu runs normally outside tests.
-  // ThreadTaskRunnerHandle is set and it is passed during construction and
-  // never changes.
+  // SingleThreadTaskRunner::CurrentDefaultHandle is set and it is passed during
+  // construction and never changes.
   // 2) The WaylandBufferManagerGpu runs in unit tests and when it's created,
   // the task runner is not available and must be set later when ::Initialize is
   // called. In this case, there is no race between ::Initialize and
@@ -54,11 +58,12 @@ WaylandBufferManagerGpu::WaylandBufferManagerGpu() {
   //
   // TODO(msisov): think about making unit tests initialize Ozone after task
   // runner is set that would allow to always set the task runner.
-  if (base::ThreadTaskRunnerHandle::IsSet()) {
-    gpu_thread_runner_ = base::ThreadTaskRunnerHandle::Get();
+  if (base::SingleThreadTaskRunner::HasCurrentDefault()) {
+    gpu_thread_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
   } else {
     // In tests, the further calls might happen on a different sequence.
-    // Otherwise, ThreadTaskRunnerHandle should have already been set.
+    // Otherwise, SingleThreadTaskRunner::CurrentDefaultHandle should have
+    // already been set.
     DETACH_FROM_SEQUENCE(gpu_sequence_checker_);
   }
 }
@@ -72,17 +77,21 @@ void WaylandBufferManagerGpu::Initialize(
     bool supports_dma_buf,
     bool supports_viewporter,
     bool supports_acquire_fence,
-    uint32_t supported_surface_augmentor_version) {
+    bool supports_overlays,
+    uint32_t supported_surface_augmentor_version,
+    bool supports_single_pixel_buffer,
+    const base::Version& server_version) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(gpu_sequence_checker_);
 
   // See the comment in the constructor.
   if (!gpu_thread_runner_)
-    gpu_thread_runner_ = base::ThreadTaskRunnerHandle::Get();
+    gpu_thread_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
 
   supported_buffer_formats_with_modifiers_ = buffer_formats_with_modifiers;
   supports_viewporter_ = supports_viewporter;
   supports_acquire_fence_ = supports_acquire_fence;
   supports_dmabuf_ = supports_dma_buf;
+  supports_overlays_ = supports_overlays;
 
   supports_non_backed_solid_color_buffers_ =
       supported_surface_augmentor_version >=
@@ -95,16 +104,33 @@ void WaylandBufferManagerGpu::Initialize(
       AUGMENTED_SURFACE_SET_BACKGROUND_COLOR_SINCE_VERSION;
   supports_clip_rect_ = supported_surface_augmentor_version >=
                         AUGMENTED_SUB_SURFACE_SET_CLIP_RECT_SINCE_VERSION;
+  supports_affine_transform_ =
+      supported_surface_augmentor_version >=
+      AUGMENTED_SUB_SURFACE_SET_TRANSFORM_SINCE_VERSION;
 
+  // Clients at version 8 think clip rect is in parent surface's space, while
+  // clients at version 9 or above think it's in local surface's space.
+  // Unfortunately, clipping in version 9 is implemented incorrectly. It has
+  // been fixed in version 10, so use version 10 instead.
+  supports_out_of_window_clip_rect_ =
+      supported_surface_augmentor_version >=
+      AUGMENTED_SURFACE_SET_CLIP_RECT_SINCE_VERSION + 2;
+  // Exo transformation fix landed in https://crrev.com/c/4961473
+  has_transformation_fix_ = server_version.IsValid() &&
+                            server_version >= base::Version("121.0.6113.0");
+
+  supports_single_pixel_buffer_ = supports_single_pixel_buffer;
   BindHostInterface(std::move(remote_host));
 
   ProcessPendingTasks();
 }
 
-void WaylandBufferManagerGpu::OnSubmission(gfx::AcceleratedWidget widget,
-                                           uint32_t buffer_id,
-                                           gfx::SwapResult swap_result,
-                                           gfx::GpuFenceHandle release_fence) {
+void WaylandBufferManagerGpu::OnSubmission(
+    gfx::AcceleratedWidget widget,
+    uint32_t frame_id,
+    gfx::SwapResult swap_result,
+    gfx::GpuFenceHandle release_fence,
+    const std::vector<wl::WaylandPresentationInfo>& presentation_infos) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(gpu_sequence_checker_);
 
   DCHECK_LE(commit_thread_runners_.count(widget), 1u);
@@ -112,17 +138,23 @@ void WaylandBufferManagerGpu::OnSubmission(gfx::AcceleratedWidget widget,
   auto it = commit_thread_runners_.find(widget);
   if (it == commit_thread_runners_.end())
     return;
-  it->second->PostTask(
-      FROM_HERE,
-      base::BindOnce(&WaylandBufferManagerGpu::SubmitSwapResultOnOriginThread,
-                     base::Unretained(this), widget, buffer_id, swap_result,
-                     std::move(release_fence)));
+
+  if (it->second->BelongsToCurrentThread()) {
+    HandleSubmissionOnOriginThread(widget, frame_id, swap_result,
+                                   std::move(release_fence),
+                                   presentation_infos);
+  } else {
+    it->second->PostTask(
+        FROM_HERE,
+        base::BindOnce(&WaylandBufferManagerGpu::HandleSubmissionOnOriginThread,
+                       base::Unretained(this), widget, frame_id, swap_result,
+                       std::move(release_fence), presentation_infos));
+  }
 }
 
 void WaylandBufferManagerGpu::OnPresentation(
     gfx::AcceleratedWidget widget,
-    uint32_t buffer_id,
-    const gfx::PresentationFeedback& feedback) {
+    const std::vector<wl::WaylandPresentationInfo>& presentation_infos) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(gpu_sequence_checker_);
 
   DCHECK_LE(commit_thread_runners_.count(widget), 1u);
@@ -130,10 +162,16 @@ void WaylandBufferManagerGpu::OnPresentation(
   auto it = commit_thread_runners_.find(widget);
   if (it == commit_thread_runners_.end())
     return;
-  it->second->PostTask(
-      FROM_HERE,
-      base::BindOnce(&WaylandBufferManagerGpu::SubmitPresentationOnOriginThread,
-                     base::Unretained(this), widget, buffer_id, feedback));
+
+  if (it->second->BelongsToCurrentThread()) {
+    HandlePresentationOnOriginThread(widget, presentation_infos);
+  } else {
+    it->second->PostTask(
+        FROM_HERE,
+        base::BindOnce(
+            &WaylandBufferManagerGpu::HandlePresentationOnOriginThread,
+            base::Unretained(this), widget, presentation_infos));
+  }
 }
 
 void WaylandBufferManagerGpu::RegisterSurface(gfx::AcceleratedWidget widget,
@@ -143,7 +181,8 @@ void WaylandBufferManagerGpu::RegisterSurface(gfx::AcceleratedWidget widget,
       FROM_HERE,
       base::BindOnce(
           &WaylandBufferManagerGpu::SaveTaskRunnerForWidgetOnIOThread,
-          base::Unretained(this), widget, base::ThreadTaskRunnerHandle::Get()));
+          base::Unretained(this), widget,
+          base::SingleThreadTaskRunner::GetCurrentDefault()));
 
   base::AutoLock scoped_lock(lock_);
   widget_to_surface_map_.emplace(widget, surface);
@@ -240,9 +279,28 @@ void WaylandBufferManagerGpu::CreateSolidColorBuffer(SkColor4f color,
   RunOrQueueTask(std::move(task));
 }
 
+void WaylandBufferManagerGpu::CreateSinglePixelBuffer(SkColor4f color,
+                                                      uint32_t buf_id) {
+  DCHECK(gpu_thread_runner_);
+  if (!gpu_thread_runner_->BelongsToCurrentThread()) {
+    // Do the mojo call on the GpuMainThread.
+    gpu_thread_runner_->PostTask(
+        FROM_HERE,
+        base::BindOnce(&WaylandBufferManagerGpu::CreateSinglePixelBuffer,
+                       base::Unretained(this), color, buf_id));
+    return;
+  }
+
+  base::OnceClosure task =
+      base::BindOnce(&WaylandBufferManagerGpu::CreateSinglePixelBufferTask,
+                     base::Unretained(this), color, buf_id);
+  RunOrQueueTask(std::move(task));
+}
+
 void WaylandBufferManagerGpu::CommitBuffer(gfx::AcceleratedWidget widget,
                                            uint32_t frame_id,
                                            uint32_t buffer_id,
+                                           gfx::FrameData data,
                                            const gfx::Rect& bounds_rect,
                                            const gfx::RoundedCornersF& corners,
                                            float surface_scale_factor,
@@ -258,12 +316,13 @@ void WaylandBufferManagerGpu::CommitBuffer(gfx::AcceleratedWidget widget,
           gfx::RRectF(gfx::RectF(bounds_rect), corners), gfx::ColorSpace(),
           absl::nullopt),
       nullptr, buffer_id, surface_scale_factor);
-  CommitOverlays(widget, frame_id, std::move(overlay_configs));
+  CommitOverlays(widget, frame_id, data, std::move(overlay_configs));
 }
 
 void WaylandBufferManagerGpu::CommitOverlays(
     gfx::AcceleratedWidget widget,
     uint32_t frame_id,
+    gfx::FrameData data,
     std::vector<wl::WaylandOverlayConfig> overlays) {
   DCHECK(gpu_thread_runner_);
   if (!gpu_thread_runner_->BelongsToCurrentThread()) {
@@ -271,13 +330,13 @@ void WaylandBufferManagerGpu::CommitOverlays(
     gpu_thread_runner_->PostTask(
         FROM_HERE, base::BindOnce(&WaylandBufferManagerGpu::CommitOverlays,
                                   base::Unretained(this), widget, frame_id,
-                                  std::move(overlays)));
+                                  data, std::move(overlays)));
     return;
   }
 
   base::OnceClosure task = base::BindOnce(
       &WaylandBufferManagerGpu::CommitOverlaysTask, base::Unretained(this),
-      widget, frame_id, std::move(overlays));
+      widget, frame_id, data, std::move(overlays));
   RunOrQueueTask(std::move(task));
 }
 
@@ -315,7 +374,7 @@ GbmDevice* WaylandBufferManagerGpu::GetGbmDevice() {
     return nullptr;
   }
 
-  gbm_device_ = CreateGbmDevice(drm_render_node_fd_.release());
+  gbm_device_ = CreateGbmDevice(drm_render_node_fd_.get());
   if (!gbm_device_) {
     supports_dmabuf_ = false;
     LOG(WARNING) << "Failed to initialize gbm device.";
@@ -330,19 +389,26 @@ void WaylandBufferManagerGpu::AddBindingWaylandBufferManagerGpu(
   receiver_set_.Add(this, std::move(receiver));
 }
 
-const std::vector<uint64_t>&
+const std::vector<uint64_t>
 WaylandBufferManagerGpu::GetModifiersForBufferFormat(
     gfx::BufferFormat buffer_format) const {
   auto it = supported_buffer_formats_with_modifiers_.find(buffer_format);
   if (it != supported_buffer_formats_with_modifiers_.end()) {
+    if (drm_modifiers_filter_) {
+      return drm_modifiers_filter_->Filter(buffer_format, it->second);
+    }
     return it->second;
   }
-  static std::vector<uint64_t> dummy;
-  return dummy;
+  return {};
 }
 
 uint32_t WaylandBufferManagerGpu::AllocateBufferID() {
   return ++next_buffer_id_ ? next_buffer_id_ : ++next_buffer_id_;
+}
+
+bool WaylandBufferManagerGpu::SupportsFormat(
+    gfx::BufferFormat buffer_format) const {
+  return supported_buffer_formats_with_modifiers_.contains(buffer_format);
 }
 
 void WaylandBufferManagerGpu::BindHostInterface(
@@ -381,41 +447,44 @@ void WaylandBufferManagerGpu::ForgetTaskRunnerForWidgetOnIOThread(
   commit_thread_runners_.erase(widget);
 }
 
-void WaylandBufferManagerGpu::SubmitSwapResultOnOriginThread(
+void WaylandBufferManagerGpu::HandleSubmissionOnOriginThread(
     gfx::AcceleratedWidget widget,
     uint32_t frame_id,
     gfx::SwapResult swap_result,
-    gfx::GpuFenceHandle release_fence) {
+    gfx::GpuFenceHandle release_fence,
+    const std::vector<wl::WaylandPresentationInfo>& presentation_infos) {
   DCHECK_NE(widget, gfx::kNullAcceleratedWidget);
   auto* surface = GetSurface(widget);
   // The surface might be destroyed by the time the swap result is provided.
   if (surface)
     surface->OnSubmission(frame_id, swap_result, std::move(release_fence));
+
+  HandlePresentationOnOriginThread(widget, presentation_infos);
 }
 
-void WaylandBufferManagerGpu::SubmitPresentationOnOriginThread(
+void WaylandBufferManagerGpu::HandlePresentationOnOriginThread(
     gfx::AcceleratedWidget widget,
-    uint32_t frame_id,
-    const gfx::PresentationFeedback& feedback) {
+    const std::vector<wl::WaylandPresentationInfo>& presentation_infos) {
   DCHECK_NE(widget, gfx::kNullAcceleratedWidget);
+
   auto* surface = GetSurface(widget);
   // The surface might be destroyed by the time the presentation feedback is
   // provided.
-  if (surface)
-    surface->OnPresentation(frame_id, feedback);
-}
-
-#if defined(WAYLAND_GBM)
-void WaylandBufferManagerGpu::OpenAndStoreDrmRenderNodeFd() {
-  DrmRenderNodePathFinder path_finder;
-  const base::FilePath drm_node_path = path_finder.GetDrmRenderNodePath();
-  if (drm_node_path.empty()) {
-    LOG(WARNING) << "Failed to find drm render node path.";
+  if (!surface) {
     return;
   }
 
+  for (const auto& presentation_info : presentation_infos) {
+    surface->OnPresentation(presentation_info.frame_id,
+                            presentation_info.feedback);
+  }
+}
+
+#if defined(WAYLAND_GBM)
+void WaylandBufferManagerGpu::OpenAndStoreDrmRenderNodeFd(
+    const base::FilePath& drm_node_path) {
   DrmRenderNodeHandle handle;
-  if (!handle.Initialize(drm_node_path)) {
+  if (drm_node_path.empty() || !handle.Initialize(drm_node_path)) {
     LOG(WARNING) << "Failed to initialize drm render node handle.";
     return;
   }
@@ -491,14 +560,23 @@ void WaylandBufferManagerGpu::CreateSolidColorBufferTask(SkColor4f color,
   remote_host_->CreateSolidColorBuffer(size, color, buf_id);
 }
 
+void WaylandBufferManagerGpu::CreateSinglePixelBufferTask(SkColor4f color,
+                                                          uint32_t buf_id) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(gpu_sequence_checker_);
+  DCHECK(remote_host_);
+
+  remote_host_->CreateSinglePixelBuffer(color, buf_id);
+}
+
 void WaylandBufferManagerGpu::CommitOverlaysTask(
     gfx::AcceleratedWidget widget,
     uint32_t frame_id,
+    gfx::FrameData data,
     std::vector<wl::WaylandOverlayConfig> overlays) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(gpu_sequence_checker_);
   DCHECK(remote_host_);
 
-  remote_host_->CommitOverlays(widget, frame_id, std::move(overlays));
+  remote_host_->CommitOverlays(widget, frame_id, data, std::move(overlays));
 }
 
 void WaylandBufferManagerGpu::DestroyBufferTask(uint32_t buffer_id) {

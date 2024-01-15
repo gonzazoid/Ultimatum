@@ -10,10 +10,13 @@
 #include <string>
 #include <vector>
 
+#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/observer_list.h"
 #include "build/build_config.h"
+#include "components/signin/public/base/signin_buildflags.h"
+#include "components/signin/public/identity_manager/account_info.h"
 #include "components/signin/public/identity_manager/load_credentials_state.h"
 #include "google_apis/gaia/gaia_auth_util.h"
 #include "google_apis/gaia/google_service_auth_error.h"
@@ -52,7 +55,8 @@ class ProfileOAuth2TokenServiceDelegate {
   CreateAccessTokenFetcher(
       const CoreAccountId& account_id,
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-      OAuth2AccessTokenConsumer* consumer) = 0;
+      OAuth2AccessTokenConsumer* consumer,
+      const std::string& token_binding_challenge) = 0;
 
   // Returns |true| if a refresh token is available for |account_id|, and
   // |false| otherwise.
@@ -88,8 +92,15 @@ class ProfileOAuth2TokenServiceDelegate {
       const CoreAccountId& failed_account) {}
 
   virtual void Shutdown() {}
-  virtual void UpdateCredentials(const CoreAccountId& account_id,
-                                 const std::string& refresh_token) {}
+  virtual void UpdateCredentials(
+      const CoreAccountId& account_id,
+      const std::string& refresh_token
+#if BUILDFLAG(ENABLE_BOUND_SESSION_CREDENTIALS)
+      ,
+      const std::vector<uint8_t>& wrapped_binding_key = std::vector<uint8_t>()
+#endif  // BUILDFLAG(ENABLE_BOUND_SESSION_CREDENTIALS)
+  ) {
+  }
   virtual void RevokeCredentials(const CoreAccountId& account_id) {}
   virtual scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactory()
       const;
@@ -153,6 +164,11 @@ class ProfileOAuth2TokenServiceDelegate {
 #endif
 
 #if BUILDFLAG(IS_ANDROID)
+  // Triggers platform specific implementation to reload accounts from system.
+  virtual void SeedAccountsThenReloadAllAccountsWithPrimaryAccount(
+      const std::vector<CoreAccountInfo>& core_account_infos,
+      const absl::optional<CoreAccountId>& primary_account_id) {}
+
   // Returns a reference to the corresponding Java object.
   virtual base::android::ScopedJavaLocalRef<jobject> GetJavaObject() = 0;
 #endif

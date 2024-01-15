@@ -9,10 +9,6 @@
 #include "chrome/browser/ash/android_sms/android_sms_service.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 
-namespace user_prefs {
-class PrefRegistrySyncable;
-}  // namespace user_prefs
-
 namespace ash {
 namespace android_sms {
 
@@ -33,24 +29,15 @@ class AndroidSmsServiceFactory : public BrowserContextKeyedServiceFactory {
   ~AndroidSmsServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   content::BrowserContext* GetBrowserContextToUse(
       content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
   bool ServiceIsNULLWhileTesting() const override;
-  void RegisterProfilePrefs(
-      user_prefs::PrefRegistrySyncable* registry) override;
 };
 
 }  // namespace android_sms
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-namespace android_sms {
-using ::ash::android_sms::AndroidSmsServiceFactory;
-}
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_ANDROID_SMS_ANDROID_SMS_SERVICE_FACTORY_H_

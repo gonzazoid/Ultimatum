@@ -14,20 +14,12 @@ bool RenderViewHostDelegate::IsNeverComposited() {
   return false;
 }
 
-bool RenderViewHostDelegate::IsJavaScriptDialogShowing() const {
-  return false;
-}
-
-bool RenderViewHostDelegate::ShouldIgnoreUnresponsiveRenderer() {
-  return false;
-}
-
 bool RenderViewHostDelegate::IsGuest() {
   return false;
 }
 
-absl::optional<SkColor> RenderViewHostDelegate::GetBaseBackgroundColor() {
-  return absl::nullopt;
+std::optional<SkColor> RenderViewHostDelegate::GetBaseBackgroundColor() {
+  return std::nullopt;
 }
 
 }  // namespace content

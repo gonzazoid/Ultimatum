@@ -4,7 +4,7 @@
 
 #include "chrome/browser/recovery/recovery_install_global_error.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/browser_process.h"
@@ -15,7 +15,7 @@
 #include "chrome/browser/upgrade_detector/upgrade_detector.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/prefs/pref_service.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -131,6 +131,11 @@ void RecoveryInstallGlobalError::BubbleViewAcceptButtonPressed(
 void RecoveryInstallGlobalError::BubbleViewCancelButtonPressed(
     Browser* browser) {
   component_updater::DeclinedElevatedRecoveryInstall(pref_registrar_.prefs());
+}
+
+base::WeakPtr<GlobalErrorWithStandardBubble>
+RecoveryInstallGlobalError::AsWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 bool RecoveryInstallGlobalError::HasElevationNotification() const {

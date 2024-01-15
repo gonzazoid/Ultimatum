@@ -5,13 +5,14 @@
 #include "chrome/browser/ash/login/challenge_response_auth_keys_loader.h"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
@@ -38,7 +39,6 @@
 #include "extensions/browser/process_manager.h"
 #include "extensions/browser/process_manager_observer.h"
 #include "extensions/common/manifest_handlers/background_info.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 namespace {
@@ -57,12 +57,14 @@ base::flat_set<std::string> GetLoginScreenPolicyExtensionIds() {
   const PrefService::Preference* const pref =
       prefs->FindPreference(extensions::pref_names::kInstallForceList);
   if (!pref || !pref->IsManaged() ||
-      pref->GetType() != base::Value::Type::DICTIONARY)
+      pref->GetType() != base::Value::Type::DICT) {
     return {};
+  }
 
   base::flat_set<std::string> extension_ids;
-  for (const auto item : pref->GetValue()->DictItems())
+  for (const auto item : pref->GetValue()->GetDict()) {
     extension_ids.insert(item.first);
+  }
   return extension_ids;
 }
 
@@ -84,7 +86,7 @@ void LoadStoredChallengeResponseSpkiKeysForUser(
     const AccountId& account_id,
     std::vector<std::string>* spki_items,
     base::flat_set<std::string>* extension_ids) {
-  const base::Value known_user_value =
+  const base::Value::List known_user_value =
       user_manager::KnownUser(g_browser_process->local_state())
           .GetChallengeResponseKeys(account_id);
   std::vector<DeserializedChallengeResponseKey>
@@ -119,7 +121,7 @@ std::vector<ChallengeResponseKey::SignatureAlgorithm> MakeAlgorithmListFromSsl(
   std::vector<ChallengeResponseKey::SignatureAlgorithm>
       challenge_response_algorithms;
   for (auto ssl_algorithm : ssl_algorithms) {
-    absl::optional<ChallengeResponseKey::SignatureAlgorithm> algorithm =
+    std::optional<ChallengeResponseKey::SignatureAlgorithm> algorithm =
         GetChallengeResponseKeyAlgorithmFromSsl(ssl_algorithm);
     if (algorithm)
       challenge_response_algorithms.push_back(*algorithm);
@@ -193,8 +195,8 @@ class ExtensionLoadObserver final
     }
 
     // Ensure that the extension's background host is active.
-    const extensions::LazyContextId context_id(browser_context,
-                                               extension->id());
+    const auto context_id =
+        extensions::LazyContextId::ForExtension(browser_context, extension);
     extensions::LazyContextTaskQueue* queue = context_id.GetTaskQueue();
     if (!queue->ShouldEnqueueTask(browser_context, extension)) {
       // The background host already exists.

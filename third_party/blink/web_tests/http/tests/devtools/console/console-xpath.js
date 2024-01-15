@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ConsoleTestRunner} from 'console_test_runner';
+
+import * as Console from 'devtools/panels/console/console.js';
+
 (async function() {
   TestRunner.addResult(`Tests $x for iterator and non-iterator types.\n`);
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('console_test_runner');
   await TestRunner.showPanel('console');
   await TestRunner.loadHTML(`
       <a href="http://chromium.org"></a>
@@ -12,7 +16,7 @@
   `);
 
   TestRunner.addSniffer(
-      Console.ConsoleViewMessage.prototype, 'formattedParameterAsNodeForTest', formattedParameter, true);
+      Console.ConsoleViewMessage.ConsoleViewMessage.prototype, 'formattedParameterAsNodeForTest', formattedParameter, true);
   ConsoleTestRunner.addConsoleViewSniffer(messageSniffer, true);
 
   await ConsoleTestRunner.evaluateInConsolePromise('$x(\'42\')');                           // number

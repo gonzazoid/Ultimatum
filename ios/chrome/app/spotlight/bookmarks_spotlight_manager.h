@@ -9,6 +9,10 @@
 
 class ChromeBrowserState;
 
+namespace favicon {
+class LargeIconService;
+}
+
 namespace bookmarks {
 class BookmarkNode;
 class BookmarkModel;
@@ -17,42 +21,38 @@ class BookmarkModel;
 @class CSSearchableItem;
 @class TopSitesSpotlightManager;
 
-@protocol BookmarkUpdatedDelegate
-
-// Called when a bookmark is updated.
-- (void)bookmarkUpdated;
-
-@end
-
+/// This class is intended to be used by the SpotlightManager
+/// It maintains an index of bookmark items in spotlightInterface from the
+/// observed bookmarkModel. The methods should be called on main thread, but
+/// will internally dispatch work to a background thread
 @interface BookmarksSpotlightManager : BaseSpotlightManager
 
-// The delegate notified when a bookmark is updated.
-@property(nonatomic, weak) id<BookmarkUpdatedDelegate> delegate;
+- (instancetype)
+        initWithLargeIconService:(favicon::LargeIconService*)largeIconService
+    localOrSyncableBookmarkModel:
+        (bookmarks::BookmarkModel*)localOrSyncableBookmarkModel
+            accountBookmarkModel:(bookmarks::BookmarkModel*)accountBookmarkModel
+              spotlightInterface:(SpotlightInterface*)spotlightInterface
+           searchableItemFactory:(SearchableItemFactory*)searchableItemFactory;
+
+/// Number of pending large icon tasks.
+@property(nonatomic, assign) NSUInteger pendingLargeIconTasksCount;
 
 + (BookmarksSpotlightManager*)bookmarksSpotlightManagerWithBrowserState:
     (ChromeBrowserState*)browserState;
 
-// Checks the date of the latest global indexation and reindex all bookmarks if
-// needed.
+/// Checks the date of the latest global indexation and reindex all bookmarks if
+/// needed.
 - (void)reindexBookmarksIfNeeded;
 
-// Methods below here are for testing use only.
+/// Clears all the bookmarks in the Spotlight index then index the bookmarks in
+/// the model.
+- (void)clearAndReindexModel;
 
-- (instancetype)
-initWithLargeIconService:(favicon::LargeIconService*)largeIconService
-           bookmarkModel:(bookmarks::BookmarkModel*)bookmarkModel;
-
-// Recursively adds node ancestors titles to keywords. Permanent nodes are
-// ignored.
-- (void)getParentKeywordsForNode:(const bookmarks::BookmarkNode*)node
-                         inArray:(NSMutableArray*)keywords;
-
-// Adds keywords to `item`.
-- (void)addKeywords:(NSArray*)keywords toSearchableItem:(CSSearchableItem*)item;
-
-// Called before the instance is deallocated. This method should be overridden
-// by the subclasses and de-activate the instance.
-- (void)shutdown;
+/// Recursively returns all the parent folders names of a node.
+/// It is exposed mainly to be tested.
+- (NSMutableArray*)parentFolderNamesForNode:
+    (const bookmarks::BookmarkNode*)node;
 
 @end
 

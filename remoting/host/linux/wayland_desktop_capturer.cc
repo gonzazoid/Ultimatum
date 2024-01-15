@@ -11,7 +11,7 @@
 #include "remoting/host/linux/wayland_manager.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capture_options.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capturer.h"
-#include "third_party/webrtc/modules/desktop_capture/linux/wayland/xdg_session_details.h"
+#include "third_party/webrtc/modules/portal/xdg_session_details.h"
 
 namespace remoting {
 
@@ -24,11 +24,17 @@ using webrtc::xdg_portal::SessionDetails;
 
 WaylandDesktopCapturer::WaylandDesktopCapturer(
     const DesktopCaptureOptions& options)
-    : base_capturer_pipewire_(
-          options,
-          // Note: RemoteDesktopPortal doesn't own `this`
-          std::make_unique<xdg_portal::RemoteDesktopPortal>(this)) {}
-WaylandDesktopCapturer::~WaylandDesktopCapturer() {}
+    : base_capturer_pipewire_(options,
+                              // Note: RemoteDesktopPortal doesn't own `this`
+                              std::make_unique<xdg_portal::RemoteDesktopPortal>(
+                                  this,
+                                  options.prefer_cursor_embedded())) {
+  base_capturer_pipewire_.SendFramesImmediately(true);
+}
+
+WaylandDesktopCapturer::~WaylandDesktopCapturer() {
+  WaylandManager::Get()->OnDesktopCapturerDestroyed();
+}
 
 void WaylandDesktopCapturer::Start(Callback* callback) {
   base_capturer_pipewire_.Start(callback);
@@ -48,10 +54,14 @@ bool WaylandDesktopCapturer::SelectSource(SourceId id) {
 
 void WaylandDesktopCapturer::SetScreenResolution(ScreenResolution resolution,
                                                  webrtc::ScreenId screen_id) {
-  // TODO(salmanmalik): For multi-mon, we will need to verify that screen id
+  // TODO(crbug/1442000): For multi-mon, we will need to verify that screen id
   // is managed by this capturer.
   base_capturer_pipewire_.UpdateResolution(resolution.dimensions().width(),
                                            resolution.dimensions().height());
+}
+
+void WaylandDesktopCapturer::SetMaxFrameRate(uint32_t max_frame_rate) {
+  base_capturer_pipewire_.SetMaxFrameRate(max_frame_rate);
 }
 
 #if defined(WEBRTC_USE_GIO)
@@ -82,6 +92,10 @@ void WaylandDesktopCapturer::OnScreenCastRequestResult(RequestResponse result,
 
 void WaylandDesktopCapturer::OnScreenCastSessionClosed() {
   base_capturer_pipewire_.OnScreenCastSessionClosed();
+}
+
+bool WaylandDesktopCapturer::SupportsFrameCallbacks() {
+  return true;
 }
 
 }  // namespace remoting

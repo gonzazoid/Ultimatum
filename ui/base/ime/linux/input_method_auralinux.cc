@@ -5,8 +5,8 @@
 #include "ui/base/ime/linux/input_method_auralinux.h"
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
 #include "base/environment.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_offset_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/chromeos_buildflags.h"
@@ -202,7 +202,7 @@ ui::EventDispatchDetails InputMethodAuraLinux::DispatchKeyEvent(
   // Should stop propagation of the event when composition is updated,
   // because the event is considered to be used for the composition.
   should_stop_propagation |=
-      MaybeUpdateComposition(commit_result == CommitResult::kSuccess);
+      UpdateCompositionIfChanged(commit_result == CommitResult::kSuccess);
 
   // If the IME has not handled the key event, passes the keyevent back to the
   // previous processing flow.
@@ -256,9 +256,17 @@ ui::EventDispatchDetails InputMethodAuraLinux::DispatchImeFilteredKeyPressEvent(
   // - there's no composing text, and no updated.
   // If the condition meets, that means IME did not consume the key event
   // conceptually, so continue to dispatch KeyEvent without overwriting by 229.
-  ui::EventDispatchDetails details = NeedInsertChar(result_text_)
-                                         ? DispatchKeyEventPostIME(event)
-                                         : SendFakeProcessKeyEvent(event);
+  // But in some chinese IME framework such as fcitx + GTK,
+  // if the condition meets and last event is 13(VKEY_RETURN), that means IME
+  // consume the key event conceptually(want to insert the only one character).
+  // So in this condition, should to dispatch KeyEvent with overwriting by 229.
+  ui::EventDispatchDetails details;
+  if (event->key_code() == VKEY_RETURN)
+    details = SendFakeProcessKeyEvent(event);
+  else {
+    details = NeedInsertChar(result_text_) ? DispatchKeyEventPostIME(event)
+                                           : SendFakeProcessKeyEvent(event);
+  }
   if (details.dispatcher_destroyed)
     return details;
   // If the KEYDOWN is stopped propagation (e.g. triggered an accelerator),
@@ -311,7 +319,26 @@ InputMethodAuraLinux::CommitResult InputMethodAuraLinux::MaybeCommitResult(
   return CommitResult::kSuccess;
 }
 
-bool InputMethodAuraLinux::MaybeUpdateComposition(bool text_committed) {
+bool InputMethodAuraLinux::UpdateCompositionIfTextSelected() {
+  TextInputClient* client = GetTextInputClient();
+  if (!client || IsTextInputTypeNone()) {
+    return false;
+  }
+  // In the special case where (1) there is no composition and (2) there is a
+  // non-empty selection, calling SetCompositionText should delete the
+  // selection, even when the call would otherwise be considered redundant.
+  // For example, calling SetCompositionText('') when there is no composition
+  // seems like it would have no effect, but it does if there is a non-empty
+  // selection, so we make sure it is called in such cases. See b/223500609.
+  if (!client->HasCompositionText() && composition_.text.empty() &&
+      selection_range_.IsValid() && !selection_range_.is_empty()) {
+    client->SetCompositionText(composition_);
+    return true;
+  }
+  return false;
+}
+
+bool InputMethodAuraLinux::UpdateCompositionIfChanged(bool text_committed) {
   TextInputClient* client = GetTextInputClient();
   bool update_composition =
       client && composition_changed_ && !IsTextInputTypeNone();
@@ -334,6 +361,7 @@ bool InputMethodAuraLinux::MaybeUpdateComposition(bool text_committed) {
 
 void InputMethodAuraLinux::UpdateContextFocusState() {
   surrounding_text_.reset();
+  text_range_ = gfx::Range::InvalidRange();
   selection_range_ = gfx::Range::InvalidRange();
 
   auto old_text_input_type = text_input_type_;
@@ -341,17 +369,22 @@ void InputMethodAuraLinux::UpdateContextFocusState() {
 
   auto* client = GetTextInputClient();
   bool has_client = client != nullptr;
-  context_->UpdateFocus(has_client, old_text_input_type, text_input_type_);
-
-  TextInputMode mode = TEXT_INPUT_MODE_DEFAULT;
-  int flags = TEXT_INPUT_FLAG_NONE;
-  bool should_do_learning = false;
+  TextInputClient::FocusReason reason;
+  LinuxInputMethodContext::TextInputClientAttributes attributes;
+  attributes.input_type = text_input_type_;
   if (client) {
-    mode = client->GetTextInputMode();
-    flags = client->GetTextInputFlags();
-    should_do_learning = client->ShouldDoLearning();
+    reason = client->GetFocusReason();
+    attributes.input_mode = client->GetTextInputMode();
+    attributes.flags = client->GetTextInputFlags();
+    attributes.should_do_learning = client->ShouldDoLearning();
+    attributes.can_compose_inline = client->CanComposeInline();
+  } else {
+    reason = text_input_type_ == TEXT_INPUT_TYPE_NONE
+                 ? TextInputClient::FocusReason::FOCUS_REASON_NONE
+                 : TextInputClient::FocusReason::FOCUS_REASON_OTHER;
   }
-  context_->SetContentType(text_input_type_, mode, flags, should_do_learning);
+
+  context_->UpdateFocus(has_client, old_text_input_type, attributes, reason);
 }
 
 void InputMethodAuraLinux::OnTextInputTypeChanged(TextInputClient* client) {
@@ -371,36 +404,22 @@ void InputMethodAuraLinux::OnCaretBoundsChanged(const TextInputClient* client) {
   if (client->GetTextRange(&text_range) &&
       client->GetTextFromRange(text_range, &text) &&
       client->GetEditableSelectionRange(&selection_range)) {
+    absl::optional<GrammarFragment> fragment;
+    absl::optional<AutocorrectInfo> autocorrect;
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
-    // SetGrammarFragmentAtCursor must happen before SetSurroundingText to make
-    // sure it is properly updated before IME needs it.
-    auto grammar_fragment_opt = client->GetGrammarFragmentAtCursor();
-    if (grammar_fragment_opt) {
-      auto fragment = grammar_fragment_opt.value();
-      // Convert utf16 offsets to utf8.
-      std::vector<size_t> offsets = {fragment.range.start(),
-                                     fragment.range.end()};
-      base::UTF16ToUTF8AndAdjustOffsets(text, &offsets);
-      context_->SetGrammarFragmentAtCursor(
-          ui::GrammarFragment(gfx::Range(static_cast<uint32_t>(offsets[0]),
-                                         static_cast<uint32_t>(offsets[1])),
-                              fragment.suggestion));
-    } else {
-      context_->SetGrammarFragmentAtCursor(
-          ui::GrammarFragment(gfx::Range(), ""));
-    }
-
-    // Send the updated autocorrect information before surrounding text,
-    // as surrounding text changes may trigger the IME to ask for the
-    // autocorrect information.
-    context_->SetAutocorrectInfo(client->GetAutocorrectRange(),
-                                 client->GetAutocorrectCharacterBounds());
+    fragment = client->GetGrammarFragmentAtCursor();
+    autocorrect = AutocorrectInfo{
+        client->GetAutocorrectRange(),
+        client->GetAutocorrectCharacterBounds(),
+    };
 #endif
-
-    if (surrounding_text_ != text || selection_range_ != selection_range) {
+    if (surrounding_text_ != text || text_range_ != text_range ||
+        selection_range_ != selection_range) {
       surrounding_text_ = text;
+      text_range_ = text_range;
       selection_range_ = selection_range;
-      context_->SetSurroundingText(text, selection_range);
+      context_->SetSurroundingText(text, text_range, selection_range, fragment,
+                                   autocorrect);
     }
   }
 }
@@ -486,6 +505,12 @@ void InputMethodAuraLinux::OnCommit(const std::u16string& text) {
     }
     last_commit_result_ = MaybeCommitResult(/*filtered=*/true, event);
     composition_ = CompositionText();
+  }
+}
+
+void InputMethodAuraLinux::OnInsertImage(const GURL& src) {
+  if (auto* text_input_client = GetTextInputClient()) {
+    text_input_client->InsertImage(src);
   }
 }
 
@@ -607,7 +632,9 @@ void InputMethodAuraLinux::OnPreeditUpdate(
       return;
     }
   }
-  MaybeUpdateComposition(last_commit_result_ == CommitResult::kSuccess);
+  if (!UpdateCompositionIfTextSelected()) {
+    UpdateCompositionIfChanged(last_commit_result_ == CommitResult::kSuccess);
+  }
   last_commit_result_.reset();
 }
 
@@ -624,7 +651,9 @@ bool InputMethodAuraLinux::NeedInsertChar(
 
 ui::EventDispatchDetails InputMethodAuraLinux::SendFakeProcessKeyEvent(
     ui::KeyEvent* event) const {
-  KeyEvent key_event(ui::ET_KEY_PRESSED, ui::VKEY_PROCESSKEY, event->flags());
+  ui::KeyEvent key_event(ui::ET_KEY_PRESSED, ui::VKEY_PROCESSKEY, event->code(),
+                         event->flags(), ui::DomKey::PROCESS,
+                         event->time_stamp());
   ui::EventDispatchDetails details = DispatchKeyEventPostIME(&key_event);
   if (key_event.stopped_propagation())
     event->StopPropagation();

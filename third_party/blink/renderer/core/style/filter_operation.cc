@@ -42,8 +42,9 @@ void ReferenceFilterOperation::Trace(Visitor* visitor) const {
 
 gfx::RectF ReferenceFilterOperation::MapRect(const gfx::RectF& rect) const {
   const auto* last_effect = filter_ ? filter_->LastEffect() : nullptr;
-  if (!last_effect)
+  if (!last_effect) {
     return rect;
+  }
   return last_effect->MapRect(rect);
 }
 
@@ -54,13 +55,15 @@ ReferenceFilterOperation::ReferenceFilterOperation(const AtomicString& url,
       resource_(resource) {}
 
 void ReferenceFilterOperation::AddClient(SVGResourceClient& client) {
-  if (resource_)
+  if (resource_) {
     resource_->AddClient(client);
+  }
 }
 
 void ReferenceFilterOperation::RemoveClient(SVGResourceClient& client) {
-  if (resource_)
+  if (resource_) {
     resource_->RemoveClient(client);
+  }
 }
 
 bool ReferenceFilterOperation::IsEqualAssumingSameType(
@@ -70,15 +73,16 @@ bool ReferenceFilterOperation::IsEqualAssumingSameType(
 }
 
 gfx::RectF BlurFilterOperation::MapRect(const gfx::RectF& rect) const {
-  float std_deviation = FloatValueForLength(std_deviation_, 0);
-  return FEGaussianBlur::MapEffect(gfx::SizeF(std_deviation, std_deviation),
-                                   rect);
+  return FEGaussianBlur::MapEffect(
+      gfx::SizeF(FloatValueForLength(std_deviation_.X(), 0),
+                 FloatValueForLength(std_deviation_.Y(), 0)),
+      rect);
 }
 
 gfx::RectF DropShadowFilterOperation::MapRect(const gfx::RectF& rect) const {
   float std_deviation = shadow_.Blur();
   return FEDropShadow::MapEffect(gfx::SizeF(std_deviation, std_deviation),
-                                 shadow_.Location(), rect);
+                                 shadow_.Offset(), rect);
 }
 
 gfx::RectF BoxReflectFilterOperation::MapRect(const gfx::RectF& rect) const {

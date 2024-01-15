@@ -18,11 +18,8 @@
 #include "device/bluetooth/floss/bluetooth_remote_gatt_descriptor_floss.h"
 #include "device/bluetooth/floss/bluetooth_remote_gatt_service_floss.h"
 #include "device/bluetooth/floss/fake_floss_adapter_client.h"
-#include "device/bluetooth/floss/fake_floss_advertiser_client.h"
-#include "device/bluetooth/floss/fake_floss_gatt_client.h"
-#include "device/bluetooth/floss/fake_floss_lescan_client.h"
+#include "device/bluetooth/floss/fake_floss_gatt_manager_client.h"
 #include "device/bluetooth/floss/fake_floss_manager_client.h"
-#include "device/bluetooth/floss/fake_floss_socket_manager.h"
 #include "device/bluetooth/floss/floss_dbus_manager.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -39,33 +36,17 @@ constexpr char kFakeUuidShort[] = "1812";
 
 namespace floss {
 
-using CharProperty = device::BluetoothGattCharacteristic::Property;
+using FlossCharacteristic = floss::GattCharacteristic;
 
 // Unit tests exercising GATT in device/bluetooth/floss implementations, with
 // abstract Floss API implemented as a fake Floss*Client.
 class BluetoothGattFlossTest : public testing::Test {
  public:
   void SetUp() override {
-    std::unique_ptr<floss::FlossDBusManagerSetter> dbus_setter =
-        floss::FlossDBusManager::GetSetterForTesting();
-
-    auto fake_floss_adapter_client = std::make_unique<FakeFlossAdapterClient>();
-    auto fake_floss_gatt_client = std::make_unique<FakeFlossGattClient>();
-    auto fake_floss_manager_client = std::make_unique<FakeFlossManagerClient>();
-
-    fake_floss_adapter_client_ = fake_floss_adapter_client.get();
-    fake_floss_gatt_client_ = fake_floss_gatt_client.get();
-    fake_floss_manager_client_ = fake_floss_manager_client.get();
-
-    dbus_setter->SetFlossManagerClient(std::move(fake_floss_manager_client));
-    dbus_setter->SetFlossAdapterClient(std::move(fake_floss_adapter_client));
-    dbus_setter->SetFlossGattClient(std::move(fake_floss_gatt_client));
-    dbus_setter->SetFlossSocketManager(
-        std::make_unique<FakeFlossSocketManager>());
-    dbus_setter->SetFlossLEScanClient(
-        std::make_unique<FakeFlossLEScanClient>());
-    dbus_setter->SetFlossAdvertiserClient(
-        std::make_unique<FakeFlossAdvertiserClient>());
+    // TODO(b/266989920): GetSetterForTesting method used as a shortcut to
+    // initiate fake DBUS instances and fake clients. Replace this call with a
+    // more proper init after Floss fake implement is completed.
+    FlossDBusManager::GetSetterForTesting();
 
     // Always initialize and enable adapter for Gatt tests.
     InitializeAdapter();
@@ -73,11 +54,25 @@ class BluetoothGattFlossTest : public testing::Test {
     SetClientRegistered();
   }
 
+  FakeFlossManagerClient* GetFakeManagerClient() {
+    return static_cast<FakeFlossManagerClient*>(
+        FlossDBusManager::Get()->GetManagerClient());
+  }
+
+  FakeFlossAdapterClient* GetFakeAdapterClient() {
+    return static_cast<FakeFlossAdapterClient*>(
+        floss::FlossDBusManager::Get()->GetAdapterClient());
+  }
+
+  FakeFlossGattManagerClient* GetFakeGattManagerClient() {
+    return static_cast<FakeFlossGattManagerClient*>(
+        FlossDBusManager::Get()->GetGattManagerClient());
+  }
+
   void InitializeAdapter() {
     adapter_ = BluetoothAdapterFloss::CreateAdapter();
 
-    fake_floss_manager_client_->SetAdapterPowered(/*adapter=*/kUseThisAdapter,
-                                                  /*powered=*/true);
+    GetFakeManagerClient()->SetDefaultEnabled(true);
 
     base::RunLoop run_loop;
     adapter_->Initialize(run_loop.QuitClosure());
@@ -92,10 +87,13 @@ class BluetoothGattFlossTest : public testing::Test {
   void EnableAdapter() {
     ASSERT_TRUE(adapter_.get() != nullptr);
 
-    fake_floss_manager_client_->NotifyObservers(
+    GetFakeManagerClient()->NotifyObservers(
         base::BindLambdaForTesting([](FlossManagerClient::Observer* observer) {
-          observer->AdapterEnabledChanged(kUseThisAdapter, /*enabled=*/true);
+          observer->AdapterEnabledChanged(kUseThisAdapter,
+                                          /*enabled=*/true);
         }));
+    GetFakeAdapterClient()->SetConnected(
+        FakeFlossAdapterClient::kBondedAddress1, true);
     base::RunLoop().RunUntilIdle();
   }
 
@@ -107,15 +105,15 @@ class BluetoothGattFlossTest : public testing::Test {
   }
 
   void SetClientRegistered() {
-    fake_floss_gatt_client_->GattClientRegistered(GattStatus::kSuccess,
-                                                  kGattClientId);
+    GetFakeGattManagerClient()->GattClientRegistered(GattStatus::kSuccess,
+                                                     kGattClientId);
   }
 
   void SetAclConnectionState(std::string address, bool connected) {
     FlossDeviceId device;
     device.address = address;
 
-    fake_floss_adapter_client_->NotifyObservers(base::BindLambdaForTesting(
+    GetFakeAdapterClient()->NotifyObservers(base::BindLambdaForTesting(
         [&connected, &device](FlossAdapterClient::Observer* observer) {
           if (connected) {
             observer->AdapterDeviceConnected(device);
@@ -128,14 +126,20 @@ class BluetoothGattFlossTest : public testing::Test {
   void SetGattConnectionState(GattStatus status,
                               bool connected,
                               std::string address) {
-    fake_floss_gatt_client_->GattClientConnectionState(status, kGattClientId,
-                                                       connected, address);
+    GetFakeGattManagerClient()->GattClientConnectionState(status, kGattClientId,
+                                                          connected, address);
   }
 
   void SetGattSearchComplete(std::string address,
                              const std::vector<GattService>& services,
                              GattStatus status) {
-    fake_floss_gatt_client_->GattSearchComplete(address, services, status);
+    GetFakeGattManagerClient()->GattSearchComplete(address, services, status);
+  }
+
+  void SetGattConfigureMtu(std::string address,
+                           int32_t mtu,
+                           GattStatus status) {
+    GetFakeGattManagerClient()->GattConfigureMtu(address, mtu, status);
   }
 
   GattService CreateFakeServiceFor(const device::BluetoothUUID& uuid) {
@@ -152,12 +156,6 @@ class BluetoothGattFlossTest : public testing::Test {
 
   base::test::SingleThreadTaskEnvironment task_environment_;
   scoped_refptr<device::BluetoothAdapter> adapter_;
-
-  // Holds pointer to FakeFloss*Client so that we can manipulate the fakes
-  // within the tests.
-  raw_ptr<FakeFlossAdapterClient> fake_floss_adapter_client_;
-  raw_ptr<FakeFlossGattClient> fake_floss_gatt_client_;
-  raw_ptr<FakeFlossManagerClient> fake_floss_manager_client_;
 };
 
 TEST_F(BluetoothGattFlossTest, ConnectAndResolveServices) {
@@ -215,6 +213,9 @@ TEST_F(BluetoothGattFlossTest, UpgradeToFullDiscovery) {
   // Create a gatt connection with partial service discovery.
   paired_device->CreateGattConnection(base::DoNothing(), fake_uuid_optional);
 
+  // Fake a successful configure MTU.
+  SetGattConfigureMtu(paired_device->GetAddress(), 500, GattStatus::kSuccess);
+
   // Fake a connection completion.
   SetGattConnectionState(GattStatus::kSuccess, /*connected=*/true,
                          paired_device->GetAddress());
@@ -246,46 +247,72 @@ TEST_F(BluetoothGattFlossTest, UpgradeToFullDiscovery) {
 }
 
 TEST_F(BluetoothGattFlossTest, TranslateReadWriteAuthentication) {
-  std::vector<std::pair<uint32_t, AuthRequired>> property_to_auth_read_map = {
-      {CharProperty::PROPERTY_NONE, AuthRequired::kNoAuth},
-      {CharProperty::PROPERTY_READ, AuthRequired::kNoAuth},
+  std::vector<std::pair<std::pair<uint32_t, uint32_t>, AuthRequired>>
+      property_to_auth_read_map = {
+          {{0, 0}, AuthRequired::kNoAuth},
+          {{FlossCharacteristic::GATT_CHAR_PROP_BIT_READ, 0},
+           AuthRequired::kNoAuth},
+          {{
+               FlossCharacteristic::GATT_CHAR_PROP_BIT_READ,
+               FlossCharacteristic::GATT_PERM_READ_ENCRYPTED,
+           },
+           AuthRequired::kNoMitm},
+          {{
+               FlossCharacteristic::GATT_CHAR_PROP_BIT_READ,
+               FlossCharacteristic::GATT_PERM_READ_ENC_MITM,
+           },
+           AuthRequired::kReqMitm},
 
-      {CharProperty::PROPERTY_READ_ENCRYPTED, AuthRequired::kNoMitm},
-      {CharProperty::PROPERTY_READ_ENCRYPTED_AUTHENTICATED,
-       AuthRequired::kReqMitm},
+          // Use more restrictive requirement.
+          {{FlossCharacteristic::GATT_CHAR_PROP_BIT_READ,
+            FlossCharacteristic::GATT_PERM_READ_ENCRYPTED |
+                FlossCharacteristic::GATT_PERM_READ_ENC_MITM},
+           AuthRequired::kReqMitm},
+      };
 
-      // Use more restrictive requirement.
-      {CharProperty::PROPERTY_READ_ENCRYPTED |
-           CharProperty::PROPERTY_READ_ENCRYPTED_AUTHENTICATED,
-       AuthRequired::kReqMitm},
-  };
+  std::vector<std::pair<std::pair<uint32_t, uint32_t>, AuthRequired>>
+      property_to_auth_write_map = {
+          {{0, 0}, AuthRequired::kNoAuth},
+          {{FlossCharacteristic::GATT_CHAR_PROP_BIT_WRITE, 0},
+           AuthRequired::kNoAuth},
 
-  std::vector<std::pair<uint32_t, AuthRequired>> property_to_auth_write_map = {
-      {CharProperty::PROPERTY_NONE, AuthRequired::kNoAuth},
-      {CharProperty::PROPERTY_WRITE, AuthRequired::kNoAuth},
+          // Don't accept signed writes without authentication/encryption.
+          {{FlossCharacteristic::GATT_CHAR_PROP_BIT_WRITE,
+            FlossCharacteristic::GATT_PERM_WRITE_SIGNED},
+           AuthRequired::kNoAuth},
 
-      // Don't accept signed writes without authentication/encryption.
-      {CharProperty::PROPERTY_AUTHENTICATED_SIGNED_WRITES,
-       AuthRequired::kNoAuth},
+          {{FlossCharacteristic::GATT_CHAR_PROP_BIT_WRITE,
+            FlossCharacteristic::GATT_PERM_WRITE_ENCRYPTED},
+           AuthRequired::kNoMitm},
 
-      {CharProperty::PROPERTY_WRITE_ENCRYPTED, AuthRequired::kNoMitm},
-      {CharProperty::PROPERTY_WRITE_ENCRYPTED_AUTHENTICATED,
-       AuthRequired::kReqMitm},
-      {CharProperty::PROPERTY_WRITE_ENCRYPTED |
-           CharProperty::PROPERTY_WRITE_ENCRYPTED_AUTHENTICATED,
-       AuthRequired::kReqMitm},
+          {{FlossCharacteristic::GATT_CHAR_PROP_BIT_WRITE,
+            FlossCharacteristic::GATT_PERM_WRITE_ENC_MITM},
+           AuthRequired::kReqMitm},
 
-      {CharProperty::PROPERTY_WRITE_ENCRYPTED |
-           CharProperty::PROPERTY_AUTHENTICATED_SIGNED_WRITES,
-       AuthRequired::kSignedNoMitm},
-      {CharProperty::PROPERTY_WRITE_ENCRYPTED_AUTHENTICATED |
-           CharProperty::PROPERTY_AUTHENTICATED_SIGNED_WRITES,
-       AuthRequired::kSignedReqMitm},
-      {CharProperty::PROPERTY_WRITE_ENCRYPTED |
-           CharProperty::PROPERTY_WRITE_ENCRYPTED_AUTHENTICATED |
-           CharProperty::PROPERTY_AUTHENTICATED_SIGNED_WRITES,
-       AuthRequired::kSignedReqMitm},
-  };
+          // Prefer encrypted + authenticated over encrypted.
+          {{
+               FlossCharacteristic::GATT_CHAR_PROP_BIT_WRITE,
+               FlossCharacteristic::GATT_PERM_WRITE_ENCRYPTED |
+                   FlossCharacteristic::GATT_PERM_WRITE_ENC_MITM,
+           },
+           AuthRequired::kReqMitm},
+
+          {{FlossCharacteristic::GATT_CHAR_PROP_BIT_WRITE,
+            FlossCharacteristic::GATT_PERM_WRITE_ENCRYPTED |
+                FlossCharacteristic::GATT_PERM_WRITE_SIGNED},
+           AuthRequired::kSignedNoMitm},
+
+          {{FlossCharacteristic::GATT_CHAR_PROP_BIT_WRITE,
+            FlossCharacteristic::GATT_PERM_WRITE_ENC_MITM |
+                FlossCharacteristic::GATT_PERM_WRITE_SIGNED},
+           AuthRequired::kSignedReqMitm},
+
+          {{FlossCharacteristic::GATT_CHAR_PROP_BIT_WRITE,
+            FlossCharacteristic::GATT_PERM_WRITE_ENCRYPTED |
+                FlossCharacteristic::GATT_PERM_WRITE_ENC_MITM |
+                FlossCharacteristic::GATT_PERM_WRITE_SIGNED},
+           AuthRequired::kSignedReqMitm},
+      };
 
   device::BluetoothDevice* device =
       adapter_->GetDevice(FakeFlossAdapterClient::kBondedAddress1);
@@ -297,13 +324,15 @@ TEST_F(BluetoothGattFlossTest, TranslateReadWriteAuthentication) {
 
   auto service = BluetoothRemoteGattServiceFloss::Create(
       static_cast<BluetoothAdapterFloss*>(adapter_.get()),
-      static_cast<BluetoothDeviceFloss*>(device), underlying_service, true);
+      static_cast<BluetoothDeviceFloss*>(device), underlying_service);
 
-  for (const auto& [props, auth] : property_to_auth_read_map) {
+  for (const auto& [pair, auth] : property_to_auth_read_map) {
+    const auto& [props, perms] = pair;
     GattCharacteristic tmp;
     tmp.uuid = device::BluetoothUUID("1912");
     tmp.instance_id = 2;
     tmp.properties = props;
+    tmp.permissions = perms;
 
     auto characteristic =
         BluetoothRemoteGattCharacteristicFloss::Create(service.get(), &tmp);
@@ -311,11 +340,13 @@ TEST_F(BluetoothGattFlossTest, TranslateReadWriteAuthentication) {
     EXPECT_EQ(characteristic->GetAuthForRead(), auth);
   }
 
-  for (const auto& [props, auth] : property_to_auth_write_map) {
+  for (const auto& [pair, auth] : property_to_auth_write_map) {
+    const auto& [props, perms] = pair;
     GattCharacteristic tmp;
     tmp.uuid = device::BluetoothUUID("1912");
     tmp.instance_id = 2;
     tmp.properties = props;
+    tmp.permissions = perms;
 
     auto characteristic =
         BluetoothRemoteGattCharacteristicFloss::Create(service.get(), &tmp);
@@ -335,9 +366,10 @@ TEST_F(BluetoothGattFlossTest, VerifyAllIdentifiers) {
 
   auto service = BluetoothRemoteGattServiceFloss::Create(
       static_cast<BluetoothAdapterFloss*>(adapter_.get()),
-      static_cast<BluetoothDeviceFloss*>(device), underlying_service, true);
+      static_cast<BluetoothDeviceFloss*>(device), underlying_service);
   EXPECT_EQ(service->GetIdentifier(),
-            base::StringPrintf("%s/%d", device->GetAddress().c_str(), 16));
+            base::StringPrintf("%s-%s/%04x", device->GetAddress().c_str(),
+                               service->GetUUID().value().c_str(), 16));
 
   GattCharacteristic underlying_characteristic;
   underlying_characteristic.uuid = device::BluetoothUUID(kFakeUuidShort);
@@ -345,9 +377,9 @@ TEST_F(BluetoothGattFlossTest, VerifyAllIdentifiers) {
 
   auto characteristic = BluetoothRemoteGattCharacteristicFloss::Create(
       service.get(), &underlying_characteristic);
-  EXPECT_EQ(
-      characteristic->GetIdentifier(),
-      base::StringPrintf("%s/%d/%d", device->GetAddress().c_str(), 16, 47));
+  EXPECT_EQ(characteristic->GetIdentifier(),
+            base::StringPrintf("%s-%s/%04x/%04x", device->GetAddress().c_str(),
+                               service->GetUUID().value().c_str(), 16, 47));
 
   GattDescriptor underlying_descriptor;
   underlying_descriptor.uuid = device::BluetoothUUID(kFakeUuidShort);
@@ -355,9 +387,10 @@ TEST_F(BluetoothGattFlossTest, VerifyAllIdentifiers) {
 
   auto descriptor = BluetoothRemoteGattDescriptorFloss::Create(
       service.get(), characteristic.get(), &underlying_descriptor);
-  EXPECT_EQ(descriptor->GetIdentifier(),
-            base::StringPrintf("%s/%d/%d/%d", device->GetAddress().c_str(), 16,
-                               47, 72));
+  EXPECT_EQ(
+      descriptor->GetIdentifier(),
+      base::StringPrintf("%s-%s/%04x/%04x/%04x", device->GetAddress().c_str(),
+                         service->GetUUID().value().c_str(), 16, 47, 72));
 }
 
 }  // namespace floss

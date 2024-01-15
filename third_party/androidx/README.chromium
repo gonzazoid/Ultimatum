@@ -1,10 +1,11 @@
 Name: Androidx Repository
 Short Name: androidx
+URL: https://androidx.dev
 Version: 1
 License: Refer to additional_readme_paths.json
 License Android Compatible: yes
-License File: NOT_SHIPPED
 Security Critical: yes
+Shipped: no
 
 Description:
 A gradle-specified repository for Androidx dependencies.
@@ -35,3 +36,10 @@ How to add a new androidx library:
 * Wait for android-androidx-packager to upload a new CIPD instance (linked above)
 * Wait for androidx-chromium to roll the new package (linked above)
 
+Local Modifications:
+* Added the BuildCompat.java source to local_modification/ so that we can roll
+  it manually and out-of-band with the rest of androidx. Use the
+  update_source.sh script to pull in changes from androidx-main.
+  https://crbug.com/1414452
+* Added a no-op version of androidx.window
+* Pin androidx_recycleview_recycleview to avoid https://crbug.com/1421341.

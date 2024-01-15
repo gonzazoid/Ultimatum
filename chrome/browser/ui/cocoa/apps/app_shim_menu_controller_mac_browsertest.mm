@@ -2,16 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/memory/raw_ptr.h"
-
 #import "chrome/browser/ui/cocoa/apps/app_shim_menu_controller_mac.h"
 
 #import <Cocoa/Cocoa.h>
 
+#import "base/apple/foundation_util.h"
+#import "base/apple/scoped_objc_class_swizzler.h"
 #include "base/command_line.h"
-#import "base/mac/foundation_util.h"
-#import "base/mac/scoped_nsobject.h"
-#import "base/mac/scoped_objc_class_swizzler.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/sys_string_conversions.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/apps/app_shim/app_shim_manager_mac.h"
@@ -134,15 +132,19 @@ class AppShimMenuControllerBrowserTest
     return window_list.front();
   }
 
-  raw_ptr<const extensions::Extension> app_1_ = nullptr;
-  raw_ptr<const extensions::Extension> app_2_ = nullptr;
-  raw_ptr<const extensions::Extension> hosted_app_ = nullptr;
+  raw_ptr<const extensions::Extension, AcrossTasksDanglingUntriaged> app_1_ =
+      nullptr;
+  raw_ptr<const extensions::Extension, AcrossTasksDanglingUntriaged> app_2_ =
+      nullptr;
+  raw_ptr<const extensions::Extension, AcrossTasksDanglingUntriaged>
+      hosted_app_ = nullptr;
   NSUInteger initial_menu_item_count_ = 0;
 };
 
 // Test that focusing an app window changes the menu bar.
+// Disabled; https://crbug.com/1493413.
 IN_PROC_BROWSER_TEST_F(AppShimMenuControllerBrowserTest,
-                       PlatformAppFocusUpdatesMenuBar) {
+                       DISABLED_PlatformAppFocusUpdatesMenuBar) {
   SetUpApps(PACKAGED_1 | PACKAGED_2);
   // When an app is focused, all Chrome menu items should be hidden, and a menu
   // item for the app should be added.
@@ -218,8 +220,9 @@ IN_PROC_BROWSER_TEST_F(AppShimMenuControllerBrowserTest,
 }
 
 // Test that uninstalling an app restores the main menu.
+// Disabled per crbug.com/1513792.
 IN_PROC_BROWSER_TEST_F(AppShimMenuControllerBrowserTest,
-                       ExtensionUninstallUpdatesMenuBar) {
+                       DISABLED_ExtensionUninstallUpdatesMenuBar) {
   SetUpApps(PACKAGED_1 | PACKAGED_2);
 
   FirstWindowForApp(app_2_)->GetBaseWindow()->Close();

@@ -6,6 +6,7 @@
 
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
+#include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/background_fetch/background_fetch.mojom.h"
 
 namespace content {
@@ -64,6 +65,7 @@ DatabaseStatus ToDatabaseStatus(blink::ServiceWorkerStatusCode status) {
     case blink::ServiceWorkerStatusCode::kErrorFailed:
     case blink::ServiceWorkerStatusCode::kErrorAbort:
     case blink::ServiceWorkerStatusCode::kErrorStorageDisconnected:
+    case blink::ServiceWorkerStatusCode::kErrorStorageDataCorrupted:
       // kErrorFailed is for invalid arguments (e.g. empty key) or database
       // errors. kErrorAbort is for unexpected failures, e.g. because shutdown
       // is in progress. kErrorStorageDisconnected is for the Storage Service
@@ -123,6 +125,26 @@ bool ToBackgroundFetchRegistration(
   bool did_convert = MojoFailureReasonFromRegistrationProto(
       registration_proto.failure_reason(), &registration_data->failure_reason);
   return did_convert;
+}
+
+blink::StorageKey GetMetadataStorageKey(
+    const proto::BackgroundFetchMetadata& metadata_proto) {
+  if (metadata_proto.has_storage_key()) {
+    auto storage_key =
+        blink::StorageKey::Deserialize(metadata_proto.storage_key());
+    if (storage_key.has_value()) {
+      return *storage_key;
+    }
+  }
+
+  // Fall back to the deprecated `origin` field.
+  if (metadata_proto.has_origin()) {
+    return blink::StorageKey::CreateFirstParty(
+        url::Origin::Create(GURL(metadata_proto.origin())));
+  }
+
+  // If neither field is set, the best we can do is an opaque StorageKey.
+  return blink::StorageKey();
 }
 
 bool MojoFailureReasonFromRegistrationProto(

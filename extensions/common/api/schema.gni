@@ -43,6 +43,7 @@ extensions_api_schema_files_ = [
   "printer_provider_internal.idl",
   "runtime.json",
   "serial.idl",
+  "scripts_internal.idl",
   "socket.idl",
   "sockets_tcp.idl",
   "sockets_tcp_server.idl",
@@ -54,6 +55,8 @@ extensions_api_schema_files_ = [
   "system_network.idl",
   "system_storage.idl",
   "test.json",
+  "types.json",
+  "user_scripts.idl",
   "usb.idl",
   "virtual_keyboard.idl",
   "virtual_keyboard_private.json",
@@ -78,8 +81,11 @@ if (is_chromeos_ash) {
     "diagnostics.idl",
     "lock_screen_data.idl",
     "media_perception_private.idl",
-    "webcam_private.idl",
   ]
+}
+
+if (is_chromeos) {
+  extensions_api_schema_files_ += [ "webcam_private.idl" ]
 }
 
 extensions_api_schema_files =

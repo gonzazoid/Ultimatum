@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/values.h"
@@ -47,11 +47,11 @@ std::unique_ptr<ProxyConfigDictionary> GetProxyConfigForNetwork(
     const NetworkState& network,
     const NetworkProfileHandler* network_profile_handler,
     ::onc::ONCSource* onc_source) {
-  const base::Value* network_policy = onc::GetPolicyForNetwork(
+  const base::Value::Dict* network_policy = onc::GetPolicyForNetwork(
       profile_prefs, local_state_prefs, network, onc_source);
   if (network_policy) {
-    const base::Value* proxy_policy =
-        network_policy->FindDictKey(::onc::network_config::kProxySettings);
+    const base::Value::Dict* proxy_policy =
+        network_policy->FindDict(::onc::network_config::kProxySettings);
     if (!proxy_policy) {
       // This policy doesn't set a proxy for this network. Nonetheless, this
       // disallows changes by the user.
@@ -59,7 +59,8 @@ std::unique_ptr<ProxyConfigDictionary> GetProxyConfigForNetwork(
     }
 
     return std::make_unique<ProxyConfigDictionary>(
-        onc::ConvertOncProxySettingsToProxyConfig(*proxy_policy));
+        onc::ConvertOncProxySettingsToProxyConfig(*proxy_policy)
+            .value_or(base::Value::Dict()));
   }
 
   if (network.profile_path().empty())
@@ -85,10 +86,11 @@ std::unique_ptr<ProxyConfigDictionary> GetProxyConfigForNetwork(
   // unshared) configuration.
   // The user's proxy setting is not stored in the Chrome preference yet. We
   // still rely on Shill storing it.
-  const base::Value& value = network.proxy_config();
-  if (value.is_none())
+  const std::optional<base::Value::Dict>& value = network.proxy_config();
+  if (!value) {
     return nullptr;
-  return std::make_unique<ProxyConfigDictionary>(value.GetDict().Clone());
+  }
+  return std::make_unique<ProxyConfigDictionary>(value.value().Clone());
 }
 
 void SetProxyConfigForNetwork(const ProxyConfigDictionary& proxy_config,

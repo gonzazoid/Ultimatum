@@ -7,16 +7,21 @@ include_rules = [
   "+cc/metrics",
   "+components/prefs",
   "+components/language/core/browser",
+  "+components/tab_groups",
+  "+components/sync_device_info",
+  "+components/user_manager",
   "+services/data_decoder/public",
   "+services/device/public",
   "+skia/public/mojom",
+  "+ui/chromeos/styles",
+  "+ui/display",
 ]
 
 specific_include_rules = {
-  "desks_templates_delegate.h": [
+  "saved_desk_delegate.h": [
     "+components/favicon_base/favicon_callback.h"
   ],
-  "test_desks_templates_delegate.h": [
+  "test_saved_desk_delegate.h": [
     "+components/favicon_base/favicon_callback.h"
   ],
 }

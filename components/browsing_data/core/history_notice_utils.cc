@@ -4,14 +4,13 @@
 
 #include "components/browsing_data/core/history_notice_utils.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/history/core/browser/web_history_service.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_user_settings.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_user_settings.h"
 #include "components/version_info/version_info.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 
@@ -39,7 +38,8 @@ class MergeBooleanCallbacks {
       return;
 
     std::move(target_callback_).Run(final_response_);
-    base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, this);
+    base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                  this);
   }
 
  private:
@@ -57,7 +57,7 @@ void ShouldShowNoticeAboutOtherFormsOfBrowsingHistory(
     const syncer::SyncService* sync_service,
     history::WebHistoryService* history_service,
     base::OnceCallback<void(bool)> callback) {
-  if (!sync_service || !sync_service->IsSyncFeatureActive() ||
+  if (!sync_service ||
       !sync_service->GetActiveDataTypes().Has(
           syncer::HISTORY_DELETE_DIRECTIVES) ||
       sync_service->GetUserSettings()->IsUsingExplicitPassphrase() ||
@@ -100,7 +100,7 @@ void ShouldPopupDialogAboutOtherFormsOfBrowsingHistory(
     history::WebHistoryService* history_service,
     version_info::Channel channel,
     base::OnceCallback<void(bool)> callback) {
-  if (!sync_service || !sync_service->IsSyncFeatureActive() ||
+  if (!sync_service ||
       !sync_service->GetActiveDataTypes().Has(
           syncer::HISTORY_DELETE_DIRECTIVES) ||
       sync_service->GetUserSettings()->IsUsingExplicitPassphrase() ||

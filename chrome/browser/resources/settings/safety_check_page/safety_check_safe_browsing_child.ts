@@ -7,9 +7,9 @@
  * 'settings-safety-safe-browsing-child' is the settings page containing the
  * safety check child showing the Safe Browsing status.
  */
-import {assertNotReached} from 'chrome://resources/js/assert_ts.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {assertNotReached} from 'chrome://resources/js/assert.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {MetricsBrowserProxy, MetricsBrowserProxyImpl, SafetyCheckInteractions} from '../metrics_browser_proxy.js';
@@ -80,7 +80,7 @@ export class SettingsSafetyCheckSafeBrowsingChildElement extends
     super.connectedCallback();
 
     // Register for safety check status updates.
-    this.addWebUIListener(
+    this.addWebUiListener(
         SafetyCheckCallbackConstants.SAFE_BROWSING_CHANGED,
         this.onSafetyCheckSafeBrowsingChanged_.bind(this));
   }

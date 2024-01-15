@@ -50,8 +50,7 @@ class PositionTemplate {
   DISALLOW_NEW();
 
  public:
-  PositionTemplate()
-      : offset_(0), anchor_type_(PositionAnchorType::kOffsetInAnchor) {}
+  PositionTemplate();
 
   static const TreeScope* CommonAncestorTreeScope(
       const PositionTemplate<Strategy>&,
@@ -175,7 +174,7 @@ class PositionTemplate {
   bool IsValidFor(const Document&) const;
 
   bool IsNull() const { return !anchor_node_; }
-  bool IsNotNull() const { return anchor_node_; }
+  bool IsNotNull() const { return anchor_node_ != nullptr; }
   bool IsOrphan() const { return anchor_node_ && !IsConnected(); }
 
   // Note: Comparison of positions require both parameters are non-null. You
@@ -197,7 +196,6 @@ class PositionTemplate {
   bool AtLastEditingPositionForNode() const;
 
   bool AtStartOfTree() const;
-  bool AtEndOfTree() const;
 
   static PositionTemplate<Strategy> BeforeNode(const Node& anchor_node);
   static PositionTemplate<Strategy> AfterNode(const Node& anchor_node);
@@ -232,8 +230,8 @@ class PositionTemplate {
   // EditingIgnoresContent(anchor_node_) returns true, then other places in
   // editing will treat offset_ == 0 as "before the anchor" and offset_ > 0 as
   // "after the anchor node".  See ParentAnchoredEquivalent for more info.
-  int offset_;
-  PositionAnchorType anchor_type_;
+  int offset_ = 0;
+  PositionAnchorType anchor_type_ = PositionAnchorType::kOffsetInAnchor;
 };
 
 extern template class CORE_EXTERN_TEMPLATE_EXPORT

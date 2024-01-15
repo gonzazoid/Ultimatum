@@ -16,8 +16,7 @@
     {
       "name": "LayoutNGBlockFlow (relative positioned) DIV class='container'",
       "position": [8, 18],
-      "bounds": [142, 142],
-      "contentsOpaqueForText": true
+      "bounds": [142, 142]
     }
   ],
   "transforms": [

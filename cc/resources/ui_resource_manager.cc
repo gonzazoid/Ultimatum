@@ -4,11 +4,11 @@
 
 #include "cc/resources/ui_resource_manager.h"
 
+#include <unordered_map>
 #include <utility>
 
 #include "base/check.h"
 #include "base/containers/contains.h"
-#include "base/containers/cxx20_erase.h"
 #include "cc/resources/scoped_ui_resource.h"
 
 namespace cc {
@@ -21,11 +21,10 @@ UIResourceId UIResourceManager::CreateUIResource(UIResourceClient* client) {
   DCHECK(client);
 
   UIResourceId next_id = next_ui_resource_id_++;
-  DCHECK(ui_resource_client_map_.find(next_id) ==
-         ui_resource_client_map_.end());
+  DCHECK(!base::Contains(ui_resource_client_map_, next_id));
 
   bool resource_lost = false;
-  UIResourceRequest request(UIResourceRequest::UI_RESOURCE_CREATE, next_id,
+  UIResourceRequest request(UIResourceRequest::Type::kCreate, next_id,
                             client->GetBitmap(next_id, resource_lost));
   ui_resource_request_queue_.push_back(request);
 
@@ -42,7 +41,7 @@ void UIResourceManager::DeleteUIResource(UIResourceId uid) {
   if (iter == ui_resource_client_map_.end())
     return;
 
-  UIResourceRequest request(UIResourceRequest::UI_RESOURCE_DELETE, uid);
+  UIResourceRequest request(UIResourceRequest::Type::kDelete, uid);
   ui_resource_request_queue_.push_back(request);
   ui_resource_client_map_.erase(iter);
 }
@@ -54,7 +53,7 @@ void UIResourceManager::RecreateUIResources() {
     bool resource_lost = true;
     if (!base::Contains(ui_resource_request_queue_, uid,
                         &UIResourceRequest::GetId)) {
-      UIResourceRequest request(UIResourceRequest::UI_RESOURCE_CREATE, uid,
+      UIResourceRequest request(UIResourceRequest::Type::kCreate, uid,
                                 data.client->GetBitmap(uid, resource_lost));
       ui_resource_request_queue_.push_back(request);
     }
@@ -65,7 +64,7 @@ base::flat_map<UIResourceId, gfx::Size> UIResourceManager::GetUIResourceSizes()
     const {
   base::flat_map<UIResourceId, gfx::Size>::container_type items(
       ui_resource_client_map_.size());
-  for (const auto pair : ui_resource_client_map_)
+  for (const auto& pair : ui_resource_client_map_)
     items.push_back({pair.first, pair.second.size});
   return base::flat_map<UIResourceId, gfx::Size>(std::move(items));
 }
@@ -84,7 +83,7 @@ UIResourceId UIResourceManager::GetOrCreateUIResource(const SkBitmap& bitmap) {
 
   // Evict all UIResources whose bitmaps are no longer referenced outside of the
   // map.
-  base::EraseIf(owned_shared_resources_,
+  std::erase_if(owned_shared_resources_,
                 [](auto& pair) { return pair.second->IsUniquelyOwned(); });
 
   // Max capacity of `owned_shared_resources_`. A DCHECK() would fire if cache

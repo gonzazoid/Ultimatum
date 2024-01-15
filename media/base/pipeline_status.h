@@ -9,7 +9,7 @@
 #include <iosfwd>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "media/base/decoder.h"
 #include "media/base/media_export.h"
@@ -74,7 +74,7 @@ struct PipelineStatusTraits {
   using Codes = PipelineStatusCodes;
 
   static constexpr StatusGroupType Group() { return "PipelineStatus"; }
-  static constexpr Codes DefaultEnumValue() { return PIPELINE_OK; }
+  static constexpr Codes OkEnumValue() { return PIPELINE_OK; }
 };
 
 using PipelineStatus = TypedStatus<PipelineStatusTraits>;

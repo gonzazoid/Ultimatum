@@ -12,6 +12,7 @@
 #include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
+#include "chrome/browser/web_applications/web_app_registrar.h"
 #include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/cpp/app_update.h"
 
@@ -49,7 +50,7 @@ void WebKioskAppUpdateObserver::OnAppUpdate(const apps::AppUpdate& update) {
     return;
   }
 
-  if (web_app_provider_->registrar().IsPlaceholderApp(
+  if (web_app_provider_->registrar_unsafe().IsPlaceholderApp(
           update.AppId(), web_app::WebAppManagement::Type::kKiosk)) {
     SYSLOG(INFO) << "Ignoring web app update of placeholder app";
     return;
@@ -67,18 +68,16 @@ void WebKioskAppUpdateObserver::OnAppRegistryCacheWillBeDestroyed(
 void WebKioskAppUpdateObserver::UpdateWebAppFromAppService(
     const std::string& app_id,
     bool icon_updated) {
-  // |apps::AppUpdate| passed to |OnAppUpdate()| only contains updated info. To
-  // get all info we have to use |AppRegistryCache::ForOneApp()|.
+  // `apps::AppUpdate` passed to `OnAppUpdate()` only contains updated info. To
+  // get all info we have to use `AppRegistryCache::ForOneApp()`.
   app_service_->AppRegistryCache().ForOneApp(
       app_id, [this, &icon_updated](const apps::AppUpdate& app_info) {
         GURL start_url = GURL(app_info.PublisherId());
 
         if (icon_updated && app_info.IconKey()) {
-          auto icon_key = app_info.IconKey().value();
-          // Remove web app icon effects for Kiosk apps menu.
-          icon_key.icon_effects = apps::IconEffects::kNone;
-          app_service_->LoadIconFromIconKey(
-              apps::AppType::kWeb, app_info.AppId(), icon_key,
+          app_service_->LoadIconWithIconEffects(
+              // Remove web app icon effects for Kiosk apps menu.
+              app_info.AppId(), apps::IconEffects::kNone,
               apps::IconType::kUncompressed, kWebKioskIconSize,
               /*allow_placeholder_icon=*/true,
               base::BindOnce(&WebKioskAppUpdateObserver::OnAppServiceIconLoaded,
@@ -88,7 +87,7 @@ void WebKioskAppUpdateObserver::UpdateWebAppFromAppService(
         }
 
         WebKioskAppManager::Get()->UpdateAppByAccountId(
-            account_id_, app_info.Name(), start_url, IconBitmaps());
+            account_id_, app_info.Name(), start_url, web_app::IconBitmaps());
       });
 }
 
@@ -96,7 +95,7 @@ void WebKioskAppUpdateObserver::OnAppServiceIconLoaded(
     std::string title,
     GURL start_url,
     apps::IconValuePtr icon) {
-  IconBitmaps icon_bitmaps;
+  web_app::IconBitmaps icon_bitmaps;
   if (icon->uncompressed.bitmap()) {
     icon_bitmaps.any[kWebKioskIconSize] = *icon->uncompressed.bitmap();
   }

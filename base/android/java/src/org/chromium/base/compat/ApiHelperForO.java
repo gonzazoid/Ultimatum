@@ -15,12 +15,10 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.net.ConnectivityManager;
 import android.net.ConnectivityManager.NetworkCallback;
-import android.net.NetworkRequest;
 import android.os.Build;
 import android.os.Handler;
 import android.view.Display;
@@ -71,11 +69,6 @@ public final class ApiHelperForO {
         return clipDescription.getTimestamp();
     }
 
-    /** See {@link ApplicationInfo#splitNames}. */
-    public static String[] getSplitNames(ApplicationInfo info) {
-        return info.splitNames;
-    }
-
     /**
      * See {@link Context.createContextForSplit(String) }. Be careful about adding new uses of
      * this, most split Contexts should be created through {@link
@@ -107,15 +100,6 @@ public final class ApiHelperForO {
         }
     }
 
-    /**
-     * See {@link ConnectivityManager#registerNetworkCallback(NetworkRequest,
-     * ConnectivityManager.NetworkCallback, Handler) }.
-     */
-    public static void registerNetworkCallback(ConnectivityManager connectivityManager,
-            NetworkRequest networkRequest, NetworkCallback networkCallback, Handler handler) {
-        connectivityManager.registerNetworkCallback(networkRequest, networkCallback, handler);
-    }
-
     /** See {@link ValueAnimator#areAnimatorsEnabled()}. */
     public static boolean areAnimatorsEnabled() {
         return ValueAnimator.areAnimatorsEnabled();
@@ -137,8 +121,10 @@ public final class ApiHelperForO {
      * ConnectivityManager#registerDefaultNetworkCallback(ConnectivityManager.NetworkCallback,
      * Handler) }.
      */
-    public static void registerDefaultNetworkCallback(ConnectivityManager connectivityManager,
-            NetworkCallback networkCallback, Handler handler) {
+    public static void registerDefaultNetworkCallback(
+            ConnectivityManager connectivityManager,
+            NetworkCallback networkCallback,
+            Handler handler) {
         connectivityManager.registerDefaultNetworkCallback(networkCallback, handler);
     }
 
@@ -150,14 +136,17 @@ public final class ApiHelperForO {
     /**
      * See {@link Context#registerReceiver(BroadcastReceiver, IntentFilter, String, Handler, int)}
      */
-    public static Intent registerReceiver(Context context, BroadcastReceiver receiver,
-            IntentFilter filter, String permission, Handler scheduler, int flags) {
+    public static Intent registerReceiver(
+            Context context,
+            BroadcastReceiver receiver,
+            IntentFilter filter,
+            String permission,
+            Handler scheduler,
+            int flags) {
         return context.registerReceiver(receiver, filter, permission, scheduler, flags);
     }
 
-    /**
-     * See {@link ClipData#addItem(ContentResolver, Item)}.
-     */
+    /** See {@link ClipData#addItem(ContentResolver, Item)}. */
     public static void addItem(ClipData clipData, ContentResolver contentResolver, Item item) {
         clipData.addItem(contentResolver, item);
     }

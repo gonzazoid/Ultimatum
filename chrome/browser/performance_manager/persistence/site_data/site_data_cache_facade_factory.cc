@@ -45,15 +45,19 @@ void SiteDataCacheFacadeFactory::DisassociateForTesting(Profile* profile) {
 SiteDataCacheFacadeFactory::SiteDataCacheFacadeFactory()
     : ProfileKeyedServiceFactory(
           "SiteDataCacheFacadeFactory",
-          ProfileSelections::BuildForRegularAndIncognito()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
   DependsOn(HistoryServiceFactory::GetInstance());
 }
 
 SiteDataCacheFacadeFactory::~SiteDataCacheFacadeFactory() = default;
 
-KeyedService* SiteDataCacheFacadeFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SiteDataCacheFacadeFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new SiteDataCacheFacade(context);
+  return std::make_unique<SiteDataCacheFacade>(context);
 }
 
 bool SiteDataCacheFacadeFactory::ServiceIsCreatedWithBrowserContext() const {

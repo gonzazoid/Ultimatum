@@ -2,9 +2,10 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/config/cast.gni")
 import("//build/config/chrome_build.gni")
-import("//build/config/chromecast_build.gni")
 import("//build/config/clang/clang.gni")
+import("//build/config/rust.gni")
 import("//build/config/sanitizers/sanitizers.gni")
 import("//build/toolchain/toolchain.gni")
 import("//build_overrides/build.gni")
@@ -45,6 +46,9 @@ group("deps") {
       deps += [ "//third_party/instrumented_libraries:deps" ]
     }
   }
+  if (fail_on_san_warnings) {
+    data += [ "//tools/memory/sanitizer/escalate_sanitizer_warnings.py" ]
+  }
   if (is_asan) {
     if (is_win || is_apple) {
       data_deps = [ ":copy_asan_runtime" ]
@@ -52,6 +56,12 @@ group("deps") {
     if (is_apple) {
       public_deps = [ ":asan_runtime_bundle_data" ]
     }
+  }
+  if (use_centipede || enable_fuzztest_fuzz) {
+    # For executables which aren't actual fuzzers, we need stubs for
+    # the sanitizer coverage symbols, because we'll still be generating
+    # .o files which depend on them.
+    deps += [ "//third_party/fuzztest:centipede_weak_sancov_stubs" ]
   }
 }
 
@@ -113,7 +123,7 @@ static_library("options_sources") {
   # unconditionally linked into targets.
   visibility = [
     ":deps",
-    "//:gn_visibility",
+    "//:gn_all",
   ]
   sources = [ "//build/sanitizers/sanitizer_options.cc" ]
 
@@ -156,27 +166,36 @@ config("default_sanitizer_ldflags") {
   ]
 
   if (is_posix || is_fuchsia) {
+    sanitizers = []  # sanitizers applicable to both clang and rustc
     ldflags = []
+    rustflags = []
     if (is_asan) {
-      ldflags += [ "-fsanitize=address" ]
+      sanitizers += [ "address" ]
     }
     if (is_hwasan) {
-      ldflags += [ "-fsanitize=hwaddress" ]
+      sanitizers += [ "hwaddress" ]
     }
     if (is_lsan) {
+      # In Chromium, is_lsan always implies is_asan. ASAN includes LSAN.
+      # It seems harmless to pass both options to clang, but it doesn't
+      # work on rustc, so apply this option to clang only.
       ldflags += [ "-fsanitize=leak" ]
     }
     if (is_tsan) {
-      ldflags += [ "-fsanitize=thread" ]
+      sanitizers += [ "thread" ]
     }
     if (is_msan) {
-      ldflags += [ "-fsanitize=memory" ]
+      sanitizers += [ "memory" ]
     }
     if (is_ubsan || is_ubsan_security) {
       ldflags += [ "-fsanitize=undefined" ]
     }
     if (is_ubsan_vptr) {
       ldflags += [ "-fsanitize=vptr" ]
+    }
+    foreach(sanitizer, sanitizers) {
+      ldflags += [ "-fsanitize=$sanitizer" ]
+      rustflags += [ "-Zsanitizer=$sanitizer" ]
     }
 
     if (use_sanitizer_coverage) {
@@ -262,6 +281,13 @@ config("asan_flags") {
   cflags = []
   if (is_asan) {
     cflags += [ "-fsanitize=address" ]
+    if (!is_win && !is_apple && !is_fuchsia) {
+      # TODO(crbug.com/1459233, crbug.com/1462248): This causes asan
+      # odr-violation errors in rust code, and link failures for cros/asan.
+      # Clang recently turned it on by default for all ELF targets (it was
+      # already on for Fuchsia). Pass the flag to turn it back off.
+      cflags += [ "-fno-sanitize-address-globals-dead-stripping" ]
+    }
     if (is_win) {
       if (!defined(asan_win_blocklist_path)) {
         asan_win_blocklist_path =
@@ -288,6 +314,7 @@ config("link_shared_library") {
 
 config("cfi_flags") {
   cflags = []
+  rustflags = []
   if (is_cfi && current_toolchain == default_toolchain) {
     if (!defined(cfi_ignorelist_path)) {
       cfi_ignorelist_path =
@@ -298,6 +325,20 @@ config("cfi_flags") {
       "-fsanitize-ignorelist=$cfi_ignorelist_path",
     ]
 
+    if (toolchain_supports_rust_thin_lto) {
+      # sanitize=cfi implies -fsplit-lto-unit, and Rust needs to match
+      # behaviour.  Rust needs to know the linker will be doing LTO in this case
+      # or it rejects the Zsplit-lto-unit flag.
+      # TODO(crbug.com/1442331): Add -Zsanitize=cfi instead.
+      rustflags += [
+        "-Zsplit-lto-unit",
+        "-Clinker-plugin-lto=yes",
+      ]
+    } else {
+      # Don't include bitcode if it won't be used.
+      rustflags += [ "-Cembed-bitcode=no" ]
+    }
+
     if (use_cfi_cast) {
       cflags += [
         "-fsanitize=cfi-derived-cast",
@@ -307,6 +348,10 @@ config("cfi_flags") {
 
     if (use_cfi_icall) {
       cflags += [ "-fsanitize=cfi-icall" ]
+      # TODO(crbug.com/1442331): Add cflags += [
+      # "-fsanitize-cfi-icall-experimental-normalize-integers" ]
+      # TODO(crbug.com/1442331): Add rustflags += [
+      # "-Zsanitizer-cfi-normalize-integers" ].
     }
 
     if (use_cfi_diag) {
@@ -431,11 +476,16 @@ config("ubsan_flags") {
       ubsan_ignorelist_path =
           rebase_path("//tools/ubsan/ignorelist.txt", root_build_dir)
     }
+    # TODO(crbug.com/1502579): Enable all of -fsanitize=undefined. Note that
+    # both this list and Clang's defaults omit -fsanitize=float-divide-by-zero.
+    # C and C++ leave it undefined to accommodate non-IEEE floating point, but
+    # we assume the compiler implements IEEE floating point, which does define
+    # division by zero.
     cflags += [
+      "-fsanitize=alignment",
       "-fsanitize=bool",
       "-fsanitize=bounds",
       "-fsanitize=builtin",
-      "-fsanitize=float-divide-by-zero",
       "-fsanitize=integer-divide-by-zero",
       "-fsanitize=null",
       "-fsanitize=nonnull-attribute",
@@ -504,7 +554,7 @@ config("ubsan_vptr_flags") {
 }
 
 config("fuzzing_build_mode") {
-  if (use_fuzzing_engine && optimize_for_fuzzing) {
+  if (use_fuzzing_engine) {
     defines = [ "FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION" ]
   }
 }

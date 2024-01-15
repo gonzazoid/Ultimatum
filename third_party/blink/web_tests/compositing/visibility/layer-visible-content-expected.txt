@@ -9,11 +9,10 @@
     {
       "name": "LayoutNGBlockFlow DIV class='composited box'",
       "bounds": [10, 10],
-      "contentsOpaqueForText": true,
       "drawsContent": false
     },
     {
-      "name": "LayoutNGBlockFlow PRE id='layer-tree'",
+      "name": "LayoutNGBlockFlow (children-inline) PRE id='layer-tree'",
       "bounds": [800, 16],
       "drawsContent": false
     }

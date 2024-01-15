@@ -7,9 +7,13 @@
 #include <string>
 #include <utility>
 
+#include "base/test/bind.h"
+#include "content/public/common/content_features.h"
+#include "extensions/common/features/feature.h"
 #include "extensions/common/features/simple_feature.h"
 #include "extensions/common/manifest.h"
-#include "extensions/common/value_builder.h"
+#include "extensions/common/mojom/context_type.mojom.h"
+#include "extensions/test/test_context_data.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 using extensions::mojom::ManifestLocation;
@@ -130,6 +134,85 @@ TEST(ComplexFeatureTest, Dependencies) {
                                         Feature::GetCurrentPlatform(),
                                         kUnspecifiedContextId)
                 .result());
+}
+
+TEST(ComplexFeatureTest, RequiresDelegatedAvailabilityCheck) {
+  std::vector<Feature*> features;
+
+  // Test a complex feature where |requires_delegated_availability_check| hasn't
+  // been set on any of its simple features.
+  {
+    {
+      // Feature which doesn't set |requires_delegated_availability_check|.
+      auto simple_feature = std::make_unique<SimpleFeature>();
+      features.push_back(simple_feature.release());
+    }
+    {
+      // Feature which doesn't set |requires_delegated_availability_check|.
+      auto simple_feature = std::make_unique<SimpleFeature>();
+      features.push_back(simple_feature.release());
+    }
+
+    ComplexFeature complex_feature(&features);
+    EXPECT_FALSE(complex_feature.RequiresDelegatedAvailabilityCheck());
+    EXPECT_FALSE(complex_feature.HasDelegatedAvailabilityCheckHandler());
+  }
+
+  uint32_t delegated_availability_check_call_count = 0;
+  uint32_t success_call_count = 2;
+  auto delegated_availability_check =
+      [&](const std::string& api_full_name, const Extension* extension,
+          mojom::ContextType context, const GURL& url,
+          Feature::Platform platform, int context_id, bool check_developer_mode,
+          const ContextData& context_data) {
+        ++delegated_availability_check_call_count;
+        return delegated_availability_check_call_count == success_call_count;
+      };
+
+  // Test a complex feature where |requires_delegated_availability_check| is set
+  // on multiple sub-features. The first sub-feature that requires the
+  // availability check should fail, while the second sub-feature should pass.
+  // In this case, the delegated availability check handler should be called
+  // twice.
+  {
+    {
+      // Feature which doesn't set |requires_delegated_availability_check|.
+      auto simple_feature = std::make_unique<SimpleFeature>();
+      simple_feature->set_contexts({mojom::ContextType::kPrivilegedExtension});
+      features.push_back(simple_feature.release());
+    }
+    // Two features which set |requires_delegated_availability_check| to true.
+    {
+      auto simple_feature = std::make_unique<SimpleFeature>();
+      simple_feature->set_requires_delegated_availability_check(true);
+      features.push_back(simple_feature.release());
+    }
+    {
+      auto simple_feature = std::make_unique<SimpleFeature>();
+      simple_feature->set_requires_delegated_availability_check(true);
+      features.push_back(simple_feature.release());
+    }
+
+    ComplexFeature complex_feature(&features);
+    EXPECT_TRUE(complex_feature.RequiresDelegatedAvailabilityCheck());
+    EXPECT_FALSE(complex_feature.HasDelegatedAvailabilityCheckHandler());
+
+    // A call to SetDelegatedAvailabilityCheckHandler() should set the
+    // handler to the sub-features that require it.
+    complex_feature.SetDelegatedAvailabilityCheckHandler(
+        base::BindLambdaForTesting(delegated_availability_check));
+    EXPECT_TRUE(complex_feature.HasDelegatedAvailabilityCheckHandler());
+
+    // This feature should be available the second time that the delegated
+    // availability check is called.
+    EXPECT_EQ(Feature::IS_AVAILABLE,
+              complex_feature
+                  .IsAvailableToContext(
+                      /*extension=*/nullptr, mojom::ContextType::kUnspecified,
+                      GURL(), kUnspecifiedContextId, TestContextData())
+                  .result());
+    EXPECT_EQ(2u, delegated_availability_check_call_count);
+  }
 }
 
 }  // namespace extensions

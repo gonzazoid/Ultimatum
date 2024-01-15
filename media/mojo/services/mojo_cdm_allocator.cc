@@ -7,9 +7,9 @@
 #include <limits>
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/numerics/safe_conversions.h"
@@ -135,7 +135,9 @@ class MojoCdmVideoFrame final : public VideoFrameImpl {
 
     // |frame| could fail to be created if the memory can't be mapped into
     // this address space.
+    // TODO(b/183748013): Set HDRMetadata once supported by the CDM interface.
     if (frame) {
+      frame->metadata().power_efficient = false;
       frame->set_color_space(MediaColorSpace().ToGfxColorSpace());
       frame->BackWithSharedMemory(&mapped_region->region);
       frame->AddDestructionObserver(base::BindOnce(

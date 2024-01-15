@@ -7,7 +7,7 @@
 #include <memory>
 
 #include "ash/public/cpp/notifier_metadata.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/cancelable_task_tracker.h"
@@ -30,9 +30,9 @@ std::vector<ash::NotifierMetadata> WebPageNotifierController::GetNotifierList(
     Profile* profile) {
   std::vector<ash::NotifierMetadata> notifiers;
 
-  ContentSettingsForOneType settings;
-  HostContentSettingsMapFactory::GetForProfile(profile)->GetSettingsForOneType(
-      ContentSettingsType::NOTIFICATIONS, &settings);
+  ContentSettingsForOneType settings =
+      HostContentSettingsMapFactory::GetForProfile(profile)
+          ->GetSettingsForOneType(ContentSettingsType::NOTIFICATIONS);
 
   favicon::FaviconService* const favicon_service =
       FaviconServiceFactory::GetForProfile(profile,

@@ -4,13 +4,16 @@
 
 #include "extensions/browser/events/lazy_event_dispatcher.h"
 
-#include "base/bind.h"
+#include <optional>
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extensions_browser_client.h"
 #include "extensions/browser/lazy_context_id.h"
 #include "extensions/common/features/feature.h"
+#include "extensions/common/mojom/context_type.mojom.h"
+#include "extensions/common/mojom/event_dispatcher.mojom.h"
 
 using content::BrowserContext;
 
@@ -21,12 +24,11 @@ LazyEventDispatcher::LazyEventDispatcher(BrowserContext* browser_context,
     : browser_context_(browser_context),
       dispatch_function_(std::move(dispatch_function)) {}
 
-LazyEventDispatcher::~LazyEventDispatcher() {}
+LazyEventDispatcher::~LazyEventDispatcher() = default;
 
-void LazyEventDispatcher::Dispatch(
-    const Event& event,
-    const LazyContextId& dispatch_context,
-    const base::DictionaryValue* listener_filter) {
+void LazyEventDispatcher::Dispatch(Event& event,
+                                   const LazyContextId& dispatch_context,
+                                   const base::Value::Dict* listener_filter) {
   const Extension* extension = ExtensionRegistry::Get(browser_context_)
                                    ->enabled_extensions()
                                    .GetByID(dispatch_context.extension_id());
@@ -46,10 +48,10 @@ bool LazyEventDispatcher::HasAlreadyDispatched(
 }
 
 bool LazyEventDispatcher::QueueEventDispatch(
-    const Event& event,
+    Event& event,
     const LazyContextId& dispatch_context,
     const Extension* extension,
-    const base::DictionaryValue* listener_filter) {
+    const base::Value::Dict* listener_filter) {
   if (!EventRouter::CanDispatchEventToBrowserContext(
           dispatch_context.browser_context(), extension, event)) {
     return false;
@@ -59,6 +61,8 @@ bool LazyEventDispatcher::QueueEventDispatch(
     return false;
 
   LazyContextTaskQueue* queue = dispatch_context.GetTaskQueue();
+  event.lazy_background_active_on_dispatch =
+      queue->IsReadyToRunTasks(dispatch_context.browser_context(), extension);
   if (!queue->ShouldEnqueueTask(dispatch_context.browser_context(),
                                 extension)) {
     return false;
@@ -72,16 +76,15 @@ bool LazyEventDispatcher::QueueEventDispatch(
   // to avoid lifetime issues. Use a separate copy of the event args, so they
   // last until the event is dispatched.
   if (!dispatched_event->will_dispatch_callback.is_null()) {
-    std::unique_ptr<base::Value::List> modified_event_args;
+    std::optional<base::Value::List> modified_event_args;
     mojom::EventFilteringInfoPtr modified_event_filter_info;
     if (!dispatched_event->will_dispatch_callback.Run(
             dispatch_context.browser_context(),
             // The only lazy listeners belong to an extension's background
             // context (either an event page or a service worker), which are
             // always BLESSED_EXTENSION_CONTEXTs
-            extensions::Feature::BLESSED_EXTENSION_CONTEXT, extension,
-            listener_filter, &modified_event_args,
-            &modified_event_filter_info)) {
+            extensions::mojom::ContextType::kPrivilegedExtension, extension,
+            listener_filter, modified_event_args, modified_event_filter_info)) {
       // The event has been canceled.
       return true;
     }

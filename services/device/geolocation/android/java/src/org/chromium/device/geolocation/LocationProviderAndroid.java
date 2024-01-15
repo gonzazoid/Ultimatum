@@ -13,10 +13,9 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
 
-import androidx.annotation.VisibleForTesting;
-
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.ThreadUtils;
 
 import java.util.List;
@@ -74,23 +73,24 @@ public class LocationProviderAndroid implements LocationListener, LocationProvid
     @Override
     public void onProviderDisabled(String provider) {}
 
-    @VisibleForTesting
     public void setLocationManagerForTesting(LocationManager manager) {
+        var oldValue = mLocationManager;
         mLocationManager = manager;
+        ResettersForTesting.register(() -> mLocationManager = oldValue);
     }
 
     private void createLocationManagerIfNeeded() {
         if (mLocationManager != null) return;
-        mLocationManager = (LocationManager) ContextUtils.getApplicationContext().getSystemService(
-                Context.LOCATION_SERVICE);
+        mLocationManager =
+                (LocationManager)
+                        ContextUtils.getApplicationContext()
+                                .getSystemService(Context.LOCATION_SERVICE);
         if (mLocationManager == null) {
             Log.e(TAG, "Could not get location manager.");
         }
     }
 
-    /**
-     * Registers this object with the location service.
-     */
+    /** Registers this object with the location service. */
     private void registerForLocationUpdates(boolean enableHighAccuracy) {
         createLocationManagerIfNeeded();
         if (usePassiveOneShotLocation()) return;
@@ -105,14 +105,15 @@ public class LocationProviderAndroid implements LocationListener, LocationProvid
             Context context = ContextUtils.getApplicationContext();
             if (enableHighAccuracy
                     && context.checkCallingOrSelfPermission(
-                               Manifest.permission.ACCESS_FINE_LOCATION)
+                                    Manifest.permission.ACCESS_FINE_LOCATION)
                             == PackageManager.PERMISSION_GRANTED) {
                 criteria.setAccuracy(Criteria.ACCURACY_FINE);
             }
             mLocationManager.requestLocationUpdates(
                     0, 0, criteria, this, ThreadUtils.getUiThreadLooper());
         } catch (SecurityException e) {
-            Log.e(TAG,
+            Log.e(
+                    TAG,
                     "Caught security exception while registering for location updates "
                             + "from the system. The application does not have sufficient "
                             + "geolocation permissions.");
@@ -128,9 +129,7 @@ public class LocationProviderAndroid implements LocationListener, LocationProvid
         }
     }
 
-    /**
-     * Unregisters this object from the location service.
-     */
+    /** Unregisters this object from the location service. */
     private void unregisterFromLocationUpdates() {
         if (!mIsRunning) return;
         mIsRunning = false;
@@ -160,7 +159,8 @@ public class LocationProviderAndroid implements LocationListener, LocationProvid
      */
     private boolean isOnlyPassiveLocationProviderEnabled() {
         final List<String> providers = mLocationManager.getProviders(true);
-        return providers != null && providers.size() == 1
+        return providers != null
+                && providers.size() == 1
                 && providers.get(0).equals(LocationManager.PASSIVE_PROVIDER);
     }
 }

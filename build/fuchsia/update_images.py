@@ -4,7 +4,11 @@
 # found in the LICENSE file.
 """Updates the Fuchsia images to the given revision. Should be used in a
 'hooks_os' entry so that it only runs when .gclient's target_os includes
-'fuchsia'."""
+'fuchsia'. Note, for a smooth transition, this file automatically adds
+'-release' at the end of the image gcs file name to eliminate the difference
+between product bundle v2 and gce files."""
+
+# TODO(crbug.com/1496426): Remove this file.
 
 import argparse
 import itertools
@@ -15,10 +19,11 @@ import subprocess
 import sys
 from typing import Dict, Optional
 
-from common import DIR_SOURCE_ROOT
-from common import GetHostOsFromPlatform
-from common import IMAGES_ROOT
-from common import MakeCleanDirectory
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                             'test')))
+
+from common import DIR_SRC_ROOT, IMAGES_ROOT, get_host_os, \
+                   make_clean_directory
 
 from gcs_download import DownloadAndUnpackFromCloudStorage
 
@@ -51,7 +56,7 @@ def VarLookup(local_scope):
 def GetImageHashList(bucket):
   """Read filename entries from sdk-hash-files.list (one per line), substitute
   {platform} in each entry if present, and read from each filename."""
-  assert (GetHostOsFromPlatform() == 'linux')
+  assert (get_host_os() == 'linux')
   filenames = [
       line.strip() for line in ReadFile('sdk-hash-files.list').replace(
           '{platform}', 'linux_internal').splitlines()
@@ -82,7 +87,7 @@ def GetImageHash(bucket):
   if bucket == 'fuchsia-sdk':
     hashes = GetImageHashList(bucket)
     return max(hashes)
-  deps_file = os.path.join(DIR_SOURCE_ROOT, 'DEPS')
+  deps_file = os.path.join(DIR_SRC_ROOT, 'DEPS')
   return ParseDepsFile(deps_file)['vars']['fuchsia_version'].split(':')[1]
 
 
@@ -141,6 +146,7 @@ def DownloadBootImages(bucket, image_hash, boot_image_names, image_root_dir):
     except subprocess.CalledProcessError as e:
       logging.exception('Failed to download image %s from URL: %s',
                         image_to_download, images_tarball_url)
+      raise e
 
 
 def _GetImageOverrideInfo() -> Optional[Dict[str, str]]:
@@ -159,22 +165,25 @@ def _GetImageOverrideInfo() -> Optional[Dict[str, str]]:
   }
 
 
-def GetImageLocationInfo(default_bucket: str) -> Dict[str, str]:
+def GetImageLocationInfo(default_bucket: str,
+                         allow_override: bool = True) -> Dict[str, str]:
   """Figures out where to pull the image from.
 
   Defaults to the provided default bucket and generates the hash from defaults.
-  If sdk_override.txt exists, it uses that bucket instead.
+  If sdk_override.txt exists (and is allowed) it uses that bucket instead.
 
   Args:
     default_bucket: a given default for what bucket to use
+    allow_override: allow SDK override to be used.
 
   Returns:
     A dictionary containing the bucket and image_hash
   """
-  # if sdk_override.txt exists, use the image from that bucket
-  override = _GetImageOverrideInfo()
-  if override:
-    return override
+  # if sdk_override.txt exists (and is allowed) use the image from that bucket.
+  if allow_override:
+    override = _GetImageOverrideInfo()
+    if override:
+      return override
 
   # Use the bucket in sdk-bucket.txt if an entry exists.
   # Otherwise use the default bucket.
@@ -207,6 +216,11 @@ def main():
       '--image-root-dir',
       default=IMAGES_ROOT,
       help='Specify the root directory of the downloaded images. Optional')
+  parser.add_argument(
+      '--allow-override',
+      action='store_true',
+      help='Whether sdk_override.txt can be used for fetching the image, if '
+      'it exists.')
   args = parser.parse_args()
 
   logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
@@ -215,10 +229,16 @@ def main():
   if not args.boot_images:
     return 0
 
-  # Check whether there's Fuchsia support for this platform.
-  GetHostOsFromPlatform()
+  for index, item in enumerate(args.boot_images):
+    # The gclient configuration is in the src-internal and cannot be changed
+    # atomically with the test script in src. So the update_images.py needs to
+    # support both scenarios before being fully deprecated for older milestones.
+    if not item.endswith('-release'):
+      args.boot_images[index] = item + '-release'
 
-  image_info = GetImageLocationInfo(args.default_bucket)
+  # Check whether there's Fuchsia support for this platform.
+  get_host_os()
+  image_info = GetImageLocationInfo(args.default_bucket, args.allow_override)
 
   bucket = image_info['bucket']
   image_hash = image_info['image_hash']
@@ -233,7 +253,7 @@ def main():
   if current_signature != new_signature:
     logging.info('Downloading Fuchsia images %s from bucket %s...', image_hash,
                  bucket)
-    MakeCleanDirectory(args.image_root_dir)
+    make_clean_directory(args.image_root_dir)
 
     try:
       DownloadBootImages(bucket, image_hash, args.boot_images,
@@ -244,6 +264,9 @@ def main():
       logging.exception("command '%s' failed with status %d.%s",
                         ' '.join(e.cmd), e.returncode,
                         ' Details: ' + e.output if e.output else '')
+      raise e
+  else:
+    logging.info('Signatures matched! Got %s', new_signature)
 
   return 0
 

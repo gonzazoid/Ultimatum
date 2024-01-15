@@ -6,14 +6,14 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/sequence_manager/sequence_manager.h"
 #include "base/task/sequence_manager/task_queue.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -21,16 +21,17 @@
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/platform.h"
+#include "third_party/blink/renderer/platform/scheduler/common/auto_advancing_virtual_time_domain.h"
 #include "third_party/blink/renderer/platform/scheduler/common/features.h"
+#include "third_party/blink/renderer/platform/scheduler/common/metrics_helper.h"
 #include "third_party/blink/renderer/platform/scheduler/common/process_state.h"
 #include "third_party/blink/renderer/platform/scheduler/common/throttling/cpu_time_budget_pool.h"
 #include "third_party/blink/renderer/platform/scheduler/common/throttling/task_queue_throttler.h"
 #include "third_party/blink/renderer/platform/scheduler/common/throttling/wake_up_budget_pool.h"
 #include "third_party/blink/renderer/platform/scheduler/public/event_loop.h"
-#include "third_party/blink/renderer/platform/scheduler/public/worker_scheduler.h"
 #include "third_party/blink/renderer/platform/scheduler/worker/non_main_thread_scheduler_helper.h"
+#include "third_party/blink/renderer/platform/scheduler/worker/worker_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/worker/worker_scheduler_proxy.h"
-#include "third_party/blink/renderer/platform/scheduler/worker/worker_thread_scheduler.h"
 
 namespace blink {
 namespace scheduler {
@@ -87,10 +88,10 @@ absl::optional<base::TimeDelta> GetMaxThrottlingDelay() {
 }
 
 std::unique_ptr<ukm::MojoUkmRecorder> CreateMojoUkmRecorder() {
-  mojo::PendingRemote<ukm::mojom::UkmRecorderInterface> recorder;
+  mojo::Remote<ukm::mojom::UkmRecorderFactory> factory;
   Platform::Current()->GetBrowserInterfaceBroker()->GetInterface(
-      recorder.InitWithNewPipeAndPassReceiver());
-  return std::make_unique<ukm::MojoUkmRecorder>(std::move(recorder));
+      factory.BindNewPipeAndPassReceiver());
+  return ukm::MojoUkmRecorder::Create(*factory);
 }
 
 }  // namespace
@@ -111,18 +112,15 @@ WorkerThreadScheduler::WorkerThreadScheduler(
                    idle_helper_queue_->GetTaskQueue()),
       lifecycle_state_(proxy ? proxy->lifecycle_state()
                              : SchedulingLifecycleState::kNotThrottled),
-      worker_metrics_helper_(thread_type,
-                             GetHelper().HasCPUTimingForEachTask()),
       initial_frame_status_(proxy ? proxy->initial_frame_status()
                                   : FrameStatus::kNone),
       ukm_source_id_(proxy ? proxy->ukm_source_id() : ukm::kInvalidSourceId) {
-  if (proxy && proxy->parent_frame_type())
-    worker_metrics_helper_.SetParentFrameType(*proxy->parent_frame_type());
-
   if (thread_type == ThreadType::kDedicatedWorkerThread &&
       base::FeatureList::IsEnabled(kDedicatedWorkerThrottling)) {
     CreateBudgetPools();
   }
+
+  GetHelper().SetObserver(this);
 
   TRACE_EVENT_OBJECT_CREATED_WITH_ID(
       TRACE_DISABLED_BY_DEFAULT("worker.scheduler"), "WorkerScheduler", this);
@@ -178,6 +176,7 @@ void WorkerThreadScheduler::Shutdown() {
   DCHECK(initialized_);
   ThreadSchedulerBase::Shutdown();
   idle_helper_.Shutdown();
+  idle_helper_queue_->ShutdownTaskQueue();
   GetHelper().Shutdown();
 }
 
@@ -206,7 +205,6 @@ void WorkerThreadScheduler::OnTaskCompleted(
 
   task_timing->RecordTaskEnd(lazy_now);
   DispatchOnTaskCompletionCallbacks();
-  worker_metrics_helper_.RecordTaskMetrics(task, *task_timing);
 
   if (task_queue != nullptr)
     task_queue->OnTaskRunTimeReported(task_timing);
@@ -239,14 +237,14 @@ void WorkerThreadScheduler::OnLifecycleStateChanged(
 }
 
 void WorkerThreadScheduler::RegisterWorkerScheduler(
-    WorkerScheduler* worker_scheduler) {
+    WorkerSchedulerImpl* worker_scheduler) {
   worker_schedulers_.insert(worker_scheduler);
   worker_scheduler->OnLifecycleStateChanged(lifecycle_state_);
 }
 
 void WorkerThreadScheduler::UnregisterWorkerScheduler(
-    WorkerScheduler* worker_scheduler) {
-  DCHECK(worker_schedulers_.find(worker_scheduler) != worker_schedulers_.end());
+    WorkerSchedulerImpl* worker_scheduler) {
+  DCHECK(base::Contains(worker_schedulers_, worker_scheduler));
   worker_schedulers_.erase(worker_scheduler);
 }
 
@@ -311,7 +309,7 @@ void WorkerThreadScheduler::SetCPUTimeBudgetPoolForTesting(
   cpu_time_budget_pool_ = std::move(cpu_time_budget_pool);
 }
 
-HashSet<WorkerScheduler*>&
+HashSet<WorkerSchedulerImpl*>&
 WorkerThreadScheduler::GetWorkerSchedulersForTesting() {
   return worker_schedulers_;
 }
@@ -319,6 +317,27 @@ WorkerThreadScheduler::GetWorkerSchedulersForTesting() {
 void WorkerThreadScheduler::PerformMicrotaskCheckpoint() {
   if (isolate())
     EventLoop::PerformIsolateGlobalMicrotasksCheckpoint(isolate());
+}
+
+base::SequencedTaskRunner* WorkerThreadScheduler::GetVirtualTimeTaskRunner() {
+  // Note this is not Control task runner because it has task notifications
+  // disabled.
+  return DefaultTaskQueue()->GetTaskRunnerWithDefaultTaskType().get();
+}
+
+void WorkerThreadScheduler::OnVirtualTimeDisabled() {}
+
+void WorkerThreadScheduler::OnVirtualTimePaused() {
+  for (auto* worker_scheduler : worker_schedulers_) {
+    worker_scheduler->PauseVirtualTime();
+  }
+}
+
+void WorkerThreadScheduler::OnVirtualTimeResumed() {
+  for (WorkerScheduler* worker_scheduler : worker_schedulers_) {
+    auto* scheduler = static_cast<WorkerSchedulerImpl*>(worker_scheduler);
+    scheduler->UnpauseVirtualTime();
+  }
 }
 
 void WorkerThreadScheduler::PostIdleTask(const base::Location& location,

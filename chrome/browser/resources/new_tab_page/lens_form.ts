@@ -4,10 +4,13 @@
 
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
+import {loadTimeData} from './i18n_setup.js';
+import {ProcessedFile, processFile, SUPPORTED_FILE_TYPES} from './image_processor.js';
 import {getTemplate} from './lens_form.html.js';
 
 /** Lens service endpoint for the Upload by File action. */
-const UPLOAD_FILE_ACTION: string = 'https://lens.google.com/upload';
+const SCOTTY_UPLOAD_FILE_ACTION: string = 'https://lens.google.com/upload';
+const DIRECT_UPLOAD_FILE_ACTION: string = 'https://lens.google.com/v3/upload';
 
 /** Entrypoint for the upload by file action. */
 const UPLOAD_FILE_ENTRYPOINT: string = 'cntpubb';
@@ -18,19 +21,14 @@ const UPLOAD_BY_URL_ACTION: string = 'https://lens.google.com/uploadbyurl';
 /** Entrypoint for the upload by url action. */
 const UPLOAD_URL_ENTRYPOINT: string = 'cntpubu';
 
+/** Rendering environment for the NTP searchbox entrypoint. */
+const RENDERING_ENVIRONMENT: string = 'df';
+
+/** The value of Surface.CHROMIUM expected by Lens Web. */
+const CHROMIUM_SURFACE: string = '4';
+
 /** Max length for encoded input URL. */
 const MAX_URL_LENGTH: number = 2000;
-
-const SUPPORTED_FILE_TYPES: string[] = [
-  'image/bmp',
-  'image/heic',
-  'image/heif',
-  'image/jpeg',
-  'image/png',
-  'image/tiff',
-  'image/webp',
-  'image/x-icon',
-];
 
 /** Maximum file size support by Lens in bytes. */
 const MAX_FILE_SIZE_BYTES: number = 20 * 1024 * 1024;  // 20MB
@@ -81,6 +79,21 @@ export class LensFormElement extends PolymerElement {
         readOnly: true,
         value: SUPPORTED_FILE_TYPES.join(','),
       },
+      renderingEnvironment_: {
+        type: String,
+        readOnly: true,
+        value: RENDERING_ENVIRONMENT,
+      },
+      chromiumSurface_: {
+        type: String,
+        readOnly: true,
+        value: CHROMIUM_SURFACE,
+      },
+      useDirectUpload_: {
+        type: Boolean,
+        readOnly: true,
+        value: loadTimeData.getBoolean('realboxLensDirectUpload'),
+      },
       uploadFileAction_: String,
       uploadUrlAction_: {
         type: String,
@@ -98,14 +111,20 @@ export class LensFormElement extends PolymerElement {
         readOnly: true,
         value: window.navigator.language,
       },
-      startTime_: String,
+      clientData_: {
+        type: String,
+        readOnly: true,
+        value: loadTimeData.getString('realboxLensVariations'),
+      },
     };
   }
 
   private language_: string;
-  private uploadFileAction_: string = UPLOAD_FILE_ACTION;
+  private uploadFileAction_: string = SCOTTY_UPLOAD_FILE_ACTION;
   private uploadUrl_: string = '';
   private startTime_: string|null = null;
+  private clientData_: string;
+  private useDirectUpload_: boolean;
 
   openSystemFilePicker() {
     this.$.fileInput.click();
@@ -132,7 +151,7 @@ export class LensFormElement extends PolymerElement {
     return this.submitFile_(file);
   }
 
-  private submitFile_(file: File) {
+  private async submitFile_(file: File) {
     if (!SUPPORTED_FILE_TYPES.includes(file.type)) {
       this.dispatchError_(LensErrorType.FILE_TYPE);
       return;
@@ -143,16 +162,35 @@ export class LensFormElement extends PolymerElement {
       return;
     }
 
-    const dataTransfer = new DataTransfer();
-    dataTransfer.items.add(file);
-    this.$.fileInput.files = dataTransfer.files;
+    if (this.useDirectUpload_) {
+      this.uploadFileAction_ = DIRECT_UPLOAD_FILE_ACTION;
+    }
 
     this.startTime_ = Date.now().toString();
 
-    const action = new URL(UPLOAD_FILE_ACTION);
+    let processedFile: ProcessedFile = {processedFile: file};
+
+    if (this.useDirectUpload_) {
+      processedFile = await processFile(file);
+    }
+
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(processedFile.processedFile);
+    this.$.fileInput.files = dataTransfer.files;
+
+    const action = new URL(this.uploadFileAction_);
     action.searchParams.set('ep', UPLOAD_FILE_ENTRYPOINT);
     action.searchParams.set('hl', this.language_);
     action.searchParams.set('st', this.startTime_.toString());
+    action.searchParams.set('cd', this.clientData_);
+    action.searchParams.set('re', RENDERING_ENVIRONMENT);
+    action.searchParams.set('s', CHROMIUM_SURFACE);
+    action.searchParams.set(
+        'vph',
+        processedFile.imageHeight ? processedFile.imageHeight.toString() : '');
+    action.searchParams.set(
+        'vpw',
+        processedFile.imageWidth ? processedFile.imageWidth.toString() : '');
     this.uploadFileAction_ = action.toString();
 
     this.dispatchLoading_(LensSubmitType.FILE);

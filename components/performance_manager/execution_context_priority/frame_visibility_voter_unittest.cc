@@ -41,10 +41,10 @@ class GraphOwnedWrapper : public GraphOwned {
 
   // GraphOwned:
   void OnPassedToGraph(Graph* graph) override {
-    graph->AddFrameNodeObserver(&frame_visibility_voter_);
+    graph->AddInitializingFrameNodeObserver(&frame_visibility_voter_);
   }
   void OnTakenFromGraph(Graph* graph) override {
-    graph->RemoveFrameNodeObserver(&frame_visibility_voter_);
+    graph->RemoveInitializingFrameNodeObserver(&frame_visibility_voter_);
   }
 
   // Exposes the DummyVoteObserver to validate expectations.
@@ -72,6 +72,7 @@ class FrameVisibilityVoterTest : public GraphTestHarness {
 
   void SetUp() override {
     GetGraphFeatures().EnableExecutionContextRegistry();
+    GetGraphFeatures().EnableFrameVisibilityDecorator();
     Super::SetUp();
     auto wrapper = std::make_unique<GraphOwnedWrapper>();
     wrapper_ = wrapper.get();
@@ -94,7 +95,7 @@ TEST_F(FrameVisibilityVoterTest, ChangeFrameVisibility) {
   // visibility should be kNotVisible, resulting in a low priority.
   MockSinglePageInSingleProcessGraph mock_graph(graph());
   auto& frame_node = mock_graph.frame;
-  EXPECT_EQ(frame_node->visibility(), FrameNode::Visibility::kNotVisible);
+  EXPECT_EQ(frame_node->GetVisibility(), FrameNode::Visibility::kNotVisible);
   EXPECT_EQ(observer().GetVoteCount(), 1u);
   EXPECT_TRUE(observer().HasVote(voter_id(),
                                  GetExecutionContext(frame_node.get()),

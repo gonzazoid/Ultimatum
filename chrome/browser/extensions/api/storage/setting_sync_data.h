@@ -10,6 +10,7 @@
 
 #include "base/values.h"
 #include "components/sync/model/sync_change.h"
+#include "extensions/common/extension_id.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace syncer {
@@ -32,7 +33,7 @@ class SettingSyncData {
   SettingSyncData(syncer::SyncChange::SyncChangeType change_type,
                   const std::string& extension_id,
                   const std::string& key,
-                  std::unique_ptr<base::Value> value);
+                  base::Value value);
 
   SettingSyncData(const SettingSyncData&) = delete;
   SettingSyncData& operator=(const SettingSyncData&) = delete;
@@ -45,14 +46,14 @@ class SettingSyncData {
       const {
     return change_type_;
   }
-  const std::string& extension_id() const { return extension_id_; }
+  const ExtensionId& extension_id() const { return extension_id_; }
   const std::string& key() const { return key_; }
-  // value() cannot be called if PassValue() has been called.
+  // value() cannot be called if ExtractValue() has been called.
   const base::Value& value() const { return *value_; }
 
   // Releases ownership of the value to the caller. Neither value() nor
-  // PassValue() can be after this.
-  std::unique_ptr<base::Value> PassValue();
+  // ExtractValue() can be after this.
+  base::Value ExtractValue();
 
  private:
   // Populates the extension ID, key, and value from |sync_data|. This will be
@@ -60,9 +61,9 @@ class SettingSyncData {
   void ExtractSyncData(const syncer::SyncData& sync_data);
 
   absl::optional<syncer::SyncChange::SyncChangeType> change_type_;
-  std::string extension_id_;
+  ExtensionId extension_id_;
   std::string key_;
-  std::unique_ptr<base::Value> value_;
+  absl::optional<base::Value> value_;
 };
 
 using SettingSyncDataList = std::vector<std::unique_ptr<SettingSyncData>>;

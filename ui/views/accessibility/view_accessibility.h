@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -29,6 +29,7 @@ class AXPlatformNodeDelegate;
 
 namespace views {
 
+class AtomicViewAXTreeManager;
 class View;
 class ViewsAXTreeManager;
 class Widget;
@@ -59,6 +60,11 @@ class VIEWS_EXPORT ViewAccessibility {
   // associated View, taking any custom overrides into account
   // (see OverrideFocus, OverrideRole, etc. below).
   virtual void GetAccessibleNodeData(ui::AXNodeData* node_data) const;
+
+  // Made to be overridden on platforms that need the temporary
+  // `AtomicViewAXTreeManager` to enable more accessibility functionalities for
+  // Views. See crbug.com/1468416 for more info.
+  virtual void EnsureAtomicViewAXTreeManager() {}
 
   //
   // The following methods get or set accessibility attributes (in the owning
@@ -149,22 +155,6 @@ class VIEWS_EXPORT ViewAccessibility {
                            const ax::mojom::DescriptionFrom description_from =
                                ax::mojom::DescriptionFrom::kAriaDescription);
 
-  // Sets the accessible description source by establishing a relationship
-  // between this View and another view, such as a Label. By default the source
-  // type of the description is "related element." This default should cover
-  // most, if not all, of the use cases for Views. Note that the description
-  // source types were created based on needs associated with web content
-  // accessibility, and assistive technologies may make decisions based on that
-  // supposition. For instance, kTitle implies that the source of the
-  // description will be presented as a tooltip, such as would result from the
-  // HTML 'title' attribute or the SVG <title> element. See also
-  // OverrideDescription, which allows a View to provide a flat string
-  // description which is appropriate in cases where there is not one single
-  // Label/View containing the entire description.
-  void OverrideDescribedBy(const View* described_by_view,
-                           const ax::mojom::DescriptionFrom description_from =
-                               ax::mojom::DescriptionFrom::kRelatedElement);
-
   // Sets the platform-specific accessible name/title property of the
   // NativeViewAccessible window. This is needed on platforms where the name
   // of the NativeViewAccessible window is automatically calculated by the
@@ -218,6 +208,10 @@ class VIEWS_EXPORT ViewAccessibility {
   //
   // Note that |pos_in_set| is one-based, i.e. it starts from 1 not 0.
   void OverridePosInSet(int pos_in_set, int set_size);
+  void ClearPosInSetOverride();
+
+  // Overrides the `ax::mojom::BoolAttribute::kSelected` attribute.
+  void OverrideIsSelected(bool selected);
 
   // Override the next or previous focused widget. Some assistive technologies,
   // such as screen readers, may utilize this information to transition focus
@@ -225,12 +219,18 @@ class VIEWS_EXPORT ViewAccessibility {
   // default navigation method.
   void OverrideNextFocus(Widget* widget);
   void OverridePreviousFocus(Widget* widget);
-  Widget* GetNextFocus() const;
-  Widget* GetPreviousFocus() const;
+  Widget* GetNextWindowFocus() const;
+  Widget* GetPreviousWindowFocus() const;
 
   // Override the child tree id.
   void OverrideChildTreeID(ui::AXTreeID tree_id);
   ui::AXTreeID GetChildTreeID() const;
+
+  void OverrideCharacterOffsets(const std::vector<int32_t>& offsets);
+  void OverrideWordStarts(const std::vector<int32_t>& offsets);
+  void OverrideWordEnds(const std::vector<int32_t>& offsets);
+
+  void ClearTextOffsets();
 
   // Returns the accessibility object that represents the View whose
   // accessibility is managed by this instance. This may be an AXPlatformNode or
@@ -238,7 +238,16 @@ class VIEWS_EXPORT ViewAccessibility {
   virtual gfx::NativeViewAccessible GetNativeObject() const;
 
   // Causes the screen reader to announce |text|. If the current user is not
-  // using a screen reader, has no effect.
+  // using a screen reader, has no effect. AnnouncePolitely() will speak
+  // the given string. AnnounceAlert() may make a stronger attempt to be
+  // noticeable; the screen reader may say something like "Alert: hello"
+  // instead of just "hello", and may interrupt any existing text being spoken.
+  // However, the screen reader may also treat the two calls the same.
+  // AnnounceText() is a deprecated alias for AnnounceAlert().
+  // TODO(crbug.com/1499368) - Migrate all callers of AnnounceText() to
+  // one of the other two methods.
+  virtual void AnnounceAlert(const std::u16string& text);
+  virtual void AnnouncePolitely(const std::u16string& text);
   virtual void AnnounceText(const std::u16string& text);
 
   virtual const ui::AXUniqueId& GetUniqueId() const;
@@ -246,6 +255,8 @@ class VIEWS_EXPORT ViewAccessibility {
   View* view() const { return view_; }
   AXVirtualView* FocusedVirtualChild() const { return focused_virtual_child_; }
   ViewsAXTreeManager* AXTreeManager() const;
+
+  virtual AtomicViewAXTreeManager* GetAtomicViewAXTreeManagerForTesting() const;
 
   //
   // Methods for managing virtual views.
@@ -292,6 +303,11 @@ class VIEWS_EXPORT ViewAccessibility {
 
   bool propagate_focus_to_ancestor() { return propagate_focus_to_ancestor_; }
 
+  // If true, ensures an AtomicViewAXTreeManager is created for this view.
+  void set_needs_ax_tree_manager(bool value) { needs_ax_tree_manager_ = value; }
+
+  bool needs_ax_tree_manager() { return needs_ax_tree_manager_; }
+
   // Used for testing. Allows a test to watch accessibility events.
   const AccessibilityEventsCallback& accessibility_events_callback() const;
   void set_accessibility_events_callback(AccessibilityEventsCallback callback);
@@ -328,7 +344,7 @@ class VIEWS_EXPORT ViewAccessibility {
 
   // If set to true, anything that is a descendant of this view will be hidden
   // from accessibility.
-  bool is_leaf_;
+  bool is_leaf_ = false;
 
   // When true the view is ignored when generating the AX node hierarchy, but
   // its children are included. For example, if you created a custom table with
@@ -338,7 +354,7 @@ class VIEWS_EXPORT ViewAccessibility {
   // ignored, like a Widget's RootView, ClientView, etc.
   // Similar to setting the role of an ARIA widget to "none" or
   // "presentational".
-  bool is_ignored_;
+  bool is_ignored_ = false;
 
   // Used to override the View's enabled state in case we need to mark the View
   // as enabled or disabled only in the accessibility tree.
@@ -354,6 +370,10 @@ class VIEWS_EXPORT ViewAccessibility {
 
   // Whether to move accessibility focus to an ancestor.
   bool propagate_focus_to_ancestor_ = false;
+
+  // Whether we need to ensure an AtomicViewAXTreeManager is created for this
+  // View.
+  bool needs_ax_tree_manager_ = false;
 
 #if defined(USE_AURA) && !BUILDFLAG(IS_CHROMEOS_ASH)
   // Each instance of ViewAccessibility that's associated with a root View

@@ -28,6 +28,7 @@ SANDBOX_POLICY_EXPORT extern const char kServiceSandboxType[];
 SANDBOX_POLICY_EXPORT extern const char kNoneSandbox[];
 SANDBOX_POLICY_EXPORT extern const char kNoneSandboxAndElevatedPrivileges[];
 SANDBOX_POLICY_EXPORT extern const char kNetworkSandbox[];
+SANDBOX_POLICY_EXPORT extern const char kOnDeviceModelExecutionSandbox[];
 SANDBOX_POLICY_EXPORT extern const char kPpapiSandbox[];
 SANDBOX_POLICY_EXPORT extern const char kUtilitySandbox[];
 SANDBOX_POLICY_EXPORT extern const char kCdmSandbox[];
@@ -59,6 +60,9 @@ SANDBOX_POLICY_EXPORT extern const char kMirroringSandbox[];
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
 SANDBOX_POLICY_EXPORT extern const char kHardwareVideoDecodingSandbox[];
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+SANDBOX_POLICY_EXPORT extern const char kHardwareVideoEncodingSandbox[];
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 SANDBOX_POLICY_EXPORT extern const char kImeSandbox[];
@@ -69,7 +73,6 @@ SANDBOX_POLICY_EXPORT extern const char kLibassistantSandbox[];
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 // Flags owned by the service manager sandbox.
-SANDBOX_POLICY_EXPORT extern const char kAllowNoSandboxJob[];
 SANDBOX_POLICY_EXPORT extern const char kAllowSandboxDebugging[];
 SANDBOX_POLICY_EXPORT extern const char kDisableGpuSandbox[];
 SANDBOX_POLICY_EXPORT extern const char kDisableNamespaceSandbox[];
@@ -94,7 +97,6 @@ SANDBOX_POLICY_EXPORT extern const char kDisableMetalShaderCache[];
 // Flags spied upon from other layers.
 SANDBOX_POLICY_EXPORT extern const char kProcessType[];
 SANDBOX_POLICY_EXPORT extern const char kGpuProcess[];
-SANDBOX_POLICY_EXPORT extern const char kNaClBrokerProcess[];
 SANDBOX_POLICY_EXPORT extern const char kNaClLoaderProcess[];
 SANDBOX_POLICY_EXPORT extern const char kPpapiPluginProcess[];
 SANDBOX_POLICY_EXPORT extern const char kRendererProcess[];

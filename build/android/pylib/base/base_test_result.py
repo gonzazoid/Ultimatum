@@ -6,10 +6,18 @@
 
 
 import functools
+import re
 import sys
 import threading
 
 from lib.results import result_types  # pylint: disable=import-error
+
+# This must match the source adding the suffix: bit.ly/3Zmwwyx
+MULTIPROCESS_SUFFIX = '__multiprocess_mode'
+
+# This must match the source adding the suffix: bit.ly/3Qt0Ww4
+_NULL_MUTATION_SUFFIX = '__null_'
+_MUTATION_SUFFIX_PATTERN = re.compile(r'^(.*)__([a-zA-Z]+)\.\.([a-zA-Z]+)_$')
 
 
 class ResultType:
@@ -54,6 +62,7 @@ class BaseTestResult:
     self._log = log
     self._failure_reason = failure_reason
     self._links = {}
+    self._webview_multiprocess_mode = MULTIPROCESS_SUFFIX in name
 
   def __str__(self):
     return self._name
@@ -65,7 +74,7 @@ class BaseTestResult:
     return self.GetName() == other.GetName()
 
   def __lt__(self, other):
-    return self.GetName() == other.GetName()
+    return self.GetName() < other.GetName()
 
   def __hash__(self):
     return hash(self._name)
@@ -81,6 +90,43 @@ class BaseTestResult:
   def GetName(self):
     """Get the test name."""
     return self._name
+
+  def GetNameForResultSink(self):
+    """Get the test name to be reported to resultsink."""
+    raw_name = self.GetName()
+
+    # The name can include suffixes encoding Webview variant data:
+    # a Webview multiprocess mode suffix and an AwSettings mutation suffix.
+    # If both are present, the mutation suffix will come after the multiprocess
+    # suffix. The mutation suffix can either be "__null_" or "__{key}..{value}_"
+    #
+    # Examples:
+    # (...)AwSettingsTest#testAssetUrl__multiprocess_mode__allMutations..true_
+    # (...)AwSettingsTest#testAssetUrl__multiprocess_mode__null_
+    # (...)AwSettingsTest#testAssetUrl__allMutations..true_
+    # org.chromium.android_webview.test.AwSettingsTest#testAssetUrl__null_
+
+    # first, strip any AwSettings mutation parameter information
+    # from the RHS of the raw_name
+    if raw_name.endswith(_NULL_MUTATION_SUFFIX):
+      raw_name = raw_name[:-len(_NULL_MUTATION_SUFFIX)]
+    elif match := _MUTATION_SUFFIX_PATTERN.search(raw_name):
+      raw_name = match.group(1)
+
+    # At this stage, the name will only have the multiprocess suffix appended,
+    # if applicable.
+    #
+    # Examples:
+    # (...)AwSettingsTest#testAssetUrl__multiprocess_mode
+    # org.chromium.android_webview.test.AwSettingsTest#testAssetUrl
+
+    # then check for multiprocess mode suffix and strip it, if present
+    if self._webview_multiprocess_mode:
+      assert raw_name.endswith(
+          MULTIPROCESS_SUFFIX
+      ), 'multiprocess mode test raw name should have the corresponding suffix'
+      return raw_name[:-len(MULTIPROCESS_SUFFIX)]
+    return raw_name
 
   def SetType(self, test_type):
     """Set the test result type."""
@@ -126,6 +172,16 @@ class BaseTestResult:
   def GetLinks(self):
     """Get dict containing links to test result data."""
     return self._links
+
+  def GetVariantForResultSink(self):
+    """Get the variant dict to be reported to result sink."""
+    variants = {}
+    if match := _MUTATION_SUFFIX_PATTERN.search(self.GetName()):
+      # variant keys need to be lowercase
+      variants[match.group(2).lower()] = match.group(3)
+    if self._webview_multiprocess_mode:
+      variants['webview_multiprocess_mode'] = 'Yes'
+    return variants or None
 
 
 class TestRunResults:

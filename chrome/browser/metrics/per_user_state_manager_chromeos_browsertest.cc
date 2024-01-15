@@ -8,7 +8,6 @@
 #include "base/run_loop.h"
 #include "chrome/browser/ash/login/login_manager_test.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
-#include "chrome/browser/ash/login/test/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/ash/login/test/guest_session_mixin.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/scoped_policy_update.h"
@@ -18,6 +17,7 @@
 #include "chrome/browser/ash/ownership/owner_settings_service_ash_factory.h"
 #include "chrome/browser/ash/policy/core/device_policy_builder.h"
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
+#include "chrome/browser/ash/policy/test_support/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ash/settings/scoped_testing_cros_settings.h"
 #include "chrome/browser/ash/settings/stats_reporting_controller.h"
@@ -277,7 +277,7 @@ IN_PROC_BROWSER_TEST_P(ChromeOSPerUserGuestTestWithDeviceOwner,
   EXPECT_THAT(user_manager::UserManager::Get()->GetActiveUser()->GetType(),
               Eq(user_manager::USER_TYPE_GUEST));
   EXPECT_THAT(ash::DeviceSettingsService::Get()->GetOwnershipStatus(),
-              Eq(ash::DeviceSettingsService::OWNERSHIP_TAKEN));
+              Eq(ash::DeviceSettingsService::OwnershipStatus::kOwnershipTaken));
 
   // Ensure that guest session is using owner consent.
   EXPECT_THAT(ash::StatsReportingController::Get()->IsEnabled(),

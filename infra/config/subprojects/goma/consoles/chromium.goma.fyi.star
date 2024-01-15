@@ -6,9 +6,8 @@ load("//console-header.star", "HEADER")
 
 luci.console_view(
     name = "chromium.goma.fyi",
-    header = HEADER,
-    include_experimental_builds = True,
     repo = "https://chromium.googlesource.com/chromium/src",
+    header = HEADER,
     entries = [
         luci.console_view_entry(
             builder = "goma/linux-archive-rel-goma-rbe-canary",
@@ -27,15 +26,6 @@ luci.console_view(
         luci.console_view_entry(
             builder = "goma/chromeos-amd64-generic-rel-goma-rbe-canary",
             category = "rbe|cros|rel",
-        ),
-        luci.console_view_entry(
-            builder = "goma/android-archive-dbg-goma-rbe-canary",
-            category = "rbe|android|dbg",
-        ),
-        luci.console_view_entry(
-            builder = "goma/android-archive-dbg-goma-rbe-ats-canary",
-            category = "rbe|android|dbg",
-            short_name = "ats",
         ),
         luci.console_view_entry(
             builder = "goma/mac-archive-rel-goma-rbe-canary",
@@ -62,23 +52,9 @@ luci.console_view(
             category = "rbe|win|rel",
         ),
         luci.console_view_entry(
-            builder = "goma/Win Builder Goma RBE Canary (clobber)",
-            category = "rbe|win|rel",
-            short_name = "clb",
-        ),
-        luci.console_view_entry(
             builder = "goma/Win Builder (dbg) Goma RBE Canary",
             category = "rbe|win|dbg",
         ),
-        luci.console_view_entry(
-            builder = "goma/Win Builder Goma RBE ATS Canary",
-            category = "rbe|win|rel",
-            short_name = "ats",
-        ),
-        luci.console_view_entry(
-            builder = "goma/Win Builder (dbg) Goma RBE ATS Canary",
-            category = "rbe|win|dbg",
-            short_name = "ats",
-        ),
     ],
+    include_experimental_builds = True,
 )

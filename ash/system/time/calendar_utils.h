@@ -5,11 +5,12 @@
 #ifndef ASH_SYSTEM_TIME_CALENDAR_UTILS_H_
 #define ASH_SYSTEM_TIME_CALENDAR_UTILS_H_
 
+#include <optional>
 #include <set>
 
 #include "ash/ash_export.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "google_apis/calendar/calendar_api_response_types.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/insets.h"
 
@@ -31,11 +32,14 @@ constexpr int kMillisecondsPerMinute = 60000;
 
 // The padding in each date cell view.
 constexpr int kDateVerticalPadding = 13;
-constexpr int kDateHorizontalPadding = 14;
+constexpr int kDateHorizontalPadding = 16;
 constexpr int kColumnSetPadding = 5;
 
+// The insets for the event list item view.
+constexpr int kEventListItemViewStartEndMargin = 12;
+
 // The insets within a Date cell.
-constexpr auto kDateCellInsets =
+const auto kDateCellInsets =
     gfx::Insets::VH(kDateVerticalPadding, kDateHorizontalPadding);
 
 // Duration of opacity animation for visibility changes.
@@ -82,12 +86,25 @@ constexpr int kMaxNumNonPrunableMonths = 2 * kNumSurroundingMonthsCached + 1;
 // kMaxNumNonPrunableMonths is the total maximum number of cached months.
 constexpr int kMaxNumPrunableMonths = 20;
 
+// Between child spacing for `CalendarUpNextView`.
+constexpr int kUpNextBetweenChildSpacing = 8;
+
+// The `CalendarUpNextView` UI has a rounded 'nub' that sticks up in the middle
+// of the view. To ensure that the scroll view animates nicely behind the up
+// next view, we need to forcibly overlap the views slightly for the distance
+// between the bottom and top of the 'nub'.
+constexpr int kUpNextOverlapInPx = 12;
+
+// Returns if CalendarView is for GlanceablesV2 based on whether the features
+// are enabled.
+bool IsForGlanceablesV2();
+
 // Checks if the `selected_date` is local time today.
 bool IsToday(const base::Time selected_date);
 
 // Checks if the two exploded are in the same day.
-bool IsTheSameDay(absl::optional<base::Time> date_a,
-                  absl::optional<base::Time> date_b);
+bool IsTheSameDay(std::optional<base::Time> date_a,
+                  std::optional<base::Time> date_b);
 
 // Returns the set of months that includes |selected_date| and
 // |num_months_out| before and after.
@@ -244,6 +261,46 @@ ASH_EXPORT const std::pair<base::Time, base::Time> GetFetchStartEndTimes(
 // different for different languages. If cannot find this local's day in a week,
 // returns its time exploded's `day_of_week`;
 ASH_EXPORT int GetDayOfWeekInt(const base::Time date);
+
+// Checks if the event spans more than one day.
+ASH_EXPORT bool IsMultiDayEvent(
+    const google_apis::calendar::CalendarEvent* event);
+
+// Returns the `start_time` of `event` adjusted by time difference, to ensure
+// that each event is stored by its local time, e.g. an event that starts at
+// 2022-05-31 22:00:00.000 PST (2022-06-01 05:00:00.000 UTC) is stored in the
+// map for 05-2022.
+base::Time GetStartTimeAdjusted(
+    const google_apis::calendar::CalendarEvent* event);
+
+// Returns the `end_time` of `event` adjusted by time difference.
+base::Time GetEndTimeAdjusted(
+    const google_apis::calendar::CalendarEvent* event);
+
+// Returns midnight on the day of the start time of `event`.
+ASH_EXPORT base::Time GetStartTimeMidnightAdjusted(
+    const google_apis::calendar::CalendarEvent* event);
+
+// Returns midnight on the day of the end time of `event`.
+ASH_EXPORT base::Time GetEndTimeMidnightAdjusted(
+    const google_apis::calendar::CalendarEvent* event);
+
+// Gets the event start and end times accounting for timezone.
+const std::tuple<base::Time, base::Time> GetStartAndEndTime(
+    const google_apis::calendar::CalendarEvent* event,
+    const base::Time& selected_date,
+    const base::Time& selected_date_midnight,
+    const base::Time& selected_date_midnight_utc);
+
+// Calculates the UTC and local midnight times for the given `base::Time`,
+// rounding to the correct midnight for the given timezone. This avoids an
+// issue with `base::Time::UTCMidnight()`, which will (in certain ahead
+// timezones) return the previous days midnight.
+// For example, if the current time is 19 Jan 2023 00:10 in GMT+13, then
+// `GetUTCMidnight` will return 19 Jan 2023 00:00 UTC.
+// `base::Time::UTCMidnight()` will round down to 18 Jan 2023 00:00 UTC.
+ASH_EXPORT const std::tuple<base::Time, base::Time> GetMidnight(
+    const base::Time);
 
 }  // namespace calendar_utils
 

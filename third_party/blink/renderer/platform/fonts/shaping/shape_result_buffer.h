@@ -43,8 +43,6 @@ class PLATFORM_EXPORT ShapeResultBuffer {
                                    float total_width,
                                    unsigned from,
                                    unsigned to) const;
-  Vector<CharacterRange> IndividualCharacterRanges(TextDirection,
-                                                   float total_width) const;
   Vector<double> IndividualCharacterAdvances(const StringView&,
                                              TextDirection,
                                              float total_width) const;
@@ -52,8 +50,6 @@ class PLATFORM_EXPORT ShapeResultBuffer {
   Vector<ShapeResult::RunFontData> GetRunFontData() const;
 
   GlyphData EmphasisMarkGlyphData(const FontDescription&) const;
-
-  void ExpandRangeToIncludePartialGlyphs(int* from, int* to) const;
 
  private:
   friend class ShapeResultBloberizer;

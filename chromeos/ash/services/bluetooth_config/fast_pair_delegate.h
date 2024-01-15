@@ -5,7 +5,11 @@
 #ifndef CHROMEOS_ASH_SERVICES_BLUETOOTH_CONFIG_FAST_PAIR_DELEGATE_H_
 #define CHROMEOS_ASH_SERVICES_BLUETOOTH_CONFIG_FAST_PAIR_DELEGATE_H_
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
+#include "base/observer_list.h"
+#include "base/observer_list_types.h"
+#include "chromeos/ash/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom.h"
 
 namespace ash::bluetooth_config {
 
@@ -18,14 +22,43 @@ class DeviceNameManager;
 // call each other.
 class FastPairDelegate {
  public:
-  virtual ~FastPairDelegate() = default;
+  class Observer : public base::CheckedObserver {
+   public:
+    ~Observer() override = default;
 
-  virtual absl::optional<DeviceImageInfo> GetDeviceImageInfo(
-      const std::string& device_id) = 0;
+    // Invoked when the list of fast pairable devices has changed. This callback
+    // is used when a device has been added/removed from the list, or when one
+    // or more properties of a device in the list has changed.
+    virtual void OnFastPairableDevicesChanged(
+        const std::vector<mojom::PairedBluetoothDevicePropertiesPtr>&
+            fast_pairable_devices) = 0;
+  };
+
+  virtual std::optional<DeviceImageInfo> GetDeviceImageInfo(
+      const std::string& mac_address) = 0;
   virtual void ForgetDevice(const std::string& mac_address) = 0;
+  virtual void UpdateDeviceNickname(const std::string& mac_address,
+                                    const std::string& nickname) = 0;
   virtual void SetAdapterStateController(
       AdapterStateController* adapter_state_controller) = 0;
   virtual void SetDeviceNameManager(DeviceNameManager* device_name_manager) = 0;
+  virtual std::vector<mojom::PairedBluetoothDevicePropertiesPtr>
+  GetFastPairableDeviceProperties() = 0;
+
+  void AddObserver(Observer* observer);
+  void RemoveObserver(Observer* observer);
+
+ protected:
+  virtual ~FastPairDelegate();
+  FastPairDelegate();
+
+  // For inherited classes to call, notifying observers tracked by base class.
+  void NotifyFastPairableDevicesChanged(
+      const std::vector<mojom::PairedBluetoothDevicePropertiesPtr>&
+          fast_pairable_devices);
+
+ private:
+  base::ObserverList<Observer> observers_;
 };
 
 }  // namespace ash::bluetooth_config

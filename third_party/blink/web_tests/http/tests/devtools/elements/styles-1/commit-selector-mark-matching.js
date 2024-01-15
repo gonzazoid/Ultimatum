@@ -2,10 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+
+import * as Elements from 'devtools/panels/elements/elements.js';
+
 (async function() {
   TestRunner.addResult(
       `Tests that matching selectors are marked properly after new rule creation and selector change.\n`);
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
       <div id="inspected"></div>
@@ -24,7 +28,7 @@
 
       function nodeCallback(node) {
         nodeId = node.id;
-        stylesPane = UI.panels.elements.stylesWidget;
+        stylesPane = Elements.ElementsPanel.ElementsPanel.instance().stylesWidget;
         ElementsTestRunner.addNewRule('foo, #inspected, .bar, #inspected', callback);
       }
 

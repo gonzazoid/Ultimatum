@@ -7,15 +7,16 @@
 #include "base/containers/contains.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
+#include "content/browser/network/network_service_util_internal.h"
 #include "content/public/browser/network_service_instance.h"
+#include "content/public/browser/network_service_util.h"
 #include "content/public/common/content_features.h"
-#include "content/public/common/network_service_util.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/content_browser_test.h"
 #include "mojo/public/cpp/bindings/sync_call_restrictions.h"
-#include "sandbox/features.h"
 #include "sandbox/policy/features.h"
 #include "services/network/public/cpp/network_quality_tracker.h"
+#include "services/network/public/mojom/network_service.mojom.h"
 #include "services/network/public/mojom/network_service_test.mojom.h"
 
 #if BUILDFLAG(IS_ANDROID)
@@ -81,21 +82,18 @@ class TestNetworkQualityObserver
 class SandboxedNQEBrowserTest : public ContentBrowserTest {
  public:
   SandboxedNQEBrowserTest() {
-    std::vector<base::test::FeatureRef> enabled_features = {
 #if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_FUCHSIA)
       // Network Service Sandboxing is unconditionally enabled on these
       // platforms.
-      sandbox::policy::features::kNetworkServiceSandbox,
-#endif
-    };
-    scoped_feature_list_.InitWithFeatures(
-        enabled_features,
-        /*disabled_features=*/{features::kNetworkServiceInProcess});
+    scoped_feature_list_.InitAndEnableFeature(
+        sandbox::policy::features::kNetworkServiceSandbox);
+#endif  // !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_FUCHSIA)
+    ForceOutOfProcessNetworkService();
   }
 
-  void SetUp() override {
+  void SetUpOnMainThread() override {
 #if BUILDFLAG(IS_WIN)
-    if (!sandbox::features::IsAppContainerSandboxSupported()) {
+    if (!sandbox::policy::features::IsNetworkSandboxSupported()) {
       // On *some* Windows, sandboxing cannot be enabled. We skip all the tests
       // on such platforms.
       GTEST_SKIP();
@@ -106,8 +104,6 @@ class SandboxedNQEBrowserTest : public ContentBrowserTest {
     // test body from running when one of the assertions fails.
     ASSERT_TRUE(IsOutOfProcessNetworkService());
     ASSERT_TRUE(sandbox::policy::features::IsNetworkSandboxEnabled());
-
-    ContentBrowserTest::SetUp();
   }
 
   // Simulates a network quality change.
@@ -115,7 +111,7 @@ class SandboxedNQEBrowserTest : public ContentBrowserTest {
     DCHECK(content::GetNetworkService());
 
     mojo::Remote<network::mojom::NetworkServiceTest> network_service_test;
-    content::GetNetworkService()->BindTestInterface(
+    content::GetNetworkService()->BindTestInterfaceForTesting(
         network_service_test.BindNewPipeAndPassReceiver());
     base::RunLoop run_loop;
     network_service_test->SimulateNetworkQualityChange(type,
@@ -128,7 +124,7 @@ class SandboxedNQEBrowserTest : public ContentBrowserTest {
     DCHECK(content::GetNetworkService());
 
     mojo::Remote<network::mojom::NetworkServiceTest> network_service_test;
-    content::GetNetworkService()->BindTestInterface(
+    content::GetNetworkService()->BindTestInterfaceForTesting(
         network_service_test.BindNewPipeAndPassReceiver());
     base::RunLoop run_loop;
     network_service_test->ForceNetworkQualityEstimatorReportWifiAsSlow2G(

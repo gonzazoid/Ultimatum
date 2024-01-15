@@ -9,9 +9,9 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/containers/span.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -34,6 +34,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) WinWebAuthnApiAuthenticator
   // This method is safe to call without checking WinWebAuthnApi::IsAvailable().
   // Returns false if |api| is nullptr.
   static void IsUserVerifyingPlatformAuthenticatorAvailable(
+      bool is_off_the_record,
       WinWebAuthnApi* api,
       base::OnceCallback<void(bool is_available)>);
 
@@ -83,24 +84,15 @@ class COMPONENT_EXPORT(DEVICE_FIDO) WinWebAuthnApiAuthenticator
   void GetAssertion(CtapGetAssertionRequest request,
                     CtapGetAssertionOptions options,
                     GetAssertionCallback callback) override;
-  void GetCredentialInformationForRequest(
+  void GetPlatformCredentialInfoForRequest(
       const CtapGetAssertionRequest& request,
-      base::OnceCallback<void(std::vector<DiscoverableCredentialMetadata>,
-                              bool)> callback) override;
+      const CtapGetAssertionOptions& options,
+      GetPlatformCredentialInfoForRequestCallback callback) override;
   void GetTouch(base::OnceClosure callback) override;
   void Cancel() override;
-  Type GetType() const override;
+  AuthenticatorType GetType() const override;
   std::string GetId() const override;
-  bool IsInPairingMode() const override;
-  bool IsPaired() const override;
-  bool RequiresBlePairingPin() const override;
-  // SupportsCredProtectExtension returns whether the native API supports the
-  // credProtect CTAP extension.
-  bool SupportsCredProtectExtension() const override;
-  bool SupportsHMACSecretExtension() const override;
-  bool SupportsEnterpriseAttestation() const override;
-  bool SupportsCredBlobOfSize(size_t num_bytes) const override;
-  const absl::optional<AuthenticatorSupportedOptions>& Options() const override;
+  const AuthenticatorSupportedOptions& Options() const override;
   absl::optional<FidoTransportProtocol> AuthenticatorTransport() const override;
   base::WeakPtr<FidoAuthenticator> GetWeakPtr() override;
 
@@ -113,14 +105,16 @@ class COMPONENT_EXPORT(DEVICE_FIDO) WinWebAuthnApiAuthenticator
       std::pair<CtapDeviceResponseCode,
                 absl::optional<AuthenticatorGetAssertionResponse>> result);
 
+  // options_ is per-instance because the capabilities of `win_api_` can
+  // change at run-time in tests.
+  const AuthenticatorSupportedOptions options_;
   HWND current_window_;
-
   bool is_pending_ = false;
   bool waiting_for_cancellation_ = false;
   GUID cancellation_id_ = {};
   // The pointee of |win_api_| is assumed to be a singleton that outlives
   // this instance.
-  raw_ptr<WinWebAuthnApi> win_api_;
+  raw_ptr<WinWebAuthnApi, DanglingUntriaged> win_api_;
 
   // Verifies callbacks from |win_api_| are posted back onto the originating
   // sequence.

@@ -12,7 +12,6 @@
 #include "base/containers/flat_set.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/types/id_type.h"
 #include "chrome/browser/predictors/loading_predictor_config.h"
@@ -51,7 +50,7 @@ struct OriginRequestSummary {
 struct PageRequestSummary {
   PageRequestSummary(ukm::SourceId ukm_source_id,
                      const GURL& main_frame_url,
-                     base::TimeTicks creation_time);
+                     base::TimeTicks navigation_started);
   PageRequestSummary(const PageRequestSummary& other);
   ~PageRequestSummary();
   void UpdateOrAddResource(
@@ -59,12 +58,12 @@ struct PageRequestSummary {
   void AddPreconnectAttempt(const GURL& preconnect_url);
   void AddPrefetchAttempt(const GURL& prefetch_url);
 
-  ukm::SourceId ukm_source_id;
+  const ukm::SourceId ukm_source_id;
   GURL main_frame_url;
-  GURL initial_url;
-  base::TimeTicks navigation_started;
-  base::TimeTicks navigation_committed;
-  base::TimeTicks first_contentful_paint;
+  const GURL initial_url;
+  const base::TimeTicks navigation_started;
+  base::TimeTicks navigation_committed{base::TimeTicks::Max()};
+  base::TimeTicks first_contentful_paint{base::TimeTicks::Max()};
 
   // Map of origin -> OriginRequestSummary. Only one instance of each origin
   // is kept per navigation, but the summary is updated several times.
@@ -172,7 +171,7 @@ class LoadingDataCollector {
   // Cleanup inflight_navigations_ and call a cleanup for stats_collector_.
   void CleanupAbandonedNavigations(NavigationId navigation_id);
 
-  const raw_ptr<ResourcePrefetchPredictor> predictor_;
+  const raw_ptr<ResourcePrefetchPredictor, DanglingUntriaged> predictor_;
   const raw_ptr<LoadingStatsCollector> stats_collector_;
   const LoadingPredictorConfig config_;
 

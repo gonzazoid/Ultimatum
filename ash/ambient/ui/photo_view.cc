@@ -12,10 +12,12 @@
 #include "ash/ambient/ambient_view_delegate_impl.h"
 #include "ash/ambient/model/ambient_backend_model.h"
 #include "ash/ambient/ui/ambient_background_image_view.h"
+#include "ash/ambient/ui/ambient_slideshow_peripheral_ui.h"
 #include "ash/ambient/ui/ambient_view_ids.h"
+#include "ash/ambient/ui/jitter_calculator.h"
 #include "ash/public/cpp/ambient/ambient_ui_model.h"
 #include "ash/public/cpp/metrics_util.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/aura/window.h"
@@ -37,19 +39,12 @@ void ReportSmoothness(int value) {
   base::UmaHistogramPercentage(kPhotoTransitionSmoothness, value);
 }
 
-constexpr JitterCalculator::Config kGlanceableInfoJitterConfig = {
-    /*step_size=*/5,
-    /*x_min_translation=*/0,
-    /*x_max_translation=*/20,
-    /*y_min_translation=*/-20,
-    /*y_max_translation=*/0};
-
 }  // namespace
 
 // PhotoView ------------------------------------------------------------------
-PhotoView::PhotoView(AmbientViewDelegateImpl* delegate)
-    : delegate_(delegate),
-      glanceable_info_jitter_calculator_(kGlanceableInfoJitterConfig) {
+PhotoView::PhotoView(AmbientViewDelegateImpl* delegate,
+                     PhotoViewConfig view_config)
+    : view_config_(view_config), delegate_(delegate) {
   DCHECK(delegate_);
   SetID(AmbientViewID::kAmbientPhotoView);
   Init();
@@ -83,11 +78,14 @@ void PhotoView::Init() {
     // glanceable info on screen does not shift too much at once when
     // transitioning between AmbientBackgroundImageViews in
     // StartTransitionAnimation().
-    image_view = AddChildView(std::make_unique<AmbientBackgroundImageView>(
-        delegate_, &glanceable_info_jitter_calculator_));
+    image_view =
+        AddChildView(std::make_unique<AmbientBackgroundImageView>(delegate_));
     // Each image view will be animated on its own layer.
     image_view->SetPaintToLayer();
     image_view->layer()->SetFillsBoundsOpaquely(false);
+
+    image_view->SetPeripheralUiVisibility(view_config_.peripheral_ui_visible);
+    image_view->SetForceResizeToFit(view_config_.force_resize_to_fit);
   }
 
   // Hides one image view initially for fade in animation.
@@ -141,7 +139,7 @@ void PhotoView::StartTransitionAnimation() {
 
     ui::AnimationThroughputReporter reporter(
         animation.GetAnimator(),
-        metrics_util::ForSmoothness(base::BindRepeating(ReportSmoothness)));
+        metrics_util::ForSmoothnessV3(base::BindRepeating(ReportSmoothness)));
 
     visible_layer->SetOpacity(0.0f);
   }
@@ -159,7 +157,7 @@ void PhotoView::StartTransitionAnimation() {
 
     ui::AnimationThroughputReporter reporter(
         animation.GetAnimator(),
-        metrics_util::ForSmoothness(base::BindRepeating(ReportSmoothness)));
+        metrics_util::ForSmoothnessV3(base::BindRepeating(ReportSmoothness)));
 
     invisible_layer->SetOpacity(1.0f);
   }

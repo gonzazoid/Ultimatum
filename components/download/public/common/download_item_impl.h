@@ -11,8 +11,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -24,7 +24,6 @@
 #include "components/download/public/common/download_destination_observer.h"
 #include "components/download/public/common/download_interrupt_reasons.h"
 #include "components/download/public/common/download_item.h"
-#include "components/download/public/common/download_item_rename_progress_update.h"
 #include "components/download/public/common/download_job.h"
 #include "components/download/public/common/download_url_parameters.h"
 #include "components/download/public/common/resume_mode.h"
@@ -217,7 +216,6 @@ class COMPONENTS_DOWNLOAD_EXPORT DownloadItemImpl
       base::Time last_access_time,
       bool transient,
       const std::vector<DownloadItem::ReceivedSlice>& received_slices,
-      const DownloadItemRerouteInfo& reroute_info,
       int64_t range_request_from,
       int64_t range_request_to,
       std::unique_ptr<DownloadEntry> download_entry);
@@ -247,7 +245,7 @@ class COMPONENTS_DOWNLOAD_EXPORT DownloadItemImpl
   void RemoveObserver(DownloadItem::Observer* observer) override;
   void UpdateObservers() override;
   void ValidateDangerousDownload() override;
-  void ValidateMixedContentDownload() override;
+  void ValidateInsecureDownload() override;
   void StealDangerousDownload(bool need_removal,
                               AcquireFileCallback callback) override;
   void Pause() override;
@@ -269,7 +267,6 @@ class COMPONENTS_DOWNLOAD_EXPORT DownloadItemImpl
   bool IsDone() const override;
   int64_t GetBytesWasted() const override;
   int32_t GetAutoResumeCount() const override;
-  bool IsOffTheRecord() const override;
   const GURL& GetURL() const override;
   const std::vector<GURL>& GetUrlChain() const override;
   const GURL& GetOriginalUrl() const override;
@@ -301,12 +298,13 @@ class COMPONENTS_DOWNLOAD_EXPORT DownloadItemImpl
   bool GetFileExternallyRemoved() const override;
   void DeleteFile(base::OnceCallback<void(bool)> callback) override;
   DownloadFile* GetDownloadFile() override;
-  DownloadItemRenameHandler* GetRenameHandler() override;
-  const DownloadItemRerouteInfo& GetRerouteInfo() const override;
+#if BUILDFLAG(IS_ANDROID)
+  bool IsFromExternalApp() override;
+#endif  // BUILDFLAG(IS_ANDROID)
   bool IsDangerous() const override;
-  bool IsMixedContent() const override;
+  bool IsInsecure() const override;
   DownloadDangerType GetDangerType() const override;
-  MixedContentStatus GetMixedContentStatus() const override;
+  InsecureDownloadStatus GetInsecureDownloadStatus() const override;
   bool TimeRemaining(base::TimeDelta* remaining) const override;
   int64_t CurrentSpeed() const override;
   int PercentComplete() const override;
@@ -400,6 +398,12 @@ class COMPONENTS_DOWNLOAD_EXPORT DownloadItemImpl
 
   void SetDownloadId(uint32_t download_id);
 
+#if BUILDFLAG(IS_ANDROID)
+  void set_is_from_external_app(bool is_from_external_app) {
+    is_from_external_app_ = is_from_external_app;
+  }
+#endif  // BUILDFLAG(IS_ANDROID)
+
   const DownloadUrlParameters::RequestHeadersType& request_headers() const {
     return request_headers_;
   }
@@ -409,9 +413,6 @@ class COMPONENTS_DOWNLOAD_EXPORT DownloadItemImpl
   uint64_t ukm_download_id() const { return ukm_download_id_; }
 
   void SetAutoResumeCountForTesting(int32_t auto_resume_count);
-
-  // Gets the approximate memory usage of this item.
-  size_t GetApproximateMemoryUsage() const;
 
   std::pair<int64_t, int64_t> GetRangeRequestOffset() const;
 
@@ -597,7 +598,7 @@ class COMPONENTS_DOWNLOAD_EXPORT DownloadItemImpl
       const base::FilePath& target_path,
       TargetDisposition disposition,
       DownloadDangerType danger_type,
-      MixedContentStatus mixed_content_status,
+      InsecureDownloadStatus insecure_download_status,
       const base::FilePath& intermediate_path,
       const base::FilePath& display_name,
       const std::string& mime_type,
@@ -617,15 +618,6 @@ class COMPONENTS_DOWNLOAD_EXPORT DownloadItemImpl
   // This may perform final rename if necessary and will eventually call
   // DownloadItem::Completed().
   void OnDownloadCompleting();
-
-  // Called by |rename_handler_| to update state variables when necessary.
-  // This may update |destination_info_.target_file_path| as confirmed by
-  // rerouted location to be reflected in the UI/UX, and attach other reroute
-  // specific metadata into |reroute_info_| to be persisted into the databases.
-  // However, this will not transition the internal |state_|, because the
-  // |rename_handler_| will eventually run OnDownloadRenamedToFinalName() on
-  // completion.
-  void OnRenameHandlerUpdate(const DownloadItemRenameProgressUpdate& update);
 
   void OnDownloadRenamedToFinalName(DownloadInterruptReason reason,
                                     const base::FilePath& full_path);
@@ -730,12 +722,12 @@ class COMPONENTS_DOWNLOAD_EXPORT DownloadItemImpl
 
   RequestInfo request_info_;
 
-  // GUID to identify the download, generated by |base::GenerateGUID| in
-  // download item, or provided by |DownloadUrlParameters|.
-  // The format should follow UUID version 4 in RFC 4122.
-  // The string representation is case sensitive. Legacy download GUID hex
-  // digits may be upper case ASCII characters, and new GUID will be in lower
-  // case.
+  // GUID to identify the download, generated by
+  // |base::Uuid::GenerateRandomV4().AsLowercaseString| in download item, or
+  // provided by |DownloadUrlParameters|. The format should follow UUID version
+  // 4 in RFC 4122. The string representation is case sensitive. Legacy download
+  // GUID hex digits may be upper case ASCII characters, and new GUID will be in
+  // lower case.
   std::string guid_;
 
   uint32_t download_id_ = kInvalidId;
@@ -780,7 +772,7 @@ class COMPONENTS_DOWNLOAD_EXPORT DownloadItemImpl
   DownloadDangerType danger_type_ = DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS;
 
   // The views of this item in the download shelf and download contents.
-  base::ObserverList<Observer>::Unchecked observers_;
+  base::ObserverList<Observer> observers_;
 
   // Our delegate.
   raw_ptr<DownloadItemImplDelegate> delegate_ = nullptr;
@@ -890,13 +882,13 @@ class COMPONENTS_DOWNLOAD_EXPORT DownloadItemImpl
   // UKM ID for reporting, default to 0 if uninitialized.
   uint64_t ukm_download_id_ = 0;
 
-  // The MixedContentStatus if determined.
-  MixedContentStatus mixed_content_status_ = MixedContentStatus::UNKNOWN;
+  // The InsecureDownloadStatus if determined.
+  InsecureDownloadStatus insecure_download_status_ =
+      InsecureDownloadStatus::UNKNOWN;
 
-  // A handler for renaming and helping with display the item.
-  std::unique_ptr<DownloadItemRenameHandler> rename_handler_;
-  // Metadata specific to the rename handler.
-  DownloadItemRerouteInfo reroute_info_;
+#if BUILDFLAG(IS_ANDROID)
+  bool is_from_external_app_ = false;
+#endif  // BUILDFLAG(IS_ANDROID)
 
   THREAD_CHECKER(thread_checker_);
 

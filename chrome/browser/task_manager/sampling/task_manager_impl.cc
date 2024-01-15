@@ -12,9 +12,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/adapters.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -28,14 +29,15 @@
 #include "chrome/browser/task_manager/sampling/shared_sampler.h"
 #include "components/nacl/common/buildflags.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/gpu_data_manager.h"
 #include "content/public/browser/network_service_instance.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
-#include "content/public/common/child_process_host.h"
 #include "content/public/common/content_features.h"
 #include "services/network/public/cpp/features.h"
+#include "services/network/public/mojom/network_service.mojom.h"
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/memory_instrumentation.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -51,8 +53,8 @@ namespace task_manager {
 
 namespace {
 
-base::LazyInstance<TaskManagerImpl>::DestructorAtExit
-    lazy_task_manager_instance = LAZY_INSTANCE_INITIALIZER;
+base::LazyInstance<TaskManagerImpl>::Leaky lazy_task_manager_instance =
+    LAZY_INSTANCE_INITIALIZER;
 
 }  // namespace
 
@@ -354,7 +356,8 @@ const TaskIdList& TaskManagerImpl::GetTaskIdsList() const {
     for (const auto& groups_pair : task_groups_by_proc_id_) {
       // The first task in the group (per |comparator|) is the one used for
       // sorting the group relative to other groups.
-      const std::vector<Task*>& tasks = groups_pair.second->tasks();
+      const std::vector<raw_ptr<Task, VectorExperimental>>& tasks =
+          groups_pair.second->tasks();
       Task* group_task =
           *std::min_element(tasks.begin(), tasks.end(), comparator);
       tasks_to_visit.push_back(group_task);
@@ -369,7 +372,8 @@ const TaskIdList& TaskManagerImpl::GetTaskIdsList() const {
     }
 
     for (const auto& groups_pair : arc_vm_task_groups_by_proc_id_) {
-      const std::vector<Task*>& tasks = groups_pair.second->tasks();
+      const std::vector<raw_ptr<Task, VectorExperimental>>& tasks =
+          groups_pair.second->tasks();
       Task* group_task =
           *std::min_element(tasks.begin(), tasks.end(), comparator);
       tasks_to_visit.push_back(group_task);
@@ -386,7 +390,8 @@ const TaskIdList& TaskManagerImpl::GetTaskIdsList() const {
     sorted_task_ids_.reserve(num_tasks);
     std::unordered_set<TaskGroup*> visited_groups;
     visited_groups.reserve(num_groups);
-    std::vector<Task*> current_group_tasks;  // Outside loop for fewer mallocs.
+    std::vector<raw_ptr<Task, VectorExperimental>>
+        current_group_tasks;  // Outside loop for fewer mallocs.
     while (visited_groups.size() < num_groups) {
       DCHECK(!tasks_to_visit.empty());
       TaskGroup* current_group =
@@ -492,7 +497,7 @@ void TaskManagerImpl::TaskAdded(Task* task) {
         task->process_handle(), proc_id, is_running_in_vm,
         on_background_data_ready_callback_, shared_sampler_,
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-        is_running_in_lacros ? crosapi_task_provider_ : nullptr,
+        is_running_in_lacros ? crosapi_task_provider_.get() : nullptr,
 #endif
         blocking_pool_runner_);
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -643,6 +648,8 @@ void TaskManagerImpl::StartUpdating() {
 
   is_running_ = true;
 
+  content::GetNetworkService()->EnableDataUseUpdates(true);
+
   for (const auto& provider : task_providers_)
     provider->SetObserver(this);
 
@@ -656,6 +663,8 @@ void TaskManagerImpl::StopUpdating() {
     return;
 
   is_running_ = false;
+
+  content::GetNetworkService()->EnableDataUseUpdates(false);
 
   for (const auto& provider : task_providers_)
     provider->ClearObserver();

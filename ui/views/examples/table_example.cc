@@ -51,8 +51,7 @@ TableExample::~TableExample() {
   observer_.Reset();
   // Delete the view before the model.
   if (table_ && table_->parent()) {
-    table_->parent()->RemoveChildViewT(table_);
-    table_ = nullptr;
+    table_->parent()->RemoveChildViewT(table_.ExtractAsDangling());
   }
 }
 
@@ -65,21 +64,20 @@ void TableExample::CreateExampleView(View* container) {
                                      MaximumFlexSizeRule::kUnbounded)
                        .WithWeight(1);
 
-  const auto make_checkbox = [](const std::u16string& label, int id,
-                                raw_ptr<TableView>* table,
-                                raw_ptr<Checkbox>* checkbox,
-                                FlexSpecification full_flex) {
-    return Builder<Checkbox>()
-        .CopyAddressTo(checkbox)
-        .SetText(label)
-        .SetCallback(base::BindRepeating(
-            [](int id, raw_ptr<TableView>* table, raw_ptr<Checkbox>* checkbox) {
-              (*table)->SetColumnVisibility(id, (*checkbox)->GetChecked());
-            },
-            id, table, checkbox))
-        .SetChecked(true)
-        .SetProperty(kFlexBehaviorKey, full_flex);
-  };
+  const auto make_checkbox =
+      [](const std::u16string& label, int id, raw_ptr<TableView>* table,
+         raw_ptr<Checkbox>* checkbox, FlexSpecification full_flex) {
+        return Builder<Checkbox>()
+            .CopyAddressTo(checkbox)
+            .SetText(label)
+            .SetCallback(base::BindRepeating(
+                [](int id, raw_ptr<TableView>* table, Checkbox* checkbox) {
+                  (*table)->SetColumnVisibility(id, checkbox->GetChecked());
+                },
+                id, table, *checkbox))
+            .SetChecked(true)
+            .SetProperty(kFlexBehaviorKey, full_flex);
+      };
 
   // Make table
   Builder<View>(container)
@@ -87,13 +85,13 @@ void TableExample::CreateExampleView(View* container) {
           TableView::CreateScrollViewBuilderWithTable(
               Builder<TableView>()
                   .CopyAddressTo(&table_)
-                  .SetModel(this)
-                  .SetTableType(ICON_AND_TEXT)
                   .SetColumns(
                       {TestTableColumn(0, u"Fruit", ui::TableColumn::LEFT, 1.0),
                        TestTableColumn(1, u"Color"),
                        TestTableColumn(2, u"Origin"),
                        TestTableColumn(3, u"Price", ui::TableColumn::RIGHT)})
+                  .SetTableType(TableType::kIconAndText)
+                  .SetModel(this)
                   .SetGrouper(this)
                   .SetObserver(this))
               .SetProperty(kFlexBehaviorKey, full_flex),

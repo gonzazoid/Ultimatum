@@ -6,9 +6,21 @@
 
 namespace switches {
 
-// Enables background and upload trace to trace-upload-url. Trigger rules are
-// pass as an argument.
+// Enables background tracing by passing a scenarios config as an argument. The
+// config is a serialized proto `perfetto.protos.ChromeFieldTracingConfig`
+// defined in
+// third_party/perfetto/protos/perfetto/config/chrome/scenario_config.proto.
+// protoc can be used to generate a serialized proto config with
+// protoc
+//   --encode=perfetto.protos.ChromeFieldTracingConfig
+//   --proto_path=third_party/perfetto/
+//     third_party/perfetto/protos/perfetto/config/chrome/scenario_config.proto
+//  < {input txt config}.pbtxt > {output proto config}.pb
 const char kEnableBackgroundTracing[] = "enable-background-tracing";
+
+// Enables background tracing by passing legacy trigger rules as an argument.
+const char kEnableLegacyBackgroundTracing[] =
+    "enable-legacy-background-tracing";
 
 // Causes TRACE_EVENT flags to be recorded from startup.
 // This flag will be ignored if --trace-startup or --trace-shutdown is provided.
@@ -106,5 +118,11 @@ const char kBackgroundTracingOutputFile[] = "background-tracing-output-file";
 // provided in kB. Defaults to 4096. Should be a multiple of the SMB page size
 // (currently 32kB on Desktop or 4kB on Android).
 const char kTraceSmbSize[] = "trace-smb-size";
+
+// This is only used when we did not set buffer size in trace config and will be
+// used for all trace sessions. If not provided, we will use the default value
+// provided in perfetto_config.cc
+const char kDefaultTraceBufferSizeLimitInKb[] =
+    "default-trace-buffer-size-limit-in-kb";
 
 }  // namespace switches

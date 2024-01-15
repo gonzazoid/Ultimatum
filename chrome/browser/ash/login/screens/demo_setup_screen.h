@@ -7,21 +7,21 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "chrome/browser/ash/login/demo_mode/demo_setup_controller.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ui/webui/ash/login/demo_setup_screen_handler.h"
 
 namespace ash {
+
+class DemoSetupScreenView;
 
 // Controls demo mode setup. The screen can be shown during OOBE. It allows
 // user to setup retail demo mode on the device.
 class DemoSetupScreen : public BaseScreen {
  public:
-  enum class Result { COMPLETED, CANCELED };
+  enum class Result { kCompleted, kCanceled };
 
   static std::string GetResultString(Result result);
 
@@ -66,11 +66,5 @@ class DemoSetupScreen : public BaseScreen {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::DemoSetupScreen;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_DEMO_SETUP_SCREEN_H_

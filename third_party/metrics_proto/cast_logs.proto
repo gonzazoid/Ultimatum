@@ -11,13 +11,13 @@ option java_outer_classname = "CastLogsProtos";
 
 package metrics;  // Cast-enabled device specific log data included in ChromeUserMetricsExtension.
 
-// Next tag: 8
+// Next tag: 9
 message CastLogsProto {
   // Cast specific device information.
   // Next tag: 7
   message CastDeviceInfo {
     // The product type of Cast device sent from Cast-enabled devices.
-    // Next tag: 13
+    // Next tag: 14
     enum CastProductType {
       CAST_PRODUCT_TYPE_UNKNOWN = 0;
       CAST_PRODUCT_TYPE_CHROMECAST = 1;
@@ -32,6 +32,7 @@ message CastLogsProto {
       CAST_PRODUCT_TYPE_CORE = 10;
       CAST_PRODUCT_TYPE_11 = 11;
       CAST_PRODUCT_TYPE_ANDROID_AUTOMOTIVE = 12;
+      CAST_PRODUCT_TYPE_ANDROID = 13;
     }
     optional CastProductType type = 1;
 
@@ -75,6 +76,7 @@ message CastLogsProto {
     }
     optional HardwareInfo hardware_info = 6;
   }
+
   // The device sends this information at least once per day.
   optional CastDeviceInfo cast_device_info = 1;
 
@@ -274,8 +276,8 @@ message CastLogsProto {
   }
   repeated CastEventProto cast_event = 3;
 
-  // Virtual release track for releases sent to partners, trusted beta testers,
-  // developers, etc.
+  // Virtual release track for releases sent to partners, trusted beta
+  // testers, developers, etc.
   optional fixed32 virtual_release_track = 4;
 
   // Cast specific device information which is expected to change over time.
@@ -368,4 +370,6 @@ message CastLogsProto {
   // This ID is only ever recorded for Google-internal users (dogfooders). It
   // is never recorded for external users."
   optional uint64 ephemeral_id = 7;
+
+  optional fixed32 source_virtual_release_track = 8;
 }

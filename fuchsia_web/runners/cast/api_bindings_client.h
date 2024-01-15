@@ -5,14 +5,14 @@
 #ifndef FUCHSIA_WEB_RUNNERS_CAST_API_BINDINGS_CLIENT_H_
 #define FUCHSIA_WEB_RUNNERS_CAST_API_BINDINGS_CLIENT_H_
 
+#include <chromium/cast/cpp/fidl.h>
 #include <fuchsia/web/cpp/fidl.h>
 #include <vector>
 
+#include <optional>
 #include "base/memory/weak_ptr.h"
 #include "components/cast/message_port/message_port.h"
 #include "components/cast/named_message_port_connector/named_message_port_connector.h"
-#include "fuchsia_web/runners/cast/fidl/fidl/chromium/cast/cpp/fidl.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 // Injects scripts received from the ApiBindings service, and provides connected
 // ports to the Agent.
@@ -60,7 +60,7 @@ class ApiBindingsClient {
   // Used by AttachToFrame() to invoke `on_error_callback` asynchronously.
   void CallOnErrorCallback(base::OnceClosure on_error_callback);
 
-  absl::optional<std::vector<chromium::cast::ApiBinding>> bindings_;
+  std::optional<std::vector<chromium::cast::ApiBinding>> bindings_;
   fuchsia::web::Frame* frame_ = nullptr;
   cast_api_bindings::NamedMessagePortConnector* connector_ = nullptr;
   chromium::cast::ApiBindingsPtr bindings_service_;

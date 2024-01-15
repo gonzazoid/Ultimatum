@@ -6,23 +6,20 @@
 
 #import "base/feature_list.h"
 #import "base/metrics/histogram_macros.h"
+#import "base/metrics/user_metrics.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_utils.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/settings/cells/settings_cells_constants.h"
 #import "ios/chrome/browser/ui/settings/language/cells/language_item.h"
 #import "ios/chrome/browser/ui/settings/language/language_settings_data_source.h"
 #import "ios/chrome/browser/ui/settings/language/language_settings_histograms.h"
 #import "ios/chrome/browser/ui/settings/language/language_settings_ui_constants.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_item.h"
-#import "ios/chrome/browser/ui/table_view/table_view_utils.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -37,7 +34,10 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
 }  // namespace
 
-@interface LanguageDetailsTableViewController ()
+@interface LanguageDetailsTableViewController () {
+  // Whether Settings have been dismissed.
+  BOOL _settingsAreDismissed;
+}
 
 // The model data passed to this instance.
 @property(nonatomic, strong) LanguageItem* languageItem;
@@ -81,7 +81,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
   [self loadModel];
 }
 
-#pragma mark - ChromeTableViewController
+#pragma mark - LegacyChromeTableViewController
 
 - (void)loadModel {
   [super loadModel];
@@ -129,6 +129,24 @@ typedef NS_ENUM(NSInteger, ItemType) {
       languageDetailsTableViewController:self
                  didSelectOfferTranslate:(type == ItemTypeOfferTranslate)
                             languageCode:self.languageItem.languageCode];
+}
+
+#pragma mark - SettingsControllerProtocol
+
+- (void)reportDismissalUserAction {
+  base::RecordAction(
+      base::UserMetricsAction("MobileLanguageDetailsSettingsClose"));
+}
+
+- (void)reportBackUserAction {
+  base::RecordAction(
+      base::UserMetricsAction("MobileLanguageDetailsSettingsBack"));
+}
+
+- (void)settingsWillBeDismissed {
+  DCHECK(!_settingsAreDismissed);
+
+  _settingsAreDismissed = YES;
 }
 
 @end

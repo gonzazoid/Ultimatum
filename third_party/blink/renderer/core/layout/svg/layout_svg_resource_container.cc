@@ -21,8 +21,13 @@
 
 #include "third_party/blink/renderer/core/layout/svg/svg_resources.h"
 #include "third_party/blink/renderer/core/style/reference_clip_path_operation.h"
+#include "third_party/blink/renderer/core/style/style_mask_source_image.h"
+#include "third_party/blink/renderer/core/svg/svg_element.h"
+#include "third_party/blink/renderer/core/svg/svg_length.h"
+#include "third_party/blink/renderer/core/svg/svg_length_context.h"
 #include "third_party/blink/renderer/core/svg/svg_resource.h"
 #include "third_party/blink/renderer/core/svg/svg_tree_scope_resources.h"
+#include "third_party/blink/renderer/platform/geometry/length_functions.h"
 
 namespace blink {
 
@@ -34,6 +39,26 @@ LocalSVGResource* ResourceForContainer(
   return element.GetTreeScope()
       .EnsureSVGTreeScopedResources()
       .ExistingResourceForId(element.GetIdAttribute());
+}
+
+float ObjectBoundingBoxUnitToUserUnits(const Length& length,
+                                       float ref_dimension) {
+  // For "plain" percentages we resolve against the real reference dimension
+  // and scale with the unit dimension to avoid losing precision for common
+  // cases. In essence because of the difference between:
+  //
+  //   v * percentage / 100
+  //
+  // and:
+  //
+  //   v * (percentage / 100)
+  //
+  // for certain, common, values of v and percentage.
+  float unit_dimension = 1;
+  if (length.IsPercent()) {
+    std::swap(unit_dimension, ref_dimension);
+  }
+  return FloatValueForLength(length, unit_dimension, nullptr) * ref_dimension;
 }
 
 }  // namespace
@@ -54,6 +79,81 @@ void LayoutSVGResourceContainer::UpdateLayout() {
   ClearInvalidationMask();
 }
 
+gfx::RectF LayoutSVGResourceContainer::ResolveRectangle(
+    const SVGViewportResolver& viewport_resolver,
+    const SVGLengthConversionData& conversion_data,
+    SVGUnitTypes::SVGUnitType type,
+    const gfx::RectF& reference_box,
+    const SVGLength& x,
+    const SVGLength& y,
+    const SVGLength& width,
+    const SVGLength& height) {
+  // Convert SVGLengths to Lengths (preserves percentages).
+  const LengthPoint point(x.ConvertToLength(conversion_data),
+                          y.ConvertToLength(conversion_data));
+  const LengthSize size(width.ConvertToLength(conversion_data),
+                        height.ConvertToLength(conversion_data));
+  gfx::RectF resolved_rect;
+  // If the requested unit is 'objectBoundingBox' then the resolved user units
+  // are actually normalized (in bounding box units), so transform them to the
+  // actual user space.
+  if (type == SVGUnitTypes::kSvgUnitTypeObjectboundingbox) {
+    // Resolve the Lengths to user units.
+    resolved_rect = gfx::RectF(
+        ObjectBoundingBoxUnitToUserUnits(point.X(), reference_box.width()),
+        ObjectBoundingBoxUnitToUserUnits(point.Y(), reference_box.height()),
+        ObjectBoundingBoxUnitToUserUnits(size.Width(), reference_box.width()),
+        ObjectBoundingBoxUnitToUserUnits(size.Height(),
+                                         reference_box.height()));
+    resolved_rect += reference_box.OffsetFromOrigin();
+  } else {
+    DCHECK_EQ(type, SVGUnitTypes::kSvgUnitTypeUserspaceonuse);
+    // Determine the viewport to use for resolving the Lengths to user units.
+    gfx::SizeF viewport_size_for_resolve;
+    if (size.Width().IsPercentOrCalc() || size.Height().IsPercentOrCalc() ||
+        point.X().IsPercentOrCalc() || point.Y().IsPercentOrCalc()) {
+      viewport_size_for_resolve = viewport_resolver.ResolveViewport();
+    }
+    // Resolve the Lengths to user units.
+    resolved_rect =
+        gfx::RectF(PointForLengthPoint(point, viewport_size_for_resolve),
+                   SizeForLengthSize(size, viewport_size_for_resolve));
+  }
+  return resolved_rect;
+}
+
+gfx::RectF LayoutSVGResourceContainer::ResolveRectangle(
+    const SVGElement& context_element,
+    SVGUnitTypes::SVGUnitType type,
+    const gfx::RectF& reference_box,
+    const SVGLength& x,
+    const SVGLength& y,
+    const SVGLength& width,
+    const SVGLength& height) {
+  const ComputedStyle* style =
+      SVGLengthContext::ComputedStyleForLengthResolving(context_element);
+  if (!style) {
+    return gfx::RectF(0, 0, 0, 0);
+  }
+  const SVGViewportResolver viewport_resolver(context_element);
+  const SVGLengthConversionData conversion_data(context_element, *style);
+  return ResolveRectangle(viewport_resolver, conversion_data, type,
+                          reference_box, x, y, width, height);
+}
+
+gfx::RectF LayoutSVGResourceContainer::ResolveRectangle(
+    SVGUnitTypes::SVGUnitType type,
+    const gfx::RectF& reference_box,
+    const SVGLength& x,
+    const SVGLength& y,
+    const SVGLength& width,
+    const SVGLength& height) const {
+  const SVGViewportResolver viewport_resolver(*this);
+  const SVGLengthConversionData conversion_data(*this);
+  return ResolveRectangle(viewport_resolver, conversion_data, type,
+                          reference_box, x, y, width, height);
+}
+
 void LayoutSVGResourceContainer::InvalidateClientsIfActiveResource() {
   NOT_DESTROYED();
   // Avoid doing unnecessary work if the document is being torn down.
@@ -62,12 +162,10 @@ void LayoutSVGResourceContainer::InvalidateClientsIfActiveResource() {
   // If this is the 'active' resource (the first element with the specified 'id'
   // in tree order), notify any clients that they need to reevaluate the
   // resource's contents.
-  const LocalSVGResource* resource = ResourceForContainer(*this);
+  LocalSVGResource* resource = ResourceForContainer(*this);
   if (!resource || resource->Target() != GetElement())
     return;
-  // Pass all available flags. This may be performing unnecessary invalidations
-  // in some cases.
-  MarkAllClientsForInvalidation(kInvalidateAll);
+  GetDocument().ScheduleSVGResourceInvalidation(*resource);
 }
 
 void LayoutSVGResourceContainer::WillBeDestroyed() {
@@ -125,19 +223,35 @@ bool LayoutSVGResourceContainer::FindCycleInResources(
     const LayoutObject& layout_object) {
   if (!layout_object.IsSVG() || layout_object.IsText())
     return false;
-  SVGResourceClient* client = SVGResources::GetClient(layout_object);
   // Without an associated client, we will not reference any resources.
-  if (!client)
-    return false;
-  // Fetch all the referenced resources.
-  HeapVector<Member<SVGResource>> resources = CollectResources(layout_object);
-  // This performs a depth-first search for a back-edge in all the
-  // (potentially disjoint) graphs formed by the referenced resources.
-  for (const auto& local_resource : resources) {
-    // The resource can be null if the reference is external but external
-    // references are not allowed.
-    if (local_resource && local_resource->FindCycle(*client))
-      return true;
+  if (SVGResourceClient* client = SVGResources::GetClient(layout_object)) {
+    // Fetch all the referenced resources.
+    HeapVector<Member<SVGResource>> resources = CollectResources(layout_object);
+    // This performs a depth-first search for a back-edge in all the
+    // (potentially disjoint) graphs formed by the referenced resources.
+    for (const auto& local_resource : resources) {
+      // The resource can be null if the reference is external but external
+      // references are not allowed.
+      if (local_resource && local_resource->FindCycle(*client)) {
+        return true;
+      }
+    }
+  }
+  if (RuntimeEnabledFeatures::CSSMaskingInteropEnabled()) {
+    for (const FillLayer* layer = &layout_object.StyleRef().MaskLayers(); layer;
+         layer = layer->Next()) {
+      const auto* mask_source =
+          DynamicTo<StyleMaskSourceImage>(layer->GetImage());
+      if (!mask_source) {
+        continue;
+      }
+      const SVGResource* svg_resource = mask_source->GetSVGResource();
+      SVGResourceClient* client =
+          mask_source->GetSVGResourceClient(layout_object);
+      if (svg_resource && svg_resource->FindCycle(*client)) {
+        return true;
+      }
+    }
   }
   return false;
 }
@@ -197,41 +311,53 @@ void LayoutSVGResourceContainer::MarkAllClientsForInvalidation(
   is_invalidating_ = false;
 }
 
-void LayoutSVGResourceContainer::InvalidateCacheAndMarkForLayout(
-    LayoutInvalidationReasonForTracing reason,
-    SubtreeLayoutScope* layout_scope) {
+void LayoutSVGResourceContainer::InvalidateCache() {
   NOT_DESTROYED();
-  SetNeedsLayoutAndFullPaintInvalidation(reason, kMarkContainerChain,
-                                         layout_scope);
-
-  if (EverHadLayout())
+  if (EverHadLayout()) {
     RemoveAllClientsFromCache();
-}
-
-void LayoutSVGResourceContainer::InvalidateCacheAndMarkForLayout(
-    SubtreeLayoutScope* layout_scope) {
-  NOT_DESTROYED();
-  InvalidateCacheAndMarkForLayout(
-      layout_invalidation_reason::kSvgResourceInvalidated, layout_scope);
+  }
 }
 
 static inline void RemoveFromCacheAndInvalidateDependencies(
     LayoutObject& object,
     bool needs_layout) {
-  auto* element = DynamicTo<SVGElement>(object.GetNode());
-  if (!element)
-    return;
-
   // TODO(fs): Do we still need this? (If bounds are invalidated on a leaf
   // LayoutObject, we will propagate that during the required layout and
   // invalidate effects of self and any ancestors at that time.)
-  SVGResourceInvalidator(object).InvalidateEffects();
+  if (object.IsSVG())
+    SVGResourceInvalidator(object).InvalidateEffects();
 
+  LayoutSVGResourceContainer::InvalidateDependentElements(object, needs_layout);
+}
+
+void LayoutSVGResourceContainer::InvalidateDependentElements(
+    LayoutObject& object,
+    bool needs_layout) {
+  auto* element = DynamicTo<SVGElement>(object.GetNode());
+  if (!element)
+    return;
   element->NotifyIncomingReferences([needs_layout](SVGElement& element) {
     DCHECK(element.GetLayoutObject());
     LayoutSVGResourceContainer::MarkForLayoutAndParentResourceInvalidation(
         *element.GetLayoutObject(), needs_layout);
   });
+}
+
+void LayoutSVGResourceContainer::InvalidateAncestorChainResources(
+    LayoutObject& object,
+    bool needs_layout) {
+  LayoutObject* current = object.Parent();
+  while (current) {
+    RemoveFromCacheAndInvalidateDependencies(*current, needs_layout);
+
+    if (current->IsSVGResourceContainer()) {
+      // This will process the rest of the ancestors.
+      To<LayoutSVGResourceContainer>(current)->RemoveAllClientsFromCache();
+      break;
+    }
+
+    current = current->Parent();
+  }
 }
 
 void LayoutSVGResourceContainer::MarkForLayoutAndParentResourceInvalidation(
@@ -245,20 +371,7 @@ void LayoutSVGResourceContainer::MarkForLayoutAndParentResourceInvalidation(
   }
 
   RemoveFromCacheAndInvalidateDependencies(object, needs_layout);
-
-  // Invalidate resources in ancestor chain, if needed.
-  LayoutObject* current = object.Parent();
-  while (current) {
-    RemoveFromCacheAndInvalidateDependencies(*current, needs_layout);
-
-    if (current->IsSVGResourceContainer()) {
-      // This will process the rest of the ancestors.
-      To<LayoutSVGResourceContainer>(current)->RemoveAllClientsFromCache();
-      break;
-    }
-
-    current = current->Parent();
-  }
+  InvalidateAncestorChainResources(object, needs_layout);
 }
 
 static inline bool IsLayoutObjectOfResourceContainer(
@@ -277,7 +390,7 @@ void LayoutSVGResourceContainer::StyleChanged(LayoutObject& object,
   // If this LayoutObject is the child of a resource container and
   // it requires repainting because of changes to CSS properties
   // such as 'visibility', upgrade to invalidate layout.
-  bool needs_layout = diff.NeedsPaintInvalidation() &&
+  bool needs_layout = diff.NeedsNormalPaintInvalidation() &&
                       IsLayoutObjectOfResourceContainer(object);
   MarkForLayoutAndParentResourceInvalidation(object, needs_layout);
 }

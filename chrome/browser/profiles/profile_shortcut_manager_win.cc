@@ -10,20 +10,22 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ref.h"
 #include "base/path_service.h"
 #include "base/ranges/algorithm.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/win/shortcut.h"
@@ -40,7 +42,7 @@
 #include "chrome/common/chrome_paths_internal.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/installer/util/install_util.h"
 #include "chrome/installer/util/shell_util.h"
 #include "components/prefs/pref_service.h"
@@ -199,14 +201,12 @@ bool GetDesktopShortcutsDirectories(
       !ShellUtil::GetShortcutPath(ShellUtil::SHORTCUT_LOCATION_DESKTOP,
                                   ShellUtil::CURRENT_USER,
                                   user_shortcuts_directory)) {
-    NOTREACHED();
     return false;
   }
   if (system_shortcuts_directory &&
       !ShellUtil::GetShortcutPath(ShellUtil::SHORTCUT_LOCATION_DESKTOP,
                                   ShellUtil::SYSTEM_LEVEL,
                                   system_shortcuts_directory)) {
-    NOTREACHED();
     return false;
   }
   return true;
@@ -234,8 +234,8 @@ bool IsChromeShortcut(const base::FilePath& path,
 // that have the specified |command_line|. If |include_empty_command_lines| is
 // true Chrome desktop shortcuts with empty command lines will also be included.
 struct ChromeCommandLineFilter {
-  const base::FilePath& chrome_exe;
-  const std::wstring& command_line;
+  const raw_ref<const base::FilePath> chrome_exe;
+  const raw_ref<const std::wstring> command_line;
   bool include_empty_command_lines;
 
   ChromeCommandLineFilter(const base::FilePath& chrome_exe,
@@ -247,32 +247,30 @@ struct ChromeCommandLineFilter {
 
   bool operator()(const base::FilePath& path) const {
     std::wstring shortcut_command_line;
-    if (!IsChromeShortcut(path, chrome_exe, &shortcut_command_line))
+    if (!IsChromeShortcut(path, *chrome_exe, &shortcut_command_line)) {
       return false;
+    }
 
     // TODO(asvitkine): Change this to build a CommandLine object and ensure all
     // args from |command_line| are present in the shortcut's CommandLine. This
     // will be more robust when |command_line| contains multiple args.
     if ((shortcut_command_line.empty() && include_empty_command_lines) ||
-        (shortcut_command_line.find(command_line) != std::wstring::npos)) {
+        (shortcut_command_line.find(*command_line) != std::wstring::npos)) {
       return true;
     }
     return false;
   }
 };
 
-// Get the file paths of desktop files and folders optionally filtered
-// by |filter|.
-std::set<base::FilePath> ListUserDesktopContents(
+// Get the file paths of files optionally filtered by `filter`.
+std::set<base::FilePath> ListDirContents(
+    const base::FilePath& start_dir,
+    bool recursive,
     const ChromeCommandLineFilter* filter) {
   std::set<base::FilePath> result;
 
-  base::FilePath user_shortcuts_directory;
-  if (!GetDesktopShortcutsDirectories(&user_shortcuts_directory, nullptr))
-    return result;
-
   base::FileEnumerator enumerator(
-      user_shortcuts_directory, false,
+      start_dir, recursive,
       base::FileEnumerator::FILES | base::FileEnumerator::DIRECTORIES);
   for (base::FilePath path = enumerator.Next(); !path.empty();
        path = enumerator.Next()) {
@@ -280,6 +278,25 @@ std::set<base::FilePath> ListUserDesktopContents(
       result.insert(path);
   }
   return result;
+}
+
+std::set<base::FilePath> ListUserDesktopContents(
+    const ChromeCommandLineFilter* filter) {
+  base::FilePath desktop_directory;
+  if (!GetDesktopShortcutsDirectories(&desktop_directory, nullptr))
+    return std::set<base::FilePath>();
+  return ListDirContents(desktop_directory, /*recursive=*/false, filter);
+}
+
+// Get the file paths of implicit apps sub-dirs filtered by `filter`.
+std::set<base::FilePath> ListImplicitAppContents(
+    const ChromeCommandLineFilter* filter) {
+  base::FilePath implicit_apps_path;
+  if (!base::PathService::Get(base::DIR_IMPLICIT_APP_SHORTCUTS,
+                              &implicit_apps_path)) {
+    return std::set<base::FilePath>();
+  }
+  return ListDirContents(implicit_apps_path, /*recursive=*/true, filter);
 }
 
 // Renames the given desktop shortcut and informs the shell of this change.
@@ -445,7 +462,8 @@ void CreateOrUpdateDesktopShortcutsAndIconForProfile(
     return;
   }
 
-  std::set<base::FilePath> desktop_contents = ListUserDesktopContents(nullptr);
+  std::set<base::FilePath> desktop_contents =
+      ListUserDesktopContents(/*filter=*/nullptr);
 
   const std::wstring command_line =
       profiles::internal::CreateProfileShortcutFlags(params.profile_path,
@@ -458,8 +476,8 @@ void CreateOrUpdateDesktopShortcutsAndIconForProfile(
   // Do not call ListUserDesktopContents again (but with filter) to avoid
   // excess work inside it. Just reuse non-filtered desktop_contents.
   // We need both of them (desktop_contents and shortcuts) later.
-  std::copy_if(desktop_contents.begin(), desktop_contents.end(),
-               std::inserter(shortcuts, shortcuts.begin()), filter);
+  base::ranges::copy_if(desktop_contents,
+                        std::inserter(shortcuts, shortcuts.begin()), filter);
 
   if (params.old_profile_name != params.profile_name || params.single_profile) {
     RenameChromeDesktopShortcutForProfile(
@@ -609,10 +627,12 @@ void UnpinAndDeleteDesktopShortcuts(
   const std::wstring command_line =
       profiles::internal::CreateProfileShortcutFlags(profile_path);
   ChromeCommandLineFilter filter(chrome_exe, command_line, false);
-  const std::set<base::FilePath> shortcuts = ListUserDesktopContents(&filter);
-  if (shortcuts.empty())
-    return;
-
+  std::set<base::FilePath> shortcuts = ListUserDesktopContents(&filter);
+  if (shortcuts.empty()) {
+    shortcuts = ListImplicitAppContents(&filter);
+    if (shortcuts.empty())
+      return;
+  }
   std::vector<base::FilePath> shortcuts_vector(shortcuts.begin(),
                                                shortcuts.end());
   // Unpinning is done out-of-process, which isn't allowed in unit tests.
@@ -699,9 +719,9 @@ std::wstring GetUniqueShortcutFilenameForProfile(
     const std::u16string& profile_name,
     const std::set<base::FilePath>& excludes) {
   std::set<std::wstring> excludes_names;
-  std::transform(excludes.begin(), excludes.end(),
-                 std::inserter(excludes_names, excludes_names.begin()),
-                 [](const base::FilePath& e) { return e.BaseName().value(); });
+  base::ranges::transform(
+      excludes, std::inserter(excludes_names, excludes_names.begin()),
+      [](const base::FilePath& e) { return e.BaseName().value(); });
 
   const auto base_name = GetShortcutFilenameForProfile(profile_name);
   auto name = base_name;
@@ -727,7 +747,7 @@ bool ShortcutFilenameMatcher::IsCanonical(const std::wstring& filename) const {
   if (filename == profile_shortcut_filename_)
     return true;
 
-  base::WStringPiece shortcut_suffix = filename;
+  std::wstring_view shortcut_suffix = filename;
   if (!base::StartsWith(shortcut_suffix, profile_shortcut_name_))
     return false;
   shortcut_suffix.remove_prefix(profile_shortcut_name_.size());
@@ -746,13 +766,12 @@ bool ShortcutFilenameMatcher::IsCanonical(const std::wstring& filename) const {
 
 std::wstring CreateProfileShortcutFlags(const base::FilePath& profile_path,
                                         const bool incognito) {
-  std::wstring flags = base::StringPrintf(
-      L"--%ls=\"%ls\"", base::ASCIIToWide(switches::kProfileDirectory).c_str(),
-      profile_path.BaseName().value().c_str());
+  std::wstring flags =
+      base::StrCat({L"--", base::ASCIIToWide(switches::kProfileDirectory),
+                    L"=\"", profile_path.BaseName().value(), L"\""});
 
   if (incognito) {
-    flags.append(base::StringPrintf(
-        L" --%ls", base::ASCIIToWide(switches::kIncognito).c_str()));
+    flags.append(L" --" + base::ASCIIToWide(switches::kIncognito));
   }
 
   return flags;
@@ -905,10 +924,10 @@ void ProfileShortcutManagerWin::RemoveProfileShortcuts(
 void ProfileShortcutManagerWin::HasProfileShortcuts(
     const base::FilePath& profile_path,
     base::OnceCallback<void(bool)> callback) {
-  base::PostTaskAndReplyWithResult(
-      base::ThreadPool::CreateCOMSTATaskRunner({base::MayBlock()}).get(),
-      FROM_HERE, base::BindOnce(&HasAnyProfileShortcuts, profile_path),
-      std::move(callback));
+  base::ThreadPool::CreateCOMSTATaskRunner({base::MayBlock()})
+      ->PostTaskAndReplyWithResult(
+          FROM_HERE, base::BindOnce(&HasAnyProfileShortcuts, profile_path),
+          std::move(callback));
 }
 
 void ProfileShortcutManagerWin::GetShortcutProperties(

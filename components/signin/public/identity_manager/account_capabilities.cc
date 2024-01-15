@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "base/notreached.h"
 #include "components/signin/public/identity_manager/account_capabilities.h"
 
 #include "base/no_destructor.h"
@@ -40,6 +41,16 @@ AccountCapabilities::GetSupportedAccountCapabilityNames() {
   return *kCapabilityNames;
 }
 
+bool AccountCapabilities::AreAnyCapabilitiesKnown() const {
+  for (const std::string& capability_name :
+       GetSupportedAccountCapabilityNames()) {
+    if (GetCapabilityByName(capability_name) != signin::Tribool::kUnknown) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool AccountCapabilities::AreAllCapabilitiesKnown() const {
   for (const std::string& capability_name :
        GetSupportedAccountCapabilityNames()) {
@@ -59,6 +70,10 @@ signin::Tribool AccountCapabilities::GetCapabilityByName(
   return iterator->second ? signin::Tribool::kTrue : signin::Tribool::kFalse;
 }
 
+signin::Tribool AccountCapabilities::can_have_email_address_displayed() const {
+  return GetCapabilityByName(kCanHaveEmailAddressDisplayedCapabilityName);
+}
+
 signin::Tribool AccountCapabilities::can_offer_extended_chrome_sync_promos()
     const {
   return GetCapabilityByName(kCanOfferExtendedChromeSyncPromosCapabilityName);
@@ -69,20 +84,39 @@ signin::Tribool AccountCapabilities::can_run_chrome_privacy_sandbox_trials()
   return GetCapabilityByName(kCanRunChromePrivacySandboxTrialsCapabilityName);
 }
 
-signin::Tribool AccountCapabilities::can_stop_parental_supervision() const {
-  return GetCapabilityByName(kCanStopParentalSupervisionCapabilityName);
+signin::Tribool AccountCapabilities::is_opted_in_to_parental_supervision()
+    const {
+  return GetCapabilityByName(kIsOptedInToParentalSupervisionCapabilityName);
 }
 
-signin::Tribool AccountCapabilities::is_subject_to_parental_controls() const {
-  return GetCapabilityByName(kIsSubjectToParentalControlsCapabilityName);
+signin::Tribool AccountCapabilities::can_toggle_auto_updates() const {
+  return GetCapabilityByName(kCanToggleAutoUpdatesName);
+}
+
+signin::Tribool AccountCapabilities::can_use_chrome_ip_protection() const {
+  return GetCapabilityByName(kCanUseChromeIpProtectionName);
+}
+
+signin::Tribool AccountCapabilities::can_use_model_execution_features() const {
+  return GetCapabilityByName(kCanUseModelExecutionFeaturesName);
 }
 
 signin::Tribool AccountCapabilities::is_allowed_for_machine_learning() const {
   return GetCapabilityByName(kIsAllowedForMachineLearningCapabilityName);
 }
 
-signin::Tribool AccountCapabilities::can_toggle_auto_updates() const {
-  return GetCapabilityByName(kCanToggleAutoUpdatesName);
+signin::Tribool AccountCapabilities::
+    is_subject_to_chrome_privacy_sandbox_restricted_measurement_notice() const {
+  return GetCapabilityByName(
+      kIsSubjectToChromePrivacySandboxRestrictedMeasurementNotice);
+}
+
+signin::Tribool AccountCapabilities::is_subject_to_enterprise_policies() const {
+  return GetCapabilityByName(kIsSubjectToEnterprisePoliciesCapabilityName);
+}
+
+signin::Tribool AccountCapabilities::is_subject_to_parental_controls() const {
+  return GetCapabilityByName(kIsSubjectToParentalControlsCapabilityName);
 }
 
 bool AccountCapabilities::UpdateWith(const AccountCapabilities& other) {
@@ -147,5 +181,16 @@ AccountCapabilities::ConvertToJavaAccountCapabilities(JNIEnv* env) const {
       env, base::android::ToJavaArrayOfStrings(env, capability_names),
       base::android::ToJavaBooleanArray(env, capability_values.get(),
                                         capabilities_size));
+}
+#endif
+
+#if BUILDFLAG(IS_IOS)
+AccountCapabilities::AccountCapabilities(
+    base::flat_map<std::string, bool> capabilities)
+    : capabilities_map_(std::move(capabilities)) {}
+
+const base::flat_map<std::string, bool>&
+AccountCapabilities::ConvertToAccountCapabilitiesIOS() {
+  return capabilities_map_;
 }
 #endif

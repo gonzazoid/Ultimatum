@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstring>
 
+#include "base/containers/span.h"
 #include "base/hash/hash.h"
 
 namespace base {
@@ -59,7 +60,7 @@ using base::trace_event::Backtrace;
 using base::trace_event::StackFrame;
 
 size_t hash<StackFrame>::operator()(const StackFrame& frame) const {
-  return hash<const void*>()(frame.value);
+  return hash<const void*>()(frame.value.get());
 }
 
 size_t hash<Backtrace>::operator()(const Backtrace& backtrace) const {
@@ -67,7 +68,8 @@ size_t hash<Backtrace>::operator()(const Backtrace& backtrace) const {
   for (size_t i = 0; i != backtrace.frame_count; ++i) {
     values[i] = backtrace.frames[i].value;
   }
-  return base::PersistentHash(values, backtrace.frame_count * sizeof(*values));
+  auto values_span = base::make_span(values).first(backtrace.frame_count);
+  return base::PersistentHash(base::as_bytes(values_span));
 }
 
 size_t hash<AllocationContext>::operator()(const AllocationContext& ctx) const {

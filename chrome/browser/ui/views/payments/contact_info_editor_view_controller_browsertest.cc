@@ -21,7 +21,7 @@ namespace {
 const char16_t kNameFull[] = u"Kirby Puckett";
 const char16_t kPhoneNumber[] = u"6515558946";
 const char16_t kPhoneNumberInvalid[] = u"123";
-const char16_t kEmailAddress[] = u"kirby@example.com";
+const char16_t kEmailAddress[] = u"kirby@example.test";
 const char16_t kEmailAddressInvalid[] = u"kirby";
 
 std::string GetLocale() {
@@ -50,10 +50,10 @@ class MAYBE_PaymentRequestContactInfoEditorTest
 IN_PROC_BROWSER_TEST_F(MAYBE_PaymentRequestContactInfoEditorTest, HappyPath) {
   // Installs two apps so that the Payment Request UI will be shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("/payment_request_contact_details_test.html");
@@ -106,10 +106,10 @@ IN_PROC_BROWSER_TEST_F(MAYBE_PaymentRequestContactInfoEditorTest,
                        EnterAcceleratorHappyPath) {
   // Installs two apps so that the Payment Request UI will be shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("/payment_request_contact_details_test.html");
@@ -135,8 +135,8 @@ IN_PROC_BROWSER_TEST_F(MAYBE_PaymentRequestContactInfoEditorTest,
       .WillOnce(QuitMessageLoop(&data_loop));
   views::View* editor_sheet = dialog_view()->GetViewByID(
       static_cast<int>(DialogViewID::CONTACT_INFO_EDITOR_SHEET));
-  editor_sheet->AcceleratorPressed(
-      ui::Accelerator(ui::VKEY_RETURN, ui::EF_NONE));
+  EXPECT_TRUE(editor_sheet->AcceleratorPressed(
+      ui::Accelerator(ui::VKEY_RETURN, ui::EF_NONE)));
   data_loop.Run();
 
   personal_data_manager->RemoveObserver(&personal_data_observer_);
@@ -159,10 +159,10 @@ IN_PROC_BROWSER_TEST_F(MAYBE_PaymentRequestContactInfoEditorTest,
 IN_PROC_BROWSER_TEST_F(MAYBE_PaymentRequestContactInfoEditorTest, Validation) {
   // Installs two apps so that the Payment Request UI will be shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("/payment_request_contact_details_test.html");
@@ -226,17 +226,18 @@ IN_PROC_BROWSER_TEST_F(MAYBE_PaymentRequestContactInfoEditorTest,
                        ModifyExisting) {
   // Installs two apps so that the Payment Request UI will be shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("/payment_request_contact_details_test.html");
   autofill::PersonalDataManager* personal_data_manager = GetDataManager();
   personal_data_manager->AddObserver(&personal_data_observer_);
 
-  autofill::AutofillProfile incomplete_profile;
+  autofill::AutofillProfile incomplete_profile(
+      autofill::i18n_model_definition::kLegacyHierarchyCountryCode);
   incomplete_profile.SetInfo(autofill::NAME_FULL, kNameFull, GetLocale());
   AddAutofillProfile(incomplete_profile);
 
@@ -286,21 +287,23 @@ IN_PROC_BROWSER_TEST_F(MAYBE_PaymentRequestContactInfoEditorTest,
                        ModifyExistingSelectsIt) {
   // Installs two apps so that the Payment Request UI will be shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("/payment_request_contact_details_test.html");
   autofill::PersonalDataManager* personal_data_manager = GetDataManager();
   personal_data_manager->AddObserver(&personal_data_observer_);
 
-  autofill::AutofillProfile incomplete_profile;
+  autofill::AutofillProfile incomplete_profile(
+      autofill::i18n_model_definition::kLegacyHierarchyCountryCode);
   incomplete_profile.SetInfo(autofill::NAME_FULL, kNameFull, GetLocale());
   AddAutofillProfile(incomplete_profile);
 
-  autofill::AutofillProfile other_incomplete_profile;
+  autofill::AutofillProfile other_incomplete_profile(
+      autofill::i18n_model_definition::kLegacyHierarchyCountryCode);
   other_incomplete_profile.SetInfo(autofill::NAME_FULL, u"other", GetLocale());
   AddAutofillProfile(other_incomplete_profile);
 
@@ -354,10 +357,10 @@ IN_PROC_BROWSER_TEST_F(MAYBE_PaymentRequestContactInfoEditorTest,
                        HappyPathInIncognito) {
   // Installs two apps so that the Payment Request UI will be shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   SetIncognito();
@@ -410,10 +413,10 @@ IN_PROC_BROWSER_TEST_F(MAYBE_PaymentRequestContactInfoEditorTest,
                        RetryWithPayerErrors) {
   // Installs two apps so that the Payment Request UI will be shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("/payment_request_retry_with_payer_errors.html");
@@ -441,15 +444,15 @@ IN_PROC_BROWSER_TEST_F(MAYBE_PaymentRequestContactInfoEditorTest,
                                DialogEvent::PROCESSING_SPINNER_HIDDEN,
                                DialogEvent::BACK_TO_PAYMENT_SHEET_NAVIGATION,
                                DialogEvent::CONTACT_INFO_EDITOR_OPENED});
-  ASSERT_TRUE(content::ExecuteScript(GetActiveWebContents(),
-                                     "retry({"
-                                     "  payer: {"
-                                     "    email: 'EMAIL ERROR',"
-                                     "    name: 'NAME ERROR',"
-                                     "    phone: 'PHONE ERROR'"
-                                     "  }"
-                                     "});"));
-  WaitForObservedEvent();
+  ASSERT_TRUE(content::ExecJs(GetActiveWebContents(),
+                              "retry({"
+                              "  payer: {"
+                              "    email: 'EMAIL ERROR',"
+                              "    name: 'NAME ERROR',"
+                              "    phone: 'PHONE ERROR'"
+                              "  }"
+                              "});"));
+  ASSERT_TRUE(WaitForObservedEvent());
 
   EXPECT_EQ(u"EMAIL ERROR", GetErrorLabelForType(autofill::EMAIL_ADDRESS));
   EXPECT_EQ(u"NAME ERROR", GetErrorLabelForType(autofill::NAME_FULL));
@@ -462,10 +465,10 @@ IN_PROC_BROWSER_TEST_F(
     RetryWithPayerErrors_HasSameValueButDifferentErrorsShown) {
   // Installs two apps so that the Payment Request UI will be shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("/payment_request_retry_with_payer_errors.html");
@@ -496,15 +499,15 @@ IN_PROC_BROWSER_TEST_F(
                                DialogEvent::PROCESSING_SPINNER_HIDDEN,
                                DialogEvent::BACK_TO_PAYMENT_SHEET_NAVIGATION,
                                DialogEvent::CONTACT_INFO_EDITOR_OPENED});
-  ASSERT_TRUE(content::ExecuteScript(GetActiveWebContents(),
-                                     "retry({"
-                                     "  payer: {"
-                                     "    email: 'EMAIL ERROR',"
-                                     "    name: 'NAME ERROR',"
-                                     "    phone: 'PHONE ERROR'"
-                                     "  }"
-                                     "});"));
-  WaitForObservedEvent();
+  ASSERT_TRUE(content::ExecJs(GetActiveWebContents(),
+                              "retry({"
+                              "  payer: {"
+                              "    email: 'EMAIL ERROR',"
+                              "    name: 'NAME ERROR',"
+                              "    phone: 'PHONE ERROR'"
+                              "  }"
+                              "});"));
+  ASSERT_TRUE(WaitForObservedEvent());
 
   EXPECT_EQ(u"EMAIL ERROR", GetErrorLabelForType(autofill::EMAIL_ADDRESS));
   EXPECT_EQ(u"NAME ERROR", GetErrorLabelForType(autofill::NAME_FULL));
@@ -516,10 +519,10 @@ IN_PROC_BROWSER_TEST_F(MAYBE_PaymentRequestContactInfoEditorTest,
                        RetryWithPayerErrors_NoPaymentOptions) {
   // Installs two apps so that the Payment Request UI will be shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("/payment_request_retry_with_no_payment_options.html");
@@ -546,15 +549,15 @@ IN_PROC_BROWSER_TEST_F(MAYBE_PaymentRequestContactInfoEditorTest,
                                DialogEvent::SPEC_DONE_UPDATING,
                                DialogEvent::PROCESSING_SPINNER_HIDDEN,
                                DialogEvent::BACK_TO_PAYMENT_SHEET_NAVIGATION});
-  ASSERT_TRUE(content::ExecuteScript(GetActiveWebContents(),
-                                     "retry({"
-                                     "  payer: {"
-                                     "    email: 'EMAIL ERROR',"
-                                     "    name: 'NAME ERROR',"
-                                     "    phone: 'PHONE ERROR'"
-                                     "  }"
-                                     "});"));
-  WaitForObservedEvent();
+  ASSERT_TRUE(content::ExecJs(GetActiveWebContents(),
+                              "retry({"
+                              "  payer: {"
+                              "    email: 'EMAIL ERROR',"
+                              "    name: 'NAME ERROR',"
+                              "    phone: 'PHONE ERROR'"
+                              "  }"
+                              "});"));
+  ASSERT_TRUE(WaitForObservedEvent());
 
   const int kErrorLabelOffset =
       static_cast<int>(DialogViewID::ERROR_LABEL_OFFSET);

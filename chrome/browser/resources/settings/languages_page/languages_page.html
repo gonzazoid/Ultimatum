@@ -51,13 +51,9 @@
   }
 
   #restartButton {
-    margin-inline-start: var(--settings-controlled-by-spacing);
+    margin-inline-start: var(--cr-controlled-by-spacing);
   }
 </if>
-
-  #offerTranslations:focus {
-    background-color: transparent;
-  }
 </style>
 <div id="languagesSection">
   <div class="cr-row continuation">
@@ -66,16 +62,16 @@
     </h2>
     <cr-button id="addLanguages" class="header-aligned-button"
         disabled="[[!canEnableSomeSupportedLanguage_(languages)]]"
-        on-click="onAddLanguagesTap_">
+        on-click="onAddLanguagesClick_">
       $i18n{addLanguages}
     </cr-button>
   </div>
-  <div class="list-frame vertical-list">
+  <div class="list-frame vertical-list" role="list">
     <template is="dom-repeat" items="[[languages.enabled]]">
       <div class$="list-item [[getLanguageItemClass_(
           item.language.code, language.prospectiveUILanguage)]]
           [[isTranslationTarget_(item.language.code,
-          languages.translateTarget)]]">
+          languages.translateTarget)]]" role="listitem">
         <div class="start cr-padded-text">
           <div title="[[item.language.nativeDisplayName]]">
             [[formatIndex_(index)]]. [[item.language.displayName]]
@@ -85,7 +81,7 @@
           </div>
 <if expr="is_win">
           <div class="explain-selected"
-              hidden="[[!isProspectiveUILanguage_(
+              hidden="[[!isProspectiveUiLanguage_(
                   item.language.code,
                   languages.prospectiveUILanguage)]]">
             $i18n{isDisplayedInThisLanguage}
@@ -96,7 +92,7 @@
         <template is="dom-if" if="[[isRestartRequired_(
             item.language.code, languages.prospectiveUILanguage)]]"
             restamp>
-          <cr-button id="restartButton" on-click="onRestartTap_">
+          <cr-button id="restartButton" on-click="onRestartClick_">
             $i18n{restart}
           </cr-button>
         </template>
@@ -104,33 +100,27 @@
         <cr-icon-button class="icon-more-vert"
             title="$i18n{moreActions}"
             id="more-[[item.language.code]]"
-            on-click="onDotsTap_">
+            on-click="onDotsClick_">
         </cr-icon-button>
       </div>
     </template>
   </div>
-  <template is="dom-if" if="[[!enableDesktopDetailedLanguageSettings_]]">
-    <settings-toggle-button id="offerTranslateOtherLanguages"
-        pref="{{prefs.translate.enabled}}" label="$i18n{offerToEnableTranslate}"
-        on-settings-boolean-control-change="onTranslateToggleChange_">
-    </settings-toggle-button>
-  </template>
   <cr-lazy-render id="menu">
     <template>
       <cr-action-menu role-description="$i18n{menu}"
 <if expr="is_win">
-          on-close="onCloseMenu_"
+          on-close="onCloseMenu_" class="complex"
 </if>
-          class$="[[getMenuClass_(prefs.translate.enabled.value)]]">
+          >
 <if expr="is_win">
         <cr-checkbox id="uiLanguageItem"
             class="dropdown-item"
-            checked="[[isProspectiveUILanguage_(
+            checked="[[isProspectiveUiLanguage_(
                 detailLanguage_.language.code,
                 languages.prospectiveUILanguage)]]"
-            on-change="onUILanguageChange_"
-            disabled="[[disableUILanguageCheckbox_(
-                detailLanguage_, languages.prospectiveUILanguage)]]">
+            on-change="onUiLanguageChange_"
+            disabled="[[disableUiLanguageCheckbox_(
+                detailLanguage_, languages.prospectiveUILanguage)]]" noink>
           <span>
             $i18n{displayInThisLanguage}
           </span>
@@ -139,36 +129,25 @@
           </iron-icon>
         </cr-checkbox>
 </if> <!-- is_win -->
-        <template is="dom-if" if="[[!enableDesktopDetailedLanguageSettings_]]">
-          <cr-checkbox id="offerTranslations"
-              class="dropdown-item"
-              checked="[[detailLanguage_.translateEnabled]]"
-              on-change="onTranslateCheckboxChange_"
-              hidden="[[!prefs.translate.enabled.value]]"
-              disabled="[[disableTranslateCheckbox_(
-                  detailLanguage_, languages.translateTarget)]]">
-            $i18n{offerToTranslateInThisLanguage} </cr-checkbox>
-          <hr hidden="[[!shouldShowDialogSeparator_(languages.enabled.*)]]">
-        </template>
         <button class="dropdown-item" role="menuitem"
-            on-click="onMoveToTopTap_"
+            on-click="onMoveToTopClick_"
             hidden="[[isNthLanguage_(
                 0, detailLanguage_, languages.enabled.*)]]">
           $i18n{moveToTop}
         </button>
         <button class="dropdown-item" role="menuitem"
-            on-click="onMoveUpTap_"
+            on-click="onMoveUpClick_"
             hidden="[[!showMoveUp_(detailLanguage_, languages.enabled.*)]]">
           $i18n{moveUp}
         </button>
         <button class="dropdown-item" role="menuitem"
-            on-click="onMoveDownTap_"
+            on-click="onMoveDownClick_"
             hidden="[[!showMoveDown_(
                 detailLanguage_, languages.enabled.*)]]">
           $i18n{moveDown}
         </button>
         <button class="dropdown-item" role="menuitem"
-            on-click="onRemoveLanguageTap_"
+            on-click="onRemoveLanguageClick_"
             disabled="[[!detailLanguage_.removable]]">
           $i18n{removeLanguage}
         </button>

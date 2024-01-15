@@ -5,19 +5,18 @@
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_controller_impl.h"
 
 #import "base/memory/ptr_util.h"
-#import "ios/chrome/browser/browser_state/browser_state_otr_helper.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/main/browser.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/browser_state_otr_helper.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
 #import "ios/chrome/browser/ui/broadcaster/chrome_broadcast_observer_bridge.h"
 #import "ios/chrome/browser/ui/broadcaster/chrome_broadcaster.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_system_notification_observer.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/web/common/features.h"
 
 // static
 FullscreenController* FullscreenController::FromBrowser(Browser* browser) {
+  // TODO(crbug.com/1469841): Do not create FullscreenController and
+  // FullscreenWebStateListObserver for an inactive browser.
   FullscreenController* fullscreen_controller =
       static_cast<FullscreenController*>(
           browser->GetUserData(FullscreenController::UserDataKey()));
@@ -40,25 +39,29 @@ FullscreenControllerImpl::FullscreenControllerImpl(Browser* browser)
                     mediator:&mediator_]) {
   DCHECK(broadcaster_);
   [broadcaster_ addObserver:bridge_
-                forSelector:@selector(broadcastScrollViewSize:)];
-  [broadcaster_ addObserver:bridge_
                 forSelector:@selector(broadcastScrollViewContentSize:)];
+  if (base::FeatureList::IsEnabled(web::features::kSmoothScrollingDefault)) {
+    [broadcaster_ addObserver:bridge_
+                  forSelector:@selector(broadcastScrollViewSize:)];
+    [broadcaster_ addObserver:bridge_
+                  forSelector:@selector(broadcastScrollViewIsScrolling:)];
+    [broadcaster_ addObserver:bridge_
+                  forSelector:@selector(broadcastScrollViewIsDragging:)];
+    [broadcaster_ addObserver:bridge_
+                  forSelector:@selector(broadcastScrollViewIsZooming:)];
+    [broadcaster_ addObserver:bridge_
+                  forSelector:@selector(broadcastScrollViewContentInset:)];
+    [broadcaster_ addObserver:bridge_
+                  forSelector:@selector(broadcastContentScrollOffset:)];
+  }
   [broadcaster_ addObserver:bridge_
-                forSelector:@selector(broadcastScrollViewContentInset:)];
+                forSelector:@selector(broadcastCollapsedTopToolbarHeight:)];
   [broadcaster_ addObserver:bridge_
-                forSelector:@selector(broadcastContentScrollOffset:)];
+                forSelector:@selector(broadcastExpandedTopToolbarHeight:)];
   [broadcaster_ addObserver:bridge_
-                forSelector:@selector(broadcastScrollViewIsScrolling:)];
+                forSelector:@selector(broadcastCollapsedBottomToolbarHeight:)];
   [broadcaster_ addObserver:bridge_
-                forSelector:@selector(broadcastScrollViewIsZooming:)];
-  [broadcaster_ addObserver:bridge_
-                forSelector:@selector(broadcastScrollViewIsDragging:)];
-  [broadcaster_ addObserver:bridge_
-                forSelector:@selector(broadcastCollapsedToolbarHeight:)];
-  [broadcaster_ addObserver:bridge_
-                forSelector:@selector(broadcastExpandedToolbarHeight:)];
-  [broadcaster_ addObserver:bridge_
-                forSelector:@selector(broadcastBottomToolbarHeight:)];
+                forSelector:@selector(broadcastExpandedBottomToolbarHeight:)];
 }
 
 FullscreenControllerImpl::~FullscreenControllerImpl() {
@@ -66,41 +69,35 @@ FullscreenControllerImpl::~FullscreenControllerImpl() {
   web_state_list_observer_.Disconnect();
   [notification_observer_ disconnect];
   [broadcaster_ removeObserver:bridge_
-                   forSelector:@selector(broadcastScrollViewSize:)];
-  [broadcaster_ removeObserver:bridge_
                    forSelector:@selector(broadcastScrollViewContentSize:)];
+  if (base::FeatureList::IsEnabled(web::features::kSmoothScrollingDefault)) {
+    [broadcaster_ removeObserver:bridge_
+                     forSelector:@selector(broadcastScrollViewSize:)];
+    [broadcaster_ removeObserver:bridge_
+                     forSelector:@selector(broadcastScrollViewIsScrolling:)];
+    [broadcaster_ removeObserver:bridge_
+                     forSelector:@selector(broadcastScrollViewIsDragging:)];
+    [broadcaster_ removeObserver:bridge_
+                     forSelector:@selector(broadcastScrollViewIsZooming:)];
+    [broadcaster_ removeObserver:bridge_
+                     forSelector:@selector(broadcastScrollViewContentInset:)];
+    [broadcaster_ removeObserver:bridge_
+                     forSelector:@selector(broadcastContentScrollOffset:)];
+  }
   [broadcaster_ removeObserver:bridge_
-                   forSelector:@selector(broadcastScrollViewContentInset:)];
+                   forSelector:@selector(broadcastCollapsedTopToolbarHeight:)];
   [broadcaster_ removeObserver:bridge_
-                   forSelector:@selector(broadcastContentScrollOffset:)];
-  [broadcaster_ removeObserver:bridge_
-                   forSelector:@selector(broadcastScrollViewIsScrolling:)];
-  [broadcaster_ removeObserver:bridge_
-                   forSelector:@selector(broadcastScrollViewIsZooming:)];
-  [broadcaster_ removeObserver:bridge_
-                   forSelector:@selector(broadcastScrollViewIsDragging:)];
-  [broadcaster_ removeObserver:bridge_
-                   forSelector:@selector(broadcastCollapsedToolbarHeight:)];
-  [broadcaster_ removeObserver:bridge_
-                   forSelector:@selector(broadcastExpandedToolbarHeight:)];
-  [broadcaster_ removeObserver:bridge_
-                   forSelector:@selector(broadcastBottomToolbarHeight:)];
+                   forSelector:@selector(broadcastExpandedTopToolbarHeight:)];
+  [broadcaster_
+      removeObserver:bridge_
+         forSelector:@selector(broadcastExpandedBottomToolbarHeight:)];
+  [broadcaster_
+      removeObserver:bridge_
+         forSelector:@selector(broadcastCollapsedBottomToolbarHeight:)];
 }
 
 ChromeBroadcaster* FullscreenControllerImpl::broadcaster() {
   return broadcaster_;
-}
-
-void FullscreenControllerImpl::SetWebStateList(WebStateList* web_state_list) {
-  web_state_list_observer_.SetWebStateList(web_state_list);
-}
-
-const WebStateList* FullscreenControllerImpl::GetWebStateList() const {
-  return web_state_list_observer_.GetWebStateList();
-}
-
-WebStateList* FullscreenControllerImpl::GetWebStateList() {
-  return web_state_list_observer_.GetWebStateList();
 }
 
 void FullscreenControllerImpl::AddObserver(
@@ -161,13 +158,41 @@ void FullscreenControllerImpl::ExitFullscreen() {
   mediator_.ExitFullscreen();
 }
 
+void FullscreenControllerImpl::ExitFullscreenWithoutAnimation() {
+  mediator_.ExitFullscreenWithoutAnimation();
+}
+
+bool FullscreenControllerImpl::IsForceFullscreenMode() const {
+  return model_.IsForceFullscreenMode();
+}
+
+void FullscreenControllerImpl::EnterForceFullscreenMode() {
+  CHECK(IsBottomOmniboxSteadyStateEnabled());
+  if (IsForceFullscreenMode()) {
+    return;
+  }
+  model_.SetForceFullscreenMode(true);
+  // Disable fullscreen because:
+  // - It interfers with the animation when moving the secondary toolbar above
+  // the keyboard.
+  // - Fullscreen should not resize the toolbar it's above the keyboard.
+  IncrementDisabledCounter();
+  mediator_.ForceEnterFullscreen();
+}
+
+void FullscreenControllerImpl::ExitForceFullscreenMode() {
+  CHECK(IsBottomOmniboxSteadyStateEnabled());
+  if (!IsForceFullscreenMode()) {
+    return;
+  }
+  DecrementDisabledCounter();
+  model_.SetForceFullscreenMode(false);
+  mediator_.ExitFullscreenWithoutAnimation();
+}
+
 void FullscreenControllerImpl::ResizeHorizontalViewport() {
   // TODO(crbug.com/1114054) this hack temporarily force change webview's
   // width insets to trigger a width recomputation of its content. It will cause
   // two relayouts.
   mediator_.ResizeHorizontalInsets();
-}
-
-void FullscreenControllerImpl::FreezeToolbarHeight(bool freeze_toolbar_height) {
-  model_.SetFreezeToolbarHeight(freeze_toolbar_height);
 }

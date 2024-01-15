@@ -13,14 +13,20 @@
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/image_annotation/public/mojom/image_annotation.mojom.h"
-#include "ui/accessibility/ax_mode.h"
 
 #if BUILDFLAG(IS_ANDROID)
+#include "base/scoped_observation.h"
 #include "net/base/network_change_notifier.h"
+#include "ui/accessibility/ax_mode.h"
 #include "ui/accessibility/ax_mode_observer.h"
+#include "ui/accessibility/platform/ax_platform.h"
 #endif
 
 class Profile;
+
+namespace content {
+class WebContents;
+}
 
 namespace image_annotation {
 class ImageAnnotationService;
@@ -59,9 +65,9 @@ class AccessibilityLabelsService
 
   void Init();
 
-  ui::AXMode GetAXMode();
+  bool IsEnabled();
 
-  void EnableLabelsServiceOnce();
+  void EnableLabelsServiceOnce(content::WebContents* web_contents);
 
   // Routes an Annotator interface receiver to the Image Annotation service for
   // binding.
@@ -98,6 +104,11 @@ class AccessibilityLabelsService
 
   // Owns us via the KeyedService mechanism.
   raw_ptr<Profile> profile_;
+
+#if BUILDFLAG(IS_ANDROID)
+  base::ScopedObservation<ui::AXPlatform, ui::AXModeObserver>
+      ax_mode_observation_{this};
+#endif
 
   PrefChangeRegistrar pref_change_registrar_;
 

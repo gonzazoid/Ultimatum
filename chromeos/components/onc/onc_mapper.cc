@@ -22,22 +22,22 @@ base::Value Mapper::MapValue(const OncValueSignature& signature,
                              const base::Value& onc_value,
                              bool* error) {
   switch (onc_value.type()) {
-    case base::Value::Type::DICTIONARY: {
-      if (signature.onc_type != base::Value::Type::DICTIONARY) {
+    case base::Value::Type::DICT: {
+      if (signature.onc_type != base::Value::Type::DICT) {
         *error = true;
         return {};
       }
-      return MapObject(signature, onc_value, error);
+      return base::Value(MapObject(signature, onc_value.GetDict(), error));
     }
     case base::Value::Type::LIST: {
       if (signature.onc_type != base::Value::Type::LIST) {
         *error = true;
         return {};
       }
-      return MapArray(signature, onc_value, error);
+      return base::Value(MapArray(signature, onc_value.GetList(), error));
     }
     default: {
-      if ((signature.onc_type == base::Value::Type::DICTIONARY) ||
+      if ((signature.onc_type == base::Value::Type::DICT) ||
           (signature.onc_type == base::Value::Type::LIST)) {
         *error = true;
         return {};
@@ -47,10 +47,10 @@ base::Value Mapper::MapValue(const OncValueSignature& signature,
   }
 }
 
-base::Value Mapper::MapObject(const OncValueSignature& signature,
-                              const base::Value& onc_object,
-                              bool* error) {
-  base::Value result(base::Value::Type::DICTIONARY);
+base::Value::Dict Mapper::MapObject(const OncValueSignature& signature,
+                                    const base::Value::Dict& onc_object,
+                                    bool* error) {
+  base::Value::Dict result;
 
   bool found_unknown_field = false;
   MapFields(signature, onc_object, &found_unknown_field, error, &result);
@@ -66,20 +66,19 @@ base::Value Mapper::MapPrimitive(const OncValueSignature& signature,
 }
 
 void Mapper::MapFields(const OncValueSignature& object_signature,
-                       const base::Value& onc_object,
+                       const base::Value::Dict& onc_object,
                        bool* found_unknown_field,
                        bool* nested_error,
-                       base::Value* result) {
-  DCHECK(onc_object.is_dict());
-  for (auto it : onc_object.DictItems()) {
+                       base::Value::Dict* result) {
+  for (const auto [field_name, onc_value] : onc_object) {
     bool current_field_unknown = false;
-    base::Value result_value = MapField(it.first, object_signature, it.second,
+    base::Value result_value = MapField(field_name, object_signature, onc_value,
                                         &current_field_unknown, nested_error);
 
     if (current_field_unknown)
       *found_unknown_field = true;
     else if (!result_value.is_none())
-      result->SetKey(it.first, std::move(result_value));
+      result->Set(field_name, std::move(result_value));
     else
       DCHECK(*nested_error);
   }
@@ -104,22 +103,24 @@ base::Value Mapper::MapField(const std::string& field_name,
   return {};
 }
 
-base::Value Mapper::MapArray(const OncValueSignature& array_signature,
-                             const base::Value& onc_array,
-                             bool* nested_error) {
-  DCHECK(array_signature.onc_array_entry_signature != NULL)
+base::Value::List Mapper::MapArray(const OncValueSignature& array_signature,
+                                   const base::Value::List& onc_array,
+                                   bool* nested_error) {
+  DCHECK(array_signature.onc_array_entry_signature != nullptr)
       << "Found missing onc_array_entry_signature.";
 
-  base::Value result_array(base::Value::Type::LIST);
+  base::Value::List result_array;
   int original_index = 0;
-  for (const auto& entry : onc_array.GetList()) {
+  for (const auto& entry : onc_array) {
+    bool error = false;
     base::Value result_entry =
         MapEntry(original_index, *array_signature.onc_array_entry_signature,
-                 entry, nested_error);
-    if (!result_entry.is_none())
+                 entry, &error);
+    if (!error) {
       result_array.Append(std::move(result_entry));
-    else
-      DCHECK(*nested_error);
+    }
+
+    *nested_error |= error;
     ++original_index;
   }
   return result_array;

@@ -60,28 +60,11 @@ LayerImpl::LayerImpl(LayerTreeImpl* tree_impl,
     : layer_id_(id),
       layer_tree_impl_(tree_impl),
       will_always_push_properties_(will_always_push_properties),
-      scrollable_(false),
-      layer_property_changed_not_from_property_trees_(false),
-      layer_property_changed_from_property_trees_(false),
-      may_contain_video_(false),
-      contents_opaque_(false),
-      contents_opaque_for_text_(false),
-      should_check_backface_visibility_(false),
-      draws_content_(false),
-      contributes_to_drawn_render_surface_(false),
-      hit_testable_(false),
-      is_inner_viewport_scroll_layer_(false),
-      background_color_(SkColors::kTransparent),
-      safe_opaque_background_color_(SkColors::kTransparent),
       transform_tree_index_(kInvalidPropertyNodeId),
       effect_tree_index_(kInvalidPropertyNodeId),
       clip_tree_index_(kInvalidPropertyNodeId),
       scroll_tree_index_(kInvalidPropertyNodeId),
-      current_draw_mode_(DRAW_MODE_NONE),
-      needs_push_properties_(false),
-      needs_show_scrollbars_(false),
-      raster_even_if_not_drawn_(false),
-      has_transform_node_(false) {
+      current_draw_mode_(DRAW_MODE_NONE) {
   DCHECK_GT(layer_id_, 0);
 
   DCHECK(layer_tree_impl_);
@@ -147,7 +130,7 @@ void LayerImpl::SetScrollTreeIndex(int index) {
 void LayerImpl::PopulateSharedQuadState(viz::SharedQuadState* state,
                                         bool contents_opaque) const {
   EffectNode* effect_node = GetEffectTree().Node(effect_tree_index_);
-  absl::optional<gfx::Rect> clip_rect;
+  std::optional<gfx::Rect> clip_rect;
   if (draw_properties_.is_clipped) {
     clip_rect = draw_properties_.clip_rect;
   }
@@ -157,8 +140,8 @@ void LayerImpl::PopulateSharedQuadState(viz::SharedQuadState* state,
                 draw_properties_.opacity,
                 effect_node->HasRenderSurface() ? SkBlendMode::kSrcOver
                                                 : effect_node->blend_mode,
-                GetSortingContextId());
-  state->is_fast_rounded_corner = draw_properties_.is_fast_rounded_corner;
+                GetSortingContextId(), static_cast<uint32_t>(id()),
+                draw_properties_.is_fast_rounded_corner);
 }
 
 void LayerImpl::PopulateScaledSharedQuadState(viz::SharedQuadState* state,
@@ -185,7 +168,7 @@ void LayerImpl::PopulateScaledSharedQuadStateWithContentRects(
       GetScaledDrawTransform(layer_to_content_scale);
 
   EffectNode* effect_node = GetEffectTree().Node(effect_tree_index_);
-  absl::optional<gfx::Rect> clip_rect;
+  std::optional<gfx::Rect> clip_rect;
   if (draw_properties().is_clipped) {
     clip_rect = draw_properties().clip_rect;
   }
@@ -194,8 +177,8 @@ void LayerImpl::PopulateScaledSharedQuadStateWithContentRects(
                 draw_properties().opacity,
                 effect_node->HasRenderSurface() ? SkBlendMode::kSrcOver
                                                 : effect_node->blend_mode,
-                GetSortingContextId());
-  state->is_fast_rounded_corner = draw_properties().is_fast_rounded_corner;
+                GetSortingContextId(), static_cast<uint32_t>(id()),
+                draw_properties().is_fast_rounded_corner);
 }
 
 bool LayerImpl::WillDraw(DrawMode draw_mode,
@@ -326,6 +309,8 @@ void LayerImpl::UpdateScrollable() {
       return;
   }
 
+  const bool container_bounds_changed =
+      scrollable_ && scroll_node->container_bounds != scroll_container_bounds_;
   scroll_container_bounds_ =
       scrollable_ ? scroll_node->container_bounds : gfx::Size();
   scroll_contents_bounds_ = scrollable_ ? scroll_node->bounds : gfx::Size();
@@ -335,7 +320,13 @@ void LayerImpl::UpdateScrollable() {
 
   if (layer_tree_impl()->settings().scrollbar_animator ==
       LayerTreeSettings::AURA_OVERLAY) {
-    set_needs_show_scrollbars(scrollable_);
+    if (layer_tree_impl()->settings().enable_fluent_overlay_scrollbar) {
+      // Show scrollbars when resizing scrollable areas and
+      // not when the inside content gets expanded.
+      set_needs_show_scrollbars(scrollable_ && container_bounds_changed);
+    } else {
+      set_needs_show_scrollbars(scrollable_);
+    }
   }
 
   NoteLayerPropertyChanged();
@@ -389,7 +380,7 @@ void LayerImpl::PushPropertiesTo(LayerImpl* layer) {
   layer->may_contain_video_ = may_contain_video_;
   layer->should_check_backface_visibility_ = should_check_backface_visibility_;
   layer->draws_content_ = draws_content_;
-  layer->hit_testable_ = hit_testable_;
+  layer->hit_test_opaqueness_ = hit_test_opaqueness_;
   layer->touch_action_region_ = touch_action_region_;
   layer->all_touch_action_regions_ = ClonePtr(all_touch_action_regions_);
   layer->background_color_ = background_color_;
@@ -547,26 +538,32 @@ void LayerImpl::SetDrawsContent(bool draws_content) {
   NoteLayerPropertyChanged();
 }
 
-void LayerImpl::SetHitTestable(bool should_hit_test) {
-  if (hit_testable_ == should_hit_test)
+void LayerImpl::SetHitTestOpaqueness(HitTestOpaqueness opaqueness) {
+  if (hit_test_opaqueness_ == opaqueness) {
     return;
+  }
 
-  hit_testable_ = should_hit_test;
+  hit_test_opaqueness_ = opaqueness;
   NoteLayerPropertyChanged();
 }
 
 bool LayerImpl::HitTestable() const {
   EffectTree& effect_tree = GetEffectTree();
-  bool should_hit_test = hit_testable_;
   // TODO(sunxd): remove or refactor SetHideLayerAndSubtree, or move this logic
   // to subclasses of Layer. See https://crbug.com/595843 and
   // https://crbug.com/931865.
   // The bit |subtree_hidden| can only be true for ui::Layers. Other layers are
   // not supposed to set this bit.
-  if (effect_tree.Node(effect_tree_index())) {
-    should_hit_test &= !effect_tree.Node(effect_tree_index())->subtree_hidden;
+  if (const EffectNode* node = effect_tree.Node(effect_tree_index())) {
+    if (node->subtree_hidden) {
+      return false;
+    }
   }
-  return should_hit_test;
+  return hit_test_opaqueness_ != HitTestOpaqueness::kTransparent;
+}
+
+bool LayerImpl::OpaqueToHitTest() const {
+  return HitTestable() && hit_test_opaqueness_ == HitTestOpaqueness::kOpaque;
 }
 
 void LayerImpl::SetBackgroundColor(SkColor4f background_color) {
@@ -657,8 +654,8 @@ void LayerImpl::GetAllPrioritizedTilesForTracing(
 void LayerImpl::AsValueInto(base::trace_event::TracedValue* state) const {
   // The output is consumed at least by
   // 1. DevTools for showing layer tree information for frame snapshots in
-  //    performance timeline (third_party/devtools_frontend/src/front_end/
-  //    timeline_model/TracingLayerTree.js),
+  //    performance timeline (third_party/devtools-frontend/src/front_end/
+  //    models/timeline_model/TracingLayerTree.ts),
   // 2. trace_viewer
   //    (third_party/catapult/tracing/tracing/extras/chrome/cc/layer_impl.html)
   //    Note that trace_viewer uses "namingStyle" style instead of
@@ -716,6 +713,7 @@ void LayerImpl::AsValueInto(base::trace_event::TracedValue* state) const {
   state->EndArray();
 
   state->SetBoolean("hit_testable", HitTestable());
+  state->SetBoolean("opaque_to_hit_test", OpaqueToHitTest());
   state->SetBoolean("contents_opaque", contents_opaque());
 
   if (debug_info_) {
@@ -826,7 +824,7 @@ const RenderSurfaceImpl* LayerImpl::render_target() const {
 
 gfx::Vector2dF LayerImpl::GetIdealContentsScale() const {
   const auto& transform = ScreenSpaceTransform();
-  absl::optional<gfx::Vector2dF> transform_scales =
+  std::optional<gfx::Vector2dF> transform_scales =
       gfx::TryComputeTransform2dScaleComponents(transform);
   if (transform_scales) {
     // TODO(crbug.com/1196414): Remove this scale cap.
@@ -984,6 +982,11 @@ std::string LayerImpl::DebugName() const {
 
 gfx::ContentColorUsage LayerImpl::GetContentColorUsage() const {
   return gfx::ContentColorUsage::kSRGB;
+}
+
+viz::ViewTransitionElementResourceId LayerImpl::ViewTransitionResourceId()
+    const {
+  return viz::ViewTransitionElementResourceId();
 }
 
 }  // namespace cc

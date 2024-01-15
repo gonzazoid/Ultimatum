@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/test/task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -81,7 +82,7 @@ class MockEncoder : public webrtc::VideoEncoder {
       const webrtc::VideoFrame& frame,
       const std::vector<webrtc::VideoFrameType>* frame_types) override {
     webrtc::EncodedImage encoded_frame;
-    encoded_frame.SetTimestamp(frame.timestamp());
+    encoded_frame.SetRtpTimestamp(frame.timestamp());
     encoded_frame._frameType = frame_types && !frame_types->empty()
                                    ? frame_types->at(0)
                                    : webrtc::VideoFrameType::kVideoFrameDelta;
@@ -121,10 +122,10 @@ class MockEncoder : public webrtc::VideoEncoder {
 
  private:
   int frame_counter_ = 0;
-  base::test::TaskEnvironment* task_environment_;
-  int* spatial_layers_;
-  bool* const is_hw_accelerated_;
-  webrtc::EncodedImageCallback* callback_;
+  raw_ptr<base::test::TaskEnvironment, ExperimentalRenderer> task_environment_;
+  raw_ptr<int, ExperimentalRenderer> spatial_layers_;
+  const raw_ptr<bool, ExperimentalRenderer> is_hw_accelerated_;
+  raw_ptr<webrtc::EncodedImageCallback, ExperimentalRenderer> callback_;
 };
 
 class FakeEncodedImageCallback : public webrtc::EncodedImageCallback {
@@ -133,7 +134,7 @@ class FakeEncodedImageCallback : public webrtc::EncodedImageCallback {
       const webrtc::EncodedImage& encoded_image,
       const webrtc::CodecSpecificInfo* codec_specific_info) override {
     ++frame_counter_;
-    return {Result::OK, encoded_image.Timestamp()};
+    return {Result::OK, encoded_image.RtpTimestamp()};
   }
   void OnDroppedFrame(DropReason reason) override { ; }
   int get_frame_counter() const { return frame_counter_; }
@@ -215,7 +216,7 @@ class StatsCollectingEncoderTest : public ::testing::Test {
   int spatial_layers_{1};
   bool is_hw_accelerated_{false};
   FakeEncodedImageCallback encoded_image_callback_;
-  MockEncoder* internal_encoder_;
+  raw_ptr<MockEncoder, DanglingUntriaged> internal_encoder_;
   StatsCollectingEncoder stats_encoder_;
 
   uint32_t frame_counter_{0};

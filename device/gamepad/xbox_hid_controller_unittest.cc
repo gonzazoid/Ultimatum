@@ -6,10 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "device/gamepad/hid_writer.h"
 #include "device/gamepad/public/mojom/gamepad.mojom.h"
@@ -84,7 +85,10 @@ class XboxHidControllerTest : public testing::Test {
   XboxHidControllerTest(const XboxHidControllerTest&) = delete;
   XboxHidControllerTest& operator=(const XboxHidControllerTest&) = delete;
 
-  void TearDown() override { gamepad_->Shutdown(); }
+  void TearDown() override {
+    fake_hid_writer_ = nullptr;
+    gamepad_->Shutdown();
+  }
 
   void PostPlayEffect(
       double start_delay,
@@ -96,13 +100,13 @@ class XboxHidControllerTest : public testing::Test {
         mojom::GamepadEffectParameters::New(
             kDurationMillis, start_delay, strong_magnitude, weak_magnitude,
             /*left_trigger=*/0, /*right_trigger=*/0),
-        std::move(callback), base::ThreadTaskRunnerHandle::Get());
+        std::move(callback), base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 
   void PostResetVibration(
       mojom::GamepadHapticsManager::ResetVibrationActuatorCallback callback) {
     gamepad_->ResetVibration(std::move(callback),
-                             base::ThreadTaskRunnerHandle::Get());
+                             base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 
   // Callback for PlayEffect or ResetVibration.

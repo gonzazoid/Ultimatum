@@ -4,9 +4,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
-#include "base/json/json_reader.h"
+#include "base/functional/bind.h"
+#include "base/test/values_test_util.h"
 #include "services/data_decoder/xml_parser.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -53,11 +53,8 @@ void TestParseXml(const std::string& xml,
   EXPECT_FALSE(error) << "Unexpected error: " << *error;
   EXPECT_TRUE(actual_value);
 
-  std::unique_ptr<base::Value> expected_value =
-      base::JSONReader::ReadDeprecated(json);
-  DCHECK(expected_value) << "Bad test, incorrect JSON: " << json;
-
-  EXPECT_EQ(*expected_value, *actual_value);
+  base::Value expected_value = base::test::ParseJson(json);
+  EXPECT_EQ(expected_value, *actual_value);
 }
 
 }  // namespace
@@ -69,11 +66,11 @@ TEST_F(XmlParserTest, ParseBadXml) {
     const char* input;
     const char* expected_error;
   } test_cases[] = {
-      {"", "Extra content at the end of the document"},
-      {"  ", "Extra content at the end of the document"},
-      {"Awesome possum", "Document is empty"},
-      {R"( ["json", "or", "xml?"] )", "Document is empty"},
-      {"<unbalanced>", "Extra content at the end of the document"},
+      {"", "Document is empty"},
+      {"  ", "Start tag expected"},
+      {"Awesome possum", "Start tag expected"},
+      {R"( ["json", "or", "xml?"] )", "Start tag expected"},
+      {"<unbalanced>", "Premature end of data in tag"},
       {"<hello>bad tag</goodbye>",
        "Opening and ending tag mismatch: hello line 1 and goodbye"},
   };

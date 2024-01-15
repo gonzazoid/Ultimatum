@@ -284,7 +284,7 @@ UChar32 StringView::CodepointAt(unsigned i) const {
 }
 
 unsigned StringView::NextCodePointOffset(unsigned i) const {
-  SECURITY_DCHECK(i < length());
+  DCHECK_LT(i, length());
   if (Is8Bit())
     return i + 1;
   const UChar* str = Characters16() + i;
@@ -295,11 +295,11 @@ unsigned StringView::NextCodePointOffset(unsigned i) const {
 }
 
 CodePointIterator StringView::begin() const {
-  return CodePointIterator(*this, 0u);
+  return CodePointIterator(*this);
 }
 
 CodePointIterator StringView::end() const {
-  return CodePointIterator(*this, length_);
+  return CodePointIterator::End(*this);
 }
 
 }  // namespace WTF

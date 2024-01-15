@@ -114,7 +114,11 @@ enum class MessageIdentifier {
   DESKTOP_SITE_GLOBAL_OPT_IN = 34,
   PASSWORD_MANAGER_ERROR = 35,
   DOWNLOAD_INCOGNITO_WARNING = 36,
-
+  // Removed: RESTORE_CUSTOM_TAB = 37,
+  // Removed: UNDO_CUSTOM_TAB_RESTORATION = 38,
+  CVC_SAVE = 39,
+  TRACKING_PROTECTION_NOTICE = 40,
+  DESKTOP_SITE_WINDOW_SETTING = 41,
   // Insert new values before this line.
   COUNT
 };

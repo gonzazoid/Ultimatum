@@ -13,15 +13,16 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/weak_ptr.h"
 #include "components/viz/common/surfaces/surface_id.h"
 #include "components/viz/host/hit_test/hit_test_query.h"
 #include "components/viz/host/hit_test/hit_test_region_observer.h"
-#include "content/browser/renderer_host/event_with_latency_info.h"
 #include "content/browser/renderer_host/input/touch_emulator_client.h"
 #include "content/browser/renderer_host/render_widget_host_view_base_observer.h"
 #include "content/browser/renderer_host/render_widget_targeter.h"
 #include "content/common/content_export.h"
+#include "content/common/input/event_with_latency_info.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/blink/public/mojom/input/input_event_result.mojom-shared.h"
 #include "ui/gfx/geometry/transform.h"
@@ -90,7 +91,7 @@ class CONTENT_EXPORT RenderWidgetHostInputEventRouter final
       RenderWidgetHostViewBase* view) override;
 
   void RouteMouseEvent(RenderWidgetHostViewBase* root_view,
-                       blink::WebMouseEvent* event,
+                       const blink::WebMouseEvent* event,
                        const ui::LatencyInfo& latency);
   void RouteMouseWheelEvent(RenderWidgetHostViewBase* root_view,
                             blink::WebMouseWheelEvent* event,
@@ -120,10 +121,6 @@ class CONTENT_EXPORT RenderWidgetHostInputEventRouter final
   void AddFrameSinkIdOwner(const viz::FrameSinkId& id,
                            RenderWidgetHostViewBase* owner);
   void RemoveFrameSinkIdOwner(const viz::FrameSinkId& id);
-
-  bool is_registered(const viz::FrameSinkId& id) const {
-    return owner_map_.find(id) != owner_map_.end();
-  }
 
   TouchEmulator* GetTouchEmulator();
   // Since GetTouchEmulator will lazily create a touch emulator, the following
@@ -161,6 +158,10 @@ class CONTENT_EXPORT RenderWidgetHostInputEventRouter final
   void SetMouseCaptureTarget(RenderWidgetHostViewBase* target,
                              bool captures_dragging);
 
+  // Toggle if mouse up event should be dispatched to root RenderWidgetHostView
+  // in addition to the target RenderWidgethostView.
+  void RootViewReceivesMouseUpIfNecessary(bool root_view_receives_mouse_up);
+
   std::vector<RenderWidgetHostView*> GetRenderWidgetHostViewsForTests() const;
   RenderWidgetTargeter* GetRenderWidgetTargeterForTests();
 
@@ -178,7 +179,7 @@ class CONTENT_EXPORT RenderWidgetHostInputEventRouter final
       const blink::WebGestureEvent& event) override;
   void ForwardEmulatedTouchEvent(const blink::WebTouchEvent& event,
                                  RenderWidgetHostViewBase* target) override;
-  void SetCursor(const WebCursor& cursor) override;
+  void SetCursor(const ui::Cursor& cursor) override;
   void ShowContextMenuAtPoint(const gfx::Point& point,
                               const ui::MenuSourceType source_type,
                               RenderWidgetHostViewBase* target) override;
@@ -202,7 +203,10 @@ class CONTENT_EXPORT RenderWidgetHostInputEventRouter final
  private:
   FRIEND_TEST_ALL_PREFIXES(
       BrowserSideFlingBrowserTest,
-      DISABLE_InertialGSUBubblingStopsWhenParentCannotScroll);
+      DISABLED_InertialGSUBubblingStopsWhenParentCannotScroll);
+  FRIEND_TEST_ALL_PREFIXES(
+      WebContentsImplBrowserTest,
+      MouseUpInOOPIframeShouldCancelMainFrameAutoscrollSelection);
 
   using FrameSinkIdOwnerMap =
       std::unordered_map<viz::FrameSinkId,
@@ -232,7 +236,7 @@ class CONTENT_EXPORT RenderWidgetHostInputEventRouter final
       RenderWidgetHostViewBase* target,
       const blink::WebGestureEvent& touchpad_gesture_event,
       const ui::LatencyInfo& latency,
-      const absl::optional<gfx::PointF>& target_location);
+      const std::optional<gfx::PointF>& target_location);
 
   // MouseMove/Enter/Leave events might need to be processed by multiple frames
   // in different processes for MouseEnter and MouseLeave event handlers to
@@ -290,20 +294,20 @@ class CONTENT_EXPORT RenderWidgetHostInputEventRouter final
                           RenderWidgetHostViewBase* target,
                           const blink::WebMouseEvent& mouse_event,
                           const ui::LatencyInfo& latency,
-                          const absl::optional<gfx::PointF>& target_location);
+                          const std::optional<gfx::PointF>& target_location);
   // |mouse_wheel_event| is in the coord-space of |root_view|.
   void DispatchMouseWheelEvent(
       RenderWidgetHostViewBase* root_view,
       RenderWidgetHostViewBase* target,
       const blink::WebMouseWheelEvent& mouse_wheel_event,
       const ui::LatencyInfo& latency,
-      const absl::optional<gfx::PointF>& target_location);
+      const std::optional<gfx::PointF>& target_location);
   // Assumes |touch_event| has coordinates in the root view's coordinate space.
   void DispatchTouchEvent(RenderWidgetHostViewBase* root_view,
                           RenderWidgetHostViewBase* target,
                           const blink::WebTouchEvent& touch_event,
                           const ui::LatencyInfo& latency,
-                          const absl::optional<gfx::PointF>& target_location,
+                          const std::optional<gfx::PointF>& target_location,
                           bool is_emulated);
   // Assumes |gesture_event| has coordinates in root view's coordinate space.
   void DispatchTouchscreenGestureEvent(
@@ -311,7 +315,7 @@ class CONTENT_EXPORT RenderWidgetHostInputEventRouter final
       RenderWidgetHostViewBase* target,
       const blink::WebGestureEvent& gesture_event,
       const ui::LatencyInfo& latency,
-      const absl::optional<gfx::PointF>& target_location);
+      const std::optional<gfx::PointF>& target_location);
 
   // TODO(828422): Remove once this issue no longer occurs.
   void ReportBubblingScrollToSameView(const blink::WebGestureEvent& event,
@@ -330,7 +334,7 @@ class CONTENT_EXPORT RenderWidgetHostInputEventRouter final
       RenderWidgetHostViewBase* target,
       blink::WebInputEvent* event,
       const ui::LatencyInfo& latency,
-      const absl::optional<gfx::PointF>& target_location) override;
+      const std::optional<gfx::PointF>& target_location) override;
   // Notify whether the events in the queue are being flushed due to touch ack
   // timeout, or the flushing has completed.
   void SetEventsBeingFlushed(bool events_being_flushed) override;
@@ -340,7 +344,9 @@ class CONTENT_EXPORT RenderWidgetHostInputEventRouter final
   }
 
   void SetTouchscreenGestureTarget(RenderWidgetHostViewBase* target,
-                                   bool moved_recently = false);
+                                   bool moved_recently,
+                                   bool moved_recently_for_iov2);
+  void ClearTouchscreenGestureTarget();
 
   void ForwardDelegatedInkPoint(
       RenderWidgetHostViewBase* target_view,
@@ -356,17 +362,33 @@ class CONTENT_EXPORT RenderWidgetHostInputEventRouter final
 
   FrameSinkIdOwnerMap owner_map_;
   TargetMap touchscreen_gesture_target_map_;
-  RenderWidgetHostViewBase* touch_target_ = nullptr;
+  // This field is not a raw_ptr<> because of a reference to raw_ptr in
+  // not-rewritten platform specific code.
+  RAW_PTR_EXCLUSION RenderWidgetHostViewBase* touch_target_ = nullptr;
   base::WeakPtr<RenderWidgetHostViewBase> touchscreen_gesture_target_;
   bool touchscreen_gesture_target_moved_recently_ = false;
-  RenderWidgetHostViewBase* touchpad_gesture_target_ = nullptr;
+  bool touchscreen_gesture_target_moved_recently_for_iov2_ = false;
+  // // This field is not a raw_ptr<> because of a reference to raw_ptr in
+  // not-rewritten platform specific code.
+  RAW_PTR_EXCLUSION RenderWidgetHostViewBase* touchpad_gesture_target_ =
+      nullptr;
   raw_ptr<RenderWidgetHostViewBase> bubbling_gesture_scroll_target_ = nullptr;
   raw_ptr<RenderWidgetHostViewChildFrame> bubbling_gesture_scroll_origin_ =
       nullptr;
   // Used to target wheel events for the duration of a scroll.
-  RenderWidgetHostViewBase* wheel_target_ = nullptr;
+  // This field is not a raw_ptr<> because of missing |.get()| in not-rewritten
+  // platform specific code.
+  RAW_PTR_EXCLUSION RenderWidgetHostViewBase* wheel_target_ = nullptr;
   // Maintains the same target between mouse down and mouse up.
   raw_ptr<RenderWidgetHostViewBase> mouse_capture_target_ = nullptr;
+  // There is no mouse capture set if a mouse down event dispatches to main
+  // frame. The subsequent mouse events might not be delivered to the main frame
+  // if mouse is moved over to an OOP iframe. There is caches mouse state in
+  // main frame such as autoscroll selection. In this case we should dispatch an
+  // additional mouse up event to the main frame to clear any cached mouse
+  // state. This flag indicates the state is active and mouse up event will be
+  // dispatched to main frame in addition to the target frame.
+  bool root_view_receive_additional_mouse_up_ = false;
 
   // Tracked for the purpose of generating MouseEnter and MouseLeave events.
   raw_ptr<RenderWidgetHostViewBase> last_mouse_move_target_;
@@ -447,10 +469,6 @@ class CONTENT_EXPORT RenderWidgetHostInputEventRouter final
   mutable gfx::PointF mouse_down_pre_transformed_coordinate_;
   mutable gfx::PointF mouse_down_post_transformed_coordinate_;
   raw_ptr<RenderWidgetHostViewBase> last_mouse_down_target_ = nullptr;
-
-  // Set to true when we first DwoC on an invalid RWHVB* in DispatchTouchEvent.
-  // Used to prevent multiple dumps.
-  bool has_dumped_ = false;
 
   // Remote end of the connection for sending delegated ink points to viz to
   // support the delegated ink trails feature.

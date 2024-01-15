@@ -10,7 +10,6 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -22,31 +21,40 @@
 
 class Profile;
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
 // Request type, passed to RequestManager::CreateRequest. For logging purposes.
-enum RequestType {
-  REQUEST_UNMOUNT,
-  GET_METADATA,
-  GET_ACTIONS,
-  EXECUTE_ACTION,
-  READ_DIRECTORY,
-  OPEN_FILE,
-  CLOSE_FILE,
-  READ_FILE,
-  CREATE_DIRECTORY,
-  DELETE_ENTRY,
-  CREATE_FILE,
-  COPY_ENTRY,
-  MOVE_ENTRY,
-  TRUNCATE,
-  WRITE_FILE,
-  ABORT,
-  ADD_WATCHER,
-  REMOVE_WATCHER,
-  CONFIGURE,
-  TESTING
+enum class RequestType {
+  kAbort = 0,
+  kAddWatcher = 1,
+  kCloseFile = 2,
+  kConfigure = 3,
+  kCopyEntry = 4,
+  kCreateDirectory = 5,
+  kCreateFile = 6,
+  kDeleteEntry = 7,
+  kExecuteAction = 8,
+  kGetActions = 9,
+  kGetMetadata = 10,
+  kMount = 11,
+  kMoveEntry = 12,
+  kOpenFile = 13,
+  kReadDirectory = 14,
+  kReadFile = 15,
+  kRemoveWatcher = 16,
+  kTruncate = 17,
+  kUnmount = 18,
+  kWriteFile = 19,
+};
+
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class OperationCompletion {
+  kCompletedNormally = 0,
+  kCompletedAfterWarning = 1,
+  kAbortedFromNotification = 2,
+  kAbortedInternally = 3,
+  kMaxValue = kAbortedInternally,
 };
 
 // Manages requests between the service, async utils and the providing
@@ -57,7 +65,7 @@ class RequestManager {
   // this interface.
   class HandlerInterface {
    public:
-    virtual ~HandlerInterface() {}
+    virtual ~HandlerInterface() = default;
 
     // Called when the request is created. Executes the request implementation.
     // Returns false in case of a execution failure.
@@ -67,27 +75,32 @@ class RequestManager {
     // Execute(). It may be called more than once, until |has_more| is set to
     // false.
     virtual void OnSuccess(int request_id,
-                           std::unique_ptr<RequestValue> result,
+                           const RequestValue& result,
                            bool has_more) = 0;
 
     // Error callback invoked by the providing extension in response to
     // Execute(). It can be called at most once. It can be also called if the
     // request is aborted due to a timeout.
     virtual void OnError(int request_id,
-                         std::unique_ptr<RequestValue> result,
+                         const RequestValue& result,
                          base::File::Error error) = 0;
+
+    // Called when the request is aborted due to timeout, before |OnError| is
+    // called.
+    virtual void OnAbort(int request_id) = 0;
   };
 
   // Observes activities in the request manager.
   class Observer {
    public:
-    virtual ~Observer() {}
+    virtual ~Observer() = default;
 
     // Called when the request is created.
     virtual void OnRequestCreated(int request_id, RequestType type) = 0;
 
     // Called when the request is destroyed.
-    virtual void OnRequestDestroyed(int request_id) = 0;
+    virtual void OnRequestDestroyed(int request_id,
+                                    OperationCompletion completion) = 0;
 
     // Called when the request is executed.
     virtual void OnRequestExecuted(int request_id) = 0;
@@ -102,15 +115,13 @@ class RequestManager {
                                    const RequestValue& result,
                                    base::File::Error error) = 0;
 
-    // Called when the request is timeouted.
-    virtual void OnRequestTimeouted(int request_id) = 0;
+    // Called when the request is timed out.
+    virtual void OnRequestTimedOut(int request_id) = 0;
   };
 
-  // Creates a request manager for |profile| and |provider_id|. Note, that
-  // there may be multiple instances of request managers per provider.
   RequestManager(Profile* profile,
-                 const std::string& provider_id,
-                 NotificationManagerInterface* notification_manager);
+                 NotificationManagerInterface* notification_manager,
+                 base::TimeDelta timeout);
 
   RequestManager(const RequestManager&) = delete;
   RequestManager& operator=(const RequestManager&) = delete;
@@ -128,14 +139,14 @@ class RequestManager {
   // returns base::File::FILE_OK. Otherwise returns an error code. |response|
   // must not be NULL.
   base::File::Error FulfillRequest(int request_id,
-                                   std::unique_ptr<RequestValue> response,
+                                   const RequestValue& response,
                                    bool has_more);
 
   // Handles error response for the |request_id|. If handling the error
   // succeeds, theen returns base::File::FILE_OK. Otherwise returns an error
   // code. Always disposes the request. |response| must not be NULL.
   base::File::Error RejectRequest(int request_id,
-                                  std::unique_ptr<RequestValue> response,
+                                  const RequestValue& response,
                                   base::File::Error error);
 
   // Sets a custom timeout for tests. The new timeout value will be applied to
@@ -150,9 +161,9 @@ class RequestManager {
   void RemoveObserver(Observer* observer);
 
   // Destroys the request with the passed |request_id|.
-  void DestroyRequest(int request_id);
+  void DestroyRequest(int request_id, OperationCompletion completion);
 
- private:
+ protected:
   struct Request {
     Request();
 
@@ -166,10 +177,14 @@ class RequestManager {
 
     // Handler tied to this request.
     std::unique_ptr<HandlerInterface> handler;
+
+    // Indicates if this operation timed out and a warning has been shown to the
+    // user.
+    bool shown_unresponsive_notification = false;
   };
 
   // Called when a request with |request_id| timeouts.
-  void OnRequestTimeout(int request_id);
+  virtual void OnRequestTimeout(int request_id);
 
   // Called when an user either aborts the unresponsive request or lets it
   // continue.
@@ -180,21 +195,22 @@ class RequestManager {
   // Resets the timeout timer for the specified request.
   void ResetTimer(int request_id);
 
-  // Checks whether there is an ongoing interaction between the provider
-  // and user.
-  bool IsInteractingWithUser() const;
+  // Reject a request specifying how it was completed.
+  base::File::Error RejectRequestInternal(int request_id,
+                                          const RequestValue& response,
+                                          base::File::Error error,
+                                          OperationCompletion completion);
 
   raw_ptr<Profile> profile_;  // Not owned.
-  std::string provider_id_;
   std::map<int, std::unique_ptr<Request>> requests_;
-  raw_ptr<NotificationManagerInterface> notification_manager_;  // Not owned.
+  raw_ptr<NotificationManagerInterface, DanglingUntriaged>
+      notification_manager_;  // Not owned.
   int next_id_;
   base::TimeDelta timeout_;
   base::ObserverList<Observer>::Unchecked observers_;
   base::WeakPtrFactory<RequestManager> weak_ptr_factory_{this};
 };
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_REQUEST_MANAGER_H_

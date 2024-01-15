@@ -48,7 +48,6 @@ if (!is_ios) {
   }
 } else {
   source_set("sessions") {
-    configs += [ "//build/config/compiler:enable_arc" ]
     sources = [
       "ios/ios_live_tab.h",
       "ios/ios_live_tab.mm",
@@ -65,12 +64,14 @@ if (!is_ios) {
     public_deps = [
       ":shared",
       "//ios/web",
+      "//ios/web/public/session/proto",
     ]
 
     deps = [
       "//base",
       "//ios/web/common",
       "//ios/web/public/session",
+      "//ios/web/public/session/proto:proto_util",
     ]
   }
 }
@@ -81,6 +82,7 @@ component("session_id") {
     "core/session_id.h",
     "core/session_id_generator.cc",
     "core/session_id_generator.h",
+    "core/sessions_export.h",
   ]
 
   configs += [ ":implementation" ]
@@ -206,7 +208,6 @@ source_set("unit_tests") {
       "ios/ios_serialized_navigation_builder_unittest.mm",
       "ios/ios_serialized_navigation_driver_unittest.cc",
     ]
-    configs += [ "//build/config/compiler:enable_arc" ]
   }
 
   public_deps = [ ":sessions" ]

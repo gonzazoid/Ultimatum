@@ -8,33 +8,41 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/check.h"
 #include "base/check_op.h"
+#include "base/feature_list.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/notreached.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/strings/string_util.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/values.h"
 #include "components/update_client/action_runner.h"
-#include "components/update_client/component_unpacker.h"
 #include "components/update_client/configurator.h"
+#include "components/update_client/crx_cache.h"
 #include "components/update_client/crx_downloader_factory.h"
+#include "components/update_client/features.h"
 #include "components/update_client/network.h"
 #include "components/update_client/patcher.h"
 #include "components/update_client/persisted_data.h"
 #include "components/update_client/protocol_definition.h"
 #include "components/update_client/protocol_serializer.h"
+#include "components/update_client/puffin_patcher.h"
 #include "components/update_client/task_traits.h"
+#include "components/update_client/unpacker.h"
 #include "components/update_client/unzipper.h"
 #include "components/update_client/update_client.h"
 #include "components/update_client/update_client_errors.h"
+#include "components/update_client/update_client_metrics.h"
 #include "components/update_client/update_engine.h"
 #include "components/update_client/utils.h"
 
@@ -70,33 +78,54 @@
 //     |    error      V                                     |
 //     +-<-------- kUpdating --------------------------------+
 
-namespace update_client {
+// The state machine for a check for update only.
+//
+//                                kNew
+//                                  |
+//                                  V
+//                             kChecking
+//                                  |
+//                         yes      V     no
+//                         +----[update?] ------> kUpToDate
+//                         |
+//             yes         v           no
+//          +---<-- update disabled? -->---+
+//          |                              |
+//     kUpdateError                    kCanUpdate
 
+namespace update_client {
 namespace {
 
-using InstallOnBlockingTaskRunnerCompleteCallback = base::OnceCallback<
-    void(ErrorCategory error_category, int error_code, int extra_code1)>;
+using InstallOnBlockingTaskRunnerCompleteCallback = base::OnceCallback<void(
+    ErrorCategory error_category,
+    int error_code,
+    int extra_code1,
+    absl::optional<CrxInstaller::Result> installer_result)>;
 
 void InstallComplete(scoped_refptr<base::SequencedTaskRunner> main_task_runner,
                      InstallOnBlockingTaskRunnerCompleteCallback callback,
                      const base::FilePath& unpack_path,
-                     const CrxInstaller::Result& result) {
+                     const CrxInstaller::Result& installer_result) {
   base::ThreadPool::PostTask(
       FROM_HERE, kTaskTraits,
       base::BindOnce(
           [](scoped_refptr<base::SequencedTaskRunner> main_task_runner,
              InstallOnBlockingTaskRunnerCompleteCallback callback,
              const base::FilePath& unpack_path,
-             const CrxInstaller::Result& result) {
+             const CrxInstaller::Result& installer_result) {
             base::DeletePathRecursively(unpack_path);
-            const ErrorCategory error_category =
-                result.error ? ErrorCategory::kInstall : ErrorCategory::kNone;
+            const ErrorCategory error_category = installer_result.error
+                                                     ? ErrorCategory::kInstall
+                                                     : ErrorCategory::kNone;
             main_task_runner->PostTask(
-                FROM_HERE, base::BindOnce(std::move(callback), error_category,
-                                          static_cast<int>(result.error),
-                                          result.extended_error));
+                FROM_HERE,
+                base::BindOnce(std::move(callback), error_category,
+                               static_cast<int>(installer_result.error),
+                               installer_result.extended_error,
+                               installer_result));
           },
-          main_task_runner, std::move(callback), unpack_path, result));
+          main_task_runner, std::move(callback), unpack_path,
+          installer_result));
 }
 
 void InstallOnBlockingTaskRunner(
@@ -108,21 +137,23 @@ void InstallOnBlockingTaskRunner(
     scoped_refptr<CrxInstaller> installer,
     CrxInstaller::ProgressCallback progress_callback,
     InstallOnBlockingTaskRunnerCompleteCallback callback) {
-  DCHECK(base::DirectoryExists(unpack_path));
+  VLOG_IF(1, !base::DirectoryExists(unpack_path))
+      << unpack_path << " does not exist";
 
-  // Acquire the ownership of the |unpack_path|.
   base::ScopedTempDir unpack_path_owner;
   std::ignore = unpack_path_owner.Set(unpack_path);
 
-  if (static_cast<int>(fingerprint.size()) !=
-      base::WriteFile(
+  if (!base::WriteFile(
           unpack_path.Append(FILE_PATH_LITERAL("manifest.fingerprint")),
-          fingerprint.c_str(), base::checked_cast<int>(fingerprint.size()))) {
-    const CrxInstaller::Result result(InstallError::FINGERPRINT_WRITE_FAILED);
+          fingerprint)) {
+    const CrxInstaller::Result installer_result(
+        InstallError::FINGERPRINT_WRITE_FAILED,
+        logging::GetLastSystemErrorCode());
     main_task_runner->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), ErrorCategory::kInstall,
-                       static_cast<int>(result.error), result.extended_error));
+                       static_cast<int>(installer_result.error),
+                       installer_result.extended_error, absl::nullopt));
     return;
   }
 
@@ -174,62 +205,219 @@ void InstallOnBlockingTaskRunner(
       base::BindOnce(
           [](scoped_refptr<CallbackChecker> callback_checker,
              CrxInstaller::Callback callback,
-             const CrxInstaller::Result& result) {
+             const CrxInstaller::Result& installer_result) {
             callback_checker->set_unsafe();
-            std::move(callback).Run(result);
+            std::move(callback).Run(installer_result);
           },
           callback_checker,
           base::BindOnce(&InstallComplete, main_task_runner,
                          std::move(callback), unpack_path_owner.Take())));
 }
 
-void UnpackCompleteOnBlockingTaskRunner(
+void CrxCachePutCompleteOnCrxCacheBlockingTaskRunner(
     scoped_refptr<base::SequencedTaskRunner> main_task_runner,
     const base::FilePath& crx_path,
+    const base::FilePath& unpack_path,
+    const std::string& public_key,
     const std::string& fingerprint,
     std::unique_ptr<CrxInstaller::InstallParams> install_params,
     scoped_refptr<CrxInstaller> installer,
     CrxInstaller::ProgressCallback progress_callback,
     InstallOnBlockingTaskRunnerCompleteCallback callback,
-    const ComponentUnpacker::Result& result) {
-  update_client::DeleteFileAndEmptyParentDirectory(crx_path);
-
+    const CrxCache::Result& result) {
   if (result.error != UnpackerError::kNone) {
-    main_task_runner->PostTask(
-        FROM_HERE,
-        base::BindOnce(std::move(callback), ErrorCategory::kUnpack,
-                       static_cast<int>(result.error), result.extended_error));
-    return;
+    update_client::DeleteFileAndEmptyParentDirectory(crx_path);
+    DVLOG(2) << "crx_cache->Put failed: " << static_cast<int>(result.error);
+  } else {
+    update_client::DeleteEmptyDirectory(crx_path.DirName());
   }
-
   base::ThreadPool::PostTask(
       FROM_HERE, kTaskTraits,
       base::BindOnce(&InstallOnBlockingTaskRunner, main_task_runner,
-                     result.unpack_path, result.public_key, fingerprint,
-                     std::move(install_params), installer,
-                     std::move(progress_callback), std::move(callback)));
+                     unpack_path, public_key, fingerprint,
+                     std::move(install_params), installer, progress_callback,
+                     std::move(callback)));
 }
 
-void StartInstallOnBlockingTaskRunner(
+void PuffinUnpackCompleteOnBlockingTaskRunner(
+    scoped_refptr<base::SequencedTaskRunner> main_task_runner,
+    const base::FilePath& crx_path,
+    const std::string& id,
+    const std::string& fingerprint,
+    std::unique_ptr<CrxInstaller::InstallParams> install_params,
+    scoped_refptr<CrxInstaller> installer,
+    absl::optional<scoped_refptr<update_client::CrxCache>> optional_crx_cache,
+    CrxInstaller::ProgressCallback progress_callback,
+    InstallOnBlockingTaskRunnerCompleteCallback callback,
+    const Unpacker::Result& result) {
+  if (result.error != UnpackerError::kNone) {
+    update_client::DeleteFileAndEmptyParentDirectory(crx_path);
+    DVLOG(2) << "Unpack failed: " << static_cast<int>(result.error);
+    main_task_runner->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), ErrorCategory::kUnpack,
+                                  static_cast<int>(result.error),
+                                  result.extended_error, absl::nullopt));
+  } else if (!base::FeatureList::IsEnabled(features::kPuffinPatches) ||
+             !optional_crx_cache.has_value()) {
+    // If we were unable to create the crx_cache, skip the CrxCache::Put call.
+    // Since we don't need the cache to perform full updates, ignore the error
+    if (base::FeatureList::IsEnabled(features::kPuffinPatches)) {
+      DVLOG(2) << "No crx cache provided, proceeding without crx retention.";
+    } else {
+      DVLOG(2)
+          << "Puffin Patches are disabled, proceeding without crx retention.";
+    }
+    update_client::DeleteFileAndEmptyParentDirectory(crx_path);
+    base::ThreadPool::PostTask(
+        FROM_HERE, kTaskTraits,
+        base::BindOnce(&InstallOnBlockingTaskRunner, main_task_runner,
+                       result.unpack_path, result.public_key, fingerprint,
+                       std::move(install_params), installer, progress_callback,
+                       std::move(callback)));
+  } else {
+    main_task_runner->PostTask(
+        FROM_HERE,
+        base::BindOnce(
+            &CrxCache::Put, optional_crx_cache.value(), crx_path, id,
+            fingerprint,
+            base::BindPostTask(
+                base::ThreadPool::CreateSequencedTaskRunner(kTaskTraits),
+                base::BindOnce(&CrxCachePutCompleteOnCrxCacheBlockingTaskRunner,
+                               main_task_runner, crx_path, result.unpack_path,
+                               result.public_key, fingerprint,
+                               std::move(install_params), installer,
+                               progress_callback, std::move(callback)))));
+  }
+}
+
+void StartPuffinInstallOnBlockingTaskRunner(
     scoped_refptr<base::SequencedTaskRunner> main_task_runner,
     const std::vector<uint8_t>& pk_hash,
     const base::FilePath& crx_path,
+    const std::string& id,
     const std::string& fingerprint,
     std::unique_ptr<CrxInstaller::InstallParams> install_params,
     scoped_refptr<CrxInstaller> installer,
     std::unique_ptr<Unzipper> unzipper_,
+    absl::optional<scoped_refptr<update_client::CrxCache>> optional_crx_cache,
+    crx_file::VerifierFormat crx_format,
+    CrxInstaller::ProgressCallback progress_callback,
+    InstallOnBlockingTaskRunnerCompleteCallback callback) {
+  Unpacker::Unpack(
+      pk_hash, crx_path, std::move(unzipper_), crx_format,
+      base::BindOnce(&PuffinUnpackCompleteOnBlockingTaskRunner,
+                     main_task_runner, crx_path, id, fingerprint,
+                     std::move(install_params), installer, optional_crx_cache,
+                     progress_callback, std::move(callback)));
+}
+
+void OnPuffPatchCompleteOnBlockingTaskRunner(
+    scoped_refptr<base::SequencedTaskRunner> main_task_runner,
+    const std::vector<uint8_t>& pk_hash,
+    const base::FilePath& patch_path,
+    const base::FilePath& dest_crx_path,
+    const std::string& id,
+    const std::string& fingerprint,
+    std::unique_ptr<CrxInstaller::InstallParams> install_params,
+    scoped_refptr<CrxInstaller> installer,
+    std::unique_ptr<Unzipper> unzipper_,
+    scoped_refptr<update_client::CrxCache> crx_cache,
+    crx_file::VerifierFormat crx_format,
+    CrxInstaller::ProgressCallback progress_callback,
+    InstallOnBlockingTaskRunnerCompleteCallback callback,
+    UnpackerError error,
+    int extra_code) {
+  update_client::DeleteFileAndEmptyParentDirectory(patch_path);
+  if (error != UnpackerError::kNone) {
+    update_client::DeleteFileAndEmptyParentDirectory(dest_crx_path);
+    main_task_runner->PostTask(
+        FROM_HERE,
+        base::BindOnce(std::move(callback), ErrorCategory::kUnpack,
+                       static_cast<int>(error), extra_code, absl::nullopt));
+    DVLOG(2) << "PuffPatch failed: " << static_cast<int>(error);
+    return;
+  }
+
+  base::ThreadPool::CreateSequencedTaskRunner(kTaskTraits)
+      ->PostTask(
+          FROM_HERE,
+          base::BindOnce(
+              &update_client::StartPuffinInstallOnBlockingTaskRunner,
+              main_task_runner, pk_hash, dest_crx_path, id, fingerprint,
+              std::move(install_params), installer, std::move(unzipper_),
+              absl::optional<scoped_refptr<update_client::CrxCache>>(crx_cache),
+              crx_format, progress_callback, std::move(callback)));
+}
+
+void StartPuffPatchOnBlockingTaskRunner(
+    scoped_refptr<base::SequencedTaskRunner> main_task_runner,
+    const std::vector<uint8_t>& pk_hash,
+    const base::FilePath& puff_patch_path,
+    const std::string& id,
+    const std::string& fingerprint,
+    std::unique_ptr<CrxInstaller::InstallParams> install_params,
+    scoped_refptr<CrxInstaller> installer,
+    std::unique_ptr<Unzipper> unzipper_,
+    scoped_refptr<update_client::CrxCache> crx_cache,
+    scoped_refptr<Patcher> patcher_,
+    crx_file::VerifierFormat crx_format,
+    CrxInstaller::ProgressCallback progress_callback,
+    InstallOnBlockingTaskRunnerCompleteCallback callback,
+    const CrxCache::Result& result) {
+  if (result.error != UnpackerError::kNone) {
+    main_task_runner->PostTask(
+        FROM_HERE,
+        base::BindOnce(std::move(callback), ErrorCategory::kUnpack,
+                       static_cast<int>(result.error), 0, absl::nullopt));
+    DVLOG(2) << "crx_cache->Get failed: " << static_cast<int>(result.error);
+    return;
+  }
+  base::FilePath crx_path = result.crx_cache_path;
+  base::FilePath dest_path = crx_path.DirName().AppendASCII(
+      base::JoinString({"temp", fingerprint}, "_"));
+  base::File crx_file(crx_path, base::File::FLAG_OPEN | base::File::FLAG_READ);
+  base::File puff_patch_file(puff_patch_path,
+                             base::File::FLAG_OPEN | base::File::FLAG_READ);
+  base::File dest_file(dest_path, base::File::FLAG_CREATE_ALWAYS |
+                                      base::File::FLAG_WRITE |
+                                      base::File::FLAG_WIN_EXCLUSIVE_WRITE);
+  PuffinPatcher::Patch(
+      std::move(crx_file), std::move(puff_patch_file), std::move(dest_file),
+      patcher_,
+      base::BindOnce(&OnPuffPatchCompleteOnBlockingTaskRunner, main_task_runner,
+                     pk_hash, puff_patch_path, dest_path, id, fingerprint,
+                     std::move(install_params), installer, std::move(unzipper_),
+                     crx_cache, crx_format, progress_callback,
+                     std::move(callback)));
+}
+
+void StartGetPreviousCrxOnBlockingTaskRunner(
+    scoped_refptr<base::SequencedTaskRunner> main_task_runner,
+    const std::vector<uint8_t>& pk_hash,
+    const base::FilePath& puff_patch_path,
+    const std::string& id,
+    const std::string& previous_fingerprint,
+    const std::string& fingerprint,
+    std::unique_ptr<CrxInstaller::InstallParams> install_params,
+    scoped_refptr<CrxInstaller> installer,
+    std::unique_ptr<Unzipper> unzipper_,
+    scoped_refptr<update_client::CrxCache> crx_cache,
     scoped_refptr<Patcher> patcher_,
     crx_file::VerifierFormat crx_format,
     CrxInstaller::ProgressCallback progress_callback,
     InstallOnBlockingTaskRunnerCompleteCallback callback) {
-  auto unpacker = base::MakeRefCounted<ComponentUnpacker>(
-      pk_hash, crx_path, installer, std::move(unzipper_), std::move(patcher_),
-      crx_format);
-
-  unpacker->Unpack(base::BindOnce(
-      &UnpackCompleteOnBlockingTaskRunner, main_task_runner, crx_path,
-      fingerprint, std::move(install_params), installer,
-      std::move(progress_callback), std::move(callback)));
+  main_task_runner->PostTask(
+      FROM_HERE,
+      base::BindOnce(
+          &CrxCache::Get, crx_cache, id, previous_fingerprint,
+          base::BindPostTask(
+              base::ThreadPool::CreateSequencedTaskRunner(kTaskTraits),
+              base::BindOnce(&StartPuffPatchOnBlockingTaskRunner,
+                             main_task_runner, pk_hash, puff_patch_path, id,
+                             fingerprint, std::move(install_params), installer,
+                             std::move(unzipper_), crx_cache, patcher_,
+                             crx_format, progress_callback,
+                             std::move(callback)))));
 }
 
 // Returns a string literal corresponding to the value of the downloader |d|.
@@ -239,9 +427,36 @@ const char* DownloaderToString(CrxDownloader::DownloadMetrics::Downloader d) {
       return "direct";
     case CrxDownloader::DownloadMetrics::kBits:
       return "bits";
+    case CrxDownloader::DownloadMetrics::kBackgroundMac:
+      return "nsurlsession_background";
     default:
       return "unknown";
   }
+}
+
+base::Value::Dict MakeEvent(
+    int event_type,
+    int result,
+    int error_code,
+    int extra_code1,
+    const absl::optional<base::Version>& previous_version,
+    const absl::optional<base::Version>& next_version) {
+  base::Value::Dict event;
+  event.Set("eventtype", event_type);
+  event.Set("eventresult", result);
+  if (error_code) {
+    event.Set("errorcode", error_code);
+  }
+  if (extra_code1) {
+    event.Set("extracode1", extra_code1);
+  }
+  if (previous_version) {
+    event.Set("previousversion", previous_version->GetString());
+  }
+  if (next_version) {
+    event.Set("nextversion", next_version->GetString());
+  }
+  return event;
 }
 
 }  // namespace
@@ -254,20 +469,20 @@ Component::Component(const UpdateContext& update_context, const std::string& id)
 Component::~Component() = default;
 
 scoped_refptr<Configurator> Component::config() const {
-  return update_context_.config;
+  return update_context_->config;
 }
 
 std::string Component::session_id() const {
-  return update_context_.session_id;
+  return update_context_->session_id;
 }
 
 bool Component::is_foreground() const {
-  return update_context_.is_foreground;
+  return update_context_->is_foreground;
 }
 
 void Component::Handle(CallbackHandleComplete callback_handle_complete) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(state_);
+  CHECK(state_);
 
   callback_handle_complete_ = std::move(callback_handle_complete);
 
@@ -279,12 +494,13 @@ void Component::ChangeState(std::unique_ptr<State> next_state) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   previous_state_ = state();
-  if (next_state)
+  if (next_state) {
     state_ = std::move(next_state);
-  else
+  } else {
     is_handled_ = true;
+  }
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, std::move(callback_handle_complete_));
 }
 
@@ -294,8 +510,9 @@ CrxUpdateItem Component::GetCrxUpdateItem() const {
   CrxUpdateItem crx_update_item;
   crx_update_item.state = state_->state();
   crx_update_item.id = id_;
-  if (crx_component_)
+  if (crx_component_) {
     crx_update_item.component = *crx_component_;
+  }
   crx_update_item.last_check = last_check_;
   crx_update_item.next_version = next_version_;
   crx_update_item.next_fp = next_fp_;
@@ -306,6 +523,7 @@ CrxUpdateItem Component::GetCrxUpdateItem() const {
   crx_update_item.error_code = error_code_;
   crx_update_item.extra_code1 = extra_code1_;
   crx_update_item.custom_updatecheck_data = custom_attrs_;
+  crx_update_item.installer_result = installer_result_;
 
   return crx_update_item;
 }
@@ -313,14 +531,15 @@ CrxUpdateItem Component::GetCrxUpdateItem() const {
 void Component::SetParseResult(const ProtocolParser::Result& result) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  DCHECK_EQ(0, update_check_error_);
+  CHECK_EQ(0, update_check_error_);
 
   status_ = result.status;
   action_run_ = result.action_run;
   custom_attrs_ = result.custom_attributes;
 
-  if (result.manifest.packages.empty())
+  if (result.manifest.packages.empty()) {
     return;
+  }
 
   next_version_ = base::Version(result.manifest.version);
   const auto& package = result.manifest.packages.front();
@@ -329,13 +548,15 @@ void Component::SetParseResult(const ProtocolParser::Result& result) {
   // Resolve the urls by combining the base urls with the package names.
   for (const auto& crx_url : result.crx_urls) {
     const GURL url = crx_url.Resolve(package.name);
-    if (url.is_valid())
+    if (url.is_valid()) {
       crx_urls_.push_back(url);
+    }
   }
   for (const auto& crx_diffurl : result.crx_diffurls) {
     const GURL url = crx_diffurl.Resolve(package.namediff);
-    if (url.is_valid())
+    if (url.is_valid()) {
       crx_diffurls_.push_back(url);
+    }
   }
 
   hash_sha256_ = package.hash_sha256;
@@ -362,22 +583,21 @@ void Component::SetParseResult(const ProtocolParser::Result& result) {
   }
 }
 
-void Component::Uninstall(const CrxComponent& crx_component, int reason) {
+void Component::PingOnly(const CrxComponent& crx_component,
+                         int event_type,
+                         int result,
+                         int error_code,
+                         int extra_code1) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK_EQ(ComponentState::kNew, state());
+  CHECK_EQ(ComponentState::kNew, state());
   crx_component_ = crx_component;
   previous_version_ = crx_component_->version;
   next_version_ = base::Version("0");
-  extra_code1_ = reason;
-  state_ = std::make_unique<StateUninstalled>(this);
-}
-
-void Component::Registration(const CrxComponent& crx_component) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK_EQ(ComponentState::kNew, state());
-  crx_component_ = crx_component;
-  next_version_ = crx_component_->version;
-  state_ = std::make_unique<StateRegistration>(this);
+  error_code_ = error_code;
+  extra_code1_ = extra_code1;
+  state_ = std::make_unique<StatePingOnly>(this);
+  AppendEvent(MakeEvent(event_type, result, error_code, extra_code1,
+                        previous_version_, absl::nullopt));
 }
 
 void Component::SetUpdateCheckResult(
@@ -385,13 +605,14 @@ void Component::SetUpdateCheckResult(
     ErrorCategory error_category,
     int error) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK_EQ(ComponentState::kChecking, state());
+  CHECK_EQ(ComponentState::kChecking, state());
 
   error_category_ = error_category;
   error_code_ = error;
 
-  if (result)
+  if (result) {
     SetParseResult(result.value());
+  }
 }
 
 void Component::NotifyWait() {
@@ -403,10 +624,10 @@ bool Component::CanDoBackgroundDownload() const {
   // Foreground component updates are always downloaded in foreground.
   return !is_foreground() &&
          (crx_component() && crx_component()->allows_background_download) &&
-         update_context_.config->EnabledBackgroundDownloader();
+         update_context_->config->EnabledBackgroundDownloader();
 }
 
-void Component::AppendEvent(base::Value event) {
+void Component::AppendEvent(base::Value::Dict event) {
   events_.push_back(std::move(event));
 }
 
@@ -414,137 +635,127 @@ void Component::NotifyObservers(UpdateClient::Observer::Events event) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   // There is no corresponding component state for the COMPONENT_WAIT event.
-  if (update_context_.crx_state_change_callback &&
+  if (update_context_->crx_state_change_callback &&
       event != UpdateClient::Observer::Events::COMPONENT_WAIT) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
-        base::BindRepeating(update_context_.crx_state_change_callback,
+        base::BindRepeating(update_context_->crx_state_change_callback,
                             GetCrxUpdateItem()));
   }
-  update_context_.notify_observers_callback.Run(event, id_);
+  update_context_->notify_observers_callback.Run(event, id_);
 }
 
 base::TimeDelta Component::GetUpdateDuration() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  if (update_begin_.is_null())
+  if (update_begin_.is_null()) {
     return base::TimeDelta();
-
+  }
   const base::TimeDelta update_cost(base::TimeTicks::Now() - update_begin_);
-  DCHECK_GE(update_cost, base::TimeDelta());
-  const base::TimeDelta max_update_delay =
-      base::Seconds(update_context_.config->UpdateDelay());
-  return std::min(update_cost, max_update_delay);
+  if (update_cost.is_negative()) {
+    return base::TimeDelta();
+  }
+  return std::min(update_cost, update_context_->config->UpdateDelay());
 }
 
-base::Value Component::MakeEventUpdateComplete() const {
-  base::Value event(base::Value::Type::DICTIONARY);
-  event.SetKey("eventtype", base::Value(update_context_.is_install ? 2 : 3));
-  event.SetKey(
-      "eventresult",
-      base::Value(static_cast<int>(state() == ComponentState::kUpdated)));
-  if (error_category() != ErrorCategory::kNone)
-    event.SetKey("errorcat", base::Value(static_cast<int>(error_category())));
-  if (error_code())
-    event.SetKey("errorcode", base::Value(error_code()));
-  if (extra_code1())
-    event.SetKey("extracode1", base::Value(extra_code1()));
+base::Value::Dict Component::MakeEventUpdateComplete() const {
+  base::Value::Dict event;
+  event.Set("eventtype", update_context_->is_install
+                             ? protocol_request::kEventInstall
+                             : protocol_request::kEventUpdate);
+  event.Set("eventresult",
+            static_cast<int>(state() == ComponentState::kUpdated));
+  if (error_category() != ErrorCategory::kNone) {
+    event.Set("errorcat", static_cast<int>(error_category()));
+  }
+  if (error_code()) {
+    event.Set("errorcode", error_code());
+  }
+  if (extra_code1()) {
+    event.Set("extracode1", extra_code1());
+  }
   if (HasDiffUpdate(*this)) {
     const int diffresult = static_cast<int>(!diff_update_failed());
-    event.SetKey("diffresult", base::Value(diffresult));
+    event.Set("diffresult", diffresult);
   }
   if (diff_error_category() != ErrorCategory::kNone) {
     const int differrorcat = static_cast<int>(diff_error_category());
-    event.SetKey("differrorcat", base::Value(differrorcat));
+    event.Set("differrorcat", differrorcat);
   }
-  if (diff_error_code())
-    event.SetKey("differrorcode", base::Value(diff_error_code()));
-  if (diff_extra_code1())
-    event.SetKey("diffextracode1", base::Value(diff_extra_code1()));
-  if (!previous_fp().empty())
-    event.SetKey("previousfp", base::Value(previous_fp()));
-  if (!next_fp().empty())
-    event.SetKey("nextfp", base::Value(next_fp()));
-  DCHECK(previous_version().IsValid());
-  event.SetKey("previousversion", base::Value(previous_version().GetString()));
-  if (next_version().IsValid())
-    event.SetKey("nextversion", base::Value(next_version().GetString()));
+  if (diff_error_code()) {
+    event.Set("differrorcode", diff_error_code());
+  }
+  if (diff_extra_code1()) {
+    event.Set("diffextracode1", diff_extra_code1());
+  }
+  if (!previous_fp().empty()) {
+    event.Set("previousfp", previous_fp());
+  }
+  if (!next_fp().empty()) {
+    event.Set("nextfp", next_fp());
+  }
+  CHECK(previous_version().IsValid());
+  event.Set("previousversion", previous_version().GetString());
+  if (next_version().IsValid()) {
+    event.Set("nextversion", next_version().GetString());
+  }
   return event;
 }
 
-base::Value Component::MakeEventDownloadMetrics(
+base::Value::Dict Component::MakeEventDownloadMetrics(
     const CrxDownloader::DownloadMetrics& dm) const {
-  base::Value event(base::Value::Type::DICTIONARY);
-  event.SetKey("eventtype", base::Value(14));
-  event.SetKey("eventresult", base::Value(static_cast<int>(dm.error == 0)));
-  event.SetKey("downloader", base::Value(DownloaderToString(dm.downloader)));
-  if (dm.error)
-    event.SetKey("errorcode", base::Value(dm.error));
-  event.SetKey("url", base::Value(dm.url.spec()));
+  base::Value::Dict event;
+  event.Set("eventtype", protocol_request::kEventDownload);
+  event.Set("eventresult", static_cast<int>(dm.error == 0));
+  event.Set("downloader", DownloaderToString(dm.downloader));
+  if (dm.error) {
+    event.Set("errorcode", dm.error);
+  }
+  if (dm.extra_code1) {
+    event.Set("extracode1", dm.extra_code1);
+  }
+  event.Set("url", dm.url.spec());
 
   // -1 means that the  byte counts are not known.
-  if (dm.total_bytes != -1 && dm.total_bytes < kProtocolMaxInt)
-    event.SetKey("total", base::Value(static_cast<double>(dm.total_bytes)));
-  if (dm.downloaded_bytes != -1 && dm.total_bytes < kProtocolMaxInt) {
-    event.SetKey("downloaded",
-                 base::Value(static_cast<double>(dm.downloaded_bytes)));
+  if (dm.total_bytes != -1 &&
+      dm.total_bytes < protocol_request::kProtocolMaxInt) {
+    event.Set("total", static_cast<double>(dm.total_bytes));
   }
-  if (dm.download_time_ms && dm.total_bytes < kProtocolMaxInt) {
-    event.SetKey("download_time_ms",
-                 base::Value(static_cast<double>(dm.download_time_ms)));
+  if (dm.downloaded_bytes != -1 &&
+      dm.total_bytes < protocol_request::kProtocolMaxInt) {
+    event.Set("downloaded", static_cast<double>(dm.downloaded_bytes));
   }
-  DCHECK(previous_version().IsValid());
-  event.SetKey("previousversion", base::Value(previous_version().GetString()));
-  if (next_version().IsValid())
-    event.SetKey("nextversion", base::Value(next_version().GetString()));
+  if (dm.download_time_ms &&
+      dm.total_bytes < protocol_request::kProtocolMaxInt) {
+    event.Set("download_time_ms", static_cast<double>(dm.download_time_ms));
+  }
+  CHECK(previous_version().IsValid());
+  event.Set("previousversion", previous_version().GetString());
+  if (next_version().IsValid()) {
+    event.Set("nextversion", next_version().GetString());
+  }
   return event;
 }
 
-base::Value Component::MakeEventUninstalled() const {
-  DCHECK(state() == ComponentState::kUninstalled);
-  base::Value event(base::Value::Type::DICTIONARY);
-  event.SetKey("eventtype", base::Value(4));
-  event.SetKey("eventresult", base::Value(1));
-  if (extra_code1())
-    event.SetKey("extracode1", base::Value(extra_code1()));
-  DCHECK(previous_version().IsValid());
-  event.SetKey("previousversion", base::Value(previous_version().GetString()));
-  DCHECK(next_version().IsValid());
-  event.SetKey("nextversion", base::Value(next_version().GetString()));
+base::Value::Dict Component::MakeEventActionRun(bool succeeded,
+                                                int error_code,
+                                                int extra_code1) const {
+  base::Value::Dict event;
+  event.Set("eventtype", protocol_request::kEventAction);
+  event.Set("eventresult", static_cast<int>(succeeded));
+  if (error_code) {
+    event.Set("errorcode", error_code);
+  }
+  if (extra_code1) {
+    event.Set("extracode1", extra_code1);
+  }
   return event;
 }
 
-base::Value Component::MakeEventRegistration() const {
-  DCHECK(state() == ComponentState::kRegistration);
-  base::Value event(base::Value::Type::DICTIONARY);
-  event.SetKey("eventtype", base::Value(2));
-  event.SetKey("eventresult", base::Value(1));
-  if (error_code())
-    event.SetKey("errorcode", base::Value(error_code()));
-  if (extra_code1())
-    event.SetKey("extracode1", base::Value(extra_code1()));
-  DCHECK(next_version().IsValid());
-  event.SetKey("nextversion", base::Value(next_version().GetString()));
-  return event;
-}
-
-base::Value Component::MakeEventActionRun(bool succeeded,
-                                          int error_code,
-                                          int extra_code1) const {
-  base::Value event(base::Value::Type::DICTIONARY);
-  event.SetKey("eventtype", base::Value(42));
-  event.SetKey("eventresult", base::Value(static_cast<int>(succeeded)));
-  if (error_code)
-    event.SetKey("errorcode", base::Value(error_code));
-  if (extra_code1)
-    event.SetKey("extracode1", base::Value(extra_code1));
-  return event;
-}
-
-std::vector<base::Value> Component::GetEvents() const {
-  std::vector<base::Value> events;
-  for (const auto& event : events_)
+std::vector<base::Value::Dict> Component::GetEvents() const {
+  std::vector<base::Value::Dict> events;
+  for (const auto& event : events_) {
     events.push_back(event.Clone());
+  }
   return events;
 }
 
@@ -569,9 +780,9 @@ void Component::State::Handle(CallbackNextState callback_next_state) {
 
 void Component::State::TransitionState(std::unique_ptr<State> next_state) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(next_state);
+  CHECK(next_state);
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback_next_state_), std::move(next_state)));
 }
@@ -579,7 +790,7 @@ void Component::State::TransitionState(std::unique_ptr<State> next_state) {
 void Component::State::EndState() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback_next_state_), nullptr));
 }
 
@@ -606,7 +817,7 @@ void Component::StateNew::DoHandle() {
     // on state transitions but it does not allow such notifications when a
     // new state is entered. Hence, posting the task below is a workaround for
     // this design oversight.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
             [](Component& component) {
@@ -633,14 +844,16 @@ void Component::StateChecking::DoHandle() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   auto& component = State::component();
-  DCHECK(component.crx_component());
+  CHECK(component.crx_component());
 
   if (component.error_code_) {
+    metrics::RecordUpdateCheckResult(metrics::UpdateCheckResult::kError);
     TransitionState(std::make_unique<StateUpdateError>(&component));
     return;
   }
 
-  if (component.update_context_.is_cancelled) {
+  if (component.update_context_->is_cancelled) {
+    metrics::RecordUpdateCheckResult(metrics::UpdateCheckResult::kCanceled);
     TransitionState(std::make_unique<StateUpdateError>(&component));
     component.error_category_ = ErrorCategory::kService;
     component.error_code_ = static_cast<int>(ServiceError::CANCELLED);
@@ -648,12 +861,15 @@ void Component::StateChecking::DoHandle() {
   }
 
   if (component.status_ == "ok") {
+    metrics::RecordUpdateCheckResult(metrics::UpdateCheckResult::kHasUpdate);
     TransitionState(std::make_unique<StateCanUpdate>(&component));
     return;
   }
 
   if (component.status_ == "noupdate") {
-    if (component.action_run_.empty()) {
+    metrics::RecordUpdateCheckResult(metrics::UpdateCheckResult::kNoUpdate);
+    if (component.action_run_.empty() ||
+        component.update_context_->is_update_check_only) {
       TransitionState(std::make_unique<StateUpToDate>(&component));
     } else {
       TransitionState(std::make_unique<StateRun>(&component));
@@ -661,6 +877,7 @@ void Component::StateChecking::DoHandle() {
     return;
   }
 
+  metrics::RecordUpdateCheckResult(metrics::UpdateCheckResult::kError);
   TransitionState(std::make_unique<StateUpdateError>(&component));
 }
 
@@ -676,12 +893,13 @@ void Component::StateUpdateError::DoHandle() {
 
   auto& component = State::component();
 
-  DCHECK_NE(ErrorCategory::kNone, component.error_category_);
-  DCHECK_NE(0, component.error_code_);
+  CHECK_NE(ErrorCategory::kNone, component.error_category_);
+  CHECK_NE(0, component.error_code_);
 
   // Create an event only when the server response included an update.
-  if (component.IsUpdateAvailable())
+  if (component.IsUpdateAvailable()) {
     component.AppendEvent(component.MakeEventUpdateComplete());
+  }
 
   EndState();
   component.NotifyObservers(Events::COMPONENT_UPDATE_ERROR);
@@ -698,41 +916,88 @@ void Component::StateCanUpdate::DoHandle() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   auto& component = State::component();
-  DCHECK(component.crx_component());
+  CHECK(component.crx_component());
 
   component.is_update_available_ = true;
   component.NotifyObservers(Events::COMPONENT_UPDATE_FOUND);
 
-  if (!component.crx_component()->updates_enabled) {
+  if (!component.crx_component()->updates_enabled ||
+      (!component.crx_component()->allow_updates_on_metered_connection &&
+       component.config()->IsConnectionMetered())) {
     component.error_category_ = ErrorCategory::kService;
     component.error_code_ = static_cast<int>(ServiceError::UPDATE_DISABLED);
     component.extra_code1_ = 0;
+    metrics::RecordCanUpdateResult(metrics::CanUpdateResult::kUpdatesDisabled);
     TransitionState(std::make_unique<StateUpdateError>(&component));
     return;
   }
 
-  if (component.update_context_.is_cancelled) {
+  if (component.update_context_->is_cancelled) {
     TransitionState(std::make_unique<StateUpdateError>(&component));
     component.error_category_ = ErrorCategory::kService;
     component.error_code_ = static_cast<int>(ServiceError::CANCELLED);
+    metrics::RecordCanUpdateResult(metrics::CanUpdateResult::kCanceled);
     return;
   }
 
+  if (component.update_context_->is_update_check_only) {
+    component.error_category_ = ErrorCategory::kService;
+    component.error_code_ =
+        static_cast<int>(ServiceError::CHECK_FOR_UPDATE_ONLY);
+    component.extra_code1_ = 0;
+    component.AppendEvent(component.MakeEventUpdateComplete());
+    EndState();
+    metrics::RecordCanUpdateResult(
+        metrics::CanUpdateResult::kCheckForUpdateOnly);
+    return;
+  }
+
+  metrics::RecordCanUpdateResult(metrics::CanUpdateResult::kCanUpdate);
+
   // Start computing the cost of the this update from here on.
   component.update_begin_ = base::TimeTicks::Now();
-
-  if (CanTryDiffUpdate())
-    TransitionState(std::make_unique<StateDownloadingDiff>(&component));
-  else
-    TransitionState(std::make_unique<StateDownloading>(&component));
+  CHECK(component.update_context_->crx_cache_);
+  if (CanTryDiffUpdate()) {
+    base::ThreadPool::PostTaskAndReplyWithResult(
+        FROM_HERE, {base::MayBlock()},
+        base::BindOnce(&update_client::CrxCache::Contains,
+                       component.update_context_->crx_cache_.value(),
+                       component.crx_component()->app_id,
+                       component.previous_fp_),
+        base::BindOnce(
+            &Component::StateCanUpdate::CheckIfCacheContainsCrxComplete,
+            base::Unretained(this)));
+    return;
+  }
+  TransitionState(std::make_unique<StateDownloading>(&component));
 }
 
 // Returns true if a differential update is available, it has not failed yet,
 // and the configuration allows this update.
 bool Component::StateCanUpdate::CanTryDiffUpdate() const {
+  if (!base::FeatureList::IsEnabled(features::kPuffinPatches)) {
+    return false;
+  }
   const auto& component = Component::State::component();
   return HasDiffUpdate(component) && !component.diff_error_code_ &&
-         component.update_context_.config->EnabledDeltas();
+         component.update_context_->crx_cache_.has_value() &&
+         component.update_context_->config->EnabledDeltas();
+}
+
+void Component::StateCanUpdate::CheckIfCacheContainsCrxComplete(
+    bool crx_is_in_cache) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  auto& component = State::component();
+  if (crx_is_in_cache) {
+    TransitionState(std::make_unique<StateDownloadingDiff>(&component));
+  } else {
+    // If the configuration allows diff update, but the previous crx
+    // is not cached, report the kPuffinMissingPreviousCrx error.
+    component.diff_error_category_ = ErrorCategory::kUnpack;
+    component.diff_error_code_ =
+        static_cast<int>(UnpackerError::kPuffinMissingPreviousCrx);
+    TransitionState(std::make_unique<StateDownloading>(&component));
+  }
 }
 
 Component::StateUpToDate::StateUpToDate(Component* component)
@@ -746,7 +1011,7 @@ void Component::StateUpToDate::DoHandle() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   auto& component = State::component();
-  DCHECK(component.crx_component());
+  CHECK(component.crx_component());
 
   component.NotifyObservers(Events::COMPONENT_ALREADY_UP_TO_DATE);
   EndState();
@@ -763,7 +1028,7 @@ void Component::StateDownloadingDiff::DoHandle() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   auto& component = Component::State::component();
-  DCHECK(component.crx_component());
+  CHECK(component.crx_component());
 
   component.downloaded_bytes_ = -1;
   component.total_bytes_ = -1;
@@ -774,7 +1039,7 @@ void Component::StateDownloadingDiff::DoHandle() {
   crx_downloader_->set_progress_callback(
       base::BindRepeating(&Component::StateDownloadingDiff::DownloadProgress,
                           base::Unretained(this)));
-  crx_downloader_->StartDownload(
+  cancel_callback_ = crx_downloader_->StartDownload(
       component.crx_diffurls_, component.hashdiff_sha256_,
       base::BindOnce(&Component::StateDownloadingDiff::DownloadComplete,
                      base::Unretained(this)));
@@ -788,13 +1053,9 @@ void Component::StateDownloadingDiff::DoHandle() {
 void Component::StateDownloadingDiff::DownloadProgress(int64_t downloaded_bytes,
                                                        int64_t total_bytes) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (downloaded_bytes != -1 && total_bytes != -1)
-    DCHECK_LE(downloaded_bytes, total_bytes);
-
   auto& component = Component::State::component();
   component.downloaded_bytes_ = downloaded_bytes;
   component.total_bytes_ = total_bytes;
-
   component.NotifyObservers(Events::COMPONENT_UPDATE_DOWNLOADING);
 }
 
@@ -803,12 +1064,13 @@ void Component::StateDownloadingDiff::DownloadComplete(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   auto& component = Component::State::component();
-  for (const auto& download_metrics : crx_downloader_->download_metrics())
+  for (const auto& download_metrics : crx_downloader_->download_metrics()) {
     component.AppendEvent(component.MakeEventDownloadMetrics(download_metrics));
+  }
 
   crx_downloader_ = nullptr;
 
-  if (component.update_context_.is_cancelled) {
+  if (component.update_context_->is_cancelled) {
     TransitionState(std::make_unique<StateUpdateError>(&component));
     component.error_category_ = ErrorCategory::kService;
     component.error_code_ = static_cast<int>(ServiceError::CANCELLED);
@@ -816,7 +1078,7 @@ void Component::StateDownloadingDiff::DownloadComplete(
   }
 
   if (download_result.error) {
-    DCHECK(download_result.response.empty());
+    CHECK(download_result.response.empty());
     component.diff_error_category_ = ErrorCategory::kDownload;
     component.diff_error_code_ = download_result.error;
 
@@ -824,7 +1086,7 @@ void Component::StateDownloadingDiff::DownloadComplete(
     return;
   }
 
-  component.crx_path_ = download_result.response;
+  component.payload_path_ = download_result.response;
 
   TransitionState(std::make_unique<StateUpdatingDiff>(&component));
 }
@@ -840,7 +1102,7 @@ void Component::StateDownloading::DoHandle() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   auto& component = Component::State::component();
-  DCHECK(component.crx_component());
+  CHECK(component.crx_component());
 
   component.downloaded_bytes_ = -1;
   component.total_bytes_ = -1;
@@ -850,7 +1112,7 @@ void Component::StateDownloading::DoHandle() {
           component.CanDoBackgroundDownload());
   crx_downloader_->set_progress_callback(base::BindRepeating(
       &Component::StateDownloading::DownloadProgress, base::Unretained(this)));
-  crx_downloader_->StartDownload(
+  cancel_callback_ = crx_downloader_->StartDownload(
       component.crx_urls_, component.hash_sha256_,
       base::BindOnce(&Component::StateDownloading::DownloadComplete,
                      base::Unretained(this)));
@@ -864,13 +1126,9 @@ void Component::StateDownloading::DoHandle() {
 void Component::StateDownloading::DownloadProgress(int64_t downloaded_bytes,
                                                    int64_t total_bytes) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (downloaded_bytes != -1 && total_bytes != -1)
-    DCHECK_LE(downloaded_bytes, total_bytes);
-
   auto& component = Component::State::component();
   component.downloaded_bytes_ = downloaded_bytes;
   component.total_bytes_ = total_bytes;
-
   component.NotifyObservers(Events::COMPONENT_UPDATE_DOWNLOADING);
 }
 
@@ -880,12 +1138,13 @@ void Component::StateDownloading::DownloadComplete(
 
   auto& component = Component::State::component();
 
-  for (const auto& download_metrics : crx_downloader_->download_metrics())
+  for (const auto& download_metrics : crx_downloader_->download_metrics()) {
     component.AppendEvent(component.MakeEventDownloadMetrics(download_metrics));
+  }
 
   crx_downloader_ = nullptr;
 
-  if (component.update_context_.is_cancelled) {
+  if (component.update_context_->is_cancelled) {
     TransitionState(std::make_unique<StateUpdateError>(&component));
     component.error_category_ = ErrorCategory::kService;
     component.error_code_ = static_cast<int>(ServiceError::CANCELLED);
@@ -893,7 +1152,7 @@ void Component::StateDownloading::DownloadComplete(
   }
 
   if (download_result.error) {
-    DCHECK(download_result.response.empty());
+    CHECK(download_result.response.empty());
     component.error_category_ = ErrorCategory::kDownload;
     component.error_code_ = download_result.error;
 
@@ -901,7 +1160,7 @@ void Component::StateDownloading::DownloadComplete(
     return;
   }
 
-  component.crx_path_ = download_result.response;
+  component.payload_path_ = download_result.response;
 
   TransitionState(std::make_unique<StateUpdating>(&component));
 }
@@ -917,9 +1176,9 @@ void Component::StateUpdatingDiff::DoHandle() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   auto& component = Component::State::component();
-  const auto& update_context = component.update_context_;
+  const auto& update_context = *component.update_context_;
 
-  DCHECK(component.crx_component());
+  CHECK(component.crx_component());
 
   component.install_progress_ = -1;
   component.NotifyObservers(Events::COMPONENT_UPDATE_READY);
@@ -927,38 +1186,56 @@ void Component::StateUpdatingDiff::DoHandle() {
   // Adapts the repeating progress callback invoked by the installer so that
   // the callback can be posted to the main sequence instead of running
   // the callback on the sequence the installer is running on.
-  auto main_task_runner = base::SequencedTaskRunnerHandle::Get();
-  base::ThreadPool::CreateSequencedTaskRunner(kTaskTraits)
-      ->PostTask(
-          FROM_HERE,
-          base::BindOnce(
-              &update_client::StartInstallOnBlockingTaskRunner,
-              base::SequencedTaskRunnerHandle::Get(),
-              component.crx_component()->pk_hash, component.crx_path_,
-              component.next_fp_, component.install_params(),
-              component.crx_component()->installer,
-              update_context.config->GetUnzipperFactory()->Create(),
-              update_context.config->GetPatcherFactory()->Create(),
-              component.crx_component()->crx_format_requirement,
-              base::BindRepeating(
-                  &Component::StateUpdatingDiff::InstallProgress,
-                  base::Unretained(this)),
-              base::BindOnce(&Component::StateUpdatingDiff::InstallComplete,
-                             base::Unretained(this))));
+  auto main_task_runner = base::SequencedTaskRunner::GetCurrentDefault();
+  if (base::FeatureList::IsEnabled(features::kPuffinPatches) &&
+      update_context.crx_cache_.has_value() &&
+      update_context.config->EnabledDeltas()) {
+    base::ThreadPool::CreateSequencedTaskRunner(kTaskTraits)
+        ->PostTask(
+            FROM_HERE,
+            base::BindOnce(
+                &update_client::StartGetPreviousCrxOnBlockingTaskRunner,
+                base::SequencedTaskRunner::GetCurrentDefault(),
+                component.crx_component()->pk_hash, component.payload_path_,
+                component.crx_component()->app_id, component.previous_fp_,
+                component.next_fp_, component.install_params(),
+                component.crx_component()->installer,
+                update_context.config->GetUnzipperFactory()->Create(),
+                update_context.crx_cache_.value(),
+                update_context.config->GetPatcherFactory()->Create(),
+                component.crx_component()->crx_format_requirement,
+                base::BindRepeating(
+                    &Component::StateUpdatingDiff::InstallProgress,
+                    base::Unretained(this)),
+                base::BindOnce(&Component::StateUpdatingDiff::InstallComplete,
+                               base::Unretained(this))));
+  } else {
+    // We shouldn't get here if kPuffinPatches is disabled, due to the check in
+    // CanTryDiffUpdate, but if we do, return an error to avoid diff updates.
+    main_task_runner->PostTask(
+        FROM_HERE,
+        base::BindOnce(&Component::StateUpdatingDiff::InstallComplete,
+                       base::Unretained(this), ErrorCategory::kUnpack,
+                       static_cast<int>(UnpackerError::kCrxCacheNotProvided), 0,
+                       absl::nullopt));
+  }
 }
 
 void Component::StateUpdatingDiff::InstallProgress(int install_progress) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   auto& component = Component::State::component();
-  if (install_progress >= 0 && install_progress <= 100)
+  if (install_progress >= 0 && install_progress <= 100) {
     component.install_progress_ = install_progress;
+  }
   component.NotifyObservers(Events::COMPONENT_UPDATE_UPDATING);
 }
 
-void Component::StateUpdatingDiff::InstallComplete(ErrorCategory error_category,
-                                                   int error_code,
-                                                   int extra_code1) {
+void Component::StateUpdatingDiff::InstallComplete(
+    ErrorCategory error_category,
+    int error_code,
+    int extra_code1,
+    absl::optional<CrxInstaller::Result>) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   auto& component = Component::State::component();
@@ -972,18 +1249,17 @@ void Component::StateUpdatingDiff::InstallComplete(ErrorCategory error_category,
     return;
   }
 
-  DCHECK_EQ(ErrorCategory::kNone, component.diff_error_category_);
-  DCHECK_EQ(0, component.diff_error_code_);
-  DCHECK_EQ(0, component.diff_extra_code1_);
+  CHECK_EQ(ErrorCategory::kNone, component.diff_error_category_);
+  CHECK_EQ(0, component.diff_error_code_);
 
-  DCHECK_EQ(ErrorCategory::kNone, component.error_category_);
-  DCHECK_EQ(0, component.error_code_);
-  DCHECK_EQ(0, component.extra_code1_);
+  CHECK_EQ(ErrorCategory::kNone, component.error_category_);
+  CHECK_EQ(0, component.error_code_);
 
-  if (component.action_run_.empty())
+  if (component.action_run_.empty()) {
     TransitionState(std::make_unique<StateUpdated>(&component));
-  else
+  } else {
     TransitionState(std::make_unique<StateRun>(&component));
+  }
 }
 
 Component::StateUpdating::StateUpdating(Component* component)
@@ -997,9 +1273,9 @@ void Component::StateUpdating::DoHandle() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   auto& component = Component::State::component();
-  const auto& update_context = component.update_context_;
+  const auto& update_context = *component.update_context_;
 
-  DCHECK(component.crx_component());
+  CHECK(component.crx_component());
 
   component.install_progress_ = -1;
   component.NotifyObservers(Events::COMPONENT_UPDATE_READY);
@@ -1007,17 +1283,20 @@ void Component::StateUpdating::DoHandle() {
   // Adapts the repeating progress callback invoked by the installer so that
   // the callback can be posted to the main sequence instead of running
   // the callback on the sequence the installer is running on.
-  auto main_task_runner = base::SequencedTaskRunnerHandle::Get();
+  auto main_task_runner = base::SequencedTaskRunner::GetCurrentDefault();
   base::ThreadPool::CreateSequencedTaskRunner(kTaskTraits)
       ->PostTask(
           FROM_HERE,
           base::BindOnce(
-              &update_client::StartInstallOnBlockingTaskRunner,
+              &update_client::StartPuffinInstallOnBlockingTaskRunner,
               main_task_runner, component.crx_component()->pk_hash,
-              component.crx_path_, component.next_fp_,
-              component.install_params(), component.crx_component()->installer,
+              component.payload_path_, component.crx_component()->app_id,
+              component.next_fp_, component.install_params(),
+              component.crx_component()->installer,
               update_context.config->GetUnzipperFactory()->Create(),
-              update_context.config->GetPatcherFactory()->Create(),
+              component.crx_component()->allow_cached_copies
+                  ? update_context.crx_cache_
+                  : absl::nullopt,
               component.crx_component()->crx_format_requirement,
               base::BindRepeating(&Component::StateUpdating::InstallProgress,
                                   base::Unretained(this)),
@@ -1029,14 +1308,17 @@ void Component::StateUpdating::InstallProgress(int install_progress) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   auto& component = Component::State::component();
-  if (install_progress >= 0 && install_progress <= 100)
+  if (install_progress >= 0 && install_progress <= 100) {
     component.install_progress_ = install_progress;
+  }
   component.NotifyObservers(Events::COMPONENT_UPDATE_UPDATING);
 }
 
-void Component::StateUpdating::InstallComplete(ErrorCategory error_category,
-                                               int error_code,
-                                               int extra_code1) {
+void Component::StateUpdating::InstallComplete(
+    ErrorCategory error_category,
+    int error_code,
+    int extra_code1,
+    absl::optional<CrxInstaller::Result> installer_result) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   auto& component = Component::State::component();
@@ -1044,20 +1326,31 @@ void Component::StateUpdating::InstallComplete(ErrorCategory error_category,
   component.error_category_ = error_category;
   component.error_code_ = error_code;
   component.extra_code1_ = extra_code1;
+  component.installer_result_ = installer_result;
+
+  CHECK(component.crx_component_);
+  if (!component.crx_component_->allow_cached_copies &&
+      component.update_context_->crx_cache_) {
+    base::ThreadPool::CreateSequencedTaskRunner(kTaskTraits)
+        ->PostTask(FROM_HERE,
+                   base::BindOnce(&CrxCache::RemoveAll,
+                                  component.update_context_->crx_cache_->get(),
+                                  component.crx_component()->app_id));
+  }
 
   if (component.error_code_ != 0) {
     TransitionState(std::make_unique<StateUpdateError>(&component));
     return;
   }
 
-  DCHECK_EQ(ErrorCategory::kNone, component.error_category_);
-  DCHECK_EQ(0, component.error_code_);
-  DCHECK_EQ(0, component.extra_code1_);
+  CHECK_EQ(ErrorCategory::kNone, component.error_category_);
+  CHECK_EQ(0, component.error_code_);
 
-  if (component.action_run_.empty())
+  if (component.action_run_.empty()) {
     TransitionState(std::make_unique<StateUpdated>(&component));
-  else
+  } else {
     TransitionState(std::make_unique<StateRun>(&component));
+  }
 }
 
 Component::StateUpdated::StateUpdated(Component* component)
@@ -1073,58 +1366,35 @@ void Component::StateUpdated::DoHandle() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   auto& component = State::component();
-  DCHECK(component.crx_component());
+  CHECK(component.crx_component());
 
   component.crx_component_->version = component.next_version_;
   component.crx_component_->fingerprint = component.next_fp_;
 
-  component.update_context_.persisted_data->SetProductVersion(
+  component.update_context_->persisted_data->SetProductVersion(
       component.id(), component.crx_component_->version);
-  component.update_context_.persisted_data->SetFingerprint(
+  component.update_context_->persisted_data->SetFingerprint(
       component.id(), component.crx_component_->fingerprint);
 
   component.AppendEvent(component.MakeEventUpdateComplete());
 
   component.NotifyObservers(Events::COMPONENT_UPDATED);
+  metrics::RecordComponentUpdated();
   EndState();
 }
 
-Component::StateUninstalled::StateUninstalled(Component* component)
-    : State(component, ComponentState::kUninstalled) {
+Component::StatePingOnly::StatePingOnly(Component* component)
+    : State(component, ComponentState::kPingOnly) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
-Component::StateUninstalled::~StateUninstalled() {
+Component::StatePingOnly::~StatePingOnly() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
-void Component::StateUninstalled::DoHandle() {
+void Component::StatePingOnly::DoHandle() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  auto& component = State::component();
-  DCHECK(component.crx_component());
-
-  component.AppendEvent(component.MakeEventUninstalled());
-
-  EndState();
-}
-
-Component::StateRegistration::StateRegistration(Component* component)
-    : State(component, ComponentState::kRegistration) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-}
-
-Component::StateRegistration::~StateRegistration() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-}
-void Component::StateRegistration::DoHandle() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  auto& component = State::component();
-  DCHECK(component.crx_component());
-
-  component.AppendEvent(component.MakeEventRegistration());
-
+  CHECK(State::component().crx_component());
   EndState();
 }
 
@@ -1139,7 +1409,7 @@ void Component::StateRun::DoHandle() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   const auto& component = State::component();
-  DCHECK(component.crx_component());
+  CHECK(component.crx_component());
 
   action_runner_ = std::make_unique<ActionRunner>(component);
   action_runner_->Run(

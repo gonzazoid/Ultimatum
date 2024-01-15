@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/feature_list.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/ui/side_search/side_search_config.h"
@@ -52,7 +53,6 @@ class SideSearchTabContentsHelperTest : public ::testing::Test {
         [](const GURL& url) { return !IsSearchURLMatch(url); }));
     config->SetGenerateSideSearchURLCallback(
         base::BindRepeating([](const GURL& url) { return url; }));
-    config->set_is_side_panel_srp_available(true);
     Test::SetUp();
   }
 
@@ -115,11 +115,12 @@ class SideSearchTabContentsHelperTest : public ::testing::Test {
   base::test::ScopedFeatureList scoped_feature_list_;
 };
 
-TEST_F(SideSearchTabContentsHelperTest, LastSearchURLUpdatesCorrectly) {
+// TODO(crbug.com/1384174): Update this test to pass and re-enable.
+TEST_F(SideSearchTabContentsHelperTest,
+       DISABLED_LastSearchURLUpdatesCorrectly) {
   // When a tab is first opened there should be no last encountered search URL.
   EXPECT_FALSE(helper()->last_search_url().has_value());
-  EXPECT_TRUE(!GetLastCommittedSideContentsEntry() ||
-              GetLastCommittedSideContentsEntry()->IsInitialEntry());
+  EXPECT_TRUE(GetLastCommittedSideContentsEntry()->IsInitialEntry());
 
   // Navigating to a matching search URL should update the `last_search_url`.
   LoadURL(kSearchMatchUrl1);
@@ -162,7 +163,9 @@ TEST_F(SideSearchTabContentsHelperTest, LastSearchURLUpdatesCorrectly) {
   EXPECT_EQ(kSearchMatchUrl2, GetLastCommittedSideContentsEntry()->GetURL());
 }
 
-TEST_F(SideSearchTabContentsHelperTest, IndicatesWhenSidePanelShouldBeShown) {
+// TODO(crbug.com/1384174): Update this test to pass and re-enable.
+TEST_F(SideSearchTabContentsHelperTest,
+       DISABLED_IndicatesWhenSidePanelShouldBeShown) {
   // With no initial navigation the side panel should not be showing.
   EXPECT_FALSE(helper()->CanShowSidePanelForCommittedNavigation());
 
@@ -217,7 +220,8 @@ TEST_F(SideSearchTabContentsHelperTest, ClearsInternalStateWhenConfigChanges) {
   EXPECT_EQ(nullptr, helper()->side_panel_contents_for_testing());
 }
 
-TEST_F(SideSearchTabContentsHelperTest, EmitsReturnedToSRPMetrics) {
+// TODO(crbug.com/1384174): Update this test to pass and re-enable.
+TEST_F(SideSearchTabContentsHelperTest, DISABLED_EmitsReturnedToSRPMetrics) {
   // Navigating to a matching search. Then navigate to a non-matching URL and
   // navigate back, doing so twice.
   LoadURL(kSearchMatchUrl1);

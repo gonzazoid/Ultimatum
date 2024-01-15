@@ -18,8 +18,8 @@ BASE_FEATURE(kEnableNeuralPalmAdaptiveHold,
              "EnableNeuralPalmAdaptiveHold",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
-BASE_FEATURE(kEnableNeuralStylusReportFilter,
-             "EnableNeuralStylusReportFilter",
+BASE_FEATURE(kEnableEdgeDetection,
+             "EnableEdgeDetection",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 // TODO(b/171249701): Remove this flag when we can support this in all cases.
@@ -46,7 +46,11 @@ BASE_FEATURE(kLibinputHandleTouchpad,
 
 BASE_FEATURE(kEnableFakeKeyboardHeuristic,
              "EnableFakeKeyboardHeuristic",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+BASE_FEATURE(kEnableFakeMouseHeuristic,
+             "EnableFakeMouseHeuristic",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 extern const base::FeatureParam<std::string> kNeuralPalmRadiusPolynomial{
     &kEnableNeuralPalmDetectionFilter, "neural_palm_radius_polynomial", ""};

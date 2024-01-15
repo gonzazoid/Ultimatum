@@ -7,19 +7,20 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "media/base/audio_decoder_config.h"
 #include "media/base/audio_renderer.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/media_log.h"
 #include "media/base/media_resource.h"
 #include "media/base/media_switches.h"
@@ -222,7 +223,7 @@ void RendererImpl::Flush(base::OnceClosure flush_cb) {
                                     TRACE_ID_LOCAL(this));
 
   if (state_ == STATE_FLUSHED) {
-    flush_cb_ = BindToCurrentLoop(std::move(flush_cb));
+    flush_cb_ = base::BindPostTaskToCurrentDefault(std::move(flush_cb));
     FinishFlush();
     return;
   }
@@ -351,10 +352,10 @@ bool RendererImpl::GetWallClockTimes(
 }
 
 bool RendererImpl::HasEncryptedStream() {
-  std::vector<DemuxerStream*> demuxer_streams =
+  std::vector<raw_ptr<DemuxerStream, VectorExperimental>> demuxer_streams =
       media_resource_->GetAllStreams();
 
-  for (auto* stream : demuxer_streams) {
+  for (media::DemuxerStream* stream : demuxer_streams) {
     if (stream->type() == DemuxerStream::AUDIO &&
         stream->audio_decoder_config().is_encrypted())
       return true;
@@ -445,6 +446,14 @@ void RendererImpl::InitializeVideoRenderer() {
 
   if (!video_stream) {
     video_renderer_.reset();
+
+    // Something has disabled all audio and video streams, so fail
+    // initialization.
+    if (!audio_renderer_) {
+      FinishInitialization(PIPELINE_ERROR_COULD_NOT_RENDER);
+      return;
+    }
+
     task_runner_->PostTask(
         FROM_HERE, base::BindOnce(&RendererImpl::OnVideoRendererInitializeDone,
                                   weak_this_, PIPELINE_OK));
@@ -1053,6 +1062,10 @@ void RendererImpl::OnEnabledAudioTracksChanged(
   audio_renderer_->Flush(base::BindOnce(&RendererImpl::CleanUpTrackChange,
                                         weak_this_, std::move(fix_stream_cb),
                                         &audio_ended_, &audio_playing_));
+}
+
+RendererType RendererImpl::GetRendererType() {
+  return RendererType::kRendererImpl;
 }
 
 }  // namespace media

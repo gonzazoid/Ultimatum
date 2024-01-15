@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/mojom/notifications/notification.mojom-blink.h"
 #include "third_party/blink/public/mojom/permissions/permission.mojom-blink.h"
@@ -75,7 +75,9 @@ mojom::blink::PermissionStatus NotificationManager::GetPermissionStatus() {
       "Blink.NotificationManager.GetPermissionStatusTime");
   mojom::blink::PermissionStatus permission_status;
   if (!GetNotificationService()->GetPermissionStatus(&permission_status)) {
-    NOTREACHED();
+    // The browser-side Mojo connection was closed, disabling notifications.
+    // Hitting this code path means the mojo call is no longer bound to the
+    // browser process.
     return mojom::blink::PermissionStatus::DENIED;
   }
 
@@ -176,10 +178,6 @@ void NotificationManager::DisplayPersistentNotification(
   // an indication that something has gone wrong.
   size_t author_data_size =
       notification_data->data.has_value() ? notification_data->data->size() : 0;
-
-  base::UmaHistogramCounts1000(
-      "Notifications.AuthorDataSize",
-      base::saturated_cast<base::HistogramBase::Sample>(author_data_size));
 
   if (author_data_size >
       mojom::blink::NotificationData::kMaximumDeveloperDataSize) {

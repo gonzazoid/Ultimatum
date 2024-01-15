@@ -12,7 +12,6 @@
     {
       "name": "LayoutNGBlockFlow HTML",
       "bounds": [600, 8],
-      "contentsOpaqueForText": true,
       "drawsContent": false
     }
   ]
@@ -31,7 +30,6 @@
     {
       "name": "LayoutNGBlockFlow HTML",
       "bounds": [400, 8],
-      "contentsOpaqueForText": true,
       "drawsContent": false
     }
   ]
@@ -50,7 +48,6 @@
     {
       "name": "LayoutNGBlockFlow HTML",
       "bounds": [400, 8],
-      "contentsOpaqueForText": true,
       "drawsContent": false
     }
   ]
@@ -69,7 +66,6 @@
     {
       "name": "LayoutNGBlockFlow HTML",
       "bounds": [800, 8],
-      "contentsOpaqueForText": true,
       "drawsContent": false
     }
   ]

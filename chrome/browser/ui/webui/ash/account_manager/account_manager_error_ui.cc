@@ -4,9 +4,10 @@
 
 #include "chrome/browser/ui/webui/ash/account_manager/account_manager_error_ui.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/branding_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/browser_resources.h"
@@ -18,14 +19,14 @@ namespace ash {
 
 AccountManagerErrorUI::AccountManagerErrorUI(content::WebUI* web_ui)
     : ui::WebDialogUI(web_ui), weak_factory_(this) {
-  content::WebUIDataSource* html_source = content::WebUIDataSource::Create(
-      chrome::kChromeUIAccountManagerErrorHost);
+  content::WebUIDataSource* html_source =
+      content::WebUIDataSource::CreateAndAdd(
+          Profile::FromWebUI(web_ui), chrome::kChromeUIAccountManagerErrorHost);
+  webui::EnableTrustedTypesCSP(html_source);
 
   web_ui->RegisterMessageCallback(
       "closeDialog", base::BindRepeating(&WebDialogUI::CloseDialog,
                                          weak_factory_.GetWeakPtr()));
-
-  html_source->DisableTrustedTypesCSP();
 
   html_source->UseStringsJs();
   html_source->EnableReplaceI18nInJS();
@@ -45,17 +46,16 @@ AccountManagerErrorUI::AccountManagerErrorUI(content::WebUI* web_ui)
 #endif
 
   // Add required resources.
-  html_source->AddResourcePath("account_manager_shared_css.js",
+  html_source->AddResourcePath("account_manager_shared.css.js",
                                IDR_ACCOUNT_MANAGER_SHARED_CSS_JS);
   html_source->AddResourcePath("account_manager_browser_proxy.js",
                                IDR_ACCOUNT_MANAGER_BROWSER_PROXY_JS);
   html_source->AddResourcePath("account_manager_error_app.js",
                                IDR_ACCOUNT_MANAGER_ERROR_APP_JS);
+  html_source->AddResourcePath("account_manager_error_app.html.js",
+                               IDR_ACCOUNT_MANAGER_ERROR_APP_HTML_JS);
 
   html_source->SetDefaultResource(IDR_ACCOUNT_MANAGER_ERROR_HTML);
-
-  Profile* profile = Profile::FromWebUI(web_ui);
-  content::WebUIDataSource::Add(profile, html_source);
 }
 
 AccountManagerErrorUI::~AccountManagerErrorUI() = default;

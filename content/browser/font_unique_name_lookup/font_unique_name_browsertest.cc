@@ -9,7 +9,7 @@
 #include "build/build_config.h"
 #include "content/browser/devtools/protocol/devtools_protocol_test_support.h"
 #include "content/browser/web_contents/web_contents_impl.h"
-#include "content/public/common/content_features.h"
+#include "content/common/features.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test_utils.h"
@@ -18,7 +18,6 @@
 
 #if BUILDFLAG(IS_WIN)
 #include "base/files/scoped_temp_dir.h"
-#include "content/browser/renderer_host/dwrite_font_lookup_table_builder_win.h"
 #endif
 
 namespace content {
@@ -33,8 +32,6 @@ const char* const kExpectedFontFamilyNames[] = {"AndroidClock",
                                                 "Noto Sans Bengali",
                                                 "Noto Sans Bengali UI",
                                                 "Noto Sans Devanagari",
-                                                "Noto Sans Devanagari",
-                                                "Noto Sans Devanagari UI",
                                                 "Noto Sans Devanagari UI",
                                                 "Noto Sans Kannada",
                                                 "Noto Sans Kannada",
@@ -45,12 +42,8 @@ const char* const kExpectedFontFamilyNames[] = {"AndroidClock",
                                                 "Noto Sans Lao UI",
                                                 "Noto Sans Lao UI",
                                                 "Noto Sans Malayalam",
-                                                "Noto Sans Malayalam",
-                                                "Noto Sans Malayalam UI",
                                                 "Noto Sans Malayalam UI",
                                                 "Noto Sans Tamil",
-                                                "Noto Sans Tamil",
-                                                "Noto Sans Tamil UI",
                                                 "Noto Sans Tamil UI",
                                                 "Noto Sans Telugu",
                                                 "Noto Sans Telugu",
@@ -93,7 +86,7 @@ const char* const kExpectedFontFamilyNames[] = {"Ahem",
                                                 "Tinos",
                                                 "Mukti Narrow",
                                                 "Tinos"};
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(IS_APPLE)
 const char* const kExpectedFontFamilyNames[] = {"American Typewriter",
                                                 "Arial Narrow",
                                                 "Baskerville",
@@ -137,14 +130,8 @@ class FontUniqueNameBrowserTest : public DevToolsProtocolTest {
 
 // TODO(crbug.com/949181): Make this work on Fuchsia.
 #if !BUILDFLAG(IS_FUCHSIA)
-// TODO(crbug.com/1270151): Fix this on Android 11 and 12.
-#if BUILDFLAG(IS_ANDROID)
-#define MAYBE_ContentLocalFontsMatching DISABLED_ContentLocalFontsMatching
-#else
-#define MAYBE_ContentLocalFontsMatching ContentLocalFontsMatching
-#endif
 IN_PROC_BROWSER_TEST_F(FontUniqueNameBrowserTest,
-                       MAYBE_ContentLocalFontsMatching) {
+                       ContentLocalFontsMatching) {
   LoadAndWait("/font_src_local_matching.html");
   Attach();
 

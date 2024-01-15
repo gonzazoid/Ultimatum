@@ -51,14 +51,14 @@ class Node : public APIObjectImpl<Node, APIObject::kNode> {
   };
 
   // Constructs a new node of the given `type`, using `driver` to support IPC.
-  // Note that `driver` must outlive the Node. `driver_node` is an arbitrary
-  // driver-specific handle that may be used for additional context when
-  // interfacing with the driver regarding this node.
-  Node(Type type, const IpczDriver& driver, IpczDriverHandle driver_node);
+  // Note that `driver` must outlive the Node.
+  Node(Type type,
+       const IpczDriver& driver,
+       const IpczCreateNodeOptions* options = nullptr);
 
   Type type() const { return type_; }
   const IpczDriver& driver() const { return driver_; }
-  IpczDriverHandle driver_node() const { return driver_node_; }
+  const IpczCreateNodeOptions& options() const { return options_; }
 
   // APIObject:
   IpczResult Close() override;
@@ -76,12 +76,6 @@ class Node : public APIObjectImpl<Node, APIObject::kNode> {
 
   // Gets a reference to the node's broker link, if it has one.
   Ref<NodeLink> GetBrokerLink();
-
-  // Sets this node's assigned name as given by a broker. NodeConnector is
-  // responsible for calling on non-broker Nodes this after receiving the
-  // expected handshake from a broker. Must not be called on broker nodes, as
-  // they assign their own name at construction time.
-  void SetAssignedName(const NodeName& name);
 
   // Registers a new connection for the given `remote_node_name`.
   bool AddConnection(const NodeName& remote_node_name, Connection connection);
@@ -156,8 +150,10 @@ class Node : public APIObjectImpl<Node, APIObject::kNode> {
   // the relay source directly.
   bool AcceptRelayedMessage(msg::AcceptRelayedMessage& accept);
 
-  // Drops this node's connection to the named node, if one exists.
-  void DropConnection(const OperationContext& context, const NodeName& name);
+  // Drops the connection running over `connection_link` between this node and
+  // another.
+  void DropConnection(const OperationContext& context,
+                      const NodeLink& connection_link);
 
   // Asynchronously waits for this Node to acquire a broker link and then
   // invokes `callback` with it. If this node already has a broker link then the
@@ -192,7 +188,7 @@ class Node : public APIObjectImpl<Node, APIObject::kNode> {
 
   const Type type_;
   const IpczDriver& driver_;
-  const IpczDriverHandle driver_node_;
+  const IpczCreateNodeOptions options_;
 
   absl::Mutex mutex_;
 

@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/loader/pending_link_preload.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/loader/link_loader.h"
 #include "third_party/blink/renderer/core/loader/preload_helper.h"
@@ -39,7 +40,7 @@ class PendingLinkPreload::FinishObserver final : public ResourceFinishObserver {
     return "PendingLinkPreload::FinishObserver";
   }
 
-  Resource* GetResource() { return resource_; }
+  Resource* GetResource() { return resource_.Get(); }
   void Dispose() {
     if (!resource_)
       return;
@@ -92,7 +93,7 @@ void PendingLinkPreload::NotifyFinished() {
 void PendingLinkPreload::UnblockRendering() {
   if (RenderBlockingResourceManager* manager =
           document_->GetRenderBlockingResourceManager()) {
-    manager->RemovePendingPreload(*this);
+    manager->RemovePendingFontPreload(*this);
   }
 }
 
@@ -109,7 +110,7 @@ void PendingLinkPreload::Dispose() {
   document_->RemovePendingLinkHeaderPreloadIfNeeded(*this);
 }
 
-Resource* PendingLinkPreload::GetResourceForTesting() {
+Resource* PendingLinkPreload::GetResourceForTesting() const {
   return finish_observer_ ? finish_observer_->GetResource() : nullptr;
 }
 

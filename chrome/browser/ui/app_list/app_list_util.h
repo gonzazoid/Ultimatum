@@ -8,7 +8,8 @@
 #include "build/chromeos_buildflags.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ui/app_list/app_list_syncable_service.h"
+#include "ash/public/cpp/app_list/app_list_types.h"
+#include "chrome/browser/ash/app_list/app_list_syncable_service.h"
 
 namespace ash {
 struct AppListItemMetadata;
@@ -18,16 +19,16 @@ struct AppListItemMetadata;
 // Returns whether the app launcher has been enabled.
 bool IsAppLauncherEnabled();
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 namespace app_list {
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
 // Generates app list item meta data from the given sync item. Note that
 // `AppListItemMetadata` has more attributes than `SyncItem`. Those extra
 // attributes are not covered by this method.
 std::unique_ptr<ash::AppListItemMetadata> GenerateItemMetadataFromSyncItem(
     const app_list::AppListSyncableService::SyncItem& sync_item);
+#endif
 
 }  // namespace app_list
-#endif
 
 #endif  // CHROME_BROWSER_UI_APP_LIST_APP_LIST_UTIL_H_

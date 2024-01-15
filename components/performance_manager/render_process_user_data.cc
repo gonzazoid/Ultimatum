@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "build/build_config.h"
 #include "components/performance_manager/graph/process_node_impl.h"
@@ -31,9 +31,12 @@ RenderProcessUserData::RenderProcessUserData(
     content::RenderProcessHost* render_process_host)
     : host_(render_process_host) {
   host_->AddObserver(this);
+  base::TaskPriority initial_priority = host_->IsSpare()
+                                            ? base::TaskPriority::LOWEST
+                                            : base::TaskPriority::HIGHEST;
   process_node_ = PerformanceManagerImpl::CreateProcessNode(
-      content::PROCESS_TYPE_RENDERER,
-      RenderProcessHostProxy(RenderProcessHostId(host_->GetID())));
+      RenderProcessHostProxy(RenderProcessHostId(host_->GetID())),
+      initial_priority);
 }
 
 RenderProcessUserData::~RenderProcessUserData() {

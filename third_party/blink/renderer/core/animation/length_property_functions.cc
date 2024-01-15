@@ -207,6 +207,9 @@ bool LengthPropertyFunctions::GetLength(const CSSProperty& property,
     case CSSPropertyID::kTextIndent:
       result = style.TextIndent();
       return true;
+    case CSSPropertyID::kTextUnderlineOffset:
+      result = style.TextUnderlineOffset();
+      return true;
     case CSSPropertyID::kTop:
       result = style.Top();
       return true;
@@ -320,7 +323,6 @@ bool LengthPropertyFunctions::GetLength(const CSSProperty& property,
 }
 
 bool LengthPropertyFunctions::SetLength(const CSSProperty& property,
-                                        ComputedStyle& style,
                                         ComputedStyleBuilder& builder,
                                         const Length& value) {
   switch (property.PropertyID()) {
@@ -342,7 +344,7 @@ bool LengthPropertyFunctions::SetLength(const CSSProperty& property,
       builder.SetFlexBasis(value);
       return true;
     case CSSPropertyID::kHeight:
-      style.SetHeight(value);
+      builder.SetHeight(value);
       return true;
     case CSSPropertyID::kLeft:
       builder.SetLeft(value);
@@ -399,7 +401,7 @@ bool LengthPropertyFunctions::SetLength(const CSSProperty& property,
       builder.SetRight(value);
       return true;
     case CSSPropertyID::kShapeMargin:
-      style.SetShapeMargin(value);
+      builder.SetShapeMargin(value);
       return true;
     case CSSPropertyID::kStrokeDashoffset:
       builder.SetStrokeDashOffset(value);
@@ -408,7 +410,7 @@ bool LengthPropertyFunctions::SetLength(const CSSProperty& property,
       builder.SetTop(value);
       return true;
     case CSSPropertyID::kWidth:
-      style.SetWidth(value);
+      builder.SetWidth(value);
       return true;
     case CSSPropertyID::kWebkitPerspectiveOriginX:
       builder.SetPerspectiveOriginX(value);

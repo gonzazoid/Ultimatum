@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "dbus/object_path.h"
 #include "dbus/property.h"
 #include "device/bluetooth/bluetooth_export.h"
@@ -81,6 +81,9 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothDeviceClient : public BluezDBusClient {
 
     // Indicates that the device is currently paired. Read-only.
     dbus::Property<bool> paired;
+
+    // Indicates that the device is currently bonded. Read-only.
+    dbus::Property<bool> bonded;
 
     // Indicates that the device is currently connected via any transports.
     // Read-only.

@@ -8,31 +8,23 @@
 #include <memory>
 #include <string>
 
-#include "build/chromeos_buildflags.h"
+#include "base/memory/raw_ptr.h"
+#include "base/timer/timer.h"
 #include "components/exo/data_device.h"
 #include "components/exo/data_offer_observer.h"
 #include "components/exo/data_source_observer.h"
+#include "components/exo/extended_drag_source.h"
 #include "components/exo/surface_observer.h"
 #include "components/exo/wm_helper.h"
 #include "ui/aura/client/drag_drop_client_observer.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom-forward.h"
 #include "ui/gfx/geometry/point_f.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "components/exo/extended_drag_source.h"
-#endif
-
 class SkBitmap;
 
 namespace ash {
 class DragDropController;
 }  // namespace ash
-
-namespace aura {
-namespace client {
-class DragDropClient;
-}  // namespace client
-}  // namespace aura
 
 namespace ui {
 class OSExchangeData;
@@ -51,9 +43,7 @@ class ScopedSurface;
 // or if another drag operation races with this one to start and wins.
 class DragDropOperation : public DataSourceObserver,
                           public SurfaceObserver,
-#if BUILDFLAG(IS_CHROMEOS_ASH)
                           public ExtendedDragSource::Observer,
-#endif
                           public aura::client::DragDropClientObserver {
  public:
   // Create an operation for a drag-drop originating from a wayland app.
@@ -71,6 +61,9 @@ class DragDropOperation : public DataSourceObserver,
   // Abort the operation if it hasn't been started yet, otherwise do nothing.
   void AbortIfPending();
 
+  // The drag drop has started.
+  bool started() const { return started_; }
+
   // DataSourceObserver:
   void OnDataSourceDestroying(DataSource* source) override;
 
@@ -79,12 +72,10 @@ class DragDropOperation : public DataSourceObserver,
 
   // aura::client::DragDropClientObserver:
   void OnDragStarted() override;
-#if BUILDFLAG(IS_CHROMEOS_ASH)
   void OnDragActionsChanged(int actions) override;
 
   // ExtendedDragSource::Observer:
   void OnExtendedDragSourceDestroying(ExtendedDragSource* source) override;
-#endif
 
  private:
   class IconSurface;
@@ -101,14 +92,12 @@ class DragDropOperation : public DataSourceObserver,
 
   void OnDragIconCaptured(const SkBitmap& icon_bitmap);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
   // Called when the focused window is a Lacros window and a source
   // DataTransferEndpoint is found in the available MIME types. This
   // is currently used to synchronize drag source metadata from
   // Lacros to Ash.
   void OnDataTransferEndpointRead(const std::string& mime_type,
                                   std::u16string data);
-#endif
 
   void OnTextRead(const std::string& mime_type, std::u16string data);
   void OnHTMLRead(const std::string& mime_type, std::u16string data);
@@ -128,26 +117,21 @@ class DragDropOperation : public DataSourceObserver,
   // directly. Use ScheduleStartDragDropOperation instead.
   void StartDragDropOperation();
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
   void ResetExtendedDragSource();
-#endif
 
   std::unique_ptr<ScopedDataSource> source_;
   std::unique_ptr<ScopedSurface> icon_;
   std::unique_ptr<ScopedSurface> origin_;
   gfx::PointF drag_start_point_;
   std::unique_ptr<ui::OSExchangeData> os_exchange_data_;
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  ash::DragDropController* drag_drop_controller_;
-#else
-  aura::client::DragDropClient* drag_drop_controller_;
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+  raw_ptr<ash::DragDropController> drag_drop_controller_;
 
   base::RepeatingClosure counter_;
 
   // Stores whether this object has just started a drag operation. If so, we
-  // want to ignore the OnDragStarted event.
-  bool started_by_this_object_ = false;
+  // want to ignore the OnDragStarted event, and self destruct the object when
+  // completed.
+  bool started_ = false;
 
   bool captured_icon_ = false;
 
@@ -159,9 +143,11 @@ class DragDropOperation : public DataSourceObserver,
 
   ui::mojom::DragEventSource event_source_;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  ExtendedDragSource* extended_drag_source_;
-#endif
+  raw_ptr<ExtendedDragSource> extended_drag_source_;
+
+  // TODO(crbug.com/1371493): Remove this once the issue is fixed.
+  base::OneShotTimer start_drag_drop_timer_;
+  void DragDataReadTimeout();
 
   base::WeakPtrFactory<DragDropOperation> weak_ptr_factory_{this};
 };

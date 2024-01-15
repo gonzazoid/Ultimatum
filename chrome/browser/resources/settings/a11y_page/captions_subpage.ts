@@ -4,28 +4,29 @@
 
 /**
  * @fileoverview 'settings-captions' is a component for showing captions
- * settings subpage (chrome://settings/captions, and
- * chrome://os-settings/manageAccessibility/captions on Chrome OS).
+ * settings on chrome://settings/captions.
  */
 
 import '//resources/cr_elements/cr_shared_style.css.js';
-import '../controls/settings_slider.js';
+import '/shared/settings/controls/settings_slider.js';
 import '../settings_shared.css.js';
+import '../strings.m.js';
 import './live_caption_section.js';
 
+import {loadTimeData} from '//resources/js/load_time_data.js';
 import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {FontsBrowserProxyImpl, FontsData} from '/shared/settings/appearance_page/fonts_browser_proxy.js';
+import {DropdownMenuOptionList} from '/shared/settings/controls/settings_dropdown_menu.js';
+import {SettingsToggleButtonElement} from '/shared/settings/controls/settings_toggle_button.js';
+import {PrefsMixin} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
 
-import {FontsBrowserProxyImpl, FontsData} from '../appearance_page/fonts_browser_proxy.js';
-import {DropdownMenuOptionList} from '../controls/settings_dropdown_menu.js';
-import {SettingsToggleButtonElement} from '../controls/settings_toggle_button.js';
-import {loadTimeData} from '../i18n_setup.js';
-import {PrefsMixin} from '../prefs/prefs_mixin.js';
+import {LanguageHelper, LanguagesModel} from '../languages_page/languages_types.js';
 
 import {getTemplate} from './captions_subpage.html.js';
 
 const SettingsCaptionsElementBase = PrefsMixin(PolymerElement);
 
-class SettingsCaptionsElement extends SettingsCaptionsElementBase {
+export class SettingsCaptionsElement extends SettingsCaptionsElementBase {
   static get is() {
     return 'settings-captions';
   }
@@ -40,6 +41,18 @@ class SettingsCaptionsElement extends SettingsCaptionsElementBase {
         type: Object,
         notify: true,
       },
+
+
+      /**
+       * Read-only reference to the languages model provided by the
+       * 'settings-languages' instance.
+       */
+      languages: {
+        type: Object,
+        notify: true,
+      },
+
+      languageHelper: Object,
 
       /**
        * List of options for the background opacity drop-down menu.
@@ -141,6 +154,12 @@ class SettingsCaptionsElement extends SettingsCaptionsElementBase {
 
       /**
        * List of options for the text shadow drop-down menu.
+       *
+       * Other clients are relying on these values to determine text shadow type
+       * from preference. Please update the following files if any of these
+       * values are changed:
+       * https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/resources/ash/settings/os_a11y_page/captions_subpage.ts;l=142-170;drc=0918c7f73782a9575396f0c6b80a722b5a3d255a
+       * https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ash/arc/intent_helper/arc_settings_service.cc;l=86-94;drc=a782e6ac5124014b8473c9e7e445d799624b532c
        */
       textShadowOptions_: {
         readOnly: true,
@@ -198,6 +217,8 @@ class SettingsCaptionsElement extends SettingsCaptionsElementBase {
     };
   }
 
+  languages: LanguagesModel;
+  languageHelper: LanguageHelper;
   private readonly backgroundOpacityOptions_: DropdownMenuOptionList;
   private readonly colorOptions_: DropdownMenuOptionList;
   private textFontOptions_: DropdownMenuOptionList;
@@ -238,7 +259,8 @@ class SettingsCaptionsElement extends SettingsCaptionsElementBase {
    * @return the font family as a CSS property value.
    */
   private getFontFamily_(): string {
-    const fontFamily = this.getPref('accessibility.captions.text_font').value;
+    const fontFamily =
+        this.getPref<string>('accessibility.captions.text_font').value;
 
     // Return the preference value or the default font family for
     // video::-webkit-media-text-track-container defined in mediaControls.css.
@@ -249,7 +271,7 @@ class SettingsCaptionsElement extends SettingsCaptionsElementBase {
    * @return the background color as a RGBA string.
    */
   private computeBackgroundColor_(): string {
-    const backgroundColor = this.formatRGAString_(
+    const backgroundColor = this.formatRgaString_(
         'accessibility.captions.background_color',
         'accessibility.captions.background_opacity');
 
@@ -262,7 +284,7 @@ class SettingsCaptionsElement extends SettingsCaptionsElementBase {
    * @return the text color as a RGBA string.
    */
   private computeTextColor_(): string {
-    const textColor = this.formatRGAString_(
+    const textColor = this.formatRgaString_(
         'accessibility.captions.text_color',
         'accessibility.captions.text_opacity');
 
@@ -279,7 +301,7 @@ class SettingsCaptionsElement extends SettingsCaptionsElementBase {
    *     value as a percentage.
    * @return The formatted RGBA string.
    */
-  private formatRGAString_(colorPreference: string, opacityPreference: string):
+  private formatRgaString_(colorPreference: string, opacityPreference: string):
       string {
     const color = this.getPref(colorPreference).value;
 
@@ -288,7 +310,7 @@ class SettingsCaptionsElement extends SettingsCaptionsElementBase {
     }
 
     return 'rgba(' + color + ',' +
-        parseInt(this.getPref(opacityPreference).value, 10) / 100.0 + ')';
+        this.getPref<number>(opacityPreference).value / 100.0 + ')';
   }
 
   /**
@@ -301,6 +323,12 @@ class SettingsCaptionsElement extends SettingsCaptionsElementBase {
     }
 
     return `${+ size.slice(0, -1) / 100}%`;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'settings-captions': SettingsCaptionsElement;
   }
 }
 

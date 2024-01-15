@@ -7,6 +7,7 @@
   const testStart = Date.now();
   const testLimit = 5 * 60 * 1000;  // Way longer than the test may take.
 
+  dp.Target.setAutoAttach({autoAttach: true, flatten: true, waitForDebuggerOnStart: false});
   const TracingHelper =
       await testRunner.loadScript('../resources/tracing-test.js');
   const tracingHelper = new TracingHelper(testRunner, session);
@@ -37,7 +38,7 @@
 
   const auctionJs = `
     navigator.runAdAuction({
-      decisionLogicUrl: "${base}fledge_decision_logic.js.php",
+      decisionLogicURL: "${base}fledge_decision_logic.js.php",
       seller: "https://a.test:8443",
       interestGroupBuyers: ["https://a.test:8443"]})`;
 
@@ -61,13 +62,22 @@
     }
   }
 
-  const sortedRequestInfo = [...requestIdToInfo.values()].sort((a, b) => {
+  let sortedRequestInfo = [...requestIdToInfo.values()].sort((a, b) => {
     if (a.url < b.url)
       return -1;
     else if (a.url === b.url)
       return 0;
     return +1;
   });
+
+  // There may racily be two bidding logic loads, depending on how far along running reportings scripts
+  // has advanced, which is done after auction completion is signalled. If there are two such loads,
+  // ignore the second one.
+  if (sortedRequestInfo.length > 2 &&
+      sortedRequestInfo[0].endsWith("fledge_bidding_logic.js.php") &&
+      sortedRequestInfo[1].endsWith("fledge_bidding_logic.js.php")) {
+    sortedRequestInfo = sortedRequestInfo.splice(1);
+  }
 
   for (let requestInfo of sortedRequestInfo) {
     testRunner.log(requestInfo.url + ':');
@@ -80,6 +90,7 @@
         validateRelativeMs(data.timing, 'connectStart');
         validateRelativeMs(data.timing, 'dnsEnd');
         validateRelativeMs(data.timing, 'dnsStart');
+        validateRelativeMs(data.timing, 'receiveHeadersStart');
         validateRelativeMs(data.timing, 'receiveHeadersEnd');
         validateRelativeMs(data.timing, 'sendEnd');
         validateRelativeMs(data.timing, 'sendStart');

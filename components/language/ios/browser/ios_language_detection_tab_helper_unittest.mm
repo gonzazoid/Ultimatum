@@ -11,17 +11,15 @@
 #import "base/test/scoped_feature_list.h"
 #import "base/test/task_environment.h"
 #import "base/values.h"
+#import "components/language/ios/browser/language_detection_java_script_feature.h"
 #import "components/prefs/pref_registry_simple.h"
 #import "components/prefs/testing_pref_service.h"
 #import "components/translate/core/browser/translate_pref_names.h"
 #import "components/translate/core/common/translate_util.h"
 #include "components/translate/core/language_detection/language_detection_model.h"
+#import "ios/web/public/test/fakes/fake_web_frames_manager.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
 #import "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace language {
 
@@ -31,6 +29,12 @@ class IOSLanguageDetectionTabHelperTest : public PlatformTest {
     PlatformTest::SetUp();
     scoped_feature_list_.InitWithFeatures(
         {translate::kTFLiteLanguageDetectionEnabled}, {});
+
+    auto frames_manager = std::make_unique<web::FakeWebFramesManager>();
+    web::ContentWorld content_world =
+        language::LanguageDetectionJavaScriptFeature::GetInstance()
+            ->GetSupportedContentWorld();
+    web_state_.SetWebFramesManager(content_world, std::move(frames_manager));
 
     pref_service_.registry()->RegisterBooleanPref(
         translate::prefs::kOfferTranslateEnabled, true);

@@ -7,6 +7,7 @@
 #include <string>
 
 #include "base/logging.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/ash/scanning/zeroconf_scanner_detector.h"
@@ -39,15 +40,21 @@ void SetSchemeAndProtocol(const std::string& service_type,
 // name on success and an empty string on failure.
 std::string CreateDeviceName(const std::string& name,
                              const std::string& scheme,
-                             const std::string& rs,
+                             const absl::optional<std::string>& rs,
                              const net::IPAddress& ip_address,
                              int port,
                              const std::string& backend_prefix) {
   std::string path;
-  if (rs == "none")
+  if (!rs.has_value()) {
     path = "eSCL/";
-  else if (!rs.empty())
-    path = rs + "/";
+  } else if (!rs->empty()) {
+    // Some scanners report rs=/eSCL instead of rs=eSCL. This causes problems
+    // without our URL construction, so trim any leading slashes here. We also
+    // trim trailing slashes in case any scanners report rs=eSCL/, since we
+    // append a slash after.
+    base::TrimString(rs.value(), "/", &path);
+    path += "/";
+  }
 
   // Replace colons in the instance name to prevent them from breaking
   // sane-airscan's device name parsing logic.
@@ -73,7 +80,11 @@ std::string CreateDeviceName(const std::string& name,
 
 absl::optional<Scanner> CreateSaneScanner(const std::string& name,
                                           const std::string& service_type,
-                                          const std::string& rs,
+                                          const std::string& manufacturer,
+                                          const std::string& model,
+                                          const std::string& uuid,
+                                          const absl::optional<std::string>& rs,
+                                          const std::vector<std::string>& pdl,
                                           const net::IPAddress& ip_address,
                                           int port,
                                           bool usable) {
@@ -84,17 +95,24 @@ absl::optional<Scanner> CreateSaneScanner(const std::string& name,
   // If the name contains "EPSON" and is a generic service type, use the
   // "epsonds:net" backend.
   if (service_type == ZeroconfScannerDetector::kGenericScannerServiceType &&
-      base::StartsWith(name, "EPSON"))
+      base::StartsWith(name, "EPSON")) {
     device_name = base::StringPrintf("%s:%s", "epsonds:net",
                                      ip_address.ToString().c_str());
-  else if (service_type != ZeroconfScannerDetector::kGenericScannerServiceType)
+  } else if (service_type !=
+             ZeroconfScannerDetector::kGenericScannerServiceType) {
     device_name =
         CreateDeviceName(name, scheme, rs, ip_address, port, "airscan:escl");
-  if (device_name.empty())
+  }
+  if (device_name.empty()) {
     return absl::nullopt;
+  }
 
   Scanner scanner;
   scanner.display_name = name;
+  scanner.manufacturer = manufacturer;
+  scanner.model = model;
+  scanner.uuid = uuid;
+  scanner.pdl = pdl;
   scanner.device_names[protocol].emplace(
       ScannerDeviceName(device_name, usable));
   scanner.ip_addresses.insert(ip_address);

@@ -8,22 +8,26 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_file_usvstring.h"
 #include "third_party/blink/renderer/core/fileapi/file.h"
 #include "third_party/blink/renderer/core/html/forms/form_controller.h"
+#include "third_party/blink/renderer/core/testing/null_execution_context.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
 namespace {
 
-FormData* Deserialize(const Vector<String>& strings) {
+FormData* Deserialize(ExecutionContext& context,
+                      const Vector<String>& strings) {
   wtf_size_t i = 0;
   auto state = FormControlState::Deserialize(strings, i);
   wtf_size_t j = 0;
-  return FormData::CreateFromControlState(state, j);
+  return FormData::CreateFromControlState(context, state, j);
 }
 
 }  // namespace
 
 TEST(FormDataTest, append) {
+  test::TaskEnvironment task_environment;
   auto* fd = MakeGarbageCollected<FormData>(UTF8Encoding());
   fd->append("test\n1", "value\n1");
   fd->append("test\r2", nullptr, "filename");
@@ -37,6 +41,7 @@ TEST(FormDataTest, append) {
 }
 
 TEST(FormDataTest, AppendFromElement) {
+  test::TaskEnvironment task_environment;
   UChar lone_surrogate_chars[] = {u'a', 0xD800, u'b', 0};
   String lone_surrogate_string(lone_surrogate_chars);
 
@@ -65,6 +70,7 @@ TEST(FormDataTest, AppendFromElement) {
 }
 
 TEST(FormDataTest, get) {
+  test::TaskEnvironment task_environment;
   auto* fd = MakeGarbageCollected<FormData>(UTF8Encoding());
   fd->append("name1", "value1");
 
@@ -78,6 +84,7 @@ TEST(FormDataTest, get) {
 }
 
 TEST(FormDataTest, getAll) {
+  test::TaskEnvironment task_environment;
   auto* fd = MakeGarbageCollected<FormData>(UTF8Encoding());
   fd->append("name1", "value1");
 
@@ -90,6 +97,7 @@ TEST(FormDataTest, getAll) {
 }
 
 TEST(FormDataTest, has) {
+  test::TaskEnvironment task_environment;
   auto* fd = MakeGarbageCollected<FormData>(UTF8Encoding());
   fd->append("name1", "value1");
 
@@ -98,6 +106,8 @@ TEST(FormDataTest, has) {
 }
 
 TEST(FormDataTest, AppendToControlState) {
+  test::TaskEnvironment task_environment;
+  ScopedNullExecutionContext context;
   {
     auto* fd = MakeGarbageCollected<FormData>();
     FormControlState state;
@@ -110,7 +120,9 @@ TEST(FormDataTest, AppendToControlState) {
   {
     auto* fd = MakeGarbageCollected<FormData>();
     fd->append("n1", "string");
-    fd->AppendFromElement("n1", MakeGarbageCollected<File>("/etc/hosts"));
+    fd->AppendFromElement(
+        "n1", MakeGarbageCollected<File>(&context.GetExecutionContext(),
+                                         "/etc/hosts"));
     FormControlState state;
     fd->AppendToControlState(state);
 
@@ -130,34 +142,46 @@ TEST(FormDataTest, AppendToControlState) {
 }
 
 TEST(FormDataTest, CreateFromControlState) {
-  EXPECT_EQ(nullptr, Deserialize({"1", "not-a-number"}))
+  test::TaskEnvironment task_environment;
+  ScopedNullExecutionContext context;
+  EXPECT_EQ(nullptr,
+            Deserialize(context.GetExecutionContext(), {"1", "not-a-number"}))
       << "Should fail on size parsing";
 
-  auto* fd0 = Deserialize({"1", "0"});
+  auto* fd0 = Deserialize(context.GetExecutionContext(), {"1", "0"});
   ASSERT_NE(nullptr, fd0);
   EXPECT_EQ(0u, fd0->size());
 
-  EXPECT_EQ(nullptr, Deserialize({"1", "1"})) << "Missing name value";
+  EXPECT_EQ(nullptr, Deserialize(context.GetExecutionContext(), {"1", "1"}))
+      << "Missing name value";
 
-  EXPECT_EQ(nullptr, Deserialize({"2", "1", "n0"})) << "Missing entry type";
+  EXPECT_EQ(nullptr,
+            Deserialize(context.GetExecutionContext(), {"2", "1", "n0"}))
+      << "Missing entry type";
 
-  EXPECT_EQ(nullptr, Deserialize({"3", "1", "n0", "DOMString"}))
+  EXPECT_EQ(nullptr, Deserialize(context.GetExecutionContext(),
+                                 {"3", "1", "n0", "DOMString"}))
       << "Unknown entry type";
 
-  EXPECT_EQ(nullptr, Deserialize({"3", "1", "n0", "USVString"}))
+  EXPECT_EQ(nullptr, Deserialize(context.GetExecutionContext(),
+                                 {"3", "1", "n0", "USVString"}))
       << "Missing USVString value";
 
-  EXPECT_EQ(nullptr, Deserialize({"3", "1", "n1", "File"}))
+  EXPECT_EQ(nullptr, Deserialize(context.GetExecutionContext(),
+                                 {"3", "1", "n1", "File"}))
       << "Missing File value 1";
 
-  EXPECT_EQ(nullptr, Deserialize({"4", "1", "n1", "File", "/etc/hosts"}))
+  EXPECT_EQ(nullptr, Deserialize(context.GetExecutionContext(),
+                                 {"4", "1", "n1", "File", "/etc/hosts"}))
       << "Missing File value 2";
 
   EXPECT_EQ(nullptr,
-            Deserialize({"5", "1", "n1", "File", "/etc/password", "pasword"}))
+            Deserialize(context.GetExecutionContext(),
+                        {"5", "1", "n1", "File", "/etc/password", "pasword"}))
       << "Missing File value 3";
 
-  auto* fd = Deserialize({"9", "2", "n1", "USVString", "string-value", "n2",
+  auto* fd = Deserialize(context.GetExecutionContext(),
+                         {"9", "2", "n1", "USVString", "string-value", "n2",
                           "File", "/etc/password", "pasword", ""});
   ASSERT_NE(nullptr, fd);
   EXPECT_EQ(2u, fd->size());
@@ -170,6 +194,7 @@ TEST(FormDataTest, CreateFromControlState) {
 }
 
 TEST(FormDataTest, FilenameWithLoneSurrogates) {
+  test::TaskEnvironment task_environment;
   UChar filename[] = {'a', 0xD800, 'b', 0};
   auto* file = MakeGarbageCollected<File>(filename, absl::nullopt,
                                           BlobDataHandle::Create());

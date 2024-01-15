@@ -4,25 +4,23 @@
 
 #include "chrome/browser/autofill/address_accessory_controller_impl.h"
 
-#include <algorithm>
 #include <utility>
 
 #include "base/memory/ptr_util.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/trace_event/trace_event.h"
-#include "chrome/browser/android/preferences/autofill/autofill_profile_bridge.h"
+#include "chrome/browser/android/preferences/autofill/settings_launcher_helper.h"
 #include "chrome/browser/autofill/manual_filling_controller.h"
 #include "chrome/browser/autofill/manual_filling_utils.h"
 #include "chrome/browser/autofill/personal_data_manager_factory.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/vr/vr_tab_helper.h"
 #include "components/autofill/content/browser/content_autofill_driver.h"
 #include "components/autofill/core/browser/personal_data_manager.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/unique_ids.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/web_contents.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace autofill {
@@ -30,25 +28,25 @@ namespace {
 
 // Defines which types to load from the Personal data manager and add as field
 // to the address sheet. Order matters.
-constexpr ServerFieldType kTypesToInclude[] = {
-    ServerFieldType::NAME_FULL,
-    ServerFieldType::COMPANY_NAME,
-    ServerFieldType::ADDRESS_HOME_LINE1,
-    ServerFieldType::ADDRESS_HOME_LINE2,
-    ServerFieldType::ADDRESS_HOME_ZIP,
-    ServerFieldType::ADDRESS_HOME_CITY,
-    ServerFieldType::ADDRESS_HOME_STATE,
-    ServerFieldType::ADDRESS_HOME_COUNTRY,
-    ServerFieldType::PHONE_HOME_WHOLE_NUMBER,
-    ServerFieldType::EMAIL_ADDRESS,
+constexpr FieldType kTypesToInclude[] = {
+    FieldType::NAME_FULL,
+    FieldType::COMPANY_NAME,
+    FieldType::ADDRESS_HOME_LINE1,
+    FieldType::ADDRESS_HOME_LINE2,
+    FieldType::ADDRESS_HOME_ZIP,
+    FieldType::ADDRESS_HOME_CITY,
+    FieldType::ADDRESS_HOME_STATE,
+    FieldType::ADDRESS_HOME_COUNTRY,
+    FieldType::PHONE_HOME_WHOLE_NUMBER,
+    FieldType::EMAIL_ADDRESS,
 };
 
 void AddProfileInfoAsSelectableField(UserInfo* info,
                                      const AutofillProfile* profile,
-                                     ServerFieldType type) {
+                                     FieldType type) {
   std::u16string field = profile->GetRawInfo(type);
-  if (type == ServerFieldType::NAME_MIDDLE && field.empty()) {
-    field = profile->GetRawInfo(ServerFieldType::NAME_MIDDLE_INITIAL);
+  if (type == FieldType::NAME_MIDDLE && field.empty()) {
+    field = profile->GetRawInfo(FieldType::NAME_MIDDLE_INITIAL);
   }
   info->add_field(AccessorySheetField(
       /*display_text=*/field, /*text_to_fill=*/field,
@@ -58,8 +56,8 @@ void AddProfileInfoAsSelectableField(UserInfo* info,
 
 UserInfo TranslateProfile(const AutofillProfile* profile) {
   UserInfo info;
-  for (ServerFieldType server_field_type : kTypesToInclude) {
-    AddProfileInfoAsSelectableField(&info, profile, server_field_type);
+  for (FieldType field_type : kTypesToInclude) {
+    AddProfileInfoAsSelectableField(&info, profile, field_type);
   }
   return info;
 }
@@ -67,8 +65,7 @@ UserInfo TranslateProfile(const AutofillProfile* profile) {
 std::vector<UserInfo> UserInfosForProfiles(
     const std::vector<AutofillProfile*>& profiles) {
   std::vector<UserInfo> infos(profiles.size());
-  std::transform(profiles.begin(), profiles.end(), infos.begin(),
-                 TranslateProfile);
+  base::ranges::transform(profiles, infos.begin(), TranslateProfile);
   return infos;
 }
 
@@ -86,21 +83,8 @@ AddressAccessoryControllerImpl::~AddressAccessoryControllerImpl() {
 }
 
 // static
-bool AddressAccessoryController::AllowedForWebContents(
-    content::WebContents* web_contents) {
-  DCHECK(web_contents) << "Need valid WebContents to attach controller to!";
-  if (vr::VrTabHelper::IsInVr(web_contents)) {
-    return false;  // TODO(crbug.com/902305): Re-Enable if possible.
-  }
-  return base::FeatureList::IsEnabled(
-      autofill::features::kAutofillKeyboardAccessory);
-}
-
-// static
 AddressAccessoryController* AddressAccessoryController::GetOrCreate(
     content::WebContents* web_contents) {
-  DCHECK(AddressAccessoryController::AllowedForWebContents(web_contents));
-
   AddressAccessoryControllerImpl::CreateForWebContents(web_contents);
   return AddressAccessoryControllerImpl::FromWebContents(web_contents);
 }
@@ -110,7 +94,7 @@ void AddressAccessoryControllerImpl::RegisterFillingSourceObserver(
   source_observer_ = std::move(observer);
 }
 
-absl::optional<autofill::AccessorySheetData>
+std::optional<autofill::AccessorySheetData>
 AddressAccessoryControllerImpl::GetSheetData() const {
   if (!personal_data_manager_) {
     return absl::nullopt;
@@ -139,8 +123,14 @@ void AddressAccessoryControllerImpl::OnFillingTriggered(
       autofill::ContentAutofillDriver::GetForRenderFrameHost(rfh);
   if (!driver)
     return;
-  driver->browser_events().RendererShouldFillFieldWithValue(
+  driver->browser_events().ApplyFieldAction(
+      mojom::ActionPersistence::kFill, mojom::TextReplacement::kReplaceAll,
       focused_field_id, selection.display_text());
+}
+
+void AddressAccessoryControllerImpl::OnPasskeySelected(
+    const std::vector<uint8_t>& passkey_id) {
+  NOTIMPLEMENTED() << "Passkey support not available in address controller.";
 }
 
 void AddressAccessoryControllerImpl::OnOptionSelected(
@@ -177,10 +167,15 @@ void AddressAccessoryControllerImpl::RefreshSuggestions() {
   } else {
     // TODO(crbug.com/1169167): Remove once filling controller pulls this
     // information instead of waiting to get it pushed.
-    absl::optional<AccessorySheetData> data = GetSheetData();
+    std::optional<AccessorySheetData> data = GetSheetData();
     DCHECK(data.has_value());
     GetManualFillingController()->RefreshSuggestions(std::move(data).value());
   }
+}
+
+base::WeakPtr<AddressAccessoryController>
+AddressAccessoryControllerImpl::AsWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 void AddressAccessoryControllerImpl::OnPersonalDataChanged() {

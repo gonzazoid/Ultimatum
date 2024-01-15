@@ -5,7 +5,7 @@
 #ifndef CONTENT_TEST_MOCK_COMMIT_DEFERRING_CONDITION_H_
 #define CONTENT_TEST_MOCK_COMMIT_DEFERRING_CONDITION_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "content/browser/renderer_host/commit_deferring_condition_runner.h"
 #include "content/public/browser/commit_deferring_condition.h"
 #include "content/public/browser/web_contents_observer.h"
@@ -26,8 +26,9 @@ class MockCommitDeferringCondition;
 // condition to a NavigationRequest.
 class MockCommitDeferringConditionWrapper {
  public:
-  explicit MockCommitDeferringConditionWrapper(NavigationHandle& handle,
-                                               bool is_ready_to_commit);
+  explicit MockCommitDeferringConditionWrapper(
+      NavigationHandle& handle,
+      CommitDeferringCondition::Result result);
 
   MockCommitDeferringConditionWrapper(
       const MockCommitDeferringConditionWrapper&) = delete;
@@ -65,7 +66,7 @@ class MockCommitDeferringConditionInstaller {
  public:
   explicit MockCommitDeferringConditionInstaller(
       const GURL& url,
-      bool is_ready_to_commit,
+      CommitDeferringCondition::Result result,
       CommitDeferringConditionRunner::InsertOrder order =
           CommitDeferringConditionRunner::InsertOrder::kAfter);
   ~MockCommitDeferringConditionInstaller();
@@ -88,7 +89,7 @@ class MockCommitDeferringConditionInstaller {
       CommitDeferringCondition::NavigationType type);
 
   GURL url_;
-  bool is_ready_to_commit_;
+  CommitDeferringCondition::Result result_;
   const int generator_id_;
 
   base::OnceClosure was_installed_closure_;

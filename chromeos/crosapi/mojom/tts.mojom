@@ -114,6 +114,8 @@ struct TtsUtterance {
 // Interface for Tts, implemented in ash-chrome. Used by lacros-chrome to
 // communicate with ash TtsController to send the voice data and
 // speech requests to ash.
+// Next version: 5
+// Next method id: 7
 [Stable, Uuid="8550e8d0-a818-49a3-93c1-d8053a33b2e6"]
 interface Tts {
   // A TtsClient can register itself with Tts, so that Tts can communicate with
@@ -133,33 +135,78 @@ interface Tts {
   [MinVersion=1]
   SpeakOrEnqueue@2(TtsUtterance utterance,
                    pending_remote<TtsUtteranceClient> utterance_client);
+
+  // Requests Ash TtsController to stop the current utterance if it matches
+  // the given |source_url|.
+  [MinVersion=2]
+  Stop@3(url.mojom.Url source_url);
+
+  // Requests Ash TtsController to pause speeach synthesis.
+  [MinVersion=3]
+  Pause@4();
+
+  // Requests Ash TtsController to resume speeach synthesis.
+  [MinVersion=3]
+  Resume@5();
+
+  // Returns true if Ash TtsController is currnetly speaking an utterance.
+  [MinVersion=4]
+  IsSpeaking@6() => (bool speaking);
 };
 
 // Interface for tts client. Implemented in lacros-chrome.
 // Each Tts client is associated with a browser context object in Lacros.
 // Used by ash-chrome to send voices to Lacros.
+// Next version: 3
+// Next method id: 5
 [Stable, Uuid="60ce0365-451e-402d-9a1c-e57350f9a202"]
 interface TtsClient {
   // Called when voices changed in ash TtsController .
   // |all_voices| contains the new voices (provided by both Ash and
   // Lacros).
   VoicesChanged@0(array<TtsVoice> all_voices);
+
+  // Called from Ash to request a Lacros Tts engine to speak the |utterance|
+  // with the given |voice|. |utterance_client| is provided only if |utterance|
+  // is issued by Ash.
+  [MinVersion=1]
+  SpeakWithLacrosVoice@1(TtsUtterance utterance, TtsVoice voice,
+      pending_remote<TtsUtteranceClient>? ash_utterance_client);
+
+  // Called from Ash to request the specified Lacros speech engine to stop
+  // speaking.
+  [MinVersion=1]
+  Stop@2(string engine_id);
+
+  // Called from Ash to request the specified Lacros speech engine to pause
+  // speaking.
+  [MinVersion=2]
+  Pause@3(string engine_id);
+
+  // Called from Ash to request the specified Lacros speech engine to resume
+  // speaking.
+  [MinVersion=2]
+  Resume@4(string engine_id);
 };
 
-// This interface serves as a remote client of a TtsUtterance in Ash which is
-// originated from the Lacros. Implemented in lacros-chrome.
-// When Tts extension API or SpeechSynthesis web API is called from Lacros
-// browser to speak an utterance, We will call Tts::SpeakOrEnqueue to send the
-// utterance data to Ash along with a pending_remote<TtsUtteranceClient>
-// object, which allows to perform tasks associated with the utterance.
-// The disconnect handler will be invoked in Ash when the original utterance
-// becomes invalid in Lacros.
+// This interface receives events from an utterance which is being spoken by
+// a remote process.
+// Can be used in either lacros-chrome or ash.
+//
+// For example, when Tts extension API or SpeechSynthesis web API is called from
+// Lacros browser to speak an utterance, We will call Tts::SpeakOrEnqueue to
+// send the utterance to Ash along with a pending_remote<TtsUtteranceClient>
+// object, which can be used to forward the TtsEvent back to Lacros. In
+// addition, its disconnect handler will be invoked in Ash when the original
+// utterance becomes invalid in Lacros.
+// Similarly, it is also passed as argument in TtsClient::SpeakWithLacrosVoice
+// when Ash calls this API to speak an Ash Utterance with a Lacros speech
+// engine.
 [Stable, Uuid="edf0536d-53ea-445c-9519-cb39af32364f"]
 interface TtsUtteranceClient {
-  // Forwards a speech engine event received from an Ash speech engine
-  // to the callback function of the Tts client in Lacros. |error_message|
-  // may contain an error message from the speech engine only if |event_type|
-  // is TtsEventType::kError.
+  // Forwards a Tts event received from the remote speech engine to the callback
+  // function of the TtsUtterance. |error_message| may contain an error message
+  // from the speech engine only if |event_type| is TtsEventType::kError.
   OnTtsEvent@0(TtsEventType event_type, uint32 char_index,
              uint32 length, string error_message);
 };

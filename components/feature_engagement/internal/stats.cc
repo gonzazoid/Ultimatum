@@ -174,6 +174,10 @@ void RecordShouldTriggerHelpUI(const base::Feature& feature,
   if (!result.display_lock_ok) {
     LogTriggerHelpUIResult(name, TriggerHelpUIResult::FAILURE_DISPLAY_LOCK);
   }
+  if (!result.groups_ok) {
+    LogTriggerHelpUIResult(
+        name, TriggerHelpUIResult::FAILURE_GROUPS_PRECONDITION_UNMET);
+  }
 }
 
 void RecordUserDismiss() {
@@ -217,11 +221,6 @@ void RecordAvailabilityDbLoadEvent(bool success) {
       "InProductHelp.Db.Load." +
       ToDbHistogramSuffix(StoreType::AVAILABILITY_STORE);
   base::UmaHistogramBoolean(histogram_name, success);
-}
-
-void RecordConfigParsingEvent(ConfigParsingEvent event) {
-  UMA_HISTOGRAM_ENUMERATION("InProductHelp.Config.ParsingEvent", event,
-                            ConfigParsingEvent::COUNT);
 }
 
 }  // namespace stats

@@ -5,9 +5,8 @@
 
 #include "base/no_destructor.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/tracing/perfetto_platform.h"
-#include "third_party/perfetto/include/perfetto/tracing.h"
+#include "third_party/perfetto/include/perfetto/tracing/core/data_source_config.h"
 
 namespace base {
 namespace test {
@@ -100,7 +99,7 @@ TracingEnvironment::~TracingEnvironment() {
 perfetto::protos::gen::TraceConfig TracingEnvironment::GetDefaultTraceConfig() {
   perfetto::protos::gen::TraceConfig trace_config;
   auto* buffer_config = trace_config.add_buffers();
-  buffer_config->set_size_kb(1024 * 1024);
+  buffer_config->set_size_kb(32 * 1024);
   auto* data_source = trace_config.add_data_sources();
   auto* source_config = data_source->mutable_config();
   source_config->set_name("track_event");

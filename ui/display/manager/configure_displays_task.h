@@ -10,8 +10,8 @@
 #include <queue>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/containers/queue.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/display/manager/display_manager_export.h"
 #include "ui/display/types/display_configuration_params.h"
@@ -28,11 +28,17 @@ class NativeDisplayDelegate;
 struct DISPLAY_MANAGER_EXPORT DisplayConfigureRequest {
   DisplayConfigureRequest(DisplaySnapshot* display,
                           const DisplayMode* mode,
+                          const gfx::Point& origin,
+                          bool enable_vrr);
+
+  DisplayConfigureRequest(DisplaySnapshot* display,
+                          const DisplayMode* mode,
                           const gfx::Point& origin);
 
-  DisplaySnapshot* display;
-  const DisplayMode* mode;
+  raw_ptr<DisplaySnapshot> display;
+  raw_ptr<const DisplayMode> mode;
   gfx::Point origin;
+  bool enable_vrr;
 };
 
 using RequestAndStatusList = std::pair<const DisplayConfigureRequest*, bool>;
@@ -54,19 +60,28 @@ using RequestAndStatusList = std::pair<const DisplayConfigureRequest*, bool>;
 // If we're constrained by (1), reducing the resolution of any display will
 // relieve pressure. However if we're constrained by (2), only those displays on
 // the saturated link can relieve pressure.
+//
+// Note that the |enable_vrr| property is not modified in the event of a
+// downgrade, as it does not affect bandwidth and changing its value would not
+// cause a failing request to succeed.
 class DISPLAY_MANAGER_EXPORT ConfigureDisplaysTask
     : public NativeDisplayObserver {
  public:
+  // Note: the enum values below match those of the ConfigureDisplaysTaskStatus
+  // histogram enum and should never change, or else it will make historical
+  // data of the affected metrics difficult to process.
   enum Status {
     // At least one of the displays failed to apply any mode it supports.
-    ERROR,
+    ERROR = 0,
 
     // The requested configuration was applied.
-    SUCCESS,
+    SUCCESS = 1,
 
     // At least one of the displays failed to apply the requested
     // configuration, but it managed to fall back to another mode.
-    PARTIAL_SUCCESS,
+    PARTIAL_SUCCESS = 2,
+
+    kMaxValue = PARTIAL_SUCCESS
   };
 
   using ResponseCallback = base::OnceCallback<void(Status)>;
@@ -94,8 +109,8 @@ class DISPLAY_MANAGER_EXPORT ConfigureDisplaysTask
     RequestToOriginalMode(DisplayConfigureRequest* request,
                           const DisplayMode* original_mode);
 
-    DisplayConfigureRequest* request;
-    const DisplayMode* const original_mode;
+    raw_ptr<DisplayConfigureRequest> request;
+    const raw_ptr<const DisplayMode> original_mode;
   };
   using PartitionedRequestsQueue =
       std::queue<std::vector<RequestToOriginalMode>>;
@@ -133,7 +148,7 @@ class DISPLAY_MANAGER_EXPORT ConfigureDisplaysTask
   // requests). Return false if no request was downgraded.
   bool DowngradeDisplayRequestGroup();
 
-  NativeDisplayDelegate* delegate_;  // Not owned.
+  raw_ptr<NativeDisplayDelegate> delegate_;  // Not owned.
 
   // Holds the next configuration request to attempt modeset.
   std::vector<DisplayConfigureRequest> requests_;

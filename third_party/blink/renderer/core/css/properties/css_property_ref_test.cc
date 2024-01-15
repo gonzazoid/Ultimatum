@@ -6,6 +6,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/core/css/css_property_name.h"
 #include "third_party/blink/renderer/core/css/css_test_helpers.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
 
 namespace blink {
@@ -87,7 +88,7 @@ TEST_F(CSSPropertyRefTest, GetResolvedPropertyAlias) {
 TEST_F(CSSPropertyRefTest, FromCSSPropertyNameCustom) {
   css_test_helpers::RegisterProperty(GetDocument(), "--x", "<length>", "42px",
                                      false);
-  CSSPropertyRef ref(CSSPropertyName("--x"), GetDocument());
+  CSSPropertyRef ref(CSSPropertyName(AtomicString("--x")), GetDocument());
   EXPECT_EQ(CSSPropertyID::kVariable, ref.GetProperty().PropertyID());
 }
 

@@ -6,9 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/location.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromeos/ash/components/dbus/cicerone/fake_cicerone_client.h"
 
 namespace ash {
@@ -81,6 +82,10 @@ bool FakeConciergeClient::IsVmStoppedSignalConnected() {
   return is_vm_stopped_signal_connected_;
 }
 
+bool FakeConciergeClient::IsVmStoppingSignalConnected() {
+  return is_vm_stopping_signal_connected_;
+}
+
 bool FakeConciergeClient::IsDiskImageProgressSignalConnected() {
   return is_disk_image_progress_signal_connected_;
 }
@@ -90,7 +95,7 @@ void FakeConciergeClient::CreateDiskImage(
     chromeos::DBusMethodCallback<vm_tools::concierge::CreateDiskImageResponse>
         callback) {
   create_disk_image_call_count_++;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), create_disk_image_response_),
       send_create_disk_image_response_delay_);
@@ -102,7 +107,7 @@ void FakeConciergeClient::CreateDiskImageWithFd(
     chromeos::DBusMethodCallback<vm_tools::concierge::CreateDiskImageResponse>
         callback) {
   create_disk_image_call_count_++;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), create_disk_image_response_));
 }
@@ -112,7 +117,7 @@ void FakeConciergeClient::DestroyDiskImage(
     chromeos::DBusMethodCallback<vm_tools::concierge::DestroyDiskImageResponse>
         callback) {
   destroy_disk_image_call_count_++;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), destroy_disk_image_response_));
 }
@@ -123,10 +128,10 @@ void FakeConciergeClient::ImportDiskImage(
     chromeos::DBusMethodCallback<vm_tools::concierge::ImportDiskImageResponse>
         callback) {
   import_disk_image_call_count_++;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), import_disk_image_response_));
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&FakeConciergeClient::NotifyDiskImageProgress,
                                 weak_ptr_factory_.GetWeakPtr()));
 }
@@ -137,7 +142,7 @@ void FakeConciergeClient::CancelDiskImageOperation(
         callback) {
   // Removes signals sent during disk image import.
   disk_image_status_signals_.clear();
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), cancel_disk_image_response_));
 }
@@ -162,7 +167,7 @@ void FakeConciergeClient::DiskImageStatus(
         callback) {
   disk_image_status_call_count_++;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), disk_image_status_response_));
 }
@@ -173,7 +178,7 @@ void FakeConciergeClient::ListVmDisks(
         callback) {
   list_vm_disks_call_count_++;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), list_vm_disks_response_));
 }
 
@@ -182,7 +187,7 @@ void FakeConciergeClient::StartVm(
     chromeos::DBusMethodCallback<vm_tools::concierge::StartVmResponse>
         callback) {
   start_vm_call_count_++;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, base::BindOnce(std::move(callback), start_vm_response_),
       send_start_vm_response_delay_);
 
@@ -196,7 +201,7 @@ void FakeConciergeClient::StartVm(
   vm_tools::cicerone::TremplinStartedSignal tremplin_started_signal;
   tremplin_started_signal.set_vm_name(request.name());
   tremplin_started_signal.set_owner_id(request.owner_id());
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&FakeConciergeClient::NotifyTremplinStarted,
                      weak_ptr_factory_.GetWeakPtr(),
@@ -207,7 +212,7 @@ void FakeConciergeClient::StartVm(
   vm_tools::concierge::VmStartedSignal vm_started_signal;
   vm_started_signal.set_name(request.name());
   vm_started_signal.set_owner_id(request.owner_id());
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&FakeConciergeClient::NotifyVmStarted,
                                 weak_ptr_factory_.GetWeakPtr(),
                                 std::move(vm_started_signal)));
@@ -247,11 +252,11 @@ void FakeConciergeClient::StopVm(
   vm_tools::concierge::VmStoppedSignal signal;
   signal.set_name(request.name());
   signal.set_owner_id(request.owner_id());
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeConciergeClient::NotifyVmStopped,
                      weak_ptr_factory_.GetWeakPtr(), std::move(signal)));
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), stop_vm_response_));
 }
 
@@ -259,7 +264,7 @@ void FakeConciergeClient::SuspendVm(
     const vm_tools::concierge::SuspendVmRequest& request,
     chromeos::DBusMethodCallback<vm_tools::concierge::SuspendVmResponse>
         callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), suspend_vm_response_));
 }
 
@@ -267,7 +272,7 @@ void FakeConciergeClient::ResumeVm(
     const vm_tools::concierge::ResumeVmRequest& request,
     chromeos::DBusMethodCallback<vm_tools::concierge::ResumeVmResponse>
         callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), resume_vm_response_));
 }
 
@@ -276,7 +281,7 @@ void FakeConciergeClient::GetVmInfo(
     chromeos::DBusMethodCallback<vm_tools::concierge::GetVmInfoResponse>
         callback) {
   get_vm_info_call_count_++;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), get_vm_info_response_));
 }
 
@@ -285,7 +290,7 @@ void FakeConciergeClient::GetVmEnterpriseReportingInfo(
     chromeos::DBusMethodCallback<
         vm_tools::concierge::GetVmEnterpriseReportingInfoResponse> callback) {
   get_vm_enterprise_reporting_info_call_count_++;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback),
                                 get_vm_enterprise_reporting_info_response_));
 }
@@ -295,7 +300,7 @@ void FakeConciergeClient::ArcVmCompleteBoot(
     chromeos::DBusMethodCallback<vm_tools::concierge::ArcVmCompleteBootResponse>
         callback) {
   arcvm_complete_boot_call_count_++;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), arcvm_complete_boot_response_));
 }
@@ -305,7 +310,7 @@ void FakeConciergeClient::SetVmCpuRestriction(
     chromeos::DBusMethodCallback<
         vm_tools::concierge::SetVmCpuRestrictionResponse> callback) {
   set_vm_cpu_restriction_call_count_++;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), set_vm_cpu_restriction_response_));
 }
@@ -313,21 +318,9 @@ void FakeConciergeClient::SetVmCpuRestriction(
 void FakeConciergeClient::WaitForServiceToBeAvailable(
     dbus::ObjectProxy::WaitForServiceToBeAvailableCallback callback) {
   wait_for_service_to_be_available_call_count_++;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback),
                                 wait_for_service_to_be_available_response_));
-}
-
-void FakeConciergeClient::GetContainerSshKeys(
-    const vm_tools::concierge::ContainerSshKeysRequest& request,
-    chromeos::DBusMethodCallback<vm_tools::concierge::ContainerSshKeysResponse>
-        callback) {
-  get_container_ssh_keys_call_count_++;
-
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-      FROM_HERE,
-      base::BindOnce(std::move(callback), container_ssh_keys_response_),
-      send_get_container_ssh_keys_response_delay_);
 }
 
 void FakeConciergeClient::AttachUsbDevice(
@@ -337,7 +330,7 @@ void FakeConciergeClient::AttachUsbDevice(
         callback) {
   attach_usb_device_call_count_++;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), attach_usb_device_response_));
 }
@@ -348,7 +341,7 @@ void FakeConciergeClient::DetachUsbDevice(
         callback) {
   detach_usb_device_call_count_++;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), detach_usb_device_response_));
 }
@@ -358,7 +351,7 @@ void FakeConciergeClient::StartArcVm(
     chromeos::DBusMethodCallback<vm_tools::concierge::StartVmResponse>
         callback) {
   start_arc_vm_call_count_++;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), start_vm_response_));
 }
 
@@ -367,10 +360,10 @@ void FakeConciergeClient::ResizeDiskImage(
     chromeos::DBusMethodCallback<vm_tools::concierge::ResizeDiskImageResponse>
         callback) {
   resize_disk_image_call_count_++;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), resize_disk_image_response_));
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&FakeConciergeClient::NotifyDiskImageProgress,
                                 weak_ptr_factory_.GetWeakPtr()));
 }
@@ -380,7 +373,7 @@ void FakeConciergeClient::ReclaimVmMemory(
     chromeos::DBusMethodCallback<vm_tools::concierge::ReclaimVmMemoryResponse>
         callback) {
   reclaim_vm_memory_call_count_++;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), reclaim_vm_memory_response_));
 }
@@ -390,7 +383,7 @@ void FakeConciergeClient::ListVms(
     chromeos::DBusMethodCallback<vm_tools::concierge::ListVmsResponse>
         callback) {
   list_vms_call_count_++;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), list_vms_response_));
 }
 
@@ -398,9 +391,35 @@ void FakeConciergeClient::GetVmLaunchAllowed(
     const vm_tools::concierge::GetVmLaunchAllowedRequest& request,
     chromeos::DBusMethodCallback<
         vm_tools::concierge::GetVmLaunchAllowedResponse> callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), get_vm_launch_allowed_response_));
+}
+
+void FakeConciergeClient::SwapVm(
+    const vm_tools::concierge::SwapVmRequest& request,
+    chromeos::DBusMethodCallback<vm_tools::concierge::SwapVmResponse>
+        callback) {
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback), swap_vm_response_));
+}
+
+void FakeConciergeClient::InstallPflash(
+    base::ScopedFD fd,
+    const vm_tools::concierge::InstallPflashRequest& request,
+    chromeos::DBusMethodCallback<vm_tools::concierge::InstallPflashResponse>
+        callback) {
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback), install_pflash_response_));
+}
+
+void FakeConciergeClient::AggressiveBalloon(
+    const vm_tools::concierge::AggressiveBalloonRequest& request,
+    chromeos::DBusMethodCallback<vm_tools::concierge::AggressiveBalloonResponse>
+        callback) {
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(std::move(callback), aggressive_balloon_response_));
 }
 
 void FakeConciergeClient::NotifyVmStarted(
@@ -413,10 +432,17 @@ void FakeConciergeClient::NotifyVmStarted(
 
 void FakeConciergeClient::NotifyVmStopped(
     const vm_tools::concierge::VmStoppedSignal& signal) {
-  // Now GetVmInfo can return success.
+  // Now GetVmInfo can no longer succeed.
   get_vm_info_response_->set_success(false);
   for (auto& observer : vm_observer_list_)
     observer.OnVmStopped(signal);
+}
+
+void FakeConciergeClient::NotifyVmStopping(
+    const vm_tools::concierge::VmStoppingSignal& signal) {
+  for (auto& observer : vm_observer_list_) {
+    observer.OnVmStopping(signal);
+  }
 }
 
 bool FakeConciergeClient::HasVmObservers() const {
@@ -466,17 +492,15 @@ void FakeConciergeClient::InitializeProtoResponses() {
 
   set_vm_cpu_restriction_response_.emplace();
 
-  container_ssh_keys_response_.emplace();
-  container_ssh_keys_response_->set_container_public_key("pubkey");
-  container_ssh_keys_response_->set_host_private_key("privkey");
-  container_ssh_keys_response_->set_hostname("hostname");
-
   attach_usb_device_response_.emplace();
   attach_usb_device_response_->set_success(true);
   attach_usb_device_response_->set_guest_port(0);
 
   detach_usb_device_response_.emplace();
   detach_usb_device_response_->set_success(true);
+
+  install_pflash_response_.emplace();
+  install_pflash_response_->set_success(true);
 }
 
 }  // namespace ash

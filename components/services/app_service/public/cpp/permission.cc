@@ -3,9 +3,21 @@
 // found in the LICENSE file.
 
 #include "components/services/app_service/public/cpp/permission.h"
+
+#include <sstream>
+
 #include "third_party/abseil-cpp/absl/types/variant.h"
 
 namespace apps {
+
+namespace {
+
+const char kPermissionTypeKey[] = "permission_type";
+const char kValueKey[] = "value";
+const char kIsManagedKey[] = "is_managed";
+const char kDetailsKey[] = "details";
+
+}  // namespace
 
 APP_ENUM_TO_STRING(PermissionType,
                    kUnknown,
@@ -19,36 +31,32 @@ APP_ENUM_TO_STRING(PermissionType,
                    kFileHandling)
 APP_ENUM_TO_STRING(TriState, kAllow, kBlock, kAsk)
 
-PermissionValue::PermissionValue(bool bool_value) : value(bool_value) {}
+Permission::Permission(PermissionType permission_type,
+                       PermissionValue value,
+                       bool is_managed,
+                       absl::optional<std::string> details)
+    : permission_type(permission_type),
+      value(std::move(value)),
+      is_managed(is_managed),
+      details(std::move(details)) {}
 
-PermissionValue::PermissionValue(TriState tristate_value)
-    : value(tristate_value) {}
+Permission::~Permission() = default;
 
-PermissionValue::~PermissionValue() = default;
-
-bool PermissionValue::operator==(const PermissionValue& other) const {
-  if (absl::holds_alternative<bool>(value) &&
-      absl::holds_alternative<bool>(other.value)) {
-    return absl::get<bool>(value) == absl::get<bool>(other.value);
-  }
-  if (absl::holds_alternative<TriState>(value) &&
-      absl::holds_alternative<TriState>(other.value)) {
-    return absl::get<TriState>(value) == absl::get<TriState>(other.value);
-  }
-  return false;
+bool Permission::operator==(const Permission& other) const {
+  return permission_type == other.permission_type && value == other.value &&
+         is_managed == other.is_managed && details == other.details;
 }
 
-std::unique_ptr<PermissionValue> PermissionValue::Clone() const {
-  if (absl::holds_alternative<bool>(value)) {
-    return std::make_unique<PermissionValue>(absl::get<bool>(value));
-  }
-  if (absl::holds_alternative<TriState>(value)) {
-    return std::make_unique<PermissionValue>(absl::get<TriState>(value));
-  }
-  return nullptr;
+bool Permission::operator!=(const Permission& other) const {
+  return !(*this == other);
 }
 
-bool PermissionValue::IsPermissionEnabled() const {
+PermissionPtr Permission::Clone() const {
+  return std::make_unique<Permission>(permission_type, value, is_managed,
+                                      details);
+}
+
+bool Permission::IsPermissionEnabled() const {
   if (absl::holds_alternative<bool>(value)) {
     return absl::get<bool>(value);
   }
@@ -58,50 +66,17 @@ bool PermissionValue::IsPermissionEnabled() const {
   return false;
 }
 
-Permission::Permission(PermissionType permission_type,
-                       PermissionValuePtr value,
-                       bool is_managed)
-    : permission_type(permission_type),
-      value(std::move(value)),
-      is_managed(is_managed) {}
-
-Permission::~Permission() = default;
-
-bool Permission::operator==(const Permission& other) const {
-  return permission_type == other.permission_type &&
-         ((!value && !other.value) || (*value == *other.value)) &&
-         is_managed == other.is_managed;
-}
-
-bool Permission::operator!=(const Permission& other) const {
-  return !(*this == other);
-}
-
-PermissionPtr Permission::Clone() const {
-  if (!value) {
-    return nullptr;
-  }
-
-  return std::make_unique<Permission>(permission_type, value->Clone(),
-                                      is_managed);
-}
-
-bool Permission::IsPermissionEnabled() const {
-  return value && value->IsPermissionEnabled();
-}
-
 std::string Permission::ToString() const {
   std::stringstream out;
-  out << " permission type: " << EnumToString(permission_type);
-  out << " value: " << std::endl;
-  if (value) {
-    if (absl::holds_alternative<bool>(value->value)) {
-      out << " bool_value: "
-          << (absl::get<bool>(value->value) ? "true" : "false");
-    } else if (absl::holds_alternative<TriState>(value->value)) {
-      out << " tristate_value: "
-          << EnumToString(absl::get<TriState>(value->value));
-    }
+  out << " permission type: " << EnumToString(permission_type) << std::endl;
+  if (absl::holds_alternative<bool>(value)) {
+    out << " bool_value: " << (absl::get<bool>(value) ? "true" : "false");
+  } else if (absl::holds_alternative<TriState>(value)) {
+    out << " tristate_value: " << EnumToString(absl::get<TriState>(value));
+  }
+  out << std::endl;
+  if (details.has_value()) {
+    out << " details: " << details.value() << std::endl;
   }
   out << " is_managed: " << (is_managed ? "true" : "false") << std::endl;
   return out.str();
@@ -128,138 +103,90 @@ bool IsEqual(const Permissions& source, const Permissions& target) {
   return true;
 }
 
-PermissionType ConvertMojomPermissionTypeToPermissionType(
-    apps::mojom::PermissionType mojom_permission_type) {
-  switch (mojom_permission_type) {
-    case apps::mojom::PermissionType::kUnknown:
-      return PermissionType::kUnknown;
-    case apps::mojom::PermissionType::kCamera:
-      return PermissionType::kCamera;
-    case apps::mojom::PermissionType::kLocation:
-      return PermissionType::kLocation;
-    case apps::mojom::PermissionType::kMicrophone:
-      return PermissionType::kMicrophone;
-    case apps::mojom::PermissionType::kNotifications:
-      return PermissionType::kNotifications;
-    case apps::mojom::PermissionType::kContacts:
-      return PermissionType::kContacts;
-    case apps::mojom::PermissionType::kStorage:
-      return PermissionType::kStorage;
-    case apps::mojom::PermissionType::kPrinting:
-      return PermissionType::kPrinting;
-    case apps::mojom::PermissionType::kFileHandling:
-      return PermissionType::kFileHandling;
+base::Value::Dict ConvertPermissionToDict(const PermissionPtr& permission) {
+  base::Value::Dict dict;
+
+  if (!permission) {
+    return dict;
   }
+
+  dict.Set(kPermissionTypeKey, static_cast<int>(permission->permission_type));
+
+  if (absl::holds_alternative<bool>(permission->value)) {
+    dict.Set(kValueKey, absl::get<bool>(permission->value));
+  } else if (absl::holds_alternative<TriState>(permission->value)) {
+    dict.Set(kValueKey,
+             static_cast<int>(absl::get<TriState>(permission->value)));
+  }
+
+  dict.Set(kIsManagedKey, permission->is_managed);
+
+  if (permission->details.has_value()) {
+    dict.Set(kDetailsKey, permission->details.value());
+  }
+
+  return dict;
 }
 
-apps::mojom::PermissionType ConvertPermissionTypeToMojomPermissionType(
-    PermissionType permission_type) {
-  switch (permission_type) {
-    case PermissionType::kUnknown:
-      return apps::mojom::PermissionType::kUnknown;
-    case PermissionType::kCamera:
-      return apps::mojom::PermissionType::kCamera;
-    case PermissionType::kLocation:
-      return apps::mojom::PermissionType::kLocation;
-    case PermissionType::kMicrophone:
-      return apps::mojom::PermissionType::kMicrophone;
-    case PermissionType::kNotifications:
-      return apps::mojom::PermissionType::kNotifications;
-    case PermissionType::kContacts:
-      return apps::mojom::PermissionType::kContacts;
-    case PermissionType::kStorage:
-      return apps::mojom::PermissionType::kStorage;
-    case PermissionType::kPrinting:
-      return apps::mojom::PermissionType::kPrinting;
-    case PermissionType::kFileHandling:
-      return apps::mojom::PermissionType::kFileHandling;
-  }
-}
-
-TriState ConvertMojomTriStateToTriState(apps::mojom::TriState mojom_tri_state) {
-  switch (mojom_tri_state) {
-    case apps::mojom::TriState::kAllow:
-      return TriState::kAllow;
-    case apps::mojom::TriState::kBlock:
-      return TriState::kBlock;
-    case apps::mojom::TriState::kAsk:
-      return TriState::kAsk;
-  }
-}
-
-apps::mojom::TriState ConvertTriStateToMojomTriState(TriState tri_state) {
-  switch (tri_state) {
-    case TriState::kAllow:
-      return apps::mojom::TriState::kAllow;
-    case TriState::kBlock:
-      return apps::mojom::TriState::kBlock;
-    case TriState::kAsk:
-      return apps::mojom::TriState::kAsk;
-  }
-}
-
-PermissionValuePtr ConvertMojomPermissionValueToPermissionValue(
-    const apps::mojom::PermissionValuePtr& mojom_permission_value) {
-  if (!mojom_permission_value) {
+PermissionPtr ConvertDictToPermission(const base::Value::Dict& dict) {
+  absl::optional<int> permission_type = dict.FindInt(kPermissionTypeKey);
+  if (!permission_type.has_value() ||
+      permission_type.value() < static_cast<int>(PermissionType::kUnknown) ||
+      permission_type.value() > static_cast<int>(PermissionType::kMaxValue)) {
     return nullptr;
   }
 
-  if (mojom_permission_value->is_tristate_value()) {
-    return std::make_unique<PermissionValue>(ConvertMojomTriStateToTriState(
-        mojom_permission_value->get_tristate_value()));
-  } else if (mojom_permission_value->is_bool_value()) {
-    return std::make_unique<PermissionValue>(
-        mojom_permission_value->get_bool_value());
+  Permission::PermissionValue permission_value;
+  absl::optional<bool> value = dict.FindBool(kValueKey);
+  if (value.has_value()) {
+    permission_value = value.value();
+  } else {
+    absl::optional<int> tri_state = dict.FindInt(kValueKey);
+    if (tri_state.has_value() &&
+        tri_state.value() >= static_cast<int>(TriState::kAllow) &&
+        tri_state.value() <= static_cast<int>(TriState::kMaxValue)) {
+      permission_value = static_cast<TriState>(tri_state.value());
+    } else {
+      return nullptr;
+    }
   }
-  return nullptr;
-}
 
-apps::mojom::PermissionValuePtr ConvertPermissionValueToMojomPermissionValue(
-    const PermissionValuePtr& permission_value) {
-  if (!permission_value) {
+  absl::optional<bool> is_managed = dict.FindBool(kIsManagedKey);
+  if (!is_managed.has_value()) {
     return nullptr;
   }
 
-  if (absl::holds_alternative<bool>(permission_value->value)) {
-    return apps::mojom::PermissionValue::NewBoolValue(
-        absl::get<bool>(permission_value->value));
-  }
-  if (absl::holds_alternative<TriState>(permission_value->value)) {
-    return apps::mojom::PermissionValue::NewTristateValue(
-        ConvertTriStateToMojomTriState(
-            absl::get<TriState>(permission_value->value)));
-  }
-
-  NOTREACHED();
-  return nullptr;
-}
-
-PermissionPtr ConvertMojomPermissionToPermission(
-    const apps::mojom::PermissionPtr& mojom_permission) {
-  if (!mojom_permission) {
-    return nullptr;
-  }
+  const std::string* details = dict.FindString(kDetailsKey);
 
   return std::make_unique<Permission>(
-      ConvertMojomPermissionTypeToPermissionType(
-          mojom_permission->permission_type),
-      ConvertMojomPermissionValueToPermissionValue(mojom_permission->value),
-      mojom_permission->is_managed);
+      static_cast<PermissionType>(permission_type.value()), permission_value,
+      is_managed.value(),
+      details ? absl::optional<std::string>(*details) : absl::nullopt);
 }
 
-apps::mojom::PermissionPtr ConvertPermissionToMojomPermission(
-    const PermissionPtr& permission) {
-  auto mojom_permission = apps::mojom::Permission::New();
-  if (!permission) {
-    return mojom_permission;
+base::Value::List ConvertPermissionsToList(const Permissions& permissions) {
+  base::Value::List list;
+  for (const auto& permission : permissions) {
+    list.Append(ConvertPermissionToDict(permission));
+  }
+  return list;
+}
+
+Permissions ConvertListToPermissions(const base::Value::List* list) {
+  Permissions permissions;
+
+  if (!list) {
+    return permissions;
   }
 
-  mojom_permission->permission_type =
-      ConvertPermissionTypeToMojomPermissionType(permission->permission_type);
-  mojom_permission->value =
-      ConvertPermissionValueToMojomPermissionValue(permission->value);
-  mojom_permission->is_managed = permission->is_managed;
-  return mojom_permission;
+  for (const base::Value& permission : *list) {
+    PermissionPtr parsed_permission =
+        ConvertDictToPermission(permission.GetDict());
+    if (parsed_permission) {
+      permissions.push_back(std::move(parsed_permission));
+    }
+  }
+  return permissions;
 }
 
 }  // namespace apps

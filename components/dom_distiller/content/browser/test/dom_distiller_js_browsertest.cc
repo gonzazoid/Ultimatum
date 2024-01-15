@@ -2,10 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/cfi_buildflags.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/path_service.h"
@@ -13,7 +13,6 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -105,7 +104,7 @@ class DomDistillerJsTest : public content::ContentBrowserTest {
 
   void SetUpTestServer() {
     base::FilePath path;
-    base::PathService::Get(base::DIR_SOURCE_ROOT, &path);
+    base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &path);
     path = path.AppendASCII(kExternalTestResourcesPath);
     embedded_test_server()->ServeFilesFromDirectory(path);
     ASSERT_TRUE(embedded_test_server()->Start());
@@ -114,6 +113,7 @@ class DomDistillerJsTest : public content::ContentBrowserTest {
 
 // Disabled on MSan as well as Android and Linux CFI bots.
 // https://crbug.com/845180
+// https://crbug.com/1434395
 // Then disabled more generally on Android: https://crbug.com/979685
 // TODO(jaebaek):  HTMLImageElement::LayoutBoxWidth() returns a value that has
 // a small error from the real one (i.e., the real is 38, but it returns 37)
@@ -121,6 +121,7 @@ class DomDistillerJsTest : public content::ContentBrowserTest {
 // EmbedExtractorTest.testImageExtractorWithAttributesCSSHeightCM (See
 // crrev.com/c/916021). We must solve this precision issue.
 #if defined(MEMORY_SANITIZER) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID) || \
+    BUILDFLAG(IS_FUCHSIA) ||                                                   \
     ((BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)) &&                        \
      (BUILDFLAG(CFI_CAST_CHECK) || BUILDFLAG(CFI_ICALL_CHECK) ||               \
       BUILDFLAG(CFI_ENFORCEMENT_DIAGNOSTIC) ||                                 \
@@ -147,7 +148,7 @@ IN_PROC_BROWSER_TEST_F(DomDistillerJsTest, MAYBE_RunJsTests) {
   js_test_execution_done_callback_ = run_loop.QuitClosure();
   // Add timeout in case JS Test execution fails. It is safe to call the
   // QuitClosure multiple times.
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(), TestTimeouts::action_max_timeout());
   web_contents->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
       base::UTF8ToUTF16(kRunJsTestsJs),
@@ -158,13 +159,14 @@ IN_PROC_BROWSER_TEST_F(DomDistillerJsTest, MAYBE_RunJsTests) {
   // Convert to dictionary and parse the results.
   ASSERT_TRUE(result_.is_dict()) << "Result is not a dictionary: " << result_;
 
-  absl::optional<bool> success = result_.FindBoolKey("success");
+  const base::Value::Dict& dict = result_.GetDict();
+  absl::optional<bool> success = dict.FindBool("success");
   ASSERT_TRUE(success.has_value());
-  absl::optional<int> num_tests = result_.FindIntKey("numTests");
+  absl::optional<int> num_tests = dict.FindInt("numTests");
   ASSERT_TRUE(num_tests.has_value());
-  absl::optional<int> failed = result_.FindIntKey("failed");
+  absl::optional<int> failed = dict.FindInt("failed");
   ASSERT_TRUE(failed.has_value());
-  absl::optional<int> skipped = result_.FindIntKey("skipped");
+  absl::optional<int> skipped = dict.FindInt("skipped");
   ASSERT_TRUE(skipped.has_value());
 
   VLOG(0) << "Ran " << num_tests.value()
@@ -175,7 +177,7 @@ IN_PROC_BROWSER_TEST_F(DomDistillerJsTest, MAYBE_RunJsTests) {
 
   // Only print the log if there was an error.
   if (!success.value()) {
-    const std::string* console_log = result_.FindStringKey("log");
+    const std::string* console_log = dict.FindString("log");
     ASSERT_TRUE(console_log);
     VLOG(0) << "Console log:\n" << *console_log;
     VLOG(0) << "\n\n"

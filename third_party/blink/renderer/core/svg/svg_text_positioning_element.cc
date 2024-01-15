@@ -20,7 +20,6 @@
 
 #include "third_party/blink/renderer/core/svg/svg_text_positioning_element.h"
 
-#include "third_party/blink/renderer/core/layout/ng/svg/layout_ng_svg_text.h"
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_text.h"
 #include "third_party/blink/renderer/core/svg/svg_animated_length_list.h"
 #include "third_party/blink/renderer/core/svg/svg_animated_number_list.h"
@@ -51,15 +50,9 @@ SVGTextPositioningElement::SVGTextPositioningElement(
           this,
           svg_names::kDyAttr,
           MakeGarbageCollected<SVGLengthList>(SVGLengthMode::kHeight))),
-      rotate_(
-          MakeGarbageCollected<SVGAnimatedNumberList>(this,
-                                                      svg_names::kRotateAttr)) {
-  AddToPropertyMap(x_);
-  AddToPropertyMap(y_);
-  AddToPropertyMap(dx_);
-  AddToPropertyMap(dy_);
-  AddToPropertyMap(rotate_);
-}
+      rotate_(MakeGarbageCollected<SVGAnimatedNumberList>(
+          this,
+          svg_names::kRotateAttr)) {}
 
 void SVGTextPositioningElement::Trace(Visitor* visitor) const {
   visitor->Trace(x_);
@@ -87,18 +80,39 @@ void SVGTextPositioningElement::SvgAttributeChanged(
     if (!layout_object)
       return;
 
-    if (LayoutSVGBlock* text_or_ng_text =
+    if (auto* ng_text =
             LayoutSVGText::LocateLayoutSVGTextAncestor(layout_object)) {
-      if (auto* text_layout_object = DynamicTo<LayoutSVGText>(text_or_ng_text))
-        text_layout_object->SetNeedsPositioningValuesUpdate();
-      else
-        To<LayoutNGSVGText>(text_or_ng_text)->SetNeedsPositioningValuesUpdate();
+      ng_text->SetNeedsPositioningValuesUpdate();
     }
     MarkForLayoutAndParentResourceInvalidation(*layout_object);
     return;
   }
 
   SVGTextContentElement::SvgAttributeChanged(params);
+}
+
+SVGAnimatedPropertyBase* SVGTextPositioningElement::PropertyFromAttribute(
+    const QualifiedName& attribute_name) const {
+  if (attribute_name == svg_names::kXAttr) {
+    return x_.Get();
+  } else if (attribute_name == svg_names::kYAttr) {
+    return y_.Get();
+  } else if (attribute_name == svg_names::kDxAttr) {
+    return dx_.Get();
+  } else if (attribute_name == svg_names::kDyAttr) {
+    return dy_.Get();
+  } else if (attribute_name == svg_names::kRotateAttr) {
+    return rotate_.Get();
+  } else {
+    return SVGTextContentElement::PropertyFromAttribute(attribute_name);
+  }
+}
+
+void SVGTextPositioningElement::SynchronizeAllSVGAttributes() const {
+  SVGAnimatedPropertyBase* attrs[]{x_.Get(), y_.Get(), dx_.Get(), dy_.Get(),
+                                   rotate_.Get()};
+  SynchronizeListOfSVGAttributes(attrs);
+  SVGTextContentElement::SynchronizeAllSVGAttributes();
 }
 
 }  // namespace blink

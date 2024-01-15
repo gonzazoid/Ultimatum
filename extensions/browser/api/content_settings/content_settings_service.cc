@@ -6,15 +6,17 @@
 
 #include "base/lazy_instance.h"
 #include "base/memory/scoped_refptr.h"
-#include "extensions/browser/extension_prefs_scope.h"
 #include "extensions/browser/pref_names.h"
+#include "extensions/common/api/types.h"
+
+using extensions::api::types::ChromeSettingScope;
 
 namespace extensions {
 
 ContentSettingsService::ContentSettingsService(content::BrowserContext* context)
     : content_settings_store_(base::MakeRefCounted<ContentSettingsStore>()) {}
 
-ContentSettingsService::~ContentSettingsService() {}
+ContentSettingsService::~ContentSettingsService() = default;
 
 // static
 ContentSettingsService* ContentSettingsService::Get(
@@ -42,18 +44,18 @@ void ContentSettingsService::OnExtensionRegistered(
 void ContentSettingsService::OnExtensionPrefsLoaded(
     const std::string& extension_id,
     const ExtensionPrefs* prefs) {
-  const base::ListValue* content_settings = nullptr;
-  if (prefs->ReadPrefAsList(
-          extension_id, pref_names::kPrefContentSettings, &content_settings)) {
+  const base::Value::List* content_settings =
+      prefs->ReadPrefAsList(extension_id, pref_names::kPrefContentSettings);
+  if (content_settings) {
     content_settings_store_->SetExtensionContentSettingFromList(
-        extension_id, content_settings->GetList(), kExtensionPrefsScopeRegular);
+        extension_id, *content_settings, ChromeSettingScope::kRegular);
   }
-  if (prefs->ReadPrefAsList(extension_id,
-                            pref_names::kPrefIncognitoContentSettings,
-                            &content_settings)) {
+  content_settings = prefs->ReadPrefAsList(
+      extension_id, pref_names::kPrefIncognitoContentSettings);
+  if (content_settings) {
     content_settings_store_->SetExtensionContentSettingFromList(
-        extension_id, content_settings->GetList(),
-        kExtensionPrefsScopeIncognitoPersistent);
+        extension_id, *content_settings,
+        ChromeSettingScope::kIncognitoPersistent);
   }
 }
 

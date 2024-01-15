@@ -10,8 +10,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -156,10 +156,6 @@ class RankerModelLoaderImpl : public RankerModelLoader {
   // The next time before which no new attempts to download the model should be
   // attempted.
   base::TimeTicks next_earliest_download_time_;
-
-  // Tracks the last time of the last attempt to load a model, either from file
-  // of from URL. Used for UMA reporting of load durations.
-  base::TimeTicks load_start_time_;
 
   // The current state of the loader.
   LoaderState state_ = LoaderState::NOT_STARTED;

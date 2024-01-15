@@ -11,17 +11,17 @@
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 
 // A SingleThreadTaskRunner which forwards everything to its |target_|. This
 // serves two purposes:
-// 1) If a ThreadTaskRunnerHandle owned by TestMockTimeTaskRunner were to be
-//    set to point to that TestMockTimeTaskRunner, a reference cycle would
-//    result.  As |target_| here is a non-refcounting raw pointer, the cycle is
-//    broken.
+// 1) If a TaskRunner CurrentDefaultHandle owned by TestMockTimeTaskRunner were
+//    to be set to point to that TestMockTimeTaskRunner, a reference cycle
+//    would result. As |target_| here is a non-refcounting raw pointer, the
+//    cycle is broken.
 // 2) Since SingleThreadTaskRunner is ref-counted, it's quite easy for it to
 //    accidentally get captured between tests in a singleton somewhere.
 //    Indirecting via NonOwningProxyTaskRunner permits TestMockTimeTaskRunner
@@ -151,7 +151,7 @@ TestMockTimeTaskRunner::TestOrderedPendingTask::operator=(
 // Ref. TestMockTimeTaskRunner::RunsTasksInCurrentSequence().
 TestMockTimeTaskRunner::ScopedContext::ScopedContext(
     scoped_refptr<TestMockTimeTaskRunner> scope)
-    : thread_task_runner_handle_override_(scope) {
+    : single_thread_task_runner_current_default_handle_override_(scope) {
   scope->RunUntilIdle();
 }
 
@@ -179,7 +179,8 @@ TestMockTimeTaskRunner::TestMockTimeTaskRunner(Time start_time,
   if (type == Type::kBoundToThread) {
     RunLoop::RegisterDelegateForCurrentThread(this);
     thread_task_runner_handle_ =
-        std::make_unique<ThreadTaskRunnerHandle>(proxy_task_runner_);
+        std::make_unique<SingleThreadTaskRunner::CurrentDefaultHandle>(
+            proxy_task_runner_);
   }
 }
 
@@ -369,9 +370,10 @@ void TestMockTimeTaskRunner::ProcessTasksNoLaterThan(TimeDelta max_delta,
 
   // Multiple test task runners can share the same thread for determinism in
   // unit tests. Make sure this TestMockTimeTaskRunner's tasks run in its scope.
-  absl::optional<ThreadTaskRunnerHandleOverrideForTesting> ttrh_override;
-  if (!ThreadTaskRunnerHandle::IsSet() ||
-      ThreadTaskRunnerHandle::Get() != proxy_task_runner_.get()) {
+  absl::optional<SingleThreadTaskRunner::CurrentHandleOverrideForTesting>
+      ttrh_override;
+  if (!SingleThreadTaskRunner::HasCurrentDefault() ||
+      SingleThreadTaskRunner::GetCurrentDefault() != proxy_task_runner_.get()) {
     ttrh_override.emplace(proxy_task_runner_.get());
   }
 

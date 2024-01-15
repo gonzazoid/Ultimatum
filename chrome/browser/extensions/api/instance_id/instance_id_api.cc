@@ -4,9 +4,7 @@
 
 #include "chrome/browser/extensions/api/instance_id/instance_id_api.h"
 
-#include <memory>
-
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/time/time.h"
@@ -96,7 +94,7 @@ ExtensionFunction::ResponseAction InstanceIDGetCreationTimeFunction::DoWork() {
 
 void InstanceIDGetCreationTimeFunction::GetCreationTimeCompleted(
     const base::Time& creation_time) {
-  Respond(WithArguments(creation_time.ToDoubleT()));
+  Respond(WithArguments(creation_time.InSecondsFSinceUnixEpoch()));
 }
 
 InstanceIDGetTokenFunction::InstanceIDGetTokenFunction() {}
@@ -104,9 +102,9 @@ InstanceIDGetTokenFunction::InstanceIDGetTokenFunction() {}
 InstanceIDGetTokenFunction::~InstanceIDGetTokenFunction() {}
 
 ExtensionFunction::ResponseAction InstanceIDGetTokenFunction::DoWork() {
-  std::unique_ptr<api::instance_id::GetToken::Params> params =
+  absl::optional<api::instance_id::GetToken::Params> params =
       api::instance_id::GetToken::Params::Create(args());
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   GetInstanceID()->GetToken(
       params->get_token_params.authorized_entity,
@@ -121,7 +119,7 @@ void InstanceIDGetTokenFunction::GetTokenCompleted(
     const std::string& token,
     instance_id::InstanceID::Result result) {
   if (result == instance_id::InstanceID::SUCCESS)
-    Respond(OneArgument(base::Value(token)));
+    Respond(WithArguments(token));
   else
     Respond(Error(InstanceIDResultToError(result)));
 }
@@ -131,9 +129,9 @@ InstanceIDDeleteTokenFunction::InstanceIDDeleteTokenFunction() {}
 InstanceIDDeleteTokenFunction::~InstanceIDDeleteTokenFunction() {}
 
 ExtensionFunction::ResponseAction InstanceIDDeleteTokenFunction::DoWork() {
-  std::unique_ptr<api::instance_id::DeleteToken::Params> params =
+  absl::optional<api::instance_id::DeleteToken::Params> params =
       api::instance_id::DeleteToken::Params::Create(args());
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   GetInstanceID()->DeleteToken(
       params->delete_token_params.authorized_entity,

@@ -5,15 +5,16 @@
 #include "chromeos/ash/services/bluetooth_config/adapter_state_controller_impl.h"
 
 #include <memory>
+#include <optional>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/containers/queue.h"
+#include "base/functional/callback.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "device/bluetooth/test/mock_bluetooth_adapter.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash::bluetooth_config {
 
@@ -35,7 +36,9 @@ class FakeObserver : public AdapterStateController::Observer {
 
 }  // namespace
 
-class AdapterStateControllerImplTest : public testing::Test {
+class AdapterStateControllerImplTest
+    : public testing::Test,
+      public testing::WithParamInterface<bool> {
  protected:
   AdapterStateControllerImplTest() = default;
   AdapterStateControllerImplTest(const AdapterStateControllerImplTest&) =
@@ -60,8 +63,9 @@ class AdapterStateControllerImplTest : public testing::Test {
                    base::OnceClosure error_callback) {
               EXPECT_FALSE(pending_power_state_.has_value());
               pending_power_state_ = powered;
-              set_powered_success_callback_ = std::move(success_callback);
-              set_powered_error_callback_ = std::move(error_callback);
+              set_powered_success_callbacks_.emplace(
+                  std::move(success_callback));
+              set_powered_error_callbacks_.emplace(std::move(error_callback));
             }));
 
     adapter_state_controller_ =
@@ -107,19 +111,33 @@ class AdapterStateControllerImplTest : public testing::Test {
     EXPECT_EQ(expected_pending_state, *pending_power_state_);
     pending_power_state_.reset();
 
-    if (success) {
-      std::move(set_powered_success_callback_).Run();
-      set_powered_error_callback_.Reset();
+    base::OnceClosure success_callback =
+        std::move(set_powered_success_callbacks_.front());
+    set_powered_success_callbacks_.pop();
+    base::OnceClosure error_callback =
+        std::move(set_powered_error_callbacks_.front());
+    set_powered_error_callbacks_.pop();
 
-      // In real-life, the adapter's powered state doesn't change until after
-      // the success callback is fired. Simulate this by setting the adapter
-      // state after invoking the success callback.
-      SetAdapterPoweredState(expected_pending_state);
+    if (success) {
+      // Depending on if BlueZ or Floss is being used, SetAdapterPoweredState()
+      // gets called before or after the success callback. Add coverage to test
+      // both cases (b/274973520).
+      bool is_floss_enabled = GetParam();
+      if (!is_floss_enabled) {
+        SetAdapterPoweredState(expected_pending_state);
+      }
+
+      std::move(success_callback).Run();
+      error_callback.Reset();
+
+      if (is_floss_enabled) {
+        SetAdapterPoweredState(expected_pending_state);
+      }
       return;
     }
 
-    std::move(set_powered_error_callback_).Run();
-    set_powered_success_callback_.Reset();
+    std::move(error_callback).Run();
+    success_callback.Reset();
   }
 
   size_t GetNumObserverEvents() const { return fake_observer_.num_calls(); }
@@ -132,9 +150,9 @@ class AdapterStateControllerImplTest : public testing::Test {
   bool is_adapter_present_ = true;
   bool is_adapter_powered_ = true;
 
-  absl::optional<bool> pending_power_state_;
-  base::OnceClosure set_powered_success_callback_;
-  base::OnceClosure set_powered_error_callback_;
+  std::optional<bool> pending_power_state_;
+  base::queue<base::OnceClosure> set_powered_success_callbacks_;
+  base::queue<base::OnceClosure> set_powered_error_callbacks_;
 
   scoped_refptr<testing::NiceMock<device::MockBluetoothAdapter>> mock_adapter_;
   FakeObserver fake_observer_;
@@ -142,7 +160,11 @@ class AdapterStateControllerImplTest : public testing::Test {
   std::unique_ptr<AdapterStateController> adapter_state_controller_;
 };
 
-TEST_F(AdapterStateControllerImplTest, StateChangesFromOutsideClass) {
+// Boolean parameter indicating whether to simulate Floss
+// (floss::features::IsFlossEnabled()) adapter behavior or not.
+INSTANTIATE_TEST_SUITE_P(All, AdapterStateControllerImplTest, testing::Bool());
+
+TEST_P(AdapterStateControllerImplTest, StateChangesFromOutsideClass) {
   EXPECT_EQ(mojom::BluetoothSystemState::kEnabled, GetAdapterState());
 
   SetAdapterPoweredState(/*powered=*/false);
@@ -154,7 +176,7 @@ TEST_F(AdapterStateControllerImplTest, StateChangesFromOutsideClass) {
   EXPECT_EQ(2u, GetNumObserverEvents());
 }
 
-TEST_F(AdapterStateControllerImplTest, SetBluetoothEnabledState) {
+TEST_P(AdapterStateControllerImplTest, SetBluetoothEnabledState) {
   EXPECT_EQ(mojom::BluetoothSystemState::kEnabled, GetAdapterState());
 
   histogram_tester.ExpectBucketCount("Bluetooth.ChromeOS.PoweredState", false,
@@ -199,7 +221,7 @@ TEST_F(AdapterStateControllerImplTest, SetBluetoothEnabledState) {
       "Bluetooth.ChromeOS.PoweredState.Enable.Result", true, 1);
 }
 
-TEST_F(AdapterStateControllerImplTest, SetBluetoothEnabledState_Error) {
+TEST_P(AdapterStateControllerImplTest, SetBluetoothEnabledState_Error) {
   EXPECT_EQ(mojom::BluetoothSystemState::kEnabled, GetAdapterState());
 
   histogram_tester.ExpectBucketCount("Bluetooth.ChromeOS.PoweredState", false,
@@ -226,7 +248,7 @@ TEST_F(AdapterStateControllerImplTest, SetBluetoothEnabledState_Error) {
       "Bluetooth.ChromeOS.PoweredState.Enable.Result", true, 0);
 }
 
-TEST_F(AdapterStateControllerImplTest, MultiplePowerChanges_SameChange) {
+TEST_P(AdapterStateControllerImplTest, MultiplePowerChanges_SameChange) {
   EXPECT_EQ(mojom::BluetoothSystemState::kEnabled, GetAdapterState());
 
   histogram_tester.ExpectBucketCount("Bluetooth.ChromeOS.PoweredState", false,
@@ -262,9 +284,19 @@ TEST_F(AdapterStateControllerImplTest, MultiplePowerChanges_SameChange) {
       "Bluetooth.ChromeOS.PoweredState.Disable.Result", true, 1);
   histogram_tester.ExpectBucketCount(
       "Bluetooth.ChromeOS.PoweredState.Enable.Result", true, 0);
+
+  // Simulate adapter being enabled by system. There should be no leftover
+  // queued disable requests (Regression test for b/269082911).
+  SetAdapterPoweredState(/*powered=*/true);
+  EXPECT_EQ(mojom::BluetoothSystemState::kEnabled, GetAdapterState());
+  EXPECT_EQ(3u, GetNumObserverEvents());
+  histogram_tester.ExpectBucketCount(
+      "Bluetooth.ChromeOS.PoweredState.Disable.Result", true, 1);
+  histogram_tester.ExpectBucketCount(
+      "Bluetooth.ChromeOS.PoweredState.Enable.Result", true, 0);
 }
 
-TEST_F(AdapterStateControllerImplTest, MultiplePowerChanges_DifferentChange) {
+TEST_P(AdapterStateControllerImplTest, MultiplePowerChanges_DifferentChange) {
   EXPECT_EQ(mojom::BluetoothSystemState::kEnabled, GetAdapterState());
 
   histogram_tester.ExpectBucketCount("Bluetooth.ChromeOS.PoweredState", false,
@@ -320,7 +352,7 @@ TEST_F(AdapterStateControllerImplTest, MultiplePowerChanges_DifferentChange) {
 }
 
 // Regression test for b/219596007.
-TEST_F(AdapterStateControllerImplTest,
+TEST_P(AdapterStateControllerImplTest,
        MultiplePowerChanges_AdapterChangesAvailability) {
   EXPECT_EQ(mojom::BluetoothSystemState::kEnabled, GetAdapterState());
 

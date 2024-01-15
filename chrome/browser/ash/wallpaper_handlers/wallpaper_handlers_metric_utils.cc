@@ -23,6 +23,8 @@ std::string ToHistogramBase(GooglePhotosApi api) {
       return "Ash.Wallpaper.GooglePhotos.Api.GetPhoto";
     case GooglePhotosApi::kGetPhotos:
       return "Ash.Wallpaper.GooglePhotos.Api.GetPhotos";
+    case GooglePhotosApi::kGetSharedAlbums:
+      return "Ash.Wallpaper.GooglePhotos.Api.GetSharedAlbums";
   }
 }
 
@@ -51,6 +53,14 @@ void RecordGooglePhotosApiResponseParsed(GooglePhotosApi api,
         base::StringPrintf("%s.Result.Count", histogram_base.c_str()),
         result_count.value());
   }
+}
+
+void RecordGooglePhotosApiRefreshCount(GooglePhotosApi api, int refresh_count) {
+  // Record refresh count.
+  const std::string histogram_base = ToHistogramBase(api);
+  base::UmaHistogramExactLinear(
+      base::StringPrintf("%s.RefreshCount", histogram_base.c_str()),
+      refresh_count, 11);
 }
 
 }  // namespace wallpaper_handlers

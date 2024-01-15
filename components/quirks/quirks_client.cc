@@ -5,12 +5,11 @@
 #include "components/quirks/quirks_client.h"
 
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/strings/escape.h"
 #include "base/strings/stringprintf.h"
-#include "base/task/task_runner_util.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "components/quirks/quirks_manager.h"
 #include "components/version_info/version_info.h"
@@ -41,13 +40,13 @@ const net::BackoffEntry::Policy kDefaultBackoffPolicy = {
 };
 
 bool WriteIccFile(const base::FilePath file_path, const std::string& data) {
-  int bytes_written = base::WriteFile(file_path, data.data(), data.length());
-  if (bytes_written == -1)
+  if (!base::WriteFile(file_path, data)) {
     PLOG(ERROR) << "Write failed: " << file_path.value();
-  else
-    VLOG(1) << bytes_written << "bytes written to: " << file_path.value();
+    return false;
+  }
 
-  return (bytes_written != -1);
+  VLOG(1) << data.size() << "bytes written to: " << file_path.value();
+  return true;
 }
 
 }  // namespace
@@ -73,7 +72,7 @@ void QuirksClient::StartDownload() {
   DCHECK(thread_checker_.CalledOnValidThread());
 
   // URL of icc file on Quirks Server.
-  int major_version = atoi(version_info::GetVersionNumber().c_str());
+  int major_version = version_info::GetMajorVersionNumberAsInt();
   std::string url = base::StringPrintf(
       kQuirksUrlFormat, IdToHexString(product_id_).c_str(), major_version);
 
@@ -164,9 +163,8 @@ void QuirksClient::OnDownloadComplete(
     return;
   }
 
-  base::PostTaskAndReplyWithResult(
-      manager_->task_runner(), FROM_HERE,
-      base::BindOnce(&WriteIccFile, icc_path_, data),
+  manager_->task_runner()->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&WriteIccFile, icc_path_, data),
       base::BindOnce(&QuirksClient::Shutdown, weak_ptr_factory_.GetWeakPtr()));
 }
 

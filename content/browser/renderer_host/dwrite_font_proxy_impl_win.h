@@ -14,10 +14,7 @@
 #include <vector>
 
 #include "base/memory/read_only_shared_memory_region.h"
-#include "base/memory/ref_counted.h"
-#include "content/browser/renderer_host/dwrite_font_lookup_table_builder_win.h"
 #include "content/common/content_export.h"
-#include "content/public/browser/browser_message_filter.h"
 #include "content/public/browser/browser_thread.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "third_party/blink/public/mojom/dwrite_font_proxy/dwrite_font_proxy.mojom.h"
@@ -42,6 +39,12 @@ class CONTENT_EXPORT DWriteFontProxyImpl
 
   void SetWindowsFontsPathForTesting(std::u16string path);
 
+  // Adds a font to the "system collection" for content_shell tests. Usually
+  // this is the Ahem.ttf font. The font will report as being `local()` as if
+  // it was installed on the system. Must be called before any instance of the
+  // class is instantiated.
+  static void SideLoadFontForTesting(base::FilePath path);
+
  protected:
   // blink::mojom::DWriteFontProxy:
   void FindFamily(const std::u16string& family_name,
@@ -49,8 +52,8 @@ class CONTENT_EXPORT DWriteFontProxyImpl
   void GetFamilyCount(GetFamilyCountCallback callback) override;
   void GetFamilyNames(uint32_t family_index,
                       GetFamilyNamesCallback callback) override;
-  void GetFontFiles(uint32_t family_index,
-                    GetFontFilesCallback callback) override;
+  void GetFontFileHandles(uint32_t family_index,
+                          GetFontFileHandlesCallback callback) override;
   void MapCharacters(const std::u16string& text,
                      blink::mojom::DWriteFontStylePtr font_style,
                      const std::u16string& locale_name,
@@ -59,27 +62,11 @@ class CONTENT_EXPORT DWriteFontProxyImpl
                      MapCharactersCallback callback) override;
   void MatchUniqueFont(const std::u16string& unique_font_name,
                        MatchUniqueFontCallback callback) override;
-  void GetUniqueFontLookupMode(
-      GetUniqueFontLookupModeCallback callback) override;
-
-  void GetUniqueNameLookupTableIfAvailable(
-      GetUniqueNameLookupTableIfAvailableCallback callback) override;
-
-  void GetUniqueNameLookupTable(
-      GetUniqueNameLookupTableCallback callback) override;
-
-  void FallbackFamilyAndStyleForCodepoint(
-      const std::string& base_family_name,
-      const std::string& locale_name,
-      uint32_t codepoint,
-      FallbackFamilyAndStyleForCodepointCallback callback) override;
 
   void InitializeDirectWrite();
 
  private:
   bool IsLastResortFallbackFont(uint32_t font_index);
-
- private:
   bool direct_write_initialized_ = false;
   Microsoft::WRL::ComPtr<IDWriteFontCollection> collection_;
   Microsoft::WRL::ComPtr<IDWriteFactory> factory_;

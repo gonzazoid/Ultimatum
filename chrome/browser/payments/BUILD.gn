@@ -19,6 +19,7 @@ source_set("browser_tests") {
     "ignore_payment_method_browsertest.cc",
     "journey_logger_browsertest.cc",
     "load_and_remove_iframe_with_many_payment_requests_browsertest.cc",
+    "payment_handler_change_payment_method_browsertest.cc",
     "payment_handler_change_shipping_address_option_browsertest.cc",
     "payment_handler_enable_delegations_browsertest.cc",
     "payment_handler_enforce_full_delegation_browsertest.cc",
@@ -65,9 +66,10 @@ source_set("browser_tests") {
 
   if (!is_android) {
     sources += [
+      "capability_delegation_browsertest.cc",
       "manifest_verifier_browsertest.cc",
       "payment_manifest_parser_browsertest.cc",
-      "secure_payment_confirmation_creation_browsertest.cc",
+      "secure_payment_confirmation_authenticator_browsertest.cc",
       "service_worker_payment_app_finder_browsertest.cc",
       "site_per_process_payments_browsertest.cc",
     ]

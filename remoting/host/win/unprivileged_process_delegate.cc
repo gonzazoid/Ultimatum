@@ -14,6 +14,7 @@
 #include <string>
 #include <utility>
 
+#include <optional>
 #include "base/command_line.h"
 #include "base/files/file.h"
 #include "base/logging.h"
@@ -36,7 +37,6 @@
 #include "remoting/host/win/launch_process_with_token.h"
 #include "remoting/host/win/security_descriptor.h"
 #include "remoting/host/win/window_station_and_desktop.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using base::win::ScopedHandle;
 using base::win::Sid;
@@ -64,7 +64,8 @@ const char kLowIntegrityMandatoryLabel[] = "S:(ML;CIOI;NW;;;LW)";
 // gives SYSTEM and the logon SID full access the window station. The child
 // containers and objects inherit ACE giving SYSTEM and the logon SID full
 // access to them as well.
-const char kWindowStationSdFormat[] = "O:SYG:SYD:(A;CIOIIO;GA;;;SY)"
+const char kWindowStationSdFormat[] =
+    "O:SYG:SYD:(A;CIOIIO;GA;;;SY)"
     "(A;CIOIIO;GA;;;%s)(A;NP;0xf037f;;;SY)(A;NP;0xf037f;;;%s)";
 
 // Security descriptor of the worker process. It gives access SYSTEM full access
@@ -106,7 +107,7 @@ bool CreateRestrictedToken(ScopedHandle* token_out) {
   }
 
   ScopedHandle restricted_token(temp_handle);
-  absl::optional<Sid> sid = Sid::FromIntegrityLevel(SECURITY_MANDATORY_LOW_RID);
+  std::optional<Sid> sid = Sid::FromIntegrityLevel(SECURITY_MANDATORY_LOW_RID);
   if (!sid) {
     LOG(ERROR) << "Failed to get integrity level SID";
     return false;
@@ -192,10 +193,11 @@ bool CreateWindowStationAndDesktop(ScopedSid logon_sid,
     return false;
   }
 
-  desired_access = DESKTOP_READOBJECTS | DESKTOP_CREATEWINDOW |
-      DESKTOP_CREATEMENU | DESKTOP_HOOKCONTROL | DESKTOP_JOURNALRECORD |
-      DESKTOP_JOURNALPLAYBACK | DESKTOP_ENUMERATE | DESKTOP_WRITEOBJECTS |
-      DESKTOP_SWITCHDESKTOP | DELETE | READ_CONTROL | WRITE_DAC | WRITE_OWNER;
+  desired_access =
+      DESKTOP_READOBJECTS | DESKTOP_CREATEWINDOW | DESKTOP_CREATEMENU |
+      DESKTOP_HOOKCONTROL | DESKTOP_JOURNALRECORD | DESKTOP_JOURNALPLAYBACK |
+      DESKTOP_ENUMERATE | DESKTOP_WRITEOBJECTS | DESKTOP_SWITCHDESKTOP |
+      DELETE | READ_CONTROL | WRITE_DAC | WRITE_OWNER;
 
   security_attributes.nLength = sizeof(security_attributes);
   security_attributes.lpSecurityDescriptor = desktop_sd.get();
@@ -293,12 +295,13 @@ void UnprivilegedProcessDelegate::LaunchProcess(
   std::unique_ptr<IPC::ChannelProxy> server = IPC::ChannelProxy::Create(
       invitation.AttachMessagePipe(message_pipe_token).release(),
       IPC::Channel::MODE_SERVER, this, io_task_runner_,
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   base::CommandLine command_line(target_command_->argv());
   command_line.AppendSwitchASCII(kMojoPipeToken, message_pipe_token);
 
   base::HandlesToInheritVector handles_to_inherit = {
-      handles.desktop(), handles.window_station(),
+      handles.desktop(),
+      handles.window_station(),
   };
   mojo::PlatformChannel channel;
   channel.PrepareToPassRemoteEndpoint(&handles_to_inherit, &command_line);

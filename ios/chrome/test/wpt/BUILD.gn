@@ -8,6 +8,33 @@ import("//build/config/ios/rules.gni")
 import("//ios/build/chrome_build.gni")
 import("//ios/chrome/test/xcuitest/ios_chrome_xcuitest_app_host.gni")
 import("//ios/public/provider/chrome/browser/build_config.gni")
+import("//testing/test.gni")
+
+script_test("chrome_ios_wpt") {
+  script = "//third_party/blink/tools/run_wpt_tests.py"
+  args = [
+    "--product",
+    "chrome_ios",
+    "--target",
+    "Release",
+    "--zero-tests-executed-ok",
+    "--no-retry-failures",
+    "--use-upstream-wpt",
+  ]
+  deps = [ ":all_tests" ]
+  data_deps = [
+    ":tools",
+    "//third_party/blink/tools:wpt_tests_isolate",
+  ]
+}
+
+group("tools") {
+  data = [
+    "tools/",
+    "//ios/build/bots/scripts/",
+    "//ios/testing/plugin",
+  ]
+}
 
 group("all_tests") {
   testonly = true
@@ -21,6 +48,7 @@ copy("copy_clusterfuzz_scripts") {
   sources = [
     "//ios/build/bots/scripts",
     "//ios/chrome/test/wpt/tools",
+    "//ios/testing/plugin",
 
     # Variations test utilities used by variations_runner script.
     "//testing/scripts/variations_seed_access_helper.py",
@@ -57,11 +85,17 @@ ios_xcuitest_test("ios_cwt_chromedriver_tests_module") {
     "//ios/third_party/gtx:gtx+bundle",
     "//third_party/icu:icudata",
   ]
+
+  # Those frameworks are force-linked via //base/test:test_support, so
+  # ensure the framework bundles are packaged in the test runner and
+  # not the test module.
+  runner_only_bundle_deps = [ "//base/test:test_trace_processor+bundle" ]
 }
 
 source_set("shared_helper_headers") {
   testonly = true
   sources = [ "cwt_webdriver_app_interface.h" ]
+  public_deps = [ "//base" ]
 }
 
 source_set("cwt_constants") {
@@ -74,7 +108,6 @@ source_set("cwt_constants") {
 
 source_set("app_support") {
   testonly = true
-  configs += [ "//build/config/compiler:enable_arc" ]
 
   sources = [
     "cwt_stderr_logger.h",
@@ -87,11 +120,12 @@ source_set("app_support") {
     ":cwt_constants",
     "//base",
     "//base/test:test_support",
+    "//components/signin/internal/identity_manager",
     "//ios/chrome/app:app_internal",
     "//ios/chrome/app:tests_hook",
-    "//ios/chrome/browser/main:public",
-    "//ios/chrome/browser/tabs:tabs",
-    "//ios/chrome/browser/web_state_list",
+    "//ios/chrome/browser/shared/model/browser",
+    "//ios/chrome/browser/shared/model/web_state_list",
+    "//ios/chrome/browser/tabs/model",
     "//ios/chrome/test/app:test_support",
     "//ios/testing:nserror_support",
     "//ios/third_party/edo",
@@ -105,10 +139,7 @@ source_set("app_support") {
 
 source_set("cwt_chromedriver_tests") {
   testonly = true
-  configs += [
-    "//build/config/compiler:enable_arc",
-    "//build/config/ios:xctest_config",
-  ]
+  configs += [ "//build/config/ios:xctest_config" ]
 
   sources = [
     "cwt_chrome_driver.mm",

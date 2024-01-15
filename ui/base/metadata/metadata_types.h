@@ -10,9 +10,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/callback_list.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 
 namespace ui {
@@ -56,7 +56,8 @@ class COMPONENT_EXPORT(UI_BASE_METADATA) MetaDataProvider {
  public:
   MetaDataProvider();
   virtual ~MetaDataProvider();
-  virtual class ClassMetaData* GetClassMetaData() = 0;
+  virtual const class ClassMetaData* GetClassMetaData() const = 0;
+  class ClassMetaData* GetClassMetaData();
 
  protected:
   [[nodiscard]] base::CallbackListSubscription AddPropertyChangedCallback(
@@ -87,9 +88,13 @@ class COMPONENT_EXPORT(UI_BASE_METADATA) ClassMetaData {
   virtual ~ClassMetaData();
 
   const std::string& type_name() const { return type_name_; }
-  const std::vector<MemberMetaDataBase*>& members() const { return members_; }
+  const std::vector<raw_ptr<MemberMetaDataBase, VectorExperimental>>& members()
+      const {
+    return members_;
+  }
   const std::string& file() const { return file_; }
   const int& line() const { return line_; }
+  const std::string& GetUniqueName() const;
   void AddMemberData(std::unique_ptr<MemberMetaDataBase> member_data);
 
   // Lookup the member data entry for a member of this class with a given name.
@@ -160,7 +165,8 @@ class COMPONENT_EXPORT(UI_BASE_METADATA) ClassMetaData {
 
  private:
   std::string type_name_;
-  std::vector<MemberMetaDataBase*> members_;
+  mutable std::string unique_name_;
+  std::vector<raw_ptr<MemberMetaDataBase, VectorExperimental>> members_;
   raw_ptr<ClassMetaData> parent_class_meta_data_ = nullptr;
   std::string file_;
   const int line_ = 0;

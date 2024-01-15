@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Alliance for Open Media. All rights reserved
+ * Copyright (c) 2024, Alliance for Open Media. All rights reserved
  *
  * This source code is subject to the terms of the BSD 2 Clause License and
  * the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -10,10 +10,11 @@
  */
 #ifndef AOM_CONFIG_H_
 #define AOM_CONFIG_H_
-#define ARCH_ARM 0
-#define ARCH_PPC 0
-#define ARCH_X86 0
-#define ARCH_X86_64 1
+#define AOM_ARCH_AARCH64 0
+#define AOM_ARCH_ARM 0
+#define AOM_ARCH_PPC 0
+#define AOM_ARCH_X86 0
+#define AOM_ARCH_X86_64 1
 #define CONFIG_ACCOUNTING 0
 #define CONFIG_ANALYZER 0
 #define CONFIG_AV1_DECODER 1
@@ -28,18 +29,20 @@
 #define CONFIG_COLLECT_COMPONENT_TIMING 0
 #define CONFIG_COLLECT_PARTITION_STATS 0
 #define CONFIG_COLLECT_RD_STATS 0
+#define CONFIG_CWG_C013 0
 #define CONFIG_DEBUG 0
 #define CONFIG_DENOISE 1
 #define CONFIG_DISABLE_FULL_PIXEL_SPLIT_8X8 1
 #define CONFIG_ENTROPY_STATS 0
 #define CONFIG_EXCLUDE_SIMD_MISMATCH 0
 #define CONFIG_FPMT_TEST 0
-#define CONFIG_GCC 0
+#define CONFIG_GCC  0
 #define CONFIG_GCOV 0
 #define CONFIG_GPROF 0
 #define CONFIG_INSPECTION 0
 #define CONFIG_INTERNAL_STATS 0
 #define CONFIG_INTER_STATS_ONLY 0
+#define CONFIG_LIBVMAF_PSNR_PEAK 1
 #define CONFIG_LIBYUV 0
 #define CONFIG_MAX_DECODE_PROFILE 0
 #define CONFIG_MISMATCH_DEBUG 0
@@ -48,6 +51,7 @@
 #define CONFIG_NORMAL_TILE_MODE 1
 #define CONFIG_OPTICAL_FLOW_API 0
 #define CONFIG_OS_SUPPORT 1
+#define CONFIG_OUTPUT_FRAME_SIZE 0
 #define CONFIG_PARTITION_SEARCH_ORDER 0
 #define CONFIG_PIC 1
 #define CONFIG_RATECTRL_LOG 0
@@ -56,6 +60,7 @@
 #define CONFIG_REALTIME_ONLY 1
 #define CONFIG_RT_ML_PARTITIONING 0
 #define CONFIG_RUNTIME_CPU_DETECT 1
+#define CONFIG_SALIENCY_MAP 0
 #define CONFIG_SHARED 0
 #define CONFIG_SIZE_LIMIT 1
 #define CONFIG_SPATIAL_RESAMPLING 1
@@ -74,16 +79,19 @@
 #define HAVE_FEXCEPT 1
 #define HAVE_MMX 1
 #define HAVE_NEON 0
-#define HAVE_PTHREAD_H 0
+#define HAVE_NEON_DOTPROD 0
+#define HAVE_NEON_I8MM 0
+#define HAVE_PTHREAD_H  0
 #define HAVE_SSE 1
 #define HAVE_SSE2 1
 #define HAVE_SSE3 1
 #define HAVE_SSE4_1 1
 #define HAVE_SSE4_2 1
 #define HAVE_SSSE3 1
-#define HAVE_UNISTD_H 0
+#define HAVE_SVE 0
+#define HAVE_UNISTD_H  0
 #define HAVE_VSX 0
 #define HAVE_WXWIDGETS 0
-#define INLINE __inline
+#define INLINE  __inline
 #define STATIC_LINK_JXL 0
 #endif  // AOM_CONFIG_H_

@@ -9,7 +9,8 @@ import("//testing/test.gni")
 
 if (is_android) {
   import("//build/config/android/config.gni")
-  import("//build/config/android/rules.gni")  # For generate_jni().
+  import("//build/config/android/rules.gni")
+  import("//third_party/jni_zero/jni_zero.gni")
 }
 
 if (is_mac) {
@@ -62,10 +63,9 @@ test("device_unittests") {
     "test/run_all_unittests.cc",
   ]
 
-  if (is_mac) {
+  if (is_apple) {
     sources += [
-      "bluetooth/bluetooth_adapter_mac_metrics_unittest.mm",
-      "bluetooth/bluetooth_adapter_mac_unittest.mm",
+      "bluetooth/bluetooth_low_energy_adapter_apple_unittest.mm",
       "bluetooth/bluetooth_low_energy_advertisement_manager_mac_unittest.mm",
       "bluetooth/test/bluetooth_test_mac.h",
       "bluetooth/test/bluetooth_test_mac.mm",
@@ -82,6 +82,10 @@ test("device_unittests") {
     ]
   }
 
+  if (is_mac) {
+    sources += [ "bluetooth/bluetooth_adapter_mac_unittest.mm" ]
+  }
+
   if (is_android) {
     sources += [
       "bluetooth/bluetooth_adapter_android_unittest.cc",
@@ -94,7 +98,6 @@ test("device_unittests") {
     sources += [
       "bluetooth/bluetooth_adapter_win_unittest.cc",
       "bluetooth/bluetooth_device_win_unittest.cc",
-      "bluetooth/bluetooth_low_energy_win_unittest.cc",
       "bluetooth/bluetooth_service_record_win_unittest.cc",
       "bluetooth/bluetooth_task_manager_win_unittest.cc",
       "bluetooth/test/bluetooth_test_win.cc",
@@ -124,8 +127,6 @@ test("device_unittests") {
     "//device/bluetooth:deprecated_experimental_mojo",
     "//device/bluetooth:fake_bluetooth",
     "//device/bluetooth:mocks",
-    "//device/fido",
-    "//device/fido:test_support",
     "//device/gamepad",
     "//device/gamepad:test_helpers",
     "//device/gamepad/public/cpp:shared_with_blink",
@@ -148,8 +149,15 @@ test("device_unittests") {
     "//ui/resources:ui_test_pak_data",
   ]
 
+  if (!is_ios) {
+    deps += [
+      "//device/fido",
+      "//device/fido:test_support",
+    ]
+  }
+
   # Most of the FIDO implementation is not compiled in for Android.
-  if (!is_android) {
+  if (!is_android && !is_ios) {
     sources += [
       "fido/attestation_statement_formats_unittest.cc",
       "fido/auth_token_requester_unittest.cc",
@@ -166,6 +174,7 @@ test("device_unittests") {
       "fido/credential_management_handler_unittest.cc",
       "fido/ctap_request_unittest.cc",
       "fido/ctap_response_unittest.cc",
+      "fido/enclave/enclave_protocol_utils_unittest.cc",
       "fido/fake_fido_discovery_unittest.cc",
       "fido/fido_device_authenticator_unittest.cc",
       "fido/fido_device_discovery_unittest.cc",
@@ -183,12 +192,21 @@ test("device_unittests") {
       "fido/u2f_command_constructor_unittest.cc",
       "fido/u2f_register_operation_unittest.cc",
       "fido/u2f_sign_operation_unittest.cc",
+      "fido/value_response_conversions_unittest.cc",
       "fido/virtual_ctap2_device_unittest.cc",
       "fido/virtual_fido_device_authenticator_unittest.cc",
       "fido/virtual_u2f_device_unittest.cc",
     ]
 
-    deps += [ "//device/fido:mocks" ]
+    deps += [
+      "//components/sync/protocol:protocol",
+      "//device/fido:mocks",
+      "//services/data_decoder/public/cpp:test_support",
+    ]
+
+    if (is_chromeos_lacros) {
+      deps += [ "//chromeos/startup" ]
+    }
 
     if (is_mac) {
       data_deps += [ "fido/strings:fido_test_strings" ]
@@ -197,13 +215,16 @@ test("device_unittests") {
 
   if (is_mac) {
     sources += [
+      "fido/mac/authenticator_unittest.mm",
       "fido/mac/browsing_data_deletion_unittest.mm",
       "fido/mac/credential_metadata_unittest.cc",
       "fido/mac/credential_store_unittest.mm",
       "fido/mac/get_assertion_operation_unittest_mac.mm",
+      "fido/mac/icloud_keychain_unittest.mm",
       "fido/mac/make_credential_operation_unittest_mac.mm",
       "fido/mac/util_unittest.cc",
     ]
+    deps += [ "//device/fido:icloud_keychain_test_support" ]
   }
 
   if (is_win) {
@@ -216,7 +237,7 @@ test("device_unittests") {
   # FIDO HID:
   # Android doesn't compile.
   # Linux, requires udev.
-  if (!is_linux_without_udev && !is_android) {
+  if (!is_linux_without_udev && !is_android && !is_ios) {
     sources += [
       "fido/hid/fido_hid_device_unittest.cc",
       "fido/hid/fido_hid_discovery_unittest.cc",
@@ -253,7 +274,11 @@ test("device_unittests") {
     ]
     deps += [ "//chromeos/constants" ]
     if (is_chromeos_ash) {
-      deps += [ "//ash/constants" ]
+      deps += [
+        "//ash/constants",
+        "//chromeos/ash/services/nearby/public/cpp/",
+        "//chromeos/ash/services/secure_channel/public/cpp/shared",
+      ]
     }
     if (is_chromeos_lacros) {
       deps += [ "//chromeos/lacros:test_support" ]
@@ -279,12 +304,17 @@ test("device_unittests") {
       "bluetooth/floss/bluetooth_socket_floss_unittest.cc",
       "bluetooth/floss/exported_callback_manager_unittest.cc",
       "bluetooth/floss/floss_adapter_client_unittest.cc",
+      "bluetooth/floss/floss_admin_client_unittest.cc",
       "bluetooth/floss/floss_advertiser_client_unittest.cc",
+      "bluetooth/floss/floss_battery_manager_client_unittest.cc",
+      "bluetooth/floss/floss_bluetooth_telephony_client_unittest.cc",
       "bluetooth/floss/floss_dbus_client_unittest.cc",
-      "bluetooth/floss/floss_gatt_client_unittest.cc",
+      "bluetooth/floss/floss_dbus_manager_unittest.cc",
+      "bluetooth/floss/floss_gatt_manager_client_unittest.cc",
       "bluetooth/floss/floss_lescan_client_unittest.cc",
       "bluetooth/floss/floss_manager_client_unittest.cc",
       "bluetooth/floss/floss_socket_manager_unittest.cc",
+      "bluetooth/floss/floss_version_unittest.cc",
       "bluetooth/test/bluetooth_test_bluez.cc",
       "bluetooth/test/bluetooth_test_bluez.h",
     ]
@@ -326,15 +356,21 @@ test("device_unittests") {
     ]
   }
 
-  if (is_mac) {
+  if (is_apple) {
     deps += [ "//third_party/ocmock" ]
     ldflags = [ "-ObjC" ]
     frameworks = [
       "CoreBluetooth.framework",
-      "IOBluetooth.framework",
       "IOKit.framework",
       "Foundation.framework",
+    ]
+  }
+
+  if (is_mac) {
+    frameworks += [
+      "IOBluetooth.framework",
       "Security.framework",
+      "AuthenticationServices.framework",
     ]
   }
 
@@ -342,8 +378,6 @@ test("device_unittests") {
     sources += [
       "bluetooth/bluetooth_classic_win_fake.cc",
       "bluetooth/bluetooth_classic_win_fake.h",
-      "bluetooth/bluetooth_low_energy_win_fake.cc",
-      "bluetooth/bluetooth_low_energy_win_fake.h",
       "bluetooth/test/fake_bluetooth_adapter_winrt.cc",
       "bluetooth/test/fake_bluetooth_adapter_winrt.h",
       "bluetooth/test/fake_bluetooth_le_advertisement_data_section_winrt.cc",
@@ -425,7 +459,7 @@ test("device_unittests") {
 
   # Some gamepad tests require the HID service. Only build these tests on
   # platforms where the HID service is enabled.
-  if (!is_android && !is_fuchsia) {
+  if (!is_android && !is_fuchsia && !is_ios) {
     sources += [ "gamepad/nintendo_data_fetcher_unittest.cc" ]
 
     deps += [
@@ -453,17 +487,21 @@ if (is_android) {
 
   android_library("bluetooth_test_java") {
     testonly = true
+
     sources = bluetooth_java_sources_needing_jni
     deps = [
       "//base:base_java",
-      "//base:jni_java",
       "//components/location/android:location_java",
       "//device/bluetooth:java",
       "//third_party/android_sdk:android_test_mock_java",
       "//third_party/androidx:androidx_annotation_annotation_java",
+      "//third_party/jni_zero:jni_zero_java",
     ]
 
-    srcjar_deps = [ ":bluetooth_test_javagen" ]
+    srcjar_deps = [
+      ":bluetooth_test_javagen",
+      ":bluetooth_test_jni_headers",
+    ]
   }
 
   robolectric_binary("device_junit_tests") {

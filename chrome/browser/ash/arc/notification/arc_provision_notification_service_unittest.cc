@@ -13,8 +13,9 @@
 #include "ash/components/arc/session/arc_service_manager.h"
 #include "ash/components/arc/test/arc_util_test_support.h"
 #include "ash/components/arc/test/fake_arc_session.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/values.h"
 #include "chrome/browser/ash/arc/arc_optin_uma.h"
 #include "chrome/browser/ash/arc/arc_util.h"
@@ -43,7 +44,7 @@ const char kArcManagedProvisionNotificationId[] = "arc_managed_provision";
 class ArcProvisionNotificationServiceTest : public BrowserWithTestWindowTest {
  protected:
   ArcProvisionNotificationServiceTest()
-      : user_manager_enabler_(std::make_unique<ash::FakeChromeUserManager>()) {}
+      : fake_user_manager_(std::make_unique<ash::FakeChromeUserManager>()) {}
 
   ArcProvisionNotificationServiceTest(
       const ArcProvisionNotificationServiceTest&) = delete;
@@ -86,8 +87,8 @@ class ArcProvisionNotificationServiceTest : public BrowserWithTestWindowTest {
 
     const AccountId account_id(AccountId::FromUserEmailGaiaId(
         profile()->GetProfileUserName(), "1234567890"));
-    GetFakeUserManager()->AddUser(account_id);
-    GetFakeUserManager()->LoginUser(account_id);
+    fake_user_manager_->AddUser(account_id);
+    fake_user_manager_->LoginUser(account_id);
   }
 
   void TearDown() override {
@@ -105,18 +106,14 @@ class ArcProvisionNotificationServiceTest : public BrowserWithTestWindowTest {
     ash::ConciergeClient::Shutdown();
   }
 
-  ash::FakeChromeUserManager* GetFakeUserManager() {
-    return static_cast<ash::FakeChromeUserManager*>(
-        user_manager::UserManager::Get());
-  }
-
   std::unique_ptr<ArcServiceManager> arc_service_manager_;
   std::unique_ptr<ArcSessionManager> arc_session_manager_;
   std::unique_ptr<NotificationDisplayServiceTester> display_service_;
-  session_manager::SessionManager* session_manager_;
+  raw_ptr<session_manager::SessionManager> session_manager_;
 
  private:
-  user_manager::ScopedUserManager user_manager_enabler_;
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_;
   TestingPrefServiceSimple local_state_;
 };
 

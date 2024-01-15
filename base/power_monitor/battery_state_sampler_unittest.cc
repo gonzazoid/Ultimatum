@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,11 @@
 #include "base/power_monitor/power_monitor_buildflags.h"
 #include "base/power_monitor/sampling_event_source.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/gtest_util.h"
 #include "base/test/power_monitor_test_utils.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace base {
@@ -54,7 +54,7 @@ class TestBatteryLevelProviderAsync : public TestBatteryLevelProvider {
     auto next_battery_state = std::move(battery_states_.front());
     battery_states_.pop();
 
-    SequencedTaskRunnerHandle::Get()->PostTask(
+    SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         BindLambdaForTesting([callback = std::move(callback),
                               battery_state = next_battery_state]() mutable {

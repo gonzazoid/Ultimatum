@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#import "base/containers/contains.h"
+#import "base/ios/ios_util.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
 #import "ios/chrome/browser/ui/settings/settings_app_interface.h"
@@ -15,10 +17,6 @@
 #import "net/test/embedded_test_server/embedded_test_server.h"
 #import "net/test/embedded_test_server/http_request.h"
 #import "net/test/embedded_test_server/http_response.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -44,9 +42,9 @@ std::unique_ptr<net::test_server::HttpResponse> SearchResponse(
   std::unique_ptr<net::test_server::BasicHttpResponse> http_response =
       std::make_unique<net::test_server::BasicHttpResponse>();
   http_response->set_code(net::HTTP_OK);
-  if (request.GetURL().path().find(kGoogleURL) != std::string::npos) {
+  if (base::Contains(request.GetURL().path(), kGoogleURL)) {
     http_response->set_content("<body>" + std::string(kGoogleURL) + "</body>");
-  } else if (request.GetURL().path().find(kYahooURL) != std::string::npos) {
+  } else if (base::Contains(request.GetURL().path(), kYahooURL)) {
     http_response->set_content("<body>" + std::string(kYahooURL) + "</body>");
   }
   return std::move(http_response);
@@ -114,6 +112,11 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
 // Tests that when changing the default search engine, the URL used for the
 // search is updated.
 - (void)testChangeSearchEngine {
+  // TODO(crbug.com/1469573): Test flaky on iOS 17.
+  if (base::ios::IsRunningOnIOS17OrLater()) {
+    EARL_GREY_TEST_DISABLED(@"Flaky on iOS 17.");
+  }
+
   self.testServer->RegisterRequestHandler(base::BindRepeating(&SearchResponse));
   GREYAssertTrue(self.testServer->Start(), @"Test server failed to start.");
 
@@ -132,7 +135,10 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
   [ChromeEarlGrey
       waitForSufficientlyVisibleElementWithMatcher:chrome_test_util::Omnibox()];
   [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
-      performAction:grey_typeText([@"test" stringByAppendingString:@"\n"])];
+      performAction:grey_replaceText(@"test")];
+  // TODO(crbug.com/1454516): Use simulatePhysicalKeyboardEvent until
+  // replaceText can properly handle \n.
+  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"\n" flags:0];
 
   [ChromeEarlGrey waitForWebStateContainingText:kGoogleURL];
 
@@ -160,7 +166,10 @@ std::unique_ptr<net::test_server::HttpResponse> StandardResponse(
       waitForSufficientlyVisibleElementWithMatcher:chrome_test_util::Omnibox()];
 
   [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
-      performAction:grey_typeText([@"test" stringByAppendingString:@"\n"])];
+      performAction:grey_replaceText(@"test")];
+  // TODO(crbug.com/1454516): Use simulatePhysicalKeyboardEvent until
+  // replaceText can properly handle \n.
+  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"\n" flags:0];
 
   [ChromeEarlGrey waitForWebStateContainingText:kYahooURL];
 }

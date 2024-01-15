@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ui/views/safe_browsing/password_reuse_modal_warning_dialog.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "chrome/browser/ui/browser.h"
@@ -58,7 +58,8 @@ class PasswordReuseModalWarningTest : public DialogBrowserTest {
   void DialogCallback(WarningAction action) { latest_user_action_ = action; }
 
  protected:
-  raw_ptr<PasswordReuseModalWarningDialog, DanglingUntriaged> dialog_;
+  raw_ptr<PasswordReuseModalWarningDialog, AcrossTasksDanglingUntriaged>
+      dialog_;
   WarningAction latest_user_action_;
 };
 

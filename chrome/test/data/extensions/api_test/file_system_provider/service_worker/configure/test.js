@@ -3,9 +3,6 @@
 // found in the LICENSE file.
 
 import {catchError, mountTestFileSystem, promisifyWithLastError, remoteProvider} from '/_test_resources/api_test/file_system_provider/service_worker/helpers.js';
-// For shared constants.
-import {TestFileSystemProvider} from '/_test_resources/api_test/file_system_provider/service_worker/provider.js';
-
 
 async function main() {
   await navigator.serviceWorker.ready;
@@ -32,9 +29,9 @@ async function main() {
       chrome.test.assertFalse(providers[0].multipleMounts);
       chrome.test.assertEq('device', providers[0].source);
 
-      await new Promise(
-          resolve => chrome.fileManagerPrivate.configureVolume(
-              fileSystem.volumeInfo.volumeId, resolve));
+      await promisifyWithLastError(
+          chrome.fileManagerPrivate.configureVolume,
+          fileSystem.volumeInfo.volumeId);
 
       chrome.test.succeed();
     },

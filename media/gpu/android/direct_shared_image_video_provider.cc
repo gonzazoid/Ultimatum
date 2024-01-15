@@ -6,12 +6,14 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "gpu/command_buffer/service/abstract_texture.h"
 #include "gpu/command_buffer/service/mailbox_manager.h"
@@ -21,7 +23,6 @@
 #include "gpu/ipc/service/command_buffer_stub.h"
 #include "gpu/ipc/service/gpu_channel.h"
 #include "gpu/ipc/service/gpu_channel_manager.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/media_switches.h"
 #include "mojo/public/cpp/bindings/callback_helpers.h"
 #include "ui/gl/gl_bindings.h"
@@ -80,12 +81,13 @@ void DirectSharedImageVideoProvider::RequestImage(ImageReadyCB cb,
   //
   // Also note that CodecImage shouldn't be the thing that's added to the
   // group anyway.  The thing that owns buffer management is all we really
-  // care about, and that doesn't have anything to do with GLImage.
+  // care about.
 
   // Note: `cb` is only run on successful creation, so this does not use
   // `AsyncCall()` + `Then()` to chain the callbacks.
   gpu_factory_.AsyncCall(&GpuSharedImageVideoFactory::CreateImage)
-      .WithArgs(BindToCurrentLoop(std::move(cb)), spec, GetDrDcLock());
+      .WithArgs(base::BindPostTaskToCurrentDefault(std::move(cb)), spec,
+                GetDrDcLock());
 }
 
 GpuSharedImageVideoFactory::GpuSharedImageVideoFactory(
@@ -167,7 +169,8 @@ void GpuSharedImageVideoFactory::CreateImage(
   // Guarantee that the SharedImage is destroyed even if the VideoFrame is
   // dropped. Otherwise we could keep shared images we don't need alive.
   auto release_cb = mojo::WrapCallbackWithDefaultInvokeIfNotRun(
-      BindToCurrentLoop(std::move(destroy_shared_image)), gpu::SyncToken());
+      base::BindPostTaskToCurrentDefault(std::move(destroy_shared_image)),
+      gpu::SyncToken());
 
   SharedImageVideoProvider::ImageRecord record;
   record.mailbox = mailbox;
@@ -180,7 +183,7 @@ void GpuSharedImageVideoFactory::CreateImage(
   // should work with some other object that happens to be used by CodecImage,
   // and non-GL things, to hold the output buffer, etc.
   record.codec_image_holder = base::MakeRefCounted<CodecImageHolder>(
-      base::SequencedTaskRunnerHandle::Get(), std::move(codec_image),
+      base::SequencedTaskRunner::GetCurrentDefault(), std::move(codec_image),
       std::move(drdc_lock));
 
   std::move(image_ready_cb).Run(std::move(record));
@@ -193,10 +196,6 @@ bool GpuSharedImageVideoFactory::CreateImageInternal(
     scoped_refptr<gpu::RefCountedLock> drdc_lock) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   if (!MakeContextCurrent(stub_))
-    return false;
-
-  gpu::gles2::ContextGroup* group = stub_->decoder_context()->GetContextGroup();
-  if (!group)
     return false;
 
   const auto& coded_size = spec.coded_size;

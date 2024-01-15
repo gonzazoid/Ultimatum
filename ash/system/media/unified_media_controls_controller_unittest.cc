@@ -7,9 +7,7 @@
 #include "ash/system/media/unified_media_controls_view.h"
 #include "ash/test/ash_test_base.h"
 #include "base/ranges/algorithm.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "media/base/media_switches.h"
 #include "services/media_session/public/cpp/test/test_media_controller.h"
 #include "services/media_session/public/mojom/media_session.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -54,7 +52,6 @@ class UnifiedMediaControlsControllerTest : public AshTestBase {
   ~UnifiedMediaControlsControllerTest() override = default;
 
   void SetUp() override {
-    feature_list_.InitAndEnableFeature(media::kGlobalMediaControlsForChromeOS);
     AshTestBase::SetUp();
 
     mock_delegate_ = std::make_unique<MockMediaControlsDelegate>();
@@ -172,8 +169,6 @@ class UnifiedMediaControlsControllerTest : public AshTestBase {
     controller_->MediaSessionActionsChanged(
         std::vector<MediaSessionAction>(actions_.begin(), actions_.end()));
   }
-
-  base::test::ScopedFeatureList feature_list_;
 
   std::unique_ptr<views::Widget> widget_;
   std::unique_ptr<UnifiedMediaControlsController> controller_;
@@ -378,31 +373,31 @@ TEST_F(UnifiedMediaControlsControllerTest,
 
   EXPECT_FALSE(delegate()->IsControlsVisible());
 
-  // Don't show controls if we don't have metadata and session info.
+  // Don't show controls if we don't have session info.
   controller()->MediaSessionChanged(request_id);
   EXPECT_FALSE(delegate()->IsControlsVisible());
 
-  // Test that we need to have both media title and session info
-  // to display the controls.
+  // Test that we need to session info to display the controls.
   media_session::mojom::MediaSessionInfoPtr session_info(
       media_session::mojom::MediaSessionInfo::New());
   session_info->is_controllable = true;
   controller()->MediaSessionInfoChanged(session_info.Clone());
-  EXPECT_FALSE(delegate()->IsControlsVisible());
+  EXPECT_TRUE(delegate()->IsControlsVisible());
 
+  // Test that we should not display a non-controllable session.
   session_info->is_controllable = false;
   controller()->MediaSessionInfoChanged(session_info.Clone());
   media_session::MediaMetadata metadata;
   metadata.title = u"foo";
   controller()->MediaSessionMetadataChanged(metadata);
-  EXPECT_FALSE(delegate()->IsControlsVisible());
+  EXPECT_TRUE(IsMediaControlsInEmptyState());
 
   // Controls should show with metadata and controllable session.
   SimulateNewMediaSessionWithData(request_id);
   EXPECT_TRUE(delegate()->IsControlsVisible());
   EXPECT_FALSE(IsMediaControlsInEmptyState());
 
-  controller()->MediaSessionChanged(absl::nullopt);
+  controller()->MediaSessionChanged(std::nullopt);
   EXPECT_FALSE(IsMediaControlsInEmptyState());
 
   // Still in normal state since we are within waiting delay time frame.
@@ -416,7 +411,7 @@ TEST_F(UnifiedMediaControlsControllerTest,
   EXPECT_FALSE(IsMediaControlsInEmptyState());
 
   // Hide controls timer expired, controls should be in empty state.
-  controller()->MediaSessionChanged(absl::nullopt);
+  controller()->MediaSessionChanged(std::nullopt);
   task_environment()->FastForwardBy(base::Milliseconds(kFreezeControlsTime));
   EXPECT_TRUE(IsMediaControlsInEmptyState());
   EXPECT_TRUE(delegate()->IsControlsVisible());
@@ -447,7 +442,7 @@ TEST_F(UnifiedMediaControlsControllerTest, MediaControlsEmptyState) {
     EXPECT_TRUE(button->GetEnabled());
 
   // Media controls should be in empty state after getting empty session.
-  controller()->MediaSessionChanged(absl::nullopt);
+  controller()->MediaSessionChanged(std::nullopt);
   task_environment()->FastForwardBy(base::Milliseconds(kFreezeControlsTime));
 
   EXPECT_TRUE(IsMediaControlsInEmptyState());
@@ -498,7 +493,7 @@ TEST_F(UnifiedMediaControlsControllerTest, MediaControlsEmptyStateWithArtwork) {
   EXPECT_TRUE(artwork_view()->GetVisible());
   EXPECT_EQ(artwork_view()->background(), nullptr);
 
-  controller()->MediaSessionChanged(absl::nullopt);
+  controller()->MediaSessionChanged(std::nullopt);
   task_environment()->FastForwardBy(base::Milliseconds(kFreezeControlsTime));
 
   // Artwork view should still be visible and have an background in empty state.
@@ -535,7 +530,7 @@ TEST_F(UnifiedMediaControlsControllerTest, FreezeControlsWhenUpdateSession) {
   EXPECT_EQ(artist_label()->GetText(), init_metadata.artist);
   EXPECT_FALSE(artwork_view()->GetVisible());
 
-  controller()->MediaSessionChanged(absl::nullopt);
+  controller()->MediaSessionChanged(std::nullopt);
 
   // Test that metadata update is ignored when we waiting for new session.
   media_session::MediaMetadata metadata;
@@ -685,6 +680,21 @@ TEST_F(UnifiedMediaControlsControllerTest, ArtistVisibility) {
   metadata.artist = u"artist";
   controller()->MediaSessionMetadataChanged(metadata);
   EXPECT_TRUE(artist_label()->GetVisible());
+}
+
+TEST_F(UnifiedMediaControlsControllerTest,
+       FallbackToSourceTitleWhenTitleIsEmpty) {
+  auto request_id = base::UnguessableToken::Create();
+  SimulateNewMediaSessionWithData(request_id);
+
+  // Simulate metadata update with empty title.
+  media_session::MediaMetadata metadata;
+  metadata.source_title = u"source title";
+  metadata.title = u"";
+  controller()->MediaSessionMetadataChanged(metadata);
+
+  // Title label should display source title instead.
+  EXPECT_EQ(title_label()->GetText(), metadata.source_title);
 }
 
 }  // namespace ash

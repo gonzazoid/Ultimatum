@@ -10,6 +10,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -20,17 +21,14 @@
 #include "base/observer_list.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
-#include "base/time/time.h"
-#include "base/timer/timer.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/tabs/tab_group_controller.h"
+#include "chrome/browser/ui/tabs/tab_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_scrubbing_metrics.h"
 #include "chrome/browser/ui/tabs/tab_strip_user_gesture_details.h"
-#include "chrome/browser/ui/tabs/tab_switch_event_latency_recorder.h"
 #include "components/sessions/core/session_id.h"
 #include "components/tab_groups/tab_group_id.h"
 #include "components/tab_groups/tab_group_visual_data.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 #include "ui/base/models/list_selection_model.h"
 #include "ui/base/page_transition_types.h"
@@ -56,6 +54,47 @@ class TabGroupModelFactory {
 
   static TabGroupModelFactory* GetInstance();
   std::unique_ptr<TabGroupModel> Create(TabGroupController* controller);
+};
+
+// Holds state for a WebContents that has been detached from the tab strip.
+// Will also handle WebContents deletion if |remove_reason| is kDeleted, or
+// WebContents caching if |remove_reason| is kCached.
+struct DetachedWebContents {
+  DetachedWebContents(int index_before_any_removals,
+                      int index_at_time_of_removal,
+                      std::unique_ptr<TabModel> tab,
+                      content::WebContents* contents,
+                      TabStripModelChange::RemoveReason remove_reason,
+                      std::optional<SessionID> id);
+  DetachedWebContents(const DetachedWebContents&) = delete;
+  DetachedWebContents& operator=(const DetachedWebContents&) = delete;
+  ~DetachedWebContents();
+  DetachedWebContents(DetachedWebContents&&);
+
+  // When a WebContents is removed the delegate is given a chance to
+  // take ownership of it (generally for caching). If the delegate takes
+  // ownership, `tab` will be null, and `contents` will be
+  // non-null. In other words, all observers should use `contents`, it is
+  // guaranteed to be valid for the life time of the notification (and
+  // possibly longer).
+  std::unique_ptr<TabModel> tab;
+  raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged> contents;
+
+  // The index of the WebContents in the original selection model of the tab
+  // strip [prior to any tabs being removed, if multiple tabs are being
+  // simultaneously removed].
+  const int index_before_any_removals;
+
+  // The index of the WebContents at the time it is being removed. If multiple
+  // tabs are being simultaneously removed, the index reflects previously
+  // removed tabs in this batch.
+  const int index_at_time_of_removal;
+
+  TabStripModelChange::RemoveReason remove_reason;
+
+  // The |contents| associated optional SessionID, used as key for
+  // ClosedTabCache. We only cache |contents| if |remove_reason| is kCached.
+  std::optional<SessionID> id;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -91,49 +130,8 @@ class TabGroupModelFactory {
 ////////////////////////////////////////////////////////////////////////////////
 class TabStripModel : public TabGroupController {
  public:
-  // Holds state for a WebContents that has been detached from the tab strip.
-  // Will also handle WebContents deletion if |remove_reason| is kDeleted, or
-  // WebContents caching if |remove_reason| is kCached.
-  // TODO(https://crbug.com/1234327): Don't make DetachedWebContents an inner
-  // class, so it can be forward declared in TabStripModelDelegate.
-  struct DetachedWebContents {
-    DetachedWebContents(int index_before_any_removals,
-                        int index_at_time_of_removal,
-                        std::unique_ptr<content::WebContents> owned_contents,
-                        content::WebContents* contents,
-                        TabStripModelChange::RemoveReason remove_reason,
-                        absl::optional<SessionID> id);
-    DetachedWebContents(const DetachedWebContents&) = delete;
-    DetachedWebContents& operator=(const DetachedWebContents&) = delete;
-    ~DetachedWebContents();
-    DetachedWebContents(DetachedWebContents&&);
-
-    // When a WebContents is removed the delegate is given a chance to
-    // take ownership of it (generally for caching). If the delegate takes
-    // ownership, `owned_contents` will be null, and `contents` will be
-    // non-null. In other words, all observers should use `contents`, it is
-    // guaranteed to be valid for the life time of the notification (and
-    // possibly longer).
-    std::unique_ptr<content::WebContents> owned_contents;
-    raw_ptr<content::WebContents, DanglingUntriaged> contents;
-
-    // The index of the WebContents in the original selection model of the tab
-    // strip [prior to any tabs being removed, if multiple tabs are being
-    // simultaneously removed].
-    const int index_before_any_removals;
-
-    // The index of the WebContents at the time it is being removed. If multiple
-    // tabs are being simultaneously removed, the index reflects previously
-    // removed tabs in this batch.
-    const int index_at_time_of_removal;
-
-    TabStripModelChange::RemoveReason remove_reason;
-
-    // The |contents| associated optional SessionID, used as key for
-    // ClosedTabCache. We only cache |contents| if |remove_reason| is kCached.
-    absl::optional<SessionID> id;
-  };
-
+  // TODO(1394210): Remove this, and use std::optional<size_t> (or at least
+  // std::optional<int>) in its place.
   static constexpr int kNoTab = -1;
 
   TabStripModel() = delete;
@@ -166,6 +164,9 @@ class TabStripModel : public TabGroupController {
   // Retrieve the number of WebContentses/emptiness of the TabStripModel.
   int count() const { return static_cast<int>(contents_data_.size()); }
   bool empty() const { return contents_data_.empty(); }
+
+  int GetIndexOfTab(TabHandle tab) const;
+  TabHandle GetTabHandleAt(int index) const;
 
   // Retrieve the Profile associated with this TabStripModel.
   Profile* profile() const { return profile_; }
@@ -210,14 +211,20 @@ class TabStripModel : public TabGroupController {
       int index,
       std::unique_ptr<content::WebContents> contents,
       int add_types,
-      absl::optional<tab_groups::TabGroupId> group = absl::nullopt);
+      std::optional<tab_groups::TabGroupId> group = std::nullopt);
+
+  // Adds a TabModel from another tabstrip at the specified location. See
+  // InsertWebContentsAt.
+  int InsertDetachedTabAt(
+      int index,
+      std::unique_ptr<TabModel> tab,
+      int add_types,
+      std::optional<tab_groups::TabGroupId> group = std::nullopt);
+
   // Closes the WebContents at the specified index. This causes the
   // WebContents to be destroyed, but it may not happen immediately.
-  // |close_types| is a bitmask of CloseTypes. Returns true if the
-  // WebContents was closed immediately, false if it was not closed (we
-  // may be waiting for a response from an onunload handler, or waiting for the
-  // user to confirm closure).
-  bool CloseWebContentsAt(int index, uint32_t close_types);
+  // |close_types| is a bitmask of CloseTypes.
+  void CloseWebContentsAt(int index, uint32_t close_types);
 
   // Replaces the WebContents at |index| with |new_contents|. The
   // WebContents that was at |index| is returned and its ownership returns
@@ -226,8 +233,14 @@ class TabStripModel : public TabGroupController {
       int index,
       std::unique_ptr<content::WebContents> new_contents);
 
+  // Detaches the tab at the specified index for reinsertion into another tab
+  // strip. Returns the detached tab.
+  std::unique_ptr<TabModel> DetachTabAtForInsertion(int index);
+
   // Detaches the WebContents at the specified index for reinsertion into
   // another tab strip. Returns the detached WebContents.
+  // TODO(1476012): Migrate callers to DetachTabAtForInsertion or
+  // DetachAndDeleteWebContentsAt.
   std::unique_ptr<content::WebContents> DetachWebContentsAtForInsertion(
       int index);
 
@@ -280,7 +293,7 @@ class TabStripModel : public TabGroupController {
 
   // Returns the WebContents at the specified index, or NULL if there is
   // none.
-  content::WebContents* GetWebContentsAt(int index) const override;
+  content::WebContents* GetWebContentsAt(int index) const;
 
   // Returns the index of the specified WebContents, or TabStripModel::kNoTab
   // if the WebContents is not in this TabStripModel.
@@ -346,17 +359,23 @@ class TabStripModel : public TabGroupController {
   // Returns true if the tab at |index| is blocked by a tab modal dialog.
   bool IsTabBlocked(int index) const;
 
+  // Returns true if the tab at |index| is allowed to be closed.
+  bool IsTabClosable(int index) const;
+
+  // Returns true if the tab corresponding to |contents| is allowed to be
+  // closed.
+  bool IsTabClosable(const content::WebContents* contents) const;
+
   // Returns the group that contains the tab at |index|, or nullopt if the tab
   // index is invalid or not grouped.
-  absl::optional<tab_groups::TabGroupId> GetTabGroupForTab(
+  std::optional<tab_groups::TabGroupId> GetTabGroupForTab(
       int index) const override;
 
   // If a tab inserted at |index| would be within a tab group, return that
   // group's ID. Otherwise, return nullopt. If |index| points to the first tab
   // in a group, it will return nullopt since a new tab would be either between
   // two different groups or just after a non-grouped tab.
-  absl::optional<tab_groups::TabGroupId> GetSurroundingTabGroup(
-      int index) const;
+  std::optional<tab_groups::TabGroupId> GetSurroundingTabGroup(int index) const;
 
   // Returns the index of the first tab that is not a pinned tab. This returns
   // |count()| if all of the tabs are pinned tabs, and 0 if none of the tabs are
@@ -377,6 +396,9 @@ class TabStripModel : public TabGroupController {
   // Returns true if the tab at |index| is selected.
   bool IsTabSelected(int index) const;
 
+  // Returns the timestamp at which the tab was last accessed.
+  std::optional<base::Time> GetLastAccessed(int index) const;
+
   // Sets the selection to match that of |source|.
   void SetSelectionFromModel(ui::ListSelectionModel source);
 
@@ -394,7 +416,7 @@ class TabStripModel : public TabGroupController {
       int index,
       ui::PageTransition transition,
       int add_types,
-      absl::optional<tab_groups::TabGroupId> group = absl::nullopt);
+      std::optional<tab_groups::TabGroupId> group = std::nullopt);
 
   // Closes the selected tabs.
   void CloseSelectedTabs();
@@ -434,7 +456,7 @@ class TabStripModel : public TabGroupController {
   // being moved, and adds them to the tab group |group|.
   void MoveTabsAndSetGroup(const std::vector<int>& indices,
                            int destination_index,
-                           absl::optional<tab_groups::TabGroupId> group);
+                           std::optional<tab_groups::TabGroupId> group);
 
   // Similar to AddToExistingGroup(), but creates a group with id |group| if it
   // doesn't exist. This is only intended to be called from session restore
@@ -447,8 +469,8 @@ class TabStripModel : public TabGroupController {
   // create the group then add the tab to the group.
   void UpdateGroupForDragRevert(
       int index,
-      absl::optional<tab_groups::TabGroupId> group_id,
-      absl::optional<tab_groups::TabGroupVisualData> group_data);
+      std::optional<tab_groups::TabGroupId> group_id,
+      std::optional<tab_groups::TabGroupVisualData> group_data);
 
   // Removes the set of tabs pointed to by |indices| from the the groups they
   // are in, if any. The tabs are moved out of the group if necessary. |indices|
@@ -471,7 +493,6 @@ class TabStripModel : public TabGroupController {
   void UnfollowSites(const std::vector<int>& indices);
 
   // TabGroupController:
-  Profile* GetProfile() override;
   void CreateTabGroup(const tab_groups::TabGroupId& group) override;
   void OpenTabGroupEditor(const tab_groups::TabGroupId& group) override;
   void ChangeTabGroupContents(const tab_groups::TabGroupId& group) override;
@@ -480,6 +501,7 @@ class TabStripModel : public TabGroupController {
       const TabGroupChange::VisualsChange& visuals) override;
   void MoveTabGroup(const tab_groups::TabGroupId& group) override;
   void CloseTabGroup(const tab_groups::TabGroupId& group) override;
+  std::u16string GetTitleAt(int index) const override;
   // The same as count(), but overridden for TabGroup to access.
   int GetTabCount() const override;
 
@@ -499,15 +521,19 @@ class TabStripModel : public TabGroupController {
     CommandToggleGrouped,
     CommandToggleSiteMuted,
     CommandSendTabToSelf,
+    CommandAddNote,
     CommandAddToReadLater,
     CommandAddToNewGroup,
     CommandAddToExistingGroup,
     CommandRemoveFromGroup,
     CommandMoveToExistingWindow,
     CommandMoveTabsToNewWindow,
+    CommandOrganizeTabs,
     CommandFollowSite,
     CommandUnfollowSite,
     CommandCopyURL,
+    CommandGoBack,
+    CommandCloseAllTabs,
     CommandLast
   };
 
@@ -556,11 +582,11 @@ class TabStripModel : public TabGroupController {
   // |index|. This method will check the indices to the right of |index| before
   // checking the indices to the left of |index|. |index| cannot be returned.
   // |collapsing_group| is optional and used in cases where the group is
-  // collapsing but not yet reflected in the model. Returns absl::nullopt if
+  // collapsing but not yet reflected in the model. Returns std::nullopt if
   // there are no valid tabs.
-  absl::optional<int> GetNextExpandedActiveTab(
+  std::optional<int> GetNextExpandedActiveTab(
       int index,
-      absl::optional<tab_groups::TabGroupId> collapsing_group) const;
+      std::optional<tab_groups::TabGroupId> collapsing_group) const;
 
   // Forget all opener relationships, to reduce unpredictable tab switching
   // behavior in complex session states.
@@ -579,7 +605,6 @@ class TabStripModel : public TabGroupController {
  private:
   FRIEND_TEST_ALL_PREFIXES(TabStripModelTest, GetIndicesClosedByCommand);
 
-  class Tab;
   struct DetachNotifications;
 
   // Perform tasks associated with changes to the model. Change the Active Index
@@ -591,9 +616,9 @@ class TabStripModel : public TabGroupController {
   // is used to indicate to observers what is going to happen to the WebContents
   // (i.e. deleted or reinserted into another tab strip). Returns the detached
   // WebContents.
-  std::unique_ptr<TabStripModel::DetachedWebContents>
-  DetachWebContentsWithReasonAt(int index,
-                                TabStripModelChange::RemoveReason reason);
+  std::unique_ptr<DetachedWebContents> DetachWebContentsWithReasonAt(
+      int index,
+      TabStripModelChange::RemoveReason reason);
 
   // Performs all the work to detach a WebContents instance but avoids sending
   // most notifications. TabClosingAt() and TabDetachedAt() are sent because
@@ -643,7 +668,7 @@ class TabStripModel : public TabGroupController {
   // something related to their current activity.
   bool IsNewTabAtEndOfTabStrip(content::WebContents* contents) const;
 
-  // Adds the specified WebContents at the specified location.
+  // Adds the specified TabModel at the specified location.
   // |add_types| is a bitmask of AddTabTypes; see it for details.
   //
   // All append/insert methods end up in this method.
@@ -652,22 +677,18 @@ class TabStripModel : public TabGroupController {
   // as such the ADD_FORCE_INDEX AddTabTypes is meaningless here. The only time
   // the |index| is changed is if using the index would result in breaking the
   // constraint that all pinned tabs occur before non-pinned tabs. It returns
-  // the index the web contents is actually inserted to. See also
-  // AddWebContents.
-  int InsertWebContentsAtImpl(int index,
-                              std::unique_ptr<content::WebContents> contents,
-                              int add_types,
-                              absl::optional<tab_groups::TabGroupId> group);
+  // the index the tab is actually inserted to. See also AddWebContents.
+  int InsertTabAtImpl(int index,
+                      std::unique_ptr<TabModel> tab,
+                      int add_types,
+                      std::optional<tab_groups::TabGroupId> group);
 
   // Closes the WebContentses at the specified indices. This causes the
   // WebContentses to be destroyed, but it may not happen immediately. If
   // the page in question has an unload event the WebContents will not be
   // destroyed until after the event has completed, which will then call back
   // into this method.
-  //
-  // Returns true if the WebContentses were closed immediately, false if we
-  // are waiting for the result of an onunload handler.
-  bool CloseTabs(base::span<content::WebContents* const> items,
+  void CloseTabs(base::span<content::WebContents* const> items,
                  uint32_t close_types);
 
   // |close_types| is a bitmask of the types in CloseTypes.
@@ -744,25 +765,28 @@ class TabStripModel : public TabGroupController {
   // appropriate |group|.
   void MoveTabsAndSetGroupImpl(const std::vector<int>& indices,
                                int destination_index,
-                               absl::optional<tab_groups::TabGroupId> group);
+                               std::optional<tab_groups::TabGroupId> group);
 
   // Moves the tab at |index| to |new_index| and sets its group to |new_group|.
   // Notifies any observers that group affiliation has changed for the tab.
   void MoveAndSetGroup(int index,
                        int new_index,
-                       absl::optional<tab_groups::TabGroupId> new_group);
+                       std::optional<tab_groups::TabGroupId> new_group);
 
   void AddToReadLaterImpl(const std::vector<int>& indices);
 
   // Helper function for MoveAndSetGroup. Removes the tab at |index| from the
   // group that contains it, if any. Also deletes that group, if it now contains
   // no tabs. Returns that group.
-  absl::optional<tab_groups::TabGroupId> UngroupTab(int index);
+  std::optional<tab_groups::TabGroupId> UngroupTab(int index);
 
   // Helper function for MoveAndSetGroup. Adds the tab at |index| to |group|,
   // updates the group model, and notifies the observers if the group at that
   // index would change.
   void GroupTab(int index, const tab_groups::TabGroupId& group);
+
+  // Disconnects any saved tab groups whose tabs are a subset of `indices`.
+  void DisconnectSavedTabGroups(const std::vector<int>& indices) const;
 
   // Changes the pinned state of the tab at `index`, moving it in the process if
   // necessary. Returns the new index of the tab.
@@ -793,12 +817,15 @@ class TabStripModel : public TabGroupController {
   // Takes the |selection| change and decides whether to forget the openers.
   void OnActiveTabChanged(const TabStripSelectionChange& selection);
 
+  // Checks if policy allows a tab to be closed.
+  bool PolicyAllowsTabClosing(content::WebContents* contents) const;
+
   // Determine where to shift selection after a tab is closed.
-  absl::optional<int> DetermineNewSelectedIndex(int removed_index) const;
+  std::optional<int> DetermineNewSelectedIndex(int removed_index) const;
 
   // The WebContents data currently hosted within this TabStripModel. This must
   // be kept in sync with |selection_model_|.
-  std::vector<std::unique_ptr<Tab>> contents_data_;
+  std::vector<std::unique_ptr<TabModel>> contents_data_;
 
   // The model for tab groups hosted within this TabStripModel.
   std::unique_ptr<TabGroupModel> group_model_;
@@ -810,7 +837,7 @@ class TabStripModel : public TabGroupController {
   base::ObserverList<TabStripModelObserver>::Unchecked observers_;
 
   // A profile associated with this TabStripModel.
-  raw_ptr<Profile, DanglingUntriaged> profile_;
+  raw_ptr<Profile, AcrossTasksDanglingUntriaged> profile_;
 
   // True if all tabs are currently being closed via CloseAllTabs.
   bool closing_all_ = false;
@@ -821,9 +848,6 @@ class TabStripModel : public TabGroupController {
   // TabStripModel is not re-entrancy safe. This member is used to guard public
   // methods that mutate state of |selection_model_| or |contents_data_|.
   bool reentrancy_guard_ = false;
-
-  // A recorder for recording tab switching input latency to UMA
-  TabSwitchEventLatencyRecorder tab_switch_event_latency_recorder_;
 
   TabStripScrubbingMetrics scrubbing_metrics_;
 

@@ -21,7 +21,6 @@
 #include "media/gpu/vaapi/vaapi_wrapper.h"
 #include "media/gpu/vaapi/vp9_vaapi_video_encoder_delegate.h"
 #include "media/gpu/vp9_picture.h"
-#include "media/gpu/vp9_svc_layers.h"
 #include "media/video/fake_gpu_memory_buffer.h"
 #include "media/video/video_encode_accelerator.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -49,12 +48,15 @@ constexpr int kSpatialLayersResolutionDenom[][3] = {
     {2, 1, 0},  // For two spatial layers.
     {4, 2, 1},  // For three spatial layers.
 };
-const VideoEncodeAccelerator::Config kDefaultVideoEncodeAcceleratorConfig(
-    PIXEL_FORMAT_I420,
-    kDefaultEncodeSize,
-    VP9PROFILE_PROFILE0,
-    kDefaultBitrate,
-    kDefaultFramerate);
+
+VideoEncodeAccelerator::Config DefaultVideoEncodeAcceleratorConfig() {
+  VideoEncodeAccelerator::Config vea_config(
+      PIXEL_FORMAT_I420, kDefaultEncodeSize, VP9PROFILE_PROFILE0,
+      kDefaultBitrate);
+
+  vea_config.initial_framerate = kDefaultFramerate;
+  return vea_config;
+}
 
 std::vector<VideoEncodeAccelerator::Config::SpatialLayer> GetDefaultSVCLayers(
     size_t num_spatial_layers,
@@ -100,6 +102,10 @@ bool IsSVCSupported(const VideoEncodeAccelerator::Config& config) {
          config.output_profile == VP9PROFILE_PROFILE0;
 }
 
+MATCHER_P(CheckEncodeData, payload_size_bytes, "") {
+  return arg.payload_size_bytes == payload_size_bytes;
+}
+
 MATCHER_P3(MatchesBitstreamBufferMetadata,
            payload_size_bytes,
            key_frame,
@@ -139,13 +145,14 @@ class MockVideoEncodeAcceleratorClient : public VideoEncodeAccelerator::Client {
                void(unsigned int, const gfx::Size&, size_t));
   MOCK_METHOD2(BitstreamBufferReady,
                void(int32_t, const BitstreamBufferMetadata&));
-  MOCK_METHOD1(NotifyError, void(VideoEncodeAccelerator::Error));
+  MOCK_METHOD1(NotifyErrorStatus, void(const EncoderStatus&));
   MOCK_METHOD1(NotifyEncoderInfoChange, void(const VideoEncoderInfo&));
 };
 
 class MockVaapiWrapper : public VaapiWrapper {
  public:
-  explicit MockVaapiWrapper(CodecMode mode) : VaapiWrapper(mode) {}
+  explicit MockVaapiWrapper(CodecMode mode)
+      : VaapiWrapper(VADisplayStateHandle(), mode) {}
 
   MOCK_METHOD2(GetVAEncMaxNumOfRefFrames, bool(VideoCodecProfile, size_t*));
   MOCK_METHOD1(CreateContext, bool(const gfx::Size&));
@@ -172,24 +179,21 @@ class MockVaapiWrapper : public VaapiWrapper {
   MOCK_METHOD0(DestroyContext, void());
   MOCK_METHOD1(DestroySurface, void(VASurfaceID));
 
-  MOCK_METHOD5(DoBlitSurface,
+  MOCK_METHOD4(DoBlitSurface,
                bool(const VASurface&,
                     const VASurface&,
                     absl::optional<gfx::Rect>,
-                    absl::optional<gfx::Rect>,
-                    VideoRotation));
+                    absl::optional<gfx::Rect>));
   bool BlitSurface(const VASurface& va_surface_src,
                    const VASurface& va_surface_dest,
                    absl::optional<gfx::Rect> src_rect = absl::nullopt,
-                   absl::optional<gfx::Rect> dest_rect = absl::nullopt,
-                   VideoRotation rotation = VIDEO_ROTATION_0
+                   absl::optional<gfx::Rect> dest_rect = absl::nullopt
 #if BUILDFLAG(IS_CHROMEOS_ASH)
                    ,
                    VAProtectedSessionID va_protected_session_id = VA_INVALID_ID
 #endif
                    ) override {
-    return DoBlitSurface(va_surface_src, va_surface_dest, src_rect, dest_rect,
-                         rotation);
+    return DoBlitSurface(va_surface_src, va_surface_dest, src_rect, dest_rect);
   }
 
  private:
@@ -209,8 +213,8 @@ class MockVP9VaapiVideoEncoderDelegate : public VP9VaapiVideoEncoderDelegate {
   MOCK_CONST_METHOD0(GetBitstreamBufferSize, size_t());
   MOCK_CONST_METHOD0(GetMaxNumOfRefFrames, size_t());
   MOCK_METHOD2(GetMetadata, BitstreamBufferMetadata(const EncodeJob&, size_t));
-  MOCK_METHOD1(PrepareEncodeJob, bool(EncodeJob&));
-  MOCK_METHOD1(BitrateControlUpdate, void(uint64_t));
+  MOCK_METHOD1(PrepareEncodeJob, PrepareEncodeJobResult(EncodeJob&));
+  MOCK_METHOD1(BitrateControlUpdate, void(const BitstreamBufferMetadata&));
   MOCK_METHOD0(GetSVCLayerResolutions, std::vector<gfx::Size>());
   bool UpdateRates(const VideoBitrateAllocation&, uint32_t) override {
     return false;
@@ -241,19 +245,39 @@ class VaapiVideoEncodeAcceleratorTest
     ResetEncoder();
   }
 
-  void ResetEncoder() NO_THREAD_SAFETY_ANALYSIS {
+  void ResetEncoder() {
     encoder_.reset(new VaapiVideoEncodeAccelerator);
     auto* vaapi_encoder =
         reinterpret_cast<VaapiVideoEncodeAccelerator*>(encoder_.get());
-    vaapi_encoder->vaapi_wrapper_ = mock_vaapi_wrapper_;
-    vaapi_encoder->encoder_ =
-        std::make_unique<MockVP9VaapiVideoEncoderDelegate>(
-            mock_vaapi_wrapper_,
-            base::BindRepeating(&VaapiVideoEncodeAcceleratorTest::OnError,
-                                base::Unretained(this)));
+    base::WaitableEvent event;
+    auto on_error_cb = base::BindRepeating(
+        &VaapiVideoEncodeAcceleratorTest::OnError, base::Unretained(this));
+    // Set |encoder_| and |vaapi_wrapper_| of |vaapi_encoder| in the encoder
+    // sequence.
+    vaapi_encoder->encoder_task_runner_->PostTask(
+        FROM_HERE,
+        base::BindOnce(
+            [](VaapiVideoEncodeAccelerator* vaapi_encoder,
+               scoped_refptr<VaapiWrapper> vaapi_wrapper,
+               base::RepeatingClosure on_error_cb,
+               raw_ptr<MockVP9VaapiVideoEncoderDelegate,
+                       AcrossTasksDanglingUntriaged>* mock_encoder,
+               base::WaitableEvent* event) {
+              DCHECK_CALLED_ON_VALID_SEQUENCE(
+                  vaapi_encoder->encoder_sequence_checker_);
+              vaapi_encoder->vaapi_wrapper_ = vaapi_wrapper;
+              vaapi_encoder->encoder_ =
+                  std::make_unique<MockVP9VaapiVideoEncoderDelegate>(
+                      vaapi_wrapper, std::move(on_error_cb));
+              *mock_encoder =
+                  reinterpret_cast<MockVP9VaapiVideoEncoderDelegate*>(
+                      vaapi_encoder->encoder_.get());
+              event->Signal();
+            },
+            base::Unretained(vaapi_encoder), mock_vaapi_wrapper_, on_error_cb,
+            base::Unretained(&mock_encoder_), base::Unretained(&event)));
+    event.Wait();
     EXPECT_CALL(*this, OnError()).Times(0);
-    mock_encoder_ = reinterpret_cast<MockVP9VaapiVideoEncoderDelegate*>(
-        vaapi_encoder->encoder_.get());
   }
 
   void SetDefaultMocksBehavior(const VideoEncodeAccelerator::Config& config) {
@@ -341,28 +365,6 @@ class VaapiVideoEncodeAcceleratorTest
       bool use_temporal_layer_encoding) {
     ::testing::InSequence s;
 
-    constexpr VASurfaceID kInputSurfaceId = 1234;
-    EXPECT_CALL(*mock_vaapi_wrapper_,
-                CreateScopedVASurfaces(
-                    VA_RT_FORMAT_YUV420, kDefaultEncodeSize,
-                    std::vector<VaapiWrapper::SurfaceUsageHint>{
-                        VaapiWrapper::SurfaceUsageHint::kVideoEncoder},
-                    1, absl::optional<gfx::Size>(), absl::optional<uint32_t>()))
-        .WillOnce(
-            WithArgs<0, 1>([&vaapi_wrapper = this->mock_vaapi_wrapper_,
-                            surface_id = kInputSurfaceId](
-                               unsigned int format, const gfx::Size& size) {
-              std::vector<std::unique_ptr<ScopedVASurface>> va_surfaces;
-              va_surfaces.push_back(std::make_unique<ScopedVASurface>(
-                  vaapi_wrapper, surface_id, size, format));
-              return va_surfaces;
-            }));
-
-    EXPECT_CALL(
-        *mock_vaapi_wrapper_,
-        UploadVideoFrameToSurface(_, kInputSurfaceId, kDefaultEncodeSize))
-        .WillOnce(Return(true));
-
     constexpr VASurfaceID kEncodeSurfaceId = 1234;
     EXPECT_CALL(*mock_vaapi_wrapper_,
                 CreateScopedVASurfaces(
@@ -386,6 +388,28 @@ class VaapiVideoEncodeAcceleratorTest
               return va_surfaces;
             }));
 
+    constexpr VASurfaceID kInputSurfaceId = 1234;
+    EXPECT_CALL(*mock_vaapi_wrapper_,
+                CreateScopedVASurfaces(
+                    VA_RT_FORMAT_YUV420, kDefaultEncodeSize,
+                    std::vector<VaapiWrapper::SurfaceUsageHint>{
+                        VaapiWrapper::SurfaceUsageHint::kVideoEncoder},
+                    1, absl::optional<gfx::Size>(), absl::optional<uint32_t>()))
+        .WillOnce(
+            WithArgs<0, 1>([&vaapi_wrapper = this->mock_vaapi_wrapper_,
+                            surface_id = kInputSurfaceId](
+                               unsigned int format, const gfx::Size& size) {
+              std::vector<std::unique_ptr<ScopedVASurface>> va_surfaces;
+              va_surfaces.push_back(std::make_unique<ScopedVASurface>(
+                  vaapi_wrapper, surface_id, size, format));
+              return va_surfaces;
+            }));
+
+    EXPECT_CALL(
+        *mock_vaapi_wrapper_,
+        UploadVideoFrameToSurface(_, kInputSurfaceId, kDefaultEncodeSize))
+        .WillOnce(Return(true));
+
     constexpr VABufferID kCodedBufferId = 123;
     EXPECT_CALL(*mock_vaapi_wrapper_,
                 CreateVABuffer(VAEncCodedBufferType, output_buffer_size_))
@@ -395,8 +419,7 @@ class VaapiVideoEncodeAcceleratorTest
         }));
 
     EXPECT_CALL(*mock_encoder_, PrepareEncodeJob(_))
-        .WillOnce(WithArgs<0>([encoder = encoder_.get(),
-                               use_temporal_layer_encoding](
+        .WillOnce(WithArgs<0>([use_temporal_layer_encoding](
                                   VaapiVideoEncoderDelegate::EncodeJob& job) {
           if (use_temporal_layer_encoding) {
             // Set Vp9Metadata on temporal layer encoding.
@@ -404,7 +427,7 @@ class VaapiVideoEncodeAcceleratorTest
             reinterpret_cast<VP9Picture*>(picture)->metadata_for_encoding =
                 Vp9Metadata();
           }
-          return true;
+          return VaapiVideoEncoderDelegate::PrepareEncodeJobResult::kSuccess;
         }));
     EXPECT_CALL(*mock_vaapi_wrapper_,
                 ExecuteAndDestroyPendingBuffers(kInputSurfaceId))
@@ -415,8 +438,6 @@ class VaapiVideoEncodeAcceleratorTest
     EXPECT_CALL(*mock_vaapi_wrapper_,
                 GetEncodedChunkSize(kCodedBufferId, kInputSurfaceId))
         .WillOnce(Return(kEncodedChunkSize));
-    EXPECT_CALL(*mock_encoder_, BitrateControlUpdate(kEncodedChunkSize))
-        .WillOnce(Return());
     EXPECT_CALL(*mock_encoder_, GetMetadata(_, _))
         .WillOnce(
             WithArgs<0, 1>([](const VaapiVideoEncoderDelegate::EncodeJob& job,
@@ -429,6 +450,9 @@ class VaapiVideoEncodeAcceleratorTest
                   reinterpret_cast<VP9Picture*>(picture)->metadata_for_encoding;
               return metadata;
             }));
+    EXPECT_CALL(*mock_encoder_,
+                BitrateControlUpdate(CheckEncodeData(kEncodedChunkSize)))
+        .WillOnce(Return());
     EXPECT_CALL(*mock_vaapi_wrapper_,
                 DownloadFromVABuffer(kCodedBufferId, Eq(absl::nullopt), _,
                                      output_buffer_size_, _))
@@ -494,49 +518,11 @@ class VaapiVideoEncodeAcceleratorTest
 
     ::testing::InSequence s;
 
-    // Create VASurface from GpuMemory-based VideoFrame.
-    const VASurfaceID kSourceSurfaceId = 123456;
-    EXPECT_CALL(*mock_vaapi_wrapper_, CreateVASurfaceForPixmap(_, _))
-        .WillOnce(
-            Return(new VASurface(kSourceSurfaceId, kDefaultEncodeSize,
-                                 VA_RT_FORMAT_YUV420, base::DoNothing())));
-
-    constexpr VASurfaceID kVppDestSurfaceIds[] = {456, 457};
-    constexpr VASurfaceID kEncodeSurfaceIds[] = {458, 459, 460};
     std::vector<gfx::Size> svc_resolutions =
         GetDefaultSVCResolutions(num_spatial_layers);
-    // Create Surfaces.
-    for (size_t i = num_spatial_layers - 1; i != std::variant_npos; --i) {
-      if (i < num_spatial_layers - 1) {
-        if (va_vpp_dest_surface_ids_[i] == VA_INVALID_ID) {
-          EXPECT_CALL(
-              *mock_vpp_vaapi_wrapper_,
-              CreateScopedVASurfaces(
-                  VA_RT_FORMAT_YUV420, svc_resolutions[i],
-                  std::vector<VaapiWrapper::SurfaceUsageHint>{
-                      VaapiWrapper::SurfaceUsageHint::kVideoProcessWrite,
-                      VaapiWrapper::SurfaceUsageHint::kVideoEncoder},
-                  1, absl::optional<gfx::Size>(), absl::optional<uint32_t>()))
-              .WillOnce(WithArgs<0, 1>(
-                  [&surface_id = this->va_vpp_dest_surface_ids_[i],
-                   &vaapi_wrapper = this->mock_vpp_vaapi_wrapper_,
-                   vpp_dest_surface_id = kVppDestSurfaceIds[i]](
-                      unsigned int format, const gfx::Size& size) {
-                    surface_id = vpp_dest_surface_id;
-                    std::vector<std::unique_ptr<ScopedVASurface>> va_surfaces;
-                    va_surfaces.push_back(std::make_unique<ScopedVASurface>(
-                        vaapi_wrapper, vpp_dest_surface_id, size, format));
-                    return va_surfaces;
-                  }));
-        }
-        absl::optional<gfx::Rect> src_rect = gfx::Rect(svc_resolutions[i + 1]);
-        absl::optional<gfx::Rect> layer_rect = gfx::Rect(svc_resolutions[i]);
-        EXPECT_CALL(*mock_vpp_vaapi_wrapper_,
-                    DoBlitSurface(_, _, src_rect, layer_rect,
-                                  VideoRotation::VIDEO_ROTATION_0))
-            .WillOnce(Return(true));
-      }
 
+    constexpr VASurfaceID kEncodeSurfaceIds[] = {458, 459, 460};
+    for (size_t i = 0; i < num_spatial_layers; i++) {
       // For reconstructed surface.
       if (va_encode_surface_ids_[i].empty()) {
         EXPECT_CALL(
@@ -564,6 +550,44 @@ class VaapiVideoEncodeAcceleratorTest
                 }));
       }
     }
+    // Create VASurface from GpuMemory-based VideoFrame.
+    const VASurfaceID kSourceSurfaceId = 123456;
+    EXPECT_CALL(*mock_vaapi_wrapper_, CreateVASurfaceForPixmap(_, _))
+        .WillOnce(
+            Return(new VASurface(kSourceSurfaceId, kDefaultEncodeSize,
+                                 VA_RT_FORMAT_YUV420, base::DoNothing())));
+
+    constexpr VASurfaceID kVppDestSurfaceIds[] = {456, 457};
+
+    // Create Surfaces.
+    for (size_t i = 0; i < num_spatial_layers - 1; ++i) {
+        if (va_vpp_dest_surface_ids_[i] == VA_INVALID_ID) {
+          EXPECT_CALL(
+              *mock_vpp_vaapi_wrapper_,
+              CreateScopedVASurfaces(
+                  VA_RT_FORMAT_YUV420, svc_resolutions[i],
+                  std::vector<VaapiWrapper::SurfaceUsageHint>{
+                      VaapiWrapper::SurfaceUsageHint::kVideoProcessWrite,
+                      VaapiWrapper::SurfaceUsageHint::kVideoEncoder},
+                  1, absl::optional<gfx::Size>(), absl::optional<uint32_t>()))
+              .WillOnce(WithArgs<0, 1>(
+                  [&surface_id = this->va_vpp_dest_surface_ids_[i],
+                   &vaapi_wrapper = this->mock_vpp_vaapi_wrapper_,
+                   vpp_dest_surface_id = kVppDestSurfaceIds[i]](
+                      unsigned int format, const gfx::Size& size) {
+                    surface_id = vpp_dest_surface_id;
+                    std::vector<std::unique_ptr<ScopedVASurface>> va_surfaces;
+                    va_surfaces.push_back(std::make_unique<ScopedVASurface>(
+                        vaapi_wrapper, vpp_dest_surface_id, size, format));
+                    return va_surfaces;
+                  }));
+        }
+        absl::optional<gfx::Rect> default_rect = gfx::Rect(kDefaultEncodeSize);
+        absl::optional<gfx::Rect> layer_rect = gfx::Rect(svc_resolutions[i]);
+        EXPECT_CALL(*mock_vpp_vaapi_wrapper_,
+                    DoBlitSurface(_, _, default_rect, layer_rect))
+            .WillOnce(Return(true));
+    }
 
     // Create CodedBuffers in creating EncodeJobs.
     constexpr VABufferID kCodedBufferIds[] = {123, 124, 125};
@@ -579,27 +603,22 @@ class VaapiVideoEncodeAcceleratorTest
 
     for (size_t i = 0; i < num_spatial_layers; ++i) {
       EXPECT_CALL(*mock_encoder_, PrepareEncodeJob(_))
-          .WillOnce(WithArgs<0>([encoder = encoder_.get()](
-                                    VaapiVideoEncoderDelegate::EncodeJob& job) {
+          .WillOnce(WithArgs<0>([](VaapiVideoEncoderDelegate::EncodeJob& job) {
             // Set Vp9Metadata on spatial layer encoding.
             CodecPicture* picture = job.picture().get();
             reinterpret_cast<VP9Picture*>(picture)->metadata_for_encoding =
                 Vp9Metadata();
-            return true;
+            return VaapiVideoEncoderDelegate::PrepareEncodeJobResult::kSuccess;
           }));
       EXPECT_CALL(*mock_vaapi_wrapper_, ExecuteAndDestroyPendingBuffers(_))
           .WillOnce(Return(true));
     }
-
     for (size_t i = 0; i < num_spatial_layers; ++i) {
       const VABufferID kCodedBufferId = kCodedBufferIds[i];
       const uint64_t kEncodedChunkSize = kEncodedChunkSizes[i];
       ASSERT_LE(kEncodedChunkSize, output_buffer_size_);
       EXPECT_CALL(*mock_vaapi_wrapper_, GetEncodedChunkSize(kCodedBufferId, _))
           .WillOnce(Return(kEncodedChunkSize));
-      EXPECT_CALL(*mock_encoder_, BitrateControlUpdate(kEncodedChunkSize))
-          .WillOnce(Return());
-
       EXPECT_CALL(*mock_encoder_, GetMetadata(_, _))
           .WillOnce(
               WithArgs<0, 1>([](const VaapiVideoEncoderDelegate::EncodeJob& job,
@@ -612,6 +631,9 @@ class VaapiVideoEncodeAcceleratorTest
                                    ->metadata_for_encoding;
                 return metadata;
               }));
+      EXPECT_CALL(*mock_encoder_,
+                  BitrateControlUpdate(CheckEncodeData(kEncodedChunkSize)))
+          .WillOnce(Return());
     }
 
     for (size_t i = 0; i < num_spatial_layers; ++i) {
@@ -648,22 +670,39 @@ class VaapiVideoEncodeAcceleratorTest
   std::unique_ptr<VideoEncodeAccelerator> encoder_;
   scoped_refptr<MockVaapiWrapper> mock_vaapi_wrapper_;
   scoped_refptr<MockVaapiWrapper> mock_vpp_vaapi_wrapper_;
-  raw_ptr<MockVP9VaapiVideoEncoderDelegate> mock_encoder_ = nullptr;
+  raw_ptr<MockVP9VaapiVideoEncoderDelegate, AcrossTasksDanglingUntriaged>
+      mock_encoder_ = nullptr;
 };
 
 struct VaapiVideoEncodeAcceleratorTestParam {
+  SVCInterLayerPredMode inter_layer_pred = SVCInterLayerPredMode::kOnKeyPic;
   uint8_t num_of_spatial_layers = 0;
   uint8_t num_of_temporal_layers = 0;
 } kTestCases[]{
-    // {num_of_spatial_layers, num_of_temporal_layers}
-    {1u, 1u}, {1u, 2u}, {1u, 3u}, {2u, 1u}, {2u, 2u},
-    {2u, 3u}, {3u, 1u}, {3u, 2u}, {3u, 3u},
+    // {inter_layer_pred, num_of_spatial_layers, num_of_temporal_layers}
+    {SVCInterLayerPredMode::kOnKeyPic, 2u, 1u},
+    {SVCInterLayerPredMode::kOnKeyPic, 2u, 2u},
+    {SVCInterLayerPredMode::kOnKeyPic, 2u, 3u},
+    {SVCInterLayerPredMode::kOnKeyPic, 3u, 1u},
+    {SVCInterLayerPredMode::kOnKeyPic, 3u, 2u},
+    {SVCInterLayerPredMode::kOnKeyPic, 3u, 3u},
+    {SVCInterLayerPredMode::kOff, 1u, 1u},
+    {SVCInterLayerPredMode::kOff, 1u, 2u},
+    {SVCInterLayerPredMode::kOff, 1u, 3u},
+    {SVCInterLayerPredMode::kOff, 2u, 1u},
+    {SVCInterLayerPredMode::kOff, 2u, 2u},
+    {SVCInterLayerPredMode::kOff, 2u, 3u},
+    {SVCInterLayerPredMode::kOff, 3u, 1u},
+    {SVCInterLayerPredMode::kOff, 3u, 2u},
+    {SVCInterLayerPredMode::kOff, 3u, 3u},
 };
 
 TEST_P(VaapiVideoEncodeAcceleratorTest, Initialize) {
   const uint8_t num_of_spatial_layers = GetParam().num_of_spatial_layers;
+  const SVCInterLayerPredMode inter_layer_pred = GetParam().inter_layer_pred;
 
-  VideoEncodeAccelerator::Config config = kDefaultVideoEncodeAcceleratorConfig;
+  VideoEncodeAccelerator::Config config = DefaultVideoEncodeAcceleratorConfig();
+  config.inter_layer_pred = inter_layer_pred;
   const uint8_t num_of_temporal_layers = GetParam().num_of_temporal_layers;
   config.spatial_layers =
       GetDefaultSVCLayers(num_of_spatial_layers, num_of_temporal_layers);
@@ -700,7 +739,9 @@ TEST_P(VaapiVideoEncodeAcceleratorTest, EncodeVP9WithSingleSpatialLayer) {
   if (GetParam().num_of_spatial_layers > 1u)
     GTEST_SKIP() << "Test only meant for single spatial layer";
 
-  VideoEncodeAccelerator::Config config = kDefaultVideoEncodeAcceleratorConfig;
+  VideoEncodeAccelerator::Config config = DefaultVideoEncodeAcceleratorConfig();
+  const SVCInterLayerPredMode inter_layer_pred = GetParam().inter_layer_pred;
+  config.inter_layer_pred = inter_layer_pred;
   VideoEncodeAccelerator::Config::SpatialLayer spatial_layer;
   spatial_layer.width = kDefaultEncodeSize.width();
   spatial_layer.height = kDefaultEncodeSize.height();
@@ -723,7 +764,9 @@ TEST_P(VaapiVideoEncodeAcceleratorTest, EncodeVP9WithMultipleSpatialLayers) {
     GTEST_SKIP() << "Test only meant for multiple spatial layers configuration";
 
   const uint8_t num_of_temporal_layers = GetParam().num_of_temporal_layers;
-  VideoEncodeAccelerator::Config config = kDefaultVideoEncodeAcceleratorConfig;
+  VideoEncodeAccelerator::Config config = DefaultVideoEncodeAcceleratorConfig();
+  const SVCInterLayerPredMode inter_layer_pred = GetParam().inter_layer_pred;
+  config.inter_layer_pred = inter_layer_pred;
   config.input_format = PIXEL_FORMAT_NV12;
   config.storage_type =
       VideoEncodeAccelerator::Config::StorageType::kGpuMemoryBuffer;

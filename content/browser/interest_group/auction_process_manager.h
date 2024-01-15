@@ -7,10 +7,11 @@
 
 #include <list>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
@@ -19,7 +20,6 @@
 #include "content/services/auction_worklet/public/mojom/auction_worklet_service.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/origin.h"
 
 namespace base {
@@ -97,7 +97,7 @@ class CONTENT_EXPORT AuctionProcessManager {
     // in. If it's available immediately, it's returned. If not, nullopt is
     // returned and |callback| will be invoked when it's available. Should not
     // be called if the process hasn't been assigned yet.
-    absl::optional<base::ProcessId> GetPid(
+    std::optional<base::ProcessId> GetPid(
         base::OnceCallback<void(base::ProcessId)> callback);
 
    private:
@@ -150,9 +150,9 @@ class CONTENT_EXPORT AuctionProcessManager {
   // properties.
   //
   // If a process is synchronously assigned to the ProcessHandle, returns true
-  // and the service pointer can immediately be retrieved from `handle`.
+  // and the service pointer can immediately be retrieved from `process_handle`.
   // `callback` will not be invoked. Otherwise, returns false and will invoke
-  // `callback` when the service pointer can be retrieved from `handle`.
+  // `callback` when the service pointer can be retrieved from `process_handle`.
   //
   // Auctions must request (and get) a service for their `kSeller` worklet
   // before requesting any `kBidder` worklets to avoid deadlock.

@@ -6,9 +6,18 @@
 
 #include "android_webview/browser/metrics/aw_metrics_service_client.h"
 #include "android_webview/browser/tracing/background_tracing_field_trial.h"
+#include "base/i18n/rtl.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/strings/string_piece.h"
+#include "base/task/thread_pool.h"
 #include "components/metrics/field_trials_provider.h"
+#include "components/metrics/metrics_features.h"
+#include "components/metrics/metrics_log.h"
 #include "components/metrics/metrics_service.h"
+#include "components/metrics/version_utils.h"
+#include "components/version_info/android/channel_getter.h"
+#include "third_party/metrics_proto/trace_log.pb.h"
+#include "third_party/zlib/google/compression_utils.h"
 
 namespace tracing {
 
@@ -17,8 +26,8 @@ AwBackgroundTracingMetricsProvider::AwBackgroundTracingMetricsProvider() =
 AwBackgroundTracingMetricsProvider::~AwBackgroundTracingMetricsProvider() =
     default;
 
-void AwBackgroundTracingMetricsProvider::Init() {
-  android_webview::MaybeSetupWebViewOnlyTracing();
+void AwBackgroundTracingMetricsProvider::DoInit() {
+  android_webview::MaybeSetupWebViewOnlyTracingFromFieldTrial();
 
   metrics::MetricsService* metrics =
       android_webview::AwMetricsServiceClient::GetInstance()
@@ -30,13 +39,29 @@ void AwBackgroundTracingMetricsProvider::Init() {
           metrics->GetSyntheticTrialRegistry(), base::StringPiece()));
 }
 
-void AwBackgroundTracingMetricsProvider::ProvideEmbedderMetrics(
-    metrics::ChromeUserMetricsExtension* uma_proto,
-    base::HistogramSnapshotManager* snapshot_manager) {
-  // Remove the package name according to the privacy requirements.
-  // See go/public-webview-trace-collection.
-  auto* system_profile = uma_proto->mutable_system_profile();
-  system_profile->clear_app_package_name();
+base::OnceCallback<bool(metrics::ChromeUserMetricsExtension*, std::string&&)>
+AwBackgroundTracingMetricsProvider::GetEmbedderMetricsProvider() {
+  return base::BindOnce([](metrics::ChromeUserMetricsExtension* uma_proto,
+                           std::string&& compressed_trace) {
+    if (compressed_trace.size() > kCompressedUploadLimitBytes) {
+      return false;
+    }
+    SetTrace(uma_proto->add_trace_log(), std::move(compressed_trace));
+
+    // Remove the package name according to the privacy requirements.
+    // See go/public-webview-trace-collection.
+    auto* system_profile = uma_proto->mutable_system_profile();
+    system_profile->clear_app_package_name();
+    return true;
+  });
+}
+
+void AwBackgroundTracingMetricsProvider::RecordCoreSystemProfileMetrics(
+    metrics::SystemProfileProto* system_profile_proto) {
+  metrics::MetricsLog::RecordCoreSystemProfile(
+      metrics::GetVersionString(),
+      metrics::AsProtobufChannel(version_info::android::GetChannel()), false,
+      base::i18n::GetConfiguredLocale(), std::string(), system_profile_proto);
 }
 
 }  // namespace tracing

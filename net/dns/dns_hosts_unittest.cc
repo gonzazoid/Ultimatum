@@ -4,7 +4,10 @@
 
 #include "net/dns/dns_hosts.h"
 
+#include "base/test/metrics/histogram_tester.h"
+#include "base/trace_event/memory_usage_estimator.h"
 #include "build/build_config.h"
+#include "net/base/cronet_buildflags.h"
 #include "net/base/ip_address.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -52,7 +55,10 @@ TEST(DnsHostsTest, ParseHosts) {
       "127.0.0.3 .foo # entries with leading dot are ignored\n"
       "127.0.0.3 . # just a dot is ignored\n"
       "127.0.0.4 bar. # trailing dot is allowed, for now\n"
-      "gibberish";
+      "gibberish\n"
+      "127.0.0.5 fóó.test # canonicalizes to 'xn--f-vgaa.test' due to RFC3490\n"
+      "127.0.0.6 127.0.0.1 # ignore IP host\n"
+      "2048::3 [::1] # ignore IP host";
 
   const ExpectedHostsEntry kEntries[] = {
       {"localhost", ADDRESS_FAMILY_IPV4, "127.0.0.1"},
@@ -68,12 +74,22 @@ TEST(DnsHostsTest, ParseHosts) {
       {"cache4", ADDRESS_FAMILY_IPV4, "127.0.0.1"},
       {"cache5", ADDRESS_FAMILY_IPV4, "127.0.0.2"},
       {"bar.", ADDRESS_FAMILY_IPV4, "127.0.0.4"},
+      {"xn--f-vgaa.test", ADDRESS_FAMILY_IPV4, "127.0.0.5"},
   };
 
   DnsHosts expected_hosts, actual_hosts;
   PopulateExpectedHosts(kEntries, std::size(kEntries), &expected_hosts);
+
+  base::HistogramTester histograms;
   ParseHosts(kContents, &actual_hosts);
   ASSERT_EQ(expected_hosts, actual_hosts);
+  histograms.ExpectUniqueSample("Net.DNS.DnsHosts.Count", std::size(kEntries),
+                                1);
+#if !BUILDFLAG(CRONET_BUILD)
+  histograms.ExpectUniqueSample(
+      "Net.DNS.DnsHosts.EstimateMemoryUsage",
+      base::trace_event::EstimateMemoryUsage(actual_hosts), 1);
+#endif
 }
 
 TEST(DnsHostsTest, ParseHosts_CommaIsToken) {

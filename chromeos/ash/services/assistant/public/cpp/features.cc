@@ -5,7 +5,9 @@
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
 
 #include "ash/constants/ash_features.h"
+#include "base/command_line.h"
 #include "base/feature_list.h"
+#include "sandbox/policy/switches.h"
 
 namespace ash::assistant::features {
 
@@ -19,10 +21,6 @@ BASE_FEATURE(kAssistantAppSupport,
 
 BASE_FEATURE(kAssistantDebugging,
              "AssistantDebugging",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
-BASE_FEATURE(kAssistantRoutines,
-             "AssistantRoutines",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 BASE_FEATURE(kAssistantWaitScheduling,
@@ -50,16 +48,12 @@ BASE_FEATURE(kDisableVoiceMatch,
              "DisableVoiceMatch",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-BASE_FEATURE(kEnableLibAssistantSandbox,
-             "LibAssistantSandbox",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kEnableLibAssistantDLC,
+             "LibAssistantDLC",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-BASE_FEATURE(kEnableLibAssistantV2,
-             "LibAssistantV2",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
-BASE_FEATURE(kEnableLibAssistantDlc,
-             "LibAssistantDlc",
+BASE_FEATURE(kEnableAssistantOnboarding,
+             "AssistantOnboarding",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 bool IsAppSupportEnabled() {
@@ -87,10 +81,6 @@ bool IsLibAssistantBetaBackendEnabled() {
   return base::FeatureList::IsEnabled(kEnableLibAssistantBetaBackend);
 }
 
-bool IsRoutinesEnabled() {
-  return base::FeatureList::IsEnabled(kAssistantRoutines);
-}
-
 bool IsStereoAudioInputEnabled() {
   return base::FeatureList::IsEnabled(kEnableStereoAudioInput) ||
          // Audio eraser requires 2 channel input.
@@ -106,15 +96,16 @@ bool IsWaitSchedulingEnabled() {
 }
 
 bool IsLibAssistantSandboxEnabled() {
-  return base::FeatureList::IsEnabled(kEnableLibAssistantSandbox);
+  return !base::CommandLine::ForCurrentProcess()->HasSwitch(
+      sandbox::policy::switches::kNoSandbox);
 }
 
-bool IsLibAssistantV2Enabled() {
-  return base::FeatureList::IsEnabled(kEnableLibAssistantV2);
+bool IsLibAssistantDLCEnabled() {
+  return base::FeatureList::IsEnabled(kEnableLibAssistantDLC);
 }
 
-bool IsLibAssistantDlcEnabled() {
-  return base::FeatureList::IsEnabled(kEnableLibAssistantDlc);
+bool IsOnboardingEnabled() {
+  return base::FeatureList::IsEnabled(kEnableAssistantOnboarding);
 }
 
 }  // namespace ash::assistant::features

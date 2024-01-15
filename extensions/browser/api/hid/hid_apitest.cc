@@ -7,11 +7,10 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/chromeos_buildflags.h"
 #include "extensions/browser/api/device_permissions_prompt.h"
 #include "extensions/browser/api/hid/hid_device_manager.h"
@@ -30,7 +29,6 @@ namespace extensions {
 
 namespace {
 
-using ::base::ThreadTaskRunnerHandle;
 using ::device::FakeHidManager;
 using ::device::HidReportDescriptor;
 
@@ -252,23 +250,6 @@ IN_PROC_BROWSER_TEST_F(HidApiTest, OnDeviceRemoved) {
   EXPECT_EQ("success", result_listener.message());
 }
 
-IN_PROC_BROWSER_TEST_F(HidApiTest, GetUserSelectedDevices) {
-  ExtensionTestMessageListener open_listener("opened_device");
-
-  TestExtensionsAPIClient test_api_client;
-  ASSERT_TRUE(LoadApp("api_test/hid/get_user_selected_devices"));
-  ASSERT_TRUE(open_listener.WaitUntilSatisfied());
-
-  ExtensionTestMessageListener remove_listener("removed");
-  GetFakeHidManager()->RemoveDevice(kTestDeviceGuids[0]);
-  ASSERT_TRUE(remove_listener.WaitUntilSatisfied());
-
-  ExtensionTestMessageListener add_listener("added");
-  AddDevice(kTestDeviceGuids[0], kTestPhysicalDeviceIds[0], kTestVendorId,
-            kTestProductId, true, "A");
-  ASSERT_TRUE(add_listener.WaitUntilSatisfied());
-}
-
 namespace {
 
 device::mojom::HidDeviceInfoPtr CreateDeviceWithOneCollection(
@@ -280,6 +261,8 @@ device::mojom::HidDeviceInfoPtr CreateDeviceWithOneCollection(
   auto collection = device::mojom::HidCollectionInfo::New();
   collection->usage =
       device::mojom::HidUsageAndPage::New(1, device::mojom::kPageVendor);
+  auto report = device::mojom::HidReportDescription::New();
+  collection->input_reports.push_back(std::move(report));
   device_info->collections.push_back(std::move(collection));
   return device_info;
 }

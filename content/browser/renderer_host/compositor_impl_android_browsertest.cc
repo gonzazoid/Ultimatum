@@ -5,9 +5,10 @@
 #include "base/android/application_status_listener.h"
 #include "base/android/build_info.h"
 #include "base/base_switches.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "content/browser/browser_main_loop.h"
 #include "content/browser/gpu/gpu_process_host.h"
 #include "content/browser/renderer_host/compositor_impl_android.h"
@@ -106,7 +107,7 @@ class ContextLostRunLoop : public viz::ContextLostObserver {
       return;
     }
     context_provider_->ContextGL()->Flush();
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&ContextLostRunLoop::CheckForContextLoss,
                        base::Unretained(this)),
@@ -201,9 +202,8 @@ IN_PROC_BROWSER_TEST_F(CompositorImplBrowserTest,
   base::RunLoop loop;
   // The callback will cancel the loop used to wait.
   static_cast<content::Compositor*>(compositor_impl())
-      ->RequestPresentationTimeForNextFrame(base::BindOnce(
-          [](base::OnceClosure quit,
-             const gfx::PresentationFeedback& feedback) {
+      ->RequestSuccessfulPresentationTimeForNextFrame(base::BindOnce(
+          [](base::OnceClosure quit, base::TimeTicks presentation_timestamp) {
             std::move(quit).Run();
           },
           loop.QuitClosure()));

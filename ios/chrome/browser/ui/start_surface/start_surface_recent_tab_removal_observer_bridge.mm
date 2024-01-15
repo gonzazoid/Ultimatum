@@ -6,10 +6,6 @@
 
 #import "base/strings/sys_string_conversions.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 StartSurfaceRecentTabObserverBridge::StartSurfaceRecentTabObserverBridge(
     id<StartSurfaceRecentTabObserving> delegate)
     : delegate_(delegate) {}
@@ -19,27 +15,18 @@ StartSurfaceRecentTabObserverBridge::~StartSurfaceRecentTabObserverBridge() =
 
 void StartSurfaceRecentTabObserverBridge::MostRecentTabRemoved(
     web::WebState* web_state) {
-  const SEL selector = @selector(mostRecentTabWasRemoved:);
-  if (![delegate_ respondsToSelector:selector])
-    return;
-
   [delegate_ mostRecentTabWasRemoved:web_state];
 }
 
 void StartSurfaceRecentTabObserverBridge::MostRecentTabFaviconUpdated(
+    web::WebState* web_state,
     UIImage* image) {
-  const SEL selector = @selector(mostRecentTabFaviconUpdatedWithImage:);
-  if (![delegate_ respondsToSelector:selector])
-    return;
-
-  [delegate_ mostRecentTabFaviconUpdatedWithImage:image];
+  [delegate_ mostRecentTab:web_state faviconUpdatedWithImage:image];
 }
 
 void StartSurfaceRecentTabObserverBridge::MostRecentTabTitleUpdated(
+    web::WebState* web_state,
     const std::u16string& title) {
-  const SEL selector = @selector(mostRecentTabTitleWasUpdated:);
-  if (![delegate_ respondsToSelector:selector])
-    return;
-
-  [delegate_ mostRecentTabTitleWasUpdated:base::SysUTF16ToNSString(title)];
+  [delegate_ mostRecentTab:web_state
+           titleWasUpdated:base::SysUTF16ToNSString(title)];
 }

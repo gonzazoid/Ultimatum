@@ -5,15 +5,23 @@
 #ifndef UI_OZONE_PLATFORM_X11_NATIVE_PIXMAP_EGL_X11_BINDING_H_
 #define UI_OZONE_PLATFORM_X11_NATIVE_PIXMAP_EGL_X11_BINDING_H_
 
+#include <memory>
+
+#include "ui/gfx/native_pixmap.h"
+#include "ui/gfx/x/connection.h"
+#include "ui/gfx/x/glx.h"
 #include "ui/ozone/public/native_pixmap_gl_binding.h"
+
+typedef void* EGLSurface;
+typedef void* EGLDisplay;
 
 namespace ui {
 
-// A binding maintained between GLImageEGLPixmap and GL Textures in Ozone. This
-// is used on X11.
+// A binding maintained between NativePixmap and GL Textures in Ozone that works
+// within the context of X11.
 class NativePixmapEGLX11Binding : public NativePixmapGLBinding {
  public:
-  NativePixmapEGLX11Binding();
+  explicit NativePixmapEGLX11Binding(gfx::BufferFormat format);
   ~NativePixmapEGLX11Binding() override;
 
   static std::unique_ptr<NativePixmapGLBinding> Create(
@@ -22,6 +30,25 @@ class NativePixmapEGLX11Binding : public NativePixmapGLBinding {
       gfx::Size plane_size,
       GLenum target,
       GLuint texture_id);
+
+  static bool CanImportNativeGLXPixmap();
+
+  // NativePixmapGLBinding:
+  GLuint GetInternalFormat() override;
+  GLenum GetDataType() override;
+
+ private:
+  bool Initialize(x11::Pixmap pixmap);
+
+  // Binds image to texture currently bound to |target|. Returns true on
+  // success.
+  bool BindTexture(GLenum target, GLuint texture_id);
+
+  EGLSurface surface_ = nullptr;
+  EGLDisplay display_;
+  gfx::BufferFormat format_;
+
+  x11::Pixmap pixmap_ = x11::Pixmap::None;
 };
 
 }  // namespace ui

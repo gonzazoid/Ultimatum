@@ -8,8 +8,9 @@ found in the LICENSE file.
 <head>
   <title>A guest that opens a new window.</title>
   <script type="text/javascript">
-    window.onload = function() {
-      window.open('about:blank');
+    window.newWindow = null;
+    window.onload = () => {
+      window.newWindow = window.open('empty_guest.html', 'namedWebview');
     };
   </script>
 </head>

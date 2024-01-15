@@ -7,26 +7,15 @@
 
 #import <UIKit/UIKit.h>
 
-#include "ios/chrome/browser/first_run/first_run_metrics.h"
+#import <optional>
+
+#import "ios/chrome/browser/first_run/model/first_run_metrics.h"
 
 namespace signin {
 class IdentityManager;
 }
-namespace web {
-class WebState;
-}
 
-class ChromeBrowserState;
-@class FirstRunConfiguration;
 @protocol SyncPresenter;
-
-// Notification sent when the first run ends, right before dimissing the Terms
-// of Service modal view.
-extern NSString* const kChromeFirstRunUIWillFinishNotification;
-
-// Notification sent when the first run has finished and has dismissed the Terms
-// of Service modal view.
-extern NSString* const kChromeFirstRunUIDidFinishNotification;
 
 // Default value for metrics reporting state. "YES" corresponding to "opt-out"
 // state.
@@ -38,22 +27,8 @@ void RecordFirstRunSignInMetrics(
     first_run::SignInAttemptStatus sign_in_attempt_status,
     BOOL has_sso_accounts);
 
-// Records the result of the sign in steps for the First Run.
-void RecordFirstRunScrollButtonVisibilityMetrics(
-    first_run::FirstRunScreenType screen_type,
-    BOOL scroll_button_visible);
-
 // Records the completion of the first run.
 void WriteFirstRunSentinel();
-
-// Methods for writing sentinel and recording metrics and posting notifications
-void FinishFirstRun(ChromeBrowserState* browserState,
-                    web::WebState* web_state,
-                    FirstRunConfiguration* config,
-                    id<SyncPresenter> presenter);
-
-// Posts a notification that First Run did finish.
-void FirstRunDismissed();
 
 // Returns whether the First Run Experience should be presented.
 bool ShouldPresentFirstRunExperience();

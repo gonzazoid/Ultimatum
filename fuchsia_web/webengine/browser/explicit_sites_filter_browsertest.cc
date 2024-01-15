@@ -12,13 +12,13 @@
 #include "components/safe_search_api/stub_url_checker.h"
 #include "components/safe_search_api/url_checker.h"
 #include "content/public/test/browser_test.h"
+#include "fuchsia_web/common/test/frame_for_test.h"
 #include "fuchsia_web/common/test/frame_test_util.h"
 #include "fuchsia_web/common/test/test_navigation_listener.h"
 #include "fuchsia_web/webengine/browser/context_impl.h"
 #include "fuchsia_web/webengine/browser/frame_impl.h"
 #include "fuchsia_web/webengine/browser/frame_impl_browser_test_base.h"
 #include "fuchsia_web/webengine/browser/web_engine_browser_main_parts.h"
-#include "fuchsia_web/webengine/test/frame_for_test.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace {
@@ -101,8 +101,6 @@ IN_PROC_BROWSER_TEST_F(ExplicitSitesFilterTest, FilterDisabled_SiteAllowed) {
 
   SetPageIsNotExplicit();
 
-  fuchsia::web::NavigationControllerPtr controller;
-  frame->GetNavigationController(controller.NewRequest());
   EXPECT_TRUE(LoadUrlAndExpectResponse(frame.GetNavigationController(), {},
                                        GetPage1UrlSpec()));
 
@@ -247,6 +245,8 @@ IN_PROC_BROWSER_TEST_F(ExplicitSitesFilterTest,
   // deleted. Then, create a new FrameHost connection, which creates a new
   // BrowserContext.
   frame_host1.Unbind();
+  frame1 = {};
+
   fuchsia::web::FrameHostPtr frame_host2 = ConnectToFrameHost();
   ASSERT_EQ(frame_host_impls().size(), 1U);
 
@@ -289,6 +289,8 @@ IN_PROC_BROWSER_TEST_F(ExplicitSitesFilterTest,
   // deleted. Then, create a new FrameHost connection, which creates a new
   // BrowserContext.
   frame_host1.Unbind();
+  frame1 = {};
+
   fuchsia::web::FrameHostPtr frame_host2 = ConnectToFrameHost();
   ASSERT_EQ(frame_host_impls().size(), 1U);
 

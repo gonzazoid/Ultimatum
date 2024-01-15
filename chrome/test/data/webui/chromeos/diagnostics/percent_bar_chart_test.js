@@ -3,20 +3,20 @@
 // found in the LICENSE file.
 
 import 'chrome://diagnostics/percent_bar_chart.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
 import {PercentBarChartElement} from 'chrome://diagnostics/percent_bar_chart.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
-
-import {assertEquals, assertFalse, assertTrue} from '../../chai_assert.js';
 
 import * as dx_utils from './diagnostics_test_utils.js';
 
-export function percentBarChartTestSuite() {
+suite('percentBarChartTestSuite', function() {
   /** @type {?PercentBarChartElement} */
   let percentBarChartElement = null;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes.emptyHTML;
   });
 
   teardown(() => {
@@ -74,4 +74,4 @@ export function percentBarChartTestSuite() {
       assertEquals(paperProgress.value, paperProgress.max);
     });
   });
-}
+});

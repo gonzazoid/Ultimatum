@@ -220,8 +220,7 @@ void NaClForkDelegate::Init(const int sandboxdesc,
       };
       const base::CommandLine& current_cmd_line =
           *base::CommandLine::ForCurrentProcess();
-      cmd_line.CopySwitchesFrom(current_cmd_line, kForwardSwitches,
-                                std::size(kForwardSwitches));
+      cmd_line.CopySwitchesFrom(current_cmd_line, kForwardSwitches);
 
       // The command line needs to be tightly controlled to use
       // |helper_bootstrap_exe|. So from now on, argv_to_launch should be
@@ -240,7 +239,9 @@ void NaClForkDelegate::Init(const int sandboxdesc,
                             bootstrap_prepend.end());
     }
 
+    std::vector<int> max_these_limits;  // must outlive `options`
     base::LaunchOptions options;
+    options.maximize_rlimits = &max_these_limits;
     options.fds_to_remap.push_back(
         std::make_pair(fds[1], kNaClZygoteDescriptor));
     options.fds_to_remap.push_back(
@@ -262,9 +263,7 @@ void NaClForkDelegate::Init(const int sandboxdesc,
     // because the existing limit may prevent the initial exec of
     // nacl_helper_bootstrap from succeeding, with its large address space
     // reservation.
-    std::vector<int> max_these_limits;
     max_these_limits.push_back(RLIMIT_AS);
-    options.maximize_rlimits = &max_these_limits;
 
     // Clear the environment for the NaCl Helper process.
     options.clear_environment = true;

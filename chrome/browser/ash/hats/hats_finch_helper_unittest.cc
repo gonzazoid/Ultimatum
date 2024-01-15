@@ -42,7 +42,8 @@ class HatsFinchHelperTest : public testing::Test {
       std::string reset_survey,
       std::string reset,
       std::string trigger_id,
-      std::string custom_client_data = std::string()) {
+      std::string custom_client_data = std::string(),
+      std::string enabled_for_googlers = std::string()) {
     base::FieldTrialParams params;
     params[HatsFinchHelper::kProbabilityParam] = prob;
     params[HatsFinchHelper::kSurveyCycleLengthParam] = cycle_length;
@@ -51,6 +52,7 @@ class HatsFinchHelperTest : public testing::Test {
     params[HatsFinchHelper::kResetAllParam] = reset;
     params[HatsFinchHelper::kTriggerIdParam] = trigger_id;
     params[HatsFinchHelper::kCustomClientDataParam] = custom_client_data;
+    params[HatsFinchHelper::kEnabledForGooglersParam] = enabled_for_googlers;
     return params;
   }
 
@@ -75,7 +77,7 @@ TEST_F(HatsFinchHelperTest, InitFinchSeed_ValidValues) {
   EXPECT_EQ(hats_finch_helper.probability_of_pick_, 1.0);
   EXPECT_EQ(hats_finch_helper.survey_cycle_length_, 7);
   EXPECT_EQ(hats_finch_helper.first_survey_start_date_,
-            base::Time().FromJsTime(1475613895337LL));
+            base::Time().FromMillisecondsSinceUnixEpoch(1475613895337LL));
   EXPECT_EQ(hats_finch_helper.trigger_id_, kValidTriggerId);
   EXPECT_FALSE(hats_finch_helper.reset_survey_cycle_);
   EXPECT_FALSE(hats_finch_helper.reset_hats_);
@@ -91,8 +93,9 @@ TEST_F(HatsFinchHelperTest, InitFinchSeed_Invalidalues) {
 
   EXPECT_EQ(hats_finch_helper.probability_of_pick_, 0.0);
   EXPECT_EQ(hats_finch_helper.survey_cycle_length_, INT_MAX);
-  EXPECT_GE(hats_finch_helper.first_survey_start_date_.ToJsTime(),
-            2 * current_time.ToJsTime());
+  EXPECT_GE(hats_finch_helper.first_survey_start_date_
+                .InMillisecondsFSinceUnixEpoch(),
+            2 * current_time.InMillisecondsFSinceUnixEpoch());
 }
 
 TEST_F(HatsFinchHelperTest, TestComputeNextDate) {
@@ -112,16 +115,18 @@ TEST_F(HatsFinchHelperTest, TestComputeNextDate) {
   hats_finch_helper.first_survey_start_date_ = start_date;
   base::Time expected_date =
       start_date + base::Days(2 * hats_finch_helper.survey_cycle_length_);
-  EXPECT_EQ(expected_date.ToJsTime(),
-            hats_finch_helper.ComputeNextEndDate().ToJsTime());
+  EXPECT_EQ(
+      expected_date.InMillisecondsFSinceUnixEpoch(),
+      hats_finch_helper.ComputeNextEndDate().InMillisecondsFSinceUnixEpoch());
 
   // Case 2
   base::Time future_time = current_time + base::Days(10);
   hats_finch_helper.first_survey_start_date_ = future_time;
   expected_date =
       future_time + base::Days(hats_finch_helper.survey_cycle_length_);
-  EXPECT_EQ(expected_date.ToJsTime(),
-            hats_finch_helper.ComputeNextEndDate().ToJsTime());
+  EXPECT_EQ(
+      expected_date.InMillisecondsFSinceUnixEpoch(),
+      hats_finch_helper.ComputeNextEndDate().InMillisecondsFSinceUnixEpoch());
 }
 
 TEST_F(HatsFinchHelperTest, ResetSurveyCycle) {
@@ -140,8 +145,9 @@ TEST_F(HatsFinchHelperTest, ResetSurveyCycle) {
 
   EXPECT_EQ(hats_finch_helper.probability_of_pick_, 0);
   EXPECT_EQ(hats_finch_helper.survey_cycle_length_, INT_MAX);
-  EXPECT_GE(hats_finch_helper.first_survey_start_date_.ToJsTime(),
-            2 * current_time.ToJsTime());
+  EXPECT_GE(hats_finch_helper.first_survey_start_date_
+                .InMillisecondsFSinceUnixEpoch(),
+            2 * current_time.InMillisecondsFSinceUnixEpoch());
 
   EXPECT_FALSE(pref_service->GetBoolean(prefs::kHatsDeviceIsSelected));
   EXPECT_NE(pref_service->GetInt64(prefs::kHatsSurveyCycleEndTimestamp),
@@ -166,8 +172,9 @@ TEST_F(HatsFinchHelperTest, ResetHats) {
 
   EXPECT_EQ(hats_finch_helper.probability_of_pick_, 0);
   EXPECT_EQ(hats_finch_helper.survey_cycle_length_, INT_MAX);
-  EXPECT_GE(hats_finch_helper.first_survey_start_date_.ToJsTime(),
-            2 * current_time.ToJsTime());
+  EXPECT_GE(hats_finch_helper.first_survey_start_date_
+                .InMillisecondsFSinceUnixEpoch(),
+            2 * current_time.InMillisecondsFSinceUnixEpoch());
 
   EXPECT_FALSE(pref_service->GetBoolean(prefs::kHatsDeviceIsSelected));
   EXPECT_NE(pref_service->GetInt64(prefs::kHatsSurveyCycleEndTimestamp),
@@ -196,6 +203,27 @@ TEST_F(HatsFinchHelperTest, CustomClientData) {
 
   EXPECT_EQ(hats_finch_helper.GetCustomClientDataAsString(kHatsGeneralSurvey),
             "12345");
+}
+
+TEST_F(HatsFinchHelperTest, NoEnabledForGooglersConfig) {
+  base::FieldTrialParams params = CreateParamMap(
+      "1.0", "7", "1475613895337", "false", "false", kValidTriggerId);
+  SetFeatureParams(params);
+
+  HatsFinchHelper hats_finch_helper(&profile_, kHatsGeneralSurvey);
+
+  EXPECT_EQ(hats_finch_helper.IsEnabledForGooglers(kHatsGeneralSurvey), false);
+}
+
+TEST_F(HatsFinchHelperTest, EnabledForGooglers) {
+  base::FieldTrialParams params =
+      CreateParamMap("1.0", "7", "1475613895337", "false", "false",
+                     kValidTriggerId, "", "true");
+  SetFeatureParams(params);
+
+  HatsFinchHelper hats_finch_helper(&profile_, kHatsGeneralSurvey);
+
+  EXPECT_EQ(hats_finch_helper.IsEnabledForGooglers(kHatsGeneralSurvey), true);
 }
 
 }  // namespace ash

@@ -63,7 +63,7 @@ class AddressProfileSaveManager {
   void OnUserDecision(
       std::unique_ptr<ProfileImportProcess> import_process,
       AutofillClient::SaveAddressProfileOfferUserDecision decision,
-      AutofillProfile edited_profile);
+      base::optional_ref<const AutofillProfile> edited_profile);
 
   PersonalDataManager* personal_data_manager() {
     return personal_data_manager_;
@@ -79,6 +79,12 @@ class AddressProfileSaveManager {
   // import process should be continued silently.
   void MaybeOfferSavePrompt(
       std::unique_ptr<ProfileImportProcess> import_process);
+
+  // Increases or resets the strike count depending on the user decision for
+  // the corresponding prompt type.
+  void AdjustNewProfileStrikes(ProfileImportProcess& import_process) const;
+  void AdjustUpdateProfileStrikes(ProfileImportProcess& import_process) const;
+  void AdjustMigrateProfileStrikes(ProfileImportProcess& import_process) const;
 
   // A pointer to the autofill client. It is assumed that the client outlives
   // the instance of this class

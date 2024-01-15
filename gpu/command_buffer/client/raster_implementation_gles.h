@@ -24,7 +24,8 @@ namespace raster {
 class RASTER_EXPORT RasterImplementationGLES : public RasterInterface {
  public:
   explicit RasterImplementationGLES(gles2::GLES2Interface* gl,
-                                    ContextSupport* context_support);
+                                    ContextSupport* context_support,
+                                    const gpu::Capabilities& caps);
 
   RasterImplementationGLES(const RasterImplementationGLES&) = delete;
   RasterImplementationGLES& operator=(const RasterImplementationGLES&) = delete;
@@ -55,29 +56,35 @@ class RASTER_EXPORT RasterImplementationGLES : public RasterInterface {
                               GLenum pname,
                               GLuint64* params) override;
 
-  // Texture copying.
-  void CopySubTexture(const gpu::Mailbox& source_mailbox,
-                      const gpu::Mailbox& dest_mailbox,
-                      GLenum dest_target,
-                      GLint xoffset,
-                      GLint yoffset,
-                      GLint x,
-                      GLint y,
-                      GLsizei width,
-                      GLsizei height,
-                      GLboolean unpack_flip_y,
-                      GLboolean unpack_premultiply_alpha) override;
+  // Copies SharedImage if `supports_yuv_rgb_conversion` else copies textures.
+  void CopySharedImage(const gpu::Mailbox& source_mailbox,
+                       const gpu::Mailbox& dest_mailbox,
+                       GLenum dest_target,
+                       GLint xoffset,
+                       GLint yoffset,
+                       GLint x,
+                       GLint y,
+                       GLsizei width,
+                       GLsizei height,
+                       GLboolean unpack_flip_y,
+                       GLboolean unpack_premultiply_alpha) override;
 
   void WritePixels(const gpu::Mailbox& dest_mailbox,
                    int dst_x_offset,
                    int dst_y_offset,
+                   int dst_plane_index,
                    GLenum texture_target,
-                   GLuint row_bytes,
-                   const SkImageInfo& src_info,
-                   const void* src_pixels) override;
+                   const SkPixmap& src_sk_pixmap) override;
+
+  void WritePixelsYUV(const gpu::Mailbox& dest_mailbox,
+                      const SkYUVAPixmaps& src_yuv_pixmap) override;
 
   void ConvertYUVAMailboxesToRGB(
       const gpu::Mailbox& dest_mailbox,
+      GLint src_x,
+      GLint src_y,
+      GLsizei width,
+      GLsizei height,
       SkYUVColorSpace planes_yuv_color_space,
       const SkColorSpace* planes_rgb_color_space,
       SkYUVAInfo::PlaneConfig plane_config,
@@ -98,6 +105,7 @@ class RASTER_EXPORT RasterImplementationGLES : public RasterInterface {
                            GLboolean can_use_lcd_text,
                            GLboolean visible,
                            const gfx::ColorSpace& color_space,
+                           float hdr_headroom,
                            const GLbyte* mailbox) override;
   void RasterCHROMIUM(const cc::DisplayItemList* list,
                       cc::ImageProvider* provider,
@@ -107,8 +115,7 @@ class RASTER_EXPORT RasterImplementationGLES : public RasterInterface {
                       const gfx::Vector2dF& post_translate,
                       const gfx::Vector2dF& post_scale,
                       bool requires_clear,
-                      size_t* max_op_size_hint,
-                      bool preserve_recording = true) override;
+                      size_t* max_op_size_hint) override;
   void EndRasterCHROMIUM() override;
 
   // Image decode acceleration.
@@ -122,6 +129,8 @@ class RASTER_EXPORT RasterImplementationGLES : public RasterInterface {
       const gpu::Mailbox& source_mailbox,
       GLenum source_target,
       GrSurfaceOrigin source_origin,
+      const gfx::Size& source_size,
+      const gfx::Point& source_starting_point,
       const SkImageInfo& dst_info,
       GLuint dst_row_bytes,
       unsigned char* out,
@@ -148,10 +157,13 @@ class RASTER_EXPORT RasterImplementationGLES : public RasterInterface {
                            GLuint dst_row_bytes,
                            int src_x,
                            int src_y,
+                           int plane_index,
                            void* dst_pixels) override;
 
   // Raster via GrContext.
   GLuint CreateAndConsumeForGpuRaster(const gpu::Mailbox& mailbox) override;
+  GLuint CreateAndConsumeForGpuRaster(
+      const scoped_refptr<gpu::ClientSharedImage>& shared_image) override;
   void DeleteGpuRasterTexture(GLuint texture) override;
   void BeginGpuRaster() override;
   void EndGpuRaster() override;
@@ -190,6 +202,7 @@ class RASTER_EXPORT RasterImplementationGLES : public RasterInterface {
 
   raw_ptr<gles2::GLES2Interface> gl_;
   raw_ptr<ContextSupport> context_support_;
+  const gpu::Capabilities capabilities_;
   std::unique_ptr<GLHelper> gl_helper_;
   base::WeakPtrFactory<RasterImplementationGLES> weak_ptr_factory_{this};
 };

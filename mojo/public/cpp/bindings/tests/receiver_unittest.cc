@@ -5,9 +5,10 @@
 #include <stdint.h>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include <optional>
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -16,6 +17,7 @@
 #include "base/synchronization/waitable_event.h"
 #include "base/test/bind.h"
 #include "base/threading/thread.h"
+#include "build/blink_buildflags.h"
 #include "mojo/core/embedder/embedder.h"
 #include "mojo/core/test/mojo_test_base.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
@@ -32,7 +34,6 @@
 #include "mojo/public/interfaces/bindings/tests/sample_interfaces.mojom.h"
 #include "mojo/public/interfaces/bindings/tests/sample_service.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace mojo {
 namespace test {
@@ -767,7 +768,7 @@ class TestGenericBinderImpl : public mojom::TestGenericBinder {
 
   Receiver<mojom::TestGenericBinder> receiver_;
   bool connected_ = true;
-  absl::optional<base::RunLoop> wait_loop_;
+  std::optional<base::RunLoop> wait_loop_;
   raw_ptr<GenericPendingReceiver> next_receiver_storage_ = nullptr;
   raw_ptr<GenericPendingAssociatedReceiver> next_associated_receiver_storage_ =
       nullptr;
@@ -777,11 +778,11 @@ using ReceiverSerializationTest = ReceiverTest;
 
 TEST_P(ReceiverSerializationTest, NullGenericPendingReceiver) {
   Remote<mojom::TestGenericBinder> remote;
+  GenericPendingReceiver receiver;
   TestGenericBinderImpl binder(remote.BindNewPipeAndPassReceiver());
 
   // Bind a null, nullable receiver.
   remote->BindOptionalReceiver(GenericPendingReceiver());
-  GenericPendingReceiver receiver;
   binder.WaitForNextReceiver(&receiver);
   EXPECT_FALSE(receiver.is_valid());
 
@@ -828,11 +829,11 @@ TEST_P(ReceiverSerializationTest, NullGenericPendingReceiver) {
 
 TEST_P(ReceiverSerializationTest, NullGenericPendingAssociatedReceiver) {
   Remote<mojom::TestGenericBinder> remote;
+  GenericPendingAssociatedReceiver receiver;
   TestGenericBinderImpl binder(remote.BindNewPipeAndPassReceiver());
 
   // Bind a null, nullable associated receiver.
   remote->BindOptionalAssociatedReceiver(GenericPendingAssociatedReceiver());
-  GenericPendingAssociatedReceiver receiver;
   binder.WaitForNextAssociatedReceiver(&receiver);
   EXPECT_FALSE(receiver.is_valid());
 
@@ -982,6 +983,8 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(MultiprocessReceiverClient,
   MojoClose(test_pipe);
 }
 
+// iOS doesn't have the ability to fork processes yet.
+#if !BUILDFLAG(IS_IOS)
 TEST_F(MultiprocessReceiverTest, MultiprocessReceiver) {
   // Regression test for https://crbug.com/1371860.
   //
@@ -1010,7 +1013,7 @@ TEST_F(MultiprocessReceiverTest, MultiprocessReceiver) {
     constexpr size_t kNumIterations = 1000;
     constexpr size_t kNumReceiversPerIteration = 10;
     for (size_t i = 0; i < kNumIterations; ++i) {
-      std::vector<absl::optional<Receiver<mojom::TestInterface1>>> receivers(
+      std::vector<std::optional<Receiver<mojom::TestInterface1>>> receivers(
           kNumReceiversPerIteration);
       for (auto& receiver : receivers) {
         receiver.emplace(this);
@@ -1025,6 +1028,7 @@ TEST_F(MultiprocessReceiverTest, MultiprocessReceiver) {
     }
   });
 }
+#endif  // BUILDFLAG(USE_BLINK)
 
 INSTANTIATE_MOJO_BINDINGS_TEST_SUITE_P(ReceiverTest);
 INSTANTIATE_MOJO_BINDINGS_TEST_SUITE_P(SelfOwnedReceiverTest);

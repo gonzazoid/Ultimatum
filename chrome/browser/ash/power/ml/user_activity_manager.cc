@@ -11,15 +11,16 @@
 #include "ash/constants/ash_pref_names.h"
 #include "ash/shell.h"
 #include "ash/wm/mru_window_tracker.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/trace_event/trace_event.h"
 #include "chrome/browser/ash/crosapi/crosapi_ash.h"
 #include "chrome/browser/ash/crosapi/crosapi_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/resource_coordinator/tab_metrics_logger.h"
 #include "chrome/browser/tab_contents/form_interaction_tab_helper.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
@@ -28,6 +29,7 @@
 #include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "chromeos/constants/devicetype.h"
 #include "chromeos/dbus/power_manager/power_supply_properties.pb.h"
+#include "components/site_engagement/content/site_engagement_service.h"
 #include "ui/aura/client/aura_constants.h"
 
 namespace ash {
@@ -98,10 +100,10 @@ void LogMetricsToUMA(const UserActivityEvent& event) {
 // True if the first browser window in mru windows list is from Lacros.
 bool ShouldUseLacrosFeatures() {
   if (ash::Shell::HasInstance()) {
-    std::vector<aura::Window*> mru_windows =
+    std::vector<raw_ptr<aura::Window, VectorExperimental>> mru_windows =
         ash::Shell::Get()->mru_window_tracker()->BuildMruWindowList(
             ash::kActiveDesk);
-    for (auto* window : mru_windows) {
+    for (aura::Window* window : mru_windows) {
       if (!window->IsVisible())
         continue;
 
@@ -116,6 +118,24 @@ bool ShouldUseLacrosFeatures() {
   }
 
   return false;
+}
+
+int GetRoundedOrInvalidEngagementScore(content::WebContents* contents) {
+  if (!site_engagement::SiteEngagementService::IsEnabled()) {
+    return -1;
+  }
+
+  auto* service = site_engagement::SiteEngagementService::Get(
+      contents->GetBrowserContext());
+  DCHECK(service);
+
+  // Scores range from 0 to 100. Round down to a multiple of 10 to conform to
+  // privacy guidelines.
+  double raw_score = service->GetScore(contents->GetVisibleURL());
+  int rounded_score = static_cast<int>(raw_score / 10) * 10;
+  DCHECK_LE(0, rounded_score);
+  DCHECK_GE(100, rounded_score);
+  return rounded_score;
 }
 
 }  // namespace
@@ -385,6 +405,7 @@ void UserActivityManager::HandleSmartDimDecision(
 }
 
 void UserActivityManager::OnSessionStateChanged() {
+  TRACE_EVENT0("ui", "UserActivityManager::OnSessionStateChanged");
   DCHECK(session_manager_);
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   const bool was_locked = screen_is_locked_;
@@ -406,7 +427,7 @@ void UserActivityManager::OnLacrosInstanceDisconnected(
 }
 
 void UserActivityManager::OnReceiveSwitchStates(
-    absl::optional<chromeos::PowerManagerClient::SwitchStates> switch_states) {
+    std::optional<chromeos::PowerManagerClient::SwitchStates> switch_states) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (switch_states.has_value()) {
     lid_state_ = switch_states->lid_state;
@@ -415,7 +436,7 @@ void UserActivityManager::OnReceiveSwitchStates(
 }
 
 void UserActivityManager::OnReceiveInactivityDelays(
-    absl::optional<power_manager::PowerManagementPolicy::Delays> delays) {
+    std::optional<power_manager::PowerManagementPolicy::Delays> delays) {
   if (delays.has_value()) {
     screen_dim_delay_ = base::Milliseconds(delays->screen_dim_ms());
     screen_off_delay_ = base::Milliseconds(delays->screen_off_ms());
@@ -550,18 +571,10 @@ void UserActivityManager::ExtractFeatures(
 }
 
 TabProperty UserActivityManager::UpdateOpenTabURL() {
-  BrowserList* browser_list = BrowserList::GetInstance();
-  DCHECK(browser_list);
-
   TabProperty property;
 
   // Find the active tab in the visible focused or topmost browser.
-  for (auto browser_iterator =
-           browser_list->begin_browsers_ordered_by_activation();
-       browser_iterator != browser_list->end_browsers_ordered_by_activation();
-       ++browser_iterator) {
-    Browser* browser = *browser_iterator;
-
+  for (Browser* browser : BrowserList::GetInstance()->OrderedByActivation()) {
     if (!browser->window()->GetNativeWindow()->IsVisible())
       continue;
 
@@ -585,8 +598,7 @@ TabProperty UserActivityManager::UpdateOpenTabURL() {
       // Domain could be empty.
       property.domain = contents->GetLastCommittedURL().host();
       // Engagement score could be -1 if engagement service is disabled.
-      property.engagement_score =
-          TabMetricsLogger::GetSiteEngagementScore(contents);
+      property.engagement_score = GetRoundedOrInvalidEngagementScore(contents);
       property.has_form_entry =
           FormInteractionTabHelper::FromWebContents(contents)
               ->had_form_interaction();
@@ -700,9 +712,9 @@ void UserActivityManager::PopulatePreviousEventData(
 
 void UserActivityManager::ResetAfterLogging() {
   features_.Clear();
-  idle_event_start_since_boot_ = absl::nullopt;
+  idle_event_start_since_boot_ = std::nullopt;
   waiting_for_final_action_ = false;
-  model_prediction_ = absl::nullopt;
+  model_prediction_ = std::nullopt;
 
   previous_idle_event_data_.reset();
 }

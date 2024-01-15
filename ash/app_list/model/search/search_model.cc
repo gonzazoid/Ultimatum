@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 
 namespace ash {
 
@@ -23,22 +23,8 @@ void SearchModel::SetSearchEngineIsGoogle(bool is_google) {
   search_box_->SetSearchEngineIsGoogle(is_google);
 }
 
-std::vector<SearchResult*> SearchModel::FilterSearchResultsByDisplayType(
-    SearchResults* results,
-    SearchResult::DisplayType display_type,
-    const std::set<std::string>& excludes,
-    size_t max_results) {
-  base::RepeatingCallback<bool(const SearchResult&)> filter_function =
-      base::BindRepeating(
-          [](const SearchResult::DisplayType& display_type,
-             const std::set<std::string>& excludes,
-             const SearchResult& r) -> bool {
-            return excludes.count(r.id()) == 0 &&
-                   display_type == r.display_type();
-          },
-          display_type, excludes);
-  return SearchModel::FilterSearchResultsByFunction(results, filter_function,
-                                                    max_results);
+void SearchModel::SetWouldTriggerLauncherSearchIph(bool would_trigger) {
+  search_box_->SetWouldTriggerIph(would_trigger);
 }
 
 std::vector<SearchResult*> SearchModel::FilterSearchResultsByFunction(
@@ -105,28 +91,9 @@ SearchResult* SearchModel::FindSearchResult(const std::string& id) {
   return nullptr;
 }
 
-SearchResult* SearchModel::GetFirstVisibleResult() {
-  for (const auto& result : *results_) {
-    if (result->is_visible())
-      return result.get();
-  }
-
-  return nullptr;
-}
-
 void SearchModel::DeleteAllResults() {
   PublishResults(std::vector<std::unique_ptr<SearchResult>>(),
                  std::vector<ash::AppListSearchResultCategory>());
-}
-
-void SearchModel::DeleteResultById(const std::string& id) {
-  for (size_t i = 0; i < results_->item_count(); ++i) {
-    SearchResult* result = results_->GetItemAt(i);
-    if (result->id() == id) {
-      results_->DeleteAt(i);
-      break;
-    }
-  }
 }
 
 }  // namespace ash

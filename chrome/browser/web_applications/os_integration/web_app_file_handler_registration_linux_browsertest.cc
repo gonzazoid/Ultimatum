@@ -2,29 +2,33 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/test/repeating_test_future.h"
+#include "base/test/test_future.h"
 #include "chrome/browser/web_applications/os_integration/web_app_file_handler_registration.h"
 
 #include <map>
 #include <string>
 
+#include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
 #include "base/files/file_path.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
-#include "base/test/scoped_feature_list.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/shell_integration_linux.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/web_applications/test/web_app_browsertest_util.h"
 #include "chrome/browser/web_applications/external_install_options.h"
-#include "chrome/browser/web_applications/web_app_id.h"
+#include "chrome/browser/web_applications/test/os_integration_test_override_impl.h"
+#include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "components/services/app_service/public/cpp/file_handler.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/test/browser_test.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/blink/public/common/features.h"
 #include "url/gurl.h"
 
 namespace web_app {
@@ -52,13 +56,12 @@ class WebAppFileHandlerRegistrationLinuxBrowserTest
     : public InProcessBrowserTest {
  protected:
   WebAppFileHandlerRegistrationLinuxBrowserTest() {
-    scoped_feature_list_.InitAndEnableFeature(
-        blink::features::kFileHandlingAPI);
+    base::ScopedAllowBlockingForTesting allow_blocking;
+    override_registration_ =
+        OsIntegrationTestOverrideImpl::OverrideForTesting();
   }
 
-  WebAppRegistrar& registrar() {
-    return WebAppProvider::GetForTest(browser()->profile())->registrar();
-  }
+  Profile* profile() { return browser()->profile(); }
 
   void InstallApp(ExternalInstallOptions install_options) {
     auto result = ExternallyManagedAppManagerInstall(browser()->profile(),
@@ -66,12 +69,26 @@ class WebAppFileHandlerRegistrationLinuxBrowserTest
     result_code_ = result.code;
   }
 
-  base::test::ScopedFeatureList scoped_feature_list_;
+  void TearDownOnMainThread() override {
+    test::UninstallAllWebApps(browser()->profile());
+    {
+      base::ScopedAllowBlockingForTesting allow_blocking;
+      override_registration_.reset();
+    }
+  }
+
+  const base::FilePath GetUserApplicationsDir() {
+    return override_registration_->test_override->applications_dir().Append(
+        "applications");
+  }
+
   absl::optional<webapps::InstallResultCode> result_code_;
+  std::unique_ptr<OsIntegrationTestOverrideImpl::BlockingRegistration>
+      override_registration_;
 };
 
-// Verify that the MIME type registration callback is called and that
-// the caller behaves as expected.
+// Verify that the MIME type registration callback is called with
+// the correct xdg-utility commands and data.
 IN_PROC_BROWSER_TEST_F(
     WebAppFileHandlerRegistrationLinuxBrowserTest,
     UpdateMimeInfoDatabaseOnLinuxCallbackCalledSuccessfully) {
@@ -80,37 +97,61 @@ IN_PROC_BROWSER_TEST_F(
       "/banners/"
       "manifest_test_page.html?manifest=manifest_with_file_handlers.json"));
 
-  apps::FileHandlers file_handlers;
-  file_handlers.push_back(GetTestFileHandler(
+  apps::FileHandlers expected_file_handlers;
+  expected_file_handlers.push_back(GetTestFileHandler(
       "https://site.api/open-foo",
       {{"application/foo", {".foo"}}, {"application/foobar", {".foobar"}}}));
-  file_handlers.push_back(GetTestFileHandler(
+  expected_file_handlers.push_back(GetTestFileHandler(
       "https://site.api/open-bar", {{"application/bar", {".bar", ".baz"}}}));
 
   std::string expected_file_contents =
       shell_integration_linux::GetMimeTypesRegistrationFileContents(
-          file_handlers);
-  bool path_reached = false;
-  base::RunLoop run_loop;
-  UpdateMimeInfoDatabaseOnLinuxCallback callback = base::BindLambdaForTesting(
-      [&expected_file_contents, &path_reached, &run_loop](
-          base::FilePath filename, std::string xdg_command,
-          std::string file_contents) {
-        EXPECT_EQ(file_contents, expected_file_contents);
-        path_reached = true;
-        run_loop.Quit();
+          expected_file_handlers);
+
+  std::vector<LinuxFileRegistration> xdg_commands_called;
+  base::RunLoop loop;
+  SetUpdateMimeInfoDatabaseOnLinuxCallbackForTesting(base::BindLambdaForTesting(
+      [&](base::FilePath filename_in, std::string xdg_command_in,
+          std::string file_contents_in) {
+        LinuxFileRegistration file_registration = LinuxFileRegistration();
+        file_registration.file_name = filename_in;
+        file_registration.xdg_command = xdg_command_in;
+        file_registration.file_contents = file_contents_in;
+        xdg_commands_called.push_back(file_registration);
+        loop.Quit();
         return true;
-      });
-  SetUpdateMimeInfoDatabaseOnLinuxCallbackForTesting(std::move(callback));
+      }));
 
   // Override the source as default apps don't get file handlers registered.
   ExternalInstallOptions install_options = CreateInstallOptions(url);
   install_options.install_source = ExternalInstallSource::kExternalPolicy;
   InstallApp(install_options);
-  run_loop.Run();
+
+  loop.Run();
+  absl::optional<webapps::AppId> app_id = WebAppProvider::GetForTest(profile())
+                                              ->registrar_unsafe()
+                                              .LookupExternalAppId(url);
+  EXPECT_TRUE(app_id.has_value());
+
+  base::FilePath expected_filename =
+      shell_integration_linux::GetMimeTypesRegistrationFilename(
+          profile()->GetPath(), app_id.value());
+
+  // The first call is the xdg-mime one, which contains the XML for the file
+  // handlers.
+  EXPECT_EQ(xdg_commands_called[0].file_contents, expected_file_contents);
+  EXPECT_EQ(xdg_commands_called[0].file_name, expected_filename);
+  SetUpdateMimeInfoDatabaseOnLinuxCallbackForTesting(
+      UpdateMimeInfoDatabaseOnLinuxCallback());
   EXPECT_EQ(webapps::InstallResultCode::kSuccessNewInstall,
             result_code_.value());
-  ASSERT_TRUE(path_reached);
+
+  // The second call should be the one that refreshes the mimeinfo.cache, i.e.
+  // the update-desktop-database call.
+  EXPECT_TRUE(base::StartsWith(xdg_commands_called[1].xdg_command,
+                               "update-desktop-database"));
+  EXPECT_TRUE(base::Contains(xdg_commands_called[1].xdg_command,
+                             GetUserApplicationsDir().value()));
 }
 
 }  // namespace web_app

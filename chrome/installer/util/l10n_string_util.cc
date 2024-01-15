@@ -13,13 +13,15 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/debug/alias.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
+#include "base/numerics/checked_math.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/strings/strcat_win.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/win/atl.h"
 #include "base/win/embedded_i18n/language_selector.h"
@@ -70,19 +72,26 @@ std::wstring GetLocalizedString(int base_message_id) {
   if (g_translation_delegate)
     return g_translation_delegate->GetLocalizedString(base_message_id);
 
-  std::wstring localized_string;
-
-  UINT message_id = base::checked_cast<UINT>(base_message_id +
-                                             GetLanguageSelector().offset());
+  const auto& language_selector = GetLanguageSelector();
+  const auto language_offset = language_selector.offset();
+  const UINT message_id = base::checked_cast<UINT>(
+      base::CheckAdd(base_message_id, language_offset).ValueOrDie());
   const ATLSTRINGRESOURCEIMAGE* image =
       AtlGetStringResourceImage(_AtlBaseModule.GetModuleInstance(), message_id);
   if (image) {
-    localized_string = std::wstring(image->achString, image->nLength);
-  } else {
-    NOTREACHED() << "Unable to find resource id " << message_id;
+    return std::wstring(image->achString, image->nLength);
   }
 
-  return localized_string;
+  // Debugging aid for https://crbug.com/1478933.
+  base::debug::Alias(&base_message_id);
+  base::debug::Alias(&language_offset);
+  base::debug::Alias(&message_id);
+  DEBUG_ALIAS_FOR_WCHARCSTR(selected_translation,
+                            language_selector.selected_translation().c_str(),
+                            16);
+  NOTREACHED() << "Unable to find resource id " << message_id;
+
+  return std::wstring();
 }
 
 // Here we generate the url spec with the Microsoft res:// scheme which is
@@ -107,7 +116,7 @@ std::wstring GetLocalizedEulaResource() {
 
   // Spaces and DOS paths must be url encoded.
   std::wstring url_path =
-      base::StringPrintf(L"res://%ls/#23/%ls", full_exe_path, resource.c_str());
+      base::StrCat({L"res://", full_exe_path, L"/#23/", resource});
 
   // The cast is safe because url_path has limited length
   // (see the definition of full_exe_path and resource).

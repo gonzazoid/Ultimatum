@@ -202,21 +202,13 @@ SCTReportingService::SCTReportingService(
 
 SCTReportingService::~SCTReportingService() = default;
 
-namespace {
-void SetSCTAuditingEnabledForStoragePartition(
-    network::mojom::SCTAuditingMode mode,
-    content::StoragePartition* storage_partition) {
-  storage_partition->GetNetworkContext()->SetSCTAuditingMode(mode);
-}
-}  // namespace
-
 network::mojom::SCTAuditingMode SCTReportingService::GetReportingMode() {
   if (profile_->IsOffTheRecord() ||
       !base::FeatureList::IsEnabled(features::kSCTAuditing)) {
     return network::mojom::SCTAuditingMode::kDisabled;
   }
-  if (safe_browsing::IsSafeBrowsingEnabled(pref_service_)) {
-    if (safe_browsing::IsExtendedReportingEnabled(pref_service_)) {
+  if (safe_browsing::IsSafeBrowsingEnabled(*pref_service_)) {
+    if (safe_browsing::IsExtendedReportingEnabled(*pref_service_)) {
       return network::mojom::SCTAuditingMode::kEnhancedSafeBrowsingReporting;
     }
     if (base::FeatureList::IsEnabled(features::kSCTAuditingHashdance)) {
@@ -231,8 +223,10 @@ void SCTReportingService::OnPreferenceChanged() {
 
   // Iterate over StoragePartitions for this Profile, and for each get the
   // NetworkContext and set the SCT auditing mode.
-  profile_->ForEachStoragePartition(
-      base::BindRepeating(&SetSCTAuditingEnabledForStoragePartition, mode));
+  profile_->ForEachLoadedStoragePartition(
+      [mode](content::StoragePartition* partition) {
+        partition->GetNetworkContext()->SetSCTAuditingMode(mode);
+      });
 
   if (mode == network::mojom::SCTAuditingMode::kDisabled)
     content::GetNetworkService()->ClearSCTAuditingCache();

@@ -6,8 +6,8 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/hash/hash.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
@@ -15,6 +15,7 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/stringize_macros.h"
 #include "base/system/sys_info.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
@@ -76,13 +77,13 @@ constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
         })");
 
 template <typename T, typename IsTChecker, typename TGetter>
-bool FindKeyAndGet(const base::Value& dict,
+bool FindKeyAndGet(const base::Value::Dict& dict,
                    const std::string& key,
                    T* out,
                    IsTChecker is_t_checker,
                    TGetter t_getter,
                    const std::string& type_name) {
-  const base::Value* value = dict.FindKey(key);
+  const base::Value* value = dict.Find(key);
   if (!value) {
     LOG(WARNING) << "|" << key << "| not found in dictionary.";
     return false;
@@ -95,7 +96,7 @@ bool FindKeyAndGet(const base::Value& dict,
   return true;
 }
 
-bool FindKeyAndGet(const base::Value& dict,
+bool FindKeyAndGet(const base::Value::Dict& dict,
                    const std::string& key,
                    std::string* out) {
   const std::string& (base::Value::*get_string_fp)() const =
@@ -104,12 +105,16 @@ bool FindKeyAndGet(const base::Value& dict,
                        "string");
 }
 
-bool FindKeyAndGet(const base::Value& dict, const std::string& key, int* out) {
+bool FindKeyAndGet(const base::Value::Dict& dict,
+                   const std::string& key,
+                   int* out) {
   return FindKeyAndGet(dict, key, out, &base::Value::is_int,
                        &base::Value::GetInt, "int");
 }
 
-bool FindKeyAndGet(const base::Value& dict, const std::string& key, bool* out) {
+bool FindKeyAndGet(const base::Value::Dict& dict,
+                   const std::string& key,
+                   bool* out) {
   return FindKeyAndGet(dict, key, out, &base::Value::is_bool,
                        &base::Value::GetBool, "bool");
 }
@@ -146,12 +151,12 @@ class MessageAndLinkTextResults
         out_message_translation_(out_message_translation),
         out_link_translation_(out_link_translation) {}
 
-  void OnMessageTranslationsFetched(absl::optional<base::Value> translations) {
+  void OnMessageTranslationsFetched(std::optional<base::Value> translations) {
     is_message_translation_fetched_ = true;
     OnTranslationsFetched(std::move(translations), out_message_translation_);
   }
 
-  void OnLinkTranslationsFetched(absl::optional<base::Value> translations) {
+  void OnLinkTranslationsFetched(std::optional<base::Value> translations) {
     is_link_translation_fetched_ = true;
     OnTranslationsFetched(std::move(translations), out_link_translation_);
   }
@@ -161,7 +166,7 @@ class MessageAndLinkTextResults
 
   ~MessageAndLinkTextResults() = default;
 
-  void OnTranslationsFetched(absl::optional<base::Value> translations,
+  void OnTranslationsFetched(std::optional<base::Value> translations,
                              std::string* string_to_update) {
     if (!done_) {
       LOG(WARNING) << "Received new translations after some translations have "
@@ -173,9 +178,10 @@ class MessageAndLinkTextResults
       NotifyFetchFailed();
       return;
     }
+
+    const base::Value::Dict& dict = translations->GetDict();
     bool is_translation_found = false;
-    is_translation_found =
-        FindKeyAndGet(*translations, locale_, string_to_update);
+    is_translation_found = FindKeyAndGet(dict, locale_, string_to_update);
     if (!is_translation_found) {
       LOG(WARNING) << "Failed to find translation for locale " << locale_
                    << ". Looking for parent locales instead.";
@@ -185,7 +191,7 @@ class MessageAndLinkTextResults
         // Locales returned by GetParentLocales() use "_" instead of "-", which
         // need to be fixed.
         std::replace(parent_locale.begin(), parent_locale.end(), '_', '-');
-        if (FindKeyAndGet(*translations, parent_locale, string_to_update)) {
+        if (FindKeyAndGet(dict, parent_locale, string_to_update)) {
           LOG(WARNING) << "Locale " << parent_locale
                        << " is being used instead.";
           is_translation_found = true;
@@ -199,7 +205,7 @@ class MessageAndLinkTextResults
           << " is found in translations. Falling back to default locale: "
           << kDefaultLocale;
       is_translation_found =
-          FindKeyAndGet(*translations, kDefaultLocale, string_to_update);
+          FindKeyAndGet(dict, kDefaultLocale, string_to_update);
     }
     if (!is_translation_found) {
       LOG(ERROR) << "Failed to find translation for default locale";
@@ -208,20 +214,26 @@ class MessageAndLinkTextResults
     }
     if (done_ && is_message_translation_fetched_ &&
         is_link_translation_fetched_) {
-      std::move(done_).Run(true);
+      RunDoneCallback(true);
     }
   }
 
   void NotifyFetchFailed() {
     DCHECK(done_);
-    std::move(done_).Run(false);
+    RunDoneCallback(false);
+  }
+
+  void RunDoneCallback(bool arg) {
+    // Drop unowned resources before invoking callback destroying them.
+    out_link_translation_ = nullptr;
+    out_message_translation_ = nullptr;
+    std::move(done_).Run(arg);
   }
 
   std::string locale_;
   Callback done_;
   raw_ptr<std::string> out_message_translation_;
-  // TODO(crbug.com/1298696): Breaks remoting_unittests.
-  raw_ptr<std::string, DegradeToNoOpWhenMTE> out_link_translation_;
+  raw_ptr<std::string> out_link_translation_;
   bool is_message_translation_fetched_ = false;
   bool is_link_translation_fetched_ = false;
 };
@@ -275,24 +287,25 @@ void NotificationClient::GetNotification(const std::string& user_email,
 
 void NotificationClient::OnRulesFetched(const std::string& user_email,
                                         NotificationCallback callback,
-                                        absl::optional<base::Value> rules) {
+                                        std::optional<base::Value> rules) {
   if (!rules) {
     LOG(ERROR) << "Rules not found";
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
 
   if (!rules->is_list()) {
     LOG(ERROR) << "Rules should be list";
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
 
-  for (const auto& rule : rules->GetListDeprecated()) {
+  for (const auto& rule : rules->GetList()) {
     std::string message_text_filename;
     std::string link_text_filename;
-    auto message = ParseAndMatchRule(rule, user_email, &message_text_filename,
-                                     &link_text_filename);
+    auto message =
+        ParseAndMatchRule(rule.GetDict(), user_email, &message_text_filename,
+                          &link_text_filename);
 
     if (message) {
       FetchTranslatedTexts(message_text_filename, link_text_filename,
@@ -301,11 +314,11 @@ void NotificationClient::OnRulesFetched(const std::string& user_email,
     }
   }
   // No matching rule is found.
-  std::move(callback).Run(absl::nullopt);
+  std::move(callback).Run(std::nullopt);
 }
 
-absl::optional<NotificationMessage> NotificationClient::ParseAndMatchRule(
-    const base::Value& rule,
+std::optional<NotificationMessage> NotificationClient::ParseAndMatchRule(
+    const base::Value::Dict& rule,
     const std::string& user_email,
     std::string* out_message_text_filename,
     std::string* out_link_text_filename) {
@@ -323,32 +336,32 @@ absl::optional<NotificationMessage> NotificationClient::ParseAndMatchRule(
       !FindKeyAndGet(rule, "link_text", &link_text_filename) ||
       !FindKeyAndGet(rule, "link_url", &link_url) ||
       !FindKeyAndGet(rule, "percent", &percent)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   if (should_ignore_dev_messages_) {
     bool is_dev_mode;
     if (FindKeyAndGet(rule, "dev_mode", &is_dev_mode) && is_dev_mode) {
-      return absl::nullopt;
+      return std::nullopt;
     }
   }
 
   if (target_platform != current_platform_) {
     VLOG(1) << "Notification ignored. Target platform: " << target_platform
             << "; current platform: " << current_platform_;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   VersionRange version_range(version_spec_string);
   if (!version_range.IsValid()) {
     LOG(ERROR) << "Invalid version range: " << version_spec_string;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   if (!version_range.ContainsVersion(current_version_)) {
     VLOG(1) << "Current version " << current_version_ << " not in range "
             << version_spec_string;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // OS version check is not performed if |os_version| is not specified.
@@ -357,21 +370,21 @@ absl::optional<NotificationMessage> NotificationClient::ParseAndMatchRule(
     VersionRange os_version_range(os_version_spec_string);
     if (!os_version_range.IsValid()) {
       LOG(ERROR) << "Invalid OS version range: " << os_version_spec_string;
-      return absl::nullopt;
+      return std::nullopt;
     }
     if (!os_version_range.ContainsVersion(current_os_version_)) {
       VLOG(1) << "Current OS version " << current_os_version_
               << " not in range " << os_version_spec_string;
-      return absl::nullopt;
+      return std::nullopt;
     }
   }
 
   if (!ShouldShowNotificationForUser(user_email, percent)) {
     VLOG(1) << "User is not selected for notification";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  auto message = absl::make_optional<NotificationMessage>();
+  auto message = std::make_optional<NotificationMessage>();
   message->message_id = message_id;
   message->link_url = link_url;
   message->allow_silence = false;
@@ -384,9 +397,9 @@ absl::optional<NotificationMessage> NotificationClient::ParseAndMatchRule(
 void NotificationClient::FetchTranslatedTexts(
     const std::string& message_text_filename,
     const std::string& link_text_filename,
-    absl::optional<NotificationMessage> partial_message,
+    std::optional<NotificationMessage> partial_message,
     NotificationCallback done) {
-  // Copy the message into a unique_ptr since moving absl::optional does not
+  // Copy the message into a unique_ptr since moving std::optional does not
   // move the internal storage.
   auto message_copy = std::make_unique<NotificationMessage>(*partial_message);
   std::string* message_text_ptr = &message_copy->message_text;
@@ -395,8 +408,8 @@ void NotificationClient::FetchTranslatedTexts(
       [](std::unique_ptr<NotificationMessage> message,
          NotificationCallback done, bool is_successful) {
         std::move(done).Run(
-            is_successful ? absl::make_optional<NotificationMessage>(*message)
-                          : absl::nullopt);
+            is_successful ? std::make_optional<NotificationMessage>(*message)
+                          : std::nullopt);
       },
       std::move(message_copy), std::move(done));
   auto results = base::MakeRefCounted<MessageAndLinkTextResults>(

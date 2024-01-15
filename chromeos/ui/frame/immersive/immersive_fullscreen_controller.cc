@@ -6,7 +6,7 @@
 
 #include <set>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chromeos/ui/base/window_properties.h"
 #include "chromeos/ui/frame/immersive/immersive_context.h"
 #include "chromeos/ui/frame/immersive/immersive_focus_watcher.h"
@@ -16,6 +16,7 @@
 #include "ui/aura/env.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_targeter.h"
+#include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/events/base_event_utils.h"
@@ -26,6 +27,11 @@
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 #include "ui/views/view.h"
 #include "ui/views/widget/widget.h"
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "ui/platform_window/extensions/wayland_extension.h"
+#include "ui/views/widget/desktop_aura/desktop_window_tree_host_lacros.h"
+#endif
 
 DEFINE_UI_CLASS_PROPERTY_TYPE(chromeos::ImmersiveFullscreenController*)
 
@@ -280,7 +286,14 @@ void ImmersiveFullscreenController::UnlockRevealedState() {
 // static
 void ImmersiveFullscreenController::EnableForWidget(views::Widget* widget,
                                                     bool enabled) {
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  auto* wayland_extension = views::DesktopWindowTreeHostLacros::From(
+                                widget->GetNativeWindow()->GetHost())
+                                ->GetWaylandExtension();
+  wayland_extension->SetImmersiveFullscreenStatus(enabled);
+#else
   widget->GetNativeWindow()->SetProperty(kImmersiveIsActive, enabled);
+#endif
 }
 
 // static
@@ -542,16 +555,20 @@ bool ImmersiveFullscreenController::UpdateRevealedLocksForSwipe(
 
 base::TimeDelta ImmersiveFullscreenController::GetAnimationDuration(
     Animate animate) const {
+  base::TimeDelta duration;
   switch (animate) {
     case ANIMATE_NO:
-      return base::TimeDelta();
+      // Use default which is `base::TimeDelta()`.
+      break;
     case ANIMATE_SLOW:
-      return base::Milliseconds(400);
+      duration = base::Milliseconds(400);
+      break;
     case ANIMATE_FAST:
-      return base::Milliseconds(200);
+      duration = base::Milliseconds(200);
+      break;
   }
-  NOTREACHED();
-  return base::TimeDelta();
+
+  return ui::ScopedAnimationDurationScaleMode::duration_multiplier() * duration;
 }
 
 void ImmersiveFullscreenController::MaybeStartReveal(Animate animate) {

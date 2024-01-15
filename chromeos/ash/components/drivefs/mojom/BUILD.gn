@@ -13,7 +13,10 @@ mojom_component("mojom") {
     "fake_drivefs_launcher.mojom",
   ]
 
-  public_deps = [ "//mojo/public/mojom/base" ]
+  public_deps = [
+    "//chromeos/components/drivefs/mojom",
+    "//mojo/public/mojom/base",
+  ]
 
   output_prefix = "drivefs_mojom"
   macro_prefix = "DRIVEFS_MOJOM"
@@ -36,4 +39,13 @@ mojom_component("mojom") {
       ]
     },
   ]
+}
+
+mojom_component("pinning_manager_types") {
+  sources = [ "pinning_manager_types.mojom" ]
+
+  output_prefix = "pinning_manager_types_mojom"
+  macro_prefix = "PINNING_MANAGER_TYPES_MOJOM"
+
+  webui_module_path = "/"
 }

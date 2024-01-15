@@ -25,14 +25,22 @@ GuestOsRegistryServiceFactory* GuestOsRegistryServiceFactory::GetInstance() {
 }
 
 GuestOsRegistryServiceFactory::GuestOsRegistryServiceFactory()
-    : ProfileKeyedServiceFactory("GuestOsRegistryService") {}
+    : ProfileKeyedServiceFactory(
+          "GuestOsRegistryService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              .WithGuest(ProfileSelection::kNone)
+              .WithAshInternals(ProfileSelection::kNone)
+              .WithSystem(ProfileSelection::kNone)
+              .Build()) {}
 
 GuestOsRegistryServiceFactory::~GuestOsRegistryServiceFactory() = default;
 
-KeyedService* GuestOsRegistryServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+GuestOsRegistryServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new GuestOsRegistryService(profile);
+  return std::make_unique<GuestOsRegistryService>(profile);
 }
 
 }  // namespace guest_os

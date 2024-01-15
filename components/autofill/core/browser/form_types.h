@@ -5,9 +5,13 @@
 #ifndef COMPONENTS_AUTOFILL_CORE_BROWSER_FORM_TYPES_H_
 #define COMPONENTS_AUTOFILL_CORE_BROWSER_FORM_TYPES_H_
 
+#include <string_view>
+
 #include "components/autofill/core/browser/field_types.h"
 
 namespace autofill {
+
+class FormStructure;
 
 enum class FormType : int {
   kUnknownFormType,
@@ -17,9 +21,13 @@ enum class FormType : int {
   kMaxValue = kPasswordForm
 };
 
+// Returns true if the form contains fields that represent the card number and
+// the card expiration date.
+bool FormHasAllCreditCardFields(const FormStructure& form_structure);
+
 FormType FieldTypeGroupToFormType(FieldTypeGroup field_type_group);
 
-base::StringPiece FormTypeToStringPiece(FormType form_type);
+std::string_view FormTypeToStringView(FormType form_type);
 
 }  // namespace autofill
 

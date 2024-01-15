@@ -22,7 +22,12 @@ ArcDocumentsProviderRootMapFactory::GetForBrowserContext(
 ArcDocumentsProviderRootMapFactory::ArcDocumentsProviderRootMapFactory()
     : ProfileKeyedServiceFactory(
           "ArcDocumentsProviderRootMap",
-          ProfileSelections::BuildRedirectedInIncognito()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {
   DependsOn(ArcFileSystemOperationRunner::GetFactory());
 }
 
@@ -32,10 +37,12 @@ ArcDocumentsProviderRootMapFactory::~ArcDocumentsProviderRootMapFactory() =
 // static
 ArcDocumentsProviderRootMapFactory*
 ArcDocumentsProviderRootMapFactory::GetInstance() {
-  return base::Singleton<ArcDocumentsProviderRootMapFactory>::get();
+  static base::NoDestructor<ArcDocumentsProviderRootMapFactory> instance;
+  return instance.get();
 }
 
-KeyedService* ArcDocumentsProviderRootMapFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ArcDocumentsProviderRootMapFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   auto* arc_service_manager = ArcServiceManager::Get();
 
@@ -50,7 +57,8 @@ KeyedService* ArcDocumentsProviderRootMapFactory::BuildServiceInstanceFor(
     return nullptr;
   }
 
-  return new ArcDocumentsProviderRootMap(Profile::FromBrowserContext(context));
+  return std::make_unique<ArcDocumentsProviderRootMap>(
+      Profile::FromBrowserContext(context));
 }
 
 }  // namespace arc

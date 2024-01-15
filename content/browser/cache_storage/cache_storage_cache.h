@@ -8,16 +8,19 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/id_map.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/services/storage/public/cpp/buckets/bucket_locator.h"
+#include "components/services/storage/public/cpp/quota_error_or.h"
 #include "components/services/storage/public/mojom/cache_storage_control.mojom.h"
 #include "content/browser/cache_storage/blob_storage_context_wrapper.h"
 #include "content/browser/cache_storage/cache_storage_cache_handle.h"
@@ -28,7 +31,6 @@
 #include "net/base/completion_once_callback.h"
 #include "net/base/io_buffer.h"
 #include "net/disk_cache/disk_cache.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/cache_storage/cache_storage.mojom.h"
 #include "third_party/blink/public/mojom/quota/quota_types.mojom.h"
 
@@ -162,17 +164,15 @@ class CONTENT_EXPORT CacheStorageCache {
                       int64_t trace_id,
                       VerboseErrorCallback callback,
                       BadMessageCallback bad_message_callback);
-  void BatchDidGetUsageAndQuota(
+  void BatchDidGetBucketSpaceRemaining(
       std::vector<blink::mojom::BatchOperationPtr> operations,
       int64_t trace_id,
       VerboseErrorCallback callback,
       BadMessageCallback bad_message_callback,
-      absl::optional<std::string> message,
+      std::optional<std::string> message,
       uint64_t space_required,
       uint64_t side_data_size,
-      blink::mojom::QuotaStatusCode status_code,
-      int64_t usage,
-      int64_t quota);
+      storage::QuotaErrorOr<int64_t> space_remaining);
 
   // Returns blink::mojom::CacheStorageError::kSuccess and a vector of
   // requests if there are no errors.
@@ -380,15 +380,14 @@ class CONTENT_EXPORT CacheStorageCache {
                      WriteMetadataCallback callback);
 
   // WriteSideData callbacks
-  void WriteSideDataDidGetQuota(ErrorCallback callback,
-                                const GURL& url,
-                                base::Time expected_response_time,
-                                int64_t trace_id,
-                                scoped_refptr<net::IOBuffer> buffer,
-                                int buf_len,
-                                blink::mojom::QuotaStatusCode status_code,
-                                int64_t usage,
-                                int64_t quota);
+  void WriteSideDataDidGetBucketSpaceRemaining(
+      ErrorCallback callback,
+      const GURL& url,
+      base::Time expected_response_time,
+      int64_t trace_id,
+      scoped_refptr<net::IOBuffer> buffer,
+      int buf_len,
+      storage::QuotaErrorOr<int64_t> space_remaining);
 
   void WriteSideDataImpl(ErrorCallback callback,
                          const GURL& url,

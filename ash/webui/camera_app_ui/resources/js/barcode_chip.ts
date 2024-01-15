@@ -2,9 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from './assert.js';
+import {assert, assertExists} from './assert.js';
 import * as dom from './dom.js';
 import {reportError} from './error.js';
+import {Flag} from './flag.js';
 import {I18nString} from './i18n_string.js';
 import {BarcodeContentType, sendBarcodeDetectedEvent} from './metrics.js';
 import * as loadTimeData from './models/load_time_data.js';
@@ -16,6 +17,18 @@ import {
   ErrorLevel,
   ErrorType,
 } from './type.js';
+
+interface WifiConfig {
+  securityType: string;
+  ssid: string|null;
+  password: string|null;
+  eapMethod: string|null;     // EAP only
+  anonIdentity: string|null;  // EAP only
+  identity: string|null;      // EAP only
+  phase2method: string|null;  // EAP only
+}
+
+const QR_CODE_ESCAPE_CHARS = ['\\', ';', ',', ':'];
 
 // TODO(b/172879638): Tune the duration according to the final motion spec.
 const CHIP_DURATION = 8000;
@@ -83,15 +96,93 @@ function isSafeUrl(s: string): boolean {
 }
 
 /**
- * Setups the copy button.
+ * Parses the given string `s`. If the string is a wifi connection request,
+ * return `WifiConfig` and if not, return null.
+ */
+function parseWifi(s: string): WifiConfig|null {
+  // Example string `WIFI:S:<SSID>;P:<PASSWORD>;T:<WPA|WEP|WPA2-EAP|nopass>;H;;`
+  // Reference:
+  // https://github.com/zxing/zxing/wiki/Barcode-Contents#wi-fi-network-config-android-ios-11
+  const wifiConfig: WifiConfig = {
+    securityType: 'nopass',
+    ssid: null,
+    password: null,
+    eapMethod: null,
+    anonIdentity: null,
+    identity: null,
+    phase2method: null,
+  };
+  if (s.startsWith('WIFI:') && s.endsWith(';;')) {
+    s = s.substring(5, s.length - 1);
+    let i = 0;
+    let component = '';
+    while (i < s.length) {
+      // Unescape characters escaped with a backslash
+      if (s[i] === '\\' && i + 1 < s.length &&
+          QR_CODE_ESCAPE_CHARS.includes(s[i + 1])) {
+        component += s[i + 1];
+        i += 2;
+      } else if (s[i] === ';') {
+        const splitIdx = component.search(':');
+        if (splitIdx === -1) {
+          return null;
+        }
+        const key = component.substring(0, splitIdx);
+        const val = component.substring(splitIdx + 1);
+        switch (key) {
+          case 'A':
+            wifiConfig.anonIdentity = val;
+            break;
+          case 'E':
+            wifiConfig.eapMethod = val;
+            break;
+          case 'H':
+            if (val !== 'true' && val !== 'false') {
+              wifiConfig.phase2method = val;
+            }
+            break;
+          case 'I':
+            wifiConfig.identity = val;
+            break;
+          case 'P':
+            wifiConfig.password = val;
+            break;
+          case 'PH2':
+            wifiConfig.phase2method = val;
+            break;
+          case 'S':
+            wifiConfig.ssid = val;
+            break;
+          case 'T':
+            wifiConfig.securityType = val;
+            break;
+          default:
+            return null;
+        }
+        component = '';
+        i += 1;
+      } else {
+        component += s[i];
+        i += 1;
+      }
+    }
+  }
+
+  if (wifiConfig.ssid === null) {
+    return null;
+  }
+  return wifiConfig;
+}
+
+/**
+ * Creates the copy button.
  *
  * @param container The container for the button.
  * @param content The content to be copied.
  * @param snackbarLabel The label to be displayed on snackbar when the content
  *     is copied.
- * @return The copy button element.
  */
-function setupCopyButton(
+function createCopyButton(
     container: HTMLElement, content: string,
     snackbarLabel: I18nString): HTMLElement {
   const copyButton =
@@ -110,21 +201,21 @@ function showUrl(url: string) {
   const container = dom.get('#barcode-chip-url-container', HTMLDivElement);
   activate(container);
 
-  const anchor = dom.getFrom(container, 'a', HTMLAnchorElement);
-  Object.assign(anchor, {
-    textContent: url,
-    onclick: () => {
-      ChromeHelper.getInstance().openUrlInBrowser(url);
-    },
-  });
-  const hostname = new URL(url).hostname;
-  const label =
-      loadTimeData.getI18nMessage(I18nString.BARCODE_LINK_DETECTED, hostname);
-  anchor.setAttribute('aria-label', label);
-  anchor.setAttribute('aria-description', url);
-  anchor.focus();
+  const textEl = dom.get('#barcode-chip-url-content', HTMLSpanElement);
+  textEl.textContent =
+      loadTimeData.getI18nMessage(I18nString.BARCODE_LINK_CHIPTEXT, url);
 
-  setupCopyButton(container, url, I18nString.SNACKBAR_LINK_COPIED);
+  const chip = dom.get('#barcode-chip-url', HTMLButtonElement);
+  chip.onclick = () => {
+    ChromeHelper.getInstance().openUrlInBrowser(url);
+  };
+  chip.focus();
+
+  const copyButton =
+      createCopyButton(container, url, I18nString.SNACKBAR_LINK_COPIED);
+  const label =
+      loadTimeData.getI18nMessage(I18nString.BARCODE_COPY_LINK_BUTTON, url);
+  copyButton.setAttribute('aria-label', label);
 }
 
 /**
@@ -133,9 +224,8 @@ function showUrl(url: string) {
 function showText(text: string) {
   const container = dom.get('#barcode-chip-text-container', HTMLDivElement);
   activate(container);
-  container.classList.remove('expanded');
 
-  const textEl = dom.get('#barcode-chip-text-content', HTMLDivElement);
+  const textEl = dom.get('#barcode-chip-text-content', HTMLSpanElement);
   textEl.textContent = text;
   const expandable = textEl.scrollWidth > textEl.clientWidth;
 
@@ -148,7 +238,10 @@ function showText(text: string) {
   };
 
   const copyButton =
-      setupCopyButton(container, text, I18nString.SNACKBAR_TEXT_COPIED);
+      createCopyButton(container, text, I18nString.SNACKBAR_TEXT_COPIED);
+  const label =
+      loadTimeData.getI18nMessage(I18nString.BARCODE_COPY_TEXT_BUTTON, text);
+  copyButton.setAttribute('aria-label', label);
 
   // TODO(b/172879638): There is a race in ChromeVox which will speak the
   // focused element twice.
@@ -160,9 +253,35 @@ function showText(text: string) {
 }
 
 /**
+ * Shows an actionable wifi chip for connecting Wi-fi.
+ */
+function showWifi(wifiConfig: WifiConfig) {
+  const container = dom.get('#barcode-chip-wifi-container', HTMLDivElement);
+  activate(container);
+
+  const ssidString = assertExists(wifiConfig.ssid);
+
+  const textEl = dom.get('#barcode-chip-wifi-content', HTMLSpanElement);
+  const text =
+      loadTimeData.getI18nMessage(I18nString.BARCODE_WIFI_CHIPTEXT, ssidString);
+  textEl.textContent = text;
+
+  const chip = dom.get('#barcode-chip-wifi', HTMLElement);
+  const label = loadTimeData.getI18nMessage(
+      I18nString.LABEL_BARCODE_WIFI_CHIP, ssidString);
+  chip.setAttribute('aria-label', label);
+  chip.onclick = () => {
+    // TODO(dorahkim): After is crrev/c/4964660 is landed, connect to the Wi-fi
+    // here.
+  };
+
+  chip.focus();
+}
+
+/**
  * Shows an actionable chip for the string detected from a barcode.
  */
-export async function show(code: string): Promise<void> {
+export function show(code: string): void {
   if (code === currentCode) {
     if (currentTimer !== null) {
       // Extend the duration by resetting the timeout.
@@ -178,8 +297,19 @@ export async function show(code: string): Promise<void> {
   }
 
   currentCode = code;
-
-  if (isSafeUrl(code)) {
+  const wifiConfig = parseWifi(code);
+  if (loadTimeData.getChromeFlag(Flag.AUTO_QR) && wifiConfig !== null) {
+    sendBarcodeDetectedEvent(
+        {contentType: BarcodeContentType.WIFI}, wifiConfig.securityType);
+    if (['WEP', 'WPA', 'WPA2-EAP', 'nopass'].includes(
+            wifiConfig.securityType)) {
+      showWifi(wifiConfig);
+    } else {
+      // For unsupported security types, we show a raw string.
+      // We can support more if metrics proves the needs.
+      showText(code);
+    }
+  } else if (isSafeUrl(code)) {
     sendBarcodeDetectedEvent({contentType: BarcodeContentType.URL});
     showUrl(code);
   } else {

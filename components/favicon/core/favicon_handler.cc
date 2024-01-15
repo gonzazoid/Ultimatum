@@ -8,10 +8,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
-#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/metrics/histogram_functions.h"
@@ -104,6 +103,15 @@ bool FaviconURLEquals(const FaviconURL& lhs, const FaviconURL& rhs) {
          lhs.icon_sizes == rhs.icon_sizes;
 }
 
+// Returns true if `icon_sizes` has the "any" size keyword specified. The 'any'
+// value is represented as the size 0x0 (e.g `gfx::Size()` or the predicate
+// `gfx::Size::IsZero()`). "0x0" (or generally, a 0 dimension) is considered an
+// invalid size by the 'sizes' parser (see for example `WebIconSizesParser` in
+// Blink).
+bool HasAnySize(const std::vector<gfx::Size>& icon_sizes) {
+  return base::ranges::any_of(icon_sizes, &gfx::Size::IsZero);
+}
+
 }  // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -118,7 +126,11 @@ FaviconHandler::FaviconCandidate::FromFaviconURL(
   candidate.icon_url = favicon_url.icon_url;
   candidate.icon_type = favicon_url.icon_type;
 
-  if (!favicon_url.icon_sizes.empty()) {
+  if (HasAnySize(favicon_url.icon_sizes)) {
+    // For candidates which has the keyword "any" as part of their size
+    // information, assign a score of 1.
+    candidate.score = 1.0f;
+  } else if (!favicon_url.icon_sizes.empty()) {
     // For candidates with explicit size information, the score is computed
     // based on similarity with |desired_pixel_sizes|.
     SelectFaviconFrameIndices(favicon_url.icon_sizes, desired_pixel_sizes,
@@ -303,12 +315,8 @@ void FaviconHandler::NotifyFaviconUpdated(const GURL& icon_url,
   if (image.IsEmpty())
     return;
 
-  gfx::Image image_with_adjusted_colorspace = image;
-  favicon_base::SetFaviconColorSpace(&image_with_adjusted_colorspace);
-
   delegate_->OnFaviconUpdated(last_page_url_, handler_type_, icon_url,
-                              icon_url != notification_icon_url_,
-                              image_with_adjusted_colorspace);
+                              icon_url != notification_icon_url_, image);
 
   notification_icon_url_ = icon_url;
   notification_icon_type_ = icon_type;
@@ -505,6 +513,8 @@ void FaviconHandler::OnDidDownloadFavicon(
       if (service_)
         service_->UnableToDownloadFavicon(image_url);
     } else if (http_status_code != 0) {
+      // `http_status_code` might be HTTP_OK here, but this is still
+      // considered an error since `bitmaps` is empty.
       error_other_than_404_found_ = true;
     }
   } else {

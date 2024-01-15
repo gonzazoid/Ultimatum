@@ -5,13 +5,9 @@
 #include "components/omnibox/browser/autocomplete_provider.h"
 
 #include <algorithm>
-#include <set>
 #include <string>
 
-#include "base/feature_list.h"
-#include "base/i18n/case_conversion.h"
-#include "base/logging.h"
-#include "base/strings/string_split.h"
+#include "base/notreached.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/trace_event/memory_usage_estimator.h"
@@ -23,8 +19,6 @@
 #include "components/omnibox/browser/autocomplete_provider_listener.h"
 #include "components/omnibox/browser/history_provider.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
-#include "components/omnibox/browser/scored_history_match.h"
-#include "components/omnibox/common/omnibox_features.h"
 #include "components/url_formatter/url_fixer.h"
 #include "url/gurl.h"
 
@@ -78,6 +72,8 @@ const char* AutocompleteProvider::TypeToString(Type type) {
       return "OpenTab";
     case TYPE_HISTORY_CLUSTER_PROVIDER:
       return "HistoryCluster";
+    case TYPE_CALCULATOR:
+      return "Calculator";
     default:
       NOTREACHED() << "Unhandled AutocompleteProvider::Type " << type;
       return "Unknown";
@@ -89,8 +85,9 @@ void AutocompleteProvider::AddListener(AutocompleteProviderListener* listener) {
 }
 
 void AutocompleteProvider::NotifyListeners(bool updated_matches) const {
-  for (auto* listener : listeners_)
+  for (AutocompleteProviderListener* listener : listeners_) {
     listener->OnProviderUpdate(updated_matches, this);
+  }
 }
 
 void AutocompleteProvider::StartPrefetch(const AutocompleteInput& input) {
@@ -108,34 +105,6 @@ void AutocompleteProvider::Stop(bool clear_cached_results,
 
 const char* AutocompleteProvider::GetName() const {
   return TypeToString(type_);
-}
-
-// static
-ACMatchClassifications AutocompleteProvider::ClassifyAllMatchesInString(
-    const std::u16string& find_text,
-    const std::u16string& text,
-    const bool text_is_search_query,
-    const ACMatchClassifications& original_class) {
-  // TODO (manukh) Move this function to autocomplete_match_classification
-  DCHECK(!find_text.empty());
-
-  if (text.empty())
-    return original_class;
-
-  TermMatches term_matches = FindTermMatches(find_text, text);
-
-  ACMatchClassifications classifications;
-  if (text_is_search_query) {
-    classifications = ClassifyTermMatches(term_matches, text.size(),
-                                          ACMatchClassification::NONE,
-                                          ACMatchClassification::MATCH);
-  } else
-    classifications = ClassifyTermMatches(term_matches, text.size(),
-                                          ACMatchClassification::MATCH,
-                                          ACMatchClassification::NONE);
-
-  return AutocompleteMatch::MergeClassifications(original_class,
-                                                 classifications);
 }
 
 metrics::OmniboxEventProto_ProviderType
@@ -179,8 +148,19 @@ AutocompleteProvider::AsOmniboxEventProviderType() const {
       return metrics::OmniboxEventProto::OPEN_TAB;
     case TYPE_HISTORY_CLUSTER_PROVIDER:
       return metrics::OmniboxEventProto::HISTORY_CLUSTER;
+    case TYPE_CALCULATOR:
+      // TODO(manukh): Since there's a high likelihood the calc provider won't
+      //   launch, log as search provider to avoid the adding then deprecating
+      //   the provider in the proto and histograms.
+      return metrics::OmniboxEventProto::SEARCH;
     default:
-      NOTREACHED() << "Unhandled AutocompleteProvider::Type " << type_;
+      // TODO(crbug.com/1499235) This was a NOTREACHED that we converted to help
+      //   debug crbug.com/1499235 since NOTREACHED's don't log their message in
+      //   crash reports. Should be reverted back to a NOTREACHED or
+      //   NOTREACHED_NORETURN if their logs eventually begin being logged to
+      //   crash reports.
+      DUMP_WILL_BE_NOTREACHED_NORETURN()
+          << "[NOTREACHED] Unhandled AutocompleteProvider::Type " << type_;
       return metrics::OmniboxEventProto::UNKNOWN_PROVIDER;
   }
 }
@@ -198,8 +178,6 @@ void AutocompleteProvider::DeleteMatchElement(const AutocompleteMatch& match,
 
 void AutocompleteProvider::AddProviderInfo(ProvidersInfo* provider_info) const {
 }
-
-void AutocompleteProvider::ResetSession() {}
 
 size_t AutocompleteProvider::EstimateMemoryUsage() const {
   return base::trace_event::EstimateMemoryUsage(matches_);
@@ -315,31 +293,24 @@ bool AutocompleteProvider::InKeywordMode(const AutocompleteInput& input) {
          metrics::OmniboxEventProto::INVALID;
 }
 
-// static
-bool AutocompleteProvider::InExplicitExperimentalKeywordMode(
-    const AutocompleteInput& input,
-    const std::u16string& keyword) {
-  return OmniboxFieldTrial::IsExperimentalKeywordModeEnabled() &&
-         input.prefer_keyword() &&
-         base::StartsWith(input.text(), keyword,
-                          base::CompareCase::SENSITIVE) &&
-         InExplicitKeywordMode(input, keyword);
-}
+void AutocompleteProvider::ResizeMatches(size_t max_matches,
+                                         bool ml_scoring_enabled) {
+  if (matches_.size() <= max_matches) {
+    return;
+  }
 
-// static
-bool AutocompleteProvider::InExplicitKeywordMode(
-    const AutocompleteInput& input,
-    const std::u16string& keyword) {
-  // It is important to this method that we determine if the user entered
-  // keyword mode intentionally, as we use this routine to e.g. filter
-  // all but keyword results. Currently we assume that the user entered
-  // keyword mode intentionally with all entry methods except with a
-  // space (and disregard entry method during a backspace). However, if the
-  // user has typed a char past the space, we again assume keyword mode.
-  return (((input.keyword_mode_entry_method() !=
-                metrics::OmniboxEventProto::SPACE_AT_END &&
-            input.keyword_mode_entry_method() !=
-                metrics::OmniboxEventProto::SPACE_IN_MIDDLE) &&
-           !input.prevent_inline_autocomplete()) ||
-          input.text().size() > keyword.size() + 1);
+  // When ML Scoring is not enabled, simply resize the `matches_` list.
+  if (!ml_scoring_enabled) {
+    matches_.resize(max_matches);
+    return;
+  }
+
+  // The provider should pass all match candidates to the controller if ML
+  // scoring is enabled. Mark any matches over `max_matches` with zero relevance
+  // and `culled_by_provider` set to true to simulate the resizing.
+  base::ranges::for_each(std::next(matches_.begin(), max_matches),
+                         matches_.end(), [&](auto& match) {
+                           match.relevance = 0;
+                           match.culled_by_provider = true;
+                         });
 }

@@ -18,19 +18,24 @@
 #include "chrome/test/base/in_process_browser_test.h"
 #include "components/autofill/content/browser/content_autofill_driver.h"
 #include "components/autofill/content/browser/test_autofill_manager_injector.h"
+#include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/browser_autofill_manager.h"
 #include "components/autofill/core/browser/data_model/autofill_offer_data.h"
 #include "components/autofill/core/browser/payments/autofill_offer_manager.h"
 #include "components/autofill/core/browser/personal_data_manager.h"
 #include "components/autofill/core/browser/test_autofill_manager_waiter.h"
 #include "components/autofill/core/browser/test_event_waiter.h"
+#include "content/public/test/content_mock_cert_verifier.h"
+#include "net/test/embedded_test_server/embedded_test_server.h"
+#include "net/test/embedded_test_server/http_request.h"
+#include "net/test/embedded_test_server/http_response.h"
 
 class CouponService;
 
 namespace autofill {
 
 namespace {
-const int64_t kCreditCardInstrumentId = 0x4444;
+constexpr int64_t kCreditCardInstrumentId = 0x4444;
 }  // namespace
 
 // Test base class for the OfferNotificationBubbleViews related tests. Provides
@@ -42,10 +47,7 @@ class OfferNotificationBubbleViewsTestBase
   class TestAutofillManager : public BrowserAutofillManager {
    public:
     TestAutofillManager(ContentAutofillDriver* driver, AutofillClient* client)
-        : BrowserAutofillManager(driver,
-                                 client,
-                                 "en-US",
-                                 EnableDownloadManager(false)) {}
+        : BrowserAutofillManager(driver, client, "en-US") {}
 
     testing::AssertionResult WaitForFormsSeen(int min_num_awaited_calls) {
       return forms_seen_waiter_.Wait(min_num_awaited_calls);
@@ -54,7 +56,7 @@ class OfferNotificationBubbleViewsTestBase
    private:
     TestAutofillManagerWaiter forms_seen_waiter_{
         *this,
-        {&AutofillManager::Observer::OnAfterFormsSeen}};
+        {AutofillManagerEvent::kFormsSeen}};
   };
 
   // Various events that can be waited on by the DialogEventWaiter.
@@ -62,16 +64,17 @@ class OfferNotificationBubbleViewsTestBase
     BUBBLE_SHOWN,
   };
 
-  explicit OfferNotificationBubbleViewsTestBase(
-      bool promo_code_flag_enabled = true);
+  OfferNotificationBubbleViewsTestBase();
   ~OfferNotificationBubbleViewsTestBase() override;
   OfferNotificationBubbleViewsTestBase(
       const OfferNotificationBubbleViewsTestBase&) = delete;
   OfferNotificationBubbleViewsTestBase& operator=(
       const OfferNotificationBubbleViewsTestBase&) = delete;
 
-  // InProcessBrowserTest::SetUpOnMainThread:
+  // InProcessBrowserTest:
   void SetUpOnMainThread() override;
+  void TearDownOnMainThread() override;
+  void SetUpCommandLine(base::CommandLine* command_line) override;
 
   // OfferNotificationBubbleControllerImpl::ObserverForTest:
   void OnBubbleShown() override;
@@ -104,8 +107,12 @@ class OfferNotificationBubbleViewsTestBase
 
   TestAutofillManager* GetAutofillManager();
 
-  void NavigateTo(const std::string& file_path);
-  void NavigateToAndWaitForForm(const std::string& file_path);
+  // The test fixture's HTTPS server listens at a random port.
+  // `GetUrl("foo.com", "/index.html")` returns a URL
+  // `GURL("https://foo.com:1234/index.html")` for the right port.
+  GURL GetUrl(std::string_view host, std::string_view path) const;
+  void NavigateTo(const GURL& url);
+  void NavigateToAndWaitForForm(const GURL& url);
 
   OfferNotificationBubbleViews* GetOfferNotificationBubbleViews();
 
@@ -125,7 +132,9 @@ class OfferNotificationBubbleViewsTestBase
 
   AutofillOfferManager* GetOfferManager();
 
-  void WaitForObservedEvent() { event_waiter_->Wait(); }
+  [[nodiscard]] testing::AssertionResult WaitForObservedEvent() {
+    return event_waiter_->Wait();
+  }
 
   PersonalDataManager* personal_data() { return personal_data_; }
 
@@ -149,12 +158,14 @@ class OfferNotificationBubbleViewsTestBase
   std::string GetDefaultTestDetailsUrlString() const;
 
  private:
-  std::unique_ptr<TestAutofillManagerInjector<TestAutofillManager>>
-      autofill_manager_injector_;
-  raw_ptr<PersonalDataManager, DanglingUntriaged> personal_data_;
-  raw_ptr<CouponService, DanglingUntriaged> coupon_service_;
-  std::unique_ptr<autofill::EventWaiter<DialogEvent>> event_waiter_;
+  test::AutofillBrowserTestEnvironment autofill_test_environment_;
   base::test::ScopedFeatureList scoped_feature_list_;
+  TestAutofillManagerInjector<TestAutofillManager> autofill_manager_injector_;
+  raw_ptr<PersonalDataManager> personal_data_ = nullptr;
+  raw_ptr<CouponService> coupon_service_ = nullptr;
+  std::unique_ptr<autofill::EventWaiter<DialogEvent>> event_waiter_;
+  net::EmbeddedTestServer https_server_;
+  content::ContentMockCertVerifier cert_verifier_;
 };
 
 }  // namespace autofill

@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "cc/resources/ui_resource_bitmap.h"
 #include "cc/test/fake_layer_tree_host_impl.h"
 
@@ -29,8 +29,9 @@ void FakeUIResourceLayerTreeHostImpl::CreateUIResource(
 
   data.resource_id_for_export = resource_provider()->ImportResource(
       viz::TransferableResource::MakeGpu(
-          gpu::Mailbox::Generate(), GL_LINEAR, GL_TEXTURE_2D, gpu::SyncToken(),
-          bitmap.GetSize(), viz::RGBA_8888, false /* is_overlay_candidate */),
+          gpu::Mailbox::GenerateForSharedImage(), GL_TEXTURE_2D,
+          gpu::SyncToken(), bitmap.GetSize(),
+          viz::SinglePlaneFormat::kRGBA_8888, false /* is_overlay_candidate */),
       base::DoNothing());
 
   data.opaque = bitmap.GetOpaque();

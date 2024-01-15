@@ -10,7 +10,6 @@
 #include "components/segmentation_platform/internal/database/segment_info_database.h"
 #include "components/segmentation_platform/internal/database/signal_storage_config.h"
 #include "components/segmentation_platform/internal/database/storage_service.h"
-#include "components/segmentation_platform/internal/execution/default_model_manager.h"
 #include "components/segmentation_platform/internal/metadata/metadata_utils.h"
 #include "components/segmentation_platform/internal/proto/model_prediction.pb.h"
 #include "components/segmentation_platform/internal/signals/histogram_signal_handler.h"
@@ -19,6 +18,7 @@
 #include "components/segmentation_platform/internal/signals/user_action_signal_handler.h"
 #include "components/segmentation_platform/internal/stats.h"
 #include "components/segmentation_platform/internal/ukm_data_manager.h"
+#include "components/segmentation_platform/public/proto/model_metadata.pb.h"
 #include "components/segmentation_platform/public/proto/types.pb.h"
 
 namespace segmentation_platform {
@@ -27,11 +27,14 @@ namespace {
 class FilterExtractor {
  public:
   explicit FilterExtractor(
-      const DefaultModelManager::SegmentInfoList& segment_infos) {
-    for (const auto& info : segment_infos) {
-      const proto::SegmentInfo& segment_info = info->segment_info;
+      const SegmentInfoDatabase::SegmentInfoList& segment_infos) {
+    for (auto& info : segment_infos) {
+      const proto::SegmentInfo& segment_info = *info.second;
       const auto& metadata = segment_info.model_metadata();
-      AddUmaFeatures(metadata);
+      metadata_utils::VisitAllUmaFeatures(
+          metadata, /*include_outputs=*/true,
+          base::BindRepeating(&FilterExtractor::AddUmaFeature,
+                              base::Unretained(this)));
       if (AddUkmFeatures(metadata)) {
         history_based_segments.insert(segment_info.segment_id());
       }
@@ -44,30 +47,23 @@ class FilterExtractor {
   base::flat_set<SegmentId> history_based_segments;
 
  private:
-  void AddUmaFeatures(const proto::SegmentationModelMetadata& metadata) {
-    auto features =
-        metadata_utils::GetAllUmaFeatures(metadata, /*include_outputs=*/true);
-    for (auto const& feature : features) {
-      if (feature.type() == proto::SignalType::USER_ACTION &&
-          feature.name_hash() != 0) {
-        user_actions.insert(feature.name_hash());
-        VLOG(1) << "Segmentation platform started observing " << feature.name();
-        continue;
-      }
-
-      if ((feature.type() == proto::SignalType::HISTOGRAM_VALUE ||
-           feature.type() == proto::SignalType::HISTOGRAM_ENUM) &&
-          !feature.name().empty()) {
-        VLOG(1) << "Segmentation platform started observing " << feature.name();
-        histograms.insert(std::make_pair(feature.name(), feature.type()));
-        continue;
-      }
-
-      NOTREACHED() << "Unexpected feature type";
-
-      // TODO(shaktisahu): We can filter out enum values as an optimization
-      // before storing in DB.
+  void AddUmaFeature(const proto::UMAFeature& feature) {
+    if (feature.type() == proto::SignalType::USER_ACTION &&
+        feature.name_hash() != 0) {
+      user_actions.insert(feature.name_hash());
+      VLOG(1) << "Segmentation platform started observing " << feature.name();
+      return;
     }
+
+    if ((feature.type() == proto::SignalType::HISTOGRAM_VALUE ||
+         feature.type() == proto::SignalType::HISTOGRAM_ENUM) &&
+        !feature.name().empty()) {
+      VLOG(1) << "Segmentation platform started observing " << feature.name();
+      histograms.insert(std::make_pair(feature.name(), feature.type()));
+      return;
+    }
+
+    NOTREACHED() << "Unexpected feature type";
   }
 
   bool AddUkmFeatures(const proto::SegmentationModelMetadata& metadata) {
@@ -104,15 +100,15 @@ SignalFilterProcessor::SignalFilterProcessor(
 SignalFilterProcessor::~SignalFilterProcessor() = default;
 
 void SignalFilterProcessor::OnSignalListUpdated() {
-  storage_service_->default_model_manager()->GetAllSegmentInfoFromBothModels(
-      segment_ids_, storage_service_->segment_info_database(),
-      base::BindOnce(&SignalFilterProcessor::FilterSignals,
-                     weak_ptr_factory_.GetWeakPtr()));
+  auto available_segments =
+      storage_service_->segment_info_database()->GetSegmentInfoForBothModels(
+          segment_ids_);
+  FilterSignals(std::move(available_segments));
 }
 
 void SignalFilterProcessor::FilterSignals(
-    DefaultModelManager::SegmentInfoList segment_infos) {
-  FilterExtractor extractor(segment_infos);
+    std::unique_ptr<SegmentInfoDatabase::SegmentInfoList> segment_infos) {
+  FilterExtractor extractor(*segment_infos.get());
 
   stats::RecordSignalsListeningCount(extractor.user_actions,
                                      extractor.histograms);
@@ -126,14 +122,13 @@ void SignalFilterProcessor::FilterSignals(
     history_observer_->SetHistoryBasedSegments(
         std::move(extractor.history_based_segments));
   }
-  for (const auto& segment_info : segment_infos) {
+  for (const auto& segment_info : *segment_infos) {
     if (is_first_time_model_update_) {
       stats::RecordModelUpdateTimeDifference(
-          segment_info->segment_info.segment_id(),
-          segment_info->segment_info.model_update_time_s());
+          segment_info.first, segment_info.second->model_update_time_s());
     }
     storage_service_->signal_storage_config()->OnSignalCollectionStarted(
-        segment_info->segment_info.model_metadata());
+        segment_info.second->model_metadata());
   }
   is_first_time_model_update_ = false;
 }

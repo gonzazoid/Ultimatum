@@ -13,8 +13,9 @@ class CommandUpdater;
 // The location bar icon to show the Translate bubble where the user can have
 // the page translated.
 class TranslateIconView : public PageActionIconView {
+  METADATA_HEADER(TranslateIconView, PageActionIconView)
+
  public:
-  METADATA_HEADER(TranslateIconView);
   TranslateIconView(CommandUpdater* command_updater,
                     IconLabelBubbleView::Delegate* icon_label_bubble_delegate,
                     PageActionIconView::Delegate* page_action_icon_delegate);
@@ -31,7 +32,6 @@ class TranslateIconView : public PageActionIconView {
   // PageActionIconView:
   void OnExecuting(PageActionIconView::ExecuteSource execute_source) override;
   const gfx::VectorIcon& GetVectorIcon() const override;
-  std::u16string GetTextForTooltipAndAccessibleName() const override;
 
  private:
   // Returns the Partial Translate bubble instance for the Translate icon.

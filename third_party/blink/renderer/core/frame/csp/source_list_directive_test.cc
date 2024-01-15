@@ -79,30 +79,58 @@ TEST_F(SourceListDirectiveTest, BasicMatchingStar) {
   network::mojom::blink::CSPSourceListPtr source_list =
       ParseSourceList("script-src", sources);
 
-  EXPECT_TRUE(CSPSourceListAllows(*source_list, *self_source,
-                                  KURL(base, "http://example.com/")));
-  EXPECT_TRUE(CSPSourceListAllows(*source_list, *self_source,
-                                  KURL(base, "https://example.com/")));
-  EXPECT_TRUE(CSPSourceListAllows(*source_list, *self_source,
-                                  KURL(base, "http://example.com/bar")));
-  EXPECT_TRUE(CSPSourceListAllows(*source_list, *self_source,
-                                  KURL(base, "http://foo.example.com/")));
-  EXPECT_TRUE(CSPSourceListAllows(*source_list, *self_source,
-                                  KURL(base, "http://foo.example.com/bar")));
-  EXPECT_TRUE(CSPSourceListAllows(*source_list, *self_source,
-                                  KURL(base, "ftp://example.com/")));
+  EXPECT_EQ(CSPSourceListAllows(*source_list, *self_source,
+                                KURL(base, "http://example.com/")),
+            CSPCheckResult::Allowed());
+  EXPECT_EQ(CSPSourceListAllows(*source_list, *self_source,
+                                KURL(base, "https://example.com/")),
+            CSPCheckResult::Allowed());
+  EXPECT_EQ(CSPSourceListAllows(*source_list, *self_source,
+                                KURL(base, "http://example.com/bar")),
+            CSPCheckResult::Allowed());
+  EXPECT_EQ(CSPSourceListAllows(*source_list, *self_source,
+                                KURL(base, "http://foo.example.com/")),
+            CSPCheckResult::Allowed());
+  EXPECT_EQ(CSPSourceListAllows(*source_list, *self_source,
+                                KURL(base, "http://foo.example.com/bar")),
+            CSPCheckResult::Allowed());
+  EXPECT_EQ(CSPSourceListAllows(*source_list, *self_source,
+                                KURL(base, "ftp://example.com/")),
+            base::FeatureList::IsEnabled(
+                network::features::kCspStopMatchingWildcardDirectivesToFtp)
+                ? CSPCheckResult::Blocked()
+                : CSPCheckResult::AllowedOnlyIfWildcardMatchesFtp());
+  EXPECT_EQ(CSPSourceListAllows(*source_list, *self_source,
+                                KURL(base, "ws://example.com/")),
+            CSPCheckResult::AllowedOnlyIfWildcardMatchesWs());
 
-  EXPECT_FALSE(CSPSourceListAllows(*source_list, *self_source,
-                                   KURL(base, "data:https://example.test/")));
-  EXPECT_FALSE(CSPSourceListAllows(*source_list, *self_source,
-                                   KURL(base, "blob:https://example.test/")));
-  EXPECT_FALSE(
-      CSPSourceListAllows(*source_list, *self_source,
-                          KURL(base, "filesystem:https://example.test/")));
-  EXPECT_FALSE(CSPSourceListAllows(*source_list, *self_source,
-                                   KURL(base, "file:///etc/hosts")));
-  EXPECT_FALSE(CSPSourceListAllows(*source_list, *self_source,
-                                   KURL(base, "applewebdata://example.test/")));
+  EXPECT_EQ(CSPSourceListAllows(*source_list, *self_source,
+                                KURL(base, "data:https://example.test/")),
+            CSPCheckResult::Blocked());
+  EXPECT_EQ(CSPSourceListAllows(*source_list, *self_source,
+                                KURL(base, "blob:https://example.test/")),
+            CSPCheckResult::Blocked());
+  EXPECT_EQ(CSPSourceListAllows(*source_list, *self_source,
+                                KURL(base, "filesystem:https://example.test/")),
+            CSPCheckResult::Blocked());
+  EXPECT_EQ(CSPSourceListAllows(*source_list, *self_source,
+                                KURL(base, "file:///etc/hosts")),
+            CSPCheckResult::Blocked());
+  EXPECT_EQ(CSPSourceListAllows(*source_list, *self_source,
+                                KURL(base, "applewebdata://example.test/")),
+            CSPCheckResult::Blocked());
+}
+
+TEST_F(SourceListDirectiveTest, BasicMatchingStarPlusExplicitFtpWs) {
+  network::mojom::blink::CSPSourceListPtr source_list =
+      ParseSourceList("script-src", "* ftp: ws:");
+
+  EXPECT_EQ(CSPSourceListAllows(*source_list, *self_source,
+                                KURL("ftp://example.com/")),
+            CSPCheckResult::Allowed());
+  EXPECT_EQ(CSPSourceListAllows(*source_list, *self_source,
+                                KURL("ws://example.com/")),
+            CSPCheckResult::Allowed());
 }
 
 TEST_F(SourceListDirectiveTest, StarallowsSelf) {
@@ -312,30 +340,35 @@ TEST_F(SourceListDirectiveTest, AllowAllInline) {
   // Script-src and style-src differently handle presence of 'strict-dynamic'.
   network::mojom::blink::CSPSourceListPtr script_src =
       ParseSourceList("script-src", "'strict-dynamic' 'unsafe-inline'");
-  EXPECT_FALSE(
-      CSPSourceListAllowAllInline(CSPDirectiveName::ScriptSrc, *script_src));
+  EXPECT_FALSE(CSPSourceListAllowAllInline(
+      CSPDirectiveName::ScriptSrc, ContentSecurityPolicy::InlineType::kScript,
+      *script_src));
 
   network::mojom::blink::CSPSourceListPtr style_src =
       ParseSourceList("style-src", "'strict-dynamic' 'unsafe-inline'");
-  EXPECT_TRUE(
-      CSPSourceListAllowAllInline(CSPDirectiveName::StyleSrc, *style_src));
+  EXPECT_TRUE(CSPSourceListAllowAllInline(
+      CSPDirectiveName::StyleSrc, ContentSecurityPolicy::InlineType::kStyle,
+      *style_src));
 
   for (const auto& test : cases) {
     script_src = ParseSourceList("script-src", test.sources);
-    EXPECT_EQ(
-        CSPSourceListAllowAllInline(CSPDirectiveName::ScriptSrc, *script_src),
-        test.expected);
+    EXPECT_EQ(CSPSourceListAllowAllInline(
+                  CSPDirectiveName::ScriptSrc,
+                  ContentSecurityPolicy::InlineType::kScript, *script_src),
+              test.expected);
 
     style_src = ParseSourceList("style-src", test.sources);
-    EXPECT_EQ(
-        CSPSourceListAllowAllInline(CSPDirectiveName::StyleSrc, *style_src),
-        test.expected);
+    EXPECT_EQ(CSPSourceListAllowAllInline(
+                  CSPDirectiveName::StyleSrc,
+                  ContentSecurityPolicy::InlineType::kStyle, *style_src),
+              test.expected);
 
     // If source list doesn't have a valid type, it must not allow all inline.
     network::mojom::blink::CSPSourceListPtr img_src =
         ParseSourceList("img-src", test.sources);
-    EXPECT_FALSE(
-        CSPSourceListAllowAllInline(CSPDirectiveName::ImgSrc, *img_src));
+    EXPECT_FALSE(CSPSourceListAllowAllInline(
+        CSPDirectiveName::ImgSrc, ContentSecurityPolicy::InlineType::kScript,
+        *img_src));
   }
 }
 

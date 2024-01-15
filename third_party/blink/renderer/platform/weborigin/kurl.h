@@ -33,7 +33,7 @@
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
-#include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
+#include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 #include "url/third_party/mozilla/url_parse.h"
 #include "url/url_canon.h"
@@ -42,28 +42,20 @@
 // KURL stands for the URL parser in KDE's HTML Widget (KHTML). The name hasn't
 // changed since Blink forked WebKit, which in turn forked KHTML.
 //
-// KURL is Blink's main URL class, and is the analog to GURL in other Chromium
-// code. It is not thread safe but is generally cheap to copy and compare KURLs
-// to each other.
-//
-// KURL and GURL both share the same underlying URL parser, whose code is
+// KURL is Blink's URL class and is the analog to GURL in other Chromium
+// code. KURL and GURL both share the same underlying URL parser, whose code is
 // located in //url, but KURL is backed by Blink specific WTF::Strings. This
 // means that KURLs are usually cheap to copy due to WTF::Strings being
 // internally ref-counted. However, please don't copy KURLs if you can use a
 // const ref, since the size of the parsed structure and related metadata is
 // non-trivial.
 //
-// In fact, for the majority of KURLs (i.e. those not copied across threads),
-// the backing string is an AtomicString, meaning that it is stored in the
-// thread-local AtomicString table, allowing optimizations like fast comparison.
-// See platform/wtf/text/AtomicString.h for information on the performance
-// characteristics of AtomicStrings.
-//
 // KURL also has a few other optimizations, including:
-//  - Cached bit for whether the KURL is http/https
-//  - Internal reference to the URL protocol (scheme) to avoid String allocation
-//    for the callers that require it. Common protocols like http and https are
-//    stored as static strings which can be shared across threads.
+// - Fast comparisons since the string spec is stored as an AtomicString.
+// - Cached bit for whether the KURL is http/https
+// - Internal reference to the URL protocol (scheme) to avoid String allocation
+//   for the callers that require it. Common protocols like http and https are
+//   stored as shared static strings.
 namespace WTF {
 class TextEncoding;
 }
@@ -138,6 +130,8 @@ class PLATFORM_EXPORT KURL {
   bool CanSetPathname() const { return IsHierarchical(); }
   bool IsHierarchical() const;
 
+  // The returned `String` is guaranteed to consist of only ASCII characters,
+  // but may be 8-bit or 16-bit.
   const String& GetString() const { return string_; }
 
   String ElidedString() const;
@@ -172,8 +166,9 @@ class PLATFORM_EXPORT KURL {
   bool ProtocolIsJavaScript() const;
   bool ProtocolIsInHTTPFamily() const;
   bool IsLocalFile() const;
-  bool IsAboutBlankURL() const;   // Is exactly about:blank.
-  bool IsAboutSrcdocURL() const;  // Is exactly about:srcdoc.
+  bool IsAboutBlankURL() const;   // Is about:blank, ignoring query/ref strings.
+  bool IsAboutSrcdocURL() const;  // Is about:srcdoc, ignoring query/ref
+                                  // strings..
 
   bool SetProtocol(const String&);
   void SetHost(const String&);
@@ -228,6 +223,8 @@ class PLATFORM_EXPORT KURL {
 
   void WriteIntoTrace(perfetto::TracedValue context) const;
 
+  bool HasIDNA2008DeviationCharacter() const;
+
  private:
   friend struct WTF::HashTraits<blink::KURL>;
 
@@ -250,15 +247,23 @@ class PLATFORM_EXPORT KURL {
   void InitInnerURL();
   void InitProtocolMetadata();
 
+  // Asserts that `string_` is an ASCII string in DCHECK builds.
+  void AssertStringSpecIsASCII();
+
   bool is_valid_;
   bool protocol_is_in_http_family_;
+  // Set to true if any part of the URL string contains an IDNA 2008 deviation
+  // character. Only used for logging. The hostname is decoded to IDN and
+  // checked for deviation characters again before logging.
+  // TODO(crbug.com/1396475): Remove once Non-Transitional mode is shipped.
+  bool has_idna2008_deviation_character_;
 
   // Keep a separate string for the protocol to avoid copious copies for
   // protocol().
   String protocol_;
 
   url::Parsed parsed_;
-  String string_;
+  AtomicString string_;
   std::unique_ptr<KURL> inner_url_;
 };
 
@@ -306,13 +311,20 @@ PLATFORM_EXPORT String DecodeURLEscapeSequences(const String&,
 
 PLATFORM_EXPORT String EncodeWithURLEscapeSequences(const String&);
 
+// Checks an arbitrary string for invalid escape sequences.
+//
+// A valid percent-encoding is '%' followed by exactly two hex-digits. This
+// function returns true if an occurrence of '%' is found and followed by
+// anything other than two hex-digits.
+PLATFORM_EXPORT bool HasInvalidURLEscapeSequences(const String&);
+
 }  // namespace blink
 
 namespace WTF {
 
 // Defined in kurl_hash.h.
 template <>
-struct DefaultHash<blink::KURL>;
+struct HashTraits<blink::KURL>;
 
 template <>
 struct CrossThreadCopier<blink::KURL>

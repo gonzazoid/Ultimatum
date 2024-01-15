@@ -5,7 +5,8 @@
 #include <memory>
 
 #include "ash/components/arc/session/arc_container_client_adapter.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -43,14 +44,14 @@ class ArcContainerClientAdapterTest : public testing::Test,
  protected:
   ArcClientAdapter* client_adapter() { return client_adapter_.get(); }
 
-  const absl::optional<bool>& is_system_shutdown() const {
+  const std::optional<bool>& is_system_shutdown() const {
     return is_system_shutdown_;
   }
 
  private:
   std::unique_ptr<ArcClientAdapter> client_adapter_;
   content::BrowserTaskEnvironment browser_task_environment_;
-  absl::optional<bool> is_system_shutdown_;
+  std::optional<bool> is_system_shutdown_;
 };
 
 void OnMiniInstanceStarted(bool result) {
@@ -101,7 +102,7 @@ TEST_F(ArcContainerClientAdapterTest,
     }
 
    private:
-    Observer* const child_observer_;
+    const raw_ptr<Observer> child_observer_;
     std::unique_ptr<ArcClientAdapter> nested_client_adapter_;
     bool stopped_called_ = false;
   };
@@ -175,7 +176,71 @@ TEST_F(ArcContainerClientAdapterTest, StartArc_DisableUreadahead) {
   EXPECT_TRUE(request.disable_ureadahead());
 }
 
-TEST_F(ArcContainerClientAdapterTest, ArcVmTTSCachingDefault) {
+TEST_F(ArcContainerClientAdapterTest,
+       StartArc_NoHostUreadaheadGenerationByDefault) {
+  StartParams start_params;
+  client_adapter()->StartMiniArc(std::move(start_params),
+                                 base::BindOnce(&OnMiniInstanceStarted));
+  const auto& request = ash::FakeSessionManagerClient::Get()
+                            ->last_start_arc_mini_container_request();
+  EXPECT_TRUE(request.has_host_ureadahead_generation());
+  EXPECT_FALSE(request.host_ureadahead_generation());
+}
+
+TEST_F(ArcContainerClientAdapterTest, StartArc_HostUreadaheadGenerationSet) {
+  StartParams start_params;
+  start_params.host_ureadahead_generation = true;
+  client_adapter()->StartMiniArc(std::move(start_params),
+                                 base::BindOnce(&OnMiniInstanceStarted));
+  const auto& request = ash::FakeSessionManagerClient::Get()
+                            ->last_start_arc_mini_container_request();
+  EXPECT_TRUE(request.has_host_ureadahead_generation());
+  EXPECT_TRUE(request.host_ureadahead_generation());
+}
+
+TEST_F(ArcContainerClientAdapterTest, StartArc_DoNotUseDevCachesByDefault) {
+  StartParams start_params;
+  client_adapter()->StartMiniArc(std::move(start_params),
+                                 base::BindOnce(&OnMiniInstanceStarted));
+  const auto& request = ash::FakeSessionManagerClient::Get()
+                            ->last_start_arc_mini_container_request();
+  EXPECT_TRUE(request.has_use_dev_caches());
+  EXPECT_FALSE(request.use_dev_caches());
+}
+
+TEST_F(ArcContainerClientAdapterTest, StartArc_UseDevCachesSet) {
+  StartParams start_params;
+  start_params.use_dev_caches = true;
+  client_adapter()->StartMiniArc(std::move(start_params),
+                                 base::BindOnce(&OnMiniInstanceStarted));
+  const auto& request = ash::FakeSessionManagerClient::Get()
+                            ->last_start_arc_mini_container_request();
+  EXPECT_TRUE(request.has_use_dev_caches());
+  EXPECT_TRUE(request.use_dev_caches());
+}
+
+TEST_F(ArcContainerClientAdapterTest, StartArc_ArcSignedInDefault) {
+  StartParams start_params;
+  client_adapter()->StartMiniArc(std::move(start_params),
+                                 base::BindOnce(&OnMiniInstanceStarted));
+  const auto& request = ash::FakeSessionManagerClient::Get()
+                            ->last_start_arc_mini_container_request();
+  EXPECT_TRUE(request.has_arc_signed_in());
+  EXPECT_FALSE(request.arc_signed_in());
+}
+
+TEST_F(ArcContainerClientAdapterTest, Startrc_ArcSignedIn) {
+  StartParams start_params;
+  start_params.arc_signed_in = true;
+  client_adapter()->StartMiniArc(std::move(start_params),
+                                 base::BindOnce(&OnMiniInstanceStarted));
+  const auto& request = ash::FakeSessionManagerClient::Get()
+                            ->last_start_arc_mini_container_request();
+  EXPECT_TRUE(request.has_arc_signed_in());
+  EXPECT_TRUE(request.arc_signed_in());
+}
+
+TEST_F(ArcContainerClientAdapterTest, ArcTTSCachingDefault) {
   StartParams start_params;
   client_adapter()->StartMiniArc(std::move(start_params),
                                  base::BindOnce(&OnMiniInstanceStarted));
@@ -185,7 +250,7 @@ TEST_F(ArcContainerClientAdapterTest, ArcVmTTSCachingDefault) {
   EXPECT_FALSE(request.enable_tts_caching());
 }
 
-TEST_F(ArcContainerClientAdapterTest, ArcVmTTSCachingEnabled) {
+TEST_F(ArcContainerClientAdapterTest, ArcTTSCachingEnabled) {
   StartParams start_params;
   start_params.enable_tts_caching = true;
   client_adapter()->StartMiniArc(std::move(start_params),
@@ -254,6 +319,40 @@ TEST_P(ArcContainerClientAdapterDalvikMemoryProfileTest, Profile) {
   EXPECT_EQ(test_param.expectation, request.dalvik_memory_profile());
 }
 
+struct HostUreadaheadModeTestParam {
+  // Requested profile.
+  StartParams::HostUreadaheadMode mode;
+  // Expected value passed to DBus.
+  StartArcMiniInstanceRequest_HostUreadaheadMode expectation;
+};
+
+constexpr HostUreadaheadModeTestParam kHostUreadaheadModeTestCases[] = {
+    {StartParams::HostUreadaheadMode::MODE_READAHEAD,
+     StartArcMiniInstanceRequest_HostUreadaheadMode_MODE_DEFAULT},
+    {StartParams::HostUreadaheadMode::MODE_GENERATE,
+     StartArcMiniInstanceRequest_HostUreadaheadMode_MODE_GENERATE},
+    {StartParams::HostUreadaheadMode::MODE_DISABLED,
+     StartArcMiniInstanceRequest_HostUreadaheadMode_MODE_DISABLED}};
+
+class ArcContainerClientAdapterHostUreadaheadModeTest
+    : public ArcContainerClientAdapterTest,
+      public testing::WithParamInterface<HostUreadaheadModeTestParam> {};
+
+INSTANTIATE_TEST_SUITE_P(All,
+                         ArcContainerClientAdapterHostUreadaheadModeTest,
+                         ::testing::ValuesIn(kHostUreadaheadModeTestCases));
+
+TEST_P(ArcContainerClientAdapterHostUreadaheadModeTest, Mode) {
+  const auto& test_param = GetParam();
+  StartParams start_params;
+  start_params.host_ureadahead_mode = test_param.mode;
+  client_adapter()->StartMiniArc(std::move(start_params),
+                                 base::BindOnce(&OnMiniInstanceStarted));
+  const auto& request = ash::FakeSessionManagerClient::Get()
+                            ->last_start_arc_mini_container_request();
+  EXPECT_TRUE(request.has_host_ureadahead_mode());
+  EXPECT_EQ(test_param.expectation, request.host_ureadahead_mode());
+}
 }  // namespace
 
 }  // namespace arc

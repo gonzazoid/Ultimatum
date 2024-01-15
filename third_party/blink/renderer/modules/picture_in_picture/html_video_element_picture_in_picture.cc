@@ -36,6 +36,7 @@ const char kUserGestureRequired[] =
 const char kDisablePictureInPicturePresent[] =
     "\"disablePictureInPicture\" attribute is present.";
 const char kAutoPipAndroid[] = "The video is currently in auto-pip mode.";
+const char kDocumentPip[] = "The video is currently in document pip mode.";
 
 }  // namespace
 
@@ -48,7 +49,8 @@ ScriptPromise HTMLVideoElementPictureInPicture::requestPictureInPicture(
   if (exception_state.HadException())
     return ScriptPromise();
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   auto promise = resolver->Promise();
 
   PictureInPictureController::From(element.GetDocument())
@@ -61,8 +63,7 @@ ScriptPromise HTMLVideoElementPictureInPicture::requestPictureInPicture(
 bool HTMLVideoElementPictureInPicture::FastHasAttribute(
     const HTMLVideoElement& element,
     const QualifiedName& name) {
-  DCHECK(name == html_names::kDisablepictureinpictureAttr ||
-         name == html_names::kAutopictureinpictureAttr);
+  DCHECK(name == html_names::kDisablepictureinpictureAttr);
   return element.FastHasAttribute(name);
 }
 
@@ -71,8 +72,7 @@ void HTMLVideoElementPictureInPicture::SetBooleanAttribute(
     HTMLVideoElement& element,
     const QualifiedName& name,
     bool value) {
-  DCHECK(name == html_names::kDisablepictureinpictureAttr ||
-         name == html_names::kAutopictureinpictureAttr);
+  DCHECK(name == html_names::kDisablepictureinpictureAttr);
   element.SetBooleanAttribute(name, value);
 
   Document& document = element.GetDocument();
@@ -121,6 +121,10 @@ void HTMLVideoElementPictureInPicture::CheckIfPictureInPictureIsAllowed(
     case Status::kAutoPipAndroid:
       exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                         kAutoPipAndroid);
+      return;
+    case Status::kDocumentPip:
+      exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
+                                        kDocumentPip);
       return;
     case Status::kEnabled:
       break;

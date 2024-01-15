@@ -384,31 +384,16 @@ DispatchEventResult MouseEvent::DispatchEvent(EventDispatcher& dispatcher) {
   GetEventPath().AdjustForRelatedTarget(dispatcher.GetNode(), relatedTarget());
 
   bool is_click = type() == event_type_names::kClick;
-  bool send_to_disabled_form_controls =
-      RuntimeEnabledFeatures::SendMouseEventsDisabledFormControlsEnabled();
 
   if (!isTrusted())
     return dispatcher.Dispatch();
 
-  if (send_to_disabled_form_controls &&
-      (is_click || type() == event_type_names::kMousedown ||
-       type() == event_type_names::kMouseup)) {
+  if (is_click || type() == event_type_names::kMousedown ||
+      type() == event_type_names::kMouseup ||
+      (RuntimeEnabledFeatures::
+           DontFireDblclickOnDisabledFormControlsEnabled() &&
+       type() == event_type_names::kDblclick)) {
     GetEventPath().AdjustForDisabledFormControl();
-  }
-
-  if (!send_to_disabled_form_controls &&
-      IsDisabledFormControl(&dispatcher.GetNode())) {
-    if (GetEventPath().HasEventListenersInPath(type())) {
-      UseCounter::Count(dispatcher.GetNode().GetDocument(),
-                        WebFeature::kDispatchMouseEventOnDisabledFormControl);
-      if (type() == event_type_names::kMousedown ||
-          type() == event_type_names::kMouseup) {
-        UseCounter::Count(
-            dispatcher.GetNode().GetDocument(),
-            WebFeature::kDispatchMouseUpDownEventOnDisabledFormControl);
-      }
-    }
-    return DispatchEventResult::kCanceledBeforeDispatch;
   }
 
   if (type().empty())
@@ -524,8 +509,9 @@ void MouseEvent::ComputeRelativePosition() {
     PaintLayer* layer = n->GetLayoutObject()->EnclosingLayer();
     layer = layer->EnclosingSelfPaintingLayer();
 
-    PhysicalOffset physical_offset;
-    layer->ConvertToLayerCoords(nullptr, physical_offset);
+    PhysicalOffset physical_offset =
+        layer->GetLayoutObject().LocalToAbsolutePoint(PhysicalOffset(),
+                                                      kIgnoreTransforms);
     layer_location_ -= gfx::Vector2dF(physical_offset);
 
     layer_location_.Scale(inverse_zoom_factor);

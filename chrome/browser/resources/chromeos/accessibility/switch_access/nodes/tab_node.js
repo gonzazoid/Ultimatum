@@ -4,13 +4,14 @@
 
 import {RectUtil} from '../../common/rect_util.js';
 import {Navigator} from '../navigator.js';
-import {SAConstants, SwitchAccessMenuAction} from '../switch_access_constants.js';
+import {ActionResponse} from '../switch_access_constants.js';
 
 import {BackButtonNode} from './back_button_node.js';
 import {BasicNode, BasicRootNode} from './basic_node.js';
 import {SAChildNode, SARootNode} from './switch_access_node.js';
 
 const AutomationNode = chrome.automation.AutomationNode;
+const MenuAction = chrome.accessibilityPrivate.SwitchAccessMenuAction;
 
 /**
  * This class handles the behavior of tab nodes at the top level (i.e. as
@@ -35,7 +36,7 @@ export class TabNode extends BasicNode {
 
   /** @override */
   get actions() {
-    return [SwitchAccessMenuAction.SELECT];
+    return [MenuAction.SELECT];
   }
 
   // ================= General methods =================
@@ -52,11 +53,11 @@ export class TabNode extends BasicNode {
 
   /** @override */
   performAction(action) {
-    if (action !== SwitchAccessMenuAction.SELECT) {
-      return SAConstants.ActionResponse.NO_ACTION_TAKEN;
+    if (action !== MenuAction.SELECT) {
+      return ActionResponse.NO_ACTION_TAKEN;
     }
     Navigator.byItem.enterGroup();
-    return SAConstants.ActionResponse.CLOSE_MENU;
+    return ActionResponse.CLOSE_MENU;
   }
 
   // ================= Static methods =================
@@ -104,7 +105,7 @@ class ActionableTabNode extends BasicNode {
 
   /** @override */
   get actions() {
-    return [SwitchAccessMenuAction.SELECT];
+    return [MenuAction.SELECT];
   }
 
   /** @override */

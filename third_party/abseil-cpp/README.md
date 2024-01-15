@@ -80,6 +80,8 @@ Abseil contains the following C++ library components:
 * [`container`](absl/container/)
   <br /> The `container` library contains additional STL-style containers,
   including Abseil's unordered "Swiss table" containers.
+* [`crc`](absl/crc/) The `crc` library contains code for
+  computing error-detecting cyclic redundancy checks on data.
 * [`debugging`](absl/debugging/)
   <br /> The `debugging` library contains code useful for enabling leak
   checks, and stacktrace and symbolization utilities.
@@ -89,9 +91,6 @@ Abseil contains the following C++ library components:
 * [`hash`](absl/hash/)
   <br /> The `hash` library contains the hashing framework and default hash
   functor implementations for hashable types in Abseil.
-* [`iterator`](absl/iterator/)
-  <br /> The `iterator` library contains utilities for augmenting ranges in
-  range-based for loops.
 * [`log`](absl/log/)
   <br /> The `log` library contains `LOG` and `CHECK` macros and facilities
   for writing logged messages out to disk, `stderr`, or user-extensible

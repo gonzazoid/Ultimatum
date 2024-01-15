@@ -7,25 +7,55 @@
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/ui_features.h"
+#include "chrome/browser/ui/views/tabs/new_tab_button.h"
+#include "chrome/browser/ui/views/tabs/tab_search_button.h"
+#include "chrome/browser/ui/views/tabs/tab_strip_control_button.h"
 #include "chrome/browser/ui/views/tabs/tab_strip_controller.h"
+#include "chrome/grit/generated_resources.h"
 #include "components/vector_icons/vector_icons.h"
+#include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/gfx/paint_vector_icon.h"
+#include "ui/views/background.h"
 #include "ui/views/view_class_properties.h"
 
-TabSearchButton::TabSearchButton(TabStrip* tab_strip)
-    : NewTabButton(tab_strip, PressedCallback()),
+namespace {
+constexpr int kCRTabSearchCornerRadius = 10;
+constexpr int kCRTabSearchFlatCornerRadius = 4;
+}  // namespace
+
+TabSearchButton::TabSearchButton(TabStripController* tab_strip_controller,
+                                 Edge flat_edge)
+    : TabStripControlButton(tab_strip_controller,
+                            PressedCallback(),
+                            features::IsChromeRefresh2023()
+                                ? vector_icons::kExpandMoreIcon
+                                : vector_icons::kCaretDownIcon,
+                            flat_edge),
       tab_search_bubble_host_(std::make_unique<TabSearchBubbleHost>(
           this,
-          tab_strip->controller()->GetProfile())) {
-  SetImageHorizontalAlignment(HorizontalAlignment::ALIGN_CENTER);
-  SetImageVerticalAlignment(VerticalAlignment::ALIGN_MIDDLE);
+          tab_strip_controller->GetProfile())) {
   SetProperty(views::kElementIdentifierKey, kTabSearchButtonElementId);
+
+  SetTooltipText(l10n_util::GetStringUTF16(IDS_TOOLTIP_TAB_SEARCH));
+  SetAccessibleName(l10n_util::GetStringUTF16(IDS_ACCNAME_TAB_SEARCH));
+
+  SetForegroundFrameActiveColorId(kColorNewTabButtonForegroundFrameActive);
+  SetForegroundFrameInactiveColorId(kColorNewTabButtonForegroundFrameInactive);
+  if (features::IsChromeRefresh2023()) {
+    SetBackgroundFrameActiveColorId(kColorNewTabButtonCRBackgroundFrameActive);
+    SetBackgroundFrameInactiveColorId(
+        kColorNewTabButtonCRBackgroundFrameInactive);
+  }
+
+  UpdateColors();
 }
 
 TabSearchButton::~TabSearchButton() = default;
 
 void TabSearchButton::NotifyClick(const ui::Event& event) {
+  TabStripControlButton::NotifyClick(event);
   // Run pressed callback via MenuButtonController, instead of directly. This is
   // safe as the TabSearchBubbleHost will always configure the TabSearchButton
   // with a MenuButtonController.
@@ -33,24 +63,15 @@ void TabSearchButton::NotifyClick(const ui::Event& event) {
       ->Activate(&event);
 }
 
-void TabSearchButton::FrameColorsChanged() {
-  NewTabButton::FrameColorsChanged();
-  // Icon color needs to be updated here as this is called when the hosting
-  // window switches between active and inactive states. In each state the
-  // foreground color of the tab controls is expected to change.
-  SetImage(Button::STATE_NORMAL,
-           gfx::CreateVectorIcon(
-               base::FeatureList::IsEnabled(features::kTabSearchChevronIcon)
-                   ? vector_icons::kCaretDownIcon
-                   : kTabSearchIcon,
-               GetForegroundColor()));
+int TabSearchButton::GetCornerRadius() const {
+  return features::IsChromeRefresh2023()
+             ? kCRTabSearchCornerRadius
+             : TabStripControlButton::kButtonSize.width() / 2;
 }
 
-void TabSearchButton::PaintIcon(gfx::Canvas* canvas) {
-  // Call ImageButton::PaintButtonContents() to paint the TabSearchButton's
-  // VectorIcon.
-  views::ImageButton::PaintButtonContents(canvas);
+int TabSearchButton::GetFlatCornerRadius() const {
+  return kCRTabSearchFlatCornerRadius;
 }
 
-BEGIN_METADATA(TabSearchButton, NewTabButton)
+BEGIN_METADATA(TabSearchButton)
 END_METADATA

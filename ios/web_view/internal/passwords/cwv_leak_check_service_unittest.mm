@@ -5,9 +5,10 @@
 #import "base/ranges/algorithm.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/test/task_environment.h"
-#import "components/password_manager/core/browser/bulk_leak_check_service.h"
 #import "components/password_manager/core/browser/leak_detection/bulk_leak_check.h"
+#import "components/password_manager/core/browser/leak_detection/bulk_leak_check_service.h"
 #import "components/password_manager/core/browser/leak_detection/leak_detection_check_factory.h"
+#import "components/password_manager/core/browser/leak_detection/leak_detection_request_utils.h"
 #import "components/password_manager/core/browser/leak_detection/mock_leak_detection_check_factory.h"
 #import "components/signin/public/identity_manager/identity_test_environment.h"
 #import "ios/web_view/internal/passwords/cwv_leak_check_credential_internal.h"
@@ -21,15 +22,12 @@
 #import "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using password_manager::BulkLeakCheck;
 using password_manager::BulkLeakCheckDelegateInterface;
 using password_manager::BulkLeakCheckService;
 using password_manager::IsLeaked;
 using password_manager::LeakCheckCredential;
+using password_manager::LeakDetectionInitiator;
 using password_manager::MockLeakDetectionCheckFactory;
 
 namespace ios_web_view {
@@ -47,7 +45,8 @@ class FakeBulkLeakCheck : public BulkLeakCheck {
   FakeBulkLeakCheck(BulkLeakCheckDelegateInterface* delegate)
       : delegate_(delegate) {}
 
-  void CheckCredentials(std::vector<LeakCheckCredential> checks) override {
+  void CheckCredentials(LeakDetectionInitiator initiator,
+                        std::vector<LeakCheckCredential> checks) override {
     std::move(checks.begin(), checks.end(), std::back_inserter(queue_));
   }
 

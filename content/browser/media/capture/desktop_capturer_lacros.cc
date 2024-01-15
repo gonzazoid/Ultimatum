@@ -6,9 +6,9 @@
 
 #include "base/feature_list.h"
 #include "chromeos/lacros/lacros_service.h"
+#include "content/browser/media/capture/desktop_frame_skia.h"
 #include "content/public/browser/desktop_media_id.h"
 #include "content/public/common/content_features.h"
-#include "media/capture/capture_switches.h"
 #include "mojo/public/cpp/bindings/sync_call_restrictions.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_frame.h"
@@ -17,53 +17,21 @@
 #include "ui/aura/window_tree_host.h"
 
 namespace content {
-namespace {
-
-// An SkBitmap backed subclass of DesktopFrame. This enables the webrtc system
-// to retain the SkBitmap buffer without having to copy the pixels out until
-// they are needed (e.g., for encoding).
-class DesktopFrameSkia : public webrtc::DesktopFrame {
- public:
-  explicit DesktopFrameSkia(const SkBitmap& bitmap)
-      : webrtc::DesktopFrame(
-            webrtc::DesktopSize(bitmap.width(), bitmap.height()),
-            bitmap.rowBytes(),
-            static_cast<uint8_t*>(bitmap.getPixels()),
-            nullptr),
-        bitmap_(bitmap) {}
-  ~DesktopFrameSkia() override = default;
-
- private:
-  DesktopFrameSkia(const DesktopFrameSkia&) = delete;
-  DesktopFrameSkia& operator=(const DesktopFrameSkia&) = delete;
-
-  SkBitmap bitmap_;
-};
-
-}  // namespace
 
 DesktopCapturerLacros::DesktopCapturerLacros(
     CaptureType capture_type,
     const webrtc::DesktopCaptureOptions& options)
-    : capture_type_(capture_type),
-      options_(options),
-      is_aura_capture_enabled_(
-          base::FeatureList::IsEnabled(features::kLacrosAuraCapture)) {
+    : capture_type_(capture_type), options_(options) {
   // Allow this class to be constructed on any sequence.
   DETACH_FROM_SEQUENCE(sequence_checker_);
 
-  if (is_aura_capture_enabled_) {
-    InitializeWidgetMap();
-    aura::Env::GetInstance()->AddObserver(this);
-  }
+  InitializeWidgetMap();
+  aura::Env::GetInstance()->AddObserver(this);
 }
 
 DesktopCapturerLacros::~DesktopCapturerLacros() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  if (is_aura_capture_enabled_) {
-    aura::Env::GetInstance()->RemoveObserver(this);
-  }
+  aura::Env::GetInstance()->RemoveObserver(this);
 }
 
 bool DesktopCapturerLacros::GetSourceList(SourceList* result) {
@@ -76,12 +44,13 @@ bool DesktopCapturerLacros::GetSourceList(SourceList* result) {
     snapshot_capturer_->ListSources(&sources);
   }
 
-  for (auto& source : sources) {
+  for (const auto& source : sources) {
     Source s;
     s.id = source->id;
     s.title = source->title;
+    s.display_id = source->display_id;
 
-    if (is_aura_capture_enabled_ && source->window_unique_id) {
+    if (source->window_unique_id) {
       // Use the AcceleratedWidget's value as the in process identifier, since
       // that is unique to the process. Since we aren't called on the UI thread,
       // we cannot call |DesktopMediaID::RegisterNativeWindow()| directly.
@@ -130,7 +99,7 @@ void DesktopCapturerLacros::Start(Callback* callback) {
 
   // Lacros can assume that Ash is at least M88.
   int version =
-      lacros_service->GetInterfaceVersion(crosapi::mojom::ScreenManager::Uuid_);
+      lacros_service->GetInterfaceVersion<crosapi::mojom::ScreenManager>();
   CHECK_GE(version, 1);
 
   if (capture_type_ == kScreen) {
@@ -178,15 +147,16 @@ void DesktopCapturerLacros::DidTakeSnapshot(bool success,
     return;
   }
 
-  callback_->OnCaptureResult(Result::SUCCESS,
-                             std::make_unique<DesktopFrameSkia>(snapshot));
+  callback_->OnCaptureResult(
+      Result::SUCCESS, std::make_unique<content::DesktopFrameSkia>(snapshot));
 }
 
 void DesktopCapturerLacros::InitializeWidgetMap() {
   // On desktop aura there is one WindowTreeHost per top-level window. Thus, by
   // iterating through the set of window_tree_hosts, we're essentially iterating
   // through the list of known windows.
-  for (auto* host : aura::Env::GetInstance()->window_tree_hosts()) {
+  for (aura::WindowTreeHost* host :
+       aura::Env::GetInstance()->window_tree_hosts()) {
     OnHostInitialized(host);
   }
 }

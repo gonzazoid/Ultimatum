@@ -33,10 +33,14 @@ const InstallConstants kInstallModes[] = {
             L"",  // Empty install_suffix for the primary install mode.
         .logo_suffix = L"",  // No logo suffix for the primary install mode.
         .app_guid = L"{8A69D345-D564-463c-AFF1-A69D9E530F96}",
-        .base_app_name = L"Google Chrome",  // A distinct base_app_name.
-        .base_app_id = L"Chrome",           // A distinct base_app_id.
-        .prog_id_prefix = L"ChromeHTML",    // ProgID prefix.
-        .prog_id_description = L"Chrome HTML Document",  // ProgID description.
+        .base_app_name = L"Google Chrome",        // A distinct base_app_name.
+        .base_app_id = L"Chrome",                 // A distinct base_app_id.
+        .browser_prog_id_prefix = L"ChromeHTML",  // Browser ProgID prefix.
+        .browser_prog_id_description =
+            L"Chrome HTML Document",         // Browser ProgID description.
+        .pdf_prog_id_prefix = L"ChromePDF",  // PDF ProgID prefix.
+        .pdf_prog_id_description =
+            L"Chrome PDF Document",  // PDF ProgID description.
         .active_setup_guid =
             L"{8A69D345-D564-463c-AFF1-A69D9E530F96}",  // Active Setup GUID.
         .legacy_command_execute_clsid =
@@ -63,8 +67,6 @@ const InstallConstants kInstallModes[] = {
         .supports_system_level = true,  // Supports system-level installs.
         .supports_set_as_default_browser =
             true,  // Supports in-product set as default browser UX.
-        .supports_retention_experiments =
-            true,  // Supports retention experiments.
         .app_icon_resource_index =
             icon_resources::kApplicationIndex,  // App icon resource index.
         .app_icon_resource_id = IDR_MAINFRAME,  // App icon resource id.
@@ -81,11 +83,14 @@ const InstallConstants kInstallModes[] = {
         .logo_suffix = L"Beta",           // Logo suffix.
         .app_guid =
             L"{8237E44A-0054-442C-B6B6-EA0509993955}",  // A distinct app GUID.
-        .base_app_name = L"Google Chrome Beta",  // A distinct base_app_name.
-        .base_app_id = L"ChromeBeta",            // A distinct base_app_id.
-        .prog_id_prefix = L"ChromeBHTML",        // ProgID prefix.
-        .prog_id_description =
-            L"Chrome Beta HTML Document",  // ProgID description.
+        .base_app_name = L"Google Chrome Beta",    // A distinct base_app_name.
+        .base_app_id = L"ChromeBeta",              // A distinct base_app_id.
+        .browser_prog_id_prefix = L"ChromeBHTML",  // Browser ProgID prefix.
+        .browser_prog_id_description =
+            L"Chrome Beta HTML Document",     // Browser ProgID description.
+        .pdf_prog_id_prefix = L"ChromeBPDF",  // PDF ProgID prefix.
+        .pdf_prog_id_description =
+            L"Chrome Beta PDF Document",  // PDF ProgID description.
         .active_setup_guid =
             L"{8237E44A-0054-442C-B6B6-EA0509993955}",  // Active Setup GUID.
         .legacy_command_execute_clsid = L"",  // CommandExecuteImpl CLSID.
@@ -110,8 +115,6 @@ const InstallConstants kInstallModes[] = {
         .supports_system_level = true,  // Supports system-level installs.
         .supports_set_as_default_browser =
             true,  // Supports in-product set as default browser UX.
-        .supports_retention_experiments =
-            true,  // Supports retention experiments.
         .app_icon_resource_index =
             icon_resources::kBetaApplicationIndex,  // App icon resource index.
         .app_icon_resource_id = IDR_X005_BETA,      // App icon resource id.
@@ -128,11 +131,14 @@ const InstallConstants kInstallModes[] = {
         .logo_suffix = L"Dev",           // Logo suffix.
         .app_guid =
             L"{401C381F-E0DE-4B85-8BD8-3F3F14FBDA57}",  // A distinct app GUID.
-        .base_app_name = L"Google Chrome Dev",  // A distinct base_app_name.
-        .base_app_id = L"ChromeDev",            // A distinct base_app_id.
-        .prog_id_prefix = L"ChromeDHTML",       // ProgID prefix.
-        .prog_id_description =
-            L"Chrome Dev HTML Document",  // ProgID description.
+        .base_app_name = L"Google Chrome Dev",     // A distinct base_app_name.
+        .base_app_id = L"ChromeDev",               // A distinct base_app_id.
+        .browser_prog_id_prefix = L"ChromeDHTML",  // ProgID prefix.
+        .browser_prog_id_description =
+            L"Chrome Dev HTML Document",      // Browser ProgID description.
+        .pdf_prog_id_prefix = L"ChromeDPDF",  // PDF ProgID prefix.
+        .pdf_prog_id_description =
+            L"Chrome Dev PDF Document",  // PDF ProgID description.
         .active_setup_guid =
             L"{401C381F-E0DE-4B85-8BD8-3F3F14FBDA57}",  // Active Setup GUID.
         .legacy_command_execute_clsid = L"",  // CommandExecuteImpl CLSID.
@@ -157,8 +163,6 @@ const InstallConstants kInstallModes[] = {
         .supports_system_level = true,  // Supports system-level installs.
         .supports_set_as_default_browser =
             true,  // Supports in-product set as default browser UX.
-        .supports_retention_experiments =
-            true,  // Supports retention experiments.
         .app_icon_resource_index =
             icon_resources::kDevApplicationIndex,  // App icon resource index.
         .app_icon_resource_id = IDR_X004_DEV,      // App icon resource id.
@@ -177,9 +181,12 @@ const InstallConstants kInstallModes[] = {
             L"{4ea16ac7-fd5a-47c3-875b-dbf4a2008c20}",  // A distinct app GUID.
         .base_app_name = L"Google Chrome Canary",  // A distinct base_app_name.
         .base_app_id = L"ChromeCanary",            // A distinct base_app_id.
-        .prog_id_prefix = L"ChromeSSHTM",          // ProgID prefix.
-        .prog_id_description =
-            L"Chrome Canary HTML Document",  // ProgID description.
+        .browser_prog_id_prefix = L"ChromeSSHTM",  // ProgID prefix.
+        .browser_prog_id_description =
+            L"Chrome Canary HTML Document",    // Browser ProgID description.
+        .pdf_prog_id_prefix = L"ChromeSSPDF",  // PDF ProgID prefix.
+        .pdf_prog_id_description =
+            L"Chrome Canary PDF Document",  // PDF ProgID description.
         .active_setup_guid =
             L"{4ea16ac7-fd5a-47c3-875b-dbf4a2008c20}",  // Active Setup GUID.
         .legacy_command_execute_clsid =
@@ -207,8 +214,6 @@ const InstallConstants kInstallModes[] = {
             false,  // Does not support system-level installs.
         .supports_set_as_default_browser =
             false,  // Does not support in-product set as default browser UX.
-        .supports_retention_experiments =
-            true,  // Supports retention experiments.
         .app_icon_resource_index =
             icon_resources::kSxSApplicationIndex,  // App icon resource index.
         .app_icon_resource_id = IDR_SXS,           // App icon resource id.

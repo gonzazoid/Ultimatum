@@ -80,7 +80,7 @@ void DeclareProperty(Document& document,
                      bool is_inherited);
 
 scoped_refptr<CSSVariableData> CreateVariableData(String);
-const CSSValue* CreateCustomIdent(AtomicString);
+const CSSValue* CreateCustomIdent(const char*);
 const CSSValue* ParseLonghand(Document& document,
                               const CSSProperty&,
                               const String& value);
@@ -94,6 +94,13 @@ StyleRuleBase* ParseRule(Document& document, String text);
 const CSSValue* ParseValue(Document&, String syntax, String value);
 
 CSSSelectorList* ParseSelectorList(const String&);
+// Parse the selector as if nested with the given CSSNestingType, using
+// the specified StyleRule to resolve either the parent selector "&"
+// (for kNesting), or the :scope pseudo-class (for kScope).
+CSSSelectorList* ParseSelectorList(const String&,
+                                   CSSNestingType,
+                                   const StyleRule* parent_rule_for_nesting,
+                                   bool is_within_scope);
 
 }  // namespace css_test_helpers
 }  // namespace blink

@@ -20,13 +20,13 @@ class FieldDataManagerTest : public testing::Test {
     FormFieldData field1;
     field1.id_attribute = u"name1";
     field1.value = u"first";
-    field1.form_control_type = "text";
+    field1.form_control_type = FormControlType::kInputText;
     field1.unique_renderer_id = FieldRendererId(1);
     control_elements_.push_back(field1);
 
     FormFieldData field2;
     field2.id_attribute = u"name2";
-    field2.form_control_type = "password";
+    field2.form_control_type = FormControlType::kInputPassword;
     field2.unique_renderer_id = FieldRendererId(2);
     control_elements_.push_back(field2);
   }
@@ -93,14 +93,14 @@ TEST_F(FieldDataManagerTest, UpdateFieldDataMapWithNullValue) {
   EXPECT_EQ(u"first", field_data_manager->GetUserInput(id));
 }
 
-TEST_F(FieldDataManagerTest, FindMachedValue) {
+TEST_F(FieldDataManagerTest, FindMatchedValue) {
   const scoped_refptr<FieldDataManager> field_data_manager =
       base::MakeRefCounted<FieldDataManager>();
   field_data_manager->UpdateFieldDataMap(
       control_elements_[0].unique_renderer_id, control_elements_[0].value,
       FieldPropertiesFlags::kUserTyped);
-  EXPECT_TRUE(field_data_manager->FindMachedValue(u"first_element"));
-  EXPECT_FALSE(field_data_manager->FindMachedValue(u"second_element"));
+  EXPECT_TRUE(field_data_manager->FindMatchedValue(u"first_element"));
+  EXPECT_FALSE(field_data_manager->FindMatchedValue(u"second_element"));
 }
 
 }  // namespace autofill

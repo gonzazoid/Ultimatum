@@ -13,16 +13,8 @@
 #include "components/signin/public/base/multilogin_parameters.h"
 #include "components/signin/public/identity_manager/set_accounts_in_cookie_result.h"
 #include "google_apis/gaia/core_account_id.h"
-#include "google_apis/gaia/google_service_auth_error.h"
 
 namespace signin {
-
-AccountsCookieMutatorImpl::MultiloginHelperWrapper::MultiloginHelperWrapper(
-    std::unique_ptr<OAuthMultiloginHelper> helper)
-    : helper_(std::move(helper)) {}
-
-AccountsCookieMutatorImpl::MultiloginHelperWrapper::~MultiloginHelperWrapper() =
-    default;
 
 AccountsCookieMutatorImpl::AccountsCookieMutatorImpl(
     SigninClient* signin_client,
@@ -41,23 +33,6 @@ AccountsCookieMutatorImpl::AccountsCookieMutatorImpl(
 
 AccountsCookieMutatorImpl::~AccountsCookieMutatorImpl() = default;
 
-void AccountsCookieMutatorImpl::AddAccountToCookie(
-    const CoreAccountId& account_id,
-    gaia::GaiaSource source,
-    AddAccountToCookieCompletedCallback completion_callback) {
-  gaia_cookie_manager_service_->AddAccountToCookie(
-      account_id, source, std::move(completion_callback));
-}
-
-void AccountsCookieMutatorImpl::AddAccountToCookieWithToken(
-    const CoreAccountId& account_id,
-    const std::string& access_token,
-    gaia::GaiaSource source,
-    AddAccountToCookieCompletedCallback completion_callback) {
-  gaia_cookie_manager_service_->AddAccountToCookieWithToken(
-      account_id, access_token, source, std::move(completion_callback));
-}
-
 void AccountsCookieMutatorImpl::SetAccountsInCookie(
     const MultiloginParameters& parameters,
     gaia::GaiaSource source,
@@ -71,33 +46,6 @@ void AccountsCookieMutatorImpl::SetAccountsInCookie(
   gaia_cookie_manager_service_->SetAccountsInCookie(
       parameters.mode, accounts, source,
       std::move(set_accounts_in_cookies_completed_callback));
-}
-
-std::unique_ptr<AccountsCookieMutator::SetAccountsInCookieTask>
-AccountsCookieMutatorImpl::SetAccountsInCookieForPartition(
-    PartitionDelegate* partition_delegate,
-    const MultiloginParameters& parameters,
-    gaia::GaiaSource source,
-    base::OnceCallback<void(SetAccountsInCookieResult)>
-        set_accounts_in_cookies_completed_callback) {
-  // The default partition must go through the GaiaCookieManagerService.
-  DCHECK_NE(signin_client_->GetCookieManager(),
-            partition_delegate->GetCookieManagerForPartition())
-      << "The default partition is passed to "
-      << "SetAccountsInCookieForPartition(). Use SetAccountsInCookie() "
-      << "instead.";
-
-  std::vector<GaiaCookieManagerService::AccountIdGaiaIdPair> accounts;
-  for (const auto& account_id : parameters.accounts_to_send) {
-    accounts.push_back(make_pair(
-        account_id, account_tracker_service_->GetAccountInfo(account_id).gaia));
-  }
-
-  return std::make_unique<MultiloginHelperWrapper>(
-      std::make_unique<OAuthMultiloginHelper>(
-          signin_client_, partition_delegate, token_service_, parameters.mode,
-          accounts, /*external_cc_result=*/std::string(), source,
-          std::move(set_accounts_in_cookies_completed_callback)));
 }
 
 void AccountsCookieMutatorImpl::TriggerCookieJarUpdate() {

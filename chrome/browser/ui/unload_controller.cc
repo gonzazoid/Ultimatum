@@ -4,24 +4,30 @@
 
 #include "chrome/browser/ui/unload_controller.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/ranges/algorithm.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/devtools/devtools_window.h"
 #include "chrome/browser/lifetime/application_lifetime_desktop.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_delegate.h"
+#include "chrome/browser/ui/web_applications/app_browser_controller.h"
+#include "chrome/browser/ui/web_applications/web_app_tabbed_utils.h"
+#include "chrome/browser/web_applications/policy/web_app_policy_manager.h"
+#include "chrome/browser/web_applications/web_app_provider.h"
+#include "chrome/browser/web_applications/web_app_tab_helper.h"
 #include "components/tab_groups/tab_group_id.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/buildflags/buildflags.h"
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
+#include "chrome/browser/profiles/profile.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/constants.h"
 #endif  // (ENABLE_EXTENSIONS)
@@ -45,6 +51,13 @@ bool UnloadController::CanCloseContents(content::WebContents* contents) {
   // that avoids the fast shutdown path where we just kill all the renderers.
   if (is_attempting_to_close_browser_)
     ClearUnloadState(contents, true);
+
+  if (!web_app::IsTabClosable(
+          browser_->tab_strip_model(),
+          browser_->tab_strip_model()->GetIndexOfWebContents(contents))) {
+    return false;
+  }
+
   return !is_attempting_to_close_browser_ ||
          is_calling_before_unload_handlers();
 }
@@ -104,7 +117,7 @@ bool UnloadController::BeforeUnloadFired(content::WebContents* contents,
                                          bool proceed) {
   if (!proceed) {
     DevToolsWindow::OnPageCloseCanceled(contents);
-    absl::optional<tab_groups::TabGroupId> group =
+    std::optional<tab_groups::TabGroupId> group =
         browser_->tab_strip_model()->GetTabGroupForTab(
             browser_->tab_strip_model()->GetIndexOfWebContents(contents));
     if (group.has_value())
@@ -137,16 +150,21 @@ bool UnloadController::BeforeUnloadFired(content::WebContents* contents,
   return true;
 }
 
-bool UnloadController::ShouldCloseWindow() {
-  if (HasCompletedUnloadProcessing())
-    return true;
+BrowserClosingStatus UnloadController::GetBrowserClosingStatus() {
+  if (IsUnclosableApp()) {
+    return BrowserClosingStatus::kDeniedByPolicy;
+  }
+
+  if (HasCompletedUnloadProcessing()) {
+    return BrowserClosingStatus::kPermitted;
+  }
 
   // Special case for when we quit an application. The devtools window can
   // close if it's beforeunload event has already fired which will happen due
   // to the interception of it's content's beforeunload.
   if (browser_->is_type_devtools() &&
       DevToolsWindow::HasFiredBeforeUnloadEventForDevToolsBrowser(browser_)) {
-    return true;
+    return BrowserClosingStatus::kPermitted;
   }
 
   // The behavior followed here varies based on the current phase of the
@@ -165,13 +183,16 @@ bool UnloadController::ShouldCloseWindow() {
   is_attempting_to_close_browser_ = true;
   // Cases 1 and 4.
   bool need_beforeunload_fired = TabsNeedBeforeUnloadFired();
-  if (need_beforeunload_fired == is_calling_before_unload_handlers())
-    return !need_beforeunload_fired;
+  if (need_beforeunload_fired == is_calling_before_unload_handlers()) {
+    return need_beforeunload_fired
+               ? BrowserClosingStatus::kDeniedUnloadHandlersNeedTime
+               : BrowserClosingStatus::kPermitted;
+  }
 
   // Cases 2 and 3.
   on_close_confirmed_.Reset();
   ProcessPendingTabs(false);
-  return false;
+  return BrowserClosingStatus::kDeniedUnloadHandlersNeedTime;
 }
 
 bool UnloadController::TryToCloseWindow(
@@ -400,9 +421,24 @@ void UnloadController::ClearUnloadState(content::WebContents* web_contents,
       // Do not post a new task if there is already any.
       if (weak_factory_.HasWeakPtrs())
         return;
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(&UnloadController::ProcessPendingTabs,
                                     weak_factory_.GetWeakPtr(), false));
     }
   }
+}
+
+bool UnloadController::IsUnclosableApp() const {
+  if (!web_app::AppBrowserController::IsWebApp(browser_.get())) {
+    return false;
+  }
+
+  content::WebContents* const active_web_contents =
+      browser_->tab_strip_model()->GetActiveWebContents();
+  if (!active_web_contents) {
+    return false;
+  }
+  return web_app::WebAppProvider::GetForWebContents(active_web_contents)
+      ->policy_manager()
+      .IsPreventCloseEnabled(browser_->app_controller()->app_id());
 }

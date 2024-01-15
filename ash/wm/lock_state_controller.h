@@ -6,6 +6,7 @@
 #define ASH_WM_LOCK_STATE_CONTROLLER_H_
 
 #include <memory>
+#include <optional>
 
 #include "ash/ash_export.h"
 #include "ash/public/cpp/session/session_observer.h"
@@ -13,13 +14,13 @@
 #include "ash/wallpaper/wallpaper_constants.h"
 #include "ash/wm/lock_state_observer.h"
 #include "ash/wm/session_state_animator.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/timer/elapsed_timer.h"
 #include "base/timer/timer.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/window_tree_host_observer.h"
 
 namespace ash {
@@ -146,6 +147,7 @@ class ASH_EXPORT LockStateController : public aura::WindowTreeHostObserver,
   void PreLockAnimation(SessionStateAnimator::AnimationSpeed speed,
                         bool request_lock_on_completion);
   void StartPostLockAnimation();
+  void OnPostLockFailTimeout();
   // This method calls |callback| when animation completes.
   void StartUnlockAnimationBeforeLockUIDestroyed(base::OnceClosure callback);
   void StartUnlockAnimationAfterLockUIDestroyed();
@@ -190,7 +192,7 @@ class ASH_EXPORT LockStateController : public aura::WindowTreeHostObserver,
   bool shutting_down_ = false;
 
   // The reason (e.g. user action) for a pending shutdown.
-  absl::optional<ShutdownReason> shutdown_reason_;
+  std::optional<ShutdownReason> shutdown_reason_;
 
   // Indicates whether controller should proceed to (cancellable) shutdown after
   // locking.
@@ -215,11 +217,15 @@ class ASH_EXPORT LockStateController : public aura::WindowTreeHostObserver,
   std::unique_ptr<base::ElapsedTimer> lock_duration_timer_;
 
   // Controller used to trigger the actual shutdown.
-  ShutdownController* shutdown_controller_;
+  raw_ptr<ShutdownController, DanglingUntriaged> shutdown_controller_;
 
   // Started when we request that the screen be locked.  When it fires, we
   // assume that our request got dropped.
   base::OneShotTimer lock_fail_timer_;
+
+  // Started when we call StartPostLockAnimation. When it fires, we assume
+  // that our request got dropped.
+  base::OneShotTimer post_lock_fail_timer_;
 
   // Started when we begin displaying the pre-shutdown animation.  When it
   // fires, we start the shutdown animation and get ready to request shutdown.
@@ -243,7 +249,7 @@ class ASH_EXPORT LockStateController : public aura::WindowTreeHostObserver,
   base::ObserverList<LockStateObserver>::Unchecked observers_;
 
   // To access the pref kLoginShutdownTimestampPrefName
-  PrefService* local_state_;
+  raw_ptr<PrefService> local_state_;
 
   base::WeakPtrFactory<LockStateController> weak_ptr_factory_{this};
 };

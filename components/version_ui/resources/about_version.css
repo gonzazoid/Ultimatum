@@ -112,6 +112,12 @@ body {
   width: 1em;
 }
 
+@media (forced-colors: active) {
+  #copy-to-clipboard-icon {
+    background-color: ButtonText;
+  }
+}
+
 #copy-to-clipboard:hover,
 #copy-os-content-to-clipboard:hover {
   background-color: var(--hover-background-color);
@@ -120,4 +126,12 @@ body {
 #copy-to-clipboard:active,
 #copy-os-content-to-clipboard:active {
   background-color: var(--active-background-color);
+}
+
+#messages {
+  clip: rect(0 0 0 0);
+  height: 1px;
+  overflow: hidden;
+  position: fixed;
+  width: 1px;
 }

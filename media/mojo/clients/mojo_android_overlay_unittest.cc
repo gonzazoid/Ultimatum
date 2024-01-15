@@ -5,7 +5,7 @@
 #include <memory>
 
 #include "base/android/jni_android.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
@@ -138,7 +138,7 @@ class MojoAndroidOverlayTest : public ::testing::Test {
     surface_ = gl::ScopedJavaSurface(surface_texture_.get());
     surface_key_ = gpu::GpuSurfaceTracker::Get()->AddSurfaceForNativeWidget(
         gpu::GpuSurfaceTracker::SurfaceRecord(
-            gfx::kNullAcceleratedWidget, surface_.j_surface(),
+            surface_.CopyRetainOwnership(),
             false /* can_be_used_with_surface_control */));
 
     mock_provider_.client_->OnSurfaceReady(surface_key_);

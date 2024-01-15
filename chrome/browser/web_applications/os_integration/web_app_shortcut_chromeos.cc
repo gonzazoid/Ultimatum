@@ -6,10 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/task/task_runner.h"
+#include "chrome/browser/web_applications/web_app_constants.h"
 
 namespace web_app {
 
@@ -34,9 +35,13 @@ void DeletePlatformShortcuts(const base::FilePath& web_app_path,
                                                     /*shortcut_deleted=*/true));
 }
 
-void UpdatePlatformShortcuts(const base::FilePath& web_app_path,
-                             const std::u16string& old_app_title,
-                             const ShortcutInfo& shortcut_info) {}
+Result UpdatePlatformShortcuts(
+    const base::FilePath& web_app_path,
+    const std::u16string& old_app_title,
+    absl::optional<ShortcutLocations> user_specified_locations,
+    const ShortcutInfo& shortcut_info) {
+  return Result::kOk;
+}
 
 ShortcutLocations GetAppExistingShortCutLocationImpl(
     const ShortcutInfo& shortcut_info) {

@@ -11,17 +11,9 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
-#include "net/cert/pem.h"
 #include "net/cert/x509_certificate.h"
 #include "net/cert/x509_util.h"
-
-#if BUILDFLAG(IS_MAC)
-#include <Security/Security.h>
-
-#include "base/strings/sys_string_conversions.h"
-#include "net/cert/cert_verify_proc_mac.h"
-#include "net/cert/internal/trust_store_mac.h"
-#endif
+#include "third_party/boringssl/src/pki/pem.h"
 
 namespace {
 
@@ -35,7 +27,7 @@ const char kCertificateHeader[] = "CERTIFICATE";
 void ExtractCertificatesFromData(const std::string& data_string,
                                  const base::FilePath& file_path,
                                  std::vector<CertInput>* certs) {
-  net::PEMTokenizer pem_tokenizer(data_string, {kCertificateHeader});
+  bssl::PEMTokenizer pem_tokenizer(data_string, {kCertificateHeader});
   int block = 0;
   while (pem_tokenizer.GetNext()) {
     CertInput cert;
@@ -53,7 +45,7 @@ void ExtractCertificatesFromData(const std::string& data_string,
 
   std::vector<bssl::UniquePtr<CRYPTO_BUFFER>> pkcs7_cert_buffers;
   if (net::x509_util::CreateCertBuffersFromPKCS7Bytes(
-          base::as_bytes(base::make_span(data_string)), &pkcs7_cert_buffers)) {
+          base::as_byte_span(data_string), &pkcs7_cert_buffers)) {
     int n = 0;
     for (const auto& cert_buffer : pkcs7_cert_buffers) {
       CertInput cert;
@@ -73,38 +65,6 @@ void ExtractCertificatesFromData(const std::string& data_string,
   cert.source_file_path = file_path;
   certs->push_back(cert);
 }
-
-#if BUILDFLAG(IS_MAC)
-std::string SecErrorStr(OSStatus err) {
-  base::ScopedCFTypeRef<CFStringRef> cfstr(
-      SecCopyErrorMessageString(err, nullptr));
-  return base::StringPrintf("%d(%s)", err,
-                            base::SysCFStringRefToUTF8(cfstr).c_str());
-}
-
-std::string TrustResultStr(uint32_t trust_result) {
-  switch (trust_result) {
-    case kSecTrustResultInvalid:
-      return "kSecTrustResultInvalid";
-    case kSecTrustResultProceed:
-      return "kSecTrustResultProceed";
-    case 2:  // kSecTrustResultConfirm SEC_DEPRECATED_ATTRIBUTE = 2,
-      return "kSecTrustResultConfirm";
-    case kSecTrustResultDeny:
-      return "kSecTrustResultDeny";
-    case kSecTrustResultUnspecified:
-      return "kSecTrustResultUnspecified";
-    case kSecTrustResultRecoverableTrustFailure:
-      return "kSecTrustResultRecoverableTrustFailure";
-    case kSecTrustResultFatalTrustFailure:
-      return "kSecTrustResultFatalTrustFailure";
-    case kSecTrustResultOtherError:
-      return "kSecTrustResultOtherError";
-    default:
-      return "UNKNOWN";
-  }
-}
-#endif
 
 }  // namespace
 
@@ -144,7 +104,7 @@ bool ReadFromFile(const base::FilePath& file_path, std::string* file_data) {
 }
 
 bool WriteToFile(const base::FilePath& file_path, const std::string& data) {
-  if (base::WriteFile(file_path, data.data(), data.size()) < 0) {
+  if (!base::WriteFile(file_path, data)) {
     std::cerr << "ERROR: WriteFile " << file_path.value() << ": "
               << strerror(errno) << "\n";
     return false;
@@ -157,42 +117,6 @@ void PrintCertError(const std::string& error, const CertInput& cert) {
   if (!cert.source_details.empty())
     std::cerr << " (" << cert.source_details << ")";
   std::cerr << "\n";
-}
-
-void PrintDebugData(const base::SupportsUserData* debug_data) {
-#if BUILDFLAG(IS_MAC)
-  auto* mac_platform_debug_info =
-      net::CertVerifyProcMac::ResultDebugData::Get(debug_data);
-  if (mac_platform_debug_info) {
-    std::cout << base::StringPrintf(
-        "CertVerifyProcMac::ResultDebugData: trust_result=%u(%s) "
-        "result_code=%s\n",
-        mac_platform_debug_info->trust_result(),
-        TrustResultStr(mac_platform_debug_info->trust_result()).c_str(),
-        SecErrorStr(mac_platform_debug_info->result_code()).c_str());
-    for (size_t i = 0; i < mac_platform_debug_info->status_chain().size();
-         ++i) {
-      const auto& cert_info = mac_platform_debug_info->status_chain()[i];
-      std::string status_codes_str;
-      for (const auto code : cert_info.status_codes) {
-        if (!status_codes_str.empty())
-          status_codes_str += ',';
-        status_codes_str += SecErrorStr(code);
-      }
-      std::cout << base::StringPrintf(
-          " cert %zu: status_bits=0x%x status_codes=%s\n", i,
-          cert_info.status_bits, status_codes_str.c_str());
-    }
-  }
-
-  auto* mac_trust_debug_info =
-      net::TrustStoreMac::ResultDebugData::Get(debug_data);
-  if (mac_trust_debug_info) {
-    std::cout << base::StringPrintf(
-        "TrustStoreMac::ResultDebugData::combined_trust_debug_info: 0x%x\n",
-        mac_trust_debug_info->combined_trust_debug_info());
-  }
-#endif
 }
 
 std::string FingerPrintCryptoBuffer(const CRYPTO_BUFFER* cert_handle) {

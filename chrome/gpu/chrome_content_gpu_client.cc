@@ -7,16 +7,16 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/token.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/common/profiler/unwind_util.h"
 #include "chrome/gpu/browser_exposed_gpu_interfaces.h"
 #include "components/heap_profiling/in_process/heap_profiler_controller.h"
-#include "components/metrics/call_stack_profile_builder.h"
+#include "components/metrics/call_stacks/call_stack_profile_builder.h"
 #include "content/public/child/child_thread.h"
 #include "content/public/common/content_switches.h"
 #include "media/media_buildflags.h"
@@ -79,7 +79,7 @@ void ChromeContentGpuClient::GpuServiceInitialized() {
         HeapProfilerController::GetProfilingEnabled() ==
             HeapProfilerController::ProfilingEnabled::kEnabled) {
       ThreadProfiler::SetMainThreadTaskRunner(
-          base::ThreadTaskRunnerHandle::Get());
+          base::SingleThreadTaskRunner::GetCurrentDefault());
 
       mojo::PendingRemote<metrics::mojom::CallStackProfileCollector> collector;
       content::ChildThread::Get()->BindHostReceiver(
@@ -125,10 +125,16 @@ void ChromeContentGpuClient::PostCompositorThreadCreated(
   // We pass in CreateCoreUnwindersFactory here since it lives in the chrome/
   // layer while TracingSamplerProfiler is outside of chrome/.
   task_runner->PostTask(
-      FROM_HERE,
-      base::BindOnce(&tracing::TracingSamplerProfiler::
-                         CreateOnChildThreadWithCustomUnwinders,
-                     base::BindRepeating(&CreateCoreUnwindersFactory)));
+      FROM_HERE, base::BindOnce(&tracing::TracingSamplerProfiler::
+                                    CreateOnChildThreadWithCustomUnwinders,
+#if BUILDFLAG(IS_ANDROID)
+                                base::BindRepeating(
+                                    &CreateCoreUnwindersFactory,
+                                    /*is_java_name_hashing_enabled=*/false)));
+#else
+                                base::BindRepeating(
+                                    &CreateCoreUnwindersFactory)));
+#endif  // BUILDFLAG(IS_ANDROID)
 }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)

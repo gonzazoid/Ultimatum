@@ -11,6 +11,7 @@
 #include <memory>
 
 #include "base/containers/span.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "base/test/values_test_util.h"
 #include "base/values.h"
@@ -53,7 +54,7 @@ class ScopedAvoidIdentityHashForTesting {
   ~ScopedAvoidIdentityHashForTesting();
 
  private:
-  content::V8ValueConverterImpl* converter_;
+  raw_ptr<content::V8ValueConverterImpl, ExperimentalRenderer> converter_;
 };
 
 ScopedAvoidIdentityHashForTesting::ScopedAvoidIdentityHashForTesting(
@@ -84,13 +85,13 @@ class V8ValueConverterImplTest : public testing::Test {
 
   void TearDown() override { context_.Reset(); }
 
-  std::string GetString(base::DictionaryValue* value, const std::string& key) {
-    std::string temp;
-    if (!value->GetString(key, &temp)) {
+  std::string GetString(base::Value::Dict* value, const std::string& key) {
+    std::string* temp = value->FindString(key);
+    if (!temp) {
       ADD_FAILURE();
       return std::string();
     }
-    return temp;
+    return *temp;
   }
 
   std::string GetString(v8::Local<v8::Object> value, const std::string& key) {
@@ -108,8 +109,7 @@ class V8ValueConverterImplTest : public testing::Test {
     return std::string(*utf8, utf8.length());
   }
 
-  std::string GetString(base::ListValue* value, uint32_t index) {
-    const base::Value::List& value_list = value->GetList();
+  std::string GetString(const base::Value::List& value_list, uint32_t index) {
     if (index >= value_list.size() || !value_list[index].is_string()) {
       ADD_FAILURE();
       return std::string();
@@ -150,9 +150,9 @@ class V8ValueConverterImplTest : public testing::Test {
     return temp.As<v8::Int32>()->Value();
   }
 
-  bool IsNull(base::DictionaryValue* value, const std::string& key) {
-    base::Value* child = nullptr;
-    if (!value->Get(key, &child)) {
+  bool IsNull(base::Value::Dict* value, const std::string& key) {
+    base::Value* child = value->Find(key);
+    if (!child) {
       ADD_FAILURE();
       return false;
     }
@@ -179,11 +179,6 @@ class V8ValueConverterImplTest : public testing::Test {
       return false;
     }
     return list[index].type() == base::Value::Type::NONE;
-  }
-
-  // Deprecated. Convert callers to use base::Value::List and remove.
-  bool IsNullDeprecated(base::ListValue* value, uint32_t index) {
-    return IsNull(value->GetList(), index);
   }
 
   bool IsNull(v8::Local<v8::Array> value, uint32_t index) {
@@ -219,18 +214,19 @@ class V8ValueConverterImplTest : public testing::Test {
                   .ToLocalChecked(),
               val)
         .Check();
-    std::unique_ptr<base::Value> dictionary(
+    std::unique_ptr<base::Value> dictionary_val(
         converter.FromV8Value(object, context));
-    ASSERT_TRUE(dictionary.get());
-    ASSERT_TRUE(dictionary->is_dict());
+    ASSERT_TRUE(dictionary_val.get());
+    ASSERT_TRUE(dictionary_val->is_dict());
+    const base::Value::Dict& dictionary = dictionary_val->GetDict();
 
     if (expected_value) {
-      const base::Value* temp = dictionary->FindKey("test");
+      const base::Value* temp = dictionary.Find("test");
       ASSERT_TRUE(temp);
       EXPECT_EQ(expected_type, temp->type());
       EXPECT_EQ(*expected_value, *temp);
     } else {
-      EXPECT_FALSE(dictionary->FindKey("test"));
+      EXPECT_FALSE(dictionary.contains("test"));
     }
 
     v8::Local<v8::Array> array(v8::Array::New(isolate_));
@@ -266,7 +262,7 @@ class V8ValueConverterImplTest : public testing::Test {
   base::test::TaskEnvironment task_environment_;
   gin::IsolateHolder isolate_holder_;
   v8::Isolate::Scope isolate_scope_;
-  v8::Isolate* isolate_ = nullptr;
+  raw_ptr<v8::Isolate, ExperimentalRenderer> isolate_ = nullptr;
 
   // Context for the JavaScript in the test.
   v8::Persistent<v8::Context> context_;
@@ -305,7 +301,7 @@ TEST_F(V8ValueConverterImplTest, BasicRoundTrip) {
       converter.ToV8Value(original_root, context).As<v8::Object>();
   ASSERT_FALSE(v8_object.IsEmpty());
 
-  EXPECT_EQ(original_root.DictSize(),
+  EXPECT_EQ(original_root.GetDict().size(),
             v8_object->GetPropertyNames(context).ToLocalChecked()->Length());
   EXPECT_TRUE(
       v8_object
@@ -433,8 +429,8 @@ TEST_F(V8ValueConverterImplTest, ObjectExceptions) {
   v8::Local<v8::Context> context =
       v8::Local<v8::Context>::New(isolate_, context_);
   v8::Context::Scope context_scope(context);
-  v8::MicrotasksScope microtasks(
-      isolate_, v8::MicrotasksScope::kDoNotRunMicrotasks);
+  v8::MicrotasksScope microtasks(context,
+                                 v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   // Set up objects to throw when reading or writing 'foo'.
   const char source[] =
@@ -453,17 +449,19 @@ TEST_F(V8ValueConverterImplTest, ObjectExceptions) {
 
   // Converting from v8 value should replace the foo property with null.
   V8ValueConverterImpl converter;
-  std::unique_ptr<base::DictionaryValue> converted(
-      base::DictionaryValue::From(converter.FromV8Value(object, context)));
-  ASSERT_TRUE(converted.get());
+  std::unique_ptr<base::Value> base_value =
+      converter.FromV8Value(object, context);
+  base::Value::Dict* converted = base_value->GetIfDict();
+  ASSERT_TRUE(converted);
+
   // http://code.google.com/p/v8/issues/detail?id=1342
-  // EXPECT_EQ(2u, converted->size());
-  // EXPECT_TRUE(IsNull(converted.get(), "foo"));
-  EXPECT_EQ(1u, converted->DictSize());
-  EXPECT_EQ("bar", GetString(converted.get(), "bar"));
+  // EXPECT_EQ(2u, converted);
+  // EXPECT_TRUE(IsNull(*converted, "foo"));
+  EXPECT_EQ(1u, converted->size());
+  EXPECT_EQ("bar", GetString(converted, "bar"));
 
   // Converting to v8 value should not trigger the setter.
-  converted->SetString("foo", "foo");
+  converted->Set("foo", "foo");
   v8::Local<v8::Object> copy =
       converter.ToV8Value(*converted, context).As<v8::Object>();
   EXPECT_FALSE(copy.IsEmpty());
@@ -477,8 +475,8 @@ TEST_F(V8ValueConverterImplTest, ArrayExceptions) {
   v8::Local<v8::Context> context =
       v8::Local<v8::Context>::New(isolate_, context_);
   v8::Context::Scope context_scope(context);
-  v8::MicrotasksScope microtasks(
-      isolate_, v8::MicrotasksScope::kDoNotRunMicrotasks);
+  v8::MicrotasksScope microtasks(context,
+                                 v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   const char source[] =
       "(function() {"
@@ -520,7 +518,7 @@ TEST_F(V8ValueConverterImplTest, WeirdTypes) {
   v8::Local<v8::Context> context =
       v8::Local<v8::Context>::New(isolate_, context_);
   v8::Context::Scope context_scope(context);
-  v8::MicrotasksScope microtasks(isolate_,
+  v8::MicrotasksScope microtasks(context,
                                  v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   v8::Local<v8::RegExp> regex(
@@ -533,10 +531,10 @@ TEST_F(V8ValueConverterImplTest, WeirdTypes) {
                 base::Value::Type::NONE,  // Arbitrary type, result is NULL.
                 std::unique_ptr<base::Value>());
   TestWeirdType(converter, v8::Date::New(context, 1000).ToLocalChecked(),
-                base::Value::Type::DICTIONARY,
-                std::unique_ptr<base::Value>(new base::DictionaryValue()));
-  TestWeirdType(converter, regex, base::Value::Type::DICTIONARY,
-                std::unique_ptr<base::Value>(new base::DictionaryValue()));
+                base::Value::Type::DICT,
+                std::make_unique<base::Value>(base::Value::Type::DICT));
+  TestWeirdType(converter, regex, base::Value::Type::DICT,
+                std::make_unique<base::Value>(base::Value::Type::DICT));
 
   converter.SetDateAllowed(true);
   TestWeirdType(converter, v8::Date::New(context, 1000).ToLocalChecked(),
@@ -552,8 +550,8 @@ TEST_F(V8ValueConverterImplTest, Prototype) {
   v8::Local<v8::Context> context =
       v8::Local<v8::Context>::New(isolate_, context_);
   v8::Context::Scope context_scope(context);
-  v8::MicrotasksScope microtasks(
-      isolate_, v8::MicrotasksScope::kDoNotRunMicrotasks);
+  v8::MicrotasksScope microtasks(context,
+                                 v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   const char source[] =
       "(function() {"
@@ -564,10 +562,11 @@ TEST_F(V8ValueConverterImplTest, Prototype) {
   v8::Local<v8::Object> object = CompileRun<v8::Object>(context, source);
 
   V8ValueConverterImpl converter;
-  std::unique_ptr<base::DictionaryValue> result(
-      base::DictionaryValue::From(converter.FromV8Value(object, context)));
-  ASSERT_TRUE(result.get());
-  EXPECT_EQ(0u, result->DictSize());
+  std::unique_ptr<base::Value> base_value =
+      converter.FromV8Value(object, context);
+  base::Value::Dict* result = base_value->GetIfDict();
+  ASSERT_TRUE(result);
+  EXPECT_TRUE(result->empty());
 }
 
 TEST_F(V8ValueConverterImplTest, ObjectPrototypeSetter) {
@@ -579,7 +578,7 @@ TEST_F(V8ValueConverterImplTest, ObjectPrototypeSetter) {
   v8::Local<v8::Context> context =
       v8::Local<v8::Context>::New(isolate_, context_);
   v8::Context::Scope context_scope(context);
-  v8::MicrotasksScope microtasks(isolate_,
+  v8::MicrotasksScope microtasks(context,
                                  v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   const char source[] =
@@ -647,7 +646,7 @@ TEST_F(V8ValueConverterImplTest, ArrayPrototypeSetter) {
   v8::Local<v8::Context> context =
       v8::Local<v8::Context>::New(isolate_, context_);
   v8::Context::Scope context_scope(context);
-  v8::MicrotasksScope microtasks(isolate_,
+  v8::MicrotasksScope microtasks(context,
                                  v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   const char source[] =
@@ -712,8 +711,8 @@ TEST_F(V8ValueConverterImplTest, StripNullFromObjects) {
   v8::Local<v8::Context> context =
       v8::Local<v8::Context>::New(isolate_, context_);
   v8::Context::Scope context_scope(context);
-  v8::MicrotasksScope microtasks(
-      isolate_, v8::MicrotasksScope::kDoNotRunMicrotasks);
+  v8::MicrotasksScope microtasks(context,
+                                 v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   const char source[] =
       "(function() {"
@@ -724,11 +723,11 @@ TEST_F(V8ValueConverterImplTest, StripNullFromObjects) {
 
   V8ValueConverterImpl converter;
   converter.SetStripNullFromObjects(true);
-
-  std::unique_ptr<base::DictionaryValue> result(
-      base::DictionaryValue::From(converter.FromV8Value(object, context)));
-  ASSERT_TRUE(result.get());
-  EXPECT_EQ(0u, result->DictSize());
+  std::unique_ptr<base::Value> base_value =
+      converter.FromV8Value(object, context);
+  base::Value::Dict* result = base_value->GetIfDict();
+  ASSERT_TRUE(result);
+  EXPECT_TRUE(result->empty());
 }
 
 TEST_F(V8ValueConverterImplTest, RecursiveObjects) {
@@ -736,7 +735,7 @@ TEST_F(V8ValueConverterImplTest, RecursiveObjects) {
   v8::Local<v8::Context> context =
       v8::Local<v8::Context>::New(isolate_, context_);
   v8::Context::Scope context_scope(context);
-  v8::MicrotasksScope microtasks(isolate_,
+  v8::MicrotasksScope microtasks(context,
                                  v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   V8ValueConverterImpl converter;
@@ -758,22 +757,22 @@ TEST_F(V8ValueConverterImplTest, RecursiveObjects) {
             object)
       .Check();
 
-  std::unique_ptr<base::DictionaryValue> object_result(
-      base::DictionaryValue::From(converter.FromV8Value(object, context)));
-  ASSERT_TRUE(object_result.get());
-  EXPECT_EQ(2u, object_result->DictSize());
-  EXPECT_TRUE(IsNull(object_result.get(), "obj"));
+  std::unique_ptr<base::Value> base_value =
+      converter.FromV8Value(object, context);
+  base::Value::Dict* object_result = base_value->GetIfDict();
+  ASSERT_TRUE(object_result);
+  EXPECT_EQ(2u, object_result->size());
+  EXPECT_TRUE(IsNull(object_result, "obj"));
 
   v8::Local<v8::Array> array = v8::Array::New(isolate_).As<v8::Array>();
   ASSERT_FALSE(array.IsEmpty());
   array->Set(context, 0, v8::String::NewFromUtf8Literal(isolate_, "1")).Check();
   array->Set(context, 1, array).Check();
 
-  std::unique_ptr<base::ListValue> list_result(
-      base::ListValue::From(converter.FromV8Value(array, context)));
-  ASSERT_TRUE(list_result.get());
-  EXPECT_EQ(2u, list_result->GetList().size());
-  EXPECT_TRUE(IsNullDeprecated(list_result.get(), 1));
+  base::Value::List list_result(
+      std::move(*converter.FromV8Value(array, context)).TakeList());
+  EXPECT_EQ(2u, list_result.size());
+  EXPECT_TRUE(IsNull(list_result, 1));
 }
 
 TEST_F(V8ValueConverterImplTest, WeirdProperties) {
@@ -781,8 +780,8 @@ TEST_F(V8ValueConverterImplTest, WeirdProperties) {
   v8::Local<v8::Context> context =
       v8::Local<v8::Context>::New(isolate_, context_);
   v8::Context::Scope context_scope(context);
-  v8::MicrotasksScope microtasks(
-      isolate_, v8::MicrotasksScope::kDoNotRunMicrotasks);
+  v8::MicrotasksScope microtasks(context,
+                                 v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   const char source[] =
       "(function() {"
@@ -819,8 +818,8 @@ TEST_F(V8ValueConverterImplTest, ArrayGetters) {
   v8::Local<v8::Context> context =
       v8::Local<v8::Context>::New(isolate_, context_);
   v8::Context::Scope context_scope(context);
-  v8::MicrotasksScope microtasks(
-      isolate_, v8::MicrotasksScope::kDoNotRunMicrotasks);
+  v8::MicrotasksScope microtasks(context,
+                                 v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   const char source[] =
       "(function() {"
@@ -832,10 +831,9 @@ TEST_F(V8ValueConverterImplTest, ArrayGetters) {
   v8::Local<v8::Array> array = CompileRun<v8::Array>(context, source);
 
   V8ValueConverterImpl converter;
-  std::unique_ptr<base::ListValue> result(
-      base::ListValue::From(converter.FromV8Value(array, context)));
-  ASSERT_TRUE(result.get());
-  EXPECT_EQ(2u, result->GetList().size());
+  base::Value::List result(
+      std::move(*converter.FromV8Value(array, context)).TakeList());
+  EXPECT_EQ(2u, result.size());
 }
 
 TEST_F(V8ValueConverterImplTest, UndefinedValueBehavior) {
@@ -843,8 +841,8 @@ TEST_F(V8ValueConverterImplTest, UndefinedValueBehavior) {
   v8::Local<v8::Context> context =
       v8::Local<v8::Context>::New(isolate_, context_);
   v8::Context::Scope context_scope(context);
-  v8::MicrotasksScope microtasks(
-      isolate_, v8::MicrotasksScope::kDoNotRunMicrotasks);
+  v8::MicrotasksScope microtasks(context,
+                                 v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   v8::Local<v8::Object> object;
   {
@@ -895,7 +893,7 @@ TEST_F(V8ValueConverterImplTest, ObjectsWithClashingIdentityHash) {
   v8::Local<v8::Context> context =
       v8::Local<v8::Context>::New(isolate_, context_);
   v8::Context::Scope context_scope(context);
-  v8::MicrotasksScope microtasks(isolate_,
+  v8::MicrotasksScope microtasks(context,
                                  v8::MicrotasksScope::kDoNotRunMicrotasks);
   V8ValueConverterImpl converter;
 
@@ -930,7 +928,7 @@ TEST_F(V8ValueConverterImplTest, DetectCycles) {
   v8::Local<v8::Context> context =
       v8::Local<v8::Context>::New(isolate_, context_);
   v8::Context::Scope context_scope(context);
-  v8::MicrotasksScope microtasks(isolate_,
+  v8::MicrotasksScope microtasks(context,
                                  v8::MicrotasksScope::kDoNotRunMicrotasks);
   V8ValueConverterImpl converter;
 
@@ -962,15 +960,15 @@ TEST_F(V8ValueConverterImplTest, DetectCycles) {
       .Check();
 
   // The first repetition should be trimmed and replaced by a null value.
-  base::DictionaryValue expected_dictionary;
-  expected_dictionary.SetKey(key, base::Value());
+  base::Value::Dict expected_dictionary;
+  expected_dictionary.Set(key, base::Value());
 
   // The actual result.
-  std::unique_ptr<base::Value> actual_dictionary(
-      converter.FromV8Value(recursive_object, context));
-  ASSERT_TRUE(actual_dictionary.get());
-
-  EXPECT_TRUE(expected_dictionary == *actual_dictionary);
+  std::unique_ptr<base::Value> base_value =
+      converter.FromV8Value(recursive_object, context);
+  base::Value::Dict* actual_dictionary = base_value->GetIfDict();
+  ASSERT_TRUE(actual_dictionary);
+  EXPECT_EQ(expected_dictionary, *actual_dictionary);
 }
 
 // Tests that reused object values with no cycles do not get nullified.
@@ -979,8 +977,8 @@ TEST_F(V8ValueConverterImplTest, ReuseObjects) {
   v8::Local<v8::Context> context =
       v8::Local<v8::Context>::New(isolate_, context_);
   v8::Context::Scope context_scope(context);
-  v8::MicrotasksScope microtasks(
-      isolate_, v8::MicrotasksScope::kDoNotRunMicrotasks);
+  v8::MicrotasksScope microtasks(context,
+                                 v8::MicrotasksScope::kDoNotRunMicrotasks);
   V8ValueConverterImpl converter;
 
   // Object with reused values in different keys.
@@ -994,21 +992,22 @@ TEST_F(V8ValueConverterImplTest, ReuseObjects) {
     v8::Local<v8::Object> object = CompileRun<v8::Object>(context, source);
 
     // The actual result.
-    std::unique_ptr<base::DictionaryValue> result(
-        base::DictionaryValue::From(converter.FromV8Value(object, context)));
-    ASSERT_TRUE(result.get());
-    EXPECT_EQ(2u, result->DictSize());
+    std::unique_ptr<base::Value> base_value =
+        converter.FromV8Value(object, context);
+    base::Value::Dict* result = base_value->GetIfDict();
+    ASSERT_TRUE(result);
+    EXPECT_EQ(2u, result->size());
 
     {
-      base::DictionaryValue* one_dict = nullptr;
       const char key1[] = "one";
-      ASSERT_TRUE(result->GetDictionary(key1, &one_dict));
+      base::Value::Dict* one_dict = result->FindDict(key1);
+      ASSERT_TRUE(one_dict);
       EXPECT_EQ("another same value", GetString(one_dict, "key"));
     }
     {
-      base::DictionaryValue* two_dict = nullptr;
       const char key2[] = "two";
-      ASSERT_TRUE(result->GetDictionary(key2, &two_dict));
+      base::Value::Dict* two_dict = result->FindDict(key2);
+      ASSERT_TRUE(two_dict);
       EXPECT_EQ("another same value", GetString(two_dict, "key"));
     }
   }
@@ -1024,13 +1023,12 @@ TEST_F(V8ValueConverterImplTest, ReuseObjects) {
     v8::Local<v8::Array> array = CompileRun<v8::Array>(context, source);
 
     // The actual result.
-    std::unique_ptr<base::ListValue> list_result(
-        base::ListValue::From(converter.FromV8Value(array, context)));
-    ASSERT_TRUE(list_result.get());
-    ASSERT_EQ(2u, list_result->GetList().size());
-    for (size_t i = 0; i < list_result->GetList().size(); ++i) {
-      ASSERT_FALSE(IsNullDeprecated(list_result.get(), i));
-      base::Value::Dict* dict_value = list_result->GetList()[0].GetIfDict();
+    base::Value::List list_result(
+        std::move(*converter.FromV8Value(array, context)).TakeList());
+    ASSERT_EQ(2u, list_result.size());
+    for (size_t i = 0; i < list_result.size(); ++i) {
+      ASSERT_FALSE(IsNull(list_result, i));
+      base::Value::Dict* dict_value = list_result[0].GetIfDict();
       ASSERT_TRUE(dict_value);
       EXPECT_STREQ("same value", dict_value->FindString("key")->c_str());
     }
@@ -1042,7 +1040,7 @@ TEST_F(V8ValueConverterImplTest, MaxRecursionDepth) {
   v8::Local<v8::Context> context =
       v8::Local<v8::Context>::New(isolate_, context_);
   v8::Context::Scope context_scope(context);
-  v8::MicrotasksScope microtasks(isolate_,
+  v8::MicrotasksScope microtasks(context,
                                  v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   // Must larger than kMaxRecursionDepth in v8_value_converter_impl.cc.
@@ -1087,7 +1085,7 @@ TEST_F(V8ValueConverterImplTest, NegativeZero) {
   v8::HandleScope handle_scope(isolate_);
   v8::Local<v8::Context> context =
       v8::Local<v8::Context>::New(isolate_, context_);
-  v8::MicrotasksScope microtasks(isolate_,
+  v8::MicrotasksScope microtasks(context,
                                  v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   v8::Context::Scope context_scope(context);

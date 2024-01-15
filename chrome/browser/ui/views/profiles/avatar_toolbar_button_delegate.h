@@ -5,22 +5,24 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_PROFILES_AVATAR_TOOLBAR_BUTTON_DELEGATE_H_
 #define CHROME_BROWSER_UI_VIEWS_PROFILES_AVATAR_TOOLBAR_BUTTON_DELEGATE_H_
 
+#include <optional>
 #include <string>
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/sync/sync_ui_util.h"
 #include "chrome/browser/ui/browser_list_observer.h"
 #include "chrome/browser/ui/views/profiles/avatar_toolbar_button.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_service_observer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_service_observer.h"
 #include "ui/gfx/image/image.h"
 
+class Browser;
 class Profile;
 
 // Handles the business logic for AvatarToolbarButton. This includes
@@ -30,7 +32,7 @@ class AvatarToolbarButtonDelegate : public BrowserListObserver,
                                     public signin::IdentityManager::Observer,
                                     public syncer::SyncServiceObserver {
  public:
-  AvatarToolbarButtonDelegate(AvatarToolbarButton* button, Profile* profile);
+  AvatarToolbarButtonDelegate(AvatarToolbarButton* button, Browser* browser);
 
   AvatarToolbarButtonDelegate(const AvatarToolbarButtonDelegate&) = delete;
   AvatarToolbarButtonDelegate& operator=(const AvatarToolbarButtonDelegate&) =
@@ -52,12 +54,17 @@ class AvatarToolbarButtonDelegate : public BrowserListObserver,
 
   AvatarToolbarButton::State GetState() const;
 
-  absl::optional<AvatarSyncErrorType> GetAvatarSyncErrorType() const;
+  std::optional<AvatarSyncErrorType> GetAvatarSyncErrorType() const;
 
   bool IsSyncFeatureEnabled() const;
 
   void ShowHighlightAnimation();
   bool IsHighlightAnimationVisible() const;
+
+#if !BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_CHROMEOS_ASH)
+  void ShowSignInText();
+  void HideSignInText();
+#endif
 
   // Should be called when the icon is updated. This may trigger the identity
   // pill animation if the delegate is waiting for the image.
@@ -70,19 +77,21 @@ class AvatarToolbarButtonDelegate : public BrowserListObserver,
   void NotifyClick();
   void OnMouseExited();
   void OnBlur();
-  void OnHighlightChanged();
+  void OnThemeChanged(const ui::ColorProvider* color_provider);
 
  private:
-  enum class IdentityAnimationState { kNotShowing, kWaitingForImage, kShowing };
+  enum class ButtonTextState {
+    kNotShowing,
+    kWaitingForImage,
+    kShowingName,
+    kShowingSigninText
+  };
 
   // BrowserListObserver:
   void OnBrowserAdded(Browser* browser) override;
   void OnBrowserRemoved(Browser* browser) override;
 
   // ProfileAttributesStorage::Observer:
-  void OnProfileAdded(const base::FilePath& profile_path) override;
-  void OnProfileWasRemoved(const base::FilePath& profile_path,
-                           const std::u16string& profile_name) override;
   void OnProfileAvatarChanged(const base::FilePath& profile_path) override;
   void OnProfileHighResAvatarLoaded(
       const base::FilePath& profile_path) override;
@@ -99,9 +108,11 @@ class AvatarToolbarButtonDelegate : public BrowserListObserver,
       const GoogleServiceAuthError& error) override;
   void OnExtendedAccountInfoUpdated(const AccountInfo& info) override;
   void OnExtendedAccountInfoRemoved(const AccountInfo& info) override;
+  void OnIdentityManagerShutdown(signin::IdentityManager*) override;
 
   // SyncServiceObserver:
   void OnStateChanged(syncer::SyncService*) override;
+  void OnSyncShutdown(syncer::SyncService*) override;
 
   // Initiates showing the identity.
   void OnUserIdentityChanged();
@@ -125,9 +136,9 @@ class AvatarToolbarButtonDelegate : public BrowserListObserver,
       identity_manager_observation_{this};
 
   const raw_ptr<AvatarToolbarButton> avatar_toolbar_button_;
+  const raw_ptr<Browser> browser_;
   const raw_ptr<Profile> profile_;
-  IdentityAnimationState identity_animation_state_ =
-      IdentityAnimationState::kNotShowing;
+  ButtonTextState button_text_state_ = ButtonTextState::kNotShowing;
 
   // Count of identity pill animation timeouts that are currently scheduled.
   // Multiple timeouts are scheduled when multiple animation triggers happen in
@@ -145,7 +156,7 @@ class AvatarToolbarButtonDelegate : public BrowserListObserver,
 
   // Caches the value of the last error so the class can detect when it changes
   // and notify |avatar_toolbar_button_|.
-  absl::optional<AvatarSyncErrorType> last_avatar_error_;
+  std::optional<AvatarSyncErrorType> last_avatar_error_;
 
   base::WeakPtrFactory<AvatarToolbarButtonDelegate> weak_ptr_factory_{this};
 };

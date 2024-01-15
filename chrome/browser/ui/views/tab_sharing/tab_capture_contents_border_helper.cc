@@ -5,12 +5,15 @@
 #include "chrome/browser/ui/views/tab_sharing/tab_capture_contents_border_helper.h"
 
 #include "base/containers/contains.h"
+#include "base/feature_list.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "chrome/browser/browser_features.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
+#include "content/public/browser/browser_thread.h"
 #include "ui/gfx/color_palette.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -22,8 +25,6 @@ namespace {
 constexpr int kMinContentsBorderWidth = 20;
 constexpr int kMinContentsBorderHeight = 20;
 
-// TODO(https://crbug.com/1030925): Fix contents border on ChromeOS.
-#if !BUILDFLAG(IS_CHROMEOS)
 class BorderView : public views::View {
  public:
   BorderView() = default;
@@ -42,7 +43,7 @@ class BorderView : public views::View {
 };
 
 void InitContentsBorderWidget(content::WebContents* web_contents) {
-  Browser* const browser = chrome::FindBrowserWithWebContents(web_contents);
+  Browser* const browser = chrome::FindBrowserWithTab(web_contents);
   if (!browser) {
     return;
   }
@@ -83,7 +84,6 @@ void InitContentsBorderWidget(content::WebContents* web_contents) {
   // After this fix, capturing a given tab X twice will still yield one widget.
   browser_view->set_contents_border_widget(widget);
 }
-#endif  // !BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace
 
@@ -99,7 +99,7 @@ void TabCaptureContentsBorderHelper::OnCapturerAdded(
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   DCHECK(!base::Contains(session_to_bounds_, capture_session_id));
 
-  session_to_bounds_[capture_session_id] = absl::nullopt;
+  session_to_bounds_[capture_session_id] = std::nullopt;
 
   Update();
 }
@@ -123,7 +123,7 @@ void TabCaptureContentsBorderHelper::VisibilityUpdated() {
 
 void TabCaptureContentsBorderHelper::OnRegionCaptureRectChanged(
     CaptureSessionId capture_session_id,
-    const absl::optional<gfx::Rect>& region_capture_rect) {
+    const std::optional<gfx::Rect>& region_capture_rect) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   DCHECK(base::Contains(session_to_bounds_, capture_session_id));
 
@@ -132,20 +132,27 @@ void TabCaptureContentsBorderHelper::OnRegionCaptureRectChanged(
       region_capture_rect->height() >= kMinContentsBorderHeight) {
     session_to_bounds_[capture_session_id] = region_capture_rect;
   } else {
-    session_to_bounds_[capture_session_id] = absl::nullopt;
+    session_to_bounds_[capture_session_id] = std::nullopt;
   }
 
   UpdateBlueBorderLocation();
 }
 
 void TabCaptureContentsBorderHelper::Update() {
-// TODO(https://crbug.com/1030925): Fix contents border on ChromeOS.
-#if !BUILDFLAG(IS_CHROMEOS)
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+
+#if BUILDFLAG(IS_CHROMEOS)
+  // The blue border behavior used to be problematic on ChromeOS - see
+  // crbug.com/1320262 and crbug.com/1030925. This check serves as a means of
+  // flag-disabling this feature in case of possible future regressions.
+  if (!base::FeatureList::IsEnabled(features::kTabCaptureBlueBorderCrOS)) {
+    return;
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   content::WebContents* const web_contents = &GetWebContents();
 
-  Browser* const browser = chrome::FindBrowserWithWebContents(web_contents);
+  Browser* const browser = chrome::FindBrowserWithTab(web_contents);
   if (!browser) {
     return;
   }
@@ -177,7 +184,6 @@ void TabCaptureContentsBorderHelper::Update() {
   } else {
     contents_border_widget->Hide();
   }
-#endif  // !BUILDFLAG(IS_CHROMEOS)
 }
 
 void TabCaptureContentsBorderHelper::UpdateBlueBorderLocation() {
@@ -186,7 +192,7 @@ void TabCaptureContentsBorderHelper::UpdateBlueBorderLocation() {
 
   content::WebContents* const web_contents = &GetWebContents();
 
-  Browser* const browser = chrome::FindBrowserWithWebContents(web_contents);
+  Browser* const browser = chrome::FindBrowserWithTab(web_contents);
   if (!browser) {
     return;
   }
@@ -200,8 +206,8 @@ void TabCaptureContentsBorderHelper::UpdateBlueBorderLocation() {
   browser_view->SetContentBorderBounds(GetBlueBorderLocation());
 }
 
-absl::optional<gfx::Rect>
-TabCaptureContentsBorderHelper::GetBlueBorderLocation() const {
+std::optional<gfx::Rect> TabCaptureContentsBorderHelper::GetBlueBorderLocation()
+    const {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   DCHECK(!session_to_bounds_.empty()) << "No blue border should be shown.";
 
@@ -209,7 +215,7 @@ TabCaptureContentsBorderHelper::GetBlueBorderLocation() const {
   // one capture session. If there are more, fall back on drawing the border
   // around the entire tab.
   return (session_to_bounds_.size() == 1u) ? session_to_bounds_.begin()->second
-                                           : absl::nullopt;
+                                           : std::nullopt;
 }
 
 WEB_CONTENTS_USER_DATA_KEY_IMPL(TabCaptureContentsBorderHelper);

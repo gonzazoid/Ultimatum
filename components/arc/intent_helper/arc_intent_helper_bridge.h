@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "ash/components/arc/mojom/intent_helper.mojom.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/threading/thread_checker.h"
@@ -46,6 +47,10 @@ class ArcIntentHelperBridge : public KeyedService,
     // Resets ARC; this wipes all user data, stops ARC, then
     // re-enables ARC.
     virtual void ResetArc() = 0;
+
+    // Handles Android settings to sync GeoLocation information.
+    virtual void HandleUpdateAndroidSettings(mojom::AndroidSetting setting,
+                                             bool is_enabled) = 0;
   };
   // Returns singleton instance for the given BrowserContext,
   // or nullptr if the browser |context| is not allowed to use ARC.
@@ -53,6 +58,8 @@ class ArcIntentHelperBridge : public KeyedService,
       content::BrowserContext* context);
   static ArcIntentHelperBridge* GetForBrowserContextForTesting(
       content::BrowserContext* context);
+
+  static void ShutDownForTesting(content::BrowserContext* context);
 
   // Returns factory for the ArcIntentHelperBridge.
   static BrowserContextKeyedServiceFactory* GetFactory();
@@ -91,7 +98,6 @@ class ArcIntentHelperBridge : public KeyedService,
   void OpenWallpaperPicker() override;
   void OpenVolumeControl() override;
   void OnOpenWebApp(const std::string& url) override;
-  void RecordShareFilesMetricsDeprecated(mojom::ShareFiles flag) override;
   void LaunchCameraApp(uint32_t intent_id,
                        arc::mojom::CameraIntentMode mode,
                        bool should_handle_result,
@@ -134,6 +140,9 @@ class ArcIntentHelperBridge : public KeyedService,
 
   void SendNewCaptureBroadcast(bool is_video, std::string file_path);
 
+  void OnAndroidSettingChange(arc::mojom::AndroidSetting setting,
+                              bool is_enabled) override;
+
   // Filters out handlers that belong to the intent_helper apk and returns
   // a new array.
   static std::vector<mojom::IntentHandlerInfoPtr> FilterOutIntentHelper(
@@ -145,8 +154,9 @@ class ArcIntentHelperBridge : public KeyedService,
  private:
   THREAD_CHECKER(thread_checker_);
 
-  content::BrowserContext* const context_;
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<content::BrowserContext> context_;
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 
   ActivityIconLoader icon_loader_;
 

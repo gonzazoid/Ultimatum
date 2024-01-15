@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 import {NativeLayerImpl, PrintPreviewDestinationDialogCrosElement, State} from 'chrome://print/print_preview.js';
-import {assert} from 'chrome://resources/js/assert.js';
 import {keyDownOn} from 'chrome://resources/polymer/v3_0/iron-test-helpers/mock-interactions.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {fakeDataBind} from 'chrome://webui-test/polymer_test_util.js';
@@ -13,20 +12,7 @@ import {setNativeLayerCrosInstance} from './native_layer_cros_stub.js';
 import {NativeLayerStub} from './native_layer_stub.js';
 import {setupTestListenerElement} from './print_preview_test_utils.js';
 
-const destination_dialog_cros_interactive_test = {
-  suiteName: 'DestinationDialogCrosInteractiveTest',
-  TestNames: {
-    FocusSearchBox: 'focus search box',
-    EscapeSearchBox: 'escape search box',
-  },
-};
-
-Object.assign(window, {
-  destination_dialog_cros_interactive_test:
-      destination_dialog_cros_interactive_test,
-});
-
-suite(destination_dialog_cros_interactive_test.suiteName, function() {
+suite('DestinationDialogInteractiveTest', function() {
   let dialog: PrintPreviewDestinationDialogCrosElement;
 
   let nativeLayer: NativeLayerStub;
@@ -58,33 +44,41 @@ suite(destination_dialog_cros_interactive_test.suiteName, function() {
     // Initialize
     destinationSettings.init(
         'FooDevice' /* printerName */, false /* pdfPrinterDisabled */,
-        true /* isDriveMounted */,
+        false /* saveToDriveDisabled */,
         '' /* serializedDefaultDestinationSelectionRulesStr */);
     return nativeLayer.whenCalled('getPrinterCapabilities').then(() => {
+      const provisionalDestination = {
+        extensionId: 'ABC123',
+        extensionName: 'ABC Printing',
+        id: 'XYZDevice',
+        name: 'XYZ',
+        provisional: true,
+      };
+
+      // Set the extension destinations and force the destination store to
+      // reload printers.
+      nativeLayer.setExtensionDestinations([[provisionalDestination]]);
+
       // Retrieve a reference to dialog
       dialog = destinationSettings.$.destinationDialog.get();
     });
   });
 
   // Tests that the search input text field is automatically focused when the
-  // dialog is shown.
-  test(
-      assert(destination_dialog_cros_interactive_test.TestNames.FocusSearchBox),
-      function() {
-        const searchInput = dialog.$.searchBox.getSearchInput();
-        assertTrue(!!searchInput);
-        const whenFocusDone = eventToPromise('focus', searchInput);
-        dialog.destinationStore.startLoadAllDestinations();
-        dialog.show();
-        return whenFocusDone;
-      });
+  // dialog is shown and there are destinations available.
+  test('FocusSearchBox', function() {
+    const searchInput = dialog.$.searchBox.getSearchInput();
+    assertTrue(!!searchInput);
+    const whenFocusDone = eventToPromise('focus', searchInput);
+    dialog.destinationStore.startLoadAllDestinations();
+    dialog.show();
+    return whenFocusDone;
+  });
 
   // Tests that pressing the escape key while the search box is focused
   // closes the dialog if and only if the query is empty.
   test(
-      assert(
-          destination_dialog_cros_interactive_test.TestNames.EscapeSearchBox),
-      function() {
+      'EscapeSearchBox', function() {
         const searchBox = dialog.$.searchBox;
         const searchInput = searchBox.getSearchInput();
         assertTrue(!!searchInput);

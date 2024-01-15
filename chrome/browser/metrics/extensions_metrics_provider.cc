@@ -13,9 +13,11 @@
 
 #include "base/hash/legacy_hash.h"
 #include "base/logging.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/strings/stringprintf.h"
 #include "base/time/time.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/extensions/chrome_content_browser_client_extensions_part.h"
 #include "chrome/browser/extensions/extension_management.h"
 #include "chrome/browser/extensions/install_verifier.h"
 #include "chrome/browser/profiles/profile.h"
@@ -32,6 +34,7 @@
 #include "extensions/common/manifest.h"
 #include "extensions/common/manifest_constants.h"
 #include "extensions/common/manifest_handlers/background_info.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/metrics_proto/system_profile.pb.h"
 
 using extensions::Extension;
@@ -216,7 +219,7 @@ ExtensionInstallProto::BackgroundScriptType GetBackgroundScriptType(
   return ExtensionInstallProto::NO_BACKGROUND_SCRIPT;
 }
 
-static_assert(extensions::disable_reason::DISABLE_REASON_LAST == (1LL << 22),
+static_assert(extensions::disable_reason::DISABLE_REASON_LAST == (1LL << 23),
               "Adding a new disable reason? Be sure to include the new reason "
               "below, update the test to exercise it, and then adjust this "
               "value for DISABLE_REASON_LAST");
@@ -259,6 +262,9 @@ std::vector<ExtensionInstallProto::DisableReason> GetDisableReasons(
        ExtensionInstallProto::NOT_ALLOWLISTED},
       {extensions::disable_reason::DISABLE_NOT_ASH_KEEPLISTED,
        ExtensionInstallProto::NOT_ASH_KEEPLISTED},
+      {extensions::disable_reason::
+           DISABLE_PUBLISHED_IN_STORE_REQUIRED_BY_POLICY,
+       ExtensionInstallProto::PUBLISHED_IN_STORE_REQUIRED_BY_POLICY},
   };
 
   int disable_reasons = prefs->GetDisableReasons(id);
@@ -274,8 +280,15 @@ std::vector<ExtensionInstallProto::DisableReason> GetDisableReasons(
       disable_reasons &= ~mask;
     }
   }
-  DCHECK_EQ(extensions::disable_reason::DisableReason::DISABLE_NONE,
-            disable_reasons);
+  if (disable_reasons !=
+      extensions::disable_reason::DisableReason::DISABLE_NONE) {
+    // Record any unexpected disable reasons - these are likely deprecated
+    // reason(s) that have not been migrated over in a few clients. Use this
+    // histogram to determine how many clients are affected to decide what
+    // action to take (if any).
+    base::UmaHistogramSparse("Extensions.DeprecatedDisableReasonsObserved",
+                             disable_reasons);
+  }
 
   return reasons;
 }
@@ -333,7 +346,7 @@ metrics::ExtensionInstallProto ConstructInstallProto(
   }
   install.set_blacklist_state(GetBlacklistState(extension.id(), prefs));
   install.set_installed_in_this_sample_period(
-      prefs->GetInstallTime(extension.id()) >= last_sample_time);
+      prefs->GetLastUpdateTime(extension.id()) >= last_sample_time);
 
   return install;
 }
@@ -343,14 +356,14 @@ std::vector<metrics::ExtensionInstallProto> GetInstallsForProfile(
     Profile* profile,
     base::Time last_sample_time) {
   extensions::ExtensionPrefs* prefs = extensions::ExtensionPrefs::Get(profile);
-  std::unique_ptr<extensions::ExtensionSet> extensions =
+  const extensions::ExtensionSet extensions =
       extensions::ExtensionRegistry::Get(profile)
           ->GenerateInstalledExtensionsSet();
   std::vector<ExtensionInstallProto> installs;
-  installs.reserve(extensions->size());
+  installs.reserve(extensions.size());
   extensions::ExtensionManagement* extension_management =
       extensions::ExtensionManagementFactory::GetForBrowserContext(profile);
-  for (const auto& extension : *extensions) {
+  for (const auto& extension : extensions) {
     installs.push_back(ConstructInstallProto(
         *extension, prefs, last_sample_time, extension_management));
   }
@@ -379,13 +392,18 @@ int ExtensionsMetricsProvider::HashExtension(const std::string& extension_id,
   return output % kExtensionListBuckets;
 }
 
-std::unique_ptr<extensions::ExtensionSet>
+absl::optional<extensions::ExtensionSet>
 ExtensionsMetricsProvider::GetInstalledExtensions(Profile* profile) {
-  if (profile) {
-    return extensions::ExtensionRegistry::Get(profile)
-        ->GenerateInstalledExtensionsSet();
+  // Some profiles cannot have extensions, such as the System Profile.
+  if (!profile || extensions::ChromeContentBrowserClientExtensionsPart::
+                      AreExtensionsDisabledForProfile(profile)) {
+    return absl::nullopt;
   }
-  return nullptr;
+
+  extensions::ExtensionRegistry* registry =
+      extensions::ExtensionRegistry::Get(profile);
+  DCHECK(registry);
+  return registry->GenerateInstalledExtensionsSet();
 }
 
 uint64_t ExtensionsMetricsProvider::GetClientID() const {
@@ -435,18 +453,19 @@ void ExtensionsMetricsProvider::ProvideOffStoreMetric(
   // time when this metric is generated.
   std::vector<Profile*> profiles = profile_manager->GetLoadedProfiles();
   for (size_t i = 0u; i < profiles.size() && state < OFF_STORE; ++i) {
-    extensions::InstallVerifier* verifier =
-        extensions::InstallVerifier::Get(profiles[i]);
-
-    std::unique_ptr<extensions::ExtensionSet> extensions(
-        GetInstalledExtensions(profiles[i]));
+    absl::optional<extensions::ExtensionSet> extensions =
+        GetInstalledExtensions(profiles[i]);
     if (!extensions)
       continue;
 
+    extensions::InstallVerifier* verifier =
+        extensions::InstallVerifier::Get(profiles[i]);
+    DCHECK(verifier);
+
     // Combine the state from each profile, always favoring the higher state as
     // defined by the order of ExtensionState.
-    state = std::max(
-        state, CheckForOffStore(*extensions.get(), *verifier, profiles[i]));
+    state =
+        std::max(state, CheckForOffStore(*extensions, *verifier, profiles[i]));
   }
 
   system_profile->set_offstore_extensions_state(ExtensionStateAsProto(state));
@@ -460,8 +479,8 @@ void ExtensionsMetricsProvider::ProvideOccupiedBucketMetric(
   // profiles.
   Profile* profile = cached_profile_.GetMetricsProfile();
 
-  std::unique_ptr<extensions::ExtensionSet> extensions(
-      GetInstalledExtensions(profile));
+  absl::optional<extensions::ExtensionSet> extensions =
+      GetInstalledExtensions(profile);
   if (!extensions)
     return;
 
@@ -484,6 +503,11 @@ void ExtensionsMetricsProvider::ProvideExtensionInstallsMetrics(
       g_browser_process->profile_manager()->GetLoadedProfiles();
   last_sample_time_ = base::Time::Now();
   for (Profile* profile : profiles) {
+    if (extensions::ChromeContentBrowserClientExtensionsPart::
+            AreExtensionsDisabledForProfile(profile)) {
+      continue;
+    }
+
     std::vector<ExtensionInstallProto> installs =
         GetInstallsForProfile(profile, last_sample_time_);
     for (ExtensionInstallProto& install : installs)

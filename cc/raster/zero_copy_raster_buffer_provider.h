@@ -13,6 +13,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "cc/raster/raster_buffer_provider.h"
+#include "cc/trees/raster_capabilities.h"
 
 namespace base {
 class WaitableEvent;
@@ -21,18 +22,13 @@ class ConvertableToTraceFormat;
 }
 }
 
-namespace gpu {
-class GpuMemoryBufferManager;
-}
-
 namespace cc {
 
 class CC_EXPORT ZeroCopyRasterBufferProvider : public RasterBufferProvider {
  public:
   ZeroCopyRasterBufferProvider(
-      gpu::GpuMemoryBufferManager* gpu_memory_buffer_manager,
-      viz::ContextProvider* compositor_context_provider,
-      viz::ResourceFormat tile_format);
+      viz::RasterContextProvider* compositor_context_provider,
+      const RasterCapabilities& raster_caps);
   ZeroCopyRasterBufferProvider(const ZeroCopyRasterBufferProvider&) = delete;
   ~ZeroCopyRasterBufferProvider() override;
 
@@ -47,27 +43,29 @@ class CC_EXPORT ZeroCopyRasterBufferProvider : public RasterBufferProvider {
       bool depends_on_at_raster_decodes,
       bool depends_on_hardware_accelerated_jpeg_candidates,
       bool depends_on_hardware_accelerated_webp_candidates) override;
-  void Flush() override;
-  viz::ResourceFormat GetResourceFormat() const override;
+  viz::SharedImageFormat GetFormat() const override;
   bool IsResourcePremultiplied() const override;
   bool CanPartialRasterIntoProvidedResource() const override;
   bool IsResourceReadyToDraw(
-      const ResourcePool::InUsePoolResource& resource) const override;
+      const ResourcePool::InUsePoolResource& resource) override;
   uint64_t SetReadyToDrawCallback(
       const std::vector<const ResourcePool::InUsePoolResource*>& resources,
       base::OnceClosure callback,
-      uint64_t pending_callback_id) const override;
+      uint64_t pending_callback_id) override;
   void SetShutdownEvent(base::WaitableEvent* shutdown_event) override;
   void Shutdown() override;
+
+ protected:
+  void Flush() override;
 
  private:
   std::unique_ptr<base::trace_event::ConvertableToTraceFormat> StateAsValue()
       const;
 
-  raw_ptr<gpu::GpuMemoryBufferManager> gpu_memory_buffer_manager_;
   raw_ptr<base::WaitableEvent> shutdown_event_ = nullptr;
-  raw_ptr<viz::ContextProvider> compositor_context_provider_;
-  viz::ResourceFormat tile_format_;
+  raw_ptr<viz::RasterContextProvider> compositor_context_provider_;
+  const viz::SharedImageFormat tile_format_;
+  const uint32_t tile_texture_target_;
 };
 
 }  // namespace cc

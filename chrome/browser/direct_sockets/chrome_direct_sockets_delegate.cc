@@ -32,7 +32,7 @@ bool ChromeDirectSocketsDelegate::ValidateAddressAndPort(
     const GURL& lock_url,
     const std::string& address,
     uint16_t port,
-    blink::mojom::DirectSocketProtocolType protocol) const {
+    ProtocolType protocol) const {
   if (!IsLockedToExtension(lock_url)) {
     return true;
   }
@@ -41,10 +41,33 @@ bool ChromeDirectSocketsDelegate::ValidateAddressAndPort(
   // model.
   auto* extension = GetExtensionByLockUrl(browser_context, lock_url);
   DCHECK(extension);
-  content::SocketPermissionRequest param(
-      protocol == blink::mojom::DirectSocketProtocolType::kTcp
-          ? content::SocketPermissionRequest::TCP_CONNECT
-          : content::SocketPermissionRequest::UDP_SEND_TO,
-      address, port);
-  return extensions::SocketsManifestData::CheckRequest(extension, param);
+
+  switch (protocol) {
+    case ProtocolType::kTcp:
+      return extensions::SocketsManifestData::CheckRequest(
+          extension,
+          /*request=*/{content::SocketPermissionRequest::TCP_CONNECT, address,
+                       port});
+    case ProtocolType::kConnectedUdp:
+      return extensions::SocketsManifestData::CheckRequest(
+          extension,
+          /*request=*/{content::SocketPermissionRequest::UDP_SEND_TO, address,
+                       port});
+    case ProtocolType::kBoundUdp:
+      // For kBoundUdp we check both UDP_BIND for the given |address| and
+      // |port| as well as ensure that UDP_SEND_TO allows routing packets
+      // anywhere. '*' is the wildcard address, 0 is the wildcard port.
+      return extensions::SocketsManifestData::CheckRequest(
+                 extension,
+                 /*request=*/{content::SocketPermissionRequest::UDP_BIND,
+                              address, port}) &&
+             extensions::SocketsManifestData::CheckRequest(
+                 extension,
+                 /*request=*/{content::SocketPermissionRequest::UDP_SEND_TO,
+                              /*host=*/"*", /*port=*/0});
+    case ProtocolType::kTcpServer:
+      return extensions::SocketsManifestData::CheckRequest(
+          extension, /*request=*/{content::SocketPermissionRequest::TCP_LISTEN,
+                                  address, port});
+  }
 }

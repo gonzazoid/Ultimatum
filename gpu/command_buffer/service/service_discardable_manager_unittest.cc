@@ -19,7 +19,6 @@
 #include "gpu/command_buffer/service/texture_manager.h"
 #include "gpu/config/gpu_preferences.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/gl/gl_image_stub.h"
 #include "ui/gl/gl_mock.h"
 #include "ui/gl/gl_switches.h"
 
@@ -78,9 +77,13 @@ class ServiceDiscardableManagerTest : public GpuServiceTest {
         &client_, &command_buffer_service_, &outputter_);
     feature_info_ = new FeatureInfo();
     context_group_ = scoped_refptr<ContextGroup>(new ContextGroup(
-        gpu_preferences_, false, &mailbox_manager_, nullptr, nullptr, nullptr,
-        feature_info_, false, nullptr, nullptr, GpuFeatureInfo(),
-        &discardable_manager_, nullptr, &shared_image_manager_));
+        gpu_preferences_, /*supports_passthrough_command_decoders=*/false,
+        &mailbox_manager_, /*memory_tracker=*/nullptr,
+        /*shader_translator_cache=*/nullptr,
+        /*framebuffer_completeness_cache=*/nullptr, feature_info_,
+        /*bind_generates_resource=*/false, /*progress_reporter=*/nullptr,
+        GpuFeatureInfo(), &discardable_manager_,
+        /*passthrough_discardable_manager=*/nullptr, &shared_image_manager_));
     TestHelper::SetupContextGroupInitExpectations(
         gl_.get(), DisallowedFeatures(), "", "", CONTEXT_TYPE_OPENGLES2, false);
     context_group_->Initialize(decoder_.get(), CONTEXT_TYPE_OPENGLES2,
@@ -95,6 +98,7 @@ class ServiceDiscardableManagerTest : public GpuServiceTest {
     // Texture manager will destroy the 6 black/default textures.
     EXPECT_CALL(*gl_, DeleteTextures(TextureManager::kNumDefaultTextures, _));
 
+    texture_manager_ = nullptr;
     context_group_->Destroy(decoder_.get(), true);
     context_group_ = nullptr;
     EXPECT_EQ(0u, discardable_manager_.NumCacheEntriesForTesting());
@@ -128,6 +132,7 @@ class ServiceDiscardableManagerTest : public GpuServiceTest {
   GpuPreferences gpu_preferences_;
   scoped_refptr<FeatureInfo> feature_info_;
   MockDestructionObserver destruction_observer_;
+  // This is owned by |context_group_|.
   raw_ptr<TextureManager> texture_manager_;
   FakeCommandBufferServiceBase command_buffer_service_;
   FakeDecoderClient client_;

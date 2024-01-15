@@ -4,16 +4,63 @@
 
 #include "chrome/browser/headless/headless_mode_browsertest.h"
 
+#include "base/strings/stringprintf.h"
+#include "chrome/browser/headless/headless_mode_browsertest_utils.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/aura/window_tree_host_platform.h"
+#include "ui/gfx/geometry/rect.h"
+#include "ui/gfx/geometry/size.h"
+#include "ui/gfx/native_widget_types.h"
 #include "ui/views/widget/desktop_aura/desktop_window_tree_host_win.h"
+#include "ui/views/widget/widget.h"
 
-// A class to expose a protected method for testing purposes.
+namespace headless {
+
+// A class to expose protected methods for testing purposes.
 class DesktopWindowTreeHostWinWrapper : public views::DesktopWindowTreeHostWin {
  public:
   HWND GetHWND() const { return DesktopWindowTreeHostWin::GetHWND(); }
+  gfx::Rect GetWindowBoundsInScreen() const override {
+    return DesktopWindowTreeHostWin::GetWindowBoundsInScreen();
+  }
 };
+
+namespace test {
+
+bool IsPlatformWindowVisible(views::Widget* widget) {
+  CHECK(widget);
+
+  gfx::NativeWindow native_window = widget->GetNativeWindow();
+  CHECK(native_window);
+
+  aura::WindowTreeHostPlatform* host =
+      static_cast<aura::WindowTreeHostPlatform*>(native_window->GetHost());
+  CHECK(host);
+
+  gfx::AcceleratedWidget accelerated_widget = host->GetAcceleratedWidget();
+  CHECK(::IsWindow(accelerated_widget));
+
+  return !!::IsWindowVisible(accelerated_widget);
+}
+
+gfx::Rect GetPlatformWindowExpectedBounds(views::Widget* widget) {
+  CHECK(widget);
+
+  gfx::NativeWindow native_window = widget->GetNativeWindow();
+  CHECK(native_window);
+
+  DesktopWindowTreeHostWinWrapper* host =
+      static_cast<DesktopWindowTreeHostWinWrapper*>(native_window->GetHost());
+  CHECK(host);
+
+  return host->GetWindowBoundsInScreen();
+}
+
+}  // namespace test
+
+namespace {
 
 INSTANTIATE_TEST_SUITE_P(HeadlessModeBrowserTestWithStartWindowMode,
                          HeadlessModeBrowserTestWithStartWindowMode,
@@ -46,13 +93,13 @@ IN_PROC_BROWSER_TEST_F(HeadlessModeBrowserTest,
   EXPECT_FALSE(::IsWindowVisible(desktop_window_hwnd));
 
   // Verify fullscreen state.
-  ToggleFullscreenModeSync(browser());
+  test::ToggleFullscreenModeSync(browser());
   ASSERT_TRUE(browser()->window()->IsFullscreen());
   EXPECT_TRUE(browser()->window()->IsVisible());
   EXPECT_FALSE(::IsWindowVisible(desktop_window_hwnd));
 
   // Verify back to normal state.
-  ToggleFullscreenModeSync(browser());
+  test::ToggleFullscreenModeSync(browser());
   ASSERT_FALSE(browser()->window()->IsFullscreen());
   EXPECT_TRUE(browser()->window()->IsVisible());
   EXPECT_FALSE(::IsWindowVisible(desktop_window_hwnd));
@@ -107,3 +154,47 @@ IN_PROC_BROWSER_TEST_F(HeadlessModeBrowserTest,
   EXPECT_TRUE(browser()->window()->IsVisible());
   EXPECT_FALSE(::IsWindowVisible(desktop_window_hwnd));
 }
+
+IN_PROC_BROWSER_TEST_F(HeadlessModeBrowserTestWithWindowSize, LargeWindowSize) {
+  DesktopWindowTreeHostWinWrapper* desktop_window_tree_host =
+      static_cast<DesktopWindowTreeHostWinWrapper*>(
+          browser()->window()->GetNativeWindow()->GetHost());
+  HWND desktop_window_hwnd = desktop_window_tree_host->GetHWND();
+
+  // Expect the platform window size to be smaller than the requested window
+  // size due to Windows clamping the window dimensions to the monitor work
+  // area.
+  RECT platform_window_rect;
+  CHECK(::GetWindowRect(desktop_window_hwnd, &platform_window_rect));
+  EXPECT_LT(gfx::Rect(platform_window_rect).width(), kWindowSize.width());
+  EXPECT_LT(gfx::Rect(platform_window_rect).height(), kWindowSize.height());
+
+  // Expect the reported browser window size to be the same as the requested
+  // window size.
+  gfx::Rect bounds = browser()->window()->GetBounds();
+  EXPECT_EQ(bounds.size(), kWindowSize);
+}
+
+IN_PROC_BROWSER_TEST_F(HeadlessModeBrowserTestWithWindowSizeAndScale,
+                       WindowSizeWithScale) {
+  DesktopWindowTreeHostWinWrapper* desktop_window_tree_host =
+      static_cast<DesktopWindowTreeHostWinWrapper*>(
+          browser()->window()->GetNativeWindow()->GetHost());
+  HWND desktop_window_hwnd = desktop_window_tree_host->GetHWND();
+
+  // Expect the platform window size to be larger than the requested window size
+  // due to scaling.
+  RECT platform_window_rect;
+  CHECK(::GetWindowRect(desktop_window_hwnd, &platform_window_rect));
+  EXPECT_GT(gfx::Rect(platform_window_rect).width(), kWindowSize.width());
+  EXPECT_GT(gfx::Rect(platform_window_rect).height(), kWindowSize.height());
+
+  // Expect the reported browser window size to be the same as the requested
+  // window size.
+  gfx::Rect bounds = browser()->window()->GetBounds();
+  EXPECT_EQ(bounds.size(), kWindowSize);
+}
+
+}  // namespace
+
+}  // namespace headless

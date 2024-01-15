@@ -13,7 +13,7 @@
 #include "ash/app_list/model/app_list_model_export.h"
 #include "ash/app_list/model/search/search_box_model.h"
 #include "ash/app_list/model/search/search_result.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "ui/base/models/list_model.h"
 
 namespace ash {
@@ -39,14 +39,8 @@ class APP_LIST_MODEL_EXPORT SearchModel {
     return search_box_->search_engine_is_google();
   }
 
-  // Filters the given |results| by |display_type| and with exclusion of
-  // results in the |excludes|. The returned list is
-  // truncated to |max_results|.
-  static std::vector<SearchResult*> FilterSearchResultsByDisplayType(
-      SearchResults* results,
-      SearchResult::DisplayType display_type,
-      const std::set<std::string>& excludes,
-      size_t max_results);
+  void SetWouldTriggerLauncherSearchIph(bool would_trigger);
+  bool would_trigger_iph() const { return search_box_->would_trigger_iph(); }
 
   // Filter the given |results| by those which |result_filter| returns true for.
   // The returned list is truncated to |max_results|.
@@ -67,16 +61,9 @@ class APP_LIST_MODEL_EXPORT SearchModel {
 
   SearchResult* FindSearchResult(const std::string& id);
 
-  // Returns the first available SearchResult which has not been marked as
-  // hidden by its source. Returns null if no such result exists.
-  SearchResult* GetFirstVisibleResult();
-
   // Deletes all search results. This is used when moving from zero-state to a
   // search query.
   void DeleteAllResults();
-
-  // Delete result by the given id.
-  void DeleteResultById(const std::string& id);
 
  private:
   std::unique_ptr<SearchBoxModel> search_box_;

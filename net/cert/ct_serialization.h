@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "net/base/net_export.h"
@@ -92,9 +92,10 @@ NET_EXPORT bool EncodeSignedCertificateTimestamp(
     const scoped_refptr<ct::SignedCertificateTimestamp>& input,
     std::string* output);
 
-// Writes an SCTList into |output|, containing a single |sct|.
-NET_EXPORT_PRIVATE bool EncodeSCTListForTesting(base::StringPiece sct,
-                                                std::string* output);
+// Writes an SCTList into |output|, containing |scts|.
+NET_EXPORT_PRIVATE bool EncodeSCTListForTesting(
+    const std::vector<std::string>& scts,
+    std::string* output);
 }  // namespace net::ct
 
 #endif  // NET_CERT_CT_SERIALIZATION_H_

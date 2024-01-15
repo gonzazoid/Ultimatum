@@ -21,7 +21,7 @@ const char kCdmDataQuotaBytes[] = "cdm-data-quota-bytes";
 const char kDataQuotaBytes[] = "data-quota-bytes";
 const char kGoogleApiKey[] = "google-api-key";
 const char kContextProvider[] = "context-provider";
-const char kEnableCfv2[] = "enable-cfv2";
+const char kProxyBypassList[] = "proxy-bypass-list";
 
 #if BUILDFLAG(ENABLE_CAST_RECEIVER)
 const char kAllowRunningInsecureContent[] = "allow-running-insecure-content";

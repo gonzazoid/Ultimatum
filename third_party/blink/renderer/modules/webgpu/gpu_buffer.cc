@@ -31,9 +31,10 @@ namespace {
 
 // A size that if used to create a dawn_wire buffer, will guarantee we'll OOM
 // immediately. It is an implementation detail of dawn_wire but that's tested
-// on CQ in Dawn.
-constexpr uint64_t kGuaranteedBufferOOMSize =
-    std::numeric_limits<size_t>::max();
+// on CQ in Dawn. Note that we set kGuaranteedBufferOOMSize to
+// (WGPU_WHOLE_MAP_SIZE - 1) to ensure we never pass WGPU_WHOLE_MAP_SIZE from
+// blink to wire_client.
+constexpr uint64_t kGuaranteedBufferOOMSize = WGPU_WHOLE_MAP_SIZE - 1u;
 
 WGPUBufferDescriptor AsDawnType(const GPUBufferDescriptor* webgpu_desc,
                                 std::string* label) {
@@ -67,44 +68,43 @@ WGPUBufferDescriptor AsDawnType(const GPUBufferDescriptor* webgpu_desc,
 // becomes complex to handle destruction when the last reference to
 // the WGPUBuffer may be held either by a GC object, or a non-GC object.
 class GPUMappedDOMArrayBuffer : public DOMArrayBuffer {
+  static constexpr char kWebGPUBufferMappingDetachKey[] = "WebGPUBufferMapping";
+
  public:
-  static GPUMappedDOMArrayBuffer* Create(GPUBuffer* owner,
+  static GPUMappedDOMArrayBuffer* Create(v8::Isolate* isolate,
+                                         GPUBuffer* owner,
                                          ArrayBufferContents contents) {
-    return MakeGarbageCollected<GPUMappedDOMArrayBuffer>(owner,
-                                                         std::move(contents));
+    auto* mapped_array_buffer = MakeGarbageCollected<GPUMappedDOMArrayBuffer>(
+        owner, std::move(contents));
+    mapped_array_buffer->SetDetachKey(isolate, kWebGPUBufferMappingDetachKey);
+    return mapped_array_buffer;
   }
 
   GPUMappedDOMArrayBuffer(GPUBuffer* owner, ArrayBufferContents contents)
       : DOMArrayBuffer(std::move(contents)), owner_(owner) {}
   ~GPUMappedDOMArrayBuffer() override = default;
 
-  // Override Transfer such that a copy of the contents is always made. The
-  // backing store will still be detached for this ArrayBuffer, but the
-  // result will be a copy of the contents, not a reference to
-  // the same backing store. This is required by the WebGPU specification so
-  // that the mapped backing store may not be shared cross-thread.
-  bool Transfer(v8::Isolate* isolate, ArrayBufferContents& result) override {
-    // Transfer into |contents| which will detach |this| and all views of
-    // |this|.
-    ArrayBufferContents contents;
-    bool did_detach = DOMArrayBuffer::Transfer(isolate, contents);
-    if (!did_detach) {
-      return false;
+  void DetachContents(v8::Isolate* isolate) {
+    if (IsDetached()) {
+      return;
     }
-
-    // Copy the contents into the result.
-    contents.CopyTo(result);
-    owner_->device()->AddConsoleWarning(
-        "ArrayBuffer backed by mapped GPUBuffer was copied and detached, not "
-        "transferred.");
-    return true;
-  }
-
-  bool DetachContents(v8::Isolate* isolate) {
+    NonThrowableExceptionState exception_state;
     // Detach the array buffer by transferring the contents out and dropping
     // them.
     ArrayBufferContents contents;
-    return DOMArrayBuffer::Transfer(isolate, contents);
+    bool result = DOMArrayBuffer::Transfer(
+        isolate, V8AtomicString(isolate, kWebGPUBufferMappingDetachKey),
+        contents, exception_state);
+    // TODO(crbug.com/1326210): Temporary CHECK to prevent aliased array
+    // buffers.
+    CHECK(result && IsDetached());
+  }
+
+  // Due to an unusual non-owning backing these array buffers can't be shared
+  // for internal use.
+  bool ShareNonSharedForInternalUse(ArrayBufferContents& result) override {
+    result.Detach();
+    return false;
   }
 
   void Trace(Visitor* visitor) const override {
@@ -118,12 +118,15 @@ class GPUMappedDOMArrayBuffer : public DOMArrayBuffer {
 
 // static
 GPUBuffer* GPUBuffer::Create(GPUDevice* device,
-                             const GPUBufferDescriptor* webgpu_desc) {
+                             const GPUBufferDescriptor* webgpu_desc,
+                             ExceptionState& exception_state) {
   DCHECK(device);
 
   std::string label;
   WGPUBufferDescriptor dawn_desc = AsDawnType(webgpu_desc, &label);
 
+  // Save the requested size of the buffer, for reflection and defaults.
+  uint64_t buffer_size = dawn_desc.size;
   // If the buffer is mappable, make sure the size stays in a size_t but still
   // guarantees that we have an OOM.
   bool is_mappable =
@@ -133,9 +136,21 @@ GPUBuffer* GPUBuffer::Create(GPUDevice* device,
     dawn_desc.size = std::min(dawn_desc.size, kGuaranteedBufferOOMSize);
   }
 
-  GPUBuffer* buffer = MakeGarbageCollected<GPUBuffer>(
-      device, dawn_desc.size,
-      device->GetProcs().deviceCreateBuffer(device->GetHandle(), &dawn_desc));
+  WGPUBuffer wgpuBuffer =
+      device->GetProcs().deviceCreateBuffer(device->GetHandle(), &dawn_desc);
+  // dawn_wire::client will return nullptr when mappedAtCreation == true and
+  // dawn_wire::client fails to allocate memory for initializing an active
+  // buffer mapping, which is required by latest WebGPU SPEC.
+  if (wgpuBuffer == nullptr) {
+    DCHECK(dawn_desc.mappedAtCreation);
+    exception_state.ThrowRangeError(
+        "createBuffer failed, size is too large for the implementation when "
+        "mappedAtCreation == true");
+    return nullptr;
+  }
+
+  GPUBuffer* buffer =
+      MakeGarbageCollected<GPUBuffer>(device, buffer_size, wgpuBuffer);
   if (webgpu_desc->hasLabel())
     buffer->setLabel(webgpu_desc->label());
 
@@ -182,27 +197,27 @@ ScriptPromise GPUBuffer::mapAsync(ScriptState* script_state,
   return MapAsyncImpl(script_state, mode, offset, size, exception_state);
 }
 
-DOMArrayBuffer* GPUBuffer::getMappedRange(ExecutionContext* execution_context,
+DOMArrayBuffer* GPUBuffer::getMappedRange(ScriptState* script_state,
                                           uint64_t offset,
                                           ExceptionState& exception_state) {
-  return GetMappedRangeImpl(offset, absl::nullopt, execution_context,
+  return GetMappedRangeImpl(script_state, offset, absl::nullopt,
                             exception_state);
 }
 
-DOMArrayBuffer* GPUBuffer::getMappedRange(ExecutionContext* execution_context,
+DOMArrayBuffer* GPUBuffer::getMappedRange(ScriptState* script_state,
                                           uint64_t offset,
                                           uint64_t size,
                                           ExceptionState& exception_state) {
-  return GetMappedRangeImpl(offset, size, execution_context, exception_state);
+  return GetMappedRangeImpl(script_state, offset, size, exception_state);
 }
 
-void GPUBuffer::unmap(ScriptState* script_state) {
-  ResetMappingState(script_state->GetIsolate());
+void GPUBuffer::unmap(v8::Isolate* isolate) {
+  ResetMappingState(isolate);
   GetProcs().bufferUnmap(GetHandle());
 }
 
-void GPUBuffer::destroy(ScriptState* script_state) {
-  ResetMappingState(script_state->GetIsolate());
+void GPUBuffer::destroy(v8::Isolate* isolate) {
+  ResetMappingState(isolate);
   GetProcs().bufferDestroy(GetHandle());
   // Destroyed, so it can never be mapped again. Stop tracking.
   device_->adapter()->gpu()->UntrackMappableBuffer(this);
@@ -218,6 +233,10 @@ uint64_t GPUBuffer::size() const {
 
 uint32_t GPUBuffer::usage() const {
   return GetProcs().bufferGetUsage(GetHandle());
+}
+
+String GPUBuffer::mapState() const {
+  return FromDawnEnum(GetProcs().bufferGetMapState(GetHandle()));
 }
 
 ScriptPromise GPUBuffer::MapAsyncImpl(ScriptState* script_state,
@@ -243,14 +262,13 @@ ScriptPromise GPUBuffer::MapAsyncImpl(ScriptState* script_state,
   size_t map_size =
       static_cast<size_t>(std::min(size_defaulted, kGuaranteedBufferOOMSize));
 
-  ScriptPromiseResolver* resolver =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  ScriptPromiseResolver* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   // And send the command, leaving remaining validation to Dawn.
-  auto* callback =
-      BindWGPUOnceCallback(&GPUBuffer::OnMapAsyncCallback, WrapPersistent(this),
-                           WrapPersistent(resolver));
+  auto* callback = MakeWGPUOnceCallback(resolver->WrapCallbackInScriptScope(
+      WTF::BindOnce(&GPUBuffer::OnMapAsyncCallback, WrapPersistent(this))));
 
   GetProcs().bufferMapAsync(GetHandle(), mode, map_offset, map_size,
                             callback->UnboundCallback(),
@@ -262,11 +280,10 @@ ScriptPromise GPUBuffer::MapAsyncImpl(ScriptState* script_state,
   return promise;
 }
 
-DOMArrayBuffer* GPUBuffer::GetMappedRangeImpl(
-    uint64_t offset,
-    absl::optional<uint64_t> size,
-    ExecutionContext* execution_context,
-    ExceptionState& exception_state) {
+DOMArrayBuffer* GPUBuffer::GetMappedRangeImpl(ScriptState* script_state,
+                                              uint64_t offset,
+                                              absl::optional<uint64_t> size,
+                                              ExceptionState& exception_state) {
   // Compute the defaulted size which is "until the end of the buffer" or 0 if
   // offset is past the end of the buffer.
   uint64_t size_defaulted = 0;
@@ -316,8 +333,8 @@ DOMArrayBuffer* GPUBuffer::GetMappedRangeImpl(
       GetHandle(), range_offset, range_size);
 
   if (!map_data_const) {
-    // TODO: have explanatory error messages here (or just leave them to the
-    // asynchronous error reporting).
+    // Ensure that GPU process error messages are bubbled back to the renderer process.
+    EnsureFlush(ToEventLoop(script_state));
     exception_state.ThrowDOMException(DOMExceptionCode::kOperationError,
                                       "getMappedRange failed");
     return nullptr;
@@ -332,7 +349,7 @@ DOMArrayBuffer* GPUBuffer::GetMappedRangeImpl(
   // Note that we put this check after the checks in Dawn because the latest
   // WebGPU SPEC requires the checks on the buffer state (mapped or not) should
   // be done before the creation of ArrayBuffer.
-  if (range_size > v8::TypedArray::kMaxLength) {
+  if (range_size > v8::TypedArray::kMaxByteLength) {
     exception_state.ThrowRangeError(
         "getMappedRange failed, size is too large for the implementation");
     return nullptr;
@@ -345,8 +362,8 @@ DOMArrayBuffer* GPUBuffer::GetMappedRangeImpl(
       const_cast<uint8_t*>(static_cast<const uint8_t*>(map_data_const));
 
   mapped_ranges_.push_back(std::make_pair(range_offset, range_end));
-  return CreateArrayBufferForMappedData(map_data, range_size,
-                                        execution_context);
+  return CreateArrayBufferForMappedData(script_state->GetIsolate(), map_data,
+                                        range_size);
 }
 
 void GPUBuffer::OnMapAsyncCallback(ScriptPromiseResolver* resolver,
@@ -355,45 +372,55 @@ void GPUBuffer::OnMapAsyncCallback(ScriptPromiseResolver* resolver,
     case WGPUBufferMapAsyncStatus_Success:
       resolver->Resolve();
       break;
-    case WGPUBufferMapAsyncStatus_Error:
-      resolver->Reject(MakeGarbageCollected<DOMException>(
-          DOMExceptionCode::kOperationError, "Could not mapAsync"));
+    case WGPUBufferMapAsyncStatus_ValidationError:
+      resolver->RejectWithDOMException(DOMExceptionCode::kOperationError,
+                                       "Buffer is invalid");
       break;
     case WGPUBufferMapAsyncStatus_Unknown:
-      resolver->Reject(MakeGarbageCollected<DOMException>(
-          DOMExceptionCode::kOperationError, "Unknown error in mapAsync"));
+      resolver->RejectWithDOMException(DOMExceptionCode::kOperationError,
+                                       "Unknown error in mapAsync");
       break;
     case WGPUBufferMapAsyncStatus_DeviceLost:
-      resolver->Reject(MakeGarbageCollected<DOMException>(
-          DOMExceptionCode::kAbortError, "Device is lost"));
+      resolver->RejectWithDOMException(DOMExceptionCode::kAbortError,
+                                       "Device is lost");
       break;
     case WGPUBufferMapAsyncStatus_DestroyedBeforeCallback:
-      resolver->Reject(MakeGarbageCollected<DOMException>(
+      resolver->RejectWithDOMException(
           DOMExceptionCode::kAbortError,
-          "Buffer is destroyed before the mapping is resolved"));
+          "Buffer is destroyed before the mapping is resolved");
       break;
     case WGPUBufferMapAsyncStatus_UnmappedBeforeCallback:
-      resolver->Reject(MakeGarbageCollected<DOMException>(
+      resolver->RejectWithDOMException(
           DOMExceptionCode::kAbortError,
-          "Buffer is unmapped before the mapping is resolved"));
+          "Buffer is unmapped before the mapping is resolved");
+      break;
+    case WGPUBufferMapAsyncStatus_MappingAlreadyPending:
+      resolver->RejectWithDOMException(DOMExceptionCode::kOperationError,
+                                       "A mapping is already pending");
+      break;
+    case WGPUBufferMapAsyncStatus_OffsetOutOfRange:
+      resolver->RejectWithDOMException(DOMExceptionCode::kOperationError,
+                                       "The offset is out of range");
+      break;
+    case WGPUBufferMapAsyncStatus_SizeOutOfRange:
+      resolver->RejectWithDOMException(DOMExceptionCode::kOperationError,
+                                       "The size is out of range");
       break;
     default:
       NOTREACHED();
   }
 }
 
-DOMArrayBuffer* GPUBuffer::CreateArrayBufferForMappedData(
-    void* data,
-    size_t data_length,
-    ExecutionContext* execution_context) {
+DOMArrayBuffer* GPUBuffer::CreateArrayBufferForMappedData(v8::Isolate* isolate,
+                                                          void* data,
+                                                          size_t data_length) {
   DCHECK(data);
-  DCHECK_LE(static_cast<uint64_t>(data_length), v8::TypedArray::kMaxLength);
+  DCHECK_LE(static_cast<uint64_t>(data_length), v8::TypedArray::kMaxByteLength);
 
   ArrayBufferContents contents(v8::ArrayBuffer::NewBackingStore(
       data, data_length, v8::BackingStore::EmptyDeleter, nullptr));
   GPUMappedDOMArrayBuffer* array_buffer =
-      GPUMappedDOMArrayBuffer::Create(this, contents);
-
+      GPUMappedDOMArrayBuffer::Create(isolate, this, contents);
   mapped_array_buffers_.push_back(array_buffer);
   return array_buffer;
 }
@@ -407,11 +434,7 @@ void GPUBuffer::DetachMappedArrayBuffers(v8::Isolate* isolate) {
   for (Member<GPUMappedDOMArrayBuffer>& mapped_array_buffer :
        mapped_array_buffers_) {
     GPUMappedDOMArrayBuffer* array_buffer = mapped_array_buffer.Release();
-    DCHECK(array_buffer->IsDetachable(isolate));
-
     array_buffer->DetachContents(isolate);
-    // TODO(crbug.com/1326210): Temporary CHECK to prevent aliased array buffers.
-    CHECK(array_buffer->IsDetached());
   }
   mapped_array_buffers_.clear();
 }

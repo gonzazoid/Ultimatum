@@ -10,14 +10,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/timer/timer.h"
 #include "components/webrtc/thread_wrapper.h"
 #include "net/socket/client_socket_factory.h"
@@ -60,26 +59,26 @@ constexpr base::TimeDelta kPerfStatsInterval = base::Minutes(1);
 // still be sent out.
 constexpr base::TimeDelta kDestroySignalingDelay = base::Seconds(2);
 
-bool IsClientResolutionValid(int dips_width, int dips_height) {
+bool IsClientResolutionValid(int width_pixels, int height_pixels) {
   // This prevents sending resolution on a portrait mode small phone screen
   // because resizing the remote desktop to portrait will mess with icons and
   // such on the desktop and it probably isn't what the user wants.
-  return (dips_width >= dips_height) || (dips_width >= kMinDimension);
+  return (width_pixels >= height_pixels) || (width_pixels >= kMinDimension);
 }
 
 // Normalizes the resolution so that both dimensions are not smaller than
 // kMinDimension.
 void NormalizeClientResolution(protocol::ClientResolution* resolution) {
   int min_dimension =
-      std::min(resolution->dips_width(), resolution->dips_height());
+      std::min(resolution->width_pixels(), resolution->height_pixels());
   if (min_dimension >= kMinDimension) {
     return;
   }
 
   // Always scale by integer to prevent blurry interpolation.
   int scale = std::ceil(((float)kMinDimension) / min_dimension);
-  resolution->set_dips_width(resolution->dips_width() * scale);
-  resolution->set_dips_height(resolution->dips_height() * scale);
+  resolution->set_width_pixels(resolution->width_pixels() * scale);
+  resolution->set_height_pixels(resolution->height_pixels() * scale);
 }
 
 struct SessionContext {
@@ -117,7 +116,7 @@ class ChromotingSession::Core : public ClientUserInterface,
   void SendKeyEvent(int usb_key_code, bool key_down);
   void SendTextEvent(const std::string& text);
   void SendTouchEvent(const protocol::TouchEvent& touch_event);
-  void SendClientResolution(int dips_width, int dips_height, float scale);
+  void SendClientResolution(int width_pixels, int height_pixels, float scale);
   void EnableVideoChannel(bool enable);
   void SendClientMessage(const std::string& type, const std::string& data);
 
@@ -292,25 +291,20 @@ void ChromotingSession::Core::SendTouchEvent(
   client_->input_stub()->InjectTouchEvent(touch_event);
 }
 
-void ChromotingSession::Core::SendClientResolution(int dips_width,
-                                                   int dips_height,
+void ChromotingSession::Core::SendClientResolution(int width_pixels,
+                                                   int height_pixels,
                                                    float scale) {
   DCHECK(network_task_runner()->BelongsToCurrentThread());
-  if (!IsClientResolutionValid(dips_width, dips_height)) {
+  if (!IsClientResolutionValid(width_pixels, height_pixels)) {
     return;
   }
 
   protocol::ClientResolution client_resolution;
-  client_resolution.set_dips_width(dips_width);
-  client_resolution.set_dips_height(dips_height);
+  client_resolution.set_width_pixels(width_pixels);
+  client_resolution.set_height_pixels(height_pixels);
   client_resolution.set_x_dpi(scale * kDefaultDPI);
   client_resolution.set_y_dpi(scale * kDefaultDPI);
   NormalizeClientResolution(&client_resolution);
-
-  // Include the legacy width & height in physical pixels for use by older
-  // hosts.
-  client_resolution.set_width_deprecated(dips_width * scale);
-  client_resolution.set_height_deprecated(dips_height * scale);
 
   client_->host_stub()->NotifyClientResolution(client_resolution);
 }
@@ -696,8 +690,8 @@ void ChromotingSession::GetFeedbackData(
 
   // Bind to base::Unretained(core) instead of the WeakPtr so that we can still
   // get the feedback data after the session is remotely disconnected.
-  base::PostTaskAndReplyWithResult(
-      runtime_->network_task_runner().get(), FROM_HERE,
+  runtime_->network_task_runner()->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&Core::GetFeedbackData, base::Unretained(core_.get())),
       std::move(callback));
 }
@@ -749,11 +743,11 @@ void ChromotingSession::SendTouchEvent(
   RunCoreTaskOnNetworkThread(FROM_HERE, &Core::SendTouchEvent, touch_event);
 }
 
-void ChromotingSession::SendClientResolution(int dips_width,
-                                             int dips_height,
+void ChromotingSession::SendClientResolution(int width_pixels,
+                                             int height_pixels,
                                              float scale) {
-  RunCoreTaskOnNetworkThread(FROM_HERE, &Core::SendClientResolution, dips_width,
-                             dips_height, scale);
+  RunCoreTaskOnNetworkThread(FROM_HERE, &Core::SendClientResolution,
+                             width_pixels, height_pixels, scale);
 }
 
 void ChromotingSession::EnableVideoChannel(bool enable) {

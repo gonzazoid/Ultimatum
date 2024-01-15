@@ -8,8 +8,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/pickle.h"
 #include "base/strings/string_split.h"
@@ -59,8 +59,8 @@ void TestDataExchangeDelegate::SendFileInfo(
   for (const auto& file : files) {
     lines.push_back("file://" + file.path.value());
   }
-  std::string result = base::JoinString(lines, "\r\n");
-  std::move(callback).Run(base::RefCountedString::TakeString(&result));
+  std::move(callback).Run(base::MakeRefCounted<base::RefCountedString>(
+      base::JoinString(lines, "\r\n")));
 }
 
 bool TestDataExchangeDelegate::HasUrlsInPickle(
@@ -79,22 +79,15 @@ void TestDataExchangeDelegate::RunSendPickleCallback(std::vector<GURL> urls) {
   for (const auto& url : urls) {
     lines.push_back(url.spec());
   }
-  std::string result = base::JoinString(lines, "\r\n");
   std::move(send_pickle_callback_)
-      .Run(base::RefCountedString::TakeString(&result));
+      .Run(base::MakeRefCounted<base::RefCountedString>(
+          base::JoinString(lines, "\r\n")));
 }
 
 std::vector<ui::FileInfo> TestDataExchangeDelegate::ParseFileSystemSources(
     const ui::DataTransferEndpoint* source,
     const base::Pickle& pickle) const {
   std::vector<ui::FileInfo> file_info;
-  std::string lines(static_cast<const char*>(pickle.data()), pickle.size());
-  for (const base::StringPiece& line : base::SplitStringPiece(
-           lines, "\n", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY)) {
-    base::FilePath path;
-    if (net::FileURLToFilePath(GURL(line), &path))
-      file_info.push_back(ui::FileInfo(std::move(path), base::FilePath()));
-  }
   return file_info;
 }
 

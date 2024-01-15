@@ -4,9 +4,9 @@
 
 #include "gpu/gles2_conform_support/egl/context.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "gpu/command_buffer/client/gles2_implementation.h"
 #include "gpu/command_buffer/client/gles2_lib.h"
 #include "gpu/command_buffer/client/shared_memory_limits.h"
@@ -172,7 +172,15 @@ const gpu::Capabilities& Context::GetCapabilities() const {
   return capabilities_;
 }
 
+const gpu::GLCapabilities& Context::GetGLCapabilities() const {
+  return gl_capabilities_;
+}
+
 void Context::SignalQuery(uint32_t query, base::OnceClosure callback) {
+  NOTREACHED();
+}
+
+void Context::CancelAllQueries() {
   NOTREACHED();
 }
 
@@ -255,8 +263,7 @@ bool Context::CreateService(gl::GLSurface* gl_surface) {
   scoped_refptr<gpu::gles2::ContextGroup> group(new gpu::gles2::ContextGroup(
       gpu_preferences, true, &mailbox_manager_, nullptr /* memory_tracker */,
       &translator_cache_, &completeness_cache_, feature_info, true,
-      nullptr /* image_factory */, nullptr /* progress_reporter */,
-      gpu_feature_info, &discardable_manager_,
+      nullptr /* progress_reporter */, gpu_feature_info, &discardable_manager_,
       &passthrough_discardable_manager_, &shared_image_manager_));
 
   auto command_buffer = std::make_unique<gpu::CommandBufferDirect>();
@@ -278,17 +285,21 @@ bool Context::CreateService(gl::GLSurface* gl_surface) {
 
   gl_context->MakeCurrent(gl_surface);
 
-  gpu::ContextCreationAttribs helper;
-  config_->GetAttrib(EGL_ALPHA_SIZE, &helper.alpha_size);
-  config_->GetAttrib(EGL_DEPTH_SIZE, &helper.depth_size);
-  config_->GetAttrib(EGL_STENCIL_SIZE, &helper.stencil_size);
+  EGLint alpha_size, depth_size, stencil_size;
+  config_->GetAttrib(EGL_ALPHA_SIZE, &alpha_size);
+  config_->GetAttrib(EGL_DEPTH_SIZE, &depth_size);
+  config_->GetAttrib(EGL_STENCIL_SIZE, &stencil_size);
 
-  helper.buffer_preserved = false;
+  CHECK_EQ(alpha_size, 0);
+  CHECK_EQ(depth_size, 0);
+  CHECK_EQ(stencil_size, 0);
+
+  gpu::ContextCreationAttribs helper;
   helper.bind_generates_resource = kBindGeneratesResources;
   helper.fail_if_major_perf_caveat = false;
   helper.lose_context_when_out_of_memory = kLoseContextWhenOutOfMemory;
   helper.context_type = gpu::CONTEXT_TYPE_OPENGLES2;
-  helper.offscreen_framebuffer_size = gl_surface->GetSize();
+  helper.offscreen_framebuffer_size_for_testing = gl_surface->GetSize();
 
   auto result = decoder->Initialize(gl_surface, gl_context.get(),
                                     gl_surface->IsOffscreen(),
@@ -306,6 +317,7 @@ bool Context::CreateService(gl::GLSurface* gl_surface) {
   // Client side Capabilities queries return reference, service side return
   // value. Here two sides are joined together.
   capabilities_ = decoder->GetCapabilities();
+  gl_capabilities_ = decoder->GetGLCapabilities();
 
   auto transfer_buffer =
       std::make_unique<gpu::TransferBuffer>(gles2_cmd_helper.get());

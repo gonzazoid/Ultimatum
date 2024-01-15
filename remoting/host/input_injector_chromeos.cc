@@ -11,12 +11,13 @@
 
 #include "ash/display/window_tree_host_manager.h"
 #include "ash/shell.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/icu_string_conversions.h"
 #include "base/location.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
+#include "base/task/single_thread_task_runner.h"
 #include "remoting/host/chromeos/point_transformer.h"
 #include "remoting/host/clipboard.h"
 #include "remoting/proto/internal.pb.h"
@@ -60,7 +61,7 @@ ui::EventFlags MouseButtonToUIFlags(MouseEvent::MouseButton button) {
 bool IsLockKey(ui::DomCode dom_code) {
   switch (dom_code) {
     // Ignores all the keys that could possibly be mapped to Caps Lock in event
-    // rewriter. Please refer to ui::EventRewriterChromeOS::RewriteModifierKeys.
+    // rewriter. Please refer to ui::EventRewriterAsh::RewriteModifierKeys.
     case ui::DomCode::F16:
     case ui::DomCode::CAPS_LOCK:
     case ui::DomCode::META_LEFT:
@@ -121,6 +122,9 @@ class InputInjectorChromeos::Core {
   void InjectTextEvent(const TextEvent& event);
   void InjectMouseEvent(const MouseEvent& event);
   void Start(std::unique_ptr<protocol::ClipboardStub> client_clipboard);
+  void StartWithDelegate(
+      std::unique_ptr<ui::SystemInputInjector> delegate,
+      std::unique_ptr<protocol::ClipboardStub> client_clipboard);
 
  private:
   void SetLockStates(uint32_t states);
@@ -167,6 +171,7 @@ void InputInjectorChromeos::Core::InjectKeyEvent(const KeyEvent& event) {
 
   // Ignore events which can't be mapped.
   if (dom_code != ui::DomCode::NONE) {
+    VLOG(3) << "Injecting key " << (event.pressed() ? "down" : "up") << " event.";
     delegate_->InjectKeyEvent(dom_code, event.pressed(),
                               true /* suppress_auto_repeat */);
   }
@@ -229,16 +234,24 @@ void InputInjectorChromeos::Core::InjectMouseMove(const MouseEvent& event) {
 
 void InputInjectorChromeos::Core::Start(
     std::unique_ptr<protocol::ClipboardStub> client_clipboard) {
-  delegate_ = ui::OzonePlatform::GetInstance()->CreateSystemInputInjector();
-  if (!delegate_ && !base::SysInfo::IsRunningOnChromeOS()) {
+  auto delegate = ui::OzonePlatform::GetInstance()->CreateSystemInputInjector();
+  if (!delegate && !base::SysInfo::IsRunningOnChromeOS()) {
     // This happens when directly running the Chrome binary on linux.
     // We'll simply ignore all input there (instead of crashing).
     // Note: it would be nicer to swap this out with input_injector_x11.cc
     // on linux instead (and properly handle the input), but that runs into
     // dependency issues.
-    delegate_ = std::make_unique<SystemInputInjectorStub>();
+    delegate = std::make_unique<SystemInputInjectorStub>();
   }
-  DCHECK(delegate_);
+  DCHECK(delegate);
+
+  StartWithDelegate(std::move(delegate), std::move(client_clipboard));
+}
+
+void InputInjectorChromeos::Core::StartWithDelegate(
+    std::unique_ptr<ui::SystemInputInjector> delegate,
+    std::unique_ptr<protocol::ClipboardStub> client_clipboard) {
+  delegate_ = std::move(delegate);
 
   delegate_->SetDeviceId(ui::ED_REMOTE_INPUT_DEVICE);
 
@@ -299,6 +312,15 @@ void InputInjectorChromeos::Start(
   input_task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&Core::Start, base::Unretained(core_.get()),
                                 std::move(client_clipboard)));
+}
+
+void InputInjectorChromeos::StartForTesting(
+    std::unique_ptr<ui::SystemInputInjector> input_injector,
+    std::unique_ptr<protocol::ClipboardStub> client_clipboard) {
+  input_task_runner_->PostTask(
+      FROM_HERE,
+      base::BindOnce(&Core::StartWithDelegate, base::Unretained(core_.get()),
+                     std::move(input_injector), std::move(client_clipboard)));
 }
 
 // static

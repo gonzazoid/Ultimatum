@@ -9,7 +9,7 @@
 #include <string>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
@@ -100,7 +100,7 @@ void CheckCapturedNetLogEntries(const std::vector<net::NetLogEntry>& entries) {
   }
   ASSERT_LT(i, entries.size());
   EXPECT_EQ("alert: foo", net::GetStringValueFromParams(entries[i], "message"));
-  ASSERT_FALSE(entries[i].params.FindKey("line_number"));
+  ASSERT_FALSE(entries[i].params.contains("line_number"));
 
   while (i < entries.size() &&
          entries[i].type != net::NetLogEventType::PAC_JAVASCRIPT_ERROR) {
@@ -133,15 +133,20 @@ class ProxyServiceMojoTest : public testing::Test {
             true /* pac_quick_check_enabled */, &network_delegate_);
   }
 
+  void DeleteService() {
+    fetcher_ = nullptr;
+    proxy_resolution_service_.reset();
+  }
+
   base::test::TaskEnvironment task_environment_;
   TestMojoProxyResolverFactory test_mojo_proxy_resolver_factory_;
   TestNetworkDelegate network_delegate_;
   net::MockHostResolver mock_host_resolver_;
-  // Owned by |proxy_resolution_service_|.
-  raw_ptr<net::MockPacFileFetcher> fetcher_;
   net::RecordingNetLogObserver net_log_observer_;
   std::unique_ptr<net::ConfiguredProxyResolutionService>
       proxy_resolution_service_;
+  // Owned by |proxy_resolution_service_|.
+  raw_ptr<net::MockPacFileFetcher> fetcher_;
 };
 
 TEST_F(ProxyServiceMojoTest, Basic) {
@@ -161,9 +166,9 @@ TEST_F(ProxyServiceMojoTest, Basic) {
   fetcher_->NotifyFetchCompletion(net::OK, kSimplePacScript);
 
   EXPECT_THAT(callback.WaitForResult(), IsOk());
-  EXPECT_EQ("PROXY foo:1234", info.ToPacString());
+  EXPECT_EQ("PROXY foo:1234", info.ToDebugString());
   EXPECT_EQ(0u, mock_host_resolver_.num_resolve());
-  proxy_resolution_service_.reset();
+  DeleteService();
 }
 
 TEST_F(ProxyServiceMojoTest, DnsResolution) {
@@ -184,9 +189,9 @@ TEST_F(ProxyServiceMojoTest, DnsResolution) {
   fetcher_->NotifyFetchCompletion(net::OK, kDnsResolvePacScript);
 
   EXPECT_THAT(callback.WaitForResult(), IsOk());
-  EXPECT_EQ("QUIC bar:4321", info.ToPacString());
+  EXPECT_EQ("QUIC bar:4321", info.ToDebugString());
   EXPECT_EQ(1u, mock_host_resolver_.num_resolve());
-  proxy_resolution_service_.reset();
+  DeleteService();
 }
 
 TEST_F(ProxyServiceMojoTest, Error) {
@@ -211,7 +216,7 @@ TEST_F(ProxyServiceMojoTest, Error) {
       TestNetworkDelegate::PAC_SCRIPT_ERROR);
 
   EXPECT_THAT(callback.WaitForResult(), IsOk());
-  EXPECT_EQ("DIRECT", info.ToPacString());
+  EXPECT_EQ("DIRECT", info.ToDebugString());
   EXPECT_EQ(0u, mock_host_resolver_.num_resolve());
   CheckCapturedNetLogEntries(
       net_log_observer_.GetEntriesForSource(net_log_with_source.source()));
@@ -238,7 +243,7 @@ TEST_F(ProxyServiceMojoTest, ErrorOnInitialization) {
       TestNetworkDelegate::PAC_SCRIPT_ERROR);
 
   EXPECT_THAT(callback.WaitForResult(), IsOk());
-  EXPECT_EQ("DIRECT", info.ToPacString());
+  EXPECT_EQ("DIRECT", info.ToDebugString());
   EXPECT_EQ(0u, mock_host_resolver_.num_resolve());
 
   CheckCapturedNetLogEntries(net_log_observer_.GetEntries());

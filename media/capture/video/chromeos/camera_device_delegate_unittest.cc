@@ -10,13 +10,14 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/thread_pool.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/capture/video/chromeos/camera_buffer_factory.h"
 #include "media/capture/video/chromeos/camera_device_context.h"
 #include "media/capture/video/chromeos/camera_hal_delegate.h"
@@ -115,6 +116,11 @@ class MockCameraDevice : public cros::mojom::Camera3DeviceOps {
   MOCK_METHOD2(DoConfigureStreamsAndGetAllocatedBuffers,
                void(cros::mojom::Camera3StreamConfigurationPtr& config,
                     ConfigureStreamsAndGetAllocatedBuffersCallback& callback));
+
+  void SignalStreamFlush(const std::vector<uint64_t>& stream_ids) override {
+    DoSignalStreamFlush(stream_ids);
+  }
+  MOCK_METHOD1(DoSignalStreamFlush, void(std::vector<uint64_t> stream_ids));
 };
 
 constexpr int32_t kJpegMaxBufferSize = 1024;
@@ -144,7 +150,9 @@ class CameraDeviceDelegateTest : public ::testing::Test {
   void SetUp() override {
     VideoCaptureDeviceFactoryChromeOS::SetGpuBufferManager(
         &mock_gpu_memory_buffer_manager_);
-    camera_hal_delegate_ = std::make_unique<CameraHalDelegate>();
+    camera_hal_delegate_ = std::make_unique<CameraHalDelegate>(
+        base::ThreadPool::CreateSingleThreadTaskRunner(
+            {}, base::SingleThreadTaskRunnerThreadMode::DEDICATED));
     if (!camera_hal_delegate_->Init()) {
       LOG(ERROR) << "Failed to initialize CameraHalDelegate";
       camera_hal_delegate_.reset();
@@ -157,7 +165,7 @@ class CameraDeviceDelegateTest : public ::testing::Test {
         mock_camera_module_.GetPendingRemote());
   }
 
-  void TearDown() override { camera_hal_delegate_->Reset(); }
+  void TearDown() override {}
 
   void AllocateDevice() {
     ASSERT_FALSE(device_delegate_thread_.IsRunning());
@@ -541,9 +549,9 @@ class CameraDeviceDelegateTest : public ::testing::Test {
 // frame, and close the device.
 TEST_F(CameraDeviceDelegateTest, AllocateCaptureAndStop) {
   auto* mock_client = ResetDeviceContext();
-  mock_client->SetFrameCb(BindToCurrentLoop(base::BindOnce(
+  mock_client->SetFrameCb(base::BindPostTaskToCurrentDefault(base::BindOnce(
       &CameraDeviceDelegateTest::QuitRunLoop, base::Unretained(this))));
-  mock_client->SetQuitCb(BindToCurrentLoop(base::BindOnce(
+  mock_client->SetQuitCb(base::BindPostTaskToCurrentDefault(base::BindOnce(
       &CameraDeviceDelegateTest::QuitRunLoop, base::Unretained(this))));
   SetUpExpectationUntilCapturing(mock_client);
   SetUpExpectationForCaptureLoop();
@@ -576,7 +584,7 @@ TEST_F(CameraDeviceDelegateTest, AllocateCaptureAndStop) {
 // 4. Async IPC call OpenDevice() finished
 TEST_F(CameraDeviceDelegateTest, StopBeforeOpened) {
   auto* mock_client = ResetDeviceContext();
-  mock_client->SetQuitCb(BindToCurrentLoop(base::BindOnce(
+  mock_client->SetQuitCb(base::BindPostTaskToCurrentDefault(base::BindOnce(
       &CameraDeviceDelegateTest::QuitRunLoop, base::Unretained(this))));
   SetUpExpectationForHalDelegate();
 
@@ -628,7 +636,7 @@ TEST_F(CameraDeviceDelegateTest, StopBeforeOpened) {
 // is called right after the device is initialized.
 TEST_F(CameraDeviceDelegateTest, StopAfterInitialized) {
   auto* mock_client = ResetDeviceContext();
-  mock_client->SetQuitCb(BindToCurrentLoop(base::BindOnce(
+  mock_client->SetQuitCb(base::BindPostTaskToCurrentDefault(base::BindOnce(
       &CameraDeviceDelegateTest::QuitRunLoop, base::Unretained(this))));
   SetUpExpectationUntilInitialized();
 
@@ -667,7 +675,7 @@ TEST_F(CameraDeviceDelegateTest, StopAfterInitialized) {
 // is called right after the stream is configured.
 TEST_F(CameraDeviceDelegateTest, StopAfterStreamConfigured) {
   auto* mock_client = ResetDeviceContext();
-  mock_client->SetQuitCb(BindToCurrentLoop(base::BindOnce(
+  mock_client->SetQuitCb(base::BindPostTaskToCurrentDefault(base::BindOnce(
       &CameraDeviceDelegateTest::QuitRunLoop, base::Unretained(this))));
   SetUpExpectationUntilStreamConfigured();
 
@@ -712,11 +720,12 @@ TEST_F(CameraDeviceDelegateTest, FailToOpenDevice) {
 
   auto stop_on_error = [&]() {
     device_delegate_thread_.task_runner()->PostTask(
-        FROM_HERE, base::BindOnce(&CameraDeviceDelegate::StopAndDeAllocate,
-                                  camera_device_delegate_->GetWeakPtr(),
-                                  BindToCurrentLoop(base::BindOnce(
-                                      &CameraDeviceDelegateTest::QuitRunLoop,
-                                      base::Unretained(this)))));
+        FROM_HERE,
+        base::BindOnce(&CameraDeviceDelegate::StopAndDeAllocate,
+                       camera_device_delegate_->GetWeakPtr(),
+                       base::BindPostTaskToCurrentDefault(base::BindOnce(
+                           &CameraDeviceDelegateTest::QuitRunLoop,
+                           base::Unretained(this)))));
   };
   EXPECT_CALL(*mock_client, OnError(_, _, _))
       .Times(AtLeast(1))
@@ -756,9 +765,9 @@ TEST_F(CameraDeviceDelegateTest, FailToOpenDevice) {
 // multiple times.
 TEST_F(CameraDeviceDelegateTest, DoubleStopAndDeAllocate) {
   auto* mock_client = ResetDeviceContext();
-  mock_client->SetFrameCb(BindToCurrentLoop(base::BindOnce(
+  mock_client->SetFrameCb(base::BindPostTaskToCurrentDefault(base::BindOnce(
       &CameraDeviceDelegateTest::QuitRunLoop, base::Unretained(this))));
-  mock_client->SetQuitCb(BindToCurrentLoop(base::BindOnce(
+  mock_client->SetQuitCb(base::BindPostTaskToCurrentDefault(base::BindOnce(
       &CameraDeviceDelegateTest::QuitRunLoop, base::Unretained(this))));
   SetUpExpectationUntilCapturing(mock_client);
   SetUpExpectationForCaptureLoop();
@@ -782,11 +791,12 @@ TEST_F(CameraDeviceDelegateTest, DoubleStopAndDeAllocate) {
   WaitForDeviceToClose();
 
   device_delegate_thread_.task_runner()->PostTask(
-      FROM_HERE, base::BindOnce(&CameraDeviceDelegate::StopAndDeAllocate,
-                                camera_device_delegate_->GetWeakPtr(),
-                                BindToCurrentLoop(base::BindOnce(
-                                    &CameraDeviceDelegateTest::QuitRunLoop,
-                                    base::Unretained(this)))));
+      FROM_HERE,
+      base::BindOnce(&CameraDeviceDelegate::StopAndDeAllocate,
+                     camera_device_delegate_->GetWeakPtr(),
+                     base::BindPostTaskToCurrentDefault(
+                         base::BindOnce(&CameraDeviceDelegateTest::QuitRunLoop,
+                                        base::Unretained(this)))));
   DoLoop();
 
   ResetDevice();

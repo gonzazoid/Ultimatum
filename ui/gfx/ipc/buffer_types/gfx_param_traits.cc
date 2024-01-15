@@ -9,6 +9,7 @@
 
 #include <string>
 
+#include "base/numerics/safe_conversions.h"
 #include "base/strings/stringprintf.h"
 
 namespace IPC {
@@ -32,7 +33,8 @@ bool ParamTraits<gfx::BufferUsageAndFormat>::Read(
 void ParamTraits<gfx::BufferUsageAndFormat>::Log(
     const gfx::BufferUsageAndFormat& p,
     std::string* l) {
-  l->append(base::StringPrintf("(%d, %d)", p.usage, p.format));
+  l->append(base::StringPrintf("(%d, %u)", static_cast<int>(p.usage),
+                               base::strict_cast<uint32_t>(p.format)));
 }
 
 }  // namespace IPC
@@ -40,20 +42,20 @@ void ParamTraits<gfx::BufferUsageAndFormat>::Log(
 // Generate param traits write methods.
 #include "ipc/param_traits_write_macros.h"
 namespace IPC {
-#undef UI_GFX_IPC_GFX_BUFFER_TYPES_PARAM_TRAITS_MACROS_H_
+#undef UI_GFX_IPC_BUFFER_TYPES_GFX_PARAM_TRAITS_MACROS_H_
 #include "ui/gfx/ipc/buffer_types/gfx_param_traits_macros.h"
 }  // namespace IPC
 
 // Generate param traits read methods.
 #include "ipc/param_traits_read_macros.h"
 namespace IPC {
-#undef UI_GFX_IPC_GFX_BUFFER_TYPES_PARAM_TRAITS_MACROS_H_
+#undef UI_GFX_IPC_BUFFER_TYPES_GFX_PARAM_TRAITS_MACROS_H_
 #include "ui/gfx/ipc/buffer_types/gfx_param_traits_macros.h"
 }  // namespace IPC
 
 // Generate param traits log methods.
 #include "ipc/param_traits_log_macros.h"
 namespace IPC {
-#undef UI_GFX_IPC_GFX_BUFFER_TYPES_PARAM_TRAITS_MACROS_H_
+#undef UI_GFX_IPC_BUFFER_TYPES_GFX_PARAM_TRAITS_MACROS_H_
 #include "ui/gfx/ipc/buffer_types/gfx_param_traits_macros.h"
 }  // namespace IPC

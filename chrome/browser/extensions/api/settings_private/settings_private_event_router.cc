@@ -7,9 +7,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
@@ -140,7 +140,7 @@ void SettingsPrivateEventRouter::OnPreferenceChanged(
   // This posts an asynchronous task to ensure that all pref stores are updated,
   // as |prefs_util_->GetPref()| relies on this information to determine if a
   // preference is controlled by e.g. extensions.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&SettingsPrivateEventRouter::SendPrefChange,
                                 weak_ptr_factory_.GetWeakPtr(), pref_name));
 }
@@ -152,7 +152,7 @@ void SettingsPrivateEventRouter::SendPrefChange(const std::string& pref_name) {
     return;
   }
 
-  std::unique_ptr<api::settings_private::PrefObject> pref_object =
+  absl::optional<api::settings_private::PrefObject> pref_object =
       prefs_util_->GetPref(pref_name);
 
   std::vector<api::settings_private::PrefObject> prefs;
@@ -161,15 +161,16 @@ void SettingsPrivateEventRouter::SendPrefChange(const std::string& pref_name) {
 
   auto args(api::settings_private::OnPrefsChanged::Create(prefs));
 
-  std::unique_ptr<Event> extension_event(new Event(
-      events::SETTINGS_PRIVATE_ON_PREFS_CHANGED,
-      api::settings_private::OnPrefsChanged::kEventName, std::move(args)));
+  std::unique_ptr<Event> extension_event =
+      std::make_unique<Event>(events::SETTINGS_PRIVATE_ON_PREFS_CHANGED,
+                              api::settings_private::OnPrefsChanged::kEventName,
+                              std::move(args), context_);
   event_router->BroadcastEvent(std::move(extension_event));
 }
 
-SettingsPrivateEventRouter* SettingsPrivateEventRouter::Create(
+std::unique_ptr<SettingsPrivateEventRouter> SettingsPrivateEventRouter::Create(
     content::BrowserContext* context) {
-  return new SettingsPrivateEventRouter(context);
+  return std::make_unique<SettingsPrivateEventRouter>(context);
 }
 
 }  // namespace extensions

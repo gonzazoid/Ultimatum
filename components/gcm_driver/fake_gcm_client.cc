@@ -8,14 +8,13 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/sys_byteorder.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "google_apis/gcm/base/encryptor.h"
@@ -73,7 +72,6 @@ FakeGCMClient::~FakeGCMClient() {
 void FakeGCMClient::Initialize(
     const ChromeBuildInfo& chrome_build_info,
     const base::FilePath& store_path,
-    bool remove_account_mappings_with_email_key,
     const scoped_refptr<base::SequencedTaskRunner>& blocking_task_runner,
     scoped_refptr<base::SequencedTaskRunner> io_task_runner,
     base::RepeatingCallback<void(
@@ -106,7 +104,7 @@ void FakeGCMClient::Start(StartMode start_mode) {
 
 void FakeGCMClient::DoStart() {
   started_ = true;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeGCMClient::Started, weak_ptr_factory_.GetWeakPtr()));
 }
@@ -138,7 +136,7 @@ void FakeGCMClient::Register(
         instance_id_token_info->scope);
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&FakeGCMClient::RegisterFinished,
                                 weak_ptr_factory_.GetWeakPtr(),
                                 std::move(registration_info), registration_id));
@@ -154,7 +152,7 @@ void FakeGCMClient::Unregister(
     scoped_refptr<RegistrationInfo> registration_info) {
   DCHECK(io_thread_->RunsTasksInCurrentSequence());
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeGCMClient::UnregisterFinished,
                      weak_ptr_factory_.GetWeakPtr(), registration_info));
@@ -165,7 +163,7 @@ void FakeGCMClient::Send(const std::string& app_id,
                          const OutgoingMessage& message) {
   DCHECK(io_thread_->RunsTasksInCurrentSequence());
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeGCMClient::SendFinished,
                      weak_ptr_factory_.GetWeakPtr(), app_id, message));
@@ -293,14 +291,14 @@ void FakeGCMClient::SendFinished(const std::string& app_id,
     send_error_details.message_id = message.id;
     send_error_details.result = NETWORK_ERROR;
     send_error_details.additional_data = message.data;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&FakeGCMClient::MessageSendError,
                        weak_ptr_factory_.GetWeakPtr(), app_id,
                        send_error_details),
         base::Milliseconds(200));
   } else if(message.id.find("ack") != std::string::npos) {
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&FakeGCMClient::SendAcknowledgement,
                        weak_ptr_factory_.GetWeakPtr(), app_id, message.id),

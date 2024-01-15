@@ -9,8 +9,10 @@
 
 #include "ash/ash_export.h"
 #include "ash/login/ui/auth_factor_model.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
 namespace views {
@@ -27,6 +29,8 @@ class ArrowButtonView;
 // A view that displays a collection of auth factors to be shown on the lock and
 // login screens.
 class ASH_EXPORT LoginAuthFactorsView : public views::View {
+  METADATA_HEADER(LoginAuthFactorsView, views::View)
+
  public:
   using AuthFactorState = AuthFactorModel::AuthFactorState;
 
@@ -48,7 +52,7 @@ class ASH_EXPORT LoginAuthFactorsView : public views::View {
     AuthIconView* checkmark_icon();
 
    private:
-    LoginAuthFactorsView* const view_;
+    const raw_ptr<LoginAuthFactorsView> view_;
   };
 
   LoginAuthFactorsView(base::RepeatingClosure on_click_to_enter_callback,
@@ -124,29 +128,29 @@ class ASH_EXPORT LoginAuthFactorsView : public views::View {
   // Child views, owned by the Views hierarchy
 
   // A container laying added icons horizontally.
-  views::View* auth_factor_icon_row_;
+  raw_ptr<views::View> auth_factor_icon_row_;
 
   // An animated label.
-  AnimatedAuthFactorsLabelWrapper* label_wrapper_;
+  raw_ptr<AnimatedAuthFactorsLabelWrapper> label_wrapper_;
 
   // A container laying arrow button and its corresponding animation view on top
   // of each other.
-  views::View* arrow_icon_container_;
+  raw_ptr<views::View> arrow_icon_container_;
 
   // A box layout container for arrow button and its label.
-  views::View* arrow_button_container_;
+  raw_ptr<views::View> arrow_button_container_;
 
   // A button with an arrow icon. Only visible when an auth factor is in the
   // kClickRequired state.
-  ArrowButtonView* arrow_button_;
+  raw_ptr<ArrowButtonView> arrow_button_;
 
   // A view with nudge animation expanding from arrow icon to encourage user to
   // tap. Only visible when an auth factor is in the kClickRequired state.
-  AuthIconView* arrow_nudge_animation_;
+  raw_ptr<AuthIconView> arrow_nudge_animation_;
 
   // A green checkmark icon (or animation) shown when an auth factor reaches
   // the kAuthenticated state, just before the login/lock screen is dismissed.
-  AuthIconView* checkmark_icon_;
+  raw_ptr<AuthIconView> checkmark_icon_;
 
   /////////////////////////////////////////////////////////////////////////////
 

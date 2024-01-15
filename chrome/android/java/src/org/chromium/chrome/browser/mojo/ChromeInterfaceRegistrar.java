@@ -4,13 +4,16 @@
 
 package org.chromium.chrome.browser.mojo;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
+
 import org.chromium.blink.mojom.Authenticator;
 import org.chromium.chrome.browser.browserservices.digitalgoods.DigitalGoodsFactoryFactory;
 import org.chromium.chrome.browser.installedapp.InstalledAppProviderFactory;
 import org.chromium.chrome.browser.payments.ChromePaymentRequestFactory;
+import org.chromium.chrome.browser.webauthn.ChromeAuthenticatorConfirmationFactory;
 import org.chromium.chrome.browser.webshare.ShareServiceImplementationFactory;
 import org.chromium.components.webauthn.AuthenticatorFactory;
+import org.chromium.components.webauthn.WebauthnModeProvider.WebauthnMode;
 import org.chromium.content_public.browser.InterfaceRegistrar;
 import org.chromium.content_public.browser.RenderFrameHost;
 import org.chromium.content_public.browser.WebContents;
@@ -48,7 +51,12 @@ class ChromeInterfaceRegistrar {
                     PaymentRequest.MANAGER, new ChromePaymentRequestFactory(renderFrameHost));
             registry.addInterface(
                     InstalledAppProvider.MANAGER, new InstalledAppProviderFactory(renderFrameHost));
-            registry.addInterface(Authenticator.MANAGER, new AuthenticatorFactory(renderFrameHost));
+            registry.addInterface(
+                    Authenticator.MANAGER,
+                    new AuthenticatorFactory(
+                            renderFrameHost,
+                            new ChromeAuthenticatorConfirmationFactory(),
+                            WebauthnMode.CHROME));
             registry.addInterface(
                     DigitalGoodsFactory.MANAGER, new DigitalGoodsFactoryFactory(renderFrameHost));
         }

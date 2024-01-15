@@ -8,12 +8,10 @@
 #define NET_COOKIES_COOKIE_OPTIONS_H_
 
 #include <ostream>
+#include <string>
 
+#include "base/check_op.h"
 #include "net/base/net_export.h"
-#include "net/cookies/cookie_constants.h"
-#include "net/cookies/cookie_inclusion_status.h"
-#include "net/first_party_sets/same_party_context.h"
-#include "url/gurl.h"
 
 namespace net {
 
@@ -88,6 +86,26 @@ class NET_EXPORT CookieOptions {
         kMaxValue = kAllSameSiteRedirect
       };
 
+      // These values are persisted to logs. Entries should not be renumbered
+      // and numeric values should never be reused.
+      enum class HttpMethod {
+        // kUnset indicates this enum wasn't applicable in the context.
+        kUnset = -1,
+        // kUnknown indicates we were unable to convert the method string to
+        // this enum.
+        kUnknown = 0,
+        kGet = 1,
+        kHead = 2,
+        kPost = 3,
+        KPut = 4,
+        kDelete = 5,
+        kConnect = 6,
+        kOptions = 7,
+        kTrace = 8,
+        kPatch = 9,
+        kMaxValue = kPatch
+      };
+
       // Records the type of any context downgrade due to a cross-site redirect,
       // i.e. whether the spec change in
       // https://github.com/httpwg/http-extensions/pull/1348 changed the result
@@ -102,6 +120,15 @@ class NET_EXPORT CookieOptions {
 
       ContextRedirectTypeBug1221316 redirect_type_bug_1221316 =
           ContextRedirectTypeBug1221316::kUnset;
+
+      // Records the HTTP method of requests that result in a cross-site
+      // redirect downgrade. May be kUnset if there wasn't a downgrade or if the
+      // cookie access wasn't due to a request.
+      //
+      // Note that this field is always set when there was a context
+      // downgrade but the associated histrogram is only recorded when that
+      // context downgrade results in a change in inclusion status.
+      HttpMethod http_method_bug_1221316 = HttpMethod::kUnset;
     };
 
     // The following three constructors apply default values for the metadata
@@ -201,14 +228,12 @@ class NET_EXPORT CookieOptions {
   // * Excludes SameSite cookies
   // * Updates last-accessed time.
   // * Does not report excluded cookies in APIs that can do so.
-  // * Excludes SameParty cookies.
   //
   // These settings can be altered by calling:
   //
   // * |set_{include,exclude}_httponly()|
   // * |set_same_site_cookie_context()|
   // * |set_do_not_update_access_time()|
-  // * |set_same_party_cookie_context_type()|
   CookieOptions();
   CookieOptions(const CookieOptions& other);
   CookieOptions(CookieOptions&& other);
@@ -239,26 +264,6 @@ class NET_EXPORT CookieOptions {
   void unset_return_excluded_cookies() { return_excluded_cookies_ = false; }
   bool return_excluded_cookies() const { return return_excluded_cookies_; }
 
-  void set_same_party_context(const SamePartyContext& context) {
-    same_party_context_ = context;
-  }
-  const SamePartyContext& same_party_context() const {
-    return same_party_context_;
-  }
-
-  // Getter/setter of |full_party_context_size_| for logging purposes.
-  void set_full_party_context_size(uint32_t len) {
-    full_party_context_size_ = len;
-  }
-  uint32_t full_party_context_size() const { return full_party_context_size_; }
-
-  void set_is_in_nontrivial_first_party_set(bool is_member) {
-    is_in_nontrivial_first_party_set_ = is_member;
-  }
-  bool is_in_nontrivial_first_party_set() const {
-    return is_in_nontrivial_first_party_set_;
-  }
-
   // Convenience method for where you need a CookieOptions that will
   // work for getting/setting all types of cookies, including HttpOnly and
   // SameSite cookies. Also specifies not to update the access time, because
@@ -274,19 +279,6 @@ class NET_EXPORT CookieOptions {
   SameSiteCookieContext same_site_cookie_context_;
   bool update_access_time_ = true;
   bool return_excluded_cookies_ = false;
-
-  SamePartyContext same_party_context_;
-
-  // The size of the isolation_info.party_context plus the top-frame site.
-  // Stored for logging purposes.
-  uint32_t full_party_context_size_ = 0;
-  // Whether the site requesting cookie access (as opposed to e.g. the
-  // `site_for_cookies`) is a member (or owner) of a nontrivial First-Party
-  // Set.
-  // This is included here temporarily, for the purpose of ignoring SameParty
-  // for sites that are not participating in the Origin Trial.
-  // TODO(https://crbug.com/1163990): remove this field.
-  bool is_in_nontrivial_first_party_set_ = false;
 };
 
 NET_EXPORT bool operator==(
@@ -312,6 +304,8 @@ inline void PrintTo(
       << static_cast<int>(m.cross_site_redirect_downgrade);
   *os << ", redirect_type_bug_1221316: "
       << static_cast<int>(m.redirect_type_bug_1221316);
+  *os << ", http_method_bug_1221316: "
+      << static_cast<int>(m.http_method_bug_1221316);
   *os << " }";
 }
 

@@ -37,17 +37,16 @@ extern "C" {
  * len contains the number of bytes in the src
  * dest should be allocated by the caller to contain
  *   at least modp_b64_encode_len(len) bytes (see below)
- *   This will contain the null-terminated b64 encoded result
- * returns length of the destination string plus the ending null byte
- *    i.e.  the result will be equal to strlen(dest) + 1
+ *   This will contain the (non-null terminated) b64 bytes.
+ * returns length of the destination string.
  *
  * Example
- * 
+ *
  * \code
  * char* src = ...;
  * int srclen = ...; //the length of number of bytes in src
  * char* dest = (char*) malloc(modp_b64_encode_len);
- * int len = modp_b64_encode(dest, src, sourcelen);
+ * int len = modp_b64_encode_data(dest, src, sourcelen);
  * if (len == -1) {
  *   printf("Error\n");
  * } else {
@@ -55,6 +54,17 @@ extern "C" {
  * }
  * \endcode
  *
+ */
+size_t modp_b64_encode_data(char* dest, const char* str, size_t len);
+
+/**
+ * Same as modp_b64_encode_data, but additionally sets a null terminator at the
+ * end of `dest` (i.e. at dest[output_size]).
+ * Like modp_b64_encode_data, returns the length of the destination string (i.e.
+ * not counting the null terminator).
+ *
+ * TODO(csharrison): Consider removing this once all callers migrate to
+ * modp_b64_encode_data.
  */
 size_t modp_b64_encode(char* dest, const char* str, size_t len);
 
@@ -79,11 +89,27 @@ size_t modp_b64_encode(char* dest, const char* str, size_t len);
  * if (len == -1) { error }
  * \endcode
  */
-size_t modp_b64_decode(char* dest, const char* src, size_t len);
+enum class ModpDecodePolicy {
+  // src length must be divisible by 4, with a max of 2 pad chars.
+  kStrict,
+
+  // Matches the infra spec: https://infra.spec.whatwg.org/#forgiving-base64
+  // _except_ for ignoring whitespace (Step 1).
+  kForgiving,
+
+  // src length % 4 must not equal 1, after stripping all pad chars.
+  // Accepts any number of pad chars.
+  kNoPaddingValidation,
+};
+size_t modp_b64_decode(
+    char* dest,
+    const char* src,
+    size_t len,
+    ModpDecodePolicy policy = ModpDecodePolicy::kStrict);
 
 /**
- * The maximum input that can be passed into modp_b64_encode. Lengths beyond
- * this will overflow modp_b64_encode_len.
+ * The maximum input that can be passed into modp_b64_encode{_data}.
+ * Lengths beyond this will overflow modp_b64_encode_len.
  *
  * This works because modp_b64_encode_len(A) computes:
  *     ceiling[max_len / 3] * 4 + 1
@@ -91,23 +117,27 @@ size_t modp_b64_decode(char* dest, const char* src, size_t len);
  *   = floor[(SIZE_MAX-1)/4] * 4 + 1
  *  <= SIZE_MAX-1 + 1
  *   = SIZE_MAX
+ *
+ * Note: technically modp_b64_encode_data can take one extra byte, but for
+ * simplicity the bound is shared between the two functions.
  */
 #define MODP_B64_MAX_INPUT_LEN ((SIZE_MAX - 1) / 4 * 3)
 
 /**
  * Given a source string of length len, this returns the amount of
- * memory the destination string should have.
+ * memory the destination string should have, for modp_b64_encode_data and
+ * modp_b64_encode, respectively.
  *
  * remember, this is integer math
  * 3 bytes turn into 4 chars
- * ceiling[len / 3] * 4 + 1
+ * ceiling[len / 3] * 4
  *
- * +1 is for any extra null.
  *
- * WARNING: This expression will overflow if the A is above
+ * WARNING: These expressions will overflow if the A is above
  * MODP_B64_MAX_INPUT_LEN. The caller must check this bound first.
  */
-#define modp_b64_encode_len(A) ((A+2)/3 * 4 + 1)
+#define modp_b64_encode_data_len(A) ((A + 2) / 3 * 4)
+#define modp_b64_encode_len(A) (modp_b64_encode_data_len(A) + 1)
 
 /**
  * Given a base64 string of length len,
@@ -120,69 +150,10 @@ size_t modp_b64_decode(char* dest, const char* src, size_t len);
  */
 #define modp_b64_decode_len(A) (A / 4 * 3 + 2)
 
-/**
- * Will return the strlen of the output from encoding.
- * This may be less than the required number of bytes allocated.
- *
- * This allows you to 'deserialized' a struct
- * \code
- * char* b64encoded = "...";
- * int len = strlen(b64encoded);
- *
- * struct datastuff foo;
- * if (modp_b64_encode_strlen(sizeof(struct datastuff)) != len) {
- *    // wrong size
- *    return false;
- * } else {
- *    // safe to do;
- *    if (modp_b64_decode((char*) &foo, b64encoded, len) == -1) {
- *      // bad characters
- *      return false;
- *    }
- * }
- * // foo is filled out now
- * \endcode
- */
-#define modp_b64_encode_strlen(A) ((A + 2)/ 3 * 4)
-
 #define MODP_B64_ERROR ((size_t)-1)
 
 #ifdef __cplusplus
 }
-
-#include <string>
-
-inline std::string& modp_b64_encode(std::string& s)
-{
-    std::string x(modp_b64_encode_len(s.size()), '\0');
-    size_t d = modp_b64_encode(const_cast<char*>(x.data()), s.data(), s.size());
-    x.erase(d, std::string::npos);
-    s.swap(x);
-    return s;
-}
-
-/**
- * base 64 decode a string (self-modifing)
- * On failure, the string is empty.
- *
- * This function is for C++ only (duh)
- *
- * \param[in,out] s the string to be decoded
- * \return a reference to the input string
- */
-inline std::string& modp_b64_decode(std::string& s)
-{
-    std::string x(modp_b64_decode_len(s.size()), '\0');
-    size_t d = modp_b64_decode(const_cast<char*>(x.data()), s.data(), s.size());
-    if (d == MODP_B64_ERROR) {
-        x.clear();
-    } else {
-        x.erase(d, std::string::npos);
-    }
-    s.swap(x);
-    return s;
-}
-
 #endif /* __cplusplus */
 
 #endif /* MODP_B64 */

@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/platform/text/layout_locale.h"
 
 #include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "third_party/blink/renderer/platform/language.h"
 #include "third_party/blink/renderer/platform/text/hyphenation.h"
@@ -24,11 +25,14 @@ namespace blink {
 namespace {
 
 struct PerThreadData {
-  HashMap<AtomicString, scoped_refptr<LayoutLocale>, CaseFoldingHash>
+  HashMap<AtomicString,
+          scoped_refptr<LayoutLocale>,
+          CaseFoldingHashTraits<AtomicString>>
       locale_map;
-  const LayoutLocale* default_locale = nullptr;
-  const LayoutLocale* system_locale = nullptr;
-  const LayoutLocale* default_locale_for_han = nullptr;
+  raw_ptr<const LayoutLocale, ExperimentalRenderer> default_locale = nullptr;
+  raw_ptr<const LayoutLocale, ExperimentalRenderer> system_locale = nullptr;
+  raw_ptr<const LayoutLocale, ExperimentalRenderer> default_locale_for_han =
+      nullptr;
   bool default_locale_for_han_computed = false;
   String current_accept_languages;
 };
@@ -40,7 +44,7 @@ PerThreadData& GetPerThreadData() {
 
 struct DelimiterConfig {
   ULocaleDataDelimiterType type;
-  UChar* result;
+  raw_ptr<UChar, ExperimentalRenderer> result;
 };
 // Use  ICU ulocdata to find quote delimiters for an ICU locale
 // https://unicode-org.github.io/icu-docs/apidoc/dev/icu4c/ulocdata_8h.html#a0bf1fdd1a86918871ae2c84b5ce8421f
@@ -75,6 +79,23 @@ scoped_refptr<QuotesData> GetQuotesDataForLanguage(const char* locale) {
   ulocdata_close(uld);
 
   return QuotesData::Create(open1[0], close1[0], open2[0], close2[0]);
+}
+
+// Returns the Unicode Line Break Style Identifier (key "lb") value.
+// https://www.unicode.org/reports/tr35/#UnicodeLineBreakStyleIdentifier
+inline const char* LbValueFromStrictness(LineBreakStrictness strictness) {
+  switch (strictness) {
+    case LineBreakStrictness::kDefault:
+      return nullptr;  // nullptr removes any existing values.
+    case LineBreakStrictness::kNormal:
+      return "normal";
+    case LineBreakStrictness::kStrict:
+      return "strict";
+    case LineBreakStrictness::kLoose:
+      return "loose";
+  }
+  NOTREACHED();
+  return nullptr;
 }
 
 }  // namespace
@@ -223,7 +244,7 @@ const LayoutLocale& LayoutLocale::GetDefault() {
   if (UNLIKELY(!data.default_locale)) {
     AtomicString language = DefaultLanguage();
     data.default_locale =
-        LayoutLocale::Get(!language.empty() ? language : "en");
+        LayoutLocale::Get(!language.empty() ? language : AtomicString("en"));
   }
   return *data.default_locale;
 }
@@ -323,7 +344,8 @@ scoped_refptr<QuotesData> LayoutLocale::GetQuotesData() const {
 }
 
 AtomicString LayoutLocale::LocaleWithBreakKeyword(
-    LineBreakIteratorMode mode) const {
+    LineBreakStrictness strictness,
+    bool use_phrase) const {
   if (string_.empty())
     return string_;
 
@@ -332,47 +354,53 @@ AtomicString LayoutLocale::LocaleWithBreakKeyword(
   if (string_.Contains('@'))
     return string_;
 
-  std::string utf8_locale = string_.Utf8();
-  Vector<char> buffer(static_cast<wtf_size_t>(utf8_locale.length() + 11), 0);
-  memcpy(buffer.data(), utf8_locale.c_str(), utf8_locale.length());
+  constexpr wtf_size_t kMaxLbValueLen = 6;
+  constexpr wtf_size_t kMaxKeywordsLen =
+      /* strlen("@lb=") */ 4 + kMaxLbValueLen + /* strlen("@lw=phrase") */ 10;
+  class ULocaleKeywordBuilder {
+   public:
+    explicit ULocaleKeywordBuilder(const std::string& utf8_locale)
+        : length_(base::saturated_cast<wtf_size_t>(utf8_locale.length())),
+          buffer_(length_ + kMaxKeywordsLen + 1, 0) {
+      // The `buffer_` is initialized to 0 above.
+      memcpy(buffer_.data(), utf8_locale.c_str(), length_);
+    }
+    explicit ULocaleKeywordBuilder(const String& locale)
+        : ULocaleKeywordBuilder(locale.Utf8()) {}
 
-  const char* keyword_value = nullptr;
-  switch (mode) {
-    default:
-      NOTREACHED();
-      [[fallthrough]];
-    case LineBreakIteratorMode::kDefault:
-      // nullptr will cause any existing values to be removed.
-      break;
-    case LineBreakIteratorMode::kNormal:
-      keyword_value = "normal";
-      break;
-    case LineBreakIteratorMode::kStrict:
-      keyword_value = "strict";
-      break;
-    case LineBreakIteratorMode::kLoose:
-      keyword_value = "loose";
-      break;
+    AtomicString ToAtomicString() const {
+      return AtomicString::FromUTF8(buffer_.data(), length_);
+    }
+
+    bool SetStrictness(LineBreakStrictness strictness) {
+      const char* const lb_value = LbValueFromStrictness(strictness);
+      DCHECK(!lb_value || strlen(lb_value) <= kMaxLbValueLen);
+      return SetKeywordValue("lb", lb_value);
+    }
+
+    bool SetKeywordValue(const char* keyword_name, const char* value) {
+      ICUError status;
+      int32_t length_needed = uloc_setKeywordValue(
+          keyword_name, value, buffer_.data(), buffer_.size(), &status);
+      if (U_SUCCESS(status)) {
+        DCHECK_GE(length_needed, 0);
+        length_ = length_needed;
+        DCHECK_LT(length_, buffer_.size());
+        return true;
+      }
+      DCHECK_NE(status, U_BUFFER_OVERFLOW_ERROR);
+      return false;
+    }
+
+   private:
+    wtf_size_t length_;
+    Vector<char> buffer_;
+  } builder(string_);
+
+  if (builder.SetStrictness(strictness) &&
+      (!use_phrase || builder.SetKeywordValue("lw", "phrase"))) {
+    return builder.ToAtomicString();
   }
-
-  ICUError status;
-  int32_t length_needed = uloc_setKeywordValue(
-      "lb", keyword_value, buffer.data(), buffer.size(), &status);
-  if (U_SUCCESS(status))
-    return AtomicString::FromUTF8(buffer.data(), length_needed);
-
-  if (status == U_BUFFER_OVERFLOW_ERROR) {
-    buffer.Grow(length_needed + 1);
-    memset(buffer.data() + utf8_locale.length(), 0,
-           buffer.size() - utf8_locale.length());
-    status = U_ZERO_ERROR;
-    int32_t length_needed2 = uloc_setKeywordValue(
-        "lb", keyword_value, buffer.data(), buffer.size(), &status);
-    DCHECK_EQ(length_needed, length_needed2);
-    if (U_SUCCESS(status) && length_needed == length_needed2)
-      return AtomicString::FromUTF8(buffer.data(), length_needed);
-  }
-
   NOTREACHED();
   return string_;
 }

@@ -5,8 +5,8 @@
 #ifndef SERVICES_NETWORK_PUBLIC_CPP_WEAK_WRAPPER_SHARED_URL_LOADER_FACTORY_H_
 #define SERVICES_NETWORK_PUBLIC_CPP_WEAK_WRAPPER_SHARED_URL_LOADER_FACTORY_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -53,7 +53,8 @@ class COMPONENT_EXPORT(NETWORK_CPP) WeakWrapperSharedURLLoaderFactory
   base::OnceCallback<mojom::URLLoaderFactory*()> make_factory_ptr_;
 
   // Not owned.
-  raw_ptr<mojom::URLLoaderFactory> factory_ptr_ = nullptr;
+  raw_ptr<mojom::URLLoaderFactory, AcrossTasksDanglingUntriaged> factory_ptr_ =
+      nullptr;
 };
 
 }  // namespace network

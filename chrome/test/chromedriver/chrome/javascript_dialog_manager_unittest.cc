@@ -7,7 +7,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/values.h"
 #include "chrome/test/chromedriver/chrome/browser_info.h"
@@ -17,8 +17,7 @@
 
 TEST(JavaScriptDialogManager, NoDialog) {
   StubDevToolsClient client;
-  BrowserInfo browser_info;
-  JavaScriptDialogManager manager(&client, &browser_info);
+  JavaScriptDialogManager manager(&client);
   std::string message("HI");
   ASSERT_EQ(kNoSuchAlert, manager.GetDialogMessage(&message).code());
   ASSERT_FALSE(manager.IsDialogOpen());
@@ -28,12 +27,11 @@ TEST(JavaScriptDialogManager, NoDialog) {
 
 TEST(JavaScriptDialogManager, HandleDialogPassesParams) {
   RecorderDevToolsClient client;
-  BrowserInfo browser_info;
-  JavaScriptDialogManager manager(&client, &browser_info);
-  base::DictionaryValue params;
-  params.SetString("message", "hi");
-  params.SetString("type", "prompt");
-  params.SetString("defaultPrompt", "This is a default text");
+  JavaScriptDialogManager manager(&client);
+  base::Value::Dict params;
+  params.Set("message", "hi");
+  params.Set("type", "prompt");
+  params.Set("defaultPrompt", "This is a default text");
   ASSERT_EQ(
       kOk,
       manager.OnEvent(&client, "Page.javascriptDialogOpening", params).code());
@@ -47,12 +45,11 @@ TEST(JavaScriptDialogManager, HandleDialogPassesParams) {
 
 TEST(JavaScriptDialogManager, HandleDialogNullPrompt) {
   RecorderDevToolsClient client;
-  BrowserInfo browser_info;
-  JavaScriptDialogManager manager(&client, &browser_info);
-  base::DictionaryValue params;
-  params.SetString("message", "hi");
-  params.SetString("type", "prompt");
-  params.SetString("defaultPrompt", "");
+  JavaScriptDialogManager manager(&client);
+  base::Value::Dict params;
+  params.Set("message", "hi");
+  params.Set("type", "prompt");
+  params.Set("defaultPrompt", "");
   ASSERT_EQ(
       kOk,
       manager.OnEvent(&client, "Page.javascriptDialogOpening", params).code());
@@ -63,12 +60,11 @@ TEST(JavaScriptDialogManager, HandleDialogNullPrompt) {
 
 TEST(JavaScriptDialogManager, ReconnectClearsStateAndSendsEnable) {
   RecorderDevToolsClient client;
-  BrowserInfo browser_info;
-  JavaScriptDialogManager manager(&client, &browser_info);
-  base::DictionaryValue params;
-  params.SetString("message", "hi");
-  params.SetString("type", "alert");
-  params.SetString("defaultPrompt", "");
+  JavaScriptDialogManager manager(&client);
+  base::Value::Dict params;
+  params.Set("message", "hi");
+  params.Set("type", "alert");
+  params.Set("defaultPrompt", "");
   ASSERT_EQ(
       kOk,
       manager.OnEvent(&client, "Page.javascriptDialogOpening", params).code());
@@ -77,7 +73,6 @@ TEST(JavaScriptDialogManager, ReconnectClearsStateAndSendsEnable) {
   ASSERT_EQ(kOk, manager.GetDialogMessage(&message).code());
 
   ASSERT_TRUE(manager.OnConnected(&client).IsOk());
-  ASSERT_EQ("Page.enable", client.commands_[0].method);
   ASSERT_FALSE(manager.IsDialogOpen());
   ASSERT_EQ(kNoSuchAlert, manager.GetDialogMessage(&message).code());
   ASSERT_EQ(kNoSuchAlert, manager.HandleDialog(false, nullptr).code());
@@ -87,8 +82,8 @@ namespace {
 
 class FakeDevToolsClient : public StubDevToolsClient {
  public:
-  FakeDevToolsClient() : listener_(nullptr), closing_count_(0) {}
-  ~FakeDevToolsClient() override {}
+  FakeDevToolsClient() = default;
+  ~FakeDevToolsClient() override = default;
 
   void set_closing_count(int closing_count) {
     closing_count_ = closing_count;
@@ -97,37 +92,41 @@ class FakeDevToolsClient : public StubDevToolsClient {
   // Overridden from StubDevToolsClient:
   Status SendCommandAndGetResult(const std::string& method,
                                  const base::Value::Dict& params,
-                                 base::Value* result) override {
+                                 base::Value::Dict* result) override {
     while (closing_count_ > 0) {
-      base::DictionaryValue empty;
-      Status status =
-          listener_->OnEvent(this, "Page.javascriptDialogClosed", empty);
+      Status status = listener_->OnEvent(this, "Page.javascriptDialogClosed",
+                                         base::Value::Dict());
       if (status.IsError())
         return status;
       closing_count_--;
     }
-    *result = base::Value(base::Value::Type::DICTIONARY);
     return Status(kOk);
   }
+
   void AddListener(DevToolsEventListener* listener) override {
     listener_ = listener;
   }
 
+  void RemoveListener(DevToolsEventListener* listener) override {
+    if (listener == listener_) {
+      listener_ = nullptr;
+    }
+  }
+
  private:
-  raw_ptr<DevToolsEventListener> listener_;
-  int closing_count_;
+  raw_ptr<DevToolsEventListener> listener_ = nullptr;
+  int closing_count_ = 0;
 };
 
 }  // namespace
 
 TEST(JavaScriptDialogManager, OneDialog) {
   FakeDevToolsClient client;
-  BrowserInfo browser_info;
-  JavaScriptDialogManager manager(&client, &browser_info);
-  base::DictionaryValue params;
-  params.SetString("message", "hi");
-  params.SetString("type", "alert");
-  params.SetString("defaultPrompt", "");
+  JavaScriptDialogManager manager(&client);
+  base::Value::Dict params;
+  params.Set("message", "hi");
+  params.Set("type", "alert");
+  params.Set("defaultPrompt", "");
   ASSERT_FALSE(manager.IsDialogOpen());
   std::string message;
   ASSERT_EQ(kNoSuchAlert, manager.GetDialogMessage(&message).code());
@@ -151,17 +150,16 @@ TEST(JavaScriptDialogManager, OneDialog) {
 
 TEST(JavaScriptDialogManager, TwoDialogs) {
   FakeDevToolsClient client;
-  BrowserInfo browser_info;
-  JavaScriptDialogManager manager(&client, &browser_info);
-  base::DictionaryValue params;
-  params.SetString("message", "1");
-  params.SetString("type", "confirm");
-  params.SetString("defaultPrompt", "");
+  JavaScriptDialogManager manager(&client);
+  base::Value::Dict params;
+  params.Set("message", "1");
+  params.Set("type", "confirm");
+  params.Set("defaultPrompt", "");
   ASSERT_EQ(
       kOk,
       manager.OnEvent(&client, "Page.javascriptDialogOpening", params).code());
-  params.SetString("message", "2");
-  params.SetString("type", "alert");
+  params.Set("message", "2");
+  params.Set("type", "alert");
   ASSERT_EQ(
       kOk,
       manager.OnEvent(&client, "Page.javascriptDialogOpening", params).code());
@@ -191,11 +189,11 @@ TEST(JavaScriptDialogManager, TwoDialogs) {
 TEST(JavaScriptDialogManager, OneDialogManualClose) {
   StubDevToolsClient client;
   BrowserInfo browser_info;
-  JavaScriptDialogManager manager(&client, &browser_info);
-  base::DictionaryValue params;
-  params.SetString("message", "hi");
-  params.SetString("type", "alert");
-  params.SetString("defaultPrompt", "");
+  JavaScriptDialogManager manager(&client);
+  base::Value::Dict params;
+  params.Set("message", "hi");
+  params.Set("type", "alert");
+  params.Set("defaultPrompt", "");
   ASSERT_FALSE(manager.IsDialogOpen());
   std::string message;
   ASSERT_EQ(kNoSuchAlert, manager.GetDialogMessage(&message).code());

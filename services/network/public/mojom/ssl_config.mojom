@@ -4,9 +4,9 @@
 
 module network.mojom;
 
+import "services/network/public/mojom/optional_bool.mojom";
+
 enum SSLVersion {
-  kTLS1,
-  kTLS11,
   kTLS12,
   kTLS13,
 };
@@ -40,12 +40,28 @@ struct SSLConfig {
   // canonicalized according to the rules used by GURL.
   array<string> client_cert_pooling_policy;
 
-  // If false, disables post-quantum key agreement in TLS connections.
-  bool cecpq2_enabled = true;
+  // If specified, controls whether post-quantum key agreement is allowed
+  // in TLS connections. If kUnset, this is determined by feature flags.
+  OptionalBool post_quantum_override = kUnset;
 
   // If false, disables TLS Encrypted ClientHello (ECH). If true, the feature
   // may be enabled or disabled, depending on feature flags.
   bool ech_enabled = true;
+
+  // If specified, controls whether insecure hashes are allowed in TLS
+  // handshakes. If kUnset, this is determined by feature flags.
+  OptionalBool insecure_hash_override = kUnset;
+
+  // If specified, controls whether the X.509 keyUsage extension is checked in
+  // TLS 1.2 for RSA certificates that chain to a local trust anchor. If kUnset,
+  // this is determined by feature flags.
+  //
+  // Independent of the setting of this value, keyUsage is always checked at TLS
+  // 1.3, for ECDSA certificates, and for all certificates that chain to a known
+  // root.
+  //
+  // TODO(crbug.com/795089): Enable this unconditionally.
+  OptionalBool rsa_key_usage_for_local_anchors_override = kUnset;
 };
 
 // Receives SSL configuration updates.

@@ -5,30 +5,42 @@
 #ifndef CONTENT_BROWSER_INTEREST_GROUP_AUCTION_WORKLET_MANAGER_H_
 #define CONTENT_BROWSER_INTEREST_GROUP_AUCTION_WORKLET_MANAGER_H_
 
+#include <stdint.h>
+
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/observer_list_types.h"
 #include "content/browser/interest_group/auction_process_manager.h"
+#include "content/browser/interest_group/subresource_url_builder.h"
 #include "content/common/content_export.h"
+#include "content/services/auction_worklet/public/mojom/auction_shared_storage_host.mojom-forward.h"
 #include "content/services/auction_worklet/public/mojom/bidder_worklet.mojom.h"
 #include "content/services/auction_worklet/public/mojom/seller_worklet.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/network/public/mojom/client_security_state.mojom-forward.h"
 #include "services/network/public/mojom/url_loader_factory.mojom-forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
+namespace net {
+class NetworkAnonymizationKey;
+}
+
 namespace content {
 
+class AuctionSharedStorageHost;
+class AuctionNetworkEventsProxy;
 class RenderFrameHostImpl;
 class SiteInstance;
+class SubresourceUrlAuthorizations;
+class SubresourceUrlBuilder;
 
 // Per-frame manager of auction worklets. Manages creation and sharing of
 // worklets. Worklets may be reused if they share URLs for scripts and trusted
@@ -37,8 +49,7 @@ class SiteInstance;
 // hooks, the others by the current worklet implementations.
 //
 // If a worklet fails to load or crashes, information about the error is
-// broadcast to all consumers of the worklet. This will only happen after
-// a worklet was successfully created. After a load failure or crash, the
+// broadcast to all consumers of the worklet. After a load failure or crash, the
 // worklet will not be able to invoke any pending callbacks passed over the Mojo
 // interface.
 //
@@ -46,12 +57,13 @@ class SiteInstance;
 // invoking callbacks that are sharing a worklet in FIFO order. The
 // AuctionProcessManager handles prioritization for process creation. Once a
 // process is created for a worklet, the worklet is created immediately.
-//
-// TODO(https://crbug.com/1276639): Currently only applies to seller worklets.
-// Make this handle bidder worklets, too.
 class CONTENT_EXPORT AuctionWorkletManager {
  public:
   using WorkletType = AuctionProcessManager::WorkletType;
+
+  // How many callbacks are dispatched at once, if splitting up notifications is
+  // on.
+  static const size_t kBatchSize = 10;
 
   // Types of fatal error that can prevent a worklet from all further execution.
   enum class FatalErrorType {
@@ -62,6 +74,8 @@ class CONTENT_EXPORT AuctionWorkletManager {
   using FatalErrorCallback =
       base::OnceCallback<void(FatalErrorType fatal_error_type,
                               const std::vector<std::string>& errors)>;
+
+  int GetFrameTreeNodeID();
 
   // Delegate class to allow dependency injection in tests. Note that passed in
   // URLLoaderFactories can crash and be restarted, so passing in raw pointers
@@ -79,7 +93,13 @@ class CONTENT_EXPORT AuctionWorkletManager {
     // signals.
     virtual network::mojom::URLLoaderFactory* GetTrustedURLLoaderFactory() = 0;
 
-    // Get containing frame. (Passed to debugging hooks).
+    // Preconnects a single uncredentialed socket with the provided parameters.
+    virtual void PreconnectSocket(
+        const GURL& url,
+        const net::NetworkAnonymizationKey& network_anonymization_key) = 0;
+
+    // Get containing frame. (Passed to debugging hooks, and also used to get
+    // the renderer process ID for subresource loading).
     virtual RenderFrameHostImpl* GetFrame() = 0;
 
     // Returns the SiteInstance representing the frame running the auction.
@@ -88,6 +108,9 @@ class CONTENT_EXPORT AuctionWorkletManager {
     // Returns the ClientSecurityState associated with the frame, for use in
     // bidder worklet and signals fetches.
     virtual network::mojom::ClientSecurityStatePtr GetClientSecurityState() = 0;
+
+    // Returns the cookie deprecation label for facilitated testing.
+    virtual std::optional<std::string> GetCookieDeprecationLabel() = 0;
   };
 
   // Internal class that owns and creates worklets. It also tracks pending
@@ -96,16 +119,60 @@ class CONTENT_EXPORT AuctionWorkletManager {
   // AuctionWorkletManager.
   class WorkletOwner;
 
+  // Enough information to uniquely ID a worklet. If these fields match for two
+  // worklets (and they're loaded in the same frame, as this class is
+  // frame-scoped), the worklets can use the same Mojo Worklet object.
+  struct CONTENT_EXPORT WorkletKey {
+    WorkletKey(WorkletType type,
+               const GURL& script_url,
+               const std::optional<GURL>& wasm_url,
+               const std::optional<GURL>& signals_url,
+               bool needs_cors_for_additional_bid,
+               std::optional<uint16_t> experiment_group_id,
+               const std::string& trusted_bidding_signals_slot_size_param);
+    WorkletKey(const WorkletKey&);
+    WorkletKey(WorkletKey&&);
+    ~WorkletKey();
+
+    // Fast, non-cryptographic hash to count unique worklets for UKM.
+    size_t GetHash() const;
+
+    bool operator<(const WorkletKey& other) const;
+
+    WorkletType type;
+    GURL script_url;
+    std::optional<GURL> wasm_url;
+    std::optional<GURL> signals_url;
+
+    // `needs_cors_for_additional_bid` is set for buyer reporting for additional
+    // bids; those need to perform a CORS check others don't.
+    bool needs_cors_for_additional_bid;
+
+    std::optional<uint16_t> experiment_group_id;
+    std::string trusted_bidding_signals_slot_size_param;
+  };
+
   // Class that tracks a request for a Worklet, and helps manage the lifetime of
   // the returned Worklet once the request receives one. Destroying the handle
   // will abort a pending request and potentially release any worklets or
   // processes it is keeping alive, so consumers should destroy these as soon as
-  // they are no longer needed.
+  // they are no longer needed. Handles should not outlive the
+  // AuctionWorkletManager.
   class CONTENT_EXPORT WorkletHandle : public base::CheckedObserver {
    public:
     WorkletHandle(const WorkletHandle&) = delete;
     WorkletHandle& operator=(const WorkletHandle&) = delete;
     ~WorkletHandle() override;
+
+    // Authorizes subresource bundle subresource URLs that the worklet may
+    // request as long as this WorkletHandle instance is live (refcounting
+    // allows multiple WorkletHandle instances to authorize the same URLs).
+    //
+    // This must be called manually before the worklet is asked to do anything
+    // involving fetching those subresources, but after the worklet is
+    // available. Calls after the first one will be ignored.
+    void AuthorizeSubresourceUrls(
+        const SubresourceUrlBuilder& subresource_url_builder);
 
     // Retrieves the corresponding Worklet Mojo interface for the requested
     // worklet. Only the method corresponding to the worklet type `this` was
@@ -122,6 +189,9 @@ class CONTENT_EXPORT AuctionWorkletManager {
     // pointers still seems the safest thing to do).
     auction_worklet::mojom::BidderWorklet* GetBidderWorklet();
     auction_worklet::mojom::SellerWorklet* GetSellerWorklet();
+
+    const SubresourceUrlAuthorizations&
+    GetSubresourceUrlAuthorizationsForTesting();
 
    private:
     friend class AuctionWorkletManager;
@@ -143,10 +213,11 @@ class CONTENT_EXPORT AuctionWorkletManager {
 
     scoped_refptr<WorkletOwner> worklet_owner_;
 
-    // Non-null only when waiting on a Worklet object to be provided.
     base::OnceClosure worklet_available_callback_;
-
     FatalErrorCallback fatal_error_callback_;
+
+    uint64_t seq_num_;
+    bool authorized_subresources_ = false;
   };
 
   // `delegate` and `auction_process_manager` must outlive the created
@@ -159,6 +230,16 @@ class CONTENT_EXPORT AuctionWorkletManager {
   AuctionWorkletManager& operator=(const AuctionWorkletManager&) = delete;
   ~AuctionWorkletManager();
 
+  // Computes the key for bidder worklet with given params.
+  // RequestBidderWorklet(...) is RequestWorkletByKey(BidderWorkletKey(...))
+  static WorkletKey BidderWorkletKey(
+      const GURL& bidding_logic_url,
+      const std::optional<GURL>& wasm_url,
+      const std::optional<GURL>& trusted_bidding_signals_url,
+      bool needs_cors_for_additional_bid,
+      std::optional<uint16_t> experiment_group_id,
+      const std::string& trusted_bidding_signals_slot_size_param);
+
   // Requests a worklet with the specified properties. The top frame origin and
   // debugging information are obtained from the Delegate's RenderFrameHost.
   //
@@ -166,63 +247,54 @@ class CONTENT_EXPORT AuctionWorkletManager {
   // DevTools, and merging requests with the same parameters so they can share a
   // single worklet.
   //
-  // If a worklet is synchronously assigned to `out_worklet_handle`, returns
-  // true and the Worklet pointer can immediately be retrieved from the handle.
-  // `worklet_available_callback` will not be invoked. Otherwise, returns false
-  // and will invoke `worklet_available_callback` when the service pointer can
-  // be retrieved from `handle`.
+  // Will invoke `worklet_available_callback` when the service pointer can
+  // be retrieved from `handle`. Multiple instances of the callback can be
+  // invoked synchronously right after each other, but none will be invoked from
+  // within the Request... call itself. `worklet_available_callback` invocations
+  // that refer to the same underlying worklet will be in the same order as the
+  // Request... call, but those that don't share worklets are unordered with
+  // respect to each other.
   //
   // `fatal_error_callback` is invoked in the case of a fatal error. It may be
-  // invoked any time after the worklet is available (after returning true or
-  // after `worklet_available_callback` has been invoked), before the
-  // WorkletHandle is destroyed. It is called to indicate the worklet failed to
-  // load or crashed.
-  [[nodiscard]] bool RequestBidderWorklet(
+  // invoked both if the worklet creation outright failed, or after a successful
+  // creation that invoked `worklet_available_callback_`, so long as the
+  // WorkletHandle lives. It is called to indicate the worklet failed to
+  // load or crashed.  Callbacks from multiple calls may be invoked right after
+  // another without returning to the event loop (but not within the Request...
+  // call itself); but unlike for success callback there are no ordering
+  // guarantees about ordering of failures corresponding to different Request...
+  // calls.
+  //
+  // The callbacks should not delete the AuctionWorkletManager itself, but are
+  // free to release any WorkletHandle they wish.
+  void RequestBidderWorklet(
       const GURL& bidding_logic_url,
-      const absl::optional<GURL>& wasm_url,
-      const absl::optional<GURL>& trusted_bidding_signals_url,
-      absl::optional<uint16_t> experiment_group_id,
+      const std::optional<GURL>& wasm_url,
+      const std::optional<GURL>& trusted_bidding_signals_url,
+      bool needs_cors_for_additional_bid,
+      std::optional<uint16_t> experiment_group_id,
+      const std::string& trusted_bidding_signals_slot_size_param,
       base::OnceClosure worklet_available_callback,
       FatalErrorCallback fatal_error_callback,
       std::unique_ptr<WorkletHandle>& out_worklet_handle);
-  [[nodiscard]] bool RequestSellerWorklet(
+  void RequestSellerWorklet(
       const GURL& decision_logic_url,
-      const absl::optional<GURL>& trusted_scoring_signals_url,
-      absl::optional<uint16_t> experiment_group_id,
+      const std::optional<GURL>& trusted_scoring_signals_url,
+      std::optional<uint16_t> experiment_group_id,
       base::OnceClosure worklet_available_callback,
       FatalErrorCallback fatal_error_callback,
       std::unique_ptr<WorkletHandle>& out_worklet_handle);
+  void RequestWorkletByKey(WorkletKey worklet_info,
+                           base::OnceClosure worklet_available_callback,
+                           FatalErrorCallback fatal_error_callback,
+                           std::unique_ptr<WorkletHandle>& out_worklet_handle);
 
  private:
-  // Enough information to uniquely ID a worklet. If these fields match for two
-  // worklets (and they're loaded in the same frame, as this class is
-  // frame-scoped), the worklets can use the same Mojo Worklet object.
-  struct WorkletInfo {
-    WorkletInfo(WorkletType type,
-                const GURL& script_url,
-                const absl::optional<GURL>& wasm_url,
-                const absl::optional<GURL>& signals_url,
-                absl::optional<uint16_t> experiment_group_id);
-    WorkletInfo(const WorkletInfo&);
-    WorkletInfo(WorkletInfo&&);
-    ~WorkletInfo();
-
-    WorkletType type;
-    GURL script_url;
-    absl::optional<GURL> wasm_url;
-    absl::optional<GURL> signals_url;
-    absl::optional<uint16_t> experiment_group_id;
-
-    bool operator<(const WorkletInfo& other) const;
-  };
-
-  bool RequestWorkletInternal(
-      WorkletInfo worklet_info,
-      base::OnceClosure worklet_available_callback,
-      FatalErrorCallback fatal_error_callback,
-      std::unique_ptr<WorkletHandle>& out_worklet_handle);
-
   void OnWorkletNoLongerUsable(WorkletOwner* worklet);
+
+  mojo::PendingRemote<auction_worklet::mojom::AuctionSharedStorageHost>
+  MaybeBindAuctionSharedStorageHost(RenderFrameHostImpl* auction_runner_rfh,
+                                    const url::Origin& worklet_origin);
 
   // Accessors used by inner classes. Not strictly needed, but makes it clear
   // which fields they can access.
@@ -238,7 +310,10 @@ class CONTENT_EXPORT AuctionWorkletManager {
   const url::Origin frame_origin_;
   raw_ptr<Delegate> const delegate_;
 
-  std::map<WorkletInfo, WorkletOwner*> worklets_;
+  std::unique_ptr<AuctionNetworkEventsProxy> auction_network_events_proxy_;
+  std::unique_ptr<AuctionSharedStorageHost> auction_shared_storage_host_;
+
+  std::map<WorkletKey, WorkletOwner*> worklets_;
 };
 
 }  // namespace content

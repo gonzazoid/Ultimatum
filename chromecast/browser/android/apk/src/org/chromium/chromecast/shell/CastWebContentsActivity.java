@@ -24,6 +24,7 @@ import android.widget.FrameLayout;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
+import androidx.annotation.VisibleForTesting;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import org.chromium.base.BuildInfo;
@@ -32,7 +33,7 @@ import org.chromium.chromecast.base.Both;
 import org.chromium.chromecast.base.CastSwitches;
 import org.chromium.chromecast.base.Controller;
 import org.chromium.chromecast.base.Observable;
-import org.chromium.chromecast.base.Observers;
+import org.chromium.chromecast.base.Observer;
 import org.chromium.chromecast.base.Unit;
 import org.chromium.content_public.browser.WebContents;
 
@@ -83,15 +84,24 @@ public class CastWebContentsActivity extends Activity {
     private final Controller<Unit> mStartedState = new Controller<>();
     // Tracks the most recent Intent for the Activity.
     private final Controller<Intent> mGotIntentState = new Controller<>();
+    // Tracks the most recent session id for the Activity. Derived from
+    // mGotIntentState.
+    private final Controller<String> mSessionIdState = new Controller<>();
     // Set this to cause the Activity to finish.
     private final Controller<String> mIsFinishingState = new Controller<>();
     // Set in unittests to skip some behavior.
     private final Controller<Unit> mIsTestingState = new Controller<>();
     // Set at creation. Handles destroying SurfaceHelper.
     private final Controller<CastWebContentsSurfaceHelper> mSurfaceHelperState = new Controller<>();
+    // Set when the activity has the surface available.
+    @VisibleForTesting
+    final Controller<Unit> mSurfaceAvailable = new Controller<>();
 
     @Nullable
     private CastWebContentsSurfaceHelper mSurfaceHelper;
+
+    // SessionId provided in the original Intent used to start the Activity.
+    private String mRootSessionId;
 
     private boolean mAllowPictureInPicture;
     private boolean mIsInPictureInPictureMode;
@@ -109,7 +119,7 @@ public class CastWebContentsActivity extends Activity {
                 mIsFinishingState.set("Stopped by intent: " + intent.getAction());
             });
         });
-        createdAndNotTestingState.subscribe(Observers.onEnter(x -> {
+        createdAndNotTestingState.subscribe(Observer.onOpen(x -> {
             // Do this in onCreate() only if not testing.
             CastBrowserHelper.initializeBrowser(getApplicationContext());
 
@@ -120,7 +130,9 @@ public class CastWebContentsActivity extends Activity {
                             (FrameLayout) findViewById(R.id.web_contents_container),
                             CastSwitches.getSwitchValueColor(
                                     CastSwitches.CAST_APP_BACKGROUND_COLOR, Color.BLACK)),
-                    (Uri uri) -> mIsFinishingState.set("Delayed teardown for URI: " + uri)));
+                    (Uri uri)
+                            -> mIsFinishingState.set("Delayed teardown for URI: " + uri),
+                    mSurfaceAvailable));
         }));
 
         mSurfaceHelperState.subscribe((CastWebContentsSurfaceHelper surfaceHelper) -> {
@@ -131,7 +143,7 @@ public class CastWebContentsActivity extends Activity {
             };
         });
 
-        mCreatedState.subscribe(Observers.onExit(x -> mSurfaceHelperState.reset()));
+        mCreatedState.subscribe(Observer.onClose(x -> mSurfaceHelperState.reset()));
 
         mCreatedState.subscribe(x -> {
             IntentFilter filter = new IntentFilter();
@@ -142,19 +154,86 @@ public class CastWebContentsActivity extends Activity {
             });
         });
 
+        final Controller<Unit> mediaPlaying = new Controller<>();
+        mCreatedState.and(mSessionIdState).map(Both::getSecond).subscribe(sessionId -> {
+            IntentFilter filter = new IntentFilter(CastWebContentsIntentUtils.ACTION_MEDIA_PLAYING);
+            LocalBroadcastReceiverScope scope =
+                    new LocalBroadcastReceiverScope(filter, (Intent intent) -> {
+                        if (CastWebContentsIntentUtils.isMediaPlaying(intent)) {
+                            mediaPlaying.set(Unit.unit());
+                        } else {
+                            mediaPlaying.reset();
+                        }
+                    });
+            // Ensure we get an update if media playback had already started.
+            requestMediaPlayingStatus(sessionId);
+            return scope;
+        });
+
+        final Controller<Unit> isDocked = new Controller<>();
+        mCreatedState.subscribe(x -> {
+            IntentFilter filter = new IntentFilter(Intent.ACTION_DOCK_EVENT);
+            return new BroadcastReceiverScope(filter, (Intent intent) -> {
+                if (isDocked(intent)) {
+                    isDocked.set(Unit.unit());
+                } else {
+                    isDocked.reset();
+                }
+            });
+        });
+
+        mCreatedState.subscribe(x -> {
+            IntentFilter filter = new IntentFilter(Intent.ACTION_USER_PRESENT);
+            return new BroadcastReceiverScope(filter, (Intent intent) -> {
+                if (DEBUG) {
+                    Log.d(TAG, "ACTION_USER_PRESENT received. canUsePictureInPicture: "
+                            + canUsePictureInPicture() + " mAllowPictureInPicture: "
+                            + mAllowPictureInPicture);
+                }
+                if (canUsePictureInPicture() && mAllowPictureInPicture) {
+                    enterPictureInPictureMode(new PictureInPictureParams.Builder().build());
+                }
+            });
+        });
+
+        Observable<Unit> shouldKeepScreenOn =
+                mGotIntentState
+                        .filter(intent
+                                -> CastWebContentsIntentUtils.shouldKeepScreenOn(intent)
+                                        || isInLockTaskMode(this))
+                        .opaque();
+
+        shouldKeepScreenOn.or(mediaPlaying.and(isDocked).opaque()).subscribe((x) -> {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            return () -> getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        });
+
+        isDocked.subscribe((x) -> {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON);
+            return ()
+                           -> getWindow().clearFlags(
+                                   WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON);
+        });
+
+        mGotIntentState.map(Intent::getExtras)
+                .map(CastWebContentsIntentUtils::getSessionId)
+                .subscribe(Observer.onOpen(mSessionIdState::set));
+
+        mStartedState.and(mSessionIdState).subscribe(both -> {
+            sendVisibilityChanged(
+                    both.second, CastWebContentsIntentUtils.VISIBITY_TYPE_FULL_SCREEN);
+            return () -> {
+                sendVisibilityChanged(both.second, CastWebContentsIntentUtils.VISIBITY_TYPE_HIDDEN);
+            };
+        });
+        mStartedState.subscribe(Observer.onOpen(mSurfaceAvailable::set));
+
         // Set a flag to exit sleep mode when this activity starts.
         mCreatedState.and(mGotIntentState)
                 .map(Both::getSecond)
                 // Turn the screen on only if the launching Intent asks to.
                 .filter(CastWebContentsIntentUtils::shouldTurnOnScreen)
-                .subscribe(Observers.onEnter(x -> turnScreenOn()));
-
-        mCreatedState.and(mGotIntentState)
-                .map(Both::getSecond)
-                .filter(CastWebContentsIntentUtils::shouldKeepScreenOn)
-                .subscribe(Observers.onEnter(x -> {
-                    getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-                }));
+                .subscribe(Observer.onOpen(x -> turnScreenOn()));
 
         // Handle each new Intent.
         Controller<CastWebContentsSurfaceHelper.StartParams> startParamsState = new Controller<>();
@@ -163,33 +242,27 @@ public class CastWebContentsActivity extends Activity {
                 .map(Intent::getExtras)
                 .map(CastWebContentsSurfaceHelper.StartParams::fromBundle)
                 // Use the duplicate-filtering functionality of Controller to drop duplicate params.
-                .subscribe(Observers.onEnter(startParamsState::set));
+                .subscribe(Observer.onOpen(startParamsState::set));
         mSurfaceHelperState.and(startParamsState)
-                .subscribe(Observers.onEnter(
+                .subscribe(Observer.onOpen(
                         Both.adapt(CastWebContentsSurfaceHelper::onNewStartParams)));
 
-        mIsFinishingState.subscribe(Observers.onEnter((String reason) -> {
+        mGotIntentState.and(Observable.not(mIsFinishingState))
+                .map(Both::getFirst)
+                .map(CastWebContentsIntentUtils::getSessionId)
+                .subscribe(Observer.onOpen(sessionId -> {
+                    TaskRemovedMonitorService.start(mRootSessionId, sessionId);
+                }));
+
+        mIsFinishingState.subscribe(Observer.onOpen((String reason) -> {
             if (DEBUG) Log.d(TAG, "Finishing activity: " + reason);
             mSurfaceHelperState.reset();
+            TaskRemovedMonitorService.stop();
             finishAndRemoveTask();
         }));
 
-        mStartedState.subscribe(x -> {
-            Context ctx = getApplicationContext();
-            Intent intent = getIntent();
-            String instanceId = CastWebContentsIntentUtils.getSessionId(intent.getExtras());
-            Intent visible = CastWebContentsIntentUtils.onVisibilityChange(
-                    instanceId, CastWebContentsIntentUtils.VISIBITY_TYPE_FULL_SCREEN);
-            LocalBroadcastManager.getInstance(ctx).sendBroadcastSync(visible);
-            return () -> {
-                Intent hidden = CastWebContentsIntentUtils.onVisibilityChange(
-                        instanceId, CastWebContentsIntentUtils.VISIBITY_TYPE_HIDDEN);
-                LocalBroadcastManager.getInstance(ctx).sendBroadcastSync(hidden);
-            };
-        });
-
         // If a new Intent arrives after finishing, start a new Activity instead of recycling this.
-        gotIntentAfterFinishingState.subscribe(Observers.onEnter((Intent intent) -> {
+        gotIntentAfterFinishingState.subscribe(Observer.onOpen((Intent intent) -> {
             Log.d(TAG, "Got intent while finishing current activity, so start new activity.");
             int flags = intent.getFlags();
             flags = flags & ~Intent.FLAG_ACTIVITY_SINGLE_TOP;
@@ -203,6 +276,7 @@ public class CastWebContentsActivity extends Activity {
     protected void onCreate(final Bundle savedInstanceState) {
         if (DEBUG) Log.d(TAG, "onCreate");
         super.onCreate(savedInstanceState);
+        mRootSessionId = CastWebContentsIntentUtils.getSessionId(getIntent());
         mCreatedState.set(Unit.unit());
         mGotIntentState.set(getIntent());
 
@@ -215,6 +289,7 @@ public class CastWebContentsActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         if (DEBUG) Log.d(TAG, "onNewIntent");
+        setIntent(intent);
         mGotIntentState.set(intent);
     }
 
@@ -229,6 +304,7 @@ public class CastWebContentsActivity extends Activity {
     protected void onStop() {
         if (DEBUG) Log.d(TAG, "onStop");
         mStartedState.reset();
+
         // If this device is in "lock task mode," then leaving the Activity will not return to the
         // Home screen and there will be no affordance for the user to return to this Activity.
         // When in this mode, leaving the Activity should tear down the Cast app.
@@ -236,10 +312,6 @@ public class CastWebContentsActivity extends Activity {
             CastWebContentsComponent.onComponentClosed(
                     CastWebContentsIntentUtils.getSessionId(getIntent()));
             mIsFinishingState.set("User exit while in lock task mode");
-        } else if (mIsInPictureInPictureMode) {
-            CastWebContentsComponent.onComponentClosed(
-                    CastWebContentsIntentUtils.getSessionId(getIntent()));
-            mIsFinishingState.set("User exit while in picture-in-picture mode");
         }
         super.onStop();
     }
@@ -290,6 +362,8 @@ public class CastWebContentsActivity extends Activity {
         if (DEBUG) Log.d(TAG, "onUserLeaveHint");
         if (canUsePictureInPicture() && mAllowPictureInPicture) {
             enterPictureInPictureMode(new PictureInPictureParams.Builder().build());
+        } else {
+            mSurfaceAvailable.reset();
         }
     }
 
@@ -325,6 +399,19 @@ public class CastWebContentsActivity extends Activity {
                 && !BuildInfo.getInstance().isTV;
     }
 
+    // Sends the specified visibility change event to the current app (as reported by getIntent()).
+    private void sendVisibilityChanged(String sessionId, @VisibilityType int visibilityType) {
+        Context ctx = getApplicationContext();
+        Intent event = CastWebContentsIntentUtils.onVisibilityChange(sessionId, visibilityType);
+        LocalBroadcastManager.getInstance(ctx).sendBroadcastSync(event);
+    }
+
+    private void requestMediaPlayingStatus(String sessionId) {
+        Context ctx = getApplicationContext();
+        Intent intent = CastWebContentsIntentUtils.requestMediaPlayingStatus(sessionId);
+        LocalBroadcastManager.getInstance(ctx).sendBroadcastSync(intent);
+    }
+
     public void finishForTesting() {
         mIsFinishingState.set("Finish for testing");
     }
@@ -335,5 +422,14 @@ public class CastWebContentsActivity extends Activity {
 
     public void setSurfaceHelperForTesting(CastWebContentsSurfaceHelper surfaceHelper) {
         mSurfaceHelperState.set(surfaceHelper);
+    }
+
+    private static boolean isDocked(Intent intent) {
+        if (intent == null || !Intent.ACTION_DOCK_EVENT.equals(intent.getAction())) {
+            Log.w(TAG, "Invalid dock intent:" + intent);
+            return false;
+        }
+        int dockState = intent.getIntExtra(Intent.EXTRA_DOCK_STATE, -1);
+        return dockState != Intent.EXTRA_DOCK_STATE_UNDOCKED;
     }
 }

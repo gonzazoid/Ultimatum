@@ -15,12 +15,11 @@
 #include <unordered_set>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/flat_set.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/functional/bind.h"
 #include "base/memory/memory_pressure_monitor.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/values.h"
@@ -46,7 +45,6 @@ class Value;
 
 namespace net {
 
-class CTPolicyEnforcer;
 class CertVerifier;
 class ClientSocketFactory;
 class ClientSocketPool;
@@ -64,7 +62,7 @@ class NetworkErrorLoggingService;
 class NetworkQualityEstimator;
 class ProxyDelegate;
 class ProxyResolutionService;
-class ProxyServer;
+class ProxyChain;
 class QuicCryptoClientStreamFactory;
 #if BUILDFLAG(ENABLE_REPORTING)
 class ReportingService;
@@ -80,12 +78,6 @@ const uint32_t kSpdyMaxHeaderTableSize = 64 * 1024;
 // The maximum size of header list that the server is allowed to send.
 const uint32_t kSpdyMaxHeaderListSize = 256 * 1024;
 
-// Specifies the maximum concurrent streams server could send (via push).
-const uint32_t kSpdyMaxConcurrentPushedStreams = 1000;
-
-// Specifies the the default value for the push setting, which is disabled.
-const uint32_t kSpdyDisablePush = 0;
-
 // Self-contained structure with all the simple configuration options
 // supported by the HttpNetworkSession.
 struct NET_EXPORT HttpNetworkSessionParams {
@@ -93,7 +85,6 @@ struct NET_EXPORT HttpNetworkSessionParams {
   HttpNetworkSessionParams(const HttpNetworkSessionParams& other);
   ~HttpNetworkSessionParams();
 
-  bool enable_server_push_cancellation = false;
   HostMappingRules host_mapping_rules;
   bool ignore_certificate_errors = false;
   uint16_t testing_fixed_http_port = 0;
@@ -198,9 +189,8 @@ struct NET_EXPORT HttpNetworkSessionContext {
   raw_ptr<HostResolver> host_resolver;
   raw_ptr<CertVerifier> cert_verifier;
   raw_ptr<TransportSecurityState> transport_security_state;
-  raw_ptr<CTPolicyEnforcer> ct_policy_enforcer;
   raw_ptr<SCTAuditingDelegate> sct_auditing_delegate;
-  raw_ptr<ProxyResolutionService> proxy_resolution_service;
+  raw_ptr<ProxyResolutionService, DanglingUntriaged> proxy_resolution_service;
   raw_ptr<ProxyDelegate> proxy_delegate;
   raw_ptr<const HttpUserAgentSettings> http_user_agent_settings;
   raw_ptr<SSLConfigService> ssl_config_service;
@@ -241,10 +231,10 @@ class NET_EXPORT HttpNetworkSession {
   void RemoveResponseDrainer(HttpResponseBodyDrainer* drainer);
 
   // Returns the socket pool of the given type for use with the specified
-  // ProxyServer. Use ProxyServer::Direct() to get the pool for use with direct
+  // ProxyChain. Use ProxyChain::Direct() to get the pool for use with direct
   // connections.
   ClientSocketPool* GetSocketPool(SocketPoolType pool_type,
-                                  const ProxyServer& proxy_server);
+                                  const ProxyChain& proxy_chain);
 
   CertVerifier* cert_verifier() { return cert_verifier_; }
   ProxyResolutionService* proxy_resolution_service() {
@@ -294,8 +284,6 @@ class NET_EXPORT HttpNetworkSession {
   // Returns the original Context used to construct this session.
   const HttpNetworkSessionContext& context() const { return context_; }
 
-  void SetServerPushDelegate(std::unique_ptr<ServerPushDelegate> push_delegate);
-
   // Returns protocols to be used with ALPN.
   const NextProtoVector& GetAlpnProtos() const { return next_protos_; }
 
@@ -310,6 +298,9 @@ class NET_EXPORT HttpNetworkSession {
 
   // Disable QUIC for new streams.
   void DisableQuic();
+
+  // Ignores certificate errors on new connection attempts.
+  void IgnoreCertificateErrorsForTesting();
 
   // Clear the SSL session cache.
   void ClearSSLSessionCache();
@@ -340,7 +331,8 @@ class NET_EXPORT HttpNetworkSession {
   const raw_ptr<ReportingService> reporting_service_;
   const raw_ptr<NetworkErrorLoggingService> network_error_logging_service_;
 #endif
-  const raw_ptr<ProxyResolutionService> proxy_resolution_service_;
+  const raw_ptr<ProxyResolutionService, DanglingUntriaged>
+      proxy_resolution_service_;
   const raw_ptr<SSLConfigService> ssl_config_service_;
 
   HttpAuthCache http_auth_cache_;
@@ -349,7 +341,6 @@ class NET_EXPORT HttpNetworkSession {
   WebSocketEndpointLockManager websocket_endpoint_lock_manager_;
   std::unique_ptr<ClientSocketPoolManager> normal_socket_pool_manager_;
   std::unique_ptr<ClientSocketPoolManager> websocket_socket_pool_manager_;
-  std::unique_ptr<ServerPushDelegate> push_delegate_;
   QuicStreamFactory quic_stream_factory_;
   SpdySessionPool spdy_session_pool_;
   std::unique_ptr<HttpStreamFactory> http_stream_factory_;

@@ -9,30 +9,29 @@ import {BridgeConstants} from '../common/bridge_constants.js';
 import {BridgeHelper} from '../common/bridge_helper.js';
 import {EventSourceType} from '../common/event_source_type.js';
 
-export const EventSourceState = {};
+export class EventSource {
+  constructor() {
+    /** @private {!EventSourceType} */
+    this.state_ = chrome.accessibilityPrivate.IS_DEFAULT_EVENT_SOURCE_TOUCH ?
+        EventSourceType.TOUCH_GESTURE :
+        EventSourceType.NONE;
+  }
 
-/**
- * Sets the current event source.
- * @param {EventSourceType} source
- */
-EventSourceState.set = function(source) {
-  EventSourceState.current_ = source;
-};
+  static init() {
+    EventSource.instance = new EventSource();
 
-/**
- * Gets the current event source.
- * @return {EventSourceType}
- */
-EventSourceState.get = function() {
-  return EventSourceState.current_;
-};
+    BridgeHelper.registerHandler(
+        BridgeConstants.EventSource.TARGET,
+        BridgeConstants.EventSource.Action.GET, () => EventSource.get());
+  }
 
-/** @private {EventSourceType} */
-EventSourceState.current_ =
-    chrome.accessibilityPrivate.IS_DEFAULT_EVENT_SOURCE_TOUCH ?
-    EventSourceType.TOUCH_GESTURE :
-    EventSourceType.NONE;
+  /** @param {!EventSourceType} source */
+  static set(source) {
+    EventSource.instance.state_ = source;
+  }
 
-BridgeHelper.registerHandler(
-    BridgeConstants.EventSourceState.TARGET,
-    BridgeConstants.EventSourceState.Action.GET, () => EventSourceState.get());
+  /** @return {!EventSourceType} */
+  static get() {
+    return EventSource.instance.state_;
+  }
+}

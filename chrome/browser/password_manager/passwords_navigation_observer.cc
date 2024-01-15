@@ -4,6 +4,9 @@
 
 #include "chrome/browser/password_manager/passwords_navigation_observer.h"
 
+#include "content/public/browser/navigation_handle.h"
+#include "content/public/browser/render_frame_host.h"
+#include "content/public/browser/web_contents_observer.h"
 #include "url/gurl.h"
 
 PasswordsNavigationObserver::PasswordsNavigationObserver(
@@ -17,21 +20,20 @@ void PasswordsNavigationObserver::DidFinishNavigation(
     return;
 
   if (quit_on_entry_committed_)
-    run_loop_.Quit();
+    waiter_helper_.OnEvent();
 }
 
 void PasswordsNavigationObserver::DidFinishLoad(
     content::RenderFrameHost* render_frame_host,
     const GURL& validated_url) {
-  render_frame_host_ = render_frame_host;
   if (!wait_for_path_.empty()) {
     if (validated_url.path() == wait_for_path_)
-      run_loop_.Quit();
+      waiter_helper_.OnEvent();
   } else if (!render_frame_host->GetParent()) {
-    run_loop_.Quit();
+    waiter_helper_.OnEvent();
   }
 }
 
-void PasswordsNavigationObserver::Wait() {
-  run_loop_.Run();
+bool PasswordsNavigationObserver::Wait() {
+  return waiter_helper_.Wait();
 }

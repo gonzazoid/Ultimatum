@@ -24,7 +24,10 @@ enum MediaSessionAction {
   "seekto",
   "togglemicrophone",
   "togglecamera",
-  "hangup"
+  "hangup",
+  "previousslide",
+  "nextslide",
+  "enterpictureinpicture"
 };
 
 callback MediaSessionActionHandler = void (MediaSessionActionDetails details);
@@ -42,9 +45,9 @@ callback MediaSessionActionHandler = void (MediaSessionActionDetails details);
     [Measure, RaisesException]
     void setPositionState(optional MediaPositionState state = {});
 
-    [Measure, RuntimeEnabled=MediaSessionWebRTC]
+    [Measure]
     void setMicrophoneActive(boolean active);
 
-    [Measure, RuntimeEnabled=MediaSessionWebRTC]
+    [Measure]
     void setCameraActive(boolean active);
 };

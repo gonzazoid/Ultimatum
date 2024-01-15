@@ -16,6 +16,8 @@ import zipfile
 
 import filter_zip
 from util import build_utils
+import action_helpers  # build_utils adds //build to sys.path.
+import zip_helpers
 
 
 _ANDROID_BUILD_DIR = os.path.dirname(os.path.dirname(__file__))
@@ -65,7 +67,7 @@ def _AddResources(aar_zip, resource_zips, include_globs):
 def main(args):
   args = build_utils.ExpandFileArgs(args)
   parser = argparse.ArgumentParser()
-  build_utils.AddDepfileOption(parser)
+  action_helpers.add_depfile_arg(parser)
   parser.add_argument('--output', required=True, help='Path to output aar.')
   parser.add_argument('--jars', required=True, help='GN list of jar inputs.')
   parser.add_argument('--dependencies-res-zips', required=True,
@@ -98,52 +100,60 @@ def main(args):
   if options.native_libraries and not options.abi:
     parser.error('You must provide --abi if you have native libs')
 
-  options.jars = build_utils.ParseGnList(options.jars)
-  options.dependencies_res_zips = build_utils.ParseGnList(
+  options.jars = action_helpers.parse_gn_list(options.jars)
+  options.dependencies_res_zips = action_helpers.parse_gn_list(
       options.dependencies_res_zips)
-  options.r_text_files = build_utils.ParseGnList(options.r_text_files)
-  options.proguard_configs = build_utils.ParseGnList(options.proguard_configs)
-  options.native_libraries = build_utils.ParseGnList(options.native_libraries)
-  options.jar_excluded_globs = build_utils.ParseGnList(
+  options.r_text_files = action_helpers.parse_gn_list(options.r_text_files)
+  options.proguard_configs = action_helpers.parse_gn_list(
+      options.proguard_configs)
+  options.native_libraries = action_helpers.parse_gn_list(
+      options.native_libraries)
+  options.jar_excluded_globs = action_helpers.parse_gn_list(
       options.jar_excluded_globs)
-  options.jar_included_globs = build_utils.ParseGnList(
+  options.jar_included_globs = action_helpers.parse_gn_list(
       options.jar_included_globs)
-  options.resource_included_globs = build_utils.ParseGnList(
+  options.resource_included_globs = action_helpers.parse_gn_list(
       options.resource_included_globs)
 
   with tempfile.NamedTemporaryFile(delete=False) as staging_file:
     try:
       with zipfile.ZipFile(staging_file.name, 'w') as z:
-        build_utils.AddToZipHermetic(
-            z, 'AndroidManifest.xml', src_path=options.android_manifest)
+        zip_helpers.add_to_zip_hermetic(z,
+                                        'AndroidManifest.xml',
+                                        src_path=options.android_manifest)
 
         path_transform = filter_zip.CreatePathTransform(
             options.jar_excluded_globs, options.jar_included_globs)
         with tempfile.NamedTemporaryFile() as jar_file:
-          build_utils.MergeZips(
-              jar_file.name, options.jars, path_transform=path_transform)
-          build_utils.AddToZipHermetic(z, 'classes.jar', src_path=jar_file.name)
+          zip_helpers.merge_zips(jar_file.name,
+                                 options.jars,
+                                 path_transform=path_transform)
+          zip_helpers.add_to_zip_hermetic(z,
+                                          'classes.jar',
+                                          src_path=jar_file.name)
 
-        build_utils.AddToZipHermetic(
-            z,
-            'R.txt',
-            data=_MergeRTxt(options.r_text_files,
-                            options.resource_included_globs))
-        build_utils.AddToZipHermetic(z, 'public.txt', data='')
+        zip_helpers.add_to_zip_hermetic(z,
+                                        'R.txt',
+                                        data=_MergeRTxt(
+                                            options.r_text_files,
+                                            options.resource_included_globs))
+        zip_helpers.add_to_zip_hermetic(z, 'public.txt', data='')
 
         if options.proguard_configs:
-          build_utils.AddToZipHermetic(
-              z, 'proguard.txt',
-              data=_MergeProguardConfigs(options.proguard_configs))
+          zip_helpers.add_to_zip_hermetic(z,
+                                          'proguard.txt',
+                                          data=_MergeProguardConfigs(
+                                              options.proguard_configs))
 
         _AddResources(z, options.dependencies_res_zips,
                       options.resource_included_globs)
 
         for native_library in options.native_libraries:
           libname = os.path.basename(native_library)
-          build_utils.AddToZipHermetic(
-              z, os.path.join('jni', options.abi, libname),
-              src_path=native_library)
+          zip_helpers.add_to_zip_hermetic(z,
+                                          os.path.join('jni', options.abi,
+                                                       libname),
+                                          src_path=native_library)
     except:
       os.unlink(staging_file.name)
       raise
@@ -152,7 +162,7 @@ def main(args):
   if options.depfile:
     all_inputs = (options.jars + options.dependencies_res_zips +
                   options.r_text_files + options.proguard_configs)
-    build_utils.WriteDepfile(options.depfile, options.output, all_inputs)
+    action_helpers.write_depfile(options.depfile, options.output, all_inputs)
 
 
 if __name__ == '__main__':

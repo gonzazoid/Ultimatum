@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_UI_LENS_LENS_SIDE_PANEL_HELPER_H_
 #define CHROME_BROWSER_UI_LENS_LENS_SIDE_PANEL_HELPER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "url/gurl.h"
 
 namespace content {
@@ -28,15 +28,6 @@ void OpenLensSidePanel(Browser* browser,
 // Opens the Lens region search feature in a new tab with a WebUI page.
 void OpenLensStaticPage(Browser* browser);
 
-// Check if the lens URL is a valid results page. This is done by checking if
-// the URL has a payload parameter.
-bool IsValidLensResultUrl(const GURL& url);
-
-// Returns true if the given URL corresponds to any Lens webpage. This is done
-// by checking if the given URL and lens::features::kHomepageURLForLens have
-// matching domains
-bool IsLensUrl(const GURL& url);
-
 // Checks to see if the page corresponding to the current URL should be visible
 // to the user. The page should be visible if
 //   - The page is the Lens Results page
@@ -53,14 +44,6 @@ views::Widget* OpenLensRegionSearchInstructions(
     Browser* browser,
     base::OnceClosure close_callback,
     base::OnceClosure escape_callback);
-
-// For testing purposes, retrieves the web contents used by the Lens side panel
-// view.
-content::WebContents* GetLensSidePanelWebContentsForTesting(Browser* browser);
-
-// For testing purposes, creates the LensSidePanelController in the
-// corresponding BrowserView of |browser|.
-void CreateLensSidePanelControllerForTesting(Browser* browser);
 
 // For testing purposes, retrieves the web contents used by the lens unified
 // side panel view. This is there because of BUILD rules for browser test where

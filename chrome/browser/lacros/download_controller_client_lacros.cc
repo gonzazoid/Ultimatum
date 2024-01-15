@@ -4,7 +4,7 @@
 
 #include "chrome/browser/lacros/download_controller_client_lacros.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chromeos/crosapi/mojom/download_controller.mojom.h"
@@ -39,7 +39,7 @@ DownloadControllerClientLacros::DownloadControllerClientLacros() {
     return;
 
   int remote_version =
-      service->GetInterfaceVersion(crosapi::mojom::DownloadController::Uuid_);
+      service->GetInterfaceVersion<crosapi::mojom::DownloadController>();
   if (remote_version < 0 ||
       static_cast<uint32_t>(remote_version) <
           crosapi::mojom::DownloadController::kBindClientMinVersion) {
@@ -58,8 +58,10 @@ void DownloadControllerClientLacros::GetAllDownloads(
   std::vector<crosapi::mojom::DownloadItemPtr> downloads;
 
   // Aggregate all downloads.
-  for (auto* download : download_notifier_.GetAllDownloads())
+  for (download::DownloadItem* download :
+       download_notifier_.GetAllDownloads()) {
     downloads.push_back(ConvertToMojoDownloadItem(download));
+  }
 
   // Sort chronologically by start time.
   std::sort(downloads.begin(), downloads.end(),
@@ -111,16 +113,18 @@ void DownloadControllerClientLacros::OnManagerInitialized(
     content::DownloadManager* manager) {
   download::SimpleDownloadManager::DownloadVector downloads;
   manager->GetAllDownloads(&downloads);
-  for (auto* download : downloads)
+  for (download::DownloadItem* download : downloads) {
     OnDownloadCreated(manager, download);
+  }
 }
 
 void DownloadControllerClientLacros::OnManagerGoingDown(
     content::DownloadManager* manager) {
   download::SimpleDownloadManager::DownloadVector downloads;
   manager->GetAllDownloads(&downloads);
-  for (auto* download : downloads)
+  for (download::DownloadItem* download : downloads) {
     OnDownloadDestroyed(manager, download);
+  }
 }
 
 void DownloadControllerClientLacros::OnDownloadCreated(

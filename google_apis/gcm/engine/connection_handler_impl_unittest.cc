@@ -10,13 +10,13 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "google/protobuf/io/coded_stream.h"
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
@@ -256,16 +256,14 @@ void GCMConnectionHandlerImplTest::BuildSocket(const ReadList& read_list,
   const url::Origin kOrigin = url::Origin::Create(kDestination);
   mojo_socket_factory_remote_->CreateProxyResolvingSocket(
       kDestination,
-      net::NetworkAnonymizationKey(
-          /*top_frame_site=*/net::SchemefulSite(kOrigin),
-          /*frame_site=*/net::SchemefulSite(kOrigin)),
+      net::NetworkAnonymizationKey::CreateSameSite(net::SchemefulSite(kOrigin)),
       std::move(options),
       net::MutableNetworkTrafficAnnotationTag(TRAFFIC_ANNOTATION_FOR_TESTS),
       mojo_socket_remote_.BindNewPipeAndPassReceiver(),
       mojo::NullRemote() /* observer */,
       base::BindLambdaForTesting(
-          [&](int result, const absl::optional<net::IPEndPoint>& local_addr,
-              const absl::optional<net::IPEndPoint>& peer_addr,
+          [&](int result, const std::optional<net::IPEndPoint>& local_addr,
+              const std::optional<net::IPEndPoint>& peer_addr,
               mojo::ScopedDataPipeConsumerHandle receive_pipe_handle,
               mojo::ScopedDataPipeProducerHandle send_pipe_handle) {
             net_error = result;
@@ -285,7 +283,8 @@ void GCMConnectionHandlerImplTest::PumpLoop() {
 void GCMConnectionHandlerImplTest::Connect(
     ScopedMessage* dst_proto) {
   connection_handler_ = std::make_unique<ConnectionHandlerImpl>(
-      base::ThreadTaskRunnerHandle::Get(), TestTimeouts::tiny_timeout(),
+      base::SingleThreadTaskRunner::GetCurrentDefault(),
+      TestTimeouts::tiny_timeout(),
       base::BindRepeating(&GCMConnectionHandlerImplTest::ReadContinuation,
                           base::Unretained(this), dst_proto),
       base::BindRepeating(&GCMConnectionHandlerImplTest::WriteContinuation,

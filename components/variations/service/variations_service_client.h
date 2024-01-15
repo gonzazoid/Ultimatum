@@ -12,7 +12,6 @@
 #include "components/variations/proto/study.pb.h"
 #include "components/variations/seed_response.h"
 #include "components/version_info/channel.h"
-#include "components/version_info/version_info.h"
 
 namespace network {
 class SharedURLLoaderFactory;
@@ -21,6 +20,8 @@ class SharedURLLoaderFactory;
 namespace network_time {
 class NetworkTimeTracker;
 }
+
+class PrefService;
 
 namespace variations {
 
@@ -71,6 +72,18 @@ class VariationsServiceClient {
   // well. But this could be confusing and could prevent using UMA filters on a
   // non finch-filtered study to analyze the finch-filtered launch potential.
   virtual bool IsEnterprise() = 0;
+
+  // Removes stored Google Groups variations information for deleted profiles.
+  // Must be called at startup, prior to the variations Google Groups being
+  // read.
+  // This is a no-op on platforms that do not support multiple profiles.
+  virtual void RemoveGoogleGroupsFromPrefsForDeletedProfiles(
+      PrefService* local_state) = 0;
+
+  // Registers the group membership of the limited entropy synthetic trial.
+  // TODO(crbug.com/1508150): Remove once the trial has wrapped up.
+  virtual void RegisterLimitedEntropySyntheticTrial(
+      std::string_view group_name);
 
  private:
   // Gets the channel of the embedder. But all variations callers should use

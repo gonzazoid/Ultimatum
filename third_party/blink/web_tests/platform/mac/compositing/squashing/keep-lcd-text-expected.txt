@@ -9,11 +9,10 @@
     {
       "name": "LayoutNGBlockFlow (positioned) DIV id='composited'",
       "bounds": [300, 300],
-      "contentsOpaqueForText": true,
       "drawsContent": false
     },
     {
-      "name": "LayoutNGBlockFlow (positioned) DIV id='non-opaque'",
+      "name": "LayoutNGBlockFlow (positioned, children-inline) DIV id='non-opaque'",
       "bounds": [220, 270],
       "backgroundColor": "#FFFF00"
     }

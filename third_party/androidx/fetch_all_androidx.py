@@ -50,6 +50,10 @@ _OVERRIDES = [
     #('androidx_core_core/core-1.9.0-SNAPSHOT.aar',
     # 'https://androidx.dev/snapshots/builds/8545498/artifacts/repository/'
     # 'androidx/core/core/1.8.0-SNAPSHOT/core-1.8.0-20220505.122105-1.aar'),
+    ('androidx_recyclerview_recyclerview/recyclerview-1.4.0-SNAPSHOT.aar',
+     'https://androidx.dev/snapshots/builds/9668027/artifacts/repository/'
+     'androidx/recyclerview/recyclerview/1.4.0-SNAPSHOT/'
+     'recyclerview-1.4.0-20230228.234124-1.aar'),
 ]
 
 
@@ -216,7 +220,7 @@ def _write_cipd_yaml(libs_dir, version, cipd_yaml_path, experimental=False):
     else:
         package = 'chromium/third_party/androidx'
     contents = [
-        '# Copyright 2021 The Chromium Authors. All rights reserved.',
+        '# Copyright 2021 The Chromium Authors',
         '# Use of this source code is governed by a BSD-style license that can be',
         '# found in the LICENSE file.',
         '# version: ' + version,
@@ -275,11 +279,13 @@ def main():
     dependency_version_map = _parse_dir_list(dir_list)
     _process_build_gradle(dependency_version_map,
                           androidx_snapshot_repository_url)
+    shutil.copyfile(os.path.join(_ANDROIDX_PATH, 'BUILD.gn.template'),
+                    os.path.join(_ANDROIDX_PATH, 'BUILD.gn'))
 
     fetch_all_cmd = [
         _FETCH_ALL_PATH, '--android-deps-dir', _ANDROIDX_PATH,
         '--ignore-vulnerabilities'
-    ]
+    ] + ['-v'] * args.verbose_count
     # Overrides do not work with local snapshots since the repository_url is
     # different.
     if not args.local_repo:

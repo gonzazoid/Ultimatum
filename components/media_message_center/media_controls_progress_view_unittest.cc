@@ -6,13 +6,15 @@
 
 #include <memory>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "services/media_session/public/mojom/media_session.mojom.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/events/base_event_utils.h"
 #include "ui/views/controls/progress_bar.h"
 #include "ui/views/test/views_test_base.h"
 
@@ -42,7 +44,8 @@ class MediaControlsProgressViewTest : public views::ViewsTestBase {
     views::View* container =
         widget_.SetContentsView(std::make_unique<views::View>());
 
-    progress_view_ = new MediaControlsProgressView(base::DoNothing());
+    progress_view_ = new MediaControlsProgressView(base::BindRepeating(
+        &MediaControlsProgressViewTest::SeekTo, base::Unretained(this)));
     container->AddChildView(progress_view_.get());
 
     widget_.Show();
@@ -53,8 +56,11 @@ class MediaControlsProgressViewTest : public views::ViewsTestBase {
     ViewsTestBase::TearDown();
   }
 
+  MOCK_METHOD1(SeekTo, void(double));
+
  protected:
-  raw_ptr<MediaControlsProgressView> progress_view_ = nullptr;
+  raw_ptr<MediaControlsProgressView, DanglingUntriaged> progress_view_ =
+      nullptr;
 
  private:
   views::Widget widget_;
@@ -126,9 +132,7 @@ TEST_F(MAYBE_MediaControlsProgressViewTest, UpdateProgress) {
   EXPECT_EQ(progress_view_->progress_bar_for_testing()->GetValue(), .55);
 }
 
-// Flaky on multiple platforms. crbug.com/1293864
-TEST_F(MAYBE_MediaControlsProgressViewTest,
-       DISABLED_UpdateProgressFastPlayback) {
+TEST_F(MAYBE_MediaControlsProgressViewTest, UpdateProgressFastPlayback) {
   media_session::MediaPosition media_position(
       /*playback_rate=*/2, /*duration=*/base::Seconds(600),
       /*position=*/base::Seconds(300), /*end_of_media=*/false);
@@ -270,6 +274,73 @@ TEST_F(MAYBE_MediaControlsProgressViewTest, UpdateProgressTwice) {
   EXPECT_EQ(progress_view_->duration_for_testing(), u"03:20");
   EXPECT_EQ(progress_view_->progress_time_for_testing(), u"00:50");
   EXPECT_EQ(progress_view_->progress_bar_for_testing()->GetValue(), .25);
+}
+
+TEST_F(MAYBE_MediaControlsProgressViewTest,
+       UpdateProgressWithInfiniteDuration) {
+  media_session::MediaPosition media_position(/*playback_rate=*/1,
+                                              /*duration=*/base::Seconds(600),
+                                              /*position=*/base::Seconds(300),
+                                              /*end_of_media=*/false);
+
+  // Simulate a non-live position change.
+  progress_view_->UpdateProgress(media_position);
+
+  // Verify that the progress view reflects the position update.
+  EXPECT_TRUE(progress_view_->is_duration_visible_for_testing());
+  EXPECT_EQ(progress_view_->duration_for_testing(), u"10:00");
+  EXPECT_EQ(progress_view_->progress_bar_for_testing()->GetValue(), .5);
+
+  media_session::MediaPosition media_position_live(
+      /*playback_rate=*/1,
+      /*duration=*/base::TimeDelta::Max(),
+      /*position=*/base::Seconds(300),
+      /*end_of_media=*/false);
+
+  // Simulate a position change with infinite duration. i.e. a live media.
+  progress_view_->UpdateProgress(media_position_live);
+
+  // Verify that duration view is hidden and progress bar is set correctly.
+  EXPECT_FALSE(progress_view_->is_duration_visible_for_testing());
+  EXPECT_EQ(progress_view_->duration_for_testing(), u"");
+  EXPECT_EQ(progress_view_->progress_bar_for_testing()->GetValue(), 1.0);
+
+  // Simulate another non-live position change.
+  progress_view_->UpdateProgress(media_position);
+
+  // Verify that the progress view is back to its normal state.
+  EXPECT_TRUE(progress_view_->is_duration_visible_for_testing());
+  EXPECT_EQ(progress_view_->duration_for_testing(), u"10:00");
+  EXPECT_EQ(progress_view_->progress_bar_for_testing()->GetValue(), .5);
+}
+
+TEST_F(MAYBE_MediaControlsProgressViewTest, SeekTo) {
+  progress_view_->SetBounds(0, 0, 300, 40);
+
+  media_session::MediaPosition media_position(
+      /*playback_rate=*/1, /*duration=*/base::Seconds(600),
+      /*position=*/base::Seconds(300), /*end_of_media=*/false);
+  progress_view_->UpdateProgress(media_position);
+
+  gfx::Point point(progress_view_->width() / 2, progress_view_->height() / 2);
+  ui::MouseEvent pressed_event(ui::ET_MOUSE_PRESSED, point, point,
+                               ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON,
+                               ui::EF_LEFT_MOUSE_BUTTON);
+
+  // Simulate a mouse click event and SeekTo callback should be called.
+  EXPECT_CALL(*this, SeekTo(0.5));
+  progress_view_->OnMousePressed(pressed_event);
+
+  media_session::MediaPosition media_position_live(
+      /*playback_rate=*/1, /*duration=*/base::TimeDelta::Max(),
+      /*position=*/base::Seconds(300), /*end_of_media=*/false);
+
+  // Simulate a position change with infinite duration. i.e. a live media.
+  progress_view_->UpdateProgress(media_position_live);
+
+  // Simulate a mouse click event and SeekTo callback should not be called.
+  EXPECT_CALL(*this, SeekTo(testing::_)).Times(0);
+  progress_view_->OnMousePressed(pressed_event);
 }
 
 }  // namespace media_message_center

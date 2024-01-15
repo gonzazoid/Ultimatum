@@ -4,10 +4,10 @@
 
 #include "chrome/browser/ui/views/frame/dbus_appmenu_registrar.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "chrome/browser/ui/views/frame/dbus_appmenu.h"
@@ -32,11 +32,8 @@ DbusAppmenuRegistrar* DbusAppmenuRegistrar::GetInstance() {
 }
 
 void DbusAppmenuRegistrar::OnMenuBarCreated(DbusAppmenu* menu) {
-  if (base::Contains(menus_, menu)) {
-    NOTREACHED();
-    return;
-  }
-  menus_[menu] = kUninitialized;
+  // Make sure insertion succeeds, we should not already be tracking `menu`.
+  CHECK(menus_.insert({menu, kUninitialized}).second);
   if (service_has_owner_)
     InitializeMenu(menu);
 }

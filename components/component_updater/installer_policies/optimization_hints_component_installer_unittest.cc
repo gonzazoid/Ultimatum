@@ -10,10 +10,8 @@
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/run_loop.h"
-#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/version.h"
 #include "components/component_updater/mock_component_updater_service.h"
 #include "components/optimization_guide/core/optimization_guide_constants.h"
@@ -66,23 +64,14 @@ class OptimizationHintsComponentInstallerTest : public PlatformTest {
     return component_install_dir_.GetPath();
   }
 
-  base::Version ruleset_format_version() {
-    return policy_->ruleset_format_version_;
-  }
-
   void CreateTestOptimizationHints(const std::string& hints_content) {
     base::FilePath hints_path = component_install_dir().Append(
         optimization_guide::kUnindexedHintsFileName);
     ASSERT_TRUE(base::WriteFile(hints_path, hints_content));
   }
 
-  void LoadOptimizationHints(const base::Version& ruleset_format) {
-    base::Value manifest(base::Value::Type::DICTIONARY);
-    if (ruleset_format.IsValid()) {
-      manifest.SetStringKey(
-          OptimizationHintsComponentInstallerPolicy::kManifestRulesetFormatKey,
-          ruleset_format.GetString());
-    }
+  void LoadOptimizationHints() {
+    base::Value::Dict manifest;
     ASSERT_TRUE(policy_->VerifyInstallation(manifest, component_install_dir()));
     const base::Version expected_version(kTestHintsVersion);
     policy_->ComponentReady(expected_version, component_install_dir(),
@@ -130,35 +119,10 @@ TEST_F(OptimizationHintsComponentInstallerTest,
   RunUntilIdle();
 }
 
-TEST_F(OptimizationHintsComponentInstallerTest, NoRulesetFormatIgnored) {
-  ASSERT_NO_FATAL_FAILURE(CreateTestOptimizationHints("some hints"));
-
-  ASSERT_NO_FATAL_FAILURE(LoadOptimizationHints(base::Version("")));
-  EXPECT_FALSE(optimization_guide::OptimizationHintsComponentUpdateListener::
-                   GetInstance()
-                       ->hints_component_info()
-                       .has_value());
-}
-
-TEST_F(OptimizationHintsComponentInstallerTest, FutureRulesetFormatIgnored) {
-  ASSERT_NO_FATAL_FAILURE(CreateTestOptimizationHints("some hints"));
-  base::Version version = ruleset_format_version();
-  const std::vector<uint32_t> future_ruleset_components = {
-      version.components()[0] + 1, version.components()[1],
-      version.components()[2]};
-
-  ASSERT_NO_FATAL_FAILURE(
-      LoadOptimizationHints(base::Version(future_ruleset_components)));
-  EXPECT_FALSE(optimization_guide::OptimizationHintsComponentUpdateListener::
-                   GetInstance()
-                       ->hints_component_info()
-                       .has_value());
-}
-
 TEST_F(OptimizationHintsComponentInstallerTest, LoadFileWithData) {
   const std::string expected_hints = "some hints";
   ASSERT_NO_FATAL_FAILURE(CreateTestOptimizationHints(expected_hints));
-  ASSERT_NO_FATAL_FAILURE(LoadOptimizationHints(ruleset_format_version()));
+  ASSERT_NO_FATAL_FAILURE(LoadOptimizationHints());
 
   absl::optional<optimization_guide::HintsComponentInfo> component_info =
       optimization_guide::OptimizationHintsComponentUpdateListener::

@@ -4,22 +4,26 @@
 
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/browser/device_trust_key_manager_impl.h"
 
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/containers/span.h"
+#include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
 #include "base/task/bind_post_task.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/browser/key_rotation_launcher.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/browser/metrics_utils.h"
+#include "chrome/browser/enterprise/connectors/device_trust/key_management/core/persistence/key_persistence_delegate.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/core/signing_key_pair.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/core/signing_key_util.h"
 #include "crypto/unexportable_key.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
+using BPKUR = enterprise_management::BrowserPublicKeyUploadRequest;
+
 namespace enterprise_connectors {
+
+using KeyRotationResult = DeviceTrustKeyManager::KeyRotationResult;
 
 namespace {
 
@@ -30,28 +34,99 @@ namespace {
 // was freed up (use-after-free), which is a security issue.
 absl::optional<std::vector<uint8_t>> SignString(
     const std::string& str,
-    crypto::UnexportableSigningKey* key) {
-  if (!key) {
+    scoped_refptr<SigningKeyPair> key_pair) {
+  if (!key_pair || !key_pair->key()) {
     return absl::nullopt;
   }
-  return key->SignSlowly(base::as_bytes(base::make_span(str)));
+  return key_pair->key()->SignSlowly(base::as_bytes(base::make_span(str)));
+}
+
+void OnSignatureGenerated(
+    BPKUR::KeyTrustLevel trust_level,
+    base::TimeTicks start_time,
+    DeviceTrustKeyManagerImpl::SignStringCallback callback,
+    absl::optional<std::vector<uint8_t>> signature) {
+  LogSignatureLatency(trust_level, start_time);
+  std::move(callback).Run(std::move(signature));
+}
+
+absl::optional<DeviceTrustKeyManager::PermanentFailure>
+RotationStatusToPermanentFailure(KeyRotationCommand::Status status,
+                                 bool is_key_creation) {
+  // Permanent failures can only occur in key creation flows as, during rotation
+  // flows, there is an underlying assumption that a valid key was already
+  // created successfully. When a rotation flow fails, the browser rolls back
+  // to the valid key and the connector should still work.
+  if (!is_key_creation) {
+    return absl::nullopt;
+  }
+
+  switch (status) {
+    case KeyRotationCommand::Status::FAILED_KEY_CONFLICT:
+      // Hitting a conflict in a key creation flow means that the corresponding
+      // local key has been lost, and is therefore considered a permanent
+      // failure.
+      return DeviceTrustKeyManager::PermanentFailure::kCreationUploadConflict;
+    case KeyRotationCommand::Status::FAILED_OS_RESTRICTION:
+      // The current OS doesn't allow support for Device Trust.
+      return DeviceTrustKeyManager::PermanentFailure::kOsRestriction;
+    case KeyRotationCommand::Status::FAILED_INVALID_PERMISSIONS:
+      // Something is wrong in the setup and the browser doesn't have sufficient
+      // privileges.
+      return DeviceTrustKeyManager::PermanentFailure::kInsufficientPermissions;
+    case KeyRotationCommand::Status::FAILED_INVALID_INSTALLATION:
+      // The current browser installation doesn't allow support for Device
+      // Trust.
+      return DeviceTrustKeyManager::PermanentFailure::kInvalidInstallation;
+    case KeyRotationCommand::Status::SUCCEEDED:
+    case KeyRotationCommand::Status::FAILED:
+    case KeyRotationCommand::Status::FAILED_INVALID_DMTOKEN_STORAGE:
+    case KeyRotationCommand::Status::FAILED_INVALID_DMTOKEN:
+    case KeyRotationCommand::Status::FAILED_INVALID_MANAGEMENT_SERVICE:
+    case KeyRotationCommand::Status::FAILED_INVALID_DMSERVER_URL:
+    case KeyRotationCommand::Status::FAILED_INVALID_COMMAND:
+    case KeyRotationCommand::Status::TIMED_OUT:
+      return absl::nullopt;
+  }
+}
+
+// Given the `result` from a LoadKey operation, determine whether key creation
+// should be kicked-off or not.
+bool ShouldTriggerKeyCreation(LoadPersistedKeyResult result) {
+  switch (result) {
+    // On Success, don't try to create a new key.
+    case LoadPersistedKeyResult::kSuccess:
+    // Unknown failures are treated as retriable.
+    case LoadPersistedKeyResult::kUnknown:
+      return false;
+    case LoadPersistedKeyResult::kNotFound:
+    case LoadPersistedKeyResult::kMalformedKey:
+      return true;
+  }
 }
 
 }  // namespace
 
 DeviceTrustKeyManagerImpl::DeviceTrustKeyManagerImpl(
-    std::unique_ptr<KeyRotationLauncher> key_rotation_launcher)
+    std::unique_ptr<KeyRotationLauncher> key_rotation_launcher,
+    std::unique_ptr<KeyLoader> key_loader)
     : key_rotation_launcher_(std::move(key_rotation_launcher)),
+      key_loader_(std::move(key_loader)),
       background_task_runner_(base::ThreadPool::CreateSequencedTaskRunner(
           {base::MayBlock(), base::TaskPriority::USER_BLOCKING,
            base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN})) {
   DCHECK(key_rotation_launcher_);
+  DCHECK(key_loader_);
 }
 
 DeviceTrustKeyManagerImpl::~DeviceTrustKeyManagerImpl() = default;
 
 void DeviceTrustKeyManagerImpl::StartInitialization() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (HasPermanentFailure()) {
+    return;
+  }
+
   // Initialization is only needed when the manager is in its default state
   // with no loaded key.
   if (state_ == InitializationState::kDefault && !key_pair_) {
@@ -65,6 +140,11 @@ void DeviceTrustKeyManagerImpl::StartInitialization() {
 void DeviceTrustKeyManagerImpl::RotateKey(const std::string& nonce,
                                           RotateKeyCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (HasPermanentFailure()) {
+    std::move(callback).Run(KeyRotationResult::FAILURE);
+    return;
+  }
+
   if (state_ == InitializationState::kDefault) {
     // Update the state right now to mark new client requests as pending.
     state_ = InitializationState::kRotatingKey;
@@ -86,7 +166,7 @@ void DeviceTrustKeyManagerImpl::RotateKey(const std::string& nonce,
   // Cancel previously pending requests and replace them with this new one.
   if (pending_rotation_request_) {
     std::move(pending_rotation_request_->callback)
-        .Run(DeviceTrustKeyManager::KeyRotationResult::CANCELLATION);
+        .Run(KeyRotationResult::CANCELLATION);
   }
   pending_rotation_request_ =
       std::make_unique<DeviceTrustKeyManagerImpl::RotateKeyRequest>(
@@ -96,6 +176,11 @@ void DeviceTrustKeyManagerImpl::RotateKey(const std::string& nonce,
 void DeviceTrustKeyManagerImpl::ExportPublicKeyAsync(
     ExportPublicKeyCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (HasPermanentFailure()) {
+    std::move(callback).Run(absl::nullopt);
+    return;
+  }
+
   if (IsFullyInitialized()) {
     auto public_key_info = key_pair_->key()->GetSubjectPublicKeyInfo();
     std::string public_key(public_key_info.begin(), public_key_info.end());
@@ -111,10 +196,16 @@ void DeviceTrustKeyManagerImpl::ExportPublicKeyAsync(
 void DeviceTrustKeyManagerImpl::SignStringAsync(const std::string& str,
                                                 SignStringCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (HasPermanentFailure()) {
+    std::move(callback).Run(absl::nullopt);
+    return;
+  }
+
   if (IsFullyInitialized()) {
     background_task_runner_->PostTaskAndReplyWithResult(
-        FROM_HERE, base::BindOnce(&SignString, str, key_pair_->key()),
-        std::move(callback));
+        FROM_HERE, base::BindOnce(&SignString, str, key_pair_),
+        base::BindOnce(&OnSignatureGenerated, key_pair_->trust_level(),
+                       base::TimeTicks::Now(), std::move(callback)));
     return;
   }
 
@@ -125,14 +216,27 @@ void DeviceTrustKeyManagerImpl::SignStringAsync(const std::string& str,
 
 absl::optional<DeviceTrustKeyManagerImpl::KeyMetadata>
 DeviceTrustKeyManagerImpl::GetLoadedKeyMetadata() const {
-  if (!IsFullyInitialized()) {
+  if (!IsFullyInitialized() && !HasPermanentFailure()) {
     return absl::nullopt;
   }
 
-  const auto& spki_bytes = key_pair_->key()->GetSubjectPublicKeyInfo();
-  return DeviceTrustKeyManagerImpl::KeyMetadata{
-      key_pair_->trust_level(), key_pair_->key()->Algorithm(),
-      std::string(spki_bytes.begin(), spki_bytes.end())};
+  DeviceTrustKeyManagerImpl::KeyMetadata metadata;
+  if (IsFullyInitialized()) {
+    metadata.trust_level = key_pair_->trust_level();
+    metadata.algorithm = key_pair_->key()->Algorithm();
+
+    const auto& spki_bytes = key_pair_->key()->GetSubjectPublicKeyInfo();
+    metadata.spki_bytes = std::string(spki_bytes.begin(), spki_bytes.end());
+
+    metadata.synchronization_response_code = sync_key_response_code_;
+  }
+
+  metadata.permanent_failure = permanent_failure_;
+  return metadata;
+}
+
+bool DeviceTrustKeyManagerImpl::HasPermanentFailure() const {
+  return permanent_failure_.has_value();
 }
 
 void DeviceTrustKeyManagerImpl::AddPendingRequest(
@@ -151,25 +255,25 @@ void DeviceTrustKeyManagerImpl::AddPendingRequest(
 void DeviceTrustKeyManagerImpl::LoadKey(bool create_on_fail) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   state_ = InitializationState::kLoadingKey;
-  background_task_runner_->PostTaskAndReplyWithResult(
-      FROM_HERE, base::BindOnce(&LoadPersistedKey),
-      base::BindOnce(&DeviceTrustKeyManagerImpl::OnKeyLoaded,
-                     weak_factory_.GetWeakPtr(), create_on_fail));
+  key_loader_->LoadKey(base::BindOnce(&DeviceTrustKeyManagerImpl::OnKeyLoaded,
+                                      weak_factory_.GetWeakPtr(),
+                                      create_on_fail));
 }
 
 void DeviceTrustKeyManagerImpl::OnKeyLoaded(
     bool create_on_fail,
-    std::unique_ptr<SigningKeyPair> loaded_key_pair) {
+    KeyLoader::DTCLoadKeyResult load_key_result) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (loaded_key_pair && !loaded_key_pair->is_empty()) {
-    key_pair_ = std::move(loaded_key_pair);
+  sync_key_response_code_ = load_key_result.status_code;
+  if (load_key_result.key_pair && !load_key_result.key_pair->is_empty()) {
+    key_pair_ = std::move(load_key_result.key_pair);
   } else {
     key_pair_.reset();
   }
 
   state_ = InitializationState::kDefault;
-  LogKeyLoadingResult(GetLoadedKeyMetadata());
+  LogKeyLoadingResult(GetLoadedKeyMetadata(), load_key_result.result);
 
   // Do this check after caching the previous key as failure to rotate will
   // restore it in persistence.
@@ -181,7 +285,8 @@ void DeviceTrustKeyManagerImpl::OnKeyLoaded(
     return;
   }
 
-  if (!IsFullyInitialized() && create_on_fail) {
+  if (!IsFullyInitialized() && create_on_fail &&
+      ShouldTriggerKeyCreation(load_key_result.result)) {
     // Key loading failed, so we can kick-off the key creation. This is
     // guarded by a flag to make sure not to loop infinitely over:
     // create succeeds -> load fails -> create again...
@@ -200,6 +305,12 @@ void DeviceTrustKeyManagerImpl::StartKeyRotationInner(
     const std::string& nonce,
     RotateKeyCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (HasPermanentFailure()) {
+    // No point in running the key rotation if we already know the outcome.
+    std::move(callback).Run(KeyRotationResult::FAILURE);
+    return;
+  }
+
   state_ = InitializationState::kRotatingKey;
   key_rotation_succeeded_ = false;
 
@@ -223,10 +334,19 @@ void DeviceTrustKeyManagerImpl::OnKeyRotationFinished(
       result_status == KeyRotationCommand::Status::SUCCEEDED;
   state_ = InitializationState::kDefault;
 
-  std::move(callback).Run(
-      key_rotation_succeeded_
-          ? DeviceTrustKeyManager::KeyRotationResult::SUCCESS
-          : DeviceTrustKeyManager::KeyRotationResult::FAILURE);
+  if (!key_rotation_succeeded_) {
+    const auto permanent_failure = RotationStatusToPermanentFailure(
+        result_status, /*is_key_creation=*/!IsFullyInitialized());
+    if (permanent_failure) {
+      // Wrapping the assignment in a conditional to prevent setting an existing
+      // permanent failure back to absl::nullopt if, for some reason,
+      // `result_status` represented a subsequent transient failure.
+      permanent_failure_ = permanent_failure;
+    }
+  }
+
+  std::move(callback).Run(key_rotation_succeeded_ ? KeyRotationResult::SUCCESS
+                                                  : KeyRotationResult::FAILURE);
 
   if (!key_rotation_succeeded_ && TryResumePendingRotationRequest()) {
     // In this edge case, another rotate key request came in at the same time

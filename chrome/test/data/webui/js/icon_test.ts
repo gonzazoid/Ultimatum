@@ -2,21 +2,21 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {isChromeOS, isLacros, isLinux, isMac, isWindows} from 'chrome://resources/js/cr.m.js';
+import {isChromeOS, isLacros, isLinux, isMac, isWindows} from 'chrome://resources/js/platform.js';
 import {getFavicon, getFaviconForPageURL, getFileIconUrl} from 'chrome://resources/js/icon.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 
-suite('IconModuleTest', function() {
+suite('IconTest', function() {
   test('GetFaviconForPageURL', function() {
     const url = 'http://foo.com';
 
     function getExpectedImageSet(size: number): string {
-      const expectedDesktop = '-webkit-image-set(' +
+      const expectedDesktop = 'image-set(' +
           `url("chrome://favicon2/?size=${size}&scaleFactor=1x&pageUrl=` +
           encodeURIComponent(url) + '&allowGoogleServerFallback=0") 1x, ' +
           `url("chrome://favicon2/?size=${size}&scaleFactor=2x&pageUrl=` +
           encodeURIComponent(url) + '&allowGoogleServerFallback=0") 2x)';
-      const expectedOther = '-webkit-image-set(' +
+      const expectedOther = 'image-set(' +
           `url("chrome://favicon2/?size=${size}&scaleFactor=1x&pageUrl=` +
           encodeURIComponent(url) + '&allowGoogleServerFallback=0") ' +
           window.devicePixelRatio + 'x)';
@@ -44,12 +44,12 @@ suite('IconModuleTest', function() {
 
   test('GetFavicon', function() {
     const url = 'http://foo.com/foo.ico';
-    const expectedDesktop = '-webkit-image-set(' +
+    const expectedDesktop = 'image-set(' +
         'url("chrome://favicon2/?size=16&scaleFactor=1x&iconUrl=' +
         encodeURIComponent('http://foo.com/foo.ico') + '") 1x, ' +
         'url("chrome://favicon2/?size=16&scaleFactor=2x&iconUrl=' +
         encodeURIComponent('http://foo.com/foo.ico') + '") 2x)';
-    const expectedOther = '-webkit-image-set(' +
+    const expectedOther = 'image-set(' +
         'url("chrome://favicon2/?size=16&scaleFactor=1x&iconUrl=' +
         encodeURIComponent('http://foo.com/foo.ico') + '") ' +
         window.devicePixelRatio + 'x)';

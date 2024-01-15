@@ -5,7 +5,6 @@
 #ifndef CHROME_BROWSER_VR_VR_TAB_HELPER_H_
 #define CHROME_BROWSER_VR_VR_TAB_HELPER_H_
 
-#include "chrome/browser/vr/ui_suppressed_element.h"
 #include "content/public/browser/web_contents_user_data.h"
 
 namespace vr {
@@ -34,10 +33,6 @@ class VrTabHelper : public content::WebContentsUserData<VrTabHelper> {
   static bool IsContentDisplayedInHeadset(content::WebContents* contents);
   static void SetIsContentDisplayedInHeadset(content::WebContents* contents,
                                              bool state);
-
-  // If suppressed, this function will log a UMA stat.
-  static bool IsUiSuppressedInVr(content::WebContents* contents,
-                                 UiSuppressedElement element);
 
   static void ExitVrPresentation();
 

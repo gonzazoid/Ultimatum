@@ -98,9 +98,10 @@
 <translation id="4141203561740478845">ठेगाना पट्टी भएको पङ्क्तिलाई हाइलाइट गर्नुहोस्</translation>
 <translation id="4148761611071495477"><ph name="CTRL" /><ph name="SEPARATOR" /><ph name="G" /> वा <ph name="ENTER" /></translation>
 <translation id="4240486403425279990">परिदृश्य मोड</translation>
+<translation id="4275283744500212192">विन्डो लेआउटका विकल्पहरू खोल्नुहोस्</translation>
 <translation id="4382340674111381977">अघिल्लो पृष्ठमा फर्कनुहोस्</translation>
 <translation id="4458670250301149821">एपको ग्रिडमा कुनै एपको आइकन फोल्डर भित्र/बाहिर सार्नुहोस्</translation>
-<translation id="4472417192667361414">प्रणाली तथा प्रदर्शनसम्बन्धी सेटिङहरू</translation>
+<translation id="4472417192667361414">सिस्टम तथा प्रदर्शनसम्बन्धी सेटिङहरू</translation>
 <translation id="449214506787633354"><ph name="CTRL" />, त्यसपछि <ph name="LEFT" /> वा <ph name="RIGHT" /> वा <ph name="UP" /> वा <ph name="DOWN" /></translation>
 <translation id="4556221320735744018">किबोर्ड सर्टकटसम्बन्धी मद्दतकर्ता हेर्नुहोस्‌</translation>
 <translation id="4609344656788228519"><ph name="CTRL1" /><ph name="SEPARATOR1" /><ph name="BACK1" /> वा <ph name="CTRL2" /><ph name="SEPARATOR2" /><ph name="SHIFT" /><ph name="SEPARATOR3" /><ph name="BACK2" /></translation>
@@ -156,8 +157,8 @@
 <translation id="6671538777808758331">आफ्नो खोजको अर्को परिणाममा जानुहोस्</translation>
 <translation id="6681606577947445973"><ph name="REFRESH" /> वा <ph name="CTRL" /><ph name="SEPARATOR" /><ph name="R" /></translation>
 <translation id="6690765639083431875">विन्डोलाई बायाँतिर डक गर्नुहोस्</translation>
-<translation id="6692847073476874842">फाइल अनुप्रयोगमार्फत कुनै फाइल पूर्वावलोकन गर्नुहोस्</translation>
-<translation id="671928215901716392">स्क्रिन लक गर्नुहोस्</translation>
+<translation id="6692847073476874842">फाइल एपमार्फत कुनै फाइल पूर्वावलोकन गर्नुहोस्</translation>
+<translation id="671928215901716392">लक स्क्रिन</translation>
 <translation id="6727005317916125192">अघिल्लो फलक</translation>
 <translation id="6740781404993465795">अर्को शब्द वा अक्षर चयन गर्नुहोस्</translation>
 <translation id="6755851152783057058">पछिल्लो पटक प्रयोग गरिएको इनपुट विधिमा जानुहोस्</translation>
@@ -193,6 +194,7 @@
 <translation id="8388247778047144397">लिंकलाई ट्याब स्ट्रिपमा रहेको खाली क्षेत्रमा ड्र्याग गर्नुहोस्</translation>
 <translation id="8389638407792712197">नयाँ विन्डो खोल्नुहोस्</translation>
 <translation id="8429696719963529183">F कुञ्जीहरू प्रयोग गर्नुहोस्‌ (F1 देखि F12 सम्म)</translation>
+<translation id="8539396513118402548">सर्टकटहरूको सूची</translation>
 <translation id="85690795166292698">लिंकलाई नयाँ ट्याबमा खोल्नुहोस्</translation>
 <translation id="8609384513243082612">नयाँ ट्याब खोल्नुहोस्</translation>
 <translation id="8644639153978066712">लुकाइएका फाइलहरूलाई फाइल एपमा देखाउनुहोस्‌</translation>

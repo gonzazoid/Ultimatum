@@ -7,9 +7,11 @@
 
 #include <string>
 
+#include "base/observer_list_types.h"
+
 namespace ash {
 
-class KioskAppManagerObserver {
+class KioskAppManagerObserver : public base::CheckedObserver {
  public:
   // Invoked when the app data is changed or loading state is changed.
   virtual void OnKioskAppDataChanged(const std::string& app_id) {}
@@ -26,27 +28,21 @@ class KioskAppManagerObserver {
   // Invoked when the Kiosk Apps configuration changes.
   virtual void OnKioskAppsSettingsChanged() {}
 
-  // Invoked when kiosk app cache is updated for |app_id|.
+  // Invoked when kiosk app cache is updated for `app_id`.
   virtual void OnKioskAppCacheUpdated(const std::string& app_id) {}
 
   // Invoked when kiosk app updating from usb stick has been completed.
-  // |success| indicates if all the updates are completed successfully.
+  // `success` indicates if all the updates are completed successfully.
   virtual void OnKioskAppExternalUpdateComplete(bool success) {}
 
   // Called when kiosk app session initialization is complete - i.e. when
-  // KioskAppManager::InitSession() is called.
+  // KioskChromeAppManager::InitSession() is called.
   virtual void OnKioskSessionInitialized() {}
 
  protected:
-  virtual ~KioskAppManagerObserver() {}
+  ~KioskAppManagerObserver() override = default;
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the //chrome/browser/chromeos
-// source code migration is finished.
-namespace chromeos {
-using ::ash::KioskAppManagerObserver;
-}
 
 #endif  // CHROME_BROWSER_ASH_APP_MODE_KIOSK_APP_MANAGER_OBSERVER_H_

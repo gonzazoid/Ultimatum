@@ -7,6 +7,8 @@
 
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
+class CastMediaNotificationProducerKeyedService;
+
 namespace content {
 class BrowserContext;
 }
@@ -23,9 +25,12 @@ class CastMediaNotificationProducerKeyedServiceFactory
 
   static CastMediaNotificationProducerKeyedServiceFactory* GetInstance();
 
+  static CastMediaNotificationProducerKeyedService* GetForProfile(
+      Profile* profile);
+
  private:
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
   bool ServiceIsNULLWhileTesting() const override;

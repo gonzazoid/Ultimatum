@@ -9,11 +9,12 @@
 #include <wrl/client.h>
 
 #include <string>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/scoped_native_library.h"
 #include "base/strings/utf_string_conversions.h"
@@ -149,8 +150,9 @@ bool IsPinnedToTaskbarHelper::ShortcutHasUnpinToTaskbarVerb(
       error_count++;
       continue;
     }
-    if (base::WStringPiece(name.Get(), name.Length()) == verb_name)
+    if (std::wstring_view(name.Get(), name.Length()) == verb_name) {
       return true;
+    }
   }
 
   if (error_count == verb_count)

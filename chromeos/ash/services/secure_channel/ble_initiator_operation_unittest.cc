@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
 #include "chromeos/ash/services/secure_channel/ble_initiator_failure_type.h"
@@ -106,7 +106,7 @@ class SecureChannelBleInitiatorOperationTest : public testing::Test {
   DeviceIdPair device_id_pair_;
 
   std::unique_ptr<AuthenticatedChannel> channel_from_callback_;
-  absl::optional<BleInitiatorFailureType> failure_type_from_callback_;
+  std::optional<BleInitiatorFailureType> failure_type_from_callback_;
 
   std::unique_ptr<ConnectToDeviceOperation<BleInitiatorFailureType>> operation_;
 };

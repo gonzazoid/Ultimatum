@@ -10,9 +10,9 @@
 #include "ash/public/cpp/login_accelerators.h"
 #include "ash/public/cpp/login_screen.h"
 #include "ash/public/cpp/scoped_guest_button_blocker.h"
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/values.h"
@@ -20,20 +20,21 @@
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/ash/policy/enrollment/auto_enrollment_type_checker.h"
-#include "chrome/browser/ash/reset/metrics.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/ash/tpm_firmware_update.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/browser_process_platform_part_ash.h"
-#include "chrome/browser/ui/webui/chromeos/login/reset_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/reset_screen_handler.h"
 #include "chrome/common/pref_names.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
+#include "chromeos/ash/components/install_attributes/install_attributes.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "chromeos/dbus/power/power_manager_client.h"
-#include "chromeos/system/statistics_provider.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
+#include "components/user_manager/user_manager.h"
 
 // Enable VLOG level 1.
 #undef ENABLED_VLOG_LEVEL
@@ -98,7 +99,7 @@ void StartTPMFirmwareUpdate(
 // Checks if powerwash is allowed based on update modes and passes the result
 // to `callback`.
 void OnUpdateModesAvailable(
-    base::OnceCallback<void(bool, absl::optional<tpm_firmware_update::Mode>)>
+    base::OnceCallback<void(bool, std::optional<tpm_firmware_update::Mode>)>
         callback,
     const std::set<tpm_firmware_update::Mode>& modes) {
   using tpm_firmware_update::Mode;
@@ -109,7 +110,7 @@ void OnUpdateModesAvailable(
     std::move(callback).Run(true, mode);
     return;
   }
-  std::move(callback).Run(false, absl::nullopt);
+  std::move(callback).Run(false, std::nullopt);
 }
 
 }  // namespace
@@ -122,11 +123,15 @@ void ResetScreen::SetTpmFirmwareUpdateCheckerForTesting(
 
 // static
 void ResetScreen::CheckIfPowerwashAllowed(
-    base::OnceCallback<void(bool, absl::optional<tpm_firmware_update::Mode>)>
+    base::OnceCallback<void(bool, std::optional<tpm_firmware_update::Mode>)>
         callback) {
-  if (g_browser_process->platform_part()
-          ->browser_policy_connector_ash()
-          ->IsDeviceEnterpriseManaged()) {
+  if (InstallAttributes::Get()->IsDeviceLocked()) {
+    if (!InstallAttributes::Get()->IsEnterpriseManaged()) {
+      // The consumer owned device is always allowed to powerwash.
+      std::move(callback).Run(/*is_reset_allowed=*/true, std::nullopt);
+      return;
+    }
+
     // Powerwash is allowed by default, if the policy is loaded. Admin can
     // explicitly forbid powerwash. If the policy is not loaded yet, we
     // consider by default that the device is not allowed to powerwash.
@@ -134,7 +139,7 @@ void ResetScreen::CheckIfPowerwashAllowed(
     CrosSettings::Get()->GetBoolean(kDevicePowerwashAllowed,
                                     &is_powerwash_allowed);
     if (is_powerwash_allowed) {
-      std::move(callback).Run(true, absl::nullopt);
+      std::move(callback).Run(/*is_reset_allowed=*/true, std::nullopt);
       return;
     }
 
@@ -154,7 +159,7 @@ void ResetScreen::CheckIfPowerwashAllowed(
       policy::AutoEnrollmentTypeChecker::GetFRERequirementAccordingToVPD(
           system::StatisticsProvider::GetInstance()) !=
       policy::AutoEnrollmentTypeChecker::FRERequirement::kExplicitlyRequired;
-  std::move(callback).Run(is_reset_allowed, absl::nullopt);
+  std::move(callback).Run(is_reset_allowed, std::nullopt);
 }
 
 ResetScreen::ResetScreen(base::WeakPtr<ResetView> view,
@@ -203,16 +208,12 @@ void ResetScreen::ShowImpl() {
         LoginScreen::Get()->GetScopedGuestButtonBlocker();
   }
 
-  reset::DialogViewType dialog_type =
-      reset::DialogViewType::kCount;  // used by UMA metrics.
-
   bool restart_required = user_manager::UserManager::Get()->IsUserLoggedIn() ||
                           !base::CommandLine::ForCurrentProcess()->HasSwitch(
                               switches::kFirstExecAfterBoot);
   if (restart_required) {
     if (view_)
       view_->SetScreenState(ResetView::State::kRestartRequired);
-    dialog_type = reset::DialogViewType::kShortcutRestartRequired;
   } else {
     if (view_)
       view_->SetScreenState(ResetView::State::kPowerwashProposal);
@@ -223,15 +224,9 @@ void ResetScreen::ShowImpl() {
           switches::kDisableRollbackOption)) {
     if (view_)
       view_->SetIsRollbackAvailable(false);
-    dialog_type = reset::DialogViewType::kShortcutOfferingRollbackUnavailable;
   } else {
     UpdateEngineClient::Get()->CanRollbackCheck(base::BindOnce(
         &ResetScreen::OnRollbackCheck, weak_ptr_factory_.GetWeakPtr()));
-  }
-
-  if (dialog_type < reset::DialogViewType::kCount) {
-    UMA_HISTOGRAM_ENUMERATION("Reset.ChromeOS.PowerwashDialogShown",
-                              dialog_type, reset::DialogViewType::kCount);
   }
 
   // Set availability of TPM firmware update.
@@ -374,7 +369,7 @@ void ResetScreen::OnPowerwash() {
         base::Seconds(10));
   } else {
     VLOG(1) << "Starting Powerwash";
-    SessionManagerClient::Get()->StartDeviceWipe();
+    SessionManagerClient::Get()->StartDeviceWipe(base::DoNothing());
   }
 }
 
@@ -406,22 +401,11 @@ void ResetScreen::OnToggleRollback() {
   VLOG(1) << "Requested rollback availability"
           << view_->GetIsRollbackAvailable();
   if (view_->GetIsRollbackAvailable() && !view_->GetIsRollbackRequested()) {
-    UMA_HISTOGRAM_ENUMERATION(
-        "Reset.ChromeOS.PowerwashDialogShown",
-        reset::DialogViewType::kShortcutOfferingRollbackAvailable,
-        reset::DialogViewType::kCount);
     view_->SetIsRollbackRequested(true);
   }
 }
 
 void ResetScreen::OnShowConfirm() {
-  reset::DialogViewType dialog_type =
-      view_->GetIsRollbackRequested()
-          ? reset::DialogViewType::kShortcutConfirmingPowerwashAndRollback
-          : reset::DialogViewType::kShortcutConfirmingPowerwashOnly;
-  UMA_HISTOGRAM_ENUMERATION("Reset.ChromeOS.PowerwashDialogShown", dialog_type,
-                            reset::DialogViewType::kCount);
-
   view_->SetShouldShowConfirmationDialog(true);
 }
 
@@ -462,12 +446,6 @@ void ResetScreen::OnRollbackCheck(bool can_rollback) {
 
   const bool rollback_available =
       !connector->IsDeviceEnterpriseManaged() && can_rollback;
-  reset::DialogViewType dialog_type =
-      rollback_available
-          ? reset::DialogViewType::kShortcutOfferingRollbackAvailable
-          : reset::DialogViewType::kShortcutOfferingRollbackUnavailable;
-  UMA_HISTOGRAM_ENUMERATION("Reset.ChromeOS.PowerwashDialogShown", dialog_type,
-                            reset::DialogViewType::kCount);
 
   view_->SetIsRollbackAvailable(rollback_available);
 }

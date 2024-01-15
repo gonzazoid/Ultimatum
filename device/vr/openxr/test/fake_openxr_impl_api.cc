@@ -2,12 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <wrl.h>
-
 #include "base/containers/contains.h"
 #include "device/vr/openxr/openxr_util.h"
 #include "device/vr/openxr/test/openxr_negotiate.h"
 #include "device/vr/openxr/test/openxr_test_helper.h"
+
+#if BUILDFLAG(IS_WIN)
+#include <wrl.h>
+#endif
 
 namespace {
 // Global test helper that communicates with the test and contains the mock
@@ -534,7 +536,7 @@ XrResult xrEnumerateViewConfigurationViews(
   RETURN_IF(view_count_output == nullptr, XR_ERROR_VALIDATION_FAILURE,
             "view_count_output is nullptr");
 
-  const std::vector<XrViewConfigurationView>& view_properties =
+  const std::vector<device::OpenXrViewProperties>& view_properties =
       g_test_helper.GetViewConfigInfo(view_configuration_type).Properties();
   *view_count_output = view_properties.size();
   if (view_capacity_input == 0) {
@@ -546,8 +548,36 @@ XrResult xrEnumerateViewConfigurationViews(
   RETURN_IF(views == nullptr, XR_ERROR_VALIDATION_FAILURE,
             "XrViewConfigurationView is nullptr");
   for (uint32_t i = 0; i < view_properties.size(); i++) {
-    views[i] = view_properties[i];
+    views[i] = view_properties[i].GetPropertiesForTest();
   }
+
+  return XR_SUCCESS;
+}
+
+XrResult xrEnumerateSwapchainFormats(XrSession session,
+                                     uint32_t format_capacity_input,
+                                     uint32_t* format_count_output,
+                                     int64_t* formats) {
+  DVLOG(2) << __FUNCTION__;
+  RETURN_IF_XR_FAILED(g_test_helper.ValidateSession(session));
+  RETURN_IF(format_capacity_input != 1 && format_capacity_input != 0,
+            XR_ERROR_SIZE_INSUFFICIENT,
+            "xrEnumerateSwapchainFormats does not equal length returned by "
+            "previous call");
+  RETURN_IF(format_count_output == nullptr, XR_ERROR_VALIDATION_FAILURE,
+            "format_count_output is nullptr");
+  *format_count_output = 1;
+  if (format_capacity_input == 0) {
+    return XR_SUCCESS;
+  }
+
+  RETURN_IF(format_capacity_input < *format_count_output,
+            XR_ERROR_SIZE_INSUFFICIENT,
+            "format_capacity_input is less than required size");
+  RETURN_IF(formats == nullptr, XR_ERROR_VALIDATION_FAILURE,
+            "Formats Array is nullptr");
+  // This is what is hardcoded in `OpenXrGraphicsBindingD3D11`.
+  formats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 
   return XR_SUCCESS;
 }
@@ -596,6 +626,7 @@ XrResult xrEnumerateSwapchainImages(XrSwapchain swapchain,
   return XR_SUCCESS;
 }
 
+#if BUILDFLAG(IS_WIN)
 __stdcall XrResult xrGetD3D11GraphicsRequirementsKHR(
     XrInstance instance,
     XrSystemId system_id,
@@ -630,6 +661,7 @@ __stdcall XrResult xrGetD3D11GraphicsRequirementsKHR(
   RETURN_IF_FALSE(false, XR_ERROR_VALIDATION_FAILURE,
                   "Unable to create query DXGI Adapter");
 }
+#endif
 
 XrResult xrGetActionStateFloat(XrSession session,
                                const XrActionStateGetInfo* get_info,
@@ -1127,6 +1159,9 @@ XrResult XRAPI_PTR xrGetInstanceProcAddr(XrInstance instance,
   } else if (strcmp(name, "xrEnumerateInstanceExtensionProperties") == 0) {
     *function = reinterpret_cast<PFN_xrVoidFunction>(
         xrEnumerateInstanceExtensionProperties);
+  } else if (strcmp(name, "xrEnumerateSwapchainFormats") == 0) {
+    *function =
+        reinterpret_cast<PFN_xrVoidFunction>(xrEnumerateSwapchainFormats);
   } else if (strcmp(name, "xrEnumerateSwapchainImages") == 0) {
     *function =
         reinterpret_cast<PFN_xrVoidFunction>(xrEnumerateSwapchainImages);
@@ -1136,9 +1171,11 @@ XrResult XRAPI_PTR xrGetInstanceProcAddr(XrInstance instance,
   } else if (strcmp(name, "xrEnumerateViewConfigurationViews") == 0) {
     *function =
         reinterpret_cast<PFN_xrVoidFunction>(xrEnumerateViewConfigurationViews);
+#if BUILDFLAG(IS_WIN)
   } else if (strcmp(name, "xrGetD3D11GraphicsRequirementsKHR") == 0) {
     *function =
         reinterpret_cast<PFN_xrVoidFunction>(xrGetD3D11GraphicsRequirementsKHR);
+#endif
   } else if (strcmp(name, "xrGetActionStateFloat") == 0) {
     *function = reinterpret_cast<PFN_xrVoidFunction>(xrGetActionStateFloat);
   } else if (strcmp(name, "xrGetActionStateBoolean") == 0) {

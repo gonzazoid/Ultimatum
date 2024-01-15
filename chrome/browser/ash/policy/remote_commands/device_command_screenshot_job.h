@@ -12,8 +12,7 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/task_runner.h"
@@ -38,6 +37,7 @@ using OnScreenshotTakenCallback =
 class DeviceCommandScreenshotJob : public RemoteCommandJob,
                                    public UploadJob::Delegate {
  public:
+  static const char kUploadUrlFieldName[];
   // When the screenshot command terminates, the result payload that gets sent
   // to the server is populated with one of the following result codes. These
   // are exposed publicly here since DeviceCommandScreenshotTest uses them.
@@ -68,7 +68,7 @@ class DeviceCommandScreenshotJob : public RemoteCommandJob,
   // dependencies.
   class Delegate {
    public:
-    virtual ~Delegate() {}
+    virtual ~Delegate() = default;
 
     // Returns true if screenshots are allowed in this session. Returns false
     // if the current session is not an auto-launched kiosk session, or there
@@ -111,8 +111,7 @@ class DeviceCommandScreenshotJob : public RemoteCommandJob,
 
   // RemoteCommandJob:
   bool ParseCommandPayload(const std::string& command_payload) override;
-  void RunImpl(CallbackWithResult succeeded_callback,
-               CallbackWithResult failed_callback) override;
+  void RunImpl(CallbackWithResult result_callback) override;
   void TerminateImpl() override;
 
   // Posts `StartScreenshotUpload` job on |task_runner|.
@@ -121,15 +120,14 @@ class DeviceCommandScreenshotJob : public RemoteCommandJob,
 
   void StartScreenshotUpload(std::vector<ScreenshotData> upload_data);
 
+  void ReportResult(ResultType result_type, ResultCode result_code);
+
   // The URL to which the POST request should be directed.
   GURL upload_url_;
 
   // The callback that will be called when the screenshot was successfully
-  // uploaded.
-  CallbackWithResult succeeded_callback_;
-
-  // The callback that will be called when this command failed.
-  CallbackWithResult failed_callback_;
+  // uploaded or when the command has failed.
+  CallbackWithResult result_callback_;
 
   // The Delegate is used to acquire screenshots and create UploadJobs.
   std::unique_ptr<Delegate> screenshot_delegate_;

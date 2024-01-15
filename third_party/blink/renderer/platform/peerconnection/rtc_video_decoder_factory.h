@@ -5,7 +5,10 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_PEERCONNECTION_RTC_VIDEO_DECODER_FACTORY_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_PEERCONNECTION_RTC_VIDEO_DECODER_FACTORY_H_
 
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "third_party/blink/renderer/platform/peerconnection/gpu_codec_support_waiter.h"
+#include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/webrtc/api/video_codecs/video_decoder_factory.h"
 #include "third_party/webrtc/modules/video_coding/include/video_codec_interface.h"
 #include "ui/gfx/color_space.h"
@@ -21,8 +24,8 @@ class GpuVideoAcceleratorFactories;
 
 namespace blink {
 
-// TODO(wuchengli): add unittest.
-class RTCVideoDecoderFactory : public webrtc::VideoDecoderFactory {
+class PLATFORM_EXPORT RTCVideoDecoderFactory
+    : public webrtc::VideoDecoderFactory {
  public:
   // The `decoder_factory` and `media_task_runner` are only needed if the
   // experiment `media::kUseDecoderStreamForWebRTC` is enabled. If the
@@ -54,7 +57,8 @@ class RTCVideoDecoderFactory : public webrtc::VideoDecoderFactory {
 
  private:
   void CheckAndWaitDecoderSupportStatusIfNeeded() const;
-  media::GpuVideoAcceleratorFactories* gpu_factories_;
+  raw_ptr<media::GpuVideoAcceleratorFactories, ExperimentalRenderer>
+      gpu_factories_;
   base::WeakPtr<media::DecoderFactory> decoder_factory_;
 
   scoped_refptr<base::SequencedTaskRunner> media_task_runner_;

@@ -11,7 +11,6 @@
 #include <algorithm>
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/trace_event/memory_allocator_dump.h"
 #include "base/trace_event/memory_dump_manager.h"
@@ -105,14 +104,15 @@ bool CommandBufferHelper::AllocateRingBuffer() {
 void CommandBufferHelper::SetGetBuffer(int32_t id,
                                        scoped_refptr<Buffer> buffer) {
   command_buffer_->SetGetBuffer(id);
+  entries_ = nullptr;
+  total_entry_count_ = 0;
   ring_buffer_ = std::move(buffer);
   ring_buffer_id_ = id;
   ++set_get_buffer_count_;
-  entries_ = ring_buffer_
-                 ? static_cast<CommandBufferEntry*>(ring_buffer_->memory())
-                 : 0;
-  total_entry_count_ =
-      ring_buffer_ ? ring_buffer_size_ / sizeof(CommandBufferEntry) : 0;
+  if (ring_buffer_) {
+    entries_ = static_cast<CommandBufferEntry*>(ring_buffer_->memory());
+    total_entry_count_ = ring_buffer_size_ / sizeof(CommandBufferEntry);
+  }
   // Call to SetGetBuffer(id) above resets get and put offsets to 0.
   // No need to query it through IPC.
   put_ = 0;
@@ -386,7 +386,7 @@ bool CommandBufferHelper::OnMemoryDump(
   dump->AddScalar(MemoryAllocatorDump::kNameSize,
                   MemoryAllocatorDump::kUnitsBytes, ring_buffer_size_);
 
-  if (args.level_of_detail != MemoryDumpLevelOfDetail::BACKGROUND) {
+  if (args.level_of_detail != MemoryDumpLevelOfDetail::kBackground) {
     dump->AddScalar(
         "free_size", MemoryAllocatorDump::kUnitsBytes,
         GetTotalFreeEntriesNoWaiting() * sizeof(CommandBufferEntry));

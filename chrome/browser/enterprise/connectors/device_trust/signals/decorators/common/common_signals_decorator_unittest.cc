@@ -4,7 +4,7 @@
 
 #include "chrome/browser/enterprise/connectors/device_trust/signals/decorators/common/common_signals_decorator.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
@@ -16,7 +16,7 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/system/fake_statistics_provider.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 namespace enterprise_connectors {
@@ -36,7 +36,7 @@ class CommonSignalsDecoratorTest : public testing::Test {
   base::HistogramTester histogram_tester_;
   CommonSignalsDecorator decorator_;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  chromeos::system::ScopedFakeStatisticsProvider fake_statistics_provider;
+  ash::system::ScopedFakeStatisticsProvider fake_statistics_provider;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 };
 

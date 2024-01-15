@@ -14,13 +14,14 @@
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
 #include "chrome/browser/support_tool/data_collector.h"
-#include "components/feedback/pii_types.h"
-#include "components/feedback/redaction_tool.h"
+#include "components/feedback/redaction_tool/pii_types.h"
+#include "components/feedback/redaction_tool/redaction_tool.h"
 #include "components/feedback/system_logs/system_logs_source.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -48,7 +49,7 @@ const TestData kTestData[] = {
      /*test_logs_pii_redacted=*/
      "Collected data for testing:\n"
      "Will contain some PII sensitive info to test functionality.\n"
-     "Some IP addresss as PII here: <0.0.0.0/8: 1>, <IPv6: 1>\n"},
+     "Some IP addresss as PII here: (0.0.0.0/8: 1), (IPv6: 1)\n"},
     {/*data_source_name=*/"test-log-source-url",
      /*test_logs=*/
      "More data for testing for this log source:\n"
@@ -58,13 +59,13 @@ const TestData kTestData[] = {
      /*test_logs_pii_redacted=*/
      "More data for testing for this log source:\n"
      "For example some URL address that could be visited by user\n"
-     "is <URL: 1> and this will be considered as PII.\n"},
+     "is (URL: 1) and this will be considered as PII.\n"},
 };
 
 // The PII sensitive data that the test data contains.
 const PIIMap kPIIInTestData = {
-    {feedback::PIIType::kIPAddress, {"0.255.255.255", "::ffff:cb0c:10ea"}},
-    {feedback::PIIType::kURL,
+    {redaction::PIIType::kIPAddress, {"0.255.255.255", "::ffff:cb0c:10ea"}},
+    {redaction::PIIType::kURL,
      {"chrome-extension://nkoccljplnhpfnfiajclkommnmllphnl/foobar.js?bar=x"}}};
 
 namespace {
@@ -101,7 +102,7 @@ class SystemLogSourceDataCollectorAdaptorTest : public ::testing::Test {
     task_runner_for_redaction_tool_ =
         base::ThreadPool::CreateSequencedTaskRunner({});
     redaction_tool_container_ =
-        base::MakeRefCounted<feedback::RedactionToolContainer>(
+        base::MakeRefCounted<redaction::RedactionToolContainer>(
             task_runner_for_redaction_tool_, nullptr);
   }
 
@@ -140,7 +141,7 @@ class SystemLogSourceDataCollectorAdaptorTest : public ::testing::Test {
   base::test::TaskEnvironment task_environment_;
   base::ScopedTempDir temp_dir_;
   scoped_refptr<base::SequencedTaskRunner> task_runner_for_redaction_tool_;
-  scoped_refptr<feedback::RedactionToolContainer> redaction_tool_container_;
+  scoped_refptr<redaction::RedactionToolContainer> redaction_tool_container_;
 };
 
 TEST_F(SystemLogSourceDataCollectorAdaptorTest, CollectAndExportData) {

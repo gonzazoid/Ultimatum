@@ -10,6 +10,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Paint.FontMetrics;
+import android.graphics.Typeface;
 import android.text.Layout;
 import android.text.TextPaint;
 import android.text.TextUtils;
@@ -20,9 +21,7 @@ import androidx.appcompat.content.res.AppCompatResources;
 
 import org.chromium.chrome.R;
 
-/**
- * A factory that creates text and favicon bitmaps.
- */
+/** A factory that creates text and favicon bitmaps. */
 public class TitleBitmapFactory {
     private static final String TAG = "TitleBitmapFactory";
 
@@ -45,11 +44,13 @@ public class TitleBitmapFactory {
      */
     public TitleBitmapFactory(Context context, boolean incognito) {
         Resources res = context.getResources();
-        int textColor = AppCompatResources
-                                .getColorStateList(context,
-                                        incognito ? R.color.compositor_tab_title_bar_text_incognito
-                                                  : R.color.compositor_tab_title_bar_text)
-                                .getDefaultColor();
+        int textColor =
+                AppCompatResources.getColorStateList(
+                                context,
+                                incognito
+                                        ? R.color.compositor_tab_title_bar_text_incognito
+                                        : R.color.compositor_tab_title_bar_text)
+                        .getDefaultColor();
         float textSize = res.getDimension(R.dimen.compositor_tab_title_text_size);
 
         boolean fakeBoldText = res.getBoolean(R.bool.compositor_tab_title_fake_bold_text);
@@ -85,15 +86,18 @@ public class TitleBitmapFactory {
     public Bitmap getFaviconBitmap(Bitmap favicon) {
         assert favicon != null;
         try {
-            Bitmap b = Bitmap.createBitmap(
-                    mFaviconDimension, mFaviconDimension, Bitmap.Config.ARGB_8888);
+            Bitmap b =
+                    Bitmap.createBitmap(
+                            mFaviconDimension, mFaviconDimension, Bitmap.Config.ARGB_8888);
             Canvas c = new Canvas(b);
             if (favicon.getWidth() > mFaviconDimension || favicon.getHeight() > mFaviconDimension) {
-                float scale = (float) mFaviconDimension
-                        / Math.max(favicon.getWidth(), favicon.getHeight());
+                float scale =
+                        (float) mFaviconDimension
+                                / Math.max(favicon.getWidth(), favicon.getHeight());
                 c.scale(scale, scale);
             } else {
-                c.translate(Math.round((mFaviconDimension - favicon.getWidth()) / 2.0f),
+                c.translate(
+                        Math.round((mFaviconDimension - favicon.getWidth()) / 2.0f),
                         Math.round((mFaviconDimension - favicon.getHeight()) / 2.0f));
             }
             c.drawBitmap(favicon, 0, 0, null);
@@ -110,24 +114,37 @@ public class TitleBitmapFactory {
     /**
      * Generates the title bitmap.
      *
-     * @param context   Android's UI context.
-     * @param title     The title of the tab.
-     * @return          The Bitmap with the title.
+     * @param context Android's UI context.
+     * @param title The title of the tab.
+     * @return The Bitmap with the title.
      */
     public Bitmap getTitleBitmap(Context context, String title) {
         try {
             boolean drawText = !TextUtils.isEmpty(title);
             int textWidth =
                     drawText ? (int) Math.ceil(Layout.getDesiredWidth(title, mTextPaint)) : 0;
+
             // Minimum 1 width bitmap to avoid createBitmap function's IllegalArgumentException,
             // when textWidth == 0.
-            Bitmap b = Bitmap.createBitmap(Math.max(Math.min(mMaxWidth, textWidth), 1), mViewHeight,
-                    Bitmap.Config.ARGB_8888);
+            Bitmap b =
+                    Bitmap.createBitmap(
+                            Math.max(Math.min(mMaxWidth, textWidth), 1),
+                            mViewHeight,
+                            Bitmap.Config.ARGB_8888);
             Canvas c = new Canvas(b);
             if (drawText) {
-                c.drawText(title, 0, Math.min(MAX_NUM_TITLE_CHAR, title.length()), 0,
-                        Math.round((mViewHeight - mTextHeight) / 2.0f + mTextYOffset), mTextPaint);
+                c.drawText(
+                        title,
+                        0,
+                        Math.min(MAX_NUM_TITLE_CHAR, title.length()),
+                        0,
+                        Math.round((mViewHeight - mTextHeight) / 2.0f + mTextYOffset),
+                        mTextPaint);
             }
+
+            // Set bolded tab title text back to normal.
+            mTextPaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.NORMAL));
+
             return b;
         } catch (OutOfMemoryError ex) {
             Log.e(TAG, "OutOfMemoryError while building title texture.");

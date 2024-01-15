@@ -16,6 +16,8 @@ group("browser") {
 source_set("internal") {
   visibility = [ "//components/policy/*" ]
   sources = [
+    "boolean_disabling_policy_handler.cc",
+    "boolean_disabling_policy_handler.h",
     "browser_policy_connector.cc",
     "browser_policy_connector.h",
     "browser_policy_connector_base.cc",
@@ -34,6 +36,10 @@ source_set("internal") {
     "policy_conversions_client.h",
     "policy_error_map.cc",
     "policy_error_map.h",
+    "remote_commands/user_remote_commands_service_base.cc",
+    "remote_commands/user_remote_commands_service_base.h",
+    "signin/profile_separation_policies.cc",
+    "signin/profile_separation_policies.h",
     "signin/user_cloud_signin_restriction_policy_fetcher.cc",
     "signin/user_cloud_signin_restriction_policy_fetcher.h",
     "url_allowlist_policy_handler.cc",
@@ -54,6 +60,8 @@ source_set("internal") {
     "webui/policy_status_provider.h",
     "webui/policy_webui_constants.cc",
     "webui/policy_webui_constants.h",
+    "webui/statistics_collector.cc",
+    "webui/statistics_collector.h",
   ]
 
   if (!is_chromeos_ash) {
@@ -73,6 +81,7 @@ source_set("internal") {
     "//build:branding_buildflags",
     "//build:chromeos_buildflags",
     "//components/google/core/common",
+    "//components/invalidation/impl",
     "//components/keyed_service/core",
     "//components/pref_registry",
     "//components/prefs",
@@ -129,14 +138,21 @@ static_library("test_support") {
     "//build:branding_buildflags",
     "//build:chromeos_buildflags",
     "//components/prefs",
+    "//printing/buildflags",
     "//testing/gtest",
     "//url",
   ]
+
+  # The test data lives inside components/policy/test/data (and not inside
+  # chrome/test/data/) because components/policy/PRESUBMIT.py depends on it. And
+  # we want the presubmit check run automatically when the files is modified.
+  data = [ "//components/policy/test/data/" ]
 }
 
 source_set("unit_tests") {
   testonly = true
   sources = [
+    "boolean_disabling_policy_handler_unittest.cc",
     "configuration_policy_handler_list_unittest.cc",
     "configuration_policy_handler_unittest.cc",
     "configuration_policy_pref_store_unittest.cc",

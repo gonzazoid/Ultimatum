@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,20 +13,19 @@ namespace autofill {
 
 // static
 std::unique_ptr<FormField> NumericQuantityField::Parse(
-    AutofillScanner* scanner,
-    const LanguageCode& page_language,
-    PatternSource pattern_source,
-    LogManager* log_manager) {
-  AutofillField* field;
-  base::span<const MatchPatternRef> quantity_patterns =
-      GetMatchPatterns("NUMERIC_QUANTITY", page_language, pattern_source);
+    ParsingContext& context,
+    AutofillScanner* scanner) {
+  raw_ptr<AutofillField> field;
+  base::span<const MatchPatternRef> quantity_patterns = GetMatchPatterns(
+      "NUMERIC_QUANTITY", context.page_language, context.pattern_source);
 
   if (ParseFieldSpecifics(
-          scanner, kNumericQuantityRe,
+          context, scanner, kNumericQuantityRe,
           kDefaultMatchParamsWith<
-              MatchFieldType::kNumber, MatchFieldType::kSelect,
-              MatchFieldType::kTextArea, MatchFieldType::kSearch>,
-          quantity_patterns, &field, {log_manager, "kNumericQuantityRe"})) {
+              FormControlType::kInputNumber, FormControlType::kSelectOne,
+              FormControlType::kSelectList, FormControlType::kTextArea,
+              FormControlType::kInputSearch>,
+          quantity_patterns, &field, "kNumericQuantityRe")) {
     return base::WrapUnique(new NumericQuantityField(field));
   }
 

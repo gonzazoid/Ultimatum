@@ -78,6 +78,16 @@ dimension.)
 Note you might need `--swarming-os Ubuntu-14.04` if you get an error like,
 `UnboundLocalError: local variable 'dbus_pid' referenced before assignment`.
 
+Web tests can be also run on swarmed. However:
+- the only supported output folders are `Debug` and `Release`
+- `--no-test-flags` must be specified.
+
+For example, you can run all Web Platform Tests inside `<some-wpt-folder>` like this:
+```
+$ autoninja -C out/Release blink_tests
+$ tools/run-swarmed.py --no-test-flags out/Release blink_wpt_tests <some-wpt-folder>
+```
+
 ### mb.py run
 
 Similar to `tools/run-swarmed.py`, `mb.py run` bundles much of the logic into a
@@ -163,7 +173,11 @@ You may need to log in to `https://chromium-swarm.appspot.com` to do this
 $ tools/luci-go/isolate login
 ```
 
-Use your google.com account for this.
+Use your google.com account for this. On Windows the command would be:
+
+```
+$ tools\luci-go\isolate.exe login
+```
 
 ## Uploading an isolate
 
@@ -251,3 +265,7 @@ page, which gives you commands to:
 [borg]: https://ai.google/research/pubs/pub43438
 [kubernetes]: https://kubernetes.io/
 [swarming bot list]: https://chromium-swarm.appspot.com/botlist
+
+To find out repo checkout, gn args, etc for local compile, you can use
+[how to repro bot failures](../testing/how_to_repro_bot_failures.md)
+as a reference.

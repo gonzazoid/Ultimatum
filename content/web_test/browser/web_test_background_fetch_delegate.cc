@@ -7,12 +7,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "components/download/content/factory/download_service_factory_helper.h"
 #include "components/download/public/background_service/background_download_service.h"
@@ -198,7 +199,7 @@ class WebTestBackgroundFetchDelegate::WebTestBackgroundFetchDownloadClient
   void GetUploadData(const std::string& guid,
                      download::GetUploadDataCallback callback) override {
     if (!guid_to_request_body_mapping_[guid]) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), nullptr));
       return;
     }
@@ -323,8 +324,8 @@ void WebTestBackgroundFetchDelegate::MarkJobComplete(
 
 void WebTestBackgroundFetchDelegate::UpdateUI(
     const std::string& job_unique_id,
-    const absl::optional<std::string>& title,
-    const absl::optional<SkBitmap>& icon) {
+    const std::optional<std::string>& title,
+    const std::optional<SkBitmap>& icon) {
   background_fetch_client_->client()->OnUIUpdated(job_unique_id);
 }
 

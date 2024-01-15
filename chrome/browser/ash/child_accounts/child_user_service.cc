@@ -4,8 +4,8 @@
 
 #include "chrome/browser/ash/child_accounts/child_user_service.h"
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
 #include "base/time/time.h"
@@ -105,11 +105,11 @@ void ChildUserService::ResumeWebActivity(const std::string& app_service_id) {
   NOTIMPLEMENTED();
 }
 
-absl::optional<base::TimeDelta> ChildUserService::GetTimeLimitForApp(
+std::optional<base::TimeDelta> ChildUserService::GetTimeLimitForApp(
     const std::string& app_service_id,
     apps::AppType app_type) {
   if (!app_time_controller_)
-    return absl::nullopt;
+    return std::nullopt;
 
   return app_time_controller_->GetTimeLimitForApp(app_service_id, app_type);
 }

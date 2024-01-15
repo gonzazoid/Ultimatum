@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
   }
 
   if (reinstall) {
-    [[NSFileManager defaultManager]
+    [NSFileManager.defaultManager
         removeItemAtPath:@"/Applications/Google Chrome.app"
                    error:nil];
   }
@@ -72,8 +72,9 @@ int main(int argc, char* argv[]) {
   unsigned reasons;
   int can_install = GoogleChromeCompatibilityCheck(&reasons);
   NSLog(@"can_install: %d, reasons %x", can_install, reasons);
-  if (check_only)
+  if (check_only) {
     return 0;
+  }
 
   if (can_install && !source_path.empty()) {
     int install_result = InstallGoogleChrome(
@@ -82,6 +83,7 @@ int main(int argc, char* argv[]) {
     NSLog(@"install result: %d", install_result);
   }
 
-  if (launch)
+  if (launch) {
     LaunchGoogleChrome();
+  }
 }

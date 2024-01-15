@@ -7,17 +7,17 @@
 #include <iterator>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/hash/sha1.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
 #include "components/policy/core/common/cloud/test/policy_builder.h"
+#include "components/policy/proto/device_management_backend.pb.h"
 #include "crypto/signature_creator.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -45,15 +45,31 @@ int GetCommandIdOrDefault(const em::SignedData& signed_command) {
 
 }  // namespace
 
-std::string SignDataWithTestKey(const std::string& data) {
+std::string SignDataWithTestKey(const std::string& data,
+                                SignatureType algorithm) {
+  crypto::SignatureCreator::HashAlgorithm crypto_hash_alg;
+
+  switch (algorithm) {
+    case em::PolicyFetchRequest::SHA256_RSA:
+      crypto_hash_alg = crypto::SignatureCreator::SHA256;
+      break;
+    case em::PolicyFetchRequest::NONE:
+    case em::PolicyFetchRequest::SHA1_RSA:
+      crypto_hash_alg = crypto::SignatureCreator::SHA1;
+      break;
+  }
+
   std::unique_ptr<crypto::RSAPrivateKey> private_key =
       PolicyBuilder::CreateTestSigningKey();
-  std::string sha1 = base::SHA1HashString(data);
-  std::vector<uint8_t> digest(sha1.begin(), sha1.end());
+  std::unique_ptr<crypto::SignatureCreator> signer =
+      crypto::SignatureCreator::Create(private_key.get(), crypto_hash_alg);
+
+  std::vector<uint8_t> input(data.begin(), data.end());
   std::vector<uint8_t> result;
-  CHECK(crypto::SignatureCreator::Sign(private_key.get(),
-                                       crypto::SignatureCreator::SHA1,
-                                       digest.data(), digest.size(), &result));
+
+  CHECK(signer->Update(input.data(), input.size()));
+  CHECK(signer->Final(&result));
+
   return std::string(result.begin(), result.end());
 }
 
@@ -80,7 +96,7 @@ struct TestingRemoteCommandsServer::RemoteCommandWithCallback {
 
 TestingRemoteCommandsServer::TestingRemoteCommandsServer()
     : clock_(base::DefaultTickClock::GetInstance()),
-      task_runner_(base::ThreadTaskRunnerHandle::Get()) {
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {
   weak_ptr_to_this_ = weak_factory_.GetWeakPtr();
 }
 

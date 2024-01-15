@@ -8,25 +8,17 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ResolveInfo;
 
-import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
 
 import org.chromium.base.Callback;
-import org.chromium.base.Function;
 import org.chromium.base.supplier.Supplier;
-import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.url.GURL;
-import org.chromium.url.Origin;
 
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
 import java.util.List;
 
-/**
- * A delegate for {@link ExternalNavigationHandler}.
- */
+/** A delegate for {@link ExternalNavigationHandler}. */
 public interface ExternalNavigationDelegate {
     /**
      * Returns the Context with which this delegate is associated, or null if there is no such
@@ -45,17 +37,8 @@ public interface ExternalNavigationDelegate {
      */
     boolean willAppHandleIntent(Intent intent);
 
-    /**
-     * Returns whether to disable forwarding URL requests to external intents for the passed-in URL.
-     */
+    /** Returns whether to disable forwarding URL requests to external intents for the passed-in URL. */
     boolean shouldDisableExternalIntentRequestsForUrl(GURL url);
-
-    /**
-     * Loads a URL as specified by |loadUrlParams| if possible. May fail in exceptional conditions
-     * (e.g., if there is no valid tab).
-     * @param loadUrlParams parameters of the URL to be loaded
-     */
-    void loadUrlIfPossible(LoadUrlParams loadUrlParams);
 
     /** Adds a window id to the intent, if necessary. */
     void maybeSetWindowId(Intent intent);
@@ -67,8 +50,8 @@ public interface ExternalNavigationDelegate {
      * Invoked for intents with request metadata such as user gesture, whether request is renderer
      * initiated and the initiator origin. Records the information if desired.
      */
-    void maybeSetRequestMetadata(Intent intent, boolean hasUserGesture, boolean isRendererInitiated,
-            @Nullable Origin initiatorOrigin);
+    void maybeSetRequestMetadata(
+            Intent intent, boolean hasUserGesture, boolean isRendererInitiated);
 
     /**
      * Records the pending incognito URL if desired. Called only if the
@@ -76,24 +59,16 @@ public interface ExternalNavigationDelegate {
      */
     void maybeSetPendingIncognitoUrl(Intent intent);
 
-    /**
-     * Determine if the application of the embedder is in the foreground.
-     */
+    /** Determine if the application of the embedder is in the foreground. */
     boolean isApplicationInForeground();
 
-    /**
-     * @return The WindowAndroid instance associated with this delegate instance.
-     */
+    /** @return The WindowAndroid instance associated with this delegate instance. */
     WindowAndroid getWindowAndroid();
 
-    /**
-     * @return The WebContents instance associated with this delegate instance.
-     */
+    /** @return The WebContents instance associated with this delegate instance. */
     WebContents getWebContents();
 
-    /**
-     * @return Whether this delegate has a valid tab available.
-     */
+    /** @return Whether this delegate has a valid tab available. */
     boolean hasValidTab();
 
     /**
@@ -105,9 +80,7 @@ public interface ExternalNavigationDelegate {
      */
     boolean canCloseTabOnIncognitoIntentLaunch();
 
-    /**
-     * @return whether it's possible to load a URL in the current tab.
-     */
+    /** @return whether it's possible to load a URL in the current tab. */
     boolean canLoadUrlInCurrentTab();
 
     /* Invoked when the tab associated with this delegate should be closed. */
@@ -130,66 +103,22 @@ public interface ExternalNavigationDelegate {
     void presentLeavingIncognitoModalDialog(Callback<Boolean> onUserDecision);
 
     /**
-     * @param intent The intent to launch.
+     * @param resolveInfoSupplier The resolveInfos to check.
      * @return Whether the Intent points to an app that we trust and that launched this app.
      */
-    boolean isIntentForTrustedCallingApp(
-            Intent intent, Supplier<List<ResolveInfo>> resolveInfoSupplier);
+    boolean isForTrustedCallingApp(Supplier<List<ResolveInfo>> resolveInfoSupplier);
 
-    /**
-     * @param intent The intent to launch
-     * @return Whether the Intent points to Autofill Assistant
-     */
-    boolean isIntentToAutofillAssistant(Intent intent);
-
-    /**
-     * Used by isIntentToAutofillAssistantAllowingApp() below.
-     */
-    @IntDef({IntentToAutofillAllowingAppResult.NONE,
-            IntentToAutofillAllowingAppResult.DEFER_TO_APP_NOW,
-            IntentToAutofillAllowingAppResult.DEFER_TO_APP_LATER})
-    @Retention(RetentionPolicy.SOURCE)
-    public @interface IntentToAutofillAllowingAppResult {
-        int NONE = 0;
-        // Skip handling with Autofill Assistant and expect an external intent to be launched.
-        int DEFER_TO_APP_NOW = 1;
-        // Skip handling with Autofill Assistant and expect an external intent to be launched after
-        // a redirect.
-        int DEFER_TO_APP_LATER = 2;
-    }
-
-    /**
-     * @param params The external navigation params
-     * @param targetIntent The intent to launch
-     * @param canExternalAppHandleIntent The checker whether or not an external app can handle the
-     * provided intent
-     * @return Whether the Intent to Autofill Assistant allows override with an app.
-     */
-    @IntentToAutofillAllowingAppResult
-    int isIntentToAutofillAssistantAllowingApp(ExternalNavigationParams params, Intent targetIntent,
-            Function<Intent, Boolean> canExternalAppHandleIntent);
-
-    /**
-     * Gives the embedder a chance to handle the intent via the autofill assistant.
-     */
-    boolean handleWithAutofillAssistant(ExternalNavigationParams params, Intent targetIntent,
-            GURL browserFallbackUrl, boolean isGoogleReferrer);
-
-    /**
-     * Whether WebAPKs should be launched even on the initial Intent.
-     */
+    /** Whether WebAPKs should be launched even on the initial Intent. */
     boolean shouldLaunchWebApksOnInitialIntent();
 
-    /**
-     * Potentially adds a target package to the Intent. Returns whether the package was set.
-     */
-    boolean maybeSetTargetPackage(Intent intent, Supplier<List<ResolveInfo>> resolveInfoSupplier);
+    /** Adds a target package to the Intent. Only called if isForTrustedCallingApp is true. */
+    void setPackageForTrustedCallingApp(Intent intent);
 
     /**
      * Whether the Activity launch should be aborted if the disambiguation prompt is going to be
      * shown and Chrome is able to handle the navigation.
      */
-    boolean shouldAvoidDisambiguationDialog(Intent intent);
+    boolean shouldAvoidDisambiguationDialog(GURL intentDataUrl);
 
     /**
      * Whether navigations started by the embedder (i.e. not by the renderer) should stay in the
@@ -197,4 +126,11 @@ public interface ExternalNavigationDelegate {
      * navigation still being allowed to leave the browser.
      */
     boolean shouldEmbedderInitiatedNavigationsStayInBrowser();
+
+    /**
+     * Returns the scheme (or null) used by web pages to start up the browser (Chrome Stable for
+     * Chrome) without an explicit Intent.
+     */
+    @Nullable
+    String getSelfScheme();
 }

@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "build/build_config.h"
 #include "build/chromecast_buildflags.h"
@@ -18,6 +18,38 @@ const char AudioDeviceDescription::kCommunicationsDeviceId[] = "communications";
 const char AudioDeviceDescription::kLoopbackInputDeviceId[] = "loopback";
 const char AudioDeviceDescription::kLoopbackWithMuteDeviceId[] =
     "loopbackWithMute";
+const char AudioDeviceDescription::kLoopbackWithoutChromeId[] =
+    "loopbackWithoutChrome";
+
+namespace {
+// Sanitize names which are known to contain the user's name, such as AirPods'
+// default name as recommended in
+// https://w3c.github.io/mediacapture-main/#sanitize-device-labels
+// See crbug.com/1163072 and crbug.com/1293761 for background information..
+constexpr char kAirpodsNameSubstring[] = "AirPods";  // crbug.com/1163072
+
+// On Windows 10, "... Hands-Free AG Audio" is a special profile with
+// both microphone and speakers.  "... Stereo" is another special profile
+// which supports higher quality audio. Windows 11 merges the two to avoid
+// confusing the user.
+// TODO(crbug.com/1412400): The strings are localized by the OS which
+// should be taken into account.
+constexpr char kProfileNameHandsFree[] = "Hands-Free AG Audio";
+constexpr char kProfileNameStereo[] = "Stereo";
+
+void RedactDeviceName(std::string& name) {
+  std::string profile;
+  if (name.find(kProfileNameHandsFree) != std::string::npos) {
+    profile += std::string(" ") + kProfileNameHandsFree;
+  } else if (name.find(kProfileNameStereo) != std::string::npos) {
+    profile += std::string(" ") + kProfileNameStereo;
+  }
+  if (name.find(kAirpodsNameSubstring) != std::string::npos) {
+    name = kAirpodsNameSubstring + profile;
+  }
+}
+
+}  // namespace
 
 // static
 bool AudioDeviceDescription::IsDefaultDevice(const std::string& device_id) {
@@ -33,8 +65,9 @@ bool AudioDeviceDescription::IsCommunicationsDevice(
 
 // static
 bool AudioDeviceDescription::IsLoopbackDevice(const std::string& device_id) {
-  return device_id.compare(kLoopbackInputDeviceId) == 0 ||
-         device_id.compare(kLoopbackWithMuteDeviceId) == 0;
+  return device_id == kLoopbackInputDeviceId ||
+         device_id == kLoopbackWithMuteDeviceId ||
+         device_id == kLoopbackWithoutChromeId;
 }
 
 // static
@@ -46,12 +79,7 @@ bool AudioDeviceDescription::UseSessionIdToSelectDevice(
 
 // static
 std::string AudioDeviceDescription::GetDefaultDeviceName() {
-#if !BUILDFLAG(IS_IOS)
   return GetLocalizedStringUTF8(DEFAULT_AUDIO_DEVICE_NAME);
-#else
-  NOTREACHED();
-  return "";
-#endif
 }
 
 // static
@@ -63,8 +91,7 @@ std::string AudioDeviceDescription::GetCommunicationsDeviceName() {
   // is deprecated.
   return "";
 #else
-  NOTREACHED();
-  return "";
+  NOTREACHED_NORETURN();
 #endif
 }
 
@@ -92,6 +119,8 @@ std::string AudioDeviceDescription::GetCommunicationsDeviceName(
 void AudioDeviceDescription::LocalizeDeviceDescriptions(
     AudioDeviceDescriptions* device_descriptions) {
   for (auto& description : *device_descriptions) {
+    RedactDeviceName(description.device_name);
+
     if (media::AudioDeviceDescription::IsDefaultDevice(description.unique_id)) {
       description.device_name =
           media::AudioDeviceDescription::GetDefaultDeviceName(
@@ -105,11 +134,32 @@ void AudioDeviceDescription::LocalizeDeviceDescriptions(
   }
 }
 
+AudioDeviceDescription::AudioDeviceDescription() = default;
+AudioDeviceDescription::~AudioDeviceDescription() = default;
+
+AudioDeviceDescription::AudioDeviceDescription(
+    const AudioDeviceDescription& other) = default;
+AudioDeviceDescription& AudioDeviceDescription::operator=(
+    const AudioDeviceDescription& other) = default;
+
+AudioDeviceDescription::AudioDeviceDescription(AudioDeviceDescription&& other) =
+    default;
+AudioDeviceDescription& AudioDeviceDescription::operator=(
+    AudioDeviceDescription&& other) = default;
+
 AudioDeviceDescription::AudioDeviceDescription(std::string device_name,
                                                std::string unique_id,
-                                               std::string group_id)
-    : device_name(std::move(device_name)),
-      unique_id(std::move(unique_id)),
-      group_id(std::move(group_id)) {}
+                                               std::string group_id,
+                                               bool is_system_default)
+    : device_name(device_name),
+      unique_id(unique_id),
+      group_id(group_id),
+      is_system_default(is_system_default) {}
+
+bool AudioDeviceDescription::operator==(
+    const AudioDeviceDescription& other) const {
+  return device_name == other.device_name && unique_id == other.unique_id &&
+         group_id == other.group_id;
+}
 
 }  // namespace media

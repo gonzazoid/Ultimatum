@@ -15,9 +15,9 @@ limitations under the License.
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include "tensorflow/lite/acceleration/configuration/configuration_generated.h"
+#include "tensorflow/lite/acceleration/configuration/delegate_registry.h"
 #include "tensorflow/lite/c/common.h"
-#include "tensorflow/lite/experimental/acceleration/configuration/configuration_generated.h"
-#include "tensorflow/lite/experimental/acceleration/configuration/delegate_registry.h"
 #include "tensorflow/lite/interpreter.h"
 #include "tensorflow/lite/kernels/register.h"
 #include "tensorflow/lite/model.h"
@@ -43,8 +43,7 @@ using ::tflite::task::vision::ImageDataFree;
 
 using EdgeTpuCoralPluginTest = testing::TestWithParam<std::string>;
 
-INSTANTIATE_TEST_SUITE_P(CoralPluginTests,
-                         EdgeTpuCoralPluginTest,
+INSTANTIATE_TEST_SUITE_P(CoralPluginTests, EdgeTpuCoralPluginTest,
                          testing::Values(kRegularModelFilePath,
                                          kEdgeTpuModelFilePath));
 

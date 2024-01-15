@@ -15,7 +15,11 @@ namespace ui {
 
 namespace {
 constexpr uint32_t kMinVersion = 1;
-constexpr uint32_t kMaxVersion = 4;
+constexpr uint32_t kMaxVersion = 10;
+
+// The minimum version for `augmented_surface_set_rounded_corners_clip_bounds`
+// with a local coordinates bounds.
+constexpr uint32_t kRoundedClipBoundsInLocalSurfaceCoordinatesSinceVersion = 9;
 }
 
 // static
@@ -59,6 +63,21 @@ bool SurfaceAugmenter::SupportsSubpixelAccuratePosition() const {
 bool SurfaceAugmenter::SupportsClipRect() const {
   return GetSurfaceAugmentorVersion() >=
          AUGMENTED_SUB_SURFACE_SET_CLIP_RECT_SINCE_VERSION;
+}
+
+bool SurfaceAugmenter::SupportsClipRectOnAugmentedSurface() const {
+  return GetSurfaceAugmentorVersion() >=
+         AUGMENTED_SURFACE_SET_CLIP_RECT_SINCE_VERSION;
+}
+
+bool SurfaceAugmenter::SupportsTransform() const {
+  return GetSurfaceAugmentorVersion() >=
+         AUGMENTED_SUB_SURFACE_SET_TRANSFORM_SINCE_VERSION;
+}
+
+bool SurfaceAugmenter::NeedsRoundedClipBoundsInLocalSurfaceCoordinates() const {
+  return GetSurfaceAugmentorVersion() >=
+         kRoundedClipBoundsInLocalSurfaceCoordinatesSinceVersion;
 }
 
 uint32_t SurfaceAugmenter::GetSurfaceAugmentorVersion() const {

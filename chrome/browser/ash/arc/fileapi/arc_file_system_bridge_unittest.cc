@@ -15,6 +15,7 @@
 #include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
@@ -24,8 +25,8 @@
 #include "chrome/browser/ash/file_system_provider/fake_extension_provider.h"
 #include "chrome/browser/ash/file_system_provider/service.h"
 #include "chrome/browser/ash/file_system_provider/service_factory.h"
-#include "chrome/browser/chromeos/fileapi/external_file_url_util.h"
-#include "chrome/browser/chromeos/fileapi/file_system_backend.h"
+#include "chrome/browser/ash/fileapi/external_file_url_util.h"
+#include "chrome/browser/ash/fileapi/file_system_backend.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile_manager.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
@@ -93,7 +94,7 @@ class ArcFileSystemBridgeTest : public testing::Test {
   base::ScopedTempDir temp_dir_;
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfileManager> profile_manager_;
-  Profile* profile_ = nullptr;
+  raw_ptr<Profile, DanglingUntriaged> profile_ = nullptr;
 
   FakeFileSystemInstance fake_file_system_;
   ArcBridgeService arc_bridge_service_;
@@ -104,12 +105,11 @@ TEST_F(ArcFileSystemBridgeTest, GetFileName) {
   base::RunLoop run_loop;
   arc_file_system_bridge_->GetFileName(
       EncodeToChromeContentProviderUrl(GURL(kTestUrl)).spec(),
-      base::BindLambdaForTesting(
-          [&](const absl::optional<std::string>& result) {
-            run_loop.Quit();
-            ASSERT_TRUE(result.has_value());
-            EXPECT_EQ("hello.txt", result.value());
-          }));
+      base::BindLambdaForTesting([&](const std::optional<std::string>& result) {
+        run_loop.Quit();
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ("hello.txt", result.value());
+      }));
   run_loop.Run();
 }
 
@@ -123,12 +123,11 @@ TEST_F(ArcFileSystemBridgeTest, GetFileNameNonASCII) {
   base::RunLoop run_loop;
   arc_file_system_bridge_->GetFileName(
       EncodeToChromeContentProviderUrl(url).spec(),
-      base::BindLambdaForTesting(
-          [&](const absl::optional<std::string>& result) {
-            run_loop.Quit();
-            ASSERT_TRUE(result.has_value());
-            EXPECT_EQ(filename, result.value());
-          }));
+      base::BindLambdaForTesting([&](const std::optional<std::string>& result) {
+        run_loop.Quit();
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(filename, result.value());
+      }));
   run_loop.Run();
 }
 
@@ -140,12 +139,11 @@ TEST_F(ArcFileSystemBridgeTest, GetFileNameLockIcon) {
   base::RunLoop run_loop;
   arc_file_system_bridge_->GetFileName(
       EncodeToChromeContentProviderUrl(url).spec(),
-      base::BindLambdaForTesting(
-          [&](const absl::optional<std::string>& result) {
-            run_loop.Quit();
-            ASSERT_TRUE(result.has_value());
-            EXPECT_EQ("\xF0\x9F\x94\x92", result.value());
-          }));
+      base::BindLambdaForTesting([&](const std::optional<std::string>& result) {
+        run_loop.Quit();
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ("\xF0\x9F\x94\x92", result.value());
+      }));
   run_loop.Run();
 }
 
@@ -156,11 +154,10 @@ TEST_F(ArcFileSystemBridgeTest, GetFileNameEscapedPathSeparator) {
   base::RunLoop run_loop;
   arc_file_system_bridge_->GetFileName(
       EncodeToChromeContentProviderUrl(url).spec(),
-      base::BindLambdaForTesting(
-          [&](const absl::optional<std::string>& result) {
-            run_loop.Quit();
-            ASSERT_FALSE(result.has_value());
-          }));
+      base::BindLambdaForTesting([&](const std::optional<std::string>& result) {
+        run_loop.Quit();
+        ASSERT_FALSE(result.has_value());
+      }));
   run_loop.Run();
 }
 
@@ -182,7 +179,7 @@ TEST_F(ArcFileSystemBridgeTest, GetLastModified) {
   base::RunLoop run_loop;
   arc_file_system_bridge_->GetLastModified(
       EncodeToChromeContentProviderUrl(GURL(kTestUrl)),
-      base::BindLambdaForTesting([&](const absl::optional<base::Time> result) {
+      base::BindLambdaForTesting([&](const std::optional<base::Time> result) {
         ASSERT_TRUE(result.has_value());
         EXPECT_EQ(expected, result.value());
         run_loop.Quit();
@@ -194,12 +191,11 @@ TEST_F(ArcFileSystemBridgeTest, GetFileType) {
   base::RunLoop run_loop;
   arc_file_system_bridge_->GetFileType(
       EncodeToChromeContentProviderUrl(GURL(kTestUrl)).spec(),
-      base::BindLambdaForTesting(
-          [&](const absl::optional<std::string>& result) {
-            ASSERT_TRUE(result.has_value());
-            EXPECT_EQ(kTestFileType, result.value());
-            run_loop.Quit();
-          }));
+      base::BindLambdaForTesting([&](const std::optional<std::string>& result) {
+        ASSERT_TRUE(result.has_value());
+        EXPECT_EQ(kTestFileType, result.value());
+        run_loop.Quit();
+      }));
   run_loop.Run();
 }
 
@@ -215,8 +211,8 @@ TEST_F(ArcFileSystemBridgeTest, GetVirtualFileId) {
   base::RunLoop run_loop;
   arc_file_system_bridge_->GetVirtualFileId(
       EncodeToChromeContentProviderUrl(GURL(kTestUrl)).spec(),
-      base::BindLambdaForTesting([&](const absl::optional<std::string>& id) {
-        ASSERT_NE(absl::nullopt, id);
+      base::BindLambdaForTesting([&](const std::optional<std::string>& id) {
+        ASSERT_NE(std::nullopt, id);
         EXPECT_EQ(kId, id.value());
         run_loop.Quit();
       }));
@@ -263,7 +259,7 @@ TEST_F(ArcFileSystemBridgeTest, OpenFileToRead) {
 
   // Requested number of bytes are written to the pipe.
   std::vector<char> buf(kTestFileSize);
-  ASSERT_TRUE(base::ReadFromFD(pipe_read_end.get(), buf.data(), buf.size()));
+  ASSERT_TRUE(base::ReadFromFD(pipe_read_end.get(), buf));
 
   // ID is released.
   EXPECT_TRUE(arc_file_system_bridge_->HandleIdReleased(kId));
@@ -292,8 +288,8 @@ TEST_F(ArcFileSystemBridgeTest, GetLinuxVFSPathFromExternalFileURL) {
 
   // Create externalfile: URL as would be encoded inside the
   // ChromeContentProvider URL.
-  GURL smbfs_url = chromeos::CreateExternalFileURLFromPath(
-      profile_, smbfs_path_expected, true);
+  GURL smbfs_url =
+      ash::CreateExternalFileURLFromPath(profile_, smbfs_path_expected, true);
 
   // Check: The path returned matches the path encoded into the URL.
   base::FilePath smbfs_path =

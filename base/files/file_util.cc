@@ -4,6 +4,7 @@
 
 #include "base/files/file_util.h"
 
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -31,7 +32,6 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/bind_post_task.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 
 #if BUILDFLAG(IS_WIN)
 #include <windows.h>
@@ -141,7 +141,7 @@ OnceClosure GetDeleteFileCallback(const FilePath& path,
   return BindOnce(&RunAndReply, BindOnce(&DeleteFile, path),
                   reply_callback.is_null()
                       ? std::move(reply_callback)
-                      : BindPostTask(SequencedTaskRunnerHandle::Get(),
+                      : BindPostTask(SequencedTaskRunner::GetCurrentDefault(),
                                      std::move(reply_callback)));
 }
 
@@ -151,7 +151,7 @@ OnceClosure GetDeletePathRecursivelyCallback(
   return BindOnce(&RunAndReply, BindOnce(&DeletePathRecursively, path),
                   reply_callback.is_null()
                       ? std::move(reply_callback)
-                      : BindPostTask(SequencedTaskRunnerHandle::Get(),
+                      : BindPostTask(SequencedTaskRunner::GetCurrentDefault(),
                                      std::move(reply_callback)));
 }
 
@@ -439,6 +439,18 @@ bool TruncateFile(FILE* file) {
     return false;
 #endif
   return true;
+}
+
+int ReadFile(const FilePath& filename, char* data, int max_size) {
+  if (max_size < 0) {
+    return -1;
+  }
+  std::optional<uint64_t> result =
+      ReadFile(filename, make_span(data, static_cast<uint32_t>(max_size)));
+  if (!result) {
+    return -1;
+  }
+  return checked_cast<int>(result.value());
 }
 
 bool WriteFile(const FilePath& filename, span<const uint8_t> data) {

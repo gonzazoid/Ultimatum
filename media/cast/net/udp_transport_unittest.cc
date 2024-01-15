@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/test/mock_callback.h"
@@ -155,6 +155,9 @@ TEST_F(UdpTransportImplTest, UdpTransportSendAndReceive) {
   received_packet = packet_receiver_on_receiver.TakePacket();
   EXPECT_TRUE(received_packet);
   EXPECT_TRUE(base::ranges::equal(packet, *received_packet));
+
+  send_transport_->StopReceiving();
+  recv_transport_->StopReceiving();
 }
 
 }  // namespace cast

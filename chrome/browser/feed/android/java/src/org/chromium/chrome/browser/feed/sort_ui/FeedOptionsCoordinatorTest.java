@@ -32,23 +32,16 @@ import org.chromium.ui.modelutil.PropertyModel;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
- * Tests for {@link FeedOptionsCoordinator}.
- */
+/** Tests for {@link FeedOptionsCoordinator}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class FeedOptionsCoordinatorTest {
-    @Mock
-    private FeedServiceBridge.Natives mFeedServiceBridgeJniMock;
-    @Mock
-    private FeedOptionsView mView;
-    @Mock
-    private ChipView mChipView;
-    @Mock
-    private TextView mTextView;
+    @Mock private FeedServiceBridge.Natives mFeedServiceBridgeJniMock;
+    @Mock private FeedOptionsView mView;
+    @Mock private ChipView mChipView;
+    @Mock private TextView mTextView;
 
-    @Rule
-    public JniMocker mMocker = new JniMocker();
+    @Rule public JniMocker mMocker = new JniMocker();
 
     private FeedOptionsCoordinator mCoordinator;
     private Context mContext;
@@ -125,7 +118,10 @@ public class FeedOptionsCoordinatorTest {
     @Test
     public void testOptionsSelected() {
         AtomicBoolean listenerCalled = new AtomicBoolean(false);
-        mCoordinator.setOptionsListener(() -> { listenerCalled.set(true); });
+        mCoordinator.setOptionsListener(
+                () -> {
+                    listenerCalled.set(true);
+                });
         List<PropertyModel> chipModels = mCoordinator.getChipModelsForTest();
         chipModels.get(0).set(ChipProperties.SELECTED, false);
         chipModels.get(1).set(ChipProperties.SELECTED, true);

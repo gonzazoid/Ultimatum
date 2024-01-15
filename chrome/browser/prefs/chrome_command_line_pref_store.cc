@@ -35,6 +35,7 @@
 #include "ui/display/display_switches.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/constants/ash_pref_names.h"
 #include "ash/constants/ash_switches.h"
 #include "chrome/browser/ash/borealis/borealis_prefs.h"
 #include "chrome/browser/ash/borealis/borealis_switches.h"
@@ -44,10 +45,6 @@ const CommandLinePrefStore::SwitchToPreferenceMapEntry
     ChromeCommandLinePrefStore::string_switch_map_[] = {
         {switches::kLang, language::prefs::kApplicationLocale},
         {switches::kAcceptLang, language::prefs::kSelectedLanguages},
-        // `switches::kAuthServerAllowlistDeprecated` must be before
-        // `switches::kAuthServerAllowlist` so that the deprecated value is
-        // overridden in `ChromeCommandLinePrefStore::ApplyStringSwitches`.
-        {switches::kAuthServerAllowlistDeprecated, prefs::kAuthServerAllowlist},
         {switches::kAuthServerAllowlist, prefs::kAuthServerAllowlist},
         {switches::kSSLVersionMin, prefs::kSSLVersionMin},
         {switches::kSSLVersionMax, prefs::kSSLVersionMax},
@@ -84,7 +81,7 @@ const CommandLinePrefStore::BooleanSwitchToPreferenceMapEntry
          prefs::kSafeBrowsingEnhanced, true},
 #if BUILDFLAG(IS_CHROMEOS_ASH)
         {ash::switches::kEnableTouchpadThreeFingerClick,
-         prefs::kEnableTouchpadThreeFingerClick, true},
+         ash::prefs::kEnableTouchpadThreeFingerClick, true},
         {switches::kEnableUnifiedDesktop,
          prefs::kUnifiedDesktopEnabledByDefault, true},
         {ash::switches::kEnableCastReceiver, prefs::kCastReceiverEnabled, true},
@@ -130,10 +127,10 @@ bool ChromeCommandLinePrefStore::ValidateProxySwitches() {
 
 void ChromeCommandLinePrefStore::ApplySimpleSwitches() {
   // Look for each switch we know about and set its preference accordingly.
-  ApplyStringSwitches(string_switch_map_, std::size(string_switch_map_));
-  ApplyPathSwitches(path_switch_map_, std::size(path_switch_map_));
-  ApplyIntegerSwitches(integer_switch_map_, std::size(integer_switch_map_));
-  ApplyBooleanSwitches(boolean_switch_map_, std::size(boolean_switch_map_));
+  ApplyStringSwitches(string_switch_map_);
+  ApplyPathSwitches(path_switch_map_);
+  ApplyIntegerSwitches(integer_switch_map_);
+  ApplyBooleanSwitches(boolean_switch_map_);
 }
 
 void ChromeCommandLinePrefStore::ApplyProxyMode() {
@@ -190,7 +187,7 @@ void ChromeCommandLinePrefStore::ApplyExplicitlyAllowedPortSwitch() {
     return;
   }
 
-  base::Value integer_list(base::Value::Type::LIST);
+  base::Value::List integer_list;
   std::string switch_value =
       command_line()->GetSwitchValueASCII(switches::kExplicitlyAllowedPorts);
   const auto& split = base::SplitStringPiece(
@@ -203,6 +200,7 @@ void ChromeCommandLinePrefStore::ApplyExplicitlyAllowedPortSwitch() {
       continue;
     integer_list.Append(base::Value(port));
   }
-  SetValue(prefs::kExplicitlyAllowedNetworkPorts, std::move(integer_list),
+  SetValue(prefs::kExplicitlyAllowedNetworkPorts,
+           base::Value(std::move(integer_list)),
            WriteablePrefStore::DEFAULT_PREF_WRITE_FLAGS);
 }

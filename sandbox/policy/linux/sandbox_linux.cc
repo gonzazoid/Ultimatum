@@ -18,16 +18,18 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/singleton.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/system/sys_info.h"
+#include "base/threading/platform_thread.h"
+#include "base/threading/thread_id_name_manager.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "ppapi/buildflags/buildflags.h"
@@ -45,6 +47,7 @@
 #include "sandbox/linux/syscall_broker/broker_command.h"
 #include "sandbox/linux/syscall_broker/broker_process.h"
 #include "sandbox/linux/system_headers/linux_stat.h"
+#include "sandbox/policy/features.h"
 #include "sandbox/policy/linux/bpf_broker_policy_linux.h"
 #include "sandbox/policy/linux/sandbox_seccomp_bpf_linux.h"
 #include "sandbox/policy/mojom/sandbox.mojom.h"
@@ -82,6 +85,22 @@ bool IsRunningTSAN() {
 #else
   return false;
 #endif
+}
+
+// In processes which must bring up GPU drivers before sandbox initialization,
+// we can't ensure that other threads won't be running already.
+bool ShouldAllowThreadsDuringSandboxInit(const std::string& process_type,
+                                         sandbox::mojom::Sandbox sandbox_type) {
+  if (process_type == switches::kGpuProcess) {
+    return true;
+  }
+
+  if (process_type == switches::kUtilityProcess &&
+      sandbox_type == sandbox::mojom::Sandbox::kOnDeviceModelExecution) {
+    return true;
+  }
+
+  return false;
 }
 
 // Get a file descriptor to /proc. Either duplicate |proc_fd| or try to open
@@ -308,12 +327,18 @@ bool SandboxLinux::StartSeccompBPF(sandbox::mojom::Sandbox sandbox_type,
           ? SandboxBPF::SeccompLevel::MULTI_THREADED
           : SandboxBPF::SeccompLevel::SINGLE_THREADED;
 
+  bool force_disable_spectre_variant2_mitigation =
+      base::FeatureList::IsEnabled(
+          features::kForceDisableSpectreVariant2MitigationInNetworkService) &&
+      sandbox_type == sandbox::mojom::Sandbox::kNetwork;
+
   // If the kernel supports the sandbox, and if the command line says we
   // should enable it, enable it or die.
   std::unique_ptr<BPFBasePolicy> policy =
       SandboxSeccompBPF::PolicyForSandboxType(sandbox_type, options);
   SandboxSeccompBPF::StartSandboxWithExternalPolicy(
-      std::move(policy), OpenProc(proc_fd_), seccomp_level);
+      std::move(policy), OpenProc(proc_fd_), seccomp_level,
+      force_disable_spectre_variant2_mitigation);
   SandboxSeccompBPF::RunSandboxSanityChecks(sandbox_type, options);
   seccomp_bpf_started_ = true;
   LogSandboxStarted("seccomp-bpf");
@@ -359,8 +384,10 @@ bool SandboxLinux::InitializeSandbox(sandbox::mojom::Sandbox sandbox_type,
     if (IsRunningTSAN())
       return false;
 
-    // The GPU process is allowed to call InitializeSandbox() with threads.
-    bool sandbox_failure_fatal = process_type != switches::kGpuProcess;
+    // Only a few specific processes are allowed to call InitializeSandbox()
+    // with multiple threads running.
+    bool sandbox_failure_fatal =
+        !ShouldAllowThreadsDuringSandboxInit(process_type, sandbox_type);
     // This can be disabled with the '--gpu-sandbox-failures-fatal' flag.
     // Setting the flag with no value or any value different than 'yes' or 'no'
     // is equal to setting '--gpu-sandbox-failures-fatal=yes'.
@@ -378,6 +405,12 @@ bool SandboxLinux::InitializeSandbox(sandbox::mojom::Sandbox sandbox_type,
     if (sandbox_failure_fatal && !IsUnsandboxedSandboxType(sandbox_type)) {
       error_message += " Try waiting for /proc to be updated.";
       LOG(ERROR) << error_message;
+
+      for (const auto& id :
+           base::ThreadIdNameManager::GetInstance()->GetIds()) {
+        LOG(ERROR) << "ThreadId=" << id << " name:"
+                   << base::ThreadIdNameManager::GetInstance()->GetName(id);
+      }
       // This will return if /proc/self eventually reports this process is
       // single-threaded, or crash if it does not after a number of retries.
       ThreadHelpers::AssertSingleThreaded();
@@ -410,22 +443,19 @@ bool SandboxLinux::InitializeSandbox(sandbox::mojom::Sandbox sandbox_type,
 
   InitLibcLocaltimeFunctions();
 
-  bool is_libassistant_sandbox = false;
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#if BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
-  // TODO(crbug.com/1312224, b/255771022): re-enable this check on kLibassistant
-  // sandbox when getaddrinfo() can sometimes run in the sandboxed process.
-  if (sandbox_type == sandbox::mojom::Sandbox::kLibassistant)
-    is_libassistant_sandbox = true;
-#endif  // BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-
-  if (!IsUnsandboxedSandboxType(sandbox_type) && !is_libassistant_sandbox) {
+#if !BUILDFLAG(IS_CHROMEOS)
+  if (!IsUnsandboxedSandboxType(sandbox_type)) {
     // No sandboxed process should make use of getaddrinfo() as it is impossible
     // to sandbox (e.g. glibc loads arbitrary third party DNS resolution
     // libraries).
+    // On ChromeOS none of these third party libraries are installed, so there
+    // is no need to discourage getaddrinfo().
+    // TODO(crbug.com/1312224): in the future this should depend on the
+    // libraries listed in /etc/nsswitch.conf, and should be a
+    // SandboxLinux::Options option.
     DiscourageGetaddrinfo();
   }
+#endif  // BUILDFLAG(IS_LINUX)
 
   // Attempt to limit the future size of the address space of the process.
   // Fine to call with multiple threads as we don't use RLIMIT_STACK.
@@ -467,17 +497,26 @@ rlim_t GetProcessDataSizeLimit(sandbox::mojom::Sandbox sandbox_type) {
     // to 64 GB.
     constexpr rlim_t GB = 1024 * 1024 * 1024;
     const rlim_t physical_memory = base::SysInfo::AmountOfPhysicalMemory();
+    rlim_t limit;
     if (sandbox_type == sandbox::mojom::Sandbox::kGpu &&
         physical_memory > 64 * GB) {
-      return 64 * GB;
+      limit = 64 * GB;
     } else if (sandbox_type == sandbox::mojom::Sandbox::kGpu &&
                physical_memory > 32 * GB) {
-      return 32 * GB;
+      limit = 32 * GB;
     } else if (physical_memory > 16 * GB) {
-      return 16 * GB;
+      limit = 16 * GB;
     } else {
-      return 8 * GB;
+      limit = 8 * GB;
     }
+
+    if (sandbox_type == sandbox::mojom::Sandbox::kRenderer &&
+        base::FeatureList::IsEnabled(
+            sandbox::policy::features::kHigherRendererMemoryLimit)) {
+      limit *= 2;
+    }
+
+    return limit;
   }
 #endif
 
@@ -524,7 +563,7 @@ void SandboxLinux::StartBrokerProcess(
   // other LSMs like AppArmor and Landlock. Some userspace code, such as
   // glibc's |dlopen|, expect to see EACCES rather than EPERM. See
   // crbug.com/1233028 for an example.
-  auto policy = absl::make_optional<syscall_broker::BrokerSandboxConfig>(
+  auto policy = std::make_optional<syscall_broker::BrokerSandboxConfig>(
       allowed_command_set, std::move(permissions), EACCES);
   // Leaked at shutdown, so use bare |new|.
   broker_process_ = new syscall_broker::BrokerProcess(

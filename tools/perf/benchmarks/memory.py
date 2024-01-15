@@ -47,13 +47,12 @@ def SetExtraBrowserOptionsForMemoryMeasurement(options):
   options.flush_os_page_caches_on_start = True
 
 
-@benchmark.Info(emails=['erikchen@chromium.org'])
+@benchmark.Info(emails=['lizeb@chromium.org'])
 class MemoryBenchmarkDesktop(perf_benchmark.PerfBenchmark):
   """Measure memory usage on synthetic sites."""
   options = {'pageset_repeat': 5}
-  # TODO(rmhasan): Remove the SUPPORTED_PLATFORMS lists.
-  # SUPPORTED_PLATFORMS is deprecated, please put system specifier tags
-  # from expectations.config in SUPPORTED_PLATFORM_TAGS.
+  # TODO(johnchen): Remove either the SUPPORTED_PLATFORMS or
+  # SUPPORTED_PLATFORMS_TAGS lists. Only one is necessary.
   SUPPORTED_PLATFORMS = [story.expectations.ALL_DESKTOP]
   SUPPORTED_PLATFORM_TAGS = [platforms.DESKTOP]
 

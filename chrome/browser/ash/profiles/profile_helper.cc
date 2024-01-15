@@ -11,20 +11,21 @@
 
 #include "ash/constants/ash_switches.h"
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/check_is_test.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
+#include "base/system/sys_info.h"
 #include "base/threading/thread_restrictions.h"
-#include "chrome/browser/ash/base/file_flusher.h"
 #include "chrome/browser/ash/profiles/browser_context_helper_delegate_impl.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/profiles/profile_types_ash.h"
 #include "chrome/common/chrome_constants.h"
 #include "chrome/common/chrome_switches.h"
 #include "chromeos/ash/components/browser_context_helper/browser_context_helper.h"
@@ -34,32 +35,6 @@
 #include "content/public/browser/browser_thread.h"
 
 namespace ash {
-namespace {
-
-class UsernameHashMatcher {
- public:
-  explicit UsernameHashMatcher(const std::string& h) : username_hash(h) {}
-  bool operator()(const user_manager::User* user) const {
-    return user->username_hash() == username_hash;
-  }
-
- private:
-  const std::string& username_hash;
-};
-
-bool IsSigninProfilePath(const base::FilePath& profile_path) {
-  return profile_path.value() == chrome::kInitialProfile;
-}
-
-bool IsLockScreenAppProfilePath(const base::FilePath& profile_path) {
-  return profile_path.value() == chrome::kLockScreenAppProfile;
-}
-
-bool IsLockScreenProfilePath(const base::FilePath& profile_path) {
-  return profile_path.value() == chrome::kLockScreenProfile;
-}
-
-}  // anonymous namespace
 
 // static
 bool ProfileHelper::enable_profile_to_user_testing = false;
@@ -71,23 +46,6 @@ class ProfileHelperImpl : public ProfileHelper {
       std::unique_ptr<BrowserContextHelper::Delegate> delegate);
   ~ProfileHelperImpl() override;
 
-  // Returns the path that corresponds to the passed profile.
-  base::FilePath GetProfileDir(base::StringPiece profile);
-
-  // Returns true if the signin profile has been initialized.
-  bool IsSigninProfileInitialized();
-
-  // Returns OffTheRecord profile for use during signing phase.
-  Profile* GetSigninProfile();
-
-  // Returns OffTheRecord profile for use during online authentication on the
-  // lock screen.
-  Profile* GetLockScreenProfile();
-
-  // ProfileHelper overrides
-  base::FilePath GetActiveUserProfileDir() override;
-  void Initialize() override;
-
   Profile* GetProfileByAccountId(const AccountId& account_id) override;
   Profile* GetProfileByUser(const user_manager::User* user) override;
 
@@ -95,54 +53,22 @@ class ProfileHelperImpl : public ProfileHelper {
       const Profile* profile) const override;
   user_manager::User* GetUserByProfile(Profile* profile) const override;
 
-  void FlushProfile(Profile* profile) override;
-
-  void SetProfileToUserMappingForTesting(user_manager::User* user) override;
   void SetUserToProfileMappingForTesting(const user_manager::User* user,
                                          Profile* profile) override;
-  void RemoveUserFromListForTesting(const AccountId& account_id) override;
 
  private:
-  // user_manager::UserManager::UserSessionStateObserver implementation:
-  void ActiveUserHashChanged(const std::string& hash) override;
-
   std::unique_ptr<BrowserContextHelper> browser_context_helper_;
 
-  // Identifies path to active user profile on Chrome OS.
-  std::string active_user_id_hash_;
-
-  // Used for testing by unit tests and FakeUserManager/MockUserManager.
+  // Used for testing by unit tests and FakeUserManager.
   std::map<const user_manager::User*, Profile*> user_to_profile_for_testing_;
-
-  // When this list is not empty GetUserByProfile() will find user that has
-  // the same user_id as |profile|->GetProfileName().
-  user_manager::UserList user_list_for_testing_;
-
-  std::unique_ptr<FileFlusher> profile_flusher_;
 };
-
-namespace {
-// Convenient utility to obtain ProfileHelperImpl.
-// Currently ProfileHelper interface is implemented by only ProfileHelperImpl,
-// so safe to cast.
-// TODO(crbug.com/1325210): Remove this after ProfileHelper is moved out from
-// chrome/browser.
-ProfileHelperImpl* GetImpl() {
-  return static_cast<ProfileHelperImpl*>(ProfileHelper::Get());
-}
-}  // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
 // ProfileHelper, public
 
-ProfileHelper::ProfileHelper() {}
+ProfileHelper::ProfileHelper() = default;
 
-ProfileHelper::~ProfileHelper() {
-  // Checking whether UserManager is initialized covers case
-  // when ScopedTestUserManager is used.
-  if (user_manager::UserManager::IsInitialized())
-    user_manager::UserManager::Get()->RemoveSessionStateObserver(this);
-}
+ProfileHelper::~ProfileHelper() = default;
 
 // static
 std::unique_ptr<ProfileHelper> ProfileHelper::CreateInstance() {
@@ -164,12 +90,13 @@ base::FilePath ProfileHelper::GetProfilePathByUserIdHash(
 
 // static
 base::FilePath ProfileHelper::GetSigninProfileDir() {
-  return GetImpl()->GetProfileDir(chrome::kInitialProfile);
+  return BrowserContextHelper::Get()->GetSigninBrowserContextPath();
 }
 
 // static
 Profile* ProfileHelper::GetSigninProfile() {
-  return GetImpl()->GetSigninProfile();
+  return Profile::FromBrowserContext(
+      BrowserContextHelper::Get()->DeprecatedGetOrCreateSigninBrowserContext());
 }
 
 // static
@@ -187,104 +114,66 @@ base::FilePath ProfileHelper::GetUserProfileDir(
 
 // static
 bool ProfileHelper::IsSigninProfile(const Profile* profile) {
-  return profile && IsSigninProfilePath(profile->GetBaseName());
+  return ::IsSigninProfile(profile);
 }
 
 // static
 bool ProfileHelper::IsSigninProfileInitialized() {
-  return GetImpl()->IsSigninProfileInitialized();
+  return BrowserContextHelper::Get()->GetSigninBrowserContext();
 }
 
 // static
 bool ProfileHelper::IsLockScreenAppProfile(const Profile* profile) {
-  return profile && IsLockScreenAppProfilePath(profile->GetBaseName());
+  return ::IsLockScreenAppProfile(profile);
 }
 
 // static
 base::FilePath ProfileHelper::GetLockScreenAppProfilePath() {
-  return GetImpl()->GetProfileDir(chrome::kLockScreenAppProfile);
-}
-
-// static
-std::string ProfileHelper::GetLockScreenAppProfileName() {
-  return chrome::kLockScreenAppProfile;
+  return BrowserContextHelper::Get()->GetLockScreenAppBrowserContextPath();
 }
 
 // static
 base::FilePath ProfileHelper::GetLockScreenProfileDir() {
-  return GetImpl()->GetProfileDir(chrome::kLockScreenProfile);
+  return BrowserContextHelper::Get()->GetLockScreenBrowserContextPath();
 }
 
 // static
 Profile* ProfileHelper::GetLockScreenProfile() {
-  return GetImpl()->GetLockScreenProfile();
+  return Profile::FromBrowserContext(
+      BrowserContextHelper::Get()->GetLockScreenBrowserContext());
 }
 
 // static
 bool ProfileHelper::IsLockScreenProfile(const Profile* profile) {
-  return profile && IsLockScreenProfilePath(profile->GetBaseName());
+  return ::IsLockScreenProfile(profile);
 }
 
 // static
 bool ProfileHelper::IsOwnerProfile(const Profile* profile) {
-  if (!profile)
-    return false;
-  const user_manager::User* user =
-      ProfileHelper::Get()->GetUserByProfile(profile);
-  if (!user)
-    return false;
-  return user->GetAccountId() ==
-         user_manager::UserManager::Get()->GetOwnerAccountId();
+  return user_manager::UserManager::Get()->IsOwnerUser(
+      ProfileHelper::Get()->GetUserByProfile(profile));
 }
 
 // static
 bool ProfileHelper::IsPrimaryProfile(const Profile* profile) {
-  if (!profile)
-    return false;
-  const user_manager::User* user =
-      ProfileHelper::Get()->GetUserByProfile(profile);
-  if (!user)
-    return false;
-  return user == user_manager::UserManager::Get()->GetPrimaryUser();
+  return user_manager::UserManager::Get()->IsPrimaryUser(
+      ProfileHelper::Get()->GetUserByProfile(profile));
 }
 
 // static
 bool ProfileHelper::IsEphemeralUserProfile(const Profile* profile) {
-  if (!profile)
-    return false;
-
-  // Owner profile is always persistent.
-  if (IsOwnerProfile(profile))
-    return false;
-
-  const user_manager::User* user =
-      ProfileHelper::Get()->GetUserByProfile(profile);
-  if (!user)
-    return false;
-
-  // Guest and public account is ephemeral.
-  const user_manager::UserType user_type = user->GetType();
-  if (user_type == user_manager::USER_TYPE_GUEST ||
-      user_type == user_manager::USER_TYPE_PUBLIC_ACCOUNT) {
-    return true;
-  }
-
-  // Otherwise, users are ephemeral when the policy is enabled.
-  return user_manager::UserManager::Get()->AreEphemeralUsersEnabled();
+  return user_manager::UserManager::Get()->IsEphemeralUser(
+      ProfileHelper::Get()->GetUserByProfile(profile));
 }
 
 // static
 bool ProfileHelper::IsUserProfile(const Profile* profile) {
-  return !ProfileHelper::IsSigninProfile(profile) &&
-         !ProfileHelper::IsLockScreenAppProfile(profile) &&
-         !ProfileHelper::IsLockScreenProfile(profile);
+  return ::IsUserProfile(profile);
 }
 
 // static
 bool ProfileHelper::IsUserProfilePath(const base::FilePath& profile_path) {
-  return !IsSigninProfilePath(profile_path) &&
-         !IsLockScreenAppProfilePath(profile_path) &&
-         !IsLockScreenProfilePath(profile_path);
+  return ::IsUserProfilePath(profile_path);
 }
 
 // static
@@ -305,81 +194,31 @@ ProfileHelperImpl::ProfileHelperImpl(
 
 ProfileHelperImpl::~ProfileHelperImpl() = default;
 
-base::FilePath ProfileHelperImpl::GetProfileDir(base::StringPiece profile) {
-  const base::FilePath* user_data_dir =
-      browser_context_helper_->delegate()->GetUserDataDir();
-  if (!user_data_dir)
-    return base::FilePath();
-  return user_data_dir->AppendASCII(profile);
-}
-
-bool ProfileHelperImpl::IsSigninProfileInitialized() {
-  return browser_context_helper_->delegate()->GetBrowserContextByPath(
-      GetSigninProfileDir());
-}
-
-Profile* ProfileHelperImpl::GetSigninProfile() {
-  Profile* profile = Profile::FromBrowserContext(
-      browser_context_helper_->delegate()->DeprecatedGetBrowserContext(
-          GetSigninProfileDir()));
-  if (!profile)
-    return nullptr;
-  return profile->GetPrimaryOTRProfile(/*create_if_needed=*/true);
-}
-
-Profile* ProfileHelperImpl::GetLockScreenProfile() {
-  ProfileManager* profile_manager = g_browser_process->profile_manager();
-  DCHECK(profile_manager);
-  Profile* profile =
-      profile_manager->GetProfileByPath(GetLockScreenProfileDir());
-  if (!profile)
-    return nullptr;
-  return profile->GetPrimaryOTRProfile(/*create_if_needed=*/true);
-}
-
-base::FilePath ProfileHelperImpl::GetActiveUserProfileDir() {
-  return ProfileHelper::GetUserProfileDir(active_user_id_hash_);
-}
-
-void ProfileHelperImpl::Initialize() {
-  user_manager::UserManager::Get()->AddSessionStateObserver(this);
-}
-
 Profile* ProfileHelperImpl::GetProfileByAccountId(const AccountId& account_id) {
-  const user_manager::User* user =
-      user_manager::UserManager::Get()->FindUser(account_id);
-
-  if (!user) {
-    LOG(WARNING) << "Unable to retrieve user for account_id.";
-    return nullptr;
+  // TODO(crbug.com/1325210): Remove test injection from here.
+  if (!user_to_profile_for_testing_.empty()) {
+    const auto* user = user_manager::UserManager::Get()->FindUser(account_id);
+    auto it = user_to_profile_for_testing_.find(user);
+    if (it != user_to_profile_for_testing_.end()) {
+      return it->second;
+    }
   }
 
-  return GetProfileByUser(user);
+  return Profile::FromBrowserContext(
+      browser_context_helper_->GetBrowserContextByAccountId(account_id));
 }
 
 Profile* ProfileHelperImpl::GetProfileByUser(const user_manager::User* user) {
-  // This map is non-empty only in tests.
+  // TODO(crbug.com/1325210): Remove test injection from here.
   if (!user_to_profile_for_testing_.empty()) {
-    std::map<const user_manager::User*, Profile*>::const_iterator it =
-        user_to_profile_for_testing_.find(user);
-    if (it != user_to_profile_for_testing_.end())
+    auto it = user_to_profile_for_testing_.find(user);
+    if (it != user_to_profile_for_testing_.end()) {
       return it->second;
+    }
   }
 
-  if (!user->is_profile_created())
-    return nullptr;
-
-  Profile* profile = Profile::FromBrowserContext(
-      browser_context_helper_->delegate()->GetBrowserContextByPath(
-          browser_context_helper_->GetBrowserContextPathByUserIdHash(
-              user->username_hash())));
-
-  // GetActiveUserProfile() or GetProfileByUserIdHash() returns a new instance
-  // of ProfileImpl(), but actually its off-the-record profile should be used.
-  if (user_manager::UserManager::Get()->IsLoggedInAsGuest())
-    profile = profile->GetPrimaryOTRProfile(/*create_if_needed=*/true);
-
-  return profile;
+  return Profile::FromBrowserContext(
+      browser_context_helper_->GetBrowserContextByUser(user));
 }
 
 const user_manager::User* ProfileHelperImpl::GetUserByProfile(
@@ -389,16 +228,18 @@ const user_manager::User* ProfileHelperImpl::GetUserByProfile(
   }
 
   // This map is non-empty only in tests.
-  if (enable_profile_to_user_testing || !user_list_for_testing_.empty()) {
-    if (always_return_primary_user_for_testing)
-      return user_manager::UserManager::Get()->GetPrimaryUser();
+  if (enable_profile_to_user_testing) {
+    auto* user_manager = user_manager::UserManager::Get();
+    if (always_return_primary_user_for_testing) {
+      return user_manager->GetPrimaryUser();
+    }
 
+    // Walk through all users in UserManager.
     const std::string& user_name = profile->GetProfileUserName();
-    for (user_manager::UserList::const_iterator it =
-             user_list_for_testing_.begin();
-         it != user_list_for_testing_.end(); ++it) {
-      if ((*it)->GetAccountId().GetUserEmail() == user_name)
-        return *it;
+    for (user_manager::User* user : user_manager->GetUsers()) {
+      if (user->GetAccountId().GetUserEmail() == user_name) {
+        return user;
+      }
     }
 
     // In case of test setup we should always default to primary user.
@@ -422,18 +263,16 @@ const user_manager::User* ProfileHelperImpl::GetUserByProfile(
     return user_manager->GetActiveUser();
   }
 
-  // Finds the matching user in logged-in user list since only a logged-in
-  // user would have a profile.
-  const std::string username_hash =
-      ProfileHelper::GetUserIdHashFromProfile(profile);
-  const user_manager::UserList& users = user_manager->GetLoggedInUsers();
-  const user_manager::UserList::const_iterator pos =
-      base::ranges::find_if(users, UsernameHashMatcher(username_hash));
-  if (pos != users.end())
-    return *pos;
+  if (const auto* user = browser_context_helper_->GetUserByBrowserContext(
+          const_cast<Profile*>(profile));
+      user) {
+    return user;
+  }
 
   // Many tests do not have their users registered with UserManager and
   // runs here. If |active_user_| matches |profile|, returns it.
+  // This is expected happening only for testing.
+  CHECK_IS_TEST();
   const user_manager::User* active_user = user_manager->GetActiveUser();
   return active_user &&
                  browser_context_helper_->GetBrowserContextPathByUserIdHash(
@@ -448,40 +287,11 @@ user_manager::User* ProfileHelperImpl::GetUserByProfile(
       GetUserByProfile(static_cast<const Profile*>(profile)));
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// ProfileHelper, UserManager::UserSessionStateObserver implementation:
-
-void ProfileHelperImpl::ActiveUserHashChanged(const std::string& hash) {
-  active_user_id_hash_ = hash;
-}
-
-void ProfileHelperImpl::SetProfileToUserMappingForTesting(
-    user_manager::User* user) {
-  user_list_for_testing_.push_back(user);
-}
-
 void ProfileHelperImpl::SetUserToProfileMappingForTesting(
     const user_manager::User* user,
     Profile* profile) {
+  DCHECK(user);
   user_to_profile_for_testing_[user] = profile;
-}
-
-void ProfileHelperImpl::RemoveUserFromListForTesting(
-    const AccountId& account_id) {
-  auto it = base::ranges::find(user_list_for_testing_, account_id,
-                               &user_manager::User::GetAccountId);
-  if (it != user_list_for_testing_.end())
-    user_list_for_testing_.erase(it);
-}
-
-void ProfileHelperImpl::FlushProfile(Profile* profile) {
-  if (!profile_flusher_)
-    profile_flusher_ = std::make_unique<FileFlusher>();
-
-  // Flushes files directly under profile path since these are the critical
-  // ones.
-  profile_flusher_->RequestFlush(profile->GetPath(), /*recursive=*/false,
-                                 base::OnceClosure());
 }
 
 }  // namespace ash

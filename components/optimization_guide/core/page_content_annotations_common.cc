@@ -55,12 +55,12 @@ bool BatchAnnotationResult::HasOutputForType() const {
   switch (type()) {
     case AnnotationType::kUnknown:
       return false;
-    case AnnotationType::kPageTopics:
-      return !!topics();
     case AnnotationType::kContentVisibility:
       return !!visibility_score();
     case AnnotationType::kPageEntities:
       return !!entities();
+    case AnnotationType::kTextEmbedding:
+      return !!embeddings();
   }
 }
 
@@ -68,14 +68,6 @@ base::Value BatchAnnotationResult::AsValue() const {
   base::Value::Dict result;
   result.Set("input", input());
   result.Set("type", AnnotationTypeToString(type()));
-
-  if (topics()) {
-    base::Value::List list;
-    for (const auto& wi : *topics()) {
-      list.Append(wi.AsValue());
-    }
-    result.Set("topics", std::move(list));
-  }
 
   if (entities()) {
     base::Value::List list;
@@ -87,6 +79,14 @@ base::Value BatchAnnotationResult::AsValue() const {
 
   if (visibility_score()) {
     result.Set("visibility_score", *visibility_score());
+  }
+
+  if (embeddings()) {
+    base::Value::List list;
+    for (const auto& embedding : *embeddings_) {
+      list.Append(embedding);
+    }
+    result.Set("embeddings", std::move(list));
   }
 
   return base::Value(std::move(result));
@@ -102,13 +102,7 @@ std::string BatchAnnotationResult::ToJSON() const {
 
 std::string BatchAnnotationResult::ToString() const {
   std::string output = "nullopt";
-  if (topics_) {
-    std::vector<std::string> all_weighted_ids;
-    for (const WeightedIdentifier& wi : *topics_) {
-      all_weighted_ids.push_back(wi.ToString());
-    }
-    output = "{" + base::JoinString(all_weighted_ids, ",") + "}";
-  } else if (entities_) {
+  if (entities_) {
     std::vector<std::string> all_entities;
     for (const ScoredEntityMetadata& md : *entities_) {
       all_entities.push_back(md.ToString());
@@ -116,6 +110,12 @@ std::string BatchAnnotationResult::ToString() const {
     output = "{" + base::JoinString(all_entities, ",") + "}";
   } else if (visibility_score_) {
     output = base::NumberToString(*visibility_score_);
+  } else if (embeddings_) {
+    std::vector<std::string> all_embeddings;
+    for (const float& embedding : *embeddings_) {
+      all_embeddings.push_back(base::NumberToString(embedding));
+    }
+    output = "[" + base::JoinString(all_embeddings, ",") + "]";
   }
   return base::StringPrintf(
       "BatchAnnotationResult{"
@@ -129,26 +129,6 @@ std::ostream& operator<<(std::ostream& stream,
                          const BatchAnnotationResult& result) {
   stream << result.ToString();
   return stream;
-}
-
-// static
-BatchAnnotationResult BatchAnnotationResult::CreatePageTopicsResult(
-    const std::string& input,
-    absl::optional<std::vector<WeightedIdentifier>> topics) {
-  BatchAnnotationResult result;
-  result.input_ = input;
-  result.topics_ = topics;
-  result.type_ = AnnotationType::kPageTopics;
-
-  // Always sort the result (if present) by the given score.
-  if (result.topics_) {
-    std::sort(result.topics_->begin(), result.topics_->end(),
-              [](const WeightedIdentifier& a, const WeightedIdentifier& b) {
-                return a.weight() < b.weight();
-              });
-  }
-
-  return result;
 }
 
 //  static
@@ -183,6 +163,17 @@ BatchAnnotationResult BatchAnnotationResult::CreateContentVisibilityResult(
 }
 
 // static
+BatchAnnotationResult BatchAnnotationResult::CreateTextEmbeddingResult(
+    const std::string& input,
+    absl::optional<std::vector<float>> embeddings) {
+  BatchAnnotationResult result;
+  result.input_ = input;
+  result.embeddings_ = embeddings;
+  result.type_ = AnnotationType::kTextEmbedding;
+  return result;
+}
+
+// static
 BatchAnnotationResult BatchAnnotationResult::CreateEmptyAnnotationsResult(
     const std::string& input) {
   BatchAnnotationResult result;
@@ -193,7 +184,7 @@ BatchAnnotationResult BatchAnnotationResult::CreateEmptyAnnotationsResult(
 bool BatchAnnotationResult::operator==(
     const BatchAnnotationResult& other) const {
   return this->input_ == other.input_ && this->type_ == other.type_ &&
-         this->topics_ == other.topics_ && this->entities_ == other.entities_ &&
+         this->entities_ == other.entities_ &&
          this->visibility_score_ == other.visibility_score_;
 }
 
@@ -206,6 +197,37 @@ std::vector<BatchAnnotationResult> CreateEmptyBatchAnnotationResults(
         BatchAnnotationResult::CreateEmptyAnnotationsResult(input));
   }
   return results;
+}
+
+// static
+PageContentAnnotationsResult
+PageContentAnnotationsResult::CreateContentVisibilityScoreResult(
+    const PageContentAnnotationsResult::ContentVisibilityScore& score) {
+  PageContentAnnotationsResult result;
+  result.result_ = score;
+  return result;
+}
+
+PageContentAnnotationsResult::PageContentAnnotationsResult() = default;
+
+PageContentAnnotationsResult::PageContentAnnotationsResult(
+    const PageContentAnnotationsResult&) = default;
+PageContentAnnotationsResult& PageContentAnnotationsResult::operator=(
+    const PageContentAnnotationsResult&) = default;
+PageContentAnnotationsResult::~PageContentAnnotationsResult() = default;
+
+AnnotationType PageContentAnnotationsResult::GetType() const {
+  if (absl::holds_alternative<ContentVisibilityScore>(result_)) {
+    return AnnotationType::kContentVisibility;
+  }
+  return AnnotationType::kUnknown;
+}
+
+PageContentAnnotationsResult::ContentVisibilityScore
+PageContentAnnotationsResult::GetContentVisibilityScore() const {
+  DCHECK_EQ(AnnotationType::kContentVisibility, GetType());
+  return absl::get<PageContentAnnotationsResult::ContentVisibilityScore>(
+      result_);
 }
 
 }  // namespace optimization_guide

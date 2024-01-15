@@ -6,16 +6,20 @@
 #define CONTENT_PUBLIC_TEST_UNITTEST_TEST_SUITE_H_
 
 #include <memory>
+#include <optional>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
+#include "mojo/core/embedder/configuration.h"
+#include "v8/include/v8-forward.h"
 
 namespace base {
 class TestSuite;
 }
 
 namespace content {
+class BrowserAccessibilityStateImpl;
 class ContentBrowserClient;
 class ContentClient;
 class ContentUtilityClient;
@@ -38,18 +42,25 @@ class UnitTestTestSuite {
   struct ContentClients {
     ContentClients();
     ~ContentClients();
-    std::unique_ptr<ContentClient> content_client;
+
+    // Must outlive `content_client`.
     std::unique_ptr<ContentBrowserClient> content_browser_client;
     std::unique_ptr<ContentUtilityClient> content_utility_client;
+    std::unique_ptr<ContentClient> content_client;
   };
 
   // Create test versions of ContentClient interfaces.
   static std::unique_ptr<UnitTestTestSuite::ContentClients>
   CreateTestContentClients();
 
-  UnitTestTestSuite(base::TestSuite* test_suite,
-                    base::RepeatingCallback<std::unique_ptr<ContentClients>()>
-                        create_clients);
+  // Constructs a new UnitTestTestSuite to wrap `test_suite`.
+  // `child_mojo_config`, if provided, is the Mojo configuration to use in any
+  // child process spawned by these tests.
+  UnitTestTestSuite(
+      base::TestSuite* test_suite,
+      base::RepeatingCallback<std::unique_ptr<ContentClients>()> create_clients,
+      std::optional<mojo::core::Configuration> child_mojo_config =
+          std::nullopt);
 
   UnitTestTestSuite(const UnitTestTestSuite&) = delete;
   UnitTestTestSuite& operator=(const UnitTestTestSuite&) = delete;
@@ -57,6 +68,8 @@ class UnitTestTestSuite {
   ~UnitTestTestSuite();
 
   int Run();
+
+  static v8::Isolate* MainThreadIsolateForUnitTestSuite();
 
  private:
   class UnitTestEventListener;
@@ -67,7 +80,11 @@ class UnitTestTestSuite {
 
   std::unique_ptr<TestBlinkWebUnitTestSupport> blink_test_support_;
 
+  raw_ptr<v8::Isolate> isolate_;
+
   std::unique_ptr<TestHostResolver> test_host_resolver_;
+
+  std::unique_ptr<BrowserAccessibilityStateImpl> browser_accessibility_state_;
 
   base::RepeatingCallback<std::unique_ptr<ContentClients>()> create_clients_;
 

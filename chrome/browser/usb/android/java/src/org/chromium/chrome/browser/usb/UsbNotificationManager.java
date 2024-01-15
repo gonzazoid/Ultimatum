@@ -10,11 +10,12 @@ import android.content.Intent;
 import androidx.annotation.Nullable;
 
 import org.chromium.base.ContextUtils;
+import org.chromium.base.shared_preferences.SharedPreferencesManager;
 import org.chromium.chrome.browser.notifications.NotificationUmaTracker;
 import org.chromium.chrome.browser.notifications.NotificationWrapperBuilderFactory;
 import org.chromium.chrome.browser.notifications.channels.ChromeChannelDefinitions;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.components.browser_ui.notifications.NotificationManagerProxy;
 import org.chromium.components.browser_ui.notifications.NotificationMetadata;
@@ -37,8 +38,6 @@ import java.util.Set;
  * to a USB device.
  */
 public class UsbNotificationManager {
-    private static final String TAG = "UsbNotificationManager";
-
     private static final String NOTIFICATION_NAMESPACE = "UsbNotificationManager";
 
     public static final String ACTION_USB_UPDATE = "org.chromium.chrome.browser.app.usb.USB_UPDATE";
@@ -57,7 +56,7 @@ public class UsbNotificationManager {
             NotificationManagerProxy notificationManager, UsbNotificationManagerDelegate delegate) {
         mDelegate = delegate;
         mNotificationManager = notificationManager;
-        mSharedPreferences = SharedPreferencesManager.getInstance();
+        mSharedPreferences = ChromeSharedPreferences.getInstance();
     }
 
     /**
@@ -134,13 +133,17 @@ public class UsbNotificationManager {
         NotificationWrapperBuilder builder =
                 NotificationWrapperBuilderFactory.createNotificationWrapperBuilder(
                         ChromeChannelDefinitions.ChannelId.USB,
-                        new NotificationMetadata(NotificationUmaTracker.SystemNotificationType.USB,
-                                NOTIFICATION_NAMESPACE, notificationId));
+                        new NotificationMetadata(
+                                NotificationUmaTracker.SystemNotificationType.USB,
+                                NOTIFICATION_NAMESPACE,
+                                notificationId));
 
         Intent tabIntent = mDelegate.createTrustedBringTabToFrontIntent(notificationId);
-        PendingIntentProvider contentIntent = tabIntent == null
-                ? null
-                : PendingIntentProvider.getActivity(appContext, notificationId, tabIntent, 0);
+        PendingIntentProvider contentIntent =
+                tabIntent == null
+                        ? null
+                        : PendingIntentProvider.getActivity(
+                                appContext, notificationId, tabIntent, 0);
 
         builder.setAutoCancel(false)
                 .setOngoing(true)
@@ -155,8 +158,9 @@ public class UsbNotificationManager {
             contentText = appContext.getString(R.string.usb_notification_content_text_incognito);
             builder.setSubText(appContext.getString(R.string.notification_incognito_tab));
         } else {
-            String urlForDisplay = UrlFormatter.formatUrlForSecurityDisplay(
-                    new GURL(url), SchemeDisplay.OMIT_HTTP_AND_HTTPS);
+            String urlForDisplay =
+                    UrlFormatter.formatUrlForSecurityDisplay(
+                            new GURL(url), SchemeDisplay.OMIT_HTTP_AND_HTTPS);
             if (contentIntent == null) {
                 contentText = urlForDisplay;
             } else {
@@ -171,8 +175,10 @@ public class UsbNotificationManager {
         mNotificationManager.notify(notification);
         mNotificationIds.add(notificationId);
         updateSharedPreferencesEntry(notificationId, false);
-        NotificationUmaTracker.getInstance().onNotificationShown(
-                NotificationUmaTracker.SystemNotificationType.USB, notification.getNotification());
+        NotificationUmaTracker.getInstance()
+                .onNotificationShown(
+                        NotificationUmaTracker.SystemNotificationType.USB,
+                        notification.getNotification());
     }
 
     /**
@@ -181,9 +187,12 @@ public class UsbNotificationManager {
      * @param remove Boolean describing if the notification was added or removed.
      */
     private void updateSharedPreferencesEntry(int notificationId, boolean remove) {
-        Set<String> notificationIds = new HashSet<>(mSharedPreferences.readStringSet(
-                ChromePreferenceKeys.USB_NOTIFICATION_IDS, new HashSet<>()));
-        if (remove && !notificationIds.isEmpty()
+        Set<String> notificationIds =
+                new HashSet<>(
+                        mSharedPreferences.readStringSet(
+                                ChromePreferenceKeys.USB_NOTIFICATION_IDS, new HashSet<>()));
+        if (remove
+                && !notificationIds.isEmpty()
                 && notificationIds.contains(String.valueOf(notificationId))) {
             notificationIds.remove(String.valueOf(notificationId));
         } else if (!remove) {
@@ -196,7 +205,7 @@ public class UsbNotificationManager {
     private static boolean shouldStartService(
             Context context, boolean isConnected, int notificationTabId) {
         if (isConnected) return true;
-        SharedPreferencesManager sharedPreferences = SharedPreferencesManager.getInstance();
+        SharedPreferencesManager sharedPreferences = ChromeSharedPreferences.getInstance();
         Set<String> notificationIds =
                 sharedPreferences.readStringSet(ChromePreferenceKeys.USB_NOTIFICATION_IDS, null);
         if (notificationIds == null || notificationIds.isEmpty()) return false;
@@ -213,9 +222,12 @@ public class UsbNotificationManager {
      * @param url Url of the website interacting with Usb devices.
      * @param isIncognito Whether tab is in incognito mode.
      */
-
-    public static void updateUsbNotificationForTab(Context context, Class service,
-            int notificationTabId, @Nullable WebContents webContents, GURL url,
+    public static void updateUsbNotificationForTab(
+            Context context,
+            Class service,
+            int notificationTabId,
+            @Nullable WebContents webContents,
+            GURL url,
             boolean isIncognito) {
         boolean isConnected = UsbBridge.isWebContentsConnectedToUsbDevice(webContents);
         if (!shouldStartService(context, isConnected, notificationTabId)) return;
@@ -233,7 +245,7 @@ public class UsbNotificationManager {
      * @param service The usb notification service class.
      */
     public static void clearUsbNotifications(Class service) {
-        SharedPreferencesManager sharedPreferences = SharedPreferencesManager.getInstance();
+        SharedPreferencesManager sharedPreferences = ChromeSharedPreferences.getInstance();
         Set<String> notificationIds =
                 sharedPreferences.readStringSet(ChromePreferenceKeys.USB_NOTIFICATION_IDS, null);
         if (notificationIds == null || notificationIds.isEmpty()) return;

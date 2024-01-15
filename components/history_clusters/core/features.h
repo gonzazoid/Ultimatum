@@ -7,8 +7,6 @@
 
 #include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
-#include "base/time/time.h"
-#include "url/gurl.h"
 
 namespace history_clusters {
 
@@ -25,6 +23,9 @@ BASE_DECLARE_FEATURE(kJourneysLabels);
 
 // Enables images for Journeys in UI.
 BASE_DECLARE_FEATURE(kJourneysImages);
+
+// Enables images to cover the full container for Journeys in UI.
+extern const base::FeatureParam<bool> kJourneysImagesCover;
 
 // Enables persisting and using persisted clusters.
 BASE_DECLARE_FEATURE(kPersistedClusters);
@@ -64,6 +65,23 @@ BASE_DECLARE_FEATURE(kHistoryClustersKeywordFiltering);
 // Enables experimentation for how to dedupe visits in clusters.
 BASE_DECLARE_FEATURE(kHistoryClustersVisitDeduping);
 
+// Enables visits from other synced devices to be included in clusters.
+BASE_DECLARE_FEATURE(kJourneysIncludeSyncedVisits);
+
+// Persist keyword caches via pref service.
+BASE_DECLARE_FEATURE(kJourneysPersistCachesToPrefs);
+
+// Enables context clustering to be performed at navigation time rather than in
+// batches.
+BASE_DECLARE_FEATURE(kHistoryClustersNavigationContextClustering);
+
+// Enables Journeys creating new tab groups that have names derived from the
+// cluster title. If disabled, new tab groups are anonymous.
+BASE_DECLARE_FEATURE(kJourneysNamedNewTabGroups);
+
+// Enables filtering of the zero-state Journeys WebUI.
+BASE_DECLARE_FEATURE(kJourneysZeroStateFiltering);
+
 // Order consistently with config.h.
 
 }  // namespace internal
@@ -73,15 +91,13 @@ BASE_DECLARE_FEATURE(kHistoryClustersVisitDeduping);
 // referred to outside of Journeys code. Moreover, they are not used inside an
 // inner loop, so they don't need to be high performance.
 
-// Enables the user survey when the user clicks over to Journeys from History.
-BASE_DECLARE_FEATURE(kJourneysSurveyForHistoryEntrypoint);
-extern const base::FeatureParam<base::TimeDelta>
-    kJourneysSurveyForHistoryEntrypointDelay;
+// Enables Side Panel Journeys.
+BASE_DECLARE_FEATURE(kSidePanelJourneys);
+extern const base::FeatureParam<bool> kSidePanelJourneysOpensFromOmnibox;
+BASE_DECLARE_FEATURE(kSidePanelJourneysQueryless);
 
-// Enables the user survey when the user uses the omnibox to access Journeys.
-BASE_DECLARE_FEATURE(kJourneysSurveyForOmniboxEntrypoint);
-extern const base::FeatureParam<base::TimeDelta>
-    kJourneysSurveyForOmniboxEntrypointDelay;
+// Enables renaming Journeys in the UI.
+BASE_DECLARE_FEATURE(kRenameJourneys);
 
 }  // namespace history_clusters
 

@@ -6,20 +6,41 @@
 #define CONTENT_BROWSER_PRELOADING_PREFETCH_PREFETCH_FEATURES_H_
 
 #include "base/feature_list.h"
+#include "base/metrics/field_trial_params.h"
 #include "content/common/content_export.h"
 
-namespace content::features {
+namespace features {
 
 // If enabled, then prefetch requests from speculation rules should use the code
 // in content/browser/preloading/prefetch/ instead of
 // chrome/browser/preloadingprefetch/prefetch_proxy/.
 CONTENT_EXPORT BASE_DECLARE_FEATURE(kPrefetchUseContentRefactor);
 
-// If enabled, then navigation requests should check the match responses in the
-// prefetch cache by using the No-Vary-Search rules if No-Vary-Search header
-// is specified in prefetched responses.
-CONTENT_EXPORT BASE_DECLARE_FEATURE(kPrefetchNoVarySearch);
+// If enabled, PrefetchContainer can be used for more than one navigation.
+// https://crbug.com/1449360
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kPrefetchReusable);
 
-}  // namespace content::features
+// The size limit of body size in bytes that can be reused in
+// `kPrefetchReusable`.
+CONTENT_EXPORT extern const base::FeatureParam<int>
+    kPrefetchReusableBodySizeLimit;
+
+// If enabled, navigational prefetch is scoped to the referring document's
+// network isolation key instead of the old behavior of the referring document
+// itself. See crbug.com/1502326
+BASE_DECLARE_FEATURE(kPrefetchNIKScope);
+
+// If enabled, the early cookie copy in `PrefetchDocumentManager` is
+// skipped. See crbug.com/1503003 for details.
+BASE_DECLARE_FEATURE(kPrefetchDocumentManagerEarlyCookieCopySkipped);
+
+// If enabled, a will retrieve and store responses from/to the HTTP cache
+// whenever possible.
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kPrefetchUsesHTTPCache);
+
+// If explicitly disabled, prefetch proxy is not used.
+BASE_DECLARE_FEATURE(kPrefetchProxy);
+
+}  // namespace features
 
 #endif  // CONTENT_BROWSER_PRELOADING_PREFETCH_PREFETCH_FEATURES_H_

@@ -5,6 +5,7 @@
 #ifndef CC_RASTER_SCOPED_GRCONTEXT_ACCESS_H_
 #define CC_RASTER_SCOPED_GRCONTEXT_ACCESS_H_
 
+#include "base/memory/raw_ptr.h"
 #include "components/viz/common/gpu/raster_context_provider.h"
 #include "gpu/command_buffer/client/raster_interface.h"
 
@@ -23,7 +24,7 @@ class ScopedGrContextAccess {
   }
 
  private:
-  viz::RasterContextProvider* context_provider_;
+  raw_ptr<viz::RasterContextProvider> context_provider_;
 };
 
 #endif  // CC_RASTER_SCOPED_GRCONTEXT_ACCESS_H_

@@ -9,8 +9,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/user_metrics.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/autocomplete/autocomplete_classifier_factory.h"
@@ -27,7 +27,7 @@
 #include "chrome/browser/ui/views/frame/tab_strip_region_view.h"
 #include "chrome/browser/ui/views/tabs/tab_strip.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
-#include "chrome/browser/ui/views/touch_uma/touch_uma.h"
+#include "chrome/common/chrome_features.h"
 #include "components/omnibox/browser/autocomplete_classifier.h"
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "content/public/browser/browser_thread.h"
@@ -46,6 +46,7 @@
 #include "ui/base/hit_test.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_provider.h"
+#include "ui/compositor/layer_tree_owner.h"
 #include "ui/compositor/paint_recorder.h"
 #include "ui/gfx/scoped_canvas.h"
 #include "ui/views/view.h"
@@ -314,6 +315,10 @@ void BrowserRootView::OnMouseExited(const ui::MouseEvent& event) {
   RootView::OnMouseExited(event);
 }
 
+gfx::Size BrowserRootView::CalculatePreferredSize() const {
+  return browser_view_->GetRestoredBounds().size();
+}
+
 void BrowserRootView::PaintChildren(const views::PaintInfo& paint_info) {
   views::internal::RootView::PaintChildren(paint_info);
 
@@ -341,19 +346,17 @@ void BrowserRootView::PaintChildren(const views::PaintInfo& paint_info) {
     const int width = std::round(toolbar_bounds.width() * scale);
 
     gfx::ScopedCanvas scoped_canvas(canvas);
-    int active_tab_index = tabstrip()->GetActiveIndex();
-    if (active_tab_index != TabStripModel::kNoTab) {
-      Tab* active_tab = tabstrip()->tab_at(active_tab_index);
+    const std::optional<int> active_tab_index = tabstrip()->GetActiveIndex();
+    if (active_tab_index.has_value()) {
+      Tab* active_tab = tabstrip()->tab_at(active_tab_index.value());
       if (active_tab && active_tab->GetVisible()) {
         gfx::RectF bounds(active_tab->GetMirroredBounds());
-        views::View* tabstrip_root = this;
-#if BUILDFLAG(IS_MAC)
-        // In immersive fullscreen, the top container is hosted in
-        // `overlay_widget`, which has its own root view.
-        if (browser_view_->immersive_mode_controller()->IsRevealed())
-          tabstrip_root = browser_view_->overlay_widget()->GetRootView();
-#endif
-        ConvertRectToTarget(tabstrip(), tabstrip_root, &bounds);
+        // The root of the views tree that hosts tabstrip is BrowserRootView.
+        // Except in Mac Immersive Fullscreen where the tabstrip is hosted in
+        // `overlay_widget` or `tab_overlay_widget`, each have their own root
+        // view.
+        ConvertRectToTarget(tabstrip(), tabstrip()->GetWidget()->GetRootView(),
+                            &bounds);
         canvas->ClipRect(bounds, SkClipOp::kDifference);
       }
     }
@@ -363,29 +366,36 @@ void BrowserRootView::PaintChildren(const views::PaintInfo& paint_info) {
     DCHECK(widget);
     const SkColor toolbar_top_separator_color =
         widget->GetColorProvider()->GetColor(
-            tabstrip()->ShouldPaintAsActiveFrame()
+            GetWidget()->ShouldPaintAsActive()
                 ? kColorToolbarTopSeparatorFrameActive
                 : kColorToolbarTopSeparatorFrameInactive);
 
     cc::PaintFlags flags;
     flags.setColor(toolbar_top_separator_color);
-    flags.setStyle(cc::PaintFlags::kFill_Style);
     flags.setAntiAlias(true);
-    canvas->DrawRect(gfx::RectF(x, bottom - scale, width, scale), flags);
-  }
-}
+    if (features::IsChromeRefresh2023()) {
+      const float stroke_width = scale;
+      // Outset the rectangle and corner radius by half the stroke width
+      // to draw an outer stroke.
+      const float stroke_outset = stroke_width / 2;
+      const float corner_radius =
+          GetLayoutConstant(TOOLBAR_CORNER_RADIUS) * scale + stroke_outset;
 
-void BrowserRootView::OnEventProcessingStarted(ui::Event* event) {
-  if (event->IsGestureEvent()) {
-    ui::GestureEvent* gesture_event = event->AsGestureEvent();
-    if (gesture_event->type() == ui::ET_GESTURE_TAP &&
-        gesture_event->location().y() <= 0 &&
-        gesture_event->location().x() <= browser_view_->GetBounds().width()) {
-      TouchUMA::RecordGestureAction(TouchUMA::kGestureRootViewTopTap);
+      flags.setStyle(cc::PaintFlags::kStroke_Style);
+      flags.setStrokeWidth(stroke_width);
+
+      // Only draw the top half of the rounded rect.
+      canvas->ClipRect(gfx::RectF(x, 0, width, bottom + corner_radius),
+                       SkClipOp::kIntersect);
+
+      gfx::RectF rect(x, bottom, width, 2 * corner_radius);
+      rect.Outset(stroke_outset);
+      canvas->DrawRoundRect(rect, corner_radius, flags);
+    } else {
+      flags.setStyle(cc::PaintFlags::kFill_Style);
+      canvas->DrawRect(gfx::RectF(x, bottom - scale, width, scale), flags);
     }
   }
-
-  RootView::OnEventProcessingStarted(event);
 }
 
 BrowserRootView::DropTarget* BrowserRootView::GetDropTarget(
@@ -452,7 +462,8 @@ bool BrowserRootView::GetPasteAndGoURL(const ui::OSExchangeData& data,
 void BrowserRootView::NavigateToDropUrl(
     std::unique_ptr<DropInfo> drop_info,
     const ui::DropTargetEvent& event,
-    ui::mojom::DragOperation& output_drag_op) {
+    ui::mojom::DragOperation& output_drag_op,
+    std::unique_ptr<ui::LayerTreeOwner> drag_image_layer_owner) {
   DCHECK(drop_info);
 
   Browser* const browser = browser_view_->browser();
@@ -504,5 +515,5 @@ void BrowserRootView::NavigateToDropUrl(
   output_drag_op = GetDropEffect(event, url);
 }
 
-BEGIN_METADATA(BrowserRootView, views::internal::RootView)
+BEGIN_METADATA(BrowserRootView)
 END_METADATA

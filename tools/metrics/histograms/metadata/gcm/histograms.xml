@@ -33,7 +33,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="GCM.CheckinRequestStatus" enum="GCMCheckinRequestStatus"
-    expires_after="2023-04-23">
+    expires_after="2023-11-12">
   <owner>peter@chromium.org</owner>
   <owner>knollr@chromium.org</owner>
   <summary>Status code of the outcome of a GCM checkin request.</summary>
@@ -49,62 +49,12 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="GCM.ConnectionDisconnectErrorCode"
-    enum="CombinedHttpResponseAndNetErrorCode" expires_after="M77">
-  <owner>zea@chromium.org</owner>
-  <summary>URL response and error codes from GCM disconnect events.</summary>
-</histogram>
-
-<histogram name="GCM.ConnectionEndpoint" enum="GCMEndpoints"
-    expires_after="2018-08-30">
-  <owner>zea@chromium.org</owner>
-  <summary>Number of connections made to each specific MCS endpoint.</summary>
-</histogram>
-
-<histogram name="GCM.ConnectionFailureErrorCode"
-    enum="CombinedHttpResponseAndNetErrorCode" expires_after="2018-08-30">
-  <owner>zea@chromium.org</owner>
-  <summary>URL response and error codes from GCM connection attempts.</summary>
-</histogram>
-
-<histogram name="GCM.ConnectionLatency" units="ms" expires_after="M88">
+<histogram name="GCM.ClientStartDelay" units="ms" expires_after="2024-09-14">
+  <owner>rushans@google.com</owner>
   <owner>peter@chromium.org</owner>
-  <owner>zea@chromium.org</owner>
   <summary>
-    The time between the initiation of a connection and the successful
-    completion of it.
-  </summary>
-</histogram>
-
-<histogram name="GCM.ConnectionResetReason" enum="GCMConnectionResetReason"
-    expires_after="2018-08-30">
-  <owner>zea@chromium.org</owner>
-  <summary>Reasons for GCM connection resets.</summary>
-</histogram>
-
-<histogram name="GCM.ConnectionSuccessRate" enum="BooleanSuccess"
-    expires_after="2018-08-30">
-  <owner>zea@chromium.org</owner>
-  <summary>
-    GCM connection success rate. Does not take into account login success. See
-    GCM.ConnectionFailureErrorCode for a breakdown of connection failure
-    reasons.
-  </summary>
-</histogram>
-
-<histogram name="GCM.ConnectionUpTime" units="ms" expires_after="2018-08-30">
-  <owner>zea@chromium.org</owner>
-  <summary>
-    Time (from login until reset) that a GCM connection was active.
-  </summary>
-</histogram>
-
-<histogram name="GCM.Crypto.CreateKeySuccessRate" enum="BooleanSuccess"
-    expires_after="M88">
-  <owner>peter@chromium.org</owner>
-  <owner>zea@chromium.org</owner>
-  <summary>
-    Success rate of writing new keying material to the GCM key store.
+    Records the time for which GCM client start task has been delayed. Recorded
+    whenever GCM client is requested to start.
   </summary>
 </histogram>
 
@@ -117,56 +67,6 @@ chromium-metrics-reviews@google.com.
   <summary>
     Result of decryption on a received GCM message, which includes unencrypted
     messages, successfully decrypted messages and decryption failures.
-  </summary>
-</histogram>
-
-<histogram name="GCM.Crypto.EncryptMessageResult" enum="GCMEncryptionResult"
-    expires_after="M92">
-  <owner>peter@chromium.org</owner>
-  <owner>alexchau@chromium.org</owner>
-  <summary>
-    Result of encryption of outgoing GCM message, which includes successfully
-    encrypted messages and encryption failures.
-  </summary>
-</histogram>
-
-<histogram name="GCM.Crypto.GCMDatabaseUpgradeResult" enum="Boolean"
-    expires_after="2021-07-21">
-  <owner>nator@chromium.org</owner>
-  <owner>peter@chromium.org</owner>
-  <owner>rayankans@chromium.org</owner>
-  <summary>
-    Result of upgrading GCM Key Store Database from deprecated format to current
-    format. We upgrade the GCM Key store when it first initialized, if it
-    contains any EncryptionData object with a KeyPair in it, and then record
-    whether the upgrade was successful in this metric.
-  </summary>
-</histogram>
-
-<histogram name="GCM.Crypto.GetKeySuccessRate" enum="BooleanSuccess"
-    expires_after="M88">
-  <owner>peter@chromium.org</owner>
-  <owner>zea@chromium.org</owner>
-  <summary>
-    Success rate of reading keying material from the GCM key store.
-  </summary>
-</histogram>
-
-<histogram name="GCM.Crypto.InitKeyStoreSuccessRate" enum="BooleanSuccess"
-    expires_after="M94">
-  <owner>peter@chromium.org</owner>
-  <owner>zea@chromium.org</owner>
-  <summary>
-    Success rate of initializing the LevelDB back-end of the GCM key store.
-  </summary>
-</histogram>
-
-<histogram name="GCM.Crypto.LoadKeyStoreSuccessRate" enum="BooleanSuccess"
-    expires_after="M94">
-  <owner>peter@chromium.org</owner>
-  <owner>zea@chromium.org</owner>
-  <summary>
-    Success rate of loading existing keying material in the GCM key store.
   </summary>
 </histogram>
 
@@ -188,79 +88,37 @@ chromium-metrics-reviews@google.com.
   <summary>The result of a database open attempt by the GCM store.</summary>
 </histogram>
 
-<histogram name="GCM.DataMessageReceived" enum="BooleanReceived"
-    expires_after="M88">
+<histogram name="GCM.DelayedTaskControlledReadyTime" units="ms"
+    expires_after="2024-09-14">
+  <owner>rushans@google.com</owner>
   <owner>peter@chromium.org</owner>
-  <owner>zea@chromium.org</owner>
   <summary>
-    Number of DATA_MESSAGE messages received from Google Cloud Messaging for
-    which a matching registration exists. Recorded when processing the received
-    message. Prior to M56 this also counted received DELETED_MESSAGES messages
-    (whether or not a registration existed).
+    Records the time for which tasks in GCM driver were delayed. Recorded once
+    GCM driver is ready (normally this means that GCM client is initialized).
   </summary>
 </histogram>
 
-<histogram name="GCM.DataMessageReceivedHasCollapseKey"
-    enum="BooleanHasCollapseKey" expires_after="2018-08-30">
+<histogram name="GCM.DeliveredToAppHandler{AppHandler}" enum="BooleanDelivered"
+    expires_after="2024-06-30">
   <owner>peter@chromium.org</owner>
+  <owner>rushans@google.com</owner>
   <summary>
-    Records whether a non-empty collapse_key token is set for each received
-    DATA_MESSAGE message from Google Cloud Messaging for which a matching
-    registration exists. Recorded while processing the received message.
+    Whether a received GCM message could be delivered to an app handler
+    ({AppHandler}). Recorded for each received GCM message that didn't have
+    encryption issues. This metric was expired between July 2021 and January
+    2023, and may be missing data until M111.
   </summary>
-</histogram>
-
-<histogram name="GCM.DeletedMessagesReceived" units="messages"
-    expires_after="2018-08-30">
-  <owner>peter@chromium.org</owner>
-  <summary>
-    For every DELETED_MESSAGES message received from Google Cloud Messaging
-    (whether or not a matching registration exists), this records the provided
-    count of how many messages were simultaneously deleted, or zero if the count
-    is unknown.
-  </summary>
-</histogram>
-
-<histogram name="GCM.DeliveredToAppHandler" enum="BooleanDelivered"
-    expires_after="M92">
-  <owner>peter@chromium.org</owner>
-  <owner>mamir@chromium.org</owner>
-  <summary>
-    Whether a received GCM message could be delivered to an app handler.
-    Recorded for each received GCM message that didn't have encryption issues.
-  </summary>
-</histogram>
-
-<histogram name="GCM.HeartbeatMissedDelta" units="ms"
-    expires_after="2018-08-30">
-  <owner>zea@chromium.org</owner>
-  <summary>
-    If a heartbeat was missed, the time delta by which it was missed (in system
-    time, not ticks).
-  </summary>
-</histogram>
-
-<histogram name="GCM.IncomingSendErrors" units="messages" expires_after="M98">
-  <owner>peter@chromium.org</owner>
-  <owner>knollr@chromium.org</owner>
-  <summary>
-    Number of SEND_ERROR messages received from Google Cloud Messaging. Recorded
-    when processing the received message.
-  </summary>
+  <token key="AppHandler">
+    <variant name="" summary="all handlers"/>
+    <variant name=".FcmInvalidations" summary="FCM invalidations"/>
+    <variant name=".SyncInvalidations" summary="Sync standalone invalidations"/>
+  </token>
 </histogram>
 
 <histogram name="GCM.LoadStatus" enum="GCMLoadStatus" expires_after="M98">
   <owner>peter@chromium.org</owner>
   <owner>knollr@chromium.org</owner>
   <summary>Status code of loading from the persistent GCM store.</summary>
-</histogram>
-
-<histogram name="GCM.NumThrottledApps" units="units" expires_after="M85">
-  <owner>zea@chromium.org</owner>
-  <summary>
-    Number of applications hitting GCM per-app outstanding message limits at
-    startup time.
-  </summary>
 </histogram>
 
 <histogram name="GCM.PendingConnectionEventsAtShutdown" units="events"
@@ -306,7 +164,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="GCM.RegistrationRequestStatus"
-    enum="GCMRegistrationRequestStatus" expires_after="2023-04-02">
+    enum="GCMRegistrationRequestStatus" expires_after="2024-06-30">
   <owner>peter@chromium.org</owner>
   <summary>
     Status code of the outcome of a GCM registration request. The Unknown error
@@ -316,100 +174,13 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="GCM.RemoveAccountMappingWhenLoading"
-    enum="BooleanDeletedOrNot" expires_after="2020-11-30">
-  <owner>msarda@chromium.org</owner>
-  <owner>chrome-signin-team@google.com</owner>
-  <summary>
-    Number of times that account mapping entries are deleted from or kept in the
-    GCM store database while loading them in memory. Used during the account ID
-    migration from email to Gaia ID.
-  </summary>
-</histogram>
-
-<histogram name="GCM.ResetStoreError" enum="GCMResetStoreError"
-    expires_after="M85">
-  <owner>zea@chromium.org</owner>
-  <summary>
-    Reports the problem encountered when resetting the GCM store.
-  </summary>
-</histogram>
-
-<histogram name="GCM.RestoredIncomingMessages" units="units"
-    expires_after="2018-08-30">
-  <owner>zea@chromium.org</owner>
-  <summary>
-    Number of unacknowledged incoming messages restored from the persistent
-    store at startup.
-  </summary>
-</histogram>
-
-<histogram name="GCM.RestoredOutgoingMessages" units="units"
-    expires_after="2018-08-30">
-  <owner>zea@chromium.org</owner>
-  <summary>
-    Number of pending outgoing messages restored from the persistent store at
-    startup.
-  </summary>
-</histogram>
-
-<histogram name="GCM.RestoredRegistrations" units="units"
-    expires_after="2018-08-30">
-  <owner>peter@chromium.org</owner>
-  <summary>
-    Number of registrations restored from the persistent store at startup.
-  </summary>
-</histogram>
-
-<histogram name="GCM.SendMessageStatus" enum="GCMSendMessageStatus"
-    expires_after="2018-08-30">
-  <owner>peter@chromium.org</owner>
-  <summary>
-    Result of sending an upstream message through Google Cloud Messaging.
-    Recorded when the message has either been queued, sent, or has been dropped
-    because it expired or an error happened.
-  </summary>
-</histogram>
-
-<histogram name="GCM.SendWebPushMessagePayloadSize" units="units"
-    expires_after="M98">
-  <owner>knollr@chromium.org</owner>
-  <owner>peter@chromium.org</owner>
-  <summary>
-    Size of web push messages payload. Recorded right before the message is
-    sent.
-  </summary>
-</histogram>
-
 <histogram name="GCM.SendWebPushMessageResult" enum="SendWebPushMessageResult"
-    expires_after="2023-04-23">
+    expires_after="2024-05-19">
   <owner>knollr@chromium.org</owner>
   <owner>peter@chromium.org</owner>
   <summary>
     Result of sending web push messages. Recorded when the message has either
     been sent, or has been dropped because an error happened.
-  </summary>
-</histogram>
-
-<histogram name="GCM.SendWebPushMessageStatusCode"
-    enum="CombinedHttpResponseAndNetErrorCode" expires_after="M98">
-  <owner>knollr@chromium.org</owner>
-  <owner>peter@chromium.org</owner>
-  <summary>
-    Result code from sending web push messages. Logs net::Error if it's not
-    net::OK. Logs net::OK if response header is not present. Otherwise, logs
-    HTTP status code returned. Recorded when received response after message has
-    been sent.
-  </summary>
-</histogram>
-
-<histogram name="GCM.StoreDestroySucceeded" enum="BooleanSuccess"
-    expires_after="M85">
-  <owner>zea@chromium.org</owner>
-  <summary>
-    Success indicates successfully destroying the GCM persistent store. Failure
-    indicates a failure destroying the persistence store. GCM store will be
-    destroyed when the profile has been signed out.
   </summary>
 </histogram>
 
@@ -419,34 +190,6 @@ chromium-metrics-reviews@google.com.
   <summary>
     Size of the GCM persistent store in kilobytes at startup. Warning: this
     histogram was expired from 2018-08-30 to 2021-09-20; data may be missing.
-  </summary>
-</histogram>
-
-<histogram name="GCM.StoreUpdateSucceeded" enum="BooleanSuccess"
-    expires_after="2018-08-30">
-  <owner>zea@chromium.org</owner>
-  <summary>
-    Success indicates successfully updating the GCM persistent store on message
-    update. Failure indicates a failure updating the persistence store.
-  </summary>
-</histogram>
-
-<histogram name="GCM.SuspendTime" units="ms" expires_after="2018-08-30">
-  <owner>zea@chromium.org</owner>
-  <summary>Time elapsed from machine suspend until resume.</summary>
-</histogram>
-
-<histogram name="GCM.UnregistrationRequestStatus"
-    enum="GCMUnregistrationRequestStatus" expires_after="M88">
-  <owner>peter@chromium.org</owner>
-  <owner>zea@chromium.org</owner>
-  <summary>Status code of the outcome of a GCM unregistration request.</summary>
-</histogram>
-
-<histogram name="GCM.UserSignedIn" enum="Boolean" expires_after="2021-03-28">
-  <owner>jianli@chromium.org</owner>
-  <summary>
-    Indicates whether the user was signed in when GCM started up.
   </summary>
 </histogram>
 

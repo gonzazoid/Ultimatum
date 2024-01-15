@@ -3,18 +3,23 @@
 // found in the LICENSE file.
 
 import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/policy/cr_tooltip_icon.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import './diagnostics_card_frame.js';
 import './icons.html.js';
 
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
 import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {PolymerElementProperties} from 'chrome://resources/polymer/v3_0/polymer/interfaces.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
+import {ConnectionType, KeyboardInfo} from './input.mojom-webui.js';
 import {getTemplate} from './input_card.html.js';
-import {ConnectionType, KeyboardInfo, TouchDeviceInfo} from './input_data_provider.mojom-webui.js';
+import {InputDataProviderInterface, TouchDeviceInfo} from './input_data_provider.mojom-webui.js';
+import {HostDeviceStatus} from './input_list.js';
+import {getInputDataProvider} from './mojo_interface_provider.js';
 
 declare global {
   interface HTMLElementEventMap {
@@ -40,15 +45,15 @@ export enum InputCardType {
 const InputCardElementBase = I18nMixin(PolymerElement);
 
 export class InputCardElement extends InputCardElementBase {
-  static get is() {
+  static get is(): string {
     return 'input-card';
   }
 
-  static get template() {
+  static get template(): HTMLTemplateElement {
     return getTemplate();
   }
 
-  static get properties() {
+  static get properties(): PolymerElementProperties {
     return {
       /**
        * The type of input device to be displayed. Valid values are 'keyboard',
@@ -61,18 +66,26 @@ export class InputCardElement extends InputCardElementBase {
         value: () => [],
       },
 
-      deviceIcon_: {
+      deviceIcon: {
         type: String,
-        computed: 'computeDeviceIcon_(deviceType)',
+        computed: 'computeDeviceIcon(deviceType)',
+      },
+
+      hostDeviceStatus: {
+        type: Object,
       },
     };
   }
 
   deviceType: InputCardType;
   devices: KeyboardInfo[]|TouchDeviceInfo[];
-  private deviceIcon_: string;
+  hostDeviceStatus: HostDeviceStatus;
 
-  private computeDeviceIcon_(deviceType: InputCardType): string {
+  private deviceIcon: string;
+  private inputDataProvider: InputDataProviderInterface =
+      getInputDataProvider();
+
+  private computeDeviceIcon(deviceType: InputCardType): string {
     return {
       [InputCardType.KEYBOARD]: 'diagnostics:keyboard',
       [InputCardType.TOUCHPAD]: 'diagnostics:touchpad',
@@ -84,7 +97,7 @@ export class InputCardElement extends InputCardElementBase {
    * Fetches the description string for a device based on its connection type
    * (e.g. "Bluetooth keyboard", "Internal touchpad").
    */
-  private getDeviceDescription_(device: KeyboardInfo|TouchDeviceInfo): string {
+  private getDeviceDescription(device: KeyboardInfo|TouchDeviceInfo): string {
     if (device.connectionType === ConnectionType.kUnknown) {
       return '';
     }
@@ -102,6 +115,16 @@ export class InputCardElement extends InputCardElementBase {
         'inputDescription' + connectionTypeString + deviceTypeString);
   }
 
+  private isInternalKeyboard(device: KeyboardInfo|TouchDeviceInfo): boolean {
+    return this.deviceType == InputCardType.KEYBOARD &&
+        device.connectionType == ConnectionType.kInternal;
+  }
+
+  private isInternalKeyboardTestable(): boolean {
+    return !this.hostDeviceStatus.isTabletMode &&
+        this.hostDeviceStatus.isLidOpen;
+  }
+
   /**
    * Grey out the test button if the test device is untestable. e.g. if the
    * laptop's lid is closed, the internal touchscreen is untestable.
@@ -111,12 +134,35 @@ export class InputCardElement extends InputCardElementBase {
     if ('testable' in device) {
       return (device as TouchDeviceInfo).testable;
     }
+
+    if (this.isInternalKeyboard(device)) {
+      return this.isInternalKeyboardTestable();
+    }
+
     return true;
   }
 
+  private getDeviceTestabilityErrorMessage(device: KeyboardInfo|
+                                           TouchDeviceInfo): string {
+    // If it is not an internal keyboard, return the generic untestable string.
+    if (!this.isInternalKeyboard(device)) {
+      return loadTimeData.getString('inputDeviceUntestableNote');
+    }
 
+    // Otherwise, differentiate the string based on the reason it is untestable.
+    if (this.hostDeviceStatus.isTabletMode) {
+      return loadTimeData.getString('inputKeyboardUntestableTabletModeNote');
+    }
 
-  private handleTestButtonClick_(e: PointerEvent): void {
+    if (!this.hostDeviceStatus.isLidOpen) {
+      return loadTimeData.getString('inputKeyboardUntestableLidClosedNote');
+    }
+
+    // Otherwise, there is no error.
+    return '';
+  }
+
+  private handleTestButtonClick(e: PointerEvent): void {
     const inputDeviceButton = e.target as CrButtonElement;
     assert(inputDeviceButton);
     const closestDevice: HTMLDivElement|null =

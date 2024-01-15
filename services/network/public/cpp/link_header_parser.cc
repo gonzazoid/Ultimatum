@@ -54,15 +54,17 @@ absl::optional<mojom::LinkAsAttribute> ParseAsAttribute(
     return absl::nullopt;
 
   std::string value = base::ToLowerASCII(attr.value());
-  if (value == "font")
+  if (value == "font") {
     return mojom::LinkAsAttribute::kFont;
-  else if (value == "image")
+  } else if (value == "image") {
     return mojom::LinkAsAttribute::kImage;
-  else if (value == "script")
+  } else if (value == "script") {
     return mojom::LinkAsAttribute::kScript;
-  // TODO(crbug.com/671310): Disallow "stylesheet", it was allowed accidentally.
-  else if (value == "style" || value == "stylesheet")
+  } else if (value == "style") {
     return mojom::LinkAsAttribute::kStyleSheet;
+  } else if (value == "fetch") {
+    return mojom::LinkAsAttribute::kFetch;
+  }
   return absl::nullopt;
 }
 
@@ -79,6 +81,26 @@ absl::optional<mojom::CrossOriginAttribute> ParseCrossOriginAttribute(
   else if (value == "use-credentials")
     return mojom::CrossOriginAttribute::kUseCredentials;
   return absl::nullopt;
+}
+
+// Parses `fetchpriority` attribute and returns its parsed representation.
+// Returns mojom::FetchPriorityAttribute::kAuto which is the missing and
+// invalid value for the attribute.
+absl::optional<mojom::FetchPriorityAttribute> ParseFetchPriorityAttribute(
+    const absl::optional<std::string>& attr) {
+  if (!attr.has_value()) {
+    return mojom::FetchPriorityAttribute::kAuto;
+  }
+
+  std::string value = base::ToLowerASCII(attr.value());
+  if (value == "low") {
+    return mojom::FetchPriorityAttribute::kLow;
+  } else if (value == "high") {
+    return mojom::FetchPriorityAttribute::kHigh;
+  } else if (value == "auto") {
+    return mojom::FetchPriorityAttribute::kAuto;
+  }
+  return mojom::FetchPriorityAttribute::kAuto;
 }
 
 // Parses attributes of a Link header and populates parsed representations of
@@ -129,6 +151,18 @@ bool ParseAttributes(
       if (!attr.second.has_value() || !IsValidMimeType(attr.second.value()))
         return false;
       parsed->mime_type = attr.second.value();
+    } else if (name == "fetchpriority") {
+      // TODO(crbug.com/1182567): Make sure ignoring second and subsequent ones
+      // is a reasonable behavior.
+      if (parsed->fetch_priority != mojom::FetchPriorityAttribute::kAuto) {
+        continue;
+      }
+      absl::optional<mojom::FetchPriorityAttribute> fetch_priority =
+          ParseFetchPriorityAttribute(attr.second);
+      if (!fetch_priority.has_value()) {
+        return false;
+      }
+      parsed->fetch_priority = fetch_priority.value();
     } else {
       // The current Link header contains an attribute which isn't pre-defined.
       return false;

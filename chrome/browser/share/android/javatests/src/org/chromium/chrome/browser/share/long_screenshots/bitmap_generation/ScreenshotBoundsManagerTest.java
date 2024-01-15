@@ -9,7 +9,6 @@ import static org.junit.Assert.assertNull;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
-import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.util.Size;
@@ -30,25 +29,17 @@ import org.chromium.content.browser.webcontents.WebContentsImpl;
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class ScreenshotBoundsManagerTest {
-    @Mock
-    private Context mContext;
+    @Mock private Context mContext;
 
-    @Mock
-    private Tab mTab;
+    @Mock private Tab mTab;
 
-    @Mock
-    private RenderCoordinatesImpl mRenderCoordinates;
+    @Mock private RenderCoordinatesImpl mRenderCoordinates;
 
-    @Mock
-    private WebContentsImpl mWebContents;
+    @Mock private WebContentsImpl mWebContents;
 
-    @Mock
-    private LongScreenshotsCompositor mCompositor;
+    @Mock private LongScreenshotsCompositor mCompositor;
 
-    @Mock
-    private LongScreenshotsTabService mTabService;
-
-    private Bitmap mTestBitmap = Bitmap.createBitmap(512, 1024, Bitmap.Config.ARGB_8888);
+    @Mock private LongScreenshotsTabService mTabService;
 
     @Before
     public void setUp() {

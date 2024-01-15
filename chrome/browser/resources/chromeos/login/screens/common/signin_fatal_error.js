@@ -6,7 +6,24 @@
  * @fileoverview Polymer element for signin fatal error.
  */
 
-/* #js_imports_placeholder */
+import '//resources/js/action_link.js';
+import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '../../components/oobe_icons.html.js';
+import '../../components/common_styles/oobe_common_styles.css.js';
+import '../../components/common_styles/oobe_dialog_host_styles.css.js';
+import '../../components/dialogs/oobe_adaptive_dialog.js';
+import '../../components/buttons/oobe_text_button.js';
+
+import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {OobeDialogHostBehavior} from '../../components/behaviors/oobe_dialog_host_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+import {OOBE_UI_STATE, SCREEN_GAIA_SIGNIN} from '../../components/display_manager_types.js';
+import {OobeTypes} from '../../components/oobe_types.js';
+
+import {getTemplate} from './signin_fatal_error.html.js';
+
 
 /**
  * @constructor
@@ -14,16 +31,22 @@
  * @implements {LoginScreenBehaviorInterface}
  * @implements {OobeI18nBehaviorInterface}
  */
-const SigninFatalErrorBase = Polymer.mixinBehaviors(
+const SigninFatalErrorBase = mixinBehaviors(
     [OobeI18nBehavior, OobeDialogHostBehavior, LoginScreenBehavior],
-    Polymer.Element);
+    PolymerElement);
 
 /**
+ * Data that is passed to the screen during onBeforeShow.
  * @typedef {{
- *   actionButton:  OobeTextButton,
+ *   errorState: OobeTypes.FatalErrorCode,
+ *   errorText: (string|undefined),
+ *   keyboardHint: (string|undefined),
+ *   details: (string|undefined),
+ *   helpLinkText: (string|undefined),
+ *   url: (string|undefined),
  * }}
  */
-SigninFatalErrorBase.$;
+let SigninFatalErrorScreenData;
 
 /**
  * @polymer
@@ -33,7 +56,10 @@ class SigninFatalScreen extends SigninFatalErrorBase {
     return 'signin-fatal-error-element';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return getTemplate();
+  }
+
 
   static get properties() {
     return {
@@ -48,38 +74,48 @@ class SigninFatalScreen extends SigninFatalErrorBase {
 
       /**
        * Error state from the screen
+       * @type {OobeTypes.FatalErrorCode}
        * @private
        */
       errorState_: {
         type: Number,
+        value: OobeTypes.FatalErrorCode.UNKNOWN,
       },
 
       /**
        * Additional information that will be used when creating the subtitle.
+       * @type {SigninFatalErrorScreenData}
        * @private
        */
       params_: {
         type: Object,
+        value: {},
       },
 
+      /**
+       * @type {(string|undefined)}
+       * @private
+       */
       keyboardHint_: {
         type: String,
       },
 
+      /**
+       * @type {(string|undefined)}
+       * @private
+       */
       details_: {
         type: String,
       },
 
+      /**
+       * @type {(string|undefined)}
+       * @private
+       */
       helpLinkText_: {
         type: String,
       },
     };
-  }
-
-  constructor() {
-    super();
-    this.errorState_ = 0;
-    this.params_ = {};
   }
 
   ready() {
@@ -96,15 +132,15 @@ class SigninFatalScreen extends SigninFatalErrorBase {
    * Returns the control which should receive initial focus.
    */
   get defaultControl() {
-    return this.$.actionButton;
+    return /** @type {HTMLElement} */ (this.$.actionButton);
   }
 
   /**
    * Invoked just before being shown. Contains all the data for the screen.
-   * @suppress {missingProperties} params_ fields.
+   * @param {SigninFatalErrorScreenData} data Screen init payload.
    */
   onBeforeShow(data) {
-    this.errorState_ = data && 'errorState' in data && data.errorState;
+    this.errorState_ = data?.errorState;
     this.params_ = data;
     this.keyboardHint_ = this.params_.keyboardHint;
     this.details_ = this.params_.details;
@@ -134,10 +170,9 @@ class SigninFatalScreen extends SigninFatalErrorBase {
    * Generates the subtitle that is shown to the
    * user based on the error
    * @param {string} locale
-   * @param {number} error_state
+   * @param {OobeTypes.FatalErrorCode} error_state
    * @param {string} params
    * @private
-   * @suppress {missingProperties} errorText in this.params_
    */
   computeSubtitle_(locale, error_state, params) {
     switch (this.errorState_) {
@@ -146,9 +181,12 @@ class SigninFatalScreen extends SigninFatalErrorBase {
       case OobeTypes.FatalErrorCode.MISSING_GAIA_INFO:
         return this.i18n('fatalErrorMessageNoAccountDetails');
       case OobeTypes.FatalErrorCode.INSECURE_CONTENT_BLOCKED:
-        return this.i18n(
-            'fatalErrorMessageInsecureURL',
-            'url' in this.params_ && this.params_.url);
+        /**
+         * @suppress {checkTypes} We know that url is already a valid string.
+         * @type {string}
+         */
+        const url = this.params_?.url;
+        return this.i18n('fatalErrorMessageInsecureURL', url);
       case OobeTypes.FatalErrorCode.CUSTOM:
         return this.params_.errorText;
       case OobeTypes.FatalErrorCode.UNKNOWN:

@@ -24,6 +24,9 @@ class WindowFrameProvider {
   // window behind the corners.
   virtual int GetTopCornerRadiusDip() = 0;
 
+  // Returns true iff any parts of the top frame are translucent.
+  virtual bool IsTopFrameTranslucent() = 0;
+
   // Returns the shadow and border drawn around the window in DIPs.
   virtual gfx::Insets GetFrameThicknessDip() = 0;
 
@@ -33,7 +36,7 @@ class WindowFrameProvider {
                                 const gfx::Rect& rect,
                                 int top_area_height,
                                 bool focused,
-                                ui::WindowTiledEdges tiled_edges) = 0;
+                                const gfx::Insets& input_insets) = 0;
 };
 
 }  // namespace ui

@@ -6,7 +6,14 @@ package org.chromium.chrome.browser.xsurface;
 
 import androidx.annotation.Nullable;
 
+import org.chromium.chrome.browser.xsurface.feed.FeedSurfaceScope;
+import org.chromium.chrome.browser.xsurface.feed.FeedSurfaceScopeDependencyProvider;
+import org.chromium.chrome.browser.xsurface.pageinsights.PageInsightsSurfaceScope;
+import org.chromium.chrome.browser.xsurface.pageinsights.PageInsightsSurfaceScopeDependencyProvider;
+
 /**
+ * Implemented internally.
+ *
  * Used to initialize singleton-level dependencies for xsurface. Also provides surface-level
  * dependencies that depend on the singleton dependencies.
  **/
@@ -23,18 +30,38 @@ public interface ProcessScope {
      *
      * @param dependencyProvider Provider for activity-scoped dependencies.
      **/
-    @Nullable
-    default SurfaceScope obtainSurfaceScope(SurfaceScopeDependencyProvider dependencyProvider) {
+    @Deprecated
+    default @Nullable SurfaceScope obtainSurfaceScope(
+            SurfaceScopeDependencyProvider dependencyProvider) {
         return null;
     }
 
-    @Nullable
-    default ImageCacheHelper provideImageCacheHelper() {
+    /**
+     * Returns a SurfaceScope which should be one per Surface. That Surface can have multiple
+     * HybridListRenderers and SurfaceRenderers within its UI.
+     *
+     * @param dependencyProvider Provider for activity-scoped dependencies.
+     **/
+    default @Nullable FeedSurfaceScope obtainFeedSurfaceScope(
+            FeedSurfaceScopeDependencyProvider dependencyProvider) {
         return null;
     }
 
-    @Nullable
-    default ReliabilityLoggingTestUtil provideReliabilityLoggingTestUtil() {
+    /**
+     * Returns PageInsightsSurfaceScope, for use in the Page Insights feature.
+     *
+     * @param dependencyProvider Provider for activity-scoped dependencies.
+     */
+    default @Nullable PageInsightsSurfaceScope obtainPageInsightsSurfaceScope(
+            PageInsightsSurfaceScopeDependencyProvider dependencyProvider) {
+        return null;
+    }
+
+    default @Nullable ImageCacheHelper provideImageCacheHelper() {
+        return null;
+    }
+
+    default @Nullable ReliabilityLoggingTestUtil provideReliabilityLoggingTestUtil() {
         return null;
     }
 }

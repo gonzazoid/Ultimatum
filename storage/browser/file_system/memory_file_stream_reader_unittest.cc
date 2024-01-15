@@ -9,13 +9,15 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/containers/span.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
@@ -46,18 +48,16 @@ class MemoryFileStreamReaderTest : public FileStreamReaderTest {
       int64_t initial_offset,
       const base::Time& expected_modification_time) override {
     return std::make_unique<MemoryFileStreamReader>(
-        base::ThreadTaskRunnerHandle::Get(), file_util_->GetWeakPtr(),
-        test_dir().AppendASCII(file_name), initial_offset,
-        expected_modification_time);
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        file_util_->GetWeakPtr(), test_dir().AppendASCII(file_name),
+        initial_offset, expected_modification_time);
   }
 
   void WriteFile(const std::string& file_name,
-                 const char* buf,
-                 size_t buf_size,
+                 std::string_view data,
                  base::Time* modification_time) override {
     base::FilePath path = test_dir().AppendASCII(file_name);
-    file_util_->CreateFileForTesting(path,
-                                     base::span<const char>(buf, buf_size));
+    file_util_->CreateFileForTesting(path, data);
     base::File::Info file_info;
     ASSERT_EQ(base::File::FILE_OK, file_util_->GetFileInfo(path, &file_info));
     if (modification_time)

@@ -3,21 +3,19 @@
 // found in the LICENSE file.
 
 // clang-format off
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {SafeBrowsingSetting, SettingsSecurityPageElement} from 'chrome://settings/lazy_load.js';
-import {MetricsBrowserProxyImpl, PrivacyElementInteractions, PrivacyPageBrowserProxyImpl, Router, routes, SafeBrowsingInteractions, SecureDnsMode} from 'chrome://settings/settings.js';
-// <if expr="chrome_root_store_supported">
-import {OpenWindowProxyImpl} from 'chrome://settings/settings.js';
-// </if>
+import {HttpsFirstModeSetting, SafeBrowsingSetting, SettingsSecurityPageElement} from 'chrome://settings/lazy_load.js';
+import {HatsBrowserProxyImpl, CrSettingsPrefs, MetricsBrowserProxyImpl, OpenWindowProxyImpl, PrivacyElementInteractions, PrivacyPageBrowserProxyImpl, Router, routes, SafeBrowsingInteractions, SecureDnsMode, SecurityPageInteraction, SettingsPrefsElement, SettingsToggleButtonElement} from 'chrome://settings/settings.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {isChildVisible} from 'chrome://webui-test/test_util.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
+import {TestHatsBrowserProxy} from './test_hats_browser_proxy.js';
 import {TestMetricsBrowserProxy} from './test_metrics_browser_proxy.js';
-// <if expr="chrome_root_store_supported">
-import {TestOpenWindowProxy} from './test_open_window_proxy.js';
-// </if>
+
+import {TestOpenWindowProxy} from 'chrome://webui-test/test_open_window_proxy.js';
+
 import {TestPrivacyPageBrowserProxy} from './test_privacy_page_browser_proxy.js';
 
 // clang-format on
@@ -34,26 +32,31 @@ function pagePrefs() {
         value: SafeBrowsingSetting.STANDARD,
       },
       password_leak_detection: {value: false},
+      https_first_mode_enabled: {
+        type: chrome.settingsPrivate.PrefType.NUMBER,
+        value: HttpsFirstModeSetting.DISABLED,
+      },
     },
     dns_over_https:
         {mode: {value: SecureDnsMode.AUTOMATIC}, templates: {value: ''}},
-    https_only_mode_enabled: {value: false},
+    https_only_mode_enabled: {
+      type: chrome.settingsPrivate.PrefType.NUMBER,
+      value: HttpsFirstModeSetting.DISABLED,
+    },
   };
 }
 
-suite('CrSettingsSecurityPageTest', function() {
+suite('Main', function() {
   let testMetricsBrowserProxy: TestMetricsBrowserProxy;
   let testPrivacyBrowserProxy: TestPrivacyPageBrowserProxy;
   let page: SettingsSecurityPageElement;
-  // <if expr="chrome_root_store_supported">
   let openWindowProxy: TestOpenWindowProxy;
-  // </if>
 
   suiteSetup(function() {
     loadTimeData.overrideValues({
       enableSecurityKeysSubpage: true,
-      showHttpsOnlyModeSetting: true,
       showChromeRootStoreCertificates: true,
+      enableHttpsFirstModeNewSettings: true,
     });
   });
 
@@ -62,10 +65,8 @@ suite('CrSettingsSecurityPageTest', function() {
     MetricsBrowserProxyImpl.setInstance(testMetricsBrowserProxy);
     testPrivacyBrowserProxy = new TestPrivacyPageBrowserProxy();
     PrivacyPageBrowserProxyImpl.setInstance(testPrivacyBrowserProxy);
-    // <if expr="chrome_root_store_supported">
     openWindowProxy = new TestOpenWindowProxy();
     OpenWindowProxyImpl.setInstance(openWindowProxy);
-    // </if>
     document.body.innerHTML = window.trustedTypes!.emptyHTML;
     page = document.createElement('settings-security-page');
     page.prefs = pagePrefs();
@@ -83,25 +84,17 @@ suite('CrSettingsSecurityPageTest', function() {
   // <if expr="is_macosx or is_win">
   test('NativeCertificateManager', function() {
     page.shadowRoot!.querySelector<HTMLElement>('#manageCertificates')!.click();
-    return testPrivacyBrowserProxy.whenCalled('showManageSSLCertificates');
+    return testPrivacyBrowserProxy.whenCalled('showManageSslCertificates');
   });
   // </if>
 
-  // <if expr="chrome_root_store_supported">
   test('ChromeRootStorePage', async function() {
     const row =
         page.shadowRoot!.querySelector<HTMLElement>('#chromeCertificates');
     assertTrue(!!row);
     row.click();
-    const url = await openWindowProxy.whenCalled('openURL');
+    const url = await openWindowProxy.whenCalled('openUrl');
     assertEquals(url, loadTimeData.getString('chromeRootStoreHelpCenterURL'));
-  });
-  // </if>
-
-  // Initially specified pref option should be expanded
-  test('SafeBrowsingRadio_InitialPrefOptionIsExpanded', function() {
-    assertFalse(page.$.safeBrowsingEnhanced.expanded);
-    assertTrue(page.$.safeBrowsingStandard.expanded);
   });
 
   // <if expr="not chromeos_lacros">
@@ -126,12 +119,308 @@ suite('CrSettingsSecurityPageTest', function() {
     assertFalse(isChildVisible(page, '#security-keys-phones-subpage-trigger'));
   });
 
-  test('PasswordsLeakDetectionSubLabel', function() {
+  // Tests that changing the HTTPS-First Mode setting sets the associated pref.
+  test('HttpsFirstModeRadioButtons', function() {
+    let radioButton = page.shadowRoot!.querySelector<HTMLElement>(
+        '#httpsFirstModeEnabledFull');
+    assertTrue(!!radioButton);
+    radioButton.click();
+    assertEquals(
+        HttpsFirstModeSetting.ENABLED_FULL,
+        page.getPref('generated.https_first_mode_enabled').value);
+
+    radioButton = page.shadowRoot!.querySelector<HTMLElement>(
+        '#httpsFirstModeEnabledIncognito');
+    assertTrue(!!radioButton);
+    radioButton.click();
+    assertEquals(
+        HttpsFirstModeSetting.ENABLED_INCOGNITO,
+        page.getPref('generated.https_first_mode_enabled').value);
+
+    radioButton =
+        page.shadowRoot!.querySelector<HTMLElement>('#httpsFirstModeDisabled');
+    assertTrue(!!radioButton);
+    radioButton.click();
+    assertEquals(
+        HttpsFirstModeSetting.DISABLED,
+        page.getPref('generated.https_first_mode_enabled').value);
+  });
+
+  // TODO(crbug.com/1494186): Add test for alternate sub-label when Advanced
+  // Protection is enabled.
+});
+
+suite('SecurityPageHappinessTrackingSurveys', function() {
+  let testHatsBrowserProxy: TestHatsBrowserProxy;
+  let settingsPrefs: SettingsPrefsElement;
+  let page: SettingsSecurityPageElement;
+
+  suiteSetup(function() {
+    settingsPrefs = document.createElement('settings-prefs');
+    return CrSettingsPrefs.initialized;
+  });
+
+  setup(function() {
+    testHatsBrowserProxy = new TestHatsBrowserProxy();
+    HatsBrowserProxyImpl.setInstance(testHatsBrowserProxy);
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
+    page = document.createElement('settings-security-page');
+    page.prefs = settingsPrefs.prefs;
+    document.body.appendChild(page);
+    Router.getInstance().navigateTo(routes.SECURITY);
+    return flushTasks();
+  });
+
+  teardown(function() {
+    page.remove();
+    Router.getInstance().navigateTo(routes.BASIC);
+  });
+
+  test('SecurityPageBeforeUnloadCallsHatsProxy', async function() {
+    // Interact with the security page.
+    page.$.safeBrowsingEnhanced.click();
+    flush();
+
+    const t1 = 10000;
+    testHatsBrowserProxy.setNow(t1);
+    window.dispatchEvent(new Event('focus'));
+
+    const t2 = 20000;
+    testHatsBrowserProxy.setNow(t2);
+    window.dispatchEvent(new Event('blur'));
+
+    const t3 = 60000;
+    testHatsBrowserProxy.setNow(t3);
+    window.dispatchEvent(new Event('focus'));
+
+    const t4 = 80000;
+    testHatsBrowserProxy.setNow(t4);
+    window.dispatchEvent(new Event('blur'));
+
+    // Fire the beforeunload event to simulate closing the page.
+    window.dispatchEvent(new Event('beforeunload'));
+    const args =
+        await testHatsBrowserProxy.whenCalled('securityPageHatsRequest');
+
+    // Verify the latest interaction type.
+    assertEquals(SecurityPageInteraction.RADIO_BUTTON_ENHANCED_CLICK, args[0]);
+
+    // Verify the safe browsing state on open.
+    assertEquals(SafeBrowsingSetting.STANDARD, args[1]);
+
+    // Verify the time the user spend on the security page.
+    const expectedTotalTimeInFocus = t2 - t1 + t4 - t3;
+    assertEquals(expectedTotalTimeInFocus, args[2]);
+  });
+});
+
+suite('FlagsDisabled', function() {
+  let page: SettingsSecurityPageElement;
+
+  suiteSetup(function() {
+    loadTimeData.overrideValues({
+      enableSecurityKeysSubpage: false,
+      enableFriendlierSafeBrowsingSettings: false,
+      enableHashPrefixRealTimeLookups: false,
+      enableHttpsFirstModeNewSettings: false,
+    });
+  });
+
+  setup(function() {
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
+    page = document.createElement('settings-security-page');
+    page.prefs = pagePrefs();
+    document.body.appendChild(page);
+    flush();
+  });
+
+  teardown(function() {
+    page.remove();
+  });
+
+  test('ManageSecurityKeysSubpageHidden', function() {
+    assertFalse(isChildVisible(page, '#security-keys-subpage-trigger'));
+  });
+
+  // The element only exists on Windows.
+  // <if expr="is_win">
+  test('ManageSecurityKeysPhonesSubpageVisibleAndNavigates', function() {
+    // On modern versions of Windows the security keys subpage will be disabled
+    // because Windows manages that itself, but a link to the subpage for
+    // managing phones as security keys will be included.
+    const triggerId = '#security-keys-phones-subpage-trigger';
+    assertTrue(isChildVisible(page, triggerId));
+    page.shadowRoot!.querySelector<HTMLElement>(triggerId)!.click();
+    flush();
+    assertEquals(
+        routes.SECURITY_KEYS_PHONES, Router.getInstance().getCurrentRoute());
+  });
+  // </if>
+
+  // TODO(crbug.com/1466292): Remove once friendlier safe browsing settings
+  // standard protection is launched.
+  test('NotUpdatedStandardProtectionDropdown', function() {
+    const standardProtection = page.$.safeBrowsingStandard;
+    const spSubLabel = loadTimeData.getString('safeBrowsingStandardDesc');
+    assertEquals(spSubLabel, standardProtection.subLabel);
+
+    const safeBrowsingStandardBulTwo =
+        page.shadowRoot!.querySelector<HTMLElement>(
+            '#safeBrowsingStandardBulTwo')!;
+    const subBulTwoLabel = loadTimeData.getString('safeBrowsingStandardBulTwo');
+    assertEquals(
+        subBulTwoLabel, safeBrowsingStandardBulTwo.textContent!.trim());
+
+    const passwordsLeakToggle = page.$.passwordsLeakToggle;
+    const passwordLeakLabel =
+        loadTimeData.getString('passwordsLeakDetectionLabel');
+    assertEquals(passwordLeakLabel, passwordsLeakToggle.label);
+
+    const passwordLeakSubLabel =
+        loadTimeData.getString('passwordsLeakDetectionGeneralDescription');
+    assertEquals(passwordLeakSubLabel, passwordsLeakToggle.subLabel);
+  });
+
+  // TODO(crbug.com/1470385): Remove once friendlier safe browsing settings
+  // enhanced protection is launched.
+  test('NotUpdatedEnhancedProtectionDropdown', function() {
+    // Enhanced protection sublabel should not be the updated one.
+    const enhancedProtection = page.$.safeBrowsingEnhanced;
+    const epSubLabel = loadTimeData.getString('safeBrowsingEnhancedDesc');
+    assertEquals(epSubLabel, enhancedProtection.subLabel);
+
+    // The updated description container should not be visible.
+    assertFalse(isChildVisible(page, '#enhancedProtectionDescContainer'));
+
+    // No protection sublabel should not be the updated one.
+    const noProtection = page.$.safeBrowsingDisabled;
+    const npSubLabel = loadTimeData.getString('safeBrowsingNoneDesc');
+    assertEquals(npSubLabel, noProtection.subLabel);
+  });
+
+  // TODO(crbug.com/1466292): Remove once friendlier safe browsing settings
+  // standard protection is launched.
+  test('NotUpdatedPasswordsLeakDetectionSubLabel', function() {
     const toggle = page.$.passwordsLeakToggle;
     const defaultSubLabel =
         loadTimeData.getString('passwordsLeakDetectionGeneralDescription');
     const activeWhenSignedInSubLabel =
         loadTimeData.getString('passwordsLeakDetectionGeneralDescription') +
+        ' ' +
+        loadTimeData.getString(
+            'passwordsLeakDetectionSignedOutEnabledDescription');
+    assertEquals(defaultSubLabel, toggle.subLabel);
+
+    page.set('prefs.profile.password_manager_leak_detection.value', true);
+    page.set(
+        'prefs.generated.password_leak_detection.userControlDisabled', true);
+    flush();
+    assertEquals(activeWhenSignedInSubLabel, toggle.subLabel);
+
+    page.set('prefs.generated.password_leak_detection.value', true);
+    page.set(
+        'prefs.generated.password_leak_detection.userControlDisabled', false);
+    flush();
+    assertEquals(defaultSubLabel, toggle.subLabel);
+
+    page.set('prefs.profile.password_manager_leak_detection.value', false);
+    flush();
+    assertEquals(defaultSubLabel, toggle.subLabel);
+  });
+
+  // Tests that toggling the HTTPS-Only Mode setting sets the associated pref.
+  test('HttpsOnlyModeToggle', function() {
+    const httpsOnlyModeToggle =
+        page.shadowRoot!.querySelector<HTMLElement>('#httpsOnlyModeToggle');
+    assertTrue(!!httpsOnlyModeToggle);
+
+    assertEquals(
+        HttpsFirstModeSetting.DISABLED,
+        page.getPref('generated.https_first_mode_enabled').value);
+
+    httpsOnlyModeToggle.click();
+    assertEquals(
+        HttpsFirstModeSetting.ENABLED_FULL,
+        page.getPref('generated.https_first_mode_enabled').value);
+  });
+
+  // Tests that the correct Advanced Protection sublabel is used when the
+  // HTTPS-Only Mode setting toggle has user control disabled.
+  test('HttpsOnlyModeSettingSubLabel', function() {
+    const toggle = page.shadowRoot!.querySelector<SettingsToggleButtonElement>(
+        '#httpsOnlyModeToggle');
+    assertTrue(!!toggle);
+    const defaultSubLabel = loadTimeData.getString('httpsOnlyModeDescription');
+    assertEquals(defaultSubLabel, toggle.subLabel);
+
+    page.setPrefValue(
+        'generated.https_first_mode_enabled', HttpsFirstModeSetting.DISABLED);
+    page.set(
+        'prefs.generated.https_first_mode_enabled.userControlDisabled', true);
+    flush();
+    const lockedSubLabel =
+        loadTimeData.getString('httpsOnlyModeDescriptionAdvancedProtection');
+    assertEquals(lockedSubLabel, toggle.subLabel);
+
+    page.setPrefValue(
+        'generated.https_first_mode_enabled',
+        HttpsFirstModeSetting.ENABLED_FULL);
+    page.set(
+        'prefs.generated.https_first_mode_enabled.userControlDisabled', true);
+    flush();
+    assertEquals(lockedSubLabel, toggle.subLabel);
+  });
+});
+
+// Separate test suite for tests specifically related to Safe Browsing controls.
+suite('SafeBrowsing', function() {
+  let testMetricsBrowserProxy: TestMetricsBrowserProxy;
+  let testPrivacyBrowserProxy: TestPrivacyPageBrowserProxy;
+  let page: SettingsSecurityPageElement;
+  let openWindowProxy: TestOpenWindowProxy;
+
+  function setUpPage() {
+    page = document.createElement('settings-security-page');
+    page.prefs = pagePrefs();
+    document.body.appendChild(page);
+    page.$.safeBrowsingEnhanced.updateCollapsed();
+    page.$.safeBrowsingStandard.updateCollapsed();
+    flush();
+  }
+  function resetPage() {
+    page.remove();
+    setUpPage();
+  }
+
+  setup(function() {
+    testMetricsBrowserProxy = new TestMetricsBrowserProxy();
+    MetricsBrowserProxyImpl.setInstance(testMetricsBrowserProxy);
+    testPrivacyBrowserProxy = new TestPrivacyPageBrowserProxy();
+    PrivacyPageBrowserProxyImpl.setInstance(testPrivacyBrowserProxy);
+    openWindowProxy = new TestOpenWindowProxy();
+    OpenWindowProxyImpl.setInstance(openWindowProxy);
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
+    setUpPage();
+  });
+
+  teardown(function() {
+    page.remove();
+    Router.getInstance().navigateTo(routes.BASIC);
+  });
+
+  // Initially specified pref option should be expanded
+  test('SafeBrowsingRadio_InitialPrefOptionIsExpanded', function() {
+    assertFalse(page.$.safeBrowsingEnhanced.expanded);
+    assertTrue(page.$.safeBrowsingStandard.expanded);
+  });
+
+  test('PasswordsLeakDetectionSubLabel', function() {
+    const toggle = page.$.passwordsLeakToggle;
+    const defaultSubLabel = loadTimeData.getString(
+        'passwordsLeakDetectionGeneralDescriptionUpdated');
+    const activeWhenSignedInSubLabel =
+        loadTimeData.getString(
+            'passwordsLeakDetectionGeneralDescriptionUpdated') +
         ' ' +
         loadTimeData.getString(
             'passwordsLeakDetectionSignedOutEnabledDescription');
@@ -237,8 +526,8 @@ suite('CrSettingsSecurityPageTest', function() {
         assertTrue(page.$.safeBrowsingStandard.expanded);
         assertTrue(page.$.safeBrowsingEnhanced.expanded);
 
-        page.shadowRoot!.querySelector('settings-disable-safebrowsing-dialog')!
-            .$.confirm.click();
+        page.shadowRoot!.querySelector('settings-simple-confirmation-dialog')!.$
+            .confirm.click();
         flush();
 
         // Wait for onDisableSafebrowsingDialogClose_ to finish.
@@ -261,16 +550,14 @@ suite('CrSettingsSecurityPageTest', function() {
     // Previously selected option must remain opened.
     assertTrue(page.$.safeBrowsingStandard.expanded);
 
-    page.shadowRoot!.querySelector('settings-disable-safebrowsing-dialog')!.$
+    page.shadowRoot!.querySelector('settings-simple-confirmation-dialog')!.$
         .confirm.click();
     flush();
 
     // Wait for onDisableSafebrowsingDialogClose_ to finish.
     await flushTasks();
 
-    assertEquals(
-        null,
-        page.shadowRoot!.querySelector('settings-disable-safebrowsing-dialog'));
+    assertFalse(isChildVisible(page, 'settings-simple-confirmation-dialog'));
 
     assertFalse(page.$.safeBrowsingEnhanced.checked);
     assertFalse(page.$.safeBrowsingStandard.checked);
@@ -291,16 +578,14 @@ suite('CrSettingsSecurityPageTest', function() {
     // Previously selected option must remain opened.
     assertTrue(page.$.safeBrowsingEnhanced.expanded);
 
-    page.shadowRoot!.querySelector('settings-disable-safebrowsing-dialog')!.$
+    page.shadowRoot!.querySelector('settings-simple-confirmation-dialog')!.$
         .cancel.click();
     flush();
 
     // Wait for onDisableSafebrowsingDialogClose_ to finish.
     await flushTasks();
 
-    assertEquals(
-        null,
-        page.shadowRoot!.querySelector('settings-disable-safebrowsing-dialog'));
+    assertFalse(isChildVisible(page, 'settings-simple-confirmation-dialog'));
 
     assertTrue(page.$.safeBrowsingEnhanced.checked);
     assertFalse(page.$.safeBrowsingStandard.checked);
@@ -321,16 +606,14 @@ suite('CrSettingsSecurityPageTest', function() {
     // Previously selected option must remain opened.
     assertTrue(page.$.safeBrowsingStandard.expanded);
 
-    page.shadowRoot!.querySelector('settings-disable-safebrowsing-dialog')!.$
+    page.shadowRoot!.querySelector('settings-simple-confirmation-dialog')!.$
         .cancel.click();
     flush();
 
     // Wait for onDisableSafebrowsingDialogClose_ to finish.
     await flushTasks();
 
-    assertEquals(
-        null,
-        page.shadowRoot!.querySelector('settings-disable-safebrowsing-dialog'));
+    assertFalse(isChildVisible(page, 'settings-simple-confirmation-dialog'));
 
     assertFalse(page.$.safeBrowsingEnhanced.checked);
     assertTrue(page.$.safeBrowsingStandard.checked);
@@ -373,7 +656,7 @@ suite('CrSettingsSecurityPageTest', function() {
     // Previously selected option must remain opened.
     assertTrue(page.$.safeBrowsingStandard.expanded);
 
-    page.shadowRoot!.querySelector('settings-disable-safebrowsing-dialog')!.$
+    page.shadowRoot!.querySelector('settings-simple-confirmation-dialog')!.$
         .confirm.click();
     flush();
 
@@ -394,7 +677,7 @@ suite('CrSettingsSecurityPageTest', function() {
     // Previously selected option must remain opened.
     assertTrue(page.$.safeBrowsingStandard.expanded);
 
-    page.shadowRoot!.querySelector('settings-disable-safebrowsing-dialog')!.$
+    page.shadowRoot!.querySelector('settings-simple-confirmation-dialog')!.$
         .confirm.click();
     flush();
 
@@ -428,7 +711,7 @@ suite('CrSettingsSecurityPageTest', function() {
     // Previously selected option must remain opened.
     assertTrue(page.$.safeBrowsingStandard.expanded);
 
-    page.shadowRoot!.querySelector('settings-disable-safebrowsing-dialog')!.$
+    page.shadowRoot!.querySelector('settings-simple-confirmation-dialog')!.$
         .confirm.click();
     flush();
 
@@ -524,7 +807,7 @@ suite('CrSettingsSecurityPageTest', function() {
     testMetricsBrowserProxy.resetResolver(
         'recordSafeBrowsingInteractionHistogram');
     testMetricsBrowserProxy.resetResolver('recordAction');
-    page.shadowRoot!.querySelector('settings-disable-safebrowsing-dialog')!.$
+    page.shadowRoot!.querySelector('settings-simple-confirmation-dialog')!.$
         .cancel.click();
     flush();
     const [disableDeniedResult, disableDeniedAction] = await Promise.all([
@@ -547,7 +830,7 @@ suite('CrSettingsSecurityPageTest', function() {
     testMetricsBrowserProxy.resetResolver(
         'recordSafeBrowsingInteractionHistogram');
     testMetricsBrowserProxy.resetResolver('recordAction');
-    page.shadowRoot!.querySelector('settings-disable-safebrowsing-dialog')!.$
+    page.shadowRoot!.querySelector('settings-simple-confirmation-dialog')!.$
         .confirm.click();
     flush();
     const [disableConfirmedResult, disableConfirmedAction] = await Promise.all([
@@ -576,75 +859,105 @@ suite('CrSettingsSecurityPageTest', function() {
             'recordSafeBrowsingInteractionHistogram'));
   });
 
-  test('enhancedProtectionAutoExpanded', function() {
+  test('standardProtectionExpandedIfNoQueryParam', function() {
     // Standard protection should be pre-expanded if there is no param.
     Router.getInstance().navigateTo(routes.SECURITY);
+    assertEquals(
+        page.prefs.generated.safe_browsing.value, SafeBrowsingSetting.STANDARD);
     assertFalse(page.$.safeBrowsingEnhanced.expanded);
     assertTrue(page.$.safeBrowsingStandard.expanded);
-    // Enhanced protection should be pre-expanded if the param is set to
+  });
+
+  test('enhancedProtectionCollapsedIfParamIsEnhanced', function() {
+    // Enhanced protection should be collapsed if the param is set to
     // enhanced.
     Router.getInstance().navigateTo(
         routes.SECURITY,
         /* dynamicParams= */ new URLSearchParams('q=enhanced'));
     assertEquals(
-        SafeBrowsingSetting.STANDARD, page.prefs.generated.safe_browsing.value);
-    assertTrue(page.$.safeBrowsingEnhanced.expanded);
+        page.prefs.generated.safe_browsing.value, SafeBrowsingSetting.STANDARD);
+    assertFalse(page.$.safeBrowsingEnhanced.expanded);
     assertFalse(page.$.safeBrowsingStandard.expanded);
   });
 
-  // Tests that toggling the HTTPS-Only Mode setting sets the associated pref.
-  test('httpsOnlyModeToggle', function() {
-    const httpsOnlyModeToggle =
-        page.shadowRoot!.querySelector<HTMLElement>('#httpsOnlyModeToggle')!;
-    assertFalse(page.prefs.https_only_mode_enabled.value);
-    httpsOnlyModeToggle.click();
-    assertTrue(page.prefs.https_only_mode_enabled.value);
-  });
-});
-
-
-suite('CrSettingsSecurityPageTest_FlagsDisabled', function() {
-  let page: SettingsSecurityPageElement;
-
-  suiteSetup(function() {
+  test('UpdatedStandardProtectionDropdown', function() {
     loadTimeData.overrideValues({
-      enableSecurityKeysSubpage: false,
-      showHttpsOnlyModeSetting: false,
+      enableHashPrefixRealTimeLookups: false,
     });
+    resetPage();
+    const standardProtection = page.$.safeBrowsingStandard;
+    const updatedSpSubLabel =
+        loadTimeData.getString('safeBrowsingStandardDescUpdated');
+    assertEquals(updatedSpSubLabel, standardProtection.subLabel);
+
+    const passwordsLeakToggle = page.$.passwordsLeakToggle;
+    const updatedPasswordLeakLabel =
+        loadTimeData.getString('passwordsLeakDetectionLabelUpdated');
+    assertEquals(updatedPasswordLeakLabel, passwordsLeakToggle.label);
+
+    const updatedPasswordLeakSubLabel = loadTimeData.getString(
+        'passwordsLeakDetectionGeneralDescriptionUpdated');
+    assertEquals(updatedPasswordLeakSubLabel, passwordsLeakToggle.subLabel);
   });
 
-  setup(function() {
-    document.body.innerHTML = window.trustedTypes!.emptyHTML;
-    page = document.createElement('settings-security-page');
-    page.prefs = pagePrefs();
-    document.body.appendChild(page);
+  test('UpdatedEnhancedProtectionText', function() {
+    const enhancedProtection = page.$.safeBrowsingEnhanced;
+    const epSubLabel =
+        loadTimeData.getString('safeBrowsingEnhancedDescUpdated');
+    assertEquals(epSubLabel, enhancedProtection.subLabel);
+
+    const noProtection = page.$.safeBrowsingDisabled;
+    const npSubLabel = loadTimeData.getString('safeBrowsingNoneDescUpdated');
+    assertEquals(npSubLabel, noProtection.subLabel);
+
+    page.$.safeBrowsingEnhanced.click();
     flush();
+    // Learn more label should be visible.
+    assertTrue(isChildVisible(page, '#learnMoreLabelContainer'));
   });
 
-  teardown(function() {
-    page.remove();
+  // <if expr="_google_chrome">
+  test('StandardProtectionDropdownWithProxyString', function() {
+    loadTimeData.overrideValues({
+      enableHashPrefixRealTimeLookups: true,
+    });
+    resetPage();
+    const standardProtection = page.$.safeBrowsingStandard;
+    const subLabel =
+        loadTimeData.getString('safeBrowsingStandardDescUpdatedProxy');
+    assertEquals(subLabel, standardProtection.subLabel);
   });
 
-  test('ManageSecurityKeysSubpageHidden', function() {
-    assertFalse(isChildVisible(page, '#security-keys-subpage-trigger'));
-  });
-
-  // The element only exists on Windows.
-  // <if expr="is_win">
-  test('ManageSecurityKeysPhonesSubpageVisibleAndNavigates', function() {
-    // On modern versions of Windows the security keys subpage will be disabled
-    // because Windows manages that itself, but a link to the subpage for
-    // managing phones as security keys will be included.
-    const triggerId = '#security-keys-phones-subpage-trigger';
-    assertTrue(isChildVisible(page, triggerId));
-    page.shadowRoot!.querySelector<HTMLElement>(triggerId)!.click();
-    flush();
-    assertEquals(
-        routes.SECURITY_KEYS_PHONES, Router.getInstance().getCurrentRoute());
+  // TODO(crbug.com/1466292): Remove once friendlier safe browsing settings
+  // standard protection is launched.
+  test(
+      'FriendlierSettingsDisabledStandardProtectionDropdownWithProxyString',
+      function() {
+        loadTimeData.overrideValues({
+          enableFriendlierSafeBrowsingSettings: false,
+          enableHashPrefixRealTimeLookups: true,
+        });
+        resetPage();
+        const standardProtection = page.$.safeBrowsingStandard;
+        const subLabel = loadTimeData.getString('safeBrowsingStandardDesc');
+        assertEquals(subLabel, standardProtection.subLabel);
+        const safeBrowsingStandardBulTwo =
+            page.shadowRoot!.querySelector<HTMLElement>(
+                '#safeBrowsingStandardBulTwo')!;
+        const subBulTwoLabel =
+            loadTimeData.getString('safeBrowsingStandardBulTwoProxy');
+        assertEquals(
+            subBulTwoLabel, safeBrowsingStandardBulTwo.textContent!.trim());
+      });
+  // </if>
+  // <if expr="not _google_chrome">
+  test('StandardProtectionDropdownNoProxyStringForChromium', function() {
+    // If this test fails, it may be because hash-prefix real-time lookups have
+    // been enabled for Chromium. The settings strings only currently support
+    // Chrome, so this must be addressed to support Chromium as well.
+    const standardProtection = page.$.safeBrowsingStandard;
+    const subLabel = loadTimeData.getString('safeBrowsingStandardDescUpdated');
+    assertEquals(subLabel, standardProtection.subLabel);
   });
   // </if>
-
-  test('HttpsOnlyModeSettingHidden', function() {
-    assertFalse(isChildVisible(page, '#httpsOnlyModeToggle'));
-  });
 });

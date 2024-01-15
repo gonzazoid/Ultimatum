@@ -5,10 +5,11 @@
 #ifndef ASH_PUBLIC_CPP_APP_LIST_APP_LIST_CONTROLLER_H_
 #define ASH_PUBLIC_CPP_APP_LIST_APP_LIST_CONTROLLER_H_
 
+#include <optional>
+
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/public/cpp/ash_public_export.h"
-#include "base/callback_forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/functional/callback_forward.h"
 #include "ui/aura/window.h"
 
 namespace ash {
@@ -19,6 +20,7 @@ class AppListClient;
 class AppListControllerObserver;
 class AppListModel;
 class SearchModel;
+class QuickAppAccessModel;
 
 // An interface implemented in Ash to handle calls from Chrome.
 // These include:
@@ -51,25 +53,19 @@ class ASH_PUBLIC_EXPORT AppListController {
   // as a model identifier passed to various `AppListClient` methods.
   virtual void SetActiveModel(int profile_id,
                               AppListModel* model,
-                              SearchModel* search_model) = 0;
+                              SearchModel* search_model,
+                              QuickAppAccessModel* quick_app_access_model) = 0;
 
   // Clears any previously set app list or search model.
   virtual void ClearActiveModel() = 0;
 
-  // Notifies sync service has finished processing sync changes.
-  virtual void NotifyProcessSyncChangesFinished() = 0;
-
   // Dismisses the app list.
   virtual void DismissAppList() = 0;
 
-  // Returns bounds of a rectangle to show an AppInfo dialog.
-  using GetAppInfoDialogBoundsCallback =
-      base::OnceCallback<void(const gfx::Rect&)>;
-  virtual void GetAppInfoDialogBounds(
-      GetAppInfoDialogBoundsCallback callback) = 0;
-
   // Shows the app list.
-  virtual void ShowAppList() = 0;
+  virtual void ShowAppList(AppListShowSource source) = 0;
+
+  virtual AppListShowSource LastAppListShowSource() = 0;
 
   // Returns the app list window or nullptr if it is not visible.
   virtual aura::Window* GetWindow() = 0;
@@ -77,7 +73,7 @@ class ASH_PUBLIC_EXPORT AppListController {
   // Returns whether the AppList is visible on the provided display.
   // If |display_id| is null, returns whether an app list is visible on any
   // display.
-  virtual bool IsVisible(const absl::optional<int64_t>& display_id) = 0;
+  virtual bool IsVisible(const std::optional<int64_t>& display_id) = 0;
 
   // Returns whether the AppList is visible on any display.
   virtual bool IsVisible() = 0;
@@ -90,7 +86,7 @@ class ASH_PUBLIC_EXPORT AppListController {
   // the animation to fade out the current grid completes. The closure is set
   // iff `animate` is true.
   virtual void UpdateAppListWithNewTemporarySortOrder(
-      const absl::optional<AppListSortOrder>& new_order,
+      const std::optional<AppListSortOrder>& new_order,
       bool animate,
       base::OnceClosure update_position_closure) = 0;
 

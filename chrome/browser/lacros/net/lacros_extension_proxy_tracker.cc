@@ -18,20 +18,25 @@
 #include "net/proxy_resolution/proxy_config_with_annotation.h"
 
 namespace lacros {
+namespace {
+crosapi::mojom::NetworkSettingsService* GetNetworkSettingsApi() {
+  auto* lacros_service = chromeos::LacrosService::Get();
+  return lacros_service->GetRemote<crosapi::mojom::NetworkSettingsService>()
+      .get();
+}
+}  // namespace
 namespace net {
 
 LacrosExtensionProxyTracker::LacrosExtensionProxyTracker(Profile* profile)
     : profile_(profile) {
   DCHECK(profile_->IsMainProfile());
-  if (!LacrosExtensionProxyTracker::AshVersionSupportsExtensionSetProxies())
-    return;
-
   proxy_prefs_registrar_.Init(profile_->GetPrefs());
   proxy_prefs_registrar_.Add(
       proxy_config::prefs::kProxy,
       base::BindRepeating(&LacrosExtensionProxyTracker::OnProxyPrefChanged,
                           base::Unretained(this)));
   OnProxyPrefChanged(proxy_config::prefs::kProxy);
+  extension_observation_.Observe(extensions::ExtensionRegistry::Get(profile));
 }
 
 LacrosExtensionProxyTracker::~LacrosExtensionProxyTracker() = default;
@@ -44,13 +49,15 @@ void LacrosExtensionProxyTracker::OnProxyPrefChanged(
   ProxyPrefs::ConfigState config_state =
       PrefProxyConfigTrackerImpl::ReadPrefConfig(profile_->GetPrefs(), &config);
 
-  auto* lacros_service = chromeos::LacrosService::Get();
-
   if (config_state != ProxyPrefs::ConfigState::CONFIG_EXTENSION) {
     if (extension_proxy_active_) {
       extension_proxy_active_ = false;
-      lacros_service->GetRemote<crosapi::mojom::NetworkSettingsService>()
-          ->ClearExtensionProxy();
+      if (AshVersionSupportsExtensionMetadata()) {
+        GetNetworkSettingsApi()->ClearExtensionControllingProxyMetadata();
+      } else {
+        // TODO(acostinas,b/267719988) Remove this deprecated call in 118.
+        GetNetworkSettingsApi()->ClearExtensionProxy();
+      }
     }
     return;
   }
@@ -58,41 +65,68 @@ void LacrosExtensionProxyTracker::OnProxyPrefChanged(
   const extensions::Extension* extension =
       extensions::GetExtensionOverridingProxy(profile_);
 
-  // This can happen in a new Chrome session, if the extension proxy was set
-  // in a previous Chrome session. In this case, it's safe to exit here since
-  // Ash-Chrome already has the information of the extension which set the
-  // proxy. The reason is that the extension store where the pref is stored is
-  // loaded before the extension which is controlling the pref.
+  // The the extension-set proxy pref update is received before the extension is
+  // enabled. This happens when the extension store where the pref is stored is
+  // loaded before the extension, in one of the following cases:
+  // - A new Chrome session is started, where the extension has set the proxy
+  // pref in a previous session;
+  // - Ash to Lacros migration;
+  // - Disabling and then enabling an extension which is controlling the proxy.
+  // It's safe to ignore the update here because this case is handled by
+  // listening to the ExtensionRegistry events and re-sending the proxy config
+  // to Ash when the extension which is controlling the proxy is loaded.
   if (!extension) {
     return;
   }
 
-  auto proxy_config = chromeos::NetProxyToCrosapiProxy(config);
-  proxy_config->extension = crosapi::mojom::ExtensionControllingProxy::New();
-  proxy_config->extension->name = extension->name();
-  proxy_config->extension->id = extension->id();
-  proxy_config->extension->can_be_disabled =
+  auto extension_info = crosapi::mojom::ExtensionControllingProxy::New();
+  extension_info->name = extension->name();
+  extension_info->id = extension->id();
+  extension_info->can_be_disabled =
       !extensions::ExtensionSystem::Get(profile_)
            ->management_policy()
            ->MustRemainEnabled(extension, nullptr);
 
-  lacros_service->GetRemote<crosapi::mojom::NetworkSettingsService>()
-      ->SetExtensionProxy(std::move(proxy_config));
+  if (AshVersionSupportsExtensionMetadata()) {
+    GetNetworkSettingsApi()->SetExtensionControllingProxyMetadata(
+        std::move(extension_info));
+    return;
+  }
+  auto proxy_config = chromeos::NetProxyToCrosapiProxy(config);
+  proxy_config->extension = std::move(extension_info);
+  // TODO(acostinas, b/267719988) Remove this deprecated call in 118.
+  GetNetworkSettingsApi()->SetExtensionProxy(std::move(proxy_config));
+}
+
+void LacrosExtensionProxyTracker::OnExtensionReady(
+    content::BrowserContext* browser_context,
+    const extensions::Extension* extension) {
+  if (!extension_proxy_active_) {
+    return;
+  }
+  if (profile_ != Profile::FromBrowserContext(browser_context)) {
+    return;
+  }
+  if (extensions::GetExtensionOverridingProxy(profile_) != extension) {
+    return;
+  }
+
+  OnProxyPrefChanged(proxy_config::prefs::kProxy);
 }
 
 // static
-bool LacrosExtensionProxyTracker::AshVersionSupportsExtensionSetProxies() {
+bool LacrosExtensionProxyTracker::AshVersionSupportsExtensionMetadata() {
   chromeos::LacrosService* service = chromeos::LacrosService::Get();
   if (!service->IsAvailable<crosapi::mojom::NetworkSettingsService>()) {
     LOG(ERROR) << "Ash NetworkSettingsService not available";
     return false;
   }
 
-  int network_settings_version = service->GetInterfaceVersion(
-      crosapi::mojom::NetworkSettingsService::Uuid_);
+  int network_settings_version =
+      service->GetInterfaceVersion<crosapi::mojom::NetworkSettingsService>();
   if (network_settings_version <
       int{crosapi::mojom::NetworkSettingsService::MethodMinVersions::
-              kSetExtensionProxyMinVersion}) {
+              kSetExtensionControllingProxyMetadataMinVersion}) {
     LOG(WARNING) << "Ash NetworkSettingsService version "
                  << network_settings_version
                  << " does not support extension set proxies.";

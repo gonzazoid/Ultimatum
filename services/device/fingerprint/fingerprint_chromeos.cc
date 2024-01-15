@@ -6,8 +6,8 @@
 
 #include <string.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "chromeos/ash/components/dbus/biod/biod_client.h"
 #include "dbus/object_path.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -87,6 +87,16 @@ device::mojom::FingerprintError ToMojom(biod::FingerprintError type) {
   }
   NOTREACHED();
   return device::mojom::FingerprintError::UNKNOWN;
+}
+
+device::mojom::BiometricsManagerStatus ToMojom(
+    biod::BiometricsManagerStatus status) {
+  switch (status) {
+    case biod::BiometricsManagerStatus::INITIALIZED:
+      return device::mojom::BiometricsManagerStatus::INITIALIZED;
+  }
+  NOTREACHED();
+  return device::mojom::BiometricsManagerStatus::UNKNOWN;
 }
 
 }  // namespace
@@ -243,6 +253,14 @@ void FingerprintChromeOS::BiodServiceRestarted() {
     observer->OnRestarted();
 }
 
+void FingerprintChromeOS::BiodServiceStatusChanged(
+    biod::BiometricsManagerStatus status) {
+  opened_session_ = FingerprintSession::NONE;
+  for (auto& observer : observers_) {
+    observer->OnStatusChanged(ToMojom(status));
+  }
+}
+
 void FingerprintChromeOS::BiodEnrollScanDoneReceived(
     biod::ScanResult scan_result,
     bool enroll_session_complete,
@@ -329,9 +347,11 @@ void FingerprintChromeOS::OnStartAuthSession(
 
 void FingerprintChromeOS::OnGetRecordsForUser(
     GetRecordsForUserCallback callback,
-    const std::vector<dbus::ObjectPath>& records) {
-  if (records.size() == 0) {
-    std::move(callback).Run({base::flat_map<std::string, std::string>()});
+    const std::vector<dbus::ObjectPath>& records,
+    bool success) {
+  if (records.size() == 0 || success == false) {
+    std::move(callback).Run({base::flat_map<std::string, std::string>()},
+                            success);
     StartNextRequest();
     return;
   }
@@ -354,7 +374,7 @@ void FingerprintChromeOS::OnGetLabelFromRecordPath(
   records_path_to_label_[record_path.value()] = label;
   if (records_path_to_label_.size() == num_records) {
     DCHECK(on_get_records_);
-    std::move(on_get_records_).Run(records_path_to_label_);
+    std::move(on_get_records_).Run(records_path_to_label_, true);
     StartNextRequest();
   }
 }

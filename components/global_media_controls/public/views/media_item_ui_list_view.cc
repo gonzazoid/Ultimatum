@@ -36,16 +36,18 @@ MediaItemUIListView::SeparatorStyle::SeparatorStyle(SkColor separator_color,
       separator_thickness(separator_thickness) {}
 
 MediaItemUIListView::MediaItemUIListView()
-    : MediaItemUIListView(absl::nullopt) {}
+    : MediaItemUIListView(absl::nullopt, /*should_clip_height=*/true) {}
 
 MediaItemUIListView::MediaItemUIListView(
-    const absl::optional<SeparatorStyle>& separator_style)
+    const absl::optional<SeparatorStyle>& separator_style,
+    bool should_clip_height)
     : separator_style_(separator_style) {
   SetBackgroundColor(absl::nullopt);
   SetContents(std::make_unique<views::View>());
   contents()->SetLayoutManager(std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kVertical));
-  ClipHeightTo(0, kMediaListMaxHeight);
+  ClipHeightTo(0, should_clip_height ? kMediaListMaxHeight
+                                     : std::numeric_limits<int>::max());
 
   SetVerticalScrollBar(
       std::make_unique<views::OverlayScrollBar>(/*horizontal=*/false));
@@ -60,9 +62,16 @@ void MediaItemUIListView::ShowItem(const std::string& id,
   DCHECK(!base::Contains(items_, id));
   DCHECK_NE(nullptr, item.get());
 
-  // If this isn't the first item, then create a top-sided separator
-  // border.
-  if (!items_.empty()) {
+#if BUILDFLAG(IS_CHROMEOS)
+  bool use_cros_updated_ui =
+      base::FeatureList::IsEnabled(media::kGlobalMediaControlsCrOSUpdatedUI);
+#else
+  bool use_cros_updated_ui = false;
+#endif
+
+  // If this isn't the first item, then create a top-sided separator border.
+  // No separator border should be drawn for the Chrome OS updated UI.
+  if (!items_.empty() && !use_cros_updated_ui) {
     if (separator_style_.has_value()) {
       item->SetBorder(CreateMediaListSeparatorBorder(
           separator_style_->separator_color,
@@ -74,6 +83,7 @@ void MediaItemUIListView::ShowItem(const std::string& id,
     }
   }
 
+  item->SetScrollView(this);
   items_[id] = contents()->AddChildView(std::move(item));
 
   contents()->InvalidateLayout();
@@ -91,14 +101,15 @@ void MediaItemUIListView::HideItem(const std::string& id) {
     contents()->children().at(1)->SetBorder(nullptr);
   }
 
-  // Remove the item. Note that since |RemoveChildView()| does not delete the
-  // item, we now have ownership.
-  contents()->RemoveChildView(items_[id]);
-  delete items_[id];
+  contents()->RemoveChildViewT(items_[id]);
   items_.erase(id);
 
   contents()->InvalidateLayout();
   PreferredSizeChanged();
+}
+
+MediaItemUIView* MediaItemUIListView::GetItem(const std::string& id) {
+  return items_[id];
 }
 
 base::WeakPtr<MediaItemUIListView> MediaItemUIListView::GetWeakPtr() {

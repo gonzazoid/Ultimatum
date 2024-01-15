@@ -8,11 +8,10 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/offline_pages/core/model/model_task_test_base.h"
 #include "components/offline_pages/core/model/offline_page_item_generator.h"
 #include "components/offline_pages/core/offline_page_types.h"
@@ -54,6 +53,7 @@ class AddPageTaskTest : public ModelTaskTestBase {
 
  private:
   absl::optional<AddPageResult> last_add_page_result_;
+  base::WeakPtrFactory<AddPageTaskTest> weak_ptr_factory_{this};
 };
 
 void AddPageTaskTest::ResetResults() {
@@ -65,7 +65,8 @@ void AddPageTaskTest::OnAddPageDone(AddPageResult result) {
 }
 
 AddPageTask::AddPageTaskCallback AddPageTaskTest::add_page_callback() {
-  return base::BindOnce(&AddPageTaskTest::OnAddPageDone, base::AsWeakPtr(this));
+  return base::BindOnce(&AddPageTaskTest::OnAddPageDone,
+                        weak_ptr_factory_.GetWeakPtr());
 }
 
 void AddPageTaskTest::AddPage(const OfflinePageItem& page) {

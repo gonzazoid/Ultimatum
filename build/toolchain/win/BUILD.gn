@@ -43,8 +43,8 @@ if (target_cpu == "arm64") {
   win_toolchains("arm64") {
     toolchain_arch = "arm64"
   }
-  win_toolchains(host_cpu) {
-    toolchain_arch = host_cpu
+  win_toolchains("x64") {
+    toolchain_arch = "x64"
   }
 }
 
@@ -65,6 +65,11 @@ win_toolchains("nacl_win64") {
 if (target_os == "winuwp") {
   assert(target_cpu == "x64" || target_cpu == "x86" || target_cpu == "arm" ||
          target_cpu == "arm64")
+
+  # Note that //build/toolchain/win/win_toolchain_data.gni collects the output
+  # of setup_toolchain.py, however it's not compatible with the UWP toolchain,
+  # as the UWP toolchain requires the `environment.store_$CPU` variable, instead
+  # of the usual `environment.$CPU`.
   store_cpu_toolchain_data =
       exec_script("//build/toolchain/win/setup_toolchain.py",
                   [

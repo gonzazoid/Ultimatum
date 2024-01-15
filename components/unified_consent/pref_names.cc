@@ -7,9 +7,13 @@
 namespace unified_consent {
 namespace prefs {
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
 const char kUnifiedConsentMigrationState[] = "unified_consent.migration_state";
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 const char kUrlKeyedAnonymizedDataCollectionEnabled[] =
     "url_keyed_anonymized_data_collection.enabled";
+
+const char kPageContentCollectionEnabled[] = "page_content_collection.enabled";
 
 }  // namespace prefs
 }  // namespace unified_consent

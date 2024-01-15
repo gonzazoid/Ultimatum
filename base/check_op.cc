@@ -6,6 +6,7 @@
 
 #include <string.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <sstream>
 
@@ -63,10 +64,14 @@ char* CheckOpValueStr(const std::string& v) {
   return strdup(v.c_str());
 }
 
-char* CheckOpValueStr(float f) {
-  char buf[50];
-  snprintf(buf, sizeof(buf), "%.6f", f);
-  return strdup(buf);
+char* CheckOpValueStr(std::string_view v) {
+  // Ideally this would be `strndup`, but `strndup` is not portable.
+  char* ret = static_cast<char*>(malloc(v.size() + 1));
+  if (ret) {
+    std::copy(v.begin(), v.end(), ret);
+    ret[v.size()] = 0;
+  }
+  return ret;
 }
 
 char* CheckOpValueStr(double v) {
@@ -82,69 +87,15 @@ char* StreamValToStr(const void* v,
   return strdup(ss.str().c_str());
 }
 
-CheckOpResult::CheckOpResult(const char* expr_str, char* v1_str, char* v2_str) {
-  std::ostringstream ss;
-  ss << expr_str << " (" << v1_str << " vs. " << v2_str << ")";
-  message_ = strdup(ss.str().c_str());
+char* CreateCheckOpLogMessageString(const char* expr_str,
+                                    char* v1_str,
+                                    char* v2_str) {
+  std::stringstream ss;
+  ss << "Check failed: " << expr_str << " (" << v1_str << " vs. " << v2_str
+     << ")";
   free(v1_str);
   free(v2_str);
+  return strdup(ss.str().c_str());
 }
-
-#if !CHECK_WILL_STREAM()
-
-void CheckOpFailureStr(char* v1_str, char* v2_str) {
-  LOG(FATAL) << "Check failed (" << v1_str << " vs. " << v2_str << ")";
-  __builtin_unreachable();
-}
-
-template <>
-[[noreturn]] BASE_EXPORT void CheckOpFailure<int, int>(int v1, int v2) {
-  CheckOpFailureStr(CheckOpValueStr(v1), CheckOpValueStr(v2));
-}
-
-template <>
-[[noreturn]] BASE_EXPORT void CheckOpFailure<unsigned, unsigned>(unsigned v1,
-                                                                 unsigned v2) {
-  CheckOpFailureStr(CheckOpValueStr(v1), CheckOpValueStr(v2));
-}
-
-template <>
-[[noreturn]] BASE_EXPORT void CheckOpFailure<long, long>(long v1, long v2) {
-  CheckOpFailureStr(CheckOpValueStr(v1), CheckOpValueStr(v2));
-}
-
-template <>
-[[noreturn]] BASE_EXPORT void CheckOpFailure<unsigned long, unsigned long>(
-    unsigned long v1,
-    unsigned long v2) {
-  CheckOpFailureStr(CheckOpValueStr(v1), CheckOpValueStr(v2));
-}
-
-template <>
-[[noreturn]] BASE_EXPORT void CheckOpFailure<long long, long long>(
-    long long v1,
-    long long v2) {
-  CheckOpFailureStr(CheckOpValueStr(v1), CheckOpValueStr(v2));
-}
-
-template <>
-[[noreturn]] BASE_EXPORT void
-CheckOpFailure<unsigned long long, unsigned long long>(unsigned long long v1,
-                                                       unsigned long long v2) {
-  CheckOpFailureStr(CheckOpValueStr(v1), CheckOpValueStr(v2));
-}
-
-template <>
-[[noreturn]] BASE_EXPORT void CheckOpFailure<float, float>(float v1, float v2) {
-  CheckOpFailureStr(CheckOpValueStr(v1), CheckOpValueStr(v2));
-}
-
-template <>
-[[noreturn]] BASE_EXPORT void CheckOpFailure<double, double>(double v1,
-                                                             double v2) {
-  CheckOpFailureStr(CheckOpValueStr(v1), CheckOpValueStr(v2));
-}
-
-#endif  // !CHECK_WILL_STREAM()
 
 }  // namespace logging

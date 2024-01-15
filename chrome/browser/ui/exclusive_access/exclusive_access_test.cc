@@ -4,13 +4,14 @@
 
 #include "chrome/browser/ui/exclusive_access/exclusive_access_test.h"
 
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_window.h"
@@ -22,13 +23,12 @@
 #include "chrome/browser/ui/exclusive_access/mouse_lock_controller.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/chrome_switches.h"
-#include "content/public/browser/native_web_keyboard_event.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_features.h"
+#include "content/public/common/input/native_web_keyboard_event.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "extensions/common/extension.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/frame/fullscreen.mojom.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/events/base_event_utils.h"
@@ -36,6 +36,50 @@
 #include "ui/events/keycodes/keyboard_codes.h"
 
 using content::WebContents;
+
+BrowserFullscreenModeWaiter::BrowserFullscreenModeWaiter(
+    Browser* browser,
+    bool wait_until_exit_fullscreen_mode)
+    : wait_until_exit_fullscreen_mode_(wait_until_exit_fullscreen_mode),
+      controller_(
+          browser->exclusive_access_manager()->fullscreen_controller()) {
+  CHECK(controller_);
+  CHECK_EQ(wait_until_exit_fullscreen_mode_,
+           controller_->IsFullscreenForBrowser());
+  observation_.Observe(controller_);
+}
+
+BrowserFullscreenModeWaiter::~BrowserFullscreenModeWaiter() = default;
+
+void BrowserFullscreenModeWaiter::OnFullscreenStateChanged() {
+  // Note: In Lacros, when full screen mode changes, FullscreenController
+  // triggers WindowFullscreenStateChanged twice for the same change
+  // asynchronously. If the test code toggles fullscreen mode on and off, there
+  // is a race between the second notification of fullscreen mode on and test
+  // code toggle fullscreen mode off. Wait until the fullscreen state changes to
+  // the expected mode. See details in crbug.com/1481727.
+  if (wait_until_exit_fullscreen_mode_ &&
+      controller_->IsFullscreenForBrowser()) {
+    return;
+  }
+  if (!wait_until_exit_fullscreen_mode_ &&
+      !controller_->IsFullscreenForBrowser()) {
+    return;
+  }
+
+  observed_change_ = true;
+  if (run_loop_.running()) {
+    run_loop_.Quit();
+  }
+}
+
+void BrowserFullscreenModeWaiter::Wait() {
+  if (observed_change_) {
+    return;
+  }
+
+  run_loop_.Run();
+}
 
 FullscreenNotificationObserver::FullscreenNotificationObserver(
     Browser* browser) {
@@ -47,8 +91,9 @@ FullscreenNotificationObserver::~FullscreenNotificationObserver() = default;
 
 void FullscreenNotificationObserver::OnFullscreenStateChanged() {
   observed_change_ = true;
-  if (run_loop_.running())
+  if (run_loop_.running()) {
     run_loop_.Quit();
+  }
 }
 
 void FullscreenNotificationObserver::Wait() {
@@ -97,6 +142,12 @@ void ExclusiveAccessTest::TearDownOnMainThread() {
       base::RepeatingCallback<void(ExclusiveAccessBubbleHideReason)>();
 }
 
+// static
+bool ExclusiveAccessTest::IsBubbleDownloadNotification(
+    ExclusiveAccessBubble* bubble) {
+  return bubble->notify_download_;
+}
+
 bool ExclusiveAccessTest::RequestKeyboardLock(bool esc_key_locked) {
   WebContents* tab = browser()->tab_strip_model()->GetActiveWebContents();
 
@@ -106,7 +157,7 @@ bool ExclusiveAccessTest::RequestKeyboardLock(bool esc_key_locked) {
   // then we create a set of keys that does not include escape (we arbitrarily
   // chose the 'a' key) which means the user/test can just press escape to exit
   // fullscreen.
-  absl::optional<base::flat_set<ui::DomCode>> codes;
+  std::optional<base::flat_set<ui::DomCode>> codes;
   if (esc_key_locked)
     codes = base::flat_set<ui::DomCode>({ui::DomCode::ESCAPE});
   else

@@ -4,13 +4,14 @@
 
 package org.chromium.chrome.browser.omaha;
 
-import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Build;
 
 import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.BuildInfo;
+import org.chromium.base.ContextUtils;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.ThreadUtils;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.IntCachedFieldTrialParameter;
@@ -22,8 +23,10 @@ import org.chromium.chrome.browser.flags.IntCachedFieldTrialParameter;
 public class VersionNumberGetter {
     private static final String MIN_SDK_VERSION_PARAM = "min_sdk_version";
     public static final IntCachedFieldTrialParameter MIN_SDK_VERSION =
-            new IntCachedFieldTrialParameter(ChromeFeatureList.OMAHA_MIN_SDK_VERSION_ANDROID,
-                    MIN_SDK_VERSION_PARAM, Build.VERSION_CODES.M);
+            new IntCachedFieldTrialParameter(
+                    ChromeFeatureList.OMAHA_MIN_SDK_VERSION_ANDROID,
+                    MIN_SDK_VERSION_PARAM,
+                    ContextUtils.getApplicationContext().getApplicationInfo().minSdkVersion);
 
     private static final class LazyHolder {
         private static final VersionNumberGetter INSTANCE = new VersionNumberGetter();
@@ -35,9 +38,9 @@ public class VersionNumberGetter {
         return sInstanceForTests == null ? LazyHolder.INSTANCE : sInstanceForTests;
     }
 
-    @VisibleForTesting
     static void setInstanceForTests(VersionNumberGetter getter) {
         sInstanceForTests = getter;
+        ResettersForTesting.register(() -> sInstanceForTests = null);
     }
 
     @VisibleForTesting
@@ -50,14 +53,14 @@ public class VersionNumberGetter {
     /** If false, OmahaClient will never report that a newer version is available. */
     private static boolean sEnableUpdateDetection = true;
 
-    protected VersionNumberGetter() { }
+    protected VersionNumberGetter() {}
 
     /**
      * Retrieve the latest version we know about from disk.
      * This function incurs I/O, so make sure you don't use it from the main thread.
      * @return The latest version if we retrieved one from the Omaha server, or "" if we haven't.
      */
-    public String getLatestKnownVersion(Context context) {
+    public String getLatestKnownVersion() {
         assert !ThreadUtils.runningOnUiThread();
         SharedPreferences prefs = OmahaBase.getSharedPreferences();
         return prefs.getString(OmahaBase.PREF_LATEST_VERSION, "");
@@ -67,7 +70,7 @@ public class VersionNumberGetter {
      * Retrieve the version of Chrome we're using.
      * @return The latest version if we retrieved one from the Omaha server, or "" if we haven't.
      */
-    public String getCurrentlyUsedVersion(Context context) {
+    public String getCurrentlyUsedVersion() {
         return BuildInfo.getInstance().versionName;
     }
 
@@ -112,7 +115,7 @@ public class VersionNumberGetter {
      *
      * NOTE: This function incurs I/O, so don't use it on the main thread.
      */
-    static boolean isNewerVersionAvailable(Context context) {
+    static boolean isNewerVersionAvailable() {
         assert !ThreadUtils.runningOnUiThread();
 
         // This may be explicitly enabled for some channels and for unit tests.
@@ -128,8 +131,8 @@ public class VersionNumberGetter {
 
         // Compare version numbers.
         VersionNumberGetter getter = getInstance();
-        String currentStr = getter.getCurrentlyUsedVersion(context);
-        String latestStr = getter.getLatestKnownVersion(context);
+        String currentStr = getter.getCurrentlyUsedVersion();
+        String latestStr = getter.getLatestKnownVersion();
 
         VersionNumber currentVersionNumber = VersionNumber.fromString(currentStr);
         VersionNumber latestVersionNumber = VersionNumber.fromString(latestStr);

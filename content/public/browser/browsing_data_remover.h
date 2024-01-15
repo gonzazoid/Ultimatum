@@ -6,9 +6,9 @@
 #define CONTENT_PUBLIC_BROWSER_BROWSING_DATA_REMOVER_H_
 
 #include <memory>
+#include <optional>
 
-#include "base/callback_forward.h"
-#include "base/memory/weak_ptr.h"
+#include "base/functional/callback_forward.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 
@@ -24,6 +24,7 @@ namespace content {
 
 class BrowsingDataFilterBuilder;
 class BrowsingDataRemoverDelegate;
+class StoragePartitionConfig;
 
 ////////////////////////////////////////////////////////////////////////////////
 // BrowsingDataRemover is responsible for removing data related to browsing:
@@ -96,6 +97,8 @@ class BrowsingDataRemover {
   // prohibited from deleting history or downloads.
   static constexpr DataType DATA_TYPE_NO_CHECKS = 1 << 13;
 
+  // 14 is already taken by DATA_TYPE_BACKGROUND_FETCH.
+
   // AVOID_CLOSING_CONNECTIONS is a pseudo-datatype indicating that when
   // deleting COOKIES, BrowsingDataRemover should skip
   // storage backends whose deletion would cause closing network connections.
@@ -165,6 +168,12 @@ class BrowsingDataRemover {
       DATA_TYPE_ATTRIBUTION_REPORTING_INTERNAL |
       DATA_TYPE_PRIVATE_AGGREGATION_INTERNAL |
       DATA_TYPE_INTEREST_GROUPS_INTERNAL;
+
+  // Data types stored within a StoragePartition (i.e. not Profile-scoped).
+  static constexpr DataType DATA_TYPE_ON_STORAGE_PARTITION =
+      DATA_TYPE_DOM_STORAGE | DATA_TYPE_COOKIES |
+      DATA_TYPE_AVOID_CLOSING_CONNECTIONS | DATA_TYPE_CACHE |
+      DATA_TYPE_APP_CACHE_DEPRECATED | DATA_TYPE_PRIVACY_SANDBOX;
 
   using OriginType = uint64_t;
   // Web storage origins that StoragePartition recognizes as NOT protected
@@ -272,6 +281,9 @@ class BrowsingDataRemover {
   virtual const base::Time& GetLastUsedBeginTimeForTesting() = 0;
   virtual uint64_t GetLastUsedRemovalMaskForTesting() = 0;
   virtual uint64_t GetLastUsedOriginTypeMaskForTesting() = 0;
+  virtual std::optional<StoragePartitionConfig>
+  GetLastUsedStoragePartitionConfigForTesting() = 0;
+  virtual uint64_t GetPendingTaskCountForTesting() = 0;
 };
 
 }  // namespace content

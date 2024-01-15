@@ -9,11 +9,6 @@
 
 #include <linux/v4l2-controls.h>
 
-// ChromeOS specific header; does not exist upstream
-#if BUILDFLAG(IS_CHROMEOS)
-#include <linux/media/vp9-ctrls-upstream.h>
-#endif
-
 #include <set>
 
 #include "base/files/memory_mapped_file.h"
@@ -40,17 +35,16 @@ class Vp9Decoder : public VideoDecoder {
   // Parses next frame from IVF stream and decodes the frame. This method will
   // place the Y, U, and V values into the respective vectors and update the
   // size with the display area size of the decoded frame.
-  VideoDecoder::Result DecodeNextFrame(std::vector<char>& y_plane,
-                                       std::vector<char>& u_plane,
-                                       std::vector<char>& v_plane,
-                                       gfx::Size& size,
-                                       const int frame_number) override;
+  VideoDecoder::Result DecodeNextFrame(const int frame_number,
+                                       std::vector<uint8_t>& y_plane,
+                                       std::vector<uint8_t>& u_plane,
+                                       std::vector<uint8_t>& v_plane,
+                                       gfx::Size& size) override;
 
  private:
   Vp9Decoder(std::unique_ptr<IvfParser> ivf_parser,
              std::unique_ptr<V4L2IoctlShim> v4l2_ioctl,
-             std::unique_ptr<V4L2Queue> OUTPUT_queue,
-             std::unique_ptr<V4L2Queue> CAPTURE_queue);
+             gfx::Size display_resolution);
 
   // Reads next frame from IVF stream and its size into |vp9_frame_header|
   // and |size| respectively.
@@ -70,17 +64,20 @@ class Vp9Decoder : public VideoDecoder {
   // |reusable_buffer_slots| to indicate which CAPTURE buffers can be reused
   // for VIDIOC_QBUF ioctl call.
   std::set<int> RefreshReferenceSlots(uint8_t refresh_frame_flags,
-                                      scoped_refptr<MmapedBuffer> buffer,
-                                      uint32_t last_queued_buffer_index);
+                                      scoped_refptr<MmappedBuffer> buffer,
+                                      uint32_t last_queued_buffer_id);
 
   // Parser for the IVF stream to decode.
   const std::unique_ptr<IvfParser> ivf_parser_;
+
+  // Supports parsed compressed headers
+  const bool supports_compressed_headers_;
 
   // VP9-specific data.
   const std::unique_ptr<Vp9Parser> vp9_parser_;
 
   // Reference frames currently in use.
-  std::array<scoped_refptr<MmapedBuffer>, kVp9NumRefFrames> ref_frames_;
+  std::array<scoped_refptr<MmappedBuffer>, kVp9NumRefFrames> ref_frames_;
 };
 
 }  // namespace v4l2_test

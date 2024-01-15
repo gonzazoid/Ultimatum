@@ -6,16 +6,11 @@
 
 #import <objc/runtime.h>
 
-#import "base/i18n/rtl.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
 #import "testing/platform_test.h"
 #import "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -33,10 +28,10 @@ void Verify(UIKeyCommand* command,
 void Verify(UIKeyCommand* command,
             NSString* symbolicDescription,
             NSString* action,
-            int messageID) {
+            NSString* messageIDAsString) {
   EXPECT_NSEQ(command.cr_symbolicDescription, symbolicDescription);
   EXPECT_TRUE(sel_isEqual(command.action, NSSelectorFromString(action)));
-  EXPECT_NSEQ(command.title, l10n_util::GetNSStringWithFixup(messageID));
+  EXPECT_NSEQ(command.title, NSLocalizedString(messageIDAsString, @""));
   EXPECT_NSEQ(command.discoverabilityTitle, command.title);
 }
 
@@ -51,31 +46,34 @@ UIKeyCommand* KeyCommand(NSString* input) {
 // Checks that UIKeyCommand-s are correctly created.
 TEST_F(UIKeyCommandChromeTest, Factories) {
   Verify(UIKeyCommand.cr_openNewTab, @"⌘T", @"keyCommand_openNewTab",
-         IDS_IOS_TOOLS_MENU_NEW_TAB);
+         @"IDS_IOS_KEYBOARD_NEW_TAB");
   Verify(UIKeyCommand.cr_openNewRegularTab, @"⌘N",
          @"keyCommand_openNewRegularTab");
   Verify(UIKeyCommand.cr_openNewIncognitoTab, @"⇧⌘N",
          @"keyCommand_openNewIncognitoTab",
-         IDS_IOS_TOOLS_MENU_NEW_INCOGNITO_TAB);
+         @"IDS_IOS_KEYBOARD_NEW_INCOGNITO_TAB");
   Verify(UIKeyCommand.cr_openNewWindow, @"⌥⌘N", @"keyCommand_openNewWindow",
-         IDS_IOS_KEYBOARD_NEW_WINDOW);
+         @"IDS_IOS_KEYBOARD_NEW_WINDOW");
+  Verify(UIKeyCommand.cr_openNewIncognitoWindow, @"⌥⇧⌘N",
+         @"keyCommand_openNewIncognitoWindow",
+         @"IDS_IOS_KEYBOARD_NEW_INCOGNITO_WINDOW");
   Verify(UIKeyCommand.cr_reopenLastClosedTab, @"⇧⌘T",
-         @"keyCommand_reopenLastClosedTab", IDS_IOS_KEYBOARD_REOPEN_CLOSED_TAB);
-  Verify(UIKeyCommand.cr_openFindInPage, @"⌘F", @"keyCommand_openFindInPage",
-         IDS_IOS_TOOLS_MENU_FIND_IN_PAGE);
-  Verify(UIKeyCommand.cr_findNextStringInPage, @"⌘G",
-         @"keyCommand_findNextStringInPage", IDS_IOS_KEYBOARD_FIND_NEXT);
-  Verify(UIKeyCommand.cr_findPreviousStringInPage, @"⇧⌘G",
-         @"keyCommand_findPreviousStringInPage",
-         IDS_IOS_KEYBOARD_FIND_PREVIOUS);
-  Verify(UIKeyCommand.cr_focusOmnibox, @"⌘L", @"keyCommand_focusOmnibox",
-         IDS_IOS_KEYBOARD_OPEN_LOCATION);
+         @"keyCommand_reopenLastClosedTab",
+         @"IDS_IOS_KEYBOARD_REOPEN_CLOSED_TAB");
+  Verify(UIKeyCommand.cr_find, @"⌘F", @"keyCommand_find",
+         @"IDS_IOS_KEYBOARD_FIND");
+  Verify(UIKeyCommand.cr_findNext, @"⌘G", @"keyCommand_findNext",
+         @"IDS_IOS_KEYBOARD_FIND_NEXT");
+  Verify(UIKeyCommand.cr_findPrevious, @"⇧⌘G", @"keyCommand_findPrevious",
+         @"IDS_IOS_KEYBOARD_FIND_PREVIOUS");
+  Verify(UIKeyCommand.cr_openLocation, @"⌘L", @"keyCommand_openLocation",
+         @"IDS_IOS_KEYBOARD_OPEN_LOCATION");
   Verify(UIKeyCommand.cr_closeTab, @"⌘W", @"keyCommand_closeTab",
-         IDS_IOS_TOOLS_MENU_CLOSE_TAB);
+         @"IDS_IOS_KEYBOARD_CLOSE_TAB");
   Verify(UIKeyCommand.cr_showNextTab, @"⌃⇥", @"keyCommand_showNextTab",
-         IDS_IOS_KEYBOARD_NEXT_TAB);
+         @"IDS_IOS_KEYBOARD_NEXT_TAB");
   Verify(UIKeyCommand.cr_showPreviousTab, @"⌃⇧⇥", @"keyCommand_showPreviousTab",
-         IDS_IOS_KEYBOARD_PREVIOUS_TAB);
+         @"IDS_IOS_KEYBOARD_PREVIOUS_TAB");
   Verify(UIKeyCommand.cr_showNextTab_2, @"⌘}", @"keyCommand_showNextTab");
   Verify(UIKeyCommand.cr_showPreviousTab_2, @"⌘{",
          @"keyCommand_showPreviousTab");
@@ -83,75 +81,57 @@ TEST_F(UIKeyCommandChromeTest, Factories) {
   Verify(UIKeyCommand.cr_showPreviousTab_3, @"⌥⌘←",
          @"keyCommand_showPreviousTab");
   Verify(UIKeyCommand.cr_showBookmarks, @"⌥⌘B", @"keyCommand_showBookmarks",
-         IDS_IOS_KEYBOARD_SHOW_BOOKMARKS);
+         @"IDS_IOS_KEYBOARD_SHOW_BOOKMARKS");
   Verify(UIKeyCommand.cr_addToBookmarks, @"⌘D", @"keyCommand_addToBookmarks",
-         IDS_IOS_KEYBOARD_ADD_TO_BOOKMARKS);
+         @"IDS_IOS_KEYBOARD_ADD_TO_BOOKMARKS");
   Verify(UIKeyCommand.cr_reload, @"⌘R", @"keyCommand_reload",
-         IDS_IOS_ACCNAME_RELOAD);
-  Verify(UIKeyCommand.cr_goBack, @"⌘[", @"keyCommand_goBack",
-         IDS_IOS_KEYBOARD_HISTORY_BACK);
-  Verify(UIKeyCommand.cr_goForward, @"⌘]", @"keyCommand_goForward",
-         IDS_IOS_KEYBOARD_HISTORY_FORWARD);
-  Verify(UIKeyCommand.cr_goBack_2, @"⌘←", @"keyCommand_goBack");
-  Verify(UIKeyCommand.cr_goForward_2, @"⌘→", @"keyCommand_goForward");
+         @"IDS_IOS_KEYBOARD_RELOAD");
+  Verify(UIKeyCommand.cr_back, @"⌘[", @"keyCommand_back",
+         @"IDS_IOS_KEYBOARD_HISTORY_BACK");
+  Verify(UIKeyCommand.cr_forward, @"⌘]", @"keyCommand_forward",
+         @"IDS_IOS_KEYBOARD_HISTORY_FORWARD");
+  Verify(UIKeyCommand.cr_back_2, @"⌘←", @"keyCommand_back");
+  Verify(UIKeyCommand.cr_forward_2, @"⌘→", @"keyCommand_forward");
   Verify(UIKeyCommand.cr_showHistory, @"⌘Y", @"keyCommand_showHistory",
-         IDS_IOS_KEYBOARD_SHOW_HISTORY);
-  Verify(UIKeyCommand.cr_startVoiceSearch, @"⇧⌘.",
-         @"keyCommand_startVoiceSearch",
-         IDS_IOS_VOICE_SEARCH_KEYBOARD_DISCOVERY_TITLE);
+         @"IDS_IOS_KEYBOARD_SHOW_HISTORY");
+  Verify(UIKeyCommand.cr_voiceSearch, @"⇧⌘.", @"keyCommand_voiceSearch",
+         @"IDS_IOS_KEYBOARD_VOICE_SEARCH");
   Verify(UIKeyCommand.cr_close, @"⎋", @"keyCommand_close");
   Verify(UIKeyCommand.cr_showSettings, @"⌘,", @"keyCommand_showSettings",
-         IDS_IOS_KEYBOARD_SHOW_SETTINGS);
+         @"IDS_IOS_KEYBOARD_SHOW_SETTINGS");
   Verify(UIKeyCommand.cr_stop, @"⌘.", @"keyCommand_stop",
-         IDS_IOS_KEYBOARD_STOP);
+         @"IDS_IOS_KEYBOARD_STOP");
   Verify(UIKeyCommand.cr_showHelp, @"⌥⌘?", @"keyCommand_showHelp",
-         IDS_IOS_KEYBOARD_SHOW_HELP);
-  Verify(UIKeyCommand.cr_showDownloadsFolder, @"⌥⌘L",
-         @"keyCommand_showDownloadsFolder", IDS_IOS_KEYBOARD_SHOW_DOWNLOADS);
-  Verify(UIKeyCommand.cr_showDownloadsFolder_2, @"⇧⌘J",
-         @"keyCommand_showDownloadsFolder");
-  Verify(UIKeyCommand.cr_showTab0, @"⌘1", @"keyCommand_showTab0",
-         IDS_IOS_KEYBOARD_FIRST_TAB);
-  Verify(UIKeyCommand.cr_showTab1, @"⌘2", @"keyCommand_showTab1");
-  Verify(UIKeyCommand.cr_showTab2, @"⌘3", @"keyCommand_showTab2");
-  Verify(UIKeyCommand.cr_showTab3, @"⌘4", @"keyCommand_showTab3");
-  Verify(UIKeyCommand.cr_showTab4, @"⌘5", @"keyCommand_showTab4");
-  Verify(UIKeyCommand.cr_showTab5, @"⌘6", @"keyCommand_showTab5");
-  Verify(UIKeyCommand.cr_showTab6, @"⌘7", @"keyCommand_showTab6");
-  Verify(UIKeyCommand.cr_showTab7, @"⌘8", @"keyCommand_showTab7");
-  Verify(UIKeyCommand.cr_showLastTab, @"⌘9", @"keyCommand_showLastTab",
-         IDS_IOS_KEYBOARD_LAST_TAB);
+         @"IDS_IOS_KEYBOARD_SHOW_HELP");
+  Verify(UIKeyCommand.cr_showDownloads, @"⌥⌘L", @"keyCommand_showDownloads",
+         @"IDS_IOS_KEYBOARD_SHOW_DOWNLOADS");
+  Verify(UIKeyCommand.cr_showDownloads_2, @"⇧⌘J", @"keyCommand_showDownloads");
+  Verify(UIKeyCommand.cr_select1, @"⌘1", @"keyCommand_select1");
+  Verify(UIKeyCommand.cr_select2, @"⌘2", @"keyCommand_select2");
+  Verify(UIKeyCommand.cr_select3, @"⌘3", @"keyCommand_select3");
+  Verify(UIKeyCommand.cr_select4, @"⌘4", @"keyCommand_select4");
+  Verify(UIKeyCommand.cr_select5, @"⌘5", @"keyCommand_select5");
+  Verify(UIKeyCommand.cr_select6, @"⌘6", @"keyCommand_select6");
+  Verify(UIKeyCommand.cr_select7, @"⌘7", @"keyCommand_select7");
+  Verify(UIKeyCommand.cr_select8, @"⌘8", @"keyCommand_select8");
+  Verify(UIKeyCommand.cr_select9, @"⌘9", @"keyCommand_select9",
+         @"IDS_IOS_KEYBOARD_LAST_TAB");
   Verify(UIKeyCommand.cr_reportAnIssue, @"⇧⌘I", @"keyCommand_reportAnIssue",
-         IDS_IOS_KEYBOARD_REPORT_AN_ISSUE);
+         @"IDS_IOS_KEYBOARD_REPORT_AN_ISSUE");
   Verify(UIKeyCommand.cr_reportAnIssue_2, @"⌥⇧⌘I", @"keyCommand_reportAnIssue");
   Verify(UIKeyCommand.cr_addToReadingList, @"⇧⌘D",
-         @"keyCommand_addToReadingList", IDS_IOS_KEYBOARD_ADD_TO_READING_LIST);
+         @"keyCommand_addToReadingList",
+         @"IDS_IOS_KEYBOARD_ADD_TO_READING_LIST");
   Verify(UIKeyCommand.cr_showReadingList, @"⌥⌘R", @"keyCommand_showReadingList",
-         IDS_IOS_KEYBOARD_SHOW_READING_LIST);
+         @"IDS_IOS_KEYBOARD_SHOW_READING_LIST");
   Verify(UIKeyCommand.cr_goToTabGrid, @"⇧⌘\\", @"keyCommand_goToTabGrid",
-         IDS_IOS_KEYBOARD_GO_TO_TAB_GRID);
+         @"IDS_IOS_KEYBOARD_GO_TO_TAB_GRID");
   Verify(UIKeyCommand.cr_clearBrowsingData, @"⇧⌘⌫",
-         @"keyCommand_clearBrowsingData", IDS_IOS_KEYBOARD_CLEAR_BROWSING_DATA);
-
-  // Prior to iOS 15, RTL needs to be handled manually. Check it for key
-  // commands that need to adapt.
-  if (@available(iOS 15.0, *)) {
-    // Nothing to do on iOS 15+.
-  } else {
-    base::i18n::SetRTLForTesting(true);
-    Verify(UIKeyCommand.cr_showNextTab_2, @"⌘{", @"keyCommand_showNextTab");
-    Verify(UIKeyCommand.cr_showPreviousTab_2, @"⌘}",
-           @"keyCommand_showPreviousTab");
-    Verify(UIKeyCommand.cr_showNextTab_3, @"⌥⌘←", @"keyCommand_showNextTab");
-    Verify(UIKeyCommand.cr_showPreviousTab_3, @"⌥⌘→",
-           @"keyCommand_showPreviousTab");
-    Verify(UIKeyCommand.cr_goBack, @"⌘]", @"keyCommand_goBack",
-           IDS_IOS_KEYBOARD_HISTORY_BACK);
-    Verify(UIKeyCommand.cr_goForward, @"⌘[", @"keyCommand_goForward",
-           IDS_IOS_KEYBOARD_HISTORY_FORWARD);
-    Verify(UIKeyCommand.cr_goBack_2, @"⌘→", @"keyCommand_goBack");
-    Verify(UIKeyCommand.cr_goForward_2, @"⌘←", @"keyCommand_goForward");
-  }
+         @"keyCommand_clearBrowsingData",
+         @"IDS_IOS_KEYBOARD_CLEAR_BROWSING_DATA");
+  Verify(UIKeyCommand.cr_closeAll, @"⇧⌘W", @"keyCommand_closeAll",
+         @"IDS_IOS_KEYBOARD_CLOSE_ALL");
+  Verify(UIKeyCommand.cr_undo, @"⌘Z", @"keyCommand_undo");
 }
 
 // Checks that modifiers in the symbolic description are correct (correct symbol

@@ -10,7 +10,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
@@ -19,6 +19,7 @@
 #include "media/base/media_switches.h"
 #include "media/base/media_util.h"
 #include "media/base/mock_filters.h"
+#include "media/base/mock_media_log.h"
 #include "media/base/test_helpers.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
 #include "third_party/blink/public/platform/web_url.h"
@@ -199,11 +200,12 @@ class MockMultiBufferDataSource : public MultiBufferDataSource {
   MockMultiBufferDataSource(
       const scoped_refptr<base::SingleThreadTaskRunner>& task_runner,
       scoped_refptr<UrlData> url_data,
+      media::MediaLog* media_log,
       BufferedDataSourceHost* host)
       : MultiBufferDataSource(
             task_runner,
             std::move(url_data),
-            &media_log_,
+            media_log,
             host,
             base::BindRepeating(&MockMultiBufferDataSource::set_downloading,
                                 base::Unretained(this))),
@@ -221,7 +223,6 @@ class MockMultiBufferDataSource : public MultiBufferDataSource {
  private:
   // Whether the resource is downloading or deferred.
   bool downloading_;
-  media::NullMediaLog media_log_;
 };
 
 static const int64_t kFileSize = 5000000;
@@ -253,14 +254,16 @@ class MultiBufferDataSourceTest : public testing::Test {
                           UrlData::CorsMode cors_mode,
                           size_t file_size = kFileSize) {
     GURL gurl(url);
+    media_log_ = std::make_unique<NiceMock<media::MockMediaLog>>();
     data_source_ = std::make_unique<MockMultiBufferDataSource>(
         task_runner_, url_index_.GetByUrl(gurl, cors_mode, UrlIndex::kNormal),
-        &host_);
+        media_log_.get(), &host_);
     data_source_->SetPreload(preload_);
 
     response_generator_ =
         std::make_unique<TestResponseGenerator>(gurl, file_size);
     EXPECT_CALL(*this, OnInitialize(expected));
+    data_source_->SetIsClientAudioElement(is_client_audio_element_);
     data_source_->Initialize(base::BindOnce(
         &MultiBufferDataSourceTest::OnInitialize, base::Unretained(this)));
     base::RunLoop().RunUntilIdle();
@@ -472,9 +475,13 @@ class MultiBufferDataSourceTest : public testing::Test {
   }
   double data_source_playback_rate() { return data_source_->playback_rate_; }
   bool is_local_source() { return data_source_->AssumeFullyBuffered(); }
+  bool is_client_audio_element() { return loader()->is_client_audio_element_; }
   scoped_refptr<UrlData> url_data() { return data_source_->url_data_; }
   void set_might_be_reused_from_cache_in_future(bool value) {
     url_data()->set_cacheable(value);
+  }
+  void set_is_client_audio_element(bool value) {
+    is_client_audio_element_ = value;
   }
 
  protected:
@@ -485,6 +492,7 @@ class MultiBufferDataSourceTest : public testing::Test {
       task_environment_.GetMainThreadTaskRunner();
   TestUrlIndex url_index_{&fetch_context_, task_runner_};
 
+  std::unique_ptr<media::MediaLog> media_log_;
   std::unique_ptr<MockMultiBufferDataSource> data_source_;
 
   std::unique_ptr<TestResponseGenerator> response_generator_;
@@ -493,6 +501,8 @@ class MultiBufferDataSourceTest : public testing::Test {
 
   // Used for calling MultiBufferDataSource::Read().
   uint8_t buffer_[kDataSize * 2];
+
+  bool is_client_audio_element_ = false;
 };
 
 TEST_F(MultiBufferDataSourceTest, Range_Supported) {
@@ -965,7 +975,7 @@ TEST_F(MultiBufferDataSourceTest, SetBitrate) {
 TEST_F(MultiBufferDataSourceTest, MediaPlaybackRateChanged) {
   InitializeWith206Response();
 
-  data_source_->MediaPlaybackRateChanged(2.0);
+  data_source_->OnMediaPlaybackRateChanged(2.0);
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(2.0, data_source_playback_rate());
 
@@ -1017,11 +1027,12 @@ TEST_F(MultiBufferDataSourceTest, Http_ShareData) {
   EXPECT_TRUE(data_source_->downloading());
 
   StrictMock<MockBufferedDataSourceHost> host2;
+  media_log_ = std::make_unique<NiceMock<media::MockMediaLog>>();
   MockMultiBufferDataSource source2(
       task_runner_,
       url_index_.GetByUrl(GURL(kHttpUrl), UrlData::CORS_UNSPECIFIED,
                           UrlIndex::kNormal),
-      &host2);
+      media_log_.get(), &host2);
   source2.SetPreload(preload_);
 
   EXPECT_CALL(*this, OnInitialize(true));
@@ -1107,7 +1118,7 @@ TEST_F(MultiBufferDataSourceTest, LocalResource_DeferStrategy) {
   EXPECT_TRUE(is_local_source());
   CheckCapacityDefer();
 
-  data_source_->MediaIsPlaying();
+  data_source_->OnMediaIsPlaying();
   CheckCapacityDefer();
 
   Stop();
@@ -1121,7 +1132,7 @@ TEST_F(MultiBufferDataSourceTest, LocalResource_PreloadMetadata_DeferStrategy) {
   EXPECT_TRUE(is_local_source());
   CheckReadThenDefer();
 
-  data_source_->MediaIsPlaying();
+  data_source_->OnMediaIsPlaying();
   CheckCapacityDefer();
 
   Stop();
@@ -1135,7 +1146,7 @@ TEST_F(MultiBufferDataSourceTest, ExternalResource_Reponse200_DeferStrategy) {
   EXPECT_FALSE(data_source_->range_supported());
   CheckCapacityDefer();
 
-  data_source_->MediaIsPlaying();
+  data_source_->OnMediaIsPlaying();
   CheckCapacityDefer();
 
   Stop();
@@ -1151,7 +1162,7 @@ TEST_F(MultiBufferDataSourceTest,
   EXPECT_FALSE(data_source_->range_supported());
   CheckReadThenDefer();
 
-  data_source_->MediaIsPlaying();
+  data_source_->OnMediaIsPlaying();
   CheckCapacityDefer();
 
   Stop();
@@ -1165,11 +1176,11 @@ TEST_F(MultiBufferDataSourceTest, ExternalResource_Reponse206_DeferStrategy) {
   EXPECT_TRUE(data_source_->range_supported());
   CheckCapacityDefer();
 
-  data_source_->MediaIsPlaying();
+  data_source_->OnMediaIsPlaying();
   CheckCapacityDefer();
 
   set_might_be_reused_from_cache_in_future(true);
-  data_source_->MediaIsPlaying();
+  data_source_->OnMediaIsPlaying();
   CheckCapacityDefer();
 
   Stop();
@@ -1185,11 +1196,11 @@ TEST_F(MultiBufferDataSourceTest,
   EXPECT_TRUE(data_source_->range_supported());
   CheckReadThenDefer();
 
-  data_source_->MediaIsPlaying();
+  data_source_->OnMediaIsPlaying();
   CheckCapacityDefer();
 
   set_might_be_reused_from_cache_in_future(true);
-  data_source_->MediaIsPlaying();
+  data_source_->OnMediaIsPlaying();
   CheckCapacityDefer();
 
   set_might_be_reused_from_cache_in_future(false);
@@ -1335,7 +1346,7 @@ TEST_F(MultiBufferDataSourceTest,
   // Marking the media as playing should prevent deferral. It also tells the
   // data source to start buffering beyond the initial load.
   EXPECT_FALSE(data_source_->cancel_on_defer_for_testing());
-  data_source_->MediaIsPlaying();
+  data_source_->OnMediaIsPlaying();
   data_source_->OnBufferingHaveEnough(false);
   CheckCapacityDefer();
   ASSERT_TRUE(active_loader());
@@ -1362,7 +1373,7 @@ TEST_F(MultiBufferDataSourceTest,
   EXPECT_FALSE(active_loader_allownull());
 
   // Verify playback resumes correctly too.
-  data_source_->MediaIsPlaying();
+  data_source_->OnMediaIsPlaying();
   EXPECT_FALSE(data_source_->cancel_on_defer_for_testing());
 
   // A read from a previously buffered range won't create a new loader yet.
@@ -1382,12 +1393,55 @@ TEST_F(MultiBufferDataSourceTest,
   }
 }
 
+// This test triggers an edge case where request destination is not
+// properly set to "audio" (crbug.com/12345). The edge case is triggered when
+// preload omitted or is set to metadata, and a read from an unbuffered range
+// takes place.
+TEST_F(MultiBufferDataSourceTest,
+       ExternalResource_Response206_CheckIsClientAudioElement) {
+  set_preload(MultiBufferDataSource::METADATA);
+  set_is_client_audio_element(true);
+  InitializeWith206Response();
+  EXPECT_EQ(MultiBufferDataSource::METADATA, preload());
+  EXPECT_FALSE(is_local_source());
+  EXPECT_TRUE(is_client_audio_element());
+  EXPECT_TRUE(data_source_->range_supported());
+  CheckReadThenDefer();
+
+  // Reset the reader on defer. As a result, during the next unbuffered range
+  // read, a locked resource loader will be created.
+  data_source_->OnBufferingHaveEnough(true);
+
+  // Deliver data until capacity is reached and verify deferral.
+  int bytes_received = 0;
+  EXPECT_CALL(host_, AddBufferedByteRange(_, _)).Times(testing::AtLeast(1));
+  while (active_loader_allownull() && !data_provider()->deferred()) {
+    ReceiveData(kDataSize);
+    bytes_received += kDataSize;
+  }
+  EXPECT_GT(bytes_received, 0);
+  EXPECT_LT(bytes_received + kDataSize, kFileSize);
+  EXPECT_FALSE(active_loader_allownull());
+
+  // Read from an unbuffered range will create a new resource loader.
+  ReadAt(kFarReadPosition);
+  EXPECT_CALL(*this, ReadCallback(kDataSize));
+  EXPECT_CALL(host_, AddBufferedByteRange(kFarReadPosition,
+                                          kFarReadPosition + kDataSize));
+  EXPECT_TRUE(is_client_audio_element());
+  Respond(response_generator_->Generate206(kFarReadPosition));
+  ReceiveData(kDataSize);
+
+  Stop();
+}
+
 TEST_F(MultiBufferDataSourceTest, SeekPastEOF) {
   GURL gurl(kHttpUrl);
+  media_log_ = std::make_unique<NiceMock<media::MockMediaLog>>();
   data_source_ = std::make_unique<MockMultiBufferDataSource>(
       task_runner_,
       url_index_.GetByUrl(gurl, UrlData::CORS_UNSPECIFIED, UrlIndex::kNormal),
-      &host_);
+      media_log_.get(), &host_);
   data_source_->SetPreload(preload_);
 
   response_generator_ =
@@ -1763,10 +1817,11 @@ TEST_F(MultiBufferDataSourceTest, CheckBufferSizeAfterReadingALot) {
 // back to "idle" when we're done loading.
 TEST_F(MultiBufferDataSourceTest, Http_CheckLoadingTransition) {
   GURL gurl(kHttpUrl);
+  media_log_ = std::make_unique<NiceMock<media::MockMediaLog>>();
   data_source_ = std::make_unique<MockMultiBufferDataSource>(
       task_runner_,
       url_index_.GetByUrl(gurl, UrlData::CORS_UNSPECIFIED, UrlIndex::kNormal),
-      &host_);
+      media_log_.get(), &host_);
   data_source_->SetPreload(preload_);
 
   response_generator_ =

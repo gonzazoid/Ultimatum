@@ -64,7 +64,8 @@ TEST_F(RefCountedFragmentTest, SimpleRef) {
 
   FragmentRef<TestObject> ref(
       RefCountedFragment::kUnmanagedRef,
-      Fragment(FragmentDescriptor(BufferId(0), 0, sizeof(object)), &object));
+      Fragment::FromDescriptorUnsafe(
+          FragmentDescriptor(BufferId(0), 0, sizeof(object)), &object));
   EXPECT_EQ(1, object.ref_count_for_testing());
   ref.reset();
   EXPECT_EQ(0, object.ref_count_for_testing());
@@ -75,7 +76,8 @@ TEST_F(RefCountedFragmentTest, Copy) {
 
   FragmentRef<TestObject> ref1(
       RefCountedFragment::kUnmanagedRef,
-      Fragment(FragmentDescriptor(BufferId(0), 0, sizeof(object1)), &object1));
+      Fragment::FromDescriptorUnsafe(
+          FragmentDescriptor(BufferId(0), 0, sizeof(object1)), &object1));
   EXPECT_EQ(1, object1.ref_count_for_testing());
 
   FragmentRef<TestObject> other1 = ref1;
@@ -88,7 +90,8 @@ TEST_F(RefCountedFragmentTest, Copy) {
   TestObject object2;
   auto ref2 = FragmentRef<TestObject>(
       RefCountedFragment::kUnmanagedRef,
-      Fragment(FragmentDescriptor(BufferId(0), 0, sizeof(object2)), &object2));
+      Fragment::FromDescriptorUnsafe(
+          FragmentDescriptor(BufferId(0), 0, sizeof(object2)), &object2));
   EXPECT_EQ(1, object1.ref_count_for_testing());
   EXPECT_EQ(1, object2.ref_count_for_testing());
   ref2 = ref1;
@@ -115,7 +118,8 @@ TEST_F(RefCountedFragmentTest, Move) {
 
   FragmentRef<TestObject> ref1(
       RefCountedFragment::kUnmanagedRef,
-      Fragment(FragmentDescriptor(BufferId(0), 0, sizeof(object1)), &object1));
+      Fragment::FromDescriptorUnsafe(
+          FragmentDescriptor(BufferId(0), 0, sizeof(object1)), &object1));
   EXPECT_EQ(1, ref1.ref_count_for_testing());
 
   FragmentRef<TestObject> other1 = std::move(ref1);
@@ -133,10 +137,12 @@ TEST_F(RefCountedFragmentTest, Move) {
   TestObject object3;
   FragmentRef<TestObject> ref2(
       RefCountedFragment::kUnmanagedRef,
-      Fragment(FragmentDescriptor(BufferId(0), 0, sizeof(object2)), &object2));
+      Fragment::FromDescriptorUnsafe(
+          FragmentDescriptor(BufferId(0), 0, sizeof(object2)), &object2));
   FragmentRef<TestObject> ref3(
       RefCountedFragment::kUnmanagedRef,
-      Fragment(FragmentDescriptor(BufferId(0), 0, sizeof(object3)), &object3));
+      Fragment::FromDescriptorUnsafe(
+          FragmentDescriptor(BufferId(0), 0, sizeof(object3)), &object3));
 
   EXPECT_FALSE(ref2.is_null());
   EXPECT_TRUE(ref2.is_addressable());
@@ -159,8 +165,7 @@ TEST_F(RefCountedFragmentTest, Move) {
 }
 
 TEST_F(RefCountedFragmentTest, Free) {
-  auto node = MakeRefCounted<Node>(Node::Type::kNormal, kTestDriver,
-                                   IPCZ_INVALID_DRIVER_HANDLE);
+  auto node = MakeRefCounted<Node>(Node::Type::kNormal, kTestDriver);
   DriverMemoryWithMapping buffer = NodeLinkMemory::AllocateMemory(kTestDriver);
   auto memory =
       NodeLinkMemory::Create(std::move(node), std::move(buffer.mapping));
@@ -172,8 +177,7 @@ TEST_F(RefCountedFragmentTest, Free) {
   for (size_t i = 0; i < kNumAllocations; ++i) {
     Fragment fragment = memory->AllocateFragment(sizeof(TestObject));
     EXPECT_TRUE(fragment.is_addressable());
-    FragmentRef<TestObject> ref(RefCountedFragment::kAdoptExistingRef, memory,
-                                fragment);
+    FragmentRef<TestObject> ref(kAdoptExistingRef, memory, fragment);
   }
 }
 

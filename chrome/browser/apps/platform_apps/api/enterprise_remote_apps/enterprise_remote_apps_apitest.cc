@@ -1,7 +1,8 @@
-// Copyright 2020 The Chromium Authors
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/apps/platform_apps/api/enterprise_remote_apps/enterprise_remote_apps_api.h"
 
 #include <string>
@@ -11,15 +12,20 @@
 #include "ash/app_list/model/app_list_item.h"
 #include "ash/app_list/model/app_list_item_list.h"
 #include "ash/app_list/model/app_list_model.h"
+#include "ash/app_list/quick_app_access_model.h"
+#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/shell.h"
 #include "base/files/file_path.h"
 #include "base/path_service.h"
+#include "base/test/gtest_tags.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/values.h"
-#include "chrome/browser/ash/login/test/embedded_policy_test_server_mixin.h"
+#include "chrome/browser/ash/app_list/app_list_syncable_service_factory.h"
 #include "chrome/browser/ash/login/test/session_manager_state_waiter.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
+#include "chrome/browser/ash/policy/test_support/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ash/remote_apps/id_generator.h"
 #include "chrome/browser/ash/remote_apps/remote_apps_manager.h"
@@ -27,7 +33,6 @@
 #include "chrome/browser/ash/remote_apps/remote_apps_model.h"
 #include "chrome/browser/extensions/chrome_test_extension_loader.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/app_list_syncable_service_factory.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
 #include "chrome/common/chrome_paths.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
@@ -71,7 +76,11 @@ constexpr char kId4[] = "Id 4";
 class RemoteAppsApitest : public policy::DevicePolicyCrosBrowserTest,
                           public testing::WithParamInterface<std::string> {
  public:
-  RemoteAppsApitest() = default;
+  RemoteAppsApitest() {
+    // Quick App is used for the current implementation of app pinning.
+    scoped_feature_list_.InitAndEnableFeature(
+        ash::features::kHomeButtonQuickAppAccess);
+  }
 
   // DevicePolicyCrosBrowserTest:
   void SetUp() override {
@@ -133,7 +142,7 @@ class RemoteAppsApitest : public policy::DevicePolicyCrosBrowserTest,
   }
 
   void LoadExtensionAndRunTest(const std::string& test_name) {
-    config_.SetKey("customArg", base::Value(test_name));
+    config_.Set("customArg", base::Value(test_name));
     extensions::TestGetConfigFunction::set_test_config_state(&config_);
 
     std::unique_ptr<ash::FakeIdGenerator> id_generator =
@@ -183,13 +192,34 @@ class RemoteAppsApitest : public policy::DevicePolicyCrosBrowserTest,
     return index == model_size - 1;
   }
 
+  const std::string& PinnedAppId() {
+    return ash::AppListModelProvider::Get()
+        ->quick_app_access_model()
+        ->quick_app_id();
+  }
+
+  void ExpectNoAppIsPinned() {
+    // When no app is pinned, QuickAppAccessMode::quick_app_id() returns an
+    // empty string.
+    EXPECT_EQ(PinnedAppId(), "");
+  }
+
+  // Launch healthcare application on device (COM_HEALTH_CUJ1_TASK2_WF1).
+  void AddScreenplayTag() {
+    base::AddTagToTestResult("feature_id",
+                             "screenplay-446812cc-07af-4094-bfb2-00150301ede3");
+  }
+
  private:
-  Profile* profile_;
-  base::DictionaryValue config_;
+  raw_ptr<Profile, DanglingUntriaged> profile_;
+  base::Value::Dict config_;
   ash::EmbeddedPolicyTestServerMixin policy_test_server_mixin_{&mixin_host_};
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 IN_PROC_BROWSER_TEST_P(RemoteAppsApitest, AddApp) {
+  AddScreenplayTag();
+
   extensions::ResultCatcher catcher;
   LoadExtensionAndRunTest("AddApp");
   ASSERT_TRUE(catcher.GetNextResult());
@@ -224,6 +254,8 @@ IN_PROC_BROWSER_TEST_P(RemoteAppsApitest, AddAppNoIconUrl) {
 }
 
 IN_PROC_BROWSER_TEST_P(RemoteAppsApitest, AddAppToFront) {
+  AddScreenplayTag();
+
   extensions::ResultCatcher catcher;
   LoadExtensionAndRunTest("AddAppToFront");
   ASSERT_TRUE(catcher.GetNextResult());
@@ -233,6 +265,8 @@ IN_PROC_BROWSER_TEST_P(RemoteAppsApitest, AddAppToFront) {
 }
 
 IN_PROC_BROWSER_TEST_P(RemoteAppsApitest, AddFolderAndApps) {
+  AddScreenplayTag();
+
   extensions::ResultCatcher catcher;
   LoadExtensionAndRunTest("AddFolderAndApps");
   ASSERT_TRUE(catcher.GetNextResult());
@@ -285,6 +319,8 @@ IN_PROC_BROWSER_TEST_P(RemoteAppsApitest, DeleteAppInFolder) {
 }
 
 IN_PROC_BROWSER_TEST_P(RemoteAppsApitest, OnRemoteAppLaunched) {
+  AddScreenplayTag();
+
   extensions::ResultCatcher catcher;
   ExtensionTestMessageListener listener("Remote app added");
   listener.set_extension_id(kExtensionId);
@@ -304,6 +340,8 @@ IN_PROC_BROWSER_TEST_P(RemoteAppsApitest, OnRemoteAppLaunched) {
 IN_PROC_BROWSER_TEST_P(RemoteAppsApitest, SortLauncher) {
   if (GetParam() != kApiExtensionRelativePath)
     GTEST_SKIP() << "The sortLauncher API method is not available in Mojo API";
+
+  AddScreenplayTag();
 
   base::FilePath test_dir_path;
   base::PathService::Get(chrome::DIR_TEST_DATA, &test_dir_path);
@@ -364,6 +402,43 @@ IN_PROC_BROWSER_TEST_P(RemoteAppsApitest, SortLauncher) {
   EXPECT_LT(id2_index, app1_index);           // Test App 7 < Test App 1
   EXPECT_LT(app1_index, app2_index);          // Test App 1 < Test App 2
   EXPECT_LT(app2_index, app4_index);          // Test App 2 < Test App 4
+}
+
+// Adds a remote app to the launcher and tests that it can be pinned to the
+// shelf.
+// TODO(b/279770944): Investigate crashes: when test finishes we get segfault in
+// the destructor of QuickAppAccessModel. That can be mitigated by manually
+// unpinning the app before the end of the test, i.e. calling
+// `ash::AppListModelProvider::Get()->quick_app_access_model()->SetQuickApp("");`
+// But then the test becomes flaky: sometimes it crashes in
+// `ash::HomeButton::AnimateQuickAppButtonOut()`.
+IN_PROC_BROWSER_TEST_P(RemoteAppsApitest, DISABLED_PinSingleApp) {
+  if (GetParam() != kApiExtensionRelativePath) {
+    GTEST_SKIP() << "The setPinnedApps API method is not available in Mojo API";
+  }
+
+  extensions::ResultCatcher catcher;
+  // This should pin app with ID `kId1` to the shelf
+  LoadExtensionAndRunTest("PinSingleApp");
+  ASSERT_TRUE(catcher.GetNextResult());
+
+  EXPECT_EQ(PinnedAppId(), kId1);
+}
+
+// Adds multiple remote apps to the launcher and tests that we get an error when
+// trying to pin more that one of them.
+IN_PROC_BROWSER_TEST_P(RemoteAppsApitest, PinMultipleAppsError) {
+  if (GetParam() != kApiExtensionRelativePath) {
+    GTEST_SKIP() << "The setPinnedApps API method is not available in Mojo API";
+  }
+
+  extensions::ResultCatcher catcher;
+  // This will try to pin multiple apps to the shelf which should result in
+  // extension error.
+  LoadExtensionAndRunTest("PinMultipleAppsError");
+  ASSERT_TRUE(catcher.GetNextResult());
+
+  ExpectNoAppIsPinned();
 }
 
 INSTANTIATE_TEST_SUITE_P(,

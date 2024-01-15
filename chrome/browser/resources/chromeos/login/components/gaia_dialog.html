@@ -20,22 +20,18 @@ found in the LICENSE file.
   }
 
   #saml-notice-container {
-    border-bottom: 1px solid var(--google-grey-200);
+    border-bottom: 1px solid var(--cros-sys-separator);
     height: 44px;
   }
 
   #saml-footer-container {
-    border-top: 1px solid var(--google-grey-200);
+    border-top: 1px solid var(--cros-sys-separator);
     height: 58px;
   }
 
   #saml-notice-recording-indicator {
     padding-inline-end: 10px;
     padding-inline-start: 10px;
-  }
-
-  #saml-notice-message {
-    font-size: 13px;
   }
 
   #signin-frame {
@@ -82,7 +78,7 @@ found in the LICENSE file.
   }
 
   #sshWarning {
-    color: var(--google-red-600);
+    color: var(--cros-sys-error);
     text-align: center;
   }
 
@@ -95,7 +91,8 @@ found in the LICENSE file.
 <!-- As this dialog have pre-loading logic that require access to elements,
       dialog is marked as no-lazy. -->
 <oobe-content-dialog role="dialog" id="gaiaDialog" no-lazy
-    no-buttons$="[[isSamlSsoVisible]]" fullscreen$="[[isSamlSsoVisible]]">
+    no-buttons$="[[isSamlSsoVisible]]" fullscreen$="[[isSamlSsoVisible]]"
+    isGaia$="[[!isSamlSsoVisible]]">
   <div slot="content" id="signin-frame-container"
       hideshadows$="[[isPopUpOverlayVisible_]]"
       class="flex layout vertical">
@@ -131,14 +128,20 @@ found in the LICENSE file.
   <div slot="back-navigation" hidden$="[[navigationHidden]]">
     <oobe-back-button id="signin-back-button"
         disabled="[[!navigationEnabled]]"
-        hidden="[[isBackButtonHidden(hideBackButtonIfCantGoBack,
-                                      canGoBack)]]"
+        hidden="[[isBackButtonHidden(navigationHidden,
+                                     hideBackButtonIfCantGoBack, canGoBack)]]"
         on-click="onBackButtonClicked_">
     </oobe-back-button>
   </div>
   <div slot="bottom-buttons" hidden$="[[navigationHidden]]">
     <div hidden="[[!isDefaultNavigationShown_(canGoBack,
-        gaiaDialogButtonsType)]]">
+        gaiaDialogButtonsType)]]" class="flex layout horizontal">
+      <quick-start-entry-point
+        id="quick-start-signin-button"
+        on-click="onQuickStartClicked_"
+        hidden="[[!isQuickStartEnabled_]]"
+        quick-start-text-key="signinScreenQuickStart">
+      </quick-start-entry-point>
       <oobe-text-button id="secondary-action-button"
           label-for-aria="[[secondaryActionButtonLabel_]]"
           on-click="onSecondaryActionButtonClicked_"

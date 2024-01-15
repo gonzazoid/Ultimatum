@@ -1,6 +1,9 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/goma/mac-archive-rel-goma-rbe-canary/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
@@ -17,7 +20,6 @@
                 "apply_configs": [
                   "clobber",
                   "mb",
-                  "goma_use_local",
                   "goma_canary"
                 ],
                 "build_config": "Release",

@@ -74,7 +74,7 @@ class LocalDeviceTestRun(test_run.TestRun):
       consecutive_device_errors = 0
       for test in tests:
         if not test:
-          logging.warning('No tests in shared. Continuing.')
+          logging.warning('No tests in shard. Continuing.')
           tests.test_completed()
           continue
         if exit_now.isSet():
@@ -100,24 +100,36 @@ class LocalDeviceTestRun(test_run.TestRun):
           consecutive_device_errors = 0
 
           if isinstance(test, list):
+            result_log = ''
+            if len(test) > 1:
+              result_log = ('The test command timed out when running multiple '
+                            'tests including this test. It does not '
+                            'necessarily mean this specific test timed out.')
+              # Ensure instrumentation tests not batched at env level retries.
+              for t in test:
+                # |dict| type infers it's an instrumentation test.
+                if isinstance(t, dict) and t['annotations']:
+                  t['annotations'].pop('Batch', None)
+
             results.AddResults(
                 base_test_result.BaseTestResult(
                     self._GetUniqueTestName(t),
-                    base_test_result.ResultType.TIMEOUT) for t in test)
+                    base_test_result.ResultType.TIMEOUT,
+                    log=result_log) for t in test)
           else:
             results.AddResult(
                 base_test_result.BaseTestResult(
                     self._GetUniqueTestName(test),
                     base_test_result.ResultType.TIMEOUT))
-        except Exception as e:  # pylint: disable=broad-except
+        except device_errors.DeviceUnreachableError:
+          # If the device is no longer reachable then terminate this
+          # run_tests_on_device call.
+          raise
+        except base_error.BaseError:
+          # If we get a device error but believe the device is still
+          # reachable, attempt to continue using it.
           if isinstance(tests, test_collection.TestCollection):
             rerun = test
-          if (isinstance(e, device_errors.DeviceUnreachableError)
-              or not isinstance(e, base_error.BaseError)):
-            # If we get a device error but believe the device is still
-            # reachable, attempt to continue using it. Otherwise, raise
-            # the exception and terminate this run_tests_on_device call.
-            raise
 
           consecutive_device_errors += 1
           if consecutive_device_errors >= 3:
@@ -184,9 +196,9 @@ class LocalDeviceTestRun(test_run.TestRun):
           results.append(try_results)
 
           try:
-            if self._ShouldShard():
+            if self._ShouldShardTestsForDevices():
               tc = test_collection.TestCollection(
-                  self._CreateShards(grouped_tests))
+                  self._CreateShardsForDevices(grouped_tests))
               self._env.parallel_devices.pMap(
                   run_tests_on_device, tc, try_results).pGet(None)
             else:
@@ -294,17 +306,8 @@ class LocalDeviceTestRun(test_run.TestRun):
     partitions = []
 
 
-    def CountTestsIndividually(test):
-      if not isinstance(test, list):
-        return False
-      annotations = test[0]['annotations']
-      # UnitTests tests are really fast, so to balance shards better, count
-      # UnitTests Batches as single tests.
-      return ('Batch' not in annotations
-              or annotations['Batch']['value'] != 'UnitTests')
-
     num_not_yet_allocated = sum(
-        [len(test) - 1 for test in tests if CountTestsIndividually(test)])
+        [len(test) - 1 for test in tests if self._CountTestsIndividually(test)])
     num_not_yet_allocated += len(tests)
 
     # Fast linear partition approximation capped by max_partition_size. We
@@ -315,7 +318,7 @@ class LocalDeviceTestRun(test_run.TestRun):
     partitions.append([])
     last_partition_size = 0
     for test in tests:
-      test_count = len(test) if CountTestsIndividually(test) else 1
+      test_count = len(test) if self._CountTestsIndividually(test) else 1
       # Make a new shard whenever we would overfill the previous one. However,
       # if the size of the test group is larger than the max partition size on
       # its own, just put the group in its own shard instead of splitting up the
@@ -344,13 +347,23 @@ class LocalDeviceTestRun(test_run.TestRun):
       partitions.pop()
     return partitions
 
+  def _CountTestsIndividually(self, test):
+    # pylint: disable=no-self-use
+    if not isinstance(test, list):
+      return False
+    annotations = test[0]['annotations']
+    # UnitTests tests are really fast, so to balance shards better, count
+    # UnitTests Batches as single tests.
+    return ('Batch' not in annotations
+            or annotations['Batch']['value'] != 'UnitTests')
+
   def GetTool(self, device):
     if str(device) not in self._tools:
       self._tools[str(device)] = valgrind_tools.CreateTool(
           self._env.tool, device)
     return self._tools[str(device)]
 
-  def _CreateShards(self, tests):
+  def _CreateShardsForDevices(self, tests):
     raise NotImplementedError
 
   def _GetUniqueTestName(self, test):
@@ -378,7 +391,7 @@ class LocalDeviceTestRun(test_run.TestRun):
   def _RunTest(self, device, test):
     raise NotImplementedError
 
-  def _ShouldShard(self):
+  def _ShouldShardTestsForDevices(self):
     raise NotImplementedError
 
 

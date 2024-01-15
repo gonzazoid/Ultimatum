@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_PEERCONNECTION_RTC_ENCODED_VIDEO_UNDERLYING_SOURCE_H_
 
 #include "base/gtest_prod_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "third_party/blink/renderer/core/streams/underlying_source_base.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
@@ -25,8 +26,10 @@ class MODULES_EXPORT RTCEncodedVideoUnderlyingSource
       WTF::CrossThreadOnceClosure disconnect_callback);
 
   // UnderlyingSourceBase
-  ScriptPromise pull(ScriptState*) override;
-  ScriptPromise Cancel(ScriptState*, ScriptValue reason) override;
+  ScriptPromise Pull(ScriptState*, ExceptionState&) override;
+  ScriptPromise Cancel(ScriptState*,
+                       ScriptValue reason,
+                       ExceptionState&) override;
 
   void OnFrameFromSource(
       std::unique_ptr<webrtc::TransformableVideoFrameInterface>);

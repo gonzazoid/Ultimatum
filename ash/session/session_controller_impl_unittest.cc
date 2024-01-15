@@ -9,8 +9,10 @@
 #include <utility>
 #include <vector>
 
+#include "ash/constants/ash_pref_names.h"
 #include "ash/login_status.h"
 #include "ash/public/cpp/ash_prefs.h"
+#include "ash/public/cpp/session/scoped_screen_lock_blocker.h"
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/session/test_session_controller_client.h"
 #include "ash/shell.h"
@@ -18,13 +20,16 @@
 #include "ash/test/ash_test_base.h"
 #include "ash/wm/window_state.h"
 #include "ash/wm/window_util.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/json/values_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/user_manager/user_type.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/window.h"
@@ -89,7 +94,7 @@ class TestSessionObserver : public SessionObserver {
   AccountId active_account_id_;
   bool first_session_started_ = false;
   std::vector<AccountId> user_session_account_ids_;
-  PrefService* last_user_pref_service_ = nullptr;
+  raw_ptr<PrefService> last_user_pref_service_ = nullptr;
   int user_prefs_changed_count_ = 0;
 };
 
@@ -187,7 +192,7 @@ class SessionControllerImplWithShellTest : public AshTestBase {
   const TestSessionObserver* observer() const { return &observer_; }
 
  protected:
-  WindowState* window_state_ = nullptr;
+  raw_ptr<WindowState, DanglingUntriaged> window_state_ = nullptr;
 
  private:
   TestSessionObserver observer_;
@@ -466,7 +471,12 @@ TEST_F(SessionControllerImplTest, IsUserChild) {
   EXPECT_TRUE(controller()->IsUserChild());
 }
 
-using SessionControllerImplPrefsTest = NoSessionAshTestBase;
+class SessionControllerImplPrefsTest : public NoSessionAshTestBase {
+ public:
+  SessionControllerImplPrefsTest()
+      : NoSessionAshTestBase(
+            base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
+};
 
 // Verifies that SessionObserver is notified for PrefService changes.
 TEST_F(SessionControllerImplPrefsTest, Observer) {
@@ -494,7 +504,8 @@ TEST_F(SessionControllerImplPrefsTest, Observer) {
   EXPECT_EQ(nullptr, observer.last_user_pref_service());
 
   auto pref_service = std::make_unique<TestingPrefServiceSimple>();
-  RegisterUserProfilePrefs(pref_service->registry(), true /* for_test */);
+  RegisterUserProfilePrefs(pref_service->registry(), /*country=*/"",
+                           /*for_test=*/true);
   session->SetUserPrefService(kUserAccount1, std::move(pref_service));
   EXPECT_EQ(controller->GetUserPrefServiceForUser(kUserAccount1),
             observer.last_user_pref_service());
@@ -518,7 +529,8 @@ TEST_F(SessionControllerImplPrefsTest, Observer) {
   // There should be no notification about a PrefService for an inactive user
   // becoming initialized.
   pref_service = std::make_unique<TestingPrefServiceSimple>();
-  RegisterUserProfilePrefs(pref_service->registry(), true /* for_test */);
+  RegisterUserProfilePrefs(pref_service->registry(), /*country=*/"",
+                           /*for_text=*/true);
   session->SetUserPrefService(kUserAccount2, std::move(pref_service));
   EXPECT_EQ(nullptr, observer.last_user_pref_service());
 
@@ -559,6 +571,154 @@ TEST_F(SessionControllerImplPrefsTest, NotifyOnce) {
             observer.last_user_pref_service());
 
   controller->RemoveObserver(&observer);
+}
+
+// Base class for a session observer which can be mocked.
+class MockSessionObserver : public SessionObserver {
+ public:
+  // SessionObserver:
+  MOCK_METHOD(void, OnActiveUserSessionChanged, (const AccountId&), (override));
+  MOCK_METHOD(void, OnSessionStateChanged, (SessionState), (override));
+};
+
+// Verifies that time of last session activation is stored to synced user prefs.
+TEST_F(SessionControllerImplPrefsTest, SetsTimeOfLastSessionActivation) {
+  constexpr char kUser1Email[] = "user1@test.com";
+  const AccountId kUser1AccountId = AccountId::FromUserEmail(kUser1Email);
+  constexpr char kUser2Email[] = "user2@test.com";
+  const AccountId kUser2AccountId = AccountId::FromUserEmail(kUser2Email);
+
+  // Register mock session observer.
+  testing::NiceMock<MockSessionObserver> mock_session_observer;
+  SessionControllerImpl* controller = Shell::Get()->session_controller();
+  controller->AddObserver(&mock_session_observer);
+
+  // Switch to test user.
+  TestSessionControllerClient* session = GetSessionControllerClient();
+  session->AddUserSession(kUser1Email, user_manager::USER_TYPE_REGULAR);
+  session->SwitchActiveUser(kUser1AccountId);
+
+  // Initially time of last session activation is expected to be `base::Time()`.
+  base::Time expected_time_of_last_session_activation;
+
+  // Iterate over all possible session states.
+  for (auto expected_session_state : std::vector<SessionState>{
+           SessionState::OOBE, SessionState::LOGIN_PRIMARY,
+           SessionState::LOGGED_IN_NOT_ACTIVE, SessionState::ACTIVE,
+           SessionState::LOCKED, SessionState::LOGIN_SECONDARY,
+           SessionState::RMA}) {
+    // Set session state and expect observers to be notified of the event.
+    EXPECT_CALL(mock_session_observer, OnSessionStateChanged)
+        .WillOnce(testing::Invoke([&](SessionState session_state) {
+          EXPECT_EQ(session_state, expected_session_state);
+
+          auto* const time_of_last_session_activation =
+              controller->GetUserPrefServiceForUser(kUser1AccountId)
+                  ->FindPreference(prefs::kTimeOfLastSessionActivation);
+
+          // Verify that the expected time of last session activation is stored.
+          // Note that it is intentional that even if the session is becoming
+          // activated, the stored time of last session activation will not be
+          // updated until *after* the session state changed event propagates.
+          // This is to allow observers to read the pref during event handling.
+          EXPECT_EQ(
+              *base::ValueToTime(time_of_last_session_activation->GetValue()),
+              expected_time_of_last_session_activation);
+        }));
+    session->SetSessionState(expected_session_state);
+    testing::Mock::VerifyAndClearExpectations(&mock_session_observer);
+
+    {
+      // Flush message loop.
+      base::RunLoop run_loop;
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, run_loop.QuitClosure());
+      run_loop.Run();
+    }
+
+    auto* const time_of_last_session_activation =
+        controller->GetUserPrefServiceForUser(kUser1AccountId)
+            ->FindPreference(prefs::kTimeOfLastSessionActivation);
+
+    // When the session is activated, it is expected that the time of last
+    // session activation be stored to synced user prefs. Note that it is
+    // expected that this be done *after* notifying observers of the session
+    // state change in case observers read the pref during event handling.
+    if (controller->GetSessionState() == SessionState::ACTIVE) {
+      expected_time_of_last_session_activation =
+          *base::ValueToTime(time_of_last_session_activation->GetValue());
+
+      // It is expected that time of last session activation be rounded down to
+      // the nearest day since Windows epoch to reduce syncs.
+      EXPECT_EQ(base::Time::FromDeltaSinceWindowsEpoch(base::Days(
+                    base::Time::Now().ToDeltaSinceWindowsEpoch().InDays())),
+                expected_time_of_last_session_activation);
+      continue;
+    }
+
+    // When the session is not being activated, the stored time of last session
+    // activation should remain unchanged.
+    EXPECT_EQ(*base::ValueToTime(time_of_last_session_activation->GetValue()),
+              expected_time_of_last_session_activation);
+  }
+
+  // Ensure session state is active so that we can confirm that switching the
+  // active user updates the time of last activation even if session state does
+  // not change.
+  session->SetSessionState(SessionState::ACTIVE);
+
+  // Initially time of last session activation is expected to be `base::Time()`.
+  expected_time_of_last_session_activation = base::Time();
+
+  // Switch active user and expect observers to be notified of the event.
+  EXPECT_CALL(mock_session_observer, OnActiveUserSessionChanged)
+      .WillOnce(testing::Invoke([&](const AccountId& account_id) {
+        EXPECT_EQ(account_id, kUser2AccountId);
+
+        auto* const time_of_last_session_activation =
+            controller->GetUserPrefServiceForUser(kUser2AccountId)
+                ->FindPreference(prefs::kTimeOfLastSessionActivation);
+
+        // Verify that the expected time of last session activation is stored.
+        // Note that it is intentional the stored time of last session
+        // activation will not be updated until *after* the session state
+        // changed event propagates. This is to allow observers to read the pref
+        // during event handling.
+        EXPECT_EQ(
+            *base::ValueToTime(time_of_last_session_activation->GetValue()),
+            expected_time_of_last_session_activation);
+      }));
+  session->AddUserSession(kUser2Email, user_manager::USER_TYPE_REGULAR);
+  session->SwitchActiveUser(kUser2AccountId);
+  testing::Mock::VerifyAndClearExpectations(&mock_session_observer);
+
+  {
+    // Flush message loop.
+    base::RunLoop run_loop;
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, run_loop.QuitClosure());
+    run_loop.Run();
+  }
+
+  auto* const time_of_last_session_activation =
+      controller->GetUserPrefServiceForUser(kUser2AccountId)
+          ->FindPreference(prefs::kTimeOfLastSessionActivation);
+
+  // When switching to an active session, it is expected that the time of last
+  // session activation be stored to synced user prefs. Note that it is expected
+  // that this be done *after* notifying observers of the active user session
+  // change in case observers read the pref during event handling.
+  expected_time_of_last_session_activation =
+      *base::ValueToTime(time_of_last_session_activation->GetValue());
+
+  // It is expected that time of last session activation be rounded down to
+  // the nearest day since Windows epoch to reduce syncs.
+  EXPECT_EQ(base::Time::FromDeltaSinceWindowsEpoch(base::Days(
+                base::Time::Now().ToDeltaSinceWindowsEpoch().InDays())),
+            expected_time_of_last_session_activation);
+
+  // Clean up.
+  controller->RemoveObserver(&mock_session_observer);
 }
 
 TEST_F(SessionControllerImplTest, GetUserType) {
@@ -613,6 +773,24 @@ TEST_F(SessionControllerImplTest, IsUserFirstLogin) {
   EXPECT_TRUE(controller()->IsUserFirstLogin());
 }
 
+TEST_F(SessionControllerImplTest, ScopedScreenLockBlocker) {
+  SessionInfo info;
+  FillDefaultSessionInfo(&info);
+  SetSessionInfo(info);
+  UpdateSession(1u, "user1@test.com");
+  EXPECT_TRUE(controller()->CanLockScreen());
+  {
+    auto blocker1 = controller()->GetScopedScreenLockBlocker();
+    EXPECT_FALSE(controller()->CanLockScreen());
+    {
+      auto blocker2 = controller()->GetScopedScreenLockBlocker();
+      EXPECT_FALSE(controller()->CanLockScreen());
+    }
+    EXPECT_FALSE(controller()->CanLockScreen());
+  }
+  EXPECT_TRUE(controller()->CanLockScreen());
+}
+
 class CanSwitchUserTest : public AshTestBase {
  public:
   // The action type to perform / check for upon user switching.
@@ -636,7 +814,7 @@ class CanSwitchUserTest : public AshTestBase {
   // Accessing the capture session functionality.
   // Simulates a screen capture session start.
   void StartCaptureSession() {
-    Shell::Get()->system_tray_notifier()->NotifyScreenCaptureStart(
+    Shell::Get()->system_tray_notifier()->NotifyScreenAccessStart(
         base::BindRepeating(&CanSwitchUserTest::StopCaptureCallback,
                             base::Unretained(this)),
         base::RepeatingClosure(), std::u16string());
@@ -644,7 +822,7 @@ class CanSwitchUserTest : public AshTestBase {
 
   // The callback which gets called when the screen capture gets stopped.
   void StopCaptureSession() {
-    Shell::Get()->system_tray_notifier()->NotifyScreenCaptureStop();
+    Shell::Get()->system_tray_notifier()->NotifyScreenAccessStop();
   }
 
   // Simulates a screen capture session stop.
@@ -653,15 +831,14 @@ class CanSwitchUserTest : public AshTestBase {
   // Accessing the share session functionality.
   // Simulate a Screen share session start.
   void StartShareSession() {
-    Shell::Get()->system_tray_notifier()->NotifyScreenShareStart(
+    Shell::Get()->system_tray_notifier()->NotifyRemotingScreenShareStart(
         base::BindRepeating(&CanSwitchUserTest::StopShareCallback,
-                            base::Unretained(this)),
-        std::u16string());
+                            base::Unretained(this)));
   }
 
   // Simulates a screen share session stop.
   void StopShareSession() {
-    Shell::Get()->system_tray_notifier()->NotifyScreenShareStop();
+    Shell::Get()->system_tray_notifier()->NotifyRemotingScreenShareStop();
   }
 
   // The callback which gets called when the screen share gets stopped.
@@ -671,7 +848,7 @@ class CanSwitchUserTest : public AshTestBase {
   // The passed |action| type parameter defines the outcome (which will be
   // checked) and the action the user will choose.
   void SwitchUser(ActionType action) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&CloseMessageBox, action));
     Shell::Get()->session_controller()->CanSwitchActiveUser(base::BindOnce(
         &CanSwitchUserTest::SwitchCallback, base::Unretained(this)));

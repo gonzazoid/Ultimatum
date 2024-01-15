@@ -4,6 +4,8 @@
 
 #include "chrome/browser/ui/webui/managed_ui_handler.h"
 
+#include <optional>
+
 #include "base/token.h"
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
@@ -19,7 +21,6 @@
 #include "content/public/test/test_web_ui_data_source.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
 #include "components/policy/core/browser/browser_policy_connector_base.h"
@@ -43,10 +44,10 @@ class ManagedUIHandlerTest : public testing::Test {
         std::make_unique<policy::PolicyServiceImpl>(std::move(providers)));
     profile_ = builder.Build();
 
-    // We use a random source_name here as calling Add() can replace existing
-    // sources with the same name (which might destroy the memory addressed by
-    // |source_->GetWebUIDataSource()|.
-    content::WebUIDataSource::Add(profile(), source_->GetWebUIDataSource());
+    // `source_` has been created with a random name, so calling
+    // AddDataSourceForBrowserContext() won't accidentally destroy other data
+    // sources.
+    source_->AddDataSourceForBrowserContext(profile());
   }
 
   void TearDown() override { policy_provider()->Shutdown(); }
@@ -67,7 +68,7 @@ class ManagedUIHandlerTest : public testing::Test {
 
   bool IsSourceManaged() {
     const auto* local_strings = source_->GetLocalizedStrings();
-    absl::optional<bool> managed = local_strings->FindBool("isManaged");
+    std::optional<bool> managed = local_strings->FindBool("isManaged");
     if (!managed.has_value()) {
       ADD_FAILURE();
       return false;

@@ -10,9 +10,9 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
@@ -79,11 +79,10 @@ class Storage : public base::RefCountedThreadSafe<Storage> {
   // be paased here.
   void UpdateEncryptionKey(SignedEncryptionInfo signed_encryption_key);
 
-  // Stores the given |pipeline_id|. Overwrites any data from previous calls.
-  // Returns "ok" |Status| if success. Otherwise returns error Status.
-  Status StorePipelineId(base::StringPiece pipeline_id);
-  // Returns the pipeline ID if possible. Otherwise, returns error Status.
-  StatusOr<std::string> GetPipelineId();
+  // Registers completion notification callback. Thread-safe.
+  // All registered callbacks are called when all queues destructions come
+  // to their completion and the Storage is destructed as well.
+  void RegisterCompletionCallback(base::OnceClosure callback);
 
  protected:
   virtual ~Storage();
@@ -101,9 +100,6 @@ class Storage : public base::RefCountedThreadSafe<Storage> {
   // It can be invoked multiple times in parallel, but will only do
   // one server roundtrip and notify all requestors upon its completion.
   class KeyDelivery;
-
-  // Private helper class for pipeline ID upload/download to the file system.
-  class PipelineIdInStorage;
 
   // Private constructor, to be called by Create factory method only.
   // Queues need to be added afterwards.
@@ -137,7 +133,7 @@ class Storage : public base::RefCountedThreadSafe<Storage> {
   const scoped_refptr<EncryptionModuleInterface> encryption_module_;
 
   // Internal module for initiail key delivery from server.
-  const std::unique_ptr<KeyDelivery> key_delivery_;
+  const std::unique_ptr<KeyDelivery, base::OnTaskRunnerDeleter> key_delivery_;
 
   // Compression module.
   const scoped_refptr<CompressionModule> compression_module_;
@@ -147,9 +143,6 @@ class Storage : public base::RefCountedThreadSafe<Storage> {
 
   // Upload provider callback.
   const UploaderInterface::AsyncStartUploaderCb async_start_upload_cb_;
-
-  // Internal pipeline ID management module.
-  const std::unique_ptr<PipelineIdInStorage> pipeline_id_in_storage_;
 
   // Task runner for storage-wide operations (initialization, queues selection).
   const scoped_refptr<base::SequencedTaskRunner> sequenced_task_runner_;

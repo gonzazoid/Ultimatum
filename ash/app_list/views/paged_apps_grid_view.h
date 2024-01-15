@@ -6,6 +6,7 @@
 #define ASH_APP_LIST_VIEWS_PAGED_APPS_GRID_VIEW_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "ash/app_list/app_list_metrics.h"
@@ -13,8 +14,9 @@
 #include "ash/ash_export.h"
 #include "ash/public/cpp/pagination/pagination_model.h"
 #include "ash/public/cpp/pagination/pagination_model_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/compositor/presentation_time_recorder.h"
 #include "ui/compositor/throughput_tracker.h"
 #include "ui/events/types/event_type.h"
@@ -43,6 +45,8 @@ class PaginationController;
 class ASH_EXPORT PagedAppsGridView : public AppsGridView,
                                      public PaginationModelObserver,
                                      public views::ViewTargeterDelegate {
+  METADATA_HEADER(PagedAppsGridView, AppsGridView)
+
  public:
   class ContainerDelegate {
    public:
@@ -75,9 +79,6 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
   PagedAppsGridView& operator=(const PagedAppsGridView&) = delete;
   ~PagedAppsGridView() override;
 
-  // Called when tablet mode starts and ends.
-  void OnTabletModeChanged(bool started);
-
   // Sets the number of max rows and columns in grid pages. Special-cases the
   // first page, which may allow smaller number of rows in certain cases (to
   // make room for other UI elements like continue section).
@@ -91,7 +92,6 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
 
   // ui::EventHandler:
   void OnGestureEvent(ui::GestureEvent* event) override;
-  void OnMouseEvent(ui::MouseEvent* event) override;
 
   // views::View:
   void Layout() override;
@@ -104,9 +104,13 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
   gfx::Size GetTileGridSize() const override;
   int GetTotalPages() const override;
   int GetSelectedPage() const override;
+  bool IsPageFull(size_t page_index) const override;
+  GridIndex GetGridIndexFromIndexInViewModel(int index) const override;
+  int GetNumberOfPulsingBlocksToShow(int item_count) const override;
   void MaybeStartCardifiedView() override;
   void MaybeEndCardifiedView() override;
-  void MaybeStartPageFlip() override;
+  bool IsAnimatingCardifiedState() const override;
+  bool MaybeStartPageFlip() override;
   void MaybeStopPageFlip() override;
   bool MaybeAutoScroll() override;
   void StopAutoScroll() override {}
@@ -114,16 +118,16 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
                                   ui::EventType type) override;
   void SetFocusAfterEndDrag(AppListItem* drag_item) override;
   void RecordAppMovingTypeMetrics(AppListAppMovingType type) override;
-  int GetMaxRowsInPage(int page) const override;
+  std::optional<int> GetMaxRowsInPage(int page) const override;
   gfx::Vector2d GetGridCenteringOffset(int page) const override;
   void UpdatePaging() override;
   void RecordPageMetrics() override;
   const gfx::Vector2d CalculateTransitionOffset(
       int page_of_view) const override;
   void EnsureViewVisible(const GridIndex& index) override;
-  absl::optional<VisibleItemIndexRange> GetVisibleItemIndexRange()
+  std::optional<VisibleItemIndexRange> GetVisibleItemIndexRange()
       const override;
-  base::ScopedClosureRunner LockAppsGridOpacity() override;
+  bool ShouldContainerHandleDragEvents() override;
 
   // PaginationModelObserver:
   void SelectedPageChanged(int old_selected, int new_selected) override;
@@ -213,10 +217,6 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
   // Gets the tile grid size on the provided apps grid page.
   gfx::Size GetTileGridSizeForPage(int page) const;
 
-  // Indicates whether the drag event (from the gesture or mouse) should be
-  // handled by PagedAppsGridView.
-  bool ShouldHandleDragEvent(const ui::LocatedEvent& event);
-
   // Returns true if the page is the right target to flip to.
   bool IsValidPageFlipTarget(int page) const;
 
@@ -289,11 +289,11 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
   int GetPaddingBetweenPages() const;
 
   // Created by AppListMainView, owned by views hierarchy.
-  ContentsView* const contents_view_;
+  const raw_ptr<ContentsView> contents_view_;
 
   // Used to get information about whether a point is within the page flip drag
   // buffer area around this view.
-  ContainerDelegate* const container_delegate_;
+  const raw_ptr<ContainerDelegate> container_delegate_;
 
   // Depends on |pagination_model_|.
   std::unique_ptr<PaginationController> pagination_controller_;
@@ -308,21 +308,8 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
   // the edge.
   base::TimeDelta page_flip_delay_;
 
-  // Whether the grid is in mouse drag. Used for between-item drags that move
-  // the entire grid, not for app icon drags.
-  bool is_in_mouse_drag_ = false;
-
-  // The initial mouse drag location in root window coordinate. Updates when the
-  // drag on PagedAppsGridView starts. Used for between-item drags that move the
-  // entire grid, not for app icon drags.
-  gfx::PointF mouse_drag_start_point_;
-
-  // The last mouse drag location in root window coordinate. Used for
-  // between-item drags that move the entire grid, not for app icon drags.
-  gfx::PointF last_mouse_drag_point_;
-
   // Records smoothness of pagination animation.
-  absl::optional<ui::ThroughputTracker> pagination_metrics_tracker_;
+  std::optional<ui::ThroughputTracker> pagination_metrics_tracker_;
 
   // Records the presentation time for apps grid dragging.
   std::unique_ptr<ui::PresentationTimeRecorder> presentation_time_recorder_;
@@ -364,8 +351,8 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
 
   void StackCardsAtBottom() override;
 
-  // If true, ignore the calls on `UpdateOpacity()`.
-  bool lock_opacity_ = false;
+  // Whether the apps grid is currently animating  the cardified state.
+  bool is_animating_cardified_state_ = false;
 
   // The callback that runs once cardified state is ended.
   base::RepeatingClosure cardified_state_ended_test_callback_;

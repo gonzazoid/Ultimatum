@@ -50,7 +50,7 @@ class MockAudioRendererSink : public SwitchableAudioRendererSink {
   ~MockAudioRendererSink() override;
 
  private:
-  raw_ptr<RenderCallback> callback_;
+  raw_ptr<RenderCallback, AcrossTasksDanglingUntriaged> callback_;
   OutputDeviceInfo output_device_info_;
 };
 

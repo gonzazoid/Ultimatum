@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ui/views/autofill/payments/migratable_card_view.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/ui/autofill/payments/local_card_migration_dialog_state.h"
 #include "chrome/browser/ui/views/autofill/payments/local_card_migration_dialog_view.h"
@@ -16,7 +16,6 @@
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
-#include "ui/base/resource/resource_bundle.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/paint_vector_icon.h"
@@ -47,7 +46,10 @@ MigratableCardView::MigratableCardView(
                    .release());
 
   checkbox_uncheck_text_container_ =
-      AddChildView(std::make_unique<views::View>());
+      AddChildView(views::Builder<views::View>()
+                       .SetBackground(views::CreateThemedSolidBackground(
+                           ui::kColorBubbleFooterBackground))
+                       .Build());
   views::BoxLayout* layout = checkbox_uncheck_text_container_->SetLayoutManager(
       std::make_unique<views::BoxLayout>(
           views::BoxLayout::Orientation::kVertical,
@@ -78,14 +80,7 @@ std::string MigratableCardView::GetGuid() const {
 }
 
 std::u16string MigratableCardView::GetCardIdentifierString() const {
-  return migratable_credit_card_.credit_card()
-      .CardIdentifierStringForAutofillDisplay();
-}
-
-void MigratableCardView::OnThemeChanged() {
-  View::OnThemeChanged();
-  checkbox_uncheck_text_container_->SetBackground(views::CreateSolidBackground(
-      GetColorProvider()->GetColor(ui::kColorBubbleFooterBackground)));
+  return migratable_credit_card_.credit_card().CardNameAndLastFourDigits();
 }
 
 std::unique_ptr<views::View>
@@ -122,9 +117,9 @@ MigratableCardView::GetMigratableCardDescriptionView(
         // TODO(crbug/867194): Currently the ink drop animation circle is
         // cropped by the border of scroll bar view. Find a way to adjust the
         // format.
-        views::InkDrop::Get(checkbox_)->SetMode(
-            views::InkDropHost::InkDropMode::OFF);
-        checkbox_->SetAssociatedLabel(card_description.get());
+        views::InkDrop::Get(checkbox_->ink_drop_view())
+            ->SetMode(views::InkDropHost::InkDropMode::OFF);
+        checkbox_->SetAccessibleName(card_description.get());
       }
       break;
     }
@@ -155,13 +150,11 @@ MigratableCardView::GetMigratableCardDescriptionView(
           views::BoxLayout::Orientation::kHorizontal, gfx::Insets(),
           provider->GetDistanceMetric(DISTANCE_RELATED_LABEL_HORIZONTAL_LIST)));
 
-  ui::ResourceBundle& rb = ui::ResourceBundle::GetSharedInstance();
   std::unique_ptr<views::ImageView> card_image =
       std::make_unique<views::ImageView>();
   card_image->SetImage(
-      rb.GetImageNamed(CreditCard::IconResourceId(
-                           migratable_credit_card.credit_card().network()))
-          .AsImageSkia());
+      ui::ImageModel::FromResourceId(CreditCard::IconResourceId(
+          migratable_credit_card.credit_card().network())));
   card_image->SetAccessibleName(
       migratable_credit_card.credit_card().NetworkForDisplay());
   card_network_and_last_four_digits->AddChildView(card_image.release());
@@ -218,7 +211,7 @@ void MigratableCardView::CheckboxPressed() {
   parent_dialog_->UpdateLayout();
 }
 
-BEGIN_METADATA(MigratableCardView, views::View)
+BEGIN_METADATA(MigratableCardView)
 ADD_READONLY_PROPERTY_METADATA(bool, Selected)
 ADD_READONLY_PROPERTY_METADATA(std::string, Guid)
 ADD_READONLY_PROPERTY_METADATA(std::u16string, CardIdentifierString)

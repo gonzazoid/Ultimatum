@@ -50,12 +50,18 @@ class ClangPluginTest(object):
     os.chdir(self._test_base)
 
     clang_cmd = [self._clang_path, '-c', '-std=c++14']
+
+    # Use the traditional diagnostics format (see crbug.com/1450229).
+    clang_cmd.extend([
+        '-fno-diagnostics-show-line-numbers', '-fcaret-diagnostics-max-lines=1'
+    ])
+
     clang_cmd.extend(['-Xclang', '-add-plugin', '-Xclang', self._plugin_name])
     self.AdjustClangArguments(clang_cmd)
 
     passing = []
     failing = []
-    tests = glob.glob('*.cpp')
+    tests = glob.glob('*.cpp') + glob.glob('*.mm')
     for test in tests:
       sys.stdout.write('Testing %s... ' % test)
       test_name, _ = os.path.splitext(test)
@@ -110,6 +116,10 @@ class ClangPluginTest(object):
     except IOError:
       open(result_file, 'w').write(actual)
       return 'no expected file found'
+
+    # Normalize backslashes to forward-slashes to avoid failure on Windows
+    actual = actual.replace('\\', '/')
+    expected = expected.replace('\\', '/')
 
     if expected != actual:
       open(result_file, 'w').write(actual)

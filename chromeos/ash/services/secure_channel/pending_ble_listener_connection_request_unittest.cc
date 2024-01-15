@@ -7,6 +7,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/unguessable_token.h"
@@ -55,15 +56,14 @@ class SecureChannelPendingBleListenerConnectionRequestTest
             fake_pending_connection_request_delegate_.get(), mock_adapter_);
   }
 
-  const absl::optional<
-      PendingConnectionRequestDelegate::FailedConnectionReason>&
+  const std::optional<PendingConnectionRequestDelegate::FailedConnectionReason>&
   GetFailedConnectionReason() {
     return fake_pending_connection_request_delegate_
         ->GetFailedConnectionReasonForId(
             pending_ble_listener_request_->GetRequestId());
   }
 
-  const absl::optional<mojom::ConnectionAttemptFailureReason>&
+  const std::optional<mojom::ConnectionAttemptFailureReason>&
   GetConnectionAttemptFailureReason() {
     return fake_client_connection_parameters_->failure_reason();
   }
@@ -77,7 +77,8 @@ class SecureChannelPendingBleListenerConnectionRequestTest
 
   std::unique_ptr<FakePendingConnectionRequestDelegate>
       fake_pending_connection_request_delegate_;
-  FakeClientConnectionParameters* fake_client_connection_parameters_;
+  raw_ptr<FakeClientConnectionParameters, DanglingUntriaged>
+      fake_client_connection_parameters_;
   scoped_refptr<testing::NiceMock<device::MockBluetoothAdapter>> mock_adapter_;
 
   std::unique_ptr<PendingConnectionRequest<BleListenerFailureType>>

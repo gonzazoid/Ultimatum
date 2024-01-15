@@ -55,8 +55,8 @@ class AppWindowRegistry : public KeyedService,
   };
 
   typedef std::list<AppWindow*> AppWindowList;
-  typedef AppWindowList::const_iterator const_iterator;
-  typedef std::set<std::string> InspectedWindowSet;
+  using const_iterator = AppWindowList::const_iterator;
+  using InspectedWindowSet = std::set<std::string>;
 
   explicit AppWindowRegistry(content::BrowserContext* context);
   ~AppWindowRegistry() override;
@@ -116,7 +116,7 @@ class AppWindowRegistry : public KeyedService,
     ~Factory() override;
 
     // BrowserContextKeyedServiceFactory
-    KeyedService* BuildServiceInstanceFor(
+    std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
         content::BrowserContext* context) const override;
     bool ServiceIsCreatedWithBrowserContext() const override;
     content::BrowserContext* GetBrowserContextToUse(

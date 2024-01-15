@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/task/single_thread_task_runner.h"
@@ -21,6 +21,7 @@
 #include "third_party/blink/renderer/platform/disk_data_allocator.h"
 #include "third_party/blink/renderer/platform/instrumentation/memory_pressure_listener.h"
 #include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
+#include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
@@ -82,30 +83,10 @@ void MoveString(ParkableStringImpl* string,
 const char* ParkableStringManager::kAllocatorDumpName = "parkable_strings";
 const base::TimeDelta ParkableStringManager::kFirstParkingDelay;
 
-// Compares not the pointers, but the arrays. Uses pointers to save space.
-struct ParkableStringManager::SecureDigestHash {
-  STATIC_ONLY(SecureDigestHash);
-
-  static unsigned GetHash(
-      const ParkableStringImpl::SecureDigest* const digest) {
-    // The first bytes of the hash are as good as anything else.
-    return *reinterpret_cast<const unsigned*>(digest->data());
-  }
-
-  static inline bool Equal(const ParkableStringImpl::SecureDigest* const a,
-                           const ParkableStringImpl::SecureDigest* const b) {
-    return a == b ||
-           std::equal(a->data(), a->data() + ParkableStringImpl::kDigestSize,
-                      b->data());
-  }
-
-  static constexpr bool safe_to_compare_to_empty_or_deleted = false;
-};
-
 // static
 ParkableStringManagerDumpProvider*
 ParkableStringManagerDumpProvider::Instance() {
-  static ParkableStringManagerDumpProvider instance;
+  DEFINE_STATIC_LOCAL(ParkableStringManagerDumpProvider, instance, ());
   return &instance;
 }
 
@@ -121,7 +102,7 @@ ParkableStringManagerDumpProvider::ParkableStringManagerDumpProvider() =
     default;
 
 ParkableStringManager& ParkableStringManager::Instance() {
-  DEFINE_STATIC_LOCAL(ParkableStringManager, instance, ());
+  DEFINE_THREAD_SAFE_STATIC_LOCAL(ParkableStringManager, instance, ());
   return instance;
 }
 
@@ -218,28 +199,87 @@ scoped_refptr<ParkableStringImpl> ParkableStringManager::Add(
   return new_parkable;
 }
 
-void ParkableStringManager::Remove(ParkableStringImpl* string) {
+void ParkableStringManager::RemoveOnMainThread(ParkableStringImpl* string) {
   DCHECK(IsMainThread());
   DCHECK(string->may_be_parked());
   DCHECK(string->digest());
 
-  StringMap* map = nullptr;
-  if (string->is_on_disk())
-    map = &on_disk_strings_;
-  else if (string->is_parked())
-    map = &parked_strings_;
-  else
-    map = &unparked_strings_;
+  {
+    base::AutoLock locker(string->metadata_->lock_);
+    // `RefCountedThreadSafeBase::Release()` may return false if the Main
+    // Thread took a new reference to the string between the moment this task
+    // was posted from a background thread and its execution.
+    if (!string->RefCountedThreadSafeBase::Release()) {
+      return;
+    }
 
-  auto it = map->find(string->digest());
-  DCHECK(it != map->end());
-  map->erase(it);
+    StringMap* map = nullptr;
+    if (string->is_on_disk_no_lock()) {
+      map = &on_disk_strings_;
+    } else if (string->is_parked_no_lock()) {
+      map = &parked_strings_;
+    } else {
+      map = &unparked_strings_;
+    }
+
+    auto it = map->find(string->digest());
+    DCHECK(it != map->end());
+    map->erase(it);
+  }
+
+  if (string->has_on_disk_data()) {
+    data_allocator().Discard(std::move(string->metadata_->on_disk_metadata_));
+    // Now data_allocator may have enough free space for pending compressed
+    // strings. Schedule for them.
+    ScheduleAgingTaskIfNeeded();
+  }
+
+  delete string;
+}
+
+void ParkableStringManager::Remove(ParkableStringImpl* string) {
+  if (task_runner_->BelongsToCurrentThread()) {
+    RemoveOnMainThread(string);
+    return;
+  }
+  task_runner_->PostTask(
+      FROM_HERE,
+      base::BindOnce(&ParkableStringManager::RemoveOnMainThread,
+                     base::Unretained(this), base::Unretained(string)));
+}
+
+void ParkableStringManager::CompleteUnparkOnMainThread(
+    ParkableStringImpl* string,
+    base::TimeDelta elapsed,
+    base::TimeDelta disk_elapsed) {
+  DCHECK(IsMainThread());
+  bool was_on_disk = !disk_elapsed.is_min();
+  RecordUnparkingTime(elapsed);
+  OnUnparked(string, was_on_disk);
+  if (was_on_disk) {
+    RecordDiskReadTime(disk_elapsed);
+  }
+}
+
+void ParkableStringManager::CompleteUnpark(ParkableStringImpl* string,
+                                           base::TimeDelta elapsed,
+                                           base::TimeDelta disk_elapsed) {
+  // The task runner is bound to the main thread.
+  if (task_runner_->BelongsToCurrentThread()) {
+    CompleteUnparkOnMainThread(string, elapsed, disk_elapsed);
+    return;
+  }
+  // Use a retained reference to prevent `string` from being deleted before
+  // `CompleteUnpark()` is executed in the main thread.
+  task_runner_->PostTask(
+      FROM_HERE, BindOnce(&ParkableStringManager::CompleteUnparkOnMainThread,
+                          base::Unretained(this), base::RetainedRef(string),
+                          elapsed, disk_elapsed));
 }
 
 void ParkableStringManager::OnParked(ParkableStringImpl* newly_parked_string) {
   DCHECK(IsMainThread());
   DCHECK(newly_parked_string->may_be_parked());
-  DCHECK(newly_parked_string->is_parked());
   MoveString(newly_parked_string, &unparked_strings_, &parked_strings_);
 }
 
@@ -247,24 +287,15 @@ void ParkableStringManager::OnWrittenToDisk(
     ParkableStringImpl* newly_written_string) {
   DCHECK(IsMainThread());
   DCHECK(newly_written_string->may_be_parked());
-  DCHECK(newly_written_string->is_on_disk());
   MoveString(newly_written_string, &parked_strings_, &on_disk_strings_);
 }
 
-void ParkableStringManager::OnReadFromDisk(ParkableStringImpl* string) {
-  DCHECK(IsMainThread());
-  DCHECK(string->may_be_parked());
-  DCHECK(string->is_on_disk());
-  MoveString(string, &on_disk_strings_, &parked_strings_);
-  // Does not call ScheduleAgingTaskIfNeeded() since OnUnparked() will be called
-  // when the string is unparked (in the same main thread task).
-}
-
-void ParkableStringManager::OnUnparked(ParkableStringImpl* was_parked_string) {
+void ParkableStringManager::OnUnparked(ParkableStringImpl* was_parked_string,
+                                       bool was_on_disk) {
   DCHECK(IsMainThread());
   DCHECK(was_parked_string->may_be_parked());
-  DCHECK(!was_parked_string->is_parked());
-  MoveString(was_parked_string, &parked_strings_, &unparked_strings_);
+  StringMap* from_map = was_on_disk ? &on_disk_strings_ : &parked_strings_;
+  MoveString(was_parked_string, from_map, &unparked_strings_);
   ScheduleAgingTaskIfNeeded();
 }
 
@@ -295,46 +326,15 @@ size_t ParkableStringManager::Size() const {
 }
 
 void ParkableStringManager::RecordStatisticsAfter5Minutes() const {
-  base::UmaHistogramTimes("Memory.ParkableString.MainThreadTime.5min",
-                          total_unparking_time_);
-  if (base::ThreadTicks::IsSupported()) {
-    base::UmaHistogramTimes("Memory.ParkableString.ParkingThreadTime.5min",
-                            total_parking_thread_time_);
-  }
-  Statistics stats = ComputeStatistics();
-  base::UmaHistogramCounts100000("Memory.ParkableString.TotalSizeKb.5min",
-                                 static_cast<int>(stats.original_size / 1000));
-  base::UmaHistogramCounts100000(
-      "Memory.ParkableString.CompressedSizeKb.5min",
-      static_cast<int>(stats.compressed_size / 1000));
-  size_t savings = stats.compressed_original_size - stats.compressed_size;
-  base::UmaHistogramCounts100000("Memory.ParkableString.SavingsKb.5min",
-                                 static_cast<int>(savings / 1000));
-  if (stats.compressed_original_size != 0) {
-    int ratio_percentage = static_cast<int>((100 * stats.compressed_size) /
-                                            stats.compressed_original_size);
-    base::UmaHistogramPercentageObsoleteDoNotUse(
-        "Memory.ParkableString.CompressionRatio.5min", ratio_percentage);
-  }
-
-  // May not be usable, e.g. Incognito, permission or write failure.
-  base::UmaHistogramBoolean("Memory.ParkableString.DiskIsUsable.5min",
-                            data_allocator().may_write());
   // These metrics only make sense if the disk allocator is used.
   if (data_allocator().may_write()) {
+    Statistics stats = ComputeStatistics();
     base::UmaHistogramTimes("Memory.ParkableString.DiskWriteTime.5min",
                             total_disk_write_time_);
     base::UmaHistogramTimes("Memory.ParkableString.DiskReadTime.5min",
                             total_disk_read_time_);
-
-    base::UmaHistogramCounts100000(
-        "Memory.ParkableString.MemorySavingsKb.5min",
-        std::max(0, static_cast<int>(stats.savings_size)) / 1000);
     base::UmaHistogramCounts100000("Memory.ParkableString.OnDiskSizeKb.5min",
                                    static_cast<int>(stats.on_disk_size / 1000));
-    base::UmaHistogramCounts100000(
-        "Memory.ParkableString.OnDiskFootprintKb.5min",
-        static_cast<int>(data_allocator().disk_footprint()) / 1000);
   }
 }
 
@@ -384,9 +384,10 @@ void ParkableStringManager::ScheduleAgingTaskIfNeeded() {
   if (has_pending_aging_task_)
     return;
 
-  base::TimeDelta delay = base::Seconds(kAgingIntervalInSeconds);
-  if (base::FeatureList::IsEnabled(features::kDelayFirstParkingOfStrings) &&
-      !first_string_aging_was_delayed_) {
+  base::TimeDelta delay = kAgingInterval;
+  // Delay the first aging tick, since this renderer may be short-lived, we do
+  // not want to waste CPU time compressing memory that is going away soon.
+  if (!first_string_aging_was_delayed_) {
     delay = kFirstParkingDelay;
     first_string_aging_was_delayed_ = true;
   }
@@ -472,6 +473,19 @@ ParkableStringManager::Statistics ParkableStringManager::ComputeStatistics()
   return stats;
 }
 
+void ParkableStringManager::AssertRemoved(ParkableStringImpl* string) {
+#if DCHECK_IS_ON()
+  auto it = on_disk_strings_.find(string->digest());
+  DCHECK_EQ(it, on_disk_strings_.end());
+
+  it = parked_strings_.find(string->digest());
+  DCHECK_EQ(it, parked_strings_.end());
+
+  it = unparked_strings_.find(string->digest());
+  DCHECK_EQ(it, unparked_strings_.end());
+#endif
+}
+
 void ParkableStringManager::ResetForTesting() {
   has_pending_aging_task_ = false;
   has_posted_unparking_time_accounting_task_ = false;
@@ -485,6 +499,17 @@ void ParkableStringManager::ResetForTesting() {
   on_disk_strings_.clear();
   allocator_for_testing_ = nullptr;
   first_string_aging_was_delayed_ = false;
+}
+
+bool ParkableStringManager::IsOnParkedMapForTesting(
+    ParkableStringImpl* string) {
+  auto it = parked_strings_.find(string->digest());
+  return it != parked_strings_.end();
+}
+
+bool ParkableStringManager::IsOnDiskMapForTesting(ParkableStringImpl* string) {
+  auto it = on_disk_strings_.find(string->digest());
+  return it != on_disk_strings_.end();
 }
 
 ParkableStringManager::ParkableStringManager()

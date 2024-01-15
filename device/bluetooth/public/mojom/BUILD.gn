@@ -5,8 +5,13 @@
 import("//mojo/public/tools/bindings/mojom.gni")
 
 mojom("mojom") {
+  generate_java = true
   sources = [ "uuid.mojom" ]
   webui_module_path = "/"
+
+  # Indirect dependency of Blink test support so generate legacy bindings for
+  # Blink in JavaScript.
+  generate_legacy_js_bindings = true
 
   cpp_typemaps = [
     {

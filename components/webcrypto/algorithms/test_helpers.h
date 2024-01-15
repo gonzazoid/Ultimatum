@@ -10,6 +10,7 @@
 #include <memory>
 #include <ostream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/strings/string_number_conversions.h"
@@ -65,11 +66,7 @@ blink::WebCryptoAlgorithm CreateRsaHashedKeyGenAlgorithm(
 //  - For empty inputs, a byte is added.
 std::vector<uint8_t> Corrupted(const std::vector<uint8_t>& input);
 
-std::vector<uint8_t> HexStringToBytes(const std::string& hex);
-
-// Deprecated; do not add new uses of this function, since base::DictionaryValue
-// itself is deprecated.
-std::vector<uint8_t> MakeJsonVector(const base::DictionaryValue& dict);
+std::vector<uint8_t> HexStringToBytes(std::string_view hex);
 
 // Serialize |value| to json, then return that json as a byte vector.
 std::vector<uint8_t> MakeJsonVector(const base::ValueView& value);
@@ -86,13 +83,13 @@ base::Value::List ReadJsonTestFileAsList(const char* test_file_name);
 // (which can include periods for nested dictionaries). Interprets the
 // string as a hex encoded string and converts it to a bytes list.
 //
-// Returns empty vector on failure or if |dict| is not a dictionary.
-std::vector<uint8_t> GetBytesFromHexString(const base::Value* dict,
-                                           const std::string& property_name);
+// Returns empty vector on failure.
+std::vector<uint8_t> GetBytesFromHexString(const base::Value::Dict& dict,
+                                           std::string_view property_name);
 
 // Reads a string property with path "property_name" and converts it to a
-// WebCryptoAlgorith. Returns null algorithm on failure.
-blink::WebCryptoAlgorithm GetDigestAlgorithm(const base::DictionaryValue* dict,
+// WebCryptoAlgorithm. Returns null algorithm on failure.
+blink::WebCryptoAlgorithm GetDigestAlgorithm(const base::Value::Dict& dict,
                                              const char* property_name);
 
 // Returns true if any of the vectors in the input list have identical content.
@@ -134,15 +131,6 @@ Status ImportKeyJwkFromDict(const base::ValueView& dict,
                             blink::WebCryptoKeyUsageMask usages,
                             blink::WebCryptoKey* key);
 
-// Obsolete compatibility overload, do not add new uses. This is only present
-// because base::DictionaryValue requires explicit conversion to
-// base::ValueView.
-Status ImportKeyJwkFromDict(const base::DictionaryValue& dict,
-                            const blink::WebCryptoAlgorithm& algorithm,
-                            bool extractable,
-                            blink::WebCryptoKeyUsageMask usages,
-                            blink::WebCryptoKey* key);
-
 // Parses a vector of JSON into a dictionary.
 absl::optional<base::Value::Dict> GetJwkDictionary(
     const std::vector<uint8_t>& json);
@@ -151,23 +139,23 @@ absl::optional<base::Value::Dict> GetJwkDictionary(
 // required on the fields examined.
 ::testing::AssertionResult VerifyJwk(
     const base::Value::Dict& dict,
-    const std::string& kty_expected,
-    const std::string& alg_expected,
+    std::string_view kty_expected,
+    std::string_view alg_expected,
     blink::WebCryptoKeyUsageMask use_mask_expected);
 
 ::testing::AssertionResult VerifySecretJwk(
     const std::vector<uint8_t>& json,
-    const std::string& alg_expected,
-    const std::string& k_expected_hex,
+    std::string_view alg_expected,
+    std::string_view k_expected_hex,
     blink::WebCryptoKeyUsageMask use_mask_expected);
 
 // Verifies that the JSON in the input vector contains the provided
 // expected values. Exact matches are required on the fields examined.
 ::testing::AssertionResult VerifyPublicJwk(
     const std::vector<uint8_t>& json,
-    const std::string& alg_expected,
-    const std::string& n_expected_hex,
-    const std::string& e_expected_hex,
+    std::string_view alg_expected,
+    std::string_view n_expected_hex,
+    std::string_view e_expected_hex,
     blink::WebCryptoKeyUsageMask use_mask_expected);
 
 // Helper that tests importing ane exporting of symmetric keys as JWK.
@@ -175,7 +163,7 @@ void ImportExportJwkSymmetricKey(
     int key_len_bits,
     const blink::WebCryptoAlgorithm& import_algorithm,
     blink::WebCryptoKeyUsageMask usages,
-    const std::string& jwk_alg);
+    std::string_view jwk_alg);
 
 // Wrappers around GenerateKey() which expect the result to be either a secret
 // key or a public/private keypair. If the result does not match the
@@ -193,19 +181,19 @@ Status GenerateKeyPair(const blink::WebCryptoAlgorithm& algorithm,
 // Reads a key format string as used in some JSON test files and converts it to
 // a WebCryptoKeyFormat.
 blink::WebCryptoKeyFormat GetKeyFormatFromJsonTestCase(
-    const base::DictionaryValue* test);
+    const base::Value::Dict& test);
 
 // Extracts the key data bytes from |test| as used insome JSON test files.
 std::vector<uint8_t> GetKeyDataFromJsonTestCase(
-    const base::DictionaryValue* test,
+    const base::Value::Dict& test,
     blink::WebCryptoKeyFormat key_format);
 
 // Reads the "crv" string from a JSON test case and returns it as a
 // WebCryptoNamedCurve.
 blink::WebCryptoNamedCurve GetCurveNameFromDictionary(
-    const base::DictionaryValue* dict);
+    const base::Value::Dict& dict);
 
-blink::WebCryptoNamedCurve CurveNameToCurve(const std::string& name);
+blink::WebCryptoNamedCurve CurveNameToCurve(std::string_view name);
 
 // Creates an HMAC import algorithm whose inner hash algorithm is determined by
 // the specified algorithm ID. It is an error to call this method with a hash

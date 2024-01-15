@@ -17,18 +17,19 @@ FormattedTextRunInternal::FormattedTextRunInternal(
   // text. In the future we should handle execution_context's from worker
   // threads that do not have a document.
   auto* document = To<LocalDOMWindow>(execution_context)->document();
-  scoped_refptr<ComputedStyle> style =
-      document->GetStyleResolver().CreateComputedStyle();
-  style->SetDisplay(EDisplay::kInline);
+  ComputedStyleBuilder builder =
+      document->GetStyleResolver().CreateComputedStyleBuilder();
+  builder.SetDisplay(EDisplay::kInline);
   layout_text_ = LayoutText::CreateAnonymousForFormattedText(
-      *document, std::move(style), text.Impl(), LegacyLayout::kAuto);
+      *document, builder.TakeStyle(), text.Impl());
   layout_text_->SetIsLayoutNGObjectForFormattedText(true);
 }
 
 void FormattedTextRunInternal::UpdateStyle(Document& document,
                                            const ComputedStyle& parent_style) {
-  auto style = document.GetStyleResolver().StyleForFormattedText(
-      /*is_text_run*/ true, parent_style, GetCssPropertySet());
+  const ComputedStyle* style =
+      document.GetStyleResolver().StyleForFormattedText(
+          /*is_text_run*/ true, parent_style, GetCssPropertySet());
   layout_text_->SetStyle(style, LayoutObject::ApplyStyleChanges::kNo);
 }
 

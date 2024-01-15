@@ -29,7 +29,9 @@ message DeviceInfoSpecifics {
   optional string client_name = 2;
 
   // The platform of the device.
-  optional SyncEnums.DeviceType device_type = 3;
+  // Deprecated in M110, but still populated for backwards compatibility.
+  // Replaced by os_type + device_form_factor.
+  optional SyncEnums.DeviceType device_type = 3 [deprecated = true];
 
   // The UserAgent used when contacting the Chrome Sync server.
   // Only present when talking to the HTTP server.
@@ -90,6 +92,12 @@ message DeviceInfoSpecifics {
     ChromeVersionInfo chrome_version_info = 17;
     GooglePlayServicesVersionInfo google_play_services_version_info = 18;
   }
+
+  // The OS type the device.
+  optional SyncEnums.OsType os_type = 19;
+
+  // The form factor of the device.
+  optional SyncEnums.DeviceFormFactor device_form_factor = 20;
 }
 
 // Feature specific information about the device that is running a sync-enabled
@@ -196,6 +204,11 @@ message PhoneAsASecurityKeySpecificFields {
   // A P-256, X9.62-encoded public key for this device. Specific to the Chrome
   // instance.
   optional bytes peer_public_key_x962 = 5;
+
+  // The credential ID for use when signing into accounts.google.com. This
+  // credential ID isn't published as a WebauthnCredentialSpecifics, unlike
+  // other passkeys, because it's auto-generated.
+  optional bytes google_credential_id = 6;
 }
 
 message ChromeVersionInfo {

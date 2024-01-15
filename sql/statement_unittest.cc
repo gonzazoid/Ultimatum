@@ -5,11 +5,13 @@
 #include <limits>
 #include <string>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/functional/bind.h"
+#include "base/strings/string_piece.h"
 #include "base/test/bind.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "sql/database.h"
 #include "sql/statement.h"
 #include "sql/test/scoped_error_expecter.h"
@@ -24,6 +26,8 @@ class StatementTest : public testing::Test {
   ~StatementTest() override = default;
 
   void SetUp() override {
+    db_.set_histogram_tag("Test");
+
     ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
     ASSERT_TRUE(
         db_.Open(temp_dir_.GetPath().AppendASCII("statement_test.sqlite")));
@@ -258,6 +262,39 @@ TEST_F(StatementTest, BindBlob) {
   EXPECT_FALSE(select.Step());
 }
 
+TEST_F(StatementTest, BindBlob_String16Overload) {
+  // `id` makes SQLite's rowid mechanism explicit. We rely on it to retrieve
+  // the rows in the same order that they were inserted.
+  ASSERT_TRUE(db_.Execute(
+      "CREATE TABLE blobs(id INTEGER PRIMARY KEY NOT NULL, b BLOB NOT NULL)"));
+
+  const std::vector<std::u16string> values = {
+      std::u16string(), std::u16string(u"hello\n"), std::u16string(u"😀🍩🎉"),
+      std::u16string(u"\xd800\xdc00text"),  // surrogate pair with text
+      std::u16string(u"\xd8ff"),            // unpaired high surrogate
+      std::u16string(u"\xdddd"),            // unpaired low surrogate
+      std::u16string(u"\xdc00\xd800text"),  // lone low followed by lone high
+                                            // surrogate and text
+      std::u16string(1024, 0xdb23),         // long invalid UTF-16
+  };
+
+  Statement insert(db_.GetUniqueStatement("INSERT INTO blobs(b) VALUES(?)"));
+  for (const std::u16string& value : values) {
+    insert.BindBlob(0, value);
+    ASSERT_TRUE(insert.Run());
+    insert.Reset(/*clear_bound_vars=*/true);
+  }
+
+  Statement select(db_.GetUniqueStatement("SELECT b FROM blobs ORDER BY id"));
+  for (const std::u16string& value : values) {
+    ASSERT_TRUE(select.Step());
+    std::u16string column_value;
+    EXPECT_TRUE(select.ColumnBlobAsString16(0, &column_value));
+    EXPECT_EQ(value, column_value);
+  }
+  EXPECT_FALSE(select.Step());
+}
+
 TEST_F(StatementTest, BindString) {
   // `id` makes SQLite's rowid mechanism explicit. We rely on it to retrieve
   // the rows in the same order that they were inserted.
@@ -316,14 +353,34 @@ TEST_F(StatementTest, GetSQLStatementExcludesBoundValues) {
   ASSERT_TRUE(insert.Run());
 
   // Verify that GetSQLStatement doesn't leak any bound values that may be PII.
-  EXPECT_EQ(insert.GetSQLStatement(), "INSERT INTO texts(t) VALUES(?)");
-  EXPECT_EQ(insert.GetSQLStatement().find("VALUES"), 21U);
-  EXPECT_EQ(insert.GetSQLStatement().find("Doe"), std::string::npos);
+  std::string sql_statement = insert.GetSQLStatement();
+  EXPECT_TRUE(base::Contains(sql_statement, "INSERT INTO texts(t) VALUES(?)"));
+  EXPECT_TRUE(base::Contains(sql_statement, "VALUES"));
+  EXPECT_FALSE(base::Contains(sql_statement, "Doe"));
 
   // Sanity check that the name was actually committed.
   Statement select(db_.GetUniqueStatement("SELECT t FROM texts ORDER BY id"));
   ASSERT_TRUE(select.Step());
   EXPECT_EQ(select.ColumnString(0), "John Doe");
+}
+
+TEST_F(StatementTest, RunReportsPerformanceMetrics) {
+  base::HistogramTester histogram_tester;
+
+  ASSERT_TRUE(db_.Execute(
+      "CREATE TABLE rows(a INTEGER PRIMARY KEY NOT NULL, b INTEGER NOT NULL)"));
+  ASSERT_TRUE(db_.Execute("INSERT INTO rows(a, b) VALUES(12, 42)"));
+
+  histogram_tester.ExpectTotalCount("Sql.Statement.Test.VMSteps", 0);
+
+  {
+    Statement select(db_.GetUniqueStatement("SELECT b FROM rows WHERE a=?"));
+    select.BindInt64(0, 12);
+    ASSERT_TRUE(select.Step());
+    EXPECT_EQ(select.ColumnInt64(0), 42);
+  }
+
+  histogram_tester.ExpectTotalCount("Sql.Statement.Test.VMSteps", 1);
 }
 
 }  // namespace

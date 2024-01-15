@@ -7,12 +7,12 @@
 
 #include <stdint.h>
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "chrome/browser/web_applications/web_app_id.h"
+#include "chrome/browser/web_applications/web_app_ui_manager.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
-#include "extensions/common/constants.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/webapps/common/web_app_id.h"
 #include "ui/gfx/geometry/rect.h"
 
 class Profile;
@@ -21,6 +21,10 @@ class GURL;
 enum class WindowOpenDisposition;
 struct NavigateParams;
 
+namespace apps {
+struct AppLaunchParams;
+}
+
 namespace content {
 class WebContents;
 }
@@ -28,28 +32,35 @@ class WebContents;
 namespace web_app {
 
 class AppBrowserController;
+class WithAppResources;
 
-absl::optional<AppId> GetWebAppForActiveTab(Browser* browser);
+std::optional<webapps::AppId> GetWebAppForActiveTab(const Browser* browser);
 
 // Clears navigation history prior to user entering app scope.
 void PrunePreScopeNavigationHistory(const GURL& scope,
                                     content::WebContents* contents);
 
-// Reparents the active tab into a new app browser for the web app that has the
-// tab's URL in its scope. Does nothing if there is no web app in scope.
+// Invokes ReparentWebContentsIntoAppBrowser() for the active tab for the
+// web app that has the tab's URL in its scope. Does nothing if there is no web
+// app in scope.
 Browser* ReparentWebAppForActiveTab(Browser* browser);
 
-// Reparents |contents| into an app browser for |app_id|.
-// Uses existing app browser if they are in experimental tabbed mode, otherwise
-// creates a new browser window.
+// Reparents |contents| into a standalone web app window for |app_id|.
+// - If the web app has a launch_handler set to reuse existing windows and there
+// are existing web app windows around this will launch the web app into the
+// existing window and close |contents|.
+// - If the web app is in experimental tabbed mode and has and existing web app
+// window, |contents| will be reparented into the existing window.
+// - Otherwise a new browser window is created for |contents| to be reparented
+// into.
 Browser* ReparentWebContentsIntoAppBrowser(content::WebContents* contents,
-                                           const AppId& app_id);
+                                           const webapps::AppId& app_id);
 
 // Tags `contents` with the given app id and marks it as an app. This
 // differentiates it from a `WebContents` which happens to be hosting a page
 // that is part of an app.
 void SetWebContentsActingAsApp(content::WebContents* contents,
-                               const AppId& app_id);
+                               const webapps::AppId& app_id);
 
 // Marks the web contents as being the pinned home tab of a tabbed web app.
 void SetWebContentsIsPinnedHomeTab(content::WebContents* contents);
@@ -72,6 +83,8 @@ Browser* CreateWebApplicationWindow(Profile* profile,
                                     bool omit_from_session_restore = false,
                                     bool can_resize = true,
                                     bool can_maximize = true,
+                                    bool can_fullscreen = true,
+                                    bool is_system_web_app = false,
                                     gfx::Rect initial_bounds = gfx::Rect());
 
 content::WebContents* NavigateWebApplicationWindow(
@@ -85,17 +98,25 @@ content::WebContents* NavigateWebAppUsingParams(const std::string& app_id,
 
 // RecordLaunchMetrics methods report UMA metrics. It shouldn't have other
 // side-effects (e.g. updating app launch time).
-void RecordLaunchMetrics(const AppId& app_id,
+void RecordLaunchMetrics(const webapps::AppId& app_id,
                          apps::LaunchContainer container,
-                         extensions::AppLaunchSource launch_source,
+                         apps::LaunchSource launch_source,
                          const GURL& launch_url,
                          content::WebContents* web_contents);
 
 // Updates statistics about web app launch. For example, app's last launch time
 // (populates recently launched app list) and site engagement stats.
 void UpdateLaunchStats(content::WebContents* web_contents,
-                       const AppId& app_id,
+                       const webapps::AppId& app_id,
                        const GURL& launch_url);
+
+// Locks that lock apps all have the WithAppResources mixin, allowing any
+// app-locking lock to call this method.
+void LaunchWebApp(apps::AppLaunchParams params,
+                  LaunchWebAppWindowSetting launch_setting,
+                  Profile& profile,
+                  WithAppResources& app_resources,
+                  LaunchWebAppDebugValueCallback callback);
 
 }  // namespace web_app
 

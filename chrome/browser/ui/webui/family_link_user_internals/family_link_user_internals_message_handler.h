@@ -8,17 +8,18 @@
 #include "base/callback_list.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
-#include "chrome/browser/supervised_user/supervised_user_error_page/supervised_user_error_page.h"
-#include "chrome/browser/supervised_user/supervised_user_service.h"
-#include "chrome/browser/supervised_user/supervised_user_service_observer.h"
-#include "chrome/browser/supervised_user/supervised_user_url_filter.h"
+#include "components/supervised_user/core/browser/supervised_user_error_page.h"
+#include "components/supervised_user/core/browser/supervised_user_service.h"
+#include "components/supervised_user/core/browser/supervised_user_service_observer.h"
+#include "components/supervised_user/core/browser/supervised_user_url_filter.h"
+#include "components/supervised_user/core/common/supervised_user_utils.h"
 #include "content/public/browser/web_ui_message_handler.h"
 
 // The implementation for the chrome://family-link-user-internals page.
 class FamilyLinkUserInternalsMessageHandler
     : public content::WebUIMessageHandler,
       public SupervisedUserServiceObserver,
-      public SupervisedUserURLFilter::Observer {
+      public supervised_user::SupervisedUserURLFilter::Observer {
  public:
   FamilyLinkUserInternalsMessageHandler();
 
@@ -37,32 +38,31 @@ class FamilyLinkUserInternalsMessageHandler
   // SupervisedUserServiceObserver:
   void OnURLFilterChanged() override;
 
-  SupervisedUserService* GetSupervisedUserService();
+  supervised_user::SupervisedUserService* GetSupervisedUserService();
 
   void HandleRegisterForEvents(const base::Value::List& args);
   void HandleGetBasicInfo(const base::Value::List& args);
   void HandleTryURL(const base::Value::List& args);
 
   void SendBasicInfo();
-  void SendFamilyLinkUserSettings(const base::DictionaryValue* settings);
+  void SendFamilyLinkUserSettings(const base::Value::Dict& settings);
 
-  void OnTryURLResult(
-      const std::string& callback_id,
-      SupervisedUserURLFilter::FilteringBehavior behavior,
-      supervised_user_error_page::FilteringBehaviorReason reason,
-      bool uncertain);
+  void OnTryURLResult(const std::string& callback_id,
+                      supervised_user::FilteringBehavior behavior,
+                      supervised_user::FilteringBehaviorReason reason,
+                      bool uncertain);
 
   // SupervisedUserURLFilter::Observer:
   void OnSiteListUpdated() override;
   void OnURLChecked(const GURL& url,
-                    SupervisedUserURLFilter::FilteringBehavior behavior,
-                    supervised_user_error_page::FilteringBehaviorReason reason,
+                    supervised_user::FilteringBehavior behavior,
+                    supervised_user::FilteringBehaviorReason reason,
                     bool uncertain) override;
 
   base::CallbackListSubscription user_settings_subscription_;
 
-  base::ScopedObservation<SupervisedUserURLFilter,
-                          SupervisedUserURLFilter::Observer>
+  base::ScopedObservation<supervised_user::SupervisedUserURLFilter,
+                          supervised_user::SupervisedUserURLFilter::Observer>
       scoped_observation_{this};
 
   base::WeakPtrFactory<FamilyLinkUserInternalsMessageHandler> weak_factory_{

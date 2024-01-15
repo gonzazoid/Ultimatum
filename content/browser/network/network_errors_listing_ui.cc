@@ -7,11 +7,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/values.h"
-#include "content/grit/dev_ui_content_resources.h"
+#include "content/grit/network_errors_resources.h"
+#include "content/grit/network_errors_resources_map.h"
+#include "content/public/browser/browser_context.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/common/url_constants.h"
@@ -79,11 +81,10 @@ NetworkErrorsListingUI::NetworkErrorsListingUI(WebUI* web_ui)
 
   // Add required resources.
   html_source->UseStringsJs();
-  html_source->AddResourcePath("network_errors_listing.css",
-                               IDR_NETWORK_ERROR_LISTING_CSS);
-  html_source->AddResourcePath("network_errors_listing.js",
-                               IDR_NETWORK_ERROR_LISTING_JS);
-  html_source->SetDefaultResource(IDR_NETWORK_ERROR_LISTING_HTML);
+  html_source->AddResourcePaths(
+      base::make_span(kNetworkErrorsResources, kNetworkErrorsResourcesSize));
+  html_source->SetDefaultResource(
+      IDR_NETWORK_ERRORS_NETWORK_ERRORS_LISTING_HTML);
   html_source->SetRequestFilter(
       base::BindRepeating(&ShouldHandleWebUIRequestCallback),
       base::BindRepeating(&HandleWebUIRequestCallback,

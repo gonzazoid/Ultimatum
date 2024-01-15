@@ -36,15 +36,13 @@ class MediaRouterAndroid : public MediaRouterBase {
                    const url::Origin& origin,
                    content::WebContents* web_contents,
                    MediaRouteResponseCallback callback,
-                   base::TimeDelta timeout,
-                   bool incognito) override;
+                   base::TimeDelta timeout) override;
   void JoinRoute(const MediaSource::Id& source,
                  const std::string& presentation_id,
                  const url::Origin& origin,
                  content::WebContents* web_contents,
                  MediaRouteResponseCallback callback,
-                 base::TimeDelta timeout,
-                 bool incognito) override;
+                 base::TimeDelta timeout) override;
   void DetachRoute(MediaRoute::Id route_id) override;
   void TerminateRoute(const MediaRoute::Id& route_id) override;
   void SendRouteMessage(const MediaRoute::Id& route_id,
@@ -69,6 +67,11 @@ class MediaRouterAndroid : public MediaRouterBase {
                       const MediaSink::Id& sink_id,
                       int request_id,
                       bool is_local);
+
+  // Notifies the media router when the route media source is updated. This can
+  // happen during remote playback with the media element's source URL changes.
+  void OnRouteMediaSourceUpdated(const MediaRoute::Id& route_id,
+                                 const MediaSource::Id& source_id);
 
   // Notifies the media router that route creation or joining failed.
   void OnCreateRouteRequestError(const std::string& error_text, int request_id);
@@ -142,8 +145,10 @@ class MediaRouterAndroid : public MediaRouterBase {
   void UnregisterMediaSinksObserver(MediaSinksObserver* observer) override;
   void RegisterMediaRoutesObserver(MediaRoutesObserver* observer) override;
   void UnregisterMediaRoutesObserver(MediaRoutesObserver* observer) override;
-  void RegisterRouteMessageObserver(RouteMessageObserver* observer) override;
-  void UnregisterRouteMessageObserver(RouteMessageObserver* observer) override;
+  void RegisterPresentationConnectionMessageObserver(
+      PresentationConnectionMessageObserver* observer) override;
+  void UnregisterPresentationConnectionMessageObserver(
+      PresentationConnectionMessageObserver* observer) override;
 
   void OnPresentationConnectionError(const std::string& route_id);
   void OnRouteRequestError(
@@ -166,7 +171,7 @@ class MediaRouterAndroid : public MediaRouterBase {
                          std::unique_ptr<MediaSinksObserverList>>;
   MediaSinkObservers sinks_observers_;
 
-  base::ObserverList<MediaRoutesObserver>::Unchecked routes_observers_;
+  base::ObserverList<MediaRoutesObserver> routes_observers_;
 
   struct MediaRouteRequest {
     MediaRouteRequest(const MediaSource& source,

@@ -7,16 +7,16 @@
 #include <utility>
 
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/feature_list.h"
-#include "base/json/json_string_value_serializer.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/notreached.h"
 #include "base/observer_list.h"
-#include "components/os_crypt/os_crypt.h"
+#include "components/sync/base/features.h"
 #include "components/sync/base/passphrase_enums.h"
 #include "components/sync/base/time.h"
+#include "components/sync/engine/nigori/cross_user_sharing_public_key.h"
 #include "components/sync/engine/nigori/nigori.h"
 #include "components/sync/nigori/keystore_keys_cryptographer.h"
 #include "components/sync/nigori/nigori_storage.h"
@@ -24,6 +24,7 @@
 #include "components/sync/protocol/encryption.pb.h"
 #include "components/sync/protocol/entity_data.h"
 #include "components/sync/protocol/nigori_local_data.pb.h"
+#include "components/sync/protocol/nigori_specifics.pb.h"
 
 namespace syncer {
 
@@ -40,7 +41,7 @@ const char kNigoriNonUniqueName[] = "Nigori";
 // added.
 enum class KeyDerivationMethodStateForMetrics {
   NOT_SET = 0,
-  UNSUPPORTED = 1,
+  DEPRECATED_UNSUPPORTED = 1,
   PBKDF2_HMAC_SHA1_1003 = 2,
   SCRYPT_8192_8_11 = 3,
   kMaxValue = SCRYPT_8192_8_11
@@ -56,12 +57,10 @@ KeyDerivationMethodStateForMetrics GetKeyDerivationMethodStateForMetrics(
       return KeyDerivationMethodStateForMetrics::PBKDF2_HMAC_SHA1_1003;
     case KeyDerivationMethod::SCRYPT_8192_8_11:
       return KeyDerivationMethodStateForMetrics::SCRYPT_8192_8_11;
-    case KeyDerivationMethod::UNSUPPORTED:
-      return KeyDerivationMethodStateForMetrics::UNSUPPORTED;
   }
 
   NOTREACHED();
-  return KeyDerivationMethodStateForMetrics::UNSUPPORTED;
+  return KeyDerivationMethodStateForMetrics::NOT_SET;
 }
 
 std::string GetScryptSaltFromSpecifics(
@@ -77,18 +76,22 @@ std::string GetScryptSaltFromSpecifics(
 
 KeyDerivationParams GetKeyDerivationParamsFromSpecifics(
     const sync_pb::NigoriSpecifics& specifics) {
-  switch (ProtoKeyDerivationMethodToEnum(
-      specifics.custom_passphrase_key_derivation_method())) {
+  absl::optional<KeyDerivationMethod> key_derivation_method =
+      ProtoKeyDerivationMethodToEnum(
+          specifics.custom_passphrase_key_derivation_method());
+  // Guaranteed by validations (e.g. SpecificsHasValidKeyDerivationParams()).
+  DCHECK(key_derivation_method);
+
+  switch (*key_derivation_method) {
     case KeyDerivationMethod::PBKDF2_HMAC_SHA1_1003:
       return KeyDerivationParams::CreateForPbkdf2();
     case KeyDerivationMethod::SCRYPT_8192_8_11:
       return KeyDerivationParams::CreateForScrypt(
           GetScryptSaltFromSpecifics(specifics));
-    case KeyDerivationMethod::UNSUPPORTED:
-      break;
   }
 
-  return KeyDerivationParams::CreateWithUnsupportedMethod();
+  NOTREACHED();
+  return KeyDerivationParams::CreateForPbkdf2();
 }
 
 // We need to apply base64 encoding before deriving Nigori keys because the
@@ -104,12 +107,15 @@ std::vector<std::string> Base64EncodeKeys(
 }
 
 bool SpecificsHasValidKeyDerivationParams(const NigoriSpecifics& specifics) {
-  switch (ProtoKeyDerivationMethodToEnum(
-      specifics.custom_passphrase_key_derivation_method())) {
-    case KeyDerivationMethod::UNSUPPORTED:
-      DLOG(ERROR) << "Unsupported key derivation method encountered: "
-                  << specifics.custom_passphrase_key_derivation_method();
-      return false;
+  absl::optional<KeyDerivationMethod> key_derivation_method =
+      ProtoKeyDerivationMethodToEnum(
+          specifics.custom_passphrase_key_derivation_method());
+  if (!key_derivation_method) {
+    DLOG(ERROR) << "Unsupported key derivation method encountered: "
+                << specifics.custom_passphrase_key_derivation_method();
+    return false;
+  }
+  switch (*key_derivation_method) {
     case KeyDerivationMethod::PBKDF2_HMAC_SHA1_1003:
       return true;
     case KeyDerivationMethod::SCRYPT_8192_8_11:
@@ -217,9 +223,14 @@ bool UpdatePassphraseType(NigoriSpecifics::PassphraseType new_type,
 bool IsValidEncryptedTypesTransition(bool old_encrypt_everything,
                                      const NigoriSpecifics& specifics) {
   // We don't support relaxing the encryption requirements.
-  // TODO(crbug.com/922900): more logic is to be added here, once we support
-  // enforced encryption for individual datatypes.
   return specifics.encrypt_everything() || !old_encrypt_everything;
+}
+
+absl::optional<CrossUserSharingPublicKey> PublicKeyFromProto(
+    const sync_pb::CrossUserSharingPublicKey& public_key) {
+  std::vector<uint8_t> key(public_key.x25519_public_key().begin(),
+                           public_key.x25519_public_key().end());
+  return CrossUserSharingPublicKey::CreateByImport(key);
 }
 
 }  // namespace
@@ -303,10 +314,6 @@ NigoriSyncBridgeImpl::NigoriSyncBridgeImpl(
     : processor_(std::move(processor)),
       storage_(std::move(storage)),
       broadcasting_observer_(std::make_unique<BroadcastingObserver>()) {
-  // TODO(crbug.com/922900): we currently don't verify |deserialized_data|.
-  // It's quite unlikely we get a corrupted data, since it was successfully
-  // deserialized and decrypted. But we may want to consider some
-  // verifications, taking into account sensitivity of this data.
   absl::optional<sync_pb::NigoriLocalData> deserialized_data =
       storage_->RestoreData();
   if (!deserialized_data) {
@@ -331,6 +338,12 @@ NigoriSyncBridgeImpl::NigoriSyncBridgeImpl(
     DCHECK(!state_.keystore_keys_cryptographer->IsEmpty());
     QueuePendingLocalCommit(
         PendingLocalNigoriCommit::ForKeystoreInitialization());
+  }
+
+  if (state_.NeedsGenerateCrossUserSharingKeyPair()) {
+    QueuePendingLocalCommit(
+        PendingLocalNigoriCommit::
+            ForCrossUserSharingPublicPrivateKeyInitializer());
   }
 
   // Keystore key rotation might be not performed, but required.
@@ -360,8 +373,6 @@ void NigoriSyncBridgeImpl::NotifyInitialStateToObservers() {
   // We need to expose whole bridge state through notifications, because it
   // can be different from default due to restoring from the file or
   // completeness of first sync cycle (which happens before Init() call).
-  // TODO(crbug.com/922900): try to avoid double notification (second one can
-  // happen during UpdateLocalState() call).
   broadcasting_observer_->OnEncryptedTypesChanged(state_.GetEncryptedTypes(),
                                                   state_.encrypt_everything);
   broadcasting_observer_->OnCryptographerStateChanged(
@@ -527,7 +538,7 @@ bool NigoriSyncBridgeImpl::NeedKeystoreKey() const {
   // if there is no keystore keys yet or remote keybag wasn't decryptable due
   // to absence of some keystore key. In case of key rotation, it's a server
   // responsibility to send updated keystore keys. |keystore_keys_| is expected
-  // to be non-empty before MergeSyncData() call, regardless of passphrase
+  // to be non-empty before MergeFullSyncData() call, regardless of passphrase
   // type.
   return state_.keystore_keys_cryptographer->IsEmpty() ||
          (state_.pending_keystore_decryptor_token.has_value() &&
@@ -554,12 +565,9 @@ bool NigoriSyncBridgeImpl::SetKeystoreKeys(
     // Newly arrived keystore keys could resolve pending encryption state in
     // keystore mode.
     DCHECK_EQ(state_.passphrase_type, NigoriSpecifics::KEYSTORE_PASSPHRASE);
-    const absl::optional<sync_pb::NigoriKey> keystore_decryptor_key =
-        TryDecryptPendingKeystoreDecryptorToken(
-            sync_pb::EncryptedData(*state_.pending_keystore_decryptor_token));
 
-    absl::optional<ModelError> error = TryDecryptPendingKeysWith(
-        BuildDecryptionKeyBagForRemoteKeybag(keystore_decryptor_key));
+    absl::optional<ModelError> error =
+        TryDecryptPendingKeysWith(BuildDecryptionKeyBagForRemoteKeybag());
     if (error.has_value()) {
       processor_->ReportError(*error);
       return false;
@@ -579,7 +587,7 @@ bool NigoriSyncBridgeImpl::SetKeystoreKeys(
   return true;
 }
 
-absl::optional<ModelError> NigoriSyncBridgeImpl::MergeSyncData(
+absl::optional<ModelError> NigoriSyncBridgeImpl::MergeFullSyncData(
     absl::optional<EntityData> data) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (!data) {
@@ -593,6 +601,8 @@ absl::optional<ModelError> NigoriSyncBridgeImpl::MergeSyncData(
   if (specifics.passphrase_type() != NigoriSpecifics::IMPLICIT_PASSPHRASE ||
       !specifics.encryption_keybag().blob().empty()) {
     // We received regular Nigori.
+    // TODO(crbug.com/1445056): consider generating a new public-private key
+    // pair after the initial sync.
     return UpdateLocalState(data->specifics.nigori());
   }
   // Ensure we have |keystore_keys| during the initial download, requested to
@@ -600,9 +610,11 @@ absl::optional<ModelError> NigoriSyncBridgeImpl::MergeSyncData(
   // default keystore Nigori.
   DCHECK(state_.keystore_keys_cryptographer);
   if (state_.keystore_keys_cryptographer->IsEmpty()) {
-    // TODO(crbug.com/922900): try to relax this requirement for Nigori
+    // TODO(crbug.com/1407699): try to relax this requirement for Nigori
     // initialization as well. Keystore keys might not arrive, for example, due
-    // to throttling.
+    // to throttling. It seems easier after complete deprecation of
+    // IMPLICIT_PASSPHRASE, where not initialized state will be well
+    // distinguished.
     return ModelError(FROM_HERE,
                       "Keystore keys are not set during first time sync.");
   }
@@ -613,7 +625,7 @@ absl::optional<ModelError> NigoriSyncBridgeImpl::MergeSyncData(
   return absl::nullopt;
 }
 
-absl::optional<ModelError> NigoriSyncBridgeImpl::ApplySyncChanges(
+absl::optional<ModelError> NigoriSyncBridgeImpl::ApplyIncrementalSyncChanges(
     absl::optional<EntityData> data) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
@@ -679,21 +691,21 @@ absl::optional<ModelError> NigoriSyncBridgeImpl::UpdateLocalState(
 
   state_.trusted_vault_debug_info = specifics.trusted_vault_debug_info();
 
+  if (state_.passphrase_type == NigoriSpecifics::CUSTOM_PASSPHRASE) {
+    state_.custom_passphrase_key_derivation_params =
+        GetKeyDerivationParamsFromSpecifics(specifics);
+  }
+
   absl::optional<sync_pb::NigoriKey> keystore_decryptor_key;
   if (state_.passphrase_type == NigoriSpecifics::KEYSTORE_PASSPHRASE) {
-    keystore_decryptor_key = TryDecryptPendingKeystoreDecryptorToken(
-        specifics.keystore_decryptor_token());
+    state_.pending_keystore_decryptor_token =
+        specifics.keystore_decryptor_token();
   } else {
     state_.pending_keystore_decryptor_token.reset();
   }
 
   const NigoriKeyBag decryption_key_bag_for_remote_update =
-      BuildDecryptionKeyBagForRemoteKeybag(keystore_decryptor_key);
-
-  if (state_.passphrase_type == NigoriSpecifics::CUSTOM_PASSPHRASE) {
-    state_.custom_passphrase_key_derivation_params =
-        GetKeyDerivationParamsFromSpecifics(specifics);
-  }
+      BuildDecryptionKeyBagForRemoteKeybag();
 
   // Set incoming encrypted keys as pending, so they are processed in
   // TryDecryptPendingKeysWith(). If the keybag is not immediately decryptable,
@@ -702,6 +714,15 @@ absl::optional<ModelError> NigoriSyncBridgeImpl::UpdateLocalState(
   // passphrase type.
   state_.pending_keys = specifics.encryption_keybag();
   state_.cryptographer->ClearDefaultEncryptionKey();
+
+  if (base::FeatureList::IsEnabled(kSharingOfferKeyPairRead) &&
+      specifics.has_cross_user_sharing_public_key()) {
+    // Remote update wins over local state.
+    state_.cross_user_sharing_public_key =
+        PublicKeyFromProto(specifics.cross_user_sharing_public_key());
+    state_.cross_user_sharing_key_pair_version =
+        specifics.cross_user_sharing_public_key().version();
+  }
 
   absl::optional<ModelError> error =
       TryDecryptPendingKeysWith(decryption_key_bag_for_remote_update);
@@ -723,13 +744,9 @@ absl::optional<ModelError> NigoriSyncBridgeImpl::UpdateLocalState(
   broadcasting_observer_->OnCryptographerStateChanged(
       state_.cryptographer.get(), state_.pending_keys.has_value());
 
-  // TODO(crbug.com/1057655): issuing OnPassphraseAccepted() should be allowed
-  // for all passphrase types, but going out from |pending_keys| state might
-  // be disallowed for some circumstances (such as CUSTOM_PASSPHRASE ->
-  // CUSTOM_PASSPHRASE updates). Keep temporarily as is to avoid behavioral
-  // changes.
-  if (!state_.pending_keys.has_value() && had_pending_keys_before_update &&
-      state_.passphrase_type == NigoriSpecifics::KEYSTORE_PASSPHRASE) {
+  if (!state_.pending_keys.has_value() && had_pending_keys_before_update) {
+    // Guaranteed by BuildDecryptionKeyBagForRemoteKeybag() logic.
+    DCHECK_EQ(state_.passphrase_type, NigoriSpecifics::KEYSTORE_PASSPHRASE);
     broadcasting_observer_->OnPassphraseAccepted();
   }
 
@@ -744,34 +761,31 @@ absl::optional<ModelError> NigoriSyncBridgeImpl::UpdateLocalState(
   return absl::nullopt;
 }
 
-absl::optional<sync_pb::NigoriKey>
-NigoriSyncBridgeImpl::TryDecryptPendingKeystoreDecryptorToken(
-    const sync_pb::EncryptedData& keystore_decryptor_token) {
-  DCHECK(!keystore_decryptor_token.blob().empty());
-  sync_pb::NigoriKey keystore_decryptor_key;
-  if (state_.keystore_keys_cryptographer->DecryptKeystoreDecryptorToken(
-          keystore_decryptor_token, &keystore_decryptor_key)) {
-    state_.pending_keystore_decryptor_token.reset();
-    return keystore_decryptor_key;
-  }
-  state_.pending_keystore_decryptor_token = keystore_decryptor_token;
-  return absl::nullopt;
-}
-
-NigoriKeyBag NigoriSyncBridgeImpl::BuildDecryptionKeyBagForRemoteKeybag(
-    const absl::optional<sync_pb::NigoriKey>& keystore_decryptor_key) const {
+NigoriKeyBag NigoriSyncBridgeImpl::BuildDecryptionKeyBagForRemoteKeybag()
+    const {
   NigoriKeyBag decryption_key_bag = NigoriKeyBag::CreateEmpty();
 
-  if (keystore_decryptor_key.has_value()) {
+  if (state_.pending_keystore_decryptor_token.has_value()) {
     DCHECK_EQ(state_.passphrase_type, NigoriSpecifics::KEYSTORE_PASSPHRASE);
-    decryption_key_bag.AddKeyFromProto(*keystore_decryptor_key);
+    sync_pb::NigoriKey keystore_decryptor_key;
+    if (state_.keystore_keys_cryptographer->DecryptKeystoreDecryptorToken(
+            *state_.pending_keystore_decryptor_token,
+            &keystore_decryptor_key)) {
+      // Note: |pending_keystore_decryptor_token| will be cleared upon
+      // successful decryption of |pending_keys|.
+      decryption_key_bag.AddKeyFromProto(keystore_decryptor_key);
+    }
   }
 
-  // TODO(crbug.com/1057655): this should be allowed for KEYSTORE_PASSPHRASE,
-  // but should be disallowed if |passphrase_type| was changed in current
-  // update.
-  if (state_.passphrase_type != NigoriSpecifics::KEYSTORE_PASSPHRASE &&
-      state_.cryptographer->CanEncrypt()) {
+  if (state_.passphrase_type == NigoriSpecifics::KEYSTORE_PASSPHRASE) {
+    // Allow decryption using keystore keys directly: while using
+    // |keystore_decryptor_token| should be sufficient, this supports future
+    // case when |keystore_decryptor_token| is not passed.
+    decryption_key_bag.AddAllUnknownKeysFrom(
+        state_.keystore_keys_cryptographer->GetKeystoreKeybag());
+  }
+
+  if (state_.cryptographer->CanEncrypt()) {
     decryption_key_bag.AddKeyFromProto(
         state_.cryptographer->ExportDefaultKey());
   }
@@ -789,7 +803,7 @@ absl::optional<ModelError> NigoriSyncBridgeImpl::TryDecryptPendingKeysWith(
     return absl::nullopt;
   }
 
-  sync_pb::NigoriKeyBag decrypted_pending_keys;
+  sync_pb::EncryptionKeys decrypted_pending_keys;
   if (!decrypted_pending_keys.ParseFromString(decrypted_pending_keys_str)) {
     return absl::nullopt;
   }
@@ -797,8 +811,10 @@ absl::optional<ModelError> NigoriSyncBridgeImpl::TryDecryptPendingKeysWith(
   const std::string new_default_key_name = state_.pending_keys->key_name();
   DCHECK(key_bag.HasKey(new_default_key_name));
 
-  NigoriKeyBag new_key_bag =
-      NigoriKeyBag::CreateFromProto(decrypted_pending_keys);
+  NigoriKeyBag new_key_bag = NigoriKeyBag::CreateEmpty();
+  for (auto key : decrypted_pending_keys.key()) {
+    new_key_bag.AddKeyFromProto(key);
+  }
 
   if (!new_key_bag.HasKey(new_default_key_name)) {
     // Protocol violation.
@@ -813,6 +829,37 @@ absl::optional<ModelError> NigoriSyncBridgeImpl::TryDecryptPendingKeysWith(
                       "Received keybag is missing the last trusted vault key.");
   }
 
+  if (base::FeatureList::IsEnabled(kSharingOfferKeyPairRead)) {
+    CrossUserSharingKeys new_cross_user_sharing_keys =
+        CrossUserSharingKeys::CreateEmpty();
+    for (auto key_pair :
+         decrypted_pending_keys.cross_user_sharing_private_key()) {
+      new_cross_user_sharing_keys.AddKeyPairFromProto(key_pair);
+    }
+
+    if (state_.cross_user_sharing_key_pair_version.has_value() &&
+        !new_cross_user_sharing_keys.HasKeyPair(
+            state_.cross_user_sharing_key_pair_version.value())) {
+      // TODO(crbug/1474918): Record metric to capture this state.
+      DLOG(ERROR) << "Received keybag is missing the last "
+                  << "cross-user-sharing private key.";
+      // Reset keys so that on next startup they would be recreated and
+      // committed to the server.
+      // TODO(crbug/1474918): Clear obsolete key-pairs from cryptographer.
+      state_.cross_user_sharing_key_pair_version = absl::nullopt;
+      state_.cross_user_sharing_public_key = absl::nullopt;
+    } else if (state_.cross_user_sharing_key_pair_version.has_value()) {
+      // Use the keys from the server and replace any pre-existing ones (so in
+      // case of conflict the server wins). One of cases when this can happen is
+      // when one of older clients is upgraded to a newer version and generated
+      // a new key pair because it wasn't aware of the previous key pair.
+      state_.cryptographer->ReplaceCrossUserSharingKeys(
+          std::move(new_cross_user_sharing_keys));
+      state_.cryptographer->SelectDefaultCrossUserSharingKey(
+          state_.cross_user_sharing_key_pair_version.value());
+    }
+  }
+
   // Reset |last_default_trusted_vault_key_name| as |state_| might go out of
   // TRUSTED_VAULT passphrase type. The callers are responsible to set it again
   // if needed.
@@ -820,6 +867,7 @@ absl::optional<ModelError> NigoriSyncBridgeImpl::TryDecryptPendingKeysWith(
   state_.cryptographer->EmplaceKeysFrom(new_key_bag);
   state_.cryptographer->SelectDefaultEncryptionKey(new_default_key_name);
   state_.pending_keys.reset();
+  state_.pending_keystore_decryptor_token.reset();
 
   return absl::nullopt;
 }
@@ -870,6 +918,8 @@ void NigoriSyncBridgeImpl::ApplyDisableSyncChanges() {
   state_.last_default_trusted_vault_key_name = absl::nullopt;
   state_.trusted_vault_debug_info =
       sync_pb::NigoriSpecifics::TrustedVaultDebugInfo();
+  state_.cross_user_sharing_public_key = absl::nullopt;
+  state_.cross_user_sharing_key_pair_version = absl::nullopt;
 
   broadcasting_observer_->OnCryptographerStateChanged(
       state_.cryptographer.get(),
@@ -916,7 +966,7 @@ KeyDerivationParams NigoriSyncBridgeImpl::GetKeyDerivationParamsForPendingKeys()
   switch (state_.passphrase_type) {
     case NigoriSpecifics::UNKNOWN:
       NOTREACHED();
-      return KeyDerivationParams::CreateWithUnsupportedMethod();
+      return KeyDerivationParams::CreateForPbkdf2();
     case NigoriSpecifics::IMPLICIT_PASSPHRASE:
     case NigoriSpecifics::KEYSTORE_PASSPHRASE:
     case NigoriSpecifics::FROZEN_IMPLICIT_PASSPHRASE:
@@ -975,6 +1025,8 @@ void NigoriSyncBridgeImpl::MaybeTriggerKeystoreReencryption() {
 
 void NigoriSyncBridgeImpl::QueuePendingLocalCommit(
     std::unique_ptr<PendingLocalNigoriCommit> local_commit) {
+  // TODO(crbug.com/1445056): Consider adding more validations in ctor to get
+  // stronger guarantee around DCHECK() below.
   DCHECK(processor_->IsTrackingMetadata());
 
   pending_local_commit_queue_.push_back(std::move(local_commit));
@@ -1004,7 +1056,9 @@ void NigoriSyncBridgeImpl::PutNextApplicablePendingLocalCommit() {
 }
 
 void NigoriSyncBridgeImpl::MaybePopulateKeystoreKeysIntoCryptographer() {
-  DCHECK(!state_.keystore_keys_cryptographer->IsEmpty());
+  if (state_.keystore_keys_cryptographer->IsEmpty()) {
+    return;
+  }
   if (state_.passphrase_type == NigoriSpecifics::KEYSTORE_PASSPHRASE) {
     // KEYSTORE_PASSPHRASE should be ignored, because otherwise keystore key
     // rotation logic would be broken.

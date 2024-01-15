@@ -21,7 +21,14 @@ load(
     "ABSL_TEST_COPTS",
 )
 
-package(default_visibility = ["//visibility:public"])
+package(
+    default_visibility = ["//visibility:public"],
+    features = [
+        "header_modules",
+        "layering_check",
+        "parse_headers",
+    ],
+)
 
 licenses(["notice"])
 
@@ -47,6 +54,7 @@ cc_test(
         "//absl/types:any",
         "//absl/types:optional",
         "//absl/utility",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -73,12 +81,13 @@ cc_test(
     copts = ABSL_TEST_COPTS,
     linkopts = ABSL_DEFAULT_LINKOPTS,
     deps = [
-        ":counting_allocator",
         ":fixed_array",
+        ":test_allocator",
         "//absl/base:config",
         "//absl/base:exception_testing",
         "//absl/hash:hash_testing",
         "//absl/memory",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -92,6 +101,7 @@ cc_test(
         ":fixed_array",
         "//absl/base:config",
         "//absl/base:exception_safety_testing",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -116,6 +126,7 @@ cc_library(
     linkopts = ABSL_DEFAULT_LINKOPTS,
     deps = [
         ":compressed_tuple",
+        "//absl/base:config",
         "//absl/base:core_headers",
         "//absl/memory",
         "//absl/meta:type_traits",
@@ -139,13 +150,12 @@ cc_library(
 )
 
 cc_library(
-    name = "counting_allocator",
+    name = "test_allocator",
     testonly = 1,
-    hdrs = ["internal/counting_allocator.h"],
-    copts = ABSL_DEFAULT_COPTS,
+    copts = ABSL_TEST_COPTS,
     linkopts = ABSL_DEFAULT_LINKOPTS,
+    textual_hdrs = ["internal/test_allocator.h"],
     visibility = ["//visibility:private"],
-    deps = ["//absl/base:config"],
 )
 
 cc_test(
@@ -154,16 +164,17 @@ cc_test(
     copts = ABSL_TEST_COPTS,
     linkopts = ABSL_DEFAULT_LINKOPTS,
     deps = [
-        ":counting_allocator",
         ":inlined_vector",
+        ":test_allocator",
         ":test_instance_tracker",
         "//absl/base:config",
         "//absl/base:core_headers",
         "//absl/base:exception_testing",
-        "//absl/base:raw_logging_internal",
         "//absl/hash:hash_testing",
+        "//absl/log:check",
         "//absl/memory",
         "//absl/strings",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -192,6 +203,7 @@ cc_test(
         ":inlined_vector",
         "//absl/base:config",
         "//absl/base:exception_safety_testing",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -216,6 +228,7 @@ cc_test(
     linkopts = ABSL_DEFAULT_LINKOPTS,
     deps = [
         ":test_instance_tracker",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -255,8 +268,10 @@ cc_test(
         ":unordered_map_lookup_test",
         ":unordered_map_members_test",
         ":unordered_map_modifiers_test",
-        "//absl/base:raw_logging_internal",
+        "//absl/log:check",
+        "//absl/meta:type_traits",
         "//absl/types:any",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -283,15 +298,18 @@ cc_test(
     linkopts = ABSL_DEFAULT_LINKOPTS,
     tags = ["no_test_loonix"],
     deps = [
+        ":container_memory",
         ":flat_hash_set",
         ":hash_generator_testing",
         ":unordered_set_constructor_test",
         ":unordered_set_lookup_test",
         ":unordered_set_members_test",
         ":unordered_set_modifiers_test",
-        "//absl/base:raw_logging_internal",
+        "//absl/base:config",
+        "//absl/log:check",
         "//absl/memory",
         "//absl/strings",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -326,6 +344,7 @@ cc_test(
         ":unordered_map_lookup_test",
         ":unordered_map_members_test",
         ":unordered_map_modifiers_test",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -357,6 +376,7 @@ cc_test(
         ":unordered_set_lookup_test",
         ":unordered_set_members_test",
         ":unordered_set_modifiers_test",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -383,7 +403,10 @@ cc_test(
     deps = [
         ":container_memory",
         ":test_instance_tracker",
+        "//absl/base:no_destructor",
+        "//absl/meta:type_traits",
         "//absl/strings",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -393,6 +416,9 @@ cc_library(
     hdrs = ["internal/hash_function_defaults.h"],
     copts = ABSL_DEFAULT_COPTS,
     linkopts = ABSL_DEFAULT_LINKOPTS,
+    visibility = [
+        "//visibility:private",
+    ],
     deps = [
         "//absl/base:config",
         "//absl/hash",
@@ -414,6 +440,7 @@ cc_test(
         "//absl/strings",
         "//absl/strings:cord",
         "//absl/strings:cord_test_helpers",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -427,6 +454,7 @@ cc_library(
     linkopts = ABSL_DEFAULT_LINKOPTS,
     deps = [
         ":hash_policy_testing",
+        "//absl/base:no_destructor",
         "//absl/memory",
         "//absl/meta:type_traits",
         "//absl/strings",
@@ -452,6 +480,7 @@ cc_test(
     linkopts = ABSL_DEFAULT_LINKOPTS,
     deps = [
         ":hash_policy_testing",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -474,6 +503,7 @@ cc_test(
     linkopts = ABSL_DEFAULT_LINKOPTS,
     deps = [
         ":hash_policy_traits",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -494,6 +524,8 @@ cc_test(
     linkopts = ABSL_DEFAULT_LINKOPTS,
     deps = [
         ":common_policy_traits",
+        "//absl/base:config",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -531,11 +563,13 @@ cc_library(
         "//absl/base",
         "//absl/base:config",
         "//absl/base:core_headers",
+        "//absl/base:raw_logging_internal",
         "//absl/debugging:stacktrace",
         "//absl/memory",
         "//absl/profiling:exponential_biased",
         "//absl/profiling:sample_recorder",
         "//absl/synchronization",
+        "//absl/time",
         "//absl/utility",
     ],
 )
@@ -555,6 +589,7 @@ cc_test(
         "//absl/synchronization",
         "//absl/synchronization:thread_pool",
         "//absl/time",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -575,6 +610,8 @@ cc_test(
     deps = [
         ":hash_policy_traits",
         ":node_slot_policy",
+        "//absl/base:config",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -587,6 +624,8 @@ cc_library(
     deps = [
         ":container_memory",
         ":raw_hash_set",
+        "//absl/base:config",
+        "//absl/base:core_headers",
         "//absl/base:throw_delegate",
     ],
 )
@@ -617,8 +656,11 @@ cc_library(
         ":hashtablez_sampler",
         "//absl/base:config",
         "//absl/base:core_headers",
+        "//absl/base:dynamic_annotations",
         "//absl/base:endian",
         "//absl/base:prefetch",
+        "//absl/base:raw_logging_internal",
+        "//absl/hash",
         "//absl/memory",
         "//absl/meta:type_traits",
         "//absl/numeric:bits",
@@ -643,14 +685,19 @@ cc_test(
         ":hash_function_defaults",
         ":hash_policy_testing",
         ":hashtable_debug",
+        ":hashtablez_sampler",
         ":raw_hash_set",
+        ":test_allocator",
         "//absl/base",
         "//absl/base:config",
         "//absl/base:core_headers",
         "//absl/base:prefetch",
-        "//absl/base:raw_logging_internal",
+        "//absl/hash",
         "//absl/log",
+        "//absl/memory",
+        "//absl/meta:type_traits",
         "//absl/strings",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -687,10 +734,12 @@ cc_binary(
         ":hash_function_defaults",
         ":hashtable_debug",
         ":raw_hash_set",
+        "//absl/base:no_destructor",
         "//absl/random",
         "//absl/random:distributions",
         "//absl/strings",
         "//absl/strings:str_format",
+        "//absl/types:optional",
     ],
 )
 
@@ -703,7 +752,8 @@ cc_test(
     deps = [
         ":raw_hash_set",
         ":tracked",
-        "//absl/base:core_headers",
+        "//absl/base:config",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -716,6 +766,7 @@ cc_library(
     deps = [
         "//absl/base:config",
         "//absl/base:core_headers",
+        "//absl/debugging:demangle_internal",
         "//absl/meta:type_traits",
         "//absl/strings",
         "//absl/types:span",
@@ -734,9 +785,10 @@ cc_test(
     deps = [
         ":layout",
         "//absl/base:config",
-        "//absl/base:core_headers",
-        "//absl/base:raw_logging_internal",
+        "//absl/log:check",
         "//absl/types:span",
+        "//absl/utility",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -882,6 +934,7 @@ cc_test(
         ":unordered_set_lookup_test",
         ":unordered_set_members_test",
         ":unordered_set_modifiers_test",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -897,6 +950,7 @@ cc_test(
         ":unordered_map_lookup_test",
         ":unordered_map_members_test",
         ":unordered_map_modifiers_test",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -913,6 +967,7 @@ cc_test(
         ":flat_hash_set",
         ":node_hash_map",
         ":node_hash_set",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -982,7 +1037,7 @@ cc_test(
     deps = [
         ":btree",
         ":btree_test_common",
-        ":counting_allocator",
+        ":test_allocator",
         ":test_instance_tracker",
         "//absl/algorithm:container",
         "//absl/base:core_headers",
@@ -993,6 +1048,8 @@ cc_test(
         "//absl/random",
         "//absl/strings",
         "//absl/types:compare",
+        "//absl/types:optional",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -1023,5 +1080,6 @@ cc_binary(
         "//absl/strings:str_format",
         "//absl/time",
         "@com_github_google_benchmark//:benchmark_main",
+        "@com_google_googletest//:gtest",
     ],
 )

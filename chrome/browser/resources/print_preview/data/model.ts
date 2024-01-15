@@ -2,10 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-// <if expr="is_chromeos">
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-// </if>
+import {assert} from 'chrome://resources/js/assert.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
@@ -13,12 +11,16 @@ import {BackgroundGraphicsModeRestriction, Policies} from '../native_layer.js';
 // <if expr="is_chromeos">
 import {ColorModeRestriction, DuplexModeRestriction, PinModeRestriction} from '../native_layer.js';
 // </if>
-import {CapabilityWithReset, Cdd, CddCapabilities, ColorOption, DpiOption, DuplexOption, MediaSizeOption} from './cdd.js';
+import {CapabilityWithReset, Cdd, CddCapabilities, ColorOption, DpiOption, DuplexOption, MediaSizeOption, MediaTypeOption} from './cdd.js';
 import {Destination, DestinationOrigin, GooglePromotedDestinationId, PrinterType, RecentDestination} from './destination.js';
 import {DocumentSettings} from './document_info.js';
 import {CustomMarginsOrientation, Margins, MarginsSetting, MarginsType} from './margins.js';
 import {ScalingType} from './scaling.js';
 import {Size} from './size.js';
+
+// <if expr="is_chromeos">
+import {PrinterStatusReason} from './printer_status_cros.js';
+// </if>
 
 /**
  * |key| is the field in the serialized settings state that corresponds to the
@@ -34,6 +36,7 @@ export interface Setting {
   setFromUi: boolean;
   key: string;
   updatesPreview: boolean;
+  policyDefaultValue?: any;
 }
 
 export interface Settings {
@@ -44,6 +47,8 @@ export interface Settings {
   color: Setting;
   customMargins: Setting;
   mediaSize: Setting;
+  borderless: Setting;
+  mediaType: Setting;
   margins: Setting;
   dpi: Setting;
   scaling: Setting;
@@ -70,6 +75,8 @@ export interface SerializedSettings {
   recentDestinations?: RecentDestination[];
   dpi?: DpiOption;
   mediaSize?: MediaSizeOption;
+  borderless?: boolean;
+  mediaType?: MediaTypeOption;
   marginsType?: MarginsType;
   customMargins?: MarginsSetting;
   isColorEnabled?: boolean;
@@ -132,6 +139,11 @@ interface CloudJobTicket {
 export interface MediaSizeValue {
   width_microns: number;
   height_microns: number;
+  imageable_area_left_microns?: number;
+  imageable_area_bottom_microns?: number;
+  imageable_area_right_microns?: number;
+  imageable_area_top_microns?: number;
+  has_borderless_variant?: boolean;
 }
 
 export interface Ticket {
@@ -154,6 +166,8 @@ export interface Ticket {
   scalingType: ScalingType;
   shouldPrintBackgrounds: boolean;
   shouldPrintSelectionOnly: boolean;
+  borderless?: boolean;
+  mediaType?: string;
   advancedSettings?: object;
   capabilities?: string;
   marginsCustom?: MarginsSetting;
@@ -168,9 +182,13 @@ export type PrintTicket = Ticket&{
   pageHeight: number,
   pageWidth: number,
   // <if expr="is_chromeos">
+  printerManuallySelected: boolean,
   printToGoogleDrive: boolean,
   // </if>
   showSystemDialog: boolean,
+  // <if expr="is_chromeos">
+  printerStatusReason?: PrinterStatusReason,
+  // </if>
 };
 
 /**
@@ -210,6 +228,7 @@ export function whenReady(): Promise<void> {
  */
 const STICKY_SETTING_NAMES: string[] = [
   'recentDestinations',
+  'borderless',
   'collate',
   'color',
   'cssBackground',
@@ -221,6 +240,7 @@ const STICKY_SETTING_NAMES: string[] = [
   'layout',
   'margins',
   'mediaSize',
+  'mediaType',
   'scaling',
   'scalingType',
   'scalingTypePdf',
@@ -236,6 +256,75 @@ STICKY_SETTING_NAMES.push('pin', 'pinValue');
  * so that we do not request header/footer for margins that will be zero.
  */
 const MINIMUM_HEIGHT_MICRONS: number = 25400;
+
+// <if expr="is_chromeos">
+/**
+ * Helper function for configurePolicySetting_(). Calculates default duplex
+ * value based on allowed and default policies. Return undefined when both
+ * allowed and default duplex policies are not set.
+ * @param allowedMode Duplex allowed mode set by policy.
+ * @param defaultMode Duplex default mode set by policy.
+ */
+function getDuplexDefaultValue(
+    allowedMode: DuplexModeRestriction|undefined,
+    defaultMode: DuplexModeRestriction|undefined): DuplexModeRestriction|
+    undefined {
+  if (allowedMode !== DuplexModeRestriction.DUPLEX) {
+    return (allowedMode === undefined ||
+            allowedMode === DuplexModeRestriction.UNSET) ?
+        defaultMode :
+        allowedMode;
+  }
+
+  // If allowedMode === DUPLEX, then we need to use defaultMode as the
+  // default value if it's compliant with allowedMode. Other two-sided modes are
+  // also available in this case.
+  if (defaultMode === DuplexModeRestriction.SHORT_EDGE ||
+      defaultMode === DuplexModeRestriction.LONG_EDGE) {
+    return defaultMode;
+  }
+
+  // In this case defaultMode is either not set or non-compliant with
+  // allowedMode. Note that "DUPLEX" is not a single mode, but a group of modes.
+  return DuplexModeRestriction.DUPLEX;
+}
+
+/**
+ * Helper function that checks whether the duplex default value set by policy
+ * is supported by a printing destination.
+ * @param duplexPolicyDefault Duplex value policy default.
+ * @param duplexShortEdgePolicyDefault DuplexShortEdge value policy default.
+ * @param caps Capabilities of a printing destination.
+ */
+function getDuplexPolicyDefaultValueAvailable(
+    duplexPolicyDefault: boolean|undefined,
+    duplexShortEdgePolicyDefault: boolean|undefined,
+    caps: CddCapabilities|null): boolean {
+  // `duplexShortEdgePolicyDefault` is undefined if the default mode is set to
+  // "Simplex". `duplexPolicyDefault` is defined if and only if there is a
+  // default duplex policy.
+  if (duplexPolicyDefault === undefined) {
+    return false;
+  }
+  const capsHasDuplexOptions = !!caps && !!caps.duplex && !!caps.duplex.option;
+  if (!capsHasDuplexOptions) {
+    // There are no duplex capabilities reported by the printer.
+    return false;
+  }
+
+  let defaultPolicyDuplexType: DuplexType|null = null;
+  if (duplexPolicyDefault === false) {
+    defaultPolicyDuplexType = DuplexType.NO_DUPLEX;
+  } else if (duplexShortEdgePolicyDefault === true) {
+    defaultPolicyDuplexType = DuplexType.SHORT_EDGE;
+  } else {
+    defaultPolicyDuplexType = DuplexType.LONG_EDGE;
+  }
+
+  return caps!.duplex!.option.some(o => o.type === defaultPolicyDuplexType);
+}
+// </if>
+
 
 export class PrintPreviewModelElement extends PolymerElement {
   static get is() {
@@ -315,6 +404,10 @@ export class PrintPreviewModelElement extends PolymerElement {
               unavailableValue: {
                 width_microns: 215900,
                 height_microns: 279400,
+                imageable_area_left_microns: 0,
+                imageable_area_bottom_microns: 0,
+                imageable_area_right_microns: 215900,
+                imageable_area_top_microns: 279400,
               },
               valid: true,
               available: true,
@@ -322,6 +415,26 @@ export class PrintPreviewModelElement extends PolymerElement {
               setFromUi: false,
               key: 'mediaSize',
               updatesPreview: true,
+            },
+            borderless: {
+              value: false,
+              unavailableValue: false,
+              valid: true,
+              available: false,
+              setByPolicy: false,
+              setFromUi: false,
+              key: 'borderless',
+              updatesPreview: true,
+            },
+            mediaType: {
+              value: '',
+              unavailableValue: '',
+              valid: true,
+              available: false,
+              setByPolicy: false,
+              setFromUi: false,
+              key: 'mediaType',
+              updatesPreview: false,
             },
             margins: {
               value: MarginsType.DEFAULT,
@@ -550,7 +663,9 @@ export class PrintPreviewModelElement extends PolymerElement {
       'updateSettingsFromDestination_(destination.capabilities)',
       'updateSettingsAvailabilityFromDocumentSettings_(' +
           'documentSettings.isModifiable, documentSettings.isFromArc,' +
-          'documentSettings.hasCssMediaStyles, documentSettings.hasSelection)',
+          'documentSettings.allPagesHaveCustomSize,' +
+          'documentSettings.allPagesHaveCustomOrientation,' +
+          'documentSettings.hasSelection)',
       'updateHeaderFooterAvailable_(' +
           'margins, settings.margins.value, settings.mediaSize.value)',
 
@@ -759,7 +874,7 @@ export class PrintPreviewModelElement extends PolymerElement {
     const isSaveAsPDF = this.destination.type === PrinterType.PDF_PRINTER;
     const knownSizeToSaveAsPdf = isSaveAsPDF &&
         (!this.documentSettings.isModifiable ||
-         this.documentSettings.hasCssMediaStyles);
+         this.documentSettings.allPagesHaveCustomSize);
     const scalingAvailable =
         !knownSizeToSaveAsPdf && !this.documentSettings.isFromArc;
     this.setSettingPath_('scaling.available', scalingAvailable);
@@ -775,6 +890,13 @@ export class PrintPreviewModelElement extends PolymerElement {
     this.setSettingPath_(
         'mediaSize.available',
         !!caps && !!caps.media_size && !knownSizeToSaveAsPdf);
+    this.setSettingPath_(
+        'borderless.available', this.isBorderlessAvailable_(caps));
+    this.setSettingPath_(
+        'mediaType.available',
+        loadTimeData.getBoolean('isBorderlessPrintingEnabled') && !!caps &&
+            !!caps.media_type && !!caps.media_type.option &&
+            caps.media_type.option.length > 1);
     this.setSettingPath_(
         'dpi.available',
         !this.documentSettings.isFromArc && !!caps && !!caps.dpi &&
@@ -896,7 +1018,7 @@ export class PrintPreviewModelElement extends PolymerElement {
     if (!caps || !caps.page_orientation || !caps.page_orientation.option ||
         (!this.documentSettings.isModifiable &&
          !this.documentSettings.isFromArc) ||
-        this.documentSettings.hasCssMediaStyles) {
+        this.documentSettings.allPagesHaveCustomOrientation) {
       return false;
     }
     let hasAutoOrPortraitOption = false;
@@ -907,6 +1029,16 @@ export class PrintPreviewModelElement extends PolymerElement {
       hasLandscapeOption = hasLandscapeOption || option.type === 'LANDSCAPE';
     });
     return hasLandscapeOption && hasAutoOrPortraitOption;
+  }
+
+  /**
+   * @return Whether the borderless setting should be available.
+   */
+  private isBorderlessAvailable_(caps: CddCapabilities|null): boolean {
+    return loadTimeData.getBoolean('isBorderlessPrintingEnabled') && !!caps &&
+        !!caps.media_size?.option?.find(o => {
+          return o.has_borderless_variant;
+        });
   }
 
   private updateSettingsValues_(caps: CddCapabilities|null) {
@@ -926,6 +1058,35 @@ export class PrintPreviewModelElement extends PolymerElement {
         });
       }
       this.setSetting('mediaSize', matchingOption || defaultOption, true);
+    }
+
+    if (this.settings.borderless.available) {
+      this.setSetting(
+          'borderless',
+          this.settings.borderless.setFromUi &&
+              this.getSettingValue('borderless'),
+          true);
+    }
+
+    if (this.settings.mediaType.available) {
+      const defaultOption =
+          caps!.media_type!.option.find(o => !!o.is_default) ||
+          caps!.media_type!.option[0];
+      let matchingOption = null;
+      if (this.settings.mediaType.setFromUi) {
+        const currentMediaType = this.getSettingValue('mediaType');
+        matchingOption = caps!.media_type!.option.find(o => {
+          return o.vendor_id === currentMediaType.vendor_id;
+        });
+      }
+      this.setSetting('mediaType', matchingOption || defaultOption, true);
+    } else if (
+        caps && caps.media_type && caps.media_type.option &&
+        caps.media_type.option.length > 0) {
+      const unavailableValue =
+          caps!.media_type!.option.find(o => !!o.is_default) ||
+          caps!.media_type!.option[0];
+      this.setSettingPath_('mediaType.unavailableValue', unavailableValue);
     }
 
     if (this.settings.dpi.available) {
@@ -968,25 +1129,39 @@ export class PrintPreviewModelElement extends PolymerElement {
       this.setSettingPath_('color.unavailableValue', false);
     }
 
-    if (!this.settings.duplex.setFromUi && this.settings.duplex.available) {
+    // Duplex policy is available on ChromeOS only. Therefore, we don't need to
+    // check printing destinations' duplex availability on other platforms.
+    // <if expr="is_chromeos">
+    const duplexPolicyDefaultValueAvailable =
+        getDuplexPolicyDefaultValueAvailable(
+            this.getSetting('duplex').policyDefaultValue,
+            this.getSetting('duplexShortEdge').policyDefaultValue, caps);
+    // </if>
+    // <if expr="not is_chromeos">
+    const duplexPolicyDefaultValueAvailable = false;
+    // </if>
+    if (!this.settings.duplex.setFromUi && this.settings.duplex.available &&
+        !duplexPolicyDefaultValueAvailable) {
       const defaultOption = caps!.duplex!.option.find(o => !!o.is_default);
-      this.setSetting(
-          'duplex',
-          defaultOption ? (defaultOption.type === DuplexType.LONG_EDGE ||
-                           defaultOption.type === DuplexType.SHORT_EDGE) :
-                          false,
-          true);
-      this.setSetting(
-          'duplexShortEdge',
-          defaultOption ? defaultOption.type === DuplexType.SHORT_EDGE : false,
-          true);
+      if (defaultOption !== undefined) {
+        const defaultOptionIsDuplex =
+            defaultOption.type === DuplexType.SHORT_EDGE ||
+            defaultOption.type === DuplexType.LONG_EDGE;
+        this.setSetting('duplex', defaultOptionIsDuplex, true);
+        if (defaultOptionIsDuplex) {
+          this.setSetting(
+              'duplexShortEdge', defaultOption.type === DuplexType.SHORT_EDGE,
+              true);
+        }
 
-      if (!this.settings.duplexShortEdge.available) {
-        // Duplex is available, so must have only one two sided printing option.
-        // Set duplexShortEdge's unavailable value based on the printer.
-        this.setSettingPath_(
-            'duplexShortEdge.unavailableValue',
-            caps!.duplex!.option.some(o => o.type === DuplexType.SHORT_EDGE));
+        if (!this.settings.duplexShortEdge.available) {
+          // Duplex is available, so must have only one two sided printing
+          // option. Set duplexShortEdge's unavailable value based on the
+          // printer.
+          this.setSettingPath_(
+              'duplexShortEdge.unavailableValue',
+              caps!.duplex!.option.some(o => o.type === DuplexType.SHORT_EDGE));
+        }
       }
     } else if (
         !this.settings.duplex.available && caps && caps.duplex &&
@@ -1136,6 +1311,7 @@ export class PrintPreviewModelElement extends PolymerElement {
         }
         break;
       }
+      // <if expr="is_chromeos">
       case 'color': {
         const value = allowedMode ? allowedMode : defaultMode;
         if (value !== undefined) {
@@ -1146,7 +1322,7 @@ export class PrintPreviewModelElement extends PolymerElement {
         break;
       }
       case 'duplex': {
-        const value = allowedMode ? allowedMode : defaultMode;
+        const value = getDuplexDefaultValue(allowedMode, defaultMode);
         if (value !== undefined) {
           this.setPolicySetting_(
               settingName, value, !!allowedMode,
@@ -1163,6 +1339,8 @@ export class PrintPreviewModelElement extends PolymerElement {
         }
         break;
       }
+      // </if>
+      // <if expr="is_win or is_macosx">
       case 'printPdfAsImageAvailability': {
         const value = allowedMode !== undefined ? allowedMode : defaultMode;
         if (value !== undefined) {
@@ -1172,6 +1350,7 @@ export class PrintPreviewModelElement extends PolymerElement {
         }
         break;
       }
+      // </if>
       case 'printPdfAsImage': {
         if (defaultMode !== undefined) {
           this.setPolicySetting_(
@@ -1310,21 +1489,27 @@ export class PrintPreviewModelElement extends PolymerElement {
           continue;
         }
         if (settingName === 'duplex') {
-          let setDuplexTypeByPolicy = false;
-          this.set(
-              'settings.duplex.value',
-              policyEntry.value !== DuplexModeRestriction.SIMPLEX);
-          if (policyEntry.value === DuplexModeRestriction.SHORT_EDGE) {
-            this.set('settings.duplexShortEdge.value', true);
-            setDuplexTypeByPolicy = true;
-          } else if (policyEntry.value === DuplexModeRestriction.LONG_EDGE) {
-            this.set('settings.duplexShortEdge.value', false);
-            setDuplexTypeByPolicy = true;
+          const isDuplex =
+              (policyEntry.value === DuplexModeRestriction.SHORT_EDGE ||
+               policyEntry.value === DuplexModeRestriction.LONG_EDGE ||
+               policyEntry.value === DuplexModeRestriction.DUPLEX);
+
+          this.set('settings.duplex.value', isDuplex);
+          this.set('settings.duplex.policyDefaultValue', isDuplex);
+
+          if (policyEntry.value === DuplexModeRestriction.SHORT_EDGE ||
+              policyEntry.value === DuplexModeRestriction.LONG_EDGE) {
+            this.set(
+                'settings.duplexShortEdge.value',
+                policyEntry.value === DuplexModeRestriction.SHORT_EDGE);
+            this.set(
+                'settings.duplexShortEdge.policyDefaultValue',
+                policyEntry.value === DuplexModeRestriction.SHORT_EDGE);
           }
+
           this.set('settings.duplex.setByPolicy', policyEntry.managed);
-          this.set(
-              'settings.duplexShortEdge.setByPolicy',
-              policyEntry.managed && setDuplexTypeByPolicy);
+          // Duplex mode is never set by policy
+          this.set('settings.duplexShortEdge.setByPolicy', false);
           continue;
         }
         if (settingName === 'pin') {
@@ -1407,6 +1592,14 @@ export class PrintPreviewModelElement extends PolymerElement {
       const cddDefault = this.getResetValue_(caps['media_size']!);
       if (cddDefault) {
         this.set('settings.mediaSize.value', cddDefault);
+      }
+    }
+
+    if (this.settings.mediaType.available) {
+      assert(loadTimeData.getBoolean('isBorderlessPrintingEnabled'));
+      const cddDefault = this.getResetValue_(caps['media_type']!);
+      if (cddDefault) {
+        this.set('settings.mediaType.value', cddDefault);
       }
     }
 
@@ -1533,6 +1726,10 @@ export class PrintPreviewModelElement extends PolymerElement {
         'scalingType';
     const ticket: PrintTicket = {
       mediaSize: this.getSettingValue('mediaSize') as MediaSizeValue,
+      borderless: loadTimeData.getBoolean('isBorderlessPrintingEnabled') &&
+          this.getSettingValue('mediaSize')?.has_borderless_variant &&
+          this.getSettingValue('borderless'),
+      mediaType: this.getSettingValue('mediaType')?.vendor_id,
       pageCount: this.getSettingValue('pages').length,
       landscape: this.getSettingValue('layout'),
       color: destination.getNativeColorModel(
@@ -1563,6 +1760,7 @@ export class PrintPreviewModelElement extends PolymerElement {
       // <if expr="is_chromeos">
       printToGoogleDrive:
           destination.id === GooglePromotedDestinationId.SAVE_TO_DRIVE_CROS,
+      printerManuallySelected: destination.printerManuallySelected,
       // </if>
     };
 
@@ -1587,6 +1785,8 @@ export class PrintPreviewModelElement extends PolymerElement {
     }
     if (destination.origin === DestinationOrigin.CROS) {
       ticket['advancedSettings'] = this.getSettingValue('vendorItems');
+      ticket['printerStatusReason'] =
+          destination.printerStatusReason || PrinterStatusReason.UNKNOWN_REASON;
     }
     // </if>
 

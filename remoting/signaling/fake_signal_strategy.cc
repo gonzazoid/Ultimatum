@@ -6,12 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "remoting/signaling/signaling_id_util.h"
 #include "remoting/signaling/xmpp_constants.h"
 #include "third_party/libjingle_xmpp/xmllite/xmlelement.h"
@@ -28,7 +27,7 @@ void FakeSignalStrategy::Connect(FakeSignalStrategy* peer1,
 }
 
 FakeSignalStrategy::FakeSignalStrategy(const SignalingAddress& address)
-    : main_thread_(base::ThreadTaskRunnerHandle::Get()),
+    : main_thread_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       address_(address),
       last_id_(0) {
   DETACH_FROM_SEQUENCE(sequence_checker_);
@@ -54,8 +53,9 @@ void FakeSignalStrategy::SetState(State state) {
     return;
   }
   state_ = state;
-  for (auto& observer : listeners_)
+  for (auto& observer : listeners_) {
     observer.OnSignalStrategyStateChange(state_);
+  }
 }
 
 void FakeSignalStrategy::SetPeerCallback(const PeerCallback& peer_callback) {
@@ -149,18 +149,20 @@ void FakeSignalStrategy::RemoveListener(Listener* listener) {
   listeners_.RemoveObserver(listener);
 }
 
-bool FakeSignalStrategy::SendStanza(std::unique_ptr<jingle_xmpp::XmlElement> stanza) {
+bool FakeSignalStrategy::SendStanza(
+    std::unique_ptr<jingle_xmpp::XmlElement> stanza) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   address_.SetInMessage(stanza.get(), SignalingAddress::FROM);
 
-  if (peer_callback_.is_null())
+  if (peer_callback_.is_null()) {
     return false;
+  }
 
   if (send_delay_.is_zero()) {
     peer_callback_.Run(std::move(stanza));
   } else {
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, base::BindOnce(peer_callback_, std::move(stanza)),
         send_delay_);
   }
@@ -212,8 +214,9 @@ void FakeSignalStrategy::NotifyListeners(
   }
 
   for (auto& listener : listeners_) {
-    if (listener.OnSignalStrategyIncomingStanza(stanza_ptr))
+    if (listener.OnSignalStrategyIncomingStanza(stanza_ptr)) {
       break;
+    }
   }
 }
 

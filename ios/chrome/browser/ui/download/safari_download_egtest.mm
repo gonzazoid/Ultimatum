@@ -2,11 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/test/ios/wait_util.h"
 #import "components/strings/grit/components_strings.h"
-#import "ios/chrome/browser/download/download_test_util.h"
-#import "ios/chrome/browser/download/mime_type_util.h"
+#import "ios/chrome/browser/download/model/download_test_util.h"
+#import "ios/chrome/browser/download/model/mime_type_util.h"
 #import "ios/chrome/browser/ui/download/features.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
@@ -18,10 +18,6 @@
 #import "net/test/embedded_test_server/http_request.h"
 #import "net/test/embedded_test_server/http_response.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::test::ios::kWaitForDownloadTimeout;
 using chrome_test_util::ButtonWithAccessibilityLabelId;

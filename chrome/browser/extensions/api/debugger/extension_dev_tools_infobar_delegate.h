@@ -8,11 +8,12 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/callback_list.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
 #include "components/infobars/core/confirm_infobar_delegate.h"
+#include "extensions/common/extension_id.h"
 
 class GlobalConfirmInfoBar;
 
@@ -46,9 +47,6 @@ class ExtensionDevToolsInfoBarDelegate : public ConfirmInfoBarDelegate {
   gfx::ElideBehavior GetMessageElideBehavior() const override;
   int GetButtons() const override;
 
-  // Autocloses the infobar_ after 5 seconds.
-  static void NotifyExtensionDetached(const std::string& extension_id);
-
  private:
   ExtensionDevToolsInfoBarDelegate(std::string extension_id,
                                    const std::string& extension_name);
@@ -57,7 +55,10 @@ class ExtensionDevToolsInfoBarDelegate : public ConfirmInfoBarDelegate {
   base::CallbackListSubscription RegisterDestroyedCallback(
       base::OnceClosure destroyed_callback);
 
-  const std::string extension_id_;
+  // Autocloses the infobar_ after 5 seconds, only when no callbacks remain.
+  void MaybeStartAutocloseTimer();
+
+  const ExtensionId extension_id_;
   const std::u16string extension_name_;
   // infobar_ is set after attaching an extension and is deleted 5 seconds after
   // detaching the extension. |infobar_| owns this object and is therefore

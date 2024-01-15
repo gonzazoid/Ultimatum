@@ -12,6 +12,7 @@
 #include "chrome/browser/feature_engagement/tracker_factory.h"
 #include "chrome/browser/language/language_model_manager_factory.h"
 #include "chrome/browser/media/router/media_router_feature.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/themes/theme_properties.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_element_identifiers.h"
@@ -34,6 +35,7 @@
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/pointer/touch_ui_controller.h"
 #include "ui/base/theme_provider.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/native_theme/native_theme.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -56,11 +58,14 @@ MediaToolbarButtonView::MediaToolbarButtonView(
   button_controller()->set_notify_action(
       views::ButtonController::NotifyAction::kOnPress);
   SetFlipCanvasOnPaintForRTLUI(false);
-  SetVectorIcons(kMediaToolbarButtonIcon, kMediaToolbarButtonTouchIcon);
+  SetVectorIcons(features::IsChromeRefresh2023()
+                     ? kMediaToolbarButtonChromeRefreshIcon
+                     : kMediaToolbarButtonIcon,
+                 kMediaToolbarButtonTouchIcon);
   SetTooltipText(
       l10n_util::GetStringUTF16(IDS_GLOBAL_MEDIA_CONTROLS_ICON_TOOLTIP_TEXT));
   GetViewAccessibility().OverrideHasPopup(ax::mojom::HasPopup::kDialog);
-  SetProperty(views::kElementIdentifierKey, kMediaButtonElementId);
+  SetProperty(views::kElementIdentifierKey, kToolbarMediaButtonElementId);
 
   // We start hidden and only show once |controller_| tells us to.
   SetVisible(false);
@@ -111,25 +116,8 @@ void MediaToolbarButtonView::Enable() {
   // attempt to display an IPH at this point would have simply failed, so this
   // is not a behavioral change (see crbug.com/1291170).
   if (browser_->window() && captions::IsLiveCaptionFeatureSupported()) {
-    // Live Caption multi language is only enabled when SODA is also enabled.
-    if (base::FeatureList::IsEnabled(media::kLiveCaptionMultiLanguage)) {
       browser_->window()->MaybeShowFeaturePromo(
           feature_engagement::kIPHLiveCaptionFeature);
-    } else {
-      // Live Caption only works for English-language speech for now, so we only
-      // show the promo to users whose fluent languages include english. Fluent
-      // languages are set in chrome://settings/languages.
-      language::LanguageModel* language_model =
-          LanguageModelManagerFactory::GetForBrowserContext(browser_->profile())
-              ->GetPrimaryModel();
-      for (const auto& lang : language_model->GetLanguages()) {
-        if (base::MatchPattern(lang.lang_code, "en*")) {
-          browser_->window()->MaybeShowFeaturePromo(
-              feature_engagement::kIPHLiveCaptionFeature);
-          break;
-        }
-      }
-    }
   }
 
   for (auto& observer : observers_)
@@ -143,6 +131,15 @@ void MediaToolbarButtonView::Disable() {
 
   for (auto& observer : observers_)
     observer.OnMediaButtonDisabled();
+}
+
+void MediaToolbarButtonView::MaybeShowLocalMediaCastingPromo() {
+  if (media_router::GlobalMediaControlsCastStartStopEnabled(
+          browser_->profile()) &&
+      service_->should_show_cast_local_media_iph()) {
+    browser_->window()->MaybeShowFeaturePromo(
+        feature_engagement::kIPHGMCLocalMediaCastingFeature);
+  }
 }
 
 void MediaToolbarButtonView::MaybeShowStopCastingPromo() {
@@ -179,5 +176,5 @@ void MediaToolbarButtonView::ClosePromoBubble() {
       feature_engagement::kIPHGMCCastStartStopFeature);
 }
 
-BEGIN_METADATA(MediaToolbarButtonView, ToolbarButton)
+BEGIN_METADATA(MediaToolbarButtonView)
 END_METADATA

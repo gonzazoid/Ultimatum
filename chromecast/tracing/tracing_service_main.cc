@@ -11,8 +11,8 @@
 #include <memory>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
 #include "base/message_loop/message_pump_for_io.h"
@@ -24,7 +24,7 @@
 #include "base/strings/string_util.h"
 #include "base/task/current_thread.h"
 #include "base/task/single_thread_task_executor.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chromecast/tracing/ftrace.h"
 #include "chromecast/tracing/system_tracing_common.h"
@@ -154,7 +154,7 @@ class TraceCopyTask : public base::MessagePumpLibevent::FdWatcher {
     in_fd_.reset();
     out_fd_.reset();
     buffer_.reset();
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback_), status, total_copied_));
   }
 
@@ -310,8 +310,8 @@ class TraceConnection : public base::MessagePumpLibevent::FdWatcher {
     connection_fd_.reset();
     StopFtrace();
     ClearFtrace();
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  std::move(callback_));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(callback_));
   }
 
   // Tracing state.

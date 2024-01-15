@@ -4,17 +4,17 @@
 
 #include <string>
 
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/constants/ash_switches.h"
-#include "ash/public/cpp/accessibility_controller.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
-#include "base/run_loop.h"
+#include "base/memory/raw_ptr.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/test/repeating_test_future.h"
 #include "base/values.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
 #include "chrome/browser/ash/accessibility/magnification_manager.h"
@@ -22,7 +22,6 @@
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "components/policy/core/common/policy_types.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #include "components/prefs/pref_change_registrar.h"
@@ -40,45 +39,6 @@ using ::ash::MagnificationManager;
 const int kDisabledScreenMagnifier = 0;
 const int kFullScreenMagnifier = 1;
 const int kDockedScreenMagnifier = 2;
-
-// Spins the loop until a notification is received from |prefs| that the value
-// of |pref_name| has changed. If the notification is received before Wait()
-// has been called, Wait() returns immediately and no loop is spun.
-class PrefChangeWatcher {
- public:
-  PrefChangeWatcher(const char* pref_name, PrefService* prefs);
-
-  PrefChangeWatcher(const PrefChangeWatcher&) = delete;
-  PrefChangeWatcher& operator=(const PrefChangeWatcher&) = delete;
-
-  void Wait();
-
-  void OnPrefChange();
-
- private:
-  bool pref_changed_ = false;
-
-  base::RunLoop run_loop_;
-  PrefChangeRegistrar registrar_;
-};
-
-PrefChangeWatcher::PrefChangeWatcher(const char* pref_name,
-                                     PrefService* prefs) {
-  registrar_.Init(prefs);
-  registrar_.Add(pref_name,
-                 base::BindRepeating(&PrefChangeWatcher::OnPrefChange,
-                                     base::Unretained(this)));
-}
-
-void PrefChangeWatcher::Wait() {
-  if (!pref_changed_)
-    run_loop_.Run();
-}
-
-void PrefChangeWatcher::OnPrefChange() {
-  pref_changed_ = true;
-  run_loop_.Quit();
-}
 
 }  // namespace
 
@@ -105,7 +65,7 @@ class LoginScreenAccessibilityPolicyBrowsertest
 
   base::Value GetPrefValue(const char* pref_name) const;
 
-  Profile* login_profile_ = nullptr;
+  raw_ptr<Profile, DanglingUntriaged> login_profile_ = nullptr;
 };
 
 LoginScreenAccessibilityPolicyBrowsertest::
@@ -137,9 +97,15 @@ void LoginScreenAccessibilityPolicyBrowsertest::SetUpOnMainThread() {
 
 void LoginScreenAccessibilityPolicyBrowsertest::
     RefreshDevicePolicyAndWaitForPrefChange(const char* pref_name) {
-  PrefChangeWatcher watcher(pref_name, login_profile_->GetPrefs());
+  PrefService* prefs = login_profile_->GetPrefs();
+  ASSERT_TRUE(prefs);
+  PrefChangeRegistrar registrar;
+  base::test::RepeatingTestFuture<const char*> pref_changed_future;
+  registrar.Init(prefs);
+  registrar.Add(pref_name, base::BindRepeating(
+                               pref_changed_future.GetCallback(), pref_name));
   RefreshDevicePolicy();
-  watcher.Wait();
+  EXPECT_EQ(pref_name, pref_changed_future.Take());
 }
 
 void LoginScreenAccessibilityPolicyBrowsertest::SetUpCommandLine(

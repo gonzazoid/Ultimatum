@@ -11,8 +11,8 @@
 #include "chrome/browser/ui/passwords/passwords_model_delegate.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/favicon/core/favicon_util.h"
+#include "components/password_manager/core/browser/features/password_manager_features_util.h"
 #include "components/password_manager/core/browser/password_feature_manager.h"
-#include "components/password_manager/core/browser/password_manager_features_util.h"
 #include "components/password_manager/core/common/password_manager_ui.h"
 #include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
@@ -60,12 +60,12 @@ std::u16string MoveToAccountStoreBubbleController::GetTitle() const {
 
 void MoveToAccountStoreBubbleController::AcceptMove() {
   dismissal_reason_ = metrics_util::CLICKED_ACCEPT;
-  if (delegate_->GetPasswordFeatureManager()->IsOptedInForAccountStorage()) {
-    // User has already opted in to the account store. Move without reauth.
-    return delegate_->MovePasswordToAccountStore();
+  if (!delegate_->GetPasswordFeatureManager()->IsOptedInForAccountStorage()) {
+    // The user opted out since the bubble was shown. This should be rare and
+    // ultimately harmless, just do nothing.
+    return;
   }
-  // Otherwise, we should invoke the reauth flow before saving.
-  return delegate_->AuthenticateUserForAccountStoreOptInAndMovePassword();
+  return delegate_->MovePasswordToAccountStore();
 }
 
 void MoveToAccountStoreBubbleController::RejectMove() {

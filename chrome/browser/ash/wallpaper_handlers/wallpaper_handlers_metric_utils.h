@@ -17,6 +17,7 @@ enum class GooglePhotosApi {
   kGetEnabled,
   kGetPhoto,
   kGetPhotos,
+  kGetSharedAlbums,
 };
 
 // Records the following on Google Photos API response parsing completion:
@@ -27,6 +28,9 @@ enum class GooglePhotosApi {
 void RecordGooglePhotosApiResponseParsed(GooglePhotosApi api,
                                          base::TimeDelta response_time,
                                          absl::optional<size_t> result_count);
+
+// Records Ash.Wallpaper.GooglePhotos.Api.{Api}.RefreshCount metric.
+void RecordGooglePhotosApiRefreshCount(GooglePhotosApi api, int refresh_count);
 
 }  // namespace wallpaper_handlers
 

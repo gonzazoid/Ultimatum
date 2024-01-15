@@ -8,156 +8,25 @@
 #import "base/strings/sys_string_conversions.h"
 #import "base/strings/utf_string_conversions.h"
 #import "components/keyed_service/ios/browser_state_keyed_service_factory.h"
-#import "components/ntp_snippets/content_suggestion.h"
-#import "components/ntp_snippets/content_suggestions_service.h"
-#import "components/ntp_snippets/mock_content_suggestions_provider.h"
-#import "components/search_engines/template_url.h"
-#import "components/search_engines/template_url_service.h"
-#import "ios/chrome/browser/application_context/application_context.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/flags/system_flags.h"
-#import "ios/chrome/browser/ntp_snippets/ios_chrome_content_suggestions_service_factory.h"
-#import "ios/chrome/browser/ntp_snippets/ios_chrome_content_suggestions_service_factory_util.h"
-#import "ios/chrome/browser/search_engines/template_url_service_factory.h"
+#import "components/prefs/pref_service.h"
+#import "ios/chrome/browser/ntp/model/set_up_list_item_type.h"
+#import "ios/chrome/browser/ntp/model/set_up_list_prefs.h"
+#import "ios/chrome/browser/search_engines/model/template_url_service_factory.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/public/features/system_flags.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/content_suggestions/content_suggestions_collection_utils.h"
-#import "ios/chrome/browser/ui/content_suggestions/ntp_home_provider_test_singleton.h"
 #import "ios/chrome/browser/ui/content_suggestions/ntp_home_test_utils.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/ui/content_suggestions/set_up_list/constants.h"
+#import "ios/chrome/browser/ui/content_suggestions/set_up_list/set_up_list_item_view.h"
 #import "ios/chrome/test/app/chrome_test_util.h"
 #import "net/base/mac/url_conversions.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using content_suggestions::SearchFieldWidth;
-using ntp_snippets::AdditionalSuggestionsHelper;
-using ntp_snippets::Category;
-using ntp_snippets::CategoryStatus;
-using ntp_snippets::ContentSuggestion;
-using ntp_snippets::ContentSuggestionsService;
-using ntp_snippets::CreateChromeContentSuggestionsService;
-using ntp_snippets::KnownCategories;
-using ntp_snippets::MockContentSuggestionsProvider;
-using testing::_;
-using testing::Invoke;
-using testing::WithArg;
-
-namespace {
-// Returns a suggestion created from the `category`, `suggestion_id` and the
-// `url`.
-ContentSuggestion CreateSuggestion(Category category,
-                                   std::string suggestion_id,
-                                   GURL url) {
-  ContentSuggestion suggestion(category, suggestion_id, url);
-  suggestion.set_title(base::UTF8ToUTF16(url.spec()));
-
-  return suggestion;
-}
-
-}  // namespace
+using set_up_list_prefs::SetUpListItemState;
 
 @implementation NewTabPageAppInterface
-
-+ (void)setUpService {
-  ChromeBrowserState* browserState =
-      chrome_test_util::GetOriginalBrowserState();
-  // Sets the ContentSuggestionsService associated with this browserState to a
-  // service with no provider registered, allowing to register fake providers
-  // which do not require internet connection. The previous service is deleted.
-  IOSChromeContentSuggestionsServiceFactory::GetInstance()->SetTestingFactory(
-      browserState,
-      base::BindRepeating(&CreateChromeContentSuggestionsService));
-
-  ContentSuggestionsService* service =
-      IOSChromeContentSuggestionsServiceFactory::GetForBrowserState(
-          browserState);
-  [[ContentSuggestionsTestSingleton sharedInstance]
-      registerArticleProvider:service];
-}
-
-+ (void)resetService {
-  ChromeBrowserState* browserState =
-      chrome_test_util::GetOriginalBrowserState();
-
-  // Resets the Service associated with this browserState to a new service with
-  // no providers. The previous service is deleted.
-  IOSChromeContentSuggestionsServiceFactory::GetInstance()->SetTestingFactory(
-      browserState,
-      base::BindRepeating(&CreateChromeContentSuggestionsService));
-}
-
-+ (void)makeSuggestionsAvailable {
-  [self provider]->FireCategoryStatusChanged([self category],
-                                             CategoryStatus::AVAILABLE);
-}
-
-+ (void)disableSuggestions {
-  [self provider]->FireCategoryStatusChanged(
-      [self category], CategoryStatus::ALL_SUGGESTIONS_EXPLICITLY_DISABLED);
-}
-
-+ (void)addNumberOfSuggestions:(NSInteger)numberOfSuggestions
-      additionalSuggestionsURL:(NSURL*)URL {
-  GURL newURL = net::GURLWithNSURL(URL);
-  std::vector<ContentSuggestion> suggestions;
-  for (NSInteger i = 1; i <= numberOfSuggestions; i++) {
-    std::string index = base::SysNSStringToUTF8(@(i).stringValue);
-    suggestions.push_back(
-        CreateSuggestion([self category], "chromium" + index,
-                         GURL("http://chromium.org/" + index)));
-  }
-  [self provider]->FireSuggestionsChanged([self category],
-                                          std::move(suggestions));
-
-  if (URL) {
-    // Set up the action when "More" is tapped.
-    [[ContentSuggestionsTestSingleton sharedInstance]
-        resetAdditionalSuggestionsHelperWithURL:newURL];
-    EXPECT_CALL(*[self provider], FetchMock(_, _, _))
-        .WillRepeatedly(WithArg<2>(
-            Invoke([[ContentSuggestionsTestSingleton sharedInstance]
-                       additionalSuggestionsHelper],
-                   &AdditionalSuggestionsHelper::SendAdditionalSuggestions)));
-  }
-}
-
-+ (void)addSuggestionNumber:(NSInteger)suggestionNumber {
-  std::string index = base::NumberToString(suggestionNumber);
-  std::vector<ContentSuggestion> suggestions;
-  suggestions.push_back(CreateSuggestion([self category], "chromium" + index,
-                                         GURL("http://chromium.org/" + index)));
-  [self provider]->FireSuggestionsChanged([self category],
-                                          std::move(suggestions));
-}
-
-+ (NSString*)defaultSearchEngine {
-  // Get the default Search Engine.
-  ChromeBrowserState* browser_state =
-      chrome_test_util::GetOriginalBrowserState();
-  TemplateURLService* service =
-      ios::TemplateURLServiceFactory::GetForBrowserState(browser_state);
-  return base::SysUTF16ToNSString(
-      service->GetDefaultSearchProvider()->short_name());
-}
-
-+ (void)resetSearchEngineTo:(NSString*)defaultSearchEngine {
-  std::u16string defaultSearchEngineString =
-      base::SysNSStringToUTF16(defaultSearchEngine);
-  // Set the search engine back to the default in case the test fails before
-  // cleaning it up.
-  ChromeBrowserState* browser_state =
-      chrome_test_util::GetOriginalBrowserState();
-  TemplateURLService* service =
-      ios::TemplateURLServiceFactory::GetForBrowserState(browser_state);
-  std::vector<TemplateURL*> urls = service->GetTemplateURLs();
-
-  for (auto iter = urls.begin(); iter != urls.end(); ++iter) {
-    if (defaultSearchEngineString == (*iter)->short_name()) {
-      service->SetUserSelectedDefaultSearchProvider(*iter);
-    }
-  }
-}
 
 + (CGFloat)searchFieldWidthForCollectionWidth:(CGFloat)collectionWidth
                               traitCollection:
@@ -182,14 +51,51 @@ ContentSuggestion CreateSuggestion(Category category,
   return ntp_home::DiscoverHeaderLabel();
 }
 
-#pragma mark - Helper
-
-+ (MockContentSuggestionsProvider*)provider {
-  return [[ContentSuggestionsTestSingleton sharedInstance] provider];
++ (void)disableSetUpList {
+  set_up_list_prefs::DisableSetUpList(GetApplicationContext()->GetLocalState());
 }
 
-+ (Category)category {
-  return Category::FromKnownCategory(KnownCategories::ARTICLES);
++ (void)resetSetUpListPrefs {
+  PrefService* localState = GetApplicationContext()->GetLocalState();
+  localState->ClearPref(set_up_list_prefs::kDisabled);
+  SetUpListItemState unknown = SetUpListItemState::kUnknown;
+  set_up_list_prefs::SetItemState(localState, SetUpListItemType::kSignInSync,
+                                  unknown);
+  set_up_list_prefs::SetItemState(localState,
+                                  SetUpListItemType::kDefaultBrowser, unknown);
+  set_up_list_prefs::SetItemState(localState, SetUpListItemType::kAutofill,
+                                  unknown);
+}
+
++ (BOOL)setUpListItemSignInSyncIsComplete {
+  return ntp_home::SetUpListItemViewWithAccessibilityId(
+             set_up_list::kSignInItemID)
+      .complete;
+}
+
++ (BOOL)setUpListItemDefaultBrowserIsComplete {
+  SetUpListItemView* view = ntp_home::SetUpListItemViewWithAccessibilityId(
+      set_up_list::kDefaultBrowserItemID);
+  return view.complete;
+}
+
++ (BOOL)setUpListItemAutofillIsComplete {
+  return ntp_home::SetUpListItemViewWithAccessibilityId(
+             set_up_list::kAutofillItemID)
+      .complete;
+}
+
++ (BOOL)setUpListItemDefaultBrowserInMagicStackIsComplete {
+  SetUpListItemView* view =
+      ntp_home::SetUpListItemViewInMagicStackWithAccessibilityId(
+          set_up_list::kDefaultBrowserItemID);
+  return view.complete;
+}
+
++ (BOOL)setUpListItemAutofillInMagicStackIsComplete {
+  return ntp_home::SetUpListItemViewInMagicStackWithAccessibilityId(
+             set_up_list::kAutofillItemID)
+      .complete;
 }
 
 @end

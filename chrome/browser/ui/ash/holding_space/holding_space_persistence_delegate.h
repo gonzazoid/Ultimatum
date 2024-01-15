@@ -8,7 +8,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/ash/holding_space/holding_space_keyed_service_delegate.h"
 #include "chrome/browser/ui/ash/holding_space/holding_space_util.h"
 
@@ -34,8 +35,10 @@ class HoldingSpacePersistenceDelegate
   // NOTE: Any changes to persistence must be backwards compatible.
   static constexpr char kPersistencePath[] = "ash.holding_space.items";
 
-  // Callback to invoke when holding space persistence has been restored.
-  using PersistenceRestoredCallback = base::OnceClosure;
+  // Callback to invoke when holding space persistence has been restored to
+  // add the restored items to the holding space model.
+  using PersistenceRestoredCallback =
+      base::OnceCallback<void(std::vector<HoldingSpaceItemPtr>)>;
 
   HoldingSpacePersistenceDelegate(
       HoldingSpaceKeyedService* service,
@@ -64,11 +67,12 @@ class HoldingSpacePersistenceDelegate
   // Restores the holding space model from persistent storage.
   void RestoreModelFromPersistence();
 
-  // Removes the persisted suggestions if the suggestion feature is disabled.
-  void MaybeRemoveSuggestionsFromPersistence();
+  // Removes items from persistent storage that should not be restored to the
+  // in-memory holding space model.
+  void MaybeRemoveItemsFromPersistence();
 
   // Owned by `HoldingSpaceKeyedService`.
-  ThumbnailLoader* const thumbnail_loader_;
+  const raw_ptr<ThumbnailLoader> thumbnail_loader_;
 
   // Callback to invoke when holding space persistence has been restored.
   PersistenceRestoredCallback persistence_restored_callback_;

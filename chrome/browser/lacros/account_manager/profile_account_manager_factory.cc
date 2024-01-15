@@ -26,13 +26,21 @@ ProfileAccountManager* ProfileAccountManagerFactory::GetForProfile(
 }
 
 ProfileAccountManagerFactory::ProfileAccountManagerFactory()
-    : ProfileKeyedServiceFactory("ProfileAccountManager") {}
+    : ProfileKeyedServiceFactory(
+          "ProfileAccountManager",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 ProfileAccountManagerFactory::~ProfileAccountManagerFactory() = default;
 
-KeyedService* ProfileAccountManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ProfileAccountManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new ProfileAccountManager(
+  return std::make_unique<ProfileAccountManager>(
       g_browser_process->profile_manager()->GetAccountProfileMapper(),
       /*profile_path=*/context->GetPath());
 }

@@ -15,6 +15,7 @@
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
 #include "media/base/bitstream_buffer.h"
@@ -24,22 +25,21 @@
 #include "media/video/video_encode_accelerator.h"
 
 namespace media {
-
-class Video;
-
 namespace test {
 
 class AlignedDataHelper;
+class RawVideo;
 
 // Video encoder client configuration.
 // TODO(dstaessens): Add extra parameters (e.g. h264 output level)
 struct VideoEncoderClientConfig {
   static constexpr uint32_t kDefaultBitrate = 200000;
   VideoEncoderClientConfig(
-      const Video* video,
+      const RawVideo* video,
       VideoCodecProfile output_profile,
       const std::vector<VideoEncodeAccelerator::Config::SpatialLayer>&
           spatial_layers,
+      SVCInterLayerPredMode inter_layer_pred_mode,
       const media::VideoBitrateAllocation& bitrate,
       bool reverse);
   VideoEncoderClientConfig(const VideoEncoderClientConfig&);
@@ -49,14 +49,18 @@ struct VideoEncoderClientConfig {
   VideoCodecProfile output_profile = VideoCodecProfile::H264PROFILE_MAIN;
   // The resolution output by VideoEncoderClient.
   gfx::Size output_resolution;
-  // The number of temporal/spatial layers of the output stream.
-  size_t num_temporal_layers = 1u;
-  size_t num_spatial_layers = 1u;
   // The spatial layers for SVC stream, it's empty for simple stream.
   std::vector<VideoEncodeAccelerator::Config::SpatialLayer> spatial_layers;
+  // The number of temporal/spatial layers and inter layer prediction of the
+  // output stream.
+  size_t num_temporal_layers = 1u;
+  size_t num_spatial_layers = 1u;
+  SVCInterLayerPredMode inter_layer_pred_mode = SVCInterLayerPredMode::kOff;
   // The maximum number of bitstream buffer encodes that can be requested
   // without waiting for the result of the previous encodes requests.
   size_t max_outstanding_encode_requests = 1;
+  // The drop frame threshold. See VideoEncodeAccelerator::Config for detail.
+  uint8_t drop_frame_thresh = 0;
   // The desired bitrate in bits/second.
   media::VideoBitrateAllocation bitrate_allocation;
   // The desired framerate in frames/second.
@@ -92,6 +96,7 @@ class VideoEncoderStats {
   uint32_t framerate = 0;
   size_t total_num_encoded_frames = 0;
   size_t total_encoded_frames_size = 0;
+  size_t num_dropped_frames = 0;
   // Filled in spatial/temporal layer encoding and codec is vp9.
   std::vector<std::vector<size_t>> num_encoded_frames_per_layer;
   std::vector<std::vector<size_t>> encoded_frames_size_per_layer;
@@ -127,7 +132,7 @@ class VideoEncoderClient : public VideoEncodeAccelerator::Client {
   // Initialize the video encode accelerator for the specified |video|.
   // Initialization is performed asynchronous, upon completion a 'kInitialized'
   // event will be sent to the test encoder.
-  bool Initialize(const Video* video);
+  bool Initialize(const RawVideo* video);
 
   // Start encoding the video stream, encoder should be idle when this function
   // is called. This function is non-blocking, for each frame encoded a
@@ -158,7 +163,7 @@ class VideoEncoderClient : public VideoEncodeAccelerator::Client {
                                size_t output_buffer_size) override;
   void BitstreamBufferReady(int32_t bitstream_buffer_id,
                             const BitstreamBufferMetadata& metadata) override;
-  void NotifyError(VideoEncodeAccelerator::Error error) override;
+  void NotifyErrorStatus(const EncoderStatus& status) override;
   void NotifyEncoderInfoChange(const VideoEncoderInfo& info) override;
 
  private:
@@ -178,7 +183,7 @@ class VideoEncoderClient : public VideoEncodeAccelerator::Client {
   void Destroy();
 
   // Create a new video |encoder_| on the |encoder_client_thread_|.
-  void CreateEncoderTask(const Video* video,
+  void CreateEncoderTask(const RawVideo* video,
                          bool* success,
                          base::WaitableEvent* done);
   // Destroy the active video |encoder_| on the |encoder_client_thread_|.
@@ -241,7 +246,7 @@ class VideoEncoderClient : public VideoEncodeAccelerator::Client {
   VideoEncoderClientState encoder_client_state_;
 
   // The video being encoded, owned by the video encoder test environment.
-  raw_ptr<const Video> video_ = nullptr;
+  raw_ptr<const RawVideo> video_ = nullptr;
   // Helper used to align data and create frames from the raw video stream.
   std::unique_ptr<media::test::AlignedDataHelper> aligned_data_helper_;
 

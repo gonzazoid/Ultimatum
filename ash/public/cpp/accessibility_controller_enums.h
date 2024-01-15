@@ -224,6 +224,21 @@ enum class DictationBubbleHintType {
   kCopy,
 };
 
+// The types of notifications that can be shown by Dictation.
+enum class DictationNotificationType {
+  kAllDlcsDownloaded,
+  kNoDlcsDownloaded,
+  kOnlySodaDownloaded,
+  kOnlyPumpkinDownloaded,
+};
+
+// The types of accessibility-related toasts. This enum should be kept in sync
+// with chrome.accessibilityPrivate.ToastType.
+enum class AccessibilityToastType {
+  kDictationMicMuted,
+  kDictationNoFocusedTextField,
+};
+
 }  // namespace ash
 
 #endif  // ASH_PUBLIC_CPP_ACCESSIBILITY_CONTROLLER_ENUMS_H_

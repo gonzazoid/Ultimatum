@@ -10,6 +10,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/power_monitor/power_monitor.h"
 #include "base/power_monitor/power_monitor_source.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "components/viz/service/performance_hint/hint_session.h"
 #include "gpu/config/gpu_info.h"
@@ -38,9 +39,8 @@ class MockDelegate : public VizMainImpl::Delegate {
 // that the dependency-injected UKM recorder actually gets used.
 class MockUkmRecorder : public ukm::MojoUkmRecorder {
  public:
-  MockUkmRecorder()
-      : ukm::MojoUkmRecorder(
-            mojo::PendingRemote<ukm::mojom::UkmRecorderInterface>()) {}
+  MockUkmRecorder(ukm::mojom::UkmRecorderFactory& factory)
+      : MojoUkmRecorder(factory) {}
 
   MOCK_METHOD1(AddEntry, void(ukm::mojom::UkmEntryPtr));
 };
@@ -84,12 +84,16 @@ class MockPowerMonitorSource : public base::PowerMonitorSource {
 TEST(VizMainImplTest, OopVizDependencyInjection) {
   VizMainImpl::ExternalDependencies external_deps;
   scoped_refptr<base::SingleThreadTaskRunner> task_runner =
-      base::ThreadTaskRunnerHandle::Get();
+      base::SingleThreadTaskRunner::GetCurrentDefault();
 
   // |VizMainImpl| is supposed to use the |UkmRecorder| injected through
   // |ExternalDependencies|.
+
+  mojo::Remote<ukm::mojom::UkmRecorderFactory> factory;
+  std::ignore = factory.BindNewPipeAndPassReceiver();
   std::unique_ptr<MockUkmRecorder> mock_ukm_recorder =
-      std::make_unique<MockUkmRecorder>();
+      std::make_unique<MockUkmRecorder>(*factory);
+
   EXPECT_CALL(*mock_ukm_recorder, AddEntry);
   external_deps.ukm_recorder = std::move(mock_ukm_recorder);
 

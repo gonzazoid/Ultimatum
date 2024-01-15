@@ -15,31 +15,32 @@ namespace blink {
 
 template <typename KeyArg,
           typename MappedArg,
-          typename HashArg = DefaultHash<KeyArg>,
           typename KeyTraitsArg = HashTraits<KeyArg>,
           typename MappedTraitsArg = HashTraits<MappedArg>>
-class HeapHashMap final : public GarbageCollected<HeapHashMap<KeyArg,
-                                                              MappedArg,
-                                                              HashArg,
-                                                              KeyTraitsArg,
-                                                              MappedTraitsArg>>,
-                          public HashMap<KeyArg,
-                                         MappedArg,
-                                         HashArg,
-                                         KeyTraitsArg,
-                                         MappedTraitsArg,
-                                         HeapAllocator> {
+class HeapHashMap final
+    : public GarbageCollected<
+          HeapHashMap<KeyArg, MappedArg, KeyTraitsArg, MappedTraitsArg>>,
+      public HashMap<KeyArg,
+                     MappedArg,
+                     KeyTraitsArg,
+                     MappedTraitsArg,
+                     HeapAllocator> {
   DISALLOW_NEW();
 
  public:
   HeapHashMap() { CheckType(); }
 
   void Trace(Visitor* visitor) const {
-    HashMap<KeyArg, MappedArg, HashArg, KeyTraitsArg, MappedTraitsArg,
+    HashMap<KeyArg, MappedArg, KeyTraitsArg, MappedTraitsArg,
             HeapAllocator>::Trace(visitor);
   }
 
  private:
+  template <typename T>
+  static constexpr bool IsValidNonTraceableType() {
+    return !WTF::IsTraceable<T>::value && !WTF::IsPointerToGced<T>::value;
+  }
+
   static constexpr void CheckType() {
     static_assert(std::is_trivially_destructible<HeapHashMap>::value,
                   "HeapHashMap must be trivially destructible.");
@@ -48,12 +49,12 @@ class HeapHashMap final : public GarbageCollected<HeapHashMap<KeyArg,
         "For hash maps without traceable elements, use HashMap<> "
         "instead of HeapHashMap<>.");
     static_assert(WTF::IsMemberOrWeakMemberType<KeyArg>::value ||
-                      !WTF::IsTraceable<KeyArg>::value,
+                      IsValidNonTraceableType<KeyArg>(),
                   "HeapHashMap supports only Member, WeakMember and "
                   "non-traceable types as keys.");
     static_assert(
         WTF::IsMemberOrWeakMemberType<MappedArg>::value ||
-            !WTF::IsTraceable<MappedArg>::value ||
+            IsValidNonTraceableType<MappedArg>() ||
             WTF::IsSubclassOfTemplate<MappedArg, v8::TracedReference>::value,
         "HeapHashMap supports only Member, WeakMember, "
         "TraceWrapperV8Reference and "

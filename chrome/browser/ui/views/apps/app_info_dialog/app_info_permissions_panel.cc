@@ -8,9 +8,9 @@
 #include <vector>
 
 #include "apps/saved_files_service.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_split.h"
 #include "chrome/browser/apps/platform_apps/app_load_service.h"
@@ -25,6 +25,7 @@
 #include "extensions/common/permissions/permissions_data.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/models/image_model.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/text_constants.h"
@@ -47,18 +48,19 @@ const int kIndentationBeforeNestedBullet = 13;
 // the right of a bullet in the permissions list. The alt-text is set to a
 // revoke message containing the given |permission_message|.
 class RevokeButton : public views::ImageButton {
+  METADATA_HEADER(RevokeButton, views::ImageButton)
+
  public:
-  METADATA_HEADER(RevokeButton);
   explicit RevokeButton(PressedCallback callback,
                         const std::u16string& permission_message)
       : views::ImageButton(std::move(callback)) {
     ui::ResourceBundle& rb = ui::ResourceBundle::GetSharedInstance();
-    SetImage(views::Button::STATE_NORMAL,
-             rb.GetImageNamed(IDR_DISABLE).ToImageSkia());
-    SetImage(views::Button::STATE_HOVERED,
-             rb.GetImageNamed(IDR_DISABLE_H).ToImageSkia());
-    SetImage(views::Button::STATE_PRESSED,
-             rb.GetImageNamed(IDR_DISABLE_P).ToImageSkia());
+    SetImageModel(views::Button::STATE_NORMAL,
+                  ui::ImageModel::FromImage(rb.GetImageNamed(IDR_DISABLE)));
+    SetImageModel(views::Button::STATE_HOVERED,
+                  ui::ImageModel::FromImage(rb.GetImageNamed(IDR_DISABLE_H)));
+    SetImageModel(views::Button::STATE_PRESSED,
+                  ui::ImageModel::FromImage(rb.GetImageNamed(IDR_DISABLE_P)));
     SetBorder(std::unique_ptr<views::Border>());
     SetSize(GetPreferredSize());
 
@@ -73,13 +75,14 @@ class RevokeButton : public views::ImageButton {
   ~RevokeButton() override = default;
 };
 
-BEGIN_METADATA(RevokeButton, views::ImageButton)
+BEGIN_METADATA(RevokeButton)
 END_METADATA
 
 // A bulleted list of permissions.
 class BulletedPermissionsList : public views::View {
+  METADATA_HEADER(BulletedPermissionsList, views::View)
+
  public:
-  METADATA_HEADER(BulletedPermissionsList);
   BulletedPermissionsList() {
     SetLayoutManager(std::make_unique<views::BoxLayout>(
         views::BoxLayout::Orientation::kVertical, gfx::Insets(),
@@ -100,9 +103,10 @@ class BulletedPermissionsList : public views::View {
                             gfx::ElideBehavior elide_behavior_for_submessages,
                             base::RepeatingClosure revoke_callback) {
     std::unique_ptr<RevokeButton> revoke_button;
-    if (!revoke_callback.is_null())
+    if (!revoke_callback.is_null()) {
       revoke_button = std::make_unique<RevokeButton>(std::move(revoke_callback),
                                                      std::move(message));
+    }
 
     auto permission_label = std::make_unique<AppInfoLabel>(message);
     permission_label->SetMultiLine(true);
@@ -149,7 +153,7 @@ class BulletedPermissionsList : public views::View {
   }
 };
 
-BEGIN_METADATA(BulletedPermissionsList, views::View)
+BEGIN_METADATA(BulletedPermissionsList)
 END_METADATA
 
 }  // namespace
@@ -166,8 +170,7 @@ AppInfoPermissionsPanel::AppInfoPermissionsPanel(
   CreatePermissionsList();
 }
 
-AppInfoPermissionsPanel::~AppInfoPermissionsPanel() {
-}
+AppInfoPermissionsPanel::~AppInfoPermissionsPanel() {}
 
 void AppInfoPermissionsPanel::CreatePermissionsList() {
   auto permissions_heading = CreateHeading(
@@ -228,15 +231,16 @@ int AppInfoPermissionsPanel::GetRetainedFileCount() const {
     apps::SavedFilesService* service = apps::SavedFilesService::Get(profile_);
     // The SavedFilesService can be null for incognito profiles. See
     // http://crbug.com/467795.
-    if (service)
+    if (service) {
       return service->GetAllFileEntries(app_->id()).size();
+    }
   }
   return 0;
 }
 
 std::u16string AppInfoPermissionsPanel::GetRetainedFileHeading() const {
-  return l10n_util::GetPluralStringFUTF16(
-      IDS_APPLICATION_INFO_RETAINED_FILES, GetRetainedFileCount());
+  return l10n_util::GetPluralStringFUTF16(IDS_APPLICATION_INFO_RETAINED_FILES,
+                                          GetRetainedFileCount());
 }
 
 std::vector<std::u16string> AppInfoPermissionsPanel::GetRetainedFilePaths()
@@ -262,8 +266,9 @@ std::vector<std::u16string> AppInfoPermissionsPanel::GetRetainedFilePaths()
 void AppInfoPermissionsPanel::RevokeFilePermissions() {
   apps::SavedFilesService* service = apps::SavedFilesService::Get(profile_);
   // The SavedFilesService can be null for incognito profiles.
-  if (service)
+  if (service) {
     service->ClearQueue(app_);
+  }
   apps::AppLoadService::Get(profile_)->RestartApplicationIfRunning(app_->id());
 
   Close();
@@ -276,8 +281,8 @@ int AppInfoPermissionsPanel::GetRetainedDeviceCount() const {
 }
 
 std::u16string AppInfoPermissionsPanel::GetRetainedDeviceHeading() const {
-  return l10n_util::GetPluralStringFUTF16(
-      IDS_APPLICATION_INFO_RETAINED_DEVICES, GetRetainedDeviceCount());
+  return l10n_util::GetPluralStringFUTF16(IDS_APPLICATION_INFO_RETAINED_DEVICES,
+                                          GetRetainedDeviceCount());
 }
 
 std::vector<std::u16string> AppInfoPermissionsPanel::GetRetainedDevices()
@@ -293,5 +298,5 @@ void AppInfoPermissionsPanel::RevokeDevicePermissions() {
   Close();
 }
 
-BEGIN_METADATA(AppInfoPermissionsPanel, AppInfoPanel)
+BEGIN_METADATA(AppInfoPermissionsPanel)
 END_METADATA

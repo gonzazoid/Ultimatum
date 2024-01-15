@@ -52,8 +52,10 @@ class CORE_EXPORT MainThreadDebugger final : public ThreadDebuggerCommonImpl {
     USING_FAST_MALLOC(ClientMessageLoop);
 
    public:
+    enum MessageLoopKind { kNormalPause, kInstrumentationPause };
+
     virtual ~ClientMessageLoop() = default;
-    virtual void Run(LocalFrame*) = 0;
+    virtual void Run(LocalFrame*, MessageLoopKind) = 0;
     virtual void QuitNow() = 0;
     virtual void RunIfWaitingForDebugger(LocalFrame*) = 0;
   };
@@ -63,7 +65,7 @@ class CORE_EXPORT MainThreadDebugger final : public ThreadDebuggerCommonImpl {
   MainThreadDebugger& operator=(const MainThreadDebugger&) = delete;
   ~MainThreadDebugger() override;
 
-  static MainThreadDebugger* Instance();
+  static MainThreadDebugger* Instance(v8::Isolate*);
 
   bool IsWorker() override { return false; }
   bool IsPaused() const { return paused_; }
@@ -79,6 +81,8 @@ class CORE_EXPORT MainThreadDebugger final : public ThreadDebuggerCommonImpl {
   void ExceptionThrown(ExecutionContext*, ErrorEvent*);
 
  private:
+  FRIEND_TEST_ALL_PREFIXES(MainThreadDebuggerMultipleMainFramesTest, Allow);
+
   void ReportConsoleMessage(ExecutionContext*,
                             mojom::ConsoleMessageSource,
                             mojom::ConsoleMessageLevel,
@@ -88,6 +92,7 @@ class CORE_EXPORT MainThreadDebugger final : public ThreadDebuggerCommonImpl {
 
   // V8InspectorClient implementation.
   void runMessageLoopOnPause(int context_group_id) override;
+  void runMessageLoopOnInstrumentationPause(int context_group_id) override;
   void quitMessageLoopOnPause() override;
   void muteMetrics(int context_group_id) override;
   void unmuteMetrics(int context_group_id) override;

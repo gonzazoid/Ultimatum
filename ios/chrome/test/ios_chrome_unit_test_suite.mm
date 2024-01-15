@@ -10,22 +10,17 @@
 #import "components/breadcrumbs/core/breadcrumb_manager.h"
 #import "components/breadcrumbs/core/crash_reporter_breadcrumb_observer.h"
 #import "components/content_settings/core/common/content_settings_pattern.h"
-#import "ios/chrome/browser/browser_state/browser_state_keyed_service_factories.h"
-#import "ios/chrome/browser/paths/paths.h"
-#import "ios/chrome/browser/url/chrome_url_constants.h"
+#import "ios/chrome/browser/browser_state/model/browser_state_keyed_service_factories.h"
+#import "ios/chrome/browser/shared/model/paths/paths.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
 #import "ios/chrome/test/testing_application_context.h"
 #import "ios/components/webui/web_ui_url_constants.h"
 #import "ios/public/provider/chrome/browser/app_utils/app_utils_api.h"
-#import "ios/public/provider/chrome/browser/chrome_browser_provider.h"
 #import "ios/web/public/web_client.h"
 #import "testing/gtest/include/gtest/gtest.h"
 #import "ui/base/resource/resource_bundle.h"
 #import "ui/base/ui_base_paths.h"
 #import "url/url_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -44,11 +39,6 @@ class IOSChromeUnitTestSuiteInitializer
   void OnTestStart(const testing::TestInfo& test_info) override {
     ios::provider::Initialize();
 
-    chrome_browser_provider_ = ios::CreateChromeBrowserProvider();
-    ios::ChromeBrowserProvider* previous_provider =
-        ios::SetChromeBrowserProvider(chrome_browser_provider_.get());
-    DCHECK(!previous_provider);
-
     DCHECK(!GetApplicationContext());
     application_context_.reset(new TestingApplicationContext);
   }
@@ -57,18 +47,10 @@ class IOSChromeUnitTestSuiteInitializer
     DCHECK_EQ(GetApplicationContext(), application_context_.get());
     application_context_.reset();
 
-    ios::ChromeBrowserProvider* previous_provider =
-        ios::SetChromeBrowserProvider(nullptr);
-    DCHECK_EQ(previous_provider, chrome_browser_provider_.get());
-    chrome_browser_provider_.reset();
-
     breadcrumbs::BreadcrumbManager::GetInstance().ResetForTesting();
-    breadcrumbs::CrashReporterBreadcrumbObserver::GetInstance()
-        .ResetForTesting();
   }
 
  private:
-  std::unique_ptr<ios::ChromeBrowserProvider> chrome_browser_provider_;
   std::unique_ptr<ApplicationContext> application_context_;
 };
 

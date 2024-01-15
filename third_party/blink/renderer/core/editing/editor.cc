@@ -46,6 +46,7 @@
 #include "third_party/blink/renderer/core/editing/commands/indent_outdent_command.h"
 #include "third_party/blink/renderer/core/editing/commands/insert_list_command.h"
 #include "third_party/blink/renderer/core/editing/commands/replace_selection_command.h"
+#include "third_party/blink/renderer/core/editing/commands/selection_for_undo_step.h"
 #include "third_party/blink/renderer/core/editing/commands/simplify_markup_command.h"
 #include "third_party/blink/renderer/core/editing/commands/typing_command.h"
 #include "third_party/blink/renderer/core/editing/commands/undo_stack.h"
@@ -98,7 +99,8 @@ namespace {
 bool IsInPasswordFieldWithUnrevealedPassword(const Position& position) {
   if (auto* input =
           DynamicTo<HTMLInputElement>(EnclosingTextControl(position))) {
-    return (input->type() == input_type_names::kPassword) &&
+    return input->FormControlType() ==
+               mojom::blink::FormControlType::kInputPassword &&
            !input->ShouldRevealPassword();
   }
   return false;
@@ -426,6 +428,20 @@ void Editor::RespondToChangedContents(const Position& position) {
   frame_->Client()->DidChangeContents();
 }
 
+void Editor::NotifyAccessibilityOfDeletionOrInsertionInTextField(
+    const SelectionForUndoStep& changed_selection,
+    bool is_deletion) {
+  if (AXObjectCache* cache =
+          GetFrame().GetDocument()->ExistingAXObjectCache()) {
+    if (!changed_selection.Start().IsValidFor(*GetFrame().GetDocument()) ||
+        !changed_selection.End().IsValidFor(*GetFrame().GetDocument())) {
+      return;
+    }
+    cache->HandleDeletionOrInsertionInTextField(changed_selection.AsSelection(),
+                                                is_deletion);
+  }
+}
+
 void Editor::RegisterCommandGroup(CompositeEditCommand* command_group_wrapper) {
   DCHECK(command_group_wrapper->IsCommandGroupWrapper());
   last_edit_command_ = command_group_wrapper;
@@ -624,6 +640,12 @@ void Editor::CopyImage(const HitTestResult& result) {
                             result.AltDisplayString());
 }
 
+void Editor::CopyImage(const HitTestResult& result,
+                       const scoped_refptr<Image>& image) {
+  WriteImageToClipboard(*frame_->GetSystemClipboard(), image, KURL(),
+                        result.AltDisplayString());
+}
+
 bool Editor::CanUndo() {
   return undo_stack_->CanUndo();
 }
@@ -648,22 +670,22 @@ void Editor::SetBaseWritingDirection(
       return;
     text_control->setAttribute(
         html_names::kDirAttr,
-        direction == mojo_base::mojom::blink::TextDirection::LEFT_TO_RIGHT
-            ? "ltr"
-            : "rtl");
+        AtomicString(
+            direction == mojo_base::mojom::blink::TextDirection::LEFT_TO_RIGHT
+                ? "ltr"
+                : "rtl"));
     text_control->DispatchInputEvent();
     return;
   }
 
   auto* style =
       MakeGarbageCollected<MutableCSSPropertyValueSet>(kHTMLQuirksMode);
-  style->SetProperty(
+  style->ParseAndSetProperty(
       CSSPropertyID::kDirection,
-      direction == mojo_base::mojom::blink::TextDirection::LEFT_TO_RIGHT
-          ? "ltr"
-          : direction == mojo_base::mojom::blink::TextDirection::RIGHT_TO_LEFT
-                ? "rtl"
-                : "inherit",
+      direction == mojo_base::mojom::blink::TextDirection::LEFT_TO_RIGHT ? "ltr"
+      : direction == mojo_base::mojom::blink::TextDirection::RIGHT_TO_LEFT
+          ? "rtl"
+          : "inherit",
       /* important */ false, GetFrame().DomWindow()->GetSecureContextMode());
   ApplyParagraphStyleToSelection(
       style, InputEvent::InputType::kFormatSetBlockTextDirection);
@@ -676,6 +698,14 @@ void Editor::RevealSelectionAfterEditingOperation(
   if (!GetFrameSelection().IsAvailable())
     return;
   GetFrameSelection().RevealSelection(alignment, kDoNotRevealExtent);
+}
+
+void Editor::AddImageResourceObserver(ImageResourceObserver* observer) {
+  image_resource_observers_.insert(observer);
+}
+
+void Editor::RemoveImageResourceObserver(ImageResourceObserver* observer) {
+  image_resource_observers_.erase(observer);
 }
 
 void Editor::AddToKillRing(const EphemeralRange& range) {
@@ -735,7 +765,9 @@ EphemeralRange Editor::RangeBetweenPoints(const gfx::Point& start_point,
       CreateVisiblePosition(end_position);
   if (end_visible_position.IsNull())
     return EphemeralRange();
-  return MakeRange(start_visible_position, end_visible_position);
+  return start_position.GetPosition() <= end_position.GetPosition()
+             ? MakeRange(start_visible_position, end_visible_position)
+             : MakeRange(end_visible_position, start_visible_position);
 }
 
 void Editor::ComputeAndSetTypingStyle(CSSPropertyValueSet* style,
@@ -947,12 +979,20 @@ void Editor::ReplaceSelection(const String& text) {
                            InputEvent::InputType::kInsertReplacementText);
 }
 
+void Editor::ElementRemoved(Element* element) {
+  if (last_edit_command_ &&
+      last_edit_command_->EndingSelection().RootEditableElement() == element) {
+    last_edit_command_ = nullptr;
+  }
+}
+
 void Editor::Trace(Visitor* visitor) const {
   visitor->Trace(frame_);
   visitor->Trace(last_edit_command_);
   visitor->Trace(undo_stack_);
   visitor->Trace(mark_);
   visitor->Trace(typing_style_);
+  visitor->Trace(image_resource_observers_);
 }
 
 }  // namespace blink

@@ -6,9 +6,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
@@ -21,22 +21,21 @@
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/network_service_util.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/site_isolation_policy.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_client.h"
-#include "content/public/common/network_service_util.h"
 #include "content/public/common/url_constants.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test.h"
+#include "content/public/test/content_browser_test_content_browser_client.h"
 #include "content/public/test/content_browser_test_utils.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "content/public/test/test_utils.h"
 #include "content/public/test/url_loader_interceptor.h"
 #include "content/shell/browser/shell.h"
-#include "content/shell/browser/shell_content_browser_client.h"
-#include "content/test/test_content_browser_client.h"
 #include "net/base/filename_util.h"
 #include "net/base/load_flags.h"
 #include "net/base/net_errors.h"
@@ -599,14 +598,15 @@ IN_PROC_BROWSER_TEST_F(LoaderBrowserTest, SubresourceRedirectToDataURLBlocked) {
   std::string script = R"((url => {
     var xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
-    xhr.onload = () => domAutomationController.send("ALLOWED");
-    xhr.onerror = () => domAutomationController.send("BLOCKED");
-    xhr.send();
+    return new Promise(resolve => {
+      xhr.onload = () => resolve("ALLOWED");
+      xhr.onerror = () => resolve("BLOCKED");
+      xhr.send();
+    });
   }))";
 
   EXPECT_EQ("BLOCKED",
-            EvalJs(shell(), script + "('" + subresource_url.spec() + "')",
-                   EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+            EvalJs(shell(), script + "('" + subresource_url.spec() + "')"));
 }
 
 IN_PROC_BROWSER_TEST_F(LoaderBrowserTest, RedirectToDataURLBlocked) {
@@ -630,17 +630,18 @@ GURL CreateFileSystemURL(Shell* window) {
   std::string filesystem_url_string = EvalJs(window, R"(
       var blob = new Blob(['<html><body>hello</body></html>'],
                           {type: 'text/html'});
-      window.webkitRequestFileSystem(TEMPORARY, blob.size, fs => {
-        fs.root.getFile('foo.html', {create: true}, file => {
-          file.createWriter(writer => {
-            writer.write(blob);
-            writer.onwriteend = () => {
-              domAutomationController.send(file.toURL());
-            }
+      new Promise(resolve => {
+        window.webkitRequestFileSystem(TEMPORARY, blob.size, fs => {
+          fs.root.getFile('foo.html', {create: true}, file => {
+            file.createWriter(writer => {
+              writer.write(blob);
+              writer.onwriteend = () => {
+                resolve(file.toURL());
+              }
+            });
           });
         });
-      });)",
-                                             EXECUTE_SCRIPT_USE_MANUAL_REPLY)
+      });)")
                                           .ExtractString();
   GURL filesystem_url(filesystem_url_string);
   EXPECT_TRUE(filesystem_url.is_valid());
@@ -661,14 +662,15 @@ IN_PROC_BROWSER_TEST_F(LoaderBrowserTest,
   std::string script = R"((url => {
     var xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
-    xhr.onload = () => domAutomationController.send("ALLOWED");
-    xhr.onerror = () => domAutomationController.send("BLOCKED");
-    xhr.send();
+    return new Promise(resolve => {
+      xhr.onload = () => resolve("ALLOWED");
+      xhr.onerror = () => resolve("BLOCKED");
+      xhr.send();
+    });
   }))";
 
   EXPECT_EQ("BLOCKED",
-            EvalJs(shell(), script + "('" + subresource_url.spec() + "')",
-                   EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+            EvalJs(shell(), script + "('" + subresource_url.spec() + "')"));
 }
 
 IN_PROC_BROWSER_TEST_F(LoaderBrowserTest, RedirectToFileSystemURLBlocked) {
@@ -686,13 +688,13 @@ namespace {
 struct RequestData {
   const GURL url;
   const net::SiteForCookies site_for_cookies;
-  const absl::optional<url::Origin> initiator;
+  const std::optional<url::Origin> initiator;
   const int load_flags;
   const std::string referrer;
 
   RequestData(const GURL& url,
               const net::SiteForCookies& site_for_cookies,
-              const absl::optional<url::Origin>& initiator,
+              const std::optional<url::Origin>& initiator,
               int load_flags,
               const std::string& referrer)
       : url(url),
@@ -768,6 +770,7 @@ IN_PROC_BROWSER_TEST_F(RequestDataBrowserTest, Basic) {
   url::Origin top_origin = url::Origin::Create(top_url);
 
   NavigateToURLBlockUntilNavigationsComplete(shell(), top_url, 1);
+  WaitForRequests(8u);
 
   auto requests = data();
   EXPECT_EQ(8u, requests.size());
@@ -875,6 +878,7 @@ IN_PROC_BROWSER_TEST_F(RequestDataBrowserTest, SameOriginNested) {
   url::Origin top_origin = url::Origin::Create(top_url);
 
   NavigateToURLBlockUntilNavigationsComplete(shell(), top_url, 1);
+  WaitForRequests(3u);
 
   auto requests = data();
   EXPECT_EQ(3u, requests.size());
@@ -914,6 +918,7 @@ IN_PROC_BROWSER_TEST_F(RequestDataBrowserTest, SameOriginAuxiliary) {
   EXPECT_EQ(true, EvalJs(shell(), "clickSameSiteNewWindowLink();"));
   Shell* new_shell = new_shell_observer.GetShell();
   EXPECT_TRUE(WaitForLoadStop(new_shell->web_contents()));
+  WaitForRequests(2u);
 
   auto requests = data();
   EXPECT_EQ(2u, requests.size());
@@ -1003,6 +1008,7 @@ IN_PROC_BROWSER_TEST_F(RequestDataBrowserTest, CrossOriginNested) {
   url::Origin nested_origin = url::Origin::Create(nested_url);
 
   NavigateToURLBlockUntilNavigationsComplete(shell(), top_url, 1);
+  WaitForRequests(4u);
 
   auto requests = data();
   EXPECT_EQ(4u, requests.size());
@@ -1138,12 +1144,11 @@ class URLModifyingThrottle : public blink::URLLoaderThrottle {
   bool modified_redirect_url_ = false;
 };
 
-class ThrottleContentBrowserClient : public TestContentBrowserClient {
+class ThrottleContentBrowserClient
+    : public ContentBrowserTestContentBrowserClient {
  public:
   ThrottleContentBrowserClient(bool modify_start, bool modify_redirect)
-      : TestContentBrowserClient(),
-        modify_start_(modify_start),
-        modify_redirect_(modify_redirect) {}
+      : modify_start_(modify_start), modify_redirect_(modify_redirect) {}
 
   ThrottleContentBrowserClient(const ThrottleContentBrowserClient&) = delete;
   ThrottleContentBrowserClient& operator=(const ThrottleContentBrowserClient&) =
@@ -1158,7 +1163,8 @@ class ThrottleContentBrowserClient : public TestContentBrowserClient {
       BrowserContext* browser_context,
       const base::RepeatingCallback<WebContents*()>& wc_getter,
       NavigationUIData* navigation_ui_data,
-      int frame_tree_node_id) override {
+      int frame_tree_node_id,
+      absl::optional<int64_t> navigation_id) override {
     std::vector<std::unique_ptr<blink::URLLoaderThrottle>> throttles;
     auto throttle =
         std::make_unique<URLModifyingThrottle>(modify_start_, modify_redirect_);
@@ -1176,8 +1182,6 @@ class ThrottleContentBrowserClient : public TestContentBrowserClient {
 IN_PROC_BROWSER_TEST_F(LoaderBrowserTest, URLLoaderThrottleStartModify) {
   base::Lock lock;
   ThrottleContentBrowserClient content_browser_client(true, false);
-  auto* old_content_browser_client =
-      SetBrowserClientForTesting(&content_browser_client);
 
   std::set<GURL> urls_requested;
   std::map<GURL, net::test_server::HttpRequest::HeaderMap> header_map;
@@ -1201,8 +1205,6 @@ IN_PROC_BROWSER_TEST_F(LoaderBrowserTest, URLLoaderThrottleStartModify) {
     ASSERT_TRUE(header_map[expected_url]["Foo"] == "BarRequest");
     ASSERT_TRUE(header_map[expected_url]["ExemptFoo"] == "ExemptBarRequest");
   }
-
-  SetBrowserClientForTesting(old_content_browser_client);
 }
 
 // Ensures if a URLLoaderThrottle modifies a URL and headers in
@@ -1210,8 +1212,6 @@ IN_PROC_BROWSER_TEST_F(LoaderBrowserTest, URLLoaderThrottleStartModify) {
 IN_PROC_BROWSER_TEST_F(LoaderBrowserTest, URLLoaderThrottleRedirectModify) {
   base::Lock lock;
   ThrottleContentBrowserClient content_browser_client(false, true);
-  auto* old_content_browser_client =
-      SetBrowserClientForTesting(&content_browser_client);
 
   std::set<GURL> urls_requested;
   std::map<GURL, net::test_server::HttpRequest::HeaderMap> header_map;
@@ -1237,8 +1237,6 @@ IN_PROC_BROWSER_TEST_F(LoaderBrowserTest, URLLoaderThrottleRedirectModify) {
     ASSERT_EQ(header_map[expected_url]["ExemptFoo"], "ExemptBarRedirect");
     ASSERT_NE(urls_requested.find(expected_url), urls_requested.end());
   }
-
-  SetBrowserClientForTesting(old_content_browser_client);
 }
 
 }  // namespace content

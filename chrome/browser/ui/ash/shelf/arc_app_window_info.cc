@@ -5,8 +5,8 @@
 #include "chrome/browser/ui/ash/shelf/arc_app_window_info.h"
 
 #include "ash/public/cpp/window_properties.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
-#include "chrome/browser/ui/app_list/arc/intent.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
+#include "chrome/browser/ash/app_list/arc/intent.h"
 
 namespace {
 
@@ -78,8 +78,9 @@ void ArcAppWindowInfo::set_window(aura::Window* window) {
   if (window_ == window)
     return;
 
-  if (window_ && observed_window_.IsObservingSource(window_))
+  if (window_ && observed_window_.IsObservingSource(window_.get())) {
     observed_window_.Reset();
+  }
 
   window_ = window;
   UpdateWindowProperties();

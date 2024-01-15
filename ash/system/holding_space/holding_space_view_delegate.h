@@ -6,19 +6,24 @@
 #define ASH_SYSTEM_HOLDING_SPACE_HOLDING_SPACE_VIEW_DELEGATE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "ash/ash_export.h"
-#include "ash/public/cpp/tablet_mode.h"
-#include "ash/public/cpp/tablet_mode_observer.h"
 #include "base/callback_list.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/scoped_observation.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/models/simple_menu_model.h"
+#include "ui/display/display_observer.h"
 #include "ui/views/context_menu_controller.h"
 #include "ui/views/drag_controller.h"
 #include "ui/views/view.h"
+
+namespace display {
+enum class TabletState;
+}  // namespace display
 
 namespace ui {
 class GestureEvent;
@@ -43,7 +48,7 @@ class ASH_EXPORT HoldingSpaceViewDelegate
     : public views::ContextMenuController,
       public views::DragController,
       public ui::SimpleMenuModel::Delegate,
-      public TabletModeObserver {
+      public display::DisplayObserver {
  public:
   // A class which caches the current selection of holding space item views on
   // creation and restores that selection on destruction.
@@ -55,10 +60,10 @@ class ASH_EXPORT HoldingSpaceViewDelegate
     ~ScopedSelectionRestore();
 
    private:
-    HoldingSpaceViewDelegate* const delegate_;
+    const raw_ptr<HoldingSpaceViewDelegate> delegate_;
     std::vector<std::string> selected_item_ids_;
-    absl::optional<std::string> selected_range_start_item_id_;
-    absl::optional<std::string> selected_range_end_item_id_;
+    std::optional<std::string> selected_range_start_item_id_;
+    std::optional<std::string> selected_range_end_item_id_;
   };
 
   explicit HoldingSpaceViewDelegate(HoldingSpaceTrayBubble* bubble);
@@ -151,9 +156,8 @@ class ASH_EXPORT HoldingSpaceViewDelegate
   // SimpleMenuModel::Delegate:
   void ExecuteCommand(int command_id, int event_flags) override;
 
-  // TabletModeObserver:
-  void OnTabletModeStarted() override;
-  void OnTabletModeEnded() override;
+  // display::DisplayObserver:
+  void OnDisplayTabletStateChanged(display::TabletState state) override;
 
   // Builds and returns a raw pointer to `context_menu_model_`.
   ui::SimpleMenuModel* BuildMenuModel();
@@ -186,7 +190,7 @@ class ASH_EXPORT HoldingSpaceViewDelegate
   void OpenItemsAndScheduleClose(
       const std::vector<const HoldingSpaceItemView*>& views);
 
-  HoldingSpaceTrayBubble* const bubble_;
+  const raw_ptr<HoldingSpaceTrayBubble> bubble_;
 
   std::unique_ptr<ui::SimpleMenuModel> context_menu_model_;
   std::unique_ptr<views::MenuRunner> context_menu_runner_;
@@ -194,12 +198,16 @@ class ASH_EXPORT HoldingSpaceViewDelegate
   // Caches a view for which mouse released events should be temporarily
   // ignored. This is to prevent us from selecting a view on mouse pressed but
   // then unselecting that same view on mouse released.
-  HoldingSpaceItemView* ignore_mouse_released_ = nullptr;
+  raw_ptr<HoldingSpaceItemView, DanglingUntriaged> ignore_mouse_released_ =
+      nullptr;
 
   // Caches views from which range-based selections should start and end. This
   // is used when determining the range for selection performed via shift-click.
-  HoldingSpaceItemView* selected_range_start_ = nullptr;
-  HoldingSpaceItemView* selected_range_end_ = nullptr;
+  raw_ptr<HoldingSpaceItemView, DanglingUntriaged> selected_range_start_ =
+      nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #addr-of
+  RAW_PTR_EXCLUSION HoldingSpaceItemView* selected_range_end_ = nullptr;
 
   // Dictates how UI should represent holding space item views' selected states
   // to the user based on device state and `selection_size_`.
@@ -211,8 +219,7 @@ class ASH_EXPORT HoldingSpaceViewDelegate
   // Cached size of the selection of holding space item views.
   size_t selection_size_ = 0u;
 
-  base::ScopedObservation<TabletMode, TabletModeObserver> tablet_mode_observer_{
-      this};
+  display::ScopedDisplayObserver display_observer_{this};
 
   base::WeakPtrFactory<HoldingSpaceViewDelegate> weak_factory_{this};
 };

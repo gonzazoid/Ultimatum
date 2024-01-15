@@ -13,7 +13,6 @@
 #include "base/check_op.h"
 #include "base/memory/raw_ptr_exclusion.h"
 #include "base/message_loop/message_pump_type.h"
-#include "base/message_loop/timer_slack.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -31,6 +30,15 @@ class BASE_EXPORT MessagePump {
 
   // Returns true if the MessagePumpForUI has been overidden.
   static bool IsMessagePumpForUIFactoryOveridden();
+
+  static void InitializeFeatures();
+
+  // Manage the state of |kAlignWakeUps| and the leeway of the process.
+  static void OverrideAlignWakeUpsState(bool enabled, TimeDelta leeway);
+  static void ResetAlignWakeUpsState();
+  static bool GetAlignWakeUpsEnabled();
+  static TimeDelta GetLeewayIgnoringThreadOverride();
+  static TimeDelta GetLeewayForCurrentThread();
 
   // Creates the default MessagePump based on |type|. Caller owns return value.
   static std::unique_ptr<MessagePump> Create(MessagePumpType type);
@@ -58,13 +66,19 @@ class BASE_EXPORT MessagePump {
       // delayed tasks.
       TimeTicks delayed_run_time;
 
+      // |leeway| determines the preferred time range for scheduling
+      // work. A larger leeway provides more freedom to schedule work at
+      // an optimal time for power consumption. This field is ignored
+      // for immediate work.
+      TimeDelta leeway;
+
       // A recent view of TimeTicks::Now(). Only valid if |delayed_run_time|
       // isn't null nor max. MessagePump impls should use remaining_delay()
       // instead of resampling Now() if they wish to sleep for a TimeDelta.
       TimeTicks recent_now;
 
       // If true, native messages should be processed before executing more work
-      // from the Delegate. This is an optional hint; not all message pumpls
+      // from the Delegate. This is an optional hint; not all message pumps
       // implement this.
       bool yield_to_native = false;
     };
@@ -80,36 +94,56 @@ class BASE_EXPORT MessagePump {
     virtual NextWorkInfo DoWork() = 0;
 
     // Called from within Run just before the message pump goes to sleep.
-    // Returns true to indicate that idle work was done. Returning false means
-    // the pump will now wait.
+    // Returns true to indicate that idle work was done; in which case Run()
+    // should resume with calling DoWork(). Returning false means the pump
+    // should now wait.
     virtual bool DoIdleWork() = 0;
 
     class ScopedDoWorkItem {
      public:
-      ScopedDoWorkItem() : outer_(nullptr) {}
+      ScopedDoWorkItem() : outer_(nullptr), work_item_depth_(0) {}
 
       ~ScopedDoWorkItem() {
-        if (outer_)
-          outer_->OnEndWorkItem();
+        if (outer_) {
+          outer_->OnEndWorkItem(work_item_depth_);
+        }
       }
 
       ScopedDoWorkItem(ScopedDoWorkItem&& rhs)
-          : outer_(std::exchange(rhs.outer_, nullptr)) {}
+          : outer_(std::exchange(rhs.outer_, nullptr)),
+            work_item_depth_(rhs.work_item_depth_) {}
       ScopedDoWorkItem& operator=(ScopedDoWorkItem&& rhs) {
+        // We should only ever go from an empty ScopedDoWorkItem to an
+        // initialized one, or from an initialized one to an empty one.
+        CHECK_NE(IsNull(), rhs.IsNull());
+        // Since we're overwriting this ScopedDoWorkItem, we need to record its
+        // destruction.
+        if (outer_) {
+          outer_->OnEndWorkItem(work_item_depth_);
+        }
+
+        work_item_depth_ = rhs.work_item_depth_;
         outer_ = std::exchange(rhs.outer_, nullptr);
         return *this;
       }
+
+      bool IsNull() { return !outer_; }
 
      private:
       friend Delegate;
 
       explicit ScopedDoWorkItem(Delegate* outer) : outer_(outer) {
         outer_->OnBeginWorkItem();
+        work_item_depth_ = outer_->RunDepth();
       }
 
       // `outer_` is not a raw_ptr<...> for performance reasons (based on
       // analysis of sampling profiler data and tab_search:top100:2020).
       RAW_PTR_EXCLUSION Delegate* outer_;
+
+      // Records the run level at which this DoWorkItem was created to allow
+      // detection of exits of nested loops.
+      int work_item_depth_;
     };
 
     // Called before a unit of work is executed. This allows reports
@@ -127,10 +161,18 @@ class BASE_EXPORT MessagePump {
     // native work -- if it can tell).
     virtual void BeforeWait() = 0;
 
+    // May be called when starting to process native work and it is guaranteed
+    // that DoWork() will be called again before sleeping. Allows the delegate
+    // to skip unnecessary ScheduleWork() calls.
+    virtual void BeginNativeWorkBeforeDoWork() = 0;
+
+    // Returns the nesting level at which the Delegate is currently running.
+    virtual int RunDepth() = 0;
+
    private:
     // Called upon entering/exiting a ScopedDoWorkItem.
     virtual void OnBeginWorkItem() = 0;
-    virtual void OnEndWorkItem() = 0;
+    virtual void OnEndWorkItem(int work_item_depth) = 0;
   };
 
   MessagePump();
@@ -230,8 +272,10 @@ class BASE_EXPORT MessagePump {
   virtual void ScheduleDelayedWork(
       const Delegate::NextWorkInfo& next_work_info) = 0;
 
-  // Sets the timer slack to the specified value.
-  virtual void SetTimerSlack(TimerSlack timer_slack);
+  // Returns an adjusted |run_time| based on alignment policies of the pump.
+  virtual TimeTicks AdjustDelayedRunTime(TimeTicks earliest_time,
+                                         TimeTicks run_time,
+                                         TimeTicks latest_time);
 };
 
 }  // namespace base

@@ -43,6 +43,8 @@ class IOSSystemDataCollector {
   const std::string& StandardName() const { return standard_name_; }
   const std::string& DaylightName() const { return daylight_name_; }
   bool IsApplicationActive() const { return active_; }
+  uint64_t AddressMask() const { return address_mask_; }
+  uint64_t InitializationTime() const { return initialization_time_ns_; }
 
   // Currently unused by minidump.
   int Orientation() const { return orientation_; }
@@ -80,6 +82,13 @@ class IOSSystemDataCollector {
   std::string standard_name_;
   std::string daylight_name_;
   ActiveApplicationCallback active_application_callback_;
+  uint64_t address_mask_;
+
+  // Time in nanoseconds as returned by ClockMonotonicNanoseconds() to store the
+  // crashpad start time. This clock increments monotonically but pauses while
+  // the system is asleep. It should not be compared to other system time
+  // sources.
+  uint64_t initialization_time_ns_;
 };
 
 }  // namespace internal

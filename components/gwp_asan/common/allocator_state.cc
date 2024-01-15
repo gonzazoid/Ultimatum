@@ -167,7 +167,7 @@ AllocatorState::SlotIdx AllocatorState::AddrToSlot(uintptr_t addr) const {
   return static_cast<SlotIdx>(slot);
 }
 
-AllocatorState::SlotMetadata::SlotMetadata() {}
+AllocatorState::SlotMetadata::SlotMetadata() = default;
 
 }  // namespace internal
 }  // namespace gwp_asan

@@ -40,17 +40,19 @@ bool CreateAPIPermission(const std::string& permission_str,
   const APIPermissionInfo* permission_info =
       PermissionsInfo::GetInstance()->GetByName(permission_str);
   if (permission_info) {
-    std::unique_ptr<APIPermission> permission(
-        permission_info->CreateAPIPermission());
     if (source != APIPermissionSet::kAllowInternalPermissions &&
         permission_info->is_internal()) {
-      // An internal permission specified in permissions list is an error.
-      if (error) {
-        *error = ErrorUtils::FormatErrorMessageUTF16(
-            errors::kPermissionNotAllowedInManifest, permission_str);
+      // Treat internal permissions as unhandled if we don't allow them. This
+      // prevents us from hard erroring in the case that we ever change a
+      // permission from internal to not or vice versa.
+      if (unhandled_permissions) {
+        unhandled_permissions->push_back(permission_str);
       }
-      return false;
+      return true;
     }
+
+    std::unique_ptr<APIPermission> permission(
+        permission_info->CreateAPIPermission());
 
     std::string error_details;
     if (!permission->FromValue(permission_value, &error_details,
@@ -143,31 +145,20 @@ void APIPermissionSet::insert(std::unique_ptr<APIPermission> permission) {
 
 // static
 bool APIPermissionSet::ParseFromJSON(
-    const base::Value* permissions,
+    const base::Value::List& permissions,
     APIPermissionSet::ParseSource source,
     APIPermissionSet* api_permissions,
     std::u16string* error,
     std::vector<std::string>* unhandled_permissions) {
-  if (!permissions->is_list()) {
-    if (error) {
-      *error = ErrorUtils::FormatErrorMessageUTF16(errors::kInvalidPermission,
-                                                   "<root>");
-      return false;
-    }
-    VLOG(1) << "Root Permissions value is not a list.";
-    // Failed to parse, but since error is NULL, failures are not fatal so
-    // return true here anyway.
-    return true;
-  }
-  const base::Value::List& list = permissions->GetList();
-  for (size_t i = 0; i < list.size(); ++i) {
+  for (size_t i = 0; i < permissions.size(); ++i) {
     std::string permission_str;
     const base::Value* permission_value = nullptr;
     // permission should be a string or a single key dict.
-    if (list[i].is_string()) {
-      permission_str = list[i].GetString();
-    } else if (list[i].is_dict() && list[i].DictSize() == 1) {
-      auto dict_iter = list[i].DictItems().begin();
+    if (permissions[i].is_string()) {
+      permission_str = permissions[i].GetString();
+    } else if (permissions[i].is_dict() &&
+               permissions[i].GetDict().size() == 1) {
+      auto dict_iter = permissions[i].GetDict().begin();
       permission_str = dict_iter->first;
       permission_value = &dict_iter->second;
     } else {

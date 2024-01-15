@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_ASH_CROSTINI_CROSTINI_TERMINAL_PROVIDER_H_
 #define CHROME_BROWSER_ASH_CROSTINI_CROSTINI_TERMINAL_PROVIDER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/guest_os/guest_id.h"
 #include "chrome/browser/ash/guest_os/public/guest_os_terminal_provider.h"
 
@@ -23,6 +24,8 @@ class CrostiniTerminalProvider : public guest_os::GuestOsTerminalProvider {
 
   bool RecoveryRequired(int64_t display_id) override;
 
+  bool AllowedByPolicy() override;
+
   std::string PrepareCwd(storage::FileSystemURL path) override;
 
   std::unique_ptr<extensions::StartupStatus> CreateStartupStatus(
@@ -34,7 +37,7 @@ class CrostiniTerminalProvider : public guest_os::GuestOsTerminalProvider {
           callback) override;
 
  private:
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   guest_os::GuestId container_id_;
 };
 

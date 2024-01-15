@@ -5,17 +5,28 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_PUBLIC_FRAME_OR_WORKER_SCHEDULER_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_PUBLIC_FRAME_OR_WORKER_SCHEDULER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/types/strong_alias.h"
+#include "third_party/blink/public/platform/scheduler/web_scoped_virtual_time_pauser.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/scheduler/public/feature_and_js_location_blocking_bfcache.h"
 #include "third_party/blink/renderer/platform/scheduler/public/scheduling_lifecycle_state.h"
 #include "third_party/blink/renderer/platform/scheduler/public/scheduling_policy.h"
 #include "third_party/blink/renderer/platform/scheduler/public/web_scheduling_priority.h"
+#include "third_party/blink/renderer/platform/scheduler/public/web_scheduling_queue_type.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
+
+namespace {
+
+// Maximum number of back/forward cache blocking details to send to the browser.
+// As long as this is a small number, we don't have to worry about the cost of
+// linear searches of the vector.
+constexpr size_t kMaxNumberOfBackForwardCacheBlockingDetails = 10;
+
+}  // namespace
 
 namespace blink {
 class FrameScheduler;
@@ -89,25 +100,55 @@ class PLATFORM_EXPORT FrameOrWorkerScheduler {
     base::WeakPtr<FrameOrWorkerScheduler> scheduler_;
   };
 
-  using BFCacheBlockingFeatureAndLocations =
-      WTF::Vector<FeatureAndJSLocationBlockingBFCache>;
+  // A struct to wrap a vector of `FeatureAndJSLocationBlockingBFCache`.
+  struct BFCacheBlockingFeatureAndLocations {
+    void MaybeAdd(FeatureAndJSLocationBlockingBFCache details) {
+      // Only add `details` when the same one does not exist already in the
+      // `details_list` and when the size of the `details_list` is less than
+      // `kMaxNumberOfBackForwardCacheBlockingDetails` to avoid sending a big
+      // mojo message.
+      if (details_list.Find(details) == kNotFound &&
+          details_list.size() < kMaxNumberOfBackForwardCacheBlockingDetails) {
+        details_list.push_back(details);
+      }
+    }
+    void Erase(FeatureAndJSLocationBlockingBFCache details) {
+      wtf_size_t index = details_list.Find(details);
+      // Because we avoid duplicates and set a limit, the details might not be
+      // found.
+      if (index != kNotFound) {
+        details_list.EraseAt(index);
+      }
+    }
+    void Clear() { details_list.clear(); }
+    bool operator==(BFCacheBlockingFeatureAndLocations& other) {
+      return details_list == other.details_list;
+    }
+
+    WTF::Vector<FeatureAndJSLocationBlockingBFCache> details_list;
+  };
 
   class PLATFORM_EXPORT Delegate {
    public:
     using BFCacheBlockingFeatureAndLocations =
         FrameOrWorkerScheduler::BFCacheBlockingFeatureAndLocations;
+
+    struct BlockingDetails {
+      const BFCacheBlockingFeatureAndLocations&
+          non_sticky_features_and_js_locations;
+      const BFCacheBlockingFeatureAndLocations&
+          sticky_features_and_js_locations;
+      BlockingDetails(BFCacheBlockingFeatureAndLocations& non_sticky,
+                      BFCacheBlockingFeatureAndLocations& sticky)
+          : non_sticky_features_and_js_locations(non_sticky),
+            sticky_features_and_js_locations(sticky) {}
+    };
     virtual ~Delegate() = default;
 
     // Notifies that the list of active blocking features for this worker has
     // changed when a blocking feature and its JS location are registered or
     // removed.
-    // TODO(crbug.com/1366675): Remove features_mask
-    virtual void UpdateBackForwardCacheDisablingFeatures(
-        uint64_t features_mask,
-        const BFCacheBlockingFeatureAndLocations&
-            non_sticky_features_and_js_locations,
-        const BFCacheBlockingFeatureAndLocations&
-            sticky_features_and_js_locations) = 0;
+    virtual void UpdateBackForwardCacheDisablingFeatures(BlockingDetails) = 0;
   };
 
   virtual ~FrameOrWorkerScheduler();
@@ -153,7 +194,10 @@ class PLATFORM_EXPORT FrameOrWorkerScheduler {
       ObserverType,
       OnLifecycleStateChangedCallback);
 
+  // Creates a new task queue for use with the web-exposed scheduling API with
+  // the given priority and type. See https://wicg.github.io/scheduling-apis.
   virtual std::unique_ptr<WebSchedulingTaskQueue> CreateWebSchedulingTaskQueue(
+      WebSchedulingQueueType,
       WebSchedulingPriority) = 0;
 
   virtual FrameScheduler* ToFrameScheduler() { return nullptr; }
@@ -165,6 +209,17 @@ class PLATFORM_EXPORT FrameOrWorkerScheduler {
   // and should not generally be used.
   virtual scoped_refptr<base::SingleThreadTaskRunner>
   CompositorTaskRunner() = 0;
+
+  // Returns a WebScopedVirtualTimePauser which can be used to vote for pausing
+  // virtual time. Virtual time will be paused if any WebScopedVirtualTimePauser
+  // votes to pause it, and only unpaused only if all
+  // WebScopedVirtualTimePausers are either destroyed or vote to unpause.  Note
+  // the WebScopedVirtualTimePauser returned by this method is initially
+  // unpaused.
+  // TODO(crbug.com/1416992): consider moving this to ThreadScheduler.
+  virtual WebScopedVirtualTimePauser CreateWebScopedVirtualTimePauser(
+      const String& name,
+      WebScopedVirtualTimePauser::VirtualTaskDuration) = 0;
 
  protected:
   FrameOrWorkerScheduler();

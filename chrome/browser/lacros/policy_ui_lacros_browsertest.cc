@@ -73,42 +73,53 @@ void PolicyUiLacrosBrowserTest::ReadStatusFor(
         // Wait for the status box to appear in case page just loaded.
         const statusSection = document.getElementById('status-section');
         if (statusSection.hidden) {
-          window.requestIdleCallback(readStatus);
-          return;
+          return new Promise(resolve => {
+            window.requestIdleCallback(resolve);
+          }).then(readStatus);
         }
 
         const policies = getPolicyFieldsets();
         const statuses = {};
         for (let i = 0; i < policies.length; ++i) {
-          const legend = policies[i].querySelector('legend').textContent;
+          const statusHeading = policies[i]
+            .querySelector('.status-box-heading').textContent;
           const entries = {};
           const rows = policies[i]
             .querySelectorAll('.status-entry div:nth-child(2)');
           for (let j = 0; j < rows.length; ++j) {
-            entries[rows[j].className] = rows[j].textContent.trim();
+            entries[rows[j].className.split(' ')[0]] = rows[j].textContent
+              .trim();
           }
-          statuses[legend.trim()] = entries;
+          statuses[statusHeading.trim()] = entries;
         }
-        domAutomationController.send(JSON.stringify(statuses));
-      }
+        return JSON.stringify(statuses);
+      };
 
-      window.requestIdleCallback(readStatus);
+      return new Promise(resolve => {
+        window.requestIdleCallback(resolve);
+      }).then(readStatus);
     })();
   )JS";
   content::WebContents* contents =
       chrome_test_utils::GetActiveWebContents(this);
-  std::string json;
-  ASSERT_TRUE(
-      content::ExecuteScriptAndExtractString(contents, javascript, &json));
+  std::string json = content::EvalJs(contents, javascript).ExtractString();
   absl::optional<base::Value> statuses = base::JSONReader::Read(json);
   ASSERT_TRUE(statuses.has_value() && statuses->is_dict());
-  const base::Value* actual_entries = statuses->FindDictKey(policy_legend);
-  ASSERT_TRUE(actual_entries && actual_entries->is_dict());
-  for (const auto entry : actual_entries->DictItems())
+  const base::Value::Dict* actual_entries =
+      statuses->GetDict().FindDict(policy_legend);
+  ASSERT_TRUE(actual_entries);
+  for (const auto entry : *actual_entries) {
     policy_status->insert_or_assign(entry.first, entry.second.GetString());
+  }
 }
 
-IN_PROC_BROWSER_TEST_F(PolicyUiLacrosBrowserTest, ShowManagedByField) {
+// TODO(crbug.com/1447850) This test constantly fail for internal builder.
+#if BUILDFLAG(IS_CHROMEOS_LACROS) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
+#define MAYBE_ShowManagedByField DISABLED_ShowManagedByField
+#else
+#define MAYBE_ShowManagedByField ShowManagedByField
+#endif
+IN_PROC_BROWSER_TEST_F(PolicyUiLacrosBrowserTest, MAYBE_ShowManagedByField) {
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
                                            GURL(chrome::kChromeUIPolicyURL)));
   base::flat_map<std::string, std::string> status;

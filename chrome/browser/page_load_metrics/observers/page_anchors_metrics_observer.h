@@ -7,7 +7,8 @@
 
 #include "base/memory/raw_ptr.h"
 #include "components/page_load_metrics/browser/page_load_metrics_observer.h"
-#include "content/public/browser/web_contents_user_data.h"
+#include "content/public/browser/document_user_data.h"
+#include "content/public/browser/render_frame_host.h"
 
 // Tracks anchor information in content::NavigationPredictor to report gathered
 // data on navigating out the page. Ideally this should be managed by
@@ -18,35 +19,8 @@
 class PageAnchorsMetricsObserver
     : public page_load_metrics::PageLoadMetricsObserver {
  public:
-  class AnchorsData : public content::WebContentsUserData<AnchorsData> {
-   public:
-    AnchorsData(const AnchorsData&) = delete;
-    ~AnchorsData() override;
-    AnchorsData& operator=(const AnchorsData&) = delete;
-
-    int MedianLinkLocation();
-
-    void Clear();
-
-    size_t number_of_anchors_same_host_ = 0;
-    size_t number_of_anchors_contains_image_ = 0;
-    size_t number_of_anchors_in_iframe_ = 0;
-    size_t number_of_anchors_url_incremented_ = 0;
-    size_t number_of_anchors_ = 0;
-    int total_clickable_space_ = 0;
-    int viewport_height_ = 0;
-    int viewport_width_ = 0;
-    std::vector<int> link_locations_;
-
-   private:
-    friend class content::WebContentsUserData<AnchorsData>;
-    explicit AnchorsData(content::WebContents* contents);
-    WEB_CONTENTS_USER_DATA_KEY_DECL();
-  };
-
   PageAnchorsMetricsObserver(const PageAnchorsMetricsObserver&) = delete;
-  explicit PageAnchorsMetricsObserver(content::WebContents* web_contents)
-      : web_contents_(web_contents) {}
+  explicit PageAnchorsMetricsObserver(content::WebContents* web_contents) {}
   PageAnchorsMetricsObserver& operator=(const PageAnchorsMetricsObserver&) =
       delete;
 
@@ -63,13 +37,33 @@ class PageAnchorsMetricsObserver
       const page_load_metrics::mojom::PageLoadTiming& timing) override;
   void DidActivatePrerenderedPage(
       content::NavigationHandle* navigation_handle) override;
+  page_load_metrics::PageLoadMetricsObserver::ObservePolicy OnCommit(
+      content::NavigationHandle* navigation_handle) override;
+  void OnRenderFrameDeleted(content::RenderFrameHost* rfh) override;
+  page_load_metrics::PageLoadMetricsObserver::ObservePolicy
+  OnEnterBackForwardCache(
+      const page_load_metrics::mojom::PageLoadTiming& timing) override;
+  void OnRestoreFromBackForwardCache(
+      const page_load_metrics::mojom::PageLoadTiming& timing,
+      content::NavigationHandle* navigation_handle) override;
 
  private:
-  void RecordUkm();
+  void UpdateRenderFrameHostAndSourceId(
+      content::NavigationHandle* navigation_handle);
+
+  void RecordDataToUkm();
+  void RecordAnchorElementMetricsDataToUkm();
+
+  content::RenderFrameHost* render_frame_host() const {
+    return render_frame_host_id_.has_value()
+               ? content::RenderFrameHost::FromID(render_frame_host_id_.value())
+               : nullptr;
+  }
 
   bool is_in_prerendered_page_ = false;
 
-  raw_ptr<content::WebContents> web_contents_;
+  absl::optional<content::GlobalRenderFrameHostId> render_frame_host_id_;
+  ukm::SourceId ukm_source_id_;
 };
 
 #endif  // CHROME_BROWSER_PAGE_LOAD_METRICS_OBSERVERS_PAGE_ANCHORS_METRICS_OBSERVER_H_

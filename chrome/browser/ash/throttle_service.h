@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
@@ -53,6 +54,7 @@ class ThrottleService {
   void NotifyObserverStateChangedForTesting();
   void SetObserversForTesting(
       std::vector<std::unique_ptr<ThrottleObserver>> observers);
+  bool HasServiceObserverForTesting(ServiceObserver* candidate);
 
   bool should_throttle() const {
     // When `should_throttle_` hasn't been initialized, return true to throttle
@@ -82,7 +84,7 @@ class ThrottleService {
   // it was effective. Derived classes can implement this function to record UMA
   // metrics.
   virtual void RecordCpuRestrictionDisabledUMA(const std::string& observer_name,
-                                               base::TimeDelta delta) = 0;
+                                               base::TimeDelta delta) {}
 
   const std::vector<std::unique_ptr<ThrottleObserver>>& observers() const {
     return observers_;
@@ -90,7 +92,7 @@ class ThrottleService {
   content::BrowserContext* context() const { return context_; }
 
  private:
-  content::BrowserContext* const context_;
+  const raw_ptr<content::BrowserContext> context_;
   std::vector<std::unique_ptr<ThrottleObserver>> observers_;
 
   // True when the target should be throttled. Use optional<> to make sure this
@@ -98,17 +100,12 @@ class ThrottleService {
   // changed for the first time.
   absl::optional<bool> should_throttle_;
 
-  ThrottleObserver* last_effective_observer_{nullptr};
+  raw_ptr<ThrottleObserver> last_effective_observer_{nullptr};
   base::TimeTicks last_throttle_transition_;
   base::ObserverList<ServiceObserver> service_observers_;
   base::WeakPtrFactory<ThrottleService> weak_ptr_factory_{this};
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace chromeos {
-using ::ash::ThrottleService;
-}
 
 #endif  // CHROME_BROWSER_ASH_THROTTLE_SERVICE_H_

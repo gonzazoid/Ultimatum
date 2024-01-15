@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/task_traits.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "content/browser/background_sync/background_sync_launcher.h"
 #include "content/browser/background_sync/background_sync_manager.h"
@@ -55,8 +55,7 @@ void BackgroundSyncContext::FireBackgroundSyncEventsAcrossPartitions(
 
 void BackgroundSyncContextImpl::Init(
     const scoped_refptr<ServiceWorkerContextWrapper>& service_worker_context,
-    const scoped_refptr<DevToolsBackgroundServicesContextImpl>&
-        devtools_context) {
+    DevToolsBackgroundServicesContextImpl& devtools_context) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   CreateBackgroundSyncManager(service_worker_context, devtools_context);
@@ -173,8 +172,8 @@ void BackgroundSyncContextImpl::FireBackgroundSyncEvents(
     base::OnceClosure done_closure) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (!background_sync_manager_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  std::move(done_closure));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(done_closure));
     return;
   }
 
@@ -184,12 +183,12 @@ void BackgroundSyncContextImpl::FireBackgroundSyncEvents(
 
 void BackgroundSyncContextImpl::CreateBackgroundSyncManager(
     scoped_refptr<ServiceWorkerContextWrapper> service_worker_context,
-    scoped_refptr<DevToolsBackgroundServicesContextImpl> devtools_context) {
+    DevToolsBackgroundServicesContextImpl& devtools_context) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!background_sync_manager_);
 
   background_sync_manager_ = BackgroundSyncManager::Create(
-      std::move(service_worker_context), std::move(devtools_context));
+      std::move(service_worker_context), devtools_context);
 }
 
 }  // namespace content

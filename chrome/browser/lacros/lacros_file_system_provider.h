@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_LACROS_LACROS_FILE_SYSTEM_PROVIDER_H_
 #define CHROME_BROWSER_LACROS_LACROS_FILE_SYSTEM_PROVIDER_H_
 
+#include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chromeos/crosapi/mojom/file_system_provider.mojom.h"
 #include "extensions/browser/extension_registry.h"
@@ -40,6 +41,16 @@ class LacrosFileSystemProvider : public crosapi::mojom::FileSystemProvider,
                         const std::string& event_name,
                         base::Value::List args,
                         ForwardOperationCallback callback) override;
+  void ForwardRequest(const std::string& provider,
+                      const absl::optional<std::string>& file_system_id,
+                      int64_t request_id,
+                      int32_t histogram_value,
+                      const std::string& event_name,
+                      base::Value::List args,
+                      ForwardRequestCallback callback) override;
+  void CancelRequest(const std::string& provider,
+                     const absl::optional<std::string>& file_system_id,
+                     int64_t request_id) override;
 
   // extensions::ExtensionRegistryObserver overrides.
   void OnExtensionLoaded(content::BrowserContext* browser_context,

@@ -5,8 +5,10 @@
 #ifndef ASH_WM_OVERVIEW_OVERVIEW_ITEM_VIEW_H_
 #define ASH_WM_OVERVIEW_OVERVIEW_ITEM_VIEW_H_
 
-#include "ash/wm/overview/overview_highlightable_view.h"
+#include "ash/wm/overview/event_handler_delegate.h"
+#include "ash/wm/overview/overview_focusable_view.h"
 #include "ash/wm/window_mini_view.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/button.h"
 
@@ -23,68 +25,59 @@ namespace ash {
 class CloseButton;
 class OverviewItem;
 
-// OverviewItemView covers the overview window and listens for events.
+// OverviewItemView covers the overview window, provides an overview only header
+// and handles events. It hosts a mirror view if the window is minimized.
 class ASH_EXPORT OverviewItemView : public WindowMiniView,
-                                    public OverviewHighlightableView {
+                                    public OverviewFocusableView {
  public:
   METADATA_HEADER(OverviewItemView);
 
-  // The visibility of the header. It may be fully visible or invisible, or
-  // everything but the close button is visible.
-  enum class HeaderVisibility {
-    kInvisible,
-    kCloseButtonInvisibleOnly,
-    kVisible,
-  };
-
-  // If |show_preview| is true, this class will contain a child view which
-  // mirrors |window|.
+  // If `show_preview` is true, this class will contain a child view which
+  // mirrors `window`.
   OverviewItemView(OverviewItem* overview_item,
+                   EventHandlerDelegate* event_handler_delegate,
                    views::Button::PressedCallback close_callback,
                    aura::Window* window,
                    bool show_preview);
-
   OverviewItemView(const OverviewItemView&) = delete;
   OverviewItemView& operator=(const OverviewItemView&) = delete;
-
   ~OverviewItemView() override;
 
-  // Fades the app icon and title out if |visibility| is kInvisible, in
-  // otherwise. If |close_button_| is not null, also fades the close button in
-  // if |visibility| is kVisible, out otherwise. Sets
-  // |current_header_visibility_| to |visibility|.
-  void SetHeaderVisibility(HeaderVisibility visibility);
+  CloseButton* close_button() const { return close_button_; }
+
+  void SetCloseButtonVisible(bool visible);
 
   // Hides the close button instantaneously, and then fades it in slowly and
-  // with a long delay. Sets |current_header_visibility_| to kVisible. Assumes
-  // that |close_button_| is not null, and that |current_header_visibility_| is
+  // with a long delay. Sets `current_header_visibility_` to kVisible. Assumes
+  // that `close_button_` is not null, and that `current_header_visibility_` is
   // not kInvisible.
   void HideCloseInstantlyAndThenShowItSlowly();
 
-  // Called when |overview_item_| is about to be restored to its original state
+  // Called when `overview_item_` is about to be restored to its original state
   // outside of overview.
   void OnOverviewItemWindowRestoring();
 
-  // Refreshes |preview_view_| so that its content is up-to-date. Used by tab
+  // Refreshes `preview_view_` so that its content is up-to-date. Used by tab
   // dragging.
   void RefreshPreviewView();
 
   // WindowMiniView:
-  gfx::Rect GetHeaderBounds() const override;
   gfx::Size GetPreviewViewSize() const override;
 
-  // OverviewHighlightableView:
-  views::View* GetView() override;
-  void MaybeActivateHighlightedView() override;
-  void MaybeCloseHighlightedView(bool primary_action) override;
-  void MaybeSwapHighlightedView(bool right) override;
-  bool MaybeActivateHighlightedViewOnOverviewExit(
-      OverviewSession* overview_session) override;
-  void OnViewHighlighted() override;
-  void OnViewUnhighlighted() override;
-  gfx::Point GetMagnifierFocusPointInScreen() override;
+  // WindowMiniViewBase:
+  void RefreshItemVisuals() override;
 
-  CloseButton* close_button() const { return close_button_; }
+  // OverviewFocusableView:
+  views::View* GetView() override;
+  OverviewItemBase* GetOverviewItem() override;
+  void MaybeActivateFocusedView() override;
+  void MaybeCloseFocusedView(bool primary_action) override;
+  void MaybeSwapFocusedView(bool right) override;
+  bool MaybeActivateFocusedViewOnOverviewExit(
+      OverviewSession* overview_session) override;
+  void OnFocusableViewFocused() override;
+  void OnFocusableViewBlurred() override;
+  gfx::Point GetMagnifierFocusPointInScreen() override;
 
  protected:
   // views::View:
@@ -97,13 +90,18 @@ class ASH_EXPORT OverviewItemView : public WindowMiniView,
   void OnThemeChanged() override;
 
  private:
-  // The OverviewItem which owns the widget which houses this view. Non-null
-  // until |OnOverviewItemWindowRestoring| is called.
-  OverviewItem* overview_item_;
+  // The `OverviewItem` whose item widget owns and hosts this view. Please note
+  // that `item_widget_` may outlive its corresponding `OverviewItem` which will
+  // make `overview_item_` null while `this` is still alive. `overview_item_`
+  // will be explicitly set to null when `OnOverviewItemWindowRestoring()` is
+  // called.
+  raw_ptr<OverviewItem> overview_item_;
 
-  CloseButton* close_button_;
+  // Points to the event handling delegate to handle the events forwarded from
+  // `this`.
+  raw_ptr<EventHandlerDelegate> event_handler_delegate_;
 
-  HeaderVisibility current_header_visibility_ = HeaderVisibility::kVisible;
+  raw_ptr<CloseButton> close_button_;
 };
 
 }  // namespace ash

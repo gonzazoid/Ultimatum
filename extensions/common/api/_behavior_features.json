@@ -10,14 +10,6 @@
 // well as feature.h, simple_feature.h, and feature_provider.h.
 
 {
-  "do_not_sync": {
-    "channel": "stable",
-    "component_extensions_auto_granted": false,
-    "extension_types": ["extension"],
-    "allowlist": [
-      "226CF815E39A363090A1E547D53063472B8279FA"   // Media Router Stable
-    ]
-  },
   "zoom_without_bubble": {
     "channel": "stable",
     "extension_types": ["extension"],
@@ -49,7 +41,8 @@
     "allowlist": [
       // https://crbug.com/626342
       "85DA1AC24AF23CDA9F5A19858EB9C6E9E1BA57F6",  // Sign-in Screen Test App
-      "EC3DE21E048B67319893889529354DFBFA96FD23",  // Smart Card Connector
+      "EC3DE21E048B67319893889529354DFBFA96FD23",  // https://crbug.com/1233881
+      "A19608AC34215B127FF9D7C006D67F5C8ED8146D",  // https://crbug.com/1233881
       "6B748A5C005F21B7CBCF4170C2F883E435DEB511"   // CSSI Smart Card Middleware
     ]
   }, {
@@ -59,8 +52,9 @@
     "location": "policy",
     "platforms": ["chromeos"],
     "allowlist": [
-      // https://crbug.com/1233881
-      "EC3DE21E048B67319893889529354DFBFA96FD23",   // Smart Card Connector
+      "93B7178E8C275515C38D4F43D9DF4648F0EA9B03",   // Badge Based Auth Extension
+      "EC3DE21E048B67319893889529354DFBFA96FD23",   // https://crbug.com/1233881
+      "A19608AC34215B127FF9D7C006D67F5C8ED8146D",   // https://crbug.com/1233881
       // https://crbug.com/1194693
       "6B748A5C005F21B7CBCF4170C2F883E435DEB511",   // CSSI Smart Card Middleware
       "075FF17D52ED6E3C2E5EC4D99F188E7A25AF47EA"    // Beta CSSI Smart Card Middleware

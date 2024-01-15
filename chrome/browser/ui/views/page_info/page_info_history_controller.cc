@@ -4,17 +4,19 @@
 
 #include "chrome/browser/ui/views/page_info/page_info_history_controller.h"
 
+#include "base/time/time.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/chrome_pages.h"
-#include "chrome/browser/ui/views/page_info/page_info_hover_button.h"
+#include "chrome/browser/ui/views/controls/rich_hover_button.h"
 #include "chrome/browser/ui/views/page_info/page_info_main_view.h"
 #include "chrome/browser/ui/views/page_info/page_info_view_factory.h"
 #include "components/page_info/core/page_info_history_data_source.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/web_contents.h"
+#include "ui/base/l10n/l10n_util.h"
 #include "ui/views/view.h"
 
 PageInfoHistoryController::PageInfoHistoryController(
@@ -55,17 +57,20 @@ void PageInfoHistoryController::UpdateRow(base::Time last_visit) {
 std::unique_ptr<views::View> PageInfoHistoryController::CreateHistoryButton(
     std::u16string last_visit) {
   // TODO(crbug.com/1275042): Use correct icons and strings (tooltip).
-  return std::make_unique<PageInfoHoverButton>(
+  auto button = std::make_unique<RichHoverButton>(
       base::BindRepeating(&PageInfoHistoryController::OpenHistoryPage,
                           weak_factory_.GetWeakPtr()),
-      PageInfoViewFactory::GetHistoryIcon(), IDS_PAGE_INFO_HISTORY, last_visit,
-      PageInfoViewFactory::VIEW_ID_PAGE_INFO_HISTORY_BUTTON,
+      PageInfoViewFactory::GetHistoryIcon(),
+      l10n_util::GetStringUTF16(IDS_PAGE_INFO_HISTORY), last_visit,
+
       /*tooltip_text=*/std::u16string(), std::u16string(),
       PageInfoViewFactory::GetLaunchIcon());
+  button->SetID(PageInfoViewFactory::VIEW_ID_PAGE_INFO_HISTORY_BUTTON);
+  return button;
 }
 
 void PageInfoHistoryController::OpenHistoryPage() {
   // TODO(crbug.com/1275042): Add test for destroring web content.
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents_);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents_);
   chrome::ShowHistory(browser, site_url_.host());
 }

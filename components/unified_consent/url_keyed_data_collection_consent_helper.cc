@@ -7,15 +7,16 @@
 #include <map>
 #include <set>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
+#include "base/ranges/algorithm.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
 #include "components/sync/base/model_type.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_service_observer.h"
-#include "components/sync/driver/sync_service_utils.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_service_observer.h"
+#include "components/sync/service/sync_service_utils.h"
 #include "components/unified_consent/pref_names.h"
 
 namespace unified_consent {
@@ -36,7 +37,7 @@ class PrefBasedUrlKeyedDataCollectionConsentHelper
   ~PrefBasedUrlKeyedDataCollectionConsentHelper() override = default;
 
   // UrlKeyedDataCollectionConsentHelper:
-  bool IsEnabled() override;
+  State GetConsentState() override;
 
  private:
   void OnPrefChanged();
@@ -50,7 +51,8 @@ class SyncBasedUrlKeyedDataCollectionConsentHelper
  public:
   SyncBasedUrlKeyedDataCollectionConsentHelper(
       syncer::SyncService* sync_service,
-      std::set<syncer::ModelType> sync_data_types);
+      std::set<syncer::ModelType> sync_data_types,
+      bool require_sync_feature_enabled);
 
   SyncBasedUrlKeyedDataCollectionConsentHelper(
       const SyncBasedUrlKeyedDataCollectionConsentHelper&) = delete;
@@ -60,7 +62,7 @@ class SyncBasedUrlKeyedDataCollectionConsentHelper
   ~SyncBasedUrlKeyedDataCollectionConsentHelper() override;
 
   // UrlKeyedDataCollectionConsentHelper:
-  bool IsEnabled() override;
+  State GetConsentState() override;
 
   // syncer::SyncServiceObserver:
   void OnStateChanged(syncer::SyncService* sync) override;
@@ -69,8 +71,10 @@ class SyncBasedUrlKeyedDataCollectionConsentHelper
  private:
   void UpdateSyncDataTypeStates();
 
+  const bool require_sync_feature_enabled_;
   raw_ptr<syncer::SyncService> sync_service_;
   std::map<syncer::ModelType, syncer::UploadState> sync_data_type_states_;
+  bool sync_feature_state_ = false;
 };
 
 PrefBasedUrlKeyedDataCollectionConsentHelper::
@@ -84,9 +88,13 @@ PrefBasedUrlKeyedDataCollectionConsentHelper::
           base::Unretained(this)));
 }
 
-bool PrefBasedUrlKeyedDataCollectionConsentHelper::IsEnabled() {
+UrlKeyedDataCollectionConsentHelper::State
+PrefBasedUrlKeyedDataCollectionConsentHelper::GetConsentState() {
+  // There's no initializing state for pref-based helpers.
   return pref_service_->GetBoolean(
-      prefs::kUrlKeyedAnonymizedDataCollectionEnabled);
+             prefs::kUrlKeyedAnonymizedDataCollectionEnabled)
+             ? State::kEnabled
+             : State::kDisabled;
 }
 
 void PrefBasedUrlKeyedDataCollectionConsentHelper::OnPrefChanged() {
@@ -96,8 +104,10 @@ void PrefBasedUrlKeyedDataCollectionConsentHelper::OnPrefChanged() {
 SyncBasedUrlKeyedDataCollectionConsentHelper::
     SyncBasedUrlKeyedDataCollectionConsentHelper(
         syncer::SyncService* sync_service,
-        std::set<syncer::ModelType> sync_data_types)
-    : sync_service_(sync_service) {
+        std::set<syncer::ModelType> sync_data_types,
+        bool require_sync_feature_enabled)
+    : require_sync_feature_enabled_(require_sync_feature_enabled),
+      sync_service_(sync_service) {
   DCHECK(!sync_data_types.empty());
 
   for (const auto& sync_data_type : sync_data_types) {
@@ -115,21 +125,44 @@ SyncBasedUrlKeyedDataCollectionConsentHelper::
     sync_service_->RemoveObserver(this);
 }
 
-bool SyncBasedUrlKeyedDataCollectionConsentHelper::IsEnabled() {
-  for (const auto& sync_data_type_states : sync_data_type_states_) {
-    if (sync_data_type_states.second != syncer::UploadState::ACTIVE)
-      return false;
+// Note: This method must only consume cached state (not query anything from
+// SyncService), to ensure that the state-change detection in OnStateChanged()
+// works correctly.
+UrlKeyedDataCollectionConsentHelper::State
+SyncBasedUrlKeyedDataCollectionConsentHelper::GetConsentState() {
+  if (require_sync_feature_enabled_ && !sync_feature_state_) {
+    return State::kDisabled;
   }
-  return true;
+
+  // Any sync type that's NOT_ACTIVE makes the whole consent kDisabled.
+  for (const auto& sync_data_type_states : sync_data_type_states_) {
+    if (sync_data_type_states.second == syncer::UploadState::NOT_ACTIVE) {
+      return State::kDisabled;
+    }
+  }
+
+  // If no sync type is NOT_ACTIVE, any sync type still INITIALIZING makes the
+  // whole consent kInitializing.
+  for (const auto& sync_data_type_states : sync_data_type_states_) {
+    if (sync_data_type_states.second == syncer::UploadState::INITIALIZING) {
+      return State::kInitializing;
+    }
+  }
+
+  DCHECK(base::ranges::all_of(sync_data_type_states_, [](auto& state) {
+    return state.second == syncer::UploadState::ACTIVE;
+  })) << "Nothing is NOT_ACTIVE or INITIALIZING, so all must be ACTIVE.";
+  return State::kEnabled;
 }
 
 void SyncBasedUrlKeyedDataCollectionConsentHelper::OnStateChanged(
     syncer::SyncService* sync_service) {
   DCHECK_EQ(sync_service_, sync_service);
-  bool enabled_before_state_updated = IsEnabled();
+  auto old_state = GetConsentState();
   UpdateSyncDataTypeStates();
-  if (enabled_before_state_updated != IsEnabled())
+  if (old_state != GetConsentState()) {
     FireOnStateChanged();
+  }
 }
 
 void SyncBasedUrlKeyedDataCollectionConsentHelper::OnSyncShutdown(
@@ -140,9 +173,14 @@ void SyncBasedUrlKeyedDataCollectionConsentHelper::OnSyncShutdown(
 }
 
 void SyncBasedUrlKeyedDataCollectionConsentHelper::UpdateSyncDataTypeStates() {
-  for (auto iter = sync_data_type_states_.begin();
-       iter != sync_data_type_states_.end(); ++iter) {
-    iter->second = syncer::GetUploadToGoogleState(sync_service_, iter->first);
+  if (require_sync_feature_enabled_) {
+    // TODO(crbug.com/1462552): Find a replacement once IsSyncFeatureEnabled()
+    // starts always returning false.
+    sync_feature_state_ =
+        sync_service_ && sync_service_->IsSyncFeatureEnabled();
+  }
+  for (auto& [model_type, upload_state] : sync_data_type_states_) {
+    upload_state = syncer::GetUploadToGoogleState(sync_service_, model_type);
   }
 }
 
@@ -166,8 +204,25 @@ std::unique_ptr<UrlKeyedDataCollectionConsentHelper>
 UrlKeyedDataCollectionConsentHelper::NewPersonalizedDataCollectionConsentHelper(
     syncer::SyncService* sync_service) {
   return std::make_unique<SyncBasedUrlKeyedDataCollectionConsentHelper>(
-      sync_service, std::set<syncer::ModelType>(
-                        {syncer::ModelType::HISTORY_DELETE_DIRECTIVES}));
+      sync_service,
+      std::set<syncer::ModelType>(
+          {syncer::ModelType::HISTORY_DELETE_DIRECTIVES}),
+      /*require_sync_feature_enabled=*/false);
+}
+
+// static
+std::unique_ptr<UrlKeyedDataCollectionConsentHelper>
+UrlKeyedDataCollectionConsentHelper::
+    NewPersonalizedBookmarksDataCollectionConsentHelper(
+        syncer::SyncService* sync_service,
+        bool require_sync_feature_enabled) {
+  return std::make_unique<SyncBasedUrlKeyedDataCollectionConsentHelper>(
+      sync_service, std::set<syncer::ModelType>({syncer::ModelType::BOOKMARKS}),
+      require_sync_feature_enabled);
+}
+
+bool UrlKeyedDataCollectionConsentHelper::IsEnabled() {
+  return GetConsentState() == State::kEnabled;
 }
 
 void UrlKeyedDataCollectionConsentHelper::AddObserver(Observer* observer) {

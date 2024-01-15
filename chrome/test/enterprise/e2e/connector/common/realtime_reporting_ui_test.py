@@ -2,16 +2,24 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import json
+import logging
 import time
+
 from absl import app
+from histogram.util import poll_histogram
 from pywinauto.application import Application
 from selenium import webdriver
-
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 from test_util import create_chrome_webdriver
 from test_util import getElementFromShadowRoot
 
-UnsafePageLink = "http://testsafebrowsing.appspot.com/s/malware.html"
-UnsafeDownloadLink = "http://testsafebrowsing.appspot.com/s/badrep.exe"
+
+_UNSAFE_PAGE_LINK = 'http://testsafebrowsing.appspot.com/s/malware.html'
+_UNSAFE_DOWNLOAD_LINK = 'http://testsafebrowsing.appspot.com/s/badrep.exe'
+_TIMEOUT = 10
 
 
 def visit(window, url):
@@ -20,19 +28,27 @@ def visit(window, url):
   SafeBrowsing intercepts HTTP requests & hangs WebDriver.get(), which prevents
   us from getting the page source. Using pywinauto to visit the pages instead.
   """
-  window.Edit.set_edit_text(url).type_keys("%{ENTER}")
+  window.Edit.set_edit_text(url).type_keys('%{ENTER}')
   time.sleep(10)
 
 
-def main(argv):
-  exclude_switches = ["disable-background-networking"]
-  chrome_options = webdriver.ChromeOptions()
-  chrome_options.add_experimental_option("excludeSwitches", exclude_switches)
+def wait_element(driver, by_selector, selector, timeout=_TIMEOUT * 3):
+  return WebDriverWait(driver, timeout).until(
+      EC.presence_of_element_located((by_selector, selector)),
+      'Could not find element with selector: "{}"'.format(selector))
 
+
+def main(argv):
+  exclude_switches = ['disable-background-networking']
+  chrome_options = webdriver.ChromeOptions()
+  chrome_options.add_experimental_option('excludeSwitches', exclude_switches)
+  chrome_options.add_argument('--enable-stats-collection-bindings')
+
+  result = {}
   driver = create_chrome_webdriver(chrome_options=chrome_options)
 
   try:
-    app = Application(backend="uia")
+    app = Application(backend='uia')
     app.connect(title_re='.*Chrome|.*Chromium')
     window = app.top_window()
 
@@ -42,26 +58,43 @@ def main(argv):
     time.sleep(60 * 5)
 
     # Verify Policy status legend in chrome://policy page
-    policy_url = "chrome://policy"
+    # Switch to the new window
+    policy_url = 'chrome://policy'
+    logging.info('Navigating to chrome://policy')
     driver.get(policy_url)
-    driver.find_element_by_id('reload-policies').click
+    WebDriverWait(driver=driver, timeout=10)
+
+    wait_element(driver, By.CSS_SELECTOR, '#reload-policies')
+    driver.find_element(By.CSS_SELECTOR, '#reload-policies').click()
     # Give the page 2 seconds to render the legend
     time.sleep(2)
-    status_box = driver.find_element_by_css_selector("status-box")
-    el = getElementFromShadowRoot(driver, status_box, "fieldset")
+    wait_element(driver, By.CSS_SELECTOR, 'status-box')
+    status_box = driver.find_element(By.CSS_SELECTOR, 'status-box')
+    el = getElementFromShadowRoot(driver, status_box, '.status-box-fields')
 
-    deviceId = el.find_element_by_class_name(
-        'machine-enrollment-device-id').text
+    deviceId = el.find_element(By.CLASS_NAME,
+                               'machine-enrollment-device-id').text
 
-    visit(window, UnsafePageLink)
+    logging.info('Navigating to %s' % _UNSAFE_PAGE_LINK)
+    visit(window, _UNSAFE_PAGE_LINK)
 
-    visit(window, UnsafeDownloadLink)
-    print('\nDeviceId:' + deviceId.strip())
+    logging.info('Navigating to %s' % _UNSAFE_DOWNLOAD_LINK)
+    visit(window, _UNSAFE_DOWNLOAD_LINK)
 
-  except Exception as error:
-    print(error)
+    result['DeviceId'] = deviceId.strip()
+
+    hg = poll_histogram(driver, [
+        'Enterprise.ReportingEventUploadSuccess',
+        'Enterprise.ReportingEventUploadFailure',
+    ])
+    if hg:
+      result['Histogram'] = hg
+
+  except Exception as e:
+    logging.critical(e, exc_info=True)
   finally:
     driver.quit()
+  logging.info(f'Result:{json.dumps(result)}')
 
 
 if __name__ == '__main__':

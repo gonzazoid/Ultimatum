@@ -17,6 +17,10 @@
 #include "extensions/common/constants.h"
 #include "printing/buildflags/buildflags.h"
 
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/constants/chromeos_features.h"
+#endif
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/keyboard/ui/grit/keyboard_resources.h"
 #include "chrome/browser/ash/input_method/component_extension_ime_manager_delegate_impl.h"
@@ -41,7 +45,10 @@ bool IsComponentExtensionAllowlisted(const std::string& extension_id) {
     extension_misc::kGuestModeTestExtensionId,
     extension_misc::kSelectToSpeakExtensionId,
     extension_misc::kSwitchAccessExtensionId,
-#endif
+#elif BUILDFLAG(IS_CHROMEOS_LACROS)
+    extension_misc::kEmbeddedA11yHelperExtensionId,
+    extension_misc::kChromeVoxHelperExtensionId,
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 #if BUILDFLAG(IS_CHROMEOS)
     extension_misc::kContactCenterInsightsExtensionId,
     extension_misc::kDeskApiExtensionId,
@@ -52,6 +59,13 @@ bool IsComponentExtensionAllowlisted(const std::string& extension_id) {
     if (extension_id == kAllowed[i])
       return true;
   }
+
+#if BUILDFLAG(IS_CHROMEOS)
+  if (chromeos::features::IsUploadOfficeToCloudEnabled() &&
+      extension_id == extension_misc::kODFSExtensionId) {
+    return true;
+  }
+#endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   if (ash::input_method::ComponentExtensionIMEManagerDelegateImpl::
@@ -71,7 +85,6 @@ bool IsComponentExtensionAllowlisted(int manifest_resource_id) {
 #if BUILDFLAG(ENABLE_HANGOUT_SERVICES_EXTENSION)
     case IDR_HANGOUT_SERVICES_MANIFEST:
 #endif
-    case IDR_IDENTITY_API_SCOPE_APPROVAL_MANIFEST:
     case IDR_NETWORK_SPEECH_SYNTHESIS_MANIFEST:
     case IDR_WEBSTORE_MANIFEST:
 

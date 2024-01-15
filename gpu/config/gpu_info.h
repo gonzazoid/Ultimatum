@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 
+#include <optional>
+#include "base/clang_profiling_buildflags.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/span.h"
 #include "base/time/time.h"
@@ -21,8 +23,8 @@
 #include "gpu/config/dx_diag_node.h"
 #include "gpu/gpu_export.h"
 #include "gpu/vulkan/buildflags.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/gl/gl_implementation.h"
 #include "ui/gl/gpu_preference.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -79,8 +81,9 @@ enum class IntelGpuSeriesType {
   kAlderlake = 22,
   kAlchemist = 26,
   kRaptorlake = 27,
+  kMeteorlake = 28,
   // Please also update |gpu_series_map| in process_json.py.
-  kMaxValue = kRaptorlake,
+  kMaxValue = kMeteorlake,
 };
 
 // Video profile.  This *must* match media::VideoCodecProfile.
@@ -88,43 +91,58 @@ enum VideoCodecProfile {
   VIDEO_CODEC_PROFILE_UNKNOWN = -1,
   VIDEO_CODEC_PROFILE_MIN = VIDEO_CODEC_PROFILE_UNKNOWN,
   H264PROFILE_BASELINE = 0,
-  H264PROFILE_MAIN,
-  H264PROFILE_EXTENDED,
-  H264PROFILE_HIGH,
-  H264PROFILE_HIGH10PROFILE,
-  H264PROFILE_HIGH422PROFILE,
-  H264PROFILE_HIGH444PREDICTIVEPROFILE,
-  H264PROFILE_SCALABLEBASELINE,
-  H264PROFILE_SCALABLEHIGH,
-  H264PROFILE_STEREOHIGH,
-  H264PROFILE_MULTIVIEWHIGH,
-  VP8PROFILE_ANY,
-  VP9PROFILE_PROFILE0,
-  VP9PROFILE_PROFILE1,
-  VP9PROFILE_PROFILE2,
-  VP9PROFILE_PROFILE3,
-  HEVCPROFILE_MAIN,
-  HEVCPROFILE_MAIN10,
-  HEVCPROFILE_MAIN_STILL_PICTURE,
-  DOLBYVISION_PROFILE0,
-  DOLBYVISION_PROFILE4,
-  DOLBYVISION_PROFILE5,
-  DOLBYVISION_PROFILE7,
-  THEORAPROFILE_ANY,
-  AV1PROFILE_PROFILE_MAIN,
-  AV1PROFILE_PROFILE_HIGH,
-  AV1PROFILE_PROFILE_PRO,
-  DOLBYVISION_PROFILE8,
-  DOLBYVISION_PROFILE9,
-  HEVCPROFILE_REXT,
-  HEVCPROFILE_HIGH_THROUGHPUT,
-  HEVCPROFILE_MULTIVIEW_MAIN,
-  HEVCPROFILE_SCALABLE_MAIN,
-  HEVCPROFILE_3D_MAIN,
-  HEVCPROFILE_SCREEN_EXTENDED,
-  HEVCPROFILE_SCALABLE_REXT,
-  HEVCPROFILE_HIGH_THROUGHPUT_SCREEN_EXTENDED,
-  VIDEO_CODEC_PROFILE_MAX = HEVCPROFILE_HIGH_THROUGHPUT_SCREEN_EXTENDED,
+  H264PROFILE_MAIN = 1,
+  H264PROFILE_EXTENDED = 2,
+  H264PROFILE_HIGH = 3,
+  H264PROFILE_HIGH10PROFILE = 4,
+  H264PROFILE_HIGH422PROFILE = 5,
+  H264PROFILE_HIGH444PREDICTIVEPROFILE = 6,
+  H264PROFILE_SCALABLEBASELINE = 7,
+  H264PROFILE_SCALABLEHIGH = 8,
+  H264PROFILE_STEREOHIGH = 9,
+  H264PROFILE_MULTIVIEWHIGH = 10,
+  VP8PROFILE_ANY = 11,
+  VP9PROFILE_PROFILE0 = 12,
+  VP9PROFILE_PROFILE1 = 13,
+  VP9PROFILE_PROFILE2 = 14,
+  VP9PROFILE_PROFILE3 = 15,
+  HEVCPROFILE_MAIN = 16,
+  HEVCPROFILE_MAIN10 = 17,
+  HEVCPROFILE_MAIN_STILL_PICTURE = 18,
+  DOLBYVISION_PROFILE0 = 19,
+  // Deprecated: DOLBYVISION_PROFILE4 = 20,
+  DOLBYVISION_PROFILE5 = 21,
+  DOLBYVISION_PROFILE7 = 22,
+  THEORAPROFILE_ANY = 23,
+  AV1PROFILE_PROFILE_MAIN = 24,
+  AV1PROFILE_PROFILE_HIGH = 25,
+  AV1PROFILE_PROFILE_PRO = 26,
+  DOLBYVISION_PROFILE8 = 27,
+  DOLBYVISION_PROFILE9 = 28,
+  HEVCPROFILE_REXT = 29,
+  HEVCPROFILE_HIGH_THROUGHPUT = 30,
+  HEVCPROFILE_MULTIVIEW_MAIN = 31,
+  HEVCPROFILE_SCALABLE_MAIN = 32,
+  HEVCPROFILE_3D_MAIN = 33,
+  HEVCPROFILE_SCREEN_EXTENDED = 34,
+  HEVCPROFILE_SCALABLE_REXT = 35,
+  HEVCPROFILE_HIGH_THROUGHPUT_SCREEN_EXTENDED = 36,
+  VVCPROFILE_MAIN10 = 37,
+  VVCPROFILE_MAIN12 = 38,
+  VVCPROFILE_MAIN12_INTRA = 39,
+  VVCPROIFLE_MULTILAYER_MAIN10 = 40,
+  VVCPROFILE_MAIN10_444 = 41,
+  VVCPROFILE_MAIN12_444 = 42,
+  VVCPROFILE_MAIN16_444 = 43,
+  VVCPROFILE_MAIN12_444_INTRA = 44,
+  VVCPROFILE_MAIN16_444_INTRA = 45,
+  VVCPROFILE_MULTILAYER_MAIN10_444 = 46,
+  VVCPROFILE_MAIN10_STILL_PICTURE = 47,
+  VVCPROFILE_MAIN12_STILL_PICTURE = 48,
+  VVCPROFILE_MAIN10_444_STILL_PICTURE = 49,
+  VVCPROFILE_MAIN12_444_STILL_PICTURE = 50,
+  VVCPROFILE_MAIN16_444_STILL_PICTURE = 51,
+  VIDEO_CODEC_PROFILE_MAX = VVCPROFILE_MAIN16_444_STILL_PICTURE,
 };
 
 // Specification of a decoding profile supported by a hardware decoder.
@@ -154,6 +172,7 @@ struct GPU_EXPORT VideoEncodeAcceleratorSupportedProfile {
   gfx::Size max_resolution;
   uint32_t max_framerate_numerator;
   uint32_t max_framerate_denominator;
+  bool is_software_codec;
 };
 using VideoEncodeAcceleratorSupportedProfiles =
     std::vector<VideoEncodeAcceleratorSupportedProfile>;
@@ -277,11 +296,11 @@ struct GPU_EXPORT GPUInfo {
     CHROME_LUID luid;
 #endif  // BUILDFLAG(IS_WIN)
 
-#if BUILDFLAG(IS_MAC)
-    // The registry ID of an IOGraphicsAccelerator2 or AGXAccelerator matches
-    // the ID used for GPU selection by ANGLE_platform_angle_device_id.
-    uint64_t register_id = 0ULL;
-#endif  // BUILDFLAG(IS_MAC)
+    // The 64-bit ID used for GPU selection by ANGLE_platform_angle_device_id.
+    // On Mac this matches the registry ID of an IOGraphicsAccelerator2 or
+    // AGXAccelerator.
+    // On Windows this matches the concatenated LUID.
+    uint64_t system_device_id = 0ULL;
 
     // Whether this GPU is the currently used one.
     // Currently this field is only supported and meaningful on OS X and on
@@ -364,6 +383,9 @@ struct GPU_EXPORT GPUInfo {
   // See machine_model_name's comment.
   std::string machine_model_version;
 
+  // The DisplayType requested from ANGLE.
+  std::string display_type;
+
   // The GL_VERSION string.
   std::string gl_version;
 
@@ -389,7 +411,7 @@ struct GPU_EXPORT GPUInfo {
   // reset detection or notification not available.
   uint32_t gl_reset_notification_strategy;
 
-  bool software_rendering;
+  gl::GLImplementationParts gl_implementation_parts;
 
   // Empty means unknown. Defined on X11 as
   // - "1" means indirect (versions can't be all zero)
@@ -417,6 +439,13 @@ struct GPU_EXPORT GPUInfo {
   bool is_asan = true;
 #else
   bool is_asan = false;
+#endif
+
+// Whether the browser was built with Clang coverage enabled or not.
+#if BUILDFLAG(USE_CLANG_COVERAGE) || BUILDFLAG(CLANG_PROFILING)
+  bool is_clang_coverage = true;
+#else
+  bool is_clang_coverage = false;
 #endif
 
 #if defined(ARCH_CPU_64_BITS)
@@ -466,7 +495,7 @@ struct GPU_EXPORT GPUInfo {
   uint32_t visibility_callback_call_count = 0;
 
 #if BUILDFLAG(ENABLE_VULKAN)
-  absl::optional<VulkanInfo> vulkan_info;
+  std::optional<VulkanInfo> vulkan_info;
 #endif
 
   // Note: when adding new members, please remember to update EnumerateFields

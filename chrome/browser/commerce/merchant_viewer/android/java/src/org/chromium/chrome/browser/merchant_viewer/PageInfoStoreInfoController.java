@@ -11,22 +11,18 @@ import android.view.ViewGroup;
 import androidx.annotation.Nullable;
 
 import org.chromium.base.supplier.Supplier;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.chrome.browser.commerce.ShoppingServiceFactory;
 import org.chromium.chrome.browser.merchant_viewer.MerchantTrustMessageViewModel.MessageDescriptionUI;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.tab_ui.R;
 import org.chromium.components.commerce.core.ShoppingService.MerchantInfo;
 import org.chromium.components.page_info.PageInfoAction;
-import org.chromium.components.page_info.PageInfoDiscoverabilityMetrics;
-import org.chromium.components.page_info.PageInfoDiscoverabilityMetrics.DiscoverabilityAction;
 import org.chromium.components.page_info.PageInfoMainController;
 import org.chromium.components.page_info.PageInfoRowView;
 import org.chromium.components.page_info.PageInfoSubpageController;
 import org.chromium.content_public.browser.WebContents;
 
-/**
- * Class for controlling the {@link ChromePageInfo} "store info" section.
- */
+/** Class for controlling the {@link ChromePageInfo} "store info" section. */
 public class PageInfoStoreInfoController implements PageInfoSubpageController {
     public static final int STORE_INFO_ROW_ID = View.generateViewId();
 
@@ -42,14 +38,15 @@ public class PageInfoStoreInfoController implements PageInfoSubpageController {
     private final Context mContext;
     private final boolean mPageInfoOpenedFromStoreIcon;
     private final WebContents mWebContents;
-    private final PageInfoDiscoverabilityMetrics mDiscoverabilityMetrics =
-            new PageInfoDiscoverabilityMetrics();
     private final MerchantTrustMetrics mMetrics = new MerchantTrustMetrics();
 
-    public PageInfoStoreInfoController(PageInfoMainController mainController,
+    public PageInfoStoreInfoController(
+            PageInfoMainController mainController,
             PageInfoRowView rowView,
             @Nullable Supplier<StoreInfoActionHandler> actionHandlerSupplier,
-            boolean pageInfoOpenedFromStoreIcon, WebContents webContents, Profile profile) {
+            boolean pageInfoOpenedFromStoreIcon,
+            WebContents webContents,
+            Profile profile) {
         mMainController = mainController;
         mRowView = rowView;
         mContext = mRowView.getContext();
@@ -59,9 +56,10 @@ public class PageInfoStoreInfoController implements PageInfoSubpageController {
         // Creating the instance of {@link MerchantTrustSignalsDataProvider} will force
         // OptimizationGuide to register for the MERCHANT_TRUST_SIGNALS type, so we need to check
         // the feature flag first.
-        if (ChromeFeatureList.isEnabled(ChromeFeatureList.COMMERCE_MERCHANT_VIEWER)) {
-            new MerchantTrustSignalsDataProvider().getDataForUrl(
-                    profile, mMainController.getURL(), this::setupStoreInfoRow);
+        if (profile != null
+                && ShoppingServiceFactory.getForProfile(profile).isMerchantViewerEnabled()) {
+            new MerchantTrustSignalsDataProvider()
+                    .getDataForUrl(profile, mMainController.getURL(), this::setupStoreInfoRow);
         } else {
             setupStoreInfoRow(null);
         }
@@ -69,7 +67,8 @@ public class PageInfoStoreInfoController implements PageInfoSubpageController {
 
     private void setupStoreInfoRow(@Nullable MerchantInfo merchantInfo) {
         PageInfoRowView.ViewParams rowParams = new PageInfoRowView.ViewParams();
-        if (mActionHandlerSupplier == null || mActionHandlerSupplier.get() == null
+        if (mActionHandlerSupplier == null
+                || mActionHandlerSupplier.get() == null
                 || merchantInfo == null) {
             rowParams.visible = false;
         } else {
@@ -84,16 +83,13 @@ public class PageInfoStoreInfoController implements PageInfoSubpageController {
             if (mPageInfoOpenedFromStoreIcon) {
                 rowParams.rowTint = R.color.iph_highlight_blue;
             }
-            rowParams.clickCallback = () -> {
-                if (mPageInfoOpenedFromStoreIcon) {
-                    mDiscoverabilityMetrics.recordDiscoverabilityAction(
-                            DiscoverabilityAction.STORE_INFO_OPENED);
-                }
-                mMainController.recordAction(PageInfoAction.PAGE_INFO_STORE_INFO_CLICKED);
-                mMainController.dismiss();
-                mMetrics.recordUkmOnRowClicked(mWebContents);
-                mActionHandlerSupplier.get().onStoreInfoClicked(merchantInfo);
-            };
+            rowParams.clickCallback =
+                    () -> {
+                        mMainController.recordAction(PageInfoAction.PAGE_INFO_STORE_INFO_CLICKED);
+                        mMainController.dismiss();
+                        mMetrics.recordUkmOnRowClicked(mWebContents);
+                        mActionHandlerSupplier.get().onStoreInfoClicked(merchantInfo);
+                    };
             mMetrics.recordUkmOnRowSeen(mWebContents);
         }
         mMetrics.recordMetricsForStoreInfoRowVisible(rowParams.visible);
@@ -102,12 +98,13 @@ public class PageInfoStoreInfoController implements PageInfoSubpageController {
 
     private CharSequence getRowSubtitle(MerchantInfo merchantInfo) {
         if (merchantInfo.starRating > 0) {
-            CharSequence subTitle = MerchantTrustMessageViewModel.getMessageDescription(
-                    mContext, merchantInfo, MessageDescriptionUI.RATING_AND_REVIEWS);
+            CharSequence subTitle =
+                    MerchantTrustMessageViewModel.getMessageDescription(
+                            mContext, merchantInfo, MessageDescriptionUI.RATING_AND_REVIEWS);
             if (subTitle != null) return subTitle;
         } else if (merchantInfo.hasReturnPolicy) {
-            return mContext.getResources().getString(
-                    R.string.page_info_store_info_description_with_no_rating);
+            return mContext.getResources()
+                    .getString(R.string.page_info_store_info_description_with_no_rating);
         }
         assert false : "Invalid trust signal";
         return "";
@@ -132,7 +129,4 @@ public class PageInfoStoreInfoController implements PageInfoSubpageController {
 
     @Override
     public void updateRowIfNeeded() {}
-
-    @Override
-    public void onNativeInitialized() {}
 }

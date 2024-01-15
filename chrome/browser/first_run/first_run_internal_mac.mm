@@ -6,12 +6,10 @@
 
 #include "chrome/browser/mac/initial_prefs.h"
 
-namespace first_run {
-namespace internal {
+namespace first_run::internal {
 
 base::FilePath InitialPrefsPath() {
   return initial_prefs::InitialPrefsPath();
 }
 
-}  // namespace internal
-}  // namespace first_run
+}  // namespace first_run::internal

@@ -26,12 +26,14 @@ namespace net::x509_util {
 NET_EXPORT bool IsSameCertificate(CERTCertificate* a, CERTCertificate* b);
 NET_EXPORT bool IsSameCertificate(CERTCertificate* a, const X509Certificate* b);
 NET_EXPORT bool IsSameCertificate(const X509Certificate* a, CERTCertificate* b);
+NET_EXPORT bool IsSameCertificate(CERTCertificate* a, const CRYPTO_BUFFER* b);
+NET_EXPORT bool IsSameCertificate(const CRYPTO_BUFFER* a, CERTCertificate* b);
 
 // Returns a CERTCertificate handle from the DER-encoded representation. The
 // returned value may reference an already existing CERTCertificate object.
 // Returns NULL on failure.
 NET_EXPORT ScopedCERTCertificate
-CreateCERTCertificateFromBytes(const uint8_t* data, size_t length);
+CreateCERTCertificateFromBytes(base::span<const uint8_t> data);
 
 // Returns a CERTCertificate handle from |cert|. The returned value may
 // reference an already existing CERTCertificate object.  Returns NULL on
@@ -157,10 +159,11 @@ NET_EXPORT bool GetValidityTimes(CERTCertificate* cert,
 // (all zero) fingerprint on failure.
 NET_EXPORT SHA256HashValue CalculateFingerprint256(CERTCertificate* cert);
 
-// Behaves like `CERT_GetCertIsPerm` in NSS. This function's type signature
-// mirrors the NSS function so call sites can be easily replaced when
-// https://crbug.com/1365414 is resolved.
-NET_EXPORT SECStatus GetCertIsPerm(const CERTCertificate* cert, PRBool* isperm);
+// Prefer using NSSCertDatabase::ImportUserCert. Temporary public for Kcer.
+// Import a user certificate. The private key for the user certificate must
+// already be installed, otherwise returns ERR_NO_PRIVATE_KEY_FOR_CERT.
+// Returns OK or a network error code.
+NET_EXPORT int ImportUserCert(CERTCertificate* cert);
 
 }  // namespace net::x509_util
 

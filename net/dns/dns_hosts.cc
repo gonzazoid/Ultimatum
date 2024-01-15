@@ -5,14 +5,20 @@
 #include "net/dns/dns_hosts.h"
 
 #include <string>
+#include <utility>
 
 #include "base/check.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
+#include "base/trace_event/memory_usage_estimator.h"
 #include "build/build_config.h"
+#include "net/base/cronet_buildflags.h"
+#include "net/base/url_util.h"
 #include "net/dns/dns_util.h"
+#include "url/url_canon.h"
 
 using base::StringPiece;
 
@@ -84,9 +90,7 @@ class HostsParser {
   // Fast-forwards the parser to the next line.  Should be called if an IP
   // address doesn't parse, to avoid wasting time tokenizing hostnames that
   // will be ignored.
-  void SkipRestOfLine() {
-    pos_ = text_.find("\n", pos_);
-  }
+  void SkipRestOfLine() { pos_ = text_.find("\n", pos_); }
 
   // Returns whether the last-parsed token is an IP address (true) or a
   // hostname (false).
@@ -158,10 +162,18 @@ void ParseHostsWithCommaMode(const std::string& contents,
         }
       }
     } else {
-      DnsHostsKey key(std::string(parser.token()), family);
-      if (!IsValidDNSDomain(key.first))
+      url::CanonHostInfo canonicalization_info;
+      std::string canonicalized_host =
+          CanonicalizeHost(parser.token(), &canonicalization_info);
+
+      // Skip if token is invalid for host canonicalization, or if it
+      // canonicalizes as an IP address.
+      if (canonicalization_info.family != url::CanonHostInfo::NEUTRAL)
         continue;
-      key.first = base::ToLowerASCII(key.first);
+
+      DnsHostsKey key(std::move(canonicalized_host), family);
+      if (!IsCanonicalizedHostCompliant(key.first))
+        continue;
       IPAddress* mapped_ip = &(*dns_hosts)[key];
       if (mapped_ip->empty())
         *mapped_ip = ip;
@@ -189,6 +201,19 @@ void ParseHosts(const std::string& contents, DnsHosts* dns_hosts) {
 #endif
 
   ParseHostsWithCommaMode(contents, dns_hosts, comma_mode);
+
+  // TODO(crbug.com/1377305): Remove this when we have enough data.
+  base::UmaHistogramCounts100000("Net.DNS.DnsHosts.Count", dns_hosts->size());
+
+#if !BUILDFLAG(CRONET_BUILD)
+  // Cronet disables tracing and doesn't provide an implementation of
+  // base::trace_event::EstimateMemoryUsage for DnsHosts. Having this
+  // conditional is preferred over a fake implementation to avoid reporting fake
+  // metrics.
+  base::UmaHistogramMemoryKB(
+      "Net.DNS.DnsHosts.EstimateMemoryUsage",
+      base::trace_event::EstimateMemoryUsage(*dns_hosts));
+#endif  // !BUILDFLAG(CRONET_BUILD)
 }
 
 DnsHostsParser::~DnsHostsParser() = default;
@@ -210,6 +235,10 @@ bool DnsHostsFileParser::ParseHosts(DnsHosts* dns_hosts) const {
 
   // Reject HOSTS files larger than |kMaxHostsSize| bytes.
   const int64_t kMaxHostsSize = 1 << 25;  // 32MB
+
+  // TODO(crbug.com/1377305): Remove this when we have enough data.
+  base::UmaHistogramCustomCounts("Net.DNS.DnsHosts.FileSize", size, 1,
+                                 kMaxHostsSize * 2, 50);
   if (size > kMaxHostsSize)
     return false;
 

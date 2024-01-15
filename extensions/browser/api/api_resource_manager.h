@@ -11,7 +11,7 @@
 #include <unordered_set>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/notreached.h"
@@ -21,7 +21,6 @@
 #include "components/keyed_service/core/keyed_service.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/browser/notification_registrar.h"
 #include "extensions/browser/browser_context_keyed_api_factory.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_registry_factory.h"
@@ -371,7 +370,6 @@ class ApiResourceManager : public BrowserContextKeyedAPI,
     SEQUENCE_CHECKER(sequence_checker_);
   };
 
-  content::NotificationRegistrar registrar_;
   scoped_refptr<ApiResourceData> data_;
 
   base::ScopedObservation<ExtensionRegistry, ExtensionRegistryObserver>

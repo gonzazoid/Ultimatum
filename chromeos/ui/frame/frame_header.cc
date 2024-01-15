@@ -12,6 +12,7 @@
 #include "ui/base/class_property.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/color/color_id.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_observer.h"
 #include "ui/compositor/layer_tree_owner.h"
@@ -21,6 +22,7 @@
 #include "ui/gfx/font_list.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/scoped_canvas.h"
+#include "ui/views/background.h"
 #include "ui/views/view.h"
 #include "ui/views/widget/native_widget_aura.h"
 #include "ui/views/widget/widget.h"
@@ -112,11 +114,12 @@ void FrameHeader::FrameAnimatorView::StartAnimation(base::TimeDelta duration) {
 
   layer_owner_ = std::move(old_layer_owner);
 
-  AddLayerBeneathView(old_layer);
+  AddLayerToRegion(old_layer, views::LayerRegion::kBelow);
 
-  // The old layer is on top and should fade out.
-  old_layer->SetOpacity(1.f);
-  new_layer->SetOpacity(1.f);
+  // The old layer is on top and should fade out. The new layer is given the
+  // opacity as the old layer is currently targeting. This ensures that we don't
+  // change the overall opacity, since it may have been set by something else.
+  new_layer->SetOpacity(old_layer->GetTargetOpacity());
   {
     ui::ScopedLayerAnimationSettings settings(old_layer->GetAnimator());
     settings.SetPreemptionStrategy(
@@ -158,7 +161,7 @@ void FrameHeader::FrameAnimatorView::OnImplicitAnimationsCompleted() {
   // TODO(crbug.com/1172694): Remove this DCHECK if this is indeed the cause.
   DCHECK(layer_owner_);
   if (layer_owner_) {
-    RemoveLayerBeneathView(layer_owner_->root());
+    RemoveLayerFromRegions(layer_owner_->root());
     layer_owner_.reset();
   }
 }
@@ -199,6 +202,11 @@ FrameHeader::~FrameHeader() {
   if (center_button_ && !center_button_->parent()) {
     delete center_button_;
     center_button_ = nullptr;
+  }
+
+  if (underneath_layer_owner_) {
+    underneath_layer_owner_->RemoveObserver(this);
+    underneath_layer_owner_ = nullptr;
   }
 
   auto* target_window = target_widget_->GetNativeView();
@@ -264,7 +272,8 @@ void FrameHeader::SetPaintAsActive(bool paint_as_active) {
     back_button_->SetPaintAsActive(paint_as_active);
   if (center_button_)
     center_button_->SetPaintAsActive(paint_as_active);
-  UpdateCaptionButtonColors();
+
+  UpdateFrameColors();
 }
 
 void FrameHeader::OnShowStateChanged(ui::WindowShowState show_state) {
@@ -276,6 +285,15 @@ void FrameHeader::OnShowStateChanged(ui::WindowShowState show_state) {
 
 void FrameHeader::OnFloatStateChanged() {
   LayoutHeaderInternal();
+}
+
+void FrameHeader::SetHeaderCornerRadius(int radius) {
+  if (radius == corner_radius_) {
+    return;
+  }
+
+  corner_radius_ = radius;
+  view_->SchedulePaint();
 }
 
 void FrameHeader::SetLeftHeaderView(views::View* left_header_view) {
@@ -321,6 +339,10 @@ SkPath FrameHeader::GetWindowMaskForFrameHeader(const gfx::Size& size) {
   return SkPath();
 }
 
+ui::ColorId FrameHeader::GetColorIdForCurrentMode() const {
+  return mode_ == MODE_ACTIVE ? ui::kColorFrameActive : ui::kColorFrameInactive;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // FrameHeader, protected:
 
@@ -336,17 +358,64 @@ void FrameHeader::UpdateFrameHeaderKey() {
   target_widget_->GetNativeView()->SetProperty(kFrameHeaderKey, this);
 }
 
+void FrameHeader::OnLayerRecreated(ui::Layer* old_layer) {
+  if (underneath_layer_owner_) {
+    frame_animator_->RemoveLayerFromRegionsKeepInLayerTree(old_layer);
+    frame_animator_->AddLayerToRegion(underneath_layer_owner_->layer(),
+                                      views::LayerRegion::kBelow);
+  }
+}
+
+void FrameHeader::AddLayerBeneath(ui::LayerOwner* layer_owner) {
+  if (layer_owner) {
+    underneath_layer_owner_ = layer_owner;
+    // A relationship between the layer_owner's layer and animation view is
+    // created, we need to observe the layer_owner in case of the layer gets
+    // recreated.
+    layer_owner->AddObserver(this);
+    frame_animator_->AddLayerToRegion(layer_owner->layer(),
+                                      views::LayerRegion::kBelow);
+  }
+}
+
+void FrameHeader::RemoveLayerBeneath() {
+  if (underneath_layer_owner_) {
+    frame_animator_->RemoveLayerFromRegionsKeepInLayerTree(
+        underneath_layer_owner_->layer());
+    underneath_layer_owner_->RemoveObserver(this);
+    underneath_layer_owner_ = nullptr;
+  }
+}
+
 gfx::Rect FrameHeader::GetPaintedBounds() const {
   return gfx::Rect(view_->width(), painted_height_);
 }
 
-void FrameHeader::UpdateCaptionButtonColors() {
+void FrameHeader::UpdateCaptionButtonColors(
+    std::optional<ui::ColorId> icon_color_id) {
   const SkColor frame_color = GetCurrentFrameColor();
-  caption_button_container_->SetBackgroundColor(frame_color);
-  if (back_button_)
+  if (caption_button_container_->window_controls_overlay_enabled()) {
+    caption_button_container_->SetBackground(
+        views::CreateSolidBackground(frame_color));
+  }
+
+  if (icon_color_id.has_value()) {
+    caption_button_container_->SetButtonIconColor(*icon_color_id);
+    if (back_button_) {
+      back_button_->SetIconColorId(*icon_color_id);
+    }
+    if (center_button_) {
+      center_button_->SetIconColorId(*icon_color_id);
+    }
+    return;
+  }
+  caption_button_container_->SetButtonBackgroundColor(frame_color);
+  if (back_button_) {
     back_button_->SetBackgroundColor(frame_color);
-  if (center_button_)
+  }
+  if (center_button_) {
     center_button_->SetBackgroundColor(frame_color);
+  }
 }
 
 void FrameHeader::PaintTitleBar(gfx::Canvas* canvas) {

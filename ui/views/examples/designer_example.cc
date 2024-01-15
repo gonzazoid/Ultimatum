@@ -6,12 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/ranges/ranges.h"
 #include "base/strings/utf_string_conversions.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "third_party/skia/include/core/SkPath.h"
 #include "ui/base/cursor/cursor.h"
+#include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/metadata/metadata_types.h"
@@ -38,6 +39,7 @@
 #include "ui/views/controls/table/table_view.h"
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/examples/examples_color_id.h"
+#include "ui/views/examples/grit/views_examples_resources.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/layout/box_layout_view.h"
 #include "ui/views/metadata/view_factory.h"
@@ -48,8 +50,9 @@
 namespace views::examples {
 
 class DesignerSurface : public View {
+  METADATA_HEADER(DesignerSurface, View)
+
  public:
-  METADATA_HEADER(DesignerSurface);
   explicit DesignerSurface(int grid_size = 8);
   DesignerSurface(const DesignerSurface&) = delete;
   DesignerSurface& operator=(const DesignerSurface&) = delete;
@@ -104,7 +107,7 @@ void DesignerSurface::RebuildGridImage() {
   grid_image_ = gfx::ImageSkia::CreateFrom1xBitmap(grid_canvas->GetBitmap());
 }
 
-BEGIN_METADATA(DesignerSurface, View)
+BEGIN_METADATA(DesignerSurface)
 ADD_PROPERTY_METADATA(int, GridSize)
 END_METADATA
 
@@ -153,7 +156,11 @@ class ClassRegistration<Combobox> : public BaseClassRegistration,
   ClassRegistration() = default;
   ~ClassRegistration() override = default;
   std::unique_ptr<View> CreateView() override {
-    return std::make_unique<Combobox>(this);
+    return Builder<Combobox>()
+        .SetModel(this)
+        .SetAccessibleName(
+            l10n_util::GetStringUTF16(IDS_DESIGNER_COMBOBOX_NAME))
+        .Build();
   }
   std::u16string GetViewClassName() override {
     return base::ASCIIToUTF16(Combobox::MetaData()->type_name());
@@ -188,6 +195,8 @@ class ClassRegistration<Textfield> : public BaseClassRegistration {
     return Builder<Textfield>()
         .SetText(text)
         .SetDefaultWidthInChars(text.size())
+        .SetAccessibleName(
+            l10n_util::GetStringUTF16(IDS_DESIGNER_TEXTFIELD_NAME))
         .Build();
   }
   std::u16string GetViewClassName() override {
@@ -227,7 +236,10 @@ class ClassRegistration<ToggleButton> : public BaseClassRegistration {
   ClassRegistration() = default;
   ~ClassRegistration() override = default;
   std::unique_ptr<View> CreateView() override {
-    return std::make_unique<ToggleButton>();
+    return Builder<ToggleButton>()
+        .SetAccessibleName(
+            l10n_util::GetStringUTF16(IDS_DESIGNER_IMAGEBUTTON_NAME))
+        .Build();
   }
   std::u16string GetViewClassName() override {
     return base::ASCIIToUTF16(ToggleButton::MetaData()->type_name());
@@ -241,8 +253,10 @@ class ClassRegistration<ImageButton> : public BaseClassRegistration {
   ~ClassRegistration() override = default;
   std::unique_ptr<View> CreateView() override {
     return Builder<ImageButton>()
-        .SetImage(Button::ButtonState::STATE_NORMAL,
-                  gfx::CreateVectorIcon(kPinIcon, ui::kColorIcon))
+        .SetImageModel(Button::ButtonState::STATE_NORMAL,
+                       ui::ImageModel::FromVectorIcon(kPinIcon, ui::kColorIcon))
+        .SetAccessibleName(
+            l10n_util::GetStringUTF16(IDS_DESIGNER_IMAGEBUTTON_NAME))
         .Build();
   }
   std::u16string GetViewClassName() override {
@@ -457,7 +471,10 @@ bool DesignerExample::GrabHandles::IsGrabHandle(View* view) {
 
 DesignerExample::DesignerExample() : ExampleBase("Designer") {}
 
-DesignerExample::~DesignerExample() = default;
+DesignerExample::~DesignerExample() {
+  if (tracker_.view())
+    inspector_->SetModel(nullptr);
+}
 
 void DesignerExample::CreateExampleView(View* container) {
   Builder<View>(container)
@@ -499,13 +516,17 @@ void DesignerExample::CreateExampleView(View* container) {
                                   .SetColumns({MakeColumn(0, u"Name", true),
                                                MakeColumn(1, u"Value", false)})
                                   .SetModel(this)
-                                  .SetTableType(views::TEXT_ONLY)
+                                  .SetTableType(views::TableType::kTextOnly)
                                   .SetSingleSelection(true))
                               .SetPreferredSize(gfx::Size(250, 400)))))
       .BuildChildren();
   grab_handles_.Initialize(designer_panel_);
   designer_container_->SetFlexForView(designer_panel_, 75);
   class_registrations_ = GetClassRegistrations();
+
+  // TODO(crbug.com/1392538): Refactor such that the TableModel is not
+  // responsible for managing the lifetimes of views
+  tracker_.SetView(inspector_);
 }
 
 void DesignerExample::OnEvent(ui::Event* event) {

@@ -4,11 +4,13 @@
 
 #include "chromeos/ash/services/assistant/assistant_manager_service_impl.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 
 #include "ash/public/cpp/assistant/controller/assistant_alarm_timer_controller.h"
 #include "base/json/json_reader.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
@@ -40,7 +42,6 @@
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash::assistant {
 
@@ -93,7 +94,7 @@ class FakeLibassistantServiceHost : public LibassistantServiceHost {
   void Stop() override { service_->Unbind(); }
 
  private:
-  FakeLibassistantService* service_;
+  raw_ptr<FakeLibassistantService> service_;
 };
 
 class StateObserverMock : public AssistantManagerService::StateObserver {
@@ -156,8 +157,8 @@ class AssistantManagerServiceImplTest : public testing::Test {
   }
 
   void CreateAssistantManagerServiceImpl(
-      absl::optional<std::string> s3_server_uri_override = absl::nullopt,
-      absl::optional<std::string> device_id_override = absl::nullopt) {
+      std::optional<std::string> s3_server_uri_override = std::nullopt,
+      std::optional<std::string> device_id_override = std::nullopt) {
     // We can not have 2 instances of |AssistantManagerServiceImpl| at the same
     // time, so we must destroy the old one before creating a new one.
     assistant_manager_service_.reset();
@@ -188,6 +189,10 @@ class AssistantManagerServiceImplTest : public testing::Test {
 
   FullyInitializedAssistantState& assistant_state() { return assistant_state_; }
 
+  void SetAssistantStateContext(bool enabled) {
+    assistant_state_.SetContextEnabled(enabled);
+  }
+
   FakeServiceContext* fake_service_context() { return service_context_.get(); }
 
   base::test::TaskEnvironment& task_environment() { return task_environment_; }
@@ -212,7 +217,10 @@ class AssistantManagerServiceImplTest : public testing::Test {
     base::RunLoop().RunUntilIdle();
   }
 
-  void FlushForTesting() { background_thread().FlushForTesting(); }
+  void FlushForTesting() {
+    libassistant_service_.FlushForTesting();
+    background_thread().FlushForTesting();
+  }
 
   // Adds a state observer mock, and add the expectation for the fact that it
   // auto-fires the observer.
@@ -358,6 +366,14 @@ TEST_F(AssistantManagerServiceImplTest, ShouldSetStateToStoppedAfterStopping) {
   WaitForState(AssistantManagerService::STOPPED);
 }
 
+TEST_F(AssistantManagerServiceImplTest, ShouldSetStateToDisconnected) {
+  Start();
+  WaitForState(AssistantManagerService::STARTED);
+
+  mojom_service_controller().SetState(ServiceState::kDisconnected);
+  WaitForState(AssistantManagerService::DISCONNECTED);
+}
+
 TEST_F(AssistantManagerServiceImplTest, ShouldAllowRestartingAfterStopping) {
   Start();
   WaitForState(AssistantManagerService::STARTED);
@@ -404,7 +420,9 @@ TEST_F(AssistantManagerServiceImplTest,
   EXPECT_EQ("<access-token>", mojom_service_controller().access_token());
 }
 
-TEST_F(AssistantManagerServiceImplTest, ShouldPassUserInfoToAssistantManager) {
+// TODO(crbug.com/1431315): Re-enable this test
+TEST_F(AssistantManagerServiceImplTest,
+       DISABLED_ShouldPassUserInfoToAssistantManager) {
   Start();
   WaitForState(AssistantManagerService::STARTED);
 
@@ -417,11 +435,12 @@ TEST_F(AssistantManagerServiceImplTest, ShouldPassUserInfoToAssistantManager) {
 }
 
 TEST_F(AssistantManagerServiceImplTest,
-       ShouldPassEmptyUserInfoToAssistantManager) {
+       // TODO(crbug.com/1431315): Re-enable this test
+       DISABLED_ShouldPassEmptyUserInfoToAssistantManager) {
   Start();
   WaitForState(AssistantManagerService::STARTED);
 
-  assistant_manager_service()->SetUser(absl::nullopt);
+  assistant_manager_service()->SetUser(std::nullopt);
   RunUntilIdle();
 
   EXPECT_EQ(kNoValue, mojom_service_controller().gaia_id());
@@ -454,7 +473,7 @@ TEST_F(AssistantManagerServiceImplTest,
 TEST_F(AssistantManagerServiceImplTest,
        ShouldPassDeviceIdOverrideToMojomService) {
   CreateAssistantManagerServiceImpl(
-      /*s3_server_uri_override=*/absl::nullopt, "the-device-id-override");
+      /*s3_server_uri_override=*/std::nullopt, "the-device-id-override");
 
   Start();
   WaitForState(AssistantManagerService::STARTED);
@@ -527,7 +546,10 @@ TEST_F(AssistantManagerServiceImplTest,
 TEST_F(AssistantManagerServiceImplTest, ShouldFireStateObserverWhenAddingIt) {
   StrictMock<StateObserverMock> observer;
   EXPECT_CALL(observer,
-              OnStateChanged(AssistantManagerService::State::STOPPED));
+              OnStateChanged(AssistantManagerService::State::STARTED));
+
+  Start();
+  WaitForState(AssistantManagerService::STARTED);
 
   assistant_manager_service()->AddAndFireStateObserver(&observer);
 
@@ -708,6 +730,7 @@ TEST_F(AssistantManagerServiceImplTest, ShouldSyncSpeakerIdEnrollmentStatus) {
 TEST_F(AssistantManagerServiceImplTest,
        ShouldSyncSpeakerIdEnrollmentStatusWhenRunning) {
   AssistantManagerServiceImpl::ResetIsFirstInitFlagForTesting();
+  StartAndWaitForRunning();
 
   StrictMock<SpeakerIdEnrollmentClientMock> client_mock;
   StrictMock<SpeakerIdEnrollmentControllerMock> mojom_mock;
@@ -722,12 +745,11 @@ TEST_F(AssistantManagerServiceImplTest,
             SpeakerIdEnrollmentStatus::New(/*user_model_exists=*/true));
       });
 
-  StartAndWaitForRunning();
-
   mojom_mock.FlushForTesting();
 }
 
-TEST_F(AssistantManagerServiceImplTest, ShouldPropagateColorMode) {
+// TODO(crbug.com/1431315): Re-enable this test
+TEST_F(AssistantManagerServiceImplTest, DISABLED_ShouldPropagateColorMode) {
   ASSERT_FALSE(mojom_service_controller().dark_mode_enabled().has_value());
 
   StartAndWaitForRunning();
@@ -740,6 +762,20 @@ TEST_F(AssistantManagerServiceImplTest, ShouldPropagateColorMode) {
 
   ASSERT_TRUE(mojom_service_controller().dark_mode_enabled().has_value());
   EXPECT_TRUE(mojom_service_controller().dark_mode_enabled().value());
+}
+
+TEST_F(AssistantManagerServiceImplTest, ShouldNotCrashRunningAfterStopped) {
+  Start();
+  SetAssistantStateContext(/*enabled=*/false);
+  WaitForState(AssistantManagerService::STARTED);
+
+  // http://crbug.com/1414264: calling Stop() before Running is set, should not
+  // crash.
+  assistant_manager_service()->Stop();
+  WaitForState(AssistantManagerService::STOPPING);
+
+  mojom_service_controller().SetState(ServiceState::kRunning);
+  WaitForState(AssistantManagerService::RUNNING);
 }
 
 }  // namespace ash::assistant

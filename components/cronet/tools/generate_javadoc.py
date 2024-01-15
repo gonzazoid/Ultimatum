@@ -5,6 +5,7 @@
 # found in the LICENSE file.
 
 import argparse
+import itertools
 import os
 import shutil
 import sys
@@ -17,6 +18,7 @@ sys.path.insert(0, os.path.join(REPOSITORY_ROOT, 'build/android/gyp'))
 sys.path.insert(0, os.path.join(REPOSITORY_ROOT, 'net/tools/net_docs'))
 # pylint: disable=wrong-import-position
 from util import build_utils
+import action_helpers  # build_utils adds //build to sys.path.
 import net_docs
 from markdown.postprocessors import Postprocessor
 from markdown.extensions import Extension
@@ -24,8 +26,11 @@ from markdown.extensions import Extension
 
 DOCLAVA_DIR = os.path.join(REPOSITORY_ROOT, 'buildtools', 'android', 'doclava')
 SDK_DIR = os.path.join(REPOSITORY_ROOT, 'third_party', 'android_sdk', 'public')
-JAVADOC_PATH = os.path.join(build_utils.JAVA_HOME, 'bin', 'javadoc')
-JAR_PATH = os.path.join(build_utils.JAVA_HOME, 'bin', 'jar')
+# TODO(b/260694901) Remove this usage of Java 11 as soon as Doclava supports it.
+# Doclava support for JDK17 was actively being worked on as of Jan 2023.
+JAVA_11_HOME = os.path.join(REPOSITORY_ROOT, 'third_party', 'jdk11', 'current')
+JAVADOC_PATH = os.path.join(JAVA_11_HOME, 'bin', 'javadoc')
+JAR_PATH = os.path.join(JAVA_11_HOME, 'bin', 'jar')
 
 JAVADOC_WARNING = """\
 javadoc: warning - The old Doclet and Taglet APIs in the packages
@@ -57,7 +62,7 @@ def GenerateJavadoc(args, src_dir, output_dir):
 
   build_utils.DeleteDirectory(output_dir)
   build_utils.MakeDirectory(output_dir)
-  classpath = ([android_sdk_jar, args.support_annotations_jar] +
+  classpath = ([android_sdk_jar] + args.support_annotations_jars +
                args.classpath_jars)
   javadoc_cmd = [
       os.path.abspath(JAVADOC_PATH),
@@ -110,7 +115,7 @@ def GenerateJavadoc(args, src_dir, output_dir):
 
 def main(argv):
   parser = argparse.ArgumentParser()
-  build_utils.AddDepfileOption(parser)
+  action_helpers.add_depfile_arg(parser)
   parser.add_argument('--output-dir', help='Directory to put javadoc')
   parser.add_argument('--input-dir', help='Root of cronet source')
   parser.add_argument('--input-src-jar', help='Cronet api source jar')
@@ -118,13 +123,21 @@ def main(argv):
   parser.add_argument('--readme-file', help='Path of the README.md')
   parser.add_argument('--zip-file', help='Path to ZIP archive of javadocs.')
   parser.add_argument('--android-sdk-jar', help='Path to android.jar')
-  parser.add_argument('--support-annotations-jar',
-                      help='Path to support-annotations-$VERSION.jar')
+  parser.add_argument('--support-annotations-jars',
+                      help='Path to support-annotations-$VERSION.jar',
+                      action='append',
+                      nargs='*')
   parser.add_argument('--classpath-jars',
-                      help='Paths to jars needed by support-annotations-jar.')
+                      help='Paths to jars needed by support-annotations-jar.',
+                      action='append',
+                      nargs='*')
   expanded_argv = build_utils.ExpandFileArgs(argv)
   args, _ = parser.parse_known_args(expanded_argv)
-  args.classpath_jars = build_utils.ParseGnList(args.classpath_jars)
+
+  args.classpath_jars = action_helpers.parse_gn_list(args.classpath_jars)
+
+  args.support_annotations_jars = list(
+      itertools.chain(*args.support_annotations_jars))
   # A temporary directory to put the output of cronet api source jar files.
   unzipped_jar_path = tempfile.mkdtemp(dir=args.output_dir)
   if os.path.exists(args.input_src_jar):
@@ -154,11 +167,11 @@ def main(argv):
       # Ignore .pyc files here, it might be re-generated during build.
       deps.extend(
           os.path.join(root, f) for f in filenames if not f.endswith('.pyc'))
-    if args.support_annotations_jar:
-      deps.append(args.support_annotations_jar)
+    if args.support_annotations_jars:
+      deps.extend(args.support_annotations_jars)
     if args.classpath_jars:
       deps.extend(args.classpath_jars)
-    build_utils.WriteDepfile(args.depfile, args.zip_file, deps)
+    action_helpers.write_depfile(args.depfile, args.zip_file, deps)
   # Clean up temporary output directory.
   build_utils.DeleteDirectory(unzipped_jar_path)
 

@@ -3,10 +3,10 @@
 # found in the LICENSE file.
 
 source_set("keyboard_assist") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "omnibox_assistive_keyboard_delegate.h",
-    "omnibox_assistive_keyboard_delegate.mm",
+    "omnibox_assistive_keyboard_mediator.h",
+    "omnibox_assistive_keyboard_mediator.mm",
     "omnibox_assistive_keyboard_views.h",
     "omnibox_assistive_keyboard_views.mm",
     "omnibox_assistive_keyboard_views_utils.h",
@@ -17,10 +17,6 @@ source_set("keyboard_assist") {
     "omnibox_keyboard_accessory_view.mm",
     "omnibox_ui_bar_button_item.h",
     "omnibox_ui_bar_button_item.mm",
-    "voice_search_keyboard_accessory_button.h",
-    "voice_search_keyboard_accessory_button.mm",
-    "voice_search_keyboard_bar_button_item.h",
-    "voice_search_keyboard_bar_button_item.mm",
   ]
   deps = [
     "resources:keyboard_accessory_lens",
@@ -28,19 +24,24 @@ source_set("keyboard_assist") {
     "resources:keyboard_accessory_voice_search",
     "//base",
     "//base:i18n",
+    "//components/search_engines",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/flags:system_flags",
-    "//ios/chrome/browser/search_engines:search_engines",
-    "//ios/chrome/browser/ui:feature_flags",
-    "//ios/chrome/browser/ui/commands",
+    "//ios/chrome/browser/search_engines/model",
+    "//ios/chrome/browser/search_engines/model:search_engines_util",
+    "//ios/chrome/browser/shared/public/commands",
+    "//ios/chrome/browser/shared/public/features",
+    "//ios/chrome/browser/shared/public/features:system_flags",
+    "//ios/chrome/browser/shared/ui/elements",
+    "//ios/chrome/browser/shared/ui/symbols",
+    "//ios/chrome/browser/shared/ui/util",
+    "//ios/chrome/browser/ui/bubble",
+    "//ios/chrome/browser/ui/lens:lens_availability",
     "//ios/chrome/browser/ui/lens:lens_entrypoint",
     "//ios/chrome/browser/ui/location_bar:constants",
     "//ios/chrome/browser/ui/omnibox:features",
     "//ios/chrome/browser/ui/omnibox:omnibox_internal",
-    "//ios/chrome/browser/ui/toolbar/public",
-    "//ios/chrome/browser/ui/util",
-    "//ios/chrome/browser/ui/util:util_swift",
-    "//ios/chrome/browser/voice",
+    "//ios/chrome/browser/voice/model",
+    "//ios/chrome/common:button_config",
     "//ios/chrome/common/ui/colors",
     "//ios/chrome/common/ui/util",
     "//ios/public/provider/chrome/browser/lens:lens_api",
@@ -51,21 +52,4 @@ source_set("keyboard_assist") {
   allow_circular_includes_from =
       [ "//ios/chrome/browser/ui/omnibox:omnibox_internal" ]
   frameworks = [ "UIKit.framework" ]
-}
-
-source_set("unit_tests") {
-  testonly = true
-  sources = [
-    "voice_search_keyboard_accessory_button_unittest.mm",
-    "voice_search_keyboard_bar_button_item_unittest.mm",
-  ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
-
-  deps = [
-    ":keyboard_assist",
-    "//ios/chrome/browser/voice",
-    "//ios/chrome/browser/voice:test_support",
-    "//testing/gtest",
-  ]
 }

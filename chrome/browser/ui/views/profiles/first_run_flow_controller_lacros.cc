@@ -4,14 +4,21 @@
 
 #include "chrome/browser/ui/views/profiles/first_run_flow_controller_lacros.h"
 
+#include "base/functional/callback.h"
 #include "base/logging.h"
-#include "chrome/browser/browser_process.h"
-#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
-#include "chrome/browser/ui/views/profiles/profile_management_step_controller.h"
-#include "chrome/browser/ui/views/profiles/profile_management_utils.h"
+#include "chrome/browser/ui/profiles/profile_picker.h"
+#include "chrome/browser/ui/views/profiles/profile_management_types.h"
 #include "chrome/browser/ui/views/profiles/profile_picker_signed_in_flow_controller.h"
+#include "chrome/browser/ui/webui/intro/intro_ui.h"
+#include "chrome/common/webui_url_constants.h"
+#include "components/signin/public/base/consent_level.h"
+#include "components/signin/public/base/signin_metrics.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
+#include "content/public/browser/web_contents.h"
+#include "content/public/browser/web_ui.h"
+#include "google_apis/gaia/core_account_id.h"
 
 namespace {
 // Registers a new `Observer` that will invoke `callback_` when `manager`
@@ -29,8 +36,9 @@ class OnRefreshTokensLoadedObserver : public signin::IdentityManager::Observer {
   void OnRefreshTokensLoaded() override {
     identity_manager_observation_.Reset();
 
-    if (callback_)
+    if (callback_) {
       std::move(callback_).Run();
+    }
   }
 
  private:
@@ -44,22 +52,26 @@ class OnRefreshTokensLoadedObserver : public signin::IdentityManager::Observer {
 class LacrosFirstRunSignedInFlowController
     : public ProfilePickerSignedInFlowController {
  public:
-  // `finish_flow_callback` will be called when the user completes the FRE, but
-  // might not be executed, for example if this object is destroyed before the
-  // flow is completed.
+  // `step_completed_callback` will be called when the user completes the step.
+  // It might not happen, for example if this object is destroyed before the
+  // step is completed.
   LacrosFirstRunSignedInFlowController(
       ProfilePickerWebContentsHost* host,
       Profile* profile,
+      const CoreAccountInfo& account_info,
       std::unique_ptr<content::WebContents> contents,
       base::OnceClosure sync_confirmation_seen_callback,
-      FinishFlowCallback finish_flow_callback)
-      : ProfilePickerSignedInFlowController(host,
-                                            profile,
-                                            std::move(contents),
-                                            absl::optional<SkColor>()),
+      base::OnceCallback<void(PostHostClearedCallback)> step_completed_callback)
+      : ProfilePickerSignedInFlowController(
+            host,
+            profile,
+            account_info,
+            std::move(contents),
+            signin_metrics::AccessPoint::ACCESS_POINT_FOR_YOU_FRE,
+            std::optional<SkColor>()),
         sync_confirmation_seen_callback_(
             std::move(sync_confirmation_seen_callback)),
-        finish_flow_callback_(std::move(finish_flow_callback)) {}
+        step_completed_callback_(std::move(step_completed_callback)) {}
 
   ~LacrosFirstRunSignedInFlowController() override = default;
 
@@ -68,8 +80,9 @@ class LacrosFirstRunSignedInFlowController
     signin::IdentityManager* identity_manager =
         IdentityManagerFactory::GetForProfile(profile());
 
-    if (can_retry_init_observer_)
+    if (can_retry_init_observer_) {
       can_retry_init_observer_.reset();
+    }
 
     LOG(WARNING) << "Init running "
                  << (identity_manager->AreRefreshTokensLoaded() ? "with"
@@ -97,8 +110,27 @@ class LacrosFirstRunSignedInFlowController
   }
 
   void FinishAndOpenBrowser(PostHostClearedCallback callback) override {
-    if (finish_flow_callback_.value())
-      std::move(finish_flow_callback_.value()).Run(std::move(callback));
+    if (step_completed_callback_) {
+      std::move(step_completed_callback_).Run(std::move(callback));
+    }
+  }
+
+  void SwitchToLacrosIntro(
+      signin::SigninChoiceCallback proceed_callback) override {
+    DCHECK(proceed_callback);
+
+    host()->ShowScreen(
+        contents(), GURL(chrome::kChromeUIIntroURL),
+        base::BindOnce(
+            &LacrosFirstRunSignedInFlowController::SwitchToIntroFinished,
+            // Unretained ok: callback is called by the owner of this instance.
+            base::Unretained(this), std::move(proceed_callback)));
+  }
+
+  void SwitchToManagedUserProfileNotice(
+      ManagedUserProfileNoticeUI::ScreenType type,
+      signin::SigninChoiceCallback proceed_callback) override {
+    NOTREACHED();
   }
 
   void SwitchToSyncConfirmation() override {
@@ -108,19 +140,35 @@ class LacrosFirstRunSignedInFlowController
     ProfilePickerSignedInFlowController::SwitchToSyncConfirmation();
   }
 
- protected:
-  void PreShowScreenForDebug() override {
-    LOG(WARNING) << "Calling ShowScreen()";
+ private:
+  void SwitchToIntroFinished(signin::SigninChoiceCallback proceed_callback) {
+    base::OnceCallback signin_choice_adapter_callback =
+        base::BindOnce([](IntroChoice choice) {
+          switch (choice) {
+            case IntroChoice::kContinueWithAccount:
+              // Note: Indicates that the profile is "new" but will not result
+              // in the creation of a new profile.
+              return signin::SigninChoice::SIGNIN_CHOICE_NEW_PROFILE;
+            case IntroChoice::kQuit:
+              return signin::SigninChoice::SIGNIN_CHOICE_CANCEL;
+          }
+        });
+
+    contents()
+        ->GetWebUI()
+        ->GetController()
+        ->GetAs<IntroUI>()
+        ->SetSigninChoiceCallback(
+            IntroSigninChoiceCallback(std::move(signin_choice_adapter_callback)
+                                          .Then(std::move(proceed_callback))));
   }
 
- private:
-  // Callback that gets called when the user gets to the last step of the FRE.
+  // Callback that gets called when the user gets to the sync confirmation
+  // screen.
   base::OnceClosure sync_confirmation_seen_callback_;
 
-  // Callback that will be called when the user completes all the steps in the
-  // flow, to finalize and close it.
-  FinishFlowCallback finish_flow_callback_;
-
+  // Callback that will be called when the user completes the step.
+  base::OnceCallback<void(PostHostClearedCallback)> step_completed_callback_;
   std::unique_ptr<signin::IdentityManager::Observer> can_retry_init_observer_;
 };
 
@@ -130,35 +178,11 @@ FirstRunFlowControllerLacros::FirstRunFlowControllerLacros(
     ProfilePickerWebContentsHost* host,
     ClearHostClosure clear_host_callback,
     Profile* profile,
-    ProfilePicker::DebugFirstRunExitedCallback first_run_exited_callback)
-    : ProfileManagementFlowController(host,
-                                      std::move(clear_host_callback),
-                                      Step::kPostSignInFlow),
+    ProfilePicker::FirstRunExitedCallback first_run_exited_callback)
+    : ProfileManagementFlowControllerImpl(host, std::move(clear_host_callback)),
+      profile_(profile),
       first_run_exited_callback_(std::move(first_run_exited_callback)) {
   DCHECK(first_run_exited_callback_);
-
-  auto mark_sync_confirmation_seen_callback =
-      base::BindOnce(&FirstRunFlowControllerLacros::MarkSyncConfirmationSeen,
-                     // Unretained ok: the callback is passed to a step that
-                     // the `this` will own and outlive.
-                     base::Unretained(this));
-  auto finish_flow_callback = FinishFlowCallback(
-      base::BindOnce(&FirstRunFlowControllerLacros::ExitFlowAndRun,
-                     // Unretained ok: the callback is passed to a step that
-                     // the `this` will own and outlive.
-                     base::Unretained(this),
-                     // Unretained ok: `signed_in_flow` will register a profile
-                     // keep alive.
-                     base::Unretained(profile)));
-  auto signed_in_flow = std::make_unique<LacrosFirstRunSignedInFlowController>(
-      host, profile,
-      content::WebContents::Create(content::WebContents::CreateParams(profile)),
-      std::move(mark_sync_confirmation_seen_callback),
-      std::move(finish_flow_callback));
-
-  RegisterStep(initial_step(),
-               ProfileManagementStepController::CreateForPostSignInFlow(
-                   host, std::move(signed_in_flow)));
 }
 
 FirstRunFlowControllerLacros::~FirstRunFlowControllerLacros() {
@@ -168,34 +192,60 @@ FirstRunFlowControllerLacros::~FirstRunFlowControllerLacros() {
     std::move(first_run_exited_callback_)
         .Run(sync_confirmation_seen_
                  ? ProfilePicker::FirstRunExitStatus::kQuitAtEnd
-                 : ProfilePicker::FirstRunExitStatus::kQuitEarly,
-             ProfilePicker::FirstRunExitSource::kControllerDestructor,
-             // Since the flow is exited already, we don't have anything to
-             // close or finish setting up, and the callback won't be executed
-             // anyway.
-             /*maybe_callback=*/base::OnceClosure());
+                 : ProfilePicker::FirstRunExitStatus::kQuitEarly);
+    // Since the flow is exited already, we don't have anything to close or
+    // finish setting up.
   }
 }
 
-void FirstRunFlowControllerLacros::ExitFlowAndRun(
-    Profile* profile,
-    PostHostClearedCallback callback) {
-  // We don't call `FinishFlowAndRunInBrowser()` directly, as
-  // `first_run_exited_callback_` should make a browser window available when
-  // it runs. If there is no browser, then we will create it as a fallback.
-  auto finish_flow_callback =
-      base::BindOnce(&FirstRunFlowControllerLacros::FinishFlowAndRunInBrowser,
-                     // Unretained ok: the flow will be closed when we run
-                     // `finish_flow_callback`, so `this` will still be alive.
-                     base::Unretained(this),
-                     // Unretained ok: the flow keeps the profile alive and
-                     // `first_run_exited_callback_` will open a browser for it.
-                     base::Unretained(profile), std::move(callback));
+void FirstRunFlowControllerLacros::Init(
+    StepSwitchFinishedCallback step_switch_finished_callback) {
+  SwitchToIdentityStepsFromPostSignIn(
+      profile_,
+      IdentityManagerFactory::GetForProfile(profile_)->GetPrimaryAccountInfo(
+          signin::ConsentLevel::kSignin),
+      content::WebContents::Create(
+          content::WebContents::CreateParams(profile_)),
+      std::move(step_switch_finished_callback));
+}
 
+void FirstRunFlowControllerLacros::CancelPostSignInFlow() {
+  NOTREACHED_NORETURN();  // The whole Lacros FRE is post-sign-in, it's not
+                          // cancellable.
+}
+
+bool FirstRunFlowControllerLacros::PreFinishWithBrowser() {
   std::move(first_run_exited_callback_)
-      .Run(ProfilePicker::FirstRunExitStatus::kCompleted,
-           ProfilePicker::FirstRunExitSource::kFlowFinished,
-           std::move(finish_flow_callback));
+      .Run(ProfilePicker::FirstRunExitStatus::kCompleted);
+  return true;
+}
+
+std::unique_ptr<ProfilePickerSignedInFlowController>
+FirstRunFlowControllerLacros::CreateSignedInFlowController(
+    Profile* signed_in_profile,
+    const CoreAccountInfo& account_info,
+    std::unique_ptr<content::WebContents> contents) {
+  DCHECK_EQ(profile_, signed_in_profile);
+
+  auto mark_sync_confirmation_seen_callback =
+      base::BindOnce(&FirstRunFlowControllerLacros::MarkSyncConfirmationSeen,
+                     // Unretained ok: the callback is passed to a step that
+                     // the `this` will own and outlive.
+                     base::Unretained(this));
+
+  auto signed_in_flow = std::make_unique<LacrosFirstRunSignedInFlowController>(
+      host(), profile_, account_info, std::move(contents),
+      std::move(mark_sync_confirmation_seen_callback),
+      // This is the last step: when it completes, finish and exit the whole
+      // flow.
+      base::BindOnce(&FirstRunFlowControllerLacros::FinishFlowAndRunInBrowser,
+                     // Unretained ok: the callback is passed to a step that
+                     // the `this` will own and outlive.
+                     base::Unretained(this),
+                     // Unretained ok: the steps register a profile alive and
+                     // will be alive until this callback runs.
+                     base::Unretained(signed_in_profile)));
+  return signed_in_flow;
 }
 
 void FirstRunFlowControllerLacros::MarkSyncConfirmationSeen() {

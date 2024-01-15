@@ -14,6 +14,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
 #include "components/content_settings/core/common/content_settings.h"
+#include "components/content_settings/core/common/content_settings_types.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/cookies/cookie_change_dispatcher.h"
@@ -31,6 +32,8 @@ class GURL;
 namespace network {
 class FirstPartySetsAccessDelegate;
 class SessionCleanupCookieStore;
+
+using SettingsChangeCallback = base::RepeatingClosure;
 
 // Wrap a cookie store in an implementation of the mojo cookie interface.
 class COMPONENT_EXPORT(NETWORK_SERVICE) CookieManager
@@ -50,6 +53,9 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) CookieManager
   CookieManager& operator=(const CookieManager&) = delete;
 
   ~CookieManager() override;
+
+  // Register a callback to be invoked just before settings change.
+  void AddSettingsWillChangeCallback(SettingsChangeCallback callback);
 
   const CookieSettings& cookie_settings() const { return cookie_settings_; }
 
@@ -75,7 +81,9 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) CookieManager
                           SetCanonicalCookieCallback callback) override;
   void DeleteCanonicalCookie(const net::CanonicalCookie& cookie,
                              DeleteCanonicalCookieCallback callback) override;
-  void SetContentSettings(const ContentSettingsForOneType& settings) override;
+  void SetContentSettings(ContentSettingsType content_settings_type,
+                          const ContentSettingsForOneType& settings,
+                          SetContentSettingsCallback callback) override;
   void DeleteCookies(mojom::CookieDeletionFilterPtr filter,
                      DeleteCookiesCallback callback) override;
   void DeleteSessionOnlyCookies(
@@ -88,6 +96,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) CookieManager
       mojo::PendingRemote<mojom::CookieChangeListener> listener) override;
   void CloneInterface(
       mojo::PendingReceiver<mojom::CookieManager> new_interface) override;
+  void SetPreCommitCallbackDelayForTesting(base::TimeDelta delay) override;
 
   size_t GetClientsBoundForTesting() const { return receivers_.size(); }
   size_t GetListenersRegisteredForTesting() const {
@@ -99,11 +108,9 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) CookieManager
                               AllowFileSchemeCookiesCallback callback) override;
   void SetForceKeepSessionState() override;
   void BlockThirdPartyCookies(bool block) override;
-  void SetContentSettingsForLegacyCookieAccess(
-      const ContentSettingsForOneType& settings) override;
-  void SetStorageAccessGrantSettings(
-      const ContentSettingsForOneType& settings,
-      SetStorageAccessGrantSettingsCallback callback) override;
+  void BlockTruncatedCookies(bool block) override;
+  void SetMitigationsEnabledFor3pcd(bool enable) override;
+  void SetTrackingProtectionEnabledFor3pcd(bool enable) override;
 
   // Configures |out| based on |params|. (This doesn't honor
   // allow_file_scheme_cookies, which affects the cookie store rather than the
@@ -115,24 +122,12 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) CookieManager
   // Causes the next call to GetCookieList to crash the process.
   static void CrashOnGetCookieList();
 
-  // Will convert a site's partitioned cookies into unpartitioned cookies. This
-  // may result in multiple cookies which have the same (partition_key, name,
-  // host_key, path), which violates the database's unique constraint. The
-  // algorithm we use to coalesce the cookies into a single unpartitioned cookie
-  // is the following:
-  //
-  // 1.  If one of the cookies has no partition key (i.e. it is unpartitioned)
-  //     choose this cookie.
-  //
-  // 2.  Choose the partitioned cookie with the most recent last_access_time.
-  //
-  // This function is a no-op when PartitionedCookies are disabled or
-  // PartitionedCookiesBypassOriginTrial is enabled.
-  // TODO(crbug.com/1296161): Delete this when the partitioned cookies Origin
-  // Trial ends.
-  void ConvertPartitionedCookiesToUnpartitioned(const GURL& url) override;
-
  private:
+  // This is called right before settings are about to change. This is used to
+  // give a chance to adjust expectations for observers that rely on the
+  // previous known settings.
+  void OnSettingsWillChange();
+
   // State associated with a CookieChangeListener.
   struct ListenerRegistration {
     ListenerRegistration();
@@ -162,6 +157,8 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) CookieManager
   // Note: RestrictedCookieManager and CookieAccessDelegate store pointers to
   // |cookie_settings_|.
   CookieSettings cookie_settings_;
+
+  SettingsChangeCallback settings_will_change_callback_;
 
   base::WeakPtrFactory<CookieManager> weak_factory_{this};
 };

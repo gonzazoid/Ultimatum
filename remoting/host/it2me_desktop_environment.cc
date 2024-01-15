@@ -8,13 +8,18 @@
 #include <utility>
 
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/memory/ptr_util.h"
+#include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
+#include "remoting/host/basic_desktop_environment.h"
 #include "remoting/host/client_session_control.h"
 #include "remoting/host/host_window.h"
 #include "remoting/host/host_window_proxy.h"
 #include "remoting/host/input_monitor/local_input_monitor.h"
-#include "remoting/host/session_terminator.h"
+#include "remoting/protocol/capability_names.h"
+#include "remoting/protocol/errors.h"
 
 #if BUILDFLAG(IS_POSIX)
 #include <sys/types.h>
@@ -91,35 +96,14 @@ It2MeDesktopEnvironment::It2MeDesktopEnvironment(
   }
 }
 
-bool It2MeDesktopEnvironment::InitializeCurtainMode() {
-#if BUILDFLAG(IS_CHROMEOS)
-  if (base::FeatureList::IsEnabled(features::kEnableCrdAdminRemoteAccess)) {
-    if (desktop_environment_options().enable_curtaining()) {
-      const auto* user_manager = user_manager::UserManager::Get();
-      // Don't allow the remote admin to hijack and curtain off a user's
-      // session.
-      if (user_manager->IsUserLoggedIn()) {
-        LOG(ERROR) << "Failed to activate curtain mode because a user is "
-                      "currently logged in.";
-        return false;
-      }
-
-      curtain_mode_ = std::make_unique<CurtainModeChromeOs>(ui_task_runner());
-      if (!curtain_mode_->Activate()) {
-        LOG(ERROR) << "Failed to activate the curtain mode.";
-        curtain_mode_ = nullptr;
-        return false;
-      }
-
-      // Log out the current user when a curtained off session is disconnected,
-      // to prevent a local passerby from gaining control of the logged-in
-      // session when they unplug the ethernet cable.
-      session_terminator_ = SessionTerminator::Create(ui_task_runner());
-      return true;
-    }
+std::string It2MeDesktopEnvironment::GetCapabilities() const {
+  std::string capabilities = BasicDesktopEnvironment::GetCapabilities();
+  if (desktop_environment_options().enable_file_transfer()) {
+    capabilities += " ";
+    capabilities += protocol::kFileTransferCapability;
   }
-#endif  // BUILDFLAG(IS_CHROMEOS)
-  return true;
+
+  return capabilities;
 }
 
 It2MeDesktopEnvironmentFactory::It2MeDesktopEnvironmentFactory(
@@ -140,14 +124,9 @@ std::unique_ptr<DesktopEnvironment> It2MeDesktopEnvironmentFactory::Create(
     const DesktopEnvironmentOptions& options) {
   DCHECK(caller_task_runner()->BelongsToCurrentThread());
 
-  std::unique_ptr<It2MeDesktopEnvironment> result(new It2MeDesktopEnvironment(
+  return base::WrapUnique(new It2MeDesktopEnvironment(
       caller_task_runner(), video_capture_task_runner(), input_task_runner(),
       ui_task_runner(), client_session_control, options));
-
-  if (!result->InitializeCurtainMode())
-    return nullptr;
-
-  return result;
 }
 
 }  // namespace remoting

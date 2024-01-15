@@ -7,7 +7,10 @@
 
 #include <string>
 
+#include "base/token.h"
 #include "chrome/browser/search/background/ntp_background.pb.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/skia/include/core/SkColor.h"
 #include "url/gurl.h"
 
 enum class ErrorType {
@@ -21,7 +24,13 @@ enum class ErrorType {
   SERVICE_ERROR,
 };
 
-std::string GetThumbnailImageOptionsForTesting();
+std::string GetThumbnailImageOptions();
+// Adds options for resizing an image to its url.
+// Without options added to the image, it is 512x512.
+// TODO(crbug.com/874339): Request resolution from service, instead of
+// setting it here.
+GURL AddOptionsToImageURL(const std::string& image_url,
+                          const std::string& image_options);
 
 // Background images are organized into collections, according to a theme. This
 // struct contains the data required to display information about a collection,
@@ -37,7 +46,8 @@ struct CollectionInfo {
   CollectionInfo& operator=(CollectionInfo&&);
 
   static CollectionInfo CreateFromProto(
-      const ntp::background::Collection& collection);
+      const ntp::background::Collection& collection,
+      absl::optional<GURL> preview_image_url);
 
   // A unique identifier for the collection.
   std::string collection_id;
@@ -63,10 +73,10 @@ struct CollectionImage {
 
   // default_image_options are applied to the image.image_url() if options
   // (specifying resolution, cropping, etc) are not already present.
-  static CollectionImage CreateFromProto(
-      const std::string& collection_id,
-      const ntp::background::Image& image,
-      const std::string& default_image_options);
+  static CollectionImage CreateFromProto(const std::string& collection_id,
+                                         const ntp::background::Image& image,
+                                         const GURL& default_image_url,
+                                         const GURL& thumbnail_image_url);
 
   // A unique identifier for the collection the image is in.
   std::string collection_id;
@@ -118,6 +128,16 @@ struct CustomBackground {
   // Url of the custom background selected by the user.
   GURL custom_background_url;
 
+  // Url of snapshot for the custom background selected by the user.
+  GURL custom_background_snapshot_url;
+
+  // Whether the image is a local resource.
+  bool is_uploaded_image;
+
+  // Id for local custom background. This can be empty if it is an uploaded
+  // local background, rather than from wallpaper search.
+  absl::optional<base::Token> local_background_id;
+
   // First attribution string for custom background.
   std::string custom_background_attribution_line_1;
 
@@ -127,8 +147,14 @@ struct CustomBackground {
   // Url to learn more info about the custom background.
   GURL custom_background_attribution_action_url;
 
-  // Id of the collection being used for "daily refresh".
+  // Id of the collection being used.
   std::string collection_id;
+
+  // Main color of the image.
+  absl::optional<SkColor> custom_background_main_color;
+
+  // Whether daily refresh is enabled.
+  bool daily_refresh_enabled;
 };
 
 #endif  // CHROME_BROWSER_SEARCH_BACKGROUND_NTP_BACKGROUND_DATA_H_

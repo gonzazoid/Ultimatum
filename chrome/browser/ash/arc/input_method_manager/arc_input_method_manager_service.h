@@ -6,11 +6,13 @@
 #define CHROME_BROWSER_ASH_ARC_INPUT_METHOD_MANAGER_ARC_INPUT_METHOD_MANAGER_SERVICE_H_
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
 #include "ash/components/arc/mojom/input_method_manager.mojom-forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list_types.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
 #include "chrome/browser/ash/arc/input_method_manager/arc_input_method_manager_bridge.h"
@@ -36,7 +38,7 @@ class ArcInputMethodManagerService
       public ArcInputMethodManagerBridge::Delegate,
       public ash::input_method::InputMethodManager::ImeMenuObserver,
       public ash::input_method::InputMethodManager::Observer,
-      public ui::IMEBridgeObserver {
+      public ash::IMEBridgeObserver {
  public:
   class Observer : public base::CheckedObserver {
    public:
@@ -101,7 +103,7 @@ class ArcInputMethodManagerService
                           Profile* profile,
                           bool show_message) override;
 
-  // ui::IMEBridgeObserver overrides:
+  // ash::IMEBridgeObserver overrides:
   void OnInputContextHandlerChanged() override;
 
   // Called when a11y keyboard option changed and disables ARC IME while a11y
@@ -146,7 +148,7 @@ class ArcInputMethodManagerService
   void SendHideVirtualKeyboard();
   void NotifyVirtualKeyboardVisibilityChange(bool visible);
 
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
 
   std::unique_ptr<ArcInputMethodManagerBridge> imm_bridge_;
   std::set<std::string> enabled_arc_ime_ids_;
@@ -166,7 +168,7 @@ class ArcInputMethodManagerService
 
   // The current (active) input method, observed for
   // OnVirtualKeyboardVisibilityChangedIfEnabled.
-  ui::InputMethod* input_method_ = nullptr;
+  raw_ptr<ui::InputMethod> input_method_ = nullptr;
   bool is_arc_ime_active_ = false;
 
   std::unique_ptr<InputConnectionImpl> active_connection_;

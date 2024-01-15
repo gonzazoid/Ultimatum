@@ -6,86 +6,37 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include <optional>
+#include "base/base64.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/numerics/safe_conversions.h"
-#include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/strings/string_piece.h"
+#include "base/test/values_test_util.h"
+#include "base/values.h"
+#include "components/headless/command_handler/headless_command_switches.h"
+#include "components/headless/test/pdf_utils.h"
 #include "content/public/test/browser_test.h"
-#include "headless/app/headless_shell_switches.h"
-#include "headless/lib/browser/headless_web_contents_impl.h"
-#include "headless/public/devtools/domains/io.h"
-#include "headless/public/devtools/domains/page.h"
-#include "headless/public/devtools/domains/runtime.h"
+#include "headless/public/switches.h"
 #include "headless/test/headless_browser_test.h"
+#include "headless/test/headless_browser_test_utils.h"
+#include "headless/test/headless_devtooled_browsertest.h"
 #include "pdf/pdf.h"
 #include "printing/buildflags/buildflags.h"
 #include "printing/pdf_render_settings.h"
 #include "printing/units.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/inspector_protocol/crdtp/dispatch.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size_conversions.h"
 #include "ui/gfx/geometry/size_f.h"
 
 namespace headless {
 
-namespace {
-
-// Utility class to render the specified PDF page into a bitmap and
-// inspect the resulting pixels.
-class PDFPageBitmap {
- public:
-  static constexpr int kColorChannels = 4;
-  static constexpr int kDpi = 300;
-
-  PDFPageBitmap() = default;
-  ~PDFPageBitmap() = default;
-
-  void Render(base::span<const uint8_t> pdf_span, int page_index) {
-    absl::optional<gfx::SizeF> page_size_in_points =
-        chrome_pdf::GetPDFPageSizeByIndex(pdf_span, page_index);
-    ASSERT_TRUE(page_size_in_points.has_value());
-
-    gfx::SizeF page_size_in_pixels =
-        gfx::ScaleSize(page_size_in_points.value(),
-                       static_cast<float>(kDpi) / printing::kPointsPerInch);
-
-    gfx::Rect page_rect(gfx::ToCeiledSize(page_size_in_pixels));
-
-    constexpr chrome_pdf::RenderOptions options = {
-        .stretch_to_bounds = false,
-        .keep_aspect_ratio = true,
-        .autorotate = true,
-        .use_color = true,
-        .render_device_type = chrome_pdf::RenderDeviceType::kPrinter,
-    };
-
-    bitmap_size_ = page_rect.size();
-    bitmap_data_.resize(kColorChannels * bitmap_size_.GetArea());
-    ASSERT_TRUE(chrome_pdf::RenderPDFPageToBitmap(
-        pdf_span, page_index, bitmap_data_.data(), bitmap_size_,
-        gfx::Size(kDpi, kDpi), options));
-  }
-
-  uint32_t GetPixelRGB(int x, int y) {
-    int pixel_index =
-        bitmap_size_.width() * y * kColorChannels + x * kColorChannels;
-    return bitmap_data_[pixel_index + 0]             // B
-           | (bitmap_data_[pixel_index + 1] << 8)    // G
-           | (bitmap_data_[pixel_index + 2] << 16);  // R
-  }
-
- protected:
-  std::vector<uint8_t> bitmap_data_;
-  gfx::Size bitmap_size_;
-};
-
-}  // namespace
-
-class HeadlessPDFPagesBrowserTest : public HeadlessAsyncDevTooledBrowserTest {
+class HeadlessPDFPagesBrowserTest : public HeadlessDevTooledBrowserTest {
  public:
   const double kPaperWidth = 10;
   const double kPaperHeight = 15;
@@ -95,38 +46,44 @@ class HeadlessPDFPagesBrowserTest : public HeadlessAsyncDevTooledBrowserTest {
   const int kDpi = 300;
 
   void RunDevTooledTest() override {
-    std::string height_expression = "document.body.style.height = '" +
-                                    base::NumberToString(kDocHeight) + "in'";
-    std::unique_ptr<runtime::EvaluateParams> params =
-        runtime::EvaluateParams::Builder()
-            .SetExpression("document.body.style.background = '#123456';" +
-                           height_expression)
-            .Build();
-    devtools_client_->GetRuntime()->Evaluate(
-        std::move(params),
+    std::string script =
+        "document.body.style.background = '#123456';"
+        "document.body.style.height = '" +
+        base::NumberToString(kDocHeight) + "in'";
+
+    devtools_client_.SendCommand(
+        "Runtime.evaluate", Param("expression", script),
         base::BindOnce(&HeadlessPDFPagesBrowserTest::OnPageSetupCompleted,
                        base::Unretained(this)));
   }
 
-  void OnPageSetupCompleted(std::unique_ptr<runtime::EvaluateResult> result) {
-    devtools_client_->GetPage()->GetExperimental()->PrintToPDF(
-        page::PrintToPDFParams::Builder()
-            .SetPrintBackground(true)
-            .SetPaperHeight(kPaperHeight)
-            .SetPaperWidth(kPaperWidth)
-            .SetMarginTop(0)
-            .SetMarginBottom(0)
-            .SetMarginLeft(0)
-            .SetMarginRight(0)
-            .Build(),
+  void OnPageSetupCompleted(base::Value::Dict) {
+    base::Value::Dict params;
+    params.Set("printBackground", true);
+    params.Set("paperHeight", kPaperHeight);
+    params.Set("paperWidth", kPaperWidth);
+    params.Set("marginTop", 0);
+    params.Set("marginBottom", 0);
+    params.Set("marginLeft", 0);
+    params.Set("marginRight", 0);
+
+    devtools_client_.SendCommand(
+        "Page.printToPDF", std::move(params),
         base::BindOnce(&HeadlessPDFPagesBrowserTest::OnPDFCreated,
                        base::Unretained(this)));
   }
 
-  void OnPDFCreated(std::unique_ptr<page::PrintToPDFResult> result) {
-    protocol::Binary pdf_data = result->GetData();
+  void OnPDFCreated(base::Value::Dict result) {
+    std::string pdf_data_base64 = DictString(result, "result.data");
+    ASSERT_FALSE(pdf_data_base64.empty());
+
+    std::string pdf_data;
+    ASSERT_TRUE(base::Base64Decode(pdf_data_base64, &pdf_data));
     EXPECT_GT(pdf_data.size(), 0U);
-    auto pdf_span = base::make_span(pdf_data.data(), pdf_data.size());
+
+    auto pdf_span = base::make_span(
+        reinterpret_cast<const uint8_t*>(pdf_data.data()), pdf_data.size());
+
     int num_pages;
     EXPECT_TRUE(chrome_pdf::GetPDFDocInfo(pdf_span, &num_pages, nullptr));
     EXPECT_EQ(std::ceil(kDocHeight / kPaperHeight), num_pages);
@@ -139,7 +96,7 @@ class HeadlessPDFPagesBrowserTest : public HeadlessAsyncDevTooledBrowserTest {
         .render_device_type = chrome_pdf::RenderDeviceType::kPrinter,
     };
     for (int i = 0; i < num_pages; i++) {
-      absl::optional<gfx::SizeF> size_in_points =
+      std::optional<gfx::SizeF> size_in_points =
           chrome_pdf::GetPDFPageSizeByIndex(pdf_span, i);
       ASSERT_TRUE(size_in_points.has_value());
       EXPECT_EQ(static_cast<int>(size_in_points.value().width()),
@@ -160,79 +117,88 @@ class HeadlessPDFPagesBrowserTest : public HeadlessAsyncDevTooledBrowserTest {
       EXPECT_EQ(0x34, page_bitmap_data[1]);  // G
       EXPECT_EQ(0x12, page_bitmap_data[2]);  // R
     }
+
     FinishAsynchronousTest();
   }
 };
 
-HEADLESS_ASYNC_DEVTOOLED_TEST_F(HeadlessPDFPagesBrowserTest);
+HEADLESS_DEVTOOLED_TEST_F(HeadlessPDFPagesBrowserTest);
 
-class HeadlessPDFStreamBrowserTest : public HeadlessAsyncDevTooledBrowserTest {
+class HeadlessPDFStreamBrowserTest : public HeadlessDevTooledBrowserTest {
  public:
   const double kPaperWidth = 10;
   const double kPaperHeight = 15;
   const double kDocHeight = 50;
 
   void RunDevTooledTest() override {
-    std::string height_expression = "document.body.style.height = '" +
-                                    base::NumberToString(kDocHeight) + "in'";
-    std::unique_ptr<runtime::EvaluateParams> params =
-        runtime::EvaluateParams::Builder()
-            .SetExpression(height_expression)
-            .Build();
-    devtools_client_->GetRuntime()->Evaluate(
-        std::move(params),
+    std::string script = "document.body.style.height = '" +
+                         base::NumberToString(kDocHeight) + "in'";
+
+    devtools_client_.SendCommand(
+        "Runtime.evaluate", Param("expression", script),
         base::BindOnce(&HeadlessPDFStreamBrowserTest::OnPageSetupCompleted,
                        base::Unretained(this)));
   }
 
-  void OnPageSetupCompleted(std::unique_ptr<runtime::EvaluateResult> result) {
-    devtools_client_->GetPage()->GetExperimental()->PrintToPDF(
-        page::PrintToPDFParams::Builder()
-            .SetTransferMode(page::PrintToPDFTransferMode::RETURN_AS_STREAM)
-            .SetPaperHeight(kPaperHeight)
-            .SetPaperWidth(kPaperWidth)
-            .SetMarginTop(0)
-            .SetMarginBottom(0)
-            .SetMarginLeft(0)
-            .SetMarginRight(0)
-            .Build(),
+  void OnPageSetupCompleted(base::Value::Dict) {
+    base::Value::Dict params;
+    params.Set("transferMode", "ReturnAsStream");
+    params.Set("printBackground", true);
+    params.Set("paperHeight", kPaperHeight);
+    params.Set("paperWidth", kPaperWidth);
+    params.Set("marginTop", 0);
+    params.Set("marginBottom", 0);
+    params.Set("marginLeft", 0);
+    params.Set("marginRight", 0);
+
+    devtools_client_.SendCommand(
+        "Page.printToPDF", std::move(params),
         base::BindOnce(&HeadlessPDFStreamBrowserTest::OnPDFCreated,
                        base::Unretained(this)));
   }
 
-  void OnPDFCreated(std::unique_ptr<page::PrintToPDFResult> result) {
-    EXPECT_EQ(result->GetData().size(), 0U);
-    stream_ = result->GetStream();
-    devtools_client_->GetIO()->Read(
-        stream_, base::BindOnce(&HeadlessPDFStreamBrowserTest::OnReadChunk,
-                                base::Unretained(this)));
+  void OnPDFCreated(base::Value::Dict result) {
+    EXPECT_THAT(result, DictHasValue("result.data", std::string()));
+
+    stream_ = DictString(result, "result.stream");
+
+    devtools_client_.SendCommand(
+        "IO.read", Param("handle", std::string(stream_)),
+        base::BindOnce(&HeadlessPDFStreamBrowserTest::OnReadChunk,
+                       base::Unretained(this)));
   }
 
-  void OnReadChunk(std::unique_ptr<io::ReadResult> result) {
-    base64_data_ = base64_data_ + result->GetData();
-    if (result->GetEof()) {
+  void OnReadChunk(base::Value::Dict result) {
+    EXPECT_THAT(result, DictHasValue("result.base64Encoded", true));
+
+    const std::string base64_pdf_data_chunk = DictString(result, "result.data");
+    base64_pdf_data_.append(base64_pdf_data_chunk);
+
+    if (DictBool(result, "result.eof")) {
       OnPDFLoaded();
     } else {
-      devtools_client_->GetIO()->Read(
-          stream_, base::BindOnce(&HeadlessPDFStreamBrowserTest::OnReadChunk,
-                                  base::Unretained(this)));
+      devtools_client_.SendCommand(
+          "IO.read", Param("handle", std::string(stream_)),
+          base::BindOnce(&HeadlessPDFStreamBrowserTest::OnReadChunk,
+                         base::Unretained(this)));
     }
   }
 
   void OnPDFLoaded() {
-    EXPECT_GT(base64_data_.size(), 0U);
-    bool success;
-    protocol::Binary pdf_data =
-        protocol::Binary::fromBase64(base64_data_, &success);
-    EXPECT_TRUE(success);
+    EXPECT_GT(base64_pdf_data_.size(), 0U);
+
+    std::string pdf_data;
+    ASSERT_TRUE(base::Base64Decode(base64_pdf_data_, &pdf_data));
     EXPECT_GT(pdf_data.size(), 0U);
-    auto pdf_span = base::make_span(pdf_data.data(), pdf_data.size());
+
+    auto pdf_span = base::make_span(
+        reinterpret_cast<const uint8_t*>(pdf_data.data()), pdf_data.size());
 
     int num_pages;
     EXPECT_TRUE(chrome_pdf::GetPDFDocInfo(pdf_span, &num_pages, nullptr));
     EXPECT_EQ(std::ceil(kDocHeight / kPaperHeight), num_pages);
 
-    absl::optional<bool> tagged = chrome_pdf::IsPDFDocTagged(pdf_span);
+    std::optional<bool> tagged = chrome_pdf::IsPDFDocTagged(pdf_span);
     ASSERT_TRUE(tagged.has_value());
     EXPECT_FALSE(tagged.value());
 
@@ -241,64 +207,80 @@ class HeadlessPDFStreamBrowserTest : public HeadlessAsyncDevTooledBrowserTest {
 
  private:
   std::string stream_;
-  std::string base64_data_;
+  std::string base64_pdf_data_;
 };
 
-HEADLESS_ASYNC_DEVTOOLED_TEST_F(HeadlessPDFStreamBrowserTest);
+HEADLESS_DEVTOOLED_TEST_F(HeadlessPDFStreamBrowserTest);
 
-class HeadlessPDFBrowserTestBase : public HeadlessAsyncDevTooledBrowserTest,
-                                   public page::Observer {
+class HeadlessPDFBrowserTestBase : public HeadlessDevTooledBrowserTest {
  public:
   void RunDevTooledTest() override {
     ASSERT_TRUE(embedded_test_server()->Start());
 
-    devtools_client_->GetPage()->AddObserver(this);
+    devtools_client_.AddEventHandler(
+        "Page.loadEventFired",
+        base::BindRepeating(&HeadlessPDFBrowserTestBase::OnLoadEventFired,
+                            base::Unretained(this)));
+    SendCommandSync(devtools_client_, "Page.enable");
 
-    base::RunLoop run_loop(base::RunLoop::Type::kNestableTasksAllowed);
-    devtools_client_->GetPage()->Enable(run_loop.QuitClosure());
-    run_loop.Run();
-
-    devtools_client_->GetPage()->Navigate(
-        embedded_test_server()->GetURL(GetUrl()).spec());
+    devtools_client_.SendCommand(
+        "Page.navigate",
+        Param("url", embedded_test_server()->GetURL(GetUrl()).spec()));
   }
 
-  void OnLoadEventFired(const page::LoadEventFiredParams&) override {
-    devtools_client_->GetPage()->GetExperimental()->PrintToPDF(
-        GetPrintToPDFParams(),
+  void OnLoadEventFired(const base::Value::Dict&) {
+    devtools_client_.SendCommand(
+        "Page.printToPDF", GetPrintToPDFParams(),
         base::BindOnce(&HeadlessPDFBrowserTestBase::OnPDFCreated,
                        base::Unretained(this)));
   }
 
-  void OnPDFCreated(std::unique_ptr<page::PrintToPDFResult> result) {
-    if (result) {
-      protocol::Binary pdf_data = result->GetData();
+  void OnPDFCreated(base::Value::Dict result) {
+    std::optional<int> error_code = result.FindIntByDottedPath("error.code");
+    const std::string* error_message =
+        result.FindStringByDottedPath("error.message");
+    ASSERT_EQ(error_code.has_value(), !!error_message);
+    if (error_code || error_message) {
+      OnPDFFailure(*error_code, *error_message);
+    } else {
+      std::string pdf_data_base64 = DictString(result, "result.data");
+      ASSERT_FALSE(pdf_data_base64.empty());
+
+      std::string pdf_data;
+      ASSERT_TRUE(base::Base64Decode(pdf_data_base64, &pdf_data));
       ASSERT_GT(pdf_data.size(), 0U);
-      auto pdf_span = base::make_span(pdf_data.data(), pdf_data.size());
+
+      auto pdf_span = base::make_span(
+          reinterpret_cast<const uint8_t*>(pdf_data.data()), pdf_data.size());
       int num_pages;
       ASSERT_TRUE(chrome_pdf::GetPDFDocInfo(pdf_span, &num_pages, nullptr));
       OnPDFReady(pdf_span, num_pages);
-    } else {
-      OnPDFFailure();
     }
 
     FinishAsynchronousTest();
   }
 
   virtual const char* GetUrl() = 0;
-  virtual std::unique_ptr<page::PrintToPDFParams> GetPrintToPDFParams() {
-    return page::PrintToPDFParams::Builder()
-        .SetPrintBackground(true)
-        .SetPaperHeight(41)
-        .SetPaperWidth(41)
-        .SetMarginTop(0)
-        .SetMarginBottom(0)
-        .SetMarginLeft(0)
-        .SetMarginRight(0)
-        .Build();
+
+  virtual base::Value::Dict GetPrintToPDFParams() {
+    base::Value::Dict params;
+    params.Set("printBackground", true);
+    params.Set("paperHeight", 41);
+    params.Set("paperWidth", 41);
+    params.Set("marginTop", 0);
+    params.Set("marginBottom", 0);
+    params.Set("marginLeft", 0);
+    params.Set("marginRight", 0);
+
+    return params;
   }
+
   virtual void OnPDFReady(base::span<const uint8_t> pdf_span,
                           int num_pages) = 0;
-  virtual void OnPDFFailure() { EXPECT_TRUE(false); }
+
+  virtual void OnPDFFailure(int code, const std::string& message) {
+    ADD_FAILURE() << "code=" << code << " message: " << message;
+  }
 };
 
 class HeadlessPDFPageSizeRoundingBrowserTest
@@ -311,71 +293,80 @@ class HeadlessPDFPageSizeRoundingBrowserTest
   }
 };
 
-HEADLESS_ASYNC_DEVTOOLED_TEST_F(HeadlessPDFPageSizeRoundingBrowserTest);
+HEADLESS_DEVTOOLED_TEST_F(HeadlessPDFPageSizeRoundingBrowserTest);
 
 class HeadlessPDFPageRangesBrowserTest
     : public HeadlessPDFBrowserTestBase,
-      public testing::WithParamInterface<std::tuple<const char*, int>> {
+      public testing::WithParamInterface<
+          std::tuple<const char*, int, const char*>> {
  public:
   const char* GetUrl() override { return "/lorem_ipsum.html"; }
 
-  std::unique_ptr<page::PrintToPDFParams> GetPrintToPDFParams() override {
-    return page::PrintToPDFParams::Builder()
-        .SetPaperHeight(8.5)
-        .SetPaperWidth(11)
-        .SetMarginTop(0.5)
-        .SetMarginBottom(0.5)
-        .SetMarginLeft(0.5)
-        .SetMarginRight(0.5)
-        .SetPageRanges(page_ranges())
-        .Build();
+  base::Value::Dict GetPrintToPDFParams() override {
+    base::Value::Dict params;
+    params.Set("pageRanges", page_ranges());
+    params.Set("paperHeight", 8.5);
+    params.Set("paperWidth", 11);
+    params.Set("marginTop", 0.5);
+    params.Set("marginBottom", 0.5);
+    params.Set("marginLeft", 0.5);
+    params.Set("marginRight", 0.5);
+
+    return params;
   }
 
   void OnPDFReady(base::span<const uint8_t> pdf_span, int num_pages) override {
     EXPECT_THAT(num_pages, testing::Eq(expected_page_count()));
   }
 
-  void OnPDFFailure() override {
+  void OnPDFFailure(int code, const std::string& message) override {
     EXPECT_THAT(-1, testing::Eq(expected_page_count()));
+    EXPECT_THAT(
+        code, testing::Eq(static_cast<int>(crdtp::DispatchCode::SERVER_ERROR)));
+    EXPECT_THAT(message, testing::Eq(expected_error_message()));
   }
 
   std::string page_ranges() { return std::get<0>(GetParam()); }
   int expected_page_count() { return std::get<1>(GetParam()); }
+  std::string expected_error_message() { return std::get<2>(GetParam()); }
 };
 
-INSTANTIATE_TEST_SUITE_P(All,
-                         HeadlessPDFPageRangesBrowserTest,
-                         testing::Values(std::make_tuple("1-9", 4),
-                                         std::make_tuple("1-3", 3),
-                                         std::make_tuple("2-4", 3),
-                                         std::make_tuple("4-9", 1),
-                                         std::make_tuple("5-9", -1),
-                                         std::make_tuple("9-5", -1),
-                                         std::make_tuple("abc", -1)));
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    HeadlessPDFPageRangesBrowserTest,
+    testing::Values(
+        std::make_tuple("1-9", 4, ""),
+        std::make_tuple("1-3", 3, ""),
+        std::make_tuple("2-4", 3, ""),
+        std::make_tuple("4-9", 1, ""),
+        std::make_tuple("5-9", -1, "Page range exceeds page count"),
+        std::make_tuple("9-5", -1, "Page range is invalid (start > end)"),
+        std::make_tuple("abc", -1, "Page range syntax error")));
 
-HEADLESS_ASYNC_DEVTOOLED_TEST_P(HeadlessPDFPageRangesBrowserTest);
+HEADLESS_DEVTOOLED_TEST_P(HeadlessPDFPageRangesBrowserTest);
 
 class HeadlessPDFOOPIFBrowserTest : public HeadlessPDFBrowserTestBase {
  public:
   const char* GetUrl() override { return "/oopif.html"; }
 
-  std::unique_ptr<page::PrintToPDFParams> GetPrintToPDFParams() override {
-    return page::PrintToPDFParams::Builder()
-        .SetPrintBackground(true)
-        .SetPaperHeight(10)
-        .SetPaperWidth(15)
-        .SetMarginTop(0)
-        .SetMarginBottom(0)
-        .SetMarginLeft(0)
-        .SetMarginRight(0)
-        .Build();
+  base::Value::Dict GetPrintToPDFParams() override {
+    base::Value::Dict params;
+    params.Set("printBackground", true);
+    params.Set("paperHeight", 10);
+    params.Set("paperWidth", 15);
+    params.Set("marginTop", 0);
+    params.Set("marginBottom", 0);
+    params.Set("marginLeft", 0);
+    params.Set("marginRight", 0);
+
+    return params;
   }
 
   void OnPDFReady(base::span<const uint8_t> pdf_span, int num_pages) override {
     EXPECT_THAT(num_pages, testing::Eq(1));
 
     PDFPageBitmap page_image;
-    page_image.Render(pdf_span, 0);
+    ASSERT_TRUE(page_image.Render(pdf_span, 0));
 
     // Expect red iframe pixel at 1 inch into the page.
     EXPECT_EQ(page_image.GetPixelRGB(1 * PDFPageBitmap::kDpi,
@@ -384,9 +375,110 @@ class HeadlessPDFOOPIFBrowserTest : public HeadlessPDFBrowserTestBase {
   }
 };
 
-HEADLESS_ASYNC_DEVTOOLED_TEST_F(HeadlessPDFOOPIFBrowserTest);
+HEADLESS_DEVTOOLED_TEST_F(HeadlessPDFOOPIFBrowserTest);
 
-#if BUILDFLAG(ENABLE_TAGGED_PDF)
+class HeadlessPDFTinyPageBrowserTest
+    : public HeadlessPDFBrowserTestBase,
+      public testing::WithParamInterface<gfx::SizeF> {
+ public:
+  const char* GetUrl() override { return "/hello.html"; }
+
+  base::Value::Dict GetPrintToPDFParams() override {
+    // This tests that we can print into tiny pages as some WPT
+    // tests expect that.
+    base::Value::Dict params;
+    params.Set("paperHeight", paper_height());
+    params.Set("paperWidth", paper_width());
+    params.Set("marginTop", 0);
+    params.Set("marginBottom", 0);
+    params.Set("marginLeft", 0);
+    params.Set("marginRight", 0);
+
+    return params;
+  }
+
+  void OnPDFReady(base::span<const uint8_t> pdf_span, int num_pages) override {
+    EXPECT_GT(num_pages, 0);
+  }
+
+  void OnPDFFailure(int code, const std::string& message) override {
+    ADD_FAILURE() << "code=" << code << " message: " << message
+                  << " paper size: " << paper_size().ToString();
+  }
+
+  gfx::SizeF paper_size() const { return GetParam(); }
+  float paper_height() const { return paper_size().height(); }
+  float paper_width() const { return paper_size().width(); }
+};
+
+INSTANTIATE_TEST_SUITE_P(All,
+                         HeadlessPDFTinyPageBrowserTest,
+                         testing::Values(gfx::SizeF(0.1, 0.1),
+                                         gfx::SizeF(0.01, 0.01),
+                                         gfx::SizeF(0.001, 0.001)));
+
+HEADLESS_DEVTOOLED_TEST_P(HeadlessPDFTinyPageBrowserTest);
+
+class HeadlessPDFOversizeMarginsBrowserTest
+    : public HeadlessPDFBrowserTestBase {
+ public:
+  const char* GetUrl() override { return "/hello.html"; }
+
+  base::Value::Dict GetPrintToPDFParams() override {
+    // Set paper size to be smaller than the margins and expect content size
+    // error.
+    base::Value::Dict params;
+    params.Set("paperHeight", 0.1);
+    params.Set("paperWidth", 0.1);
+    params.Set("marginTop", 0.2);
+    params.Set("marginBottom", 0.2);
+    params.Set("marginLeft", 0.2);
+    params.Set("marginRight", 0.2);
+
+    return params;
+  }
+
+  void OnPDFReady(base::span<const uint8_t> pdf_span, int num_pages) override {
+    EXPECT_TRUE(false);
+  }
+
+  void OnPDFFailure(int code, const std::string& message) override {
+    EXPECT_THAT(
+        code,
+        testing::Eq(static_cast<int>(crdtp::DispatchCode::INVALID_PARAMS)));
+    EXPECT_THAT(message,
+                testing::Eq("invalid print parameters: content area is empty"));
+  }
+};
+
+HEADLESS_DEVTOOLED_TEST_F(HeadlessPDFOversizeMarginsBrowserTest);
+
+class HeadlessPDFDisableLazyLoading : public HeadlessPDFBrowserTestBase {
+ public:
+  const char* GetUrl() override { return "/page_with_lazy_image.html"; }
+
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    HeadlessPDFBrowserTestBase::SetUpCommandLine(command_line);
+    command_line->AppendSwitch(switches::kDisableLazyLoading);
+  }
+
+  base::Value::Dict GetPrintToPDFParams() override {
+    base::Value::Dict params;
+    params.Set("printBackground", true);
+
+    return params;
+  }
+
+  void OnPDFReady(base::span<const uint8_t> pdf_span, int num_pages) override {
+    EXPECT_THAT(num_pages, testing::Eq(5));
+    PDFPageBitmap page_image;
+    ASSERT_TRUE(page_image.Render(pdf_span, 4));
+    EXPECT_TRUE(page_image.CheckColoredRect(SkColorSetRGB(0x00, 0x64, 0x00),
+                                            SkColorSetRGB(0xff, 0xff, 0xff)));
+  }
+};
+
+HEADLESS_DEVTOOLED_TEST_F(HeadlessPDFDisableLazyLoading);
 
 const char kExpectedStructTreeJSON[] = R"({
    "lang": "en",
@@ -562,8 +654,8 @@ class HeadlessTaggedPDFBrowserTest
   void OnPDFReady(base::span<const uint8_t> pdf_span, int num_pages) override {
     EXPECT_THAT(num_pages, testing::Eq(1));
 
-    absl::optional<bool> tagged = chrome_pdf::IsPDFDocTagged(pdf_span);
-    EXPECT_THAT(tagged, testing::Optional(true));
+    std::optional<bool> tagged = chrome_pdf::IsPDFDocTagged(pdf_span);
+    ASSERT_THAT(tagged, testing::Optional(true));
 
     constexpr int kFirstPage = 0;
     base::Value struct_tree =
@@ -578,7 +670,7 @@ class HeadlessTaggedPDFBrowserTest
   }
 };
 
-HEADLESS_ASYNC_DEVTOOLED_TEST_P(HeadlessTaggedPDFBrowserTest);
+HEADLESS_DEVTOOLED_TEST_P(HeadlessTaggedPDFBrowserTest);
 
 INSTANTIATE_TEST_SUITE_P(All,
                          HeadlessTaggedPDFBrowserTest,
@@ -598,17 +690,71 @@ class HeadlessTaggedPDFDisabledBrowserTest
   void OnPDFReady(base::span<const uint8_t> pdf_span, int num_pages) override {
     EXPECT_THAT(num_pages, testing::Eq(1));
 
-    absl::optional<bool> tagged = chrome_pdf::IsPDFDocTagged(pdf_span);
+    std::optional<bool> tagged = chrome_pdf::IsPDFDocTagged(pdf_span);
     EXPECT_THAT(tagged, testing::Optional(false));
   }
 };
 
-HEADLESS_ASYNC_DEVTOOLED_TEST_P(HeadlessTaggedPDFDisabledBrowserTest);
+HEADLESS_DEVTOOLED_TEST_P(HeadlessTaggedPDFDisabledBrowserTest);
 
 INSTANTIATE_TEST_SUITE_P(All,
                          HeadlessTaggedPDFDisabledBrowserTest,
                          ::testing::ValuesIn(kTaggedPDFTestData));
 
-#endif  // BUILDFLAG(ENABLE_TAGGED_PDF)
+class HeadlessGenerateTaggedPDFBrowserTest
+    : public HeadlessPDFBrowserTestBase,
+      public ::testing::WithParamInterface<bool> {
+ public:
+  const char* GetUrl() override { return "/structured_doc.html"; }
+
+  base::Value::Dict GetPrintToPDFParams() override {
+    base::Value::Dict params;
+    params.Set("generateTaggedPDF", generate_tagged_pdf());
+    return params;
+  }
+
+  bool generate_tagged_pdf() { return GetParam(); }
+
+  void OnPDFReady(base::span<const uint8_t> pdf_span, int num_pages) override {
+    EXPECT_THAT(num_pages, testing::Eq(1));
+
+    std::optional<bool> is_pdf_tagged = chrome_pdf::IsPDFDocTagged(pdf_span);
+    EXPECT_THAT(is_pdf_tagged, testing::Optional(generate_tagged_pdf()));
+  }
+};
+
+HEADLESS_DEVTOOLED_TEST_P(HeadlessGenerateTaggedPDFBrowserTest);
+
+INSTANTIATE_TEST_SUITE_P(All,
+                         HeadlessGenerateTaggedPDFBrowserTest,
+                         ::testing::Bool());
+
+class HeadlessGenerateDocumentOutlinePDFBrowserTest
+    : public HeadlessPDFBrowserTestBase,
+      public ::testing::WithParamInterface<bool> {
+ public:
+  const char* GetUrl() override { return "/structured_doc.html"; }
+
+  base::Value::Dict GetPrintToPDFParams() override {
+    base::Value::Dict params;
+    params.Set("generateDocumentOutline", generate_document_outline());
+    return params;
+  }
+
+  bool generate_document_outline() { return GetParam(); }
+
+  void OnPDFReady(base::span<const uint8_t> pdf_span, int num_pages) override {
+    EXPECT_THAT(num_pages, testing::Eq(1));
+
+    std::optional<bool> has_outline = chrome_pdf::PDFDocHasOutline(pdf_span);
+    EXPECT_THAT(has_outline, testing::Optional(generate_document_outline()));
+  }
+};
+
+HEADLESS_DEVTOOLED_TEST_P(HeadlessGenerateDocumentOutlinePDFBrowserTest);
+
+INSTANTIATE_TEST_SUITE_P(All,
+                         HeadlessGenerateDocumentOutlinePDFBrowserTest,
+                         ::testing::Bool());
 
 }  // namespace headless

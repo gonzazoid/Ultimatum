@@ -3,19 +3,21 @@
 // found in the LICENSE file.
 
 #include "chrome/browser/navigation_predictor/anchor_element_preloader.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_functions.h"
 #include "chrome/browser/predictors/loading_predictor.h"
 #include "chrome/browser/predictors/loading_predictor_factory.h"
-#include "chrome/browser/prefetch/prefetch_prefs.h"
 #include "chrome/browser/preloading/chrome_preloading.h"
+#include "chrome/browser/preloading/preloading_prefs.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/preloading.h"
 #include "content/public/browser/preloading_data.h"
 #include "content/public/browser/web_contents.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
 #include "third_party/blink/public/common/features.h"
+#include "ui/base/page_transition_types.h"
 #include "url/scheme_host_port.h"
 
 namespace {
@@ -36,26 +38,28 @@ content::PreloadingFailureReason ToFailureReason(
 AnchorElementPreloader::~AnchorElementPreloader() = default;
 
 AnchorElementPreloader::AnchorElementPreloader(
-    content::RenderFrameHost& render_frame_host,
-    mojo::PendingReceiver<blink::mojom::AnchorElementInteractionHost> receiver)
-    : content::DocumentService<blink::mojom::AnchorElementInteractionHost>(
-          render_frame_host,
-          std::move(receiver)) {}
-
-void AnchorElementPreloader::Create(
-    content::RenderFrameHost* render_frame_host,
-    mojo::PendingReceiver<blink::mojom::AnchorElementInteractionHost>
-        receiver) {
-  CHECK(render_frame_host);
-  // The object is bound to the lifetime of the |render_frame_host| and the mojo
-  // connection. See DocumentService for details.
-  new AnchorElementPreloader(*render_frame_host, std::move(receiver));
-}
-
-void AnchorElementPreloader::OnPointerDown(const GURL& target) {
+    content::RenderFrameHost& render_frame_host)
+    : render_frame_host_(render_frame_host) {
   content::PreloadingData* preloading_data =
       content::PreloadingData::GetOrCreateForWebContents(
-          content::WebContents::FromRenderFrameHost(&render_frame_host()));
+          content::WebContents::FromRenderFrameHost(&*render_frame_host_));
+  preloading_data->SetIsNavigationInDomainCallback(
+      chrome_preloading_predictor::kPointerDownOnAnchor,
+      base::BindRepeating(
+          [](content::NavigationHandle* navigation_handle) -> bool {
+            return ui::PageTransitionCoreTypeIs(
+                       navigation_handle->GetPageTransition(),
+                       ui::PageTransition::PAGE_TRANSITION_LINK) &&
+                   ui::PageTransitionIsNewNavigation(
+                       navigation_handle->GetPageTransition());
+          }));
+}
+
+void AnchorElementPreloader::MaybePreconnect(const GURL& target) {
+  auto* web_contents =
+      content::WebContents::FromRenderFrameHost(&*render_frame_host_);
+  content::PreloadingData* preloading_data =
+      content::PreloadingData::GetOrCreateForWebContents(web_contents);
   url::SchemeHostPort scheme_host_port(target);
   content::PreloadingURLMatchCallback match_callback =
       base::BindRepeating(is_match_for_preconnect, scheme_host_port);
@@ -64,22 +68,25 @@ void AnchorElementPreloader::OnPointerDown(const GURL& target) {
   // likely compute the confidence by looking at different factors (e.g. anchor
   // element dimensions, last time since scroll, etc.).
   preloading_data->AddPreloadingPrediction(
-      ToPreloadingPredictor(ChromePreloadingPredictor::kPointerDownOnAnchor),
+      chrome_preloading_predictor::kPointerDownOnAnchor,
       /*confidence=*/100, match_callback);
   content::PreloadingAttempt* attempt = preloading_data->AddPreloadingAttempt(
-      ToPreloadingPredictor(ChromePreloadingPredictor::kPointerDownOnAnchor),
-      content::PreloadingType::kPreconnect, match_callback);
+      chrome_preloading_predictor::kPointerDownOnAnchor,
+      content::PreloadingType::kPreconnect, match_callback,
+      web_contents->GetPrimaryMainFrame()->GetPageUkmSourceId());
 
-  if (!prefetch::IsSomePreloadingEnabled(
-          *Profile::FromBrowserContext(render_frame_host().GetBrowserContext())
-               ->GetPrefs())) {
-    attempt->SetEligibility(
-        content::PreloadingEligibility::kPreloadingDisabled);
+  if (content::PreloadingEligibility eligibility =
+          prefetch::IsSomePreloadingEnabled(
+              *Profile::FromBrowserContext(
+                   render_frame_host_->GetBrowserContext())
+                   ->GetPrefs());
+      eligibility != content::PreloadingEligibility::kEligible) {
+    attempt->SetEligibility(eligibility);
     return;
   }
 
   auto* loading_predictor = predictors::LoadingPredictorFactory::GetForProfile(
-      Profile::FromBrowserContext(render_frame_host().GetBrowserContext()));
+      Profile::FromBrowserContext(render_frame_host_->GetBrowserContext()));
   if (!loading_predictor) {
     attempt->SetEligibility(ToPreloadingEligibility(
         ChromePreloadingEligibility::kUnableToGetLoadingPredictor));
@@ -89,13 +96,17 @@ void AnchorElementPreloader::OnPointerDown(const GURL& target) {
   attempt->SetEligibility(content::PreloadingEligibility::kEligible);
   RecordUmaPreloadedTriggered(AnchorElementPreloaderType::kPreconnect);
 
+  // In addition to the globally-controlled preloading config, check for the
+  // feature-specific holdback. We disable the feature if the user is in either
+  // of those holdbacks.
   if (base::GetFieldTrialParamByFeatureAsBool(
           blink::features::kAnchorElementInteraction, "preconnect_holdback",
           false)) {
     attempt->SetHoldbackStatus(content::PreloadingHoldbackStatus::kHoldback);
+  }
+  if (attempt->ShouldHoldback()) {
     return;
   }
-  attempt->SetHoldbackStatus(content::PreloadingHoldbackStatus::kAllowed);
 
   if (preconnected_targets_.find(scheme_host_port) !=
       preconnected_targets_.end()) {
@@ -119,8 +130,8 @@ void AnchorElementPreloader::OnPointerDown(const GURL& target) {
       content::PreloadingTriggeringOutcome::kTriggeredButOutcomeUnknown);
 
   net::SchemefulSite schemeful_site(target);
-  net::NetworkAnonymizationKey network_anonymization_key(schemeful_site,
-                                                         schemeful_site);
+  auto network_anonymization_key =
+      net::NetworkAnonymizationKey::CreateSameSite(schemeful_site);
   loading_predictor->PreconnectURLIfAllowed(target, /*allow_credentials=*/true,
                                             network_anonymization_key);
 }

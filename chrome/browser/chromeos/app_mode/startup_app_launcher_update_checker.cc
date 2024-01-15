@@ -6,17 +6,16 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/syslog_logging.h"
-#include "chrome/browser/chrome_notification_types.h"
+#include "base/version.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/updater/extension_updater.h"
 #include "chrome/browser/profiles/profile.h"
-#include "content/public/browser/notification_service.h"
 #include "extensions/browser/extension_system.h"
 #include "extensions/browser/updater/extension_downloader.h"
 
-namespace ash {
+namespace chromeos {
 
 StartupAppLauncherUpdateChecker::StartupAppLauncherUpdateChecker(
     Profile* profile)
@@ -34,17 +33,19 @@ bool StartupAppLauncherUpdateChecker::Run(UpdateCheckCallback callback) {
       extensions::ExtensionSystem::Get(profile_)
           ->extension_service()
           ->updater();
-  if (!updater)
+  if (!updater) {
     return false;
+  }
 
   callback_ = std::move(callback);
 
   update_found_ = false;
-  registrar_.Add(this, extensions::NOTIFICATION_EXTENSION_UPDATE_FOUND,
-                 content::NotificationService::AllSources());
 
   extensions::ExtensionUpdater::CheckParams params;
   params.install_immediately = true;
+  params.update_found_callback =
+      base::BindRepeating(&StartupAppLauncherUpdateChecker::MarkUpdateFound,
+                          weak_ptr_factory_.GetWeakPtr());
   params.callback =
       base::BindOnce(&StartupAppLauncherUpdateChecker::OnExtensionUpdaterDone,
                      weak_ptr_factory_.GetWeakPtr());
@@ -52,24 +53,17 @@ bool StartupAppLauncherUpdateChecker::Run(UpdateCheckCallback callback) {
   return true;
 }
 
-void StartupAppLauncherUpdateChecker::Observe(
-    int type,
-    const content::NotificationSource& source,
-    const content::NotificationDetails& details) {
-  DCHECK_EQ(extensions::NOTIFICATION_EXTENSION_UPDATE_FOUND, type);
-
-  const content::Details<extensions::UpdateDetails> update_details(details);
-  SYSLOG(INFO) << "Found extension update id=" << update_details->id
-               << " version=" << update_details->version.GetString();
+void StartupAppLauncherUpdateChecker::MarkUpdateFound(
+    const std::string& id,
+    const base::Version& version) {
+  SYSLOG(INFO) << "Found extension update id=" << id
+               << " version=" << version.GetString();
   update_found_ = true;
 }
 
 void StartupAppLauncherUpdateChecker::OnExtensionUpdaterDone() {
-  registrar_.Remove(this, extensions::NOTIFICATION_EXTENSION_UPDATE_FOUND,
-                    content::NotificationService::AllSources());
-
-  // It is not safe to use |this| after the callback has been run.
+  // It is not safe to use `this` after the callback has been run.
   std::move(callback_).Run(update_found_);
 }
 
-}  // namespace ash
+}  // namespace chromeos

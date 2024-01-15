@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "base/metrics/histogram_base.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/time/default_tick_clock.h"
 
@@ -20,21 +21,14 @@ MediaSessionUmaHelper::MediaSessionUmaHelper()
 MediaSessionUmaHelper::~MediaSessionUmaHelper()
 {}
 
-// static
-void MediaSessionUmaHelper::RecordMediaSessionUserAction(
-    MediaSessionUserAction action,
-    bool focused) {
-  UMA_HISTOGRAM_ENUMERATION("Media.Session.UserAction", action);
-  UMA_HISTOGRAM_BOOLEAN("Media.Session.UserAction.Focus", focused);
-}
-
 void MediaSessionUmaHelper::RecordSessionSuspended(
     MediaSessionSuspendedSource source) const {
   UMA_HISTOGRAM_ENUMERATION("Media.Session.Suspended", source);
 }
 
-void MediaSessionUmaHelper::RecordRequestAudioFocusResult(bool result) const {
-  UMA_HISTOGRAM_BOOLEAN("Media.Session.RequestAudioFocusResult", result);
+void MediaSessionUmaHelper::RecordEnterPictureInPicture(
+    EnterPictureInPictureType type) const {
+  base::UmaHistogramEnumeration("Media.Session.EnterPictureInPicture", type);
 }
 
 void MediaSessionUmaHelper::OnSessionActive() {

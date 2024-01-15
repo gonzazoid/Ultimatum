@@ -6,6 +6,7 @@ package org.chromium.chrome.browser.browserservices.intents;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 
 import android.content.Intent;
@@ -16,18 +17,17 @@ import org.junit.runner.RunWith;
 import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.chrome.browser.intents.BrowserIntentUtils;
 
 import java.util.ArrayList;
 
-/**
- * Tests for {@link WebappIntentUtils}.
- */
+/** Tests for {@link WebappIntentUtils}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class WebappIntentUtilsTest {
     /**
-     * Test that {@link WebappIntentUtils#copyWebappLaunchIntentExtras()} does not set intent
-     * extras on the destination intent if they are not present in the source intent.
+     * Test that {@link WebappIntentUtils#copyWebappLaunchIntentExtras()} does not set intent extras
+     * on the destination intent if they are not present in the source intent.
      */
     @Test
     public void testCopyWebappLaunchIntentExtrasMissingKeys() {
@@ -37,6 +37,8 @@ public class WebappIntentUtilsTest {
         assertFalse(toIntent.hasExtra(WebappConstants.EXTRA_IS_ICON_ADAPTIVE));
         assertFalse(toIntent.hasExtra(WebappConstants.EXTRA_DISPLAY_MODE));
         assertFalse(toIntent.hasExtra(WebappConstants.EXTRA_BACKGROUND_COLOR));
+        assertFalse(toIntent.hasExtra(WebappConstants.EXTRA_DARK_THEME_COLOR));
+        assertFalse(toIntent.hasExtra(WebappConstants.EXTRA_DARK_BACKGROUND_COLOR));
         assertFalse(toIntent.hasExtra(Intent.EXTRA_STREAM));
     }
 
@@ -52,6 +54,9 @@ public class WebappIntentUtilsTest {
         fromIntent.putExtra(WebappConstants.EXTRA_IS_ICON_GENERATED, true);
         fromIntent.putExtra(WebappConstants.EXTRA_DISPLAY_MODE, 1);
         fromIntent.putExtra(WebappConstants.EXTRA_BACKGROUND_COLOR, 1L);
+        fromIntent.putExtra(WebappConstants.EXTRA_DARK_THEME_COLOR, 2L);
+        fromIntent.putExtra(WebappConstants.EXTRA_DARK_BACKGROUND_COLOR, 3L);
+        BrowserIntentUtils.addStartupTimestampsToIntent(fromIntent);
 
         Intent toIntent = new Intent();
         WebappIntentUtils.copyWebappLaunchIntentExtras(fromIntent, toIntent);
@@ -61,6 +66,10 @@ public class WebappIntentUtilsTest {
                 true, toIntent.getBooleanExtra(WebappConstants.EXTRA_IS_ICON_GENERATED, false));
         assertEquals(1, toIntent.getIntExtra(WebappConstants.EXTRA_DISPLAY_MODE, 0));
         assertEquals(1L, toIntent.getLongExtra(WebappConstants.EXTRA_BACKGROUND_COLOR, 0L));
+        assertEquals(2L, toIntent.getLongExtra(WebappConstants.EXTRA_DARK_THEME_COLOR, 0L));
+        assertEquals(3L, toIntent.getLongExtra(WebappConstants.EXTRA_DARK_BACKGROUND_COLOR, 0L));
+        assertNotEquals(-1L, BrowserIntentUtils.getStartupRealtimeMillis(toIntent));
+        assertNotEquals(-1L, BrowserIntentUtils.getStartupUptimeMillis(toIntent));
     }
 
     /**

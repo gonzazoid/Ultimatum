@@ -16,13 +16,9 @@
                 contentSetting)]]">
           $i18n{incognitoSiteOnly}
         </cr-checkbox>
-        <cr-checkbox id="thirdParties"
-            hidden$="[[shouldHideThirdPartyCookieCheckbox_(category)]]">
-          $i18n{siteSettingsCookiesThirdPartyExceptionLabel}
-        </cr-checkbox>
       </div>
       <div slot="button-container">
-        <cr-button class="cancel-button" on-click="onCancelTap_">
+        <cr-button class="cancel-button" on-click="onCancelClick_">
           $i18n{cancel}
         </cr-button>
         <cr-button class="action-button" id="add" on-click="onSubmit_"

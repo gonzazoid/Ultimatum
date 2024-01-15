@@ -4,6 +4,7 @@
 
 import("//build/config/chromeos/ui_mode.gni")
 import("//testing/test.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 use_barhopper = is_chrome_branded && is_chromeos
 
@@ -35,8 +36,10 @@ source_set("lib") {
       "text_detection_impl_mac.h",
       "text_detection_impl_mac.mm",
     ]
-    frameworks = [ "QuartzCore.framework" ]
-    weak_frameworks = [ "Vision.framework" ]
+    frameworks = [
+      "QuartzCore.framework",
+      "Vision.framework",
+    ]
   } else if (is_win) {
     sources += [
       "detection_utils_win.cc",
@@ -61,8 +64,6 @@ source_set("lib") {
   if (is_mac) {
     # On macOS there is a barcode detection API available from the platform.
     sources += [
-      "barcode_detection_impl_mac.h",
-      "barcode_detection_impl_mac.mm",
       "barcode_detection_impl_mac_vision.h",
       "barcode_detection_impl_mac_vision.mm",
       "barcode_detection_impl_mac_vision_api.h",
@@ -126,14 +127,15 @@ if (is_android) {
       "$google_play_services_package:google_play_services_vision_common_java",
       "$google_play_services_package:google_play_services_vision_java",
       "//base:base_java",
-      "//base:jni_java",
       "//mojo/public/java:base_java",
       "//mojo/public/java:bindings_java",
       "//mojo/public/java:system_java",
       "//mojo/public/java/system:system_impl_java",
+      "//mojo/public/mojom/base:base_java",
       "//services/shape_detection/public/mojom:mojom_java",
       "//skia/public/mojom:mojom_java",
       "//third_party/android_deps:chromium_play_services_availability_java",
+      "//third_party/jni_zero:jni_zero_java",
       "//ui/gfx/geometry/mojom:mojom_java",
     ]
   }

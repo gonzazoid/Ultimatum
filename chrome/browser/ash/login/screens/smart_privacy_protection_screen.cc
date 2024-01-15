@@ -6,11 +6,14 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
+#include "chrome/browser/ash/login/demo_mode/demo_session.h"
+#include "chrome/browser/ash/login/wizard_context.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/webui/chromeos/login/smart_privacy_protection_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/smart_privacy_protection_screen_handler.h"
 #include "components/prefs/pref_service.h"
 
 namespace ash {
+
 namespace {
 
 constexpr const char kUserActionFeatureTurnOn[] = "continue-feature-on";
@@ -22,11 +25,11 @@ constexpr const char kUserActionShowLearnMore[] = "show-learn-more";
 // static
 std::string SmartPrivacyProtectionScreen::GetResultString(Result result) {
   switch (result) {
-    case Result::PROCEED_WITH_FEATURE_ON:
+    case Result::kProceedWithFeatureOn:
       return "ContinueWithFeatureOn";
-    case Result::PROCEED_WITH_FEATURE_OFF:
+    case Result::kProceedWithFeatureOff:
       return "ContinueWithFeatureOff";
-    case Result::NOT_APPLICABLE:
+    case Result::kNotApplicable:
       return BaseScreen::kNotApplicable;
   }
 }
@@ -46,10 +49,10 @@ bool SmartPrivacyProtectionScreen::MaybeSkip(WizardContext& context) {
   // SnoopingProtection and QuickDim. The screen should be skipped if none of
   // them is enabled.
   if (!context.skip_post_login_screens_for_tests &&
-      ash::features::IsQuickDimEnabled()) {
+      features::IsQuickDimEnabled() && !DemoSession::IsDeviceInDemoMode()) {
     return false;
   }
-  exit_callback_.Run(Result::NOT_APPLICABLE);
+  exit_callback_.Run(Result::kNotApplicable);
   return true;
 }
 
@@ -65,12 +68,12 @@ void SmartPrivacyProtectionScreen::OnUserAction(const base::Value::List& args) {
   if (action_id == kUserActionFeatureTurnOn) {
     Profile* profile = ProfileManager::GetActiveUserProfile();
     profile->GetPrefs()->SetBoolean(prefs::kPowerQuickDimEnabled,
-                                    ash::features::IsQuickDimEnabled());
-    exit_callback_.Run(Result::PROCEED_WITH_FEATURE_ON);
+                                    features::IsQuickDimEnabled());
+    exit_callback_.Run(Result::kProceedWithFeatureOn);
   } else if (action_id == kUserActionFeatureTurnOff) {
     Profile* profile = ProfileManager::GetActiveUserProfile();
     profile->GetPrefs()->SetBoolean(prefs::kPowerQuickDimEnabled, false);
-    exit_callback_.Run(Result::PROCEED_WITH_FEATURE_OFF);
+    exit_callback_.Run(Result::kProceedWithFeatureOff);
   } else if (action_id == kUserActionShowLearnMore) {
     // TODO(crbug.com/1293320): add p-link once available
   } else {

@@ -60,94 +60,122 @@ bool AXMenuList::OnNativeClickAction() {
 }
 
 void AXMenuList::Detach() {
-  // Detach() calls ClearChildren(), but AXMenuList::ClearChildren()
-  // detaches the grandchild options, not the child option.
-  AXLayoutObject::Detach();
+  // The default implementation of Detach() calls ClearChildren(), but
+  // that is not enough. The popup child needs to be specially removed
+  // from the AXObjectCache.
   DCHECK_LE(children_.size(), 1U);
 
-  // Clear the popup.
+  // Clear the children.
   if (children_.size()) {
-    children_[0]->DetachFromParent();
-    // Unfortunately, the popup will be left hanging around until
-    // AXObjectCacheImpl() is reset. We cannot remove it here because
-    // this can be called while AXObjectCacheImpl() is detaching all objects,
-    // and the hash map of objects does not allow similtaneous iteration and
+    // Do not call Remove() while AXObjectCacheImpl() is detaching all objects,
+    // because the hash map of objects does not allow simultaneous iteration and
     // removal of objects.
-    // TODO(accessibility) Consider something like this, or something that
-    // marks the object for imminent diposal.
-    // if (!AXObjectCache().IsDisposing()
-    //   children_[0]->AXObjectCache().Remove(children_[0]);
-    children_[0]->Detach();
+    CHECK(popup_ == children_[0]);
     children_.clear();
   }
-}
 
-void AXMenuList::SetNeedsToUpdateChildren() const {
-  if (!children_.empty()) {
-    if (AXObject* child_popup = children_[0]) {
-      // If we have a child popup, update its children at the same time.
-      DCHECK(IsA<AXMenuListPopup>(child_popup));
-      child_popup->SetNeedsToUpdateChildren();
+  // Clear the popup.
+  if (popup_) {
+    if (!AXObjectCache().HasBeenDisposed()) {
+      auto& cache = AXObjectCache();
+      for (auto* const option_grandchild :
+           To<HTMLSelectElement>(GetNode())->GetOptionList()) {
+        cache.Remove(option_grandchild, /* notify_parent */ false);
+      }
+      cache.Remove(popup_, /* notify_parent */ false);
     }
+    popup_->Detach();
+    popup_ = nullptr;
   }
 
-  AXObject::SetNeedsToUpdateChildren();
+  AXLayoutObject::Detach();
+}
+
+void AXMenuList::ChildrenChangedWithCleanLayout() {
+  if (!children_.empty()) {
+    CHECK_EQ(children_.size(), 1U);
+    CHECK_EQ(children_[0], popup_);
+    // If we have a child popup, update its children at the same time.
+    popup_->ChildrenChangedWithCleanLayout();
+  }
+
+  AXLayoutObject::ChildrenChangedWithCleanLayout();
+}
+
+void AXMenuList::SetNeedsToUpdateChildren(bool update) const {
+  if (!update) {
+    AXLayoutObject::SetNeedsToUpdateChildren(false);
+    return;
+  }
+
+  if (!children_.empty()) {
+    CHECK_EQ(children_.size(), 1U);
+    CHECK_EQ(children_[0], popup_);
+    // If we have a child popup, update its children at the same time.
+    popup_->SetNeedsToUpdateChildren();
+  }
+
+  AXLayoutObject::SetNeedsToUpdateChildren();
 }
 
 void AXMenuList::ClearChildren() const {
-  if (children_.empty())
-    return;
-
-  // Unless the menu list is detached, there's no reason to clear our
-  // AXMenuListPopup child. If we get a call to clearChildren, it's because the
-  // options might have changed, so call it on our popup. Clearing the
-  // AXMenuListPopup child would cause additional thrashing and events that the
-  // AT would need to process, potentially causing the AT to believe that the
-  // popup had closed and a new popup and reopened.
-  // The mock AXMenuListPopup child will be cleared when this object is
-  // detached, as it has no use without this object as an owner.
-  DCHECK_EQ(children_.size(), 1U);
-  children_[0]->ClearChildren();
+  if (popup_) {
+    popup_->ClearChildren();
+  }
+  AXLayoutObject::ClearChildren();
 }
 
 void AXMenuList::AddChildren() {
-#if DCHECK_IS_ON()
+#if defined(AX_FAIL_FAST_BUILD)
   DCHECK(!IsDetached());
   DCHECK(!is_adding_children_) << " Reentering method on " << GetNode();
   base::AutoReset<bool> reentrancy_protector(&is_adding_children_, true);
   // ClearChildren() does not clear the menulist popup chld.
-  DCHECK_LE(children_.size(), 1U)
-      << "Parent still has " << children_.size() << " children before adding:"
-      << "\nParent is " << ToString(true, true) << "\nFirst child is "
-      << children_[0]->ToString(true, true);
+  CHECK(children_.empty()) << "Parent still has " << children_.size()
+                           << " children before adding:"
+                           << "\nParent is " << ToString(true, true)
+                           << "\nFirst child is "
+                           << children_[0]->ToString(true, true);
 #endif
 
-  DCHECK(children_dirty_);
-  children_dirty_ = false;
+  CHECK(NeedsToUpdateChildren());
 
-  AXObject* ax_popup_child = GetOrCreateMockPopupChild();
+  GetOrCreateMockPopupChild();
+  CHECK(popup_);
+  children_.push_back(popup_);
+  popup_->SetParent(this);
 
   // Update mock AXMenuListPopup children.
-  ax_popup_child->SetNeedsToUpdateChildren();
-  ax_popup_child->UpdateChildrenIfNecessary();
+  if (ChildrenNeedToUpdateCachedValues()) {
+    popup_->InvalidateCachedValues();
+  }
+  // Update cached values preemptively, where we can control the
+  // notify_parent_of_ignored_changes parameter, so that we do not try to notify
+  // a parent of children changes (which would be redundant as we are already
+  // processing children changed on the parent).
+  popup_->UpdateCachedAttributeValuesIfNeeded(
+      /*notify_parent_of_ignored_changes*/ false);
+  popup_->UpdateChildrenIfNecessary();
+
+  SetNeedsToUpdateChildren(false);
 }
 
 AXObject* AXMenuList::GetOrCreateMockPopupChild() {
-  if (IsDetached())
+  if (IsDetached()) {
+    popup_ = nullptr;
     return nullptr;
-
-  // Ensure mock AXMenuListPopup exists as first and only child.
-  if (children_.empty()) {
-    AXObjectCacheImpl& cache = AXObjectCache();
-    AXObject* popup =
-        cache.CreateAndInit(ax::mojom::blink::Role::kMenuListPopup, this);
-    DCHECK(popup);
-    DCHECK(!popup->IsDetached());
-    DCHECK(popup->CachedParentObject());
-    children_.push_back(popup);
   }
-  DCHECK_EQ(children_.size(), 1U);
-  return children_[0];
+
+  if (!popup_) {
+    popup_ = AXObjectCache().CreateAndInit(
+        ax::mojom::blink::Role::kMenuListPopup, this);
+    CHECK(popup_);
+    CHECK(!popup_->IsDetached());
+    CHECK_EQ(popup_->CachedParentObject(), this);
+    CHECK(popup_->IsMenuListPopup());
+  }
+
+  return popup_;
 }
 
 bool AXMenuList::IsCollapsed() const {
@@ -210,6 +238,11 @@ void AXMenuList::DidHidePopup() {
 
   if (GetNode() && GetNode()->IsFocused())
     AXObjectCache().PostNotification(this, ax::mojom::Event::kFocus);
+}
+
+void AXMenuList::Trace(Visitor* visitor) const {
+  visitor->Trace(popup_);
+  AXLayoutObject::Trace(visitor);
 }
 
 }  // namespace blink

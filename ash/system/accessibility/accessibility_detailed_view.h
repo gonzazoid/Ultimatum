@@ -11,8 +11,9 @@
 #include "ash/accessibility/accessibility_observer.h"
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/system/tray/tray_detailed_view.h"
+#include "base/memory/raw_ptr.h"
 #include "components/soda/soda_installer.h"
-#include "ui/gfx/font.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/view.h"
 
@@ -36,8 +37,7 @@ class ASH_EXPORT AccessibilityDetailedView
     : public TrayDetailedView,
       public speech::SodaInstaller::Observer {
  public:
-  static const char kClassName[];
-
+  METADATA_HEADER(AccessibilityDetailedView);
   explicit AccessibilityDetailedView(DetailedViewDelegate* delegate);
 
   AccessibilityDetailedView(const AccessibilityDetailedView&) = delete;
@@ -47,9 +47,6 @@ class ASH_EXPORT AccessibilityDetailedView
   ~AccessibilityDetailedView() override;
 
   void OnAccessibilityStatusChanged();
-
-  // views::View
-  const char* GetClassName() const override;
 
  private:
   friend class AccessibilityDetailedViewLoginScreenTest;
@@ -71,7 +68,6 @@ class ASH_EXPORT AccessibilityDetailedView
   void AppendAccessibilityList();
 
   // Adds the enabled accessibility features to the `container`.
-  // Only used with QsRevamp.
   void AddEnabledFeatures(views::View* container);
 
   // Adds all accessibility features to the `container`.
@@ -82,6 +78,8 @@ class ASH_EXPORT AccessibilityDetailedView
   HoverHighlightView* AddSpokenFeedbackView(views::View* container);
   HoverHighlightView* AddSelectToSpeakView(views::View* container);
   HoverHighlightView* AddDictationView(views::View* container);
+  HoverHighlightView* AddFaceGazeView(views::View* container);
+  HoverHighlightView* AddColorCorrectionView(views::View* container);
   HoverHighlightView* AddHighContrastView(views::View* container);
   HoverHighlightView* AddScreenMagnifierView(views::View* container);
   HoverHighlightView* AddDockedMagnifierView(views::View* container);
@@ -95,6 +93,21 @@ class ASH_EXPORT AccessibilityDetailedView
   HoverHighlightView* AddHighlightMouseCursorView(views::View* container);
   HoverHighlightView* AddHighlightKeyboardFocusView(views::View* container);
   HoverHighlightView* AddStickyKeysView(views::View* container);
+
+  // Adds a HoverHighlightView to the scroll list and returns it.
+  HoverHighlightView* AddScrollListFeatureItem(views::View* container,
+                                               const gfx::VectorIcon& icon,
+                                               const std::u16string& text,
+                                               bool checked,
+                                               bool enterprise_managed);
+
+  // Adds a HoverHighlightView with a toggle button on the right to the scroll
+  // list and returns it.
+  HoverHighlightView* AddScrollListToggleItem(views::View* container,
+                                              const gfx::VectorIcon& icon,
+                                              const std::u16string& text,
+                                              bool checked,
+                                              bool enterprise_managed);
 
   // SodaInstaller::Observer:
   void OnSodaInstalled(speech::LanguageCode language_code) override;
@@ -111,25 +124,48 @@ class ASH_EXPORT AccessibilityDetailedView
   bool IsSodaFeatureInTray(SodaFeature feature);
   void SetSodaFeatureSubtext(SodaFeature feature, std::u16string message);
 
-  HoverHighlightView* spoken_feedback_view_ = nullptr;
-  HoverHighlightView* select_to_speak_view_ = nullptr;
-  HoverHighlightView* dictation_view_ = nullptr;
-  HoverHighlightView* high_contrast_view_ = nullptr;
-  HoverHighlightView* screen_magnifier_view_ = nullptr;
-  HoverHighlightView* docked_magnifier_view_ = nullptr;
-  HoverHighlightView* large_cursor_view_ = nullptr;
-  HoverHighlightView* autoclick_view_ = nullptr;
-  HoverHighlightView* virtual_keyboard_view_ = nullptr;
-  HoverHighlightView* switch_access_view_ = nullptr;
-  HoverHighlightView* live_caption_view_ = nullptr;
-  HoverHighlightView* mono_audio_view_ = nullptr;
-  HoverHighlightView* caret_highlight_view_ = nullptr;
-  HoverHighlightView* highlight_mouse_cursor_view_ = nullptr;
-  HoverHighlightView* highlight_keyboard_focus_view_ = nullptr;
-  HoverHighlightView* sticky_keys_view_ = nullptr;
+  raw_ptr<HoverHighlightView> spoken_feedback_view_ = nullptr;
+  raw_ptr<HoverHighlightView> select_to_speak_view_ = nullptr;
+  raw_ptr<HoverHighlightView> dictation_view_ = nullptr;
+  raw_ptr<HoverHighlightView> facegaze_view_ = nullptr;
+  raw_ptr<HoverHighlightView> color_correction_view_ = nullptr;
+  raw_ptr<HoverHighlightView> high_contrast_view_ = nullptr;
+  raw_ptr<HoverHighlightView> screen_magnifier_view_ = nullptr;
+  raw_ptr<HoverHighlightView> docked_magnifier_view_ = nullptr;
+  raw_ptr<HoverHighlightView> large_cursor_view_ = nullptr;
+  raw_ptr<HoverHighlightView> autoclick_view_ = nullptr;
+  raw_ptr<HoverHighlightView> virtual_keyboard_view_ = nullptr;
+  raw_ptr<HoverHighlightView> switch_access_view_ = nullptr;
+  raw_ptr<HoverHighlightView> live_caption_view_ = nullptr;
+  raw_ptr<HoverHighlightView> mono_audio_view_ = nullptr;
+  raw_ptr<HoverHighlightView> caret_highlight_view_ = nullptr;
+  raw_ptr<HoverHighlightView> highlight_mouse_cursor_view_ = nullptr;
+  raw_ptr<HoverHighlightView> highlight_keyboard_focus_view_ = nullptr;
+  raw_ptr<HoverHighlightView> sticky_keys_view_ = nullptr;
 
-  views::Button* help_view_ = nullptr;
-  views::Button* settings_view_ = nullptr;
+  // Views that appear in the top section listing enabled items. Created if the
+  // feature is enabled, otherwise nullptr. Owned by views hierarchy.
+  raw_ptr<HoverHighlightView> spoken_feedback_top_view_ = nullptr;
+  raw_ptr<HoverHighlightView> select_to_speak_top_view_ = nullptr;
+  raw_ptr<HoverHighlightView> dictation_top_view_ = nullptr;
+  raw_ptr<HoverHighlightView> facegaze_top_view_ = nullptr;
+  raw_ptr<HoverHighlightView> color_correction_top_view_ = nullptr;
+  raw_ptr<HoverHighlightView> high_contrast_top_view_ = nullptr;
+  raw_ptr<HoverHighlightView> screen_magnifier_top_view_ = nullptr;
+  raw_ptr<HoverHighlightView> docked_magnifier_top_view_ = nullptr;
+  raw_ptr<HoverHighlightView> large_cursor_top_view_ = nullptr;
+  raw_ptr<HoverHighlightView> autoclick_top_view_ = nullptr;
+  raw_ptr<HoverHighlightView> virtual_keyboard_top_view_ = nullptr;
+  raw_ptr<HoverHighlightView> switch_access_top_view_ = nullptr;
+  raw_ptr<HoverHighlightView> live_caption_top_view_ = nullptr;
+  raw_ptr<HoverHighlightView> mono_audio_top_view_ = nullptr;
+  raw_ptr<HoverHighlightView> caret_highlight_top_view_ = nullptr;
+  raw_ptr<HoverHighlightView> highlight_mouse_cursor_top_view_ = nullptr;
+  raw_ptr<HoverHighlightView> highlight_keyboard_focus_top_view_ = nullptr;
+  raw_ptr<HoverHighlightView> sticky_keys_top_view_ = nullptr;
+
+  raw_ptr<views::Button> help_view_ = nullptr;
+  raw_ptr<views::Button> settings_view_ = nullptr;
 
   LoginStatus login_;
 };

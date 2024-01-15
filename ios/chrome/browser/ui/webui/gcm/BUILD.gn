@@ -11,9 +11,9 @@ source_set("gcm") {
     "//base",
     "//components/gcm_driver",
     "//components/resources",
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/gcm",
-    "//ios/chrome/browser/url:constants",
+    "//ios/chrome/browser/gcm/model",
+    "//ios/chrome/browser/shared/model/browser_state",
+    "//ios/chrome/browser/shared/model/url:constants",
     "//ios/web/public/webui",
   ]
 }

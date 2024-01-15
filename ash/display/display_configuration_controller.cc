@@ -16,9 +16,10 @@
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/wallpaper/wallpaper_controller_impl.h"
-#include "base/bind.h"
+#include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/system/sys_info.h"
 #include "base/time/time.h"
-#include "chromeos/system/devicemode.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/display/display_layout.h"
 #include "ui/display/manager/display_manager.h"
@@ -88,8 +89,9 @@ DisplayConfigurationController::DisplayConfigurationController(
     : display_manager_(display_manager),
       window_tree_host_manager_(window_tree_host_manager) {
   window_tree_host_manager_->AddObserver(this);
-  if (chromeos::IsRunningAsSystemCompositor())
+  if (base::SysInfo::IsRunningOnChromeOS()) {
     limiter_ = std::make_unique<DisplayChangeLimiter>();
+  }
   if (!g_disable_animator_for_test)
     display_animator_ = std::make_unique<DisplayAnimator>();
 }
@@ -232,7 +234,7 @@ void DisplayConfigurationController::SetDisplayLayoutImpl(
 void DisplayConfigurationController::SetMirrorModeImpl(bool mirror) {
   display_manager_->SetMirrorMode(
       mirror ? display::MirrorMode::kNormal : display::MirrorMode::kOff,
-      absl::nullopt);
+      std::nullopt);
   if (display_animator_)
     display_animator_->StartFadeInAnimation();
 }
@@ -254,8 +256,12 @@ void DisplayConfigurationController::SetUnifiedDesktopLayoutMatrixImpl(
 ScreenRotationAnimator*
 DisplayConfigurationController::GetScreenRotationAnimatorForDisplay(
     int64_t display_id) {
-  aura::Window* root_window = Shell::GetRootWindowForDisplayId(display_id);
-  return ScreenRotationAnimator::GetForRootWindow(root_window);
+  auto* root_controller =
+      Shell::GetRootWindowControllerWithDisplayId(display_id);
+  CHECK(root_controller);
+  auto* animator = root_controller->GetScreenRotationAnimator();
+  CHECK(animator);
+  return animator;
 }
 
 }  // namespace ash

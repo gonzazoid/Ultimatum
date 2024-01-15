@@ -4,18 +4,18 @@
 
 #include "components/browsing_data/content/mock_cache_storage_helper.h"
 
-#include "base/callback.h"
-#include "content/public/browser/browser_context.h"
+#include "base/functional/callback.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/browser/storage_usage_info.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "url/gurl.h"
 
 namespace browsing_data {
 
 MockCacheStorageHelper::MockCacheStorageHelper(
-    content::BrowserContext* browser_context)
-    : CacheStorageHelper(browser_context->GetDefaultStoragePartition()) {}
+    content::StoragePartition* storage_partition)
+    : CacheStorageHelper(storage_partition) {}
 
 MockCacheStorageHelper::~MockCacheStorageHelper() {}
 
@@ -26,21 +26,24 @@ void MockCacheStorageHelper::StartFetching(FetchCallback callback) {
   fetched_ = true;
 }
 
-void MockCacheStorageHelper::DeleteCacheStorage(const url::Origin& origin) {
+void MockCacheStorageHelper::DeleteCacheStorage(
+    const blink::StorageKey& storage_key) {
   ASSERT_TRUE(fetched_);
-  ASSERT_TRUE(origins_.find(origin) != origins_.end());
-  origins_[origin] = false;
+  ASSERT_TRUE(storage_keys_.find(storage_key) != storage_keys_.end());
+  storage_keys_[storage_key] = false;
 }
 
 void MockCacheStorageHelper::AddCacheStorageSamples() {
   const url::Origin kOrigin1 = url::Origin::Create(GURL("https://cshost1:1/"));
   const url::Origin kOrigin2 = url::Origin::Create(GURL("https://cshost2:2/"));
-  content::StorageUsageInfo info1(blink::StorageKey(kOrigin1), 1, base::Time());
+  content::StorageUsageInfo info1(blink::StorageKey::CreateFirstParty(kOrigin1),
+                                  1, base::Time());
   response_.push_back(info1);
-  origins_[kOrigin1] = true;
-  content::StorageUsageInfo info2(blink::StorageKey(kOrigin2), 2, base::Time());
+  storage_keys_[blink::StorageKey::CreateFirstParty(kOrigin1)] = true;
+  content::StorageUsageInfo info2(blink::StorageKey::CreateFirstParty(kOrigin2),
+                                  2, base::Time());
   response_.push_back(info2);
-  origins_[kOrigin2] = true;
+  storage_keys_[blink::StorageKey::CreateFirstParty(kOrigin2)] = true;
 }
 
 void MockCacheStorageHelper::Notify() {
@@ -49,12 +52,13 @@ void MockCacheStorageHelper::Notify() {
 }
 
 void MockCacheStorageHelper::Reset() {
-  for (auto& pair : origins_)
+  for (auto& pair : storage_keys_) {
     pair.second = true;
+  }
 }
 
 bool MockCacheStorageHelper::AllDeleted() {
-  for (const auto& pair : origins_) {
+  for (const auto& pair : storage_keys_) {
     if (pair.second)
       return false;
   }

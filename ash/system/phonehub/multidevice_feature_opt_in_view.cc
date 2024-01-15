@@ -7,15 +7,19 @@
 #include <memory>
 #include <string>
 
-#include "ash/components/phonehub/multidevice_feature_access_manager.h"
-#include "ash/components/phonehub/util/histogram_util.h"
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/new_window_delegate.h"
+#include "ash/root_window_controller.h"
+#include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
 #include "ash/system/phonehub/phone_hub_metrics.h"
+#include "ash/system/phonehub/phone_hub_tray.h"
 #include "ash/system/phonehub/phone_hub_view_ids.h"
+#include "ash/system/status_area_widget.h"
 #include "chromeos/ash/components/multidevice/logging/logging.h"
+#include "chromeos/ash/components/phonehub/multidevice_feature_access_manager.h"
+#include "chromeos/ash/components/phonehub/util/histogram_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 
 namespace ash {
@@ -88,33 +92,6 @@ PermissionsOnboardingSetUpMode GetPermissionSetupMode(
   return PermissionsOnboardingSetUpMode::kNone;
 }
 
-int GetDescriptionStringId(phonehub::MultideviceFeatureAccessManager*
-                               multidevice_feature_access_manager) {
-  PermissionsOnboardingSetUpMode permission_setup_mode =
-      GetPermissionSetupMode(multidevice_feature_access_manager);
-  switch (permission_setup_mode) {
-    case PermissionsOnboardingSetUpMode::kCameraRoll:
-      return IDS_ASH_PHONE_HUB_CAMERA_ROLL_OPT_IN_DESCRIPTION;
-    case PermissionsOnboardingSetUpMode::kMessagingApps:
-      return IDS_ASH_PHONE_HUB_APPS_OPT_IN_DESCRIPTION;
-    case PermissionsOnboardingSetUpMode::kNotificationAndCameraRoll:
-      return IDS_ASH_PHONE_HUB_NOTIFICATION_AND_CAMERA_ROLL_OPT_IN_DESCRIPTION;
-    case PermissionsOnboardingSetUpMode::kNotification:
-      return IDS_ASH_PHONE_HUB_NOTIFICATION_OPT_IN_DESCRIPTION;
-    case PermissionsOnboardingSetUpMode::kNotificationAndMessagingApps:
-      return IDS_ASH_PHONE_HUB_NOTIFICATION_AND_APPS_OPT_IN_DESCRIPTION;
-    case PermissionsOnboardingSetUpMode::kMessagingAppsAndCameraRoll:
-      return IDS_ASH_PHONE_HUB_CAMERA_ROLL_AND_APPS_OPT_IN_DESCRIPTION;
-    case PermissionsOnboardingSetUpMode::kAllPermissions:
-      return IDS_ASH_PHONE_HUB_ALL_FEATURES_OPT_IN_DESCRIPTION;
-    case PermissionsOnboardingSetUpMode::kNone:
-    default:
-      // Just return the default strings since the MultideviceFeatureOptInView
-      // will be invisible.
-      return IDS_ASH_PHONE_HUB_NOTIFICATION_OPT_IN_DESCRIPTION;
-  }
-}
-
 std::string GetMultiDeviceSettingUrl(
     PermissionsOnboardingSetUpMode permission_setup_mode) {
   return base::StringPrintf(kMultideviceSettingsUrl,
@@ -128,12 +105,12 @@ MultideviceFeatureOptInView::MultideviceFeatureOptInView(
         multidevice_feature_access_manager)
     : SubFeatureOptInView(
           PhoneHubViewID::kMultideviceFeatureOptInView,
-          GetDescriptionStringId(multidevice_feature_access_manager),
-          IDS_ASH_PHONE_HUB_NOTIFICATION_OPT_IN_SET_UP_BUTTON),
+          GetPermissionSetupMode(multidevice_feature_access_manager)),
       multidevice_feature_access_manager_(multidevice_feature_access_manager) {
   DCHECK(multidevice_feature_access_manager_);
   setup_mode_ = GetPermissionSetupMode(multidevice_feature_access_manager_);
-  access_manager_observation_.Observe(multidevice_feature_access_manager_);
+  access_manager_observation_.Observe(
+      multidevice_feature_access_manager_.get());
   // Checks and updates its visibility upon creation.
   UpdateVisibility(/*was_visible=*/false);
 }
@@ -151,6 +128,7 @@ void MultideviceFeatureOptInView::SetUpButtonPressed() {
   NewWindowDelegate::GetInstance()->OpenUrl(
       GURL(url), NewWindowDelegate::OpenUrlFrom::kUserInteraction,
       NewWindowDelegate::Disposition::kNewForegroundTab);
+  ClosePhoneHubBubble();
 }
 
 void MultideviceFeatureOptInView::DismissButtonPressed() {
@@ -176,8 +154,7 @@ void MultideviceFeatureOptInView::UpdateVisibility(bool was_visible) {
       GetPermissionSetupMode(multidevice_feature_access_manager_);
   if (current_mode != setup_mode_) {
     setup_mode_ = current_mode;
-    RefreshDescription(
-        GetDescriptionStringId(multidevice_feature_access_manager_));
+    SetSetUpMode(setup_mode_);
   }
   SetVisible(setup_mode_ != PermissionsOnboardingSetUpMode::kNone &&
              !multidevice_feature_access_manager_
@@ -186,6 +163,24 @@ void MultideviceFeatureOptInView::UpdateVisibility(bool was_visible) {
     LogPermissionOnboardingPromoShown(setup_mode_);
   }
   PreferredSizeChanged();
+}
+
+void MultideviceFeatureOptInView::ClosePhoneHubBubble() {
+  // Close Phone Hub bubble in current display.
+  views::Widget* const widget = GetWidget();
+  // |widget| is null when this function is called before the view is added to a
+  // widget (in unit tests).
+  if (!widget) {
+    return;
+  }
+  int64_t current_display_id =
+      display::Screen::GetScreen()
+          ->GetDisplayNearestWindow(widget->GetNativeWindow())
+          .id();
+  Shell::GetRootWindowControllerWithDisplayId(current_display_id)
+      ->GetStatusAreaWidget()
+      ->phone_hub_tray()
+      ->CloseBubble();
 }
 
 BEGIN_METADATA(MultideviceFeatureOptInView, views::View)

@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/metrics/histogram_macros.h"
@@ -16,7 +16,6 @@
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "components/back_forward_cache/back_forward_cache_disable.h"
 #include "components/dom_distiller/content/browser/distiller_javascript_utils.h"
@@ -154,7 +153,8 @@ void DomDistillerViewerSource::RequestViewerHandle::Cancel() {
 
   // Schedule the Viewer for deletion. Ensures distillation is cancelled, and
   // any pending data stored in |buffer_| is released.
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, this);
+  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                this);
 }
 
 void DomDistillerViewerSource::RequestViewerHandle::DOMContentLoaded(
@@ -171,16 +171,6 @@ void DomDistillerViewerSource::RequestViewerHandle::DOMContentLoaded(
   // See http://crbug.com/811417.
   if (render_frame_host->GetParentOrOuterDocument()) {
     return;
-  }
-
-  int64_t start_time_ms = url_utils::GetTimeFromDistillerUrl(
-      render_frame_host->GetLastCommittedURL());
-  if (start_time_ms > 0) {
-    base::TimeTicks start_time =
-        base::Milliseconds(start_time_ms) + base::TimeTicks();
-    base::TimeDelta latency = base::TimeTicks::Now() - start_time;
-
-    UMA_HISTOGRAM_TIMES("DomDistiller.Time.ViewerLoading", latency);
   }
 
   // No SendJavaScript() calls allowed before |buffer_| is run and cleared.

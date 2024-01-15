@@ -4,14 +4,15 @@
 
 #import "ios/chrome/browser/ui/settings/password/password_exporter.h"
 
-#import "base/bind.h"
 #import "base/check.h"
 #import "base/files/file_path.h"
+#import "base/functional/bind.h"
 #import "base/metrics/histogram_macros.h"
 #import "base/notreached.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/task/thread_pool.h"
 #import "base/threading/scoped_blocking_call.h"
+#import "components/device_reauth/device_reauth_metrics_util.h"
 #import "components/password_manager/core/browser/export/password_csv_writer.h"
 #import "components/password_manager/core/browser/password_manager_metrics_util.h"
 #import "components/password_manager/core/browser/ui/credential_ui_entry.h"
@@ -21,12 +22,8 @@
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util_mac.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
+using device_reauth::ReauthResult;
 using password_manager::metrics_util::LogPasswordSettingsReauthResult;
-using password_manager::metrics_util::ReauthResult;
 
 namespace {
 
@@ -173,7 +170,7 @@ enum class ReauthenticationStatus {
     [self serializePasswords:std::move(passwords)];
     [self startReauthentication];
   } else {
-    [_weakDelegate showSetPasscodeDialog];
+    [_weakDelegate showSetPasscodeForPasswordExportDialog];
   }
 }
 

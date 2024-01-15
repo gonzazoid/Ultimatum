@@ -21,10 +21,6 @@
 #include "content/public/test/navigation_handle_observer.h"
 #include "content/public/test/test_navigation_observer.h"
 
-#if BUILDFLAG(IS_WIN)
-#include "base/win/windows_version.h"
-#endif
-
 class ExternalProtocolHandlerBrowserTest : public InProcessBrowserTest {
  public:
   content::WebContents* web_content() {
@@ -49,10 +45,10 @@ class ExternalProtocolHandlerSandboxBrowserTest
   // additional security check and ask the user, without displaying a message in
   // the console. Adopt Linux's behavior for the purpose of this test suite.
   void AllowCustomProtocol() {
-    base::ListValue allow_list;
+    base::Value::List allow_list;
     allow_list.Append("custom:*");
     browser()->profile()->GetPrefs()->Set(policy::policy_prefs::kUrlAllowlist,
-                                          allow_list);
+                                          base::Value(std::move(allow_list)));
   }
 
   content::RenderFrameHost* CreateIFrame(content::RenderFrameHost* document,
@@ -106,7 +102,7 @@ class ExternalProtocolHandlerSandboxBrowserTest
         has_user_gesture ? content::EXECUTE_SCRIPT_DEFAULT_OPTIONS
                          : content::EXECUTE_SCRIPT_NO_USER_GESTURE));
 
-    observer.Wait();
+    EXPECT_TRUE(observer.Wait());
     std::string message = observer.GetMessageAt(0u);
 
     return message == allowed_msg_1 || message == allowed_msg_2;
@@ -159,14 +155,6 @@ class TabAddedRemovedObserver : public TabStripModelObserver {
 #endif
 IN_PROC_BROWSER_TEST_F(ExternalProtocolHandlerBrowserTest,
                        MAYBE_AutoCloseTabOnNonWebProtocolNavigation) {
-#if BUILDFLAG(IS_WIN)
-  // On Win 7 the protocol is registered to be handled by Chrome and thus never
-  // reaches the ExternalProtocolHandler so we skip the test. For
-  // more info see installer/util/shell_util.cc:GetShellIntegrationEntries
-  if (base::win::GetVersion() < base::win::Version::WIN8)
-    return;
-#endif
-
   TabAddedRemovedObserver observer(browser()->tab_strip_model());
   ASSERT_EQ(browser()->tab_strip_model()->count(), 1);
   ASSERT_TRUE(
@@ -184,21 +172,13 @@ IN_PROC_BROWSER_TEST_F(ExternalProtocolHandlerBrowserTest,
 #endif
 IN_PROC_BROWSER_TEST_F(ExternalProtocolHandlerBrowserTest,
                        MAYBE_ProtocolLaunchEmitsConsoleLog) {
-#if BUILDFLAG(IS_WIN)
-  // On Win 7 the protocol is registered to be handled by Chrome and thus never
-  // reaches the ExternalProtocolHandler so we skip the test. For
-  // more info see installer/util/shell_util.cc:GetShellIntegrationEntries
-  if (base::win::GetVersion() < base::win::Version::WIN8)
-    return;
-#endif
-
   content::WebContentsConsoleObserver observer(web_content());
   // Wait for either "Launched external handler..." or "Failed to launch..."; the former will pass
   // the test, while the latter will fail it more quickly than waiting for a timeout.
   observer.SetPattern("*aunch*'mailto:test@site.test'*");
   ASSERT_TRUE(
       ExecJs(web_content(), "window.open('mailto:test@site.test', '_self');"));
-  observer.Wait();
+  ASSERT_TRUE(observer.Wait());
   ASSERT_EQ(1u, observer.messages().size());
   EXPECT_EQ("Launched external handler for 'mailto:test@site.test'.",
             observer.GetMessageAt(0u));
@@ -213,7 +193,7 @@ IN_PROC_BROWSER_TEST_F(ExternalProtocolHandlerBrowserTest,
   observer.SetPattern("Failed to launch 'does.not.exist:failure'*");
   ASSERT_TRUE(
       ExecJs(web_content(), "window.open('does.not.exist:failure', '_self');"));
-  observer.Wait();
+  ASSERT_TRUE(observer.Wait());
   ASSERT_EQ(1u, observer.messages().size());
 #endif
 }
@@ -285,8 +265,8 @@ class AlwaysBlockedExternalProtocolHandlerDelegate
     ExternalProtocolHandler::SetDelegateForTesting(nullptr);
   }
 
-  scoped_refptr<shell_integration::DefaultProtocolClientWorker>
-  CreateShellWorker(const GURL& url) override {
+  scoped_refptr<shell_integration::DefaultSchemeClientWorker> CreateShellWorker(
+      const GURL& url) override {
     NOTREACHED();
     return nullptr;
   }
@@ -336,7 +316,7 @@ IN_PROC_BROWSER_TEST_F(ExternalProtocolHandlerBrowserTest,
 
   ASSERT_TRUE(
       ExecJs(originating_rfh, "location.href = 'willfailtolaunch://foo';"));
-  observer.Wait();
+  ASSERT_TRUE(observer.Wait());
   ASSERT_EQ(1u, observer.messages().size());
   EXPECT_EQ("Not allowed to launch 'willfailtolaunch://foo'.",
             observer.GetMessageAt(0u));

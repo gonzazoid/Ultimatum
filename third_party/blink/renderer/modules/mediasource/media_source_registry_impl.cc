@@ -43,11 +43,9 @@ void MediaSourceRegistryImpl::Init() {
   DVLOG(1) << __func__ << " instance=" << &instance;
 }
 
-void MediaSourceRegistryImpl::RegisterURL(SecurityOrigin*,
-                                          const KURL& url,
+void MediaSourceRegistryImpl::RegisterURL(const KURL& url,
                                           URLRegistrable* registrable) {
-  base::AutoLock lock(map_lock_);
-
+  DCHECK(IsMainThread());
   DCHECK_EQ(&registrable->Registry(), this);
 
   DCHECK(!url.IsEmpty());  // Caller of interface should already enforce this.
@@ -61,8 +59,7 @@ void MediaSourceRegistryImpl::RegisterURL(SecurityOrigin*,
 }
 
 void MediaSourceRegistryImpl::UnregisterURL(const KURL& url) {
-  base::AutoLock lock(map_lock_);
-
+  DCHECK(IsMainThread());
   DVLOG(1) << __func__ << " url=" << url << ", IsMainThread=" << IsMainThread();
   DCHECK(!url.IsEmpty());  // Caller of interface should already enforce this.
 
@@ -77,8 +74,6 @@ void MediaSourceRegistryImpl::UnregisterURL(const KURL& url) {
 
 scoped_refptr<MediaSourceAttachment> MediaSourceRegistryImpl::LookupMediaSource(
     const String& url) {
-  base::AutoLock lock(map_lock_);
-
   DCHECK(IsMainThread());
   DCHECK(!url.empty());
   auto iter = media_sources_.find(url);

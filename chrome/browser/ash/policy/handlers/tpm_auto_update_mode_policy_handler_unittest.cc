@@ -6,11 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/timer/mock_timer.h"
+#include "base/values.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/settings/scoped_testing_cros_settings.h"
 #include "chrome/browser/ash/tpm_firmware_update.h"
@@ -42,7 +44,7 @@ class TPMAutoUpdateModePolicyHandlerTest : public testing::Test {
   TPMAutoUpdateModePolicyHandlerTest()
       : local_state_(TestingBrowserProcess::GetGlobal()),
         user_manager_(new ash::FakeChromeUserManager()),
-        user_manager_enabler_(base::WrapUnique(user_manager_)) {
+        user_manager_enabler_(base::WrapUnique(user_manager_.get())) {
     ash::SessionManagerClient::InitializeFakeInMemory();
   }
 
@@ -51,11 +53,11 @@ class TPMAutoUpdateModePolicyHandlerTest : public testing::Test {
   }
 
   void SetAutoUpdateMode(AutoUpdateMode auto_update_mode) {
-    base::DictionaryValue dict;
-    dict.SetKey(ash::tpm_firmware_update::kSettingsKeyAutoUpdateMode,
-                base::Value(static_cast<int>(auto_update_mode)));
+    base::Value::Dict dict;
+    dict.Set(ash::tpm_firmware_update::kSettingsKeyAutoUpdateMode,
+             static_cast<int>(auto_update_mode));
     scoped_testing_cros_settings_.device_settings()->Set(
-        ash::kTPMFirmwareUpdateSettings, dict);
+        ash::kTPMFirmwareUpdateSettings, base::Value(std::move(dict)));
     base::RunLoop().RunUntilIdle();
   }
 
@@ -74,7 +76,7 @@ class TPMAutoUpdateModePolicyHandlerTest : public testing::Test {
 
   content::BrowserTaskEnvironment task_environment_;
   ScopedTestingLocalState local_state_;
-  ash::FakeChromeUserManager* user_manager_;
+  raw_ptr<ash::FakeChromeUserManager, DanglingUntriaged> user_manager_;
   user_manager::ScopedUserManager user_manager_enabler_;
 
   // Set up fake install attributes to pretend the machine is enrolled.

@@ -9,30 +9,27 @@
 #ifndef CONTENT_PUBLIC_BROWSER_PAGE_NAVIGATOR_H_
 #define CONTENT_PUBLIC_BROWSER_PAGE_NAVIGATOR_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/memory/ref_counted.h"
 #include "content/common/content_export.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/global_request_id.h"
 #include "content/public/browser/reload_type.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/site_instance.h"
-#include "content/public/common/child_process_host.h"
 #include "content/public/common/referrer.h"
 #include "ipc/ipc_message.h"
 #include "services/network/public/cpp/resource_request_body.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "third_party/blink/public/common/navigation/impression.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/mojom/frame/triggering_event_info.mojom-shared.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/base/window_open_disposition.h"
 #include "url/gurl.h"
-
-namespace network {
-class SharedURLLoaderFactory;
-}
 
 namespace content {
 
@@ -81,7 +78,7 @@ struct CONTENT_EXPORT OpenURLParams {
   // drop), and the frame with the corresponding token may have been deleted
   // before the navigation begins. This parameter is defined if and only if
   // |initiator_process_id| below is.
-  absl::optional<blink::LocalFrameToken> initiator_frame_token;
+  std::optional<blink::LocalFrameToken> initiator_frame_token;
 
   // ID of the renderer process of the RenderFrameHost that initiated the
   // navigation. This is defined if and only if |initiator_frame_token| above
@@ -89,7 +86,11 @@ struct CONTENT_EXPORT OpenURLParams {
   int initiator_process_id = ChildProcessHost::kInvalidUniqueID;
 
   // The origin of the initiator of the navigation.
-  absl::optional<url::Origin> initiator_origin;
+  std::optional<url::Origin> initiator_origin;
+
+  // The base url of the initiator of the navigation. This will be non-null only
+  // if the navigation is about:blank or about:srcdoc.
+  std::optional<GURL> initiator_base_url;
 
   // SiteInstance of the frame that initiated the navigation or null if we
   // don't know it.
@@ -159,7 +160,7 @@ struct CONTENT_EXPORT OpenURLParams {
   // Optional impression associated with this navigation. Only set on
   // navigations that originate from links with impression attributes. Used for
   // conversion measurement.
-  absl::optional<blink::Impression> impression;
+  std::optional<blink::Impression> impression;
 
   // Indicates that this navigation is for PDF content in a renderer.
   bool is_pdf = false;

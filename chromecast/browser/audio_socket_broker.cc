@@ -8,14 +8,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/posix/unix_domain_socket.h"
 #include "base/task/bind_post_task.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/timer/timer.h"
 #include "chromecast/media/audio/audio_io_thread.h"
 #include "chromecast/media/audio/audio_output_service/constants.h"
@@ -140,7 +139,7 @@ AudioSocketBroker::AudioSocketBroker(
     const std::string& audio_output_service_path)
     : DocumentService(render_frame_host, std::move(receiver)),
       audio_output_service_path_(audio_output_service_path),
-      main_task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
+      main_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {}
 
 AudioSocketBroker::~AudioSocketBroker() = default;
 

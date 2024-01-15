@@ -10,17 +10,16 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/browser_dialogs.h"
-#include "chrome/browser/web_applications/app_registrar_observer.h"
 #include "chrome/browser/web_applications/web_app_callback_app_identity.h"
 #include "chrome/browser/web_applications/web_app_install_manager.h"
 #include "chrome/browser/web_applications/web_app_install_manager_observer.h"
+#include "components/webapps/browser/uninstall_result_code.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/metadata/view_factory.h"
 #include "ui/views/window/dialog_delegate.h"
 
 class Profile;
 class SkBitmap;
-class WebAppUninstallDialogViews;
 
 // WebAppIdentityUpdateConfirmationView provides views for showing which parts
 // of the app's identity changed so the user can make a determination whether to
@@ -28,8 +27,10 @@ class WebAppUninstallDialogViews;
 class WebAppIdentityUpdateConfirmationView
     : public views::DialogDelegateView,
       public web_app::WebAppInstallManagerObserver {
+  METADATA_HEADER(WebAppIdentityUpdateConfirmationView,
+                  views::DialogDelegateView)
+
  public:
-  METADATA_HEADER(WebAppIdentityUpdateConfirmationView);
   WebAppIdentityUpdateConfirmationView(
       Profile* profile,
       const std::string& app_id,
@@ -48,17 +49,14 @@ class WebAppIdentityUpdateConfirmationView
 
  private:
   // web_app::WebAppInstallManagerObserver:
-  void OnWebAppWillBeUninstalled(const web_app::AppId& app_id) override;
   void OnWebAppInstallManagerDestroyed() override;
 
   // views::WidgetDelegate:
   bool ShouldShowCloseButton() const override;
-
-  // views::DialogDelegateView:
   bool Cancel() override;
 
   void OnDialogAccepted();
-  void OnWebAppUninstallDialogClosed(webapps::UninstallResultCode code);
+  void OnWebAppUninstallScheduled(bool uninstall_scheduled);
 
   const raw_ptr<Profile> profile_;
 
@@ -72,9 +70,6 @@ class WebAppIdentityUpdateConfirmationView
 
   // A callback to relay the results of the app identity update dialog.
   web_app::AppIdentityDialogCallback callback_;
-
-  // The app uninstall dialog, shown to confirm the uninstallation.
-  std::unique_ptr<WebAppUninstallDialogViews> uninstall_dialog_;
 
   base::WeakPtrFactory<WebAppIdentityUpdateConfirmationView> weak_factory_{
       this};

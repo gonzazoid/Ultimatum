@@ -7,9 +7,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/callback_list.h"
-#include "chrome/browser/ui/tabs/tab_style.h"
 #include "chrome/browser/ui/thumbnails/thumbnail_image.h"
 
 // Tracks a specific thumbnail, or no thumbnail. Provides a callback for when
@@ -42,6 +40,7 @@ class TabHoverCardThumbnailObserver {
   scoped_refptr<ThumbnailImage> current_image_;
   std::unique_ptr<ThumbnailImage::Subscription> subscription_;
   base::RepeatingCallbackList<CallbackSignature> callback_list_;
+  bool reentrancy_guard_ = false;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_TABS_TAB_HOVER_CARD_THUMBNAIL_OBSERVER_H_

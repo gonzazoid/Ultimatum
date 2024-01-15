@@ -7,10 +7,10 @@
 
 #include <cstddef>
 #include <functional>
+#include <memory>
 #include <string>
 #include <utility>
 
-#include "ipcz/atomic_queue_state.h"
 #include "ipcz/fragment_ref.h"
 #include "ipcz/link_type.h"
 #include "ipcz/node_name.h"
@@ -35,7 +35,7 @@ class Router;
 // deactivate it. As a general rule, calls into Router should be made using a
 // Router reference owned on the calling stack rather than a reference owned by
 // the RouterLink.
-class RouterLink : public RefCounted {
+class RouterLink : public RefCounted<RouterLink> {
  public:
   using Pair = std::pair<Ref<RouterLink>, Ref<RouterLink>>;
 
@@ -71,7 +71,7 @@ class RouterLink : public RefCounted {
   // Passes a parcel to the Router on the other side of this link to be queued
   // and/or router further.
   virtual void AcceptParcel(const OperationContext& context,
-                            Parcel& parcel) = 0;
+                            std::unique_ptr<Parcel> parcel) = 0;
 
   // Notifies the Router on the other side of the link that the route has been
   // closed from this side. `sequence_length` is the total number of parcels
@@ -84,19 +84,6 @@ class RouterLink : public RefCounted {
   // in this case we don't know the final sequence length and can't guarantee
   // delivery of any further parcels.
   virtual void AcceptRouteDisconnected(const OperationContext& context) = 0;
-
-  // Returns the AtomicQueueState for the other side of this link if available.
-  // Otherwise returns null.
-  virtual AtomicQueueState* GetPeerQueueState() = 0;
-
-  // Returns the AtomicQueueState for this side of the link if available.
-  // Otherwise returns null.
-  virtual AtomicQueueState* GetLocalQueueState() = 0;
-
-  // Notifies the other side that this side has updated its visible queue state
-  // in some way which may be interesting to them. This should be called
-  // sparingly to avoid redundant IPC traffic and redundant idle wakes.
-  virtual void SnapshotPeerQueueState(const OperationContext& context) = 0;
 
   // Signals that this side of the link is in a stable state suitable for one
   // side or the other to lock the link, either for bypass or closure
@@ -198,7 +185,9 @@ class RouterLink : public RefCounted {
   virtual std::string Describe() const = 0;
 
  protected:
-  ~RouterLink() override = default;
+  friend class RefCounted<RouterLink>;
+
+  virtual ~RouterLink() = default;
 };
 
 }  // namespace ipcz

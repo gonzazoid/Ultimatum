@@ -5,10 +5,10 @@
 #include "extensions/common/api/declarative_net_request/dnr_manifest_handler.h"
 
 #include <set>
+#include <string_view>
 
 #include "base/files/file_path.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
 #include "extensions/common/api/declarative_net_request.h"
 #include "extensions/common/api/declarative_net_request/constants.h"
@@ -49,8 +49,7 @@ bool DNRManifestHandler::Parse(Extension* extension, std::u16string* error) {
 
   dnr_api::ManifestKeys manifest_keys;
   if (!dnr_api::ManifestKeys::ParseFromDictionary(
-          extension->manifest()->available_values().GetDict(), &manifest_keys,
-          error)) {
+          extension->manifest()->available_values(), manifest_keys, *error)) {
     return false;
   }
   std::vector<dnr_api::Ruleset> rulesets =
@@ -66,7 +65,7 @@ bool DNRManifestHandler::Parse(Extension* extension, std::u16string* error) {
     return false;
   }
 
-  std::set<base::StringPiece> ruleset_ids;
+  std::set<std::string_view> ruleset_ids;
 
   // Validates the ruleset at the given |index|. On success, returns true and
   // populates |info|. On failure, returns false and populates |error|.

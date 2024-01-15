@@ -10,30 +10,20 @@
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/first_party_sets/first_party_sets_policy_service.h"
+#include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/privacy_sandbox/canonical_topic.h"
+#include "components/privacy_sandbox/privacy_sandbox_prefs.h"
 #include "components/privacy_sandbox/privacy_sandbox_settings.h"
 #include "components/profile_metrics/browser_profile_type.h"
+#include "content/public/browser/interest_group_manager.h"
 #include "net/base/schemeful_site.h"
 
 class Browser;
-class PrefService;
-#if !BUILDFLAG(IS_ANDROID)
-class TrustSafetySentimentService;
-#endif
 
-namespace content {
-class BrowsingDataRemover;
-class InterestGroupManager;
-}
-
-namespace content_settings {
-class CookieSettings;
-}
-
-namespace browsing_topics {
-class BrowsingTopicsService;
+namespace views {
+class Widget;
 }
 
 // Service which encapsulates logic related to displaying and controlling the
@@ -50,9 +40,11 @@ class PrivacySandboxService : public KeyedService {
   // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.chrome.browser.privacy_sandbox
   enum class PromptType {
     kNone = 0,
-    kNotice = 1,
-    kConsent = 2,
-    kMaxValue = kConsent,
+    kM1Consent = 1,
+    kM1NoticeROW = 2,
+    kM1NoticeEEA = 3,
+    kM1NoticeRestricted = 4,
+    kMaxValue = kM1NoticeRestricted,
   };
 
   // An exhaustive list of actions related to showing & interacting with the
@@ -84,56 +76,56 @@ class PrivacySandboxService : public KeyedService {
     // settings.
     kNoticeLearnMore = 11,
 
-    kMaxValue = kNoticeLearnMore,
+    // Interactions with M1 Notice ROW prompt and M1 Notice EEA prompt.
+    kNoticeMoreInfoOpened = 12,
+    kNoticeMoreInfoClosed = 13,
+
+    // The button is shown only when the prompt content isn't fully visible.
+    kConsentMoreButtonClicked = 14,
+    kNoticeMoreButtonClicked = 15,
+
+    // Restricted notice interactions
+    kRestrictedNoticeAcknowledge = 16,
+    kRestrictedNoticeOpenSettings = 17,
+    kRestrictedNoticeShown = 18,
+    kRestrictedNoticeClosedNoInteraction = 19,
+    kRestrictedNoticeMoreButtonClicked = 20,
+
+    kMaxValue = kRestrictedNoticeMoreButtonClicked,
   };
 
-  PrivacySandboxService(
-      privacy_sandbox::PrivacySandboxSettings* privacy_sandbox_settings,
-      content_settings::CookieSettings* cookie_settings,
-      PrefService* pref_service,
-      content::InterestGroupManager* interest_group_manager,
-      profile_metrics::BrowserProfileType profile_type,
-      content::BrowsingDataRemover* browsing_data_remover,
-#if !BUILDFLAG(IS_ANDROID)
-      TrustSafetySentimentService* sentiment_service,
-#endif
-      browsing_topics::BrowsingTopicsService* browsing_topics_service,
-      first_party_sets::FirstPartySetsPolicyService* first_party_sets_service);
-
-  ~PrivacySandboxService() override;
-
-  // Returns the prompt type that should be shown to the user. This consults
-  // previous consent / notice information stored in preferences, the current
-  // state of the Privacy Sandbox settings, and the current location of the
-  // user, to determine the appropriate type. This is expected to be called by
-  // UI code locations determining whether a prompt should be shown on startup.
-  // Virtual to allow mocking in tests.
-  virtual PromptType GetRequiredPromptType();
-
-  // Informs the service that |action| occurred with the prompt. This allows
-  // the service to record this information in preferences such that future
-  // calls to GetRequiredPromptType() are correct. This is expected to be
-  // called appropriately by all locations showing the prompt. Metrics shared
-  // between platforms will also be recorded.
-  // This method is virtual for mocking in tests.
-  virtual void PromptActionOccurred(PromptAction action);
+  // If during the trials a previous consent decision was made, or the notice
+  // was already acknowledged, and the privacy sandbox is disabled,
+  // `prefs::kPrivacySandboxM1PromptSuppressed` was set to either
+  // `kTrialsConsentDeclined` or `kTrialsDisabledAfterNotice` accordingly and
+  // the prompt is suppressed. This logic is now deprecated after launching GA.
+  enum class PromptSuppressedReason {
+    // Prompt has never been suppressed
+    kNone = 0,
+    // User had the Privacy Sandbox restricted at confirmation
+    kRestricted = 1,
+    // User was blocking 3PC when we attempted consent
+    kThirdPartyCookiesBlocked = 2,
+    // User declined the trials consent
+    kTrialsConsentDeclined = 3,
+    // User saw trials notice, and then disabled trials
+    kTrialsDisabledAfterNotice = 4,
+    // A policy is suppressing any prompt
+    kPolicy = 5,
+    // User migrated from EEA to ROW, and had already previously finished the
+    // EEA consent flow.
+    kEEAFlowCompletedBeforeRowMigration = 6,
+    // User migrated from ROW to EEA, but had already disabled Topics from
+    // settings.
+    kROWFlowCompletedAndTopicsDisabledBeforeEEAMigration = 7,
+    // The user is restricted with a guardian, so a direct notice is shown.
+    kNoticeShownToGuardian = 8,
+    kMaxValue = kNoticeShownToGuardian,
+  };
 
   // Returns whether |url| is suitable to display the Privacy Sandbox prompt
   // over. Only about:blank and certain chrome:// URLs are considered suitable.
   static bool IsUrlSuitableForPrompt(const GURL& url);
-
-  // Functions for coordinating the display of the Privacy Sandbox prompts
-  // across multiple browser windows. Only relevant for Desktop.
-
-  // Informs the service that a Privacy Sandbox prompt has been opened
-  // or closed for |browser|.
-  // Virtual to allow mocking in tests.
-  virtual void PromptOpenedForBrowser(Browser* browser);
-  virtual void PromptClosedForBrowser(Browser* browser);
-
-  // Returns whether a Privacy Sandbox prompt is currently open for |browser|.
-  // Virtual to allow mocking in tests.
-  virtual bool IsPromptOpenForBrowser(Browser* browser);
 
   // Disables the display of the Privacy Sandbox prompt for testing. When
   // |disabled| is true, GetRequiredPromptType() will only ever return that no
@@ -143,82 +135,61 @@ class PrivacySandboxService : public KeyedService {
   // ensure it is reset at the end of your test.
   static void SetPromptDisabledForTests(bool disabled);
 
-  // Disables the Privacy Sandbox completely if |enabled| is false. If |enabled|
-  // is true, context specific as well as restriction checks will still be
-  // performed to determine if specific APIs are available in specific contexts.
-  void SetPrivacySandboxEnabled(bool enabled);
+  // Returns the prompt type that should be shown to the user. This consults
+  // previous consent / notice information stored in preferences, the current
+  // state of the Privacy Sandbox settings, and the current location of the
+  // user, to determine the appropriate type. This is expected to be called by
+  // UI code locations determining whether a prompt should be shown on startup.
+  virtual PromptType GetRequiredPromptType() = 0;
 
-  // Used by the UI to check if the API is enabled. This is a UI function ONLY.
-  // Checks the primary pref directly, and _only_ the primary pref. There are
-  // many other reasons that API access may be denied that are not checked by
-  // this function. All decisions for allowing access to APIs should be routed
-  // through the PrivacySandboxSettings class.
-  // TODO(crbug.com/1310157): Rename this function to better reflect this.
-  bool IsPrivacySandboxEnabled();
+  // Informs the service that |action| occurred with the prompt. This allows
+  // the service to record this information in preferences such that future
+  // calls to GetRequiredPromptType() are correct. This is expected to be
+  // called appropriately by all locations showing the prompt. Metrics shared
+  // between platforms will also be recorded.
+  virtual void PromptActionOccurred(PromptAction action) = 0;
 
-  // Returns whether the state of the API is managed.
-  bool IsPrivacySandboxManaged();
+  // Functions for coordinating the display of the Privacy Sandbox prompts
+  // across multiple browser windows. Only relevant for Desktop.
+
+#if !BUILDFLAG(IS_ANDROID)
+  // Informs the service that a Privacy Sandbox prompt has been opened
+  // or closed for |browser|.
+  virtual void PromptOpenedForBrowser(Browser* browser,
+                                      views::Widget* widget) = 0;
+  virtual void PromptClosedForBrowser(Browser* browser) = 0;
+
+  // Returns whether a Privacy Sandbox prompt is currently open for |browser|.
+  virtual bool IsPromptOpenForBrowser(Browser* browser) = 0;
+#endif  // !BUILDFLAG(IS_ANDROID)
+
+  // If set to true, this treats the testing environment as that of a branded
+  // Chrome build.
+  virtual void ForceChromeBuildForTests(bool force_chrome_build) = 0;
 
   // Returns whether the Privacy Sandbox is currently restricted for the
   // profile. UI code should consult this to ensure that when restricted,
   // Privacy Sandbox related UI is updated appropriately.
-  virtual bool IsPrivacySandboxRestricted();
+  virtual bool IsPrivacySandboxRestricted() = 0;
 
-  // Called when the V2 Privacy Sandbox preference is changed.
-  void OnPrivacySandboxV2PrefChanged();
+  // Returns whether the Privacy Sandbox is configured to show a restricted
+  // notice.
+  virtual bool IsRestrictedNoticeEnabled() = 0;
 
-  // Returns whether the FirstPartySets preference is enabled.
-  bool IsFirstPartySetsDataAccessEnabled() const;
+  // Toggles the RelatedWebsiteSets preference.
+  virtual void SetFirstPartySetsDataAccessEnabled(bool enabled) = 0;
 
-  // Returns whether the FirstPartySets preference is managed.
-  virtual bool IsFirstPartySetsDataAccessManaged() const;
+  // Returns whether the RelatedWebsiteSets preference is enabled.
+  virtual bool IsFirstPartySetsDataAccessEnabled() const = 0;
 
-  // Toggles the FirstPartySets preference.
-  void SetFirstPartySetsDataAccessEnabled(bool enabled);
-
-  // Returns the set of eTLD + 1's on which the user was joined to a FLEDGE
-  // interest group. Consults with the InterestGroupManager associated with
-  // |profile_| and formats the returned data for direct display to the user.
-  // Virtual to allow mocking in tests.
-  virtual void GetFledgeJoiningEtldPlusOneForDisplay(
-      base::OnceCallback<void(std::vector<std::string>)> callback);
-
-  // Returns the set of top frames which are blocked from joining the profile to
-  // an interest group. Virtual to allow mocking in tests.
-  virtual std::vector<std::string> GetBlockedFledgeJoiningTopFramesForDisplay()
-      const;
-
-  // Sets Fledge interest group joining to |allowed| for |top_frame_etld_plus1|.
-  // Forwards the setting to the PrivacySandboxSettings service, but also
-  // removes any Fledge data for the |top_frame_etld_plus1| if |allowed| is
-  // false.
-  // Virtual to allow mocking in tests.
-  virtual void SetFledgeJoiningAllowed(const std::string& top_frame_etld_plus1,
-                                       bool allowed) const;
-
-  // Returns the top topics for the previous N epochs.
-  // Virtual for mocking in tests.
-  virtual std::vector<privacy_sandbox::CanonicalTopic> GetCurrentTopTopics()
-      const;
-
-  // Returns the set of topics which have been blocked by the user.
-  // Virtual for mocking in tests.
-  virtual std::vector<privacy_sandbox::CanonicalTopic> GetBlockedTopics() const;
-
-  // Sets a |topic_id|, as both a top topic and topic provided to the web, to be
-  // allowed/blocked based on the value of |allowed|. This is stored to
-  // preferences and made available to the Topics API via the
-  // PrivacySandboxSettings class. This function expects that |topic| will have
-  // previously been provided by one of the above functions. Virtual for mocking
-  // in tests.
-  virtual void SetTopicAllowed(privacy_sandbox::CanonicalTopic topic,
-                               bool allowed);
+  // Returns whether the RelatedWebsiteSets preference is managed.
+  virtual bool IsFirstPartySetsDataAccessManaged() const = 0;
 
   // DEPRECATED - Do not use in new code. It will be replaced with queries to
   // the First-Party Sets that are in the browser-process.
   // Virtual for mocking in tests.
   virtual base::flat_map<net::SchemefulSite, net::SchemefulSite>
-  GetSampleFirstPartySets() const;
+  GetSampleFirstPartySets() const = 0;
 
   // Returns the owner domain of the first party set that `site_url` is a member
   // of, or absl::nullopt if `site_url` is not recognised as a member of an FPS.
@@ -226,11 +197,11 @@ class PrivacySandboxService : public KeyedService {
   // should not, absl::nullopt is always returned.
   // Virtual for mocking in tests.
   virtual absl::optional<net::SchemefulSite> GetFirstPartySetOwner(
-      const GURL& site_url) const;
+      const GURL& site_url) const = 0;
 
   // Same as GetFirstPartySetOwner but returns a formatted string.
   virtual absl::optional<std::u16string> GetFirstPartySetOwnerForDisplay(
-      const GURL& site_url) const;
+      const GURL& site_url) const = 0;
 
   // Returns true if `site`'s membership in an FPS is being managed by policy or
   // if FirstPartySets preference is managed. Virtual for mocking in tests.
@@ -240,205 +211,65 @@ class PrivacySandboxService : public KeyedService {
   // if `site` is being added into a First-Party Set since there's no UI use for
   // whether `site` is being removed by an enterprise yet.
   virtual bool IsPartOfManagedFirstPartySet(
-      const net::SchemefulSite& site) const;
+      const net::SchemefulSite& site) const = 0;
 
- protected:
-  friend class PrivacySandboxServiceTest;
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           MetricsLoggingOccursCorrectly);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTestNonRegularProfile,
-                           NoMetricsRecorded);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServicePromptTest, RestrictedPrompt);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServicePromptTest, ManagedNoPrompt);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServicePromptTest,
-                           ManuallyControlledNoPrompt);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServicePromptTest, NoParamNoPrompt);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceDeathTest,
-                           GetRequiredPromptType);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           PrivacySandboxPromptNoticeWaiting);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           PrivacySandboxPromptConsentWaiting);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           PrivacySandboxV1OffEnabled);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           PrivacySandboxV1OffDisabled);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           PrivacySandboxConsentEnabled);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           PrivacySandboxConsentDisabled);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           PrivacySandboxNoticeEnabled);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           PrivacySandboxNoticeDisabled);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           PrivacySandbox3PCOffEnabled);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           PrivacySandbox3PCOffDisabled);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           PrivacySandboxManagedEnabled);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           PrivacySandboxManagedDisabled);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           PrivacySandboxManuallyControlledEnabled);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           PrivacySandboxManuallyControlledDisabled);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           PrivacySandboxNoPromptDisabled);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           PrivacySandboxNoPromptEnabled);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest, PrivacySandboxRestricted);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           FirstPartySetsNotRelevantMetricAllowedCookies);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           FirstPartySetsNotRelevantMetricBlockedCookies);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           FirstPartySetsEnabledMetric);
-  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxServiceTest,
-                           FirstPartySetsDisabledMetric);
+  // Returns the set of eTLD + 1's on which the user was joined to a FLEDGE
+  // interest group. Consults with the InterestGroupManager associated with
+  // |profile_| and formats the returned data for direct display to the user.
+  virtual void GetFledgeJoiningEtldPlusOneForDisplay(
+      base::OnceCallback<void(std::vector<std::string>)> callback) = 0;
 
-  // Should be used only for tests when mocking the service.
-  PrivacySandboxService();
+  // Returns the set of top frames which are blocked from joining the profile to
+  // an interest group.
+  virtual std::vector<std::string> GetBlockedFledgeJoiningTopFramesForDisplay()
+      const = 0;
 
-  // Contains all possible privacy sandbox states, recorded on startup.
-  // These values are persisted to logs. Entries should not be renumbered and
-  // numeric values should never be reused.
-  // Must be kept in sync with the SettingsPrivacySandboxEnabled enum in
-  // histograms/enums.xml.
-  enum class SettingsPrivacySandboxEnabled {
-    kPSEnabledAllowAll = 0,
-    kPSEnabledBlock3P = 1,
-    kPSEnabledBlockAll = 2,
-    kPSDisabledAllowAll = 3,
-    kPSDisabledBlock3P = 4,
-    kPSDisabledBlockAll = 5,
-    kPSDisabledPolicyBlock3P = 6,
-    kPSDisabledPolicyBlockAll = 7,
-    // DEPRECATED
-    kPSEnabledFlocDisabledAllowAll = 8,
-    // DEPRECATED
-    kPSEnabledFlocDisabledBlock3P = 9,
-    // DEPRECATED
-    kPSEnabledFlocDisabledBlockAll = 10,
-    // Add values above this line with a corresponding label in
-    // tools/metrics/histograms/enums.xml
-    kMaxValue = kPSEnabledFlocDisabledBlockAll,
-  };
+  // Sets Fledge interest group joining to |allowed| for |top_frame_etld_plus1|.
+  // Forwards the setting to the PrivacySandboxSettings service, but also
+  // removes any Fledge data for the |top_frame_etld_plus1| if |allowed| is
+  // false.
+  virtual void SetFledgeJoiningAllowed(const std::string& top_frame_etld_plus1,
+                                       bool allowed) const = 0;
 
-  // Contains all possible states of first party sets preference.
-  // These values are persisted to logs. Entries should not be renumbered and
-  // numeric values should never be reused.
-  // Must be kept in sync with the FirstPartySetsState enum in
-  // histograms/enums.xml.
-  enum class FirstPartySetsState {
-    // The user allows all cookies, or blocks all cookies.
-    kFpsNotRelevant = 0,
-    // The user blocks third-party cookies, and has FPS enabled.
-    kFpsEnabled = 1,
-    // The user blocks third-party cookies, and has FPS disabled.
-    kFpsDisabled = 2,
-    kMaxValue = kFpsDisabled,
-  };
+  // Returns the top topics for the previous N epochs.
+  // Virtual for mocking in tests.
+  virtual std::vector<privacy_sandbox::CanonicalTopic> GetCurrentTopTopics()
+      const = 0;
 
-  // Contains the possible states of a users Privacy Sandbox overall settings.
-  // Must be kept in sync with SettingsPrivacySandboxStartupStates in
-  // histograms/enums.xml
-  enum class PSStartupStates {
-    kPromptWaiting = 0,
-    kPromptOffV1OffEnabled = 1,
-    kPromptOffV1OffDisabled = 2,
-    kConsentShownEnabled = 3,
-    kConsentShownDisabled = 4,
-    kNoticeShownEnabled = 5,
-    kNoticeShownDisabled = 6,
-    kPromptOff3PCOffEnabled = 7,
-    kPromptOff3PCOffDisabled = 8,
-    kPromptOffManagedEnabled = 9,
-    kPromptOffManagedDisabled = 10,
-    kPromptOffRestricted = 11,
-    kPromptOffManuallyControlledEnabled = 12,
-    kPromptOffManuallyControlledDisabled = 13,
-    kNoPromptRequiredEnabled = 14,
-    kNoPromptRequiredDisabled = 15,
+  // Returns the set of topics which have been blocked by the user.
+  // Virtual for mocking in tests.
+  virtual std::vector<privacy_sandbox::CanonicalTopic> GetBlockedTopics()
+      const = 0;
 
-    // Add values above this line with a corresponding label in
-    // tools/metrics/histograms/enums.xml
-    kMaxValue = kNoPromptRequiredDisabled,
-  };
+  // Sets a |topic_id|, as both a top topic and topic provided to the web, to be
+  // allowed/blocked based on the value of |allowed|. This is stored to
+  // preferences and made available to the Topics API via the
+  // PrivacySandboxSettings class. This function expects that |topic| will have
+  // previously been provided by one of the above functions. Virtual for mocking
+  // in tests.
+  virtual void SetTopicAllowed(privacy_sandbox::CanonicalTopic topic,
+                               bool allowed) = 0;
 
-  // Helper function to log first party sets state.
-  void RecordFirstPartySetsStateHistogram(FirstPartySetsState state);
+  // Inform the service that the user changed the Topics toggle in settings,
+  // so that the current topics consent information can be updated.
+  // TODO (crbug.com/1378703): Determine whether changes to the preference,
+  // such as by policy or extensions, should also call here.
+  // Virtual for mocking in tests.
+  virtual void TopicsToggleChanged(bool new_value) const = 0;
 
-  // Helper function to actually make the metrics call for
-  // LogPrivacySandboxState.
-  void RecordPrivacySandboxHistogram(SettingsPrivacySandboxEnabled state);
+  // Whether the current profile requires consent for Topics to operate.
+  virtual bool TopicsConsentRequired() const = 0;
 
-  // Logs the state of the privacy sandbox and cookie settings. Called once per
-  // profile startup.
-  void LogPrivacySandboxState();
+  // Whether there is an active consent for Topics currently recorded.
+  virtual bool TopicsHasActiveConsent() const = 0;
 
-  // Logs the state of privacy sandbox 3 in regards to prompts. Called once per
-  // profile startup.
-  void RecordPrivacySandbox3StartupMetrics();
-
-  // Converts the provided list of |top_frames| into eTLD+1s for display, and
-  // provides those to |callback|.
-  void ConvertFledgeJoiningTopFramesForDisplay(
-      base::OnceCallback<void(std::vector<std::string>)> callback,
-      std::vector<url::Origin> top_frames);
-
-  // Contains the logic which powers GetRequiredPromptType(). Static to allow
-  // EXPECT_DCHECK_DEATH testing, which does not work well with many of the
-  // other dependencies of this service. It is also for this reason the 3P
-  // cookie block state is passed in, as CookieSettings cannot be used in
-  // death tests.
-  static PrivacySandboxService::PromptType GetRequiredPromptTypeInternal(
-      PrefService* pref_service,
-      profile_metrics::BrowserProfileType profile_type,
-      privacy_sandbox::PrivacySandboxSettings* privacy_sandbox_settings,
-      bool third_party_cookies_blocked);
-
-  // Checks to see if initialization of the user's FPS pref is required, and if
-  // so, sets the default value based on the user's current cookie settings.
-  void MaybeInitializeFirstPartySetsPref();
-
- private:
-  raw_ptr<privacy_sandbox::PrivacySandboxSettings> privacy_sandbox_settings_;
-  raw_ptr<content_settings::CookieSettings> cookie_settings_;
-  raw_ptr<PrefService> pref_service_;
-  raw_ptr<content::InterestGroupManager> interest_group_manager_;
-  profile_metrics::BrowserProfileType profile_type_;
-  raw_ptr<content::BrowsingDataRemover> browsing_data_remover_;
-#if !BUILDFLAG(IS_ANDROID)
-  raw_ptr<TrustSafetySentimentService> sentiment_service_;
-#endif
-  raw_ptr<browsing_topics::BrowsingTopicsService> browsing_topics_service_;
-  raw_ptr<first_party_sets::FirstPartySetsPolicyService>
-      first_party_sets_policy_service_;
-
-  PrefChangeRegistrar user_prefs_registrar_;
-
-  // The set of Browser windows which have an open Privacy Sandbox prompt.
-  std::set<Browser*> browsers_with_open_prompts_;
-
-  // Fake implementation for current and blocked topics.
-  std::set<privacy_sandbox::CanonicalTopic> fake_current_topics_ = {
-      {browsing_topics::Topic(1),
-       privacy_sandbox::CanonicalTopic::AVAILABLE_TAXONOMY},
-      {browsing_topics::Topic(2),
-       privacy_sandbox::CanonicalTopic::AVAILABLE_TAXONOMY}};
-  std::set<privacy_sandbox::CanonicalTopic> fake_blocked_topics_ = {
-      {browsing_topics::Topic(3),
-       privacy_sandbox::CanonicalTopic::AVAILABLE_TAXONOMY},
-      {browsing_topics::Topic(4),
-       privacy_sandbox::CanonicalTopic::AVAILABLE_TAXONOMY}};
-
-  // Informs the TrustSafetySentimentService, if it exists, that a
-  // Privacy Sandbox 3 interaction for an area has occurred The area is
-  // determined by |action|. Only a subset of actions has a corresponding area.
-  void InformSentimentService(PrivacySandboxService::PromptAction action);
-
-  base::WeakPtrFactory<PrivacySandboxService> weak_factory_{this};
+  // Functions which returns the details of the currently recorded Topics
+  // consent.
+  // TODO (crbug.com/1378703): Display the output of these functions in WebUI.
+  virtual privacy_sandbox::TopicsConsentUpdateSource
+  TopicsConsentLastUpdateSource() const = 0;
+  virtual base::Time TopicsConsentLastUpdateTime() const = 0;
+  virtual std::string TopicsConsentLastUpdateText() const = 0;
 };
 
 #endif  // CHROME_BROWSER_PRIVACY_SANDBOX_PRIVACY_SANDBOX_SERVICE_H_

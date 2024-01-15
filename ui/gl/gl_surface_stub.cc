@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 
 namespace gl {
@@ -27,10 +27,10 @@ bool GLSurfaceStub::IsOffscreen() {
 }
 
 gfx::SwapResult GLSurfaceStub::SwapBuffers(PresentationCallback callback,
-                                           FrameData data) {
+                                           gfx::FrameData data) {
   gfx::PresentationFeedback feedback(base::TimeTicks::Now(), base::TimeDelta(),
                                      0 /* flags */);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(feedback)));
   return gfx::SwapResult::SWAP_ACK;
 }

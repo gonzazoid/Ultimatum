@@ -398,6 +398,9 @@ TEST_F(AnimationTest, AttachTwoAnimationsToOneLayer) {
       element_id_, ElementListType::PENDING, end_opacity);
   client_impl_.ExpectTransformPropertyMutated(
       element_id_, ElementListType::PENDING, transform_x, transform_y);
+
+  animation1->set_animation_delegate(nullptr);
+  animation2->set_animation_delegate(nullptr);
 }
 
 TEST_F(AnimationTest, AddRemoveAnimationToNonAttachedAnimation) {
@@ -546,7 +549,7 @@ TEST_F(AnimationTest, SwitchToLayer) {
   EXPECT_EQ(animation_impl_->keyframe_effect()->element_id(), element_id_);
   CheckKeyframeEffectTimelineNeedsPushProperties(false);
 
-  const ElementId new_element_id(element_id_.GetStableId() + 1);
+  const ElementId new_element_id(element_id_.GetInternalValue() + 1);
   animation_->DetachElement();
   animation_->AttachElement(new_element_id);
 

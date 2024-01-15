@@ -9,7 +9,7 @@
 #include "third_party/blink/renderer/core/dom/events/native_event_listener.h"
 #include "third_party/blink/renderer/core/editing/position_with_affinity.h"
 #include "third_party/blink/renderer/core/editing/text_affinity.h"
-#include "third_party/blink/renderer/core/layout/ng/ng_physical_box_fragment.h"
+#include "third_party/blink/renderer/core/layout/physical_box_fragment.h"
 #include "third_party/blink/renderer/core/testing/core_unit_test_helper.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 
@@ -17,10 +17,6 @@ namespace blink {
 
 class HitTestingTest : public RenderingTest {
  protected:
-  bool LayoutNGEnabled() const {
-    return RuntimeEnabledFeatures::LayoutNGEnabled();
-  }
-
   PositionWithAffinity HitTest(const PhysicalOffset offset) {
     const HitTestRequest hit_request(HitTestRequest::kActive);
     const HitTestLocation hit_location(offset);
@@ -50,8 +46,8 @@ TEST_F(HitTestingTest, OcclusionHitTest) {
     <div id=occluder></div>
   )HTML");
 
-  Element* target = GetDocument().getElementById("target");
-  Element* occluder = GetDocument().getElementById("occluder");
+  Element* target = GetDocument().getElementById(AtomicString("target"));
+  Element* occluder = GetDocument().getElementById(AtomicString("occluder"));
   HitTestResult result = target->GetLayoutObject()->HitTestForOcclusion();
   EXPECT_EQ(result.InnerNode(), target);
 
@@ -83,8 +79,8 @@ TEST_F(HitTestingTest, OcclusionHitTestWithClipPath) {
     <div id=occluder></div>
   )HTML");
 
-  Element* target = GetDocument().getElementById("target");
-  Element* occluder = GetDocument().getElementById("occluder");
+  Element* target = GetDocument().getElementById(AtomicString("target"));
+  Element* occluder = GetDocument().getElementById(AtomicString("occluder"));
 
   // target and occluder don't overlap, no occlusion.
   HitTestResult result = target->GetLayoutObject()->HitTestForOcclusion();

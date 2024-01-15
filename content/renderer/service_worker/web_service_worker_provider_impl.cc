@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/trace_event/trace_event.h"
 #include "content/renderer/service_worker/service_worker_provider_context.h"
@@ -228,7 +228,7 @@ void WebServiceWorkerProviderImpl::CountFeature(
 void WebServiceWorkerProviderImpl::OnRegistered(
     std::unique_ptr<WebServiceWorkerRegistrationCallbacks> callbacks,
     blink::mojom::ServiceWorkerErrorType error,
-    const absl::optional<std::string>& error_msg,
+    const std::optional<std::string>& error_msg,
     blink::mojom::ServiceWorkerRegistrationObjectInfoPtr registration) {
   TRACE_EVENT_NESTABLE_ASYNC_END2(
       "ServiceWorker", "WebServiceWorkerProviderImpl::RegisterServiceWorker",
@@ -254,7 +254,7 @@ void WebServiceWorkerProviderImpl::OnRegistered(
 void WebServiceWorkerProviderImpl::OnDidGetRegistration(
     std::unique_ptr<WebServiceWorkerGetRegistrationCallbacks> callbacks,
     blink::mojom::ServiceWorkerErrorType error,
-    const absl::optional<std::string>& error_msg,
+    const std::optional<std::string>& error_msg,
     blink::mojom::ServiceWorkerRegistrationObjectInfoPtr registration) {
   TRACE_EVENT_NESTABLE_ASYNC_END2(
       "ServiceWorker", "WebServiceWorkerProviderImpl::GetRegistration",
@@ -282,8 +282,8 @@ void WebServiceWorkerProviderImpl::OnDidGetRegistration(
 void WebServiceWorkerProviderImpl::OnDidGetRegistrations(
     std::unique_ptr<WebServiceWorkerGetRegistrationsCallbacks> callbacks,
     blink::mojom::ServiceWorkerErrorType error,
-    const absl::optional<std::string>& error_msg,
-    absl::optional<
+    const std::optional<std::string>& error_msg,
+    std::optional<
         std::vector<blink::mojom::ServiceWorkerRegistrationObjectInfoPtr>>
         infos) {
   TRACE_EVENT_NESTABLE_ASYNC_END2(

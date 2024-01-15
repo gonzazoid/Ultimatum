@@ -7,9 +7,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -23,8 +23,12 @@ class TickClock;
 }  // namespace base
 
 namespace media {
-class MojoDataPipeReader;
+class DecoderBuffer;
 }  // namespace media
+
+namespace media::cast {
+class DecoderBufferReader;
+}  // namespace media::cast
 
 namespace openscreen::cast {
 class Sender;
@@ -79,13 +83,12 @@ class COMPONENT_EXPORT(MIRRORING_SERVICE) RemotingSender final
   // Friend class for unit tests.
   friend class RemotingSenderTest;
 
-  // media::mojom::RemotingDataStreamSender implementation. SendFrame() will
-  // push callbacks onto the back of the input queue, and these may or may not
-  // be processed at a later time. It depends on whether the data pipe has data
-  // available or the CastTransport can accept more frames. CancelInFlightData()
-  // is processed immediately, and will cause all pending operations to discard
-  // data when they are processed later.
-  void SendFrame(uint32_t frame_size) override;
+  // Creates SenderEncodedFrames.
+  class SenderEncodedFrameFactory;
+
+  // media::mojom::RemotingDataStreamSender implementation.
+  void SendFrame(media::mojom::DecoderBufferPtr buffer,
+                 SendFrameCallback callback) override;
   void CancelInFlightData() override;
 
   // FrameSender::Client overrides.
@@ -93,26 +96,24 @@ class COMPONENT_EXPORT(MIRRORING_SERVICE) RemotingSender final
   base::TimeDelta GetEncoderBacklogDuration() const override;
   void OnFrameCanceled(media::cast::FrameId frame_id) override;
 
-  // Attempt to run next pending input task, popping the head of the input queue
-  // as each task succeeds.
-  void ProcessNextInputTask();
-
-  // These are called via callbacks run from the input queue.
-  // Consumes a frame of |size| from the associated Mojo data pipe.
-  void ReadFrame(uint32_t size);
-  // Sends out the frame to the receiver over network.
+  // Sends out the frame to the receiver over network if |frame_sender_| has
+  // available space to handle it.
   void TrySendFrame();
 
-  // Called when a frame is completely read/discarded from the data pipe.
-  void OnFrameRead(bool success);
+  // Sets |next_frame_| once it has been read from the data pipe.
+  void OnFrameRead(scoped_refptr<media::DecoderBuffer> buffer);
 
-  // Called when an input task completes.
-  void OnInputTaskComplete();
-
+  // Called when |stream_sender_| is disconnected.
   void OnRemotingDataStreamError();
 
+  // Clears the current frame and requests a new one be sent.
+  void ClearCurrentFrame();
+
   // Returns true if OnRemotingDataStreamError was called.
-  bool HadError() const;
+  bool HadError() const {
+    DCHECK_EQ(!decoder_buffer_reader_, !stream_sender_.is_bound());
+    return !decoder_buffer_reader_;
+  }
 
   SEQUENCE_CHECKER(sequence_checker_);
 
@@ -124,30 +125,35 @@ class COMPONENT_EXPORT(MIRRORING_SERVICE) RemotingSender final
   // Callback that is run to notify when a fatal error occurs.
   base::OnceClosure error_callback_;
 
-  std::unique_ptr<media::MojoDataPipeReader> data_pipe_reader_;
+  // Reads media::DecoderBuffer instances and passes them to OnFrameRead().
+  std::unique_ptr<media::cast::DecoderBufferReader> decoder_buffer_reader_;
 
   // Mojo receiver for this instance. Implementation at the other end of the
   // message pipe uses the RemotingDataStreamSender remote to control when
   // this RemotingSender consumes from |pipe_|.
   mojo::Receiver<media::mojom::RemotingDataStreamSender> stream_sender_;
 
-  // The next frame's payload data. Populated by call to OnFrameRead() when
-  // reading succeeded.
-  std::string next_frame_data_;
+  // Whether this is an audio sender (true) or a video sender (false).
+  const bool is_audio_;
 
-  // Queue of pending input operations. |input_queue_discards_remaining_|
-  // indicates the number of operations where data should be discarded (due to
-  // CancelInFlightData()).
-  base::queue<base::RepeatingClosure> input_queue_;
-  size_t input_queue_discards_remaining_;
+  // Responsible for creating encoded frames.
+  std::unique_ptr<SenderEncodedFrameFactory> frame_factory_;
 
-  // Indicates whether the |data_pipe_reader_| is processing a reading request.
-  bool is_reading_;
+  // The next frame. Populated by call to OnFrameRead() when reading succeeded.
+  scoped_refptr<media::DecoderBuffer> next_frame_;
+
+  // To be called once a frame has been successfully read and this instance is
+  // ready to process a new one.
+  SendFrameCallback read_complete_cb_;
 
   // Set to true if the first frame has not yet been sent, or if a
   // CancelInFlightData() operation just completed. This causes TrySendFrame()
   // to mark the next frame as the start of a new sequence.
-  bool flow_restart_pending_;
+  bool flow_restart_pending_ = true;
+
+  // Number of EnqueueFrame() calls that have failed since the last successful
+  // call.
+  int consecutive_enqueue_frame_failure_count_ = 0;
 
   // The next frame's ID. Before any frames are sent, this will be the ID of
   // the first frame.

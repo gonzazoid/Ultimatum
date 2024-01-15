@@ -10,10 +10,12 @@
 #include <cstring>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/trace_event/trace_event.h"
 #include "media/base/media_switches.h"
+#include "media/base/video_encoder_metrics_provider.h"
 #include "media/cast/common/openscreen_conversion_helpers.h"
 #include "media/cast/common/rtp_time.h"
 #include "media/cast/common/sender_encoded_frame.h"
@@ -54,6 +56,17 @@ constexpr base::TimeDelta kMinKeyFrameRequestInterval = base::Milliseconds(500);
 
 // This is the minimum amount of frames between issuing key frame requests.
 constexpr int kMinKeyFrameRequestFrameInterval = 6;
+
+// UMA histogram name for video bitrate setting.
+constexpr char kHistogramBitrate[] = "CastStreaming.Sender.Video.Bitrate";
+
+// UMA histogram for the percentage of dropped video frames.
+constexpr char kHistogramDroppedFrames[] =
+    "CastStreaming.Sender.Video.PercentDroppedFrames";
+
+// UMA histogram for recording when a frame is dropped.
+constexpr char kHistogramFrameDropped[] =
+    "CastStreaming.Sender.Video.FrameDropped";
 
 // Extract capture begin/end timestamps from |video_frame|'s metadata and log
 // it.
@@ -96,6 +109,8 @@ VideoSender::VideoSender(
     StatusChangeCallback status_change_cb,
     const CreateVideoEncodeAcceleratorCallback& create_vea_cb,
     CastTransport* const transport_sender,
+    std::unique_ptr<media::VideoEncoderMetricsProvider>
+        encoder_metrics_provider,
     PlayoutDelayChangeCB playout_delay_change_cb,
     media::VideoCaptureFeedbackCB feedback_cb)
     : VideoSender(cast_environment,
@@ -106,6 +121,7 @@ VideoSender::VideoSender(
                                       video_config,
                                       transport_sender,
                                       *this),
+                  std::move(encoder_metrics_provider),
                   std::move(playout_delay_change_cb),
                   std::move(feedback_cb)) {}
 
@@ -115,6 +131,8 @@ VideoSender::VideoSender(
     StatusChangeCallback status_change_cb,
     const CreateVideoEncodeAcceleratorCallback& create_vea_cb,
     std::unique_ptr<openscreen::cast::Sender> sender,
+    std::unique_ptr<media::VideoEncoderMetricsProvider>
+        encoder_metrics_provider,
     PlayoutDelayChangeCB playout_delay_change_cb,
     media::VideoCaptureFeedbackCB feedback_cb,
     FrameSender::GetSuggestedVideoBitrateCB get_bitrate_cb)
@@ -127,10 +145,9 @@ VideoSender::VideoSender(
                                       std::move(sender),
                                       *this,
                                       std::move(get_bitrate_cb)),
+                  std::move(encoder_metrics_provider),
                   std::move(playout_delay_change_cb),
-                  std::move(feedback_cb)) {
-  DCHECK(base::FeatureList::IsEnabled(kOpenscreenCastStreamingSession));
-}
+                  std::move(feedback_cb)) {}
 
 // Note, we use a fixed bitrate value when external video encoder is used.
 // Some hardware encoder shows bad behavior if we set the bitrate too
@@ -142,6 +159,8 @@ VideoSender::VideoSender(
     StatusChangeCallback status_change_cb,
     const CreateVideoEncodeAcceleratorCallback& create_vea_cb,
     std::unique_ptr<FrameSender> sender,
+    std::unique_ptr<media::VideoEncoderMetricsProvider>
+        encoder_metrics_provider,
     PlayoutDelayChangeCB playout_delay_change_cb,
     media::VideoCaptureFeedbackCB feedback_callback)
     : frame_sender_(std::move(sender)),
@@ -151,6 +170,7 @@ VideoSender::VideoSender(
       playout_delay_change_cb_(std::move(playout_delay_change_cb)),
       feedback_cb_(feedback_callback) {
   video_encoder_ = VideoEncoder::Create(cast_environment_, video_config,
+                                        std::move(encoder_metrics_provider),
                                         status_change_cb, create_vea_cb);
   if (!video_encoder_) {
     cast_environment_->PostTask(
@@ -159,17 +179,18 @@ VideoSender::VideoSender(
   }
 }
 
-VideoSender::~VideoSender() = default;
+VideoSender::~VideoSender() {
+  // Record the number of frames dropped during this session.
+  base::UmaHistogramPercentage(kHistogramDroppedFrames,
+                               (number_of_frames_dropped_ * 100) /
+                                   std::max(1, number_of_frames_inserted_));
+}
 
 void VideoSender::InsertRawVideoFrame(
     scoped_refptr<media::VideoFrame> video_frame,
     const base::TimeTicks& reference_time) {
   DCHECK(cast_environment_->CurrentlyOn(CastEnvironment::MAIN));
-
-  if (!video_encoder_) {
-    NOTREACHED();
-    return;
-  }
+  CHECK(video_encoder_);
 
   const RtpTimeTicks rtp_timestamp =
       ToRtpTimeTicks(video_frame->timestamp(), kVideoFrequency);
@@ -233,7 +254,10 @@ void VideoSender::InsertRawVideoFrame(
           ? reference_time - last_enqueued_frame_reference_time_
           : base::Seconds(1.0 / frame_sender_->MaxFrameRate());
 
-  if (frame_sender_->ShouldDropNextFrame(duration_added_by_next_frame)) {
+  number_of_frames_inserted_++;
+  const CastStreamingFrameDropReason reason =
+      frame_sender_->ShouldDropNextFrame(duration_added_by_next_frame);
+  if (reason != CastStreamingFrameDropReason::kNotDropped) {
     base::TimeDelta new_target_delay =
         std::min(frame_sender_->CurrentRoundTripTime() * kRoundTripsNeeded +
                      base::Milliseconds(kConstantTimeMs),
@@ -262,10 +286,11 @@ void VideoSender::InsertRawVideoFrame(
     // drop every subsequent frame for the rest of the session.
     video_encoder_->EmitFrames();
 
-    TRACE_EVENT_INSTANT2("cast.stream", "Video Frame Drop",
-                         TRACE_EVENT_SCOPE_THREAD,
-                         "rtp_timestamp", rtp_timestamp.lower_32_bits(),
-                         "reason", "too much in flight");
+    number_of_frames_dropped_++;
+    base::UmaHistogramEnumeration(kHistogramFrameDropped, reason);
+    TRACE_EVENT_INSTANT2("cast.stream", "Video Frame Drop (raw frame)",
+                         TRACE_EVENT_SCOPE_THREAD, "duration",
+                         duration_added_by_next_frame, "reason", reason);
     return;
   }
 
@@ -282,19 +307,29 @@ void VideoSender::InsertRawVideoFrame(
     last_bitrate_ = bitrate;
   }
 
+  // Report the bitrate every 500 frames.
+  constexpr int kSampleInterval = 500;
+  frames_since_bitrate_reported_ =
+      ++frames_since_bitrate_reported_ % kSampleInterval;
+  if (frames_since_bitrate_reported_ == 0) {
+    base::UmaHistogramMemoryKB(kHistogramBitrate, bitrate / 1000);
+  }
+
   TRACE_COUNTER_ID1("cast.stream", "Video Target Bitrate", this, bitrate);
 
-  const scoped_refptr<VideoFrame> frame_to_encode =
-      MaybeRenderPerformanceMetricsOverlay(
-          frame_sender_->GetTargetPlayoutDelay(), low_latency_mode_, bitrate,
-          frames_in_encoder_ + 1, last_reported_encoder_utilization_,
-          last_reported_lossiness_, std::move(video_frame));
+  if (base::FeatureList::IsEnabled(media::kCastStreamingPerformanceOverlay)) {
+    video_frame = RenderPerformanceMetricsOverlay(
+        frame_sender_->GetTargetPlayoutDelay(), low_latency_mode_, bitrate,
+        frames_in_encoder_ + 1, last_reported_encoder_utilization_,
+        last_reported_lossiness_, std::move(video_frame));
+  }
+
   if (video_encoder_->EncodeVideoFrame(
-          frame_to_encode, reference_time,
+          video_frame, reference_time,
           base::BindOnce(&VideoSender::OnEncodedVideoFrame, AsWeakPtr(),
-                         frame_to_encode))) {
+                         video_frame))) {
     TRACE_EVENT_NESTABLE_ASYNC_BEGIN1(
-        "cast.stream", "Video Encode", TRACE_ID_LOCAL(frame_to_encode.get()),
+        "cast.stream", "Video Encode", TRACE_ID_LOCAL(video_frame.get()),
         "rtp_timestamp", rtp_timestamp.lower_32_bits());
     frames_in_encoder_++;
     duration_in_encoder_ += duration_added_by_next_frame;
@@ -377,17 +412,19 @@ void VideoSender::OnEncodedVideoFrame(
   }
 
   const RtpTimeTicks rtp_timestamp = encoded_frame->rtp_timestamp;
-  if (!frame_sender_->EnqueueFrame(std::move(encoded_frame))) {
+  const CastStreamingFrameDropReason reason =
+      frame_sender_->EnqueueFrame(std::move(encoded_frame));
+  if (reason != CastStreamingFrameDropReason::kNotDropped) {
     // Since we have dropped an already encoded frame, which is much worse than
     // dropping a raw frame above, we need to flush the encoder and emit a new
     // keyframe.
     video_encoder_->EmitFrames();
     video_encoder_->GenerateKeyFrame();
 
+    base::UmaHistogramEnumeration(kHistogramFrameDropped, reason);
     TRACE_EVENT_INSTANT2("cast.stream", "Video Frame Drop (already encoded)",
                          TRACE_EVENT_SCOPE_THREAD, "rtp_timestamp",
-                         rtp_timestamp.lower_32_bits(), "reason",
-                         "openscreen sender did not accept the frame");
+                         rtp_timestamp.lower_32_bits(), "reason", reason);
   }
 }
 

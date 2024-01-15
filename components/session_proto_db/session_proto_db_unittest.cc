@@ -6,18 +6,22 @@
 
 #include <map>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/task/thread_pool.h"
-#include "base/test/task_environment.h"
 #include "components/leveldb_proto/testing/fake_db.h"
 #include "components/session_proto_db/session_proto_db_test_proto.pb.h"
+#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
+#include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 using testing::_;
+using KeyValuePair =
+    std::pair<std::string, persisted_state_db::PersistedStateContentProto>;
 
 namespace {
 persisted_state_db::PersistedStateContentProto BuildProto(
@@ -111,7 +115,8 @@ class SessionProtoDBTest : public testing::Test {
         new SessionProtoDB<persisted_state_db::PersistedStateContentProto>(
             std::move(storage_db),
             base::ThreadPool::CreateSequencedTaskRunner(
-                {base::MayBlock(), base::TaskPriority::USER_VISIBLE})));
+                {base::MayBlock(), base::TaskPriority::USER_VISIBLE}),
+            content::GetUIThreadTaskRunner({})));
   }
 
   void MockInitCallbackPersistedStateDB(
@@ -193,7 +198,8 @@ class SessionProtoDBTest : public testing::Test {
         new SessionProtoDB<session_proto_db::SessionProtoDBTestProto>(
             std::move(storage_db),
             base::ThreadPool::CreateSequencedTaskRunner(
-                {base::MayBlock(), base::TaskPriority::USER_VISIBLE})));
+                {base::MayBlock(), base::TaskPriority::USER_VISIBLE}),
+            content::GetUIThreadTaskRunner({})));
   }
 
   void GetTestEvaluationTestProtoDB(
@@ -303,15 +309,17 @@ class SessionProtoDBTest : public testing::Test {
 
  protected:
   raw_ptr<
-      leveldb_proto::test::FakeDB<session_proto_db::SessionProtoDBTestProto>>
+      leveldb_proto::test::FakeDB<session_proto_db::SessionProtoDBTestProto>,
+      DanglingUntriaged>
       test_content_db_;
 
  private:
-  base::test::TaskEnvironment task_environment_;
+  content::BrowserTaskEnvironment task_environment_;
 
   // For persisted_state_db::PersistedStateContentProto database
   raw_ptr<leveldb_proto::test::FakeDB<
-      persisted_state_db::PersistedStateContentProto>>
+              persisted_state_db::PersistedStateContentProto>,
+          DanglingUntriaged>
       content_db_;
   std::unique_ptr<
       SessionProtoDB<persisted_state_db::PersistedStateContentProto>>
@@ -632,6 +640,61 @@ TEST_F(SessionProtoDBTest, TestInitializationFailure) {
   for (int i = 3; i < 6; i++) {
     run_loop[i].Run();
   }
+}
+
+TEST_F(SessionProtoDBTest, TestUpdateEntries) {
+  InitPersistedStateDB();
+  base::RunLoop run_loop[6];
+  persisted_state_db()->InsertContent(
+      kMockKeyA, kMockValueA,
+      base::BindOnce(&SessionProtoDBTest::OperationEvaluation,
+                     base::Unretained(this), run_loop[0].QuitClosure(), true));
+  MockInsertCallbackPersistedStateDB(content_db(), true);
+  run_loop[0].Run();
+
+  // Do one update and one insert for the UpdateEntries call.
+  auto entries_to_update = std::make_unique<std::vector<KeyValuePair>>();
+  entries_to_update->emplace_back(kMockKeyA, kMockValueB);
+  entries_to_update->emplace_back(kMockKeyB, kMockValueA);
+  persisted_state_db()->UpdateEntries(
+      std::move(entries_to_update),
+      std::make_unique<std::vector<std::string>>(),
+      base::BindOnce(&SessionProtoDBTest::OperationEvaluation,
+                     base::Unretained(this), run_loop[1].QuitClosure(), true));
+  MockInsertCallbackPersistedStateDB(content_db(), true);
+  run_loop[1].Run();
+
+  persisted_state_db()->LoadOneEntry(
+      kMockKeyA,
+      base::BindOnce(&SessionProtoDBTest::GetEvaluationPersistedStateDB,
+                     base::Unretained(this), run_loop[2].QuitClosure(),
+                     kExpectedB));
+  content_db()->GetCallback(true);
+  run_loop[2].Run();
+  persisted_state_db()->LoadOneEntry(
+      kMockKeyB,
+      base::BindOnce(&SessionProtoDBTest::GetEvaluationPersistedStateDB,
+                     base::Unretained(this), run_loop[3].QuitClosure(),
+                     kExpectedA));
+  content_db()->GetCallback(true);
+  run_loop[3].Run();
+
+  // Reverts the update and insertion earlier.
+  entries_to_update = std::make_unique<std::vector<KeyValuePair>>();
+  auto keys_to_remove = std::make_unique<std::vector<std::string>>();
+  entries_to_update->emplace_back(kMockKeyA, kMockValueA);
+  keys_to_remove->emplace_back(kMockKeyB);
+  persisted_state_db()->UpdateEntries(
+      std::move(entries_to_update), std::move(keys_to_remove),
+      base::BindOnce(&SessionProtoDBTest::OperationEvaluation,
+                     base::Unretained(this), run_loop[4].QuitClosure(), true));
+  MockInsertCallbackPersistedStateDB(content_db(), true);
+  run_loop[4].Run();
+
+  persisted_state_db()->LoadAllEntries(base::BindOnce(
+      &SessionProtoDBTest::GetEvaluationPersistedStateDB,
+      base::Unretained(this), run_loop[5].QuitClosure(), kExpectedA));
+  MockLoadCallbackPersistedStateDB(content_db(), true);
 }
 
 TEST_F(SessionProtoDBTest, TestMaintenanceKeepSomeKeys) {

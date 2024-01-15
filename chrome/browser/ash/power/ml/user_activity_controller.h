@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/ash/power/ml/idle_event_notifier.h"
 #include "chrome/browser/ash/power/ml/user_activity_manager.h"
 #include "chrome/browser/ash/power/ml/user_activity_ukm_logger_impl.h"
@@ -21,6 +21,8 @@ namespace ml {
 // UserActivityManager).
 class UserActivityController {
  public:
+  static UserActivityController* Get();
+
   UserActivityController();
 
   UserActivityController(const UserActivityController&) = delete;
@@ -41,14 +43,5 @@ class UserActivityController {
 }  // namespace ml
 }  // namespace power
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-namespace power {
-namespace ml {
-using ::ash::power::ml::UserActivityController;
-}  // namespace ml
-}  // namespace power
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_POWER_ML_USER_ACTIVITY_CONTROLLER_H_

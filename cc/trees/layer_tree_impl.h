@@ -42,14 +42,14 @@ class TracedValue;
 
 namespace viz {
 class ClientResourceProvider;
-class ContextProvider;
+class RasterContextProvider;
 }
 
 namespace cc {
 
 enum class ActivelyScrollingType;
 class DebugRectHistory;
-class DocumentTransitionRequest;
+class ViewTransitionRequest;
 class DroppedFrameCounter;
 class HeadsUpDisplayLayerImpl;
 class ImageDecodeCache;
@@ -127,7 +127,7 @@ class CC_EXPORT LayerTreeImpl {
   int max_texture_size() const;
   const LayerTreeSettings& settings() const;
   const LayerTreeDebugState& debug_state() const;
-  viz::ContextProvider* context_provider() const;
+  viz::RasterContextProvider* context_provider() const;
   viz::ClientResourceProvider* resource_provider() const;
   TileManager* tile_manager() const;
   ImageDecodeCache* image_decode_cache() const;
@@ -153,7 +153,6 @@ class CC_EXPORT LayerTreeImpl {
                                      float initial_opacity);
   void DidAnimateScrollOffset();
   bool use_gpu_rasterization() const;
-  GpuRasterizationStatus GetGpuRasterizationStatus() const;
   bool create_low_res_tiling() const;
   bool RequiresHighResToDraw() const;
   bool SmoothnessTakesPriority() const;
@@ -313,12 +312,15 @@ class CC_EXPORT LayerTreeImpl {
   gfx::PointF TotalMaxScrollOffset() const;
 
   void AddPresentationCallbacks(
-      std::vector<PresentationTimeCallbackBuffer::MainCallback> callbacks);
-  std::vector<PresentationTimeCallbackBuffer::MainCallback>
+      std::vector<PresentationTimeCallbackBuffer::Callback> callbacks);
+  std::vector<PresentationTimeCallbackBuffer::Callback>
   TakePresentationCallbacks();
-  bool has_presentation_callbacks() const {
-    return !presentation_callbacks_.empty();
-  }
+
+  void AddSuccessfulPresentationCallbacks(
+      std::vector<PresentationTimeCallbackBuffer::SuccessfulCallback>
+          callbacks);
+  std::vector<PresentationTimeCallbackBuffer::SuccessfulCallback>
+  TakeSuccessfulPresentationCallbacks();
 
   // The following viewport related property nodes will only ever be set on the
   // main-frame's renderer (i.e. OOPIF and UI compositors will not have these
@@ -331,7 +333,6 @@ class CC_EXPORT LayerTreeImpl {
         const_cast<const LayerTreeImpl*>(this)
             ->OverscrollElasticityTransformNode());
   }
-  ElementId OverscrollElasticityEffectElementId() const;
   const TransformNode* PageScaleTransformNode() const;
   TransformNode* PageScaleTransformNode() {
     return const_cast<TransformNode*>(
@@ -596,7 +597,8 @@ class CC_EXPORT LayerTreeImpl {
 
   void RegisterPictureLayerImpl(PictureLayerImpl* layer);
   void UnregisterPictureLayerImpl(PictureLayerImpl* layer);
-  const std::vector<PictureLayerImpl*>& picture_layers() const {
+  const std::vector<raw_ptr<PictureLayerImpl, VectorExperimental>>&
+  picture_layers() const {
     return picture_layers_;
   }
 
@@ -611,9 +613,6 @@ class CC_EXPORT LayerTreeImpl {
   void UnregisterScrollbar(ScrollbarLayerImplBase* scrollbar_layer);
   ScrollbarSet ScrollbarsFor(ElementId scroll_element_id) const;
 
-  LayerImpl* FindFirstScrollingLayerOrScrollbarThatIsHitByPoint(
-      const gfx::PointF& screen_space_point);
-
   LayerImpl* FindLayerThatIsHitByPoint(const gfx::PointF& screen_space_point);
 
   LayerImpl* FindLayerThatIsHitByPointInTouchHandlerRegion(
@@ -622,13 +621,11 @@ class CC_EXPORT LayerTreeImpl {
   LayerImpl* FindLayerThatIsHitByPointInWheelEventHandlerRegion(
       const gfx::PointF& screen_space_point);
 
-  // Return all layers with a hit non-fast scrollable region.
-  std::vector<const LayerImpl*> FindLayersHitByPointInNonFastScrollableRegion(
-      const gfx::PointF& screen_space_point);
-  // Returns all layers up to the first scroller or scrollbar layer, inclusive.
-  // The returned vector is sorted in order of top most come first. The back of
-  // the vector will be the scrollable layer if one was hit.
-  std::vector<const LayerImpl*> FindAllLayersUpToAndIncludingFirstScrollable(
+  // Returns all layers up to the first scroller, scrollbar layer or a layer
+  // opaque to hit test, inclusive. The returned vector is sorted in order of
+  // top most come first. The back of the vector will be the scrollable layer
+  // or the first layer opaque to hit test, if one was hit.
+  std::vector<const LayerImpl*> FindLayersUpToFirstScrollableOrOpaqueToHitTest(
       const gfx::PointF& screen_space_point);
   bool PointHitsNonFastScrollableRegion(const gfx::PointF& scree_space_point,
                                         const LayerImpl& layer) const;
@@ -791,27 +788,20 @@ class CC_EXPORT LayerTreeImpl {
     return host_impl_->viewport_mobile_optimized();
   }
 
-  // Add a document transition request from the embedder.
-  void AddDocumentTransitionRequest(
-      std::unique_ptr<DocumentTransitionRequest> request);
+  // Add a view transition request from the embedder.
+  void AddViewTransitionRequest(std::unique_ptr<ViewTransitionRequest> request);
 
-  // Returns all of the document transition requests stored so far, and empties
+  // Returns all of the view transition requests stored so far, and empties
   // the internal list.
-  std::vector<std::unique_ptr<DocumentTransitionRequest>>
-  TakeDocumentTransitionRequests();
+  std::vector<std::unique_ptr<ViewTransitionRequest>>
+  TakeViewTransitionRequests();
 
-  bool HasDocumentTransitionRequests() const;
+  // Returns true if there are pending ViewTransition requests that need a draw.
+  bool HasViewTransitionRequests() const;
 
-  void ClearVisualUpdateDurations();
-  void SetVisualUpdateDurations(
-      base::TimeDelta previous_surfaces_visual_update_duration,
-      base::TimeDelta visual_update_duration);
-  base::TimeDelta previous_surfaces_visual_update_duration() const {
-    return previous_surfaces_visual_update_duration_;
-  }
-  base::TimeDelta visual_update_duration() const {
-    return visual_update_duration_;
-  }
+  // Returns true if there is a pending ViewTransition save request to cache
+  // output of the current frame.
+  bool HasViewTransitionSaveRequest() const;
 
  protected:
   float ClampPageScaleFactorToLimits(float page_scale_factor) const;
@@ -842,7 +832,7 @@ class CC_EXPORT LayerTreeImpl {
   int source_frame_number_;
   uint64_t trace_id_ = 0;
   int is_first_frame_after_commit_tracker_;
-  raw_ptr<HeadsUpDisplayLayerImpl> hud_layer_;
+  raw_ptr<HeadsUpDisplayLayerImpl, DanglingUntriaged> hud_layer_;
   PropertyTrees property_trees_;
   SkColor4f background_color_;
 
@@ -898,7 +888,7 @@ class CC_EXPORT LayerTreeImpl {
   base::flat_map<ElementId, ScrollbarLayerIds>
       element_id_to_scrollbar_layer_ids_;
 
-  std::vector<PictureLayerImpl*> picture_layers_;
+  std::vector<raw_ptr<PictureLayerImpl, VectorExperimental>> picture_layers_;
 
   // After commit (or impl-side invalidation), the LayerTreeHostImpl must walk
   // all PictureLayerImpls that have PaintWorklets to ensure they are painted.
@@ -960,8 +950,9 @@ class CC_EXPORT LayerTreeImpl {
   // Display transform hint to tag frames generated from this tree.
   gfx::OverlayTransform display_transform_hint_ = gfx::OVERLAY_TRANSFORM_NONE;
 
-  std::vector<PresentationTimeCallbackBuffer::MainCallback>
-      presentation_callbacks_;
+  std::vector<PresentationTimeCallbackBuffer::Callback> presentation_callbacks_;
+  std::vector<PresentationTimeCallbackBuffer::SuccessfulCallback>
+      successful_presentation_callbacks_;
 
   // Event metrics that are reported back from the main thread.
   EventMetrics::List events_metrics_from_main_thread_;
@@ -969,8 +960,7 @@ class CC_EXPORT LayerTreeImpl {
   std::unique_ptr<gfx::DelegatedInkMetadata> delegated_ink_metadata_;
 
   // Document transition requests to be transferred to Viz.
-  std::vector<std::unique_ptr<DocumentTransitionRequest>>
-      document_transition_requests_;
+  std::vector<std::unique_ptr<ViewTransitionRequest>> view_transition_requests_;
 
   // The cumulative time spent performing visual updates for all Surfaces before
   // this one.

@@ -13,7 +13,7 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/observer_list.h"
@@ -33,14 +33,10 @@ namespace invalidation {
 
 namespace {
 
-const char kTypeSubscribedForInvalidationsDeprecated[] =
-    "invalidation.registered_for_invalidation";
+constexpr char kDeprecatedSyncInvalidationGCMSenderId[] = "8181035976";
 
 const char kTypeSubscribedForInvalidations[] =
     "invalidation.per_sender_registered_for_invalidation";
-
-const char kActiveRegistrationTokenDeprecated[] =
-    "invalidation.active_registration_token";
 
 const char kActiveRegistrationTokens[] =
     "invalidation.per_sender_active_registration_tokens";
@@ -103,33 +99,11 @@ class PerProjectDictionaryPrefUpdate {
   raw_ptr<base::Value::Dict> per_sender_pref_;
 };
 
-// Added in M76.
-void MigratePrefs(PrefService* prefs, const std::string& project_id) {
-  if (!prefs->HasPrefPath(kActiveRegistrationTokenDeprecated)) {
-    return;
-  }
-  {
-    ScopedDictPrefUpdate token_update(prefs, kActiveRegistrationTokens);
-    token_update->Set(project_id,
-                      prefs->GetString(kActiveRegistrationTokenDeprecated));
-  }
-
-  const auto& old_subscriptions =
-      prefs->GetDict(kTypeSubscribedForInvalidationsDeprecated);
-  prefs->SetDict(project_id, old_subscriptions.Clone());
-  prefs->ClearPref(kActiveRegistrationTokenDeprecated);
-  prefs->ClearPref(kTypeSubscribedForInvalidationsDeprecated);
-}
-
 }  // namespace
 
 // static
 void PerUserTopicSubscriptionManager::RegisterProfilePrefs(
     PrefRegistrySimple* registry) {
-  registry->RegisterDictionaryPref(kTypeSubscribedForInvalidationsDeprecated);
-  registry->RegisterStringPref(kActiveRegistrationTokenDeprecated,
-                               std::string());
-
   registry->RegisterDictionaryPref(kTypeSubscribedForInvalidations);
   registry->RegisterDictionaryPref(kActiveRegistrationTokens);
 }
@@ -139,6 +113,18 @@ void PerUserTopicSubscriptionManager::RegisterPrefs(
     PrefRegistrySimple* registry) {
   // Same as RegisterProfilePrefs; see comment in the header.
   RegisterProfilePrefs(registry);
+}
+
+// static
+void PerUserTopicSubscriptionManager::ClearDeprecatedPrefs(PrefService* prefs) {
+  if (prefs->HasPrefPath(kTypeSubscribedForInvalidations)) {
+    ScopedDictPrefUpdate update(prefs, kTypeSubscribedForInvalidations);
+    update->Remove(kDeprecatedSyncInvalidationGCMSenderId);
+  }
+  if (prefs->HasPrefPath(kActiveRegistrationTokens)) {
+    ScopedDictPrefUpdate update(prefs, kActiveRegistrationTokens);
+    update->Remove(kDeprecatedSyncInvalidationGCMSenderId);
+  }
 }
 
 // State of the instance ID token when subscription is requested.
@@ -205,13 +191,11 @@ PerUserTopicSubscriptionManager::PerUserTopicSubscriptionManager(
     IdentityProvider* identity_provider,
     PrefService* pref_service,
     network::mojom::URLLoaderFactory* url_loader_factory,
-    const std::string& project_id,
-    bool migrate_prefs)
+    const std::string& project_id)
     : pref_service_(pref_service),
       identity_provider_(identity_provider),
       url_loader_factory_(url_loader_factory),
       project_id_(project_id),
-      migrate_prefs_(migrate_prefs),
       request_access_token_backoff_(&kBackoffPolicy) {}
 
 PerUserTopicSubscriptionManager::~PerUserTopicSubscriptionManager() = default;
@@ -222,18 +206,13 @@ PerUserTopicSubscriptionManager::Create(
     IdentityProvider* identity_provider,
     PrefService* pref_service,
     network::mojom::URLLoaderFactory* url_loader_factory,
-    const std::string& project_id,
-    bool migrate_prefs) {
+    const std::string& project_id) {
   return std::make_unique<PerUserTopicSubscriptionManager>(
-      identity_provider, pref_service, url_loader_factory, project_id,
-      migrate_prefs);
+      identity_provider, pref_service, url_loader_factory, project_id);
 }
 
 void PerUserTopicSubscriptionManager::Init() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (migrate_prefs_) {
-    MigratePrefs(pref_service_, project_id_);
-  }
   PerProjectDictionaryPrefUpdate update(pref_service_, project_id_);
   if (update->empty()) {
     return;
@@ -260,7 +239,7 @@ void PerUserTopicSubscriptionManager::Init() {
 }
 
 void PerUserTopicSubscriptionManager::UpdateSubscribedTopics(
-    const Topics& topics,
+    const TopicMap& topics,
     const std::string& instance_id_token) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   instance_id_token_ = instance_id_token;
@@ -298,7 +277,7 @@ void PerUserTopicSubscriptionManager::UpdateSubscribedTopics(
     if (topics.find(topic) == topics.end()) {
       // Unsubscription request may only replace pending subscription request,
       // because topic immediately deleted from |topic_to_private_topic_| when
-      // unsubsciption request scheduled.
+      // unsubscription request scheduled.
       DCHECK(pending_subscriptions_.count(topic) == 0 ||
              pending_subscriptions_[topic]->type ==
                  PerUserTopicSubscriptionRequest::SUBSCRIBE);
@@ -383,6 +362,7 @@ void PerUserTopicSubscriptionManager::StartPendingSubscriptionRequest(
                          SubscriptionFinished,
                      base::Unretained(it->second.get())),
       url_loader_factory_);
+  NotifySubscriptionRequestStarted(topic);
 }
 
 void PerUserTopicSubscriptionManager::ActOnSuccessfulSubscription(
@@ -438,6 +418,7 @@ void PerUserTopicSubscriptionManager::SubscriptionFinishedForTopic(
     Status code,
     std::string private_topic_name,
     PerUserTopicSubscriptionRequest::RequestType type) {
+  NotifySubscriptionRequestFinished(topic, code);
   if (code.IsSuccess()) {
     ActOnSuccessfulSubscription(topic, private_topic_name, type);
     return;
@@ -610,13 +591,19 @@ void PerUserTopicSubscriptionManager::NotifySubscriptionChannelStateChange(
   }
 }
 
-base::Value::Dict PerUserTopicSubscriptionManager::CollectDebugData() const {
-  base::Value::Dict status;
-  for (const auto& topic_to_private_topic : topic_to_private_topic_) {
-    status.Set(topic_to_private_topic.first, topic_to_private_topic.second);
+void PerUserTopicSubscriptionManager::NotifySubscriptionRequestStarted(
+    Topic topic) {
+  for (auto& observer : observers_) {
+    observer.OnSubscriptionRequestStarted(topic);
   }
-  status.Set("Instance id token", instance_id_token_);
-  return status;
+}
+
+void PerUserTopicSubscriptionManager::NotifySubscriptionRequestFinished(
+    Topic topic,
+    Status code) {
+  for (auto& observer : observers_) {
+    observer.OnSubscriptionRequestFinished(topic, code);
+  }
 }
 
 absl::optional<Topic>

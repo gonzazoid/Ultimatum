@@ -310,7 +310,7 @@ TEST_F(ElementAnimationsTest, AddedAnimationIsDestroyed) {
   auto events = CreateEventsForTesting();
   animation2_impl->UpdateState(true, events.get());
   EXPECT_EQ(1u, events->events_.size());
-  EXPECT_EQ(AnimationEvent::STARTED, events->events_[0].type);
+  EXPECT_EQ(AnimationEvent::Type::kStarted, events->events_[0].type);
 
   // The actual detachment happens here, inside the callback
   animation2->DispatchAndDelegateAnimationEvent(events->events_[0]);
@@ -472,8 +472,9 @@ TEST_F(ElementAnimationsTest, Activation) {
   EXPECT_EQ(
       KeyframeModel::WAITING_FOR_DELETION,
       animation_impl_->GetKeyframeModel(TargetProperty::OPACITY)->run_state());
-  // The impl thread animations should have de-activated.
-  EXPECT_EQ(0u, host_impl->ticking_animations_for_testing().size());
+  // The impl thread animations will be deactivated once a commit clears the
+  // animation.
+  EXPECT_EQ(1u, host_impl->ticking_animations_for_testing().size());
 
   EXPECT_EQ(1u, events->events_.size());
   animation_->DispatchAndDelegateAnimationEvent(events->events_[0]);
@@ -604,7 +605,7 @@ TEST_F(ElementAnimationsTest, DoNotSyncFinishedAnimation) {
   animation_impl_->Tick(kInitialTickTime);
   animation_impl_->UpdateState(true, events.get());
   EXPECT_EQ(1u, events->events_.size());
-  EXPECT_EQ(AnimationEvent::STARTED, events->events_[0].type);
+  EXPECT_EQ(AnimationEvent::Type::kStarted, events->events_[0].type);
 
   // Notify main thread animations that the animation has started.
   animation_->DispatchAndDelegateAnimationEvent(events->events_[0]);
@@ -614,7 +615,7 @@ TEST_F(ElementAnimationsTest, DoNotSyncFinishedAnimation) {
   animation_impl_->Tick(kInitialTickTime + base::Seconds(1));
   animation_impl_->UpdateState(true, events.get());
   EXPECT_EQ(1u, events->events_.size());
-  EXPECT_EQ(AnimationEvent::FINISHED, events->events_[0].type);
+  EXPECT_EQ(AnimationEvent::Type::kFinished, events->events_[0].type);
 
   animation_->DispatchAndDelegateAnimationEvent(events->events_[0]);
 
@@ -656,7 +657,7 @@ TEST_F(ElementAnimationsTest, AnimationsAreDeleted) {
 
   // There should be a STARTED event for the animation.
   EXPECT_EQ(1u, events->events_.size());
-  EXPECT_EQ(AnimationEvent::STARTED, events->events_[0].type);
+  EXPECT_EQ(AnimationEvent::Type::kStarted, events->events_[0].type);
   animation_->DispatchAndDelegateAnimationEvent(events->events_[0]);
 
   animation_->Tick(kInitialTickTime + base::Milliseconds(1000));
@@ -673,7 +674,7 @@ TEST_F(ElementAnimationsTest, AnimationsAreDeleted) {
 
   // There should be a FINISHED event for the animation.
   EXPECT_EQ(1u, events->events_.size());
-  EXPECT_EQ(AnimationEvent::FINISHED, events->events_[0].type);
+  EXPECT_EQ(AnimationEvent::Type::kFinished, events->events_[0].type);
 
   // Neither animations should have deleted the animation yet.
   EXPECT_TRUE(animation_->GetKeyframeModel(TargetProperty::OPACITY));
@@ -719,7 +720,7 @@ TEST_F(ElementAnimationsTest, AnimationFinishedOnImplDeletedOnMain) {
 
   // There should be a STARTED event for the animation.
   EXPECT_EQ(1u, events->events_.size());
-  EXPECT_EQ(AnimationEvent::STARTED, events->events_[0].type);
+  EXPECT_EQ(AnimationEvent::Type::kStarted, events->events_[0].type);
   animation_->DispatchAndDelegateAnimationEvent(events->events_[0]);
 
   events = CreateEventsForTesting();
@@ -730,7 +731,7 @@ TEST_F(ElementAnimationsTest, AnimationFinishedOnImplDeletedOnMain) {
 
   // There should be a FINISHED event for the animation.
   EXPECT_EQ(1u, events->events_.size());
-  EXPECT_EQ(AnimationEvent::FINISHED, events->events_[0].type);
+  EXPECT_EQ(AnimationEvent::Type::kFinished, events->events_[0].type);
 
   // Before the FINISHED event is received, main aborts the keyframe
   // and detaches the element.
@@ -771,10 +772,9 @@ TEST_F(ElementAnimationsTest, TrivialTransition) {
 
   auto events = CreateEventsForTesting();
 
-  std::unique_ptr<KeyframeModel> to_add(
-      CreateKeyframeModel(std::unique_ptr<gfx::AnimationCurve>(
-                              new FakeFloatTransition(1.0, 0.f, 1.f)),
-                          1, TargetProperty::OPACITY));
+  std::unique_ptr<KeyframeModel> to_add =
+      CreateKeyframeModel(std::make_unique<FakeFloatTransition>(1.0, 0.f, 1.f),
+                          1, TargetProperty::OPACITY);
   int keyframe_model_id = to_add->id();
 
   EXPECT_FALSE(
@@ -1355,10 +1355,9 @@ TEST_F(ElementAnimationsTest,
 
   auto events = CreateEventsForTesting();
 
-  std::unique_ptr<KeyframeModel> to_add(
-      CreateKeyframeModel(std::unique_ptr<gfx::AnimationCurve>(
-                              new FakeFloatTransition(1.0, 0.f, 1.f)),
-                          1, TargetProperty::OPACITY));
+  std::unique_ptr<KeyframeModel> to_add =
+      CreateKeyframeModel(std::make_unique<FakeFloatTransition>(1.0, 0.f, 1.f),
+                          1, TargetProperty::OPACITY);
   to_add->set_needs_synchronized_start_time(true);
   int keyframe_model_id = to_add->id();
 
@@ -1380,7 +1379,7 @@ TEST_F(ElementAnimationsTest,
 
   // Send the synchronized start time.
   animation_->DispatchAndDelegateAnimationEvent(AnimationEvent(
-      AnimationEvent::STARTED,
+      AnimationEvent::Type::kStarted,
       {animation_->animation_timeline()->id(), animation_->id(),
        keyframe_model_id},
       1, TargetProperty::OPACITY, kInitialTickTime + base::Milliseconds(2000)));
@@ -1400,14 +1399,10 @@ TEST_F(ElementAnimationsTest, TrivialQueuing) {
   int animation1_id = 1;
   int animation2_id = 2;
   animation_->AddKeyframeModel(KeyframeModel::Create(
-      std::unique_ptr<gfx::AnimationCurve>(
-          new FakeFloatTransition(1.0, 0.f, 1.f)),
-      animation1_id, 1,
+      std::make_unique<FakeFloatTransition>(1.0, 0.f, 1.f), animation1_id, 1,
       KeyframeModel::TargetPropertyId(TargetProperty::OPACITY)));
   animation_->AddKeyframeModel(KeyframeModel::Create(
-      std::unique_ptr<gfx::AnimationCurve>(
-          new FakeFloatTransition(1.0, 1.f, 0.5f)),
-      animation2_id, 2,
+      std::make_unique<FakeFloatTransition>(1.0, 1.f, 0.5f), animation2_id, 2,
       KeyframeModel::TargetPropertyId(TargetProperty::OPACITY)));
 
   animation_->Tick(kInitialTickTime);
@@ -1462,18 +1457,16 @@ TEST_F(ElementAnimationsTest, Interrupt) {
   auto events = CreateEventsForTesting();
 
   animation_->AddKeyframeModel(
-      CreateKeyframeModel(std::unique_ptr<gfx::AnimationCurve>(
-                              new FakeFloatTransition(1.0, 0.f, 1.f)),
+      CreateKeyframeModel(std::make_unique<FakeFloatTransition>(1.0, 0.f, 1.f),
                           1, TargetProperty::OPACITY));
   animation_->Tick(kInitialTickTime);
   animation_->UpdateState(true, events.get());
   EXPECT_TRUE(animation_->keyframe_effect()->HasTickingKeyframeModel());
   EXPECT_EQ(0.f, client_.GetOpacity(element_id_, ElementListType::ACTIVE));
 
-  std::unique_ptr<KeyframeModel> to_add(
-      CreateKeyframeModel(std::unique_ptr<gfx::AnimationCurve>(
-                              new FakeFloatTransition(1.0, 1.f, 0.5f)),
-                          2, TargetProperty::OPACITY));
+  std::unique_ptr<KeyframeModel> to_add =
+      CreateKeyframeModel(std::make_unique<FakeFloatTransition>(1.0, 1.f, 0.5f),
+                          2, TargetProperty::OPACITY);
   animation_->AbortKeyframeModelsWithProperty(TargetProperty::OPACITY, false);
   animation_->AddKeyframeModel(std::move(to_add));
 
@@ -1497,15 +1490,14 @@ TEST_F(ElementAnimationsTest, ScheduleTogetherWhenAPropertyIsBlocked) {
 
   auto events = CreateEventsForTesting();
 
-  animation_->AddKeyframeModel(CreateKeyframeModel(
-      std::unique_ptr<gfx::AnimationCurve>(new FakeTransformTransition(1)), 1,
-      TargetProperty::TRANSFORM));
-  animation_->AddKeyframeModel(CreateKeyframeModel(
-      std::unique_ptr<gfx::AnimationCurve>(new FakeTransformTransition(1)), 2,
-      TargetProperty::TRANSFORM));
   animation_->AddKeyframeModel(
-      CreateKeyframeModel(std::unique_ptr<gfx::AnimationCurve>(
-                              new FakeFloatTransition(1.0, 0.f, 1.f)),
+      CreateKeyframeModel(std::make_unique<FakeTransformTransition>(1), 1,
+                          TargetProperty::TRANSFORM));
+  animation_->AddKeyframeModel(
+      CreateKeyframeModel(std::make_unique<FakeTransformTransition>(1), 2,
+                          TargetProperty::TRANSFORM));
+  animation_->AddKeyframeModel(
+      CreateKeyframeModel(std::make_unique<FakeFloatTransition>(1.0, 0.f, 1.f),
                           2, TargetProperty::OPACITY));
 
   animation_->Tick(kInitialTickTime);
@@ -1533,16 +1525,14 @@ TEST_F(ElementAnimationsTest, ScheduleTogetherWithAnAnimWaiting) {
 
   auto events = CreateEventsForTesting();
 
-  animation_->AddKeyframeModel(CreateKeyframeModel(
-      std::unique_ptr<gfx::AnimationCurve>(new FakeTransformTransition(2)), 1,
-      TargetProperty::TRANSFORM));
   animation_->AddKeyframeModel(
-      CreateKeyframeModel(std::unique_ptr<gfx::AnimationCurve>(
-                              new FakeFloatTransition(1.0, 0.f, 1.f)),
+      CreateKeyframeModel(std::make_unique<FakeTransformTransition>(2), 1,
+                          TargetProperty::TRANSFORM));
+  animation_->AddKeyframeModel(
+      CreateKeyframeModel(std::make_unique<FakeFloatTransition>(1.0, 0.f, 1.f),
                           1, TargetProperty::OPACITY));
   animation_->AddKeyframeModel(
-      CreateKeyframeModel(std::unique_ptr<gfx::AnimationCurve>(
-                              new FakeFloatTransition(1.0, 1.f, 0.5f)),
+      CreateKeyframeModel(std::make_unique<FakeFloatTransition>(1.0, 1.f, 0.5f),
                           2, TargetProperty::OPACITY));
 
   // Animations with id 1 should both start now.
@@ -1574,10 +1564,9 @@ TEST_F(ElementAnimationsTest, TrivialLooping) {
 
   auto events = CreateEventsForTesting();
 
-  std::unique_ptr<KeyframeModel> to_add(
-      CreateKeyframeModel(std::unique_ptr<gfx::AnimationCurve>(
-                              new FakeFloatTransition(1.0, 0.f, 1.f)),
-                          1, TargetProperty::OPACITY));
+  std::unique_ptr<KeyframeModel> to_add =
+      CreateKeyframeModel(std::make_unique<FakeFloatTransition>(1.0, 0.f, 1.f),
+                          1, TargetProperty::OPACITY);
   to_add->set_iterations(3);
   animation_->AddKeyframeModel(std::move(to_add));
 
@@ -1619,10 +1608,9 @@ TEST_F(ElementAnimationsTest, InfiniteLooping) {
 
   auto events = CreateEventsForTesting();
 
-  std::unique_ptr<KeyframeModel> to_add(
-      CreateKeyframeModel(std::unique_ptr<gfx::AnimationCurve>(
-                              new FakeFloatTransition(1.0, 0.f, 1.f)),
-                          1, TargetProperty::OPACITY));
+  std::unique_ptr<KeyframeModel> to_add =
+      CreateKeyframeModel(std::make_unique<FakeFloatTransition>(1.0, 0.f, 1.f),
+                          1, TargetProperty::OPACITY);
   to_add->set_iterations(std::numeric_limits<double>::infinity());
   animation_->AddKeyframeModel(std::move(to_add));
 
@@ -1664,8 +1652,7 @@ TEST_F(ElementAnimationsTest, PauseResume) {
   auto events = CreateEventsForTesting();
 
   animation_->AddKeyframeModel(
-      CreateKeyframeModel(std::unique_ptr<gfx::AnimationCurve>(
-                              new FakeFloatTransition(1.0, 0.f, 1.f)),
+      CreateKeyframeModel(std::make_unique<FakeFloatTransition>(1.0, 0.f, 1.f),
                           1, TargetProperty::OPACITY));
 
   animation_->Tick(kInitialTickTime);
@@ -1710,17 +1697,14 @@ TEST_F(ElementAnimationsTest, AbortAGroupedAnimation) {
 
   const int keyframe_model_id = 2;
   animation_->AddKeyframeModel(KeyframeModel::Create(
-      std::unique_ptr<gfx::AnimationCurve>(new FakeTransformTransition(1)), 1,
-      1, KeyframeModel::TargetPropertyId(TargetProperty::TRANSFORM)));
+      std::make_unique<FakeTransformTransition>(1), 1, 1,
+      KeyframeModel::TargetPropertyId(TargetProperty::TRANSFORM)));
   animation_->AddKeyframeModel(KeyframeModel::Create(
-      std::unique_ptr<gfx::AnimationCurve>(
-          new FakeFloatTransition(2.0, 0.f, 1.f)),
-      keyframe_model_id, 1,
+      std::make_unique<FakeFloatTransition>(2.0, 0.f, 1.f), keyframe_model_id,
+      1, KeyframeModel::TargetPropertyId(TargetProperty::OPACITY)));
+  animation_->AddKeyframeModel(KeyframeModel::Create(
+      std::make_unique<FakeFloatTransition>(1.0, 1.f, 0.75f), 3, 2,
       KeyframeModel::TargetPropertyId(TargetProperty::OPACITY)));
-  animation_->AddKeyframeModel(KeyframeModel::Create(
-      std::unique_ptr<gfx::AnimationCurve>(
-          new FakeFloatTransition(1.0, 1.f, 0.75f)),
-      3, 2, KeyframeModel::TargetPropertyId(TargetProperty::OPACITY)));
 
   animation_->Tick(kInitialTickTime);
   animation_->UpdateState(true, events.get());
@@ -1754,10 +1738,9 @@ TEST_F(ElementAnimationsTest, PushUpdatesWhenSynchronizedStartTimeNeeded) {
 
   auto events = CreateEventsForTesting();
 
-  std::unique_ptr<KeyframeModel> to_add(
-      CreateKeyframeModel(std::unique_ptr<gfx::AnimationCurve>(
-                              new FakeFloatTransition(2.0, 0.f, 1.f)),
-                          0, TargetProperty::OPACITY));
+  std::unique_ptr<KeyframeModel> to_add =
+      CreateKeyframeModel(std::make_unique<FakeFloatTransition>(2.0, 0.f, 1.f),
+                          0, TargetProperty::OPACITY);
   to_add->set_needs_synchronized_start_time(true);
   animation_->AddKeyframeModel(std::move(to_add));
 
@@ -1787,19 +1770,18 @@ TEST_F(ElementAnimationsTest, SkipUpdateState) {
 
   auto events = CreateEventsForTesting();
 
-  std::unique_ptr<KeyframeModel> first_keyframe_model(CreateKeyframeModel(
-      std::unique_ptr<gfx::AnimationCurve>(new FakeTransformTransition(1)), 1,
-      TargetProperty::TRANSFORM));
+  std::unique_ptr<KeyframeModel> first_keyframe_model =
+      CreateKeyframeModel(std::make_unique<FakeTransformTransition>(1), 1,
+                          TargetProperty::TRANSFORM);
   first_keyframe_model->set_is_controlling_instance_for_test(true);
   animation_->AddKeyframeModel(std::move(first_keyframe_model));
 
   animation_->Tick(kInitialTickTime);
   animation_->UpdateState(true, events.get());
 
-  std::unique_ptr<KeyframeModel> second_keyframe_model(
-      CreateKeyframeModel(std::unique_ptr<gfx::AnimationCurve>(
-                              new FakeFloatTransition(1.0, 0.f, 1.f)),
-                          2, TargetProperty::OPACITY));
+  std::unique_ptr<KeyframeModel> second_keyframe_model =
+      CreateKeyframeModel(std::make_unique<FakeFloatTransition>(1.0, 0.f, 1.f),
+                          2, TargetProperty::OPACITY);
   second_keyframe_model->set_is_controlling_instance_for_test(true);
   animation_->AddKeyframeModel(std::move(second_keyframe_model));
 
@@ -1836,8 +1818,7 @@ TEST_F(ElementAnimationsTest, InactiveObserverGetsTicked) {
 
   const int id = 1;
   animation_impl_->AddKeyframeModel(
-      CreateKeyframeModel(std::unique_ptr<gfx::AnimationCurve>(
-                              new FakeFloatTransition(1.0, 0.5f, 1.f)),
+      CreateKeyframeModel(std::make_unique<FakeFloatTransition>(1.0, 0.5f, 1.f),
                           id, TargetProperty::OPACITY));
   animation_impl_->GetKeyframeModel(TargetProperty::OPACITY)
       ->set_affects_active_elements(false);
@@ -1900,22 +1881,20 @@ TEST_F(ElementAnimationsTest, AbortKeyframeModelsWithProperty) {
   // Start with several animations, and allow some of them to reach the finished
   // state.
   animation_->AddKeyframeModel(KeyframeModel::Create(
-      std::unique_ptr<gfx::AnimationCurve>(new FakeTransformTransition(1.0)), 1,
-      1, KeyframeModel::TargetPropertyId(TargetProperty::TRANSFORM)));
+      std::make_unique<FakeTransformTransition>(1.0), 1, 1,
+      KeyframeModel::TargetPropertyId(TargetProperty::TRANSFORM)));
   animation_->AddKeyframeModel(KeyframeModel::Create(
-      std::unique_ptr<gfx::AnimationCurve>(
-          new FakeFloatTransition(1.0, 0.f, 1.f)),
-      2, 2, KeyframeModel::TargetPropertyId(TargetProperty::OPACITY)));
+      std::make_unique<FakeFloatTransition>(1.0, 0.f, 1.f), 2, 2,
+      KeyframeModel::TargetPropertyId(TargetProperty::OPACITY)));
   animation_->AddKeyframeModel(KeyframeModel::Create(
-      std::unique_ptr<gfx::AnimationCurve>(new FakeTransformTransition(1.0)), 3,
-      3, KeyframeModel::TargetPropertyId(TargetProperty::TRANSFORM)));
+      std::make_unique<FakeTransformTransition>(1.0), 3, 3,
+      KeyframeModel::TargetPropertyId(TargetProperty::TRANSFORM)));
   animation_->AddKeyframeModel(KeyframeModel::Create(
-      std::unique_ptr<gfx::AnimationCurve>(new FakeTransformTransition(2.0)), 4,
-      4, KeyframeModel::TargetPropertyId(TargetProperty::TRANSFORM)));
+      std::make_unique<FakeTransformTransition>(2.0), 4, 4,
+      KeyframeModel::TargetPropertyId(TargetProperty::TRANSFORM)));
   animation_->AddKeyframeModel(KeyframeModel::Create(
-      std::unique_ptr<gfx::AnimationCurve>(
-          new FakeFloatTransition(1.0, 0.f, 1.f)),
-      5, 5, KeyframeModel::TargetPropertyId(TargetProperty::OPACITY)));
+      std::make_unique<FakeFloatTransition>(1.0, 0.f, 1.f), 5, 5,
+      KeyframeModel::TargetPropertyId(TargetProperty::OPACITY)));
 
   animation_->Tick(kInitialTickTime);
   animation_->UpdateState(true, nullptr);
@@ -2031,7 +2010,7 @@ TEST_F(ElementAnimationsTest, ImplThreadAbortedAnimationGetsDeleted) {
   animation_impl_->UpdateState(true, events.get());
   EXPECT_TRUE(host_impl_->needs_push_properties());
   EXPECT_EQ(1u, events->events_.size());
-  EXPECT_EQ(AnimationEvent::ABORTED, events->events_[0].type);
+  EXPECT_EQ(AnimationEvent::Type::kAborted, events->events_[0].type);
   EXPECT_EQ(
       KeyframeModel::WAITING_FOR_DELETION,
       animation_impl_->GetKeyframeModel(TargetProperty::OPACITY)->run_state());
@@ -2103,7 +2082,7 @@ TEST_F(ElementAnimationsTest, ImplThreadTakeoverAnimationGetsDeleted) {
   EXPECT_TRUE(delegate_impl.finished());
   EXPECT_TRUE(host_impl_->needs_push_properties());
   EXPECT_EQ(1u, events->events_.size());
-  EXPECT_EQ(AnimationEvent::TAKEOVER, events->events_[0].type);
+  EXPECT_EQ(AnimationEvent::Type::kTakeOver, events->events_[0].type);
   EXPECT_EQ(TicksFromSecondsF(123), events->events_[0].animation_start_time);
   EXPECT_EQ(target_value, static_cast<ScrollOffsetAnimationCurve*>(
                               events->events_[0].curve.get())
@@ -2142,16 +2121,15 @@ TEST_F(ElementAnimationsTest, FinishedEventsForGroup) {
   const int group_id = 1;
 
   // Add two animations with the same group id but different durations.
-  std::unique_ptr<KeyframeModel> first_keyframe_model(KeyframeModel::Create(
-      std::unique_ptr<gfx::AnimationCurve>(new FakeTransformTransition(2.0)), 1,
-      group_id, KeyframeModel::TargetPropertyId(TargetProperty::TRANSFORM)));
+  std::unique_ptr<KeyframeModel> first_keyframe_model = KeyframeModel::Create(
+      std::make_unique<FakeTransformTransition>(2.0), 1, group_id,
+      KeyframeModel::TargetPropertyId(TargetProperty::TRANSFORM));
   first_keyframe_model->set_is_controlling_instance_for_test(true);
   animation_impl_->AddKeyframeModel(std::move(first_keyframe_model));
 
-  std::unique_ptr<KeyframeModel> second_keyframe_model(KeyframeModel::Create(
-      std::unique_ptr<gfx::AnimationCurve>(
-          new FakeFloatTransition(1.0, 0.f, 1.f)),
-      2, group_id, KeyframeModel::TargetPropertyId(TargetProperty::OPACITY)));
+  std::unique_ptr<KeyframeModel> second_keyframe_model = KeyframeModel::Create(
+      std::make_unique<FakeFloatTransition>(1.0, 0.f, 1.f), 2, group_id,
+      KeyframeModel::TargetPropertyId(TargetProperty::OPACITY));
   second_keyframe_model->set_is_controlling_instance_for_test(true);
   animation_impl_->AddKeyframeModel(std::move(second_keyframe_model));
 
@@ -2160,8 +2138,8 @@ TEST_F(ElementAnimationsTest, FinishedEventsForGroup) {
 
   // Both animations should have started.
   EXPECT_EQ(2u, events->events_.size());
-  EXPECT_EQ(AnimationEvent::STARTED, events->events_[0].type);
-  EXPECT_EQ(AnimationEvent::STARTED, events->events_[1].type);
+  EXPECT_EQ(AnimationEvent::Type::kStarted, events->events_[0].type);
+  EXPECT_EQ(AnimationEvent::Type::kStarted, events->events_[1].type);
 
   events = CreateEventsForTesting();
   animation_impl_->Tick(kInitialTickTime + base::Milliseconds(1000));
@@ -2182,8 +2160,8 @@ TEST_F(ElementAnimationsTest, FinishedEventsForGroup) {
 
   // Both animations should have generated FINISHED events.
   EXPECT_EQ(2u, events->events_.size());
-  EXPECT_EQ(AnimationEvent::FINISHED, events->events_[0].type);
-  EXPECT_EQ(AnimationEvent::FINISHED, events->events_[1].type);
+  EXPECT_EQ(AnimationEvent::Type::kFinished, events->events_[0].type);
+  EXPECT_EQ(AnimationEvent::Type::kFinished, events->events_[1].type);
 }
 
 // Ensure that when a group has a mix of aborted and finished animations,
@@ -2197,16 +2175,15 @@ TEST_F(ElementAnimationsTest, FinishedAndAbortedEventsForGroup) {
   auto events = CreateEventsForTesting();
 
   // Add two animations with the same group id.
-  std::unique_ptr<KeyframeModel> first_keyframe_model(CreateKeyframeModel(
-      std::unique_ptr<gfx::AnimationCurve>(new FakeTransformTransition(1.0)), 1,
-      TargetProperty::TRANSFORM));
+  std::unique_ptr<KeyframeModel> first_keyframe_model =
+      CreateKeyframeModel(std::make_unique<FakeTransformTransition>(1.0), 1,
+                          TargetProperty::TRANSFORM);
   first_keyframe_model->set_is_controlling_instance_for_test(true);
   animation_impl_->AddKeyframeModel(std::move(first_keyframe_model));
 
-  std::unique_ptr<KeyframeModel> second_keyframe_model(
-      CreateKeyframeModel(std::unique_ptr<gfx::AnimationCurve>(
-                              new FakeFloatTransition(1.0, 0.f, 1.f)),
-                          1, TargetProperty::OPACITY));
+  std::unique_ptr<KeyframeModel> second_keyframe_model =
+      CreateKeyframeModel(std::make_unique<FakeFloatTransition>(1.0, 0.f, 1.f),
+                          1, TargetProperty::OPACITY);
   second_keyframe_model->set_is_controlling_instance_for_test(true);
   animation_impl_->AddKeyframeModel(std::move(second_keyframe_model));
 
@@ -2215,8 +2192,8 @@ TEST_F(ElementAnimationsTest, FinishedAndAbortedEventsForGroup) {
 
   // Both animations should have started.
   EXPECT_EQ(2u, events->events_.size());
-  EXPECT_EQ(AnimationEvent::STARTED, events->events_[0].type);
-  EXPECT_EQ(AnimationEvent::STARTED, events->events_[1].type);
+  EXPECT_EQ(AnimationEvent::Type::kStarted, events->events_[0].type);
+  EXPECT_EQ(AnimationEvent::Type::kStarted, events->events_[1].type);
 
   animation_impl_->AbortKeyframeModelsWithProperty(TargetProperty::OPACITY,
                                                    false);
@@ -2228,9 +2205,9 @@ TEST_F(ElementAnimationsTest, FinishedAndAbortedEventsForGroup) {
   // We should have exactly 2 events: a FINISHED event for the tranform
   // animation, and an ABORTED event for the opacity animation.
   EXPECT_EQ(2u, events->events_.size());
-  EXPECT_EQ(AnimationEvent::FINISHED, events->events_[0].type);
+  EXPECT_EQ(AnimationEvent::Type::kFinished, events->events_[0].type);
   EXPECT_EQ(TargetProperty::TRANSFORM, events->events_[0].target_property);
-  EXPECT_EQ(AnimationEvent::ABORTED, events->events_[1].type);
+  EXPECT_EQ(AnimationEvent::Type::kAborted, events->events_[1].type);
   EXPECT_EQ(TargetProperty::OPACITY, events->events_[1].target_property);
 }
 
@@ -2245,8 +2222,7 @@ TEST_F(ElementAnimationsTest, MaximumAnimationScaleNotScaled) {
                                element_id_, ElementListType::ACTIVE));
 
   animation_impl_->AddKeyframeModel(
-      CreateKeyframeModel(std::unique_ptr<gfx::AnimationCurve>(
-                              new FakeFloatTransition(1.0, 0.f, 1.f)),
+      CreateKeyframeModel(std::make_unique<FakeFloatTransition>(1.0, 0.f, 1.f),
                           1, TargetProperty::OPACITY));
 
   // Opacity animations aren't non-translation transforms.
@@ -3736,10 +3712,9 @@ TEST_F(ElementAnimationsTest, TestIsCurrentlyAnimatingProperty) {
   AttachTimelineAnimationLayer();
 
   // Create an animation that initially affects only pending elements.
-  std::unique_ptr<KeyframeModel> keyframe_model(
-      CreateKeyframeModel(std::unique_ptr<gfx::AnimationCurve>(
-                              new FakeFloatTransition(1.0, 0.f, 1.f)),
-                          1, TargetProperty::OPACITY));
+  std::unique_ptr<KeyframeModel> keyframe_model =
+      CreateKeyframeModel(std::make_unique<FakeFloatTransition>(1.0, 0.f, 1.f),
+                          1, TargetProperty::OPACITY);
   keyframe_model->set_affects_active_elements(false);
 
   animation_->AddKeyframeModel(std::move(keyframe_model));
@@ -3807,10 +3782,9 @@ TEST_F(ElementAnimationsTest, TestIsAnimatingPropertyTimeOffsetFillMode) {
 
   // Create an animation that initially affects only pending elements, and has
   // a start delay of 2 seconds.
-  std::unique_ptr<KeyframeModel> keyframe_model(
-      CreateKeyframeModel(std::unique_ptr<gfx::AnimationCurve>(
-                              new FakeFloatTransition(1.0, 0.f, 1.f)),
-                          1, TargetProperty::OPACITY));
+  std::unique_ptr<KeyframeModel> keyframe_model =
+      CreateKeyframeModel(std::make_unique<FakeFloatTransition>(1.0, 0.f, 1.f),
+                          1, TargetProperty::OPACITY);
   keyframe_model->set_fill_mode(KeyframeModel::FillMode::NONE);
   keyframe_model->set_time_offset(base::Milliseconds(-2000));
   keyframe_model->set_affects_active_elements(false);
@@ -3889,8 +3863,7 @@ TEST_F(ElementAnimationsTest, RemoveAndReAddAnimationToTicking) {
   // Add an animation and ensure the animation is in the host's ticking
   // animations. Remove the animation using RemoveFromTicking().
   animation_->AddKeyframeModel(
-      CreateKeyframeModel(std::unique_ptr<gfx::AnimationCurve>(
-                              new FakeFloatTransition(1.0, 1.f, 0.5f)),
+      CreateKeyframeModel(std::make_unique<FakeFloatTransition>(1.0, 1.f, 0.5f),
                           1, TargetProperty::OPACITY));
   ASSERT_EQ(1u, host_->ticking_animations_for_testing().size());
   animation_->keyframe_effect()->RemoveFromTicking();
@@ -3899,8 +3872,7 @@ TEST_F(ElementAnimationsTest, RemoveAndReAddAnimationToTicking) {
   // Ensure that adding a new animation will correctly update the ticking
   // animations list.
   animation_->AddKeyframeModel(
-      CreateKeyframeModel(std::unique_ptr<gfx::AnimationCurve>(
-                              new FakeFloatTransition(1.0, 1.f, 0.5f)),
+      CreateKeyframeModel(std::make_unique<FakeFloatTransition>(1.0, 1.f, 0.5f),
                           2, TargetProperty::OPACITY));
   EXPECT_EQ(1u, host_->ticking_animations_for_testing().size());
 }
@@ -3913,12 +3885,11 @@ TEST_F(ElementAnimationsTest, FinishedKeyframeModelsNotCopiedToImpl) {
   CreateImplTimelineAndAnimation();
 
   animation_->AddKeyframeModel(KeyframeModel::Create(
-      std::unique_ptr<gfx::AnimationCurve>(new FakeTransformTransition(1.0)), 1,
-      1, KeyframeModel::TargetPropertyId(TargetProperty::TRANSFORM)));
+      std::make_unique<FakeTransformTransition>(1.0), 1, 1,
+      KeyframeModel::TargetPropertyId(TargetProperty::TRANSFORM)));
   animation_->AddKeyframeModel(KeyframeModel::Create(
-      std::unique_ptr<gfx::AnimationCurve>(
-          new FakeFloatTransition(2.0, 0.f, 1.f)),
-      2, 2, KeyframeModel::TargetPropertyId(TargetProperty::OPACITY)));
+      std::make_unique<FakeFloatTransition>(2.0, 0.f, 1.f), 2, 2,
+      KeyframeModel::TargetPropertyId(TargetProperty::OPACITY)));
 
   // Finish the first keyframe model.
   animation_->Tick(kInitialTickTime);

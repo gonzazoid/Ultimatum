@@ -6,13 +6,9 @@
 
 #import <UIKit/UIKit.h>
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 // Fake implementation of UIMenuBuilder for tests.
 @interface TestUIMenuBuilder : NSObject <UIMenuBuilder>
@@ -83,25 +79,29 @@ using MenuBuilderTest = PlatformTest;
 // Checks that calling a builder for the non-main menu system doesn't affect the
 // builder.
 TEST_F(MenuBuilderTest, NonMainSystem_NoOp) {
-  TestUIMenuBuilder* nonMainBuilder = [[TestUIMenuBuilder alloc] init];
-  nonMainBuilder.system = UIMenuSystem.contextSystem;
-  ASSERT_FALSE(nonMainBuilder.wasMutated);
+  if (@available(iOS 15, *)) {
+    TestUIMenuBuilder* nonMainBuilder = [[TestUIMenuBuilder alloc] init];
+    nonMainBuilder.system = UIMenuSystem.contextSystem;
+    ASSERT_FALSE(nonMainBuilder.wasMutated);
 
-  [MenuBuilder buildMainMenuWithBuilder:nonMainBuilder];
+    [MenuBuilder buildMainMenuWithBuilder:nonMainBuilder];
 
-  EXPECT_FALSE(nonMainBuilder.wasMutated);
+    EXPECT_FALSE(nonMainBuilder.wasMutated);
+  }
 }
 
 // Checks that calling a builder for the non-main menu system affects the
 // builder.
 TEST_F(MenuBuilderTest, MainSystem_Configured) {
-  TestUIMenuBuilder* mainBuilder = [[TestUIMenuBuilder alloc] init];
-  mainBuilder.system = UIMenuSystem.mainSystem;
-  ASSERT_FALSE(mainBuilder.wasMutated);
+  if (@available(iOS 15, *)) {
+    TestUIMenuBuilder* mainBuilder = [[TestUIMenuBuilder alloc] init];
+    mainBuilder.system = UIMenuSystem.mainSystem;
+    ASSERT_FALSE(mainBuilder.wasMutated);
 
-  [MenuBuilder buildMainMenuWithBuilder:mainBuilder];
+    [MenuBuilder buildMainMenuWithBuilder:mainBuilder];
 
-  EXPECT_TRUE(mainBuilder.wasMutated);
+    EXPECT_TRUE(mainBuilder.wasMutated);
+  }
 }
 
 }  // namespace

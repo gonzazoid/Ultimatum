@@ -1,5 +1,5 @@
 include_rules = [
-  "+components/autofill/core/common",
+  "+components/compose",
   "+components/contextual_search/core",
   "+components/keyed_service/core",
   "+components/pref_registry",

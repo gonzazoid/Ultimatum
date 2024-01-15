@@ -8,7 +8,6 @@ import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
-import android.content.res.TypedArray;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.text.TextUtils;
@@ -16,6 +15,7 @@ import android.text.TextUtils;
 import androidx.annotation.Nullable;
 
 import org.chromium.base.ApplicationStatus;
+import org.chromium.base.BuildInfo;
 import org.chromium.base.IntentUtils;
 import org.chromium.chrome.browser.AppHooks;
 import org.chromium.chrome.browser.LaunchIntentDispatcher;
@@ -35,12 +35,10 @@ public class FreIntentCreator {
      *
      * @param caller               Activity instance that is requesting the first run.
      * @param fromIntent           Intent used to launch the caller.
-     * @param requiresBroadcast    Whether or not the Intent triggers a BroadcastReceiver.
      * @param preferLightweightFre Whether to prefer the Lightweight First Run Experience.
      * @return Intent to launch First Run Experience.
      */
-    public Intent create(Context caller, Intent fromIntent, boolean requiresBroadcast,
-            boolean preferLightweightFre) {
+    public Intent create(Context caller, Intent fromIntent, boolean preferLightweightFre) {
         @Nullable
         BrowserServicesIntentDataProvider webApkIntentDataProvider =
                 WebappLauncherActivity.maybeSlowlyGenerateWebApkIntentDataProviderFromIntent(
@@ -54,12 +52,13 @@ public class FreIntentCreator {
             associatedAppName = webappExtras.shortName;
 
             WebApkExtras webApkExtras = webApkIntentDataProvider.getWebApkExtras();
-            intentToLaunchAfterFreComplete = WebappLauncherActivity.createRelaunchWebApkIntent(
-                    fromIntent, webApkExtras.webApkPackageName, webappExtras.url);
+            intentToLaunchAfterFreComplete =
+                    WebappLauncherActivity.createRelaunchWebApkIntent(
+                            fromIntent, webApkExtras.webApkPackageName, webappExtras.url);
         }
 
         Intent result = createInternal(caller, fromIntent, preferLightweightFre, associatedAppName);
-        addPendingIntent(caller, result, intentToLaunchAfterFreComplete, requiresBroadcast);
+        addPendingIntent(caller, result, intentToLaunchAfterFreComplete);
         return result;
     }
 
@@ -74,7 +73,10 @@ public class FreIntentCreator {
      *                             WebAPK. Null otherwise.
      * @return Intent to launch First Run Experience.
      */
-    protected Intent createInternal(Context caller, Intent fromIntent, boolean preferLightweightFre,
+    protected Intent createInternal(
+            Context caller,
+            Intent fromIntent,
+            boolean preferLightweightFre,
             @Nullable String associatedAppName) {
         // Launch the Generic First Run Experience if it was previously active.
         boolean isGenericFreActive = checkIsGenericFreActive();
@@ -107,15 +109,19 @@ public class FreIntentCreator {
      * @param fromIntent                     The intent that was used to launch Chrome.
      */
     private static Intent createGenericFirstRunIntent(Context context, Intent fromIntent) {
-        Class<?> activityClass = shouldSwitchToTabbedMode(context)
-                ? TabbedModeFirstRunActivity.class
-                : FirstRunActivity.class;
+        Class<?> activityClass =
+                shouldSwitchToTabbedMode(context)
+                        ? TabbedModeFirstRunActivity.class
+                        : FirstRunActivity.class;
         Intent intent = new Intent(context, activityClass);
-        intent.putExtra(FirstRunActivity.EXTRA_COMING_FROM_CHROME_ICON,
+        intent.putExtra(
+                FirstRunActivity.EXTRA_COMING_FROM_CHROME_ICON,
                 TextUtils.equals(fromIntent.getAction(), Intent.ACTION_MAIN));
-        intent.putExtra(FirstRunActivity.EXTRA_CHROME_LAUNCH_INTENT_IS_CCT,
+        intent.putExtra(
+                FirstRunActivity.EXTRA_CHROME_LAUNCH_INTENT_IS_CCT,
                 LaunchIntentDispatcher.isCustomTabIntent(fromIntent));
-        intent.putExtra(FirstRunActivityBase.EXTRA_FRE_INTENT_CREATION_ELAPSED_REALTIME_MS,
+        intent.putExtra(
+                FirstRunActivityBase.EXTRA_FRE_INTENT_CREATION_ELAPSED_REALTIME_MS,
                 SystemClock.elapsedRealtime());
 
         // Copy extras bundle from intent which was used to launch Chrome. Copying the extras
@@ -137,20 +143,16 @@ public class FreIntentCreator {
      * @param context                        The context that corresponds to the Intent.
      * @param firstRunIntent                 The intent that will be used to start first run.
      * @param intentToLaunchAfterFreComplete The intent to launch when the user completes the FRE.
-     * @param requiresBroadcast              Whether or not the fromIntent must be broadcasted.
      */
-    private static void addPendingIntent(Context context, Intent firstRunIntent,
-            Intent intentToLaunchAfterFreComplete, boolean requiresBroadcast) {
-        final PendingIntent pendingIntent;
-        int pendingIntentFlags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_ONE_SHOT
-                | IntentUtils.getPendingIntentMutabilityFlag(false);
-        if (requiresBroadcast) {
-            pendingIntent = PendingIntent.getBroadcast(
-                    context, 0, intentToLaunchAfterFreComplete, pendingIntentFlags);
-        } else {
-            pendingIntent = PendingIntent.getActivity(
-                    context, 0, intentToLaunchAfterFreComplete, pendingIntentFlags);
-        }
+    private static void addPendingIntent(
+            Context context, Intent firstRunIntent, Intent intentToLaunchAfterFreComplete) {
+        int pendingIntentFlags =
+                PendingIntent.FLAG_UPDATE_CURRENT
+                        | PendingIntent.FLAG_ONE_SHOT
+                        | IntentUtils.getPendingIntentMutabilityFlag(false);
+        PendingIntent pendingIntent =
+                PendingIntent.getActivity(
+                        context, 0, intentToLaunchAfterFreComplete, pendingIntentFlags);
         firstRunIntent.putExtra(FirstRunActivity.EXTRA_FRE_COMPLETE_LAUNCH_INTENT, pendingIntent);
     }
 
@@ -181,14 +183,12 @@ public class FreIntentCreator {
         // Caller must be an activity.
         if (!(caller instanceof Activity)) return false;
 
+        // Always show TabbedMode on automotive devices.
+        if (BuildInfo.getInstance().isAutomotive) return true;
+
         // We must be on a tablet (where FRE is a dialog).
         if (!DeviceFormFactor.isNonMultiDisplayContextOnTablet(caller)) return false;
 
-        // Caller must use a theme with @drawable/window_background (the same background
-        // used by TabbedModeFRE).
-        TypedArray a = caller.obtainStyledAttributes(new int[] {android.R.attr.windowBackground});
-        int backgroundResourceId = a.getResourceId(0 /* index */, 0);
-        a.recycle();
-        return (backgroundResourceId == org.chromium.chrome.R.drawable.window_background);
+        return true;
     }
 }

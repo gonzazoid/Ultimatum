@@ -55,7 +55,7 @@ bool IsInputLatencyBeginComponent(ui::LatencyComponentType type) {
 }
 
 constexpr const char kTraceCategoriesForAsyncEvents[] =
-    "benchmark,latencyInfo,rail";
+    "benchmark,latencyInfo,rail,input.scrolling";
 
 struct LatencyInfoEnabledInitializer {
   LatencyInfoEnabledInitializer() :
@@ -148,11 +148,10 @@ void LatencyInfo::AddLatencyNumber(LatencyComponentType component) {
   AddLatencyNumberWithTimestampImpl(component, base::TimeTicks::Now(), nullptr);
 }
 
-void LatencyInfo::AddLatencyNumberWithTraceName(
-    LatencyComponentType component,
-    const char* trace_name_str) {
-  AddLatencyNumberWithTimestampImpl(component, base::TimeTicks::Now(),
-                                    trace_name_str);
+void LatencyInfo::AddLatencyNumberWithTraceName(LatencyComponentType component,
+                                                const char* trace_name_str,
+                                                base::TimeTicks now) {
+  AddLatencyNumberWithTimestampImpl(component, now, trace_name_str);
 }
 
 void LatencyInfo::AddLatencyNumberWithTimestamp(LatencyComponentType component,

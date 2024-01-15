@@ -13,16 +13,16 @@
 #include "base/base64.h"
 #include "base/base64url.h"
 #include "base/big_endian.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/gcm_driver/common/gcm_message.h"
 #include "components/gcm_driver/crypto/gcm_decryption_result.h"
 #include "components/gcm_driver/crypto/gcm_encryption_result.h"
@@ -66,8 +66,9 @@ class GCMEncryptionProviderTest : public ::testing::Test {
     ASSERT_TRUE(scoped_temp_dir_.CreateUniqueTempDir());
 
     encryption_provider_ = std::make_unique<GCMEncryptionProvider>();
-    encryption_provider_->Init(scoped_temp_dir_.GetPath(),
-                               base::ThreadTaskRunnerHandle::Get());
+    encryption_provider_->Init(
+        scoped_temp_dir_.GetPath(),
+        base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 
   void TearDown() override {
@@ -584,9 +585,7 @@ void GCMEncryptionProviderTest::TestEncryptionRoundTrip(
 
       message.data["content-encoding"] = "aes128gcm";
       if (use_internal_raw_data_for_draft08) {
-        std::string raw_data_base64;
-        base::Base64Encode(encrypted_message(), &raw_data_base64);
-        message.data["_googRawData"] = raw_data_base64;
+        message.data["_googRawData"] = base::Base64Encode(encrypted_message());
       } else {
         message.raw_data = encrypted_message();
       }

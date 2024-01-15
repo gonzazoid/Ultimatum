@@ -9,12 +9,14 @@
 #include <string>
 
 #include "base/threading/thread_checker.h"
-#import "ios/chrome/browser/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
 
 namespace network {
 class TestNetworkConnectionTracker;
 class TestURLLoaderFactory;
 }  // namespace network
+
+class MockPromosManager;
 
 class TestingApplicationContext : public ApplicationContext {
  public:
@@ -38,6 +40,15 @@ class TestingApplicationContext : public ApplicationContext {
 
   // Sets the ChromeBrowserStateManager.
   void SetChromeBrowserStateManager(ios::ChromeBrowserStateManager* manager);
+
+  // Sets the VariationsService.
+  void SetVariationsService(variations::VariationsService* variations_service);
+
+  // Sets the SystemIdentityManager.
+  // Must be set before `GetSystemIdentityManager`is called (i.e. before
+  // creating a TestChromeBrowserState).
+  void SetSystemIdentityManager(
+      std::unique_ptr<SystemIdentityManager> system_identity_manager);
 
   // ApplicationContext implementation.
   void OnAppEnterForeground() override;
@@ -67,10 +78,8 @@ class TestingApplicationContext : public ApplicationContext {
   SafeBrowsingService* GetSafeBrowsingService() override;
   network::NetworkConnectionTracker* GetNetworkConnectionTracker() override;
   BrowserPolicyConnectorIOS* GetBrowserPolicyConnector() override;
-  PromosManager* GetPromosManager() override;
-  breadcrumbs::BreadcrumbPersistentStorageManager*
-  GetBreadcrumbPersistentStorageManager() override;
   id<SingleSignOnService> GetSSOService() override;
+  SystemIdentityManager* GetSystemIdentityManager() override;
   segmentation_platform::OTRWebStateObserver*
   GetSegmentationOTRWebStateObserver() override;
   PushNotificationService* GetPushNotificationService() override;
@@ -86,6 +95,7 @@ class TestingApplicationContext : public ApplicationContext {
   // hard dependency on the policy infrastructure. In order to outlive the pref
   // service, the policy connector must live outside the keyed services.
   std::unique_ptr<BrowserPolicyConnectorIOS> browser_policy_connector_;
+  std::unique_ptr<MockPromosManager> promos_manager_;
 
   ios::ChromeBrowserStateManager* chrome_browser_state_manager_;
   std::unique_ptr<network_time::NetworkTimeTracker> network_time_tracker_;
@@ -95,7 +105,9 @@ class TestingApplicationContext : public ApplicationContext {
   std::unique_ptr<network::TestNetworkConnectionTracker>
       test_network_connection_tracker_;
   __strong id<SingleSignOnService> single_sign_on_service_ = nil;
+  std::unique_ptr<SystemIdentityManager> system_identity_manager_;
   std::unique_ptr<PushNotificationService> push_notification_service_;
+  variations::VariationsService* variations_service_;
 };
 
 #endif  // IOS_CHROME_TEST_TESTING_APPLICATION_CONTEXT_H_

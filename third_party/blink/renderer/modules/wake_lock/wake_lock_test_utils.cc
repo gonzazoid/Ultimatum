@@ -28,7 +28,6 @@
 namespace blink {
 
 using mojom::blink::PermissionDescriptorPtr;
-using mojom::blink::PermissionStatus;
 
 namespace {
 
@@ -163,10 +162,11 @@ void MockPermissionService::BindRequest(mojo::ScopedMessagePipeHandle handle) {
       &MockPermissionService::OnConnectionError, WTF::Unretained(this)));
 }
 
-void MockPermissionService::SetPermissionResponse(V8WakeLockType::Enum type,
-                                                  PermissionStatus status) {
-  DCHECK(status == PermissionStatus::GRANTED ||
-         status == PermissionStatus::DENIED);
+void MockPermissionService::SetPermissionResponse(
+    V8WakeLockType::Enum type,
+    mojom::blink::PermissionStatus status) {
+  DCHECK(status == mojom::blink::PermissionStatus::GRANTED ||
+         status == mojom::blink::PermissionStatus::DENIED);
   permission_responses_[static_cast<size_t>(type)] = status;
 }
 
@@ -201,13 +201,24 @@ void MockPermissionService::HasPermission(PermissionDescriptorPtr permission,
                                           HasPermissionCallback callback) {
   V8WakeLockType::Enum type;
   if (!GetWakeLockTypeFromDescriptor(permission, &type)) {
-    std::move(callback).Run(PermissionStatus::DENIED);
+    std::move(callback).Run(mojom::blink::PermissionStatus::DENIED);
     return;
   }
   size_t pos = static_cast<size_t>(type);
   DCHECK(permission_responses_[pos].has_value());
-  std::move(callback).Run(
-      permission_responses_[pos].value_or(PermissionStatus::DENIED));
+  std::move(callback).Run(permission_responses_[pos].value_or(
+      mojom::blink::PermissionStatus::DENIED));
+}
+
+void MockPermissionService::RegisterPageEmbeddedPermissionControl(
+    Vector<mojom::blink::PermissionDescriptorPtr> permissions,
+    mojo::PendingRemote<mojom::blink::EmbeddedPermissionControlClient> client) {
+}
+
+void MockPermissionService::RequestPageEmbeddedPermission(
+    mojom::blink::EmbeddedPermissionRequestDescriptorPtr permissions,
+    RequestPageEmbeddedPermissionCallback) {
+  NOTREACHED();
 }
 
 void MockPermissionService::RequestPermission(
@@ -216,7 +227,7 @@ void MockPermissionService::RequestPermission(
     RequestPermissionCallback callback) {
   V8WakeLockType::Enum type;
   if (!GetWakeLockTypeFromDescriptor(permission, &type)) {
-    std::move(callback).Run(PermissionStatus::DENIED);
+    std::move(callback).Run(mojom::blink::PermissionStatus::DENIED);
     return;
   }
 
@@ -224,8 +235,8 @@ void MockPermissionService::RequestPermission(
   DCHECK(permission_responses_[pos].has_value());
   if (request_permission_callbacks_[pos])
     std::move(request_permission_callbacks_[pos]).Run();
-  std::move(callback).Run(
-      permission_responses_[pos].value_or(PermissionStatus::DENIED));
+  std::move(callback).Run(permission_responses_[pos].value_or(
+      mojom::blink::PermissionStatus::DENIED));
 }
 
 void MockPermissionService::RequestPermissions(
@@ -242,11 +253,17 @@ void MockPermissionService::RevokePermission(PermissionDescriptorPtr permission,
 
 void MockPermissionService::AddPermissionObserver(
     PermissionDescriptorPtr permission,
-    PermissionStatus last_known_status,
+    mojom::blink::PermissionStatus last_known_status,
     mojo::PendingRemote<mojom::blink::PermissionObserver>) {
   NOTREACHED();
 }
 
+void MockPermissionService::NotifyEventListener(
+    PermissionDescriptorPtr permission,
+    const String& event_type,
+    bool is_added) {
+  NOTREACHED();
+}
 // WakeLockTestingContext
 
 WakeLockTestingContext::WakeLockTestingContext(
@@ -325,15 +342,15 @@ v8::Promise::PromiseState ScriptPromiseUtils::GetPromiseState(
 // static
 DOMException* ScriptPromiseUtils::GetPromiseResolutionAsDOMException(
     const ScriptPromise& promise) {
-  return V8DOMException::ToImplWithTypeCheck(promise.GetIsolate(),
-                                             promise.V8Promise()->Result());
+  return V8DOMException::ToWrappable(promise.GetIsolate(),
+                                     promise.V8Promise()->Result());
 }
 
 // static
 WakeLockSentinel* ScriptPromiseUtils::GetPromiseResolutionAsWakeLockSentinel(
     const ScriptPromise& promise) {
-  return V8WakeLockSentinel::ToImplWithTypeCheck(promise.GetIsolate(),
-                                                 promise.V8Promise()->Result());
+  return V8WakeLockSentinel::ToWrappable(promise.GetIsolate(),
+                                         promise.V8Promise()->Result());
 }
 
 }  // namespace blink

@@ -6,7 +6,7 @@
 
 #import <memory>
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/run_loop.h"
 #import "base/strings/string_number_conversions.h"
 #import "base/strings/sys_string_conversions.h"
@@ -18,10 +18,6 @@
 #import "ios/web/test/mojo_test.mojom.h"
 #import "ios/web/web_state/web_state_impl.h"
 #import "testing/gtest_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::test::ios::kWaitForJSCompletionTimeout;
 using base::test::ios::WaitUntilConditionOrTimeout;

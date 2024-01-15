@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #ifndef DEVICE_BLUETOOTH_FLOSS_BLUETOOTH_REMOTE_GATT_SERVICE_FLOSS_H_
@@ -9,7 +9,7 @@
 #include "device/bluetooth/bluetooth_export.h"
 #include "device/bluetooth/bluetooth_remote_gatt_service.h"
 #include "device/bluetooth/floss/bluetooth_gatt_service_floss.h"
-#include "device/bluetooth/floss/floss_gatt_client.h"
+#include "device/bluetooth/floss/floss_gatt_manager_client.h"
 
 namespace device {
 class BluetoothDevice;
@@ -27,8 +27,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothRemoteGattServiceFloss
   static std::unique_ptr<BluetoothRemoteGattServiceFloss> Create(
       BluetoothAdapterFloss* adapter,
       BluetoothDeviceFloss* device,
-      GattService remote_service,
-      bool primary);
+      GattService remote_service);
 
   BluetoothRemoteGattServiceFloss(const BluetoothRemoteGattServiceFloss&) =
       delete;
@@ -48,17 +47,13 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothRemoteGattServiceFloss
  protected:
   BluetoothRemoteGattServiceFloss(BluetoothAdapterFloss* adapter,
                                   BluetoothDeviceFloss* device,
-                                  GattService remote_service,
-                                  bool primary);
+                                  GattService remote_service);
 
  private:
-  // Is this a primary service?
-  bool primary_;
-
   // Data about the remote gatt service represented by this class.
   GattService remote_service_;
 
-  // Services that are included in a primary service.
+  // Services that are included with this service.
   std::vector<std::unique_ptr<BluetoothRemoteGattServiceFloss>>
       included_services_;
 

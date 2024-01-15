@@ -13,6 +13,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import org.chromium.base.task.PostTask;
+import org.chromium.base.task.TaskTraits;
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.base.test.util.CommandLineFlags;
@@ -20,20 +21,16 @@ import org.chromium.base.test.util.Feature;
 import org.chromium.chrome.browser.browserservices.intents.BrowserServicesIntentDataProvider;
 import org.chromium.chrome.browser.browserservices.intents.WebappExtras;
 import org.chromium.chrome.browser.browserservices.intents.WebappInfo;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
 import org.chromium.chrome.test.util.browser.webapps.WebApkIntentDataProviderBuilder;
 import org.chromium.chrome.test.util.browser.webapps.WebappTestPage;
 import org.chromium.components.webapps.WebappsIconUtils;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
 import org.chromium.net.test.EmbeddedTestServerRule;
-/**
- * Tests the WebApkUpdateDataFetcher.
- */
+
+/** Tests the WebApkUpdateDataFetcher. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @Batch(Batch.PER_CLASS)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
@@ -41,8 +38,7 @@ public class WebApkUpdateDataFetcherTest {
     @Rule
     public ChromeTabbedActivityTestRule mActivityTestRule = new ChromeTabbedActivityTestRule();
 
-    @Rule
-    public EmbeddedTestServerRule mTestServerRule = new EmbeddedTestServerRule();
+    @Rule public EmbeddedTestServerRule mTestServerRule = new EmbeddedTestServerRule();
 
     private static final String WEBAPK_START_URL =
             "/chrome/test/data/banners/manifest_test_page.html";
@@ -78,8 +74,8 @@ public class WebApkUpdateDataFetcherTest {
 
     // CallbackHelper which blocks until the {@link ManifestUpgradeDetectorFetcher.Callback}
     // callback is called.
-    private static class CallbackWaiter
-            extends CallbackHelper implements WebApkUpdateDataFetcher.Observer {
+    private static class CallbackWaiter extends CallbackHelper
+            implements WebApkUpdateDataFetcher.Observer {
         private boolean mWebApkCompatible;
         private String mName;
         private String mManifestId;
@@ -87,8 +83,10 @@ public class WebApkUpdateDataFetcherTest {
         private boolean mIsPrimaryIconMaskable;
 
         @Override
-        public void onGotManifestData(BrowserServicesIntentDataProvider fetchedInfo,
-                String primaryIconUrl, String splashIconUrl) {
+        public void onGotManifestData(
+                BrowserServicesIntentDataProvider fetchedInfo,
+                String primaryIconUrl,
+                String splashIconUrl) {
             Assert.assertNull(mName);
             mWebApkCompatible = true;
 
@@ -130,19 +128,24 @@ public class WebApkUpdateDataFetcherTest {
 
     private WebApkIntentDataProviderBuilder getTestIntentDataProviderBuilder(
             final String manifestUrl) {
-        WebApkIntentDataProviderBuilder builder = new WebApkIntentDataProviderBuilder(
-                "random.package", mTestServerRule.getServer().getURL(WEBAPK_START_URL));
+        WebApkIntentDataProviderBuilder builder =
+                new WebApkIntentDataProviderBuilder(
+                        "random.package", mTestServerRule.getServer().getURL(WEBAPK_START_URL));
         builder.setScope(mTestServerRule.getServer().getURL(WEB_MANIFEST_SCOPE));
         builder.setManifestUrl(mTestServerRule.getServer().getURL(manifestUrl));
         return builder;
     }
 
     /** Creates and starts a WebApkUpdateDataFetcher. */
-    private void startWebApkUpdateDataFetcher(final WebApkIntentDataProviderBuilder builder,
+    private void startWebApkUpdateDataFetcher(
+            final WebApkIntentDataProviderBuilder builder,
             final WebApkUpdateDataFetcher.Observer observer) {
         final WebApkUpdateDataFetcher fetcher = new WebApkUpdateDataFetcher();
-        PostTask.runOrPostTask(UiThreadTaskTraits.DEFAULT,
-                () -> { fetcher.start(mTab, WebappInfo.create(builder.build()), observer); });
+        PostTask.runOrPostTask(
+                TaskTraits.UI_DEFAULT,
+                () -> {
+                    fetcher.start(mTab, WebappInfo.create(builder.build()), observer);
+                });
     }
 
     /**
@@ -165,9 +168,8 @@ public class WebApkUpdateDataFetcherTest {
     }
 
     /**
-     * Test that WebApkUpdateDataFetcher selects a maskable icon when
-     * 1. the manifest has a maskable icon, and
-     * 2. the Android version >= 26 (which supports adaptive icon).
+     * Test that WebApkUpdateDataFetcher selects a maskable icon when 1. the manifest has a maskable
+     * icon, and 2. the Android version >= 26 (which supports adaptive icon).
      */
     @Test
     @MediumTest
@@ -183,28 +185,6 @@ public class WebApkUpdateDataFetcherTest {
 
         Assert.assertEquals(
                 WebappsIconUtils.doesAndroidSupportMaskableIcons(), waiter.isPrimaryIconMaskable());
-    }
-
-    /**
-     * Test starting WebApkUpdateDataFetcher on page which uses a different manifest URL than the
-     * ManifestUpgradeDetectorFetcher is looking for. Check that the callback is only called once
-     * the user navigates to a page which uses the desired manifest URL.
-     */
-    @Test
-    @MediumTest
-    @Feature({"Webapps"})
-    public void testLaunchWithDifferentManifestUrl() throws Exception {
-        WebappTestPage.navigateToServiceWorkerPageWithManifest(
-                mTestServerRule.getServer(), mTab, WEB_MANIFEST_URL1);
-
-        CallbackWaiter waiter = new CallbackWaiter();
-        startWebApkUpdateDataFetcher(getTestIntentDataProviderBuilder(WEB_MANIFEST_URL2), waiter);
-
-        WebappTestPage.navigateToServiceWorkerPageWithManifest(
-                mTestServerRule.getServer(), mTab, WEB_MANIFEST_URL2);
-        waiter.waitForCallback(0);
-        Assert.assertTrue(waiter.isWebApkCompatible());
-        Assert.assertEquals(WEB_MANIFEST_NAME2, waiter.name());
     }
 
     /**
@@ -233,7 +213,6 @@ public class WebApkUpdateDataFetcherTest {
     @Test
     @MediumTest
     @Feature({"Webapps"})
-    @EnableFeatures(ChromeFeatureList.WEB_APK_UNIQUE_ID)
     public void testLaunchWithDifferentManifestUrlSameId() throws Exception {
         WebappTestPage.navigateToServiceWorkerPageWithManifest(
                 mTestServerRule.getServer(), mTab, WEB_MANIFEST_URL1);
@@ -254,7 +233,6 @@ public class WebApkUpdateDataFetcherTest {
     @Test
     @MediumTest
     @Feature({"Webapps"})
-    @EnableFeatures(ChromeFeatureList.WEB_APK_UNIQUE_ID)
     public void testLaunchWithDifferentManifestId() throws Exception {
         WebappTestPage.navigateToServiceWorkerPageWithManifest(
                 mTestServerRule.getServer(), mTab, WEB_MANIFEST_URL3);
@@ -270,13 +248,10 @@ public class WebApkUpdateDataFetcherTest {
         Assert.assertNotNull(waiter.manifestId());
     }
 
-    /**
-     * Test starting WebApkUpdateDataFetcher when current WebAPK has no ID specified.
-     */
+    /** Test starting WebApkUpdateDataFetcher when current WebAPK has no ID specified. */
     @Test
     @MediumTest
     @Feature({"Webapps"})
-    @EnableFeatures(ChromeFeatureList.WEB_APK_UNIQUE_ID)
     public void testLaunchWithEmptyOldManifestId() throws Exception {
         WebappTestPage.navigateToServiceWorkerPageWithManifest(
                 mTestServerRule.getServer(), mTab, WEB_MANIFEST_URL3);
@@ -287,6 +262,9 @@ public class WebApkUpdateDataFetcherTest {
                 getTestIntentDataProviderBuilder(WEB_MANIFEST_URL1);
         // Set manifestId to empty string.
         oldIntentDataProviderBuilder.setWebApkManifestId("");
+        // Set manifestUrl to be the same so update can be trigger
+        oldIntentDataProviderBuilder.setManifestUrl(
+                mTestServerRule.getServer().getURL(WEB_MANIFEST_URL3));
 
         startWebApkUpdateDataFetcher(oldIntentDataProviderBuilder, waiter);
 

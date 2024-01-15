@@ -19,14 +19,14 @@ class GPU;
 class GPUDeviceDescriptor;
 class GPUSupportedFeatures;
 class GPUSupportedLimits;
+class GPUMemoryHeapInfo;
 class ScriptPromiseResolver;
 
-class GPUAdapter final : public ScriptWrappable, public DawnObjectBase {
+class GPUAdapter final : public ScriptWrappable, DawnObject<WGPUAdapter> {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
   GPUAdapter(GPU* gpu,
-             const String& name,
              WGPUAdapter handle,
              scoped_refptr<DawnControlClientHolder> dawn_control_client);
 
@@ -35,18 +35,18 @@ class GPUAdapter final : public ScriptWrappable, public DawnObjectBase {
 
   void Trace(Visitor* visitor) const override;
 
-  const String& name() const;
-  GPU* gpu() const { return gpu_; }
+  GPU* gpu() const { return gpu_.Get(); }
   GPUSupportedFeatures* features() const;
-  GPUSupportedLimits* limits() const { return limits_; }
+  GPUSupportedLimits* limits() const { return limits_.Get(); }
   bool isFallbackAdapter() const;
-  void invalidate() { is_invalid_ = true; }
+  WGPUBackendType backendType() const;
+  bool SupportsMultiPlanarFormats() const;
+  bool isCompatibilityMode() const;
 
   ScriptPromise requestDevice(ScriptState* script_state,
                               GPUDeviceDescriptor* descriptor);
 
-  ScriptPromise requestAdapterInfo(ScriptState* script_state,
-                                   const Vector<String>& unmask_hints);
+  ScriptPromise requestAdapterInfo(ScriptState* script_state);
 
   // Console warnings should generally be attributed to a GPUDevice, but in
   // cases where there is no device warnings can be surfaced here. It's expected
@@ -57,17 +57,22 @@ class GPUAdapter final : public ScriptWrappable, public DawnObjectBase {
 
  private:
   void OnRequestDeviceCallback(ScriptState* script_state,
-                               ScriptPromiseResolver* resolver,
                                const GPUDeviceDescriptor* descriptor,
+                               ScriptPromiseResolver* resolver,
                                WGPURequestDeviceStatus status,
                                WGPUDevice dawn_device,
                                const char* error_message);
 
-  String name_;
-  WGPUAdapter handle_;
+  void setLabelImpl(const String&) override {
+    // There isn't a wgpu::Adapter::SetLabel, just skip.
+  }
+
   Member<GPU> gpu_;
   bool is_fallback_adapter_;
-  bool is_invalid_ = false;
+  WGPUBackendType backend_type_;
+  WGPUAdapterType adapter_type_;
+  bool is_consumed_ = false;
+  bool is_compatibility_mode_;
   Member<GPUSupportedLimits> limits_;
   Member<GPUSupportedFeatures> features_;
 
@@ -76,6 +81,7 @@ class GPUAdapter final : public ScriptWrappable, public DawnObjectBase {
   String device_;
   String description_;
   String driver_;
+  HeapVector<Member<GPUMemoryHeapInfo>> memory_heaps_;
 
   static constexpr int kMaxAllowedConsoleWarnings = 50;
   int allowed_console_warnings_remaining_ = kMaxAllowedConsoleWarnings;

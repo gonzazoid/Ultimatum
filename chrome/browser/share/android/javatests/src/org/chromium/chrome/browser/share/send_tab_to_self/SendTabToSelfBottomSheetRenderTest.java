@@ -4,6 +4,10 @@
 
 package org.chromium.chrome.browser.share.send_tab_to_self;
 
+import static androidx.test.espresso.Espresso.onView;
+import static androidx.test.espresso.assertion.ViewAssertions.doesNotExist;
+import static androidx.test.espresso.matcher.ViewMatchers.withText;
+
 import static org.mockito.Mockito.when;
 
 import android.graphics.Bitmap;
@@ -14,7 +18,6 @@ import android.view.View;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.test.filters.MediumTest;
 
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -26,13 +29,14 @@ import org.chromium.base.test.util.Feature;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
+import org.chromium.chrome.test.R;
+import org.chromium.chrome.test.util.browser.signin.SigninTestRule;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.components.signin.base.AccountCapabilities;
 import org.chromium.components.signin.base.AccountInfo;
 import org.chromium.components.signin.base.CoreAccountId;
 import org.chromium.components.signin.identitymanager.ConsentLevel;
 import org.chromium.components.signin.identitymanager.IdentityManager;
-import org.chromium.components.signin.test.util.R;
 import org.chromium.components.sync_device_info.FormFactor;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.ui.test.util.BlankUiTestActivityTestCase;
@@ -52,90 +56,142 @@ public class SendTabToSelfBottomSheetRenderTest extends BlankUiTestActivityTestC
     public final RenderTestRule mRenderTestRule =
             RenderTestRule.Builder.withPublicCorpus()
                     .setBugComponent(RenderTestRule.Component.UI_BROWSER_SHARING)
-                    .setRevision(4)
+                    .setRevision(5)
                     .build();
-    @Rule
-    public final MockitoRule mMockitoRule = MockitoJUnit.rule();
 
-    @Mock
-    private Profile mProfile;
-    @Mock
-    private IdentityServicesProvider mIdentityServicesProvider;
-    @Mock
-    private IdentityManager mIdentityManager;
-    @Mock
-    private BottomSheetController mBottomSheetController;
+    @Rule public final MockitoRule mMockitoRule = MockitoJUnit.rule();
 
-    @Before
-    public void setUp() {
+    @Mock private Profile mProfile;
+    @Mock private IdentityServicesProvider mIdentityServicesProvider;
+    @Mock private IdentityManager mIdentityManager;
+    @Mock private BottomSheetController mBottomSheetController;
+
+    @Test
+    @MediumTest
+    @Feature("RenderTest")
+    public void testDevicePickerBottomSheet() throws Throwable {
+        setUpAccountData(createFakeAccount());
+        long todayTimestamp = Calendar.getInstance().getTimeInMillis();
+        List<TargetDeviceInfo> devices =
+                Arrays.asList(
+                        new TargetDeviceInfo("My Phone", "guid1", FormFactor.PHONE, todayTimestamp),
+                        new TargetDeviceInfo(
+                                "My Computer",
+                                "guid2",
+                                FormFactor.DESKTOP,
+                                todayTimestamp - TimeUnit.DAYS.toMillis(1)));
+        View view =
+                TestThreadUtils.runOnUiThreadBlockingNoException(
+                        () -> {
+                            DevicePickerBottomSheetContent sheetContent =
+                                    new DevicePickerBottomSheetContent(
+                                            getActivity(),
+                                            JUnitTestGURLs.HTTP_URL.getSpec(),
+                                            "Title",
+                                            mBottomSheetController,
+                                            devices,
+                                            mProfile);
+                            getActivity().setContentView(sheetContent.getContentView());
+                            return sheetContent.getContentView();
+                        });
+        mRenderTestRule.render(view, "device_picker");
+    }
+
+    @Test
+    @MediumTest
+    public void testDevicePickerBottomSheetWithNonDisplayableAccountEmail() throws Throwable {
+        AccountInfo account =
+                createFakeAccount(SigninTestRule.NON_DISPLAYABLE_EMAIL_ACCOUNT_CAPABILITIES);
+        setUpAccountData(account);
+        long todayTimestamp = Calendar.getInstance().getTimeInMillis();
+        List<TargetDeviceInfo> devices =
+                Arrays.asList(
+                        new TargetDeviceInfo("My Phone", "guid1", FormFactor.PHONE, todayTimestamp),
+                        new TargetDeviceInfo(
+                                "My Computer",
+                                "guid2",
+                                FormFactor.DESKTOP,
+                                todayTimestamp - TimeUnit.DAYS.toMillis(1)));
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    DevicePickerBottomSheetContent sheetContent =
+                            new DevicePickerBottomSheetContent(
+                                    getActivity(),
+                                    JUnitTestGURLs.HTTP_URL.getSpec(),
+                                    "Title",
+                                    mBottomSheetController,
+                                    devices,
+                                    mProfile);
+                    getActivity().setContentView(sheetContent.getContentView());
+                });
+        onView(withText(account.getEmail())).check(doesNotExist());
+    }
+
+    @Test
+    @MediumTest
+    @Feature("RenderTest")
+    public void testNoTargetDeviceBottomSheet() throws Throwable {
+        setUpAccountData(createFakeAccount());
+        View view =
+                TestThreadUtils.runOnUiThreadBlockingNoException(
+                        () -> {
+                            NoTargetDeviceBottomSheetContent sheetContent =
+                                    new NoTargetDeviceBottomSheetContent(getActivity());
+                            getActivity().setContentView(sheetContent.getContentView());
+                            return sheetContent.getContentView();
+                        });
+        mRenderTestRule.render(view, "no_target_device_with_account");
+    }
+
+    @Test
+    @MediumTest
+    public void testNoTargetDeviceBottomSheetWithNonDisplayableAccountEmail() throws Throwable {
+        AccountInfo account =
+                createFakeAccount(SigninTestRule.NON_DISPLAYABLE_EMAIL_ACCOUNT_CAPABILITIES);
+        setUpAccountData(account);
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    NoTargetDeviceBottomSheetContent sheetContent =
+                            new NoTargetDeviceBottomSheetContent(getActivity());
+                    getActivity().setContentView(sheetContent.getContentView());
+                });
+        onView(withText(account.getEmail())).check(doesNotExist());
+    }
+
+    private AccountInfo createFakeAccount() {
+        return createFakeAccount(new AccountCapabilities(new HashMap<>()));
+    }
+
+    private AccountInfo createFakeAccount(AccountCapabilities accountCapabilities) {
+        Drawable drawable =
+                AppCompatResources.getDrawable(getActivity(), R.drawable.test_profile_picture);
+        Bitmap bitmap =
+                Bitmap.createBitmap(
+                        drawable.getIntrinsicWidth(),
+                        drawable.getIntrinsicHeight(),
+                        Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+        drawable.draw(canvas);
+
+        return new AccountInfo(
+                new CoreAccountId("id"),
+                "test@gmail.com",
+                "gaiaId",
+                "John Doe",
+                "John",
+                bitmap,
+                accountCapabilities);
+    }
+
+    /** Set up account data to be shown by the UI following createFakeAccount(). */
+    private void setUpAccountData(AccountInfo account) {
         // Set up account data to be shown by the UI.
-        AccountInfo account = createFakeAccount();
         when(mIdentityManager.getPrimaryAccountInfo(ConsentLevel.SIGNIN)).thenReturn(account);
         when(mIdentityManager.findExtendedAccountInfoByEmailAddress(account.getEmail()))
                 .thenReturn(account);
         when(mIdentityServicesProvider.getIdentityManager(mProfile)).thenReturn(mIdentityManager);
         IdentityServicesProvider.setInstanceForTests(mIdentityServicesProvider);
         Profile.setLastUsedProfileForTesting(mProfile);
-    }
-
-    @Test
-    @MediumTest
-    @Feature("RenderTest")
-    public void testDevicePickerBottomSheet() throws Throwable {
-        long todayTimestamp = Calendar.getInstance().getTimeInMillis();
-        List<TargetDeviceInfo> devices = Arrays.asList(
-                new TargetDeviceInfo("My Phone", "guid1", FormFactor.PHONE, todayTimestamp),
-                new TargetDeviceInfo("My Computer", "guid2", FormFactor.DESKTOP,
-                        todayTimestamp - TimeUnit.DAYS.toMillis(1)));
-        View view = TestThreadUtils.runOnUiThreadBlockingNoException(() -> {
-            DevicePickerBottomSheetContent sheetContent =
-                    new DevicePickerBottomSheetContent(getActivity(), JUnitTestGURLs.HTTP_URL,
-                            "Title", mBottomSheetController, devices, mProfile);
-            getActivity().setContentView(sheetContent.getContentView());
-            return sheetContent.getContentView();
-        });
-        mRenderTestRule.render(view, "device_picker");
-    }
-
-    @Test
-    @MediumTest
-    @Feature("RenderTest")
-    public void testNoTargetDeviceBottomSheetWithPromoFeatureDisabled() throws Throwable {
-        View view = TestThreadUtils.runOnUiThreadBlockingNoException(() -> {
-            NoTargetDeviceBottomSheetContent sheetContent = new NoTargetDeviceBottomSheetContent(
-                    getActivity(), /*isPromoFeatureEnabled=*/false);
-            getActivity().setContentView(sheetContent.getContentView());
-            return sheetContent.getContentView();
-        });
-        mRenderTestRule.render(view, "no_target_device");
-    }
-
-    @Test
-    @MediumTest
-    @Feature("RenderTest")
-    public void testNoTargetDeviceBottomSheetWithPromoFeatureEnabled() throws Throwable {
-        View view = TestThreadUtils.runOnUiThreadBlockingNoException(() -> {
-            NoTargetDeviceBottomSheetContent sheetContent = new NoTargetDeviceBottomSheetContent(
-                    getActivity(), /*isPromoFeatureEnabled=*/true);
-            getActivity().setContentView(sheetContent.getContentView());
-            return sheetContent.getContentView();
-        });
-        mRenderTestRule.render(view, "no_target_device_with_account");
-    }
-
-    // TODO(crbug.com/1219434): This duplicates the account in AccountManagerTestRule, so tests can
-    // later adopt the rule without failing the golden diffs. That's not done now because it
-    // requires changing the device picker to depend on ProfileDataCache instead of IdentityManager.
-    private AccountInfo createFakeAccount() {
-        Drawable drawable =
-                AppCompatResources.getDrawable(getActivity(), R.drawable.test_profile_picture);
-        Bitmap bitmap = Bitmap.createBitmap(drawable.getIntrinsicWidth(),
-                drawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
-        drawable.draw(canvas);
-
-        return new AccountInfo(new CoreAccountId("id"), "test@gmail.com", "gaiaId", "John Doe",
-                "John", bitmap, new AccountCapabilities(new HashMap<>()));
     }
 }

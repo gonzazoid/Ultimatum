@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
@@ -46,7 +46,7 @@ class PublicIpAddressGeolocator : public mojom::Geolocation {
   void SetHighAccuracy(bool high_accuracy) override;
 
   // Callback to register with PublicIpAddressLocationNotifier.
-  void OnPositionUpdate(const mojom::Geoposition& position);
+  void OnPositionUpdate(mojom::GeopositionResultPtr result);
 
   // The callback passed to QueryNextPosition.
   QueryNextPositionCallback query_next_position_callback_;
@@ -55,7 +55,7 @@ class PublicIpAddressGeolocator : public mojom::Geolocation {
   base::Time last_updated_timestamp_;
 
   // Notifier to ask for IP-geolocation updates.
-  const raw_ptr<PublicIpAddressLocationNotifier> notifier_;
+  const raw_ptr<PublicIpAddressLocationNotifier, DanglingUntriaged> notifier_;
 
   // The most recent PartialNetworkTrafficAnnotationTag provided by a client.
   std::unique_ptr<const net::PartialNetworkTrafficAnnotationTag>

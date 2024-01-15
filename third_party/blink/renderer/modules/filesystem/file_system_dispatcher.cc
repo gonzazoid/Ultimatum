@@ -6,6 +6,8 @@
 
 #include <utility>
 
+#include "base/containers/contains.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "components/services/filesystem/public/mojom/types.mojom-blink.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -14,6 +16,7 @@
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
+#include "third_party/blink/renderer/core/fileapi/blob.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
@@ -365,7 +368,7 @@ void FileSystemDispatcher::TruncateSync(const KURL& path,
 }
 
 void FileSystemDispatcher::Write(const KURL& path,
-                                 const String& blob_id,
+                                 const Blob& blob,
                                  int64_t offset,
                                  int* request_id_out,
                                  const WriteCallback& success_callback,
@@ -396,21 +399,21 @@ void FileSystemDispatcher::Write(const KURL& path,
                                       std::move(error_callback), operation_id)),
                     std::move(receiver), task_runner);
 
-  GetFileSystemManager().Write(path, blob_id, offset, std::move(op_receiver),
-                               std::move(listener));
+  GetFileSystemManager().Write(path, blob.AsMojoBlob(), offset,
+                               std::move(op_receiver), std::move(listener));
 
   if (request_id_out)
     *request_id_out = operation_id;
 }
 
 void FileSystemDispatcher::WriteSync(const KURL& path,
-                                     const String& blob_id,
+                                     const Blob& blob,
                                      int64_t offset,
                                      const WriteCallback& success_callback,
                                      StatusCallback error_callback) {
   int64_t byte_count;
   base::File::Error error_code = base::File::FILE_ERROR_FAILED;
-  GetFileSystemManager().WriteSync(path, blob_id, offset, &byte_count,
+  GetFileSystemManager().WriteSync(path, blob.AsMojoBlob(), offset, &byte_count,
                                    &error_code);
   if (error_code == base::File::FILE_OK)
     std::move(success_callback).Run(byte_count, /*complete=*/true);
@@ -420,8 +423,7 @@ void FileSystemDispatcher::WriteSync(const KURL& path,
 
 void FileSystemDispatcher::Cancel(int request_id_to_cancel,
                                   StatusCallback callback) {
-  if (cancellable_operations_.find(request_id_to_cancel) ==
-      cancellable_operations_.end()) {
+  if (!base::Contains(cancellable_operations_, request_id_to_cancel)) {
     std::move(callback).Run(base::File::FILE_ERROR_INVALID_OPERATION);
     return;
   }

@@ -11,7 +11,6 @@
 #include "third_party/blink/renderer/platform/graphics/paint/display_item.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_record.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
-#include "third_party/skia/include/core/SkRefCnt.h"
 
 namespace cc {
 class ScrollbarLayerBase;
@@ -30,19 +29,20 @@ class TransformPaintPropertyNode;
 // scrollbar layer.
 class PLATFORM_EXPORT ScrollbarDisplayItem final : public DisplayItem {
  public:
-  ScrollbarDisplayItem(DisplayItemClientId,
-                       Type,
-                       scoped_refptr<cc::Scrollbar>,
-                       const gfx::Rect& visual_rect,
-                       const TransformPaintPropertyNode* scroll_translation,
-                       CompositorElementId element_id,
-                       RasterEffectOutset outset,
-                       PaintInvalidationReason paint_invalidation_reason =
-                           PaintInvalidationReason::kJustCreated);
+  ScrollbarDisplayItem(
+      DisplayItemClientId,
+      Type,
+      scoped_refptr<cc::Scrollbar>,
+      const gfx::Rect& visual_rect,
+      scoped_refptr<const TransformPaintPropertyNode> scroll_translation,
+      CompositorElementId element_id,
+      RasterEffectOutset outset,
+      PaintInvalidationReason paint_invalidation_reason =
+          PaintInvalidationReason::kJustCreated);
 
   const TransformPaintPropertyNode* ScrollTranslation() const {
     DCHECK(!IsTombstone());
-    return data_->scroll_translation_;
+    return data_->scroll_translation_.get();
   }
   CompositorElementId ElementId() const {
     DCHECK(!IsTombstone());
@@ -51,7 +51,9 @@ class PLATFORM_EXPORT ScrollbarDisplayItem final : public DisplayItem {
 
   // Paints the scrollbar into the internal paint record, for non-composited
   // scrollbar.
-  sk_sp<const PaintRecord> Paint() const;
+  PaintRecord Paint() const;
+
+  bool NeedsUpdateDisplay() const;
 
   // Create or reuse the cc scrollbar layer, for composited scrollbar.
   scoped_refptr<cc::ScrollbarLayerBase> CreateOrReuseLayer(
@@ -60,15 +62,23 @@ class PLATFORM_EXPORT ScrollbarDisplayItem final : public DisplayItem {
   // Records a scrollbar into a GraphicsContext. Must check
   // PaintController::UseCachedItem() before calling this function.
   // |rect| is the bounding box of the scrollbar in the current transform space.
-  static void Record(GraphicsContext&,
-                     const DisplayItemClient&,
-                     DisplayItem::Type,
-                     scoped_refptr<cc::Scrollbar>,
-                     const gfx::Rect& visual_rect,
-                     const TransformPaintPropertyNode* scroll_translation,
-                     CompositorElementId element_id);
+  static void Record(
+      GraphicsContext&,
+      const DisplayItemClient&,
+      DisplayItem::Type,
+      scoped_refptr<cc::Scrollbar>,
+      const gfx::Rect& visual_rect,
+      scoped_refptr<const TransformPaintPropertyNode> scroll_translation,
+      CompositorElementId element_id);
 
   bool IsOpaque() const;
+
+  static bool IsScrollbarElementId(CompositorElementId element_id) {
+    return NamespaceFromCompositorElementId(element_id) ==
+               CompositorElementIdNamespace::kHorizontalScrollbar ||
+           NamespaceFromCompositorElementId(element_id) ==
+               CompositorElementIdNamespace::kVerticalScrollbar;
+  }
 
  private:
   friend class DisplayItem;
@@ -79,10 +89,10 @@ class PLATFORM_EXPORT ScrollbarDisplayItem final : public DisplayItem {
 
   struct Data {
     scoped_refptr<cc::Scrollbar> scrollbar_;
-    const TransformPaintPropertyNode* scroll_translation_;
+    scoped_refptr<const TransformPaintPropertyNode> scroll_translation_;
     CompositorElementId element_id_;
     // This is lazily created for non-composited scrollbar.
-    mutable sk_sp<const PaintRecord> record_;
+    mutable PaintRecord record_;
 
     USING_FAST_MALLOC(Data);
   };

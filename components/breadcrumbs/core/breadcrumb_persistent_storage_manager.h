@@ -8,8 +8,10 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "components/breadcrumbs/core/breadcrumb_manager.h"
@@ -33,51 +35,42 @@ constexpr size_t kPersistedFilesizeInBytes = kMaxDataLength * 2;
 class BreadcrumbPersistentStorageManager : public BreadcrumbManagerObserver {
  public:
   // Observes the BreadcrumbManager and stores observed breadcrumb events to a
-  // file in `directory`.
+  // file in `directory`. If a previous session's events are already stored in
+  // the file, reads them and passes them to the BreadcrumbManager to be
+  // prepended to the event log.
   explicit BreadcrumbPersistentStorageManager(
       const base::FilePath& directory,
-      base::RepeatingCallback<bool()> is_metrics_enabled_callback);
+      base::RepeatingCallback<bool()> is_metrics_enabled_callback,
+      base::OnceClosure initialization_done_callback = base::DoNothing());
   ~BreadcrumbPersistentStorageManager() override;
   BreadcrumbPersistentStorageManager(
       const BreadcrumbPersistentStorageManager&) = delete;
   BreadcrumbPersistentStorageManager& operator=(
       const BreadcrumbPersistentStorageManager&) = delete;
 
-  // Returns the stored breadcrumb events from disk to |callback|.
-  void GetStoredEvents(
-      base::OnceCallback<void(std::vector<std::string>)> callback);
-
  private:
+  // Sets `file_position_` based on the given `previous_session_events`, and
+  // passes them to the BreadcrumbManager. If any events have already been
+  // logged it then writes them to the file.
+  void Initialize(base::OnceClosure initialization_done_callback,
+                  const std::string& previous_session_events);
+
   // Returns whether metrics consent has been provided and the persistent
   // storage manager can therefore create its breadcrumbs files. Deletes any
   // existing breadcrumbs files if consent has been revoked.
   bool CheckForFileConsent();
 
-  // Initializes |file_position_| to |file_size| and writes any events so far.
-  void InitializeFilePosition(size_t file_size);
-
   // Writes |pending_breadcrumbs_| to |breadcrumbs_file_| if it fits, otherwise
   // rewrites the file. NOTE: Writing may be delayed if the file has recently
   // been written into.
-  void WriteEvents();
+  void WriteEvents(base::OnceClosure done_callback = base::DoNothing());
 
-  // Appends events in |pending_breadcrumbs| to |existing events|, then writes
-  // the combined events to |breadcrumbs_file_|, overwriting any existing
-  // persisted breadcrumbs.
-  void CombineEventsAndRewriteAllBreadcrumbs(
-      const std::vector<std::string> pending_breadcrumbs,
-      std::vector<std::string> existing_events);
-
-  // Writes events from BreadcrumbManager to `breadcrumbs_file_`, overwriting
-  // any existing persisted breadcrumbs.
-  void RewriteAllExistingBreadcrumbs();
-
-  // Writes breadcrumbs stored in |pending_breadcrumbs_| to |breadcrumbs_file_|.
-  void WritePendingBreadcrumbs();
+  // Writes the given `events` to `breadcrumbs_file_`. If `append` is false,
+  // overwrites the file.
+  void Write(const std::string& events, bool append);
 
   // BreadcrumbManagerObserver
   void EventAdded(const std::string& event) override;
-  void OldEventsRemoved() override;
 
   // Individual breadcrumbs that have not yet been written to disk.
   std::string pending_breadcrumbs_;
@@ -89,21 +82,8 @@ class BreadcrumbPersistentStorageManager : public BreadcrumbManagerObserver {
   // A timer to delay writing to disk too often.
   base::OneShotTimer write_timer_;
 
-  // TODO(crbug.com/1327267): Remove these counters once crash is understood.
-  // The number of times the breadcrumbs file has been written to. Counts from
-  // the perspective of the main thread, i.e., a write is counted at the time
-  // that a task to write is posted.
-  size_t write_counter_ = 0;
-  // The value of `write_counter_` when the file was last fully rewritten, i.e.,
-  // replaced by the temp file. Intended to investigate whether replacing the
-  // breadcrumbs file can sometimes cause a crash on the next write attempt.
-  size_t write_counter_at_last_full_rewrite_ = 0;
-
   // The path to the file for storing persisted breadcrumbs.
   const base::FilePath breadcrumbs_file_path_;
-
-  // The path to the temporary file for writing persisted breadcrumbs.
-  const base::FilePath breadcrumbs_temp_file_path_;
 
   // The current size of breadcrumbs written to |breadcrumbs_file_path_|.
   // NOTE: The optional will not have a value until the size of the existing

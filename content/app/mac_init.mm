@@ -9,7 +9,7 @@
 namespace content {
 
 void InitializeMac() {
-  [[NSUserDefaults standardUserDefaults] registerDefaults:@{
+  [NSUserDefaults.standardUserDefaults registerDefaults:@{
     // Exceptions routed to -[NSApplication reportException:] should crash
     // immediately, as opposed being swallowed or presenting UI that gives the
     // user a choice in the matter.

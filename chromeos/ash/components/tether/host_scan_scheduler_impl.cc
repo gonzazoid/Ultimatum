@@ -7,21 +7,19 @@
 #include <memory>
 
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/default_clock.h"
+#include "base/trace_event/trace_event.h"
 #include "chromeos/ash/components/multidevice/logging/logging.h"
-#include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_type_pattern.h"
 #include "components/session_manager/core/session_manager.h"
 
-namespace ash {
-
-namespace tether {
+namespace ash::tether {
 
 namespace {
 
@@ -54,16 +52,15 @@ HostScanSchedulerImpl::HostScanSchedulerImpl(
       session_manager_(session_manager),
       host_scan_batch_timer_(std::make_unique<base::OneShotTimer>()),
       clock_(base::DefaultClock::GetInstance()),
-      task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       is_screen_locked_(session_manager_->IsScreenLocked()) {
-  network_state_handler_->AddObserver(this, FROM_HERE);
+  network_state_handler_observer_.Observe(network_state_handler_.get());
   host_scanner_->AddObserver(this);
   session_manager_->AddObserver(this);
 }
 
 HostScanSchedulerImpl::~HostScanSchedulerImpl() {
   network_state_handler_->SetTetherScanState(false);
-  network_state_handler_->RemoveObserver(this, FROM_HERE);
   host_scanner_->RemoveObserver(this);
   session_manager_->RemoveObserver(this);
 
@@ -119,6 +116,10 @@ void HostScanSchedulerImpl::ScanRequested(const NetworkTypePattern& type) {
     AttemptScan();
 }
 
+void HostScanSchedulerImpl::OnShuttingDown() {
+  network_state_handler_observer_.Reset();
+}
+
 void HostScanSchedulerImpl::ScanFinished() {
   network_state_handler_->SetTetherScanState(false);
 
@@ -130,6 +131,7 @@ void HostScanSchedulerImpl::ScanFinished() {
 }
 
 void HostScanSchedulerImpl::OnSessionStateChanged() {
+  TRACE_EVENT0("login", "HostScanSchedulerImpl::OnSessionStateChanged");
   bool was_screen_locked = is_screen_locked_;
   is_screen_locked_ = session_manager_->IsScreenLocked();
 
@@ -209,6 +211,4 @@ void HostScanSchedulerImpl::LogHostScanBatchMetric() {
                   << batch_duration.InSeconds() << " seconds.";
 }
 
-}  // namespace tether
-
-}  // namespace ash
+}  // namespace ash::tether

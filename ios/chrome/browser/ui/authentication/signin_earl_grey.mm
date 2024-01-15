@@ -6,16 +6,12 @@
 
 #import "base/test/ios/wait_util.h"
 #import "components/signin/public/base/consent_level.h"
-#import "ios/chrome/browser/signin/fake_system_identity.h"
+#import "ios/chrome/browser/signin/model/fake_system_identity.h"
 #import "ios/chrome/browser/ui/authentication/signin_earl_grey_app_interface.h"
 #import "ios/chrome/browser/ui/settings/settings_table_view_controller_constants.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::test::ios::WaitUntilConditionOrTimeout;
 
@@ -25,10 +21,28 @@ using base::test::ios::WaitUntilConditionOrTimeout;
   [SigninEarlGreyAppInterface addFakeIdentity:fakeIdentity];
 }
 
-- (void)setCapabilities:(NSDictionary*)capabilities
-            forIdentity:(FakeSystemIdentity*)fakeIdentity {
-  [SigninEarlGreyAppInterface setCapabilities:capabilities
-                                  forIdentity:fakeIdentity];
+- (void)addFakeIdentityForSSOAuthAddAccountFlow:
+    (FakeSystemIdentity*)fakeIdentity {
+  [SigninEarlGreyAppInterface
+      addFakeIdentityForSSOAuthAddAccountFlow:fakeIdentity];
+}
+
+- (void)setIsSubjectToParentalControls:(BOOL)value
+                           forIdentity:(FakeSystemIdentity*)fakeIdentity {
+  [SigninEarlGreyAppInterface setIsSubjectToParentalControls:value
+                                                 forIdentity:fakeIdentity];
+}
+
+- (void)setCanHaveEmailAddressDisplayed:(BOOL)value
+                            forIdentity:(FakeSystemIdentity*)fakeIdentity {
+  [SigninEarlGreyAppInterface setCanHaveEmailAddressDisplayed:value
+                                                  forIdentity:fakeIdentity];
+}
+
+- (void)setCanOfferExtendedChromeSyncPromos:(BOOL)value
+                                forIdentity:(FakeSystemIdentity*)fakeIdentity {
+  [SigninEarlGreyAppInterface setCanOfferExtendedChromeSyncPromos:value
+                                                      forIdentity:fakeIdentity];
 }
 
 - (void)forgetFakeIdentity:(FakeSystemIdentity*)fakeIdentity {
@@ -91,7 +105,8 @@ using base::test::ios::WaitUntilConditionOrTimeout;
   NSString* errorStr = [NSString
       stringWithFormat:@"Unexpected email of the signed in user [expected = "
                        @"\"%@\", actual = \"%@\", consent %d]",
-                       expectedEmail, primaryAccountEmail, consent];
+                       expectedEmail, primaryAccountEmail,
+                       static_cast<int>(consent)];
   EG_TEST_HELPER_ASSERT_TRUE(
       [expectedEmail isEqualToString:primaryAccountEmail], errorStr);
 }

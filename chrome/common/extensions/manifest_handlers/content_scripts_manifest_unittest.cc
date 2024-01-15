@@ -6,13 +6,11 @@
 #include "base/files/file_path.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/test/scoped_feature_list.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/extensions/manifest_tests/chrome_manifest_test.h"
 #include "chrome/common/webui_url_constants.h"
 #include "extensions/common/error_utils.h"
 #include "extensions/common/extension.h"
-#include "extensions/common/extension_features.h"
 #include "extensions/common/file_util.h"
 #include "extensions/common/manifest_constants.h"
 #include "extensions/common/manifest_handlers/content_scripts_handler.h"
@@ -106,11 +104,7 @@ TEST_F(ContentScriptsManifestTest, FailLoadingNonUTF8Scripts) {
       error.c_str());
 }
 
-TEST_F(ContentScriptsManifestTest, MatchOriginAsFallback_FeatureEnabled) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(
-      extensions_features::kContentScriptsMatchOriginAsFallback);
-
+TEST_F(ContentScriptsManifestTest, MatchOriginAsFallback) {
   scoped_refptr<const Extension> extension =
       LoadAndExpectSuccess("content_script_match_origin_as_fallback.json");
   ASSERT_TRUE(extension);
@@ -144,10 +138,6 @@ TEST_F(ContentScriptsManifestTest, MatchOriginAsFallback_FeatureEnabled) {
 }
 
 TEST_F(ContentScriptsManifestTest, MatchOriginAsFallback_InvalidCases) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(
-      extensions_features::kContentScriptsMatchOriginAsFallback);
-
   LoadAndExpectWarning(
       "content_script_match_origin_as_fallback_warning_for_mv2.json",
       errors::kMatchOriginAsFallbackRestrictedToMV3);
@@ -156,43 +146,37 @@ TEST_F(ContentScriptsManifestTest, MatchOriginAsFallback_InvalidCases) {
       errors::kMatchOriginAsFallbackCantHavePaths);
 }
 
-TEST_F(ContentScriptsManifestTest, MatchOriginAsFallback_FeatureDisabled) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndDisableFeature(
-      extensions_features::kContentScriptsMatchOriginAsFallback);
-
+TEST_F(ContentScriptsManifestTest, ExecutionWorld) {
   scoped_refptr<const Extension> extension =
-      LoadAndExpectSuccess("content_script_match_origin_as_fallback.json");
-  ASSERT_TRUE(extension);
+      LoadAndExpectSuccess("content_script_execution_world.json");
   const UserScriptList& user_scripts =
       ContentScriptsInfo::GetContentScripts(extension.get());
-  ASSERT_EQ(7u, user_scripts.size());
+  ASSERT_EQ(3u, user_scripts.size());
 
-  // With the feature disabled, match_origin_as_fallback should be ignored.
+  // Content scripts which don't specify an execution world will default to the
+  // isolated world.
+  EXPECT_EQ(mojom::ExecutionWorld::kIsolated,
+            user_scripts[0]->execution_world());
 
-  // The first script specifies `"match_origin_as_fallback": true`.
-  EXPECT_EQ(MatchOriginAsFallbackBehavior::kNever,
-            user_scripts[0]->match_origin_as_fallback());
-  // The second specifies `"match_origin_as_fallback": false`.
-  EXPECT_EQ(MatchOriginAsFallbackBehavior::kNever,
-            user_scripts[1]->match_origin_as_fallback());
-  // The third specifies `"match_about_blank": true`.
-  EXPECT_EQ(MatchOriginAsFallbackBehavior::kMatchForAboutSchemeAndClimbTree,
-            user_scripts[2]->match_origin_as_fallback());
-  // The fourth specifies `"match_about_blank": false`.
-  EXPECT_EQ(MatchOriginAsFallbackBehavior::kNever,
-            user_scripts[3]->match_origin_as_fallback());
-  // The fifth specifies `"match_origin_as_fallback": false` *and*
-  // `"match_about_blank": true`.
-  EXPECT_EQ(MatchOriginAsFallbackBehavior::kMatchForAboutSchemeAndClimbTree,
-            user_scripts[4]->match_origin_as_fallback());
-  // The sixth specifies `"match_origin_as_fallback": true` *and*
-  // `"match_about_blank": false`.
-  EXPECT_EQ(MatchOriginAsFallbackBehavior::kNever,
-            user_scripts[5]->match_origin_as_fallback());
-  // The seventh and final does not specify a value for either.
-  EXPECT_EQ(MatchOriginAsFallbackBehavior::kNever,
-            user_scripts[6]->match_origin_as_fallback());
+  // Content scripts which specify an execution world will run on the world that
+  // was specified.
+  EXPECT_EQ(mojom::ExecutionWorld::kMain, user_scripts[1]->execution_world());
+  EXPECT_EQ(mojom::ExecutionWorld::kIsolated,
+            user_scripts[2]->execution_world());
+}
+
+TEST_F(ContentScriptsManifestTest, ExecutionWorld_InvalidForMV2) {
+  scoped_refptr<const Extension> extension = LoadAndExpectWarning(
+      "content_script_execution_world_warning_for_mv2.json",
+      errors::kExecutionWorldRestrictedToMV3);
+  const UserScriptList& user_scripts =
+      ContentScriptsInfo::GetContentScripts(extension.get());
+  ASSERT_EQ(1u, user_scripts.size());
+
+  // The content script parsed from the manifest should be executing in the
+  // isolated world.
+  EXPECT_EQ(mojom::ExecutionWorld::kIsolated,
+            user_scripts[0]->execution_world());
 }
 
 }  // namespace extensions

@@ -70,6 +70,12 @@ mojom_component("tokens") {
           cpp = "::blink::WorkletToken"
         },
 
+        # SHADOW REALM TOKENS
+        {
+          mojom = "blink.mojom.ShadowRealmToken"
+          cpp = "::blink::ShadowRealmToken"
+        },
+
         # OTHER TOKENS
         #
         # Keep this section last.
@@ -88,10 +94,6 @@ mojom_component("tokens") {
         {
           mojom = "blink.mojom.ExecutionContextToken"
           cpp = "::blink::ExecutionContextToken"
-        },
-        {
-          mojom = "blink.mojom.PortalToken"
-          cpp = "::blink::PortalToken"
         },
         {
           mojom = "blink.mojom.V8ContextToken"

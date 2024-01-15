@@ -6,8 +6,8 @@
 
 #import <Security/Security.h>
 
+#include "base/apple/scoped_cftyperef.h"
 #include "base/logging.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "base/no_destructor.h"
 #include "base/strings/sys_string_conversions.h"
 
@@ -15,13 +15,15 @@ namespace remoting {
 
 namespace {
 
-using ScopedMutableDictionary = base::ScopedCFTypeRef<CFMutableDictionaryRef>;
+using ScopedMutableDictionary =
+    base::apple::ScopedCFTypeRef<CFMutableDictionaryRef>;
 
 const char kServicePrefix[] = "com.google.ChromeRemoteDesktop.";
 
-base::ScopedCFTypeRef<CFDataRef> CFDataFromStdString(const std::string& data) {
+base::apple::ScopedCFTypeRef<CFDataRef> CFDataFromStdString(
+    const std::string& data) {
   const UInt8* data_pointer = reinterpret_cast<const UInt8*>(data.data());
-  return base::ScopedCFTypeRef<CFDataRef>(
+  return base::apple::ScopedCFTypeRef<CFDataRef>(
       CFDataCreate(kCFAllocatorDefault, data_pointer, data.size()));
 }
 
@@ -35,10 +37,10 @@ ScopedMutableDictionary CreateQueryForUpdate(const std::string& service,
                                              const std::string& account) {
   ScopedMutableDictionary dictionary = CreateScopedMutableDictionary();
   CFDictionarySetValue(dictionary.get(), kSecClass, kSecClassGenericPassword);
-  base::ScopedCFTypeRef<CFStringRef> service_cf(
+  base::apple::ScopedCFTypeRef<CFStringRef> service_cf(
       base::SysUTF8ToCFStringRef(service));
   CFDictionarySetValue(dictionary.get(), kSecAttrService, service_cf.get());
-  base::ScopedCFTypeRef<CFStringRef> account_cf(
+  base::apple::ScopedCFTypeRef<CFStringRef> account_cf(
       base::SysUTF8ToCFStringRef(account));
   CFDictionarySetValue(dictionary.get(), kSecAttrAccount, account_cf.get());
 
@@ -92,7 +94,8 @@ void RemotingKeychain::SetData(Key key,
         CreateScopedMutableDictionary();
     CFDictionarySetValue(updated_attributes.get(), kSecValueData,
                          CFDataFromStdString(data).get());
-    OSStatus status = SecItemUpdate(update_query, updated_attributes);
+    OSStatus status =
+        SecItemUpdate(update_query.get(), updated_attributes.get());
     if (status != errSecSuccess) {
       LOG(FATAL) << "Failed to update keychain item. Status: " << status;
     }
@@ -113,9 +116,9 @@ std::string RemotingKeychain::GetData(Key key,
   std::string service = KeyToService(key);
 
   ScopedMutableDictionary query = CreateQueryForLookup(service, account);
-  base::ScopedCFTypeRef<CFDataRef> cf_result;
+  base::apple::ScopedCFTypeRef<CFDataRef> cf_result;
   OSStatus status =
-      SecItemCopyMatching(query, (CFTypeRef*)cf_result.InitializeInto());
+      SecItemCopyMatching(query.get(), (CFTypeRef*)cf_result.InitializeInto());
   if (status == errSecItemNotFound) {
     return "";
   }
@@ -133,7 +136,7 @@ void RemotingKeychain::RemoveData(Key key, const std::string& account) {
   std::string service = KeyToService(key);
 
   ScopedMutableDictionary query = CreateQueryForUpdate(service, account);
-  OSStatus status = SecItemDelete(query);
+  OSStatus status = SecItemDelete(query.get());
   if (status != errSecSuccess && status != errSecItemNotFound) {
     LOG(FATAL) << "Failed to delete a keychain item. Status: " << status;
   }

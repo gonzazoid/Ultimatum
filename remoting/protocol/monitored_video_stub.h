@@ -5,7 +5,7 @@
 #ifndef REMOTING_PROTOCOL_MONITORED_VIDEO_STUB_H_
 #define REMOTING_PROTOCOL_MONITORED_VIDEO_STUB_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/timer/timer.h"
@@ -29,10 +29,9 @@ class MonitoredVideoStub : public VideoStub {
 
   static const int kConnectivityCheckDelaySeconds = 2;
 
-  MonitoredVideoStub(
-      VideoStub* video_stub,
-      base::TimeDelta connectivity_check_delay,
-      const ChannelStateCallback& callback);
+  MonitoredVideoStub(VideoStub* video_stub,
+                     base::TimeDelta connectivity_check_delay,
+                     const ChannelStateCallback& callback);
 
   MonitoredVideoStub(const MonitoredVideoStub&) = delete;
   MonitoredVideoStub& operator=(const MonitoredVideoStub&) = delete;

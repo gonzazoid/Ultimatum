@@ -11,10 +11,10 @@
 #include "ash/components/arc/video_accelerator/gpu_arc_video_decoder.h"
 #include "ash/components/arc/video_accelerator/protected_buffer_manager.h"
 #include "base/memory/unsafe_shared_memory_region.h"
+#include "base/task/bind_post_task.h"
 #include "chromeos/components/cdm_factory_daemon/chromeos_cdm_factory.h"
 #include "gpu/config/gpu_driver_bug_workarounds.h"
 #include "gpu/config/gpu_preferences.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/gpu/macros.h"
 #include "mojo/public/cpp/bindings/callback_helpers.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
@@ -47,7 +47,7 @@ class MojoProtectedBufferManager : public DecoderProtectedBufferManager {
     remote_->GetProtectedSharedMemoryFromHandle(
         mojo::WrapPlatformHandle(mojo::PlatformHandle(std::move(dummy_fd))),
         mojo::WrapCallbackWithDefaultInvokeIfNotRun(
-            media::BindToCurrentLoop(base::BindOnce(
+            base::BindPostTaskToCurrentDefault(base::BindOnce(
                 &OnGetProtectedSharedMemoryRegionFor, std::move(response_cb))),
             mojo::ScopedSharedBufferHandle()));
   }
@@ -60,9 +60,9 @@ class MojoProtectedBufferManager : public DecoderProtectedBufferManager {
     remote_->GetProtectedNativePixmapHandleFromHandle(
         mojo::WrapPlatformHandle(mojo::PlatformHandle(std::move(dummy_fd))),
         mojo::WrapCallbackWithDefaultInvokeIfNotRun(
-            media::BindToCurrentLoop(base::BindOnce(
+            base::BindPostTaskToCurrentDefault(base::BindOnce(
                 &OnGetProtectedNativePixmapHandleFor, std::move(response_cb))),
-            absl::nullopt));
+            std::nullopt));
   }
 
  private:
@@ -83,7 +83,7 @@ class MojoProtectedBufferManager : public DecoderProtectedBufferManager {
 
   static void OnGetProtectedNativePixmapHandleFor(
       GetProtectedNativePixmapHandleForResponseCB response_cb,
-      absl::optional<gfx::NativePixmapHandle> native_pixmap_handle) {
+      std::optional<gfx::NativePixmapHandle> native_pixmap_handle) {
     if (!native_pixmap_handle)
       return std::move(response_cb).Run(gfx::NativePixmapHandle());
     // TODO(b/195769334): does anything need to be validated here?

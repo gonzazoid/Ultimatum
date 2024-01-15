@@ -39,10 +39,8 @@ try:
 except ImportError:
     _winreg = None  # pylint: disable=invalid-name
 
-from blinkpy.common import exit_codes
 from blinkpy.common.memoized import memoized
 from blinkpy.web_tests.breakpad.dump_reader_win import DumpReaderWin
-from blinkpy.web_tests.models import test_run_results
 from blinkpy.web_tests.port import base
 
 _log = logging.getLogger(__name__)
@@ -51,11 +49,12 @@ _log = logging.getLogger(__name__)
 class WinPort(base.Port):
     port_name = 'win'
 
-    SUPPORTED_VERSIONS = ('win10.20h2', 'win11')
+    SUPPORTED_VERSIONS = ('win10.20h2', 'win11-arm64', 'win11')
 
     FALLBACK_PATHS = {}
     FALLBACK_PATHS['win11'] = ['win']
     FALLBACK_PATHS['win10.20h2'] = ['win10'] + FALLBACK_PATHS['win11']
+    FALLBACK_PATHS['win11-arm64'] = ['win11-arm64'] + FALLBACK_PATHS['win11']
 
     BUILD_REQUIREMENTS_URL = 'https://chromium.googlesource.com/chromium/src/+/main/docs/windows_build_instructions.md'
 
@@ -72,7 +71,11 @@ class WinPort(base.Port):
                 version = 'win11'
             else:
                 version = host.platform.os_version
+
             port_name = port_name + '-' + version
+            if 'ARM' in host.platform.processor():
+                port_name = port_name + '-arm64'
+
         return port_name
 
     def __init__(self, host, port_name, **kwargs):
@@ -83,7 +86,10 @@ class WinPort(base.Port):
         if self.get_option('disable_breakpad'):
             self._dump_reader = None
         else:
-            self._dump_reader = DumpReaderWin(host, self._build_path())
+            self._dump_reader = DumpReaderWin(host, self.build_path())
+
+        if port_name.endswith('arm64'):
+            self._architecture = 'arm64'
 
     def additional_driver_flags(self):
         flags = super(WinPort, self).additional_driver_flags()
@@ -216,24 +222,31 @@ class WinPort(base.Port):
         return val
 
     def path_to_apache(self):
+        if self._architecture == 'arm64':
+            return self._path_from_chromium_base('third_party',
+                                                 'apache-windows-arm64', 'bin',
+                                                 'httpd.exe')
         return self._path_from_chromium_base('third_party', 'apache-win32',
                                              'bin', 'httpd.exe')
 
     def path_to_apache_config_file(self):
+        if self._architecture == 'arm64':
+            return self._filesystem.join(self.apache_config_directory(),
+                                         'win-httpd-php8.conf')
         return self._filesystem.join(self.apache_config_directory(),
                                      'win-httpd.conf')
+
+    def path_to_driver(self, target=None):
+        binary_name = '%s.exe' % self.driver_name()
+        return self.build_path(binary_name, target=target)
 
     #
     # PROTECTED ROUTINES
     #
 
-    def _path_to_driver(self, target=None):
-        binary_name = '%s.exe' % self.driver_name()
-        return self._build_path_with_target(target, binary_name)
-
     def _path_to_image_diff(self):
         binary_name = 'image_diff.exe'
-        return self._build_path(binary_name)
+        return self.build_path(binary_name)
 
     def look_for_new_crash_logs(self, crashed_processes, start_time):
         if self.get_option('disable_breakpad'):

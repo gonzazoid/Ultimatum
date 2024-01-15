@@ -10,8 +10,6 @@ source_set("chromeos") {
     "ash_mojom_video_consumer.h",
     "ash_proxy.cc",
     "ash_proxy.h",
-    "aura_desktop_capturer.cc",
-    "aura_desktop_capturer.h",
     "clipboard_aura.cc",
     "clipboard_aura.h",
     "frame_sink_desktop_capturer.cc",
@@ -30,6 +28,7 @@ source_set("chromeos") {
     "//ash",
     "//build:chromeos_buildflags",
     "//cc",
+    "//components/prefs",
     "//components/viz/host",
     "//gpu/command_buffer/common",
     "//remoting/protocol",
@@ -60,24 +59,44 @@ source_set("enterprise_support") {
   sources = [ "chromeos_enterprise_params.h" ]
 }
 
+source_set("browser_interop") {
+  sources = [
+    "browser_interop.cc",
+    "browser_interop.h",
+  ]
+
+  deps = [
+    "//chrome/browser:browser_process",
+    "//content/public/browser:browser",
+    "//remoting/base:base",
+    "//remoting/host",
+  ]
+}
+
 source_set("remoting_service") {
   sources = [
+    "file_session_storage.cc",
+    "file_session_storage.h",
     "remote_support_host_ash.cc",
     "remote_support_host_ash.h",
     "remoting_service.cc",
     "remoting_service.h",
+    "session_id.h",
+    "session_storage.h",
   ]
 
   public_deps = [
     ":enterprise_support",
     "//remoting/host/it2me:chrome_os_host",
+    "//remoting/host/it2me:common",
   ]
 
   configs += [ "//remoting/build/config:version" ]
 
   deps = [
-    "//chrome/browser:browser_process",
-    "//content/public/browser:browser",
+    ":browser_interop",
+    ":features",
+    "//chrome/common:constants",
     "//mojo/public/cpp/bindings",
     "//remoting/base:base",
     "//remoting/host",
@@ -119,9 +138,11 @@ source_set("unit_tests") {
   testonly = true
 
   sources = [
-    "aura_desktop_capturer_unittest.cc",
     "clipboard_aura_unittest.cc",
+    "file_session_storage_unittest.cc",
     "frame_sink_desktop_capturer_unittest.cc",
+    "remote_support_host_ash_unittest.cc",
+    "remoting_service_unittest.cc",
     "scoped_fake_ash_proxy.cc",
     "scoped_fake_ash_proxy.h",
   ]
@@ -129,14 +150,19 @@ source_set("unit_tests") {
   configs += [ "//remoting/build/config:version" ]
 
   deps = [
+    ":browser_interop",
     ":chromeos",
     ":features",
+    ":remoting_service",
     "//base/test:test_support",
+    "//components/policy/core/common:test_support",
     "//components/viz/service",
     "//remoting/host:common",
     "//remoting/host:test_support",
+    "//remoting/host/it2me:common",
     "//remoting/proto",
     "//remoting/resources",
+    "//services/network:test_support",
     "//skia",
     "//testing/gmock",
     "//testing/gtest",

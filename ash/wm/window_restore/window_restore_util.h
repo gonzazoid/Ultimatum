@@ -5,6 +5,7 @@
 #ifndef ASH_WM_WINDOW_RESTORE_WINDOW_RESTORE_UTIL_H_
 #define ASH_WM_WINDOW_RESTORE_WINDOW_RESTORE_UTIL_H_
 
+#include "base/memory/raw_ptr.h"
 #include "components/app_restore/window_info.h"
 
 namespace aura {
@@ -20,9 +21,9 @@ namespace ash {
 // saves desks, and we need to add extra information such as the app title.
 std::unique_ptr<app_restore::WindowInfo> BuildWindowInfo(
     aura::Window* window,
-    absl::optional<int> activation_index,
+    std::optional<int> activation_index,
     bool for_saved_desks,
-    const std::vector<aura::Window*>& mru_windows);
+    const std::vector<raw_ptr<aura::Window, VectorExperimental>>& mru_windows);
 
 }  // namespace ash
 

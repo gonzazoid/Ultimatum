@@ -11,7 +11,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/macros/concat.h"
 #include "base/memory/raw_ptr.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/class_property.h"
@@ -25,6 +26,7 @@ template <typename Builder>
 class BaseViewBuilderT : public internal::ViewBuilderCore {
  public:
   using ViewClass_ = typename internal::ViewClassTrait<Builder>::ViewClass_;
+  using AfterBuildCallback = base::OnceCallback<void(ViewClass_*)>;
   using ConfigureCallback = base::OnceCallback<void(ViewClass_*)>;
   BaseViewBuilderT() { view_ = std::make_unique<ViewClass_>(); }
   explicit BaseViewBuilderT(std::unique_ptr<ViewClass_> view) {
@@ -35,25 +37,34 @@ class BaseViewBuilderT : public internal::ViewBuilderCore {
   BaseViewBuilderT& operator=(BaseViewBuilderT&&) = default;
   ~BaseViewBuilderT() override = default;
 
-  template <typename View>
-  Builder& CopyAddressTo(View** view_address) & {
+  Builder& AfterBuild(AfterBuildCallback after_build_callback) & {
+    // Allow multiple after build callbacks by chaining them.
+    if (after_build_callback_) {
+      after_build_callback_ = base::BindOnce(
+          [](AfterBuildCallback previous_callback,
+             AfterBuildCallback current_callback, ViewClass_* root_view) {
+            std::move(previous_callback).Run(root_view);
+            std::move(current_callback).Run(root_view);
+          },
+          std::move(after_build_callback_), std::move(after_build_callback));
+    } else {
+      after_build_callback_ = std::move(after_build_callback);
+    }
+    return *static_cast<Builder*>(this);
+  }
+
+  Builder&& AfterBuild(AfterBuildCallback after_build_callback) && {
+    return std::move(this->AfterBuild(std::move(after_build_callback)));
+  }
+
+  template <typename ViewPtr>
+  Builder& CopyAddressTo(ViewPtr* view_address) & {
     *view_address = view_ ? view_.get() : root_view_.get();
     return *static_cast<Builder*>(this);
   }
 
-  template <typename View>
-  Builder&& CopyAddressTo(View** view_address) && {
-    return std::move(this->CopyAddressTo(view_address));
-  }
-
-  template <typename View, typename Option>
-  Builder& CopyAddressTo(raw_ptr<View, Option>* view_address) & {
-    *view_address = view_ ? view_.get() : root_view_.get();
-    return *static_cast<Builder*>(this);
-  }
-
-  template <typename View, typename Option>
-  Builder&& CopyAddressTo(raw_ptr<View, Option>* view_address) && {
+  template <typename ViewPtr>
+  Builder&& CopyAddressTo(ViewPtr* view_address) && {
     return std::move(this->CopyAddressTo(view_address));
   }
 
@@ -115,6 +126,7 @@ class BaseViewBuilderT : public internal::ViewBuilderCore {
     SetProperties(view_.get());
     DoCustomConfigure(view_.get());
     CreateChildren(view_.get());
+    DoAfterBuild(view_.get());
     return std::move(view_);
   }
 
@@ -124,6 +136,7 @@ class BaseViewBuilderT : public internal::ViewBuilderCore {
     SetProperties(root_view_);
     DoCustomConfigure(root_view_);
     CreateChildren(root_view_);
+    DoAfterBuild(root_view_);
   }
 
   template <typename T>
@@ -199,12 +212,24 @@ class BaseViewBuilderT : public internal::ViewBuilderCore {
     return *static_cast<Builder*>(this);
   }
 
+  void DoAfterBuild(ViewClass_* view) {
+    if (after_build_callback_) {
+      std::move(after_build_callback_).Run(view);
+    }
+  }
+
   void DoCustomConfigure(ViewClass_* view) {
     if (configure_callback_)
       std::move(configure_callback_).Run(view);
   }
 
   std::unique_ptr<View> DoBuild() override { return std::move(*this).Build(); }
+
+  // Optional callback invoked right after calling `CreateChildren()`. This
+  // allows additional configuration of the view not easily covered by the
+  // builder after all addresses have been copied, properties have been set,
+  // and children have themselves been built and added.
+  AfterBuildCallback after_build_callback_;
 
   // Optional callback invoked right before calling CreateChildren. This allows
   // any additional configuration of the view not easily covered by the builder.
@@ -276,9 +301,6 @@ class BaseViewBuilderT : public internal::ViewBuilderCore {
 #define NUM_ARGS_IMPL(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, N, ...) N
 #define NUM_ARGS(...) NUM_ARGS_IMPL(__VA_ARGS__, _10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
 
-#define BUILD_MACRO_NAME_IMPL(a, b) a##b
-#define BUILD_MACRO_NAME(a, b) BUILD_MACRO_NAME_IMPL(a, b)
-
 // This will expand the list of types into a parameter declaration list.
 // eg: DECL_PARAMS(int, char, float, double) will expand to:
 // int param4, char param3, float param2, double param1
@@ -293,7 +315,7 @@ class BaseViewBuilderT : public internal::ViewBuilderCore {
 #define DECL_PARAM9(type, ...) type param9, DECL_PARAM8(__VA_ARGS__)
 #define DECL_PARAM10(type, ...) type param10, DECL_PARAM9(__VA_ARGS__)
 #define DECL_PARAMS(...) \
-  BUILD_MACRO_NAME(DECL_PARAM, NUM_ARGS(__VA_ARGS__))(__VA_ARGS__)
+  BASE_CONCAT(DECL_PARAM, NUM_ARGS(__VA_ARGS__))(__VA_ARGS__)
 
 // This will expand into list of parameters suitable for calling a function
 // using the same param names from the above expansion.
@@ -310,7 +332,7 @@ class BaseViewBuilderT : public internal::ViewBuilderCore {
 #define PASS_PARAM9(type, ...) param9, PASS_PARAM8(__VA_ARGS__)
 #define PASS_PARAM10(type, ...) param10, PASS_PARAM9(__VA_ARGS__)
 #define PASS_PARAMS(...) \
-  BUILD_MACRO_NAME(PASS_PARAM, NUM_ARGS(__VA_ARGS__))(__VA_ARGS__)
+  BASE_CONCAT(PASS_PARAM, NUM_ARGS(__VA_ARGS__))(__VA_ARGS__)
 
 // BEGIN_VIEW_BUILDER, END_VIEW_BUILDER and VIEW_BUILDER_XXXX macros should
 // be placed into the same namespace as the 'view_class' parameter.
@@ -406,6 +428,30 @@ class BaseViewBuilderT : public internal::ViewBuilderCore {
   template <typename... Args>                                                 \
   BuilderT&& method_name(Args&&... args)&& {                                  \
     return std::move(this->method_name(std::forward<Args>(args)...));         \
+  }
+
+// Enables exposing a template or ambiguously-named method by providing an alias
+// that will be used on the Builder.
+//
+// Examples:
+//
+//   VIEW_BUILDER_METHOD_ALIAS(
+//       AddTab, AddTab<View>, StringPiece, unique_ptr<View>)
+//
+//   VIEW_BUILDER_METHOD_ALIAS(UnambiguousName, AmbiguousName, int)
+//
+#define VIEW_BUILDER_METHOD_ALIAS(builder_method, view_method, ...)           \
+  template <typename... Args>                                                 \
+  BuilderT& builder_method(Args&&... args)& {                                 \
+    auto caller = std::make_unique<::views::internal::ClassMethodCaller<      \
+        ViewClass_, decltype(&ViewClass_::view_method),                       \
+        &ViewClass_::view_method, __VA_ARGS__>>(std::forward<Args>(args)...); \
+    ::views::internal::ViewBuilderCore::AddPropertySetter(std::move(caller)); \
+    return *static_cast<BuilderT*>(this);                                     \
+  }                                                                           \
+  template <typename... Args>                                                 \
+  BuilderT&& builder_method(Args&&... args)&& {                               \
+    return std::move(this->builder_method(std::forward<Args>(args)...));      \
   }
 
 #define VIEW_BUILDER_VIEW_TYPE_PROPERTY(property_type, property_name)         \

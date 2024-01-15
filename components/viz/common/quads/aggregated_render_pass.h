@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/hash/hash.h"
 #include "base/types/id_type.h"
 #include "cc/base/list_container.h"
@@ -89,6 +89,12 @@ class VIZ_COMMON_EXPORT AggregatedRenderPass : public RenderPassInternal {
     return quad_list.AllocateAndConstruct<DrawQuadType>();
   }
 
+  // Indicates if any its quad needs to draw with blending.
+  bool ShouldDrawWithBlending() const;
+
+  // Indicates if this pass has copy requests or video capture enabled.
+  bool HasCapture() const;
+
   // Uniquely identifies the render pass in the aggregated frame.
   AggregatedRenderPassId id;
 
@@ -97,6 +103,20 @@ class VIZ_COMMON_EXPORT AggregatedRenderPass : public RenderPassInternal {
 
   // Indicates current RenderPass is a color conversion pass.
   bool is_color_conversion_pass = false;
+
+  // Windows only: Indicates that the render pass backing's updates need to be
+  // synchronized with tree updates. A swap chain does not synchronize its
+  // presents with DComp commits. This is needed when e.g. the render pass has
+  // video holes that need to line up with other overlays or is itself presented
+  // as an overlay.
+  bool needs_synchronous_dcomp_commit = false;
+
+  // Indicates whether video capture has been enabled for this render pass.
+  //
+  // This is useful to avoid flipping back and forth between promoting quads to
+  // overlays since a 30fps capture on a 60fps monitor can make a copy request
+  // every other frame.
+  bool video_capture_enabled = false;
 
   void AsValueInto(base::trace_event::TracedValue* dict) const;
 

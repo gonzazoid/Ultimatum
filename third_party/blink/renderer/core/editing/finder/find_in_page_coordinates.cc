@@ -36,6 +36,7 @@
 #include "third_party/blink/renderer/core/editing/visible_units.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
+#include "third_party/blink/renderer/core/layout/geometry/writing_mode_converter.h"
 #include "third_party/blink/renderer/core/layout/layout_block.h"
 #include "third_party/blink/renderer/core/layout/layout_box.h"
 #include "third_party/blink/renderer/core/layout/layout_embedded_content.h"
@@ -68,11 +69,15 @@ static gfx::RectF ToNormalizedRect(const gfx::RectF& absolute_rect,
   if (!container)
     return gfx::RectF();
 
-  // We want to normalize by the max layout overflow size instead of only the
-  // visible bounding box.  Quads and their enclosing bounding boxes need to be
-  // used in order to keep results transform-friendly.
-  PhysicalRect overflow_rect = container->FlipForWritingMode(
-      LayoutRect(LayoutPoint(), container->MaxLayoutOverflow()));
+  // We want to normalize by the max scrollable overflow size instead of only
+  // the visible bounding box.  Quads and their enclosing bounding boxes need to
+  // be used in order to keep results transform-friendly.
+  auto converter = container->CreateWritingModeConverter();
+  LogicalRect logical_overflow_rect =
+      converter.ToLogical(container->ScrollableOverflowRect());
+  logical_overflow_rect.ShiftBlockStartEdgeTo(LayoutUnit());
+  logical_overflow_rect.ShiftInlineStartEdgeTo(LayoutUnit());
+  PhysicalRect overflow_rect = converter.ToPhysical(logical_overflow_rect);
 
   // For scrolling we need to get where the actual origin is independently of
   // the scroll.

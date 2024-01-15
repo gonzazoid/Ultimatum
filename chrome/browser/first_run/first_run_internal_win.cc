@@ -9,11 +9,11 @@
 #include <stdint.h>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/path_service.h"
 #include "base/process/kill.h"
@@ -90,9 +90,8 @@ bool WriteEULAtoTempFile(base::FilePath* eula_path) {
   std::string terms =
       ui::ResourceBundle::GetSharedInstance().LoadLocalizedResourceString(
           IDS_TERMS_HTML);
-  return (!terms.empty() &&
-          base::CreateTemporaryFile(eula_path) &&
-          base::WriteFile(*eula_path, terms.data(), terms.size()) != -1);
+  return (!terms.empty() && base::CreateTemporaryFile(eula_path) &&
+          base::WriteFile(*eula_path, terms));
 }
 
 // Creates the sentinel indicating that the EULA was required and has been
@@ -101,7 +100,7 @@ bool CreateEULASentinel() {
   base::FilePath eula_sentinel;
   return InstallUtil::GetEulaSentinelFilePath(&eula_sentinel) &&
          base::CreateDirectory(eula_sentinel.DirName()) &&
-         base::WriteFile(eula_sentinel, "", 0) != -1;
+         base::WriteFile(eula_sentinel, base::StringPiece());
 }
 
 }  // namespace
@@ -159,11 +158,7 @@ base::FilePath InitialPrefsPath() {
   if (!base::PathService::Get(base::DIR_EXE, &dir_exe))
     return base::FilePath();
 
-  base::FilePath initial_prefs = dir_exe.AppendASCII(installer::kInitialPrefs);
-  if (base::PathIsReadable(initial_prefs))
-    return initial_prefs;
-
-  return dir_exe.AppendASCII(installer::kLegacyInitialPrefs);
+  return installer::InitialPreferences::Path(dir_exe);
 }
 
 }  // namespace internal

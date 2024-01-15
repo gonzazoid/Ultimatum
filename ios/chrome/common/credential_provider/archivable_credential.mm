@@ -4,53 +4,49 @@
 
 #import "ios/chrome/common/credential_provider/archivable_credential.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
 
 // Keys used to serialize properties.
 NSString* const kACFaviconKey = @"favicon";
-NSString* const kACKeychainIdentifierKey = @"keychainIdentifier";
+NSString* const kACPasswordKey = @"password";
 NSString* const kACRankKey = @"rank";
 NSString* const kACRecordIdentifierKey = @"recordIdentifier";
 NSString* const kACServiceIdentifierKey = @"serviceIdentifier";
 NSString* const kACServiceNameKey = @"serviceName";
 NSString* const kACUserKey = @"user";
-NSString* const kACValidationIdentifierKey = @"validationIdentifier";
+NSString* const kNoteKey = @"note";
 
 }  // namespace
 
 @implementation ArchivableCredential
 
 @synthesize favicon = _favicon;
-@synthesize keychainIdentifier = _keychainIdentifier;
+@synthesize password = _password;
 @synthesize rank = _rank;
 @synthesize recordIdentifier = _recordIdentifier;
 @synthesize serviceIdentifier = _serviceIdentifier;
 @synthesize serviceName = _serviceName;
 @synthesize user = _user;
-@synthesize validationIdentifier = _validationIdentifier;
+@synthesize note = _note;
 
 - (instancetype)initWithFavicon:(NSString*)favicon
-             keychainIdentifier:(NSString*)keychainIdentifier
+                       password:(NSString*)password
                            rank:(int64_t)rank
                recordIdentifier:(NSString*)recordIdentifier
               serviceIdentifier:(NSString*)serviceIdentifier
                     serviceName:(NSString*)serviceName
                            user:(NSString*)user
-           validationIdentifier:(NSString*)validationIdentifier {
+                           note:(NSString*)note {
   self = [super init];
   if (self) {
     _favicon = favicon;
-    _keychainIdentifier = keychainIdentifier;
+    _password = password;
     _rank = rank;
     _recordIdentifier = recordIdentifier;
     _serviceIdentifier = serviceIdentifier;
     _serviceName = serviceName;
     _user = user;
-    _validationIdentifier = validationIdentifier;
+    _note = note;
   }
   return self;
 }
@@ -63,22 +59,22 @@ NSString* const kACValidationIdentifierKey = @"validationIdentifier";
       return NO;
     }
     ArchivableCredential* otherCredential = (ArchivableCredential*)other;
-    return
-        [self.favicon isEqual:otherCredential.favicon] &&
-        [self.keychainIdentifier isEqual:otherCredential.keychainIdentifier] &&
-        self.rank == otherCredential.rank &&
-        [self.recordIdentifier isEqual:otherCredential.recordIdentifier] &&
-        [self.serviceIdentifier isEqual:otherCredential.serviceIdentifier] &&
-        [self.serviceName isEqual:otherCredential.serviceName] &&
-        [self.user isEqual:otherCredential.user] &&
-        [self.validationIdentifier
-            isEqual:otherCredential.validationIdentifier];
+    return [self.favicon isEqualToString:otherCredential.favicon] &&
+           [self.password isEqualToString:otherCredential.password] &&
+           self.rank == otherCredential.rank &&
+           [self.recordIdentifier
+               isEqualToString:otherCredential.recordIdentifier] &&
+           [self.serviceIdentifier
+               isEqualToString:otherCredential.serviceIdentifier] &&
+           [self.serviceName isEqualToString:otherCredential.serviceName] &&
+           [self.user isEqualToString:otherCredential.user] &&
+           [self.note isEqualToString:otherCredential.note];
   }
 }
 
 - (NSUInteger)hash {
-  // Using record identifier xored with keychain identifier should be enough.
-  return self.recordIdentifier.hash ^ self.keychainIdentifier.hash;
+  // Using record identifier xored with password should be enough.
+  return self.recordIdentifier.hash ^ self.password.hash;
 }
 
 #pragma mark - NSSecureCoding
@@ -89,27 +85,25 @@ NSString* const kACValidationIdentifierKey = @"validationIdentifier";
 
 - (void)encodeWithCoder:(NSCoder*)coder {
   [coder encodeObject:self.favicon forKey:kACFaviconKey];
-  [coder encodeObject:self.keychainIdentifier forKey:kACKeychainIdentifierKey];
+  [coder encodeObject:self.password forKey:kACPasswordKey];
   [coder encodeInt64:self.rank forKey:kACRankKey];
   [coder encodeObject:self.recordIdentifier forKey:kACRecordIdentifierKey];
   [coder encodeObject:self.serviceIdentifier forKey:kACServiceIdentifierKey];
   [coder encodeObject:self.serviceName forKey:kACServiceNameKey];
   [coder encodeObject:self.user forKey:kACUserKey];
-  [coder encodeObject:self.validationIdentifier
-               forKey:kACValidationIdentifierKey];
+  [coder encodeObject:self.note forKey:kNoteKey];
 }
 
 - (instancetype)initWithCoder:(NSCoder*)coder {
-  return [self
-           initWithFavicon:[coder decodeObjectForKey:kACFaviconKey]
-        keychainIdentifier:[coder decodeObjectForKey:kACKeychainIdentifierKey]
-                      rank:[coder decodeInt64ForKey:kACRankKey]
-          recordIdentifier:[coder decodeObjectForKey:kACRecordIdentifierKey]
-         serviceIdentifier:[coder decodeObjectForKey:kACServiceIdentifierKey]
-               serviceName:[coder decodeObjectForKey:kACServiceNameKey]
-                      user:[coder decodeObjectForKey:kACUserKey]
-      validationIdentifier:[coder
-                               decodeObjectForKey:kACValidationIdentifierKey]];
+  return
+      [self initWithFavicon:[coder decodeObjectForKey:kACFaviconKey]
+                   password:[coder decodeObjectForKey:kACPasswordKey]
+                       rank:[coder decodeInt64ForKey:kACRankKey]
+           recordIdentifier:[coder decodeObjectForKey:kACRecordIdentifierKey]
+          serviceIdentifier:[coder decodeObjectForKey:kACServiceIdentifierKey]
+                serviceName:[coder decodeObjectForKey:kACServiceNameKey]
+                       user:[coder decodeObjectForKey:kACUserKey]
+                       note:[coder decodeObjectForKey:kNoteKey]];
 }
 
 @end

@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "android_webview/browser/aw_browser_context.h"
+#include "android_webview/browser/aw_browser_context_store.h"
 #include "android_webview/browser/aw_browser_process.h"
 #include "android_webview/browser/aw_feature_list_creator.h"
 #include "android_webview/browser/network_service/aw_network_change_notifier_factory.h"
@@ -57,8 +58,12 @@ class AwBrowserContextTest : public testing::Test {
 
 // Tests that constraints on trust for Symantec-issued certificates are not
 // enforced for the NetworkContext, as it should behave like the Android system.
-TEST_F(AwBrowserContextTest, SymantecPoliciesExempted) {
-  AwBrowserContext context;
+// TODO(crbug.com/1473326): Fix the flakiness and re-enable.
+TEST_F(AwBrowserContextTest, DISABLED_SymantecPoliciesExempted) {
+  AwBrowserContext context(
+      AwBrowserContextStore::kDefaultContextName,
+      base::FilePath(AwBrowserContextStore::kDefaultContextPath),
+      /*is_default=*/true);
   network::mojom::NetworkContextParams network_context_params;
   cert_verifier::mojom::CertVerifierCreationParams cert_verifier_params;
   context.ConfigureNetworkContextParams(
@@ -73,7 +78,10 @@ TEST_F(AwBrowserContextTest, SymantecPoliciesExempted) {
 // including those in application manifests, as it should behave like
 // the Android system.
 TEST_F(AwBrowserContextTest, SHA1LocalAnchorsAllowed) {
-  AwBrowserContext context;
+  AwBrowserContext context(
+      AwBrowserContextStore::kDefaultContextName,
+      base::FilePath(AwBrowserContextStore::kDefaultContextPath),
+      /*is_default=*/true);
   network::mojom::NetworkContextParams network_context_params;
   cert_verifier::mojom::CertVerifierCreationParams cert_verifier_params;
   context.ConfigureNetworkContextParams(

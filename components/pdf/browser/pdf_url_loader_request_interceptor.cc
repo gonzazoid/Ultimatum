@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/pdf/browser/pdf_stream_delegate.h"
 #include "components/pdf/browser/plugin_response_writer.h"
 #include "content/public/browser/url_loader_request_interceptor.h"
@@ -81,8 +81,16 @@ PdfURLLoaderRequestInterceptor::CreateRequestHandler(
   if (!contents)
     return {};
 
+  // Normally, `content::WebContents::UnsafeFindFrameByFrameTreeNodeId()` should
+  // not be used, since a FrameTreeNode's `RenderFrameHost` may change over its
+  // lifetime. However, the only use for this `RenderFrameHost` is to get its
+  // parent `RenderFrameHost`, which cannot change during the lifetime of the
+  // FrameTreeNode.
+  content::RenderFrameHost* content_frame =
+      contents->UnsafeFindFrameByFrameTreeNodeId(frame_tree_node_id_);
+
   absl::optional<PdfStreamDelegate::StreamInfo> stream =
-      stream_delegate_->GetStreamInfo(contents);
+      stream_delegate_->GetStreamInfo(content_frame->GetParent());
   if (!stream.has_value())
     return {};
 

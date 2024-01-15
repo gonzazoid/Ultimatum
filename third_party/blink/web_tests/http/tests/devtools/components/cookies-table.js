@@ -2,6 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+
+import * as CookieTable from 'devtools/ui/legacy/components/cookie_table/cookie_table.js';
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Tests inspector cookies table\n`);
 
@@ -77,7 +82,7 @@
   }
 
   function createCookie(data) {
-    const cookie = new SDK.Cookie(data.name, data.value);
+    const cookie = new SDK.Cookie.Cookie(data.name, data.value);
     for (let key in data) {
       if (key === 'name' || key === 'value')
         continue;
@@ -88,7 +93,7 @@
   }
 
   function createSortAndDumpCookies(cookieData, sortColumn, isAsc) {
-    const table = new CookieTable.CookiesTable(SDK.targetManager.mainTarget(), true);
+    const table = new CookieTable.CookiesTable.CookiesTable(true);
     const cookies = cookieData.map(createCookie);
     table.dataGrid = mockDataGrid({sortColumn, isAsc});
     table.sortCookies(cookies);
@@ -97,7 +102,7 @@
   }
 
   function createBuildAndDumpTable(cookieData, selectedNode, isAsc, lastEditedColumn) {
-    const table = new CookieTable.CookiesTable(SDK.targetManager.mainTarget(), true);
+    const table = new CookieTable.CookiesTable.CookiesTable(true);
     const cookies = cookieData && cookieData.map(createCookie);
     const rootNode = mockNode({});
     table.lastEditedColumnId = lastEditedColumn || null;
@@ -154,6 +159,5 @@
     TestRunner.completeTest();
   }
 
-  await TestRunner.loadLegacyModule('cookie_table');
   run();
 })();

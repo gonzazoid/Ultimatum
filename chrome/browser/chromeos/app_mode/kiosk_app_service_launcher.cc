@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/syslog_logging.h"
 #include "base/types/cxx23_to_underlying.h"
@@ -19,7 +19,7 @@
 #include "components/services/app_service/public/cpp/app_update.h"
 #include "components/services/app_service/public/cpp/instance.h"
 
-namespace ash {
+namespace chromeos {
 
 KioskAppServiceLauncher::KioskAppServiceLauncher(Profile* profile) {
   app_service_ = apps::AppServiceProxyFactory::GetForProfile(profile);
@@ -58,7 +58,7 @@ void KioskAppServiceLauncher::CheckAndMaybeLaunchApp(
     case apps::Readiness::kDisabledByUser:
     case apps::Readiness::kUninstalledByUser:
     case apps::Readiness::kRemoved:
-    case apps::Readiness::kUninstalledByMigration:
+    case apps::Readiness::kUninstalledByNonUser:
       SYSLOG(ERROR) << "Kiosk app should not have readiness "
                     << base::to_underlying(readiness);
       if (app_launched_callback_.has_value()) {
@@ -72,7 +72,7 @@ void KioskAppServiceLauncher::CheckAndMaybeLaunchApp(
 void KioskAppServiceLauncher::EnsureAppTypeInitialized(
     apps::AppType app_type,
     base::OnceClosure app_type_initialized_callback) {
-  if (app_service_->AppRegistryCache().IsAppTypeInitialized(app_type)) {
+  if (app_service_->AppRegistryCache().IsAppTypePublished(app_type)) {
     std::move(app_type_initialized_callback).Run();
     return;
   }
@@ -102,10 +102,20 @@ void KioskAppServiceLauncher::OnAppUpdate(const apps::AppUpdate& update) {
   LaunchAppInternal();
 }
 
-void KioskAppServiceLauncher::OnAppTypeInitialized(apps::AppType app_type) {
+void KioskAppServiceLauncher::OnAppTypePublishing(
+    const std::vector<apps::AppPtr>& deltas,
+    apps::AppType app_type) {
   if (app_type == app_type_ && app_type_initialized_callback_.has_value()) {
     app_registry_observation_.Reset();
-    std::move(app_type_initialized_callback_.value()).Run();
+
+    // Move the callback to the local variable, then reset
+    // `app_type_initialized_callback_`, to prevent
+    // `app_type_initialized_callback_` is called again when OnAppTypePublishing
+    // is called recursively.
+    base::OnceClosure app_type_initialized_callback =
+        std::move(app_type_initialized_callback_.value());
+    app_type_initialized_callback_ = absl::nullopt;
+    std::move(app_type_initialized_callback).Run();
   }
 }
 
@@ -153,4 +163,4 @@ void KioskAppServiceLauncher::OnAppLaunched(apps::LaunchResult&& result) {
   }
 }
 
-}  // namespace ash
+}  // namespace chromeos

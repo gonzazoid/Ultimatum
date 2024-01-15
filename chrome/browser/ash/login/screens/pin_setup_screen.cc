@@ -8,8 +8,9 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
-#include "ash/public/cpp/tablet_mode.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "chrome/browser/ash/login/quick_unlock/auth_token.h"
@@ -21,11 +22,15 @@
 #include "chrome/browser/ash/login/wizard_context.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/webui/chromeos/login/pin_setup_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/pin_setup_screen_handler.h"
+#include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
+#include "chromeos/ash/components/login/auth/auth_performer.h"
 #include "chromeos/ash/components/login/auth/public/cryptohome_key_constants.h"
 #include "chromeos/ash/components/login/auth/public/user_context.h"
+#include "chromeos/ash/components/osauth/public/auth_session_storage.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user_manager.h"
+#include "ui/display/screen.h"
 
 namespace ash {
 namespace {
@@ -80,22 +85,13 @@ std::string PinSetupScreen::GetResultString(Result result) {
   }
 }
 
-// static
-bool PinSetupScreen::ShouldSkipBecauseOfPolicy() {
-  PrefService* prefs = ProfileManager::GetActiveUserProfile()->GetPrefs();
-  if (chrome_user_manager_util::IsPublicSessionOrEphemeralLogin() ||
-      quick_unlock::IsPinDisabledByPolicy(prefs, quick_unlock::Purpose::kAny)) {
-    return true;
-  }
-
-  return false;
-}
-
 PinSetupScreen::PinSetupScreen(base::WeakPtr<PinSetupScreenView> view,
                                const ScreenExitCallback& exit_callback)
     : BaseScreen(PinSetupScreenView::kScreenId, OobeScreenPriority::DEFAULT),
       view_(std::move(view)),
-      exit_callback_(exit_callback) {
+      exit_callback_(exit_callback),
+      auth_performer_(UserDataAuthClient::Get()),
+      cryptohome_pin_engine_(&auth_performer_) {
   DCHECK(view_);
 
   quick_unlock::PinBackend::GetInstance()->HasLoginSupport(base::BindOnce(
@@ -104,19 +100,21 @@ PinSetupScreen::PinSetupScreen(base::WeakPtr<PinSetupScreenView> view,
 
 PinSetupScreen::~PinSetupScreen() = default;
 
-bool PinSetupScreen::SkipScreen(WizardContext& context) {
-  ClearAuthData(context);
-  exit_callback_.Run(Result::NOT_APPLICABLE);
-  return true;
-}
-
-bool PinSetupScreen::MaybeSkip(WizardContext& context) {
-  if (context.skip_post_login_screens_for_tests || ShouldSkipBecauseOfPolicy())
-    return SkipScreen(context);
-
-  // Just a precaution:
-  if (!context.extra_factors_auth_session)
-    return SkipScreen(context);
+bool PinSetupScreen::ShouldBeSkipped(const WizardContext& context) const {
+  if (!context.extra_factors_token.has_value()) {
+    return true;
+  }
+  if (!ash::AuthSessionStorage::Get()->IsValid(
+          context.extra_factors_token.value())) {
+    return true;
+  }
+  AccountId account_id = ash::AuthSessionStorage::Get()
+                             ->Peek(context.extra_factors_token.value())
+                             ->GetAccountId();
+  if (context.skip_post_login_screens_for_tests ||
+      cryptohome_pin_engine_.ShouldSkipSetupBecauseOfPolicy(account_id)) {
+    return true;
+  }
 
   // If cryptohome takes very long to respond, `has_login_support_` may be null
   // here, but this is very unusual.
@@ -129,12 +127,21 @@ bool PinSetupScreen::MaybeSkip(WizardContext& context) {
 
   // Show the screen if the device is in tablet mode or tablet mode first user
   // run is forced on the device.
-  if (TabletMode::Get()->InTabletMode() ||
+  if (display::Screen::GetScreen()->InTabletMode() ||
       switches::ShouldOobeUseTabletModeFirstRun()) {
     return false;
   }
 
-  return SkipScreen(context);
+  return true;
+}
+
+bool PinSetupScreen::MaybeSkip(WizardContext& context) {
+  if (ShouldBeSkipped(context)) {
+    ClearAuthData(context);
+    exit_callback_.Run(Result::NOT_APPLICABLE);
+    return true;
+  }
+  return false;
 }
 
 void PinSetupScreen::ShowImpl() {
@@ -146,16 +153,9 @@ void PinSetupScreen::ShowImpl() {
       quick_unlock::QuickUnlockFactory::GetForProfile(
           ProfileManager::GetActiveUserProfile());
   quick_unlock_storage->MarkStrongAuth();
-  std::unique_ptr<UserContext> user_context =
-      std::move(context()->extra_factors_auth_session);
-
-  // Due to crbug.com/1203420 we need to mark the key as a wildcard (no label).
-  if (user_context->GetKey()->GetLabel() == kCryptohomeGaiaKeyLabel) {
-    user_context->GetKey()->SetLabel(kCryptohomeWildcardLabel);
-  }
-
-  const std::string token =
-      quick_unlock_storage->CreateAuthToken(*user_context);
+  std::string token;
+  CHECK(context()->extra_factors_token);
+  token = *context()->extra_factors_token;
   bool is_child_account =
       user_manager::UserManager::Get()->IsLoggedInAsChildUser();
 
@@ -190,7 +190,11 @@ void PinSetupScreen::OnUserAction(const base::Value::List& args) {
 }
 
 void PinSetupScreen::ClearAuthData(WizardContext& context) {
-  context.extra_factors_auth_session.reset();
+  if (context.extra_factors_token.has_value()) {
+    ash::AuthSessionStorage::Get()->Invalidate(
+        context.extra_factors_token.value(), base::DoNothing());
+    context.extra_factors_token = std::nullopt;
+  }
 }
 
 void PinSetupScreen::OnHasLoginSupport(bool login_available) {

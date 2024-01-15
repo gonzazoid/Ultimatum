@@ -6,22 +6,22 @@
 #define CHROME_BROWSER_UI_WEB_APPLICATIONS_APP_BROWSER_CONTROLLER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/themes/theme_service.h"
 #include "chrome/browser/ui/page_action/page_action_icon_type.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "components/url_formatter/url_formatter.h"
 #include "components/webapps/browser/installable/installable_metrics.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/browser/web_contents_observer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "third_party/skia/include/core/SkRegion.h"
 #include "ui/color/color_provider.h"
-#include "ui/color/color_provider_manager.h"
+#include "ui/color/color_provider_key.h"
 #include "url/gurl.h"
 
 class Browser;
@@ -54,11 +54,10 @@ class WebAppBrowserController;
 bool IsSameHostAndPort(const GURL& app_url, const GURL& page_url);
 
 // Class to encapsulate logic to control the browser UI for web apps.
-class AppBrowserController
-    : public ui::ColorProviderManager::InitializerSupplier,
-      public TabStripModelObserver,
-      public content::WebContentsObserver,
-      public BrowserThemeProviderDelegate {
+class AppBrowserController : public ui::ColorProviderKey::InitializerSupplier,
+                             public TabStripModelObserver,
+                             public content::WebContentsObserver,
+                             public BrowserThemeProviderDelegate {
  public:
   AppBrowserController(const AppBrowserController&) = delete;
   AppBrowserController& operator=(const AppBrowserController&) = delete;
@@ -67,7 +66,11 @@ class AppBrowserController
   // Returns whether |browser| is a web app window/pop-up.
   static bool IsWebApp(const Browser* browser);
   // Returns whether |browser| is a web app window/pop-up for |app_id|.
-  static bool IsForWebApp(const Browser* browser, const AppId& app_id);
+  static bool IsForWebApp(const Browser* browser, const webapps::AppId& app_id);
+  // Returns a Browser* that is for |app_id| and |profile| if any, searches in
+  // order of last browser activation. Ignores pop-up Browsers.
+  static Browser* FindForWebApp(const Profile& profile,
+                                const webapps::AppId& app_id);
 
   // Renders |url|'s origin as Unicode.
   static std::u16string FormatUrlOrigin(
@@ -120,10 +123,10 @@ class AppBrowserController
   virtual ui::ImageModel GetWindowIcon() const = 0;
 
   // Returns the color of the title bar.
-  virtual absl::optional<SkColor> GetThemeColor() const;
+  virtual std::optional<SkColor> GetThemeColor() const;
 
   // Returns the background color of the page.
-  virtual absl::optional<SkColor> GetBackgroundColor() const;
+  virtual std::optional<SkColor> GetBackgroundColor() const;
 
   // Returns the title to be displayed in the window title bar.
   virtual std::u16string GetTitle() const;
@@ -145,6 +148,17 @@ class AppBrowserController
 
   // Gets the new tab URL for tabbed apps.
   virtual GURL GetAppNewTabUrl() const;
+
+  // Whether the app's tab strip should hide the new tab button, e.g. because
+  // the app has a pinned home tab at the same URL as the new tab URL.
+  virtual bool ShouldHideNewTabButton() const;
+
+  // Returns whether the url is within the scope of the tab strip home tab.
+  virtual bool IsUrlInHomeTabScope(const GURL& url) const;
+
+  // Returns whether the app icon should be displayed on the tab instead of the
+  // favicon.
+  virtual bool ShouldShowAppIconOnTab(int index) const;
 
   // Determines whether the specified url is 'inside' the app |this| controls.
   virtual bool IsUrlInAppScope(const GURL& url) const = 0;
@@ -177,19 +191,37 @@ class AppBrowserController
   // Returns true when an app's effective display mode is borderless.
   virtual bool AppUsesBorderlessMode() const;
 
+  // Returns true when an app's effective display mode is tabbed.
+  virtual bool AppUsesTabbed() const;
+
   virtual bool IsIsolatedWebApp() const;
+
+  // TODO(crbug.com/1316117): Remove this mock when `WebAppBrowserTest`s support
+  // creating Isolated Web Apps.
+  virtual void SetIsolatedWebAppTrueForTesting();
 
   // Returns true when the app's effective display mode is
   // window-controls-overlay and the user has toggled WCO on for the app.
   virtual bool IsWindowControlsOverlayEnabled() const;
 
-  virtual void ToggleWindowControlsOverlayEnabled();
+  virtual void ToggleWindowControlsOverlayEnabled(
+      base::OnceClosure on_complete);
 
   // Returns the default bounds for the app or empty for no defaults.
   virtual gfx::Rect GetDefaultBounds() const;
 
   // Whether the browser should show the reload button in the toolbar.
   virtual bool HasReloadButton() const;
+
+  // Returns whether prevent close is enabled.
+  bool IsPreventCloseEnabled() const;
+
+#if !BUILDFLAG(IS_CHROMEOS)
+  // Whether the browser should show the profile menu button in the toolbar.
+  // Not appliccable to ChromeOS, because apps can be installed only for
+  // one main profile there.
+  virtual bool HasProfileMenuButton() const;
+#endif  // !BUILDFLAG(IS_CHROMEOS)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // Returns the SystemWebAppDelegate if any for this controller.
@@ -201,7 +233,7 @@ class AppBrowserController
   // animated.
   void UpdateCustomTabBarVisibility(bool animate) const;
 
-  const AppId& app_id() const { return app_id_; }
+  const webapps::AppId& app_id() const { return app_id_; }
 
   Browser* browser() const { return browser_; }
 
@@ -227,22 +259,29 @@ class AppBrowserController
   CustomThemeSupplier* GetThemeSupplier() const override;
   bool ShouldUseCustomFrame() const override;
 
-  // ui::ColorProviderManager::InitializerSupplier
+  // ui::ColorProviderKey::InitializerSupplier
   void AddColorMixers(ui::ColorProvider* provider,
-                      const ui::ColorProviderManager::Key& key) const override;
+                      const ui::ColorProviderKey& key) const override;
 
   void UpdateDraggableRegion(const SkRegion& region);
-  const absl::optional<SkRegion>& draggable_region() const {
+  const std::optional<SkRegion>& draggable_region() const {
     return draggable_region_;
   }
 
   void SetOnUpdateDraggableRegionForTesting(base::OnceClosure done);
 
+  // Called when this browser is going to receive a reparented web contents
+  // from an installation or intent action. If the initial url is not set or
+  // isn't within the app scope, set it to the app's start_url, allowing the 'x'
+  // button to appear in the toolbar & the user can use it to navigate back to
+  // that location.
+  void MaybeSetInitialUrlOnReparentTab();
+
  protected:
   AppBrowserController(Browser* browser,
-                       AppId app_id,
+                       webapps::AppId app_id,
                        bool has_tab_strip);
-  AppBrowserController(Browser* browser, AppId app_id);
+  AppBrowserController(Browser* browser, webapps::AppId app_id);
 
   // Called once the app browser controller has determined its initial url.
   virtual void OnReceivedInitialURL();
@@ -254,23 +293,23 @@ class AppBrowserController
   // Gets the icon to use if the app icon is not available.
   ui::ImageModel GetFallbackAppIcon() const;
 
+  void UpdateThemePack();
+
  private:
   // Sets the url that the app browser controller was created with.
   void SetInitialURL(const GURL& initial_url);
 
-  void UpdateThemePack();
-
   const raw_ptr<Browser> browser_;
-  const AppId app_id_;
+  const webapps::AppId app_id_;
   const bool has_tab_strip_;
   GURL initial_url_;
 
   scoped_refptr<BrowserThemePack> theme_pack_;
   std::unique_ptr<ui::ThemeProvider> theme_provider_;
-  absl::optional<SkColor> last_theme_color_;
-  absl::optional<SkColor> last_background_color_;
+  std::optional<SkColor> last_theme_color_;
+  std::optional<SkColor> last_background_color_;
 
-  absl::optional<SkRegion> draggable_region_ = absl::nullopt;
+  std::optional<SkRegion> draggable_region_ = std::nullopt;
 
   base::OnceClosure on_draggable_region_set_for_testing_;
 };

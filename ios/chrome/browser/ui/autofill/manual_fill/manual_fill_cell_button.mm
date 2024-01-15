@@ -4,12 +4,12 @@
 
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_cell_button.h"
 
+#import "base/ios/ios_util.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/ui/autofill/manual_fill/manual_fill_cell_utils.h"
+#import "ios/chrome/common/button_configuration_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/common/ui/util/sdk_forward_declares.h"
 
 namespace {
 
@@ -54,13 +54,15 @@ static const CGFloat kButtonVerticalMargin = 12;
   [self setTitleColor:[UIColor colorNamed:kBlueColor]
              forState:UIControlStateNormal];
   self.translatesAutoresizingMaskIntoConstraints = NO;
-  self.titleLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
-  self.titleLabel.adjustsFontForContentSizeCategory = YES;
   self.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeading;
-  self.contentEdgeInsets =
-      UIEdgeInsetsMake(kButtonVerticalMargin, kButtonHorizontalMargin,
-                       kButtonVerticalMargin, kButtonHorizontalMargin);
-  self.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+
+  UIButtonConfiguration* buttonConfiguration =
+      [UIButtonConfiguration plainButtonConfiguration];
+  buttonConfiguration.contentInsets = NSDirectionalEdgeInsetsMake(
+      kButtonVerticalMargin, kButtonHorizontalMargin, kButtonVerticalMargin,
+      kButtonHorizontalMargin);
+  buttonConfiguration.titleLineBreakMode = NSLineBreakByTruncatingTail;
+  self.configuration = buttonConfiguration;
 }
 
 @end

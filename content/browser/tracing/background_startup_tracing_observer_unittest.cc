@@ -31,10 +31,8 @@ void TestStartupRuleExists(const BackgroundTracingConfigImpl& config,
       BackgroundStartupTracingObserver::FindStartupRuleInConfig(config);
   if (exists) {
     ASSERT_TRUE(rule);
-    EXPECT_EQ(BackgroundTracingConfigImpl::CategoryPreset::BENCHMARK_STARTUP,
-              rule->category_preset());
-    EXPECT_EQ(30, rule->GetTraceDelay());
-    EXPECT_FALSE(rule->stop_tracing_on_repeated_reactive());
+    EXPECT_EQ("org.chromium.background_tracing.startup", rule->rule_id());
+    EXPECT_EQ(base::Seconds(30), rule->GetTraceDelay());
   } else {
     EXPECT_FALSE(rule);
   }
@@ -90,16 +88,15 @@ TEST(BackgroundStartupTracingObserverTest, IncludeStartupConfigIfNeeded) {
 
   // A custom config without preference set should not set preference and keep
   // config same.
-  base::Value::Dict rules_dict;
-  rules_dict.Set("rule", "MONITOR_AND_DUMP_WHEN_TRIGGER_NAMED");
-  rules_dict.Set("trigger_name", "test");
-  base::Value::Dict dict;
-  base::Value::List rules_list;
-  rules_list.Append(std::move(rules_dict));
-  dict.Set("configs", std::move(rules_list));
-  dict.Set("custom_categories",
-           tracing::TraceStartupConfig::kDefaultStartupCategories);
-  config_impl = BackgroundTracingConfigImpl::ReactiveFromDict(dict);
+  config_impl = BackgroundTracingConfigImpl::ReactiveFromDict(
+      base::Value::Dict()
+          .Set("configs",
+               base::Value::List().Append(
+                   base::Value::Dict()
+                       .Set("rule", "MONITOR_AND_DUMP_WHEN_TRIGGER_NAMED")
+                       .Set("trigger_name", "test")))
+          .Set("custom_categories",
+               tracing::TraceStartupConfig::kDefaultStartupCategories));
   ASSERT_TRUE(config_impl);
 
   preferences->SetBackgroundStartupTracingEnabled(false);

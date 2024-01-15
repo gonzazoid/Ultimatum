@@ -192,6 +192,7 @@ static_library("test_support") {
     "test/env_test_helper.h",
     "test/event_generator_delegate_aura.cc",
     "test/event_generator_delegate_aura.h",
+    "test/find_window.h",
     "test/test_cursor_client.cc",
     "test/test_cursor_client.h",
     "test/test_focus_client.cc",
@@ -206,6 +207,7 @@ static_library("test_support") {
     "test/test_window_targeter.h",
     "test/test_windows.cc",
     "test/test_windows.h",
+    "test/ui_controls_aurawin.h",
     "test/ui_controls_factory_aura.h",
     "test/window_event_dispatcher_test_api.cc",
     "test/window_event_dispatcher_test_api.h",
@@ -245,13 +247,10 @@ static_library("test_support") {
   ]
 
   if (is_win) {
-    sources += [ "test/ui_controls_factory_aurawin.cc" ]
+    sources += [ "test/ui_controls_aurawin.cc" ]
   }
 
-  if (use_ozone) {
-    if (is_fuchsia) {
-      deps += [ "//ui/ozone" ]
-    }
+  if (use_ozone && (is_chromeos_ash || is_castos)) {
     sources += [
       "test/ui_controls_ozone.cc",
       "test/ui_controls_ozone.h",

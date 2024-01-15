@@ -4,8 +4,6 @@
 
 component("media_message_center") {
   sources = [
-    "media_artwork_view.cc",
-    "media_artwork_view.h",
     "media_controls_progress_view.cc",
     "media_controls_progress_view.h",
     "media_notification_background.h",
@@ -18,24 +16,30 @@ component("media_message_center") {
     "media_notification_item.h",
     "media_notification_util.cc",
     "media_notification_util.h",
+    "media_notification_view.cc",
     "media_notification_view.h",
     "media_notification_view_impl.cc",
     "media_notification_view_impl.h",
-    "media_notification_view_modern_impl.cc",
-    "media_notification_view_modern_impl.h",
     "media_notification_volume_slider_view.cc",
     "media_notification_volume_slider_view.h",
+    "media_squiggly_progress_view.cc",
+    "media_squiggly_progress_view.h",
+    "notification_theme.cc",
     "notification_theme.h",
   ]
 
   defines = [ "IS_MEDIA_MESSAGE_CENTER_IMPL" ]
 
-  public_deps = [ "//services/media_session/public/mojom" ]
+  public_deps = [
+    "//services/media_session/public/mojom",
+    "//third_party/abseil-cpp:absl",
+  ]
 
   deps = [
     "//base",
     "//components/media_message_center/vector_icons",
     "//components/strings:components_strings_grit",
+    "//components/url_formatter",
     "//components/vector_icons",
     "//services/media_session/public/cpp",
     "//skia",
@@ -55,8 +59,8 @@ source_set("unit_tests") {
     "media_notification_background_ash_impl_unittest.cc",
     "media_notification_background_impl_unittest.cc",
     "media_notification_view_impl_unittest.cc",
-    "media_notification_view_modern_impl_unittest.cc",
     "media_notification_volume_slider_view_unittest.cc",
+    "media_squiggly_progress_view_unittest.cc",
   ]
 
   deps = [
@@ -70,6 +74,7 @@ source_set("unit_tests") {
     "//testing/gmock",
     "//testing/gtest",
     "//ui/accessibility",
+    "//ui/gfx:test_support",
     "//ui/message_center",
     "//ui/native_theme:test_support",
     "//ui/views",

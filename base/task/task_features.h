@@ -12,38 +12,18 @@
 
 namespace base {
 
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_APPLE)
-#define HAS_NATIVE_THREAD_POOL() 1
-#else
-#define HAS_NATIVE_THREAD_POOL() 0
-#endif
+// Fixed amount of threads that will be used as a cap for thread pools.
+BASE_EXPORT BASE_DECLARE_FEATURE(kThreadPoolCap2);
 
-#if HAS_NATIVE_THREAD_POOL()
-// Under this feature, ThreadPoolImpl will use a foreground ThreadGroup backed
-// by a native thread pool implementation. The Windows Thread Pool API and
-// libdispatch are used on Windows and macOS/iOS respectively.
-BASE_EXPORT BASE_DECLARE_FEATURE(kUseNativeThreadPool);
-// Under this feature, ThreadPoolImpl will use a background ThreadGroup backed
-// by a native thread pool implementation.
-BASE_EXPORT BASE_DECLARE_FEATURE(kUseBackgroundNativeThreadPool);
-#endif
+extern const BASE_EXPORT base::FeatureParam<int> kThreadPoolCapRestrictedCount;
+
+// Under this feature, a utility_thread_group will be created for
+// running USER_VISIBLE tasks.
+BASE_EXPORT BASE_DECLARE_FEATURE(kUseUtilityThreadGroup);
 
 // Under this feature, worker threads are not reclaimed after a timeout. Rather,
 // only excess workers are cleaned up immediately after finishing a task.
 BASE_EXPORT BASE_DECLARE_FEATURE(kNoWorkerThreadReclaim);
-
-// This feature controls whether wake ups are possible for canceled tasks.
-BASE_EXPORT BASE_DECLARE_FEATURE(kNoWakeUpsForCanceledTasks);
-
-// Controls whether or not canceled delayed tasks are removed from task queues.
-BASE_EXPORT BASE_DECLARE_FEATURE(kRemoveCanceledTasksInTaskQueue);
-
-// This feature controls whether or not the scheduled task is always abandoned
-// when a timer is stopped or reset. The re-use of the scheduled task is an
-// optimization that ensures a timer can not leave multiple canceled tasks in
-// the task queue. Meant to be used in conjunction with
-// kRemoveCanceledTasksInTaskQueue.
-BASE_EXPORT BASE_DECLARE_FEATURE(kAlwaysAbandonScheduledTask);
 
 // This feature controls whether ThreadPool WorkerThreads should hold off waking
 // up to purge partition alloc within the first minute of their lifetime. See
@@ -53,12 +33,25 @@ BASE_EXPORT BASE_DECLARE_FEATURE(kDelayFirstWorkerWake);
 // Under this feature, a non-zero leeway is added to delayed tasks. Along with
 // DelayPolicy, this affects the time at which a delayed task runs.
 BASE_EXPORT BASE_DECLARE_FEATURE(kAddTaskLeewayFeature);
+#if BUILDFLAG(IS_WIN)
+constexpr TimeDelta kDefaultLeeway = Milliseconds(16);
+#else
 constexpr TimeDelta kDefaultLeeway = Milliseconds(8);
+#endif  // #if !BUILDFLAG(IS_WIN)
 extern const BASE_EXPORT base::FeatureParam<TimeDelta> kTaskLeewayParam;
+
+// We consider that delayed tasks above |kMaxPreciseDelay| never need
+// DelayPolicy::kPrecise. The default value is slightly above 30Hz timer.
+constexpr TimeDelta kDefaultMaxPreciseDelay = Milliseconds(36);
+extern const BASE_EXPORT base::FeatureParam<TimeDelta> kMaxPreciseDelay;
 
 // Under this feature, wake ups are aligned at a 8ms boundary when allowed per
 // DelayPolicy.
 BASE_EXPORT BASE_DECLARE_FEATURE(kAlignWakeUps);
+
+// Under this feature, slack is added on mac message pumps that support it when
+// allowed per DelayPolicy.
+BASE_EXPORT BASE_DECLARE_FEATURE(kTimerSlackMac);
 
 // Under this feature, tasks that need high resolution timer are determined
 // based on explicit DelayPolicy rather than based on a threshold.
@@ -67,19 +60,14 @@ BASE_EXPORT BASE_DECLARE_FEATURE(kExplicitHighResolutionTimerWin);
 // Feature to run tasks by batches before pumping out messages.
 BASE_EXPORT BASE_DECLARE_FEATURE(kRunTasksByBatches);
 
-// Feature to run tasks by batches before pumping out messages.
-BASE_EXPORT BASE_DECLARE_FEATURE(kBrowserPeriodicYieldingToNative);
-extern const BASE_EXPORT base::FeatureParam<TimeDelta>
-    kBrowserPeriodicYieldingToNativeNormalInputAfterMsParam;
-extern const BASE_EXPORT base::FeatureParam<TimeDelta>
-    kBrowserPeriodicYieldingToNativeFlingInputAfterMsParam;
-extern const BASE_EXPORT base::FeatureParam<TimeDelta>
-    kBrowserPeriodicYieldingToNativeNoInputAfterMsParam;
-extern const BASE_EXPORT base::FeatureParam<TimeDelta>
-    kBrowserPeriodicYieldingToNativeDelay;
+// Controls the max number of delayed tasks that can run before selecting an
+// immediate task in sequence manager.
+BASE_EXPORT BASE_DECLARE_FEATURE(kMaxDelayedStarvationTasks);
+extern const BASE_EXPORT base::FeatureParam<int>
+    kMaxDelayedStarvationTasksParam;
 
-BASE_EXPORT void InitializeTaskLeeway();
-BASE_EXPORT TimeDelta GetTaskLeeway();
+// Feature to use a JobTaskSource implementation that minimizes lock contention.
+BASE_EXPORT BASE_DECLARE_FEATURE(kUseNewJobImplementation);
 
 }  // namespace base
 

@@ -3,8 +3,10 @@
 # found in the LICENSE file.
 
 import("//build/config/android/rules.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 android_library("java") {
+  srcjar_deps = [ ":jni_headers" ]
   sources = [
     "java/src/org/chromium/chrome/browser/browserservices/verification/ChromeOriginVerifier.java",
     "java/src/org/chromium/chrome/browser/browserservices/verification/ChromeOriginVerifierFactory.java",
@@ -13,14 +15,13 @@ android_library("java") {
   ]
   deps = [
     "//base:base_java",
-    "//base:jni_java",
     "//build/android:build_java",
     "//chrome/browser/android/browserservices/metrics:java",
     "//chrome/browser/flags:java",
     "//chrome/browser/preferences:java",
     "//chrome/browser/profiles/android:java",
-    "//components/digital_asset_links:java",
-    "//components/digital_asset_links/android:java",
+    "//components/content_relationship_verification:java",
+    "//components/content_relationship_verification/android:java",
     "//components/embedder_support/android:util_java",
     "//components/externalauth/android:java",
     "//content/public/android:content_java",
@@ -28,8 +29,8 @@ android_library("java") {
     "//third_party/android_deps:javax_inject_javax_inject_java",
     "//third_party/androidx:androidx_annotation_annotation_java",
     "//third_party/androidx:androidx_browser_browser_java",
+    "//third_party/jni_zero:jni_zero_java",
   ]
-  annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
 }
 
 generate_jni("jni_headers") {
@@ -46,7 +47,7 @@ android_library("javatests") {
     "//base:base_java_test_support",
     "//chrome/browser/flags:java",
     "//chrome/test/android:chrome_java_integration_test_support",
-    "//components/digital_asset_links/android:java",
+    "//components/content_relationship_verification/android:java",
     "//components/embedder_support/android:util_java",
     "//components/externalauth/android:java",
     "//content/public/android:content_java",
@@ -65,15 +66,16 @@ robolectric_binary("verification_junit_tests") {
     "//base:base_java_test_support",
     "//base:base_junit_test_support",
     "//chrome/browser/profiles/android:java",
-    "//components/digital_asset_links:java",
-    "//components/digital_asset_links/android:java",
-    "//components/digital_asset_links/android:junit_test_support",
+    "//components/content_relationship_verification:java",
+    "//components/content_relationship_verification/android:java",
+    "//components/content_relationship_verification/android:junit_test_support",
     "//components/embedder_support/android:util_java",
+    "//components/externalauth/android:java",
     "//content/public/android:content_java",
     "//content/public/test/android:content_java_test_support",
     "//third_party/androidx:androidx_browser_browser_java",
     "//third_party/androidx:androidx_test_core_java",
-    "//third_party/androidx:androidx_test_runner_java",
+    "//third_party/jni_zero:jni_zero_java",
     "//third_party/junit",
     "//third_party/mockito:mockito_java",
   ]

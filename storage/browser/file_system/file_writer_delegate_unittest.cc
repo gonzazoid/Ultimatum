@@ -11,15 +11,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/io_buffer.h"
 #include "net/base/request_priority.h"
 #include "net/http/http_response_headers.h"
@@ -61,22 +60,28 @@ class Result {
     return write_status_;
   }
 
+  void Run() { loop_.Run(); }
+
   void DidWrite(base::File::Error status,
                 int64_t bytes,
                 FileWriterDelegate::WriteProgressStatus write_status) {
     write_status_ = write_status;
     if (status == base::File::FILE_OK) {
       bytes_written_ += bytes;
-      if (write_status_ != FileWriterDelegate::SUCCESS_IO_PENDING)
-        base::RunLoop::QuitCurrentWhenIdleDeprecated();
+      if (write_status_ != FileWriterDelegate::SUCCESS_IO_PENDING) {
+        DCHECK(!loop_.AnyQuitCalled());
+        loop_.QuitWhenIdle();
+      }
     } else {
       EXPECT_EQ(base::File::FILE_OK, status_);
       status_ = status;
-      base::RunLoop::QuitCurrentWhenIdleDeprecated();
+      DCHECK(!loop_.AnyQuitCalled());
+      loop_.QuitWhenIdle();
     }
   }
 
  private:
+  base::RunLoop loop_;
   // For post-operation status.
   base::File::Error status_;
   int64_t bytes_written_;
@@ -104,7 +109,8 @@ class FileWriterDelegateTest : public PlatformTest {
 
   int64_t GetFileSizeOnDisk(const char* test_file_path) {
     // There might be in-flight flush/write.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, base::DoNothing());
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::DoNothing());
     base::RunLoop().RunUntilIdle();
 
     FileSystemURL url = GetFileSystemURL(test_file_path);
@@ -195,7 +201,7 @@ TEST_F(FileWriterDelegateTest, WriteSuccessWithoutQuotaLimit) {
   Result result;
   ASSERT_EQ(0, usage());
   file_writer_delegate_->Start(blob->CreateReader(), GetWriteCallback(&result));
-  base::RunLoop().Run();
+  result.Run();
 
   ASSERT_EQ(FileWriterDelegate::SUCCESS_COMPLETED, result.write_status());
   file_writer_delegate_.reset();
@@ -214,7 +220,7 @@ TEST_F(FileWriterDelegateTest, WriteSuccessWithJustQuota) {
   Result result;
   ASSERT_EQ(0, usage());
   file_writer_delegate_->Start(blob->CreateReader(), GetWriteCallback(&result));
-  base::RunLoop().Run();
+  result.Run();
   ASSERT_EQ(FileWriterDelegate::SUCCESS_COMPLETED, result.write_status());
   file_writer_delegate_.reset();
 
@@ -233,7 +239,7 @@ TEST_F(FileWriterDelegateTest, DISABLED_WriteFailureByQuota) {
   Result result;
   ASSERT_EQ(0, usage());
   file_writer_delegate_->Start(blob->CreateReader(), GetWriteCallback(&result));
-  base::RunLoop().Run();
+  result.Run();
   ASSERT_EQ(FileWriterDelegate::ERROR_WRITE_STARTED, result.write_status());
   file_writer_delegate_.reset();
 
@@ -253,7 +259,7 @@ TEST_F(FileWriterDelegateTest, WriteZeroBytesSuccessfullyWithZeroQuota) {
   Result result;
   ASSERT_EQ(0, usage());
   file_writer_delegate_->Start(blob->CreateReader(), GetWriteCallback(&result));
-  base::RunLoop().Run();
+  result.Run();
   ASSERT_EQ(FileWriterDelegate::SUCCESS_COMPLETED, result.write_status());
   file_writer_delegate_.reset();
 
@@ -285,10 +291,10 @@ TEST_F(FileWriterDelegateTest, WriteSuccessWithoutQuotaLimitConcurrent) {
   file_writer_delegate_->Start(blob->CreateReader(), GetWriteCallback(&result));
   file_writer_delegate2->Start(blob->CreateReader(),
                                GetWriteCallback(&result2));
-  base::RunLoop().Run();
+  result.Run();
   if (result.write_status() == FileWriterDelegate::SUCCESS_IO_PENDING ||
       result2.write_status() == FileWriterDelegate::SUCCESS_IO_PENDING)
-    base::RunLoop().Run();
+    result2.Run();
 
   ASSERT_EQ(FileWriterDelegate::SUCCESS_COMPLETED, result.write_status());
   ASSERT_EQ(FileWriterDelegate::SUCCESS_COMPLETED, result2.write_status());
@@ -318,7 +324,7 @@ TEST_F(FileWriterDelegateTest, WritesWithQuotaAndOffset) {
     ASSERT_EQ(0, usage());
     file_writer_delegate_->Start(blob->CreateReader(),
                                  GetWriteCallback(&result));
-    base::RunLoop().Run();
+    result.Run();
     ASSERT_EQ(FileWriterDelegate::SUCCESS_COMPLETED, result.write_status());
     file_writer_delegate_.reset();
 
@@ -337,7 +343,7 @@ TEST_F(FileWriterDelegateTest, WritesWithQuotaAndOffset) {
     Result result;
     file_writer_delegate_->Start(blob->CreateReader(),
                                  GetWriteCallback(&result));
-    base::RunLoop().Run();
+    result.Run();
     EXPECT_EQ(kDataSize, usage());
     EXPECT_EQ(GetFileSizeOnDisk("test"), usage());
     EXPECT_EQ(kDataSize, result.bytes_written());
@@ -355,7 +361,7 @@ TEST_F(FileWriterDelegateTest, WritesWithQuotaAndOffset) {
     Result result;
     file_writer_delegate_->Start(blob->CreateReader(),
                                  GetWriteCallback(&result));
-    base::RunLoop().Run();
+    result.Run();
     ASSERT_EQ(FileWriterDelegate::SUCCESS_COMPLETED, result.write_status());
     file_writer_delegate_.reset();
 
@@ -375,7 +381,7 @@ TEST_F(FileWriterDelegateTest, WritesWithQuotaAndOffset) {
     Result result;
     file_writer_delegate_->Start(blob->CreateReader(),
                                  GetWriteCallback(&result));
-    base::RunLoop().Run();
+    result.Run();
     ASSERT_EQ(FileWriterDelegate::SUCCESS_COMPLETED, result.write_status());
     file_writer_delegate_.reset();
 
@@ -396,7 +402,7 @@ TEST_F(FileWriterDelegateTest, WritesWithQuotaAndOffset) {
     Result result;
     file_writer_delegate_->Start(blob->CreateReader(),
                                  GetWriteCallback(&result));
-    base::RunLoop().Run();
+    result.Run();
     ASSERT_EQ(FileWriterDelegate::ERROR_WRITE_STARTED, result.write_status());
     file_writer_delegate_.reset();
 

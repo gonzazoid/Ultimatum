@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/test/launcher/unit_test_launcher.h"
 #include "base/test/test_suite.h"
@@ -11,7 +11,7 @@
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/base/ui_base_paths.h"
 
-#if BUILDFLAG(IS_APPLE)
+#if BUILDFLAG(IS_MAC)
 #include "base/test/mock_chrome_application_mac.h"
 #endif
 
@@ -36,7 +36,7 @@ ShellDialogsTestSuite::ShellDialogsTestSuite(int argc, char** argv)
 void ShellDialogsTestSuite::Initialize() {
   base::TestSuite::Initialize();
 
-#if BUILDFLAG(IS_APPLE)
+#if BUILDFLAG(IS_MAC)
   mock_cr_app::RegisterMockCrApp();
 #endif
 

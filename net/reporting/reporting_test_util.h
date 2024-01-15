@@ -162,7 +162,7 @@ class TestReportingContext : public ReportingContext {
   TestReportingContext(const TestReportingContext&) = delete;
   TestReportingContext& operator=(const TestReportingContext&) = delete;
 
-  ~TestReportingContext();
+  ~TestReportingContext() override;
 
   base::MockOneShotTimer* test_delivery_timer() { return delivery_timer_; }
   base::MockOneShotTimer* test_garbage_collection_timer() {
@@ -290,7 +290,8 @@ class ReportingTestBase : public TestWithTaskEnvironment {
   base::SimpleTestClock clock_;
   base::SimpleTestTickClock tick_clock_;
   std::unique_ptr<TestReportingContext> context_;
-  raw_ptr<ReportingCache::PersistentReportingStore> store_ = nullptr;
+  raw_ptr<ReportingCache::PersistentReportingStore, DanglingUntriaged> store_ =
+      nullptr;
 };
 
 class TestReportingService : public ReportingService {
@@ -369,7 +370,8 @@ class TestReportingService : public ReportingService {
 
   ReportingContext* GetContextForTesting() const override;
 
-  std::vector<const ReportingReport*> GetReports() const override;
+  std::vector<raw_ptr<const ReportingReport, VectorExperimental>> GetReports()
+      const override;
   base::flat_map<url::Origin, std::vector<ReportingEndpoint>>
   GetV1ReportingEndpointsByOrigin() const override;
   void AddReportingCacheObserver(ReportingCacheObserver* observer) override;

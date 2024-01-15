@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "chrome/browser/ui/views/payments/editor_view_controller.h"
 #include "chrome/browser/ui/views/payments/validation_delegate.h"
 
@@ -38,17 +39,17 @@ class ContactInfoEditorViewController : public EditorViewController {
   // EditorViewController:
   bool IsEditingExistingItem() override;
   std::vector<EditorField> GetFieldDefinitions() override;
-  std::u16string GetInitialValueForType(
-      autofill::ServerFieldType type) override;
+  std::u16string GetInitialValueForType(autofill::FieldType type) override;
   bool ValidateModelAndSave() override;
   std::unique_ptr<ValidationDelegate> CreateValidationDelegate(
       const EditorField& field) override;
   std::unique_ptr<ui::ComboboxModel> GetComboboxModelForType(
-      const autofill::ServerFieldType& type) override;
+      const autofill::FieldType& type) override;
 
  protected:
   // PaymentRequestSheetController:
   std::u16string GetSheetTitle() override;
+  base::WeakPtr<PaymentRequestSheetController> GetWeakPtr() override;
 
  private:
   // Uses the values in the UI fields to populate the corresponding values in
@@ -56,7 +57,7 @@ class ContactInfoEditorViewController : public EditorViewController {
   void PopulateProfile(autofill::AutofillProfile* profile);
   bool GetSheetId(DialogViewID* sheet_id) override;
   std::u16string GetValueForType(const autofill::AutofillProfile& profile,
-                                 autofill::ServerFieldType type);
+                                 autofill::FieldType type);
 
   raw_ptr<autofill::AutofillProfile> profile_to_edit_;
 
@@ -92,8 +93,11 @@ class ContactInfoEditorViewController : public EditorViewController {
     EditorField field_;
     // Outlives this class. Never null.
     raw_ptr<ContactInfoEditorViewController, DanglingUntriaged> controller_;
-    const std::string& locale_;
+    const raw_ref<const std::string> locale_;
   };
+
+  // Must be the last member of a leaf class.
+  base::WeakPtrFactory<ContactInfoEditorViewController> weak_ptr_factory_{this};
 };
 
 }  // namespace payments

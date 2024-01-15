@@ -8,10 +8,9 @@
 #include <map>
 #include <memory>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -24,16 +23,17 @@
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/browser/history_service_observer.h"
 #include "components/history/core/browser/history_types.h"
-#include "components/history_clusters/core/clustering_backend.h"
-#include "components/history_clusters/core/history_clusters_service_task_get_most_recent_clusters.h"
-#include "components/history_clusters/core/history_clusters_service_task_update_clusters.h"
+#include "components/history_clusters/core/context_clusterer_history_service_observer.h"
 #include "components/history_clusters/core/history_clusters_types.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
+class PrefService;
+class TemplateURLService;
+
 namespace optimization_guide {
 class EntityMetadataProvider;
-class NewOptimizationGuideDecider;
+class OptimizationGuideDecider;
 }  // namespace optimization_guide
 
 namespace site_engagement {
@@ -42,36 +42,14 @@ class SiteEngagementScoreProvider;
 
 namespace history_clusters {
 
+class ClusteringBackend;
 class HistoryClustersService;
-
-// Clears `HistoryClustersService`'s keyword cache when 1 or more history
-// entries are deleted.
-class VisitDeletionObserver : public history::HistoryServiceObserver {
- public:
-  explicit VisitDeletionObserver(
-      HistoryClustersService* history_clusters_service);
-
-  ~VisitDeletionObserver() override;
-
-  // Starts observing a service for history deletions.
-  void AttachToHistoryService(history::HistoryService* history_service);
-
-  // history::HistoryServiceObserver
-  void OnURLsDeleted(history::HistoryService* history_service,
-                     const history::DeletionInfo& deletion_info) override;
-
- private:
-  HistoryClustersService* history_clusters_service_;
-
-  // Tracks the observed history service, for cleanup.
-  base::ScopedObservation<history::HistoryService,
-                          history::HistoryServiceObserver>
-      history_service_observation_{this};
-};
+class HistoryClustersServiceTask;
 
 // This Service provides an API to the History Clusters for UI entry points.
 class HistoryClustersService : public base::SupportsUserData,
-                               public KeyedService {
+                               public KeyedService,
+                               public history::HistoryServiceObserver {
  public:
   class Observer : public base::CheckedObserver {
    public:
@@ -82,19 +60,17 @@ class HistoryClustersService : public base::SupportsUserData,
   // percentile, and we do synchronous lookups as the user types in the omnibox.
   using KeywordMap =
       std::unordered_map<std::u16string, history::ClusterKeywordData>;
-  using URLKeywordSet = std::unordered_set<std::string>;
 
   // `url_loader_factory` is allowed to be nullptr, like in unit tests.
-  // In that case, HistoryClustersService will never instantiate a clustering
-  // backend that requires it, such as the RemoteClusteringBackend.
   HistoryClustersService(
       const std::string& application_locale,
       history::HistoryService* history_service,
       optimization_guide::EntityMetadataProvider* entity_metadata_provider,
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       site_engagement::SiteEngagementScoreProvider* engagement_score_provider,
-      optimization_guide::NewOptimizationGuideDecider*
-          optimization_guide_decider);
+      TemplateURLService* template_url_service,
+      optimization_guide::OptimizationGuideDecider* optimization_guide_decider,
+      PrefService* pref_service);
   HistoryClustersService(const HistoryClustersService&) = delete;
   HistoryClustersService& operator=(const HistoryClustersService&) = delete;
   ~HistoryClustersService() override;
@@ -106,10 +82,18 @@ class HistoryClustersService : public base::SupportsUserData,
   // KeyedService:
   void Shutdown() override;
 
-  // Returns true if the Journeys feature is enabled for the current application
-  // locale. This is a cached wrapper of `IsJourneysEnabled()` within features.h
-  // that's already evaluated against the g_browser_process application locale.
-  bool IsJourneysEnabled() const;
+  // Returns true if the Journeys feature is enabled both by feature flag AND
+  // by the user pref / policy value. Virtual for testing.
+  virtual bool IsJourneysEnabledAndVisible() const;
+
+  // Returns true if the Journeys feature is enabled by feature flag, but
+  // ignores the pref / policy value.
+  bool is_journeys_feature_flag_enabled() const {
+    return is_journeys_feature_flag_enabled_;
+  }
+
+  // Returns true if the Journeys use of Images is enabled.
+  static bool IsJourneysImagesEnabled();
 
   // Used to add and remove observers.
   void AddObserver(Observer* obs);
@@ -140,14 +124,10 @@ class HistoryClustersService : public base::SupportsUserData,
   // have been recorded. References retrieved prior will no longer be valid.
   void CompleteVisitContextAnnotationsIfReady(int64_t nav_id);
 
-  // This is a low-level API that doesn't support querying by search terms or
-  // de-duplication across multiple batches. Any UI should almost certainly use
-  // `QueryClustersState` instead.
-  //
-  // Entrypoint to `HistoryClustersServiceTaskGetMostRecentClusters`.
-  //
   // Returns the freshest clusters created from the user visit history based on
-  // `query`, `begin_time`, and `continuation_params`.
+  // `query`, `filter_params`, `begin_time`, and `continuation_params`.
+  // - `filter_params` represents how the caller wants the clusters to be
+  // filtered.
   // - `begin_time` is an inclusive lower bound. In the general case where the
   //   caller wants to traverse to the start of history, `base::Time()` should
   //   be used.
@@ -157,24 +137,15 @@ class HistoryClustersService : public base::SupportsUserData,
   //   if the caller wants the newest visits.
   // - `recluster`, if true, forces reclustering as if
   //   `persist_clusters_in_history_db` were false.
-  // The returned clusters are sorted in reverse-chronological order based on
-  // their highest scoring visit. The visits within each cluster are sorted by
-  // score, from highest to lowest.
-  //
-  // TODO(tommycli): Investigate entirely hiding access to this low-level method
-  //  behind QueryClustersState.
-  std::unique_ptr<HistoryClustersServiceTaskGetMostRecentClusters>
-  QueryClusters(ClusteringRequestSource clustering_request_source,
-                base::Time begin_time,
-                QueryClustersContinuationParams continuation_params,
-                bool recluster,
-                QueryClustersCallback callback,
-                HistoryClustersServiceTaskGetMostRecentClusters::Source source);
-
-  // Invokes `UpdateClusters()` after a short delay, then again periodically.
-  // E.g., might invoke `UpdateClusters()` initially 5 minutes after startup,
-  // then every 1 hour afterwards.
-  void RepeatedlyUpdateClusters();
+  // The caller is responsible for checking `IsJourneysEnabled()` before calling
+  // this method. Virtual for testing.
+  virtual std::unique_ptr<HistoryClustersServiceTask> QueryClusters(
+      ClusteringRequestSource clustering_request_source,
+      QueryClustersFilterParams filter_params,
+      base::Time begin_time,
+      QueryClustersContinuationParams continuation_params,
+      bool recluster,
+      QueryClustersCallback callback);
 
   // Entrypoint to the `HistoryClustersServiceTaskUpdateClusters`. Updates the
   // persisted clusters in the history DB and invokes `callback` when done.
@@ -189,23 +160,32 @@ class HistoryClustersService : public base::SupportsUserData,
   absl::optional<history::ClusterKeywordData> DoesQueryMatchAnyCluster(
       const std::string& query);
 
-  // Returns true if `url_keyword` matches a URL in a significant cluster. This
-  // may kick off a cache refresh while still immediately returning false.
-  // `url_keyword` is derived from a given URL by ComputeURLKeywordForLookup().
-  // SRP URLs canonicalized by TemplateURLService should be passed in directly.
-  bool DoesURLMatchAnyCluster(const std::string& url_keyword);
-
-  // Clears `all_keywords_cache_` and cancels any pending tasks to populate it.
-  void ClearKeywordCache();
-
   // Prints the keyword bag state to the log messages. For example, a button on
   // chrome://history-clusters-internals triggers this.
   void PrintKeywordBagStateToLogMessage() const;
 
+  // history::HistoryServiceObserver:
+  void OnURLVisited(history::HistoryService* history_service,
+                    const history::URLRow& url_row,
+                    const history::VisitRow& visit_row) override;
+  void OnURLsDeleted(history::HistoryService* history_service,
+                     const history::DeletionInfo& deletion_info) override;
+
  private:
   friend class HistoryClustersServiceTestApi;
+  friend class HistoryClustersServiceTestBase;
+
+  // Invokes `UpdateClusters()` after a short delay, then again periodically.
+  // E.g., might invoke `UpdateClusters()` initially 5 minutes after startup,
+  // then every 1 hour afterwards.
+  void RepeatedlyUpdateClusters();
 
   // Starts a keyword cache refresh, if necessary.
+  // TODO(manukh): `StartKeywordCacheRefresh()` and
+  //  `PopulateClusterKeywordCache()` should be encapsulated into their own task
+  //  to avoid cluttering `HistoryClusterService` with their callbacks. Similar
+  //  to the `HistoryClustersServiceTaskGetMostRecentClusters` and
+  //  `HistoryClustersServiceTaskUpdateClusters` tasks.
   void StartKeywordCacheRefresh();
 
   // This is a callback used for the `QueryClusters()` call from
@@ -216,14 +196,28 @@ class HistoryClustersService : public base::SupportsUserData,
       base::ElapsedTimer total_latency_timer,
       base::Time begin_time,
       std::unique_ptr<KeywordMap> keyword_accumulator,
-      std::unique_ptr<URLKeywordSet> url_keyword_accumulator,
       KeywordMap* cache,
-      URLKeywordSet* url_cache,
       std::vector<history::Cluster> clusters,
       QueryClustersContinuationParams continuation_params);
 
-  // True if Journeys is enabled based on field trial and locale checks.
-  const bool is_journeys_enabled_;
+  // Clears `all_keywords_cache_` and cancels any pending tasks to populate it.
+  void ClearKeywordCache();
+
+  // Reads the "all keywords" and short keyword caches from prefs and
+  // deserializes them.
+  void LoadCachesFromPrefs();
+  // Serializes and writes the short keyword cache to prefs.
+  void WriteShortCacheToPrefs();
+  // Serializes and writes the "all keywords" cache to prefs.
+  void WriteAllCacheToPrefs();
+
+  // Whether keyword caches should persisted via the pref service.
+  const bool persist_caches_to_prefs_;
+
+  // True if Journeys is enabled based on feature flag and locale checks.
+  // But critically, this does NOT check the pref or policy value to see if
+  // either the user or Enterprise has disabled Journeys.
+  const bool is_journeys_feature_flag_enabled_;
 
   // Non-owning pointer, but never nullptr.
   history::HistoryService* const history_service_;
@@ -241,7 +235,6 @@ class HistoryClustersService : public base::SupportsUserData,
   // the cache was generated so we can periodically re-generate.
   // TODO(tommycli): Make a smarter mechanism for regenerating the cache.
   KeywordMap all_keywords_cache_;
-  URLKeywordSet all_url_keywords_cache_;
   base::Time all_keywords_cache_timestamp_;
 
   // Like above, but will represent the clusters newer than
@@ -255,19 +248,16 @@ class HistoryClustersService : public base::SupportsUserData,
   // TODO(manukh) This is a "band aid" fix to missing keywords for recent
   //  visits.
   KeywordMap short_keyword_cache_;
-  URLKeywordSet short_url_keywords_cache_;
   base::Time short_keyword_cache_timestamp_;
 
   // Tracks the current keyword task. Will be `nullptr` or
   // `cache_keyword_query_task_.Done()` will be true if there is no ongoing
   // task.
-  std::unique_ptr<HistoryClustersServiceTaskGetMostRecentClusters>
-      cache_keyword_query_task_;
+  std::unique_ptr<HistoryClustersServiceTask> cache_keyword_query_task_;
 
   // Tracks the current update task. Will be `nullptr` or
   // `update_clusters_task_.Done()` will be true if there is no ongoing task.
-  std::unique_ptr<HistoryClustersServiceTaskUpdateClusters>
-      update_clusters_task_;
+  std::unique_ptr<HistoryClustersServiceTask> update_clusters_task_;
 
   // Used to invoke `UpdateClusters()` on startup after a short delay. See
   // `RepeatedlyUpdateClusters()`'s comment.
@@ -277,10 +267,30 @@ class HistoryClustersService : public base::SupportsUserData,
   // `RepeatedlyUpdateClusters()`'s comment.
   base::RepeatingTimer update_clusters_period_timer_;
 
+  // The time of the last `UpdateClusters()` call. Used for logging and to limit
+  // requests when `persist_on_query` is enabled.
+  base::ElapsedTimer update_clusters_timer_;
+
+  // Whether a synced visit was received since the last `UpdateClusters()` call.
+  // Used to determine whether the full set of persisted clusters needs to be
+  // iterated through when updating cluster triggerability. Always set this to
+  // true at the beginning of the session, so anything that happened at browser
+  // close gets picked up.
+  bool received_synced_visit_since_last_update_ = true;
+
   // A list of observers for this service.
   base::ObserverList<Observer> observers_;
 
-  VisitDeletionObserver visit_deletion_observer_;
+  // Tracks the observed history service, for cleanup.
+  base::ScopedObservation<history::HistoryService,
+                          history::HistoryServiceObserver>
+      history_service_observation_{this};
+
+  std::unique_ptr<ContextClustererHistoryServiceObserver>
+      context_clusterer_observer_;
+
+  // Used to store keyword caches across restarts.
+  raw_ptr<PrefService> pref_service_ = nullptr;
 
   // Weak pointers issued from this factory never get invalidated before the
   // service is destroyed.

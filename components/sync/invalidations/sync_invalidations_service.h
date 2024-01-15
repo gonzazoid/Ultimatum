@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/sync/base/model_type.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -44,6 +44,9 @@ class SyncInvalidationsService : public KeyedService {
   // |listener| has already been added before. When a new |listener| is added,
   // previously received messages will be immediately replayed.
   virtual void AddListener(InvalidationsListener* listener) = 0;
+
+  // Returns whether `listener` was added.
+  virtual bool HasListener(InvalidationsListener* listener) = 0;
 
   // Removes |listener|, does nothing if it wasn't added before. |listener| must
   // not be nullptr.

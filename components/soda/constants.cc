@@ -8,17 +8,27 @@
 
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/notreached.h"
 #include "base/path_service.h"
 #include "base/strings/strcat.h"
+#include "base/strings/string_split.h"
+#include "base/strings/string_util.h"
 #include "build/build_config.h"
 #include "components/component_updater/component_updater_paths.h"
 #include "components/crx_file/id_util.h"
+#include "media/base/media_switches.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/l10n/l10n_util.h"
 
 namespace speech {
+const constexpr char* const kDefaultEnabledLanguages[] = {"fr-FR", "it-IT",
+                                                          "de-DE"};
 
 const char kUsEnglishLocale[] = "en-US";
+
+const char kEnglishLocaleNoCountry[] = "en";
+const char kChineseLocaleNoCountry[] = "cmn";
 
 const char kSodaBinaryInstallationResult[] =
     "SodaInstaller.BinaryInstallationResult";
@@ -140,7 +150,22 @@ absl::optional<SodaLanguagePackComponentConfig> GetLanguageComponentConfig(
     const std::string& language_name) {
   for (const SodaLanguagePackComponentConfig& config :
        kLanguageComponentConfigs) {
-    if (config.language_name == language_name) {
+    if (base::ToLowerASCII(config.language_name) ==
+        base::ToLowerASCII(language_name)) {
+      return config;
+    }
+  }
+
+  return absl::nullopt;
+}
+
+absl::optional<SodaLanguagePackComponentConfig>
+GetLanguageComponentConfigMatchingLanguageSubtag(
+    const std::string& language_name) {
+  for (const SodaLanguagePackComponentConfig& config :
+       kLanguageComponentConfigs) {
+    if (l10n_util::GetLanguage(base::ToLowerASCII(config.language_name)) ==
+        l10n_util::GetLanguage(base::ToLowerASCII(language_name))) {
       return config;
     }
   }
@@ -151,8 +176,7 @@ absl::optional<SodaLanguagePackComponentConfig> GetLanguageComponentConfig(
 LanguageCode GetLanguageCodeByComponentId(const std::string& component_id) {
   for (const SodaLanguagePackComponentConfig& config :
        kLanguageComponentConfigs) {
-    if (crx_file::id_util::GenerateIdFromHash(config.public_key_sha,
-                                              sizeof(config.public_key_sha)) ==
+    if (crx_file::id_util::GenerateIdFromHash(config.public_key_sha) ==
         component_id) {
       return config.language_code;
     }
@@ -183,13 +207,16 @@ LanguageCode GetLanguageCode(const std::string& language_name) {
   return LanguageCode::kNone;
 }
 
-int GetLanguageDisplayName(const std::string& language_name) {
-  absl::optional<SodaLanguagePackComponentConfig> language_config =
-      GetLanguageComponentConfig(language_name);
-  if (language_config.has_value()) {
-    return language_config.value().display_name;
+const std::u16string GetLanguageDisplayName(const std::string& language_name,
+                                            const std::string& display_locale) {
+  if (language_name.substr(0, 3) == kChineseLocaleNoCountry) {
+    return l10n_util::GetDisplayNameForLocale(language_name.substr(0, 8),
+                                              display_locale, true);
+
+  } else {
+    return l10n_util::GetDisplayNameForLocaleWithoutCountry(
+        language_name, display_locale, true);
   }
-  return 0;
 }
 
 const std::string GetInstallationSuccessTimeMetricForLanguagePack(
@@ -214,6 +241,19 @@ const std::string GetInstallationResultMetricForLanguagePack(
   DCHECK(config && config->language_name);
   return base::StrCat({"SodaInstaller.Language.", config->language_name,
                        ".InstallationResult"});
+}
+
+std::vector<std::string> GetEnabledLanguages() {
+  std::vector<std::string> enabled_languages = base::SplitString(
+      base::GetFieldTrialParamValueByFeature(
+          media::kLiveCaptionExperimentalLanguages, "available_languages"),
+      ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
+
+  for (const char* const enabled_language : kDefaultEnabledLanguages) {
+    enabled_languages.push_back(enabled_language);
+  }
+
+  return enabled_languages;
 }
 
 }  // namespace speech

@@ -9,11 +9,10 @@ import android.text.TextUtils;
 
 import androidx.annotation.Nullable;
 
-import org.chromium.base.metrics.RecordHistogram;
-import org.chromium.chrome.browser.autofill.PersonalDataManager.AutofillProfile;
-import org.chromium.chrome.browser.payments.AutofillAddress;
+import org.chromium.chrome.browser.autofill.AutofillAddress;
 import org.chromium.chrome.browser.payments.AutofillContact;
 import org.chromium.chrome.browser.payments.ContactEditor;
+import org.chromium.components.autofill.AutofillProfile;
 import org.chromium.components.payments.JourneyLogger;
 import org.chromium.components.payments.Section;
 
@@ -23,9 +22,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
-/**
- * The data to show in the contact details section where the user can select something.
- */
+/** The data to show in the contact details section where the user can select something. */
 public class ContactDetailsSection extends SectionInformation {
     private final Context mContext;
     private final ContactEditor mContactEditor;
@@ -39,8 +36,11 @@ public class ContactDetailsSection extends SectionInformation {
      * @param contactEditor         The Contact Editor associated with this flow.
      * @param journeyLogger         The JourneyLogger for the current Payment Request.
      */
-    public ContactDetailsSection(Context context, Collection<AutofillProfile> unmodifiableProfiles,
-            ContactEditor contactEditor, JourneyLogger journeyLogger) {
+    public ContactDetailsSection(
+            Context context,
+            Collection<AutofillProfile> unmodifiableProfiles,
+            ContactEditor contactEditor,
+            JourneyLogger journeyLogger) {
         // Initially no items are selected, but they are updated later in the constructor.
         super(PaymentRequestUI.DataType.CONTACT_DETAILS, null);
 
@@ -65,14 +65,17 @@ public class ContactDetailsSection extends SectionInformation {
         // contacts section refresh. The updatedContact can be null when user has added a new
         // shipping address without an email, but the contact info section requires only email
         // address. Null updatedContact should not be added to the mItems list.
-        @Nullable AutofillContact updatedContact =
+        @Nullable
+        AutofillContact updatedContact =
                 createAutofillContactFromProfile(editedAddress.getProfile());
         if (null == updatedContact) return;
 
         for (int i = 0; i < mItems.size(); i++) {
             AutofillContact existingContact = (AutofillContact) mItems.get(i);
-            if (existingContact.getProfile().getGUID().equals(
-                        editedAddress.getProfile().getGUID())) {
+            if (existingContact
+                    .getProfile()
+                    .getGUID()
+                    .equals(editedAddress.getProfile().getGUID())) {
                 // We need to replace |existingContact| with |updatedContact|.
                 mItems.remove(i);
                 mItems.add(i, updatedContact);
@@ -108,12 +111,14 @@ public class ContactDetailsSection extends SectionInformation {
 
         // Order the contacts so the ones that have most of the required information are put first.
         // The sort is stable, so contacts with the same relevance score are sorted by frecency.
-        Collections.sort(contacts, new Comparator<AutofillContact>() {
-            @Override
-            public int compare(AutofillContact a, AutofillContact b) {
-                return b.getRelevanceScore() - a.getRelevanceScore();
-            }
-        });
+        Collections.sort(
+                contacts,
+                new Comparator<AutofillContact>() {
+                    @Override
+                    public int compare(AutofillContact a, AutofillContact b) {
+                        return b.getRelevanceScore() - a.getRelevanceScore();
+                    }
+                });
 
         // This algorithm is quadratic, but since the number of contacts is generally very small
         // ( < 10) a faster but more complicated algorithm would be overkill.
@@ -145,59 +150,46 @@ public class ContactDetailsSection extends SectionInformation {
         // TODO(crbug.com/746062): Remove this once a journeyLogger is passed in tests.
         if (journeyLogger != null) {
             // Log the number of suggested contact info.
-            journeyLogger.setNumberOfSuggestionsShown(Section.CONTACT_INFO, uniqueContacts.size(),
+            journeyLogger.setNumberOfSuggestionsShown(
+                    Section.CONTACT_INFO,
+                    uniqueContacts.size(),
                     firstCompleteContactIndex != SectionInformation.NO_SELECTION);
         }
-
-        // Record all required and missing fields of the most complete suggestion.
-        recordMissingContactFields(uniqueContacts.isEmpty() ? null : uniqueContacts.get(0));
 
         updateItemsWithCollection(firstCompleteContactIndex, uniqueContacts);
     }
 
-    @Nullable
-    private AutofillContact createAutofillContactFromProfile(AutofillProfile profile) {
+    private @Nullable AutofillContact createAutofillContactFromProfile(AutofillProfile profile) {
         boolean requestPayerName = mContactEditor.getRequestPayerName();
         boolean requestPayerPhone = mContactEditor.getRequestPayerPhone();
         boolean requestPayerEmail = mContactEditor.getRequestPayerEmail();
-        String name = requestPayerName && !TextUtils.isEmpty(profile.getFullName())
-                ? profile.getFullName()
-                : null;
-        String phone = requestPayerPhone && !TextUtils.isEmpty(profile.getPhoneNumber())
-                ? profile.getPhoneNumber()
-                : null;
-        String email = requestPayerEmail && !TextUtils.isEmpty(profile.getEmailAddress())
-                ? profile.getEmailAddress()
-                : null;
+        String name =
+                requestPayerName && !TextUtils.isEmpty(profile.getFullName())
+                        ? profile.getFullName()
+                        : null;
+        String phone =
+                requestPayerPhone && !TextUtils.isEmpty(profile.getPhoneNumber())
+                        ? profile.getPhoneNumber()
+                        : null;
+        String email =
+                requestPayerEmail && !TextUtils.isEmpty(profile.getEmailAddress())
+                        ? profile.getEmailAddress()
+                        : null;
 
         if (name != null || phone != null || email != null) {
             @ContactEditor.CompletionStatus
             int completionStatus = mContactEditor.checkContactCompletionStatus(name, phone, email);
-            return new AutofillContact(mContext, profile, name, phone, email, completionStatus,
-                    requestPayerName, requestPayerPhone, requestPayerEmail);
+            return new AutofillContact(
+                    mContext,
+                    profile,
+                    name,
+                    phone,
+                    email,
+                    completionStatus,
+                    requestPayerName,
+                    requestPayerPhone,
+                    requestPayerEmail);
         }
         return null;
-    }
-
-    // Bit field values are identical to ProfileFields from payments_profile_comparator.h
-    private void recordMissingContactFields(AutofillContact contact) {
-        int missingFields = 0;
-        if (mContactEditor.getRequestPayerName()
-                && (contact == null || TextUtils.isEmpty(contact.getPayerName()))) {
-            missingFields |= ContactEditor.INVALID_NAME;
-        }
-        if (mContactEditor.getRequestPayerPhone()
-                && (contact == null || TextUtils.isEmpty(contact.getPayerPhone()))) {
-            missingFields |= ContactEditor.INVALID_PHONE_NUMBER;
-        }
-        if (mContactEditor.getRequestPayerEmail()
-                && (contact == null || TextUtils.isEmpty(contact.getPayerEmail()))) {
-            missingFields |= ContactEditor.INVALID_EMAIL;
-        }
-
-        if (missingFields != 0) {
-            RecordHistogram.recordSparseHistogram(
-                    "PaymentRequest.MissingContactFields", missingFields);
-        }
     }
 }

@@ -9,33 +9,30 @@
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "base/feature_list.h"
-#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
+#include "base/test/gtest_tags.h"
 #include "base/time/time.h"
-#include "chrome/browser/ash/app_mode/app_session_ash.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_types.h"
 #include "chrome/browser/ash/app_mode/kiosk_profile_loader.h"
+#include "chrome/browser/ash/app_mode/kiosk_system_session.h"
 #include "chrome/browser/ash/app_mode/web_app/web_kiosk_app_manager.h"
 #include "chrome/browser/ash/login/app_mode/kiosk_launch_controller.h"
 #include "chrome/browser/ash/login/app_mode/test/kiosk_base_test.h"
-#include "chrome/browser/ash/login/app_mode/test/test_browser_closed_waiter.h"
-#include "chrome/browser/ash/login/test/device_state_mixin.h"
+#include "chrome/browser/ash/login/app_mode/test/kiosk_test_helpers.h"
+#include "chrome/browser/ash/login/app_mode/test/web_kiosk_base_test.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
-#include "chrome/browser/ash/login/test/kiosk_test_helpers.h"
-#include "chrome/browser/ash/login/test/network_portal_detector_mixin.h"
-#include "chrome/browser/ash/login/test/oobe_base_test.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/ownership/fake_owner_settings_service.h"
-#include "chrome/browser/ash/policy/core/device_local_account.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/test/test_browser_closed_waiter.h"
 #include "chrome/browser/ui/webui/ash/login/error_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/signin_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
 #include "chrome/browser/web_applications/external_install_options.h"
 #include "chrome/browser/web_applications/externally_managed_app_manager.h"
-#include "chrome/browser/web_applications/user_display_mode.h"
+#include "chrome/browser/web_applications/mojom/user_display_mode.mojom.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
@@ -52,9 +49,6 @@ namespace {
 
 using ::testing::_;
 
-const char kAppInstallUrl[] = "https://app.com/install";
-const char kAppLaunchUrl[] = "https://app.com/launch";
-const char16_t kAppTitle[] = u"title.";
 const test::UIPath kNetworkConfigureScreenContinueButton = {"error-message",
                                                             "continueButton"};
 
@@ -62,63 +56,17 @@ class FakeKioskProfileLoaderDelegate : public KioskProfileLoader::Delegate {
  public:
   MOCK_METHOD1(OnProfileLoaded, void(Profile*));
   MOCK_METHOD1(OnProfileLoadFailed, void(KioskAppLaunchError::Error));
-  MOCK_METHOD1(OnOldEncryptionDetected, void(const UserContext&));
+  MOCK_METHOD1(OnOldEncryptionDetected, void(std::unique_ptr<UserContext>));
 };
 
-class WebKioskTest : public OobeBaseTest {
+class WebKioskTest : public WebKioskBaseTest {
  public:
-  WebKioskTest()
-      : account_id_(
-            AccountId::FromUserEmail(policy::GenerateDeviceLocalAccountUserId(
-                kAppInstallUrl,
-                policy::DeviceLocalAccount::TYPE_WEB_KIOSK_APP))) {
-    set_exit_when_last_browser_closes(false);
-    needs_background_networking_ = true;
-    skip_splash_wait_override_ =
-        KioskLaunchController::SkipSplashScreenWaitForTesting();
-    network_wait_override_ =
-        KioskLaunchController::SetNetworkWaitForTesting(base::Seconds(0));
-  }
+  WebKioskTest() = default;
 
   WebKioskTest(const WebKioskTest&) = delete;
   WebKioskTest& operator=(const WebKioskTest&) = delete;
 
-  void TearDownOnMainThread() override {
-    settings_.reset();
-    OobeBaseTest::TearDownOnMainThread();
-  }
-
-  void SetOnline(bool online) {
-    network_portal_detector_.SimulateDefaultNetworkState(
-        online ? NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_ONLINE
-               : NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_OFFLINE);
-  }
-
-  const AccountId& account_id() { return account_id_; }
-
-  void PrepareAppLaunch() {
-    std::vector<policy::DeviceLocalAccount> device_local_accounts = {
-        policy::DeviceLocalAccount(
-            policy::WebKioskAppBasicInfo(kAppInstallUrl, "", ""),
-            kAppInstallUrl)};
-
-    settings_ = std::make_unique<ScopedDeviceSettings>();
-    int ui_update_count = LoginScreenTestApi::GetUiUpdateCount();
-    policy::SetDeviceLocalAccounts(settings_->owner_settings_service(),
-                                   device_local_accounts);
-    // Wait for the Kiosk App configuration to reload.
-    LoginScreenTestApi::WaitForUiUpdate(ui_update_count);
-  }
-
   void MakeAppAlreadyInstalled() {
-    if (!base::FeatureList::IsEnabled(::features::kKioskEnableAppService)) {
-      WebAppInstallInfo info;
-      info.start_url = GURL(kAppLaunchUrl);
-      info.title = kAppTitle;
-      WebKioskAppManager::Get()->UpdateAppByAccountId(account_id(), info);
-      return;
-    }
-
     // Intercept URL loader to avoid installing a placeholder app.
     content::URLLoaderInterceptor url_interceptor(base::BindRepeating(
         [](content::URLLoaderInterceptor::RequestParams* params) {
@@ -139,7 +87,8 @@ class WebKioskTest : public OobeBaseTest {
           auto* provider =
               web_app::WebAppProvider::GetForLocalAppsUnchecked(profile);
           web_app::ExternalInstallOptions install_options(
-              GURL(kAppInstallUrl), web_app::UserDisplayMode::kStandalone,
+              GURL(kAppInstallUrl),
+              web_app::mojom::UserDisplayMode::kStandalone,
               web_app::ExternalInstallSource::kKiosk);
           install_options.install_placeholder = true;
           provider->externally_managed_app_manager().InstallNow(
@@ -158,24 +107,13 @@ class WebKioskTest : public OobeBaseTest {
     loop.Run();
   }
 
-  bool LaunchApp() {
-    return LoginScreenTestApi::LaunchApp(
-        WebKioskAppManager::Get()->GetAppByAccountId(account_id())->app_id());
-  }
-
-  void InitializeRegularOnlineKiosk() {
-    SetOnline(true);
-    PrepareAppLaunch();
-    LaunchApp();
-    KioskSessionInitializedWaiter().Wait();
-  }
-
   void SetBlockAppLaunch(bool block) {
-    if (block)
+    if (block) {
       block_app_launch_override_ =
           KioskLaunchController::BlockAppLaunchForTesting();
-    else
+    } else {
       block_app_launch_override_.reset();
+    }
   }
 
   void WaitNetworkConfigureScreenAndContinueWithOnlineState(
@@ -220,18 +158,7 @@ class WebKioskTest : public OobeBaseTest {
   }
 
  private:
-  NetworkPortalDetectorMixin network_portal_detector_{&mixin_host_};
-  DeviceStateMixin device_state_mixin_{
-      &mixin_host_, DeviceStateMixin::State::OOBE_COMPLETED_CLOUD_ENROLLED};
-  const AccountId account_id_;
-  std::unique_ptr<ScopedDeviceSettings> settings_;
-
-  std::unique_ptr<base::AutoReset<bool>> skip_splash_wait_override_;
-  std::unique_ptr<base::AutoReset<base::TimeDelta>> network_wait_override_;
   std::unique_ptr<base::AutoReset<bool>> block_app_launch_override_;
-  // Web kiosks do not support consumer-based kiosk. Network can always be
-  // configured.
-  ScopedCanConfigureNetwork can_configure_network_override_{true, false};
 };
 
 // Runs the kiosk app when the network is always present.
@@ -272,6 +199,9 @@ IN_PROC_BROWSER_TEST_F(WebKioskTest, PRE_AlreadyInstalledOffline) {
 
 // Runs the kiosk app offline when it has been already installed.
 IN_PROC_BROWSER_TEST_F(WebKioskTest, AlreadyInstalledOffline) {
+  base::AddFeatureIdTagToTestResult(
+      "screenplay-35e430a3-04b3-46a7-aa0a-207a368b8cba");
+
   SetOnline(false);
   PrepareAppLaunch();
   LaunchApp();
@@ -289,7 +219,7 @@ IN_PROC_BROWSER_TEST_F(WebKioskTest, LaunchWithConfigureAcceleratorPressed) {
   // Block app launch after it is being installed.
   SetBlockAppLaunch(true);
   OobeScreenWaiter(AppLaunchSplashScreenView::kScreenId).Wait();
-  ASSERT_TRUE(ash::LoginScreenTestApi::PressAccelerator(
+  ASSERT_TRUE(LoginScreenTestApi::PressAccelerator(
       ui::Accelerator(ui::VKEY_N, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN)));
   WaitNetworkConfigureScreenAndContinueWithOnlineState(
       /* require_network*/ true);
@@ -311,20 +241,21 @@ IN_PROC_BROWSER_TEST_F(WebKioskTest,
 IN_PROC_BROWSER_TEST_F(WebKioskTest,
                        AlreadyInstalledWithConfigureAcceleratorPressed) {
   SetOnline(false);
-  PrepareAppLaunch();
   // Set the threshold to a max value to disable the offline message screen,
-  // otherwise it would interfere with app launch.
+  // otherwise it would interfere with app launch. This is needed as this is
+  // happening on the GaiaScreen in terms of screens of WizardController.
   LoginDisplayHost::default_host()
       ->GetOobeUI()
-      ->signin_screen_handler()
-      ->SetOfflineTimeoutForTesting(base::TimeDelta::Max());
+      ->GetHandler<GaiaScreenHandler>()
+      ->set_offline_timeout_for_testing(base::TimeDelta::Max());
+  PrepareAppLaunch();
   LaunchApp();
 
   // Block app launch after it is being installed.
   SetBlockAppLaunch(true);
   OobeScreenWaiter(AppLaunchSplashScreenView::kScreenId).Wait();
 
-  ASSERT_TRUE(ash::LoginScreenTestApi::PressAccelerator(
+  ASSERT_TRUE(LoginScreenTestApi::PressAccelerator(
       ui::Accelerator(ui::VKEY_N, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN)));
 
   WaitNetworkConfigureScreenAndContinueWithOnlineState(
@@ -365,8 +296,8 @@ IN_PROC_BROWSER_TEST_F(WebKioskTest, KeyboardConfigPolicy) {
 IN_PROC_BROWSER_TEST_F(WebKioskTest, OpenA11ySettings) {
   InitializeRegularOnlineKiosk();
 
-  Browser* settings_browser =
-      OpenA11ySettingsBrowser(WebKioskAppManager::Get()->app_session());
+  Browser* settings_browser = OpenA11ySettingsBrowser(
+      WebKioskAppManager::Get()->kiosk_system_session());
 
   // Make sure the settings browser was opened.
   ASSERT_NE(settings_browser, nullptr);
@@ -380,23 +311,24 @@ IN_PROC_BROWSER_TEST_F(WebKioskTest, CloseSettingWindowIfOnlyOpen) {
   EXPECT_EQ(BrowserList::GetInstance()->size(), 1u);
   Browser* initial_browser = BrowserList::GetInstance()->get(0);
 
-  AppSessionAsh* app_session = WebKioskAppManager::Get()->app_session();
+  KioskSystemSession* session =
+      WebKioskAppManager::Get()->kiosk_system_session();
 
-  Browser* settings_browser = OpenA11ySettingsBrowser(app_session);
+  Browser* settings_browser = OpenA11ySettingsBrowser(session);
   // Make sure the settings browser was opened.
   ASSERT_NE(settings_browser, nullptr);
   EXPECT_EQ(BrowserList::GetInstance()->size(), 2u);
 
   // Close the initial browser.
   initial_browser->window()->Close();
-  // Ensure |settings_browser| is closed too.
+  // Ensure `settings_browser` is closed too.
   TestBrowserClosedWaiter settings_browser_closed_waiter{settings_browser};
-  settings_browser_closed_waiter.WaitUntilClosed();
+  ASSERT_TRUE(settings_browser_closed_waiter.WaitUntilClosed());
 
   // No browsers are opened in the web kiosk session, so it should be
   // terminated.
   EXPECT_EQ(BrowserList::GetInstance()->size(), 0u);
-  EXPECT_TRUE(app_session->is_shutting_down());
+  EXPECT_TRUE(session->is_shutting_down());
 }
 
 // Closing the a11y settings window should not exit the web app kiosk
@@ -406,22 +338,23 @@ IN_PROC_BROWSER_TEST_F(WebKioskTest, NotExitIfCloseSettingsWindow) {
   // The initial browser should exist in the web kiosk session.
   EXPECT_EQ(BrowserList::GetInstance()->size(), 1u);
 
-  AppSessionAsh* app_session = WebKioskAppManager::Get()->app_session();
+  KioskSystemSession* session =
+      WebKioskAppManager::Get()->kiosk_system_session();
 
-  Browser* settings_browser = OpenA11ySettingsBrowser(app_session);
+  Browser* settings_browser = OpenA11ySettingsBrowser(session);
   // Make sure the settings browser was opened.
   ASSERT_NE(settings_browser, nullptr);
   EXPECT_EQ(BrowserList::GetInstance()->size(), 2u);
 
-  // Close |settings_browser| and ensure it is closed.
+  // Close `settings_browser` and ensure it is closed.
   settings_browser->window()->Close();
   TestBrowserClosedWaiter settings_browser_closed_waiter{settings_browser};
-  settings_browser_closed_waiter.WaitUntilClosed();
+  ASSERT_TRUE(settings_browser_closed_waiter.WaitUntilClosed());
 
   // The initial browsers should still be opened and so the kiosk session should
   // not be terminated.
   EXPECT_EQ(BrowserList::GetInstance()->size(), 1u);
-  EXPECT_FALSE(app_session->is_shutting_down());
+  EXPECT_FALSE(session->is_shutting_down());
 }
 
 }  // namespace

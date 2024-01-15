@@ -23,7 +23,6 @@
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding_macros.h"
 #include "third_party/blink/renderer/platform/bindings/v8_object_constructor.h"
-#include "third_party/blink/renderer/platform/scheduler/common/features.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 
 #include "v8/include/v8.h"
@@ -50,10 +49,7 @@ AnimationWorkletGlobalScope::AnimationWorkletGlobalScope(
     WorkerThread* thread)
     : WorkletGlobalScope(std::move(creation_params),
                          thread->GetWorkerReportingProxy(),
-                         thread,
-                         /*create_microtask_queue=*/
-                         base::FeatureList::IsEnabled(
-                             scheduler::kMicrotaskQueuePerAnimationWorklet)) {}
+                         thread) {}
 
 AnimationWorkletGlobalScope::~AnimationWorkletGlobalScope() = default;
 
@@ -307,7 +303,7 @@ void AnimationWorkletGlobalScope::MigrateAnimatorsTo(
     scoped_refptr<SerializedScriptValue> serialized_state;
     if (animator->IsStateful()) {
       ExceptionState exception_state(script_state->GetIsolate(),
-                                     ExceptionState::kExecutionContext,
+                                     ExceptionContextType::kOperationInvoke,
                                      "Animator", "state");
       // If an animator state function throws or the state is not
       // serializable, the animator will be removed from the global scope.
@@ -346,7 +342,7 @@ AnimatorDefinition* AnimationWorkletGlobalScope::FindDefinitionForTest(
     const String& name) {
   auto it = animator_definitions_.find(name);
   if (it != animator_definitions_.end())
-    return it->value;
+    return it->value.Get();
   return nullptr;
 }
 

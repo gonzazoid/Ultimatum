@@ -5,8 +5,9 @@
 #ifndef REMOTING_BASE_AUTO_THREAD_TASK_RUNNER_H_
 #define REMOTING_BASE_AUTO_THREAD_TASK_RUNNER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/task/single_thread_task_runner.h"
+#include "build/buildflag.h"
 
 namespace remoting {
 
@@ -15,6 +16,14 @@ namespace remoting {
 // when no more references remain.
 class AutoThreadTaskRunner : public base::SingleThreadTaskRunner {
  public:
+#if BUILDFLAG(IS_CHROMEOS)
+  // Constructs an instance of |AutoThreadTaskRunner| wrapping |task_runner|.
+  // This c'tor should be used when the underlying thread is not owned, such as
+  // when this instance is running on a browser thread on ChromeOS.
+  explicit AutoThreadTaskRunner(
+      scoped_refptr<base::SingleThreadTaskRunner> task_runner);
+#endif
+
   // Constructs an instance of |AutoThreadTaskRunner| wrapping |task_runner|.
   // |stop_task| is posted to |task_runner| when the last reference to
   // the AutoThreadTaskRunner is dropped.

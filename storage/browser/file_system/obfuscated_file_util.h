@@ -13,11 +13,11 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
 #include "base/files/file.h"
 #include "base/files/file_error_or.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
@@ -45,7 +45,7 @@ class SpecialStoragePolicy;
 // Class representing the key for directories_. NOTE: The `bucket` value is
 // optional due to usage of ObfuscatedFileUtil where the type is not kTemporary
 // (i.e. kPersistent or kSyncable). For all non-temporary types, expect the
-// bucket member value to be absl::nullopt. The class is implemented as such to
+// bucket member value to be std::nullopt. The class is implemented as such to
 // avoid mapping the same StorageKey to potentially different bucket values,
 // which would cause directories_ lookup errors. NOTE: The `type_string` value
 // is empty when designating a "top-level directory" or a directory that
@@ -66,11 +66,11 @@ class DatabaseKey {
   DatabaseKey& operator=(DatabaseKey&& other);
 
   DatabaseKey(const blink::StorageKey& storage_key,
-              const absl::optional<BucketLocator>& bucket,
+              const std::optional<BucketLocator>& bucket,
               const std::string& type_string);
 
   const blink::StorageKey& storage_key() const { return storage_key_; }
-  const absl::optional<BucketLocator>& bucket() const { return bucket_; }
+  const std::optional<BucketLocator>& bucket() const { return bucket_; }
   const std::string& type() const { return type_; }
 
   bool operator==(const DatabaseKey& other) const;
@@ -79,7 +79,7 @@ class DatabaseKey {
 
  private:
   blink::StorageKey storage_key_;
-  absl::optional<BucketLocator> bucket_;
+  std::optional<BucketLocator> bucket_;
   std::string type_;
 };
 
@@ -127,9 +127,9 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) ObfuscatedFileUtil
    public:
     virtual ~AbstractStorageKeyEnumerator() = default;
 
-    // Returns the next StorageKey. Returns absl::nullopt if there are no more
+    // Returns the next StorageKey. Returns std::nullopt if there are no more
     // StorageKeys.
-    virtual absl::optional<blink::StorageKey> Next() = 0;
+    virtual std::optional<blink::StorageKey> Next() = 0;
 
     // Returns the current StorageKey's information.
     // `type_string` must be ascii string.
@@ -143,7 +143,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) ObfuscatedFileUtil
   // filesystem directory. `known_type_strings` are known type string names that
   // this file system should care about. This info is used to determine whether
   // we could delete the entire origin directory or not in
-  // DeleteDirectoryForStorageKeyAndType. If no directory for any known type
+  // DeleteDirectoryForBucketAndType. If no directory for any known type
   // exists the origin directory may get deleted when one StorageKey/type pair
   // is deleted. NOTE: type strings are not mapped 1-to-1 with FileSystemType,
   // and as a result, directories should only be directly compared using type
@@ -218,7 +218,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) ObfuscatedFileUtil
   // Returns a base::FileError if the directory is undefined.
   base::FileErrorOr<base::FilePath> GetDirectoryForBucketAndType(
       const BucketLocator& bucket_locator,
-      const absl::optional<FileSystemType>& type,
+      const std::optional<FileSystemType>& type,
       bool create);
 
   // Gets the topmost directory specific to this StorageKey and type.  This will
@@ -231,22 +231,15 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) ObfuscatedFileUtil
   // `create` is false).
   base::FileErrorOr<base::FilePath> GetDirectoryForStorageKeyAndType(
       const blink::StorageKey& storage_key,
-      const absl::optional<FileSystemType>& type,
+      const std::optional<FileSystemType>& type,
       bool create);
-
-  // Deletes the topmost directory specific to this StorageKey and type. This
-  // will delete its directory database. Deletes the topmost StorageKey
-  // directory if `type` is absl::nullopt.
-  bool DeleteDirectoryForStorageKeyAndType(
-      const blink::StorageKey& storage_key,
-      const absl::optional<FileSystemType>& type);
 
   // Deletes the topmost directory specific to this BucketLocator and type. This
   // will delete its directory database. Deletes the topmost bucket
-  // directory if `type` is absl::nullopt.
+  // directory if `type` is std::nullopt.
   bool DeleteDirectoryForBucketAndType(
       const BucketLocator& bucket_locator,
-      const absl::optional<FileSystemType>& type);
+      const std::optional<FileSystemType>& type);
 
   // This method and all methods of its returned class must be called only on
   // the FILE thread.  The caller is responsible for deleting the returned
@@ -254,16 +247,10 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) ObfuscatedFileUtil
   std::unique_ptr<AbstractStorageKeyEnumerator> CreateStorageKeyEnumerator();
 
   // Deletes a directory database from the database list and destroys the
-  // database on the disk corresponding to the provided StorageKey and type.
-  void DestroyDirectoryDatabaseForStorageKey(
-      const blink::StorageKey& storage_key,
-      const absl::optional<FileSystemType>& type);
-
-  // Deletes a directory database from the database list and destroys the
   // database on the disk corresponding to the provided bucket locator and type.
   void DestroyDirectoryDatabaseForBucket(
       const BucketLocator& bucket_locator,
-      const absl::optional<FileSystemType>& type);
+      const std::optional<FileSystemType>& type);
 
   // Computes a cost for storing a given file in the obfuscated FSFU.
   // As the cost of a file is independent of the cost of its parent directories,
@@ -350,13 +337,6 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) ObfuscatedFileUtil
   // filesystem.
   base::FilePath DataPathToLocalPath(const FileSystemURL& url,
                                      const base::FilePath& data_file_path);
-
-  // Deletes a directory database from the database list and destroys the
-  // database on the disk.
-  void DestroyDirectoryDatabaseHelper(
-      const absl::optional<BucketLocator>& bucket_locator,
-      const blink::StorageKey& storage_key,
-      const absl::optional<FileSystemType>& type);
 
   // This returns nullptr if `create` flag is false and a filesystem does not
   // exist for the given `url`.

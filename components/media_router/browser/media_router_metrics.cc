@@ -50,34 +50,6 @@ std::string GetHistogramNameForProvider(
   }
 }
 
-std::string GetUiName(UiType ui) {
-  switch (ui) {
-    case UiType::kCastDialog:
-      return "CastHarmony";
-    case UiType::kGlobalMediaControls:
-      return "GlobalMediaControls";
-  }
-}
-
-std::string GetDeviceCountHistogramName(
-    const std::string& ui,
-    MediaRouterDialogActivationLocation activation_location,
-    mojom::MediaRouteProviderId provider,
-    bool is_available) {
-  std::string trigger;
-  switch (activation_location) {
-    case MediaRouterDialogActivationLocation::PAGE:
-      trigger = "PresentationApi";
-      break;
-    default:
-      trigger = "BrowserUi";
-  }
-  std::string mrp = ProviderIdToString(provider);
-  std::string state = is_available ? "Available" : "Unavailable";
-  return base::StrCat({MediaRouterMetrics::kHistogramUiDeviceCount, ".", ui,
-                       ".", trigger, ".", mrp, ".", state});
-}
-
 PresentationUrlType GetPresentationUrlType(const GURL& url) {
   if (url.SchemeIs(kDialPresentationUrlScheme))
     return PresentationUrlType::kDial;
@@ -103,8 +75,6 @@ MediaRouterMetrics::MediaRouterMetrics() = default;
 MediaRouterMetrics::~MediaRouterMetrics() = default;
 
 // static
-const char MediaRouterMetrics::kHistogramCloseLatency[] =
-    "MediaRouter.Ui.Action.CloseLatency";
 const char MediaRouterMetrics::kHistogramIconClickLocation[] =
     "MediaRouter.Icon.Click.Location";
 const char MediaRouterMetrics::kHistogramMediaRouterFileFormat[] =
@@ -115,28 +85,12 @@ const char MediaRouterMetrics::kHistogramMediaSinkType[] =
     "MediaRouter.Sink.SelectedType";
 const char MediaRouterMetrics::kHistogramPresentationUrlType[] =
     "MediaRouter.PresentationRequest.AvailabilityUrlType";
-const char MediaRouterMetrics::kHistogramRouteCreationOutcome[] =
-    "MediaRouter.Route.CreationOutcome";
-const char MediaRouterMetrics::kHistogramStartLocalLatency[] =
-    "MediaRouter.Ui.Action.StartLocal.Latency";
-const char MediaRouterMetrics::kHistogramStartLocalPosition[] =
-    "MediaRouter.Ui.Action.StartLocalPosition";
-const char MediaRouterMetrics::kHistogramStartLocalSessionSuccessful[] =
-    "MediaRouter.Ui.Action.StartLocalSessionSuccessful";
-const char MediaRouterMetrics::kHistogramStopRoute[] =
-    "MediaRouter.Ui.Action.StopRoute";
 const char MediaRouterMetrics::kHistogramUiDeviceCount[] =
     "MediaRouter.Ui.Device.Count";
 const char MediaRouterMetrics::kHistogramUiDialogIconStateAtOpen[] =
     "MediaRouter.Ui.Dialog.IconStateAtOpen";
 const char MediaRouterMetrics::kHistogramUiDialogLoadedWithData[] =
     "MediaRouter.Ui.Dialog.LoadedWithData";
-const char MediaRouterMetrics::kHistogramUiDialogPaint[] =
-    "MediaRouter.Ui.Dialog.Paint";
-const char MediaRouterMetrics::kHistogramUiFirstAction[] =
-    "MediaRouter.Ui.FirstAction";
-const char MediaRouterMetrics::kHistogramUiIconStateAtInit[] =
-    "MediaRouter.Ui.IconStateAtInit";
 const char MediaRouterMetrics::kHistogramUiAndroidDialogType[] =
     "MediaRouter.Ui.Android.DialogType";
 const char MediaRouterMetrics::kHistogramUiAndroidDialogAction[] =
@@ -161,48 +115,16 @@ void MediaRouterMetrics::RecordMediaRouterDialogActivationLocation(
 }
 
 // static
-void MediaRouterMetrics::RecordMediaRouterDialogPaint(
-    const base::TimeDelta& delta) {
-  UMA_HISTOGRAM_TIMES(kHistogramUiDialogPaint, delta);
-}
-
-// static
 void MediaRouterMetrics::RecordMediaRouterDialogLoaded(
     const base::TimeDelta& delta) {
   UMA_HISTOGRAM_TIMES(kHistogramUiDialogLoadedWithData, delta);
 }
 
 // static
-void MediaRouterMetrics::RecordCloseDialogLatency(
-    const base::TimeDelta& delta) {
-  UMA_HISTOGRAM_TIMES(kHistogramCloseLatency, delta);
-}
-
-// static
-void MediaRouterMetrics::RecordMediaRouterInitialUserAction(
-    MediaRouterUserAction action) {
-  DCHECK_LT(static_cast<int>(action),
-            static_cast<int>(MediaRouterUserAction::TOTAL_COUNT));
-  UMA_HISTOGRAM_ENUMERATION(
-      kHistogramUiFirstAction, static_cast<int>(action),
-      static_cast<int>(MediaRouterUserAction::TOTAL_COUNT));
-}
-
-// static
-void MediaRouterMetrics::RecordRouteCreationOutcome(
-    MediaRouterRouteCreationOutcome outcome) {
-  DCHECK_LT(static_cast<int>(outcome),
-            static_cast<int>(MediaRouterRouteCreationOutcome::TOTAL_COUNT));
-  UMA_HISTOGRAM_ENUMERATION(
-      kHistogramRouteCreationOutcome, static_cast<int>(outcome),
-      static_cast<int>(MediaRouterRouteCreationOutcome::TOTAL_COUNT));
-}
-
-// static
 void MediaRouterMetrics::RecordMediaRouterFileFormat(
     const media::container_names::MediaContainerName format) {
-  UMA_HISTOGRAM_ENUMERATION(kHistogramMediaRouterFileFormat, format,
-                            media::container_names::CONTAINER_MAX + 1);
+  base::UmaHistogramEnumeration(
+      kHistogramMediaRouterFileFormat, format);
 }
 
 // static
@@ -240,82 +162,13 @@ void MediaRouterMetrics::RecordMediaSinkTypeForCastDialog(
 }
 
 // static
-void MediaRouterMetrics::RecordMediaSinkTypeWhenCastAndDialPresent(
-    SinkIconType sink_icon_type,
-    UiType ui) {
-  UMA_HISTOGRAM_ENUMERATION(
-      base::StrCat(
-          {kHistogramMediaSinkType, ".CastAndDialPresent.", GetUiName(ui)}),
-      sink_icon_type, SinkIconType::TOTAL_COUNT);
-}
-
-// static
 void MediaRouterMetrics::RecordDeviceCount(int device_count) {
   UMA_HISTOGRAM_COUNTS_100(kHistogramUiDeviceCount, device_count);
 }
 
 // static
-void MediaRouterMetrics::RecordGmcDeviceCount(
-    MediaRouterDialogActivationLocation activation_location,
-    mojom::MediaRouteProviderId provider,
-    bool is_available,
-    int count) {
-  base::UmaHistogramCounts100(
-      GetDeviceCountHistogramName("GlobalMediaControls", activation_location,
-                                  provider, is_available),
-      count);
-}
-
-// static
-void MediaRouterMetrics::RecordCastDialogDeviceCount(
-    MediaRouterDialogActivationLocation activation_location,
-    mojom::MediaRouteProviderId provider,
-    bool is_available,
-    int count) {
-  base::UmaHistogramCounts100(
-      GetDeviceCountHistogramName("CastHarmony", activation_location, provider,
-                                  is_available),
-      count);
-}
-
-// static
-void MediaRouterMetrics::RecordStartRouteDeviceIndex(int index) {
-  base::UmaHistogramSparse(kHistogramStartLocalPosition, std::min(index, 100));
-}
-
-// static
-void MediaRouterMetrics::RecordStartLocalSessionLatency(
-    const base::TimeDelta& delta) {
-  UMA_HISTOGRAM_TIMES(kHistogramStartLocalLatency, delta);
-}
-
-// static
-void MediaRouterMetrics::RecordStartLocalSessionSuccessful(bool success) {
-  UMA_HISTOGRAM_BOOLEAN(kHistogramStartLocalSessionSuccessful, success);
-}
-
-// static
-void MediaRouterMetrics::RecordStopLocalRoute() {
-  // Local routes have the enum value 0.
-  UMA_HISTOGRAM_BOOLEAN(kHistogramStopRoute, 0);
-}
-
-// static
-void MediaRouterMetrics::RecordStopRemoteRoute() {
-  // Remote routes have the enum value 1.
-  UMA_HISTOGRAM_BOOLEAN(kHistogramStopRoute, 1);
-}
-
-// static
 void MediaRouterMetrics::RecordIconStateAtDialogOpen(bool is_pinned) {
   UMA_HISTOGRAM_BOOLEAN(kHistogramUiDialogIconStateAtOpen, is_pinned);
-}
-
-// static
-void MediaRouterMetrics::RecordIconStateAtInit(bool is_pinned) {
-  // Since this gets called only rarely, use base::UmaHistogramBoolean() to
-  // avoid instantiating the caching code.
-  base::UmaHistogramBoolean(kHistogramUiIconStateAtInit, is_pinned);
 }
 
 // static

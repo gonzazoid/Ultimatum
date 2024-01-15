@@ -6,9 +6,10 @@
 #define CHROMEOS_ASH_SERVICES_MULTIDEVICE_SETUP_PUBLIC_CPP_MULTIDEVICE_SETUP_CLIENT_IMPL_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/timer/timer.h"
 #include "chromeos/ash/components/multidevice/remote_device.h"
 #include "chromeos/ash/components/multidevice/remote_device_cache.h"
@@ -18,7 +19,6 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -61,7 +61,7 @@ class MultiDeviceSetupClientImpl : public MultiDeviceSetupClient,
   void SetFeatureEnabledState(
       mojom::Feature feature,
       bool enabled,
-      const absl::optional<std::string>& auth_token,
+      const std::optional<std::string>& auth_token,
       mojom::MultiDeviceSetup::SetFeatureEnabledStateCallback callback)
       override;
   const FeatureStatesMap& GetFeatureStates() const override;
@@ -71,11 +71,13 @@ class MultiDeviceSetupClientImpl : public MultiDeviceSetupClient,
       mojom::EventTypeForDebugging type,
       mojom::MultiDeviceSetup::TriggerEventForDebuggingCallback callback)
       override;
+  void SetQuickStartPhoneInstanceID(
+      const std::string& qs_phone_instance_id) override;
 
   // mojom::HostStatusObserver:
   void OnHostStatusChanged(
       mojom::HostStatus host_status,
-      const absl::optional<multidevice::RemoteDevice>& host_device) override;
+      const std::optional<multidevice::RemoteDevice>& host_device) override;
 
   // mojom::FeatureStateObserver:
   void OnFeatureStatesChanged(

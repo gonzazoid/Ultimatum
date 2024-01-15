@@ -8,16 +8,15 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/current_thread.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -30,14 +29,13 @@
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
-#include "chromeos/login/login_state/login_state.h"
-#include "content/public/browser/notification_service.h"
-#include "content/public/browser/notification_source.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/browser/external_install_info.h"
 #include "extensions/browser/external_provider_interface.h"
-#include "extensions/browser/notification_types.h"
+#include "extensions/browser/updater/extension_downloader.h"
+#include "extensions/browser/updater/extension_update_found_test_observer.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_urls.h"
 #include "services/data_decoder/public/cpp/test_support/in_process_data_decoder.h"
@@ -149,8 +147,8 @@ class TrackingProxyTaskRunner : public base::SingleThreadTaskRunner {
 void AddExtensionToDictionary(const std::string& extension_id,
                               const std::string& update_url,
                               base::Value::Dict& dict) {
-  base::Value::Dict value;
-  value.Set(extensions::ExternalProviderImpl::kExternalUpdateUrl, update_url);
+  auto value = base::Value::Dict().Set(
+      extensions::ExternalProviderImpl::kExternalUpdateUrl, update_url);
   dict.Set(extension_id, std::move(value));
 }
 
@@ -165,8 +163,11 @@ class DeviceLocalAccountExternalCacheTest : public testing::Test {
   void TearDown() override;
 
   void VerifyAndResetVisitorCallExpectations();
-  base::FilePath SimulateExtensionDownload(const std::string& id,
-                                           const std::string& manifest_file);
+  base::FilePath SimulateExtensionDownload(
+      const std::string& id,
+      const std::string& manifest_file,
+      extensions::ExtensionUpdateFoundTestObserver&
+          extension_update_found_observer);
 
   content::BrowserTaskEnvironment task_environment_{
       content::BrowserTaskEnvironment::IO_MAINLOOP};
@@ -202,7 +203,7 @@ void DeviceLocalAccountExternalCacheTest::SetUp() {
   ASSERT_TRUE(base::PathService::Get(chrome::DIR_TEST_DATA, &test_dir_));
 
   ASSERT_TRUE(testing_profile_manager_.SetUp());
-  chromeos::LoginState::Initialize();
+  ash::LoginState::Initialize();
   crosapi::IdleServiceAsh::DisableForTesting();
   Profile* profile = testing_profile_manager_.CreateTestingProfile("Default");
   crosapi_manager_ = crosapi::CreateCrosapiManagerWithTestRegistry();
@@ -221,7 +222,7 @@ void DeviceLocalAccountExternalCacheTest::SetUp() {
 void DeviceLocalAccountExternalCacheTest::TearDown() {
   crosapi_manager_.reset();
   testing_profile_manager_.DeleteAllTestingProfiles();
-  chromeos::LoginState::Shutdown();
+  ash::LoginState::Shutdown();
   TestingBrowserProcess::GetGlobal()->SetSharedURLLoaderFactory(nullptr);
 }
 
@@ -236,7 +237,9 @@ void DeviceLocalAccountExternalCacheTest::
 
 base::FilePath DeviceLocalAccountExternalCacheTest::SimulateExtensionDownload(
     const std::string& id,
-    const std::string& manifest_file) {
+    const std::string& manifest_file,
+    extensions::ExtensionUpdateFoundTestObserver&
+        extension_update_found_observer) {
   // Return a manifest to the downloader.
   std::string manifest;
   EXPECT_TRUE(base::ReadFileToString(test_dir_.Append(kExtensionUpdateManifest),
@@ -247,10 +250,7 @@ base::FilePath DeviceLocalAccountExternalCacheTest::SimulateExtensionDownload(
                                        manifest);
 
   // Wait for the manifest to be parsed.
-  content::WindowedNotificationObserver(
-      extensions::NOTIFICATION_EXTENSION_UPDATE_FOUND,
-      content::NotificationService::AllSources())
-      .Wait();
+  extension_update_found_observer.Wait();
 
   // Verify that the downloader is attempting to download a CRX file.
   EXPECT_EQ(1, test_url_loader_factory_.NumPending());
@@ -278,7 +278,8 @@ TEST_F(DeviceLocalAccountExternalCacheTest, CacheNotStarted) {
 TEST_F(DeviceLocalAccountExternalCacheTest, ForceInstallListEmpty) {
   // Start the cache. Verify that the loader announces an empty extension list.
   EXPECT_CALL(visitor_, OnExternalProviderReady(provider_.get())).Times(1);
-  external_cache_->StartCache(base::ThreadTaskRunnerHandle::Get());
+  external_cache_->StartCache(
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   external_cache_->UpdateExtensionsList(base::Value::Dict());
   base::RunLoop().RunUntilIdle();
   VerifyAndResetVisitorCallExpectations();
@@ -299,13 +300,14 @@ TEST_F(DeviceLocalAccountExternalCacheTest, ForceInstallListEmpty) {
 // set and the cache is started, the loader downloads, caches and serves the
 // extension.
 TEST_F(DeviceLocalAccountExternalCacheTest, ForceInstallListSet) {
+  extensions::ExtensionUpdateFoundTestObserver extension_update_found_observer;
   base::Value::Dict dict;
   AddExtensionToDictionary(kExtensionId,
                            extension_urls::GetWebstoreUpdateUrl().spec(), dict);
 
   // Start the cache.
   auto cache_task_runner = base::MakeRefCounted<TrackingProxyTaskRunner>(
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   external_cache_->StartCache(cache_task_runner);
   external_cache_->UpdateExtensionsList(std::move(dict));
 
@@ -318,8 +320,8 @@ TEST_F(DeviceLocalAccountExternalCacheTest, ForceInstallListSet) {
   // update manifest.
   EXPECT_EQ(1, test_url_loader_factory_.NumPending());
 
-  const base::FilePath cached_crx_path =
-      SimulateExtensionDownload(kExtensionId, kExtensionUpdateManifest);
+  const base::FilePath cached_crx_path = SimulateExtensionDownload(
+      kExtensionId, kExtensionUpdateManifest, extension_update_found_observer);
 
   base::RunLoop cache_run_loop;
   EXPECT_CALL(

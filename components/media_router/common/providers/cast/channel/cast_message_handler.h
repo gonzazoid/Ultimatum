@@ -5,6 +5,8 @@
 #ifndef COMPONENTS_MEDIA_ROUTER_COMMON_PROVIDERS_CAST_CHANNEL_CAST_MESSAGE_HANDLER_H_
 #define COMPONENTS_MEDIA_ROUTER_COMMON_PROVIDERS_CAST_CHANNEL_CAST_MESSAGE_HANDLER_H_
 
+#include <string_view>
+
 #include "base/callback_list.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
@@ -12,6 +14,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
+#include "base/observer_list_types.h"
 #include "base/sequence_checker.h"
 #include "base/time/tick_clock.h"
 #include "base/timer/timer.h"
@@ -105,8 +108,8 @@ using SetVolumeRequest = PendingRequest<ResultCallback>;
 // messages can be sent. Virtual connections are managed by CastMessageHandler.
 struct VirtualConnection {
   VirtualConnection(int channel_id,
-                    const std::string& source_id,
-                    const std::string& destination_id);
+                    std::string_view source_id,
+                    std::string_view destination_id);
   ~VirtualConnection();
 
   bool operator<(const VirtualConnection& other) const;
@@ -123,11 +126,20 @@ struct VirtualConnection {
 
 struct InternalMessage {
   InternalMessage(CastMessageType type,
-                  const std::string& message_namespace,
+                  std::string_view source_id,
+                  std::string_view destination_id,
+                  std::string_view message_namespace,
                   base::Value::Dict message);
   ~InternalMessage();
 
   CastMessageType type;
+  // `source_id` and `destination_id` are from the CastMessage that this
+  // InternalMessage was created from. If this message is from the receiver to
+  // the sender, `source_id` and `destination_id` represent those two
+  // respectively, and may not match a VirtualConnection's `source_id` (sender)
+  // and `destination_id` (receiver).
+  std::string source_id;
+  std::string destination_id;
   // This field is only needed to communicate the namespace
   // information from CastMessageHandler::OnMessage to
   // MirroringActivityRecord::OnInternalMessage.  Maybe there's a better way?
@@ -148,12 +160,13 @@ constexpr base::TimeDelta kRequestTimeout = base::Seconds(5);
 // destructor) must be run on the same sequence that CastSocketService runs on.
 class CastMessageHandler : public CastSocket::Observer {
  public:
-  class Observer {
+  class Observer : public base::CheckedObserver {
    public:
-    virtual ~Observer() = default;
-    virtual void OnAppMessage(int channel_id, const CastMessage& message) {}
+    ~Observer() override;
+
+    virtual void OnAppMessage(int channel_id, const CastMessage& message) = 0;
     virtual void OnInternalMessage(int channel_id,
-                                   const InternalMessage& message) {}
+                                   const InternalMessage& message) = 0;
   };
 
   // |parse_json|: A callback which can be used to parse a string of potentially
@@ -163,9 +176,9 @@ class CastMessageHandler : public CastSocket::Observer {
       data_decoder::DataDecoder::ValueParseCallback callback)>;
   CastMessageHandler(CastSocketService* socket_service,
                      ParseJsonCallback parse_json,
-                     const std::string& user_agent,
-                     const std::string& browser_version,
-                     const std::string& locale);
+                     std::string_view user_agent,
+                     std::string_view browser_version,
+                     std::string_view locale);
 
   CastMessageHandler(const CastMessageHandler&) = delete;
   CastMessageHandler& operator=(const CastMessageHandler&) = delete;
@@ -189,6 +202,13 @@ class CastMessageHandler : public CastSocket::Observer {
                                const std::string& source_id,
                                const std::string& destination_id);
 
+  // Removes the virtual connection on (|source_id|, |destination_id|) on the
+  // device given by |channel_id| without sending a close request. Call
+  // CloseConnection() instead to close and then remove a connection.
+  virtual void RemoveConnection(int channel_id,
+                                const std::string& source_id,
+                                const std::string& destination_id);
+
   // Sends an app availability for |app_id| to the device given by |socket|.
   // |callback| is always invoked asynchronously, and will be invoked when a
   // response is received, or if the request timed out. No-ops if there is
@@ -199,12 +219,6 @@ class CastMessageHandler : public CastSocket::Observer {
 
   // Sends a receiver status request to the socket given by |channel_id|.
   virtual void RequestReceiverStatus(int channel_id);
-
-  // Sends a broadcast message containing |app_ids| and |request| to the socket
-  // given by |channel_id|.
-  virtual Result SendBroadcastMessage(int channel_id,
-                                      const std::vector<std::string>& app_ids,
-                                      const BroadcastRequest& request);
 
   // Requests a session launch for |app_id| on the device given by |channel_id|.
   // |callback| will be invoked with the response or with a timed out result if
@@ -365,7 +379,7 @@ class CastMessageHandler : public CastSocket::Observer {
 
   int next_request_id_ = 0;
 
-  base::ObserverList<Observer>::Unchecked observers_;
+  base::ObserverList<Observer> observers_;
 
   // Set of virtual connections opened to receivers.
   base::flat_set<VirtualConnection> virtual_connections_;

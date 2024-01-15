@@ -10,7 +10,7 @@
 #include "ash/quick_pair/common/pair_failure.h"
 #include "ash/quick_pair/fast_pair_handshake/fast_pair_data_encryptor_impl.h"
 #include "ash/quick_pair/fast_pair_handshake/fast_pair_gatt_service_client_impl.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 
 namespace ash {
@@ -25,8 +25,14 @@ FastPairHandshake::FastPairHandshake(
     : adapter_(std::move(adapter)),
       device_(std::move(device)),
       on_complete_callback_(std::move(on_complete)),
-      fast_pair_data_encryptor_(std::move(data_encryptor)),
-      fast_pair_gatt_service_client_(std::move(gatt_service_client)) {}
+      fast_pair_data_encryptor_(std::move(data_encryptor)) {}
+
+FastPairHandshake::FastPairHandshake(
+    scoped_refptr<device::BluetoothAdapter> adapter,
+    scoped_refptr<Device> device)
+    : adapter_(std::move(adapter)),
+      device_(std::move(device)),
+      on_complete_callback_(base::DoNothing()) {}
 
 FastPairHandshake::~FastPairHandshake() = default;
 

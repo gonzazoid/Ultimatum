@@ -9,6 +9,7 @@ import "services/viz/public/mojom/compositing/local_surface_id.mojom";
 import "third_party/blink/public/mojom/manifest/display_mode.mojom";
 import "ui/display/mojom/screen_infos.mojom";
 import "ui/gfx/geometry/mojom/geometry.mojom";
+import "ui/base/mojom/ui_base_types.mojom";
 
 // See public/common/widget/visual_properties.h
 struct VisualProperties {
@@ -17,6 +18,9 @@ struct VisualProperties {
 
   // Whether or not blink should be in auto-resize mode.
   bool auto_resize_enabled = false;
+
+  // Whether or not the widget can be resized.
+  bool resizable = true;
 
   // The minimum size for Blink if auto-resize is enabled.
   gfx.mojom.Size min_size_for_auto_resize;
@@ -65,6 +69,10 @@ struct VisualProperties {
   // The display mode. This will be replicated amongst subframes.
   DisplayMode display_mode = DisplayMode.kUndefined;
 
+  // The window show state.
+  ui.mojom.WindowShowState window_show_state
+      = ui.mojom.WindowShowState.SHOW_STATE_DEFAULT;
+
   // This represents the latest capture sequence number requested. When this is
   // incremented, that means the caller wants to synchronize surfaces which
   // should cause a new LocalSurfaceId to be generated.
@@ -83,6 +91,9 @@ struct VisualProperties {
   // account the transform from child frame space to main frame space.
   float compositing_scale_factor = 1;
 
+  // The OS cursor accessibility scale factor.
+  float cursor_accessibility_scale_factor = 1;
+
   // The logical segments of the root widget, in widget-relative DIPs. This
   // property is set by the root RenderWidget in the renderer process, then
   // propagated to child local frame roots via RenderFrameProxy/
@@ -100,4 +111,8 @@ struct VisualProperties {
   // frame.
   gfx.mojom.Rect window_controls_overlay_rect;
 
+  // If shown and resizing the renderer, returns the height of the virtual
+  // keyboard in physical pixels. Otherwise, returns 0. Always 0 in a
+  // non-outermost main frame.
+  uint32 virtual_keyboard_resize_height_physical_px;
 };

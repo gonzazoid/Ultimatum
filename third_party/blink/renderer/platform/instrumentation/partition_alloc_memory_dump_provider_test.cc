@@ -4,8 +4,8 @@
 
 #include "third_party/blink/renderer/platform/instrumentation/partition_alloc_memory_dump_provider.h"
 
-#include "base/allocator/buildflags.h"
-#include "base/allocator/partition_allocator/partition_alloc_config.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_buildflags.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_config.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/trace_event/process_memory_dump.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -21,12 +21,12 @@ TEST(PartitionAllocMemoryDumpProviderTest, Simple) {
 
   base::HistogramTester histogram_tester;
   base::trace_event::MemoryDumpArgs args = {
-      base::trace_event::MemoryDumpLevelOfDetail::DETAILED};
+      base::trace_event::MemoryDumpLevelOfDetail::kDetailed};
   base::trace_event::ProcessMemoryDump pmd(args);
   PartitionAllocMemoryDumpProvider::Instance()->OnMemoryDump(args, &pmd);
 
 #if !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) && \
-    defined(PA_THREAD_CACHE_SUPPORTED) &&        \
+    PA_CONFIG(THREAD_CACHE_SUPPORTED) &&         \
     !defined(MEMORY_TOOL_REPLACES_ALLOCATOR)
   histogram_tester.ExpectTotalCount("Memory.PartitionAlloc.ThreadCache.HitRate",
                                     1);
@@ -47,7 +47,7 @@ TEST(PartitionAllocMemoryDumpProviderTest, Simple) {
   histogram_tester.ExpectTotalCount(
       "Memory.PartitionAlloc.ThreadCache.BatchFillRate.MainThread", 0);
 #endif  // !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) &&
-        // defined(PA_THREAD_CACHE_SUPPORTED) &&
+        // PA_CONFIG(THREAD_CACHE_SUPPORTED) &&
         // !defined(MEMORY_TOOL_REPLACES_ALLOCATOR)
 }
 

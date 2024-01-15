@@ -10,7 +10,7 @@ import android.view.View;
 import androidx.annotation.VisibleForTesting;
 import androidx.preference.Preference;
 
-import org.chromium.chrome.browser.safety_check.SafetyCheckProperties.PasswordsState;
+import org.chromium.chrome.browser.safety_check.PasswordsCheckPreferenceProperties.PasswordsState;
 import org.chromium.chrome.browser.safety_check.SafetyCheckProperties.SafeBrowsingState;
 import org.chromium.chrome.browser.safety_check.SafetyCheckProperties.UpdatesState;
 import org.chromium.ui.modelutil.PropertyKey;
@@ -43,10 +43,13 @@ class SafetyCheckViewBinder {
             case PasswordsState.SAFE:
                 return context.getString(R.string.safety_check_passwords_safe);
             case PasswordsState.COMPROMISED_EXIST:
-                int compromised = model.get(SafetyCheckProperties.COMPROMISED_PASSWORDS);
-                return context.getResources().getQuantityString(
-                        R.plurals.safety_check_passwords_compromised_exist, compromised,
-                        compromised);
+                int compromised =
+                        model.get(PasswordsCheckPreferenceProperties.COMPROMISED_PASSWORDS_COUNT);
+                return context.getResources()
+                        .getQuantityString(
+                                R.plurals.safety_check_passwords_compromised_exist,
+                                compromised,
+                                compromised);
             case PasswordsState.BACKEND_VERSION_NOT_SUPPORTED:
                 return context.getString(R.string.safety_check_passwords_update_play_services);
             default:
@@ -177,18 +180,19 @@ class SafetyCheckViewBinder {
             return context.getString(R.string.safety_check_timestamp_after);
         } else if (timeDiff < H_TO_MS) {
             int minutes = (int) (timeDiff / MIN_TO_MS);
-            return context.getResources().getQuantityString(
-                    R.plurals.safety_check_timestamp_after_mins, minutes, minutes);
+            return context.getResources()
+                    .getQuantityString(
+                            R.plurals.safety_check_timestamp_after_mins, minutes, minutes);
         } else if (timeDiff < DAY_TO_MS) {
             int hours = (int) (timeDiff / H_TO_MS);
-            return context.getResources().getQuantityString(
-                    R.plurals.safety_check_timestamp_after_hours, hours, hours);
+            return context.getResources()
+                    .getQuantityString(R.plurals.safety_check_timestamp_after_hours, hours, hours);
         } else if (timeDiff < 2 * DAY_TO_MS) {
             return context.getString(R.string.safety_check_timestamp_after_yesterday);
         } else {
             int days = (int) (timeDiff / DAY_TO_MS);
-            return context.getResources().getQuantityString(
-                    R.plurals.safety_check_timestamp_after_days, days, days);
+            return context.getResources()
+                    .getQuantityString(R.plurals.safety_check_timestamp_after_days, days, days);
         }
     }
 
@@ -196,8 +200,8 @@ class SafetyCheckViewBinder {
             PropertyModel model, SafetyCheckSettingsFragment fragment) {
         long lastRunTime = model.get(SafetyCheckProperties.LAST_RUN_TIMESTAMP);
         long currentTime = System.currentTimeMillis();
-        fragment.getTimestampTextView().setText(
-                getLastRunTimestampText(fragment.getContext(), lastRunTime, currentTime));
+        fragment.getTimestampTextView()
+                .setText(getLastRunTimestampText(fragment.getContext(), lastRunTime, currentTime));
     }
 
     private static void clearTimestampText(SafetyCheckSettingsFragment fragment) {
@@ -206,28 +210,8 @@ class SafetyCheckViewBinder {
 
     static void bind(
             PropertyModel model, SafetyCheckSettingsFragment fragment, PropertyKey propertyKey) {
-        if (SafetyCheckProperties.PASSWORDS_STATE == propertyKey) {
-            @PasswordsState
-            int state = model.get(SafetyCheckProperties.PASSWORDS_STATE);
-            fragment.updateElementStatus(
-                    PASSWORDS_KEY, getStringForPasswords(fragment.getContext(), model, state));
-            SafetyCheckElementPreference preference = fragment.findPreference(PASSWORDS_KEY);
-            preference.setEnabled(true);
-            if (state == PasswordsState.UNCHECKED) {
-                preference.clearStatusIndicator();
-                preference.setEnabled(true);
-            } else if (state == PasswordsState.CHECKING) {
-                clearTimestampText(fragment);
-                preference.showProgressBar();
-                preference.setEnabled(false);
-            } else {
-                displayTimestampText(model, fragment);
-                preference.showStatusIcon(getStatusIconForPasswords(state));
-                preference.setEnabled(true);
-            }
-        } else if (SafetyCheckProperties.SAFE_BROWSING_STATE == propertyKey) {
-            @SafeBrowsingState
-            int state = model.get(SafetyCheckProperties.SAFE_BROWSING_STATE);
+        if (SafetyCheckProperties.SAFE_BROWSING_STATE == propertyKey) {
+            @SafeBrowsingState int state = model.get(SafetyCheckProperties.SAFE_BROWSING_STATE);
             fragment.updateElementStatus(SAFE_BROWSING_KEY, getStringForSafeBrowsing(state));
             SafetyCheckElementPreference preference = fragment.findPreference(SAFE_BROWSING_KEY);
             preference.setEnabled(true);
@@ -244,8 +228,7 @@ class SafetyCheckViewBinder {
                 preference.setEnabled(true);
             }
         } else if (SafetyCheckProperties.UPDATES_STATE == propertyKey) {
-            @UpdatesState
-            int state = model.get(SafetyCheckProperties.UPDATES_STATE);
+            @UpdatesState int state = model.get(SafetyCheckProperties.UPDATES_STATE);
             fragment.updateElementStatus(UPDATES_KEY, getStringForUpdates(state));
             SafetyCheckElementPreference preference = fragment.findPreference(UPDATES_KEY);
             preference.setEnabled(true);
@@ -261,24 +244,62 @@ class SafetyCheckViewBinder {
                 preference.showStatusIcon(getStatusIconForUpdates(state));
                 preference.setEnabled(true);
             }
-        } else if (SafetyCheckProperties.PASSWORDS_CLICK_LISTENER == propertyKey) {
-            fragment.findPreference(PASSWORDS_KEY)
-                    .setOnPreferenceClickListener((Preference.OnPreferenceClickListener) model.get(
-                            SafetyCheckProperties.PASSWORDS_CLICK_LISTENER));
         } else if (SafetyCheckProperties.SAFE_BROWSING_CLICK_LISTENER == propertyKey) {
             fragment.findPreference(SAFE_BROWSING_KEY)
-                    .setOnPreferenceClickListener((Preference.OnPreferenceClickListener) model.get(
-                            SafetyCheckProperties.SAFE_BROWSING_CLICK_LISTENER));
+                    .setOnPreferenceClickListener(
+                            (Preference.OnPreferenceClickListener)
+                                    model.get(SafetyCheckProperties.SAFE_BROWSING_CLICK_LISTENER));
         } else if (SafetyCheckProperties.UPDATES_CLICK_LISTENER == propertyKey) {
             fragment.findPreference(UPDATES_KEY)
-                    .setOnPreferenceClickListener((Preference.OnPreferenceClickListener) model.get(
-                            SafetyCheckProperties.UPDATES_CLICK_LISTENER));
+                    .setOnPreferenceClickListener(
+                            (Preference.OnPreferenceClickListener)
+                                    model.get(SafetyCheckProperties.UPDATES_CLICK_LISTENER));
         } else if (SafetyCheckProperties.SAFETY_CHECK_BUTTON_CLICK_LISTENER == propertyKey) {
-            fragment.getCheckButton().setOnClickListener((View.OnClickListener) model.get(
-                    SafetyCheckProperties.SAFETY_CHECK_BUTTON_CLICK_LISTENER));
+            fragment.getCheckButton()
+                    .setOnClickListener(
+                            (View.OnClickListener)
+                                    model.get(
+                                            SafetyCheckProperties
+                                                    .SAFETY_CHECK_BUTTON_CLICK_LISTENER));
         } else if (SafetyCheckProperties.LAST_RUN_TIMESTAMP == propertyKey) {
             displayTimestampText(model, fragment);
-        } else if (SafetyCheckProperties.COMPROMISED_PASSWORDS == propertyKey) {
+        } else {
+            assert false : "Unhandled property detected in SafetyCheckViewBinder!";
+        }
+    }
+
+    static void bindPasswordSafetyCheck(
+            PropertyModel safetyCheckModel,
+            PropertyModel model,
+            SafetyCheckSettingsFragment fragment,
+            PropertyKey propertyKey) {
+        if (PasswordsCheckPreferenceProperties.PASSWORDS_STATE == propertyKey) {
+            @PasswordsState
+            int state = model.get(PasswordsCheckPreferenceProperties.PASSWORDS_STATE);
+            fragment.updateElementStatus(
+                    PASSWORDS_KEY, getStringForPasswords(fragment.getContext(), model, state));
+            SafetyCheckElementPreference preference = fragment.findPreference(PASSWORDS_KEY);
+            preference.setEnabled(true);
+            if (state == PasswordsState.UNCHECKED) {
+                preference.clearStatusIndicator();
+                preference.setEnabled(true);
+            } else if (state == PasswordsState.CHECKING) {
+                clearTimestampText(fragment);
+                preference.showProgressBar();
+                preference.setEnabled(false);
+            } else {
+                displayTimestampText(safetyCheckModel, fragment);
+                preference.showStatusIcon(getStatusIconForPasswords(state));
+                preference.setEnabled(true);
+            }
+        } else if (PasswordsCheckPreferenceProperties.PASSWORDS_CLICK_LISTENER == propertyKey) {
+            fragment.findPreference(PASSWORDS_KEY)
+                    .setOnPreferenceClickListener(
+                            (Preference.OnPreferenceClickListener)
+                                    model.get(
+                                            PasswordsCheckPreferenceProperties
+                                                    .PASSWORDS_CLICK_LISTENER));
+        } else if (PasswordsCheckPreferenceProperties.COMPROMISED_PASSWORDS_COUNT == propertyKey) {
             // Do nothing - this is handled by the PASSWORDS_STATE update.
             return;
         } else {

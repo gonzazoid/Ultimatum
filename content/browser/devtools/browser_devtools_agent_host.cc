@@ -4,13 +4,13 @@
 
 #include "content/browser/devtools/browser_devtools_agent_host.h"
 
-#include "base/bind.h"
 #include "base/clang_profiling_buildflags.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/memory/ptr_util.h"
 #include "base/no_destructor.h"
 #include "base/task/single_thread_task_runner.h"
+#include "base/uuid.h"
 #include "build/config/compiler/compiler_buildflags.h"
 #include "components/viz/common/buildflags.h"
 #include "content/browser/devtools/devtools_session.h"
@@ -118,11 +118,10 @@ class BrowserDevToolsAgentHost::BrowserAutoAttacher final
   // DevToolsAgentHostObserver overrides.
   void DevToolsAgentHostCreated(DevToolsAgentHost* host) override {
     DCHECK(auto_attach());
-    // In the top level target handler auto-attach to pages as soon as they
+    // In the top level target handler, auto-attach to pages as soon as they
     // are created, otherwise if they don't incur any network activity we'll
     // never get a chance to throttle them (and auto-attach there).
-
-    if (IsMainFrameHost(host) || IsSharedWorkerHost(host)) {
+    if (ShouldAttachToTarget(host)) {
       DispatchAutoAttach(
           host, wait_for_debugger_on_start() && !processing_existent_targets_);
     }
@@ -130,8 +129,17 @@ class BrowserDevToolsAgentHost::BrowserAutoAttacher final
 
   bool ShouldForceDevToolsAgentHostCreation() override { return true; }
 
-  static bool IsSharedWorkerHost(DevToolsAgentHost* host) {
-    return host->GetType() == DevToolsAgentHost::kTypeSharedWorker;
+  static bool ShouldAttachToTarget(DevToolsAgentHost* host) {
+    if (host->GetType() == DevToolsAgentHost::kTypeSharedWorker) {
+      return true;
+    }
+    if (host->GetType() == DevToolsAgentHost::kTypeSharedStorageWorklet) {
+      return true;
+    }
+    if (host->GetType() == DevToolsAgentHost::kTypeTab) {
+      return true;
+    }
+    return IsMainFrameHost(host);
   }
 
   static bool IsMainFrameHost(DevToolsAgentHost* host) {
@@ -139,9 +147,6 @@ class BrowserDevToolsAgentHost::BrowserAutoAttacher final
         static_cast<WebContentsImpl*>(host->GetWebContents());
     if (!web_contents)
       return false;
-    // TODO(https://crbug.com/1264031): With MPArch a WebContents might have
-    // multiple FrameTrees. Make sure this code really just needs the
-    // primary one.
     FrameTreeNode* frame_tree_node = web_contents->GetPrimaryFrameTree().root();
     if (!frame_tree_node)
       return false;
@@ -162,7 +167,7 @@ BrowserDevToolsAgentHost::BrowserDevToolsAgentHost(
     scoped_refptr<base::SingleThreadTaskRunner> tethering_task_runner,
     const CreateServerSocketCallback& socket_callback,
     bool only_discovery)
-    : DevToolsAgentHostImpl(base::GenerateGUID()),
+    : DevToolsAgentHostImpl(base::Uuid::GenerateRandomV4().AsLowercaseString()),
       auto_attacher_(std::make_unique<BrowserAutoAttacher>()),
       tethering_task_runner_(tethering_task_runner),
       socket_callback_(socket_callback),
@@ -200,12 +205,14 @@ bool BrowserDevToolsAgentHost::AttachSession(DevToolsSession* session,
   session->CreateAndAddHandler<protocol::SecurityHandler>();
   session->CreateAndAddHandler<protocol::StorageHandler>(
       session->GetClient()->IsTrusted());
-  session->CreateAndAddHandler<protocol::SystemInfoHandler>();
+  session->CreateAndAddHandler<protocol::SystemInfoHandler>(
+      /* is_browser_sessoin= */ true);
   if (tethering_task_runner_) {
     session->CreateAndAddHandler<protocol::TetheringHandler>(
         socket_callback_, tethering_task_runner_);
   }
-  session->CreateAndAddHandler<protocol::TracingHandler>(GetIOContext());
+  session->CreateAndAddHandler<protocol::TracingHandler>(
+      this, GetIOContext(), /* root_session */ nullptr);
 
 #if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX) && BUILDFLAG(CLANG_PGO)
   session->CreateAndAddHandler<protocol::NativeProfilingHandler>();

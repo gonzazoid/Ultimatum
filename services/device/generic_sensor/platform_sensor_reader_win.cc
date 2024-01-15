@@ -11,11 +11,11 @@
 
 #include <iomanip>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/numerics/math_constants.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/win/scoped_propvariant.h"
 #include "services/device/generic_sensor/generic_sensor_consts.h"
@@ -318,15 +318,15 @@ class EventListener
     base::TimeTicks ticks_now = base::TimeTicks::Now();
     base::Time time_now = base::Time::NowFromSystemTime();
 
-    base::Time::Exploded exploded;
-    exploded.year = report_time.wYear;
-    exploded.month = report_time.wMonth;
-    exploded.day_of_week = report_time.wDayOfWeek;
-    exploded.day_of_month = report_time.wDay;
-    exploded.hour = report_time.wHour;
-    exploded.minute = report_time.wMinute;
-    exploded.second = report_time.wSecond;
-    exploded.millisecond = report_time.wMilliseconds;
+    const base::Time::Exploded exploded = {
+        .year = report_time.wYear,
+        .month = report_time.wMonth,
+        .day_of_week = report_time.wDayOfWeek,
+        .day_of_month = report_time.wDay,
+        .hour = report_time.wHour,
+        .minute = report_time.wMinute,
+        .second = report_time.wSecond,
+        .millisecond = report_time.wMilliseconds};
 
     base::Time timestamp;
     if (!base::Time::FromUTCExploded(exploded, &timestamp))
@@ -406,7 +406,7 @@ PlatformSensorReaderWin32::PlatformSensorReaderWin32(
     Microsoft::WRL::ComPtr<ISensor> sensor,
     std::unique_ptr<ReaderInitParams> params)
     : init_params_(std::move(params)),
-      com_sta_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      com_sta_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       sensor_active_(false),
       client_(nullptr),
       sensor_(sensor),

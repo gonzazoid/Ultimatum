@@ -10,6 +10,7 @@
 
 #include "ash/components/arc/mojom/wake_lock.mojom.h"
 #include "ash/components/arc/session/connection_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -67,13 +68,16 @@ class ArcWakeLockBridge : public KeyedService,
   void AcquirePartialWakeLock(AcquirePartialWakeLockCallback callback) override;
   void ReleasePartialWakeLock(ReleasePartialWakeLockCallback callback) override;
 
+  static void EnsureFactoryBuilt();
+
  private:
   class WakeLockRequester;
 
   // Returns the WakeLockRequester for |type|, creating one if needed.
   WakeLockRequester* GetWakeLockRequester(device::mojom::WakeLockType type);
 
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 
   mojo::Remote<device::mojom::WakeLockProvider> wake_lock_provider_;
 

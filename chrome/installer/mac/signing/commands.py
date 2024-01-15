@@ -13,7 +13,7 @@ import stat
 import subprocess
 import tempfile
 
-from . import logger
+from signing import logger
 
 
 def file_exists(path):
@@ -71,9 +71,7 @@ def read_file(path):
 
 
 def zip(out, path):
-    shutil.move(
-        shutil.make_archive('{}.zip.tmp'.format(os.path.basename(out)), 'zip',
-                            path), out)
+    run_command(['zip', '-9ry', out, '.'], cwd=path)
 
 
 def set_executable(path):
@@ -95,19 +93,6 @@ def run_command(args, **kwargs):
 def run_command_output(args, **kwargs):
     logger.info('Running command: %s', args)
     return subprocess.check_output(args, **kwargs)
-
-
-def run_password_command_output(args, password, **kwargs):
-    """Runs a command that expects a password on stdin. This function feeds
-    |password| to that command and returns the output like
-    run_command_output().
-    """
-    assert 'stdin' not in kwargs
-    return run_command_output(
-        args,
-        start_new_session=True,
-        input=(password + '\n').encode('utf8'),
-        **kwargs)
 
 
 def lenient_run_command_output(args, **kwargs):

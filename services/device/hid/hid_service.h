@@ -10,9 +10,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_helpers.h"
 #include "base/check.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"

@@ -6,15 +6,16 @@
 
 #include <tuple>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/observer_list.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "ui/base/ime/ime_key_event_dispatcher.h"
 #include "ui/base/ime/input_method_observer.h"
 #include "ui/base/ime/text_input_client.h"
+#include "ui/base/ime/text_input_flags.h"
 #include "ui/base/ime/virtual_keyboard_controller_stub.h"
 #include "ui/events/event.h"
 
@@ -46,8 +47,6 @@ void InputMethodBase::OnFocus() {
 void InputMethodBase::OnBlur() {
 }
 
-void InputMethodBase::OnTouch(ui::EventPointerType pointerType) {}
-
 void InputMethodBase::SetFocusedTextInputClient(TextInputClient* client) {
   SetFocusedTextInputClientInternal(client);
 }
@@ -76,7 +75,11 @@ void InputMethodBase::OnTextInputTypeChanged(TextInputClient* client) {
 
 TextInputType InputMethodBase::GetTextInputType() const {
   TextInputClient* client = GetTextInputClient();
-  return client ? client->GetTextInputType() : TEXT_INPUT_TYPE_NONE;
+  return client
+             ? (client->GetTextInputFlags() & TEXT_INPUT_FLAG_HAS_BEEN_PASSWORD
+                    ? TEXT_INPUT_TYPE_PASSWORD
+                    : client->GetTextInputType())
+             : TEXT_INPUT_TYPE_NONE;
 }
 
 void InputMethodBase::SetVirtualKeyboardVisibilityIfEnabled(bool should_show) {

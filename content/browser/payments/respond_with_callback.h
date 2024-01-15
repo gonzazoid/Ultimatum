@@ -5,7 +5,7 @@
 #ifndef CONTENT_BROWSER_PAYMENTS_RESPOND_WITH_CALLBACK_H_
 #define CONTENT_BROWSER_PAYMENTS_RESPOND_WITH_CALLBACK_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/metrics/histogram_macros.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/public/browser/browser_context.h"
@@ -55,7 +55,6 @@ class RespondWithCallback
       blink::ServiceWorkerStatusCode service_worker_status) = 0;
 
   void FinishServiceWorkerRequest();
-  void MaybeRecordTimeoutMetric(blink::ServiceWorkerStatusCode status);
   void ClearRespondWithCallbackAndCloseWindow();
 
  private:

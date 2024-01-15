@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "build/build_config.h"
 #include "chrome/browser/safe_browsing/download_protection/check_client_download_request_base.h"
@@ -39,6 +39,8 @@ class CheckFileSystemAccessWriteRequest
 
   ~CheckFileSystemAccessWriteRequest() override;
 
+  download::DownloadItem* item() const override;
+
  private:
   // CheckClientDownloadRequestBase overrides:
   bool IsSupportedDownload(DownloadCheckResultReason* reason) override;
@@ -61,9 +63,14 @@ class CheckFileSystemAccessWriteRequest
                     DownloadCheckResultReason reason,
                     enterprise_connectors::AnalysisSettings settings) override;
   bool ShouldPromptForDeepScanning(bool server_requests_prompt) const override;
+  bool ShouldPromptForLocalDecryption(
+      bool server_requests_prompt) const override;
+  bool ShouldPromptForIncorrectPassword() const override;
+  bool ShouldShowScanFailure() const override;
   void NotifyRequestFinished(DownloadCheckResult result,
                              DownloadCheckResultReason reason) override;
   bool IsAllowlistedByPolicy() const override;
+  void LogDeepScanningPrompt(bool did_prompt) const override;
 
   const std::unique_ptr<content::FileSystemAccessWriteItem> item_;
   std::unique_ptr<ReferrerChainData> referrer_chain_data_;

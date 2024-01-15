@@ -7,6 +7,7 @@
 #include "base/containers/contains.h"
 #include "chrome/browser/extensions/chrome_test_extension_loader.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
+#include "chrome/browser/extensions/extension_keeplist_chromeos.h"
 #include "chrome/browser/lacros/lacros_extensions_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
@@ -24,6 +25,14 @@ namespace {
 class LacrosExtensionAppsControllerTest
     : public extensions::ExtensionBrowserTest {
  public:
+  void SetUp() override {
+    // Since the browser tests run without Ash, Lacros won't get the Ash
+    // extension keeplist data from Ash (passed via crosapi). Therefore,
+    // set empty ash keeplist for test.
+    extensions::SetEmptyAshKeeplistForTest();
+    ExtensionBrowserTest::SetUp();
+  }
+
   content::WebContents* GetActiveWebContents() {
     Browser* browser =
         chrome::FindTabbedBrowser(profile(), /*match_original_profiles=*/false);
@@ -42,10 +51,9 @@ IN_PROC_BROWSER_TEST_F(LacrosExtensionAppsControllerTest, OpenNativeSettings) {
                               extension->id()));
 
   // Send the message to open native settings.
-  std::string muxed_id = lacros_extensions_util::MuxId(profile(), extension);
   std::unique_ptr<LacrosExtensionAppsController> controller =
       LacrosExtensionAppsController::MakeForChromeApps();
-  controller->OpenNativeSettings(muxed_id);
+  controller->OpenNativeSettings(extension->id());
 
   // Now the URL should be on a settings page that has the extension id.
   ASSERT_TRUE(base::Contains(GetActiveWebContents()->GetVisibleURL().spec(),
@@ -70,8 +78,7 @@ IN_PROC_BROWSER_TEST_F(LacrosExtensionAppsControllerTest, Uninstall) {
   // Uninstall the extension.
   std::unique_ptr<LacrosExtensionAppsController> controller =
       LacrosExtensionAppsController::MakeForChromeApps();
-  controller->Uninstall(lacros_extensions_util::MuxId(profile(), extension),
-                        apps::UninstallSource::kAppList,
+  controller->Uninstall(extension->id(), apps::UninstallSource::kAppList,
                         /*clear_site_data=*/true,
                         /*report_abuse=*/true);
 
@@ -81,53 +88,42 @@ IN_PROC_BROWSER_TEST_F(LacrosExtensionAppsControllerTest, Uninstall) {
 }
 
 // Test loading an icon
-IN_PROC_BROWSER_TEST_F(LacrosExtensionAppsControllerTest, LoadIcon) {
+IN_PROC_BROWSER_TEST_F(LacrosExtensionAppsControllerTest, GetCompressedIcon) {
   const extensions::Extension* extension_minimal =
       LoadExtension(test_data_dir_.AppendASCII("platform_apps/minimal"));
   const extensions::Extension* extension_with_icon =
       LoadExtension(test_data_dir_.AppendASCII("platform_apps/app_icon"));
 
-  // Two for loops are much easier to set up then a doubly parameterized test.
+  // For loop is much easier to set up then a doubly parameterized test.
   for (int i = 0; i <= 1; ++i) {
     // Regardless of whether we use an extension with an custom icon or not, an
     // icon should always load.
     const extensions::Extension* extension =
         (i == 0) ? extension_minimal : extension_with_icon;
 
-    for (int j = 0; j <= 1; ++j) {
-      // Check that both the compressed and uncompressed images load correctly.
-      bool compressed = (j == 0);
+    // Check that the compressed images load correctly.
 
-      // Set up the LoadIconCallback which quits the nested run loop and
-      // populates |output|.
-      apps::IconValuePtr output;
-      base::RunLoop run_loop;
-      LacrosExtensionAppsController::LoadIconCallback callback = base::BindOnce(
-          [](base::RunLoop* run_loop, apps::IconValuePtr* output,
-             apps::IconValuePtr input) {
-            *output = std::move(input);
-            run_loop->QuitClosure().Run();
-          },
-          &run_loop, &output);
+    // Set up the LoadIconCallback which quits the nested run loop and
+    // populates |output|.
+    apps::IconValuePtr output;
+    base::RunLoop run_loop;
+    apps::LoadIconCallback callback = base::BindOnce(
+        [](base::RunLoop* run_loop, apps::IconValuePtr* output,
+           apps::IconValuePtr input) {
+          *output = std::move(input);
+          run_loop->QuitClosure().Run();
+        },
+        &run_loop, &output);
 
-      // Load the icon
-      auto icon_type = compressed ? apps::IconType::kCompressed
-                                  : apps::IconType::kUncompressed;
-      std::unique_ptr<LacrosExtensionAppsController> controller =
-          LacrosExtensionAppsController::MakeForChromeApps();
-      controller->LoadIcon(lacros_extensions_util::MuxId(profile(), extension),
-                           std::make_unique<apps::IconKey>(0, 0, 0), icon_type,
-                           /*size_hint_in_dip=*/1, std::move(callback));
-      run_loop.Run();
+    // Load the icon
+    std::unique_ptr<LacrosExtensionAppsController> controller =
+        LacrosExtensionAppsController::MakeForChromeApps();
+    controller->GetCompressedIcon(extension->id(), /*size_in_dip=*/1,
+                                  ui::ResourceScaleFactor::k100Percent,
+                                  std::move(callback));
+    run_loop.Run();
 
-      if (compressed) {
-        EXPECT_FALSE(output->compressed.empty());
-      } else {
-        EXPECT_FALSE(output->uncompressed.isNull());
-        EXPECT_GT(output->uncompressed.width(), 0);
-        EXPECT_GT(output->uncompressed.height(), 0);
-      }
-    }
+    EXPECT_FALSE(output->compressed.empty());
   }
 }
 

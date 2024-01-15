@@ -25,6 +25,7 @@
 #include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/scoped_canvas.h"
 #include "ui/views/style/typography.h"
+#include "ui/views/style/typography_provider.h"
 #include "ui/views/view.h"
 
 namespace media_message_center {
@@ -316,7 +317,7 @@ void MediaNotificationBackgroundImpl::Paint(gfx::Canvas* canvas,
     canvas->DrawRect(draw_bounds, flags);
   }
 
-  if (audio_device_selector_availability_) {
+  if (audio_device_selector_visible_) {
     // Draw a gradient to fade the color background of the audio device picker
     // and the image together.
     gfx::Rect draw_bounds = GetBottomGradientBounds(*view);
@@ -380,12 +381,9 @@ void MediaNotificationBackgroundImpl::UpdateFavicon(
   UpdateColorsInternal();
 }
 
-void MediaNotificationBackgroundImpl::UpdateDeviceSelectorAvailability(
-    bool availability) {
-  if (audio_device_selector_availability_ == availability)
-    return;
-
-  audio_device_selector_availability_ = availability;
+void MediaNotificationBackgroundImpl::UpdateDeviceSelectorVisibility(
+    bool visible) {
+  audio_device_selector_visible_ = visible;
 }
 
 SkColor MediaNotificationBackgroundImpl::GetBackgroundColor(
@@ -398,10 +396,9 @@ SkColor MediaNotificationBackgroundImpl::GetBackgroundColor(
 SkColor MediaNotificationBackgroundImpl::GetForegroundColor(
     const views::View& owner) const {
   const SkColor foreground =
-      foreground_color_.has_value()
-          ? *foreground_color_
-          : views::style::GetColor(owner, views::style::CONTEXT_LABEL,
-                                   views::style::STYLE_PRIMARY);
+      foreground_color_.value_or(owner.GetColorProvider()->GetColor(
+          views::TypographyProvider::Get().GetColorId(
+              views::style::CONTEXT_LABEL, views::style::STYLE_PRIMARY)));
   return color_utils::BlendForMinContrast(
              foreground, GetBackgroundColor(owner), absl::nullopt,
              kMediaNotificationMinimumContrastRatio)

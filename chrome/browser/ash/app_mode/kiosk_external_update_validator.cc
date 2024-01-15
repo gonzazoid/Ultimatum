@@ -4,8 +4,9 @@
 
 #include "chrome/browser/ash/app_mode/kiosk_external_update_validator.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/task/sequenced_task_runner.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "extensions/common/extension.h"
@@ -21,11 +22,9 @@ KioskExternalUpdateValidator::KioskExternalUpdateValidator(
     : backend_task_runner_(backend_task_runner),
       crx_file_(file),
       crx_unpack_dir_(crx_unpack_dir),
-      delegate_(delegate) {
-}
+      delegate_(delegate) {}
 
-KioskExternalUpdateValidator::~KioskExternalUpdateValidator() {
-}
+KioskExternalUpdateValidator::~KioskExternalUpdateValidator() = default;
 
 void KioskExternalUpdateValidator::Start() {
   auto unpacker = base::MakeRefCounted<extensions::SandboxedUnpacker>(
@@ -54,7 +53,7 @@ void KioskExternalUpdateValidator::OnUnpackFailure(
 void KioskExternalUpdateValidator::OnUnpackSuccess(
     const base::FilePath& temp_dir,
     const base::FilePath& extension_dir,
-    std::unique_ptr<base::DictionaryValue> original_manifest,
+    std::unique_ptr<base::Value::Dict> original_manifest,
     const extensions::Extension* extension,
     const SkBitmap& install_icon,
     extensions::declarative_net_request::RulesetInstallPrefs

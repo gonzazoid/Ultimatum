@@ -1,6 +1,6 @@
-dstockwell@google.com
-tapted@chromium.org
-patricialor@chromium.org
+callistus@google.com
+zufeng@google.com
+msalomao@google.com
 
 per-file *.mojom=set noparent
 per-file *.mojom=file://ipc/SECURITY_OWNERS

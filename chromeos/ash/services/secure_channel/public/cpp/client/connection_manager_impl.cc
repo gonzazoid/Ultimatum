@@ -5,14 +5,14 @@
 #include "chromeos/ash/services/secure_channel/public/cpp/client/connection_manager_impl.h"
 
 #include "ash/constants/ash_features.h"
-#include "ash/services/device_sync/public/cpp/device_sync_client.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/time/clock.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
+#include "chromeos/ash/services/device_sync/public/cpp/device_sync_client.h"
 #include "chromeos/ash/services/multidevice_setup/public/cpp/multidevice_setup_client.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/secure_channel_client.h"
 #include "chromeos/ash/services/secure_channel/public/mojom/secure_channel.mojom-shared.h"
@@ -86,23 +86,23 @@ ConnectionManager::Status ConnectionManagerImpl::GetStatus() const {
   return Status::kDisconnected;
 }
 
-void ConnectionManagerImpl::AttemptNearbyConnection() {
+bool ConnectionManagerImpl::AttemptNearbyConnection() {
   if (GetStatus() != Status::kDisconnected) {
     PA_LOG(WARNING) << "Connection to host already established or is "
                     << "currently attempting to establish, exiting "
                     << "AttemptConnection().";
-    return;
+    return false;
   }
 
-  const absl::optional<multidevice::RemoteDeviceRef> remote_device =
+  const std::optional<multidevice::RemoteDeviceRef> remote_device =
       multidevice_setup_client_->GetHostStatus().second;
-  const absl::optional<multidevice::RemoteDeviceRef> local_device =
+  const std::optional<multidevice::RemoteDeviceRef> local_device =
       device_sync_client_->GetLocalDeviceMetadata();
 
   if (!remote_device || !local_device) {
     PA_LOG(ERROR) << "AttemptConnection() failed because either remote or "
                   << "local device is null.";
-    return;
+    return false;
   }
 
   connection_attempt_ = secure_channel_client_->InitiateConnectionToDevice(
@@ -116,6 +116,7 @@ void ConnectionManagerImpl::AttemptNearbyConnection() {
   timer_->Start(FROM_HERE, kConnectionTimeout,
                 base::BindOnce(&ConnectionManagerImpl::OnConnectionTimeout,
                                weak_ptr_factory_.GetWeakPtr()));
+  return true;
 }
 
 void ConnectionManagerImpl::Disconnect() {
@@ -154,11 +155,11 @@ void ConnectionManagerImpl::RegisterPayloadFile(
 }
 
 void ConnectionManagerImpl::GetHostLastSeenTimestamp(
-    base::OnceCallback<void(absl::optional<base::Time>)> callback) {
-  const absl::optional<multidevice::RemoteDeviceRef> remote_device =
+    base::OnceCallback<void(std::optional<base::Time>)> callback) {
+  const std::optional<multidevice::RemoteDeviceRef> remote_device =
       multidevice_setup_client_->GetHostStatus().second;
   if (!remote_device) {
-    std::move(callback).Run(/*timestamp=*/absl::nullopt);
+    std::move(callback).Run(/*timestamp=*/std::nullopt);
     return;
   }
 

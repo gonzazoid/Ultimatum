@@ -6,6 +6,20 @@ import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/ui.gni")
 import("//testing/test.gni")
 
+component("display_features") {
+  output_name = "display_features"
+  sources = [
+    "display_features.cc",
+    "display_features.h",
+  ]
+  defines = [ "IS_DISPLAY_FEATURES_IMPL" ]
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+  deps = [
+    "//base",
+    "//build:chromeos_buildflags",
+  ]
+}
+
 component("display") {
   sources = [
     "display.cc",
@@ -13,8 +27,6 @@ component("display") {
     "display_change_notifier.cc",
     "display_change_notifier.h",
     "display_export.h",
-    "display_features.cc",
-    "display_features.h",
     "display_finder.cc",
     "display_finder.h",
     "display_layout.cc",
@@ -41,6 +53,7 @@ component("display") {
     "screen_info.h",
     "screen_infos.cc",
     "screen_infos.h",
+    "tablet_state.cc",
     "tablet_state.h",
     "unified_desktop_utils.cc",
     "unified_desktop_utils.h",
@@ -66,6 +79,8 @@ component("display") {
       "win/base_window_finder_win.h",
       "win/color_profile_reader.cc",
       "win/color_profile_reader.h",
+      "win/display_config_helper.cc",
+      "win/display_config_helper.h",
       "win/display_info.cc",
       "win/display_info.h",
       "win/dpi.cc",
@@ -78,8 +93,6 @@ component("display") {
       "win/screen_win.h",
       "win/screen_win_display.cc",
       "win/screen_win_display.h",
-      "win/topmost_window_finder_win.cc",
-      "win/topmost_window_finder_win.h",
       "win/uwp_text_scale_factor.cc",
       "win/uwp_text_scale_factor.h",
     ]
@@ -91,7 +104,10 @@ component("display") {
 
   defines = [ "DISPLAY_IMPLEMENTATION" ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   public_deps = [
+    ":display_features",
     "//ui/display/types",
     "//ui/gfx:color_space",
     "//ui/gfx:gfx",
@@ -101,6 +117,7 @@ component("display") {
     "//base",
     "//base:i18n",
     "//build:chromeos_buildflags",
+    "//components/device_event_log",
     "//mojo/public/cpp/bindings:struct_traits",
     "//ui/display/mojom:mojom_shared_cpp_sources",
     "//ui/display/util",
@@ -112,6 +129,8 @@ component("display") {
     # Don't conflict with Windows' "display.dll".
     output_name = "ui_display"
     deps += [ "//ui/gfx/mojom:dxgi_info" ]
+    libs = [ "shcore.lib" ]
+    ldflags = [ "/DELAYLOAD:shcore.dll" ]
   }
 
   if (use_aura) {
@@ -156,15 +175,16 @@ static_library("test_support") {
     "test/display_matchers.cc",
     "test/display_matchers.h",
     "test/display_test_util.h",
-    "test/scoped_screen_override.cc",
-    "test/scoped_screen_override.h",
     "test/test_screen.cc",
     "test/test_screen.h",
   ]
   public_deps = [ ":display" ]
   deps = [
     "//base",
+    "//skia",
     "//testing/gmock",
+    "//third_party/re2",
+    "//ui/display",
     "//ui/display/types",
     "//ui/display/util",
     "//ui/events/devices",
@@ -179,6 +199,12 @@ static_library("test_support") {
       "win/test/scoped_screen_win.h",
       "win/test/screen_util_win.cc",
       "win/test/screen_util_win.h",
+      "win/test/virtual_display_win_util.cc",
+      "win/test/virtual_display_win_util.h",
+    ]
+    deps += [
+      "//third_party/win_virtual_display/controller",
+      "//third_party/win_virtual_display/driver/public",
     ]
   }
 
@@ -197,6 +223,10 @@ static_library("test_support") {
       "manager/test/action_logger.h",
       "manager/test/action_logger_util.cc",
       "manager/test/action_logger_util.h",
+      "manager/test/fake_display_delegate.cc",
+      "manager/test/fake_display_delegate.h",
+      "manager/test/fake_display_snapshot.cc",
+      "manager/test/fake_display_snapshot.h",
       "manager/test/test_display_layout_manager.cc",
       "manager/test/test_display_layout_manager.h",
       "manager/test/test_native_display_delegate.cc",
@@ -206,6 +236,7 @@ static_library("test_support") {
       "manager/test/touch_transform_controller_test_api.cc",
       "manager/test/touch_transform_controller_test_api.h",
     ]
+    configs += [ "//build/config/compiler:wexit_time_destructors" ]
     public_deps += [ "//ui/display/manager" ]
   }
 }
@@ -239,11 +270,10 @@ test("display_unittests") {
     "//base/test:test_support",
     "//build:chromeos_buildflags",
     "//cc/base",
-    "//mojo/core/test:run_all_unittests",
     "//mojo/public/cpp/test_support:test_utils",
     "//testing/gmock",
     "//testing/gtest",
-    "//ui/display/fake",
+    "//ui/display:test_support",
     "//ui/display/mojom",
     "//ui/display/types",
     "//ui/display/util",
@@ -261,35 +291,57 @@ test("display_unittests") {
 
   if (is_chromeos_ash) {
     sources += [
-      "fake/fake_display_snapshot_unittest.cc",
       "manager/apply_content_protection_task_unittest.cc",
       "manager/configure_displays_task_unittest.cc",
+      "manager/content_protection_key_manager_unittest.cc",
       "manager/content_protection_manager_unittest.cc",
       "manager/display_change_observer_unittest.cc",
       "manager/display_configurator_unittest.cc",
-      "manager/display_manager_util_unittest.cc",
-      "manager/display_manager_utilities_unittest.cc",
+      "manager/display_port_observer_unittest.cc",
+      "manager/display_properties_parser_unittest.cc",
       "manager/json_converter_unittest.cc",
       "manager/managed_display_info_unittest.cc",
       "manager/query_content_protection_task_unittest.cc",
+      "manager/test/fake_display_snapshot_unittest.cc",
       "manager/touch_device_manager_unittest.cc",
       "manager/touch_transform_controller_unittest.cc",
       "manager/update_display_configuration_task_unittest.cc",
+      "manager/util/display_manager_test_util_unittest.cc",
+      "manager/util/display_manager_util_unittest.cc",
     ]
+
     deps += [
       ":display_manager_test_api",
-      "//ash/constants",
+      "//ui/base:run_all_unittests",
       "//ui/display/manager",
+      "//ui/ozone:ozone_switches",
     ]
+
+    data_deps = [
+      "//ui/base:ui_base_test_resources_pak",
+      "//ui/resources:ui_test_pak_data",
+    ]
+  } else {
+    deps += [ "//mojo/core/test:run_all_unittests" ]
   }
 }
 
-# This target is added as a dependency of browser interactive_ui_tests. It must
+# This target is added as a dependency of browser interactive_ui_tests.It must
 # be source_set, otherwise the linker will drop the tests as dead code.
 source_set("display_interactive_ui_tests") {
   testonly = true
   if (is_mac) {
     sources = [ "mac/test/virtual_display_mac_util_interactive_uitest.mm" ]
+
+    deps = [
+      ":display",
+      ":test_support",
+      "//base/test:test_support",
+      "//testing/gtest",
+    ]
+  }
+  if (is_win) {
+    sources = [ "win/test/virtual_display_win_util_interactive_uitest.cc" ]
 
     deps = [
       ":display",

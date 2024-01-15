@@ -6,8 +6,8 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -17,7 +17,6 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -43,12 +42,16 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
 
+#if !BUILDFLAG(IS_WIN)
+#include <netinet/in.h>
+#include <sys/socket.h>
+#else
+#include <winsock2.h>
+#endif
+
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/build_info.h"
-#include "base/android/radio_utils.h"
-#include "base/test/metrics/histogram_tester.h"
 #include "net/android/network_change_notifier_factory_android.h"
-#include "net/android/radio_activity_tracker.h"
 #include "net/base/network_change_notifier.h"
 #endif
 
@@ -230,7 +233,7 @@ void UDPSocketTest::ConnectTest(bool use_nonblocking_io, bool use_async) {
   EXPECT_THAT(rv, IsError(ERR_IO_PENDING));
 
   // Client sends to the server.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&UDPSocketTest::WriteSocketIgnoreResult,
                      base::Unretained(this), client.get(), simple_message));
@@ -323,8 +326,7 @@ TEST_F(UDPSocketTest, PartialRecv) {
   // Read just 2 bytes. Read() is expected to return the first 2 bytes from the
   // packet and discard the rest.
   const int kPartialReadSize = 2;
-  scoped_refptr<IOBuffer> buffer =
-      base::MakeRefCounted<IOBuffer>(kPartialReadSize);
+  auto buffer = base::MakeRefCounted<IOBufferWithSize>(kPartialReadSize);
   int rv =
       server_socket.RecvFrom(buffer.get(), kPartialReadSize,
                              &recv_from_address_, recv_callback.callback());
@@ -451,6 +453,57 @@ TEST_F(UDPSocketTest, ConnectFail) {
 
   // Make sure that UDPSocket actually closed the socket.
   EXPECT_FALSE(socket.is_connected());
+}
+
+// Similar to ConnectFail but UDPSocket adopts an opened socket instead of
+// opening one directly.
+TEST_F(UDPSocketTest, AdoptedSocket) {
+  auto socketfd =
+      CreatePlatformSocket(ConvertAddressFamily(ADDRESS_FAMILY_IPV4),
+                           SOCK_DGRAM, AF_UNIX ? 0 : IPPROTO_UDP);
+  UDPSocket socket(DatagramSocket::DEFAULT_BIND, nullptr, NetLogSource());
+
+  EXPECT_THAT(socket.AdoptOpenedSocket(ADDRESS_FAMILY_IPV4, socketfd), IsOk());
+
+  // Connect to an IPv6 address should fail since the socket was created for
+  // IPv4.
+  EXPECT_THAT(socket.Connect(net::IPEndPoint(IPAddress::IPv6Localhost(), 53)),
+              Not(IsOk()));
+
+  // Make sure that UDPSocket actually closed the socket.
+  EXPECT_FALSE(socket.is_connected());
+}
+
+// Tests that UDPSocket updates the global counter correctly.
+TEST_F(UDPSocketTest, LimitAdoptSocket) {
+  ASSERT_EQ(0, GetGlobalUDPSocketCountForTesting());
+  {
+    // Creating a platform socket does not increase count.
+    auto socketfd =
+        CreatePlatformSocket(ConvertAddressFamily(ADDRESS_FAMILY_IPV4),
+                             SOCK_DGRAM, AF_UNIX ? 0 : IPPROTO_UDP);
+    ASSERT_EQ(0, GetGlobalUDPSocketCountForTesting());
+
+    // Simply allocating a UDPSocket does not increase count.
+    UDPSocket socket(DatagramSocket::DEFAULT_BIND, nullptr, NetLogSource());
+    EXPECT_EQ(0, GetGlobalUDPSocketCountForTesting());
+
+    // Calling AdoptOpenedSocket() allocates the socket and increases the global
+    // counter.
+    EXPECT_THAT(socket.AdoptOpenedSocket(ADDRESS_FAMILY_IPV4, socketfd),
+                IsOk());
+    EXPECT_EQ(1, GetGlobalUDPSocketCountForTesting());
+
+    // Connect to an IPv6 address should fail since the socket was created for
+    // IPv4.
+    EXPECT_THAT(socket.Connect(net::IPEndPoint(IPAddress::IPv6Localhost(), 53)),
+                Not(IsOk()));
+
+    // That Connect() failed doesn't change the global counter.
+    EXPECT_EQ(1, GetGlobalUDPSocketCountForTesting());
+  }
+  // Finally, destroying UDPSocket decrements the global counter.
+  EXPECT_EQ(0, GetGlobalUDPSocketCountForTesting());
 }
 
 // In this test, we verify that connect() on a socket will have the effect
@@ -606,7 +659,7 @@ TEST_F(UDPSocketTest, ClientSetDoNotFragment) {
     // TODO(crbug.com/945590): IP_MTU_DISCOVER is not implemented on Fuchsia.
     EXPECT_THAT(rv, IsError(ERR_NOT_IMPLEMENTED));
 #elif BUILDFLAG(IS_MAC)
-    if (base::mac::IsAtLeastOS11()) {
+    if (base::mac::MacOSMajorVersion() >= 11) {
       EXPECT_THAT(rv, IsOk());
     } else {
       EXPECT_THAT(rv, IsError(ERR_NOT_IMPLEMENTED));
@@ -634,7 +687,7 @@ TEST_F(UDPSocketTest, ServerSetDoNotFragment) {
     // TODO(crbug.com/945590): IP_MTU_DISCOVER is not implemented on Fuchsia.
     EXPECT_THAT(rv, IsError(ERR_NOT_IMPLEMENTED));
 #elif BUILDFLAG(IS_MAC)
-    if (base::mac::IsAtLeastOS11()) {
+    if (base::mac::MacOSMajorVersion() >= 11) {
       EXPECT_THAT(rv, IsOk());
     } else {
       EXPECT_THAT(rv, IsError(ERR_NOT_IMPLEMENTED));
@@ -887,8 +940,6 @@ TEST_F(UDPSocketTest, ConnectUsingNetworkAsync) {
     }
     EXPECT_NE(ERR_NOT_IMPLEMENTED, rv);
     EXPECT_NE(OK, rv);
-    EXPECT_NE(NetworkChangeNotifier::GetDefaultNetwork(),
-              socket.GetBoundNetwork());
   }
 
   {
@@ -1478,25 +1529,6 @@ TEST_F(UDPSocketTest, Tag) {
   EXPECT_GT(GetTaggedBytes(tag_val1), old_traffic);
 }
 
-TEST_F(UDPSocketTest, RecordRadioWakeUpTrigger) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(features::kRecordRadioWakeupTrigger);
-
-  base::HistogramTester histograms;
-
-  // Simulates the radio state is dormant.
-  android::RadioActivityTracker::GetInstance().OverrideRadioActivityForTesting(
-      base::android::RadioDataActivity::kDormant);
-  android::RadioActivityTracker::GetInstance().OverrideRadioTypeForTesting(
-      base::android::RadioConnectionType::kCell);
-
-  ConnectTest(/*use_nonblocking_io=*/false, false);
-
-  // Check the write is recorded as a possible radio wake-up trigger.
-  histograms.ExpectTotalCount(
-      android::kUmaNamePossibleWakeupTriggerUDPWriteAnnotationId, 1);
-}
-
 TEST_F(UDPSocketTest, BindToNetwork) {
   // The specific value of this address doesn't really matter, and no
   // server needs to be running here. The test only needs to call
@@ -1593,16 +1625,18 @@ TEST_F(UDPSocketTest, LimitClientSocket) {
   socket2.reset();
   EXPECT_EQ(1, GetGlobalUDPSocketCountForTesting());
 
-  // Now that the count is below limit, try to connect socket3 again. This time
+  // Now that the count is below limit, try to connect another socket. This time
   // it will work.
-  EXPECT_THAT(socket3->Connect(server_address), IsOk());
+  auto socket4 = std::make_unique<UDPClientSocket>(DatagramSocket::DEFAULT_BIND,
+                                                   nullptr, NetLogSource());
+  EXPECT_THAT(socket4->Connect(server_address), IsOk());
   EXPECT_EQ(2, GetGlobalUDPSocketCountForTesting());
 
   // Verify that closing the two remaining sockets brings the open count back to
   // 0.
   socket1.reset();
   EXPECT_EQ(1, GetGlobalUDPSocketCountForTesting());
-  socket3.reset();
+  socket4.reset();
   EXPECT_EQ(0, GetGlobalUDPSocketCountForTesting());
 }
 

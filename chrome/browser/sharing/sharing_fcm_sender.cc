@@ -4,12 +4,11 @@
 
 #include "chrome/browser/sharing/sharing_fcm_sender.h"
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
-#include "base/guid.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/trace_event/trace_event.h"
+#include "base/uuid.h"
 #include "base/version.h"
-#include "chrome/browser/sharing/features.h"
 #include "chrome/browser/sharing/sharing_constants.h"
 #include "chrome/browser/sharing/sharing_message_bridge.h"
 #include "chrome/browser/sharing/sharing_sync_preference.h"
@@ -18,7 +17,8 @@
 #include "chrome/browser/sharing/web_push/web_push_sender.h"
 #include "components/gcm_driver/crypto/gcm_encryption_result.h"
 #include "components/gcm_driver/gcm_driver.h"
-#include "components/sync/driver/sync_service.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync_device_info/device_info_tracker.h"
 #include "components/sync_device_info/local_device_info_provider.h"
 
 SharingFCMSender::SharingFCMSender(
@@ -27,25 +27,37 @@ SharingFCMSender::SharingFCMSender(
     SharingSyncPreference* sync_preference,
     VapidKeyManager* vapid_key_manager,
     gcm::GCMDriver* gcm_driver,
-    syncer::LocalDeviceInfoProvider* local_device_info_provider,
+    const syncer::DeviceInfoTracker* device_info_tracker,
+    const syncer::LocalDeviceInfoProvider* local_device_info_provider,
     syncer::SyncService* sync_service)
     : web_push_sender_(std::move(web_push_sender)),
       sharing_message_bridge_(sharing_message_bridge),
       sync_preference_(sync_preference),
       vapid_key_manager_(vapid_key_manager),
       gcm_driver_(gcm_driver),
+      device_info_tracker_(device_info_tracker),
       local_device_info_provider_(local_device_info_provider),
       sync_service_(sync_service) {}
 
 SharingFCMSender::~SharingFCMSender() = default;
 
-void SharingFCMSender::DoSendMessageToDevice(const syncer::DeviceInfo& device,
-                                             base::TimeDelta time_to_live,
-                                             SharingMessage message,
-                                             SendMessageCallback callback) {
+void SharingFCMSender::DoSendMessageToDevice(
+    const SharingTargetDeviceInfo& device,
+    base::TimeDelta time_to_live,
+    SharingMessage message,
+    SendMessageCallback callback) {
   TRACE_EVENT0("sharing", "SharingFCMSender::DoSendMessageToDevice");
 
-  auto fcm_configuration = GetFCMChannel(device);
+  const syncer::DeviceInfo* device_info =
+      device_info_tracker_->GetDeviceInfo(device.guid());
+  if (!device_info) {
+    std::move(callback).Run(SharingSendMessageResult::kDeviceNotFound,
+                            /*message_id=*/absl::nullopt,
+                            SharingChannelType::kUnknown);
+    return;
+  }
+
+  auto fcm_configuration = GetFCMChannel(*device_info);
   if (!fcm_configuration) {
     std::move(callback).Run(SharingSendMessageResult::kDeviceNotFound,
                             /*message_id=*/absl::nullopt,
@@ -72,7 +84,6 @@ void SharingFCMSender::SendMessageToFcmTarget(
   TRACE_EVENT0("sharing", "SharingFCMSender::SendMessageToFcmTarget");
 
   bool canSendViaSync =
-      base::FeatureList::IsEnabled(kSharingSendViaSync) &&
       sync_service_->GetActiveDataTypes().Has(syncer::SHARING_MESSAGE) &&
       !fcm_configuration.sender_id_fcm_token().empty() &&
       !fcm_configuration.sender_id_p256dh().empty() &&
@@ -81,9 +92,8 @@ void SharingFCMSender::SendMessageToFcmTarget(
                          !fcm_configuration.vapid_p256dh().empty() &&
                          !fcm_configuration.vapid_auth_secret().empty();
 
-  if (canSendViaSync && (!canSendViaVapid ||
-                         !base::FeatureList::IsEnabled(kSharingPreferVapid))) {
-    message.set_message_id(base::GenerateGUID());
+  if (canSendViaSync) {
+    message.set_message_id(base::Uuid::GenerateRandomV4().AsLowercaseString());
     EncryptMessage(
         kSharingSenderID, fcm_configuration.sender_id_p256dh(),
         fcm_configuration.sender_id_auth_secret(), message,
@@ -95,6 +105,7 @@ void SharingFCMSender::SendMessageToFcmTarget(
     return;
   }
 
+  // TODO(crbug.com/1408456): This can probably go away.
   if (canSendViaVapid) {
     absl::optional<SharingSyncPreference::FCMRegistration> fcm_registration =
         sync_preference_->GetFCMRegistration();
@@ -127,15 +138,14 @@ void SharingFCMSender::SendMessageToServerTarget(
     SendMessageCallback callback) {
   TRACE_EVENT0("sharing", "SharingFCMSender::SendMessageToServerTarget");
 
-  if (!base::FeatureList::IsEnabled(kSharingSendViaSync) ||
-      !sync_service_->GetActiveDataTypes().Has(syncer::SHARING_MESSAGE)) {
+  if (!sync_service_->GetActiveDataTypes().Has(syncer::SHARING_MESSAGE)) {
     std::move(callback).Run(SharingSendMessageResult::kInternalError,
                             /*message_id=*/absl::nullopt,
                             SharingChannelType::kServer);
     return;
   }
 
-  message.set_message_id(base::GenerateGUID());
+  message.set_message_id(base::Uuid::GenerateRandomV4().AsLowercaseString());
   EncryptMessage(
       kSharingSenderID, server_channel.p256dh(), server_channel.auth_secret(),
       message, SharingChannelType::kServer, std::move(callback),

@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_ASH_NEARBY_NEARBY_DEPENDENCIES_PROVIDER_H_
 #define CHROME_BROWSER_ASH_NEARBY_NEARBY_DEPENDENCIES_PROVIDER_H_
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/services/nearby/public/mojom/sharing.mojom.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -26,6 +26,10 @@ namespace ash::nearby {
 
 class BluetoothAdapterManager;
 
+namespace presence {
+class CredentialStorageInitializer;
+}  // namespace presence
+
 // Provides dependencies required to initialize NearbyPresence and
 // NearbyConnections. Implemented as a KeyedService because WebRTC
 // dependencies are linked to the user's identity.
@@ -40,6 +44,8 @@ class NearbyDependenciesProvider : public KeyedService {
 
   virtual void PrepareForShutdown();
 
+  static void EnsureFactoryBuilt();
+
  private:
   friend class NearbyProcessManagerImplTest;
 
@@ -49,8 +55,11 @@ class NearbyDependenciesProvider : public KeyedService {
   // Test-only constructor.
   NearbyDependenciesProvider();
 
-  mojo::PendingRemote<bluetooth::mojom::Adapter>
+  mojo::PendingRemote<::bluetooth::mojom::Adapter>
   GetBluetoothAdapterPendingRemote();
+
+  mojo::PendingRemote<presence::mojom::NearbyPresenceCredentialStorage>
+  GetNearbyPresenceCredentialStoragePendingRemote();
 
   sharing::mojom::WebRtcDependenciesPtr GetWebRtcDependencies();
 
@@ -60,10 +69,13 @@ class NearbyDependenciesProvider : public KeyedService {
 
   std::unique_ptr<BluetoothAdapterManager> bluetooth_manager_;
 
+  std::unique_ptr<presence::CredentialStorageInitializer>
+      presence_credential_storage_initializer_;
+
   bool shut_down_ = false;
 
-  Profile* profile_ = nullptr;
-  signin::IdentityManager* identity_manager_ = nullptr;
+  raw_ptr<Profile> profile_ = nullptr;
+  raw_ptr<signin::IdentityManager> identity_manager_ = nullptr;
 };
 
 }  // namespace ash::nearby

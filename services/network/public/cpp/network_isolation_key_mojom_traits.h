@@ -21,19 +21,27 @@ namespace mojo {
 
 template <>
 struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
-    StructTraits<network::mojom::NetworkIsolationKeyDataView,
+    StructTraits<network::mojom::EmptyNetworkIsolationKeyDataView,
                  net::NetworkIsolationKey> {
-  static const absl::optional<net::SchemefulSite>& top_frame_site(
+  static bool Read(network::mojom::EmptyNetworkIsolationKeyDataView data,
+                   net::NetworkIsolationKey* out);
+};
+
+template <>
+struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
+    StructTraits<network::mojom::NonEmptyNetworkIsolationKeyDataView,
+                 net::NetworkIsolationKey> {
+  static const net::SchemefulSite& top_frame_site(
       const net::NetworkIsolationKey& input) {
-    return input.GetTopFrameSite();
+    return input.GetTopFrameSite().value();
   }
 
-  static const absl::optional<net::SchemefulSite>& frame_site(
+  static const net::SchemefulSite& frame_site(
       const net::NetworkIsolationKey& input) {
-    static const base::NoDestructor<absl::optional<net::SchemefulSite>>
-        nullopt_origin;
-    return net::NetworkIsolationKey::IsFrameSiteEnabled() ? input.GetFrameSite()
-                                                          : *nullopt_origin;
+    return input
+        .GetFrameSiteForSerialization(
+            net::NetworkIsolationKey::SerializationPassKey())
+        .value();
   }
 
   static const absl::optional<base::UnguessableToken>& nonce(
@@ -41,8 +49,29 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
     return input.GetNonce();
   }
 
+  static bool Read(network::mojom::NonEmptyNetworkIsolationKeyDataView data,
+                   net::NetworkIsolationKey* out);
+};
+
+template <>
+struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
+    UnionTraits<network::mojom::NetworkIsolationKeyDataView,
+                net::NetworkIsolationKey> {
+  static const net::NetworkIsolationKey& empty(
+      const net::NetworkIsolationKey& input) {
+    return input;
+  }
+
+  static const net::NetworkIsolationKey& non_empty(
+      const net::NetworkIsolationKey& input) {
+    return input;
+  }
+
   static bool Read(network::mojom::NetworkIsolationKeyDataView data,
                    net::NetworkIsolationKey* out);
+
+  static network::mojom::NetworkIsolationKeyDataView::Tag GetTag(
+      const net::NetworkIsolationKey& input);
 };
 
 }  // namespace mojo

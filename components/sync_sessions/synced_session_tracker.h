@@ -13,12 +13,13 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "components/sessions/core/session_id.h"
 #include "components/sessions/core/session_types.h"
 #include "components/sync/protocol/session_specifics.pb.h"
 #include "components/sync/protocol/sync_enums.pb.h"
+#include "components/sync_device_info/device_info.h"
 #include "components/sync_sessions/synced_session.h"
 #include "components/sync_sessions/tab_node_pool.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -53,29 +54,25 @@ class SyncedSessionTracker {
   // Returns vector with all sessions we're tracking. SyncedSession ownership
   // remains within the SyncedSessionTracker. Lookup parameter is used to decide
   // which tabs should be included.
-  std::vector<const SyncedSession*> LookupAllSessions(
-      SessionLookup lookup) const;
+  std::vector<raw_ptr<const SyncedSession, VectorExperimental>>
+  LookupAllSessions(SessionLookup lookup) const;
 
   // Returns all foreign sessions we're tracking (skips the local session
   // object). SyncedSession ownership remains within the SyncedSessionTracker.
   // Lookup parameter is used to decide which foreign tabs should be include.
-  std::vector<const SyncedSession*> LookupAllForeignSessions(
-      SessionLookup lookup) const;
+  std::vector<raw_ptr<const SyncedSession, VectorExperimental>>
+  LookupAllForeignSessions(SessionLookup lookup) const;
 
   // Returns the tab node ids (see GetTab) for all the tabs* associated with the
   // session having tag |session_tag|.
   std::set<int> LookupTabNodeIds(const std::string& session_tag) const;
 
-  // Attempts to look up the session windows associatd with the session given
-  // by |session_tag|. Ownership of SessionWindows stays within the
+  // Returns the session windows associated with the session given
+  // by |session_tag|. Returns an empty vector if there are no windows for
+  // `session_tag`. Ownership of SessionWindows stays within the
   // SyncedSessionTracker.
-  // If lookup succeeds:
-  // - Fills windows with the SessionWindow pointers, returns true.
-  // Else
-  // - Returns false.
-  bool LookupSessionWindows(
-      const std::string& session_tag,
-      std::vector<const sessions::SessionWindow*>* windows) const;
+  std::vector<const sessions::SessionWindow*> LookupSessionWindows(
+      const std::string& session_tag) const;
 
   // Attempts to look up the tab associated with the given tag and tab id.
   // Ownership of the SessionTab remains within the SyncedSessionTracker.
@@ -163,16 +160,17 @@ class SyncedSessionTracker {
   void DeleteForeignTab(const std::string& session_tag, int tab_node_id);
 
   // Deletes the session associated with |session_tag| if it exists.
-  // Returns true if the session existed and was deleted, false otherwise.
-  bool DeleteForeignSession(const std::string& session_tag);
+  void DeleteForeignSession(const std::string& session_tag);
 
   // **** Methods specific to the local session. ****
 
   // Set the local session information. Must be called before any other local
   // session methods are invoked.
-  void InitLocalSession(const std::string& local_session_tag,
-                        const std::string& local_session_name,
-                        sync_pb::SyncEnums::DeviceType local_device_type);
+  void InitLocalSession(
+      const std::string& local_session_tag,
+      const std::string& local_session_name,
+      sync_pb::SyncEnums::DeviceType local_device_type,
+      syncer::DeviceInfo::FormFactor local_device_form_factor);
 
   // Gets the session tag previously set with InitLocalSession().
   const std::string& GetLocalSessionTag() const;
@@ -270,7 +268,7 @@ class SyncedSessionTracker {
   // Creates tracked session if it wasn't known previously. Never returns null.
   TrackedSession* GetTrackedSession(const std::string& session_tag);
 
-  std::vector<const SyncedSession*> LookupSessions(
+  std::vector<raw_ptr<const SyncedSession, VectorExperimental>> LookupSessions(
       SessionLookup lookup,
       bool exclude_local_session) const;
 

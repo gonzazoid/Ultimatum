@@ -7,6 +7,9 @@
 
 #include <string>
 
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
+
 class Profile;
 
 namespace ash {
@@ -23,18 +26,15 @@ class LoginFeedback {
 
   // Request to show the feedback UI with `description`.
   void Request(const std::string& description);
+  // Request to show the feedback Dialog with `description`. The callback will
+  // be invoked after the dialog is shown.
+  void Request(const std::string& description, base::OnceClosure callback);
 
  private:
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
   std::string description_;
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::LoginFeedback;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_UI_LOGIN_FEEDBACK_H_

@@ -34,9 +34,11 @@ struct BLINK_COMMON_EXPORT ExplodedHttpBody {
 };
 
 struct BLINK_COMMON_EXPORT ExplodedFrameState {
+  // When adding a new member, also add it to ExplodedFrameState::assign.
   absl::optional<std::u16string> url_string;
   absl::optional<std::u16string> referrer;
   absl::optional<url::Origin> initiator_origin;
+  absl::optional<std::u16string> initiator_base_url_string;
   absl::optional<std::u16string> target;
   absl::optional<std::u16string> state_object;
   std::vector<absl::optional<std::u16string>> document_state;

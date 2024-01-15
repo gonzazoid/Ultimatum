@@ -8,7 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,55 +18,62 @@ import android.content.ClipDescription;
 import android.content.ClipboardManager;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.SpannableString;
 import android.text.style.RelativeSizeSpan;
+import android.widget.TextView;
 
+import androidx.annotation.StringRes;
+
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.robolectric.annotation.Config;
+import org.robolectric.shadows.ShadowLooper;
+import org.robolectric.shadows.ShadowToast;
 
-import org.chromium.base.ContentUriUtils;
-import org.chromium.base.StreamUtil;
+import org.chromium.base.ContextUtils;
+import org.chromium.base.task.test.ShadowPostTask;
+import org.chromium.base.task.test.ShadowPostTask.TestImpl;
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.base.test.util.UrlUtils;
+import org.chromium.ui.R;
+import org.chromium.ui.widget.ToastManager;
+import org.chromium.url.GURL;
 import org.chromium.url.JUnitTestGURLs;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-
-/**
- * Tests logic in the Clipboard class.
- */
+/** Tests logic in the Clipboard class. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE)
+@Config(
+        manifest = Config.NONE,
+        shadows = {ShadowPostTask.class})
 public class ClipboardTest {
     private static final String PLAIN_TEXT = "plain";
     private static final String HTML_TEXT = "<span style=\"color: red;\">HTML</span>";
-    private static final byte[] TEST_IMAGE_DATA = new byte[] {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    private Uri mTempImageUri;
 
-    private Uri generateUriFromImage(final byte[] jpegImageData) {
-        FileOutputStream fOut = null;
-        try {
-            File path = new File(UrlUtils.getIsolatedTestFilePath("test_image"));
-            if (path.exists() || path.mkdir()) {
-                File saveFile = File.createTempFile(
-                        String.valueOf(System.currentTimeMillis()), ".jpg", path);
-                fOut = new FileOutputStream(saveFile);
-                fOut.write(jpegImageData);
-                fOut.flush();
+    @Before
+    public void setup() {
+        ShadowPostTask.setTestImpl(
+                new TestImpl() {
+                    @Override
+                    public void postDelayedTask(int taskTraits, Runnable task, long delay) {
+                        new Handler(Looper.getMainLooper()).postDelayed(task, delay);
+                    }
+                });
+        mTempImageUri = Uri.parse("content://tmp/test/image.jpg");
+        ClipboardImpl.setSkipImageMimeTypeCheckForTesting(true);
+    }
 
-                return ContentUriUtils.getContentUriFromFile(saveFile);
-            }
-        } catch (IOException ie) {
-            // Ignore exception.
-        } finally {
-            StreamUtil.closeQuietly(fOut);
-        }
-
-        return null;
+    @After
+    public void tearDown() {
+        ToastManager.resetForTesting();
+        ShadowToast.reset();
+        ClipboardImpl.setSkipImageMimeTypeCheckForTesting(null);
+        Clipboard.resetForTesting();
     }
 
     @Test
@@ -101,12 +108,13 @@ public class ClipboardTest {
 
         // simple set a null, check if there is no crash.
         clipboard.setImageUri(null);
+        ShadowLooper.idleMainLooper();
+        assertNull(clipboard.getImageUri());
 
         // Set actually data.
-        Uri imageUri = generateUriFromImage(TEST_IMAGE_DATA);
-        clipboard.setImageUri(imageUri);
-
-        assertEquals(imageUri, clipboard.getImageUri());
+        clipboard.setImageUri(mTempImageUri);
+        ShadowLooper.idleMainLooper();
+        assertEquals(mTempImageUri, clipboard.getImageUri());
     }
 
     @Test
@@ -115,13 +123,13 @@ public class ClipboardTest {
         ClipboardManager clipboardManager = Mockito.mock(ClipboardManager.class);
         ((ClipboardImpl) clipboard).overrideClipboardManagerForTesting(clipboardManager);
 
-        String url = JUnitTestGURLs.SEARCH_URL;
-        clipboard.copyUrlToClipboard(JUnitTestGURLs.getGURL(url));
+        GURL url = JUnitTestGURLs.SEARCH_URL;
+        clipboard.copyUrlToClipboard(url);
 
         ArgumentCaptor<ClipData> clipCaptor = ArgumentCaptor.forClass(ClipData.class);
         verify(clipboardManager).setPrimaryClip(clipCaptor.capture());
         assertEquals("url", clipCaptor.getValue().getDescription().getLabel());
-        assertEquals(url, clipCaptor.getValue().getItemAt(0).getText());
+        assertEquals(url.getSpec(), clipCaptor.getValue().getItemAt(0).getText());
     }
 
     @Test
@@ -131,13 +139,13 @@ public class ClipboardTest {
         ((ClipboardImpl) clipboard).overrideClipboardManagerForTesting(clipboardManager);
 
         doThrow(SecurityException.class).when(clipboardManager).setPrimaryClip(any(ClipData.class));
-        String url = JUnitTestGURLs.SEARCH_URL;
-        clipboard.copyUrlToClipboard(JUnitTestGURLs.getGURL(url));
+        GURL url = JUnitTestGURLs.SEARCH_URL;
+        clipboard.copyUrlToClipboard(url);
 
         ArgumentCaptor<ClipData> clipCaptor = ArgumentCaptor.forClass(ClipData.class);
         verify(clipboardManager).setPrimaryClip(clipCaptor.capture());
         assertEquals("url", clipCaptor.getValue().getDescription().getLabel());
-        assertEquals(url, clipCaptor.getValue().getItemAt(0).getText());
+        assertEquals(url.getSpec(), clipCaptor.getValue().getItemAt(0).getText());
     }
 
     @Test
@@ -151,5 +159,48 @@ public class ClipboardTest {
         when(clipboardManager.getPrimaryClipDescription()).thenReturn(clipDescription);
 
         assertTrue(clipboard.hasCoercedText());
+    }
+
+    @Test
+    @Config(shadows = ShadowToast.class)
+    public void setTextWithNotification() {
+        Clipboard.getInstance().setText("label", "text", false);
+        assertNull(ShadowToast.getLatestToast());
+
+        Clipboard.getInstance().setText("label", "text", true);
+        assertNotNull(ShadowToast.getLatestToast());
+        assertTextFromLatestToast(R.string.copied);
+    }
+
+    @Test
+    @Config(shadows = ShadowToast.class)
+    public void setImageWithNotification() {
+        Clipboard.getInstance().setImageUri(mTempImageUri, false);
+        ShadowLooper.idleMainLooper();
+        assertNull(ShadowToast.getLatestToast());
+
+        Clipboard.getInstance().setImageUri(mTempImageUri, true);
+        ShadowLooper.idleMainLooper();
+        assertNotNull(ShadowToast.getLatestToast());
+        assertTextFromLatestToast(R.string.image_copied);
+    }
+
+    @Test
+    @Config(shadows = ShadowToast.class)
+    public void setImageWithFailedNotification() {
+        Clipboard.getInstance().setImageUri(null, false);
+        ShadowLooper.idleMainLooper();
+        assertNotNull(ShadowToast.getLatestToast());
+        assertTextFromLatestToast(R.string.copy_to_clipboard_failure_message);
+    }
+
+    private void assertTextFromLatestToast(@StringRes int strRes) {
+        TextView textView = (TextView) ShadowToast.getLatestToast().getView();
+        String actualText = textView == null ? "" : textView.getText().toString();
+
+        assertEquals(
+                "Text for toast shown does not match.",
+                ContextUtils.getApplicationContext().getString(strRes),
+                actualText);
     }
 }

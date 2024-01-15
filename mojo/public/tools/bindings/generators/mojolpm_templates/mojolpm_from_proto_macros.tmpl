@@ -3,7 +3,11 @@
 
 {%- macro declare_array(type, kind) %}
 {%-   set mojom_type = kind.kind|cpp_wrapper_type(add_same_module_namespaces=true) %}
-{%-   set mojom_maybe_type = kind.kind|cpp_wrapper_type(add_same_module_namespaces=true, ignore_nullable=true) %}
+{%-   if kind.kind|is_nullable_kind %}
+{%-     set mojom_maybe_type = kind.kind|to_unnullable_kind|cpp_wrapper_type(add_same_module_namespaces=true) %}
+{%-   else %}
+{%-     set mojom_maybe_type = mojom_type %}
+{%-   endif %}
 bool FromProto(
   const {{type}}& input,
   std::vector<{{mojom_type}}>& output);{{"\n"-}}
@@ -26,7 +30,11 @@ bool FromProto(
 {%- macro declare_map(type, kind) %}
 {%-   set mojom_key_type = kind.key_kind|cpp_wrapper_type(add_same_module_namespaces=true) %}
 {%-   set mojom_value_type = kind.value_kind|cpp_wrapper_type(add_same_module_namespaces=true) %}
-{%-   set mojom_maybe_value_type = kind.value_kind|cpp_wrapper_type(add_same_module_namespaces=true, ignore_nullable=true) %}
+{%-   if kind.value_kind|is_nullable_kind %}
+{%-     set mojom_maybe_value_type = kind.value_kind|to_unnullable_kind|cpp_wrapper_type(add_same_module_namespaces=true) %}
+{%-   else %}
+{%-     set mojom_maybe_value_type = mojom_value_type %}
+{%-   endif %}
 bool FromProto(
   const {{type}}& input,
   base::flat_map<{{mojom_key_type}},
@@ -69,39 +77,34 @@ bool FromProto(
 
 {%- macro define_array(type, kind) %}
 {%-   set mojom_type = kind.kind|cpp_wrapper_type(add_same_module_namespaces=true) %}
-{%-   set mojom_maybe_type = kind.kind|cpp_wrapper_type(add_same_module_namespaces=true, ignore_nullable=true) %}
 bool FromProto(
     const {{type}}& input,
     std::vector<{{mojom_type}}>& output) {
   bool result = true;
-  size_t i = 0;
 
-  output.resize(input.values_size());
-
+  output.reserve(input.values_size());
   for (const auto& entry : input.values()) {
+    {{mojom_type}} value{ {{- kind.kind|default_constructor_args -}} };
 {%-   if kind.kind|is_nullable_kind %}
-    {{mojom_type}} value;
-    {{mojom_maybe_type}} maybe_value;
+{%-     set unnullable_kind = kind.kind|to_unnullable_kind %}
+{%-     set mojom_maybe_type = unnullable_kind|cpp_wrapper_type(add_same_module_namespaces=true) %}
+    {{mojom_maybe_type}} maybe_value{ {{- unnullable_kind|default_constructor_args -}} };
     if (FromProto(entry.value(), maybe_value)) {
       value = std::move(maybe_value);
     }
-    output[i++] = std::move(value);
 {%-   elif kind.kind|is_map_kind or kind.kind|is_array_kind %}
-    {{mojom_type}} values;
-    result = FromProto(entry, values);
+    result = FromProto(entry, value);
     if (!result) {
       break;
     }
-    output[i++] = std::move(values);
 {%-   else %}
-    {{mojom_type}} value;
     result = FromProto(entry.value(), value);
     if (!result) {
       break;
     }
-    output[i++] = std::move(value);
 {%-   endif %}
-  }
+    output.emplace_back(std::move(value));
+}
 
   return result;
 }{{"\n"-}}
@@ -128,7 +131,6 @@ bool FromProto(
 {%- macro define_map(type, kind) %}
 {%-   set mojom_key_type = kind.key_kind|cpp_wrapper_type(add_same_module_namespaces=true) %}
 {%-   set mojom_value_type = kind.value_kind|cpp_wrapper_type(add_same_module_namespaces=true) %}
-{%-   set mojom_maybe_value_type = kind.value_kind|cpp_wrapper_type(add_same_module_namespaces=true, ignore_nullable=true) %}
 bool FromProto(
     const {{type}}& input,
     base::flat_map<{{mojom_key_type}},
@@ -136,9 +138,11 @@ bool FromProto(
   bool result = true;
   for (const auto& entry : input.values()) {
 {%-   if kind.value_kind|is_nullable_kind %}
-    {{mojom_key_type}} key;
-    {{mojom_value_type}} value;
-    {{mojom_maybe_value_type}} maybe_value;
+{%-     set unnullable_value_kind = kind.value_kind|to_unnullable_kind %}
+{%-     set mojom_maybe_value_type = unnullable_value_kind|cpp_wrapper_type(add_same_module_namespaces=true) %}
+    {{mojom_key_type}} key{ {{- kind.key_kind|default_constructor_args -}} };
+    {{mojom_value_type}} value{ {{- kind.value_kind|default_constructor_args -}} };
+    {{mojom_maybe_value_type}} maybe_value{ {{- unnullable_value_kind|default_constructor_args -}} };
 
     if (FromProto(entry.key(), key)) {
       if (FromProto(entry.value(), maybe_value)) {
@@ -150,8 +154,8 @@ bool FromProto(
       break;
     }
 {%-   else %}
-    {{mojom_key_type}} key;
-    {{mojom_value_type}} value;
+    {{mojom_key_type}} key{ {{- kind.key_kind|default_constructor_args -}} };
+    {{mojom_value_type}} value{ {{- kind.value_kind|default_constructor_args -}} };
 
     if (FromProto(entry.key(), key)
         && FromProto(entry.value(), value)) {
@@ -221,7 +225,7 @@ bool FromProto(
   output = static_cast<{{mojom_type}}>(input);
   return true;
 {%-   else %}
-  return mojo::EnumTraits<{{enum_type}}, {{mojom_type}}>::FromMojom(
+  return ::mojo::EnumTraits<{{enum_type}}, {{mojom_type}}>::FromMojom(
     static_cast<{{enum_type}}>(input), &output);
 {%-   endif %}
 }
@@ -264,10 +268,11 @@ bool FromProto(
 {%-       set name = field.name|camel_to_under %}
 {%-       set kind = field.kind %}
 {%-       set field_mojom_type = kind|cpp_wrapper_type(add_same_module_namespaces=true) %}
-{%-       set field_maybe_mojom_type = kind|cpp_wrapper_type(add_same_module_namespaces=true, ignore_nullable=true) %}
-  {{field_mojom_type}} local_{{name}};
+  {{field_mojom_type}} local_{{name}}{ {{- kind|default_constructor_args -}} };
 {%-       if kind|is_nullable_kind %}
-  {{field_maybe_mojom_type}} local_maybe_{{name}};
+{%-         set unnullable_kind = kind|to_unnullable_kind %}
+{%-         set field_maybe_mojom_type = unnullable_kind|cpp_wrapper_type(add_same_module_namespaces=true) %}
+  {{field_maybe_mojom_type}} local_maybe_{{name}}{ {{- unnullable_kind|default_constructor_args -}} };
 {%-       endif %}
 {%-     endfor %}
 
@@ -325,7 +330,7 @@ bool FromProto(
 {%-     set dataview_type = (union|get_qualified_name_for_kind(flatten_nested_kind=True)) ~ "DataView" %}
 {%-     set data_type = (union|get_qualified_name_for_kind(flatten_nested_kind=True, internal=True)) %}
   ::mojo::Message mojolpm_message(0, 0, 0, 0, nullptr);
-  mojo::internal::MessageFragment<{{data_type}}> mojolpm_fragment(
+  ::mojo::internal::MessageFragment<{{data_type}}> mojolpm_fragment(
       mojolpm_message);
 
   ::mojo::internal::Serializer<{{dataview_type}}, const {{union_type}}>::Serialize(
@@ -340,22 +345,24 @@ bool FromProto(
 {%-       set field_mojom_type = kind|cpp_wrapper_type(add_same_module_namespaces=true) %}
     case {{union_type}}::k{{("m_" ~ name)|under_to_camel}}: {
 {%-       if kind|is_nullable_kind %}
-{%-         set field_maybe_mojom_type = kind|cpp_wrapper_type(add_same_module_namespaces=true, ignore_nullable=true) %}
-      {{field_mojom_type}} local_{{name}};
-      {{field_maybe_mojom_type}} maybe_local_{{name}};
+{%-         set unnullable_kind = kind|to_unnullable_kind %}
+{%-         set field_maybe_mojom_type = unnullable_kind|cpp_wrapper_type(add_same_module_namespaces=true) %}
+      {{field_mojom_type}} local_{{name}}{ {{- kind|default_constructor_args -}} };
+      {{field_maybe_mojom_type}} maybe_local_{{name}}{ {{- unnullable_kind|default_constructor_args -}} };
       if (FromProto(input.m_{{name}}(), maybe_local_{{name}})) {
         local_{{name}} = std::move(maybe_local_{{name}});
       }
-      output = {{union|get_qualified_name_for_kind(flatten_nested_kind=true)}}::New{{name|under_to_camel}}(std::move(local_{{name}}));
+      output = {{union|get_qualified_name_for_kind(flatten_nested_kind=true)}}::New{{name|under_to_camel(digits_split=false)}}(std::move(local_{{name}}));
       return true;
 {%-       else %}
-      {{field_mojom_type}} local_{{name}};
+      {{field_mojom_type}} local_{{name}}{ {{- kind|default_constructor_args -}} };
       if (FromProto(input.m_{{name}}(), local_{{name}})) {
-        output = {{union|get_qualified_name_for_kind(flatten_nested_kind=true)}}::New{{name|under_to_camel}}(std::move(local_{{name}}));
+        output = {{union|get_qualified_name_for_kind(flatten_nested_kind=true)}}::New{{name|under_to_camel(digits_split=false)}}(std::move(local_{{name}}));
         return true;
       }
+      break;
 {%-       endif %}
-    } break;
+    }
 {%      endfor %}
     default: {
       return false;

@@ -7,15 +7,12 @@
 
 #include <memory>
 #include <utility>
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/platform/platform.h"
-#include "third_party/blink/public/platform/scheduler/web_resource_loading_task_runner_handle.h"
-#include "third_party/blink/public/platform/web_back_forward_cache_loader_helper.h"
-#include "third_party/blink/public/platform/web_url_loader_factory.h"
-#include "third_party/blink/public/platform/web_url_loader_mock_factory.h"
 #include "third_party/blink/renderer/platform/exported/wrapped_resource_request.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
-#include "third_party/blink/renderer/platform/loader/testing/web_url_loader_factory_with_mock.h"
-#include "third_party/blink/renderer/platform/testing/code_cache_loader_mock.h"
+#include "third_party/blink/renderer/platform/testing/url_loader_mock_factory.h"
 
 namespace blink {
 
@@ -23,37 +20,28 @@ namespace blink {
 class TestLoaderFactory : public ResourceFetcher::LoaderFactory {
  public:
   TestLoaderFactory()
-      : TestLoaderFactory(WebURLLoaderMockFactory::GetSingletonInstance()) {}
+      : TestLoaderFactory(URLLoaderMockFactory::GetSingletonInstance()) {}
 
-  explicit TestLoaderFactory(WebURLLoaderMockFactory* mock_factory)
-      : url_loader_factory_(
-            std::make_unique<WebURLLoaderFactoryWithMock>(mock_factory)) {}
+  explicit TestLoaderFactory(URLLoaderMockFactory* mock_factory)
+      : mock_factory_(mock_factory) {}
 
   // LoaderFactory implementations
-  std::unique_ptr<WebURLLoader> CreateURLLoader(
-      const ResourceRequest& request,
+  std::unique_ptr<URLLoader> CreateURLLoader(
+      const network::ResourceRequest& request,
       const ResourceLoaderOptions& options,
       scoped_refptr<base::SingleThreadTaskRunner> freezable_task_runner,
       scoped_refptr<base::SingleThreadTaskRunner> unfreezable_task_runner,
-      WebBackForwardCacheLoaderHelper back_forward_cache_loader_helper)
-      override {
-    WrappedResourceRequest wrapped(request);
-    return url_loader_factory_->CreateURLLoader(
-        wrapped,
-        scheduler::WebResourceLoadingTaskRunnerHandle::CreateUnprioritized(
-            std::move(freezable_task_runner)),
-        scheduler::WebResourceLoadingTaskRunnerHandle::CreateUnprioritized(
-            std::move(unfreezable_task_runner)),
-        /*keep_alive_handle=*/mojo::NullRemote(),
-        back_forward_cache_loader_helper);
+      BackForwardCacheLoaderHelper* back_forward_cache_loader_helper,
+      const absl::optional<base::UnguessableToken>&
+          service_worker_race_network_request_token,
+      bool is_from_origin_dirty_style_sheet) override {
+    return mock_factory_->CreateURLLoader();
   }
 
-  std::unique_ptr<WebCodeCacheLoader> CreateCodeCacheLoader() override {
-    return std::make_unique<CodeCacheLoaderMock>();
-  }
+  CodeCacheHost* GetCodeCacheHost() override { return nullptr; }
 
  private:
-  std::unique_ptr<WebURLLoaderFactory> url_loader_factory_;
+  raw_ptr<URLLoaderMockFactory, ExperimentalRenderer> mock_factory_;
 };
 
 }  // namespace blink

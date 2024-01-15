@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/process/process_handle.h"
@@ -159,6 +159,7 @@ class ConsumerHost : public perfetto::Consumer, public mojom::ConsumerHost {
                    bool has_more) override;
   void OnObservableEvents(const perfetto::ObservableEvents&) override;
   void OnTraceStats(bool success, const perfetto::TraceStats&) override;
+  void OnSessionCloned(const OnSessionClonedArgs&) override;
 
   // Unused in Chrome.
   void OnDetach(bool success) override {}

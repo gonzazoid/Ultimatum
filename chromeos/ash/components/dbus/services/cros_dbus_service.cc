@@ -9,8 +9,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/system/sys_info.h"
 #include "dbus/bus.h"
 #include "dbus/exported_object.h"
@@ -84,7 +85,7 @@ class CrosDBusServiceImpl : public CrosDBusService {
 
   bool service_started_;
   base::PlatformThreadId origin_thread_id_;
-  dbus::Bus* bus_;
+  raw_ptr<dbus::Bus> bus_;
   std::string service_name_;
   dbus::ObjectPath object_path_;
   scoped_refptr<dbus::ExportedObject> exported_object_;

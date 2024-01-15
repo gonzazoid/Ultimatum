@@ -26,7 +26,7 @@ class StopCastingHandler {
   StopCastingHandler() = default;
   ~StopCastingHandler() = default;
 
-  MOCK_METHOD0(StopCasting, void());
+  MOCK_METHOD(void, StopCasting, (), ());
 };
 
 // A mock class for delegating media notification footer view.
@@ -36,9 +36,9 @@ class MockFooterViewDelegate : public MediaItemUIFooterView::Delegate {
   ~MockFooterViewDelegate() override = default;
 
   // MediaNotificationfooterview::Delegate.
-  MOCK_METHOD0(OnDropdownButtonClicked, void());
-  MOCK_METHOD0(IsDeviceSelectorExpanded, bool());
-  MOCK_METHOD1(OnDeviceSelected, void(int));
+  MOCK_METHOD(void, OnDropdownButtonClicked, (), (override));
+  MOCK_METHOD(bool, IsDeviceSelectorExpanded, (), (override));
+  MOCK_METHOD(void, OnDeviceSelected, (int), (override));
 };
 
 }  // namespace
@@ -83,7 +83,7 @@ class MediaItemUIFooterViewTest : public ChromeViewsTestBase {
 
   std::vector<views::View*> GetVisibleItems() {
     std::vector<views::View*> item;
-    for (auto* view : get_view()->children()) {
+    for (views::View* view : get_view()->children()) {
       if (view->GetVisible() && view->width() > 0)
         item.push_back(view);
     }
@@ -102,7 +102,7 @@ class MediaItemUIFooterViewTest : public ChromeViewsTestBase {
   std::unique_ptr<views::Widget> widget_;
   std::unique_ptr<StopCastingHandler> handler_;
   std::unique_ptr<MockFooterViewDelegate> delegate_;
-  raw_ptr<MediaItemUIFooterView> view_ = nullptr;
+  raw_ptr<MediaItemUIFooterView, DanglingUntriaged> view_ = nullptr;
 };
 
 TEST_F(MediaItemUIFooterViewTest, ViewDuringCast) {

@@ -5,11 +5,12 @@
 #ifndef ASH_QUICK_PAIR_REPOSITORY_FAST_PAIR_PENDING_WRITE_STORE_H_
 #define ASH_QUICK_PAIR_REPOSITORY_FAST_PAIR_PENDING_WRITE_STORE_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "ash/quick_pair/proto/fastpair_data.pb.h"
 #include "base/values.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefRegistrySimple;
 
@@ -31,11 +32,12 @@ class PendingWriteStore {
 
   struct PendingWrite {
     PendingWrite(const std::string& mac_address,
-                 const std::string& hex_model_id);
+                 const nearby::fastpair::FastPairInfo fast_pair_info);
+    PendingWrite(PendingWrite&& pending_write);
     ~PendingWrite();
 
     const std::string mac_address;
-    const std::string hex_model_id;
+    const nearby::fastpair::FastPairInfo fast_pair_info;
   };
 
   struct PendingDelete {
@@ -49,12 +51,12 @@ class PendingWriteStore {
 
   // Saves details about a pending request to add a new paired device to
   // Footprints.
-  void AddPairedDevice(const std::string& mac_address,
-                       const std::string& hex_model_id);
+  void WritePairedDevice(const std::string& mac_address,
+                         const nearby::fastpair::FastPairInfo fast_pair_info);
 
   // Gets a list of all devices which have been paired but not yet written to
   // the server.
-  std::vector<PendingWrite> GetPendingAdds();
+  std::vector<PendingWrite> GetPendingWrites();
 
   // To be called after a paired device is saved to Footprints, this removes
   // pending device from storage.

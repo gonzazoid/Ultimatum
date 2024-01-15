@@ -7,9 +7,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ref.h"
 #include "base/ranges/algorithm.h"
 #include "content/browser/storage_partition_impl.h"
 #include "net/cookies/canonical_cookie.h"
@@ -41,14 +42,11 @@ void ProcessCookies(base::OnceCallback<void(bool)> callback,
 
 AttributionCookieCheckerImpl::AttributionCookieCheckerImpl(
     StoragePartitionImpl* storage_partition)
-    : storage_partition_(storage_partition) {
-  DCHECK(storage_partition_);
-}
+    : storage_partition_(
+          raw_ref<StoragePartitionImpl>::from_ptr(storage_partition)) {}
 
 AttributionCookieCheckerImpl::~AttributionCookieCheckerImpl() = default;
 
-// TODO(apaseltiner): Consider caching the results of this check to avoid
-// repeated lookups for the same origins in close temporal proximity.
 void AttributionCookieCheckerImpl::IsDebugCookieSet(
     const url::Origin& origin,
     base::OnceCallback<void(bool)> callback) {

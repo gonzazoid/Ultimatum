@@ -2,12 +2,12 @@
 
 **Get started [here](#setup)**.
 
-[Visual Studio Code (VS Code)](https://code.visualstudio.com) is a free,
-open source, lightweight and powerful code editor for Windows, Mac and Linux,
-based on [Electron](https://www.electronjs.org/)/Chromium.
-It has built-in support for JavaScript, TypeScript and Node.js and a rich
-extension ecosystem that adds intellisense, debugging, syntax highlighting etc.
-For many languages like C++, Python, Go, Java, it works without too much setup.
+[Visual Studio Code (VS Code)](https://code.visualstudio.com) is a free, open
+source, lightweight and powerful code editor for Windows, macOS and Linux, based
+on [Electron](https://www.electronjs.org/)/Chromium. It has built-in support for
+JavaScript, TypeScript and Node.js and a rich extension ecosystem that adds
+intellisense, debugging, syntax highlighting etc. For many languages like C++,
+Python, Go, Java, it works without too much setup.
 
 It is NOT a full-fledged IDE like Visual Studio. The two are completely
 separate products. The only commonality with Visual Studio is that both are
@@ -48,9 +48,8 @@ make changes, read the [documentation
 guidelines](documentation_guidelines.md) and
 [submit a change list](contributing.md).
 
-All file paths and commands have been tested on Linux. Windows and Mac might
-require a slightly different setup (e.g. `Ctrl` -> `Cmd`). Please update this
-page accordingly.
+All file paths and commands have been tested on Linux and macOS. Windows might
+require a slightly different setup. Please update this page accordingly.
 
 
 ## Setup
@@ -65,10 +64,11 @@ Follow the steps on [Setting up Visual Studio Code](https://code.visualstudio.co
 
 ### Usage
 
-To run it on Linux, just navigate to Chromium's `src` folder and type `code .`
-in a terminal. The argument to `code` is the base directory of the workspace. VS
-Code does not require project or solution files. However, it does store
-workspace settings in a `.vscode` folder in your base directory.
+To run it on Linux or on macOS, just navigate to Chromium's `src` folder and
+type `code .` in a terminal. The argument to `code` is the base directory of the
+workspace. VS Code does not require project or solution files. However, it does
+store workspace settings in a `.vscode` folder in your base directory (i.e. your
+project root folder).
 
 If you installed Code Insiders, the binary name is `code-insiders` instead.
 
@@ -97,7 +97,8 @@ the "Preferences: Open User Settings (JSON)" verb (for whatever reason, setting
 
 Up to now, you have a basic version of VS Code without much language support.
 Next, we will install some useful extensions. Jump to the extensions window
-(`Ctrl+Shift+X`) and install the extensions, or run the following commands.
+(`Ctrl+Shift+X`, or `Cmd+Shift+X` in macOS) and install the extensions, or run
+the following commands.
 
 You will most likely use the following extensions every day:
 
@@ -144,18 +145,18 @@ $ echo "ms-vscode.cpptools llvm-vs-code-extensions.vscode-clangd ms-python.pytho
 The following extensions might be useful for you as well:
 
 ```bash
-$ echo "wmaurer.change-case shd101wyy.markdown-preview-enhanced Gruntfuggly.todo-tree alefragnani.Bookmarks spmeesseman.vscode-taskexplorer streetsidesoftware.code-spell-checker tht13.html-preview-vscode anseki.vscode-color" | xargs -n 1 code --force --install-extension
+$ echo "wmaurer.change-case shd101wyy.markdown-preview-enhanced Gruntfuggly.todo-tree alefragnani.Bookmarks spmeesseman.vscode-taskexplorer streetsidesoftware.code-spell-checker george-alisson.html-preview-vscode anseki.vscode-color" | xargs -n 1 code --force --install-extension
 ```
 
 *   **chromium-codesearch** -
-    Mac and Linux only: adds ability to open the current line in [Chromium Code
+    macOS and Linux only: adds ability to open the current line in [Chromium Code
     Search](https://cs.chromium.org/). All other functionality is deprecated, so
     currently only of limited usefulness.
 *   [**change-case**](https://marketplace.visualstudio.com/items?itemName=wmaurer.change-case) -
     Quickly change the case of the current selection or current word.
 *   [**Markdown Preview Enhanced**](https://marketplace.visualstudio.com/items?itemName=shd101wyy.markdown-preview-enhanced) -
     Preview markdown side-by-side with automatic scroll sync and many other
-    features with `ctrl+k v`. This document was written with this extension!
+    features with `Ctrl+k v`. This document was written with this extension!
 *   [**Todo Tree**](https://marketplace.visualstudio.com/items?itemName=Gruntfuggly.todo-tree) -
     Displays comment tags like TODO/FIXME in a tree view in a dedicated sidebar.
 *   [**Bookmarks**](https://marketplace.visualstudio.com/items?itemName=alefragnani.Bookmarks) -
@@ -167,8 +168,8 @@ $ echo "wmaurer.change-case shd101wyy.markdown-preview-enhanced Gruntfuggly.todo
 *   [**Code Spell Checker**](https://marketplace.visualstudio.com/items?itemName=streetsidesoftware.code-spell-checker) -
     A basic spell checker that works well with camelCase code. It helps catch
     common spelling errors.
-*   [**HTML Preview**](https://marketplace.visualstudio.com/items?itemName=tht13.html-preview-vscode) -
-    Previews HTML files while editing with `ctrl+k v`.
+*   [**HTML Preview**](https://marketplace.visualstudio.com/items?itemName=george-alisson.html-preview-vscode) -
+    Previews HTML files while editing with `Ctrl+k v`.
 *   [**Color Picker**](https://marketplace.visualstudio.com/items?itemName=anseki.vscode-color) -
     Visualizes color codes inline and provides color picker GUI to generates new
     color codes.
@@ -180,8 +181,9 @@ other useful extensions.
 
 ### Color Scheme
 
-Press `Ctrl+Shift+P, color, Enter` to pick a color scheme for the editor. There
-are also tons of [color schemes available for download on the
+Press `Ctrl+Shift+P (Cmd+Shift+P `in macOS`), color, Enter`  to pick a color
+scheme for the editor. There are also tons of [color schemes available for
+download on the
 marketplace](https://marketplace.visualstudio.com/search?target=VSCode&category=Themes&sortBy=Downloads).
 
 ### Keyboard Shortcuts
@@ -189,9 +191,9 @@ marketplace](https://marketplace.visualstudio.com/search?target=VSCode&category=
 #### CheatSheet
 
 *   [Windows](https://code.visualstudio.com/shortcuts/keyboard-shortcuts-windows.pdf)
-*   [Mac](https://code.visualstudio.com/shortcuts/keyboard-shortcuts-macos.pdf)
+*   [macOS](https://code.visualstudio.com/shortcuts/keyboard-shortcuts-macos.pdf)
 
-#### Useful Shortcuts
+#### Useful Shortcuts (Linux)
 
 *   `Ctrl+P` opens a search box to find and open a file.
 *   `F1` or `Ctrl+Shift+P` opens a search box to find a command (e.g. Tasks: Run
@@ -224,65 +226,83 @@ Note: See also [Key Bindings for Visual Studio Code
 
 ### Java/Android Support
 
-*Before anything*, add these to your settings.json.
+Follow these steps to get full IDE support (outline, autocompletion, jump to
+definition including automatic decompilation of prebuilts, real-time reporting
+of compile errors/warnings, Javadocs, etc.) when editing `.java` files in
+Chromium:
+
+1. **Add the following to your VS Code workspace `settings.json`:**
+    * `"java.import.gradle.enabled": false`
+      `"java.import.maven.enabled": false`
+      This will prevent the language server from attempting to build *all*
+      Gradle and Maven projects that can be found anywhere in the Chromium
+      source tree, which typically results in hilarity.
+    * `"java.jdt.ls.java.home": "<< ABSOLUTE PATH TO YOUR WORKING COPY OF CHROMIUM >>/src/third_party/jdk/current"`
+      This one is optional but reduces the likelihood of problems by making sure
+      the language server uses the same JDK as the Chromium build system (as
+      opposed to some random JDK from your host system).
+2. **Install the
+   [*Language Support for Java™ by Red Hat*](https://marketplace.visualstudio.com/items?itemName=redhat.java)
+   extension.**
+   You do not need any other extension.
+3. In the VS Code explorer (left-hand pane) **right-click on a folder (any folder)
+   and click *Add Folder to Java Source Path***.
+   This is just one way to force the extension to generate an internal build
+   project for the language server. The specific folder doesn't matter because
+   the source path configuration will be overwritten in step 6.
+4. **Wait for the *Successfully added '...' to the project src_...'s source
+   path* pop-up notification to appear**.
+   Note that this can take some time (1-2 minutes), during which VS Code seems
+   to be idle.
+5. **Build your code** in the usual way (i.e. using gn and ninja commands).
+   This will produce build config files that are necessary for the next step. It
+   will also make autogenerated code visible to the language server.
+6. **Generate the `.classpath` file** for the internal build project by running
+   `build/android/generate_vscode_classpath.py` with the appropriate arguments
+   from the root of your VS Code workspace folder.
+   For example, if your VS Code workspace is rooted in `src`, your build
+   output directory is `out/Debug-x86` and your build target is
+   `//components/cronet/android:cronet_javatests`, run:
+   `build/android/generate_vscode_classpath.py --output-dir out/Debug-x86 --build-config gen/components/cronet/android/cronet_javatests.build_config.json > ~/.vscode*/data/User/workspaceStorage/*/redhat.java/jdt_ws/.metadata/.plugins/org.eclipse.core.resources/.projects/src_*/.classpath`
+7. **Reload** your VS Code window.
+8. **Open a Java source file then wait a couple of minutes** for the language
+   server to build the project.
+9. **Done!** You should now have full Java language support for any `.java` file
+   that is included in the build.
+
+*** note
+**Warning:** do not attempt to change the extension's source path settings, as
+that risks overwriting the generated `.classpath` file.
+***
+
+#### Known issues
+
+* Errors related to `GEN_JNI` are caused by the language server (rightfully)
+  getting confused about multiple definitions of the
+  [autogenerated](/third_party/jni_zero/README.md) `GEN_JNI` class. This
+  is a known quirk of the JNI generator.
+
+#### Automatic formatting
+
+Java code in Chromium is formatted using [clang-format](/docs/clang_format.md).
+To get VS Code to use clang-format to format Java files, install the
+[*Clang-Format* extension](https://marketplace.visualstudio.com/items?itemName=xaver.clang-format)
+and set it as the default formatter for Java in your workspace `settings.json`:
+
+```json
+"[java]": {
+  "editor.defaultFormatter": "xaver.clang-format"
+}
 ```
-// LightWeight is the language support, the feature we care about. The other
-// modes include build functionality with Maven and Gradle. They try to build
-// on their own and end up showing thousands of errors.
-"java.server.launchMode": "LightWeight",
-// Avoids overwriting the custom .classpath file (c.f. next section).
-"java.configuration.updateBuildConfiguration": "disabled",
+
+To avoid potential formatting differences due to clang-format version skew, it
+makes sense to configure the extension to run clang-format in the same way
+`git cl format` would. You can do this by adding the following to your
+workspace `settings.json`:
+
+```json
+"clang-format.executable": "<< PATH TO YOUR CHROMIUM WORKING COPY >>/src/buildtools/linux64/clang-format"
 ```
-Then install the "Language Support for Java" extension. If you installed it
-before setting the configs above, uninstall, delete the <project> folder (c.f.
-next section) and reinstall. You also don't need any of the remaining extensions
-in "Extension Pack for Java".
-
-#### Setting up code completion/reference finding/etc.
-
-You'll need to generate a placeholder .classpath file and locate it. In order
-to generate it, right click on any Java source folder in the left panel and
-choose "Add folder to java source path". Its location will depend on whether
-you're doing local or remote development. Local path on linux will look
-something like:
-
-`~/.vscode/data/User/workspaceStorage/<hash>/redhat.java/jdt_ws/<project>/.classpath`
-
-You might find multiple folders when looking for `<project>`. Choose anything except
-`jdt.ls-java-project`. If you only see `jdt.ls-java-project`, try using the
-"Add folder to java source path" option again.
-
-If doing remote development, the file will be under `~/.vscode-server/` on your
-remote machine.
-
-You'll need to replace all of the contents of that file with the contents of
-`tools/android/eclipse/.classpath` (external) or
-`clank/development/ide/eclipse/.classpath` (generated by gclient runhooks for
-Chrome developers), and then replace some paths as vscode interprets some paths
-differently from eclipse.
-*   Replace: `kind="src" path="` with `kind="src" path="_/`
-    * eg. `<classpathentry kind="src" path="_/android_webview/glue/java/src"/>`
-*   Replace: `kind="lib" path="../src` with `kind="lib" path="_`
-    * eg.
-`<classpathentry kind="lib" path="_/out/Debug/lib.java/base/base_java.jar"/>`
-*   Remove all nested paths (or exclude them from their parents). At time of
-writing:
-    * `third_party/android_protobuf/src/java/src/main/java`
-    * `third_party/junit/src/src/main/java`
-
-Also, make sure
-`export ANDROID_HOME=/usr/local/google/home/{your_ldap}/Android/Sdk` is in the
-remote machine's `~/.bashrc`.
-
-Then restart vscode, open a Java file, and wait for a bit.
-
-Debugging tips:
-*   Right clicking on a folder in vscode and clicking "Add folder to java source
-path" will error if there are syntax problems with your classpath. (Don't use
-this actually add new paths to your classpath as it won't work correctly)
-    * If there are no syntax errors, ensure the correct .classpath file is being
-    used by seeing if the folder was actually added to the .classpath file you
-    edited.
 
 ## Setup For Chromium
 
@@ -299,7 +319,7 @@ settings to enable better team development, or change settings locally to suit
 personal preference.
 
 To use these settings wholesale, enter the following commands into your terminal
-while at the src directory:
+while at the `src/` directory:
 
 ```bash
 $ mkdir .vscode/
@@ -325,10 +345,11 @@ $ cp tools/vscode/tasks.json .vscode
 Before running most of the tasks, you'll need to set the `chromeOutputDir` value
 in your `.vscode/tasks.json` file.
 
-Now you can run tasks by using `Ctrl+P` and typing "task " and then a number
-of your choice. If you select one of the build tasks, the build output will
-display in the terminal pane. Jump through build problems quickly using F8 /
-Shift-F8. See [task names](#task-names) for more info on running tasks.
+Now you can run tasks by using `Ctrl+P` (`Cmd+Shift+P` in macOS) and typing
+"task " and then a number of your choice. If you select one of the build tasks,
+the build output will display in the terminal pane. Jump through build problems
+quickly using F8 / Shift-F8. See [task names](#task-names) for more info on
+running tasks.
 
 If you have intellisense enabled but do not have include paths set up correctly,
 jumping through problems will also try to navigate through all the include files
@@ -430,7 +451,7 @@ should work remotely if you followed the setup instructions at
 problems, please refer to
 [go/vscode-remote#windows](http://go/vscode-remote#windows).
 
-Non-Googlers may follow may follow Microsoft's instructions for
+Non-Googlers may follow Microsoft's instructions for
 [installing the OpenSSH server](https://docs.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse).
 VS Code should work remotely after following this step.
 
@@ -455,11 +476,11 @@ $ cp tools/vscode/cpp.json .vscode/cpp.code-snippets
 
 #### The `out` folder
 
-Automatically generated code is put into a subfolder of out/, which means that
+Automatically generated code is put into a subfolder of `out/`, which means that
 these files are ignored by VS Code (see files.exclude above) and cannot be
-opened e.g. from quick-open (`Ctrl+P`).
-As of version 1.21, VS Code does not support negated glob commands, but you can
-define a set of exclude pattern to include only out/Debug/gen:
+opened e.g. from quick-open (`Ctrl+P`). As of version 1.21, VS Code does not
+support negated glob commands, but you can define a set of exclude pattern to
+include only `out/Debug/gen`:
 ```
 "files.exclude": {
   // Ignore build output folders. Except out/Debug/gen/
@@ -532,4 +553,4 @@ set `cwd` to the output dir. otherwise, set `cwd` to `${workspaceFolder}`.
 ### More
 
 More tips and tricks can be found
-[here](https://github.com/Microsoft/vscode-tips-and-tricks/blob/master/README.md).
+[here](https://code.visualstudio.com/docs/getstarted/tips-and-tricks).

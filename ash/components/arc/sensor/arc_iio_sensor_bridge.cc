@@ -91,11 +91,16 @@ void ArcIioSensorBridge::SetIsTabletModeOn(bool is_tablet_mode_on) {
 }
 
 void ArcIioSensorBridge::OnGetSwitchStates(
-    absl::optional<chromeos::PowerManagerClient::SwitchStates> states) {
+    std::optional<chromeos::PowerManagerClient::SwitchStates> states) {
   if (states.has_value()) {
     SetIsTabletModeOn(states->tablet_mode ==
                       chromeos::PowerManagerClient::TabletMode::ON);
   }
+}
+
+// static
+void ArcIioSensorBridge::EnsureFactoryBuilt() {
+  ArcIioSensorBridgeFactory::GetInstance();
 }
 
 }  // namespace arc

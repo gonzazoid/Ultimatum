@@ -5,7 +5,7 @@
 #ifndef IOS_CHROME_BROWSER_UI_AUTOFILL_FORM_INPUT_ACCESSORY_FORM_INPUT_ACCESSORY_COORDINATOR_H_
 #define IOS_CHROME_BROWSER_UI_AUTOFILL_FORM_INPUT_ACCESSORY_FORM_INPUT_ACCESSORY_COORDINATOR_H_
 
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
 #import "ios/web/common/crw_input_view_provider.h"
 
 @class ManualFillInjectionHandler;
@@ -14,7 +14,10 @@
 // Delegate for the coordinator actions.
 @protocol FormInputAccessoryCoordinatorNavigator <NSObject>
 
-// Opens the passwords settings.
+// Opens the Password Manager screen.
+- (void)openPasswordManager;
+
+// Opens the Password Settings screen.
 - (void)openPasswordSettings;
 
 // Opens the addresses settings.
@@ -33,6 +36,9 @@
 
 // The delegate for the coordinator. Must be set before it starts.
 @property(nonatomic, weak) id<FormInputAccessoryCoordinatorNavigator> navigator;
+
+// Stops child coordinators presenting UI.
+- (void)clearPresentedState;
 
 @end
 

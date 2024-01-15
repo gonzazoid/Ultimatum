@@ -5,11 +5,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
+#include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/current_thread.h"
@@ -68,7 +69,7 @@ bool HasDocType(const WebDocument& doc) {
 // https://crbug.com/788788
 #if BUILDFLAG(IS_ANDROID) && defined(ADDRESS_SANITIZER)
 #define MAYBE_DomSerializerTests DISABLED_DomSerializerTests
-#elif defined(THREAD_SANITIZER)
+#elif defined(THREAD_SANITIZER) || defined(MEMORY_SANITIZER)
 // http://crbug.com/1350508
 #define MAYBE_DomSerializerTests DISABLED_DomSerializerTests
 #else
@@ -303,7 +304,7 @@ IN_PROC_BROWSER_TEST_F(MAYBE_DomSerializerTests,
 
   std::string original_contents;
   {
-    // Read original contents for later comparison .
+    // Read original contents for later comparison.
     base::ScopedAllowBlockingForTesting allow_blocking;
     ASSERT_TRUE(base::ReadFileToString(page_file_path, &original_contents));
   }
@@ -322,14 +323,13 @@ IN_PROC_BROWSER_TEST_F(MAYBE_DomSerializerTests,
     ASSERT_FALSE(motw_declaration.empty());
     // The encoding of original contents is ISO-8859-1, so we convert the MOTW
     // declaration to ASCII and search whether original contents has it or not.
-    ASSERT_TRUE(std::string::npos == original_contents.find(motw_declaration));
+    ASSERT_FALSE(base::Contains(original_contents, motw_declaration));
 
     // Do serialization.
     SerializeDomForURL(file_url, false);
     // Make sure the serialized contents have MOTW ;
     ASSERT_TRUE(serialization_reported_end_of_data());
-    ASSERT_FALSE(std::string::npos ==
-                 serialized_contents().find(motw_declaration));
+    ASSERT_TRUE(base::Contains(serialized_contents(), motw_declaration));
   }));
 }
 
@@ -341,7 +341,7 @@ IN_PROC_BROWSER_TEST_F(MAYBE_DomSerializerTests,
 
   std::string original_contents;
   {
-    // Read original contents for later comparison .
+    // Read original contents for later comparison.
     base::ScopedAllowBlockingForTesting allow_blocking;
     ASSERT_TRUE(base::ReadFileToString(page_file_path, &original_contents));
   }
@@ -361,14 +361,13 @@ IN_PROC_BROWSER_TEST_F(MAYBE_DomSerializerTests,
     ASSERT_FALSE(motw_declaration.empty());
     // The encoding of original contents is ISO-8859-1, so we convert the MOTW
     // declaration to ASCII and search whether original contents has it or not.
-    ASSERT_TRUE(std::string::npos == original_contents.find(motw_declaration));
+    ASSERT_TRUE(!base::Contains(original_contents, motw_declaration));
 
     // Do serialization.
     SerializeDomForURL(file_url, true);
-    // Make sure the serialized contents have MOTW ;
+    // Make sure the serialized contents have MOTW;
     ASSERT_TRUE(serialization_reported_end_of_data());
-    ASSERT_FALSE(std::string::npos ==
-                 serialized_contents().find(motw_declaration));
+    ASSERT_TRUE(base::Contains(serialized_contents(), motw_declaration));
   }));
 }
 
@@ -856,8 +855,16 @@ IN_PROC_BROWSER_TEST_F(MAYBE_DomSerializerTests,
   }));
 }
 
+// Flaky on win-asan. See https://crbug.com/1484904
+#if BUILDFLAG(IS_WIN) && defined(ADDRESS_SANITIZER)
+#define MAYBE_SubResourceForElementsInNonHTMLNamespace \
+  DISABLED_SubResourceForElementsInNonHTMLNamespace
+#else
+#define MAYBE_SubResourceForElementsInNonHTMLNamespace \
+  SubResourceForElementsInNonHTMLNamespace
+#endif
 IN_PROC_BROWSER_TEST_F(MAYBE_DomSerializerTests,
-                       SubResourceForElementsInNonHTMLNamespace) {
+                       MAYBE_SubResourceForElementsInNonHTMLNamespace) {
   base::FilePath page_file_path =
       GetTestFilePath("dom_serializer", "non_html_namespace.htm");
   GURL file_url = net::FilePathToFileURL(page_file_path);

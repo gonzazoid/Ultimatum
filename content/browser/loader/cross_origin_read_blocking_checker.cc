@@ -4,7 +4,7 @@
 
 #include "content/browser/loader/cross_origin_read_blocking_checker.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "net/base/io_buffer.h"
@@ -103,8 +103,9 @@ CrossOriginReadBlockingChecker::CrossOriginReadBlockingChecker(
   DCHECK(!callback_.is_null());
 
   corb_analyzer_ = network::corb::ResponseAnalyzer::Create(corb_state);
-  auto decision = corb_analyzer_->Init(request.url, request.request_initiator,
-                                       request.mode, response);
+  auto decision =
+      corb_analyzer_->Init(request.url, request.request_initiator, request.mode,
+                           request.destination, response);
   switch (decision) {
     case network::corb::ResponseAnalyzer::Decision::kBlock:
       OnBlocked();

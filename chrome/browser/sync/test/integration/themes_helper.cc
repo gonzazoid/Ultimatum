@@ -4,11 +4,12 @@
 
 #include "chrome/browser/sync/test/integration/themes_helper.h"
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/updater/extension_updater.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sync/test/integration/sync_extension_helper.h"
 #include "chrome/browser/themes/theme_helper.h"
 #include "chrome/browser/themes/theme_service.h"
@@ -105,8 +106,8 @@ ThemePendingInstallChecker::ThemePendingInstallChecker(Profile* profile,
 ThemePendingInstallChecker::~ThemePendingInstallChecker() = default;
 
 bool ThemePendingInstallChecker::IsExitConditionSatisfied(std::ostream* os) {
-  *os << "Waiting for pending theme to be '" << theme_ << "'";
-  return themes_helper::ThemeIsPendingInstall(profile_, theme_);
+  *os << "Waiting for pending theme to be '" << *theme_ << "'";
+  return themes_helper::ThemeIsPendingInstall(profile_, *theme_);
 }
 
 ThemeConditionChecker::ThemeConditionChecker(

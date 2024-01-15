@@ -4,7 +4,7 @@
 
 #include "components/sync/base/weak_handle.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
@@ -37,7 +37,13 @@ class Base {
   base::WeakPtrFactory<Base> weak_ptr_factory_{this};
 };
 
-class Derived : public Base, public base::SupportsWeakPtr<Derived> {};
+class Derived : public Base {
+ public:
+  base::WeakPtr<Derived> AsWeakPtr() { return weak_ptr_factory_.GetWeakPtr(); }
+
+ private:
+  base::WeakPtrFactory<Derived> weak_ptr_factory_{this};
+};
 
 class WeakHandleTest : public ::testing::Test {
  protected:

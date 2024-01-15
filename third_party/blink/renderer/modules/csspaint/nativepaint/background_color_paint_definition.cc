@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/modules/csspaint/nativepaint/background_color_paint_definition.h"
 
+#include "cc/paint/paint_recorder.h"
 #include "third_party/blink/renderer/core/animation/animation_effect.h"
 #include "third_party/blink/renderer/core/animation/compositor_animations.h"
 #include "third_party/blink/renderer/core/animation/css/compositor_keyframe_double.h"
@@ -14,14 +15,12 @@
 #include "third_party/blink/renderer/core/css/cssom/paint_worklet_input.h"
 #include "third_party/blink/renderer/core/css/cssom/paint_worklet_style_property_map.h"
 #include "third_party/blink/renderer/core/css/cssom/style_property_map_read_only.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/frame/web_local_frame_impl.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
-#include "third_party/blink/renderer/modules/csspaint/paint_rendering_context_2d.h"
 #include "third_party/blink/renderer/platform/graphics/color.h"
-#include "third_party/blink/renderer/platform/graphics/paint_worklet_paint_dispatcher.h"
-#include "third_party/blink/renderer/platform/graphics/platform_paint_worklet_layer_painter.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 
 namespace blink {
@@ -30,8 +29,9 @@ namespace {
 
 bool AllColorsOpaque(const Vector<Color>& animated_colors) {
   for (const auto& color : animated_colors) {
-    if (color.HasAlpha())
+    if (!color.IsOpaque()) {
       return false;
+    }
   }
   return true;
 }
@@ -120,13 +120,13 @@ bool GetColorsFromKeyframe(const PropertySpecificKeyframe* frame,
     const auto* keyframe =
         To<TransitionKeyframe::PropertySpecificKeyframe>(frame);
     InterpolableValue* value =
-        keyframe->GetValue()->Value().interpolable_value.get();
+        keyframe->GetValue()->Value().interpolable_value.Get();
 
     const auto& list = To<InterpolableList>(*value);
-    DCHECK(CSSColorInterpolationType::IsRGBA(*(list.Get(0))));
+    DCHECK(CSSColorInterpolationType::IsNonKeywordColor(*(list.Get(0))));
 
-    Color rgba = CSSColorInterpolationType::GetRGBA(*(list.Get(0)));
-    animated_colors->push_back(rgba);
+    Color color = CSSColorInterpolationType::GetColor(*(list.Get(0)));
+    animated_colors->push_back(color);
   }
   return true;
 }
@@ -176,7 +176,7 @@ bool ValidateColorValue(const Element* element,
       return false;
 
     const InterpolableList& list = To<InterpolableList>(*interpolable_value);
-    return CSSColorInterpolationType::IsRGBA(*(list.Get(0)));
+    return CSSColorInterpolationType::IsNonKeywordColor(*(list.Get(0)));
   }
   return false;
 }
@@ -219,21 +219,11 @@ BackgroundColorPaintDefinition::BackgroundColorPaintDefinition(
           &local_root,
           PaintWorkletInput::PaintWorkletInputType::kBackgroundColor) {}
 
-sk_sp<PaintRecord> BackgroundColorPaintDefinition::Paint(
+PaintRecord BackgroundColorPaintDefinition::Paint(
     const CompositorPaintWorkletInput* compositor_input,
     const CompositorPaintWorkletJob::AnimatedPropertyValues&
         animated_property_values) {
-  return Paint(compositor_input, animated_property_values,
-               worker_backing_thread_->BackingThread().GetTaskRunner());
-}
-
-sk_sp<PaintRecord> BackgroundColorPaintDefinition::Paint(
-    const CompositorPaintWorkletInput* compositor_input,
-    const CompositorPaintWorkletJob::AnimatedPropertyValues&
-        animated_property_values,
-    scoped_refptr<base::SingleThreadTaskRunner> task_runner) {
   const auto* input = To<BackgroundColorPaintWorkletInput>(compositor_input);
-  gfx::SizeF container_size = input->ContainerSize();
   Vector<Color> animated_colors = input->AnimatedColors();
   Vector<double> offsets = input->Offsets();
   DCHECK_GT(animated_colors.size(), 1u);
@@ -270,33 +260,25 @@ sk_sp<PaintRecord> BackgroundColorPaintDefinition::Paint(
   // Because the progress is a global one, we need to adjust it with offsets.
   float adjusted_progress = (progress - offsets[result_index]) /
                             (offsets[result_index + 1] - offsets[result_index]);
-  std::unique_ptr<InterpolableValue> from =
-      CSSColorInterpolationType::CreateInterpolableColor(
-          animated_colors[result_index]);
-  std::unique_ptr<InterpolableValue> to =
-      CSSColorInterpolationType::CreateInterpolableColor(
-          animated_colors[result_index + 1]);
-  std::unique_ptr<InterpolableValue> result =
+  InterpolableValue* from = CSSColorInterpolationType::CreateInterpolableColor(
+      animated_colors[result_index]);
+  InterpolableValue* to = CSSColorInterpolationType::CreateInterpolableColor(
+      animated_colors[result_index + 1]);
+  InterpolableValue* result =
       CSSColorInterpolationType::CreateInterpolableColor(
           animated_colors[result_index + 1]);
   from->Interpolate(*to, adjusted_progress, *result);
-  Color rgba = CSSColorInterpolationType::GetRGBA(*(result.get()));
+  Color color = CSSColorInterpolationType::GetColor(*result);
   // TODO(crbug/1308932): Remove toSkColor4f and make all SkColor4f.
-  SkColor4f current_color = rgba.toSkColor4f();
+  SkColor4f current_color = color.toSkColor4f();
 
+  cc::InspectablePaintRecorder paint_recorder;
   // When render this element, we always do pixel snapping to its nearest pixel,
   // therefore we use rounded |container_size| to create the rendering context.
-  gfx::Size rounded_size = gfx::ToRoundedSize(container_size);
-  if (!context_ || context_->Width() != rounded_size.width() ||
-      context_->Height() != rounded_size.height()) {
-    PaintRenderingContext2DSettings* context_settings =
-        PaintRenderingContext2DSettings::Create();
-    context_ = MakeGarbageCollected<PaintRenderingContext2D>(
-        rounded_size, context_settings, /*zoom=*/1, /*device_scale_factor=*/1,
-        std::move(task_runner));
-  }
-  context_->GetDrawingPaintCanvas()->drawColor(current_color);
-  return context_->GetRecord();
+  const gfx::Size container_size(gfx::ToRoundedSize(input->ContainerSize()));
+  cc::PaintCanvas* canvas = paint_recorder.beginRecording(container_size);
+  canvas->drawColor(current_color);
+  return paint_recorder.finishRecordingAsPicture();
 }
 
 scoped_refptr<Image> BackgroundColorPaintDefinition::Paint(
@@ -333,12 +315,11 @@ bool BackgroundColorPaintDefinition::GetBGColorPaintWorkletParams(
                                               progress, compositable_animation);
 }
 
-sk_sp<PaintRecord> BackgroundColorPaintDefinition::PaintForTest(
+PaintRecord BackgroundColorPaintDefinition::PaintForTest(
     const Vector<Color>& animated_colors,
     const Vector<double>& offsets,
     const CompositorPaintWorkletJob::AnimatedPropertyValues&
-        animated_property_values,
-    scoped_refptr<base::SingleThreadTaskRunner> task_runner) {
+        animated_property_values) {
   gfx::SizeF container_size(100, 100);
   absl::optional<double> progress = 0;
   CompositorPaintWorkletInput::PropertyKeys property_keys;
@@ -346,7 +327,7 @@ sk_sp<PaintRecord> BackgroundColorPaintDefinition::PaintForTest(
       base::MakeRefCounted<BackgroundColorPaintWorkletInput>(
           container_size, 1u, animated_colors, offsets, progress,
           property_keys);
-  return Paint(input.get(), animated_property_values, std::move(task_runner));
+  return Paint(input.get(), animated_property_values);
 }
 
 void BackgroundColorPaintDefinition::Trace(Visitor* visitor) const {

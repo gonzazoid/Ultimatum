@@ -148,8 +148,8 @@ class DevToolsIssueStorageWithBackForwardCacheBrowserTest
   void SetUpCommandLine(base::CommandLine* command_line) override {
     // Enable BackForwardCache, omitting this feature results in a crash.
     feature_list_.InitWithFeaturesAndParameters(
-        DefaultEnabledBackForwardCacheParametersForTests(),
-        DefaultDisabledBackForwardCacheParametersForTests());
+        GetDefaultEnabledBackForwardCacheFeaturesForTesting(),
+        GetDefaultDisabledBackForwardCacheFeaturesForTesting());
   }
 
  protected:
@@ -199,7 +199,8 @@ class DevToolsIssueStorageWithPrerenderBrowserTest
             base::Unretained(this))) {}
 
   void SetUp() override {
-    prerender_test_helper().SetUp(embedded_test_server());
+    prerender_test_helper().RegisterServerRequestMonitor(
+        embedded_test_server());
     DevToolsIssueStorageBrowserTest::SetUp();
   }
 

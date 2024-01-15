@@ -10,6 +10,7 @@
 #include "base/time/time.h"
 #include "chrome/browser/performance_manager/decorators/page_live_state_decorator_delegate_impl.h"
 #include "chrome/browser/performance_manager/mechanisms/page_freezer.h"
+#include "chrome/browser/performance_manager/policies/page_discarding_helper.h"
 #include "components/performance_manager/decorators/freezing_vote_decorator.h"
 #include "components/performance_manager/freezing/freezing_vote_aggregator.h"
 #include "components/performance_manager/graph/graph_impl.h"
@@ -100,28 +101,42 @@ class PageFreezingPolicyTest : public GraphTestHarness {
 
 TEST_F(PageFreezingPolicyTest, AudiblePageGetsCannotFreezeVote) {
   page_node()->SetIsAudible(true);
-  EXPECT_EQ(page_node()->freezing_vote()->value(),
+  EXPECT_EQ(page_node()->GetFreezingVote()->value(),
             freezing::FreezingVoteValue::kCannotFreeze);
-  EXPECT_EQ(page_node()->freezing_vote()->reason(),
+  EXPECT_EQ(page_node()->GetFreezingVote()->reason(),
             PageFreezingPolicyAccess::CannotFreezeReasonToString(
                 PageFreezingPolicyAccess::CannotFreezeReason::kAudible));
 }
 
+TEST_F(PageFreezingPolicyTest, RecentlyAudiblePageGetsCannotFreezeVote) {
+  page_node()->SetIsAudible(true);
+  EXPECT_EQ(page_node()->GetFreezingVote()->value(),
+            freezing::FreezingVoteValue::kCannotFreeze);
+  task_env().FastForwardBy(base::Seconds(1));
+  page_node()->SetIsAudible(false);
+  EXPECT_EQ(
+      page_node()->GetFreezingVote()->reason(),
+      PageFreezingPolicyAccess::CannotFreezeReasonToString(
+          PageFreezingPolicyAccess::CannotFreezeReason::kRecentlyAudible));
+  task_env().FastForwardBy(policies::kTabAudioProtectionTime);
+  EXPECT_FALSE(page_node()->GetFreezingVote().has_value());
+}
+
 TEST_F(PageFreezingPolicyTest, PageHoldingWeblockGetsCannotFreezeVote) {
   page_node()->SetIsHoldingWebLockForTesting(true);
-  EXPECT_EQ(page_node()->freezing_vote()->value(),
+  EXPECT_EQ(page_node()->GetFreezingVote()->value(),
             freezing::FreezingVoteValue::kCannotFreeze);
-  EXPECT_EQ(page_node()->freezing_vote()->reason(),
+  EXPECT_EQ(page_node()->GetFreezingVote()->reason(),
             PageFreezingPolicyAccess::CannotFreezeReasonToString(
                 PageFreezingPolicyAccess::CannotFreezeReason::kHoldingWebLock));
 }
 
 TEST_F(PageFreezingPolicyTest, PageHoldingIndexedDBLockGetsCannotFreezeVote) {
   page_node()->SetIsHoldingIndexedDBLockForTesting(true);
-  EXPECT_EQ(page_node()->freezing_vote()->value(),
+  EXPECT_EQ(page_node()->GetFreezingVote()->value(),
             freezing::FreezingVoteValue::kCannotFreeze);
   EXPECT_EQ(
-      page_node()->freezing_vote()->reason(),
+      page_node()->GetFreezingVote()->reason(),
       PageFreezingPolicyAccess::CannotFreezeReasonToString(
           PageFreezingPolicyAccess::CannotFreezeReason::kHoldingIndexedDBLock));
 }
@@ -129,10 +144,10 @@ TEST_F(PageFreezingPolicyTest, PageHoldingIndexedDBLockGetsCannotFreezeVote) {
 TEST_F(PageFreezingPolicyTest, CannotFreezeIsConnectedToUSBDevice) {
   PageLiveStateDecorator::Data::GetOrCreateForPageNode(page_node())
       ->SetIsConnectedToUSBDeviceForTesting(true);
-  EXPECT_EQ(page_node()->freezing_vote()->value(),
+  EXPECT_EQ(page_node()->GetFreezingVote()->value(),
             freezing::FreezingVoteValue::kCannotFreeze);
   EXPECT_EQ(
-      page_node()->freezing_vote()->reason(),
+      page_node()->GetFreezingVote()->reason(),
       PageFreezingPolicyAccess::CannotFreezeReasonToString(
           PageFreezingPolicyAccess::CannotFreezeReason::kConnectedToUsbDevice));
 }
@@ -140,9 +155,9 @@ TEST_F(PageFreezingPolicyTest, CannotFreezeIsConnectedToUSBDevice) {
 TEST_F(PageFreezingPolicyTest, CannotFreezePageConnectedToBluetoothDevice) {
   PageLiveStateDecorator::Data::GetOrCreateForPageNode(page_node())
       ->SetIsConnectedToBluetoothDeviceForTesting(true);
-  EXPECT_EQ(page_node()->freezing_vote()->value(),
+  EXPECT_EQ(page_node()->GetFreezingVote()->value(),
             freezing::FreezingVoteValue::kCannotFreeze);
-  EXPECT_EQ(page_node()->freezing_vote()->reason(),
+  EXPECT_EQ(page_node()->GetFreezingVote()->reason(),
             PageFreezingPolicyAccess::CannotFreezeReasonToString(
                 PageFreezingPolicyAccess::CannotFreezeReason::
                     kConnectedToBluetoothDevice));
@@ -151,9 +166,9 @@ TEST_F(PageFreezingPolicyTest, CannotFreezePageConnectedToBluetoothDevice) {
 TEST_F(PageFreezingPolicyTest, CannotFreezePageCapturingVideo) {
   PageLiveStateDecorator::Data::GetOrCreateForPageNode(page_node())
       ->SetIsCapturingVideoForTesting(true);
-  EXPECT_EQ(page_node()->freezing_vote()->value(),
+  EXPECT_EQ(page_node()->GetFreezingVote()->value(),
             freezing::FreezingVoteValue::kCannotFreeze);
-  EXPECT_EQ(page_node()->freezing_vote()->reason(),
+  EXPECT_EQ(page_node()->GetFreezingVote()->reason(),
             PageFreezingPolicyAccess::CannotFreezeReasonToString(
                 PageFreezingPolicyAccess::CannotFreezeReason::kCapturingVideo));
 }
@@ -161,9 +176,9 @@ TEST_F(PageFreezingPolicyTest, CannotFreezePageCapturingVideo) {
 TEST_F(PageFreezingPolicyTest, CannotFreezePageCapturingAudio) {
   PageLiveStateDecorator::Data::GetOrCreateForPageNode(page_node())
       ->SetIsCapturingAudioForTesting(true);
-  EXPECT_EQ(page_node()->freezing_vote()->value(),
+  EXPECT_EQ(page_node()->GetFreezingVote()->value(),
             freezing::FreezingVoteValue::kCannotFreeze);
-  EXPECT_EQ(page_node()->freezing_vote()->reason(),
+  EXPECT_EQ(page_node()->GetFreezingVote()->reason(),
             PageFreezingPolicyAccess::CannotFreezeReasonToString(
                 PageFreezingPolicyAccess::CannotFreezeReason::kCapturingAudio));
 }
@@ -171,9 +186,9 @@ TEST_F(PageFreezingPolicyTest, CannotFreezePageCapturingAudio) {
 TEST_F(PageFreezingPolicyTest, CannotFreezePageBeingMirrored) {
   PageLiveStateDecorator::Data::GetOrCreateForPageNode(page_node())
       ->SetIsBeingMirroredForTesting(true);
-  EXPECT_EQ(page_node()->freezing_vote()->value(),
+  EXPECT_EQ(page_node()->GetFreezingVote()->value(),
             freezing::FreezingVoteValue::kCannotFreeze);
-  EXPECT_EQ(page_node()->freezing_vote()->reason(),
+  EXPECT_EQ(page_node()->GetFreezingVote()->reason(),
             PageFreezingPolicyAccess::CannotFreezeReasonToString(
                 PageFreezingPolicyAccess::CannotFreezeReason::kBeingMirrored));
 }
@@ -181,17 +196,17 @@ TEST_F(PageFreezingPolicyTest, CannotFreezePageBeingMirrored) {
 TEST_F(PageFreezingPolicyTest, CannotFreezePageCapturingWindow) {
   PageLiveStateDecorator::Data::GetOrCreateForPageNode(page_node())
       ->SetIsCapturingWindowForTesting(true);
-  EXPECT_EQ(page_node()->freezing_vote()->value(),
+  EXPECT_EQ(page_node()->GetFreezingVote()->value(),
             freezing::FreezingVoteValue::kCannotFreeze);
 }
 
 TEST_F(PageFreezingPolicyTest, CannotFreezePageCapturingDisplay) {
   PageLiveStateDecorator::Data::GetOrCreateForPageNode(page_node())
       ->SetIsCapturingDisplayForTesting(true);
-  EXPECT_EQ(page_node()->freezing_vote()->value(),
+  EXPECT_EQ(page_node()->GetFreezingVote()->value(),
             freezing::FreezingVoteValue::kCannotFreeze);
   EXPECT_EQ(
-      page_node()->freezing_vote()->reason(),
+      page_node()->GetFreezingVote()->reason(),
       PageFreezingPolicyAccess::CannotFreezeReasonToString(
           PageFreezingPolicyAccess::CannotFreezeReason::kCapturingDisplay));
 }
@@ -239,7 +254,7 @@ TEST_F(PageFreezingPolicyTest, PageNodeIsntFrozenBeforeLoadingCompletes) {
   // The page freezer shouldn't be called as the page node isn't fully loaded
   // yet.
   ::testing::Mock::VerifyAndClearExpectations(page_freezer_raw);
-  EXPECT_EQ(page_node()->freezing_vote()->value(),
+  EXPECT_EQ(page_node()->GetFreezingVote()->value(),
             freezing::FreezingVoteValue::kCanFreeze);
 
   EXPECT_CALL(*page_freezer_raw, MaybeFreezePageNodeImpl(page_node()));
@@ -259,7 +274,7 @@ TEST_F(PageFreezingPolicyTest, PeriodicUnfreeze) {
   page_node()->SetLoadingState(PageNode::LoadingState::kLoadedIdle);
   ::testing::Mock::VerifyAndClearExpectations(page_freezer_raw);
   EXPECT_EQ(performance_manager::mojom::LifecycleState::kFrozen,
-            page_node()->lifecycle_state());
+            page_node()->GetLifecycleState());
 
   // Ensure that the page gets unfrozen periodically.
   for (int i = 0; i < 2; ++i) {
@@ -268,14 +283,14 @@ TEST_F(PageFreezingPolicyTest, PeriodicUnfreeze) {
         PageFreezingPolicy::GetUnfreezeIntervalForTesting());
     ::testing::Mock::VerifyAndClearExpectations(page_freezer_raw);
     EXPECT_EQ(performance_manager::mojom::LifecycleState::kRunning,
-              page_node()->lifecycle_state());
+              page_node()->GetLifecycleState());
 
     EXPECT_CALL(*page_freezer_raw, MaybeFreezePageNodeImpl(page_node()));
     task_env().FastForwardBy(
         PageFreezingPolicy::GetUnfreezeDurationForTesting());
     ::testing::Mock::VerifyAndClearExpectations(page_freezer_raw);
     EXPECT_EQ(performance_manager::mojom::LifecycleState::kFrozen,
-              page_node()->lifecycle_state());
+              page_node()->GetLifecycleState());
   }
 }
 
@@ -290,7 +305,7 @@ TEST_F(PageFreezingPolicyTest,
   page_node()->SetLoadingState(PageNode::LoadingState::kLoadedIdle);
   ::testing::Mock::VerifyAndClearExpectations(page_freezer_raw);
   EXPECT_EQ(performance_manager::mojom::LifecycleState::kFrozen,
-            page_node()->lifecycle_state());
+            page_node()->GetLifecycleState());
 
   task_env().FastForwardBy(PageFreezingPolicy::GetUnfreezeIntervalForTesting() /
                            2);
@@ -299,7 +314,7 @@ TEST_F(PageFreezingPolicyTest,
   page_node()->set_freezing_vote(kCannotFreezeVote);
   ::testing::Mock::VerifyAndClearExpectations(page_freezer_raw);
   EXPECT_EQ(performance_manager::mojom::LifecycleState::kRunning,
-            page_node()->lifecycle_state());
+            page_node()->GetLifecycleState());
 
   task_env().FastForwardBy(PageFreezingPolicy::GetUnfreezeIntervalForTesting() *
                            2);
@@ -318,7 +333,7 @@ TEST_F(PageFreezingPolicyTest,
   page_node()->SetLoadingState(PageNode::LoadingState::kLoadedIdle);
   ::testing::Mock::VerifyAndClearExpectations(page_freezer_raw);
   EXPECT_EQ(performance_manager::mojom::LifecycleState::kFrozen,
-            page_node()->lifecycle_state());
+            page_node()->GetLifecycleState());
 
   task_env().FastForwardBy(PageFreezingPolicy::GetUnfreezeIntervalForTesting() /
                            2);
@@ -329,7 +344,7 @@ TEST_F(PageFreezingPolicyTest,
       performance_manager::mojom::LifecycleState::kRunning);
   ::testing::Mock::VerifyAndClearExpectations(page_freezer_raw);
   EXPECT_EQ(performance_manager::mojom::LifecycleState::kRunning,
-            page_node()->lifecycle_state());
+            page_node()->GetLifecycleState());
 
   task_env().FastForwardBy(PageFreezingPolicy::GetUnfreezeIntervalForTesting() *
                            2);

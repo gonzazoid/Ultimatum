@@ -11,13 +11,14 @@
 #include <unordered_map>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/values.h"
 #include "extensions/browser/api/lock_screen_data/lock_screen_value_store_migrator.h"
 #include "extensions/browser/api/lock_screen_data/operation_result.h"
 
 namespace base {
-class DictionaryValue;
 class SequencedTaskRunner;
 }  // namespace base
 
@@ -84,7 +85,7 @@ class LockScreenValueStoreMigratorImpl : public LockScreenValueStoreMigrator {
   // and starts data item migration.
   void OnGotItemsForExtension(const ExtensionId& extension_id,
                               OperationResult result,
-                              std::unique_ptr<base::DictionaryValue> items);
+                              base::Value::Dict items);
 
   // Starts migration for the next data item in the extension's migration
   // queue - it reads the item contents from the source storage.
@@ -127,16 +128,16 @@ class LockScreenValueStoreMigratorImpl : public LockScreenValueStoreMigrator {
   // |migration_items_|.
   void ClearMigrationData(const ExtensionId& extension_id);
 
-  content::BrowserContext* const context_;
+  const raw_ptr<content::BrowserContext, DanglingUntriaged> context_;
 
   ExtensionMigratedCallback callback_;
 
   // Set of extensions whose data is being migrated.
   std::set<ExtensionId> extensions_to_migrate_;
 
-  ValueStoreCache* const source_store_cache_;
-  ValueStoreCache* const target_store_cache_;
-  base::SequencedTaskRunner* const task_runner_;
+  const raw_ptr<ValueStoreCache, DanglingUntriaged> source_store_cache_;
+  const raw_ptr<ValueStoreCache, DanglingUntriaged> target_store_cache_;
+  const raw_ptr<base::SequencedTaskRunner> task_runner_;
 
   // Crypto key used to encrypt/decrypt data items in the storage.
   const std::string crypto_key_;

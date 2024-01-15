@@ -5,17 +5,18 @@
 #ifndef IOS_CHROME_BROWSER_UI_SETTINGS_PASSWORD_PASSWORD_DETAILS_PASSWORD_DETAILS_COORDINATOR_H_
 #define IOS_CHROME_BROWSER_UI_SETTINGS_PASSWORD_PASSWORD_DETAILS_PASSWORD_DETAILS_COORDINATOR_H_
 
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
+#import "ios/chrome/browser/ui/settings/password/password_details/password_details.h"
 
 namespace password_manager {
+class AffiliatedGroup;
 struct CredentialUIEntry;
 }  // namespace password_manager
 
 @protocol ApplicationCommands;
 class Browser;
-class IOSChromePasswordCheckManager;
 @protocol PasswordDetailsCoordinatorDelegate;
-@class ReauthenticationModule;
+@protocol ReauthenticationProtocol;
 
 // This coordinator presents a password details for the user.
 @interface PasswordDetailsCoordinator : ChromeCoordinator
@@ -27,8 +28,18 @@ class IOSChromePasswordCheckManager;
                           credential:
                               (const password_manager::CredentialUIEntry&)
                                   credential
-                        reauthModule:(ReauthenticationModule*)reauthModule
-                passwordCheckManager:(IOSChromePasswordCheckManager*)manager
+                        reauthModule:(id<ReauthenticationProtocol>)reauthModule
+                             context:(DetailsContext)context
+    NS_DESIGNATED_INITIALIZER;
+
+- (instancetype)
+    initWithBaseNavigationController:
+        (UINavigationController*)navigationController
+                             browser:(Browser*)browser
+                     affiliatedGroup:(const password_manager::AffiliatedGroup&)
+                                         affiliatedGroup
+                        reauthModule:(id<ReauthenticationProtocol>)reauthModule
+                             context:(DetailsContext)context
     NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)initWithBaseViewController:(UIViewController*)viewController
@@ -39,6 +50,10 @@ class IOSChromePasswordCheckManager;
 
 // Delegate.
 @property(nonatomic, weak) id<PasswordDetailsCoordinatorDelegate> delegate;
+
+// Determine if we need to setup a cancel button on the navigation's left bar
+// button.
+@property(nonatomic) BOOL showCancelButton;
 
 @end
 

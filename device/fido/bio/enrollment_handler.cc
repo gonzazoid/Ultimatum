@@ -4,8 +4,8 @@
 
 #include "device/fido/bio/enrollment_handler.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "components/device_event_log/device_event_log.h"
 #include "device/fido/bio/enrollment.h"
 #include "device/fido/fido_authenticator.h"
@@ -153,18 +153,17 @@ void BioEnrollmentHandler::OnTouch(FidoAuthenticator* authenticator) {
 
   CancelActiveAuthenticators(authenticator->GetId());
 
-  if (!authenticator->Options() ||
-      (authenticator->Options()->bio_enrollment_availability ==
-           AuthenticatorSupportedOptions::BioEnrollmentAvailability::
-               kNotSupported &&
-       authenticator->Options()->bio_enrollment_availability_preview ==
-           AuthenticatorSupportedOptions::BioEnrollmentAvailability::
-               kNotSupported)) {
+  if (authenticator->Options().bio_enrollment_availability ==
+          AuthenticatorSupportedOptions::BioEnrollmentAvailability::
+              kNotSupported &&
+      authenticator->Options().bio_enrollment_availability_preview ==
+          AuthenticatorSupportedOptions::BioEnrollmentAvailability::
+              kNotSupported) {
     RunErrorCallback(Error::kAuthenticatorMissingBioEnrollment);
     return;
   }
 
-  if (authenticator->Options()->client_pin_availability !=
+  if (authenticator->Options().client_pin_availability !=
       AuthenticatorSupportedOptions::ClientPinAvailability::
           kSupportedAndPinSet) {
     RunErrorCallback(Error::kNoPINSet);

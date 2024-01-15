@@ -7,9 +7,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequenced_task_runner.h"
@@ -42,7 +43,7 @@ TextureLayer::~TextureLayer() = default;
 void TextureLayer::ClearClient() {
   client_.Write(*this) = nullptr;
   ClearTexture();
-  SetDrawsContent(HasDrawableContent());
+  UpdateDrawsContent();
 }
 
 void TextureLayer::ClearTexture() {
@@ -78,10 +79,10 @@ void TextureLayer::SetUV(const gfx::PointF& top_left,
   SetNeedsCommit();
 }
 
-void TextureLayer::SetHDRMetadata(
-    absl::optional<gfx::HDRMetadata> hdr_metadata) {
-  if (hdr_metadata_.Read(*this) == hdr_metadata)
+void TextureLayer::SetHdrMetadata(const gfx::HDRMetadata& hdr_metadata) {
+  if (hdr_metadata_.Read(*this) == hdr_metadata) {
     return;
+  }
   hdr_metadata_.Write(*this) = hdr_metadata;
   SetNeedsCommit();
 }
@@ -130,7 +131,7 @@ void TextureLayer::SetTransferableResourceInternal(
   else
     SetNeedsPushProperties();
 
-  SetDrawsContent(HasDrawableContent());
+  UpdateDrawsContent();
 }
 
 void TextureLayer::SetTransferableResource(
@@ -168,6 +169,12 @@ void TextureLayer::SetLayerTreeHost(LayerTreeHost* host) {
 bool TextureLayer::HasDrawableContent() const {
   return (client_.Read(*this) || resource_holder_.Read(*this)) &&
          Layer::HasDrawableContent();
+}
+
+bool TextureLayer::RequiresSetNeedsDisplayOnHdrHeadroomChange() const {
+  // TODO(https://crbug.com/1450807): Only return true if the contents of the
+  // video are HDR.
+  return true;
 }
 
 bool TextureLayer::Update() {
@@ -215,7 +222,7 @@ void TextureLayer::PushPropertiesTo(
   texture_layer->SetPremultipliedAlpha(premultiplied_alpha_.Read(*this));
   texture_layer->SetBlendBackgroundColor(blend_background_color_.Read(*this));
   texture_layer->SetForceTextureToOpaque(force_texture_to_opaque_.Read(*this));
-  texture_layer->SetHDRMetadata(hdr_metadata_.Read(*this));
+  texture_layer->SetHdrMetadata(hdr_metadata_.Read(*this));
   if (needs_set_resource_.Read(*this)) {
     viz::TransferableResource resource;
     viz::ReleaseCallback release_callback;
@@ -249,17 +256,16 @@ void TextureLayer::PushPropertiesTo(
 SharedBitmapIdRegistration TextureLayer::RegisterSharedBitmapId(
     const viz::SharedBitmapId& id,
     scoped_refptr<CrossThreadSharedBitmap> bitmap) {
-  DCHECK(to_register_bitmaps_.Read(*this).find(id) ==
-         to_register_bitmaps_.Read(*this).end());
-  DCHECK(registered_bitmaps_.Read(*this).find(id) ==
-         registered_bitmaps_.Read(*this).end());
+  DCHECK(!base::Contains(to_register_bitmaps_.Read(*this), id));
+  DCHECK(!base::Contains(registered_bitmaps_.Read(*this), id));
   to_register_bitmaps_.Write(*this)[id] = std::move(bitmap);
   base::Erase(to_unregister_bitmap_ids_.Write(*this), id);
-  // This does not SetNeedsCommit() to be as lazy as possible. Notifying a
-  // SharedBitmapId is not needed until it is used, and using it will require
-  // a commit, so we can wait for that commit before forwarding the
-  // notification instead of forcing it to happen as a side effect of this
-  // method.
+
+  // This does not SetNeedsCommit() to be as lazy as possible.
+  // Notifying a SharedBitmapId is not needed until it is used,
+  // and using it will require a commit, so we can wait for that commit
+  // before forwarding the notification instead of forcing it to happen
+  // as a side effect of this method.
   SetNeedsPushProperties();
   return SharedBitmapIdRegistration(weak_ptr_factory_.GetMutableWeakPtr(), id);
 }

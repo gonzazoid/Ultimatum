@@ -4,7 +4,7 @@
 
 #include "ash/system/progress_indicator/progress_indicator_animation.h"
 
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/gfx/animation/slide_animation.h"
 
@@ -36,7 +36,14 @@ bool ProgressIndicatorAnimation::HasAnimated() const {
 }
 
 bool ProgressIndicatorAnimation::IsAnimating() const {
-  return animator_ && animator_->is_animating();
+  if (animator_ && animator_->is_animating()) {
+    return true;
+  }
+
+  // Cyclic animations, such as indeterminate ring animations, repeat forever
+  // and never finish from the user's perspective. Therefore, this function
+  // returns true if a cyclic animation has started.
+  return is_cyclic_ && !start_time_.is_null();
 }
 
 void ProgressIndicatorAnimation::AnimationProgressed(
@@ -57,7 +64,7 @@ void ProgressIndicatorAnimation::AnimationEnded(
   // immediately. Otherwise the animation will loop endlessly without providing
   // other code an opportunity to run.
   if (ui::ScopedAnimationDurationScaleMode::duration_multiplier() == 0.f) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&ProgressIndicatorAnimation::StartInternal,
                        weak_factory_.GetWeakPtr(), /*is_cyclic_restart=*/true));

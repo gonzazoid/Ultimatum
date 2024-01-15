@@ -5,26 +5,27 @@
 #ifndef IOS_CHROME_BROWSER_UI_RECENT_TABS_RECENT_TABS_TABLE_VIEW_CONTROLLER_H_
 #define IOS_CHROME_BROWSER_UI_RECENT_TABS_RECENT_TABS_TABLE_VIEW_CONTROLLER_H_
 
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_controller.h"
 #import "ios/chrome/browser/ui/recent_tabs/recent_tabs_consumer.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_controller.h"
 #include "ui/base/window_open_disposition.h"
 
 class Browser;
 enum class UrlLoadStrategy;
 
 namespace synced_sessions {
-class DistantSession;
+struct DistantSession;
 }
 
 @protocol ApplicationCommands;
 @protocol RecentTabsMenuProvider;
-@protocol RecentTabsTableViewControllerDelegate;
 @protocol RecentTabsPresentationDelegate;
+@protocol RecentTabsTableViewControllerDelegate;
+@protocol RecentTabsTableViewControllerUIDelegate;
 @protocol TableViewFaviconDataSource;
 
 @interface RecentTabsTableViewController
-    : ChromeTableViewController <RecentTabsConsumer,
-                                 UIAdaptivePresentationControllerDelegate>
+    : LegacyChromeTableViewController <RecentTabsConsumer,
+                                       UIAdaptivePresentationControllerDelegate>
 // The Browser for the tabs being restored. It's an error to pass a nullptr
 // Browser.
 @property(nonatomic, assign) Browser* browser;
@@ -32,10 +33,11 @@ class DistantSession;
 @property(nonatomic, weak) id<ApplicationCommands> handler;
 // Opaque instructions on how to open urls.
 @property(nonatomic) UrlLoadStrategy loadStrategy;
-// Disposition for tabs restored by this object. Defaults to CURRENT_TAB.
-@property(nonatomic, assign) WindowOpenDisposition restoredTabDisposition;
 // RecentTabsTableViewControllerDelegate delegate.
 @property(nonatomic, weak) id<RecentTabsTableViewControllerDelegate> delegate;
+// Delegate for UI-related events.
+@property(nonatomic, weak) id<RecentTabsTableViewControllerUIDelegate>
+    UIDelegate;
 // Whether the updates of the RecentTabs should be ignored. Setting this to NO
 // would trigger a reload of the TableView.
 @property(nonatomic, assign) BOOL preventUpdates;
@@ -55,7 +57,12 @@ class DistantSession;
 @property(nonatomic, weak) id<RecentTabsMenuProvider> menuProvider;
 
 // Multi-window session for this vc's recent tabs.
-@property(nonatomic, assign) UISceneSession* session;
+@property(nonatomic, weak) UISceneSession* session;
+
+// Whether the grid is scrolled to the top.
+@property(nonatomic, readonly, getter=isScrolledToTop) BOOL scrolledToTop;
+// Whether the grid is scrolled to the bottom.
+@property(nonatomic, readonly, getter=isScrolledToBottom) BOOL scrolledToBottom;
 
 // Initializers.
 - (instancetype)init NS_DESIGNATED_INITIALIZER;

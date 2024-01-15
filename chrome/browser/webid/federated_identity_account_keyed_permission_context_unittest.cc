@@ -6,7 +6,6 @@
 
 #include <memory>
 
-#include "base/memory/raw_ptr.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/content_settings/core/common/content_settings_types.h"
 #include "content/public/test/browser_task_environment.h"
@@ -16,8 +15,7 @@
 
 namespace {
 
-const char kTestIdpOriginKey[] = "identity-provider";
-
+constexpr char kTestIdpOriginKey[] = "identity-provider";
 }
 
 class FederatedIdentityAccountKeyedPermissionContextTest
@@ -65,7 +63,7 @@ TEST_F(FederatedIdentityAccountKeyedPermissionContextTest,
     base::Value::List account_list;
     account_list.Append(account);
     new_object.Set("account-ids", base::Value(std::move(account_list)));
-    context()->GrantObjectPermission(rp, base::Value(std::move(new_object)));
+    context()->GrantObjectPermission(rp, std::move(new_object));
   }
   auto granted_objects = context()->GetAllGrantedObjects();
   EXPECT_EQ(1u, granted_objects.size());
@@ -86,24 +84,26 @@ TEST_F(FederatedIdentityAccountKeyedPermissionContextTest,
   EXPECT_EQ(key_old_format, key_new_format);
 }
 
-// Test that '<' in the url::Origin parameters passed to
-// FederatedIdentityAccountKeyedPermissionContext::GrantPermission() are
-// escaped.
-// '<' is used as a separator in
-// FederatedIdentityAccountKeyedPermissionContextTest::GetKeyForObject().
+// Test a URL with a '<' character, which is used as a separator in
+// FederatedIdentityAccountKeyedPermissionContext::GetKeyForObject().
 TEST_F(FederatedIdentityAccountKeyedPermissionContextTest, VerifyKeySeparator) {
-  const url::Origin rp = url::Origin::Create(GURL("https://rp<.example</<?<"));
+  // Assert that URL host part can't include '<'.
+  ASSERT_FALSE(GURL("https://rp<.example/").is_valid());
+
+  // FederatedIdentityAccountKeyedPermissionContext accepts only valid URLs.
+  // So test a URL with '<', but not in the host part.
+  const url::Origin rp = url::Origin::Create(GURL("https://<@rp.example/<?<"));
   const url::Origin idp =
-      url::Origin::Create(GURL("https://idp<.example</<?<"));
+      url::Origin::Create(GURL("https://<@idp.example/<?<"));
   const url::Origin rp_embedder =
-      url::Origin::Create(GURL("https://rp-embedder<.example</<?<"));
+      url::Origin::Create(GURL("https://<@rp-embedder.example/<?<"));
   const std::string account("consetogo");
 
   context()->GrantPermission(rp, rp_embedder, idp, account);
   auto granted_objects = context()->GetAllGrantedObjects();
   EXPECT_EQ(1u, granted_objects.size());
   std::string key = context()->GetKeyForObject(granted_objects[0]->value);
-  EXPECT_EQ("https://idp%3C.example%3C<https://rp-embedder%3C.example%3C", key);
+  EXPECT_EQ("https://idp.example<https://rp-embedder.example", key);
 }
 
 // Test calling
@@ -127,7 +127,7 @@ TEST_F(FederatedIdentityAccountKeyedPermissionContextTest,
     account_list.Append(account_a);
     account_list.Append(account_b);
     new_object.Set("account-ids", base::Value(std::move(account_list)));
-    context()->GrantObjectPermission(rp, base::Value(std::move(new_object)));
+    context()->GrantObjectPermission(rp, std::move(new_object));
   }
   {
     base::Value::Dict new_object;
@@ -135,7 +135,7 @@ TEST_F(FederatedIdentityAccountKeyedPermissionContextTest,
     base::Value::List account_list;
     account_list.Append(account_c);
     new_object.Set("account-ids", base::Value(std::move(account_list)));
-    context()->GrantObjectPermission(rp, base::Value(std::move(new_object)));
+    context()->GrantObjectPermission(rp, std::move(new_object));
   }
 
   // Permissions in the old format should only be returned when
@@ -252,4 +252,53 @@ TEST_F(FederatedIdentityAccountKeyedPermissionContextTest,
   EXPECT_EQ(1u, granted_objects1.size());
   EXPECT_EQ(1u, granted_objects2.size());
   EXPECT_EQ(granted_objects1[0]->value, granted_objects2[0]->value);
+}
+
+// Test that FederatedIdentityAccountKeyedPermissionContext can recover from
+// crbug.com/1381130
+TEST_F(FederatedIdentityAccountKeyedPermissionContextTest, RecoverFrom1381130) {
+  // crbug.com/1381130 only occurred when RP=IDP.
+  const url::Origin site = url::Origin::Create(GURL("https://example.com"));
+  std::string account{"conestogo"};
+
+  // Storing data not associated with a signed-in account is bad because it
+  // makes the expected behaviour of RevokePermission() unclear.
+  base::Value::Dict new_object;
+  new_object.Set(kTestIdpOriginKey, site.Serialize());
+  new_object.Set("bug", base::Value("wrong"));
+  context()->GrantObjectPermission(site, std::move(new_object));
+
+  context()->GrantPermission(site, site, site, account);
+  EXPECT_TRUE(context()->HasPermission(site, site, site, account));
+}
+
+TEST_F(FederatedIdentityAccountKeyedPermissionContextTest, RevokeNoMatch) {
+  constexpr char kAccountId[] = "account123";
+  const url::Origin rpRequester =
+      url::Origin::Create(GURL("https://rp.example"));
+  const url::Origin rpEmbedder =
+      url::Origin::Create(GURL("https://rp-embedder.example"));
+  const url::Origin idp = url::Origin::Create(GURL("https://idp.example"));
+
+  // Revoke will not crash if there are no previous permissions.
+  context()->RevokePermission(rpRequester, rpEmbedder, idp, kAccountId);
+
+  context()->GrantPermission(rpRequester, rpEmbedder, idp, kAccountId);
+  EXPECT_TRUE(
+      context()->HasPermission(rpRequester, rpEmbedder, idp, kAccountId));
+
+  // Revoke will remove the permission even if the account ID does not
+  // match.
+  context()->RevokePermission(rpRequester, rpEmbedder, idp, "noMatch");
+  EXPECT_FALSE(
+      context()->HasPermission(rpRequester, rpEmbedder, idp, kAccountId));
+
+  // Revoke will remove the permission when the account ID matches, but
+  // only that permission.
+  context()->GrantPermission(rpRequester, rpEmbedder, idp, kAccountId);
+  context()->GrantPermission(rpRequester, rpEmbedder, idp, "other");
+  context()->RevokePermission(rpRequester, rpEmbedder, idp, kAccountId);
+  EXPECT_FALSE(
+      context()->HasPermission(rpRequester, rpEmbedder, idp, kAccountId));
+  EXPECT_TRUE(context()->HasPermission(rpRequester, rpEmbedder, idp, "other"));
 }

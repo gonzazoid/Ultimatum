@@ -5,10 +5,35 @@
 import("//testing/libfuzzer/fuzzer_test.gni")
 import("//testing/test.gni")
 
-# This needs to be a static library rather than a sources set because small
-# portions of this are used in some contexts (like chrome_elf), and it
-# doesn't seem to dead-code strip very well. This saves 12K on chrome_elf.dll,
-# over a source set, for example.
+source_set("service_resolver") {
+  sources = [
+    "src/resolver.cc",
+    "src/resolver.h",
+    "src/service_resolver.cc",
+    "src/service_resolver.h",
+  ]
+
+  if (current_cpu == "x64" || current_cpu == "arm64") {
+    sources += [
+      "src/resolver_64.cc",
+      "src/service_resolver_64.cc",
+    ]
+  } else if (current_cpu == "x86") {
+    sources += [
+      "src/resolver_32.cc",
+      "src/service_resolver_32.cc",
+    ]
+  }
+
+  public_deps = [
+    ":common",
+    "//base",
+    "//sandbox:common",
+  ]
+
+  deps = [ "//base:base_static" ]
+}
+
 static_library("sandbox") {
   sources = [
     "src/acl.cc",
@@ -50,12 +75,6 @@ static_library("sandbox") {
     "src/ipc_tags.h",
     "src/job.cc",
     "src/job.h",
-    "src/named_pipe_dispatcher.cc",
-    "src/named_pipe_dispatcher.h",
-    "src/named_pipe_interception.cc",
-    "src/named_pipe_interception.h",
-    "src/named_pipe_policy.cc",
-    "src/named_pipe_policy.h",
     "src/nt_internals.h",
     "src/policy_broker.cc",
     "src/policy_broker.h",
@@ -83,8 +102,6 @@ static_library("sandbox") {
     "src/process_thread_interception.h",
     "src/process_thread_policy.cc",
     "src/process_thread_policy.h",
-    "src/resolver.cc",
-    "src/resolver.h",
     "src/restricted_token.cc",
     "src/restricted_token.h",
     "src/restricted_token_utils.cc",
@@ -99,14 +116,8 @@ static_library("sandbox") {
     "src/sandbox_policy_base.h",
     "src/sandbox_policy_diagnostic.cc",
     "src/sandbox_policy_diagnostic.h",
-    "src/sandbox_rand.cc",
-    "src/sandbox_rand.h",
-    "src/sandbox_utils.cc",
-    "src/sandbox_utils.h",
     "src/security_capabilities.cc",
     "src/security_capabilities.h",
-    "src/service_resolver.cc",
-    "src/service_resolver.h",
     "src/sharedmem_ipc_client.cc",
     "src/sharedmem_ipc_client.h",
     "src/sharedmem_ipc_server.cc",
@@ -139,13 +150,6 @@ static_library("sandbox") {
     sources += [
       "src/interceptors_64.cc",
       "src/interceptors_64.h",
-      "src/resolver_64.cc",
-      "src/service_resolver_64.cc",
-    ]
-  } else if (current_cpu == "x86") {
-    sources += [
-      "src/resolver_32.cc",
-      "src/service_resolver_32.cc",
     ]
   }
 
@@ -155,7 +159,10 @@ static_library("sandbox") {
   configs +=
       [ "//build/config/sanitizers:default_sanitizer_flags_but_coverage" ]
 
-  configs += [ "//build/config:precompiled_headers" ]
+  configs += [
+    "//build/config:precompiled_headers",
+    "//build/config/compiler:prevent_unsafe_narrowing",
+  ]
 
   public_deps = [
     ":common",
@@ -165,7 +172,13 @@ static_library("sandbox") {
 
   deps = [
     ":maybe_set_appcontainer_acls",
+    ":service_resolver",
     "//base:base_static",
+  ]
+
+  libs = [
+    "ntdll.lib",
+    "userenv.lib",
   ]
 }
 
@@ -180,8 +193,8 @@ test("sbox_integration_tests") {
     "src/ipc_leak_test.cc",
     "src/ipc_ping_test.cc",
     "src/lpc_policy_test.cc",
-    "src/named_pipe_policy_test.cc",
     "src/policy_target_test.cc",
+    "src/process_delegate_data_test.cc",
     "src/process_mitigations_deathtest.cc",
     "src/process_mitigations_dyncode_unittest.cc",
     "src/process_mitigations_extensionpoints_unittest.cc",
@@ -190,6 +203,7 @@ test("sbox_integration_tests") {
     "src/process_policy_test.cc",
     "src/restricted_token_test.cc",
     "src/unload_dll_test.cc",
+    "src/zero_appshim_unittest.cc",
     "tests/common/controller.cc",
     "tests/common/test_utils.cc",
     "tests/common/test_utils.h",
@@ -201,6 +215,7 @@ test("sbox_integration_tests") {
 
   deps = [
     ":sandbox",
+    ":test_support",
     "//base/test:test_support",
     "//sandbox/policy:tests",
     "//testing/gtest",
@@ -215,9 +230,7 @@ test("sbox_integration_tests") {
 }
 
 group("maybe_set_appcontainer_acls") {
-  # NACL on 32-bit builds this target twice, once for 64-bit and once for 32-bit
-  # so avoid this dep from running twice with the same output in that case.
-  # Additionally, exclude setting ACLs when build is not happening on Windows.
+  # Exclude setting ACLs when build is not happening on Windows.
   if (current_cpu == target_cpu && host_os == "win") {
     deps = [ ":set_appcontainer_acls" ]
   }
@@ -238,18 +251,26 @@ if (current_cpu == target_cpu && host_os == "win") {
 }
 
 shared_library("sbox_integration_test_hooking_dll") {
+  testonly = true
   sources = [ "tests/integration_tests/hooking_dll.cc" ]
 
-  deps = [ ":common_test" ]
+  deps = [
+    ":common",
+    ":test_support",
+  ]
 }
 
 executable("sbox_integration_test_win_proc") {
+  testonly = true
   sources = [ "tests/integration_tests/hooking_win_proc.cc" ]
 
   configs -= [ "//build/config/win:console" ]
   configs += [ "//build/config/win:windowed" ]
 
-  deps = [ ":common_test" ]
+  deps = [
+    ":common",
+    ":test_support",
+  ]
 }
 
 test("sbox_validation_tests") {
@@ -263,6 +284,7 @@ test("sbox_validation_tests") {
 
   deps = [
     ":sandbox",
+    ":test_support",
     "//base/test:test_support",
     "//testing/gtest",
   ]
@@ -283,6 +305,7 @@ test("sbox_unittests") {
     "src/restricted_token_unittest.cc",
     "src/sandbox_nt_util_unittest.cc",
     "src/service_resolver_unittest.cc",
+    "src/target_process_unittest.cc",
     "src/threadpool_unittest.cc",
     "src/win_utils_unittest.cc",
     "tests/common/test_utils.cc",
@@ -292,6 +315,8 @@ test("sbox_unittests") {
 
   deps = [
     ":sandbox",
+    ":service_resolver",
+    ":test_support",
     "//base/test:test_support",
     "//testing/gtest",
   ]
@@ -303,28 +328,43 @@ fuzzer_test("sandbox_policy_rule_fuzzer") {
   sources = [ "fuzzer/sandbox_policy_rule_fuzzer.cc" ]
   dict = "fuzzer/sandbox_policy_rule.dict"
   deps = [
+    ":sandbox",
     "//base",
-    "//sandbox",
   ]
+}
+
+fuzzer_test("sandbox_nt_utils_fuzzer") {
+  sources = [ "fuzzer/sandbox_nt_utils_fuzzer.cc" ]
+  deps = [ ":sandbox" ]
+}
+
+fuzzer_test("sandbox_ipc_fuzzer") {
+  sources = [ "fuzzer/sandbox_ipc_fuzzer.cc" ]
+  deps = [ ":sandbox" ]
+  dict = "fuzzer/ipc.dict"
+  libfuzzer_options = [ "max_len=1024" ]
 }
 
 source_set("common") {
   sources = [
-    "fuzzer/fuzzer_types.h",
     "src/sandbox.h",
     "src/sandbox_policy.h",
     "src/sandbox_types.h",
     "src/security_level.h",
-    "tests/common/controller.h",
   ]
 
   deps = [ "//base" ]
-  public_deps = [ ":common_test" ]
 }
 
-source_set("common_test") {
+source_set("test_support") {
+  testonly = true
   sources = [
+    "tests/common/controller.h",
     "tests/integration_tests/hooking_dll.h",
     "tests/integration_tests/hooking_win_proc.h",
+  ]
+  deps = [
+    ":common",
+    "//base",
   ]
 }

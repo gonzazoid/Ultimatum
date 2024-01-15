@@ -4,7 +4,7 @@
 
 #include "components/previous_session_info/previous_session_info.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/test/ios/wait_util.h"
 #include "base/time/time.h"
@@ -15,20 +15,19 @@
 #include "testing/gtest_mac.h"
 #include "testing/platform_test.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-using previous_session_info_constants::kPreviousSessionInfoMemoryFootprint;
-using previous_session_info_constants::kPreviousSessionInfoRestoringSession;
 using previous_session_info_constants::
     kPreviousSessionInfoConnectedSceneSessionIDs;
-using previous_session_info_constants::kPreviousSessionInfoTabCount;
+using previous_session_info_constants::kPreviousSessionInfoInactiveTabCount;
+using previous_session_info_constants::kPreviousSessionInfoMemoryFootprint;
 using previous_session_info_constants::kPreviousSessionInfoOTRTabCount;
+using previous_session_info_constants::kPreviousSessionInfoParamsPrefix;
+using previous_session_info_constants::kPreviousSessionInfoRestoringSession;
+using previous_session_info_constants::kPreviousSessionInfoTabCount;
 
 namespace {
 
 const NSInteger kTabCount = 15;
+const NSInteger kInactiveTabCount = 30;
 
 // Key in the UserDefaults for a boolean value keeping track of memory warnings.
 NSString* const kDidSeeMemoryWarningShortlyBeforeTerminating =
@@ -46,6 +45,19 @@ NSString* const kLastRanLanguage = @"LastRanLanguage";
 NSString* const kTestSession1ID = @"test_session_1";
 NSString* const kTestSession2ID = @"test_session_2";
 NSString* const kTestSession3ID = @"test_session_3";
+
+NSDictionary* GetParamsDictionary() {
+  NSMutableDictionary* reportParameters = [[NSMutableDictionary alloc] init];
+  NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
+  NSUInteger prefix_length = kPreviousSessionInfoParamsPrefix.length;
+  for (NSString* key in [defaults dictionaryRepresentation].allKeys) {
+    if ([key hasPrefix:kPreviousSessionInfoParamsPrefix]) {
+      NSString* crash_key = [key substringFromIndex:prefix_length];
+      reportParameters[crash_key] = [defaults stringForKey:key];
+    }
+  }
+  return reportParameters;
+}
 
 using PreviousSessionInfoTest = PlatformTest;
 
@@ -484,27 +496,27 @@ TEST_F(PreviousSessionInfoTest,
 // Tests adding and removing report parameters.
 TEST_F(PreviousSessionInfoTest, ReportParameters) {
   // Default state.
-  [NSUserDefaults.standardUserDefaults
-      removeObjectForKey:previous_session_info_constants::
-                             kPreviousSessionInfoParams];
+  NSUserDefaults* defaults = [NSUserDefaults standardUserDefaults];
+  for (NSString* key in [defaults dictionaryRepresentation].allKeys) {
+    if ([key hasPrefix:kPreviousSessionInfoParamsPrefix]) {
+      [defaults removeObjectForKey:key];
+    }
+  }
 
   [PreviousSessionInfo resetSharedInstanceForTesting];
-  EXPECT_FALSE([PreviousSessionInfo sharedInstance].reportParameters);
+  EXPECT_EQ([PreviousSessionInfo sharedInstance].reportParameters.count, 0ul);
 
   // Removing non-existing key does not crash.
   NSString* const kKey0 = @"url0";
   [[PreviousSessionInfo sharedInstance] removeReportParameterForKey:kKey0];
   [PreviousSessionInfo resetSharedInstanceForTesting];
-  EXPECT_FALSE([PreviousSessionInfo sharedInstance].reportParameters);
+  EXPECT_EQ([PreviousSessionInfo sharedInstance].reportParameters.count, 0ul);
 
   // Add first URL.
   [[PreviousSessionInfo sharedInstance]
       setReportParameterURL:GURL("https://example.test/path")
                      forKey:kKey0];
-  NSDictionary<NSString*, NSString*>* URLs =
-      [NSUserDefaults.standardUserDefaults
-          dictionaryForKey:previous_session_info_constants::
-                               kPreviousSessionInfoParams];
+  NSDictionary<NSString*, NSString*>* URLs = GetParamsDictionary();
   EXPECT_NSEQ(@{kKey0 : @"https://example.test/"}, URLs);  // stores only origin
   [PreviousSessionInfo resetSharedInstanceForTesting];
   EXPECT_NSEQ(URLs, [[PreviousSessionInfo sharedInstance] reportParameters]);
@@ -513,9 +525,7 @@ TEST_F(PreviousSessionInfoTest, ReportParameters) {
   [[PreviousSessionInfo sharedInstance]
       setReportParameterURL:GURL("https://example2.test/path")
                      forKey:kKey0];
-  URLs = [NSUserDefaults.standardUserDefaults
-      dictionaryForKey:previous_session_info_constants::
-                           kPreviousSessionInfoParams];
+  URLs = GetParamsDictionary();
   EXPECT_NSEQ(@{kKey0 : @"https://example2.test/"}, URLs);
 
   // Add second URL.
@@ -523,9 +533,7 @@ TEST_F(PreviousSessionInfoTest, ReportParameters) {
   [[PreviousSessionInfo sharedInstance]
       setReportParameterURL:GURL("https://example3.test/path")
                      forKey:kKey1];
-  URLs = [NSUserDefaults.standardUserDefaults
-      dictionaryForKey:previous_session_info_constants::
-                           kPreviousSessionInfoParams];
+  URLs = GetParamsDictionary();
   NSDictionary<NSString*, NSString*>* expected = @{
     kKey0 : @"https://example2.test/",
     kKey1 : @"https://example3.test/",
@@ -537,19 +545,43 @@ TEST_F(PreviousSessionInfoTest, ReportParameters) {
 
   // Remove first URL.
   [[PreviousSessionInfo sharedInstance] removeReportParameterForKey:kKey0];
-  URLs = [NSUserDefaults.standardUserDefaults
-      dictionaryForKey:previous_session_info_constants::
-                           kPreviousSessionInfoParams];
+  URLs = GetParamsDictionary();
   EXPECT_NSEQ(@{kKey1 : @"https://example3.test/"}, URLs);
 
   // Remove second URL.
   [[PreviousSessionInfo sharedInstance] removeReportParameterForKey:kKey1];
-  URLs = [NSUserDefaults.standardUserDefaults
-      dictionaryForKey:previous_session_info_constants::
-                           kPreviousSessionInfoParams];
-  EXPECT_FALSE(URLs);
+  URLs = GetParamsDictionary();
+  EXPECT_EQ(URLs.count, 0ul);
   [PreviousSessionInfo resetSharedInstanceForTesting];
-  EXPECT_FALSE([[PreviousSessionInfo sharedInstance] reportParameters]);
+  EXPECT_EQ([PreviousSessionInfo sharedInstance].reportParameters.count, 0ul);
+  [PreviousSessionInfo resetSharedInstanceForTesting];
+
+  // Write a param with spaces, and other non-standard characters.
+  NSString* const kAtypicalKey1 = @"* \xe2\x99\xa0";
+  NSString* const kAtypicalKey2 = @"http:// not a url.";
+  NSString* const kAtypicalKey3 =
+      @"\xef\xbf\xbd,\xef\xbf\xbd,\xf0\x90\x8c\x80z,\xef\xbf\xbds";
+  [[PreviousSessionInfo sharedInstance] setReportParameterValue:kAtypicalKey1
+                                                         forKey:kAtypicalKey1];
+  [[PreviousSessionInfo sharedInstance] setReportParameterValue:kAtypicalKey2
+                                                         forKey:kAtypicalKey2];
+  [[PreviousSessionInfo sharedInstance] setReportParameterValue:kAtypicalKey3
+                                                         forKey:kAtypicalKey3];
+  expected = @{
+    kAtypicalKey1 : kAtypicalKey1,
+    kAtypicalKey2 : kAtypicalKey2,
+    kAtypicalKey3 : kAtypicalKey3,
+  };
+  EXPECT_NSEQ(expected, GetParamsDictionary());
+
+  [[PreviousSessionInfo sharedInstance]
+      removeReportParameterForKey:kAtypicalKey1];
+  [[PreviousSessionInfo sharedInstance]
+      removeReportParameterForKey:kAtypicalKey2];
+  [[PreviousSessionInfo sharedInstance]
+      removeReportParameterForKey:kAtypicalKey3];
+  [PreviousSessionInfo resetSharedInstanceForTesting];
+  EXPECT_EQ([PreviousSessionInfo sharedInstance].reportParameters.count, 0ul);
   [PreviousSessionInfo resetSharedInstanceForTesting];
 }
 
@@ -598,6 +630,33 @@ TEST_F(PreviousSessionInfoTest, TabCountRecording) {
 
   EXPECT_NSEQ(@(kTabCount), [NSUserDefaults.standardUserDefaults
                                 objectForKey:kPreviousSessionInfoTabCount]);
+}
+
+// Tests inactiveTabCount property.
+TEST_F(PreviousSessionInfoTest, InactiveTabCount) {
+  [PreviousSessionInfo resetSharedInstanceForTesting];
+  [NSUserDefaults.standardUserDefaults
+      setInteger:kInactiveTabCount
+          forKey:kPreviousSessionInfoInactiveTabCount];
+
+  [[PreviousSessionInfo sharedInstance] beginRecordingCurrentSession];
+  EXPECT_EQ(kInactiveTabCount,
+            [PreviousSessionInfo sharedInstance].inactiveTabCount);
+}
+
+// Tests inactive tab count gets written to NSUserDefaults.
+TEST_F(PreviousSessionInfoTest, InactiveTabCountRecording) {
+  [PreviousSessionInfo resetSharedInstanceForTesting];
+  [NSUserDefaults.standardUserDefaults
+      removeObjectForKey:kPreviousSessionInfoInactiveTabCount];
+
+  [[PreviousSessionInfo sharedInstance] beginRecordingCurrentSession];
+  [[PreviousSessionInfo sharedInstance]
+      updateCurrentSessionInactiveTabCount:kInactiveTabCount];
+
+  EXPECT_NSEQ(@(kInactiveTabCount),
+              [NSUserDefaults.standardUserDefaults
+                  objectForKey:kPreviousSessionInfoInactiveTabCount]);
 }
 
 // Tests OTRTabCount property.

@@ -15,8 +15,10 @@
 #include "base/containers/queue.h"
 #include "base/files/scoped_file.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
+#include "gpu/ipc/common/gpu_memory_buffer_support.h"
 #include "media/capture/video/linux/scoped_v4l2_device_fd.h"
 #include "media/capture/video/linux/v4l2_capture_device_impl.h"
 #include "media/capture/video/video_capture_device.h"
@@ -32,6 +34,10 @@ class Location;
 }  // namespace base
 
 namespace media {
+
+#if BUILDFLAG(IS_LINUX)
+class V4L2CaptureDelegateGpuHelper;
+#endif  // BUILDFLAG(IS_LINUX)
 
 // Class doing the actual Linux capture using V4L2 API. V4L2 SPLANE/MPLANE
 // capture specifics are implemented in derived classes. Created on the owner's
@@ -77,6 +83,14 @@ class CAPTURE_EXPORT V4L2CaptureDelegate final {
 
   base::WeakPtr<V4L2CaptureDelegate> GetWeakPtr();
 
+  static bool IsBlockedControl(int control_id);
+  static bool IsControllableControl(
+      int control_id,
+      const base::RepeatingCallback<int(int, void*)>& do_ioctl);
+
+  void SetGPUEnvironmentForTesting(
+      std::unique_ptr<gpu::GpuMemoryBufferSupport> gmb_support);
+
  private:
   friend class V4L2CaptureDelegateTest;
 
@@ -90,6 +104,12 @@ class CAPTURE_EXPORT V4L2CaptureDelegate final {
 
   // Simple wrapper to do HANDLE_EINTR(v4l2_->ioctl(device_fd_.get(), ...)).
   int DoIoctl(int request, void* argp);
+
+  // Check whether the control is controllable (and not changed automatically).
+  bool IsControllableControl(int control_id);
+
+  // Subscribe and unsubscribe control events as needed.
+  void ReplaceControlEventSubscriptions();
 
   // Creates a mojom::RangePtr with the (min, max, current, step) values of the
   // control associated with |control_id|. Returns an empty Range otherwise.
@@ -112,6 +132,16 @@ class CAPTURE_EXPORT V4L2CaptureDelegate final {
   void SetErrorState(VideoCaptureError error,
                      const base::Location& from_here,
                      const std::string& reason);
+
+#if BUILDFLAG(IS_LINUX)
+  // Systems which describe a "color space" usually map that to one or more of
+  // {primary, matrix, transfer, range}. BuildColorSpaceFromv4l2() will use the
+  // matched value as first priority. Otherwise, if there is no best matching
+  // value, it will be a value with a different name but no essential
+  // difference and add a corresponding comments like: "SRGB and BT709 use the
+  // same transform".
+  gfx::ColorSpace BuildColorSpaceFromv4l2();
+#endif
 
   const raw_ptr<V4L2CaptureDevice> v4l2_;
   const scoped_refptr<base::SingleThreadTaskRunner> v4l2_task_runner_;
@@ -136,6 +166,14 @@ class CAPTURE_EXPORT V4L2CaptureDelegate final {
 
   // Clockwise rotation in degrees. This value should be 0, 90, 180, or 270.
   int rotation_;
+
+#if BUILDFLAG(IS_LINUX)
+  // Support GPU memory buffer.
+  bool use_gpu_buffer_;
+  std::unique_ptr<V4L2CaptureDelegateGpuHelper> v4l2_gpu_helper_;
+#endif  // BUILDFLAG(IS_LINUX)
+  // For GPU Environment Testing.
+  std::unique_ptr<gpu::GpuMemoryBufferSupport> gmb_support_test_;
 
   base::WeakPtrFactory<V4L2CaptureDelegate> weak_factory_{this};
 };

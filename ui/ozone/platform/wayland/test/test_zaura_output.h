@@ -5,6 +5,7 @@
 #ifndef UI_OZONE_PLATFORM_WAYLAND_TEST_TEST_ZAURA_OUTPUT_H_
 #define UI_OZONE_PLATFORM_WAYLAND_TEST_TEST_ZAURA_OUTPUT_H_
 
+#include <aura-shell-server-protocol.h>
 #include <wayland-client-protocol.h>
 
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -13,32 +14,24 @@
 
 namespace wl {
 
-// Manages zaura_output object.
+extern const struct zaura_output_interface kTestZAuraOutputImpl;
+
+struct TestOutputMetrics;
+
+// Handles the server-side representation of the zaura_output.
 class TestZAuraOutput : public ServerObject {
  public:
   explicit TestZAuraOutput(wl_resource* resource);
-
   TestZAuraOutput(const TestZAuraOutput&) = delete;
   TestZAuraOutput& operator=(const TestZAuraOutput&) = delete;
-
   ~TestZAuraOutput() override;
 
-  const gfx::Insets& GetInsets() const { return insets_; }
-  void SetInsets(const gfx::Insets& insets) { pending_insets_ = insets; }
+  // Sends the activated event immediately.
+  void SendActivated();
 
-  int32_t GetLogicalTransform() const { return logical_transform_; }
-  void SetLogicalTransform(int32_t logical_transform) {
-    pending_logical_transform_ = logical_transform;
-  }
-
-  void Flush();
-
- private:
-  gfx::Insets insets_;
-  absl::optional<gfx::Insets> pending_insets_;
-
-  int32_t logical_transform_ = WL_OUTPUT_TRANSFORM_NORMAL;
-  absl::optional<int32_t> pending_logical_transform_;
+  // Called by the owning wl_output as part of its Flush() operation that
+  // propagates the current state of `metrics_` to clients.
+  void Flush(const TestOutputMetrics& metrics);
 };
 
 }  // namespace wl

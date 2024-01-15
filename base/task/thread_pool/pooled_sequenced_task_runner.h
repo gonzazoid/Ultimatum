@@ -6,7 +6,7 @@
 #define BASE_TASK_THREAD_POOL_POOLED_SEQUENCED_TASK_RUNNER_H_
 
 #include "base/base_export.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/task/task_traits.h"
@@ -52,8 +52,8 @@ class BASE_EXPORT PooledSequencedTaskRunner
  private:
   ~PooledSequencedTaskRunner() override;
 
-  // TODO(crbug.com/1298696): Breaks base_unittests.
-  const raw_ptr<PooledTaskRunnerDelegate, DegradeToNoOpWhenMTE>
+  // Dangling usage guarded by MatchesCurrentDelegate() checks.
+  const raw_ptr<PooledTaskRunnerDelegate, DisableDanglingPtrDetection>
       pooled_task_runner_delegate_;
 
   // Sequence for all Tasks posted through this TaskRunner.

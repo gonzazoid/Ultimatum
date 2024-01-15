@@ -7,15 +7,14 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/adapters.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "base/values.h"
 #include "chrome/browser/vr/databinding/binding_base.h"
 #include "chrome/browser/vr/elements/draw_phase.h"
-#include "chrome/browser/vr/elements/keyboard.h"
-#include "chrome/browser/vr/elements/reticle.h"
 #include "chrome/browser/vr/elements/ui_element.h"
 #include "chrome/browser/vr/frame_lifecycle.h"
 #include "ui/gfx/geometry/transform.h"
@@ -52,7 +51,9 @@ UiScene::MutableElements GetVisibleElementsWithPredicateMutable(UiElement* root,
   return result;
 }
 
-void GetAllElementsRecursive(std::vector<UiElement*>* elements, UiElement* e) {
+void GetAllElementsRecursive(
+    std::vector<raw_ptr<UiElement, VectorExperimental>>* elements,
+    UiElement* e) {
   e->set_descendants_updated(false);
   elements->push_back(e);
   for (auto& child : e->children())
@@ -121,20 +122,6 @@ std::unique_ptr<UiElement> UiScene::RemoveUiElement(int element_id) {
 
 bool UiScene::OnBeginFrame(const base::TimeTicks& current_time,
                            const gfx::Transform& head_pose) {
-  // Before dirtying the scene, we process scheduled tasks for the frame.
-  {
-    TRACE_EVENT0("gpu", "UiScene::OnBeginFrame.ScheduledTasks");
-    for (auto it = scheduled_tasks_.begin(); it != scheduled_tasks_.end();) {
-      auto& task = *it;
-      task->Tick(current_time);
-      if (task->empty()) {
-        it = scheduled_tasks_.erase(it);
-      } else {
-        ++it;
-      }
-    }
-  }
-
   bool scene_dirty = !initialized_scene_ || is_dirty_;
   initialized_scene_ = true;
   is_dirty_ = false;
@@ -142,7 +129,7 @@ bool UiScene::OnBeginFrame(const base::TimeTicks& current_time,
   auto& elements = GetAllElements();
 
   FrameLifecycle::set_phase(kDirty);
-  for (auto* element : elements) {
+  for (vr::UiElement* element : elements) {
     element->set_update_phase(kDirty);
     element->set_last_frame_time(current_time);
   }
@@ -227,7 +214,7 @@ UiElement* UiScene::GetUiElementByName(UiElementName name) const {
           name));
 }
 
-std::vector<UiElement*>& UiScene::GetAllElements() {
+std::vector<raw_ptr<UiElement, VectorExperimental>>& UiScene::GetAllElements() {
   if (root_element_->descendants_updated()) {
     all_elements_.clear();
     GetAllElementsRecursive(&all_elements_, root_element_.get());
@@ -250,7 +237,6 @@ UiScene::Elements UiScene::GetElementsToDraw() {
   return GetVisibleElementsWithPredicate(
       root_element_.get(), [](UiElement* element) {
         return element->draw_phase() == kPhaseForeground ||
-               element->draw_phase() == kPhaseBackplanes ||
                element->draw_phase() == kPhaseBackground;
       });
 }
@@ -287,9 +273,6 @@ void UiScene::AddPerFrameCallback(PerFrameCallback callback) {
   per_frame_callback_.push_back(callback);
 }
 
-void UiScene::AddSequence(std::unique_ptr<Sequence> sequence) {
-  scheduled_tasks_.push_back(std::move(sequence));
-}
 
 void UiScene::InitializeElement(UiElement* element) {
   CHECK_GE(element->id(), 0);

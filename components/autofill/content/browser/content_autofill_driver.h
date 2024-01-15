@@ -6,35 +6,33 @@
 #define COMPONENTS_AUTOFILL_CONTENT_BROWSER_CONTENT_AUTOFILL_DRIVER_H_
 
 #include <memory>
-#include <string>
+#include <optional>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "base/supports_user_data.h"
+#include "base/memory/raw_ref.h"
+#include "base/types/optional_ref.h"
 #include "build/build_config.h"
 #include "components/autofill/content/common/mojom/autofill_agent.mojom.h"
 #include "components/autofill/content/common/mojom/autofill_driver.mojom.h"
 #include "components/autofill/core/browser/autofill_driver.h"
 #include "components/autofill/core/browser/autofill_manager.h"
-#include "components/autofill/core/common/form_data_predictions.h"
-#include "components/autofill_assistant/core/public/autofill_assistant_intent.h"
+#include "components/autofill/core/common/form_data.h"
+#include "components/autofill/core/common/mojom/autofill_types.mojom-shared.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_widget_host.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
-class NavigationHandle;
 class RenderFrameHost;
 }  // namespace content
 
 namespace autofill {
 
-class AutofillableData;
 class ContentAutofillDriverFactory;
-class ContentAutofillRouter;
+class AutofillDriverRouter;
 
 // ContentAutofillDriver drives the Autofill flow in the browser process based
 // on communication from the renderer and from the external world.
@@ -51,15 +49,15 @@ class ContentAutofillRouter;
 //   mojom::AutofillAgent events must be owned by that RenderFrameHost.
 //
 // Events in AutofillDriver and mojom::AutofillDriver are passed on to
-// ContentAutofillRouter, which has one instance per WebContents. The naming
-// pattern is that for all of these events, there are two functions:
+// AutofillDriverRouter, which has one instance per WebContents. The naming
+// pattern is that for all of these events, there are three functions:
 //
 //   1. ReturnType ContentAutofillDriver::f(Args...)
-//   2. ReturnType ContentAutofillRouter::f(ContentAutofillDriver*, Args...,
-//                                          Callback)
+//   2. ReturnType AutofillDriverRouter::f(AutofillDriver*, Args..., callback)
+//   3. ReturnType callback(AutofillDriver*, Args...)
 //
 // The first function calls the second, and the second calls the third, perhaps
-// for a different ContentAutofillDriver.
+// for a different AutofillDriver and with modified arguments.
 //
 // Consider the following pseudo-HTML:
 //   <!-- frame name "ABC" -->
@@ -112,7 +110,7 @@ class ContentAutofillRouter;
 //     FieldRendererId{.renderer_id = 78}
 //   });
 //
-// See ContentAutofillRouter for further details.
+// See AutofillDriverRouter for further details.
 class ContentAutofillDriver : public AutofillDriver,
                               public mojom::AutofillDriver {
  public:
@@ -121,13 +119,11 @@ class ContentAutofillDriver : public AutofillDriver,
   static ContentAutofillDriver* GetForRenderFrameHost(
       content::RenderFrameHost* render_frame_host);
 
-  // Partially constructs the ContentAutofillDriver. The ContentAutofillDriver
-  // needs an AutofillManager that should be set via set_autofill_manager() (for
-  // Android Autofill) or set_browser_autofill_manager (for Chromium).
-  // Outside of unittests, ContentAutofillDriverFactory is instantiated and set
-  // up by the ContentAutofillDriverFactory.
+  // Partially constructs the ContentAutofillDriver: afterwards, the caller
+  // *must* set a non-null AutofillManager with set_autofill_manager().
+  // Outside of unittests, this is done by ContentAutofillDriverFactory.
   ContentAutofillDriver(content::RenderFrameHost* render_frame_host,
-                        ContentAutofillRouter* autofill_router);
+                        ContentAutofillDriverFactory* owner);
   ContentAutofillDriver(const ContentAutofillDriver&) = delete;
   ContentAutofillDriver& operator=(const ContentAutofillDriver&) = delete;
   ~ContentAutofillDriver() override;
@@ -135,9 +131,11 @@ class ContentAutofillDriver : public AutofillDriver,
   void set_autofill_manager(std::unique_ptr<AutofillManager> autofill_manager) {
     autofill_manager_ = std::move(autofill_manager);
   }
-  AutofillManager* autofill_manager() { return autofill_manager_.get(); }
 
-  content::RenderFrameHost* render_frame_host() { return render_frame_host_; }
+  content::RenderFrameHost* render_frame_host() { return &*render_frame_host_; }
+  const content::RenderFrameHost* render_frame_host() const {
+    return &*render_frame_host_;
+  }
 
   // Expose the events that originate from the browser and renderer processes,
   // respectively.
@@ -147,7 +145,7 @@ class ContentAutofillDriver : public AutofillDriver,
   // relevant because renderer forms and browser forms have distinct properties:
   // certain fields are not set in renderer form (see SetFrameAndFormMetaData()
   // for details) and, if they are part of a frame-transcending form, they are
-  // not flattened yet (see ContentAutofillRouter for details).
+  // not flattened yet (see AutofillDriverRouter for details).
   autofill::AutofillDriver& browser_events() { return *this; }
   mojom::AutofillDriver& renderer_events() { return *this; }
 
@@ -158,146 +156,145 @@ class ContentAutofillDriver : public AutofillDriver,
   // autofill::AutofillDriver:
   // These are the non-event functions from autofill::AutofillDriver. The events
   // are defined in the private part below.
-  bool IsIncognito() const override;
+  LocalFrameToken GetFrameToken() const override;
+  std::optional<LocalFrameToken> Resolve(FrameToken query) override;
+  ContentAutofillDriver* GetParent() override;
+  AutofillManager& GetAutofillManager() override;
   bool IsInActiveFrame() const override;
   bool IsInAnyMainFrame() const override;
   bool IsPrerendering() const override;
+  bool HasSharedAutofillPermission() const override;
   bool CanShowAutofillUi() const override;
-  ui::AXTreeID GetAxTreeId() const override;
-  scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactory() override;
-  bool RendererIsAvailable() override;
   void HandleParsedForms(const std::vector<FormData>& forms) override {}
   void PopupHidden() override;
   net::IsolationInfo IsolationInfo() override;
-
-  // Triggers filling of |fill_data| into |raw_form| and |raw_field|. This event
-  // is called only by Autofill Assistant on the browser side and provides the
-  // |fill_data| itself. This is different from the usual Autofill flow, where
-  // the renderer triggers Autofill with the AskForValuesToFill() event, which
-  // displays the Autofill popup to select the fill data.
-  // FillFormForAssistant() is located in ContentAutofillDriver so that
-  // |raw_form| and |raw_field| get their meta data set analogous to
-  // AskForValuesToFill().
-  void FillFormForAssistant(
-      const AutofillableData& fill_data,
-      const FormData& raw_form,
-      const FormFieldData& raw_field,
-      const autofill_assistant::AutofillAssistantIntent intent);
-
-  // Called to inform the browser that in the field with `form_global_id` and
-  // `field_global_id`, the context menu was triggered. This is different from
-  // the usual Autofill flow where the renderer calls the browser or the browser
-  // informs the renderer of some event.
-  virtual void OnContextMenuShownInField(const FormGlobalId& form_global_id,
-                                         const FieldGlobalId& field_global_id);
-
-  // Triggers a reparse of the new forms in the AutofillAgent. This is necessary
-  // when a form is seen in a child frame and it is not known which form is its
-  // parent.
-  //
-  // Generally, this may happen because AutofillAgent is only notified about
-  // newly created form control elements.
-  //
-  // For example, consider a parent frame with a form that contains an <iframe>.
-  // Suppose the parent form is seen (processed by AutofillDriver::FormsSeen())
-  // before the iframe is loaded. Loading a cross-origin page into the iframe
-  // changes the iframe's frame token. Then, the frame token in the parent
-  // form's FormData::child_frames is outdated. When a form is seen in the child
-  // frame, it is not known *which* form in the parent frame is its parent
-  // form. In this scenario, a reparse is triggered.
-  //
-  // Virtual for testing.
-  virtual void TriggerReparse();
 
   // Indicates that the `potentially_submitted_form_` has probably been
   // submitted if the feature AutofillProbableFormSubmissionInBrowser is
   // enabled.
   void ProbablyFormSubmitted(base::PassKey<ContentAutofillDriverFactory>);
 
-  // DidNavigateFrame() is called on the frame's driver, respectively, when a
-  // navigation occurs in that specific frame.
-  void DidNavigateFrame(content::NavigationHandle* navigation_handle);
+  // Called on certain types of navigations by ContentAutofillDriverFactory.
+  void Reset();
 
-  // Key-press handlers capture the user input into fields from the renderer.
-  // The AutofillPopupControllerImpl listens for input while showing a popup.
-  // That way, the user can select suggestions from the popup, for example.
+  // Called to inform the browser that in the field with `form_global_id` and
+  // `field_global_id`, the context menu was triggered. This is different from
+  // the usual Autofill flow where the renderer calls the browser or the browser
+  // informs the renderer of some event.
   //
-  // In a frame-transcending form, the <input> the user queried Autofill from
-  // may be in a different frame than |render_frame_host_|. Therefore,
-  // SetKeyPressHandler() and UnsetKeyPressHandler() are forwarded to the
-  // last-queried source remembered by ContentAutofillRouter.
-  // For non-Autofill forms (i.e., password forms), which are not handled by
-  // ContentAutofillDriver and ContentAutofillRouter and hence are not
-  // frame-transcending, this routing must be skipped by setting |skip_routing|.
-  void SetKeyPressHandler(
-      const content::RenderWidgetHost::KeyPressEventCallback& handler);
-  void UnsetKeyPressHandler();
-
-  // Sets whether the keyboard should be suppressed. Used to keep the keyboard
-  // hidden while the bottom sheet (e.g. Touch To Fill) is shown. Forwarded to
-  // the last-queried source remembered by ContentAutofillRouter.
-  virtual void SetShouldSuppressKeyboard(bool suppress);
-
-  // Callbacks that are called also in other functions by ContentAutofillRouter.
-  void FocusNoLongerOnFormCallback(bool had_interacted_form);
-  void UnsetKeyPressHandlerCallback();
-  void SetShouldSuppressKeyboardCallback(bool suppress);
-  void OnContextMenuShownInFieldCallback(const FormGlobalId& form_global_id,
+  // This is tricky because the context-menu event may refer to a renderer form
+  // in a certain frame, but the form is managed by the AutofillManager of
+  // another frame.
+  //
+  // TODO(crbug.com/1490899): Let callers call AutofillManager directly once
+  // AutofillManager is per-tab.
+  //
+  // Virtual for testing.
+  virtual void OnContextMenuShownInField(const FormGlobalId& form_global_id,
                                          const FieldGlobalId& field_global_id);
 
  private:
   friend class ContentAutofillDriverTestApi;
 
-  // autofill::AutofillDriver:
-  // Events triggered by the browser. These events are routed by
-  // ContentAutofillRouter to potentially a different ContentAutofillDriver and
-  // then passed to AutofillAgent in the renderer.
+  // Communication falls into two groups:
   //
-  // These events are private to to avoid accidental in the browser.
-  // They can be accessed explicitly through browser_events().
-  std::vector<FieldGlobalId> FillOrPreviewForm(
-      int query_id,
-      mojom::RendererFormDataAction action,
-      const FormData& data,
-      const url::Origin& triggered_origin,
-      const base::flat_map<FieldGlobalId, ServerFieldType>& field_type_map)
+  // (1) Browser -> renderer (autofill::AutofillDriver):
+  //     These events are triggered by an AutofillManager or similar and are
+  //     passed to one or multiple AutofillAgents. They fall into three groups:
+  //     (1a) Broadcast events are sent to many AutofillAgents.
+  //     (1b) Routed events are sent to a single AutofillAgent, which may
+  //          be not this driver's AutofillAgent.
+  //     (1c) Unrouted events are sent to this driver's AutofillAgent.
+  // (2) Renderer -> browser (mojom::AutofillDriver):
+  //     These events are triggered by an AutofillAgent and are passed to one or
+  //     multiple AutofillManagers. They fall into two groups:
+  //     (2a) Broadcast events are sent to many AutofillManagers.
+  //     (2b) Routed events are sent to a single AutofillManager, which may
+  //          be not this driver's AutofillManager.
+  //
+  // These events are private to avoid accidental use in the browser process.
+  // Groups (1) and (2) can be accessed explicitly through browser_events() and
+  // renderer_events(), respectively.
+  //
+  // Keep the events of each group in alphabetic order.
+
+  // Group (1a): browser -> renderer events, broadcast (see comment above).
+  // autofill::AutofillDriver:
+  void TriggerFormExtractionInAllFrames(
+      base::OnceCallback<void(bool success)> form_extraction_finished_callback)
       override;
-  void SendAutofillTypePredictionsToRenderer(
-      const std::vector<FormStructure*>& forms) override;
-  void RendererShouldAcceptDataListSuggestion(
-      const FieldGlobalId& field_id,
-      const std::u16string& value) override;
   void RendererShouldClearFilledSection() override;
   void RendererShouldClearPreviewedForm() override;
-  void RendererShouldFillFieldWithValue(const FieldGlobalId& field_id,
-                                        const std::u16string& value) override;
-  void RendererShouldPreviewFieldWithValue(
+
+  // Group (1b): browser -> renderer events, routed (see comment above).
+  // autofill::AutofillDriver:
+  base::flat_set<FieldGlobalId> ApplyFormAction(
+      mojom::ActionType action_type,
+      mojom::ActionPersistence action_persistence,
+      const FormData& data,
+      const url::Origin& triggered_origin,
+      const base::flat_map<FieldGlobalId, FieldType>& field_type_map) override;
+  void ApplyFieldAction(mojom::ActionPersistence action_persistence,
+                        mojom::TextReplacement text_replacement,
+                        const FieldGlobalId& field_id,
+                        const std::u16string& value) override;
+  void ExtractForm(FormGlobalId form,
+                   BrowserFormHandler final_handler) override;
+  void RendererShouldAcceptDataListSuggestion(
       const FieldGlobalId& field_id,
       const std::u16string& value) override;
   void RendererShouldSetSuggestionAvailability(
       const FieldGlobalId& field_id,
-      const mojom::AutofillState state) override;
-  void SendFieldsEligibleForManualFillingToRenderer(
-      const std::vector<FieldGlobalId>& fields) override;
+      mojom::AutofillSuggestionAvailability suggestion_availability) override;
+  void RendererShouldTriggerSuggestions(
+      const FieldGlobalId& field_id,
+      AutofillSuggestionTriggerSource trigger_source) override;
+  void SendAutofillTypePredictionsToRenderer(
+      const std::vector<raw_ptr<FormStructure, VectorExperimental>>& forms)
+      override;
 
+  // Group (1c): browser -> renderer events, unrouted (see comment above).
+  // autofill::AutofillDriver:
+  // TODO(crbug.com/1281695): This event is currently not routed, but it looks
+  // like it should be breadcast to all renderers.
+  void GetFourDigitCombinationsFromDOM(
+      base::OnceCallback<void(const std::vector<std::string>&)>
+          potential_matches) override;
+  void TriggerFormExtractionInDriverFrame() override;
+
+  // Group (2a): renderer -> browser events, broadcast (see comment above).
   // mojom::AutofillDriver:
-  // Events triggered by the renderer. These events are routed by
-  // ContentAutofillRouter to potentially a different ContentAutofillDriver and
-  // then passed to AutofillManager.
-  //
-  // We do not expect to receive Autofill related messages from a prerendered
-  // page, so we validate calls accordingly. If we receive an unexpected call,
-  // we shut down the renderer and log the bad message.
-  //
-  // These events are private to to avoid accidental in the browser.
-  // They can be accessed explicitly through renderer_events().
-  void SetFormToBeProbablySubmitted(
-      const absl::optional<FormData>& form) override;
+  void DidEndTextFieldEditing() override;
+  void FocusNoLongerOnForm(bool had_interacted_form) override;
+  void HidePopup() override;
+
+  // Group (2b): renderer -> browser events, routed (see comment above).
+  // mojom::AutofillDriver:
+  void AskForValuesToFill(
+      const FormData& form,
+      const FormFieldData& field,
+      const gfx::RectF& bounding_box,
+      AutofillSuggestionTriggerSource trigger_source) override;
+  void DidFillAutofillFormData(const FormData& form,
+                               base::TimeTicks timestamp) override;
+  void FocusOnFormField(const FormData& form,
+                        const FormFieldData& field,
+                        const gfx::RectF& bounding_box) override;
   void FormsSeen(const std::vector<FormData>& updated_forms,
                  const std::vector<FormRendererId>& removed_forms) override;
   void FormSubmitted(const FormData& form,
                      bool known_success,
                      mojom::SubmissionSource submission_source) override;
+  void JavaScriptChangedAutofilledValue(
+      const FormData& form,
+      const FormFieldData& field,
+      const std::u16string& old_value) override;
+  void SelectControlDidChange(const FormData& form,
+                              const FormFieldData& field,
+                              const gfx::RectF& bounding_box) override;
+  void SelectOrSelectListFieldOptionsDidChange(const FormData& form) override;
+  void SetFormToBeProbablySubmitted(
+      const std::optional<FormData>& form) override;
   void TextFieldDidChange(const FormData& form,
                           const FormFieldData& field,
                           const gfx::RectF& bounding_box,
@@ -305,30 +302,6 @@ class ContentAutofillDriver : public AutofillDriver,
   void TextFieldDidScroll(const FormData& form,
                           const FormFieldData& field,
                           const gfx::RectF& bounding_box) override;
-  void SelectControlDidChange(const FormData& form,
-                              const FormFieldData& field,
-                              const gfx::RectF& bounding_box) override;
-  void AskForValuesToFill(
-      const FormData& form,
-      const FormFieldData& field,
-      const gfx::RectF& bounding_box,
-      int32_t query_id,
-      AutoselectFirstSuggestion autoselect_first_suggestion,
-      FormElementWasClicked form_element_was_clicked) override;
-  void HidePopup() override;
-  void FocusNoLongerOnForm(bool had_interacted_form) override;
-  void FocusOnFormField(const FormData& form,
-                        const FormFieldData& field,
-                        const gfx::RectF& bounding_box) override;
-  void DidFillAutofillFormData(const FormData& form,
-                               base::TimeTicks timestamp) override;
-  void DidPreviewAutofillFormData() override;
-  void DidEndTextFieldEditing() override;
-  void SelectFieldOptionsDidChange(const FormData& form) override;
-  void JavaScriptChangedAutofilledValue(
-      const FormData& form,
-      const FormFieldData& field,
-      const std::u16string& old_value) override;
 
   // Sets parameters of |form| and |optional_field| that can be extracted from
   // |render_frame_host_|. |optional_field| is treated as if it is a field of
@@ -338,7 +311,10 @@ class ContentAutofillDriver : public AutofillDriver,
   // received from the renderer.
   void SetFrameAndFormMetaData(FormData& form,
                                FormFieldData* optional_field) const;
+  // Returns a copy of `form` after applying `SetFormAndFormMetaData` to it.
   [[nodiscard]] FormData GetFormWithFrameAndFormMetaData(FormData form) const;
+  [[nodiscard]] std::optional<FormData> GetFormWithFrameAndFormMetaData(
+      base::optional_ref<const FormData> form) const;
 
   // Transform bounding box coordinates to real viewport coordinates. In the
   // case of a page spanning multiple renderer processes, subframe renderers
@@ -349,40 +325,33 @@ class ContentAutofillDriver : public AutofillDriver,
   // Returns the AutofillRouter and confirms that it may be accessed (we should
   // not be using the router if we're prerendering).
   //
-  // Also DCHECKs that the driver is in a state where events may be handled.
-  ContentAutofillRouter& autofill_router();
+  // The router must only route among ContentAutofillDrivers because
+  // ContentAutofillDriver casts AutofillDrivers to ContentAutofillDrivers.
+  AutofillDriverRouter& router();
 
-  // Weak ref to the RenderFrameHost the driver is associated with. Should
-  // always be non-NULL and valid for lifetime of |this|.
-  const raw_ptr<content::RenderFrameHost> render_frame_host_ = nullptr;
+  // The frame/document to which this driver is associated. Outlives `this`.
+  // RFH is corresponds to neither a frame nor a document: it may survive
+  // navigations that documents don't, but it may not survive cross-origin
+  // navigations.
+  const raw_ref<content::RenderFrameHost> render_frame_host_;
 
-  // Weak ref to the AutofillRouter associated with the WebContents.
-  // Do not access directly, use autofill_router() instead.
-  raw_ptr<ContentAutofillRouter> autofill_router_ = nullptr;
+  // The factory that created this driver. Outlives `this`.
+  const raw_ref<ContentAutofillDriverFactory> owner_;
 
   // The form pushed from the AutofillAgent to the AutofillDriver. When the
   // ProbablyFormSubmitted() event is fired, this form is considered the
   // submitted one.
-  absl::optional<FormData> potentially_submitted_form_;
+  std::optional<FormData> potentially_submitted_form_;
 
   // Keeps track of the forms for which FormSubmitted() event has been triggered
   // to avoid duplicates fired by AutofillAgent.
   std::set<FormGlobalId> submitted_forms_;
 
-  // AutofillManager instance via which this object drives the shared Autofill
-  // code.
   std::unique_ptr<AutofillManager> autofill_manager_ = nullptr;
-
-  content::RenderWidgetHost::KeyPressEventCallback key_press_handler_;
 
   mojo::AssociatedReceiver<mojom::AutofillDriver> receiver_{this};
 
   mojo::AssociatedRemote<mojom::AutofillAgent> autofill_agent_;
-
-  bool should_suppress_keyboard_ = false;
-
-  content::RenderWidgetHost::SuppressShowingImeCallback
-      suppress_showing_ime_callback_;
 };
 
 }  // namespace autofill

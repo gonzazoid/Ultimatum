@@ -23,7 +23,7 @@
 #include "base/win/win_util.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/password_manager/password_manager_util_win.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "components/password_manager/core/browser/password_manager.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/prefs/pref_service.h"
@@ -269,6 +269,16 @@ bool CheckBlankPassword(const WCHAR* username) {
   return result;
 }
 
+// Returns true if there is device authentication present on the machine, false
+// otherwise.
+bool DeviceAuthenticationPresent(const WCHAR* username) {
+  // If the machine is domain-joined, we should not check whether the password
+  // is blank and we should assume there is a password and thus there is device
+  // authentication present. Otherwise, if there is a non-blank password, also
+  // return that there is device authentication present.
+  return base::win::IsEnrolledToDomain() || !CheckBlankPassword(username);
+}
+
 }  // namespace
 
 bool AuthenticateUser(gfx::NativeWindow window,
@@ -284,8 +294,11 @@ bool AuthenticateUser(gfx::NativeWindow window,
     return false;
   }
 
-  if (!base::win::IsEnrolledToDomain() && CheckBlankPassword(cur_username))
+  // If there is no device authentication set up on the machine, then
+  // automatically authenticate the user.
+  if (!DeviceAuthenticationPresent(cur_username)) {
     return true;
+  }
 
   // Build the strings to display in the credential UI.  If these strings are
   // left empty on domain joined machines, CredUIPromptForWindowsCredentials()
@@ -335,24 +348,15 @@ bool AuthenticateUser(gfx::NativeWindow window,
   return retval;
 }
 
-std::u16string GetMessageForLoginPrompt(
-    password_manager::ReauthPurpose purpose) {
-  switch (purpose) {
-    case password_manager::ReauthPurpose::VIEW_PASSWORD:
-      return l10n_util::GetStringUTF16(
-          IDS_PASSWORDS_PAGE_AUTHENTICATION_PROMPT);
-    case password_manager::ReauthPurpose::COPY_PASSWORD:
-      return l10n_util::GetStringUTF16(
-          IDS_PASSWORDS_PAGE_COPY_AUTHENTICATION_PROMPT);
-
-    case password_manager::ReauthPurpose::EDIT_PASSWORD:
-      return l10n_util::GetStringUTF16(
-          IDS_PASSWORDS_PAGE_EDIT_AUTHENTICATION_PROMPT);
-
-    case password_manager::ReauthPurpose::EXPORT:
-      return l10n_util::GetStringUTF16(
-          IDS_PASSWORDS_PAGE_EXPORT_AUTHENTICATION_PROMPT);
+bool CanAuthenticateWithScreenLock() {
+  WCHAR cur_username[CREDUI_MAX_USERNAME_LENGTH + 1] = {};
+  DWORD cur_username_length = std::size(cur_username);
+  if (!GetUserNameEx(NameSamCompatible, cur_username, &cur_username_length)) {
+    DLOG(ERROR) << "Unable to obtain username " << GetLastError();
+    return false;
   }
+
+  return DeviceAuthenticationPresent(cur_username);
 }
 
 }  // namespace password_manager_util_win

@@ -9,12 +9,14 @@
 #include "base/check.h"
 #include "base/notreached.h"
 #include "base/time/time.h"
+#include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "ui/events/devices/x11/touch_factory_x11.h"
 #include "ui/events/event.h"
 #include "ui/events/event_utils.h"
 #include "ui/events/keycodes/dom/dom_key.h"
 #include "ui/events/keycodes/keyboard_code_conversion_x.h"
+#include "ui/events/ozone/events_ozone.h"
 #include "ui/events/pointer_details.h"
 #include "ui/events/types/event_type.h"
 #include "ui/events/x/events_x_utils.h"
@@ -80,9 +82,9 @@ Event::Properties GetEventPropertiesFromXEvent(EventType type,
     // IBus-/fctix-GTK specific flags
     uint8_t ime_flags = (state >> kPropertyKeyboardImeFlagOffset) &
                         kPropertyKeyboardImeFlagMask;
-    if (ime_flags)
-      properties.emplace(kPropertyKeyboardImeFlag, Values{ime_flags});
-
+    if (ime_flags) {
+      SetKeyboardImeFlagProperty(&properties, ime_flags);
+    }
   } else if (type == ET_MOUSE_EXITED) {
     // NotifyVirtual events are created for intermediate windows that the
     // pointer crosses through. These occur when middle clicking.
@@ -172,11 +174,11 @@ std::unique_ptr<TouchEvent> CreateTouchEvent(EventType type,
   auto event = std::make_unique<TouchEventX11>(
       type, EventLocationFromXEvent(xev), EventTimeFromXEvent(xev),
       GetTouchPointerDetailsFromXEvent(xev));
-#if defined(USE_OZONE)
-    // Touch events don't usually have |root_location| set differently than
-    // |location|, since there is a touch device to display association, but
-    // this doesn't happen in Ozone X11.
-    event->set_root_location(EventSystemLocationFromXEvent(xev));
+#if BUILDFLAG(IS_OZONE)
+  // Touch events don't usually have |root_location| set differently than
+  // |location|, since there is a touch device to display association, but
+  // this doesn't happen in Ozone X11.
+  event->set_root_location(EventSystemLocationFromXEvent(xev));
 #endif
   return event;
 }
@@ -193,6 +195,15 @@ std::unique_ptr<ScrollEvent> CreateScrollEvent(EventType type,
     GetFlingDataFromXEvent(xev, &x_offset, &y_offset, &x_offset_ordinal,
                            &y_offset_ordinal, nullptr);
   }
+  // When lifting up fingers x_offset and y_offset both have the value 0
+  // If this is the case ET_SCROLL_FLING_START needs to be emitted, in order to
+  // trigger touchpad overscroll navigation gesture.
+  // x_offset and y_offset should not be manipulated, however, since some X11
+  // drivers such as synaptics simulate the fling themselves
+  if (!x_offset && !y_offset) {
+    type = ET_SCROLL_FLING_START;
+  }
+
   auto event = std::make_unique<ScrollEvent>(
       type, EventLocationFromXEvent(xev), EventTimeFromXEvent(xev),
       EventFlagsFromXEvent(xev), x_offset, y_offset, x_offset_ordinal,
@@ -202,7 +213,8 @@ std::unique_ptr<ScrollEvent> CreateScrollEvent(EventType type,
   // We need to filter zero scroll offset here. Because MouseWheelEventQueue
   // assumes we'll never get a zero scroll offset event and we need delta to
   // determine which element to scroll on phaseBegan.
-  return (event->x_offset() != 0.0 || event->y_offset() != 0.0)
+  return (event->x_offset() != 0.0 || event->y_offset() != 0.0 ||
+          event->type() == ET_SCROLL_FLING_START)
              ? std::move(event)
              : nullptr;
 }

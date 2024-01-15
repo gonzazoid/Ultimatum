@@ -33,6 +33,8 @@ source_set("scanning") {
     "//chromeos/ash/components/network",
     "//chromeos/ash/services/quick_pair",
     "//chromeos/ash/services/quick_pair/public/cpp",
+    "//components/cross_device/logging:logging",
+    "//components/cross_device/logging:logging",
     "//device/bluetooth",
     "//device/bluetooth/public/cpp",
   ]
@@ -76,7 +78,7 @@ source_set("unit_tests") {
     "//ash/constants",
     "//ash/quick_pair/common",
     "//ash/quick_pair/common:test_support",
-    "//ash/quick_pair/fast_pair_handshake:test_support",
+    "//ash/quick_pair/fast_pair_handshake",
     "//ash/quick_pair/proto:fastpair_proto",
     "//ash/quick_pair/repository:repository",
     "//ash/quick_pair/repository:test_support",

@@ -6,9 +6,11 @@
 #define CHROMEOS_ASH_SERVICES_LIBASSISTANT_SERVICE_CONTROLLER_H_
 
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-#include "base/scoped_observation.h"
+#include "base/scoped_observation_traits.h"
 #include "chromeos/ash/services/libassistant/grpc/assistant_client.h"
 #include "chromeos/ash/services/libassistant/grpc/assistant_client_observer.h"
 #include "chromeos/ash/services/libassistant/grpc/services_status_observer.h"
@@ -80,9 +82,9 @@ class COMPONENT_EXPORT(LIBASSISTANT_SERVICE) ServiceController
   mojom::ServiceState state_ = mojom::ServiceState::kStopped;
 
   // Called during |Initialize| to apply boot configuration.
-  mojom::SettingsController* settings_controller_ = nullptr;
+  raw_ptr<mojom::SettingsController> settings_controller_ = nullptr;
 
-  LibassistantFactory& libassistant_factory_;
+  const raw_ref<LibassistantFactory> libassistant_factory_;
 
   std::unique_ptr<AssistantClient> assistant_client_;
   std::unique_ptr<ChromiumApiDelegate> chromium_api_delegate_;
@@ -94,12 +96,25 @@ class COMPONENT_EXPORT(LIBASSISTANT_SERVICE) ServiceController
   base::WeakPtrFactory<ServiceController> weak_factory_{this};
 };
 
-using ScopedAssistantClientObserver = base::ScopedObservation<
-    ServiceController,
-    AssistantClientObserver,
-    &ServiceController::AddAndFireAssistantClientObserver,
-    &ServiceController::RemoveAssistantClientObserver>;
-
 }  // namespace ash::libassistant
+
+namespace base {
+
+template <>
+struct ScopedObservationTraits<ash::libassistant::ServiceController,
+                               ash::libassistant::AssistantClientObserver> {
+  static void AddObserver(
+      ash::libassistant::ServiceController* source,
+      ash::libassistant::AssistantClientObserver* observer) {
+    source->AddAndFireAssistantClientObserver(observer);
+  }
+  static void RemoveObserver(
+      ash::libassistant::ServiceController* source,
+      ash::libassistant::AssistantClientObserver* observer) {
+    source->RemoveAssistantClientObserver(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // CHROMEOS_ASH_SERVICES_LIBASSISTANT_SERVICE_CONTROLLER_H_

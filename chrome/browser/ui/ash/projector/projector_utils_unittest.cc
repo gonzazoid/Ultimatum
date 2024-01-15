@@ -9,10 +9,11 @@
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/prefs/browser_prefs.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/account_id/account_id.h"
 #include "components/prefs/pref_service.h"
@@ -63,7 +64,6 @@ class ScopedLogIn {
 
     switch (user_type) {
       case user_manager::USER_TYPE_REGULAR:  // fallthrough
-      case user_manager::USER_TYPE_ACTIVE_DIRECTORY:
         LogIn();
         break;
       case user_manager::USER_TYPE_PUBLIC_ACCOUNT:
@@ -114,7 +114,7 @@ class ScopedLogIn {
     fake_user_manager_->LoginUser(account_id_);
   }
 
-  FakeUserManagerWithLocalState* fake_user_manager_;
+  raw_ptr<FakeUserManagerWithLocalState> fake_user_manager_;
   const AccountId account_id_;
 };
 
@@ -122,7 +122,7 @@ class ScopedLogIn {
 
 class ProjectorUtilsTest : public testing::Test {
  public:
-  ProjectorUtilsTest() : scoped_feature_list_(features::kProjector) {}
+  ProjectorUtilsTest() = default;
   ProjectorUtilsTest(const ProjectorUtilsTest&) = delete;
   ProjectorUtilsTest& operator=(const ProjectorUtilsTest&) = delete;
   ~ProjectorUtilsTest() override = default;
@@ -167,7 +167,6 @@ class ProjectorUtilsTest : public testing::Test {
   base::ScopedTempDir data_dir_;
   std::unique_ptr<user_manager::ScopedUserManager> user_manager_enabler_;
   std::unique_ptr<TestingProfile> profile_;
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 class ProjectorUtilsChildTest : public ProjectorUtilsTest {
@@ -209,14 +208,6 @@ TEST_F(ProjectorUtilsManagedTest, IsProjectorAllowedForProfile_ManagedAccount) {
   EXPECT_TRUE(IsProjectorAllowedForProfile(profile()));
 }
 
-TEST_F(ProjectorUtilsTest, IsProjectorAllowedForProfile_ActiveDirectory) {
-  ScopedLogIn login(GetFakeUserManager(),
-                    AccountId::AdFromUserEmailObjGuid(
-                        profile()->GetProfileUserName(), "<obj_guid>"),
-                    user_manager::USER_TYPE_ACTIVE_DIRECTORY);
-  EXPECT_FALSE(IsProjectorAllowedForProfile(profile()));
-}
-
 TEST_F(ProjectorUtilsChildTest, IsProjectorAllowedForProfile_ChildUser) {
   ScopedLogIn login(GetFakeUserManager(),
                     AccountId::FromUserEmailGaiaId(
@@ -227,8 +218,7 @@ TEST_F(ProjectorUtilsChildTest, IsProjectorAllowedForProfile_ChildUser) {
 }
 
 TEST_F(ProjectorUtilsTest, IsProjectorAllowedForProfile_GuestAccount) {
-  ScopedLogIn login(GetFakeUserManager(),
-                    GetFakeUserManager()->GetGuestAccountId(),
+  ScopedLogIn login(GetFakeUserManager(), user_manager::GuestAccountId(),
                     user_manager::USER_TYPE_GUEST);
   EXPECT_FALSE(IsProjectorAllowedForProfile(profile()));
 }
@@ -261,14 +251,6 @@ TEST_F(ProjectorUtilsManagedTest, IsProjectorAppEnabled_ManagedAccount) {
   EXPECT_TRUE(IsProjectorAppEnabled(profile()));
 }
 
-TEST_F(ProjectorUtilsTest, IsProjectorAppEnabled_ActiveDirectory) {
-  ScopedLogIn login(GetFakeUserManager(),
-                    AccountId::AdFromUserEmailObjGuid(
-                        profile()->GetProfileUserName(), "<obj_guid>"),
-                    user_manager::USER_TYPE_ACTIVE_DIRECTORY);
-  EXPECT_FALSE(IsProjectorAppEnabled(profile()));
-}
-
 TEST_F(ProjectorUtilsChildTest, IsProjectorAppEnabled_ChildUser) {
   ScopedLogIn login(GetFakeUserManager(),
                     AccountId::FromUserEmailGaiaId(
@@ -279,8 +261,7 @@ TEST_F(ProjectorUtilsChildTest, IsProjectorAppEnabled_ChildUser) {
 }
 
 TEST_F(ProjectorUtilsTest, IsProjectorAppEnabled_GuestAccount) {
-  ScopedLogIn login(GetFakeUserManager(),
-                    GetFakeUserManager()->GetGuestAccountId(),
+  ScopedLogIn login(GetFakeUserManager(), user_manager::GuestAccountId(),
                     user_manager::USER_TYPE_GUEST);
   EXPECT_FALSE(IsProjectorAppEnabled(profile()));
 }

@@ -5,20 +5,22 @@
 #include "content/browser/media/media_license_manager.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/services/storage/public/cpp/buckets/bucket_locator.h"
 #include "components/services/storage/public/cpp/buckets/constants.h"
 #include "components/services/storage/public/cpp/constants.h"
@@ -26,12 +28,15 @@
 #include "content/browser/media/media_license_storage_host.h"
 #include "media/cdm/cdm_type.h"
 #include "sql/database.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "sql/sqlite_result_code.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/quota/quota_types.mojom-shared.h"
 #include "url/origin.h"
 
 namespace content {
+
+using MediaLicenseStorageHostOpenError =
+    MediaLicenseStorageHost::MediaLicenseStorageHostOpenError;
 
 namespace {
 
@@ -54,20 +59,6 @@ scoped_refptr<base::SequencedTaskRunner> CreateDatabaseTaskRunner() {
 }
 
 }  // namespace
-
-MediaLicenseManager::CdmFileId::CdmFileId(const std::string& name,
-                                          const media::CdmType& cdm_type)
-    : name(name), cdm_type(cdm_type) {}
-MediaLicenseManager::CdmFileId::CdmFileId(const CdmFileId&) = default;
-MediaLicenseManager::CdmFileId::~CdmFileId() = default;
-
-MediaLicenseManager::CdmFileIdAndContents::CdmFileIdAndContents(
-    const CdmFileId& file,
-    std::vector<uint8_t> data)
-    : file(file), data(std::move(data)) {}
-MediaLicenseManager::CdmFileIdAndContents::CdmFileIdAndContents(
-    const CdmFileIdAndContents&) = default;
-MediaLicenseManager::CdmFileIdAndContents::~CdmFileIdAndContents() = default;
 
 MediaLicenseManager::MediaLicenseManager(
     bool in_memory,
@@ -93,7 +84,7 @@ MediaLicenseManager::MediaLicenseManager(
 MediaLicenseManager::~MediaLicenseManager() = default;
 
 void MediaLicenseManager::OpenCdmStorage(
-    const BindingContext& binding_context,
+    const CdmStorageBindingContext& binding_context,
     mojo::PendingReceiver<media::mojom::CdmStorage> receiver) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
@@ -116,7 +107,7 @@ void MediaLicenseManager::OpenCdmStorage(
   // Get the default bucket for `storage_key`.
   quota_manager_proxy()->UpdateOrCreateBucket(
       storage::BucketInitParams::ForDefaultBucket(storage_key),
-      base::SequencedTaskRunnerHandle::Get(),
+      base::SequencedTaskRunner::GetCurrentDefault(),
       base::BindOnce(&MediaLicenseManager::DidGetBucket,
                      weak_factory_.GetWeakPtr(), storage_key));
 }
@@ -134,7 +125,7 @@ void MediaLicenseManager::DidGetBucket(
   DCHECK_GT(receivers_list.size(), 0u);
 
   storage::BucketLocator bucket_locator;
-  if (result.ok()) {
+  if (result.has_value()) {
     bucket_locator = result->ToBucketLocator();
   } else {
     // Use the null locator, but update the `storage_key` field so
@@ -142,6 +133,14 @@ void MediaLicenseManager::DidGetBucket(
     // We could consider falling back to using an in-memory database in this
     // case, but failing here seems easier to reason about from a website
     // author's point of view.
+    sql::UmaHistogramSqliteResult(
+        "Media.EME.MediaLicenseDatabaseOpenSQLiteError",
+        result.error().sqlite_error);
+    base::UmaHistogramEnumeration(
+        "Media.EME.MediaLicenseDatabaseOpenQuotaError",
+        result.error().quota_error);
+    MediaLicenseStorageHost::ReportDatabaseOpenError(
+        MediaLicenseStorageHostOpenError::kBucketLocatorError, in_memory());
     DCHECK(bucket_locator.id.is_null());
     bucket_locator.storage_key = storage_key;
   }

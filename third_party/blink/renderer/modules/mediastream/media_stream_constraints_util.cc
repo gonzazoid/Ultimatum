@@ -115,9 +115,7 @@ VideoCaptureSettings::VideoCaptureSettings(
     const VideoTrackAdapterSettings& track_adapter_settings,
     absl::optional<double> min_frame_rate,
     absl::optional<double> max_frame_rate,
-    absl::optional<double> pan,
-    absl::optional<double> tilt,
-    absl::optional<double> zoom)
+    absl::optional<ImageCaptureDeviceSettings> image_capture_device_settings)
     : failed_constraint_name_(nullptr),
       device_id_(std::move(device_id)),
       capture_params_(capture_params),
@@ -125,9 +123,7 @@ VideoCaptureSettings::VideoCaptureSettings(
       track_adapter_settings_(track_adapter_settings),
       min_frame_rate_(min_frame_rate),
       max_frame_rate_(max_frame_rate),
-      pan_(pan),
-      tilt_(tilt),
-      zoom_(zoom) {
+      image_capture_device_settings_(image_capture_device_settings) {
   DCHECK(!min_frame_rate ||
          *min_frame_rate_ <= capture_params.requested_format.frame_rate);
   DCHECK(!track_adapter_settings.target_size() ||
@@ -240,16 +236,18 @@ VideoTrackAdapterSettings SelectVideoTrackAdapterSettings(
       std::min(resolution_set.max_aspect_ratio(),
                static_cast<double>(resolution_set.max_width()) /
                    static_cast<double>(resolution_set.min_height()));
-  // VideoTrackAdapter uses a frame rate of 0.0 to disable frame-rate
+  // VideoTrackAdapter uses an unset frame rate to disable frame-rate
   // adjustment.
-  double track_max_frame_rate = frame_rate_set.Max().value_or(0.0);
+  absl::optional<double> track_max_frame_rate = frame_rate_set.Max();
   if (basic_constraint_set.frame_rate.HasIdeal()) {
     track_max_frame_rate = std::max(basic_constraint_set.frame_rate.Ideal(),
                                     kMinDeviceCaptureFrameRate);
-    if (frame_rate_set.Min() && track_max_frame_rate < *frame_rate_set.Min())
+    if (frame_rate_set.Min() && *track_max_frame_rate < *frame_rate_set.Min()) {
       track_max_frame_rate = *frame_rate_set.Min();
-    if (frame_rate_set.Max() && track_max_frame_rate > *frame_rate_set.Max())
+    }
+    if (frame_rate_set.Max() && *track_max_frame_rate > *frame_rate_set.Max()) {
       track_max_frame_rate = *frame_rate_set.Max();
+    }
   }
 
   return VideoTrackAdapterSettings(target_resolution, track_min_aspect_ratio,

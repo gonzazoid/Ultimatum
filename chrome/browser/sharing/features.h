@@ -8,6 +8,8 @@
 #include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
 
+BASE_DECLARE_FEATURE(kClickToCall);
+
 // Feature flag for matching device expiration to pulse interval.
 BASE_DECLARE_FEATURE(kSharingMatchPulseInterval);
 
@@ -23,15 +25,5 @@ extern const base::FeatureParam<int> kSharingPulseDeltaDesktopHours;
 // last updated timestamp less frequently because it does not do this when
 // backgrounded. Such devices cannot be marked stale aggressively.
 extern const base::FeatureParam<int> kSharingPulseDeltaAndroidHours;
-
-// Feature flag for configuring the timeout in the sharing message bridge.
-BASE_DECLARE_FEATURE(kSharingMessageBridgeTimeout);
-extern const base::FeatureParam<int> kSharingMessageBridgeTimeoutSeconds;
-
-// Feature flag for sending sharing message via Sync.
-BASE_DECLARE_FEATURE(kSharingSendViaSync);
-
-// Feature flag for prefer sending sharing message using VAPID.
-BASE_DECLARE_FEATURE(kSharingPreferVapid);
 
 #endif  // CHROME_BROWSER_SHARING_FEATURES_H_

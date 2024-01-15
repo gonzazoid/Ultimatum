@@ -5,6 +5,7 @@
 #include "services/device/device_posture/device_posture_platform_provider.h"
 
 #include "build/build_config.h"
+#include "services/device/device_posture/device_posture_platform_provider_default.h"
 #include "services/device/device_posture/device_posture_provider_impl.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -23,7 +24,7 @@ DevicePosturePlatformProvider::Create() {
 #elif BUILDFLAG(IS_ANDROID)
   return std::make_unique<DevicePosturePlatformProviderAndroid>();
 #else
-  return nullptr;
+  return std::make_unique<DevicePosturePlatformProviderDefault>();
 #endif
 }
 
@@ -36,6 +37,12 @@ void DevicePosturePlatformProvider::NotifyDevicePostureChanged(
     const device::mojom::DevicePostureType& posture) {
   DCHECK(provider_);
   provider_->OnDevicePostureChanged(posture);
+}
+
+void DevicePosturePlatformProvider::NotifyWindowSegmentsChanged(
+    const std::vector<gfx::Rect>& segments) {
+  DCHECK(provider_);
+  provider_->OnViewportSegmentsChanged(segments);
 }
 
 }  // namespace device

@@ -29,6 +29,21 @@ class PageDelegate {
 
   // Called when the main document's virtual keyboard mode changes.
   virtual void OnVirtualKeyboardModeChanged(PageImpl& page) {}
+
+  // Called when `page` becomes primary in its FrameTree.
+  virtual void NotifyPageBecamePrimary(PageImpl& page) = 0;
+
+  // Tells if `page` should be handled as in preview mode.
+  virtual bool IsInPreviewMode() const = 0;
+
+  // Notifies `BrowserView` about the resizable boolean having been set vith
+  // `window.setResizable(bool)` API.
+  virtual void OnCanResizeFromWebAPIChanged() = 0;
+
+  // Notify the page uses a forbidden powerful API and cannot be shown in
+  // preview mode.
+  virtual void CancelPreviewByMojoBinderPolicy(
+      const std::string& interface_name) = 0;
 };
 
 }  // namespace content

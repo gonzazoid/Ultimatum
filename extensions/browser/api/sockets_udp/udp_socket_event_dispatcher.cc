@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "content/public/browser/browser_thread.h"
 #include "extensions/browser/api/socket/udp_socket.h"
 #include "extensions/browser/event_router.h"
@@ -51,14 +51,14 @@ UDPSocketEventDispatcher::UDPSocketEventDispatcher(
   sockets_ = manager->data_;
 }
 
-UDPSocketEventDispatcher::~UDPSocketEventDispatcher() {}
+UDPSocketEventDispatcher::~UDPSocketEventDispatcher() = default;
 
-UDPSocketEventDispatcher::ReceiveParams::ReceiveParams() {}
+UDPSocketEventDispatcher::ReceiveParams::ReceiveParams() = default;
 
 UDPSocketEventDispatcher::ReceiveParams::ReceiveParams(
     const ReceiveParams& other) = default;
 
-UDPSocketEventDispatcher::ReceiveParams::~ReceiveParams() {}
+UDPSocketEventDispatcher::ReceiveParams::~ReceiveParams() = default;
 
 void UDPSocketEventDispatcher::OnSocketBind(const std::string& extension_id,
                                             int socket_id) {
@@ -131,7 +131,7 @@ void UDPSocketEventDispatcher::ReceiveCallback(
 
     // Post a task to delay the read until the socket is available, as
     // calling StartReceive at this point would error with ERR_IO_PENDING.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&UDPSocketEventDispatcher::StartReceive, params));
   } else if (bytes_read == net::ERR_IO_PENDING) {

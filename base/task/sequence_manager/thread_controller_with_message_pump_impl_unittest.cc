@@ -8,9 +8,8 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include "base/bind.h"
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
+
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/sequence_manager/task_queue.h"
@@ -21,7 +20,6 @@
 #include "base/test/mock_callback.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_tick_clock.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -91,7 +89,6 @@ class MockMessagePump : public MessagePump {
   MOCK_METHOD0(Quit, void());
   MOCK_METHOD0(ScheduleWork, void());
   MOCK_METHOD1(ScheduleDelayedWork_TimeTicks, void(const TimeTicks&));
-  MOCK_METHOD1(SetTimerSlack, void(TimerSlack));
 
   void ScheduleDelayedWork(
       const MessagePump::Delegate::NextWorkInfo& next_work_info) override {
@@ -125,6 +122,9 @@ class FakeSequencedTaskSource : public SequencedTaskSource {
   explicit FakeSequencedTaskSource(TickClock* clock) : clock_(clock) {}
   ~FakeSequencedTaskSource() override = default;
 
+  void SetRunTaskSynchronouslyAllowed(
+      bool can_run_tasks_synchronously) override {}
+
   absl::optional<SelectedTask> SelectNextTask(
       LazyNow& lazy_now,
       SelectTaskOption option) override {
@@ -136,20 +136,21 @@ class FakeSequencedTaskSource : public SequencedTaskSource {
         !tasks_.front().delayed_run_time.is_null()) {
       return absl::nullopt;
     }
-    running_stack_.push_back(std::move(tasks_.front()));
+    task_execution_stack_.push_back(std::move(tasks_.front()));
     tasks_.pop();
-    return SelectedTask(running_stack_.back(), TaskExecutionTraceLogger(),
-                        TaskQueue::QueuePriority::kNormalPriority,
+    return SelectedTask(task_execution_stack_.back(),
+                        TaskExecutionTraceLogger(),
+                        static_cast<TaskQueue::QueuePriority>(
+                            TaskQueue::DefaultQueuePriority::kNormalPriority),
                         QueueName::TEST_TQ);
   }
 
-  void DidRunTask(LazyNow& lazy_now) override { running_stack_.pop_back(); }
+  void DidRunTask(LazyNow& lazy_now) override {
+    task_execution_stack_.pop_back();
+  }
 
-  void RemoveAllCanceledDelayedTasksFromFront(LazyNow* lazy_now) override {}
-
-  absl::optional<WakeUp> GetPendingWakeUp(
-      LazyNow* lazy_now,
-      SelectTaskOption option) const override {
+  absl::optional<WakeUp> GetPendingWakeUp(LazyNow* lazy_now,
+                                          SelectTaskOption option) override {
     if (tasks_.empty())
       return absl::nullopt;
     if (option == SequencedTaskSource::SelectTaskOption::kSkipDelayedTask &&
@@ -179,29 +180,46 @@ class FakeSequencedTaskSource : public SequencedTaskSource {
     return has_pending_high_resolution_tasks;
   }
 
+  void OnBeginWork() override {}
+
   void SetHasPendingHighResolutionTasks(bool state) {
     has_pending_high_resolution_tasks = state;
   }
 
-  bool OnSystemIdle() override { return false; }
+  bool OnIdle() override { return false; }
+
+  void MaybeEmitTaskDetails(perfetto::EventContext& ctx,
+                            const SelectedTask& selected_task) const override {}
 
  private:
   raw_ptr<TickClock> clock_;
   std::queue<Task> tasks_;
-  std::vector<Task> running_stack_;
+  // Use std::deque() so that references returned by SelectNextTask() remain
+  // valid until the matching call to DidRunTask(), even when nested RunLoops
+  // cause tasks to be pushed on the stack in-between. This is needed because
+  // references are kept in local variables by calling code between
+  // SelectNextTask()/DidRunTask().
+  //
+  // See also `SequenceManagerImpl::MainThreadOnly::task_execution_stack`.
+  std::deque<Task> task_execution_stack_;
   bool has_pending_high_resolution_tasks = false;
 };
 
 }  // namespace
 
-class ThreadControllerWithMessagePumpTest : public testing::Test {
+class ThreadControllerWithMessagePumpTestBase : public testing::Test {
  public:
-  ThreadControllerWithMessagePumpTest()
-      : message_pump_(new testing::StrictMock<MockMessagePump>()),
-        settings_(
-            SequenceManager::Settings::Builder().SetTickClock(&clock_).Build()),
-        thread_controller_(std::unique_ptr<MessagePump>(message_pump_),
-                           settings_),
+  explicit ThreadControllerWithMessagePumpTestBase(
+      bool can_run_tasks_by_batches)
+      : settings_(SequenceManager::Settings::Builder()
+                      .SetTickClock(&clock_)
+                      .SetCanRunTasksByBatches(can_run_tasks_by_batches)
+                      .Build()),
+        thread_controller_(
+            std::make_unique<testing::StrictMock<MockMessagePump>>(),
+            settings_),
+        message_pump_(static_cast<MockMessagePump*>(
+            thread_controller_.GetBoundMessagePump())),
         task_source_(&clock_) {
     // SimpleTestTickClock starts at zero, but that also satisfies
     // TimeTicks::is_null() and that throws off some ThreadController state.
@@ -222,20 +240,38 @@ class ThreadControllerWithMessagePumpTest : public testing::Test {
   TimeTicks FromNow(TimeDelta delta) { return clock_.NowTicks() + delta; }
 
  protected:
-  raw_ptr<MockMessagePump> message_pump_;
-  SequenceManager::Settings settings_;
   SimpleTestTickClock clock_;
+  SequenceManager::Settings settings_;
   ThreadControllerForTest thread_controller_;
+  raw_ptr<MockMessagePump> message_pump_;
   FakeSequencedTaskSource task_source_;
+};
+
+class ThreadControllerWithMessagePumpTest
+    : public ThreadControllerWithMessagePumpTestBase {
+ public:
+  ThreadControllerWithMessagePumpTest()
+      : ThreadControllerWithMessagePumpTestBase(
+            /* can_run_tasks_by_batches=*/true) {}
+};
+
+class ThreadControllerWithMessagePumpNoBatchesTest
+    : public ThreadControllerWithMessagePumpTestBase {
+ public:
+  ThreadControllerWithMessagePumpNoBatchesTest()
+      : ThreadControllerWithMessagePumpTestBase(
+            /* can_run_tasks_by_batches=*/false) {}
 };
 
 TEST_F(ThreadControllerWithMessagePumpTest, ScheduleDelayedWork) {
   MockCallback<OnceClosure> task1;
-  task_source_.AddTask(FROM_HERE, task1.Get(), FromNow(Seconds(10)));
+  task_source_.AddTask(FROM_HERE, task1.Get(), FromNow(Seconds(10)),
+                       clock_.NowTicks());
   MockCallback<OnceClosure> task2;
   task_source_.AddTask(FROM_HERE, task2.Get());
   MockCallback<OnceClosure> task3;
-  task_source_.AddTask(FROM_HERE, task3.Get(), FromNow(Seconds(20)));
+  task_source_.AddTask(FROM_HERE, task3.Get(), FromNow(Seconds(20)),
+                       clock_.NowTicks());
 
   // Call a no-op DoWork. Expect that it doesn't do any work.
   clock_.Advance(Seconds(5));
@@ -298,7 +334,8 @@ TEST_F(ThreadControllerWithMessagePumpTest, SetNextDelayedDoWork_CapAtOneDay) {
 
 TEST_F(ThreadControllerWithMessagePumpTest, DelayedWork_CapAtOneDay) {
   MockCallback<OnceClosure> task1;
-  task_source_.AddTask(FROM_HERE, task1.Get(), FromNow(Days(10)));
+  task_source_.AddTask(FROM_HERE, task1.Get(), FromNow(Days(10)),
+                       clock_.NowTicks());
 
   auto next_work_info = thread_controller_.DoWork();
   EXPECT_EQ(next_work_info.delayed_run_time, FromNow(Days(1)));
@@ -306,7 +343,8 @@ TEST_F(ThreadControllerWithMessagePumpTest, DelayedWork_CapAtOneDay) {
 
 TEST_F(ThreadControllerWithMessagePumpTest, DoWorkDoesntScheduleDelayedWork) {
   MockCallback<OnceClosure> task1;
-  task_source_.AddTask(FROM_HERE, task1.Get(), FromNow(Seconds(10)));
+  task_source_.AddTask(FROM_HERE, task1.Get(), FromNow(Seconds(10)),
+                       clock_.NowTicks());
 
   EXPECT_CALL(*message_pump_, ScheduleDelayedWork_TimeTicks(_)).Times(0);
   auto next_work_info = thread_controller_.DoWork();
@@ -319,7 +357,8 @@ TEST_F(ThreadControllerWithMessagePumpTest, NestedExecution) {
   // the nested loop.
   std::vector<std::string> log;
 
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   EXPECT_CALL(*message_pump_, Run(_))
       .WillOnce(Invoke([&log, this](MessagePump::Delegate* delegate) {
@@ -384,7 +423,8 @@ TEST_F(ThreadControllerWithMessagePumpTest,
   // nested runloop.
   std::vector<std::string> log;
 
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   EXPECT_CALL(*message_pump_, Run(_))
       .WillOnce(Invoke([&log, this](MessagePump::Delegate* delegate) {
@@ -446,13 +486,13 @@ TEST_F(ThreadControllerWithMessagePumpTest, SetDefaultTaskRunner) {
   scoped_refptr<SingleThreadTaskRunner> task_runner1 =
       MakeRefCounted<FakeTaskRunner>();
   thread_controller_.SetDefaultTaskRunner(task_runner1);
-  EXPECT_EQ(task_runner1, ThreadTaskRunnerHandle::Get());
+  EXPECT_EQ(task_runner1, SingleThreadTaskRunner::GetCurrentDefault());
 
   // Check that we are correctly supporting overriding.
   scoped_refptr<SingleThreadTaskRunner> task_runner2 =
       MakeRefCounted<FakeTaskRunner>();
   thread_controller_.SetDefaultTaskRunner(task_runner2);
-  EXPECT_EQ(task_runner2, ThreadTaskRunnerHandle::Get());
+  EXPECT_EQ(task_runner2, SingleThreadTaskRunner::GetCurrentDefault());
 }
 
 TEST_F(ThreadControllerWithMessagePumpTest, EnsureWorkScheduled) {
@@ -482,7 +522,8 @@ TEST_F(ThreadControllerWithMessagePumpTest, EnsureWorkScheduled) {
 }
 
 TEST_F(ThreadControllerWithMessagePumpTest, WorkBatching) {
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   const int kBatchSize = 5;
   thread_controller_.SetWorkBatchSize(kBatchSize);
@@ -507,7 +548,8 @@ TEST_F(ThreadControllerWithMessagePumpTest, WorkBatching) {
 TEST_F(ThreadControllerWithMessagePumpTest, QuitInterruptsBatch) {
   // This check ensures that RunLoop::Quit() makes us drop back to a work batch
   // size of 1.
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   const int kBatchSize = 5;
   thread_controller_.SetWorkBatchSize(kBatchSize);
@@ -542,115 +584,93 @@ TEST_F(ThreadControllerWithMessagePumpTest, QuitInterruptsBatch) {
   testing::Mock::VerifyAndClearExpectations(message_pump_);
 }
 
-#if BUILDFLAG(IS_ANDROID)
-TEST_F(ThreadControllerWithMessagePumpTest, PeriodicYieldingToNative) {
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+TEST_F(ThreadControllerWithMessagePumpTest, PrioritizeYieldingToNative) {
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   testing::InSequence sequence;
+
   RunLoop run_loop;
+  const auto delayed_time = FromNow(Seconds(10));
   EXPECT_CALL(*message_pump_, Run(_))
       .WillOnce(Invoke([&](MessagePump::Delegate* delegate) {
-        // B: Post 5 application tasks
-        //    First two combined should take 4 ms
-        //    Third one should take 4 ms
-        //    4th and 5th should be 1ms each
-        // B: EnabledPeriodicYieldingToNative within thread controller to 3ms
-        //    window.
-        // C: Call DoWork() to run the first 2 tasks
-        //   D: Expect we return immediate work and have executed Run() on
-        //      task 1 and 2, yield_to_native should be true
-        //      executed_task_count should be 2.
-        // E: Call DoWork() again to execute the 3rd task only,
-        //   F: yield_to_native should still be true.
-        //    executed_task_count should be 3
-        // G: Disable EnabledPeriodicYieldingToNative
-        // H: Task count should increment by 1 per execution as that's the
-        //    batch size, yield_to_native should remain false.
+        clock_.Advance(Seconds(5));
+        MockCallback<OnceClosure> tasks[5];
+
+        // A: Post 5 application tasks, 4 immediate 1 delayed.
+        // B: Run one of them (enter active)
+        //   C: Expect we return immediate work item without yield_to_native
+        //      (default behaviour).
+        // D: Set PrioritizeYieldingToNative until 8 seconds and run second
+        //    task.
+        //   E: Expect we return immediate work item with yield_to_native.
+        // F: Exceed the PrioritizeYieldingToNative deadline and run third task.
+        //   G: Expect we return immediate work item without yield_to_native.
+        // H: Set PrioritizeYieldingToNative to Max() and run third of them
+        //   I: Expect we return a delayed work item with yield_to_native.
 
         // A:
-        int executed_task_count = 0;
-        task_source_.AddTask(
-            FROM_HERE,
-            base::BindOnce(
-                [](int* executed_task_count, SimpleTestTickClock* clock) {
-                  clock->Advance(base::Milliseconds(2));
-                  (*executed_task_count)++;
-                },
-                &executed_task_count, &clock_));
-        task_source_.AddTask(
-            FROM_HERE,
-            base::BindOnce(
-                [](int* executed_task_count, SimpleTestTickClock* clock) {
-                  clock->Advance(base::Milliseconds(2));
-                  (*executed_task_count)++;
-                },
-                &executed_task_count, &clock_));
-        task_source_.AddTask(
-            FROM_HERE,
-            base::BindOnce(
-                [](int* executed_task_count, SimpleTestTickClock* clock) {
-                  clock->Advance(base::Milliseconds(4));
-                  (*executed_task_count)++;
-                },
-                &executed_task_count, &clock_));
-        task_source_.AddTask(
-            FROM_HERE,
-            base::BindOnce(
-                [](int* executed_task_count, SimpleTestTickClock* clock) {
-                  clock->Advance(base::Milliseconds(1));
-                  (*executed_task_count)++;
-                },
-                &executed_task_count, &clock_));
-        task_source_.AddTask(
-            FROM_HERE,
-            base::BindOnce(
-                [](int* executed_task_count, SimpleTestTickClock* clock) {
-                  clock->Advance(base::Milliseconds(1));
-                  (*executed_task_count)++;
-                },
-                &executed_task_count, &clock_));
+        task_source_.AddTask(FROM_HERE, tasks[0].Get(),
+                             /* delayed_run_time=*/base::TimeTicks(),
+                             /* queue_time=*/clock_.NowTicks());
+        task_source_.AddTask(FROM_HERE, tasks[1].Get(),
+                             /* delayed_run_time=*/base::TimeTicks(),
+                             /* queue_time=*/clock_.NowTicks());
+        task_source_.AddTask(FROM_HERE, tasks[2].Get(),
+                             /* delayed_run_time=*/base::TimeTicks(),
+                             /* queue_time=*/clock_.NowTicks());
+        task_source_.AddTask(FROM_HERE, tasks[3].Get(),
+                             /* delayed_run_time=*/base::TimeTicks(),
+                             /* queue_time=*/clock_.NowTicks());
+        task_source_.AddTask(FROM_HERE, tasks[4].Get(),
+                             /* delayed_run_time=*/delayed_time,
+                             /* queue_time=*/clock_.NowTicks());
 
         // B:
-        thread_controller_.EnablePeriodicYieldingToNative(
-            base::Milliseconds(3));
-
-        // C:
+        EXPECT_CALL(tasks[0], Run());
         auto next_work_item = thread_controller_.DoWork();
+        // C:
+        EXPECT_EQ(next_work_item.delayed_run_time, TimeTicks());
+        EXPECT_FALSE(next_work_item.yield_to_native);
+
         // D:
-        EXPECT_EQ(next_work_item.delayed_run_time, TimeTicks());
-        EXPECT_EQ(executed_task_count, 2);
-        EXPECT_TRUE(next_work_item.yield_to_native);
-
-        // E:
+        thread_controller_.PrioritizeYieldingToNative(FromNow(Seconds(3)));
+        EXPECT_CALL(tasks[1], Run());
         next_work_item = thread_controller_.DoWork();
-        // F:
+        // E:
         EXPECT_EQ(next_work_item.delayed_run_time, TimeTicks());
-        EXPECT_EQ(executed_task_count, 3);
         EXPECT_TRUE(next_work_item.yield_to_native);
 
+        // F:
+        clock_.Advance(Seconds(3));
+        EXPECT_CALL(tasks[2], Run());
+        next_work_item = thread_controller_.DoWork();
         // G:
-        thread_controller_.EnablePeriodicYieldingToNative(
-            base::TimeDelta::Max());
+        EXPECT_EQ(next_work_item.delayed_run_time, TimeTicks());
+        EXPECT_FALSE(next_work_item.yield_to_native);
 
         // H:
+        thread_controller_.PrioritizeYieldingToNative(base::TimeTicks::Max());
+        EXPECT_CALL(tasks[3], Run());
         next_work_item = thread_controller_.DoWork();
-        EXPECT_FALSE(next_work_item.yield_to_native);
-        EXPECT_EQ(executed_task_count, 4);
-        next_work_item = thread_controller_.DoWork();
-        EXPECT_FALSE(next_work_item.yield_to_native);
-        EXPECT_EQ(executed_task_count, 5);
+
+        // I:
+        EXPECT_EQ(next_work_item.delayed_run_time, delayed_time);
+        EXPECT_TRUE(next_work_item.yield_to_native);
+
+        EXPECT_FALSE(thread_controller_.DoIdleWork());
       }));
 
   run_loop.Run();
   testing::Mock::VerifyAndClearExpectations(message_pump_);
 }
-#endif  // BUILDFLAG(IS_ANDROID)
 
 TEST_F(ThreadControllerWithMessagePumpTest, EarlyQuit) {
   // This test ensures that a opt-of-runloop Quit() (which is possible with some
   // pump implementations) doesn't affect the next RunLoop::Run call.
 
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   std::vector<std::string> log;
 
@@ -735,11 +755,14 @@ TEST_F(ThreadControllerWithMessagePumpTest, NativeNestedMessageLoop) {
 
 TEST_F(ThreadControllerWithMessagePumpTest, RunWithTimeout) {
   MockCallback<OnceClosure> task1;
-  task_source_.AddTask(FROM_HERE, task1.Get(), FromNow(Seconds(5)));
+  task_source_.AddTask(FROM_HERE, task1.Get(), FromNow(Seconds(5)),
+                       clock_.NowTicks());
   MockCallback<OnceClosure> task2;
-  task_source_.AddTask(FROM_HERE, task2.Get(), FromNow(Seconds(10)));
+  task_source_.AddTask(FROM_HERE, task2.Get(), FromNow(Seconds(10)),
+                       clock_.NowTicks());
   MockCallback<OnceClosure> task3;
-  task_source_.AddTask(FROM_HERE, task3.Get(), FromNow(Seconds(20)));
+  task_source_.AddTask(FROM_HERE, task3.Get(), FromNow(Seconds(20)),
+                       clock_.NowTicks());
 
   EXPECT_CALL(*message_pump_, Run(_))
       .WillOnce(Invoke([&](MessagePump::Delegate*) {
@@ -767,9 +790,11 @@ TEST_F(ThreadControllerWithMessagePumpTest, RunWithTimeout) {
 #if BUILDFLAG(IS_WIN)
 TEST_F(ThreadControllerWithMessagePumpTest, SetHighResolutionTimer) {
   MockCallback<OnceClosure> task;
-  task_source_.AddTask(FROM_HERE, task.Get(), FromNow(Seconds(5)));
+  task_source_.AddTask(FROM_HERE, task.Get(), FromNow(Seconds(5)),
+                       clock_.NowTicks());
 
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   EXPECT_CALL(*message_pump_, Run(_))
       .WillOnce(Invoke([&](MessagePump::Delegate* delegate) {
@@ -802,9 +827,11 @@ TEST_F(ThreadControllerWithMessagePumpTest, SetHighResolutionTimer) {
 TEST_F(ThreadControllerWithMessagePumpTest,
        SetHighResolutionTimerWithPowerSuspend) {
   MockCallback<OnceClosure> task;
-  task_source_.AddTask(FROM_HERE, task.Get(), FromNow(Seconds(5)));
+  task_source_.AddTask(FROM_HERE, task.Get(), FromNow(Seconds(5)),
+                       clock_.NowTicks());
 
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   EXPECT_CALL(*message_pump_, Run(_))
       .WillOnce(Invoke([&](MessagePump::Delegate* delegate) {
@@ -841,12 +868,15 @@ TEST_F(ThreadControllerWithMessagePumpTest,
 
 TEST_F(ThreadControllerWithMessagePumpTest,
        ScheduleDelayedWorkWithPowerSuspend) {
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   MockCallback<OnceClosure> task1;
-  task_source_.AddTask(FROM_HERE, task1.Get(), FromNow(Seconds(10)));
+  task_source_.AddTask(FROM_HERE, task1.Get(), FromNow(Seconds(10)),
+                       clock_.NowTicks());
   MockCallback<OnceClosure> task2;
-  task_source_.AddTask(FROM_HERE, task2.Get(), FromNow(Seconds(15)));
+  task_source_.AddTask(FROM_HERE, task2.Get(), FromNow(Seconds(15)),
+                       clock_.NowTicks());
 
   clock_.Advance(Seconds(5));
 
@@ -892,7 +922,8 @@ TEST_F(ThreadControllerWithMessagePumpTest,
 
 TEST_F(ThreadControllerWithMessagePumpTest,
        ThreadControllerActiveSingleApplicationTask) {
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   thread_controller_.InstallTraceObserver();
 
@@ -951,7 +982,8 @@ TEST_F(ThreadControllerWithMessagePumpTest,
 
 TEST_F(ThreadControllerWithMessagePumpTest,
        ThreadControllerActiveMultipleApplicationTasks) {
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   thread_controller_.InstallTraceObserver();
 
@@ -1000,7 +1032,8 @@ TEST_F(ThreadControllerWithMessagePumpTest,
 
 TEST_F(ThreadControllerWithMessagePumpTest,
        ThreadControllerActiveWakeUpForNothing) {
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   thread_controller_.InstallTraceObserver();
 
@@ -1051,12 +1084,12 @@ TEST_F(ThreadControllerWithMessagePumpTest,
   RunLoop().Run();
 }
 
-#if not BUILDFLAG(IS_ANDROID)
 TEST_F(ThreadControllerWithMessagePumpTest, DoWorkBatches) {
-  base::test::ScopedFeatureList scoped_feature_list_;
+  base::test::ScopedFeatureList scoped_feature_list;
 
-  scoped_feature_list_.InitAndEnableFeature(kRunTasksByBatches);
+  scoped_feature_list.InitAndEnableFeature(kRunTasksByBatches);
   ThreadControllerWithMessagePumpImpl::InitializeFeatures();
+  MessagePump::InitializeFeatures();
 
   int task_counter = 0;
   for (int i = 0; i < 2; i++) {
@@ -1069,11 +1102,32 @@ TEST_F(ThreadControllerWithMessagePumpTest, DoWorkBatches) {
   ThreadControllerWithMessagePumpImpl::ResetFeatures();
 }
 
-TEST_F(ThreadControllerWithMessagePumpTest, DoWorkBatchesForSetTime) {
-  base::test::ScopedFeatureList scoped_feature_list_;
+TEST_F(ThreadControllerWithMessagePumpNoBatchesTest, DoWorkBatches) {
+  base::test::ScopedFeatureList scoped_feature_list;
 
-  scoped_feature_list_.InitAndEnableFeature(kRunTasksByBatches);
+  scoped_feature_list.InitAndEnableFeature(kRunTasksByBatches);
   ThreadControllerWithMessagePumpImpl::InitializeFeatures();
+  MessagePump::InitializeFeatures();
+
+  int task_counter = 0;
+  for (int i = 0; i < 2; i++) {
+    task_source_.AddTask(
+        FROM_HERE, BindLambdaForTesting([&] { task_counter++; }), TimeTicks());
+  }
+  thread_controller_.DoWork();
+
+  // Only one task should run because the SequenceManager was configured to
+  // disallow batches.
+  EXPECT_EQ(task_counter, 1);
+  ThreadControllerWithMessagePumpImpl::ResetFeatures();
+}
+
+TEST_F(ThreadControllerWithMessagePumpTest, DoWorkBatchesForSetTime) {
+  base::test::ScopedFeatureList scoped_feature_list;
+
+  scoped_feature_list.InitAndEnableFeature(kRunTasksByBatches);
+  ThreadControllerWithMessagePumpImpl::InitializeFeatures();
+  MessagePump::InitializeFeatures();
 
   int task_counter = 0;
 
@@ -1088,10 +1142,11 @@ TEST_F(ThreadControllerWithMessagePumpTest, DoWorkBatchesForSetTime) {
   EXPECT_EQ(task_counter, 2);
   ThreadControllerWithMessagePumpImpl::ResetFeatures();
 }
-#endif  // BUILDFLAG(IS_ANDROID)
+
 TEST_F(ThreadControllerWithMessagePumpTest,
        ThreadControllerActiveAdvancedNesting) {
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   thread_controller_.InstallTraceObserver();
 
@@ -1231,7 +1286,8 @@ TEST_F(ThreadControllerWithMessagePumpTest,
 
 TEST_F(ThreadControllerWithMessagePumpTest,
        ThreadControllerActiveNestedNativeLoop) {
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   thread_controller_.InstallTraceObserver();
 
@@ -1243,6 +1299,7 @@ TEST_F(ThreadControllerWithMessagePumpTest,
   EXPECT_CALL(*message_pump_, Run(_))
       .WillOnce(Invoke([&](MessagePump::Delegate* delegate) {
         MockCallback<OnceClosure> tasks[2];
+        size_t run_level_depth = delegate->RunDepth();
 
         // A: Post 2 application tasks
         // B: Run one of them which allows nested application tasks (enter
@@ -1284,7 +1341,7 @@ TEST_F(ThreadControllerWithMessagePumpTest,
           thread_controller_.OnBeginWorkItem();
           testing::Mock::VerifyAndClearExpectations(
               &*thread_controller_.trace_observer_);
-          thread_controller_.OnEndWorkItem();
+          thread_controller_.OnEndWorkItem(run_level_depth + 1);
 
           // E:
           EXPECT_CALL(tasks[1], Run());
@@ -1306,7 +1363,7 @@ TEST_F(ThreadControllerWithMessagePumpTest,
           thread_controller_.OnBeginWorkItem();
           testing::Mock::VerifyAndClearExpectations(
               &*thread_controller_.trace_observer_);
-          thread_controller_.OnEndWorkItem();
+          thread_controller_.OnEndWorkItem(run_level_depth + 1);
 
           // H:
           EXPECT_CALL(*thread_controller_.trace_observer_,
@@ -1339,7 +1396,8 @@ TEST_F(ThreadControllerWithMessagePumpTest,
 
 TEST_F(ThreadControllerWithMessagePumpTest,
        ThreadControllerActiveUnusedNativeLoop) {
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   thread_controller_.InstallTraceObserver();
 
@@ -1414,7 +1472,8 @@ TEST_F(ThreadControllerWithMessagePumpTest,
 
 TEST_F(ThreadControllerWithMessagePumpTest,
        ThreadControllerActiveNestedNativeLoopWithoutAllowance) {
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   thread_controller_.InstallTraceObserver();
 
@@ -1426,6 +1485,7 @@ TEST_F(ThreadControllerWithMessagePumpTest,
   EXPECT_CALL(*message_pump_, Run(_))
       .WillOnce(Invoke([&](MessagePump::Delegate* delegate) {
         MockCallback<OnceClosure> tasks[2];
+        size_t run_level_depth = delegate->RunDepth();
 
         // A: Post 2 application tasks
         // B: Run one of them (enter active)
@@ -1456,7 +1516,7 @@ TEST_F(ThreadControllerWithMessagePumpTest,
           thread_controller_.OnBeginWorkItem();
           testing::Mock::VerifyAndClearExpectations(
               &*thread_controller_.trace_observer_);
-          thread_controller_.OnEndWorkItem();
+          thread_controller_.OnEndWorkItem(run_level_depth + 1);
 
           // E:
           EXPECT_CALL(*thread_controller_.trace_observer_,
@@ -1497,7 +1557,8 @@ TEST_F(ThreadControllerWithMessagePumpTest,
 
 TEST_F(ThreadControllerWithMessagePumpTest,
        ThreadControllerActiveMultipleNativeLoopsUnderOneApplicationTask) {
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   thread_controller_.InstallTraceObserver();
 
@@ -1509,6 +1570,7 @@ TEST_F(ThreadControllerWithMessagePumpTest,
   EXPECT_CALL(*message_pump_, Run(_))
       .WillOnce(Invoke([&](MessagePump::Delegate* delegate) {
         MockCallback<OnceClosure> tasks[2];
+        size_t run_level_depth = delegate->RunDepth();
 
         // A: Post 1 application task
         // B: Run it
@@ -1547,7 +1609,7 @@ TEST_F(ThreadControllerWithMessagePumpTest,
             thread_controller_.OnBeginWorkItem();
             testing::Mock::VerifyAndClearExpectations(
                 &*thread_controller_.trace_observer_);
-            thread_controller_.OnEndWorkItem();
+            thread_controller_.OnEndWorkItem(run_level_depth + 1);
 
             // E & H:
             thread_controller_.SetTaskExecutionAllowed(false);
@@ -1583,7 +1645,8 @@ TEST_F(ThreadControllerWithMessagePumpTest,
 
 TEST_F(ThreadControllerWithMessagePumpTest,
        ThreadControllerActiveNativeLoopsReachingIdle) {
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   thread_controller_.InstallTraceObserver();
 
@@ -1595,6 +1658,7 @@ TEST_F(ThreadControllerWithMessagePumpTest,
   EXPECT_CALL(*message_pump_, Run(_))
       .WillOnce(Invoke([&](MessagePump::Delegate* delegate) {
         MockCallback<OnceClosure> task;
+        size_t run_level_depth = delegate->RunDepth();
 
         // A: Post 1 application task
         // B: Run it
@@ -1637,7 +1701,7 @@ TEST_F(ThreadControllerWithMessagePumpTest,
           thread_controller_.OnBeginWorkItem();
           testing::Mock::VerifyAndClearExpectations(
               &*thread_controller_.trace_observer_);
-          thread_controller_.OnEndWorkItem();
+          thread_controller_.OnEndWorkItem(run_level_depth + 1);
 
           // E:
           EXPECT_CALL(*thread_controller_.trace_observer_,
@@ -1652,7 +1716,7 @@ TEST_F(ThreadControllerWithMessagePumpTest,
           thread_controller_.OnBeginWorkItem();
           testing::Mock::VerifyAndClearExpectations(
               &*thread_controller_.trace_observer_);
-          thread_controller_.OnEndWorkItem();
+          thread_controller_.OnEndWorkItem(run_level_depth + 1);
 
           // G:
           thread_controller_.SetTaskExecutionAllowed(false);
@@ -1685,7 +1749,8 @@ TEST_F(ThreadControllerWithMessagePumpTest,
 
 TEST_F(ThreadControllerWithMessagePumpTest,
        ThreadControllerActiveQuitNestedWhileApplicationIdle) {
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   thread_controller_.InstallTraceObserver();
 
@@ -1776,7 +1841,8 @@ TEST_F(ThreadControllerWithMessagePumpTest,
 // case as well.
 TEST_F(ThreadControllerWithMessagePumpTest,
        ThreadControllerActiveNestedWithinNativeAllowsApplicationTasks) {
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   thread_controller_.InstallTraceObserver();
 
@@ -1797,6 +1863,7 @@ TEST_F(ThreadControllerWithMessagePumpTest,
             &*thread_controller_.trace_observer_);
 
         MockCallback<OnceClosure> task;
+        size_t run_level_depth = delegate->RunDepth();
 
         // A: Post 1 application task
         // B: Run a native task
@@ -1837,7 +1904,7 @@ TEST_F(ThreadControllerWithMessagePumpTest,
                     OnThreadControllerActiveEnd);
         EXPECT_CALL(*thread_controller_.trace_observer_,
                     OnPhaseRecorded(ThreadController::kNested));
-        thread_controller_.OnEndWorkItem();
+        thread_controller_.OnEndWorkItem(run_level_depth);
 
         // F:
         EXPECT_CALL(*thread_controller_.trace_observer_,
@@ -1862,7 +1929,8 @@ TEST_F(ThreadControllerWithMessagePumpTest,
 // allowance away-from and back-to |false|.
 TEST_F(ThreadControllerWithMessagePumpTest,
        ThreadControllerActiveDummyScopedAllowApplicationTasks) {
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   thread_controller_.InstallTraceObserver();
 
@@ -1883,6 +1951,7 @@ TEST_F(ThreadControllerWithMessagePumpTest,
             &*thread_controller_.trace_observer_);
 
         MockCallback<OnceClosure> task;
+        size_t run_level_depth = delegate->RunDepth();
 
         // A: Post 1 application task
         // B: Run a native task
@@ -1933,7 +2002,7 @@ TEST_F(ThreadControllerWithMessagePumpTest,
                     OnThreadControllerActiveEnd);
         EXPECT_CALL(*thread_controller_.trace_observer_,
                     OnPhaseRecorded(ThreadController::kNested));
-        thread_controller_.OnEndWorkItem();
+        thread_controller_.OnEndWorkItem(run_level_depth);
 
         // H:
         EXPECT_CALL(*thread_controller_.trace_observer_,
@@ -1951,7 +2020,8 @@ TEST_F(ThreadControllerWithMessagePumpTest,
 // Verify that the kScheduled phase is emitted when coming out of idle and
 // `queue_time` is set on PendingTasks.
 TEST_F(ThreadControllerWithMessagePumpTest, MessagePumpPhasesWithQueuingTime) {
-  ThreadTaskRunnerHandle handle(MakeRefCounted<FakeTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle handle(
+      MakeRefCounted<FakeTaskRunner>());
 
   thread_controller_.InstallTraceObserver();
 

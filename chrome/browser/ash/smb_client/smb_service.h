@@ -11,8 +11,10 @@
 #include <unordered_map>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file.h"
+#include "base/functional/callback.h"
+#include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_info.h"
@@ -43,8 +45,7 @@ class SmbShareInfo;
 
 // Creates and manages an smb file system.
 class SmbService : public KeyedService,
-                   public net::NetworkChangeNotifier::NetworkChangeObserver,
-                   public base::SupportsWeakPtr<SmbService> {
+                   public net::NetworkChangeNotifier::NetworkChangeObserver {
  public:
   using MountResponse = base::OnceCallback<void(SmbMountResult result)>;
   using StartReadDirIfSuccessfulCallback =
@@ -116,17 +117,24 @@ class SmbService : public KeyedService,
   void SetSmbFsMounterCreationCallbackForTesting(
       SmbFsShare::MounterCreationCallback callback);
 
+  // Returns true if any SMB shares have been configured or saved before.
+  bool IsAnySmbShareConfigured();
+
  private:
+  FRIEND_TEST_ALL_PREFIXES(SmbServiceWithSmbfsTest, MountInvalidSaved);
+  FRIEND_TEST_ALL_PREFIXES(SmbServiceWithSmbfsTest, MountInvalidPreconfigured);
+
   using MountInternalCallback =
       base::OnceCallback<void(SmbMountResult result,
                               const base::FilePath& mount_path)>;
 
-  // Callback passed to MountInternal().
-  void MountInternalDone(MountResponse callback,
-                         const SmbShareInfo& info,
-                         bool should_open_file_manager_after_mount,
-                         SmbMountResult result,
-                         const base::FilePath& mount_path);
+  // Callback passed to MountInternal() when mounts are initiated
+  // (generally by user interaction) via Mount().
+  void OnUserInitiatedMountDone(MountResponse callback,
+                                const SmbShareInfo& info,
+                                bool should_open_file_manager_after_mount,
+                                SmbMountResult result,
+                                const base::FilePath& mount_path);
 
   // Mounts an SMB share with url |share_url| using either smbprovider or smbfs
   // based on feature flags.
@@ -155,8 +163,17 @@ class SmbService : public KeyedService,
       const std::vector<SmbShareInfo>& saved_smbfs_shares,
       const std::vector<SmbUrl>& preconfigured_shares);
 
+  // Sets the callback passed to MountInternal() when a saved or
+  // preconfigured share mount request is made during setup.
+  void SetRestoredShareMountDoneCallbackForTesting(
+      MountInternalCallback callback);
+
   // Mounts a saved (smbfs) SMB share with details |info|.
   void MountSavedSmbfsShare(const SmbShareInfo& info);
+
+  // Handles the response from attempting to mount a previously saved share.
+  void OnMountSavedSmbfsShareDone(SmbMountResult result,
+                                  const base::FilePath& mount_path);
 
   // Mounts a preconfigured (by policy) SMB share with path |share_url|. The
   // share is mounted with empty credentials.
@@ -226,7 +243,7 @@ class SmbService : public KeyedService,
   static bool disable_share_discovery_for_testing_;
 
   const file_system_provider::ProviderId provider_id_;
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   std::unique_ptr<SmbShareFinder> share_finder_;
   // |smbfs_mount_id| -> SmbFsShare
   // Note, mount ID for smbfs is a randomly generated string. For smbprovider
@@ -238,16 +255,11 @@ class SmbService : public KeyedService,
 
   base::OnceClosure setup_complete_callback_;
   SmbFsShare::MounterCreationCallback smbfs_mounter_creation_callback_;
+  MountInternalCallback restored_share_mount_done_callback_;
+  base::WeakPtrFactory<SmbService> weak_ptr_factory_{this};
 };
 
 }  // namespace smb_client
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-namespace smb_client {
-using ::ash::smb_client::SmbService;
-}  // namespace smb_client
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_SMB_CLIENT_SMB_SERVICE_H_

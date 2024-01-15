@@ -2,7 +2,7 @@
       :host dialog {
         background-color: var(--cr-menu-background-color);
         border: none;
-        border-radius: 4px;
+        border-radius: var(--cr-menu-border-radius, 4px);
         box-shadow: var(--cr-menu-shadow);
         margin: 0;
         min-width: 128px;
@@ -19,6 +19,21 @@
         }
       }
 
+      :host-context([chrome-refresh-2023]) {
+        --cr-hairline: 1px solid var(--color-menu-separator,
+            var(--cr-fallback-color-divider));
+        --cr-action-menu-disabled-item-color:
+            var(--color-menu-item-foreground-disabled,
+                var(--cr-fallback-color-disabled-foreground));
+        --cr-action-menu-disabled-item-opacity: 1;
+        --cr-menu-background-color: var(--color-menu-background,
+            var(--cr-fallback-color-surface));
+        --cr-menu-background-focus-color: var(--cr-hover-background-color);
+        --cr-menu-shadow: var(--cr-elevation-2);
+        --cr-primary-text-color: var(--color-menu-item-foreground,
+            var(--cr-fallback-color-on-surface));
+      }
+
       :host dialog::backdrop {
         background-color: transparent;
       }
@@ -32,7 +47,7 @@
         color: var(--cr-primary-text-color);
         font: inherit;
         min-height: 32px;
-        padding: 0 24px;
+        padding: 8px 24px;
         text-align: start;
         user-select: none;
         width: 100%;
@@ -44,6 +59,8 @@
       }
 
       :host ::slotted(.dropdown-item[disabled]) {
+        color: var(--cr-action-menu-disabled-item-color,
+            var(--cr-primary-text-color));
         opacity: var(--cr-action-menu-disabled-item-opacity, 0.65);
       }
 
@@ -69,11 +86,15 @@
         outline: none;
         padding: 8px 0;
       }
+
+      :host-context([chrome-refresh-2023]) .item-wrapper {
+        background: none;
+      }
     </style>
     <dialog id="dialog" part="dialog" on-close="onNativeDialogClose_"
         role="application" aria-roledescription$="[[roleDescription]]">
       <div id="wrapper" class="item-wrapper" role="menu" tabindex="-1"
           aria-label$="[[accessibilityLabel]]">
-        <slot id="contentNode"></slot>
+        <slot id="contentNode" on-slotchange="onSlotchange_"></slot>
       </div>
     </dialog>

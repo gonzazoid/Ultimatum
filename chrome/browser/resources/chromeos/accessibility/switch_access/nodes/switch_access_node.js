@@ -5,10 +5,10 @@
 import {RectUtil} from '../../common/rect_util.js';
 import {FocusRingManager} from '../focus_ring_manager.js';
 import {SwitchAccess} from '../switch_access.js';
-import {SAConstants, SwitchAccessMenuAction} from '../switch_access_constants.js';
-
+import {ActionResponse, ErrorType} from '../switch_access_constants.js';
 
 const AutomationNode = chrome.automation.AutomationNode;
+const MenuAction = chrome.accessibilityPrivate.SwitchAccessMenuAction;
 
 /**
  * This interface represents some object or group of objects on screen
@@ -39,7 +39,7 @@ export class SAChildNode {
 
   /**
    * Returns a list of all the actions available for this node.
-   * @return {!Array<SwitchAccessMenuAction>}
+   * @return {!Array<MenuAction>}
    * @abstract
    */
   get actions() {}
@@ -72,12 +72,11 @@ export class SAChildNode {
       next = next.next_;
       if (!next) {
         this.onInvalidNavigation_(
-            SAConstants.ErrorType.NEXT_UNDEFINED,
+            ErrorType.NEXT_UNDEFINED,
             'Next node must be set on all SAChildNodes before navigating');
       }
       if (this === next) {
-        this.onInvalidNavigation_(
-            SAConstants.ErrorType.NEXT_INVALID, 'No valid next node');
+        this.onInvalidNavigation_(ErrorType.NEXT_INVALID, 'No valid next node');
       }
       if (next.isValidAndVisible()) {
         return next;
@@ -100,12 +99,12 @@ export class SAChildNode {
       previous = previous.previous_;
       if (!previous) {
         this.onInvalidNavigation_(
-            SAConstants.ErrorType.PREVIOUS_UNDEFINED,
+            ErrorType.PREVIOUS_UNDEFINED,
             'Previous node must be set on all SAChildNodes before navigating');
       }
       if (this === previous) {
         this.onInvalidNavigation_(
-            SAConstants.ErrorType.PREVIOUS_INVALID, 'No valid previous node');
+            ErrorType.PREVIOUS_INVALID, 'No valid previous node');
       }
       if (previous.isValidAndVisible()) {
         return previous;
@@ -133,7 +132,7 @@ export class SAChildNode {
     if (!this.isFocused_) {
       return;
     }
-    this.performAction(SwitchAccessMenuAction.SELECT);
+    this.performAction(MenuAction.SELECT);
   }
 
   /**
@@ -145,7 +144,7 @@ export class SAChildNode {
 
   /**
    * Given a menu action, returns whether it can be performed on this node.
-   * @param {SwitchAccessMenuAction} action
+   * @param {MenuAction} action
    * @return {boolean}
    */
   hasAction(action) {
@@ -201,9 +200,8 @@ export class SAChildNode {
 
   /**
    * Performs the specified action on the node, if it is available.
-   * @param {SwitchAccessMenuAction} action
-   * @return {SAConstants.ActionResponse} What action the menu should perform in
-   *      response.
+   * @param {MenuAction} action
+   * @return {ActionResponse} What action the menu should perform in response.
    * @abstract
    */
   performAction(action) {}
@@ -245,7 +243,7 @@ export class SAChildNode {
 
   /**
    *
-   * @param {SAConstants.ErrorType} error
+   * @param {!ErrorType} error
    * @param {string} message
    */
   onInvalidNavigation_(error, message) {
@@ -311,8 +309,8 @@ export class SARootNode {
       return this.children_[0];
     } else {
       throw SwitchAccess.error(
-          SAConstants.ErrorType.NO_CHILDREN,
-          'Root nodes must contain children.', true /* shouldRecover */);
+          ErrorType.NO_CHILDREN, 'Root nodes must contain children.',
+          true /* shouldRecover */);
     }
   }
 
@@ -322,8 +320,8 @@ export class SARootNode {
       return this.children_[this.children_.length - 1];
     } else {
       throw SwitchAccess.error(
-          SAConstants.ErrorType.NO_CHILDREN,
-          'Root nodes must contain children.', true /* shouldRecover */);
+          ErrorType.NO_CHILDREN, 'Root nodes must contain children.',
+          true /* shouldRecover */);
     }
   }
 
@@ -352,8 +350,8 @@ export class SARootNode {
     let result = true;
     for (let i = 0; i < this.children_.length; i++) {
       if (!this.children_[i]) {
-        console.error(SwitchAccess.error(
-            SAConstants.ErrorType.NULL_CHILD, 'Child cannot be null.'));
+        console.error(
+            SwitchAccess.error(ErrorType.NULL_CHILD, 'Child cannot be null.'));
         return false;
       }
       result = result && this.children_[i].equals(other.children_[i]);
@@ -463,7 +461,7 @@ export class SARootNode {
   connectChildren_() {
     if (this.children_.length < 1) {
       console.error(SwitchAccess.error(
-          SAConstants.ErrorType.NO_CHILDREN,
+          ErrorType.NO_CHILDREN,
           'Root node must have at least 1 interesting child.'));
       return;
     }
@@ -479,3 +477,6 @@ export class SARootNode {
     }
   }
 }
+
+/** @typedef {!SAChildNode|!SARootNode} */
+export let SANode;

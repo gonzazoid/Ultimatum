@@ -9,8 +9,9 @@
 #include "base/memory/shared_memory_mapping.h"
 #include "base/memory/writable_shared_memory_region.h"
 #include "base/no_destructor.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "media/base/audio_glitch_info.h"
 #include "media/base/audio_timestamp_helper.h"
 
 namespace {
@@ -398,17 +399,14 @@ void WebEngineAudioOutputDevice::PumpSamples(base::TimeTicks playback_time) {
 
   auto now = base::TimeTicks::Now();
 
-  int skipped_frames = 0;
-
   // Check if it's too late to send the next packet. If it is, then advance
   // current stream position.
   auto lead_time = playback_time - now;
   if (lead_time < min_lead_time_) {
     auto new_playback_time = now + min_lead_time_;
     auto skipped_time = new_playback_time - playback_time;
-    skipped_frames = media::AudioTimestampHelper::TimeToFrames(
+    media_pos_frames_ += media::AudioTimestampHelper::TimeToFrames(
         skipped_time, params_.sample_rate());
-    media_pos_frames_ += skipped_frames;
     playback_time += skipped_time;
   }
 
@@ -421,8 +419,8 @@ void WebEngineAudioOutputDevice::PumpSamples(base::TimeTicks playback_time) {
     if (!callback_)
       return;
 
-    frames_filled = callback_->Render(playback_time - now, now, skipped_frames,
-                                      audio_bus_.get());
+    frames_filled =
+        callback_->Render(playback_time - now, now, {}, audio_bus_.get());
   }
 
   if (frames_filled) {

@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/strings/string_util.h"
@@ -24,9 +24,12 @@ namespace {
 const char kTraceFilename[] = "tracing.zip";
 const char kPerformanceCategoryTag[] = "Performance";
 
+const base::FilePath::CharType kAutofillMetadataFilename[] =
+    FILE_PATH_LITERAL("autofill_metadata.txt");
+const char kAutofillMetadataAttachmentName[] = "autofill_metadata.zip";
+
 const base::FilePath::CharType kHistogramsFilename[] =
     FILE_PATH_LITERAL("histograms.txt");
-
 const char kHistogramsAttachmentName[] = "histograms.zip";
 
 }  // namespace
@@ -38,7 +41,7 @@ FeedbackData::FeedbackData(base::WeakPtr<feedback::FeedbackUploader> uploader,
   // sending the report. If it is created after this point, then the tracing is
   // not relevant to this report.
   if (tracing_manager) {
-    tracing_manager_ = base::AsWeakPtr(tracing_manager);
+    tracing_manager_ = tracing_manager->AsWeakPtr();
   }
 }
 
@@ -81,6 +84,28 @@ void FeedbackData::SetAndCompressHistograms(std::string histograms) {
       base::BindOnce(&FeedbackData::CompressFile, this,
                      base::FilePath(kHistogramsFilename),
                      kHistogramsAttachmentName, std::move(histograms)),
+      base::BindOnce(&FeedbackData::OnCompressComplete, this));
+}
+
+void FeedbackData::CompressAutofillMetadata() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  std::string& autofill_info = autofill_metadata();
+  if (autofill_info.empty()) {
+    return;
+  }
+  // If the user opts out of sharing the page URL, any URL related entries
+  // should be removed from the autofill logs.
+  if (page_url().empty()) {
+    feedback_util::RemoveUrlsFromAutofillData(autofill_info);
+  }
+
+  ++pending_op_count_;
+  base::ThreadPool::PostTaskAndReply(
+      FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
+      base::BindOnce(&FeedbackData::CompressFile, this,
+                     base::FilePath(kAutofillMetadataFilename),
+                     kAutofillMetadataAttachmentName, std::move(autofill_info)),
       base::BindOnce(&FeedbackData::OnCompressComplete, this));
 }
 
@@ -134,7 +159,8 @@ void FeedbackData::SendReport() {
     auto post_body = std::make_unique<std::string>();
     feedback_data.SerializeToString(post_body.get());
     uploader_->QueueReport(std::move(post_body),
-                           /*has_email=*/!user_email().empty());
+                           /*has_email=*/!user_email().empty(),
+                           /*product_id=*/feedback_data.product_id());
   }
 }
 

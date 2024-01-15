@@ -6,13 +6,6 @@ import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/ozone.gni")
 
 declare_args() {
-  # Indicates if X11 VA-API-based hardware acceleration is to be used.
-  # See also the comment near the |use_vaapi| arg.
-  use_vaapi_x11 = is_linux && ozone_platform_x11 &&
-                  (target_cpu == "x86" || target_cpu == "x64") && !is_castos
-}
-
-declare_args() {
   # Indicates if V4L plugin is used.
   use_v4lplugin = false
 
@@ -21,23 +14,20 @@ declare_args() {
   use_v4l2_codec =
       is_chromeos_lacros && (target_cpu == "arm" || target_cpu == "arm64")
 
-  # Indicates if Video4Linux2 AML encoder is used. This is used for AML
-  # platforms which have v4l2 hardware encoder
-  use_v4l2_codec_aml = false
-
   # Indicates if VA-API-based hardware acceleration is to be used. This
   # is typically the case on x86-based ChromeOS devices.
-  # VA-API should also be compiled by default on x11-using linux devices
+  # VA-API should also be compiled by default on x11/wayland linux devices
   # using x86/x64.
-  use_vaapi = use_vaapi_x11 || (is_chromeos_lacros &&
-                                (target_cpu == "x86" || target_cpu == "x64"))
+  use_vaapi = (is_chromeos_lacros ||
+               (is_linux && !is_castos &&
+                (ozone_platform_x11 || ozone_platform_wayland))) &&
+              (target_cpu == "x86" || target_cpu == "x64")
 
   # Indicates if ChromeOS protected media support exists. This is used
   # to enable the CDM daemon in Chrome OS as well as support for
-  # encrypted content with HW video decoders.
-  # TODO(jkardatzke): Enable this for Lacros always, it is determined at runtime
-  # in that configuration.
-  use_chromeos_protected_media = false
+  # encrypted content with HW video decoders. This is always enabled for Lacros
+  # because it detects support at runtime.
+  use_chromeos_protected_media = is_chromeos_lacros
 
   # Indicates if the ChromeOS protected media functionality should also be
   # utilized by HW video decoding for ARC.
@@ -47,6 +37,9 @@ declare_args() {
   # H.264, VP9 and HEVC are enabled if protected media is enabled; AV1 is
   # optional.
   use_chromeos_protected_av1 = false
+
+  # A platform that is capable of hardware av1 decoding.
+  use_av1_hw_decoder = is_chromeos || is_linux || is_win || is_apple
 }
 
 if (use_arc_protected_media) {

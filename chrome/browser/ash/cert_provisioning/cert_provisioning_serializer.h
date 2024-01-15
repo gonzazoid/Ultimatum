@@ -6,7 +6,9 @@
 #define CHROME_BROWSER_ASH_CERT_PROVISIONING_CERT_PROVISIONING_SERIALIZER_H_
 
 #include "base/values.h"
-#include "chrome/browser/ash/cert_provisioning/cert_provisioning_worker.h"
+#include "chrome/browser/ash/cert_provisioning/cert_provisioning_common.h"
+#include "chrome/browser/ash/cert_provisioning/cert_provisioning_worker_dynamic.h"
+#include "chrome/browser/ash/cert_provisioning/cert_provisioning_worker_static.h"
 
 class PrefService;
 
@@ -16,19 +18,34 @@ namespace cert_provisioning {
 class CertProvisioningSerializer {
  public:
   // Creates/updates saved state of the |worker| in preference storage.
-  static void SerializeWorkerToPrefs(PrefService* pref_service,
-                                     const CertProvisioningWorkerImpl& worker);
+  static void SerializeWorkerToPrefs(
+      PrefService* pref_service,
+      const CertProvisioningWorkerStatic& worker);
+  static void SerializeWorkerToPrefs(
+      PrefService* pref_service,
+      const CertProvisioningWorkerDynamic& worker);
   // Deletes saved state of the |worker| from preference storage.
   static void DeleteWorkerFromPrefs(PrefService* pref_service,
-                                    const CertProvisioningWorkerImpl& worker);
+                                    const CertProvisioningWorkerStatic& worker);
+  static void DeleteWorkerFromPrefs(
+      PrefService* pref_service,
+      const CertProvisioningWorkerDynamic& worker);
   // Deserializes saved worker state |saved_worker| into a just created
   // |worker|. Consider using CertProvisioningWorkerFactory::Deserialize
   // instead of calling it directly.
-  static bool DeserializeWorker(const base::Value& saved_worker,
-                                CertProvisioningWorkerImpl* worker);
+  static bool DeserializeWorker(const base::Value::Dict& saved_worker,
+                                CertProvisioningWorkerStatic* worker);
+  static bool DeserializeWorker(const base::Value::Dict& saved_worker,
+                                CertProvisioningWorkerDynamic* worker);
+
+  static std::optional<ProtocolVersion> GetProtocolVersion(
+      const base::Value::Dict& saved_worker);
 
  private:
-  static base::Value SerializeWorker(const CertProvisioningWorkerImpl& worker);
+  static base::Value::Dict SerializeWorker(
+      const CertProvisioningWorkerStatic& worker);
+  static base::Value::Dict SerializeWorker(
+      const CertProvisioningWorkerDynamic& worker);
 };
 
 }  // namespace cert_provisioning

@@ -8,27 +8,19 @@
 
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/time/time.h"
 #include "content/browser/browser_context_impl.h"
 #include "content/browser/loader/navigation_loader_interceptor.h"
-#include "content/browser/loader/single_request_url_loader_factory.h"
-#include "content/browser/preloading/prefetch/prefetch_container.h"
 #include "content/browser/preloading/prefetch/prefetch_features.h"
-#include "content/browser/preloading/prefetch/prefetch_from_string_url_loader.h"
-#include "content/browser/preloading/prefetch/prefetch_origin_prober.h"
-#include "content/browser/preloading/prefetch/prefetch_params.h"
-#include "content/browser/preloading/prefetch/prefetch_probe_result.h"
+#include "content/browser/preloading/prefetch/prefetch_match_resolver.h"
 #include "content/browser/preloading/prefetch/prefetch_service.h"
 #include "content/browser/preloading/prefetch/prefetch_serving_page_metrics_container.h"
-#include "content/browser/preloading/prefetch/prefetched_mainframe_response_container.h"
+#include "content/browser/preloading/prefetch/prefetch_url_loader_helper.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
 #include "content/browser/renderer_host/navigation_request.h"
-#include "content/public/browser/prefetch_metrics.h"
 #include "content/public/browser/web_contents.h"
 #include "services/network/public/cpp/resource_request.h"
+#include "services/network/public/cpp/single_request_url_loader_factory.h"
 #include "services/network/public/cpp/wrapper_shared_url_loader_factory.h"
-#include "url/gurl.h"
-#include "url/scheme_host_port.h"
 
 namespace content {
 namespace {
@@ -41,199 +33,144 @@ BrowserContext* BrowserContextFromFrameTreeNodeId(int frame_tree_node_id) {
   return web_content->GetBrowserContext();
 }
 
-PrefetchService* PrefetchServiceFromFrameTreeNodeId(int frame_tree_node_id) {
-  BrowserContext* browser_context =
-      BrowserContextFromFrameTreeNodeId(frame_tree_node_id);
-  if (!browser_context)
-    return nullptr;
-  return BrowserContextImpl::From(browser_context)->GetPrefetchService();
-}
-
-PrefetchServingPageMetricsContainer*
-PrefetchServingPageMetricsContainerFromFrameTreeNodeId(int frame_tree_node_id) {
-  FrameTreeNode* frame_tree_node =
-      FrameTreeNode::GloballyFindByID(frame_tree_node_id);
-  if (!frame_tree_node || !frame_tree_node->navigation_request())
-    return nullptr;
-
-  return PrefetchServingPageMetricsContainer::GetForNavigationHandle(
-      *frame_tree_node->navigation_request());
-}
-
-void RecordCookieWaitTime(base::TimeDelta wait_time) {
-  UMA_HISTOGRAM_CUSTOM_TIMES(
-      "PrefetchProxy.AfterClick.Mainframe.CookieWaitTime", wait_time,
-      base::TimeDelta(), base::Seconds(5), 50);
+void RecordWasFullRedirectChainServedHistogram(
+    bool was_full_redirect_chain_served) {
+  UMA_HISTOGRAM_BOOLEAN("PrefetchProxy.AfterClick.WasFullRedirectChainServed",
+                        was_full_redirect_chain_served);
 }
 
 }  // namespace
 
-// static
-std::unique_ptr<PrefetchURLLoaderInterceptor>
-PrefetchURLLoaderInterceptor::MaybeCreateInterceptor(int frame_tree_node_id) {
-  if (!base::FeatureList::IsEnabled(features::kPrefetchUseContentRefactor))
-    return nullptr;
-
-  return std::make_unique<PrefetchURLLoaderInterceptor>(frame_tree_node_id);
-}
-
 PrefetchURLLoaderInterceptor::PrefetchURLLoaderInterceptor(
-    int frame_tree_node_id)
-    : frame_tree_node_id_(frame_tree_node_id) {}
+    int frame_tree_node_id,
+    std::optional<blink::DocumentToken> initiator_document_token,
+    base::WeakPtr<PrefetchServingPageMetricsContainer>
+        serving_page_metrics_container)
+    : frame_tree_node_id_(frame_tree_node_id),
+      initiator_document_token_(std::move(initiator_document_token)),
+      serving_page_metrics_container_(
+          std::move(serving_page_metrics_container)) {}
 
 PrefetchURLLoaderInterceptor::~PrefetchURLLoaderInterceptor() = default;
 
 void PrefetchURLLoaderInterceptor::MaybeCreateLoader(
-    const network::ResourceRequest& tenative_resource_request,
+    const network::ResourceRequest& tentative_resource_request,
     BrowserContext* browser_context,
     NavigationLoaderInterceptor::LoaderCallback callback,
     NavigationLoaderInterceptor::FallbackCallback fallback_callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  DCHECK(!loader_callback_);
+  CHECK(!loader_callback_);
   loader_callback_ = std::move(callback);
-  url_ = tenative_resource_request.url;
 
-  base::WeakPtr<PrefetchContainer> prefetch_container = GetPrefetch(url_);
-  DCHECK(!prefetch_container || prefetch_container->GetURL() == url_);
-  if (!prefetch_container ||
-      !prefetch_container->HasValidPrefetchedResponse(
-          PrefetchCacheableDuration()) ||
-      prefetch_container->HaveDefaultContextCookiesChanged()) {
-    DoNotInterceptNavigation();
+  if (redirect_reader_ && redirect_reader_.DoesCurrentURLToServeMatch(
+                              tentative_resource_request.url)) {
+    OnGotPrefetchToServe(
+        frame_tree_node_id_, tentative_resource_request,
+        base::BindOnce(&PrefetchURLLoaderInterceptor::OnGetPrefetchComplete,
+                       weak_factory_.GetWeakPtr()),
+        std::move(redirect_reader_));
     return;
   }
 
-  PrefetchOriginProber* origin_prober = GetPrefetchOriginProber();
-  if (!origin_prober) {
-    DoNotInterceptNavigation();
-    return;
-  }
-  if (origin_prober->ShouldProbeOrigins()) {
-    probe_start_time_ = base::TimeTicks::Now();
-    base::OnceClosure on_success_callback =
-        base::BindOnce(&PrefetchURLLoaderInterceptor::
-                           EnsureCookiesCopiedAndInterceptPrefetchedNavigation,
-                       weak_factory_.GetWeakPtr(), tenative_resource_request,
-                       prefetch_container);
-
-    origin_prober->Probe(
-        url::SchemeHostPort(url_).GetURL(),
-        base::BindOnce(&PrefetchURLLoaderInterceptor::OnProbeComplete,
-                       weak_factory_.GetWeakPtr(), prefetch_container,
-                       std::move(on_success_callback)));
-    return;
+  if (redirect_reader_) {
+    RecordWasFullRedirectChainServedHistogram(false);
+    redirect_reader_ = PrefetchContainer::Reader();
   }
 
-  prefetch_container->OnPrefetchProbeResult(PrefetchProbeResult::kNoProbing);
-  PrefetchServingPageMetricsContainer* serving_page_metrics_container =
-      PrefetchServingPageMetricsContainerFromFrameTreeNodeId(
-          frame_tree_node_id_);
-  if (serving_page_metrics_container)
-    serving_page_metrics_container->SetPrefetchStatus(
-        prefetch_container->GetPrefetchStatus());
+  FrameTreeNode* frame_tree_node =
+      FrameTreeNode::GloballyFindByID(frame_tree_node_id_);
+  if (!frame_tree_node->IsOutermostMainFrame()) {
+    // The prefetch code does not currently deal with prefetching within a frame
+    // (i.e., where the partition which should be assigned to the request is not
+    // the same as the partition belonging to its site at the top level).
+    //
+    // This could be made smarter in the future (to do those prefetches within
+    // the right partition, or at minimum to use it from that partition if they
+    // happen to be the same, i.e., the URL remains within the same site as the
+    // top-level document).
+    std::move(loader_callback_).Run({});
+    return;
+  }
 
-  EnsureCookiesCopiedAndInterceptPrefetchedNavigation(tenative_resource_request,
-                                                      prefetch_container);
+  // During the lifetime of the PrefetchUrlLoaderInterceptor there is only one
+  // cross-document navigation waiting for its final response.
+  // We only need to worry about one active navigation while trying to match
+  // prefetch_container in PrefetchService.
+  // This navigation is represented by `prefetch_match_resolver`.
+  // See documentation here as why this is true:
+  // https://chromium.googlesource.com/chromium/src/+/main/docs/navigation_concepts.md#concurrent-navigations
+  NavigationRequest* navigation_request = frame_tree_node->navigation_request();
+  PrefetchMatchResolver::CreateForNavigationHandle(*navigation_request);
+  PrefetchMatchResolver* prefetch_match_resolver =
+      PrefetchMatchResolver::GetForNavigationHandle(*navigation_request);
+  CHECK(prefetch_match_resolver);
+
+  GetPrefetch(
+      tentative_resource_request, *prefetch_match_resolver,
+      base::BindOnce(&PrefetchURLLoaderInterceptor::OnGetPrefetchComplete,
+                     weak_factory_.GetWeakPtr()));
 }
 
-base::WeakPtr<PrefetchContainer> PrefetchURLLoaderInterceptor::GetPrefetch(
-    const GURL& url) const {
-  PrefetchService* prefetch_service =
-      PrefetchServiceFromFrameTreeNodeId(frame_tree_node_id_);
-  if (!prefetch_service)
-    return nullptr;
-
-  return prefetch_service->GetPrefetchToServe(url);
-}
-
-PrefetchOriginProber* PrefetchURLLoaderInterceptor::GetPrefetchOriginProber()
+void PrefetchURLLoaderInterceptor::GetPrefetch(
+    const network::ResourceRequest& tentative_resource_request,
+    PrefetchMatchResolver& prefetch_match_resolver,
+    base::OnceCallback<void(PrefetchContainer::Reader)> get_prefetch_callback)
     const {
   PrefetchService* prefetch_service =
-      PrefetchServiceFromFrameTreeNodeId(frame_tree_node_id_);
-  if (!prefetch_service)
-    return nullptr;
-
-  return prefetch_service->GetPrefetchOriginProber();
-}
-
-void PrefetchURLLoaderInterceptor::OnProbeComplete(
-    base::WeakPtr<PrefetchContainer> prefetch_container,
-    base::OnceClosure on_success_callback,
-    PrefetchProbeResult result) {
-  DCHECK(probe_start_time_);
-
-  PrefetchServingPageMetricsContainer* serving_page_metrics_container =
-      PrefetchServingPageMetricsContainerFromFrameTreeNodeId(
-          frame_tree_node_id_);
-  if (serving_page_metrics_container)
-    serving_page_metrics_container->SetProbeLatency(base::TimeTicks::Now() -
-                                                    probe_start_time_.value());
-
-  if (prefetch_container) {
-    prefetch_container->OnPrefetchProbeResult(result);
-
-    if (serving_page_metrics_container)
-      serving_page_metrics_container->SetPrefetchStatus(
-          prefetch_container->GetPrefetchStatus());
-  }
-
-  if (PrefetchProbeResultIsSuccess(result)) {
-    std::move(on_success_callback).Run();
+      PrefetchService::GetFromFrameTreeNodeId(frame_tree_node_id_);
+  if (!prefetch_service) {
+    std::move(get_prefetch_callback).Run({});
     return;
   }
 
-  DoNotInterceptNavigation();
-}
-
-void PrefetchURLLoaderInterceptor::
-    EnsureCookiesCopiedAndInterceptPrefetchedNavigation(
-        const network::ResourceRequest& tenative_resource_request,
-        base::WeakPtr<PrefetchContainer> prefetch_container) {
-  if (prefetch_container) {
-    prefetch_container->OnInterceptorCheckCookieCopy();
-  }
-
-  if (prefetch_container &&
-      prefetch_container->IsIsolatedCookieCopyInProgress()) {
-    cookie_copy_start_time_ = base::TimeTicks::Now();
-    prefetch_container->SetOnCookieCopyCompleteCallback(base::BindOnce(
-        &PrefetchURLLoaderInterceptor::InterceptPrefetchedNavigation,
-        weak_factory_.GetWeakPtr(), tenative_resource_request,
-        prefetch_container));
+  if (!initiator_document_token_.has_value()) {
+    // TODO(crbug.com/1500135): Construct PrefetchContainer::Key for browser
+    // triggered navigations.
+    std::move(get_prefetch_callback).Run({});
     return;
   }
 
-  RecordCookieWaitTime(base::TimeDelta());
-
-  InterceptPrefetchedNavigation(tenative_resource_request, prefetch_container);
+  prefetch_match_resolver.SetOnPrefetchToServeReadyCallback(base::BindOnce(
+      &OnGotPrefetchToServe, frame_tree_node_id_, tentative_resource_request,
+      std::move(get_prefetch_callback)));
+  prefetch_service->GetPrefetchToServe(
+      PrefetchContainer::Key(initiator_document_token_.value(),
+                             tentative_resource_request.url),
+      serving_page_metrics_container_, prefetch_match_resolver);
 }
 
-void PrefetchURLLoaderInterceptor::InterceptPrefetchedNavigation(
-    const network::ResourceRequest& tenative_resource_request,
-    base::WeakPtr<PrefetchContainer> prefetch_container) {
-  if (cookie_copy_start_time_) {
-    base::TimeDelta wait_time =
-        base::TimeTicks::Now() - cookie_copy_start_time_.value();
-    DCHECK_GT(wait_time, base::TimeDelta());
-    RecordCookieWaitTime(wait_time);
-  }
-
-  if (!prefetch_container) {
-    DoNotInterceptNavigation();
+void PrefetchURLLoaderInterceptor::OnGetPrefetchComplete(
+    PrefetchContainer::Reader reader) {
+  if (!reader) {
+    // Do not intercept the request.
+    redirect_reader_ = PrefetchContainer::Reader();
+    std::move(loader_callback_).Run({});
     return;
   }
 
-  // Set up URL loader that will serve the prefetched data, and URL loader
-  // factory that will "create" this loader.
-  std::unique_ptr<PrefetchFromStringURLLoader> url_loader =
-      std::make_unique<PrefetchFromStringURLLoader>(
-          prefetch_container->ReleasePrefetchedResponse(),
-          tenative_resource_request);
-  scoped_refptr<SingleRequestURLLoaderFactory>
+  auto request_handler = reader.CreateRequestHandler();
+  if (!request_handler) {
+    redirect_reader_ = PrefetchContainer::Reader();
+    std::move(loader_callback_).Run({});
+    return;
+  }
+
+  scoped_refptr<network::SingleRequestURLLoaderFactory>
       single_request_url_loader_factory =
-          base::MakeRefCounted<SingleRequestURLLoaderFactory>(
-              url_loader->ServingResponseHandler());
+          base::MakeRefCounted<network::SingleRequestURLLoaderFactory>(
+              std::move(request_handler));
+
+  // If |prefetch_container| is done serving the prefetch, clear out
+  // |redirect_reader_|, but otherwise cache it in |redirect_reader_|.
+  if (reader.IsEnd()) {
+    if (redirect_reader_) {
+      RecordWasFullRedirectChainServedHistogram(true);
+    }
+    redirect_reader_ = PrefetchContainer::Reader();
+  } else {
+    redirect_reader_ = std::move(reader);
+  }
 
   // Create URL loader factory pipe that can be possibly proxied by Extensions.
   mojo::PendingReceiver<network::mojom::URLLoaderFactory> pending_receiver;
@@ -257,7 +194,8 @@ void PrefetchURLLoaderInterceptor::InterceptPrefetchedNavigation(
       navigation_request->GetNavigationId(),
       ukm::SourceIdObj::FromInt64(navigation_request->GetNextPageUkmSourceId()),
       &pending_receiver, /*header_client=*/nullptr, &bypass_redirect_checks,
-      /*disable_secure_dns=*/nullptr, /*factory_override=*/nullptr);
+      /*disable_secure_dns=*/nullptr, /*factory_override=*/nullptr,
+      /*navigation_response_task_runner=*/nullptr);
 
   // Bind the (possibly proxied) mojo pipe to the URL loader factory that will
   // serve the prefetched data.
@@ -268,13 +206,6 @@ void PrefetchURLLoaderInterceptor::InterceptPrefetchedNavigation(
       .Run(network::SharedURLLoaderFactory::Create(
           std::make_unique<network::WrapperPendingSharedURLLoaderFactory>(
               std::move(pending_remote))));
-
-  // url_loader manages its own lifetime once bound to the mojo pipes.
-  url_loader.release();
-}
-
-void PrefetchURLLoaderInterceptor::DoNotInterceptNavigation() {
-  std::move(loader_callback_).Run({});
 }
 
 }  // namespace content

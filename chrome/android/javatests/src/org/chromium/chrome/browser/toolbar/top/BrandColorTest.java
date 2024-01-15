@@ -18,13 +18,13 @@ import org.junit.runner.RunWith;
 import org.chromium.base.ObserverList.RewindableIterator;
 import org.chromium.base.SysUtils;
 import org.chromium.base.task.PostTask;
+import org.chromium.base.task.TaskTraits;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Criteria;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.Feature;
 import org.chromium.base.test.util.Restriction;
 import org.chromium.base.test.util.UrlUtils;
-import org.chromium.chrome.R;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabObserver;
@@ -32,14 +32,12 @@ import org.chromium.chrome.browser.tab.TabTestUtils;
 import org.chromium.chrome.browser.toolbar.ToolbarDataProvider;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
+import org.chromium.chrome.test.R;
 import org.chromium.components.browser_ui.styles.ChromeColors;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.ui.test.util.UiRestriction;
 
-/**
- * Contains tests for the brand color feature.
- */
+/** Contains tests for the brand color feature. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 public class BrandColorTest {
@@ -54,30 +52,41 @@ public class BrandColorTest {
     private int mDefaultColor;
 
     private static String getUrlWithBrandColor(String brandColor) {
-        String brandColorMetaTag = TextUtils.isEmpty(brandColor)
-                ? ""
-                : "<meta name='theme-color' content='" + brandColor + "'>";
-        return UrlUtils.encodeHtmlDataUri("<html>"
-                + "  <head>"
-                + "    " + brandColorMetaTag + "  </head>"
-                + "  <body>"
-                + "    Theme color set to " + brandColor + "  </body>"
-                + "</html>");
+        String brandColorMetaTag =
+                TextUtils.isEmpty(brandColor)
+                        ? ""
+                        : "<meta name='theme-color' content='" + brandColor + "'>";
+        return UrlUtils.encodeHtmlDataUri(
+                "<html>"
+                        + "  <head>"
+                        + "    "
+                        + brandColorMetaTag
+                        + "  </head>"
+                        + "  <body>"
+                        + "    Theme color set to "
+                        + brandColor
+                        + "  </body>"
+                        + "</html>");
     }
 
     private void checkForBrandColor(final int brandColor) {
-        CriteriaHelper.pollUiThread(() -> {
-            Criteria.checkThat(mToolbarDataProvider.getPrimaryColor(), Matchers.is(brandColor));
-            Criteria.checkThat(mToolbarDataProvider.getPrimaryColor(),
-                    Matchers.is(mToolbar.getBackgroundDrawable().getColor()));
-        });
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    Criteria.checkThat(
+                            mToolbarDataProvider.getPrimaryColor(), Matchers.is(brandColor));
+                    Criteria.checkThat(
+                            mToolbarDataProvider.getPrimaryColor(),
+                            Matchers.is(mToolbar.getBackgroundDrawable().getColor()));
+                });
         if (!SysUtils.isLowEndDevice()) {
             final int expectedStatusBarColor;
             expectedStatusBarColor = brandColor == mDefaultColor ? mDefaultColor : brandColor;
-            CriteriaHelper.pollUiThread(() -> {
-                Criteria.checkThat(mActivityTestRule.getActivity().getWindow().getStatusBarColor(),
-                        Matchers.is(expectedStatusBarColor));
-            });
+            CriteriaHelper.pollUiThread(
+                    () -> {
+                        Criteria.checkThat(
+                                mActivityTestRule.getActivity().getWindow().getStatusBarColor(),
+                                Matchers.is(expectedStatusBarColor));
+                    });
         }
     }
 
@@ -85,13 +94,12 @@ public class BrandColorTest {
         mActivityTestRule.startMainActivityWithURL(url);
         mToolbar = (ToolbarPhone) mActivityTestRule.getActivity().findViewById(R.id.toolbar);
         mToolbarDataProvider = mToolbar.getToolbarDataProvider();
-        mDefaultColor = ChromeColors.getDefaultThemeColor(
-                mActivityTestRule.getActivity(), /* isIncognito = */ false);
+        mDefaultColor =
+                ChromeColors.getDefaultThemeColor(
+                        mActivityTestRule.getActivity(), /* isIncognito= */ false);
     }
 
-    /**
-     * Test for having default primary color working correctly.
-     */
+    /** Test for having default primary color working correctly. */
     @Test
     @SmallTest
     @Restriction(UiRestriction.RESTRICTION_TYPE_PHONE)
@@ -101,9 +109,7 @@ public class BrandColorTest {
         checkForBrandColor(mDefaultColor);
     }
 
-    /**
-     * Test for adding a brand color for a url.
-     */
+    /** Test for adding a brand color for a url. */
     @Test
     @SmallTest
     @Restriction(UiRestriction.RESTRICTION_TYPE_PHONE)
@@ -113,9 +119,7 @@ public class BrandColorTest {
         checkForBrandColor(Color.parseColor(BRAND_COLOR_1));
     }
 
-    /**
-     * Test for immediately setting the brand color.
-     */
+    /** Test for immediately setting the brand color. */
     @Test
     @SmallTest
     @Restriction(UiRestriction.RESTRICTION_TYPE_PHONE)
@@ -124,38 +128,40 @@ public class BrandColorTest {
         startMainActivityWithURL(getUrlWithBrandColor(BRAND_COLOR_1));
         checkForBrandColor(Color.parseColor(BRAND_COLOR_1));
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mActivityTestRule.getActivity().getToolbarManager().onThemeColorChanged(
-                    mDefaultColor, false);
-            // Since the color should change instantly, there is no need to use the criteria
-            // helper.
-            Assert.assertEquals(mToolbarDataProvider.getPrimaryColor(),
-                    mToolbar.getBackgroundDrawable().getColor());
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mActivityTestRule
+                            .getActivity()
+                            .getToolbarManager()
+                            .onThemeColorChanged(mDefaultColor, false);
+                    // Since the color should change instantly, there is no need to use the criteria
+                    // helper.
+                    Assert.assertEquals(
+                            mToolbarDataProvider.getPrimaryColor(),
+                            mToolbar.getBackgroundDrawable().getColor());
+                });
     }
 
-    /**
-     * Test to make sure onLoadStarted doesn't reset the brand color.
-     */
+    /** Test to make sure onLoadStarted doesn't reset the brand color. */
     @Test
     @SmallTest
     @Restriction(UiRestriction.RESTRICTION_TYPE_PHONE)
     @Feature({"StatusBar", "Omnibox"})
     public void testBrandColorWithLoadStarted() {
         startMainActivityWithURL(getUrlWithBrandColor(BRAND_COLOR_1));
-        PostTask.postTask(UiThreadTaskTraits.DEFAULT, () -> {
-            Tab tab = mActivityTestRule.getActivity().getActivityTab();
-            RewindableIterator<TabObserver> observers = TabTestUtils.getTabObservers(tab);
-            while (observers.hasNext()) {
-                observers.next().onLoadStarted(tab, true);
-            }
-        });
+        PostTask.postTask(
+                TaskTraits.UI_DEFAULT,
+                () -> {
+                    Tab tab = mActivityTestRule.getActivity().getActivityTab();
+                    RewindableIterator<TabObserver> observers = TabTestUtils.getTabObservers(tab);
+                    while (observers.hasNext()) {
+                        observers.next().onLoadStarted(tab, true);
+                    }
+                });
         checkForBrandColor(Color.parseColor(BRAND_COLOR_1));
     }
 
-    /**
-     * Test for checking navigating to new brand color updates correctly.
-     */
+    /** Test for checking navigating to new brand color updates correctly. */
     @Test
     @SmallTest
     @Restriction(UiRestriction.RESTRICTION_TYPE_PHONE)
@@ -183,10 +189,10 @@ public class BrandColorTest {
         mActivityTestRule.loadUrl("about:blank");
         checkForBrandColor(mDefaultColor);
         PostTask.runOrPostTask(
-                UiThreadTaskTraits.DEFAULT, () -> mActivityTestRule.getActivity().onBackPressed());
+                TaskTraits.UI_DEFAULT, () -> mActivityTestRule.getActivity().onBackPressed());
         checkForBrandColor(Color.parseColor(BRAND_COLOR_1));
         PostTask.runOrPostTask(
-                UiThreadTaskTraits.DEFAULT, () -> mActivityTestRule.getActivity().onBackPressed());
+                TaskTraits.UI_DEFAULT, () -> mActivityTestRule.getActivity().onBackPressed());
         checkForBrandColor(mDefaultColor);
     }
 }

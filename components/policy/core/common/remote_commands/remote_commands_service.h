@@ -9,10 +9,11 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/scoped_observation.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/core/common/cloud/policy_invalidation_scope.h"
 #include "components/policy/core/common/remote_commands/remote_command_job.h"
@@ -68,9 +69,17 @@ class POLICY_EXPORT RemoteCommandsService
     kBrowserClearBrowsingData = 18,
     kDeviceResetEuicc = 19,
     kBrowserRotateAttestationCredential = 20,
+    kFetchCrdAvailabilityInfo = 21,
+    kFetchSupportPacket = 22,
     // Used by UMA histograms. Shall refer to the last enumeration.
-    kMaxValue = kBrowserRotateAttestationCredential
+    kMaxValue = kFetchSupportPacket
   };
+
+  // Signature type that will be used for the requests.
+  static constexpr enterprise_management::PolicyFetchRequest::SignatureType
+  GetSignatureType() {
+    return enterprise_management::PolicyFetchRequest::SHA256_RSA;
+  }
 
   // Returns the metric name to report received commands.
   static const char* GetMetricNameReceivedRemoteCommand(
@@ -79,6 +88,9 @@ class POLICY_EXPORT RemoteCommandsService
   static std::string GetMetricNameExecutedRemoteCommand(
       PolicyInvalidationScope scope,
       enterprise_management::RemoteCommand_Type command_type);
+
+  // Returns remote command fetch request type based on the invalidation scope.
+  static std::string GetRequestType(PolicyInvalidationScope scope);
 
   RemoteCommandsService(std::unique_ptr<RemoteCommandsFactory> factory,
                         CloudPolicyClient* client,
@@ -174,6 +186,9 @@ class POLICY_EXPORT RemoteCommandsService
 
   // Represents remote commands scope covered by service.
   const PolicyInvalidationScope scope_;
+
+  base::ScopedObservation<RemoteCommandsQueue, RemoteCommandsQueue::Observer>
+      remote_commands_queue_observation{this};
 
   base::WeakPtrFactory<RemoteCommandsService> weak_factory_{this};
 };

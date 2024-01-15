@@ -3,6 +3,7 @@
 # found in the LICENSE file.
 
 import("//build/config/chromeos/ui_mode.gni")
+import("//build/config/rust.gni")
 import("//build/symlink.gni")
 import("//testing/libfuzzer/fuzzer_test.gni")
 import("//testing/test.gni")
@@ -82,6 +83,13 @@ if (!is_win) {
   if (current_toolchain == host_toolchain || target_os == "mac") {
     # Contains the code shared by both {micro,mini}dump_stackwalk.
     static_library("stackwalk_common") {
+      # Binaries that use this library are not debugged frequently and
+      # performance is vastly reduced without optimizations. So, force maximum
+      # optimization to get the lowest runtimes in Chromium tests that use these
+      # tools. These can be removed locally if debugging is actually needed.
+      configs -= [ "//build/config/compiler:default_optimization" ]
+      configs += [ "//build/config/compiler:optimize_max" ]
+
       sources = [
         "breakpad/src/common/path_helper.cc",
         "breakpad/src/common/path_helper.h",
@@ -124,6 +132,10 @@ if (!is_win) {
         "breakpad/src/processor/stackwalker_ppc.h",
         "breakpad/src/processor/stackwalker_ppc64.cc",
         "breakpad/src/processor/stackwalker_ppc64.h",
+        "breakpad/src/processor/stackwalker_riscv.cc",
+        "breakpad/src/processor/stackwalker_riscv.h",
+        "breakpad/src/processor/stackwalker_riscv64.cc",
+        "breakpad/src/processor/stackwalker_riscv64.h",
         "breakpad/src/processor/stackwalker_sparc.cc",
         "breakpad/src/processor/stackwalker_sparc.h",
         "breakpad/src/processor/stackwalker_x86.cc",
@@ -159,6 +171,14 @@ if (!is_win) {
         "breakpad/src/third_party/libdisasm/x86_operand_list.c",
         "breakpad/src/third_party/libdisasm/x86_operand_list.h",
       ]
+      if (is_linux || is_chromeos) {
+        sources += [
+          "breakpad/src/common/linux/scoped_pipe.cc",
+          "breakpad/src/common/linux/scoped_pipe.h",
+          "breakpad/src/common/linux/scoped_tmpfile.cc",
+          "breakpad/src/common/linux/scoped_tmpfile.h",
+        ]
+      }
 
       configs -= [ "//build/config/compiler:chromium_code" ]
       configs += [ "//build/config/compiler:no_chromium_code" ]
@@ -195,6 +215,13 @@ if (!is_win) {
         "breakpad/src/processor/symbolic_constants_win.cc",
         "breakpad/src/processor/symbolic_constants_win.h",
       ]
+
+      if (is_linux || is_chromeos) {
+        sources += [
+          "breakpad/src/processor/disassembler_objdump.cc",
+          "breakpad/src/processor/disassembler_objdump.h",
+        ]
+      }
     }
 
     executable("microdump_stackwalk") {
@@ -233,6 +260,13 @@ if (!is_win) {
         "breakpad/src/processor/symbolic_constants_win.cc",
         "breakpad/src/processor/symbolic_constants_win.h",
       ]
+
+      if (is_linux || is_chromeos) {
+        sources += [
+          "breakpad/src/processor/disassembler_objdump.cc",
+          "breakpad/src/processor/disassembler_objdump.h",
+        ]
+      }
     }
 
     executable("minidump_dump") {
@@ -326,6 +360,27 @@ if (is_mac) {
 
       # For breakpad/src/common/stabs_reader.h.
       defines = [ "HAVE_MACH_O_NLIST_H" ]
+
+      if (enable_rust_crash) {
+        deps = [ "//third_party/rust/rustc_demangle_capi/v0_1:lib" ]
+        defines += [ "HAVE_RUSTC_DEMANGLE" ]
+        include_dirs += [ "//third_party/rust/chromium_crates_io/vendor/rustc-demangle-capi-0.1.0/include" ]
+        sources += [ "//third_party/rust/chromium_crates_io/vendor/rustc-demangle-capi-0.1.0/include/rustc_demangle.h" ]
+      }
+    }
+    test("breakpad_unittests") {
+      sources = [ "breakpad/src/common/module_unittest.cc" ]
+      deps = [
+        ":common",
+        "//testing/gmock",
+        "//testing/gtest",
+        "//testing/gtest:gtest_main",
+      ]
+      include_dirs = [
+        "breakpad/src",
+        "chromium",  # Use our copy of breakpad_googletest_includes.h
+        ".",
+      ]
     }
 
     executable("dump_syms") {
@@ -361,7 +416,41 @@ if (is_mac) {
       configs -= [ "//build/config/compiler:chromium_code" ]
       configs += [ "//build/config/compiler:no_chromium_code" ]
 
+      # Do not compile with ARC because Breakpad code is not compatible with
+      # being compiled with ARC.
+      configs -= [ "//build/config/compiler:enable_arc" ]
+
       deps = [ ":common" ]
+    }
+
+    action("gen_symbol_tools_packager") {
+      testonly = true
+      script = "scripts/gen_symbol_tools_packager.py"
+      _go_sources = [
+        "breakpad/src/tools/mac/upload_system_symbols/arch_reader.go",
+        "breakpad/src/tools/mac/upload_system_symbols/extract.go",
+        "breakpad/src/tools/mac/upload_system_symbols/upload_system_symbols.go",
+      ]
+      _extra_sources = [
+        "breakpad/src/tools/mac/upload_system_symbols/upload_system_symbols.sh",
+      ]
+
+      sources = [ "scripts/package_symbol_tools.py.template" ] + _go_sources +
+                _extra_sources
+      outputs = [ "$root_out_dir/package_symbol_tools.py" ]
+      deps = [
+        ":dump_syms",
+        ":symupload",
+        "//tools/mac:dsc_extractor",
+      ]
+      args = [
+               "-a",
+               target_cpu,
+               "-t",
+               rebase_path("scripts/package_symbol_tools.py.template",
+                           root_build_dir),
+             ] + [ "-go_src" ] + rebase_path(_go_sources, root_build_dir) +
+             [ "-extra" ] + rebase_path(_extra_sources, root_build_dir)
     }
   } else {
     binary_symlink("dump_syms") {
@@ -379,101 +468,6 @@ if (is_ios) {
   }
   binary_symlink("symupload") {
     binary_label = ":$target_name($host_toolchain)"
-  }
-}
-
-if (is_mac) {
-  static_library("utilities") {
-    sources = [
-      "breakpad/src/client/mac/crash_generation/ConfigFile.mm",
-      "breakpad/src/client/mac/handler/breakpad_nlist_64.cc",
-      "breakpad/src/client/mac/handler/dynamic_images.cc",
-      "breakpad/src/client/mac/handler/minidump_generator.cc",
-      "breakpad/src/client/minidump_file_writer.cc",
-      "breakpad/src/common/convert_UTF.cc",
-      "breakpad/src/common/mac/MachIPC.mm",
-      "breakpad/src/common/mac/arch_utilities.cc",
-      "breakpad/src/common/mac/arch_utilities.h",
-      "breakpad/src/common/mac/bootstrap_compat.cc",
-      "breakpad/src/common/mac/file_id.cc",
-      "breakpad/src/common/mac/launch_reporter.cc",
-      "breakpad/src/common/mac/macho_id.cc",
-      "breakpad/src/common/mac/macho_utilities.cc",
-      "breakpad/src/common/mac/macho_walker.cc",
-      "breakpad/src/common/mac/string_utilities.cc",
-      "breakpad/src/common/md5.cc",
-      "breakpad/src/common/scoped_ptr.h",
-      "breakpad/src/common/simple_string_dictionary.cc",
-      "breakpad/src/common/string_conversion.cc",
-    ]
-
-    configs += [ ":internal_config" ]
-
-    # There are some warnings in this code.
-    configs -= [ "//build/config/compiler:chromium_code" ]
-    configs += [ "//build/config/compiler:no_chromium_code" ]
-  }
-
-  executable("crash_inspector") {
-    sources = [
-      "breakpad/src/client/mac/crash_generation/Inspector.mm",
-      "breakpad/src/client/mac/crash_generation/InspectorMain.mm",
-    ]
-
-    # TODO(GYP): 'mac_real_dsym': 1,
-
-    include_dirs = [
-      "breakpad/src/client/apple/Framework",
-      "breakpad/src/common/mac",
-      "breakpad/src",
-    ]
-    frameworks = [
-      "CoreServices.framework",
-      "Foundation.framework",
-    ]
-
-    deps = [ ":utilities" ]
-  }
-
-  # TODO(GYP) this target has some mac_bundle_resources stuff.
-  # executable("crash_report_sender") {
-  # }
-  group("crash_report_sender") {
-  }
-
-  config("breakpad_config") {
-    include_dirs = [ "breakpad/src/client/apple/Framework" ]
-  }
-
-  static_library("breakpad") {
-    sources = [
-      "breakpad/src/client/mac/Framework/Breakpad.mm",
-      "breakpad/src/client/mac/Framework/OnDemandServer.mm",
-      "breakpad/src/client/mac/crash_generation/crash_generation_client.cc",
-      "breakpad/src/client/mac/crash_generation/crash_generation_client.h",
-      "breakpad/src/client/mac/handler/exception_handler.cc",
-      "breakpad/src/client/mac/handler/protected_memory_allocator.cc",
-    ]
-
-    configs += [ ":internal_config" ]
-    public_configs = [ ":breakpad_config" ]
-
-    defines = [ "USE_PROTECTED_ALLOCATIONS=1" ]
-    include_dirs = [ "breakpad/src/client/apple/Framework" ]
-
-    # TODO(crbug.com/841631): Breakpad uses bootstrap_subset() and
-    # bootstrap_create_server(), both of which are deprecated starting in 10.10.
-    cflags = [ "-Wno-deprecated-declarations" ]
-
-    deps = [
-      ":crash_inspector",
-      ":crash_report_sender",
-      ":utilities",
-    ]
-  }
-
-  group("client") {
-    public_configs = [ ":client_config" ]
   }
 }
 
@@ -569,6 +563,15 @@ if (is_linux || is_chromeos || is_android) {
       defines = [ "HAVE_A_OUT_H" ]
 
       include_dirs = [ "breakpad/src" ]
+
+      if (enable_rust_crash) {
+        deps = [ "//third_party/rust/rustc_demangle_capi/v0_1:lib" ]
+        defines += [ "HAVE_RUSTC_DEMANGLE" ]
+        include_dirs += [ "//third_party/rust/chromium_crates_io/vendor/rustc-demangle-capi-0.1.0/include" ]
+        sources += [ "//third_party/rust/chromium_crates_io/vendor/rustc-demangle-capi-0.1.0/include/rustc_demangle.h" ]
+      }
+
+      libs = [ "z" ]
     }
   } else {
     # Aliases for convenience.
@@ -710,8 +713,13 @@ if (is_linux || is_chromeos || is_android) {
       "breakpad/src/common/linux/elf_core_dump_unittest.cc",
       "breakpad/src/common/linux/file_id_unittest.cc",
       "breakpad/src/common/linux/linux_libc_support_unittest.cc",
+      "breakpad/src/common/linux/scoped_pipe.cc",
+      "breakpad/src/common/linux/scoped_pipe.h",
+      "breakpad/src/common/linux/scoped_pipe_unittest.cc",
+      "breakpad/src/common/linux/scoped_tmpfile.cc",
+      "breakpad/src/common/linux/scoped_tmpfile.h",
+      "breakpad/src/common/linux/scoped_tmpfile_unittest.cc",
       "breakpad/src/common/linux/synth_elf.cc",
-      "breakpad/src/common/linux/tests/auto_testfile.h",
       "breakpad/src/common/linux/tests/crash_generator.cc",
       "breakpad/src/common/linux/tests/crash_generator.h",
       "breakpad/src/common/memory_allocator_unittest.cc",
@@ -722,7 +730,7 @@ if (is_linux || is_chromeos || is_android) {
       "breakpad/src/common/tests/file_utils.h",
       "breakpad/src/tools/linux/md2core/minidump_memory_range.h",
       "breakpad/src/tools/linux/md2core/minidump_memory_range_unittest.cc",
-      "linux/breakpad_googletest_includes.h",
+      "chromium/breakpad_googletest_includes.h",
     ]
 
     deps = [
@@ -736,7 +744,7 @@ if (is_linux || is_chromeos || is_android) {
     data_deps = [ ":linux_dumper_unittest_helper" ]
 
     include_dirs = [
-      "linux",  # Use our copy of breakpad_googletest_includes.h
+      "chromium",  # Use our copy of breakpad_googletest_includes.h
       ".",
     ]
 
@@ -1051,6 +1059,8 @@ if (is_ios) {
       "breakpad/src/common/long_string_dictionary.cc",
       "breakpad/src/common/mac/HTTPMultipartUpload.m",
       "breakpad/src/common/mac/HTTPRequest.m",
+      "breakpad/src/common/mac/arch_utilities.cc",
+      "breakpad/src/common/mac/arch_utilities.h",
       "breakpad/src/common/mac/encoding_util.m",
       "breakpad/src/common/mac/file_id.cc",
       "breakpad/src/common/mac/file_id.h",
@@ -1078,6 +1088,10 @@ if (is_ios) {
     ]
 
     public_configs = [ ":client_config" ]
+
+    # Do not compile with ARC because Breakpad code is not compatible with being
+    # compiled with ARC.
+    configs -= [ "//build/config/compiler:enable_arc" ]
 
     if (is_clang) {
       # See https://crbug.com/google-breakpad/675.

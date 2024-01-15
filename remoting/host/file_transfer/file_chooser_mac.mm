@@ -8,12 +8,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/mac/foundation_util.h"
-#include "base/mac/scoped_nsobject.h"
+#include "base/apple/foundation_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
+#import "base/task/sequenced_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/sequence_bound.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "remoting/base/string_resources.h"
 #include "ui/base/l10n/l10n_util_mac.h"
 
@@ -25,14 +25,14 @@
 
 @implementation FileTransferOpenPanelDelegate
 - (BOOL)panel:(id)sender shouldEnableURL:(NSURL*)url {
-  return [url isFileURL];
+  return url.fileURL;
 }
 
 - (BOOL)panel:(id)sender validateURL:(NSURL*)url error:(NSError**)outError {
   // Refuse to accept users closing the dialog with a key repeat, since the key
   // may have been first pressed while the user was looking at something else.
-  if ([[NSApp currentEvent] type] == NSEventTypeKeyDown &&
-      [[NSApp currentEvent] isARepeat]) {
+  if (NSApp.currentEvent.type == NSEventTypeKeyDown &&
+      NSApp.currentEvent.ARepeat) {
     return NO;
   }
 
@@ -62,8 +62,8 @@ class MacFileChooserOnUiThread {
  private:
   void RunCallback(FileChooser::Result result);
 
-  base::scoped_nsobject<FileTransferOpenPanelDelegate> delegate_;
-  base::scoped_nsobject<NSOpenPanel> open_panel_;
+  FileTransferOpenPanelDelegate* __strong delegate_;
+  NSOpenPanel* __strong open_panel_;
   scoped_refptr<base::SequencedTaskRunner> caller_task_runner_;
   base::WeakPtr<FileChooserMac> file_chooser_mac_;
 };
@@ -92,7 +92,7 @@ class FileChooserMac : public FileChooser {
 MacFileChooserOnUiThread::MacFileChooserOnUiThread(
     scoped_refptr<base::SequencedTaskRunner> caller_task_runner,
     base::WeakPtr<FileChooserMac> file_chooser_mac)
-    : delegate_([FileTransferOpenPanelDelegate new]),
+    : delegate_([[FileTransferOpenPanelDelegate alloc] init]),
       caller_task_runner_(std::move(caller_task_runner)),
       file_chooser_mac_(std::move(file_chooser_mac)) {}
 
@@ -105,27 +105,26 @@ MacFileChooserOnUiThread::~MacFileChooserOnUiThread() {
 
 void MacFileChooserOnUiThread::Show() {
   DCHECK(!open_panel_);
-  open_panel_.reset([NSOpenPanel openPanel], base::scoped_policy::RETAIN);
-  [open_panel_
-      setMessage:l10n_util::GetNSString(IDS_DOWNLOAD_FILE_DIALOG_TITLE)];
-  [open_panel_ setAllowsMultipleSelection:NO];
-  [open_panel_ setCanChooseFiles:YES];
-  [open_panel_ setCanChooseDirectories:NO];
-  [open_panel_ setDelegate:delegate_];
+  open_panel_ = [NSOpenPanel openPanel];
+  open_panel_.message = l10n_util::GetNSString(IDS_DOWNLOAD_FILE_DIALOG_TITLE);
+  open_panel_.allowsMultipleSelection = NO;
+  open_panel_.canChooseFiles = YES;
+  open_panel_.canChooseDirectories = NO;
+  open_panel_.delegate = delegate_;
   [open_panel_ beginWithCompletionHandler:^(NSModalResponse result) {
     if (result == NSModalResponseOK) {
-      NSURL* url = [open_panel_ URLs][0];
-      if (![url isFileURL]) {
+      NSURL* url = open_panel_.URLs[0];
+      if (!url.fileURL) {
         // Delegate should prevent this.
         RunCallback(protocol::MakeFileTransferError(
             FROM_HERE, protocol::FileTransfer_Error_Type_UNEXPECTED_ERROR));
       }
-      RunCallback(base::mac::NSStringToFilePath([url path]));
+      RunCallback(base::apple::NSStringToFilePath([url path]));
     } else {
       RunCallback(protocol::MakeFileTransferError(
           FROM_HERE, protocol::FileTransfer_Error_Type_CANCELED));
     }
-    open_panel_.reset();
+    open_panel_ = nil;
   }];
   // Bring to front.
   [NSApp activateIgnoringOtherApps:YES];
@@ -143,7 +142,7 @@ FileChooserMac::FileChooserMac(
     : callback_(std::move(callback)), weak_ptr_factory_(this) {
   mac_file_chooser_on_ui_thread_ =
       base::SequenceBound<MacFileChooserOnUiThread>(
-          ui_task_runner, base::SequencedTaskRunnerHandle::Get(),
+          ui_task_runner, base::SequencedTaskRunner::GetCurrentDefault(),
           weak_ptr_factory_.GetWeakPtr());
 }
 

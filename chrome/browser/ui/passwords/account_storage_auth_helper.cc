@@ -7,10 +7,13 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/reauth_result.h"
+#include "chrome/browser/signin/signin_ui_util.h"
 #include "components/password_manager/core/browser/password_feature_manager.h"
 #include "components/signin/public/base/consent_level.h"
+#include "components/signin/public/base/signin_buildflags.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "google_apis/gaia/core_account_id.h"
 
@@ -20,11 +23,13 @@ using ReauthSucceeded =
 }
 
 AccountStorageAuthHelper::AccountStorageAuthHelper(
+    Profile* profile,
     signin::IdentityManager* identity_manager,
     password_manager::PasswordFeatureManager* password_feature_manager,
     base::RepeatingCallback<SigninViewController*()>
         signin_view_controller_getter)
-    : identity_manager_(identity_manager),
+    : profile_(profile),
+      identity_manager_(identity_manager),
       password_feature_manager_(password_feature_manager),
       signin_view_controller_getter_(std::move(signin_view_controller_getter)) {
   DCHECK(password_feature_manager_);
@@ -70,9 +75,7 @@ void AccountStorageAuthHelper::TriggerOptInReauth(
 
 void AccountStorageAuthHelper::TriggerSignIn(
     signin_metrics::AccessPoint access_point) {
-  if (SigninViewController* controller = signin_view_controller_getter_.Run()) {
-    controller->ShowDiceAddAccountTab(access_point, std::string());
-  }
+  signin_ui_util::ShowSigninPromptFromPromo(profile_, access_point);
 }
 
 void AccountStorageAuthHelper::OnOptInReauthCompleted(

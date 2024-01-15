@@ -4,8 +4,8 @@
 
 #include "chrome/browser/ash/login/screens/offline_login_screen.h"
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
@@ -19,9 +19,10 @@
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
-#include "chrome/browser/ui/webui/chromeos/login/offline_login_screen_handler.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/browser/ui/webui/ash/login/offline_login_screen_handler.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
+#include "chromeos/ash/components/login/auth/public/auth_types.h"
 #include "chromeos/ash/components/login/auth/public/key.h"
 #include "chromeos/ash/components/login/auth/public/user_context.h"
 #include "components/user_manager/known_user.h"
@@ -40,7 +41,7 @@ constexpr const base::TimeDelta kIdleTimeDelta = base::Minutes(3);
 
 // These values should not be renumbered and numeric values should never
 // be reused. This must be kept in sync with ChromeOSHiddenUserPodsOfflineLogin
-// in tools/metrics/histogram/enums.xml
+// in tools/metrics/histograms/enums.xml
 enum class OfflineLoginEvent {
   kOfflineLoginEnabled = 0,
   kOfflineLoginBlockedByTimeLimit = 1,
@@ -149,16 +150,13 @@ void OfflineLoginScreen::HandleCompleteAuth(const std::string& email,
 
   UserContext user_context(*user);
   user_context.SetKey(Key(password));
+  user_context.SetLocalPasswordInput(LocalPasswordInput{password});
   // Save the user's plaintext password for possible authentication to a
   // network. See https://crbug.com/386606 for details.
   user_context.SetPasswordKey(Key(password));
   user_context.SetIsUsingPin(false);
-  if (account_id.GetAccountType() == AccountType::ACTIVE_DIRECTORY) {
-    CHECK(user_context.GetUserType() ==
-          user_manager::UserType::USER_TYPE_ACTIVE_DIRECTORY)
-        << "Incorrect Active Directory user type "
-        << user_context.GetUserType();
-  }
+  CHECK(account_id.GetAccountType() != AccountType::ACTIVE_DIRECTORY)
+      << "Incorrect Active Directory user type " << user_context.GetUserType();
   user_context.SetIsUsingOAuth(false);
 
   if (ExistingUserController::current_controller()) {
@@ -179,7 +177,7 @@ void OfflineLoginScreen::HandleEmailSubmitted(const std::string& email) {
   user_manager::KnownUser known_user(g_browser_process->local_state());
   const AccountId account_id = known_user.GetAccountId(
       sanitized_email, std::string(), AccountType::UNKNOWN);
-  const absl::optional<base::TimeDelta> offline_signin_interval =
+  const std::optional<base::TimeDelta> offline_signin_interval =
       known_user.GetOfflineSigninLimit(account_id);
 
   // Further checks only if the limit is set.
@@ -236,7 +234,6 @@ void OfflineLoginScreen::UpdateState(NetworkError::ErrorReason reason) {
   NetworkStateInformer::State state = network_state_informer_->state();
   is_network_available_ =
       (state == NetworkStateInformer::ONLINE &&
-       reason != NetworkError::ERROR_REASON_PORTAL_DETECTED &&
        reason != NetworkError::ERROR_REASON_LOADING_TIMEOUT);
 }
 

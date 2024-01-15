@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
-// Next MinVersion: 50
+// Next MinVersion: 54
 
 module arc.mojom;
 
@@ -16,31 +16,12 @@ import "url/mojom/url.mojom";
 
 [Extensible]
 enum PatternType {
-  PATTERN_LITERAL,
-  PATTERN_PREFIX,
-  PATTERN_SIMPLE_GLOB,
-};
-
-[Extensible]
-enum ShareFiles {
-  // 0 and 3: capture that everything went great, the files were copied.
-  SINGLE_FILE_SUCCESS = 0,
-  // 1 and 4: Whenever we fail to copy, we try to delete the partially copied
-  // files, if the backroll goes well we call this entry.
-  SINGLE_FILE_BACKROLLED = 1,
-  // 2 and 5: Whenever we are unable to backroll because something else went
-  // wrong, we place this error on the MISC_ERROR bin. (it could have been a bad
-  // file descriptor, or just a read/write error)
-  SINGLE_FILE_MISC_ERROR = 2,
-  MULTIPLE_FILES_SUCCESS = 3,
-  MULTIPLE_FILES_BACKROLLED = 4,
-  MULTIPLE_FILES_MISC_ERROR = 5,
-  // This records a faulty response from DocumentsUI, since our implementation
-  // relies on DocumentsUI, sometimes it may return a bad response that we
-  // cannot process (e.g. for a single file DocumentsUI is in charge of creating
-  // the new file where we will copy, if it fails it can send us a bad response
-  // or maybe DocumentsUI is not returning the expected flags).
-  BAD_RESPONSE_FROM_DOCUMENTS_UI = 6,
+  PATTERN_LITERAL = 0,
+  PATTERN_PREFIX = 1,
+  PATTERN_SIMPLE_GLOB = 2,
+  [MinVersion=51] PATTERN_ADVANCED_GLOB = 3,
+  [MinVersion=51] PATTERN_SUFFIX = 4,
+  [MinVersion=51, Default] kUnknown = -1,
 };
 
 struct PatternMatcher {
@@ -174,8 +155,13 @@ enum ChromePage {
   KEYBOARDANDTEXTINPUT = 82,
   CURSORANDTOUCHPAD = 83,
   AUDIOANDCAPTIONS = 84,
+  PERDEVICEKEYBOARD = 85,
+  PERDEVICEMOUSE = 86,
+  PERDEVICETOUCHPAD = 87,
+  PERDEVICEPOINTINGSTICK = 88,
+  GRAPHICSTABLET = 89,
 
-  // Next value to be used is 85.
+  // Next value to be used is 90.
 };
 
 // Describes an unique chrome app.
@@ -270,6 +256,64 @@ enum SupportedLinkChangeSource {
   kUserPreference,
 };
 
+// Android setting that we want to relay back to update Chrome setting.
+[Extensible]
+enum AndroidSetting {
+  [Default] kUnknown = 0,
+  kGeoLocation,           // Deprecated, replaced with specific scenarios.
+  kGeoLocationAtBoot,
+  kGeoLocationUserTriggered,
+};
+
+// The type of shadow used for Chrome captions.
+// https://developer.android.com/reference/android/view/accessibility/CaptioningManager.CaptionStyle
+[Extensible]
+enum CaptionTextShadowType {
+  // Edge type value specifying no character edges.
+  kNone = 0,
+
+  // Edge type value specifying uniformly outlined character edges.
+  kUniform = 1,
+
+  // Edge type value specifying drop-shadowed character edges.
+  kDropShadow = 2,
+
+  // Edge type value specifying raised bevel character edges.
+  kRaised = 3,
+
+  // Edge type value specifying depressed bevel character edges.
+  kDepressed = 4,
+
+  [Default] kInvalidEnumValue = -1,
+};
+
+struct CaptionColor {
+  uint8 alpha;
+  uint8 red;
+  uint8 green;
+  uint8 blue;
+};
+
+// Encapsulates settings to stylize captions.
+// https://developer.android.com/reference/android/view/accessibility/CaptioningManager.CaptionStyle.html
+struct CaptionStyle {
+  string user_locale;
+  float font_scale;
+  CaptionColor? text_color;
+  CaptionColor? background_color;
+  CaptionTextShadowType text_shadow_type;
+};
+
+// Accessibility features supported by ARC AccessibilityService.
+struct AccessibilityFeatures {
+  bool docked_magnifier_enabled;
+  bool focus_highlight_enabled;
+  bool screen_magnifier_enabled;
+  bool select_to_speak_enabled;
+  bool spoken_feedback_enabled;
+  bool switch_access_enabled;
+};
+
 // Interface to interact with a custom tab.
 // Close the interface pointer to close the custom tab.
 // Next method ID: 1
@@ -280,7 +324,7 @@ interface CustomTabSession {
 
 // Handles intents from ARC in Chrome.
 // Deprecated method ID: 4, 9, 10, 16, 18
-// Next method ID: 23
+// Next method ID: 24
 interface IntentHelperHost {
   // Called when icons associated with the package are no longer up to date.
   [MinVersion=3] OnIconInvalidated@1(string package_name);
@@ -314,9 +358,6 @@ interface IntentHelperHost {
   // Opens the specified URL as a web app if it is installed. Otherwise falls
   // back to the behaviour of OnOpenUrl. |url| must have a HTTPS scheme.
   [MinVersion=23] OnOpenWebApp@8(string url);
-
-  // Records Sharing files feature's metrics via Chrome.
-  [MinVersion=24] RecordShareFilesMetricsDeprecated@9(ShareFiles flag);
 
   // Does a reset of ARC; this wipes /data, and then re-calls on OOBE for
   // account binding to happen again, as if the user just went through OOBE.
@@ -385,27 +426,21 @@ interface IntentHelperHost {
 
   // Close any dialogs opened from ARC.
   [MinVersion=49] OnCloseSystemDialogs@22();
+
+  // Relay android setting to Chrome.
+  [MinVersion=50] OnAndroidSettingChange@23(
+      AndroidSetting setting, bool is_enabled);
 };
 
 // Sends intents to ARC on behalf of Chrome.
-// Deprecated method ID: 0, 7, 11, 12, 14, 18
-// Next method ID: 22
+// Deprecated method ID: 0, 7, 11, 12, 14, 17, 18
+// Next method ID: 24
 interface IntentHelperInstance {
   // Sets the given package as a preferred package. The next time an ACTION_VIEW
   // intent is sent with a URL that requires disambiguation, instead of opening
   // the ResolverActivity, this package will be picked if it is on the list.
   // When multiple packages are set as preferred, the most recent setting wins.
   [MinVersion=7] AddPreferredPackage@8(string package_name);
-
-  // Sets the given package as a preferred app for the given |intent_filter|
-  // and |intent_info|.
-  // The |package_name| is selected by the user on Chrome-side to remember the
-  // user preference. The |intent_info| is used to generate the components set
-  // and match for setting the preferred activity.
-  // This is used to sync the preferred app setting from Chrome OS.
-  [MinVersion=32] AddPreferredApp@17(string package_name,
-                                     IntentFilter intent_filter,
-                                     IntentInfo intent_info);
 
   // Set the verified link domain status to either always open (|always_open| is
   // true) or always ask (|always_open| is false) for the |package_names|.
@@ -477,4 +512,11 @@ interface IntentHelperInstance {
   // Request ARC to send the domain verification status update for all packages
   // to Chrome OS.
   [MinVersion=37] RequestDomainVerificationStatusUpdate@19();
+
+  // Requests the service to set the caption style.
+  [MinVersion=52] SetCaptionStyle@22(CaptionStyle style);
+
+  // Send list of enabled accessibility features to ARC.
+  [MinVersion=53] EnableAccessibilityFeatures@23(AccessibilityFeatures
+      features);
 };

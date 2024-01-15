@@ -8,7 +8,7 @@
 
 #include <algorithm>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
@@ -233,13 +233,18 @@ void CachedStorageArea::BindStorageArea(
     return;
   }
 
-  auto task_runner =
-      local_dom_window->GetTaskRunner(TaskType::kInternalNavigationAssociated);
+  // Because the storage area is keyed by the BlinkStorageKey it could be
+  // reused by other frames in the same agent cluster so we use the
+  // associated AgentGroupScheduler's task runner.
+  auto task_runner = local_dom_window->GetFrame()
+                         ->GetFrameScheduler()
+                         ->GetAgentGroupScheduler()
+                         ->DefaultTaskRunner();
   if (new_area) {
     remote_area_.Bind(std::move(new_area), task_runner);
   } else if (storage_namespace_) {
     storage_namespace_->BindStorageArea(
-        *local_dom_window,
+        storage_key_, local_dom_window->GetLocalFrameToken(),
         remote_area_.BindNewPipeAndPassReceiver(task_runner));
   } else {
     return;

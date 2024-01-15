@@ -53,15 +53,15 @@ class CORE_EXPORT DisplayLockUtilities {
     friend void Document::UpdateStyleAndLayoutForRange(
         const Range* range,
         DocumentUpdateReason reason);
-    friend void Document::UpdateStyleAndLayoutTreeForNode(const Node*);
-    friend void Document::UpdateStyleAndLayoutTreeForSubtree(const Node* node);
-    friend void Document::EnsurePaintLocationDataValidForNode(
-        const Node* node,
+    friend void Document::UpdateStyleAndLayoutTreeForElement(
+        const Element* node,
+        DocumentUpdateReason reason);
+    friend void Document::UpdateStyleAndLayoutTreeForSubtree(
+        const Element* node,
         DocumentUpdateReason reason);
     friend void Document::EnsurePaintLocationDataValidForNode(
         const Node* node,
-        DocumentUpdateReason reason,
-        CSSPropertyID property_id);
+        DocumentUpdateReason reason);
     friend VisibleSelection
     FrameSelection::ComputeVisibleSelectionInDOMTreeDeprecated() const;
     friend gfx::RectF Range::BoundingRect() const;
@@ -211,6 +211,8 @@ class CORE_EXPORT DisplayLockUtilities {
   // See: http://bit.ly/2RXULVi, "beforeactivate Event" part.
   static bool ActivateFindInPageMatchRangeIfNeeded(
       const EphemeralRangeInFlatTree& range);
+  static bool NeedsActivationForFindInPage(
+      const EphemeralRangeInFlatTree& range);
 
   // Returns activatable-locked inclusive ancestors of |node|.
   // Note that this function will return an empty list if |node| is inside a
@@ -293,6 +295,8 @@ class CORE_EXPORT DisplayLockUtilities {
   static void ElementLostFocus(Element*);
   static void ElementGainedFocus(Element*);
 
+  // Returns true if the selection changed functions need to be called.
+  static bool NeedsSelectionChangedUpdate(const Document& document);
   static void SelectionChanged(const EphemeralRangeInFlatTree& old_selection,
                                const EphemeralRangeInFlatTree& new_selection);
   static void SelectionRemovedFromDocument(Document& document);
@@ -323,6 +327,9 @@ class CORE_EXPORT DisplayLockUtilities {
   static bool IsPotentialStyleRecalcRoot(const Node& node);
 
  private:
+  static bool IsDisplayLockedPreventingPaintUnmemoized(const Node& node,
+                                                       bool inclusive_check);
+
   // This is a helper function for ShouldIgnoreNodeDueToDisplayLock() when the
   // activation reason is kAccessibility. Note that it's private because it
   // assumes certain conditions (specifically the presence of `memoizer_`, which

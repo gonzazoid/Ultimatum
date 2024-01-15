@@ -66,11 +66,6 @@ chrome.browserAction.onClicked.addListener(function(tab) {
   cachedUrl = tab.url;
   chrome.tabs.executeScript({code: injectIframe}, callbackPass());
   assertTrue(canXhr(tab.url));
-
-  chrome.automation.getTree(callbackPass(function(rootNode) {
-    assertFalse(rootNode == undefined);
-    assertEq(RoleType.ROOT_WEB_AREA, rootNode.role);
-  }));
 });
 
 var navigationCount = 0;
@@ -87,7 +82,7 @@ chrome.webNavigation.onCompleted.addListener(function(details) {
 
   if (expectHasAccess) {
     chrome.tabs.executeScript({code: 'true'}, callbackPass());
-    chrome.automation.getTree(callbackPass());
+    chrome.automation.getDesktop(callbackPass());
     assertTrue(canXhr(details.url));
     return;
   }
@@ -99,8 +94,8 @@ chrome.webNavigation.onCompleted.addListener(function(details) {
           'Extension manifest must request permission to access the ' +
           'respective host.'));
 
-  chrome.automation.getTree(callbackFail(
-      'Failed request of automation on a page'));
+  chrome.automation.getDesktop(
+      callbackFail('Failed request of automation on a page'));
 
   assertFalse(canXhr(details.url));
 });

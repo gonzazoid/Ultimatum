@@ -12,10 +12,7 @@ import static org.chromium.chrome.browser.ui.autofill.OtpVerificationDialogPrope
 import static org.chromium.chrome.browser.ui.autofill.OtpVerificationDialogProperties.SHOW_PROGRESS_BAR_OVERLAY;
 import static org.chromium.chrome.browser.ui.autofill.OtpVerificationDialogProperties.VIEW_DELEGATE;
 
-import android.os.Build.VERSION_CODES;
 import android.os.Handler;
-
-import androidx.annotation.RequiresApi;
 
 import org.chromium.chrome.browser.ui.autofill.OtpVerificationDialogCoordinator.Delegate;
 import org.chromium.ui.modaldialog.DialogDismissalCause;
@@ -32,8 +29,10 @@ class OtpVerificationDialogMediator
     private Delegate mDelegate;
     private PropertyModel mOtpVerificationDialogModel;
 
-    OtpVerificationDialogMediator(ModalDialogManager modalDialogManager,
-            PropertyModel.Builder dialogModelBuilder, Delegate delegate) {
+    OtpVerificationDialogMediator(
+            ModalDialogManager modalDialogManager,
+            PropertyModel.Builder dialogModelBuilder,
+            Delegate delegate) {
         mModalDialogManager = modalDialogManager;
         mModalDialogModel = dialogModelBuilder.with(ModalDialogProperties.CONTROLLER, this).build();
         mDelegate = delegate;
@@ -44,7 +43,6 @@ class OtpVerificationDialogMediator
         mDelegate.onDialogDismissed();
     }
 
-    @RequiresApi(api = VERSION_CODES.N)
     @Override
     public void onClick(PropertyModel model, int buttonType) {
         switch (buttonType) {
@@ -64,16 +62,15 @@ class OtpVerificationDialogMediator
         }
     }
 
-    @RequiresApi(api = VERSION_CODES.N)
     @Override
     public void onTextChanged(CharSequence s) {
-        mModalDialogModel.set(ModalDialogProperties.POSITIVE_BUTTON_DISABLED,
+        mModalDialogModel.set(
+                ModalDialogProperties.POSITIVE_BUTTON_DISABLED,
                 s.length() != mOtpVerificationDialogModel.get(OTP_LENGTH));
         mOtpVerificationDialogModel.set(OTP_ERROR_MESSAGE, Optional.empty());
         mOtpVerificationDialogModel.set(EDIT_TEXT, Optional.of(s));
     }
 
-    @RequiresApi(api = VERSION_CODES.N)
     @Override
     public void onResendLinkClicked() {
         clearEditText();
@@ -97,7 +94,6 @@ class OtpVerificationDialogMediator
     }
 
     /** Clear the text in the Edit Text field. */
-    @RequiresApi(api = VERSION_CODES.N)
     void clearEditText() {
         mOtpVerificationDialogModel.set(EDIT_TEXT, Optional.empty());
     }
@@ -112,7 +108,6 @@ class OtpVerificationDialogMediator
     }
 
     /** Show an error message for the submitted otp. */
-    @RequiresApi(api = VERSION_CODES.N)
     void showOtpErrorMessage(Optional<String> errorMessage) {
         mOtpVerificationDialogModel.set(SHOW_PROGRESS_BAR_OVERLAY, false);
         mOtpVerificationDialogModel.set(OTP_ERROR_MESSAGE, errorMessage);
@@ -128,8 +123,9 @@ class OtpVerificationDialogMediator
      */
     void showConfirmationAndDismissDialog(String confirmationMessage) {
         mOtpVerificationDialogModel.set(SHOW_CONFIRMATION, confirmationMessage);
-        new Handler().postDelayed(
-                this::dismissDialog, DELAY_BETWEEN_CONFIRMATION_SHOWN_AND_DISMISSAL_MS);
+        new Handler()
+                .postDelayed(
+                        this::dismissDialog, DELAY_BETWEEN_CONFIRMATION_SHOWN_AND_DISMISSAL_MS);
     }
 
     void onNewOtpRequested() {

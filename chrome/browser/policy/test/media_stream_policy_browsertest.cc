@@ -71,9 +71,9 @@ class MediaStreamDevicesControllerBrowserTest
     int render_frame_id = web_contents->GetPrimaryMainFrame()->GetRoutingID();
     return content::MediaStreamRequest(
         render_process_id, render_frame_id, 0,
-        request_url_.DeprecatedGetOriginAsURL(), false,
-        blink::MEDIA_DEVICE_ACCESS, std::string(), std::string(),
-        audio_request_type, video_request_type, /*disable_local_echo=*/false,
+        url::Origin::Create(request_url_), false, blink::MEDIA_DEVICE_ACCESS,
+        std::string(), std::string(), audio_request_type, video_request_type,
+        /*disable_local_echo=*/false,
         /*request_pan_tilt_zoom_permission=*/false);
   }
 
@@ -92,7 +92,7 @@ class MediaStreamDevicesControllerBrowserTest
     if (allowlist_policy) {
       // Add an entry to the allowlist that allows the specified URL regardless
       // of the setting of kAudioCapturedAllowed.
-      base::Value list(base::Value::Type::LIST);
+      base::Value::List list;
       if (allow_rule) {
         list.Append(allow_rule);
         request_url_allowed_via_allowlist_ = true;
@@ -104,7 +104,7 @@ class MediaStreamDevicesControllerBrowserTest
         request_url_allowed_via_allowlist_ = false;
       }
       policies->Set(allowlist_policy, POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
-                    POLICY_SOURCE_CLOUD, std::move(list), nullptr);
+                    POLICY_SOURCE_CLOUD, base::Value(std::move(list)), nullptr);
     }
   }
 
@@ -118,8 +118,8 @@ class MediaStreamDevicesControllerBrowserTest
       const blink::mojom::StreamDevices& devices =
           *stream_devices_set.stream_devices[0];
       if (policy_value_ || request_url_allowed_via_allowlist_) {
-        ASSERT_EQ(1, devices.audio_device.has_value() +
-                         devices.video_device.has_value());
+        ASSERT_NE(devices.audio_device.has_value(),
+                  devices.video_device.has_value());
         if (devices.audio_device.has_value()) {
           ASSERT_EQ("fake_dev", devices.audio_device.value().id);
         } else if (devices.video_device.has_value()) {

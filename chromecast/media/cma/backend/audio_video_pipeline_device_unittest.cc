@@ -8,10 +8,10 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/memory_mapped_file.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
@@ -21,7 +21,6 @@
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_checker.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chromecast/base/task_runner_impl.h"
 #if defined(ENABLE_VIDEO_WITH_MIXED_AUDIO)
@@ -90,7 +89,7 @@ VideoConfig DefaultVideoConfig() {
 
 base::FilePath GetTestDataFilePath(const std::string& name) {
   base::FilePath file_path;
-  CHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &file_path));
+  CHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &file_path));
 
   file_path = file_path.Append(FILE_PATH_LITERAL("media"))
                   .Append(FILE_PATH_LITERAL("test"))
@@ -229,6 +228,7 @@ class AudioVideoPipelineDeviceTest : public testing::Test {
 
   void Initialize();
   void Start();
+  void RunUntilIdle();
   void OnEndOfStream();
 
   void SetAudioFeeder(std::unique_ptr<BufferFeeder> audio_feeder) {
@@ -262,6 +262,8 @@ class AudioVideoPipelineDeviceTest : public testing::Test {
   bool ran_playing_playback_checks_;
   bool backwards_pts_change_;
   int64_t last_pts_;
+
+  base::RunLoop loop_{base::RunLoop::Type::kNestableTasksAllowed};
 
   // Current media time.
   base::TimeDelta pause_time_;
@@ -315,7 +317,7 @@ void BufferFeeder::Start() {
   }
   last_pushed_pts_ = std::numeric_limits<int64_t>::min();
   buffers_copy_ = buffers_;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&BufferFeeder::FeedBuffer, base::Unretained(this)));
 }
@@ -433,7 +435,7 @@ void BufferFeeder::OnPushBufferComplete(BufferStatus status) {
   if (feeding_completed_)
     return;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&BufferFeeder::FeedBuffer, base::Unretained(this)));
 }
@@ -723,6 +725,10 @@ void AudioVideoPipelineDeviceTest::ConfigureForFile(
   ASSERT_TRUE(backend_->Initialize());
 }
 
+void AudioVideoPipelineDeviceTest::RunUntilIdle() {
+  loop_.RunUntilIdle();
+}
+
 void AudioVideoPipelineDeviceTest::Start() {
   pause_time_ = base::TimeDelta();
   pause_pattern_idx_ = 0;
@@ -754,9 +760,11 @@ void AudioVideoPipelineDeviceTest::Start() {
               current_pts == std::numeric_limits<int64_t>::min());
   last_pts_ = current_pts;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&AudioVideoPipelineDeviceTest::MonitorLoop,
                                 base::Unretained(this)));
+
+  loop_.Run();
 }
 
 void AudioVideoPipelineDeviceTest::RunStoppedChecks() {
@@ -794,7 +802,7 @@ void AudioVideoPipelineDeviceTest::OnEndOfStream() {
     for (auto& feeder : effects_feeders_)
       feeder->Stop();
 
-    base::RunLoop::QuitCurrentWhenIdleDeprecated();
+    loop_.QuitWhenIdle();
   }
 }
 
@@ -847,7 +855,7 @@ void AudioVideoPipelineDeviceTest::MonitorLoop() {
   // The playback start time will be INT64_MIN until the audio and video are
   // ready for playback, so just defer all the AV sync checks till then.
   if (playback_start_time == INT64_MIN) {
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&AudioVideoPipelineDeviceTest::MonitorLoop,
                        base::Unretained(this)),
@@ -900,7 +908,7 @@ void AudioVideoPipelineDeviceTest::MonitorLoop() {
               << "ms";
 
     // Wait for pause finish
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&AudioVideoPipelineDeviceTest::OnPauseCompleted,
                        base::Unretained(this)),
@@ -909,7 +917,7 @@ void AudioVideoPipelineDeviceTest::MonitorLoop() {
   }
 
   // Check state again in a little while
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&AudioVideoPipelineDeviceTest::MonitorLoop,
                      base::Unretained(this)),
@@ -970,54 +978,50 @@ void AudioVideoPipelineDeviceTest::OnPauseCompleted() {
 
 void AudioVideoPipelineDeviceTest::TestBackendStates() {
   ASSERT_TRUE(backend()->Initialize());
-  base::RunLoop().RunUntilIdle();
+  RunUntilIdle();
 
   RunStoppedChecks();
-  base::RunLoop().RunUntilIdle();
+  RunUntilIdle();
 
   const int64_t start_pts = 222;
   ASSERT_TRUE(backend()->Start(start_pts));
-  base::RunLoop().RunUntilIdle();
+  RunUntilIdle();
   RunPlaybackChecks();
 
   ASSERT_TRUE(backend()->Pause());
-  base::RunLoop().RunUntilIdle();
+  RunUntilIdle();
   RunPlaybackChecks();
 
   ASSERT_TRUE(backend()->Resume());
-  base::RunLoop().RunUntilIdle();
+  RunUntilIdle();
   RunPlaybackChecks();
 
   backend()->Stop();
-  base::RunLoop().RunUntilIdle();
+  RunUntilIdle();
 
   RunStoppedChecks();
-  base::RunLoop().RunUntilIdle();
+  RunUntilIdle();
 }
 
 void AudioVideoPipelineDeviceTest::StartImmediateEosTest() {
   RunStoppedChecks();
 
   ASSERT_TRUE(backend()->Initialize());
-  base::RunLoop().RunUntilIdle();
-
-  Start();
+  RunUntilIdle();
 }
 
 void AudioVideoPipelineDeviceTest::EndImmediateEosTest() {
   RunPlaybackChecks();
 
   ASSERT_TRUE(backend_->Pause());
-  base::RunLoop().RunUntilIdle();
+  RunUntilIdle();
 
   RunPlaybackChecks();
 
   backend_->Stop();
-  base::RunLoop().RunUntilIdle();
+  RunUntilIdle();
 
   RunStoppedChecks();
-
-  base::RunLoop::QuitCurrentWhenIdleDeprecated();
 }
 
 TEST_F(AudioVideoPipelineDeviceTest, PcmPlayback) {
@@ -1025,7 +1029,6 @@ TEST_F(AudioVideoPipelineDeviceTest, PcmPlayback) {
   ConfigureForAudioOnly("bear_pcm.wav");
   PauseBeforeEos();
   Start();
-  base::RunLoop().Run();
 }
 
 TEST_F(AudioVideoPipelineDeviceTest, Mp3Playback) {
@@ -1033,7 +1036,6 @@ TEST_F(AudioVideoPipelineDeviceTest, Mp3Playback) {
   ConfigureForAudioOnly("sfx.mp3");
   PauseBeforeEos();
   Start();
-  base::RunLoop().Run();
 }
 
 TEST_F(AudioVideoPipelineDeviceTest, AacPlayback) {
@@ -1041,14 +1043,12 @@ TEST_F(AudioVideoPipelineDeviceTest, AacPlayback) {
   ConfigureForAudioOnly("sfx.m4a");
   PauseBeforeEos();
   Start();
-  base::RunLoop().Run();
 }
 
 TEST_F(AudioVideoPipelineDeviceTest, VorbisPlayback) {
   set_sync_type(MediaPipelineDeviceParams::kModeIgnorePts);
   ConfigureForAudioOnly("sfx.ogg");
   Start();
-  base::RunLoop().Run();
 }
 
 // TODO(kmackay) FFmpegDemuxForTest can't handle AC3 or EAC3.
@@ -1058,7 +1058,6 @@ TEST_F(AudioVideoPipelineDeviceTest, H264Playback) {
   ConfigureForVideoOnly("bear.h264", true /* raw_h264 */);
   PauseBeforeEos();
   Start();
-  base::RunLoop().Run();
 }
 
 TEST_F(AudioVideoPipelineDeviceTest, WebmPlaybackWithPause) {
@@ -1071,7 +1070,6 @@ TEST_F(AudioVideoPipelineDeviceTest, WebmPlaybackWithPause) {
 
   ConfigureForVideoOnly("bear-640x360.webm", false /* raw_h264 */);
   Start();
-  base::RunLoop().Run();
 }
 
 TEST_F(AudioVideoPipelineDeviceTest, Vp8Playback) {
@@ -1081,7 +1079,6 @@ TEST_F(AudioVideoPipelineDeviceTest, Vp8Playback) {
   set_sync_type(MediaPipelineDeviceParams::kModeSyncPts);
   ConfigureForVideoOnly("bear-vp8a.webm", false /* raw_h264 */);
   Start();
-  base::RunLoop().Run();
 }
 
 TEST_F(AudioVideoPipelineDeviceTest, WebmPlayback) {
@@ -1092,7 +1089,6 @@ TEST_F(AudioVideoPipelineDeviceTest, WebmPlayback) {
   ConfigureForFile("bear-640x360.webm");
   PauseBeforeEos();
   Start();
-  base::RunLoop().Run();
 }
 
 // TODO(kmackay) FFmpegDemuxForTest can't handle HEVC or VP9.
@@ -1160,7 +1156,6 @@ TEST_F(AudioVideoPipelineDeviceTest, AudioImmediateEos) {
 
   ASSERT_TRUE(audio_decoder->SetConfig(DefaultAudioConfig()));
   StartImmediateEosTest();
-  base::RunLoop().RunUntilIdle();
 }
 
 TEST_F(AudioVideoPipelineDeviceTest, VideoImmediateEos) {
@@ -1185,7 +1180,6 @@ TEST_F(AudioVideoPipelineDeviceTest, VideoImmediateEos) {
   ASSERT_TRUE(audio_decoder->SetConfig(DefaultAudioConfig()));
   ASSERT_TRUE(video_decoder->SetConfig(DefaultVideoConfig()));
   StartImmediateEosTest();
-  base::RunLoop().RunUntilIdle();
 }
 
 TEST_F(AudioVideoPipelineDeviceTest, Mp3Playback_WithEffectsStreams) {
@@ -1194,7 +1188,6 @@ TEST_F(AudioVideoPipelineDeviceTest, Mp3Playback_WithEffectsStreams) {
   PauseBeforeEos();
   AddEffectsStreams();
   Start();
-  base::RunLoop().Run();
 }
 
 TEST_F(AudioVideoPipelineDeviceTest, AacPlayback_WithEffectsStreams) {
@@ -1203,7 +1196,6 @@ TEST_F(AudioVideoPipelineDeviceTest, AacPlayback_WithEffectsStreams) {
   PauseBeforeEos();
   AddEffectsStreams();
   Start();
-  base::RunLoop().Run();
 }
 
 TEST_F(AudioVideoPipelineDeviceTest, VorbisPlayback_WithEffectsStreams) {
@@ -1211,7 +1203,6 @@ TEST_F(AudioVideoPipelineDeviceTest, VorbisPlayback_WithEffectsStreams) {
   ConfigureForAudioOnly("sfx.ogg");
   AddEffectsStreams();
   Start();
-  base::RunLoop().Run();
 }
 
 // TODO(kmackay) FFmpegDemuxForTest can't handle AC3 or EAC3.
@@ -1222,7 +1213,6 @@ TEST_F(AudioVideoPipelineDeviceTest, H264Playback_WithEffectsStreams) {
   PauseBeforeEos();
   AddEffectsStreams();
   Start();
-  base::RunLoop().Run();
 }
 
 TEST_F(AudioVideoPipelineDeviceTest, WebmPlaybackWithPause_WithEffectsStreams) {
@@ -1236,7 +1226,6 @@ TEST_F(AudioVideoPipelineDeviceTest, WebmPlaybackWithPause_WithEffectsStreams) {
   ConfigureForVideoOnly("bear-640x360.webm", false /* raw_h264 */);
   AddEffectsStreams();
   Start();
-  base::RunLoop().Run();
 }
 
 TEST_F(AudioVideoPipelineDeviceTest, Vp8Playback_WithEffectsStreams) {
@@ -1247,7 +1236,6 @@ TEST_F(AudioVideoPipelineDeviceTest, Vp8Playback_WithEffectsStreams) {
   ConfigureForVideoOnly("bear-vp8a.webm", false /* raw_h264 */);
   AddEffectsStreams();
   Start();
-  base::RunLoop().Run();
 }
 
 TEST_F(AudioVideoPipelineDeviceTest, WebmPlayback_WithEffectsStreams) {
@@ -1259,14 +1247,12 @@ TEST_F(AudioVideoPipelineDeviceTest, WebmPlayback_WithEffectsStreams) {
   PauseBeforeEos();
   AddEffectsStreams();
   Start();
-  base::RunLoop().Run();
 }
 
 TEST_F(AudioVideoPipelineDeviceTest, Mp4Playback) {
   set_sync_type(MediaPipelineDeviceParams::kModeSyncPts);
   ConfigureForFile("bear.mp4");
   Start();
-  base::RunLoop().Run();
 }
 
 }  // namespace media

@@ -87,12 +87,11 @@ class VisualDebuggerTestBase : public testing::Test {
   int window_x_ = 256;
   int window_y_ = 256;
   std::vector<StaticSource> sources_cache_;
-  std::vector<VizDebuggerInternal::DrawCall> draw_rect_calls_cache_;
+  std::vector<VizDebuggerInternal::DrawCall> draw_calls_cache_;
   std::vector<VizDebuggerInternal::LogCall> log_calls_cache_;
-  std::vector<VizDebuggerInternal::DrawTextCall> draw_text_calls_cache_;
   std::vector<VizDebuggerInternal::Buffer> buffers_;
 };
 }  // namespace viz
 
 #endif  // BUILDFLAG(USE_VIZ_DEBUGGER)
-#endif
+#endif  // COMPONENTS_VIZ_SERVICE_DEBUGGER_VIZ_DEBUGGER_UNITTESTS_VIZ_DEBUGGER_UNITTEST_BASE_H_

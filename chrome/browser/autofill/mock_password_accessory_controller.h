@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_AUTOFILL_MOCK_PASSWORD_ACCESSORY_CONTROLLER_H_
 
 #include <map>
+#include <optional>
 
 #include "chrome/browser/password_manager/android/password_accessory_controller.h"
 #include "components/autofill/core/browser/ui/accessory_sheet_data.h"
@@ -40,16 +41,23 @@ class MockPasswordAccessoryController : public PasswordAccessoryController {
               (override));
   MOCK_METHOD(void, DidNavigateMainFrame, ());
   MOCK_METHOD(void,
+              UpdateCredManReentryUi,
+              (autofill::mojom::FocusedFieldType));
+  MOCK_METHOD(void,
               RegisterFillingSourceObserver,
               (FillingSourceObserver),
               (override));
-  MOCK_METHOD(absl::optional<autofill::AccessorySheetData>,
+  MOCK_METHOD(std::optional<autofill::AccessorySheetData>,
               GetSheetData,
               (),
               (const, override));
   MOCK_METHOD(void,
               OnFillingTriggered,
               (autofill::FieldGlobalId, const autofill::AccessorySheetField&),
+              (override));
+  MOCK_METHOD((void),
+              OnPasskeySelected,
+              (const std::vector<uint8_t>& credential_id),
               (override));
   MOCK_METHOD(void,
               OnOptionSelected,
@@ -59,6 +67,13 @@ class MockPasswordAccessoryController : public PasswordAccessoryController {
               OnToggleChanged,
               (autofill::AccessoryAction toggled_action, bool enabled),
               (override));
+
+  base::WeakPtr<PasswordAccessoryController> AsWeakPtr() override {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
+ private:
+  base::WeakPtrFactory<MockPasswordAccessoryController> weak_ptr_factory_{this};
 };
 
 #endif  // CHROME_BROWSER_AUTOFILL_MOCK_PASSWORD_ACCESSORY_CONTROLLER_H_

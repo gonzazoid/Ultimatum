@@ -22,10 +22,12 @@
 #include "cc/test/pixel_test_utils.h"
 #include "cc/test/skia_common.h"
 #include "cc/test/test_skcanvas.h"
+#include "skia/ext/font_utils.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "third_party/skia/include/core/SkFont.h"
 #include "third_party/skia/include/core/SkSurface.h"
 #include "third_party/skia/include/core/SkTextBlob.h"
 #include "ui/gfx/geometry/rect.h"
@@ -125,7 +127,7 @@ TEST_F(DisplayItemListTest, TraceEmptyVisualRect) {
   EXPECT_TRACED_RECT(0, 0, 0, 0, visual_rect);
   name = item_dict->FindString("name");
   ASSERT_NE(nullptr, name);
-  EXPECT_EQ("DrawRect", *name);
+  EXPECT_EQ("DrawRectOp", *name);
 
   item_dict = ((*items)[1]).GetIfDict();
   ASSERT_NE(nullptr, item_dict);
@@ -134,7 +136,7 @@ TEST_F(DisplayItemListTest, TraceEmptyVisualRect) {
   EXPECT_TRACED_RECT(8, 9, 10, 10, visual_rect);
   name = item_dict->FindString("name");
   ASSERT_NE(nullptr, name);
-  EXPECT_EQ("DrawRect", *name);
+  EXPECT_EQ("DrawRectOp", *name);
 }
 
 TEST_F(DisplayItemListTest, SingleUnpairedRange) {
@@ -336,7 +338,7 @@ TEST_F(DisplayItemListTest, TransformPairedRange) {
       SkRect::MakeLTRB(0.f + first_offset.x(), 0.f + first_offset.y(),
                        60.f + first_offset.x(), 60.f + first_offset.y()),
       red_paint);
-  expected_canvas.setMatrix(gfx::TransformToFlattenedSkMatrix(transform));
+  expected_canvas.setMatrix(gfx::TransformToSkM44(transform));
   expected_canvas.drawRect(
       SkRect::MakeLTRB(50.f + second_offset.x(), 50.f + second_offset.y(),
                        75.f + second_offset.x(), 75.f + second_offset.y()),
@@ -351,7 +353,8 @@ TEST_F(DisplayItemListTest, FilterPairedRange) {
   unsigned char pixels[4 * 100 * 100] = {0};
   auto list = base::MakeRefCounted<DisplayItemList>();
 
-  sk_sp<SkSurface> source_surface = SkSurface::MakeRasterN32Premul(50, 50);
+  sk_sp<SkSurface> source_surface =
+      SkSurfaces::Raster(SkImageInfo::MakeN32Premul(50, 50));
   SkCanvas* source_canvas = source_surface->getCanvas();
   source_canvas->clear(SkColorSetRGB(128, 128, 128));
   PaintImage source_image = PaintImageBuilder::WithDefault()
@@ -383,12 +386,11 @@ TEST_F(DisplayItemListTest, FilterPairedRange) {
     list->push<TranslateOp>(filter_bounds.x(), filter_bounds.y());
 
     PaintFlags flags;
-    flags.setImageFilter(
-        RenderSurfaceFilters::BuildImageFilter(filters, filter_bounds.size()));
+    flags.setImageFilter(RenderSurfaceFilters::BuildImageFilter(filters));
 
     SkRect layer_bounds = gfx::RectFToSkRect(filter_bounds);
     layer_bounds.offset(-filter_bounds.x(), -filter_bounds.y());
-    list->push<SaveLayerOp>(&layer_bounds, &flags);
+    list->push<SaveLayerOp>(layer_bounds, flags);
     list->push<TranslateOp>(-filter_bounds.x(), -filter_bounds.y());
 
     list->EndPaintOfPairedBegin();
@@ -530,7 +532,7 @@ TEST_F(DisplayItemListTest, AsValueWithOps) {
     PaintFlags red_paint;
     red_paint.setColor(SK_ColorRED);
 
-    list->push<SaveLayerOp>(nullptr, &red_paint);
+    list->push<SaveLayerOp>(red_paint);
     list->push<TranslateOp>(static_cast<float>(offset.x()),
                             static_cast<float>(offset.y()));
     list->push<DrawRectOp>(SkRect::MakeWH(4, 4), red_paint);
@@ -568,9 +570,9 @@ TEST_F(DisplayItemListTest, AsValueWithOps) {
       ASSERT_NE(nullptr, items);
       ASSERT_EQ(7u, items->size());
 
-      const char* expected_names[] = {"Save",      "Concat",   "SaveLayer",
-                                      "Translate", "DrawRect", "Restore",
-                                      "Restore"};
+      const char* expected_names[] = {
+          "SaveOp",     "ConcatOp",  "SaveLayerOp", "TranslateOp",
+          "DrawRectOp", "RestoreOp", "RestoreOp"};
       bool expected_has_skp[] = {false, true, true, true, true, false, false};
 
       for (int i = 0; i < 7; ++i) {
@@ -1139,7 +1141,7 @@ TEST_F(DisplayItemListTest, TotalOpCount) {
   list->StartPaint();
   list->push<SaveOp>();
   list->push<TranslateOp>(10.f, 20.f);
-  list->push<DrawRecordOp>(sub_list->ReleaseAsRecord());
+  list->push<DrawRecordOp>(sub_list->FinalizeAndReleaseAsRecord());
   list->push<RestoreOp>();
   list->EndPaintOfUnpaired(gfx::Rect());
   EXPECT_EQ(8u, list->TotalOpCount());
@@ -1149,11 +1151,12 @@ TEST_F(DisplayItemListTest, AreaOfDrawText) {
   auto list = base::MakeRefCounted<DisplayItemList>();
   auto sub_list = base::MakeRefCounted<DisplayItemList>();
 
-  auto text_blob1 = SkTextBlob::MakeFromString("ABCD", SkFont());
+  SkFont font = skia::DefaultFont();
+  auto text_blob1 = SkTextBlob::MakeFromString("ABCD", font);
   gfx::Size text_blob1_size(ceilf(text_blob1->bounds().width()),
                             ceilf(text_blob1->bounds().height()));
   auto text_blob1_area = text_blob1_size.width() * text_blob1_size.height();
-  auto text_blob2 = SkTextBlob::MakeFromString("EFG", SkFont());
+  auto text_blob2 = SkTextBlob::MakeFromString("EFG", font);
   gfx::Size text_blob2_size(ceilf(text_blob2->bounds().width()),
                             ceilf(text_blob2->bounds().height()));
   auto text_blob2_area = text_blob2_size.width() * text_blob2_size.height();
@@ -1161,7 +1164,7 @@ TEST_F(DisplayItemListTest, AreaOfDrawText) {
   sub_list->StartPaint();
   sub_list->push<DrawTextBlobOp>(text_blob1, 0.0f, 0.0f, PaintFlags());
   sub_list->EndPaintOfUnpaired(gfx::Rect());
-  auto record = sub_list->ReleaseAsRecord();
+  auto record = sub_list->FinalizeAndReleaseAsRecord();
 
   list->StartPaint();
   list->push<SaveOp>();

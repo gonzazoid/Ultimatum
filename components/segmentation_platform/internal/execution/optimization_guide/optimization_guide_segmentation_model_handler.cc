@@ -7,6 +7,7 @@
 #include <memory>
 #include <vector>
 
+#include "base/task/sequenced_task_runner.h"
 #include "components/optimization_guide/core/model_executor.h"
 #include "components/optimization_guide/proto/common_types.pb.h"
 #include "components/optimization_guide/proto/models.pb.h"
@@ -24,7 +25,8 @@ OptimizationGuideSegmentationModelHandler::
         optimization_guide::proto::OptimizationTarget segment_id,
         const ModelUpdatedCallback& model_updated_callback,
         absl::optional<optimization_guide::proto::Any>&& model_metadata)
-    : optimization_guide::ModelHandler<float, const std::vector<float>&>(
+    : optimization_guide::ModelHandler<ModelProvider::Response,
+                                       const ModelProvider::Request&>(
           model_provider,
           background_task_runner,
           std::make_unique<SegmentationModelExecutor>(),
@@ -41,11 +43,30 @@ OptimizationGuideSegmentationModelHandler::
     ~OptimizationGuideSegmentationModelHandler() = default;
 
 void OptimizationGuideSegmentationModelHandler::OnModelUpdated(
-    optimization_guide::proto::OptimizationTarget segment_id,
-    const optimization_guide::ModelInfo& model_info) {
+    optimization_guide::proto::OptimizationTarget optimization_target,
+    base::optional_ref<const optimization_guide::ModelInfo> model_info) {
   // First invoke parent to update internal status.
   optimization_guide::ModelHandler<
-      float, const std::vector<float>&>::OnModelUpdated(segment_id, model_info);
+      ModelProvider::Response,
+      const ModelProvider::Request&>::OnModelUpdated(optimization_target,
+                                                     model_info);
+  proto::SegmentId segment_id =
+      OptimizationTargetToSegmentId(optimization_target);
+
+  // This can happen if a server model stops being served. We'll receive one
+  // last update from optimization guide after it deleted its local data so we
+  // should do the same.
+  if (!model_info.has_value()) {
+    // The parent class should reset the model availability if it receives no
+    // metadata.
+    DCHECK(!ModelAvailable());
+    stats::RecordModelAvailability(
+        segment_id, stats::SegmentationModelAvailability::kNoModelAvailable);
+
+    model_updated_callback_.Run(segment_id, absl::nullopt,
+                                /*model_version = */ 0);
+    return;
+  }
   // The parent class should always set the model availability to true after
   // having received an updated model.
   DCHECK(ModelAvailable());
@@ -55,25 +76,22 @@ void OptimizationGuideSegmentationModelHandler::OnModelUpdated(
   absl::optional<proto::SegmentationModelMetadata> segmentation_model_metadata =
       ParsedSupportedFeaturesForLoadedModel<proto::SegmentationModelMetadata>();
   stats::RecordModelDeliveryHasMetadata(
-      OptimizationTargetToSegmentId(segment_id),
-      segmentation_model_metadata.has_value());
+      segment_id, segmentation_model_metadata.has_value());
   if (!segmentation_model_metadata.has_value()) {
     // This is not expected to happen, since the optimization guide server is
     // expected to pass this along. Either something failed horribly on the way,
     // we failed to read the metadata, or the server side configuration is
     // wrong.
     stats::RecordModelAvailability(
-        OptimizationTargetToSegmentId(segment_id),
-        stats::SegmentationModelAvailability::kMetadataInvalid);
+        segment_id, stats::SegmentationModelAvailability::kMetadataInvalid);
     return;
   }
   stats::RecordModelAvailability(
-      OptimizationTargetToSegmentId(segment_id),
-      stats::SegmentationModelAvailability::kModelAvailable);
+      segment_id, stats::SegmentationModelAvailability::kModelAvailable);
 
-  model_updated_callback_.Run(OptimizationTargetToSegmentId(segment_id),
+  model_updated_callback_.Run(segment_id,
                               std::move(*segmentation_model_metadata),
-                              model_info.GetVersion());
+                              model_info->GetVersion());
 }
 
 }  // namespace segmentation_platform

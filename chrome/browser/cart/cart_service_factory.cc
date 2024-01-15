@@ -6,11 +6,24 @@
 
 #include "chrome/browser/cart/cart_service.h"
 #include "chrome/browser/history/history_service_factory.h"
+#include "chrome/browser/optimization_guide/optimization_guide_keyed_service_factory.h"
 #include "content/public/browser/storage_partition.h"
+
+namespace {
+
+std::unique_ptr<KeyedService> BuildCartService(
+    content::BrowserContext* browser_context) {
+  Profile* profile = Profile::FromBrowserContext(browser_context);
+  DCHECK(!profile->IsOffTheRecord());
+  return std::make_unique<CartService>(profile);
+}
+
+}  // namespace
 
 // static
 CartServiceFactory* CartServiceFactory::GetInstance() {
-  return base::Singleton<CartServiceFactory>::get();
+  static base::NoDestructor<CartServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -23,16 +36,29 @@ CartService* CartServiceFactory::GetForProfile(Profile* profile) {
       GetInstance()->GetServiceForBrowserContext(profile, true));
 }
 
+// static
+BrowserContextKeyedServiceFactory::TestingFactory
+CartServiceFactory::GetDefaultFactory() {
+  return base::BindRepeating(&BuildCartService);
+}
+
 CartServiceFactory::CartServiceFactory()
-    : ProfileKeyedServiceFactory("ChromeCartService") {
+    : ProfileKeyedServiceFactory(
+          "ChromeCartService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(HistoryServiceFactory::GetInstance());
+  DependsOn(OptimizationGuideKeyedServiceFactory::GetInstance());
 }
 
 CartServiceFactory::~CartServiceFactory() = default;
 
-KeyedService* CartServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+CartServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  DCHECK(!context->IsOffTheRecord());
-
-  return new CartService(Profile::FromBrowserContext(context));
+  return BuildCartService(context);
 }

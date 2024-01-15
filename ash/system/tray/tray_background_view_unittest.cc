@@ -4,23 +4,25 @@
 
 #include "ash/system/tray/tray_background_view.h"
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/root_window_controller.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shelf/shelf.h"
 #include "ash/shelf/shelf_layout_manager.h"
 #include "ash/shell.h"
 #include "ash/system/accessibility/dictation_button_tray.h"
-#include "ash/system/status_area_widget_delegate.h"
 #include "ash/system/status_area_widget_test_helper.h"
+#include "ash/system/tray/tray_bubble_view.h"
 #include "ash/system/tray/tray_bubble_wrapper.h"
+#include "ash/system/tray/tray_utils.h"
 #include "ash/test/ash_test_base.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
-#include "components/user_manager/user_manager.h"
 #include "ui/base/models/simple_menu_model.h"
+#include "ui/compositor/layer_animator.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
-#include "ui/compositor/scoped_layer_animation_settings.h"
+#include "ui/compositor/test/layer_animation_stopped_waiter.h"
 
 namespace ash {
 
@@ -29,7 +31,8 @@ class TestTrayBackgroundView : public TrayBackgroundView,
  public:
   explicit TestTrayBackgroundView(Shelf* shelf)
       : TrayBackgroundView(shelf,
-                           TrayBackgroundViewCatalogName::kTestCatalogName) {}
+                           TrayBackgroundViewCatalogName::kTestCatalogName,
+                           RoundedCornerBehavior::kAllRounded) {}
 
   TestTrayBackgroundView(const TestTrayBackgroundView&) = delete;
   TestTrayBackgroundView& operator=(const TestTrayBackgroundView&) = delete;
@@ -38,25 +41,48 @@ class TestTrayBackgroundView : public TrayBackgroundView,
 
   // TrayBackgroundView:
   void ClickedOutsideBubble() override {}
+  void UpdateTrayItemColor(bool is_active) override {}
   std::u16string GetAccessibleNameForTray() override {
     return u"TestTrayBackgroundView";
   }
 
   void HandleLocaleChange() override {}
 
-  void HideBubbleWithView(const TrayBubbleView* bubble_view) override {}
+  void HideBubbleWithView(const TrayBubbleView* bubble_view) override {
+    if (bubble_view == bubble_->GetBubbleView())
+      CloseBubble();
+  }
+
+  void HideBubble(const TrayBubbleView* bubble_view) override {
+    if (bubble_view == bubble_->GetBubbleView()) {
+      CloseBubble();
+    }
+  }
+
   std::unique_ptr<ui::SimpleMenuModel> CreateContextMenuModel() override {
     return provide_menu_model_ ? std::make_unique<ui::SimpleMenuModel>(this)
                                : nullptr;
   }
 
-  void OnAnyBubbleVisibilityChanged(views::Widget* bubble_widget,
-                                    bool visible) override {
-    on_bubble_visibility_change_captured_widget_ = bubble_widget;
-    on_bubble_visibility_change_captured_visibility_ = visible;
+  void ShowBubble() override {
+    show_bubble_called_ = true;
+
+    auto bubble_view = std::make_unique<TrayBubbleView>(
+        CreateInitParamsForTrayBubble(/*tray=*/this));
+    bubble_view->SetCanActivate(true);
+    bubble_ = std::make_unique<TrayBubbleWrapper>(this,
+                                                  /*event_handling=*/false);
+    bubble_->ShowBubble(std::move(bubble_view));
+    bubble_->GetBubbleWidget()->Activate();
+    bubble_->bubble_view()->SetVisible(true);
+
+    SetIsActive(true);
   }
 
-  void ShowBubble() override { show_bubble_called_ = true; }
+  void CloseBubble() override {
+    bubble_.reset();
+    SetIsActive(false);
+  }
 
   // ui::SimpleMenuModel::Delegate:
   void ExecuteCommand(int command_id, int event_flags) override {}
@@ -69,17 +95,35 @@ class TestTrayBackgroundView : public TrayBackgroundView,
     SetContextMenuEnabled(should_show_menu);
   }
 
+  TrayBubbleWrapper* bubble() { return bubble_.get(); }
+
   bool show_bubble_called() const { return show_bubble_called_; }
 
-  views::Widget* on_bubble_visibility_change_captured_widget_ = nullptr;
-  bool on_bubble_visibility_change_captured_visibility_ = false;
-
  private:
+  std::unique_ptr<TrayBubbleWrapper> bubble_;
   bool provide_menu_model_ = false;
   bool show_bubble_called_ = false;
 };
 
-class TrayBackgroundViewTest : public AshTestBase {
+// A `TrayBackgroundView` whose bubble does not automatically close when the
+// lock state changes.
+class PersistentBubbleTestTrayBackgroundView : public TestTrayBackgroundView {
+ public:
+  explicit PersistentBubbleTestTrayBackgroundView(Shelf* shelf)
+      : TestTrayBackgroundView(shelf) {
+    set_should_close_bubble_on_lock_state_change(false);
+  }
+
+  PersistentBubbleTestTrayBackgroundView(
+      const PersistentBubbleTestTrayBackgroundView&) = delete;
+  PersistentBubbleTestTrayBackgroundView& operator=(
+      const PersistentBubbleTestTrayBackgroundView&) = delete;
+
+  ~PersistentBubbleTestTrayBackgroundView() override = default;
+};
+
+class TrayBackgroundViewTest : public AshTestBase,
+                               public ui::LayerAnimationObserver {
  public:
   TrayBackgroundViewTest()
       : AshTestBase(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
@@ -104,15 +148,39 @@ class TrayBackgroundViewTest : public AshTestBase {
             std::unique_ptr<TrayBackgroundView>(
                 new TestTrayBackgroundView(GetPrimaryShelf()))));
 
+    // Same as above but for a `PersistentBubbleTestTrayBackgroundView`.
+    std::unique_ptr<PersistentBubbleTestTrayBackgroundView> tmp =
+        std::make_unique<PersistentBubbleTestTrayBackgroundView>(
+            GetPrimaryShelf());
+    persistent_bubble_test_tray_background_view_ =
+        static_cast<PersistentBubbleTestTrayBackgroundView*>(
+            StatusAreaWidgetTestHelper::GetStatusAreaWidget()->AddTrayButton(
+                std::unique_ptr<TrayBackgroundView>(std::move(tmp))));
+
     // Set Dictation button to be visible.
-    AccessibilityControllerImpl* controller =
+    AccessibilityController* controller =
         Shell::Get()->accessibility_controller();
     controller->dictation().SetEnabled(true);
   }
 
+  // ui::LayerAnimationObserver:
+  void OnLayerAnimationScheduled(
+      ui::LayerAnimationSequence* sequence) override {
+    num_animations_scheduled_++;
+  }
+  void OnLayerAnimationEnded(ui::LayerAnimationSequence* sequence) override {}
+  void OnLayerAnimationAborted(ui::LayerAnimationSequence* sequence) override {}
+
   TestTrayBackgroundView* test_tray_background_view() const {
     return test_tray_background_view_;
   }
+
+  PersistentBubbleTestTrayBackgroundView*
+  persistent_bubble_test_tray_background_view() const {
+    return persistent_bubble_test_tray_background_view_;
+  }
+
+  int num_animations_scheduled() const { return num_animations_scheduled_; }
 
  protected:
   // Here we use dictation tray for testing secondary screen.
@@ -135,12 +203,22 @@ class TrayBackgroundViewTest : public AshTestBase {
   }
 
  private:
-  TestTrayBackgroundView* test_tray_background_view_ = nullptr;
+  raw_ptr<TestTrayBackgroundView, DanglingUntriaged>
+      test_tray_background_view_ = nullptr;
+  raw_ptr<PersistentBubbleTestTrayBackgroundView, DanglingUntriaged>
+      persistent_bubble_test_tray_background_view_ = nullptr;
+  int num_animations_scheduled_ = 0;
 };
+
+// Tests that a `TrayBackgroundView` initially starts in a hidden state.
+TEST_F(TrayBackgroundViewTest, InitiallyHidden) {
+  EXPECT_FALSE(test_tray_background_view()->GetVisible());
+  EXPECT_EQ(test_tray_background_view()->layer()->opacity(), 0.0f);
+}
 
 TEST_F(TrayBackgroundViewTest, ShowingAnimationAbortedByHideAnimation) {
   ui::ScopedAnimationDurationScaleMode test_duration_mode(
-      ui::ScopedAnimationDurationScaleMode::NORMAL_DURATION);
+      ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
 
   // Starts showing up animation.
   test_tray_background_view()->SetVisiblePreferred(true);
@@ -170,9 +248,31 @@ TEST_F(TrayBackgroundViewTest, ShowingAnimationAbortedByHideAnimation) {
       test_tray_background_view()->layer()->GetAnimator()->is_animating());
 }
 
+// Tests that a `TrayBackgroundView` doesn't get notified of events during its
+// hide animation.
+TEST_F(TrayBackgroundViewTest, EventsDisabledForHideAnimation) {
+  // Initially show the tray. Note that animations complete immediately in this
+  // part of the test.
+  test_tray_background_view()->SetVisiblePreferred(true);
+
+  // Ensure animations don't complete immediately for the rest of the test.
+  ui::ScopedAnimationDurationScaleMode test_duration_mode(
+      ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
+
+  // Start the tray's hide animation and verify that it can't process events.
+  test_tray_background_view()->SetVisiblePreferred(false);
+  ASSERT_TRUE(test_tray_background_view()->IsDrawn());
+  EXPECT_FALSE(test_tray_background_view()->GetCanProcessEventsWithinSubtree());
+
+  // Interrupt the hide animation with a show animation and verify that the tray
+  // can process events again.
+  test_tray_background_view()->SetVisiblePreferred(true);
+  EXPECT_TRUE(test_tray_background_view()->GetCanProcessEventsWithinSubtree());
+}
+
 TEST_F(TrayBackgroundViewTest, HandleSessionChange) {
   ui::ScopedAnimationDurationScaleMode test_duration_mode(
-      ui::ScopedAnimationDurationScaleMode::NORMAL_DURATION);
+      ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
 
   // Not showing animation after logging in.
   GetSessionControllerClient()->SetSessionState(
@@ -240,45 +340,110 @@ TEST_F(TrayBackgroundViewTest, HandleSessionChange) {
   EXPECT_TRUE(test_tray_background_view()->GetVisible());
 }
 
-// TODO(crbug.com/1314693): Flaky.
-TEST_F(TrayBackgroundViewTest, DISABLED_SecondaryDisplay) {
+// Tests that persistent `TrayBackgroundView` bubbles stay shown across lock
+// state changes.
+TEST_F(TrayBackgroundViewTest, PersistentBubbleShownAcrossLockStateChanges) {
+  // Show the bubble.
+  persistent_bubble_test_tray_background_view()->SetVisiblePreferred(true);
+  persistent_bubble_test_tray_background_view()->ShowBubble();
+  ASSERT_TRUE(persistent_bubble_test_tray_background_view()
+                  ->bubble()
+                  ->bubble_view()
+                  ->IsDrawn());
+
+  // Go to the lock screen.
+  GetSessionControllerClient()->LockScreen();
+
+  // Verify that the bubble is still shown.
+  EXPECT_TRUE(persistent_bubble_test_tray_background_view()
+                  ->bubble()
+                  ->bubble_view()
+                  ->IsDrawn());
+
+  // Unlock the device.
+  GetSessionControllerClient()->UnlockScreen();
+
+  // Verify that the bubble is still shown.
+  EXPECT_TRUE(persistent_bubble_test_tray_background_view()
+                  ->bubble()
+                  ->bubble_view()
+                  ->IsDrawn());
+}
+
+// Tests that non-persistent `TrayBackgroundView` bubbles are closed when the
+// lock state changes.
+TEST_F(TrayBackgroundViewTest, NonPersistentBubbleClosedWhenLockStateChanges) {
+  // Show the bubble.
+  test_tray_background_view()->SetVisiblePreferred(true);
+  test_tray_background_view()->ShowBubble();
+  ASSERT_TRUE(test_tray_background_view()->bubble()->bubble_view()->IsDrawn());
+
+  // Go to the lock screen.
+  GetSessionControllerClient()->LockScreen();
+
+  // Verify that the bubble is closed.
+  EXPECT_FALSE(test_tray_background_view()->bubble());
+
+  // Open the bubble on the lock screen.
+  test_tray_background_view()->ShowBubble();
+  ASSERT_TRUE(test_tray_background_view()->bubble()->bubble_view()->IsDrawn());
+
+  // Unlock the device.
+  GetSessionControllerClient()->UnlockScreen();
+
+  // Verify that the bubble is closed.
+  EXPECT_FALSE(persistent_bubble_test_tray_background_view()->bubble());
+}
+
+TEST_F(TrayBackgroundViewTest, SecondaryDisplay) {
   ui::ScopedAnimationDurationScaleMode test_duration_mode(
-      ui::ScopedAnimationDurationScaleMode::NORMAL_DURATION);
+      ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
 
   // Add secondary screen.
   UpdateDisplay("800x600,800x600");
+  GetPrimaryDictationTray()->layer()->GetAnimator()->AddObserver(this);
+  GetSecondaryDictationTray()->layer()->GetAnimator()->AddObserver(this);
 
-  // Switch the primary and secondary screen.
+  // Switch the primary and secondary screen. This should not cause additional
+  // TrayBackgroundView animations to occur.
   SwapPrimaryDisplay();
-  task_environment()->FastForwardBy(base::Milliseconds(20));
-  EXPECT_FALSE(
-      GetPrimaryDictationTray()->layer()->GetAnimator()->is_animating());
+  task_environment()->RunUntilIdle();
   EXPECT_TRUE(GetPrimaryDictationTray()->GetVisible());
-  EXPECT_FALSE(
-      GetSecondaryDictationTray()->layer()->GetAnimator()->is_animating());
   EXPECT_TRUE(GetSecondaryDictationTray()->GetVisible());
+  EXPECT_EQ(num_animations_scheduled(), 0);
 
   // Enable the animation after showing up on the secondary screen.
-  task_environment()->FastForwardBy(base::Milliseconds(20));
+  task_environment()->RunUntilIdle();
+  ui::LayerAnimationStoppedWaiter animation_waiter;
   GetPrimaryDictationTray()->SetVisiblePreferred(false);
-  GetPrimaryDictationTray()->SetVisiblePreferred(true);
-  GetSecondaryDictationTray()->SetVisiblePreferred(false);
-  GetSecondaryDictationTray()->SetVisiblePreferred(true);
-  task_environment()->FastForwardBy(base::Milliseconds(20));
   EXPECT_TRUE(
       GetPrimaryDictationTray()->layer()->GetAnimator()->is_animating());
-  EXPECT_TRUE(GetPrimaryDictationTray()->GetVisible());
+  animation_waiter.Wait(GetPrimaryDictationTray()->layer());
+
+  GetPrimaryDictationTray()->SetVisiblePreferred(true);
+  EXPECT_TRUE(
+      GetPrimaryDictationTray()->layer()->GetAnimator()->is_animating());
+  animation_waiter.Wait(GetPrimaryDictationTray()->layer());
+
+  GetSecondaryDictationTray()->SetVisiblePreferred(false);
   EXPECT_TRUE(
       GetSecondaryDictationTray()->layer()->GetAnimator()->is_animating());
+  animation_waiter.Wait(GetSecondaryDictationTray()->layer());
+
+  GetSecondaryDictationTray()->SetVisiblePreferred(true);
+  EXPECT_TRUE(
+      GetSecondaryDictationTray()->layer()->GetAnimator()->is_animating());
+  animation_waiter.Wait(GetSecondaryDictationTray()->layer());
+
+  EXPECT_TRUE(GetPrimaryDictationTray()->GetVisible());
   EXPECT_TRUE(GetSecondaryDictationTray()->GetVisible());
-  task_environment()->FastForwardBy(base::Seconds(3));
 
-  // Remove the secondary screen.
+  // Remove the secondary screen. This should not cause additional
+  // TrayBackgroundView animations to occur.
+  int num_animations_scheduled_before = num_animations_scheduled();
   UpdateDisplay("800x600");
-
-  task_environment()->FastForwardBy(base::Milliseconds(20));
-  EXPECT_FALSE(
-      GetPrimaryDictationTray()->layer()->GetAnimator()->is_animating());
+  task_environment()->RunUntilIdle();
+  EXPECT_EQ(num_animations_scheduled(), num_animations_scheduled_before);
   EXPECT_TRUE(GetPrimaryDictationTray()->GetVisible());
 }
 
@@ -374,70 +539,6 @@ TEST_F(TrayBackgroundViewTest, AutoHideShelfWithContextMenu) {
   EXPECT_EQ(SHELF_AUTO_HIDE_HIDDEN, shelf->GetAutoHideState());
 }
 
-// Loads a bubble inside the tray and shows that. Then verifies that
-// OnAnyBubbleVisibilityChanged is called.
-TEST_F(TrayBackgroundViewTest, OnAnyBubbleVisibilityChanged) {
-  ui::ScopedAnimationDurationScaleMode test_duration_mode(
-      ui::ScopedAnimationDurationScaleMode::NORMAL_DURATION);
-
-  test_tray_background_view()->SetVisiblePreferred(true);
-
-  TrayBubbleView::InitParams init_params;
-  init_params.delegate = test_tray_background_view()->GetWeakPtr();
-  init_params.parent_window =
-      Shell::GetContainer(Shell::GetPrimaryRootWindow(),
-                          kShellWindowId_AccessibilityBubbleContainer);
-  init_params.anchor_mode = TrayBubbleView::AnchorMode::kRect;
-  init_params.preferred_width = 200;
-  auto bubble_view = std::make_unique<TrayBubbleView>(init_params);
-  bubble_view->SetCanActivate(true);
-  auto bubble_ = std::make_unique<TrayBubbleWrapper>(
-      test_tray_background_view(), bubble_view.release(),
-      /*event_handling=*/false);
-
-  bubble_->GetBubbleWidget()->Show();
-  bubble_->GetBubbleWidget()->Activate();
-  bubble_->bubble_view()->SetVisible(true);
-
-  EXPECT_EQ(bubble_->GetBubbleWidget(),
-            test_tray_background_view()
-                ->on_bubble_visibility_change_captured_widget_);
-  EXPECT_TRUE(test_tray_background_view()
-                  ->on_bubble_visibility_change_captured_visibility_);
-}
-
-// Tests the default behavior of the button press with no callback set.
-TEST_F(TrayBackgroundViewTest, NoPressedCallbackSet) {
-  test_tray_background_view()->SetVisible(true);
-  ui::test::EventGenerator* generator = GetEventGenerator();
-  generator->MoveMouseTo(
-      test_tray_background_view()->GetBoundsInScreen().CenterPoint());
-
-  generator->ClickLeftButton();
-
-  EXPECT_TRUE(test_tray_background_view()->show_bubble_called());
-}
-
-// Tests that histograms are recorded when no callback is set, and the button is
-// pressed.
-TEST_F(TrayBackgroundViewTest, HistogramRecordedNoPressedCallbackSet) {
-  auto histogram_tester = std::make_unique<base::HistogramTester>();
-  histogram_tester->ExpectTotalCount(
-      "Ash.StatusArea.TrayBackgroundView.Pressed",
-      /*count=*/0);
-
-  test_tray_background_view()->SetVisible(true);
-  ui::test::EventGenerator* generator = GetEventGenerator();
-  generator->MoveMouseTo(
-      test_tray_background_view()->GetBoundsInScreen().CenterPoint());
-
-  generator->ClickLeftButton();
-
-  histogram_tester->ExpectTotalCount(
-      "Ash.StatusArea.TrayBackgroundView.Pressed",
-      /*count=*/1);
-}
-
 // Tests that `TrayBackgroundView::SetPressedCallback()` overrides
 // TrayBackgroundView's default press behavior.
 TEST_F(TrayBackgroundViewTest, PressedCallbackSet) {
@@ -449,7 +550,7 @@ TEST_F(TrayBackgroundViewTest, PressedCallbackSet) {
   // Set the callback. Pressing the  `TestTrayBackgroundView` should execute the
   // callback instead of `TrayBackgroundView::ShowBubble()`.
   bool pressed = false;
-  test_tray_background_view()->SetPressedCallback(base::BindRepeating(
+  test_tray_background_view()->SetCallback(base::BindRepeating(
       [](bool& pressed, const ui::Event& event) { pressed = true; },
       std::ref(pressed)));
   generator->ClickLeftButton();
@@ -472,12 +573,32 @@ TEST_F(TrayBackgroundViewTest, HistogramRecordedPressedCallbackSet) {
       test_tray_background_view()->GetBoundsInScreen().CenterPoint());
 
   // Set the callback. This should not effect histogram recording.
-  test_tray_background_view()->SetPressedCallback(base::DoNothing());
+  test_tray_background_view()->SetCallback(views::Button::PressedCallback());
   generator->ClickLeftButton();
 
   histogram_tester->ExpectTotalCount(
       "Ash.StatusArea.TrayBackgroundView.Pressed",
       /*count=*/1);
+}
+
+// Tests that the `TrayBubbleWrapper` owned by the `TrayBackgroundView` is
+// cleaned up and the active state of the `TrayBackgroundView` is updated if the
+// bubble widget is destroyed independently (Real life examples would be
+// clicking outside a bubble or hitting the escape key).
+TEST_F(TrayBackgroundViewTest, CleanUpOnIndependentBubbleDestruction) {
+  test_tray_background_view()->SetVisiblePreferred(true);
+  test_tray_background_view()->ShowBubble();
+
+  EXPECT_TRUE(test_tray_background_view()->is_active());
+  EXPECT_TRUE(
+      test_tray_background_view()->bubble()->GetBubbleWidget()->IsVisible());
+
+  // Destroying the bubble's widget independently of the `TrayBackgroundView`
+  // should properly clean up `bubble()` in `TrayBackgroundView`.
+  test_tray_background_view()->bubble()->GetBubbleWidget()->CloseNow();
+
+  EXPECT_FALSE(test_tray_background_view()->is_active());
+  ASSERT_FALSE(test_tray_background_view()->bubble());
 }
 
 }  // namespace ash

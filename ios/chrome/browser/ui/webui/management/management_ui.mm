@@ -4,7 +4,11 @@
 
 #import "ios/chrome/browser/ui/webui/management/management_ui.h"
 
+#import <optional>
+
+#import "base/strings/string_split.h"
 #import "base/strings/utf_string_conversions.h"
+#import "components/account_id/account_id.h"
 #import "components/grit/components_resources.h"
 #import "components/policy/core/browser/webui/policy_data_utils.h"
 #import "components/policy/core/common/cloud/cloud_policy_core.h"
@@ -12,27 +16,33 @@
 #import "components/policy/core/common/cloud/machine_level_user_cloud_policy_manager.h"
 #import "components/policy/core/common/cloud/user_cloud_policy_manager.h"
 #import "components/policy/proto/device_management_backend.pb.h"
+#import "components/prefs/pref_service.h"
+#import "components/signin/public/base/consent_level.h"
+#import "components/signin/public/identity_manager/account_info.h"
+#import "components/signin/public/identity_manager/account_managed_status_finder.h"
+#import "components/signin/public/identity_manager/identity_manager.h"
 #import "components/strings/grit/components_strings.h"
-#import "ios/chrome/browser/application_context/application_context.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/policy/browser_policy_connector_ios.h"
-#import "ios/chrome/browser/url/chrome_url_constants.h"
+#import "google_apis/gaia/gaia_auth_util.h"
+#import "ios/chrome/browser/policy/model/browser_policy_connector_ios.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
+#import "ios/chrome/browser/signin/model/identity_manager_factory.h"
+#import "ios/chrome/browser/ui/policy/user_policy_util.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/web/public/webui/web_ui_ios.h"
 #import "ios/web/public/webui/web_ui_ios_data_source.h"
-#import "third_party/abseil-cpp/absl/types/optional.h"
 #import "ui/base/l10n/l10n_util.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+using signin::AccountManagedStatusFinder;
 
 namespace {
 
-// Returns the domain of the machine level cloud policy. Returns absl::nullopt
+// Returns the domain of the machine level cloud policy. Returns std::nullopt
 // if the domain cannot be retrieved (eg. because there are no machine level
 // policies).
-absl::optional<std::string> GetMachineLevelPolicyDomain() {
+std::optional<std::string> GetMachineLevelPolicyDomain() {
   policy::MachineLevelUserCloudPolicyManager* manager =
       GetApplicationContext()
           ->GetBrowserPolicyConnector()
@@ -40,23 +50,68 @@ absl::optional<std::string> GetMachineLevelPolicyDomain() {
   return policy::GetManagedBy(manager);
 }
 
-// Returns the domain of the user cloud policy. Returns absl::nullopt if the
+// Gets the AccountId from the provided `account_info`.
+AccountId AccountIdFromAccountInfo(const CoreAccountInfo& account_info) {
+  if (account_info.email.empty() || account_info.gaia.empty()) {
+    return EmptyAccountId();
+  }
+
+  return AccountId::FromUserEmailGaiaId(
+      gaia::CanonicalizeEmail(account_info.email), account_info.gaia);
+}
+
+// Extracts the domain from the email. Returns std::nullopt if there is no
+// domain.
+std::optional<std::string> ExtractDomainFromEmail(const std::string& email) {
+  std::vector<std::string> components = base::SplitString(
+      email, "@", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
+  if (components.size() != 2) {
+    return std::nullopt;
+  }
+  const std::string domain = components[1];
+  if (domain.empty()) {
+    return std::nullopt;
+  }
+
+  return domain;
+}
+
+// Returns the domain of the user cloud policy. Returns std::nullopt if the
 // domain cannot be retrieved (eg. because there is no user policy).
-absl::optional<std::string> GetUserPolicyDomain(web::WebUIIOS* web_ui) {
-  // Get the user policy manager for the BrowserState that has the
-  // chrome://management page that hosts this UI. Each BrowserState has its own
-  // manager.
-  policy::UserCloudPolicyManager* manager =
-      ChromeBrowserState::FromWebUIIOS(web_ui)->GetUserCloudPolicyManager();
-  return policy::GetManagedBy(manager);
+std::optional<std::string> GetUserPolicyDomain(web::WebUIIOS* web_ui) {
+  ChromeBrowserState* browser_state =
+      ChromeBrowserState::FromWebUIIOS(web_ui)->GetOriginalChromeBrowserState();
+
+  if (!CanFetchUserPolicy(
+          AuthenticationServiceFactory::GetForBrowserState(browser_state),
+          browser_state->GetPrefs())) {
+    return std::nullopt;
+  }
+
+  AccountId account_id = AccountIdFromAccountInfo(
+      IdentityManagerFactory::GetForBrowserState(browser_state)
+          ->GetPrimaryAccountInfo(signin::ConsentLevel::kSignin));
+
+  const std::string user_email = account_id.GetUserEmail();
+
+  if (user_email.empty()) {
+    return std::nullopt;
+  }
+
+  if (AccountManagedStatusFinder::IsEnterpriseUserBasedOnEmail(user_email) ==
+      AccountManagedStatusFinder::EmailEnterpriseStatus::kKnownNonEnterprise) {
+    return std::nullopt;
+  }
+
+  return ExtractDomainFromEmail(user_email);
 }
 
 // Returns the management message depending on the levels of the policies that
-// are applied. Returns absl::nullopt if there are no policies.
-absl::optional<std::u16string> GetManagementMessage(web::WebUIIOS* web_ui) {
-  absl::optional<std::string> machine_level_policy_domain =
+// are applied. Returns std::nullopt if there are no policies.
+std::optional<std::u16string> GetManagementMessage(web::WebUIIOS* web_ui) {
+  std::optional<std::string> machine_level_policy_domain =
       GetMachineLevelPolicyDomain();
-  absl::optional<std::string> user_policy_domain = GetUserPolicyDomain(web_ui);
+  std::optional<std::string> user_policy_domain = GetUserPolicyDomain(web_ui);
 
   if (machine_level_policy_domain && user_policy_domain) {
     if (machine_level_policy_domain == user_policy_domain) {
@@ -97,7 +152,7 @@ absl::optional<std::u16string> GetManagementMessage(web::WebUIIOS* web_ui) {
     return l10n_util::GetStringUTF16(IDS_IOS_MANAGEMENT_UI_MESSAGE);
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 // Creates the HTML source for the chrome://management page.
@@ -105,7 +160,7 @@ web::WebUIIOSDataSource* CreateManagementUIHTMLSource(web::WebUIIOS* web_ui) {
   web::WebUIIOSDataSource* source =
       web::WebUIIOSDataSource::Create(kChromeUIManagementHost);
 
-  absl::optional<std::u16string> management_message =
+  std::optional<std::u16string> management_message =
       GetManagementMessage(web_ui);
 
   source->AddString("isManaged", management_message ? "true" : "false");

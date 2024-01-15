@@ -8,36 +8,32 @@
           "-v",
           "--browser=android-chrome-64-bundle",
           "--upload-results",
-          "--test-shard-map-filename=android-pixel2-perf-calibration_map.json"
+          "--test-shard-map-filename=android-pixel2-perf-calibration_map.json",
+          "--ignore-benchmark-exit-code"
         ],
-        "isolate_name": "performance_test_suite_android_clank_monochrome_64_32_bundle",
         "merge": {
           "script": "//tools/perf/process_perf_results.py"
         },
         "name": "performance_test_suite_android_clank_monochrome_64_32_bundle",
-        "override_compile_targets": [
-          "performance_test_suite_android_clank_monochrome_64_32_bundle"
-        ],
         "resultdb": {
           "enable": true
         },
         "swarming": {
           "can_use_on_swarming_builders": true,
-          "dimension_sets": [
-            {
-              "device_os": "OPM1.171019.021",
-              "device_os_flavor": "google",
-              "device_type": "walleye",
-              "os": "Android",
-              "pool": "chrome.tests.perf"
-            }
-          ],
+          "dimensions": {
+            "device_os": "OPM1.171019.021",
+            "device_os_flavor": "google",
+            "device_type": "walleye",
+            "os": "Android",
+            "pool": "chrome.tests.perf"
+          },
           "expiration": 7200,
           "hard_timeout": 21600,
           "io_timeout": 21600,
           "service_account": "chrome-tester@chops-service-accounts.iam.gserviceaccount.com",
           "shards": 42
         },
+        "test": "performance_test_suite_android_clank_monochrome_64_32_bundle",
         "trigger_script": {
           "args": [
             "--multiple-dimension-script-verbose",
@@ -58,35 +54,31 @@
           "--browser=release",
           "--upload-results",
           "--test-shard-map-filename=linux-perf-calibration_map.json",
+          "--ignore-benchmark-exit-code",
           "--assert-gpu-compositing"
         ],
-        "isolate_name": "performance_test_suite",
         "merge": {
           "script": "//tools/perf/process_perf_results.py"
         },
         "name": "performance_test_suite",
-        "override_compile_targets": [
-          "performance_test_suite"
-        ],
         "resultdb": {
           "enable": true
         },
         "swarming": {
           "can_use_on_swarming_builders": true,
-          "dimension_sets": [
-            {
-              "gpu": "10de:1cb3-440.100",
-              "os": "Ubuntu-18.04",
-              "pool": "chrome.tests.perf",
-              "synthetic_product_name": "PowerEdge R230 (Dell Inc.)"
-            }
-          ],
+          "dimensions": {
+            "gpu": "10de:1cb3-440.100",
+            "os": "Ubuntu-18.04",
+            "pool": "chrome.tests.perf",
+            "synthetic_product_name": "PowerEdge R230 (Dell Inc.)"
+          },
           "expiration": 7200,
           "hard_timeout": 21600,
           "io_timeout": 21600,
           "service_account": "chrome-tester@chops-service-accounts.iam.gserviceaccount.com",
           "shards": 28
         },
+        "test": "performance_test_suite",
         "trigger_script": {
           "args": [
             "--multiple-dimension-script-verbose",

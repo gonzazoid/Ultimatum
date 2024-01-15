@@ -14,12 +14,14 @@ source_set("sync") {
     "sync_utils.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
     "//base",
     "//components/safe_browsing/core/browser:sync_observer",
     "//components/safe_browsing/core/browser:token_fetcher",
     "//components/signin/public/identity_manager",
-    "//components/sync/driver",
+    "//components/sync/service",
     "//google_apis",
   ]
 }

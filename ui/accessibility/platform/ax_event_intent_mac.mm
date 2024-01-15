@@ -107,7 +107,7 @@ AXTextSelection AXTextSelection::FromDirectionAndGranularity(
       break;
   }
 
-  return AXTextSelection(direction, granularity, /* focus_change */ false);
+  return AXTextSelection(direction, granularity, /*focus_change=*/false);
 }
 
 AXTextSelection::AXTextSelection() = default;
@@ -133,7 +133,7 @@ AXTextStateChangeIntent::DefaultFocusTextStateChangeIntent() {
       AXTextStateChangeType::kSelectionMove,
       AXTextSelection(AXTextSelectionDirection::kDiscontiguous,
                       AXTextSelectionGranularity::kUnknown,
-                      /* focus_change */ true));
+                      /*focus_change=*/true));
 }
 
 // static
@@ -143,7 +143,7 @@ AXTextStateChangeIntent::DefaultSelectionChangeIntent() {
       AXTextStateChangeType::kSelectionMove,
       AXTextSelection(AXTextSelectionDirection::kDiscontiguous,
                       AXTextSelectionGranularity::kUnknown,
-                      /* focus_change */ false));
+                      /*focus_change=*/false));
 }
 
 AXTextStateChangeIntent::AXTextStateChangeIntent() = default;

@@ -8,12 +8,14 @@ GEN_INCLUDE(['../switch_access_e2e_test_base.js']);
 SwitchAccessTabNodeTest = class extends SwitchAccessE2ETest {
   async setUpDeferred() {
     await super.setUpDeferred();
-    await importModule(
-        'BackButtonNode', '/switch_access/nodes/back_button_node.js');
-    await importModule('Navigator', '/switch_access/navigator.js');
-    await importModule(
-        'SwitchAccessMenuAction', '/switch_access/switch_access_constants.js');
-    await importModule('RectUtil', '/common/rect_util.js');
+    await Promise.all([
+      importModule(
+          'BackButtonNode', '/switch_access/nodes/back_button_node.js'),
+      importModule('Navigator', '/switch_access/navigator.js'),
+      importModule('RectUtil', '/common/rect_util.js'),
+    ]);
+
+    globalThis.MenuAction = chrome.accessibilityPrivate.SwitchAccessMenuAction;
   }
 };
 
@@ -45,8 +47,8 @@ TEST_F('SwitchAccessTabNodeTest', 'Construction', function() {
     assertEquals(
         1, tab.actions.length, 'Tab as a group should have 1 action (select)');
     assertEquals(
-        chrome.accessibilityPrivate.SwitchAccessMenuAction.SELECT,
-        tab.actions[0], 'Tab as a group should have the action SELECT');
+        MenuAction.SELECT, tab.actions[0],
+        'Tab as a group should have the action SELECT');
 
     Navigator.byItem.node_.doDefaultAction();
 
@@ -64,7 +66,7 @@ TEST_F('SwitchAccessTabNodeTest', 'Construction', function() {
     assertFalse(
         tabToSelect.isGroup(), 'Tab node to select should not be a group');
     assertTrue(
-        tabToSelect.hasAction(SwitchAccessMenuAction.SELECT),
+        tabToSelect.hasAction(MenuAction.SELECT),
         'Tab as a group should have a SELECT action');
     assertFalse(
         RectUtil.equal(tabAsRoot.location, tabToSelect.location),
@@ -81,7 +83,7 @@ TEST_F('SwitchAccessTabNodeTest', 'Construction', function() {
         'Close button is not a button');
     assertFalse(close.isGroup(), 'Close button should not be a group');
     assertTrue(
-        close.hasAction(SwitchAccessMenuAction.SELECT),
+        close.hasAction(MenuAction.SELECT),
         'Close button should have a SELECT action');
     assertFalse(
         RectUtil.equal(tabAsRoot.location, close.location),

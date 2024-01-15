@@ -58,10 +58,6 @@ void SearchInputType::CountUsage() {
   CountUsageIfVisible(WebFeature::kInputTypeSearch);
 }
 
-const AtomicString& SearchInputType::FormControlType() const {
-  return input_type_names::kSearch;
-}
-
 ControlPart SearchInputType::AutoAppearance() const {
   return kSearchFieldPart;
 }
@@ -147,7 +143,7 @@ void SearchInputType::UpdateView() {
 }
 
 void SearchInputType::UpdateCancelButtonVisibility() {
-  Element* button = GetElement().UserAgentShadowRoot()->getElementById(
+  Element* button = GetElement().EnsureShadowSubtree()->getElementById(
       shadow_element_names::kIdSearchClearButton);
   if (!button)
     return;

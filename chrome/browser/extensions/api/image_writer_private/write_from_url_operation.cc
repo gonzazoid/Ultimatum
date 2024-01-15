@@ -3,8 +3,8 @@
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/api/image_writer_private/write_from_url_operation.h"
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/extensions/api/image_writer_private/error_constants.h"
 #include "chrome/browser/extensions/api/image_writer_private/operation_manager.h"
 #include "content/public/browser/browser_thread.h"
@@ -81,7 +81,7 @@ void WriteFromUrlOperation::Download(base::OnceClosure continuation) {
 
   download_continuation_ = std::move(continuation);
 
-  SetStage(image_writer_api::STAGE_DOWNLOAD);
+  SetStage(image_writer_api::Stage::kDownload);
 
   // Create traffic annotation tag.
   net::NetworkTrafficAnnotationTag traffic_annotation =
@@ -178,7 +178,7 @@ void WriteFromUrlOperation::VerifyDownload(base::OnceClosure continuation) {
     return;
   }
 
-  SetStage(image_writer_api::STAGE_VERIFYDOWNLOAD);
+  SetStage(image_writer_api::Stage::kVerifyDownload);
 
   GetMD5SumOfFile(image_path_, 0, 0, kProgressComplete,
                   base::BindOnce(&WriteFromUrlOperation::VerifyDownloadCompare,

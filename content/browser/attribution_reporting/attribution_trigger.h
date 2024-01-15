@@ -5,16 +5,14 @@
 #ifndef CONTENT_BROWSER_ATTRIBUTION_REPORTING_ATTRIBUTION_TRIGGER_H_
 #define CONTENT_BROWSER_ATTRIBUTION_REPORTING_ATTRIBUTION_TRIGGER_H_
 
-#include <stdint.h>
-
 #include <vector>
 
-#include "content/browser/attribution_reporting/attribution_aggregatable_trigger_data.h"
-#include "content/browser/attribution_reporting/attribution_aggregatable_values.h"
-#include "content/browser/attribution_reporting/attribution_filter_data.h"
+#include "components/attribution_reporting/suitable_origin.h"
+#include "components/attribution_reporting/trigger_registration.h"
+#include "content/browser/attribution_reporting/aggregatable_result.mojom.h"
+#include "content/browser/attribution_reporting/event_level_result.mojom.h"
 #include "content/common/content_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "url/origin.h"
+#include "services/network/public/cpp/trigger_verification.h"
 
 namespace content {
 
@@ -22,96 +20,14 @@ namespace content {
 // the renderer and is now being used by the browser process.
 class CONTENT_EXPORT AttributionTrigger {
  public:
-  // Represents the potential event-level outcomes from attempting to register
-  // a trigger.
-  //
-  // These values are persisted to logs. Entries should not be renumbered and
-  // numeric values should never be reused.
-  enum class EventLevelResult {
-    kSuccess = 0,
-    // The report was stored successfully, but it replaced an existing report
-    // with a lower priority.
-    kSuccessDroppedLowerPriority = 1,
-    kInternalError = 2,
-    kNoCapacityForConversionDestination = 3,
-    kNoMatchingImpressions = 4,
-    kDeduplicated = 5,
-    kExcessiveAttributions = 6,
-    kPriorityTooLow = 7,
-    kDroppedForNoise = 8,
-    kExcessiveReportingOrigins = 9,
-    kNoMatchingSourceFilterData = 10,
-    kProhibitedByBrowserPolicy = 11,
-    kNoMatchingConfigurations = 12,
-    kExcessiveReports = 13,
-    kMaxValue = kExcessiveReports,
-  };
+  using AggregatableResult = attribution_reporting::mojom::AggregatableResult;
+  using EventLevelResult = attribution_reporting::mojom::EventLevelResult;
 
-  // Represents the potential aggregatable outcomes from attempting to register
-  // a trigger.
-  //
-  // These values are persisted to logs. Entries should not be renumbered and
-  // numeric values should never be reused.
-  enum class AggregatableResult {
-    kSuccess = 0,
-    kInternalError = 1,
-    kNoCapacityForConversionDestination = 2,
-    kNoMatchingImpressions = 3,
-    kExcessiveAttributions = 4,
-    kExcessiveReportingOrigins = 5,
-    kNoHistograms = 6,
-    kInsufficientBudget = 7,
-    kNoMatchingSourceFilterData = 8,
-    kNotRegistered = 9,
-    kProhibitedByBrowserPolicy = 10,
-    kDeduplicated = 11,
-    kMaxValue = kDeduplicated,
-  };
-
-  struct CONTENT_EXPORT EventTriggerData {
-    // Data associated with trigger.
-    // Will be sanitized to a lower entropy by the `AttributionStorageDelegate`
-    // before storage.
-    uint64_t data;
-
-    // Priority specified in conversion redirect. Used to prioritize which
-    // reports to send among multiple different reports for the same attribution
-    // source. Defaults to 0 if not provided.
-    int64_t priority;
-
-    // Key specified in conversion redirect for deduplication against existing
-    // conversions with the same source. If absent, no deduplication is
-    // performed.
-    absl::optional<uint64_t> dedup_key;
-
-    // The filters used to determine whether this `EventTriggerData'`s fields
-    // are used.
-    AttributionFilterData filters;
-
-    // The negated filters used to determine whether this `EventTriggerData'`s
-    // fields are used.
-    AttributionFilterData not_filters;
-
-    EventTriggerData(uint64_t data,
-                     int64_t priority,
-                     absl::optional<uint64_t> dedup_key,
-                     AttributionFilterData filters,
-                     AttributionFilterData not_filters);
-  };
-
-  // Should only be created with values that the browser process has already
-  // validated. |conversion_destination| should be filled by a navigation origin
-  // known by the browser process.
-  AttributionTrigger(
-      url::Origin destination_origin,
-      url::Origin reporting_origin,
-      AttributionFilterData filters,
-      AttributionFilterData not_filters,
-      absl::optional<uint64_t> debug_key,
-      absl::optional<uint64_t> aggregatable_dedup_key,
-      std::vector<EventTriggerData> event_triggers,
-      std::vector<AttributionAggregatableTriggerData> aggregatable_trigger_data,
-      AttributionAggregatableValues aggregatable_values);
+  AttributionTrigger(attribution_reporting::SuitableOrigin reporting_origin,
+                     attribution_reporting::TriggerRegistration registration,
+                     attribution_reporting::SuitableOrigin destination_origin,
+                     std::vector<network::TriggerVerification> verifications,
+                     bool is_within_fenced_frame);
 
   AttributionTrigger(const AttributionTrigger&);
   AttributionTrigger& operator=(const AttributionTrigger&);
@@ -119,57 +35,44 @@ class CONTENT_EXPORT AttributionTrigger {
   AttributionTrigger& operator=(AttributionTrigger&&);
   ~AttributionTrigger();
 
-  const url::Origin& destination_origin() const { return destination_origin_; }
-
-  const url::Origin& reporting_origin() const { return reporting_origin_; }
-
-  const AttributionFilterData& filters() const { return filters_; }
-
-  const AttributionFilterData& not_filters() const { return not_filters_; }
-
-  absl::optional<uint64_t> debug_key() const { return debug_key_; }
-
-  absl::optional<uint64_t> aggregatable_dedup_key() const {
-    return aggregatable_dedup_key_;
+  const attribution_reporting::SuitableOrigin& reporting_origin() const {
+    return reporting_origin_;
   }
 
-  void ClearDebugKey() { debug_key_ = absl::nullopt; }
-
-  const std::vector<EventTriggerData>& event_triggers() const {
-    return event_triggers_;
+  const attribution_reporting::TriggerRegistration& registration() const {
+    return registration_;
   }
 
-  const std::vector<AttributionAggregatableTriggerData>&
-  aggregatable_trigger_data() const {
-    return aggregatable_trigger_data_;
+  attribution_reporting::TriggerRegistration& registration() {
+    return registration_;
   }
 
-  const AttributionAggregatableValues& aggregatable_values() const {
-    return aggregatable_values_;
+  const attribution_reporting::SuitableOrigin& destination_origin() const {
+    return destination_origin_;
   }
+
+  bool is_within_fenced_frame() const { return is_within_fenced_frame_; }
+
+  const std::vector<network::TriggerVerification>& verifications() const {
+    return verifications_;
+  }
+
+  friend bool operator==(const AttributionTrigger&,
+                         const AttributionTrigger&) = default;
 
  private:
-  // Origin that this conversion event occurred on.
-  url::Origin destination_origin_;
+  attribution_reporting::SuitableOrigin reporting_origin_;
 
-  // Origin of the conversion redirect url, and the origin that will receive any
-  // reports.
-  url::Origin reporting_origin_;
+  attribution_reporting::TriggerRegistration registration_;
 
-  AttributionFilterData filters_;
+  // Origin on which this trigger was registered.
+  attribution_reporting::SuitableOrigin destination_origin_;
 
-  AttributionFilterData not_filters_;
+  // Optional tokens attesting to the veracity of the trigger.
+  std::vector<network::TriggerVerification> verifications_;
 
-  absl::optional<uint64_t> debug_key_;
-
-  // Key specified for deduplication against existing aggregatable reports with
-  // the same source. If absent, no deduplication is performed.
-  absl::optional<uint64_t> aggregatable_dedup_key_;
-
-  std::vector<EventTriggerData> event_triggers_;
-
-  std::vector<AttributionAggregatableTriggerData> aggregatable_trigger_data_;
-  AttributionAggregatableValues aggregatable_values_;
+  // Whether the trigger is registered within a fenced frame tree.
+  bool is_within_fenced_frame_;
 };
 
 }  // namespace content

@@ -9,13 +9,16 @@ import androidx.mediarouter.media.MediaRouter;
 
 import org.chromium.base.Log;
 import org.chromium.components.media_router.BrowserMediaRouter;
+import org.chromium.components.media_router.DiscoveryCallback;
 import org.chromium.components.media_router.FlingingController;
+import org.chromium.components.media_router.MediaRoute;
 import org.chromium.components.media_router.MediaRouteManager;
 import org.chromium.components.media_router.MediaRouteProvider;
-import org.chromium.components.media_router.MediaRouteUmaRecorder;
 import org.chromium.components.media_router.MediaSource;
 import org.chromium.components.media_router.caf.BaseSessionController;
 import org.chromium.components.media_router.caf.CafBaseMediaRouteProvider;
+
+import java.util.Map;
 
 /** A {@link MediaRouteProvider} implementation for remoting, using Cast v3 API. */
 public class CafRemotingMediaRouteProvider extends CafBaseMediaRouteProvider {
@@ -47,14 +50,6 @@ public class CafRemotingMediaRouteProvider extends CafBaseMediaRouteProvider {
     }
 
     @Override
-    public void detachRoute(String routeId) {
-        super.detachRoute(routeId);
-        MediaRouteUmaRecorder.recordRemoteSessionTimeWithoutMediaElementPercentage(
-                mSessionController.getFlingingController().getApproximateCurrentTime(),
-                mSessionController.getFlingingController().getDuration());
-    }
-
-    @Override
     public void sendStringMessage(String routeId, String message) {
         Log.e(TAG, "Remote playback does not support sending messages");
     }
@@ -75,5 +70,34 @@ public class CafRemotingMediaRouteProvider extends CafBaseMediaRouteProvider {
         if (!mRoutes.containsKey(routeId)) return null;
 
         return sessionController().getFlingingController();
+    }
+
+    @Override
+    protected void updateSessionMediaSourceIfNeeded(
+            DiscoveryCallback callback, MediaSource source) {
+        var controller = sessionController();
+
+        // There is no active remote playback media route.
+        if (!hasSession() || controller.getFlingingController() == null) return;
+
+        // Do not update media source for a detached session.
+        if (!mRoutes.containsKey(controller.getRouteCreationInfo().routeId)) return;
+
+        // Do not update media source if we are still observing the original media
+        // source for remote playback.
+        String curSessionSourceId =
+                controller.getRouteCreationInfo().getMediaSource().getSourceId();
+        if (callback != null && callback.containsSourceUrn(curSessionSourceId)) return;
+
+        ((RemotingSessionController) controller).updateMediaSource(source);
+    }
+
+    protected Map<String, MediaRoute> getActiveRoutesForTesting() {
+        return mRoutes;
+    }
+
+    protected void addRouteForTesting(
+            MediaRoute route, String origin, int tabId, int nativeRequestId, boolean wasLaunched) {
+        addRoute(route, origin, tabId, nativeRequestId, wasLaunched);
     }
 }

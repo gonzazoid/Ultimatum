@@ -2,10 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {addEntries, ENTRIES, getCaller, getDateWithDayDiff, pending, repeatUntil, RootPath, sendTestMessage, TestEntryInfo} from '../test_util.js';
+import {addEntries, ENTRIES, EntryType, getCaller, getDateWithDayDiff, pending, repeatUntil, RootPath, sanitizeDate, sendTestMessage, TestEntryInfo} from '../test_util.js';
 import {testcase} from '../testcase.js';
 
-import {mountCrostini, navigateWithDirectoryTree, openNewWindow, remoteCall, setupAndWaitUntilReady} from './background.js';
+import {mountCrostini, openNewWindow, remoteCall, setupAndWaitUntilReady} from './background.js';
+import {DirectoryTreePageObject} from './page_objects/directory_tree.js';
 import {BASIC_CROSTINI_ENTRY_SET, BASIC_DRIVE_ENTRY_SET, BASIC_LOCAL_ENTRY_SET, NESTED_ENTRY_SET, RECENT_ENTRY_SET} from './test_data.js';
 
 // Mock files with recently modified dates, be aware the days passed in should
@@ -30,6 +31,20 @@ const RECENT_MODIFIED_ANDROID_AUDIO =
     ENTRIES.musicAudio.cloneWithModifiedDate(getDateWithDayDiff(21));
 const RECENT_MODIFIED_ANDROID_VIDEO =
     ENTRIES.moviesVideo.cloneWithModifiedDate(getDateWithDayDiff(25));
+
+// Special file used with provided volume. Due to the fact that we rely on
+// ash::file_system_provider::FakeProvidedFileSystem we cannot clone it from
+// existing entries. Among differences is the targetPath and sizeText that are
+// set up differently.
+const RECENT_PROVIDED_HELLO = new TestEntryInfo({
+  type: EntryType.FILE,
+  targetPath: '/recent-hello.txt',
+  mimeType: 'text/plain',
+  lastModifiedTime: getDateWithDayDiff(8),
+  nameText: 'recent-hello.txt',
+  sizeText: '6 bytes',
+  typeText: 'Plain text',
+});
 
 /**
  * Enum for supported recent filter types.
@@ -59,17 +74,6 @@ async function addPlayFileEntries() {
 }
 
 /**
- * Checks if the #file-filters-in-recents-v2 flag has been enabled or not.
- *
- * @return {!Promise<boolean>} Flag enabled or not.
- */
-async function isFiltersInRecentsV2Enabled() {
-  const isFiltersInRecentsV2Enabled =
-      await sendTestMessage({name: 'isFiltersInRecentsEnabledV2'});
-  return isFiltersInRecentsV2Enabled === 'true';
-}
-
-/**
  * Navigate to Recent folder with specific type and verify the breadcrumb path.
  *
  * @param {string} appId Files app windowId.
@@ -84,7 +88,8 @@ async function navigateToRecent(appId, type = RecentFilterType.ALL) {
     [RecentFilterType.DOCUMENT]: '/Documents',
   };
 
-  await remoteCall.waitAndClickElement(appId, ['[root-type-icon="recent"]']);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.selectItemByLabel('Recent');
   // "All" button is activated by default, no need to click.
   if (type !== RecentFilterType.ALL) {
     await remoteCall.waitAndClickElement(
@@ -103,8 +108,11 @@ async function navigateToRecent(appId, type = RecentFilterType.ALL) {
  *
  * @param {string} appId Files app windowId.
  * @param {!Array<!TestEntryInfo>} expectedEntries Expected file entries.
+ * @param {boolean=} trashButton If the file system doesn't support trash,
+ *     a delete button will show instead of a trash button.
  */
-async function verifyCurrentEntries(appId, expectedEntries) {
+async function verifyCurrentEntries(
+    appId, expectedEntries, trashButton = false) {
   // Verify Recents contains the expected files - those with an mtime in the
   // future.
   const files = TestEntryInfo.getExpectedRows(expectedEntries);
@@ -118,14 +126,11 @@ async function verifyCurrentEntries(appId, expectedEntries) {
   await remoteCall.waitForElement(appId, '#file-list li[selected]');
 
   // Test that the delete button's visibility based on v2 flag.
-  const deleteButton = await remoteCall.waitForElement(appId, '#delete-button');
-  if (await isFiltersInRecentsV2Enabled()) {
-    chrome.test.assertFalse(
-        deleteButton.hidden, 'delete button should be visible');
-  } else {
-    chrome.test.assertTrue(
-        deleteButton.hidden, 'delete button should be hidden');
-  }
+  const buttonSelector =
+      (trashButton) ? '#move-to-trash-button' : '#delete-button';
+  const deleteButton = await remoteCall.waitForElement(appId, buttonSelector);
+  chrome.test.assertFalse(
+      deleteButton.hidden, `${buttonSelector} element should be visible`);
 }
 
 /**
@@ -135,12 +140,14 @@ async function verifyCurrentEntries(appId, expectedEntries) {
  * @param {string} appId Files app windowId.
  * @param {!Array<!TestEntryInfo>=} expectedEntries Expected file
  *     entries, by default `RECENT_ENTRY_SET` is used.
+ * @param {boolean=} trashButton If the file system doesn't support trash,
+ *     a delete button will show instead of a trash button.
  */
-async function verifyRecents(appId, expectedEntries = RECENT_ENTRY_SET) {
+async function verifyRecents(
+    appId, expectedEntries = RECENT_ENTRY_SET, trashButton = false) {
   await navigateToRecent(appId);
-  await verifyCurrentEntries(appId, expectedEntries);
+  await verifyCurrentEntries(appId, expectedEntries, trashButton);
 }
-
 
 /**
  * Opens the Recent Audio folder and checks the expected entries are
@@ -148,10 +155,12 @@ async function verifyRecents(appId, expectedEntries = RECENT_ENTRY_SET) {
  *
  * @param {string} appId Files app windowId.
  * @param {!Array<!TestEntryInfo>} expectedEntries Expected file entries.
+ * @param {boolean=} trashButton If the file system doesn't support trash,
+ *     a delete button will show instead of a trash button.
  */
-async function verifyRecentAudio(appId, expectedEntries) {
+async function verifyRecentAudio(appId, expectedEntries, trashButton = false) {
   await navigateToRecent(appId, RecentFilterType.AUDIO);
-  await verifyCurrentEntries(appId, expectedEntries);
+  await verifyCurrentEntries(appId, expectedEntries, trashButton);
 }
 
 /**
@@ -160,10 +169,12 @@ async function verifyRecentAudio(appId, expectedEntries) {
  *
  * @param {string} appId Files app windowId.
  * @param {!Array<!TestEntryInfo>} expectedEntries Expected file entries.
+ * @param {boolean=} trashButton If the file system doesn't support trash,
+ *     a delete button will show instead of a trash button.
  */
-async function verifyRecentImages(appId, expectedEntries) {
+async function verifyRecentImages(appId, expectedEntries, trashButton = false) {
   await navigateToRecent(appId, RecentFilterType.IMAGE);
-  await verifyCurrentEntries(appId, expectedEntries);
+  await verifyCurrentEntries(appId, expectedEntries, trashButton);
 }
 
 /**
@@ -172,10 +183,12 @@ async function verifyRecentImages(appId, expectedEntries) {
  *
  * @param {string} appId Files app windowId.
  * @param {!Array<!TestEntryInfo>} expectedEntries Expected file entries.
+ * @param {boolean=} trashButton If the file system doesn't support trash,
+ *     a delete button will show instead of a trash button.
  */
-async function verifyRecentVideos(appId, expectedEntries) {
+async function verifyRecentVideos(appId, expectedEntries, trashButton = false) {
   await navigateToRecent(appId, RecentFilterType.VIDEO);
-  await verifyCurrentEntries(appId, expectedEntries);
+  await verifyCurrentEntries(appId, expectedEntries, trashButton);
 }
 
 /**
@@ -184,10 +197,13 @@ async function verifyRecentVideos(appId, expectedEntries) {
  *
  * @param {string} appId Files app windowId.
  * @param {!Array<!TestEntryInfo>} expectedEntries Expected file entries.
+ * @param {boolean=} trashButton If the file system doesn't support trash,
+ *     a delete button will show instead of a trash button.
  */
-async function verifyRecentDocuments(appId, expectedEntries) {
+async function verifyRecentDocuments(
+    appId, expectedEntries, trashButton = false) {
   await navigateToRecent(appId, RecentFilterType.DOCUMENT);
-  await verifyCurrentEntries(appId, expectedEntries);
+  await verifyCurrentEntries(appId, expectedEntries, trashButton);
 }
 
 /**
@@ -237,12 +253,17 @@ async function goToFileLocation(appId, fileName) {
  *
  * @param {string} appId Files app windowId.
  * @param {string} fileName Name of the file to delete.
+ * @param {boolean=} confirmDeletion If the file system doesn't support trash,
+ *     need to confirm the deletion.
  */
-async function deleteFile(appId, fileName) {
-  await rightClickContextMenu(appId, fileName, 'delete');
-  // Click "Delete" on the Delete confirm dialog.
-  await remoteCall.waitAndClickElement(
-      appId, '.files-confirm-dialog button.cr-dialog-ok');
+async function deleteFile(appId, fileName, confirmDeletion = false) {
+  const command = (confirmDeletion) ? 'delete' : 'move-to-trash';
+  await rightClickContextMenu(appId, fileName, command);
+  if (confirmDeletion) {
+    // Click "Delete" on the Delete confirm dialog.
+    await remoteCall.waitAndClickElement(
+        appId, '.files-confirm-dialog button.cr-dialog-ok');
+  }
 }
 
 /**
@@ -281,7 +302,8 @@ async function renameFile(appId, fileName, newName) {
 async function cutFileAndPasteTo(appId, fileName, newFolder) {
   await rightClickContextMenu(appId, fileName, 'cut');
   // Go to the new folder to paste.
-  await navigateWithDirectoryTree(appId, newFolder);
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.navigateToPath(newFolder);
   chrome.test.assertTrue(
       await remoteCall.callRemoteTestUtil('execCommand', appId, ['paste']));
   // Wait for the operation to be completed.
@@ -343,7 +365,8 @@ testcase.recentsDownloads = async () => {
       RootPath.DOWNLOADS, BASIC_LOCAL_ENTRY_SET, []);
 
   // Verifies file list in Recents.
-  await verifyRecents(appId);
+  await verifyRecents(
+      appId, /*expectedEntries=*/ undefined, /*trashButton=*/ true);
 
   // Tests that selecting "Go to file location" for a file navigates to
   // Downloads since the file in Recents is from Downloads.
@@ -393,6 +416,20 @@ testcase.recentsPlayFiles = async () => {
 };
 
 /**
+ * Tests that file entries populated in the My Files folder recently will be
+ * displayed in the Recent folder.
+ */
+testcase.recentsMyFiles = async () => {
+  // Populate My Files.
+  addEntries(['my_files'], [ENTRIES.beautiful, ENTRIES.photos]);
+
+  const appId = await setupAndWaitUntilReady(RootPath.MY_FILES, [], []);
+
+  // Verify file list in Recents.
+  await verifyRecents(appId, [ENTRIES.beautiful], /*trashButton=*/ true);
+};
+
+/**
  * Tests that file entries populated in Crostini folder recently won't be
  * displayed in Recent folder when Crostini has not been mounted.
  */
@@ -403,7 +440,7 @@ testcase.recentsCrostiniNotMounted = async () => {
 
   const appId = await setupAndWaitUntilReady(
       RootPath.DOWNLOADS, [ENTRIES.beautiful, ENTRIES.photos], []);
-  await verifyRecents(appId, [ENTRIES.beautiful]);
+  await verifyRecents(appId, [ENTRIES.beautiful], /*trashButton=*/ true);
 };
 
 /**
@@ -472,7 +509,8 @@ testcase.recentsNested = async () => {
       NESTED_ENTRY_SET.concat([ENTRIES.deeplyBurriedSmallJpeg]), []);
 
   // Verifies file list in Recents.
-  await verifyRecents(appId, [ENTRIES.deeplyBurriedSmallJpeg]);
+  await verifyRecents(
+      appId, [ENTRIES.deeplyBurriedSmallJpeg], /*trashButton=*/ true);
 
   // Tests that selecting "Go to file location" for a file navigates to
   // Downloads/A/B/C since the file in Recents is from Downloads/A/B/C.
@@ -483,10 +521,9 @@ testcase.recentsNested = async () => {
   await verifyBreadcrumbsPath(appId, '/My files/Downloads/A/B/C');
 
   // Check: The directory should be highlighted in the directory tree.
-  await remoteCall.waitForElement(
-      appId,
-      '.tree-item[full-path-for-testing="/Downloads/A/B/C"] > ' +
-          '.tree-row[selected][active]');
+  const directoryTree = await DirectoryTreePageObject.create(appId, remoteCall);
+  await directoryTree.waitForSelectedItemByLabel('C');
+  await directoryTree.waitForFocusableItemByLabel('C');
 };
 
 /**
@@ -497,7 +534,7 @@ testcase.recentAudioDownloads = async () => {
   const appId = await setupAndWaitUntilReady(
       RootPath.DOWNLOADS, BASIC_LOCAL_ENTRY_SET, []);
   // ENTRIES.beautiful is recently-modified and has .ogg file extension.
-  await verifyRecentAudio(appId, [ENTRIES.beautiful]);
+  await verifyRecentAudio(appId, [ENTRIES.beautiful], /*trashButton=*/ true);
 };
 
 /**
@@ -508,11 +545,11 @@ testcase.recentAudioDownloads = async () => {
 testcase.recentAudioDownloadsAndDrive = async () => {
   const appId = await setupAndWaitUntilReady(
       RootPath.DOWNLOADS, BASIC_LOCAL_ENTRY_SET, BASIC_DRIVE_ENTRY_SET);
+  // TODO(b:267515423): Fix MIME type for Entries.beautiful.
   // ENTRIES.beautiful in BASIC_DRIVE_ENTRY_SET does not have mime type.
-  // Since Drive files should be filtered based on mime types, only the file in
-  // Downloads should be shown even though the Drive one also has .ogg file
-  // extension.
-  await verifyRecentAudio(appId, [ENTRIES.beautiful]);
+  // The implementation of drivefs used in tests accepts files if the
+  // MIME type cannot be determined, erring on the side of acceptance.
+  await verifyRecentAudio(appId, [ENTRIES.beautiful, ENTRIES.beautiful]);
 
   // Tests that selecting "Go to file location" for the file navigates to
   // Downloads since the same file from My Drive doesn't appear in Recent
@@ -531,10 +568,13 @@ testcase.recentAudioDownloadsAndDriveAndPlayFiles = async () => {
   await addPlayFileEntries();
   const appId = await setupAndWaitUntilReady(
       RootPath.DOWNLOADS, BASIC_LOCAL_ENTRY_SET, BASIC_DRIVE_ENTRY_SET);
-  // ENTRIES.beautiful in BASIC_DRIVE_ENTRY_SET does not have mime type, so it
-  // won't be included. Also, Play Files recents doesn't support audio root,
-  // so audio file in Play Files won't be included.
-  await verifyRecentAudio(appId, [ENTRIES.beautiful]);
+  // TODO(b:267515423): Fix MIME type for Entries.beautiful.
+  // ENTRIES.beautiful in BASIC_DRIVE_ENTRY_SET does not have mime type.
+  // The implementation of drivefs used in tests accepts files if the
+  // MIME type cannot be determined, erring on the side of acceptance.
+  // Play Files recents doesn't support audio root, so audio file in Play
+  // Files won't be included.
+  await verifyRecentAudio(appId, [ENTRIES.beautiful, ENTRIES.beautiful]);
 };
 
 /**
@@ -545,7 +585,7 @@ testcase.recentImagesDownloads = async () => {
   const appId = await setupAndWaitUntilReady(
       RootPath.DOWNLOADS, BASIC_LOCAL_ENTRY_SET, []);
   // ENTRIES.desktop is recently-modified and has .png file extension.
-  await verifyRecentImages(appId, [ENTRIES.desktop]);
+  await verifyRecentImages(appId, [ENTRIES.desktop], /*trashButton=*/ true);
 };
 
 /**
@@ -556,9 +596,14 @@ testcase.recentImagesDownloads = async () => {
  */
 testcase.recentImagesDownloadsAndDrive = async () => {
   const appId = await setupAndWaitUntilReady(RootPath.DOWNLOADS);
+  // TODO(b:267515423): Fix MIME type for Entries.beautiful.
   // ENTRIES.desktop has 'image/png' mime type, too. Both the file in Downloads
   // and the file in Drive should be shown in Images.
-  await verifyRecentImages(appId, [ENTRIES.desktop, ENTRIES.desktop]);
+  await verifyRecentImages(appId, [
+    ENTRIES.beautiful,
+    ENTRIES.desktop,
+    ENTRIES.desktop,
+  ]);
 };
 
 /**
@@ -568,8 +613,12 @@ testcase.recentImagesDownloadsAndDrive = async () => {
 testcase.recentImagesDownloadsAndDriveAndPlayFiles = async () => {
   await addPlayFileEntries();
   const appId = await setupAndWaitUntilReady(RootPath.DOWNLOADS);
-  await verifyRecentImages(
-      appId, [ENTRIES.desktop, ENTRIES.desktop, RECENT_MODIFIED_ANDROID_IMAGE]);
+  await verifyRecentImages(appId, [
+    ENTRIES.beautiful,
+    ENTRIES.desktop,
+    ENTRIES.desktop,
+    RECENT_MODIFIED_ANDROID_IMAGE,
+  ]);
 };
 
 /**
@@ -585,7 +634,8 @@ testcase.recentVideosDownloads = async () => {
           [RECENTLY_MODIFIED_VIDEO, RECENTLY_MODIFIED_MOV_VIDEO]),
       []);
   await verifyRecentVideos(
-      appId, [RECENTLY_MODIFIED_VIDEO, RECENTLY_MODIFIED_MOV_VIDEO]);
+      appId, [RECENTLY_MODIFIED_VIDEO, RECENTLY_MODIFIED_MOV_VIDEO],
+      /*trashButton=*/ true);
 };
 
 /**
@@ -601,8 +651,14 @@ testcase.recentVideosDownloadsAndDrive = async () => {
       BASIC_DRIVE_ENTRY_SET.concat([RECENTLY_MODIFIED_VIDEO]));
   // RECENTLY_MODIFIED_VIDEO has video mime type (video/ogg) too, so the file
   // from Drive should be shown too.
-  await verifyRecentVideos(
-      appId, [RECENTLY_MODIFIED_VIDEO, RECENTLY_MODIFIED_VIDEO]);
+  // The implementation of drivefs used in tests accepts files if the MIME type
+  // cannot be determined, erring on the side of acceptance, hence
+  // ENTRIES.beautiful presence in this group.
+  await verifyRecentVideos(appId, [
+    ENTRIES.beautiful,
+    RECENTLY_MODIFIED_VIDEO,
+    RECENTLY_MODIFIED_VIDEO,
+  ]);
 };
 
 /**
@@ -615,7 +671,11 @@ testcase.recentVideosDownloadsAndDriveAndPlayFiles = async () => {
       RootPath.DOWNLOADS,
       BASIC_LOCAL_ENTRY_SET.concat([RECENTLY_MODIFIED_VIDEO]),
       BASIC_DRIVE_ENTRY_SET.concat([RECENTLY_MODIFIED_VIDEO]));
+  // The implementation of drivefs used in tests accepts files if the MIME type
+  // cannot be determined, erring on the side of acceptance, hence
+  // ENTRIES.beautiful presence in this group.
   await verifyRecentVideos(appId, [
+    ENTRIES.beautiful,
     RECENTLY_MODIFIED_VIDEO,
     RECENTLY_MODIFIED_VIDEO,
     RECENT_MODIFIED_ANDROID_VIDEO,
@@ -629,7 +689,8 @@ testcase.recentVideosDownloadsAndDriveAndPlayFiles = async () => {
 testcase.recentDocumentsDownloads = async () => {
   const appId = await setupAndWaitUntilReady(
       RootPath.DOWNLOADS, [RECENTLY_MODIFIED_DOCUMENT], []);
-  await verifyRecentDocuments(appId, [RECENTLY_MODIFIED_DOCUMENT]);
+  await verifyRecentDocuments(
+      appId, [RECENTLY_MODIFIED_DOCUMENT], /*trashButton=*/ true);
 };
 
 /**
@@ -681,7 +742,7 @@ testcase.recentsFilterResetToAll = async () => {
   const focusedElement =
       await remoteCall.callRemoteTestUtil('getActiveElement', appId, []);
   chrome.test.assertEq('all', focusedElement.attributes['file-type-filter']);
-  await verifyCurrentEntries(appId, RECENT_ENTRY_SET);
+  await verifyCurrentEntries(appId, RECENT_ENTRY_SET, /*trashButton=*/ true);
 };
 
 /**
@@ -761,7 +822,7 @@ testcase.recentsAllowDeletion = async () => {
   await remoteCall.waitForFiles(appId, files1);
 
   // Delete a file originated from Drive.
-  await deleteFile(appId, ENTRIES.desktop.nameText);
+  await deleteFile(appId, ENTRIES.desktop.nameText, /*confirmDeletion=*/ true);
   const files2 = TestEntryInfo.getExpectedRows([
     RECENT_MODIFIED_ANDROID_DOCUMENT,
     RECENT_MODIFIED_ANDROID_IMAGE,
@@ -770,7 +831,8 @@ testcase.recentsAllowDeletion = async () => {
   await remoteCall.waitForFiles(appId, files2);
 
   // Delete a file originated from Play Files.
-  await deleteFile(appId, RECENT_MODIFIED_ANDROID_IMAGE.nameText);
+  await deleteFile(
+      appId, RECENT_MODIFIED_ANDROID_IMAGE.nameText, /*confirmDeletion=*/ true);
   const files3 = TestEntryInfo.getExpectedRows(
       [RECENT_MODIFIED_ANDROID_DOCUMENT, RECENT_MODIFIED_ANDROID_VIDEO]);
   await remoteCall.waitForFiles(appId, files3);
@@ -1077,7 +1139,7 @@ function prepareFileFor1AMToday(timezone) {
   const nowDate = new Date();
   nowDate.setHours(1, 0, 0, 0);
   // Format: "May 2, 2021, 11:25 AM GMT+1000"
-  const modifiedDate = nowDate.toLocaleString('default', {
+  const modifiedDate = sanitizeDate(nowDate.toLocaleString('default', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -1086,7 +1148,7 @@ function prepareFileFor1AMToday(timezone) {
     minute: 'numeric',
     timeZone: timezone,
     timeZoneName: 'longOffset',
-  });
+  }));
   return ENTRIES.beautiful.cloneWithModifiedDate(modifiedDate);
 }
 
@@ -1224,21 +1286,82 @@ testcase.recentsRespectSearchWhenSwitchingFilter = async () => {
   await remoteCall.waitForFiles(appId, files);
 
   // Search term "tall".
-  await remoteCall.waitAndClickElement(appId, '#search-button');
-  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
-      'fakeEvent', appId, ['#search-box [type="search"]', 'focus']));
-  await remoteCall.inputText(appId, '#search-box [type="search"]', 'tall');
-  chrome.test.assertTrue(await remoteCall.callRemoteTestUtil(
-      'fakeEvent', appId, ['#search-box [type="search"]', 'input']));
+  await remoteCall.typeSearchText(appId, 'tall');
 
   // Check only tall.txt should show.
   await remoteCall.waitForFiles(
       appId, TestEntryInfo.getExpectedRows([txtFile1]));
 
-  // Switch to "Document" filter.
-  await navigateToRecent(appId, RecentFilterType.DOCUMENT);
+  // Switch to "Document" filter. Since search is active, use search options.
+  chrome.test.assertTrue(
+      !!await remoteCall.selectSearchOption(appId, 'type', 3),
+      'Failed to click "Documents" type selector');
 
   // Check there is still only tall.txt in the file list (no utf8.txt).
   await remoteCall.waitForFiles(
       appId, TestEntryInfo.getExpectedRows([txtFile1]));
+};
+
+/**
+ * Checks that Recents folder shows files from file system provider.
+ */
+testcase.recentFileSystemProviderFiles = async () => {
+  const appId = await setupAndWaitUntilReady(
+      RootPath.DOWNLOADS, BASIC_LOCAL_ENTRY_SET, []);
+  // Add 4 levels of folders to the provided file system. We wish to test that
+  // recently modified files appear in the Recent view, but also use this test
+  // to document the current limit of nesting enforced by the recent view for
+  // provided files.
+  const testFolders = [
+    new TestEntryInfo({
+      type: EntryType.DIRECTORY,
+      targetPath: '/Level1',
+      mimeType: 'text/plain',
+      lastModifiedTime: 'Fri, 25 Apr 2014 01:47:53',
+      nameText: 'Level1',
+      sizeText: '',
+      typeText: '',
+    }),
+    new TestEntryInfo({
+      type: EntryType.DIRECTORY,
+      targetPath: '/Level1/Level2',
+      mimeType: 'text/plain',
+      lastModifiedTime: 'Fri, 25 Apr 2014 01:47:53',
+      nameText: 'Level2',
+      sizeText: '',
+      typeText: '',
+    }),
+    new TestEntryInfo({
+      type: EntryType.DIRECTORY,
+      targetPath: '/Level1/Level2/Level3',
+      mimeType: 'text/plain',
+      lastModifiedTime: 'Fri, 25 Apr 2014 01:47:53',
+      nameText: 'Level3',
+      sizeText: '',
+      typeText: '',
+    }),
+  ];
+  const testEntries = [
+    RECENT_PROVIDED_HELLO,
+    RECENT_PROVIDED_HELLO.cloneWith({
+      targetPath: '/Level1/recent-hello1.txt',
+      nameText: 'recent-hello1.txt',
+    }),
+    RECENT_PROVIDED_HELLO.cloneWith({
+      targetPath: '/Level1/Level2/recent-hello2.txt',
+      nameText: 'recent-hello2.txt',
+    }),
+    RECENT_PROVIDED_HELLO.cloneWith({
+      targetPath: '/Level1/Level2/Level3/recent-hello3.txt',
+      nameText: 'recent-hello3.txt',
+    }),
+  ];
+  await addEntries(['provided'], testFolders.concat(testEntries));
+
+  // Expect that regardless of the depth of folder nesting, all recently
+  // modified files are present.
+  await navigateToRecent(appId);
+  await remoteCall.waitForFiles(
+      appId,
+      TestEntryInfo.getExpectedRows(RECENT_ENTRY_SET.concat(testEntries)));
 };

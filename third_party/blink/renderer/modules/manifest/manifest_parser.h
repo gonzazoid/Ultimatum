@@ -9,7 +9,9 @@
 
 #include "base/types/strong_alias.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/common/manifest/manifest.h"
 #include "third_party/blink/public/common/permissions_policy/permissions_policy.h"
+#include "third_party/blink/public/common/safe_url_pattern.h"
 #include "third_party/blink/public/mojom/manifest/manifest.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/manifest/manifest.mojom-blink.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom-blink.h"
@@ -55,9 +57,13 @@ class MODULES_EXPORT ManifestParser {
   // https://w3c.github.io/manifest/#processing
   bool Parse();
 
-  const mojom::blink::ManifestPtr& manifest() const;
   bool failed() const;
 
+  // Takes ownership of the Manifest produced by Parse(). Once called, the
+  // parser is invalid and should no longer be used.
+  mojom::blink::ManifestPtr TakeManifest();
+
+  // Take any errors generated.
   void TakeErrors(Vector<mojom::blink::ManifestErrorPtr>* errors);
 
  private:
@@ -71,6 +77,16 @@ class MODULES_EXPORT ManifestParser {
     kSameOriginOnly,  // Parsed URLs must be same origin as the document URL.
     kWithinScope,     // Parsed URLs must be within scope of the manifest scope
                       // (implies same origin as document URL).
+  };
+
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
+  enum class ParseIdResultType {
+    kSucceed = 0,
+    kDefaultToStartUrl = 1,
+    kInvalidStartUrl = 2,
+    kFeatureDisabled = 3,  // No longer emitted, feature flag is removed.
+    kMaxValue = kFeatureDisabled,
   };
 
   // Helper function to parse booleans present on a given |dictionary| in a
@@ -151,7 +167,8 @@ class MODULES_EXPORT ManifestParser {
   String ParseDescription(const JSONObject* object);
 
   // Parses the 'id' field of the manifest.
-  String ParseId(const JSONObject* object, const KURL& start_url);
+  std::pair<KURL, ParseIdResultType> ParseId(const JSONObject* object,
+                                             const KURL& start_url);
 
   // Parses the 'scope' field of the manifest, as defined in:
   // https://w3c.github.io/manifest/#scope-member. Returns the parsed KURL if
@@ -335,6 +352,35 @@ class MODULES_EXPORT ManifestParser {
   absl::optional<mojom::blink::ManifestUrlHandlerPtr> ParseUrlHandler(
       const JSONObject* object);
 
+  // Parses the 'scope_extensions' field of a Manifest, as defined in:
+  // https://github.com/WICG/manifest-incubations/blob/gh-pages/scope_extensions-explainer.md
+  // Returns the parsed list of ScopeExtensions. The returned ScopeExtensions
+  // are empty if the field didn't exist, parsing failed, the input list was
+  // empty, or if the blink feature flag is disabled.
+  // This feature is experimental and is only enabled by the blink feature flag:
+  // blink::features::kWebAppEnableScopeExtensions.
+  Vector<mojom::blink::ManifestScopeExtensionPtr> ParseScopeExtensions(
+      const JSONObject* object);
+
+  // Parses a single scope extension entry in 'scope_extensions', as defined in:
+  // https://github.com/WICG/manifest-incubations/blob/gh-pages/scope_extensions-explainer.md
+  // Returns |absl::nullopt| if the ScopeExtension was invalid, or a
+  // ScopeExtension if parsing succeeded.
+  // This feature is experimental and is only enabled by the blink feature flag:
+  // blink::features::kWebAppEnableScopeExtensions.
+  absl::optional<mojom::blink::ManifestScopeExtensionPtr> ParseScopeExtension(
+      const JSONObject* object);
+
+  // Parses a single scope extension origin in 'scope_extensions', as defined
+  // in:
+  // https://github.com/WICG/manifest-incubations/blob/gh-pages/scope_extensions-explainer.md
+  // Returns |absl::nullopt| if the ScopeExtension origin was invalid, or a
+  // ScopeExtension if parsing succeeded.
+  // This feature is experimental and is only enabled by the blink feature flag:
+  // blink::features::kWebAppEnableScopeExtensions.
+  absl::optional<mojom::blink::ManifestScopeExtensionPtr>
+  ParseScopeExtensionOrigin(const String& origin_string);
+
   // Parses the 'file_handlers' field of a Manifest, as defined in:
   // https://github.com/WICG/file-handling/blob/main/explainer.md
   // Returns the parsed list of FileHandlers. The returned FileHandlers are
@@ -449,12 +495,6 @@ class MODULES_EXPORT ManifestParser {
   // Returns the parsed string if any, a null string if the parsing failed.
   String ParseGCMSenderID(const JSONObject* object);
 
-  // Parses the 'isolated_storage' field of the manifest.
-  // This marks whether the application should be loaded in a dedicated storage
-  // partition.
-  // Returns true iff the field could be parsed as the boolean true.
-  bool ParseIsolatedStorage(const JSONObject* object);
-
   // Parses the 'permissions_policy' field of the manifest.
   // This outsources semantic parsing of the policy to the
   // PermissionsPolicyParser.
@@ -499,6 +539,12 @@ class MODULES_EXPORT ManifestParser {
 
   mojom::blink::TabStripMemberVisibility ParseTabStripMemberVisibility(
       const JSONValue* json_value);
+
+  // Parses the 'scope_patterns' field of the 'tab_strip.home_tab' field
+  // of the manifest.
+  Vector<SafeUrlPattern> ParseScopePatterns(const JSONObject* object);
+
+  String ParseVersion(const JSONObject* object);
 
   void AddErrorInfo(const String& error_msg,
                     bool critical = false,

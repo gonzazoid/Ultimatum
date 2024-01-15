@@ -5,13 +5,15 @@
 #include "chrome/browser/ui/webui/help/version_updater_chromeos.h"
 
 #include <memory>
+#include <optional>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/mock_callback.h"
-#include "chrome/browser/ash/login/users/mock_user_manager.h"
+#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
 #include "chromeos/ash/components/dbus/shill/shill_service_client.h"
 #include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
@@ -20,7 +22,6 @@
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
 using ::testing::_;
@@ -53,8 +54,7 @@ class VersionUpdaterCrosTest : public ::testing::Test {
         version_updater_cros_ptr_(
             reinterpret_cast<VersionUpdaterCros*>(version_updater_.get())),
         fake_update_engine_client_(nullptr),
-        mock_user_manager_(new MockUserManager()),
-        user_manager_enabler_(base::WrapUnique(mock_user_manager_)) {}
+        user_manager_enabler_(std::make_unique<FakeChromeUserManager>()) {}
 
   ~VersionUpdaterCrosTest() override {}
 
@@ -62,11 +62,8 @@ class VersionUpdaterCrosTest : public ::testing::Test {
     fake_update_engine_client_ =
         ash::UpdateEngineClient::InitializeFakeForTest();
 
-    EXPECT_CALL(*mock_user_manager_, IsCurrentUserOwner())
-        .WillRepeatedly(Return(false));
-    EXPECT_CALL(*mock_user_manager_, Shutdown()).Times(AtLeast(0));
-
-    network_handler_test_helper_ = std::make_unique<NetworkHandlerTestHelper>();
+    network_handler_test_helper_ =
+        std::make_unique<ash::NetworkHandlerTestHelper>();
     base::RunLoop().RunUntilIdle();
   }
 
@@ -99,14 +96,14 @@ class VersionUpdaterCrosTest : public ::testing::Test {
   }
 
   content::BrowserTaskEnvironment task_environment_;
-  std::unique_ptr<NetworkHandlerTestHelper> network_handler_test_helper_;
+  std::unique_ptr<ash::NetworkHandlerTestHelper> network_handler_test_helper_;
   std::unique_ptr<VersionUpdater> version_updater_;
-  VersionUpdaterCros* version_updater_cros_ptr_;
-  ash::FakeUpdateEngineClient* fake_update_engine_client_;  // Not owned.
+  raw_ptr<VersionUpdaterCros, DanglingUntriaged> version_updater_cros_ptr_;
+  raw_ptr<ash::FakeUpdateEngineClient, DanglingUntriaged>
+      fake_update_engine_client_;  // Not owned.
 
-  MockUserManager* mock_user_manager_;  // Not owned.
   user_manager::ScopedUserManager user_manager_enabler_;
-  ScopedCrosSettingsTestHelper cros_settings_test_helper_;
+  ash::ScopedCrosSettingsTestHelper cros_settings_test_helper_;
 };
 
 // The test checks following behaviour:
@@ -261,6 +258,26 @@ TEST_F(VersionUpdaterCrosTest, GetUpdateStatus_UpdatedNeedReboot) {
   StrictMock<base::MockCallback<VersionUpdater::StatusCallback>> mock_callback;
   EXPECT_CALL(mock_callback,
               Run(VersionUpdater::NEARLY_UPDATED, _, _, _, _, _, _))
+      .Times(1);
+  version_updater_cros_ptr_->GetUpdateStatus(mock_callback.Get());
+}
+
+TEST_F(VersionUpdaterCrosTest,
+       GetUpdateStatus_UpdateToRollbackVersionDisallowed) {
+  SetEthernetService();
+  update_engine::StatusResult status;
+  status.set_is_interactive(true);
+  status.set_current_operation(update_engine::Operation::DISABLED);
+  int32_t error_code = static_cast<int32_t>(
+      update_engine::ErrorCode::kOmahaUpdateIgnoredPerPolicy);
+  status.set_last_attempt_error(error_code);
+  fake_update_engine_client_->set_default_status(status);
+
+  // Expect the status to be `UPDATE_TO_ROLLBACK_VERSION_DISALLOWED`.
+  StrictMock<base::MockCallback<VersionUpdater::StatusCallback>> mock_callback;
+  EXPECT_CALL(mock_callback,
+              Run(VersionUpdater::UPDATE_TO_ROLLBACK_VERSION_DISALLOWED, _, _,
+                  _, _, _, _))
       .Times(1);
   version_updater_cros_ptr_->GetUpdateStatus(mock_callback.Get());
 }

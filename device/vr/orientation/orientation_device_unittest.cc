@@ -7,15 +7,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "device/vr/orientation/orientation_device.h"
 #include "device/vr/orientation/orientation_session.h"
 #include "device/vr/test/fake_orientation_provider.h"
@@ -23,6 +22,7 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/device/public/cpp/generic_sensor/sensor_reading.h"
+#include "services/device/public/cpp/generic_sensor/sensor_reading_shared_buffer.h"
 #include "services/device/public/cpp/generic_sensor/sensor_reading_shared_buffer_reader.h"
 #include "services/device/public/cpp/generic_sensor/sensor_traits.h"
 #include "services/device/public/mojom/sensor.mojom.h"
@@ -30,19 +30,16 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
-#include "ui/display/test/scoped_screen_override.h"
 #include "ui/gfx/geometry/quaternion.h"
 
 namespace device {
-
-using display::test::ScopedScreenOverride;
 
 namespace {
 
 class FakeScreen : public display::Screen {
  public:
-  FakeScreen() = default;
-  ~FakeScreen() override = default;
+  FakeScreen() { display::Screen::SetScreenInstance(this); }
+  ~FakeScreen() override { display::Screen::SetScreenInstance(nullptr); }
   display::Display GetPrimaryDisplay() const override { return display; }
 
   // Unused functions
@@ -104,9 +101,6 @@ class VROrientationDeviceTest : public testing::Test {
     ASSERT_TRUE(mapped_region_.IsValid());
 
     fake_screen_ = std::make_unique<FakeScreen>();
-
-    scoped_screen_override_ =
-        std::make_unique<ScopedScreenOverride>(fake_screen_.get());
 
     task_environment_.RunUntilIdle();
   }
@@ -237,7 +231,6 @@ class VROrientationDeviceTest : public testing::Test {
   mojo::Remote<mojom::SensorClient> sensor_client_;
 
   std::unique_ptr<FakeScreen> fake_screen_;
-  std::unique_ptr<ScopedScreenOverride> scoped_screen_override_;
 };
 
 TEST_F(VROrientationDeviceTest, InitializationTest) {

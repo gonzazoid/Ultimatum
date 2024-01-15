@@ -9,12 +9,12 @@
   to setup build directory with the lacros-chrome-on-linux build configuration,
   and corresponding test targets are built successfully.
 
-  * Example usages:
+Example usages
 
   ./build/lacros/test_runner.py test out/lacros/url_unittests
   ./build/lacros/test_runner.py test out/lacros/browser_tests
 
-  The commands above run url_unittests and browser_tests respecitively, and more
+  The commands above run url_unittests and browser_tests respectively, and more
   specifically, url_unitests is executed directly while browser_tests is
   executed with the latest version of prebuilt ash-chrome, and the behavior is
   controlled by |_TARGETS_REQUIRE_ASH_CHROME|, and it's worth noting that the
@@ -44,6 +44,13 @@
   will try to find the ash major version and Lacros major version. If ash is
   newer(major version larger), the runner will not run any tests and just
   returns success.
+
+Interactively debugging tests
+
+  Any of the previous examples accept the switches
+    --gdb
+    --lldb
+  to run the tests in the corresponding debugger.
 """
 
 import argparse
@@ -63,18 +70,18 @@ _SRC_ROOT = os.path.abspath(
     os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir))
 sys.path.append(os.path.join(_SRC_ROOT, 'third_party', 'depot_tools'))
 
-# Base GS URL to store prebuilt ash-chrome.
-_GS_URL_BASE = 'gs://ash-chromium-on-linux-prebuilts/x86_64'
 
-# Latest file version.
-_GS_URL_LATEST_FILE = _GS_URL_BASE + '/latest/ash-chromium.txt'
+# The cipd path for prebuilt ash chrome.
+_ASH_CIPD_PATH = 'chromium/testing/linux-ash-chromium/x86_64/ash.zip'
 
-# GS path to the zipped ash-chrome build with any given version.
-_GS_ASH_CHROME_PATH = 'ash-chromium.zip'
 
 # Directory to cache downloaded ash-chrome versions to avoid re-downloading.
 _PREBUILT_ASH_CHROME_DIR = os.path.join(os.path.dirname(__file__),
                                         'prebuilt_ash_chrome')
+
+# File path to the asan symbolizer executable.
+_ASAN_SYMBOLIZER_PATH = os.path.join(_SRC_ROOT, 'tools', 'valgrind', 'asan',
+                                     'asan_symbolize.py')
 
 # Number of seconds to wait for ash-chrome to start.
 ASH_CHROME_TIMEOUT_SECONDS = (
@@ -110,7 +117,6 @@ _TARGETS_REQUIRE_MOJO_CROSAPI = [
     # serially.
     'interactive_ui_tests',
     'lacros_chrome_browsertests',
-    'lacros_chrome_browsertests_run_in_series'
 ]
 
 # Default test filter file for each target. These filter files will be
@@ -166,28 +172,71 @@ def _remove_unused_ash_chrome_versions(version_to_skip):
           'past %d days', p, days)
       shutil.rmtree(p)
 
-def _GsutilCopyWithRetry(gs_path, local_name, retry_times=3):
-  """Gsutil copy with retry.
 
-  Args:
-    gs_path: The gs path for remote location.
-    local_name: The local file name.
-    retry_times: The total try times if the gsutil call fails.
+def _GetLatestVersionOfAshChrome():
+  '''Get the latest ash chrome version.
+
+  Get the package version info with canary ref.
+
+  Returns:
+    A string with the chrome version.
 
   Raises:
-    RuntimeError: If failed to download the specified version, for example,
-        if the version is not present on gcs.
-  """
-  import download_from_google_storage
-  gsutil = download_from_google_storage.Gsutil(
-      download_from_google_storage.GSUTIL_DEFAULT_PATH)
-  exit_code = 1
-  retry = 0
-  while exit_code and retry < retry_times:
-    retry += 1
-    exit_code = gsutil.call('cp', gs_path, local_name)
-  if exit_code:
-    raise RuntimeError('Failed to download: "%s"' % gs_path)
+    RuntimeError: if we can not get the version.
+  '''
+  cp = subprocess.run(
+      ['cipd', 'describe', _ASH_CIPD_PATH, '-version', 'canary'],
+      capture_output=True)
+  assert (cp.returncode == 0)
+  groups = re.search(r'version:(?P<version>[\d\.]+)', str(cp.stdout))
+  if not groups:
+    raise RuntimeError('Can not find the version. Error message: %s' %
+                       cp.stdout)
+  return groups.group('version')
+
+
+def _DownloadAshChromeFromCipd(path, version):
+  '''Download the ash chrome with the requested version.
+
+  Args:
+    path: string for the downloaded ash chrome folder.
+    version: string for the ash chrome version.
+
+  Returns:
+    A string representing the path for the downloaded ash chrome.
+  '''
+  with tempfile.TemporaryDirectory() as temp_dir:
+    ensure_file_path = os.path.join(temp_dir, 'ensure_file.txt')
+    f = open(ensure_file_path, 'w+')
+    f.write(_ASH_CIPD_PATH + ' version:' + version)
+    f.close()
+    subprocess.run(
+        ['cipd', 'ensure', '-ensure-file', ensure_file_path, '-root', path])
+
+
+def _DoubleCheckDownloadedAshChrome(path, version):
+  '''Check the downloaded ash is the expected version.
+
+  Double check by running the chrome binary with --version.
+
+  Args:
+    path: string for the downloaded ash chrome folder.
+    version: string for the expected ash chrome version.
+
+  Raises:
+    RuntimeError if no test_ash_chrome binary can be found.
+  '''
+  test_ash_chrome = os.path.join(path, 'test_ash_chrome')
+  if not os.path.exists(test_ash_chrome):
+    raise RuntimeError('Can not find test_ash_chrome binary under %s' % path)
+  cp = subprocess.run([test_ash_chrome, '--version'], capture_output=True)
+  assert (cp.returncode == 0)
+  if str(cp.stdout).find(version) == -1:
+    logging.warning(
+        'The downloaded ash chrome version is %s, but the '
+        'expected ash chrome is %s. There is a version mismatch. Please '
+        'file a bug to OS>Lacros so someone can take a look.' %
+        (cp.stdout, version))
 
 
 def _DownloadAshChromeIfNecessary(version):
@@ -215,36 +264,9 @@ def _DownloadAshChromeIfNecessary(version):
 
   shutil.rmtree(ash_chrome_dir, ignore_errors=True)
   os.makedirs(ash_chrome_dir)
-  with tempfile.NamedTemporaryFile() as tmp:
-    logging.info('Ash-chrome version: %s', version)
-    gs_path = _GS_URL_BASE + '/' + version + '/' + _GS_ASH_CHROME_PATH
-    _GsutilCopyWithRetry(gs_path, tmp.name)
-
-    # https://bugs.python.org/issue15795. ZipFile doesn't preserve permissions.
-    # And in order to workaround the issue, this function is created and used
-    # instead of ZipFile.extractall().
-    # The solution is copied from:
-    # https://stackoverflow.com/questions/42326428/zipfile-in-python-file-permission
-    def ExtractFile(zf, info, extract_dir):
-      zf.extract(info.filename, path=extract_dir)
-      perm = info.external_attr >> 16
-      os.chmod(os.path.join(extract_dir, info.filename), perm)
-
-    with zipfile.ZipFile(tmp.name, 'r') as zf:
-      # Extra all files instead of just 'chrome' binary because 'chrome' needs
-      # other resources and libraries to run.
-      for info in zf.infolist():
-        ExtractFile(zf, info, ash_chrome_dir)
-
+  _DownloadAshChromeFromCipd(ash_chrome_dir, version)
+  _DoubleCheckDownloadedAshChrome(ash_chrome_dir, version)
   _remove_unused_ash_chrome_versions(version)
-
-
-def _GetLatestVersionOfAshChrome():
-  """Returns the latest version of uploaded ash-chrome."""
-  with tempfile.NamedTemporaryFile() as tmp:
-    _GsutilCopyWithRetry(_GS_URL_LATEST_FILE, tmp.name)
-    with open(tmp.name, 'r') as f:
-      return f.read().strip()
 
 
 def _WaitForAshChromeToStart(tmp_xdg_dir, lacros_mojo_socket_file,
@@ -375,14 +397,25 @@ def _IsRunningOnBots(forward_args):
   return '--test-launcher-bot-mode' in forward_args
 
 
-def _KillNicely(proc, timeout_secs=0.5):
+def _KillNicely(proc, timeout_secs=2, first_wait_secs=0):
   """Kills a subprocess nicely.
 
   Args:
     proc: The subprocess to kill.
     timeout_secs: The timeout to wait in seconds.
+    first_wait_secs: The grace period before sending first SIGTERM in seconds.
   """
-  if proc and proc.poll() is None:
+  if not proc:
+    return
+
+  if first_wait_secs:
+    try:
+      proc.wait(first_wait_secs)
+      return
+    except subprocess.TimeoutExpired:
+      pass
+
+  if proc.poll() is None:
     proc.terminate()
     try:
       proc.wait(timeout_secs)
@@ -402,6 +435,66 @@ def _ClearDir(dirpath):
       shutil.rmtree(e.path)
     elif e.is_file():
       os.remove(e.path)
+
+
+def _LaunchDebugger(args, forward_args, test_env):
+  """Launches the requested debugger.
+
+  This is used to wrap the test invocation in a debugger. It returns the
+  created Popen class of the debugger process.
+
+  Args:
+      args (dict): Args for this script.
+      forward_args (list): Args to be forwarded to the test command.
+      test_env (dict): Computed environment variables for the test.
+  """
+  logging.info('Starting debugger.')
+
+  # Redirect fatal signals to "ignore." When running an interactive debugger,
+  # these signals should go only to the debugger so the user can break back out
+  # of the debugged test process into the debugger UI without killing this
+  # parent script.
+  for sig in (signal.SIGTERM, signal.SIGINT):
+    signal.signal(sig, signal.SIG_IGN)
+
+  # Force the tests into single-process-test mode for debugging unless manually
+  # specified. Otherwise the tests will run in a child process that the debugger
+  # won't be attached to and the debugger won't do anything.
+  if not ("--single-process" in forward_args
+          or "--single-process-tests" in forward_args):
+    forward_args += ["--single-process-tests"]
+
+    # Adding --single-process-tests can cause some tests to fail when they're
+    # run in the same process. Forcing the user to specify a filter will prevent
+    # a later error.
+    if not [i for i in forward_args if i.startswith("--gtest_filter")]:
+      logging.error("""Interactive debugging requested without --gtest_filter
+
+This script adds --single-process-tests to support interactive debugging but
+some tests will fail in this mode unless run independently. To debug a test
+specify a --gtest_filter=Foo.Bar to name the test you want to debug.
+""")
+      sys.exit(1)
+
+  # This code attempts to source the debugger configuration file. Some
+  # users will have this in their init but sourcing it more than once is
+  # harmless and helps people that haven't configured it.
+  if args.gdb:
+    gdbinit_file = os.path.normpath(
+        os.path.join(os.path.realpath(__file__), "../../../tools/gdb/gdbinit"))
+    debugger_command = [
+        'gdb', '--init-eval-command', 'source ' + gdbinit_file, '--args'
+    ]
+  else:
+    lldbinit_dir = os.path.normpath(
+        os.path.join(os.path.realpath(__file__), "../../../tools/lldb"))
+    debugger_command = [
+        'lldb', '-O',
+        "script sys.path[:0] = ['%s']" % lldbinit_dir, '-O',
+        'script import lldbinit', '--'
+    ]
+  debugger_command += [args.command] + forward_args
+  return subprocess.Popen(debugger_command, env=test_env)
 
 
 def _RunTestWithAshChrome(args, forward_args):
@@ -456,6 +549,7 @@ lacros_version_skew_tests_v92.0.4515.130/test_ash_chrome
     # Starts Ash-Chrome.
     tmp_xdg_dir_name = tempfile.mkdtemp()
     tmp_ash_data_dir_name = tempfile.mkdtemp()
+    tmp_unique_ash_dir_name = tempfile.mkdtemp()
 
     # Please refer to below file for how mojo connection is set up in testing.
     # //chrome/browser/ash/crosapi/test_mojo_connection_manager.h
@@ -475,8 +569,11 @@ lacros_version_skew_tests_v92.0.4515.130/test_ash_chrome
         '--user-data-dir=%s' % tmp_ash_data_dir_name,
         '--enable-wayland-server',
         '--no-startup-window',
+        '--disable-input-event-activation-protection',
         '--disable-lacros-keep-alive',
         '--disable-login-lacros-opening',
+        '--enable-field-trial-config',
+        '--enable-logging=stderr',
         '--enable-features=LacrosSupport,LacrosPrimary,LacrosOnly',
         '--ash-ready-file-path=%s' % ash_ready_file,
         '--wayland-server-socket=%s' % ash_wayland_socket_name,
@@ -496,31 +593,77 @@ lacros_version_skew_tests_v92.0.4515.130/test_ash_chrome
       logging.info('Running ash with "ASH_WRAPPER": %s', ash_wrapper)
       ash_cmd = list(ash_wrapper.split()) + ash_cmd
 
+    ash_process = None
     ash_process_has_started = False
     total_tries = 3
     num_tries = 0
+    ash_start_time = None
 
     # Create a log file if the user wanted to have one.
-    log = None
+    ash_log = None
+    ash_log_path = None
+
+    run_tests_in_debugger = args.gdb or args.lldb
+
     if args.ash_logging_path:
-      log = open(args.ash_logging_path, 'a')
-    # Ash logs can be useful. Enable ash log by default on bots.
-    elif _IsRunningOnBots(forward_args):
+      ash_log_path = args.ash_logging_path
+    # Put ash logs in a separate file on bots.
+    # For asan builds, the ash log is not symbolized. In order to
+    # read the stack strace, we don't redirect logs to another file.
+    elif _IsRunningOnBots(forward_args) and not args.combine_ash_logs_on_bots:
       summary_file = _ParseSummaryOutput(forward_args)
       if summary_file:
         ash_log_path = os.path.join(os.path.dirname(summary_file),
                                     'ash_chrome.log')
-        log = open(ash_log_path, 'a')
+    elif run_tests_in_debugger:
+      # The debugger is unusable when all Ash logs are getting dumped to the
+      # same terminal. Redirect to a log file if there isn't one specified.
+      logging.info("Running in the debugger and --ash-logging-path is not " +
+                   "specified, defaulting to the current directory.")
+      ash_log_path = 'ash_chrome.log'
+
+    if ash_log_path:
+      ash_log = open(ash_log_path, 'a')
+      logging.info('Writing ash-chrome logs to: %s', ash_log_path)
+
+    ash_stdout = ash_log or None
+    test_stdout = None
+
+    # Setup asan symbolizer.
+    ash_symbolize_process = None
+    test_symbolize_process = None
+    should_symbolize = False
+    if args.asan_symbolize_output and os.path.exists(_ASAN_SYMBOLIZER_PATH):
+      should_symbolize = True
+      ash_symbolize_stdout = ash_stdout
+      ash_stdout = subprocess.PIPE
+      test_stdout = subprocess.PIPE
 
     while not ash_process_has_started and num_tries < total_tries:
       num_tries += 1
-      if log is None:
-        ash_process = subprocess.Popen(ash_cmd, env=ash_env)
-      else:
-        ash_process = subprocess.Popen(ash_cmd,
-                                       env=ash_env,
-                                       stdout=log,
-                                       stderr=log)
+      ash_start_time = time.monotonic()
+      logging.info('Starting ash-chrome.')
+
+      # Using preexec_fn=os.setpgrp here will detach the forked process from
+      # this process group before exec-ing Ash. This prevents interactive
+      # Control-C from being seen by Ash. Otherwise Control-C in a debugger
+      # can kill Ash out from under the debugger. In non-debugger cases, this
+      # script attempts to clean up the spawned processes nicely.
+      ash_process = subprocess.Popen(ash_cmd,
+                                     env=ash_env,
+                                     preexec_fn=os.setpgrp,
+                                     stdout=ash_stdout,
+                                     stderr=subprocess.STDOUT)
+
+      if should_symbolize:
+        logging.info('Symbolizing ash logs with asan symbolizer.')
+        ash_symbolize_process = subprocess.Popen([_ASAN_SYMBOLIZER_PATH],
+                                                 stdin=ash_process.stdout,
+                                                 preexec_fn=os.setpgrp,
+                                                 stdout=ash_symbolize_stdout,
+                                                 stderr=subprocess.STDOUT)
+        # Allow ash_process to receive a SIGPIPE if symbolize process exits.
+        ash_process.stdout.close()
 
       ash_process_has_started = _WaitForAshChromeToStart(
           tmp_xdg_dir_name, lacros_mojo_socket_file, enable_mojo_crosapi,
@@ -534,6 +677,7 @@ lacros_version_skew_tests_v92.0.4515.130/test_ash_chrome
       logging.warning('Printing the output of "ps aux" for debugging:')
       subprocess.call(['ps', 'aux'])
       _KillNicely(ash_process)
+      _KillNicely(ash_symbolize_process, first_wait_secs=1)
 
       # Clean up for retry.
       _ClearDir(tmp_xdg_dir_name)
@@ -542,22 +686,47 @@ lacros_version_skew_tests_v92.0.4515.130/test_ash_chrome
     if not ash_process_has_started:
       raise RuntimeError('Timed out waiting for ash-chrome to start')
 
+    ash_elapsed_time = time.monotonic() - ash_start_time
+    logging.info('Started ash-chrome in %.3fs on try %d.', ash_elapsed_time,
+                 num_tries)
+
     # Starts tests.
     if enable_mojo_crosapi:
       forward_args.append(lacros_mojo_socket_arg)
+
+    forward_args.append('--ash-chrome-path=' + ash_chrome_file)
+    forward_args.append('--unique-ash-dir=' + tmp_unique_ash_dir_name)
 
     test_env = os.environ.copy()
     test_env['WAYLAND_DISPLAY'] = ash_wayland_socket_name
     test_env['EGL_PLATFORM'] = 'surfaceless'
     test_env['XDG_RUNTIME_DIR'] = tmp_xdg_dir_name
-    test_process = subprocess.Popen([args.command] + forward_args, env=test_env)
+
+    if run_tests_in_debugger:
+      test_process = _LaunchDebugger(args, forward_args, test_env)
+    else:
+      logging.info('Starting test process.')
+      test_process = subprocess.Popen([args.command] + forward_args,
+                                      env=test_env,
+                                      stdout=test_stdout,
+                                      stderr=subprocess.STDOUT)
+      if should_symbolize:
+        logging.info('Symbolizing test logs with asan symbolizer.')
+        test_symbolize_process = subprocess.Popen([_ASAN_SYMBOLIZER_PATH],
+                                                  stdin=test_process.stdout)
+        # Allow test_process to receive a SIGPIPE if symbolize process exits.
+        test_process.stdout.close()
     return test_process.wait()
 
   finally:
     _KillNicely(ash_process)
+    # Give symbolizer processes time to finish writing with first_wait_secs.
+    _KillNicely(ash_symbolize_process, first_wait_secs=1)
+    _KillNicely(test_symbolize_process, first_wait_secs=1)
 
     shutil.rmtree(tmp_xdg_dir_name, ignore_errors=True)
     shutil.rmtree(tmp_ash_data_dir_name, ignore_errors=True)
+    shutil.rmtree(tmp_unique_ash_dir_name, ignore_errors=True)
 
 
 def _RunTestDirectly(args, forward_args):
@@ -663,6 +832,14 @@ def Main():
       help='Path to an locally built ash-chrome to use for testing. '
       'In general you should build //chrome/test:test_ash_chrome.')
 
+  debugger_group = test_parser.add_mutually_exclusive_group()
+  debugger_group.add_argument('--gdb',
+                              action='store_true',
+                              help='Run the test in GDB.')
+  debugger_group.add_argument('--lldb',
+                              action='store_true',
+                              help='Run the test in LLDB.')
+
   # This is for version skew testing. The current CI/CQ builder builds
   # an ash chrome and pass it using --ash-chrome-path. In order to use the same
   # builder for version skew testing, we use a new argument to override
@@ -678,8 +855,20 @@ def Main():
       type=str,
       help='File & path to ash-chrome logging output while running Lacros '
       'browser tests. If not provided, no output will be generated.')
+  test_parser.add_argument('--combine-ash-logs-on-bots',
+                           action='store_true',
+                           help='Whether to combine ash logs on bots.')
+  test_parser.add_argument(
+      '--asan-symbolize-output',
+      action='store_true',
+      help='Whether to run subprocess log outputs through the asan symbolizer.')
 
   args = arg_parser.parse_known_args()
+  if not hasattr(args[0], "func"):
+    # No command specified.
+    print(__doc__)
+    sys.exit(1)
+
   return args[0].func(args[0], args[1])
 
 

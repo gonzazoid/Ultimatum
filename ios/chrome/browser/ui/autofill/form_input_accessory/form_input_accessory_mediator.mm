@@ -4,11 +4,10 @@
 
 #import "ios/chrome/browser/ui/autofill/form_input_accessory/form_input_accessory_mediator.h"
 
+#import "base/apple/foundation_util.h"
 #import "base/ios/block_types.h"
 #import "base/ios/ios_util.h"
-#import "base/mac/foundation_util.h"
 #import "base/metrics/histogram_functions.h"
-#import "base/metrics/user_metrics.h"
 #import "base/strings/sys_string_conversions.h"
 #import "components/autofill/core/browser/personal_data_manager.h"
 #import "components/autofill/core/common/autofill_features.h"
@@ -17,24 +16,24 @@
 #import "components/autofill/ios/browser/personal_data_manager_observer_bridge.h"
 #import "components/autofill/ios/form_util/form_activity_observer_bridge.h"
 #import "components/autofill/ios/form_util/form_activity_params.h"
-#import "components/prefs/pref_service.h"
-#import "ios/chrome/browser/application_context/application_context.h"
-#import "ios/chrome/browser/autofill/form_input_accessory_view_handler.h"
-#import "ios/chrome/browser/autofill/form_input_suggestions_provider.h"
-#import "ios/chrome/browser/autofill/form_suggestion_tab_helper.h"
-#import "ios/chrome/browser/autofill/manual_fill/passwords_fetcher.h"
-#import "ios/chrome/browser/passwords/password_generation_utils.h"
-#import "ios/chrome/browser/prefs/pref_names.h"
+#import "components/password_manager/core/browser/password_counter.h"
+#import "ios/chrome/browser/autofill/model/bottom_sheet/autofill_bottom_sheet_observer_bridge.h"
+#import "ios/chrome/browser/autofill/model/bottom_sheet/autofill_bottom_sheet_tab_helper.h"
+#import "ios/chrome/browser/autofill/model/form_input_accessory_view_handler.h"
+#import "ios/chrome/browser/autofill/model/form_input_suggestions_provider.h"
+#import "ios/chrome/browser/autofill/model/form_suggestion_tab_helper.h"
+#import "ios/chrome/browser/default_browser/model/utils.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_backed_boolean.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/public/commands/security_alert_commands.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/autofill/form_input_accessory/form_input_accessory_chromium_text_data.h"
 #import "ios/chrome/browser/ui/autofill/form_input_accessory/form_input_accessory_consumer.h"
 #import "ios/chrome/browser/ui/autofill/form_input_accessory/form_suggestion_view.h"
-#import "ios/chrome/browser/ui/bubble/bubble_features.h"
-#import "ios/chrome/browser/ui/commands/security_alert_commands.h"
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
-#import "ios/chrome/browser/ui/default_promo/default_browser_utils.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/ui/autofill/form_input_accessory/scoped_form_input_accessory_reauth_module_override.h"
 #import "ios/chrome/common/ui/elements/form_input_accessory_view.h"
 #import "ios/chrome/common/ui/reauthentication/reauthentication_event.h"
 #import "ios/chrome/common/ui/reauthentication/reauthentication_module.h"
@@ -45,25 +44,44 @@
 #import "ios/web/public/web_state.h"
 #import "ui/base/l10n/l10n_util_mac.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using base::UmaHistogramEnumeration;
 
-namespace {
+// Protocol to be notified when number of passwords in the store changes.
+@protocol PasswordCounterObserver <NSObject>
 
-// Kill switch guarding a workaround for keyboard flicker, see crbug.com/1253561
-BASE_FEATURE(kFormInputKeyboardReloadInputViews,
-             "FormInputKeyboardReloadInputViews",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+- (void)passwordCounterChanged:(size_t)totalPasswords;
 
-}  // namespace
+@end
 
-@interface FormInputAccessoryMediator () <FormActivityObserver,
+class PasswordCounterDelegateBridge
+    : public password_manager::PasswordCounter::Delegate {
+ public:
+  explicit PasswordCounterDelegateBridge(
+      id<PasswordCounterObserver> observer,
+      password_manager::PasswordStoreInterface* profile_store,
+      password_manager::PasswordStoreInterface* account_store)
+      : observer_(observer), counter_(profile_store, account_store, this) {}
+  PasswordCounterDelegateBridge(const PasswordCounterDelegateBridge&) = delete;
+  PasswordCounterDelegateBridge& operator=(
+      const PasswordCounterDelegateBridge&) = delete;
+
+  // PasswordCounter::Delegate:
+  void OnPasswordCounterChanged() override {
+    [observer_ passwordCounterChanged:(counter_.profile_passwords() +
+                                       counter_.account_passwords())];
+  }
+
+ private:
+  __weak id<PasswordCounterObserver> observer_ = nil;
+  password_manager::PasswordCounter counter_;
+};
+
+@interface FormInputAccessoryMediator () <AutofillBottomSheetObserving,
+                                          BooleanObserver,
+                                          FormActivityObserver,
                                           FormInputAccessoryViewDelegate,
                                           CRWWebStateObserver,
-                                          PasswordFetcherDelegate,
+                                          PasswordCounterObserver,
                                           PersonalDataManagerObserver,
                                           WebStateListObserving>
 
@@ -83,10 +101,6 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
 // The object that provides suggestions while filling forms.
 @property(nonatomic, weak) id<FormInputSuggestionsProvider> provider;
 
-// The password fetcher used to know if passwords are available and update the
-// consumer accordingly.
-@property(nonatomic, strong) PasswordFetcher* passwordFetcher;
-
 // Whether suggestions are disabled.
 @property(nonatomic, assign) BOOL suggestionsDisabled;
 
@@ -102,6 +116,10 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
 
 // Used to present alerts.
 @property(nonatomic, weak) id<SecurityAlertCommands> securityAlertHandler;
+
+// ID of the latest query to get suggestions. Using a uint to handle overflow
+// which will realistically never happen, but just in case.
+@property(nonatomic, assign) uint latestQueryId;
 
 @end
 
@@ -123,9 +141,16 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
   // Bridge to observe the web state from Objective-C.
   std::unique_ptr<web::WebStateObserverBridge> _webStateObserverBridge;
 
+  // The observer for number of passwords in the stores.
+  std::unique_ptr<PasswordCounterDelegateBridge> _passwordCounter;
+
   // Bridge to observe form activity in `_webState`.
   std::unique_ptr<autofill::FormActivityObserverBridge>
       _formActivityObserverBridge;
+
+  // Bridge for the AutofillBottomSheetObserver.
+  std::unique_ptr<autofill::AutofillBottomSheetObserverBridge>
+      _autofillBottomSheetObserverBridge;
 
   // Whether suggestions have previously been shown.
   BOOL _suggestionsHaveBeenShown;
@@ -136,6 +161,9 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
 
   // If YES `_lastSeenParams` is valid.
   BOOL _hasLastSeenParams;
+
+  // Pref tracking if bottom omnibox is enabled.
+  PrefBackedBoolean* _bottomOmniboxEnabled;
 }
 
 - (instancetype)
@@ -143,9 +171,12 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
                    handler:(id<FormInputAccessoryMediatorHandler>)handler
               webStateList:(WebStateList*)webStateList
        personalDataManager:(autofill::PersonalDataManager*)personalDataManager
-             passwordStore:
-                 (scoped_refptr<password_manager::PasswordStoreInterface>)
-                     passwordStore
+      profilePasswordStore:
+          (scoped_refptr<password_manager::PasswordStoreInterface>)
+              profilePasswordStore
+      accountPasswordStore:
+          (scoped_refptr<password_manager::PasswordStoreInterface>)
+              accountPasswordStore
       securityAlertHandler:(id<SecurityAlertCommands>)securityAlertHandler
     reauthenticationModule:(ReauthenticationModule*)reauthenticationModule {
   self = [super init];
@@ -169,6 +200,9 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
         _formActivityObserverBridge =
             std::make_unique<autofill::FormActivityObserverBridge>(_webState,
                                                                    self);
+        _autofillBottomSheetObserverBridge =
+            std::make_unique<autofill::AutofillBottomSheetObserverBridge>(
+                self, AutofillBottomSheetTabHelper::FromWebState(webState));
         _webStateObserverBridge =
             std::make_unique<web::WebStateObserverBridge>(self);
         webState->AddObserver(_webStateObserverBridge.get());
@@ -188,13 +222,11 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
                         object:nil];
 
     // In BVC unit tests the password store doesn't exist. Skip creating the
-    // fetcher.
+    // counter.
     // TODO:(crbug.com/878388) Remove this workaround.
-    if (passwordStore) {
-      _passwordFetcher =
-          [[PasswordFetcher alloc] initWithPasswordStore:passwordStore
-                                                delegate:self
-                                                     URL:GURL::EmptyGURL()];
+    if (profilePasswordStore) {
+      _passwordCounter = std::make_unique<PasswordCounterDelegateBridge>(
+          self, profilePasswordStore.get(), accountPasswordStore.get());
     }
     if (personalDataManager) {
       _personalDataManager = personalDataManager;
@@ -220,19 +252,28 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
     // Prevent a flicker from happening by starting with valid activity. This
     // will get updated as soon as a form is interacted.
     _validActivityForAccessoryView = YES;
+
+    _latestQueryId = 0;
   }
   return self;
 }
 
 - (void)dealloc {
-  [self disconnect];
+  // TODO(crbug.com/1454777)
+  DUMP_WILL_BE_CHECK(!_formActivityObserverBridge.get());
+  DUMP_WILL_BE_CHECK(!_autofillBottomSheetObserverBridge.get());
+  DUMP_WILL_BE_CHECK(!_personalDataManager);
+  DUMP_WILL_BE_CHECK(!_webState);
+  DUMP_WILL_BE_CHECK(!_webStateList);
 }
 
 - (void)disconnect {
   _formActivityObserverBridge.reset();
+  _autofillBottomSheetObserverBridge.reset();
   if (_personalDataManager && _personalDataManagerObserver.get()) {
     _personalDataManager->RemoveObserver(_personalDataManagerObserver.get());
     _personalDataManagerObserver.reset();
+    _personalDataManager = nullptr;
   }
   if (_webState) {
     _webState->RemoveObserver(_webStateObserverBridge.get());
@@ -244,6 +285,9 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
     _webStateListObserver.reset();
     _webStateList = nullptr;
   }
+  [_bottomOmniboxEnabled stop];
+  [_bottomOmniboxEnabled setObserver:nil];
+  _bottomOmniboxEnabled = nil;
 }
 
 - (void)detachFromWebState {
@@ -253,6 +297,7 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
     _webStateObserverBridge.reset();
     _webState = nullptr;
     _formActivityObserverBridge.reset();
+    _autofillBottomSheetObserverBridge.reset();
   }
 }
 
@@ -260,9 +305,27 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
   return _lastSeenParams.field_type == autofill::kPasswordFieldType;
 }
 
+- (const autofill::FormActivityParams&)lastSeenParams {
+  return _lastSeenParams;
+}
+
 #pragma mark - KeyboardNotification
 
 - (void)keyboardWillShow:(NSNotification*)notification {
+  [self updateSuggestionsIfNeeded];
+}
+
+#pragma mark - AutofillBottomSheetObserving
+
+- (void)willShowPaymentsBottomSheetWithParams:
+    (const autofill::FormActivityParams&)params {
+  // Update params in this mediator because -keyboardWillShow will be called
+  // before the bottom sheet is being notified to show and that will call
+  // -retrieveSuggestionsForForm with the last seen params. Depending on what
+  // the current page is auto focused on, it could be the incorrect params and
+  // we need to update it.
+  _lastSeenParams = params;
+  _hasLastSeenParams = YES;
   [self updateSuggestionsIfNeeded];
 }
 
@@ -280,21 +343,20 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
   }
 
   // Return early if the URL can't be verified.
-  web::URLVerificationTrustLevel trustLevel;
-  const GURL pageURL(webState->GetCurrentURL(&trustLevel));
-  if (trustLevel != web::URLVerificationTrustLevel::kAbsolute) {
+  std::optional<GURL> pageURL = webState->GetLastCommittedURLIfTrusted();
+  if (!pageURL) {
     [self reset];
     return;
   }
 
   // Return early, pause and reset if the url is not HTML.
-  if (!web::UrlHasWebScheme(pageURL) || !webState->ContentIsHTML()) {
+  if (!web::UrlHasWebScheme(*pageURL) || !webState->ContentIsHTML()) {
     [self reset];
     return;
   }
 
   // Return early and reset if frame is missing or can't call JS.
-  if (!frame || !frame->CanCallJavaScriptFunction()) {
+  if (!frame) {
     [self reset];
     return;
   }
@@ -306,12 +368,6 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
   }
 
   self.validActivityForAccessoryView = YES;
-  static bool form_input_keyboard_reload_input_views_workaround =
-      base::FeatureList::IsEnabled(kFormInputKeyboardReloadInputViews);
-  if (!form_input_keyboard_reload_input_views_workaround) {
-    [GetFirstResponder() reloadInputViews];
-  }
-
   NSString* frameID;
   if (frame) {
     frameID = base::SysUTF8ToNSString(frame->GetFrameId());
@@ -327,8 +383,7 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
     return;
   }
 
-  if (form_input_keyboard_reload_input_views_workaround &&
-      _lastSeenParams.field_type != params.field_type) {
+  if (_lastSeenParams.field_type != params.field_type) {
     [GetFirstResponder() reloadInputViews];
   }
   _lastSeenParams = params;
@@ -357,24 +412,9 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
   return ChromiumAccessoryViewTextData();
 }
 
-#pragma mark - BrandingViewControllerDelegate
-
-- (void)brandingIconPressed {
-  base::RecordAction(base::UserMetricsAction("Autofill_BrandingTapped"));
-}
-
-- (BOOL)brandingIconShouldPerformPopAnimation {
-  return GetApplicationContext()->GetLocalState()->GetInteger(
-             prefs::kAutofillBrandingIconAnimationRemainingCountPrefName) > 0;
-}
-
-- (void)brandingIconDidPerformPopAnimation {
-  PrefService* local_state = GetApplicationContext()->GetLocalState();
-  const int current_remaining_count = local_state->GetInteger(
-      prefs::kAutofillBrandingIconAnimationRemainingCountPrefName);
-  local_state->SetInteger(
-      prefs::kAutofillBrandingIconAnimationRemainingCountPrefName,
-      current_remaining_count - 1);
+- (void)fromInputAccessoryViewDidTapOmniboxTypingShield:
+    (FormInputAccessoryView*)sender {
+  [self.formNavigationHandler closeKeyboardWithOmniboxTypingShield];
 }
 
 #pragma mark - CRWWebStateObserver
@@ -400,15 +440,15 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
   [self detachFromWebState];
 }
 
-#pragma mark - CRWWebStateListObserver
+#pragma mark - WebStateListObserving
 
-- (void)webStateList:(WebStateList*)webStateList
-    didChangeActiveWebState:(web::WebState*)newWebState
-                oldWebState:(web::WebState*)oldWebState
-                    atIndex:(int)atIndex
-                     reason:(ActiveWebStateChangeReason)reason {
-  [self reset];
-  [self updateWithNewWebState:newWebState];
+- (void)didChangeWebStateList:(WebStateList*)webStateList
+                       change:(const WebStateListChange&)change
+                       status:(const WebStateListStatus&)status {
+  if (status.active_web_state_change()) {
+    [self reset];
+    [self updateWithNewWebState:status.new_active_web_state];
+  }
 }
 
 #pragma mark - Public
@@ -429,14 +469,13 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
   }
 
   // Return early if the URL can't be verified.
-  web::URLVerificationTrustLevel trustLevel;
-  const GURL pageURL(_webState->GetCurrentURL(&trustLevel));
-  if (trustLevel != web::URLVerificationTrustLevel::kAbsolute) {
+  std::optional<GURL> pageURL = _webState->GetLastCommittedURLIfTrusted();
+  if (!pageURL) {
     return NO;
   }
 
   // Return early if the url is not HTML.
-  if (!web::UrlHasWebScheme(pageURL) || !_webState->ContentIsHTML()) {
+  if (!web::UrlHasWebScheme(*pageURL) || !_webState->ContentIsHTML()) {
     return NO;
   }
 
@@ -454,7 +493,31 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
   _currentProvider.formInputNavigator = self.formNavigationHandler;
 }
 
+- (void)setOriginalPrefService:(PrefService*)originalPrefService {
+  _originalPrefService = originalPrefService;
+  if (IsBottomOmniboxSteadyStateEnabled() && _originalPrefService) {
+    _bottomOmniboxEnabled =
+        [[PrefBackedBoolean alloc] initWithPrefService:_originalPrefService
+                                              prefName:prefs::kBottomOmnibox];
+    [_bottomOmniboxEnabled setObserver:self];
+    // Initialize to the current value.
+    [self booleanDidChange:_bottomOmniboxEnabled];
+  } else {
+    [_bottomOmniboxEnabled stop];
+    [_bottomOmniboxEnabled setObserver:nil];
+    _bottomOmniboxEnabled = nil;
+  }
+}
+
 #pragma mark - Private
+
+// Returns the reauthentication module, which can be an override for testing
+// purposes.
+- (ReauthenticationModule*)reauthenticationModule {
+  return ScopedFormInputAccessoryReauthModuleOverride::instance
+             ? ScopedFormInputAccessoryReauthModuleOverride::instance->module
+             : _reauthenticationModule;
+}
 
 - (void)updateSuggestionsIfNeeded {
   if (_hasLastSeenParams && _webState) {
@@ -487,6 +550,10 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
     webState->AddObserver(_webStateObserverBridge.get());
     _formActivityObserverBridge =
         std::make_unique<autofill::FormActivityObserverBridge>(webState, self);
+    _autofillBottomSheetObserverBridge =
+        std::make_unique<autofill::AutofillBottomSheetObserverBridge>(
+            self, AutofillBottomSheetTabHelper::FromWebState(webState));
+
     FormSuggestionTabHelper* tabHelper =
         FormSuggestionTabHelper::FromWebState(webState);
     if (tabHelper) {
@@ -507,7 +574,6 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
   [self.consumer showAccessorySuggestions:@[]];
 
   [self.handler resetFormInputView];
-  [self.formNavigationHandler reset];
 
   self.suggestionsDisabled = NO;
   self.currentProvider = nil;
@@ -522,15 +588,28 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
 
   __weak id<FormInputSuggestionsProvider> weakProvider = self.provider;
   __weak __typeof(self) weakSelf = self;
+
+  // Get the query ID for this query.
+  uint queryID = ++_latestQueryId;
+
   [weakProvider
       retrieveSuggestionsForForm:params
                         webState:self.webState
         accessoryViewUpdateBlock:^(NSArray<FormSuggestion*>* suggestions,
                                    id<FormInputSuggestionsProvider> provider) {
-          // No suggestions found, return.
+          // Ignore suggestions if the results aren't from the latest query
+          // which provides the most relevant suggestions to fit the current
+          // context (i.e. for the field being focused).
+          if (queryID != weakSelf.latestQueryId) {
+            return;
+          }
+
+          // No suggestions found, return and don't update suggestions in view
+          // model.
           if (!suggestions) {
             return;
           }
+
           [weakSelf updateWithProvider:provider suggestions:suggestions];
         }];
 }
@@ -543,14 +622,18 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
 
   // If suggestions are enabled, update `currentProvider`.
   self.currentProvider = provider;
+
   // Post it to the consumer.
+  self.consumer.suggestionType = provider.suggestionType;
+  self.consumer.currentFieldId = _lastSeenParams.unique_field_id;
   [self.consumer showAccessorySuggestions:suggestions];
   if (suggestions.count) {
     if (provider.type == SuggestionProviderTypeAutofill) {
       LogLikelyInterestedDefaultBrowserUserActivity(DefaultPromoTypeMadeForIOS);
     }
-    if (provider.type == SuggestionProviderTypePassword) {
-      [self.handler showPasswordSuggestionIPHIfNeeded];
+
+    if (suggestions.firstObject.featureForIPH.length > 0) {
+      [self.handler showAutofillSuggestionIPHIfNeeded];
     }
   }
 }
@@ -560,40 +643,75 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
   [self.handler resetFormInputView];
 }
 
+// Logs information about what type of suggestion the user selected.
+- (void)logReauthenticationEvent:(ReauthenticationEvent)reauthenticationEvent
+                     popupItemId:(autofill::PopupItemId)popupItemId {
+  std::string histogramName;
+  if (self.currentProvider.type == SuggestionProviderTypePassword) {
+    histogramName = "IOS.Reauth.Password.Autofill";
+  } else if (self.currentProvider.type == SuggestionProviderTypeAutofill) {
+    switch (popupItemId) {
+      case autofill::PopupItemId::kCreditCardEntry:
+        histogramName = "IOS.Reauth.CreditCard.Autofill";
+        break;
+      case autofill::PopupItemId::kAddressEntry:
+        histogramName = "IOS.Reauth.Address.Autofill";
+        break;
+      default:
+        break;
+    }
+  }
+  if (!histogramName.empty()) {
+    UmaHistogramEnumeration(histogramName, reauthenticationEvent);
+  }
+}
+
+// Handles the selection of a suggestion.
+- (void)handleSuggestion:(FormSuggestion*)formSuggestion {
+  if (self.currentProvider.type == SuggestionProviderTypePassword) {
+    LogLikelyInterestedDefaultBrowserUserActivity(DefaultPromoTypeStaySafe);
+  }
+  if (formSuggestion.featureForIPH.length) {
+    // The IPH is only shown if the suggestion was the first one. It doesn't
+    // matter if the IPH was shown for this suggestion as we don't want to
+    // show more IPH's to the user.
+    [self.handler notifyAutofillSuggestionWithIPHSelected];
+  }
+  [self.currentProvider didSelectSuggestion:formSuggestion];
+}
+
+#pragma mark - Boolean Observer
+
+- (void)booleanDidChange:(id<ObservableBoolean>)observableBoolean {
+  if (observableBoolean == _bottomOmniboxEnabled) {
+    CHECK(IsBottomOmniboxSteadyStateEnabled());
+    [self.consumer newOmniboxPositionIsBottom:_bottomOmniboxEnabled.value];
+  }
+}
+
 #pragma mark - FormSuggestionClient
 
 - (void)didSelectSuggestion:(FormSuggestion*)formSuggestion {
-  UmaHistogramEnumeration("IOS.Reauth.Password.Autofill",
-                          ReauthenticationEvent::kAttempt);
-  __weak __typeof(self) weakSelf = self;
-  auto suggestionHandler = ^() {
-    __typeof(self) strongSelf = weakSelf;
-    if (!strongSelf) {
-      return;
-    }
-    if (strongSelf.currentProvider.type == SuggestionProviderTypePassword) {
-      LogLikelyInterestedDefaultBrowserUserActivity(DefaultPromoTypeStaySafe);
-      [self.handler notifyPasswordSuggestionSelected];
-    }
-    [strongSelf.currentProvider didSelectSuggestion:formSuggestion];
-  };
+  [self logReauthenticationEvent:ReauthenticationEvent::kAttempt
+                     popupItemId:formSuggestion.popupItemId];
+  LogAutofillUseForDefaultBrowserPromo();
 
   if (!formSuggestion.requiresReauth) {
-    UmaHistogramEnumeration("IOS.Reauth.Password.Autofill",
-                            ReauthenticationEvent::kSuccess);
-    suggestionHandler();
+    [self logReauthenticationEvent:ReauthenticationEvent::kSuccess
+                       popupItemId:formSuggestion.popupItemId];
+    [self handleSuggestion:formSuggestion];
     return;
   }
   if ([self.reauthenticationModule canAttemptReauth]) {
     NSString* reason = l10n_util::GetNSString(IDS_IOS_AUTOFILL_REAUTH_REASON);
     auto completionHandler = ^(ReauthenticationResult result) {
       if (result != ReauthenticationResult::kFailure) {
-        UmaHistogramEnumeration("IOS.Reauth.Password.Autofill",
-                                ReauthenticationEvent::kSuccess);
-        suggestionHandler();
+        [self logReauthenticationEvent:ReauthenticationEvent::kSuccess
+                           popupItemId:formSuggestion.popupItemId];
+        [self handleSuggestion:formSuggestion];
       } else {
-        UmaHistogramEnumeration("IOS.Reauth.Password.Autofill",
-                                ReauthenticationEvent::kFailure);
+        [self logReauthenticationEvent:ReauthenticationEvent::kFailure
+                           popupItemId:formSuggestion.popupItemId];
       }
     };
 
@@ -602,19 +720,22 @@ BASE_FEATURE(kFormInputKeyboardReloadInputViews,
                     canReusePreviousAuth:YES
                                  handler:completionHandler];
   } else {
-    UmaHistogramEnumeration("IOS.Reauth.Password.Autofill",
-                            ReauthenticationEvent::kMissingPasscode);
-    suggestionHandler();
+    [self logReauthenticationEvent:ReauthenticationEvent::kMissingPasscode
+                       popupItemId:formSuggestion.popupItemId];
+    [self handleSuggestion:formSuggestion];
   }
 }
 
-#pragma mark - PasswordFetcherDelegate
+- (void)didSelectSuggestion:(FormSuggestion*)formSuggestion
+                     params:(const autofill::FormActivityParams&)params {
+  CHECK(_lastSeenParams == params);
+  [self didSelectSuggestion:formSuggestion];
+}
 
-- (void)passwordFetcher:(PasswordFetcher*)passwordFetcher
-      didFetchPasswords:
-          (std::vector<std::unique_ptr<password_manager::PasswordForm>>)
-              passwords {
-  self.consumer.passwordButtonHidden = passwords.empty();
+#pragma mark - PasswordCounterObserver
+
+- (void)passwordCounterChanged:(size_t)totalPasswords {
+  self.consumer.passwordButtonHidden = !totalPasswords;
 }
 
 #pragma mark - PersonalDataManagerObserver

@@ -45,37 +45,32 @@ class FakeTickClock : public base::TickClock {
 
 constexpr base::TimeDelta FakeTickClock::kTicksAdvanceAfterEachCall;
 
-TEST(SyncNigoriTest, Permute) {
+TEST(SyncNigoriTest, GetKeyName) {
   std::unique_ptr<Nigori> nigori = Nigori::CreateByDerivation(
       KeyDerivationParams::CreateForPbkdf2(), "password");
   ASSERT_THAT(nigori, NotNull());
 
-  std::string permuted;
-  EXPECT_TRUE(nigori->Permute(Nigori::Password, kNigoriKeyName, &permuted));
-
   std::string expected =
       "ibGL7ymU0Si+eYCXGS6SBHPFT+JCYiB6GDOYqj6vIwEi"
       "WJ7RENSHxmIQ8Q3rXd/UnZUmFHYB+jSIbthQADXvrQ==";
-  EXPECT_EQ(expected, permuted);
+  EXPECT_EQ(expected, nigori->GetKeyName());
 }
 
-TEST(SyncNigoriTest, PermuteIsConstant) {
+TEST(SyncNigoriTest, GetKeyNameIsConstant) {
   std::unique_ptr<Nigori> nigori1 = Nigori::CreateByDerivation(
       KeyDerivationParams::CreateForPbkdf2(), "password");
   ASSERT_THAT(nigori1, NotNull());
 
-  std::string permuted1;
-  EXPECT_TRUE(nigori1->Permute(Nigori::Password, kNigoriKeyName, &permuted1));
+  std::string keyname1 = nigori1->GetKeyName();
 
   std::unique_ptr<Nigori> nigori2 = Nigori::CreateByDerivation(
       KeyDerivationParams::CreateForPbkdf2(), "password");
   ASSERT_THAT(nigori2, NotNull());
 
-  std::string permuted2;
-  EXPECT_TRUE(nigori2->Permute(Nigori::Password, kNigoriKeyName, &permuted2));
+  std::string keyname2 = nigori2->GetKeyName();
 
-  EXPECT_LT(0U, permuted1.size());
-  EXPECT_EQ(permuted1, permuted2);
+  EXPECT_LT(0U, keyname1.size());
+  EXPECT_EQ(keyname1, keyname2);
 }
 
 TEST(SyncNigoriTest, EncryptDifferentIv) {
@@ -83,15 +78,8 @@ TEST(SyncNigoriTest, EncryptDifferentIv) {
       KeyDerivationParams::CreateForPbkdf2(), "password");
   ASSERT_THAT(nigori, NotNull());
 
-  std::string plaintext("value");
-
-  std::string encrypted1;
-  EXPECT_TRUE(nigori->Encrypt(plaintext, &encrypted1));
-
-  std::string encrypted2;
-  EXPECT_TRUE(nigori->Encrypt(plaintext, &encrypted2));
-
-  EXPECT_NE(encrypted1, encrypted2);
+  const std::string plaintext("value");
+  EXPECT_NE(nigori->Encrypt(plaintext), nigori->Encrypt(plaintext));
 }
 
 TEST(SyncNigoriTest, Decrypt) {
@@ -115,13 +103,10 @@ TEST(SyncNigoriTest, EncryptDecrypt) {
       KeyDerivationParams::CreateForPbkdf2(), "password");
   ASSERT_THAT(nigori, NotNull());
 
-  std::string plaintext("value");
-
-  std::string encrypted;
-  EXPECT_TRUE(nigori->Encrypt(plaintext, &encrypted));
+  const std::string plaintext("value");
 
   std::string decrypted;
-  EXPECT_TRUE(nigori->Decrypt(encrypted, &decrypted));
+  EXPECT_TRUE(nigori->Decrypt(nigori->Encrypt(plaintext), &decrypted));
 
   EXPECT_EQ(plaintext, decrypted);
 }
@@ -131,13 +116,10 @@ TEST(SyncNigoriTest, EncryptDecryptEmptyString) {
       KeyDerivationParams::CreateForPbkdf2(), "password");
   ASSERT_THAT(nigori, NotNull());
 
-  std::string plaintext;
-
-  std::string encrypted;
-  EXPECT_TRUE(nigori->Encrypt(plaintext, &encrypted));
+  const std::string plaintext;
 
   std::string decrypted;
-  EXPECT_TRUE(nigori->Decrypt(encrypted, &decrypted));
+  EXPECT_TRUE(nigori->Decrypt(nigori->Encrypt(plaintext), &decrypted));
 
   EXPECT_EQ(plaintext, decrypted);
 }
@@ -147,10 +129,9 @@ TEST(SyncNigoriTest, CorruptedIv) {
       KeyDerivationParams::CreateForPbkdf2(), "password");
   ASSERT_THAT(nigori, NotNull());
 
-  std::string plaintext("test");
+  const std::string plaintext("test");
 
-  std::string encrypted;
-  EXPECT_TRUE(nigori->Encrypt(plaintext, &encrypted));
+  std::string encrypted = nigori->Encrypt(plaintext);
 
   // Corrupt the IV by changing one of its byte.
   encrypted[0] = (encrypted[0] == 'a' ? 'b' : 'a');
@@ -166,10 +147,9 @@ TEST(SyncNigoriTest, CorruptedCiphertext) {
       KeyDerivationParams::CreateForPbkdf2(), "password");
   ASSERT_THAT(nigori, NotNull());
 
-  std::string plaintext("test");
+  const std::string plaintext("test");
 
-  std::string encrypted;
-  EXPECT_TRUE(nigori->Encrypt(plaintext, &encrypted));
+  std::string encrypted = nigori->Encrypt(plaintext);
 
   // Corrput the ciphertext by changing one of its bytes.
   encrypted[Nigori::kIvSize + 10] =
@@ -199,18 +179,15 @@ TEST(SyncNigoriTest, ExportImport) {
   std::string plaintext;
   std::string ciphertext;
 
-  EXPECT_TRUE(nigori1->Encrypt(original, &ciphertext));
-  EXPECT_TRUE(nigori2->Decrypt(ciphertext, &plaintext));
+  EXPECT_TRUE(nigori2->Decrypt(nigori1->Encrypt(original), &plaintext));
   EXPECT_EQ(original, plaintext);
 
-  EXPECT_TRUE(nigori2->Encrypt(original, &ciphertext));
-  EXPECT_TRUE(nigori1->Decrypt(ciphertext, &plaintext));
+  EXPECT_TRUE(nigori1->Decrypt(nigori2->Encrypt(original), &plaintext));
   EXPECT_EQ(original, plaintext);
 
-  std::string permuted1, permuted2;
-  EXPECT_TRUE(nigori1->Permute(Nigori::Password, kNigoriKeyName, &permuted1));
-  EXPECT_TRUE(nigori2->Permute(Nigori::Password, kNigoriKeyName, &permuted2));
-  EXPECT_EQ(permuted1, permuted2);
+  std::string keyname1 = nigori1->GetKeyName();
+  EXPECT_FALSE(keyname1.empty());
+  EXPECT_EQ(keyname1, nigori2->GetKeyName());
 }
 
 TEST(SyncNigoriTest, CreateByDerivationSetsUserKey) {

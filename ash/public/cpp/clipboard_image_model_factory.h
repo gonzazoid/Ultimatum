@@ -8,7 +8,7 @@
 #include <string>
 
 #include "ash/public/cpp/ash_public_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/unguessable_token.h"
 #include "ui/base/models/image_model.h"
 
@@ -24,6 +24,8 @@ namespace ash {
 // create ImageModels until it is activated.
 class ASH_PUBLIC_EXPORT ClipboardImageModelFactory {
  public:
+  virtual ~ClipboardImageModelFactory();
+
   // Returns the singleton factory instance.
   static ClipboardImageModelFactory* Get();
 
@@ -63,7 +65,6 @@ class ASH_PUBLIC_EXPORT ClipboardImageModelFactory {
 
  protected:
   ClipboardImageModelFactory();
-  virtual ~ClipboardImageModelFactory();
 };
 
 }  // namespace ash

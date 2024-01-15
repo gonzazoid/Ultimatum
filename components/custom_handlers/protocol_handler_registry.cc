@@ -8,10 +8,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/notreached.h"
 #include "base/observer_list.h"
@@ -712,6 +712,10 @@ void ProtocolHandlerRegistry::OnSetAsDefaultProtocolClientFinished(
 
 void ProtocolHandlerRegistry::SetIsLoading(bool is_loading) {
   is_loading_ = is_loading;
+}
+
+base::WeakPtr<ProtocolHandlerRegistry> ProtocolHandlerRegistry::GetWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 void ProtocolHandlerRegistry::AddPredefinedHandler(

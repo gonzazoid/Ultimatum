@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/core/html/client_hints_util.h"
 
+#include "base/containers/contains.h"
 #include "services/network/public/cpp/client_hints.h"
 #include "third_party/blink/public/common/client_hints/client_hints.h"
 #include "third_party/blink/public/common/permissions_policy/origin_with_possible_wildcards.h"
@@ -23,11 +24,12 @@ void UpdateWindowPermissionsPolicyWithDelegationSupportForClientHints(
     const KURL& url,
     ClientHintsPreferences::Context* context,
     network::MetaCHType type,
-    bool is_doc_preloader_or_sync_parser) {
+    bool is_doc_preloader,
+    bool is_sync_parser) {
   // If it's not http-equiv="accept-ch" and it's not a preload-or-sync-parser
   // visible meta tag, then we need to warn the dev that js injected the tag.
-  if (type != network::MetaCHType::HttpEquivAcceptCH &&
-      !is_doc_preloader_or_sync_parser && local_dom_window &&
+  if (type != network::MetaCHType::HttpEquivAcceptCH && !is_doc_preloader &&
+      !is_sync_parser && local_dom_window &&
       RuntimeEnabledFeatures::ClientHintThirdPartyDelegationEnabled()) {
     AuditsIssue::ReportClientHintIssue(
         local_dom_window, ClientHintIssueReason::kMetaTagModifiedHTML);
@@ -37,9 +39,9 @@ void UpdateWindowPermissionsPolicyWithDelegationSupportForClientHints(
   // added by js, the `local_dom_window` is missing, or the feature is disabled,
   // there's nothing more to do.
   if (!client_hints_preferences.UpdateFromMetaCH(
-          header_value, url, context, type, is_doc_preloader_or_sync_parser) ||
+          header_value, url, context, type, is_doc_preloader, is_sync_parser) ||
       type == network::MetaCHType::HttpEquivAcceptCH ||
-      !is_doc_preloader_or_sync_parser || !local_dom_window ||
+      !(is_doc_preloader || is_sync_parser) || !local_dom_window ||
       !RuntimeEnabledFeatures::ClientHintThirdPartyDelegationEnabled()) {
     return;
   }
@@ -69,15 +71,18 @@ void UpdateWindowPermissionsPolicyWithDelegationSupportForClientHints(
     std::set<blink::OriginWithPossibleWildcards> origin_set(
         allow_list.AllowedOrigins().begin(), allow_list.AllowedOrigins().end());
     for (const auto& origin : pair.second) {
-      origin_set.insert(
-          blink::OriginWithPossibleWildcards(origin,
-                                             /*has_subdomain_wildcard=*/false));
+      if (auto origin_with_possible_wildcards =
+              blink::OriginWithPossibleWildcards::FromOrigin(origin);
+          origin_with_possible_wildcards.has_value()) {
+        origin_set.insert(*origin_with_possible_wildcards);
+      }
     }
     auto declaration = ParsedPermissionsPolicyDeclaration(
         policy_name,
         std::vector<blink::OriginWithPossibleWildcards>(origin_set.begin(),
                                                         origin_set.end()),
-        allow_list.MatchesAll(), allow_list.MatchesOpaqueSrc());
+        allow_list.SelfIfMatches(), allow_list.MatchesAll(),
+        allow_list.MatchesOpaqueSrc());
     container_policy.push_back(declaration);
   }
   auto new_policy = PermissionsPolicy::CopyStateFrom(current_policy);
@@ -104,8 +109,8 @@ void UpdateIFrameContainerPolicyWithDelegationSupportForClientHints(
            ParsedPermissionsPolicyDeclaration>
       feature_to_container_policy;
   for (const auto& candidate_policy : container_policy) {
-    if (feature_to_container_policy.find(candidate_policy.feature) ==
-        feature_to_container_policy.end()) {
+    if (!base::Contains(feature_to_container_policy,
+                        candidate_policy.feature)) {
       feature_to_container_policy[candidate_policy.feature] = candidate_policy;
     }
   }
@@ -136,6 +141,8 @@ void UpdateIFrameContainerPolicyWithDelegationSupportForClientHints(
 
     // Now we apply the changes from the parent policy to ensure any changes
     // since it was set are respected;
+    merged_policy.self_if_matches =
+        maybe_window_allow_list.value().SelfIfMatches();
     merged_policy.matches_all_origins |=
         maybe_window_allow_list.value().MatchesAll();
     merged_policy.matches_opaque_src |=

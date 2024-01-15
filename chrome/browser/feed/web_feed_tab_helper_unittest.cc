@@ -6,7 +6,6 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/feed/feed_feature_list.h"
@@ -81,8 +80,9 @@ class WebFeedTabHelperTest : public content::RenderViewHostTestHarness {
 
  private:
   base::test::ScopedFeatureList feature_list_;
-  raw_ptr<WebFeedTabHelper> tab_helper_;  // Owned by WebContents.
-  raw_ptr<TestWebFeedInfoFinder>
+  raw_ptr<WebFeedTabHelper, DanglingUntriaged>
+      tab_helper_;  // Owned by WebContents.
+  raw_ptr<TestWebFeedInfoFinder, DanglingUntriaged>
       web_feed_info_finder_;  // Owned by WebFeedTabHelper.
   std::unique_ptr<content::NavigationSimulator> navigation_simulator_;
 

@@ -8,6 +8,7 @@
 #include "ui/accessibility/ax_enums.mojom-shared.h"
 #include "ui/accessibility/ax_event_generator.h"
 #include "ui/accessibility/platform/automation/automation_tree_manager_owner.h"
+#include "ui/accessibility/platform/automation/v8_handler_function_wrapper.h"
 #include "v8/include/v8-function-callback.h"
 #include "v8/include/v8-value.h"
 
@@ -16,8 +17,10 @@ namespace ui {
 // Pure virtual class that allows Automation to route information in and
 // out of V8. This should be implemented by each V8 version of Automation,
 // for example in Extensions and in the AccessibilityService.
-class AX_EXPORT AutomationV8Router {
+class COMPONENT_EXPORT(AX_PLATFORM) AutomationV8Router {
  public:
+  virtual ~AutomationV8Router();
+
   // Throws an invalid argument exception in V8.
   virtual void ThrowInvalidArgumentsException(bool is_fatal = true) const = 0;
 
@@ -27,18 +30,12 @@ class AX_EXPORT AutomationV8Router {
   // Gets the V8 script context.
   virtual v8::Local<v8::Context> GetContext() const = 0;
 
-  // Returns whether this extension has the "interact" permission set (either
-  // explicitly or implicitly after manifest parsing).
-  // TODO(crbug.com/1357889): This is specific to the extensions system and
-  // should be removed from this more generic location.
-  virtual bool IsInteractPermitted() const = 0;
-
   virtual void StartCachingAccessibilityTrees() = 0;
 
   virtual void StopCachingAccessibilityTrees() = 0;
 
   //
-  // Methods converting to and from strings
+  // Methods converting to and from strings.
   //
 
   // Parses a string representing the tree change observer filter.
@@ -61,13 +58,9 @@ class AX_EXPORT AutomationV8Router {
   // Methods for routing Javascript methods to C++.
   //
 
-  using HandlerFunction =
-      base::RepeatingCallback<void(const v8::FunctionCallbackInfo<v8::Value>&)>;
-  virtual void RouteHandlerFunction(const std::string& name,
-                                    HandlerFunction handler_function) = 0;
-  virtual void RouteHandlerFunction(const std::string& name,
-                                    const std::string& api_name,
-                                    HandlerFunction handler_function) = 0;
+  virtual void RouteHandlerFunction(
+      const std::string& name,
+      scoped_refptr<V8HandlerFunctionWrapper> handler_function_wrapper) = 0;
 
   //
   // Methods for passing information from C++ to Javascript.

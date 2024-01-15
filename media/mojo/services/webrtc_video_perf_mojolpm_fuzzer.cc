@@ -8,6 +8,7 @@
 #include "base/command_line.h"
 #include "base/logging.h"
 #include "base/notreached.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_timeouts.h"
 #include "components/leveldb_proto/testing/fake_db.h"
@@ -138,7 +139,7 @@ class WebrtcVideoPerfLPMFuzzer {
   }
 
   void NextAction() {
-    const auto& action = testcase_.actions(action_index_);
+    const auto& action = testcase_->actions(action_index_);
     switch (action.action_case()) {
       case fuzzing::webrtc_video_perf::proto::Action::kUpdateRecord: {
         const auto& update_record = action.update_record();
@@ -166,10 +167,10 @@ class WebrtcVideoPerfLPMFuzzer {
     ++action_index_;
   }
 
-  bool IsFinished() { return action_index_ >= testcase_.actions_size(); }
+  bool IsFinished() { return action_index_ >= testcase_->actions_size(); }
 
  private:
-  const fuzzing::webrtc_video_perf::proto::Testcase& testcase_;
+  const raw_ref<const fuzzing::webrtc_video_perf::proto::Testcase> testcase_;
   int action_index_ = 0;
 
   // Database storage.

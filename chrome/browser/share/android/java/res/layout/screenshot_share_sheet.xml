@@ -30,7 +30,8 @@ found in the LICENSE file.
                     android:layout_height="match_parent"
                     android:gravity="center_horizontal"
                     android:layout_gravity="center_horizontal"
-                    android:padding="16dp" />
+                    android:padding="16dp"
+                    android:importantForAccessibility="no" />
 
             </FrameLayout>
 
@@ -39,21 +40,9 @@ found in the LICENSE file.
                 android:layout_height="56dp"
                 android:layout_marginStart="36dp"
                 android:layout_marginEnd="36dp"
-                android:weightSum="4"
                 android:orientation="horizontal"
                 android:gravity="bottom"
                 android:layout_gravity="start|bottom">
-
-                <TextView
-                    android:id="@+id/edit"
-                    android:text="@string/screenshot_edit_title"
-                    style="@style/SplitToolbarButton"
-                    android:drawableTop="@drawable/edit_icon"
-                    android:drawableTint="@color/default_icon_color_tint_list"
-                    android:layout_weight="1"
-                    android:gravity="center"
-                    android:layout_gravity="end|bottom"
-                    android:background="?attr/selectableItemBackgroundBorderless" />
 
                 <TextView
                     android:id="@+id/delete"

@@ -7,61 +7,49 @@
 
 #import <Foundation/Foundation.h>
 
-#import "ios/chrome/browser/ui/tab_switcher/tab_grid/grid/grid_commands.h"
-#import "ios/chrome/browser/ui/tab_switcher/tab_grid/grid/grid_drag_drop_handler.h"
-#import "ios/chrome/browser/ui/tab_switcher/tab_grid/grid/grid_image_data_source.h"
-#import "ios/chrome/browser/ui/tab_switcher/tab_grid/grid/grid_menu_actions_data_source.h"
-#import "ios/chrome/browser/ui/tab_switcher/tab_grid/grid/grid_shareable_items_provider.h"
+#import "ios/chrome/browser/ui/tab_switcher/tab_grid/tab_grid_mediator_provider_wrangler.h"
+#import "ios/chrome/browser/ui/tab_switcher/tab_grid/tab_grid_mutator.h"
 
-class Browser;
-@protocol GridConsumer;
-@class TabGridMediator;
-@class URLWithTitle;
+@protocol GridToolbarsMutator;
+@protocol TabGridConsumer;
+@protocol TabGridPageMutator;
 
-namespace sessions {
-class TabRestoreService;
-}  // namespace sessions
+namespace feature_engagement {
+class Tracker;
+}  // namespace feature_engagement
 
-// Delegate protocol for an object that can handle the action sheet that asks
-// for confirmation from the tab grid.
-@protocol TabGridMediatorDelegate <NSObject>
-
-- (void)
-    showCloseItemsConfirmationActionSheetWithTabGridMediator:
-        (TabGridMediator*)tabGridMediator
-                                                       items:
-                                                           (NSArray<NSString*>*)
-                                                               items
-                                                      anchor:(UIBarButtonItem*)
-                                                                 buttonAnchor;
-
-- (void)tabGridMediator:(TabGridMediator*)tabGridMediator
-              shareURLs:(NSArray<URLWithTitle*>*)items
-                 anchor:(UIBarButtonItem*)buttonAnchor;
-
-// Dismissed presented popovers, if any.
-- (void)dismissPopovers;
-
-@end
+class PrefService;
 
 // Mediates between model layer and tab grid UI layer.
-@interface TabGridMediator : NSObject <GridCommands,
-                                       GridDragDropHandler,
-                                       GridImageDataSource,
-                                       GridMenuActionsDataSource,
-                                       GridShareableItemsProvider>
+@interface TabGridMediator
+    : NSObject <TabGridMediatorProviderWrangler, TabGridMutator>
 
-// The source browser.
-@property(nonatomic, assign) Browser* browser;
-// TabRestoreService holds the recently closed tabs.
-@property(nonatomic, assign) sessions::TabRestoreService* tabRestoreService;
-// Delegate to handle presenting the action sheet.
-@property(nonatomic, weak) id<TabGridMediatorDelegate> delegate;
+// Mutator for regular Tabs.
+@property(nonatomic, weak) id<TabGridPageMutator> regularPageMutator;
+// Mutator for incognito Tabs.
+@property(nonatomic, weak) id<TabGridPageMutator> incognitoPageMutator;
+// Mutator for remote Tabs.
+@property(nonatomic, weak) id<TabGridPageMutator> remotePageMutator;
 
-// Initializer with `consumer` as the receiver of model layer updates.
-- (instancetype)initWithConsumer:(id<GridConsumer>)consumer
+// Mutator to handle toolbars modification.
+@property(nonatomic, weak) id<GridToolbarsMutator> toolbarsMutator;
+
+// Consumer for state changes in tab grid.
+@property(nonatomic, weak) id<TabGridConsumer> consumer;
+
+- (instancetype)initWithPrefService:(PrefService*)prefService
+           featureEngagementTracker:(feature_engagement::Tracker*)tracker
     NS_DESIGNATED_INITIALIZER;
+
 - (instancetype)init NS_UNAVAILABLE;
+// Set the current displayed page (incognito, regular or remote).
+- (void)setPage:(TabGridPage)page;
+// Set the current mode (normal/selection/search/inactive) on the currently
+// displayed page.
+- (void)setModeOnCurrentPage:(TabGridMode)mode;
+// Stops mediating and disconnects from backend models.
+- (void)disconnect;
+
 @end
 
 #endif  // IOS_CHROME_BROWSER_UI_TAB_SWITCHER_TAB_GRID_TAB_GRID_MEDIATOR_H_

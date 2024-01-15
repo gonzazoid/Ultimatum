@@ -4,7 +4,7 @@
 
 #include "remoting/host/policy_watcher.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
@@ -13,7 +13,6 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/mock_log.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/policy/core/common/fake_async_policy_loader.h"
@@ -78,8 +77,8 @@ class PolicyWatcherTest : public testing::Test {
     EXPECT_CALL(mock_policy_callback_, OnPolicyError()).Times(0);
 
     // Retaining a raw pointer to keep control over policy contents.
-    policy_loader_ =
-        new policy::FakeAsyncPolicyLoader(base::ThreadTaskRunnerHandle::Get());
+    policy_loader_ = new policy::FakeAsyncPolicyLoader(
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     policy_watcher_ = PolicyWatcher::CreateFromPolicyLoaderForTesting(
         base::WrapUnique(policy_loader_.get()));
 
@@ -314,6 +313,11 @@ class PolicyWatcherTest : public testing::Test {
     dict.Set(key::kRemoteAccessHostDomainList, base::Value::List());
     dict.Set(key::kRemoteAccessHostClipboardSizeBytes, -1);
     dict.Set(key::kRemoteAccessHostAllowRemoteSupportConnections, true);
+#if BUILDFLAG(IS_CHROMEOS)
+    dict.Set(key::kRemoteAccessHostAllowEnterpriseRemoteSupportConnections,
+             true);
+    dict.Set(key::kRemoteAccessHostAllowEnterpriseFileTransfer, false);
+#endif
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
     dict.Set(key::kRemoteAccessHostMatchUsername, false);
 #endif
@@ -520,13 +524,13 @@ TEST_P(MisspelledPolicyTest, WarningLogged) {
   // registry key on Windows which fails on the Chromium bots. The warning that
   // gets logged cases the subsequent log assertion to fail so this check was
   // added so the test runs locally and in the bot environment.
-  EXPECT_CALL(mock_log, Log(logging::LOG_WARNING, _, _, _, _))
+  EXPECT_CALL(mock_log, Log(logging::LOGGING_WARNING, _, _, _, _))
       .With(testing::Args<4>(
           ContainsSubstring("Failed to open Chrome policy registry key")))
       .Times(testing::AtMost(1));
 #endif
 
-  EXPECT_CALL(mock_log, Log(logging::LOG_WARNING, _, _, _, _))
+  EXPECT_CALL(mock_log, Log(logging::LOGGING_WARNING, _, _, _, _))
       .With(testing::Args<4>(ContainsSubstring(misspelled_policy_name)))
       .Times(1);
 

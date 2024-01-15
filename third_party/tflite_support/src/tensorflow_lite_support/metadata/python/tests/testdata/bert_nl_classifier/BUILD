@@ -13,9 +13,9 @@ filegroup(
         "*.txt",
         "*.model",
     ]) + [
-        ":bert_nl_classifier_no_metadata",
         "mobilebert_vocab",
         ":30k-clean",
+        ":bert_nl_classifier_no_metadata",
     ],
 )
 

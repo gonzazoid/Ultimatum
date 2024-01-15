@@ -9,8 +9,8 @@
 #include <limits>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "content/public/browser/browser_thread.h"
 #include "extensions/browser/api/declarative_webrequest/webrequest_condition.h"
 #include "extensions/browser/api/declarative_webrequest/webrequest_constants.h"
@@ -46,10 +46,8 @@ WebRequestRulesRegistry::WebRequestRulesRegistry(
     int rules_registry_id)
     : RulesRegistry(browser_context,
                     declarative_webrequest_constants::kOnRequest,
-                    content::BrowserThread::UI,
                     cache_delegate,
-                    rules_registry_id),
-      browser_context_(browser_context) {}
+                    rules_registry_id) {}
 
 std::set<const WebRequestRule*> WebRequestRulesRegistry::GetMatches(
     const WebRequestData& request_data_without_ids) const {
@@ -130,9 +128,9 @@ WebRequestRulesRegistry::CreateDeltas(PermissionHelper* permission_helper,
 
     std::list<extension_web_request_api_helpers::EventResponseDelta>
         rule_result;
-    WebRequestAction::ApplyInfo apply_info = {permission_helper, request_data,
-                                              crosses_incognito, &rule_result,
-                                              &ignore_tags[extension_id]};
+    WebRequestAction::ApplyInfo apply_info = {
+        permission_helper, raw_ref(request_data), crosses_incognito,
+        &rule_result, &ignore_tags[extension_id]};
     rule->Apply(&apply_info);
     result.splice(result.begin(), std::move(rule_result));
 
@@ -153,7 +151,7 @@ std::string WebRequestRulesRegistry::AddRulesImpl(
   std::string error;
   RulesVector new_webrequest_rules;
   new_webrequest_rules.reserve(rules.size());
-  const Extension* extension = ExtensionRegistry::Get(browser_context_)
+  const Extension* extension = ExtensionRegistry::Get(browser_context())
                                    ->enabled_extensions()
                                    .GetByID(extension_id);
   RulesMap& registered_rules = webrequest_rules_[extension_id];
@@ -283,11 +281,12 @@ bool WebRequestRulesRegistry::IsEmpty() const {
   return true;
 }
 
-WebRequestRulesRegistry::~WebRequestRulesRegistry() {}
+WebRequestRulesRegistry::~WebRequestRulesRegistry() = default;
 
 base::Time WebRequestRulesRegistry::GetExtensionInstallationTime(
     const std::string& extension_id) const {
-  return ExtensionPrefs::Get(browser_context_)->GetInstallTime(extension_id);
+  return ExtensionPrefs::Get(browser_context())
+      ->GetLastUpdateTime(extension_id);
 }
 
 void WebRequestRulesRegistry::ClearCacheOnNavigation() {
@@ -308,8 +307,11 @@ bool WebRequestRulesRegistry::HostPermissionsChecker(
     const Extension* extension,
     const WebRequestActionSet* actions,
     std::string* error) {
-  if (extension->permissions_data()->HasEffectiveAccessToAllHosts())
+  if (extension->permissions_data()
+          ->active_permissions()
+          .HasEffectiveAccessToAllHosts()) {
     return true;
+  }
 
   // Without the permission for all URLs, actions with the STRATEGY_DEFAULT
   // should not be registered, they would never be able to execute.

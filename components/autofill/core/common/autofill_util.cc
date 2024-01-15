@@ -4,26 +4,25 @@
 
 #include "components/autofill/core/common/autofill_util.h"
 
+#include <stddef.h>
+
 #include <algorithm>
+#include <numeric>
+#include <vector>
 
 #include "base/command_line.h"
-#include "base/feature_list.h"
-#include "base/i18n/case_conversion.h"
-#include "base/metrics/field_trial.h"
-#include "base/metrics/field_trial_params.h"
+#include "base/i18n/rtl.h"
+#include "base/no_destructor.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
-#include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
-#include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/autofill_switches.h"
 
 namespace autofill {
 
-using features::kAutofillKeyboardAccessory;
 using mojom::FocusedFieldType;
 using mojom::SubmissionIndicatorEvent;
 using mojom::SubmissionSource;
@@ -47,43 +46,14 @@ struct Compare : base::CaseInsensitiveCompareASCII<Char> {
 
 }  // namespace
 
-bool IsFeatureSubstringMatchEnabled() {
-  return base::FeatureList::IsEnabled(features::kAutofillTokenPrefixMatching);
-}
-
 bool IsShowAutofillSignaturesEnabled() {
   return base::CommandLine::ForCurrentProcess()->HasSwitch(
       switches::kShowAutofillSignatures);
 }
 
-bool IsKeyboardAccessoryEnabled() {
-#if BUILDFLAG(IS_ANDROID)
-  return base::FeatureList::IsEnabled(kAutofillKeyboardAccessory);
-#else  // !BUILDFLAG(IS_ANDROID)
-  return false;
-#endif
-}
-
-bool FieldIsSuggestionSubstringStartingOnTokenBoundary(
-    const std::u16string& suggestion,
-    const std::u16string& field_contents,
-    bool case_sensitive) {
-  if (!IsFeatureSubstringMatchEnabled()) {
-    return base::StartsWith(suggestion, field_contents,
-                            case_sensitive
-                                ? base::CompareCase::SENSITIVE
-                                : base::CompareCase::INSENSITIVE_ASCII);
-  }
-
-  return suggestion.length() >= field_contents.length() &&
-         GetTextSelectionStart(suggestion, field_contents, case_sensitive) !=
-             std::u16string::npos;
-}
-
 bool IsPrefixOfEmailEndingWithAtSign(const std::u16string& full_string,
                                      const std::u16string& prefix) {
-  return base::StartsWith(full_string, prefix + u"@",
-                          base::CompareCase::SENSITIVE);
+  return full_string.starts_with(prefix + u"@");
 }
 
 size_t GetTextSelectionStart(const std::u16string& suggestion,
@@ -133,23 +103,29 @@ void SetCheckStatus(FormFieldData* form_field_data,
 }
 
 std::vector<std::string> LowercaseAndTokenizeAttributeString(
-    base::StringPiece attribute) {
+    std::string_view attribute) {
   return base::SplitString(base::ToLowerASCII(attribute),
                            base::kWhitespaceASCII, base::TRIM_WHITESPACE,
                            base::SPLIT_WANT_NONEMPTY);
+}
+
+std::u16string RemoveWhitespace(const std::u16string& value) {
+  std::u16string stripped_value;
+  base::RemoveChars(value, base::kWhitespaceUTF16, &stripped_value);
+  return stripped_value;
 }
 
 bool SanitizedFieldIsEmpty(const std::u16string& value) {
   // Some sites enter values such as ____-____-____-____ or (___)-___-____ in
   // their fields. Check if the field value is empty after the removal of the
   // formatting characters.
-  static std::u16string formatting =
+  static const base::NoDestructor<std::u16string> formatting(
       base::StrCat({u"-_()/",
                     {&base::i18n::kRightToLeftMark, 1},
                     {&base::i18n::kLeftToRightMark, 1},
-                    base::kWhitespaceUTF16});
+                    base::kWhitespaceUTF16}));
 
-  return (value.find_first_not_of(formatting) == base::StringPiece::npos);
+  return base::ContainsOnlyChars(value, *formatting);
 }
 
 bool ShouldAutoselectFirstSuggestionOnArrowDown() {
@@ -162,11 +138,19 @@ bool ShouldAutoselectFirstSuggestionOnArrowDown() {
 }
 
 bool IsFillable(FocusedFieldType focused_field_type) {
-  return focused_field_type == FocusedFieldType::kFillableTextArea ||
-         focused_field_type == FocusedFieldType::kFillableSearchField ||
-         focused_field_type == FocusedFieldType::kFillableNonSearchField ||
-         focused_field_type == FocusedFieldType::kFillableUsernameField ||
-         focused_field_type == FocusedFieldType::kFillablePasswordField;
+  switch (focused_field_type) {
+    case FocusedFieldType::kFillableTextArea:
+    case FocusedFieldType::kFillableSearchField:
+    case FocusedFieldType::kFillableNonSearchField:
+    case FocusedFieldType::kFillableUsernameField:
+    case FocusedFieldType::kFillablePasswordField:
+    case FocusedFieldType::kFillableWebauthnTaggedField:
+      return true;
+    case FocusedFieldType::kUnfillableElement:
+    case FocusedFieldType::kUnknown:
+      return false;
+  }
+  NOTREACHED_NORETURN();
 }
 
 SubmissionIndicatorEvent ToSubmissionIndicatorEvent(SubmissionSource source) {
@@ -179,12 +163,12 @@ SubmissionIndicatorEvent ToSubmissionIndicatorEvent(SubmissionSource source) {
       return SubmissionIndicatorEvent::XHR_SUCCEEDED;
     case SubmissionSource::FRAME_DETACHED:
       return SubmissionIndicatorEvent::FRAME_DETACHED;
-    case SubmissionSource::DOM_MUTATION_AFTER_XHR:
-      return SubmissionIndicatorEvent::DOM_MUTATION_AFTER_XHR;
     case SubmissionSource::PROBABLY_FORM_SUBMITTED:
       return SubmissionIndicatorEvent::PROBABLE_FORM_SUBMISSION;
     case SubmissionSource::FORM_SUBMISSION:
       return SubmissionIndicatorEvent::HTML_FORM_SUBMISSION;
+    case SubmissionSource::DOM_MUTATION_AFTER_AUTOFILL:
+      return SubmissionIndicatorEvent::DOM_MUTATION_AFTER_AUTOFILL;
   }
 
   NOTREACHED();
@@ -198,6 +182,24 @@ GURL StripAuthAndParams(const GURL& gurl) {
   rep.ClearQuery();
   rep.ClearRef();
   return gurl.ReplaceComponents(rep);
+}
+
+bool IsAutofillManuallyTriggered(
+    AutofillSuggestionTriggerSource trigger_source) {
+  return IsAddressAutofillManuallyTriggered(trigger_source) ||
+         IsPaymentsAutofillManuallyTriggered(trigger_source);
+}
+
+bool IsAddressAutofillManuallyTriggered(
+    AutofillSuggestionTriggerSource trigger_source) {
+  return trigger_source ==
+         AutofillSuggestionTriggerSource::kManualFallbackAddress;
+}
+
+bool IsPaymentsAutofillManuallyTriggered(
+    AutofillSuggestionTriggerSource trigger_source) {
+  return trigger_source ==
+         AutofillSuggestionTriggerSource::kManualFallbackPayments;
 }
 
 }  // namespace autofill

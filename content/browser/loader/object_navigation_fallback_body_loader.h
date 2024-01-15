@@ -6,9 +6,11 @@
 #define CONTENT_BROWSER_LOADER_OBJECT_NAVIGATION_FALLBACK_BODY_LOADER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ref.h"
 #include "content/public/browser/navigation_handle_user_data.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -16,15 +18,8 @@
 #include "mojo/public/cpp/system/data_pipe_drainer.h"
 #include "services/network/public/cpp/url_loader_completion_status.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/navigation/navigation_params.mojom-forward.h"
 #include "third_party/blink/public/mojom/timing/resource_timing.mojom.h"
-
-namespace network {
-namespace mojom {
-class URLResponseHead;
-}  // namespace mojom
-}  // namespace network
 
 namespace content {
 
@@ -58,9 +53,6 @@ class ObjectNavigationFallbackBodyLoader
       public network::mojom::URLLoaderClient,
       public mojo::DataPipeDrainer::Client {
  public:
-  // `common_params, `commit_params`, and `response_head`  are used to
-  // (partially) generate the resource timing info.
-  //
   // `response_body` and `url_loader_client_endpoints` are used to drain the
   // responise body and calculate the body / data size needed for the
   // performance entry.
@@ -74,9 +66,6 @@ class ObjectNavigationFallbackBodyLoader
   // response body is successfully loaded.
   static void CreateAndStart(
       NavigationRequest& navigation_request,
-      const blink::mojom::CommonNavigationParams& common_params,
-      const blink::mojom::CommitNavigationParams& commit_params,
-      const network::mojom::URLResponseHead& response_head,
       mojo::ScopedDataPipeConsumerHandle response_body,
       network::mojom::URLLoaderClientEndpointsPtr url_loader_client_endpoints,
       base::OnceClosure completion_closure);
@@ -89,13 +78,10 @@ class ObjectNavigationFallbackBodyLoader
 
   ObjectNavigationFallbackBodyLoader(
       NavigationHandle& navigation_handle,
-      blink::mojom::ResourceTimingInfoPtr timing_info,
-      std::string server_timing_value,
       mojo::ScopedDataPipeConsumerHandle response_body,
       network::mojom::URLLoaderClientEndpointsPtr url_loader_client_endpoints,
       base::OnceClosure completion_closure);
 
-  void MaybeComplete();
   void BodyLoadFailed();
 
   // URLLoaderClient overrides:
@@ -103,7 +89,7 @@ class ObjectNavigationFallbackBodyLoader
   void OnReceiveResponse(
       network::mojom::URLResponseHeadPtr,
       mojo::ScopedDataPipeConsumerHandle body,
-      absl::optional<mojo_base::BigBuffer> cached_metadata) override;
+      std::optional<mojo_base::BigBuffer> cached_metadata) override;
   void OnReceiveRedirect(const net::RedirectInfo&,
                          network::mojom::URLResponseHeadPtr) override;
   void OnUploadProgress(int64_t current_position,
@@ -116,16 +102,13 @@ class ObjectNavigationFallbackBodyLoader
   void OnDataAvailable(const void* data, size_t num_bytes) override;
   void OnDataComplete() override;
 
-  NavigationRequest& navigation_request_;
+  const raw_ref<NavigationRequest> navigation_request_;
   // `url_loader_` must be kept alive while reading the response body.
   mojo::Remote<network::mojom::URLLoader> url_loader_;
   mojo::Receiver<network::mojom::URLLoaderClient> url_loader_client_receiver_;
   // `response_body_drainer_` will be reset to null when the response body is
   // completely drained.
   std::unique_ptr<mojo::DataPipeDrainer> response_body_drainer_;
-  absl::optional<network::URLLoaderCompletionStatus> status_;
-  blink::mojom::ResourceTimingInfoPtr timing_info_;
-  std::string server_timing_value_;
   base::OnceClosure completion_closure_;
 };
 

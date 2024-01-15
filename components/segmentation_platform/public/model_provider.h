@@ -5,8 +5,9 @@
 #ifndef COMPONENTS_SEGMENTATION_PLATFORM_PUBLIC_MODEL_PROVIDER_H_
 #define COMPONENTS_SEGMENTATION_PLATFORM_PUBLIC_MODEL_PROVIDER_H_
 
-#include "base/callback.h"
-#include "base/task/sequenced_task_runner.h"
+#include <memory>
+#include "base/functional/callback.h"
+#include "components/segmentation_platform/public/proto/model_metadata.pb.h"
 #include "components/segmentation_platform/public/proto/segmentation_platform.pb.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -19,16 +20,21 @@ class SegmentationModelMetadata;
 // single optimization target.
 class ModelProvider {
  public:
-  using ModelUpdatedCallback = base::RepeatingCallback<
-      void(proto::SegmentId, proto::SegmentationModelMetadata, int64_t)>;
+  using Request = std::vector<float>;
+  using Response = std::vector<float>;
+
+  using ModelUpdatedCallback = base::RepeatingCallback<void(
+      proto::SegmentId,
+      absl::optional<proto::SegmentationModelMetadata>,
+      int64_t)>;
   using ExecutionCallback =
-      base::OnceCallback<void(const absl::optional<float>&)>;
+      base::OnceCallback<void(const absl::optional<Response>&)>;
 
   explicit ModelProvider(proto::SegmentId segment_id);
   virtual ~ModelProvider();
 
-  ModelProvider(ModelProvider&) = delete;
-  ModelProvider& operator=(ModelProvider&) = delete;
+  ModelProvider(const ModelProvider&) = delete;
+  ModelProvider& operator=(const ModelProvider&) = delete;
 
   // Implementation should return metadata that will be used to execute model.
   // The metadata provided should define the number of features needed by the
@@ -47,7 +53,7 @@ class ModelProvider {
   // of positive result. Also see `discrete_mapping` field in the
   // `SegmentationModelMetadata` for how the score will be used to determine the
   // segment.
-  virtual void ExecuteModelWithInput(const std::vector<float>& inputs,
+  virtual void ExecuteModelWithInput(const Request& inputs,
                                      ExecutionCallback callback) = 0;
 
   // Returns true if a model is available.
@@ -55,6 +61,40 @@ class ModelProvider {
 
  protected:
   const proto::SegmentId segment_id_;
+};
+
+// ModelProvider wrapper for implementing default models in c++.
+class DefaultModelProvider : public ModelProvider {
+ public:
+  explicit DefaultModelProvider(proto::SegmentId segment_id);
+  ~DefaultModelProvider() override;
+
+  DefaultModelProvider(const DefaultModelProvider&) = delete;
+  DefaultModelProvider& operator=(const DefaultModelProvider&) = delete;
+
+  // Config needed for the model.
+  struct ModelConfig {
+    // Model metadata that contains inputs, outputs, and other configuration
+    // fields.
+    proto::SegmentationModelMetadata metadata;
+    // Model version. Should be incremented for any changes to the model.
+    int64_t model_version;
+
+    ModelConfig(proto::SegmentationModelMetadata metadata,
+                int64_t model_version);
+    ~ModelConfig();
+
+    ModelConfig(const ModelConfig&) = delete;
+    ModelConfig& operator=(const ModelConfig&) = delete;
+  };
+  virtual std::unique_ptr<ModelConfig> GetModelConfig() = 0;
+
+  // Returns true by default. Can be overridden to disable the model if needed.
+  bool ModelAvailable() override;
+
+ private:
+  void InitAndFetchModel(
+      const ModelUpdatedCallback& model_updated_callback) final;
 };
 
 // Interface used by segmentation platform to create ModelProvider(s).
@@ -70,7 +110,7 @@ class ModelProviderFactory {
   // available.
   // TODO(crbug.com/1346389): This method should be moved to Config after
   // migrating all the tests that use this.
-  virtual std::unique_ptr<ModelProvider> CreateDefaultProvider(
+  virtual std::unique_ptr<DefaultModelProvider> CreateDefaultProvider(
       proto::SegmentId) = 0;
 };
 

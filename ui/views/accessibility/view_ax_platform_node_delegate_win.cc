@@ -14,16 +14,16 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/win/windows_version.h"
 #include "third_party/iaccessible2/ia2_api_all.h"
-#include "ui/accessibility/accessibility_switches.h"
+#include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/accessibility/ax_text_utils.h"
 #include "ui/accessibility/platform/ax_fragment_root_win.h"
 #include "ui/accessibility/platform/ax_platform_node_win.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
-#include "ui/base/layout.h"
 #include "ui/base/win/atl_module.h"
 #include "ui/display/win/screen_win.h"
+#include "ui/views/accessibility/atomic_view_ax_tree_manager.h"
 #include "ui/views/accessibility/views_utilities_aura.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/view.h"
@@ -105,6 +105,40 @@ gfx::Rect ViewAXPlatformNodeDelegateWin::GetBoundsRect(
       NOTIMPLEMENTED();
       return gfx::Rect();
   }
+}
+
+gfx::Rect ViewAXPlatformNodeDelegateWin::GetInnerTextRangeBoundsRect(
+    const int start_offset,
+    const int end_offset,
+    const ui::AXCoordinateSystem coordinate_system,
+    const ui::AXClippingBehavior clipping_behavior,
+    ui::AXOffscreenResult* offscreen_result) const {
+  switch (coordinate_system) {
+    case ui::AXCoordinateSystem::kScreenPhysicalPixels:
+      return display::win::ScreenWin::DIPToScreenRect(
+          HWNDForView(view()),
+          ViewAXPlatformNodeDelegate::GetInnerTextRangeBoundsRect(
+              start_offset, end_offset, ui::AXCoordinateSystem::kScreenDIPs,
+              clipping_behavior, offscreen_result));
+    case ui::AXCoordinateSystem::kScreenDIPs:
+      return ViewAXPlatformNodeDelegate::GetInnerTextRangeBoundsRect(
+          start_offset, end_offset, coordinate_system, clipping_behavior,
+          offscreen_result);
+    case ui::AXCoordinateSystem::kRootFrame:
+    case ui::AXCoordinateSystem::kFrame:
+      NOTIMPLEMENTED();
+      return gfx::Rect();
+  }
+}
+
+void ViewAXPlatformNodeDelegateWin::EnsureAtomicViewAXTreeManager() {
+  DCHECK(needs_ax_tree_manager());
+  if (atomic_view_ax_tree_manager_) {
+    return;
+  }
+
+  atomic_view_ax_tree_manager_ =
+      views::AtomicViewAXTreeManager::Create(this, data());
 }
 
 }  // namespace views

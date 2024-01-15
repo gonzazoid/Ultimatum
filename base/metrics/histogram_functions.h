@@ -64,9 +64,12 @@ BASE_EXPORT void UmaHistogramExactLinear(const char* name,
 //   };
 //   base::UmaHistogramEnumeration("My.Enumeration",
 //                                 NewTabPageAction::kClickTitle);
+//
+// Note that there are code that refer implementation details of this function.
+// Keep them synchronized.
 template <typename T>
 void UmaHistogramEnumeration(const std::string& name, T sample) {
-  static_assert(std::is_enum<T>::value, "T is not an enum.");
+  static_assert(std::is_enum_v<T>, "T is not an enum.");
   // This also ensures that an enumeration that doesn't define kMaxValue fails
   // with a semi-useful error ("no member named 'kMaxValue' in ...").
   static_assert(static_cast<uintmax_t>(T::kMaxValue) <=
@@ -80,7 +83,7 @@ void UmaHistogramEnumeration(const std::string& name, T sample) {
 
 template <typename T>
 void UmaHistogramEnumeration(const char* name, T sample) {
-  static_assert(std::is_enum<T>::value, "T is not an enum.");
+  static_assert(std::is_enum_v<T>, "T is not an enum.");
   // This also ensures that an enumeration that doesn't define kMaxValue fails
   // with a semi-useful error ("no member named 'kMaxValue' in ...").
   static_assert(static_cast<uintmax_t>(T::kMaxValue) <=
@@ -110,7 +113,7 @@ void UmaHistogramEnumeration(const char* name, T sample) {
 // otherwise functionally equivalent to the above.
 template <typename T>
 void UmaHistogramEnumeration(const std::string& name, T sample, T enum_size) {
-  static_assert(std::is_enum<T>::value, "T is not an enum.");
+  static_assert(std::is_enum_v<T>, "T is not an enum.");
   DCHECK_LE(static_cast<uintmax_t>(enum_size), static_cast<uintmax_t>(INT_MAX));
   DCHECK_LT(static_cast<uintmax_t>(sample), static_cast<uintmax_t>(enum_size));
   return UmaHistogramExactLinear(name, static_cast<int>(sample),
@@ -119,7 +122,7 @@ void UmaHistogramEnumeration(const std::string& name, T sample, T enum_size) {
 
 template <typename T>
 void UmaHistogramEnumeration(const char* name, T sample, T enum_size) {
-  static_assert(std::is_enum<T>::value, "T is not an enum.");
+  static_assert(std::is_enum_v<T>, "T is not an enum.");
   DCHECK_LE(static_cast<uintmax_t>(enum_size), static_cast<uintmax_t>(INT_MAX));
   DCHECK_LT(static_cast<uintmax_t>(sample), static_cast<uintmax_t>(enum_size));
   return UmaHistogramExactLinear(name, static_cast<int>(sample),
@@ -256,7 +259,7 @@ BASE_EXPORT void UmaHistogramMemoryLargeMB(const char* name, int sample);
 // many distinct values to the server (across all users). Concretely, keep the
 // number of distinct values <= 100 ideally, definitely <= 1000. If you have no
 // guarantees on the range of your data, use clamping, e.g.:
-//   UmaHistogramSparse("My.Histogram", base::clamp(value, 0, 200));
+//   UmaHistogramSparse("My.Histogram", std::clamp(value, 0, 200));
 BASE_EXPORT void UmaHistogramSparse(const std::string& name, int sample);
 BASE_EXPORT void UmaHistogramSparse(const char* name, int sample);
 

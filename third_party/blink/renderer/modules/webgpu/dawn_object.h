@@ -97,7 +97,7 @@ class DawnObjectBase {
   const String& label() const { return label_; }
   void setLabel(const String& value);
 
-  virtual void setLabelImpl(const String& value) {}
+  virtual void setLabelImpl(const String& value) = 0;
 
  private:
   scoped_refptr<DawnControlClientHolder> dawn_control_client_;
@@ -162,6 +162,20 @@ class DawnObject<WGPUDevice> : public DawnObjectBase {
 
  private:
   WGPUDevice const handle_;
+};
+
+template <>
+class DawnObject<WGPUAdapter> : public DawnObjectBase {
+ public:
+  DawnObject(scoped_refptr<DawnControlClientHolder> dawn_control_client,
+             WGPUAdapter handle)
+      : DawnObjectBase(dawn_control_client), handle_(handle) {}
+  ~DawnObject() { GetProcs().adapterRelease(handle_); }
+
+  WGPUAdapter GetHandle() const { return handle_; }
+
+ private:
+  WGPUAdapter const handle_;
 };
 
 }  // namespace blink

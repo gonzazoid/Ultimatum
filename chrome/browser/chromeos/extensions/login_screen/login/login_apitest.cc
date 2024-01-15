@@ -13,16 +13,16 @@
 #include "chrome/browser/ash/login/existing_user_controller.h"
 #include "chrome/browser/ash/login/lock/screen_locker.h"
 #include "chrome/browser/ash/login/lock/screen_locker_tester.h"
-#include "chrome/browser/ash/login/test/embedded_policy_test_server_mixin.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/test/logged_in_user_mixin.h"
 #include "chrome/browser/ash/login/test/session_manager_state_waiter.h"
+#include "chrome/browser/ash/policy/test_support/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/chromeos/extensions/login_screen/login_screen_apitest_base.h"
 #include "chrome/browser/lifetime/termination_notification.h"
 #include "chrome/browser/policy/extension_force_install_mixin.h"
 #include "chrome/common/pref_names.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 #include "chromeos/ash/components/dbus/cryptohome/rpc.pb.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
@@ -30,6 +30,7 @@
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/core/common/cloud/test/policy_builder.h"
 #include "components/policy/core/common/policy_service.h"
+#include "components/policy/core/common/policy_types.h"
 #include "components/policy/policy_constants.h"
 #include "components/prefs/pref_service.h"
 #include "components/session_manager/session_manager_types.h"
@@ -134,7 +135,7 @@ class LoginApitest : public LoginScreenApitestBase {
   void RefreshPolicies() {
     base::RunLoop run_loop;
     g_browser_process->policy_service()->RefreshPolicies(
-        run_loop.QuitClosure());
+        run_loop.QuitClosure(), policy::PolicyFetchReason::kTest);
     run_loop.Run();
   }
 
@@ -171,12 +172,12 @@ class LoginApitest : public LoginScreenApitestBase {
   }
 
   void SetTestCustomArg(const std::string custom_arg) {
-    config_.SetKey("customArg", base::Value(custom_arg));
+    config_.Set("customArg", base::Value(custom_arg));
     extensions::TestGetConfigFunction::set_test_config_state(&config_);
   }
 
   void LogInWithPassword() {
-    SessionStateWaiter waiter(session_manager::SessionState::ACTIVE);
+    ash::SessionStateWaiter waiter(session_manager::SessionState::ACTIVE);
     SetTestCustomArg(kPassword);
     SetUpLoginScreenExtensionAndRunTest(kLaunchManagedGuestSessionWithPassword);
     waiter.Wait();
@@ -187,7 +188,7 @@ class LoginApitest : public LoginScreenApitestBase {
   }
 
   // Also checks that session is locked.
-  void LockScreen() { ScreenLockerTester().Lock(); }
+  void LockScreen() { ash::ScreenLockerTester().Lock(); }
 
  protected:
   std::unique_ptr<policy::UserPolicyBuilder> user_policy_builder_;
@@ -195,12 +196,12 @@ class LoginApitest : public LoginScreenApitestBase {
  private:
   ash::EmbeddedPolicyTestServerMixin policy_test_server_mixin_{&mixin_host_};
   ExtensionForceInstallMixin extension_force_install_mixin_{&mixin_host_};
-  base::DictionaryValue config_;
+  base::Value::Dict config_;
 };
 
 IN_PROC_BROWSER_TEST_F(LoginApitest, LaunchManagedGuestSession) {
   SetUpDeviceLocalAccountPolicy();
-  SessionStateWaiter waiter(session_manager::SessionState::ACTIVE);
+  ash::SessionStateWaiter waiter(session_manager::SessionState::ACTIVE);
   SetUpLoginScreenExtensionAndRunTest(kLaunchManagedGuestSession);
   waiter.Wait();
 
@@ -258,7 +259,7 @@ IN_PROC_BROWSER_TEST_F(LoginApitest, LockManagedGuestSession) {
 
   SetUpTestListeners();
   SetUpInSessionExtension();
-  SessionStateWaiter waiter(session_manager::SessionState::LOCKED);
+  ash::SessionStateWaiter waiter(session_manager::SessionState::LOCKED);
   RunTest(kInSessionLoginLockManagedGuestSession);
   waiter.Wait();
 }
@@ -281,7 +282,7 @@ IN_PROC_BROWSER_TEST_F(LoginApitest, UnlockManagedGuestSession) {
   ASSERT_EQ(session_manager::SessionManager::Get()->session_state(),
             session_manager::SessionState::ACTIVE);
 
-  SessionStateWaiter locked_waiter(session_manager::SessionState::LOCKED);
+  ash::SessionStateWaiter locked_waiter(session_manager::SessionState::LOCKED);
   SetUpTestListeners();
   LockScreen();
   locked_waiter.Wait();
@@ -292,7 +293,7 @@ IN_PROC_BROWSER_TEST_F(LoginApitest, UnlockManagedGuestSession) {
   // since the extension itself will be disabled and stopped as a result of the
   // login.unlockManagedGuestSession() API call. Instead, verify the session
   // state here.
-  SessionStateWaiter active_waiter(session_manager::SessionState::ACTIVE);
+  ash::SessionStateWaiter active_waiter(session_manager::SessionState::ACTIVE);
   RunTest(kUnlockManagedGuestSession, /*assert_test_succeed=*/false);
   active_waiter.Wait();
   ASSERT_EQ(session_manager::SessionManager::Get()->session_state(),
@@ -315,13 +316,13 @@ IN_PROC_BROWSER_TEST_F(LoginApitest, UnlockManagedGuestSessionLockedWithApi) {
   in_session_listener.set_extension_id(kInSessionExtensionId);
 
   SetUpInSessionExtension();
-  SessionStateWaiter locked_waiter(session_manager::SessionState::LOCKED);
+  ash::SessionStateWaiter locked_waiter(session_manager::SessionState::LOCKED);
   ASSERT_TRUE(in_session_listener.WaitUntilSatisfied());
   in_session_listener.Reply(kInSessionLoginLockManagedGuestSession);
   ASSERT_TRUE(catcher.GetNextResult());
   locked_waiter.Wait();
 
-  SessionStateWaiter active_waiter(session_manager::SessionState::ACTIVE);
+  ash::SessionStateWaiter active_waiter(session_manager::SessionState::ACTIVE);
   ASSERT_TRUE(login_screen_listener.WaitUntilSatisfied());
   login_screen_listener.Reply(kUnlockManagedGuestSession);
   active_waiter.Wait();
@@ -331,7 +332,7 @@ IN_PROC_BROWSER_TEST_F(LoginApitest, UnlockManagedGuestSessionWrongPassword) {
   // Note: the password check will fail even if the correct password is used as
   // |FakeUserDataAuthClient::CheckKeyEx()| does not check the user session's
   // cipher blob.
-  FakeUserDataAuthClient::TestApi::Get()->set_enable_auth_check(true);
+  ash::FakeUserDataAuthClient::TestApi::Get()->set_enable_auth_check(true);
   SetUpDeviceLocalAccountPolicy();
   LogInWithPassword();
 
@@ -468,9 +469,9 @@ class LoginApitestWithEnterpriseUser : public LoginApitest {
   // Use a different test server as |LoginApitest| uses the one from
   // |embedded_test_server()|.
   net::EmbeddedTestServer test_server_;
-  LoggedInUserMixin logged_in_user_mixin_{
+  ash::LoggedInUserMixin logged_in_user_mixin_{
       &mixin_host_,
-      LoggedInUserMixin::LogInType::kRegular,
+      ash::LoggedInUserMixin::LogInType::kRegular,
       &test_server_,
       this,
       /*should_launch_browser=*/true,

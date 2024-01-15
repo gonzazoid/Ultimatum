@@ -11,11 +11,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
 #include "components/favicon/core/favicon_driver.h"
@@ -25,10 +26,11 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkColor.h"
-#include "ui/base/layout.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #include "ui/gfx/codec/png_codec.h"
 #include "ui/gfx/favicon_size.h"
 #include "ui/gfx/image/image.h"
+#include "ui/gfx/image/image_unittest_util.h"
 
 namespace favicon {
 namespace {
@@ -83,16 +85,9 @@ MATCHER_P(ImageColorIs, expected_color, "") {
   return true;
 }
 
-SkBitmap CreateBitmapWithEdgeSize(int size, SkColor color) {
-  SkBitmap bmp;
-  bmp.allocN32Pixels(size, size);
-  bmp.eraseColor(color);
-  return bmp;
-}
-
 // Fill the given data buffer with valid png data.
 std::vector<unsigned char> FillBitmapWithEdgeSize(int size, SkColor color) {
-  SkBitmap bitmap = CreateBitmapWithEdgeSize(size, color);
+  SkBitmap bitmap = gfx::test::CreateBitmap(size, color);
   std::vector<unsigned char> output;
   gfx::PNGCodec::EncodeBGRASkBitmap(bitmap, false, &output);
   return output;
@@ -157,8 +152,8 @@ class FakeImageDownloader {
     if (url == manual_callback_url_)
       manual_callbacks_.push_back(std::move(bound_callback));
     else
-      base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                    std::move(bound_callback));
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, std::move(bound_callback));
     return download_id;
   }
 
@@ -169,7 +164,7 @@ class FakeImageDownloader {
     response.http_status_code = 200;
     for (int size : original_sizes) {
       response.original_bitmap_sizes.push_back(gfx::Size(size, size));
-      response.bitmaps.push_back(CreateBitmapWithEdgeSize(size, color));
+      response.bitmaps.push_back(gfx::test::CreateBitmap(size, color));
     }
     responses_[icon_url] = response;
   }
@@ -242,8 +237,8 @@ class FakeManifestDownloader {
     if (url == manual_callback_url_)
       manual_callbacks_.push_back(std::move(bound_callback));
     else
-      base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                    std::move(bound_callback));
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, std::move(bound_callback));
   }
 
   void Add(const GURL& manifest_url,
@@ -431,8 +426,9 @@ class FakeFaviconService {
     // should be executed sequentially.
     if (page_or_icon_url != manual_callback_url_ &&
         !HasPendingManualCallback()) {
-      return tracker->PostTask(base::ThreadTaskRunnerHandle::Get().get(),
-                               FROM_HERE, std::move(bound_callback));
+      return tracker->PostTask(
+          base::SingleThreadTaskRunner::GetCurrentDefault().get(), FROM_HERE,
+          std::move(bound_callback));
     }
 
     // We use PostTaskAndReply() to cause |callback| being run in the current
@@ -496,15 +492,6 @@ class FaviconHandlerTest : public testing::Test {
     delegate_.fake_image_downloader().Add(kIconURL12x12, IntVector{12});
     delegate_.fake_image_downloader().Add(kIconURL16x16, IntVector{16});
     delegate_.fake_image_downloader().Add(kIconURL64x64, IntVector{64});
-
-    // The score computed by SelectFaviconFrames() is dependent on the supported
-    // scale factors of the platform. It is used for determining the goodness of
-    // a downloaded bitmap in FaviconHandler::OnDidDownloadFavicon().
-    // Force the values of the scale factors so that the tests produce the same
-    // results on all platforms.
-    scoped_set_supported_scale_factors_.reset(
-        new ui::test::ScopedSetSupportedResourceScaleFactors(
-            {ui::k100Percent}));
   }
 
   bool VerifyAndClearExpectations() {
@@ -545,11 +532,19 @@ class FaviconHandlerTest : public testing::Test {
                                     candidates, manifest_url);
   }
 
-  base::test::SingleThreadTaskEnvironment task_environment_;
-  std::unique_ptr<ui::test::ScopedSetSupportedResourceScaleFactors>
-      scoped_set_supported_scale_factors_;
   testing::NiceMock<MockFaviconServiceWithFake> favicon_service_;
   testing::NiceMock<MockDelegate> delegate_;
+
+ private:
+  base::test::SingleThreadTaskEnvironment task_environment_;
+
+  // The score computed by SelectFaviconFrames() is dependent on the supported
+  // scale factors of the platform. It is used for determining the goodness of
+  // a downloaded bitmap in `FaviconHandler::OnDidDownloadFavicon()`.
+  // Force the values of the scale factors so that the tests produce the same
+  // results on all platforms.
+  ui::test::ScopedSetSupportedResourceScaleFactors
+      scoped_set_supported_scale_factors_{{ui::k100Percent}};
 };
 
 TEST_F(FaviconHandlerTest, GetFaviconFromHistory) {
@@ -1364,14 +1359,7 @@ TEST_F(FaviconHandlerTest,
 // SelectFaviconFramesTest.*.
 class FaviconHandlerMultipleFaviconsTest : public FaviconHandlerTest {
  protected:
-  FaviconHandlerMultipleFaviconsTest() {
-    // Set the supported scale factors to 1x and 2x. This affects the behavior
-    // of SelectFaviconFrames().
-    scoped_set_supported_scale_factors_.reset();  // Need to delete first.
-    scoped_set_supported_scale_factors_.reset(
-        new ui::test::ScopedSetSupportedResourceScaleFactors(
-            {ui::k100Percent, ui::k200Percent}));
-  }
+  FaviconHandlerMultipleFaviconsTest() = default;
 
   // Simulates requesting a favicon for |page_url| given:
   // - We have not previously cached anything in history for |page_url| or for
@@ -1403,6 +1391,15 @@ class FaviconHandlerMultipleFaviconsTest : public FaviconHandlerTest {
                              candidate_icons);
     return chosen_icon_size;
   }
+
+ private:
+  // Set the supported scale factors to 1x and 2x. This affects the behavior
+  // of `SelectFaviconFrames()`.
+  // `FaviconHandlerTest::scoped_set_supported_scale_factors_` cannot be used
+  // since `ui::test::ScopedSetSupportedResourceScaleFactors` uses a global
+  // variable to store the original supported resource scale factors.
+  ui::test::ScopedSetSupportedResourceScaleFactors
+      scoped_set_supported_scale_factors_{{ui::k100Percent, ui::k200Percent}};
 };
 
 // Tests that running FaviconHandler
@@ -1771,6 +1768,18 @@ TEST_F(FaviconHandlerTest, TestKeepDownloadedLargestFavicon) {
       {FaviconURL(kIconURL10x10, kFavicon, SizeVector{gfx::Size(16, 16)}),
        FaviconURL(kIconURL12x12, kFavicon, SizeVector{gfx::Size(15, 15)}),
        FaviconURL(kIconURL16x16, kFavicon, kEmptySizes)});
+}
+
+// Test that the special size keyword "any" (represented as a size of 0x0 in
+// FaviconURL) is handled.
+TEST_F(FaviconHandlerTest, TestConsiderAnySize) {
+  EXPECT_CALL(delegate_,
+              OnFaviconUpdated(_, _, kIconURL16x16, _, ImageSizeIs(16, 16)));
+
+  RunHandlerWithCandidates(
+      FaviconDriverObserver::NON_TOUCH_16_DIP,
+      {FaviconURL(kIconURL16x16, kFavicon, SizeVector{gfx::Size(0, 0)}),
+       FaviconURL(kIconURL64x64, kFavicon, SizeVector{gfx::Size(64, 64)})});
 }
 
 // Test that if a page URL is followed by another page URL which is not

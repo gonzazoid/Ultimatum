@@ -11,6 +11,9 @@
 
 namespace updater {
 
+// Key for storing the installer version in the install settings dictionary.
+extern const char kInstallerVersion[];
+
 // The updater specific app ID.
 extern const char kUpdaterAppId[];
 
@@ -107,6 +110,9 @@ extern const char kUninstallIfUnusedSwitch[];
 // scheduled to invoke the updater periodically.
 extern const char kWakeSwitch[];
 
+// Kicks off the update service for all versions.
+extern const char kWakeAllSwitch[];
+
 // The updater needs to operate in the system context.
 extern const char kSystemSwitch[];
 
@@ -162,6 +168,10 @@ extern const char kEnterpriseSwitch[];
 // Specifies that no UI should be shown.
 extern const char kSilentSwitch[];
 
+// The "alwayslaunchcmd" switch specifies that launch commands are to be run
+// unconditionally, even for silent modes.
+extern const char kAlwaysLaunchCmdSwitch[];
+
 // Specifies the handoff request argument. On Windows, the request may
 // be from legacy updaters which pass the argument in the format of
 // `/handoff <install-args-details>`. Manual argument parsing is needed for that
@@ -195,6 +205,10 @@ extern const char kCmdLineExpectDeElevated[];
 // is now trying to install the app per-user.
 extern const char kCmdLinePrefersUser[];
 
+// Environment variables.
+extern const char kUsageStatsEnabled[];
+extern const char kUsageStatsEnabledValueEnabled[];
+
 // File system paths.
 //
 // The directory name where CRX apps get installed. This is provided for demo
@@ -207,20 +221,26 @@ extern const char kUninstallScript[];
 
 // Developer override keys.
 extern const char kDevOverrideKeyUrl[];
+extern const char kDevOverrideKeyCrashUploadUrl[];
+extern const char kDevOverrideKeyDeviceManagementUrl[];
 extern const char kDevOverrideKeyUseCUP[];
 extern const char kDevOverrideKeyInitialDelay[];
 extern const char kDevOverrideKeyServerKeepAliveSeconds[];
 extern const char kDevOverrideKeyCrxVerifierFormat[];
 extern const char kDevOverrideKeyGroupPolicies[];
 extern const char kDevOverrideKeyOverinstallTimeout[];
-
-// File name of developer overrides file.
-extern const char kDevOverrideFileName[];
+extern const char kDevOverrideKeyIdleCheckPeriodSeconds[];
+extern const char kDevOverrideKeyManagedDevice[];
+extern const char kDevOverrideKeyEnableDiffUpdates[];
 
 // Timing constants.
 // How long to wait for an application installer (such as chrome_installer.exe)
 // to complete.
 inline constexpr base::TimeDelta kWaitForAppInstaller = base::Minutes(15);
+
+// How long to wait for the common setup lock for
+// AppInstall/AppUninstall/AppUpdate.
+inline constexpr base::TimeDelta kWaitForSetupLock = base::Seconds(5);
 
 // The default last check period is 4.5 hours.
 inline constexpr base::TimeDelta kDefaultLastCheckPeriod =
@@ -248,8 +268,15 @@ extern const char kUserDefaultsSuiteName[];
 inline constexpr int kCustomInstallErrorBase =
     static_cast<int>(update_client::InstallError::CUSTOM_ERROR_BASE);
 
-// The install directory for the application could not be created.
-inline constexpr int kErrorCreateAppInstallDirectory = kCustomInstallErrorBase;
+// Running the application installer failed.
+inline constexpr int kErrorApplicationInstallerFailed =
+    kCustomInstallErrorBase + 3;
+
+// The errors below are reported in the `extra_code1` in the
+// `CrxInstaller::Result` structure, with the `error` reported as
+// `GOOPDATEINSTALL_E_FILENAME_INVALID`. `GOOPDATEINSTALL_E_FILENAME_INVALID` is
+// used to avoid overlaps of the specific error codes below with Windows error
+// codes.
 
 // The install params are missing. This usually means that the update
 // response does not include the name of the installer and its command line
@@ -260,9 +287,9 @@ inline constexpr int kErrorMissingInstallParams = kCustomInstallErrorBase + 1;
 // inside the CRX.
 inline constexpr int kErrorMissingRunableFile = kCustomInstallErrorBase + 2;
 
-// Running the application installer failed.
-inline constexpr int kErrorApplicationInstallerFailed =
-    kCustomInstallErrorBase + 3;
+// The file extension for the installer is not supported. For instance, on
+// Windows, only `.exe` and `.msi` extensions are supported.
+inline constexpr int kErrorInvalidFileExtension = kCustomInstallErrorBase + 4;
 
 // Error codes.
 //
@@ -299,8 +326,8 @@ inline constexpr int kErrorFailedToDeleteDataFolder = 17;
 // Failed to get versioned updater folder path.
 inline constexpr int kErrorFailedToGetVersionedInstallDirectory = 18;
 
-// Failed to get the installed app bundle path.
-inline constexpr int kErrorFailedToGetAppBundlePath = 19;
+// Failed to get the install directory.
+inline constexpr int kErrorFailedToGetInstallDir = 19;
 
 // Failed to remove the active(unversioned) update service job from Launchd.
 inline constexpr int kErrorFailedToRemoveActiveUpdateServiceJobFromLaunchd = 20;
@@ -351,11 +378,54 @@ inline constexpr int kErrorDMRegistrationFailed = 33;
 
 inline constexpr int kErrorFailedToInstallLegacyUpdater = 34;
 
+// A Mojo remote was unexpectedly disconnected.
+inline constexpr int kErrorIpcDisconnect = 35;
+
+// Failed to copy the updater binary.
+inline constexpr int kErrorFailedToCopyBinary = 36;
+
+// Failed to delete a socket file.
+inline constexpr int kErrorFailedToDeleteSocket = 37;
+
+// Failed to create a symlink to the current version.
+inline constexpr int kErrorFailedToLinkCurrent = 38;
+
+// Failed to rename the current symlink during activation.
+inline constexpr int kErrorFailedToRenameCurrent = 39;
+
+// Failed to install one or more Systemd units.
+inline constexpr int kErrorFailedToInstallSystemdUnit = 40;
+
+// Failed to remove one or more Systemd units during uninstallation.
+inline constexpr int kErrorFailedToRemoveSystemdUnit = 41;
+
+// Running as the wrong user for the provided UpdaterScope.
+inline constexpr int kErrorWrongUser = 42;
+
+// Failed to get the setup files.
+inline constexpr int kErrorFailedToGetSetupFiles = 43;
+
+// Failed to run install list.
+inline constexpr int kErrorFailedToRunInstallList = 44;
+
+// The server was running but had no tasks to do.
+inline constexpr int kErrorIdle = 45;
+
 inline constexpr int kErrorTagParsing = 50;
 
 // Metainstaller errors.
 inline constexpr int kErrorCreatingTempDir = 60;
 inline constexpr int kErrorUnpackingResource = 61;
+inline constexpr int kErrorInitializingBackupDir = 62;
+
+// Launcher errors.
+constexpr int kErrorGettingUpdaterPath = 71;
+constexpr int kErrorStattingPath = 72;
+constexpr int kErrorLaunchingProcess = 73;
+constexpr int kErrorPathOwnershipMismatch = 74;
+
+// A setup process could not acquire the lock needed to run.
+inline constexpr int kErrorFailedToLockSetupMutex = 75;
 
 // Policy Management constants.
 // The maximum value allowed for policy AutoUpdateCheckPeriodMinutes.
@@ -388,18 +458,38 @@ inline constexpr int kPolicyForceInstallUser = 6;
 inline constexpr bool kInstallPolicyDefault = kPolicyEnabled;
 inline constexpr bool kUpdatePolicyDefault = kPolicyEnabled;
 
+// Policy manager `source()` constants.
+extern const char kSourceGroupPolicyManager[];
+extern const char kSourceDMPolicyManager[];
+extern const char kSourceManagedPreferencePolicyManager[];
+extern const char kSourceDefaultValuesPolicyManager[];
+extern const char kSourceDictValuesPolicyManager[];
+
+// Serializes updater installs.
+extern const char kSetupMutex[];
+
 inline constexpr int kUninstallPingReasonUninstalled = 0;
 inline constexpr int kUninstallPingReasonUserNotAnOwner = 1;
+inline constexpr int kUninstallPingReasonNoAppsRemain = 2;
+inline constexpr int kUninstallPingReasonNeverHadApps = 3;
 
 // The file downloaded to a temporary location could not be moved.
 inline constexpr int kErrorFailedToMoveDownloadedFile = 5;
 
-inline constexpr double kInitialDelay = 60;
-inline constexpr int kServerKeepAliveSeconds = 10;
+inline constexpr base::TimeDelta kInitialDelay = base::Minutes(1);
+inline constexpr base::TimeDelta kServerKeepAliveTime = base::Seconds(10);
 
 // The maximum number of server starts before the updater uninstalls itself
 // while waiting for the first app registration.
 inline constexpr int kMaxServerStartsBeforeFirstReg = 24;
+
+// Number of tries when an installer returns `ERROR_INSTALL_ALREADY_RUNNING`.
+inline constexpr int kNumAlreadyRunningMaxTries = 4;
+
+// Initial delay between retries when an installer returns
+// `ERROR_INSTALL_ALREADY_RUNNING`.
+inline constexpr base::TimeDelta kAlreadyRunningRetryInitialDelay =
+    base::Seconds(5);
 
 // These are GoogleUpdate error codes, which must be retained by this
 // implementation in order to be backward compatible with the existing update
@@ -408,7 +498,11 @@ inline constexpr int GOOPDATE_E_APP_INSTALL_DISABLED_BY_POLICY = 0x80040812;
 inline constexpr int GOOPDATE_E_APP_UPDATE_DISABLED_BY_POLICY = 0x80040813;
 inline constexpr int GOOPDATE_E_APP_UPDATE_DISABLED_BY_POLICY_MANUAL =
     0x8004081f;
+inline constexpr int GOOPDATEINSTALL_E_FILENAME_INVALID = 0x80040900;
+inline constexpr int GOOPDATEINSTALL_E_INSTALLER_FAILED_START = 0x80040901;
 inline constexpr int GOOPDATEINSTALL_E_INSTALLER_FAILED = 0x80040902;
+inline constexpr int GOOPDATEINSTALL_E_INSTALLER_TIMED_OUT = 0x80040904;
+inline constexpr int GOOPDATEINSTALL_E_INSTALL_ALREADY_RUNNING = 0x80040907;
 
 }  // namespace updater
 

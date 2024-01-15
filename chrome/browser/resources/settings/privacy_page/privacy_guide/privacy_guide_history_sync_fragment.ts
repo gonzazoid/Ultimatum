@@ -7,22 +7,21 @@
  * 'privacy-guide-history-sync-fragment' is the fragment in a privacy guide
  * card that contains the history sync setting and its description.
  */
-import '../../prefs/prefs.js';
+import 'chrome://resources/cr_components/settings_prefs/prefs.js';
 import './privacy_guide_description_item.js';
 import './privacy_guide_fragment_shared.css.js';
 import './privacy_guide_fragment_shared.css.js';
-import '../../controls/settings_toggle_button.js';
+import '/shared/settings/controls/settings_toggle_button.js';
 
-import {WebUiListenerMixin, WebUiListenerMixinInterface} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {SettingsToggleButtonElement} from '/shared/settings/controls/settings_toggle_button.js';
+import {SyncBrowserProxy, SyncBrowserProxyImpl, SyncPrefs, syncPrefsIndividualDataTypes} from '/shared/settings/people_page/sync_browser_proxy.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {BaseMixin} from '../../base_mixin.js';
-import {SettingsToggleButtonElement} from '../../controls/settings_toggle_button.js';
-import {loadTimeData} from '../../i18n_setup.js';
-import {MetricsBrowserProxy, MetricsBrowserProxyImpl, PrivacyGuideSettingsStates} from '../../metrics_browser_proxy.js';
-import {SyncBrowserProxy, SyncBrowserProxyImpl, SyncPrefs, syncPrefsIndividualDataTypes} from '../../people_page/sync_browser_proxy.js';
+import {MetricsBrowserProxy, MetricsBrowserProxyImpl, PrivacyGuideSettingsStates, PrivacyGuideStepsEligibleAndReached} from '../../metrics_browser_proxy.js';
 import {routes} from '../../route.js';
-import {Route, RouteObserverMixin, RouteObserverMixinInterface, Router} from '../../router.js';
+import {Route, RouteObserverMixin, Router} from '../../router.js';
 
 import {PrivacyGuideStep} from './constants.js';
 import {getTemplate} from './privacy_guide_history_sync_fragment.html.js';
@@ -34,10 +33,7 @@ export interface PrivacyGuideHistorySyncFragmentElement {
 }
 
 const PrivacyGuideHistorySyncFragmentElementBase =
-    RouteObserverMixin(WebUiListenerMixin(BaseMixin(PolymerElement))) as {
-      new (): PolymerElement & RouteObserverMixinInterface &
-          WebUiListenerMixinInterface,
-    };
+    RouteObserverMixin(WebUiListenerMixin(BaseMixin(PolymerElement)));
 
 export class PrivacyGuideHistorySyncFragmentElement extends
     PrivacyGuideHistorySyncFragmentElementBase {
@@ -70,11 +66,6 @@ export class PrivacyGuideHistorySyncFragmentElement extends
           };
         },
       },
-
-      enablePrivacyGuide2_: {
-        type: Boolean,
-        value: () => loadTimeData.getBoolean('privacyGuide2Enabled'),
-      },
     };
   }
 
@@ -99,16 +90,28 @@ export class PrivacyGuideHistorySyncFragmentElement extends
 
   override ready() {
     super.ready();
+    this.addEventListener('view-enter-start', this.onViewEnterStart_);
+    this.addEventListener('view-exit-finish', this.onViewExitFinish_);
 
-    this.addWebUIListener(
+    this.addWebUiListener(
         'sync-prefs-changed',
         (syncPrefs: SyncPrefs) => this.onSyncPrefsChange_(syncPrefs));
     this.syncBrowserProxy_.sendSyncPrefsChanged();
-    this.addEventListener('view-exit-finish', this.onViewExitFinish_);
   }
 
   override focus() {
+    // The fragment element is focused when it becomes visible. Move the focus
+    // to the fragment header, so that the newly shown content of the fragment
+    // is downwards from the focus position. This allows users of screen readers
+    // to continue navigating the screen reader position downwards through the
+    // newly visible content.
     this.shadowRoot!.querySelector<HTMLElement>('[focus-element]')!.focus();
+  }
+
+  private onViewEnterStart_() {
+    this.metricsBrowserProxy_
+        .recordPrivacyGuideStepsEligibleAndReachedHistogram(
+            PrivacyGuideStepsEligibleAndReached.HISTORY_SYNC_REACHED);
   }
 
   private onViewExitFinish_() {

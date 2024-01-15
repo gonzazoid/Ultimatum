@@ -16,7 +16,8 @@
 
 namespace ash::mojo_service_manager {
 
-// Provides fake implementation of the service manager for testing.
+// Provides fake implementation of the service manager for testing. It also
+// overrides the global service manager connection and reset it when destructed.
 //
 // The behaviors are different from the real service:
 // * No permission checking. A fake identity can be set when binding the mojo
@@ -65,7 +66,7 @@ class COMPONENT_EXPORT(CHROMEOS_MOJO_SERVICE_MANAGER) FakeMojoServiceManager
                     chromeos::mojo_service_manager::mojom::ServiceProvider>
                     service_provider) override;
   void Request(const std::string& service_name,
-               absl::optional<base::TimeDelta> timeout,
+               std::optional<base::TimeDelta> timeout,
                mojo::ScopedMessagePipeHandle receiver) override;
   void Query(const std::string& service_name, QueryCallback callback) override;
   void AddServiceObserver(

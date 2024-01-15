@@ -29,6 +29,28 @@ struct CollectionImage {
   url.mojom.Url image_url;
   // URL to a preview of the image. Can point to untrusted content.
   url.mojom.Url preview_image_url;
+  // Collection id of the image;
+  string collection_id;
+};
+
+/**
+ * New Tab Page image sources. This enum must match the numbering for
+ * NTPBackgroundImageSource in enums.xml. These values are persisted to
+ * logs. Entries should not be renumbered, removed or reused.
+ */
+ enum NtpBackgroundImageSource {
+  kNoImage,
+  kFirstPartyThemeWithoutDailyRefresh,
+  kFirstPartyThemeWithDailyRefresh,
+  kThirdPartyTheme,
+  kUploadedImage,
+  kWallpaperSearch,
+};
+
+// Enum representing the in product help promo to trigger.
+enum IphFeature {
+  kCustomizeChrome,
+  kCustomizeModules,
 };
 
 // The background image URL and styling.
@@ -45,22 +67,28 @@ struct BackgroundImage {
   string? repeat_y;
   string? position_x;
   string? position_y;
-  // The CSS styling property set on the background image's scrim.
-  string? scrim_display;
+  // Source of background image.
+  NtpBackgroundImageSource image_source;
 };
 
 // A generic theme.
 struct Theme {
   skia.mojom.SkColor text_color;
   skia.mojom.SkColor background_color;
+  // True if user color mode is baseline.
+  bool is_baseline;
   // True if the background is custom.
   bool is_custom_background;
+  // True if daily refresh is enabled.
+  bool daily_refresh_enabled;
   // True if the theme is dark (e.g. NTP background color is dark).
   bool is_dark;
+  // True if the realbox icons should be themed based on the background color.
+  bool theme_realbox_icons;
   // Color of Google logo. If not set show the logo multi-colored.
   skia.mojom.SkColor? logo_color;
-  // Selected collection for daily refresh.
-  string? daily_refresh_collection_id;
+  // Collection id of the background image.
+  string? background_image_collection_id;
   // The background image.
   BackgroundImage? background_image;
   // Human readable attributions of the background image.
@@ -68,7 +96,6 @@ struct Theme {
   string? background_image_attribution_2;
   // URL associated with the background image. Used for href.
   url.mojom.Url? background_image_attribution_url;
-
   // Theme settings for the NTP MV tiles.
   most_visited.mojom.MostVisitedTheme most_visited;
 };
@@ -151,6 +178,13 @@ enum DoodleShareChannel {
   kLinkCopy,
 };
 
+enum CustomizeChromeSection {
+  kUnspecified,
+  kAppearance,
+  kShortcuts,
+  kModules,
+};
+
 struct PromoImagePart {
   url.mojom.Url image_url;
   url.mojom.Url target;
@@ -179,6 +213,14 @@ struct Promo {
   url.mojom.Url? log_url;
   // Middle slot promo data.
   array<PromoPart> middle_slot_parts;
+};
+
+// Used to determine available modules for the NTP.
+struct ModuleIdName {
+  // A unique identifier associated with a module.
+  string id;
+  // The name associated with a module.
+  string name;
 };
 
 // Action the user performed while using the customize dialog. Used for metrics
@@ -217,7 +259,8 @@ interface PageHandlerFactory {
 interface PageHandler {
   // Sets the background image and notifies all NTPs of the change.
   SetBackgroundImage(string attribution_1, string attribution_2,
-      url.mojom.Url attribution_url, url.mojom.Url image_url);
+      url.mojom.Url attribution_url, url.mojom.Url image_url,
+      url.mojom.Url thumbnail_url, string collection_id);
   // Sets collection id for daily refresh. When |collection_id| is empty, the
   // daily refresh is turned off.
   SetDailyRefreshCollectionId(string collection_id);
@@ -261,6 +304,11 @@ interface PageHandler {
   // `module_ids` is an array of module descriptor ids that identifies the
   // modules that loaded with data.
   OnModulesLoadedWithData(array<string> module_ids);
+  // Called when a user uses a module. May lead to a HaTS survey being
+  // displayed or an in product help promo being closed.
+  OnModuleUsed(string module_id);
+  // Returns a list of available module id and name pairs.
+  GetModulesIdNames() => (array<ModuleIdName> data);
   // Sets the order of modules.
   SetModulesOrder(array<string> module_ids);
   // Returns the order of modules or an empty array if the user has not
@@ -274,8 +322,15 @@ interface PageHandler {
   UpdateModulesFreVisibility();
   // Log user's FRE |optInStatus|.
   LogModulesFreOptInStatus(OptInStatus opt_in_status);
-  // Shows customize chrome in unified side panel.
-  ShowCustomizeChromeSidePanel();
+  // Shows or hides the customize chrome in unified side panel.
+  SetCustomizeChromeSidePanelVisible(bool visible,
+                                     CustomizeChromeSection section);
+  // Increment the number of times the user has opened the side panel
+  // with the customize chrome button.
+  IncrementCustomizeChromeButtonOpenCount();
+
+  // Attempts to trigger the specified in product help promo.
+  MaybeShowFeaturePromo(IphFeature iph_feature);
 
   // ======= METRICS =======
   // Logs that the One Google Bar was added to the DOM / loaded in an iframe at
@@ -308,12 +363,13 @@ interface PageHandler {
   OnPromoLinkClicked();
   // Logs that the <ntp-app> element's |ready| callback method was called.
   OnAppRendered(double time);
+
 };
 
 // WebUI-side handler for requests from the browser.
 interface Page {
-  // Called when the customize chrome side panel is shown/hidden.
-  CustomizeChromeSidePanelVisibilityChanged(bool visible);
+  // Sets Customize Chrome Side Panel visibility to |visible|.
+  SetCustomizeChromeSidePanelVisibility(bool visible);
   // Sets the current theme.
   SetTheme(Theme theme);
   // Disables the modules in |ids|. If |all|, disables all modules and passes an
@@ -323,4 +379,6 @@ interface Page {
   SetModulesFreVisibility(bool visible);
   // Sets NTP homepage promo.
   SetPromo(Promo? promo);
+  // Shows a toast with information about Chrome Webstore themes.
+  ShowWebstoreToast();
 };

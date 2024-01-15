@@ -12,6 +12,7 @@
 
 #include "base/strings/stringprintf.h"
 #include "gin/handle.h"
+#include "third_party/blink/public/platform/scheduler/web_agent_group_scheduler.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/web/blink.h"
 #include "third_party/blink/public/web/web_document.h"
@@ -378,8 +379,8 @@ gin::ObjectTemplateBuilder WebAXObjectProxy::GetObjectTemplateBuilder(
                  &WebAXObjectProxy::AriaControlsElementAtIndex)
       .SetMethod("ariaDetailsElementAtIndex",
                  &WebAXObjectProxy::AriaDetailsElementAtIndex)
-      .SetMethod("ariaErrorMessageElement",
-                 &WebAXObjectProxy::AriaErrorMessageElement)
+      .SetMethod("ariaErrorMessageElementAtIndex",
+                 &WebAXObjectProxy::AriaErrorMessageElementAtIndex)
       .SetMethod("ariaFlowToElementAtIndex",
                  &WebAXObjectProxy::AriaFlowToElementAtIndex)
       .SetMethod("ariaOwnsElementAtIndex",
@@ -398,6 +399,7 @@ gin::ObjectTemplateBuilder WebAXObjectProxy::GetObjectTemplateBuilder(
       .SetMethod("isAttributeSettable", &WebAXObjectProxy::IsAttributeSettable)
       .SetMethod("isPressActionSupported",
                  &WebAXObjectProxy::IsPressActionSupported)
+      .SetMethod("hasDefaultAction", &WebAXObjectProxy::HasDefaultAction)
       .SetMethod("parentElement", &WebAXObjectProxy::ParentElement)
       .SetMethod("increment", &WebAXObjectProxy::Increment)
       .SetMethod("decrement", &WebAXObjectProxy::Decrement)
@@ -484,7 +486,7 @@ void WebAXObjectProxy::NotificationReceived(
   if (context.IsEmpty())
     return;
 
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  v8::Isolate* isolate = frame->GetAgentGroupScheduler()->Isolate();
 
   v8::Local<v8::Array> intents_array(
       v8::Array::New(isolate, event_intents.size()));
@@ -549,13 +551,13 @@ int WebAXObjectProxy::Height() {
   return BoundsForObject(accessibility_object_).height();
 }
 
-v8::Local<v8::Value> WebAXObjectProxy::InPageLinkTarget() {
+v8::Local<v8::Value> WebAXObjectProxy::InPageLinkTarget(v8::Isolate* isolate) {
   if (IsDetached())
     return v8::Local<v8::Object>();
   UpdateLayout();
   blink::WebAXObject target = accessibility_object_.InPageLinkTarget();
   if (target.IsNull())
-    return v8::Null(blink::MainThreadIsolate());
+    return v8::Null(isolate);
   return factory_->GetOrCreate(target);
 }
 
@@ -625,7 +627,8 @@ bool WebAXObjectProxy::SelectionIsBackward() {
   return is_selection_backward;
 }
 
-v8::Local<v8::Value> WebAXObjectProxy::SelectionAnchorObject() {
+v8::Local<v8::Value> WebAXObjectProxy::SelectionAnchorObject(
+    v8::Isolate* isolate) {
   if (IsDetached())
     return v8::Local<v8::Object>();
 
@@ -642,7 +645,7 @@ v8::Local<v8::Value> WebAXObjectProxy::SelectionAnchorObject() {
                                   anchor_offset, anchor_affinity, focus_object,
                                   focus_offset, focus_affinity);
   if (anchor_object.IsNull())
-    return v8::Null(blink::MainThreadIsolate());
+    return v8::Null(isolate);
 
   return factory_->GetOrCreate(anchor_object);
 }
@@ -683,7 +686,8 @@ std::string WebAXObjectProxy::SelectionAnchorAffinity() {
                                                                : "downstream";
 }
 
-v8::Local<v8::Value> WebAXObjectProxy::SelectionFocusObject() {
+v8::Local<v8::Value> WebAXObjectProxy::SelectionFocusObject(
+    v8::Isolate* isolate) {
   if (IsDetached())
     return v8::Local<v8::Object>();
 
@@ -700,7 +704,7 @@ v8::Local<v8::Value> WebAXObjectProxy::SelectionFocusObject() {
                                   anchor_offset, anchor_affinity, focus_object,
                                   focus_offset, focus_affinity);
   if (focus_object.IsNull())
-    return v8::Null(blink::MainThreadIsolate());
+    return v8::Null(isolate);
 
   return factory_->GetOrCreate(focus_object);
 }
@@ -1178,16 +1182,20 @@ v8::Local<v8::Object> WebAXObjectProxy::AriaDetailsElementAtIndex(
   return factory_->GetOrCreate(web_ax_object);
 }
 
-v8::Local<v8::Object> WebAXObjectProxy::AriaErrorMessageElement() {
+v8::Local<v8::Object> WebAXObjectProxy::AriaErrorMessageElementAtIndex(
+    unsigned index) {
   UpdateLayout();
-  int ax_id =
-      GetAXNodeData().GetIntAttribute(ax::mojom::IntAttribute::kErrormessageId);
+  auto ax_ids = GetAXNodeData().GetIntListAttribute(
+      ax::mojom::IntListAttribute::kErrormessageIds);
+  size_t element_count = ax_ids.size();
 
-  if (!ax_id)
+  if (index >= element_count) {
     return v8::Local<v8::Object>();
+  }
 
   blink::WebAXObject web_ax_object = blink::WebAXObject::FromWebDocumentByID(
-      accessibility_object_.GetDocument(), ax_id);
+      accessibility_object_.GetDocument(), ax_ids[index]);
+
   return factory_->GetOrCreate(web_ax_object);
 }
 
@@ -1332,7 +1340,8 @@ void WebAXObjectProxy::SetSelectedTextRange(int selection_start, int length) {
                                      selection_start + length);
 }
 
-bool WebAXObjectProxy::SetSelection(v8::Local<v8::Value> anchor_object,
+bool WebAXObjectProxy::SetSelection(v8::Isolate* isolate,
+                                    v8::Local<v8::Value> anchor_object,
                                     int anchor_offset,
                                     v8::Local<v8::Value> focus_object,
                                     int focus_offset) {
@@ -1343,15 +1352,13 @@ bool WebAXObjectProxy::SetSelection(v8::Local<v8::Value> anchor_object,
   }
 
   WebAXObjectProxy* web_ax_anchor = nullptr;
-  if (!gin::ConvertFromV8(blink::MainThreadIsolate(), anchor_object,
-                          &web_ax_anchor)) {
+  if (!gin::ConvertFromV8(isolate, anchor_object, &web_ax_anchor)) {
     return false;
   }
   DCHECK(web_ax_anchor);
 
   WebAXObjectProxy* web_ax_focus = nullptr;
-  if (!gin::ConvertFromV8(blink::MainThreadIsolate(), focus_object,
-                          &web_ax_focus)) {
+  if (!gin::ConvertFromV8(isolate, focus_object, &web_ax_focus)) {
     return false;
   }
   DCHECK(web_ax_focus);
@@ -1373,6 +1380,11 @@ bool WebAXObjectProxy::IsAttributeSettable(const std::string& attribute) {
 bool WebAXObjectProxy::IsPressActionSupported() {
   UpdateLayout();
   return accessibility_object_.Action() == ax::mojom::DefaultActionVerb::kPress;
+}
+
+bool WebAXObjectProxy::HasDefaultAction() {
+  UpdateLayout();
+  return accessibility_object_.Action() != ax::mojom::DefaultActionVerb::kNone;
 }
 
 v8::Local<v8::Object> WebAXObjectProxy::ParentElement() {
@@ -1420,16 +1432,18 @@ bool WebAXObjectProxy::SetValue(const std::string& value) {
   return accessibility_object_.PerformAction(action_data);
 }
 
-bool WebAXObjectProxy::IsEqual(v8::Local<v8::Object> proxy) {
+bool WebAXObjectProxy::IsEqual(v8::Isolate* isolate,
+                               v8::Local<v8::Object> proxy) {
   WebAXObjectProxy* unwrapped_proxy = nullptr;
-  if (!gin::ConvertFromV8(blink::MainThreadIsolate(), proxy, &unwrapped_proxy))
+  if (!gin::ConvertFromV8(isolate, proxy, &unwrapped_proxy)) {
     return false;
+  }
   return unwrapped_proxy->IsEqualToObject(accessibility_object_);
 }
 
 void WebAXObjectProxy::SetNotificationListener(
+    v8::Isolate* isolate,
     v8::Local<v8::Function> callback) {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
   notification_callback_.Reset(isolate, callback);
 }
 
@@ -1771,22 +1785,22 @@ bool RootWebAXObjectProxy::IsRoot() const {
   return true;
 }
 
-WebAXObjectProxyList::WebAXObjectProxyList(blink::WebAXContext& ax_context)
-    : ax_context_(&ax_context) {}
+WebAXObjectProxyList::WebAXObjectProxyList(v8::Isolate* isolate,
+                                           blink::WebAXContext& ax_context)
+    : isolate_(isolate), ax_context_(&ax_context) {}
 
 WebAXObjectProxyList::~WebAXObjectProxyList() {
   Clear();
 }
 
 void WebAXObjectProxyList::Clear() {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
-  v8::HandleScope handle_scope(isolate);
+  v8::HandleScope handle_scope(isolate_);
 
-  for (auto& persistent : elements_) {
-    auto local = v8::Local<v8::Object>::New(isolate, persistent);
+  for (auto& persistent : ax_objects_) {
+    auto local = v8::Local<v8::Object>::New(isolate_, persistent.second);
 
     WebAXObjectProxy* proxy = nullptr;
-    bool ok = gin::ConvertFromV8(isolate, local, &proxy);
+    bool ok = gin::ConvertFromV8(isolate_, local, &proxy);
     DCHECK(ok);
 
     // Because the v8::Persistent in this container uses
@@ -1797,38 +1811,40 @@ void WebAXObjectProxyList::Clear() {
     proxy->Reset();
   }
 
-  elements_.clear();
+  ax_objects_.clear();
 }
 
 v8::Local<v8::Object> WebAXObjectProxyList::GetOrCreate(
     const blink::WebAXObject& object) {
-  if (object.IsNull())
+  if (object.IsNull() || object.IsDetached()) {
     return v8::Local<v8::Object>();
-
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  }
 
   // Return existing object if there is a match.
-  for (const auto& persistent : elements_) {
-    auto local = v8::Local<v8::Object>::New(isolate, persistent);
+  auto persistent = ax_objects_.find(object.AxID());
+  if (persistent != ax_objects_.end()) {
+    auto local = v8::Local<v8::Object>::New(isolate_, persistent->second);
 
+#if DCHECK_IS_ON()
     WebAXObjectProxy* proxy = nullptr;
-    bool ok = gin::ConvertFromV8(isolate, local, &proxy);
+    bool ok = gin::ConvertFromV8(isolate_, local, &proxy);
     DCHECK(ok);
+    DCHECK(proxy->IsEqualToObject(object));
+#endif
 
-    if (proxy->IsEqualToObject(object))
-      return local;
+    return local;
   }
 
   // Create a new object.
   v8::Local<v8::Value> value_handle =
-      gin::CreateHandle(isolate, new WebAXObjectProxy(object, this)).ToV8();
+      gin::CreateHandle(isolate_, new WebAXObjectProxy(object, this)).ToV8();
   v8::Local<v8::Object> handle;
   if (value_handle.IsEmpty() ||
-      !value_handle->ToObject(isolate->GetCurrentContext()).ToLocal(&handle)) {
+      !value_handle->ToObject(isolate_->GetCurrentContext()).ToLocal(&handle)) {
     return {};
   }
 
-  elements_.emplace_back(isolate, handle);
+  ax_objects_.emplace(object.AxID(), v8::Global<v8::Object>(isolate_, handle));
   return handle;
 }
 

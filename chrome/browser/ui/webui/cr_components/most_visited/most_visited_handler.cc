@@ -10,7 +10,10 @@
 #include "base/feature_list.h"
 #include "base/scoped_observation.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/browser_features.h"
 #include "chrome/browser/ntp_tiles/chrome_most_visited_sites_factory.h"
+#include "chrome/browser/preloading/chrome_preloading.h"
+#include "chrome/browser/preloading/prerender/prerender_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/browser/web_applications/preinstalled_web_app_manager.h"
@@ -157,7 +160,8 @@ void MostVisitedHandler::OnMostVisitedTilesRendered(
   // This call flushes all most visited impression logs to UMA histograms.
   // Therefore, it must come last.
   logger_.LogMostVisitedLoaded(
-      base::Time::FromJsTime(time) - ntp_navigation_start_time_,
+      base::Time::FromMillisecondsSinceUnixEpoch(time) -
+          ntp_navigation_start_time_,
       !most_visited_sites_->IsCustomLinksEnabled(),
       most_visited_sites_->IsShortcutsVisible());
 }
@@ -192,6 +196,27 @@ void MostVisitedHandler::OnMostVisitedTileNavigation(
       tile->is_query_tile ? ui::PAGE_TRANSITION_LINK
                           : ui::PAGE_TRANSITION_AUTO_BOOKMARK,
       false));
+}
+
+void MostVisitedHandler::PrerenderMostVisitedTile(
+    most_visited::mojom::MostVisitedTilePtr tile,
+    bool is_hover_trigger) {
+  if (base::FeatureList::IsEnabled(features::kNewTabPageTriggerForPrerender2)) {
+    PrerenderManager::CreateForWebContents(web_contents_);
+    auto* prerender_manager = PrerenderManager::FromWebContents(web_contents_);
+    prerender_handle_ = prerender_manager->StartPrerenderNewTabPage(
+        tile->url, is_hover_trigger
+                       ? chrome_preloading_predictor::kMouseHoverOnNewTabPage
+                       : chrome_preloading_predictor::kPointerDownOnNewTabPage);
+  }
+}
+
+void MostVisitedHandler::CancelPrerender() {
+  if (base::FeatureList::IsEnabled(features::kNewTabPageTriggerForPrerender2)) {
+    auto* prerender_manager = PrerenderManager::FromWebContents(web_contents_);
+    prerender_manager->StopPrerenderNewTabPage(prerender_handle_);
+    prerender_handle_ = nullptr;
+  }
 }
 
 void MostVisitedHandler::OnURLsAvailable(

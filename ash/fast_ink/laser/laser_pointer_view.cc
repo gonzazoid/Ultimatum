@@ -5,8 +5,8 @@
 #include "ash/fast_ink/laser/laser_pointer_view.h"
 
 #include "ash/fast_ink/laser/laser_segment_utils.h"
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "third_party/skia/include/core/SkTypes.h"
@@ -177,7 +177,7 @@ views::UniqueWidgetPtr LaserPointerView::Create(
     base::TimeDelta presentation_delay,
     base::TimeDelta stationary_point_delay,
     aura::Window* container) {
-  return fast_ink::FastInkView::CreateWidgetWithContents(
+  return FastInkView::CreateWidgetWithContents(
       base::WrapUnique(new LaserPointerView(life_duration, presentation_delay,
                                             stationary_point_delay)),
       container);
@@ -226,7 +226,7 @@ void LaserPointerView::ScheduleUpdateBuffer() {
     return;
 
   pending_update_buffer_ = true;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&LaserPointerView::UpdateBuffer,
                                 weak_ptr_factory_.GetWeakPtr()));
 }
@@ -243,8 +243,8 @@ void LaserPointerView::UpdateBuffer() {
     TRACE_EVENT1("ui", "LaserPointerView::UpdateBuffer::Paint", "damage",
                  damage_rect.ToString());
 
-    ScopedPaint paint(this, damage_rect);
-    Draw(paint.canvas());
+    auto paint = GetScopedPaint(damage_rect);
+    Draw(paint->canvas());
   }
 
   UpdateSurface(laser_content_rect_, damage_rect, /*auto_refresh=*/true);

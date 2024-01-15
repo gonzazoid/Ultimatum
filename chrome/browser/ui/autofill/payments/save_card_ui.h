@@ -12,35 +12,29 @@ enum class BubbleType {
   // Save prompt when the user is saving locally.
   LOCAL_SAVE,
 
-  // Save prompt when uploading a card to Google payments.
+  // Save prompt for saving CVC locally to an existing local card.
+  LOCAL_CVC_SAVE,
+
+  // Save prompt when uploading a card to Google Payments.
   UPLOAD_SAVE,
 
-  // Credit card upload is in progress. No bubble visible but show the credit
-  // card icon with the loading indicator animation.
+  // Save prompt for uploading CVC to the Sync server for an existing server
+  // card.
+  UPLOAD_CVC_SAVE,
+
+  // Credit card upload is in progress.
   UPLOAD_IN_PROGRESS,
+
+  // Credit card upload is completed.
+  UPLOAD_COMPLETED,
 
   // The manage cards bubble when bubble is reshown after
   // icon is clicked.
   MANAGE_CARDS,
 
-  // The failure bubble when credit card uploading failed.
-  FAILURE,
-
   // There is no bubble to show anymore. This also
   // indicates that the icon should not be visible.
   INACTIVE
-};
-
-// The type of experiment running for the save card ui.
-enum SaveCardUiExperiment {
-  // Show the text for default/current image.
-  DEFAULT = 0,
-
-  // Show the text for faster and protected image.
-  FASTER_AND_PROTECTED = 1,
-
-  // Show the text for encrypted and secure image.
-  ENCRYPTED_AND_SECURE = 2
 };
 
 }  // namespace autofill

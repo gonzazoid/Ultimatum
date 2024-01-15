@@ -5,35 +5,14 @@
 /** @fileoverview Suite of tests for extensions-detail-view. */
 
 import {CrCheckboxElement, ExtensionsDetailViewElement, ExtensionsToggleRowElement, navigation, Page} from 'chrome://extensions/extensions.js';
-import {assert} from 'chrome://resources/js/assert.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
 import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {isChildVisible, isVisible} from 'chrome://webui-test/test_util.js';
 
 import {createExtensionInfo, MockItemDelegate} from './test_util.js';
 
-const extension_detail_view_tests = {
-  suiteName: 'ExtensionDetailViewTest',
-  TestNames: {
-    Layout: 'layout',
-    LayoutSource: 'layout of source section',
-    SupervisedUserDisableReasons: 'supervised user disable reasons',
-    ClickableElements: 'clickable elements',
-    Indicator: 'indicator',
-    Warnings: 'warnings',
-    NoSiteAccessWithEnhancedSiteControls:
-        'no site access with enhanced site controls',
-    InspectableViewSortOrder: 'inspectable view sort order',
-    ShowAccessRequestsInToolbar: 'show access requests in toolbar',
-  },
-};
-
-Object.assign(
-    window, {extension_detail_view_tests: extension_detail_view_tests});
-
-suite(extension_detail_view_tests.suiteName, function() {
+suite('ExtensionDetailViewTest', function() {
   /** Extension item created before each test. */
   let item: ExtensionsDetailViewElement;
 
@@ -61,7 +40,7 @@ suite(extension_detail_view_tests.suiteName, function() {
     document.body.appendChild(item);
   });
 
-  test(assert(extension_detail_view_tests.TestNames.Layout), function() {
+  test('Layout', function() {
     flush();
 
     const testIsVisible: (selector: string) => boolean =
@@ -71,6 +50,7 @@ suite(extension_detail_view_tests.suiteName, function() {
     assertFalse(testIsVisible('#extensionsOptions'));
     assertTrue(
         item.$.description.textContent!.indexOf('This is an extension') !== -1);
+    assertTrue(testIsVisible('#siteSettings'));
 
     // Check the checkboxes visibility and state. They should be visible
     // only if the associated option is enabled, and checked if the
@@ -112,9 +92,10 @@ suite(extension_detail_view_tests.suiteName, function() {
     assertFalse(testIsVisible('extensions-runtime-host-permissions'));
 
     assertTrue(testIsVisible('#no-permissions'));
-    item.set(
-        'data.permissions',
-        {simplePermissions: ['Permission 1', 'Permission 2']});
+    item.set('data.permissions', {
+      simplePermissions: ['Permission 1', 'Permission 2'],
+      canAccessSiteData: false,
+    });
     flush();
     assertTrue(testIsVisible('#permissions-list'));
     assertEquals(
@@ -127,7 +108,8 @@ suite(extension_detail_view_tests.suiteName, function() {
     assertFalse(testIsVisible('extensions-runtime-host-permissions'));
     // Reset state.
     item.set('data.dependentExtensions', []);
-    item.set('data.permissions', {simplePermissions: []});
+    item.set(
+        'data.permissions', {simplePermissions: [], canAccessSiteData: false});
     flush();
 
     const optionsUrl =
@@ -217,6 +199,7 @@ suite(extension_detail_view_tests.suiteName, function() {
         hasAllHosts: true,
         hostAccess: chrome.developerPrivate.HostAccess.ON_CLICK,
       },
+      canAccessSiteData: true,
     };
     item.set('data.permissions', allSitesPermissions);
     flush();
@@ -234,6 +217,7 @@ suite(extension_detail_view_tests.suiteName, function() {
         hasAllHosts: false,
         hostAccess: chrome.developerPrivate.HostAccess.ON_SPECIFIC_SITES,
       },
+      canAccessSiteData: true,
     };
     item.set('data.permissions', someSitesPermissions);
     flush();
@@ -242,7 +226,7 @@ suite(extension_detail_view_tests.suiteName, function() {
     assertTrue(testIsVisible('extensions-host-permissions-toggle-list'));
   });
 
-  test(assert(extension_detail_view_tests.TestNames.LayoutSource), function() {
+  test('LayoutSource', function() {
     item.set('data.location', 'FROM_STORE');
     flush();
     assertEquals('Chrome Web Store', item.$.source.textContent!.trim());
@@ -274,110 +258,101 @@ suite(extension_detail_view_tests.suiteName, function() {
     assertFalse(isChildVisible(item, '#load-path'));
   });
 
-  test(
-      assert(
-          extension_detail_view_tests.TestNames.SupervisedUserDisableReasons),
-      function() {
-        flush();
-        const toggle = item.$.enableToggle;
-        const tooltip = item.$.parentDisabledPermissionsToolTip;
-        assertTrue(isVisible(toggle));
-        assertFalse(isVisible(tooltip));
+  test('SupervisedUserDisableReasons', function() {
+    flush();
+    const toggle = item.$.enableToggle;
+    const tooltip = item.$.parentDisabledPermissionsToolTip;
+    assertTrue(isVisible(toggle));
+    assertFalse(isVisible(tooltip));
 
-        // This section tests that the enable toggle is visible but disabled
-        // when disableReasons.blockedByPolicy is true. This test prevents a
-        // regression to crbug/1003014.
-        item.set('data.disableReasons.blockedByPolicy', true);
-        flush();
-        assertTrue(isVisible(toggle));
-        assertTrue(toggle.disabled);
-        item.set('data.disableReasons.blockedByPolicy', false);
-        flush();
+    // This section tests that the enable toggle is visible but disabled
+    // when disableReasons.blockedByPolicy is true. This test prevents a
+    // regression to crbug/1003014.
+    item.set('data.disableReasons.blockedByPolicy', true);
+    flush();
+    assertTrue(isVisible(toggle));
+    assertTrue(toggle.disabled);
+    item.set('data.disableReasons.blockedByPolicy', false);
+    flush();
 
-        item.set('data.disableReasons.parentDisabledPermissions', true);
-        flush();
-        assertTrue(isVisible(toggle));
-        assertFalse(toggle.disabled);
-        assertTrue(isVisible(tooltip));
-        item.set('data.disableReasons.parentDisabledPermissions', false);
-        flush();
+    item.set('data.disableReasons.parentDisabledPermissions', true);
+    flush();
+    assertTrue(isVisible(toggle));
+    assertFalse(toggle.disabled);
+    assertTrue(isVisible(tooltip));
+    item.set('data.disableReasons.parentDisabledPermissions', false);
+    flush();
 
-        item.set('data.disableReasons.custodianApprovalRequired', true);
-        flush();
-        assertTrue(isVisible(toggle));
-        assertFalse(toggle.disabled);
-        item.set('data.disableReasons.custodianApprovalRequired', false);
-        flush();
-      });
+    item.set('data.disableReasons.custodianApprovalRequired', true);
+    flush();
+    assertTrue(isVisible(toggle));
+    assertFalse(toggle.disabled);
+    item.set('data.disableReasons.custodianApprovalRequired', false);
+    flush();
+  });
 
-  test(
-      assert(extension_detail_view_tests.TestNames.ClickableElements),
-      function() {
-        const optionsUrl =
-            'chrome-extension://' + extensionData.id + '/options.html';
-        item.set('data.optionsPage', {openInTab: true, url: optionsUrl});
-        item.set('data.prettifiedPath', 'foo/bar/baz/');
-        item.set('showActivityLog', true);
-        flush();
+  test('ClickableElements', function() {
+    const optionsUrl =
+        'chrome-extension://' + extensionData.id + '/options.html';
+    item.set('data.optionsPage', {openInTab: true, url: optionsUrl});
+    item.set('data.prettifiedPath', 'foo/bar/baz/');
+    item.set('showActivityLog', true);
+    flush();
 
-        let currentPage = null;
-        navigation.addListener(newPage => {
-          currentPage = newPage;
-        });
+    let currentPage = null;
+    navigation.addListener(newPage => {
+      currentPage = newPage;
+    });
 
-        // Even though the command line flag is not set for activity log, we
-        // still expect to navigate to it after clicking the link as the logic
-        // to redirect the page back to the details view is in manager.js. Since
-        // this behavior does not happen in the testing environment, we test the
-        // behavior in manager_test.js.
-        item.$.extensionsActivityLogLink.click();
-        assertDeepEquals(
-            currentPage,
-            {page: Page.ACTIVITY_LOG, extensionId: extensionData.id});
+    // Even though the command line flag is not set for activity log, we
+    // still expect to navigate to it after clicking the link as the logic
+    // to redirect the page back to the details view is in manager.js. Since
+    // this behavior does not happen in the testing environment, we test the
+    // behavior in manager_test.js.
+    item.$.extensionsActivityLogLink.click();
+    assertDeepEquals(
+        currentPage, {page: Page.ACTIVITY_LOG, extensionId: extensionData.id});
 
-        // Reset current page and test delegate calls.
-        navigation.navigateTo(
-            {page: Page.DETAILS, extensionId: extensionData.id});
-        currentPage = null;
+    // Reset current page and test delegate calls.
+    navigation.navigateTo({page: Page.DETAILS, extensionId: extensionData.id});
+    currentPage = null;
 
-        mockDelegate.testClickingCalls(
-            item.shadowRoot!
-                .querySelector<ExtensionsToggleRowElement>(
-                    '#allow-incognito')!.getLabel(),
-            'setItemAllowedIncognito', [extensionData.id, true]);
-        mockDelegate.testClickingCalls(
-            item.shadowRoot!
-                .querySelector<ExtensionsToggleRowElement>(
-                    '#allow-on-file-urls')!.getLabel(),
-            'setItemAllowedOnFileUrls', [extensionData.id, true]);
-        mockDelegate.testClickingCalls(
-            item.shadowRoot!
-                .querySelector<ExtensionsToggleRowElement>(
-                    '#collect-errors')!.getLabel(),
-            'setItemCollectsErrors', [extensionData.id, true]);
-        mockDelegate.testClickingCalls(
-            item.$.extensionsOptions, 'showItemOptionsPage', [extensionData]);
-        mockDelegate.testClickingCalls(
-            item.shadowRoot!.querySelector('#remove-extension')!, 'deleteItem',
-            [extensionData.id]);
-        mockDelegate.testClickingCalls(
-            item.shadowRoot!.querySelector(
-                '#load-path > a[is=\'action-link\']')!,
-            'showInFolder', [extensionData.id]);
-        mockDelegate.testClickingCalls(
-            item.shadowRoot!.querySelector('#warnings-reload-button')!,
-            'reloadItem', [extensionData.id], Promise.resolve());
+    mockDelegate.testClickingCalls(
+        item.shadowRoot!
+            .querySelector<ExtensionsToggleRowElement>(
+                '#allow-incognito')!.getLabel(),
+        'setItemAllowedIncognito', [extensionData.id, true]);
+    mockDelegate.testClickingCalls(
+        item.shadowRoot!
+            .querySelector<ExtensionsToggleRowElement>(
+                '#allow-on-file-urls')!.getLabel(),
+        'setItemAllowedOnFileUrls', [extensionData.id, true]);
+    mockDelegate.testClickingCalls(
+        item.shadowRoot!
+            .querySelector<ExtensionsToggleRowElement>(
+                '#collect-errors')!.getLabel(),
+        'setItemCollectsErrors', [extensionData.id, true]);
+    mockDelegate.testClickingCalls(
+        item.$.extensionsOptions, 'showItemOptionsPage', [extensionData]);
+    mockDelegate.testClickingCalls(
+        item.shadowRoot!.querySelector('#remove-extension')!, 'deleteItem',
+        [extensionData.id]);
+    mockDelegate.testClickingCalls(
+        item.shadowRoot!.querySelector('#load-path > a[is=\'action-link\']')!,
+        'showInFolder', [extensionData.id]);
+    mockDelegate.testClickingCalls(
+        item.shadowRoot!.querySelector('#warnings-reload-button')!,
+        'reloadItem', [extensionData.id], Promise.resolve());
 
-        // Terminate the extension so the reload button appears.
-        item.set(
-            'data.state', chrome.developerPrivate.ExtensionState.TERMINATED);
-        flush();
-        mockDelegate.testClickingCalls(
-            item.shadowRoot!.querySelector('#terminated-reload-button')!,
-            'reloadItem', [extensionData.id], Promise.resolve());
-      });
+    // Terminate the extension so the reload button appears.
+    item.set('data.state', chrome.developerPrivate.ExtensionState.TERMINATED);
+    flush();
+    mockDelegate.testClickingCalls(
+        item.shadowRoot!.querySelector('#terminated-reload-button')!,
+        'reloadItem', [extensionData.id], Promise.resolve());
+  });
 
-  test(assert(extension_detail_view_tests.TestNames.Indicator), function() {
+  test('Indicator', function() {
     const indicator = item.shadowRoot!.querySelector('cr-tooltip-icon')!;
     assertTrue(indicator.hidden);
     item.set('data.controlledInfo', {text: 'policy'});
@@ -385,7 +360,7 @@ suite(extension_detail_view_tests.suiteName, function() {
     assertFalse(indicator.hidden);
   });
 
-  test(assert(extension_detail_view_tests.TestNames.Warnings), function() {
+  test('Warnings', function() {
     function testWarningVisible(id: string, expectVisible: boolean): void {
       const f: (arg: boolean) => void =
           expectVisible ? assertTrue : assertFalse;
@@ -397,6 +372,7 @@ suite(extension_detail_view_tests.suiteName, function() {
     testWarningVisible('#suspicious-warning', false);
     testWarningVisible('#blacklisted-warning', false);
     testWarningVisible('#update-required-warning', false);
+    testWarningVisible('#published-in-store-required-warning', false);
 
     item.set('data.runtimeWarnings', ['Dummy warning']);
     flush();
@@ -405,6 +381,7 @@ suite(extension_detail_view_tests.suiteName, function() {
     testWarningVisible('#suspicious-warning', false);
     testWarningVisible('#blacklisted-warning', false);
     testWarningVisible('#update-required-warning', false);
+    testWarningVisible('#published-in-store-required-warning', false);
 
     item.set('data.disableReasons.corruptInstall', true);
     flush();
@@ -413,6 +390,7 @@ suite(extension_detail_view_tests.suiteName, function() {
     testWarningVisible('#suspicious-warning', false);
     testWarningVisible('#blacklisted-warning', false);
     testWarningVisible('#update-required-warning', false);
+    testWarningVisible('#published-in-store-required-warning', false);
     const testIsVisible = isChildVisible.bind(null, item);
     assertTrue(testIsVisible('#enableToggle'));
 
@@ -423,6 +401,7 @@ suite(extension_detail_view_tests.suiteName, function() {
     testWarningVisible('#suspicious-warning', true);
     testWarningVisible('#blacklisted-warning', false);
     testWarningVisible('#update-required-warning', false);
+    testWarningVisible('#published-in-store-required-warning', false);
 
     item.set('data.blacklistText', 'This item is blocklisted');
     flush();
@@ -431,6 +410,7 @@ suite(extension_detail_view_tests.suiteName, function() {
     testWarningVisible('#suspicious-warning', true);
     testWarningVisible('#blacklisted-warning', true);
     testWarningVisible('#update-required-warning', false);
+    testWarningVisible('#published-in-store-required-warning', false);
 
     item.set('data.blacklistText', null);
     flush();
@@ -439,6 +419,7 @@ suite(extension_detail_view_tests.suiteName, function() {
     testWarningVisible('#suspicious-warning', true);
     testWarningVisible('#blacklisted-warning', false);
     testWarningVisible('#update-required-warning', false);
+    testWarningVisible('#published-in-store-required-warning', false);
 
     item.set('data.disableReasons.updateRequired', true);
     flush();
@@ -447,17 +428,29 @@ suite(extension_detail_view_tests.suiteName, function() {
     testWarningVisible('#suspicious-warning', true);
     testWarningVisible('#blacklisted-warning', false);
     testWarningVisible('#update-required-warning', true);
+    testWarningVisible('#published-in-store-required-warning', false);
+
+    item.set('data.disableReasons.publishedInStoreRequired', true);
+    flush();
+    testWarningVisible('#runtime-warnings', true);
+    testWarningVisible('#corrupted-warning', true);
+    testWarningVisible('#suspicious-warning', true);
+    testWarningVisible('#blacklisted-warning', false);
+    testWarningVisible('#update-required-warning', true);
+    testWarningVisible('#published-in-store-required-warning', true);
 
     item.set('data.runtimeWarnings', []);
     item.set('data.disableReasons.corruptInstall', false);
     item.set('data.disableReasons.suspiciousInstall', false);
     item.set('data.disableReasons.updateRequired', false);
+    item.set('data.disableReasons.publishedInStoreRequired', false);
     flush();
     testWarningVisible('#runtime-warnings', false);
     testWarningVisible('#corrupted-warning', false);
     testWarningVisible('#suspicious-warning', false);
     testWarningVisible('#blacklisted-warning', false);
     testWarningVisible('#update-required-warning', false);
+    testWarningVisible('#published-in-store-required-warning', false);
 
     item.set('data.showSafeBrowsingAllowlistWarning', true);
     flush();
@@ -466,6 +459,7 @@ suite(extension_detail_view_tests.suiteName, function() {
     testWarningVisible('#suspicious-warning', false);
     testWarningVisible('#blacklisted-warning', false);
     testWarningVisible('#update-required-warning', false);
+    testWarningVisible('#published-in-store-required-warning', false);
     testWarningVisible('#allowlist-warning', true);
 
     item.set('data.disableReasons.suspiciousInstall', true);
@@ -475,6 +469,7 @@ suite(extension_detail_view_tests.suiteName, function() {
     testWarningVisible('#suspicious-warning', true);
     testWarningVisible('#blacklisted-warning', false);
     testWarningVisible('#update-required-warning', false);
+    testWarningVisible('#published-in-store-required-warning', false);
     testWarningVisible('#allowlist-warning', true);
 
     // Test that the allowlist warning is not shown when there is already a
@@ -487,113 +482,149 @@ suite(extension_detail_view_tests.suiteName, function() {
     testWarningVisible('#suspicious-warning', true);
     testWarningVisible('#blacklisted-warning', true);
     testWarningVisible('#update-required-warning', false);
+    testWarningVisible('#published-in-store-required-warning', false);
     testWarningVisible('#allowlist-warning', false);
   });
 
-  test(
-      assert(extension_detail_view_tests.TestNames
-                 .NoSiteAccessWithEnhancedSiteControls),
-      function() {
-        const testIsVisible = isChildVisible.bind(null, item);
+  test('NoSiteAccessWithEnhancedSiteControls', function() {
+    const testIsVisible = isChildVisible.bind(null, item);
 
-        // Ensure that if the enableEnhancedSiteControls flag is enabled, then
-        // the no site access message is in the permissions section and not in
-        // the site access section.
-        item.set('data.dependentExtensions', []);
-        item.set('data.permissions', {simplePermissions: []});
-        item.enableEnhancedSiteControls = true;
-        flush();
+    // Ensure that if the enableEnhancedSiteControls flag is enabled, then
+    // the no site access message is in the permissions section and not in
+    // the site access section.
+    item.set('data.dependentExtensions', []);
+    item.set(
+        'data.permissions', {simplePermissions: [], canAccessSiteData: false});
+    item.enableEnhancedSiteControls = true;
+    flush();
 
-        assertTrue(testIsVisible('#no-permissions'));
-        assertTrue(
-            item.shadowRoot!.querySelector<HTMLElement>('#no-permissions')!
-                .textContent!.includes(loadTimeData.getString(
-                    'itemPermissionsAndSiteAccessEmpty')));
-        assertFalse(testIsVisible('#no-site-access'));
+    assertTrue(testIsVisible('#no-permissions'));
+    assertTrue(item.shadowRoot!.querySelector<HTMLElement>('#no-permissions')!
+                   .textContent!.includes(loadTimeData.getString(
+                       'itemPermissionsAndSiteAccessEmpty')));
+    assertFalse(testIsVisible('#no-site-access'));
 
-        item.set(
-            'data.permissions',
-            {simplePermissions: ['Permission 1', 'Permission 2']});
-        flush();
+    item.set('data.permissions', {
+      simplePermissions: ['Permission 1', 'Permission 2'],
+      canAccessSiteData: false,
+    });
+    flush();
 
-        // The permissions list should contain the above 2 permissions as well
-        // as an item for no additional site permissions.
-        assertTrue(testIsVisible('#permissions-list'));
-        assertEquals(
-            3,
-            item.shadowRoot!.querySelector('#permissions-list')!
-                .querySelectorAll('li:not([hidden])')
-                .length);
-        assertFalse(testIsVisible('#no-permissions'));
-        assertTrue(testIsVisible('#permissions-list li:last-of-type'));
-      });
+    // The permissions list should contain the above 2 permissions as well
+    // as an item for no additional site permissions.
+    assertTrue(testIsVisible('#permissions-list'));
+    assertEquals(
+        3,
+        item.shadowRoot!.querySelector('#permissions-list')!
+            .querySelectorAll('li:not([hidden])')
+            .length);
+    assertFalse(testIsVisible('#no-permissions'));
+    assertTrue(testIsVisible('#permissions-list li:last-of-type'));
+  });
 
-  test(
-      assert(extension_detail_view_tests.TestNames.InspectableViewSortOrder),
-      function() {
-        function getUrl(path: string) {
-          return `chrome-extension://${extensionData.id}/${path}`;
-        }
-        item.set('data.views', [
-          {
-            type: chrome.developerPrivate.ViewType.EXTENSION_BACKGROUND_PAGE,
-            url: getUrl('_generated_background_page.html'),
-          },
-          {
-            type: chrome.developerPrivate.ViewType
-                      .EXTENSION_SERVICE_WORKER_BACKGROUND,
-            url: getUrl('sw.js'),
-          },
-          {
-            type: chrome.developerPrivate.ViewType.EXTENSION_POPUP,
-            url: getUrl('popup.html'),
-          },
-        ]);
-        item.set('inDevMode', true);
-        flush();
+  test('InspectableViewSortOrder', function() {
+    function getUrl(path: string) {
+      return `chrome-extension://${extensionData.id}/${path}`;
+    }
+    item.set('data.views', [
+      {
+        type: chrome.developerPrivate.ViewType.EXTENSION_BACKGROUND_PAGE,
+        url: getUrl('_generated_background_page.html'),
+      },
+      {
+        type: chrome.developerPrivate.ViewType
+                  .EXTENSION_SERVICE_WORKER_BACKGROUND,
+        url: getUrl('sw.js'),
+      },
+      {
+        type: chrome.developerPrivate.ViewType.EXTENSION_POPUP,
+        url: getUrl('popup.html'),
+      },
+    ]);
+    item.set('inDevMode', true);
+    flush();
 
-        const orderedListItems =
-            Array
-                .from(item.shadowRoot!.querySelectorAll<HTMLElement>(
-                    '.inspectable-view'))
-                .map(e => e.textContent!.trim());
+    const orderedListItems =
+        Array
+            .from(item.shadowRoot!.querySelectorAll<HTMLElement>(
+                '.inspectable-view'))
+            .map(e => e.textContent!.trim());
 
-        assertDeepEquals(
-            ['service worker', 'background page', 'popup.html'],
-            orderedListItems);
-      });
+    assertDeepEquals(
+        ['service worker', 'background page', 'popup.html'], orderedListItems);
+  });
 
-  test(
-      assert(extension_detail_view_tests.TestNames.ShowAccessRequestsInToolbar),
-      function() {
-        const testIsVisible = isChildVisible.bind(null, item);
+  test('ShowAccessRequestsInToolbar', function() {
+    const testIsVisible = isChildVisible.bind(null, item);
 
-        const allSitesPermissions = {
-          simplePermissions: [],
-          runtimeHostPermissions: {
-            hosts: [{granted: false, host: '<all_urls>'}],
-            hasAllHosts: true,
-            hostAccess: chrome.developerPrivate.HostAccess.ON_CLICK,
-          },
-        };
-        item.set('data.permissions', allSitesPermissions);
-        item.set('data.showAccessRequestsInToolbar', true);
-        flush();
+    const allSitesPermissions = {
+      simplePermissions: [],
+      runtimeHostPermissions: {
+        hosts: [{granted: false, host: '<all_urls>'}],
+        hasAllHosts: true,
+        hostAccess: chrome.developerPrivate.HostAccess.ON_CLICK,
+      },
+      canAccessSiteData: true,
+    };
+    item.set('data.permissions', allSitesPermissions);
+    item.set('data.showAccessRequestsInToolbar', true);
+    flush();
 
-        assertFalse(testIsVisible('#show-access-requests-toggle'));
+    assertFalse(testIsVisible('#show-access-requests-toggle'));
 
-        item.enableEnhancedSiteControls = true;
-        flush();
+    item.enableEnhancedSiteControls = true;
+    flush();
 
-        assertTrue(testIsVisible('#show-access-requests-toggle'));
-        assertTrue(item.shadowRoot!
-                       .querySelector<ExtensionsToggleRowElement>(
-                           '#show-access-requests-toggle')!.checked);
+    assertTrue(testIsVisible('#show-access-requests-toggle'));
+    assertTrue(item.shadowRoot!
+                   .querySelector<ExtensionsToggleRowElement>(
+                       '#show-access-requests-toggle')!.checked);
 
-        mockDelegate.testClickingCalls(
-            item.shadowRoot!
-                .querySelector<ExtensionsToggleRowElement>(
-                    '#show-access-requests-toggle')!.getLabel(),
-            'setShowAccessRequestsInToolbar', [extensionData.id, false]);
-      });
+    mockDelegate.testClickingCalls(
+        item.shadowRoot!
+            .querySelector<ExtensionsToggleRowElement>(
+                '#show-access-requests-toggle')!.getLabel(),
+        'setShowAccessRequestsInToolbar', [extensionData.id, false]);
+  });
+
+  test('SafetyCheckWarning', function() {
+    // Ensure that the SafetyCheckWarningContainer is not visible
+    // before enabling the feature.
+    assertFalse(isVisible(
+        item.shadowRoot!.querySelector('#safetyCheckWarningContainer')));
+    loadTimeData.overrideValues({'safetyCheckShowReviewPanel': true});
+    item.set('data.safetyCheckText', {'detailString': 'Test Message'});
+    item.set('data.blacklistText', 'This item is blocklisted');  // nocheck
+    flush();
+    // Check to make sure the warning text is hidden due to the
+    // SafetyCheckWarningContainer being shown.
+    assertFalse(isVisible(
+        item.shadowRoot!.querySelector('#blacklisted-warning')));  // nocheck
+    const safetyWarningText =
+        item.shadowRoot!.querySelector('#safetyCheckWarningContainer');
+    assertTrue(!!safetyWarningText);
+    assertTrue(isVisible(safetyWarningText));
+    assertTrue(safetyWarningText!.textContent!.includes('Test Message'));
+  });
+
+  test('PinnedToToolbar', function() {
+    assertFalse(
+        isVisible(item.shadowRoot!.querySelector<ExtensionsToggleRowElement>(
+            '#pin-to-toolbar')));
+
+    item.set('data.pinnedToToolbar', true);
+    flush();
+    const itemPinnedToggle =
+        item.shadowRoot!.querySelector<ExtensionsToggleRowElement>(
+            '#pin-to-toolbar');
+    assertTrue(isVisible(itemPinnedToggle));
+    assertTrue(itemPinnedToggle!.checked);
+
+    mockDelegate.testClickingCalls(
+        itemPinnedToggle!.getLabel(), 'setItemPinnedToToolbar',
+        [extensionData.id, false]);
+    flush();
+    assertTrue(isVisible(itemPinnedToggle));
+    assertFalse(itemPinnedToggle!.checked);
+  });
 });

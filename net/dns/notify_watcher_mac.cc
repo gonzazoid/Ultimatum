@@ -6,8 +6,8 @@
 
 #include <notify.h>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/mac/mac_util.h"
 #include "base/posix/eintr_wrapper.h"
 
@@ -38,10 +38,7 @@ bool NotifyWatcherMac::Watch(const char* key, const CallbackType& callback) {
 
 void NotifyWatcherMac::Cancel() {
   if (notify_fd_ >= 0) {
-    watcher_.reset();
-    notify_cancel(notify_token_);  // Also closes |notify_fd_|.
-    notify_fd_ = -1;
-    callback_.Reset();
+    CancelInternal();
   }
 }
 
@@ -49,13 +46,22 @@ void NotifyWatcherMac::OnFileCanReadWithoutBlocking() {
   int token;
   int status = HANDLE_EINTR(read(notify_fd_, &token, sizeof(token)));
   if (status != sizeof(token)) {
-    Cancel();
-    callback_.Run(false);
+    CancelInternal().Run(false);
     return;
   }
   // Ignoring |token| value to avoid possible endianness mismatch:
-  // http://openradar.appspot.com/8821081
+  // https://openradar.appspot.com/8821081
   callback_.Run(true);
+}
+
+NotifyWatcherMac::CallbackType NotifyWatcherMac::CancelInternal() {
+  DCHECK_GE(notify_fd_, 0);
+
+  watcher_.reset();
+  notify_cancel(notify_token_);  // Also closes |notify_fd_|.
+  notify_fd_ = -1;
+
+  return std::move(callback_);
 }
 
 }  // namespace net

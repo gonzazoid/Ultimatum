@@ -7,14 +7,9 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/values.h"
 #include "chrome/test/chromedriver/session.h"
-
-namespace base {
-class DictionaryValue;
-class Value;
-}  // namespace base
 
 struct Session;
 class Status;
@@ -338,6 +333,12 @@ Status ExecuteDeleteAllCookies(Session* session,
                                std::unique_ptr<base::Value>* value,
                                Timeout* timeout);
 
+Status ExecuteSetRPHRegistrationMode(Session* session,
+                                     WebView* web_view,
+                                     const base::Value::Dict& params,
+                                     std::unique_ptr<base::Value>* value,
+                                     Timeout* timeout);
+
 Status ExecuteSetLocation(Session* session,
                           WebView* web_view,
                           const base::Value::Dict& params,
@@ -368,10 +369,9 @@ Status ExecutePerformActions(Session* session,
                              std::unique_ptr<base::Value>* value,
                              Timeout* timeout);
 
-Status ProcessInputActionSequence(
-    Session* session,
-    const base::Value::Dict& action_sequence,
-    std::vector<std::unique_ptr<base::DictionaryValue>>* action_list);
+Status ProcessInputActionSequence(Session* session,
+                                  const base::Value::Dict& action_sequence,
+                                  std::vector<base::Value::Dict>* action_list);
 
 Status ExecuteReleaseActions(Session* session,
                              WebView* web_view,

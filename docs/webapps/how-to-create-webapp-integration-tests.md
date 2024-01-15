@@ -70,8 +70,12 @@ chrome/test/webapps/generate_framework_tests_and_coverage.py
 
 The output should:
 1. Generate a coverage report for the change in the [data directory][script-data-dir].
-1. Print new tests that need to be manually copied to the integration browsertest files.
-2. Print out test ids that need to be removed.
+2. Print new tests that need to be manually copied to the integration browsertest files.
+3. Print out test ids that need to be removed.
+
+Note:
+1. The option `--delete-in-place` can be used to remove all tests that aren't disabled by sheriffs.
+2. The option `--add-to-file` can be used to add new tests to existing test files. If the test file does not exist, the expected file names and tests will be printed out to the console. You will have to manually create the file, copy-and-paste the tests to the new file and add the file to the BUILD file.
 
 After you make changes to the integration browsertests, please re-run the above command to verify that all of the changes were performed and no mistakes were made. If all looks right, the script will output nothing to console when run a second time.
 
@@ -83,7 +87,29 @@ After all tests are added, `git cl format` is often required. It's a good idea t
 
 Before submitting, make sure to also [run the trybots on mac][running-mac-tests], as these are sometimes disabled on the CQ.
 
-### 4.3. (optional) Disable failing tests
+### 4.3. Run new tests locally.
+
+It is recommended to run the new tests locally before testing them on trybots.
+
+This command will to generate the gtest_filter for all the new and modified tests.
+
+```bash
+chrome/test/webapps/generate_gtest_filter_for_added_tests.py --diff-strategy <upstream|committed|staged|unstaged>
+```
+This script uses a default diff strategy that includes uncommitted, staged, and committed changes to the UPSTREAM. See the `--diff-strategy` option for more options here.
+
+The output should print out the gtest_filter for any new (or modified) tests in `browser_tests` and `sync_integration_tests`.
+
+The output format will be
+```bash
+browser_tests --gtest_filter=<test_name>
+
+sync_integration_tests --gtest_filter=<test_name>
+```
+
+You can run the tests by adding the path to `browser_tests` or `sync_integration_tests` binaries.
+
+### 4.4. (optional) Disable failing tests
 
 If the "manual" browsertest didn't catch a bug that is now failing for the generated tests and there is no obvious fix for the bug, it is OK to submit the new tests as disabled. To do this:
 1. Try to figure out generally why the generated tests are failing, or what the problem is, and create a bug.

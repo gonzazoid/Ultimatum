@@ -4,9 +4,9 @@
 
 #include "chromeos/ash/services/secure_channel/authenticated_channel_impl.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "chromeos/ash/components/multidevice/logging/logging.h"
@@ -147,7 +147,7 @@ void AuthenticatedChannelImpl::OnMessageSent(SecureChannel* secure_channel,
 
 void AuthenticatedChannelImpl::OnRssiFetched(
     base::OnceCallback<void(mojom::ConnectionMetadataPtr)> callback,
-    absl::optional<int32_t> current_rssi) {
+    std::optional<int32_t> current_rssi) {
   mojom::BluetoothConnectionMetadataPtr bluetooth_connection_metadata_ptr;
   if (current_rssi) {
     bluetooth_connection_metadata_ptr =

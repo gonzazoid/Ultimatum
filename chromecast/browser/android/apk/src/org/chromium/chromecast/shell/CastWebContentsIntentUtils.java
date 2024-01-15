@@ -54,6 +54,18 @@ public class CastWebContentsIntentUtils {
     public static final String ACTION_ALLOW_PICTURE_IN_PICTURE =
             "com.google.android.apps.castshell.intent.action.ALLOW_PICTURE_IN_PICTURE";
 
+    /**
+     * Action to notify CastWebContentsActivity whether or not media is playing.
+     */
+    public static final String ACTION_MEDIA_PLAYING =
+            "com.google.android.apps.castshell.intent.action.MEDIA_PLAYING";
+
+    /**
+     * Action to request that ACTION_MEDIA_PLAYING status is broadcasted.
+     */
+    public static final String ACTION_REQUEST_MEDIA_PLAYING_STATUS =
+            "com.google.android.apps.castshell.intent.action.REQUEST_MEDIA_PLAYING";
+
     /** Key of extra value in an intent, the value is a URI of cast://webcontents/<instanceId> */
     static final String INTENT_EXTRA_URI = "content_uri";
 
@@ -75,11 +87,17 @@ public class CastWebContentsIntentUtils {
     static final String INTENT_EXTRA_ALLOW_PICTURE_IN_PICTURE =
             "com.google.android.apps.castshell.intent.extra.ALLOW_PICTURE_IN_PICTURE";
 
+    /**
+     * Key of extra indicating whether media is playing.
+     */
+    static final String INTENT_EXTRA_MEDIA_PLAYING =
+            "com.google.android.apps.castshell.intent.extra.MEDIA_PLAYING";
+
     /** Key of extra value of the intent to start a web content, value is true is if cast app is
      *  a remote control app.
      */
-    static final String INTENT_EXTRA_REMOTE_CONTROL_MODE =
-            "com.google.android.apps.castshell.intent.extra.REMOTE_CONTROL_MODE";
+    static final String INTENT_EXTRA_SHOULD_REQUEST_AUDIO_FOCUS =
+            "com.google.android.apps.castshell.intent.extra.SHOULD_REQUEST_AUDIO_FOCUS";
 
     /** Key for extra value for intent to start web contents. true if the app should turn on the
      * display. */
@@ -143,6 +161,12 @@ public class CastWebContentsIntentUtils {
         return intent;
     }
 
+    public static Intent requestMediaPlayingStatus(String instanceId) {
+        Uri uri = getInstanceUri(instanceId);
+        if (DEBUG) Log.d(TAG, "requestMediaPlayingStatus with uri: " + uri);
+        return new Intent(ACTION_REQUEST_MEDIA_PLAYING_STATUS, uri);
+    }
+
     // Used by intent of ACTION_ON_VISIBILITY_CHANGE
     @VisibilityType
     public static int getVisibilityType(Intent in) {
@@ -157,9 +181,13 @@ public class CastWebContentsIntentUtils {
         return in.getAction().equals(ACTION_ON_VISIBILITY_CHANGE);
     }
 
+    public static boolean isIntentOfRequestMediaPlayingStatus(Intent in) {
+        return in.getAction().equals(ACTION_REQUEST_MEDIA_PLAYING_STATUS);
+    }
+
     // CastWebContentsComponent.Receiver -> CastWebContentsActivity
     public static Intent requestStartCastActivity(Context context, WebContents webContents,
-            boolean enableTouch, boolean isRemoteControlMode, boolean turnOnScreen,
+            boolean enableTouch, boolean shouldRequestAudioFocus, boolean turnOnScreen,
             boolean keepScreenOn, String instanceId) {
         WebContentsRegistry.addWebContents(instanceId, webContents);
         Intent intent =
@@ -169,7 +197,7 @@ public class CastWebContentsIntentUtils {
         intent.putExtra(INTENT_EXTRA_TOUCH_INPUT_ENABLED, enableTouch);
         intent.putExtra(INTENT_EXTRA_TURN_ON_SCREEN, turnOnScreen);
         intent.putExtra(INTENT_EXTRA_KEEP_SCREEN_ON, keepScreenOn);
-        intent.putExtra(INTENT_EXTRA_REMOTE_CONTROL_MODE, isRemoteControlMode);
+        intent.putExtra(INTENT_EXTRA_SHOULD_REQUEST_AUDIO_FOCUS, shouldRequestAudioFocus);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP
                 | Intent.FLAG_ACTIVITY_NO_ANIMATION | Intent.FLAG_ACTIVITY_TASK_ON_HOME);
         return intent;
@@ -239,14 +267,19 @@ public class CastWebContentsIntentUtils {
         return in.getExtras().getBoolean(INTENT_EXTRA_ALLOW_PICTURE_IN_PICTURE);
     }
 
-    // Used by ACTION_VIEW
-    public static boolean isRemoteControlMode(Bundle bundle) {
-        return bundle.getBoolean(INTENT_EXTRA_REMOTE_CONTROL_MODE);
+    // Used by ACTION_MEDIA_PLAYING
+    public static boolean isMediaPlaying(Intent in) {
+        return in.getExtras().getBoolean(INTENT_EXTRA_MEDIA_PLAYING);
     }
 
     // Used by ACTION_VIEW
-    public static boolean isRemoteControlMode(Intent in) {
-        return isRemoteControlMode(in.getExtras());
+    public static boolean shouldRequestAudioFocus(Bundle bundle) {
+        return bundle.getBoolean(INTENT_EXTRA_SHOULD_REQUEST_AUDIO_FOCUS);
+    }
+
+    // Used by ACTION_VIEW
+    public static boolean shouldRequestAudioFocus(Intent in) {
+        return shouldRequestAudioFocus(in.getExtras());
     }
 
     // Used by ACTION_VIEW
@@ -272,6 +305,13 @@ public class CastWebContentsIntentUtils {
         Intent intent = new Intent(ACTION_ALLOW_PICTURE_IN_PICTURE);
         intent.putExtra(INTENT_EXTRA_URI, getInstanceUri(instanceId).toString());
         intent.putExtra(INTENT_EXTRA_ALLOW_PICTURE_IN_PICTURE, allowPictureInPicture);
+        return intent;
+    }
+
+    public static Intent mediaPlaying(String instanceId, boolean mediaPlaying) {
+        Intent intent = new Intent(ACTION_MEDIA_PLAYING);
+        intent.putExtra(INTENT_EXTRA_URI, getInstanceUri(instanceId).toString());
+        intent.putExtra(INTENT_EXTRA_MEDIA_PLAYING, mediaPlaying);
         return intent;
     }
 

@@ -6,17 +6,14 @@ package org.chromium.chrome.browser.feed;
 import androidx.annotation.Nullable;
 
 import org.chromium.base.task.PostTask;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
+import org.chromium.base.task.TaskTraits;
 
-/**
- * Helper which is able to track a Scroll and aggregate them before sending the scroll events.
- */
+/** Helper which is able to track a Scroll and aggregate them before sending the scroll events. */
 public abstract class ScrollTracker {
     // onScroll events are very noisy, so we collate them together to avoid over-reporting scrolls.
     private static final long SCROLL_EVENT_COLLATE_MILLIS = 200L;
 
-    @Nullable
-    private ReportFunction mPostedReportFunction;
+    @Nullable private ReportFunction mPostedReportFunction;
 
     // If |mScrollAmount| is non-zero and should be reported when ReportFunction runs.
     private boolean mReadyToReport;
@@ -42,7 +39,7 @@ public abstract class ScrollTracker {
             mReadyToReport = true;
             mPostedReportFunction = new ReportFunction();
             PostTask.postDelayedTask(
-                    UiThreadTaskTraits.DEFAULT, mPostedReportFunction, SCROLL_EVENT_COLLATE_MILLIS);
+                    TaskTraits.UI_DEFAULT, mPostedReportFunction, SCROLL_EVENT_COLLATE_MILLIS);
         } else {
             mReadyToReport = false;
         }
@@ -66,8 +63,8 @@ public abstract class ScrollTracker {
                 mPostedReportFunction = null;
             } else if (mScrollAmount != 0) {
                 mReadyToReport = true;
-                PostTask.postDelayedTask(UiThreadTaskTraits.DEFAULT, mPostedReportFunction,
-                        SCROLL_EVENT_COLLATE_MILLIS);
+                PostTask.postDelayedTask(
+                        TaskTraits.UI_DEFAULT, mPostedReportFunction, SCROLL_EVENT_COLLATE_MILLIS);
             }
         }
     }

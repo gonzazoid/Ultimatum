@@ -10,11 +10,11 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "media/capture/mojom/image_capture_types.h"
 #include "media/capture/video/android/capture_jni_headers/VideoCapture_jni.h"
@@ -65,8 +65,7 @@ PhotoCapabilities::AndroidMeteringMode ToAndroidMeteringMode(
     case mojom::MeteringMode::NONE:
       return PhotoCapabilities::AndroidMeteringMode::NONE;
   }
-  NOTREACHED();
-  return PhotoCapabilities::AndroidMeteringMode::NOT_SET;
+  NOTREACHED_NORETURN();
 }
 
 mojom::FillLightMode ToMojomFillLightMode(
@@ -82,8 +81,7 @@ mojom::FillLightMode ToMojomFillLightMode(
     case PhotoCapabilities::AndroidFillLightMode::NUM_ENTRIES:
       NOTREACHED();
   }
-  NOTREACHED();
-  return mojom::FillLightMode::OFF;
+  NOTREACHED_NORETURN();
 }
 
 PhotoCapabilities::AndroidFillLightMode ToAndroidFillLightMode(
@@ -96,15 +94,14 @@ PhotoCapabilities::AndroidFillLightMode ToAndroidFillLightMode(
     case mojom::FillLightMode::OFF:
       return PhotoCapabilities::AndroidFillLightMode::OFF;
   }
-  NOTREACHED();
-  return PhotoCapabilities::AndroidFillLightMode::NOT_SET;
+  NOTREACHED_NORETURN();
 }
 
 }  // anonymous namespace
 
 VideoCaptureDeviceAndroid::VideoCaptureDeviceAndroid(
     const VideoCaptureDeviceDescriptor& device_descriptor)
-    : main_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+    : main_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       device_descriptor_(device_descriptor) {}
 
 VideoCaptureDeviceAndroid::~VideoCaptureDeviceAndroid() {

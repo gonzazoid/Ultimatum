@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "base/location.h"
 #include "base/metrics/histogram.h"
 #include "base/metrics/histogram_base.h"
 #include "base/strings/string_piece.h"
@@ -34,7 +35,7 @@ class HistogramSamples;
 // histogram data between the renderer and browser processes. If it is in a
 // content browser test, then content::FetchHistogramsFromChildProcesses()
 // should be used to achieve that.
-// To test histograms in Java tests, use HistogramTestRule.
+// To test histograms in Java tests, use HistogramWatcher.
 class HistogramTester {
  public:
   using CountsMap = std::map<std::string, HistogramBase::Count, std::less<>>;
@@ -47,56 +48,65 @@ class HistogramTester {
 
   ~HistogramTester();
 
-  // We know the exact number of samples in a bucket, and that no other bucket
-  // should have samples. Measures the diff from the snapshot taken when this
-  // object was constructed.
+  // EXPECTs that the number of samples in bucket |sample| of histogram |name|
+  // grew by |expected_bucket_count| since the HistogramTester was created and
+  // that no other bucket of the histogram gained any extra samples.
+  // If a bucket had samples before the HistogramTester was created, these
+  // samples are completely ignored.
   void ExpectUniqueSample(StringPiece name,
                           HistogramBase::Sample sample,
-                          HistogramBase::Count expected_bucket_count) const;
+                          HistogramBase::Count expected_bucket_count,
+                          const Location& location = FROM_HERE) const;
   template <typename T>
   void ExpectUniqueSample(StringPiece name,
                           T sample,
-                          HistogramBase::Count expected_bucket_count) const {
+                          HistogramBase::Count expected_bucket_count,
+                          const Location& location = FROM_HERE) const {
     ExpectUniqueSample(name, static_cast<HistogramBase::Sample>(sample),
-                       expected_bucket_count);
+                       expected_bucket_count, location);
   }
   void ExpectUniqueTimeSample(StringPiece name,
                               TimeDelta sample,
-                              HistogramBase::Count expected_bucket_count) const;
+                              HistogramBase::Count expected_bucket_count,
+                              const Location& location = FROM_HERE) const;
 
-  // We know the exact number of samples in a bucket, but other buckets may
-  // have samples as well. Measures the diff from the snapshot taken when this
-  // object was constructed.
+  // EXPECTs that the number of samples in bucket |sample| of histogram |name|
+  // grew by |expected_count| since the HistogramTester was created. Samples in
+  // other buckets are ignored.
   void ExpectBucketCount(StringPiece name,
                          HistogramBase::Sample sample,
-                         HistogramBase::Count expected_count) const;
+                         HistogramBase::Count expected_count,
+                         const Location& location = FROM_HERE) const;
   template <typename T>
   void ExpectBucketCount(StringPiece name,
                          T sample,
-                         HistogramBase::Count expected_count) const {
+                         HistogramBase::Count expected_count,
+                         const Location& location = FROM_HERE) const {
     ExpectBucketCount(name, static_cast<HistogramBase::Sample>(sample),
-                      expected_count);
+                      expected_count, location);
   }
-
-  // We don't know the values of the samples, but we know how many there are.
-  // This measures the diff from the snapshot taken when this object was
-  // constructed.
-  void ExpectTotalCount(StringPiece name, HistogramBase::Count count) const;
-
-  // We know exact number of samples for buckets corresponding to a time
-  // interval. Other intervals may have samples too.
   void ExpectTimeBucketCount(StringPiece name,
                              TimeDelta sample,
-                             HistogramBase::Count count) const;
+                             HistogramBase::Count expected_count,
+                             const Location& location = FROM_HERE) const;
 
-  // We don't know the values of the samples, but we know their sum.
-  // This returns the diff from the snapshot taken when this object was
-  // constructed.
+  // EXPECTs that the total number of samples in histogram |name|
+  // grew by |expected_count| since the HistogramTester was created.
+  void ExpectTotalCount(StringPiece name,
+                        HistogramBase::Count expected_count,
+                        const Location& location = FROM_HERE) const;
+
+  // Returns the sum of all samples recorded since the HistogramTester was
+  // created.
   int64_t GetTotalSum(StringPiece name) const;
 
   // Returns a list of all of the buckets recorded since creation of this
   // object, as vector<Bucket>, where the Bucket represents the min boundary of
   // the bucket and the count of samples recorded to that bucket since creation.
+  //
+  // Note: The histogram defines the bucket boundaries. If you test a histogram
+  // with exponential bucket sizes, this function may not be particularly useful
+  // because you would need to guess the bucket boundaries.
   //
   // Example usage, using gMock:
   //   EXPECT_THAT(histogram_tester.GetAllSamples("HistogramName"),
@@ -151,8 +161,8 @@ class HistogramTester {
   //               testing::ContainerEq(expected_counts));
   CountsMap GetTotalCountsForPrefix(StringPiece prefix) const;
 
-  // Access a modified HistogramSamples containing only what has been logged
-  // to the histogram since the creation of this object.
+  // Returns the HistogramSamples recorded since the creation of the
+  // HistogramTester.
   std::unique_ptr<HistogramSamples> GetHistogramSamplesSinceCreation(
       StringPiece histogram_name) const;
 
@@ -162,35 +172,24 @@ class HistogramTester {
   std::string GetAllHistogramsRecorded() const;
 
  private:
-  // Verifies and asserts that value in the |sample| bucket matches the
-  // |expected_count|. The bucket's current value is determined from |samples|
-  // and is modified based on the snapshot stored for histogram |name|.
-  void CheckBucketCount(StringPiece name,
-                        HistogramBase::Sample sample,
-                        Histogram::Count expected_count,
-                        const HistogramSamples& samples) const;
+  // Returns the total number of values recorded for |histogram| since the
+  // HistogramTester was created.
+  int GetTotalCountForSamples(const HistogramBase& histogram) const;
 
-  // Returns the total number of values recorded for histogram |name|. This
-  // is calculated as the number from |samples| minus the snapshot that was
-  // taken for |name|.
-  int GetTotalCountForSamples(StringPiece name,
-                              const HistogramSamples& samples) const;
-
-  // Verifies that the total number of values recorded for the histogram |name|
-  // is |expected_count|. This is checked against |samples| minus the snapshot
-  // that was taken for |name|.
-  void CheckTotalCount(StringPiece name,
-                       Histogram::Count expected_count,
-                       const HistogramSamples& samples) const;
-
-  // Sets the value for |count| to be the value in the |sample| bucket. The
-  // bucket's current value is determined from |samples| and is modified based
-  // on the snapshot stored for histogram |name|.
-  void GetBucketCountForSamples(StringPiece name,
+  // Sets |*sample_count| to number of samples by which bucket |sample| bucket
+  // grew since the HistogramTester was created. If |total_count| is non-null,
+  // sets |*total_count| to the number of samples recorded for |histogram|
+  // since the HistogramTester was created.
+  void GetBucketCountForSamples(const HistogramBase& histogram,
                                 HistogramBase::Sample sample,
-                                const HistogramSamples& samples,
-                                HistogramBase::Count* count) const;
+                                HistogramBase::Count* sample_count,
+                                HistogramBase::Count* total_count) const;
 
+  // Returns the deltas for |histogram| since the HistogramTester was created
+  // as an ASCII art histogram for debugging purposes.
+  std::string SnapshotToString(const HistogramBase& histogram) const;
+
+  // Snapshot of all histograms recorded before the HistogramTester was created.
   // Used to determine the histogram changes made during this instance's
   // lifecycle.
   std::map<std::string, std::unique_ptr<HistogramSamples>, std::less<>>
@@ -212,7 +211,7 @@ struct Bucket {
   Bucket(MetricEnum min, HistogramBase::Count count)
       : Bucket(static_cast<std::underlying_type_t<MetricEnum>>(min), count) {}
 
-  bool operator==(const Bucket& other) const;
+  friend bool operator==(const Bucket&, const Bucket&) = default;
 
   HistogramBase::Sample min;
   HistogramBase::Count count;

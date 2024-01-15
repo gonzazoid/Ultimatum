@@ -4,10 +4,12 @@
 
 #include "content/browser/android/selection/composited_touch_handle_drawable.h"
 
+#include <algorithm>
+
 #include "base/check.h"
-#include "base/cxx17_backports.h"
-#include "base/lazy_instance.h"
-#include "cc/layers/ui_resource_layer.h"
+#include "base/memory/ptr_util.h"
+#include "base/no_destructor.h"
+#include "cc/slim/ui_resource_layer.h"
 #include "content/public/browser/android/compositor.h"
 #include "ui/android/handle_view_resources.h"
 #include "ui/android/view_android.h"
@@ -18,21 +20,27 @@ namespace content {
 
 namespace {
 
-base::LazyInstance<ui::HandleViewResources>::Leaky g_selection_resources;
+ui::HandleViewResources& GetSelectionResources() {
+  static base::NoDestructor<ui::HandleViewResources> selection_resources;
+  return *selection_resources;
+}
 
 }  // namespace
 
 CompositedTouchHandleDrawable::CompositedTouchHandleDrawable(
-    gfx::NativeView view,
+    gfx::NativeView parent_native_view,
+    cc::slim::Layer* parent_layer,
     const JavaRef<jobject>& context)
-    : view_(view),
-      orientation_(ui::TouchHandleOrientation::UNDEFINED),
-      layer_(cc::UIResourceLayer::Create()) {
-  g_selection_resources.Get().LoadIfNecessary(context);
+    : orientation_(ui::TouchHandleOrientation::UNDEFINED),
+      layer_(cc::slim::UIResourceLayer::Create()) {
+  CHECK(parent_native_view);
+  CHECK(parent_layer);
+
+  view_ = parent_native_view;
+  GetSelectionResources().LoadIfNecessary(context);
   drawable_horizontal_padding_ratio_ =
-      g_selection_resources.Get().GetDrawableHorizontalPaddingRatio();
-  DCHECK(view->GetLayer());
-  view->GetLayer()->AddChild(layer_.get());
+      GetSelectionResources().GetDrawableHorizontalPaddingRatio();
+  parent_layer->AddChild(layer_.get());
 }
 
 CompositedTouchHandleDrawable::~CompositedTouchHandleDrawable() {
@@ -56,7 +64,7 @@ void CompositedTouchHandleDrawable::SetOrientation(
   orientation_ = orientation;
 
   if (orientation_changed) {
-    const SkBitmap& bitmap = g_selection_resources.Get().GetBitmap(orientation);
+    const SkBitmap& bitmap = GetSelectionResources().GetBitmap(orientation);
     const int bitmap_height = bitmap.height();
     const int bitmap_width = bitmap.width();
     layer_->SetBitmap(bitmap);
@@ -84,7 +92,7 @@ void CompositedTouchHandleDrawable::SetOrigin(const gfx::PointF& origin) {
 
 void CompositedTouchHandleDrawable::SetAlpha(float alpha) {
   DCHECK(layer_->parent());
-  alpha = base::clamp(alpha, 0.0f, 1.0f);
+  alpha = std::clamp(alpha, 0.0f, 1.0f);
   layer_->SetOpacity(alpha);
   layer_->SetHideLayerAndSubtree(!alpha);
 }

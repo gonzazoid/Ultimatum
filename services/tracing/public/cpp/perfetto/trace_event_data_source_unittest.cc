@@ -10,23 +10,24 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/metrics_hashes.h"
 #include "base/metrics/user_metrics.h"
+#include "base/process/current_process.h"
+#include "base/process/current_process_test.h"
 #include "base/run_loop.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/common/task_annotator.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_id_name_manager.h"
+#include "base/threading/platform_thread.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
-#include "base/trace_event/task_execution_macros.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/trace_log.h"
 #include "base/tracing/trace_time.h"
@@ -68,6 +69,8 @@ namespace tracing {
 namespace {
 
 constexpr char kTestProcess[] = "Browser";
+base::CurrentProcessType kTestProcessType =
+    base::CurrentProcessType::PROCESS_BROWSER;
 constexpr char kTestThread[] = "CrTestMain";
 constexpr const char kCategoryGroup[] = "browser";
 
@@ -98,25 +101,25 @@ class TraceEventDataSourceTest
     perfetto::internal::TrackRegistry::InitializeInstance();
 #endif  // !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
 
-    old_thread_name_ =
-        base::ThreadIdNameManager::GetInstance()->GetNameForCurrentThread();
-    base::ThreadIdNameManager::GetInstance()->SetName(kTestThread);
-    old_process_name_ =
-        base::trace_event::TraceLog::GetInstance()->process_name();
-    base::trace_event::TraceLog::GetInstance()->set_process_name(kTestProcess);
+    old_thread_name_ = base::PlatformThread::GetName();
+    base::PlatformThread::SetName(kTestThread);
+    old_process_name_ = base::test::CurrentProcessForTest::GetName();
+    old_process_type_ = base::test::CurrentProcessForTest::GetType();
+    base::CurrentProcess::GetInstance().SetProcessNameAndType(kTestProcess,
+                                                              kTestProcessType);
     base::trace_event::TraceLog::GetInstance()->SetRecordHostAppPackageName(
         false);
 
 #if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
     PerfettoTracedProcess::GetTaskRunner()->ResetTaskRunnerForTesting(
-        base::ThreadTaskRunnerHandle::Get());
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     TrackNameRecorder::GetInstance();
     CustomEventRecorder::GetInstance();  //->ResetForTesting();
     TraceEventMetadataSource::GetInstance()->ResetForTesting();
 #else   // !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
     PerfettoTracedProcess::GetTaskRunner()->GetOrCreateTaskRunner();
     auto perfetto_wrapper = std::make_unique<base::tracing::PerfettoTaskRunner>(
-        base::ThreadTaskRunnerHandle::Get());
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     producer_client_ =
         std::make_unique<TestProducerClient>(std::move(perfetto_wrapper));
     TraceEventMetadataSource::GetInstance()->ResetForTesting();
@@ -142,9 +145,9 @@ class TraceEventDataSourceTest
     producer_client_.reset();
 #endif  // !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
 
-    base::ThreadIdNameManager::GetInstance()->SetName(old_thread_name_);
-    base::trace_event::TraceLog::GetInstance()->set_process_name(
-        old_process_name_);
+    base::PlatformThread::SetName(kTestThread);
+    base::CurrentProcess::GetInstance().SetProcessNameAndType(
+        old_process_name_, old_process_type_);
 
 #if !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
     TracingUnitTest::TearDown();
@@ -228,7 +231,7 @@ class TraceEventDataSourceTest
   }
 
   void StopAndParseTrace() {
-    perfetto::TrackEvent::Flush();
+    base::TrackEvent::Flush();
 
     base::RunLoop wait_for_stop;
     g_tracing_session->SetOnStopCallback(
@@ -873,6 +876,7 @@ class TraceEventDataSourceTest
 
   std::string old_thread_name_;
   std::string old_process_name_;
+  base::CurrentProcessType old_process_type_;
 };
 
 void HasMetadataValue(const perfetto::protos::ChromeMetadata& entry,
@@ -894,11 +898,11 @@ void HasMetadataValue(const perfetto::protos::ChromeMetadata& entry,
 }
 
 void HasMetadataValue(const perfetto::protos::ChromeMetadata& entry,
-                      const base::Value& value) {
+                      const base::Value::Dict& value) {
   EXPECT_TRUE(entry.has_json_value());
 
-  absl::optional<base::Value> child_dict =
-      base::JSONReader::Read(entry.json_value());
+  absl::optional<base::Value::Dict> child_dict =
+      base::JSONReader::ReadDict(entry.json_value());
   EXPECT_EQ(*child_dict, value);
 }
 
@@ -907,8 +911,7 @@ void MetadataHasNamedValue(const google::protobuf::RepeatedPtrField<
                                perfetto::protos::ChromeMetadata>& metadata,
                            const char* name,
                            const T& value) {
-  for (int i = 0; i < metadata.size(); i++) {
-    auto& entry = metadata[i];
+  for (const auto& entry : metadata) {
     if (entry.name() == name) {
       HasMetadataValue(entry, value);
       return;
@@ -918,15 +921,15 @@ void MetadataHasNamedValue(const google::protobuf::RepeatedPtrField<
   NOTREACHED();
 }
 
-absl::optional<base::Value> AddJsonMetadataGenerator() {
-  base::Value metadata(base::Value::Type::DICTIONARY);
-  metadata.SetIntKey("foo_int", 42);
-  metadata.SetStringKey("foo_str", "bar");
-  metadata.SetBoolKey("foo_bool", true);
+absl::optional<base::Value::Dict> AddJsonMetadataGenerator() {
+  base::Value::Dict metadata;
+  metadata.Set("foo_int", 42);
+  metadata.Set("foo_str", "bar");
+  metadata.Set("foo_bool", true);
 
-  base::Value child_dict(base::Value::Type::DICTIONARY);
-  child_dict.SetStringKey("child_str", "child_val");
-  metadata.SetKey("child_dict", std::move(child_dict));
+  base::Value::Dict child_dict;
+  child_dict.Set("child_str", "child_val");
+  metadata.Set("child_dict", std::move(child_dict));
   return metadata;
 }
 
@@ -944,8 +947,7 @@ TEST_F(TraceEventDataSourceTest, MetadataGeneratorBeforeTracing) {
   MetadataHasNamedValue(metadata, "foo_str", "bar");
   MetadataHasNamedValue(metadata, "foo_bool", true);
 
-  base::Value child_dict(base::Value::Type::DICTIONARY);
-  child_dict.SetStringKey("child_str", "child_val");
+  auto child_dict = base::Value::Dict().Set("child_str", "child_val");
   MetadataHasNamedValue(metadata, "child_dict", child_dict);
 }
 
@@ -963,17 +965,16 @@ TEST_F(TraceEventDataSourceTest, MetadataGeneratorWhileTracing) {
   MetadataHasNamedValue(metadata, "foo_str", "bar");
   MetadataHasNamedValue(metadata, "foo_bool", true);
 
-  base::Value child_dict(base::Value::Type::DICTIONARY);
-  child_dict.SetStringKey("child_str", "child_val");
+  auto child_dict = base::Value::Dict().Set("child_str", "child_val");
   MetadataHasNamedValue(metadata, "child_dict", child_dict);
 }
 
 TEST_F(TraceEventDataSourceTest, MultipleMetadataGenerators) {
   auto* metadata_source = TraceEventMetadataSource::GetInstance();
   metadata_source->AddGeneratorFunction(base::BindRepeating([]() {
-    base::Value metadata(base::Value::Type::DICTIONARY);
-    metadata.SetIntKey("before_int", 42);
-    return absl::optional<base::Value>(std::move(metadata));
+    base::Value::Dict metadata;
+    metadata.Set("before_int", 42);
+    return absl::optional<base::Value::Dict>(std::move(metadata));
   }));
 
   StartMetaDataSource();
@@ -993,15 +994,18 @@ TEST_F(TraceEventDataSourceTest, MultipleMetadataGenerators) {
   MetadataHasNamedValue(metadata, "foo_str", "bar");
   MetadataHasNamedValue(metadata, "foo_bool", true);
 
-  base::Value child_dict(base::Value::Type::DICTIONARY);
-  child_dict.SetStringKey("child_str", "child_val");
+  auto child_dict = base::Value::Dict().Set("child_str", "child_val");
   MetadataHasNamedValue(metadata, "child_dict", child_dict);
 
   EXPECT_EQ(1, metadata1.size());
   MetadataHasNamedValue(metadata1, "before_int", 42);
 }
 
-#if BUILDFLAG(IS_ANDROID)
+// With Perfetto client library, it's not possible to filter package names
+// based on privacy settings, because privacy settings are per-session while
+// track descriptors are global. But this is not a problem because the filtering
+// is done at upload stage, so package names don't leak into Chrome traces.
+#if BUILDFLAG(IS_ANDROID) && !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
 TEST_F(TraceEventDataSourceTest,
        PackageNameNotRecordedPrivacyFilteringDisabledTraceLogNotSet) {
   StartTraceEventDataSource(/* privacy_filtering_enabled = false */);
@@ -1050,7 +1054,7 @@ TEST_F(TraceEventDataSourceTest,
       base::android::BuildInfo::GetInstance()->host_package_name(),
       e_packet->track_descriptor().chrome_process().host_app_package_name());
 }
-#endif
+#endif  // BUILDFLAG(IS_ANDROID) && !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
 
 TEST_F(TraceEventDataSourceTest, BasicTraceEvent) {
   StartTraceEventDataSource();
@@ -1096,7 +1100,8 @@ TEST_F(TraceEventDataSourceTest, ActiveProcessesMetadata) {
 TEST_F(TraceEventDataSourceTest, DISABLED_TimestampedTraceEvent) {
   StartTraceEventDataSource();
 
-  auto current_thread_tid = perfetto::ThreadTrack::Current().tid;
+  base::PlatformThreadId current_thread_tid =
+      perfetto::ThreadTrack::Current().tid;
 
   TRACE_EVENT_BEGIN_WITH_ID_TID_AND_TIMESTAMP0(
       kCategoryGroup, "bar", 42, current_thread_tid,
@@ -1106,7 +1111,8 @@ TEST_F(TraceEventDataSourceTest, DISABLED_TimestampedTraceEvent) {
 
   // Thread track for the overridden tid.
   auto* tt_packet = GetFinalizedPacket(packet_index++);
-  ExpectThreadTrack(tt_packet, /*thread_id=*/perfetto::ThreadTrack::Current().tid);
+  ExpectThreadTrack(tt_packet,
+                    /*thread_id=*/perfetto::ThreadTrack::Current().tid);
 
   auto* e_packet = GetFinalizedPacket(packet_index++);
   ExpectTraceEvent(
@@ -1140,9 +1146,9 @@ TEST_F(TraceEventDataSourceTest, InstantTraceEventOnOtherThread) {
 
   INTERNAL_TRACE_EVENT_ADD_WITH_ID_TID_AND_TIMESTAMP(
       TRACE_EVENT_PHASE_INSTANT, kCategoryGroup, "bar",
-      static_cast<uint64_t>(trace_event_internal::kNoId),
-      /*thread_id=*/1, base::TimeTicks() + base::Microseconds(10),
-      /*/flags=*/TRACE_EVENT_SCOPE_THREAD);
+      trace_event_internal::kNoId, base::PlatformThreadId(1),
+      base::TimeTicks() + base::Microseconds(10),
+      /*flags=*/TRACE_EVENT_SCOPE_THREAD);
   size_t packet_index = ExpectStandardPreamble();
 
   // Thread track for the overridden tid.
@@ -1190,9 +1196,8 @@ TEST_F(TraceEventDataSourceTest, EventWithStringArgs) {
 TEST_F(TraceEventDataSourceTest, EventWithCopiedStrings) {
   StartTraceEventDataSource();
 
-  TRACE_EVENT_COPY_INSTANT2(kCategoryGroup, "bar",
-                       TRACE_EVENT_SCOPE_THREAD,
-                       "arg1_name", "arg1_val", "arg2_name", "arg2_val");
+  TRACE_EVENT_COPY_INSTANT2(kCategoryGroup, "bar", TRACE_EVENT_SCOPE_THREAD,
+                            "arg1_name", "arg1_val", "arg2_name", "arg2_val");
 
   size_t packet_index = ExpectStandardPreamble();
 
@@ -2001,20 +2006,19 @@ TEST_F(TraceEventDataSourceTest, FilteringEventWithFlagCopy) {
   // 2). To include dynamic event names despite privacy filtering, we need to
   //     manually `set event()->set_name()`. Java names are a valid use case of
   //     this.
-  TRACE_EVENT_INSTANT(kCategoryGroup, TRACE_STR_COPY(std::string("bar")), "arg1_name",
-                      "arg1_val", "arg2_name", "arg2_val");
+  TRACE_EVENT_INSTANT(kCategoryGroup, TRACE_STR_COPY(std::string("bar")),
+                      "arg1_name", "arg1_val", "arg2_name", "arg2_val");
   TRACE_EVENT_INSTANT(
       kCategoryGroup, nullptr,
       [](perfetto::EventContext& ev) { ev.event()->set_name("javaName"); },
       "arg1_name", "arg1_val", "arg2_name", "arg2_val");
 #else
-  TRACE_EVENT_COPY_INSTANT2(kCategoryGroup, "bar",
-                       TRACE_EVENT_SCOPE_THREAD,
-                       "arg1_name", "arg1_val", "arg2_name", "arg2_val");
-  TRACE_EVENT_COPY_INSTANT2(kCategoryGroup, "javaName",
-                       TRACE_EVENT_SCOPE_THREAD |
-                           TRACE_EVENT_FLAG_JAVA_STRING_LITERALS,
-                       "arg1_name", "arg1_val", "arg2_name", "arg2_val");
+  TRACE_EVENT_COPY_INSTANT2(kCategoryGroup, "bar", TRACE_EVENT_SCOPE_THREAD,
+                            "arg1_name", "arg1_val", "arg2_name", "arg2_val");
+  TRACE_EVENT_COPY_INSTANT2(
+      kCategoryGroup, "javaName",
+      TRACE_EVENT_SCOPE_THREAD | TRACE_EVENT_FLAG_JAVA_STRING_LITERALS,
+      "arg1_name", "arg1_val", "arg2_name", "arg2_val");
 #endif
 
   size_t packet_index = ExpectStandardPreamble(
@@ -2044,15 +2048,15 @@ TEST_F(TraceEventDataSourceTest, FilteringEventWithFlagCopy) {
 TEST_F(TraceEventDataSourceTest, FilteringMetadataSource) {
   auto* metadata_source = TraceEventMetadataSource::GetInstance();
   metadata_source->AddGeneratorFunction(base::BindRepeating([]() {
-    base::Value metadata(base::Value::Type::DICTIONARY);
-    metadata.SetIntKey("foo_int", 42);
-    metadata.SetStringKey("foo_str", "bar");
-    metadata.SetBoolKey("foo_bool", true);
+    base::Value::Dict metadata;
+    metadata.Set("foo_int", 42);
+    metadata.Set("foo_str", "bar");
+    metadata.Set("foo_bool", true);
 
-    base::Value child_dict(base::Value::Type::DICTIONARY);
-    child_dict.SetStringKey("child_str", "child_val");
-    metadata.SetKey("child_dict", std::move(child_dict));
-    return absl::optional<base::Value>(std::move(metadata));
+    base::Value::Dict child_dict;
+    child_dict.Set("child_str", "child_val");
+    metadata.Set("child_dict", std::move(child_dict));
+    return absl::optional<base::Value::Dict>(std::move(metadata));
   }));
 
   StartMetaDataSource(/*privacy_filtering_enabled=*/true);
@@ -2478,7 +2482,8 @@ TEST_F(TraceEventDataSourceTest, HistogramSampleTraceConfigEmpty) {
   EXPECT_EQ(e_packet->interned_data().histogram_names()[0].name(), "Foo.Bar");
 }
 
-TEST_F(TraceEventDataSourceTest, HistogramSampleTraceConfigNotEmpty) {
+// TODO(crbug.com/1464718): The test is flaky across platforms.
+TEST_F(TraceEventDataSourceTest, DISABLED_HistogramSampleTraceConfigNotEmpty) {
   std::vector<std::string> histograms;
   histograms.push_back("Foo1.Bar1");
   histograms.push_back("Foo3.Bar3");
@@ -2522,7 +2527,8 @@ TEST_F(TraceEventDataSourceTest, HistogramSampleTraceConfigNotEmpty) {
 }
 
 TEST_F(TraceEventDataSourceTest, UserActionEvent) {
-  base::SetRecordActionTaskRunner(base::ThreadTaskRunnerHandle::Get());
+  base::SetRecordActionTaskRunner(
+      base::SingleThreadTaskRunner::GetCurrentDefault());
 
   StartTraceEventDataSource(/*privacy_filtering_enabled=*/false,
                             "-*,disabled-by-default-user_action_samples");
@@ -2633,8 +2639,8 @@ TEST_F(TraceEventDataSourceTest, EmptyPacket) {
 TEST_F(TraceEventDataSourceTest, SupportNullptrEventName) {
   StartTraceEventDataSource();
   TRACE_EVENT_INSTANT("browser", nullptr, [&](::perfetto::EventContext& ctx) {
-                          ctx.event()->set_name(std::string("EventName"));
-                        });
+    ctx.event()->set_name(std::string("EventName"));
+  });
   const auto& packets = GetFinalizedPackets();
   ASSERT_GT(packets.size(), 0u);
 

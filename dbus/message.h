@@ -13,9 +13,9 @@
 #include <string>
 #include <vector>
 
+#include "base/containers/span.h"
 #include "base/files/scoped_file.h"
 #include "base/memory/raw_ptr.h"
-#include "base/strings/string_piece.h"
 #include "dbus/dbus_export.h"
 #include "dbus/object_path.h"
 
@@ -140,7 +140,7 @@ class CHROME_DBUS_EXPORT Message {
   std::string ToStringInternal(const std::string& indent,
                                MessageReader* reader);
 
-  raw_ptr<DBusMessage, DanglingUntriaged> raw_message_;
+  raw_ptr<DBusMessage, AcrossTasksDanglingUntriaged> raw_message_;
 };
 
 // MessageCall is a type of message used for calling a method via D-Bus.
@@ -288,7 +288,7 @@ class CHROME_DBUS_EXPORT MessageWriter {
   void AppendInt64(int64_t value);
   void AppendUint64(uint64_t value);
   void AppendDouble(double value);
-  void AppendString(base::StringPiece value);
+  void AppendString(std::string_view value);
   void AppendObjectPath(const ObjectPath& value);
 
   // Appends a file descriptor to the message.
@@ -320,16 +320,16 @@ class CHROME_DBUS_EXPORT MessageWriter {
   // Appends the array of bytes. Arrays of bytes are often used for
   // exchanging binary blobs hence it's worth having a specialized
   // function.
-  void AppendArrayOfBytes(const uint8_t* values, size_t length);
+  void AppendArrayOfBytes(base::span<const uint8_t> values);
 
   // Appends array of int32_ts.
-  void AppendArrayOfInt32s(const int32_t* values, size_t length);
+  void AppendArrayOfInt32s(base::span<const int32_t> values);
 
   // Appends array of uint32_ts.
-  void AppendArrayOfUint32s(const uint32_t* values, size_t length);
+  void AppendArrayOfUint32s(base::span<const uint32_t> values);
 
   // Appends the array of doubles. Used for audio mixer matrix doubles.
-  void AppendArrayOfDoubles(const double* values, size_t length);
+  void AppendArrayOfDoubles(base::span<const double> values);
 
   // Appends the array of strings. Arrays of strings are often used for
   // exchanging lists of names hence it's worth having a specialized
@@ -372,7 +372,7 @@ class CHROME_DBUS_EXPORT MessageWriter {
   // Helper function used to implement AppendVariantOfByte() etc.
   void AppendVariantOfBasic(int dbus_type, const void* value);
 
-  raw_ptr<Message, DanglingUntriaged> message_;
+  raw_ptr<Message, AcrossTasksDanglingUntriaged> message_;
   DBusMessageIter raw_message_iter_;
   bool container_is_open_;
 };
@@ -514,7 +514,7 @@ class CHROME_DBUS_EXPORT MessageReader {
   // Helper function used to implement PopVariantOfByte() etc.
   bool PopVariantOfBasic(int dbus_type, void* value);
 
-  raw_ptr<Message, DanglingUntriaged> message_;
+  raw_ptr<Message, AcrossTasksDanglingUntriaged> message_;
   DBusMessageIter raw_message_iter_;
 };
 

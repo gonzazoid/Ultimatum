@@ -6,15 +6,15 @@
 #define CHROME_BROWSER_UI_TABS_TAB_STRIP_MODEL_DELEGATE_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
-#include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "components/sessions/core/session_id.h"
 #include "components/tab_groups/tab_group_id.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Browser;
 class GURL;
+struct DetachedWebContents;
 
 namespace content {
 class WebContents;
@@ -56,7 +56,7 @@ class TabStripModelDelegate {
       const GURL& url,
       int index,
       bool foreground,
-      absl::optional<tab_groups::TabGroupId> group = absl::nullopt) = 0;
+      std::optional<tab_groups::TabGroupId> group = std::nullopt) = 0;
 
   // Asks for a new TabStripModel to be created and the given web contentses to
   // be added to it. Its size and position are reflected in |window_bounds|.
@@ -120,7 +120,7 @@ class TabStripModelDelegate {
   // Creates an entry in the historical tab database for the specified
   // WebContents. Returns the tab's unique SessionID if a historical tab was
   // created.
-  virtual absl::optional<SessionID> CreateHistoricalTab(
+  virtual std::optional<SessionID> CreateHistoricalTab(
       content::WebContents* contents) = 0;
 
   // Creates an entry in the historical group database for the specified
@@ -165,7 +165,7 @@ class TabStripModelDelegate {
   // WebContents.
   // TODO(https://crbug.com/1234332): Provide active web contents.
   virtual void CacheWebContents(
-      const std::vector<std::unique_ptr<TabStripModel::DetachedWebContents>>&
+      const std::vector<std::unique_ptr<DetachedWebContents>>&
           web_contents) = 0;
 
   // Follows a web feed for the specified WebContents.
@@ -179,6 +179,12 @@ class TabStripModelDelegate {
 
   // Copies the URL of the given WebContents.
   virtual void CopyURL(content::WebContents* web_contents) = 0;
+
+  // Navigates the web_contents back to the previous page.
+  virtual void GoBack(content::WebContents* web_contents) = 0;
+
+  // Returns whether the web_contents can be navigated back.
+  virtual bool CanGoBack(content::WebContents* web_contents) = 0;
 };
 
 #endif  // CHROME_BROWSER_UI_TABS_TAB_STRIP_MODEL_DELEGATE_H_

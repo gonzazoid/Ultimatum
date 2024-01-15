@@ -8,17 +8,21 @@
 #include <utility>
 
 #include "ash/constants/ash_features.h"
+#include "ash/public/cpp/projector/speech_recognition_availability.h"
+#include "base/containers/fixed_flat_set.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/bind_post_task.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/speech/cros_speech_recognition_service.h"
 #include "chrome/browser/speech/cros_speech_recognition_service_factory.h"
 #include "chrome/browser/speech/speech_recognizer_delegate.h"
+#include "components/language/core/common/locale_util.h"
 #include "components/soda/soda_installer.h"
 #include "content/public/browser/audio_service.h"
 #include "content/public/browser/browser_thread.h"
+#include "media/audio/audio_device_description.h"
 #include "media/audio/audio_system.h"
 #include "media/base/audio_parameters.h"
-#include "media/base/bind_to_current_loop.h"
 
 namespace {
 
@@ -56,24 +60,142 @@ media::AudioParameters GetAudioParameters(
       kAudioSampleRate, kAudioSampleRate / kPollingTimesPerSecond);
 }
 
+inline bool IsLanguageSupported(const speech::SodaInstaller* soda_installer,
+                                const speech::LanguageCode language_code) {
+  for (auto const& language : soda_installer->GetAvailableLanguages()) {
+    if (speech::GetLanguageCode(language) == language_code)
+      return true;
+  }
+  return false;
+}
+
+inline ash::OnDeviceRecognitionAvailability InstallationErrorToAvailability(
+    speech::SodaInstaller::ErrorCode error_code) {
+  switch (error_code) {
+    case speech::SodaInstaller::ErrorCode::kUnspecifiedError:
+      return ash::OnDeviceRecognitionAvailability::
+          kSodaInstallationErrorUnspecified;
+    case speech::SodaInstaller::ErrorCode::kNeedsReboot:
+      return ash::OnDeviceRecognitionAvailability::
+          kSodaInstallationErrorNeedsReboot;
+  }
+}
+
 }  // namespace
 
-bool SpeechRecognitionRecognizerClientImpl::IsOnDeviceSpeechRecognizerAvailable(
+ash::OnDeviceRecognitionAvailability
+SpeechRecognitionRecognizerClientImpl::GetOnDeviceSpeechRecognitionAvailability(
     const std::string& language) {
-  if (!base::FeatureList::IsEnabled(ash::features::kOnDeviceSpeechRecognition))
-    return false;
+  if (!base::FeatureList::IsEnabled(
+          ash::features::kOnDeviceSpeechRecognition)) {
+    return ash::OnDeviceRecognitionAvailability::kSodaNotAvailable;
+  }
+
+  const auto language_code = speech::GetLanguageCode(language);
   speech::SodaInstaller* soda_installer = speech::SodaInstaller::GetInstance();
-  return soda_installer->IsSodaInstalled(speech::GetLanguageCode(language));
+
+  if (soda_installer->IsSodaInstalled(language_code))
+    return ash::OnDeviceRecognitionAvailability::kAvailable;
+
+  if (!IsLanguageSupported(soda_installer, language_code))
+    return ash::OnDeviceRecognitionAvailability::kUserLanguageNotAvailable;
+
+  // Maybe SODA is currently installing.
+  if (soda_installer->IsSodaDownloading(language_code) ||
+      soda_installer->IsSodaDownloading(speech::LanguageCode::kNone)) {
+    return ash::OnDeviceRecognitionAvailability::kSodaInstalling;
+  }
+
+  // It is possible that there was some installation issues for SODA which we
+  // can surface to the user.
+  const auto binary_error_code =
+      soda_installer->GetSodaInstallErrorCode(speech::LanguageCode::kNone);
+  if (binary_error_code)
+    return InstallationErrorToAvailability(binary_error_code.value());
+
+  const auto language_error_code =
+      soda_installer->GetSodaInstallErrorCode(language_code);
+  if (language_error_code)
+    return InstallationErrorToAvailability(language_error_code.value());
+
+  return ash::OnDeviceRecognitionAvailability::kSodaNotInstalled;
+}
+
+ash::ServerBasedRecognitionAvailability
+SpeechRecognitionRecognizerClientImpl::GetServerBasedRecognitionAvailability(
+    const std::string& language) {
+  if (!(ash::features::IsInternalServerSideSpeechRecognitionEnabled() ||
+        ash::features::IsInternalServerSideSpeechRecognitionEnabledByFinch())) {
+    return ash::ServerBasedRecognitionAvailability::
+        kServerBasedRecognitionNotAvailable;
+  }
+
+  static constexpr auto kSupportedLanguagesAndLocales =
+      base::MakeFixedFlatSet<base::StringPiece>({
+          "de",              // German
+          "de-AT",           // German (Austria)
+          "de-CH",           // German (Switzerland)
+          "de-DE",           // German (Germany)
+          "de-LI",           // German (Italy)
+          "en",              // English
+          "en-AU",           // English (Australia)
+          "en-CA",           // English (Canada)
+          "en-GB",           // English (UK)
+          "en-GB-oxendict",  // English (UK, OED spelling)
+          "en-IE",           // English (Ireland)
+          "en-NZ",           // English (New Zealand)
+          "en-US",           // English (US)
+          "en-XA",           // Long strings Pseudolocale
+          "en-ZA",           // English (South Africa)
+          "es",              // Spanish
+          "es-419",          // Spanish (Latin America)
+          "es-AR",           // Spanish (Argentina)
+          "es-CL",           // Spanish (Chile)
+          "es-CO",           // Spanish (Colombia)
+          "es-CR",           // Spanish (Costa Rica)
+          "es-ES",           // Spanish (Spain)
+          "es-HN",           // Spanish (Honduras)
+          "es-MX",           // Spanish (Mexico)
+          "es-PE",           // Spanish (Peru)
+          "es-US",           // Spanish (US)
+          "es-UY",           // Spanish (Uruguay)
+          "es-VE",           // Spanish (Venezuela)
+          "fr",              // French
+          "fr-CA",           // French (Canada)
+          "fr-CH",           // French (Switzerland)
+          "fr-FR",           // French (France)
+          "id",              // Indonesian
+          "it",              // Italian
+          "it-CH",           // Italian (Switzerland)
+          "it-IT",           // Italian (Italy)
+          "ja",              // Japanese
+          "ko",              // Korean
+          "pt",              // Portuguese
+          "pt-BR",           // Portuguese (Brazil)
+          "pt-PT",           // Portuguese (Portugal)
+          "ru",              // Russian
+          "sv",              // Swedish
+          "tr",              // Turkish
+      });
+
+  bool is_supported =
+      ash::features::IsInternalServerSideSpeechRecognitionEnabled() &&
+      kSupportedLanguagesAndLocales.contains(language);
+
+  if (is_supported ||
+      ash::features::IsInternalServerSideSpeechRecognitionEnabledByFinch()) {
+    return ash::ServerBasedRecognitionAvailability::kAvailable;
+  }
+
+  return ash::ServerBasedRecognitionAvailability::kUserLanguageNotAvailable;
 }
 
 SpeechRecognitionRecognizerClientImpl::SpeechRecognitionRecognizerClientImpl(
     const base::WeakPtr<SpeechRecognizerDelegate>& delegate,
     Profile* profile,
+    const std::string& device_id,
     media::mojom::SpeechRecognitionOptionsPtr options)
-    : SpeechRecognizer(delegate),
-      state_(SpeechRecognizerStatus::SPEECH_RECOGNIZER_OFF),
-      is_multichannel_supported_(false),
-      waiting_for_params_(false) {
+    : SpeechRecognizer(delegate), device_id_(device_id) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   DCHECK(options->language.has_value());
   language_ = options->language.value();
@@ -88,12 +210,12 @@ SpeechRecognitionRecognizerClientImpl::SpeechRecognitionRecognizerClientImpl(
       audio_source_fetcher_.BindNewPipeAndPassReceiver(),
       speech_recognition_client_receiver_.BindNewPipeAndPassRemote(),
       std::move(options),
-      media::BindToCurrentLoop(base::BindOnce(
+      base::BindPostTaskToCurrentDefault(base::BindOnce(
           &SpeechRecognitionRecognizerClientImpl::OnRecognizerBound,
           weak_factory_.GetWeakPtr())));
 
   audio_source_speech_recognition_context_.set_disconnect_handler(
-      media::BindToCurrentLoop(base::BindOnce(
+      base::BindPostTaskToCurrentDefault(base::BindOnce(
           &SpeechRecognitionRecognizerClientImpl::OnRecognizerDisconnected,
           weak_factory_.GetWeakPtr())));
 }
@@ -113,10 +235,9 @@ void SpeechRecognitionRecognizerClientImpl::Start() {
     audio_system_ = content::CreateAudioSystemForAudioService();
   waiting_for_params_ = true;
   audio_system_->GetInputStreamParameters(
-      media::AudioDeviceDescription::kDefaultDeviceId,
-      base::BindOnce(&SpeechRecognitionRecognizerClientImpl::
-                         StartFetchingOnInputDeviceInfo,
-                     weak_factory_.GetWeakPtr()));
+      device_id_, base::BindOnce(&SpeechRecognitionRecognizerClientImpl::
+                                     StartFetchingOnInputDeviceInfo,
+                                 weak_factory_.GetWeakPtr()));
 }
 
 void SpeechRecognitionRecognizerClientImpl::Stop() {
@@ -178,8 +299,7 @@ void SpeechRecognitionRecognizerClientImpl::StartFetchingOnInputDeviceInfo(
   content::GetAudioServiceStreamFactoryBinder().Run(
       stream_factory.InitWithNewPipeAndPassReceiver());
   audio_source_fetcher_->Start(
-      std::move(stream_factory),
-      media::AudioDeviceDescription::kDefaultDeviceId,
+      std::move(stream_factory), device_id_,
       GetAudioParameters(params, is_multichannel_supported_));
   UpdateStatus(SpeechRecognizerStatus::SPEECH_RECOGNIZER_RECOGNIZING);
 }

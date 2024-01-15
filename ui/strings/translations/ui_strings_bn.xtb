@@ -6,6 +6,7 @@
 <translation id="1127811143501539442">{DAYS,plural, =1{১ দিন পূর্বে}one{# দিন পূর্বে}other{# দিন পূর্বে}}</translation>
 <translation id="1156623771253174079">{SECONDS,plural, =1{১ মিনিট আগে}one{# মিনিট আগে}other{# মিনিট আগে}}</translation>
 <translation id="1169783199079129864">{MINUTES,plural, =1{১ মিনিট}one{# মিনিট}other{# মিনিট}}</translation>
+<translation id="1178017578188974117">{DAYS,plural, =1{১ দিন আগে}one{# দিন আগে}other{# দিন আগে}}</translation>
 <translation id="1181037720776840403">সরান</translation>
 <translation id="1243314992276662751">আপলোড</translation>
 <translation id="1266864766717917324"><ph name="CONTENT_TYPE" /> শেয়ার করা যায়নি</translation>
@@ -15,29 +16,30 @@
 <translation id="1368832886055348810">বাঁ থেকে ডান</translation>
 <translation id="1383876407941801731">Search</translation>
 <translation id="1398853756734560583">বড় করুন</translation>
+<translation id="1432724887402139994">{SECONDS,plural, =1{১ মিনিট আগে}one{# মিনিট আগে}other{# মিনিট আগে}}</translation>
 <translation id="1450753235335490080"><ph name="CONTENT_TYPE" /> শেয়ার করা যাচ্ছে না</translation>
+<translation id="1523230076022876491">{MONTHS,plural, =1{১ মাস আগে}one{# মাস আগে}other{# মাস আগে}}</translation>
 <translation id="1591184457164800433">{MINUTES,plural, =1{১ মিনিট এবং }one{# মিনিট এবং }other{# মিনিট এবং }}</translation>
 <translation id="1643823602425662293">বিজ্ঞপ্তি</translation>
 <translation id="169515659049020177">Shift</translation>
 <translation id="1710340000377843106">এখন</translation>
 <translation id="1752946267035950200">{MINUTES,plural, =1{১ মিনিট}one{# মিনিট}other{# মিনিট}}</translation>
-<translation id="1761785978543082658"><ph name="QUANTITY" /> B</translation>
+<translation id="1761785978543082658"><ph name="QUANTITY" /> বাইট</translation>
 <translation id="1801827354178857021">পূর্ণচ্ছেদ</translation>
 <translation id="1803208670097017349">{MONTHS,plural, =1{১ মাস}one{# মাস}other{# মাস}}</translation>
 <translation id="1809410197924942083"><ph name="QUANTITY" /> এমবি/সেকেণ্ড</translation>
 <translation id="1830179671306812954">{HOURS,plural, =1{১ ঘণ্টা এবং }one{# ঘণ্টা এবং }other{# ঘণ্টা এবং }}</translation>
+<translation id="185013357618350178">&amp;বেছে নিন</translation>
 <translation id="1859234291848436338">লিখন নির্দেশনা</translation>
 <translation id="1860796786778352021">বিজ্ঞপ্তি বন্ধ করা হয়েছে</translation>
 <translation id="186476001994626254">ওয়েব স্মার্ট পেস্ট কন্টেন্ট</translation>
 <translation id="1871244248791675517">Ins</translation>
-<translation id="1884435127456172652"><ph name="NUMBER" /> %</translation>
 <translation id="1901303067676059328">&amp;সকল বেছে নিন</translation>
 <translation id="19085484004813472">এটি একটি নতুন ফিচার</translation>
 <translation id="2006524834898217237">এই ডিভাইস ইন্টারনেটে কানেক্ট করা আছে কিনা দেখে নিন।</translation>
 <translation id="208586643495776849">আবার চেষ্টা করুন</translation>
 <translation id="2141853158323869627">{DAYS,plural, =1{১ দিন}one{# দিন}other{# দিন}}</translation>
 <translation id="2148716181193084225">আজ</translation>
-<translation id="2161656808144014275">পাঠ্য</translation>
 <translation id="2168039046890040389">পৃষ্ঠা নিচে</translation>
 <translation id="2190355936436201913">(খালি)</translation>
 <translation id="2192232475740621500">কম রেজোলিউশন ব্যবহার করুন</translation>
@@ -53,7 +55,6 @@
 <translation id="2445449901874883781">উচ্চ রেজোলিউশন ব্যবহার করুন</translation>
 <translation id="2482878487686419369">বিজ্ঞপ্তিগুলি</translation>
 <translation id="2497284189126895209">সব ফাইল</translation>
-<translation id="2498950423397131220">ফ্লোট</translation>
 <translation id="2515586267016047495">Alt</translation>
 <translation id="2522350507219695259">ক্রমাঙ্কন সম্পূর্ণ হয়েছে</translation>
 <translation id="252373100621549798">অজানা প্রদর্শন</translation>
@@ -61,6 +62,7 @@
 <translation id="2573731672208488250">{HOURS,plural, =1{১ ঘণ্টার মধ্যে}one{# ঘণ্টার মধ্যে}other{# ঘণ্টার মধ্যে}}</translation>
 <translation id="2583543531130364912">আপনার টাচস্ক্রীন ক্যালিব্রেট করুন</translation>
 <translation id="2586657967955657006">ক্লিপবোর্ড</translation>
+<translation id="2653844658857826081">নতুন</translation>
 <translation id="2666092431469916601">শীর্ষ</translation>
 <translation id="2701330563083355633"><ph name="DEVICE_NAME" /> থেকে শেয়ার করা হয়েছে</translation>
 <translation id="271033894570825754">নতুন</translation>
@@ -75,6 +77,7 @@
 <translation id="3157931365184549694">পুনরুদ্ধার করুন</translation>
 <translation id="3183922693828471536">এই পর্যন্ত স্ক্রল করুন</translation>
 <translation id="3234408098842461169">Down Arrow</translation>
+<translation id="3240426699337459095">লিঙ্ক কপি করা হয়েছে</translation>
 <translation id="3291688615589870984">{DAYS,plural, =1{১ দিন}one{# দিন}other{# দিন}}</translation>
 <translation id="3295886253693811851">এগুলি দিয়ে কল করুন</translation>
 <translation id="3306688585798492231">আগে থেকেই তৈরি করা আভ্যন্তরীণ ডিসপ্লে</translation>
@@ -88,7 +91,6 @@
 <translation id="3622035490309591977">ক্লিপবোর্ডের ইতিহাস</translation>
 <translation id="364720409959344976">আপলোড করার জন্য ফোল্ডার বেছে নিন</translation>
 <translation id="3660179305079774227">Up Arrow</translation>
-<translation id="3670030362669914947">নম্বর</translation>
 <translation id="3740362395218339114"><ph name="QUANTITY" /> জিবি/সেকেণ্ড</translation>
 <translation id="3757388668994797779"><ph name="QUANTITY" /> জিবি</translation>
 <translation id="3804247818991980532"><ph name="TYPE_1" />। <ph name="TYPE_2" />।</translation>
@@ -103,27 +105,27 @@
 <translation id="4266252015790371705">{MONTHS,plural, =1{১ মাস আগে}one{# মাস আগে}other{# মাস আগে}}</translation>
 <translation id="4289300219472526559">কথা বলা শুরু করুন</translation>
 <translation id="4289540628985791613">ওভারভিউ</translation>
-<translation id="4306392492252714209">ক্লিপবোর্ড থেকে সরান।</translation>
-<translation id="4311195029067684288">পূর্ণ</translation>
 <translation id="4491109536499578614">ছবি</translation>
 <translation id="4565377596337484307">পাসওয়ার্ড লুকান</translation>
 <translation id="4588090240171750605">ডান দিকে স্ক্রল করুন</translation>
+<translation id="4689010477870442157">{YEARS,plural, =1{১ বছর আগে}one{# বছর আগে}other{# বছর আগে}}</translation>
 <translation id="4724120544754982507">বিজ্ঞপ্তি কেন্দ্র, <ph name="UNREAD_NOTIFICATION_COUNT" />টি না পড়া বিজ্ঞপ্তি</translation>
+<translation id="4729257764711776855">নম্বর</translation>
 <translation id="4746179598275229723">এক্সটেনশন আনপিন করা হয়েছে</translation>
 <translation id="4788285488841504513">{MONTHS,plural, =1{১ মাস বাকি}one{# মাস বাকি}other{# মাস বাকি}}</translation>
 <translation id="4888938634149558681">কল করুন</translation>
-<translation id="4937657825850660613">হাফ</translation>
+<translation id="4895877746940133817"><ph name="TYPE_1" />, <ph name="TYPE_2" />, <ph name="TYPE_3" /></translation>
 <translation id="4968171027979920686">{SECONDS,plural, =1{১ সেকেন্ড}one{# সেকেন্ড}other{# সেকেন্ড}}</translation>
 <translation id="4971687151119236543">মিডিয়া পূর্ববর্তী ট্র্যাক</translation>
-<translation id="4971925105143343452">আংশিক</translation>
 <translation id="5046499563572181734">এখানে আলতো চাপুন</translation>
 <translation id="5076340679995252485">&amp;পেস্ট করুন</translation>
-<translation id="5123162024343028706">'উপরে দেখা যাবে' বোতাম</translation>
 <translation id="520299402983819650"><ph name="QUANTITY" /> PB</translation>
 <translation id="5278860589123563674">পাঠানো যায়নি</translation>
 <translation id="528468243742722775">শেষ</translation>
 <translation id="5329858601952122676">&amp;মুছুন</translation>
+<translation id="5361107212971249203">টেক্সট</translation>
 <translation id="5463830097259460683">ইমোজি ও প্রতীকগুলি</translation>
+<translation id="5505748296268090374"><ph name="ITEM_TEXT" /> সরান।</translation>
 <translation id="5528053674512161860">পৃষ্ঠা লোড করা যায়নি কারণ UI মডিউল (dev_ui) ইনস্টল করা নেই</translation>
 <translation id="5574202486608032840"><ph name="IDS_SHORT_PRODUCT_OS_NAME" /> সিস্টেম</translation>
 <translation id="5583640892426849032">Backspace</translation>
@@ -146,6 +148,7 @@
 <translation id="6142413573757616983"><ph name="QUANTITY" /> B/s</translation>
 <translation id="6237461503717005873"><ph name="ROW_NAME" /> বেছে নেওয়া হয়েছে।</translation>
 <translation id="6264365405983206840">&amp;সকল বেছে নিন</translation>
+<translation id="6346952829206698721">ক্লিপবোর্ড থেকে পেস্ট করুন</translation>
 <translation id="6364916375976753737">বাঁ দিকে স্ক্রল করুন</translation>
 <translation id="6394627529324717982">কমা</translation>
 <translation id="6397363302884558537">কথা বলা বন্ধ করুন</translation>
@@ -172,6 +175,7 @@
 <translation id="7170202025028120564">আপনার অ্যাপ্লিকেশনের ডিসপ্লে সেটিংস তখনই কার্যকর হবে পরে যখন এটি রিস্টার্ট করা হবে।</translation>
 <translation id="7222373446505536781">F11</translation>
 <translation id="7238427729722629793">{MINUTES,plural, =1{১ মিনিট বাকি}one{# মিনিট বাকি}other{# মিনিট বাকি}}</translation>
+<translation id="7363164521834647158">উত্তর পাঠান</translation>
 <translation id="7365057348334984696">{MINUTES,plural, =1{১ মিনিট পূর্বে}one{# মিনিট পূর্বে}other{# মিনিট পূর্বে}}</translation>
 <translation id="7389409599945284130">- <ph name="MESSAGE" /></translation>
 <translation id="7410957453383678442">{MINUTES,plural, =1{১ মিনিট বাকি}one{# মিনিট বাকি}other{# মিনিট বাকি}}</translation>
@@ -204,6 +208,7 @@
 <translation id="8393700583063109961">বার্তা পাঠান</translation>
 <translation id="8394908167088220973">মিডিয়া প্লে করুন/বিরতি</translation>
 <translation id="8458811141851741261">{YEARS,plural, =1{১ বছর}one{# বছর}other{# বছর}}</translation>
+<translation id="8598144894266192959"><ph name="NUMBER" />%</translation>
 <translation id="8602707065186045623"><ph name="SAVEAS_EXTENSION_TYPE" /> ফাইল (.<ph name="SAVEAS_EXTENSION_NAME" />)</translation>
 <translation id="8677655579646609597"><ph name="QUANTITY" /> কেবি/সেকেণ্ড</translation>
 <translation id="8725488761726303204">আরও <ph name="NUMBER" />টি</translation>
@@ -214,10 +219,12 @@
 <translation id="8867568208303837180">পাঠানো হচ্ছে…</translation>
 <translation id="8876215549894133151">ফর্ম্যাট:</translation>
 <translation id="8901569739625249689"><ph name="QUANTITY" /> কেবি</translation>
+<translation id="8927924178504495502">{HOURS,plural, =1{১ ঘণ্টা আগে}one{# ঘণ্টা আগে}other{# ঘণ্টা আগে}}</translation>
 <translation id="8996630695507351249"><ph name="TARGET_DEVICE_NAME" /> ইন্টারনেটে কানেক্ট করা আছে কিনা দেখে নিন।</translation>
 <translation id="9044832324875206639">{SECONDS,plural, =1{১ সেকেন্ড}one{# সেকেন্ড}other{# সেকেন্ড}}</translation>
 <translation id="9059834730836941392">বিজ্ঞপ্তি সঙ্কুচিত করুন</translation>
 <translation id="9170848237812810038">&amp;পূর্বাবস্থায় ফিরুন</translation>
 <translation id="932327136139879170">হোম</translation>
 <translation id="944069440740578670">অপঠিত বিজ্ঞপ্তি</translation>
+<translation id="966963601246348639">{SECONDS,plural, =1{১ সেকেন্ড আগে}one{# সেকেন্ড আগে}other{# সেকেন্ড আগে}}</translation>
 </translationbundle>

@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {assert, assertNotReached} from './assert.js';
+
 /**
  * @typedef {{
  *   substitutions: (!Array<string>|undefined),
@@ -19,12 +21,38 @@ export let SanitizeInnerHtmlOpts;
  *     attributes.
  * @return {string}
  */
-export const sanitizeInnerHtml = function(rawString, opts) {
+export const sanitizeInnerHtmlInternal = function(rawString, opts) {
   opts = opts || {};
-  return parseHtmlSubset('<b>' + rawString + '</b>', opts.tags, opts.attrs)
+  return parseHtmlSubset(`<b>${rawString}</b>`, opts.tags, opts.attrs)
       .firstChild.innerHTML;
 };
 
+let sanitizedPolicy = null;
+
+/**
+ * Same as |sanitizeInnerHtmlInternal|, but it passes through sanitizedPolicy
+ * to create a TrustedHTML.
+ * TrustedTypePolicy: createHTML() takes an optional array but our usage for
+ * sanitizeInnerHtml uses a singular opt argument. We specify the first element.
+ * @param {string} rawString The unsanitized string
+ * @param {SanitizeInnerHtmlOpts=} opts Optional additional allowed tags and
+ *     attributes.
+ * @return {TrustedHTML}
+ */
+export function sanitizeInnerHtml(rawString, opts) {
+  assert(window.trustedTypes);
+  if (sanitizedPolicy === null) {
+    // Initialize |sanitizedPolicy| lazily.
+    sanitizedPolicy =
+        window.trustedTypes.createPolicy('ash-deprecated-sanitize-inner-html', {
+          createHTML: (string, ...opts) =>
+              sanitizeInnerHtmlInternal(string, opts[0]),
+          createScript: (message) => assertNotReached(message),
+          createScriptURL: (message) => assertNotReached(message),
+        });
+  }
+  return sanitizedPolicy.createHTML(rawString, opts);
+}
 
 /**
  * Parses a very small subset of HTML. This ensures that insecure HTML /
@@ -98,8 +126,8 @@ export const parseHtmlSubset = (function() {
    * @type {!Set<string>}
    * @const
    */
-  const allowedTags =
-      new Set(['A', 'B', 'BR', 'DIV', 'KBD', 'P', 'PRE', 'SPAN', 'STRONG']);
+  const allowedTags = new Set(
+      ['A', 'B', 'I', 'BR', 'DIV', 'EM', 'KBD', 'P', 'PRE', 'SPAN', 'STRONG']);
 
   /**
    * Allow-list of optional tag names in parseHtmlSubset.
@@ -179,7 +207,8 @@ export const parseHtmlSubset = (function() {
     if (window.trustedTypes) {
       if (!unsanitizedPolicy) {
         unsanitizedPolicy = trustedTypes.createPolicy(
-            'parse-html-subset', {createHTML: untrustedHTML => untrustedHTML});
+            'ash-deprecated-parse-html-subset',
+            {createHTML: untrustedHTML => untrustedHTML});
       }
       s = unsanitizedPolicy.createHTML(s);
     }

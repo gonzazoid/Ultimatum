@@ -4,15 +4,11 @@
 
 #include "ash/in_session_auth/authentication_dialog.h"
 
-#include <cctype>
-
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/in_session_auth_token_provider.h"
 #include "ash/public/cpp/test/mock_in_session_auth_token_provider.h"
 #include "ash/test/ash_test_base.h"
 #include "base/logging.h"
 #include "base/test/bind.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/unguessable_token.h"
 #include "chromeos/ash/components/cryptohome/common_types.h"
 #include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
@@ -22,8 +18,10 @@
 #include "chromeos/ash/components/login/auth/public/authentication_error.h"
 #include "chromeos/ash/components/login/auth/public/cryptohome_key_constants.h"
 #include "chromeos/ash/components/login/auth/public/session_auth_factors.h"
+#include "chromeos/ash/components/osauth/public/common_types.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/strings/ascii.h"
 #include "ui/events/keycodes/keyboard_codes_posix.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/controls/textfield/textfield.h"
@@ -37,20 +35,13 @@ using ::testing::_;
 
 const char kTestAccount[] = "user@test.com";
 const char kExpectedPassword[] = "qwerty";
-base::UnguessableToken kToken = base::UnguessableToken::Create();
+AuthProofToken kToken = "auth-proof-token";
 
 }  // namespace
 
-class AuthenticationDialogTest : public AshTestBase,
-                                 public testing::WithParamInterface<bool> {
+class AuthenticationDialogTest : public AshTestBase {
  public:
-  AuthenticationDialogTest() {
-    if (GetParam()) {
-      scoped_feature_list_.InitAndEnableFeature(features::kUseAuthFactors);
-    } else {
-      scoped_feature_list_.InitAndDisableFeature(features::kUseAuthFactors);
-    }
-  }
+  AuthenticationDialogTest() = default;
 
   void SetUp() override {
     AshTestBase::SetUp();
@@ -62,19 +53,13 @@ class AuthenticationDialogTest : public AshTestBase,
                         bool /*ephemeral*/,
                         AuthSessionIntent /*intent*/,
                         AuthPerformer::StartSessionCallback callback) {
-    if (features::IsUseAuthFactorsEnabled()) {
-      cryptohome::AuthFactorRef ref{cryptohome::AuthFactorType::kPassword,
-                                    KeyLabel(kCryptohomeGaiaKeyLabel)};
-      cryptohome::AuthFactorCommonMetadata metadata{};
-      cryptohome::AuthFactor factor{std::move(ref), std::move(metadata)};
-      user_context->SetSessionAuthFactors(
-          SessionAuthFactors{{std::move(factor)}});
-    } else {
-      user_context->SetSessionAuthFactors(
-          SessionAuthFactors{{cryptohome::KeyDefinition::CreateForPassword(
-              "secret", KeyLabel(kCryptohomeGaiaKeyLabel), 0)}});
-    }
-    std::move(callback).Run(true, std::move(user_context), absl::nullopt);
+    cryptohome::AuthFactorRef ref{cryptohome::AuthFactorType::kPassword,
+                                  KeyLabel(kCryptohomeGaiaKeyLabel)};
+    cryptohome::AuthFactorCommonMetadata metadata{};
+    cryptohome::AuthFactor factor{std::move(ref), std::move(metadata)};
+    user_context->SetSessionAuthFactors(
+        SessionAuthFactors{{std::move(factor)}});
+    std::move(callback).Run(true, std::move(user_context), std::nullopt);
   }
 
   void GetAuthToken(std::unique_ptr<UserContext> user_context,
@@ -96,7 +81,7 @@ class AuthenticationDialogTest : public AshTestBase,
     // underlying widget.
     dialog_ = new AuthenticationDialog(
         base::BindLambdaForTesting([&](bool success,
-                                       const base::UnguessableToken& token,
+                                       const AuthProofToken& token,
                                        base::TimeDelta timeout) {
           success_ = success;
           token_ = token;
@@ -116,7 +101,7 @@ class AuthenticationDialogTest : public AshTestBase,
     generator->ClickLeftButton();
 
     for (char c : password) {
-      EXPECT_TRUE(std::isalpha(c));
+      EXPECT_TRUE(absl::ascii_isalpha(static_cast<unsigned char>(c)));
       generator->PressAndReleaseKey(
           static_cast<ui::KeyboardCode>(ui::KeyboardCode::VKEY_A + (c - 'a')),
           ui::EF_NONE);
@@ -130,30 +115,29 @@ class AuthenticationDialogTest : public AshTestBase,
     generator->ClickLeftButton();
   }
 
-  base::test::ScopedFeatureList scoped_feature_list_;
-  absl::optional<bool> success_;
-  base::UnguessableToken token_;
-  base::raw_ptr<AuthenticationDialog> dialog_;
+  std::optional<bool> success_;
+  AuthProofToken token_;
+  raw_ptr<AuthenticationDialog, AcrossTasksDanglingUntriaged> dialog_;
   std::unique_ptr<MockInSessionAuthTokenProvider> auth_token_provider_;
-  base::raw_ptr<MockAuthPerformer> auth_performer_;
+  raw_ptr<MockAuthPerformer, AcrossTasksDanglingUntriaged> auth_performer_;
   std::unique_ptr<AuthenticationDialog::TestApi> test_api_;
 };
 
-TEST_P(AuthenticationDialogTest, CallbackCalledOnCancel) {
+TEST_F(AuthenticationDialogTest, CallbackCalledOnCancel) {
   CreateAndShowDialog();
   dialog_->Cancel();
   EXPECT_TRUE(success_.has_value());
   EXPECT_EQ(success_.value(), false);
 }
 
-TEST_P(AuthenticationDialogTest, CallbackCalledOnClose) {
+TEST_F(AuthenticationDialogTest, CallbackCalledOnClose) {
   CreateAndShowDialog();
   dialog_->Close();
   EXPECT_TRUE(success_.has_value());
   EXPECT_EQ(success_.value(), false);
 }
 
-TEST_P(AuthenticationDialogTest, CorrectPasswordProvided) {
+TEST_F(AuthenticationDialogTest, CorrectPasswordProvided) {
   CreateAndShowDialog();
   TypePassword(kExpectedPassword);
 
@@ -163,7 +147,7 @@ TEST_P(AuthenticationDialogTest, CorrectPasswordProvided) {
       .WillOnce([](const std::string& key_label, const std::string& password,
                    std::unique_ptr<UserContext> user_context,
                    AuthOperationCallback callback) {
-        std::move(callback).Run(std::move(user_context), absl::nullopt);
+        std::move(callback).Run(std::move(user_context), std::nullopt);
       });
 
   EXPECT_CALL(*auth_token_provider_, ExchangeForToken)
@@ -176,7 +160,7 @@ TEST_P(AuthenticationDialogTest, CorrectPasswordProvided) {
   EXPECT_EQ(token_, kToken);
 }
 
-TEST_P(AuthenticationDialogTest, IncorrectPasswordProvidedThenCorrect) {
+TEST_F(AuthenticationDialogTest, IncorrectPasswordProvidedThenCorrect) {
   CreateAndShowDialog();
   TypePassword("ytrewq");
 
@@ -189,8 +173,8 @@ TEST_P(AuthenticationDialogTest, IncorrectPasswordProvidedThenCorrect) {
         std::move(callback).Run(
             std::move(user_context),
             password == kExpectedPassword
-                ? absl::nullopt
-                : absl::optional<AuthenticationError>{AuthenticationError{
+                ? std::nullopt
+                : std::optional<AuthenticationError>{AuthenticationError{
                       user_data_auth::
                           CRYPTOHOME_ERROR_AUTHORIZATION_KEY_NOT_FOUND}});
       });
@@ -208,7 +192,7 @@ TEST_P(AuthenticationDialogTest, IncorrectPasswordProvidedThenCorrect) {
   EXPECT_EQ(token_, kToken);
 }
 
-TEST_P(AuthenticationDialogTest, AuthSessionRestartedWhenExpired) {
+TEST_F(AuthenticationDialogTest, AuthSessionRestartedWhenExpired) {
   CreateAndShowDialog();
   TypePassword(kExpectedPassword);
 
@@ -224,8 +208,8 @@ TEST_P(AuthenticationDialogTest, AuthSessionRestartedWhenExpired) {
         std::move(callback).Run(
             std::move(user_context),
             number_of_calls++
-                ? absl::nullopt
-                : absl::optional<AuthenticationError>{AuthenticationError{
+                ? std::nullopt
+                : std::optional<AuthenticationError>{AuthenticationError{
                       user_data_auth::CRYPTOHOME_INVALID_AUTH_SESSION_TOKEN}});
       });
 
@@ -238,7 +222,5 @@ TEST_P(AuthenticationDialogTest, AuthSessionRestartedWhenExpired) {
   EXPECT_TRUE(success_.value());
   EXPECT_EQ(token_, kToken);
 }
-
-INSTANTIATE_TEST_SUITE_P(All, AuthenticationDialogTest, ::testing::Bool());
 
 }  // namespace ash

@@ -7,14 +7,12 @@
 #include <winstring.h>
 
 #include <string>
+#include <string_view>
 
 #include "base/strings/utf_string_conversions.h"
-#include "base/win/core_winrt_util.h"
-#include "base/win/windows_version.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace base {
-namespace win {
+namespace base::win {
 
 namespace {
 
@@ -24,19 +22,10 @@ constexpr wchar_t kTestString2[] = L"456789";
 }  // namespace
 
 TEST(ScopedHStringTest, Init) {
-  // ScopedHString requires WinRT core functions, which are not available in
-  // older versions.
-  if (GetVersion() < Version::WIN8) {
-    EXPECT_FALSE(ScopedHString::ResolveCoreWinRTStringDelayload());
-    return;
-  }
-
-  EXPECT_TRUE(ScopedHString::ResolveCoreWinRTStringDelayload());
-
   ScopedHString hstring = ScopedHString::Create(kTestString1);
   std::string buffer = hstring.GetAsUTF8();
   EXPECT_EQ(kTestString1, UTF8ToWide(buffer));
-  WStringPiece contents = hstring.Get();
+  std::wstring_view contents = hstring.Get();
   EXPECT_EQ(kTestString1, contents);
 
   hstring.reset();
@@ -51,5 +40,4 @@ TEST(ScopedHStringTest, Init) {
   EXPECT_EQ(kTestString2, contents);
 }
 
-}  // namespace win
-}  // namespace base
+}  // namespace base::win

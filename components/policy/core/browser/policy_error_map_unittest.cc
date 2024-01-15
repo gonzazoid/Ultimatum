@@ -4,6 +4,7 @@
 
 #include "components/policy/core/browser/policy_error_map.h"
 
+#include "base/memory/raw_ptr.h"
 #include "components/strings/grit/components_strings.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/resource/resource_bundle.h"
@@ -34,7 +35,7 @@ class PolicyErrorMapTestResourceBundle : public ::testing::TestWithParam<bool> {
 
  private:
   bool has_resource_bundle_;
-  ui::ResourceBundle* original_resource_bundle_;
+  raw_ptr<ui::ResourceBundle> original_resource_bundle_;
 };
 
 TEST_P(PolicyErrorMapTestResourceBundle, CheckForErrorsWithoutFatalErrors) {
@@ -99,6 +100,19 @@ TEST(PolicyErrorMapTest, GetErrorMessagesWithTwoReplacements) {
 
   EXPECT_EQ(errors.GetErrorMessages(kPolicyWithError),
             u"Ignored because foo is not set to Enabled.");
+}
+
+TEST(PolicyErrorMapTest, GetErrorMessagesWithThreeReplacements) {
+  PolicyErrorMap errors;
+  ASSERT_TRUE(errors.IsReady());
+  errors.AddError(
+      kPolicyWithError, IDS_POLICY_IDLE_TIMEOUT_ACTIONS_DEPENDENCY_ERROR,
+      std::vector<std::string>{"SyncDisabled", "Enabled",
+                               "clear_browsing_history, clear_bookmarks"});
+
+  EXPECT_EQ(errors.GetErrorMessages(kPolicyWithError),
+            u"These actions require the SyncDisabled policy to be set to "
+            u"Enabled: clear_browsing_history, clear_bookmarks.");
 }
 
 TEST(PolicyErrorMapTest, GetErrorMessagesWithNonAsciiReplacement) {

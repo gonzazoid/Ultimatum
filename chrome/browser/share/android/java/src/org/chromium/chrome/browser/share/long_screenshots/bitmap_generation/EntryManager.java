@@ -12,7 +12,6 @@ import android.util.Size;
 import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.ObserverList;
-import org.chromium.chrome.browser.share.long_screenshots.LongScreenshotsMetrics;
 import org.chromium.chrome.browser.share.long_screenshots.bitmap_generation.LongScreenshotsEntry.EntryStatus;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.components.paintpreview.player.CompositorStatus;
@@ -37,7 +36,6 @@ public class EntryManager {
     private @EntryStatus int mGeneratorStatus;
     private ScreenshotBoundsManager mBoundsManager;
     private int mMemoryUsedInKb;
-    private static final String TAG = "long_screenshot";
 
     /**
      * Users of the {@link EntryManager} can implement this interface to be notified of changes to
@@ -83,7 +81,6 @@ public class EntryManager {
         updateGeneratorStatus(EntryStatus.CAPTURE_IN_PROGRESS);
     }
 
-    @VisibleForTesting
     public BitmapGenerator getBitmapGeneratorForTesting() {
         return mGenerator;
     }
@@ -93,8 +90,9 @@ public class EntryManager {
      * listener to the returned entry to get that status of the generation and retrieve the bitmap.
      */
     public LongScreenshotsEntry generateFullpageEntry() {
-        LongScreenshotsEntry entry = new LongScreenshotsEntry(
-                mGenerator, mBoundsManager.getFullEntryBounds(), this::updateMemoryUsage);
+        LongScreenshotsEntry entry =
+                new LongScreenshotsEntry(
+                        mGenerator, mBoundsManager.getFullEntryBounds(), this::updateMemoryUsage);
         processEntry(entry, false, false);
         return entry;
     }
@@ -111,7 +109,9 @@ public class EntryManager {
         return entry;
     }
 
-    private void processEntry(LongScreenshotsEntry entry, boolean skipAddingEntryToList,
+    private void processEntry(
+            LongScreenshotsEntry entry,
+            boolean skipAddingEntryToList,
             boolean addToBeginningOfList) {
         if (mGeneratorStatus == EntryStatus.CAPTURE_COMPLETE) {
             entry.generateBitmap();
@@ -185,14 +185,8 @@ public class EntryManager {
                 if (status == CompositorStatus.STOPPED_DUE_TO_MEMORY_PRESSURE
                         || status == CompositorStatus.SKIPPED_DUE_TO_MEMORY_PRESSURE) {
                     updateGeneratorStatus(EntryStatus.INSUFFICIENT_MEMORY);
-                    LongScreenshotsMetrics.logLongScreenshotsEvent(
-                            LongScreenshotsMetrics.LongScreenshotsEvent
-                                    .GENERATOR_COMPOSITOR_MEMORY_PRESSURE);
                 } else if (status == CompositorStatus.OK) {
                     updateGeneratorStatus(EntryStatus.CAPTURE_COMPLETE);
-                    LongScreenshotsMetrics.logLongScreenshotsEvent(
-                            LongScreenshotsMetrics.LongScreenshotsEvent
-                                    .GENERATOR_COMPOSITOR_CAPTURE_COMPLETE);
 
                     Size contentSize = mGenerator.getContentSize();
                     Point scrollOffset = mGenerator.getScrollOffset();
@@ -201,9 +195,6 @@ public class EntryManager {
                     }
                 } else {
                     updateGeneratorStatus(EntryStatus.GENERATION_ERROR);
-                    LongScreenshotsMetrics.logLongScreenshotsEvent(
-                            LongScreenshotsMetrics.LongScreenshotsEvent
-                                    .GENERATOR_COMPOSITOR_GENERATION_ERROR);
                 }
             }
 
@@ -211,14 +202,8 @@ public class EntryManager {
             public void onCaptureResult(@Status int status) {
                 if (status == Status.LOW_MEMORY_DETECTED) {
                     updateGeneratorStatus(EntryStatus.INSUFFICIENT_MEMORY);
-                    LongScreenshotsMetrics.logLongScreenshotsEvent(
-                            LongScreenshotsMetrics.LongScreenshotsEvent
-                                    .GENERATOR_CAPTURE_INSUFFICIENT_MEMORY);
                 } else if (status != Status.OK) {
                     updateGeneratorStatus(EntryStatus.GENERATION_ERROR);
-                    LongScreenshotsMetrics.logLongScreenshotsEvent(
-                            LongScreenshotsMetrics.LongScreenshotsEvent
-                                    .GENERATOR_CAPTURE_GENERATION_ERROR);
                 }
             }
         };

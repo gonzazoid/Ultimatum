@@ -6,14 +6,16 @@
 #define CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH_MOUNT_PERFORMER_H_
 
 #include <memory>
+#include <optional>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
+#include "base/time/clock.h"
+#include "base/time/default_clock.h"
 #include "chromeos/ash/components/dbus/cryptohome/UserDataAuth.pb.h"
 #include "chromeos/ash/components/login/auth/public/auth_callbacks.h"
 #include "chromeos/ash/components/login/auth/public/authentication_error.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -24,7 +26,8 @@ class UserContext;
 // This implementation is only compatible with AuthSession-based API.
 class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH) MountPerformer {
  public:
-  MountPerformer();
+  explicit MountPerformer(
+      const base::Clock* clock = base::DefaultClock::GetInstance());
 
   MountPerformer(const MountPerformer&) = delete;
   MountPerformer& operator=(const MountPerformer&) = delete;
@@ -56,6 +59,11 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH) MountPerformer {
   void MountPersistentDirectory(std::unique_ptr<UserContext> context,
                                 AuthOperationCallback callback);
 
+  // Restore evicted filesystem keyset for the user identified by auth session
+  // in `context`. Session should be authenticated.
+  void RestoreEvictedVaultKey(std::unique_ptr<UserContext> context,
+                              AuthOperationCallback callback);
+
   // Mounts persistent directory for the user identified by auth session in
   // `context` to perform dircrypto migration.
   // Session should be authenticated.
@@ -84,40 +92,64 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH) MountPerformer {
   void RemoveUserDirectory(std::unique_ptr<UserContext> context,
                            AuthOperationCallback callback);
 
+  // Removes home directory for the user identified by `identifier`
+  // It is expected that home directory is not mounted.
+  void RemoveUserDirectoryByIdentifier(cryptohome::AccountIdentifier identifier,
+                                       NoContextOperationCallback callback);
+
   // Unmounts all currently mounted directories.
   // Context is required only for passing to callback.
   void UnmountDirectories(std::unique_ptr<UserContext> context,
                           AuthOperationCallback callback);
 
+  void MigrateToDircrypto(std::unique_ptr<UserContext> context,
+                          AuthOperationCallback callback);
+
  private:
   // Callbacks for UserDataAuthClient operations:
   void OnCreatePersistentUser(
+      base::Time request_start,
       std::unique_ptr<UserContext> context,
       AuthOperationCallback callback,
-      absl::optional<user_data_auth::CreatePersistentUserReply> reply);
+      std::optional<user_data_auth::CreatePersistentUserReply> reply);
+  void OnRestoreEvictedVaultKey(
+      std::unique_ptr<UserContext> context,
+      AuthOperationCallback callback,
+      std::optional<user_data_auth::RestoreDeviceKeyReply> reply);
   void OnPrepareGuestVault(
       std::unique_ptr<UserContext> context,
       AuthOperationCallback callback,
-      absl::optional<user_data_auth::PrepareGuestVaultReply> reply);
+      std::optional<user_data_auth::PrepareGuestVaultReply> reply);
   void OnPrepareEphemeralVault(
+      base::Time request_start,
       std::unique_ptr<UserContext> context,
       AuthOperationCallback callback,
-      absl::optional<user_data_auth::PrepareEphemeralVaultReply> reply);
+      std::optional<user_data_auth::PrepareEphemeralVaultReply> reply);
   void OnPreparePersistentVault(
       std::unique_ptr<UserContext> context,
       AuthOperationCallback callback,
-      absl::optional<user_data_auth::PreparePersistentVaultReply> reply);
+      std::optional<user_data_auth::PreparePersistentVaultReply> reply);
   void OnPrepareVaultForMigration(
       std::unique_ptr<UserContext> context,
       AuthOperationCallback callback,
-      absl::optional<user_data_auth::PrepareVaultForMigrationReply> reply);
+      std::optional<user_data_auth::PrepareVaultForMigrationReply> reply);
+  void OnServiceRunning(cryptohome::AccountIdentifier identifier,
+                        NoContextOperationCallback callback,
+                        bool service_is_available);
   void OnRemove(std::unique_ptr<UserContext> context,
                 AuthOperationCallback callback,
-                absl::optional<user_data_auth::RemoveReply> reply);
+                std::optional<user_data_auth::RemoveReply> reply);
+  void OnRemoveByIdentifier(NoContextOperationCallback callback,
+                            std::optional<user_data_auth::RemoveReply> reply);
   void OnUnmount(std::unique_ptr<UserContext> context,
                  AuthOperationCallback callback,
-                 absl::optional<user_data_auth::UnmountReply> reply);
+                 std::optional<user_data_auth::UnmountReply> reply);
+  void OnMigrateToDircrypto(
+      std::unique_ptr<UserContext> context,
+      AuthOperationCallback callback,
+      std::optional<user_data_auth::StartMigrateToDircryptoReply> reply);
 
+  const raw_ptr<const base::Clock> clock_;
   base::WeakPtrFactory<MountPerformer> weak_factory_{this};
 };
 

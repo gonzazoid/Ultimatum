@@ -8,7 +8,6 @@
 # Our version of pylint doesn't know about python3 yet.
 # pylint: disable=unexpected-keyword-arg
 import argparse
-import collections
 import csv
 import json
 import os
@@ -103,20 +102,13 @@ class _Artifact:
           name = k[4:]
         metrics['DFM: ' + name] = v['Size with hindi']['value']
 
-  def PrintLibraryCompression(self):
-    with zipfile.ZipFile(self._path) as z:
-      for info in z.infolist():
-        if info.filename.endswith('.so'):
-          sys.stdout.write('{}/{} compressed: {} uncompressed: {}\n'.format(
-              self.name, posixpath.basename(info.filename), info.compress_size,
-              info.file_size))
 
-
-def _DumpCsv(metrics):
+def _DumpCsvAndClear(metrics):
   csv_writer = csv.DictWriter(
       sys.stdout, fieldnames=list(metrics.keys()), delimiter='\t')
   csv_writer.writeheader()
   csv_writer.writerow(metrics)
+  metrics.clear()
 
 
 def _DownloadAndAnalyze(signed_prefix, unsigned_prefix, staging_dir):
@@ -128,8 +120,6 @@ def _DownloadAndAnalyze(signed_prefix, unsigned_prefix, staging_dir):
 
   webview = make_artifact('arm/AndroidWebviewStable.aab')
   webview64 = make_artifact('arm_64/AndroidWebviewStable.aab')
-  chrome_modern = make_artifact('arm/ChromeModernStable.aab')
-  chrome_modern64 = make_artifact('arm_64/ChromeModernStable.aab')
   monochrome = make_artifact('arm/MonochromeStable.aab')
   monochrome64 = make_artifact('arm_64/MonochromeStable.aab')
   trichrome_chrome = make_artifact('arm/TrichromeChromeGoogleStable.aab')
@@ -138,6 +128,12 @@ def _DownloadAndAnalyze(signed_prefix, unsigned_prefix, staging_dir):
   trichrome64_chrome = make_artifact('arm_64/TrichromeChromeGoogleStable.aab')
   trichrome64_webview = make_artifact('arm_64/TrichromeWebViewGoogleStable.aab')
   trichrome64_library = make_artifact('arm_64/TrichromeLibraryGoogleStable.apk')
+  trichrome64_high_chrome = make_artifact(
+      'high-arm_64/TrichromeChromeGoogle6432Stable.aab')
+  trichrome64_high_webview = make_artifact(
+      'high-arm_64/TrichromeWebViewGoogle6432Stable.aab')
+  trichrome64_high_library = make_artifact(
+      'high-arm_64/TrichromeLibraryGoogle6432Stable.apk')
 
   trichrome_system_apks = [
       make_artifact('arm/TrichromeWebViewGoogleSystemStable.apk'),
@@ -153,6 +149,13 @@ def _DownloadAndAnalyze(signed_prefix, unsigned_prefix, staging_dir):
           'arm_64/for-signing-only/TrichromeChromeGoogleSystemStable.apk',
           prefix=unsigned_prefix),
   ]
+  trichrome64_system_apks_high = [
+      make_artifact('high-arm_64/TrichromeWebViewGoogle6432SystemStable.apk'),
+      make_artifact('high-arm_64/TrichromeLibraryGoogle6432SystemStable.apk'),
+      make_artifact(('high-arm_64/for-signing-only/'
+                     'TrichromeChromeGoogle6432SystemStable.apk'),
+                    prefix=unsigned_prefix),
+  ]
   trichrome_system_stubs = [
       make_artifact('arm/TrichromeWebViewGoogleSystemStubStable.apk'),
       make_artifact('arm/TrichromeLibraryGoogleSystemStubStable.apk'),
@@ -167,9 +170,7 @@ def _DownloadAndAnalyze(signed_prefix, unsigned_prefix, staging_dir):
   pool.close()
 
   # Add metrics in the order that we want them in the .csv output.
-  metrics = collections.OrderedDict()
-  chrome_modern.AddSize(metrics)
-  chrome_modern64.AddSize(metrics)
+  metrics = {}
   webview.AddSize(metrics)
   webview64.AddSize(metrics)
   monochrome.AddSize(metrics)
@@ -179,21 +180,24 @@ def _DownloadAndAnalyze(signed_prefix, unsigned_prefix, staging_dir):
   trichrome_library.AddSize(metrics)
 
   # Separate where spreadsheet has computed columns for easier copy/paste.
-  _DumpCsv(metrics)
-  metrics = collections.OrderedDict()
+  _DumpCsvAndClear(metrics)
   trichrome64_chrome.AddSize(metrics)
   trichrome64_webview.AddSize(metrics)
   trichrome64_library.AddSize(metrics)
+  _DumpCsvAndClear(metrics)
 
-  _DumpCsv(metrics)
-  metrics = collections.OrderedDict()
+  trichrome64_high_chrome.AddSize(metrics)
+  trichrome64_high_webview.AddSize(metrics)
+  trichrome64_high_library.AddSize(metrics)
 
-  webview.PrintLibraryCompression()
+  _DumpCsvAndClear(metrics)
 
   metrics['System Image Size (arm32)'] = sum(x.GetApkSize()
                                              for x in trichrome_system_apks)
   metrics['System Image Size (arm64)'] = sum(x.GetApkSize()
                                              for x in trichrome64_system_apks)
+  metrics['System Image Size (arm64-high)'] = sum(
+      x.GetApkSize() for x in trichrome64_system_apks_high)
 
   go_install_size = (trichrome_chrome.GetAndroidGoSize() +
                      trichrome_webview.GetAndroidGoSize() +
@@ -209,12 +213,35 @@ def _DownloadAndAnalyze(signed_prefix, unsigned_prefix, staging_dir):
   monochrome.AddMethodCount(metrics)
 
   # Separate where spreadsheet has computed columns for easier copy/paste.
-  _DumpCsv(metrics)
-  metrics = collections.OrderedDict()
+  _DumpCsvAndClear(metrics)
 
   trichrome_chrome.AddDfmSizes(metrics, 'Chrome')
   trichrome_webview.AddDfmSizes(metrics, 'WebView')
-  _DumpCsv(metrics)
+  _DumpCsvAndClear(metrics)
+
+
+def _CheckGnArgs(unsigned_prefix, version):
+  args = [_GSUTIL, 'cat', unsigned_prefix + '/arm/gn-args-derived.txt']
+  logging.warning(' '.join(args))
+  gn_args_data = subprocess.check_output(args, text=True)
+
+  def check_arg(name, value):
+    if f'{name} = {value}' not in gn_args_data:
+      if f'{name} =' not in gn_args_data:
+        sys.stderr.write(f'{name} is not in gn-args-derived.txt.\n')
+      else:
+        sys.stderr.write(f'{name} != {value} in gn-args-derived.txt.\n')
+        sys.stderr.write('Sizes will not be accurate. Try again with a later '
+                         'patch version.\n')
+      sys.stderr.write('Manually verify via: ' + ' '.join(args) + '\n')
+      sys.exit(1)
+
+  if int(version.split('.')[0]) < 120:
+    check_arg('is_on_release_branch', 'true')
+  else:
+    check_arg('v8_is_on_release_branch', 'true')
+
+  check_arg('v8_enable_runtime_call_stats', 'false')
 
 
 def main():
@@ -231,6 +258,11 @@ def main():
 
   signed_prefix = posixpath.join(options.signed_bucket, options.version)
   unsigned_prefix = signed_prefix.replace('signed', 'unsigned')
+
+  # Ensure the binary size isn't inflated by v8_is_on_release_branch=true
+  # not being set yet.
+  _CheckGnArgs(unsigned_prefix, options.version)
+
   with tempfile.TemporaryDirectory() as staging_dir:
     if options.keep_files:
       staging_dir = 'milestone_apk_sizes-staging'

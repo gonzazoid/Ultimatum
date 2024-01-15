@@ -8,13 +8,13 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/no_destructor.h"
 #include "base/run_loop.h"
 #include "base/sequence_checker.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "base/system/sys_info.h"
 #include "base/task/single_thread_task_runner.h"
 #include "components/policy/core/common/cloud/dm_token.h"
@@ -51,6 +51,9 @@ class BrowserDMTokenStorage {
     // Gets the boolean value that determines if error message will be
     // displayed when enrollment fails.
     virtual bool InitEnrollmentErrorOption() = 0;
+    // Returns whether the enrollment token can be initialized (if it is not
+    // already) when `InitIfNeeded` is called.
+    virtual bool CanInitEnrollmentToken() const = 0;
     // Function called by `SaveDMToken()` that returns if the operation was a
     // success.
     virtual StoreTask SaveDMTokenTask(const std::string& token,
@@ -131,7 +134,8 @@ class BrowserDMTokenStorage {
   // Will be called after the DM token is stored.
   StoreCallback store_callback_;
 
-  bool is_initialized_;
+  bool is_initialized_{false};
+  bool is_init_enrollment_token_skipped_{true};
 
   std::string client_id_;
   std::string enrollment_token_;

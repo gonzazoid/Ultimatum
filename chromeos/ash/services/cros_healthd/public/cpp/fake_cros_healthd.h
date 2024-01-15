@@ -6,22 +6,28 @@
 #define CHROMEOS_ASH_SERVICES_CROS_HEALTHD_PUBLIC_CPP_FAKE_CROS_HEALTHD_H_
 
 #include <cstdint>
+#include <map>
+#include <optional>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "chromeos/ash/components/mojo_service_manager/mojom/mojo_service_manager.mojom.h"
+#include "chromeos/ash/services/cros_healthd/public/cpp/fake_routine_control.h"
 #include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd.mojom.h"
 #include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd_diagnostics.mojom.h"
 #include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd_events.mojom.h"
+#include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd_exception.mojom.h"
 #include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd_probe.mojom.h"
-#include "chromeos/services/network_health/public/mojom/network_diagnostics.mojom.h"
+#include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd_routines.mojom.h"
 #include "chromeos/services/network_health/public/mojom/network_health.mojom.h"
+#include "chromeos/services/network_health/public/mojom/network_health_types.mojom-forward.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash::cros_healthd {
 namespace internal {
@@ -60,7 +66,7 @@ class ServiceProvider
   mojo::Receiver<chromeos::mojo_service_manager::mojom::ServiceProvider>
       provider_{this};
   // The pointer to the implementation of the mojo interface.
-  MojoInterfaceType* const impl_;
+  const raw_ptr<MojoInterfaceType> impl_;
   // The receiver set to keeps the connections from clients to access the mojo
   // service.
   mojo::ReceiverSet<MojoInterfaceType> service_receiver_set_;
@@ -72,11 +78,10 @@ class ServiceProvider
 // The factory methods bind to receivers held within FakeCrosHealtdService, and
 // all requests on each of the interfaces are fulfilled by
 // FakeCrosHealthd.
-class FakeCrosHealthd final : public mojom::CrosHealthdServiceFactory,
-                              public mojom::CrosHealthdDiagnosticsService,
+class FakeCrosHealthd final : public mojom::CrosHealthdDiagnosticsService,
                               public mojom::CrosHealthdEventService,
                               public mojom::CrosHealthdProbeService,
-                              public mojom::CrosHealthdSystemService {
+                              public mojom::CrosHealthdRoutinesService {
  public:
   // Stores the params passed to `GetRoutineUpdate`.
   struct RoutineUpdateParams {
@@ -97,9 +102,14 @@ class FakeCrosHealthd final : public mojom::CrosHealthdServiceFactory,
   // will initialize this in browser test.
   static void Initialize();
 
-  // Shutdowns the global instance. This also shutdown the CrosHealthdClient
-  // (the dbus client). In browser test this will not be called.
+  // Shutdowns the global instance.
   static void Shutdown();
+
+  // Same as above but skip the steps which is not used in browser tests. These
+  // also skip mojo flushing to prevent changing the calling sequence when
+  // shutting down.
+  static void InitializeInBrowserTest();
+  static void ShutdownInBrowserTest();
 
   // Gets the global instance. A `nullptr` could be returned if it is not
   // initialized.
@@ -132,62 +142,43 @@ class FakeCrosHealthd final : public mojom::CrosHealthdServiceFactory,
   void SetProbeMultipleProcessInfoResponseForTesting(
       mojom::MultipleProcessResultPtr& result);
 
+  // Set the result for a call to `IsEventSupported`.
+  void SetIsEventSupportedResponseForTesting(mojom::SupportStatusPtr& result);
+
+  // Set the result for a call to `IsRoutineArgumentSupported`.
+  void SetIsRoutineArgumentSupportedResponseForTesting(
+      mojom::SupportStatusPtr& result);
+
+  // Flushes the service provider for routines.
+  void FlushRoutineServiceForTesting();
+
+  // Gets the `FakeRoutineController` for a certain type of routine. The
+  // returned object allows for setting expectations in tests and accessing
+  // certain properties that might change during tests. If there is no
+  // `FakeRoutineController` registered for a certain type of routine, this
+  // returns `nullptr`.
+  FakeRoutineControl* GetRoutineControlForArgumentTag(
+      mojom::RoutineArgument::Tag tag);
+
+  // Set expectation about the parameter that is passed to a call of
+  // a Diagnostics routine (`Run*Routine`) and `GetRoutineUpdate`.
+  void SetExpectedLastPassedDiagnosticsParametersForTesting(
+      base::Value::Dict expected_parameters);
+
+  // Verifies that the actual passed parameters to Diagnostic
+  // routines match the previously set expectations.
+  bool DidExpectedDiagnosticsParametersMatch();
+
   // Adds a delay before the passed callback is called.
   void SetCallbackDelay(base::TimeDelta delay);
 
-  // Calls the power event OnAcInserted for all registered power observers.
-  void EmitAcInsertedEventForTesting();
+  // Calls the `OnEvent` method with `info` on all observers registered for
+  // `category`.
+  void EmitEventForCategory(mojom::EventCategoryEnum category,
+                            mojom::EventInfoPtr info);
 
-  // Calls the power event OnAcRemoved on all registered power observers.
-  void EmitAcRemovedEventForTesting();
-
-  // Calls the power event OnOsSuspend on all registered power observers.
-  void EmitOsSuspendEventForTesting();
-
-  // Calls the power event OnOsResume on all registered power observers.
-  void EmitOsResumeEventForTesting();
-
-  // Calls the Bluetooth event OnAdapterAdded for all registered Bluetooth
-  // observers.
-  void EmitAdapterAddedEventForTesting();
-
-  // Calls the Bluetooth event OnAdapterRemoved on all registered Bluetooth
-  // observers.
-  void EmitAdapterRemovedEventForTesting();
-
-  // Calls the Bluetooth event OnAdapterPropertyChanged on all registered
-  // Bluetooth observers.
-  void EmitAdapterPropertyChangedEventForTesting();
-
-  // Calls the Bluetooth event OnDeviceAdded on all registered Bluetooth
-  // observers.
-  void EmitDeviceAddedEventForTesting();
-
-  // Calls the Bluetooth event OnDeviceRemoved on all registered Bluetooth
-  // observers.
-  void EmitDeviceRemovedEventForTesting();
-
-  // Calls the Bluetooth event OnDevicePropertyChanged on all registered
-  // Bluetooth observers.
-  void EmitDevicePropertyChangedEventForTesting();
-
-  // Calls the lid event OnLidClosed for all registered lid observers.
-  void EmitLidClosedEventForTesting();
-
-  // Calls the lid event OnLidOpened for all registered lid observers.
-  void EmitLidOpenedEventForTesting();
-
-  // Calls the audio event OnUnderrun for all registered audio observers.
-  void EmitAudioUnderrunEventForTesting();
-
-  // Calls the audio event OnSevereUnderrun for all registered audio observers.
-  void EmitAudioSevereUnderrunEventForTesting();
-
-  // Calls the Thunderbolt event OnAdd on all registered Thunderbolt observers.
-  void EmitThunderboltAddEventForTesting();
-
-  // Calls the USB event OnAdd on all registered USB observers.
-  void EmitUsbAddEventForTesting();
+  mojo::RemoteSet<mojom::EventObserver>* GetObserversByCategory(
+      mojom::EventCategoryEnum category);
 
   // Calls the network event OnConnectionStateChangedEvent on all registered
   // network observers.
@@ -201,22 +192,12 @@ class FakeCrosHealthd final : public mojom::CrosHealthdServiceFactory,
       const std::string& network_guid,
       chromeos::network_health::mojom::UInt32ValuePtr signal_strength);
 
-  // Requests the network health state using the network_health_remote_.
-  void RequestNetworkHealthForTesting(
-      chromeos::network_health::mojom::NetworkHealthService::
-          GetHealthSnapshotCallback callback);
-
-  // Calls the LanConnectivity routine on |network_diagnostics_routines_|.
-  void RunLanConnectivityRoutineForTesting(
-      chromeos::network_diagnostics::mojom::NetworkDiagnosticsRoutines::
-          RunLanConnectivityCallback callback);
-
   // Returns the last created routine by any Run*Routine method.
-  absl::optional<mojom::DiagnosticRoutineEnum> GetLastRunRoutine() const;
+  std::optional<mojom::DiagnosticRoutineEnum> GetLastRunRoutine() const;
 
   // Returns the parameters passed for the most recent call to
   // `GetRoutineUpdate`.
-  absl::optional<RoutineUpdateParams> GetRoutineUpdateParams() const;
+  std::optional<RoutineUpdateParams> GetRoutineUpdateParams() const;
 
  private:
   FakeCrosHealthd();
@@ -224,27 +205,6 @@ class FakeCrosHealthd final : public mojom::CrosHealthdServiceFactory,
 
   // Binds a new mojo remote and disconnected the old one if exists.
   mojo::Remote<mojom::CrosHealthdServiceFactory> BindNewRemote();
-
-  // CrosHealthdServiceFactory overrides:
-  void GetProbeService(
-      mojo::PendingReceiver<mojom::CrosHealthdProbeService> service) override;
-  void GetDiagnosticsService(
-      mojo::PendingReceiver<mojom::CrosHealthdDiagnosticsService> service)
-      override;
-  void GetEventService(
-      mojo::PendingReceiver<mojom::CrosHealthdEventService> service) override;
-  void SendNetworkHealthService(
-      mojo::PendingRemote<chromeos::network_health::mojom::NetworkHealthService>
-          remote) override;
-  void SendNetworkDiagnosticsRoutines(
-      mojo::PendingRemote<
-          chromeos::network_diagnostics::mojom::NetworkDiagnosticsRoutines>
-          network_diagnostics_routines) override;
-  void GetSystemService(
-      mojo::PendingReceiver<mojom::CrosHealthdSystemService> service) override;
-  void SendChromiumDataCollector(
-      mojo::PendingRemote<internal::mojom::ChromiumDataCollector> remote)
-      override;
 
   // CrosHealthdDiagnosticsService overrides:
   void GetAvailableRoutines(GetAvailableRoutinesCallback callback) override;
@@ -259,9 +219,10 @@ class FakeCrosHealthd final : public mojom::CrosHealthdServiceFactory,
   void RunBatteryHealthRoutine(
       RunBatteryHealthRoutineCallback callback) override;
   void RunSmartctlCheckRoutine(
+      mojom::NullableUint32Ptr percentage_used_threshold,
       RunSmartctlCheckRoutineCallback callback) override;
   void RunAcPowerRoutine(mojom::AcPowerStatusEnum expected_status,
-                         const absl::optional<std::string>& expected_power_type,
+                         const std::optional<std::string>& expected_power_type,
                          RunAcPowerRoutineCallback callback) override;
   void RunCpuCacheRoutine(mojom::NullableUint32Ptr length_seconds,
                           RunCpuCacheRoutineCallback callback) override;
@@ -292,7 +253,8 @@ class FakeCrosHealthd final : public mojom::CrosHealthdServiceFactory,
       uint32_t length_seconds,
       uint32_t minimum_charge_percent_required,
       RunBatteryChargeRoutineCallback callback) override;
-  void RunMemoryRoutine(RunMemoryRoutineCallback callback) override;
+  void RunMemoryRoutine(std::optional<uint32_t> max_testing_mem_kib,
+                        RunMemoryRoutineCallback callback) override;
   void RunLanConnectivityRoutine(
       RunLanConnectivityRoutineCallback callback) override;
   void RunSignalStrengthRoutine(
@@ -313,32 +275,77 @@ class FakeCrosHealthd final : public mojom::CrosHealthdServiceFactory,
       RunHttpsFirewallRoutineCallback callback) override;
   void RunHttpsLatencyRoutine(RunHttpsLatencyRoutineCallback callback) override;
   void RunVideoConferencingRoutine(
-      const absl::optional<std::string>& stun_server_hostname,
+      const std::optional<std::string>& stun_server_hostname,
       RunVideoConferencingRoutineCallback callback) override;
   void RunArcHttpRoutine(RunArcHttpRoutineCallback callback) override;
   void RunArcPingRoutine(RunArcPingRoutineCallback callback) override;
   void RunArcDnsResolutionRoutine(
       RunArcDnsResolutionRoutineCallback callback) override;
+  void RunSensitiveSensorRoutine(
+      RunSensitiveSensorRoutineCallback callback) override;
+  void RunFingerprintRoutine(RunFingerprintRoutineCallback callback) override;
+  void RunFingerprintAliveRoutine(
+      RunFingerprintAliveRoutineCallback callback) override;
+  void RunPrivacyScreenRoutine(
+      bool target_state,
+      RunPrivacyScreenRoutineCallback callback) override;
+  void DEPRECATED_RunLedLitUpRoutine(
+      mojom::DEPRECATED_LedName name,
+      mojom::DEPRECATED_LedColor color,
+      mojo::PendingRemote<mojom::DEPRECATED_LedLitUpRoutineReplier> replier,
+      DEPRECATED_RunLedLitUpRoutineCallback callback) override;
+  void RunEmmcLifetimeRoutine(RunEmmcLifetimeRoutineCallback callback) override;
+  void DEPRECATED_RunAudioSetVolumeRoutine(
+      uint64_t node_id,
+      uint8_t volume,
+      bool mute_on,
+      DEPRECATED_RunAudioSetVolumeRoutineCallback callback) override;
+  void DEPRECATED_RunAudioSetGainRoutine(
+      uint64_t node_id,
+      uint8_t gain,
+      bool mute_on,
+      DEPRECATED_RunAudioSetGainRoutineCallback callback) override;
+  void RunBluetoothPowerRoutine(
+      RunBluetoothPowerRoutineCallback callback) override;
+  void RunBluetoothDiscoveryRoutine(
+      RunBluetoothDiscoveryRoutineCallback callback) override;
+  void RunBluetoothScanningRoutine(
+      ash::cros_healthd::mojom::NullableUint32Ptr length_seconds,
+      RunBluetoothScanningRoutineCallback callback) override;
+  void RunBluetoothPairingRoutine(
+      const std::string& peripheral_id,
+      RunBluetoothPairingRoutineCallback callback) override;
+  void RunPowerButtonRoutine(uint32_t timeout_seconds,
+                             RunPowerButtonRoutineCallback callback) override;
+  void RunAudioDriverRoutine(RunAudioDriverRoutineCallback callback) override;
+  void RunUfsLifetimeRoutine(RunUfsLifetimeRoutineCallback callback) override;
+  void RunFanRoutine(RunFanRoutineCallback callback) override;
 
   // CrosHealthdEventService overrides:
-  void AddBluetoothObserver(
+  void DEPRECATED_AddBluetoothObserver(
       mojo::PendingRemote<mojom::CrosHealthdBluetoothObserver> observer)
       override;
-  void AddLidObserver(
+  void DEPRECATED_AddLidObserver(
       mojo::PendingRemote<mojom::CrosHealthdLidObserver> observer) override;
-  void AddPowerObserver(
+  void DEPRECATED_AddPowerObserver(
       mojo::PendingRemote<mojom::CrosHealthdPowerObserver> observer) override;
   void AddNetworkObserver(
       mojo::PendingRemote<
           chromeos::network_health::mojom::NetworkEventsObserver> observer)
       override;
-  void AddAudioObserver(
+  void DEPRECATED_AddAudioObserver(
       mojo::PendingRemote<mojom::CrosHealthdAudioObserver> observer) override;
-  void AddThunderboltObserver(
+  void DEPRECATED_AddThunderboltObserver(
       mojo::PendingRemote<mojom::CrosHealthdThunderboltObserver> observer)
       override;
-  void AddUsbObserver(
+  void DEPRECATED_AddUsbObserver(
       mojo::PendingRemote<mojom::CrosHealthdUsbObserver> observer) override;
+  void AddEventObserver(
+      ash::cros_healthd::mojom::EventCategoryEnum category,
+      mojo::PendingRemote<ash::cros_healthd::mojom::EventObserver> observer)
+      override;
+  void IsEventSupported(ash::cros_healthd::mojom::EventCategoryEnum category,
+                        IsEventSupportedCallback callback) override;
 
   // CrosHealthdProbeService overrides:
   void ProbeTelemetryInfo(
@@ -347,20 +354,23 @@ class FakeCrosHealthd final : public mojom::CrosHealthdServiceFactory,
   void ProbeProcessInfo(const uint32_t process_id,
                         ProbeProcessInfoCallback callback) override;
   void ProbeMultipleProcessInfo(
-      const absl::optional<std::vector<uint32_t>>& process_ids,
+      const std::optional<std::vector<uint32_t>>& process_ids,
       bool ignore_single_process_error,
       ProbeMultipleProcessInfoCallback callback) override;
 
-  // CrosHealthdSystemService overrides:
-  void GetServiceStatus(GetServiceStatusCallback callback) override;
-
-  // Used to simulate the bootstrap of healthd mojo interface.
-  mojo::Receiver<mojom::CrosHealthdServiceFactory> healthd_receiver_{this};
+  // CrosHealthdRoutinesService overrides:
+  void CreateRoutine(
+      mojom::RoutineArgumentPtr argument,
+      mojo::PendingReceiver<mojom::RoutineControl> pending_receiver,
+      mojo::PendingRemote<mojom::RoutineObserver> observer) override;
+  void IsRoutineArgumentSupported(
+      mojom::RoutineArgumentPtr arg,
+      IsRoutineArgumentSupportedCallback callback) override;
 
   // Used as the response to any GetAvailableRoutines IPCs received.
   std::vector<mojom::DiagnosticRoutineEnum> available_routines_;
   // Used to store last created routine by any Run*Routine method.
-  absl::optional<mojom::DiagnosticRoutineEnum> last_run_routine_;
+  std::optional<mojom::DiagnosticRoutineEnum> last_run_routine_;
   // Used as the response to any RunSomeRoutine IPCs received.
   mojom::RunRoutineResponsePtr run_routine_response_{
       mojom::RunRoutineResponse::New()};
@@ -368,6 +378,12 @@ class FakeCrosHealthd final : public mojom::CrosHealthdServiceFactory,
   mojom::RoutineUpdatePtr routine_update_response_{mojom::RoutineUpdate::New()};
   // Used as the response to any ProbeTelemetryInfo IPCs received.
   mojom::TelemetryInfoPtr telemetry_response_info_{mojom::TelemetryInfo::New()};
+  // Used as the response to any IsEventSupported IPCs received.
+  mojom::SupportStatusPtr is_event_supported_response_{
+      mojom::SupportStatus::NewUnmappedUnionField(0)};
+  // Used as the response to any IsRoutineSupported IPCs received.
+  mojom::SupportStatusPtr is_routine_argument_supported_response_{
+      mojom::SupportStatus::NewUnmappedUnionField(0)};
   // Used as the response to any ProbeProcessInfo IPCs received.
   mojom::ProcessResultPtr process_response_{
       mojom::ProcessResult::NewProcessInfo(mojom::ProcessInfo::New())};
@@ -382,43 +398,26 @@ class FakeCrosHealthd final : public mojom::CrosHealthdServiceFactory,
       this};
   internal::ServiceProvider<mojom::CrosHealthdProbeService> probe_provider_{
       this};
+  internal::ServiceProvider<mojom::CrosHealthdRoutinesService>
+      routines_provider_{this};
 
-  // Allows the remote end to call the probe, diagnostics and event service
-  // methods.
-  mojo::ReceiverSet<mojom::CrosHealthdProbeService> probe_receiver_set_;
-  mojo::ReceiverSet<mojom::CrosHealthdDiagnosticsService>
-      diagnostics_receiver_set_;
-  mojo::ReceiverSet<mojom::CrosHealthdEventService> event_receiver_set_;
-  mojo::ReceiverSet<mojom::CrosHealthdSystemService> system_receiver_set_;
-
-  // NetworkHealthService remote.
-  mojo::Remote<chromeos::network_health::mojom::NetworkHealthService>
-      network_health_remote_;
-
-  // Collection of registered Bluetooth observers.
-  mojo::RemoteSet<mojom::CrosHealthdBluetoothObserver> bluetooth_observers_;
-  // Collection of registered lid observers.
-  mojo::RemoteSet<mojom::CrosHealthdLidObserver> lid_observers_;
-  // Collection of registered power observers.
-  mojo::RemoteSet<mojom::CrosHealthdPowerObserver> power_observers_;
   // Collection of registered network observers.
   mojo::RemoteSet<chromeos::network_health::mojom::NetworkEventsObserver>
       network_observers_;
-  // Collection of registered audio observers.
-  mojo::RemoteSet<mojom::CrosHealthdAudioObserver> audio_observers_;
-  // Collection of registered Thunderbolt observers.
-  mojo::RemoteSet<mojom::CrosHealthdThunderboltObserver> thunderbolt_observers_;
-  // Collection of registered USB observers.
-  mojo::RemoteSet<mojom::CrosHealthdUsbObserver> usb_observers_;
+  // Collection of registered general observers grouped by category.
+  std::map<mojom::EventCategoryEnum, mojo::RemoteSet<mojom::EventObserver>>
+      event_observers_;
+  std::map<mojom::RoutineArgument::Tag, FakeRoutineControl>
+      routine_controllers_;
 
   // Contains the most recent params passed to `GetRoutineUpdate`, if it has
   // been called.
-  absl::optional<RoutineUpdateParams> routine_update_params_;
+  std::optional<RoutineUpdateParams> routine_update_params_;
 
-  // Allow |this| to call the methods on the NetworkDiagnosticsRoutines
-  // interface.
-  mojo::Remote<chromeos::network_diagnostics::mojom::NetworkDiagnosticsRoutines>
-      network_diagnostics_routines_;
+  // Expectation of the passed parameters.
+  base::Value::Dict expected_passed_parameters_;
+  // Actually passed parameter.
+  base::Value::Dict actual_passed_parameters_;
 
   base::TimeDelta callback_delay_;
 };

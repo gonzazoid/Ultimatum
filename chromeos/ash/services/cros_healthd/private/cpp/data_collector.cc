@@ -6,12 +6,16 @@
 
 #include <fcntl.h>
 
+#include "ash/display/privacy_screen_controller.h"
+#include "ash/shell.h"
 #include "base/check_op.h"
 #include "base/files/file_enumerator.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/posix/eintr_wrapper.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/thread_pool.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "chromeos/ash/components/mojo_service_manager/connection.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -35,6 +39,11 @@ class DataCollectorDelegateImpl : public DataCollector::Delegate {
 
   // DataCollector::Delegate override.
   std::string GetTouchpadLibraryName() override;
+  bool IsPrivacyScreenSupported() override;
+  bool IsPrivacyScreenManaged() override;
+  void SetPrivacyScreenState(bool state) override;
+  bool IsOutputForceMuted() override;
+  void SetOutputMute(bool mute_on) override;
 };
 
 DataCollectorDelegateImpl::DataCollectorDelegateImpl() = default;
@@ -75,6 +84,26 @@ std::string DataCollectorDelegateImpl::GetTouchpadLibraryName() {
 #else
   return "Default EventConverterEvdev";
 #endif
+}
+
+bool DataCollectorDelegateImpl::IsPrivacyScreenSupported() {
+  return Shell::Get()->privacy_screen_controller()->IsSupported();
+}
+
+bool DataCollectorDelegateImpl::IsPrivacyScreenManaged() {
+  return Shell::Get()->privacy_screen_controller()->IsManaged();
+}
+
+void DataCollectorDelegateImpl::SetPrivacyScreenState(bool state) {
+  Shell::Get()->privacy_screen_controller()->SetEnabled(state);
+}
+
+bool DataCollectorDelegateImpl::IsOutputForceMuted() {
+  return CrasAudioHandler::Get()->IsOutputForceMuted();
+}
+
+void DataCollectorDelegateImpl::SetOutputMute(bool mute_on) {
+  CrasAudioHandler::Get()->SetOutputMute(mute_on);
 }
 
 DataCollectorDelegateImpl* GetDataCollectorDelegate() {
@@ -148,13 +177,41 @@ void DataCollector::GetTouchscreenDevices(
     GetTouchscreenDevicesCallback callback) {
   content::GetUIThreadTaskRunner({})->PostTask(
       FROM_HERE, base::BindOnce(&GetTouchscreenDevicesOnUIThread,
-                                base::SequencedTaskRunnerHandle::Get(),
+                                base::SequencedTaskRunner::GetCurrentDefault(),
                                 std::move(callback)));
 }
 
 void DataCollector::GetTouchpadLibraryName(
     GetTouchpadLibraryNameCallback callback) {
-  std::move(callback).Run(delegate_->GetTouchpadLibraryName());
+  base::ThreadPool::PostTaskAndReplyWithResult(
+      FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
+      base::BindOnce(&Delegate::GetTouchpadLibraryName,
+                     base::Unretained(delegate_)),
+      std::move(callback));
+}
+
+void DataCollector::SetPrivacyScreenState(
+    bool state,
+    SetPrivacyScreenStateCallback callback) {
+  if (!delegate_->IsPrivacyScreenSupported() ||
+      delegate_->IsPrivacyScreenManaged()) {
+    std::move(callback).Run(false);
+    return;
+  }
+
+  delegate_->SetPrivacyScreenState(state);
+  std::move(callback).Run(true);
+}
+
+void DataCollector::SetAudioOutputMute(bool mute_on,
+                                       SetAudioOutputMuteCallback callback) {
+  if (!mute_on && delegate_->IsOutputForceMuted()) {
+    std::move(callback).Run(false);
+    return;
+  }
+
+  delegate_->SetOutputMute(mute_on);
+  std::move(callback).Run(true);
 }
 
 void DataCollector::Request(

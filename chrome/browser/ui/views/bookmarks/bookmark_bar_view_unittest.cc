@@ -5,14 +5,15 @@
 #include "chrome/browser/ui/views/bookmarks/bookmark_bar_view.h"
 
 #include <memory>
+#include <optional>
 
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/uuid.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -34,6 +35,7 @@
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/views/chrome_views_test_base.h"
 #include "components/bookmarks/browser/bookmark_model.h"
+#include "components/bookmarks/common/bookmark_metrics.h"
 #include "components/bookmarks/common/bookmark_pref_names.h"
 #include "components/bookmarks/test/bookmark_test_helpers.h"
 #include "components/prefs/pref_service.h"
@@ -41,9 +43,9 @@
 #include "components/search_engines/template_url_service.h"
 #include "components/search_engines/template_url_service_client.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/dragdrop/drag_drop_types.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
+#include "ui/compositor/layer_tree_owner.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/controls/button/menu_button.h"
@@ -59,6 +61,8 @@ namespace {
 class BookmarkBarViewBaseTest : public ChromeViewsTestBase {
  public:
   BookmarkBarViewBaseTest() {
+    feature_list_.InitAndEnableFeature(features::kTabGroupsSave);
+
     TestingProfile::Builder profile_builder;
     profile_builder.AddTestingFactory(
         TemplateURLServiceFactory::GetInstance(),
@@ -149,12 +153,16 @@ class BookmarkBarViewBaseTest : public ChromeViewsTestBase {
 
  private:
   static std::unique_ptr<KeyedService> CreateTemplateURLService(
-      content::BrowserContext* profile) {
+      content::BrowserContext* context) {
+    Profile* profile = Profile::FromBrowserContext(context);
     return std::make_unique<TemplateURLService>(
-        static_cast<Profile*>(profile)->GetPrefs(),
-        std::make_unique<SearchTermsData>(),
+        profile->GetPrefs(), std::make_unique<SearchTermsData>(),
         nullptr /* KeywordWebDataService */,
-        nullptr /* TemplateURLServiceClient */, base::RepeatingClosure());
+        nullptr /* TemplateURLServiceClient */, base::RepeatingClosure()
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+        , profile->IsMainProfile()
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+    );
   }
 };
 
@@ -216,7 +224,7 @@ class BookmarkBarViewInWidgetTest : public BookmarkBarViewBaseTest {
 
  private:
   std::unique_ptr<views::Widget> widget_;
-  raw_ptr<BookmarkBarView> bookmark_bar_view_ = nullptr;
+  raw_ptr<BookmarkBarView, DanglingUntriaged> bookmark_bar_view_ = nullptr;
 };
 
 // Verify that in instant extended mode the visibility of the apps shortcut
@@ -331,11 +339,13 @@ TEST_F(BookmarkBarViewTest, RemoveNode) {
   EXPECT_EQ(2u, test_helper_->GetBookmarkButtonCount());
 
   // Remove the 2nd node, should still only have 1 visible.
-  model()->Remove(bookmark_bar_node->children()[1].get());
+  model()->Remove(bookmark_bar_node->children()[1].get(),
+                  bookmarks::metrics::BookmarkEditSource::kOther);
   EXPECT_EQ("a", GetStringForVisibleButtons());
 
   // Remove the first node, should force a new button (for the 'c' node).
-  model()->Remove(bookmark_bar_node->children()[0].get());
+  model()->Remove(bookmark_bar_node->children()[0].get(),
+                  bookmarks::metrics::BookmarkEditSource::kOther);
   ASSERT_EQ("c", GetStringForVisibleButtons());
 }
 
@@ -438,7 +448,8 @@ TEST_F(BookmarkBarViewTest, DropCallbackTest) {
   EXPECT_EQ("a b c d e f", GetStringForVisibleButtons());
 
   ui::mojom::DragOperation output_drag_op;
-  std::move(cb).Run(target_event, output_drag_op);
+  std::move(cb).Run(target_event, output_drag_op,
+                    /*drag_image_layer_owner=*/nullptr);
   EXPECT_EQ("z a b c d e f", GetStringForVisibleButtons());
   EXPECT_EQ(output_drag_op, ui::mojom::DragOperation::kCopy);
 }
@@ -459,7 +470,8 @@ TEST_F(BookmarkBarViewTest, MutateModelDuringDrag) {
   ASSERT_TRUE(bookmark_bar_view()->CanDrop(drop_data));
   bookmark_bar_view()->OnDragUpdated(target_event);
   EXPECT_NE(-1, test_helper_->GetDropLocationModelIndexForTesting());
-  model()->Remove(model()->bookmark_bar_node()->children()[4].get());
+  model()->Remove(model()->bookmark_bar_node()->children()[4].get(),
+                  bookmarks::metrics::BookmarkEditSource::kOther);
   EXPECT_EQ(-1, test_helper_->GetDropLocationModelIndexForTesting());
 }
 
@@ -482,7 +494,8 @@ TEST_F(BookmarkBarViewTest, DropCallback_InvalidatePtrTest) {
   EXPECT_EQ(6u, test_helper_->GetBookmarkButtonCount());
 
   ui::mojom::DragOperation output_drag_op = ui::mojom::DragOperation::kNone;
-  std::move(cb).Run(target_event, output_drag_op);
+  std::move(cb).Run(target_event, output_drag_op,
+                    /*drag_image_layer_owner=*/nullptr);
   EXPECT_EQ("a b c d e f", GetStringForVisibleButtons());
   EXPECT_EQ(output_drag_op, ui::mojom::DragOperation::kNone);
 }
@@ -535,20 +548,24 @@ TEST_F(BookmarkBarViewTest, OnSavedTabGroupUpdateBookmarkBarCallsLayout) {
   ASSERT_TRUE(keyed_service->model());
 
   // Add 3 saved tab groups.
-  keyed_service->model()->Add(SavedTabGroup(
-      std::u16string(u"tab group 1"), tab_groups::TabGroupColorId::kGrey, {}));
+  keyed_service->model()->Add(SavedTabGroup(std::u16string(u"tab group 1"),
+                                            tab_groups::TabGroupColorId::kGrey,
+                                            {}, std::nullopt));
 
-  base::GUID button_2_id = base::GUID::GenerateRandomV4();
+  base::Uuid button_2_id = base::Uuid::GenerateRandomV4();
   keyed_service->model()->Add(SavedTabGroup(std::u16string(u"tab group 2"),
                                             tab_groups::TabGroupColorId::kGrey,
-                                            {}, button_2_id));
+                                            {}, std::nullopt, button_2_id));
 
-  keyed_service->model()->Add(SavedTabGroup(
-      std::u16string(u"tab group 3"), tab_groups::TabGroupColorId::kGrey, {}));
+  keyed_service->model()->Add(SavedTabGroup(std::u16string(u"tab group 3"),
+                                            tab_groups::TabGroupColorId::kGrey,
+                                            {}, std::nullopt));
 
-  // Save the position of the 3rd button.
-  ASSERT_EQ(3u, test_helper_->saved_tab_group_bar()->children().size());
-  const auto* button_3 = test_helper_->saved_tab_group_bar()->children()[2];
+  // Save the position of the 3rd button. The 4th button is an overflow menu
+  // that is only visible when there are more than 4 groups saved.
+  ASSERT_EQ(4u, test_helper_->saved_tab_group_bar()->children().size());
+  const auto* button_3 =
+      test_helper_->saved_tab_group_bar()->children()[2].get();
   gfx::Rect bounds_in_screen = button_3->GetBoundsInScreen();
 
   // Remove the middle tab group.

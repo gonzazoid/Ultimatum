@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/download/public/common/download_item.h"
 #include "components/download/public/common/download_url_parameters.h"
 #include "content/browser/background_fetch/background_fetch_job_controller.h"
@@ -15,7 +15,7 @@
 #include "content/public/browser/background_fetch_description.h"
 #include "content/public/browser/background_fetch_response.h"
 #include "content/public/browser/browser_context.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/download_manager.h"
 #include "content/public/browser/download_manager_delegate.h"
 #include "content/public/browser/permission_controller.h"
@@ -77,7 +77,7 @@ void BackgroundFetchDelegateProxy::GetPermissionForOrigin(
         ->GetDelegate()
         ->CheckDownloadAllowed(
             std::move(web_contents_getter), origin.GetURL(), "GET",
-            absl::nullopt, false /* from_download_cross_origin_redirect */,
+            std::nullopt, false /* from_download_cross_origin_redirect */,
             true /* content_initiated */,
             base::BindOnce(&BackgroundFetchDelegateProxy::
                                DidGetPermissionFromDownloadRequestLimiter,
@@ -201,8 +201,8 @@ void BackgroundFetchDelegateProxy::StartRequest(
 
 void BackgroundFetchDelegateProxy::UpdateUI(
     const std::string& job_unique_id,
-    const absl::optional<std::string>& title,
-    const absl::optional<SkBitmap>& icon,
+    const std::optional<std::string>& title,
+    const std::optional<SkBitmap>& icon,
     blink::mojom::BackgroundFetchRegistrationService::UpdateUICallback
         update_ui_callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);

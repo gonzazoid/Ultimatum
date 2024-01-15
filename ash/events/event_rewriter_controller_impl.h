@@ -9,8 +9,11 @@
 #include <vector>
 
 #include "ash/ash_export.h"
+#include "ash/events/peripheral_customization_event_rewriter.h"
 #include "ash/public/cpp/event_rewriter_controller.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/env_observer.h"
+#include "ui/events/ash/event_rewriter_ash.h"
 
 namespace ui {
 class EventRewriter;
@@ -20,6 +23,7 @@ namespace ash {
 
 class AccessibilityEventRewriter;
 class KeyboardDrivenEventRewriter;
+class PrerewrittenEventForwarder;
 
 // Owns ui::EventRewriters and ensures that they are added to each root window
 // EventSource, current and future, in the order that they are added to this.
@@ -35,7 +39,7 @@ class ASH_EXPORT EventRewriterControllerImpl : public EventRewriterController,
   ~EventRewriterControllerImpl() override;
 
   // EventRewriterController:
-  void Initialize(ui::EventRewriterChromeOS::Delegate* event_rewriter_delegate,
+  void Initialize(ui::EventRewriterAsh::Delegate* event_rewriter_delegate,
                   AccessibilityEventRewriterDelegate*
                       accessibility_event_rewriter_delegate) override;
   void AddEventRewriter(std::unique_ptr<ui::EventRewriter> rewriter) override;
@@ -50,17 +54,36 @@ class ASH_EXPORT EventRewriterControllerImpl : public EventRewriterController,
   void OnHostInitialized(aura::WindowTreeHost* host) override;
 
   // Enable/disable the combination of alt + other key or mouse event
-  // mapping in EventRewriterChromeOS.
+  // mapping in EventRewriterAsh.
   void SetAltDownRemappingEnabled(bool enabled);
+
+  ui::EventRewriterAsh::Delegate* event_rewriter_ash_delegate() {
+    return event_rewriter_ash_delegate_;
+  }
+
+  PeripheralCustomizationEventRewriter*
+  peripheral_customization_event_rewriter() {
+    return peripheral_customization_event_rewriter_;
+  }
+
+  PrerewrittenEventForwarder* prerewritten_event_forwarder() {
+    return prerewritten_event_forwarder_;
+  }
 
  private:
   // The |EventRewriter|s managed by this controller.
   std::vector<std::unique_ptr<ui::EventRewriter>> rewriters_;
 
   // Owned by |rewriters_|.
-  AccessibilityEventRewriter* accessibility_event_rewriter_ = nullptr;
-  KeyboardDrivenEventRewriter* keyboard_driven_event_rewriter_ = nullptr;
-  ui::EventRewriterChromeOS* event_rewriter_chromeos_ = nullptr;
+  raw_ptr<AccessibilityEventRewriter> accessibility_event_rewriter_ = nullptr;
+  raw_ptr<PeripheralCustomizationEventRewriter>
+      peripheral_customization_event_rewriter_ = nullptr;
+  raw_ptr<PrerewrittenEventForwarder> prerewritten_event_forwarder_ = nullptr;
+  raw_ptr<KeyboardDrivenEventRewriter> keyboard_driven_event_rewriter_ =
+      nullptr;
+  raw_ptr<ui::EventRewriterAsh> event_rewriter_ash_ = nullptr;
+  raw_ptr<ui::EventRewriterAsh::Delegate> event_rewriter_ash_delegate_ =
+      nullptr;
 };
 
 }  // namespace ash

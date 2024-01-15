@@ -4,11 +4,13 @@
 
 #include "third_party/blink/public/common/loader/mime_sniffing_url_loader.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_piece.h"
+#include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "net/base/mime_sniffer.h"
+#include "services/network/public/cpp/record_ontransfersizeupdate_utils.h"
 #include "services/network/public/mojom/early_hints.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "third_party/blink/public/common/loader/mime_sniffing_throttle.h"
@@ -120,6 +122,8 @@ void MimeSniffingURLLoader::OnUploadProgress(
 }
 
 void MimeSniffingURLLoader::OnTransferSizeUpdated(int32_t transfer_size_diff) {
+  network::RecordOnTransferSizeUpdatedUMA(
+      network::OnTransferSizeUpdatedFrom::kMimeSniffingURLLoader);
   destination_url_loader_client_->OnTransferSizeUpdated(transfer_size_diff);
 }
 

@@ -15,12 +15,8 @@ import androidx.browser.trusted.TokenStore;
 import androidx.browser.trusted.TrustedWebActivityCallbackRemote;
 import androidx.browser.trusted.TrustedWebActivityService;
 
-/**
- * A TrustedWebActivityService to be used in TrustedWebActivityClientTest.
- */
+/** A TrustedWebActivityService to be used in TrustedWebActivityClientTest. */
 public class TestTrustedWebActivityService extends TrustedWebActivityService {
-    private static final String TAG = "TestTWAService";
-
     public static final String COMMAND_SET_RESPONSE = "setResponse";
     public static final String SET_RESPONSE_NAME = "setResponse.name";
     public static final String SET_RESPONSE_BUNDLE = "setResponse.bundle";
@@ -35,9 +31,7 @@ public class TestTrustedWebActivityService extends TrustedWebActivityService {
     private static final String LOCATION_PERMISSION_RESULT = "locationPermissionResult";
     private static final String START_LOCATION_COMMAND_NAME = "startLocation";
     private static final String STOP_LOCATION_COMMAND_NAME = "stopLocation";
-    private static final String LOCATION_ARG_ENABLE_HIGH_ACCURACY = "enableHighAccuracy";
     private static final String EXTRA_NEW_LOCATION_AVAILABLE_CALLBACK = "onNewLocationAvailable";
-    private static final String EXTRA_NEW_LOCATION_ERROR_CALLBACK = "onNewLocationError";
     private static final String EXTRA_COMMAND_SUCCESS = "success";
 
     private final TokenStore mTokenStore = new InMemoryStore();
@@ -59,10 +53,10 @@ public class TestTrustedWebActivityService extends TrustedWebActivityService {
     }
 
     @Override
-    public boolean onNotifyNotificationWithChannel(String platformTag, int platformId,
-            Notification notification, String channelName) {
-        MessengerService.sMessageHandler
-                .recordNotifyNotification(platformTag, platformId, channelName);
+    public boolean onNotifyNotificationWithChannel(
+            String platformTag, int platformId, Notification notification, String channelName) {
+        MessengerService.sMessageHandler.recordNotifyNotification(
+                platformTag, platformId, channelName);
         return true;
     }
 
@@ -126,8 +120,8 @@ public class TestTrustedWebActivityService extends TrustedWebActivityService {
         return executionResult;
     }
 
-    private static void runCallback(TrustedWebActivityCallbackRemote callback, String name,
-            Bundle args) {
+    private static void runCallback(
+            TrustedWebActivityCallbackRemote callback, String name, Bundle args) {
         if (callback == null) return;
         try {
             callback.runExtraCallback(name, args);

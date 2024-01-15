@@ -5,12 +5,12 @@
 #include "base/synchronization/waitable_event.h"
 
 #include <windows.h>
+
 #include <stddef.h>
 
 #include <algorithm>
 #include <utility>
 
-#include "base/debug/activity_tracker.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/threading/scoped_blocking_call.h"
@@ -93,8 +93,6 @@ size_t WaitableEvent::WaitMany(WaitableEvent** events, size_t count) {
   DCHECK(count) << "Cannot wait on no events";
   internal::ScopedBlockingCallWithBaseSyncPrimitives scoped_blocking_call(
       FROM_HERE, BlockingType::MAY_BLOCK);
-  // Record an event (the first) that this thread is blocking upon.
-  debug::ScopedEventWaitActivity event_activity(events[0]);
 
   HANDLE handles[MAXIMUM_WAIT_OBJECTS];
   CHECK_LE(count, static_cast<size_t>(MAXIMUM_WAIT_OBJECTS))

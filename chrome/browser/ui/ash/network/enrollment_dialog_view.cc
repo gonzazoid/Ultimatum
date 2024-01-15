@@ -4,8 +4,9 @@
 
 #include "chrome/browser/ui/ash/network/enrollment_dialog_view.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
@@ -15,12 +16,12 @@
 #include "chrome/browser/ui/browser_navigator_params.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/grit/generated_resources.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/network/client_cert_util.h"
 #include "chromeos/ash/components/network/managed_network_configuration_handler.h"
 #include "chromeos/ash/components/network/network_event_log.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
-#include "chromeos/login/login_state/login_state.h"
 #include "extensions/browser/extension_host.h"
 #include "extensions/common/constants.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -66,7 +67,7 @@ class EnrollmentDialogView : public views::DialogDelegateView {
 
   bool accepted_;
   std::string network_name_;
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   GURL target_uri_;
 };
 
@@ -158,7 +159,7 @@ class DialogEnrollmentDelegate {
  private:
   std::string network_guid_;
   std::string network_name_;
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 };
 
 DialogEnrollmentDelegate::DialogEnrollmentDelegate(
@@ -207,7 +208,7 @@ bool EnrollmentDialogAllowed(Profile* profile) {
   if (ProfileHelper::IsSigninProfile(profile))
     return false;
 
-  chromeos::LoginState::LoggedInUserType user_type =
+  LoginState::LoggedInUserType user_type =
       LoginState::Get()->GetLoggedInUserType();
   switch (user_type) {
     case LoginState::LOGGED_IN_USER_NONE:
@@ -242,28 +243,32 @@ bool CreateEnrollmentDialog(const std::string& network_id) {
     return false;
   }
   Profile* profile = ProfileManager::GetPrimaryUserProfile();
-  if (!EnrollmentDialogAllowed(profile))
+  if (!EnrollmentDialogAllowed(profile)) {
     return false;
+  }
   std::string username_hash = ProfileHelper::GetUserIdHashFromProfile(profile);
 
   onc::ONCSource onc_source = onc::ONC_SOURCE_NONE;
-  const base::Value* policy =
+  const base::Value::Dict* policy =
       NetworkHandler::Get()
           ->managed_network_configuration_handler()
           ->FindPolicyByGUID(username_hash, network_id, &onc_source);
 
-  if (!policy)
+  if (!policy) {
     return false;
+  }
 
   client_cert::ClientCertConfig cert_config;
-  OncToClientCertConfig(onc_source, policy->GetDict(), &cert_config);
+  OncToClientCertConfig(onc_source, *policy, &cert_config);
 
-  if (cert_config.client_cert_type != onc::client_cert::kPattern)
+  if (cert_config.client_cert_type != onc::client_cert::kPattern) {
     return false;
+  }
 
-  if (cert_config.pattern.Empty())
+  if (cert_config.pattern.Empty()) {
     NET_LOG(ERROR) << "Certificate pattern is empty for: "
                    << NetworkGuidId(network_id);
+  }
 
   if (cert_config.pattern.enrollment_uri_list().empty()) {
     NET_LOG(EVENT) << "No enrollment URIs for: " << NetworkGuidId(network_id);

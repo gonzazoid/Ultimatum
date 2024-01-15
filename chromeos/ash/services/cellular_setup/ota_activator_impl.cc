@@ -6,8 +6,8 @@
 
 #include <sstream>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_functions.h"
@@ -150,7 +150,7 @@ const NetworkState* OtaActivatorImpl::GetCellularNetworkState() const {
 }
 
 void OtaActivatorImpl::StartActivation() {
-  network_state_handler_->AddObserver(this, FROM_HERE);
+  network_state_handler_observer_.Observe(network_state_handler_.get());
 
   // If |activation_delegate_| becomes disconnected, the activation request is
   // considered canceled.
@@ -194,7 +194,7 @@ void OtaActivatorImpl::AttemptNextActivationStep() {
 void OtaActivatorImpl::FinishActivationAttempt(
     mojom::ActivationResult activation_result) {
   DCHECK(network_state_handler_);
-  network_state_handler_->RemoveObserver(this, FROM_HERE);
+  network_state_handler_observer_.Reset();
   network_state_handler_ = nullptr;
 
   NET_LOG(EVENT) << "Finished attempt with result " << activation_result << ".";
@@ -224,7 +224,7 @@ void OtaActivatorImpl::AttemptToDiscoverSim() {
   // SIM slots and SIM cards in external dongles.
   bool has_psim_slots = false;
   for (const CellularSIMSlotInfo& sim_slot_info :
-       GetSimSlotInfosWithUpdatedEid(cellular_device)) {
+       cellular_utils::GetSimSlotInfosWithUpdatedEid(cellular_device)) {
     if (sim_slot_info.eid.empty()) {
       has_psim_slots = true;
       iccid_ = sim_slot_info.iccid;

@@ -7,15 +7,14 @@
  * the personalization hub.
  */
 
-import '../css/cros_button_style.css.js';
+import './ambient/ambient_preview_large_element.js';
 
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-
+import {getShouldShowTimeOfDayBanner} from './ambient/ambient_controller.js';
+import {isAmbientModeAllowed, isPersonalizationJellyEnabled, isRgbKeyboardSupported} from './load_time_booleans.js';
 import {getTemplate} from './personalization_main_element.html.js';
-import {isAmbientModeAllowed, Paths, PersonalizationRouter} from './personalization_router_element.js';
 import {WithPersonalizationStore} from './personalization_store.js';
 
-export class PersonalizationMain extends WithPersonalizationStore {
+export class PersonalizationMainElement extends WithPersonalizationStore {
   static get is() {
     return 'personalization-main';
   }
@@ -27,28 +26,34 @@ export class PersonalizationMain extends WithPersonalizationStore {
   static get properties() {
     return {
       path: String,
-      clickable_: {
+      shouldShowAmbientPreview_: {
         type: Boolean,
-        value: true,
+        value() {
+          return isAmbientModeAllowed() || isPersonalizationJellyEnabled();
+        },
       },
+      isRgbKeyboardSupported_: {
+        type: Boolean,
+        value() {
+          return isRgbKeyboardSupported();
+        },
+      },
+      shouldShowTimeOfDayBanner_: Boolean,
     };
   }
 
-  private isDarkLightModeEnabled_(): boolean {
-    return loadTimeData.getBoolean('isDarkLightModeEnabled');
-  }
+  private shouldShowTimeOfDayBanner_: boolean;
 
-  private isAmbientModeAllowed_(): boolean {
-    return isAmbientModeAllowed();
-  }
+  override connectedCallback() {
+    super.connectedCallback();
+    this.watch<PersonalizationMainElement['shouldShowTimeOfDayBanner_']>(
+        'shouldShowTimeOfDayBanner_',
+        state => state.ambient.shouldShowTimeOfDayBanner);
+    this.updateFromStore();
 
-  private isRgbKeyboardSupported_(): boolean {
-    return loadTimeData.getBoolean('isRgbKeyboardSupported');
-  }
-
-  private onClickAmbientSubpageLink_() {
-    PersonalizationRouter.instance().goToRoute(Paths.AMBIENT);
+    getShouldShowTimeOfDayBanner(this.getStore());
   }
 }
 
-customElements.define(PersonalizationMain.is, PersonalizationMain);
+customElements.define(
+    PersonalizationMainElement.is, PersonalizationMainElement);

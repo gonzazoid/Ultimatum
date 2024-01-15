@@ -5,7 +5,8 @@
 #ifndef CHROME_RENDERER_SUPERVISED_USER_SUPERVISED_USER_ERROR_PAGE_CONTROLLER_H_
 #define CHROME_RENDERER_SUPERVISED_USER_SUPERVISED_USER_ERROR_PAGE_CONTROLLER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "gin/wrappable.h"
 
@@ -45,7 +46,6 @@ class SupervisedUserErrorPageController
   void GoBack();
   void RequestUrlAccessRemote();
   void RequestUrlAccessLocal();
-  void Feedback();
 
   void OnRequestUrlAccessRemote(bool success);
 
@@ -55,7 +55,7 @@ class SupervisedUserErrorPageController
 
   base::WeakPtr<SupervisedUserErrorPageControllerDelegate> const delegate_;
 
-  content::RenderFrame* render_frame_;
+  raw_ptr<content::RenderFrame, ExperimentalRenderer> render_frame_;
 
   // This weak factory is used to generate weak pointers to the controller that
   // are used for the request permission callback, so messages to no longer

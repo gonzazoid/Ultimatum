@@ -36,37 +36,32 @@ void HitTestingTransformState::Translate(const gfx::Vector2dF& offset) {
 
 void HitTestingTransformState::ApplyTransform(
     const TransformPaintPropertyNode& transform) {
-  if (transform.IsIdentityOr2DTranslation()) {
-    Translate(transform.Translation2D());
-  } else {
-    accumulated_transform_.PreConcat(transform.MatrixWithOriginApplied());
-  }
+  accumulated_transform_.PreConcat(transform.MatrixWithOriginApplied());
 }
 
-void HitTestingTransformState::ApplyTransform(
-    const GeometryMapper::Translation2DOrMatrix& transform) {
-  if (transform.IsIdentityOr2DTranslation()) {
-    Translate(transform.Translation2D());
-  } else {
-    accumulated_transform_.PreConcat(transform.Matrix());
-  }
+void HitTestingTransformState::ApplyTransform(const gfx::Transform& transform) {
+  accumulated_transform_.PreConcat(transform);
 }
 
 void HitTestingTransformState::Flatten() {
-  TransformationMatrix inverse_transform = accumulated_transform_.Inverse();
-  last_planar_point_ = inverse_transform.ProjectPoint(last_planar_point_);
-  last_planar_quad_ = inverse_transform.ProjectQuad(last_planar_quad_);
-  last_planar_area_ = inverse_transform.ProjectQuad(last_planar_area_);
+  gfx::Transform inverse_transform;
+  if (accumulated_transform_.GetInverse(&inverse_transform)) {
+    last_planar_point_ = inverse_transform.ProjectPoint(last_planar_point_);
+    last_planar_quad_ = inverse_transform.ProjectQuad(last_planar_quad_);
+    last_planar_area_ = inverse_transform.ProjectQuad(last_planar_area_);
+  }
 
   accumulated_transform_.MakeIdentity();
 }
 
 gfx::PointF HitTestingTransformState::MappedPoint() const {
-  return accumulated_transform_.Inverse().ProjectPoint(last_planar_point_);
+  return accumulated_transform_.InverseOrIdentity().ProjectPoint(
+      last_planar_point_);
 }
 
 gfx::QuadF HitTestingTransformState::MappedQuad() const {
-  return accumulated_transform_.Inverse().ProjectQuad(last_planar_quad_);
+  return accumulated_transform_.InverseOrIdentity().ProjectQuad(
+      last_planar_quad_);
 }
 
 PhysicalRect HitTestingTransformState::BoundsOfMappedQuad() const {
@@ -79,13 +74,8 @@ PhysicalRect HitTestingTransformState::BoundsOfMappedArea() const {
 
 PhysicalRect HitTestingTransformState::BoundsOfMappedQuadInternal(
     const gfx::QuadF& q) const {
-  gfx::RectF rect =
-      accumulated_transform_.Inverse().ProjectQuad(q).BoundingBox();
-  PhysicalOffset offset(LayoutUnit::FromFloatRound(rect.x()),
-                        LayoutUnit::FromFloatRound(rect.y()));
-  PhysicalSize size(LayoutUnit::FromFloatRound(rect.right()) - offset.left,
-                    LayoutUnit::FromFloatRound(rect.bottom()) - offset.top);
-  return PhysicalRect(offset, size);
+  return PhysicalRect::EnclosingRect(
+      accumulated_transform_.InverseOrIdentity().ProjectQuad(q).BoundingBox());
 }
 
 }  // namespace blink

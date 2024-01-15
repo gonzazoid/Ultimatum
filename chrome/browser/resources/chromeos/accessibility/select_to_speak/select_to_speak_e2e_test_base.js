@@ -12,12 +12,7 @@ SelectToSpeakE2ETest = class extends E2ETestBase {
   testGenCppIncludes() {
     super.testGenCppIncludes();
     GEN(`
-#include "ash/accessibility/accessibility_delegate.h"
 #include "ash/keyboard/ui/keyboard_util.h"
-#include "ash/shell.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "chrome/browser/ash/accessibility/accessibility_manager.h"
 #include "ui/accessibility/accessibility_features.h"
     `);
   }
@@ -58,19 +53,38 @@ SelectToSpeakE2ETest = class extends E2ETestBase {
 
   /**
    * Triggers select-to-speak to read selected text at a keystroke.
+   * @param {AutomationNode?} root The root of the tree upon which selection was
+   *     set, if the presence of a selection should be verified before
+   *     triggering text.
    */
-  triggerReadSelectedText() {
+  async triggerReadSelectedText(root) {
+    while (true && root) {
+      // Wait for some non-empty selection.
+      const focusedNode = await AsyncUtil.getFocus();
+      if (focusedNode && focusedNode.root) {
+        const hasSelectionObjects = focusedNode.root.selectionStartObject &&
+            focusedNode.root.selectionEndObject;
+        const hasTextSelection =
+            focusedNode.textSelStart && focusedNode.textSelEnd;
+        if (hasSelectionObjects || hasTextSelection) {
+          break;
+        }
+      }
+      await this.waitForEvent(
+          root, 'documentSelectionChanged', /*capture=*/ false);
+    }
     assertFalse(this.mockTts.currentlySpeaking());
     assertEquals(this.mockTts.pendingUtterances().length, 0);
-    selectToSpeak.fireMockKeyDownEvent(
-        {keyCode: SelectToSpeakConstants.SEARCH_KEY_CODE});
-    selectToSpeak.fireMockKeyDownEvent(
-        {keyCode: SelectToSpeakConstants.READ_SELECTION_KEY_CODE});
+    selectToSpeak.sendMockSelectToSpeakKeysPressedChanged(
+        [SelectToSpeakConstants.SEARCH_KEY_CODE]);
+    selectToSpeak.sendMockSelectToSpeakKeysPressedChanged([
+      SelectToSpeakConstants.SEARCH_KEY_CODE,
+      SelectToSpeakConstants.READ_SELECTION_KEY_CODE,
+    ]);
     assertTrue(selectToSpeak.inputHandler_.isSelectionKeyDown_);
-    selectToSpeak.fireMockKeyUpEvent(
-        {keyCode: SelectToSpeakConstants.READ_SELECTION_KEY_CODE});
-    selectToSpeak.fireMockKeyUpEvent(
-        {keyCode: SelectToSpeakConstants.SEARCH_KEY_CODE});
+    selectToSpeak.sendMockSelectToSpeakKeysPressedChanged(
+        [SelectToSpeakConstants.SEARCH_KEY_CODE]);
+    selectToSpeak.sendMockSelectToSpeakKeysPressedChanged([]);
   }
 
   /**
@@ -79,12 +93,15 @@ SelectToSpeakE2ETest = class extends E2ETestBase {
    * @param {Object} upEvent The mouse-up event.
    */
   triggerReadMouseSelectedText(downEvent, upEvent) {
-    selectToSpeak.fireMockKeyDownEvent(
-        {keyCode: SelectToSpeakConstants.SEARCH_KEY_CODE});
-    selectToSpeak.fireMockMouseDownEvent(downEvent);
-    selectToSpeak.fireMockMouseUpEvent(upEvent);
-    selectToSpeak.fireMockKeyUpEvent(
-        {keyCode: SelectToSpeakConstants.SEARCH_KEY_CODE});
+    selectToSpeak.sendMockSelectToSpeakKeysPressedChanged(
+        [SelectToSpeakConstants.SEARCH_KEY_CODE]);
+    selectToSpeak.fireMockMouseEvent(
+        chrome.accessibilityPrivate.SyntheticMouseEventType.PRESS,
+        downEvent.screenX, downEvent.screenY);
+    selectToSpeak.fireMockMouseEvent(
+        chrome.accessibilityPrivate.SyntheticMouseEventType.RELEASE,
+        upEvent.screenX, upEvent.screenY);
+    selectToSpeak.sendMockSelectToSpeakKeysPressedChanged([]);
   }
 
   /**
@@ -94,5 +111,21 @@ SelectToSpeakE2ETest = class extends E2ETestBase {
    */
   waitOneEventLoop(callback) {
     setTimeout(this.newCallback(callback), 0);
+  }
+
+  /**
+   * Waits for mockTts to speak.
+   * @return {?Promise}
+   */
+  async waitForSpeech() {
+    // No need to do anything if TTS is already happening.
+    if (this.mockTts.currentlySpeaking()) {
+      return;
+    }
+    return new Promise(resolve => {
+      this.mockTts.setOnSpeechCallbacks([this.newCallback((utterance) => {
+        resolve();
+      })]);
+    });
   }
 };

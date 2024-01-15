@@ -5,6 +5,8 @@
 #ifndef CHROME_BROWSER_AUTOFILL_ADDRESS_ACCESSORY_CONTROLLER_IMPL_H_
 #define CHROME_BROWSER_AUTOFILL_ADDRESS_ACCESSORY_CONTROLLER_IMPL_H_
 
+#include <optional>
+
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/autofill/address_accessory_controller.h"
@@ -36,14 +38,16 @@ class AddressAccessoryControllerImpl
 
   // AccessoryController:
   void RegisterFillingSourceObserver(FillingSourceObserver observer) override;
-  absl::optional<AccessorySheetData> GetSheetData() const override;
+  std::optional<AccessorySheetData> GetSheetData() const override;
   void OnFillingTriggered(FieldGlobalId focused_field_id,
                           const AccessorySheetField& selection) override;
+  void OnPasskeySelected(const std::vector<uint8_t>& passkey_id) override;
   void OnOptionSelected(AccessoryAction selected_action) override;
   void OnToggleChanged(AccessoryAction toggled_action, bool enabled) override;
 
   // AddressAccessoryController:
   void RefreshSuggestions() override;
+  base::WeakPtr<AddressAccessoryController> AsWeakPtr() override;
 
   // PersonalDataManagerObserver:
   void OnPersonalDataChanged() override;
@@ -80,6 +84,8 @@ class AddressAccessoryControllerImpl
   raw_ptr<PersonalDataManager> personal_data_manager_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
+
+  base::WeakPtrFactory<AddressAccessoryControllerImpl> weak_ptr_factory_{this};
 };
 
 }  // namespace autofill

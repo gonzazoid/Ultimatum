@@ -7,7 +7,6 @@
 
 #include "base/lazy_instance.h"
 #include "base/location.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/timer/lap_timer.h"
 #include "cc/raster/raster_buffer.h"
@@ -273,7 +272,7 @@ class TileManagerPerfTest : public TestLayerTreeHostBase {
 
       GlobalStateThatImpactsTilePriority global_state(GlobalStateForTest());
       tile_manager()->PrepareTiles(global_state);
-      tile_manager()->CheckForCompletedTasks();
+      tile_manager()->PrepareToDraw();
       timer_.NextLap();
     } while (!timer_.HasTimeLimitExpired());
 

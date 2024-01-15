@@ -7,9 +7,10 @@
 #include <limits>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/weak_ptr.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
@@ -28,7 +29,6 @@
 #include "components/infobars/content/content_infobar_manager.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
-#include "components/variations/variations_associated_data.h"
 #include "components/version_info/version_info.h"
 #include "content/public/browser/visibility.h"
 #include "content/public/browser/web_contents.h"
@@ -45,13 +45,7 @@ void ResetCheckDefaultBrowserPref(const base::FilePath& profile_path) {
 void ShowPrompt() {
   // Show the default browser request prompt in the most recently active,
   // visible, tabbed browser. Do not show the prompt if no such browser exists.
-  BrowserList* browser_list = BrowserList::GetInstance();
-  for (auto browser_iterator =
-           browser_list->begin_browsers_ordered_by_activation();
-       browser_iterator != browser_list->end_browsers_ordered_by_activation();
-       ++browser_iterator) {
-    Browser* browser = *browser_iterator;
-
+  for (Browser* browser : BrowserList::GetInstance()->OrderedByActivation()) {
     // |browser| may be null in UI tests. Also, don't show the prompt in an app
     // window, which is not meant to be treated as a Chrome window. Only show in
     // a normal, tabbed browser.
@@ -103,8 +97,8 @@ bool ShouldShowDefaultBrowserPrompt(Profile* profile) {
       profile->GetPrefs()->GetInt64(prefs::kDefaultBrowserLastDeclined);
   if (last_dismissed_value) {
     int period_days = 0;
-    base::StringToInt(variations::GetVariationParamValue(
-                          "DefaultBrowserInfobar", "RefreshPeriodDays"),
+    base::StringToInt(base::GetFieldTrialParamValue("DefaultBrowserInfobar",
+                                                    "RefreshPeriodDays"),
                       &period_days);
     if (period_days <= 0 || period_days == std::numeric_limits<int>::max())
       return false;  // Failed to parse a reasonable period.

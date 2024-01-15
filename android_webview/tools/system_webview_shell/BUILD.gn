@@ -38,6 +38,7 @@ android_apk("system_webview_shell_apk") {
     ":system_webview_shell_apk_resources",
   ]
   enable_lint = true
+  min_sdk_version = min_supported_sdk_version
   lint_baseline_file = "lint-baseline.xml"
   lint_suppressions_file = "lint-suppressions.xml"
 }
@@ -54,9 +55,11 @@ android_library("system_webview_shell_apk_java") {
     "apk/src/org/chromium/webview_shell/WebPlatformTestsActivity.java",
     "apk/src/org/chromium/webview_shell/WebViewAnimationTestActivity.java",
     "apk/src/org/chromium/webview_shell/WebViewBrowserActivity.java",
+    "apk/src/org/chromium/webview_shell/WebViewBrowserFragment.java",
     "apk/src/org/chromium/webview_shell/WebViewBrowserSecondProcessActivity.java",
     "apk/src/org/chromium/webview_shell/WebViewCreateDestroyActivity.java",
     "apk/src/org/chromium/webview_shell/WebViewLayoutTestActivity.java",
+    "apk/src/org/chromium/webview_shell/WebViewMultiProfileBrowserActivity.java",
     "apk/src/org/chromium/webview_shell/WebViewThreadTestActivity.java",
     "apk/src/org/chromium/webview_shell/WebViewTracingActivity.java",
     "apk/src/org/chromium/webview_shell/WebViewWithClipPath.java",
@@ -68,6 +71,8 @@ android_library("system_webview_shell_apk_java") {
     "//third_party/androidx:androidx_activity_activity_java",
     "//third_party/androidx:androidx_annotation_annotation_java",
     "//third_party/androidx:androidx_appcompat_appcompat_java",
+    "//third_party/androidx:androidx_core_core_java",
+    "//third_party/androidx:androidx_fragment_fragment_java",
     "//third_party/androidx:androidx_savedstate_savedstate_java",
     "//third_party/androidx:androidx_webkit_webkit_java",
   ]
@@ -102,13 +107,17 @@ android_resources("system_webview_shell_apk_resources") {
     "apk/res/layout/activity_webview.xml",
     "apk/res/layout/activity_webview_animation_test.xml",
     "apk/res/layout/activity_webview_browser.xml",
+    "apk/res/layout/activity_webview_multi_profile.xml",
+    "apk/res/layout/fragment_webview_browser.xml",
     "apk/res/menu/main_menu.xml",
     "apk/res/values-night/colors.xml",
     "apk/res/values-v17/styles.xml",
     "apk/res/values-v29/styles.xml",
     "apk/res/values/colors.xml",
+    "apk/res/values/ids.xml",
     "apk/res/values/strings.xml",
     "apk/res/values/styles.xml",
+    "apk/res/xml/ad_services_config.xml",
     "apk/res/xml/network_security_config.xml",
   ]
 }
@@ -124,8 +133,7 @@ instrumentation_test_apk("system_webview_shell_page_cycler_apk") {
     "//base:base_java_test_support",
     "//content/public/android:content_java",
     "//content/public/test/android:content_java_test_support",
-    "//third_party/android_support_test_runner:rules_java",
-    "//third_party/android_support_test_runner:runner_java",
+    "//third_party/androidx:androidx_test_monitor_java",
     "//third_party/androidx:androidx_test_runner_java",
     "//third_party/junit",
   ]
@@ -153,8 +161,7 @@ instrumentation_test_apk("system_webview_shell_layout_test_apk") {
     "//base:base_java",
     "//base:base_java_test_support",
     "//third_party/android_sdk:android_test_base_java",
-    "//third_party/android_support_test_runner:rules_java",
-    "//third_party/android_support_test_runner:runner_java",
+    "//third_party/androidx:androidx_test_monitor_java",
     "//third_party/androidx:androidx_test_runner_java",
     "//third_party/junit",
   ]
@@ -169,6 +176,7 @@ instrumentation_test_apk("system_webview_shell_layout_test_apk") {
     "//third_party/blink/web_tests/webexposed/global-interface-listing.html",
     "//third_party/blink/web_tests/webexposed/global-interface-listing-expected.txt",
     "//third_party/blink/web_tests/webexposed/global-interface-listing-platform-specific-expected.txt",
+    "//third_party/chromium-variations",
     "$root_build_dir/third_party/blink/web_tests/resources/js-test.js",
   ]
 

@@ -6,6 +6,7 @@
 #define ASH_SYSTEM_DIAGNOSTICS_DIAGNOSTICS_LOG_CONTROLLER_H_
 
 #include <memory>
+#include <string>
 
 #include "ash/ash_export.h"
 #include "ash/login_status.h"
@@ -43,6 +44,10 @@ class ASH_EXPORT DiagnosticsLogController : SessionObserver {
   static bool IsInitialized();
   static void Initialize(std::unique_ptr<DiagnosticsBrowserDelegate> delegate);
 
+  // GenerateSessionStringOnBlockingPool needs to be run on blocking thread.
+  // Generates a string of the combined Diagnostics logs.
+  std::string GenerateSessionStringOnBlockingPool() const;
+
   // GenerateSessionLogOnBlockingPool needs to be run on blocking
   // thread. Stores combined log at |save_file_path| and returns
   // whether file creation is successful.
@@ -59,10 +64,16 @@ class ASH_EXPORT DiagnosticsLogController : SessionObserver {
   // description of LoginStatus types.
   void OnLoginStatusChanged(LoginStatus login_status) override;
 
-  KeyboardInputLog* GetKeyboardInputLog();
-  NetworkingLog* GetNetworkingLog();
-  RoutineLog* GetRoutineLog();
-  TelemetryLog* GetTelemetryLog();
+  KeyboardInputLog& GetKeyboardInputLog();
+  NetworkingLog& GetNetworkingLog();
+  RoutineLog& GetRoutineLog();
+  TelemetryLog& GetTelemetryLog();
+
+  void SetKeyboardInputLogForTesting(
+      std::unique_ptr<KeyboardInputLog> keyboard_input_log);
+  void SetNetworkingLogForTesting(std::unique_ptr<NetworkingLog> network_log);
+  void SetRoutineLogForTesting(std::unique_ptr<RoutineLog> routine_log);
+  void SetTelemetryLogForTesting(std::unique_ptr<TelemetryLog> telemetry_log);
 
  private:
   friend class DiagnosticsLogControllerTest;

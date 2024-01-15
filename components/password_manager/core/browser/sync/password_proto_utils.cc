@@ -68,16 +68,21 @@ void TrimPasswordSpecificsDataNotesForCaching(
 
 }  // namespace
 
-sync_pb::PasswordSpecificsData_PasswordIssues PasswordIssuesMapToProto(
+sync_pb::PasswordIssues PasswordIssuesMapToProto(
     const base::flat_map<InsecureType, InsecurityMetadata>&
         form_password_issues) {
-  sync_pb::PasswordSpecificsData::PasswordIssues password_issues;
+  sync_pb::PasswordIssues password_issues;
   for (const auto& [insecure_type, insecure_metadata] : form_password_issues) {
-    sync_pb::PasswordSpecificsData::PasswordIssues::PasswordIssue issue;
-    issue.set_date_first_detection_microseconds(
+    sync_pb::PasswordIssues::PasswordIssue issue;
+    issue.set_date_first_detection_windows_epoch_micros(
         insecure_metadata.create_time.ToDeltaSinceWindowsEpoch()
             .InMicroseconds());
     issue.set_is_muted(insecure_metadata.is_muted.value());
+    if (base::FeatureList::IsEnabled(
+            password_manager::features::kPasswordIssuesInSpecificsMetadata)) {
+      issue.set_trigger_notification_from_backend_on_detection(
+          insecure_metadata.trigger_notification_from_backend.value());
+    }
     switch (insecure_type) {
       case InsecureType::kLeaked:
         DCHECK(!password_issues.has_leaked_password_issue());
@@ -100,33 +105,40 @@ sync_pb::PasswordSpecificsData_PasswordIssues PasswordIssuesMapToProto(
   return password_issues;
 }
 
+InsecurityMetadata InsecurityMetadataFromProto(
+    const sync_pb::PasswordIssues::PasswordIssue& issue) {
+  if (base::FeatureList::IsEnabled(
+          password_manager::features::kPasswordIssuesInSpecificsMetadata)) {
+    return InsecurityMetadata(
+        ConvertToBaseTime(issue.date_first_detection_windows_epoch_micros()),
+        IsMuted(issue.is_muted()),
+        TriggerBackendNotification(
+            issue.trigger_notification_from_backend_on_detection()));
+  }
+  return InsecurityMetadata(
+      ConvertToBaseTime(issue.date_first_detection_windows_epoch_micros()),
+      IsMuted(issue.is_muted()), TriggerBackendNotification(false));
+}
+
 base::flat_map<InsecureType, InsecurityMetadata> PasswordIssuesMapFromProto(
     const sync_pb::PasswordSpecificsData& password_data) {
   base::flat_map<InsecureType, InsecurityMetadata> form_issues;
   const auto& specifics_issues = password_data.password_issues();
   if (specifics_issues.has_leaked_password_issue()) {
     const auto& issue = specifics_issues.leaked_password_issue();
-    form_issues[InsecureType::kLeaked] = InsecurityMetadata(
-        ConvertToBaseTime(issue.date_first_detection_microseconds()),
-        IsMuted(issue.is_muted()));
+    form_issues[InsecureType::kLeaked] = InsecurityMetadataFromProto(issue);
   }
   if (specifics_issues.has_reused_password_issue()) {
     const auto& issue = specifics_issues.reused_password_issue();
-    form_issues[InsecureType::kReused] = InsecurityMetadata(
-        ConvertToBaseTime(issue.date_first_detection_microseconds()),
-        IsMuted(issue.is_muted()));
+    form_issues[InsecureType::kReused] = InsecurityMetadataFromProto(issue);
   }
   if (specifics_issues.has_weak_password_issue()) {
     const auto& issue = specifics_issues.weak_password_issue();
-    form_issues[InsecureType::kWeak] = InsecurityMetadata(
-        ConvertToBaseTime(issue.date_first_detection_microseconds()),
-        IsMuted(issue.is_muted()));
+    form_issues[InsecureType::kWeak] = InsecurityMetadataFromProto(issue);
   }
   if (specifics_issues.has_phished_password_issue()) {
     const auto& issue = specifics_issues.phished_password_issue();
-    form_issues[InsecureType::kPhished] = InsecurityMetadata(
-        ConvertToBaseTime(issue.date_first_detection_microseconds()),
-        IsMuted(issue.is_muted()));
+    form_issues[InsecureType::kPhished] = InsecurityMetadataFromProto(issue);
   }
   return form_issues;
 }
@@ -199,6 +211,11 @@ sync_pb::PasswordSpecificsData TrimPasswordSpecificsDataForCaching(
   trimmed_password_data.clear_date_last_used();
   trimmed_password_data.clear_password_issues();
   trimmed_password_data.clear_date_password_modified_windows_epoch_micros();
+  trimmed_password_data.clear_sender_email();
+  trimmed_password_data.clear_sender_name();
+  trimmed_password_data.clear_date_received_windows_epoch_micros();
+  trimmed_password_data.clear_sharing_notification_displayed();
+  trimmed_password_data.clear_sender_profile_image_url();
 
   TrimPasswordSpecificsDataNotesForCaching(trimmed_password_data);
 
@@ -211,7 +228,7 @@ sync_pb::PasswordSpecifics SpecificsFromPassword(
   // WARNING: if you are adding support for new `PasswordSpecificsData` fields,
   // you need to update the following functions accordingly:
   // `TrimPasswordSpecificsDataForCaching`
-  // `TrimRemoteSpecificsForCachingPreservesOnlyUnknownFields`
+  // `TrimAllSupportedFieldsFromRemoteSpecificsPreservesOnlyUnknownFields`
   DCHECK_EQ(0u, TrimPasswordSpecificsDataForCaching(
                     SpecificsDataFromPassword(password_form,
                                               /*base_password_data=*/{}))
@@ -220,6 +237,8 @@ sync_pb::PasswordSpecifics SpecificsFromPassword(
   sync_pb::PasswordSpecifics specifics;
   *specifics.mutable_client_only_encrypted_data() =
       SpecificsDataFromPassword(password_form, base_password_data);
+  *specifics.mutable_unencrypted_metadata() =
+      SpecificsMetadataFromPassword(password_form);
   return specifics;
 }
 
@@ -231,8 +250,10 @@ sync_pb::PasswordSpecificsData SpecificsDataFromPassword(
   sync_pb::PasswordSpecificsData password_data = base_password_data;
   password_data.set_scheme(static_cast<int>(password_form.scheme));
   password_data.set_signon_realm(password_form.signon_realm);
-  password_data.set_origin(password_form.url.spec());
-  password_data.set_action(password_form.action.spec());
+  password_data.set_origin(
+      password_form.url.is_valid() ? password_form.url.spec() : "");
+  password_data.set_action(
+      password_form.action.is_valid() ? password_form.action.spec() : "");
   password_data.set_username_element(
       base::UTF16ToUTF8(password_form.username_element));
   password_data.set_password_element(
@@ -250,9 +271,10 @@ sync_pb::PasswordSpecificsData SpecificsDataFromPassword(
       password_form.date_created.ToDeltaSinceWindowsEpoch().InMicroseconds());
   password_data.set_blacklisted(password_form.blocked_by_user);
   password_data.set_type(static_cast<int>(password_form.type));
-  password_data.set_times_used(password_form.times_used);
+  password_data.set_times_used(password_form.times_used_in_html_form);
   password_data.set_display_name(base::UTF16ToUTF8(password_form.display_name));
-  password_data.set_avatar_url(password_form.icon_url.spec());
+  password_data.set_avatar_url(
+      password_form.icon_url.is_valid() ? password_form.icon_url.spec() : "");
   password_data.set_federation_url(
       password_form.federation_origin.opaque()
           ? std::string()
@@ -263,7 +285,33 @@ sync_pb::PasswordSpecificsData SpecificsDataFromPassword(
     *password_data.mutable_notes() =
         PasswordNotesToProto(password_form.notes, base_password_data.notes());
   }
+  password_data.set_sender_email(base::UTF16ToUTF8(password_form.sender_email));
+  password_data.set_sender_name(base::UTF16ToUTF8(password_form.sender_name));
+  password_data.set_date_received_windows_epoch_micros(
+      password_form.date_received.ToDeltaSinceWindowsEpoch().InMicroseconds());
+  password_data.set_sharing_notification_displayed(
+      password_form.sharing_notification_displayed);
+  password_data.set_sender_profile_image_url(
+      password_form.sender_profile_image_url.is_valid()
+          ? password_form.sender_profile_image_url.spec()
+          : "");
   return password_data;
+}
+
+sync_pb::PasswordSpecificsMetadata SpecificsMetadataFromPassword(
+    const PasswordForm& password_form) {
+  sync_pb::PasswordSpecificsMetadata password_metadata;
+  password_metadata.set_url(password_form.signon_realm);
+  password_metadata.set_blacklisted(password_form.blocked_by_user);
+  password_metadata.set_date_last_used_windows_epoch_micros(
+      password_form.date_last_used.ToDeltaSinceWindowsEpoch().InMicroseconds());
+  if (base::FeatureList::IsEnabled(
+          password_manager::features::kPasswordIssuesInSpecificsMetadata)) {
+    *password_metadata.mutable_password_issues() =
+        PasswordIssuesMapToProto(password_form.password_issues);
+  }
+  password_metadata.set_type(static_cast<int>(password_form.type));
+  return password_metadata;
 }
 
 PasswordForm PasswordFromSpecifics(
@@ -295,7 +343,7 @@ PasswordForm PasswordFromSpecifics(
   password.date_created = ConvertToBaseTime(password_data.date_created());
   password.blocked_by_user = password_data.blacklisted();
   password.type = static_cast<PasswordForm::Type>(password_data.type());
-  password.times_used = password_data.times_used();
+  password.times_used_in_html_form = password_data.times_used();
   password.display_name = base::UTF8ToUTF16(password_data.display_name());
   password.icon_url = GURL(password_data.avatar_url());
   password.federation_origin =
@@ -304,6 +352,14 @@ PasswordForm PasswordFromSpecifics(
   if (base::FeatureList::IsEnabled(syncer::kPasswordNotesWithBackup)) {
     password.notes = PasswordNotesFromProto(password_data.notes());
   }
+  password.sender_email = base::UTF8ToUTF16(password_data.sender_email());
+  password.sender_name = base::UTF8ToUTF16(password_data.sender_name());
+  password.date_received =
+      ConvertToBaseTime(password_data.date_received_windows_epoch_micros());
+  password.sharing_notification_displayed =
+      password_data.sharing_notification_displayed();
+  password.sender_profile_image_url =
+      GURL(password_data.sender_profile_image_url());
   return password;
 }
 

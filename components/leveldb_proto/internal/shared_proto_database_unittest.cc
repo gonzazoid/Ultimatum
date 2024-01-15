@@ -4,8 +4,9 @@
 
 #include "components/leveldb_proto/internal/shared_proto_database.h"
 
-#include "base/bind.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
 #include "build/build_config.h"
@@ -125,12 +126,7 @@ TEST_F(SharedProtoDatabaseTest, CreateClient_SucceedsWithCreate) {
   ASSERT_EQ(status, Enums::InitStatus::kOK);
 }
 
-// TODO(912117): Fix flaky test!
-#if !BUILDFLAG(IS_ANDROID)
-TEST_F(SharedProtoDatabaseTest, DISABLED_CreateClient_FailsWithoutCreate) {
-#else
 TEST_F(SharedProtoDatabaseTest, CreateClient_FailsWithoutCreate) {
-#endif
   auto status = Enums::InitStatus::kError;
   GetClientAndWait(db(), ProtoDbType::TEST_DATABASE0,
                    false /* create_if_missing */, &status);

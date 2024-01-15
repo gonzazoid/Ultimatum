@@ -7,7 +7,7 @@
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/cart/fetch_discount_worker.h"
 #include "components/commerce/core/commerce_feature_list.h"
-#include "components/endpoint_fetcher/endpoint_fetcher.h"
+#include "components/endpoint_fetcher/mock_endpoint_fetcher.h"
 #include "components/search/ntp_features.h"
 #include "components/session_proto_db/session_proto_db.h"
 #include "content/public/test/browser_task_environment.h"
@@ -83,26 +83,14 @@ const char kEndpointResponse[] =
 
 }  // namespace
 
-class MockEndpointFetcher : public EndpointFetcher {
- public:
-  explicit MockEndpointFetcher(
-      const net::NetworkTrafficAnnotationTag& annotation_tag)
-      : EndpointFetcher(annotation_tag) {}
-
-  MOCK_METHOD(void,
-              PerformRequest,
-              (EndpointFetcherCallback endpoint_fetcher_callback,
-               const char* key),
-              (override));
-};
-
 class CartDiscountFetcherTest {
  public:
   static std::string generatePostData(
       std::vector<CartDB::KeyAndValue> proto_pairs,
       double current_timestamp) {
     return CartDiscountFetcher::generatePostData(
-        std::move(proto_pairs), base::Time::FromDoubleT(current_timestamp));
+        std::move(proto_pairs),
+        base::Time::FromSecondsSinceUnixEpoch(current_timestamp));
   }
 
   static std::unique_ptr<EndpointFetcher> CreateEndpointFetcher(
@@ -160,7 +148,7 @@ TEST(CartDiscountFetcherTest, TestGeneratePostData) {
 
 TEST(CartDiscountFetcherTest, TestOnDiscountsAvailableParsing) {
   std::unique_ptr<EndpointFetcher> mock_endpoint_fetcher =
-      std::make_unique<MockEndpointFetcher>(TRAFFIC_ANNOTATION_FOR_TESTS);
+      std::make_unique<MockEndpointFetcher>();
 
   base::MockCallback<CartDiscountFetcher::CartDiscountFetcherCallback>
       mock_callback;
@@ -178,7 +166,7 @@ TEST(CartDiscountFetcherTest, TestOnDiscountsAvailableParsing) {
 
 TEST(CartDiscountFetcherTest, TestHighestDiscounts) {
   std::unique_ptr<EndpointFetcher> mock_endpoint_fetcher =
-      std::make_unique<MockEndpointFetcher>(TRAFFIC_ANNOTATION_FOR_TESTS);
+      std::make_unique<MockEndpointFetcher>();
 
   base::MockCallback<CartDiscountFetcher::CartDiscountFetcherCallback>
       mock_callback;
@@ -202,7 +190,7 @@ TEST(CartDiscountFetcherTest, TestHighestDiscounts) {
 
 TEST(CartDiscountFetcherTest, TestRawMaerchantOffersIsOptional) {
   std::unique_ptr<EndpointFetcher> mock_endpoint_fetcher =
-      std::make_unique<MockEndpointFetcher>(TRAFFIC_ANNOTATION_FOR_TESTS);
+      std::make_unique<MockEndpointFetcher>();
 
   base::MockCallback<CartDiscountFetcher::CartDiscountFetcherCallback>
       mock_callback;
@@ -248,7 +236,7 @@ TEST(CartDiscountFetcherTest, TestRawMaerchantOffersIsOptional) {
 
 TEST(CartDiscountFetcherTest, TestExternalTesterDiscount) {
   std::unique_ptr<EndpointFetcher> mock_endpoint_fetcher =
-      std::make_unique<MockEndpointFetcher>(TRAFFIC_ANNOTATION_FOR_TESTS);
+      std::make_unique<MockEndpointFetcher>();
 
   base::MockCallback<CartDiscountFetcher::CartDiscountFetcherCallback>
       mock_callback;
@@ -296,7 +284,7 @@ TEST(CartDiscountFetcherTest, TestExternalTesterDiscount) {
 
 TEST(CartDiscountFetcherTest, TestNoRuleDiscounts) {
   std::unique_ptr<EndpointFetcher> mock_endpoint_fetcher =
-      std::make_unique<MockEndpointFetcher>(TRAFFIC_ANNOTATION_FOR_TESTS);
+      std::make_unique<MockEndpointFetcher>();
 
   base::MockCallback<CartDiscountFetcher::CartDiscountFetcherCallback>
       mock_callback;
@@ -330,7 +318,7 @@ TEST(CartDiscountFetcherTest, TestNoRuleDiscounts) {
 
 TEST(CartDiscountFetcherTest, TestOverallDiscountText) {
   std::unique_ptr<EndpointFetcher> mock_endpoint_fetcher =
-      std::make_unique<MockEndpointFetcher>(TRAFFIC_ANNOTATION_FOR_TESTS);
+      std::make_unique<MockEndpointFetcher>();
 
   base::MockCallback<CartDiscountFetcher::CartDiscountFetcherCallback>
       mock_callback;
@@ -367,7 +355,7 @@ TEST(CartDiscountFetcherTest, TestOverallDiscountText) {
 
 TEST(CartDiscountFetcherTest, TestOverallDiscountTextWithRuleDiscounts) {
   std::unique_ptr<EndpointFetcher> mock_endpoint_fetcher =
-      std::make_unique<MockEndpointFetcher>(TRAFFIC_ANNOTATION_FOR_TESTS);
+      std::make_unique<MockEndpointFetcher>();
 
   base::MockCallback<CartDiscountFetcher::CartDiscountFetcherCallback>
       mock_callback;
@@ -420,7 +408,7 @@ TEST(CartDiscountFetcherTest, TestCodeBasedRuleDiscount) {
       {});
 
   std::unique_ptr<EndpointFetcher> mock_endpoint_fetcher =
-      std::make_unique<MockEndpointFetcher>(TRAFFIC_ANNOTATION_FOR_TESTS);
+      std::make_unique<MockEndpointFetcher>();
 
   base::MockCallback<CartDiscountFetcher::CartDiscountFetcherCallback>
       mock_callback;

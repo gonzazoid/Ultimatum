@@ -6,21 +6,22 @@
 
 #include <memory>
 
-#include "ash/services/device_sync/cryptauth_device_manager.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/simple_test_clock.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
 #include "base/timer/mock_timer.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_state_test_helper.h"
 #include "chromeos/ash/components/network/network_type_pattern.h"
 #include "chromeos/ash/components/tether/fake_host_scanner.h"
+#include "chromeos/ash/services/device_sync/cryptauth_device_manager.h"
 #include "chromeos/dbus/power/power_manager_client.h"
-#include "chromeos/login/login_state/login_state.h"
 #include "components/session_manager/core/session_manager.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -74,7 +75,7 @@ class HostScanSchedulerImplTest : public testing::Test {
     test_clock_.Advance(base::Seconds(10));
     test_task_runner_ = base::MakeRefCounted<base::TestSimpleTaskRunner>();
     host_scan_scheduler_->SetTestDoubles(
-        base::WrapUnique(mock_host_scan_batch_timer_), &test_clock_,
+        base::WrapUnique(mock_host_scan_batch_timer_.get()), &test_clock_,
         test_task_runner_);
   }
 
@@ -171,7 +172,8 @@ class HostScanSchedulerImplTest : public testing::Test {
   std::unique_ptr<FakeHostScanner> fake_host_scanner_;
   std::unique_ptr<session_manager::SessionManager> session_manager_;
 
-  base::MockOneShotTimer* mock_host_scan_batch_timer_;
+  raw_ptr<base::MockOneShotTimer, DanglingUntriaged>
+      mock_host_scan_batch_timer_;
   base::SimpleTestClock test_clock_;
   scoped_refptr<base::TestSimpleTaskRunner> test_task_runner_;
 

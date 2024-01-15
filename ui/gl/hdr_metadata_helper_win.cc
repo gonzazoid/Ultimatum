@@ -111,26 +111,25 @@ DXGI_HDR_METADATA_HDR10 HDRMetadataHelperWin::HDRMetadataToDXGI(
     const gfx::HDRMetadata& hdr_metadata) {
   DXGI_HDR_METADATA_HDR10 metadata{};
 
-  auto& primary_r = hdr_metadata.color_volume_metadata.primary_r;
-  metadata.RedPrimary[0] = primary_r.x() * kPrimariesFixedPoint;
-  metadata.RedPrimary[1] = primary_r.y() * kPrimariesFixedPoint;
-  auto& primary_g = hdr_metadata.color_volume_metadata.primary_g;
-  metadata.GreenPrimary[0] = primary_g.x() * kPrimariesFixedPoint;
-  metadata.GreenPrimary[1] = primary_g.y() * kPrimariesFixedPoint;
-  auto& primary_b = hdr_metadata.color_volume_metadata.primary_b;
-  metadata.BluePrimary[0] = primary_b.x() * kPrimariesFixedPoint;
-  metadata.BluePrimary[1] = primary_b.y() * kPrimariesFixedPoint;
-  auto& white_point = hdr_metadata.color_volume_metadata.white_point;
-  metadata.WhitePoint[0] = white_point.x() * kPrimariesFixedPoint;
-  metadata.WhitePoint[1] = white_point.y() * kPrimariesFixedPoint;
-  metadata.MaxMasteringLuminance =
-      hdr_metadata.color_volume_metadata.luminance_max;
+  const auto smpte_st_2086 =
+      hdr_metadata.smpte_st_2086.value_or(gfx::HdrMetadataSmpteSt2086());
+  const auto& primaries = smpte_st_2086.primaries;
+  metadata.RedPrimary[0] = primaries.fRX * kPrimariesFixedPoint;
+  metadata.RedPrimary[1] = primaries.fRY * kPrimariesFixedPoint;
+  metadata.GreenPrimary[0] = primaries.fGX * kPrimariesFixedPoint;
+  metadata.GreenPrimary[1] = primaries.fGY * kPrimariesFixedPoint;
+  metadata.BluePrimary[0] = primaries.fBX * kPrimariesFixedPoint;
+  metadata.BluePrimary[1] = primaries.fBY * kPrimariesFixedPoint;
+  metadata.WhitePoint[0] = primaries.fWX * kPrimariesFixedPoint;
+  metadata.WhitePoint[1] = primaries.fWY * kPrimariesFixedPoint;
+  metadata.MaxMasteringLuminance = smpte_st_2086.luminance_max;
   metadata.MinMasteringLuminance =
-      hdr_metadata.color_volume_metadata.luminance_min *
-      kMinLuminanceFixedPoint;
-  metadata.MaxContentLightLevel = hdr_metadata.max_content_light_level;
-  metadata.MaxFrameAverageLightLevel =
-      hdr_metadata.max_frame_average_light_level;
+      smpte_st_2086.luminance_min * kMinLuminanceFixedPoint;
+
+  const auto cta_861_3 =
+      hdr_metadata.cta_861_3.value_or(gfx::HdrMetadataCta861_3());
+  metadata.MaxContentLightLevel = cta_861_3.max_content_light_level;
+  metadata.MaxFrameAverageLightLevel = cta_861_3.max_frame_average_light_level;
 
   return metadata;
 }

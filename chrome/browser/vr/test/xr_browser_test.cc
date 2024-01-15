@@ -5,16 +5,17 @@
 #include <cstring>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/debug/debugger.h"
 #include "base/environment.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/path_service.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/browser.h"
@@ -205,7 +206,7 @@ void XrBrowserTestBase::RunJavaScriptOrFail(
     return;
   }
 
-  ASSERT_TRUE(content::ExecuteScript(web_contents, js_expression))
+  ASSERT_TRUE(content::ExecJs(web_contents, js_expression))
       << "Failed to run given JavaScript: " << js_expression;
 }
 
@@ -217,13 +218,8 @@ bool XrBrowserTestBase::RunJavaScriptAndExtractBoolOrFail(
     return false;
   }
 
-  bool result = false;
   DLOG(INFO) << "Run JavaScript: " << js_expression;
-  EXPECT_TRUE(content::ExecuteScriptAndExtractBool(
-      web_contents,
-      "window.domAutomationController.send(" + js_expression + ")", &result))
-      << "Failed to run given JavaScript for bool: " << js_expression;
-  return result;
+  return content::EvalJs(web_contents, js_expression).ExtractBool();
 }
 
 std::string XrBrowserTestBase::RunJavaScriptAndExtractStringOrFail(
@@ -234,12 +230,7 @@ std::string XrBrowserTestBase::RunJavaScriptAndExtractStringOrFail(
     return "";
   }
 
-  std::string result;
-  EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-      web_contents,
-      "window.domAutomationController.send(" + js_expression + ")", &result))
-      << "Failed to run given JavaScript for string: " << js_expression;
-  return result;
+  return content::EvalJs(web_contents, js_expression).ExtractString();
 }
 
 bool XrBrowserTestBase::PollJavaScriptBoolean(
@@ -288,7 +279,7 @@ void XrBrowserTestBase::BlockOnCondition(
     }
     // In the case where the condition is met fast enough that the given
     // RunLoop hasn't started yet, spin until it's available.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&XrBrowserTestBase::BlockOnCondition,
                        base::Unretained(this), std::move(condition),
@@ -303,7 +294,7 @@ void XrBrowserTestBase::BlockOnCondition(
     return;
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&XrBrowserTestBase::BlockOnCondition,
                      base::Unretained(this), std::move(condition),

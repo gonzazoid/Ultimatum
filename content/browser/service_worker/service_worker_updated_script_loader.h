@@ -91,7 +91,7 @@ class CONTENT_EXPORT ServiceWorkerUpdatedScriptLoader final
       const std::vector<std::string>& removed_headers,
       const net::HttpRequestHeaders& modified_headers,
       const net::HttpRequestHeaders& modified_cors_exempt_headers,
-      const absl::optional<GURL>& new_url) override;
+      const std::optional<GURL>& new_url) override;
   void SetPriority(net::RequestPriority priority,
                    int32_t intra_priority_value) override;
   void PauseReadingBodyFromNet() override;
@@ -102,7 +102,7 @@ class CONTENT_EXPORT ServiceWorkerUpdatedScriptLoader final
   void OnReceiveResponse(
       network::mojom::URLResponseHeadPtr response_head,
       mojo::ScopedDataPipeConsumerHandle body,
-      absl::optional<mojo_base::BigBuffer> cached_metadata) override;
+      std::optional<mojo_base::BigBuffer> cached_metadata) override;
   void OnReceiveRedirect(
       const net::RedirectInfo& redirect_info,
       network::mojom::URLResponseHeadPtr response_head) override;
@@ -188,6 +188,12 @@ class CONTENT_EXPORT ServiceWorkerUpdatedScriptLoader final
   // Used for responding with the fetched script to this loader's client.
   URLLoaderClientCheckedRemote client_;
   mojo::ScopedDataPipeProducerHandle client_producer_;
+
+  // Holds a part of body data from network that wasn't able to write to
+  // `client_producer_` since the data pipe was full. Only available when
+  // `client_producer_` gets blocked.
+  scoped_refptr<network::MojoToNetPendingBuffer> pending_network_buffer_;
+  uint32_t pending_network_bytes_available_ = 0;
 
   // Represents the state of |network_loader_|.
   // Corresponds to the steps of calls as a URLLoaderClient.

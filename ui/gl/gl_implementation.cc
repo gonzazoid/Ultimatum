@@ -39,12 +39,17 @@ bool GLImplementationParts::IsValid() const {
 bool GLImplementationParts::IsAllowed(
     const std::vector<GLImplementationParts>& allowed_impls) const {
   // Given a vector of GLImplementationParts, this function checks if "this"
-  // GLImplementation is found in the list, with a special case where if the
-  // list contains ANGLE/kDefault, "this" may be any ANGLE implementation.
+  // GLImplementation is found in the list, with a special case where if "this"
+  // implementation is kDefault, and we see any ANGLE implementation in the
+  // list, then we allow "this" implementation, or vice versa, if "this" is
+  // any ANGLE implementation, and we see kDefault in the list, "this" is
+  // allowed.
   for (const GLImplementationParts& impl_iter : allowed_impls) {
     if (gl == kGLImplementationEGLANGLE &&
         impl_iter.gl == kGLImplementationEGLANGLE) {
       if (impl_iter.angle == ANGLEImplementation::kDefault) {
+        return true;
+      } else if (angle == ANGLEImplementation::kDefault) {
         return true;
       } else if (angle == impl_iter.angle) {
         return true;
@@ -59,67 +64,55 @@ bool GLImplementationParts::IsAllowed(
 std::string GLImplementationParts::ToString() const {
   std::stringstream s;
   s << "(gl=";
-  switch (gl) {
-    case GLImplementation::kGLImplementationNone:
-      s << "none";
-      break;
-    case GLImplementation::kGLImplementationDesktopGL:
-      s << "desktop-gl";
-      break;
-    case GLImplementation::kGLImplementationDesktopGLCoreProfile:
-      s << "desktop-gl-core-profile";
-      break;
-    case GLImplementation::kGLImplementationEGLGLES2:
-      s << "egl-gles2";
-      break;
-    case GLImplementation::kGLImplementationMockGL:
-      s << "mock-gl";
-      break;
-    case GLImplementation::kGLImplementationStubGL:
-      s << "stub-gl";
-      break;
-    case GLImplementation::kGLImplementationDisabled:
-      s << "disabled";
-      break;
-    case GLImplementation::kGLImplementationEGLANGLE:
-      s << "egl-angle";
-      break;
-  }
+  s << GLString();
   s << ",angle=";
-  switch (angle) {
-    case ANGLEImplementation::kNone:
-      s << "none";
-      break;
-    case ANGLEImplementation::kD3D9:
-      s << "d3d9";
-      break;
-    case ANGLEImplementation::kD3D11:
-      s << "d3d11";
-      break;
-    case ANGLEImplementation::kOpenGL:
-      s << "opengl";
-      break;
-    case ANGLEImplementation::kOpenGLES:
-      s << "opengles";
-      break;
-    case ANGLEImplementation::kNull:
-      s << "null";
-      break;
-    case ANGLEImplementation::kVulkan:
-      s << "vulkan";
-      break;
-    case ANGLEImplementation::kSwiftShader:
-      s << "swiftshader";
-      break;
-    case ANGLEImplementation::kMetal:
-      s << "metal";
-      break;
-    case ANGLEImplementation::kDefault:
-      s << "default";
-      break;
-  }
+  s << ANGLEString();
   s << ")";
   return s.str();
+}
+
+std::string GLImplementationParts::GLString() const {
+  switch (gl) {
+    case GLImplementation::kGLImplementationNone:
+      return "none";
+    case GLImplementation::kGLImplementationEGLGLES2:
+      return "egl-gles2";
+    case GLImplementation::kGLImplementationMockGL:
+      return "mock-gl";
+    case GLImplementation::kGLImplementationStubGL:
+      return "stub-gl";
+    case GLImplementation::kGLImplementationDisabled:
+      return "disabled";
+    case GLImplementation::kGLImplementationEGLANGLE:
+      return "egl-angle";
+  }
+  return "";
+}
+
+std::string GLImplementationParts::ANGLEString() const {
+  switch (angle) {
+    case ANGLEImplementation::kNone:
+      return "none";
+    case ANGLEImplementation::kD3D9:
+      return "d3d9";
+    case ANGLEImplementation::kD3D11:
+      return "d3d11";
+    case ANGLEImplementation::kOpenGL:
+      return "opengl";
+    case ANGLEImplementation::kOpenGLES:
+      return "opengles";
+    case ANGLEImplementation::kNull:
+      return "null";
+    case ANGLEImplementation::kVulkan:
+      return "vulkan";
+    case ANGLEImplementation::kSwiftShader:
+      return "swiftshader";
+    case ANGLEImplementation::kMetal:
+      return "metal";
+    case ANGLEImplementation::kDefault:
+      return "default";
+  }
+  return "";
 }
 
 namespace {
@@ -129,8 +122,6 @@ const struct {
   const char* angle_name;
   GLImplementationParts implementation;
 } kGLImplementationNamePairs[] = {
-    {kGLImplementationDesktopName, kANGLEImplementationNoneName,
-     GLImplementationParts(kGLImplementationDesktopGL)},
     {kGLImplementationEGLName, kANGLEImplementationNoneName,
      GLImplementationParts(kGLImplementationEGLGLES2)},
     {kGLImplementationANGLEName, kANGLEImplementationNoneName,
@@ -237,8 +228,6 @@ gfx::ExtensionSet GetGLExtensionsFromCurrentContext(
 }
 
 }  // namespace
-
-base::ThreadLocalPointer<CurrentGL>* g_current_gl_context_tls = NULL;
 
 #if defined(USE_EGL)
 EGLApi* g_current_egl_context;
@@ -374,11 +363,6 @@ void SetANGLEImplementation(ANGLEImplementation implementation) {
 
 ANGLEImplementation GetANGLEImplementation() {
   return g_gl_implementation.angle;
-}
-
-bool HasDesktopGLFeatures() {
-  return kGLImplementationDesktopGL == g_gl_implementation.gl ||
-         kGLImplementationDesktopGLCoreProfile == g_gl_implementation.gl;
 }
 
 void AddGLNativeLibrary(base::NativeLibrary library) {

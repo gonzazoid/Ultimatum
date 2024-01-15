@@ -74,8 +74,9 @@ class TestLayoutDelegate : public OpaqueBrowserFrameViewLayoutDelegate {
   bool IsMinimized() const override { return false; }
   bool IsFullscreen() const override { return false; }
   bool IsTabStripVisible() const override { return window_title_.empty(); }
+  bool GetBorderlessModeEnabled() const override { return false; }
   int GetTabStripHeight() const override {
-    return IsTabStripVisible() ? GetLayoutConstant(TAB_HEIGHT) : 0;
+    return IsTabStripVisible() ? GetLayoutConstant(TAB_STRIP_HEIGHT) : 0;
   }
   bool IsToolbarVisible() const override { return true; }
   gfx::Size GetTabstripMinimumSize() const override {
@@ -89,11 +90,11 @@ class TestLayoutDelegate : public OpaqueBrowserFrameViewLayoutDelegate {
   bool EverHasVisibleBackgroundTabShapes() const override { return false; }
   void UpdateWindowControlsOverlay(
       const gfx::Rect& bounding_rect) const override {}
-  bool IsTranslucentWindowOpacitySupported() const override { return true; }
   bool ShouldDrawRestoredFrameShadow() const override { return true; }
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
-  ui::WindowTiledEdges GetTiledEdges() const override { return {}; }
+#if BUILDFLAG(IS_LINUX)
+  bool IsTiled() const override { return false; }
 #endif
+  int WebAppButtonHeight() const override { return 0; }
 
  private:
   std::u16string window_title_;
@@ -361,18 +362,19 @@ class OpaqueBrowserFrameViewLayoutTest
   }
 
   std::unique_ptr<views::Widget> widget_;
-  raw_ptr<views::View> root_view_ = nullptr;
-  raw_ptr<OpaqueBrowserFrameViewLayout> layout_manager_ = nullptr;
+  raw_ptr<views::View, DanglingUntriaged> root_view_ = nullptr;
+  raw_ptr<OpaqueBrowserFrameViewLayout, DanglingUntriaged> layout_manager_ =
+      nullptr;
   std::unique_ptr<TestLayoutDelegate> delegate_;
 
   // Widgets:
-  raw_ptr<views::ImageButton> minimize_button_ = nullptr;
-  raw_ptr<views::ImageButton> maximize_button_ = nullptr;
-  raw_ptr<views::ImageButton> restore_button_ = nullptr;
-  raw_ptr<views::ImageButton> close_button_ = nullptr;
+  raw_ptr<views::ImageButton, DanglingUntriaged> minimize_button_ = nullptr;
+  raw_ptr<views::ImageButton, DanglingUntriaged> maximize_button_ = nullptr;
+  raw_ptr<views::ImageButton, DanglingUntriaged> restore_button_ = nullptr;
+  raw_ptr<views::ImageButton, DanglingUntriaged> close_button_ = nullptr;
 
-  TabIconView* tab_icon_view_ = nullptr;
-  raw_ptr<views::Label> window_title_ = nullptr;
+  raw_ptr<TabIconView, DanglingUntriaged> tab_icon_view_ = nullptr;
+  raw_ptr<views::Label, DanglingUntriaged> window_title_ = nullptr;
 };
 
 TEST_P(OpaqueBrowserFrameViewLayoutTest, BasicWindow) {

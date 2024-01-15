@@ -15,15 +15,10 @@
 namespace blink {
 
 ReadableStreamDefaultControllerWithScriptScope::
-    ReadableStreamDefaultControllerWithScriptScope(ScriptState* script_state,
-                                                   ScriptValue controller)
-    : script_state_(script_state) {
-  v8::Local<v8::Object> controller_object =
-      controller.V8Value().As<v8::Object>();
-  controller_ = V8ReadableStreamDefaultController::ToImpl(controller_object);
-
-  DCHECK(controller_);
-}
+    ReadableStreamDefaultControllerWithScriptScope(
+        ScriptState* script_state,
+        ReadableStreamDefaultController* controller)
+    : script_state_(script_state), controller_(controller) {}
 
 void ReadableStreamDefaultControllerWithScriptScope::Deactivate() {
   controller_ = nullptr;
@@ -33,10 +28,15 @@ void ReadableStreamDefaultControllerWithScriptScope::Close() {
   if (!controller_)
     return;
 
-  ScriptState::Scope scope(script_state_);
-
   if (ReadableStreamDefaultController::CanCloseOrEnqueue(controller_)) {
-    ReadableStreamDefaultController::Close(script_state_, controller_);
+    if (script_state_->ContextIsValid()) {
+      ScriptState::Scope scope(script_state_);
+      ReadableStreamDefaultController::Close(script_state_, controller_);
+    } else {
+      // If the context is not valid then Close() will not try to resolve the
+      // promises, and that is not a problem.
+      ReadableStreamDefaultController::Close(script_state_, controller_);
+    }
   }
   controller_ = nullptr;
 }
@@ -62,7 +62,7 @@ void ReadableStreamDefaultControllerWithScriptScope::Enqueue(
   ScriptState::Scope scope(script_state_);
 
   v8::Isolate* isolate = script_state_->GetIsolate();
-  ExceptionState exception_state(isolate, ExceptionState::kUnknownContext, "",
+  ExceptionState exception_state(isolate, ExceptionContextType::kUnknown, "",
                                  "");
   v8::MicrotasksScope microtasks_scope(
       isolate, ToMicrotaskQueue(script_state_),

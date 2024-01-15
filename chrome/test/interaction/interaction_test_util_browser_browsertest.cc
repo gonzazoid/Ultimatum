@@ -2,9 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "chrome/test/interaction/feature_engagement_initialized_observer.h"
 #include "chrome/test/interaction/interaction_test_util_browser.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/browser_window.h"
@@ -14,11 +15,14 @@
 #include "chrome/test/interaction/webcontents_interaction_test_util.h"
 #include "content/public/test/browser_test.h"
 #include "ui/base/interaction/element_identifier.h"
+#include "ui/base/interaction/interaction_test_util.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/views/interaction/element_tracker_views.h"
 
 namespace {
+DEFINE_LOCAL_ELEMENT_IDENTIFIER_VALUE(kWebContentsElementId);
 constexpr char kDocumentWithTitle1URL[] = "/title1.html";
+constexpr char kSkipPixelTestsReason[] = "Should only run in pixel_tests.";
 }
 
 class InteractionTestUtilBrowserTest : public InteractiveBrowserTest {
@@ -53,27 +57,44 @@ IN_PROC_BROWSER_TEST_F(InteractionTestUtilBrowserTest, GetBrowserFromContext) {
 
 IN_PROC_BROWSER_TEST_F(InteractionTestUtilBrowserTest, CompareScreenshot_View) {
   RunTestSequence(
+      SetOnIncompatibleAction(OnIncompatibleAction::kSkipTest,
+                              kSkipPixelTestsReason),
       // This adds a callback that calls
       // InteractionTestUtilBrowser::CompareScreenshot().
-      Screenshot(kAppMenuButtonElementId, "AppMenuButton", "3924454"));
+      Screenshot(kToolbarAppMenuButtonElementId, "AppMenuButton", "3924454"));
 }
 
 IN_PROC_BROWSER_TEST_F(InteractionTestUtilBrowserTest,
                        CompareScreenshot_WebPage) {
-  DEFINE_LOCAL_ELEMENT_IDENTIFIER_VALUE(kWebContentsElementId);
-
   // Set the browser view to a consistent size.
   BrowserView* const browser_view =
       BrowserView::GetBrowserViewForBrowser(browser());
   browser_view->GetWidget()->SetSize({400, 300});
 
-  InstrumentTab(browser(), kWebContentsElementId);
   const GURL url = embedded_test_server()->GetURL(kDocumentWithTitle1URL);
 
-  RunTestSequence(NavigateWebContents(kWebContentsElementId, url),
+  RunTestSequence(InstrumentTab(kWebContentsElementId),
+                  SetOnIncompatibleAction(OnIncompatibleAction::kSkipTest,
+                                          kSkipPixelTestsReason),
+                  NavigateWebContents(kWebContentsElementId, url),
                   // This adds a callback that calls
                   // InteractionTestUtilBrowser::CompareScreenshot().
                   Screenshot(kWebContentsElementId, std::string(), "3924454"));
+}
+
+IN_PROC_BROWSER_TEST_F(InteractionTestUtilBrowserTest, ConfirmOmnibox) {
+  constexpr char16_t kNewUrl[] = u"chrome://version";
+
+  RunTestSequence(
+      InstrumentTab(kWebContentsElementId),
+      EnterText(kOmniboxElementId, kNewUrl), Confirm(kOmniboxElementId),
+      WaitForWebContentsNavigation(kWebContentsElementId, GURL(kNewUrl)));
+}
+
+IN_PROC_BROWSER_TEST_F(InteractionTestUtilBrowserTest,
+                       ObserveFeatureEngagementInitialized) {
+  RunTestSequence(ObserveState(kFeatureEngagementInitializedState, browser()),
+                  WaitForState(kFeatureEngagementInitializedState, true));
 }
 
 class InteractionTestUtilBrowserSelectTabTest
@@ -103,19 +124,25 @@ IN_PROC_BROWSER_TEST_P(InteractionTestUtilBrowserSelectTabTest, SelectTab) {
 
   // Select a few different tabs using both the browser and tabstrip as targets.
   InteractionTestUtilBrowser test_util;
-  test_util.SelectTab(browser_el, 2);
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util.SelectTab(browser_el, 2));
   EXPECT_EQ(2, tab_strip->GetActiveIndex());
-  test_util.SelectTab(tabstrip_el, 1);
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util.SelectTab(tabstrip_el, 1));
   EXPECT_EQ(1, tab_strip->GetActiveIndex());
-  test_util.SelectTab(tabstrip_el, 0);
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util.SelectTab(tabstrip_el, 0));
   EXPECT_EQ(0, tab_strip->GetActiveIndex());
-  test_util.SelectTab(browser_el, 3);
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util.SelectTab(browser_el, 3));
   EXPECT_EQ(3, tab_strip->GetActiveIndex());
 
   // Re-selecting the same tab shouldn't break anything.
-  test_util.SelectTab(tabstrip_el, 3);
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util.SelectTab(tabstrip_el, 3));
   EXPECT_EQ(3, tab_strip->GetActiveIndex());
-  test_util.SelectTab(browser_el, 3);
+  EXPECT_EQ(ui::test::ActionResult::kSucceeded,
+            test_util.SelectTab(browser_el, 3));
   EXPECT_EQ(3, tab_strip->GetActiveIndex());
 }
 

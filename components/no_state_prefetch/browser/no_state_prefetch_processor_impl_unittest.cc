@@ -4,6 +4,7 @@
 
 #include "components/no_state_prefetch/browser/no_state_prefetch_processor_impl.h"
 
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
@@ -68,7 +69,8 @@ class MockNoStatePrefetchProcessorImplDelegate final
   }
 
  private:
-  raw_ptr<MockNoStatePrefetchLinkManager> link_manager_;
+  raw_ptr<MockNoStatePrefetchLinkManager, AcrossTasksDanglingUntriaged>
+      link_manager_;
 };
 
 class NoStatePrefetchProcessorImplTest
@@ -170,6 +172,9 @@ TEST_F(NoStatePrefetchProcessorImplTest, StartTwice) {
   remote->Start(std::move(attributes2));
   remote.FlushForTesting();
   EXPECT_EQ(bad_message_error, "NSPPI_START_TWICE");
+  // Clean up error handler, to avoid causing other tests run in the same
+  // process from crashing.
+  mojo::SetDefaultProcessErrorHandler(base::NullCallback());
 }
 
 TEST_F(NoStatePrefetchProcessorImplTest, Cancel) {

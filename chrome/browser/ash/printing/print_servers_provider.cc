@@ -7,14 +7,14 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/values.h"
@@ -70,14 +70,15 @@ TaskResults ParseData(int task_id, std::unique_ptr<std::string> data) {
   std::set<GURL> print_server_urls;
   task_data.servers.reserve(json_blob.GetList().size());
   for (const base::Value& val : json_blob.GetList()) {
-    if (!val.is_dict()) {
+    auto* val_dict = val.GetIfDict();
+    if (!val_dict) {
       LOG(WARNING) << "Entry in print servers policy skipped. "
                    << "Not a dictionary.";
       continue;
     }
-    const std::string* id = val.FindStringKey("id");
-    const std::string* url = val.FindStringKey("url");
-    const std::string* name = val.FindStringKey("display_name");
+    const std::string* id = val_dict->FindString("id");
+    const std::string* url = val_dict->FindString("url");
+    const std::string* name = val_dict->FindString("display_name");
     if (!id || !url || !name) {
       LOG(WARNING) << "Entry in print servers policy skipped. The following "
                    << "fields are required: id, url, display_name.";
@@ -183,8 +184,12 @@ class PrintServersProviderImpl : public PrintServersProvider {
     }
   }
 
-  absl::optional<std::vector<PrintServer>> GetPrintServers() override {
-    return IsCompleted() ? absl::make_optional(result_servers_) : absl::nullopt;
+  std::optional<std::vector<PrintServer>> GetPrintServers() override {
+    return IsCompleted() ? std::make_optional(result_servers_) : std::nullopt;
+  }
+
+  base::WeakPtr<PrintServersProvider> AsWeakPtr() override {
+    return weak_ptr_factory_.GetWeakPtr();
   }
 
   void AddObserver(PrintServersProvider::Observer* observer) override {
@@ -214,8 +219,8 @@ class PrintServersProviderImpl : public PrintServersProvider {
   void SetData(std::unique_ptr<std::string> data) override {
     DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
     const bool previously_completed = IsCompleted();
-    base::PostTaskAndReplyWithResult(
-        task_runner_.get(), FROM_HERE,
+    task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&ParseData, ++last_received_task_, std::move(data)),
         base::BindOnce(&PrintServersProviderImpl::OnComputationComplete,
                        weak_ptr_factory_.GetWeakPtr()));
@@ -241,7 +246,8 @@ class PrintServersProviderImpl : public PrintServersProvider {
 
   // Called when a new allowlist is available.
   void UpdateAllowlist() {
-    allowlist_ = absl::nullopt;
+    DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+    allowlist_ = std::nullopt;
     // Fetch and parse the allowlist.
     const PrefService::Preference* pref =
         prefs_->FindPreference(allowlist_pref_);
@@ -318,11 +324,11 @@ class PrintServersProviderImpl : public PrintServersProvider {
   // The current input list of servers.
   std::vector<PrintServer> servers_;
   // The current allowlist.
-  absl::optional<std::set<std::string>> allowlist_ = absl::nullopt;
+  std::optional<std::set<std::string>> allowlist_ = std::nullopt;
   // The current resultant list of servers.
   std::vector<PrintServer> result_servers_;
 
-  PrefService* prefs_ = nullptr;
+  raw_ptr<PrefService, LeakedDanglingUntriaged> prefs_ = nullptr;
   PrefChangeRegistrar pref_change_registrar_;
   std::string allowlist_pref_;
 

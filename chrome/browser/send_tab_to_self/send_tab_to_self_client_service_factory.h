@@ -11,7 +11,7 @@ class Profile;
 
 namespace base {
 template <typename T>
-struct DefaultSingletonTraits;
+class NoDestructor;
 }  // namespace base
 
 namespace send_tab_to_self {
@@ -31,13 +31,13 @@ class SendTabToSelfClientServiceFactory : public ProfileKeyedServiceFactory {
       const SendTabToSelfClientServiceFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<SendTabToSelfClientServiceFactory>;
+  friend base::NoDestructor<SendTabToSelfClientServiceFactory>;
 
   SendTabToSelfClientServiceFactory();
   ~SendTabToSelfClientServiceFactory() override;
 
   // BrowserStateKeyedServiceFactory implementation.
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 
   bool ServiceIsCreatedWithBrowserContext() const override;

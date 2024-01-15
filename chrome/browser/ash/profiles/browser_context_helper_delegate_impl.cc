@@ -33,6 +33,20 @@ BrowserContextHelperDelegateImpl::DeprecatedGetBrowserContext(
   return profile_manager->GetProfile(path);
 }
 
+content::BrowserContext*
+BrowserContextHelperDelegateImpl::GetOrCreatePrimaryOTRBrowserContext(
+    content::BrowserContext* browser_context) {
+  Profile* profile = Profile::FromBrowserContext(browser_context);
+  return profile->GetPrimaryOTRProfile(/*create_if_needed=*/true);
+}
+
+content::BrowserContext*
+BrowserContextHelperDelegateImpl::GetOriginalBrowserContext(
+    content::BrowserContext* browser_context) {
+  Profile* profile = Profile::FromBrowserContext(browser_context);
+  return profile->GetOriginalProfile();
+}
+
 const base::FilePath* BrowserContextHelperDelegateImpl::GetUserDataDir() {
   // profile_manager can be null in unit tests.
   auto* profile_manager = g_browser_process->profile_manager();

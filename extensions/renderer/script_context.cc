@@ -5,9 +5,11 @@
 #include "extensions/renderer/script_context.h"
 
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
@@ -21,13 +23,15 @@
 #include "extensions/common/extension_api.h"
 #include "extensions/common/extension_urls.h"
 #include "extensions/common/manifest_handlers/sandboxed_page_info.h"
+#include "extensions/common/mojom/context_type.mojom.h"
 #include "extensions/common/permissions/permissions_data.h"
 #include "extensions/renderer/dispatcher.h"
+#include "extensions/renderer/isolated_world_manager.h"
+#include "extensions/renderer/renderer_context_data.h"
 #include "extensions/renderer/renderer_extension_registry.h"
+#include "extensions/renderer/renderer_frame_context_data.h"
 #include "extensions/renderer/v8_helpers.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration.mojom.h"
-#include "third_party/blink/public/platform/web_security_origin.h"
-#include "third_party/blink/public/web/web_document.h"
 #include "third_party/blink/public/web/web_document_loader.h"
 #include "third_party/blink/public/web/web_local_frame.h"
 #include "v8/include/v8-context.h"
@@ -41,105 +45,40 @@ namespace extensions {
 
 namespace {
 
-class WebLocalFrameAdapter
-    : public ContentScriptInjectionUrlGetter::FrameAdapter {
- public:
-  explicit WebLocalFrameAdapter(const blink::WebLocalFrame* frame)
-      : frame_(frame) {}
-
-  ~WebLocalFrameAdapter() override = default;
-
-  std::unique_ptr<FrameAdapter> Clone() const override {
-    return std::make_unique<WebLocalFrameAdapter>(frame_);
-  }
-
-  std::unique_ptr<FrameAdapter> GetLocalParentOrOpener() const override {
-    blink::WebFrame* parent_or_opener = nullptr;
-    if (frame_->Parent())
-      parent_or_opener = frame_->Parent();
-    else
-      parent_or_opener = frame_->Opener();
-    if (!parent_or_opener || !parent_or_opener->IsWebLocalFrame())
-      return nullptr;
-
-    blink::WebLocalFrame* local_parent_or_opener =
-        parent_or_opener->ToWebLocalFrame();
-    if (local_parent_or_opener->GetDocument().IsNull())
-      return nullptr;
-
-    return std::make_unique<WebLocalFrameAdapter>(local_parent_or_opener);
-  }
-
-  GURL GetUrl() const override {
-    if (frame_->GetDocument().Url().IsEmpty()) {
-      // It's possible for URL to be empty when `frame_` is on the initial empty
-      // document. TODO(https://crbug.com/1197308): Consider making  `frame_`'s
-      // document's URL about:blank instead of empty in that case.
-      return GURL(url::kAboutBlankURL);
-    }
-    return frame_->GetDocument().Url();
-  }
-
-  url::Origin GetOrigin() const override { return frame_->GetSecurityOrigin(); }
-
-  bool CanAccess(const url::Origin& target) const override {
-    return frame_->GetSecurityOrigin().CanAccess(target);
-  }
-
-  bool CanAccess(const FrameAdapter& target) const override {
-    // It is important that below `web_security_origin` wraps the security
-    // origin of the `target_frame` (rather than a new origin created via
-    // url::Origin round-trip - such an origin wouldn't be 100% equivalent -
-    // e.g. `disallowdocumentaccess` information might be lost).  FWIW, this
-    // scenario is execised by ScriptContextTest.GetEffectiveDocumentURL.
-    const blink::WebLocalFrame* target_frame =
-        static_cast<const WebLocalFrameAdapter&>(target).frame_;
-    blink::WebSecurityOrigin web_security_origin =
-        target_frame->GetDocument().GetSecurityOrigin();
-
-    return frame_->GetSecurityOrigin().CanAccess(web_security_origin);
-  }
-
-  uintptr_t GetId() const override {
-    return reinterpret_cast<uintptr_t>(frame_);
-  }
-
- private:
-  const blink::WebLocalFrame* const frame_;
-};
-
 GURL GetEffectiveDocumentURL(
     blink::WebLocalFrame* frame,
     const GURL& document_url,
     MatchOriginAsFallbackBehavior match_origin_as_fallback,
     bool allow_inaccessible_parents) {
   return ContentScriptInjectionUrlGetter::Get(
-      WebLocalFrameAdapter(frame), document_url, match_origin_as_fallback,
+      RendererFrameContextData(frame), document_url, match_origin_as_fallback,
       allow_inaccessible_parents);
 }
 
-std::string GetContextTypeDescriptionString(Feature::Context context_type) {
+std::string GetContextTypeDescriptionString(mojom::ContextType context_type) {
   switch (context_type) {
-    case Feature::UNSPECIFIED_CONTEXT:
+    case mojom::ContextType::kUnspecified:
       return "UNSPECIFIED";
-    case Feature::BLESSED_EXTENSION_CONTEXT:
+    case mojom::ContextType::kPrivilegedExtension:
       return "BLESSED_EXTENSION";
-    case Feature::UNBLESSED_EXTENSION_CONTEXT:
+    case mojom::ContextType::kUnprivilegedExtension:
       return "UNBLESSED_EXTENSION";
-    case Feature::CONTENT_SCRIPT_CONTEXT:
+    case mojom::ContextType::kContentScript:
       return "CONTENT_SCRIPT";
-    case Feature::WEB_PAGE_CONTEXT:
+    case mojom::ContextType::kWebPage:
       return "WEB_PAGE";
-    case Feature::BLESSED_WEB_PAGE_CONTEXT:
+    case mojom::ContextType::kPrivilegedWebPage:
       return "BLESSED_WEB_PAGE";
-    case Feature::WEBUI_CONTEXT:
+    case mojom::ContextType::kWebUi:
       return "WEBUI";
-    case Feature::WEBUI_UNTRUSTED_CONTEXT:
+    case mojom::ContextType::kUntrustedWebUi:
       return "WEBUI_UNTRUSTED";
-    case Feature::LOCK_SCREEN_EXTENSION_CONTEXT:
+    case mojom::ContextType::kLockscreenExtension:
       return "LOCK_SCREEN_EXTENSION";
-    case Feature::OFFSCREEN_EXTENSION_CONTEXT:
+    case mojom::ContextType::kOffscreenExtension:
       return "OFFSCREEN_EXTENSION_CONTEXT";
+    case mojom::ContextType::kUserScript:
+      return "USER_SCRIPT_CONTEXT";
   }
   NOTREACHED();
   return std::string();
@@ -188,13 +127,15 @@ ScriptContext::ScopedFrameDocumentLoader::~ScopedFrameDocumentLoader() {
 
 ScriptContext::ScriptContext(const v8::Local<v8::Context>& v8_context,
                              blink::WebLocalFrame* web_frame,
+                             const mojom::HostID& host_id,
                              const Extension* extension,
-                             Feature::Context context_type,
+                             mojom::ContextType context_type,
                              const Extension* effective_extension,
-                             Feature::Context effective_context_type)
+                             mojom::ContextType effective_context_type)
     : is_valid_(true),
       v8_context_(v8_context->GetIsolate(), v8_context),
       web_frame_(web_frame),
+      host_id_(host_id),
       extension_(extension),
       context_type_(context_type),
       effective_extension_(effective_extension),
@@ -207,6 +148,12 @@ ScriptContext::ScriptContext(const v8::Local<v8::Context>& v8_context,
   v8_context_.AnnotateStrongRetainer("extensions::ScriptContext::v8_context_");
   if (web_frame_)
     url_ = GetAccessCheckedFrameURL(web_frame_);
+  // Enforce the invariant that an extension should have a HostID that's set to
+  // the extension id.
+  if (extension_) {
+    CHECK_EQ(host_id_.type, mojom::HostID::HostType::kExtensions);
+    CHECK_EQ(host_id_.id, extension_->id());
+  }
 }
 
 ScriptContext::~ScriptContext() {
@@ -307,9 +254,9 @@ void ScriptContext::SafeCallFunction(
           content::V8ValueConverter::Create()->FromV8Value(result,
                                                            v8_context());
       std::move(callback).Run(
-          value ? absl::make_optional(
+          value ? std::make_optional(
                       base::Value::FromUniquePtrValue(std::move(value)))
-                : absl::nullopt,
+                : std::nullopt,
           start_time);
     }
   }
@@ -324,6 +271,9 @@ Feature::Availability ScriptContext::GetAvailability(
     const std::string& api_name,
     CheckAliasStatus check_alias) {
   DCHECK(thread_checker_.CalledOnValidThread());
+
+  // Special case #1: The `test` API depends on this being run in a test, in
+  // which case the kTestType switch is appended.
   if (base::StartsWith(api_name, "test", base::CompareCase::SENSITIVE)) {
     bool allowed = base::CommandLine::ForCurrentProcess()->
                        HasSwitch(::switches::kTestType);
@@ -332,6 +282,34 @@ Feature::Availability ScriptContext::GetAvailability(
     return Feature::Availability(result,
                                  allowed ? "" : "Only allowed in tests");
   }
+
+  // Special case #2: If it's a user script world, there are specific knobs for
+  // enabling or disabling APIs.
+  if (context_type_ == mojom::ContextType::kUserScript) {
+    CHECK(extension());
+
+    static const constexpr char* kMessagingApis[] = {
+        "runtime.onMessage",
+        "runtime.onConnect",
+        "runtime.sendMessage",
+        "runtime.connect",
+    };
+
+    if (base::ranges::find(kMessagingApis, api_name) !=
+        std::end(kMessagingApis)) {
+      bool is_available =
+          IsolatedWorldManager::GetInstance()
+              .IsMessagingEnabledInUserScriptWorlds(extension()->id());
+      if (!is_available) {
+        return Feature::Availability(
+            Feature::INVALID_CONTEXT,
+            "Messaging APIs are not enabled for this user script world.");
+      }
+    }
+
+    // Otherwise, continue through to the normal checks.
+  }
+
   // Hack: Hosted apps should have the availability of messaging APIs based on
   // the URL of the page (which might have access depending on some extension
   // with externally_connectable), not whether the app has access to messaging
@@ -343,7 +321,7 @@ Feature::Availability ScriptContext::GetAvailability(
   }
   return ExtensionAPI::GetSharedInstance()->IsAvailable(
       api_name, extension, context_type_, url(), check_alias,
-      kRendererProfileId);
+      kRendererProfileId, RendererFrameContextData(web_frame()));
 }
 
 std::string ScriptContext::GetContextTypeDescription() const {
@@ -370,11 +348,18 @@ bool ScriptContext::IsAnyFeatureAvailableToContext(
     const Feature& api,
     CheckAliasStatus check_alias) {
   DCHECK(thread_checker_.CalledOnValidThread());
+  if (web_frame()) {
+    return ExtensionAPI::GetSharedInstance()->IsAnyFeatureAvailableToContext(
+        api, extension(), context_type(),
+        GetDocumentLoaderURLForFrame(web_frame()), check_alias,
+        kRendererProfileId, RendererFrameContextData(web_frame()));
+  }
+
   // TODO(lazyboy): Decide what we should do for service workers, where
   // web_frame() is null.
-  GURL url = web_frame() ? GetDocumentLoaderURLForFrame(web_frame()) : url_;
   return ExtensionAPI::GetSharedInstance()->IsAnyFeatureAvailableToContext(
-      api, extension(), context_type(), url, check_alias, kRendererProfileId);
+      api, extension(), context_type(), url_, check_alias, kRendererProfileId,
+      RendererContextData());
 }
 
 // static
@@ -446,12 +431,11 @@ bool ScriptContext::HasAPIPermission(mojom::APIPermissionID permission) const {
     return effective_extension_->permissions_data()->HasAPIPermission(
         permission);
   }
-  if (context_type() == Feature::WEB_PAGE_CONTEXT) {
+  if (context_type() == mojom::ContextType::kWebPage) {
     // Only web page contexts may be granted content capabilities. Other
     // contexts are either privileged WebUI or extensions with their own set of
     // permissions.
-    if (content_capabilities_.find(permission) != content_capabilities_.end())
-      return true;
+    return base::Contains(content_capabilities_, permission);
   }
   return false;
 }
@@ -502,7 +486,7 @@ std::string ScriptContext::GetDebugString() const {
       "  context_type:           %s\n"
       "  effective extension id: %s\n"
       "  effective context type: %s",
-      extension_.get() ? extension_->id().c_str() : "(none)", web_frame_,
+      extension_.get() ? extension_->id().c_str() : "(none)", web_frame_.get(),
       url_.spec().c_str(), GetContextTypeDescription().c_str(),
       effective_extension_.get() ? effective_extension_->id().c_str()
                                  : "(none)",

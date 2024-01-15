@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "chrome/test/chromedriver/chrome/chrome.h"
 #include "chrome/test/chromedriver/chrome/devtools_client.h"
@@ -22,10 +22,6 @@ Status ExecuteAlertCommand(const AlertCommand& alert_command,
                            std::unique_ptr<base::Value>* value) {
   WebView* web_view = nullptr;
   Status status = session->GetTargetWindow(&web_view);
-  if (status.IsError())
-    return status;
-
-  status = web_view->ConnectIfNecessary();
   if (status.IsError())
     return status;
 

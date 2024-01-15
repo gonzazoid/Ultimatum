@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,27 +13,21 @@ struct Config;
 
 // Segmentation Chrome Power user model provider. Provides a default model and
 // metadata for the Power user optimization target.
-class PowerUserSegment : public ModelProvider {
+class PowerUserSegment : public DefaultModelProvider {
  public:
   PowerUserSegment();
   ~PowerUserSegment() override = default;
 
-  PowerUserSegment(PowerUserSegment&) = delete;
-  PowerUserSegment& operator=(PowerUserSegment&) = delete;
+  PowerUserSegment(const PowerUserSegment&) = delete;
+  PowerUserSegment& operator=(const PowerUserSegment&) = delete;
 
   static std::unique_ptr<Config> GetConfig();
 
-  // Returns the name of the subsegment for the given segment and the
-  // `subsegment_rank`. The `subsegment_rank` should be computed based on the
-  // subsegment discrete mapping in the model metadata.
-  static absl::optional<std::string> GetSubsegmentName(int subsegment_rank);
-
   // ModelProvider implementation.
-  void InitAndFetchModel(
-      const ModelUpdatedCallback& model_updated_callback) override;
+  std::unique_ptr<ModelConfig> GetModelConfig() override;
+
   void ExecuteModelWithInput(const std::vector<float>& inputs,
                              ExecutionCallback callback) override;
-  bool ModelAvailable() override;
 };
 
 }  // namespace segmentation_platform

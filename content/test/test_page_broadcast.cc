@@ -16,6 +16,10 @@ TestPageBroadcast::TestPageBroadcast(
 
 TestPageBroadcast::~TestPageBroadcast() = default;
 
+void TestPageBroadcast::FlushForTesting() {
+  receiver_.FlushForTesting();
+}
+
 // The user should add functionality as needed.
 
 void TestPageBroadcast::SetPageLifecycleState(
@@ -34,8 +38,6 @@ void TestPageBroadcast::ActivatePrerenderedPage(
   std::move(callback).Run();
 }
 
-void TestPageBroadcast::SetInsidePortal(bool is_inside_portal) {}
-
 void TestPageBroadcast::UpdateWebPreferences(
     const blink::web_pref::WebPreferences& preferences) {}
 
@@ -46,14 +48,24 @@ void TestPageBroadcast::SetHistoryOffsetAndLength(int32_t history_offset,
                                                   int32_t history_length) {}
 
 void TestPageBroadcast::SetPageBaseBackgroundColor(
-    absl::optional<SkColor> color) {}
+    std::optional<SkColor> color) {}
 
 void TestPageBroadcast::CreateRemoteMainFrame(
     const blink::RemoteFrameToken& token,
-    const absl::optional<blink::FrameToken>& opener_frame_token,
+    const std::optional<blink::FrameToken>& opener_frame_token,
     blink::mojom::FrameReplicationStatePtr replication_state,
+    bool is_loading,
     const base::UnguessableToken& devtools_frame_token,
     blink::mojom::RemoteFrameInterfacesFromBrowserPtr remote_frame_interfaces,
     blink::mojom::RemoteMainFrameInterfacesPtr remote_main_frame_interfaces) {}
+
+void TestPageBroadcast::UpdatePageBrowsingContextGroup(
+    const blink::BrowsingContextGroupInfo& browsing_context_group_info) {}
+
+void TestPageBroadcast::SetPageAttributionSupport(
+    network::mojom::AttributionSupport support) {}
+
+void TestPageBroadcast::UpdateColorProviders(
+    const blink::ColorProviderColorMaps& color_provider_colors) {}
 
 }  // namespace content

@@ -6,6 +6,7 @@
 
 #include "build/build_config.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/models/image_model.h"
 #include "ui/strings/grit/ui_strings.h"
 
 ConfirmInfoBarDelegate::~ConfirmInfoBarDelegate() = default;
@@ -41,6 +42,7 @@ int ConfirmInfoBarDelegate::GetButtons() const {
 
 std::u16string ConfirmInfoBarDelegate::GetButtonLabel(
     InfoBarButton button) const {
+  DCHECK(button == BUTTON_OK || button == BUTTON_CANCEL);
   return l10n_util::GetStringUTF16((button == BUTTON_OK) ? IDS_APP_OK
                                                          : IDS_APP_CANCEL);
 }
@@ -59,10 +61,6 @@ std::u16string ConfirmInfoBarDelegate::GetButtonTooltip(
   return std::u16string();
 }
 
-bool ConfirmInfoBarDelegate::OKButtonTriggersUACPrompt() const {
-  return false;
-}
-
 #if BUILDFLAG(IS_IOS)
 bool ConfirmInfoBarDelegate::UseIconBackgroundTint() const {
   return true;
@@ -74,6 +72,11 @@ bool ConfirmInfoBarDelegate::Accept() {
 }
 
 bool ConfirmInfoBarDelegate::Cancel() {
+  return true;
+}
+
+bool ConfirmInfoBarDelegate::ExtraButtonPressed() {
+  NOTREACHED() << "Method must be overridden.";
   return true;
 }
 

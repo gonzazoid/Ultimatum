@@ -49,7 +49,7 @@ Status CreateWebCryptoSecretKey(base::span<const uint8_t> key_data,
 }
 
 void WriteSecretKeyJwk(base::span<const uint8_t> raw_key_data,
-                       const std::string& algorithm,
+                       std::string_view algorithm,
                        bool extractable,
                        blink::WebCryptoKeyUsageMask usages,
                        std::vector<uint8_t>* jwk_key_data) {

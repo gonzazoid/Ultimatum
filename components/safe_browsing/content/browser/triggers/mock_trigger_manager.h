@@ -6,6 +6,7 @@
 #define COMPONENTS_SAFE_BROWSING_CONTENT_BROWSER_TRIGGERS_MOCK_TRIGGER_MANAGER_H_
 
 #include "components/safe_browsing/content/browser/triggers/trigger_manager.h"
+#include "components/safe_browsing/content/browser/web_contents_key.h"
 #include "components/safe_browsing/core/browser/referrer_chain_provider.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -41,13 +42,16 @@ class MockTriggerManager : public TriggerManager {
            const SBErrorOptions& error_display_options,
            TriggerManagerReason* out_reason));
 
-  MOCK_METHOD6(FinishCollectingThreatDetails,
-               bool(TriggerType trigger_type,
-                    content::WebContents* web_contents,
-                    const base::TimeDelta& delay,
-                    bool did_proceed,
-                    int num_visits,
-                    const SBErrorOptions& error_display_options));
+  MOCK_METHOD8(FinishCollectingThreatDetails,
+               FinishCollectingThreatDetailsResult(
+                   TriggerType trigger_type,
+                   WebContentsKey web_contents_key,
+                   const base::TimeDelta& delay,
+                   bool did_proceed,
+                   int num_visits,
+                   const SBErrorOptions& error_display_options,
+                   absl::optional<int64_t> warning_shown_ts,
+                   bool is_hats_candidate));
 };
 
 }  // namespace safe_browsing

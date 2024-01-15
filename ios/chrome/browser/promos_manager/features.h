@@ -7,18 +7,18 @@
 
 #import "base/feature_list.h"
 
-// Feature flag to enable the Fullscreen Promos Manager.
-BASE_DECLARE_FEATURE(kFullscreenPromosManager);
-
 // Feature flag to enable skipping evaluation of the Fullscreen Promos Manager's
 // internal Impression Limits.
 BASE_DECLARE_FEATURE(kFullscreenPromosManagerSkipInternalLimits);
 
-// Returns true if the Fullscreen Promos Manager is enabled.
-bool IsFullscreenPromosManagerEnabled();
+// Controls whether the Promos Manager should use the Feature Engagement Tracker
+// as its impression tracking system.
+BASE_DECLARE_FEATURE(kPromosManagerUsesFET);
 
 // Returns true if the Fullscreen Promos Manager should skip evaluation of its
 // internal Impression Limits when deciding whether or not to display a promo.
 bool IsSkippingInternalImpressionLimitsEnabled();
+
+bool ShouldPromosManagerUseFET();
 
 #endif  // IOS_CHROME_BROWSER_PROMOS_MANAGER_FEATURES_H_

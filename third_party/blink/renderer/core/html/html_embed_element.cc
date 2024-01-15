@@ -102,8 +102,8 @@ void HTMLEmbedElement::ParseAttribute(
           "Embed type changed");
     }
   } else if (params.name == html_names::kCodeAttr) {
-    // TODO(schenney): Remove this branch? It's not in the spec and we're not in
-    // the HTMLAppletElement hierarchy.
+    // TODO(rendering-core): Remove this branch? It's not in the spec and we're
+    // not in the HTMLAppletElement hierarchy.
     SetUrl(StripLeadingAndTrailingHTMLSpaces(params.new_value));
     SetDisposeView();
   } else if (params.name == html_names::kSrcAttr) {
@@ -166,6 +166,7 @@ void HTMLEmbedElement::UpdatePluginInternal() {
       GetDocument().GetFrame()->Client()->OverrideFlashEmbedWithHTML(
           GetDocument().CompleteURL(url_));
   if (!overriden_url.IsEmpty()) {
+    UseCounter::Count(GetDocument(), WebFeature::kOverrideFlashEmbedwithHTML);
     url_ = overriden_url.GetString();
     SetServiceType("text/html");
   }
@@ -173,7 +174,7 @@ void HTMLEmbedElement::UpdatePluginInternal() {
   RequestObject(plugin_params);
 }
 
-bool HTMLEmbedElement::LayoutObjectIsNeeded(const ComputedStyle& style) const {
+bool HTMLEmbedElement::LayoutObjectIsNeeded(const DisplayStyle& style) const {
   if (IsImageType())
     return HTMLPlugInElement::LayoutObjectIsNeeded(style);
 

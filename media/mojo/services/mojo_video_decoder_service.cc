@@ -7,14 +7,16 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/trace_event/trace_event.h"
 #include "base/types/optional_util.h"
 #include "media/base/decoder_buffer.h"
+#include "media/base/media_util.h"
 #include "media/base/simple_sync_token_client.h"
 #include "media/base/video_decoder.h"
 #include "media/base/video_decoder_config.h"
@@ -83,6 +85,13 @@ class VideoFrameHandleReleaserImpl final
       const base::UnguessableToken& release_token,
       const absl::optional<gpu::SyncToken>& release_sync_token) final {
     DVLOG(3) << __func__ << "(" << release_token.ToString() << ")";
+    TRACE_EVENT2("media", "VideoFrameHandleReleaserImpl::ReleaseVideoFrame",
+                 "release_token", release_token.ToString(),
+                 "release_sync_token",
+                 release_sync_token
+                     ? (release_sync_token->ToDebugString() + ", has_data: " +
+                        (release_sync_token->HasData() ? "true" : "false"))
+                     : "null");
     auto it = video_frames_.find(release_token);
     if (it == video_frames_.end()) {
       mojo::ReportBadMessage("Unknown |release_token|.");
@@ -108,7 +117,8 @@ class VideoFrameHandleReleaserImpl final
 
  private:
   // TODO(sandersd): Also track age, so that an overall limit can be enforced.
-  std::map<base::UnguessableToken, scoped_refptr<VideoFrame>> video_frames_;
+  base::flat_map<base::UnguessableToken, scoped_refptr<VideoFrame>>
+      video_frames_;
 };
 
 MojoVideoDecoderService::MojoVideoDecoderService(
@@ -147,6 +157,9 @@ MojoVideoDecoderService::~MojoVideoDecoderService() {
   // the histogram timer below.
   weak_factory_.InvalidateWeakPtrs();
   decoder_.reset();
+
+  mojo_media_client_ = nullptr;
+  mojo_cdm_service_context_ = nullptr;
 }
 
 void MojoVideoDecoderService::GetSupportedConfigs(
@@ -176,8 +189,8 @@ void MojoVideoDecoderService::Construct(
 
   client_.Bind(std::move(client));
 
-  scoped_refptr<base::SingleThreadTaskRunner> task_runner =
-      base::ThreadTaskRunnerHandle::Get();
+  scoped_refptr<base::SequencedTaskRunner> task_runner =
+      base::SequencedTaskRunner::GetCurrentDefault();
 
   media_log_ =
       std::make_unique<MojoMediaLog>(std::move(media_log), task_runner);
@@ -282,7 +295,7 @@ void MojoVideoDecoderService::Decode(mojom::DecoderBufferPtr buffer,
   DCHECK(callback);
 
   std::unique_ptr<ScopedDecodeTrace> trace_event;
-  if (ScopedDecodeTrace::IsEnabled()) {
+  if (MediaTraceIsEnabled()) {
     // Because multiple Decode() calls may be in flight, each call needs a
     // unique trace event class to identify it. This scoped event is bound
     // into the OnDecodeDone callback to ensure the trace is always closed.

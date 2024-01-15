@@ -7,16 +7,20 @@
 #include <memory>
 #include <string>
 
+#include "ash/constants/ash_switches.h"
 #include "base/check.h"
+#include "base/command_line.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/notreached.h"
-#include "base/rand_util.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/values.h"
 #include "third_party/icu/source/i18n/unicode/gregocal.h"
 
 namespace policy {
 namespace {
+
+constexpr base::TimeDelta kDefaultGracePeriod = base::Hours(1);
 
 ScheduledTaskExecutor::Frequency GetFrequency(const std::string& frequency) {
   if (frequency == "DAILY")
@@ -132,31 +136,31 @@ std::unique_ptr<icu::Calendar> AdvanceToNextValidTimeBasedOnPolicy(
 }  // namespace
 
 namespace scheduled_task_util {
-absl::optional<ScheduledTaskExecutor::ScheduledTaskData> ParseScheduledTask(
+std::optional<ScheduledTaskExecutor::ScheduledTaskData> ParseScheduledTask(
     const base::Value& value,
     const std::string& task_time_field_name) {
+  const base::Value::Dict& dict = value.GetDict();
   ScheduledTaskExecutor::ScheduledTaskData result;
   // Parse mandatory values first i.e. hour, minute and frequency of update
   // check. These should always be present due to schema validation at higher
   // layers.
-  const base::Value* hour_value = value.FindPathOfType(
-      {task_time_field_name, "hour"}, base::Value::Type::INTEGER);
-  DCHECK(hour_value);
-  int hour = hour_value->GetInt();
+  const base::Value::Dict* task_time_field_dict =
+      dict.FindDict(task_time_field_name);
+  DCHECK(task_time_field_dict);
+  std::optional<int> hour_opt = task_time_field_dict->FindInt("hour");
+  DCHECK(hour_opt);
   // Validated by schema validation at higher layers.
-  DCHECK(hour >= 0 && hour <= 23);
-  result.hour = hour;
+  DCHECK(*hour_opt >= 0 && *hour_opt <= 23);
+  result.hour = *hour_opt;
 
-  const base::Value* minute_value = value.FindPathOfType(
-      {task_time_field_name, "minute"}, base::Value::Type::INTEGER);
-  DCHECK(minute_value);
-  int minute = minute_value->GetInt();
+  std::optional<int> minute_opt = task_time_field_dict->FindInt("minute");
+  DCHECK(minute_opt);
   // Validated by schema validation at higher layers.
-  DCHECK(minute >= 0 && minute <= 59);
-  result.minute = minute;
+  DCHECK(*minute_opt >= 0 && *minute_opt <= 59);
+  result.minute = *minute_opt;
 
   // Validated by schema validation at higher layers.
-  const std::string* frequency = value.FindStringKey({"frequency"});
+  const std::string* frequency = dict.FindString({"frequency"});
   DCHECK(frequency);
   result.frequency = GetFrequency(*frequency);
 
@@ -166,10 +170,10 @@ absl::optional<ScheduledTaskExecutor::ScheduledTaskData> ParseScheduledTask(
       break;
 
     case ScheduledTaskExecutor::Frequency::kWeekly: {
-      const std::string* day_of_week = value.FindStringKey({"day_of_week"});
+      const std::string* day_of_week = dict.FindString({"day_of_week"});
       if (!day_of_week) {
         LOG(ERROR) << "Day of week missing";
-        return absl::nullopt;
+        return std::nullopt;
       }
 
       // Validated by schema validation at higher layers.
@@ -178,10 +182,10 @@ absl::optional<ScheduledTaskExecutor::ScheduledTaskData> ParseScheduledTask(
     }
 
     case ScheduledTaskExecutor::Frequency::kMonthly: {
-      absl::optional<int> day_of_month = value.FindIntKey({"day_of_month"});
+      std::optional<int> day_of_month = dict.FindInt("day_of_month");
       if (!day_of_month) {
         LOG(ERROR) << "Day of month missing";
-        return absl::nullopt;
+        return std::nullopt;
       }
 
       // Validated by schema validation at higher layers.
@@ -215,8 +219,9 @@ std::unique_ptr<icu::Calendar> ConvertUtcToTzIcuTime(base::Time cur_time,
   }
   // Erase current time from the calendar.
   cal_tz->clear();
-  // Use Time::ToJavaTime() to get ms since epoch in int64_t format.
-  cal_tz->setTime(cur_time.ToJavaTime(), status);
+  // Use Time::InMillisecondsSinceUnixEpoch() to get ms since epoch in int64_t
+  // format.
+  cal_tz->setTime(cur_time.InMillisecondsSinceUnixEpoch(), status);
   if (U_FAILURE(status)) {
     LOG(ERROR) << "Couldn't create calendar";
     return nullptr;
@@ -225,14 +230,14 @@ std::unique_ptr<icu::Calendar> ConvertUtcToTzIcuTime(base::Time cur_time,
   return cal_tz;
 }
 
-absl::optional<base::TimeDelta> CalculateNextScheduledTaskTimerDelay(
+std::optional<base::TimeDelta> CalculateNextScheduledTaskTimerDelay(
     const ScheduledTaskExecutor::ScheduledTaskData& data,
     base::Time time,
     const icu::TimeZone& time_zone) {
   const auto cal = ConvertUtcToTzIcuTime(time, time_zone);
   if (!cal) {
     LOG(ERROR) << "Failed to get current ICU time";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   auto scheduled_task_time = CalculateNextScheduledTimeAfter(data, *cal);
@@ -260,11 +265,36 @@ std::unique_ptr<icu::Calendar> CalculateNextScheduledTimeAfter(
   return scheduled_task_time;
 }
 
-base::TimeDelta GenerateRandomDelay(int max_delay_in_seconds) {
-  int64_t max_delay_in_ms = max_delay_in_seconds * 1000;
-  int64_t random_delay =
-      static_cast<int64_t>(base::RandGenerator(max_delay_in_ms));
-  return base::Milliseconds(random_delay);
+// Returns grace from commandline if present and valid. Returns default grace
+// time otherwise.
+base::TimeDelta GetScheduledRebootGracePeriod() {
+  const base::CommandLine* command_line =
+      base::CommandLine::ForCurrentProcess();
+
+  std::string grace_time_string = command_line->GetSwitchValueASCII(
+      ash::switches::kScheduledRebootGracePeriodInSecondsForTesting);
+
+  if (grace_time_string.empty()) {
+    return kDefaultGracePeriod;
+  }
+
+  int grace_time_in_seconds;
+  if (!base::StringToInt(grace_time_string, &grace_time_in_seconds) ||
+      grace_time_in_seconds < 0) {
+    LOG(ERROR) << "Ignored "
+               << ash::switches::kScheduledRebootGracePeriodInSecondsForTesting
+               << "=" << grace_time_string;
+    return kDefaultGracePeriod;
+  }
+
+  return base::Seconds(grace_time_in_seconds);
+}
+
+bool ShouldSkipRebootDueToGracePeriod(base::Time boot_time,
+                                      base::Time reboot_time) {
+  // Skip reboot if reboot scheduled within [boot time, boot time + grace time]
+  // interval.
+  return boot_time + GetScheduledRebootGracePeriod() >= reboot_time;
 }
 
 }  // namespace scheduled_task_util

@@ -11,9 +11,9 @@
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_writer.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
@@ -22,10 +22,10 @@
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/mock_callback.h"
 #include "base/test/simple_test_clock.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -186,7 +186,7 @@ std::string MakeServerResponse(const SkBitmap& image,
                                const std::string& dark_mime_type,
                                const std::string& fingerprint,
                                base::TimeDelta time_to_live) {
-  base::Value dict(base::Value::Type::DICTIONARY);
+  base::Value::Dict dict;
 
   std::string data_uri = "data:";
   data_uri += mime_type;
@@ -198,28 +198,28 @@ std::string MakeServerResponse(const SkBitmap& image,
   dark_data_uri += ";base64,";
   dark_data_uri += EncodeBitmapAsPNGBase64(dark_image);
 
-  dict.SetStringPath("ddljson.target_url", on_click_url);
-  dict.SetStringPath("ddljson.alt_text", alt_text);
+  dict.SetByDottedPath("ddljson.target_url", on_click_url);
+  dict.SetByDottedPath("ddljson.alt_text", alt_text);
   if (animated_url.empty()) {
-    dict.SetStringPath("ddljson.doodle_type", "SIMPLE");
+    dict.SetByDottedPath("ddljson.doodle_type", "SIMPLE");
     if (!image.isNull())
-      dict.SetStringPath("ddljson.data_uri", data_uri);
+      dict.SetByDottedPath("ddljson.data_uri", data_uri);
     if (!dark_image.isNull())
-      dict.SetStringPath("ddljson.dark_data_uri", dark_data_uri);
+      dict.SetByDottedPath("ddljson.dark_data_uri", dark_data_uri);
   } else {
-    dict.SetStringPath("ddljson.doodle_type", "ANIMATED");
-    dict.SetBoolPath("ddljson.large_image.is_animated_gif", true);
-    dict.SetStringPath("ddljson.large_image.url", animated_url);
-    dict.SetStringPath("ddljson.dark_large_image.url", dark_animated_url);
+    dict.SetByDottedPath("ddljson.doodle_type", "ANIMATED");
+    dict.SetByDottedPath("ddljson.large_image.is_animated_gif", true);
+    dict.SetByDottedPath("ddljson.large_image.url", animated_url);
+    dict.SetByDottedPath("ddljson.dark_large_image.url", dark_animated_url);
     if (!image.isNull())
-      dict.SetStringPath("ddljson.cta_data_uri", data_uri);
+      dict.SetByDottedPath("ddljson.cta_data_uri", data_uri);
     if (!dark_image.isNull())
-      dict.SetStringPath("ddljson.dark_cta_data_uri", dark_data_uri);
+      dict.SetByDottedPath("ddljson.dark_cta_data_uri", dark_data_uri);
   }
-  dict.SetStringPath("ddljson.fingerprint", fingerprint);
+  dict.SetByDottedPath("ddljson.fingerprint", fingerprint);
   if (time_to_live != base::TimeDelta())
-    dict.SetIntPath("ddljson.time_to_live_ms",
-                    static_cast<int>(time_to_live.InMilliseconds()));
+    dict.SetByDottedPath("ddljson.time_to_live_ms",
+                         static_cast<int>(time_to_live.InMilliseconds()));
 
   std::string output;
   base::JSONWriter::Write(dict, &output);
@@ -316,7 +316,7 @@ class FakeImageDecoder : public image_fetcher::ImageDecoder {
                    image_fetcher::ImageDecodedCallback callback) override {
     gfx::Image image = gfx::Image::CreateFrom1xPNGBytes(
         reinterpret_cast<const uint8_t*>(image_data.data()), image_data.size());
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), image));
   }
 };
@@ -364,7 +364,8 @@ class LogoServiceImplTest : public ::testing::Test {
                     GURL("https://example.com/logo.json"),
                     /*make_default=*/true);
 
-    test_clock_.SetNow(base::Time::FromJsTime(INT64_C(1388686828000)));
+    test_clock_.SetNow(
+        base::Time::FromMillisecondsSinceUnixEpoch(INT64_C(1388686828000)));
     logo_service_ = std::make_unique<LogoServiceImpl>(
         base::FilePath(), signin_helper_.identity_manager(),
         &template_url_service_, std::make_unique<FakeImageDecoder>(),
@@ -421,7 +422,7 @@ class LogoServiceImplTest : public ::testing::Test {
   base::test::TaskEnvironment task_environment_;
   TemplateURLService template_url_service_;
   base::SimpleTestClock test_clock_;
-  raw_ptr<NiceMock<MockLogoCache>> logo_cache_;
+  raw_ptr<NiceMock<MockLogoCache>, AcrossTasksDanglingUntriaged> logo_cache_;
 
   // Used for mocking |logo_service_| URLs.
   network::TestURLLoaderFactory test_url_loader_factory_;
@@ -991,7 +992,7 @@ void EnqueueCallbacks(LogoServiceImpl* logo_service,
   callbacks.on_fresh_decoded_logo_available =
       std::move((*fresh_callbacks)[start_index]);
   logo_service->GetLogo(std::move(callbacks), /*for_webui_ntp=*/false);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&EnqueueCallbacks, logo_service, cached_callbacks,
                      fresh_callbacks, start_index + 1));

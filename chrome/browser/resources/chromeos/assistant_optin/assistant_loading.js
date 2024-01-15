@@ -9,7 +9,22 @@
  * Event 'reload' will be fired when the user click the retry button.
  */
 
-/* #js_imports_placeholder */
+import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '//resources/polymer/v3_0/paper-progress/paper-progress.js';
+import '../components/buttons/oobe_text_button.js';
+import '../components/common_styles/oobe_dialog_host_styles.css.js';
+import '../components/dialogs/oobe_adaptive_dialog.js';
+import '../components/dialogs/oobe_content_dialog.js';
+import './assistant_icons.html.js';
+import './assistant_common_styles.css.js';
+
+import {afterNextRender, html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {MultiStepBehavior} from '../components/behaviors/multi_step_behavior.js';
+import {OobeI18nBehavior} from '../components/behaviors/oobe_i18n_behavior.js';
+
+import {BrowserProxy, BrowserProxyImpl} from './browser_proxy.js';
+
 
 const AssistantLoadingUIState = {
   LOADING: 'loading',
@@ -21,8 +36,8 @@ const AssistantLoadingUIState = {
  * @constructor
  * @extends {PolymerElement}
  */
-const AssistantLoadingBase = Polymer.mixinBehaviors(
-    [OobeI18nBehavior, MultiStepBehavior], Polymer.Element);
+const AssistantLoadingBase =
+    mixinBehaviors([OobeI18nBehavior, MultiStepBehavior], PolymerElement);
 
 /**
  * @polymer
@@ -32,7 +47,9 @@ class AssistantLoading extends AssistantLoadingBase {
     return 'assistant-loading';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return html`{__html_template__}`;
+  }
 
   static get properties() {
     return {
@@ -72,8 +89,8 @@ class AssistantLoading extends AssistantLoadingBase {
      */
     this.loadingTimeout_ = null;
 
-    /** @private {?assistant.BrowserProxy} */
-    this.browserProxy_ = assistant.BrowserProxyImpl.getInstance();
+    /** @private {?BrowserProxy} */
+    this.browserProxy_ = BrowserProxyImpl.getInstance();
   }
 
   defaultUIStep() {
@@ -153,8 +170,7 @@ class AssistantLoading extends AssistantLoadingBase {
    */
   onShow() {
     this.reloadPage();
-    Polymer.RenderStatus.afterNextRender(
-        this, () => this.$['loading-dialog'].focus());
+    afterNextRender(this, () => this.$['loading-dialog'].focus());
   }
 }
 

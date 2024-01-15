@@ -9,6 +9,8 @@
 
 #include "ash/ash_export.h"
 #include "ash/shelf/home_button.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/compositor/layer_animation_observer.h"
 #include "ui/views/animation/ink_drop_painted_layer_delegates.h"
 #include "ui/views/view.h"
@@ -17,6 +19,8 @@ namespace ash {
 
 class ASH_EXPORT AssistantOverlay : public views::View,
                                     public ui::ImplicitAnimationObserver {
+  METADATA_HEADER(AssistantOverlay, views::View)
+
  public:
   explicit AssistantOverlay(HomeButton* host_view);
 
@@ -54,7 +58,7 @@ class ASH_EXPORT AssistantOverlay : public views::View,
 
   std::unique_ptr<ui::Layer> ripple_layer_;
 
-  HomeButton* host_view_;
+  raw_ptr<HomeButton> host_view_;
 
   AnimationState animation_state_ = AnimationState::HIDDEN;
 

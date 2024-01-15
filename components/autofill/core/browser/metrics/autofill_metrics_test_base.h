@@ -11,46 +11,57 @@
 #include "components/autofill/core/browser/autofill_form_test_utils.h"
 #include "components/autofill/core/browser/autofill_suggestion_generator.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
+#include "components/autofill/core/browser/browser_autofill_manager_test_api.h"
 #include "components/autofill/core/browser/payments/test_credit_card_save_manager.h"
-#include "components/autofill/core/browser/payments/test_payments_client.h"
 #include "components/autofill/core/browser/test_autofill_client.h"
 #include "components/autofill/core/browser/test_autofill_driver.h"
 #include "components/autofill/core/browser/test_browser_autofill_manager.h"
+#include "components/autofill/core/common/mojom/autofill_types.mojom-shared.h"
 #include "components/sync/test/test_sync_service.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace autofill::metrics {
+namespace autofill::autofill_metrics {
 
 constexpr char kTestProfileId[] = "00000000-0000-0000-0000-000000000001";
 constexpr char kTestLocalCardId[] = "10000000-0000-0000-0000-000000000001";
 constexpr char kTestMaskedCardId[] = "10000000-0000-0000-0000-000000000002";
 constexpr char kTestFullServerCardId[] = "10000000-0000-0000-0000-000000000003";
+// These variables store the GUIDs of a Local and a masked Server card which
+// have the same card attributes, i.e., are duplicates of each other.
+constexpr char kTestDuplicateLocalCardId[] =
+    "10000000-0000-0000-0000-000000000004";
+constexpr char kTestDuplicateMaskedCardId[] =
+    "10000000-0000-0000-0000-000000000005";
 
 class MockAutofillClient : public TestAutofillClient {
  public:
   MockAutofillClient();
   ~MockAutofillClient() override;
-  MOCK_METHOD(void, ExecuteCommand, (int), (override));
+  MOCK_METHOD(bool,
+              ShowTouchToFillCreditCard,
+              (base::WeakPtr<TouchToFillDelegate>,
+               base::span<const autofill::CreditCard>),
+              (override));
 };
 
-class AutofillMetricsBaseTest : public testing::Test {
+class AutofillMetricsBaseTest {
  public:
   explicit AutofillMetricsBaseTest(bool is_in_any_main_frame = true);
-  ~AutofillMetricsBaseTest() override;
-
-  void SetUp() override;
-  void TearDown() override;
+  virtual ~AutofillMetricsBaseTest();
 
  protected:
+  void SetUpHelper();
+
+  void TearDownHelper();
+
   void CreateAmbiguousProfiles();
 
   // Removes all existing profiles and creates one profile.
-  // |is_server| allows creation of |SERVER_PROFILE|.
-  void RecreateProfile(bool is_server);
+  void RecreateProfile();
 
-  // Removes all existing credit cards and creates a local, masked server,
-  // full server, and/or virtual credit card, according to the parameters.
+  // Removes all existing credit cards and then invokes CreateCreditCards to
+  // create the cards.
   // TODO(crbug/1216615): Migrate this to a params builder pattern or
   // something.
   void RecreateCreditCards(bool include_local_credit_card,
@@ -58,15 +69,16 @@ class AutofillMetricsBaseTest : public testing::Test {
                            bool include_full_server_credit_card,
                            bool masked_card_is_enrolled_for_virtual_card);
 
-  // Creates a local card to existing card deck or clear them all and then add a
-  // new local card.
-  // The GUID for the card created is returned as a string.
-  std::string CreateLocalMasterCard(bool clear_existing_cards = false);
+  // Creates a local, masked server, full server, and/or virtual credit card,
+  // according to the parameters.
+  void CreateCreditCards(bool include_local_credit_card,
+                         bool include_masked_server_credit_card,
+                         bool include_full_server_credit_card,
+                         bool masked_card_is_enrolled_for_virtual_card);
 
   // Creates a local card and then a duplicate server card with the same
   // credentials/info.
-  // The GUIDs for the cards crated are returned as a vector of strings.
-  std::vector<std::string> CreateLocalAndDuplicateServerCreditCard();
+  void CreateLocalAndDuplicateServerCreditCard();
 
   void AddMaskedServerCreditCardWithOffer(std::string guid,
                                           std::string offer_reward_amount,
@@ -158,42 +170,76 @@ class AutofillMetricsBaseTest : public testing::Test {
     return form;
   }
 
-  void FillTestProfile(const FormData& form) {
-    autofill_manager().FillOrPreviewForm(
-        mojom::RendererFormDataAction::kFill, 0, form, form.fields.front(),
-        MakeFrontendId({.profile_id = kTestProfileId}));
+  void DidShowAutofillSuggestions(
+      const FormData& form,
+      size_t field_index = 0,
+      PopupItemId suggestion_type = PopupItemId::kAddressEntry) {
+    autofill_manager().DidShowSuggestions(
+        std::vector<PopupItemId>({suggestion_type}), form,
+        form.fields[field_index]);
   }
 
-  int MakeFrontendId(
-      const TestBrowserAutofillManager::MakeFrontendIdParams& params) {
-    return autofill_manager().MakeFrontendId(params);
+  void FillTestProfile(const FormData& form) {
+    autofill_manager().FillOrPreviewProfileForm(
+        mojom::ActionPersistence::kFill, form, form.fields.front(),
+        *personal_data().GetProfileByGUID(kTestProfileId),
+        {.trigger_source = AutofillTriggerSource::kPopup});
+  }
+
+  void UndoAutofill(const FormData& form) {
+    autofill_manager().UndoAutofill(mojom::ActionPersistence::kFill, form,
+                                    form.fields.front());
+  }
+
+  [[nodiscard]] FormData CreateEmptyForm() {
+    FormData form;
+    form.host_frame = test::MakeLocalFrameToken();
+    form.unique_renderer_id = test::MakeFormRendererId();
+    form.name = u"TestForm";
+    form.url = GURL("https://example.com/form.html");
+    form.action = GURL("https://example.com/submit.html");
+    form.main_frame_origin =
+        url::Origin::Create(autofill_client_->form_origin());
+    return form;
+  }
+
+  [[nodiscard]] FormData CreateForm(std::vector<FormFieldData> fields) {
+    FormData form = CreateEmptyForm();
+    form.fields = std::move(fields);
+    return form;
   }
 
   TestBrowserAutofillManager& autofill_manager() {
     return static_cast<TestBrowserAutofillManager&>(
-        *autofill_driver_->autofill_manager());
+        autofill_driver_->GetAutofillManager());
+  }
+
+  AutofillExternalDelegate& external_delegate() {
+    return *test_api(autofill_manager()).external_delegate();
   }
 
   TestPersonalDataManager& personal_data() {
     return *autofill_client_->GetPersonalDataManager();
   }
 
+  ukm::TestUkmRecorder& test_ukm_recorder() {
+    return *autofill_client_->GetTestUkmRecorder();
+  }
+
   const bool is_in_any_main_frame_ = true;
-  base::test::TaskEnvironment task_environment_;
-  test::AutofillEnvironment autofill_environment_;
+  base::test::TaskEnvironment task_environment_{
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
+  test::AutofillUnitTestEnvironment autofill_test_environment_;
   std::unique_ptr<MockAutofillClient> autofill_client_;
-  raw_ptr<ukm::TestUkmRecorder> test_ukm_recorder_;
   syncer::TestSyncService sync_service_;
   std::unique_ptr<TestAutofillDriver> autofill_driver_;
-  raw_ptr<AutofillExternalDelegate> external_delegate_;
 
  private:
   void CreateTestAutofillProfiles();
 
-  base::test::ScopedFeatureList scoped_feature_list_async_parse_form_;
-  CreditCard credit_card_ = test::GetMaskedServerCard();
+  CreditCard credit_card_ = test::WithCvc(test::GetMaskedServerCard());
 };
 
-}  // namespace autofill::metrics
+}  // namespace autofill::autofill_metrics
 
 #endif  // COMPONENTS_AUTOFILL_CORE_BROWSER_METRICS_AUTOFILL_METRICS_TEST_BASE_H_

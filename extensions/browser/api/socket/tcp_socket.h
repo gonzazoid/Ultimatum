@@ -19,7 +19,6 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/completion_once_callback.h"
-#include "services/network/public/mojom/network_service.mojom.h"
 #include "services/network/public/mojom/tcp_socket.mojom.h"
 #include "services/network/public/mojom/tls_socket.mojom.h"
 
@@ -51,7 +50,7 @@ class TCPSocket : public Socket {
   TCPSocket(mojo::PendingRemote<network::mojom::TCPConnectedSocket> socket,
             mojo::ScopedDataPipeConsumerHandle receive_stream,
             mojo::ScopedDataPipeProducerHandle send_stream,
-            const absl::optional<net::IPEndPoint>& remote_addr,
+            const std::optional<net::IPEndPoint>& remote_addr,
             const std::string& owner_extension_id);
 
   TCPSocket(const TCPSocket&) = delete;
@@ -104,17 +103,17 @@ class TCPSocket : public Socket {
  private:
   // Connects a client TCP socket.
   void OnConnectComplete(int result,
-                         const absl::optional<net::IPEndPoint>& local_addr,
-                         const absl::optional<net::IPEndPoint>& peer_addr,
+                         const std::optional<net::IPEndPoint>& local_addr,
+                         const std::optional<net::IPEndPoint>& peer_addr,
                          mojo::ScopedDataPipeConsumerHandle receive_stream,
                          mojo::ScopedDataPipeProducerHandle send_stream);
 
   // Connects a server TCP socket.
   void OnListenComplete(int result,
-                        const absl::optional<net::IPEndPoint>& local_addr);
+                        const std::optional<net::IPEndPoint>& local_addr);
   void OnAccept(
       int result,
-      const absl::optional<net::IPEndPoint>& remote_addr,
+      const std::optional<net::IPEndPoint>& remote_addr,
       mojo::PendingRemote<network::mojom::TCPConnectedSocket> connected_socket,
       mojo::ScopedDataPipeConsumerHandle receive_stream,
       mojo::ScopedDataPipeProducerHandle send_stream);
@@ -128,7 +127,7 @@ class TCPSocket : public Socket {
       int result,
       mojo::ScopedDataPipeConsumerHandle receive_stream,
       mojo::ScopedDataPipeProducerHandle send_stream,
-      const absl::optional<net::SSLInfo>& ssl_info);
+      const std::optional<net::SSLInfo>& ssl_info);
 
   content::StoragePartition* GetStoragePartitionHelper();
 
@@ -156,8 +155,8 @@ class TCPSocket : public Socket {
 
   std::unique_ptr<MojoDataPump> mojo_data_pump_;
 
-  absl::optional<net::IPEndPoint> local_addr_;
-  absl::optional<net::IPEndPoint> peer_addr_;
+  std::optional<net::IPEndPoint> local_addr_;
+  std::optional<net::IPEndPoint> peer_addr_;
 
   // Only used in tests.
   raw_ptr<content::StoragePartition, DanglingUntriaged> storage_partition_ =
@@ -180,7 +179,7 @@ class ResumableTCPSocket : public TCPSocket {
       mojo::PendingRemote<network::mojom::TCPConnectedSocket> socket,
       mojo::ScopedDataPipeConsumerHandle receive_stream,
       mojo::ScopedDataPipeProducerHandle send_stream,
-      const absl::optional<net::IPEndPoint>& remote_addr,
+      const std::optional<net::IPEndPoint>& remote_addr,
       const std::string& owner_extension_id);
 
   ~ResumableTCPSocket() override;

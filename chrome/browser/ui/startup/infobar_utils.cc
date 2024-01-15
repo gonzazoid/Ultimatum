@@ -5,6 +5,7 @@
 #include "chrome/browser/ui/startup/infobar_utils.h"
 
 #include "base/command_line.h"
+#include "build/branding_buildflags.h"
 #include "build/buildflag.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
@@ -14,17 +15,24 @@
 #include "chrome/browser/ui/session_crashed_bubble.h"
 #include "chrome/browser/ui/startup/automation_infobar_delegate.h"
 #include "chrome/browser/ui/startup/bad_flags_prompt.h"
+#include "chrome/browser/ui/startup/bidding_and_auction_consented_debugging_infobar_delegate.h"
 #include "chrome/browser/ui/startup/default_browser_prompt.h"
 #include "chrome/browser/ui/startup/google_api_keys_infobar_delegate.h"
 #include "chrome/browser/ui/startup/obsolete_system_infobar_delegate.h"
 #include "chrome/browser/ui/startup/startup_browser_creator.h"
 #include "chrome/browser/ui/startup/startup_types.h"
+#include "chrome/browser/ui/startup/test_third_party_cookie_phaseout_infobar_delegate.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
 #include "components/infobars/content/content_infobar_manager.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/common/content_switches.h"
 #include "google_apis/google_api_keys.h"
+#include "services/network/public/cpp/network_switches.h"
+
+#if BUILDFLAG(CHROME_FOR_TESTING)
+#include "chrome/browser/ui/startup/chrome_for_testing_infobar_delegate.h"
+#endif
 
 namespace {
 bool ShouldShowBadFlagsSecurityWarnings() {
@@ -58,6 +66,13 @@ bool IsKioskModeEnabled() {
       switches::kKioskMode);
 }
 
+#if BUILDFLAG(CHROME_FOR_TESTING)
+bool IsGpuTest() {
+  return base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
+             switches::kTestType) == "gpu";
+}
+#endif
+
 }  // namespace
 
 void AddInfoBarsIfNecessary(Browser* browser,
@@ -70,8 +85,30 @@ void AddInfoBarsIfNecessary(Browser* browser,
 
   // Show the Automation info bar unless it has been disabled by policy.
   bool show_bad_flags_security_warnings = ShouldShowBadFlagsSecurityWarnings();
-  if (IsAutomationEnabled() && show_bad_flags_security_warnings) {
-    AutomationInfoBarDelegate::Create();
+
+  content::WebContents* web_contents =
+      browser->tab_strip_model()->GetActiveWebContents();
+  DCHECK(web_contents);
+
+  if (show_bad_flags_security_warnings) {
+#if BUILDFLAG(CHROME_FOR_TESTING)
+    if (!IsGpuTest()) {
+      ChromeForTestingInfoBarDelegate::Create();
+    }
+#endif
+
+    if (IsAutomationEnabled())
+      AutomationInfoBarDelegate::Create();
+
+    if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+            switches::kProtectedAudiencesConsentedDebugToken)) {
+      BiddingAndAuctionConsentedDebuggingDelegate::Create(web_contents);
+    }
+
+    if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+            network::switches::kTestThirdPartyCookiePhaseout)) {
+      TestThirdPartyCookiePhaseoutInfoBarDelegate::Create(web_contents);
+    }
   }
 
   // Do not show any other info bars in Kiosk mode, because it's unlikely that
@@ -102,10 +139,6 @@ void AddInfoBarsIfNecessary(Browser* browser,
     if (infobars_shown)
       return;
     infobars_shown = true;
-
-    content::WebContents* web_contents =
-        browser->tab_strip_model()->GetActiveWebContents();
-    DCHECK(web_contents);
 
     if (show_bad_flags_security_warnings)
       chrome::ShowBadFlagsPrompt(web_contents);

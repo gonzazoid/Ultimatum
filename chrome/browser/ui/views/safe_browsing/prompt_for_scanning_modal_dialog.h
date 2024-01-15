@@ -5,8 +5,8 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_SAFE_BROWSING_PROMPT_FOR_SCANNING_MODAL_DIALOG_H_
 #define CHROME_BROWSER_UI_VIEWS_SAFE_BROWSING_PROMPT_FOR_SCANNING_MODAL_DIALOG_H_
 
-#include "base/callback.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/views/controls/styled_label.h"
@@ -21,9 +21,9 @@ namespace safe_browsing {
 // A tab modal dialog that provides more information to the user about the
 // prompt for deep scanning.
 class PromptForScanningModalDialog : public views::DialogDelegateView {
- public:
-  METADATA_HEADER(PromptForScanningModalDialog);
+  METADATA_HEADER(PromptForScanningModalDialog, views::DialogDelegateView)
 
+ public:
   // Show this dialog for the given |web_contents|.
   static void ShowForWebContents(content::WebContents* web_contents,
                                  const std::u16string& filename,

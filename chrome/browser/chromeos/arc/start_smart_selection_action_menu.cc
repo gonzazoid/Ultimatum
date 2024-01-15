@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -24,11 +24,10 @@
 #include "components/arc/common/intent_helper/arc_intent_helper_package.h"
 #include "components/renderer_context_menu/render_view_context_menu_proxy.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
-#include "components/services/app_service/public/cpp/features.h"
 #include "components/services/app_service/public/cpp/intent.h"
 #include "content/public/browser/context_menu_params.h"
-#include "ui/base/layout.h"
 #include "ui/base/models/image_model.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/events/event_constants.h"
@@ -104,7 +103,7 @@ void StartSmartSelectionActionMenu::InitMenu(
   }
 
   if (!delegate_->RequestTextSelectionActions(
-          converted_text, ui::GetSupportedResourceScaleFactors().back(),
+          converted_text, ui::GetMaxSupportedResourceScaleFactor(),
           base::BindOnce(
               &StartSmartSelectionActionMenu::HandleTextSelectionActions,
               weak_ptr_factory_.GetWeakPtr()))) {
@@ -163,21 +162,24 @@ void StartSmartSelectionActionMenu::ExecuteCommand(int command_id) {
     return;
   }
   // The app that this intent points to is able to handle it, launch it.
-  if (base::FeatureList::IsEnabled(apps::kAppServiceLaunchWithoutMojom)) {
-    apps::AppServiceProxyFactory::GetForProfile(profile)->LaunchAppWithIntent(
-        actions_[index].app_id, ui::EF_NONE,
-        CreateIntent(std::move(actions_[index].action_intent),
-                     std::move(actions_[index].activity)),
-        apps::LaunchSource::kFromSmartTextContextMenu,
-        std::make_unique<apps::WindowInfo>(display.id()), base::DoNothing());
-  } else {
-    apps::AppServiceProxyFactory::GetForProfile(profile)->LaunchAppWithIntent(
-        actions_[index].app_id, ui::EF_NONE,
-        apps::ConvertIntentToMojomIntent(
-            CreateIntent(std::move(actions_[index].action_intent),
-                         std::move(actions_[index].activity))),
-        apps::mojom::LaunchSource::kFromSmartTextContextMenu,
-        apps::MakeWindowInfo(display.id()), {});
+  apps::AppServiceProxyFactory::GetForProfile(profile)->LaunchAppWithIntent(
+      actions_[index].app_id, ui::EF_NONE,
+      CreateIntent(std::move(actions_[index].action_intent),
+                   std::move(actions_[index].activity)),
+      apps::LaunchSource::kFromSmartTextContextMenu,
+      std::make_unique<apps::WindowInfo>(display.id()), base::DoNothing());
+}
+
+void StartSmartSelectionActionMenu::OnContextMenuShown(
+    const content::ContextMenuParams& params,
+    const gfx::Rect& rect) {
+  // Since entries are kept as place holders, make them non editable and hidden.
+  for (size_t i = 0; i < kMaxMainMenuCommands; i++) {
+    proxy_->UpdateMenuItem(
+        IDC_CONTENT_CONTEXT_START_SMART_SELECTION_ACTION1 + i,
+        /*enabled=*/false,
+        /*hidden=*/true,
+        /*title=*/std::u16string());
   }
 }
 

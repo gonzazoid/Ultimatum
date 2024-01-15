@@ -5,6 +5,7 @@
 #include "third_party/blink/public/common/input/web_coalesced_input_event.h"
 
 #include "base/trace_event/trace_event.h"
+#include "base/trace_event/typed_macros.h"
 #include "third_party/blink/public/common/input/web_gesture_event.h"
 #include "third_party/blink/public/common/input/web_keyboard_event.h"
 #include "third_party/blink/public/common/input/web_mouse_wheel_event.h"
@@ -113,6 +114,17 @@ void WebCoalescedInputEvent::CoalesceWith(
   event_->Coalesce(*newer_event.event_);
   event_->SetTimeStamp(time_stamp);
   AddCoalescedEvent(*newer_event.event_);
+
+  TRACE_EVENT("input", "WebCoalescedInputEvent::CoalesceWith",
+              [trace_id = newer_event.latency_.trace_id(),
+               coalesced_to_trace_id =
+                   latency_.trace_id()](perfetto::EventContext& ctx) {
+                auto* event =
+                    ctx.event<perfetto::protos::pbzero::ChromeTrackEvent>();
+                auto* scroll_data = event->set_scroll_deltas();
+                scroll_data->set_trace_id(trace_id);
+                scroll_data->set_coalesced_to_trace_id(coalesced_to_trace_id);
+              });
 }
 
 }  // namespace blink

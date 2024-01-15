@@ -9,14 +9,17 @@
 #include "content/browser/client_hints/client_hints.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
 #include "content/browser/renderer_host/navigation_request.h"
+#include "content/common/features.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/client_hints_controller_delegate.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_client.h"
-#include "content/public/common/content_features.h"
 #include "net/http/http_request_headers.h"
 #include "net/http/http_util.h"
+#include "services/metrics/public/cpp/ukm_builders.h"
+#include "services/metrics/public/cpp/ukm_recorder.h"
+#include "services/metrics/public/cpp/ukm_source_id.h"
 #include "services/network/public/cpp/client_hints.h"
 #include "services/network/public/cpp/features.h"
 #include "services/network/public/mojom/parsed_headers.mojom-forward.h"
@@ -79,6 +82,32 @@ void CriticalClientHintsThrottle::MaybeRestartWithHints(
     const network::mojom::URLResponseHead& response_head) {
   if (!base::FeatureList::IsEnabled(features::kCriticalClientHint))
     return;
+  FrameTreeNode* frame_tree_node =
+      FrameTreeNode::GloballyFindByID(frame_tree_node_id_);
+
+  // Measure any usage of the header whether or not we take action on it.
+  auto* ukm_recorder = ukm::UkmRecorder::Get();
+  if (response_head.parsed_headers && frame_tree_node &&
+      frame_tree_node->navigation_request()) {
+    if (response_head.parsed_headers->critical_ch) {
+      for (const WebClientHintsType hint :
+           response_head.parsed_headers->critical_ch.value()) {
+        ukm::builders::ClientHints_CriticalCHHeaderUsage(
+            frame_tree_node->navigation_request()->GetNextPageUkmSourceId())
+            .SetType(static_cast<int64_t>(hint))
+            .Record(ukm_recorder->Get());
+      }
+    }
+    if (response_head.parsed_headers->accept_ch) {
+      for (const WebClientHintsType hint :
+           response_head.parsed_headers->accept_ch.value()) {
+        ukm::builders::ClientHints_AcceptCHHeaderUsage(
+            frame_tree_node->navigation_request()->GetNextPageUkmSourceId())
+            .SetType(static_cast<int64_t>(hint))
+            .Record(ukm_recorder->Get());
+      }
+    }
+  }
 
   if (!response_head.parsed_headers ||
       !response_head.parsed_headers->accept_ch ||
@@ -91,9 +120,8 @@ void CriticalClientHintsThrottle::MaybeRestartWithHints(
   if (restarted_origins_.contains(response_origin))
     return;
 
-  if (!ShouldAddClientHints(
-          response_origin, FrameTreeNode::GloballyFindByID(frame_tree_node_id_),
-          client_hint_delegate_)) {
+  if (!ShouldAddClientHints(response_origin, frame_tree_node,
+                            client_hint_delegate_)) {
     return;
   }
 
@@ -101,8 +129,7 @@ void CriticalClientHintsThrottle::MaybeRestartWithHints(
   blink::EnabledClientHints hints;
   for (const WebClientHintsType hint :
        response_head.parsed_headers->accept_ch.value())
-    hints.SetIsEnabled(response_url_, /*third_party_url=*/absl::nullopt,
-                       response_head.headers.get(), hint, true);
+    hints.SetIsEnabled(hint, true);
 
   std::vector<WebClientHintsType> critical_hints;
   for (const WebClientHintsType hint :
@@ -114,9 +141,6 @@ void CriticalClientHintsThrottle::MaybeRestartWithHints(
     return;
 
   LogCriticalCHStatus(CriticalCHRestart::kHeaderPresent);
-
-  FrameTreeNode* frame_tree_node =
-      FrameTreeNode::GloballyFindByID(frame_tree_node_id_);
 
   if (!AreCriticalHintsMissing(response_origin, frame_tree_node,
                                client_hint_delegate_, critical_hints)) {
@@ -152,6 +176,7 @@ void CriticalClientHintsThrottle::MaybeRestartWithHints(
   for (auto modified_header : modified_headers.GetHeaderVector()) {
     if (!initial_request_headers_.HasHeader(modified_header.key)) {
       LogCriticalCHStatus(CriticalCHRestart::kNavigationRestarted);
+      delegate_->DidRestartForCriticalClientHint();
       delegate_->RestartWithURLResetAndFlags(/*additional_load_flags=*/0);
       return;
     }

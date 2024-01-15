@@ -5,43 +5,43 @@
 #ifndef IOS_WEB_SESSION_SESSION_CERTIFICATE_POLICY_CACHE_IMPL_H_
 #define IOS_WEB_SESSION_SESSION_CERTIFICATE_POLICY_CACHE_IMPL_H_
 
-#import <Foundation/Foundation.h>
-
 #include "ios/web/public/session/session_certificate_policy_cache.h"
+#include "ios/web/session/session_certificate.h"
 
 namespace net {
 class X509Certificate;
 }
 
 namespace web {
+namespace proto {
+class CertificatesCacheStorage;
+}  // namespace proto
 
 // Concrete implementation of SessionCertificatePolicyCache.
-class SessionCertificatePolicyCacheImpl : public SessionCertificatePolicyCache {
+class SessionCertificatePolicyCacheImpl final
+    : public SessionCertificatePolicyCache {
  public:
-  SessionCertificatePolicyCacheImpl(BrowserState* browser_state);
+  explicit SessionCertificatePolicyCacheImpl(BrowserState* browser_state);
+  ~SessionCertificatePolicyCacheImpl() final;
 
-  SessionCertificatePolicyCacheImpl(const SessionCertificatePolicyCacheImpl&) =
-      delete;
-  SessionCertificatePolicyCacheImpl& operator=(
-      const SessionCertificatePolicyCacheImpl&) = delete;
+  // Creates a SessionCertificatePolicyCacheImpl from serialized representation.
+  SessionCertificatePolicyCacheImpl(
+      BrowserState* browser_state,
+      const proto::CertificatesCacheStorage& storage);
 
-  ~SessionCertificatePolicyCacheImpl() override;
+  // Serializes the SessionCertificatePolicyCacheImpl into `storage`.
+  void SerializeToProto(proto::CertificatesCacheStorage& storage) const;
 
   // SessionCertificatePolicyCache:
-  void UpdateCertificatePolicyCache(
-      const scoped_refptr<web::CertificatePolicyCache>& cache) const override;
+  void UpdateCertificatePolicyCache() const final;
   void RegisterAllowedCertificate(
-      scoped_refptr<net::X509Certificate> certificate,
+      const scoped_refptr<net::X509Certificate>& certificate,
       const std::string& host,
-      net::CertStatus status) override;
-
-  // Allows for batch updating the allowed certificate storages.
-  void SetAllowedCerts(NSSet* allowed_certs);
-  NSSet* GetAllowedCerts() const;
+      net::CertStatus status) final;
 
  private:
-  // An set of CRWSessionCertificateStorages representing allowed certs.
-  NSMutableSet* allowed_certs_;
+  // Represents the allowed certificates.
+  SessionCertificateSet allowed_certs_;
 };
 
 }  // namespace web

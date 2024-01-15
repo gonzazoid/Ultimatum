@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -35,7 +35,8 @@ class VIEWS_EXPORT InkDrop {
 
   // TODO(pbos): Make sure what's installed here implements InkDrop so that can
   // be used as type instead of InkDropHost.
-  static void Install(View* host, std::unique_ptr<InkDropHost> ink_drop);
+  static InkDropHost* Install(View* host,
+                              std::unique_ptr<InkDropHost> ink_drop);
 
   // Removes the InkDrop from `host`.
   static void Remove(View* host);
@@ -53,24 +54,29 @@ class VIEWS_EXPORT InkDrop {
   static std::unique_ptr<InkDrop> CreateInkDropForSquareRipple(
       InkDropHost* host,
       bool highlight_on_hover = true,
-      bool highlight_on_focus = false);
+      bool highlight_on_focus = false,
+      bool show_highlight_on_ripple = false);
 
   // Configure `host` to use CreateInkDropForSquareRipple().
   static void UseInkDropForSquareRipple(InkDropHost* host,
                                         bool highlight_on_hover = true,
-                                        bool highlight_on_focus = false);
+                                        bool highlight_on_focus = false,
+                                        bool show_highlight_on_ripple = false);
 
   // Create an InkDrop appropriate for the "flood-fill" InkDropRipple effect.
   // This InkDrop shows as a response to the ripple effect.
   static std::unique_ptr<InkDrop> CreateInkDropForFloodFillRipple(
       InkDropHost* host,
       bool highlight_on_hover = true,
-      bool highlight_on_focus = false);
+      bool highlight_on_focus = false,
+      bool show_highlight_on_ripple = true);
 
   // Configure `host` to use CreateInkDropForFloodFillRipple().
-  static void UseInkDropForFloodFillRipple(InkDropHost* host,
-                                           bool highlight_on_hover = true,
-                                           bool highlight_on_focus = false);
+  static void UseInkDropForFloodFillRipple(
+      InkDropHost* host,
+      bool highlight_on_hover = true,
+      bool highlight_on_focus = false,
+      bool show_highlight_on_ripple = true);
 
   // Create an InkDrop whose highlight does not react to its ripple.
   static std::unique_ptr<InkDrop> CreateInkDropWithoutAutoHighlight(
@@ -85,6 +91,9 @@ class VIEWS_EXPORT InkDrop {
 
   // Called by ink drop hosts when their size is changed.
   virtual void HostSizeChanged(const gfx::Size& new_size) = 0;
+
+  // Called by ink drop hosts when their theme is changed.
+  virtual void HostViewThemeChanged() = 0;
 
   // Called by ink drop hosts when their transform is changed.
   virtual void HostTransformChanged(const gfx::Transform& new_transform) = 0;
@@ -150,8 +159,9 @@ class VIEWS_EXPORT InkDrop {
 // TODO(pbos): Replace with a function that returns unique_ptr<View>, this only
 // calls SetProcessEventsWithinSubtree(false) right now.
 class VIEWS_EXPORT InkDropContainerView : public View {
+  METADATA_HEADER(InkDropContainerView, View)
+
  public:
-  METADATA_HEADER(InkDropContainerView);
   InkDropContainerView();
   InkDropContainerView(const InkDropContainerView&) = delete;
   InkDropContainerView& operator=(const InkDropContainerView&) = delete;

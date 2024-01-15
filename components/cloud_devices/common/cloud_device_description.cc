@@ -30,16 +30,15 @@ CloudDeviceDescription::~CloudDeviceDescription() = default;
 
 bool CloudDeviceDescription::InitFromString(const std::string& json) {
   absl::optional<base::Value> value = base::JSONReader::Read(json);
-  if (!value)
+  if (!value || !value->is_dict()) {
     return false;
+  }
 
-  return InitFromValue(std::move(*value));
+  return InitFromValue(std::move(*value).TakeDict());
 }
 
-bool CloudDeviceDescription::InitFromValue(base::Value ticket) {
-  if (!ticket.is_dict())
-    return false;
-  root_ = std::move(ticket).TakeDict();
+bool CloudDeviceDescription::InitFromValue(base::Value::Dict ticket) {
+  root_ = std::move(ticket);
   return IsValidTicket(root_);
 }
 
@@ -64,16 +63,14 @@ const base::Value::List* CloudDeviceDescription::GetListItem(
   return root_.FindListByDottedPath(path);
 }
 
-base::Value::Dict* CloudDeviceDescription::CreateDictItem(
-    base::StringPiece path) {
-  base::Value* result = root_.SetByDottedPath(path, base::Value::Dict());
-  return result ? &result->GetDict() : nullptr;
+bool CloudDeviceDescription::SetDictItem(base::StringPiece path,
+                                         base::Value::Dict dict) {
+  return root_.SetByDottedPath(path, std::move(dict));
 }
 
-base::Value::List* CloudDeviceDescription::CreateListItem(
-    base::StringPiece path) {
-  base::Value* result = root_.SetByDottedPath(path, base::Value::List());
-  return result ? &result->GetList() : nullptr;
+bool CloudDeviceDescription::SetListItem(base::StringPiece path,
+                                         base::Value::List list) {
+  return root_.SetByDottedPath(path, std::move(list));
 }
 
 }  // namespace cloud_devices

@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 #include "third_party/blink/renderer/modules/clipboard/clipboard_reader.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/mojom/clipboard/clipboard.mojom-blink.h"
 #include "third_party/blink/renderer/core/clipboard/clipboard_mime_types.h"
 #include "third_party/blink/renderer/core/clipboard/system_clipboard.h"
@@ -126,15 +127,18 @@ class ClipboardTextReader final : public ClipboardReader {
 class ClipboardHtmlReader final : public ClipboardReader {
  public:
   explicit ClipboardHtmlReader(SystemClipboard* system_clipboard,
-                               ClipboardPromise* promise)
-      : ClipboardReader(system_clipboard, promise) {}
+                               ClipboardPromise* promise,
+                               bool sanitize_html)
+      : ClipboardReader(system_clipboard, promise),
+        sanitize_html_(sanitize_html) {}
   ~ClipboardHtmlReader() override = default;
 
   void Read() override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
     promise_->GetExecutionContext()->CountUse(
-        WebFeature::kHtmlClipboardApiRead);
+        sanitize_html_ ? WebFeature::kHtmlClipboardApiRead
+                       : WebFeature::kHtmlClipboardApiUnsanitizedRead);
     system_clipboard()->ReadHTML(
         WTF::BindOnce(&ClipboardHtmlReader::OnRead, WrapPersistent(this)));
   }
@@ -145,6 +149,9 @@ class ClipboardHtmlReader final : public ClipboardReader {
               unsigned fragment_start,
               unsigned fragment_end) {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+    DCHECK_GE(fragment_start, 0u);
+    DCHECK_LE(fragment_end, html_string.length());
+    DCHECK_LE(fragment_start, fragment_end);
 
     LocalFrame* frame = promise_->GetLocalFrame();
     if (!frame || html_string.empty()) {
@@ -152,22 +159,23 @@ class ClipboardHtmlReader final : public ClipboardReader {
       return;
     }
 
-    // Now sanitize the HTML string.
-    // This must be called on the main thread because HTML DOM nodes can
-    // only be used on the main thread.
-    String sanitized_html = CreateSanitizedMarkupWithContext(
-        *frame->GetDocument(), html_string, fragment_start, fragment_end, url,
-        kIncludeNode, kResolveAllURLs);
-
-    if (sanitized_html.empty()) {
+    // Sanitize the HTML string if needed.
+    // `CreateSanitizedMarkupWithContext` must be called on the main thread
+    // because HTML DOM nodes can only be used on the main thread.
+    String final_html =
+        sanitize_html_ ? CreateSanitizedMarkupWithContext(
+                             *frame->GetDocument(), html_string, fragment_start,
+                             fragment_end, url, kIncludeNode, kResolveAllURLs)
+                       : html_string;
+    if (final_html.empty()) {
       NextRead(Vector<uint8_t>());
       return;
     }
     worker_pool::PostTask(
-        FROM_HERE, CrossThreadBindOnce(
-                       &ClipboardHtmlReader::EncodeOnBackgroundThread,
-                       std::move(sanitized_html), MakeCrossThreadHandle(this),
-                       std::move(clipboard_task_runner_)));
+        FROM_HERE,
+        CrossThreadBindOnce(&ClipboardHtmlReader::EncodeOnBackgroundThread,
+                            std::move(final_html), MakeCrossThreadHandle(this),
+                            std::move(clipboard_task_runner_)));
   }
 
   static void EncodeOnBackgroundThread(
@@ -198,6 +206,8 @@ class ClipboardHtmlReader final : public ClipboardReader {
     }
     promise_->OnRead(blob);
   }
+
+  bool sanitize_html_ = true;
 };
 
 // Reads SVG from the System Clipboard as a Blob with image/svg+xml content.
@@ -312,11 +322,11 @@ class ClipboardCustomFormatReader final : public ClipboardReader {
 // static
 ClipboardReader* ClipboardReader::Create(SystemClipboard* system_clipboard,
                                          const String& mime_type,
-                                         ClipboardPromise* promise) {
+                                         ClipboardPromise* promise,
+                                         bool sanitize_html) {
   DCHECK(ClipboardWriter::IsValidType(mime_type));
   // If this is a web custom format then read the unsanitized version.
-  if (RuntimeEnabledFeatures::ClipboardCustomFormatsEnabled() &&
-      !Clipboard::ParseWebCustomFormat(mime_type).IsNull()) {
+  if (!Clipboard::ParseWebCustomFormat(mime_type).empty()) {
     // We read the custom MIME type that has the "web " prefix.
     // These MIME types are found in the web custom format map written by
     // native applications.
@@ -324,14 +334,18 @@ ClipboardReader* ClipboardReader::Create(SystemClipboard* system_clipboard,
         system_clipboard, promise, mime_type);
   }
 
-  if (mime_type == kMimeTypeImagePng)
+  if (mime_type == kMimeTypeImagePng) {
     return MakeGarbageCollected<ClipboardPngReader>(system_clipboard, promise);
+  }
 
-  if (mime_type == kMimeTypeTextPlain)
+  if (mime_type == kMimeTypeTextPlain) {
     return MakeGarbageCollected<ClipboardTextReader>(system_clipboard, promise);
+  }
 
-  if (mime_type == kMimeTypeTextHTML)
-    return MakeGarbageCollected<ClipboardHtmlReader>(system_clipboard, promise);
+  if (mime_type == kMimeTypeTextHTML) {
+    return MakeGarbageCollected<ClipboardHtmlReader>(system_clipboard, promise,
+                                                     sanitize_html);
+  }
 
   if (mime_type == kMimeTypeImageSvg &&
       RuntimeEnabledFeatures::ClipboardSvgEnabled()) {

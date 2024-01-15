@@ -3,6 +3,7 @@
 # found in the LICENSE file.
 
 import("//build/config/chromeos/ui_mode.gni")
+import("//build/config/features.gni")
 import("//testing/libfuzzer/fuzzer_test.gni")
 
 source_set("lib") {
@@ -17,6 +18,8 @@ source_set("lib") {
   ]
 
   sources = [
+    "cbor_parser_impl.cc",
+    "cbor_parser_impl.h",
     "data_decoder_service.cc",
     "data_decoder_service.h",
     "gzipper.cc",
@@ -25,8 +28,6 @@ source_set("lib") {
     "json_parser_impl.h",
     "structured_headers_parser_impl.cc",
     "structured_headers_parser_impl.h",
-    "web_bundler.cc",
-    "web_bundler.h",
     "xml_parser.cc",
     "xml_parser.h",
   ]
@@ -43,6 +44,7 @@ source_set("lib") {
   deps = [
     "//base",
     "//build:chromeos_buildflags",
+    "//components/cbor",
     "//components/web_package",
     "//mojo/public/cpp/bindings",
     "//net",
@@ -56,7 +58,7 @@ source_set("lib") {
 
   public_deps = [ "//services/data_decoder/public/mojom" ]
 
-  if (!is_ios) {
+  if (use_blink) {
     sources += [
       "image_decoder_impl.cc",
       "image_decoder_impl.h",
@@ -70,6 +72,7 @@ source_set("tests") {
   testonly = true
 
   sources = [
+    "cbor_parser_unittest.cc",
     "gzipper_unittest.cc",
     "public/cpp/data_decoder_unittest.cc",
     "public/cpp/json_sanitizer_unittest.cc",
@@ -86,6 +89,7 @@ source_set("tests") {
     ":lib",
     "//base",
     "//base/test:test_support",
+    "//components/cbor",
     "//services/data_decoder/public/cpp",
     "//services/data_decoder/public/cpp:test_support",
     "//skia",
@@ -93,20 +97,22 @@ source_set("tests") {
     "//ui/gfx",
   ]
 
-  data = [ "//components/test/data/web_package/" ]
+  if (is_ios) {
+    deps += [ "//components/test:web_package_test_bundle_data" ]
+  } else {
+    data = [ "//components/test/data/web_package/" ]
+  }
 
-  if (!is_ios) {
+  if (use_blink) {
     sources += [ "image_decoder_impl_unittest.cc" ]
     deps += [
       "//gin",
       "//gin:gin_test",
       "//third_party/blink/public:blink",
+      "//tools/v8_context_snapshot:buildflags",
     ]
     data_deps = [ "//tools/v8_context_snapshot" ]
-    configs += [
-      "//tools/v8_context_snapshot:use_v8_context_snapshot",
-      "//v8:external_startup_data",
-    ]
+    configs += [ "//v8:external_startup_data" ]
   }
 }
 
@@ -119,8 +125,7 @@ source_set("xml_parser_fuzzer_deps") {
   visibility = [
     ":run_xml_parser_fuzzer",
     ":xml_parser_fuzzer",
-    ":xml_parser_fuzzer_arch_executable",
-    ":xml_parser_fuzzer_arch_executable_sources",
+    ":xml_parser_fuzzer_executable",
   ]
   public_deps = [
     ":lib",

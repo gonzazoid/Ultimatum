@@ -6,7 +6,6 @@ package org.chromium.components.policy;
 
 import static org.mockito.Mockito.verify;
 
-import android.os.Build;
 import android.os.Bundle;
 
 import org.junit.Before;
@@ -20,17 +19,13 @@ import org.robolectric.annotation.Config;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.JniMocker;
 
-/**
- * Robolectric test for AbstractAppRestrictionsProvider.
- */
+/** Robolectric test for AbstractAppRestrictionsProvider. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE, sdk = Build.VERSION_CODES.M)
+@Config(manifest = Config.NONE)
 public class PolicyConverterTest {
-    @Rule
-    public JniMocker mocker = new JniMocker();
+    @Rule public JniMocker mocker = new JniMocker();
 
-    @Mock
-    private PolicyConverter.Natives mPolicyConverterJniMock;
+    @Mock private PolicyConverter.Natives mPolicyConverterJniMock;
 
     @Before
     public void setup() {
@@ -39,8 +34,8 @@ public class PolicyConverterTest {
     }
 
     /**
-     * Test method for
-     * {@link org.chromium.components.policy.PolicyConverter#setPolicy(java.lang.String,
+     * Test method for {@link
+     * org.chromium.components.policy.PolicyConverter#setPolicy(java.lang.String,
      * java.lang.Object)}.
      */
     @Test
@@ -68,12 +63,18 @@ public class PolicyConverterTest {
         b1.putParcelableArray("b1b", ba);
         policyConverter.setPolicy("p1", b1);
         verify(mPolicyConverterJniMock)
-                .setPolicyString(1234, policyConverter, "p1",
+                .setPolicyString(
+                        1234,
+                        policyConverter,
+                        "p1",
                         "{\"i1\":23,\"s1\":\"a string\","
                                 + "\"b1b\":[{\"ba1b\":true,\"ba1s\":\"another string\"}]}");
         policyConverter.setPolicy("p1", ba);
         verify(mPolicyConverterJniMock)
-                .setPolicyString(1234, policyConverter, "p1",
+                .setPolicyString(
+                        1234,
+                        policyConverter,
+                        "p1",
                         "[{\"ba1b\":true,\"ba1s\":\"another string\"}]");
     }
 }

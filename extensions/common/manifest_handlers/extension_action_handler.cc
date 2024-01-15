@@ -16,10 +16,9 @@
 #include "extensions/common/image_util.h"
 #include "extensions/common/manifest_constants.h"
 
-// Adds `extensions::InstallWarning`s to an `extensions::Extension` if the
-// `default_popup` value for the action is not same origin, or doesn't
-// exist in the filesystem.
-void SetWarningsForInvalidDefaultPopup(
+// Adds `extensions::InstallWarning`s to `warnings` if the`default_popup` value
+// for the action doesn't exist in the filesystem.
+void SetWarningsForNonExistentDefaultPopup(
     const extensions::ActionInfo* action,
     const char* manifest_key,
     const extensions::Extension* extension,
@@ -35,16 +34,10 @@ void SetWarningsForInvalidDefaultPopup(
   base::FilePath resource_path =
       extension->GetResource(relative_path).GetFilePath();
 
-  // Check popup is only for this extension.
-  if (!extension->origin().IsSameOriginWith(default_popup_url)) {
-    warnings->push_back(extensions::InstallWarning(
-        extensions::manifest_errors::kInvalidExtensionOriginPopup, manifest_key,
-        extensions::manifest_keys::kActionDefaultPopup));
-    // Check that the popup file actually exists on filesystem.
-  } else if (resource_path.empty() || !base::PathExists(resource_path)) {
-    warnings->push_back(extensions::InstallWarning(
+  if (resource_path.empty() || !base::PathExists(resource_path)) {
+    warnings->emplace_back(
         extensions::manifest_errors::kNonexistentDefaultPopup, manifest_key,
-        extensions::manifest_keys::kActionDefaultPopup));
+        extensions::manifest_keys::kActionDefaultPopup);
   }
 }
 
@@ -52,7 +45,7 @@ namespace extensions {
 
 ExtensionActionHandler::ExtensionActionHandler() = default;
 
-ExtensionActionHandler::~ExtensionActionHandler() {}
+ExtensionActionHandler::~ExtensionActionHandler() = default;
 
 bool ExtensionActionHandler::Parse(Extension* extension,
                                    std::u16string* error) {
@@ -88,14 +81,17 @@ bool ExtensionActionHandler::Parse(Extension* extension,
   }
 
   if (key) {
-    const base::DictionaryValue* dict = nullptr;
-    if (!extension->manifest()->GetDictionary(key, &dict)) {
+    const base::Value::Dict* dict =
+        extension->manifest()->available_values().FindDict(key);
+    if (!dict) {
       *error = base::ASCIIToUTF16(error_key);
       return false;
     }
 
+    std::vector<InstallWarning> install_warnings;
     std::unique_ptr<ActionInfo> action_info =
-        ActionInfo::Load(extension, type, dict, error);
+        ActionInfo::Load(extension, type, *dict, &install_warnings, error);
+    extension->AddInstallWarnings(std::move(install_warnings));
     if (!action_info)
       return false;  // Failed to parse extension action definition.
 
@@ -133,21 +129,12 @@ bool ExtensionActionHandler::Validate(
   if (!action)
     return true;
 
-  const char* manifest_key = nullptr;
-  switch (action->type) {
-    case ActionInfo::TYPE_ACTION:
-      manifest_key = manifest_keys::kAction;
-      break;
-    case ActionInfo::TYPE_BROWSER:
-      manifest_key = manifest_keys::kBrowserAction;
-      break;
-    case ActionInfo::TYPE_PAGE:
-      manifest_key = manifest_keys::kPageAction;
-      break;
-  }
+  const char* manifest_key =
+      ActionInfo::GetManifestKeyForActionType(action->type);
   DCHECK(manifest_key);
 
-  SetWarningsForInvalidDefaultPopup(action, manifest_key, extension, warnings);
+  SetWarningsForNonExistentDefaultPopup(action, manifest_key, extension,
+                                        warnings);
 
   // Empty default icon is valid.
   if (action->default_icon.empty())
@@ -155,9 +142,8 @@ bool ExtensionActionHandler::Validate(
 
   // Analyze the icons for visibility using the default toolbar color, since
   // the majority of Chrome users don't modify their theme.
-  return file_util::ValidateExtensionIconSet(
-      action->default_icon, extension, manifest_key,
-      image_util::kDefaultToolbarColor, error);
+  return file_util::ValidateExtensionIconSet(action->default_icon, extension,
+                                             manifest_key, error);
 }
 
 bool ExtensionActionHandler::AlwaysParseForType(Manifest::Type type) const {

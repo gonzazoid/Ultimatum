@@ -10,7 +10,9 @@
 
 #include "base/android/jni_android.h"
 #include "base/numerics/math_constants.h"
+#include "base/test/scoped_feature_list.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/events/android/motion_event_android.h"
 #include "ui/events/event_constants.h"
 #include "ui/events/test/motion_event_test_utils.h"
@@ -58,9 +60,9 @@ constexpr float float_error = 0.0001f;
 // we're primarily testing caching behavior, and the code necessary to
 // construct a Java-backed MotionEvent itself adds unnecessary complexity.
 TEST(MotionEventAndroidTest, Constructor) {
-  constexpr int kEventTimeMS = 5;
+  constexpr int kEventTimeNS = 5'123'456;
   base::TimeTicks event_time =
-      base::TimeTicks() + base::Milliseconds(kEventTimeMS);
+      base::TimeTicks() + base::Nanoseconds(kEventTimeNS);
   ui::test::ScopedEventTestTickClock clock;
   clock.SetNowTicks(event_time);
 
@@ -74,9 +76,10 @@ TEST(MotionEventAndroidTest, Constructor) {
   int action_index = -1;
   MotionEventAndroid event(
       base::android::AttachCurrentThread(), nullptr, kPixToDip, 0.f, 0.f, 0.f,
-      kEventTimeMS, kAndroidActionDown, pointer_count, history_size,
-      action_index, kAndroidActionButton, 0, kAndroidButtonPrimary,
-      kAndroidAltKeyDown, raw_offset, -raw_offset, false, &p0, &p1);
+      base::TimeTicks() + base::Nanoseconds(kEventTimeNS), kAndroidActionDown,
+      pointer_count, history_size, action_index, kAndroidActionButton, 0,
+      kAndroidButtonPrimary, kAndroidAltKeyDown, raw_offset, -raw_offset, false,
+      &p0, &p1);
 
   EXPECT_EQ(MotionEvent::Action::DOWN, event.GetAction());
   EXPECT_EQ(event_time, event.GetEventTime());
@@ -118,28 +121,28 @@ TEST(MotionEventAndroidTest, Clone) {
   MotionEventAndroid::Pointer p0(
       1, 13.7f, -7.13f, 5.3f, 1.2f, 0.1f, 0.2f, kAndroidToolTypeFinger);
   MotionEventAndroid event(base::android::AttachCurrentThread(), nullptr,
-                           kPixToDip, 0, 0, 0, 0, kAndroidActionDown,
-                           pointer_count, 0, 0, 0, 0, 0, 0, 0, 0, false, &p0,
-                           nullptr);
+                           kPixToDip, 0, 0, 0, base::TimeTicks(),
+                           kAndroidActionDown, pointer_count, 0, 0, 0, 0, 0, 0,
+                           0, 0, false, &p0, nullptr);
 
   std::unique_ptr<MotionEvent> clone = event.Clone();
   EXPECT_EQ(ui::test::ToString(event), ui::test::ToString(*clone));
 }
 
 TEST(MotionEventAndroidTest, Cancel) {
-  constexpr const int kEventTimeMS = 5;
+  constexpr const int kEventTimeNS = 5'123'456;
   base::TimeTicks event_time =
-      base::TimeTicks() + base::Milliseconds(kEventTimeMS);
+      base::TimeTicks() + base::Nanoseconds(kEventTimeNS);
   ui::test::ScopedEventTestTickClock clock;
   clock.SetNowTicks(event_time);
 
   const int pointer_count = 1;
   MotionEventAndroid::Pointer p0(
       1, 13.7f, -7.13f, 5.3f, 1.2f, 0.1f, 0.2f, kAndroidToolTypeFinger);
-  MotionEventAndroid event(base::android::AttachCurrentThread(), nullptr,
-                           kPixToDip, 0, 0, 0, kEventTimeMS, kAndroidActionDown,
-                           pointer_count, 0, 0, 0, 0, 0, 0, 0, 0, false, &p0,
-                           nullptr);
+  MotionEventAndroid event(
+      base::android::AttachCurrentThread(), nullptr, kPixToDip, 0, 0, 0,
+      base::TimeTicks() + base::Nanoseconds(kEventTimeNS), kAndroidActionDown,
+      pointer_count, 0, 0, 0, 0, 0, 0, 0, 0, false, &p0, nullptr);
 
   std::unique_ptr<MotionEvent> cancel_event = event.Cancel();
   EXPECT_EQ(MotionEvent::Action::CANCEL, cancel_event->GetAction());
@@ -161,9 +164,9 @@ TEST(MotionEventAndroidTest, InvalidOrientationsSanitized) {
   MotionEventAndroid::Pointer p0(0, 0, 0, 0, 0, orientation0, 0, 0);
   MotionEventAndroid::Pointer p1(1, 0, 0, 0, 0, orientation1, 0, 0);
   MotionEventAndroid event(base::android::AttachCurrentThread(), nullptr,
-                           kPixToDip, 0, 0, 0, 0, kAndroidActionDown,
-                           pointer_count, 0, 0, 0, 0, 0, 0, 0, 0, false, &p0,
-                           &p1);
+                           kPixToDip, 0, 0, 0, base::TimeTicks(),
+                           kAndroidActionDown, pointer_count, 0, 0, 0, 0, 0, 0,
+                           0, 0, false, &p0, &p1);
 
   EXPECT_EQ(0.f, event.GetOrientation(0));
   EXPECT_EQ(0.f, event.GetOrientation(1));
@@ -177,9 +180,9 @@ TEST(MotionEventAndroidTest, NonEmptyHistoryForNonMoveEventsSanitized) {
   size_t history_size = 5;
   MotionEventAndroid::Pointer p0(0, 0, 0, 0, 0, 0, 0, 0);
   MotionEventAndroid event(base::android::AttachCurrentThread(), nullptr,
-                           kPixToDip, 0, 0, 0, 0, kAndroidActionDown,
-                           pointer_count, history_size, 0, 0, 0, 0, 0, 0, 0,
-                           false, &p0, nullptr);
+                           kPixToDip, 0, 0, 0, base::TimeTicks(),
+                           kAndroidActionDown, pointer_count, history_size, 0,
+                           0, 0, 0, 0, 0, 0, false, &p0, nullptr);
 
   EXPECT_EQ(0U, event.GetHistorySize());
 }
@@ -195,10 +198,10 @@ TEST(MotionEventAndroidTest, ActionIndexForPointerDown) {
   int pointer_count = 2;
   int history_size = 0;
   int action_index = 1;
-  MotionEventAndroid event(base::android::AttachCurrentThread(), nullptr,
-                           kPixToDip, 0, 0, 0, 0, kAndroidActionPointerDown,
-                           pointer_count, history_size, action_index, 0, 0, 0,
-                           0, 0, 0, false, &p0, &p1);
+  MotionEventAndroid event(
+      base::android::AttachCurrentThread(), nullptr, kPixToDip, 0, 0, 0,
+      base::TimeTicks(), kAndroidActionPointerDown, pointer_count, history_size,
+      action_index, 0, 0, 0, 0, 0, 0, false, &p0, &p1);
 
   EXPECT_EQ(MotionEvent::Action::POINTER_DOWN, event.GetAction());
   EXPECT_EQ(action_index, event.GetActionIndex());

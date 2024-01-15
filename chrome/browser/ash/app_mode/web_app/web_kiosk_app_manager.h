@@ -9,16 +9,19 @@
 #include <vector>
 
 #include "chrome/browser/ash/app_mode/kiosk_app_manager_base.h"
+#include "chrome/browser/ash/app_mode/kiosk_app_types.h"
 #include "chrome/browser/ash/app_mode/web_app/web_kiosk_app_data.h"
 #include "chrome/browser/ash/app_mode/web_app/web_kiosk_app_update_observer.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "components/account_id/account_id.h"
 #include "url/gurl.h"
 
-class Browser;
 class PrefRegistrySimple;
 class Profile;
+
+namespace web_app {
 struct WebAppInstallInfo;
+}  // namespace web_app
 
 namespace ash {
 
@@ -44,7 +47,7 @@ class WebKioskAppManager : public KioskAppManagerBase {
   static KioskAppManagerBase::App CreateAppByData(const WebKioskAppData& data);
 
   // KioskAppManagerBase:
-  void GetApps(std::vector<App>* apps) const override;
+  std::vector<App> GetApps() const override;
 
   void LoadIcons();
 
@@ -52,31 +55,35 @@ class WebKioskAppManager : public KioskAppManagerBase {
   // thus is_valid() returns empty AccountId.
   const AccountId& GetAutoLaunchAccountId() const;
 
-  // Obtains an app associated with given |account_id|.
+  // Obtains an app associated with given `account_id`.
   const WebKioskAppData* GetAppByAccountId(const AccountId& account_id) const;
 
   // Updates app by the data obtained during installation.
   void UpdateAppByAccountId(const AccountId& account_id,
-                            const WebAppInstallInfo& app_info);
+                            const web_app::WebAppInstallInfo& app_info);
 
   // Updates app by title, start_url and icon_bitmaps.
   void UpdateAppByAccountId(const AccountId& account_id,
                             const std::string& title,
                             const GURL& start_url,
-                            const IconBitmaps& icon_bitmaps);
+                            const web_app::IconBitmaps& icon_bitmaps);
 
   // Adds fake apps in tests.
   void AddAppForTesting(const AccountId& account_id, const GURL& install_url);
 
-  // Initialize current app session with the browser that is running the app.
-  void InitSession(Browser* browser, Profile* profile);
+  // Initializes current kiosk system session.
+  //
+  // `app_name` indicates the name of the app if it's running in Ash.
+  void InitKioskSystemSession(Profile* profile,
+                              const KioskAppId& kiosk_app_id,
+                              const std::optional<std::string>& app_name);
 
   // Starts observing web app updates from App Service in a Kiosk session.
   void StartObservingAppUpdate(Profile* profile, const AccountId& account_id);
 
  private:
   // KioskAppManagerBase:
-  // Updates |apps_| based on CrosSettings.
+  // Updates `apps_` based on CrosSettings.
   void UpdateAppsFromPolicy() override;
 
   std::vector<std::unique_ptr<WebKioskAppData>> apps_;

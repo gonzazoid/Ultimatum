@@ -6,17 +6,20 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_SCHEDULER_DOM_SCHEDULER_H_
 
 #include "base/memory/scoped_refptr.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 #include "third_party/blink/public/common/scheduler/task_attribution_id.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
-#include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
+#include "third_party/blink/renderer/modules/scheduler/dom_task_signal.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/scheduler/public/web_scheduling_priority.h"
+#include "third_party/blink/renderer/platform/scheduler/public/web_scheduling_queue_type.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
+#include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 
 namespace base {
@@ -24,11 +27,11 @@ class SingleThreadTaskRunner;
 }  // namespace base
 
 namespace blink {
-
-class DOMTask;
+class AbortSignal;
 class DOMTaskSignal;
 class ExceptionState;
 class SchedulerPostTaskOptions;
+class SchedulerYieldOptions;
 class DOMSchedulerTest;
 class V8SchedulerPostTaskCallback;
 class WebSchedulingTaskQueue;
@@ -75,6 +78,8 @@ class MODULES_EXPORT DOMScheduler : public ScriptWrappable,
                          SchedulerPostTaskOptions*,
                          ExceptionState&);
 
+  ScriptPromise yield(ScriptState*, SchedulerYieldOptions*, ExceptionState&);
+
   scheduler::TaskAttributionIdType taskId(ScriptState*);
   AtomicString isAncestor(ScriptState*,
                           scheduler::TaskAttributionIdType parent_id);
@@ -83,8 +88,14 @@ class MODULES_EXPORT DOMScheduler : public ScriptWrappable,
 
   void Trace(Visitor*) const override;
 
+  // Gets the fixed priority TaskSignal for `priority`, creating it if needed.
+  DOMTaskSignal* GetFixedPriorityTaskSignal(ScriptState*,
+                                            WebSchedulingPriority);
+
  private:
-  friend class DOMTask;  // For DOMTaskQueue
+  // TODO(crbug.com/c/979020): Move DOMTaskQueue out of DOMScheduler.
+  friend class DOMTask;              // For DOMTaskQueue
+  friend class DOMTaskContinuation;  // For DOMTaskQueue
   friend class DOMSchedulerTest;
 
   static constexpr size_t kWebSchedulingPriorityCount =
@@ -98,15 +109,19 @@ class MODULES_EXPORT DOMScheduler : public ScriptWrappable,
   // in on-heap collections.
   class DOMTaskQueue final : public GarbageCollected<DOMTaskQueue> {
    public:
-    explicit DOMTaskQueue(std::unique_ptr<WebSchedulingTaskQueue> task_queue,
-                          WebSchedulingPriority priority);
+    DOMTaskQueue(std::unique_ptr<WebSchedulingTaskQueue> task_queue,
+                 WebSchedulingPriority priority);
     ~DOMTaskQueue();
 
-    void Trace(Visitor* visitor) const {}
+    void Trace(Visitor* visitor) const;
 
     base::SingleThreadTaskRunner& GetTaskRunner() { return *task_runner_; }
 
     WebSchedulingPriority GetPriority() const { return priority_; }
+
+    void SetPriorityChangeHandle(DOMTaskSignal::AlgorithmHandle* handle) {
+      priority_change_handle_ = handle;
+    }
 
     void SetPriority(WebSchedulingPriority);
 
@@ -114,30 +129,70 @@ class MODULES_EXPORT DOMScheduler : public ScriptWrappable,
     std::unique_ptr<WebSchedulingTaskQueue> web_scheduling_task_queue_;
     scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
     WebSchedulingPriority priority_;
+    Member<DOMTaskSignal::AlgorithmHandle> priority_change_handle_;
   };
 
-  void CreateFixedPriorityTaskQueues(ExecutionContext*);
+  using FixedPriorityTaskQueueVector =
+      HeapVector<Member<DOMTaskQueue>, kWebSchedulingPriorityCount>;
+  using SignalToTaskQueueMap =
+      HeapHashMap<WeakMember<DOMTaskSignal>, WeakMember<DOMTaskQueue>>;
 
-  // Create and initialize a new WebSchedulingTaskQueue for the given
-  // DOMTaskSignal. This creates the signal and |signal_to_task_queue_map_|
-  // mapping, and registers the callback for handling priority changes.
-  void CreateTaskQueueFor(DOMTaskSignal*);
+  // Creates and enqueues one fixed priority task queue for each priority with
+  // the given queue type in the given vector.
+  void CreateFixedPriorityTaskQueues(ExecutionContext*,
+                                     WebSchedulingQueueType,
+                                     FixedPriorityTaskQueueVector&);
 
-  // Callback for when the DOMTaskSignal signals priority change.
-  void OnPriorityChange(DOMTaskSignal*);
+  // Creates and initializes a new dynamic priority WebSchedulingTaskQueue for
+  // the given task signal and `WebSchedulingQueueType`.
+  DOMTaskQueue* CreateDynamicPriorityTaskQueue(DOMTaskSignal*,
+                                               WebSchedulingQueueType);
 
-  // |fixed_priority_task_queues_| is initialized with one entry per priority,
+  // Callback for when the signal signals priority change.
+  void OnPriorityChange(DOMTaskSignal*, DOMTaskQueue*);
+
+  // The state necessary for scheduling a task or continuation.
+  struct SchedulingState {
+    STACK_ALLOCATED();
+
+   public:
+    AbortSignal* abort_source = nullptr;
+    DOMTaskSignal* priority_source = nullptr;
+  };
+
+  // Gets the abort and priority sources (signals) from `signal_option` and
+  // `priority_option`.
+  enum class InheritOption { kInherit };
+  SchedulingState GetSchedulingStateFromOptions(
+      ScriptState*,
+      absl::variant<AbortSignal*, InheritOption> signal_option,
+      absl::variant<AtomicString, InheritOption> priority_option);
+
+  // Gets the task queue used to schedule tasks or continuations with the given
+  // signal and type, creating it if needed.
+  DOMTaskQueue* GetTaskQueue(DOMTaskSignal*, WebSchedulingQueueType);
+
+  // `fixed_priority_task_queues_` is initialized with one entry per priority,
   // indexed by priority. This will be empty when the window is detached.
-  HeapVector<Member<DOMTaskQueue>, kWebSchedulingPriorityCount>
-      fixed_priority_task_queues_;
+  FixedPriorityTaskQueueVector fixed_priority_task_queues_;
 
-  // |signal_to_task_queue_map_| tracks the associated task queue for task
+  // Same as `fixed_priority_task_queues_` but for continuation queues.
+  FixedPriorityTaskQueueVector fixed_priority_continuation_queues_;
+
+  // Fixed priority task signals, indexed by priority, used for inheriting a
+  // fixed priority.
+  HeapVector<Member<DOMTaskSignal>, kWebSchedulingPriorityCount>
+      fixed_priority_task_signals_;
+
+  // `signal_to_task_queue_map_` tracks the associated task queue for task
   // signals the scheduler knows about that are still alive, with each signal
   // mapping to the corresponding dynamic priority DOMTaskQueue. Mappings are
-  // removed automatically when the corresponding signal is garbage collected.
-  // This will be empty when the window is detached.
-  HeapHashMap<WeakMember<DOMTaskSignal>, Member<DOMTaskQueue>>
-      signal_to_task_queue_map_;
+  // removed automatically when either the corresponding signal or DOMTaskQueue
+  // is garbage collected. This will be empty when the window is detached.
+  SignalToTaskQueueMap signal_to_task_queue_map_;
+
+  // Same as `signal_to_task_queue_map_` but for continuation queues.
+  SignalToTaskQueueMap signal_to_continuation_queue_map_;
 };
 
 }  // namespace blink

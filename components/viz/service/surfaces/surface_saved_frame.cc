@@ -8,9 +8,9 @@
 #include <iterator>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/flat_set.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
 #include "components/viz/common/quads/compositor_frame_transition_directive.h"
 #include "components/viz/common/quads/compositor_render_pass.h"
@@ -65,12 +65,12 @@ SurfaceSavedFrame::~SurfaceSavedFrame() {
     std::move(directive_finished_callback_).Run(directive_);
 }
 
-base::flat_set<SharedElementResourceId> SurfaceSavedFrame::GetEmptyResourceIds()
-    const {
-  base::flat_set<SharedElementResourceId> result;
+base::flat_set<ViewTransitionElementResourceId>
+SurfaceSavedFrame::GetEmptyResourceIds() const {
+  base::flat_set<ViewTransitionElementResourceId> result;
   for (auto& shared_element : directive_.shared_elements())
     if (shared_element.render_pass_id.is_null())
-      result.insert(shared_element.shared_element_resource_id);
+      result.insert(shared_element.view_transition_element_resource_id);
   return result;
 }
 
@@ -110,15 +110,14 @@ std::unique_ptr<CopyOutputRequest> SurfaceSavedFrame::CreateCopyRequestIfNeeded(
   if (shared_pass_index >= directive_.shared_elements().size())
     return nullptr;
 
-  RenderPassDrawData draw_data(
-      render_pass, TransitionUtils::ComputeAccumulatedOpacity(render_pass_list,
-                                                              render_pass.id));
+  RenderPassDrawData draw_data(render_pass);
   auto request = std::make_unique<CopyOutputRequest>(
       kResultFormat, kResultDestination,
       base::BindOnce(&SurfaceSavedFrame::NotifyCopyOfOutputComplete,
-                     weak_factory_.GetMutableWeakPtr(), ResultType::kShared,
-                     shared_pass_index, draw_data));
-  request->set_result_task_runner(base::ThreadTaskRunnerHandle::Get());
+                     weak_factory_.GetMutableWeakPtr(), shared_pass_index,
+                     draw_data));
+  request->set_result_task_runner(
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   return request;
 }
 
@@ -137,7 +136,6 @@ size_t SurfaceSavedFrame::ExpectedResultCount() const {
 }
 
 void SurfaceSavedFrame::NotifyCopyOfOutputComplete(
-    ResultType type,
     size_t shared_index,
     const RenderPassDrawData& data,
     std::unique_ptr<CopyOutputResult> output_copy) {
@@ -162,15 +160,10 @@ void SurfaceSavedFrame::NotifyCopyOfOutputComplete(
     frame_result_->shared_results.resize(directive_.shared_elements().size());
   }
 
-  OutputCopyResult* slot = nullptr;
-  if (type == ResultType::kRoot) {
-    slot = &frame_result_->root_result;
-  } else {
-    DCHECK(type == ResultType::kShared);
-    CHECK_LT(shared_index, frame_result_->shared_results.size());
-    DCHECK(!frame_result_->shared_results[shared_index]);
-    slot = &frame_result_->shared_results[shared_index].emplace();
-  }
+  CHECK_LT(shared_index, frame_result_->shared_results.size());
+  DCHECK(!frame_result_->shared_results[shared_index]);
+  OutputCopyResult* slot =
+      &frame_result_->shared_results[shared_index].emplace();
 
   DCHECK(slot);
   DCHECK_EQ(output_copy->size(), data.size);
@@ -181,8 +174,8 @@ void SurfaceSavedFrame::NotifyCopyOfOutputComplete(
     slot->is_software = true;
   } else {
     auto output_copy_texture = *output_copy->GetTextureResult();
-    slot->mailbox = output_copy_texture.planes[0].mailbox;
-    slot->sync_token = output_copy_texture.planes[0].sync_token;
+    slot->mailbox = output_copy_texture.mailbox_holders[0].mailbox;
+    slot->sync_token = output_copy_texture.mailbox_holders[0].sync_token;
     slot->color_space = output_copy_texture.color_space;
 
     CopyOutputResult::ReleaseCallbacks release_callbacks =
@@ -207,13 +200,14 @@ void SurfaceSavedFrame::CompleteSavedFrameForTesting() {
                                  kDefaultTextureSizeForTesting.height()));
 
   InitFrameResult();
-  frame_result_->root_result.bitmap = std::move(bitmap);
-  frame_result_->root_result.draw_data.size = kDefaultTextureSizeForTesting;
-  frame_result_->root_result.draw_data.target_transform.MakeIdentity();
-  frame_result_->root_result.draw_data.opacity = 1.f;
-  frame_result_->root_result.is_software = true;
-
   frame_result_->shared_results.resize(directive_.shared_elements().size());
+  for (auto& result : frame_result_->shared_results) {
+    result.emplace();
+    result->bitmap = std::move(bitmap);
+    result->draw_data.size = kDefaultTextureSizeForTesting;
+    result->is_software = true;
+  }
+
   copy_request_count_ = 0;
   valid_result_count_ = ExpectedResultCount();
   weak_factory_.InvalidateWeakPtrs();
@@ -227,17 +221,8 @@ void SurfaceSavedFrame::InitFrameResult() {
 
 SurfaceSavedFrame::RenderPassDrawData::RenderPassDrawData() = default;
 SurfaceSavedFrame::RenderPassDrawData::RenderPassDrawData(
-    const CompositorRenderPass& render_pass,
-    float opacity)
-    : opacity(opacity) {
-  // During copy request, the origin for |render_pass|'s output_rect is mapped
-  // to the origin of the texture in the result. We account for that here.
-  size = render_pass.output_rect.size();
-
-  target_transform = render_pass.transform_to_root_target;
-  target_transform.Translate(render_pass.output_rect.x(),
-                             render_pass.output_rect.y());
-}
+    const CompositorRenderPass& render_pass)
+    : size(render_pass.output_rect.size()) {}
 
 SurfaceSavedFrame::OutputCopyResult::OutputCopyResult() = default;
 SurfaceSavedFrame::OutputCopyResult::OutputCopyResult(

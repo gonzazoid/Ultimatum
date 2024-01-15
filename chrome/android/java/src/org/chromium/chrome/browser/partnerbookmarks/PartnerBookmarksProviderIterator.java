@@ -5,7 +5,6 @@
 package org.chromium.chrome.browser.partnerbookmarks;
 
 import android.database.Cursor;
-import android.database.sqlite.SQLiteException;
 import android.net.Uri;
 
 import org.chromium.base.ContextUtils;
@@ -14,16 +13,15 @@ import org.chromium.components.embedder_support.util.UrlConstants;
 
 import java.util.NoSuchElementException;
 
-/**
- * Imports bookmarks from partner content provider using the private provider API.
- */
+/** Imports bookmarks from partner content provider using the private provider API. */
 public class PartnerBookmarksProviderIterator implements PartnerBookmark.BookmarkIterator {
     private static final String TAG = "PartnerBookmarks";
     private static final String PROVIDER_AUTHORITY = "com.android.partnerbookmarks";
-    private static final Uri CONTENT_URI = new Uri.Builder()
-                                                   .scheme(UrlConstants.CONTENT_SCHEME)
-                                                   .authority(PROVIDER_AUTHORITY)
-                                                   .build();
+    private static final Uri CONTENT_URI =
+            new Uri.Builder()
+                    .scheme(UrlConstants.CONTENT_SCHEME)
+                    .authority(PROVIDER_AUTHORITY)
+                    .build();
 
     // Private bookmarks structure.
     private static final String BOOKMARKS_PATH = "bookmarks";
@@ -45,9 +43,15 @@ public class PartnerBookmarksProviderIterator implements PartnerBookmark.Bookmar
     private static final String BOOKMARKS_SORT_ORDER =
             BOOKMARKS_COLUMN_TYPE + " DESC, " + BOOKMARKS_COLUMN_ID + " ASC";
 
-    private static final String[] BOOKMARKS_PROJECTION = {BOOKMARKS_COLUMN_ID, BOOKMARKS_COLUMN_URL,
-            BOOKMARKS_COLUMN_TITLE, BOOKMARKS_COLUMN_TYPE, BOOKMARKS_COLUMN_PARENT,
-            BOOKMARKS_COLUMN_FAVICON, BOOKMARKS_COLUMN_TOUCHICON};
+    private static final String[] BOOKMARKS_PROJECTION = {
+        BOOKMARKS_COLUMN_ID,
+        BOOKMARKS_COLUMN_URL,
+        BOOKMARKS_COLUMN_TITLE,
+        BOOKMARKS_COLUMN_TYPE,
+        BOOKMARKS_COLUMN_PARENT,
+        BOOKMARKS_COLUMN_FAVICON,
+        BOOKMARKS_COLUMN_TOUCHICON
+    };
 
     private final Cursor mCursor;
 
@@ -57,11 +61,20 @@ public class PartnerBookmarksProviderIterator implements PartnerBookmark.Bookmar
      */
     public static PartnerBookmarksProviderIterator createIfAvailable() {
         try {
-            Cursor cursor = ContextUtils.getApplicationContext().getContentResolver().query(
-                    BOOKMARKS_CONTENT_URI, BOOKMARKS_PROJECTION, null, null, BOOKMARKS_SORT_ORDER);
+            Cursor cursor =
+                    ContextUtils.getApplicationContext()
+                            .getContentResolver()
+                            .query(
+                                    BOOKMARKS_CONTENT_URI,
+                                    BOOKMARKS_PROJECTION,
+                                    null,
+                                    null,
+                                    BOOKMARKS_SORT_ORDER);
             if (cursor == null) return null;
             return new PartnerBookmarksProviderIterator(cursor);
-        } catch (SQLiteException ex) {
+        } catch (Exception ex) {
+            // Depending on the OEM version of Android query() may throw a variety of different
+            // exception types. See crbug/1466882.
             Log.e(TAG, "Unable to read partner bookmark database", ex);
             return null;
         }
@@ -108,7 +121,7 @@ public class PartnerBookmarksProviderIterator implements PartnerBookmark.Bookmar
             }
             bookmark.mIsFolder =
                     mCursor.getInt(mCursor.getColumnIndexOrThrow(BOOKMARKS_COLUMN_TYPE))
-                    == BOOKMARK_TYPE_FOLDER;
+                            == BOOKMARK_TYPE_FOLDER;
             bookmark.mUrl = mCursor.getString(mCursor.getColumnIndexOrThrow(BOOKMARKS_COLUMN_URL));
             bookmark.mTitle =
                     mCursor.getString(mCursor.getColumnIndexOrThrow(BOOKMARKS_COLUMN_TITLE));

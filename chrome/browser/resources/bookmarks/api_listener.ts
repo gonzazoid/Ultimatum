@@ -2,13 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {addWebUIListener, removeWebUIListener} from 'chrome://resources/js/cr.m.js';
-import {Action} from 'chrome://resources/js/store_ts.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {addWebUiListener, removeWebUiListener} from 'chrome://resources/js/cr.js';
+import type {Action} from 'chrome://resources/js/store.js';
 
 import {createBookmark, editBookmark, moveBookmark, refreshNodes, removeBookmark, reorderChildren, setCanEditBookmarks, setIncognitoAvailability} from './actions.js';
 import {BrowserProxyImpl} from './browser_proxy.js';
-import {IncognitoAvailability} from './constants.js';
+import type {IncognitoAvailability} from './constants.js';
 import {Debouncer} from './debouncer.js';
 import {Store} from './store.js';
 import {normalizeNodes} from './util.js';
@@ -122,7 +122,7 @@ function onImportBegan() {
 }
 
 function onImportEnded() {
-  chrome.bookmarks.getTree(function(results) {
+  chrome.bookmarks.getTree().then((results) => {
     dispatch(refreshNodes(normalizeNodes(results[0]!)));
   });
   chrome.bookmarks.onCreated.addListener(onBookmarkCreated);
@@ -152,12 +152,12 @@ export function init() {
 
   const browserProxy = BrowserProxyImpl.getInstance();
   browserProxy.getIncognitoAvailability().then(onIncognitoAvailabilityChanged);
-  incognitoAvailabilityListener = addWebUIListener(
+  incognitoAvailabilityListener = addWebUiListener(
       'incognito-availability-changed', onIncognitoAvailabilityChanged);
 
   browserProxy.getCanEditBookmarks().then(onCanEditBookmarksChanged);
   canEditBookmarksListener =
-      addWebUIListener('can-edit-bookmarks-changed', onCanEditBookmarksChanged);
+      addWebUiListener('can-edit-bookmarks-changed', onCanEditBookmarksChanged);
 }
 
 export function destroy() {
@@ -169,11 +169,15 @@ export function destroy() {
   chrome.bookmarks.onImportBegan.removeListener(onImportBegan);
   chrome.bookmarks.onImportEnded.removeListener(onImportEnded);
   if (incognitoAvailabilityListener) {
-    removeWebUIListener(/** @type {{eventName: string, uid: number}} */ (
+    removeWebUiListener(/** @type {{eventName: string, uid: number}} */ (
         incognitoAvailabilityListener));
   }
   if (canEditBookmarksListener) {
-    removeWebUIListener(/** @type {{eventName: string, uid: number}} */ (
+    removeWebUiListener(/** @type {{eventName: string, uid: number}} */ (
         canEditBookmarksListener));
   }
+}
+
+export function setDebouncerForTesting() {
+  debouncer = new Debouncer(() => {});
 }

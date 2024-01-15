@@ -4,6 +4,10 @@
 
 package org.chromium.chrome.browser.keyboard_accessory.sheet_tabs;
 
+import static org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabProperties.IS_DEFAULT_A11Y_FOCUS_REQUESTED;
+import static org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabProperties.ITEMS;
+import static org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.AccessorySheetTabProperties.SCROLL_LISTENER;
+
 import android.content.Context;
 import android.graphics.drawable.Drawable;
 import android.view.ViewGroup;
@@ -12,14 +16,16 @@ import androidx.annotation.CallSuper;
 import androidx.annotation.DrawableRes;
 import androidx.annotation.LayoutRes;
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.recyclerview.widget.RecyclerView;
 
+import org.chromium.base.ResettersForTesting;
 import org.chromium.chrome.browser.keyboard_accessory.AccessoryTabType;
 import org.chromium.chrome.browser.keyboard_accessory.data.KeyboardAccessoryData;
 import org.chromium.chrome.browser.keyboard_accessory.data.KeyboardAccessoryData.AccessorySheetData;
 import org.chromium.chrome.browser.keyboard_accessory.data.Provider;
+import org.chromium.ui.modelutil.PropertyModel;
+import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 
 /**
  * This coordinator aims to be the base class for sheets to be added to the ManualFillingCoordinator
@@ -29,12 +35,11 @@ public abstract class AccessorySheetTabCoordinator implements KeyboardAccessoryD
     private final KeyboardAccessoryData.Tab mTab;
     private final RecyclerView.OnScrollListener mScrollListener;
 
-    /**
-     * Provides the icon used for a sheet. Simplifies mocking in controller tests.
-     */
-    @VisibleForTesting
+    protected final PropertyModel mModel;
+
+    /** Provides the icon used for a sheet. Simplifies mocking in controller tests. */
     public static class IconProvider {
-        private static Drawable sTestIcon;
+        private static Drawable sIconForTesting;
 
         /**
          * Loads the icon used for this class. Used to mock icons in unit tests.
@@ -43,13 +48,13 @@ public abstract class AccessorySheetTabCoordinator implements KeyboardAccessoryD
          * @return The icon as {@link Drawable}.
          */
         static Drawable getIcon(Context context, @DrawableRes int resource) {
-            if (sTestIcon != null) return sTestIcon;
+            if (sIconForTesting != null) return sIconForTesting;
             return AppCompatResources.getDrawable(context, resource);
         }
 
-        @VisibleForTesting
         public static void setIconForTesting(Drawable icon) {
-            sTestIcon = icon;
+            sIconForTesting = icon;
+            ResettersForTesting.register(() -> sIconForTesting = null);
         }
     }
 
@@ -58,23 +63,36 @@ public abstract class AccessorySheetTabCoordinator implements KeyboardAccessoryD
      * @param title A {@link String} permanently displayed in the bar above the keyboard.
      * @param icon The icon that represents this sheet in the keyboard accessory tab switcher.
      * @param contentDescription A description for this sheet used in the tab switcher.
-     * @param openingAnnouncement The announced string when opening this sheet.
      * @param layout The layout containing all views that are used by this sheet.
      * @param tabType The type of this tab as used in histograms.
      * @param scrollListener An optional listener that will be bound to an inflated recycler view.
      */
-    AccessorySheetTabCoordinator(String title, Drawable icon, String contentDescription,
-            String openingAnnouncement, @LayoutRes int layout, @AccessoryTabType int tabType,
+    AccessorySheetTabCoordinator(
+            String title,
+            Drawable icon,
+            String contentDescription,
+            @LayoutRes int layout,
+            @AccessoryTabType int tabType,
             @Nullable RecyclerView.OnScrollListener scrollListener) {
-        mTab = new KeyboardAccessoryData.Tab(
-                title, icon, contentDescription, openingAnnouncement, layout, tabType, this);
+        mTab =
+                new KeyboardAccessoryData.Tab(
+                        title, icon, contentDescription, layout, tabType, this);
         mScrollListener = scrollListener;
+        mModel =
+                new PropertyModel.Builder(AccessorySheetTabProperties.ALL_KEYS)
+                        .with(ITEMS, new AccessorySheetTabItemsModel())
+                        .with(SCROLL_LISTENER, scrollListener)
+                        .with(IS_DEFAULT_A11Y_FOCUS_REQUESTED, false)
+                        .build();
     }
 
     @CallSuper
     @Override
     public void onTabCreated(ViewGroup view) {
         AccessorySheetTabViewBinder.initializeView((RecyclerView) view, mScrollListener);
+
+        PropertyModelChangeProcessor.create(
+                mModel, (AccessorySheetTabView) view, AccessorySheetTabViewBinder::bind);
     }
 
     @CallSuper
@@ -106,5 +124,9 @@ public abstract class AccessorySheetTabCoordinator implements KeyboardAccessoryD
      */
     public void registerDataProvider(Provider<AccessorySheetData> sheetDataProvider) {
         sheetDataProvider.addObserver(getMediator());
+    }
+
+    AccessorySheetTabItemsModel getSheetDataPiecesForTesting() {
+        return mModel.get(ITEMS);
     }
 }

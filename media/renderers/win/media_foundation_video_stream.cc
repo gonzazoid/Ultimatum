@@ -23,44 +23,9 @@ using Microsoft::WRL::MakeAndInitialize;
 
 namespace {
 
-// This is supported by Media Foundation.
-DEFINE_MEDIATYPE_GUID(MFVideoFormat_THEORA, FCC('theo'))
-
 // MF_MT_MIN_MASTERING_LUMINANCE values are in 1/10000th of a nit (0.0001 nit).
 // https://docs.microsoft.com/en-us/windows/win32/api/dxgi1_5/ns-dxgi1_5-dxgi_hdr_metadata_hdr10
 constexpr int kMasteringDispLuminanceScale = 10000;
-
-GUID VideoCodecToMFSubtype(VideoCodec codec, VideoCodecProfile profile) {
-  switch (codec) {
-    case VideoCodec::kH264:
-      return MFVideoFormat_H264;
-    case VideoCodec::kVC1:
-      return MFVideoFormat_WVC1;
-    case VideoCodec::kMPEG2:
-      return MFVideoFormat_MPEG2;
-    case VideoCodec::kMPEG4:
-      return MFVideoFormat_MP4V;
-    case VideoCodec::kTheora:
-      return MFVideoFormat_THEORA;
-    case VideoCodec::kVP8:
-      return MFVideoFormat_VP80;
-    case VideoCodec::kVP9:
-      return MFVideoFormat_VP90;
-    case VideoCodec::kHEVC:
-      return MFVideoFormat_HEVC;
-    case VideoCodec::kDolbyVision:
-      if (profile == VideoCodecProfile::DOLBYVISION_PROFILE0 ||
-          profile == VideoCodecProfile::DOLBYVISION_PROFILE9) {
-        return MFVideoFormat_H264;
-      } else {
-        return MFVideoFormat_HEVC;
-      }
-    case VideoCodec::kAV1:
-      return MFVideoFormat_AV1;
-    default:
-      return GUID_NULL;
-  }
-}
 
 MFVideoRotationFormat VideoRotationToMF(VideoRotation rotation) {
   DVLOG(2) << __func__ << ": rotation=" << rotation;
@@ -165,18 +130,18 @@ MFVideoTransferFunction VideoTransferFunctionToMF(
 }
 
 MT_CUSTOM_VIDEO_PRIMARIES CustomVideoPrimaryToMF(
-    gfx::ColorVolumeMetadata color_volume_metadata) {
+    const gfx::HdrMetadataSmpteSt2086& smpte_st_2086) {
   // MT_CUSTOM_VIDEO_PRIMARIES stores value in float no scaling factor needed
   // https://docs.microsoft.com/en-us/windows/win32/api/mfapi/ns-mfapi-mt_custom_video_primaries
   MT_CUSTOM_VIDEO_PRIMARIES primaries = {0};
-  primaries.fRx = color_volume_metadata.primary_r.x();
-  primaries.fRy = color_volume_metadata.primary_r.y();
-  primaries.fGx = color_volume_metadata.primary_g.x();
-  primaries.fGy = color_volume_metadata.primary_g.y();
-  primaries.fBx = color_volume_metadata.primary_b.x();
-  primaries.fBy = color_volume_metadata.primary_b.y();
-  primaries.fWx = color_volume_metadata.white_point.x();
-  primaries.fWy = color_volume_metadata.white_point.y();
+  primaries.fRx = smpte_st_2086.primaries.fRX;
+  primaries.fRy = smpte_st_2086.primaries.fRY;
+  primaries.fGx = smpte_st_2086.primaries.fGX;
+  primaries.fGy = smpte_st_2086.primaries.fGY;
+  primaries.fBx = smpte_st_2086.primaries.fBX;
+  primaries.fBy = smpte_st_2086.primaries.fBY;
+  primaries.fWx = smpte_st_2086.primaries.fWX;
+  primaries.fWy = smpte_st_2086.primaries.fWY;
   return primaries;
 }
 
@@ -194,10 +159,6 @@ bool GetDolbyVisionConfigurations(
     case VideoCodecProfile::DOLBYVISION_PROFILE0:
       DLOG(ERROR) << __func__ << ": Profile 0 unsupported by Media Foundation";
       return false;
-    case VideoCodecProfile::DOLBYVISION_PROFILE4:
-      dolby_vision_profile = L"dvhe.04";
-      dolby_vision_configuration_nalu_type = 62;
-      break;
     case VideoCodecProfile::DOLBYVISION_PROFILE5:
       dolby_vision_profile = L"dvhe.05";
       dolby_vision_configuration_nalu_type = 62;
@@ -292,21 +253,34 @@ HRESULT GetVideoType(const VideoDecoderConfig& config,
     const auto hdr_metadata = gfx::HDRMetadata::PopulateUnspecifiedWithDefaults(
         config.hdr_metadata());
     UINT32 max_display_mastering_luminance =
-        hdr_metadata.color_volume_metadata.luminance_max;
+        hdr_metadata.smpte_st_2086->luminance_max;
     RETURN_IF_FAILED(media_type->SetUINT32(MF_MT_MAX_MASTERING_LUMINANCE,
                                            max_display_mastering_luminance));
 
     UINT32 min_display_mastering_luminance =
-        hdr_metadata.color_volume_metadata.luminance_min *
+        hdr_metadata.smpte_st_2086->luminance_min *
         kMasteringDispLuminanceScale;
     RETURN_IF_FAILED(media_type->SetUINT32(MF_MT_MIN_MASTERING_LUMINANCE,
                                            min_display_mastering_luminance));
 
     MT_CUSTOM_VIDEO_PRIMARIES primaries =
-        CustomVideoPrimaryToMF(hdr_metadata.color_volume_metadata);
+        CustomVideoPrimaryToMF(hdr_metadata.smpte_st_2086.value());
     RETURN_IF_FAILED(media_type->SetBlob(MF_MT_CUSTOM_VIDEO_PRIMARIES,
                                          reinterpret_cast<UINT8*>(&primaries),
                                          sizeof(MT_CUSTOM_VIDEO_PRIMARIES)));
+
+    if (hdr_metadata.cta_861_3.has_value()) {
+      UINT32 max_luminance_level =
+          hdr_metadata.cta_861_3->max_content_light_level;
+      RETURN_IF_FAILED(media_type->SetUINT32(MF_MT_MAX_LUMINANCE_LEVEL,
+                                             max_luminance_level));
+
+      UINT32 max_frame_average_luminance_level =
+          hdr_metadata.cta_861_3->max_frame_average_light_level;
+      RETURN_IF_FAILED(
+          media_type->SetUINT32(MF_MT_MAX_FRAME_AVERAGE_LUMINANCE_LEVEL,
+                                max_frame_average_luminance_level));
+    }
   }
   base::UmaHistogramEnumeration(
       "Media.MediaFoundation.VideoColorSpace.TransferID",
@@ -416,6 +390,14 @@ bool MediaFoundationH264VideoStream::AreFormatChangesEnabled() {
 #endif  // BUILDFLAG(USE_PROPRIETARY_CODECS)
 
 #if BUILDFLAG(ENABLE_PLATFORM_HEVC)
+HRESULT MediaFoundationHEVCVideoStream::GetMediaType(
+    IMFMediaType** media_type_out) {
+  RETURN_IF_FAILED(MediaFoundationVideoStream::GetMediaType(media_type_out));
+  // Enable conversion to Annex-B
+  demuxer_stream_->EnableBitstreamConverter();
+  return S_OK;
+}
+
 bool MediaFoundationHEVCVideoStream::AreFormatChangesEnabled() {
   // Disable explicit format change event for HEVC to allow switching to the
   // new stream without a full re-create, which will be much faster. This is

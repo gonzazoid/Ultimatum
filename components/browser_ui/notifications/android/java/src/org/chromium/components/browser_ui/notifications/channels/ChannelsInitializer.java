@@ -12,7 +12,6 @@ import android.os.Build;
 
 import androidx.annotation.RequiresApi;
 
-import org.chromium.base.CollectionUtil;
 import org.chromium.components.browser_ui.notifications.NotificationManagerProxy;
 
 import java.util.Collection;
@@ -21,17 +20,17 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 
-/**
- * Initializes our notification channels.
- */
+/** Initializes our notification channels. */
 @RequiresApi(Build.VERSION_CODES.O)
 public class ChannelsInitializer {
     private final NotificationManagerProxy mNotificationManager;
     private ChannelDefinitions mChannelDefinitions;
     private Resources mResources;
 
-    public ChannelsInitializer(NotificationManagerProxy notificationManagerProxy,
-            ChannelDefinitions channelDefinitions, Resources resources) {
+    public ChannelsInitializer(
+            NotificationManagerProxy notificationManagerProxy,
+            ChannelDefinitions channelDefinitions,
+            Resources resources) {
         mChannelDefinitions = channelDefinitions;
         mNotificationManager = notificationManagerProxy;
         mResources = resources;
@@ -149,7 +148,8 @@ public class ChannelsInitializer {
                     getPredefinedChannel(channelId);
             if (predefinedChannel == null) continue;
             NotificationChannelGroup channelGroup =
-                    mChannelDefinitions.getChannelGroupForChannel(predefinedChannel)
+                    mChannelDefinitions
+                            .getChannelGroupForChannel(predefinedChannel)
                             .toNotificationChannelGroup(mResources);
             NotificationChannel channel = predefinedChannel.toNotificationChannel(mResources);
             if (!enabled) {
@@ -160,9 +160,12 @@ public class ChannelsInitializer {
         }
 
         // Channel groups must be created before the channels.
-        CollectionUtil.forEach(
-                channelGroups.values(), mNotificationManager::createNotificationChannelGroup);
-        CollectionUtil.forEach(channels.values(), mNotificationManager::createNotificationChannel);
+        for (var channelGroup : channelGroups.values()) {
+            mNotificationManager.createNotificationChannelGroup(channelGroup);
+        }
+        for (var channel : channels.values()) {
+            mNotificationManager.createNotificationChannel(channel);
+        }
     }
 
     /**

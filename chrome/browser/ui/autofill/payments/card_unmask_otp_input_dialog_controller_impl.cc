@@ -8,7 +8,7 @@
 
 #include "build/build_config.h"
 #include "chrome/browser/ui/autofill/payments/card_unmask_otp_input_dialog_view.h"
-#include "components/autofill/core/browser/metrics/autofill_metrics.h"
+#include "components/autofill/core/browser/metrics/payments/card_unmask_authentication_metrics.h"
 #include "components/autofill/core/browser/payments/otp_unmask_result.h"
 #include "components/strings/grit/components_strings.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -29,18 +29,19 @@ CardUnmaskOtpInputDialogControllerImpl::
 }
 
 void CardUnmaskOtpInputDialogControllerImpl::ShowDialog(
-    size_t otp_length,
+    const CardUnmaskChallengeOption& challenge_option,
     base::WeakPtr<OtpUnmaskDelegate> delegate) {
   if (dialog_view_)
     return;
 
-  otp_length_ = otp_length;
+  otp_length_ = challenge_option.challenge_input_length;
+  challenge_type_ = challenge_option.type;
   delegate_ = delegate;
   dialog_view_ =
       CardUnmaskOtpInputDialogView::CreateAndShow(this, &GetWebContents());
 
   DCHECK(dialog_view_);
-  AutofillMetrics::LogOtpInputDialogShown();
+  autofill_metrics::LogOtpInputDialogShown(challenge_type_);
 }
 
 void CardUnmaskOtpInputDialogControllerImpl::OnOtpVerificationResult(
@@ -62,10 +63,11 @@ void CardUnmaskOtpInputDialogControllerImpl::OnOtpVerificationResult(
     case OtpUnmaskResult::kOtpExpired:
     case OtpUnmaskResult::kOtpMismatch:
       temporary_error_shown_ = true;
-      AutofillMetrics::LogOtpInputDialogErrorMessageShown(
+      autofill_metrics::LogOtpInputDialogErrorMessageShown(
           result == OtpUnmaskResult::kOtpMismatch
-              ? AutofillMetrics::OtpInputDialogError::kOtpMismatchError
-              : AutofillMetrics::OtpInputDialogError::kOtpExpiredError);
+              ? autofill_metrics::OtpInputDialogError::kOtpMismatchError
+              : autofill_metrics::OtpInputDialogError::kOtpExpiredError,
+          challenge_type_);
       ShowInvalidState(result);
       break;
     case OtpUnmaskResult::kUnknownType:
@@ -81,22 +83,22 @@ void CardUnmaskOtpInputDialogControllerImpl::OnDialogClosed(
     delegate_->OnUnmaskPromptClosed(user_closed_dialog);
 
   if (user_closed_dialog) {
-    AutofillMetrics::LogOtpInputDialogResult(
-        ok_button_clicked_ ? AutofillMetrics::OtpInputDialogResult::
+    autofill_metrics::LogOtpInputDialogResult(
+        ok_button_clicked_ ? autofill_metrics::OtpInputDialogResult::
                                  kDialogCancelledByUserAfterConfirmation
-                           : AutofillMetrics::OtpInputDialogResult::
+                           : autofill_metrics::OtpInputDialogResult::
                                  kDialogCancelledByUserBeforeConfirmation,
-        temporary_error_shown_);
+        temporary_error_shown_, challenge_type_);
   } else if (server_request_succeeded) {
-    AutofillMetrics::LogOtpInputDialogResult(
-        AutofillMetrics::OtpInputDialogResult::
+    autofill_metrics::LogOtpInputDialogResult(
+        autofill_metrics::OtpInputDialogResult::
             kDialogClosedAfterVerificationSucceeded,
-        temporary_error_shown_);
+        temporary_error_shown_, challenge_type_);
   } else {
-    AutofillMetrics::LogOtpInputDialogResult(
-        AutofillMetrics::OtpInputDialogResult::
+    autofill_metrics::LogOtpInputDialogResult(
+        autofill_metrics::OtpInputDialogResult::
             kDialogClosedAfterVerificationFailed,
-        temporary_error_shown_);
+        temporary_error_shown_, challenge_type_);
   }
 
   // Resets the variables to their initial states since the controller will stay
@@ -117,7 +119,7 @@ void CardUnmaskOtpInputDialogControllerImpl::OnNewCodeLinkClicked() {
   if (delegate_)
     delegate_->OnNewOtpRequested();
 
-  AutofillMetrics::LogOtpInputDialogNewOtpRequested();
+  autofill_metrics::LogOtpInputDialogNewOtpRequested(challenge_type_);
 }
 
 std::u16string CardUnmaskOtpInputDialogControllerImpl::GetWindowTitle() const {

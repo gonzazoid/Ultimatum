@@ -12,20 +12,17 @@
 #include <utility>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/chromeos_buildflags.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/device/public/mojom/usb_enumeration_options.mojom.h"
 #include "services/device/public/mojom/usb_manager_client.mojom.h"
 #include "services/device/usb/mock_usb_device.h"
-#include "services/device/usb/mock_usb_device_handle.h"
 #include "services/device/usb/mock_usb_service.h"
-#include "services/device/usb/mojo/device_impl.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 using ::testing::_;
@@ -60,7 +57,7 @@ class USBDeviceManagerImplTest : public testing::Test {
   ~USBDeviceManagerImplTest() override = default;
 
  protected:
-  raw_ptr<MockUsbService> mock_usb_service_;
+  raw_ptr<MockUsbService, DanglingUntriaged> mock_usb_service_;
   std::unique_ptr<DeviceManagerImpl> device_manager_instance_;
   base::test::SingleThreadTaskEnvironment task_environment_;
 };
@@ -94,8 +91,9 @@ void ExpectDevicesAndThen(const std::set<std::string>& expected_guids,
                           std::vector<UsbDeviceInfoPtr> results) {
   EXPECT_EQ(expected_guids.size(), results.size());
   std::set<std::string> actual_guids;
-  for (size_t i = 0; i < results.size(); ++i)
-    actual_guids.insert(results[i]->guid);
+  for (const auto& result : results) {
+    actual_guids.insert(result->guid);
+  }
   EXPECT_EQ(expected_guids, actual_guids);
   std::move(continuation).Run();
 }

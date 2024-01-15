@@ -84,7 +84,7 @@ export class PeerConnectionUpdateTable {
     row.appendChild(timeItem);
 
     // `type` is a display variant of update.type which does not get serialized
-    // into chrome://webrtc-internals.
+    // into the JSON dump.
     let type = update.type;
 
     if (update.value.length === 0) {
@@ -95,22 +95,38 @@ export class PeerConnectionUpdateTable {
     }
 
     if (update.type === 'icecandidate' || update.type === 'addIceCandidate') {
-      // extract ICE candidate type from the field following typ.
-      const candidateType = update.value.match(/(?: typ )(host|srflx|relay)/);
-      if (candidateType) {
-        type += ' (' + candidateType[1] + ')';
+      const parts = update.value.split(', ');
+      type += '(' + parts[0] + ', ' + parts[1]; // show sdpMid/sdpMLineIndex.
+      const candidateParts = parts[2].substr(11).split(' ');
+      if (candidateParts && candidateParts[7]) { // show candidate type.
+        type += ', type: ' + candidateParts[7];
       }
+      type += ')';
     } else if (
         update.type === 'createOfferOnSuccess' ||
         update.type === 'createAnswerOnSuccess') {
       this.setLastOfferAnswer_(tableElement, update);
     } else if (update.type === 'setLocalDescription') {
-      if (update.value !== this.getLastOfferAnswer_(tableElement)) {
+      const lastOfferAnswer = this.getLastOfferAnswer_(tableElement);
+      if (update.value.startsWith('type: rollback')) {
+        this.setLastOfferAnswer_(tableElement, {value: undefined})
+      } else if (lastOfferAnswer && update.value !== lastOfferAnswer) {
         type += ' (munged)';
       }
     } else if (update.type === 'setConfiguration') {
       // Update the configuration that is displayed at the top.
       peerConnectionElement.firstChild.children[2].textContent = update.value;
+    } else if (['transceiverAdded',
+        'transceiverModified'].includes(update.type)) {
+      // Show the transceiver index.
+      const indexLine = update.value.split('\n', 3)[2];
+      if (indexLine.startsWith('getTransceivers()[')) {
+        type += ' ' + indexLine.substring(17, indexLine.length - 2);
+      }
+      const kindLine = update.value.split('\n', 5)[4].trim();
+      if (kindLine.startsWith('kind:')) {
+        type += ', ' + kindLine.substring(6, kindLine.length - 2);
+      }
     } else if (['iceconnectionstatechange', 'connectionstatechange',
         'signalingstatechange'].includes(update.type)) {
       const fieldName = {
@@ -122,8 +138,8 @@ export class PeerConnectionUpdateTable {
       const numberOfEvents = el.textContent.split(' => ').length;
       if (numberOfEvents < MAX_NUMBER_OF_STATE_CHANGES_DISPLAYED) {
         el.textContent += ' => ' + update.value;
-      } else if (numberOfEvents === MAX_NUMBER_OF_STATE_CHANGES_DISPLAYED) {
-        el.textContent += ' ...';
+      } else if (numberOfEvents >= MAX_NUMBER_OF_STATE_CHANGES_DISPLAYED) {
+        el.textContent += ' => ...';
       }
     }
 
@@ -149,42 +165,46 @@ export class PeerConnectionUpdateTable {
     // RTCSessionDescription is serialized as 'type: <type>, sdp:'
     if (update.value.indexOf(', sdp:') !== -1) {
       const [type, sdp] = update.value.substr(6).split(', sdp: ');
+      if (type === 'rollback') {
+        // Rollback has no SDP.
+        summary.textContent += ' (type: "rollback")';
+      } else {
+        // Create a copy-to-clipboard button.
+        const copyBtn = document.createElement('button');
+        copyBtn.textContent = 'Copy description to clipboard';
+        copyBtn.onclick = () => {
+          navigator.clipboard.writeText(JSON.stringify({type, sdp}));
+        };
+        valueContainer.appendChild(copyBtn);
 
-      // Create a copy-to-clipboard button.
-      const copyBtn = document.createElement('button');
-      copyBtn.textContent = 'Copy description to clipboard';
-      copyBtn.onclick = () => {
-        navigator.clipboard.writeText(JSON.stringify({type, sdp}));
-      };
-      valueContainer.appendChild(copyBtn);
+        // Fold the SDP sections.
+        const sections = sdp.split('\nm=')
+          .map((part, index) => (index > 0 ?
+            'm=' + part : part).trim() + '\r\n');
+        summary.textContent +=
+          ' (type: "' + type + '", ' + sections.length + ' sections)';
+        sections.forEach(section => {
+          const lines = section.trim().split('\n');
+          // Extract the mid attribute.
+          const mid = lines
+              .filter(line => line.startsWith('a=mid:'))
+              .map(line => line.substr(6))[0];
+          const sectionDetails = document.createElement('details');
+          // Fold by default for large SDP.
+          sectionDetails.open =
+            sections.length <= MAX_NUMBER_OF_EXPANDED_MEDIASECTIONS;
+          sectionDetails.textContent = lines.slice(1).join('\n');
 
-      // Fold the SDP sections.
-      const sections = sdp.split('\nm=')
-        .map((part, index) => (index > 0 ?
-          'm=' + part : part).trim() + '\r\n');
-      summary.textContent +=
-        ' (type: "' + type + '", ' + sections.length + ' sections)';
-      sections.forEach(section => {
-        const lines = section.trim().split('\n');
-        // Extract the mid attribute.
-        const mid = lines
-            .filter(line => line.startsWith('a=mid:'))
-            .map(line => line.substr(6))[0];
-        const sectionDetails = document.createElement('details');
-        // Fold by default for large SDP.
-        sectionDetails.open =
-          sections.length <= MAX_NUMBER_OF_EXPANDED_MEDIASECTIONS;
-        sectionDetails.textContent = lines.slice(1).join('\n');
+          const sectionSummary = document.createElement('summary');
+          sectionSummary.textContent =
+            lines[0].trim() +
+            ' (' + (lines.length - 1) + ' more lines)' +
+            (mid ? ' mid=' + mid : '');
+          sectionDetails.appendChild(sectionSummary);
 
-        const sectionSummary = document.createElement('summary');
-        sectionSummary.textContent =
-          lines[0].trim() +
-          ' (' + (lines.length - 1) + ' more lines)' +
-          (mid ? ' mid=' + mid : '');
-        sectionDetails.appendChild(sectionSummary);
-
-        valueContainer.appendChild(sectionDetails);
-      });
+          valueContainer.appendChild(sectionDetails);
+        });
+      }
     } else {
       valueContainer.textContent = update.value;
     }
@@ -199,7 +219,11 @@ export class PeerConnectionUpdateTable {
    */
   ensureUpdateContainer_(peerConnectionElement) {
     const tableId = peerConnectionElement.id + this.UPDATE_LOG_ID_SUFFIX_;
-    let tableElement = $(tableId);
+
+  // Disable getElementById restriction here, since |tableId| is not always
+  // a valid selector.
+  // eslint-disable-next-line no-restricted-properties
+    let tableElement = document.getElementById(tableId);
     if (!tableElement) {
       const tableContainer = document.createElement('div');
       tableContainer.className = this.UPDATE_LOG_CONTAINER_CLASS_;

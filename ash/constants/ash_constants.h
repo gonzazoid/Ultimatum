@@ -30,13 +30,12 @@ constexpr int kFocusBorderThickness = 2;
 // The thickness of the focus bar for launcher search.
 constexpr int kFocusBarThickness = 3;
 
+// Offset added to the shelf so tray bubble bounds are in the correct display.
+constexpr int kShelfDisplayOffset = 1;
+
 constexpr int kDefaultLargeCursorSize = 64;
 
 constexpr SkColor kDefaultCursorColor = SK_ColorBLACK;
-
-// If the window's maximum size (one of width/height) is bigger than this,
-// the window become maximizable/snappable.
-constexpr int kAllowMaximizeThreshold = 30720;
 
 // These device types are a subset of ui::InputDeviceType. These strings are
 // also used in Switch Access webui.
@@ -87,6 +86,65 @@ constexpr base::TimeDelta kDefaultKeyAutoRepeatInterval =
 // Constants for notification.
 const char kPrivacyIndicatorsNotificationIdPrefix[] = "privacy-indicators";
 const char kPrivacyIndicatorsNotifierId[] = "ash.privacy-indicators";
+
+// The default value for audio strategy in ChromeVox.
+COMPONENT_EXPORT(ASH_CONSTANTS)
+extern const char kDefaultAccessibilityChromeVoxAudioStrategy[];
+
+// The default value for the braille table in ChromeVox.
+COMPONENT_EXPORT(ASH_CONSTANTS)
+extern const char kDefaultAccessibilityChromeVoxBrailleTable[];
+
+// The default value for the 6-dot braille table in ChromeVox.
+COMPONENT_EXPORT(ASH_CONSTANTS)
+extern const char kDefaultAccessibilityChromeVoxBrailleTable6[];
+
+// The default value for the 8-dot braille table in ChromeVox.
+COMPONENT_EXPORT(ASH_CONSTANTS)
+extern const char kDefaultAccessibilityChromeVoxBrailleTable8[];
+
+// The default value for the braille table type in ChromeVox.
+COMPONENT_EXPORT(ASH_CONSTANTS)
+extern const char kDefaultAccessibilityChromeVoxBrailleTableType[];
+
+// The default value for the capital strategy in ChromeVox.
+COMPONENT_EXPORT(ASH_CONSTANTS)
+extern const char kDefaultAccessibilityChromeVoxCapitalStrategy[];
+
+// The default value for the capital strategy backup pref in ChromeVox, used
+// on the settings page for saving a user's preference when they toggle
+// |usePitchChanges|.
+COMPONENT_EXPORT(ASH_CONSTANTS)
+extern const char kDefaultAccessibilityChromeVoxCapitalStrategyBackup[];
+
+// The default value for number reading style in ChromeVox.
+COMPONENT_EXPORT(ASH_CONSTANTS)
+extern const char kDefaultAccessibilityChromeVoxNumberReadingStyle[];
+
+// The default value for the preferred braille display address in ChromeVox.
+COMPONENT_EXPORT(ASH_CONSTANTS)
+extern const char
+    kDefaultAccessibilityChromeVoxPreferredBrailleDisplayAddress[];
+
+enum ChromeVoxPunctuationEcho {
+  kPunctuationEchoNone = 0,
+  kPunctuationEchoSome = 1,
+  kPunctuationEchoAll = 2
+};
+
+// The default value for punctuation echo in ChromeVox.
+constexpr int kDefaultAccessibilityChromeVoxPunctuationEcho =
+    ChromeVoxPunctuationEcho::kPunctuationEchoSome;
+
+// The default value for the number of virtual braille columns in ChromeVox.
+constexpr int kDefaultAccessibilityChromeVoxVirtualBrailleColumns = 40;
+
+// The default value for the number of virtual braille rows in ChromeVox.
+constexpr int kDefaultAccessibilityChromeVoxVirtualBrailleRows = 1;
+
+// The default value for voice name in ChromeVox.
+COMPONENT_EXPORT(ASH_CONSTANTS)
+extern const char kDefaultAccessibilityChromeVoxVoiceName[];
 
 // Whether the enhanced network voices feature in Select-to-speak is allowed by
 // default.

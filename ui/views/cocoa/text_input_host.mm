@@ -262,7 +262,7 @@ void TextInputHost::InsertText(const std::u16string& text, bool as_character) {
     // correct keycode is not needed in the current context. Send ui::EF_NONE as
     // the key modifier since |text| already accounts for the pressed key
     // modifiers.
-    text_input_client_->InsertChar(ui::KeyEvent(
+    text_input_client_->InsertChar(ui::KeyEvent::FromCharacter(
         text[0], ui::VKEY_UNKNOWN, ui::DomCode::NONE, ui::EF_NONE));
   } else {
     text_input_client_->InsertText(
@@ -295,10 +295,10 @@ void TextInputHost::SetCompositionText(const std::u16string& text,
   // the Chrome renderer. Add code to extract underlines from |text| once our
   // render text implementation supports thick underlines and discontinuous
   // underlines for consecutive characters. See http://crbug.com/612675.
-  composition.ime_text_spans.push_back(ui::ImeTextSpan(
+  composition.ime_text_spans.emplace_back(
       ui::ImeTextSpan::Type::kComposition, 0, text.length(),
       ui::ImeTextSpan::Thickness::kThin,
-      ui::ImeTextSpan::UnderlineStyle::kSolid, SK_ColorTRANSPARENT));
+      ui::ImeTextSpan::UnderlineStyle::kSolid, SK_ColorTRANSPARENT);
   text_input_client_->SetCompositionText(composition);
 }
 

@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "ash/components/arc/mojom/app.mojom.h"
@@ -10,8 +11,10 @@
 #include "ash/components/arc/test/connection_holder_util.h"
 #include "ash/components/arc/test/fake_app_instance.h"
 #include "base/json/json_writer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/ash/child_accounts/child_user_service.h"
@@ -27,7 +30,6 @@
 #include "chrome/browser/ash/policy/core/user_policy_test_helper.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
@@ -37,7 +39,6 @@
 #include "content/public/test/browser_test.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 namespace app_time {
@@ -52,7 +53,6 @@ arc::mojom::ArcPackageInfoPtr CreateArcAppPackage(
   package->last_backup_android_id = 1;
   package->last_backup_time = 1;
   package->sync = false;
-  package->system = false;
   return package;
 }
 
@@ -112,7 +112,7 @@ class AppTimeTest : public MixinBasedInProcessBrowserTest {
     arc::ArcSessionManager::Get()->Shutdown();
   }
 
-  void UpdatePerAppTimeLimitsPolicy(const base::Value& policy) {
+  void UpdatePerAppTimeLimitsPolicy(const base::Value::Dict& policy) {
     std::string policy_value;
     base::JSONWriter::Write(policy, &policy_value);
 
@@ -156,8 +156,8 @@ class AppTimeTest : public MixinBasedInProcessBrowserTest {
     EXPECT_EQ(limit1.daily_limit(), limit2.daily_limit());
     // Compare JavaTime, because some precision is lost when serializing
     // and deserializing.
-    EXPECT_EQ(limit1.last_updated().ToJavaTime(),
-              limit2.last_updated().ToJavaTime());
+    EXPECT_EQ(limit1.last_updated().InMillisecondsSinceUnixEpoch(),
+              limit2.last_updated().InMillisecondsSinceUnixEpoch());
   }
 
  private:
@@ -175,7 +175,7 @@ class AppTimeTest : public MixinBasedInProcessBrowserTest {
                                           LoggedInUserMixin::LogInType::kChild,
                                           embedded_test_server(), this};
 
-  ArcAppListPrefs* arc_app_list_prefs_ = nullptr;
+  raw_ptr<ArcAppListPrefs, DanglingUntriaged> arc_app_list_prefs_ = nullptr;
   std::unique_ptr<arc::FakeAppInstance> arc_app_instance_;
 };
 
@@ -204,7 +204,7 @@ IN_PROC_BROWSER_TEST_F(AppTimeTest, PerAppTimeLimitsPolicyUpdates) {
   // Block the app.
   AppTimeLimitsPolicyBuilder block_policy;
   const AppLimit block_limit =
-      AppLimit(AppRestriction::kBlocked, absl::nullopt, base::Time::Now());
+      AppLimit(AppRestriction::kBlocked, std::nullopt, base::Time::Now());
   block_policy.AddAppLimit(app1, block_limit);
   block_policy.SetResetTime(6, 0);
 
@@ -276,7 +276,7 @@ IN_PROC_BROWSER_TEST_F(AppTimeTest, PerAppTimeLimitsPolicyMultipleEntries) {
   // Send policy.
   AppTimeLimitsPolicyBuilder policy;
   policy.SetResetTime(6, 0);
-  policy.AddAppLimit(app2, AppLimit(AppRestriction::kBlocked, absl::nullopt,
+  policy.AddAppLimit(app2, AppLimit(AppRestriction::kBlocked, std::nullopt,
                                     base::Time::Now()));
   policy.AddAppLimit(app3, AppLimit(AppRestriction::kTimeLimit,
                                     base::Minutes(15), base::Time::Now()));

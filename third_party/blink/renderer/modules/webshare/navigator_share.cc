@@ -179,7 +179,7 @@ NavigatorShare& NavigatorShare::From(Navigator& navigator) {
   NavigatorShare* supplement =
       Supplement<Navigator>::From<NavigatorShare>(navigator);
   if (!supplement) {
-    supplement = MakeGarbageCollected<NavigatorShare>();
+    supplement = MakeGarbageCollected<NavigatorShare>(navigator);
     ProvideTo(navigator, supplement);
   }
   return *supplement;
@@ -197,6 +197,13 @@ bool NavigatorShare::canShare(ScriptState* script_state,
                               const ShareData* data) {
   if (!script_state->ContextIsValid())
     return false;
+
+  if (!ExecutionContext::From(script_state)
+           ->IsFeatureEnabled(
+               mojom::blink::PermissionsPolicyFeature::kWebShare)) {
+    return false;
+  }
+
   LocalDOMWindow* window = LocalDOMWindow::From(script_state);
   KURL unused_url;
   return CanShareInternal(*window, *data, unused_url, nullptr);
@@ -219,15 +226,18 @@ ScriptPromise NavigatorShare::share(ScriptState* script_state,
     return ScriptPromise();
   }
 
+  LocalDOMWindow* const window = LocalDOMWindow::From(script_state);
   ExecutionContext* const execution_context =
       ExecutionContext::From(script_state);
 
-  // The permissions policy is currently not enforced.
-  LocalDOMWindow* const window = LocalDOMWindow::From(script_state);
-  window->CountUse(execution_context->IsFeatureEnabled(
-                       mojom::blink::PermissionsPolicyFeature::kWebShare)
-                       ? WebFeature::kWebSharePolicyAllow
-                       : WebFeature::kWebSharePolicyDisallow);
+  if (!execution_context->IsFeatureEnabled(
+          mojom::blink::PermissionsPolicyFeature::kWebShare)) {
+    window->CountUse(WebFeature::kWebSharePolicyDisallow);
+    exception_state.ThrowDOMException(DOMExceptionCode::kNotAllowedError,
+                                      "Permission denied");
+    return ScriptPromise();
+  }
+  window->CountUse(WebFeature::kWebSharePolicyAllow);
 
 // This is due to a limitation on Android, where we sometimes are not advised
 // when the share completes. This goes against the web share spec to work around
@@ -325,7 +335,8 @@ ScriptPromise NavigatorShare::share(ScriptState* script_state,
   if (data->hasUrl())
     UseCounter::Count(execution_context, WebFeature::kWebShareContainingUrl);
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
 
   ShareClientImpl* client =
       MakeGarbageCollected<ShareClientImpl>(this, has_files, resolver);

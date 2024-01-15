@@ -4,6 +4,9 @@
 
 #include "chrome/browser/apps/icon_standardizer.h"
 
+#include "base/trace_event/trace_event.h"
+#include "third_party/skia/include/core/SkCanvas.h"
+#include "third_party/skia/include/core/SkMaskFilter.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_skia_operations.h"
 #include "ui/gfx/image/image_skia_rep.h"
@@ -24,61 +27,7 @@ constexpr float kBackgroundCircleScale = 176.0f / 192.0f;
 
 constexpr float kMinimumVisibleCircularIconSizeRatio = 0.625f;
 
-// Returns the bounding rect for the opaque part of the icon.
-gfx::Rect GetVisibleIconBounds(const SkBitmap& bitmap) {
-  const SkPixmap pixmap = bitmap.pixmap();
-
-  bool const nativeColorType = pixmap.colorType() == kN32_SkColorType;
-
-  const int width = pixmap.width();
-  const int height = pixmap.height();
-
-  // Overall bounds of the visible icon.
-  int y_from = -1;
-  int y_to = -1;
-  int x_left = width;
-  int x_right = -1;
-
-  // Find bounding rect of the visible icon by going through all pixels one row
-  // at a time and for each row find the first and the last non-transparent
-  // pixel.
-  for (int y = 0; y < height; y++) {
-    const SkColor* nativeRow =
-        nativeColorType
-            ? reinterpret_cast<const SkColor*>(bitmap.getAddr32(0, y))
-            : nullptr;
-    bool does_row_have_visible_pixels = false;
-
-    for (int x = 0; x < width; x++) {
-      if (SkColorGetA(nativeRow ? nativeRow[x] : pixmap.getColor(x, y)) >
-          kMinimumVisibleAlpha) {
-        does_row_have_visible_pixels = true;
-        x_left = std::min(x_left, x);
-        break;
-      }
-    }
-
-    // No visible pixels on this row.
-    if (!does_row_have_visible_pixels)
-      continue;
-
-    for (int x = width - 1; x > 0; x--) {
-      if (SkColorGetA(nativeRow ? nativeRow[x] : pixmap.getColor(x, y)) >
-          kMinimumVisibleAlpha) {
-        x_right = std::max(x_right, x);
-        break;
-      }
-    }
-
-    y_to = y;
-    if (y_from == -1)
-      y_from = y;
-  }
-
-  int visible_width = x_right - x_left + 1;
-  int visible_height = y_to - y_from + 1;
-  return gfx::Rect(x_left, y_from, visible_width, visible_height);
-}
+constexpr float kMaximumVisibleCircularIconSizeRatio = 1.20f;
 
 float GetDistanceBetweenPoints(gfx::PointF first_point,
                                gfx::PointF second_point) {
@@ -90,6 +39,7 @@ float GetDistanceBetweenPoints(gfx::PointF first_point,
 // Returns the distance for the farthest visible pixel away from the center of
 // the icon.
 float GetFarthestVisiblePointFromCenter(const SkBitmap& bitmap) {
+  TRACE_EVENT0("ui", "apps::GetFarthestVisiblePointFromCenter");
   int width = bitmap.width();
   int height = bitmap.height();
 
@@ -123,8 +73,9 @@ float GetFarthestVisiblePointFromCenter(const SkBitmap& bitmap) {
     }
 
     // No visible pixels on this row.
-    if (!does_row_have_visible_pixels)
+    if (!does_row_have_visible_pixels) {
       continue;
+    }
 
     for (int x = width - 1; x > 0; x--) {
       if (SkColorGetA(nativeRow ? nativeRow[x] : pixmap.getColor(x, y)) >
@@ -142,6 +93,7 @@ float GetFarthestVisiblePointFromCenter(const SkBitmap& bitmap) {
 }
 
 bool IsIconRepCircleShaped(const gfx::ImageSkiaRep& rep) {
+  TRACE_EVENT0("ui", "apps::IsIconRepCircleShaped");
   SkBitmap bitmap(rep.GetBitmap());
   int width = bitmap.width();
   int height = bitmap.height();
@@ -170,15 +122,19 @@ bool IsIconRepCircleShaped(const gfx::ImageSkiaRep& rep) {
     }
   }
 
-  gfx::Rect visible_preview_bounds = GetVisibleIconBounds(preview);
+  const float circle_radius = GetFarthestVisiblePointFromCenter(preview);
+  const float visible_icon_size_ratio =
+      (circle_radius * 2) / static_cast<float>(width);
 
-  float visible_icon_size_ratio =
-      static_cast<float>(visible_preview_bounds.width()) /
-      static_cast<float>(width);
-  // If the visible icon is too small then it should not be considered
-  // circular.
-  if (visible_icon_size_ratio < kMinimumVisibleCircularIconSizeRatio)
+  // If the visible icon is too small or too large then it should not be
+  // considered circular. This rules out small icons and large square shaped
+  // icons.
+  if (visible_icon_size_ratio < kMinimumVisibleCircularIconSizeRatio ||
+      visible_icon_size_ratio > kMaximumVisibleCircularIconSizeRatio) {
     return false;
+  }
+
+  SkPoint circle_center = SkPoint::Make(width / 2, height / 2);
 
   // Use a canvas to perform XOR and DST_OUT operations, which should
   // generate a transparent bitmap for |preview| if the original icon is
@@ -191,24 +147,22 @@ bool IsIconRepCircleShaped(const gfx::ImageSkiaRep& rep) {
 
   // XOR operation to remove a circle.
   paint_circle_mask.setBlendMode(SkBlendMode::kXor);
-  canvas.drawCircle(SkPoint::Make(width / 2.0f, height / 2.0f),
-                    visible_preview_bounds.width() / 2.0f, paint_circle_mask);
+  canvas.drawCircle(circle_center, circle_radius, paint_circle_mask);
 
   SkPaint paint_outline;
   paint_outline.setColor(SK_ColorGREEN);
   paint_outline.setStyle(SkPaint::kStroke_Style);
 
   const float outline_stroke_width =
-      visible_preview_bounds.width() * kCircleOutlineStrokeWidthRatio;
-  const float radius_offset = outline_stroke_width / 8.0f;
+      circle_radius * 2 * kCircleOutlineStrokeWidthRatio;
+  const float radius_offset = outline_stroke_width / 4.0f;
 
   paint_outline.setStrokeWidth(outline_stroke_width);
   paint_outline.setAntiAlias(true);
 
   // DST_OUT operation to remove an extra circle outline.
   paint_outline.setBlendMode(SkBlendMode::kDstOut);
-  canvas.drawCircle(SkPoint::Make(width / 2.0f, height / 2.0f),
-                    visible_preview_bounds.width() / 2.0f + radius_offset,
+  canvas.drawCircle(circle_center, circle_radius - radius_offset,
                     paint_outline);
 
   // Compute the total pixel difference between the circle mask and the
@@ -217,29 +171,31 @@ bool IsIconRepCircleShaped(const gfx::ImageSkiaRep& rep) {
   for (int y = 0; y < preview.height(); ++y) {
     SkColor* src_color = reinterpret_cast<SkColor*>(preview.getAddr32(0, y));
     for (int x = 0; x < preview.width(); ++x) {
-      if (SkColorGetA(src_color[x]) >= kMinimumVisibleAlpha)
+      if (SkColorGetA(src_color[x]) >= kMinimumVisibleAlpha) {
         total_pixel_difference++;
+      }
     }
   }
 
   float percentage_diff_pixels =
-      static_cast<float>(total_pixel_difference) /
-      (visible_preview_bounds.width() * visible_preview_bounds.height());
+      static_cast<float>(total_pixel_difference) / (width * height);
 
   // If the pixel difference between a circle and the original icon is small
   // enough, then the icon can be considered circle shaped.
   return (percentage_diff_pixels < kCircleShapePixelDifferenceThreshold);
 }
 
-absl::optional<gfx::ImageSkiaRep> StandardizeSizeOfImageRep(
+std::optional<gfx::ImageSkiaRep> StandardizeSizeOfImageRep(
     const gfx::ImageSkiaRep& rep,
     float scale) {
+  TRACE_EVENT0("ui", "apps::StandardizeSizeOfImageRep");
   SkBitmap unscaled_bitmap(rep.GetBitmap());
   int width = unscaled_bitmap.width();
   int height = unscaled_bitmap.height();
 
-  if (width == height)
-    return absl::nullopt;
+  if (width == height) {
+    return std::nullopt;
+  }
 
   int longest_side = std::max(width, height);
 
@@ -257,13 +213,15 @@ absl::optional<gfx::ImageSkiaRep> StandardizeSizeOfImageRep(
 // Returns an image with equal width and height. If necessary, padding is
 // added to ensure the width and height are equal.
 gfx::ImageSkia StandardizeSize(const gfx::ImageSkia& image) {
+  TRACE_EVENT0("ui", "apps::StandardizeSize");
   gfx::ImageSkia final_image;
 
   for (gfx::ImageSkiaRep rep : image.image_reps()) {
-    absl::optional<gfx::ImageSkiaRep> new_rep =
+    std::optional<gfx::ImageSkiaRep> new_rep =
         StandardizeSizeOfImageRep(rep, rep.scale());
-    if (!new_rep)
+    if (!new_rep) {
       return image;
+    }
 
     final_image.AddRepresentation(new_rep.value());
   }
@@ -273,10 +231,11 @@ gfx::ImageSkia StandardizeSize(const gfx::ImageSkia& image) {
 
 }  // namespace
 
-absl::optional<gfx::ImageSkiaRep> CreateStandardIconImageRep(
+std::optional<gfx::ImageSkiaRep> CreateStandardIconImageRep(
     const gfx::ImageSkiaRep& base_rep,
     float scale) {
-  absl::optional<gfx::ImageSkiaRep> resized_image_skia_rep =
+  TRACE_EVENT0("ui", "apps::CreateStandardIconImageRep");
+  std::optional<gfx::ImageSkiaRep> resized_image_skia_rep =
       StandardizeSizeOfImageRep(base_rep, scale);
   const gfx::ImageSkiaRep& standard_size_rep =
       resized_image_skia_rep.value_or(base_rep);
@@ -294,7 +253,7 @@ absl::optional<gfx::ImageSkiaRep> CreateStandardIconImageRep(
 
     if (icon_to_bitmap_size_ratio <= kBackgroundCircleScale) {
       // No need to scale down the icon, so just use the |unscaled_bitmap|.
-      return absl::nullopt;
+      return std::nullopt;
     }
     SkBitmap final_bitmap;
     final_bitmap.allocN32Pixels(width, height);
@@ -376,11 +335,12 @@ absl::optional<gfx::ImageSkiaRep> CreateStandardIconImageRep(
 }
 
 gfx::ImageSkia CreateStandardIconImage(const gfx::ImageSkia& image) {
+  TRACE_EVENT0("ui", "apps::CreateStandardIconImage");
   gfx::ImageSkia final_image;
   gfx::ImageSkia standard_size_image = StandardizeSize(image);
 
   for (gfx::ImageSkiaRep rep : standard_size_image.image_reps()) {
-    absl::optional<gfx::ImageSkiaRep> standard_rep =
+    std::optional<gfx::ImageSkiaRep> standard_rep =
         CreateStandardIconImageRep(rep, rep.scale());
     final_image.AddRepresentation(standard_rep.value_or(rep));
   }

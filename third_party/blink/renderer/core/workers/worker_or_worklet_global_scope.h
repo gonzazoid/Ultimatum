@@ -48,7 +48,7 @@ class WorkerReportingProxy;
 class WorkerThread;
 
 class CORE_EXPORT WorkerOrWorkletGlobalScope
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public ExecutionContext,
       public scheduler::WorkerScheduler::Delegate,
       public BackForwardCacheLoaderHelperImpl::Delegate {
@@ -64,7 +64,8 @@ class CORE_EXPORT WorkerOrWorkletGlobalScope
       WorkerClients*,
       std::unique_ptr<WebContentSettingsClient>,
       scoped_refptr<WebWorkerFetchContext>,
-      WorkerReportingProxy&);
+      WorkerReportingProxy&,
+      bool is_worker_loaded_from_data_url);
   ~WorkerOrWorkletGlobalScope() override;
 
   // EventTarget
@@ -76,7 +77,6 @@ class CORE_EXPORT WorkerOrWorkletGlobalScope
       v8::Isolate*,
       const WrapperTypeInfo*,
       v8::Local<v8::Object> wrapper) final;
-  bool HasPendingActivity() const override;
 
   // ExecutionContext
   bool IsWorkerOrWorkletGlobalScope() const final { return true; }
@@ -88,16 +88,13 @@ class CORE_EXPORT WorkerOrWorkletGlobalScope
 
   // scheduler::WorkerScheduler::Delegate
   void UpdateBackForwardCacheDisablingFeatures(
-      uint64_t features_mask,
-      const BFCacheBlockingFeatureAndLocations&
-          non_sticky_features_and_js_locations,
-      const BFCacheBlockingFeatureAndLocations&
-          sticky_features_and_js_locations) override {}
+      BlockingDetails details) override {}
 
   // BackForwardCacheLoaderHelperImpl::Delegate
   void EvictFromBackForwardCache(
       mojom::blink::RendererEvictionReason reason) override {}
-  void DidBufferLoadWhileInBackForwardCache(size_t num_bytes) override {}
+  void DidBufferLoadWhileInBackForwardCache(bool update_process_wide_count,
+                                            size_t num_bytes) override {}
 
   // Returns true when the WorkerOrWorkletGlobalScope is closing (e.g. via
   // WorkerGlobalScope#close() method). If this returns true, the worker is
@@ -189,10 +186,26 @@ class CORE_EXPORT WorkerOrWorkletGlobalScope
   // creating a cached metadta handler for all workers.
   virtual CodeCacheHost* GetCodeCacheHost() { return nullptr; }
 
+  // Called after the thread initialization is complete but before the script
+  // has started loading.
+  virtual void WillBeginLoading() {}
+
   Deprecation& GetDeprecation() { return deprecation_; }
 
   // Returns the current list of user preferred languages.
   String GetAcceptLanguages() const;
+
+  // Called when a console message is recorded via the console API. This
+  // will invoke `WorkerReportingProxy::ReportConsoleMessage()`.
+  virtual void OnConsoleApiMessage(mojom::ConsoleMessageLevel level,
+                                   const String& message,
+                                   SourceLocation* location);
+
+  // Called when BestEffortServiceWorker(crbug.com/1420517) is enabled.
+  virtual absl::optional<
+      mojo::PendingRemote<network::mojom::blink::URLLoaderFactory>>
+  FindRaceNetworkRequestURLLoaderFactory(
+      const base::UnguessableToken& token) = 0;
 
  protected:
   // Sets outside's CSP used for off-main-thread top-level worker script
@@ -272,7 +285,7 @@ class CORE_EXPORT WorkerOrWorkletGlobalScope
   // TODO(crbug/903579): Consider putting WebWorkerFetchContext-originated
   // things at a single place. Currently they are placed here and subclasses of
   // WebWorkerFetchContext.
-  scoped_refptr<WebWorkerFetchContext> web_worker_fetch_context_;
+  const scoped_refptr<WebWorkerFetchContext> web_worker_fetch_context_;
   Member<SubresourceFilter> subresource_filter_;
 
   Member<WorkerOrWorkletScriptController> script_controller_;

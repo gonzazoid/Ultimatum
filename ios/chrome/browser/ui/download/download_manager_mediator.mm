@@ -6,26 +6,43 @@
 
 #import <UIKit/UIKit.h>
 
-#import "base/bind.h"
+#import "base/apple/foundation_util.h"
+#import "base/feature_list.h"
 #import "base/files/file_path.h"
 #import "base/files/file_util.h"
-#import "base/strings/sys_string_conversions.h"
-#import "base/strings/utf_string_conversions.h"
+#import "base/functional/bind.h"
 #import "base/task/thread_pool.h"
-#import "ios/chrome/browser/download/download_directory_util.h"
-#import "ios/chrome/browser/download/external_app_util.h"
+#import "ios/chrome/browser/download/model/download_directory_util.h"
+#import "ios/chrome/browser/download/model/external_app_util.h"
+#import "ios/chrome/browser/drive/model/drive_availability.h"
+#import "ios/chrome/browser/drive/model/drive_tab_helper.h"
+#import "ios/chrome/browser/drive/model/upload_task.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/signin/model/system_identity.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/web/public/download/download_task.h"
 #import "net/base/net_errors.h"
 #import "ui/base/l10n/l10n_util.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 DownloadManagerMediator::DownloadManagerMediator() : weak_ptr_factory_(this) {}
 DownloadManagerMediator::~DownloadManagerMediator() {
   SetDownloadTask(nullptr);
+}
+
+#pragma mark - Public
+
+void DownloadManagerMediator::SetIsIncognito(bool is_incognito) {
+  is_incognito_ = is_incognito;
+}
+
+void DownloadManagerMediator::SetIdentityManager(
+    signin::IdentityManager* identity_manager) {
+  identity_manager_ = identity_manager;
+}
+
+void DownloadManagerMediator::SetDriveService(
+    drive::DriveService* drive_service) {
+  drive_service_ = drive_service;
 }
 
 void DownloadManagerMediator::SetConsumer(
@@ -35,21 +52,27 @@ void DownloadManagerMediator::SetConsumer(
 }
 
 void DownloadManagerMediator::SetDownloadTask(web::DownloadTask* task) {
-  if (task_) {
-    task_->RemoveObserver(this);
+  if (download_task_) {
+    download_task_->RemoveObserver(this);
   }
-  task_ = task;
-  if (task_) {
+  download_task_ = task;
+  if (download_task_) {
+    download_task_->AddObserver(this);
     UpdateConsumer();
-    task_->AddObserver(this);
   }
+  // Update upload task associated with `download_task_`.
+  UpdateUploadTask();
 }
 
 base::FilePath DownloadManagerMediator::GetDownloadPath() {
   return download_path_;
 }
 
-void DownloadManagerMediator::StartDowloading() {
+UploadTask* DownloadManagerMediator::GetUploadTask() {
+  return upload_task_;
+}
+
+void DownloadManagerMediator::StartDownloading() {
   base::FilePath download_dir;
   if (!GetTempDownloadsDirectory(&download_dir)) {
     [consumer_ setState:kDownloadManagerStateFailed];
@@ -61,83 +84,37 @@ void DownloadManagerMediator::StartDowloading() {
   // "Start Download" button.
   [consumer_ setState:kDownloadManagerStateInProgress];
 
-  task_->Start(download_dir.Append(task_->GenerateFileName()));
-}
-
-void DownloadManagerMediator::OnDownloadUpdated(web::DownloadTask* task) {
-  UpdateConsumer();
-}
-
-void DownloadManagerMediator::OnDownloadDestroyed(web::DownloadTask* task) {
-  SetDownloadTask(nullptr);
-}
-
-void DownloadManagerMediator::UpdateConsumer() {
-  DownloadManagerState state = GetDownloadManagerState();
-
-  if (state == kDownloadManagerStateSucceeded) {
-    download_path_ = task_->GetResponsePath();
-
-    base::ThreadPool::PostTaskAndReplyWithResult(
-        FROM_HERE,
-        {base::MayBlock(), base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
-        base::BindOnce(base::PathExists, download_path_),
-        base::BindOnce(
-            &DownloadManagerMediator::MoveToUserDocumentsIfFileExists,
-            weak_ptr_factory_.GetWeakPtr(), download_path_));
-  }
-
-  if (state == kDownloadManagerStateSucceeded && !IsGoogleDriveAppInstalled()) {
-    [consumer_ setInstallDriveButtonVisible:YES animated:YES];
-  }
-  [consumer_ setState:state];
-  [consumer_ setCountOfBytesReceived:task_->GetReceivedBytes()];
-  [consumer_ setCountOfBytesExpectedToReceive:task_->GetTotalBytes()];
-  [consumer_ setProgress:GetDownloadManagerProgress()];
-
-  base::FilePath filename = task_->GenerateFileName();
-  [consumer_ setFileName:base::SysUTF8ToNSString(filename.AsUTF8Unsafe())];
-
-  int a11y_announcement = GetDownloadManagerA11yAnnouncement();
-  if (a11y_announcement != -1) {
-    UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification,
-                                    l10n_util::GetNSString(a11y_announcement));
-  }
-}
-
-void DownloadManagerMediator::MoveToUserDocumentsIfFileExists(
-    base::FilePath download_path,
-    bool file_exists) {
-  if (!file_exists || !task_)
-    return;
-
-  base::FilePath user_download_path;
-  GetDownloadsDirectory(&user_download_path);
-  user_download_path = user_download_path.Append(task_->GenerateFileName());
-
-  base::ThreadPool::PostTaskAndReplyWithResult(
-      FROM_HERE,
-      {base::MayBlock(), base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
-      base::BindOnce(&base::Move, download_path, user_download_path),
-      base::BindOnce(&DownloadManagerMediator::RestoreDownloadPath,
-                     weak_ptr_factory_.GetWeakPtr(), user_download_path));
-}
-
-void DownloadManagerMediator::RestoreDownloadPath(
-    base::FilePath user_download_path,
-    bool moveCompleted) {
-  DCHECK(moveCompleted);
-  download_path_ = user_download_path;
+  download_task_->Start(
+      download_dir.Append(download_task_->GenerateFileName()));
+  // If an upload task associated with the current download task exists, start
+  // to observe it.
+  UpdateUploadTask();
 }
 
 DownloadManagerState DownloadManagerMediator::GetDownloadManagerState() const {
-  switch (task_->GetState()) {
+  // Returns the `DownloadManagerState`, depending on the state of
+  // `download_task_` and the state of the upload to Save to Drive, if that is
+  // the destination of the downloaded file.
+  switch (download_task_->GetState()) {
     case web::DownloadTask::State::kNotStarted:
       return kDownloadManagerStateNotStarted;
     case web::DownloadTask::State::kInProgress:
       return kDownloadManagerStateInProgress;
     case web::DownloadTask::State::kComplete:
-      return kDownloadManagerStateSucceeded;
+      if (!upload_task_) {
+        return kDownloadManagerStateSucceeded;
+      }
+      switch (upload_task_->GetState()) {
+        case UploadTask::State::kNotStarted:
+        case UploadTask::State::kInProgress:
+          return kDownloadManagerStateInProgress;
+        case UploadTask::State::kCancelled:
+          return kDownloadManagerStateNotStarted;
+        case UploadTask::State::kComplete:
+          return kDownloadManagerStateSucceeded;
+        case UploadTask::State::kFailed:
+          return kDownloadManagerStateFailed;
+      }
     case web::DownloadTask::State::kFailed:
       return kDownloadManagerStateFailed;
     case web::DownloadTask::State::kFailedNotResumable:
@@ -148,14 +125,93 @@ DownloadManagerState DownloadManagerMediator::GetDownloadManagerState() const {
   }
 }
 
+#pragma mark - Private
+
+void DownloadManagerMediator::UpdateConsumer() {
+  DownloadManagerState state = GetDownloadManagerState();
+
+  if (base::FeatureList::IsEnabled(kIOSSaveToDrive)) {
+    bool is_save_to_drive_available = drive::IsSaveToDriveAvailable(
+        is_incognito_, identity_manager_, drive_service_);
+    [consumer_ setDownloadToDriveButtonVisible:is_save_to_drive_available];
+  }
+
+  if (state == kDownloadManagerStateSucceeded && !upload_task_) {
+    base::FilePath user_download_path;
+    GetDownloadsDirectory(&user_download_path);
+    download_path_ =
+        user_download_path.Append(download_task_->GenerateFileName());
+
+    base::FilePath task_path = download_task_->GetResponsePath();
+
+    base::ThreadPool::PostTaskAndReplyWithResult(
+        FROM_HERE,
+        {base::MayBlock(), base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
+        base::BindOnce(base::PathExists, task_path),
+        base::BindOnce(
+            &DownloadManagerMediator::MoveToUserDocumentsIfFileExists,
+            weak_ptr_factory_.GetWeakPtr(), task_path));
+  }
+
+  if (!base::FeatureList::IsEnabled(kIOSSaveToDrive) &&
+      state == kDownloadManagerStateSucceeded && !IsGoogleDriveAppInstalled()) {
+    [consumer_ setInstallDriveButtonVisible:YES animated:YES];
+  }
+
+  if (base::FeatureList::IsEnabled(kIOSSaveToDrive)) {
+    DownloadFileDestination destination = upload_task_ == nullptr
+                                              ? DownloadFileDestination::kFiles
+                                              : DownloadFileDestination::kDrive;
+    [consumer_ setDownloadFileDestination:destination];
+    // Feed the identity user email to the consumer. If there is no upload task,
+    // then `identity` and `identity.userEmail` will be nil, which is fine.
+    id<SystemIdentity> identity =
+        upload_task_ ? upload_task_->GetIdentity() : nil;
+    [consumer_ setSaveToDriveUserEmail:identity.userEmail];
+  }
+
+  [consumer_ setState:state];
+  [consumer_ setCountOfBytesReceived:download_task_->GetReceivedBytes()];
+  [consumer_ setCountOfBytesExpectedToReceive:download_task_->GetTotalBytes()];
+  [consumer_ setProgress:GetDownloadManagerProgress()];
+
+  base::FilePath filename = download_task_->GenerateFileName();
+  [consumer_ setFileName:base::apple::FilePathToNSString(filename)];
+
+  int a11y_announcement = GetDownloadManagerA11yAnnouncement();
+  if (a11y_announcement != -1) {
+    UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification,
+                                    l10n_util::GetNSString(a11y_announcement));
+  }
+}
+
+void DownloadManagerMediator::MoveToUserDocumentsIfFileExists(
+    base::FilePath task_path,
+    bool file_exists) {
+  if (!file_exists || !download_task_) {
+    return;
+  }
+
+  base::ThreadPool::PostTaskAndReplyWithResult(
+      FROM_HERE,
+      {base::MayBlock(), base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
+      base::BindOnce(&base::Move, task_path, download_path_),
+      base::BindOnce(&DownloadManagerMediator::MoveComplete,
+                     weak_ptr_factory_.GetWeakPtr()));
+}
+
+void DownloadManagerMediator::MoveComplete(bool move_completed) {
+  DCHECK(move_completed);
+}
+
 int DownloadManagerMediator::GetDownloadManagerA11yAnnouncement() const {
-  switch (task_->GetState()) {
+  switch (download_task_->GetState()) {
     case web::DownloadTask::State::kNotStarted:
       return IDS_IOS_DOWNLOAD_MANAGER_REQUESTED_ACCESSIBILITY_ANNOUNCEMENT;
     case web::DownloadTask::State::kComplete:
     case web::DownloadTask::State::kFailed:
     case web::DownloadTask::State::kFailedNotResumable:
-      return task_->GetErrorCode()
+      return download_task_->GetErrorCode()
                  ? IDS_IOS_DOWNLOAD_MANAGER_FAILED_ACCESSIBILITY_ANNOUNCEMENT
                  : IDS_IOS_DOWNLOAD_MANAGER_SUCCEEDED_ACCESSIBILITY_ANNOUNCEMENT;
     case web::DownloadTask::State::kCancelled:
@@ -165,7 +221,57 @@ int DownloadManagerMediator::GetDownloadManagerA11yAnnouncement() const {
 }
 
 float DownloadManagerMediator::GetDownloadManagerProgress() const {
-  if (task_->GetPercentComplete() == -1)
+  if (download_task_->GetPercentComplete() == -1) {
     return 0.0f;
-  return static_cast<float>(task_->GetPercentComplete()) / 100.0f;
+  }
+  float download_progress =
+      static_cast<float>(download_task_->GetPercentComplete()) / 100.0f;
+  if (!upload_task_) {
+    return download_progress;
+  }
+  float save_to_drive_progress = upload_task_->GetProgress();
+  // If the downloaded file needs to be uploaded to Drive, then the overall
+  // progress is 50% once the download is complete, and then reaches 100% when
+  // the upload is complete.
+  return download_progress / 2.0 + save_to_drive_progress / 2.0;
+}
+
+void DownloadManagerMediator::UpdateUploadTask() {
+  if (!base::FeatureList::IsEnabled(kIOSSaveToDrive) || !download_task_) {
+    return;
+  }
+  DriveTabHelper* drive_tab_helper =
+      DriveTabHelper::FromWebState(download_task_->GetWebState());
+  SetUploadTask(drive_tab_helper->GetUploadTaskForDownload(download_task_));
+}
+
+void DownloadManagerMediator::SetUploadTask(UploadTask* task) {
+  if (upload_task_) {
+    upload_task_->RemoveObserver(this);
+  }
+  upload_task_ = task;
+  if (upload_task_) {
+    upload_task_->AddObserver(this);
+    UpdateConsumer();
+  }
+}
+
+#pragma mark - web::DownloadTaskObserver overrides
+
+void DownloadManagerMediator::OnDownloadUpdated(web::DownloadTask* task) {
+  UpdateConsumer();
+}
+
+void DownloadManagerMediator::OnDownloadDestroyed(web::DownloadTask* task) {
+  SetDownloadTask(nullptr);
+}
+
+#pragma mark - web::UploadTaskObserver overrides
+
+void DownloadManagerMediator::OnUploadUpdated(UploadTask* task) {
+  UpdateConsumer();
+}
+
+void DownloadManagerMediator::OnUploadDestroyed(UploadTask* task) {
+  SetUploadTask(nullptr);
 }

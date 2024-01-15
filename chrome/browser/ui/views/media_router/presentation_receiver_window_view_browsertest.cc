@@ -5,7 +5,7 @@
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/media_router/presentation_receiver_window_view.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -110,8 +110,8 @@ class PresentationReceiverWindowViewBrowserTest : public InProcessBrowserTest {
 
   const gfx::Rect bounds_{100, 100};
   std::unique_ptr<FakeReceiverDelegate> fake_delegate_;
-  raw_ptr<PresentationReceiverWindowView, DanglingUntriaged> receiver_view_ =
-      nullptr;
+  raw_ptr<PresentationReceiverWindowView, AcrossTasksDanglingUntriaged>
+      receiver_view_ = nullptr;
 };
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -157,7 +157,7 @@ IN_PROC_BROWSER_TEST_F(PresentationReceiverWindowViewBrowserTest,
         std::move(fullscreen_callback_).Run();
     }
 
-    PresentationReceiverWindowView* const receiver_view_;
+    const raw_ptr<PresentationReceiverWindowView> receiver_view_;
     base::CallbackListSubscription subscription_;
     const AwaitType await_type_;
     base::OnceClosure fullscreen_callback_;

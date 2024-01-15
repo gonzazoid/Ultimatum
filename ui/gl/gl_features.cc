@@ -7,8 +7,6 @@
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "build/build_config.h"
-#include "build/chromecast_buildflags.h"
-#include "build/chromeos_buildflags.h"
 #include "ui/gl/gl_switches.h"
 
 #if BUILDFLAG(IS_MAC)
@@ -27,7 +25,11 @@
 namespace features {
 namespace {
 
+#if BUILDFLAG(IS_APPLE)
+BASE_FEATURE(kGpuVsync, "GpuVsync", base::FEATURE_DISABLED_BY_DEFAULT);
+#else
 BASE_FEATURE(kGpuVsync, "GpuVsync", base::FEATURE_ENABLED_BY_DEFAULT);
+#endif
 
 #if BUILDFLAG(IS_ANDROID)
 const base::FeatureParam<std::string>
@@ -71,27 +73,47 @@ bool IsDeviceBlocked(const char* field, const std::string& block_list) {
 
 }  // namespace
 
-#if BUILDFLAG(IS_ANDROID)
-BASE_FEATURE(kAndroidFrameDeadline,
-             "AndroidFrameDeadline",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-#endif
-
+#if BUILDFLAG(ENABLE_VALIDATING_COMMAND_DECODER)
 // Use the passthrough command decoder by default.  This can be overridden with
 // the --use-cmd-decoder=passthrough or --use-cmd-decoder=validating flags.
 // Feature lives in ui/gl because it affects the GL binding initialization on
 // platforms that would otherwise not default to using EGL bindings.
-// Launched on Windows, still experimental on other platforms.
 BASE_FEATURE(kDefaultPassthroughCommandDecoder,
              "DefaultPassthroughCommandDecoder",
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_FUCHSIA) ||     \
-    (BUILDFLAG(IS_LINUX) && !BUILDFLAG(IS_CASTOS)) || \
-    BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_CASTOS)
              base::FEATURE_ENABLED_BY_DEFAULT
 #else
              base::FEATURE_DISABLED_BY_DEFAULT
 #endif
 );
+#endif  // !defined(PASSTHROUGH_COMMAND_DECODER_LAUNCHED)
+
+#if BUILDFLAG(IS_MAC)
+// If true, metal shader programs are written to disk.
+//
+// As the gpu process writes to disk when this is set, you must also disable
+// the sandbox.
+//
+// The path the shaders are written to is controlled via the command line switch
+// --shader-cache-path (default is /tmp/shaders).
+BASE_FEATURE(kWriteMetalShaderCacheToDisk,
+             "WriteMetalShaderCacheToDisk",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// If true, the metal shader cache is read from a file and put into BlobCache
+// during startup.
+BASE_FEATURE(kUseBuiltInMetalShaderCache,
+             "UseBuiltInMetalShaderCache",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+#endif
+
+#if BUILDFLAG(IS_WIN)
+// If true, VSyncThreadWin will use the primary monitor's
+// refresh rate as the vsync interval.
+BASE_FEATURE(kUsePrimaryMonitorVSyncIntervalOnSV3,
+             "UsePrimaryMonitorVSyncIntervalOnSV3",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+#endif  // BUILDFLAG(IS_WIN)
 
 bool UseGpuVsync() {
   return !base::CommandLine::ForCurrentProcess()->HasSwitch(
@@ -105,7 +127,7 @@ bool IsAndroidFrameDeadlineEnabled() {
       base::android::BuildInfo::GetInstance()->is_at_least_t() &&
       gfx::AChoreographerCompat33::Get().supported &&
       gfx::SurfaceControl::SupportsSetFrameTimeline() &&
-      base::FeatureList::IsEnabled(kAndroidFrameDeadline);
+      gfx::SurfaceControl::SupportsSetEnableBackPressure();
   return enabled;
 #else
   return false;
@@ -113,6 +135,10 @@ bool IsAndroidFrameDeadlineEnabled() {
 }
 
 bool UsePassthroughCommandDecoder() {
+#if !BUILDFLAG(ENABLE_VALIDATING_COMMAND_DECODER)
+  return true;
+#else
+
   if (!base::FeatureList::IsEnabled(kDefaultPassthroughCommandDecoder))
     return false;
 
@@ -145,6 +171,7 @@ bool UsePassthroughCommandDecoder() {
 #endif  // BUILDFLAG(IS_ANDROID)
 
   return true;
+#endif  // defined(PASSTHROUGH_COMMAND_DECODER_LAUNCHED)
 }
 
 }  // namespace features

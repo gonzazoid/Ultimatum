@@ -173,7 +173,7 @@ to the release branch you are merging to (available on
 column).
 
 Once the cherry-pick CL is prepared, you can bypass code review (but not
-OWNERS approval) within 7 days of the original change by adding the Rubber
+OWNERS approval) within 14 days of the original change by adding the Rubber
 Stamper bot (rubber-stamper@appspot.gserviceaccount.com) as a reviewer. If the
 CL meets the
 [Rubber Stamper criteria](https://chromium.googlesource.com/infra/infra/+/refs/heads/main/go/src/infra/appengine/rubber-stamper/README.md),
@@ -194,6 +194,7 @@ $ git fetch
 $ git checkout -b BRANCH_NAME refs/remotes/branch-heads/####
 $ git cl upstream branch-heads/####
 $ git cherry-pick -x COMMIT_HASH_MAIN
+$ gclient sync
 ```
 
 From here, your environment should be ready to adjust the change as required;

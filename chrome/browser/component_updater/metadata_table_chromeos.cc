@@ -57,14 +57,13 @@ const user_manager::User* GetActiveUser() {
 std::string HashUsername(const std::string& username) {
   unsigned char binmd[base::kSHA1Length];
   std::string lowercase(username);
-  std::transform(lowercase.begin(), lowercase.end(), lowercase.begin(),
-                 ::tolower);
+  base::ranges::transform(lowercase, lowercase.begin(), ::tolower);
   std::vector<uint8_t> data;
   base::ranges::copy(lowercase, std::back_inserter(data));
   base::SHA1HashBytes(data.data(), data.size(), binmd);
   std::string result = base::HexEncode(binmd, sizeof(binmd));
   // Stay compatible with CryptoLib::HexEncodeToBuffer()
-  std::transform(result.begin(), result.end(), result.begin(), ::tolower);
+  base::ranges::transform(result, result.begin(), ::tolower);
   return result;
 }
 
@@ -102,8 +101,9 @@ bool MetadataTable::AddComponentForCurrentUser(
     const std::string& component_name) {
   const user_manager::User* active_user = GetActiveUser();
   // Return immediately if action is performed when no user is signed in.
-  if (!active_user)
+  if (!active_user) {
     return false;
+  }
 
   const std::string hashed_user_id =
       HashUsername(active_user->GetAccountId().GetUserEmail());
@@ -116,13 +116,15 @@ bool MetadataTable::DeleteComponentForCurrentUser(
     const std::string& component_name) {
   const user_manager::User* active_user = GetActiveUser();
   // Return immediately if action is performed when no user is signed in.
-  if (!active_user)
+  if (!active_user) {
     return false;
+  }
 
   const std::string hashed_user_id =
       HashUsername(active_user->GetAccountId().GetUserEmail());
-  if (!DeleteItem(hashed_user_id, component_name))
+  if (!DeleteItem(hashed_user_id, component_name)) {
     return false;
+  }
   Store();
   return true;
 }
@@ -159,14 +161,15 @@ void MetadataTable::Store() {
   DCHECK(pref_service_);
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  DictionaryPrefUpdate update(pref_service_, kMetadataPrefPath);
-  update->GetDict().Set(kMetadataContentKey, installed_items_.Clone());
+  ScopedDictPrefUpdate update(pref_service_, kMetadataPrefPath);
+  update->Set(kMetadataContentKey, installed_items_.Clone());
 }
 
 void MetadataTable::AddItem(const std::string& hashed_user_id,
                             const std::string& component_name) {
-  if (HasComponentForUser(hashed_user_id, component_name))
+  if (HasComponentForUser(hashed_user_id, component_name)) {
     return;
+  }
 
   base::Value::Dict item;
   item.Set(kMetadataContentItemHashedUserIdKey, hashed_user_id);
@@ -177,8 +180,9 @@ void MetadataTable::AddItem(const std::string& hashed_user_id,
 bool MetadataTable::DeleteItem(const std::string& hashed_user_id,
                                const std::string& component_name) {
   size_t index = GetInstalledItemIndex(hashed_user_id, component_name);
-  if (index == installed_items_.size())
+  if (index == installed_items_.size()) {
     return false;
+  }
   installed_items_.erase(installed_items_.begin() + index);
   return true;
 }
@@ -197,12 +201,14 @@ size_t MetadataTable::GetInstalledItemIndex(
     const auto& dict = installed_items_[i];
     const std::string& user_id =
         GetRequiredStringFromDict(dict, kMetadataContentItemHashedUserIdKey);
-    if (user_id != hashed_user_id)
+    if (user_id != hashed_user_id) {
       continue;
+    }
     const std::string& name =
         GetRequiredStringFromDict(dict, kMetadataContentItemComponentKey);
-    if (name != component_name)
+    if (name != component_name) {
       continue;
+    }
     return i;
   }
   return installed_items_.size();

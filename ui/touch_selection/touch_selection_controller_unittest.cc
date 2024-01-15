@@ -38,7 +38,7 @@ class MockTouchHandleDrawable : public TouchHandleDrawable {
 
   ~MockTouchHandleDrawable() override {}
   void SetEnabled(bool enabled) override {}
-  void SetOrientation(ui::TouchHandleOrientation orientation,
+  void SetOrientation(TouchHandleOrientation orientation,
                       bool mirror_vertical,
                       bool mirror_horizontal) override {}
   void SetOrigin(const gfx::PointF& origin) override {}
@@ -174,6 +174,10 @@ class TouchSelectionControllerTest : public testing::Test,
   void OnLongPressEvent() {
     controller().HandleLongPressEvent(base::TimeTicks(),
                                           kIgnoredPoint);
+  }
+
+  void OnDoublePressEvent() {
+    controller().HandleDoublePressEvent(base::TimeTicks(), kIgnoredPoint);
   }
 
   void OnTapEvent() {
@@ -1034,6 +1038,76 @@ TEST_F(TouchSelectionControllerTest, LongPressDrag) {
   EXPECT_TRUE(test_controller.GetEndVisible());
 }
 
+TEST_F(TouchSelectionControllerTest, DoublePressDrag) {
+  TouchSelectionController::Config config = kDefaultConfig;
+  config.enable_longpress_drag_selection = true;
+  InitializeControllerWithConfig(config);
+  TouchSelectionControllerTestApi test_controller(&controller());
+
+  // Start a touch sequence.
+  MockMotionEvent event;
+  EXPECT_FALSE(controller().WillHandleTouchEvent(event.PressPoint(0, 0)));
+
+  // Activate a double press triggered selection.
+  constexpr gfx::RectF start_rect(-50, 0, 0, 10);
+  constexpr gfx::RectF end_rect(50, 0, 0, 10);
+  constexpr bool visible = true;
+  OnDoublePressEvent();
+  ChangeSelection(start_rect, visible, end_rect, visible);
+  EXPECT_THAT(GetAndResetEvents(), ElementsAre(SELECTION_HANDLES_SHOWN));
+  EXPECT_EQ(start_rect.bottom_left(), GetLastEventStart());
+
+  // The handles should remain invisible while the touch release and double
+  // press drag gesture are pending.
+  EXPECT_FALSE(test_controller.GetStartVisible());
+  EXPECT_FALSE(test_controller.GetEndVisible());
+  EXPECT_EQ(0.f, test_controller.GetStartAlpha());
+  EXPECT_EQ(0.f, test_controller.GetEndAlpha());
+
+  // Start dragging.
+  EXPECT_TRUE(controller().WillHandleTouchEvent(event.MovePoint(0, 0, 0)));
+  EXPECT_THAT(GetAndResetEvents(), IsEmpty());
+
+  EXPECT_TRUE(controller().WillHandleTouchEvent(
+      event.MovePoint(0, 0, kDefaultTapSlop)));
+  EXPECT_THAT(GetAndResetEvents(), ElementsAre(SELECTION_HANDLE_DRAG_STARTED));
+  EXPECT_EQ(start_rect.CenterPoint(), GetLastSelectionStart());
+  EXPECT_EQ(end_rect.CenterPoint(), GetLastSelectionEnd());
+
+  // Movement after the start of drag will be relative to the moved endpoint.
+  EXPECT_TRUE(controller().WillHandleTouchEvent(
+      event.MovePoint(0, 0, 2 * kDefaultTapSlop)));
+  EXPECT_TRUE(GetAndResetSelectionMoved());
+  EXPECT_EQ(end_rect.CenterPoint() + gfx::Vector2dF(0, kDefaultTapSlop),
+            GetLastSelectionEnd());
+
+  EXPECT_TRUE(controller().WillHandleTouchEvent(
+      event.MovePoint(0, kDefaultTapSlop, 2 * kDefaultTapSlop)));
+  EXPECT_TRUE(GetAndResetSelectionMoved());
+  EXPECT_EQ(
+      end_rect.CenterPoint() + gfx::Vector2dF(kDefaultTapSlop, kDefaultTapSlop),
+      GetLastSelectionEnd());
+
+  EXPECT_TRUE(controller().WillHandleTouchEvent(
+      event.MovePoint(0, 2 * kDefaultTapSlop, 2 * kDefaultTapSlop)));
+  EXPECT_TRUE(GetAndResetSelectionMoved());
+  EXPECT_EQ(end_rect.CenterPoint() +
+                gfx::Vector2dF(2 * kDefaultTapSlop, kDefaultTapSlop),
+            GetLastSelectionEnd());
+
+  // The handles should still be hidden.
+  EXPECT_FALSE(test_controller.GetStartVisible());
+  EXPECT_FALSE(test_controller.GetEndVisible());
+  EXPECT_EQ(0.f, test_controller.GetStartAlpha());
+  EXPECT_EQ(0.f, test_controller.GetEndAlpha());
+
+  // Releasing the touch sequence should end the drag and show the handles.
+  EXPECT_FALSE(controller().WillHandleTouchEvent(event.ReleasePoint()));
+  EXPECT_THAT(GetAndResetEvents(), ElementsAre(SELECTION_HANDLE_DRAG_STOPPED));
+  EXPECT_TRUE(test_controller.GetStartVisible());
+  EXPECT_TRUE(test_controller.GetEndVisible());
+}
+
 TEST_F(TouchSelectionControllerTest, LongPressNoDrag) {
   TouchSelectionController::Config config = kDefaultConfig;
   config.enable_longpress_drag_selection = true;
@@ -1113,6 +1187,57 @@ TEST_F(TouchSelectionControllerTest, NoLongPressDragIfDisabled) {
 
   EXPECT_EQ(1.f, test_controller.GetStartAlpha());
   EXPECT_EQ(1.f, test_controller.GetEndAlpha());
+}
+
+TEST_F(TouchSelectionControllerTest, InsertionFocusBound) {
+  OnTapEvent();
+
+  // Activate insertion. Focus should be the caret.
+  gfx::SelectionBound caret_bound;
+  caret_bound.set_type(gfx::SelectionBound::CENTER);
+  caret_bound.SetEdge(gfx::PointF(5, 5), gfx::PointF(5, 15));
+  controller().OnSelectionBoundsChanged(caret_bound, caret_bound);
+  EXPECT_THAT(GetAndResetEvents(), ElementsAre(INSERTION_HANDLE_SHOWN));
+  EXPECT_EQ(caret_bound, controller().GetFocusBound());
+
+  // Move caret.
+  caret_bound.SetEdge(gfx::PointF(8, 5), gfx::PointF(8, 15));
+  controller().OnSelectionBoundsChanged(caret_bound, caret_bound);
+  EXPECT_THAT(GetAndResetEvents(), ElementsAre(INSERTION_HANDLE_MOVED));
+  EXPECT_EQ(caret_bound, controller().GetFocusBound());
+
+  ClearInsertion();
+  EXPECT_THAT(GetAndResetEvents(), ElementsAre(INSERTION_HANDLE_CLEARED));
+}
+
+TEST_F(TouchSelectionControllerTest, SelectionFocusBound) {
+  OnLongPressEvent();
+
+  // Activate selection. Focus should be the selection end.
+  gfx::SelectionBound start_bound;
+  start_bound.set_type(gfx::SelectionBound::LEFT);
+  start_bound.SetEdge(gfx::PointF(5, 5), gfx::PointF(5, 15));
+  gfx::SelectionBound end_bound;
+  end_bound.set_type(gfx::SelectionBound::RIGHT);
+  end_bound.SetEdge(gfx::PointF(50, 5), gfx::PointF(50, 15));
+  controller().OnSelectionBoundsChanged(start_bound, end_bound);
+  EXPECT_THAT(GetAndResetEvents(), ElementsAre(SELECTION_HANDLES_SHOWN));
+  EXPECT_EQ(end_bound, controller().GetFocusBound());
+
+  // Move the selection start. Focus should now be the selection start.
+  start_bound.SetEdge(gfx::PointF(8, 5), gfx::PointF(8, 15));
+  controller().OnSelectionBoundsChanged(start_bound, end_bound);
+  EXPECT_THAT(GetAndResetEvents(), ElementsAre(SELECTION_HANDLES_MOVED));
+  EXPECT_EQ(start_bound, controller().GetFocusBound());
+
+  // Move the selection end. Focus should now be the selection end.
+  end_bound.SetEdge(gfx::PointF(52, 5), gfx::PointF(52, 15));
+  controller().OnSelectionBoundsChanged(start_bound, end_bound);
+  EXPECT_THAT(GetAndResetEvents(), ElementsAre(SELECTION_HANDLES_MOVED));
+  EXPECT_EQ(end_bound, controller().GetFocusBound());
+
+  ClearSelection();
+  EXPECT_THAT(GetAndResetEvents(), ElementsAre(SELECTION_HANDLES_CLEARED));
 }
 
 TEST_F(TouchSelectionControllerTest, RectBetweenBounds) {

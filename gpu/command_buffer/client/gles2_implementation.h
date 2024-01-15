@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include <optional>
 #include "base/compiler_specific.h"
 #include "base/containers/queue.h"
 #include "base/memory/raw_ptr.h"
@@ -39,7 +40,6 @@
 #include "gpu/command_buffer/common/context_creation_attribs.h"
 #include "gpu/command_buffer/common/context_result.h"
 #include "gpu/command_buffer/common/debug_marker_manager.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace gpu {
 
@@ -194,6 +194,8 @@ class GLES2_IMPL_EXPORT GLES2Implementation : public GLES2Interface,
   GLint GetProgramResourceLocationHelper(
       GLuint program, GLenum program_interface, const char* name);
 
+  const GLCapabilities& gl_capabilities() const { return gl_capabilities_; }
+
   const scoped_refptr<ShareGroup>& share_group() const { return share_group_; }
 
   GpuControl* gpu_control() {
@@ -259,7 +261,7 @@ class GLES2_IMPL_EXPORT GLES2Implementation : public GLES2Interface,
     int shm_id;
 
     // Address of shared memory
-    void* shm_memory;
+    raw_ptr<void> shm_memory;
 
     // Offset of shared memory
     unsigned int shm_offset;
@@ -578,6 +580,12 @@ class GLES2_IMPL_EXPORT GLES2Implementation : public GLES2Interface,
   bool GetFloatvHelper(GLenum pname, GLfloat* params);
   bool GetFramebufferAttachmentParameterivHelper(
       GLenum target, GLenum attachment, GLenum pname, GLint* params);
+  bool GetFramebufferPixelLocalStorageParameterfvANGLEHelper(GLint plane,
+                                                             GLenum pname,
+                                                             GLfloat* params);
+  bool GetFramebufferPixelLocalStorageParameterivANGLEHelper(GLint plane,
+                                                             GLenum pname,
+                                                             GLint* params);
   bool GetInteger64vHelper(GLenum pname, GLint64* params);
   bool GetIntegervHelper(GLenum pname, GLint* params);
   bool GetIntegeri_vHelper(GLenum pname, GLuint index, GLint* data);
@@ -682,6 +690,9 @@ class GLES2_IMPL_EXPORT GLES2Implementation : public GLES2Interface,
 
   GLStaticState static_state_;
   ClientContextState state_;
+
+  // GLES specific capabilities.
+  GLCapabilities gl_capabilities_;
 
   // pack alignment as last set by glPixelStorei
   GLint pack_alignment_;
@@ -803,8 +814,8 @@ class GLES2_IMPL_EXPORT GLES2Implementation : public GLES2Interface,
   std::unique_ptr<BufferTracker> buffer_tracker_;
   std::unique_ptr<ReadbackBufferShadowTracker> readback_buffer_shadow_tracker_;
 
-  absl::optional<ScopedMappedMemoryPtr> font_mapped_buffer_;
-  absl::optional<ScopedTransferBufferPtr> raster_mapped_buffer_;
+  std::optional<ScopedMappedMemoryPtr> font_mapped_buffer_;
+  std::optional<ScopedTransferBufferPtr> raster_mapped_buffer_;
 
   base::RepeatingCallback<void(const char*, int32_t)> error_message_callback_;
   bool deferring_error_callbacks_ = false;
@@ -847,6 +858,22 @@ inline bool GLES2Implementation::GetBufferParameterivHelper(
 inline bool GLES2Implementation::GetFramebufferAttachmentParameterivHelper(
     GLenum /* target */,
     GLenum /* attachment */,
+    GLenum /* pname */,
+    GLint* /* params */) {
+  return false;
+}
+
+inline bool
+GLES2Implementation::GetFramebufferPixelLocalStorageParameterfvANGLEHelper(
+    GLint /* plane */,
+    GLenum /* pname */,
+    GLfloat* /* params */) {
+  return false;
+}
+
+inline bool
+GLES2Implementation::GetFramebufferPixelLocalStorageParameterivANGLEHelper(
+    GLint /* plane */,
     GLenum /* pname */,
     GLint* /* params */) {
   return false;

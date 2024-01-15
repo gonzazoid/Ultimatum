@@ -6,7 +6,7 @@
 #define IOS_CHROME_BROWSER_UI_SETTINGS_PASSWORD_PASSWORD_SETTINGS_PASSWORD_SETTINGS_CONSTANTS_H_
 
 #import <Foundation/Foundation.h>
-#import "ios/chrome/browser/ui/list_model/list_model.h"
+#import "ios/chrome/browser/shared/ui/list_model/list_model.h"
 
 // Accessibility ID for the dialog asking users to confirm the export of their
 // passwords.
@@ -16,6 +16,17 @@ extern NSString* const kPasswordSettingsExportConfirmViewId;
 // setting.
 extern NSString* const kPasswordSettingsSavePasswordSwitchTableViewId;
 extern NSString* const kPasswordSettingsManagedSavePasswordSwitchTableViewId;
+
+// Accessibility ID for the switch controlling the account storage setting.
+extern NSString* const kPasswordSettingsAccountStorageSwitchTableViewId;
+
+// Accessibility IDs for the sections/items pertaining to bulk move passwords to
+// account.
+extern NSString* const
+    kPasswordSettingsBulkMovePasswordsToAccountDescriptionTableViewId;
+extern NSString* const
+    kPasswordSettingsBulkMovePasswordsToAccountButtonTableViewId;
+extern NSString* const kPasswordSettingsBulkMovePasswordsToAccountAlertViewId;
 
 // Accessibility ID for the UITableView in Password Settings.
 extern NSString* const kPasswordsSettingsTableViewId;

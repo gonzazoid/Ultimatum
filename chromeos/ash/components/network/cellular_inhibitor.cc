@@ -7,10 +7,10 @@
 #include <memory>
 #include <sstream>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/network/device_state.h"
 #include "chromeos/ash/components/network/network_device_handler.h"
@@ -67,7 +67,7 @@ void CellularInhibitor::Init(NetworkStateHandler* network_state_handler,
   network_state_handler_ = network_state_handler;
   network_device_handler_ = network_device_handler;
 
-  network_state_handler_observer_.Observe(network_state_handler_);
+  network_state_handler_observer_.Observe(network_state_handler_.get());
 }
 
 void CellularInhibitor::InhibitCellularScanning(InhibitReason reason,
@@ -77,10 +77,10 @@ void CellularInhibitor::InhibitCellularScanning(InhibitReason reason,
   ProcessRequests();
 }
 
-absl::optional<CellularInhibitor::InhibitReason>
+std::optional<CellularInhibitor::InhibitReason>
 CellularInhibitor::GetInhibitReason() const {
   if (state_ == State::kIdle)
-    return absl::nullopt;
+    return std::nullopt;
 
   return inhibit_requests_.front()->inhibit_reason;
 }
@@ -153,7 +153,7 @@ void CellularInhibitor::ProcessRequests() {
 
 void CellularInhibitor::OnInhibit(
     bool success,
-    absl::optional<CellularInhibitor::InhibitOperationResult> result) {
+    std::optional<CellularInhibitor::InhibitOperationResult> result) {
   DCHECK(state_ == State::kWaitForInhibit || state_ == State::kInhibiting);
 
   if (success) {
@@ -187,7 +187,7 @@ void CellularInhibitor::OnUninhibit(bool success) {
     TransitionToState(State::kInhibited);
     uninhibit_attempts_so_far_++;
 
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&CellularInhibitor::AttemptUninhibit,
                        weak_ptr_factory_.GetWeakPtr()),
@@ -255,7 +255,7 @@ void CellularInhibitor::SetInhibitProperty() {
 
   // If the new value is already set, return early.
   if (cellular_device->inhibited() == new_inhibit_value) {
-    ReturnSetInhibitPropertyResult(/*success=*/true, /*result=*/absl::nullopt);
+    ReturnSetInhibitPropertyResult(/*success=*/true, /*result=*/std::nullopt);
     return;
   }
 
@@ -292,7 +292,7 @@ void CellularInhibitor::OnSetPropertyError(bool attempted_inhibit,
 
 void CellularInhibitor::ReturnSetInhibitPropertyResult(
     bool success,
-    absl::optional<CellularInhibitor::InhibitOperationResult> result) {
+    std::optional<CellularInhibitor::InhibitOperationResult> result) {
   set_inhibit_timer_.Stop();
   if (state_ == State::kInhibiting || state_ == State::kWaitForInhibit) {
     OnInhibit(success, result);
@@ -317,7 +317,7 @@ void CellularInhibitor::CheckInhibitPropertyIfNeeded() {
   if (state_ == State::kWaitForUninhibit && cellular_device->inhibited())
     return;
 
-  ReturnSetInhibitPropertyResult(/*success=*/true, /*result=*/absl::nullopt);
+  ReturnSetInhibitPropertyResult(/*success=*/true, /*result=*/std::nullopt);
 }
 
 void CellularInhibitor::OnInhibitPropertyChangeTimeout() {
@@ -379,6 +379,9 @@ std::ostream& operator<<(
       break;
     case CellularInhibitor::InhibitReason::kDisablingProfile:
       stream << "[Disabling profile]";
+      break;
+    case CellularInhibitor::InhibitReason::kRequestingAvailableProfiles:
+      stream << "[Requesting available profiles]";
       break;
   }
   return stream;

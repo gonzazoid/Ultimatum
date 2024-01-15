@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <optional>
+
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
@@ -17,7 +19,6 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/dns/mock_host_resolver.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/chrome_debug_urls.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "url/gurl.h"
@@ -140,7 +141,7 @@ class DocumentTokenBrowserTest : public ContentBrowserTest {
 
     // Once a cross-document navigation completes, the document token should be
     // updated though.
-    nav_manager.WaitForNavigationFinished();
+    EXPECT_TRUE(nav_manager.WaitForNavigationFinished());
     // The RenderFrameHost may have changed; use the FrameTreeNode captured
     // above instead.
     RenderFrameHostImpl* const new_render_frame_host =
@@ -293,7 +294,7 @@ IN_PROC_BROWSER_TEST_F(DocumentTokenBrowserTest, NewWindowBasic) {
 
     // Once a cross-document navigation completes, the document token should be
     // updated though.
-    nav_manager.WaitForNavigationFinished();
+    ASSERT_TRUE(nav_manager.WaitForNavigationFinished());
     // The RenderFrameHost may have changed; use the FrameTreeNode captured
     // above instead.
     RenderFrameHostImpl* const new_render_frame_host =
@@ -498,7 +499,7 @@ IN_PROC_BROWSER_TEST_F(DocumentTokenBrowserTest, CrashThenReload) {
   // DocumentToken, since no new DocumentAssociatedData was created. The latter
   // is indirectly tested by checking if the WeakDocumentPtr is still valid
   // after the navigation commits.
-  nav_manager.WaitForNavigationFinished();
+  ASSERT_TRUE(nav_manager.WaitForNavigationFinished());
   EXPECT_TRUE(VerifyMatchingTokens(web_contents()));
   const blink::DocumentToken token_after_navigation_finished =
       GetBrowserSideToken(web_contents());

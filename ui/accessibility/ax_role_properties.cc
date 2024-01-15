@@ -57,8 +57,8 @@ bool HasPresentationalChildren(const ax::mojom::Role role) {
 
 bool IsAlert(const ax::mojom::Role role) {
   switch (role) {
-    case ax::mojom::Role::kAlert:
-    case ax::mojom::Role::kAlertDialog:
+    case ax::mojom::Role::kAlert:        // For simple or hidden alerts.
+    case ax::mojom::Role::kAlertDialog:  // For alerts that must be dismissed.
       return true;
     default:
       return false;
@@ -107,19 +107,6 @@ bool IsCellOrTableHeader(const ax::mojom::Role role) {
   }
 }
 
-bool IsChildTreeOwner(const ax::mojom::Role role) {
-  switch (role) {
-    case ax::mojom::Role::kEmbeddedObject:
-    case ax::mojom::Role::kIframe:
-    case ax::mojom::Role::kIframePresentational:
-    case ax::mojom::Role::kPluginObject:
-    case ax::mojom::Role::kPortal:
-      return true;
-    default:
-      return false;
-  }
-}
-
 bool IsClickable(const ax::mojom::Role role) {
   switch (role) {
     case ax::mojom::Role::kButton:
@@ -130,6 +117,7 @@ bool IsClickable(const ax::mojom::Role role) {
     case ax::mojom::Role::kDate:
     case ax::mojom::Role::kDateTime:
     case ax::mojom::Role::kDisclosureTriangle:
+    case ax::mojom::Role::kDisclosureTriangleGrouped:
     case ax::mojom::Role::kDocBackLink:
     case ax::mojom::Role::kDocBiblioRef:
     case ax::mojom::Role::kDocGlossRef:
@@ -228,6 +216,7 @@ bool IsControl(const ax::mojom::Role role) {
     case ax::mojom::Role::kDate:
     case ax::mojom::Role::kDateTime:
     case ax::mojom::Role::kDisclosureTriangle:
+    case ax::mojom::Role::kDisclosureTriangleGrouped:
     case ax::mojom::Role::kInputTime:
     case ax::mojom::Role::kListBox:
     case ax::mojom::Role::kListGrid:
@@ -303,6 +292,19 @@ bool IsDialog(const ax::mojom::Role role) {
   }
 }
 
+bool IsEmbeddingElement(const ax::mojom::Role role) {
+  switch (role) {
+    case ax::mojom::Role::kEmbeddedObject:
+    case ax::mojom::Role::kIframe:
+    case ax::mojom::Role::kIframePresentational:
+    case ax::mojom::Role::kPluginObject:
+    case ax::mojom::Role::kPortal:
+      return true;
+    default:
+      return false;
+  }
+}
+
 bool IsGridLike(const ax::mojom::Role role) {
   switch (role) {
     case ax::mojom::Role::kGrid:
@@ -369,6 +371,7 @@ bool IsItemLike(const ax::mojom::Role role) {
   switch (role) {
     case ax::mojom::Role::kArticle:
     case ax::mojom::Role::kComment:
+    case ax::mojom::Role::kDisclosureTriangleGrouped:
     case ax::mojom::Role::kListItem:
     case ax::mojom::Role::kMenuItem:
     case ax::mojom::Role::kMenuItemRadio:
@@ -381,6 +384,28 @@ bool IsItemLike(const ax::mojom::Role role) {
     case ax::mojom::Role::kDescriptionListTerm:
     case ax::mojom::Role::kTerm:
       DCHECK(!IsSetLike(role)) << "Role cannot be both item-like and set-like.";
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool IsLikelyActiveDescendantRole(const ax::mojom::Role role) {
+  switch (role) {
+    case ax::mojom::Role::kButton:
+    case ax::mojom::Role::kCell:
+    case ax::mojom::Role::kCheckBox:
+    case ax::mojom::Role::kComment:
+    case ax::mojom::Role::kListBoxOption:
+    case ax::mojom::Role::kMenuItem:
+    case ax::mojom::Role::kMenuItemCheckBox:
+    case ax::mojom::Role::kMenuItemRadio:
+    case ax::mojom::Role::kMenuListOption:
+    case ax::mojom::Role::kRadioButton:
+    case ax::mojom::Role::kRow:
+    case ax::mojom::Role::kTab:
+    case ax::mojom::Role::kToggleButton:
+    case ax::mojom::Role::kTreeItem:
       return true;
     default:
       return false;
@@ -904,6 +929,7 @@ bool IsUIAEmbeddedObject(ax::mojom::Role role) {
     case ax::mojom::Role::kDescriptionListTerm:
     case ax::mojom::Role::kDirectory:
     case ax::mojom::Role::kDisclosureTriangle:
+    case ax::mojom::Role::kDisclosureTriangleGrouped:
     case ax::mojom::Role::kDocBackLink:
     case ax::mojom::Role::kDocBiblioEntry:
     case ax::mojom::Role::kDocBiblioRef:
@@ -1026,6 +1052,7 @@ bool SupportsExpandCollapse(const ax::mojom::Role role) {
     case ax::mojom::Role::kComboBoxMenuButton:
     case ax::mojom::Role::kComboBoxSelect:
     case ax::mojom::Role::kDisclosureTriangle:
+    case ax::mojom::Role::kDisclosureTriangleGrouped:
     case ax::mojom::Role::kTextFieldWithComboBox:
     case ax::mojom::Role::kTreeItem:
       return true;
@@ -1106,6 +1133,31 @@ bool SupportsToggle(const ax::mojom::Role role) {
     default:
       return false;
   }
+}
+
+bool IsPlainContentElement(ax::mojom::Role role) {
+  switch (role) {
+    case ax::mojom::Role::kInlineTextBox:
+    case ax::mojom::Role::kLineBreak:
+    case ax::mojom::Role::kStaticText:
+    case ax::mojom::Role::kCanvas:
+    case ax::mojom::Role::kDocCover:
+    case ax::mojom::Role::kGraphicsSymbol:
+    case ax::mojom::Role::kImage:
+    case ax::mojom::Role::kSvgRoot:
+    case ax::mojom::Role::kGenericContainer:
+    case ax::mojom::Role::kNone:
+    case ax::mojom::Role::kGroup:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool SupportsArrowKeysForExpandCollapse(const ax::mojom::Role role) {
+  // TODO(accessibility): Investigate if other roles should implement this
+  // pattern.
+  return role == ax::mojom::Role::kTreeItem;
 }
 
 }  // namespace ui

@@ -21,6 +21,7 @@
 #include "base/command_line.h"
 #include "base/containers/circular_deque.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/ranges/algorithm.h"
 #include "base/scoped_generic.h"
@@ -29,6 +30,7 @@
 #include "base/time/time.h"
 #include "components/exo/wayland/clients/client_base.h"
 #include "components/exo/wayland/clients/client_helper.h"
+#include "skia/ext/font_utils.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkFont.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
@@ -146,7 +148,7 @@ void FrameCallback(void* data, wl_callback* callback, uint32_t time) {
 }
 
 struct Frame {
-  ClientBase::Buffer* buffer = nullptr;
+  raw_ptr<ClientBase::Buffer> buffer = nullptr;
   base::TimeDelta wall_time;
   base::TimeDelta cpu_time;
   std::vector<base::TimeTicks> event_times;
@@ -314,7 +316,7 @@ int RectsClient::Run(const ClientBase::InitParams& params,
   wp_presentation_feedback_listener feedback_listener = {
       FeedbackSyncOutput, FeedbackPresented, FeedbackDiscarded};
 
-  SkFont font;
+  SkFont font = skia::DefaultFont();
   font.setSize(32);
   font.setEdging(SkFont::Edging::kAlias);
   SkPaint text_paint;

@@ -4,25 +4,26 @@
 
 #include "chrome/browser/component_updater/pki_metadata_component_installer.h"
 
-#include "services/network/public/cpp/network_service_buildflags.h"
-
 #include "base/base64.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/browser_features.h"
 #include "chrome/browser/net/key_pinning.pb.h"
 #include "components/certificate_transparency/certificate_transparency_config.pb.h"
-#include "components/certificate_transparency/ct_features.h"
-#include "components/certificate_transparency/ct_known_logs.h"
 #include "components/component_updater/component_installer.h"
 #include "components/component_updater/mock_component_updater_service.h"
 #include "content/public/browser/network_service_instance.h"
 #include "content/public/test/browser_task_environment.h"
+#include "net/base/features.h"
+#include "net/cert/cert_verify_proc.h"
 #include "net/http/transport_security_state.h"
+#include "net/net_buildflags.h"
+#include "services/cert_verifier/cert_verifier_service_factory.h"
 #include "services/network/network_service.h"
+#include "services/network/public/cpp/network_service_buildflags.h"
 #include "services/network/public/mojom/ct_log_info.mojom.h"
 #include "services/network/sct_auditing/sct_auditing_cache.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -45,7 +46,7 @@ const char kLogSPKIBase64[] =
     "Iyrq1REXsoc/O0HVCXQXKP1/g6mduco4wA57lH1BSJrSet5Rc8NyR5g7zR8FPzXvav+eErLwd"
     "RsVdo4HNxlBlrc50CqkbsNFg2hdU1uCbbzRHKAF5Ih/NGdFkQZ9N+pPbTcpA8z5mWyjo6cCAw"
     "EAAQ==";
-const char kLogIdBase64[] = "ASNFZ4mrze8QERITFBUWFxgZGhscHR4f";
+const char kLogIdBase64[] = "KHWaS8pa+aGJCk5BUfi+NfHcNTRSlVLLQ8/A3d3QN3w=";
 constexpr uint64_t kLogMMDSeconds = 42;
 const char kLogURL[] = "https://futuregadgetlab.jp";
 const char kLogName[] = "FutureGadgetLog2022";
@@ -65,9 +66,8 @@ const char kPopularSCT1[] = "EBESExQVFhcYGRobHB0eHwEjRWeJq83v";
 const char kPopularSCT2[] = "oKGio6SlpqeoqaqrrK2urwEjRWeJq83v";
 
 // Constants for test pinset.
-const std::string kPinsetName = "example";
-const std::string kPinsetHostName = "example.test";
-const std::string kPinsetReportURI = "http://example-reports.test";
+const char kPinsetName[] = "example";
+const char kPinsetHostName[] = "example.test";
 const bool kPinsetIncludeSubdomains = true;
 
 // SHA256 SPKI hashes.
@@ -89,10 +89,10 @@ class PKIMetadataComponentInstallerTest : public testing::Test {
  public:
   void SetUp() override {
     scoped_feature_list_.InitWithFeatures(
-        /* enabled_features = */ {certificate_transparency::features::
-                                      kCertificateTransparencyComponentUpdater,
-                                  features::kKeyPinningComponentUpdater},
-        /* disabled_features = */ {});
+        /*enabled_features=*/{features::
+                                  kCertificateTransparencyAskBeforeEnabling,
+                              features::kKeyPinningComponentUpdater},
+        /*disabled_features=*/{});
     ct_config_.set_disable_ct_enforcement(false);
     ct_config_.mutable_log_list()->set_compatibility_version(
         kMaxSupportedCTCompatibilityVersion);
@@ -186,7 +186,6 @@ class PKIMetadataComponentInstallerTest : public testing::Test {
       host_pin->set_include_subdomains(kPinsetIncludeSubdomains);
       auto* pinset = pinlist_.add_pinsets();
       pinset->set_name(kPinsetName);
-      pinset->set_report_uri(kPinsetReportURI);
       std::string spki_bytes_as_string(kSpkiHash1.data(),
                                        kSpkiHash1.data() + kSpkiHash1.size());
       std::string bad_spki_bytes_as_string(
@@ -247,15 +246,15 @@ TEST_F(PKIMetadataComponentInstallerTest, TestProtoBytesConversion) {
 TEST_F(PKIMetadataComponentInstallerTest, VerifyInstallation) {
   WriteCTConfigToFile();
   base::FilePath path = component_install_dir_.GetPath();
-  EXPECT_TRUE(policy_->VerifyInstallation(base::Value(), path));
+  EXPECT_TRUE(policy_->VerifyInstallation(base::Value::Dict(), path));
   ASSERT_TRUE(component_install_dir_.Delete());
-  EXPECT_FALSE(policy_->VerifyInstallation(base::Value(), path));
+  EXPECT_FALSE(policy_->VerifyInstallation(base::Value::Dict(), path));
 
   WriteKPConfigToFile();
   path = component_install_dir_.GetPath();
-  EXPECT_TRUE(policy_->VerifyInstallation(base::Value(), path));
+  EXPECT_TRUE(policy_->VerifyInstallation(base::Value::Dict(), path));
   ASSERT_TRUE(component_install_dir_.Delete());
-  EXPECT_FALSE(policy_->VerifyInstallation(base::Value(), path));
+  EXPECT_FALSE(policy_->VerifyInstallation(base::Value::Dict(), path));
 }
 
 // Tests that the PKI Metadata component is registered if the features are
@@ -278,7 +277,8 @@ TEST_F(PKIMetadataComponentInstallerTest, CTEnforcementKillSwitch) {
   ct_config_.set_disable_ct_enforcement(true);
   WriteCTConfigToFile();
   policy_->ComponentReady(base::Version("1.2.3.4"),
-                          component_install_dir_.GetPath(), base::Value());
+                          component_install_dir_.GetPath(),
+                          base::Value::Dict());
   task_environment_.RunUntilIdle();
 
   network::NetworkService* network_service =
@@ -301,7 +301,8 @@ TEST_F(PKIMetadataComponentInstallerTest,
   task_environment_.RunUntilIdle();
   WriteKPConfigToFile();
   policy_->ComponentReady(base::Version("1.2.3.4"),
-                          component_install_dir_.GetPath(), base::Value());
+                          component_install_dir_.GetPath(),
+                          base::Value::Dict());
   task_environment_.RunUntilIdle();
 
   network::NetworkService* network_service =
@@ -318,7 +319,6 @@ TEST_F(PKIMetadataComponentInstallerTest,
   EXPECT_EQ(pinsets.at(0).name(), kPinsetName);
   EXPECT_EQ(pinsets.at(0).static_spki_hashes().at(0), kSpkiHash1);
   EXPECT_EQ(pinsets.at(0).bad_static_spki_hashes().at(0), kSpkiHash2);
-  EXPECT_EQ(pinsets.at(0).report_uri(), kPinsetReportURI);
 
   EXPECT_EQ(host_pins.at(0).hostname_, kPinsetHostName);
   EXPECT_EQ(host_pins.at(0).pinset_name_, kPinsetName);
@@ -339,7 +339,8 @@ TEST_F(PKIMetadataComponentInstallerTest, InstallComponentInvalidKPProto) {
   ASSERT_TRUE(base::WriteFile(file_path, "mismatch"));
 
   policy_->ComponentReady(base::Version("1.2.3.4"),
-                          component_install_dir_.GetPath(), base::Value());
+                          component_install_dir_.GetPath(),
+                          base::Value::Dict());
   task_environment_.RunUntilIdle();
 
   network::NetworkService* network_service =
@@ -369,7 +370,8 @@ TEST_F(PKIMetadataComponentInstallerTest,
   WriteKPConfigToFile();
 
   policy_->ComponentReady(base::Version("1.2.3.4"),
-                          component_install_dir_.GetPath(), base::Value());
+                          component_install_dir_.GetPath(),
+                          base::Value::Dict());
   task_environment_.RunUntilIdle();
 
   network::NetworkService* network_service =
@@ -396,7 +398,8 @@ TEST_F(PKIMetadataComponentInstallerTest, InstallComponentUpdatesCTConfig) {
 
   WriteCTConfigToFile();
   policy_->ComponentReady(base::Version("1.2.3.4"),
-                          component_install_dir_.GetPath(), base::Value());
+                          component_install_dir_.GetPath(),
+                          base::Value::Dict());
   task_environment_.RunUntilIdle();
 
   network::NetworkService* network_service =
@@ -412,7 +415,6 @@ TEST_F(PKIMetadataComponentInstallerTest, InstallComponentUpdatesCTConfig) {
   ASSERT_TRUE(base::Base64Decode(kLogSPKIBase64, &expected_public_key));
   EXPECT_EQ(logs.at(0)->public_key, expected_public_key);
   EXPECT_EQ(logs.at(0)->name, kLogName);
-  EXPECT_FALSE(logs.at(0)->operated_by_google);
   EXPECT_FALSE(logs.at(0)->disqualified_at);
   EXPECT_EQ(logs.at(0)->mmd, base::Seconds(kLogMMDSeconds));
   EXPECT_EQ(logs.at(0)->current_operator, kLogOperatorName);
@@ -420,7 +422,6 @@ TEST_F(PKIMetadataComponentInstallerTest, InstallComponentUpdatesCTConfig) {
   EXPECT_EQ(logs.at(1)->id, expected_log_id);
   EXPECT_EQ(logs.at(1)->public_key, expected_public_key);
   EXPECT_EQ(logs.at(1)->name, kGoogleLogName);
-  EXPECT_TRUE(logs.at(1)->operated_by_google);
   EXPECT_EQ(*logs.at(1)->disqualified_at,
             base::Time::UnixEpoch() + kGoogleLogDisqualificationDate);
   EXPECT_EQ(logs.at(1)->mmd, base::Seconds(kLogMMDSeconds));
@@ -443,14 +444,25 @@ TEST_F(PKIMetadataComponentInstallerTest, InstallComponentUpdatesCTConfig) {
   EXPECT_FALSE(cache->IsPopularSCT(std::vector<const uint8_t>{1, 2, 3, 4}));
 
   EXPECT_TRUE(network_service->is_ct_enforcement_enabled_for_testing());
+
+  cert_verifier::CertVerifierServiceFactoryImpl* cert_verifier_service_factory =
+      content::GetCertVerifierServiceFactoryForTesting();
+  ASSERT_TRUE(cert_verifier_service_factory);
+  const net::CertVerifyProc::ImplParams& impl_params =
+      cert_verifier_service_factory->get_impl_params();
+  ASSERT_EQ(impl_params.ct_logs.size(), 2u);
+  EXPECT_EQ(impl_params.ct_logs[0]->key_id(), expected_log_id);
+  EXPECT_EQ(impl_params.ct_logs[0]->description(), kLogName);
+  EXPECT_EQ(impl_params.ct_logs[1]->key_id(), expected_log_id);
+  EXPECT_EQ(impl_params.ct_logs[1]->description(), kGoogleLogName);
 }
 
 // Tests that installing the PKI Metadata component bails out if the CT proto is
 // invalid.
 TEST_F(PKIMetadataComponentInstallerTest, InstallComponentInvalidCTProto) {
-  // Initialize the network service.
+  // Initialize the network service and cert verifier service factory.
   content::GetNetworkService();
-  task_environment_.RunUntilIdle();
+  content::GetCertVerifierServiceFactory();
 
   // Write an invalid ct_config.pb.
   ASSERT_TRUE(component_install_dir_.CreateUniqueTempDir());
@@ -459,7 +471,8 @@ TEST_F(PKIMetadataComponentInstallerTest, InstallComponentInvalidCTProto) {
   ASSERT_TRUE(base::WriteFile(file_path, "mismatch"));
 
   policy_->ComponentReady(base::Version("1.2.3.4"),
-                          component_install_dir_.GetPath(), base::Value());
+                          component_install_dir_.GetPath(),
+                          base::Value::Dict());
   task_environment_.RunUntilIdle();
 
   network::NetworkService* network_service =
@@ -471,14 +484,22 @@ TEST_F(PKIMetadataComponentInstallerTest, InstallComponentInvalidCTProto) {
       network_service->log_list();
   EXPECT_EQ(logs.size(), 0u);
   EXPECT_TRUE(network_service->is_ct_enforcement_enabled_for_testing());
+
+  cert_verifier::CertVerifierServiceFactoryImpl* cert_verifier_service_factory =
+      content::GetCertVerifierServiceFactoryForTesting();
+  ASSERT_TRUE(cert_verifier_service_factory);
+  const net::CertVerifyProc::ImplParams& impl_params =
+      cert_verifier_service_factory->get_impl_params();
+  EXPECT_EQ(impl_params.ct_logs.size(), 0u);
 }
 
 // Tests that installing the PKI Metadata component does not update the CT log
 // list if its compatibility version exceeds the value supported.
 TEST_F(PKIMetadataComponentInstallerTest,
        InstallComponentIncompatibleCTVersion) {
-  // Initialize the network service.
+  // Initialize the network service and cert verifier service factory.
   content::GetNetworkService();
+  content::GetCertVerifierServiceFactory();
   task_environment_.RunUntilIdle();
 
   // Change the version to an unsupported values.
@@ -487,7 +508,8 @@ TEST_F(PKIMetadataComponentInstallerTest,
   WriteCTConfigToFile();
 
   policy_->ComponentReady(base::Version("1.2.3.4"),
-                          component_install_dir_.GetPath(), base::Value());
+                          component_install_dir_.GetPath(),
+                          base::Value::Dict());
   task_environment_.RunUntilIdle();
 
   network::NetworkService* network_service =
@@ -499,14 +521,23 @@ TEST_F(PKIMetadataComponentInstallerTest,
       network_service->log_list();
   EXPECT_EQ(logs.size(), 0u);
   EXPECT_TRUE(network_service->is_ct_enforcement_enabled_for_testing());
+
+  cert_verifier::CertVerifierServiceFactoryImpl* cert_verifier_service_factory =
+      content::GetCertVerifierServiceFactoryForTesting();
+  ASSERT_TRUE(cert_verifier_service_factory);
+  const net::CertVerifyProc::ImplParams& impl_params =
+      cert_verifier_service_factory->get_impl_params();
+  EXPECT_EQ(impl_params.ct_logs.size(), 0u);
 }
 
 // Tests that calling |ReconfigureAfterNetworkRestart| is a no-op if the
 // component has not been installed.
 TEST_F(PKIMetadataComponentInstallerTest, ReconfigureWhenNotInstalled) {
-  // Initialize the network service.
+  // Initialize the network service and cert verifier service factory.
   content::GetNetworkService();
+  content::GetCertVerifierServiceFactory();
   task_environment_.RunUntilIdle();
+
   PKIMetadataComponentInstallerService::GetInstance()
       ->ReconfigureAfterNetworkRestart();
 
@@ -517,6 +548,13 @@ TEST_F(PKIMetadataComponentInstallerTest, ReconfigureWhenNotInstalled) {
   const std::vector<network::mojom::CTLogInfoPtr>& logs =
       network_service->log_list();
   EXPECT_EQ(logs.size(), 0u);
+
+  cert_verifier::CertVerifierServiceFactoryImpl* cert_verifier_service_factory =
+      content::GetCertVerifierServiceFactoryForTesting();
+  ASSERT_TRUE(cert_verifier_service_factory);
+  const net::CertVerifyProc::ImplParams& impl_params =
+      cert_verifier_service_factory->get_impl_params();
+  EXPECT_EQ(impl_params.ct_logs.size(), 0u);
 }
 #endif  // BUILDFLAG(IS_CT_SUPPORTED)
 
@@ -524,18 +562,27 @@ class PKIMetadataComponentInstallerDisabledTest
     : public PKIMetadataComponentInstallerTest {
   void SetUp() override {
     scoped_feature_list_.InitWithFeatures(
-        /* enabled_features = */ {},
-        /* disabled_features = */ {certificate_transparency::features::
-                                       kCertificateTransparencyComponentUpdater,
-                                   features::kKeyPinningComponentUpdater});
+        /*enabled_features=*/{},
+        /*disabled_features=*/{
+            features::kCertificateTransparencyAskBeforeEnabling,
+            features::kKeyPinningComponentUpdater});
   }
 };
 
 // Tests that the PKI Metadata component does not get registered if both the CT
 // component updater and KP component updater features are disabled.
 TEST_F(PKIMetadataComponentInstallerDisabledTest,
-       DoNotRegisterIfFeatureDisabled) {
+       MaybeDoNotRegisterIfFeatureDisabled) {
+#if BUILDFLAG(CHROME_ROOT_STORE_SUPPORTED)
+  // If Chrome Root Store is supported on this build config, PKI metadata
+  // component will always be registered even if the other feature flags are
+  // disabled.
+  EXPECT_CALL(mock_component_update_, RegisterComponent)
+      .Times(1)
+      .WillOnce(testing::Return(true));
+#else
   EXPECT_CALL(mock_component_update_, RegisterComponent).Times(0);
+#endif
   component_updater::MaybeRegisterPKIMetadataComponent(&mock_component_update_);
   task_environment_.RunUntilIdle();
 }

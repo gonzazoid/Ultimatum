@@ -7,7 +7,8 @@
 
 #include <list>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 
 class Profile;
 
@@ -77,7 +78,7 @@ class LockScreenProfileCreator {
 
   // The lock screen profile created by this, set when the profile creation
   // finishes.
-  Profile* lock_screen_profile_ = nullptr;
+  raw_ptr<Profile> lock_screen_profile_ = nullptr;
 
   std::list<base::OnceClosure> create_profile_callbacks_;
 };

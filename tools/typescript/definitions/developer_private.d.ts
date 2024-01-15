@@ -59,6 +59,7 @@ declare global {
         EXTENSION_SERVICE_WORKER_BACKGROUND =
             'EXTENSION_SERVICE_WORKER_BACKGROUND',
         TAB_CONTENTS = 'TAB_CONTENTS',
+        EXTENSION_SIDE_PANEL = 'EXTENSION_SIDE_PANEL',
       }
 
       export enum ErrorType {
@@ -137,6 +138,7 @@ declare global {
         suspiciousInstall: boolean;
         corruptInstall: boolean;
         updateRequired: boolean;
+        publishedInStoreRequired: boolean;
         blockedByPolicy: boolean;
         reloading: boolean;
         custodianApprovalRequired: boolean;
@@ -166,6 +168,11 @@ declare global {
         ON_CLICK = 'ON_CLICK',
         ON_SPECIFIC_SITES = 'ON_SPECIFIC_SITES',
         ON_ALL_SITES = 'ON_ALL_SITES',
+      }
+
+      export interface  SafetyCheckStrings {
+        panelString?: string;
+        detailString?: string;
       }
 
       export interface ControlledInfo {
@@ -205,10 +212,12 @@ declare global {
       export interface Permissions {
         simplePermissions: chrome.developerPrivate.Permission[];
         runtimeHostPermissions?: RuntimeHostPermissions;
+        canAccessSiteData: boolean;
       }
 
       export interface ExtensionInfo {
         blacklistText?: string;
+        safetyCheckText?: SafetyCheckStrings;
         commands: Command[];
         controlledInfo?: ControlledInfo;
         dependentExtensions: DependentExtension[];
@@ -244,6 +253,8 @@ declare global {
         webStoreUrl: string;
         showSafeBrowsingAllowlistWarning: boolean;
         showAccessRequestsInToolbar: boolean;
+        acknowledgeSafetyCheckWarning: boolean;
+        pinnedToToolbar?: boolean;
       }
 
       export interface ProfileInfo {
@@ -261,6 +272,8 @@ declare global {
         errorCollection?: boolean;
         hostAccess?: HostAccess;
         showAccessRequestsInToolbar?: boolean;
+        acknowledgeSafetyCheckWarning?: boolean;
+        pinnedToToolbar?: boolean;
       }
 
       export interface ProfileConfigurationUpdate {
@@ -318,6 +331,8 @@ declare global {
         PERMISSIONS_CHANGED = 'PERMISSIONS_CHANGED',
         SERVICE_WORKER_STARTED = 'SERVICE_WORKER_STARTED',
         SERVICE_WORKER_STOPPED = 'SERVICE_WORKER_STOPPED',
+        CONFIGURATION_CHANGED = 'CONFIGURATION_CHANGED',
+        PINNED_ACTIONS_CHANGED = 'PINNED_ACTIONS_CHANGED',
       }
 
       export enum SiteSet {
@@ -412,69 +427,68 @@ declare global {
       export interface MatchingExtensionInfo {
         id: string;
         siteAccess: HostAccess;
+        canRequestAllSites: boolean;
+      }
+
+      export interface ExtensionSiteAccessUpdate {
+        id: string;
+        siteAccess: HostAccess;
       }
 
       type VoidCallback = () => void;
       type StringCallback = (s: string) => void;
 
-      export function addHostPermission(
-          extensionId: string, host: string, callback: VoidCallback): void;
-      export function autoUpdate(callback: VoidCallback): void;
-      export function choosePath(
-          selectType: SelectType, fileType: FileType,
-          callback: StringCallback): void;
+      export function addHostPermission(extensionId: string, host: string):
+          Promise<void>;
+      export function autoUpdate(): Promise<void>;
+      export function choosePath(selectType: SelectType, fileType: FileType):
+          Promise<string>;
       export function deleteExtensionErrors(
-          properties: DeleteExtensionErrorsProperties,
-          callback?: VoidCallback): void;
-      export function getExtensionsInfo(
-          options: GetExtensionsInfoOptions,
-          callback: (info: ExtensionInfo[]) => void): void;
-      export function getExtensionSize(id: string, callback: StringCallback):
-          void;
-      export function getProfileConfiguration(
-          callback: (info: ProfileInfo) => void): void;
-      export function installDroppedFile(callback?: VoidCallback): void;
-      export function loadUnpacked(
-          options: LoadUnpackedOptions,
-          callback: (error?: LoadError) => void): void;
+          properties: DeleteExtensionErrorsProperties): Promise<void>;
+      export function getExtensionsInfo(options: GetExtensionsInfoOptions):
+          Promise<ExtensionInfo[]>;
+      export function getExtensionSize(id: string): Promise<string>;
+      export function getProfileConfiguration(): Promise<ProfileInfo>;
+      export function installDroppedFile(): Promise<void>;
+      export function loadUnpacked(options: LoadUnpackedOptions):
+          Promise<LoadError|null>;
       export function notifyDragInstallInProgress(): void;
-      export function openDevTools(
-          properties: OpenDevToolsProperties, callback?: VoidCallback): void;
+      export function openDevTools(properties: OpenDevToolsProperties):
+          Promise<void>;
       export function packDirectory(
-          path: string, privateKeyPath: string, flags?: number,
-          callback?: (response: PackDirectoryResponse) => void): void;
-      export function reload(
-          extensionId: string, options?: ReloadOptions,
-          callback?: (error?: LoadError) => void): void;
-      export function removeHostPermission(
-          extensionId: string, host: string, callback: VoidCallback): void;
-      export function repairExtension(
-          extensionId: string, callback?: VoidCallback): void;
-      export function requestFileSource(
-          properties: RequestFileSourceProperties,
-          callback: (response: RequestFileSourceResponse) => void): void;
-      export function setShortcutHandlingSuspended(
-          isSuspended: boolean, callback?: VoidCallback): void;
-      export function showOptions(extensionId: string, callback?: VoidCallback):
-          void;
-      export function showPath(extensionId: string, callback?: VoidCallback):
-          void;
-      export function updateExtensionCommand(
-          update: ExtensionCommandUpdate, callback?: VoidCallback): void;
+          path: string, privateKeyPath: string,
+          flags?: number): Promise<PackDirectoryResponse>;
+      export function reload(extensionId: string, options?: ReloadOptions):
+          Promise<LoadError|null>;
+      export function removeHostPermission(extensionId: string, host: string):
+          Promise<void>;
+      export function removeMultipleExtensions(extensionIds: string[]):
+          Promise<void>;
+      export function repairExtension(extensionId: string): Promise<void>;
+      export function requestFileSource(properties:
+                                            RequestFileSourceProperties):
+          Promise<RequestFileSourceResponse>;
+      export function setShortcutHandlingSuspended(isSuspended: boolean):
+          Promise<void>;
+      export function showOptions(extensionId: string): Promise<void>;
+      export function showPath(extensionId: string): Promise<void>;
+      export function updateExtensionCommand(update: ExtensionCommandUpdate):
+          Promise<void>;
       export function updateExtensionConfiguration(
-          update: ExtensionConfigurationUpdate, callback?: VoidCallback): void;
+          update: ExtensionConfigurationUpdate): Promise<void>;
       export function updateProfileConfiguration(
-          update: ProfileConfigurationUpdate, callback?: VoidCallback): void;
-      export function getUserSiteSettings(
-          callback: (result: UserSiteSettings) => void): void;
-      export function addUserSpecifiedSites(
-          options: UserSiteSettingsOptions, callback?: VoidCallback): void;
+          update: ProfileConfigurationUpdate): Promise<void>;
+      export function getUserSiteSettings(): Promise<UserSiteSettings>;
+      export function addUserSpecifiedSites(options: UserSiteSettingsOptions):
+          Promise<void>;
       export function removeUserSpecifiedSites(
-          options: UserSiteSettingsOptions, callback?: VoidCallback): void;
-      export function getUserAndExtensionSitesByEtld(
-          callback: (result: SiteGroup[]) => void): void;
+          options: UserSiteSettingsOptions): Promise<void>;
+      export function getUserAndExtensionSitesByEtld(): Promise<SiteGroup[]>;
       export function getMatchingExtensionsForSite(site: string):
           Promise<MatchingExtensionInfo[]>;
+      export function updateSiteAccess(
+          site: string, updates: ExtensionSiteAccessUpdate[]): Promise<void>;
+      export function dismissSafetyHubExtensionsMenuNotification(): void;
 
       export const onItemStateChanged: ChromeEvent<(data: EventData) => void>;
       export const onProfileStateChanged:

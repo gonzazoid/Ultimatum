@@ -5,19 +5,17 @@
 #import "ios/chrome/browser/ui/badges/badge_view_controller.h"
 
 #import "base/check.h"
-#import "ios/chrome/browser/infobars/badge_state.h"
+#import "ios/chrome/browser/infobars/model/badge_state.h"
+#import "ios/chrome/browser/infobars/model/infobar_ios.h"
+#import "ios/chrome/browser/shared/ui/util/layout_guide_names.h"
+#import "ios/chrome/browser/shared/ui/util/util_swift.h"
 #import "ios/chrome/browser/ui/badges/badge_button.h"
 #import "ios/chrome/browser/ui/badges/badge_button_factory.h"
 #import "ios/chrome/browser/ui/badges/badge_constants.h"
 #import "ios/chrome/browser/ui/badges/badge_item.h"
-#import "ios/chrome/browser/ui/util/named_guide.h"
 #import "ios/chrome/common/material_timing.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -88,25 +86,29 @@ const CGFloat kUpdateDisplayedBadgeAnimationDamping = 0.85;
   self.displayedBadge = nil;
   self.fullScreenBadge = nil;
   if (displayedBadgeItem) {
-    BadgeButton* newButton = [self.buttonFactory
-        badgeButtonForBadgeType:displayedBadgeItem.badgeType];
+    BadgeButton* newButton =
+        [self.buttonFactory badgeButtonForBadgeType:displayedBadgeItem.badgeType
+                                       usingInfoBar:nil];
     [newButton setAccepted:displayedBadgeItem.badgeState & BadgeStateAccepted
                   animated:NO];
     self.displayedBadge = newButton;
   }
   if (fullscreenBadgeItem) {
     self.fullScreenBadge = [self.buttonFactory
-        badgeButtonForBadgeType:fullscreenBadgeItem.badgeType];
+        badgeButtonForBadgeType:fullscreenBadgeItem.badgeType
+                   usingInfoBar:nil];
   }
 }
 
 - (void)updateDisplayedBadge:(id<BadgeItem>)displayedBadgeItem
-             fullScreenBadge:(id<BadgeItem>)fullscreenBadgeItem {
+             fullScreenBadge:(id<BadgeItem>)fullscreenBadgeItem
+                     infoBar:(InfoBarIOS*)infoBar {
   if (fullscreenBadgeItem) {
     if (!self.fullScreenBadge ||
         self.fullScreenBadge.badgeType != fullscreenBadgeItem.badgeType) {
       BadgeButton* newButton = [self.buttonFactory
-          badgeButtonForBadgeType:fullscreenBadgeItem.badgeType];
+          badgeButtonForBadgeType:fullscreenBadgeItem.badgeType
+                     usingInfoBar:nil];
       self.fullScreenBadge = newButton;
     }
   } else {
@@ -121,7 +123,8 @@ const CGFloat kUpdateDisplayedBadgeAnimationDamping = 0.85;
              animated:YES];
     } else {
       BadgeButton* newButton = [self.buttonFactory
-          badgeButtonForBadgeType:displayedBadgeItem.badgeType];
+          badgeButtonForBadgeType:displayedBadgeItem.badgeType
+                     usingInfoBar:infoBar];
       [newButton setAccepted:displayedBadgeItem.badgeState & BadgeStateAccepted
                     animated:NO];
       self.displayedBadge = newButton;
@@ -221,9 +224,6 @@ const CGFloat kUpdateDisplayedBadgeAnimationDamping = 0.85;
                      self.view.transform = CGAffineTransformIdentity;
                    }
                    completion:nil];
-  NamedGuide* guide = [NamedGuide guideWithName:kBadgeOverflowMenuGuide
-                                           view:_displayedBadge];
-  guide.constrainedView = _displayedBadge;
 }
 
 - (void)setFullScreenBadge:(BadgeButton*)fullScreenBadge {

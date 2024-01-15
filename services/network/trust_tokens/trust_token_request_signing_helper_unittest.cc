@@ -7,6 +7,7 @@
 #include <iterator>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/base64.h"
@@ -18,7 +19,6 @@
 #include "base/strings/stringprintf.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
-#include "base/time/time_to_iso8601.h"
 #include "components/cbor/reader.h"
 #include "components/cbor/values.h"
 #include "components/cbor/writer.h"
@@ -67,7 +67,7 @@ MATCHER_P2(Header,
   return Matches(other_matcher)(header);
 }
 
-SuitableTrustTokenOrigin CreateSuitableOriginOrDie(base::StringPiece spec) {
+SuitableTrustTokenOrigin CreateSuitableOriginOrDie(std::string_view spec) {
   absl::optional<SuitableTrustTokenOrigin> maybe_origin =
       SuitableTrustTokenOrigin::Create(GURL(spec));
   CHECK(maybe_origin) << "Failed to create a SuitableTrustTokenOrigin!";
@@ -75,7 +75,7 @@ SuitableTrustTokenOrigin CreateSuitableOriginOrDie(base::StringPiece spec) {
 }
 
 bool ExtractRedemptionRecordsFromHeader(
-    base::StringPiece sec_redemption_record_header,
+    std::string_view sec_redemption_record_header,
     std::map<SuitableTrustTokenOrigin, std::string>*
         redemption_records_per_issuer_out,
     std::string* error_out) {
@@ -117,7 +117,7 @@ bool ExtractRedemptionRecordsFromHeader(
 
     const net::structured_headers::Item& redemption_record_item =
         params_for_issuer.front().second;
-    if (!redemption_record_item.is_byte_sequence()) {
+    if (!redemption_record_item.is_string()) {
       *error_out = "Unexpected parameter value type for RR header list item";
       return false;
     }
@@ -160,7 +160,8 @@ TEST_F(TrustTokenRequestSigningHelperTest, ProvidesMajorVersionHeader) {
   EXPECT_EQ(result, mojom::TrustTokenOperationStatus::kOk);
   // This test's expectation should change whenever the supported Trust Tokens
   // major version changes.
-  EXPECT_THAT(*my_request, Header("Sec-Trust-Token-Version", "TrustTokenV3"));
+  EXPECT_THAT(*my_request, Header("Sec-Private-State-Token-Crypto-Version",
+                                  "PrivateStateTokenV3"));
 }
 
 // Test RR attachment:

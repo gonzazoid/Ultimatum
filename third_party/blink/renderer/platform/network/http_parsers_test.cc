@@ -4,21 +4,30 @@
 
 #include "third_party/blink/renderer/platform/network/http_parsers.h"
 
+#include "base/strings/string_piece.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
+#include "net/base/features.h"
+#include "services/network/public/cpp/features.h"
 #include "services/network/public/mojom/content_security_policy.mojom-blink-forward.h"
 #include "services/network/public/mojom/content_security_policy.mojom-blink.h"
 #include "services/network/public/mojom/parsed_headers.mojom-blink.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_response.h"
+#include "third_party/blink/renderer/platform/network/http_names.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
+#include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
+#include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace blink {
 
 TEST(HTTPParsersTest, ParseCacheControl) {
   CacheControlHeader header;
 
-  header = ParseCacheControlDirectives("no-cache", AtomicString());
+  header =
+      ParseCacheControlDirectives(AtomicString("no-cache"), AtomicString());
   EXPECT_TRUE(header.parsed);
   EXPECT_TRUE(header.contains_no_cache);
   EXPECT_FALSE(header.contains_no_store);
@@ -26,7 +35,79 @@ TEST(HTTPParsersTest, ParseCacheControl) {
   EXPECT_EQ(absl::nullopt, header.max_age);
   EXPECT_EQ(absl::nullopt, header.stale_while_revalidate);
 
-  header = ParseCacheControlDirectives("no-cache no-store", AtomicString());
+  header = ParseCacheControlDirectives(AtomicString("no-cache no-store"),
+                                       AtomicString());
+  EXPECT_TRUE(header.parsed);
+  EXPECT_TRUE(header.contains_no_cache);
+  EXPECT_FALSE(header.contains_no_store);
+  EXPECT_FALSE(header.contains_must_revalidate);
+  EXPECT_EQ(absl::nullopt, header.max_age);
+  EXPECT_EQ(absl::nullopt, header.stale_while_revalidate);
+
+  header = ParseCacheControlDirectives(AtomicString("no-store must-revalidate"),
+                                       AtomicString());
+  EXPECT_TRUE(header.parsed);
+  EXPECT_FALSE(header.contains_no_cache);
+  EXPECT_TRUE(header.contains_no_store);
+  EXPECT_FALSE(header.contains_must_revalidate);
+  EXPECT_EQ(absl::nullopt, header.max_age);
+  EXPECT_EQ(absl::nullopt, header.stale_while_revalidate);
+
+  header =
+      ParseCacheControlDirectives(AtomicString("max-age=0"), AtomicString());
+  EXPECT_TRUE(header.parsed);
+  EXPECT_FALSE(header.contains_no_cache);
+  EXPECT_FALSE(header.contains_no_store);
+  EXPECT_FALSE(header.contains_must_revalidate);
+  EXPECT_EQ(base::TimeDelta(), header.max_age.value());
+  EXPECT_EQ(absl::nullopt, header.stale_while_revalidate);
+
+  header = ParseCacheControlDirectives(AtomicString("max-age"), AtomicString());
+  EXPECT_TRUE(header.parsed);
+  EXPECT_FALSE(header.contains_no_cache);
+  EXPECT_FALSE(header.contains_no_store);
+  EXPECT_FALSE(header.contains_must_revalidate);
+  EXPECT_EQ(absl::nullopt, header.max_age);
+  EXPECT_EQ(absl::nullopt, header.stale_while_revalidate);
+
+  header = ParseCacheControlDirectives(AtomicString("max-age=0 no-cache"),
+                                       AtomicString());
+  EXPECT_TRUE(header.parsed);
+  EXPECT_FALSE(header.contains_no_cache);
+  EXPECT_FALSE(header.contains_no_store);
+  EXPECT_FALSE(header.contains_must_revalidate);
+  EXPECT_EQ(base::TimeDelta(), header.max_age.value());
+  EXPECT_EQ(absl::nullopt, header.stale_while_revalidate);
+
+  header =
+      ParseCacheControlDirectives(AtomicString("no-cache=foo"), AtomicString());
+  EXPECT_TRUE(header.parsed);
+  EXPECT_FALSE(header.contains_no_cache);
+  EXPECT_FALSE(header.contains_no_store);
+  EXPECT_FALSE(header.contains_must_revalidate);
+  EXPECT_EQ(absl::nullopt, header.max_age);
+  EXPECT_EQ(absl::nullopt, header.stale_while_revalidate);
+
+  header =
+      ParseCacheControlDirectives(AtomicString("nonsense"), AtomicString());
+  EXPECT_TRUE(header.parsed);
+  EXPECT_FALSE(header.contains_no_cache);
+  EXPECT_FALSE(header.contains_no_store);
+  EXPECT_FALSE(header.contains_must_revalidate);
+  EXPECT_EQ(absl::nullopt, header.max_age);
+  EXPECT_EQ(absl::nullopt, header.stale_while_revalidate);
+
+  header = ParseCacheControlDirectives(AtomicString("\rno-cache\n\t\v\0\b"),
+                                       AtomicString());
+  EXPECT_TRUE(header.parsed);
+  EXPECT_TRUE(header.contains_no_cache);
+  EXPECT_FALSE(header.contains_no_store);
+  EXPECT_FALSE(header.contains_must_revalidate);
+  EXPECT_EQ(absl::nullopt, header.max_age);
+  EXPECT_EQ(absl::nullopt, header.stale_while_revalidate);
+
+  header = ParseCacheControlDirectives(AtomicString("      no-cache       "),
+                                       AtomicString());
   EXPECT_TRUE(header.parsed);
   EXPECT_TRUE(header.contains_no_cache);
   EXPECT_FALSE(header.contains_no_store);
@@ -35,71 +116,7 @@ TEST(HTTPParsersTest, ParseCacheControl) {
   EXPECT_EQ(absl::nullopt, header.stale_while_revalidate);
 
   header =
-      ParseCacheControlDirectives("no-store must-revalidate", AtomicString());
-  EXPECT_TRUE(header.parsed);
-  EXPECT_FALSE(header.contains_no_cache);
-  EXPECT_TRUE(header.contains_no_store);
-  EXPECT_FALSE(header.contains_must_revalidate);
-  EXPECT_EQ(absl::nullopt, header.max_age);
-  EXPECT_EQ(absl::nullopt, header.stale_while_revalidate);
-
-  header = ParseCacheControlDirectives("max-age=0", AtomicString());
-  EXPECT_TRUE(header.parsed);
-  EXPECT_FALSE(header.contains_no_cache);
-  EXPECT_FALSE(header.contains_no_store);
-  EXPECT_FALSE(header.contains_must_revalidate);
-  EXPECT_EQ(base::TimeDelta(), header.max_age.value());
-  EXPECT_EQ(absl::nullopt, header.stale_while_revalidate);
-
-  header = ParseCacheControlDirectives("max-age", AtomicString());
-  EXPECT_TRUE(header.parsed);
-  EXPECT_FALSE(header.contains_no_cache);
-  EXPECT_FALSE(header.contains_no_store);
-  EXPECT_FALSE(header.contains_must_revalidate);
-  EXPECT_EQ(absl::nullopt, header.max_age);
-  EXPECT_EQ(absl::nullopt, header.stale_while_revalidate);
-
-  header = ParseCacheControlDirectives("max-age=0 no-cache", AtomicString());
-  EXPECT_TRUE(header.parsed);
-  EXPECT_FALSE(header.contains_no_cache);
-  EXPECT_FALSE(header.contains_no_store);
-  EXPECT_FALSE(header.contains_must_revalidate);
-  EXPECT_EQ(base::TimeDelta(), header.max_age.value());
-  EXPECT_EQ(absl::nullopt, header.stale_while_revalidate);
-
-  header = ParseCacheControlDirectives("no-cache=foo", AtomicString());
-  EXPECT_TRUE(header.parsed);
-  EXPECT_FALSE(header.contains_no_cache);
-  EXPECT_FALSE(header.contains_no_store);
-  EXPECT_FALSE(header.contains_must_revalidate);
-  EXPECT_EQ(absl::nullopt, header.max_age);
-  EXPECT_EQ(absl::nullopt, header.stale_while_revalidate);
-
-  header = ParseCacheControlDirectives("nonsense", AtomicString());
-  EXPECT_TRUE(header.parsed);
-  EXPECT_FALSE(header.contains_no_cache);
-  EXPECT_FALSE(header.contains_no_store);
-  EXPECT_FALSE(header.contains_must_revalidate);
-  EXPECT_EQ(absl::nullopt, header.max_age);
-  EXPECT_EQ(absl::nullopt, header.stale_while_revalidate);
-
-  header = ParseCacheControlDirectives("\rno-cache\n\t\v\0\b", AtomicString());
-  EXPECT_TRUE(header.parsed);
-  EXPECT_TRUE(header.contains_no_cache);
-  EXPECT_FALSE(header.contains_no_store);
-  EXPECT_FALSE(header.contains_must_revalidate);
-  EXPECT_EQ(absl::nullopt, header.max_age);
-  EXPECT_EQ(absl::nullopt, header.stale_while_revalidate);
-
-  header = ParseCacheControlDirectives("      no-cache       ", AtomicString());
-  EXPECT_TRUE(header.parsed);
-  EXPECT_TRUE(header.contains_no_cache);
-  EXPECT_FALSE(header.contains_no_store);
-  EXPECT_FALSE(header.contains_must_revalidate);
-  EXPECT_EQ(absl::nullopt, header.max_age);
-  EXPECT_EQ(absl::nullopt, header.stale_while_revalidate);
-
-  header = ParseCacheControlDirectives(AtomicString(), "no-cache");
+      ParseCacheControlDirectives(AtomicString(), AtomicString("no-cache"));
   EXPECT_TRUE(header.parsed);
   EXPECT_TRUE(header.contains_no_cache);
   EXPECT_FALSE(header.contains_no_store);
@@ -108,7 +125,8 @@ TEST(HTTPParsersTest, ParseCacheControl) {
   EXPECT_EQ(absl::nullopt, header.stale_while_revalidate);
 
   header = ParseCacheControlDirectives(
-      "stale-while-revalidate=2,stale-while-revalidate=3", AtomicString());
+      AtomicString("stale-while-revalidate=2,stale-while-revalidate=3"),
+      AtomicString());
   EXPECT_TRUE(header.parsed);
   EXPECT_FALSE(header.contains_no_cache);
   EXPECT_FALSE(header.contains_no_store);
@@ -319,10 +337,11 @@ TEST(HTTPParsersTest, ParseMultipartHeadersResult) {
 
 TEST(HTTPParsersTest, ParseMultipartHeaders) {
   ResourceResponse response;
-  response.AddHttpHeaderField("foo", "bar");
-  response.AddHttpHeaderField("range", "piyo");
-  response.AddHttpHeaderField("content-length", "999");
-  response.AddHttpHeaderField("set-cookie", "a=1");
+  response.AddHttpHeaderField(AtomicString("foo"), AtomicString("bar"));
+  response.AddHttpHeaderField(http_names::kLowerRange, AtomicString("piyo"));
+  response.AddHttpHeaderField(http_names::kLowerContentLength,
+                              AtomicString("999"));
+  response.AddHttpHeaderField(http_names::kLowerSetCookie, AtomicString("a=1"));
 
   const char kData[] =
       "content-type: image/png\n"
@@ -336,11 +355,12 @@ TEST(HTTPParsersTest, ParseMultipartHeaders) {
 
   EXPECT_TRUE(result);
   EXPECT_EQ(strlen(kData), end);
-  EXPECT_EQ("image/png", response.HttpHeaderField("content-type"));
-  EXPECT_EQ("10", response.HttpHeaderField("content-length"));
-  EXPECT_EQ("bar", response.HttpHeaderField("foo"));
-  EXPECT_EQ(AtomicString(), response.HttpHeaderField("range"));
-  EXPECT_EQ("x=2, y=3", response.HttpHeaderField("set-cookie"));
+  EXPECT_EQ("image/png",
+            response.HttpHeaderField(http_names::kLowerContentType));
+  EXPECT_EQ("10", response.HttpHeaderField(http_names::kLowerContentLength));
+  EXPECT_EQ("bar", response.HttpHeaderField(AtomicString("foo")));
+  EXPECT_EQ(AtomicString(), response.HttpHeaderField(http_names::kLowerRange));
+  EXPECT_EQ("x=2, y=3", response.HttpHeaderField(http_names::kLowerSetCookie));
 }
 
 TEST(HTTPParsersTest, ParseMultipartHeadersContentCharset) {
@@ -353,7 +373,7 @@ TEST(HTTPParsersTest, ParseMultipartHeadersContentCharset) {
   EXPECT_TRUE(result);
   EXPECT_EQ(strlen(kData), end);
   EXPECT_EQ("text/html; charset=utf-8",
-            response.HttpHeaderField("content-type"));
+            response.HttpHeaderField(http_names::kLowerContentType));
   EXPECT_EQ("utf-8", response.TextEncodingName());
 }
 
@@ -850,5 +870,177 @@ TEST(HTTPParsersTest, ParseContentSecurityPoliciesSourceBasic) {
     EXPECT_FALSE(source->is_port_wildcard);
   }
 }
+
+class NoVarySearchPrefetchDisabledTest
+    : public ::testing::Test,
+      public ::testing::WithParamInterface<base::StringPiece> {
+ public:
+  NoVarySearchPrefetchDisabledTest() {
+    scoped_feature_list_.InitAndDisableFeature(
+        network::features::kPrefetchNoVarySearch);
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+TEST_P(NoVarySearchPrefetchDisabledTest, ParsingNVSReturnsDefaultURLVariance) {
+  const auto parsed_headers =
+      ParseHeaders(WTF::String::FromUTF8(GetParam()), KURL("https://a.com"));
+
+  ASSERT_TRUE(parsed_headers);
+  EXPECT_FALSE(parsed_headers->no_vary_search_with_parse_error);
+}
+
+constexpr base::StringPiece no_vary_search_prefetch_disabled_data[] = {
+    // No No-Vary-Search header.
+    "HTTP/1.1 200 OK\r\n"
+    "Set-Cookie: a\r\n"
+    "Set-Cookie: b\r\n\r\n",
+    // No-Vary-Search header present.
+    "HTTP/1.1 200 OK\r\n"
+    R"(No-Vary-Search: params=("a"))"
+    "\r\n\r\n",
+};
+
+INSTANTIATE_TEST_SUITE_P(
+    NoVarySearchPrefetchDisabledTest,
+    NoVarySearchPrefetchDisabledTest,
+    testing::ValuesIn(no_vary_search_prefetch_disabled_data));
+
+TEST(NoVarySearchPrefetchEnabledTest, ParsingNVSReturnsDefaultURLVariance) {
+  base::test::ScopedFeatureList feature_list(
+      network::features::kPrefetchNoVarySearch);
+  const base::StringPiece headers =
+      "HTTP/1.1 200 OK\r\n"
+      "Set-Cookie: a\r\n"
+      "Set-Cookie: b\r\n\r\n";
+  const auto parsed_headers =
+      ParseHeaders(WTF::String::FromUTF8(headers), KURL("https://a.com"));
+
+  ASSERT_TRUE(parsed_headers);
+  ASSERT_TRUE(parsed_headers->no_vary_search_with_parse_error);
+  ASSERT_TRUE(
+      parsed_headers->no_vary_search_with_parse_error->is_parse_error());
+  EXPECT_EQ(network::mojom::NoVarySearchParseError::kOk,
+            parsed_headers->no_vary_search_with_parse_error->get_parse_error());
+}
+
+struct NoVarySearchTestData {
+  const char* raw_headers;
+  const Vector<String> expected_no_vary_params;
+  const Vector<String> expected_vary_params;
+  const bool expected_vary_on_key_order;
+  const bool expected_vary_by_default;
+};
+
+class NoVarySearchPrefetchEnabledTest
+    : public ::testing::Test,
+      public ::testing::WithParamInterface<NoVarySearchTestData> {
+ public:
+  NoVarySearchPrefetchEnabledTest() {
+    feature_list_.InitAndEnableFeature(
+        network::features::kPrefetchNoVarySearch);
+  }
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+};
+
+TEST_P(NoVarySearchPrefetchEnabledTest, ParsingSuccess) {
+  const auto& test_data = GetParam();
+  const auto parsed_headers =
+      ParseHeaders(test_data.raw_headers, KURL("https://a.com"));
+
+  ASSERT_TRUE(parsed_headers);
+  ASSERT_TRUE(parsed_headers->no_vary_search_with_parse_error);
+  ASSERT_TRUE(
+      parsed_headers->no_vary_search_with_parse_error->is_no_vary_search());
+  const auto& no_vary_search =
+      parsed_headers->no_vary_search_with_parse_error->get_no_vary_search();
+  ASSERT_TRUE(no_vary_search->search_variance);
+  if (test_data.expected_vary_by_default) {
+    EXPECT_THAT(no_vary_search->search_variance->get_no_vary_params(),
+                test_data.expected_no_vary_params);
+  } else {
+    EXPECT_THAT(no_vary_search->search_variance->get_vary_params(),
+                test_data.expected_vary_params);
+  }
+  EXPECT_EQ(no_vary_search->vary_on_key_order,
+            test_data.expected_vary_on_key_order);
+}
+
+TEST(NoVarySearchHeaderValueParsingTest, ParsingSuccessForParseNoVarySearch) {
+  const auto no_vary_search_with_parse_error =
+      blink::ParseNoVarySearch(R"(params=("a"))");
+
+  ASSERT_TRUE(no_vary_search_with_parse_error);
+  ASSERT_TRUE(no_vary_search_with_parse_error->is_no_vary_search());
+  ASSERT_TRUE(
+      no_vary_search_with_parse_error->get_no_vary_search()->search_variance);
+  EXPECT_THAT(no_vary_search_with_parse_error->get_no_vary_search()
+                  ->search_variance->get_no_vary_params(),
+              Vector<String>({"a"}));
+  EXPECT_TRUE(
+      no_vary_search_with_parse_error->get_no_vary_search()->vary_on_key_order);
+}
+
+TEST(NoVarySearchHeaderValueParsingTest, ParsingFailureForParseNoVarySearch) {
+  const auto no_vary_search_with_parse_error =
+      blink::ParseNoVarySearch(R"(params="a")");
+
+  ASSERT_TRUE(no_vary_search_with_parse_error);
+  EXPECT_FALSE(no_vary_search_with_parse_error->is_no_vary_search());
+}
+
+Vector<NoVarySearchTestData> GetNoVarySearchParsingSuccessTestData() {
+  static Vector<NoVarySearchTestData> test_data = {
+      // params set to a list of strings with one element.
+      {
+          "HTTP/1.1 200 OK\r\n"
+          R"(No-Vary-Search: params=("a"))"
+          "\r\n\r\n",             // raw_headers
+          Vector<String>({"a"}),  // expected_no_vary_params
+          {},                     // expected_vary_params
+          true,                   // expected_vary_on_key_order
+          true                    // expected_vary_by_default
+      },
+      // params set to true.
+      {
+          "HTTP/1.1 200 OK\r\n"
+          "No-Vary-Search: params\r\n\r\n",  // raw_headers
+          {},                                // expected_no_vary_params
+          {},                                // expected_vary_params
+          true,                              // expected_vary_on_key_order
+          false                              // expected_vary_by_default
+      },
+      // Vary on one search param.
+      {
+          "HTTP/1.1 200 OK\r\n"
+          "No-Vary-Search: params\r\n"
+          R"(No-Vary-Search: except=("a"))"
+          "\r\n\r\n",             // raw_headers
+          {},                     // expected_no_vary_params
+          Vector<String>({"a"}),  // expected_vary_params
+          true,                   // expected_vary_on_key_order
+          false                   // expected_vary_by_default
+      },
+      // Don't vary on search params order.
+      {
+          "HTTP/1.1 200 OK\r\n"
+          "No-Vary-Search: key-order\r\n\r\n",  // raw_headers
+          {},                                   // expected_no_vary_params
+          {},                                   // expected_vary_params
+          false,                                // expected_vary_on_key_order
+          true                                  // expected_vary_by_default
+      },
+  };
+  return test_data;
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    NoVarySearchPrefetchEnabledTest,
+    NoVarySearchPrefetchEnabledTest,
+    testing::ValuesIn(GetNoVarySearchParsingSuccessTestData()));
 
 }  // namespace blink

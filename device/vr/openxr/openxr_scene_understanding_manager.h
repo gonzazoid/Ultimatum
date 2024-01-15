@@ -5,15 +5,18 @@
 #define DEVICE_VR_OPENXR_OPENXR_SCENE_UNDERSTANDING_MANAGER_H_
 
 #include <map>
+#include "base/memory/raw_ref.h"
 #include "base/numerics/checked_math.h"
 #include "base/numerics/math_constants.h"
 #include "device/vr/openxr/openxr_scene_observer.h"
-#include "device/vr/openxr/openxr_util.h"
 #include "device/vr/public/mojom/pose.h"
 #include "device/vr/public/mojom/vr_service.mojom.h"
 #include "device/vr/util/hit_test_subscription_data.h"
+#include "third_party/openxr/src/include/openxr/openxr.h"
 
 namespace device {
+
+class OpenXrExtensionHelper;
 
 class OpenXRSceneUnderstandingManager {
  public:
@@ -88,7 +91,7 @@ class OpenXRSceneUnderstandingManager {
                                             const gfx::Point3F& plane_origin,
                                             const gfx::Vector3dF& plane_normal);
 
-  const OpenXrExtensionHelper& extension_helper_;
+  const raw_ref<const OpenXrExtensionHelper> extension_helper_;
   XrSession session_;
   XrSpace mojo_space_;
 

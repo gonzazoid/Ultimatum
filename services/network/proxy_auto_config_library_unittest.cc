@@ -7,17 +7,19 @@
 #include <algorithm>
 #include <deque>
 #include <memory>
+#include <string_view>
 
 #include "base/barrier_closure.h"
 #include "base/containers/circular_deque.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -92,7 +94,7 @@ void VerifyActualMyIpAddresses(const net::IPAddressList& test_list) {
     EXPECT_EQ(1u, candidates.count(ip));
 }
 
-net::IPAddress CreateIPAddress(base::StringPiece literal) {
+net::IPAddress CreateIPAddress(std::string_view literal) {
   net::IPAddress result;
   if (!result.AssignFromIPLiteral(literal)) {
     ADD_FAILURE() << "Failed parsing IP: " << literal;
@@ -105,7 +107,7 @@ class MockHostResolverProc : public net::HostResolverProc {
  public:
   MockHostResolverProc() : HostResolverProc(nullptr) {}
 
-  void SetDnsResult(const std::vector<base::StringPiece>& ip_literals) {
+  void SetDnsResult(const std::vector<std::string_view>& ip_literals) {
     result_.clear();
     for (const auto& ip : ip_literals)
       result_.push_back(net::IPEndPoint(CreateIPAddress(ip), 8080));
@@ -181,6 +183,10 @@ class MockUDPSocket : public net::DatagramClientSocket {
   }
   int SetDoNotFragment() override {
     ADD_FAILURE() << "Called SetDoNotFragment()";
+    return net::ERR_UNEXPECTED;
+  }
+  int SetRecvEcn() override {
+    ADD_FAILURE() << "Called SetRecvEcn()";
     return net::ERR_UNEXPECTED;
   }
   void SetMsgConfirm(bool confirm) override {
@@ -262,7 +268,7 @@ class MockUDPSocket : public net::DatagramClientSocket {
   net::IPAddress local_ip_;
   net::Error connect_error_;
   bool connect_async_ = false;
-  base::OnceClosure* connect_callback_;
+  raw_ptr<base::OnceClosure> connect_callback_;
 };
 
 class MockSocketFactory : public net::ClientSocketFactory {
@@ -270,8 +276,8 @@ class MockSocketFactory : public net::ClientSocketFactory {
   MockSocketFactory() = default;
 
   // Connect successes and failures that complete asynchronously
-  void AddUDPConnectSuccess(base::StringPiece peer_ip_literal,
-                            base::StringPiece local_ip_literal,
+  void AddUDPConnectSuccess(std::string_view peer_ip_literal,
+                            std::string_view local_ip_literal,
                             int connect_order = -1) {
     auto peer_ip = CreateIPAddress(peer_ip_literal);
     auto local_ip = CreateIPAddress(local_ip_literal);
@@ -283,7 +289,7 @@ class MockSocketFactory : public net::ClientSocketFactory {
                         connect_order);
   }
 
-  void AddUDPConnectFailure(base::StringPiece peer_ip, int connect_order = -1) {
+  void AddUDPConnectFailure(std::string_view peer_ip, int connect_order = -1) {
     AddUDPConnectResult(CreateIPAddress(peer_ip), net::IPAddress(),
                         net::ERR_ADDRESS_UNREACHABLE, connect_order);
   }
@@ -367,10 +373,10 @@ class MockSocketFactory : public net::ClientSocketFactory {
     udp_sockets_.push_back(std::move(socket));
   }
 
-  std::vector<std::unique_ptr<MockUDPSocket>> udp_sockets_;
   // Connection callbacks for the sockets, in order of async connection
-  // completion.
+  // completion. Entries in `udp_sockets_` may point to these.
   std::deque<base::OnceClosure> connect_callbacks_;
+  std::vector<std::unique_ptr<MockUDPSocket>> udp_sockets_;
   // Unit tests should always consume all of the mock UDP sockets unless this is
   // set to false.
   bool must_use_all_sockets_ = true;
@@ -420,7 +426,7 @@ class PacLibraryTest : public testing::Test {
     // If all the ConnectAsync() completion callbacks haven't been called yet
     // they may need to in the future.
     if (!finished) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(&PacLibraryTest::RunAsyncConnectCallbacksAndPostAgain,
                          base::Unretained(this)));
@@ -971,10 +977,10 @@ TEST_F(PacLibraryTest, DeleteMyIpAddressImpl) {
   impl_->SetSocketFactoryForTest(&factory_);
   impl_->SetHostResolverProcForTest(host_resolver_proc_);
   // Post a task that deletes `impl_`.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindLambdaForTesting([&]() { impl_.reset(); }));
   // Then post a task that runs the async connection callbacks.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           base::IgnoreResult(&MockSocketFactory::RunAsyncConnectCallbacks),
@@ -1014,7 +1020,7 @@ TEST_F(PacLibraryTest, ConnectMultipleRemotes) {
 
   // Connections happen asynchronously so post a task to respond to connection
   // requests.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindLambdaForTesting(
                      [&]() { factory_.RunAsyncConnectCallbacks(); }));
 
@@ -1051,13 +1057,13 @@ TEST_F(PacLibraryTest, ConnectMultipleRemotesAsync) {
   mojo::PendingRemote<proxy_resolver::mojom::HostResolverRequestClient> remote2;
   MockClient client2(remote2.InitWithNewPipeAndPassReceiver(), results_cb);
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindLambdaForTesting(
                      [&]() { impl_->AddRequest(std::move(remote2)); }));
 
   // Connections happen asynchronously so post a task to respond to connection
   // requests.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindLambdaForTesting(
                      [&]() { factory_.RunAsyncConnectCallbacks(); }));
 
@@ -1098,12 +1104,12 @@ TEST_F(PacLibraryTest, ConnectMultipleRemotesOneDisconnects) {
                                    base::BindOnce([]() { NOTREACHED(); }));
 
   // Post a task that deletes |client2|.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindLambdaForTesting([&]() { client2.reset(); }));
 
   // Connections happen asynchronously so post a task to respond to connection
   // requests.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindLambdaForTesting(
                      [&]() { factory_.RunAsyncConnectCallbacks(); }));
 
@@ -1153,16 +1159,16 @@ TEST_F(PacLibraryTest, ConnectMultipleRemotesButAllDisconnect) {
                                    base::BindOnce([]() { NOTREACHED(); }));
 
   // Post a task that deletes |client1|.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindLambdaForTesting([&]() { client1.reset(); }));
 
   // Post a task to respond to connection requests.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindLambdaForTesting(
                      [&]() { factory_.RunAsyncConnectCallbacks(); }));
 
   // Post a task that deletes |client2|.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindLambdaForTesting([&]() { client2.reset(); }));
 
   impl_->AddRequest(std::move(remote1));
@@ -1209,7 +1215,7 @@ TEST_F(PacLibraryTest, ConnectOneRemoteAndThenAnother) {
       remote2.InitWithNewPipeAndPassReceiver(), run_loop.QuitClosure());
 
   // Post a task that deletes |client1| but connects |client2|.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindLambdaForTesting([&]() {
         client1.reset();
         impl_->AddRequest(std::move(remote2));

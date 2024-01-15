@@ -32,7 +32,6 @@
 #include "net/http/http_util.h"
 
 using base::CaseInsensitiveCompareASCII;
-using base::ListValue;
 using base::Value;
 
 namespace helpers = extension_web_request_api_helpers;
@@ -89,9 +88,9 @@ base::LazyInstance<WebRequestConditionAttributeFactory>::Leaky
 // WebRequestConditionAttribute
 //
 
-WebRequestConditionAttribute::WebRequestConditionAttribute() {}
+WebRequestConditionAttribute::WebRequestConditionAttribute() = default;
 
-WebRequestConditionAttribute::~WebRequestConditionAttribute() {}
+WebRequestConditionAttribute::~WebRequestConditionAttribute() = default;
 
 bool WebRequestConditionAttribute::Equals(
     const WebRequestConditionAttribute* other) const {
@@ -406,7 +405,7 @@ HeaderMatcher::StringMatchTest::Create(const base::Value& data,
       new StringMatchTest(data.GetString(), type, case_sensitive));
 }
 
-HeaderMatcher::StringMatchTest::~StringMatchTest() {}
+HeaderMatcher::StringMatchTest::~StringMatchTest() = default;
 
 bool HeaderMatcher::StringMatchTest::Matches(
     const std::string& str) const {
@@ -424,7 +423,7 @@ bool HeaderMatcher::StringMatchTest::Matches(
                                     CaseInsensitiveCompareASCII<char>()) !=
                str.end();
       } else {
-        return str.find(data_) != std::string::npos;
+        return base::Contains(str, data_);
       }
   }
   // We never get past the "switch", but the compiler worries about no return.
@@ -448,7 +447,7 @@ HeaderMatcher::HeaderMatchTest::HeaderMatchTest(
     : name_match_(std::move(name_match)),
       value_match_(std::move(value_match)) {}
 
-HeaderMatcher::HeaderMatchTest::~HeaderMatchTest() {}
+HeaderMatcher::HeaderMatchTest::~HeaderMatchTest() = default;
 
 // static
 std::unique_ptr<const HeaderMatcher::HeaderMatchTest>
@@ -712,9 +711,9 @@ WebRequestConditionAttributeStages::
 
 namespace {
 
-// Reads strings stored in |value|, which is expected to be a ListValue, and
-// sets corresponding bits (see RequestStage) in |out_stages|. Returns true on
-// success, false otherwise.
+// Reads strings stored in |value|, which is expected to be a Value of type
+// LIST, and sets corresponding bits (see RequestStage) in |out_stages|.
+// Returns true on success, false otherwise.
 bool ParseListOfStages(const base::Value& value, int* out_stages) {
   if (!value.is_list())
     return false;

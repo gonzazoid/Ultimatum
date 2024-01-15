@@ -1,392 +1,319 @@
-// Copyright 2022 The Chromium Authors
+// Copyright 2023 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/fast_checkout/fast_checkout_capabilities_fetcher_impl.h"
 
-#include <memory>
-
-#include "base/memory/raw_ptr.h"
-#include "base/test/gmock_callback_support.h"
-#include "base/test/gmock_move_support.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/mock_callback.h"
-#include "base/test/scoped_feature_list.h"
-#include "chrome/browser/fast_checkout/fast_checkout_features.h"
-#include "components/autofill/core/common/signatures.h"
-#include "components/autofill_assistant/browser/public/autofill_assistant.h"
-#include "components/autofill_assistant/browser/public/mock_autofill_assistant.h"
-#include "net/http/http_status_code.h"
-#include "testing/gtest/include/gtest/gtest.h"
-#include "url/gurl.h"
-#include "url/origin.h"
+#include "base/test/task_environment.h"
+#include "chrome/browser/fast_checkout/fast_checkout_funnels.pb.h"
+#include "chrome/test/base/chrome_render_view_host_test_harness.h"
+#include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
+#include "services/network/test/test_url_loader_factory.h"
+#include "testing/gmock/include/gmock/gmock.h"
 
 namespace {
-
-using autofill_assistant::AutofillAssistant;
-using base::Bucket;
-using base::BucketsAre;
-using BundleCapabilitiesInformation =
-    autofill_assistant::AutofillAssistant::BundleCapabilitiesInformation;
-using CapabilitiesInfo =
-    autofill_assistant::AutofillAssistant::CapabilitiesInfo;
-using autofill_assistant::MockAutofillAssistant;
-using base::test::RunOnceCallback;
-using CacheStateForIsTriggerFormSupported =
-    FastCheckoutCapabilitiesFetcherImpl::CacheStateForIsTriggerFormSupported;
-using testing::_;
-
-constexpr uint32_t kHashPrefixSize = 10u;
-constexpr char kIntent[] = "CHROME_FAST_CHECKOUT";
+constexpr char kFastCheckoutFunnelsUrl[] =
+    "https://www.gstatic.com/autofill/fast_checkout/funnels.binarypb";
+constexpr char kInvalidResponseBody[] = "invalid response body";
+constexpr char kDomain[] = "https://www.example.com";
+constexpr char kDomainWithoutTriggerForm[] = "https://www.example3.com";
+constexpr char kUnsupportedDomain[] = "https://www.example2.com";
+constexpr char kInvalidDomain[] = "invaliddomain";
+constexpr char kNonHttpSDomain[] = "file://path/to/a/file";
+const auto kSupportedDomains =
+    std::vector<std::string>({kDomain, kInvalidDomain, kNonHttpSDomain});
+constexpr autofill::FormSignature kTriggerFormSignature =
+    autofill::FormSignature(1234567890UL);
+constexpr autofill::FormSignature kFillFormSignature =
+    autofill::FormSignature(9876543210UL);
 constexpr char kUmaKeyCacheStateIsTriggerFormSupported[] =
     "Autofill.FastCheckout.CapabilitiesFetcher."
     "CacheStateForIsTriggerFormSupported";
-constexpr char kUmaKeyHttpCode[] =
-    "Autofill.FastCheckout.CapabilitiesFetcher.HttpResponseCode";
+constexpr char kUmaKeyParsingResult[] =
+    "Autofill.FastCheckout.CapabilitiesFetcher.ParsingResult";
+constexpr char kUmaKeyResponseAndNetErrorCode[] =
+    "Autofill.FastCheckout.CapabilitiesFetcher.HttpResponseAndNetErrorCode";
 constexpr char kUmaKeyResponseTime[] =
     "Autofill.FastCheckout.CapabilitiesFetcher.ResponseTime";
 
-constexpr char kUrl1[] = "https://wwww.firstpage.com/";
-constexpr char kUrl2[] = "https://wwww.another-domain.co.uk/";
-
-constexpr autofill::FormSignature kFormSignature1{123ull};
-constexpr autofill::FormSignature kFormSignature2{45363456756ull};
-constexpr autofill::FormSignature kFormSignature3{6736345675456ull};
-
-class FastCheckoutCapabilitiesFetcherImplTest : public ::testing::Test {
- public:
-  FastCheckoutCapabilitiesFetcherImplTest() {
-    auto autofill_assistant = std::make_unique<MockAutofillAssistant>();
-    autofill_assistant_ = autofill_assistant.get();
-
-    fetcher_ = std::make_unique<FastCheckoutCapabilitiesFetcherImpl>(
-        std::move(autofill_assistant));
+std::string CreateBinaryProtoResponse() {
+  ::fast_checkout::FastCheckoutFunnels funnels;
+  for (const std::string& domain : kSupportedDomains) {
+    ::fast_checkout::FastCheckoutFunnels_FastCheckoutFunnel* funnel =
+        funnels.add_funnels();
+    funnel->add_domains(domain);
+    funnel->add_trigger(kTriggerFormSignature.value());
+    funnel->add_fill(kFillFormSignature.value());
   }
-  ~FastCheckoutCapabilitiesFetcherImplTest() override = default;
+  // Add one additional funnel with empty `trigger` field.
+  ::fast_checkout::FastCheckoutFunnels_FastCheckoutFunnel* funnel =
+      funnels.add_funnels();
+  funnel->add_domains(kDomainWithoutTriggerForm);
+  funnel->add_fill(kFillFormSignature.value());
+  return funnels.SerializeAsString();
+}
+}  // namespace
+
+class FastCheckoutCapabilitiesFetcherImplTest
+    : public ChromeRenderViewHostTestHarness {
+ public:
+  FastCheckoutCapabilitiesFetcherImplTest()
+      : ChromeRenderViewHostTestHarness(
+            base::test::TaskEnvironment::TimeSource::MOCK_TIME) {
+    origin_ = url::Origin::Create(GURL(kDomain));
+    unsupported_origin_ = url::Origin::Create(GURL(kUnsupportedDomain));
+    invalid_origin_ = url::Origin::Create(GURL(kInvalidDomain));
+    non_http_s_origin_ = url::Origin::Create(GURL(kNonHttpSDomain));
+    origin_without_trigger_form_ =
+        url::Origin::Create(GURL(kDomainWithoutTriggerForm));
+  }
 
  protected:
-  MockAutofillAssistant* autofill_assistant() { return autofill_assistant_; }
-  FastCheckoutCapabilitiesFetcher* fetcher() { return fetcher_.get(); }
+  void SetUp() override {
+    content::RenderViewHostTestHarness::SetUp();
+
+    test_url_loader_factory_ =
+        std::make_unique<network::TestURLLoaderFactory>();
+    test_shared_loader_factory_ =
+        base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
+            test_url_loader_factory_.get());
+    fetcher_ = std::make_unique<FastCheckoutCapabilitiesFetcherImpl>(
+        test_shared_loader_factory_);
+
+    binary_proto_response_ = CreateBinaryProtoResponse();
+  }
+
+  network::TestURLLoaderFactory* url_loader_factory() {
+    return test_url_loader_factory_.get();
+  }
+  FastCheckoutCapabilitiesFetcherImpl* fetcher() { return fetcher_.get(); }
+
+  void FastForwardBy(base::TimeDelta delta) {
+    task_environment()->FastForwardBy(delta);
+  }
+
   base::HistogramTester& histogram_tester() { return histogram_tester_; }
+  const std::string& GetBinaryProtoResponse() { return binary_proto_response_; }
+  const url::Origin& GetOrigin() { return origin_; }
+  const url::Origin& GetUnsupportedOrigin() { return unsupported_origin_; }
+  const url::Origin& GetInvalidOrigin() { return invalid_origin_; }
+  const url::Origin& GetNonHttpSOrigin() { return non_http_s_origin_; }
+  const url::Origin& GetOriginWithoutTriggerForm() {
+    return origin_without_trigger_form_;
+  }
+
+  bool FetchCapabilitiesAndSimulateResponse(
+      net::HttpStatusCode status = net::HTTP_OK) {
+    fetcher()->FetchCapabilities();
+    return url_loader_factory()->SimulateResponseForPendingRequest(
+        kFastCheckoutFunnelsUrl, GetBinaryProtoResponse(), status);
+  }
+
+  bool IsTriggerFormSupportedOnSupportedDomain() {
+    return fetcher()->IsTriggerFormSupported(GetOrigin(),
+                                             kTriggerFormSignature);
+  }
 
  private:
-  // Test support.
+  std::unique_ptr<network::TestURLLoaderFactory> test_url_loader_factory_;
+  scoped_refptr<network::SharedURLLoaderFactory> test_shared_loader_factory_;
+  std::unique_ptr<FastCheckoutCapabilitiesFetcherImpl> fetcher_;
   base::HistogramTester histogram_tester_;
-  raw_ptr<MockAutofillAssistant> autofill_assistant_;
-
-  // The object to be tested.
-  std::unique_ptr<FastCheckoutCapabilitiesFetcher> fetcher_;
+  std::string binary_proto_response_;
+  url::Origin origin_;
+  url::Origin unsupported_origin_;
+  url::Origin invalid_origin_;
+  url::Origin non_http_s_origin_;
+  url::Origin origin_without_trigger_form_;
 };
 
-class FastCheckoutCapabilitiesFetcherImplTestParametrized
-    : public FastCheckoutCapabilitiesFetcherImplTest,
-      public testing::WithParamInterface<bool> {};
+TEST_F(FastCheckoutCapabilitiesFetcherImplTest,
+       FetchCapabilities_AllowsOnlyOnePendingRequest) {
+  fetcher()->FetchCapabilities();
+  fetcher()->FetchCapabilities();
+  EXPECT_EQ(url_loader_factory()->NumPending(), 1);
+}
 
-INSTANTIATE_TEST_SUITE_P(FastCheckoutCapabilitiesFetcherImplTest,
-                         FastCheckoutCapabilitiesFetcherImplTestParametrized,
-                         testing::Bool());
+TEST_F(FastCheckoutCapabilitiesFetcherImplTest,
+       FetchCapabilities_OnlyFetchesIfCacheTimeouted) {
+  // Fetch funnels successfully.
+  EXPECT_TRUE(FetchCapabilitiesAndSimulateResponse());
 
-TEST_F(FastCheckoutCapabilitiesFetcherImplTest, GetCapabilitiesEmptyResponse) {
-  url::Origin origin1 = url::Origin::Create(GURL(kUrl1));
-  uint64_t hash1 = AutofillAssistant::GetHashPrefix(kHashPrefixSize, origin1);
+  // Not able to perform another fetch because cache is still valid.
+  fetcher()->FetchCapabilities();
+  EXPECT_EQ(url_loader_factory()->NumPending(), 0);
 
-  // The cache is empty.
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature1));
+  // Travel through time beyond cache timeout.
+  FastForwardBy(base::TimeDelta(base::Minutes(11)));
 
-  EXPECT_CALL(*autofill_assistant(),
-              GetCapabilitiesByHashPrefix(
-                  kHashPrefixSize, std::vector<uint64_t>{hash1}, kIntent, _))
-      .WillOnce(RunOnceCallback<3>(net::HttpStatusCode::HTTP_OK,
-                                   std::vector<CapabilitiesInfo>()));
+  // `FetchCapabilities()` is possible again because cache got stale.
+  fetcher()->FetchCapabilities();
+  EXPECT_EQ(url_loader_factory()->NumPending(), 1);
+}
 
-  base::MockCallback<FastCheckoutCapabilitiesFetcher::Callback> callback;
-  EXPECT_CALL(callback, Run(true));
-  fetcher()->FetchAvailability(origin1, callback.Get());
+TEST_F(FastCheckoutCapabilitiesFetcherImplTest,
+       IsTriggerFormSupported_ReturnsTrueOnlyForTriggerFormOnSupportedDomain) {
+  EXPECT_TRUE(FetchCapabilitiesAndSimulateResponse());
+  EXPECT_TRUE(IsTriggerFormSupportedOnSupportedDomain());
+  EXPECT_FALSE(
+      fetcher()->IsTriggerFormSupported(GetOrigin(), kFillFormSignature));
+}
 
-  // The form is still not supported.
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature1));
+TEST_F(FastCheckoutCapabilitiesFetcherImplTest,
+       IsTriggerFormSupported_ReturnsFalseOnUnsupportedDomain) {
+  EXPECT_TRUE(FetchCapabilitiesAndSimulateResponse());
+  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(GetUnsupportedOrigin(),
+                                                 kTriggerFormSignature));
+  // `IsTriggerFormSupported()` on the supported domain should still return
+  // `true` (for `kTriggerFormSignature).
+  EXPECT_TRUE(IsTriggerFormSupportedOnSupportedDomain());
+}
 
-  // The network metric and the response time were recorded.
-  histogram_tester().ExpectUniqueSample(kUmaKeyHttpCode,
-                                        net::HttpStatusCode::HTTP_OK, 1u);
+TEST_F(FastCheckoutCapabilitiesFetcherImplTest,
+       IsTriggerFormSupported_ReturnsFalseOnInvalidDomain) {
+  EXPECT_TRUE(FetchCapabilitiesAndSimulateResponse());
+  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(GetInvalidOrigin(),
+                                                 kTriggerFormSignature));
+  // `IsTriggerFormSupported()` on the supported domain should still return
+  // `true` (for `kTriggerFormSignature).
+  EXPECT_TRUE(IsTriggerFormSupportedOnSupportedDomain());
+}
+
+TEST_F(FastCheckoutCapabilitiesFetcherImplTest,
+       IsTriggerFormSupported_ReturnsFalseOnNonHttpSDomain) {
+  EXPECT_TRUE(FetchCapabilitiesAndSimulateResponse());
+  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(GetNonHttpSOrigin(),
+                                                 kTriggerFormSignature));
+  // `IsTriggerFormSupported()` on the supported domain should still return
+  // `true` (for `kTriggerFormSignature).
+  EXPECT_TRUE(IsTriggerFormSupportedOnSupportedDomain());
+}
+
+TEST_F(FastCheckoutCapabilitiesFetcherImplTest,
+       IsTriggerFormSupported_ReturnsFalseIfRequestFailed) {
+  net::HttpStatusCode http_status = net::HTTP_BAD_REQUEST;
+
+  EXPECT_TRUE(FetchCapabilitiesAndSimulateResponse(http_status));
+  EXPECT_FALSE(IsTriggerFormSupportedOnSupportedDomain());
+
+  histogram_tester().ExpectUniqueSample(kUmaKeyResponseAndNetErrorCode,
+                                        http_status, 1u);
+}
+
+TEST_F(FastCheckoutCapabilitiesFetcherImplTest,
+       OnFetchComplete_RecordsResponseTime) {
+  EXPECT_TRUE(FetchCapabilitiesAndSimulateResponse());
+
   histogram_tester().ExpectTotalCount(kUmaKeyResponseTime, 1u);
 }
 
 TEST_F(FastCheckoutCapabilitiesFetcherImplTest,
-       GetCapabilitiesResponseWithForm) {
-  url::Origin origin1 = url::Origin::Create(GURL(kUrl1));
-  url::Origin origin2 = url::Origin::Create(GURL(kUrl2));
-  uint64_t hash1 = AutofillAssistant::GetHashPrefix(kHashPrefixSize, origin1);
+       OnFetchComplete_SuccessfulRequest_RecordsHttpOkCode) {
+  EXPECT_TRUE(FetchCapabilitiesAndSimulateResponse());
 
-  // The cache is empty.
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature1));
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin2, kFormSignature1));
-
-  BundleCapabilitiesInformation capabilities;
-  capabilities.trigger_form_signatures.push_back(kFormSignature1);
-  CapabilitiesInfo info{kUrl1, {}, capabilities};
-  EXPECT_CALL(*autofill_assistant(),
-              GetCapabilitiesByHashPrefix(
-                  kHashPrefixSize, std::vector<uint64_t>{hash1}, kIntent, _))
-      .WillOnce(RunOnceCallback<3>(net::HttpStatusCode::HTTP_OK,
-                                   std::vector<CapabilitiesInfo>{info}));
-
-  base::MockCallback<FastCheckoutCapabilitiesFetcher::Callback> callback;
-  EXPECT_CALL(callback, Run(true));
-  fetcher()->FetchAvailability(origin1, callback.Get());
-
-  // The first origin now has a supported form.
-  EXPECT_TRUE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature1));
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature2));
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin2, kFormSignature1));
+  histogram_tester().ExpectUniqueSample(kUmaKeyResponseAndNetErrorCode,
+                                        net::HTTP_OK, 1u);
 }
 
-TEST_F(FastCheckoutCapabilitiesFetcherImplTest, GetCapabilitiesNetworkError) {
-  url::Origin origin1 = url::Origin::Create(GURL(kUrl1));
-  uint64_t hash1 = AutofillAssistant::GetHashPrefix(kHashPrefixSize, origin1);
+TEST_F(FastCheckoutCapabilitiesFetcherImplTest,
+       OnFetchComplete_ValidResponseBody_RecordsSucessfulParsing) {
+  EXPECT_TRUE(FetchCapabilitiesAndSimulateResponse());
 
-  // The cache is empty.
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature1));
-
-  AutofillAssistant::GetCapabilitiesResponseCallback response_callback;
-  EXPECT_CALL(*autofill_assistant(),
-              GetCapabilitiesByHashPrefix(
-                  kHashPrefixSize, std::vector<uint64_t>{hash1}, kIntent, _))
-      .Times(1)
-      .WillOnce(MoveArg<3>(&response_callback));
-
-  base::MockCallback<FastCheckoutCapabilitiesFetcher::Callback> callback1;
-  base::MockCallback<FastCheckoutCapabilitiesFetcher::Callback> callback2;
-  fetcher()->FetchAvailability(origin1, callback1.Get());
-  // Send the same request again (while the first one is still ongoing).
-  fetcher()->FetchAvailability(origin1, callback2.Get());
-
-  EXPECT_CALL(callback1, Run(false));
-  EXPECT_CALL(callback2, Run(false));
-
-  BundleCapabilitiesInformation capabilities;
-  capabilities.trigger_form_signatures.push_back(kFormSignature1);
-  CapabilitiesInfo info{kUrl1, {}, capabilities};
-  std::move(response_callback)
-      .Run(net::HttpStatusCode::HTTP_NOT_FOUND,
-           std::vector<CapabilitiesInfo>{info});
-
-  // The cache is still empty - the content of the message was ignored.
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature1));
-
-  // However, the network metric and the response time were recorded.
   histogram_tester().ExpectUniqueSample(
-      kUmaKeyHttpCode, net::HttpStatusCode::HTTP_NOT_FOUND, 1u);
-  histogram_tester().ExpectTotalCount(kUmaKeyResponseTime, 1u);
+      kUmaKeyParsingResult,
+      FastCheckoutCapabilitiesFetcherImpl::ParsingResult::kSuccess, 1u);
 }
 
 TEST_F(FastCheckoutCapabilitiesFetcherImplTest,
-       GetCapabilitiesSubsequentRequests) {
-  url::Origin origin1 = url::Origin::Create(GURL(kUrl1));
-  uint64_t hash1 = AutofillAssistant::GetHashPrefix(kHashPrefixSize, origin1);
+       OnFetchComplete_InvalidResponseBody_RecordsParsingError) {
+  fetcher()->FetchCapabilities();
+  EXPECT_TRUE(url_loader_factory()->SimulateResponseForPendingRequest(
+      kFastCheckoutFunnelsUrl, kInvalidResponseBody));
 
-  // The cache is empty.
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature1));
-
-  // The first request times out.
-  EXPECT_CALL(*autofill_assistant(),
-              GetCapabilitiesByHashPrefix(
-                  kHashPrefixSize, std::vector<uint64_t>{hash1}, kIntent, _))
-      .WillOnce(RunOnceCallback<3>(net::HttpStatusCode::HTTP_REQUEST_TIMEOUT,
-                                   std::vector<CapabilitiesInfo>{}));
-
-  base::MockCallback<FastCheckoutCapabilitiesFetcher::Callback> callback1;
-  EXPECT_CALL(callback1, Run(false));
-  fetcher()->FetchAvailability(origin1, callback1.Get());
-  // The cache is still empty.
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature1));
-
-  // The second request is successful.
-  BundleCapabilitiesInformation capabilities;
-  capabilities.trigger_form_signatures.push_back(kFormSignature1);
-  CapabilitiesInfo info{kUrl1, {}, capabilities};
-  EXPECT_CALL(*autofill_assistant(),
-              GetCapabilitiesByHashPrefix(
-                  kHashPrefixSize, std::vector<uint64_t>{hash1}, kIntent, _))
-      .WillOnce(RunOnceCallback<3>(net::HttpStatusCode::HTTP_OK,
-                                   std::vector<CapabilitiesInfo>{info}));
-
-  base::MockCallback<FastCheckoutCapabilitiesFetcher::Callback> callback2;
-  EXPECT_CALL(callback2, Run(true));
-  fetcher()->FetchAvailability(origin1, callback2.Get());
-  // The cache is now filled.
-  EXPECT_TRUE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature1));
-
-  // A third request returns immediately.
-  base::MockCallback<FastCheckoutCapabilitiesFetcher::Callback> callback3;
-  EXPECT_CALL(callback3, Run(true));
-  fetcher()->FetchAvailability(origin1, callback3.Get());
-  EXPECT_TRUE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature1));
-
-  // All network metrics were recorded.
-  EXPECT_THAT(histogram_tester().GetAllSamples(kUmaKeyHttpCode),
-              BucketsAre(Bucket(net::HttpStatusCode::HTTP_REQUEST_TIMEOUT, 1u),
-                         Bucket(net::HttpStatusCode::HTTP_OK, 1u)));
-  histogram_tester().ExpectTotalCount(kUmaKeyResponseTime, 2u);
+  histogram_tester().ExpectUniqueSample(
+      kUmaKeyParsingResult,
+      FastCheckoutCapabilitiesFetcherImpl::ParsingResult::kParsingError, 1u);
 }
 
-TEST_F(FastCheckoutCapabilitiesFetcherImplTest,
-       GetCapabilitiesMultipleRequests) {
-  url::Origin origin1 = url::Origin::Create(GURL(kUrl1));
-  url::Origin origin2 = url::Origin::Create(GURL(kUrl2));
-  uint64_t hash1 = AutofillAssistant::GetHashPrefix(kHashPrefixSize, origin1);
-  uint64_t hash2 = AutofillAssistant::GetHashPrefix(kHashPrefixSize, origin2);
+TEST_F(
+    FastCheckoutCapabilitiesFetcherImplTest,
+    IsTriggerFormSupported_TriggerFormSignature_RecordsTriggerFormSupported) {
+  EXPECT_TRUE(FetchCapabilitiesAndSimulateResponse());
+  EXPECT_TRUE(IsTriggerFormSupportedOnSupportedDomain());
 
-  // The cache is empty.
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature1));
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature2));
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin2, kFormSignature3));
-
-  AutofillAssistant::GetCapabilitiesResponseCallback response_callback1;
-  AutofillAssistant::GetCapabilitiesResponseCallback response_callback2;
-  EXPECT_CALL(*autofill_assistant(),
-              GetCapabilitiesByHashPrefix(
-                  kHashPrefixSize, std::vector<uint64_t>{hash1}, kIntent, _))
-      .Times(1)
-      .WillOnce(MoveArg<3>(&response_callback1));
-  EXPECT_CALL(*autofill_assistant(),
-              GetCapabilitiesByHashPrefix(
-                  kHashPrefixSize, std::vector<uint64_t>{hash2}, kIntent, _))
-      .Times(1)
-      .WillOnce(MoveArg<3>(&response_callback2));
-
-  base::MockCallback<FastCheckoutCapabilitiesFetcher::Callback> callback1;
-  base::MockCallback<FastCheckoutCapabilitiesFetcher::Callback> callback2;
-  base::MockCallback<FastCheckoutCapabilitiesFetcher::Callback> callback3;
-  fetcher()->FetchAvailability(origin1, callback1.Get());
-  fetcher()->FetchAvailability(origin2, callback2.Get());
-  fetcher()->FetchAvailability(origin1, callback3.Get());
-
-  EXPECT_CALL(callback1, Run(true));
-  EXPECT_CALL(callback3, Run(true));
-
-  BundleCapabilitiesInformation capabilities;
-  capabilities.trigger_form_signatures.push_back(kFormSignature1);
-  capabilities.trigger_form_signatures.push_back(kFormSignature2);
-  CapabilitiesInfo info1{kUrl1, {}, capabilities};
-  std::move(response_callback1)
-      .Run(net::HttpStatusCode::HTTP_OK, std::vector<CapabilitiesInfo>{info1});
-
-  // The cache contains information for the first domain.
-  EXPECT_TRUE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature1));
-  EXPECT_TRUE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature2));
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature3));
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin2, kFormSignature1));
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin2, kFormSignature2));
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin2, kFormSignature3));
-
-  EXPECT_CALL(callback2, Run(true));
-  capabilities.trigger_form_signatures.clear();
-  capabilities.trigger_form_signatures.push_back(kFormSignature3);
-  CapabilitiesInfo info2{kUrl2, {}, capabilities};
-  std::move(response_callback2)
-      .Run(net::HttpStatusCode::HTTP_OK, std::vector<CapabilitiesInfo>{info2});
-
-  // The cache now contains all domain information.
-  EXPECT_TRUE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature1));
-  EXPECT_TRUE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature2));
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature3));
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin2, kFormSignature1));
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin2, kFormSignature2));
-  EXPECT_TRUE(fetcher()->IsTriggerFormSupported(origin2, kFormSignature3));
-}
-
-TEST_F(FastCheckoutCapabilitiesFetcherImplTest,
-       EnableFastCheckoutCapabilitiesFlag) {
-  // `kEnableFastCheckoutCapabilitiesFlag` flag is disabled,
-  // `IsTriggerFormSupported` returns the default value (false).
-  url::Origin origin1 = url::Origin::Create(GURL(kUrl1));
-  url::Origin origin2 = url::Origin::Create(GURL(kUrl2));
-
-  // The cache is empty.
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature1));
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature2));
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin2, kFormSignature3));
-
-  base::test::ScopedFeatureList features;
-  features.InitAndEnableFeature(features::kForceEnableFastCheckoutCapabilities);
-
-  EXPECT_TRUE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature1));
-  EXPECT_TRUE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature2));
-  EXPECT_TRUE(fetcher()->IsTriggerFormSupported(origin2, kFormSignature3));
-}
-
-TEST_F(FastCheckoutCapabilitiesFetcherImplTest,
-       IsTriggerFormSupportedRecordsUmaMetrics) {
-  url::Origin origin1 = url::Origin::Create(GURL(kUrl1));
-  uint64_t hash1 = AutofillAssistant::GetHashPrefix(kHashPrefixSize, origin1);
-
-  // The cache is empty.
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature1));
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature2));
   histogram_tester().ExpectUniqueSample(
       kUmaKeyCacheStateIsTriggerFormSupported,
-      CacheStateForIsTriggerFormSupported::kNeverFetched, 2u);
-
-  AutofillAssistant::GetCapabilitiesResponseCallback response_callback1;
-  EXPECT_CALL(*autofill_assistant(),
-              GetCapabilitiesByHashPrefix(
-                  kHashPrefixSize, std::vector<uint64_t>{hash1}, kIntent, _))
-      .Times(1)
-      .WillOnce(MoveArg<3>(&response_callback1));
-
-  base::MockCallback<FastCheckoutCapabilitiesFetcher::Callback> callback1;
-  fetcher()->FetchAvailability(origin1, callback1.Get());
-
-  // While the fetch is still ongoing, there is no availability yet.
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature1));
-  EXPECT_THAT(
-      histogram_tester().GetAllSamples(kUmaKeyCacheStateIsTriggerFormSupported),
-      BucketsAre(
-          Bucket(CacheStateForIsTriggerFormSupported::kNeverFetched, 2u),
-          Bucket(CacheStateForIsTriggerFormSupported::kFetchOngoing, 1u)));
-
-  EXPECT_CALL(callback1, Run(true));
-  BundleCapabilitiesInformation capabilities;
-  capabilities.trigger_form_signatures.push_back(kFormSignature1);
-  CapabilitiesInfo info1{kUrl1, {}, capabilities};
-  std::move(response_callback1)
-      .Run(net::HttpStatusCode::HTTP_OK, std::vector<CapabilitiesInfo>{info1});
-
-  // The cache contains information for the first domain.
-  EXPECT_TRUE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature1));
-  histogram_tester().ExpectTotalCount(kUmaKeyCacheStateIsTriggerFormSupported,
-                                      4u);
-  histogram_tester().ExpectBucketCount(
-      kUmaKeyCacheStateIsTriggerFormSupported,
-      CacheStateForIsTriggerFormSupported::kEntryAvailableAndFormSupported, 1u);
-
-  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(origin1, kFormSignature2));
-  histogram_tester().ExpectTotalCount(kUmaKeyCacheStateIsTriggerFormSupported,
-                                      5u);
-  histogram_tester().ExpectBucketCount(
-      kUmaKeyCacheStateIsTriggerFormSupported,
-      CacheStateForIsTriggerFormSupported::kEntryAvailableAndFormNotSupported,
+      FastCheckoutCapabilitiesFetcherImpl::CacheStateForIsTriggerFormSupported::
+          kEntryAvailableAndFormSupported,
       1u);
 }
 
-TEST_P(FastCheckoutCapabilitiesFetcherImplTestParametrized,
-       SupportsConsentlessExecution) {
-  url::Origin origin = url::Origin::Create(GURL(kUrl1));
-  uint64_t hash = AutofillAssistant::GetHashPrefix(kHashPrefixSize, origin);
-  BundleCapabilitiesInformation capabilities;
-  capabilities.trigger_form_signatures.push_back(kFormSignature1);
-  capabilities.supports_consentless_execution = GetParam();
-  CapabilitiesInfo info{kUrl1, {}, capabilities};
-  EXPECT_CALL(*autofill_assistant(),
-              GetCapabilitiesByHashPrefix(
-                  kHashPrefixSize, std::vector<uint64_t>{hash}, kIntent, _))
-      .WillOnce(RunOnceCallback<3>(net::HttpStatusCode::HTTP_OK,
-                                   std::vector<CapabilitiesInfo>{info}));
-  base::MockCallback<FastCheckoutCapabilitiesFetcher::Callback> callback;
-  fetcher()->FetchAvailability(origin, callback.Get());
+TEST_F(
+    FastCheckoutCapabilitiesFetcherImplTest,
+    IsTriggerFormSupported_FillFormSignature_RecordsTriggerFormNotSupported) {
+  EXPECT_TRUE(FetchCapabilitiesAndSimulateResponse());
+  EXPECT_FALSE(
+      fetcher()->IsTriggerFormSupported(GetOrigin(), kFillFormSignature));
 
-  EXPECT_EQ(fetcher()->SupportsConsentlessExecution(origin), GetParam());
+  histogram_tester().ExpectUniqueSample(
+      kUmaKeyCacheStateIsTriggerFormSupported,
+      FastCheckoutCapabilitiesFetcherImpl::CacheStateForIsTriggerFormSupported::
+          kEntryAvailableAndFormNotSupported,
+      1u);
 }
 
-}  // namespace
+TEST_F(FastCheckoutCapabilitiesFetcherImplTest,
+       IsTriggerFormSupported_FetchOngoing_RecordsFetchOngoing) {
+  fetcher()->FetchCapabilities();
+  EXPECT_FALSE(IsTriggerFormSupportedOnSupportedDomain());
+
+  histogram_tester().ExpectUniqueSample(
+      kUmaKeyCacheStateIsTriggerFormSupported,
+      FastCheckoutCapabilitiesFetcherImpl::CacheStateForIsTriggerFormSupported::
+          kFetchOngoing,
+      1u);
+}
+
+TEST_F(FastCheckoutCapabilitiesFetcherImplTest,
+       IsTriggerFormSupported_InvalidDomain_RecordsNotAvailable) {
+  EXPECT_TRUE(FetchCapabilitiesAndSimulateResponse());
+  fetcher()->IsTriggerFormSupported(GetInvalidOrigin(), kTriggerFormSignature);
+
+  histogram_tester().ExpectUniqueSample(
+      kUmaKeyCacheStateIsTriggerFormSupported,
+      FastCheckoutCapabilitiesFetcherImpl::CacheStateForIsTriggerFormSupported::
+          kEntryNotAvailable,
+      1u);
+}
+
+TEST_F(FastCheckoutCapabilitiesFetcherImplTest,
+       GetFormsToFill_InvalidDomain_ReturnsEmptySet) {
+  EXPECT_TRUE(FetchCapabilitiesAndSimulateResponse());
+  EXPECT_THAT(fetcher()->GetFormsToFill(GetInvalidOrigin()),
+              testing::IsEmpty());
+}
+
+TEST_F(FastCheckoutCapabilitiesFetcherImplTest,
+       GetFormsToFill_ValidDomain_ReturnsTriggerAndFillForms) {
+  EXPECT_TRUE(FetchCapabilitiesAndSimulateResponse());
+
+  base::flat_set<autofill::FormSignature> forms_to_fill =
+      fetcher()->GetFormsToFill(GetOrigin());
+  EXPECT_THAT(forms_to_fill, testing::UnorderedElementsAre(
+                                 kTriggerFormSignature, kFillFormSignature));
+}
+
+TEST_F(FastCheckoutCapabilitiesFetcherImplTest, NoTriggerForm) {
+  EXPECT_TRUE(FetchCapabilitiesAndSimulateResponse());
+
+  EXPECT_FALSE(fetcher()->IsTriggerFormSupported(GetOriginWithoutTriggerForm(),
+                                                 kTriggerFormSignature));
+  EXPECT_THAT(fetcher()->GetFormsToFill(GetOriginWithoutTriggerForm()),
+              testing::IsEmpty());
+  histogram_tester().ExpectUniqueSample(
+      kUmaKeyCacheStateIsTriggerFormSupported,
+      FastCheckoutCapabilitiesFetcherImpl::CacheStateForIsTriggerFormSupported::
+          kEntryNotAvailable,
+      1u);
+}

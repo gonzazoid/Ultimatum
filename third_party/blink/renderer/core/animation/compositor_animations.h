@@ -156,7 +156,9 @@ class CORE_EXPORT CompositorAnimations {
       CompositorAnimation&,
       const EffectModel&,
       Vector<int>& started_keyframe_model_ids,
-      double animation_playback_rate);
+      double animation_playback_rate,
+      bool is_monotonic_timeline,
+      bool is_boundary_aligned);
   static void CancelAnimationOnCompositor(const Element&,
                                           CompositorAnimation*,
                                           int id,
@@ -183,7 +185,9 @@ class CORE_EXPORT CompositorAnimations {
                                          const Timing::NormalizedTiming&,
                                          base::TimeDelta time_offset,
                                          CompositorTiming& out,
-                                         double animation_playback_rate);
+                                         double animation_playback_rate,
+                                         bool is_monotonic_timeline = true,
+                                         bool is_boundary_aligned = false);
 
   static void GetAnimationOnCompositor(
       const Element&,
@@ -194,7 +198,9 @@ class CORE_EXPORT CompositorAnimations {
       base::TimeDelta time_offset,
       const KeyframeEffectModelBase&,
       Vector<std::unique_ptr<cc::KeyframeModel>>& animations,
-      double animation_playback_rate);
+      double animation_playback_rate,
+      bool is_monotonic_timeline,
+      bool is_boundary_aligned);
 
   static CompositorElementIdNamespace CompositorElementNamespaceForProperty(
       CSSPropertyID property);
@@ -202,6 +208,9 @@ class CORE_EXPORT CompositorAnimations {
   static bool CheckUsesCompositedScrolling(Node* target);
 
   static bool CanStartTransformAnimationOnCompositorForSVG(const SVGElement&);
+
+  static bool CompositedPropertyRequiresSnapshot(
+      const PropertyHandle& property);
 
  private:
   static FailureReasons CheckCanStartEffectOnCompositor(

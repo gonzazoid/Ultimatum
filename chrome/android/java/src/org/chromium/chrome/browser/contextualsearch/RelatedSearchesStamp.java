@@ -8,7 +8,6 @@ import android.net.Uri;
 import android.text.TextUtils;
 
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 
@@ -35,25 +34,14 @@ class RelatedSearchesStamp {
     private static final String RELATED_SEARCHES_EXPERIMENT_RECIPE_STAGE = "R";
     private static final String RELATED_SEARCHES_NO_EXPERIMENT = "n";
     private static final String RELATED_SEARCHES_LANGUAGE_RESTRICTION = "l";
-    private static final String RELATED_SEARCHES_DARK_LAUNCH = "d";
     private static final String RELATED_SEARCHES_USER_INTERACTION = "U";
     private static final String RELATED_SEARCHES_SELECTED_POSITION = "p";
-    private static final String NO_EXPERIMENT_STAMP = RELATED_SEARCHES_STAMP_VERSION
-            + RELATED_SEARCHES_EXPERIMENT_RECIPE_STAGE + RELATED_SEARCHES_NO_EXPERIMENT;
+    private static final String NO_EXPERIMENT_STAMP =
+            RELATED_SEARCHES_STAMP_VERSION
+                    + RELATED_SEARCHES_EXPERIMENT_RECIPE_STAGE
+                    + RELATED_SEARCHES_NO_EXPERIMENT;
 
     private final ContextualSearchPolicy mPolicy;
-    private boolean mDisableDefaultAllowedLanguagesForTesting;
-
-    /**
-     * Verbosity param used to control requested results.
-     * <ul>
-     *   <li> "d" specifies a dark launch, which means return none </li>
-     *   <li> "v" for verbose  </li>
-     *   <li> "x" for extra verbose </li>
-     *   <li> "" for the default </li></ul>
-     * See also the verbosity entry in about_flags to correlate.
-     */
-    private static final String RELATED_SEARCHES_VERBOSITY_PARAM = "verbosity";
 
     /**
      * Creates a Related Searches Stamp handling instance that works with the given {@code
@@ -114,7 +102,7 @@ class RelatedSearchesStamp {
      *         Related Searches or the feature is not enabled.
      */
     String getRelatedSearchesStamp(String basePageLanguage) {
-        if (!isRelatedSearchesQualifiedAndEnabled(basePageLanguage)) return "";
+        if (!isQualifiedForRelatedSearches(basePageLanguage)) return "";
 
         boolean isLanguageRestricted = !TextUtils.isEmpty(getAllowedLanguages());
         return buildRelatedSearchesStamp(isLanguageRestricted);
@@ -128,8 +116,9 @@ class RelatedSearchesStamp {
      * @return Whether the user could do a Related Searches request if Feature-enabled.
      */
     boolean isQualifiedForRelatedSearches(String basePageLanguage) {
-        return isLanguageQualified(basePageLanguage) && canSendUrlIfNeeded()
-                && canSendContentIfNeeded();
+        return isLanguageQualified(basePageLanguage)
+                && mPolicy.hasSendUrlPermissions()
+                && mPolicy.isContextualSearchFullyEnabled();
     }
 
     /**
@@ -143,21 +132,11 @@ class RelatedSearchesStamp {
         String currentStamp = searchUri.getQueryParameter(STAMP_PARAMETER);
         if (currentStamp == null || currentStamp.isEmpty()) return searchUri;
 
-        String chosenPositionCode = RELATED_SEARCHES_USER_INTERACTION
-                + RELATED_SEARCHES_SELECTED_POSITION + Integer.toString(suggestionIndex);
+        String chosenPositionCode =
+                RELATED_SEARCHES_USER_INTERACTION
+                        + RELATED_SEARCHES_SELECTED_POSITION
+                        + Integer.toString(suggestionIndex);
         return replaceQueryParam(searchUri, STAMP_PARAMETER, currentStamp + chosenPositionCode);
-    }
-
-    /**
-     * Checks if the current user is both qualified to do Related Searches and has the feature
-     * enabled. Qualifications may include restrictions on language during early development.
-     * @param basePageLanguage The language of the page, to check for server support.
-     * @return Whether the user is qualified to get Related Searches suggestions and the
-     *         experimental feature is enabled.
-     */
-    private boolean isRelatedSearchesQualifiedAndEnabled(String basePageLanguage) {
-        return isQualifiedForRelatedSearches(basePageLanguage)
-                && ChromeFeatureList.isEnabled(ChromeFeatureList.RELATED_SEARCHES);
     }
 
     /**
@@ -173,63 +152,13 @@ class RelatedSearchesStamp {
     }
 
     /**
-     * @return whether the user's privacy setting for URL sending satisfies the configured
-     *         requirement.
-     */
-    private boolean canSendUrlIfNeeded() {
-        return !isRelatedSearchesUrlNeeded() || mPolicy.hasSendUrlPermissions();
-    }
-
-    /**
-     * @return whether the user's privacy setting for page content sending satisfies the configured
-     *         requirement.
-     */
-    private boolean canSendContentIfNeeded() {
-        return !isRelatedSearchesContentNeeded() || mPolicy.isContextualSearchFullyEnabled()
-                || mPolicy.isDelayedIntelligenceActive();
-    }
-
-    /** @return whether the runtime configuration has a URL sending permissions requirement. */
-    private boolean isRelatedSearchesUrlNeeded() {
-        return ChromeFeatureList.getFieldTrialParamByFeatureAsBoolean(
-                       ChromeFeatureList.RELATED_SEARCHES,
-                       ContextualSearchFieldTrial.RELATED_SEARCHES_NEEDS_URL_PARAM_NAME, true)
-                || mPolicy.isMissingRelatedSearchesConfiguration();
-    }
-
-    /**
-     * @return whether the runtime configuration has a page content sending permissions
-     *         requirement.
-     */
-    private boolean isRelatedSearchesContentNeeded() {
-        return ChromeFeatureList.getFieldTrialParamByFeatureAsBoolean(
-                       ChromeFeatureList.RELATED_SEARCHES,
-                       ContextualSearchFieldTrial.RELATED_SEARCHES_NEEDS_CONTENT_PARAM_NAME, true)
-                || mPolicy.isMissingRelatedSearchesConfiguration();
-    }
-
-    /**
-     * Returns the number of results to request from the server, as a single coded letter, or
-     * {@code null} if the server should just return the default number of Related Searches.
-     */
-    private String getNumberOfRelatedSearchesToRequestCode() {
-        if (!ChromeFeatureList.isEnabled(ChromeFeatureList.RELATED_SEARCHES_UI)) {
-            return RELATED_SEARCHES_DARK_LAUNCH;
-        }
-        // Return the Feature param, which could be an empty string if not present.
-        return ChromeFeatureList.getFieldTrialParamByFeature(
-                ChromeFeatureList.RELATED_SEARCHES_UI, RELATED_SEARCHES_VERBOSITY_PARAM);
-    }
-
-    /**
      * Builds the "stamp" that tracks the processing of Related Searches and describes what was
      * done at each stage using a shorthand notation. The notation is described in go/rsearches-dd
      * here: http://doc/1DryD8NAP5LQAo326LnxbqkIDCNfiCOB7ak3gAYaNWAM#bookmark=id.nx7ivu2upqw
      * <p>The first stage is built here: "1" for schema version one, "R" for the configuration
      * Recipe which has a character describing how we'll formulate the search. Typically all of
      * this comes from the Variations config at runtime. We programmatically append an "l" that
-     * indicates a language restriction (when present), and currently a "d" for "dark launch" so
-     * the server knows to return normal Contextual Search results for this older client.
+     * indicates a language restriction (when present).
      * @param isLanguageRestricted Whether there are any language restrictions needed by the
      *        server.
      * @return A string that represents and encoded description of the current request processing.
@@ -237,29 +166,24 @@ class RelatedSearchesStamp {
     private String buildRelatedSearchesStamp(boolean isLanguageRestricted) {
         String experimentConfigStamp =
                 ContextualSearchFieldTrial.getRelatedSearchesExperimentConfigurationStamp();
-        if (TextUtils.isEmpty(experimentConfigStamp)) experimentConfigStamp = NO_EXPERIMENT_STAMP;
-        StringBuilder stampBuilder = new StringBuilder().append(experimentConfigStamp);
-        if (isLanguageRestricted) stampBuilder.append(RELATED_SEARCHES_LANGUAGE_RESTRICTION);
-        // Add a tag so the server knows this version of the client is doing a dark launch
-        // and cannot decode Related Searches, unless overridden by a Feature flag.
-        String resultsToReturnCode = getNumberOfRelatedSearchesToRequestCode();
-        if (resultsToReturnCode.length() > 0) stampBuilder.append(resultsToReturnCode);
-        return stampBuilder.toString();
-    }
-
-    private String getAllowedLanguages() {
-        String allowedLanguages = ContextualSearchFieldTrial.getRelatedSearchesParam(
-                ContextualSearchFieldTrial.RELATED_SEARCHES_LANGUAGE_ALLOWLIST_PARAM_NAME);
-        // If there is no language found, we use default language list.
-        if (TextUtils.isEmpty(allowedLanguages) && !mDisableDefaultAllowedLanguagesForTesting) {
-            allowedLanguages =
-                    ContextualSearchFieldTrial.RELATED_SEARCHES_LANGUAGE_DEFAULT_ALLOWLIST;
+        String ret = experimentConfigStamp;
+        if (isLanguageRestricted) {
+            ret += RELATED_SEARCHES_LANGUAGE_RESTRICTION;
         }
-        return allowedLanguages;
+
+        return ret;
     }
 
-    @VisibleForTesting
-    void disableDefaultAllowedLanguagesForTesting(boolean disableDefaultAllowedLanguages) {
-        mDisableDefaultAllowedLanguagesForTesting = disableDefaultAllowedLanguages;
+    /**
+     * get the allowed languages for the related searches.
+     * @return A string that contains the allowed languages, or empty string which means all the
+     *         languages are allowed.
+     */
+    private String getAllowedLanguages() {
+        if (ChromeFeatureList.isEnabled(ChromeFeatureList.RELATED_SEARCHES_ALL_LANGUAGE)) {
+            return "";
+        }
+
+        return ContextualSearchFieldTrial.RELATED_SEARCHES_LANGUAGE_DEFAULT_ALLOWLIST;
     }
 }

@@ -27,7 +27,7 @@ TEST(ProcessExtensions, NoExtension) {
   base::FilePath extension_dir;
   std::vector<std::string> bg_pages;
   Status status = internal::ProcessExtensions(extensions, extension_dir,
-                                              &switches, &bg_pages);
+                                              switches, bg_pages);
   ASSERT_TRUE(status.IsOk());
   ASSERT_FALSE(switches.HasSwitch("load-extension"));
   ASSERT_EQ(0u, bg_pages.size());
@@ -36,7 +36,7 @@ TEST(ProcessExtensions, NoExtension) {
 bool AddExtensionForInstall(const std::string& relative_path,
                             std::vector<std::string>* extensions) {
   base::FilePath source_root;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &source_root);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &source_root);
   base::FilePath crx_file_path = source_root.AppendASCII(
       "chrome/test/data/chromedriver/" + relative_path);
   std::string crx_contents;
@@ -62,7 +62,7 @@ TEST(ProcessExtensions, GenerateIds) {
   ASSERT_TRUE(extension_dir.CreateUniqueTempDir());
 
   Status status = internal::ProcessExtensions(
-      extensions, extension_dir.GetPath(), &switches, &bg_pages);
+      extensions, extension_dir.GetPath(), switches, bg_pages);
 
   ASSERT_EQ(kOk, status.code()) << status.message();
   ASSERT_EQ(3u, bg_pages.size());
@@ -85,7 +85,7 @@ TEST(ProcessExtensions, GenerateIdCrx3) {
   ASSERT_TRUE(extension_dir.CreateUniqueTempDir());
 
   Status status = internal::ProcessExtensions(
-      extensions, extension_dir.GetPath(), &switches, &bg_pages);
+      extensions, extension_dir.GetPath(), switches, bg_pages);
 
   ASSERT_EQ(kOk, status.code()) << status.message();
   ASSERT_EQ(1u, bg_pages.size());
@@ -105,7 +105,7 @@ TEST(ProcessExtensions, SingleExtensionWithBgPage) {
   Switches switches;
   std::vector<std::string> bg_pages;
   Status status = internal::ProcessExtensions(
-      extensions, extension_dir.GetPath(), &switches, &bg_pages);
+      extensions, extension_dir.GetPath(), switches, bg_pages);
   ASSERT_TRUE(status.IsOk());
   ASSERT_TRUE(switches.HasSwitch("load-extension"));
   base::FilePath temp_ext_path(switches.GetSwitchValueNative("load-extension"));
@@ -113,13 +113,12 @@ TEST(ProcessExtensions, SingleExtensionWithBgPage) {
   std::string manifest_txt;
   ASSERT_TRUE(base::ReadFileToString(
       temp_ext_path.AppendASCII("manifest.json"), &manifest_txt));
-  std::unique_ptr<base::Value> manifest =
-      base::JSONReader::ReadDeprecated(manifest_txt);
+  absl::optional<base::Value> manifest = base::JSONReader::Read(manifest_txt);
   ASSERT_TRUE(manifest);
-  base::DictionaryValue* manifest_dict = nullptr;
-  ASSERT_TRUE(manifest->GetAsDictionary(&manifest_dict));
-  std::string key;
-  ASSERT_TRUE(manifest_dict->GetString("key", &key));
+  base::Value::Dict* manifest_dict = manifest->GetIfDict();
+  ASSERT_TRUE(manifest_dict);
+  std::string* key = manifest_dict->FindString("key");
+  ASSERT_TRUE(key);
   ASSERT_EQ(
       "MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAxbE7gPHcoZQX7Nv1Tpq8Osz3hhC"
       "fUPZpMCcsYALXYsICUMdFNPvsq4AsfzcIJN2Qc6C9GwlDgBEYQgC6zD9ULoSnHu3iJem49b"
@@ -132,7 +131,7 @@ TEST(ProcessExtensions, SingleExtensionWithBgPage) {
       "dnQtotb3/wuPvRFXqU0o0SAeEwGRoOxr6WqkOLuBuvwNtcKc/cCqxWMlcnId5TWX+tPEpUM"
       "4Imgbf6jIB2FPpSXQMLHQkag+k95aiXqkpirlhUaBA5yrClFLjw+Ld2yqJfh961yncxF+IB"
       "EmivSdNH0cYZBISf8CAwEAAQ==",
-      key);
+      *key);
   ASSERT_EQ(1u, bg_pages.size());
   ASSERT_EQ(
       "chrome-extension://ejapkfeonjhabbbnlpmcgholnoicapdb/"
@@ -151,7 +150,7 @@ TEST(ProcessExtensions, MultipleExtensionsNoBgPages) {
   Switches switches;
   std::vector<std::string> bg_pages;
   Status status = internal::ProcessExtensions(
-      extensions, extension_dir.GetPath(), &switches, &bg_pages);
+      extensions, extension_dir.GetPath(), switches, bg_pages);
   ASSERT_TRUE(status.IsOk());
   ASSERT_TRUE(switches.HasSwitch("load-extension"));
   base::CommandLine::StringType ext_paths =
@@ -175,7 +174,7 @@ TEST(ProcessExtensions, CommandLineExtensions) {
   switches.SetSwitch("load-extension", "/a");
   std::vector<std::string> bg_pages;
   Status status = internal::ProcessExtensions(
-      extensions, extension_dir.GetPath(), &switches, &bg_pages);
+      extensions, extension_dir.GetPath(), switches, bg_pages);
   ASSERT_EQ(kOk, status.code());
   base::FilePath::StringType load = switches.GetSwitchValueNative(
       "load-extension");
@@ -183,27 +182,16 @@ TEST(ProcessExtensions, CommandLineExtensions) {
   ASSERT_TRUE(base::PathExists(base::FilePath(load.substr(3))));
 }
 
-namespace {
-
-void AssertEQ(const base::DictionaryValue& dict, const std::string& key,
-              const char* expected_value) {
-  std::string value;
-  ASSERT_TRUE(dict.GetString(key, &value));
-  ASSERT_STREQ(value.c_str(), expected_value);
-}
-
-}  // namespace
-
 TEST(PrepareUserDataDir, CustomPrefs) {
   base::ScopedTempDir temp_dir;
   ASSERT_TRUE(temp_dir.CreateUniqueTempDir());
 
-  base::DictionaryValue prefs;
-  prefs.SetString("myPrefsKey", "ok");
-  prefs.SetKey("pref.sub", base::Value("1"));
-  base::DictionaryValue local_state;
-  local_state.SetString("myLocalKey", "ok");
-  local_state.SetKey("local.state.sub", base::Value("2"));
+  base::Value::Dict prefs;
+  prefs.Set("myPrefsKey", "ok");
+  prefs.Set("pref.sub", base::Value("1"));
+  base::Value::Dict local_state;
+  local_state.Set("myLocalKey", "ok");
+  local_state.Set("local.state.sub", base::Value("2"));
   Status status =
       internal::PrepareUserDataDir(temp_dir.GetPath(), &prefs, &local_state);
   ASSERT_EQ(kOk, status.code());
@@ -213,23 +201,22 @@ TEST(PrepareUserDataDir, CustomPrefs) {
                                   .Append(chrome::kPreferencesFilename);
   std::string prefs_str;
   ASSERT_TRUE(base::ReadFileToString(prefs_file, &prefs_str));
-  std::unique_ptr<base::Value> prefs_value =
-      base::JSONReader::ReadDeprecated(prefs_str);
-  const base::DictionaryValue* prefs_dict = nullptr;
-  ASSERT_TRUE(prefs_value->GetAsDictionary(&prefs_dict));
-  AssertEQ(*prefs_dict, "myPrefsKey", "ok");
-  AssertEQ(*prefs_dict, "pref.sub", "1");
+  absl::optional<base::Value> prefs_value = base::JSONReader::Read(prefs_str);
+  const base::Value::Dict* prefs_dict = prefs_value->GetIfDict();
+  ASSERT_TRUE(prefs_dict);
+  EXPECT_EQ("ok", *prefs_dict->FindString("myPrefsKey"));
+  EXPECT_EQ("1", *prefs_dict->FindStringByDottedPath("pref.sub"));
 
   base::FilePath local_state_file =
       temp_dir.GetPath().Append(chrome::kLocalStateFilename);
   std::string local_state_str;
   ASSERT_TRUE(base::ReadFileToString(local_state_file, &local_state_str));
-  std::unique_ptr<base::Value> local_state_value =
-      base::JSONReader::ReadDeprecated(local_state_str);
-  const base::DictionaryValue* local_state_dict = nullptr;
-  ASSERT_TRUE(local_state_value->GetAsDictionary(&local_state_dict));
-  AssertEQ(*local_state_dict, "myLocalKey", "ok");
-  AssertEQ(*local_state_dict, "local.state.sub", "2");
+  absl::optional<base::Value> local_state_value =
+      base::JSONReader::Read(local_state_str);
+  const base::Value::Dict* local_state_dict = local_state_value->GetIfDict();
+  ASSERT_TRUE(local_state_dict);
+  EXPECT_EQ("ok", *local_state_dict->FindString("myLocalKey"));
+  EXPECT_EQ("2", *local_state_dict->FindStringByDottedPath("local.state.sub"));
 }
 
 TEST(DesktopLauncher, ParseDevToolsActivePortFile_Success) {
@@ -238,10 +225,10 @@ TEST(DesktopLauncher, ParseDevToolsActivePortFile_Success) {
   char data[] = "12345\nblahblah";
   base::FilePath temp_file =
       temp_dir.GetPath().Append(FILE_PATH_LITERAL("DevToolsActivePort"));
-  ASSERT_TRUE(base::WriteFile(temp_file, data, strlen(data)));
+  ASSERT_TRUE(base::WriteFile(temp_file, data));
   int port;
   ASSERT_TRUE(
-      internal::ParseDevToolsActivePortFile(temp_dir.GetPath(), &port).IsOk());
+      internal::ParseDevToolsActivePortFile(temp_dir.GetPath(), port).IsOk());
   ASSERT_EQ(port, 12345);
 }
 
@@ -251,10 +238,10 @@ TEST(DesktopLauncher, ParseDevToolsActivePortFile_NoNewline) {
   char data[] = "12345";
   base::FilePath temp_file =
       temp_dir.GetPath().Append(FILE_PATH_LITERAL("DevToolsActivePort"));
-  ASSERT_TRUE(base::WriteFile(temp_file, data, strlen(data)));
+  ASSERT_TRUE(base::WriteFile(temp_file, data));
   int port = 1111;
   ASSERT_FALSE(
-      internal::ParseDevToolsActivePortFile(temp_dir.GetPath(), &port).IsOk());
+      internal::ParseDevToolsActivePortFile(temp_dir.GetPath(), port).IsOk());
   ASSERT_EQ(port, 1111);
 }
 
@@ -264,10 +251,10 @@ TEST(DesktopLauncher, ParseDevToolsActivePortFile_NotNumber) {
   char data[] = "12345asdf\nblahblah";
   base::FilePath temp_file =
       temp_dir.GetPath().Append(FILE_PATH_LITERAL("DevToolsActivePort"));
-  ASSERT_TRUE(base::WriteFile(temp_file, data, strlen(data)));
+  ASSERT_TRUE(base::WriteFile(temp_file, data));
   int port;
   ASSERT_FALSE(
-      internal::ParseDevToolsActivePortFile(temp_dir.GetPath(), &port).IsOk());
+      internal::ParseDevToolsActivePortFile(temp_dir.GetPath(), port).IsOk());
 }
 
 TEST(DesktopLauncher, ParseDevToolsActivePortFile_NoFile) {
@@ -277,7 +264,7 @@ TEST(DesktopLauncher, ParseDevToolsActivePortFile_NoFile) {
       temp_dir.GetPath().Append(FILE_PATH_LITERAL("DevToolsActivePort"));
   int port = 1111;
   ASSERT_FALSE(
-      internal::ParseDevToolsActivePortFile(temp_dir.GetPath(), &port).IsOk());
+      internal::ParseDevToolsActivePortFile(temp_dir.GetPath(), port).IsOk());
   ASSERT_EQ(port, 1111);
 }
 
@@ -287,7 +274,7 @@ TEST(DesktopLauncher, RemoveOldDevToolsActivePortFile_Success) {
   base::FilePath temp_file =
       temp_dir.GetPath().Append(FILE_PATH_LITERAL("DevToolsActivePort"));
   char data[] = "12345asdf\nblahblah";
-  base::WriteFile(temp_file, data, strlen(data));
+  base::WriteFile(temp_file, data);
   ASSERT_TRUE(
       internal::RemoveOldDevToolsActivePortFile(temp_dir.GetPath()).IsOk());
   ASSERT_FALSE(base::PathExists(temp_file));

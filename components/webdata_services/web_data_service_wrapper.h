@@ -7,8 +7,9 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
+#include "build/blink_buildflags.h"
 #include "build/build_config.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/sync/model/syncable_service.h"
@@ -18,7 +19,7 @@ class KeywordWebDataService;
 class TokenWebData;
 class WebDatabaseService;
 
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(USE_BLINK)
 namespace payments {
 class PaymentManifestWebDataService;
 }  // namespace payments
@@ -30,7 +31,7 @@ class AutofillWebDataService;
 
 namespace base {
 class FilePath;
-class SingleThreadTaskRunner;
+class SequencedTaskRunner;
 }  // namespace base
 
 // WebDataServiceWrapper is a KeyedService that owns multiple WebDataServices
@@ -63,7 +64,7 @@ class WebDataServiceWrapper : public KeyedService {
   WebDataServiceWrapper(
       const base::FilePath& context_path,
       const std::string& application_locale,
-      const scoped_refptr<base::SingleThreadTaskRunner>& ui_task_runner,
+      const scoped_refptr<base::SequencedTaskRunner>& ui_task_runner,
       const ShowErrorCallback& show_error_callback);
 
   WebDataServiceWrapper(const WebDataServiceWrapper&) = delete;
@@ -82,7 +83,7 @@ class WebDataServiceWrapper : public KeyedService {
   GetAccountAutofillWebData();
   virtual scoped_refptr<KeywordWebDataService> GetKeywordWebData();
   virtual scoped_refptr<TokenWebData> GetTokenWebData();
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(USE_BLINK)
   virtual scoped_refptr<payments::PaymentManifestWebDataService>
   GetPaymentManifestWebData();
 #endif
@@ -100,7 +101,7 @@ class WebDataServiceWrapper : public KeyedService {
   scoped_refptr<KeywordWebDataService> keyword_web_data_;
   scoped_refptr<TokenWebData> token_web_data_;
 
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(USE_BLINK)
   scoped_refptr<payments::PaymentManifestWebDataService>
       payment_manifest_web_data_;
 #endif

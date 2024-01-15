@@ -14,6 +14,8 @@
 
 #include "base/containers/flat_map.h"
 #include "base/time/time.h"
+#include "base/types/optional_ref.h"
+#include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/clipboard/clipboard.h"
@@ -39,7 +41,8 @@ class TestClipboard : public Clipboard {
 
   // Clipboard overrides.
   void OnPreShutdown() override;
-  DataTransferEndpoint* GetSource(ClipboardBuffer buffer) const override;
+  absl::optional<DataTransferEndpoint> GetSource(
+      ClipboardBuffer buffer) const override;
   const ClipboardSequenceNumberToken& GetSequenceNumber(
       ClipboardBuffer buffer) const override;
   std::vector<std::u16string> GetStandardFormats(
@@ -88,31 +91,26 @@ class TestClipboard : public Clipboard {
                 std::string* result) const override;
   base::Time GetLastModifiedTime() const override;
   void ClearLastModifiedTime() override;
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   bool IsSelectionBufferAvailable() const override;
-#endif  // defined(USE_OZONE)
+#endif  // BUILDFLAG(IS_OZONE)
   void WritePortableAndPlatformRepresentations(
       ClipboardBuffer buffer,
       const ObjectMap& objects,
       std::vector<Clipboard::PlatformRepresentation> platform_representations,
       std::unique_ptr<DataTransferEndpoint> data_src) override;
-  void WriteText(const char* text_data, size_t text_len) override;
-  void WriteHTML(const char* markup_data,
-                 size_t markup_len,
-                 const char* url_data,
-                 size_t url_len) override;
-  void WriteSvg(const char* markup_data, size_t markup_len) override;
-  void WriteRTF(const char* rtf_data, size_t data_len) override;
+  void WriteText(base::StringPiece text) override;
+  void WriteHTML(base::StringPiece markup,
+                 absl::optional<base::StringPiece> source_url,
+                 ClipboardContentType content_type) override;
+  void WriteSvg(base::StringPiece markup) override;
+  void WriteRTF(base::StringPiece rtf) override;
   void WriteFilenames(std::vector<ui::FileInfo> filenames) override;
-  void WriteBookmark(const char* title_data,
-                     size_t title_len,
-                     const char* url_data,
-                     size_t url_len) override;
+  void WriteBookmark(base::StringPiece title, base::StringPiece url) override;
   void WriteWebSmartPaste() override;
   void WriteBitmap(const SkBitmap& bitmap) override;
   void WriteData(const ClipboardFormatType& format,
-                 const char* data_data,
-                 size_t data_len) override;
+                 base::span<const uint8_t> data) override;
 
  private:
   struct DataStore {
@@ -121,15 +119,15 @@ class TestClipboard : public Clipboard {
     DataStore& operator=(const DataStore& other);
     ~DataStore();
     void Clear();
-    void SetDataSource(std::unique_ptr<DataTransferEndpoint> new_data_src);
-    DataTransferEndpoint* GetDataSource() const;
+    void SetDataSource(absl::optional<DataTransferEndpoint> new_data_src);
+    absl::optional<DataTransferEndpoint> GetDataSource() const;
     ClipboardSequenceNumberToken sequence_number;
     base::flat_map<ClipboardFormatType, std::string> data;
     std::string url_title;
     std::string html_src_url;
     std::vector<uint8_t> png;
     std::vector<ui::FileInfo> filenames;
-    std::unique_ptr<DataTransferEndpoint> data_src;
+    absl::optional<DataTransferEndpoint> data_src;
   };
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -142,7 +140,7 @@ class TestClipboard : public Clipboard {
   // IsReadAllowed() is called and returned.
   bool MaybeRetrieveSyncedSourceAndCheckIfReadIsAllowed(
       ClipboardBuffer buffer,
-      const DataTransferEndpoint* data_src,
+      base::optional_ref<const DataTransferEndpoint> data_src,
       const DataTransferEndpoint* data_dst) const;
 
   // The non-const versions update the sequence number as a side effect.

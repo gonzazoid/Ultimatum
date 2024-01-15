@@ -4,7 +4,7 @@
 
 #include "chrome/browser/safe_browsing/url_lookup_service_factory.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
 #include "chrome/browser/profiles/profile.h"
@@ -19,6 +19,7 @@
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "components/safe_browsing/buildflags.h"
 #include "components/safe_browsing/content/browser/safe_browsing_navigation_observer_manager.h"
+#include "components/safe_browsing/content/browser/web_ui/safe_browsing_ui.h"
 #include "components/safe_browsing/core/browser/realtime/url_lookup_service.h"
 #include "components/safe_browsing/core/browser/sync/safe_browsing_primary_account_token_fetcher.h"
 #include "components/safe_browsing/core/browser/sync/sync_utils.h"
@@ -39,11 +40,19 @@ RealTimeUrlLookupService* RealTimeUrlLookupServiceFactory::GetForProfile(
 // static
 RealTimeUrlLookupServiceFactory*
 RealTimeUrlLookupServiceFactory::GetInstance() {
-  return base::Singleton<RealTimeUrlLookupServiceFactory>::get();
+  static base::NoDestructor<RealTimeUrlLookupServiceFactory> instance;
+  return instance.get();
 }
 
 RealTimeUrlLookupServiceFactory::RealTimeUrlLookupServiceFactory()
-    : ProfileKeyedServiceFactory("RealTimeUrlLookupService") {
+    : ProfileKeyedServiceFactory(
+          "RealTimeUrlLookupService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(IdentityManagerFactory::GetInstance());
   DependsOn(SyncServiceFactory::GetInstance());
   DependsOn(VerdictCacheManagerFactory::GetInstance());
@@ -54,7 +63,8 @@ RealTimeUrlLookupServiceFactory::RealTimeUrlLookupServiceFactory()
   DependsOn(NetworkContextServiceFactory::GetInstance());
 }
 
-KeyedService* RealTimeUrlLookupServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+RealTimeUrlLookupServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   if (!g_browser_process->safe_browsing_service()) {
     return nullptr;
@@ -64,10 +74,12 @@ KeyedService* RealTimeUrlLookupServiceFactory::BuildServiceInstanceFor(
       std::make_unique<network::CrossThreadPendingSharedURLLoaderFactory>(
           g_browser_process->safe_browsing_service()->GetURLLoaderFactory(
               profile));
-  return new RealTimeUrlLookupService(
+  return std::make_unique<RealTimeUrlLookupService>(
       network::SharedURLLoaderFactory::Create(std::move(url_loader_factory)),
       VerdictCacheManagerFactory::GetForProfile(profile),
-      base::BindRepeating(&safe_browsing::GetUserPopulationForProfile, profile),
+      base::BindRepeating(
+          &safe_browsing::GetUserPopulationForProfileWithCookieTheftExperiments,
+          profile),
       profile->GetPrefs(),
       std::make_unique<SafeBrowsingPrimaryAccountTokenFetcher>(
           IdentityManagerFactory::GetForProfile(profile)),
@@ -77,7 +89,8 @@ KeyedService* RealTimeUrlLookupServiceFactory::BuildServiceInstanceFor(
                           IdentityManagerFactory::GetForProfile(profile)),
       profile->IsOffTheRecord(), g_browser_process->variations_service(),
       SafeBrowsingNavigationObserverManagerFactory::GetForBrowserContext(
-          profile));
+          profile),
+      WebUIInfoSingleton::GetInstance());
 }
 
 }  // namespace safe_browsing

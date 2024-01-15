@@ -6,13 +6,14 @@
 
 #include <set>
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback_forward.h"
 #include "net/base/schemeful_site.h"
 #include "net/cookies/cookie_constants.h"
 #include "net/cookies/cookie_util.h"
 #include "net/first_party_sets/first_party_set_metadata.h"
+#include "net/first_party_sets/first_party_sets_cache_filter.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -60,16 +61,20 @@ bool CookieAccessDelegateImpl::ShouldIgnoreSameSiteRestrictions(
   return false;
 }
 
-absl::optional<net::FirstPartySetMetadata>
+absl::optional<std::pair<net::FirstPartySetMetadata,
+                         net::FirstPartySetsCacheFilter::MatchInfo>>
 CookieAccessDelegateImpl::ComputeFirstPartySetMetadataMaybeAsync(
     const net::SchemefulSite& site,
     const net::SchemefulSite* top_frame_site,
-    const std::set<net::SchemefulSite>& party_context,
-    base::OnceCallback<void(net::FirstPartySetMetadata)> callback) const {
-  if (!first_party_sets_access_delegate_)
-    return {net::FirstPartySetMetadata()};
+    base::OnceCallback<void(net::FirstPartySetMetadata,
+                            net::FirstPartySetsCacheFilter::MatchInfo)>
+        callback) const {
+  if (!first_party_sets_access_delegate_) {
+    return std::make_pair(net::FirstPartySetMetadata(),
+                          net::FirstPartySetsCacheFilter::MatchInfo());
+  }
   return first_party_sets_access_delegate_->ComputeMetadata(
-      site, top_frame_site, party_context, std::move(callback));
+      site, top_frame_site, std::move(callback));
 }
 
 absl::optional<FirstPartySetsAccessDelegate::EntriesResult>
@@ -78,7 +83,7 @@ CookieAccessDelegateImpl::FindFirstPartySetEntries(
     base::OnceCallback<void(FirstPartySetsAccessDelegate::EntriesResult)>
         callback) const {
   if (!first_party_sets_access_delegate_)
-    return {{}};
+    return FirstPartySetsAccessDelegate::EntriesResult();
   return first_party_sets_access_delegate_->FindEntries(sites,
                                                         std::move(callback));
 }

@@ -103,6 +103,10 @@ class CONTENT_EXPORT NavigationPolicyContainerBuilder {
   // This must be called before `ComputePolicies()`.
   void SetIsOriginPotentiallyTrustworthy(bool value);
 
+  // Sets whether COOP origins allow the document to be crossOriginIsolated.
+  // This must be called before `ComputePolicies()`.
+  void SetAllowCrossOriginIsolation(bool value);
+
   // Records an additional Content Security Policy that will apply to the new
   // document. `policy` must not be null. Policies added this way are ignored
   // for failed navigations and history navigations.
@@ -144,7 +148,7 @@ class CONTENT_EXPORT NavigationPolicyContainerBuilder {
   void ComputePolicies(const GURL& url,
                        bool is_inside_mhtml,
                        network::mojom::WebSandboxFlags frame_sandbox_flags,
-                       bool is_anonymous);
+                       bool is_credentialless);
 
   // Returns a reference to the policies of the new document, i.e. the policies
   // in the policy container host to be committed.
@@ -158,6 +162,13 @@ class CONTENT_EXPORT NavigationPolicyContainerBuilder {
   // Should only be called once. `ComputePolicies()` or
   // `ComputePoliciesForError()` must have been called previously.
   blink::mojom::PolicyContainerPtr CreatePolicyContainerForBlink();
+
+  // Returns a new refptr to the `PolicyContainerHost`.
+  //
+  // `ComputePolicies()` or `ComputePoliciesForError()` must have been called
+  // previously.
+  // It is invalid to call after `TakePolicyContainerHost()`.
+  scoped_refptr<PolicyContainerHost> GetPolicyContainerHost();
 
   // Moves the `PolicyContainerHost` out of this builder. The returned host
   // contains the same policies as `FinalPolicies()`.
@@ -220,7 +231,7 @@ class CONTENT_EXPORT NavigationPolicyContainerBuilder {
       const GURL& url,
       bool is_inside_mhtml,
       network::mojom::WebSandboxFlags frame_sandbox_flags,
-      bool is_anonymous);
+      bool is_credentialless);
 
   // The policies of the parent document, if any.
   const std::unique_ptr<PolicyContainerPolicies> parent_policies_;

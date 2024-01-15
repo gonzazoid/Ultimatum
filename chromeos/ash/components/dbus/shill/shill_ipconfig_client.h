@@ -7,8 +7,8 @@
 
 #include <string>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "chromeos/ash/components/dbus/shill/shill_client_helper.h"
 
 namespace base {
@@ -33,10 +33,10 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillIPConfigClient {
    public:
     // Adds an IPConfig entry.
     virtual void AddIPConfig(const std::string& ip_config_path,
-                             const base::Value& properties) = 0;
+                             base::Value::Dict properties) = 0;
 
    protected:
-    virtual ~TestInterface() {}
+    virtual ~TestInterface() = default;
   };
 
   // Creates and initializes the global instance. |bus| must not be null.
@@ -65,11 +65,11 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillIPConfigClient {
       ShillPropertyChangedObserver* observer) = 0;
 
   // Calls the GetProperties DBus method and invokes |callback| when complete.
-  // |callback| receives a dictionary Value containing the IPCOnfig properties
-  // on success or nullopt on failure.
+  // |callback| receives a dictionary containing the IPCOnfig properties on
+  // success or nullopt on failure.
   virtual void GetProperties(
       const dbus::ObjectPath& ipconfig_path,
-      chromeos::DBusMethodCallback<base::Value> callback) = 0;
+      chromeos::DBusMethodCallback<base::Value::Dict> callback) = 0;
 
   // Calls SetProperty method.
   // |callback| is called after the method call succeeds.

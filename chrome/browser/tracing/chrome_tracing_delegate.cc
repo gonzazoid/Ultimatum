@@ -8,22 +8,20 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/json/values_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/no_destructor.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/tracing/background_tracing_field_trial.h"
 #include "chrome/browser/ui/browser_otr_state.h"
 #include "chrome/common/pref_names.h"
@@ -64,8 +62,8 @@ using tracing::BackgroundTracingStateManager;
 
 bool IsBackgroundTracingCommandLine() {
   auto tracing_mode = tracing::GetBackgroundTracingSetupMode();
-  if (tracing_mode == BackgroundTracingSetupMode::kFromConfigFile ||
-      tracing_mode == BackgroundTracingSetupMode::kFromFieldTrialLocalOutput) {
+  if (tracing_mode == BackgroundTracingSetupMode::kFromJsonConfigFile ||
+      tracing_mode == BackgroundTracingSetupMode::kFromProtoConfigFile) {
     return true;
   }
   return false;
@@ -153,13 +151,12 @@ void ChromeTracingDelegate::OnBrowserAdded(Browser* browser) {
 
 bool ChromeTracingDelegate::IsActionAllowed(
     BackgroundScenarioAction action,
-    const content::BackgroundTracingConfig& config,
-    bool requires_anonymized_data,
-    bool ignore_trace_limit) const {
+    bool requires_anonymized_data) const {
   // If the background tracing is specified on the command-line, we allow
   // any scenario to be traced and uploaded.
-  if (IsBackgroundTracingCommandLine())
+  if (IsBackgroundTracingCommandLine()) {
     return true;
+  }
 
   if (requires_anonymized_data &&
       (incognito_launched_ || chrome::IsOffTheRecordSessionActive())) {
@@ -180,19 +177,10 @@ bool ChromeTracingDelegate::IsActionAllowed(
     return false;
   }
 
-  // Check the trace limit for both kStartTracing and kUploadTrace actions
-  // because there is no point starting a trace that can't be uploaded.
-  if (!ignore_trace_limit && state.DidRecentlyUploadForScenario(config)) {
-    tracing::RecordDisallowedMetric(
-        tracing::TracingFinalizationDisallowedReason::kTraceUploadedRecently);
-    return false;
-  }
-
   return true;
 }
 
-bool ChromeTracingDelegate::IsAllowedToBeginBackgroundScenario(
-    const content::BackgroundTracingConfig& config,
+bool ChromeTracingDelegate::OnBackgroundTracingActive(
     bool requires_anonymized_data) {
   // We call Initialize() only when a tracing scenario tries to start, and
   // unless this happens we never save state. In particular, if the background
@@ -208,38 +196,26 @@ bool ChromeTracingDelegate::IsAllowedToBeginBackgroundScenario(
       BackgroundTracingStateManager::GetInstance();
   state.Initialize(g_browser_process->local_state());
 
-  // If the config includes a crash scenario, ignore the trace limit so that a
-  // trace can be taken on crash. We check if the trigger is actually due to a
-  // crash later before uploading.
-  const bool ignore_trace_limit = config.has_crash_scenario();
-
-  if (!IsActionAllowed(BackgroundScenarioAction::kStartTracing, config,
-                       requires_anonymized_data, ignore_trace_limit)) {
+  if (!IsActionAllowed(BackgroundScenarioAction::kStartTracing,
+                       requires_anonymized_data)) {
     return false;
   }
 
-  state.NotifyTracingStarted();
+  state.OnTracingStarted();
   return true;
 }
 
-bool ChromeTracingDelegate::IsAllowedToEndBackgroundScenario(
-    const content::BackgroundTracingConfig& config,
-    bool requires_anonymized_data,
-    bool is_crash_scenario) {
+bool ChromeTracingDelegate::OnBackgroundTracingIdle(
+    bool requires_anonymized_data) {
   BackgroundTracingStateManager& state =
       BackgroundTracingStateManager::GetInstance();
-  state.NotifyFinalizationStarted();
+  state.OnTracingStopped();
 
-  // If a crash scenario triggered, ignore the trace upload limit and continue
-  // uploading.
-  const bool ignore_trace_limit = is_crash_scenario;
+  return IsActionAllowed(BackgroundScenarioAction::kUploadTrace,
+                         requires_anonymized_data);
+}
 
-  if (!IsActionAllowed(BackgroundScenarioAction::kUploadTrace, config,
-                       requires_anonymized_data, ignore_trace_limit)) {
-    return false;
-  }
-
-  state.OnScenarioUploaded(config.scenario_name());
+bool ChromeTracingDelegate::ShouldSaveUnuploadedTrace() const {
   return true;
 }
 
@@ -253,11 +229,10 @@ bool ChromeTracingDelegate::IsSystemWideTracingEnabled() {
   // In non-dev images, honor the pref for system-wide tracing.
   PrefService* local_state = g_browser_process->local_state();
   DCHECK(local_state);
-  return local_state->GetBoolean(
-      chromeos::prefs::kDeviceSystemWideTracingEnabled);
+  return local_state->GetBoolean(ash::prefs::kDeviceSystemWideTracingEnabled);
 #elif BUILDFLAG(IS_CHROMEOS_LACROS)
   // This is a temporary solution that observes the ash pref
-  // chromeos::prefs::kDeviceSystemWideTracingEnabled via mojo IPC provided by
+  // ash::prefs::kDeviceSystemWideTracingEnabled via mojo IPC provided by
   // CrosapiPrefObserver.
   // crbug.com/1201582 is a long term solution for this which assumes that
   // device flags will be available to Lacros.
@@ -270,11 +245,13 @@ bool ChromeTracingDelegate::IsSystemWideTracingEnabled() {
 absl::optional<base::Value::Dict>
 ChromeTracingDelegate::GenerateMetadataDict() {
   base::Value::Dict metadata_dict;
+  // Do not include low anonymity field trials, to prevent them from being
+  // included in chrometto reports.
   std::vector<std::string> variations;
   variations::GetFieldTrialActiveGroupIdsAsStrings(base::StringPiece(),
                                                    &variations);
 
-  base::Value variations_list(base::Value::Type::LIST);
+  base::Value::List variations_list;
   for (const auto& it : variations)
     variations_list.Append(it);
 

@@ -5,32 +5,41 @@
 #ifndef ASH_PUBLIC_CPP_KIOSK_APP_MENU_H_
 #define ASH_PUBLIC_CPP_KIOSK_APP_MENU_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "ash/public/cpp/ash_public_export.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "components/account_id/account_id.h"
 #include "ui/gfx/image/image_skia.h"
 
 namespace ash {
 
-// Metadata about a kiosk app. Used for display in the kiosk app menu in the
-// login screen shelf.
+// Metadata used to populate the Kiosk apps menu in the login screen shelf.
 struct ASH_PUBLIC_EXPORT KioskAppMenuEntry {
-  KioskAppMenuEntry();
+  // Mirrors `KioskAppType`.
+  enum class AppType { kArcApp, kChromeApp, kWebApp };
+
+  KioskAppMenuEntry(AppType type,
+                    const AccountId& account_id,
+                    const std::optional<std::string>& chrome_app_id,
+                    std::u16string name,
+                    gfx::ImageSkia icon);
   KioskAppMenuEntry(const KioskAppMenuEntry& other);
   KioskAppMenuEntry(KioskAppMenuEntry&& other);
-  ~KioskAppMenuEntry();
 
   KioskAppMenuEntry& operator=(KioskAppMenuEntry&& other);
   KioskAppMenuEntry& operator=(const KioskAppMenuEntry& other);
 
-  // For Chrome kiosk apps only, the extension app id.
-  std::string app_id;
+  ~KioskAppMenuEntry();
 
-  // For ARC kiosk apps only, the account id for the app.
+  AppType type;
+
   AccountId account_id;
+
+  // Only present in Chrome apps, `nullopt` in other types.
+  std::optional<std::string> chrome_app_id;
 
   std::u16string name;
 

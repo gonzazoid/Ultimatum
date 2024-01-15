@@ -42,6 +42,7 @@
 
 namespace blink {
 
+enum class LCDTextPreference;
 class WebString;
 
 // WebSettings is owned by the WebView and allows code to modify the settings
@@ -91,7 +92,7 @@ class WebSettings {
   virtual bool ShrinksViewportContentToFit() const = 0;
   virtual bool ViewportEnabled() const = 0;
   virtual void SetAccelerated2dCanvasMSAASampleCount(int) = 0;
-  virtual void SetPreferCompositingToLCDTextEnabled(bool) = 0;
+  virtual void SetLCDTextPreference(LCDTextPreference) = 0;
   // Not implemented yet, see http://crbug.com/178119
   virtual void SetAcceleratedCompositingForTransitionEnabled(bool) {}
   // If set to true, allows frames with an https origin to display passive
@@ -109,15 +110,18 @@ class WebSettings {
   virtual void SetAllowRunningOfInsecureContent(bool) = 0;
   virtual void SetAllowScriptsToCloseWindows(bool) = 0;
   virtual void SetAllowUniversalAccessFromFileURLs(bool) = 0;
+  virtual void SetAccessibilityFontWeightAdjustment(int) = 0;
   virtual void SetAlwaysShowContextMenuOnTouch(bool) = 0;
   virtual void SetAntialiased2dCanvasEnabled(bool) = 0;
   virtual void SetAntialiasedClips2dCanvasEnabled(bool) = 0;
   virtual void SetAutoplayPolicy(mojom::AutoplayPolicy) = 0;
+  virtual void SetRequireTransientActivationForGetDisplayMedia(bool) = 0;
+  virtual void SetRequireTransientActivationForShowFileOrDirectoryPicker(
+      bool) = 0;
   virtual void SetAutoZoomFocusedEditableToLegibleScale(bool) = 0;
   virtual void SetCaretBrowsingEnabled(bool) = 0;
   virtual void SetClobberUserAgentInitialScaleQuirk(bool) = 0;
   virtual void SetCookieEnabled(bool) = 0;
-  virtual void SetNavigateOnDragDrop(bool) = 0;
   virtual void SetCursiveFontFamily(const WebString&,
                                     UScriptCode = USCRIPT_COMMON) = 0;
   virtual void SetDNSPrefetchingEnabled(bool) = 0;
@@ -135,6 +139,8 @@ class WebSettings {
   virtual void SetEditingBehavior(mojom::EditingBehavior) = 0;
   virtual void SetEnableScrollAnimator(bool) = 0;
   virtual void SetPrefersReducedMotion(bool) = 0;
+  virtual void SetPrefersReducedTransparency(bool) = 0;
+  virtual void SetInvertedColors(bool) = 0;
   virtual void SetSmoothScrollForFindEnabled(bool) = 0;
   virtual void SetWebGL1Enabled(bool) = 0;
   virtual void SetWebGL2Enabled(bool) = 0;
@@ -154,7 +160,6 @@ class WebSettings {
   virtual void SetIgnoreMainFrameOverflowHiddenQuirk(bool) = 0;
   virtual void SetImageAnimationPolicy(mojom::ImageAnimationPolicy) = 0;
   virtual void SetImagesEnabled(bool) = 0;
-  virtual void SetInlineTextBoxAccessibilityEnabled(bool) = 0;
   virtual void SetJavaScriptCanAccessClipboard(bool) = 0;
   virtual void SetJavaScriptEnabled(bool) = 0;
   virtual void SetHashNetPublicKey(const WebString) = 0;
@@ -181,6 +186,8 @@ class WebSettings {
   virtual void SetPrimaryPointerType(blink::mojom::PointerType) = 0;
   virtual void SetAvailableHoverTypes(int) = 0;
   virtual void SetPrimaryHoverType(blink::mojom::HoverType) = 0;
+  virtual void SetOutputDeviceUpdateAbilityType(
+      blink::mojom::OutputDeviceUpdateAbilityType) = 0;
   virtual void SetPreferHiddenVolumeControls(bool) = 0;
   virtual void SetShouldProtectAgainstIpcFlooding(bool) = 0;
   virtual void SetRenderVSyncNotificationEnabled(bool) = 0;
@@ -223,6 +230,7 @@ class WebSettings {
   virtual void SetTextAreasAreResizable(bool) = 0;
   virtual void SetTextAutosizingEnabled(bool) = 0;
   virtual void SetAccessibilityFontScaleFactor(float) = 0;
+  virtual void SetAccessibilityTextSizeContrastFactor(int) = 0;
   virtual void SetAccessibilityAlwaysShowFocus(bool) = 0;
   virtual void SetTextTrackKindUserPreference(TextTrackKindUserPreference) = 0;
   virtual void SetTextTrackBackgroundColor(const WebString&) = 0;
@@ -235,11 +243,9 @@ class WebSettings {
   virtual void SetTextTrackTextSize(const WebString&) = 0;
   virtual void SetTextTrackWindowColor(const WebString&) = 0;
   virtual void SetTextTrackWindowRadius(const WebString&) = 0;
-  virtual void SetThreadedScrollingEnabled(bool) = 0;
   virtual void SetTouchDragDropEnabled(bool) = 0;
   virtual void SetTouchDragEndContextMenu(bool) = 0;
   virtual void SetBarrelButtonForDragEnabled(bool) = 0;
-  virtual void SetUseLegacyBackgroundSizeShorthandBehavior(bool) = 0;
   virtual void SetViewportStyle(mojom::ViewportStyle) = 0;
   virtual void SetUseWideViewport(bool) = 0;
   virtual void SetV8CacheOptions(mojom::V8CacheOptions) = 0;
@@ -262,12 +268,12 @@ class WebSettings {
   virtual void SetLazyFrameLoadingDistanceThresholdPx2G(int) = 0;
   virtual void SetLazyFrameLoadingDistanceThresholdPx3G(int) = 0;
   virtual void SetLazyFrameLoadingDistanceThresholdPx4G(int) = 0;
-  virtual void SetLazyImageLoadingDistanceThresholdPxUnknown(int) = 0;
-  virtual void SetLazyImageLoadingDistanceThresholdPxOffline(int) = 0;
-  virtual void SetLazyImageLoadingDistanceThresholdPxSlow2G(int) = 0;
-  virtual void SetLazyImageLoadingDistanceThresholdPx2G(int) = 0;
-  virtual void SetLazyImageLoadingDistanceThresholdPx3G(int) = 0;
-  virtual void SetLazyImageLoadingDistanceThresholdPx4G(int) = 0;
+  virtual void SetLazyLoadingImageMarginPxUnknown(int) = 0;
+  virtual void SetLazyLoadingImageMarginPxOffline(int) = 0;
+  virtual void SetLazyLoadingImageMarginPxSlow2G(int) = 0;
+  virtual void SetLazyLoadingImageMarginPx2G(int) = 0;
+  virtual void SetLazyLoadingImageMarginPx3G(int) = 0;
+  virtual void SetLazyLoadingImageMarginPx4G(int) = 0;
   virtual void SetForceDarkModeEnabled(bool) = 0;
   virtual void SetPreferredColorScheme(blink::mojom::PreferredColorScheme) = 0;
   virtual void SetPreferredContrast(mojom::PreferredContrast) = 0;

@@ -14,14 +14,13 @@
 #include "ash/components/arc/test/connection_holder_util.h"
 #include "ash/components/arc/test/fake_file_system_instance.h"
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/arc/fileapi/arc_content_file_system_url_util.h"
 #include "chrome/browser/ash/arc/fileapi/arc_file_system_operation_runner.h"
-#include "chrome/browser/chromeos/fileapi/external_file_url_util.h"
+#include "chrome/browser/ash/fileapi/external_file_url_util.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "content/public/test/browser_task_environment.h"
@@ -82,13 +81,14 @@ class ArcContentFileSystemAsyncFileUtilTest : public testing::Test {
 
     arc_service_manager_->arc_bridge_service()->file_system()->CloseInstance(
         &fake_file_system_);
+    arc_service_manager_->set_browser_context(nullptr);
   }
 
  protected:
   storage::FileSystemURL ExternalFileURLToFileSystemURL(const GURL& url) {
     base::FilePath mount_point_virtual_path =
         base::FilePath::FromASCII(kContentFileSystemMountPointName);
-    base::FilePath virtual_path = chromeos::ExternalFileURLToVirtualPath(url);
+    base::FilePath virtual_path = ash::ExternalFileURLToVirtualPath(url);
     base::FilePath path(kContentFileSystemMountPointPath);
     EXPECT_TRUE(
         mount_point_virtual_path.AppendRelativePath(virtual_path, &path));
@@ -115,7 +115,7 @@ TEST_F(ArcContentFileSystemAsyncFileUtilTest, GetFileInfo) {
   async_file_util_->GetFileInfo(
       std::unique_ptr<storage::FileSystemOperationContext>(),
       ExternalFileURLToFileSystemURL(externalfile_url),
-      -1,  // fields
+      storage::FileSystemOperation::GetMetadataFieldSet::All(),
       base::BindOnce(
           [](base::RunLoop* run_loop, base::File::Error error,
              const base::File::Info& info) {

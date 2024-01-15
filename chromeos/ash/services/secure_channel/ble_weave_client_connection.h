@@ -10,11 +10,13 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
@@ -29,7 +31,6 @@
 #include "device/bluetooth/bluetooth_gatt_notify_session.h"
 #include "device/bluetooth/bluetooth_remote_gatt_characteristic.h"
 #include "device/bluetooth/public/cpp/bluetooth_uuid.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class TaskRunner;
@@ -116,7 +117,7 @@ class BluetoothLowEnergyWeaveClientConnection
   void Disconnect() override;
   std::string GetDeviceAddress() override;
   void GetConnectionRssi(
-      base::OnceCallback<void(absl::optional<int32_t>)> callback) override;
+      base::OnceCallback<void(std::optional<int32_t>)> callback) override;
 
  protected:
   enum BleWeaveConnectionResult {
@@ -332,7 +333,7 @@ class BluetoothLowEnergyWeaveClientConnection
 
     Packet value;
     WriteRequestType request_type;
-    WireMessage* associated_wire_message;
+    raw_ptr<WireMessage, DanglingUntriaged> associated_wire_message;
     int number_of_failed_attempts = 0;
   };
 
@@ -348,7 +349,7 @@ class BluetoothLowEnergyWeaveClientConnection
   void OnTimeoutForSubStatus(SubStatus status);
 
   void OnConnectionInfo(
-      base::OnceCallback<void(absl::optional<int32_t>)> rssi_callback,
+      base::OnceCallback<void(std::optional<int32_t>)> rssi_callback,
       const device::BluetoothDevice::ConnectionInfo& connection_info);
 
   // These functions are used to set up the connection so that it is ready to
@@ -357,7 +358,7 @@ class BluetoothLowEnergyWeaveClientConnection
   void CreateGattConnection();
   void OnGattConnectionCreated(
       std::unique_ptr<device::BluetoothGattConnection> gatt_connection,
-      absl::optional<device::BluetoothDevice::ConnectErrorCode> error_code);
+      std::optional<device::BluetoothDevice::ConnectErrorCode> error_code);
   void OnSetConnectionLatencySuccess();
   void OnSetConnectionLatencyErrorOrTimeout();
   void OnCharacteristicsFound(const RemoteAttribute& service,

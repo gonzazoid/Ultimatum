@@ -11,9 +11,9 @@
 #include <queue>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/synchronization/condition_variable.h"
@@ -21,14 +21,11 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/test_pending_task.h"
 #include "base/threading/thread_checker_impl.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/clock.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
 
 namespace base {
-
-class ThreadTaskRunnerHandle;
 
 // ATTENTION: Prefer using base::test::SingleThreadTaskEnvironment with a
 // base::test::SingleThreadTaskEnvironment::TimeSource::MOCK_TIME trait instead.
@@ -58,7 +55,8 @@ class ThreadTaskRunnerHandle;
 //
 // A TestMockTimeTaskRunner of Type::kBoundToThread has the following additional
 // properties:
-//   - Thread/SequencedTaskRunnerHandle refers to it on its thread.
+//   - Thread/SequencedTaskRunner::CurrentDefaultHandle refers to it on its
+//     thread.
 //   - It can be driven by a RunLoop on the thread it was created on.
 //     RunLoop::Run() will result in running non-delayed tasks until idle and
 //     then, if RunLoop::QuitWhenIdle() wasn't invoked, fast-forwarding time to
@@ -76,7 +74,8 @@ class TestMockTimeTaskRunner : public SingleThreadTaskRunner,
                                public RunLoop::Delegate {
  public:
   // Everything that is executed in the scope of a ScopedContext will behave as
-  // though it ran under |scope| (i.e. ThreadTaskRunnerHandle,
+  // though it ran under |scope|
+  // (i.e. SingleThreadTaskRunner::CurrentDefaultHandle,
   // RunsTasksInCurrentSequence, etc.). This allows the test body to be all in
   // one block when multiple TestMockTimeTaskRunners share the main thread.
   // Note: RunLoop isn't supported: will DCHECK if used inside a ScopedContext.
@@ -87,7 +86,8 @@ class TestMockTimeTaskRunner : public SingleThreadTaskRunner,
   //    protected:
   //     DoBarOnFoo() {
   //       DCHECK(foo_task_runner_->RunsOnCurrentThread());
-  //       EXPECT_EQ(foo_task_runner_, ThreadTaskRunnerHandle::Get());
+  //       EXPECT_EQ(
+  //           foo_task_runner_, SingleThreadTaskRunner::GetCurrentDefault());
   //       DoBar();
   //     }
   //
@@ -124,18 +124,19 @@ class TestMockTimeTaskRunner : public SingleThreadTaskRunner,
     ~ScopedContext();
 
    private:
-    ThreadTaskRunnerHandleOverrideForTesting
-        thread_task_runner_handle_override_;
+    SingleThreadTaskRunner::CurrentHandleOverrideForTesting
+        single_thread_task_runner_current_default_handle_override_;
   };
 
   enum class Type {
     // A TestMockTimeTaskRunner which can only be driven directly through its
-    // API. Thread/SequencedTaskRunnerHandle will refer to it only in the scope
-    // of its tasks.
+    // API. SingleThread/SequencedTaskRunner::CurrentDefaultHandle will refer to
+    // it only in the scope of its tasks.
     kStandalone,
     // A TestMockTimeTaskRunner which will associate to the thread it is created
     // on, enabling RunLoop to drive it and making
-    // Thread/SequencedTaskRunnerHandle refer to it on that thread.
+    // Thread/SequencedTaskRunner::CurrentDefaultHandle refer to it on that
+    // thread.
     kBoundToThread,
   };
 
@@ -317,7 +318,8 @@ class TestMockTimeTaskRunner : public SingleThreadTaskRunner,
   ConditionVariable tasks_lock_cv_;
 
   const scoped_refptr<NonOwningProxyTaskRunner> proxy_task_runner_;
-  std::unique_ptr<ThreadTaskRunnerHandle> thread_task_runner_handle_;
+  std::unique_ptr<SingleThreadTaskRunner::CurrentDefaultHandle>
+      thread_task_runner_handle_;
 
   // Set to true in RunLoop::Delegate::Quit() to signal the topmost
   // RunLoop::Delegate::Run() instance to stop, reset to false when it does.

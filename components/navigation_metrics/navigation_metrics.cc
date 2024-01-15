@@ -7,6 +7,7 @@
 #include <iterator>
 #include <string>
 
+#include "base/feature_list.h"
 #include "base/i18n/rtl.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_split.h"
@@ -19,12 +20,17 @@
 #include "net/base/url_util.h"
 #include "url/gurl.h"
 #include "url/url_canon.h"
+#include "url/url_features.h"
 
 namespace navigation_metrics {
 
 const char kMainFrameScheme[] = "Navigation.MainFrameScheme2";
 const char kMainFrameSchemeDifferentPage[] =
     "Navigation.MainFrameSchemeDifferentPage2";
+// Same as kMainFrameSchemeDifferentPage, but only recorded if the hostname is
+// non-unique (e.g. http://site.test):
+const char kMainFrameSchemeDifferentPageNonUniqueHostname[] =
+    "Navigation.MainFrameSchemeDifferentPage2NonUniqueHostname";
 const char kMainFrameSchemeOTR[] = "Navigation.MainFrameSchemeOTR2";
 const char kMainFrameSchemeDifferentPageOTR[] =
     "Navigation.MainFrameSchemeDifferentPageOTR2";
@@ -141,26 +147,30 @@ void RecordPrimaryMainFrameNavigation(
   Scheme scheme = GetScheme(url);
   UMA_HISTOGRAM_ENUMERATION(kMainFrameScheme, scheme, Scheme::COUNT);
   if (!is_same_document) {
-    UMA_HISTOGRAM_ENUMERATION("Navigation.MainFrameSchemeDifferentPage2",
-                              scheme, Scheme::COUNT);
-    UMA_HISTOGRAM_BOOLEAN("Navigation.MainFrameHasRTLDomainDifferentPage2",
+    UMA_HISTOGRAM_ENUMERATION(kMainFrameSchemeDifferentPage, scheme,
+                              Scheme::COUNT);
+    UMA_HISTOGRAM_BOOLEAN(kMainFrameHasRTLDomainDifferentPage,
                           base::i18n::StringContainsStrongRTLChars(
                               url_formatter::IDNToUnicode(url.host())));
+
+    if (net::IsHostnameNonUnique(url.host())) {
+      UMA_HISTOGRAM_ENUMERATION(kMainFrameSchemeDifferentPageNonUniqueHostname,
+                                scheme, Scheme::COUNT);
+    }
   }
 
-  UMA_HISTOGRAM_BOOLEAN("Navigation.MainFrameHasRTLDomain2",
+  UMA_HISTOGRAM_BOOLEAN(kMainFrameHasRTLDomain,
                         base::i18n::StringContainsStrongRTLChars(
                             url_formatter::IDNToUnicode(url.host())));
 
   if (is_off_the_record) {
-    UMA_HISTOGRAM_ENUMERATION("Navigation.MainFrameSchemeOTR2", scheme,
-                              Scheme::COUNT);
+    UMA_HISTOGRAM_ENUMERATION(kMainFrameSchemeOTR, scheme, Scheme::COUNT);
     if (!is_same_document) {
-      UMA_HISTOGRAM_ENUMERATION("Navigation.MainFrameSchemeDifferentPageOTR2",
-                                scheme, Scheme::COUNT);
+      UMA_HISTOGRAM_ENUMERATION(kMainFrameSchemeDifferentPageOTR, scheme,
+                                Scheme::COUNT);
     }
   }
-  UMA_HISTOGRAM_ENUMERATION("Navigation.MainFrameProfileType2", profile_type);
+  UMA_HISTOGRAM_ENUMERATION(kMainFrameProfileType, profile_type);
 }
 
 void RecordOmniboxURLNavigation(const GURL& url) {
@@ -170,6 +180,9 @@ void RecordOmniboxURLNavigation(const GURL& url) {
 
 IDNA2008DeviationCharacter RecordIDNA2008Metrics(
     const std::u16string& hostname16) {
+  if (!url::IsRecordingIDNA2008Metrics()) {
+    return IDNA2008DeviationCharacter::kNone;
+  }
   if (hostname16.empty()) {
     return IDNA2008DeviationCharacter::kNone;
   }

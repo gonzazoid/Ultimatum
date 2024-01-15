@@ -6,8 +6,8 @@
 
 #include <cstddef>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
 #include "device/bluetooth/bluetooth_gatt_characteristic.h"
@@ -158,7 +158,7 @@ void BluetoothGattCharacteristicServiceProviderImpl::SendValueChanged(
   array_writer.OpenDictEntry(&dict_entry_writer);
   dict_entry_writer.AppendString(bluetooth_gatt_characteristic::kValueProperty);
   dict_entry_writer.OpenVariant("ay", &variant_writer);
-  variant_writer.AppendArrayOfBytes(value.data(), value.size());
+  variant_writer.AppendArrayOfBytes(value);
   dict_entry_writer.CloseContainer(&variant_writer);
   array_writer.CloseContainer(&dict_entry_writer);
   writer.CloseContainer(&array_writer);
@@ -512,7 +512,7 @@ void BluetoothGattCharacteristicServiceProviderImpl::OnReadValue(
   std::unique_ptr<dbus::Response> response =
       dbus::Response::FromMethodCall(method_call);
   dbus::MessageWriter writer(response.get());
-  writer.AppendArrayOfBytes(value.data(), value.size());
+  writer.AppendArrayOfBytes(value);
   std::move(response_sender).Run(std::move(response));
 }
 

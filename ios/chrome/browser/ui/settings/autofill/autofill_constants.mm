@@ -4,10 +4,6 @@
 
 #import "ios/chrome/browser/ui/settings/autofill/autofill_constants.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 NSString* const kAutofillProfileEditTableViewId =
     @"kAutofillProfileEditTableViewId";
 NSString* const kAutofillProfileTableViewID = @"kAutofillProfileTableViewID";
@@ -23,6 +19,16 @@ NSString* const kAutofillCreditCardManagedViewId =
     @"kAutofillCreditCardManagedViewId";
 NSString* const kAutofillPaymentMethodsToolbarId =
     @"kAutofillPaymentMethodsToolbarId";
+NSString* const kAutofillMandatoryReauthSwitchViewId =
+    @"kAutofillMandatoryReauthSwitchViewId";
 
 NSString* const kAutofillCreditCardEditTableViewId =
     @"kAutofillCreditCardEditTableViewId";
+
+NSString* const kAutofillCountrySelectionTableViewId =
+    @"kAutofillCountrySelectionTableViewId";
+NSString* const kAutofillCountrySelectionSearchScrimId =
+    @"kAutofillCountrySelectionSearchScrimId";
+
+NSString* const kAutofillAddressMigrateToAccountButtonId =
+    @"kAutofillAddressMigrateToAccountButtonId";

@@ -20,14 +20,6 @@
 namespace guest_os {
 namespace {
 
-bool MatchContainerDict(const base::Value& dict, const GuestId& container_id) {
-  const std::string* vm_name = dict.FindStringKey(prefs::kVmNameKey);
-  const std::string* container_name =
-      dict.FindStringKey(prefs::kContainerNameKey);
-  return (vm_name && *vm_name == container_id.vm_name) &&
-         (container_name && *container_name == container_id.container_name);
-}
-
 static const base::NoDestructor<std::vector<std::string>> kPropertiesAllowList{{
     prefs::kContainerCreateOptions,
     prefs::kContainerOsVersionKey,
@@ -35,7 +27,9 @@ static const base::NoDestructor<std::vector<std::string>> kPropertiesAllowList{{
     prefs::kContainerColorKey,
     prefs::kTerminalSupportedKey,
     prefs::kTerminalLabel,
+    prefs::kTerminalPolicyDisabled,
     prefs::kContainerSharedVmDevicesKey,
+    prefs::kBruschettaConfigId,
 }};
 
 }  // namespace
@@ -99,20 +93,12 @@ std::ostream& operator<<(std::ostream& ostream, const GuestId& container_id) {
                  << container_id.container_name << "\")";
 }
 
-void RemoveDuplicateContainerEntries(PrefService* prefs) {
-  ScopedListPrefUpdate updater(prefs, prefs::kGuestOsContainers);
-
-  std::set<GuestId> seen_containers;
-  auto& containers = *updater;
-  for (auto it = containers.begin(); it != containers.end();) {
-    GuestId id(*it);
-    if (seen_containers.find(id) == seen_containers.end()) {
-      seen_containers.insert(id);
-      it++;
-    } else {
-      it = containers.erase(it);
-    }
-  }
+bool MatchContainerDict(const base::Value& dict, const GuestId& container_id) {
+  const std::string* vm_name = dict.GetDict().FindString(prefs::kVmNameKey);
+  const std::string* container_name =
+      dict.GetDict().FindString(prefs::kContainerNameKey);
+  return (vm_name && *vm_name == container_id.vm_name) &&
+         (container_name && *container_name == container_id.container_name);
 }
 
 std::vector<GuestId> GetContainers(Profile* profile, VmType vm_type) {
@@ -132,16 +118,16 @@ void AddContainerToPrefs(Profile* profile,
                          const GuestId& container_id,
                          base::Value::Dict properties) {
   ScopedListPrefUpdate updater(profile->GetPrefs(), prefs::kGuestOsContainers);
-  if (base::ranges::any_of(*updater, [&](const auto& dict) {
+  if (base::ranges::any_of(*updater, [&container_id](const auto& dict) {
         return MatchContainerDict(dict, container_id);
       })) {
     return;
   }
 
-  base::Value new_container{container_id.ToDictValue()};
-  for (const auto item : properties) {
-    if (base::Contains(*kPropertiesAllowList, item.first)) {
-      new_container.SetKey(std::move(item.first), std::move(item.second));
+  base::Value::Dict new_container = container_id.ToDictValue();
+  for (auto [key, value] : properties) {
+    if (base::Contains(*kPropertiesAllowList, key)) {
+      new_container.Set(key, std::move(value));
     }
   }
   updater->Append(std::move(new_container));
@@ -174,7 +160,7 @@ const base::Value* GetContainerPrefValue(Profile* profile,
       profile->GetPrefs()->GetList(prefs::kGuestOsContainers);
   for (const auto& dict : containers) {
     if (MatchContainerDict(dict, container_id))
-      return dict.FindKey(key);
+      return dict.GetDict().Find(key);
   }
   return nullptr;
 }
@@ -189,7 +175,7 @@ void UpdateContainerPref(Profile* profile,
   });
   if (it != updater->end()) {
     if (base::Contains(*kPropertiesAllowList, key)) {
-      it->SetKey(key, std::move(value));
+      it->GetDict().Set(key, std::move(value));
     } else {
       LOG(ERROR) << "Ignoring disallowed property: " << key;
     }
@@ -227,7 +213,7 @@ VmType VmTypeFromPref(const base::Value& pref) {
 
   // Default is TERMINA(0) if field not present since this field was introduced
   // when only TERMINA was using prefs..
-  auto type = pref.FindIntKey(guest_os::prefs::kVmTypeKey);
+  auto type = pref.GetDict().FindInt(guest_os::prefs::kVmTypeKey);
   if (!type.has_value()) {
     LOG(WARNING) << "No VM type in pref, defaulting to termina";
     return VmType::TERMINA;

@@ -60,6 +60,10 @@ WebGraphicsContext3DProviderImpl::WebGPUInterface() {
   return provider_->WebGPUInterface();
 }
 
+gpu::ContextSupport* WebGraphicsContext3DProviderImpl::ContextSupport() {
+  return provider_->ContextSupport();
+}
+
 bool WebGraphicsContext3DProviderImpl::IsContextLost() {
   return RasterInterface() &&
          RasterInterface()->GetGraphicsResetStatusKHR() != GL_NO_ERROR;
@@ -164,7 +168,7 @@ void WebGraphicsContext3DProviderImpl::OnContextLost() {
 
 cc::ImageDecodeCache* WebGraphicsContext3DProviderImpl::ImageDecodeCache(
     SkColorType color_type) {
-  DCHECK(GetCapabilities().supports_oop_raster ||
+  DCHECK(GetCapabilities().gpu_rasterization ||
          GetGrContext()->colorTypeSupportedAsImage(color_type));
   auto cache_iterator = image_decode_cache_map_.find(color_type);
   if (cache_iterator != image_decode_cache_map_.end())
@@ -176,7 +180,7 @@ cc::ImageDecodeCache* WebGraphicsContext3DProviderImpl::ImageDecodeCache(
   static const size_t kMaxWorkingSetBytes = 64 * 1024 * 1024;
 
   // TransferCache is used only with OOP raster.
-  const bool use_transfer_cache = GetCapabilities().supports_oop_raster;
+  const bool use_transfer_cache = GetCapabilities().gpu_rasterization;
 
   auto insertion_result = image_decode_cache_map_.emplace(
       color_type,
@@ -203,6 +207,11 @@ void WebGraphicsContext3DProviderImpl::CopyVideoFrame(
 viz::RasterContextProvider*
 WebGraphicsContext3DProviderImpl::RasterContextProvider() const {
   return provider_.get();
+}
+
+unsigned int WebGraphicsContext3DProviderImpl::GetGrGLTextureFormat(
+    viz::SharedImageFormat format) const {
+  return provider_->GetGrGLTextureFormat(format);
 }
 
 }  // namespace content

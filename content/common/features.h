@@ -7,25 +7,126 @@
 
 #include "base/compiler_specific.h"
 #include "base/feature_list.h"
+#include "base/metrics/field_trial_params.h"
+#include "content/common/content_export.h"
 
-namespace content {
+namespace features {
 
 // Please keep features in alphabetical order.
-
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kAllowContentInitiatedDataUrlNavigations);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kAndroidDownloadableFontsMatching);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kBackForwardCacheTimeToLiveControl);
+BASE_DECLARE_FEATURE(kBeforeUnloadBrowserResponseQueue);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(
+    kBlockInsecurePrivateNetworkRequestsFromUnknown);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kBrowserVerifiedUserActivationKeyboard);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kCanvas2DImageChromium);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kCompositeClipPathAnimation);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kCodeCacheDeletionWithoutFilter);
+BASE_DECLARE_FEATURE(kConsolidatedIPCForProxyCreation);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kConsolidatedMovementXY);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kCriticalClientHint);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kDataUrlsHaveStableNonce);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kDataUrlsHaveOriginAsUrl);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kDesktopCaptureChangeSource);
+#if BUILDFLAG(IS_MAC)
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kDeviceMonitorMac);
+#endif
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kDocumentPolicyNegotiation);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kEnableBackForwardCacheForScreenReader);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(
+    kEnableBackForwardCacheForOngoingSubframeNavigation);
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kEnableDevToolsJsErrorReporting);
+#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kEnsureAllowBindingsIsAlwaysForWebUI);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kEmbeddingRequiresOptIn);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kExperimentalContentSecurityPolicyFeatures);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kFedCmIdAssertionCORS);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kFedCmIdpSigninStatusMetrics);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kFledgeLimitNumAuctions);
+CONTENT_EXPORT extern const base::FeatureParam<int>
+    kFledgeLimitNumAuctionsParam;
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kFledgeUseInterestGroupCache);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kFledgeDelayPostAuctionInterestGroupUpdate);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kFontSrcLocalMatching);
+#if !BUILDFLAG(IS_ANDROID)
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kForwardMemoryPressureEventsToGpuProcess);
+#endif
+#if BUILDFLAG(IS_WIN)
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kGpuInfoCollectionSeparatePrefetch);
+#endif
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kGroupNIKByJoiningOrigin);
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kHandleChildThreadTypeChangesInBrowser);
+#endif
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kHighPriorityBeforeUnload);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kInMemoryCodeCache);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kInnerFrameCompositorSurfaceEviction);
+#if BUILDFLAG(IS_MAC)
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kIOSurfaceCapturer);
+#endif
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kJavaScriptArrayGrouping);
+#if BUILDFLAG(IS_MAC)
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kMacWebContentsOcclusion);
+#endif
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kMediaDevicesSystemMonitorCache);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kMediaStreamTrackTransfer);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kMojoDedicatedThread);
 #if BUILDFLAG(IS_ANDROID)
-// Unifies RenderWidgetHostViewAndroid with the other platforms in their usage
-// of OnShowWithPageVisibility. Disabling will revert the refactor and use the
-// direct ShowInternal path.
-BASE_DECLARE_FEATURE(kOnShowWithPageVisibility);
-#endif  // BUILDFLAG(IS_ANDROID)
-
-// When enabled, queues navigations instead of cancelling the previous
-// navigation if the previous navigation is already waiting for commit.
-// See https://crbug.com/838348 and https://crbug.com/1220337.
-BASE_DECLARE_FEATURE(kQueueNavigationsWhileWaitingForCommit);
+BASE_DECLARE_FEATURE(kOptimizeImmHideCalls);
+#endif
+#if !BUILDFLAG(IS_ANDROID)
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kPermissionsPolicyVerificationInContent);
+#endif
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kPreloadingConfig);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kPreloadCookies);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kPrivacySandboxAdsAPIsM1Override);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(
+    kPrivateNetworkAccessForNavigationsWarningOnly);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kProactivelySwapBrowsingInstance);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kProcessSharingWithDefaultSiteInstances);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kProcessSharingWithStrictSiteInstances);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kReloadHiddenTabsWithCrashedSubframes);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(
+    kRunStableVideoDecoderFactoryProcessServiceOnIOThread);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(
+    kResourceTimingForCancelledNavigationInFrame);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kRequestFileSetCheckedInCanRequestURL);
+BASE_DECLARE_FEATURE(kRestrictCanAccessDataForOriginToUIThread);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kReuseInitialRenderFrameHostForWebUI);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kSendBeaconThrowForBlobWithNonSimpleType);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kServiceWorkerAutoPreload);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(
+    kServiceWorkerStaticRouterStartServiceWorker);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(
+    kServiceWorkerBypassFetchHandlerHashStrings);
+CONTENT_EXPORT extern const base::FeatureParam<std::string>
+    kServiceWorkerBypassFetchHandlerBypassedHashStrings;
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kSignedExchangeReportingForDistributors);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kSiteIsolationCitadelEnforcement);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kSkipEarlyCommitPendingForCrashedFrame);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kSpeculativeServiceWorkerStartup);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kStopVideoCaptureOnScreenLock);
+#if BUILDFLAG(IS_MAC)
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kTextInputClient);
+CONTENT_EXPORT extern const base::FeatureParam<base::TimeDelta>
+    kTextInputClientIPCTimeout;
+#endif
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kTouchpadAsyncPinchEvents);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kTouchpadOverscrollHistoryNavigation);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kTrustedTypesFromLiteral);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kVideoPlaybackQuality);
+#if BUILDFLAG(IS_ANDROID)
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kWarmUpNetworkProcess);
+#endif
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kWebAssemblyDynamicTiering);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kWebOTPAssertionFeaturePolicy);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kWebRtcUseGpuMemoryBufferVideoFrames);
+CONTENT_EXPORT BASE_DECLARE_FEATURE(kWindowOpenFileSelectFix);
 
 // Please keep features in alphabetical order.
 
-}  // namespace content
+}  // namespace features
 
 #endif  // CONTENT_COMMON_FEATURES_H_

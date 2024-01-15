@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {addSingletonGetter} from 'chrome://resources/js/cr.m.js';
-
 import {BrowserBridge} from './browser_bridge.js';
 // <if expr="chromeos_ash">
 import {CrosView} from './chromeos_view.js';
@@ -12,10 +10,14 @@ import {DnsView} from './dns_view.js';
 import {DomainSecurityPolicyView} from './domain_security_policy_view.js';
 import {EventsView} from './events_view.js';
 import {ProxyView} from './proxy_view.js';
+import {SharedDictionaryView} from './shared_dictionary_view.js';
 import {SocketsView} from './sockets_view.js';
 import {TabSwitcherView} from './tab_switcher_view.js';
 import {hasTouchScreen} from './util.js';
 import {WindowView} from './view.js';
+
+/** @type {?MainView} */
+let instance = null;
 
 /**
  * This class is the root view object of the page.  It owns all the other
@@ -81,6 +83,7 @@ export class MainView extends WindowView {
     addTab(DnsView);
     addTab(SocketsView);
     addTab(DomainSecurityPolicyView);
+    addTab(SharedDictionaryView);
     // <if expr="chromeos_ash">
     addTab(CrosView);
     // </if>
@@ -148,9 +151,11 @@ export class MainView extends WindowView {
       }
     }
   }
-}
 
-addSingletonGetter(MainView);
+  static getInstance() {
+    return instance || (instance = new MainView());
+  }
+}
 
 /**
  * Takes the current hash in form of "#tab&param1=value1&param2=value2&..."

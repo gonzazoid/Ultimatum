@@ -2,10 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "third_party/blink/renderer/core/css/cssom/paint_worklet_style_property_map.h"
+
 #include <memory>
 #include <utility>
-
-#include "third_party/blink/renderer/core/css/cssom/paint_worklet_style_property_map.h"
 
 #include "third_party/blink/renderer/core/animation/compositor_animations.h"
 #include "third_party/blink/renderer/core/css/css_custom_property_declaration.h"
@@ -25,21 +25,19 @@ namespace blink {
 namespace {
 
 class PaintWorkletStylePropertyMapIterationSource final
-    : public PairIterable<String,
-                          IDLString,
-                          CSSStyleValueVector,
-                          IDLSequence<CSSStyleValue>>::IterationSource {
+    : public PairSyncIterable<StylePropertyMapReadOnly>::IterationSource {
  public:
   explicit PaintWorkletStylePropertyMapIterationSource(
       HeapVector<PaintWorkletStylePropertyMap::StylePropertyMapEntry> values)
       : index_(0), values_(values) {}
 
-  bool Next(ScriptState*,
-            String& key,
-            CSSStyleValueVector& value,
-            ExceptionState&) override {
-    if (index_ >= values_.size())
+  bool FetchNextItem(ScriptState*,
+                     String& key,
+                     CSSStyleValueVector& value,
+                     ExceptionState&) override {
+    if (index_ >= values_.size()) {
       return false;
+    }
 
     const PaintWorkletStylePropertyMap::StylePropertyMapEntry& pair =
         values_.at(index_++);
@@ -50,8 +48,7 @@ class PaintWorkletStylePropertyMapIterationSource final
 
   void Trace(Visitor* visitor) const override {
     visitor->Trace(values_);
-    PairIterable<String, IDLString, CSSStyleValueVector,
-                 IDLSequence<CSSStyleValue>>::IterationSource::Trace(visitor);
+    PairSyncIterable<StylePropertyMapReadOnly>::IterationSource::Trace(visitor);
   }
 
  private:
@@ -67,15 +64,18 @@ bool BuildNativeValues(const ComputedStyle& style,
     // Silently drop shorthand properties.
     DCHECK_NE(property_id, CSSPropertyID::kInvalid);
     DCHECK_NE(property_id, CSSPropertyID::kVariable);
-    if (CSSProperty::Get(property_id).IsShorthand())
+    if (CSSProperty::Get(property_id).IsShorthand()) {
       continue;
+    }
     std::unique_ptr<CrossThreadStyleValue> value =
         CSSProperty::Get(property_id)
             .CrossThreadStyleValueFromComputedStyle(
                 style, /* layout_object */ nullptr,
                 /* allow_visited_style */ false);
-    if (value->GetType() == CrossThreadStyleValue::StyleValueType::kUnknownType)
+    if (value->GetType() ==
+        CrossThreadStyleValue::StyleValueType::kUnknownType) {
       return false;
+    }
     data.Set(CSSProperty::Get(property_id).GetPropertyNameString(),
              std::move(value));
   }
@@ -96,8 +96,10 @@ bool BuildCustomValues(
         ref.GetProperty().CrossThreadStyleValueFromComputedStyle(
             style, /* layout_object */ nullptr,
             /* allow_visited_style */ false);
-    if (value->GetType() == CrossThreadStyleValue::StyleValueType::kUnknownType)
+    if (value->GetType() ==
+        CrossThreadStyleValue::StyleValueType::kUnknownType) {
       return false;
+    }
     // In order to animate properties, we need to track the compositor element
     // id on which they will be animated.
     const bool animatable_property =
@@ -130,11 +132,13 @@ PaintWorkletStylePropertyMap::BuildCrossThreadData(
   PaintWorkletStylePropertyMap::CrossThreadData data;
   data.ReserveCapacityForSize(native_properties.size() +
                               custom_properties.size());
-  if (!BuildNativeValues(style, native_properties, data))
+  if (!BuildNativeValues(style, native_properties, data)) {
     return absl::nullopt;
+  }
   if (!BuildCustomValues(document, unique_object_id, style, custom_properties,
-                         data, input_property_keys))
+                         data, input_property_keys)) {
     return absl::nullopt;
+  }
   return data;
 }
 
@@ -143,8 +147,9 @@ PaintWorkletStylePropertyMap::CrossThreadData
 PaintWorkletStylePropertyMap::CopyCrossThreadData(const CrossThreadData& data) {
   PaintWorkletStylePropertyMap::CrossThreadData copied_data;
   copied_data.ReserveCapacityForSize(data.size());
-  for (auto& pair : data)
+  for (auto& pair : data) {
     copied_data.Set(pair.key, pair.value->IsolatedCopy());
+  }
   return copied_data;
 }
 
@@ -179,8 +184,9 @@ CSSStyleValueVector PaintWorkletStylePropertyMap::getAll(
 
   CSSStyleValueVector values;
   auto value = data_.find(property_name);
-  if (value == data_.end())
+  if (value == data_.end()) {
     return CSSStyleValueVector();
+  }
   values.push_back(value->value->ToCSSStyleValue());
   return values;
 }
@@ -197,8 +203,9 @@ unsigned PaintWorkletStylePropertyMap::size() const {
 }
 
 PaintWorkletStylePropertyMap::IterationSource*
-PaintWorkletStylePropertyMap::StartIteration(ScriptState* script_state,
-                                             ExceptionState& exception_state) {
+PaintWorkletStylePropertyMap::CreateIterationSource(
+    ScriptState* script_state,
+    ExceptionState& exception_state) {
   // TODO(xidachen): implement this function. Note that the output should be
   // sorted.
   HeapVector<PaintWorkletStylePropertyMap::StylePropertyMapEntry> result;

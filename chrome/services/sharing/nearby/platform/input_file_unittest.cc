@@ -13,7 +13,6 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -77,7 +76,7 @@ class InputFileTest : public PlatformTest {
       if (byte_array.Empty())
         break;
 
-      file_data.append(byte_array.data(), byte_array.size());
+      file_data.append(byte_array.AsStringView());
     }
 
     EXPECT_EQ(expected_data_, file_data);
@@ -142,4 +141,3 @@ TEST_F(InputFileTest, TestExtractUnderlyingFile_Invalid) {
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

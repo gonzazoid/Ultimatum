@@ -30,6 +30,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_SVG_GRAPHICS_SVG_IMAGE_CHROME_CLIENT_H_
 
 #include "base/gtest_prod_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/loader/empty_clients.h"
 #include "third_party/blink/renderer/platform/heap/disallow_new_wrapper.h"
@@ -82,6 +83,10 @@ class CORE_EXPORT SVGImageChromeClient final : public EmptyChromeClient {
   FRIEND_TEST_ALL_PREFIXES(SVGImageTest, TimelineSuspendAndResume);
   FRIEND_TEST_ALL_PREFIXES(SVGImageTest, ResetAnimation);
   FRIEND_TEST_ALL_PREFIXES(SVGImageSimTest, PageVisibilityHiddenToVisible);
+  FRIEND_TEST_ALL_PREFIXES(SVGImageSimTest,
+                           AnimationsPausedWhenImageScrolledOutOfView);
+  FRIEND_TEST_ALL_PREFIXES(SVGImageSimTest,
+                           AnimationsResumedWhenImageScrolledIntoView);
 };
 
 template <>

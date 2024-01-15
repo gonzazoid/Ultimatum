@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "components/password_manager/core/browser/form_fetcher.h"
 #include "components/password_manager/core/browser/password_form.h"
@@ -38,13 +38,6 @@ class MovePasswordToAccountStoreHelper : public FormFetcher::Consumer {
   base::OnceClosure done_callback_;
   std::unique_ptr<FormFetcher> form_fetcher_;
 };
-
-// Helper functions which moves a batch of passwords and takes care of memory
-// management.
-void MovePasswordsToAccountStore(
-    const std::vector<PasswordForm>& forms,
-    PasswordManagerClient* client,
-    metrics_util::MoveToAccountStoreTrigger trigger);
 
 }  // namespace password_manager
 

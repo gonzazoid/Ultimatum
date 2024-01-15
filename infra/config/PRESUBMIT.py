@@ -9,14 +9,13 @@ for more details on the presubmit API built into depot_tools.
 """
 
 PRESUBMIT_VERSION = '2.0.0'
-USE_PYTHON3 = True
 
 _IGNORE_FREEZE_FOOTER = 'Ignore-Freeze'
 
 # The time module's handling of timezones is abysmal, so the boundaries are
 # precomputed in UNIX time
-_FREEZE_START = 1639641600  # 2021/12/16 00:00 -0800
-_FREEZE_END = 1641196800  # 2022/01/03 00:00 -0800
+_FREEZE_START = 1702627200  # 2023/12/15 00:00 -0800
+_FREEZE_END = 1704182400  # 2024/01/02 00:00 -0800
 
 
 def CheckFreeze(input_api, output_api):
@@ -28,11 +27,16 @@ def CheckFreeze(input_api, output_api):
         ts = input_api.time.localtime(t)
         return input_api.time.strftime('%Y/%m/%d %H:%M %z', ts)
 
+      # Don't report errors when on the presubmit --all bot or when testing with
+      # presubmit --files.
+      if input_api.no_diffs:
+        report_type = output_api.PresubmitPromptWarning
+      else:
+        report_type = output_api.PresubmitError
       return [
-          output_api.PresubmitError(
-              'There is a prod freeze in effect from {} until {},'
-              ' files in //infra/config cannot be modified'.format(
-                  convert(_FREEZE_START), convert(_FREEZE_END)))
+          report_type('There is a prod freeze in effect from {} until {},'
+                      ' files in //infra/config cannot be modified'.format(
+                          convert(_FREEZE_START), convert(_FREEZE_END)))
       ]
 
   return []
@@ -40,12 +44,8 @@ def CheckFreeze(input_api, output_api):
 
 def CheckTests(input_api, output_api):
   glob = input_api.os_path.join(input_api.PresubmitLocalPath(), '*_test.py')
-  tests = input_api.canned_checks.GetUnitTests(input_api,
-                                               output_api,
-                                               input_api.glob(glob),
-                                               run_on_python2=False,
-                                               run_on_python3=True,
-                                               skip_shebang_check=True)
+  tests = input_api.canned_checks.GetUnitTests(input_api, output_api,
+                                               input_api.glob(glob))
   return input_api.RunTests(tests)
 
 
@@ -62,9 +62,9 @@ def CheckLintLuciMilo(input_api, output_api):
   return []
 
 def CheckTestingBuildbot(input_api, output_api):
-  if ('infra/config/generated/luci/luci-milo.cfg' in input_api.LocalPaths() or
-      'infra/config/generated/luci/luci-milo-dev.cfg' in input_api.LocalPaths()
-      ):
+  if ('infra/config/generated/luci/luci-milo.cfg' in input_api.LocalPaths()
+      or 'infra/config/generated/luci/luci-milo-dev.cfg'
+      in input_api.LocalPaths()):
     return input_api.RunTests([
         input_api.Command(name='testing/buildbot config checks',
                           cmd=[
@@ -95,6 +95,21 @@ def CheckChangedLUCIConfigs(input_api, output_api):
       input_api, output_api)
 
 
+def CheckPylFilesSynced(input_api, output_api):
+  return input_api.RunTests([
+      input_api.Command(
+          name='check-pyl-files-synced',
+          cmd=[
+              input_api.python3_executable,
+              'scripts/sync-pyl-files.py',
+              '--check',
+          ],
+          kwargs={},
+          message=output_api.PresubmitError,
+      ),
+  ])
+
+
 # Footer indicating a CL that is trying to address an outage by some mechanism
 # other than those in infra/config/outages
 _OUTAGE_ACTION_FOOTER = 'Infra-Config-Outage-Action'
@@ -105,7 +120,7 @@ _IGNORE_OUTAGE_FOOTER = 'Infra-Config-Ignore-Outage'
 def CheckOutagesConfigOnCommit(input_api, output_api):
   outages_pyl = input_api.os_path.join(
       input_api.PresubmitLocalPath(), 'generated/outages.pyl')
-  with open(outages_pyl) as f:
+  with open(outages_pyl, encoding='utf-8') as f:
     outages_config = input_api.ast.literal_eval(f.read())
 
   if not outages_config:

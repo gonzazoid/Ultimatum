@@ -41,7 +41,7 @@ V8RenderingContext* HTMLCanvasElementModule::getContext(
 }
 
 OffscreenCanvas* HTMLCanvasElementModule::transferControlToOffscreen(
-    ExecutionContext* execution_context,
+    ScriptState* script_state,
     HTMLCanvasElement& canvas,
     ExceptionState& exception_state) {
   if (canvas.RenderingContext()) {
@@ -58,8 +58,8 @@ OffscreenCanvas* HTMLCanvasElementModule::transferControlToOffscreen(
         "Cannot transfer control from a canvas for more than one time.");
   } else {
     canvas.CreateLayer();
-    offscreen_canvas = TransferControlToOffscreenInternal(
-        execution_context, canvas, exception_state);
+    offscreen_canvas = TransferControlToOffscreenInternal(script_state, canvas,
+                                                          exception_state);
   }
 
   base::UmaHistogramBoolean("Blink.OffscreenCanvas.TransferControlToOffscreen",
@@ -68,14 +68,14 @@ OffscreenCanvas* HTMLCanvasElementModule::transferControlToOffscreen(
 }
 
 OffscreenCanvas* HTMLCanvasElementModule::TransferControlToOffscreenInternal(
-    ExecutionContext* execution_context,
+    ScriptState* script_state,
     HTMLCanvasElement& canvas,
     ExceptionState& exception_state) {
-  OffscreenCanvas* offscreen_canvas = OffscreenCanvas::Create(
-      execution_context, canvas.width(), canvas.height());
+  OffscreenCanvas* offscreen_canvas =
+      OffscreenCanvas::Create(script_state, canvas.width(), canvas.height());
   offscreen_canvas->SetFilterQuality(canvas.FilterQuality());
 
-  DOMNodeId canvas_id = DOMNodeIds::IdForNode(&canvas);
+  DOMNodeId canvas_id = canvas.GetDomNodeId();
   canvas.RegisterPlaceholderCanvas(static_cast<int>(canvas_id));
   offscreen_canvas->SetPlaceholderCanvasId(canvas_id);
 

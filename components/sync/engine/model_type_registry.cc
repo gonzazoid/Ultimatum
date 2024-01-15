@@ -8,7 +8,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
@@ -92,10 +92,6 @@ void ModelTypeRegistry::DisconnectDataType(ModelType type) {
   }
 }
 
-void ModelTypeRegistry::SetProxyTabsDatatypeEnabled(bool enabled) {
-  proxy_tabs_datatype_enabled_ = enabled;
-}
-
 ModelTypeSet ModelTypeRegistry::GetConnectedTypes() const {
   ModelTypeSet types;
   for (const std::unique_ptr<ModelTypeWorker>& worker :
@@ -103,10 +99,6 @@ ModelTypeSet ModelTypeRegistry::GetConnectedTypes() const {
     types.Put(worker->GetModelType());
   }
   return types;
-}
-
-bool ModelTypeRegistry::proxy_tabs_datatype_enabled() const {
-  return proxy_tabs_datatype_enabled_;
 }
 
 ModelTypeSet ModelTypeRegistry::GetInitialSyncEndedTypes() const {
@@ -140,16 +132,32 @@ KeystoreKeysHandler* ModelTypeRegistry::keystore_keys_handler() {
   return sync_encryption_handler_->GetKeystoreKeysHandler();
 }
 
+ModelTypeSet ModelTypeRegistry::GetTypesWithUnsyncedData() const {
+  ModelTypeSet types;
+  for (const std::unique_ptr<ModelTypeWorker>& worker :
+       connected_model_type_workers_) {
+    if (worker->HasLocalChanges()) {
+      types.Put(worker->GetModelType());
+    }
+  }
+  return types;
+}
+
 bool ModelTypeRegistry::HasUnsyncedItems() const {
   // For model type workers, we ask them individually.
   for (const std::unique_ptr<ModelTypeWorker>& worker :
        connected_model_type_workers_) {
-    if (worker->HasLocalChangesForTest()) {
+    if (worker->HasLocalChanges()) {
       return true;
     }
   }
 
   return false;
+}
+
+const std::vector<std::unique_ptr<ModelTypeWorker>>&
+ModelTypeRegistry::GetConnectedModelTypeWorkersForTest() const {
+  return connected_model_type_workers_;
 }
 
 base::WeakPtr<ModelTypeConnector> ModelTypeRegistry::AsWeakPtr() {

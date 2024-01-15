@@ -6,12 +6,13 @@
 #include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
-#include "base/test/simple_test_tick_clock.h"
 #include "content/browser/accessibility/browser_accessibility_manager.h"
 #include "content/browser/accessibility/test_browser_accessibility_delegate.h"
 #include "content/public/test/browser_task_environment.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/accessibility/accessibility_features.h"
+#include "ui/accessibility/ax_mode_observer.h"
 #include "ui/accessibility/platform/ax_platform_node.h"
 #include "ui/events/base_event_utils.h"
 
@@ -28,22 +29,20 @@ class BrowserAccessibilityStateImplTest : public ::testing::Test {
   void SetUp() override {
     scoped_feature_list_.InitAndEnableFeature(
         features::kAutoDisableAccessibility);
-    ui::SetEventTickClockForTesting(&clock_);
     // Set the initial time to something non-zero.
-    clock_.Advance(base::Seconds(100));
+    task_environment_.FastForwardBy(base::Seconds(100));
     state_ = BrowserAccessibilityStateImpl::GetInstance();
   }
 
   void TearDown() override {
     // Disable accessibility so that it does not impact subsequent tests.
     state_->DisableAccessibility();
-    ui::SetEventTickClockForTesting(nullptr);
   }
 
   base::test::ScopedFeatureList scoped_feature_list_;
-  base::SimpleTestTickClock clock_;
   raw_ptr<BrowserAccessibilityStateImpl> state_;
-  BrowserTaskEnvironment task_environment_;
+  BrowserTaskEnvironment task_environment_{
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   std::unique_ptr<TestBrowserAccessibilityDelegate>
       test_browser_accessibility_delegate_;
 };
@@ -65,7 +64,7 @@ TEST_F(BrowserAccessibilityStateImplTest,
   // Don't simulate any accessibility APIs in that time.
   state_->OnUserInputEvent();
   state_->OnUserInputEvent();
-  clock_.Advance(base::Seconds(31));
+  task_environment_.FastForwardBy(base::Seconds(31));
   state_->OnUserInputEvent();
 
   // Accessibility should now be disabled.
@@ -97,7 +96,7 @@ TEST_F(BrowserAccessibilityStateImplTest,
   // but simulate accessibility APIs in that time.
   state_->OnUserInputEvent();
   state_->OnUserInputEvent();
-  clock_.Advance(base::Seconds(31));
+  task_environment_.FastForwardBy(base::Seconds(31));
   state_->OnAccessibilityApiUsage();
   state_->OnUserInputEvent();
 
@@ -109,7 +108,7 @@ TEST_F(BrowserAccessibilityStateImplTest,
   // user input event, before the delay.
   state_->OnUserInputEvent();
   state_->OnAccessibilityApiUsage();
-  clock_.Advance(base::Seconds(31));
+  task_environment_.FastForwardBy(base::Seconds(31));
   state_->OnUserInputEvent();
   state_->OnUserInputEvent();
 
@@ -119,7 +118,7 @@ TEST_F(BrowserAccessibilityStateImplTest,
 
   // Advance another 31 seconds and simulate another user input event;
   // now accessibility should be disabled.
-  clock_.Advance(base::Seconds(31));
+  task_environment_.FastForwardBy(base::Seconds(31));
   state_->OnUserInputEvent();
   EXPECT_FALSE(state_->IsAccessibleBrowser());
   EXPECT_EQ(ui::AXPlatformNode::GetAccessibilityMode(), ui::AXMode());
@@ -140,7 +139,7 @@ TEST_F(BrowserAccessibilityStateImplTest,
   // but add a new accessibility mode flag.
   state_->OnUserInputEvent();
   state_->OnUserInputEvent();
-  clock_.Advance(base::Seconds(31));
+  task_environment_.FastForwardBy(base::Seconds(31));
   state_->AddAccessibilityModeFlags(ui::kAXModeComplete);
   state_->OnUserInputEvent();
 
@@ -177,13 +176,92 @@ TEST_F(BrowserAccessibilityStateImplTest,
   // checking the role, which should register accessibility API usage.
   state_->OnUserInputEvent();
   state_->OnUserInputEvent();
-  clock_.Advance(base::Seconds(31));
+  task_environment_.FastForwardBy(base::Seconds(31));
   ax_root->GetRole();
   state_->OnUserInputEvent();
 
   // Accessibility should still be enabled due to GetRole() being called.
   EXPECT_TRUE(state_->IsAccessibleBrowser());
   EXPECT_EQ(ui::AXPlatformNode::GetAccessibilityMode(), ui::kAXModeComplete);
+}
+
+TEST_F(BrowserAccessibilityStateImplTest, DisableAccessibilityHasADelay) {
+  // Initially accessibility should be disabled.
+  EXPECT_FALSE(state_->IsAccessibleBrowser());
+
+  // Enable accessibility.
+  state_->OnScreenReaderDetected();
+  EXPECT_TRUE(state_->IsAccessibleBrowser());
+
+  // After 10 seconds, disable accessibility in response to client being quit.
+  task_environment_.FastForwardBy(base::Seconds(10));
+  state_->OnScreenReaderStopped();
+
+  // After one second, accessibility support should still be enabled. This is
+  // because we delay disabling accessibility support in response to the client
+  // being quit just in case it is about to be toggled back on.
+  task_environment_.FastForwardBy(base::Seconds(1));
+  EXPECT_TRUE(state_->IsAccessibleBrowser());
+
+  // After the delay has passed without support being re-enabled, accessibility
+  // should now be disabled.
+  task_environment_.FastForwardBy(base::Seconds(10));
+  EXPECT_FALSE(state_->IsAccessibleBrowser());
+}
+
+TEST_F(BrowserAccessibilityStateImplTest,
+       EnableImmediatelyAfterDisablePreventsDisable) {
+  // Initially accessibility should be disabled.
+  EXPECT_FALSE(state_->IsAccessibleBrowser());
+
+  // Enable accessibility.
+  state_->OnScreenReaderDetected();
+  EXPECT_TRUE(state_->IsAccessibleBrowser());
+
+  // After 10 seconds, disable accessibility in response to client being quit.
+  // Then re-enable it immediately. Accessibility support should never get
+  // disabled because it was re-enabled before the delay to disable support
+  // had passed.
+  task_environment_.FastForwardBy(base::Seconds(10));
+  state_->OnScreenReaderStopped();
+  EXPECT_TRUE(state_->IsAccessibleBrowser());
+
+  task_environment_.FastForwardBy(base::Milliseconds(10));
+  state_->OnScreenReaderDetected();
+  for (int i = 0; i < 10; i++) {
+    task_environment_.FastForwardBy(base::Seconds(i));
+    EXPECT_TRUE(state_->IsAccessibleBrowser());
+  }
+}
+
+namespace {
+using ::testing::_;
+
+class MockAXModeObserver : public ui::AXModeObserver {
+ public:
+  MOCK_METHOD(void, OnAXModeAdded, (ui::AXMode mode), (override));
+};
+
+}  // namespace
+TEST_F(BrowserAccessibilityStateImplTest,
+       EnablingAccessibilityTwiceSendsASingleNotification) {
+  // Initially accessibility should be disabled.
+  EXPECT_FALSE(state_->IsAccessibleBrowser());
+
+  auto& ax_platform = ui::AXPlatform::GetInstance();
+  ::testing::StrictMock<MockAXModeObserver> mock_observer;
+  base::ScopedObservation<ui::AXPlatform, ui::AXModeObserver>
+      scoped_observation(&mock_observer);
+  scoped_observation.Observe(&ax_platform);
+
+  // Enable accessibility.
+  EXPECT_CALL(mock_observer, OnAXModeAdded(ui::kAXModeComplete));
+  state_->OnScreenReaderDetected();
+  ::testing::Mock::VerifyAndClearExpectations(&mock_observer);
+
+  // A second call should be a no-op.
+  state_->OnScreenReaderDetected();
+  ::testing::Mock::VerifyAndClearExpectations(&mock_observer);
 }
 
 }  // namespace content

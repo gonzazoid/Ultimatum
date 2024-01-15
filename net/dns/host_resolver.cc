@@ -9,8 +9,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/ranges/algorithm.h"
@@ -75,18 +75,12 @@ class FailingRequestImpl : public HostResolver::ResolveHostRequest,
     return nullptr;
   }
 
-  const absl::optional<std::vector<std::string>>& GetTextResults()
-      const override {
-    static const base::NoDestructor<absl::optional<std::vector<std::string>>>
-        nullopt_result;
-    return *nullopt_result;
+  const std::vector<std::string>* GetTextResults() const override {
+    return nullptr;
   }
 
-  const absl::optional<std::vector<HostPortPair>>& GetHostnameResults()
-      const override {
-    static const base::NoDestructor<absl::optional<std::vector<HostPortPair>>>
-        nullopt_result;
-    return *nullopt_result;
+  const std::vector<HostPortPair>* GetHostnameResults() const override {
+    return nullptr;
   }
 
   const std::set<std::string>* GetDnsAliasResults() const override {
@@ -316,8 +310,8 @@ HostCache* HostResolver::GetHostCache() {
   return nullptr;
 }
 
-base::Value HostResolver::GetDnsConfigAsValue() const {
-  return base::Value(base::Value::Type::DICTIONARY);
+base::Value::Dict HostResolver::GetDnsConfigAsValue() const {
+  return base::Value::Dict();
 }
 
 void HostResolver::SetRequestContext(URLRequestContext* request_context) {
@@ -503,19 +497,8 @@ int HostResolver::SquashErrorCode(int error) {
 }
 
 // static
-std::vector<HostResolverEndpointResult>
-HostResolver::AddressListToEndpointResults(const AddressList& address_list) {
-  HostResolverEndpointResult connection_endpoint;
-  connection_endpoint.ip_endpoints = address_list.endpoints();
-
-  std::vector<HostResolverEndpointResult> list;
-  list.push_back(std::move(connection_endpoint));
-  return list;
-}
-
-// static
 AddressList HostResolver::EndpointResultToAddressList(
-    const std::vector<HostResolverEndpointResult>& endpoints,
+    base::span<const HostResolverEndpointResult> endpoints,
     const std::set<std::string>& aliases) {
   AddressList list;
 
@@ -533,13 +516,20 @@ AddressList HostResolver::EndpointResultToAddressList(
 }
 
 // static
-std::vector<IPEndPoint> HostResolver::GetNonProtocolEndpoints(
-    const std::vector<HostResolverEndpointResult>& endpoints) {
-  auto non_protocol_endpoint =
-      base::ranges::find_if(endpoints, &EndpointResultIsNonProtocol);
-  if (non_protocol_endpoint == endpoints.end())
-    return std::vector<IPEndPoint>();
-  return non_protocol_endpoint->ip_endpoints;
+bool HostResolver::AllProtocolEndpointsHaveEch(
+    base::span<const HostResolverEndpointResult> endpoints) {
+  bool has_svcb = false;
+  for (const auto& endpoint : endpoints) {
+    if (!endpoint.metadata.supported_protocol_alpns.empty()) {
+      has_svcb = true;
+      if (endpoint.metadata.ech_config_list.empty()) {
+        return false;  // There is a non-ECH SVCB/HTTPS route.
+      }
+    }
+  }
+  // Either there were no SVCB/HTTPS records (should be SVCB-optional), or there
+  // were and all supported ECH (should be SVCB-reliant).
+  return has_svcb;
 }
 
 HostResolver::HostResolver() = default;

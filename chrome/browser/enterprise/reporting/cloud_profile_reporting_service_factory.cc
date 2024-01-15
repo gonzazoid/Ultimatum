@@ -16,7 +16,8 @@ namespace enterprise_reporting {
 // static
 CloudProfileReportingServiceFactory*
 CloudProfileReportingServiceFactory::GetInstance() {
-  return base::Singleton<CloudProfileReportingServiceFactory>::get();
+  static base::NoDestructor<CloudProfileReportingServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -26,11 +27,12 @@ CloudProfileReportingServiceFactory::GetForProfile(Profile* profile) {
       GetInstance()->GetServiceForBrowserContext(profile, /*create=*/true));
 }
 
-KeyedService* CloudProfileReportingServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+CloudProfileReportingServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
 
-  return new CloudProfileReportingService(
+  return std::make_unique<CloudProfileReportingService>(
       profile,
       g_browser_process->browser_policy_connector()
           ->device_management_service(),

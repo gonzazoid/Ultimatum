@@ -3,21 +3,21 @@
 // found in the LICENSE file.
 
 import 'chrome://diagnostics/cellular_info.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
 import {getLockType, getSignalStrength} from 'chrome://diagnostics/diagnostics_utils.js';
 import {fakeCellularNetwork} from 'chrome://diagnostics/fake_data.js';
+import {assertFalse, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
-
-import {assertFalse, assertTrue} from '../../chai_assert.js';
 
 import {assertDataPointHasExpectedHeaderAndValue} from './diagnostics_test_utils.js';
 
-export function cellularInfoTestSuite() {
+suite('cellularInfoTestSuite', function() {
   /** @type {?CellularInfoElement} */
   let cellularInfoElement = null;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes.emptyHTML;
   });
 
   teardown(() => {
@@ -170,4 +170,4 @@ export function cellularInfoTestSuite() {
                 cellularInfoElement, '#technology',
                 cellularInfoElement.i18n('networkTechnologyLabel'), ''));
   });
-}
+});

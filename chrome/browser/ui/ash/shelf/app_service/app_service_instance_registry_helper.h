@@ -9,6 +9,7 @@
 #include <memory>
 #include <set>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_forward.h"
 #include "chrome/browser/ui/ash/shelf/shelf_controller_helper.h"
 #include "components/services/app_service/public/cpp/instance.h"
@@ -122,9 +123,9 @@ class AppServiceInstanceRegistryHelper {
   // `browser_window_to_tab_windows_` and `tab_window_to_browser_window_`.
   void UpdateTabWindow(const std::string& app_id, aura::Window* window);
 
-  AppServiceAppWindowShelfController* controller_ = nullptr;
+  raw_ptr<AppServiceAppWindowShelfController> controller_ = nullptr;
 
-  apps::AppServiceProxy* proxy_ = nullptr;
+  raw_ptr<apps::AppServiceProxy> proxy_ = nullptr;
 
   // Used to get app info for tabs.
   std::unique_ptr<ShelfControllerHelper> shelf_controller_helper_;

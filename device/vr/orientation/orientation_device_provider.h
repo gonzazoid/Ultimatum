@@ -7,8 +7,8 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "device/vr/orientation/orientation_device.h"
 #include "device/vr/public/cpp/vr_device_provider.h"
@@ -30,7 +30,8 @@ class COMPONENT_EXPORT(VR_ORIENTATION) VROrientationDeviceProvider
 
   ~VROrientationDeviceProvider() override;
 
-  void Initialize(VRDeviceProviderClient* client) override;
+  void Initialize(VRDeviceProviderClient* client,
+                  content::WebContents* initializing_web_contents) override;
 
   bool Initialized() override;
 

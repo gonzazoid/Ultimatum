@@ -10,7 +10,9 @@
 
 #include <memory>
 
+#include "base/memory/raw_ref.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "media/cast/cast_environment.h"
 #include "media/cast/encoding/size_adaptable_video_encoder_base.h"
 #include "media/cast/encoding/video_encoder.h"
@@ -18,6 +20,9 @@
 #include "ui/gfx/geometry/size.h"
 
 namespace media {
+
+class VideoEncoderMetricsProvider;
+
 namespace cast {
 
 // Cast MAIN thread proxy to the internal media::VideoEncodeAccelerator
@@ -42,6 +47,7 @@ class ExternalVideoEncoder final : public VideoEncoder {
   ExternalVideoEncoder(
       const scoped_refptr<CastEnvironment>& cast_environment,
       const FrameSenderConfig& video_config,
+      VideoEncoderMetricsProvider& metrics_provider,
       const gfx::Size& frame_size,
       FrameId first_frame_id,
       StatusChangeCallback status_change_cb,
@@ -66,6 +72,8 @@ class ExternalVideoEncoder final : public VideoEncoder {
   // of |client_| via the encoder task runner.
   void DestroyClientSoon();
 
+  void SetErrorToMetricsProvider(const media::EncoderStatus& encoder_status);
+
   // Method invoked by the CreateVideoEncodeAcceleratorCallback to construct a
   // VEAClientImpl to own and interface with a new |vea|.  Upon return,
   // |client_| holds a reference to the new VEAClientImpl.
@@ -77,6 +85,8 @@ class ExternalVideoEncoder final : public VideoEncoder {
       std::unique_ptr<media::VideoEncodeAccelerator> vea);
 
   const scoped_refptr<CastEnvironment> cast_environment_;
+
+  raw_ref<VideoEncoderMetricsProvider> metrics_provider_;
 
   // The size of the visible region of the video frames to be encoded.
   const gfx::Size frame_size_;
@@ -99,6 +109,7 @@ class SizeAdaptableExternalVideoEncoder final
   SizeAdaptableExternalVideoEncoder(
       const scoped_refptr<CastEnvironment>& cast_environment,
       const FrameSenderConfig& video_config,
+      std::unique_ptr<VideoEncoderMetricsProvider> metrics_provider,
       StatusChangeCallback status_change_cb,
       const CreateVideoEncodeAcceleratorCallback& create_vea_cb);
 

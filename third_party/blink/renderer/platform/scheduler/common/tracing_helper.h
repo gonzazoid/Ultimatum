@@ -6,15 +6,16 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_COMMON_TRACING_HELPER_H_
 
 #include <string>
-#include <unordered_set>
 
 #include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/typed_macros.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
+#include "third_party/blink/renderer/platform/wtf/hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/perfetto/include/perfetto/tracing/event_context.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value.h"
@@ -73,7 +74,7 @@ class PLATFORM_EXPORT TraceableVariableController {
   void OnTraceLogEnabled();
 
  private:
-  std::unordered_set<TraceableVariable*> traceable_variables_;
+  HashSet<TraceableVariable*> traceable_variables_;
 };
 
 class TraceableVariable {
@@ -90,7 +91,8 @@ class TraceableVariable {
   virtual void OnTraceLogEnabled() = 0;
 
  private:
-  TraceableVariableController* const controller_;  // Not owned.
+  const raw_ptr<TraceableVariableController, ExperimentalRenderer>
+      controller_;  // Not owned.
 };
 
 // TRACE_EVENT macros define static variable to cache a pointer to the state

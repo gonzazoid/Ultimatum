@@ -45,22 +45,21 @@ usb_test(() => {
         }
       };
 
-      iframe.contentWindow.postMessage('Ready', '*');
+      iframe.contentWindow.postMessage('ConnectEvent', '*');
     });
   });
 }, 'events are not delivered to detached frames');
 
 usb_test(async (t) => {
   const device = await getDetachedUsbDevice();
-  let error = new Error();
   try {
     await device.forget();
+    assert_unreached();
   } catch (e) {
     // Cannot use promise_rejects_dom() because |e| is thrown from a different
     // global.
-    error = e;
+    assert_equals(e.name, 'NotSupportedError');
   }
-  assert_equals(error.name, 'NotSupportedError');
 }, 'forget() rejects in a detached context');
 </script>
 </body>

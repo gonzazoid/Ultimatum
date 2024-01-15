@@ -4,9 +4,10 @@
 
 #include "services/video_capture/device_media_to_mojo_adapter.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "build/chromeos_buildflags.h"
 #include "media/capture/video/mock_device.h"
@@ -34,7 +35,7 @@ class DeviceMediaToMojoAdapterTest : public ::testing::Test {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     adapter_ = std::make_unique<DeviceMediaToMojoAdapter>(
         std::move(mock_device), base::DoNothing(),
-        base::ThreadTaskRunnerHandle::Get());
+        base::SingleThreadTaskRunner::GetCurrentDefault());
 #elif BUILDFLAG(IS_WIN)
     adapter_ = std::make_unique<DeviceMediaToMojoAdapter>(
         std::move(mock_device), nullptr);
@@ -52,7 +53,7 @@ class DeviceMediaToMojoAdapterTest : public ::testing::Test {
   }
 
  protected:
-  raw_ptr<media::MockDevice> mock_device_ptr_;
+  raw_ptr<media::MockDevice, DanglingUntriaged> mock_device_ptr_;
   std::unique_ptr<DeviceMediaToMojoAdapter> adapter_;
   std::unique_ptr<MockVideoFrameHandler> mock_video_frame_handler_;
   mojo::PendingRemote<mojom::VideoFrameHandler> video_frame_handler_;

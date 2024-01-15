@@ -8,7 +8,7 @@
 ##
 ## Top level settings
 ##
-version_id: 54
+version_id: 63
 sampled_ping_probability: 0.01
 max_archived_binaries_to_report: 10
 default_file_type {
@@ -743,7 +743,7 @@ file_types {
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_CHROME_OS
+    platform: PLATFORM_TYPE_CHROME_OS
     danger_level: NOT_DANGEROUS
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -757,7 +757,7 @@ file_types {
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_CHROME_OS
+    platform: PLATFORM_TYPE_CHROME_OS
     danger_level: NOT_DANGEROUS
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -771,7 +771,7 @@ file_types {
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_CHROME_OS
+    platform: PLATFORM_TYPE_CHROME_OS
     danger_level: NOT_DANGEROUS
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -783,17 +783,17 @@ file_types {
   uma_value: 129
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_LINUX
+    platform: PLATFORM_TYPE_LINUX
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -803,17 +803,17 @@ file_types {
   uma_value: 130
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_LINUX
+    platform: PLATFORM_TYPE_LINUX
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -823,17 +823,17 @@ file_types {
   uma_value: 131
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_LINUX
+    platform: PLATFORM_TYPE_LINUX
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -845,17 +845,17 @@ file_types {
   uma_value: 318
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_LINUX
+    platform: PLATFORM_TYPE_LINUX
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -867,17 +867,17 @@ file_types {
   uma_value: 319
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_LINUX
+    platform: PLATFORM_TYPE_LINUX
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -887,17 +887,17 @@ file_types {
   uma_value: 132
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_LINUX
+    platform: PLATFORM_TYPE_LINUX
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -907,17 +907,17 @@ file_types {
   uma_value: 133
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_LINUX
+    platform: PLATFORM_TYPE_LINUX
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -930,17 +930,17 @@ file_types {
   uma_value: 146
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_LINUX
+    platform: PLATFORM_TYPE_LINUX
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1009,9 +1009,10 @@ file_types {
   uma_value: 1
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
+    file_weight: 10
   }
 }
 file_types {
@@ -1019,7 +1020,7 @@ file_types {
   uma_value: 33
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1029,7 +1030,7 @@ file_types {
   uma_value: 34
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1042,7 +1043,7 @@ file_types {
   uma_value: 98
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1053,7 +1054,7 @@ file_types {
   uma_value: 99
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1064,7 +1065,7 @@ file_types {
   uma_value: 100
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1075,7 +1076,7 @@ file_types {
   uma_value: 101
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1086,7 +1087,7 @@ file_types {
   uma_value: 102
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1097,7 +1098,7 @@ file_types {
   uma_value: 103
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1108,7 +1109,7 @@ file_types {
   uma_value: 104
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1119,7 +1120,7 @@ file_types {
   uma_value: 105
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1130,7 +1131,7 @@ file_types {
   uma_value: 106
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1141,7 +1142,7 @@ file_types {
   uma_value: 107
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1152,7 +1153,7 @@ file_types {
   uma_value: 108
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1163,7 +1164,7 @@ file_types {
   uma_value: 109
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1174,7 +1175,7 @@ file_types {
   uma_value: 110
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1185,7 +1186,7 @@ file_types {
   uma_value: 111
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1196,7 +1197,7 @@ file_types {
   uma_value: 112
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1207,7 +1208,7 @@ file_types {
   uma_value: 113
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1218,7 +1219,7 @@ file_types {
   uma_value: 114
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1229,7 +1230,7 @@ file_types {
   uma_value: 115
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1241,7 +1242,7 @@ file_types {
   uma_value: 388
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1253,7 +1254,7 @@ file_types {
   uma_value: 389
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1265,7 +1266,7 @@ file_types {
   uma_value: 390
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1277,7 +1278,7 @@ file_types {
   uma_value: 391
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1288,7 +1289,7 @@ file_types {
   uma_value: 90
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1299,7 +1300,7 @@ file_types {
   uma_value: 91
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1310,7 +1311,7 @@ file_types {
   uma_value: 166
   ping_setting: SAMPLED_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1321,7 +1322,7 @@ file_types {
   uma_value: 92
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1335,7 +1336,7 @@ file_types {
   uma_value: 10
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1346,7 +1347,7 @@ file_types {
   uma_value: 93
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1357,7 +1358,7 @@ file_types {
   uma_value: 94
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1368,7 +1369,7 @@ file_types {
   uma_value: 95
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1380,7 +1381,7 @@ file_types {
   uma_value: 96
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1392,7 +1393,7 @@ file_types {
   uma_value: 321
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1446,7 +1447,7 @@ file_types {
 file_types {
   extension: "pdf"
   uma_value: 14
-  ping_setting: FULL_PING
+  ping_setting: SAMPLED_PING
 }
 file_types {
   extension: "pot"
@@ -1539,7 +1540,7 @@ file_types {
   uma_value: 350
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1600,7 +1601,7 @@ file_types {
   uma_value: 153
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1610,7 +1611,7 @@ file_types {
   uma_value: 156
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1620,7 +1621,7 @@ file_types {
   uma_value: 241
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1635,7 +1636,7 @@ file_types {
   uma_value: 155
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1645,7 +1646,7 @@ file_types {
   uma_value: 157
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1655,7 +1656,7 @@ file_types {
   uma_value: 396
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1667,7 +1668,7 @@ file_types {
   uma_value: 43
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1677,7 +1678,7 @@ file_types {
   uma_value: 44
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1687,7 +1688,7 @@ file_types {
   uma_value: 45
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1697,7 +1698,7 @@ file_types {
   uma_value: 46
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1707,7 +1708,7 @@ file_types {
   uma_value: 47
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1717,7 +1718,17 @@ file_types {
   uma_value: 48
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
+    danger_level: ALLOW_ON_USER_GESTURE
+    auto_open_hint: DISALLOW_AUTO_OPEN
+  }
+}
+file_types {
+  extension: "psm1"
+  uma_value: 402
+  ping_setting: FULL_PING
+  platform_settings {
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1732,7 +1743,7 @@ file_types {
   uma_value: 25
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1742,7 +1753,7 @@ file_types {
   uma_value: 24
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1755,7 +1766,7 @@ file_types {
   uma_value: 394
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1765,7 +1776,7 @@ file_types {
   uma_value: 395
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1775,7 +1786,27 @@ file_types {
   uma_value: 398
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
+    danger_level: ALLOW_ON_USER_GESTURE
+    auto_open_hint: DISALLOW_AUTO_OPEN
+  }
+}
+file_types {
+  extension: "ftploc"
+  uma_value: 404
+  ping_setting: FULL_PING
+  platform_settings {
+    platform: PLATFORM_TYPE_MAC
+    danger_level: ALLOW_ON_USER_GESTURE
+    auto_open_hint: DISALLOW_AUTO_OPEN
+  }
+}
+file_types {
+  extension: "atloc"
+  uma_value: 405
+  ping_setting: FULL_PING
+  platform_settings {
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1790,7 +1821,7 @@ file_types {
   uma_value: 28
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1803,7 +1834,7 @@ file_types {
   uma_value: 29
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1813,7 +1844,7 @@ file_types {
   uma_value: 15
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1823,7 +1854,7 @@ file_types {
   uma_value: 26
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1833,7 +1864,7 @@ file_types {
   uma_value: 27
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1844,7 +1875,7 @@ file_types {
   uma_value: 169
   ping_setting: SAMPLED_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1856,7 +1887,7 @@ file_types {
   uma_value: 123
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1866,7 +1897,7 @@ file_types {
   uma_value: 124
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1876,7 +1907,7 @@ file_types {
   uma_value: 51
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1886,7 +1917,7 @@ file_types {
   uma_value: 125
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1898,7 +1929,7 @@ file_types {
   uma_value: 37
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1908,7 +1939,7 @@ file_types {
   uma_value: 38
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1918,7 +1949,7 @@ file_types {
   uma_value: 40
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1928,7 +1959,7 @@ file_types {
   uma_value: 42
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1938,7 +1969,7 @@ file_types {
   uma_value: 39
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1948,7 +1979,7 @@ file_types {
   uma_value: 41
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -1960,7 +1991,7 @@ file_types {
   uma_value: 262
   ping_setting: SAMPLED_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1971,7 +2002,7 @@ file_types {
   uma_value: 66
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1983,7 +2014,7 @@ file_types {
   uma_value: 70
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -1994,7 +2025,7 @@ file_types {
   uma_value: 144
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2005,7 +2036,7 @@ file_types {
   uma_value: 71
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2016,7 +2047,7 @@ file_types {
   uma_value: 72
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2027,7 +2058,7 @@ file_types {
   uma_value: 35
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2038,7 +2069,7 @@ file_types {
   uma_value: 6
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2048,7 +2079,7 @@ file_types {
   uma_value: 73
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: DANGEROUS
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2059,7 +2090,7 @@ file_types {
   uma_value: 74
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2070,7 +2101,7 @@ file_types {
   uma_value: 75
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2081,7 +2112,7 @@ file_types {
   uma_value: 65
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2092,7 +2123,7 @@ file_types {
   uma_value: 11
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2103,7 +2134,7 @@ file_types {
   uma_value: 76
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2114,7 +2145,7 @@ file_types {
   uma_value: 97
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2125,7 +2156,7 @@ file_types {
   uma_value: 392
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2136,7 +2167,7 @@ file_types {
   uma_value: 393
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2172,7 +2203,7 @@ file_types {
   uma_value: 9
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: DANGEROUS
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2183,7 +2214,7 @@ file_types {
   uma_value: 5
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2194,7 +2225,7 @@ file_types {
   uma_value: 243
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2205,9 +2236,10 @@ file_types {
   uma_value: 0
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
+    file_weight: 10
   }
 }
 file_types {
@@ -2217,7 +2249,7 @@ file_types {
   uma_value: 147
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2228,7 +2260,7 @@ file_types {
   uma_value: 77
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2241,7 +2273,7 @@ file_types {
   uma_value: 145
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2252,7 +2284,7 @@ file_types {
   uma_value: 17
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2263,7 +2295,7 @@ file_types {
   uma_value: 78
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2274,7 +2306,7 @@ file_types {
   uma_value: 36
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2299,7 +2331,7 @@ file_types {
   uma_value: 79
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2310,7 +2342,7 @@ file_types {
   uma_value: 80
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2321,7 +2353,7 @@ file_types {
   uma_value: 81
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: DANGEROUS
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2332,7 +2364,7 @@ file_types {
   uma_value: 82
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2343,7 +2375,7 @@ file_types {
   uma_value: 160
   ping_setting: SAMPLED_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2354,7 +2386,7 @@ file_types {
   uma_value: 162
   ping_setting: SAMPLED_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2365,7 +2397,7 @@ file_types {
   uma_value: 83
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2378,7 +2410,7 @@ file_types {
   uma_value: 163
   ping_setting: SAMPLED_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2389,7 +2421,7 @@ file_types {
   uma_value: 84
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2400,7 +2432,7 @@ file_types {
   uma_value: 85
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: DANGEROUS
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2414,7 +2446,7 @@ file_types {
   uma_value: 86
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: DANGEROUS
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2425,7 +2457,7 @@ file_types {
   uma_value: 87
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2436,7 +2468,7 @@ file_types {
   uma_value: 30
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2447,7 +2479,7 @@ file_types {
   uma_value: 31
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2457,7 +2489,7 @@ file_types {
   uma_value: 88
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2467,7 +2499,7 @@ file_types {
   uma_value: 89
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2478,7 +2510,7 @@ file_types {
   uma_value: 32
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2489,7 +2521,7 @@ file_types {
   uma_value: 242
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2502,7 +2534,7 @@ file_types {
   uma_value: 16
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2513,7 +2545,7 @@ file_types {
   uma_value: 167
   ping_setting: SAMPLED_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2528,7 +2560,7 @@ file_types {
   uma_value: 49
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: DANGEROUS
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2539,7 +2571,7 @@ file_types {
   uma_value: 4
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2553,7 +2585,7 @@ file_types {
   uma_value: 50
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2565,7 +2597,7 @@ file_types {
   uma_value: 246
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2577,7 +2609,7 @@ file_types {
   uma_value: 316
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2589,7 +2621,7 @@ file_types {
   uma_value: 116
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2600,7 +2632,7 @@ file_types {
   uma_value: 117
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2636,7 +2668,7 @@ file_types {
   uma_value: 309
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2648,7 +2680,7 @@ file_types {
   uma_value: 3
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2659,7 +2691,7 @@ file_types {
   uma_value: 168
   ping_setting: SAMPLED_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2670,7 +2702,7 @@ file_types {
   uma_value: 289
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2681,7 +2713,7 @@ file_types {
   uma_value: 290
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2692,7 +2724,7 @@ file_types {
   uma_value: 291
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2703,7 +2735,7 @@ file_types {
   uma_value: 292
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2715,7 +2747,7 @@ file_types {
   uma_value: 293
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2727,7 +2759,7 @@ file_types {
   uma_value: 294
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2739,7 +2771,7 @@ file_types {
   uma_value: 295
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2751,7 +2783,7 @@ file_types {
   uma_value: 296
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2763,7 +2795,7 @@ file_types {
   uma_value: 297
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2775,7 +2807,7 @@ file_types {
   uma_value: 118
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2786,7 +2818,7 @@ file_types {
   uma_value: 119
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2797,7 +2829,7 @@ file_types {
   uma_value: 120
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2808,7 +2840,7 @@ file_types {
   uma_value: 121
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2819,7 +2851,7 @@ file_types {
   uma_value: 122
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2830,7 +2862,7 @@ file_types {
   uma_value: 126
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2859,7 +2891,7 @@ file_types {
   uma_value: 127
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -2870,7 +2902,7 @@ file_types {
   uma_value: 399
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2881,7 +2913,7 @@ file_types {
   uma_value: 400
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2892,10 +2924,69 @@ file_types {
   uma_value: 401
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
+}
+file_types {
+  # Can lead to code execution if BGINFO is installed, which is fairly common.
+  extension: "bgi"
+  uma_value: 403
+  ping_setting: FULL_PING
+  platform_settings {
+    platform: PLATFORM_TYPE_WINDOWS
+    danger_level: ALLOW_ON_USER_GESTURE
+    auto_open_hint: DISALLOW_AUTO_OPEN
+  }
+}
+file_types {
+  extension: "appx"
+  uma_value: 406
+  is_archive: true
+  ping_setting: FULL_PING
+  platform_settings {
+    platform: PLATFORM_TYPE_WINDOWS
+    danger_level: ALLOW_ON_USER_GESTURE
+    auto_open_hint: DISALLOW_AUTO_OPEN
+  }
+  inspection_type: ZIP
+}
+file_types {
+  extension: "msix"
+  uma_value: 407
+  is_archive: true
+  ping_setting: FULL_PING
+  platform_settings {
+    platform: PLATFORM_TYPE_WINDOWS
+    danger_level: ALLOW_ON_USER_GESTURE
+    auto_open_hint: DISALLOW_AUTO_OPEN
+  }
+  inspection_type: ZIP
+}
+file_types {
+  extension: "appxbundle"
+  uma_value: 408
+  is_archive: true
+  ping_setting: FULL_PING
+  platform_settings {
+    platform: PLATFORM_TYPE_WINDOWS
+    danger_level: ALLOW_ON_USER_GESTURE
+    auto_open_hint: DISALLOW_AUTO_OPEN
+  }
+  inspection_type: ZIP
+}
+file_types {
+  extension: "msixbundle"
+  uma_value: 409
+  is_archive: true
+  ping_setting: FULL_PING
+  platform_settings {
+    platform: PLATFORM_TYPE_WINDOWS
+    danger_level: ALLOW_ON_USER_GESTURE
+    auto_open_hint: DISALLOW_AUTO_OPEN
+  }
+  inspection_type: ZIP
 }
 
 ##
@@ -2908,7 +2999,7 @@ file_types {
   uma_value: 251
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2919,7 +3010,7 @@ file_types {
   uma_value: 254
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2930,7 +3021,7 @@ file_types {
   uma_value: 255
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2941,7 +3032,7 @@ file_types {
   uma_value: 256
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2952,7 +3043,7 @@ file_types {
   uma_value: 21
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
     max_file_size_to_analyze: 52428800 # 50MB
@@ -2964,7 +3055,7 @@ file_types {
   uma_value: 252
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2975,7 +3066,7 @@ file_types {
   uma_value: 253
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2986,7 +3077,7 @@ file_types {
   uma_value: 357
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -2996,12 +3087,12 @@ file_types {
   uma_value: 247
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3012,7 +3103,7 @@ file_types {
   uma_value: 257
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3023,7 +3114,7 @@ file_types {
   uma_value: 258
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3034,7 +3125,7 @@ file_types {
   uma_value: 358
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3044,7 +3135,7 @@ file_types {
   uma_value: 248
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3055,7 +3146,7 @@ file_types {
   uma_value: 249
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3066,7 +3157,7 @@ file_types {
   uma_value: 250
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3077,7 +3168,7 @@ file_types {
   uma_value: 260
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3088,7 +3179,7 @@ file_types {
   uma_value: 259
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3102,7 +3193,7 @@ file_types {
   uma_value: 158
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3113,7 +3204,7 @@ file_types {
   uma_value: 359
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3124,7 +3215,7 @@ file_types {
   uma_value: 360
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3135,7 +3226,7 @@ file_types {
   uma_value: 361
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3146,7 +3237,7 @@ file_types {
   uma_value: 264
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3159,7 +3250,7 @@ file_types {
   uma_value: 265
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3170,7 +3261,7 @@ file_types {
   uma_value: 140
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3180,7 +3271,7 @@ file_types {
   uma_value: 310
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3190,7 +3281,7 @@ file_types {
   uma_value: 311
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3200,7 +3291,7 @@ file_types {
   uma_value: 312
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3210,7 +3301,7 @@ file_types {
   uma_value: 313
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3220,7 +3311,7 @@ file_types {
   uma_value: 314
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3230,7 +3321,7 @@ file_types {
   uma_value: 315
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3241,7 +3332,7 @@ file_types {
   uma_value: 263
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3253,7 +3344,7 @@ file_types {
   uma_value: 266
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3265,7 +3356,7 @@ file_types {
   uma_value: 170
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3276,7 +3367,7 @@ file_types {
   uma_value: 267
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3287,7 +3378,7 @@ file_types {
   uma_value: 356
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3297,7 +3388,7 @@ file_types {
   uma_value: 362
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3307,7 +3398,7 @@ file_types {
   uma_value: 363
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3317,7 +3408,7 @@ file_types {
   uma_value: 364
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3335,12 +3426,12 @@ file_types {
   uma_value: 22
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_LINUX
+    platform: PLATFORM_TYPE_LINUX
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_MAC
+    platform: PLATFORM_TYPE_MAC
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3350,7 +3441,7 @@ file_types {
   uma_value: 141
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_LINUX
+    platform: PLATFORM_TYPE_LINUX
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3361,7 +3452,7 @@ file_types {
   is_archive: true
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_LINUX
+    platform: PLATFORM_TYPE_LINUX
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3372,7 +3463,7 @@ file_types {
   is_archive: true
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_LINUX
+    platform: PLATFORM_TYPE_LINUX
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3382,7 +3473,7 @@ file_types {
   uma_value: 142
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_LINUX
+    platform: PLATFORM_TYPE_LINUX
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3393,7 +3484,7 @@ file_types {
   is_archive: true
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_LINUX
+    platform: PLATFORM_TYPE_LINUX
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3406,7 +3497,7 @@ file_types {
   uma_value: 164
   ping_setting: SAMPLED_PING
   platform_settings {
-    platform: PLATFORM_LINUX
+    platform: PLATFORM_TYPE_LINUX
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3416,7 +3507,7 @@ file_types {
   uma_value: 261
   ping_setting: SAMPLED_PING
   platform_settings {
-    platform: PLATFORM_LINUX
+    platform: PLATFORM_TYPE_LINUX
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3432,7 +3523,7 @@ file_types {
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: NOT_DANGEROUS
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -3446,7 +3537,7 @@ file_types {
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: NOT_DANGEROUS
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -3460,7 +3551,7 @@ file_types {
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: NOT_DANGEROUS
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -3474,7 +3565,7 @@ file_types {
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: NOT_DANGEROUS
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -3488,7 +3579,7 @@ file_types {
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: NOT_DANGEROUS
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -3502,7 +3593,7 @@ file_types {
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_WINDOWS
+    platform: PLATFORM_TYPE_WINDOWS
     danger_level: NOT_DANGEROUS
     auto_open_hint: ALLOW_AUTO_OPEN
   }
@@ -3514,7 +3605,7 @@ file_types {
   uma_value: 320
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_LINUX
+    platform: PLATFORM_TYPE_LINUX
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3530,12 +3621,12 @@ file_types {
   uma_value: 143
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_ANDROID
+    platform: PLATFORM_TYPE_ANDROID
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_CHROME_OS
+    platform: PLATFORM_TYPE_CHROME_OS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
@@ -3545,17 +3636,17 @@ file_types {
   uma_value: 20
   ping_setting: FULL_PING
   platform_settings {
-    platform: PLATFORM_ANDROID
+    platform: PLATFORM_TYPE_ANDROID
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_CHROME_OS
+    platform: PLATFORM_TYPE_CHROME_OS
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }
   platform_settings {
-    platform: PLATFORM_LINUX
+    platform: PLATFORM_TYPE_LINUX
     danger_level: ALLOW_ON_USER_GESTURE
     auto_open_hint: DISALLOW_AUTO_OPEN
   }

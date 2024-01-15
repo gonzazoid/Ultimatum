@@ -6,22 +6,19 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "build/chromeos_buildflags.h"
 #include "components/metrics/metrics_service.h"
 #include "components/metrics/metrics_service_client.h"
 #include "components/metrics/metrics_state_manager.h"
 #include "components/metrics/metrics_switches.h"
+#include "components/metrics/structured/structured_metrics_service.h"  // nogncheck
 #include "components/metrics_services_manager/metrics_services_manager_client.h"
 #include "components/ukm/ukm_service.h"
 #include "components/variations/service/variations_service.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "components/metrics/structured/neutrino_logging.h"  // nogncheck
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 namespace metrics_services_manager {
 
@@ -36,14 +33,8 @@ MetricsServicesManager::MetricsServicesManager(
 
 MetricsServicesManager::~MetricsServicesManager() {}
 
-void MetricsServicesManager::InstantiateFieldTrialList(
-    const char* enable_gpu_benchmarking_switch) const {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  metrics::structured::NeutrinoDevicesLog(
-      metrics::structured::NeutrinoDevicesLocation::kCreateEntropyProvider);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-  client_->GetMetricsStateManager()->InstantiateFieldTrialList(
-      enable_gpu_benchmarking_switch);
+void MetricsServicesManager::InstantiateFieldTrialList() const {
+  client_->GetMetricsStateManager()->InstantiateFieldTrialList();
 }
 
 metrics::MetricsService* MetricsServicesManager::GetMetricsService() {
@@ -56,6 +47,12 @@ ukm::UkmService* MetricsServicesManager::GetUkmService() {
   return GetMetricsServiceClient()->GetUkmService();
 }
 
+metrics::structured::StructuredMetricsService*
+MetricsServicesManager::GetStructuredMetricsService() {
+  DCHECK(thread_checker_.CalledOnValidThread());
+  return GetMetricsServiceClient()->GetStructuredMetricsService();
+}
+
 variations::VariationsService* MetricsServicesManager::GetVariationsService() {
   DCHECK(thread_checker_.CalledOnValidThread());
   if (!variations_service_)
@@ -63,9 +60,24 @@ variations::VariationsService* MetricsServicesManager::GetVariationsService() {
   return variations_service_.get();
 }
 
-void MetricsServicesManager::LoadingStateChanged(bool is_loading) {
-  DCHECK(thread_checker_.CalledOnValidThread());
-  GetMetricsServiceClient()->LoadingStateChanged(is_loading);
+MetricsServicesManager::OnDidStartLoadingCb
+MetricsServicesManager::GetOnDidStartLoadingCb() {
+  return base::BindRepeating(&MetricsServicesManager::LoadingStateChanged,
+                             weak_ptr_factory_.GetWeakPtr(),
+                             /*is_loading=*/true);
+}
+
+MetricsServicesManager::OnDidStopLoadingCb
+MetricsServicesManager::GetOnDidStopLoadingCb() {
+  return base::BindRepeating(&MetricsServicesManager::LoadingStateChanged,
+                             weak_ptr_factory_.GetWeakPtr(),
+                             /*is_loading=*/false);
+}
+
+MetricsServicesManager::OnRendererUnresponsiveCb
+MetricsServicesManager::GetOnRendererUnresponsiveCb() {
+  return base::BindRepeating(&MetricsServicesManager::OnRendererUnresponsive,
+                             weak_ptr_factory_.GetWeakPtr());
 }
 
 std::unique_ptr<const variations::EntropyProviders>
@@ -90,13 +102,25 @@ void MetricsServicesManager::UpdatePermissions(bool current_may_record,
                                                bool current_consent_given,
                                                bool current_may_upload) {
   DCHECK(thread_checker_.CalledOnValidThread());
-  // If the user has opted out of metrics, delete local UKM state. We only check
-  // consent for UKM.
+  // If the user has opted out of metrics, delete local UKM state.
+  // TODO(crbug.com/1445075): Investigate if UMA needs purging logic.
   if (consent_given_ && !current_consent_given) {
     ukm::UkmService* ukm = GetUkmService();
     if (ukm) {
       ukm->Purge();
       ukm->ResetClientState(ukm::ResetReason::kUpdatePermissions);
+    }
+  }
+
+  // If the user has opted out of metrics, purge Structured Metrics if consent
+  // is not granted. On ChromeOS, SM will record specific events when consent is
+  // unknown during primarily OOBE; but these events need to be purged once
+  // consent is confirmed. This feature shouldn't be used on other platforms.
+  if (!current_consent_given) {
+    metrics::structured::StructuredMetricsService* sm_service =
+        GetStructuredMetricsService();
+    if (sm_service) {
+      sm_service->Purge();
     }
   }
 
@@ -135,6 +159,19 @@ void MetricsServicesManager::UpdatePermissions(bool current_may_record,
   UpdateRunningServices();
 }
 
+void MetricsServicesManager::LoadingStateChanged(bool is_loading) {
+  DCHECK(thread_checker_.CalledOnValidThread());
+  GetMetricsServiceClient()->LoadingStateChanged(is_loading);
+  if (is_loading) {
+    GetMetricsService()->OnPageLoadStarted();
+  }
+}
+
+void MetricsServicesManager::OnRendererUnresponsive() {
+  DCHECK(thread_checker_.CalledOnValidThread());
+  GetMetricsService()->OnApplicationNotIdle();
+}
+
 void MetricsServicesManager::UpdateRunningServices() {
   DCHECK(thread_checker_.CalledOnValidThread());
   metrics::MetricsService* metrics = GetMetricsService();
@@ -158,6 +195,7 @@ void MetricsServicesManager::UpdateRunningServices() {
   }
 
   UpdateUkmService();
+  UpdateStructuredMetricsService();
 }
 
 void MetricsServicesManager::UpdateUkmService() {
@@ -181,6 +219,27 @@ void MetricsServicesManager::UpdateUkmService() {
   } else {
     ukm->DisableRecording();
     ukm->DisableReporting();
+  }
+}
+
+void MetricsServicesManager::UpdateStructuredMetricsService() {
+  metrics::structured::StructuredMetricsService* service =
+      GetStructuredMetricsService();
+  if (!service) {
+    return;
+  }
+
+  // Maybe write some helper methods for this.
+  if (may_record_) {
+    service->EnableRecording();
+    if (may_upload_) {
+      service->EnableReporting();
+    } else {
+      service->DisableReporting();
+    }
+  } else {
+    service->DisableRecording();
+    service->DisableReporting();
   }
 }
 

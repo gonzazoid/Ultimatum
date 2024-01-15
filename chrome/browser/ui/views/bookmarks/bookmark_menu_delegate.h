@@ -8,12 +8,14 @@
 #include <map>
 #include <set>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/scoped_observation.h"
 #include "chrome/browser/ui/bookmarks/bookmark_stats.h"
 #include "chrome/browser/ui/toolbar/app_menu_model.h"
 #include "chrome/browser/ui/views/bookmarks/bookmark_context_menu.h"
 #include "components/bookmarks/browser/base_bookmark_model_observer.h"
+#include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/bookmark_node_data.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom-forward.h"
 #include "ui/views/controls/menu/menu_delegate.h"
@@ -133,7 +135,8 @@ class BookmarkMenuDelegate : public bookmarks::BaseBookmarkModelObserver,
 
   // BookmarkContextMenuObserver methods.
   void WillRemoveBookmarks(
-      const std::vector<const bookmarks::BookmarkNode*>& bookmarks) override;
+      const std::vector<raw_ptr<const bookmarks::BookmarkNode,
+                                VectorExperimental>>& bookmarks) override;
   void DidRemoveBookmarks() override;
   void OnContextMenuClosed() override;
 
@@ -224,6 +227,10 @@ class BookmarkMenuDelegate : public bookmarks::BaseBookmarkModelObserver,
   // Whether the involved menu uses mnemonics or not. If it does, ampersands
   // inside bookmark titles need to be escaped.
   bool menu_uses_mnemonics_;
+
+  base::ScopedObservation<bookmarks::BookmarkModel,
+                          bookmarks::BaseBookmarkModelObserver>
+      bookmark_model_observation_{this};
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_BOOKMARKS_BOOKMARK_MENU_DELEGATE_H_

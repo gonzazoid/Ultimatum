@@ -35,20 +35,22 @@ class XDGSurfaceWrapperImpl : public ShellSurfaceWrapper {
   void AckConfigure(uint32_t serial) override;
   bool IsConfigured() override;
   void SetWindowGeometry(const gfx::Rect& bounds) override;
+  XDGSurfaceWrapperImpl* AsXDGSurfaceWrapper() override;
 
   struct xdg_surface* xdg_surface() const;
 
  private:
-  // xdg_surface_listener
-  static void Configure(void* data,
-                        struct xdg_surface* xdg_surface,
-                        uint32_t serial);
+  // xdg_surface_listener callbacks:
+  static void OnConfigure(void* data,
+                          struct xdg_surface* xdg_surface,
+                          uint32_t serial);
 
   // Non-owing WaylandWindow that uses this surface wrapper.
   const raw_ptr<WaylandWindow> wayland_window_;
   const raw_ptr<WaylandConnection> connection_;
 
   bool is_configured_ = false;
+  int64_t last_acked_serial_ = -1;
 
   wl::Object<struct xdg_surface> xdg_surface_;
 };

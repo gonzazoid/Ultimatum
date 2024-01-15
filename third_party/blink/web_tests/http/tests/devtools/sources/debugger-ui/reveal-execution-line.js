@@ -2,10 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {SourcesTestRunner} from 'sources_test_runner';
+
+import * as SourceFrame from 'devtools/ui/legacy/components/source_frame/source_frame.js';
+import * as SourcesModule from 'devtools/panels/sources/sources.js';
+
 (async function() {
   TestRunner.addResult(`Tests that execution line is revealed and highlighted when debugger is paused.\n`);
-  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
-  await TestRunner.loadLegacyModule('source_frame');
   await TestRunner.showPanel('sources');
   await TestRunner.evaluateInPagePromise(`
       function testFunction()
@@ -18,9 +22,9 @@
   SourcesTestRunner.runDebuggerTestSuite([function testRevealAndHighlightExecutionLine(next) {
     var executionLineSet = false;
     var executionLineRevealed = false;
-    TestRunner.addSniffer(SourceFrame.SourceFrame.prototype, 'revealPosition', didRevealLine);
+    TestRunner.addSniffer(SourceFrame.SourceFrame.SourceFrameImpl.prototype, 'revealPosition', didRevealLine);
     TestRunner.addSniffer(
-        Sources.DebuggerPlugin.prototype, '_executionLineChanged',
+        SourcesModule.DebuggerPlugin.DebuggerPlugin.prototype, '_executionLineChanged',
         didSetExecutionLocation);
     SourcesTestRunner.runTestFunctionAndWaitUntilPaused(didPause);
 

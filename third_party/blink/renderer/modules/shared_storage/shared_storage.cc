@@ -8,15 +8,17 @@
 #include <tuple>
 #include <utility>
 
+#include "base/check.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/strings/strcat.h"
 #include "base/time/time.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/shared_storage/shared_storage_utils.h"
 #include "third_party/blink/public/mojom/shared_storage/shared_storage.mojom-blink.h"
+#include "third_party/blink/public/mojom/shared_storage/shared_storage_worklet_service.mojom-blink.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/public/platform/web_content_settings_client.h"
@@ -24,6 +26,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_binding_for_modules.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_shared_storage_private_aggregation_config.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_shared_storage_run_operation_method_options.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_shared_storage_set_method_options.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_shared_storage_url_with_metadata.h"
@@ -32,145 +35,290 @@
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
 #include "third_party/blink/renderer/modules/shared_storage/shared_storage_worklet.h"
+#include "third_party/blink/renderer/modules/shared_storage/shared_storage_worklet_global_scope.h"
 #include "third_party/blink/renderer/modules/shared_storage/util.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_deque.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
+#include "third_party/blink/renderer/platform/mojo/heap_mojo_receiver.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
+#include "third_party/blink/renderer/platform/wtf/deque.h"
+#include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
 namespace blink {
 
 namespace {
 
-// Use the native v8::ValueSerializer here as opposed to using
-// blink::V8ScriptValueSerializer. It's capable of serializing objects of
-// primitive types. It's TBD whether we want to support any other non-primitive
-// types supported by blink::V8ScriptValueSerializer.
-bool Serialize(ScriptState* script_state,
-               const SharedStorageRunOperationMethodOptions* options,
-               ExceptionState& exception_state,
-               Vector<uint8_t>& output) {
-  DCHECK(output.empty());
+enum class GlobalScope {
+  kWindow,
+  kSharedStorageWorklet,
+};
 
-  if (!options->hasData())
-    return true;
+enum class SharedStorageSetterMethod {
+  kSet = 0,
+  kAppend = 1,
+  kDelete = 2,
+  kClear = 3,
+};
 
-  v8::Isolate* isolate = script_state->GetIsolate();
-  v8::ValueSerializer serializer(isolate);
-
-  v8::TryCatch try_catch(isolate);
-
-  bool wrote_value;
-  if (!serializer
-           .WriteValue(script_state->GetContext(), options->data().V8Value())
-           .To(&wrote_value)) {
-    DCHECK(try_catch.HasCaught());
-    exception_state.RethrowV8Exception(try_catch.Exception());
-    return false;
-  }
-
-  DCHECK(wrote_value);
-
-  std::pair<uint8_t*, size_t> buffer = serializer.Release();
-
-  output.ReserveInitialCapacity(base::checked_cast<wtf_size_t>(buffer.second));
-  output.Append(buffer.first, static_cast<wtf_size_t>(buffer.second));
-  DCHECK_EQ(output.size(), buffer.second);
-
-  free(buffer.first);
-
-  return true;
-}
-
-void LogTimingHistogramForVoidOperation(
-    blink::SharedStorageVoidOperation caller,
-    base::TimeTicks start_time) {
+void LogTimingHistogramForSetterMethod(SharedStorageSetterMethod method,
+                                       GlobalScope global_scope,
+                                       base::TimeTicks start_time) {
   base::TimeDelta elapsed_time = base::TimeTicks::Now() - start_time;
-  switch (caller) {
-    case blink::SharedStorageVoidOperation::kRun:
-      base::UmaHistogramMediumTimes("Storage.SharedStorage.Document.Timing.Run",
-                                    elapsed_time);
-      break;
-    case blink::SharedStorageVoidOperation::kSet:
-      base::UmaHistogramMediumTimes("Storage.SharedStorage.Document.Timing.Set",
-                                    elapsed_time);
-      break;
-    case blink::SharedStorageVoidOperation::kAppend:
+
+  std::string histogram_prefix = (global_scope == GlobalScope::kWindow)
+                                     ? "Storage.SharedStorage.Document."
+                                     : "Storage.SharedStorage.Worklet.";
+
+  switch (method) {
+    case SharedStorageSetterMethod::kSet:
       base::UmaHistogramMediumTimes(
-          "Storage.SharedStorage.Document.Timing.Append", elapsed_time);
+          base::StrCat({histogram_prefix, "Timing.Set"}), elapsed_time);
       break;
-    case blink::SharedStorageVoidOperation::kDelete:
+    case SharedStorageSetterMethod::kAppend:
       base::UmaHistogramMediumTimes(
-          "Storage.SharedStorage.Document.Timing.Delete", elapsed_time);
+          base::StrCat({histogram_prefix, "Timing.Append"}), elapsed_time);
       break;
-    case blink::SharedStorageVoidOperation::kClear:
+    case SharedStorageSetterMethod::kDelete:
       base::UmaHistogramMediumTimes(
-          "Storage.SharedStorage.Document.Timing.Clear", elapsed_time);
+          base::StrCat({histogram_prefix, "Timing.Delete"}), elapsed_time);
+      break;
+    case SharedStorageSetterMethod::kClear:
+      base::UmaHistogramMediumTimes(
+          base::StrCat({histogram_prefix, "Timing.Clear"}), elapsed_time);
       break;
     default:
       NOTREACHED();
   }
 }
 
-void OnVoidOperationFinished(ScriptPromiseResolver* resolver,
-                             SharedStorage* shared_storage,
-                             blink::SharedStorageVoidOperation caller,
-                             base::TimeTicks start_time,
-                             bool success,
-                             const String& error_message) {
+void OnSetterMethodFinished(ScriptPromiseResolver* resolver,
+                            SharedStorage* shared_storage,
+                            SharedStorageSetterMethod method,
+                            GlobalScope global_scope,
+                            base::TimeTicks start_time,
+                            bool success,
+                            const String& error_message) {
   DCHECK(resolver);
   ScriptState* script_state = resolver->GetScriptState();
 
   if (!success) {
-    ScriptState::Scope scope(script_state);
-    resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
-        script_state->GetIsolate(), DOMExceptionCode::kOperationError,
-        error_message));
-    if (caller == blink::SharedStorageVoidOperation::kRun) {
-      LogSharedStorageWorkletError(
-          SharedStorageWorkletErrorType::kRunWebVisible);
+    if (IsInParallelAlgorithmRunnable(resolver->GetExecutionContext(),
+                                      script_state)) {
+      ScriptState::Scope scope(script_state);
+      resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
+          script_state->GetIsolate(), DOMExceptionCode::kOperationError,
+          error_message));
     }
     return;
   }
 
-  LogTimingHistogramForVoidOperation(caller, start_time);
+  LogTimingHistogramForSetterMethod(method, global_scope, start_time);
   resolver->Resolve();
 }
 
-// TODO(crbug.com/1335504): Consider moving this function to
-// third_party/blink/common/fenced_frame/fenced_frame_utils.cc.
-bool IsValidFencedFrameReportingURL(const KURL& url) {
-  if (!url.IsValid())
-    return false;
-  return url.ProtocolIs("https");
-}
-
-bool StringFromV8(v8::Isolate* isolate, v8::Local<v8::Value> val, String* out) {
-  DCHECK(out);
-
-  if (!val->IsString())
-    return false;
-
-  v8::Local<v8::String> str = v8::Local<v8::String>::Cast(val);
-  wtf_size_t length = str->Utf8Length(isolate);
-  LChar* buffer;
-  *out = String::CreateUninitialized(length, buffer);
-
-  str->WriteUtf8(isolate, reinterpret_cast<char*>(buffer), length, nullptr,
-                 v8::String::NO_NULL_TERMINATION);
-
-  return true;
-}
-
 }  // namespace
+
+class SharedStorage::IterationSource final
+    : public PairAsyncIterable<SharedStorage>::IterationSource,
+      public mojom::blink::SharedStorageEntriesListener {
+ public:
+  IterationSource(ScriptState* script_state,
+                  ExecutionContext* execution_context,
+                  Kind kind,
+                  mojom::blink::SharedStorageWorkletServiceClient* client)
+      : PairAsyncIterable<SharedStorage>::IterationSource(script_state, kind),
+        receiver_(this, execution_context) {
+    if (GetKind() == Kind::kKey) {
+      client->SharedStorageKeys(receiver_.BindNewPipeAndPassRemote(
+          execution_context->GetTaskRunner(TaskType::kMiscPlatformAPI)));
+    } else {
+      client->SharedStorageEntries(receiver_.BindNewPipeAndPassRemote(
+          execution_context->GetTaskRunner(TaskType::kMiscPlatformAPI)));
+    }
+
+    base::UmaHistogramExactLinear(
+        "Storage.SharedStorage.AsyncIterator.IteratedEntriesBenchmarks", 0,
+        101);
+  }
+
+  void DidReadEntries(
+      bool success,
+      const String& error_message,
+      Vector<mojom::blink::SharedStorageKeyAndOrValuePtr> entries,
+      bool has_more_entries,
+      int total_queued_to_send) override {
+    CHECK(is_waiting_for_more_entries_);
+    CHECK(error_message_.IsNull());
+    CHECK(!(success && entries.empty() && has_more_entries));
+
+    if (!success) {
+      if (error_message.IsNull()) {
+        error_message_ = g_empty_string;
+      } else {
+        error_message_ = error_message;
+      }
+    }
+
+    for (auto& entry : entries) {
+      shared_storage_entry_queue_.push_back(std::move(entry));
+    }
+    is_waiting_for_more_entries_ = has_more_entries;
+
+    // Benchmark
+    if (!total_entries_queued_) {
+      total_entries_queued_ = total_queued_to_send;
+      base::UmaHistogramCounts10000(
+          "Storage.SharedStorage.AsyncIterator.EntriesQueuedCount",
+          total_entries_queued_);
+    }
+    base::CheckedNumeric<int> count = entries_received_;
+    count += entries.size();
+    entries_received_ = count.ValueOrDie();
+    while (next_benchmark_for_receipt_ <= 100 &&
+           MeetsBenchmark(entries_received_, next_benchmark_for_receipt_)) {
+      base::UmaHistogramExactLinear(
+          "Storage.SharedStorage.AsyncIterator.ReceivedEntriesBenchmarks",
+          next_benchmark_for_receipt_, 101);
+      next_benchmark_for_receipt_ += kBenchmarkStep;
+    }
+
+    ScriptState::Scope script_state_scope(GetScriptState());
+    TryResolvePromise();
+  }
+
+  void Trace(Visitor* visitor) const override {
+    visitor->Trace(receiver_);
+    PairAsyncIterable<SharedStorage>::IterationSource::Trace(visitor);
+  }
+
+ protected:
+  void GetNextIterationResult() override {
+    DCHECK(!next_start_time_);
+    next_start_time_ = base::TimeTicks::Now();
+
+    TryResolvePromise();
+  }
+
+ private:
+  void TryResolvePromise() {
+    if (!HasPendingPromise()) {
+      return;
+    }
+
+    if (!shared_storage_entry_queue_.empty()) {
+      mojom::blink::SharedStorageKeyAndOrValuePtr entry =
+          shared_storage_entry_queue_.TakeFirst();
+      TakePendingPromiseResolver()->Resolve(
+          MakeIterationResult(entry->key, entry->value));
+      LogElapsedTime();
+
+      base::CheckedNumeric<int> count = entries_iterated_;
+      entries_iterated_ = (++count).ValueOrDie();
+
+      while (next_benchmark_for_iteration_ <= 100 &&
+             MeetsBenchmark(entries_iterated_, next_benchmark_for_iteration_)) {
+        base::UmaHistogramExactLinear(
+            "Storage.SharedStorage.AsyncIterator.IteratedEntriesBenchmarks",
+            next_benchmark_for_iteration_, 101);
+        next_benchmark_for_iteration_ += kBenchmarkStep;
+      }
+
+      return;
+    }
+
+    if (!error_message_.IsNull()) {
+      TakePendingPromiseResolver()->Reject(V8ThrowDOMException::CreateOrEmpty(
+          GetScriptState()->GetIsolate(), DOMExceptionCode::kOperationError,
+          error_message_));
+      // We only record timing histograms when there is no error. Discard the
+      // start time for this call.
+      DCHECK(next_start_time_);
+      next_start_time_.reset();
+      return;
+    }
+
+    if (!is_waiting_for_more_entries_) {
+      TakePendingPromiseResolver()->Resolve(MakeEndOfIteration());
+      LogElapsedTime();
+      return;
+    }
+  }
+
+  bool MeetsBenchmark(int value, int benchmark) {
+    CHECK_GE(benchmark, 0);
+    CHECK_LE(benchmark, 100);
+    CHECK_EQ(benchmark % kBenchmarkStep, 0);
+    CHECK_GE(total_entries_queued_, 0);
+
+    if (benchmark == 0 || (total_entries_queued_ == 0 && value == 0)) {
+      return true;
+    }
+
+    CHECK_GT(total_entries_queued_, 0);
+    return (100 * value) / total_entries_queued_ >= benchmark;
+  }
+
+  void LogElapsedTime() {
+    CHECK(next_start_time_);
+    base::TimeDelta elapsed_time = base::TimeTicks::Now() - *next_start_time_;
+    next_start_time_.reset();
+    switch (GetKind()) {
+      case Kind::kKey:
+        base::UmaHistogramMediumTimes(
+            "Storage.SharedStorage.Worklet.Timing.Keys.Next", elapsed_time);
+        break;
+      case Kind::kValue:
+        base::UmaHistogramMediumTimes(
+            "Storage.SharedStorage.Worklet.Timing.Values.Next", elapsed_time);
+        break;
+      case Kind::kKeyValue:
+        base::UmaHistogramMediumTimes(
+            "Storage.SharedStorage.Worklet.Timing.Entries.Next", elapsed_time);
+        break;
+    }
+  }
+
+  HeapMojoReceiver<mojom::blink::SharedStorageEntriesListener, IterationSource>
+      receiver_;
+  // Queue of the successful results.
+  Deque<mojom::blink::SharedStorageKeyAndOrValuePtr>
+      shared_storage_entry_queue_;
+  String error_message_;  // Non-null string means error.
+  bool is_waiting_for_more_entries_ = true;
+
+  // Benchmark
+  //
+  // The total number of entries that the database has queued to send via this
+  // iterator.
+  int total_entries_queued_ = 0;
+  // The number of entries that the iterator has received from the database so
+  // far.
+  int entries_received_ = 0;
+  // The number of entries that the iterator has iterated through.
+  int entries_iterated_ = 0;
+  // The lowest benchmark for received entries that is currently unmet and so
+  // has not been logged.
+  int next_benchmark_for_receipt_ = 0;
+  // The lowest benchmark for iterated entries that is currently unmet and so
+  // has not been logged.
+  int next_benchmark_for_iteration_ = kBenchmarkStep;
+  // The step size of received / iterated entries.
+  static constexpr int kBenchmarkStep = 10;
+  // Start time of each call to GetTheNextIterationResult. Used to record a
+  // timing histogram.
+  absl::optional<base::TimeTicks> next_start_time_;
+};
 
 SharedStorage::SharedStorage() = default;
 SharedStorage::~SharedStorage() = default;
 
 void SharedStorage::Trace(Visitor* visitor) const {
   visitor->Trace(shared_storage_worklet_);
+  visitor->Trace(shared_storage_document_service_);
   ScriptWrappable::Trace(visitor);
 }
 
@@ -189,13 +337,14 @@ ScriptPromise SharedStorage::set(ScriptState* script_state,
                                  ExceptionState& exception_state) {
   base::TimeTicks start_time = base::TimeTicks::Now();
   ExecutionContext* execution_context = ExecutionContext::From(script_state);
-  CHECK(execution_context->IsWindow());
+  CHECK(execution_context->IsWindow() ||
+        execution_context->IsSharedStorageWorkletGlobalScope());
 
   if (!CheckBrowsingContextIsValid(*script_state, exception_state))
     return ScriptPromise();
 
-  ScriptPromiseResolver* resolver =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  ScriptPromiseResolver* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   if (!CheckSharedStoragePermissionsPolicy(*script_state, *execution_context,
@@ -219,12 +368,22 @@ ScriptPromise SharedStorage::set(ScriptState* script_state,
 
   bool ignore_if_present =
       options->hasIgnoreIfPresent() && options->ignoreIfPresent();
-  GetSharedStorageDocumentService(execution_context)
-      ->SharedStorageSet(
-          key, value, ignore_if_present,
-          WTF::BindOnce(&OnVoidOperationFinished, WrapPersistent(resolver),
-                        WrapPersistent(this),
-                        blink::SharedStorageVoidOperation::kSet, start_time));
+
+  if (execution_context->IsWindow()) {
+    GetSharedStorageDocumentService(execution_context)
+        ->SharedStorageSet(
+            key, value, ignore_if_present,
+            WTF::BindOnce(&OnSetterMethodFinished, WrapPersistent(resolver),
+                          WrapPersistent(this), SharedStorageSetterMethod::kSet,
+                          GlobalScope::kWindow, start_time));
+  } else {
+    GetSharedStorageWorkletServiceClient(execution_context)
+        ->SharedStorageSet(
+            key, value, ignore_if_present,
+            WTF::BindOnce(&OnSetterMethodFinished, WrapPersistent(resolver),
+                          WrapPersistent(this), SharedStorageSetterMethod::kSet,
+                          GlobalScope::kSharedStorageWorklet, start_time));
+  }
 
   return promise;
 }
@@ -235,13 +394,14 @@ ScriptPromise SharedStorage::append(ScriptState* script_state,
                                     ExceptionState& exception_state) {
   base::TimeTicks start_time = base::TimeTicks::Now();
   ExecutionContext* execution_context = ExecutionContext::From(script_state);
-  CHECK(execution_context->IsWindow());
+  CHECK(execution_context->IsWindow() ||
+        execution_context->IsSharedStorageWorkletGlobalScope());
 
   if (!CheckBrowsingContextIsValid(*script_state, exception_state))
     return ScriptPromise();
 
-  ScriptPromiseResolver* resolver =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  ScriptPromiseResolver* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   if (!CheckSharedStoragePermissionsPolicy(*script_state, *execution_context,
@@ -263,13 +423,23 @@ ScriptPromise SharedStorage::append(ScriptState* script_state,
     return promise;
   }
 
-  GetSharedStorageDocumentService(execution_context)
-      ->SharedStorageAppend(
-          key, value,
-          WTF::BindOnce(&OnVoidOperationFinished, WrapPersistent(resolver),
-                        WrapPersistent(this),
-                        blink::SharedStorageVoidOperation::kAppend,
-                        start_time));
+  if (execution_context->IsWindow()) {
+    GetSharedStorageDocumentService(execution_context)
+        ->SharedStorageAppend(
+            key, value,
+            WTF::BindOnce(&OnSetterMethodFinished, WrapPersistent(resolver),
+                          WrapPersistent(this),
+                          SharedStorageSetterMethod::kAppend,
+                          GlobalScope::kWindow, start_time));
+  } else {
+    GetSharedStorageWorkletServiceClient(execution_context)
+        ->SharedStorageAppend(
+            key, value,
+            WTF::BindOnce(&OnSetterMethodFinished, WrapPersistent(resolver),
+                          WrapPersistent(this),
+                          SharedStorageSetterMethod::kAppend,
+                          GlobalScope::kSharedStorageWorklet, start_time));
+  }
 
   return promise;
 }
@@ -279,13 +449,14 @@ ScriptPromise SharedStorage::Delete(ScriptState* script_state,
                                     ExceptionState& exception_state) {
   base::TimeTicks start_time = base::TimeTicks::Now();
   ExecutionContext* execution_context = ExecutionContext::From(script_state);
-  CHECK(execution_context->IsWindow());
+  CHECK(execution_context->IsWindow() ||
+        execution_context->IsSharedStorageWorkletGlobalScope());
 
   if (!CheckBrowsingContextIsValid(*script_state, exception_state))
     return ScriptPromise();
 
-  ScriptPromiseResolver* resolver =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  ScriptPromiseResolver* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   if (!CheckSharedStoragePermissionsPolicy(*script_state, *execution_context,
@@ -300,12 +471,21 @@ ScriptPromise SharedStorage::Delete(ScriptState* script_state,
     return promise;
   }
 
-  GetSharedStorageDocumentService(execution_context)
-      ->SharedStorageDelete(
-          key, WTF::BindOnce(&OnVoidOperationFinished, WrapPersistent(resolver),
-                             WrapPersistent(this),
-                             blink::SharedStorageVoidOperation::kDelete,
-                             start_time));
+  if (execution_context->IsWindow()) {
+    GetSharedStorageDocumentService(execution_context)
+        ->SharedStorageDelete(
+            key, WTF::BindOnce(&OnSetterMethodFinished,
+                               WrapPersistent(resolver), WrapPersistent(this),
+                               SharedStorageSetterMethod::kDelete,
+                               GlobalScope::kWindow, start_time));
+  } else {
+    GetSharedStorageWorkletServiceClient(execution_context)
+        ->SharedStorageDelete(
+            key, WTF::BindOnce(&OnSetterMethodFinished,
+                               WrapPersistent(resolver), WrapPersistent(this),
+                               SharedStorageSetterMethod::kDelete,
+                               GlobalScope::kSharedStorageWorklet, start_time));
+  }
 
   return promise;
 }
@@ -314,13 +494,14 @@ ScriptPromise SharedStorage::clear(ScriptState* script_state,
                                    ExceptionState& exception_state) {
   base::TimeTicks start_time = base::TimeTicks::Now();
   ExecutionContext* execution_context = ExecutionContext::From(script_state);
-  CHECK(execution_context->IsWindow());
+  CHECK(execution_context->IsWindow() ||
+        execution_context->IsSharedStorageWorkletGlobalScope());
 
   if (!CheckBrowsingContextIsValid(*script_state, exception_state))
     return ScriptPromise();
 
-  ScriptPromiseResolver* resolver =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  ScriptPromiseResolver* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   if (!CheckSharedStoragePermissionsPolicy(*script_state, *execution_context,
@@ -328,15 +509,211 @@ ScriptPromise SharedStorage::clear(ScriptState* script_state,
     return promise;
   }
 
-  GetSharedStorageDocumentService(execution_context)
-      ->SharedStorageClear(
-          WTF::BindOnce(&OnVoidOperationFinished, WrapPersistent(resolver),
-                        WrapPersistent(this),
-                        blink::SharedStorageVoidOperation::kClear, start_time));
+  if (execution_context->IsWindow()) {
+    GetSharedStorageDocumentService(execution_context)
+        ->SharedStorageClear(WTF::BindOnce(
+            &OnSetterMethodFinished, WrapPersistent(resolver),
+            WrapPersistent(this), SharedStorageSetterMethod::kClear,
+            GlobalScope::kWindow, start_time));
+  } else {
+    GetSharedStorageWorkletServiceClient(execution_context)
+        ->SharedStorageClear(WTF::BindOnce(
+            &OnSetterMethodFinished, WrapPersistent(resolver),
+            WrapPersistent(this), SharedStorageSetterMethod::kClear,
+            GlobalScope::kSharedStorageWorklet, start_time));
+  }
 
   return promise;
 }
 
+ScriptPromise SharedStorage::get(ScriptState* script_state,
+                                 const String& key,
+                                 ExceptionState& exception_state) {
+  base::TimeTicks start_time = base::TimeTicks::Now();
+  ExecutionContext* execution_context = ExecutionContext::From(script_state);
+  CHECK(execution_context->IsSharedStorageWorkletGlobalScope());
+
+  if (!CheckBrowsingContextIsValid(*script_state, exception_state)) {
+    return ScriptPromise();
+  }
+
+  ScriptPromiseResolver* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
+  ScriptPromise promise = resolver->Promise();
+
+  CHECK(CheckSharedStoragePermissionsPolicy(*script_state, *execution_context,
+                                            *resolver));
+
+  if (!IsValidSharedStorageKeyStringLength(key.length())) {
+    resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
+        script_state->GetIsolate(), DOMExceptionCode::kDataError,
+        "Length of the \"key\" parameter is not valid."));
+    return promise;
+  }
+
+  GetSharedStorageWorkletServiceClient(execution_context)
+      ->SharedStorageGet(
+          key,
+          WTF::BindOnce(
+              [](ScriptPromiseResolver* resolver, SharedStorage* shared_storage,
+                 base::TimeTicks start_time,
+                 mojom::blink::SharedStorageGetStatus status,
+                 const String& error_message, const String& value) {
+                DCHECK(resolver);
+                ScriptState* script_state = resolver->GetScriptState();
+
+                if (status == mojom::blink::SharedStorageGetStatus::kError) {
+                  if (IsInParallelAlgorithmRunnable(
+                          resolver->GetExecutionContext(), script_state)) {
+                    ScriptState::Scope scope(script_state);
+                    resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
+                        script_state->GetIsolate(),
+                        DOMExceptionCode::kOperationError, error_message));
+                  }
+                  return;
+                }
+
+                base::UmaHistogramMediumTimes(
+                    "Storage.SharedStorage.Worklet.Timing.Get",
+                    base::TimeTicks::Now() - start_time);
+
+                if (status == mojom::blink::SharedStorageGetStatus::kSuccess) {
+                  resolver->Resolve(value);
+                  return;
+                }
+
+                CHECK_EQ(status,
+                         mojom::blink::SharedStorageGetStatus::kNotFound);
+                resolver->Resolve();
+              },
+              WrapPersistent(resolver), WrapPersistent(this), start_time));
+
+  return promise;
+}
+
+ScriptPromise SharedStorage::length(ScriptState* script_state,
+                                    ExceptionState& exception_state) {
+  base::TimeTicks start_time = base::TimeTicks::Now();
+  ExecutionContext* execution_context = ExecutionContext::From(script_state);
+  CHECK(execution_context->IsSharedStorageWorkletGlobalScope());
+
+  if (!CheckBrowsingContextIsValid(*script_state, exception_state)) {
+    return ScriptPromise();
+  }
+
+  ScriptPromiseResolver* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
+  ScriptPromise promise = resolver->Promise();
+
+  CHECK(CheckSharedStoragePermissionsPolicy(*script_state, *execution_context,
+                                            *resolver));
+
+  GetSharedStorageWorkletServiceClient(execution_context)
+      ->SharedStorageLength(WTF::BindOnce(
+          [](ScriptPromiseResolver* resolver, SharedStorage* shared_storage,
+             base::TimeTicks start_time, bool success,
+             const String& error_message, uint32_t length) {
+            DCHECK(resolver);
+            ScriptState* script_state = resolver->GetScriptState();
+
+            if (!success) {
+              if (IsInParallelAlgorithmRunnable(resolver->GetExecutionContext(),
+                                                script_state)) {
+                ScriptState::Scope scope(script_state);
+                resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
+                    script_state->GetIsolate(),
+                    DOMExceptionCode::kOperationError, error_message));
+              }
+              return;
+            }
+
+            base::UmaHistogramMediumTimes(
+                "Storage.SharedStorage.Worklet.Timing.Length",
+                base::TimeTicks::Now() - start_time);
+
+            resolver->Resolve(length);
+          },
+          WrapPersistent(resolver), WrapPersistent(this), start_time));
+
+  return promise;
+}
+
+ScriptPromise SharedStorage::remainingBudget(ScriptState* script_state,
+                                             ExceptionState& exception_state) {
+  base::TimeTicks start_time = base::TimeTicks::Now();
+  ExecutionContext* execution_context = ExecutionContext::From(script_state);
+  CHECK(execution_context->IsSharedStorageWorkletGlobalScope());
+
+  if (!CheckBrowsingContextIsValid(*script_state, exception_state)) {
+    return ScriptPromise();
+  }
+
+  ScriptPromiseResolver* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
+  ScriptPromise promise = resolver->Promise();
+
+  CHECK(CheckSharedStoragePermissionsPolicy(*script_state, *execution_context,
+                                            *resolver));
+
+  GetSharedStorageWorkletServiceClient(execution_context)
+      ->SharedStorageRemainingBudget(WTF::BindOnce(
+          [](ScriptPromiseResolver* resolver, SharedStorage* shared_storage,
+             base::TimeTicks start_time, bool success,
+             const String& error_message, double bits) {
+            DCHECK(resolver);
+            ScriptState* script_state = resolver->GetScriptState();
+
+            if (!success) {
+              if (IsInParallelAlgorithmRunnable(resolver->GetExecutionContext(),
+                                                script_state)) {
+                ScriptState::Scope scope(script_state);
+                resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
+                    script_state->GetIsolate(),
+                    DOMExceptionCode::kOperationError, error_message));
+              }
+              return;
+            }
+
+            base::UmaHistogramMediumTimes(
+                "Storage.SharedStorage.Worklet.Timing.RemainingBudget",
+                base::TimeTicks::Now() - start_time);
+
+            resolver->Resolve(bits);
+          },
+          WrapPersistent(resolver), WrapPersistent(this), start_time));
+
+  return promise;
+}
+
+ScriptValue SharedStorage::context(ScriptState* script_state,
+                                   ExceptionState& exception_state) const {
+  ExecutionContext* execution_context = ExecutionContext::From(script_state);
+  CHECK(execution_context->IsSharedStorageWorkletGlobalScope());
+
+  if (!CheckBrowsingContextIsValid(*script_state, exception_state)) {
+    return ScriptValue();
+  }
+
+  const String& embedder_context =
+      To<SharedStorageWorkletGlobalScope>(execution_context)
+          ->embedder_context();
+
+  if (!embedder_context) {
+    base::UmaHistogramBoolean("Storage.SharedStorage.Worklet.Context.IsDefined",
+                              false);
+    return ScriptValue();
+  }
+
+  base::UmaHistogramBoolean("Storage.SharedStorage.Worklet.Context.IsDefined",
+                            true);
+  return ScriptValue(script_state->GetIsolate(),
+                     V8String(script_state->GetIsolate(), embedder_context));
+}
+
+// This C++ overload is called by JavaScript:
+// sharedStorage.selectURL('foo', [{url: "bar.com"}]);
+//
+// It returns a JavaScript promise that resolves to an urn::uuid.
 ScriptPromise SharedStorage::selectURL(
     ScriptState* script_state,
     const String& name,
@@ -347,185 +724,30 @@ ScriptPromise SharedStorage::selectURL(
                    exception_state);
 }
 
+// This C++ overload is called by JavaScript:
+// 1. sharedStorage.selectURL('foo', [{url: "bar.com"}], {data: {'option': 0}});
+// 2. sharedStorage.selectURL('foo', [{url: "bar.com"}], {data: {'option': 0},
+// resolveToConfig: true});
+//
+// It returns a JavaScript promise:
+// 1. that resolves to an urn::uuid, when `resolveToConfig` is false or
+// unspecified.
+// 2. that resolves to a fenced frame config, when `resolveToConfig` is true.
+//
+// This function implements the other overload, with `resolveToConfig`
+// defaulting to false.
 ScriptPromise SharedStorage::selectURL(
     ScriptState* script_state,
     const String& name,
     HeapVector<Member<SharedStorageUrlWithMetadata>> urls,
     const SharedStorageRunOperationMethodOptions* options,
     ExceptionState& exception_state) {
-  base::TimeTicks start_time = base::TimeTicks::Now();
-  ExecutionContext* execution_context = ExecutionContext::From(script_state);
-  CHECK(execution_context->IsWindow());
+  SharedStorageWorklet* shared_storage_worklet =
+      worklet(script_state, exception_state);
+  CHECK(shared_storage_worklet);
 
-  if (!CheckBrowsingContextIsValid(*script_state, exception_state)) {
-    LogSharedStorageWorkletError(
-        SharedStorageWorkletErrorType::kSelectURLWebVisible);
-    return ScriptPromise();
-  }
-
-  LocalFrame* frame = To<LocalDOMWindow>(execution_context)->GetFrame();
-  DCHECK(frame);
-
-  ScriptPromiseResolver* resolver =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
-
-  // For `selectURL()` to succeed, it is currently enforced in the browser side
-  // that `addModule()` must be called beforehand that passed the early
-  // permission checks. Thus the permissions-policy check here isn't strictly
-  // needed. But here we still check the permissions-policy for consistency and
-  // consider this a higher priority error.
-  if (!CheckSharedStoragePermissionsPolicy(*script_state, *execution_context,
-                                           *resolver)) {
-    LogSharedStorageWorkletError(
-        SharedStorageWorkletErrorType::kSelectURLWebVisible);
-    return promise;
-  }
-
-  if (!IsValidSharedStorageURLsArrayLength(urls.size())) {
-    resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
-        script_state->GetIsolate(), DOMExceptionCode::kDataError,
-        "Length of the \"urls\" parameter is not valid."));
-    LogSharedStorageWorkletError(
-        SharedStorageWorkletErrorType::kSelectURLWebVisible);
-    return promise;
-  }
-
-  v8::Local<v8::Context> v8_context =
-      script_state->GetIsolate()->GetCurrentContext();
-
-  Vector<mojom::blink::SharedStorageUrlWithMetadataPtr> converted_urls;
-  converted_urls.ReserveInitialCapacity(urls.size());
-
-  wtf_size_t index = 0;
-  for (const auto& url_with_metadata : urls) {
-    DCHECK(url_with_metadata->hasUrl());
-
-    KURL converted_url =
-        execution_context->CompleteURL(url_with_metadata->url());
-
-    // TODO(crbug.com/1318970): Use `IsValidFencedFrameURL()` or equivalent
-    // logic here.
-    if (!converted_url.IsValid()) {
-      resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
-          script_state->GetIsolate(), DOMExceptionCode::kDataError,
-          "The url \"" + url_with_metadata->url() + "\" is invalid."));
-      LogSharedStorageWorkletError(
-          SharedStorageWorkletErrorType::kSelectURLWebVisible);
-      return promise;
-    }
-
-    HashMap<String, KURL> converted_reporting_metadata;
-
-    if (url_with_metadata->hasReportingMetadata()) {
-      DCHECK(url_with_metadata->reportingMetadata().V8Value()->IsObject());
-
-      v8::Local<v8::Object> obj =
-          url_with_metadata->reportingMetadata().V8Value().As<v8::Object>();
-
-      v8::MaybeLocal<v8::Array> maybe_fields =
-          obj->GetOwnPropertyNames(v8_context);
-      v8::Local<v8::Array> fields;
-      if (!maybe_fields.ToLocal(&fields) || fields->Length() == 0) {
-        resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
-            script_state->GetIsolate(), DOMExceptionCode::kDataError,
-            "selectURL could not get reportingMetadata object attributes"));
-        LogSharedStorageWorkletError(
-            SharedStorageWorkletErrorType::kSelectURLWebVisible);
-        return promise;
-      }
-
-      converted_reporting_metadata.ReserveCapacityForSize(fields->Length());
-
-      for (wtf_size_t idx = 0; idx < fields->Length(); idx++) {
-        v8::Local<v8::Value> report_event =
-            fields->Get(v8_context, idx).ToLocalChecked();
-        String report_event_string;
-        if (!StringFromV8(script_state->GetIsolate(), report_event,
-                          &report_event_string)) {
-          resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
-              script_state->GetIsolate(), DOMExceptionCode::kDataError,
-              "selectURL reportingMetadata object attributes must be "
-              "strings"));
-          LogSharedStorageWorkletError(
-              SharedStorageWorkletErrorType::kSelectURLWebVisible);
-          return promise;
-        }
-
-        v8::Local<v8::Value> report_url =
-            obj->Get(v8_context, report_event).ToLocalChecked();
-        String report_url_string;
-        if (!StringFromV8(script_state->GetIsolate(), report_url,
-                          &report_url_string)) {
-          resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
-              script_state->GetIsolate(), DOMExceptionCode::kDataError,
-              "selectURL reportingMetadata object attributes must be "
-              "strings"));
-          LogSharedStorageWorkletError(
-              SharedStorageWorkletErrorType::kSelectURLWebVisible);
-          return promise;
-        }
-
-        KURL converted_report_url =
-            execution_context->CompleteURL(report_url_string);
-
-        if (!IsValidFencedFrameReportingURL(converted_report_url)) {
-          resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
-              script_state->GetIsolate(), DOMExceptionCode::kDataError,
-              "The metadata for the url at index " +
-                  String::NumberToStringECMAScript(index) +
-                  " has an invalid or non-HTTPS report_url parameter \"" +
-                  report_url_string + "\"."));
-          LogSharedStorageWorkletError(
-              SharedStorageWorkletErrorType::kSelectURLWebVisible);
-          return promise;
-        }
-
-        converted_reporting_metadata.Set(report_event_string,
-                                         converted_report_url);
-      }
-    }
-
-    converted_urls.push_back(mojom::blink::SharedStorageUrlWithMetadata::New(
-        converted_url, std::move(converted_reporting_metadata)));
-    index++;
-  }
-
-  Vector<uint8_t> serialized_data;
-  if (!Serialize(script_state, options, exception_state, serialized_data)) {
-    LogSharedStorageWorkletError(
-        SharedStorageWorkletErrorType::kSelectURLWebVisible);
-    return promise;
-  }
-
-  GetSharedStorageDocumentService(execution_context)
-      ->RunURLSelectionOperationOnWorklet(
-          name, std::move(converted_urls), std::move(serialized_data),
-          WTF::BindOnce(
-              [](ScriptPromiseResolver* resolver, SharedStorage* shared_storage,
-                 base::TimeTicks start_time, bool success,
-                 const String& error_message, const KURL& opaque_url) {
-                DCHECK(resolver);
-                ScriptState* script_state = resolver->GetScriptState();
-
-                if (!success) {
-                  ScriptState::Scope scope(script_state);
-                  resolver->Reject(V8ThrowDOMException::CreateOrEmpty(
-                      script_state->GetIsolate(),
-                      DOMExceptionCode::kOperationError, error_message));
-                  LogSharedStorageWorkletError(
-                      SharedStorageWorkletErrorType::kSelectURLWebVisible);
-                  return;
-                }
-
-                base::UmaHistogramMediumTimes(
-                    "Storage.SharedStorage.Document.Timing.SelectURL",
-                    base::TimeTicks::Now() - start_time);
-                resolver->Resolve(opaque_url);
-              },
-              WrapPersistent(resolver), WrapPersistent(this), start_time));
-
-  return promise;
+  return shared_storage_worklet->SelectURL(script_state, name, urls, options,
+                                           exception_state);
 }
 
 ScriptPromise SharedStorage::run(ScriptState* script_state,
@@ -540,39 +762,12 @@ ScriptPromise SharedStorage::run(
     const String& name,
     const SharedStorageRunOperationMethodOptions* options,
     ExceptionState& exception_state) {
-  base::TimeTicks start_time = base::TimeTicks::Now();
-  ExecutionContext* execution_context = ExecutionContext::From(script_state);
-  CHECK(execution_context->IsWindow());
+  SharedStorageWorklet* shared_storage_worklet =
+      worklet(script_state, exception_state);
+  CHECK(shared_storage_worklet);
 
-  if (!CheckBrowsingContextIsValid(*script_state, exception_state)) {
-    LogSharedStorageWorkletError(SharedStorageWorkletErrorType::kRunWebVisible);
-    return ScriptPromise();
-  }
-
-  Vector<uint8_t> serialized_data;
-  if (!Serialize(script_state, options, exception_state, serialized_data)) {
-    LogSharedStorageWorkletError(SharedStorageWorkletErrorType::kRunWebVisible);
-    return ScriptPromise();
-  }
-
-  ScriptPromiseResolver* resolver =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
-
-  if (!CheckSharedStoragePermissionsPolicy(*script_state, *execution_context,
-                                           *resolver)) {
-    LogSharedStorageWorkletError(SharedStorageWorkletErrorType::kRunWebVisible);
-    return promise;
-  }
-
-  GetSharedStorageDocumentService(execution_context)
-      ->RunOperationOnWorklet(
-          name, std::move(serialized_data),
-          WTF::BindOnce(&OnVoidOperationFinished, WrapPersistent(resolver),
-                        WrapPersistent(this),
-                        blink::SharedStorageVoidOperation::kRun, start_time));
-
-  return promise;
+  return shared_storage_worklet->Run(script_state, name, options,
+                                     exception_state);
 }
 
 SharedStorageWorklet* SharedStorage::worklet(ScriptState* script_state,
@@ -598,6 +793,30 @@ SharedStorage::GetSharedStorageDocumentService(
             execution_context->GetTaskRunner(TaskType::kMiscPlatformAPI)));
   }
   return shared_storage_document_service_.get();
+}
+
+mojom::blink::SharedStorageWorkletServiceClient*
+SharedStorage::GetSharedStorageWorkletServiceClient(
+    ExecutionContext* execution_context) {
+  CHECK(execution_context->IsSharedStorageWorkletGlobalScope());
+  return To<SharedStorageWorkletGlobalScope>(execution_context)
+      ->GetSharedStorageWorkletServiceClient();
+}
+
+PairAsyncIterable<SharedStorage>::IterationSource*
+SharedStorage::CreateIterationSource(
+    ScriptState* script_state,
+    typename PairAsyncIterable<SharedStorage>::IterationSource::Kind kind,
+    ExceptionState& exception_state) {
+  ExecutionContext* execution_context = ExecutionContext::From(script_state);
+
+  if (!CheckBrowsingContextIsValid(*script_state, exception_state)) {
+    return nullptr;
+  }
+
+  return MakeGarbageCollected<IterationSource>(
+      script_state, execution_context, kind,
+      GetSharedStorageWorkletServiceClient(execution_context));
 }
 
 }  // namespace blink

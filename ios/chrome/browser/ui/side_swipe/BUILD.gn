@@ -3,14 +3,14 @@
 # found in the LICENSE file.
 
 source_set("side_swipe") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "card_side_swipe_view.h",
     "card_side_swipe_view.mm",
-    "side_swipe_controller.h",
-    "side_swipe_controller.mm",
     "side_swipe_gesture_recognizer.h",
     "side_swipe_gesture_recognizer.mm",
+    "side_swipe_mediator+Testing.h",
+    "side_swipe_mediator.h",
+    "side_swipe_mediator.mm",
     "side_swipe_navigation_view.h",
     "side_swipe_navigation_view.mm",
     "side_swipe_util.h",
@@ -23,24 +23,25 @@ source_set("side_swipe") {
     "//base",
     "//components/reading_list/core",
     "//ios/chrome/app/theme",
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/main:public",
-    "//ios/chrome/browser/reading_list",
-    "//ios/chrome/browser/snapshots",
-    "//ios/chrome/browser/ui:feature_flags",
-    "//ios/chrome/browser/ui/elements",
+    "//ios/chrome/browser/ntp/model:util",
+    "//ios/chrome/browser/reading_list/model",
+    "//ios/chrome/browser/shared/model/browser",
+    "//ios/chrome/browser/shared/model/browser_state",
+    "//ios/chrome/browser/shared/model/url",
+    "//ios/chrome/browser/shared/model/url:constants",
+    "//ios/chrome/browser/shared/model/web_state_list",
+    "//ios/chrome/browser/shared/public/features",
+    "//ios/chrome/browser/shared/ui/elements",
+    "//ios/chrome/browser/shared/ui/util",
+    "//ios/chrome/browser/snapshots/model",
     "//ios/chrome/browser/ui/fullscreen",
     "//ios/chrome/browser/ui/ntp",
-    "//ios/chrome/browser/ui/ntp:util",
     "//ios/chrome/browser/ui/tab_switcher/tab_grid/grid:grid_ui_constants",
     "//ios/chrome/browser/ui/tabs/requirements",
     "//ios/chrome/browser/ui/toolbar/public",
-    "//ios/chrome/browser/ui/util",
-    "//ios/chrome/browser/url",
-    "//ios/chrome/browser/url:constants",
-    "//ios/chrome/browser/web",
-    "//ios/chrome/browser/web:page_placeholder",
-    "//ios/chrome/browser/web_state_list",
+    "//ios/chrome/browser/ui/toolbar/public:constants",
+    "//ios/chrome/browser/web/model",
+    "//ios/chrome/browser/web/model:page_placeholder",
     "//ios/chrome/common",
     "//ios/chrome/common/ui/colors",
     "//ios/chrome/common/ui/util",
@@ -52,17 +53,18 @@ source_set("side_swipe") {
 }
 
 source_set("unit_tests") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
-  sources = [ "side_swipe_controller_unittest.mm" ]
+  sources = [ "side_swipe_mediator_unittest.mm" ]
   deps = [
     ":side_swipe",
     "//base",
     "//base/test:test_support",
-    "//ios/chrome/browser/browser_state:test_support",
-    "//ios/chrome/browser/main:test_support",
-    "//ios/chrome/browser/url:constants",
-    "//ios/chrome/browser/web_state_list",
+    "//ios/chrome/browser/shared/model/browser/test:test_support",
+    "//ios/chrome/browser/shared/model/browser_state:test_support",
+    "//ios/chrome/browser/shared/model/url:constants",
+    "//ios/chrome/browser/shared/model/web_state_list",
+    "//ios/chrome/browser/snapshots/model",
+    "//ios/chrome/browser/ui/fullscreen",
     "//ios/chrome/test:test_support",
     "//ios/web/common",
     "//ios/web/public/test",
@@ -72,17 +74,15 @@ source_set("unit_tests") {
 }
 
 source_set("eg2_tests") {
-  configs += [
-    "//build/config/compiler:enable_arc",
-    "//build/config/ios:xctest_config",
-  ]
+  configs += [ "//build/config/ios:xctest_config" ]
   testonly = true
   sources = [ "side_swipe_egtest.mm" ]
   deps = [
     "//base",
+    "//ios/chrome/browser/shared/model/prefs:pref_names",
+    "//ios/chrome/browser/shared/public/features",
     "//ios/chrome/test/earl_grey:eg_test_support+eg2",
     "//ios/testing/earl_grey:eg_test_support+eg2",
-    "//ios/third_party/earl_grey2:test_lib",
     "//ios/web/public/test/http_server",
     "//net:test_support",
   ]

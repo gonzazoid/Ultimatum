@@ -17,6 +17,7 @@
 #include "components/viz/service/display/aggregated_frame.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkBlendMode.h"
+#include "ui/gfx/video_types.h"
 #include "ui/latency/latency_info.h"
 
 namespace viz {
@@ -51,6 +52,8 @@ struct TextureQuadParams {
   bool flipped = false;
   bool nearest_neighbor = false;
   bool secure_output_only = false;
+  gfx::ProtectedVideoType protected_video_type =
+      gfx::ProtectedVideoType::kClear;
 };
 
 // Helper to build a CompositorRenderPass and add quads to it. By default the
@@ -100,8 +103,9 @@ class RenderPassBuilder {
   // important attributes are stored in an optional struct parameter. The
   // optional params struct is POD so that designated initializers can be used
   // to construct a new object with specified parameters overridden.
-  RenderPassBuilder& AddSharedElementQuad(const gfx::Rect& rect,
-                                          const SharedElementResourceId& id);
+  RenderPassBuilder& AddSharedElementQuad(
+      const gfx::Rect& rect,
+      const ViewTransitionElementResourceId& id);
   RenderPassBuilder& AddSolidColorQuad(const gfx::Rect& rect,
                                        SkColor4f color,
                                        SolidColorQuadParms params = {});
@@ -164,6 +168,9 @@ class RenderPassBuilder {
   RenderPassBuilder& SetMaskFilter(const gfx::MaskFilterInfo& mask_filter_info,
                                    bool is_fast_rounded_corner);
 
+  // Sets SharedQuadState::layer_id for the last quad.
+  RenderPassBuilder& SetQuadLayerId(uint32_t layer_id);
+
  private:
   // Appends and returns a new SharedQuadState for quad.
   SharedQuadState* AppendDefaultSharedQuadState(const gfx::Rect rect,
@@ -221,6 +228,7 @@ class CompositorFrameBuilder {
 
   // Sets the BeginFrameAck. This replaces the default BeginFrameAck.
   CompositorFrameBuilder& SetBeginFrameAck(const BeginFrameAck& ack);
+  CompositorFrameBuilder& SetBeginFrameSourceId(uint64_t source_id);
   CompositorFrameBuilder& SetDeviceScaleFactor(float device_scale_factor);
   CompositorFrameBuilder& AddLatencyInfo(ui::LatencyInfo latency_info);
   CompositorFrameBuilder& AddLatencyInfos(
@@ -248,7 +256,8 @@ CompositorRenderPassList CopyRenderPasses(
 
 // Creates a CompositorFrame that has a render pass with 20x20 output_rect and
 // empty damage_rect. This CompositorFrame is valid and can be sent over IPC.
-CompositorFrame MakeDefaultCompositorFrame();
+CompositorFrame MakeDefaultCompositorFrame(
+    uint64_t source_id = BeginFrameArgs::kManualSourceId);
 
 // Creates a CompositorFrame with provided render pass.
 CompositorFrame MakeCompositorFrame(

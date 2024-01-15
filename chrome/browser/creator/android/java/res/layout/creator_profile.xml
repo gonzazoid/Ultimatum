@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2022 The Chromium Authors. All rights reserved.
+<!-- Copyright 2022 The Chromium Authors
      Use of this source code is governed by a BSD-style license that can be
      found in the LICENSE file.
 -->
@@ -9,40 +9,48 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:orientation="horizontal"
     android:layout_gravity="center_vertical"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
     android:background="@drawable/profile_background" >
   <LinearLayout
       android:orientation="vertical"
       android:layout_weight="1"
-      android:layout_width="0dp"
-      android:layout_height="match_parent"
-      android:layout_marginStart="16dp" >
+      android:layout_width="@dimen/creator_profile_container_width"
+      android:layout_height="wrap_content" >
     <TextView
         android:id="@+id/creator_name"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:paddingEnd="@dimen/creator_profile_text_padding"
+        android:singleLine="true"
         android:textAppearance="@style/TextAppearance.Headline.Primary" />
     <TextView
         android:id="@+id/creator_url"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:paddingEnd="@dimen/creator_profile_text_padding"
+        android:singleLine="true"
         android:textAppearance="@style/TextAppearance.TextSmall.Primary" />
   </LinearLayout>
-  <org.chromium.ui.widget.ButtonCompat
-      android:id="@+id/creator_follow_button"
+  <FrameLayout
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
-      android:layout_marginEnd="16dp"
-      android:paddingHorizontal="60dp"
-      style="@style/FilledButton"
-      android:text="@string/menu_follow"
-      android:visibility="gone" />
-  <org.chromium.ui.widget.ButtonCompat
-      android:id="@+id/creator_following_button"
-      android:layout_width="wrap_content"
-      android:layout_height="wrap_content"
-      android:layout_marginEnd="16dp"
-      android:paddingHorizontal="60dp"
-      style="@style/FilledButton"
-      android:text="@string/menu_following"
-      android:visibility="gone" />
+      android:layout_gravity="center_vertical" >
+    <org.chromium.ui.widget.ButtonCompat
+        android:id="@+id/creator_follow_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        style="@style/CreatorFollowFilledButton"
+        android:text="@string/menu_follow"
+        android:drawableStart="@drawable/follow_add"
+        android:visibility="gone" />
+    <org.chromium.ui.widget.ButtonCompat
+        android:id="@+id/creator_following_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        style="@style/CreatorFollowReverseButton"
+        android:text="@string/menu_following"
+        android:drawableStart="@drawable/following_checkmark"
+        android:visibility="gone" />
+  </FrameLayout>
 </org.chromium.chrome.browser.creator.CreatorProfileView>

@@ -18,6 +18,15 @@
     width: inherit;
   }
 
+  :host-context([chrome-refresh-2023]) cr-button {
+    --cr-hover-background-color: transparent;
+    border-radius: inherit;
+  }
+
+  :host-context([chrome-refresh-2023]) #gaiaName {
+    left: 0;
+  }
+
   #avatarContainer {
     height: var(--profile-card-avatar-icon-size);
     position: relative;
@@ -69,6 +78,11 @@
     --cr-input-background-color: none;
     --cr-input-padding-top: 0;
     top: 0;
+  }
+
+  :host-context([chrome-refresh-2023]) cr-input {
+    --cr-input-hover-background-color: transparent;
+    --cr-input-border-bottom: none;
   }
 
   #hoverUnderline {
@@ -145,7 +159,9 @@
         value="[[profileState.localProfileName]]"
         on-change="onProfileNameChanged_" on-keydown="onProfileNameKeydown_"
         on-blur="onProfileNameInputBlur_" pattern="[[pattern_]]"
-        auto-validate spellcheck="false" required>
+        auto-validate spellcheck="false"
+        on-pointerenter="onNameInputPointerEnter_"
+        on-pointerleave="onNameInputPointerLeave_" required>
     </cr-input>
     <div id="hoverUnderline"></div>
   </div>

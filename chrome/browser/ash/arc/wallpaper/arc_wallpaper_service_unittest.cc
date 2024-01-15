@@ -14,9 +14,11 @@
 #include "ash/components/arc/test/connection_holder_util.h"
 #include "ash/components/arc/test/fake_wallpaper_instance.h"
 #include "ash/constants/ash_pref_names.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
+#include "chrome/browser/ash/wallpaper_handlers/test_wallpaper_fetcher_delegate.h"
 #include "chrome/browser/image_decoder/image_decoder.h"
 #include "chrome/browser/ui/ash/test_wallpaper_controller.h"
 #include "chrome/browser/ui/ash/wallpaper_controller_client_impl.h"
@@ -61,8 +63,7 @@ class ArcWallpaperServiceTest : public testing::Test {
  public:
   ArcWallpaperServiceTest()
       : task_environment_(std::make_unique<content::BrowserTaskEnvironment>()),
-        user_manager_(new ash::FakeChromeUserManager()),
-        user_manager_enabler_(base::WrapUnique(user_manager_)) {}
+        fake_user_manager_(std::make_unique<ash::FakeChromeUserManager>()) {}
 
   ArcWallpaperServiceTest(const ArcWallpaperServiceTest&) = delete;
   ArcWallpaperServiceTest& operator=(const ArcWallpaperServiceTest&) = delete;
@@ -80,13 +81,14 @@ class ArcWallpaperServiceTest : public testing::Test {
         prefs::kDeviceWallpaperImageFilePath, std::string());
 
     // User
-    user_manager_->AddUser(user_manager::StubAccountId());
-    user_manager_->LoginUser(user_manager::StubAccountId());
-    ASSERT_TRUE(user_manager_->GetPrimaryUser());
+    fake_user_manager_->AddUser(user_manager::StubAccountId());
+    fake_user_manager_->LoginUser(user_manager::StubAccountId());
+    ASSERT_TRUE(fake_user_manager_->GetPrimaryUser());
 
     // Wallpaper
-    wallpaper_controller_client_ =
-        std::make_unique<WallpaperControllerClientImpl>();
+    wallpaper_controller_client_ = std::make_unique<
+        WallpaperControllerClientImpl>(
+        std::make_unique<wallpaper_handlers::TestWallpaperFetcherDelegate>());
     wallpaper_controller_client_->InitForTesting(&test_wallpaper_controller_);
 
     // Arc services
@@ -101,34 +103,36 @@ class ArcWallpaperServiceTest : public testing::Test {
         arc_service_manager_.arc_bridge_service()->wallpaper());
 
     // Salt
-    chromeos::SystemSaltGetter::Initialize();
-    chromeos::SystemSaltGetter::Get()->SetRawSaltForTesting({0x01, 0x02, 0x03});
+    ash::SystemSaltGetter::Initialize();
+    ash::SystemSaltGetter::Get()->SetRawSaltForTesting({0x01, 0x02, 0x03});
   }
 
   void TearDown() override {
     arc_service_manager_.arc_bridge_service()->wallpaper()->CloseInstance(
         wallpaper_instance_.get());
+    arc_service_manager_.set_browser_context(nullptr);
     wallpaper_instance_.reset();
 
     wallpaper_controller_client_.reset();
     TestingBrowserProcess::GetGlobal()->SetLocalState(nullptr);
-    chromeos::SystemSaltGetter::Shutdown();
+    ash::SystemSaltGetter::Shutdown();
   }
 
  protected:
-  arc::ArcWallpaperService* service_ = nullptr;
+  raw_ptr<arc::ArcWallpaperService, DanglingUntriaged> service_ = nullptr;
   std::unique_ptr<arc::FakeWallpaperInstance> wallpaper_instance_;
   std::unique_ptr<WallpaperControllerClientImpl> wallpaper_controller_client_;
   TestWallpaperController test_wallpaper_controller_;
 
  private:
   std::unique_ptr<content::BrowserTaskEnvironment> task_environment_;
-  ash::FakeChromeUserManager* const user_manager_ = nullptr;
-  user_manager::ScopedUserManager user_manager_enabler_;
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_;
   arc::ArcServiceManager arc_service_manager_;
-  // testing_profile_ needs to be deleted before arc_service_manager_.
-  TestingProfile testing_profile_;
   TestingPrefServiceSimple pref_service_;
+  // testing_profile_ needs to be deleted before arc_service_manager_ and
+  // pref_service_.
+  TestingProfile testing_profile_;
 };
 
 }  // namespace
@@ -143,6 +147,7 @@ TEST_F(ArcWallpaperServiceTest, SetAndGetWallpaper) {
   service_->SetDecodeRequestSenderForTesting(
       std::make_unique<SuccessDecodeRequestSender>());
   std::vector<uint8_t> bytes;
+  test_wallpaper_controller_.SetCurrentUser(user_manager::StubAccountId());
   service_->SetWallpaper(bytes, 10 /*wallpaper_id=*/);
   ASSERT_EQ(1u, wallpaper_instance_->changed_ids().size());
   EXPECT_EQ(10, wallpaper_instance_->changed_ids()[0]);
@@ -159,6 +164,7 @@ TEST_F(ArcWallpaperServiceTest, SetAndGetWallpaper) {
 TEST_F(ArcWallpaperServiceTest, SetWallpaperFailure) {
   service_->SetDecodeRequestSenderForTesting(
       std::make_unique<FailureDecodeRequestSender>());
+  test_wallpaper_controller_.SetCurrentUser(user_manager::StubAccountId());
   std::vector<uint8_t> bytes;
   service_->SetWallpaper(bytes, 10 /*wallpaper_id=*/);
 

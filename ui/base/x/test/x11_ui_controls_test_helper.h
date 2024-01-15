@@ -5,11 +5,10 @@
 #ifndef UI_BASE_X_TEST_X11_UI_CONTROLS_TEST_HELPER_H_
 #define UI_BASE_X_TEST_X11_UI_CONTROLS_TEST_HELPER_H_
 
-#include "base/memory/raw_ptr.h"
-#include "ui/gfx/native_widget_types.h"
-
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/test/ui_controls_aura.h"
+#include "ui/gfx/native_widget_types.h"
 #include "ui/gfx/x/connection.h"
 
 namespace gfx {
@@ -27,19 +26,17 @@ class COMPONENT_EXPORT(UI_BASE_X) X11UIControlsTestHelper {
 
   unsigned ButtonDownMask() const;
 
-  // Sends key press event and executes |closure| when done.
-  void SendKeyPressEvent(gfx::AcceleratedWidget widget,
-                         ui::KeyboardCode key,
-                         bool control,
-                         bool shift,
-                         bool alt,
-                         bool command,
-                         base::OnceClosure closure);
+  // Sends key events and executes |closure| when done.
+  void SendKeyEvents(gfx::AcceleratedWidget widget,
+                     ui::KeyboardCode key,
+                     int key_event_types,
+                     int accelerator_state,
+                     base::OnceClosure closure);
 
   // Sends mouse motion notify event and executes |closure| when done.
   void SendMouseMotionNotifyEvent(gfx::AcceleratedWidget widget,
                                   const gfx::Point& mouse_loc,
-                                  const gfx::Point& mouse_root_loc,
+                                  const gfx::Point& mouse_loc_in_screen_px,
                                   base::OnceClosure closure);
 
   // Sends mouse event and executes |closure| when done.
@@ -48,7 +45,7 @@ class COMPONENT_EXPORT(UI_BASE_X) X11UIControlsTestHelper {
                       int button_state,
                       int accelerator_state,
                       const gfx::Point& mouse_loc,
-                      const gfx::Point& mouse_root_loc,
+                      const gfx::Point& mouse_loc_in_screen_px,
                       base::OnceClosure closure);
 
   void RunClosureAfterAllPendingUIEvents(base::OnceClosure closure);
@@ -65,7 +62,7 @@ class COMPONENT_EXPORT(UI_BASE_X) X11UIControlsTestHelper {
                                    uint32_t keysym);
 
   // Our X11 state.
-  raw_ptr<x11::Connection> connection_ = nullptr;
+  raw_ref<x11::Connection> connection_;
   x11::Window x_root_window_;
 
   // Input-only window used for events.

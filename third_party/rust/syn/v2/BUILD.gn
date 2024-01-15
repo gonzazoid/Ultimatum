@@ -1,0 +1,100 @@
+# Copyright 2023 The Chromium Authors
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# @generated from third_party/rust/chromium_crates_io/BUILD.gn.hbs by
+# tools/crates/gnrt.
+# Do not edit!
+
+import("//build/rust/cargo_crate.gni")
+
+cargo_crate("lib") {
+  crate_name = "syn"
+  epoch = "2"
+  crate_type = "rlib"
+  crate_root =
+      "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/lib.rs"
+  sources = [
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/attr.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/bigint.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/buffer.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/custom_keyword.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/custom_punctuation.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/data.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/derive.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/discouraged.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/drops.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/error.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/export.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/expr.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/ext.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/file.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/gen/clone.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/gen/debug.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/gen/eq.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/gen/fold.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/gen/hash.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/gen/visit.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/gen/visit_mut.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/gen_helper.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/generics.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/group.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/ident.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/item.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/lib.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/lifetime.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/lit.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/lookahead.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/mac.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/macros.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/meta.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/op.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/parse.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/parse_macro_input.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/parse_quote.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/pat.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/path.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/print.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/punctuated.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/restriction.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/sealed.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/span.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/spanned.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/stmt.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/thread.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/token.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/tt.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/ty.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/verbatim.rs",
+    "//third_party/rust/chromium_crates_io/vendor/syn-2.0.39/src/whitespace.rs",
+  ]
+  inputs = []
+
+  build_native_rust_unit_tests = false
+  edition = "2021"
+  cargo_pkg_version = "2.0.39"
+  cargo_pkg_authors = "David Tolnay <dtolnay@gmail.com>"
+  cargo_pkg_name = "syn"
+  cargo_pkg_description = "Parser for Rust source code"
+  library_configs -= [ "//build/config/compiler:chromium_code" ]
+  library_configs += [ "//build/config/compiler:no_chromium_code" ]
+  executable_configs -= [ "//build/config/compiler:chromium_code" ]
+  executable_configs += [ "//build/config/compiler:no_chromium_code" ]
+  proc_macro_configs -= [ "//build/config/compiler:chromium_code" ]
+  proc_macro_configs += [ "//build/config/compiler:no_chromium_code" ]
+  deps = [
+    "//third_party/rust/proc_macro2/v1:lib",
+    "//third_party/rust/quote/v1:lib",
+    "//third_party/rust/unicode_ident/v1:lib",
+  ]
+  features = [
+    "clone-impls",
+    "derive",
+    "extra-traits",
+    "full",
+    "parsing",
+    "printing",
+    "proc-macro",
+    "quote",
+  ]
+}

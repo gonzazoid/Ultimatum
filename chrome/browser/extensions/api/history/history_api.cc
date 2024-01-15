@@ -8,10 +8,10 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_writer.h"
 #include "base/lazy_instance.h"
 #include "base/location.h"
@@ -19,7 +19,6 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/cancelable_task_tracker.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/browser/extensions/activity_log/activity_log.h"
@@ -28,9 +27,9 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/extensions/api/history.h"
-#include "chrome/common/pref_names.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/browser/history_types.h"
+#include "components/history/core/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_system_provider.h"
@@ -58,17 +57,14 @@ const char kInvalidUrlError[] = "Url is invalid.";
 const char kDeleteProhibitedError[] = "Browsing history is not allowed to be "
                                       "deleted.";
 
-double MilliSecondsFromTime(const base::Time& time) {
-  return 1000 * time.ToDoubleT();
-}
-
 HistoryItem GetHistoryItem(const history::URLRow& row) {
   HistoryItem history_item;
 
   history_item.id = base::NumberToString(row.id());
   history_item.url = row.url().spec();
   history_item.title = base::UTF16ToUTF8(row.title());
-  history_item.last_visit_time = MilliSecondsFromTime(row.last_visit());
+  history_item.last_visit_time =
+      row.last_visit().InMillisecondsFSinceUnixEpoch();
   history_item.typed_count = row.typed_count();
   history_item.visit_count = row.visit_count();
 
@@ -80,49 +76,51 @@ VisitItem GetVisitItem(const history::VisitRow& row) {
 
   visit_item.id = base::NumberToString(row.url_id);
   visit_item.visit_id = base::NumberToString(row.visit_id);
-  visit_item.visit_time = MilliSecondsFromTime(row.visit_time);
+  visit_item.visit_time = row.visit_time.InMillisecondsFSinceUnixEpoch();
   visit_item.referring_visit_id = base::NumberToString(row.referring_visit);
 
-  api::history::TransitionType transition = api::history::TRANSITION_TYPE_LINK;
+  api::history::TransitionType transition = api::history::TransitionType::kLink;
   switch (row.transition & ui::PAGE_TRANSITION_CORE_MASK) {
     case ui::PAGE_TRANSITION_LINK:
-      transition = api::history::TRANSITION_TYPE_LINK;
+      transition = api::history::TransitionType::kLink;
       break;
     case ui::PAGE_TRANSITION_TYPED:
-      transition = api::history::TRANSITION_TYPE_TYPED;
+      transition = api::history::TransitionType::kTyped;
       break;
     case ui::PAGE_TRANSITION_AUTO_BOOKMARK:
-      transition = api::history::TRANSITION_TYPE_AUTO_BOOKMARK;
+      transition = api::history::TransitionType::kAutoBookmark;
       break;
     case ui::PAGE_TRANSITION_AUTO_SUBFRAME:
-      transition = api::history::TRANSITION_TYPE_AUTO_SUBFRAME;
+      transition = api::history::TransitionType::kAutoSubframe;
       break;
     case ui::PAGE_TRANSITION_MANUAL_SUBFRAME:
-      transition = api::history::TRANSITION_TYPE_MANUAL_SUBFRAME;
+      transition = api::history::TransitionType::kManualSubframe;
       break;
     case ui::PAGE_TRANSITION_GENERATED:
-      transition = api::history::TRANSITION_TYPE_GENERATED;
+      transition = api::history::TransitionType::kGenerated;
       break;
     case ui::PAGE_TRANSITION_AUTO_TOPLEVEL:
-      transition = api::history::TRANSITION_TYPE_AUTO_TOPLEVEL;
+      transition = api::history::TransitionType::kAutoToplevel;
       break;
     case ui::PAGE_TRANSITION_FORM_SUBMIT:
-      transition = api::history::TRANSITION_TYPE_FORM_SUBMIT;
+      transition = api::history::TransitionType::kFormSubmit;
       break;
     case ui::PAGE_TRANSITION_RELOAD:
-      transition = api::history::TRANSITION_TYPE_RELOAD;
+      transition = api::history::TransitionType::kReload;
       break;
     case ui::PAGE_TRANSITION_KEYWORD:
-      transition = api::history::TRANSITION_TYPE_KEYWORD;
+      transition = api::history::TransitionType::kKeyword;
       break;
     case ui::PAGE_TRANSITION_KEYWORD_GENERATED:
-      transition = api::history::TRANSITION_TYPE_KEYWORD_GENERATED;
+      transition = api::history::TransitionType::kKeywordGenerated;
       break;
     default:
       DCHECK(false);
   }
 
   visit_item.transition = transition;
+
+  visit_item.is_local = row.originator_cache_guid.empty();
 
   return visit_item;
 }
@@ -234,13 +232,7 @@ bool HistoryFunction::VerifyDeleteAllowed(std::string* error) {
 }
 
 base::Time HistoryFunction::GetTime(double ms_from_epoch) {
-  // The history service has seconds resolution, while javascript Date() has
-  // milliseconds resolution.
-  double seconds_from_epoch = ms_from_epoch / 1000.0;
-  // Time::FromDoubleT converts double time 0 to empty Time object. So we need
-  // to do special handling here.
-  return (seconds_from_epoch == 0) ?
-      base::Time::UnixEpoch() : base::Time::FromDoubleT(seconds_from_epoch);
+  return base::Time::FromMillisecondsSinceUnixEpoch(ms_from_epoch);
 }
 
 Profile* HistoryFunction::GetProfile() const {
@@ -252,8 +244,8 @@ HistoryFunctionWithCallback::HistoryFunctionWithCallback() {}
 HistoryFunctionWithCallback::~HistoryFunctionWithCallback() {}
 
 ExtensionFunction::ResponseAction HistoryGetVisitsFunction::Run() {
-  std::unique_ptr<GetVisits::Params> params(GetVisits::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<GetVisits::Params> params = GetVisits::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   GURL url;
   std::string error;
@@ -283,8 +275,8 @@ void HistoryGetVisitsFunction::QueryComplete(history::QueryURLResult result) {
 }
 
 ExtensionFunction::ResponseAction HistorySearchFunction::Run() {
-  std::unique_ptr<Search::Params> params(Search::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<Search::Params> params = Search::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   std::u16string search_text = base::UTF8ToUTF16(params->query.text);
 
@@ -321,8 +313,8 @@ void HistorySearchFunction::SearchComplete(history::QueryResults results) {
 }
 
 ExtensionFunction::ResponseAction HistoryAddUrlFunction::Run() {
-  std::unique_ptr<AddUrl::Params> params(AddUrl::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<AddUrl::Params> params = AddUrl::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   GURL url;
   std::string error;
@@ -337,8 +329,8 @@ ExtensionFunction::ResponseAction HistoryAddUrlFunction::Run() {
 }
 
 ExtensionFunction::ResponseAction HistoryDeleteUrlFunction::Run() {
-  std::unique_ptr<DeleteUrl::Params> params(DeleteUrl::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<DeleteUrl::Params> params = DeleteUrl::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   std::string error;
   if (!VerifyDeleteAllowed(&error))
@@ -368,9 +360,9 @@ ExtensionFunction::ResponseAction HistoryDeleteUrlFunction::Run() {
 }
 
 ExtensionFunction::ResponseAction HistoryDeleteRangeFunction::Run() {
-  std::unique_ptr<DeleteRange::Params> params(
-      DeleteRange::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<DeleteRange::Params> params =
+      DeleteRange::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   std::string error;
   if (!VerifyDeleteAllowed(&error))

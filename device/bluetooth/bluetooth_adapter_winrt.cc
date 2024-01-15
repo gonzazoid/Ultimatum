@@ -13,12 +13,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/containers/span.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
@@ -30,7 +30,6 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/win/com_init_util.h"
 #include "base/win/core_winrt_util.h"
 #include "base/win/post_async_results.h"
@@ -105,11 +104,6 @@ using ABI::Windows::Storage::Streams::IDataReader;
 using ABI::Windows::Storage::Streams::IDataReaderStatics;
 using Microsoft::WRL::Callback;
 using Microsoft::WRL::ComPtr;
-
-bool ResolveCoreWinRT() {
-  return base::win::ResolveCoreWinRTDelayload() &&
-         base::win::ScopedHString::ResolveCoreWinRTStringDelayload();
-}
 
 // Query string for powered Bluetooth radios. GUID Reference:
 // https://docs.microsoft.com/en-us/windows-hardware/drivers/install/guid-bthport-device-interface
@@ -614,7 +608,7 @@ IDeviceWatcher* BluetoothAdapterWinrt::GetPoweredRadioWatcherForTesting() {
 }
 
 BluetoothAdapterWinrt::BluetoothAdapterWinrt() {
-  ui_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  ui_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
 }
 
 BluetoothAdapterWinrt::~BluetoothAdapterWinrt() {
@@ -672,13 +666,6 @@ void BluetoothAdapterWinrt::InitForTests(
     ComPtr<IBluetoothAdapterStatics> bluetooth_adapter_statics,
     ComPtr<IDeviceInformationStatics> device_information_statics,
     ComPtr<IRadioStatics> radio_statics) {
-  if (!ResolveCoreWinRT()) {
-    CompleteInit(std::move(init_callback), std::move(bluetooth_adapter_statics),
-                 std::move(device_information_statics),
-                 std::move(radio_statics));
-    return;
-  }
-
   auto statics = PerformSlowInitTasks();
 
   // This allows any passed in values (which would be fakes) to replace
@@ -702,9 +689,6 @@ void BluetoothAdapterWinrt::InitForTests(
 BluetoothAdapterWinrt::StaticsInterfaces
 BluetoothAdapterWinrt::PerformSlowInitTasks() {
   base::win::AssertComApartmentType(base::win::ComApartmentType::MTA);
-  if (!ResolveCoreWinRT())
-    return BluetoothAdapterWinrt::StaticsInterfaces();
-
   ComPtr<IBluetoothAdapterStatics> adapter_statics;
   HRESULT hr = base::win::GetActivationFactory<
       IBluetoothAdapterStatics,

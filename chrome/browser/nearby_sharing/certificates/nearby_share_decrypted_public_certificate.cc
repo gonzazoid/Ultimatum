@@ -8,8 +8,8 @@
 
 #include "chrome/browser/nearby_sharing/certificates/common.h"
 #include "chrome/browser/nearby_sharing/certificates/constants.h"
-#include "chrome/browser/nearby_sharing/logging/logging.h"
-#include "chrome/browser/nearby_sharing/proto/timestamp.pb.h"
+#include "chromeos/ash/components/nearby/common/proto/timestamp.pb.h"
+#include "components/cross_device/logging/logging.h"
 #include "crypto/aead.h"
 #include "crypto/encryptor.h"
 #include "crypto/hmac.h"
@@ -40,7 +40,7 @@ absl::optional<std::vector<uint8_t>> DecryptMetadataKey(
   std::unique_ptr<crypto::Encryptor> encryptor =
       CreateNearbyShareCtrEncryptor(secret_key, encrypted_metadata_key.salt());
   if (!encryptor) {
-    NS_LOG(ERROR)
+    CD_LOG(ERROR, Feature::NS)
         << "Cannot decrypt metadata key: Could not create CTR encryptor.";
     return absl::nullopt;
   }
@@ -97,15 +97,15 @@ bool VerifyMetadataEncryptionKeyTag(
 // static
 absl::optional<NearbyShareDecryptedPublicCertificate>
 NearbyShareDecryptedPublicCertificate::DecryptPublicCertificate(
-    const nearbyshare::proto::PublicCertificate& public_certificate,
+    const nearby::sharing::proto::PublicCertificate& public_certificate,
     const NearbyShareEncryptedMetadataKey& encrypted_metadata_key) {
   // Note: The PublicCertificate.metadata_encryption_key and
   // PublicCertificate.for_selected_contacts are not returned from the server
   // for remote devices.
-  base::Time not_before = base::Time::FromJavaTime(
-      public_certificate.start_time().seconds() * 1000);
-  base::Time not_after =
-      base::Time::FromJavaTime(public_certificate.end_time().seconds() * 1000);
+  base::Time not_before = base::Time::FromSecondsSinceUnixEpoch(
+      public_certificate.start_time().seconds());
+  base::Time not_after = base::Time::FromSecondsSinceUnixEpoch(
+      public_certificate.end_time().seconds());
   std::vector<uint8_t> public_key(public_certificate.public_key().begin(),
                                   public_certificate.public_key().end());
   std::unique_ptr<crypto::SymmetricKey> secret_key =
@@ -146,16 +146,18 @@ NearbyShareDecryptedPublicCertificate::DecryptPublicCertificate(
       DecryptMetadataPayload(encrypted_metadata, *decrypted_metadata_key,
                              secret_key.get());
   if (!decrypted_metadata_bytes) {
-    NS_LOG(ERROR) << "Metadata decryption failed: Failed to decrypt metadata "
-                  << "payload.";
+    CD_LOG(ERROR, Feature::NS)
+        << "Metadata decryption failed: Failed to decrypt metadata "
+        << "payload.";
     return absl::nullopt;
   }
 
-  nearbyshare::proto::EncryptedMetadata unencrypted_metadata;
+  nearby::sharing::proto::EncryptedMetadata unencrypted_metadata;
   if (!unencrypted_metadata.ParseFromArray(decrypted_metadata_bytes->data(),
                                            decrypted_metadata_bytes->size())) {
-    NS_LOG(ERROR) << "Metadata decryption failed: Failed to parse decrypted "
-                  << "metadata payload.";
+    CD_LOG(ERROR, Feature::NS)
+        << "Metadata decryption failed: Failed to parse decrypted "
+        << "metadata payload.";
     return absl::nullopt;
   }
 
@@ -171,7 +173,7 @@ NearbyShareDecryptedPublicCertificate::NearbyShareDecryptedPublicCertificate(
     std::unique_ptr<crypto::SymmetricKey> secret_key,
     std::vector<uint8_t> public_key,
     std::vector<uint8_t> id,
-    nearbyshare::proto::EncryptedMetadata unencrypted_metadata,
+    nearby::sharing::proto::EncryptedMetadata unencrypted_metadata,
     bool for_self_share)
     : not_before_(not_before),
       not_after_(not_after),
@@ -219,7 +221,8 @@ bool NearbyShareDecryptedPublicCertificate::VerifySignature(
   crypto::SignatureVerifier verifier;
   if (!verifier.VerifyInit(crypto::SignatureVerifier::ECDSA_SHA256, signature,
                            public_key_)) {
-    NS_LOG(ERROR) << "Verification failed: Initialization unsuccessful.";
+    CD_LOG(ERROR, Feature::NS)
+        << "Verification failed: Initialization unsuccessful.";
     return false;
   }
 

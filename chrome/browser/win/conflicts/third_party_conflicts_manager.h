@@ -9,10 +9,11 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "chrome/browser/win/conflicts/module_blocklist_cache_updater.h"
 #include "chrome/browser/win/conflicts/module_database_observer.h"
 #include "chrome/browser/win/conflicts/module_list_component_updater.h"
@@ -180,7 +181,7 @@ class ThirdPartyConflictsManager : public ModuleDatabaseObserver {
   // |on_initialization_complete_callback_|.
   void SetTerminalState(State terminal_state);
 
-  ModuleDatabaseEventSource* const module_database_event_source_;
+  const raw_ptr<ModuleDatabaseEventSource> module_database_event_source_;
 
   scoped_refptr<base::SequencedTaskRunner> background_sequence_;
 

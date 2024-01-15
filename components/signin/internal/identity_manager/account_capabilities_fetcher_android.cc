@@ -5,7 +5,7 @@
 #include "components/signin/internal/identity_manager/account_capabilities_fetcher_android.h"
 
 #include "base/android/jni_android.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/signin/public/android/jni_headers/AccountCapabilitiesFetcher_jni.h"
 #include "components/signin/public/identity_manager/account_capabilities.h"
 #include "components/signin/public/identity_manager/account_info.h"
@@ -17,8 +17,10 @@ using OnAccountCapabilitiesFetchedCallback =
 
 AccountCapabilitiesFetcherAndroid::AccountCapabilitiesFetcherAndroid(
     const CoreAccountInfo& account_info,
+    AccountCapabilitiesFetcher::FetchPriority fetch_priority,
     AccountCapabilitiesFetcher::OnCompleteCallback on_complete_callback)
     : AccountCapabilitiesFetcher(account_info,
+                                 fetch_priority,
                                  std::move(on_complete_callback)) {
   JNIEnv* env = base::android::AttachCurrentThread();
 

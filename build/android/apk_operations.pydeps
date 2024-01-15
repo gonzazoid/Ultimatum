@@ -64,8 +64,8 @@
 ../../third_party/catapult/devil/devil/utils/zip_utils.py
 ../../third_party/catapult/third_party/six/six.py
 ../../third_party/jinja2/__init__.py
-../../third_party/jinja2/_compat.py
 ../../third_party/jinja2/_identifier.py
+../../third_party/jinja2/async_utils.py
 ../../third_party/jinja2/bccache.py
 ../../third_party/jinja2/compiler.py
 ../../third_party/jinja2/defaults.py
@@ -85,8 +85,10 @@
 ../../third_party/markupsafe/__init__.py
 ../../third_party/markupsafe/_compat.py
 ../../third_party/markupsafe/_native.py
+../action_helpers.py
 ../gn_helpers.py
 ../print_python_deps.py
+../zip_helpers.py
 adb_command_line.py
 apk_operations.py
 devil_chromium.py
@@ -96,7 +98,6 @@ gyp/util/__init__.py
 gyp/util/build_utils.py
 gyp/util/md5_check.py
 gyp/util/resource_utils.py
-gyp/util/zipalign.py
 incremental_install/__init__.py
 incremental_install/installer.py
 pylib/__init__.py
@@ -104,6 +105,7 @@ pylib/constants/__init__.py
 pylib/constants/host_paths.py
 pylib/symbols/__init__.py
 pylib/symbols/deobfuscator.py
+pylib/symbols/expensive_line_transformer.py
 pylib/utils/__init__.py
 pylib/utils/app_bundle_utils.py
 pylib/utils/simpleperf.py

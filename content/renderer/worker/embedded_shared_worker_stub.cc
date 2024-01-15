@@ -7,9 +7,9 @@
 #include <stdint.h>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
-#include "content/public/common/network_service_util.h"
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
 #include "content/renderer/content_security_policy_util.h"
 #include "content/renderer/policy_container_util.h"
 #include "content/renderer/worker/fetch_client_settings_object_helpers.h"
@@ -35,11 +35,9 @@ namespace content {
 EmbeddedSharedWorkerStub::EmbeddedSharedWorkerStub(
     blink::mojom::SharedWorkerInfoPtr info,
     const blink::SharedWorkerToken& token,
-    const url::Origin& constructor_origin,
+    const blink::StorageKey& constructor_key,
     bool is_constructor_secure_context,
     const std::string& user_agent,
-    const std::string& full_user_agent,
-    const std::string& reduced_user_agent,
     const blink::UserAgentMetadata& ua_metadata,
     bool pause_on_start,
     const base::UnguessableToken& devtools_worker_token,
@@ -85,16 +83,14 @@ EmbeddedSharedWorkerStub::EmbeddedSharedWorkerStub(
   // If the network service crashes, then self-destruct so clients don't get
   // stuck with a worker with a broken loader. Self-destruction is effectively
   // the same as the worker's process crashing.
-  if (IsOutOfProcessNetworkService()) {
-    default_factory_disconnect_handler_holder_.Bind(std::move(
-        pending_subresource_loader_factory_bundle->pending_default_factory()));
-    default_factory_disconnect_handler_holder_->Clone(
-        pending_subresource_loader_factory_bundle->pending_default_factory()
-            .InitWithNewPipeAndPassReceiver());
-    default_factory_disconnect_handler_holder_.set_disconnect_handler(
-        base::BindOnce(&EmbeddedSharedWorkerStub::Terminate,
-                       base::Unretained(this)));
-  }
+  default_factory_disconnect_handler_holder_.Bind(std::move(
+      pending_subresource_loader_factory_bundle->pending_default_factory()));
+  default_factory_disconnect_handler_holder_->Clone(
+      pending_subresource_loader_factory_bundle->pending_default_factory()
+          .InitWithNewPipeAndPassReceiver());
+  default_factory_disconnect_handler_holder_.set_disconnect_handler(
+      base::BindOnce(&EmbeddedSharedWorkerStub::Terminate,
+                     base::Unretained(this)));
 
   // Initialize the subresource loader factory bundle passed by the browser
   // process.
@@ -113,17 +109,16 @@ EmbeddedSharedWorkerStub::EmbeddedSharedWorkerStub(
   }
 
   scoped_refptr<blink::WebWorkerFetchContext> web_worker_fetch_context =
-      CreateWorkerFetchContext(info->url, std::move(renderer_preferences),
+      CreateWorkerFetchContext(constructor_key, std::move(renderer_preferences),
                                std::move(preference_watcher_receiver),
                                cors_exempt_header_list);
 
   impl_ = blink::WebSharedWorker::CreateAndStart(
       token, info->url, info->options->type, info->options->credentials,
       blink::WebString::FromUTF8(info->options->name),
-      blink::WebSecurityOrigin(constructor_origin),
+      blink::WebSecurityOrigin(constructor_key.origin()),
       is_constructor_secure_context, blink::WebString::FromUTF8(user_agent),
-      blink::WebString::FromUTF8(full_user_agent),
-      blink::WebString::FromUTF8(reduced_user_agent), ua_metadata,
+      ua_metadata,
       ToWebContentSecurityPolicies(std::move(info->content_security_policies)),
       FetchClientSettingsObjectFromMojomToWeb(
           info->outside_fetch_client_settings_object),
@@ -150,7 +145,7 @@ void EmbeddedSharedWorkerStub::WorkerContextDestroyed() {
 
 scoped_refptr<blink::WebWorkerFetchContext>
 EmbeddedSharedWorkerStub::CreateWorkerFetchContext(
-    const GURL& url,
+    const blink::StorageKey& constructor_key,
     const blink::RendererPreferences& renderer_preferences,
     mojo::PendingReceiver<blink::mojom::RendererPreferenceWatcher>
         preference_watcher_receiver,
@@ -161,10 +156,9 @@ EmbeddedSharedWorkerStub::CreateWorkerFetchContext(
 
   blink::WebVector<blink::WebString> web_cors_exempt_header_list(
       cors_exempt_header_list.size());
-  std::transform(cors_exempt_header_list.begin(), cors_exempt_header_list.end(),
-                 web_cors_exempt_header_list.begin(), [](const std::string& h) {
-                   return blink::WebString::FromLatin1(h);
-                 });
+  base::ranges::transform(
+      cors_exempt_header_list, web_cors_exempt_header_list.begin(),
+      [](const auto& header) { return blink::WebString::FromLatin1(header); });
 
   // |pending_subresource_loader_updater| and
   // |pending_resource_load_info_notifier| are not used for shared workers.
@@ -179,12 +173,8 @@ EmbeddedSharedWorkerStub::CreateWorkerFetchContext(
               web_cors_exempt_header_list,
               /*pending_resource_load_info_notifier=*/mojo::NullRemote());
 
-  // TODO(horo): To get the correct first_party_to_cookies for the shared
-  // worker, we need to check the all documents bounded by the shared worker.
-  // (crbug.com/723553)
-  // https://tools.ietf.org/html/draft-ietf-httpbis-cookie-same-site-07#section-2.1.2
   web_dedicated_or_shared_worker_fetch_context->set_site_for_cookies(
-      net::SiteForCookies::FromUrl(url));
+      constructor_key.ToNetSiteForCookies());
 
   return web_dedicated_or_shared_worker_fetch_context;
 }

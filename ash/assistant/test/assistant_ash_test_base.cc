@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "ash/assistant/test/assistant_ash_test_base.h"
+#include "base/memory/raw_ptr.h"
 
 #include <string>
 #include <utility>
@@ -89,7 +90,7 @@ class ChildViewCollector {
       Get(child, result);
   }
 
-  const views::View* parent_;
+  raw_ptr<const views::View> parent_;
 };
 
 }  // namespace
@@ -118,7 +119,9 @@ void AssistantAshTestBase::SetUp() {
   test_api_->DisableAnimations();
   EnableKeyboard();
 
-  SetUpActiveUser();
+  if (set_up_active_user_in_test_set_up_) {
+    SetUpActiveUser();
+  }
 }
 
 void AssistantAshTestBase::TearDown() {
@@ -258,7 +261,7 @@ void AssistantAshTestBase::ClickOnAndWait(
   base::RunLoop().RunUntilIdle();
 }
 
-absl::optional<assistant::AssistantInteractionMetadata>
+std::optional<assistant::AssistantInteractionMetadata>
 AssistantAshTestBase::current_interaction() {
   return assistant_service()->current_interaction();
 }

@@ -11,7 +11,7 @@
 #include <set>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "components/download/public/common/download_interrupt_reasons.h"
@@ -51,6 +51,7 @@ class DownloadUpdatedObserver : public download::DownloadItem::Observer {
   EventFilter filter_;
   bool waiting_;
   bool event_seen_;
+  base::RunLoop loop_;
 };
 
 // Detects changes to the downloads after construction.
@@ -171,6 +172,8 @@ class DownloadTestObserver : public DownloadManager::Observer,
 
   // Holds the download ids which were dangerous.
   std::set<uint32_t> dangerous_downloads_seen_;
+
+  base::RunLoop loop_{base::RunLoop::Type::kNestableTasksAllowed};
 
   base::WeakPtrFactory<DownloadTestObserver> weak_factory_{this};
 };
@@ -325,6 +328,8 @@ class DownloadTestItemCreationObserver
 
   // We are in the message loop.
   bool waiting_;
+
+  base::RunLoop loop_;
 };
 
 // Class for mornitoring whether a save package download finishes.

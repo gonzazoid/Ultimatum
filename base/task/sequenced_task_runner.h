@@ -7,8 +7,9 @@
 
 #include <memory>
 
+#include "base/auto_reset.h"
 #include "base/base_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/task/delay_policy.h"
 #include "base/task/delayed_task_handle.h"
 #include "base/task/sequenced_task_runner_helpers.h"
@@ -17,18 +18,21 @@
 
 namespace blink {
 class LowPrecisionTimer;
-class MetronomeSource;
 class TimerBase;
+class TimerBasedTickProvider;
 class WebRtcTaskQueue;
 }
-namespace webrtc {
-class ThreadWrapper;
-}  // namespace webrtc
+namespace IPC {
+class ChannelAssociatedGroupController;
+}  // namespace IPC
 namespace media {
 class AlsaPcmOutputStream;
 class AlsaPcmInputStream;
 class FakeAudioWorker;
 }  // namespace media
+namespace webrtc {
+class ThreadWrapper;
+}  // namespace webrtc
 
 namespace base {
 
@@ -38,13 +42,13 @@ class DelayedTaskManager;
 }
 class DeadlineTimer;
 class MetronomeTimer;
+class PreFreezeBackgroundMemoryTrimmer;
 class TimeDelta;
 class TimeTicks;
 
 namespace subtle {
 
-// Used to restrict access to PostCancelableDelayedTaskAt() to authorize
-// callers.
+// Restricts access to PostCancelableDelayedTask*() to authorized callers.
 class PostDelayedTaskPassKey {
  private:
   // Avoid =default to disallow creation by uniform initialization.
@@ -55,17 +59,31 @@ class PostDelayedTaskPassKey {
   friend class base::DeadlineTimer;
   friend class base::MetronomeTimer;
   friend class blink::LowPrecisionTimer;
-  friend class blink::MetronomeSource;
   friend class blink::TimerBase;
+  friend class blink::TimerBasedTickProvider;
   friend class blink::WebRtcTaskQueue;
   friend class PostDelayedTaskPassKeyForTesting;
   friend class webrtc::ThreadWrapper;
   friend class media::AlsaPcmOutputStream;
   friend class media::AlsaPcmInputStream;
   friend class media::FakeAudioWorker;
+#if BUILDFLAG(IS_ANDROID)
+  friend class base::PreFreezeBackgroundMemoryTrimmer;
+#endif
+};
+
+// Restricts access to RunOrPostTask() to authorized callers.
+class RunOrPostTaskPassKey {
+ private:
+  // Avoid =default to disallow creation by uniform initialization.
+  RunOrPostTaskPassKey() {}
+
+  friend class IPC::ChannelAssociatedGroupController;
+  friend class RunOrPostTaskPassKeyForTesting;
 };
 
 class PostDelayedTaskPassKeyForTesting : public PostDelayedTaskPassKey {};
+class RunOrPostTaskPassKeyForTesting : public RunOrPostTaskPassKey {};
 
 }  // namespace subtle
 
@@ -181,10 +199,10 @@ class BASE_EXPORT SequencedTaskRunner : public TaskRunner {
   // directly. Consider using higher level timer primitives in
   // base/timer/timer.h.
   //
-  // The handle is only valid while the task is pending execution. This means
-  // that it will be invalid if the posting failed, and will be invalid while
-  // the task is executing. Calling CancelTask() on an invalid handle is a
-  // no-op.
+  // The handle is only guaranteed valid while the task is pending execution.
+  // This means that it may be invalid if the posting failed, and will be
+  // invalid while the task is executing. Calling CancelTask() on an invalid
+  // handle is a no-op.
   //
   // This method and the handle it returns are not thread-safe and can only be
   // used from the sequence this task runner runs its tasks on.
@@ -218,9 +236,26 @@ class BASE_EXPORT SequencedTaskRunner : public TaskRunner {
                                  TimeTicks delayed_run_time,
                                  subtle::DelayPolicy delay_policy);
 
+  // May run `task` synchronously if no work that has ordering or mutual
+  // exclusion expectations with tasks from this `SequencedTaskRunner` is
+  // pending or running (if such work arrives after `task` starts running
+  // synchronously, it waits until `task` finishes). Otherwise, behaves like
+  // `PostTask`. Since `task` may run synchronously, it is generally not
+  // appropriate to invoke this if `task` may take a long time to run.
+  //
+  // TODO(crbug.com/1503967): This API is still in development. It doesn't yet
+  // support SEQUENCE_CHECKER or SequenceLocalStorage.
+  virtual bool RunOrPostTask(subtle::RunOrPostTaskPassKey,
+                             const Location& from_here,
+                             OnceClosure task);
+
   // Submits a non-nestable task to delete the given object.  Returns
   // true if the object may be deleted at some point in the future,
   // and false if the object definitely will not be deleted.
+  //
+  // By default, this leaks `object` if the deleter task doesn't run, e.g. if
+  // the underlying task queue is shut down first. Subclasses can override this
+  // behavior by specializing `DeleteOrReleaseSoonInternal()`.
   template <class T>
   bool DeleteSoon(const Location& from_here, const T* object) {
     return DeleteOrReleaseSoonInternal(from_here, &DeleteHelper<T>::DoDelete,
@@ -234,6 +269,10 @@ class BASE_EXPORT SequencedTaskRunner : public TaskRunner {
   }
 
   // Submits a non-nestable task to release the given object.
+  //
+  // By default, this leaks `object` if the releaser task doesn't run, e.g. if
+  // the underlying task queue is shut down first. Subclasses can override this
+  // behavior by specializing `DeleteOrReleaseSoonInternal()`.
   //
   // ReleaseSoon makes sure that the object it the scoped_refptr points to gets
   // properly released on the correct thread.
@@ -267,7 +306,7 @@ class BASE_EXPORT SequencedTaskRunner : public TaskRunner {
   //   the current thread.
   virtual bool RunsTasksInCurrentSequence() const = 0;
 
-  // Returns the default SequencedThreadTaskRunner for the current task. It
+  // Returns the default SequencedTaskRunner for the current task. It
   // should only be called if HasCurrentDefault() returns true (see the comment
   // there for the requirements).
   //
@@ -306,6 +345,8 @@ class BASE_EXPORT SequencedTaskRunner : public TaskRunner {
     friend class SequencedTaskRunner;
     friend class CurrentHandleOverride;
 
+    const AutoReset<CurrentDefaultHandle*> resetter_;
+
     scoped_refptr<SequencedTaskRunner> task_runner_;
   };
 
@@ -320,10 +361,9 @@ class BASE_EXPORT SequencedTaskRunner : public TaskRunner {
     current_default.task_runner_ = task_runner;
   }
 
- private:
-  bool DeleteOrReleaseSoonInternal(const Location& from_here,
-                                   void (*deleter)(const void*),
-                                   const void* object);
+  virtual bool DeleteOrReleaseSoonInternal(const Location& from_here,
+                                           void (*deleter)(const void*),
+                                           const void* object);
 };
 
 // Sample usage with std::unique_ptr :

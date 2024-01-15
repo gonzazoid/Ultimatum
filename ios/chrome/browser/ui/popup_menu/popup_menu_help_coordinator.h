@@ -5,9 +5,10 @@
 #ifndef IOS_CHROME_BROWSER_UI_POPUP_MENU_POPUP_MENU_HELP_COORDINATOR_H_
 #define IOS_CHROME_BROWSER_UI_POPUP_MENU_POPUP_MENU_HELP_COORDINATOR_H_
 
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
 
 @class OverflowMenuUIConfiguration;
+@protocol PopupMenuUIUpdating;
 
 // Coordinator for the popup menu help feature, educating users about the new
 // menu
@@ -15,9 +16,15 @@
 
 @property(nonatomic, weak) OverflowMenuUIConfiguration* uiConfiguration;
 
-- (void)showPopupMenuButtonIPH;
+// UI updater.
+@property(nonatomic, weak) id<PopupMenuUIUpdating> UIUpdater;
 
-- (void)showOverflowMenuIPHInViewController:(UIViewController*)menu;
+// An integer whose value is matching the overflow_menu::Destination,
+// representing the destination on the overflow menu that should be highlighted.
+// Return nil if no destination is highlighted (default scenario).
+- (NSNumber*)highlightDestination;
+
+- (void)showHistoryOnOverflowMenuIPHInViewController:(UIViewController*)menu;
 
 @end
 

@@ -28,7 +28,7 @@
 
   #emoji-button:focus,
   #emoji-button:active {
-    outline-color: var(--cros-focus-ring-color);
+    outline-color: var(--emoji-picker-focus-ring-color);
     outline-style: solid;
     outline-width: 2px;
   }
@@ -62,7 +62,7 @@
     display: block;
     height: var(--emoji-size);
     position: relative;
-    top: calc(0px - var(--emoji-size));
+    top: calc(0 - var(--emoji-size));
     width: var(--emoji-size);
   }
 
@@ -77,27 +77,21 @@
   }
 
   #tooltip::part(tooltip) {
-    box-shadow: var(--cr-elevation-1);
-    font-family: 'Roboto', sans-serif;
-    font-size: 12px;
+    box-shadow: var(--cros-elevation-1-shadow);
+    font: var(--cros-annotation-1-font);
     margin: 4px;
     padding: 4px 8px 4px 8px;
     white-space: nowrap;
   }
 </style>
 
-<button id="emoji-button" class$="[[_className(variants)]]"
-  on-click="onClick" on-contextmenu="onContextMenu"
-  disabled="[[disabled]]" aria-label="[[_label(tooltip, emoji, variants)]]">
+<button id="emoji-button" on-click="onClick"
+    disabled="[[disabled]]" aria-label="[[getLabel()]]">
   [[emoji]]
 </button>
 <template is="dom-if" if="[[!variant]]">
   <paper-tooltip id="tooltip" for="emoji-button" fit-to-visible-bounds
-    part="tooltip" offset="8">
+      part="tooltip" offset="8">
     [[tooltip]]
   </paper-tooltip>
-</template>
-<template is="dom-if" if="[[variantsVisible]]">
-  <emoji-variants variants="[[variants]]" tooltip="[[tooltip]]">
-  </emoji-variants>
 </template>

@@ -12,19 +12,15 @@ source_set("android") {
   ]
 
   deps = [
-    ":jni_headers",
     "//base",
     "//chrome/app:generated_resources",
+    "//chrome/browser/password_entry_edit/android/internal:jni",
     "//chrome/browser/ui",
     "//components/password_manager/core/browser",
-    "//components/password_manager/core/browser:affiliation",
+    "//components/password_manager/core/browser/affiliation",
     "//components/url_formatter",
     "//ui/base",
   ]
-}
-
-generate_jni("jni_headers") {
-  sources = [ "internal/java/src/org/chromium/chrome/browser/password_entry_edit/CredentialEditBridge.java" ]
 }
 
 android_library("java") {
@@ -40,6 +36,7 @@ android_library("java") {
     "//third_party/android_deps:material_design_java",
     "//third_party/androidx:androidx_annotation_annotation_java",
     "//third_party/androidx:androidx_core_core_java",
+    "//third_party/androidx:androidx_fragment_fragment_java",
     "//third_party/androidx:androidx_preference_preference_java",
     "//ui/android:ui_no_recycler_view_java",
   ]

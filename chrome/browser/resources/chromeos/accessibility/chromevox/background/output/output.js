@@ -10,26 +10,29 @@ import {AutomationUtil} from '../../../common/automation_util.js';
 import {constants} from '../../../common/constants.js';
 import {Cursor, CURSOR_NODE_INDEX} from '../../../common/cursors/cursor.js';
 import {CursorRange} from '../../../common/cursors/range.js';
-import {AutomationTreeWalker} from '../../../common/tree_walker.js';
 import {NavBraille} from '../../common/braille/nav_braille.js';
+import {EarconId} from '../../common/earcon_id.js';
 import {EventSourceType} from '../../common/event_source_type.js';
 import {LocaleOutputHelper} from '../../common/locale_output_helper.js';
 import {LogType} from '../../common/log_types.js';
 import {Msgs} from '../../common/msgs.js';
+import {CustomRole} from '../../common/role_type.js';
+import {SettingsManager} from '../../common/settings_manager.js';
 import {Spannable} from '../../common/spannable.js';
-import {QueueMode, TtsCategory, TtsSpeechProperties} from '../../common/tts_interface.js';
+import {QueueMode, TtsCategory, TtsSpeechProperties} from '../../common/tts_types.js';
 import {ValueSelectionSpan, ValueSpan} from '../braille/spans.js';
 import {ChromeVox} from '../chromevox.js';
-import {EventSourceState} from '../event_source.js';
+import {EventSource} from '../event_source.js';
 import {FocusBounds} from '../focus_bounds.js';
-import {PhoneticData} from '../phonetic_data.js';
 
 import {OutputAncestryInfo} from './output_ancestry_info.js';
 import {OutputFormatParser, OutputFormatParserObserver} from './output_format_parser.js';
 import {OutputFormatTree} from './output_format_tree.js';
+import {OutputFormatter} from './output_formatter.js';
+import {OutputInterface} from './output_interface.js';
 import {OutputFormatLogger} from './output_logger.js';
 import {OutputRoleInfo} from './output_role_info.js';
-import {OutputRule, OutputRuleSpecifier} from './output_rules.js';
+import {AncestryOutputRule, OutputRule, OutputRuleSpecifier} from './output_rules.js';
 import * as outputTypes from './output_types.js';
 
 const AriaCurrentState = chrome.automation.AriaCurrentState;
@@ -68,6 +71,7 @@ const StateType = chrome.automation.StateType;
  * = suffix: used to specify substitution only if not previously appended.
  *     For example, $name= would insert the name attribute only if no name
  * attribute had been inserted previously.
+ * @implements {OutputInterface}
  */
 export class Output {
   constructor() {
@@ -147,67 +151,12 @@ export class Output {
     }
   }
 
-  /**
-   * For a given automation property, return true if the value
-   * represents something 'truthy', e.g.: for checked:
-   * 'true'|'mixed' -> true
-   * 'false'|undefined -> false
-   */
-  static isTruthy(node, attrib) {
-    switch (attrib) {
-      case 'checked':
-        return node.checked && node.checked !== 'false';
-      case 'hasPopup':
-        return node.hasPopup &&
-            node.hasPopup !== chrome.automation.HasPopup.FALSE;
-
-      // Chrome automatically calculates these attributes.
-      case 'posInSet':
-        return node.htmlAttributes['aria-posinset'] ||
-            (node.root.role !== RoleType.ROOT_WEB_AREA && node.posInSet);
-      case 'setSize':
-        return node.htmlAttributes['aria-setsize'] || node.setSize;
-
-      // These attributes default to false for empty strings.
-      case 'roleDescription':
-        return Boolean(node.roleDescription);
-      case 'value':
-        return Boolean(node.value);
-      case 'selected':
-        return node.selected === true;
-      default:
-        return node[attrib] !== undefined || node.state[attrib];
-    }
-  }
-
-  /**
-   * represents something 'falsey', e.g.: for selected:
-   * node.selected === false
-   */
-  static isFalsey(node, attrib) {
-    switch (attrib) {
-      case 'selected':
-        return node.selected === false;
-      default:
-        return !Output.isTruthy(node, attrib);
-    }
-  }
-
-  /**
-   * @return {boolean} True if there's any speech that will be output.
-   */
+  /** @return {boolean} True if there's any speech that will be output. */
   get hasSpeech() {
-    for (let i = 0; i < this.speechBuffer_.length; i++) {
-      if (this.speechBuffer_[i].length) {
-        return true;
-      }
-    }
-    return false;
+    return this.speechBuffer_.some(speech => speech.length);
   }
 
-  /**
-   * @return {boolean} True if there is only whitespace in this output.
-   */
+  /** @return {boolean} True if there is only whitespace in this output. */
   get isOnlyWhitespace() {
     return this.speechBuffer_.every(buff => !/\S+/.test(buff.toString()));
   }
@@ -221,13 +170,13 @@ export class Output {
    * Specify ranges for speech.
    * @param {!CursorRange} range
    * @param {CursorRange} prevRange
-   * @param {EventType|outputTypes.OutputEventType} type
+   * @param {!outputTypes.OutputEventType} type
    * @return {!Output}
    */
   withSpeech(range, prevRange, type) {
     this.formatOptions_ = {speech: true, braille: false, auralStyle: false};
     this.formattedAncestors_ = new WeakSet();
-    this.render_(
+    this.render(
         range, prevRange, type, this.speechBuffer_, this.speechFormatLog_);
     return this;
   }
@@ -236,13 +185,13 @@ export class Output {
    * Specify ranges for aurally styled speech.
    * @param {!CursorRange} range
    * @param {CursorRange} prevRange
-   * @param {EventType|outputTypes.OutputEventType} type
+   * @param {!outputTypes.OutputEventType} type
    * @return {!Output}
    */
   withRichSpeech(range, prevRange, type) {
     this.formatOptions_ = {speech: true, braille: false, auralStyle: true};
     this.formattedAncestors_ = new WeakSet();
-    this.render_(
+    this.render(
         range, prevRange, type, this.speechBuffer_, this.speechFormatLog_);
     return this;
   }
@@ -251,7 +200,7 @@ export class Output {
    * Specify ranges for braille.
    * @param {!CursorRange} range
    * @param {CursorRange} prevRange
-   * @param {EventType|outputTypes.OutputEventType} type
+   * @param {!outputTypes.OutputEventType} type
    * @return {!Output}
    */
   withBraille(range, prevRange, type) {
@@ -273,7 +222,7 @@ export class Output {
       prevRange = CursorRange.fromNode(range.start.node.parent);
       range = new CursorRange(Cursor.fromNode(start), Cursor.fromNode(end));
     }
-    this.render_(
+    this.render(
         range, prevRange, type, this.brailleBuffer_, this.brailleFormatLog_);
     return this;
   }
@@ -282,13 +231,13 @@ export class Output {
    * Specify ranges for location.
    * @param {!CursorRange} range
    * @param {CursorRange} prevRange
-   * @param {EventType|outputTypes.OutputEventType} type
+   * @param {!outputTypes.OutputEventType} type
    * @return {!Output}
    */
   withLocation(range, prevRange, type) {
     this.formatOptions_ = {speech: false, braille: false, auralStyle: false};
     this.formattedAncestors_ = new WeakSet();
-    this.render_(
+    this.render(
         range, prevRange, type, [] /*unused output*/,
         new OutputFormatLogger('', LogType.SPEECH_RULE) /*unused log*/);
     return this;
@@ -298,7 +247,7 @@ export class Output {
    * Specify the same ranges for speech and braille.
    * @param {!CursorRange} range
    * @param {CursorRange} prevRange
-   * @param {EventType|outputTypes.OutputEventType} type
+   * @param {!outputTypes.OutputEventType} type
    * @return {!Output}
    */
   withSpeechAndBraille(range, prevRange, type) {
@@ -311,7 +260,7 @@ export class Output {
    * Specify the same ranges for aurally styled speech and braille.
    * @param {!CursorRange} range
    * @param {CursorRange} prevRange
-   * @param {EventType|outputTypes.OutputEventType} type
+   * @param {!outputTypes.OutputEventType} type
    * @return {!Output}
    */
   withRichSpeechAndBraille(range, prevRange, type) {
@@ -346,8 +295,8 @@ export class Output {
    * @return {!Output}
    */
   withString(value) {
-    this.append_(this.speechBuffer_, value);
-    this.append_(this.brailleBuffer_, value);
+    this.append(this.speechBuffer_, value);
+    this.append(this.brailleBuffer_, value);
     this.speechFormatLog_.write('withString: ' + value + '\n');
     this.brailleFormatLog_.write('withString: ' + value + '\n');
     return this;
@@ -435,7 +384,7 @@ export class Output {
 
     this.formatOptions_ = {speech: true, braille: false, auralStyle: false};
     this.formattedAncestors_ = new WeakSet();
-    this.format_({
+    OutputFormatter.format(this, {
       node,
       outputFormat: formatStr,
       outputBuffer: this.speechBuffer_,
@@ -458,7 +407,7 @@ export class Output {
 
     this.formatOptions_ = {speech: false, braille: true, auralStyle: false};
     this.formattedAncestors_ = new WeakSet();
-    this.format_({
+    OutputFormatter.format(this, {
       node,
       outputFormat: formatStr,
       outputBuffer: this.brailleBuffer_,
@@ -474,11 +423,11 @@ export class Output {
    */
   onSpeechEnd(callback) {
     this.speechEndCallback_ =
-        /** @type {function(boolean=)} */ (function(opt_cleanupOnly) {
+        /** @type {function(boolean=)} */ (opt_cleanupOnly => {
           if (!opt_cleanupOnly) {
             callback();
           }
-        }.bind(this));
+        });
     return this;
   }
 
@@ -486,10 +435,6 @@ export class Output {
   go() {
     // Speech.
     let queueMode = this.determineQueueMode_();
-
-    if (this.speechBuffer_.length > 0) {
-      Output.forceModeForNextSpeechUtterance_ = undefined;
-    }
 
     let encounteredNonWhitespace = false;
     for (let i = 0; i < this.speechBuffer_.length; i++) {
@@ -507,38 +452,12 @@ export class Output {
         continue;
       }
 
-      let speechProps;
-      const speechPropsInstance =
-          /** @type {outputTypes.OutputSpeechProperties} */ (
-              buff.getSpanInstanceOf(outputTypes.OutputSpeechProperties));
-
-      if (!speechPropsInstance) {
-        speechProps = this.initialSpeechProps_;
-      } else {
-        for (const [key, value] of Object.entries(this.initialSpeechProps_)) {
-          if (speechPropsInstance.properties[key] === undefined) {
-            speechPropsInstance.properties[key] = value;
-          }
-        }
-        speechProps = new TtsSpeechProperties(speechPropsInstance.properties);
-      }
-
-      speechProps.category = this.speechCategory_;
-
-      (function() {
-        const scopedBuff = buff;
-        speechProps.startCallback = function() {
-          const actions =
-              scopedBuff.getSpansInstanceOf(outputTypes.OutputAction);
-          if (actions) {
-            actions.forEach(action => action.run());
-          }
-        };
-      }());
+      const speechProps = this.getSpeechPropsForBuff_(buff);
 
       if (i === this.speechBuffer_.length - 1) {
         speechProps.endCallback = this.speechEndCallback_;
       }
+
       let finalSpeech = buff.toString();
       for (const text in this.replacements_) {
         finalSpeech = finalSpeech.replace(text, this.replacements_[text]);
@@ -587,12 +506,48 @@ export class Output {
   /** @return {QueueMode} */
   determineQueueMode_() {
     if (Output.forceModeForNextSpeechUtterance_ !== undefined) {
-      return Output.forceModeForNextSpeechUtterance_;
+      const result = Output.forceModeForNextSpeechUtterance_;
+      if (this.speechBuffer_.length > 0) {
+        Output.forceModeForNextSpeechUtterance_ = undefined;
+      }
+      return result;
     }
     if (this.queueMode_ !== undefined) {
       return this.queueMode_;
     }
     return QueueMode.QUEUE;
+  }
+
+  /**
+   * @param {!Spannable} buff
+   * @return {!TtsSpeechProperties}
+   */
+  getSpeechPropsForBuff_(buff) {
+    let speechProps;
+    const speechPropsInstance =
+        /** @type {outputTypes.OutputSpeechProperties} */ (
+            buff.getSpanInstanceOf(outputTypes.OutputSpeechProperties));
+
+    if (!speechPropsInstance) {
+      speechProps = this.initialSpeechProps_;
+    } else {
+      for (const [key, value] of Object.entries(this.initialSpeechProps_)) {
+        if (speechPropsInstance.properties[key] === undefined) {
+          speechPropsInstance.properties[key] = value;
+        }
+      }
+      speechProps = new TtsSpeechProperties(speechPropsInstance.properties);
+    }
+
+    speechProps.category = this.speechCategory_;
+    speechProps.startCallback = () => {
+      const actions = buff.getSpansInstanceOf(outputTypes.OutputAction);
+      if (actions) {
+        actions.forEach(action => action.run());
+      }
+    };
+
+    return speechProps;
   }
 
   /**
@@ -621,18 +576,8 @@ export class Output {
     return true;
   }
 
-  /**
-   * Renders the given range using optional context previous range and event
-   * type.
-   * @param {!CursorRange} range
-   * @param {CursorRange} prevRange
-   * @param {EventType|outputTypes.OutputEventType} type
-   * @param {!Array<Spannable>} buff Buffer to receive rendered output.
-   * @param {!OutputFormatLogger} formatLog
-   * @param {{suppressStartEndAncestry: (boolean|undefined)}} optionalArgs
-   * @private
-   */
-  render_(range, prevRange, type, buff, formatLog, optionalArgs = {}) {
+  /** @override */
+  render(range, prevRange, type, buff, formatLog, optionalArgs = {}) {
     if (prevRange && !prevRange.isValid()) {
       prevRange = null;
     }
@@ -670,1024 +615,9 @@ export class Output {
   }
 
   /**
-   * Format the node given the format specifier.
-   * @param {!outputTypes.OutputFormattingData} params All the required and
-   *     optional parameters for formatting.
-   * @private
-   */
-  format_(params) {
-    let speechProps = params['opt_speechProps'];
-    const owner = this;
-    const observer =
-        new /** @implements {OutputFormatParserObserver} */ (class {
-          /** @override */
-          onTokenStart() {}
-
-          /** @override */
-          onNodeAttributeOrSpecialToken(token, tree, options) {
-            if (owner.suppressions_[token]) {
-              return true;
-            }
-
-            if (token === 'value') {
-              owner.formatValue_(params, token, options);
-            } else if (token === 'name') {
-              owner.formatName_(params, token, options);
-            } else if (token === 'description') {
-              owner.formatDescription_(params, token, options);
-            } else if (token === 'urlFilename') {
-              owner.formatUrlFilename_(params, token, options);
-            } else if (token === 'nameFromNode') {
-              owner.formatNameFromNode_(params, token, options);
-            } else if (token === 'nameOrDescendants') {
-              // This token is similar to nameOrTextContent except it gathers
-              // rich output for descendants. It also lets name from contents
-              // override the descendants text if |node| has only static text
-              // children.
-              owner.formatNameOrDescendants_(params, token, options);
-            } else if (token === 'indexInParent') {
-              owner.formatIndexInParent_(params, token, tree, options);
-            } else if (token === 'restriction') {
-              owner.formatRestriction_(params, token);
-            } else if (token === 'checked') {
-              owner.formatChecked_(params, token);
-            } else if (token === 'pressed') {
-              owner.formatPressed_(params, token);
-            } else if (token === 'state') {
-              owner.formatState_(params, token);
-            } else if (token === 'find') {
-              owner.formatFind_(params, token, tree);
-            } else if (token === 'descendants') {
-              owner.formatDescendants_(params, token);
-            } else if (token === 'joinedDescendants') {
-              owner.formatJoinedDescendants_(params, token, options);
-            } else if (token === 'role') {
-              if (localStorage['useVerboseMode'] === 'false') {
-                return true;
-              }
-              if (owner.formatOptions_.auralStyle) {
-                speechProps = new outputTypes.OutputSpeechProperties();
-                speechProps.properties['relativePitch'] = -0.3;
-              }
-
-              owner.formatRole_(params, token, options);
-            } else if (token === 'inputType') {
-              owner.formatInputType_(params, token, options);
-            } else if (
-                token === 'tableCellRowIndex' ||
-                token === 'tableCellColumnIndex') {
-              owner.formatTableCellIndex_(params, token, options);
-            } else if (token === 'cellIndexText') {
-              owner.formatCellIndexText_(params, token, options);
-            } else if (token === 'node') {
-              owner.formatNode_(params, token, tree, options);
-            } else if (
-                token === 'nameOrTextContent' || token === 'textContent') {
-              owner.formatTextContent_(params, token, options);
-            } else if (params.node[token] !== undefined) {
-              owner.formatAsFieldAccessor_(params, token, options);
-            } else if (outputTypes.OUTPUT_STATE_INFO[token]) {
-              owner.formatAsStateValue_(params, token, options);
-            } else if (token === 'phoneticReading') {
-              owner.formatPhoneticReading_(params);
-            } else if (token === 'listNestedLevel') {
-              owner.formatListNestedLevel_(params);
-            } else if (token === 'precedingBullet') {
-              owner.formatPrecedingBullet_(params);
-            } else if (tree.firstChild) {
-              owner.formatCustomFunction_(params, token, tree, options);
-            }
-          }
-
-          /** @override */
-          onMessageToken(token, tree, options) {
-            params.outputFormatLogger.write(' @');
-            if (owner.formatOptions_.auralStyle) {
-              if (!speechProps) {
-                speechProps = new outputTypes.OutputSpeechProperties();
-              }
-              speechProps.properties['relativePitch'] = -0.2;
-            }
-            owner.formatMessage_(params, token, tree, options);
-          }
-
-          /** @override */
-          onSpeechPropertyToken(token, tree, options) {
-            params.outputFormatLogger.write(' ! ' + token + '\n');
-            speechProps = new outputTypes.OutputSpeechProperties();
-            speechProps.properties[token] = true;
-            if (tree.firstChild) {
-              if (!owner.formatOptions_.auralStyle) {
-                speechProps = undefined;
-                return true;
-              }
-
-              let value = tree.firstChild.value;
-
-              // Currently, speech params take either attributes or floats.
-              let float = 0;
-              if (float = parseFloat(value)) {
-                value = float;
-              } else {
-                value = parseFloat(params.node[value]) / -10.0;
-              }
-              speechProps.properties[token] = value;
-              return true;
-            }
-          }
-
-          /** @override */
-          onTokenEnd() {
-            const buff = params.outputBuffer;
-
-            // Post processing.
-            if (speechProps) {
-              if (buff.length > 0) {
-                buff[buff.length - 1].setSpan(speechProps, 0, 0);
-                speechProps = null;
-              }
-            }
-          }
-        })();
-
-    new OutputFormatParser(observer).parse(params.outputFormat);
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   * @param {!{annotation: Array<*>, isUnique: (boolean|undefined)}} options
-   */
-  formatValue_(data, token, options) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    const text = node.value || '';
-    if (!node.state[StateType.EDITABLE] && node.name === text) {
-      return;
-    }
-
-    let selectedText = '';
-    if (node.textSelStart !== undefined) {
-      options.annotation.push(new outputTypes.OutputSelectionSpan(
-          node.textSelStart || 0, node.textSelEnd || 0));
-
-      if (node.value) {
-        selectedText =
-            node.value.substring(node.textSelStart || 0, node.textSelEnd || 0);
-      }
-    }
-    options.annotation.push(token);
-    if (selectedText && !this.formatOptions_.braille &&
-        node.state[StateType.FOCUSED]) {
-      this.append_(buff, selectedText, options);
-      this.append_(buff, Msgs.getMsg('selected'));
-      formatLog.writeTokenWithValue(token, selectedText);
-      formatLog.write('selected\n');
-    } else {
-      this.append_(buff, text, options);
-      formatLog.writeTokenWithValue(token, text);
-    }
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   * @param {!{annotation: Array<*>, isUnique: (boolean|undefined)}} options
-   */
-  formatName_(data, token, options) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const prevNode = data.opt_prevNode;
-    const formatLog = data.outputFormatLogger;
-
-    options.annotation.push(token);
-    const earcon = node ? this.findEarcon_(node, prevNode) : null;
-    if (earcon) {
-      options.annotation.push(earcon);
-    }
-
-    // Place the selection on the first character of the name if the
-    // node is the active descendant. This ensures the braille window is
-    // panned appropriately.
-    if (node.activeDescendantFor && node.activeDescendantFor.length > 0) {
-      options.annotation.push(new outputTypes.OutputSelectionSpan(0, 0));
-    }
-
-    if (localStorage['languageSwitching'] === 'true') {
-      this.assignLocaleAndAppend_(node.name || '', node, buff, options);
-    } else {
-      this.append_(buff, node.name || '', options);
-    }
-
-    formatLog.writeTokenWithValue(token, node.name);
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   * @param {!{annotation: Array<*>, isUnique: (boolean|undefined)}} options
-   */
-  formatDescription_(data, token, options) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    if (node.name === node.description) {
-      return;
-    }
-
-    options.annotation.push(token);
-    this.append_(buff, node.description || '', options);
-    formatLog.writeTokenWithValue(token, node.description);
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   * @param {!{annotation: Array<*>, isUnique: (boolean|undefined)}} options
-   */
-  formatUrlFilename_(data, token, options) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    options.annotation.push('name');
-    const url = node.url || '';
-    let filename = '';
-    if (url.substring(0, 4) !== 'data') {
-      filename = url.substring(url.lastIndexOf('/') + 1, url.lastIndexOf('.'));
-
-      // Hack to not speak the filename if it's ridiculously long.
-      if (filename.length >= 30) {
-        filename = filename.substring(0, 16) + '...';
-      }
-    }
-    this.append_(buff, filename, options);
-    formatLog.writeTokenWithValue(token, filename);
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   * @param {!{annotation: Array<*>, isUnique: (boolean|undefined)}} options
-   */
-  formatNameFromNode_(data, token, options) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    if (node.nameFrom === NameFromType.CONTENTS) {
-      return;
-    }
-
-    options.annotation.push('name');
-    this.append_(buff, node.name || '', options);
-    formatLog.writeTokenWithValue(token, node.name);
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   * @param {!{annotation: Array<*>, isUnique: (boolean|undefined)}} options
-   */
-  formatNameOrDescendants_(data, token, options) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    options.annotation.push(token);
-    if (node.name &&
-        (node.nameFrom !== NameFromType.CONTENTS ||
-         node.children.every(child => child.role === RoleType.STATIC_TEXT))) {
-      this.append_(buff, node.name || '', options);
-      formatLog.writeTokenWithValue(token, node.name);
-    } else {
-      formatLog.writeToken(token);
-      this.format_({
-        node,
-        outputFormat: '$descendants',
-        outputBuffer: buff,
-        outputFormatLogger: formatLog,
-      });
-    }
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   * @param {!OutputFormatTree} tree
-   * @param {!{annotation: Array<*>, isUnique: (boolean|undefined)}} options
-   */
-  formatIndexInParent_(data, token, tree, options) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    if (node.parent) {
-      options.annotation.push(token);
-      let roles;
-      if (tree.firstChild) {
-        roles = this.createRoles_(tree);
-      } else {
-        roles = new Set();
-        roles.add(node.role);
-      }
-
-      let count = 0;
-      for (let i = 0, child; child = node.parent.children[i]; i++) {
-        if (roles.has(child.role)) {
-          count++;
-        }
-        if (node === child) {
-          break;
-        }
-      }
-      this.append_(buff, String(count));
-      formatLog.writeTokenWithValue(token, String(count));
-    }
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   */
-  formatRestriction_(data, token) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    const msg = outputTypes.OutputPropertyMap.RESTRICTION[node.restriction];
-    if (msg) {
-      formatLog.writeToken(token);
-      this.format_({
-        node,
-        outputFormat: '@' + msg,
-        outputBuffer: buff,
-        outputFormatLogger: formatLog,
-      });
-    }
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   */
-  formatChecked_(data, token) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    const msg = outputTypes.OutputPropertyMap.CHECKED[node.checked];
-    if (msg) {
-      formatLog.writeToken(token);
-      this.format_({
-        node,
-        outputFormat: '@' + msg,
-        outputBuffer: buff,
-        outputFormatLogger: formatLog,
-      });
-    }
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   */
-  formatPressed_(data, token) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    const msg = outputTypes.OutputPropertyMap.PRESSED[node.checked];
-    if (msg) {
-      formatLog.writeToken(token);
-      this.format_({
-        node,
-        outputFormat: '@' + msg,
-        outputBuffer: buff,
-        outputFormatLogger: formatLog,
-      });
-    }
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   */
-  formatState_(data, token) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    if (node.state) {
-      Object.getOwnPropertyNames(node.state).forEach(state => {
-        const stateInfo = outputTypes.OUTPUT_STATE_INFO[state];
-        if (stateInfo && !stateInfo.isRoleSpecific && stateInfo.on) {
-          formatLog.writeToken(token);
-          this.format_({
-            node,
-            outputFormat: '$' + state,
-            outputBuffer: buff,
-            outputFormatLogger: formatLog,
-          });
-        }
-      });
-    }
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   * @param {!OutputFormatTree} tree
-   */
-  formatFind_(data, token, tree) {
-    const buff = data.outputBuffer;
-    const formatLog = data.outputFormatLogger;
-    let node = data.node;
-
-    // Find takes two arguments: JSON query string and format string.
-    if (tree.firstChild) {
-      const jsonQuery = tree.firstChild.value;
-      node = node.find(
-          /** @type {chrome.automation.FindParams}*/ (JSON.parse(jsonQuery)));
-      const formatString = tree.firstChild.nextSibling || '';
-      if (node) {
-        formatLog.writeToken(token);
-        this.format_({
-          node,
-          outputFormat: formatString,
-          outputBuffer: buff,
-          outputFormatLogger: formatLog,
-        });
-      }
-    }
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   */
-  formatDescendants_(data, token) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    if (!node) {
-      return;
-    }
-
-    let leftmost = node;
-    let rightmost = node;
-    if (AutomationPredicate.leafOrStaticText(node)) {
-      // Find any deeper leaves, if any, by starting from one level
-      // down.
-      leftmost = node.firstChild;
-      rightmost = node.lastChild;
-      if (!leftmost || !rightmost) {
-        return;
-      }
-    }
-
-    // Construct a range to the leftmost and rightmost leaves. This
-    // range gets rendered below which results in output that is the
-    // same as if a user navigated through the entire subtree of |node|.
-    leftmost = AutomationUtil.findNodePre(
-        leftmost, Dir.FORWARD, AutomationPredicate.leafOrStaticText);
-    rightmost = AutomationUtil.findNodePre(
-        rightmost, Dir.BACKWARD, AutomationPredicate.leafOrStaticText);
-    if (!leftmost || !rightmost) {
-      return;
-    }
-
-    const subrange = new CursorRange(
-        new Cursor(leftmost, CURSOR_NODE_INDEX),
-        new Cursor(rightmost, CURSOR_NODE_INDEX));
-    let prev = null;
-    if (node) {
-      prev = CursorRange.fromNode(node);
-    }
-    formatLog.writeToken(token);
-    this.render_(
-        subrange, prev, outputTypes.OutputEventType.NAVIGATE, buff, formatLog,
-        {suppressStartEndAncestry: true});
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   * @param {!{annotation: Array<*>, isUnique: (boolean|undefined)}} options
-   */
-  formatJoinedDescendants_(data, token, options) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    const unjoined = [];
-    formatLog.write('joinedDescendants {');
-    this.format_({
-      node,
-      outputFormat: '$descendants',
-      outputBuffer: unjoined,
-      outputFormatLogger: formatLog,
-    });
-    this.append_(buff, unjoined.join(' '), options);
-    formatLog.write(
-        '}: ' + (unjoined.length ? unjoined.join(' ') : 'EMPTY') + '\n');
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   * @param {!{annotation: Array<*>, isUnique: (boolean|undefined)}} options
-   */
-  formatRole_(data, token, options) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    options.annotation.push(token);
-    let msg = node.role;
-    const info = OutputRoleInfo[node.role];
-    if (node.roleDescription) {
-      msg = node.roleDescription;
-    } else if (info) {
-      if (this.formatOptions_.braille) {
-        msg = Msgs.getMsg(info.msgId + '_brl');
-      } else if (info.msgId) {
-        msg = Msgs.getMsg(info.msgId);
-      }
-    } else {
-      // We can safely ignore this role. ChromeVox output tests cover
-      // message id validity.
-      return;
-    }
-    this.append_(buff, msg || '', options);
-    formatLog.writeTokenWithValue(token, msg);
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   * @param {!{annotation: Array<*>, isUnique: (boolean|undefined)}} options
-   */
-  formatInputType_(data, token, options) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    if (!node.inputType) {
-      return;
-    }
-    options.annotation.push(token);
-    let msgId =
-        outputTypes.INPUT_TYPE_MESSAGE_IDS[node.inputType] || 'input_type_text';
-    if (this.formatOptions_.braille) {
-      msgId = msgId + '_brl';
-    }
-    this.append_(buff, Msgs.getMsg(msgId), options);
-    formatLog.writeTokenWithValue(token, Msgs.getMsg(msgId));
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   * @param {!{annotation: Array<*>, isUnique: (boolean|undefined)}} options
-   */
-  formatTableCellIndex_(data, token, options) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    let value = node[token];
-    if (value === undefined) {
-      return;
-    }
-    value = String(value + 1);
-    options.annotation.push(token);
-    this.append_(buff, value, options);
-    formatLog.writeTokenWithValue(token, value);
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   * @param {!{annotation: Array<*>, isUnique: (boolean|undefined)}} options
-   */
-  formatCellIndexText_(data, token, options) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    if (node.htmlAttributes['aria-coltext']) {
-      let value = node.htmlAttributes['aria-coltext'];
-      let row = node;
-      while (row && row.role !== RoleType.ROW) {
-        row = row.parent;
-      }
-      if (!row || !row.htmlAttributes['aria-rowtext']) {
-        return;
-      }
-      value += row.htmlAttributes['aria-rowtext'];
-      this.append_(buff, value, options);
-      formatLog.writeTokenWithValue(token, value);
-    } else {
-      formatLog.write(token);
-      this.format_({
-        node,
-        outputFormat: ` @cell_summary($if($tableCellAriaRowIndex,
-                  $tableCellAriaRowIndex, $tableCellRowIndex),
-                $if($tableCellAriaColumnIndex, $tableCellAriaColumnIndex,
-                  $tableCellColumnIndex))`,
-        outputBuffer: buff,
-        outputFormatLogger: formatLog,
-      });
-    }
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   * @param {!OutputFormatTree} tree
-   * @param {!{annotation: Array<*>, isUnique: (boolean|undefined)}} options
-   */
-  formatNode_(data, token, tree, options) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-    let prevNode = data.opt_prevNode;
-
-    if (!tree.firstChild) {
-      return;
-    }
-
-    const relationName = tree.firstChild.value;
-    if (relationName === 'tableCellColumnHeaders') {
-      // Skip output when previous position falls on the same column.
-      while (prevNode && !AutomationPredicate.cellLike(prevNode)) {
-        prevNode = prevNode.parent;
-      }
-      if (prevNode &&
-          prevNode.tableCellColumnIndex === node.tableCellColumnIndex) {
-        return;
-      }
-
-      const headers = node.tableCellColumnHeaders;
-      if (headers) {
-        for (let i = 0; i < headers.length; i++) {
-          const header = headers[i].name;
-          if (header) {
-            this.append_(buff, header, options);
-            formatLog.writeTokenWithValue(token, header);
-          }
-        }
-      }
-    } else if (relationName === 'tableCellRowHeaders') {
-      const headers = node.tableCellRowHeaders;
-      if (headers) {
-        for (let i = 0; i < headers.length; i++) {
-          const header = headers[i].name;
-          if (header) {
-            this.append_(buff, header, options);
-            formatLog.writeTokenWithValue(token, header);
-          }
-        }
-      }
-    } else if (node[relationName]) {
-      const related = node[relationName];
-      this.node_(
-          related, related, outputTypes.OutputEventType.NAVIGATE, buff,
-          formatLog);
-    }
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   * @param {!{annotation: Array<*>, isUnique: (boolean|undefined)}} options
-   */
-  formatTextContent_(data, token, options) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    if (node.name && token === 'nameOrTextContent') {
-      formatLog.writeToken(token);
-      this.format_({
-        node,
-        outputFormat: '$name',
-        outputBuffer: buff,
-        outputFormatLogger: formatLog,
-      });
-      return;
-    }
-
-    if (!node.firstChild) {
-      return;
-    }
-
-    const root = node;
-    const walker = new AutomationTreeWalker(node, Dir.FORWARD, {
-      visit: AutomationPredicate.leafOrStaticText,
-      leaf: n => {
-        // The root might be a leaf itself, but we still want to descend
-        // into it.
-        return n !== root && AutomationPredicate.leafOrStaticText(n);
-      },
-      root: r => r === root,
-    });
-    const outputStrings = [];
-    while (walker.next().node) {
-      if (walker.node.name) {
-        outputStrings.push(walker.node.name.trim());
-      }
-    }
-    const finalOutput = outputStrings.join(' ');
-    this.append_(buff, finalOutput, options);
-    formatLog.writeTokenWithValue(token, finalOutput);
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   * @param {!{annotation: Array<*>, isUnique: (boolean|undefined)}} options
-   */
-  formatAsFieldAccessor_(data, token, options) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    options.annotation.push(token);
-    let value = node[token];
-    if (typeof value === 'number') {
-      value = String(value);
-    }
-    this.append_(buff, value, options);
-    formatLog.writeTokenWithValue(token, value);
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   * @param {!{annotation: Array<*>, isUnique: (boolean|undefined)}} options
-   */
-  formatAsStateValue_(data, token, options) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    options.annotation.push('state');
-    const stateInfo = outputTypes.OUTPUT_STATE_INFO[token];
-    let resolvedInfo = {};
-    resolvedInfo = node.state[/** @type {StateType} */ (token)] ? stateInfo.on :
-                                                                  stateInfo.off;
-    if (!resolvedInfo) {
-      return;
-    }
-    if (this.formatOptions_.speech && resolvedInfo.earconId) {
-      options.annotation.push(
-          new outputTypes.OutputEarconAction(resolvedInfo.earconId),
-          node.location || undefined);
-    }
-    const msgId = this.formatOptions_.braille ? resolvedInfo.msgId + '_brl' :
-                                                resolvedInfo.msgId;
-    const msg = Msgs.getMsg(msgId);
-    this.append_(buff, msg, options);
-    formatLog.writeTokenWithValue(token, msg);
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   */
-  formatPhoneticReading_(data) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-
-    const text =
-        PhoneticData.forText(node.name || '', chrome.i18n.getUILanguage());
-    this.append_(buff, text);
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   */
-  formatListNestedLevel_(data) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-
-    let level = 0;
-    let current = node;
-    while (current) {
-      if (current.role === RoleType.LIST) {
-        level += 1;
-      }
-      current = current.parent;
-    }
-    this.append_(buff, level.toString());
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   */
-  formatPrecedingBullet_(data) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-
-    let current = node;
-    if (current.role === RoleType.INLINE_TEXT_BOX) {
-      current = current.parent;
-    }
-    if (!current || current.role !== RoleType.STATIC_TEXT) {
-      return;
-    }
-    current = current.previousSibling;
-    if (current && current.role === RoleType.LIST_MARKER) {
-      this.append_(buff, current.name || '');
-    }
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   * @param {!OutputFormatTree} tree
-   * @param {!{annotation: Array<*>, isUnique: (boolean|undefined)}} options
-   */
-  formatCustomFunction_(data, token, tree, options) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    // Custom functions.
-    if (token === 'if') {
-      formatLog.writeToken(token);
-      const cond = tree.firstChild;
-      const attrib = cond.value.slice(1);
-      if (Output.isTruthy(node, attrib)) {
-        formatLog.write(attrib + '==true => ');
-        this.format_({
-          node,
-          outputFormat: cond.nextSibling || '',
-          outputBuffer: buff,
-          outputFormatLogger: formatLog,
-        });
-      } else if (Output.isFalsey(node, attrib)) {
-        formatLog.write(attrib + '==false => ');
-        this.format_({
-          node,
-          outputFormat: cond.nextSibling.nextSibling || '',
-          outputBuffer: buff,
-          outputFormatLogger: formatLog,
-        });
-      }
-    } else if (token === 'nif') {
-      formatLog.writeToken(token);
-      const cond = tree.firstChild;
-      const attrib = cond.value.slice(1);
-      if (Output.isFalsey(node, attrib)) {
-        formatLog.write(attrib + '==false => ');
-        this.format_({
-          node,
-          outputFormat: cond.nextSibling || '',
-          outputBuffer: buff,
-          outputFormatLogger: formatLog,
-        });
-      } else if (Output.isTruthy(node, attrib)) {
-        formatLog.write(attrib + '==true => ');
-        this.format_({
-          node,
-          outputFormat: cond.nextSibling.nextSibling || '',
-          outputBuffer: buff,
-          outputFormatLogger: formatLog,
-        });
-      }
-    } else if (token === 'earcon') {
-      // Ignore unless we're generating speech output.
-      if (!this.formatOptions_.speech) {
-        return;
-      }
-
-      options.annotation.push(new outputTypes.OutputEarconAction(
-          tree.firstChild.value, node.location || undefined));
-      this.append_(buff, '', options);
-      formatLog.writeTokenWithValue(token, tree.firstChild.value);
-    }
-  }
-
-  /**
-   * @param {!outputTypes.OutputFormattingData} data
-   * @param {string} token
-   * @param {!OutputFormatTree} tree
-   * @param {!{annotation: Array<*>, isUnique: (boolean|undefined)}} options
-   */
-  formatMessage_(data, token, tree, options) {
-    const buff = data.outputBuffer;
-    const node = data.node;
-    const formatLog = data.outputFormatLogger;
-
-    const isPluralized = (token[0] === '@');
-    if (isPluralized) {
-      token = token.slice(1);
-    }
-    // Tokens can have substitutions.
-    const pieces = token.split('+');
-    token = pieces.reduce((prev, cur) => {
-      let lookup = cur;
-      if (cur[0] === '$') {
-        lookup = node[cur.slice(1)];
-      }
-      return prev + lookup;
-    }, '');
-    const msgId = token;
-    let msgArgs = [];
-    formatLog.write(token + '{');
-    if (!isPluralized) {
-      let curArg = tree.firstChild;
-      while (curArg) {
-        if (curArg.value[0] !== '$') {
-          const errorMsg = 'Unexpected value: ' + curArg.value;
-          formatLog.writeError(errorMsg);
-          console.error(errorMsg);
-          return;
-        }
-        let msgBuff = [];
-        this.format_({
-          node,
-          outputFormat: curArg,
-          outputBuffer: msgBuff,
-          outputFormatLogger: formatLog,
-        });
-        // Fill in empty string if nothing was formatted.
-        if (!msgBuff.length) {
-          msgBuff = [''];
-        }
-        msgArgs = msgArgs.concat(msgBuff);
-        curArg = curArg.nextSibling;
-      }
-    }
-    let msg = Msgs.getMsg(msgId, msgArgs);
-    try {
-      if (this.formatOptions_.braille) {
-        msg = Msgs.getMsg(msgId + '_brl', msgArgs) || msg;
-      }
-    } catch (e) {
-    }
-
-    if (!msg) {
-      const errorMsg = 'Could not get message ' + msgId;
-      formatLog.writeError(errorMsg);
-      console.error(errorMsg);
-      return;
-    }
-
-    if (isPluralized) {
-      const arg = tree.firstChild;
-      if (!arg || arg.nextSibling) {
-        const errorMsg = 'Pluralized messages take exactly one argument';
-        formatLog.writeError(errorMsg);
-        console.error(errorMsg);
-        return;
-      }
-      if (arg.value[0] !== '$') {
-        const errorMsg = 'Unexpected value: ' + arg.value;
-        formatLog.writeError(errorMsg);
-        console.error(errorMsg);
-        return;
-      }
-      const argBuff = [];
-      this.format_({
-        node,
-        outputFormat: arg,
-        outputBuffer: argBuff,
-        outputFormatLogger: formatLog,
-      });
-      const namedArgs = {COUNT: Number(argBuff[0])};
-      msg = new goog.i18n.MessageFormat(msg).format(namedArgs);
-    }
-    formatLog.write('}');
-
-    this.append_(buff, msg, options);
-    formatLog.write(': ' + msg + '\n');
-  }
-
-  /**
-   * @param {!OutputFormatTree} tree
-   * @return {!Set}
-   * @private
-   */
-  createRoles_(tree) {
-    const roles = new Set();
-    let currentNode = tree.firstChild;
-    for (; currentNode; currentNode = currentNode.nextSibling) {
-      roles.add(currentNode.value);
-    }
-    return roles;
-  }
-
-  /**
    * @param {!CursorRange} range
    * @param {CursorRange} prevRange
-   * @param {EventType|outputTypes.OutputEventType} type
+   * @param {!outputTypes.OutputEventType} type
    * @param {!Array<Spannable>} rangeBuff
    * @param {!OutputFormatLogger} formatLog
    * @param {{suppressStartEndAncestry: (boolean|undefined)}} optionalArgs
@@ -1719,7 +649,7 @@ export class Output {
     let prevNode = prevRange.start.node;
     let node = range.start.node;
 
-    const formatNodeAndAncestors = function(node, prevNode) {
+    const formatNodeAndAncestors = (node, prevNode) => {
       const buff = [];
 
       if (addContextBefore) {
@@ -1727,7 +657,7 @@ export class Output {
             node, prevNode, type, buff, formatLog,
             {preferStart: preferStartOrEndAncestry});
       }
-      this.node_(node, prevNode, type, buff, formatLog);
+      this.formatNode(node, prevNode, type, buff, formatLog);
       if (addContextAfter) {
         this.ancestry_(
             node, prevNode, type, buff, formatLog,
@@ -1737,7 +667,7 @@ export class Output {
         this.locations_.push(node.location);
       }
       return buff;
-    }.bind(this);
+    };
 
     let lca = null;
     if (range.start.node !== range.end.node) {
@@ -1826,7 +756,7 @@ export class Output {
   /**
    * @param {!AutomationNode} node
    * @param {!AutomationNode} prevNode
-   * @param {EventType|outputTypes.OutputEventType} type
+   * @param {!outputTypes.OutputEventType} type
    * @param {!Array<Spannable>} buff
    * @param {!OutputFormatLogger} formatLog
    * @param {{suppressStartEndAncestry: (boolean|undefined),
@@ -1836,7 +766,7 @@ export class Output {
    * @private
    */
   ancestry_(node, prevNode, type, buff, formatLog, optionalArgs = {}) {
-    if (localStorage['useVerboseMode'] === 'false') {
+    if (!SettingsManager.get('useVerboseMode')) {
       return;
     }
 
@@ -1855,7 +785,7 @@ export class Output {
       formatLog,
       type,
       ancestors: info.leaveAncestors,
-      formatName: 'leave',
+      navigationType: outputTypes.OutputNavigationType.LEAVE,
       exclude: [...info.enterAncestors, node],
     });
     this.ancestryHelper_({
@@ -1865,7 +795,7 @@ export class Output {
       formatLog,
       type,
       ancestors: info.enterAncestors,
-      formatName: 'enter',
+      navigationType: outputTypes.OutputNavigationType.ENTER,
       excludePreviousAncestors: true,
     });
 
@@ -1882,7 +812,7 @@ export class Output {
         formatLog,
         type,
         ancestors: info.startAncestors,
-        formatName: 'startOf',
+        navigationType: outputTypes.OutputNavigationType.START_OF,
         excludePreviousAncestors: true,
       });
     }
@@ -1895,7 +825,7 @@ export class Output {
         formatLog,
         type,
         ancestors: info.endAncestors,
-        formatName: 'endOf',
+        navigationType: outputTypes.OutputNavigationType.END_OF,
         exclude: [...info.startAncestors].concat(node),
       });
     }
@@ -1905,22 +835,19 @@ export class Output {
    * @param {{
    * node: !AutomationNode,
    * prevNode: !AutomationNode,
-   * type: (EventType|outputTypes.OutputEventType),
+   * type: !outputTypes.OutputEventType,
    * buff: !Array<Spannable>,
    * formatLog: !OutputFormatLogger,
    * ancestors: !Array<!AutomationNode>,
-   * formatName: string,
+   * navigationType: !outputTypes.OutputNavigationType,
    * exclude: (!Array<!AutomationNode>|undefined),
    * excludePreviousAncestors: (boolean|undefined)
    * }} args
    * @private
    */
   ancestryHelper_(args) {
-    let {node, prevNode, buff, formatLog, type, ancestors, formatName} = args;
-
-    const rule = new OutputRule(type);
-    // First, look up the event type's format block.
-    const eventBlock = OutputRule.RULES[rule.event];
+    let {node, prevNode, buff, formatLog, type, ancestors, navigationType} =
+        args;
 
     const excludeRoles =
         args.exclude ? new Set(args.exclude.map(node => node.role)) : new Set();
@@ -1937,48 +864,33 @@ export class Output {
         continue;
       }
 
-      const parentRole = roleInfo.inherits;
-      if (eventBlock[formatNode.role] &&
-          eventBlock[formatNode.role][formatName]) {
-        rule.role = formatNode.role;
-      } else if (eventBlock[parentRole] && eventBlock[parentRole][formatName]) {
-        rule.role = parentRole;
-      } else {
-        rule.role = 'default';
+      const rule = new AncestryOutputRule(
+          type, formatNode.role, navigationType, this.formatAsBraille);
+      if (!rule.defined) {
+        continue;
       }
 
-      if (eventBlock[rule.role][formatName]) {
-        rule.navigation = formatName;
-        rule.output =
-            eventBlock[rule.role][formatName].speak ? 'speak' : undefined;
-        if (this.formatOptions_.braille) {
-          buff = [];
-          formatLog.bufferClear();
-          if (eventBlock[rule.role][formatName].braille) {
-            rule.output = 'braille';
-          }
-        }
+      if (this.formatAsBraille) {
+        buff = /** @type {!Array<Spannable>} */ ([]);
+        formatLog.bufferClear();
+      }
 
-        excludeRoles.add(formatNode.role);
-        formatLog.writeRule(rule.specifier);
-        const enterFormat = rule.output ?
-            eventBlock[rule.role][formatName][rule.output] :
-            eventBlock[rule.role][formatName];
-        this.formattedAncestors_.add(formatNode);
-        this.format_({
-          node: formatNode,
-          outputFormat: enterFormat,
-          outputBuffer: buff,
-          outputFormatLogger: formatLog,
-          opt_prevNode: prevNode,
-        });
+      excludeRoles.add(formatNode.role);
+      formatLog.writeRule(rule.specifier);
+      this.formattedAncestors_.add(formatNode);
+      OutputFormatter.format(this, {
+        node: formatNode,
+        outputFormat: rule.enterFormat,
+        outputBuffer: buff,
+        outputFormatLogger: formatLog,
+        opt_prevNode: prevNode,
+      });
 
-        if (this.formatOptions_.braille && buff.length) {
-          const nodeSpan = this.mergeBraille_(buff);
-          nodeSpan.setSpan(
-              new outputTypes.OutputNodeSpan(formatNode), 0, nodeSpan.length);
-          originalBuff.push(nodeSpan);
-        }
+      if (this.formatAsBraille && buff.length) {
+        const nodeSpan = this.mergeBraille_(buff);
+        nodeSpan.setSpan(
+            new outputTypes.OutputNodeSpan(formatNode), 0, nodeSpan.length);
+        originalBuff.push(nodeSpan);
       }
     }
   }
@@ -1986,12 +898,12 @@ export class Output {
   /**
    * @param {!AutomationNode} node
    * @param {!AutomationNode} prevNode
-   * @param {EventType|outputTypes.OutputEventType} type
+   * @param {!outputTypes.OutputEventType} type
    * @param {!Array<Spannable>} buff
    * @param {!OutputFormatLogger} formatLog
-   * @private
+   * @override
    */
-  node_(node, prevNode, type, buff, formatLog) {
+  formatNode(node, prevNode, type, buff, formatLog) {
     const originalBuff = buff;
 
     if (this.formatOptions_.braille) {
@@ -2000,35 +912,18 @@ export class Output {
     }
 
     const rule = new OutputRule(type);
-    const eventBlock = OutputRule.RULES[rule.event];
-    const parentRole = (OutputRoleInfo[node.role] || {}).inherits || '';
-    /**
-     * Use OutputRule.RULES for node.role if exists.
-     * If not, use OutputRule.RULES for parentRole if exists.
-     * If not, use OutputRule.RULES for 'default'.
-     */
-    if (node.role && (eventBlock[node.role] || {}).speak !== undefined) {
-      rule.role = node.role;
-    } else if ((eventBlock[parentRole] || {}).speak !== undefined) {
-      rule.role = parentRole;
-    } else {
-      rule.role = 'default';
-    }
-    rule.output = 'speak';
+    rule.output = outputTypes.OutputFormatType.SPEAK;
+    rule.populateRole(node.role, rule.output);
     if (this.formatOptions_.braille) {
       // Overwrite rule by braille rule if exists.
-      if (node.role && (eventBlock[node.role] || {}).braille !== undefined) {
-        rule.role = node.role;
-        rule.output = 'braille';
-      } else if ((eventBlock[parentRole] || {}).braille !== undefined) {
-        rule.role = parentRole;
-        rule.output = 'braille';
+      if (rule.populateRole(node.role, outputTypes.OutputFormatType.BRAILLE)) {
+        rule.output = outputTypes.OutputFormatType.BRAILLE;
       }
     }
     formatLog.writeRule(rule.specifier);
-    this.format_({
+    OutputFormatter.format(this, {
       node,
-      outputFormat: eventBlock[rule.role][rule.output],
+      outputFormat: rule.formatString,
       outputBuffer: buff,
       outputFormatLogger: formatLog,
       opt_prevNode: prevNode,
@@ -2046,7 +941,7 @@ export class Output {
   /**
    * @param {!CursorRange} range
    * @param {CursorRange} prevRange
-   * @param {EventType|outputTypes.OutputEventType} type
+   * @param {!outputTypes.OutputEventType} type
    * @param {!Array<Spannable>} buff
    * @private
    */
@@ -2103,7 +998,7 @@ export class Output {
       this.ancestry_(
           node, prevNode, type, buff, formatLog, {preferStart: true});
     }
-    const earcon = this.findEarcon_(node, prevNode);
+    const earcon = this.findEarcon(node, prevNode);
     if (earcon) {
       options.annotation.push(earcon);
     }
@@ -2118,10 +1013,10 @@ export class Output {
       text = range.start.getText().substring(rangeStart, rangeEnd);
     }
 
-    if (localStorage['languageSwitching'] === 'true') {
-      this.assignLocaleAndAppend_(text, node, buff, options);
+    if (SettingsManager.get('languageSwitching')) {
+      this.assignLocaleAndAppend(text, node, buff, options);
     } else {
-      this.append_(buff, text, options);
+      this.append(buff, text, options);
     }
     formatLog.write('subNode_: ' + text + '\n');
 
@@ -2148,13 +1043,13 @@ export class Output {
    * |computeDelayedHints_|.
    * @param {!CursorRange} range
    * @param {!Array<AutomationNode>} uniqueAncestors
-   * @param {EventType|outputTypes.OutputEventType} type
+   * @param {!outputTypes.OutputEventType} type
    * @param {!Array<Spannable>} buff Buffer to receive rendered output.
    * @param {!OutputFormatLogger} formatLog
    * @private
    */
   hint_(range, uniqueAncestors, type, buff, formatLog) {
-    if (!this.enableHints_ || localStorage['useVerboseMode'] !== 'true') {
+    if (!this.enableHints_ || !SettingsManager.get('useVerboseMode')) {
       return;
     }
 
@@ -2185,14 +1080,14 @@ export class Output {
     for (const msg of allMsgs) {
       if (msg.msgId) {
         const text = Msgs.getMsg(msg.msgId, msg.subs);
-        this.append_(buff, text, {annotation: [msg.props]});
+        this.append(buff, text, {annotation: [msg.props]});
         formatLog.write('hint_: ' + text + '\n');
       } else if (msg.text) {
-        this.append_(buff, msg.text, {annotation: [msg.props]});
+        this.append(buff, msg.text, {annotation: [msg.props]});
         formatLog.write('hint_: ' + msg.text + '\n');
       } else if (msg.outputFormat) {
         formatLog.write('hint_: ...');
-        this.format_({
+        OutputFormatter.format(this, {
           node,
           outputFormat: msg.outputFormat,
           outputBuffer: buff,
@@ -2260,7 +1155,7 @@ export class Output {
    * Internal helper to |hint_|. Returns a list of message hints.
    * @param {!AutomationNode} node
    * @param {!Array<AutomationNode>} uniqueAncestors
-   * @param {EventType|outputTypes.OutputEventType} type
+   * @param {!outputTypes.OutputEventType} type
    * @return {!Array<{text: (string|undefined),
    *           msgId: (string|undefined),
    *           subs: (Array<string>|undefined),
@@ -2270,7 +1165,7 @@ export class Output {
    */
   static computeDelayedHints_(node, uniqueAncestors, type) {
     const ret = [];
-    if (EventSourceState.get() === EventSourceType.TOUCH_GESTURE) {
+    if (EventSource.get() === EventSourceType.TOUCH_GESTURE) {
       if (node.state[StateType.EDITABLE]) {
         ret.push({
           msgId: node.state[StateType.FOCUSED] ? 'hint_is_editing' :
@@ -2397,13 +1292,8 @@ export class Output {
     return ret;
   }
 
-  /**
-   * Appends output to the |buff|.
-   * @param {!Array<Spannable>} buff
-   * @param {string|!Spannable} value
-   * @param {{annotation: Array<*>, isUnique: (boolean|undefined)}=} opt_options
-   */
-  append_(buff, value, opt_options) {
+  /** @override */
+  append(buff, value, opt_options) {
     opt_options = opt_options || {isUnique: false, annotation: []};
 
     // Reject empty values without meaningful annotations.
@@ -2515,13 +1405,8 @@ export class Output {
     }, new Spannable());
   }
 
-  /**
-   * Find the earcon for a given node (including ancestry).
-   * @param {!AutomationNode} node
-   * @param {!AutomationNode=} opt_prevNode
-   * @return {outputTypes.OutputAction}
-   */
-  findEarcon_(node, opt_prevNode) {
+  /** @override */
+  findEarcon(node, opt_prevNode) {
     if (node === opt_prevNode) {
       return null;
     }
@@ -2537,9 +1422,9 @@ export class Output {
 
       while (earconFinder = ancestors.pop()) {
         const info = OutputRoleInfo[earconFinder.role];
-        if (info && info.earconId) {
+        if (info && info.earcon) {
           return new outputTypes.OutputEarconAction(
-              info.earconId, node.location || undefined);
+              info.earcon, node.location || undefined);
           break;
         }
         earconFinder = earconFinder.parent;
@@ -2577,24 +1462,38 @@ export class Output {
     }, null);
   }
 
-  /**
-   * @param {string} text
-   * @param {!AutomationNode} contextNode
-   * @param {!Array<Spannable>} buff
-   * @param {!{annotation: Array<*>, isUnique: (boolean|undefined)}} options
-   * @private
-   */
-  assignLocaleAndAppend_(text, contextNode, buff, options) {
+  /** @override */
+  assignLocaleAndAppend(text, contextNode, buff, options) {
     const data =
         LocaleOutputHelper.instance.computeTextAndLocale(text, contextNode);
     const speechProps = new outputTypes.OutputSpeechProperties();
     speechProps.properties['lang'] = data.locale;
-    this.append_(buff, data.text, options);
+    this.append(buff, data.text, options);
     // Attach associated SpeechProperties if the buffer is
     // non-empty.
     if (buff.length > 0) {
       buff[buff.length - 1].setSpan(speechProps, 0, 0);
     }
+  }
+
+  /** @override */
+  shouldSuppress(token) {
+    return this.suppressions_[token];
+  }
+
+  /** @override */
+  get useAuralStyle() {
+    return this.formatOptions_.auralStyle;
+  }
+
+  /** @override */
+  get formatAsBraille() {
+    return this.formatOptions_.braille;
+  }
+
+  /** @override */
+  get formatAsSpeech() {
+    return this.formatOptions_.speech;
   }
 }
 

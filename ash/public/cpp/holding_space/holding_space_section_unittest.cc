@@ -35,18 +35,23 @@ std::set<HoldingSpaceSectionId> GetHoldingSpaceSectionIds() {
 
 void ExpectSection(const HoldingSpaceSection* section,
                    HoldingSpaceSectionId expected_id) {
-  ASSERT_TRUE(section);
   switch (expected_id) {
     case HoldingSpaceSectionId::kDownloads:
       EXPECT_EQ(section->id, HoldingSpaceSectionId::kDownloads);
       EXPECT_THAT(section->supported_types,
                   testing::UnorderedElementsAre(
                       HoldingSpaceItem::Type::kArcDownload,
+                      HoldingSpaceItem::Type::kCameraAppPhoto,
+                      HoldingSpaceItem::Type::kCameraAppScanJpg,
+                      HoldingSpaceItem::Type::kCameraAppScanPdf,
+                      HoldingSpaceItem::Type::kCameraAppVideoGif,
+                      HoldingSpaceItem::Type::kCameraAppVideoMp4,
                       HoldingSpaceItem::Type::kDiagnosticsLog,
                       HoldingSpaceItem::Type::kDownload,
                       HoldingSpaceItem::Type::kLacrosDownload,
                       HoldingSpaceItem::Type::kNearbyShare,
                       HoldingSpaceItem::Type::kPhoneHubCameraRoll,
+                      HoldingSpaceItem::Type::kPhotoshopWeb,
                       HoldingSpaceItem::Type::kPrintedPdf,
                       HoldingSpaceItem::Type::kScan));
       EXPECT_EQ(section->max_item_count, 50u);
@@ -57,14 +62,15 @@ void ExpectSection(const HoldingSpaceSection* section,
       EXPECT_THAT(
           section->supported_types,
           testing::UnorderedElementsAre(HoldingSpaceItem::Type::kPinnedFile));
-      EXPECT_EQ(section->max_item_count, absl::nullopt);
-      EXPECT_EQ(section->max_visible_item_count, absl::nullopt);
+      EXPECT_EQ(section->max_item_count, std::nullopt);
+      EXPECT_EQ(section->max_visible_item_count, std::nullopt);
       break;
     case HoldingSpaceSectionId::kScreenCaptures:
       EXPECT_EQ(section->id, HoldingSpaceSectionId::kScreenCaptures);
       EXPECT_THAT(section->supported_types,
                   testing::UnorderedElementsAre(
                       HoldingSpaceItem::Type::kScreenRecording,
+                      HoldingSpaceItem::Type::kScreenRecordingGif,
                       HoldingSpaceItem::Type::kScreenshot));
       EXPECT_EQ(section->max_item_count, 50u);
       EXPECT_EQ(section->max_visible_item_count, 3u);
@@ -75,7 +81,7 @@ void ExpectSection(const HoldingSpaceSection* section,
                   testing::UnorderedElementsAre(
                       HoldingSpaceItem::Type::kLocalSuggestion,
                       HoldingSpaceItem::Type::kDriveSuggestion));
-      EXPECT_EQ(section->max_item_count, absl::nullopt);
+      EXPECT_EQ(section->max_item_count, std::nullopt);
       EXPECT_EQ(section->max_visible_item_count, 4u);
       break;
   }
@@ -99,14 +105,20 @@ TEST_F(HoldingSpaceSectionTest, GetHoldingSpaceSectionById) {
 TEST_F(HoldingSpaceSectionTest, GetHoldingSpaceSectionByType) {
   for (const auto& type : GetHoldingSpaceItemTypes()) {
     SCOPED_TRACE(testing::Message() << "Type: " << static_cast<size_t>(type));
-    absl::optional<HoldingSpaceSectionId> id;
+    std::optional<HoldingSpaceSectionId> id;
     switch (type) {
       case HoldingSpaceItem::Type::kArcDownload:
+      case HoldingSpaceItem::Type::kCameraAppPhoto:
+      case HoldingSpaceItem::Type::kCameraAppScanJpg:
+      case HoldingSpaceItem::Type::kCameraAppScanPdf:
+      case HoldingSpaceItem::Type::kCameraAppVideoGif:
+      case HoldingSpaceItem::Type::kCameraAppVideoMp4:
       case HoldingSpaceItem::Type::kDiagnosticsLog:
       case HoldingSpaceItem::Type::kDownload:
       case HoldingSpaceItem::Type::kLacrosDownload:
       case HoldingSpaceItem::Type::kNearbyShare:
       case HoldingSpaceItem::Type::kPhoneHubCameraRoll:
+      case HoldingSpaceItem::Type::kPhotoshopWeb:
       case HoldingSpaceItem::Type::kPrintedPdf:
       case HoldingSpaceItem::Type::kScan:
         id = HoldingSpaceSectionId::kDownloads;
@@ -119,6 +131,7 @@ TEST_F(HoldingSpaceSectionTest, GetHoldingSpaceSectionByType) {
         id = HoldingSpaceSectionId::kPinnedFiles;
         break;
       case HoldingSpaceItem::Type::kScreenRecording:
+      case HoldingSpaceItem::Type::kScreenRecordingGif:
       case HoldingSpaceItem::Type::kScreenshot:
         id = HoldingSpaceSectionId::kScreenCaptures;
         break;

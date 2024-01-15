@@ -11,6 +11,7 @@
 #include "base/base_export.h"
 #include "base/compiler_specific.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/weak_ptr.h"
 #include "base/message_loop/message_pump.h"
 #include "base/message_loop/message_pump_buildflags.h"
@@ -92,7 +93,7 @@ class BASE_EXPORT MessagePumpLibevent : public MessagePump,
     friend class RefCounted<EpollInterest>;
     ~EpollInterest();
 
-    FdWatchController* const controller_;
+    const raw_ptr<FdWatchController, AcrossTasksDanglingUntriaged> controller_;
     const EpollInterestParams params_;
     bool active_ = true;
     bool was_controller_destroyed_ = false;
@@ -161,7 +162,10 @@ class BASE_EXPORT MessagePumpLibevent : public MessagePump,
 
     // State used only with libevent
     std::unique_ptr<event> event_;
-    raw_ptr<MessagePumpLibevent> libevent_pump_ = nullptr;
+
+    // Tests (e.g. FdWatchControllerPosixTest) deliberately make this dangle.
+    raw_ptr<MessagePumpLibevent, DisableDanglingPtrDetection> libevent_pump_ =
+        nullptr;
 
     // State used only with epoll
     WeakPtr<MessagePumpEpoll> epoll_pump_;
@@ -232,7 +236,9 @@ class BASE_EXPORT MessagePumpLibevent : public MessagePump,
 #endif
 
   // State for the current invocation of Run(). null if not running.
-  RunState* run_state_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION RunState* run_state_ = nullptr;
 
   // This flag is set if libevent has processed I/O events.
   bool processed_io_events_ = false;

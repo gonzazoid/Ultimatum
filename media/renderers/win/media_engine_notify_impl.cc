@@ -78,8 +78,7 @@ PipelineStatus MediaEngineErrorToPipelineStatus(
     case MF_MEDIA_ENGINE_ERR_SRC_NOT_SUPPORTED:
       return DEMUXER_ERROR_COULD_NOT_OPEN;
     default:
-      NOTREACHED();
-      return PIPELINE_ERROR_INVALID_STATE;
+      NOTREACHED_NORETURN();
   }
 }
 
@@ -93,8 +92,10 @@ HRESULT MediaEngineNotifyImpl::RuntimeClassInitialize(
     EndedCB ended_cb,
     FormatChangeCB format_change_cb,
     LoadedDataCB loaded_data_cb,
+    CanPlayThroughCB can_play_through_cb,
     PlayingCB playing_cb,
     WaitingCB waiting_cb,
+    FrameStepCompletedCB frame_step_completed_cb,
     TimeUpdateCB time_update_cb) {
   DVLOG_FUNC(1);
 
@@ -102,8 +103,10 @@ HRESULT MediaEngineNotifyImpl::RuntimeClassInitialize(
   ended_cb_ = std::move(ended_cb);
   format_change_cb_ = std::move(format_change_cb);
   loaded_data_cb_ = std::move(loaded_data_cb);
+  can_play_through_cb_ = std::move(can_play_through_cb);
   playing_cb_ = std::move(playing_cb);
   waiting_cb_ = std::move(waiting_cb);
+  frame_step_completed_cb_ = std::move(frame_step_completed_cb);
   time_update_cb_ = std::move(time_update_cb);
   return S_OK;
 }
@@ -141,11 +144,17 @@ HRESULT MediaEngineNotifyImpl::EventNotify(DWORD event_code,
     case MF_MEDIA_ENGINE_EVENT_LOADEDDATA:
       loaded_data_cb_.Run();
       break;
+    case MF_MEDIA_ENGINE_EVENT_CANPLAYTHROUGH:
+      can_play_through_cb_.Run();
+      break;
     case MF_MEDIA_ENGINE_EVENT_PLAYING:
       playing_cb_.Run();
       break;
     case MF_MEDIA_ENGINE_EVENT_WAITING:
       waiting_cb_.Run();
+      break;
+    case MF_MEDIA_ENGINE_EVENT_FRAMESTEPCOMPLETED:
+      frame_step_completed_cb_.Run();
       break;
     case MF_MEDIA_ENGINE_EVENT_TIMEUPDATE:
       time_update_cb_.Run();

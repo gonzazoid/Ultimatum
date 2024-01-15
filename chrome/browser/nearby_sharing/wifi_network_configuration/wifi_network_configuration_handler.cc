@@ -4,11 +4,11 @@
 
 #include "chrome/browser/nearby_sharing/wifi_network_configuration/wifi_network_configuration_handler.h"
 
-#include "chrome/browser/nearby_sharing/logging/logging.h"
-#include "chrome/browser/nearby_sharing/nearby_share_metrics_logger.h"
+#include "chrome/browser/nearby_sharing/nearby_share_metrics.h"
 #include "chromeos/ash/components/network/network_configuration_handler.h"
-#include "chromeos/services/network_config/in_process_instance.h"
+#include "chromeos/ash/services/network_config/in_process_instance.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
+#include "components/cross_device/logging/logging.h"
 
 namespace {
 
@@ -27,7 +27,7 @@ chromeos::network_config::mojom::SecurityType MojoSecurityTypeFromAttachment(
 }  // namespace
 
 WifiNetworkConfigurationHandler::WifiNetworkConfigurationHandler() {
-  chromeos::network_config::BindToInProcessInstance(
+  ash::network_config::BindToInProcessInstance(
       cros_network_config_remote_.BindNewPipeAndPassReceiver());
 }
 
@@ -66,11 +66,13 @@ void WifiNetworkConfigurationHandler::OnConfigureWifiNetworkResult(
     const absl::optional<std::string>& network_guid,
     const std::string& error_message) {
   if (network_guid) {
-    NS_LOG(VERBOSE) << __func__ << ": Successfully configured to network";
+    CD_LOG(VERBOSE, Feature::NS)
+        << __func__ << ": Successfully configured to network";
     RecordNearbyShareWifiConfigurationResultMetric(/*success=*/true);
   } else {
-    NS_LOG(WARNING) << __func__ << ": Failed to configure network because "
-                    << error_message;
+    CD_LOG(WARNING, Feature::NS)
+        << __func__ << ": Failed to configure network because "
+        << error_message;
     RecordNearbyShareWifiConfigurationResultMetric(/*success=*/false);
   }
   std::move(callback).Run(network_guid, error_message);

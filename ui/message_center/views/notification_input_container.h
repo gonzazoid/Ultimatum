@@ -6,6 +6,7 @@
 #define UI_MESSAGE_CENTER_VIEWS_NOTIFICATION_INPUT_CONTAINER_H_
 
 #include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/message_center/message_center_export.h"
 #include "ui/views/controls/textfield/textfield_controller.h"
 #include "ui/views/layout/box_layout.h"
@@ -36,6 +37,7 @@ class MESSAGE_CENTER_EXPORT NotificationInputContainer
     : public views::View,
       public views::TextfieldController {
  public:
+  METADATA_HEADER(NotificationInputContainer);
   explicit NotificationInputContainer(
       NotificationInputDelegate* delegate = nullptr);
   NotificationInputContainer(const NotificationInputContainer&) = delete;
@@ -60,8 +62,8 @@ class MESSAGE_CENTER_EXPORT NotificationInputContainer
   void AnimateBackground(const ui::Event& event);
 
   // views::View:
-  void AddLayerBeneathView(ui::Layer* layer) override;
-  void RemoveLayerBeneathView(ui::Layer* layer) override;
+  void AddLayerToRegion(ui::Layer* layer, views::LayerRegion region) override;
+  void RemoveLayerFromRegions(ui::Layer* layer) override;
   void OnThemeChanged() override;
   void Layout() override;
 
@@ -92,6 +94,9 @@ class MESSAGE_CENTER_EXPORT NotificationInputContainer
 
   // Gets the id for the default placeholder string for `textfield_`.
   virtual int GetDefaultPlaceholderStringId() const;
+
+  // Gets the id for the default accessible name string for `button_`.
+  virtual int GetDefaultAccessibleNameStringId() const;
 
   // Sets the visible background of `textfield_`.
   virtual void StyleTextfield();

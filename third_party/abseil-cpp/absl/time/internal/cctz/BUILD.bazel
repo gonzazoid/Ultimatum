@@ -12,28 +12,13 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-package(features = ["-parse_headers"])
+package(features = [
+    "header_modules",
+    "layering_check",
+    "parse_headers",
+])
 
 licenses(["notice"])
-
-filegroup(
-    name = "zoneinfo",
-    srcs = glob(["testdata/zoneinfo/**"]),
-)
-
-config_setting(
-    name = "osx",
-    constraint_values = [
-        "@platforms//os:osx",
-    ],
-)
-
-config_setting(
-    name = "ios",
-    constraint_values = [
-        "@platforms//os:ios",
-    ],
-)
 
 ### libraries
 
@@ -73,12 +58,8 @@ cc_library(
         "include/cctz/zone_info_source.h",
     ],
     linkopts = select({
-        ":osx": [
-            "-framework Foundation",
-        ],
-        ":ios": [
-            "-framework Foundation",
-        ],
+        "@platforms//os:osx": ["-Wl,-framework,CoreFoundation"],
+        "@platforms//os:ios": ["-Wl,-framework,CoreFoundation"],
         "//conditions:default": [],
     }),
     visibility = ["//visibility:public"],
@@ -106,6 +87,7 @@ cc_test(
     deps = [
         ":civil_time",
         "//absl/base:config",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -115,6 +97,7 @@ cc_test(
     size = "small",
     srcs = ["src/time_zone_format_test.cc"],
     data = [":zoneinfo"],
+    env = {"TZDIR": "absl/time/internal/cctz/testdata/zoneinfo"},
     tags = [
         "no_test_android_arm",
         "no_test_android_arm64",
@@ -125,6 +108,7 @@ cc_test(
         ":civil_time",
         ":time_zone",
         "//absl/base:config",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -135,6 +119,7 @@ cc_test(
     timeout = "moderate",
     srcs = ["src/time_zone_lookup_test.cc"],
     data = [":zoneinfo"],
+    env = {"TZDIR": "absl/time/internal/cctz/testdata/zoneinfo"},
     tags = [
         "no_test_android_arm",
         "no_test_android_arm64",
@@ -145,6 +130,7 @@ cc_test(
         ":civil_time",
         ":time_zone",
         "//absl/base:config",
+        "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -168,6 +154,12 @@ cc_test(
         "//absl/base:config",
         "@com_github_google_benchmark//:benchmark_main",
     ],
+)
+
+filegroup(
+    name = "zoneinfo",
+    srcs = glob(["testdata/zoneinfo/**"]),
+    visibility = ["//absl/time:__subpackages__"],
 )
 
 ### examples

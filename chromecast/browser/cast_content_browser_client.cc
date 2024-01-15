@@ -9,18 +9,19 @@
 #include <utility>
 
 #include "base/base_switches.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/i18n/rtl.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/unguessable_token.h"
 #include "build/build_config.h"
 #include "chromecast/base/cast_constants.h"
@@ -92,7 +93,6 @@
 #include "net/ssl/ssl_cert_request_info.h"
 #include "net/ssl/ssl_private_key.h"
 #include "net/url_request/url_request_context_getter.h"
-#include "services/metrics/public/cpp/ukm_source_id.h"
 #include "services/network/public/cpp/network_switches.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/web_preferences/web_preferences.h"
@@ -110,8 +110,8 @@
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
 #if BUILDFLAG(IS_ANDROID)
+#include "base/android/build_info.h"
 #include "chromecast/media/audio/cast_audio_manager_android.h"  // nogncheck
-#include "components/cdm/browser/cdm_message_filter_android.h"
 #include "components/crash/core/app/crashpad.h"
 #include "media/audio/android/audio_manager_android.h"
 #include "media/audio/audio_features.h"
@@ -149,23 +149,40 @@ CastContentBrowserClient::CastContentBrowserClient(
       cast_network_contexts_(
           std::make_unique<CastNetworkContexts>(GetCorsExemptHeadersList())),
       cast_feature_list_creator_(cast_feature_list_creator) {
-  cast_feature_list_creator_->SetExtraEnableFeatures({
-    &::media::kInternalMediaSession, &features::kNetworkServiceInProcess,
+  std::vector<const base::Feature*> extra_enable_features = {
+    &::media::kInternalMediaSession,
+    &features::kNetworkServiceInProcess,
 #if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_VIDEO_CAPTURE_SERVICE)
-        &features::kMojoVideoCapture,
+    &features::kMojoVideoCapture,
 #endif
 #if BUILDFLAG(USE_V4L2_CODEC)
-        // Enable accelerated video decode if v4l2 codec is supported.
-        &::media::kVaapiVideoDecodeLinux,
+    // Enable accelerated video decode if v4l2 codec is supported.
+    &::media::kVaapiVideoDecodeLinux,
 #endif  // BUILDFLAG(USE_V4L2_CODEC)
-  });
+  };
+
+  std::vector<const base::Feature*> extra_disable_features;
 
 #if BUILDFLAG(IS_ANDROID)
-  cast_feature_list_creator_->SetExtraDisableFeatures({
-      // Disable AAudio improve AV sync performance.
-      &::features::kUseAAudioDriver,
-  });
+  extra_enable_features.push_back(
+      &::media::kUseTaskRunnerForMojoAudioDecoderService);
+
+  if (base::android::BuildInfo::GetInstance()->is_tv()) {
+    // Use the software decoder provided by MediaCodec instead of the built in
+    // software decoder. This can improve av sync quality.
+    extra_enable_features.push_back(&::media::kAllowMediaCodecSoftwareDecoder);
+    // For ATV HDMI dongle devices, it's hard to get an accurate audio latency.
+    // The OpenSL ES output path has a way to adjust the audio timestamp by
+    // querying AudioManager.getOutputLatency. Based on the experiment, this
+    // combination has a better av sync performance compared to the AAudio path
+    // on ATV devices.
+    extra_enable_features.push_back(&::media::kUseAudioLatencyFromHAL);
+    extra_disable_features.push_back(&::features::kUseAAudioDriver);
+  }
 #endif
+
+  cast_feature_list_creator_->SetExtraEnableFeatures(extra_enable_features);
+  cast_feature_list_creator_->SetExtraDisableFeatures(extra_disable_features);
 }
 
 CastContentBrowserClient::~CastContentBrowserClient() {
@@ -214,7 +231,8 @@ CastContentBrowserClient::GetMediaTaskRunner() {
     // and we want to initialize it with the correct task runner before any
     // tasks that might use it are posted to the media thread.
     media_resource_tracker_ = new media::MediaResourceTracker(
-        base::ThreadTaskRunnerHandle::Get(), media_thread_->task_runner());
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        media_thread_->task_runner());
   }
   return media_thread_->task_runner();
 }
@@ -266,7 +284,6 @@ CastContentBrowserClient::CreateAudioManager(
       base::BindRepeating(&CastContentBrowserClient::GetCmaBackendFactory,
                           base::Unretained(this)),
       content::GetUIThreadTaskRunner({}), GetMediaTaskRunner(),
-      browser_main_parts()->connector(),
       BUILDFLAG(ENABLE_CAST_AUDIO_MANAGER_MIXER));
 #elif BUILDFLAG(IS_ANDROID)
   if (base::FeatureList::IsEnabled(kEnableChromeAudioManagerAndroid)) {
@@ -279,14 +296,13 @@ CastContentBrowserClient::CreateAudioManager(
       std::move(audio_thread), audio_log_factory, cast_session_id_map,
       base::BindRepeating(&CastContentBrowserClient::GetCmaBackendFactory,
                           base::Unretained(this)),
-      GetMediaTaskRunner(), browser_main_parts()->connector());
+      GetMediaTaskRunner());
 #else
   return std::make_unique<media::CastAudioManager>(
       std::move(audio_thread), audio_log_factory, cast_session_id_map,
       base::BindRepeating(&CastContentBrowserClient::GetCmaBackendFactory,
                           base::Unretained(this)),
       content::GetUIThreadTaskRunner({}), GetMediaTaskRunner(),
-      browser_main_parts()->connector(),
       BUILDFLAG(ENABLE_CAST_AUDIO_MANAGER_MIXER));
 #endif
 }
@@ -298,8 +314,9 @@ bool CastContentBrowserClient::OverridesAudioManager() {
 std::unique_ptr<::media::CdmFactory> CastContentBrowserClient::CreateCdmFactory(
     ::media::mojom::FrameInterfaceFactory* frame_interfaces) {
   url::Origin cdm_origin;
-  if (!CastCdmOriginProvider::GetCdmOrigin(frame_interfaces, &cdm_origin))
+  if (!CastCdmOriginProvider::GetCdmOrigin(frame_interfaces, &cdm_origin)) {
     return nullptr;
+  }
 
   return std::make_unique<media::CastCdmFactory>(
       GetMediaTaskRunner(), cdm_origin, media_resource_tracker());
@@ -349,24 +366,10 @@ CastContentBrowserClient::CreateBrowserMainParts(
   return main_parts;
 }
 
-void CastContentBrowserClient::RenderProcessWillLaunch(
-    content::RenderProcessHost* host) {
-#if BUILDFLAG(IS_ANDROID)
-  // Cast on Android always allows persisting data.
-  //
-  // Cast on Android build always uses kForceVideoOverlays command line switch
-  // such that secure codecs can always be rendered.
-  //
-  // TODO(yucliu): On Clank, secure codecs support is tied to AndroidOverlay.
-  // Remove kForceVideoOverlays and swtich to the Clank model for secure codecs
-  // support.
-  host->AddFilter(new cdm::CdmMessageFilterAndroid(true, true));
-#endif  // BUILDFLAG(IS_ANDROID)
-}
-
 bool CastContentBrowserClient::IsHandledURL(const GURL& url) {
-  if (!url.is_valid())
+  if (!url.is_valid()) {
     return false;
+  }
 
   static const char* const kProtocolList[] = {
       content::kChromeUIScheme, content::kChromeDevToolsScheme,
@@ -376,8 +379,9 @@ bool CastContentBrowserClient::IsHandledURL(const GURL& url) {
 
   const std::string& scheme = url.scheme();
   for (size_t i = 0; i < std::size(kProtocolList); ++i) {
-    if (scheme == kProtocolList[i])
+    if (scheme == kProtocolList[i]) {
       return true;
+    }
   }
 
   if (scheme == url::kFileScheme) {
@@ -387,9 +391,6 @@ bool CastContentBrowserClient::IsHandledURL(const GURL& url) {
 
   return false;
 }
-
-void CastContentBrowserClient::SiteInstanceGotProcess(
-    content::SiteInstance* site_instance) {}
 
 void CastContentBrowserClient::AppendExtraCommandLineSwitches(
     base::CommandLine* command_line,
@@ -424,8 +425,7 @@ void CastContentBrowserClient::AppendExtraCommandLineSwitches(
         switches::kForceMediaResolutionHeight,
         switches::kForceMediaResolutionWidth,
         network::switches::kUnsafelyTreatInsecureOriginAsSecure};
-    command_line->CopySwitchesFrom(*browser_command_line, kForwardSwitches,
-                                   std::size(kForwardSwitches));
+    command_line->CopySwitchesFrom(*browser_command_line, kForwardSwitches);
   } else if (process_type == switches::kUtilityProcess) {
     if (browser_command_line->HasSwitch(switches::kAudioOutputChannels)) {
       command_line->AppendSwitchASCII(switches::kAudioOutputChannels,
@@ -446,8 +446,7 @@ void CastContentBrowserClient::AppendExtraCommandLineSwitches(
         switches::kCastInitialScreenWidth,
         switches::kVSyncInterval,
     };
-    command_line->CopySwitchesFrom(*browser_command_line, kForwardSwitches,
-                                   std::size(kForwardSwitches));
+    command_line->CopySwitchesFrom(*browser_command_line, kForwardSwitches);
 
     auto display = display::Screen::GetScreen()->GetPrimaryDisplay();
     gfx::Size res = display.GetSizeInPixel();
@@ -528,8 +527,9 @@ void CastContentBrowserClient::OverrideWebkitPrefs(
   CastWebPreferences* web_preferences =
       static_cast<CastWebPreferences*>(web_contents->GetUserData(
           CastWebPreferences::kCastWebPreferencesDataKey));
-  if (web_preferences)
+  if (web_preferences) {
     web_preferences->Update(prefs);
+  }
 }
 
 std::string CastContentBrowserClient::GetApplicationLocale() {
@@ -554,11 +554,18 @@ void CastContentBrowserClient::AllowCertificateError(
 }
 
 base::OnceClosure CastContentBrowserClient::SelectClientCertificate(
+    content::BrowserContext* browser_context,
     content::WebContents* web_contents,
     net::SSLCertRequestInfo* cert_request_info,
     net::ClientCertIdentityList client_certs,
     std::unique_ptr<content::ClientCertificateDelegate> delegate) {
   GURL requesting_url("https://" + cert_request_info->host_and_port.ToString());
+
+  if (!web_contents) {
+    LOG(ERROR) << "Invalid requestor.";
+    delegate->ContinueWithCertificate(nullptr, nullptr);
+    return base::OnceClosure();
+  }
 
   if (!requesting_url.is_valid()) {
     LOG(ERROR) << "Invalid URL string: "
@@ -586,7 +593,7 @@ base::OnceClosure CastContentBrowserClient::SelectClientCertificate(
           base::Unretained(this), requesting_url, session_id,
           web_contents->GetPrimaryMainFrame()->GetProcess()->GetID(),
           web_contents->GetPrimaryMainFrame()->GetRoutingID(),
-          base::SequencedTaskRunnerHandle::Get(),
+          base::SequencedTaskRunner::GetCurrentDefault(),
           base::BindOnce(
               &content::ClientCertificateDelegate::ContinueWithCertificate,
               base::Owned(delegate.release()))));
@@ -683,13 +690,14 @@ bool CastContentBrowserClient::IsBufferingEnabled() {
   return true;
 }
 
-absl::optional<service_manager::Manifest>
+std::optional<service_manager::Manifest>
 CastContentBrowserClient::GetServiceManifestOverlay(
     base::StringPiece service_name) {
-  if (service_name == ServiceManagerContext::kBrowserServiceName)
+  if (service_name == ServiceManagerContext::kBrowserServiceName) {
     return GetCastContentBrowserOverlayManifest();
+  }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 std::vector<service_manager::Manifest>
@@ -787,7 +795,7 @@ CastContentBrowserClient::CreateCrashHandlerHost(
   base::FilePath dumps_path;
   base::PathService::Get(base::DIR_TEMP, &dumps_path);
 
-  // Alway set "upload" to false to use our own uploader.
+  // Always set "upload" to false to use our own uploader.
   breakpad::CrashHandlerHostLinux* crash_handler =
       new breakpad::CrashHandlerHostLinux(process_type, dumps_path,
                                           false /* upload */);
@@ -814,13 +822,12 @@ CastContentBrowserClient::CreateThrottlesForNavigation(
 
 void CastContentBrowserClient::RegisterNonNetworkNavigationURLLoaderFactories(
     int frame_tree_node_id,
-    ukm::SourceIdObj ukm_source_id,
     NonNetworkURLLoaderFactoryMap* factories) {}
 
 void CastContentBrowserClient::RegisterNonNetworkSubresourceURLLoaderFactories(
     int render_process_id,
     int render_frame_id,
-    const absl::optional<url::Origin>& request_initiator_origin,
+    const std::optional<url::Origin>& request_initiator_origin,
     NonNetworkURLLoaderFactoryMap* factories) {
   if (render_frame_id == MSG_ROUTING_NONE) {
     LOG(ERROR) << "Service worker not supported.";
@@ -865,12 +872,14 @@ bool CastContentBrowserClient::IsWebUIAllowedToMakeNetworkRequests(
   return false;
 }
 
-bool CastContentBrowserClient::ShouldAllowInsecurePrivateNetworkRequests(
+content::ContentBrowserClient::PrivateNetworkRequestPolicyOverride
+CastContentBrowserClient::ShouldOverridePrivateNetworkRequestPolicy(
     content::BrowserContext* browser_context,
     const url::Origin& origin) {
   // Some Cast apps hosted over HTTP needs to access the private network so that
   // media can be streamed from a local media server.
-  return true;
+  return content::ContentBrowserClient::PrivateNetworkRequestPolicyOverride::
+      kForceAllow;
 }
 
 std::vector<std::unique_ptr<blink::URLLoaderThrottle>>
@@ -879,7 +888,8 @@ CastContentBrowserClient::CreateURLLoaderThrottles(
     content::BrowserContext* browser_context,
     const base::RepeatingCallback<content::WebContents*()>& wc_getter,
     content::NavigationUIData* navigation_ui_data,
-    int frame_tree_node_id) {
+    int frame_tree_node_id,
+    absl::optional<int64_t> navigation_id) {
   std::vector<std::unique_ptr<blink::URLLoaderThrottle>> throttles;
   if (frame_tree_node_id == content::RenderFrameHost::kNoFrameTreeNodeId) {
     // No support for service workers.
@@ -890,7 +900,7 @@ CastContentBrowserClient::CreateURLLoaderThrottles(
 
   // |cast_web_contents| may be nullptr in browser tests.
   if (cast_web_contents) {
-    const auto& rules =
+    auto rules =
         cast_web_contents->url_rewrite_rules_manager()->GetCachedRules();
     if (rules) {
       throttles.emplace_back(std::make_unique<url_rewrite::URLLoaderThrottle>(
@@ -928,7 +938,7 @@ void CastContentBrowserClient::BindMediaRenderer(
           GetCmaBackendFactory(), std::move(media_task_runner),
           GetVideoModeSwitcher(), GetVideoResolutionPolicy(),
           base::UnguessableToken::Create(), nullptr /* frame_interfaces */,
-          browser_main_parts()->connector(), true /* is_buffering_enabled */),
+          true /* is_buffering_enabled */),
       std::move(receiver));
 }
 

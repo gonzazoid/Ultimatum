@@ -1,8 +1,8 @@
-// Copyright 2017 The Chromium Authors
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "third_party/blink/renderer/core/paint/paint_layer.h"
+#include "third_party/blink/renderer/core/svg_names.h"
 #include "third_party/blink/renderer/core/testing/core_unit_test_helper.h"
 
 namespace blink {
@@ -24,8 +24,8 @@ TEST_F(LayoutSVGForeignObjectTest, DivInForeignObject) {
     </svg>
   )HTML");
 
-  const auto& svg = *GetDocument().getElementById("svg");
-  const auto& foreign = *GetDocument().getElementById("foreign");
+  const auto& svg = *GetDocument().getElementById(AtomicString("svg"));
+  const auto& foreign = *GetDocument().getElementById(AtomicString("foreign"));
   const auto& foreign_object = *GetLayoutObjectByElementId("foreign");
   const auto& div = *GetLayoutObjectByElementId("div");
 
@@ -62,8 +62,9 @@ TEST_F(LayoutSVGForeignObjectTest, DivInForeignObject) {
   EXPECT_EQ(3u, results.size());
   for (auto result : results) {
     Node* node = result.Get();
-    if (node == svg || node == div.GetNode() || node == foreign)
+    if (node == svg || node == div.GetNode() || node == foreign) {
       count++;
+    }
   }
   EXPECT_EQ(3, count);
 }
@@ -87,11 +88,12 @@ TEST_F(LayoutSVGForeignObjectTest, IframeInForeignObject) {
   )HTML");
   UpdateAllLifecyclePhasesForTest();
 
-  const auto& svg = *GetDocument().getElementById("svg");
-  const auto& foreign = *GetDocument().getElementById("foreign");
+  const auto& svg = *GetDocument().getElementById(AtomicString("svg"));
+  const auto& foreign = *GetDocument().getElementById(AtomicString("foreign"));
   const auto& foreign_object = *GetLayoutObjectByElementId("foreign");
-  const auto& iframe = *GetDocument().getElementById("iframe");
-  const auto& div = *ChildDocument().getElementById("div")->GetLayoutObject();
+  const auto& iframe = *GetDocument().getElementById(AtomicString("iframe"));
+  const auto& div =
+      *ChildDocument().getElementById(AtomicString("div"))->GetLayoutObject();
 
   EXPECT_EQ(gfx::RectF(100, 100, 300, 250), foreign_object.ObjectBoundingBox());
   EXPECT_EQ(AffineTransform(), foreign_object.LocalSVGTransform());
@@ -131,8 +133,9 @@ TEST_F(LayoutSVGForeignObjectTest, IframeInForeignObject) {
   for (auto result : results) {
     Node* node = result.Get();
     if (node == svg || node == div.GetNode() || node == foreign ||
-        node == iframe)
+        node == iframe) {
       count++;
+    }
   }
   EXPECT_EQ(4, count);
 }
@@ -148,10 +151,10 @@ TEST_F(LayoutSVGForeignObjectTest, HitTestZoomedForeignObject) {
     </svg>
   )HTML");
 
-  const auto& svg = *GetDocument().getElementById("svg");
-  const auto& foreign = *GetDocument().getElementById("foreign");
+  const auto& svg = *GetDocument().getElementById(AtomicString("svg"));
+  const auto& foreign = *GetDocument().getElementById(AtomicString("foreign"));
   const auto& foreign_object = *GetLayoutObjectByElementId("foreign");
-  const auto& div = *GetDocument().getElementById("div");
+  const auto& div = *GetDocument().getElementById(AtomicString("div"));
 
   EXPECT_EQ(gfx::RectF(10, 10, 100, 150), foreign_object.ObjectBoundingBox());
   EXPECT_EQ(AffineTransform(), foreign_object.LocalSVGTransform());
@@ -196,8 +199,9 @@ TEST_F(LayoutSVGForeignObjectTest, HitTestZoomedForeignObject) {
   EXPECT_EQ(3u, results.size());
   for (auto result : results) {
     Node* node = result.Get();
-    if (node == svg || node == &div || node == foreign)
+    if (node == svg || node == &div || node == foreign) {
       count++;
+    }
   }
   EXPECT_EQ(3, count);
 }
@@ -212,9 +216,9 @@ TEST_F(LayoutSVGForeignObjectTest, HitTestViewBoxForeignObject) {
     </svg>
   )HTML");
 
-  const auto& svg = *GetDocument().getElementById("svg");
-  const auto& foreign = *GetDocument().getElementById("foreign");
-  const auto& div = *GetDocument().getElementById("div");
+  const auto& svg = *GetDocument().getElementById(AtomicString("svg"));
+  const auto& foreign = *GetDocument().getElementById(AtomicString("foreign"));
+  const auto& div = *GetDocument().getElementById(AtomicString("div"));
 
   // LocalToAncestorPoint
   EXPECT_EQ(
@@ -258,8 +262,9 @@ TEST_F(LayoutSVGForeignObjectTest, HitTestUnderClipPath) {
     </svg>
   )HTML");
 
-  const auto& svg = *GetDocument().getElementById("svg");
-  const auto& foreignObject = *GetDocument().getElementById("foreignObject");
+  const auto& svg = *GetDocument().getElementById(AtomicString("svg"));
+  const auto& foreignObject =
+      *GetDocument().getElementById(AtomicString("foreignObject"));
 
   // The fist and the third return |svg| because the circle clip-path
   // clips out the foreignObject.
@@ -285,9 +290,10 @@ TEST_F(LayoutSVGForeignObjectTest,
     </svg>
   )HTML");
 
-  const auto& svg = *GetDocument().getElementById("svg");
-  const auto& target = *GetDocument().getElementById("target");
-  const auto& foreignObject = *GetDocument().getElementById("foreignObject");
+  const auto& svg = *GetDocument().getElementById(AtomicString("svg"));
+  const auto& target = *GetDocument().getElementById(AtomicString("target"));
+  const auto& foreignObject =
+      *GetDocument().getElementById(AtomicString("foreignObject"));
 
   EXPECT_EQ(svg, GetDocument().ElementFromPoint(1, 1));
   EXPECT_EQ(foreignObject, GetDocument().ElementFromPoint(201, 201));
@@ -319,9 +325,10 @@ TEST_F(LayoutSVGForeignObjectTest,
     </svg>
   )HTML");
 
-  const auto& svg = *GetDocument().getElementById("svg");
-  const auto& target = *GetDocument().getElementById("target");
-  const auto& foreign_object = *GetDocument().getElementById("foreignObject");
+  const auto& svg = *GetDocument().getElementById(AtomicString("svg"));
+  const auto& target = *GetDocument().getElementById(AtomicString("target"));
+  const auto& foreign_object =
+      *GetDocument().getElementById(AtomicString("foreignObject"));
 
   EXPECT_EQ(svg, GetDocument().ElementFromPoint(1, 1));
   EXPECT_EQ(foreign_object, GetDocument().ElementFromPoint(231, 201));
@@ -353,8 +360,8 @@ TEST_F(LayoutSVGForeignObjectTest, HitTestUnderScrollingAncestor) {
     </div>
   )HTML");
 
-  auto& scroller = *GetDocument().getElementById("scroller");
-  const auto& target = *GetDocument().getElementById("target");
+  auto& scroller = *GetDocument().getElementById(AtomicString("scroller"));
+  const auto& target = *GetDocument().getElementById(AtomicString("target"));
 
   EXPECT_EQ(target, GetDocument().ElementFromPoint(450, 450));
 
@@ -389,10 +396,10 @@ TEST_F(LayoutSVGForeignObjectTest, BBoxPropagationZoomed) {
   ASSERT_EQ(target.StyleRef().EffectiveZoom(), 2);
 
   EXPECT_EQ(target.ObjectBoundingBox(), gfx::RectF(6, 5, 100, 50));
-  EXPECT_EQ(target.StrokeBoundingBox(), gfx::RectF(12, 10, 200, 100));
+  EXPECT_EQ(target.DecoratedBoundingBox(), gfx::RectF(12, 10, 200, 100));
   const auto& parent_g = *target.Parent();
   EXPECT_EQ(parent_g.ObjectBoundingBox(), gfx::RectF(6, 5, 100, 50));
-  EXPECT_EQ(parent_g.StrokeBoundingBox(), gfx::RectF(6, 5, 100, 50));
+  EXPECT_EQ(parent_g.DecoratedBoundingBox(), gfx::RectF(6, 5, 100, 50));
 }
 
 // crbug.com/1335655
@@ -402,9 +409,112 @@ TEST_F(LayoutSVGForeignObjectTest, SetNeedsCollectInlines) {
   UpdateAllLifecyclePhasesForTest();
 
   auto* target = GetElementById("target");
-  target->setAttribute("unicode-bidi", "bidi-override");
+  target->setAttribute(svg_names::kUnicodeBidiAttr,
+                       AtomicString("bidi-override"));
   GetDocument().body()->innerText();
   // Pass if no crash.
+}
+
+// crbug.com/1372886
+TEST_F(LayoutSVGForeignObjectTest, SubtreeLayoutCrash) {
+  SetBodyInnerHTML(R"HTML(
+<svg style="position:absolute;">
+  <svg></svg>
+  <foreignObject>
+    <div id="in-foreign"></div>
+  </foreignObject>
+</svg>
+<div></div>
+<span></span>
+<div id="sibling-div"></div>
+<svg><pattern id="pat"></pattern>
+</svg>)HTML");
+  UpdateAllLifecyclePhasesForTest();
+  GetElementById("in-foreign")
+      ->setAttribute(svg_names::kStyleAttr,
+                     AtomicString("display: inline-block"));
+  UpdateAllLifecyclePhasesForTest();
+  GetElementById("pat")->setAttribute(svg_names::kViewBoxAttr,
+                                      AtomicString("972 815 1088 675"));
+  UpdateAllLifecyclePhasesForTest();
+  GetElementById("sibling-div")
+      ->setAttribute(svg_names::kStyleAttr, AtomicString("display: none"));
+  UpdateAllLifecyclePhasesForTest();
+  // Pass if no crashes.
+}
+
+TEST_F(LayoutSVGForeignObjectTest, ZoomChangesInvalidatePaintProperties) {
+  SetBodyInnerHTML(R"HTML(
+    <style> body { margin: 0; } </style>
+    <svg id="svg" xmlns="http://www.w3.org/2000/svg" width="100px"
+        height="100px" viewBox="-1 -1 100 100">
+      <foreignObject id="foreign" xmlns="http://www.w3.org/2000/svg"
+          width="100px" height="100px" style="overflow: visible;" />
+    </svg>
+  )HTML");
+  UpdateAllLifecyclePhasesForTest();
+
+  // Initially, the svg replaced contents transform should have no scale, and
+  // there should be no foreign object transform paint property.
+  LayoutObject* svg = GetLayoutObjectByElementId("svg");
+  const TransformPaintPropertyNode* svg_replaced_contents =
+      svg->FirstFragment().PaintProperties()->ReplacedContentTransform();
+  EXPECT_EQ(gfx::Vector2dF(1, 1), svg_replaced_contents->Get2dTranslation());
+  LayoutObject* foreign = GetLayoutObjectByElementId("foreign");
+  EXPECT_FALSE(foreign->FirstFragment().PaintProperties());
+
+  // Update zoom and ensure the foreign object is marked as needing a paint
+  // property update prior to updating paint properties.
+  GetDocument().documentElement()->setAttribute(svg_names::kStyleAttr,
+                                                AtomicString("zoom: 2"));
+  GetDocument().View()->UpdateLifecycleToLayoutClean(
+      DocumentUpdateReason::kTest);
+  EXPECT_TRUE(foreign->NeedsPaintPropertyUpdate());
+
+  UpdateAllLifecyclePhasesForTest();
+
+  // The svg replaced contents transform should contain the zoom, but the
+  // foreign object's transform should unapply it.
+  EXPECT_EQ(gfx::Vector2dF(2, 2), svg_replaced_contents->Matrix().To2dScale());
+  const TransformPaintPropertyNode* foreign_transform =
+      foreign->FirstFragment().PaintProperties()->Transform();
+  EXPECT_EQ(gfx::Vector2dF(0.5, 0.5), foreign_transform->Matrix().To2dScale());
+}
+
+TEST_F(LayoutSVGForeignObjectTest, DisplayLocked) {
+  GetDocument().body()->setInnerHTML(R"HTML(<style>
+foreignObject {
+  content-visibility: auto;
+}
+</style>
+<div style="height:300vh"></div>
+<svg>
+<foreignObject id="foreign">
+<body xmlns="http://www.w3.org/1999/xhtml"></body>
+</foreignObject>
+</svg>)HTML");
+  GetDocument().UpdateStyleAndLayoutTree();
+  GetLayoutBoxByElementId("foreign")->SetChildNeedsLayout();
+  UpdateAllLifecyclePhasesForTest();
+  // Pass if no DCHECK failures.
+}
+
+TEST_F(LayoutSVGForeignObjectTest, LocalToAncestorPoint) {
+  SetBodyInnerHTML(R"HTML(
+<style>body { margin:0; }</style>
+<div style="height:3px"></div>
+<svg width="200" height="100">
+<foreignObject id="foreign" width="200" height="100">
+<body xmlns="http://www.w3.org/1999/xhtml">
+<div style="height:17px"></div>
+<div id="target">b</div>
+</body>
+</foreignObject>
+</svg>)HTML");
+  LayoutObject* target = GetLayoutObjectByElementId("target");
+  LayoutBox* foreign = GetLayoutBoxByElementId("foreign");
+  EXPECT_NE(target->LocalToAbsolutePoint(PhysicalOffset()),
+            target->LocalToAncestorPoint(PhysicalOffset(), foreign));
 }
 
 }  // namespace blink

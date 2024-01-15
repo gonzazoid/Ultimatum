@@ -4,93 +4,25 @@
 
 #include "content/browser/direct_sockets/direct_sockets_test_utils.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
-#include "base/notreached.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/test_future.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/types/optional_util.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/web_contents_tester.h"
+#include "net/dns/host_resolver.h"
+#include "services/network/public/mojom/clear_data_filter.mojom.h"
+#include "services/network/public/mojom/udp_socket.mojom.h"
 #include "third_party/blink/public/common/permissions_policy/origin_with_possible_wildcards.h"
+#include "url/origin.h"
 
 namespace content::test {
-
-// MockHostResolver implementation
-
-MockHostResolver::MockHostResolver(
-    mojo::PendingReceiver<network::mojom::HostResolver> resolver_receiver,
-    net::HostResolver* internal_resolver)
-    : receiver_(this), internal_resolver_(internal_resolver) {
-  receiver_.Bind(std::move(resolver_receiver));
-}
-
-MockHostResolver::~MockHostResolver() = default;
-
-void MockHostResolver::ResolveHost(
-    network::mojom::HostResolverHostPtr host,
-    const ::net::NetworkAnonymizationKey& network_anonymization_key,
-    network::mojom::ResolveHostParametersPtr optional_parameters,
-    ::mojo::PendingRemote<network::mojom::ResolveHostClient>
-        pending_response_client) {
-  DCHECK(!internal_request_);
-  DCHECK(!response_client_.is_bound());
-
-  internal_request_ =
-      host->is_host_port_pair()
-          ? internal_resolver_->CreateRequest(
-                host->get_host_port_pair(), network_anonymization_key,
-                net::NetLogWithSource::Make(net::NetLog::Get(),
-                                            net::NetLogSourceType::NONE),
-                absl::nullopt)
-          : internal_resolver_->CreateRequest(
-                host->get_scheme_host_port(), network_anonymization_key,
-                net::NetLogWithSource::Make(net::NetLog::Get(),
-                                            net::NetLogSourceType::NONE),
-                absl::nullopt);
-
-  mojo::Remote<network::mojom::ResolveHostClient> response_client(
-      std::move(pending_response_client));
-
-  int rv = internal_request_->Start(
-      base::BindOnce(&MockHostResolver::OnComplete, base::Unretained(this)));
-  if (rv != net::ERR_IO_PENDING) {
-    response_client->OnComplete(
-        rv, internal_request_->GetResolveErrorInfo(),
-        base::OptionalFromPtr(internal_request_->GetAddressResults()),
-        /*endpoint_results_with_metadata=*/absl::nullopt);
-    return;
-  }
-
-  response_client_ = std::move(response_client);
-}
-
-void MockHostResolver::MdnsListen(
-    const ::net::HostPortPair& host,
-    ::net::DnsQueryType query_type,
-    ::mojo::PendingRemote<network::mojom::MdnsListenClient> response_client,
-    MdnsListenCallback callback) {
-  NOTIMPLEMENTED();
-}
-
-void MockHostResolver::OnComplete(int error) {
-  DCHECK(response_client_.is_bound());
-  DCHECK(internal_request_);
-
-  response_client_->OnComplete(
-      error, internal_request_->GetResolveErrorInfo(),
-      base::OptionalFromPtr(internal_request_->GetAddressResults()),
-      /*endpoint_results_with_metadata=*/absl::nullopt);
-  response_client_.reset();
-}
 
 // MockUDPSocket implementation
 
 MockUDPSocket::MockUDPSocket(
-    mojo::PendingReceiver<network::mojom::UDPSocket> receiver,
     mojo::PendingRemote<network::mojom::UDPSocketListener> listener) {
-  receiver_.Bind(std::move(receiver));
   listener_.Bind(std::move(listener));
 }
 
@@ -103,7 +35,7 @@ MockUDPSocket::~MockUDPSocket() {
 void MockUDPSocket::Connect(const net::IPEndPoint& remote_addr,
                             network::mojom::UDPSocketOptionsPtr socket_options,
                             ConnectCallback callback) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), net::OK,
                      net::IPEndPoint{net::IPAddress::IPv4Localhost(), 0}));
@@ -118,39 +50,59 @@ void MockUDPSocket::Send(
   if (additional_send_callback_) {
     std::move(additional_send_callback_).Run();
   }
+  if (next_send_result_) {
+    std::move(callback_).Run(*next_send_result_);
+    next_send_result_.reset();
+  }
 }
 
 void MockUDPSocket::MockSend(int32_t result,
-                             const absl::optional<base::span<uint8_t>>& data) {
+                             const std::optional<base::span<uint8_t>>& data) {
   listener_->OnReceived(result, {}, data);
 }
 
+MockRestrictedUDPSocket::MockRestrictedUDPSocket(
+    std::unique_ptr<network::TestUDPSocket> udp_socket,
+    mojo::PendingReceiver<network::mojom::RestrictedUDPSocket> receiver)
+    : network::TestRestrictedUDPSocket(std::move(udp_socket)),
+      receiver_(this, std::move(receiver)) {}
+
+MockRestrictedUDPSocket::~MockRestrictedUDPSocket() = default;
+
 // MockNetworkContext implementation
 
-MockNetworkContext::MockNetworkContext() = default;
+MockNetworkContext::MockNetworkContext()
+    : MockNetworkContext(/*host_mapping_rules=*/"") {}
+
+MockNetworkContext::MockNetworkContext(base::StringPiece host_mapping_rules)
+    : network::TestNetworkContextWithHostResolver(
+          net::HostResolver::CreateStandaloneResolver(
+              net::NetLog::Get(),
+              /*options=*/std::nullopt,
+              host_mapping_rules,
+              /*enable_caching=*/false)) {}
+
 MockNetworkContext::~MockNetworkContext() = default;
 
-void MockNetworkContext::CreateUDPSocket(
-    mojo::PendingReceiver<network::mojom::UDPSocket> receiver,
-    mojo::PendingRemote<network::mojom::UDPSocketListener> listener) {
-  socket_ = CreateMockUDPSocket(std::move(receiver), std::move(listener));
-}
-
-void MockNetworkContext::CreateHostResolver(
-    const absl::optional<net::DnsConfigOverrides>& config_overrides,
-    mojo::PendingReceiver<network::mojom::HostResolver> receiver) {
-  internal_resolver_ = net::HostResolver::CreateStandaloneResolver(
-      net::NetLog::Get(), /*options=*/absl::nullopt, host_mapping_rules_,
-      /*enable_caching=*/false);
-  host_resolver_ = std::make_unique<MockHostResolver>(std::move(receiver),
-                                                      internal_resolver_.get());
+void MockNetworkContext::CreateRestrictedUDPSocket(
+    const net::IPEndPoint& addr,
+    network::mojom::RestrictedUDPSocketMode mode,
+    const net::MutableNetworkTrafficAnnotationTag& traffic_annotation,
+    network::mojom::RestrictedUDPSocketParamsPtr params,
+    mojo::PendingReceiver<network::mojom::RestrictedUDPSocket> receiver,
+    mojo::PendingRemote<network::mojom::UDPSocketListener> listener,
+    CreateRestrictedUDPSocketCallback callback) {
+  auto socket = CreateMockUDPSocket(std::move(listener));
+  DCHECK_EQ(mode, network::mojom::RestrictedUDPSocketMode::CONNECTED);
+  socket->Connect(addr, params ? std::move(params->socket_options) : nullptr,
+                  std::move(callback));
+  restricted_udp_socket_ = std::make_unique<MockRestrictedUDPSocket>(
+      std::move(socket), std::move(receiver));
 }
 
 std::unique_ptr<MockUDPSocket> MockNetworkContext::CreateMockUDPSocket(
-    mojo::PendingReceiver<network::mojom::UDPSocket> receiver,
     mojo::PendingRemote<network::mojom::UDPSocketListener> listener) {
-  return std::make_unique<MockUDPSocket>(std::move(receiver),
-                                         std::move(listener));
+  return std::make_unique<MockUDPSocket>(std::move(listener));
 }
 
 // AsyncJsRunner implementation
@@ -206,25 +158,32 @@ std::string AsyncJsRunner::MakeScriptSendResultToDomQueue(
       script.c_str(), token_.ToString().c_str()));
 }
 
+IsolatedWebAppContentBrowserClient::IsolatedWebAppContentBrowserClient(
+    const url::Origin& isolated_app_origin)
+    : isolated_app_origin_(isolated_app_origin) {}
+
 bool IsolatedWebAppContentBrowserClient::ShouldUrlUseApplicationIsolationLevel(
     BrowserContext* browser_context,
     const GURL& url) {
-  return true;
+  return isolated_app_origin_ == url::Origin::Create(url);
 }
 
-absl::optional<blink::ParsedPermissionsPolicy>
+std::optional<blink::ParsedPermissionsPolicy>
 IsolatedWebAppContentBrowserClient::GetPermissionsPolicyForIsolatedWebApp(
     content::BrowserContext* browser_context,
     const url::Origin& app_origin) {
-  blink::ParsedPermissionsPolicy out;
-  blink::ParsedPermissionsPolicyDeclaration decl(
+  blink::ParsedPermissionsPolicyDeclaration coi_decl(
+      blink::mojom::PermissionsPolicyFeature::kCrossOriginIsolated,
+      /*allowed_origins=*/{},
+      /*self_if_matches=*/std::nullopt,
+      /*matches_all_origins=*/true, /*matches_opaque_src=*/false);
+
+  blink::ParsedPermissionsPolicyDeclaration sockets_decl(
       blink::mojom::PermissionsPolicyFeature::kDirectSockets,
-      /*allowed_origins=*/
-      {blink::OriginWithPossibleWildcards(app_origin,
-                                          /*has_subdomain_wildcard=*/false)},
+      /*allowed_origins=*/{},
+      /*self_if_matches=*/app_origin,
       /*matches_all_origins=*/false, /*matches_opaque_src=*/false);
-  out.push_back(decl);
-  return out;
+  return {{coi_decl, sockets_decl}};
 }
 
 // misc

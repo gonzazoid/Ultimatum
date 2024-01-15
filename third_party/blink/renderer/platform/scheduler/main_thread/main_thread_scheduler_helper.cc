@@ -4,6 +4,8 @@
 
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_helper.h"
 
+#include "base/task/single_thread_task_runner.h"
+#include "third_party/blink/renderer/platform/scheduler/common/task_priority.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_task_queue.h"
 
 namespace blink {
@@ -24,7 +26,7 @@ MainThreadSchedulerHelper::MainThreadSchedulerHelper(
           NewTaskQueue(MainThreadTaskQueue::QueueCreationParams(
                            MainThreadTaskQueue::QueueType::kControl)
                            .SetShouldNotifyObservers(false))) {
-  control_task_queue_->SetQueuePriority(TaskQueue::kControlPriority);
+  control_task_queue_->SetQueuePriority(TaskPriority::kControlPriority);
   InitDefaultTaskRunner(default_task_queue_->CreateTaskRunner(
       TaskType::kMainThreadTaskQueueDefault));
 
@@ -60,10 +62,8 @@ MainThreadSchedulerHelper::DeprecatedDefaultTaskRunner() {
 
 scoped_refptr<MainThreadTaskQueue> MainThreadSchedulerHelper::NewTaskQueue(
     const MainThreadTaskQueue::QueueCreationParams& params) {
-  scoped_refptr<MainThreadTaskQueue> task_queue =
-      sequence_manager_->CreateTaskQueueWithType<MainThreadTaskQueue>(
-          params.spec, params, main_thread_scheduler_);
-  return task_queue;
+  return base::MakeRefCounted<MainThreadTaskQueue>(
+      *sequence_manager_, params.spec, params, main_thread_scheduler_);
 }
 
 void MainThreadSchedulerHelper::ShutdownAllQueues() {

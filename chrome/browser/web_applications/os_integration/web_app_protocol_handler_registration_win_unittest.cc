@@ -15,7 +15,6 @@
 #include "base/test/bind.h"
 #include "base/test/test_reg_util_win.h"
 #include "base/win/registry.h"
-#include "base/win/windows_version.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -50,6 +49,7 @@ class WebAppProtocolHandlerRegistrationWinTest : public testing::Test {
   WebAppProtocolHandlerRegistrationWinTest() {}
 
   void SetUp() override {
+    registry_override_manager_.OverrideRegistry(HKEY_CURRENT_USER);
     testing_profile_manager_ = std::make_unique<TestingProfileManager>(
         TestingBrowserProcess::GetGlobal());
     ASSERT_TRUE(testing_profile_manager_->SetUp());
@@ -73,7 +73,7 @@ class WebAppProtocolHandlerRegistrationWinTest : public testing::Test {
   // Ensures that URLAssociations entries are created for a given protocol.
   // "HKEY_CURRENT_USER\Software\<prog_id>\Capabilities\URLAssociations\<protocol>".
   bool ProgIdRegisteredForProtocol(const std::string& protocol,
-                                   const AppId& app_id,
+                                   const webapps::AppId& app_id,
                                    Profile* profile) {
     std::wstring prog_id = GetProgIdForApp(profile->GetPath(), app_id);
 
@@ -97,7 +97,7 @@ class WebAppProtocolHandlerRegistrationWinTest : public testing::Test {
     return association_exists && entry_matches;
   }
 
-  void AddAndVerifyProtocolAssociations(const AppId& app_id,
+  void AddAndVerifyProtocolAssociations(const webapps::AppId& app_id,
                                         const std::string& app_name,
                                         const std::string& app_url,
                                         Profile* profile,
@@ -117,7 +117,7 @@ class WebAppProtocolHandlerRegistrationWinTest : public testing::Test {
 
     base::RunLoop run_loop;
     RegisterProtocolHandlersWithOs(
-        app_id, app_name, profile, {handler1_info, handler2_info},
+        app_id, app_name, profile->GetPath(), {handler1_info, handler2_info},
         base::BindLambdaForTesting([&](Result result) {
           EXPECT_EQ(Result::kOk, result);
           run_loop.Quit();
@@ -150,7 +150,7 @@ class WebAppProtocolHandlerRegistrationWinTest : public testing::Test {
   // Returns the expected app launcher path inside the subdirectory for
   // |app_id|.
   base::FilePath GetLauncherPathForApp(Profile* profile,
-                                       const AppId app_id,
+                                       const webapps::AppId app_id,
                                        const std::string& sanitized_app_name) {
     base::FilePath web_app_dir(GetOsIntegrationResourcesDirectoryForApp(
         profile->GetPath(), app_id, GURL()));
@@ -164,24 +164,18 @@ class WebAppProtocolHandlerRegistrationWinTest : public testing::Test {
   content::BrowserTaskEnvironment task_environment_{
       content::BrowserTaskEnvironment::IO_MAINLOOP};
   std::unique_ptr<TestingProfileManager> testing_profile_manager_;
-  raw_ptr<TestingProfile> profile_;
+  raw_ptr<TestingProfile> profile_ = nullptr;
+  registry_util::RegistryOverrideManager registry_override_manager_;
 };
 
 TEST_F(WebAppProtocolHandlerRegistrationWinTest,
        AddAndVerifyProtocolAssociations) {
-  // App protocol handlers are not supported on Windows 7.
-  if (base::win::GetVersion() <= base::win::Version::WIN7)
-    return;
   AddAndVerifyProtocolAssociations(kApp1Id, kApp1Name, kApp1Url, GetProfile(),
                                    "");
 }
 
 TEST_F(WebAppProtocolHandlerRegistrationWinTest,
        RegisterMultipleHandlersWithSameScheme) {
-  // App protocol handlers are not supported on Windows 7.
-  if (base::win::GetVersion() <= base::win::Version::WIN7)
-    return;
-
   AddAndVerifyProtocolAssociations(kApp1Id, kApp1Name, kApp1Url, GetProfile(),
                                    "");
   AddAndVerifyProtocolAssociations(kApp2Id, kApp2Name, kApp2Url, GetProfile(),
@@ -193,10 +187,6 @@ TEST_F(WebAppProtocolHandlerRegistrationWinTest,
 // the profile name, e.g., "app name (Default)" and "app name (Profile 2)".
 TEST_F(WebAppProtocolHandlerRegistrationWinTest,
        RegisterProtocolHandlersForWebAppIn2Profiles) {
-  // App protocol handlers are not supported on Windows 7.
-  if (base::win::GetVersion() <= base::win::Version::WIN7)
-    return;
-
   AddAndVerifyProtocolAssociations(kApp1Id, kApp1Name, kApp1Url, GetProfile(),
                                    "");
 
@@ -237,10 +227,6 @@ TEST_F(WebAppProtocolHandlerRegistrationWinTest,
 // registered app name.
 TEST_F(WebAppProtocolHandlerRegistrationWinTest,
        UnRegisterProtocolHandlersForWebAppIn2Profiles) {
-  // App protocol handlers are not supported on Windows 7.
-  if (base::win::GetVersion() <= base::win::Version::WIN7)
-    return;
-
   AddAndVerifyProtocolAssociations(kApp1Id, kApp1Name, kApp1Url, GetProfile(),
                                    "");
   base::FilePath app_specific_launcher_path =
@@ -257,7 +243,8 @@ TEST_F(WebAppProtocolHandlerRegistrationWinTest,
 
   base::RunLoop run_loop;
   UnregisterProtocolHandlersWithOs(
-      kApp1Id, GetProfile(), base::BindLambdaForTesting([&](Result result) {
+      kApp1Id, GetProfile()->GetPath(),
+      base::BindLambdaForTesting([&](Result result) {
         EXPECT_EQ(Result::kOk, result);
         run_loop.Quit();
       }));
@@ -293,10 +280,6 @@ TEST_F(WebAppProtocolHandlerRegistrationWinTest,
 // registry settings and the app-specific launcher.
 TEST_F(WebAppProtocolHandlerRegistrationWinTest,
        UnregisterProtocolHandlersForWebApp) {
-  // App protocol handlers are not supported on Windows 7.
-  if (base::win::GetVersion() <= base::win::Version::WIN7)
-    return;
-
   AddAndVerifyProtocolAssociations(kApp1Id, kApp1Name, kApp1Url, GetProfile(),
                                    "");
   base::FilePath app_specific_launcher_path =
@@ -305,7 +288,8 @@ TEST_F(WebAppProtocolHandlerRegistrationWinTest,
 
   base::RunLoop run_loop;
   UnregisterProtocolHandlersWithOs(
-      kApp1Id, GetProfile(), base::BindLambdaForTesting([&](Result result) {
+      kApp1Id, GetProfile()->GetPath(),
+      base::BindLambdaForTesting([&](Result result) {
         EXPECT_EQ(Result::kOk, result);
         run_loop.Quit();
       }));

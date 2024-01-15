@@ -34,15 +34,15 @@ class ONCPolicyValueValidatorBase : public PolicyValueValidator<PayloadProto> {
   bool ValidateValues(
       const PayloadProto& policy_payload,
       std::vector<ValueValidationIssue>* out_validation_issues) const override {
-    absl::optional<std::string> onc_string =
+    std::optional<std::string> onc_string =
         GetONCStringFromPayload(policy_payload);
 
     if (!onc_string.has_value())
       return true;
 
-    base::Value root_dict =
+    std::optional<base::Value::Dict> root_dict =
         chromeos::onc::ReadDictionaryFromJson(onc_string.value());
-    if (!root_dict.is_dict()) {
+    if (!root_dict.has_value()) {
       out_validation_issues->push_back({policy_name_,
                                         ValueValidationIssue::Severity::kError,
                                         "JSON parse error."});
@@ -50,15 +50,15 @@ class ONCPolicyValueValidatorBase : public PolicyValueValidator<PayloadProto> {
     }
 
     chromeos::onc::Validator validator(
-        false,  // Ignore unknown fields.
-        false,  // Ignore invalid recommended field names.
-        true,   // Fail on missing fields.
-        true,   // Validate for managed ONC.
-        true);  // Log warnings.
+        /*error_on_unknown_field=*/false,
+        /*error_on_wrong_recommended=*/false,
+        /*error_on_missing_field=*/true,
+        /*managed_onc=*/true,
+        /*log_warnings=*/true);
     validator.SetOncSource(source_);
     chromeos::onc::Validator::Result validation_result;
     validator.ValidateAndRepairObject(
-        &chromeos::onc::kToplevelConfigurationSignature, root_dict,
+        &chromeos::onc::kToplevelConfigurationSignature, root_dict.value(),
         &validation_result);
 
     bool error_found = false;
@@ -74,7 +74,7 @@ class ONCPolicyValueValidatorBase : public PolicyValueValidator<PayloadProto> {
   }
 
  protected:
-  virtual absl::optional<std::string> GetONCStringFromPayload(
+  virtual std::optional<std::string> GetONCStringFromPayload(
       const PayloadProto& policy_payload) const = 0;
 
  private:

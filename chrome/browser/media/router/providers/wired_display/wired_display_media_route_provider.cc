@@ -8,9 +8,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/i18n/number_formatting.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
@@ -51,10 +51,12 @@ MediaSinkInternal CreateSinkForDisplay(const Display& display,
 bool CompareDisplays(int64_t primary_id,
                      const Display& display1,
                      const Display& display2) {
-  if (display1.id() == primary_id)
-    return true;
-  if (display2.id() == primary_id)
+  if (display2.id() == primary_id) {
     return false;
+  }
+  if (display1.id() == primary_id) {
+    return true;
+  }
   return display1.bounds().y() < display2.bounds().y() ||
          (display1.bounds().y() == display2.bounds().y() &&
           display1.bounds().x() < display2.bounds().x());
@@ -97,7 +99,6 @@ void WiredDisplayMediaRouteProvider::CreateRoute(
     const url::Origin& origin,
     int32_t frame_tree_node_id,
     base::TimeDelta timeout,
-    bool off_the_record,
     CreateRouteCallback callback) {
   DCHECK(!base::Contains(presentations_, presentation_id));
   absl::optional<Display> display = GetDisplayBySinkId(sink_id);
@@ -115,7 +116,6 @@ void WiredDisplayMediaRouteProvider::CreateRoute(
   MediaRoute route(presentation_id, MediaSource(media_source), sink_id,
                    GetRouteDescription(media_source), true);
   route.set_local_presentation(true);
-  route.set_off_the_record(profile_->IsOffTheRecord());
   route.set_controller_type(RouteControllerType::kGeneric);
 
   Presentation& presentation =
@@ -134,7 +134,6 @@ void WiredDisplayMediaRouteProvider::JoinRoute(
     const url::Origin& origin,
     int32_t frame_tree_node_id,
     base::TimeDelta timeout,
-    bool off_the_record,
     JoinRouteCallback callback) {
   std::move(callback).Run(
       absl::nullopt, nullptr,
@@ -181,7 +180,7 @@ void WiredDisplayMediaRouteProvider::StartObservingMediaSinks(
   if (!display_observer_)
     display_observer_.emplace(this);
   sink_queries_.insert(media_source);
-  UpdateMediaSinks(media_source);
+  DiscoverSinksNow();
 }
 
 void WiredDisplayMediaRouteProvider::StopObservingMediaSinks(
@@ -197,16 +196,6 @@ void WiredDisplayMediaRouteProvider::StartObservingMediaRoutes() {
   media_router_->OnRoutesUpdated(kProviderId, route_list);
 }
 
-void WiredDisplayMediaRouteProvider::StartListeningForRouteMessages(
-    const std::string& route_id) {
-  // Messages should be handled by LocalPresentationManager.
-}
-
-void WiredDisplayMediaRouteProvider::StopListeningForRouteMessages(
-    const std::string& route_id) {
-  // Messages should be handled by LocalPresentationManager.
-}
-
 void WiredDisplayMediaRouteProvider::DetachRoute(const std::string& route_id) {
   // Detaching should be handled by LocalPresentationManager.
   NOTREACHED();
@@ -214,17 +203,15 @@ void WiredDisplayMediaRouteProvider::DetachRoute(const std::string& route_id) {
 
 void WiredDisplayMediaRouteProvider::EnableMdnsDiscovery() {}
 
-void WiredDisplayMediaRouteProvider::UpdateMediaSinks(
-    const std::string& media_source) {
-  if (IsValidStandardPresentationSource(media_source))
-    media_router_->OnSinksReceived(kProviderId, media_source, GetSinks(), {});
+void WiredDisplayMediaRouteProvider::DiscoverSinksNow() {
+  NotifySinkObservers();
 }
 
-void WiredDisplayMediaRouteProvider::CreateMediaRouteController(
+void WiredDisplayMediaRouteProvider::BindMediaController(
     const std::string& route_id,
     mojo::PendingReceiver<mojom::MediaController> media_controller,
     mojo::PendingRemote<mojom::MediaStatusObserver> observer,
-    CreateMediaRouteControllerCallback callback) {
+    BindMediaControllerCallback callback) {
   // Local screens do not support media controls.
   auto it = presentations_.find(route_id);
   if (it == presentations_.end()) {
@@ -239,10 +226,6 @@ void WiredDisplayMediaRouteProvider::CreateMediaRouteController(
 void WiredDisplayMediaRouteProvider::GetState(GetStateCallback callback) {
   NOTIMPLEMENTED();
   std::move(callback).Run(mojom::ProviderStatePtr());
-}
-
-void WiredDisplayMediaRouteProvider::OnDidProcessDisplayChanges() {
-  NotifySinkObservers();
 }
 
 void WiredDisplayMediaRouteProvider::OnDisplayAdded(

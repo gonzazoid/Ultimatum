@@ -6,6 +6,8 @@
 
 #include <utility>
 
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream.h"
 #include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -58,7 +60,7 @@ scoped_refptr<WebMediaStreamVideoRenderer>
 MediaStreamRendererFactory::GetVideoRenderer(
     const WebMediaStream& web_stream,
     const WebMediaStreamVideoRenderer::RepaintCB& repaint_cb,
-    scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
+    scoped_refptr<base::SequencedTaskRunner> video_task_runner,
     scoped_refptr<base::SingleThreadTaskRunner> main_render_task_runner) {
   DCHECK(!web_stream.IsNull());
 
@@ -74,7 +76,7 @@ MediaStreamRendererFactory::GetVideoRenderer(
   }
 
   return new MediaStreamVideoRendererSink(video_components[0].Get(), repaint_cb,
-                                          std::move(io_task_runner),
+                                          std::move(video_task_runner),
                                           std::move(main_render_task_runner));
 }
 
@@ -134,7 +136,6 @@ MediaStreamRendererFactory::GetAudioRenderer(
         audio_track->is_local_track() ? "local" : "remote"));
 
     return new TrackAudioRenderer(audio_components[0].Get(), *frame,
-                                  /*session_id=*/base::UnguessableToken(),
                                   String(device_id),
                                   std::move(on_render_error_callback));
   }

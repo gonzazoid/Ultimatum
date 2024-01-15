@@ -5,7 +5,7 @@
 #ifndef IOS_CHROME_BROWSER_UI_HISTORY_HISTORY_TABLE_VIEW_CONTROLLER_H_
 #define IOS_CHROME_BROWSER_UI_HISTORY_HISTORY_TABLE_VIEW_CONTROLLER_H_
 
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_controller.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_controller.h"
 
 #include "ios/chrome/browser/ui/history/history_consumer.h"
 #import "ios/chrome/browser/ui/history/history_entry_item_delegate.h"
@@ -16,14 +16,14 @@ enum class UrlLoadStrategy;
 @class ActionSheetCoordinator;
 @protocol TableViewFaviconDataSource;
 @protocol HistoryMenuProvider;
-@protocol HistoryUIDelegate;
+@protocol HistoryTableViewControllerDelegate;
 @protocol HistoryPresentationDelegate;
 
-// ChromeTableViewController for displaying history items.
+// LegacyChromeTableViewController for displaying history items.
 @interface HistoryTableViewController
-    : ChromeTableViewController <HistoryConsumer,
-                                 HistoryEntryItemDelegate,
-                                 UIAdaptivePresentationControllerDelegate>
+    : LegacyChromeTableViewController <HistoryConsumer,
+                                       HistoryEntryItemDelegate,
+                                       UIAdaptivePresentationControllerDelegate>
 // The ViewController's Browser.
 @property(nonatomic, assign) Browser* browser;
 // Abstraction to communicate with HistoryService and WebHistoryService.
@@ -35,7 +35,7 @@ enum class UrlLoadStrategy;
 // `searchTerms` will be the initial value of the text in the search bar.
 @property(nonatomic, copy) NSString* searchTerms;
 // Delegate for this HistoryTableView.
-@property(nonatomic, weak) id<HistoryUIDelegate> delegate;
+@property(nonatomic, weak) id<HistoryTableViewControllerDelegate> delegate;
 // Delegate used to make the Tab UI visible.
 @property(nonatomic, weak) id<HistoryPresentationDelegate> presentationDelegate;
 // Data source for favicon images.
@@ -49,6 +49,10 @@ enum class UrlLoadStrategy;
 // Initializers.
 - (instancetype)init NS_DESIGNATED_INITIALIZER;
 - (instancetype)initWithStyle:(UITableViewStyle)style NS_UNAVAILABLE;
+
+// Call this when the view controller needs to be detech from browser
+// synchronously (in the case of a shutdown for example).
+- (void)detachFromBrowser;
 
 @end
 

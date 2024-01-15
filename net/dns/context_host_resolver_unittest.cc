@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/fixed_flat_map.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
@@ -104,7 +104,7 @@ class ContextHostResolverTest : public ::testing::Test,
         HostResolverSystemTask::Params(proc, 1u));
   }
 
-  raw_ptr<MockDnsClient> dns_client_;
+  raw_ptr<MockDnsClient, DanglingUntriaged> dns_client_;
   std::unique_ptr<HostResolverManager> manager_;
 };
 
@@ -700,8 +700,8 @@ TEST_F(ContextHostResolverTest, ResultsAddedToCache) {
 TEST_F(ContextHostResolverTest, ResultsAddedToCacheWithNetworkIsolationKey) {
   const SchemefulSite kSite(GURL("https://origin.test/"));
   const NetworkIsolationKey kNetworkIsolationKey(kSite, kSite);
-  const NetworkAnonymizationKey kNetworkAnonymizationKey(
-      kSite, kSite, /*is_cross_site=*/false);
+  auto kNetworkAnonymizationKey =
+      net::NetworkAnonymizationKey::CreateSameSite(kSite);
 
   base::test::ScopedFeatureList feature_list;
   feature_list.InitAndEnableFeature(

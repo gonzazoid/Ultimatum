@@ -5,16 +5,14 @@
 #ifndef UI_AURA_TEST_UI_CONTROLS_OZONE_H_
 #define UI_AURA_TEST_UI_CONTROLS_OZONE_H_
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/chromeos_buildflags.h"
 #include "ui/aura/env.h"
 #include "ui/aura/test/aura_test_utils.h"
 #include "ui/aura/test/env_test_helper.h"
-#include "ui/aura/test/ui_controls_factory_aura.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/test/ui_controls_aura.h"
 #include "ui/display/display.h"
@@ -35,19 +33,16 @@ class UIControlsOzone : public ui_controls::UIControlsAura {
 
  private:
   // ui_controls::UIControlsAura:
-  bool SendKeyPress(gfx::NativeWindow window,
-                    ui::KeyboardCode key,
-                    bool control,
-                    bool shift,
-                    bool alt,
-                    bool command) override;
-  bool SendKeyPressNotifyWhenDone(gfx::NativeWindow window,
-                                  ui::KeyboardCode key,
-                                  bool control,
-                                  bool shift,
-                                  bool alt,
-                                  bool command,
-                                  base::OnceClosure closure) override;
+  bool SendKeyEvents(gfx::NativeWindow window,
+                     ui::KeyboardCode key,
+                     int key_event_types,
+                     int accelerator_state) override;
+  bool SendKeyEventsNotifyWhenDone(gfx::NativeWindow window,
+                                   ui::KeyboardCode key,
+                                   int key_event_types,
+                                   base::OnceClosure closure,
+                                   int accelerator_state,
+                                   ui_controls::KeyEventType wait_for) override;
   bool SendMouseMove(int screen_x, int screen_y) override;
   bool SendMouseMoveNotifyWhenDone(int screen_x,
                                    int screen_y,
@@ -72,10 +67,17 @@ class UIControlsOzone : public ui_controls::UIControlsAura {
   // Use |optional_host| to specify the host.
   // When |optional_host| is not null, event will be sent to |optional_host|.
   // When |optional_host| is null, event will be sent to the default host.
+  //
+  // By default, the closure is posted at the beginning of this method. Set
+  // |post_task_after_dispatch| to true to post the closure at the end instead.
+  // This is useful for controlling the order of outbound Wayland messages.
+  // This should only be used if it is known that the event to be dispatched
+  // will not result in a nested message loop.
   void SendEventToSink(ui::Event* event,
                        int64_t display_id,
                        base::OnceClosure closure,
-                       WindowTreeHost* optional_host = nullptr);
+                       WindowTreeHost* optional_host = nullptr,
+                       bool post_task_after_dispatch = false);
 
   void PostKeyEvent(ui::EventType type,
                     ui::KeyboardCode key_code,

@@ -15,9 +15,10 @@
 #include "ash/keyboard/ui/test/test_keyboard_layout_delegate.h"
 #include "ash/keyboard/ui/test/test_keyboard_ui_factory.h"
 #include "ash/public/cpp/keyboard/keyboard_controller_observer.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
@@ -39,10 +40,6 @@
 #include "ui/compositor/test/layer_animator_test_controller.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/gfx/geometry/rect.h"
-
-#if defined(USE_OZONE)
-#include "ui/ozone/public/ozone_platform.h"
-#endif
 
 namespace keyboard {
 namespace {
@@ -86,7 +83,7 @@ class TestFocusController : public ui::EventHandler {
     }
   }
 
-  aura::Window* root_;
+  raw_ptr<aura::Window> root_;
 };
 
 class KeyboardContainerObserver : public aura::WindowObserver {
@@ -109,8 +106,8 @@ class KeyboardContainerObserver : public aura::WindowObserver {
       run_loop_->QuitWhenIdle();
   }
 
-  aura::Window* window_;
-  base::RunLoop* const run_loop_;
+  raw_ptr<aura::Window> window_;
+  const raw_ptr<base::RunLoop> run_loop_;
 };
 
 class SetModeCallbackInvocationCounter {
@@ -248,14 +245,7 @@ class KeyboardUIControllerTest : public aura::test::AuraTestBase,
             contents_window->IsVisible() && controller_.IsKeyboardVisible());
   }
 
-  void RunLoop(base::RunLoop* run_loop) {
-#if defined(USE_OZONE)
-    // TODO(crbug/776357): Figure out why the initializer randomly doesn't run
-    // for some tests. In the mean time, prevent flaky Ozone crash.
-    ui::OzonePlatform::InitializeForGPU(ui::OzonePlatform::InitParams());
-#endif
-    run_loop->Run();
-  }
+  void RunLoop(base::RunLoop* run_loop) { run_loop->Run(); }
 
   std::unique_ptr<TestFocusController> focus_controller_;
 
@@ -801,6 +791,10 @@ class MockKeyboardControllerObserver : public ash::KeyboardControllerObserver {
 
   // KeyboardControllerObserver:
   MOCK_METHOD(void, OnKeyboardEnabledChanged, (bool is_enabled), (override));
+  MOCK_METHOD(void,
+              OnKeyboardConfigChanged,
+              (const keyboard::KeyboardConfig& config),
+              (override));
 };
 
 TEST_F(KeyboardUIControllerTest, OnKeyboardEnabledChangedToEnabled) {
@@ -840,6 +834,24 @@ TEST_F(KeyboardUIControllerTest, OnKeyboardEnabledChangedToDisabled) {
   SetTouchKeyboardEnabled(false);
 
   controller().RemoveObserver(&mock_observer);
+}
+
+TEST_F(KeyboardUIControllerTest, OnFlagChangeObserverIsCalled) {
+  MockKeyboardControllerObserver mock_observer;
+  controller().AddObserver(&mock_observer);
+
+  EXPECT_CALL(mock_observer,
+              OnKeyboardConfigChanged(keyboard::KeyboardConfig()))
+      .WillOnce(testing::InvokeWithoutArgs([]() {
+        auto* controller = KeyboardUIController::Get();
+        ASSERT_TRUE(controller);
+        EXPECT_TRUE(controller->IsEnableFlagSet(
+            keyboard::KeyboardEnableFlag::kAccessibilityEnabled));
+      }));
+
+  controller().SetEnableFlag(KeyboardEnableFlag::kAccessibilityEnabled);
+  controller().RemoveObserver(&mock_observer);
+  controller().Shutdown();
 }
 
 }  // namespace keyboard

@@ -44,8 +44,14 @@ class CORE_EXPORT WorkerBackingThread final {
 
   v8::Isolate* GetIsolate() { return isolate_; }
 
+  void SetForegrounded();
+
   static void MemoryPressureNotificationToWorkerThreadIsolates(
       v8::MemoryPressureLevel);
+  static void IsolateInBackgroundNotificationToWorkerThreadIsolates();
+  static void IsolateInForegroundNotificationToWorkerThreadIsolates();
+  static void SetBatterySaverModeForWorkerThreadIsolates(
+      bool battery_saver_mode_enabled);
 
  private:
   std::unique_ptr<blink::NonMainThread> backing_thread_;

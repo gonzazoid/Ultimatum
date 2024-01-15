@@ -6,14 +6,15 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/web_applications/test/web_app_browsertest_util.h"
+#include "chrome/browser/ui/web_applications/web_app_controller_browsertest.h"
 #include "chrome/browser/web_applications/test/web_app_icon_waiter.h"
 #include "chrome/browser/web_applications/test/web_app_test_utils.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/url_formatter/url_formatter.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/common/alternative_error_page_override_info.mojom.h"
 #include "content/public/common/content_client.h"
 #include "content/public/test/browser_test.h"
@@ -25,11 +26,10 @@
 
 // Class to test browser error page display info.
 class AlternativeErrorPageOverrideInfoBrowserTest
-    : public InProcessBrowserTest {
+    : public web_app::WebAppControllerBrowserTest {
  public:
   AlternativeErrorPageOverrideInfoBrowserTest() {
-    feature_list_.InitWithFeatures({features::kPWAsDefaultOfflinePage,
-                                    blink::features::kWebAppEnableDarkMode},
+    feature_list_.InitWithFeatures({blink::features::kWebAppEnableDarkMode},
                                    {});
   }
 
@@ -41,7 +41,7 @@ class AlternativeErrorPageOverrideInfoBrowserTest
     content::ScopedContentBrowserClientSetting setting(&browser_client);
 
     const GURL app_url = embedded_test_server()->GetURL(html);
-    web_app::NavigateToURLAndWait(browser(), app_url);
+    web_app::NavigateViaLinkClickToURLAndWait(browser(), app_url);
     web_app::test::InstallPwaForCurrentUrl(browser());
     content::BrowserContext* context = browser()->profile();
 
@@ -60,11 +60,11 @@ class AlternativeErrorPageOverrideInfoBrowserTest
 
  private:
   void SetUpOnMainThread() override {
-    InProcessBrowserTest::SetUpOnMainThread();
+    WebAppControllerBrowserTest::SetUpOnMainThread();
   }
 
   void TearDownOnMainThread() override {
-    InProcessBrowserTest::TearDownOnMainThread();
+    WebAppControllerBrowserTest::TearDownOnMainThread();
   }
 
   base::test::ScopedFeatureList feature_list_;
@@ -140,7 +140,7 @@ IN_PROC_BROWSER_TEST_F(AlternativeErrorPageOverrideInfoBrowserTest,
 
   ASSERT_TRUE(embedded_test_server()->Start());
   const GURL app_url = embedded_test_server()->GetURL("/title1.html");
-  web_app::NavigateToURLAndWait(browser(), app_url);
+  web_app::NavigateViaLinkClickToURLAndWait(browser(), app_url);
   web_app::test::InstallPwaForCurrentUrl(browser());
   content::BrowserContext* context = browser()->profile();
 
@@ -164,30 +164,35 @@ IN_PROC_BROWSER_TEST_F(AlternativeErrorPageOverrideInfoBrowserTest,
   const GURL app_url = embedded_test_server()->GetURL(
       "/banners/"
       "manifest_test_page.html?manifest=manifest_one_icon.json");
-  web_app::NavigateToURLAndWait(browser(), app_url);
+  web_app::NavigateViaLinkClickToURLAndWait(browser(), app_url);
   web_app::test::InstallPwaForCurrentUrl(browser());
   Profile* profile = browser()->profile();
   web_app::WebAppProvider* web_app_provider =
       web_app::WebAppProvider::GetForTest(profile);
-  const absl::optional<web_app::AppId> app_id =
-      web_app_provider->registrar().FindAppWithUrlInScope(app_url);
+  const absl::optional<webapps::AppId> app_id =
+      web_app_provider->registrar_unsafe().FindAppWithUrlInScope(app_url);
   WebAppIconWaiter(profile, app_id.value()).Wait();
   content::mojom::AlternativeErrorPageOverrideInfoPtr info =
       browser_client.GetAlternativeErrorPageOverrideInfo(
           app_url, /*render_frame_host=*/nullptr, profile,
           net::ERR_INTERNET_DISCONNECTED);
 
-  // Expect mojom struct with icon url.
+  // Expect mojom struct with everything (except the icon) filled out.
   EXPECT_TRUE(info);
+  EXPECT_EQ(*info->alternative_error_page_params.Find("app_short_name"),
+            "Manifest test app");
+  // This test may at first glance seem like an end-to-end test of the default
+  // offline experience, but should be considered more of a unit test for just
+  // the initial values provided to the default offline page. For a proper
+  // end-to-end test, see WebAppOfflinePageIconShowing in the
+  // WebAppOfflinePageTest suite.
   EXPECT_EQ(
       *info->alternative_error_page_params.Find("icon_url"),
-      "data:image/"
-      "png;base64,"
-      "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAA4UlEQVQ4jZVSuwqFMAw1"
-      "8baI2M3FyUXXfoGT3+FvC/"
-      "6A4iQKUrFDcweht7fWwUwhOSc5eUDXddEbw1foKIo+"
-      "1iOiIAIAiAgAfIINubh7KtABALTWxhjOuYVax58BAM7zLIqirmtEvMS4an8EIkJEpZSU"
-      "smkaIYQQwhjjSUK3tmVmWaaUWtc1jmNvGbGU0m3COZ/neRiGtm3zPO/"
-      "7Pk3T8JYuSVrrsiyrqjqOY5omzrkx5nGtRMQYG8dx33et9bZtSZK46D+"
-      "Cy1yWBREvtJcNH44xdg8GZrh3u5d7fI0ne/2tX8uNb4qnIrpWAAAAAElFTkSuQmCC");
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACk"
+      "lEQVR42mMAAQAABQABoIJXOQAAAABJRU5ErkJggg==");
+  EXPECT_EQ(
+      *info->alternative_error_page_params.Find("web_app_error_page_message"),
+      "You're offline");
+  EXPECT_EQ(*info->alternative_error_page_params.Find("supplementary_icon"),
+            "offlineIcon");
 }

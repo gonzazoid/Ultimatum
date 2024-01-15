@@ -4,8 +4,8 @@
 
 #include "components/password_manager/core/browser/password_form_prediction_waiter.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 
 namespace password_manager {
@@ -20,6 +20,16 @@ void PasswordFormPredictionWaiter::StartTimer() {
   // destruction of this object.
   timer_.Start(FROM_HERE, kMaxFillingDelayForAsyncPredictions, this,
                &PasswordFormPredictionWaiter::OnTimeout);
+}
+
+void PasswordFormPredictionWaiter::Reset() {
+  weak_ptr_factory_.InvalidateWeakPtrs();
+  outstanding_closures_ = 0;
+  timer_.Stop();
+}
+
+bool PasswordFormPredictionWaiter::IsActive() const {
+  return timer_.IsRunning();
 }
 
 base::OnceClosure PasswordFormPredictionWaiter::CreateClosure() {

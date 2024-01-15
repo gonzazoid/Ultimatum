@@ -7,6 +7,7 @@
 #include <lib/sys/cpp/component_context.h>
 #include <lib/zx/vmo.h>
 
+#include "base/bits.h"
 #include "base/fuchsia/fuchsia_logging.h"
 #include "base/fuchsia/process_context.h"
 #include "base/logging.h"
@@ -175,7 +176,7 @@ void AudioInputStreamFuchsia::OnPacketProduced(
                                        packet.payload_offset),
         num_frames);
     callback_->OnData(audio_bus_.get(), base::TimeTicks::FromZxTime(packet.pts),
-                      /*volume=*/1.0);
+                      /*volume=*/1.0, {});
   }
 
   capturer_->ReleasePacket(std::move(packet));

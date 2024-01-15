@@ -7,6 +7,7 @@
 
 #include "base/component_export.h"
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chromeos/ash/components/network/cellular_esim_profile_handler.h"
@@ -34,8 +35,9 @@ class NetworkConfigMessageHandler;
 //
 // Additionally, this class tracks all known EUICC paths. If it detects a new
 // EUICC which it previously had not known about, it automatically refreshes
-// profile metadata from that slot. This ensures that after a powerwash, we
-// still expose information about installed profiles.
+// profile metadata from that slot. This ensures that after a powerwash, since
+// all local data will be erased and we will no longer have information on which
+// slots we have metadata for, we will refresh the metadata for all slots.
 class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularESimProfileHandlerImpl
     : public CellularESimProfileHandler,
       public NetworkStateHandlerObserver {
@@ -92,7 +94,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularESimProfileHandlerImpl
       HermesResponseStatus status);
 
   // Initialized to null and set once SetDevicePrefs() is called.
-  PrefService* device_prefs_ = nullptr;
+  raw_ptr<PrefService> device_prefs_ = nullptr;
 
   base::ScopedObservation<NetworkStateHandler, NetworkStateHandlerObserver>
       network_state_handler_observer_{this};
@@ -103,10 +105,5 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularESimProfileHandlerImpl
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::CellularESimProfileHandlerImpl;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_CELLULAR_ESIM_PROFILE_HANDLER_IMPL_H_

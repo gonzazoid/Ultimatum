@@ -46,9 +46,9 @@ class TestFontSelector : public FontSelector {
   scoped_refptr<FontData> GetFontData(const FontDescription& font_description,
                                       const FontFamily&) override {
     FontSelectionCapabilities normal_capabilities(
-        {NormalWidthValue(), NormalWidthValue()},
-        {NormalSlopeValue(), NormalSlopeValue()},
-        {NormalWeightValue(), NormalWeightValue()});
+        {kNormalWidthValue, kNormalWidthValue},
+        {kNormalSlopeValue, kNormalSlopeValue},
+        {kNormalWeightValue, kNormalWeightValue});
     FontPlatformData platform_data = custom_platform_data_->GetFontPlatformData(
         font_description.EffectiveFontSize(),
         font_description.AdjustedSpecifiedSize(),
@@ -58,7 +58,7 @@ class TestFontSelector : public FontSelector {
             font_description.SyntheticItalicAllowed(),
         font_description.GetFontSelectionRequest(), normal_capabilities,
         font_description.FontOpticalSizing(), font_description.TextRendering(),
-        font_description.Orientation());
+        {}, font_description.Orientation());
     return SimpleFontData::Create(platform_data, CustomFontData::Create());
   }
 
@@ -98,7 +98,6 @@ class TestFontSelector : public FontSelector {
   void ReportEmojiSegmentGlyphCoverage(unsigned, unsigned) override {}
   ExecutionContext* GetExecutionContext() const override { return nullptr; }
   FontFaceCache* GetFontFaceCache() override { return nullptr; }
-  bool IsContextThread() const override { return true; }
 
   void RegisterForInvalidationCallbacks(FontSelectorClient*) override {}
   void UnregisterForInvalidationCallbacks(FontSelectorClient*) override {}
@@ -151,6 +150,11 @@ Font CreateTestFont(const AtomicString& family_name,
     (*init_font_description)(&font_description);
 
   return Font(font_description, TestFontSelector::Create(font_path));
+}
+
+Font CreateAhemFont(float size) {
+  return CreateTestFont(AtomicString("Ahem"), PlatformTestDataPath("Ahem.woff"),
+                        size);
 }
 
 #if BUILDFLAG(IS_WIN)

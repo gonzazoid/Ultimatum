@@ -5,7 +5,9 @@
 #include "chromeos/components/quick_answers/search_result_parsers/result_parser.h"
 
 #include "base/notreached.h"
+#include "base/strings/string_util.h"
 #include "base/values.h"
+#include "chromeos/components/quick_answers/quick_answers_model.h"
 #include "chromeos/components/quick_answers/search_result_parsers/definition_result_parser.h"
 #include "chromeos/components/quick_answers/search_result_parsers/kp_entity_result_parser.h"
 #include "chromeos/components/quick_answers/search_result_parsers/unit_conversion_result_parser.h"
@@ -13,23 +15,50 @@
 namespace quick_answers {
 namespace {
 using base::Value;
+
+constexpr char kBTagBegin[] = "<b>";
+constexpr char kBTagEnd[] = "</b>";
+
 }  // namespace
 
-const Value* ResultParser::GetFirstListElement(const Value& value,
-                                               const std::string& path) {
-  const Value* entries = value.FindListPath(path);
+const Value::Dict* ResultParser::GetFirstDictElementFromList(
+    const Value::Dict& dict,
+    const std::string& path) {
+  const Value::List* entries = dict.FindListByDottedPath(path);
 
   if (!entries) {
     // No list found.
     return nullptr;
   }
 
-  const auto& list = entries->GetList();
-  if (list.empty()) {
+  if (entries->empty()) {
     // No valid dictionary entries found.
     return nullptr;
   }
-  return &list[0];
+  return &(entries->front().GetDict());
+}
+
+std::string ResultParser::RemoveKnownHtmlTags(const std::string& input) {
+  // Copy input string to another string so we don't modify the passed value.
+  std::string out = input;
+  base::ReplaceSubstringsAfterOffset(&out, /*start_offset=*/0, kBTagBegin, "");
+  base::ReplaceSubstringsAfterOffset(&out, /*start_offset=*/0, kBTagEnd, "");
+  return out;
+}
+
+std::unique_ptr<StructuredResult> ResultParser::ParseInStructuredResult(
+    const base::Value::Dict& result) {
+  return nullptr;
+}
+
+bool ResultParser::PopulateQuickAnswer(
+    const StructuredResult& structured_result,
+    QuickAnswer* quick_answer) {
+  return false;
+}
+
+bool ResultParser::SupportsNewInterface() const {
+  return false;
 }
 
 // static

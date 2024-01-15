@@ -5,7 +5,9 @@
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
+#include "base/test/gmock_expected_support.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
 #include "components/services/storage/public/cpp/buckets/bucket_info.h"
@@ -41,10 +43,11 @@ class CacheStorageContextTest : public testing::Test {
     ASSERT_TRUE(data_dir_.CreateUniqueTempDir());
     quota_manager_ = base::MakeRefCounted<storage::MockQuotaManager>(
         /*is_incognito=*/false, data_dir_.GetPath(),
-        base::ThreadTaskRunnerHandle::Get().get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault().get(),
         /*special storage policy=*/nullptr);
     quota_manager_proxy_ = base::MakeRefCounted<storage::MockQuotaManagerProxy>(
-        quota_manager_.get(), base::ThreadTaskRunnerHandle::Get());
+        quota_manager_.get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     cache_storage_context_ =
         std::make_unique<CacheStorageContextImpl>(quota_manager_proxy());
 
@@ -114,25 +117,26 @@ TEST_F(CacheStorageContextTest, DefaultBucketCreatedOnAddReceiver) {
   loop.Run();
 
   // Check default bucket exists for https://example.com.
-  storage::QuotaErrorOr<storage::BucketInfo> result =
+  ASSERT_OK_AND_ASSIGN(
+      storage::BucketInfo result,
       quota_manager_proxy_sync.GetBucket(
           blink::StorageKey::CreateFromStringForTesting(kExampleStorageKey),
-          storage::kDefaultBucketName, blink::mojom::StorageType::kTemporary);
-  EXPECT_TRUE(result.ok());
-  EXPECT_EQ(result->name, storage::kDefaultBucketName);
-  EXPECT_EQ(result->storage_key,
+          storage::kDefaultBucketName, blink::mojom::StorageType::kTemporary));
+  EXPECT_EQ(result.name, storage::kDefaultBucketName);
+  EXPECT_EQ(result.storage_key,
             blink::StorageKey::CreateFromStringForTesting(kExampleStorageKey));
-  EXPECT_GT(result->id.value(), 0);
+  EXPECT_GT(result.id.value(), 0);
 
   // Check default bucket exists for https://google.com.
-  result = quota_manager_proxy_sync.GetBucket(
-      blink::StorageKey::CreateFromStringForTesting(kGoogleStorageKey),
-      storage::kDefaultBucketName, blink::mojom::StorageType::kTemporary);
-  EXPECT_TRUE(result.ok());
-  EXPECT_EQ(result->name, storage::kDefaultBucketName);
-  EXPECT_EQ(result->storage_key,
+  ASSERT_OK_AND_ASSIGN(
+      result,
+      quota_manager_proxy_sync.GetBucket(
+          blink::StorageKey::CreateFromStringForTesting(kGoogleStorageKey),
+          storage::kDefaultBucketName, blink::mojom::StorageType::kTemporary));
+  EXPECT_EQ(result.name, storage::kDefaultBucketName);
+  EXPECT_EQ(result.storage_key,
             blink::StorageKey::CreateFromStringForTesting(kGoogleStorageKey));
-  EXPECT_GT(result->id.value(), 0);
+  EXPECT_GT(result.id.value(), 0);
 }
 
 TEST_F(CacheStorageContextTest, GetDefaultBucketError) {

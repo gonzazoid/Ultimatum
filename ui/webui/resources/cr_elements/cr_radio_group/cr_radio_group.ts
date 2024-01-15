@@ -5,10 +5,10 @@
 import '../cr_radio_button/cr_radio_button.js';
 import '../cr_shared_vars.css.js';
 
+import {assert} from '//resources/js/assert.js';
+import {EventTracker} from '//resources/js/event_tracker.js';
 import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {assert} from '../../js/assert_ts.js';
-import {EventTracker} from '../../js/event_tracker.js';
 import {CrRadioButtonElement} from '../cr_radio_button/cr_radio_button.js';
 
 import {getTemplate} from './cr_radio_group.html.js';
@@ -47,6 +47,12 @@ export class CrRadioGroupElement extends PolymerElement {
         value: 'cr-radio-button, cr-card-radio-button, controlled-radio-button',
       },
 
+      nestedSelectable: {
+        type: Boolean,
+        value: false,
+        observer: 'populate_',
+      },
+
       selectableRegExp_: {
         value: Object,
         computed: 'computeSelectableRegExp_(selectableElements)',
@@ -57,10 +63,11 @@ export class CrRadioGroupElement extends PolymerElement {
   disabled: boolean;
   selected: string;
   selectableElements: string;
+  nestedSelectable: boolean;
   private selectableRegExp_: RegExp;
 
   private buttons_: CrRadioButtonElement[]|null = null;
-  private buttonEventTracker_: EventTracker|null = null;
+  private buttonEventTracker_: EventTracker = new EventTracker();
   private deltaKeyMap_: Map<string, number>|null = null;
   private isRtl_: boolean = false;
   private populateBound_: (() => void)|null = null;
@@ -88,7 +95,6 @@ export class CrRadioGroupElement extends PolymerElement {
       ['PageDown', 1],
       ['PageUp', -1],
     ]);
-    this.buttonEventTracker_ = new EventTracker();
 
     this.populateBound_ = () => this.populate_();
     assert(this.populateBound_);
@@ -103,7 +109,6 @@ export class CrRadioGroupElement extends PolymerElement {
     assert(this.populateBound_);
     this.shadowRoot!.querySelector('slot')!.removeEventListener(
         'slotchange', this.populateBound_);
-    assert(this.buttonEventTracker_);
     this.buttonEventTracker_.removeAll();
   }
 
@@ -170,6 +175,7 @@ export class CrRadioGroupElement extends PolymerElement {
     const name = `${radio.name}`;
     if (this.selected !== name) {
       event.preventDefault();
+      event.stopPropagation();
       this.selected = name;
       radio.focus();
     }
@@ -197,12 +203,23 @@ export class CrRadioGroupElement extends PolymerElement {
   private populate_() {
     const nodes =
         this.shadowRoot!.querySelector('slot')!.assignedNodes({flatten: true});
-    this.buttons_ =
-        Array.from(nodes).filter(
-            node => node.nodeType === Node.ELEMENT_NODE &&
-                (node as HTMLElement).matches(this.selectableElements)) as
-        CrRadioButtonElement[];
-    assert(this.buttonEventTracker_);
+    this.buttons_ = Array.from(nodes).flatMap(node => {
+      if (node.nodeType !== Node.ELEMENT_NODE) {
+        return [];
+      }
+      const el = node as HTMLElement;
+
+      let result = [];
+      if (el.matches(this.selectableElements)) {
+        result.push(el);
+      }
+
+      if (this.nestedSelectable) {
+        result = result.concat(
+            Array.from(el.querySelectorAll(this.selectableElements)));
+      }
+      return result;
+    }) as CrRadioButtonElement[];
     this.buttonEventTracker_.removeAll();
     this.buttons_!.forEach(el => {
       this.buttonEventTracker_!.add(

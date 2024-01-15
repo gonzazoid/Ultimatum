@@ -10,7 +10,7 @@
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/app_list/app_list_config.h"
 #include "ash/public/cpp/app_list/app_list_features.h"
-#include "base/guid.h"
+#include "base/uuid.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/image/image_skia.h"
 
@@ -52,6 +52,10 @@ gfx::Rect AppListFolderItem::GetTargetIconRectInFolderForItem(
 
 // static
 const char AppListFolderItem::kItemType[] = "FolderItem";
+
+AppListFolderItem* AppListFolderItem::AsFolderItem() {
+  return this;
+}
 
 const char* AppListFolderItem::GetItemType() const {
   return AppListFolderItem::kItemType;
@@ -105,12 +109,8 @@ void AppListFolderItem::SetIsSystemFolder(bool is_system_folder) {
   metadata()->is_system_folder = is_system_folder;
 }
 
-bool AppListFolderItem::ShouldAutoRemove() const {
-  return ChildItemCount() <= (IsSystemFolder() ? 0u : 1u);
-}
-
 std::string AppListFolderItem::GenerateId() {
-  return base::GenerateGUID();
+  return base::Uuid::GenerateRandomV4().AsLowercaseString();
 }
 
 void AppListFolderItem::OnFolderImageUpdated(AppListConfigType config) {

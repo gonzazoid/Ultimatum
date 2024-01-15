@@ -6,18 +6,18 @@
 #define CHROME_BROWSER_ASH_LOGIN_SAML_FAKE_SAML_IDP_MIXIN_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/files/file_path.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
-#include "chromeos/dbus/common/dbus_method_call_status.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/embedded_test_server/http_request.h"
 #include "net/test/embedded_test_server/http_response.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
+
+class FakeGaiaMixin;
 
 namespace ash {
 
@@ -58,6 +58,7 @@ class FakeSamlIdpMixin final : public InProcessBrowserTestMixin {
   GURL GetHttpSamlPageUrl() const;
   GURL GetSamlWithDeviceAttestationUrl() const;
   GURL GetSamlWithDeviceTrustUrl() const;
+  GURL GetLinkedPageUrl() const;
 
  private:
   GURL GetSamlAuthPageUrl() const;
@@ -73,7 +74,8 @@ class FakeSamlIdpMixin final : public InProcessBrowserTestMixin {
     kLoginAuth,
     kLoginWithDeviceAttestation,
     kLoginCheckDeviceAnswer,
-    kLoginWithDeviceTrust
+    kLoginWithDeviceTrust,
+    kLinkedPage
   };
 
   // Returns the RequestType that corresponds to `url`, or RequestType::Unknown
@@ -98,16 +100,22 @@ class FakeSamlIdpMixin final : public InProcessBrowserTestMixin {
   BuildResponseForCheckDeviceAnswer(
       const net::test_server::HttpRequest& request,
       const GURL& request_url);
+  std::unique_ptr<net::test_server::HttpResponse> BuildResponseForLinkedPage(
+      const net::test_server::HttpRequest& request,
+      const GURL& request_url) const;
 
   std::unique_ptr<net::test_server::HttpResponse> BuildHTMLResponse(
       const std::string& html_template,
       const std::string& relay_state,
       const std::string& next_path) const;
 
+  std::unique_ptr<net::test_server::HttpResponse> BuildHTMLResponse(
+      const std::string& response_html) const;
+
   void SaveChallengeResponse(const std::string& response);
   void ClearChallengeResponse();
 
-  FakeGaiaMixin* const gaia_mixin_;
+  const raw_ptr<FakeGaiaMixin> gaia_mixin_;
   net::EmbeddedTestServer saml_server_{net::EmbeddedTestServer::TYPE_HTTPS};
   net::EmbeddedTestServer saml_http_server_{net::EmbeddedTestServer::TYPE_HTTP};
 
@@ -123,8 +131,8 @@ class FakeSamlIdpMixin final : public InProcessBrowserTestMixin {
 
   bool device_trust_header_recieved_ = false;
   int challenge_response_count_ = 0;
-  absl::optional<std::string> challenge_response_;
-  absl::optional<std::string> error_challenge_response_;
+  std::optional<std::string> challenge_response_;
+  std::optional<std::string> error_challenge_response_;
 };
 
 }  // namespace ash

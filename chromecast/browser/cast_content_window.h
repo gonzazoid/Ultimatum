@@ -5,8 +5,7 @@
 #ifndef CHROMECAST_BROWSER_CAST_CONTENT_WINDOW_H_
 #define CHROMECAST_BROWSER_CAST_CONTENT_WINDOW_H_
 
-#include "base/callback_forward.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback_forward.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "chromecast/browser/cast_web_contents.h"
@@ -59,8 +58,6 @@ class CastContentWindow : public mojom::CastContentWindow,
   void RevokeScreenAccess() override = 0;
   void RequestVisibility(VisibilityPriority visibility_priority) override = 0;
   void EnableTouchInput(bool enabled) override = 0;
-  void SetActivityContext(base::Value activity_context) override = 0;
-  void SetHostContext(base::Value host_context) override = 0;
 
   // mojom::ActivityWindow implementation:
   void Show() override;

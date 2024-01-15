@@ -41,13 +41,13 @@ class ScopedFilterClusterMetricsRecorder {
  * //ui/webui/resources/cr_components/history_clusters/history_clusters.mojom
  */
 
-// Actions that can be performed on clusters.
+// Actions that can be performed on clusters. The int values are not logged and
+// can be changed, but should remain consistent with history_clusters.mojom.
 enum class ClusterAction {
   kDeleted = 0,
   kOpenedInTabGroup = 1,
   kRelatedSearchClicked = 2,
-  kRelatedVisitsVisibilityToggled = 3,
-  kVisitClicked = 4,
+  kVisitClicked = 3,
 };
 
 // Actions that can be performed on related search items.
@@ -58,7 +58,8 @@ enum class RelatedSearchAction {
 // Actions that can be performed on visits.
 enum class VisitAction {
   kClicked = 0,
-  kDeleted = 1,
+  kHidden = 1,
+  kDeleted = 2,
 };
 
 // Types of visits that can be shown and acted on.

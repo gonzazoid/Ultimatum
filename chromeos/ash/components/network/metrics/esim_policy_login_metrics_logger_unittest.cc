@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <memory>
+
 #include "chromeos/ash/components/network/metrics/esim_policy_login_metrics_logger.h"
 
 #include "ash/constants/ash_features.h"
@@ -9,13 +11,13 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/network/managed_network_configuration_handler_impl.h"
 #include "chromeos/ash/components/network/network_configuration_handler.h"
 #include "chromeos/ash/components/network/network_profile_handler.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_state_test_helper.h"
 #include "chromeos/ash/components/network/network_ui_data.h"
-#include "chromeos/login/login_state/login_state.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
@@ -66,9 +68,11 @@ class ESimPolicyLoginMetricsLoggerTest : public testing::Test {
         network_state_test_helper_.network_state_handler(),
         network_profile_handler_.get(), network_config_handler_.get(),
         /*network_device_handler=*/nullptr,
-        /*prohibited_tecnologies_handler=*/nullptr);
+        /*prohibited_technologies_handler=*/nullptr,
+        /*hotspot_controller=*/nullptr);
 
-    esim_policy_login_metrics_logger_.reset(new ESimPolicyLoginMetricsLogger());
+    esim_policy_login_metrics_logger_ =
+        std::make_unique<ESimPolicyLoginMetricsLogger>();
     esim_policy_login_metrics_logger_->Init(
         network_state_test_helper_.network_state_handler(),
         managed_config_handler_.get());
@@ -103,15 +107,13 @@ class ESimPolicyLoginMetricsLoggerTest : public testing::Test {
     base::RunLoop().RunUntilIdle();
   }
 
-  void SetGlobalPolicy(bool allow_only_oplicy_cellular) {
-    base::Value global_config(base::Value::Type::DICTIONARY);
-    global_config.SetBoolKey(
+  void SetGlobalPolicy(bool allow_only_policy_cellular) {
+    auto global_config = base::Value::Dict().Set(
         ::onc::global_network_config::kAllowOnlyPolicyCellularNetworks,
-        allow_only_oplicy_cellular);
+        allow_only_policy_cellular);
     managed_config_handler_->SetPolicy(
         ::onc::ONC_SOURCE_DEVICE_POLICY, /*userhash=*/std::string(),
-        /*network_configs=*/base::Value(base::Value::Type::LIST),
-        global_config);
+        /*network_configs_onc=*/base::Value::List(), global_config);
   }
 
   base::test::TaskEnvironment task_environment_;

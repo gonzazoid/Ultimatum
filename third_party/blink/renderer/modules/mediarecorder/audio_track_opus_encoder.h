@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "media/base/audio_bus.h"
 #include "media/base/audio_converter.h"
 #include "media/base/audio_fifo.h"
@@ -25,6 +26,7 @@ class AudioTrackOpusEncoder : public AudioTrackEncoder,
   AudioTrackOpusEncoder(OnEncodedAudioCB on_encoded_audio_cb,
                         uint32_t bits_per_second,
                         bool vbr_enabled = true);
+  ~AudioTrackOpusEncoder() override;
 
   AudioTrackOpusEncoder(const AudioTrackOpusEncoder&) = delete;
   AudioTrackOpusEncoder& operator=(const AudioTrackOpusEncoder&) = delete;
@@ -32,18 +34,16 @@ class AudioTrackOpusEncoder : public AudioTrackEncoder,
   void OnSetFormat(const media::AudioParameters& params) override;
   void EncodeAudio(std::unique_ptr<media::AudioBus> input_bus,
                    base::TimeTicks capture_time) override;
-  void Shutdown() override {}
 
  private:
-  ~AudioTrackOpusEncoder() override;
-
   bool is_initialized() const { return !!opus_encoder_; }
 
   void DestroyExistingOpusEncoder();
 
   // media::AudioConverted::InputCallback implementation.
   double ProvideInput(media::AudioBus* audio_bus,
-                      uint32_t frames_delayed) override;
+                      uint32_t frames_delayed,
+                      const media::AudioGlitchInfo& glitch_info) override;
 
   // Target bitrate for Opus. If 0, Opus provide automatic bitrate is used.
   const uint32_t bits_per_second_;
@@ -68,7 +68,7 @@ class AudioTrackOpusEncoder : public AudioTrackEncoder,
   // Buffer for passing AudioBus data from the converter to the encoder.
   std::unique_ptr<float[]> buffer_;
 
-  OpusEncoder* opus_encoder_;
+  raw_ptr<OpusEncoder, DanglingUntriaged> opus_encoder_;
 };
 
 }  // namespace blink

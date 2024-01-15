@@ -4,19 +4,25 @@
 
 #include "components/omnibox/browser/history_cluster_provider.h"
 
+#include "base/feature_list.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/history_clusters/core/config.h"
+#include "components/history_clusters/core/features.h"
 #include "components/history_clusters/core/history_clusters_service.h"
+#include "components/history_clusters/core/url_constants.h"
 #include "components/omnibox/browser/actions/history_clusters_action.h"
 #include "components/omnibox/browser/autocomplete_controller.h"
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/autocomplete_match_classification.h"
 #include "components/omnibox/browser/autocomplete_match_type.h"
 #include "components/omnibox/browser/autocomplete_provider.h"
+#include "third_party/metrics_proto/omnibox_event.pb.h"
+
 #include "components/omnibox/browser/autocomplete_provider_client.h"
 #include "components/omnibox/browser/autocomplete_provider_listener.h"
-#include "third_party/omnibox_proto/groups.pb.h"
+#include "components/strings/grit/components_strings.h"
+#include "ui/base/l10n/l10n_util.h"
 
 HistoryClusterProvider::HistoryClusterProvider(
     AutocompleteProviderClient* client,
@@ -38,6 +44,23 @@ HistoryClusterProvider::HistoryClusterProvider(
   history_quick_provider_->AddListener(this);
 }
 
+// static
+void HistoryClusterProvider::CompleteHistoryClustersMatch(
+    const std::string& matching_text,
+    history::ClusterKeywordData matched_keyword_data,
+    AutocompleteMatch* match) {
+  DCHECK(match);
+
+  // It's fine to unconditionally attach this takeover action, as the action
+  // itself checks the flag to redirect the user to either the Side Panel or
+  // the traditional History/Journeys WebUI. As a side effect, it will also
+  // record the action-centric metrics.
+  DCHECK(match->actions.empty());
+  match->takeover_action =
+      base::MakeRefCounted<history_clusters::HistoryClustersAction>(
+          matching_text, std::move(matched_keyword_data));
+}
+
 void HistoryClusterProvider::Start(const AutocompleteInput& input,
                                    bool minimal_changes) {
   Stop(true, false);
@@ -45,8 +68,8 @@ void HistoryClusterProvider::Start(const AutocompleteInput& input,
   if (input.omit_asynchronous_matches())
     return;
 
-  if (!IsJourneysEnabledInOmnibox(client_->GetHistoryClustersService(),
-                                  client_->GetPrefs())) {
+  if (!client_->GetHistoryClustersService() ||
+      !client_->GetHistoryClustersService()->IsJourneysEnabledAndVisible()) {
     return;
   }
 
@@ -109,13 +132,16 @@ bool HistoryClusterProvider::CreateMatches() {
   // lowest relevance with an exception for search-what-you-typed search
   // suggestions being ordered before others.
   for (const auto& search_match : search_provider_->matches()) {
-    if (client_->GetHistoryClustersService()->DoesQueryMatchAnyCluster(
-            base::UTF16ToUTF8(search_match.contents))) {
+    auto matched_keyword_data =
+        client_->GetHistoryClustersService()->DoesQueryMatchAnyCluster(
+            base::UTF16ToUTF8(search_match.contents));
+    if (matched_keyword_data) {
       client_->GetOmniboxTriggeredFeatureService()->FeatureTriggered(
-          OmniboxTriggeredFeatureService::Feature::kHistoryClusterSuggestion);
+          metrics::OmniboxEventProto_Feature_HISTORY_CLUSTER_SUGGESTION);
       if (!history_clusters::GetConfig()
                .omnibox_history_cluster_provider_counterfactual) {
-        matches_.push_back(CreateMatch(search_match.contents));
+        matches_.push_back(
+            CreateMatch(search_match, std::move(matched_keyword_data.value())));
       }
       return true;
     }
@@ -123,43 +149,44 @@ bool HistoryClusterProvider::CreateMatches() {
   return false;
 }
 
-AutocompleteMatch HistoryClusterProvider::CreateMatch(std::u16string text) {
+AutocompleteMatch HistoryClusterProvider::CreateMatch(
+    const AutocompleteMatch& search_match,
+    history::ClusterKeywordData matched_keyword_data) {
   AutocompleteMatch match;
   match.provider = this;
   match.type = AutocompleteMatch::Type::HISTORY_CLUSTER;
 
-  // TODO(manukh): Currently, history cluster suggestions only display when the
-  //  `text` is an exact match of a cluster keyword, and all cluster keywords
-  //  are treated equal. Therefore, we're limited to using a static value.
-  //  Ideally, relevance would depend on how many keywords matched, how
-  //  significant the keywords were, how significant their clusters were etc.
   match.relevance =
-      history_clusters::GetConfig().omnibox_history_cluster_provider_score;
+      history_clusters::GetConfig()
+              .omnibox_history_cluster_provider_inherit_search_match_score
+          ? search_match.relevance - 1
+          : history_clusters::GetConfig()
+                .omnibox_history_cluster_provider_score;
 
-  match.fill_into_edit = base::UTF8ToUTF16(base::StringPrintf(
-      "chrome://history/journeys?q=%s", base::UTF16ToUTF8(text).c_str()));
+  const auto& text = search_match.contents;
 
-  match.destination_url = GURL(base::UTF8ToUTF16(base::StringPrintf(
-      "chrome://history/journeys?q=%s",
-      base::EscapeQueryParamValue(base::UTF16ToUTF8(text), /*use_plus=*/false)
-          .c_str())));
+  match.destination_url = GURL(
+      base::UTF8ToUTF16(history_clusters::GetChromeUIHistoryClustersURL() +
+                        base::StringPrintf("?q=%s", base::EscapeQueryParamValue(
+                                                        base::UTF16ToUTF8(text),
+                                                        /*use_plus=*/false)
+                                                        .c_str())));
+
+  match.fill_into_edit = text;
 
   match.description = text;
   match.description_class = ClassifyTermMatches(
       FindTermMatches(input_.text(), text), text.length(),
       ACMatchClassification::MATCH, ACMatchClassification::NONE);
 
-  match.contents = match.fill_into_edit;
-  match.contents_class.push_back(
-      ACMatchClassification(0, ACMatchClassification::URL));
+  match.contents = l10n_util::GetStringUTF16(
+      base::FeatureList::IsEnabled(history_clusters::kRenameJourneys)
+          ? IDS_OMNIBOX_HISTORY_CLUSTERS_SEARCH_HINT
+          : IDS_OMNIBOX_ACTION_HISTORY_CLUSTERS_SEARCH_HINT);
+  match.contents_class = {{0, ACMatchClassification::DIM}};
 
-  if (!history_clusters::GetConfig()
-           .omnibox_history_cluster_provider_free_ranking) {
-    match.suggestion_group_id = omnibox::GROUP_HISTORY_CLUSTER;
-    // Insert a corresponding omnibox::GroupConfig with default values in the
-    // suggestion groups map; otherwise the group ID will get dropped.
-    suggestion_groups_map_[omnibox::GROUP_HISTORY_CLUSTER];
-  }
+  CompleteHistoryClustersMatch(base::UTF16ToUTF8(text),
+                               std::move(matched_keyword_data), &match);
 
   return match;
 }

@@ -11,8 +11,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/strings/string_piece.h"
 #include "base/values.h"
@@ -48,44 +48,35 @@ class FirstPartySetsComponentInstallerPolicy : public ComponentInstallerPolicy {
   // Resets static state. Should only be used to clear state during testing.
   static void ResetForTesting();
 
-  static const char kDogfoodInstallerAttributeName[];
-  static const char kV2FormatOptIn[];
-
   // Seeds a component at `install_dir` with the given `contents`. Only to be
   // used in testing.
-  static void WriteComponentForTesting(const base::FilePath& install_dir,
+  static void WriteComponentForTesting(base::Version version,
+                                       const base::FilePath& install_dir,
                                        base::StringPiece contents);
 
- private:
-  FRIEND_TEST_ALL_PREFIXES(FirstPartySetsComponentInstallerFeatureEnabledTest,
-                           NonexistentFile_OnComponentReady);
-  FRIEND_TEST_ALL_PREFIXES(FirstPartySetsComponentInstallerFeatureEnabledTest,
-                           NonexistentFile_OnRegistrationComplete);
-  FRIEND_TEST_ALL_PREFIXES(FirstPartySetsComponentInstallerFeatureEnabledTest,
-                           LoadsSets_OnComponentReady);
-  FRIEND_TEST_ALL_PREFIXES(FirstPartySetsComponentInstallerFeatureEnabledTest,
-                           IgnoreNewSets_NoInitialComponent);
-  FRIEND_TEST_ALL_PREFIXES(FirstPartySetsComponentInstallerFeatureEnabledTest,
-                           IgnoreNewSets_OnComponentReady);
-  FRIEND_TEST_ALL_PREFIXES(FirstPartySetsComponentInstallerFeatureEnabledTest,
-                           IgnoreNewSets_OnNetworkRestart);
-  FRIEND_TEST_ALL_PREFIXES(FirstPartySetsComponentInstallerFeatureDisabledTest,
-                           GetInstallerAttributes_Disabled);
-  FRIEND_TEST_ALL_PREFIXES(FirstPartySetsComponentInstallerNonDogFooderTest,
-                           GetInstallerAttributes_NonDogfooder);
-  FRIEND_TEST_ALL_PREFIXES(FirstPartySetsComponentInstallerDogFooderTest,
-                           GetInstallerAttributes_Dogfooder);
-  FRIEND_TEST_ALL_PREFIXES(FirstPartySetsComponentInstallerV2FormatTest,
-                           GetInstallerAttributes_V2OptOut);
+  static base::FilePath GetInstalledPathForTesting(const base::FilePath& base) {
+    return GetInstalledPath(base);
+  }
 
+  void ComponentReadyForTesting(const base::Version& version,
+                                const base::FilePath& install_dir,
+                                base::Value::Dict manifest) {
+    ComponentReady(version, install_dir, std::move(manifest));
+  }
+
+  update_client::InstallerAttributes GetInstallerAttributesForTesting() const {
+    return GetInstallerAttributes();
+  }
+
+ private:
   // The following methods override ComponentInstallerPolicy.
   bool SupportsGroupPolicyEnabledComponentUpdates() const override;
   bool RequiresNetworkEncryption() const override;
   update_client::CrxInstaller::Result OnCustomInstall(
-      const base::Value& manifest,
+      const base::Value::Dict& manifest,
       const base::FilePath& install_dir) override;
   void OnCustomUninstall() override;
-  bool VerifyInstallation(const base::Value& manifest,
+  bool VerifyInstallation(const base::Value::Dict& manifest,
                           const base::FilePath& install_dir) const override;
   // After the first call, ComponentReady will be no-op for new versions
   // delivered from Component Updater, i.e. new components will be installed
@@ -93,7 +84,7 @@ class FirstPartySetsComponentInstallerPolicy : public ComponentInstallerPolicy {
   // browser startup.
   void ComponentReady(const base::Version& version,
                       const base::FilePath& install_dir,
-                      base::Value manifest) override;
+                      base::Value::Dict manifest) override;
   base::FilePath GetRelativeInstallDir() const override;
   void GetHash(std::vector<uint8_t>* hash) const override;
   std::string GetName() const override;

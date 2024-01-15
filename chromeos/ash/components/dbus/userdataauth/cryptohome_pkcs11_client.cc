@@ -8,10 +8,11 @@
 
 #include <google/protobuf/message_lite.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/dbus/userdataauth/fake_cryptohome_pkcs11_client.h"
 #include "chromeos/dbus/common/blocking_method_caller.h"
@@ -108,8 +109,8 @@ class CryptohomePkcs11ClientImpl : public CryptohomePkcs11Client {
       LOG(ERROR)
           << "Failed to append protobuf when calling CryptohomePkcs11 method "
           << method_name;
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
-          FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, base::BindOnce(std::move(callback), std::nullopt));
       return;
     }
     // Bind with the weak pointer of |this| so the response is not
@@ -144,14 +145,14 @@ class CryptohomePkcs11ClientImpl : public CryptohomePkcs11Client {
     if (!ParseProto(response, &reply_proto)) {
       LOG(ERROR)
           << "Failed to parse reply protobuf from CryptohomePkcs11 method";
-      std::move(callback).Run(absl::nullopt);
+      std::move(callback).Run(std::nullopt);
       return;
     }
     std::move(callback).Run(reply_proto);
   }
 
   // D-Bus proxy for cryptohomed, not owned.
-  dbus::ObjectProxy* proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy> proxy_ = nullptr;
 
   base::WeakPtrFactory<CryptohomePkcs11ClientImpl> weak_factory_{this};
 };

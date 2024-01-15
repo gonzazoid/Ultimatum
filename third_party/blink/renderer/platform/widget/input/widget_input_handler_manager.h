@@ -12,11 +12,9 @@
 #include "build/build_config.h"
 #include "cc/input/browser_controls_state.h"
 #include "cc/trees/paint_holding_reason.h"
-#include "components/power_scheduler/power_mode_voter.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/shared_remote.h"
-#include "third_party/blink/public/mojom/input/input_handler.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/input/input_handler.mojom-blink.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/widget/input/input_handler_proxy.h"
@@ -76,9 +74,6 @@ class PLATFORM_EXPORT WidgetInputHandlerManager final
     kDeferCommits = 1 << 1,
     // if set, we have not painted a main frame from the current navigation yet
     kHasNotPainted = 1 << 2,
-    // if set, suppress events because pipeline has paused rendering (both main
-    // and compositor thread driven updates).
-    kRenderingPaused = 1 << 3,
   };
 
  public:
@@ -113,17 +108,8 @@ class PLATFORM_EXPORT WidgetInputHandlerManager final
 
   // InputHandlerProxyClient overrides.
   void WillShutdown() override;
-  void DispatchNonBlockingEventToMainThread(
-      std::unique_ptr<WebCoalescedInputEvent> event,
-      const WebInputEventAttribution& attribution,
-      std::unique_ptr<cc::EventMetrics> metrics) override;
-
   void DidAnimateForInput() override;
   void DidStartScrollingViewport() override;
-  void GenerateScrollBeginAndSendToMainThread(
-      const WebGestureEvent& update_event,
-      const WebInputEventAttribution& attribution,
-      const cc::EventMetrics* update_metrics) override;
   void SetAllowedTouchAction(cc::TouchAction touch_action) override;
   bool AllowsScrollResampling() override { return allow_scroll_resampling_; }
 
@@ -168,9 +154,6 @@ class PLATFORM_EXPORT WidgetInputHandlerManager final
   // Called to inform us when the system starts or stops deferring commits.
   void OnDeferCommitsChanged(bool defer_status, cc::PaintHoldingReason reason);
 
-  // Called to inform us when the system pauses or resumes rendering.
-  void OnPauseRenderingChanged(bool);
-
   // Allow tests, headless etc. to have input events processed before the
   // compositor is ready to commit frames.
   // TODO(schenney): Fix this somehow, forcing all tests to wait for
@@ -180,7 +163,7 @@ class PLATFORM_EXPORT WidgetInputHandlerManager final
   // Called on the main thread. Finds the matching element under the given
   // point in visual viewport coordinates and runs the callback with the
   // found element id on input thread task runner.
-  using ElementAtPointCallback = base::OnceCallback<void(uint64_t)>;
+  using ElementAtPointCallback = base::OnceCallback<void(cc::ElementId)>;
   void FindScrollTargetOnMainThread(const gfx::PointF& point,
                                     ElementAtPointCallback callback);
   void SendDroppedPointerDownCounts();
@@ -196,6 +179,11 @@ class PLATFORM_EXPORT WidgetInputHandlerManager final
   base::SingleThreadTaskRunner* main_task_runner_for_testing() const {
     return main_thread_task_runner_.get();
   }
+
+  // Immediately dispatches all queued events in both the main and compositor
+  // queues such that the queues are emptied. Invokes the passed closure when
+  // both main and compositor thread queues have been processed.
+  void FlushEventQueuesForTesting(base::OnceClosure done_callback);
 
  protected:
   friend class base::RefCountedThreadSafe<WidgetInputHandlerManager>;
@@ -234,7 +222,7 @@ class PLATFORM_EXPORT WidgetInputHandlerManager final
       std::unique_ptr<WebCoalescedInputEvent> event,
       std::unique_ptr<cc::EventMetrics> metrics,
       mojom::blink::WidgetInputHandler::DispatchEventCallback browser_callback,
-      uint64_t hit_test_result);
+      cc::ElementId hit_test_result);
 
   // This method is the callback used by the compositor input handler to
   // communicate back whether the event was successfully handled on the
@@ -249,8 +237,7 @@ class PLATFORM_EXPORT WidgetInputHandlerManager final
       std::unique_ptr<WebCoalescedInputEvent> event,
       std::unique_ptr<InputHandlerProxy::DidOverscrollParams> overscroll_params,
       const WebInputEventAttribution& attribution,
-      std::unique_ptr<cc::EventMetrics> metrics,
-      mojom::blink::ScrollResultDataPtr scroll_result_data);
+      std::unique_ptr<cc::EventMetrics> metrics);
 
   // Similar to the above; this is used by the main thread input handler to
   // communicate back the result of handling the event. Note: this may be
@@ -297,11 +284,19 @@ class PLATFORM_EXPORT WidgetInputHandlerManager final
 
   void RecordMetricsForDroppedEventsBeforePaint(const base::TimeTicks&);
 
+  // Helpers for FlushEventQueuesForTesting.
+  void FlushCompositorQueueForTesting();
+  void FlushMainThreadQueueForTesting(base::OnceClosure done);
+
   // Only valid to be called on the main thread.
   base::WeakPtr<WidgetBase> widget_;
   base::WeakPtr<mojom::blink::FrameWidgetInputHandler>
       frame_widget_input_handler_;
   scoped_refptr<scheduler::WidgetScheduler> widget_scheduler_;
+
+  // This caches `widget_->is_embedded()` value for access from outside the main
+  // thread (where `widget_` is not usable).
+  const bool widget_is_embedded_;
 
   // InputHandlerProxy is only interacted with on the compositor
   // thread.
@@ -335,6 +330,34 @@ class PLATFORM_EXPORT WidgetInputHandlerManager final
   // we definitely don't have a compositor thread.
   bool uses_input_handler_ = false;
 
+  struct UmaData {
+    // Saves the number of user-interactions that would be dropped by the
+    // DropInputEventsBeforeFirstPaint feature (i.e. before receiving the first
+    // presentation of content).
+    int suppressed_interactions_count = 0;
+
+    // Saves the number of events that would be dropped by the
+    // DropInputEventsBeforeFirstPaint feature (i.e. before receiving the first
+    // presentation of content).
+    int suppressed_events_count = 0;
+
+    // Saves most recent input event time that would be dropped by the
+    // DropInputEventsBeforeFirstPaint feature (i.e. before receiving the first
+    // presentation of content). If this is after the first paint timestamp,
+    // we log the difference to track the worst dropped event experienced.
+    base::TimeTicks most_recent_suppressed_event_time;
+
+    // Control of UMA. We emit one UMA metric per navigation telling us
+    // whether any non-move input arrived before we starting updating the page
+    // or displaying content to the user. It must be atomic because navigation
+    // can occur on the renderer thread (resetting this) coincident with the UMA
+    // being sent on the compositor thread.
+    bool have_emitted_uma{false};
+  };
+
+  base::Lock uma_data_lock_;
+  UmaData uma_data_;
+
   // State tracking why we should keep suppressing input events, keeps track of
   // which parts of the rendering pipeline are currently deferred, or whether
   // we are waiting for the first non empty paint. We use this state to suppress
@@ -349,38 +372,17 @@ class PLATFORM_EXPORT WidgetInputHandlerManager final
   // status of deferrals changes, so it needs to be thread safe.
   std::atomic<uint16_t> suppressing_input_events_state_;
 
-  // Saves most recent input event time that would be dropped by the
-  // DropInputEventsBeforeFirstPaint feature (i.e. before receiving the first
-  // presentation of content). If this is after the first paint timestamp,
-  // we log the difference to track the worst dropped event experienced.
-  base::TimeTicks most_recent_suppressed_event_time_;
-
-  // Saves the number of events that would be dropped by the
-  // DropInputEventsBeforeFirstPaint feature (i.e. before receiving the first
-  // presentation of content). This is important because it shows how many times
-  // user tried to interact with page but the event was dropped.
-  int suppressed_events_count_ = 0;
-
   // Allow input suppression to be disabled for tests and non-browser uses
   // of chromium that do not wait for the first commit, or that may never
   // commit. Over time, tests should be fixed so they provide additional
   // coverage for input suppression: crbug.com/987626
   bool allow_pre_commit_input_ = false;
 
-  // Control of UMA. We emit one UMA metric per navigation telling us
-  // whether any non-move input arrived before we starting updating the page or
-  // displaying content to the user. It must be atomic because navigation can
-  // occur on the renderer thread (resetting this) coincident with the UMA
-  // being sent on the compositor thread.
-  std::atomic<bool> have_emitted_uma_{false};
-
   // Specifies weather the renderer has received a scroll-update event after the
   // last scroll-begin or not, It is used to determine whether a scroll-update
   // is the first one in a scroll sequence or not. This variable is only used on
   // the input handling thread (i.e. on the compositor thread if it exists).
   bool has_seen_first_gesture_scroll_update_after_begin_ = false;
-
-  std::unique_ptr<power_scheduler::PowerModeVoter> response_power_mode_voter_;
 
   // Timer for count dropped events.
   std::unique_ptr<base::OneShotTimer> dropped_event_counts_timer_;

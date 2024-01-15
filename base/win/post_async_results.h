@@ -13,12 +13,12 @@
 #include <type_traits>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/bind_post_task.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 
 namespace base {
 namespace win {
@@ -59,7 +59,7 @@ using AsyncAbiT = typename ABI::Windows::Foundation::Internal::GetAbiType<
 // information.
 template <typename T>
 using AsyncResultsT = std::conditional_t<
-    std::is_convertible<AsyncAbiT<T>, IUnknown*>::value,
+    std::is_convertible_v<AsyncAbiT<T>, IUnknown*>,
     Microsoft::WRL::ComPtr<std::remove_pointer_t<AsyncAbiT<T>>>,
     AsyncAbiT<T>>;
 
@@ -124,9 +124,8 @@ HRESULT PostAsyncOperationCompletedHandler(
         // capture it in an appropriate ref-counted pointer.
         return std::make_pair(async_operation, async_status);
       })
-          .Then(base::BindPostTask(
-              base::SequencedTaskRunnerHandle::Get(),
-              base::BindOnce(
+          .Then(
+              base::BindPostTaskToCurrentDefault(base::BindOnce(
                   [](IAsyncOperationCompletedHandlerT<T> completed_handler,
                      AsyncResult async_result) {
                     std::move(completed_handler)

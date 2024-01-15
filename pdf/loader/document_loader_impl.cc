@@ -10,10 +10,11 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/containers/span.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/numerics/safe_math.h"
 #include "base/strings/string_util.h"
 #include "pdf/loader/result_codes.h"
@@ -30,6 +31,8 @@ namespace {
 // request (like rewind a cassette tape, and continue playing after).
 // Experimentally chosen value.
 constexpr int kChunkCloseDistance = 10;
+
+constexpr size_t kReadBufferSize = 256 * 1024;
 
 // Return true if the HTTP response of `loader` is a successful one and loading
 // should continue. 4xx error indicate subsequent requests will fail too.
@@ -69,7 +72,8 @@ void DocumentLoaderImpl::Chunk::Clear() {
 DocumentLoaderImpl::DocumentLoaderImpl(Client* client)
     : client_(client),
       partial_loading_enabled_(
-          base::FeatureList::IsEnabled(features::kPdfPartialLoading)) {}
+          base::FeatureList::IsEnabled(features::kPdfPartialLoading)),
+      buffer_(kReadBufferSize) {}
 
 DocumentLoaderImpl::~DocumentLoaderImpl() = default;
 
@@ -289,7 +293,7 @@ void DocumentLoaderImpl::DidOpenPartial(int32_t result) {
 
 void DocumentLoaderImpl::ReadMore() {
   loader_->ReadResponseBody(
-      buffer_, sizeof(buffer_),
+      buffer_,
       base::BindOnce(&DocumentLoaderImpl::DidRead, weak_factory_.GetWeakPtr()));
 }
 
@@ -314,25 +318,27 @@ void DocumentLoaderImpl::DidRead(int32_t result) {
     DCHECK(!chunk_.chunk_data);
     chunk_.chunk_index = chunk_stream_.GetChunkIndex(start_pos);
   }
-  if (!SaveBuffer(buffer_, result))
+  if (!SaveBuffer(result)) {
     return ReadMore();
+  }
   if (IsDocumentComplete())
     return ReadComplete();
   return ContinueDownload();
 }
 
-bool DocumentLoaderImpl::SaveBuffer(char* input, uint32_t input_size) {
+bool DocumentLoaderImpl::SaveBuffer(uint32_t input_size) {
   const uint32_t document_size = GetDocumentSize();
   bytes_received_ += input_size;
   bool chunk_saved = false;
   bool loading_pending_request = pending_requests_.Contains(chunk_.chunk_index);
-  while (input_size > 0) {
+  auto input = base::make_span(buffer_).first(input_size);
+  while (!input.empty()) {
     if (chunk_.data_size == 0)
       chunk_.chunk_data = std::make_unique<DataStream::ChunkData>();
 
     const size_t new_chunk_data_len =
-        std::min(DataStream::kChunkSize - chunk_.data_size, size_t{input_size});
-    memcpy(chunk_.chunk_data->data() + chunk_.data_size, input,
+        std::min(DataStream::kChunkSize - chunk_.data_size, input.size());
+    memcpy(chunk_.chunk_data->data() + chunk_.data_size, input.data(),
            new_chunk_data_len);
     chunk_.data_size += new_chunk_data_len;
     if (chunk_.data_size == DataStream::kChunkSize ||
@@ -343,8 +349,7 @@ bool DocumentLoaderImpl::SaveBuffer(char* input, uint32_t input_size) {
       chunk_saved = true;
     }
 
-    input += new_chunk_data_len;
-    input_size -= new_chunk_data_len;
+    input = input.subspan(new_chunk_data_len);
   }
 
   client_->OnNewDataReceived();

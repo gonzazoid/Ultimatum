@@ -11,7 +11,6 @@
 #include "base/time/time.h"
 #include "components/download/public/common/download_danger_type.h"
 #include "components/download/public/common/download_item.h"
-#include "components/download/public/common/download_item_rename_progress_update.h"
 #include "components/download/public/common/download_url_parameters.h"
 #include "services/network/public/mojom/fetch_api.mojom-shared.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -92,9 +91,6 @@ struct InProgressInfo {
   // Data slices that have been downloaded so far. The slices must be ordered
   // by their offset.
   std::vector<DownloadItem::ReceivedSlice> received_slices;
-
-  // The download's |reroute_info|.
-  download::DownloadItemRerouteInfo reroute_info;
 
   // Hash of the downloaded content.
   std::string hash;

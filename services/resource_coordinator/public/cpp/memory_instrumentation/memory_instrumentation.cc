@@ -4,7 +4,7 @@
 
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/memory_instrumentation.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 
 namespace memory_instrumentation {
 namespace {
@@ -48,8 +48,8 @@ void MemoryInstrumentation::RequestGlobalDump(
     RequestGlobalDumpCallback callback) {
   CHECK(is_browser_process_);
   coordinator_->RequestGlobalMemoryDump(
-      MemoryDumpType::SUMMARY_ONLY, MemoryDumpLevelOfDetail::BACKGROUND,
-      MemoryDumpDeterminism::NONE, allocator_dump_names,
+      MemoryDumpType::kSummaryOnly, MemoryDumpLevelOfDetail::kBackground,
+      MemoryDumpDeterminism::kNone, allocator_dump_names,
       base::BindOnce(&WrapGlobalMemoryDump, std::move(callback)));
 }
 

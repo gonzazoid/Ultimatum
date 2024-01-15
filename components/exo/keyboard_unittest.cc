@@ -5,9 +5,11 @@
 #include "components/exo/keyboard.h"
 
 #include "ash/accelerators/accelerator_controller_impl.h"
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/constants/app_types.h"
+#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
+#include "ash/keyboard/keyboard_controller_impl.h"
 #include "ash/public/cpp/external_arc/overlay/arc_overlay_manager.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_helper.h"
@@ -15,8 +17,10 @@
 #include "ash/test/test_window_builder.h"
 #include "ash/wm/desks/desks_controller.h"
 #include "ash/wm/desks/desks_test_util.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
+#include "ash/wm/tablet_mode/tablet_mode_controller_test_api.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/test/scoped_feature_list.h"
 #include "components/exo/buffer.h"
 #include "components/exo/keyboard_delegate.h"
 #include "components/exo/keyboard_device_configuration_delegate.h"
@@ -32,10 +36,13 @@
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/client/focus_client.h"
 #include "ui/base/accelerators/test_accelerator_target.h"
+#include "ui/base/ime/constants.h"
 #include "ui/base/ime/dummy_text_input_client.h"
+#include "ui/base/ime/events.h"
 #include "ui/events/devices/device_data_manager.h"
 #include "ui/events/event_constants.h"
 #include "ui/events/keycodes/dom/dom_code.h"
+#include "ui/events/ozone/events_ozone.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/events/types/event_type.h"
 #include "ui/views/controls/textfield/textfield.h"
@@ -116,7 +123,7 @@ class TestEventHandler : public ui::EventHandler {
         ->FocusWindow(focus_window_);
   }
 
-  aura::Window* focus_window_;
+  raw_ptr<aura::Window> focus_window_;
 };
 
 // Verifies that switching desks via alt-tab doesn't prevent Seat from receiving
@@ -461,7 +468,13 @@ TEST_F(KeyboardTest, OnKeyboardKey_NotSendKeyIfConsumedByIme) {
       .Times(0);
   seat.set_physical_code_for_currently_processing_event_for_testing(
       ui::DomCode::US_A);
-  generator.PressKey(ui::VKEY_A, 0);
+
+  {
+    ui::KeyEvent event(ui::ET_KEY_PRESSED, ui::VKEY_A, 0);
+    ui::SetKeyboardImeFlags(&event, ui::kPropertyKeyboardImeHandledFlag);
+    event.set_source_device_id(0);
+    generator.Dispatch(&event);
+  }
   testing::Mock::VerifyAndClearExpectations(&observer);
   testing::Mock::VerifyAndClearExpectations(delegate_ptr);
 
@@ -570,6 +583,95 @@ TEST_F(KeyboardTest, OnKeyboardKey_KeyboardInhibit) {
       ui::DomCode::US_P);
   generator.PressKey(ui::VKEY_P, ui::EF_ALT_DOWN | ui::EF_SHIFT_DOWN);
   EXPECT_EQ(0, accelerator_target.accelerator_count());
+  testing::Mock::VerifyAndClearExpectations(&observer);
+  testing::Mock::VerifyAndClearExpectations(delegate_ptr);
+}
+
+TEST_F(KeyboardTest, KeyboardKey_SuppressAutoRepeat) {
+  auto shell_surface = test::ShellSurfaceBuilder({10, 10}).BuildShellSurface();
+  auto* surface = shell_surface->surface_for_testing();
+
+  // Set lacros attribute now for testing. This can be removed, when
+  // all clients are migrated into this model.
+  surface->window()->SetProperty(aura::client::kAppType,
+                                 static_cast<int>(ash::AppType::LACROS));
+
+  aura::client::FocusClient* focus_client =
+      aura::client::GetFocusClient(ash::Shell::GetPrimaryRootWindow());
+  focus_client->FocusWindow(nullptr);
+
+  auto delegate = std::make_unique<NiceMockKeyboardDelegate>();
+  auto* delegate_ptr = delegate.get();
+  NiceMockKeyboardObserver observer;
+  Seat seat;
+  Keyboard keyboard(std::move(delegate), &seat);
+  keyboard.AddObserver(&observer);
+  keyboard.SetNeedKeyboardKeyAcks(true);
+
+  EXPECT_CALL(*delegate_ptr, CanAcceptKeyboardEventsForSurface(surface))
+      .WillOnce(testing::Return(true));
+  focus_client->FocusWindow(surface->window());
+  testing::Mock::VerifyAndClearExpectations(delegate_ptr);
+
+  ui::test::EventGenerator generator(ash::Shell::GetPrimaryRootWindow());
+
+  // Send KeyEvent annotated the auto repeat suppression.
+  {
+    testing::InSequence s;
+    EXPECT_CALL(*delegate_ptr,
+                OnKeyRepeatSettingsChanged(false, testing::_, testing::_))
+        .Times(1);
+    EXPECT_CALL(observer,
+                OnKeyboardKey(testing::_, ui::DomCode::US_X, testing::_))
+        .Times(1);
+    EXPECT_CALL(*delegate_ptr,
+                OnKeyboardKey(testing::_, ui::DomCode::US_X, testing::_))
+        .Times(1);
+  }
+  seat.set_physical_code_for_currently_processing_event_for_testing(
+      ui::DomCode::US_X);
+  {
+    ui::KeyEvent event(ui::ET_KEY_PRESSED, ui::VKEY_X, 0);
+    event.set_source_device_id(ui::ED_UNKNOWN_DEVICE);
+    {
+      ui::Event::Properties properties;
+      ui::SetKeyboardImeFlagProperty(&properties,
+                                     ui::kPropertyKeyboardImeIgnoredFlag);
+      ui::SetKeyEventSuppressAutoRepeat(properties);
+      event.SetProperties(properties);
+    }
+    generator.Dispatch(&event);
+  }
+  testing::Mock::VerifyAndClearExpectations(&observer);
+  testing::Mock::VerifyAndClearExpectations(delegate_ptr);
+
+  // Following KeyEvent without the annotation will re-enable
+  // auto-repeat.
+  {
+    testing::InSequence s;
+    EXPECT_CALL(*delegate_ptr,
+                OnKeyRepeatSettingsChanged(true, testing::_, testing::_))
+        .Times(1);
+    EXPECT_CALL(observer,
+                OnKeyboardKey(testing::_, ui::DomCode::US_Y, testing::_))
+        .Times(1);
+    EXPECT_CALL(*delegate_ptr,
+                OnKeyboardKey(testing::_, ui::DomCode::US_Y, testing::_))
+        .Times(1);
+  }
+  seat.set_physical_code_for_currently_processing_event_for_testing(
+      ui::DomCode::US_Y);
+  {
+    ui::KeyEvent event(ui::ET_KEY_PRESSED, ui::VKEY_Y, 0);
+    event.set_source_device_id(ui::ED_UNKNOWN_DEVICE);
+    {
+      ui::Event::Properties properties;
+      ui::SetKeyboardImeFlagProperty(&properties,
+                                     ui::kPropertyKeyboardImeIgnoredFlag);
+      event.SetProperties(properties);
+    }
+    generator.Dispatch(&event);
+  }
   testing::Mock::VerifyAndClearExpectations(&observer);
   testing::Mock::VerifyAndClearExpectations(delegate_ptr);
 }
@@ -716,8 +818,8 @@ TEST_F(KeyboardTest, OnKeyboardTypeChanged) {
       ui::DeviceDataManager::GetInstance();
   ASSERT_TRUE(device_data_manager != nullptr);
   // Make sure that DeviceDataManager has one external keyboard...
-  const std::vector<ui::InputDevice> keyboards{
-      ui::InputDevice(2, ui::InputDeviceType::INPUT_DEVICE_USB, "keyboard")};
+  const std::vector<ui::KeyboardDevice> keyboards{
+      ui::KeyboardDevice(2, ui::InputDeviceType::INPUT_DEVICE_USB, "keyboard")};
   device_data_manager->OnKeyboardDevicesUpdated(keyboards);
   // and a touch screen.
   const std::vector<ui::TouchscreenDevice> touch_screen{
@@ -725,9 +827,7 @@ TEST_F(KeyboardTest, OnKeyboardTypeChanged) {
                             "touch", gfx::Size(600, 400), 1)};
   device_data_manager->OnTouchscreenDevicesUpdated(touch_screen);
 
-  ash::TabletModeController* tablet_mode_controller =
-      ash::Shell::Get()->tablet_mode_controller();
-  tablet_mode_controller->SetEnabledForTest(true);
+  ash::TabletModeControllerTestApi().EnterTabletMode();
 
   Seat seat;
   auto keyboard = std::make_unique<Keyboard>(
@@ -744,7 +844,7 @@ TEST_F(KeyboardTest, OnKeyboardTypeChanged) {
   // OnKeyboardTypeChanged() with false.
   EXPECT_CALL(configuration_delegate, OnKeyboardTypeChanged(false));
   device_data_manager->OnKeyboardDevicesUpdated(
-      std::vector<ui::InputDevice>({}));
+      std::vector<ui::KeyboardDevice>({}));
   testing::Mock::VerifyAndClearExpectations(&configuration_delegate);
 
   // Re-adding keyboards calls OnKeyboardTypeChanged() with true.
@@ -754,7 +854,7 @@ TEST_F(KeyboardTest, OnKeyboardTypeChanged) {
 
   keyboard.reset();
 
-  tablet_mode_controller->SetEnabledForTest(false);
+  ash::TabletModeControllerTestApi().LeaveTabletMode();
 }
 
 TEST_F(KeyboardTest, OnKeyboardTypeChanged_AccessibilityKeyboard) {
@@ -768,8 +868,8 @@ TEST_F(KeyboardTest, OnKeyboardTypeChanged_AccessibilityKeyboard) {
       ui::DeviceDataManager::GetInstance();
   ASSERT_TRUE(device_data_manager != nullptr);
   // Make sure that DeviceDataManager has one external keyboard.
-  const std::vector<ui::InputDevice> keyboards{
-      ui::InputDevice(2, ui::InputDeviceType::INPUT_DEVICE_USB, "keyboard")};
+  const std::vector<ui::KeyboardDevice> keyboards{
+      ui::KeyboardDevice(2, ui::InputDeviceType::INPUT_DEVICE_USB, "keyboard")};
   device_data_manager->OnKeyboardDevicesUpdated(keyboards);
 
   Seat seat;
@@ -781,7 +881,7 @@ TEST_F(KeyboardTest, OnKeyboardTypeChanged_AccessibilityKeyboard) {
   EXPECT_TRUE(keyboard.HasDeviceConfigurationDelegate());
   testing::Mock::VerifyAndClearExpectations(&configuration_delegate);
 
-  ash::AccessibilityControllerImpl* accessibility_controller =
+  ash::AccessibilityController* accessibility_controller =
       ash::Shell::Get()->accessibility_controller();
 
   // Enable a11y keyboard calls OnKeyboardTypeChanged() with false.
@@ -800,6 +900,38 @@ TEST_F(KeyboardTest, OnKeyboardTypeChanged_AccessibilityKeyboard) {
 constexpr base::TimeDelta kDelta50Ms = base::Milliseconds(50);
 constexpr base::TimeDelta kDelta500Ms = base::Milliseconds(500);
 constexpr base::TimeDelta kDelta1000Ms = base::Milliseconds(1000);
+
+TEST_F(KeyboardTest, KeyRepeatSettingsUninitialized) {
+  Seat seat;
+
+  // Simulate unsigned login state.
+  auto* keyboard_controller = ash::Shell::Get()->keyboard_controller();
+  keyboard_controller->OnSigninScreenPrefServiceInitialized(nullptr);
+
+  // If KeyboardController is not initialized with prefs,
+  // no key-repeat setting event should be triggered.
+  auto delegate = std::make_unique<NiceMockKeyboardDelegate>();
+  auto* delegate_ptr = delegate.get();
+  EXPECT_CALL(*delegate_ptr,
+              OnKeyRepeatSettingsChanged(testing::_, testing::_, testing::_))
+      .Times(0);
+  Keyboard keyboard(std::move(delegate), &seat);
+  testing::Mock::VerifyAndClearExpectations(delegate_ptr);
+
+  // Then, when the pref is initialized, key repeat setting event should be
+  // triggered.
+  TestingPrefServiceSimple pref_service;
+  ash::KeyboardControllerImpl::RegisterProfilePrefs(pref_service.registry(),
+                                                    /*country=*/"");
+
+  EXPECT_CALL(*delegate_ptr,
+              OnKeyRepeatSettingsChanged(testing::_, testing::_, testing::_));
+  keyboard_controller->OnSigninScreenPrefServiceInitialized(&pref_service);
+  testing::Mock::VerifyAndClearExpectations(delegate_ptr);
+
+  // Unset the pref_service before its destruction just for tearing down.
+  keyboard_controller->OnSigninScreenPrefServiceInitialized(nullptr);
+}
 
 TEST_F(KeyboardTest, KeyRepeatSettingsLoadDefaults) {
   auto delegate = std::make_unique<NiceMockKeyboardDelegate>();
@@ -1398,5 +1530,80 @@ TEST_F(KeyboardTest, OnKeyboardKey_ChangeFocusInPreTargetHandler) {
   wm_helper()->RemovePreTargetHandler(&handler);
 }
 
+TEST_F(KeyboardTest, SystemKeysNotSentAsPressedKeys) {
+  auto shell_surface = test::ShellSurfaceBuilder({10, 10}).BuildShellSurface();
+  auto* surface = shell_surface->root_surface();
+
+  aura::client::FocusClient* focus_client =
+      aura::client::GetFocusClient(ash::Shell::GetPrimaryRootWindow());
+  focus_client->FocusWindow(nullptr);
+
+  Seat seat;
+
+  // Pressing keys before Keyboard instance is created and surface has
+  // received focus.
+  ui::test::EventGenerator* generator = GetEventGenerator();
+  seat.set_physical_code_for_currently_processing_event_for_testing(
+      ui::DomCode::US_A);
+  generator->PressKey(ui::VKEY_A, ui::EF_SHIFT_DOWN);
+  seat.set_physical_code_for_currently_processing_event_for_testing(
+      ui::DomCode::LAUNCH_APP1);
+  generator->PressKey(ui::VKEY_MEDIA_LAUNCH_APP1, 0);
+
+  auto delegate = std::make_unique<NiceMockKeyboardDelegate>();
+  auto* delegate_ptr = delegate.get();
+  auto keyboard = std::make_unique<Keyboard>(std::move(delegate), &seat);
+  ON_CALL(*delegate_ptr, CanAcceptKeyboardEventsForSurface(surface))
+      .WillByDefault(testing::Return(true));
+
+  // LAUNCH_APP1 should be filtered out before sending OnKeyboardEnter.
+  EXPECT_CALL(
+      *delegate_ptr,
+      OnKeyboardEnter(surface, base::flat_map<ui::DomCode, KeyState>(
+                                   {{ui::DomCode::US_A,
+                                     KeyState{ui::DomCode::US_A, false}}})));
+  focus_client->FocusWindow(surface->window());
+  testing::Mock::VerifyAndClearExpectations(delegate_ptr);
+}
+
+TEST_F(KeyboardTest, CanConsumeSystemKeysSentAsPressedKeys) {
+  auto shell_surface = test::ShellSurfaceBuilder({10, 10}).BuildShellSurface();
+  auto* surface = shell_surface->root_surface();
+
+  aura::client::FocusClient* focus_client =
+      aura::client::GetFocusClient(ash::Shell::GetPrimaryRootWindow());
+  focus_client->FocusWindow(nullptr);
+  ash::WindowState::Get(surface->window()->GetToplevelWindow())
+      ->SetCanConsumeSystemKeys(true);
+  Seat seat;
+
+  // Pressing keys before Keyboard instance is created and surface has
+  // received focus.
+  ui::test::EventGenerator* generator = GetEventGenerator();
+  seat.set_physical_code_for_currently_processing_event_for_testing(
+      ui::DomCode::US_A);
+  generator->PressKey(ui::VKEY_A, ui::EF_SHIFT_DOWN);
+  seat.set_physical_code_for_currently_processing_event_for_testing(
+      ui::DomCode::LAUNCH_APP1);
+  generator->PressKey(ui::VKEY_MEDIA_LAUNCH_APP1, 0);
+
+  auto delegate = std::make_unique<NiceMockKeyboardDelegate>();
+  auto* delegate_ptr = delegate.get();
+  auto keyboard = std::make_unique<Keyboard>(std::move(delegate), &seat);
+  ON_CALL(*delegate_ptr, CanAcceptKeyboardEventsForSurface(surface))
+      .WillByDefault(testing::Return(true));
+
+  // LAUNCH_APP1 should not be filtered out before sending OnKeyboardEnter.
+  EXPECT_CALL(
+      *delegate_ptr,
+      OnKeyboardEnter(
+          surface, base::flat_map<ui::DomCode, KeyState>({
+                       {ui::DomCode::US_A, KeyState{ui::DomCode::US_A, false}},
+                       {ui::DomCode::LAUNCH_APP1,
+                        KeyState{ui::DomCode::LAUNCH_APP1, false}},
+                   })));
+  focus_client->FocusWindow(surface->window());
+  testing::Mock::VerifyAndClearExpectations(delegate_ptr);
+}
 }  // namespace
 }  // namespace exo

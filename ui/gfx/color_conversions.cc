@@ -4,6 +4,9 @@
 
 #include "ui/gfx/color_conversions.h"
 
+#include <cmath>
+#include <tuple>
+
 #include "skia/ext/skcolorspace_primaries.h"
 #include "skia/ext/skcolorspace_trfn.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
@@ -40,7 +43,7 @@ const skcms_Matrix3x3* getXYZD50TosRGBLinearMatrix() {
   return &xyzd50_to_srgb_linear;
 }
 
-const skcms_Matrix3x3* getkXYZD65tosRGBMatrix() {
+const skcms_Matrix3x3* getXYZD65tosRGBLinearMatrix() {
   static skcms_Matrix3x3 adapt_XYZD65_to_srgb = skcms_Matrix3x3_concat(
       getXYZD50TosRGBLinearMatrix(), getXYDZ65toXYZD50matrix());
   return &adapt_XYZD65_to_srgb;
@@ -248,7 +251,7 @@ std::tuple<float, float, float> XYZD50ToLab(float x, float y, float z) {
     if (t <= delta_limit)
       return (841.0f / 108.0f) * t + (16.0f / 116.0f);
     else
-      return pow(t, 1.0f / 3.0f);
+      return std::pow(t, 1.0f / 3.0f);
   };
 
   x = LabTransferFunction(x / kD50_x);
@@ -263,7 +266,7 @@ std::tuple<float, float, float> XYZD50ToLab(float x, float y, float z) {
 }
 
 std::tuple<float, float, float> OklabToXYZD65(float l, float a, float b) {
-  skcms_Vector3 lab_input{{l / 100.f, a, b}};
+  skcms_Vector3 lab_input{{l, a, b}};
   skcms_Vector3 lms_intermediate =
       skcms_Matrix3x3_apply(getOklabToLMSMatrix(), &lab_input);
   lms_intermediate.vals[0] = lms_intermediate.vals[0] *
@@ -292,18 +295,13 @@ std::tuple<float, float, float> XYZD65ToOklab(float x, float y, float z) {
 
   skcms_Vector3 lab_output =
       skcms_Matrix3x3_apply(getLMSToOklabMatrix(), &lms_intermediate);
-  return std::make_tuple(lab_output.vals[0] * 100.0f, lab_output.vals[1],
+  return std::make_tuple(lab_output.vals[0], lab_output.vals[1],
                          lab_output.vals[2]);
 }
 
-std::tuple<float, float, float> LchToLab(float l,
-                                         float c,
-                                         absl::optional<float> h) {
-  if (!h.has_value())
-    return std::make_tuple(l, 0, 0);
-
-  return std::make_tuple(l, c * std::cos(gfx::DegToRad(h.value())),
-                         c * std::sin(gfx::DegToRad(h.value())));
+std::tuple<float, float, float> LchToLab(float l, float c, float h) {
+  return std::make_tuple(l, c * std::cos(gfx::DegToRad(h)),
+                         c * std::sin(gfx::DegToRad(h)));
 }
 std::tuple<float, float, float> LabToLch(float l, float a, float b) {
   return std::make_tuple(l, std::sqrt(a * a + b * b),
@@ -394,10 +392,18 @@ std::tuple<float, float, float> XYZD65ToD50(float x, float y, float z) {
                          xyz_output.vals[2]);
 }
 
+std::tuple<float, float, float> XYZD50TosRGB(float x, float y, float z) {
+  skcms_Vector3 xyz_input{{x, y, z}};
+  skcms_Vector3 rgb_result =
+      skcms_Matrix3x3_apply(getXYZD50TosRGBLinearMatrix(), &xyz_input);
+  return ApplyInverseTransferFnsRGB(rgb_result.vals[0], rgb_result.vals[1],
+                                    rgb_result.vals[2]);
+}
+
 std::tuple<float, float, float> XYZD65TosRGBLinear(float x, float y, float z) {
   skcms_Vector3 xyz_input{{x, y, z}};
   skcms_Vector3 rgb_result =
-      skcms_Matrix3x3_apply(getkXYZD65tosRGBMatrix(), &xyz_input);
+      skcms_Matrix3x3_apply(getXYZD65tosRGBLinearMatrix(), &xyz_input);
   return std::make_tuple(rgb_result.vals[0], rgb_result.vals[1],
                          rgb_result.vals[2]);
 }
@@ -427,7 +433,23 @@ std::tuple<float, float, float> SRGBToXYZD50(float r, float g, float b) {
                          xyz_output.vals[2]);
 }
 
+std::tuple<float, float, float> HSLToSRGB(float h, float s, float l) {
+  // See https://www.w3.org/TR/css-color-4/#hsl-to-rgb
+  if (!s) {
+    return std::make_tuple(l, l, l);
+  }
+
+  auto f = [&h, &l, &s](float n) {
+    float k = fmod(n + h / 30.0f, 12.0);
+    float a = s * std::min(l, 1.0f - l);
+    return l - a * std::max(-1.0f, std::min({k - 3.0f, 9.0f - k, 1.0f}));
+  };
+
+  return std::make_tuple(f(0), f(8), f(4));
+}
+
 std::tuple<float, float, float> SRGBToHSL(float r, float g, float b) {
+  // See https://www.w3.org/TR/css-color-4/#rgb-to-hsl
   float max = std::max({r, g, b});
   float min = std::min({r, g, b});
   float hue = 0.0f, saturation = 0.0f, ligth = (max + min) / 2.0f;
@@ -444,12 +466,32 @@ std::tuple<float, float, float> SRGBToHSL(float r, float g, float b) {
     } else {  // if(max == b)
       hue = (r - g) / d + 4.0f;
     }
+    hue *= 60.0f;
   }
 
   return std::make_tuple(hue, saturation, ligth);
 }
 
+std::tuple<float, float, float> HWBToSRGB(float h, float w, float b) {
+  if (w + b >= 1.0f) {
+    float gray = (w / (w + b));
+    return std::make_tuple(gray, gray, gray);
+  }
+
+  // Leverage HSL to RGB conversion to find HWB to RGB, see
+  // https://drafts.csswg.org/css-color-4/#hwb-to-rgb
+  auto [red, green, blue] = HSLToSRGB(h, 1.0f, 0.5f);
+
+  red += w - (w + b) * red;
+  green += w - (w + b) * green;
+  blue += w - (w + b) * blue;
+
+  return std::make_tuple(red, green, blue);
+}
+
 std::tuple<float, float, float> SRGBToHWB(float r, float g, float b) {
+  // Leverage RGB to HSL conversion to find RGB to HWB, see
+  // https://www.w3.org/TR/css-color-4/#rgb-to-hwb
   auto [hue, saturation, light] = SRGBToHSL(r, g, b);
   float white = std::min({r, g, b});
   float black = 1.0f - std::max({r, g, b});
@@ -492,10 +534,7 @@ SkColor4f DisplayP3ToSkColor4f(float r, float g, float b, float alpha) {
   return XYZD50ToSkColor4f(x, y, z, alpha);
 }
 
-SkColor4f LchToSkColor4f(float l_input,
-                         float c,
-                         absl::optional<float> h,
-                         float alpha) {
+SkColor4f LchToSkColor4f(float l_input, float c, float h, float alpha) {
   auto [l, a, b] = LchToLab(l_input, c, h);
   auto [x, y, z] = LabToXYZD50(l, a, b);
   return XYZD50ToSkColor4f(x, y, z, alpha);
@@ -510,61 +549,19 @@ SkColor4f Rec2020ToSkColor4f(float r, float g, float b, float alpha) {
   return XYZD50ToSkColor4f(x, y, z, alpha);
 }
 
-SkColor4f OklchToSkColor4f(float l_input,
-                           float c,
-                           absl::optional<float> h,
-                           float alpha) {
+SkColor4f OklchToSkColor4f(float l_input, float c, float h, float alpha) {
   auto [l, a, b] = LchToLab(l_input, c, h);
   auto [x, y, z] = OklabToXYZD65(l, a, b);
   return XYZD65ToSkColor4f(x, y, z, alpha);
 }
 
 SkColor4f HSLToSkColor4f(float h, float s, float l, float alpha) {
-  // Explanation of this algorithm can be found in the CSS Color 4 Module
-  // specification at https://drafts.csswg.org/css-color-4/#hsl-to-rgb with
-  // further explanation available at
-  // http://en.wikipedia.org/wiki/HSL_color_space
-
-  // Hue is in the range of 0.0 to 6.0, the remainder are in the range 0.0
-  // to 1.0. Out parameters r, g, and b are also returned in range 0.0 to 1.0.
-  if (!s) {
-    return SkColor4f{l, l, l, alpha};
-  }
-  float temp2 = l <= 0.5 ? l * (1.0 + s) : l + s - l * s;
-  float temp1 = 2.0 * l - temp2;
-
-  auto CalcHue = [](float temp1, float temp2, float hue_val) {
-    if (hue_val < 0.0f)
-      hue_val += 6.0f;
-    else if (hue_val >= 6.0f)
-      hue_val -= 6.0f;
-    if (hue_val < 1.0f)
-      return temp1 + (temp2 - temp1) * hue_val;
-    if (hue_val < 3.0f)
-      return temp2;
-    if (hue_val < 4.0f)
-      return temp1 + (temp2 - temp1) * (4.0f - hue_val);
-    return temp1;
-  };
-
-  return SkColor4f{CalcHue(temp1, temp2, h + 2.0), CalcHue(temp1, temp2, h),
-                   CalcHue(temp1, temp2, h - 2.0), alpha};
+  auto [r, g, b] = HSLToSRGB(h, s, l);
+  return SkColor4f{r, g, b, alpha};
 }
 
 SkColor4f HWBToSkColor4f(float h, float w, float b, float alpha) {
-  if (w + b >= 1.0f) {
-    float gray = (w / (w + b));
-    return SkColor4f{gray, gray, gray, alpha};
-  }
-
-  // Leverage HSL to RGB conversion to find HWB to RGB, see
-  // https://drafts.csswg.org/css-color-4/#hwb-to-rgb
-  SkColor4f result = HSLToSkColor4f(h, 1.0f, 0.5f, alpha);
-
-  result.fR += w - (w + b) * result.fR;
-  result.fG += w - (w + b) * result.fG;
-  result.fB += w - (w + b) * result.fB;
-
-  return result;
+  auto [red, green, blue] = HWBToSRGB(h, w, b);
+  return SkColor4f{red, green, blue, alpha};
 }
 }  // namespace gfx

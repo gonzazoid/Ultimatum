@@ -5,20 +5,20 @@
 #ifndef CHROME_BROWSER_ASH_LOGIN_SCREENS_PIN_SETUP_SCREEN_H_
 #define CHROME_BROWSER_ASH_LOGIN_SCREENS_PIN_SETUP_SCREEN_H_
 
+#include <optional>
 #include <string>
 
 #include "base/auto_reset.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ash/login/wizard_context.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ui/webui/chromeos/login/pin_setup_screen_handler.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chrome/browser/ui/ash/auth/cryptohome_pin_engine.h"
 
 namespace ash {
+
+class PinSetupScreenView;
+class WizardContext;
 
 class PinSetupScreen : public BaseScreen {
  public:
@@ -37,11 +37,6 @@ class PinSetupScreen : public BaseScreen {
   };
 
   static std::string GetResultString(Result result);
-
-  // Checks whether PIN setup should be skipped because of the policies.
-  // There is an additional checkpoint that might skip the setup based on user
-  // profile and pin availability information in `MaybeSkip`.
-  static bool ShouldSkipBecauseOfPolicy();
 
   static std::unique_ptr<base::AutoReset<bool>>
   SetForceNoSkipBecauseOfPolicyForTests(bool value);
@@ -66,6 +61,7 @@ class PinSetupScreen : public BaseScreen {
  protected:
   // BaseScreen:
   bool MaybeSkip(WizardContext& context) override;
+  bool ShouldBeSkipped(const WizardContext& context) const override;
   void ShowImpl() override;
   void HideImpl() override;
   void OnUserAction(const base::Value::List& args) override;
@@ -74,27 +70,24 @@ class PinSetupScreen : public BaseScreen {
   // Inticates whether the device supports usage of PIN for login.
   // This information is retrived in an async way and will not be available
   // immediately.
-  absl::optional<bool> has_login_support_;
+  std::optional<bool> has_login_support_;
 
   base::WeakPtr<PinSetupScreenView> view_;
   ScreenExitCallback exit_callback_;
 
   base::OneShotTimer token_lifetime_timeout_;
 
-  bool SkipScreen(WizardContext& context);
   void ClearAuthData(WizardContext& context);
   void OnHasLoginSupport(bool login_available);
   void OnTokenTimedOut();
+
+  AuthPerformer auth_performer_;
+
+  legacy::CryptohomePinEngine cryptohome_pin_engine_;
 
   base::WeakPtrFactory<PinSetupScreen> weak_ptr_factory_{this};
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::PinSetupScreen;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_PIN_SETUP_SCREEN_H_

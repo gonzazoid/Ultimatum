@@ -8,16 +8,17 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
+#include "base/test/gmock_expected_support.h"
 #include "base/test/test_future.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/sync_file_system/local/canned_syncable_file_system.h"
 #include "chrome/browser/sync_file_system/local/local_file_change_tracker.h"
 #include "chrome/browser/sync_file_system/local/sync_file_system_backend.h"
@@ -57,7 +58,7 @@ namespace sync_file_system {
 namespace {
 const char kOrigin1[] = "http://example.com";
 const char kOrigin2[] = "http://chromium.org";
-}
+}  // namespace
 
 class LocalFileSyncContextTest : public testing::Test {
  protected:
@@ -73,7 +74,7 @@ class LocalFileSyncContextTest : public testing::Test {
     ASSERT_TRUE(dir_.CreateUniqueTempDir());
     in_memory_env_ = leveldb_chrome::NewMemEnv("LocalFileSyncContextTest");
 
-    ui_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+    ui_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
     io_task_runner_ = content::GetIOThreadTaskRunner({});
     file_task_runner_ = content::GetIOThreadTaskRunner({});
   }
@@ -102,8 +103,8 @@ class LocalFileSyncContextTest : public testing::Test {
                                 SyncFileMetadata* metadata,
                                 FileChangeList* changes,
                                 storage::ScopedFile* snapshot) {
-    StartPrepareForSync(file_system_context, url, sync_mode,
-                        metadata, changes, snapshot);
+    StartPrepareForSync(file_system_context, url, sync_mode, metadata, changes,
+                        snapshot);
     base::RunLoop().Run();
     return status_;
   }
@@ -132,8 +133,9 @@ class LocalFileSyncContextTest : public testing::Test {
     status_ = status;
     *metadata_out = sync_file_info.metadata;
     *changes_out = sync_file_info.changes;
-    if (snapshot_out)
+    if (snapshot_out) {
       *snapshot_out = std::move(snapshot);
+    }
     base::RunLoop::QuitCurrentWhenIdleDeprecated();
   }
 
@@ -142,16 +144,15 @@ class LocalFileSyncContextTest : public testing::Test {
                                    const base::FilePath& local_path,
                                    const FileSystemURL& url,
                                    SyncFileType expected_file_type) {
-    SCOPED_TRACE(testing::Message() << "ApplyChange for " <<
-                 url.DebugString());
+    SCOPED_TRACE(testing::Message() << "ApplyChange for " << url.DebugString());
 
     // First we should call PrepareForSync to disable writing.
     SyncFileMetadata metadata;
     FileChangeList changes;
     EXPECT_EQ(SYNC_STATUS_OK,
               PrepareForSync(file_system_context, url,
-                             LocalFileSyncContext::SYNC_EXCLUSIVE,
-                             &metadata, &changes, nullptr));
+                             LocalFileSyncContext::SYNC_EXCLUSIVE, &metadata,
+                             &changes, nullptr));
     EXPECT_EQ(expected_file_type, metadata.file_type);
 
     status_ = SYNC_STATUS_UNKNOWN;
@@ -195,8 +196,9 @@ class LocalFileSyncContextTest : public testing::Test {
   }
 
   base::File::Error WaitUntilModifyFileIsDone() {
-    while (!async_modify_finished_)
+    while (!async_modify_finished_) {
       base::RunLoop().RunUntilIdle();
+    }
     return file_error_;
   }
 
@@ -230,17 +232,15 @@ class LocalFileSyncContextTest : public testing::Test {
 
   void PrepareForSync_Basic(LocalFileSyncContext::SyncMode sync_mode,
                             SyncStatusCode simulate_sync_finish_status) {
-    CannedSyncableFileSystem file_system(GURL(kOrigin1),
-                                         in_memory_env_.get(),
+    CannedSyncableFileSystem file_system(GURL(kOrigin1), in_memory_env_.get(),
                                          io_task_runner_.get(),
                                          file_task_runner_.get());
     file_system.SetUp();
     sync_context_ =
         new LocalFileSyncContext(dir_.GetPath(), in_memory_env_.get(),
                                  ui_task_runner_.get(), io_task_runner_.get());
-    ASSERT_EQ(SYNC_STATUS_OK,
-              file_system.MaybeInitializeFileSystemContext(
-                  sync_context_.get()));
+    ASSERT_EQ(SYNC_STATUS_OK, file_system.MaybeInitializeFileSystemContext(
+                                  sync_context_.get()));
     ASSERT_EQ(base::File::FILE_OK, file_system.OpenFileSystem());
 
     const FileSystemURL kFile(file_system.URL("file"));
@@ -282,17 +282,15 @@ class LocalFileSyncContextTest : public testing::Test {
 
   void PrepareForSync_WriteDuringSync(
       LocalFileSyncContext::SyncMode sync_mode) {
-    CannedSyncableFileSystem file_system(GURL(kOrigin1),
-                                         in_memory_env_.get(),
+    CannedSyncableFileSystem file_system(GURL(kOrigin1), in_memory_env_.get(),
                                          io_task_runner_.get(),
                                          file_task_runner_.get());
     file_system.SetUp();
     sync_context_ =
         new LocalFileSyncContext(dir_.GetPath(), in_memory_env_.get(),
                                  ui_task_runner_.get(), io_task_runner_.get());
-    ASSERT_EQ(SYNC_STATUS_OK,
-              file_system.MaybeInitializeFileSystemContext(
-                  sync_context_.get()));
+    ASSERT_EQ(SYNC_STATUS_OK, file_system.MaybeInitializeFileSystemContext(
+                                  sync_context_.get()));
     ASSERT_EQ(base::File::FILE_OK, file_system.OpenFileSystem());
 
     const FileSystemURL kFile(file_system.URL("file"));
@@ -327,8 +325,8 @@ class LocalFileSyncContextTest : public testing::Test {
       EXPECT_FALSE(async_modify_finished_);
     }
 
-    SimulateFinishSync(file_system.file_system_context(), kFile,
-                       SYNC_STATUS_OK, sync_mode);
+    SimulateFinishSync(file_system.file_system_context(), kFile, SYNC_STATUS_OK,
+                       sync_mode);
 
     EXPECT_EQ(base::File::FILE_OK, WaitUntilModifyFileIsDone());
 
@@ -371,8 +369,7 @@ TEST_F(LocalFileSyncContextTest, ConstructAndDestruct) {
 }
 
 TEST_F(LocalFileSyncContextTest, InitializeFileSystemContext) {
-  CannedSyncableFileSystem file_system(GURL(kOrigin1),
-                                       in_memory_env_.get(),
+  CannedSyncableFileSystem file_system(GURL(kOrigin1), in_memory_env_.get(),
                                        io_task_runner_.get(),
                                        file_task_runner_.get());
   file_system.SetUp();
@@ -431,16 +428,15 @@ TEST_F(LocalFileSyncContextTest, CreateDefaultSyncableBucket) {
   EXPECT_EQ(base::File::FILE_OK, file_system.OpenFileSystem());
 
   base::test::TestFuture<storage::QuotaErrorOr<storage::BucketInfo>> future;
-  file_system.quota_manager()->proxy()->GetBucketForTesting(
+  file_system.quota_manager()->proxy()->GetBucketByNameUnsafe(
       blink::StorageKey::CreateFromStringForTesting(kOrigin1),
       storage::kDefaultBucketName, blink::mojom::StorageType::kSyncable,
-      base::SequencedTaskRunnerHandle::Get(), future.GetCallback());
+      base::SequencedTaskRunner::GetCurrentDefault(), future.GetCallback());
 
-  const auto result = future.Take();
-  EXPECT_TRUE(result.ok());
-  EXPECT_EQ(result->name, storage::kDefaultBucketName);
-  EXPECT_EQ(result->type, blink::mojom::StorageType::kSyncable);
-  EXPECT_GT(result->id.value(), 0);
+  ASSERT_OK_AND_ASSIGN(const auto result, future.Take());
+  EXPECT_EQ(result.name, storage::kDefaultBucketName);
+  EXPECT_EQ(result.type, blink::mojom::StorageType::kSyncable);
+  EXPECT_GT(result.id.value(), 0);
 
   // Finishing the test.
   sync_context_->ShutdownOnUIThread();
@@ -448,12 +444,10 @@ TEST_F(LocalFileSyncContextTest, CreateDefaultSyncableBucket) {
 }
 
 TEST_F(LocalFileSyncContextTest, MultipleFileSystemContexts) {
-  CannedSyncableFileSystem file_system1(GURL(kOrigin1),
-                                        in_memory_env_.get(),
+  CannedSyncableFileSystem file_system1(GURL(kOrigin1), in_memory_env_.get(),
                                         io_task_runner_.get(),
                                         file_task_runner_.get());
-  CannedSyncableFileSystem file_system2(GURL(kOrigin2),
-                                        in_memory_env_.get(),
+  CannedSyncableFileSystem file_system2(GURL(kOrigin2), in_memory_env_.get(),
                                         io_task_runner_.get(),
                                         file_task_runner_.get());
   file_system1.SetUp();
@@ -508,8 +502,8 @@ TEST_F(LocalFileSyncContextTest, MultipleFileSystemContexts) {
   FileChangeList changes;
   EXPECT_EQ(SYNC_STATUS_OK,
             PrepareForSync(file_system1.file_system_context(), kURL1,
-                           LocalFileSyncContext::SYNC_EXCLUSIVE,
-                           &metadata, &changes, nullptr));
+                           LocalFileSyncContext::SYNC_EXCLUSIVE, &metadata,
+                           &changes, nullptr));
   EXPECT_EQ(1U, changes.size());
   EXPECT_TRUE(changes.list().back().IsFile());
   EXPECT_TRUE(changes.list().back().IsAddOrUpdate());
@@ -519,8 +513,8 @@ TEST_F(LocalFileSyncContextTest, MultipleFileSystemContexts) {
   changes.clear();
   EXPECT_EQ(SYNC_STATUS_OK,
             PrepareForSync(file_system2.file_system_context(), kURL2,
-                           LocalFileSyncContext::SYNC_EXCLUSIVE,
-                           &metadata, &changes, nullptr));
+                           LocalFileSyncContext::SYNC_EXCLUSIVE, &metadata,
+                           &changes, nullptr));
   EXPECT_EQ(1U, changes.size());
   EXPECT_FALSE(changes.list().back().IsFile());
   EXPECT_TRUE(changes.list().back().IsAddOrUpdate());
@@ -535,13 +529,11 @@ TEST_F(LocalFileSyncContextTest, MultipleFileSystemContexts) {
 }
 
 TEST_F(LocalFileSyncContextTest, PrepareSync_SyncSuccess_Exclusive) {
-  PrepareForSync_Basic(LocalFileSyncContext::SYNC_EXCLUSIVE,
-                       SYNC_STATUS_OK);
+  PrepareForSync_Basic(LocalFileSyncContext::SYNC_EXCLUSIVE, SYNC_STATUS_OK);
 }
 
 TEST_F(LocalFileSyncContextTest, PrepareSync_SyncSuccess_Snapshot) {
-  PrepareForSync_Basic(LocalFileSyncContext::SYNC_SNAPSHOT,
-                       SYNC_STATUS_OK);
+  PrepareForSync_Basic(LocalFileSyncContext::SYNC_SNAPSHOT, SYNC_STATUS_OK);
 }
 
 TEST_F(LocalFileSyncContextTest, PrepareSync_SyncFailure_Exclusive) {
@@ -550,8 +542,7 @@ TEST_F(LocalFileSyncContextTest, PrepareSync_SyncFailure_Exclusive) {
 }
 
 TEST_F(LocalFileSyncContextTest, PrepareSync_SyncFailure_Snapshot) {
-  PrepareForSync_Basic(LocalFileSyncContext::SYNC_SNAPSHOT,
-                       SYNC_STATUS_FAILED);
+  PrepareForSync_Basic(LocalFileSyncContext::SYNC_SNAPSHOT, SYNC_STATUS_FAILED);
 }
 
 TEST_F(LocalFileSyncContextTest, PrepareSync_WriteDuringSync_Exclusive) {
@@ -567,8 +558,7 @@ TEST_F(LocalFileSyncContextTest, PrepareSync_WriteDuringSync_Snapshot) {
 // It is also flaky on the TSAN v2 bots, and hangs other bots.
 // http://crbug.com/305905.
 TEST_F(LocalFileSyncContextTest, DISABLED_PrepareSyncWhileWriting) {
-  CannedSyncableFileSystem file_system(GURL(kOrigin1),
-                                       in_memory_env_.get(),
+  CannedSyncableFileSystem file_system(GURL(kOrigin1), in_memory_env_.get(),
                                        io_task_runner_.get(),
                                        file_task_runner_.get());
   file_system.SetUp();
@@ -594,8 +584,8 @@ TEST_F(LocalFileSyncContextTest, DISABLED_PrepareSyncWhileWriting) {
   FileChangeList changes;
   EXPECT_EQ(SYNC_STATUS_FILE_BUSY,
             PrepareForSync(file_system.file_system_context(), kURL1,
-                           LocalFileSyncContext::SYNC_EXCLUSIVE,
-                           &metadata, &changes, nullptr));
+                           LocalFileSyncContext::SYNC_EXCLUSIVE, &metadata,
+                           &changes, nullptr));
   EXPECT_EQ(SYNC_FILE_TYPE_FILE, metadata.file_type);
 
   // Register PrepareForSync method to be invoked when kURL1 becomes
@@ -630,8 +620,7 @@ TEST_F(LocalFileSyncContextTest, DISABLED_PrepareSyncWhileWriting) {
 }
 
 TEST_F(LocalFileSyncContextTest, ApplyRemoteChangeForDeletion) {
-  CannedSyncableFileSystem file_system(GURL(kOrigin1),
-                                       in_memory_env_.get(),
+  CannedSyncableFileSystem file_system(GURL(kOrigin1), in_memory_env_.get(),
                                        io_task_runner_.get(),
                                        file_task_runner_.get());
   file_system.SetUp();
@@ -676,29 +665,23 @@ TEST_F(LocalFileSyncContextTest, ApplyRemoteChangeForDeletion) {
   EXPECT_GT(new_usage, initial_usage);
 
   // Now let's apply remote deletion changes.
-  FileChange change(FileChange::FILE_CHANGE_DELETE,
-                    SYNC_FILE_TYPE_FILE);
+  FileChange change(FileChange::FILE_CHANGE_DELETE, SYNC_FILE_TYPE_FILE);
   EXPECT_EQ(SYNC_STATUS_OK,
-            ApplyRemoteChange(file_system.file_system_context(),
-                              change, base::FilePath(), kFile,
-                              SYNC_FILE_TYPE_FILE));
+            ApplyRemoteChange(file_system.file_system_context(), change,
+                              base::FilePath(), kFile, SYNC_FILE_TYPE_FILE));
 
   // The implementation doesn't check file type for deletion, and it must be ok
   // even if we don't know if the deletion change was for a file or a directory.
-  change = FileChange(FileChange::FILE_CHANGE_DELETE,
-                      SYNC_FILE_TYPE_UNKNOWN);
-  EXPECT_EQ(SYNC_STATUS_OK,
-            ApplyRemoteChange(file_system.file_system_context(),
-                              change, base::FilePath(), kDir,
-                              SYNC_FILE_TYPE_DIRECTORY));
+  change = FileChange(FileChange::FILE_CHANGE_DELETE, SYNC_FILE_TYPE_UNKNOWN);
+  EXPECT_EQ(SYNC_STATUS_OK, ApplyRemoteChange(file_system.file_system_context(),
+                                              change, base::FilePath(), kDir,
+                                              SYNC_FILE_TYPE_DIRECTORY));
 
   // Check the directory/files are deleted successfully.
-  EXPECT_EQ(base::File::FILE_ERROR_NOT_FOUND,
-            file_system.FileExists(kFile));
+  EXPECT_EQ(base::File::FILE_ERROR_NOT_FOUND, file_system.FileExists(kFile));
   EXPECT_EQ(base::File::FILE_ERROR_NOT_FOUND,
             file_system.DirectoryExists(kDir));
-  EXPECT_EQ(base::File::FILE_ERROR_NOT_FOUND,
-            file_system.FileExists(kChild));
+  EXPECT_EQ(base::File::FILE_ERROR_NOT_FOUND, file_system.FileExists(kChild));
 
   // The changes applied by ApplyRemoteChange should not be recorded in
   // the change tracker.
@@ -717,8 +700,7 @@ TEST_F(LocalFileSyncContextTest, ApplyRemoteChangeForDeletion) {
 }
 
 TEST_F(LocalFileSyncContextTest, ApplyRemoteChangeForDeletion_ForRoot) {
-  CannedSyncableFileSystem file_system(GURL(kOrigin1),
-                                       in_memory_env_.get(),
+  CannedSyncableFileSystem file_system(GURL(kOrigin1), in_memory_env_.get(),
                                        io_task_runner_.get(),
                                        file_task_runner_.get());
   file_system.SetUp();
@@ -755,18 +737,15 @@ TEST_F(LocalFileSyncContextTest, ApplyRemoteChangeForDeletion_ForRoot) {
 
   // Now let's apply remote deletion changes for the root.
   FileChange change(FileChange::FILE_CHANGE_DELETE, SYNC_FILE_TYPE_DIRECTORY);
-  EXPECT_EQ(SYNC_STATUS_OK,
-            ApplyRemoteChange(file_system.file_system_context(),
-                              change, base::FilePath(), kRoot,
-                              SYNC_FILE_TYPE_DIRECTORY));
+  EXPECT_EQ(SYNC_STATUS_OK, ApplyRemoteChange(file_system.file_system_context(),
+                                              change, base::FilePath(), kRoot,
+                                              SYNC_FILE_TYPE_DIRECTORY));
 
   // Check the directory/files are deleted successfully.
-  EXPECT_EQ(base::File::FILE_ERROR_NOT_FOUND,
-            file_system.FileExists(kFile));
+  EXPECT_EQ(base::File::FILE_ERROR_NOT_FOUND, file_system.FileExists(kFile));
   EXPECT_EQ(base::File::FILE_ERROR_NOT_FOUND,
             file_system.DirectoryExists(kDir));
-  EXPECT_EQ(base::File::FILE_ERROR_NOT_FOUND,
-            file_system.FileExists(kChild));
+  EXPECT_EQ(base::File::FILE_ERROR_NOT_FOUND, file_system.FileExists(kChild));
 
   // All changes made for the previous creation must have been also reset.
   FileSystemURLSet urls;
@@ -787,8 +766,7 @@ TEST_F(LocalFileSyncContextTest, ApplyRemoteChangeForAddOrUpdate) {
   base::ScopedTempDir temp_dir;
   ASSERT_TRUE(temp_dir.CreateUniqueTempDir());
 
-  CannedSyncableFileSystem file_system(GURL(kOrigin1),
-                                       in_memory_env_.get(),
+  CannedSyncableFileSystem file_system(GURL(kOrigin1), in_memory_env_.get(),
                                        io_task_runner_.get(),
                                        file_task_runner_.get());
   file_system.SetUp();
@@ -804,18 +782,17 @@ TEST_F(LocalFileSyncContextTest, ApplyRemoteChangeForAddOrUpdate) {
   const FileSystemURL kFile2(file_system.URL("file2"));
   const FileSystemURL kDir(file_system.URL("dir"));
 
-  const char kTestFileData0[] = "0123456789";
-  const char kTestFileData1[] = "Lorem ipsum!";
-  const char kTestFileData2[] = "This is sample test data.";
+  const std::string kTestFileData0 = "0123456789";
+  const std::string kTestFileData1 = "Lorem ipsum!";
+  const std::string kTestFileData2 = "This is sample test data.";
 
   // Create kFile1 and populate it with kTestFileData0.
   EXPECT_EQ(base::File::FILE_OK, file_system.CreateFile(kFile1));
-  EXPECT_EQ(static_cast<int64_t>(std::size(kTestFileData0) - 1),
+  EXPECT_EQ(static_cast<int>(kTestFileData0.size()),
             file_system.WriteString(kFile1, kTestFileData0));
 
   // kFile2 and kDir are not there yet.
-  EXPECT_EQ(base::File::FILE_ERROR_NOT_FOUND,
-            file_system.FileExists(kFile2));
+  EXPECT_EQ(base::File::FILE_ERROR_NOT_FOUND, file_system.FileExists(kFile2));
   EXPECT_EQ(base::File::FILE_ERROR_NOT_FOUND,
             file_system.DirectoryExists(kDir));
 
@@ -830,12 +807,8 @@ TEST_F(LocalFileSyncContextTest, ApplyRemoteChangeForAddOrUpdate) {
   const base::FilePath kFilePath1(temp_dir.GetPath().Append(FPL("file1")));
   const base::FilePath kFilePath2(temp_dir.GetPath().Append(FPL("file2")));
 
-  ASSERT_EQ(static_cast<int>(std::size(kTestFileData1) - 1),
-            base::WriteFile(kFilePath1, kTestFileData1,
-                            std::size(kTestFileData1) - 1));
-  ASSERT_EQ(static_cast<int>(std::size(kTestFileData2) - 1),
-            base::WriteFile(kFilePath2, kTestFileData2,
-                            std::size(kTestFileData2) - 1));
+  ASSERT_TRUE(base::WriteFile(kFilePath1, kTestFileData1));
+  ASSERT_TRUE(base::WriteFile(kFilePath2, kTestFileData2));
 
   // Record the usage.
   int64_t usage = -1, new_usage = -1;
@@ -857,16 +830,13 @@ TEST_F(LocalFileSyncContextTest, ApplyRemoteChangeForAddOrUpdate) {
   //  * kDir will be created
 
   // Apply the remote change to kFile1 (which will update the file).
-  FileChange change(FileChange::FILE_CHANGE_ADD_OR_UPDATE,
-                    SYNC_FILE_TYPE_FILE);
+  FileChange change(FileChange::FILE_CHANGE_ADD_OR_UPDATE, SYNC_FILE_TYPE_FILE);
   EXPECT_EQ(SYNC_STATUS_OK,
-            ApplyRemoteChange(file_system.file_system_context(),
-                              change, kFilePath1, kFile1,
-                              SYNC_FILE_TYPE_FILE));
+            ApplyRemoteChange(file_system.file_system_context(), change,
+                              kFilePath1, kFile1, SYNC_FILE_TYPE_FILE));
 
   // Check if the usage has been increased by (kTestFileData1 - kTestFileData0).
-  const int updated_size =
-      std::size(kTestFileData1) - std::size(kTestFileData0);
+  const int updated_size = kTestFileData1.size() - kTestFileData0.size();
   EXPECT_EQ(blink::mojom::QuotaStatusCode::kOk,
             file_system.GetUsageAndQuota(&new_usage, &quota));
   EXPECT_EQ(updated_size, new_usage - usage);
@@ -876,48 +846,39 @@ TEST_F(LocalFileSyncContextTest, ApplyRemoteChangeForAddOrUpdate) {
   // They are non-existent yet so their expected file type (the last
   // parameter of ApplyRemoteChange) are
   // SYNC_FILE_TYPE_UNKNOWN.
-  change = FileChange(FileChange::FILE_CHANGE_ADD_OR_UPDATE,
-                      SYNC_FILE_TYPE_FILE);
+  change =
+      FileChange(FileChange::FILE_CHANGE_ADD_OR_UPDATE, SYNC_FILE_TYPE_FILE);
   EXPECT_EQ(SYNC_STATUS_OK,
-            ApplyRemoteChange(file_system.file_system_context(),
-                              change, kFilePath2, kFile2,
-                              SYNC_FILE_TYPE_UNKNOWN));
+            ApplyRemoteChange(file_system.file_system_context(), change,
+                              kFilePath2, kFile2, SYNC_FILE_TYPE_UNKNOWN));
 
   change = FileChange(FileChange::FILE_CHANGE_ADD_OR_UPDATE,
                       SYNC_FILE_TYPE_DIRECTORY);
   EXPECT_EQ(SYNC_STATUS_OK,
-            ApplyRemoteChange(file_system.file_system_context(),
-                              change, base::FilePath(), kDir,
-                              SYNC_FILE_TYPE_UNKNOWN));
+            ApplyRemoteChange(file_system.file_system_context(), change,
+                              base::FilePath(), kDir, SYNC_FILE_TYPE_UNKNOWN));
 
   // Calling ApplyRemoteChange with different file type should be handled as
   // overwrite.
   change =
       FileChange(FileChange::FILE_CHANGE_ADD_OR_UPDATE, SYNC_FILE_TYPE_FILE);
   EXPECT_EQ(SYNC_STATUS_OK,
-            ApplyRemoteChange(file_system.file_system_context(),
-                              change,
-                              kFilePath1,
-                              kDir,
-                              SYNC_FILE_TYPE_DIRECTORY));
+            ApplyRemoteChange(file_system.file_system_context(), change,
+                              kFilePath1, kDir, SYNC_FILE_TYPE_DIRECTORY));
   EXPECT_EQ(base::File::FILE_OK, file_system.FileExists(kDir));
 
   change = FileChange(FileChange::FILE_CHANGE_ADD_OR_UPDATE,
                       SYNC_FILE_TYPE_DIRECTORY);
   EXPECT_EQ(SYNC_STATUS_OK,
-            ApplyRemoteChange(file_system.file_system_context(),
-                              change,
-                              kFilePath1,
-                              kDir,
-                              SYNC_FILE_TYPE_FILE));
+            ApplyRemoteChange(file_system.file_system_context(), change,
+                              kFilePath1, kDir, SYNC_FILE_TYPE_FILE));
 
   // Creating a file/directory must have increased the usage more than
   // the size of kTestFileData2.
   new_usage = usage;
   EXPECT_EQ(blink::mojom::QuotaStatusCode::kOk,
             file_system.GetUsageAndQuota(&new_usage, &quota));
-  EXPECT_GT(new_usage,
-            static_cast<int64_t>(usage + std::size(kTestFileData2) - 1));
+  EXPECT_GT(new_usage, static_cast<int64_t>(usage + kTestFileData2.size()));
 
   // The changes applied by ApplyRemoteChange should not be recorded in
   // the change tracker.
@@ -938,8 +899,7 @@ TEST_F(LocalFileSyncContextTest, ApplyRemoteChangeForAddOrUpdate_NoParent) {
   base::ScopedTempDir temp_dir;
   ASSERT_TRUE(temp_dir.CreateUniqueTempDir());
 
-  CannedSyncableFileSystem file_system(GURL(kOrigin1),
-                                       in_memory_env_.get(),
+  CannedSyncableFileSystem file_system(GURL(kOrigin1), in_memory_env_.get(),
                                        io_task_runner_.get(),
                                        file_task_runner_.get());
   file_system.SetUp();
@@ -951,7 +911,7 @@ TEST_F(LocalFileSyncContextTest, ApplyRemoteChangeForAddOrUpdate_NoParent) {
             file_system.MaybeInitializeFileSystemContext(sync_context_.get()));
   ASSERT_EQ(base::File::FILE_OK, file_system.OpenFileSystem());
 
-  const char kTestFileData[] = "Lorem ipsum!";
+  constexpr base::StringPiece kTestFileData = "Lorem ipsum!";
   const FileSystemURL kDir(file_system.URL("dir"));
   const FileSystemURL kFile(file_system.URL("dir/file"));
 
@@ -961,18 +921,14 @@ TEST_F(LocalFileSyncContextTest, ApplyRemoteChangeForAddOrUpdate_NoParent) {
 
   // Prepare a temporary file which represents remote file data.
   const base::FilePath kFilePath(temp_dir.GetPath().Append(FPL("file")));
-  ASSERT_EQ(
-      static_cast<int>(std::size(kTestFileData) - 1),
-      base::WriteFile(kFilePath, kTestFileData, std::size(kTestFileData) - 1));
+  ASSERT_TRUE(base::WriteFile(kFilePath, kTestFileData));
 
   // Calling ApplyChange's with kFilePath should create
   // kFile along with kDir.
-  FileChange change(FileChange::FILE_CHANGE_ADD_OR_UPDATE,
-                    SYNC_FILE_TYPE_FILE);
+  FileChange change(FileChange::FILE_CHANGE_ADD_OR_UPDATE, SYNC_FILE_TYPE_FILE);
   EXPECT_EQ(SYNC_STATUS_OK,
-            ApplyRemoteChange(file_system.file_system_context(),
-                              change, kFilePath, kFile,
-                              SYNC_FILE_TYPE_UNKNOWN));
+            ApplyRemoteChange(file_system.file_system_context(), change,
+                              kFilePath, kFile, SYNC_FILE_TYPE_UNKNOWN));
 
   // The changes applied by ApplyRemoteChange should not be recorded in
   // the change tracker.

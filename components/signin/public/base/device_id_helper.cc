@@ -6,7 +6,7 @@
 
 #include "base/check.h"
 #include "base/command_line.h"
-#include "base/guid.h"
+#include "base/uuid.h"
 #include "build/chromeos_buildflags.h"
 #include "components/prefs/pref_service.h"
 #include "components/signin/public/base/signin_pref_names.h"
@@ -17,12 +17,13 @@ namespace signin {
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
 
 std::string GetSigninScopedDeviceId(PrefService* prefs) {
-  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kDisableSigninScopedDeviceId)) {
-    return std::string();
+  std::string signin_scoped_device_id =
+      prefs->GetString(prefs::kGoogleServicesSigninScopedDeviceId);
+  if (signin_scoped_device_id.empty()) {
+    // If device_id doesn't exist then generate new and save in prefs.
+    signin_scoped_device_id = RecreateSigninScopedDeviceId(prefs);
   }
-
-  return GetOrCreateScopedDeviceId(prefs);
+  return signin_scoped_device_id;
 }
 
 std::string RecreateSigninScopedDeviceId(PrefService* prefs) {
@@ -34,17 +35,7 @@ std::string RecreateSigninScopedDeviceId(PrefService* prefs) {
 }
 
 std::string GenerateSigninScopedDeviceId() {
-  return base::GenerateGUID();
-}
-
-std::string GetOrCreateScopedDeviceId(PrefService* prefs) {
-  std::string signin_scoped_device_id =
-      prefs->GetString(prefs::kGoogleServicesSigninScopedDeviceId);
-  if (signin_scoped_device_id.empty()) {
-    // If device_id doesn't exist then generate new and save in prefs.
-    signin_scoped_device_id = RecreateSigninScopedDeviceId(prefs);
-  }
-  return signin_scoped_device_id;
+  return base::Uuid::GenerateRandomV4().AsLowercaseString();
 }
 
 #endif

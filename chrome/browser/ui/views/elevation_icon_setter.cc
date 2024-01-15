@@ -4,8 +4,8 @@
 
 #include "chrome/browser/ui/views/elevation_icon_setter.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
 #include "third_party/skia/include/core/SkBitmap.h"
@@ -15,7 +15,6 @@
 #include <windows.h>
 #include <shellapi.h>
 
-#include "base/task/task_runner_util.h"
 #include "base/win/win_util.h"
 #include "ui/display/win/dpi.h"
 #include "ui/gfx/icon_util.h"
@@ -53,13 +52,12 @@ ElevationIconSetter::ElevationIconSetter(views::LabelButton* button,
                                          base::OnceClosure callback)
     : button_(button) {
 #if BUILDFLAG(IS_WIN)
-  base::PostTaskAndReplyWithResult(
-      base::ThreadPool::CreateCOMSTATaskRunner(
-          {base::MayBlock(), base::TaskPriority::USER_BLOCKING})
-          .get(),
-      FROM_HERE, base::BindOnce(&GetElevationIcon),
-      base::BindOnce(&ElevationIconSetter::SetButtonIcon,
-                     weak_factory_.GetWeakPtr(), std::move(callback)));
+  base::ThreadPool::CreateCOMSTATaskRunner(
+      {base::MayBlock(), base::TaskPriority::USER_BLOCKING})
+      ->PostTaskAndReplyWithResult(
+          FROM_HERE, base::BindOnce(&GetElevationIcon),
+          base::BindOnce(&ElevationIconSetter::SetButtonIcon,
+                         weak_factory_.GetWeakPtr(), std::move(callback)));
 #endif
 }
 
@@ -75,9 +73,10 @@ void ElevationIconSetter::SetButtonIcon(base::OnceClosure callback,
     // mark this image as having been scaled for the current DPI already.
     device_scale_factor = display::win::GetDPIScale();
 #endif
-    button_->SetImage(
+    button_->SetImageModel(
         views::Button::STATE_NORMAL,
-        gfx::ImageSkia::CreateFromBitmap(icon, device_scale_factor));
+        ui::ImageModel::FromImageSkia(
+            gfx::ImageSkia::CreateFromBitmap(icon, device_scale_factor)));
     button_->SizeToPreferredSize();
     if (button_->parent())
       button_->parent()->Layout();

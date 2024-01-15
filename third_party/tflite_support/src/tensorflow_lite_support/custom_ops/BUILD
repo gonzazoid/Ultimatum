@@ -27,11 +27,11 @@ cc_test(
     deps = [
         ":tf_text_flex_delegate",
         "//testing/base/public:gunit",
+        "@com_google_googletest//:gtest_main",
         "@org_tensorflow//tensorflow/lite:framework",
         "@org_tensorflow//tensorflow/lite:string_util",
         "@org_tensorflow//tensorflow/lite/c:common",
         "@org_tensorflow//tensorflow/lite/kernels:builtin_ops",
-        "@com_google_googletest//:gtest_main",
     ] + select({
         "@org_tensorflow//tensorflow:android": [
             "@org_tensorflow//tensorflow/core:portable_tensorflow_lib_lite",

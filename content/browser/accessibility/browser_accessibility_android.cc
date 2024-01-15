@@ -7,8 +7,8 @@
 #include <algorithm>
 #include <unordered_map>
 
-#include "base/bind.h"
-#include "base/cxx17_backports.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/i18n/break_iterator.h"
 #include "base/lazy_instance.h"
 #include "base/strings/string_number_conversions.h"
@@ -21,6 +21,7 @@
 #include "third_party/blink/public/strings/grit/blink_accessibility_strings.h"
 #include "third_party/blink/public/strings/grit/blink_strings.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/accessibility/android/accessibility_state.h"
 #include "ui/accessibility/ax_assistant_structure.h"
 #include "ui/accessibility/ax_node_position.h"
 #include "ui/accessibility/ax_role_properties.h"
@@ -276,7 +277,7 @@ bool BrowserAccessibilityAndroid::IsFocusable() const {
     return HasStringAttribute(ax::mojom::StringAttribute::kName);
   }
 
-  return HasState(ax::mojom::State::kFocusable);
+  return BrowserAccessibility::IsFocusable();
 }
 
 bool BrowserAccessibilityAndroid::IsFormDescendant() const {
@@ -533,11 +534,8 @@ bool BrowserAccessibilityAndroid::IsChildOfLeaf() const {
 }
 
 bool BrowserAccessibilityAndroid::IsLeaf() const {
-  if (base::FeatureList::IsEnabled(
-          features::kOptimizeAccessibilityUiThreadWork)) {
-    if (g_leaf_map.Get().find(this) != g_leaf_map.Get().end()) {
-      return g_leaf_map.Get()[this];
-    }
+  if (base::Contains(g_leaf_map.Get(), this)) {
+    return g_leaf_map.Get()[this];
   }
 
   if (BrowserAccessibility::IsLeaf()) {
@@ -654,11 +652,11 @@ std::u16string BrowserAccessibilityAndroid::GetBrailleRoleDescription() const {
 }
 
 std::u16string BrowserAccessibilityAndroid::GetTextContentUTF16() const {
-  return GetSubstringTextContentUTF16(absl::nullopt);
+  return GetSubstringTextContentUTF16(std::nullopt);
 }
 
 std::u16string BrowserAccessibilityAndroid::GetSubstringTextContentUTF16(
-    absl::optional<EarlyExitPredicate> predicate) const {
+    std::optional<EarlyExitPredicate> predicate) const {
   if (ui::IsIframe(GetRole()))
     return std::u16string();
 
@@ -744,9 +742,7 @@ std::u16string BrowserAccessibilityAndroid::GetSubstringTextContentUTF16(
     for (auto it = InternalChildrenBegin(); it != InternalChildrenEnd(); ++it) {
       text += static_cast<BrowserAccessibilityAndroid*>(it.get())
                   ->GetSubstringTextContentUTF16(predicate);
-      if (base::FeatureList::IsEnabled(
-              features::kOptimizeAccessibilityUiThreadWork) &&
-          predicate && predicate.value().Run(text)) {
+      if (predicate && predicate.value().Run(text)) {
         break;
       }
     }
@@ -783,16 +779,14 @@ std::u16string BrowserAccessibilityAndroid::GetValueForControl() const {
   // Optionally replace entered password text with bullet characters
   // based on a user preference.
   if (IsPasswordField()) {
-    auto* manager =
-        static_cast<BrowserAccessibilityManagerAndroid*>(this->manager());
-    if (manager->ShouldRespectDisplayedPasswordText()) {
+    if (ui::AccessibilityState::ShouldRespectDisplayedPasswordText()) {
       // In the Chrome accessibility tree, the value of a password node is
       // unobscured. However, if ShouldRespectDisplayedPasswordText() returns
       // true we should try to expose whatever's actually visually displayed,
       // whether that's the actual password or dots or whatever. To do this
       // we rely on the password field's shadow dom.
       value = BrowserAccessibility::GetTextContentUTF16();
-    } else if (!manager->ShouldExposePasswordText()) {
+    } else if (!ui::AccessibilityState::ShouldExposePasswordText()) {
       value = std::u16string(value.size(), ui::kSecurePasswordBullet);
     }
   }
@@ -1155,10 +1149,8 @@ std::u16string BrowserAccessibilityAndroid::GetRoleDescription() const {
     }
   }
 
-  // For pop up buttons, we want to return more specific roles based on various
-  // values of the kHasPopup attribute.
-  if (GetRole() == ax::mojom::Role::kPopUpButton ||
-      GetRole() == ax::mojom::Role::kComboBoxSelect) {
+  // For buttons with a kHasPopup attribute, return a more specific role.
+  if (ui::IsButton(GetRole())) {
     switch (static_cast<ax::mojom::HasPopup>(
         GetIntAttribute(ax::mojom::IntAttribute::kHasPopup))) {
       case ax::mojom::HasPopup::kTrue:
@@ -1246,7 +1238,7 @@ int BrowserAccessibilityAndroid::GetItemIndex() const {
     if (max > min && value >= min && value <= max)
       index = static_cast<int>(((value - min)) * 100 / (max - min));
   } else {
-    absl::optional<int> pos_in_set = GetPosInSet();
+    std::optional<int> pos_in_set = GetPosInSet();
     if (pos_in_set && *pos_in_set > 0)
       index = *pos_in_set - 1;
   }
@@ -1416,22 +1408,22 @@ bool BrowserAccessibilityAndroid::Scroll(int direction,
     case UP:
       if (y_initial == y_min)
         return false;
-      y = base::clamp(y_initial - page_y, y_min, y_max);
+      y = std::clamp(y_initial - page_y, y_min, y_max);
       break;
     case DOWN:
       if (y_initial == y_max)
         return false;
-      y = base::clamp(y_initial + page_y, y_min, y_max);
+      y = std::clamp(y_initial + page_y, y_min, y_max);
       break;
     case LEFT:
       if (x_initial == x_min)
         return false;
-      x = base::clamp(x_initial - page_x, x_min, x_max);
+      x = std::clamp(x_initial - page_x, x_min, x_max);
       break;
     case RIGHT:
       if (x_initial == x_max)
         return false;
-      x = base::clamp(x_initial + page_x, x_min, x_max);
+      x = std::clamp(x_initial + page_x, x_min, x_max);
       break;
     default:
       NOTREACHED();
@@ -1636,7 +1628,7 @@ int BrowserAccessibilityAndroid::ColumnCount() const {
 }
 
 int BrowserAccessibilityAndroid::RowIndex() const {
-  absl::optional<int> pos_in_set = GetPosInSet();
+  std::optional<int> pos_in_set = GetPosInSet();
   if (pos_in_set && pos_in_set > 0)
     return *pos_in_set - 1;
   return node()->GetTableCellRowIndex().value_or(0);
@@ -2048,12 +2040,12 @@ std::u16string BrowserAccessibilityAndroid::GetContentInvalidErrorMessage()
           const std::vector<int32_t>& marker_types = child->GetIntListAttribute(
               ax::mojom::IntListAttribute::kMarkerTypes);
 
-          for (size_t i = 0; i < marker_types.size(); ++i) {
-            if (marker_types[i] &
+          for (int marker_type : marker_types) {
+            if (marker_type &
                 static_cast<int32_t>(ax::mojom::MarkerType::kSpelling)) {
               message_id = CONTENT_INVALID_SPELLING;
               break;
-            } else if (marker_types[i] &
+            } else if (marker_type &
                        static_cast<int32_t>(ax::mojom::MarkerType::kGrammar)) {
               message_id = CONTENT_INVALID_GRAMMAR;
               break;

@@ -7,16 +7,18 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/cancelable_callback.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file_descriptor_watcher_posix.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "components/exo/protected_native_pixmap_query_delegate.h"
 #include "components/viz/common/resources/transferable_resource.h"
 #include "media/media_buildflags.h"
+#include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/gfx/color_space.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/gpu_fence.h"
 #include "ui/gfx/gpu_memory_buffer.h"
@@ -28,7 +30,7 @@ class FrameSinkResourceManager;
 // This class provides the content for a Surface. The mechanism by which a
 // client provides and updates the contents is the responsibility of the client
 // and not defined as part of this class.
-class Buffer : public base::SupportsWeakPtr<Buffer> {
+class Buffer {
  public:
   explicit Buffer(std::unique_ptr<gfx::GpuMemoryBuffer> gpu_memory_buffer);
   Buffer(std::unique_ptr<gfx::GpuMemoryBuffer> gpu_memory_buffer,
@@ -52,6 +54,9 @@ class Buffer : public base::SupportsWeakPtr<Buffer> {
     release_callback_ = release_callback;
   }
 
+  // The client does not need release_callback_ to notify buffer usage.
+  void SkipLegacyRelease();
+
   // Returns if this buffer's contents are vertically inverted.
   bool y_invert() const { return y_invert_; }
 
@@ -65,6 +70,7 @@ class Buffer : public base::SupportsWeakPtr<Buffer> {
       std::unique_ptr<gfx::GpuFence> acquire_fence,
       bool secure_output_only,
       viz::TransferableResource* resource,
+      gfx::ColorSpace color_space,
       ProtectedNativePixmapQueryDelegate* protected_native_pixmap_query,
       PerCommitExplicitReleaseCallback per_commit_explicit_release_callback);
 
@@ -83,6 +89,9 @@ class Buffer : public base::SupportsWeakPtr<Buffer> {
   // The default color to be used should transferable resource production fail.
   virtual SkColor4f GetColor() const;
 
+  // Creates a SkBitmap object from |gpu_memory_buffer_|.
+  SkBitmap CreateBitmap();
+
 #if BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
   // Returns true if the underlying buffer is hardware protected. This should
   // only be checked if the corresponding surface requires secure output,
@@ -95,6 +104,8 @@ class Buffer : public base::SupportsWeakPtr<Buffer> {
       base::TimeDelta wait_for_release_delay) {
     wait_for_release_delay_ = wait_for_release_delay;
   }
+
+  virtual base::WeakPtr<Buffer> AsWeakPtr();
 
  private:
   class Texture;
@@ -210,9 +221,13 @@ class Buffer : public base::SupportsWeakPtr<Buffer> {
   // protocol requires us to send regular buffer release events.
   base::flat_map<uint64_t, BufferRelease> buffer_releases_;
 
+  bool legacy_release_skippable_ = false;
+
 #if BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
   ProtectedBufferState protected_buffer_state_ = ProtectedBufferState::UNKNOWN;
 #endif  // BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
+
+  base::WeakPtrFactory<Buffer> weak_ptr_factory_{this};
 };
 
 class SolidColorBuffer : public Buffer {
@@ -229,13 +244,18 @@ class SolidColorBuffer : public Buffer {
       std::unique_ptr<gfx::GpuFence> acquire_fence,
       bool secure_output_only,
       viz::TransferableResource* resource,
+      gfx::ColorSpace color_space,
       ProtectedNativePixmapQueryDelegate* protected_native_pixmap_query,
       PerCommitExplicitReleaseCallback per_commit_explicit_release_callback)
       override;
 
+  base::WeakPtr<Buffer> AsWeakPtr() override;
+
  private:
   SkColor4f color_;
   gfx::Size size_;
+
+  base::WeakPtrFactory<SolidColorBuffer> weak_ptr_factory_{this};
 };
 
 }  // namespace exo

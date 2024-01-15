@@ -5,6 +5,7 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_TETHER_TETHER_NETWORK_DISCONNECTION_HANDLER_H_
 #define CHROMEOS_ASH_COMPONENTS_TETHER_TETHER_NETWORK_DISCONNECTION_HANDLER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
 #include "chromeos/ash/components/tether/active_host.h"
@@ -47,6 +48,7 @@ class TetherNetworkDisconnectionHandler : public NetworkStateHandlerObserver {
 
   // NetworkStateHandlerObserver:
   void NetworkConnectionStateChanged(const NetworkState* network) override;
+  void OnShuttingDown() override;
 
  private:
   friend class TetherNetworkDisconnectionHandlerTest;
@@ -57,11 +59,15 @@ class TetherNetworkDisconnectionHandler : public NetworkStateHandlerObserver {
   void SetTaskRunnerForTesting(
       scoped_refptr<base::TaskRunner> test_task_runner);
 
-  ActiveHost* active_host_;
-  NetworkStateHandler* network_state_handler_;
-  NetworkConfigurationRemover* network_configuration_remover_;
-  DisconnectTetheringRequestSender* disconnect_tethering_request_sender_;
-  TetherSessionCompletionLogger* tether_session_completion_logger_;
+  raw_ptr<ActiveHost> active_host_;
+  raw_ptr<NetworkStateHandler> network_state_handler_;
+
+  NetworkStateHandlerScopedObservation network_state_handler_observer_{this};
+
+  raw_ptr<NetworkConfigurationRemover> network_configuration_remover_;
+  raw_ptr<DisconnectTetheringRequestSender>
+      disconnect_tethering_request_sender_;
+  raw_ptr<TetherSessionCompletionLogger> tether_session_completion_logger_;
 
   scoped_refptr<base::TaskRunner> task_runner_;
   base::WeakPtrFactory<TetherNetworkDisconnectionHandler> weak_ptr_factory_{
@@ -69,7 +75,6 @@ class TetherNetworkDisconnectionHandler : public NetworkStateHandlerObserver {
 };
 
 }  // namespace tether
-
 }  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_TETHER_TETHER_NETWORK_DISCONNECTION_HANDLER_H_

@@ -9,7 +9,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringize_macros.h"
@@ -41,6 +41,7 @@ const char kSignatureTimeAttr[] = "time";
 const char kHostVersionTag[] = "host-version";
 const char kHostOsNameTag[] = "host-os-name";
 const char kHostOsVersionTag[] = "host-os-version";
+const char kAuthorizedHelperTag[] = "authorized-helper";
 
 // Strings used to parse responses received from the bot.
 const char kRegisterQueryResultTag[] = "register-support-host-result";
@@ -56,13 +57,16 @@ XmppRegisterSupportHostRequest::XmppRegisterSupportHostRequest(
     : directory_bot_jid_(directory_bot_jid) {}
 
 XmppRegisterSupportHostRequest::~XmppRegisterSupportHostRequest() {
-  if (signal_strategy_)
+  if (signal_strategy_) {
     signal_strategy_->RemoveListener(this);
+  }
 }
 
 void XmppRegisterSupportHostRequest::StartRequest(
     SignalStrategy* signal_strategy,
     scoped_refptr<RsaKeyPair> key_pair,
+    const std::string& authorized_helper,
+    std::optional<ChromeOsEnterpriseParams> params,
     RegisterCallback callback) {
   DCHECK(signal_strategy);
   DCHECK(key_pair.get());
@@ -71,6 +75,7 @@ void XmppRegisterSupportHostRequest::StartRequest(
   key_pair_ = key_pair;
   callback_ = std::move(callback);
   signal_strategy_->AddListener(this);
+  authorized_helper_ = authorized_helper;
   iq_sender_ = std::make_unique<IqSender>(signal_strategy_);
 }
 
@@ -138,6 +143,14 @@ XmppRegisterSupportHostRequest::CreateRegistrationRequest(
   host_os_version->AddText(GetHostOperatingSystemVersion());
   query->AddElement(host_os_version.release());
 
+  // Add authorized helper if one was provided.
+  if (!authorized_helper_.empty()) {
+    auto authorized_helper = std::make_unique<XmlElement>(
+        QName(kChromotingXmlNamespace, kAuthorizedHelperTag));
+    authorized_helper->AddText(authorized_helper_);
+    query->AddElement(authorized_helper.release());
+  }
+
   return query;
 }
 
@@ -146,7 +159,8 @@ std::unique_ptr<XmlElement> XmppRegisterSupportHostRequest::CreateSignature(
   std::unique_ptr<XmlElement> signature_tag(
       new XmlElement(QName(kChromotingXmlNamespace, kSignatureTag)));
 
-  int64_t time = static_cast<int64_t>(base::Time::Now().ToDoubleT());
+  int64_t time =
+      static_cast<int64_t>(base::Time::Now().InSecondsFSinceUnixEpoch());
   std::string time_str(base::NumberToString(time));
   signature_tag->AddAttr(QName(kChromotingXmlNamespace, kSignatureTimeAttr),
                          time_str);

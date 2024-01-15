@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
@@ -49,17 +50,17 @@ class CaptivePortalWindowProxy : public views::WidgetObserver {
   // is in the captive portal state.
   // Subsequent call to this method would reuses existing view
   // but reloads test page (generate_204).
-  void ShowIfRedirected();
+  void ShowIfRedirected(const std::string& network_name);
 
   // Forces captive portal window show.
-  void Show();
+  void Show(const std::string& network_name);
 
   // Closes the window.
   void Close();
 
   // Called by CaptivePortalView when URL loading was redirected from the
   // original URL.
-  void OnRedirected();
+  void OnRedirected(const std::string& network_name);
 
   // Called by CaptivePortalView when origin URL is loaded without any
   // redirections.
@@ -96,7 +97,7 @@ class CaptivePortalWindowProxy : public views::WidgetObserver {
 
   // Initializes `captive_portal_view_` if it is not initialized and
   // starts loading Captive Portal redirect URL.
-  void InitCaptivePortalView();
+  void InitCaptivePortalView(const std::string& network_name);
 
   // Returns symbolic state name based on internal state.
   State GetState() const;
@@ -105,9 +106,9 @@ class CaptivePortalWindowProxy : public views::WidgetObserver {
   // notifications from `widget_` and resets it.
   void DetachFromWidget(views::Widget* widget);
 
-  Profile* profile_ = ProfileHelper::GetSigninProfile();
-  content::WebContents* web_contents_;
-  views::Widget* widget_ = nullptr;
+  raw_ptr<Profile> profile_ = ProfileHelper::GetSigninProfile();
+  raw_ptr<content::WebContents> web_contents_;
+  raw_ptr<views::Widget> widget_ = nullptr;
 
   std::unique_ptr<CaptivePortalView> captive_portal_view_;
 

@@ -6,10 +6,11 @@ package org.chromium.chrome.browser.signin.services;
 
 import androidx.annotation.MainThread;
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 
+import org.jni_zero.NativeMethods;
+
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.components.signin.identitymanager.AccountTrackerService;
 import org.chromium.components.signin.identitymanager.IdentityManager;
@@ -30,9 +31,10 @@ public class IdentityServicesProvider {
         return sIdentityServicesProvider;
     }
 
-    @VisibleForTesting
     public static void setInstanceForTests(IdentityServicesProvider provider) {
+        var oldValue = sIdentityServicesProvider;
         sIdentityServicesProvider = provider;
+        ResettersForTesting.register(() -> sIdentityServicesProvider = oldValue);
     }
 
     /**
@@ -76,7 +78,9 @@ public class IdentityServicesProvider {
     @NativeMethods
     public interface Natives {
         IdentityManager getIdentityManager(Profile profile);
+
         AccountTrackerService getAccountTrackerService(Profile profile);
+
         SigninManager getSigninManager(Profile profile);
     }
 }

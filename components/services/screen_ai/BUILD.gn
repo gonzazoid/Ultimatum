@@ -8,6 +8,8 @@ source_set("screen_ai") {
   sources = [
     "screen_ai_ax_tree_serializer.cc",
     "screen_ai_ax_tree_serializer.h",
+    "screen_ai_library_wrapper.cc",
+    "screen_ai_library_wrapper.h",
     "screen_ai_service_impl.cc",
     "screen_ai_service_impl.h",
   ]
@@ -15,12 +17,19 @@ source_set("screen_ai") {
   public_deps = [ "//components/services/screen_ai/proto:proto_convertors" ]
 
   deps = [
+    "//components/services/screen_ai/proto",
     "//components/services/screen_ai/public/cpp:utilities",
-    "//components/services/screen_ai/public/mojom",
+    "//components/services/screen_ai/public/mojom:factory",
+    "//components/services/screen_ai/public/mojom:mojom",
+    "//content/public/browser",
     "//mojo/public/cpp/bindings",
     "//sandbox/policy",
+    "//services/metrics/public/cpp:ukm_builders",
+    "//skia",
     "//ui/accessibility:accessibility",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 }
 
 if (is_linux || is_chromeos) {
@@ -39,11 +48,13 @@ if (is_linux || is_chromeos) {
     ]
 
     public_deps = [ "//sandbox/policy" ]
+
+    configs += [ "//build/config/compiler:wexit_time_destructors" ]
   }
 }
 
 group("test_support_data") {
-  visibility = [ ":test_support" ]
+  visibility = [ ":unit_tests" ]
   testonly = true
 
   data = [ "$root_gen_dir/components/services/screen_ai/proto/view_hierarchy.descriptor" ]
@@ -53,46 +64,41 @@ group("test_support_data") {
   ]
 }
 
-source_set("test_support") {
-  testonly = true
-
-  sources = [
-    "proto/test_proto_loader.cc",
-    "proto/test_proto_loader.h",
-  ]
-
-  data_deps = [ ":test_support_data" ]
-
-  deps = [
-    "//base",
-    "//third_party/protobuf:protobuf_full",
-  ]
-}
-
 source_set("unit_tests") {
   testonly = true
 
   sources = [
-    "public/cpp/screen_ai_install_state_unittest.cc",
+    "proto/main_content_extractor_proto_convertor_unittest.cc",
+    "proto/visual_annotator_proto_convertor_unittest.cc",
     "screen_ai_ax_tree_serializer_unittest.cc",
+    "screen_ai_service_impl_unittest.cc",
   ]
-
-  # TODO(https://crbug.com/1278249): Enable after the protobuf issue is fixed.
-  if (!is_win) {
-    sources += [ "proto/proto_convertor_unittest.cc" ]
-  }
 
   data = [ "//components/test/data/screen_ai/" ]
   deps = [
     ":screen_ai",
+    "//base/test:proto_test_support",
     "//base/test:test_support",
     "//components/services/screen_ai/proto",
-    "//components/services/screen_ai/public/cpp:screen_ai_install_state",
+    "//components/ukm:test_support",
     "//testing/gtest",
     "//ui/accessibility:test_support",
   ]
 
-  if (!is_win) {
-    deps += [ ":test_support" ]
-  }
+  data_deps = [ ":test_support_data" ]
+}
+
+source_set("test_support") {
+  testonly = true
+
+  sources = [
+    "public/test/fake_screen_ai_annotator.cc",
+    "public/test/fake_screen_ai_annotator.h",
+  ]
+
+  deps = [
+    "//base/test:test_support",
+    "//components/services/screen_ai/public/mojom",
+    "//ui/accessibility:test_support",
+  ]
 }

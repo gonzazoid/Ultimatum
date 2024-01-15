@@ -6,6 +6,8 @@
 
 #include <limits>
 
+#include "build/build_config.h"
+
 namespace printing {
 
 // True if this is the first preview request.
@@ -16,6 +18,9 @@ const char kPreviewRequestID[] = "requestID";
 
 // Unique ID to identify a print preview UI.
 const char kPreviewUIID[] = "previewUIID";
+
+// If true, tell the printer to print without margins.
+const char kSettingBorderless[] = "borderless";
 
 // Capabilities option. Contains the capabilities in CDD format.
 const char kSettingCapabilities[] = "capabilities";
@@ -52,9 +57,6 @@ const char kSettingDpiHorizontal[] = "dpiHorizontal";
 
 // Vertical DPI
 const char kSettingDpiVertical[] = "dpiVertical";
-
-// Scaling value required to fit the document to page.
-const char kSettingFitToPageScaling[] = "fitToPageScaling";
 
 // Print job duplex mode. Value is an int from DuplexMode enum.
 const char kSettingDuplexMode[] = "duplex";
@@ -113,6 +115,9 @@ const char kSettingMediaSizeVendorId[] = "vendor_id";
 
 // Key that specifies whether the requested media is a default one.
 const char kSettingMediaSizeIsDefault[] = "is_default";
+
+// Key that specifies the requested media type (plain, photo paper, etc.)
+const char kSettingMediaType[] = "mediaType";
 
 // Key that specifies the bottom margin of the page.
 const char kSettingMarginBottom[] = "marginBottom";
@@ -229,30 +234,27 @@ const char kSettingOpenPDFInPreview[] = "openPDFInPreview";
 const uint32_t kInvalidPageIndex = std::numeric_limits<int>::max();
 const uint32_t kMaxPageCount = std::numeric_limits<int>::max();
 
-#if defined(USE_CUPS)
-const char kBlack[] = "Black";
-const char kCMYK[] = "CMYK";
-const char kKCMY[] = "KCMY";
-const char kCMY_K[] = "CMY+K";
-const char kCMY[] = "CMY";
-const char kColor[] = "Color";
-const char kEpsonColor[] = "COLOR";
-const char kEpsonMono[] = "MONO";
-const char kFullColor[] = "FullColor";
-const char kGray[] = "Gray";
-const char kGrayscale[] = "Grayscale";
-const char kGreyscale[] = "Greyscale";
-const char kMono[] = "Mono";
-const char kMonochrome[] = "Monochrome";
-const char kNormal[] = "Normal";
-const char kNormalGray[] = "Normal.Gray";
-const char kRGB[] = "RGB";
-const char kRGBA[] = "RGBA";
-const char kRGB16[] = "RGB16";
-const char kSharpCMColor[] = "CMColor";
-const char kSharpCMBW[] = "CMBW";
-const char kXeroxAutomatic[] = "Automatic";
-const char kXeroxBW[] = "BW";
-#endif
+#if BUILDFLAG(IS_CHROMEOS)
+// If set, contains OAuth token that must be used during communication with the
+// printer.
+const char kSettingChromeOSAccessOAuthToken[] = "chromeos-access-oauth-token";
+
+// These correspond to IPP 'client-info' attribute and member attributes. If
+// set, 'client-info' will be sent in the IPP print job.
+const char kSettingIppClientInfo[] = "ipp-client-info";
+const char kSettingIppClientName[] = "ipp-client-name";
+const char kSettingIppClientPatches[] = "ipp-client-patches";
+const char kSettingIppClientStringVersion[] = "ipp-client-string-version";
+const char kSettingIppClientType[] = "ipp-client-type";
+const char kSettingIppClientVersion[] = "ipp-client-version";
+
+// True if the user selects to print to a different printer than the original
+// destination shown when Print Preview opens.
+const char kSettingPrinterManuallySelected[] = "printerManuallySelected";
+
+// The printer status reason shown for the selected printer at the time print
+// is requested. Only local CrOS printers set printer statuses.
+const char kSettingPrinterStatusReason[] = "printerStatusReason";
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace printing

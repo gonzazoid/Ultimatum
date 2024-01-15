@@ -8,6 +8,8 @@ import android.os.Build;
 import android.os.IBinder;
 import android.provider.Settings;
 
+import androidx.test.InstrumentationRegistry;
+
 import org.junit.rules.TestRule;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
@@ -21,15 +23,14 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * {@link TestRule} to disable animations for UI testing, or enable animation with new
  * DisableAnimationsTestRule(true). Does not work on Android S, see https://crbug.com/1225707.
  */
 public class DisableAnimationsTestRule implements TestRule {
-    /**
-     * Allows methods to ensure animations are on while disabled rule is applied class-wide.
-     */
+    /** Allows methods to ensure animations are on while disabled rule is applied class-wide. */
     @Target(ElementType.METHOD)
     @Retention(RetentionPolicy.RUNTIME)
     public @interface EnsureAnimationsOn {}
@@ -55,6 +56,11 @@ public class DisableAnimationsTestRule implements TestRule {
      */
     public DisableAnimationsTestRule(boolean enableAnimation) {
         mEnableAnimation = enableAnimation;
+
+        // Set animation scales through settings through shell commands in S+.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) return;
+
+        // Set animation scales through reflection in R-.
         try {
             Class<?> windowManagerStubClazz = Class.forName("android.view.IWindowManager$Stub");
             Method asInterface =
@@ -68,14 +74,7 @@ public class DisableAnimationsTestRule implements TestRule {
             IBinder windowManagerBinder = (IBinder) getService.invoke(null, "window");
             mWindowManagerObject = asInterface.invoke(null, windowManagerBinder);
         } catch (Exception e) {
-            // TODO(https://crbug.com/1225707): Always throw once this works on Android S. The above
-            // API is no longer accessible and will crash regardless of filter rules so just warn
-            // instead.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                Log.w(TAG, "Failed to access animation methods", e);
-            } else {
-                throw new RuntimeException("Failed to access animation methods", e);
-            }
+            throw new RuntimeException("Failed to access animation methods", e);
         }
     }
 
@@ -86,12 +85,15 @@ public class DisableAnimationsTestRule implements TestRule {
             public void evaluate() throws Throwable {
                 boolean overrideRequested =
                         description.getAnnotation(EnsureAnimationsOn.class) != null;
-                float curAnimationScale = Settings.Global.getFloat(
-                        ContextUtils.getApplicationContext().getContentResolver(),
-                        Settings.Global.ANIMATOR_DURATION_SCALE, DEFAULT_SCALE_FACTOR);
-                float toAnimationScale = mEnableAnimation || overrideRequested
-                        ? DEFAULT_SCALE_FACTOR
-                        : DISABLED_SCALE_FACTOR;
+                float curAnimationScale =
+                        Settings.Global.getFloat(
+                                ContextUtils.getApplicationContext().getContentResolver(),
+                                Settings.Global.ANIMATOR_DURATION_SCALE,
+                                DEFAULT_SCALE_FACTOR);
+                float toAnimationScale =
+                        mEnableAnimation || overrideRequested
+                                ? DEFAULT_SCALE_FACTOR
+                                : DISABLED_SCALE_FACTOR;
                 if (curAnimationScale != toAnimationScale) {
                     setAnimationScaleFactors(toAnimationScale);
                     Log.i(TAG, "Set animation scales to: %.1f", toAnimationScale);
@@ -109,14 +111,23 @@ public class DisableAnimationsTestRule implements TestRule {
     }
 
     private void setAnimationScaleFactors(float scaleFactor) throws Exception {
-        // TODO(https://crbug.com/1225707): Remove once this works on Android S.
-        if (mGetAnimationScalesMethod == null || mSetAnimationScalesMethod == null
-                || mWindowManagerObject == null) {
-            return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Set animation scales through settings through shell commands in S+.
+            List<String> commandToRuns =
+                    List.of(
+                            "settings put global animator_duration_scale " + scaleFactor,
+                            "settings put global transition_animation_scale " + scaleFactor,
+                            "settings put global window_animation_scale " + scaleFactor);
+            for (String command : commandToRuns) {
+                InstrumentationRegistry.getInstrumentation()
+                        .getUiAutomation()
+                        .executeShellCommand(command);
+            }
+        } else {
+            // Set animation scales through reflection in R-.
+            float[] scaleFactors = (float[]) mGetAnimationScalesMethod.invoke(mWindowManagerObject);
+            Arrays.fill(scaleFactors, scaleFactor);
+            mSetAnimationScalesMethod.invoke(mWindowManagerObject, scaleFactors);
         }
-
-        float[] scaleFactors = (float[]) mGetAnimationScalesMethod.invoke(mWindowManagerObject);
-        Arrays.fill(scaleFactors, scaleFactor);
-        mSetAnimationScalesMethod.invoke(mWindowManagerObject, scaleFactors);
     }
 }

@@ -18,6 +18,7 @@
 #include "services/viz/privileged/mojom/compositing/display_private.mojom.h"
 #include "services/viz/privileged/mojom/compositing/layered_window_updater.mojom.h"
 #include "third_party/skia/include/core/SkCanvas.h"
+#include "ui/gfx/frame_data.h"
 
 namespace viz {
 
@@ -93,7 +94,8 @@ class VIZ_SERVICE_EXPORT SoftwareOutputDeviceWinProxy
   ~SoftwareOutputDeviceWinProxy() override;
 
   // SoftwareOutputDevice implementation.
-  void OnSwapBuffers(SwapBuffersCallback swap_ack_callback) override;
+  void OnSwapBuffers(SwapBuffersCallback swap_ack_callback,
+                     gfx::FrameData data) override;
 
   // SoftwareOutputDeviceWinBase implementation.
   void ResizeDelegated() override;

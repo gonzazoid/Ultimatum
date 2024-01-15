@@ -4,10 +4,10 @@
 
 #include "chromecast/ui/display_settings/color_temperature_animation.h"
 
+#include <algorithm>
 #include <limits>
 #include <vector>
 
-#include "base/cxx17_backports.h"
 #include "base/time/time.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
 
@@ -55,7 +55,7 @@ ColorTemperatureAnimation::~ColorTemperatureAnimation() = default;
 void ColorTemperatureAnimation::AnimateToNewValue(float new_target_temperature,
                                                   base::TimeDelta duration) {
   start_temperature_ = current_temperature_;
-  target_temperature_ = base::clamp(new_target_temperature, 1000.0f, 20000.0f);
+  target_temperature_ = std::clamp(new_target_temperature, 1000.0f, 20000.0f);
 
   if (ui::ScopedAnimationDurationScaleMode::duration_multiplier() ==
       ui::ScopedAnimationDurationScaleMode::ZERO_DURATION) {
@@ -77,7 +77,7 @@ void ColorTemperatureAnimation::AnimateToNeutral(base::TimeDelta duration) {
 }
 
 void ColorTemperatureAnimation::AnimateToState(double state) {
-  state = base::clamp(state, 0.0, 1.0);
+  state = std::clamp(state, 0.0, 1.0);
   current_temperature_ =
       start_temperature_ + (target_temperature_ - start_temperature_) * state;
   ApplyValuesToDisplay();
@@ -86,8 +86,8 @@ void ColorTemperatureAnimation::AnimateToState(double state) {
 void ColorTemperatureAnimation::ApplyValuesToDisplay() {
   // Clamp temperature value to table range.
   float kelvin =
-      base::clamp(current_temperature_, config_.temperature_values.front(),
-                  config_.temperature_values.back());
+      std::clamp(current_temperature_, config_.temperature_values.front(),
+                 config_.temperature_values.back());
   size_t i = 0;
   // Find greatest index whose value is <= |kelvin|. This is safe since |kelvin|
   // is clamped to fall within the table range.
@@ -110,10 +110,11 @@ void ColorTemperatureAnimation::ApplyValuesToDisplay() {
   if (display_configurator_) {
 #if defined(USE_AURA)
     DVLOG(1) << "Color temperature set to " << kelvin << " kelvin.";
-    // 3x3 color matrix, represented as a vector of length 9.
-    std::vector<float> color_matrix = {red_scale, 0, 0, 0,         green_scale,
-                                       0,         0, 0, blue_scale};
-    display_configurator_->SetColorMatrix(color_matrix);
+    display::ColorTemperatureAdjustment cta;
+    cta.srgb_matrix.vals[0][0] = red_scale;
+    cta.srgb_matrix.vals[1][1] = green_scale;
+    cta.srgb_matrix.vals[2][2] = blue_scale;
+    display_configurator_->SetColorTemperatureAdjustment(cta);
 #endif  // defined(USE_AURA)
   }
 }

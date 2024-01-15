@@ -106,9 +106,8 @@ bool CSSSupportsParser::IsSupportsFeature(const CSSParserToken& first_token,
                                           const CSSParserToken& second_token) {
   return IsSupportsSelectorFn(first_token, second_token) ||
          IsSupportsDecl(first_token, second_token) ||
-         (RuntimeEnabledFeatures::SupportsFontFormatTechEnabled() &&
-          (IsFontFormatFn(first_token, second_token) ||
-           IsFontTechFn(first_token, second_token)));
+         IsFontFormatFn(first_token, second_token) ||
+         IsFontTechFn(first_token, second_token);
 }
 
 bool CSSSupportsParser::IsGeneralEnclosed(const CSSParserToken& first_token) {
@@ -122,8 +121,9 @@ bool CSSSupportsParser::IsGeneralEnclosed(const CSSParserToken& first_token) {
 CSSSupportsParser::Result CSSSupportsParser::ConsumeSupportsInParens(
     CSSParserTokenStream& stream) {
   CSSParserToken first_token = stream.Peek();
-  if (!IsSupportsInParens(first_token))
+  if (!IsSupportsInParens(first_token)) {
     return Result::kParseFailure;
+  }
 
   CSSParserTokenStream::BlockGuard guard(stream);
   stream.ConsumeWhitespace();
@@ -151,18 +151,19 @@ CSSSupportsParser::Result CSSSupportsParser::ConsumeSupportsFeature(
     const CSSParserToken& first_token,
     CSSParserTokenStream& stream) {
   // <supports-selector-fn>
-  if (IsSupportsSelectorFn(first_token, stream.Peek()))
+  if (IsSupportsSelectorFn(first_token, stream.Peek())) {
     return ConsumeSupportsSelectorFn(first_token, stream);
+  }
 
   // <supports-font-tech-fn>
-  if (IsFontTechFn(first_token, stream.Peek()) &&
-      RuntimeEnabledFeatures::SupportsFontFormatTechEnabled())
+  if (IsFontTechFn(first_token, stream.Peek())) {
     return ConsumeFontTechFn(first_token, stream);
+  }
 
   // <supports-font-format-fn>
-  if (IsFontFormatFn(first_token, stream.Peek()) &&
-      RuntimeEnabledFeatures::SupportsFontFormatTechEnabled())
+  if (IsFontFormatFn(first_token, stream.Peek())) {
     return ConsumeFontFormatFn(first_token, stream);
+  }
 
   // <supports-decl>
   return ConsumeSupportsDecl(first_token, stream);
@@ -174,8 +175,9 @@ CSSSupportsParser::Result CSSSupportsParser::ConsumeSupportsSelectorFn(
     CSSParserTokenStream& stream) {
   DCHECK(IsSupportsSelectorFn(first_token, stream.Peek()));
   auto block = stream.ConsumeUntilPeekedTypeIs<kRightParenthesisToken>();
-  if (CSSSelectorParser::SupportsComplexSelector(block, parser_.GetContext()))
+  if (CSSSelectorParser::SupportsComplexSelector(block, parser_.GetContext())) {
     return Result::kSupported;
+  }
   return Result::kUnsupported;
 }
 
@@ -183,7 +185,6 @@ CSSSupportsParser::Result CSSSupportsParser::ConsumeFontFormatFn(
     const CSSParserToken& first_token,
     CSSParserTokenStream& stream) {
   DCHECK(IsFontFormatFn(first_token, stream.Peek()));
-  DCHECK(RuntimeEnabledFeatures::SupportsFontFormatTechEnabled());
 
   auto format_block = stream.ConsumeUntilPeekedTypeIs<kRightParenthesisToken>();
 
@@ -195,8 +196,9 @@ CSSSupportsParser::Result CSSSupportsParser::ConsumeFontFormatFn(
   CSSIdentifierValue* consumed_value =
       css_parsing_utils::ConsumeFontFormatIdent(format_block);
 
-  if (!consumed_value)
+  if (!consumed_value) {
     return Result::kUnsupported;
+  }
 
   CSSSupportsParser::Result parse_result = Result::kUnsupported;
 
@@ -206,8 +208,9 @@ CSSSupportsParser::Result CSSSupportsParser::ConsumeFontFormatFn(
           : Result::kUnsupported;
 
   format_block.ConsumeWhitespace();
-  if (!format_block.AtEnd())
+  if (!format_block.AtEnd()) {
     return Result::kUnsupported;
+  }
 
   return parse_result;
 }
@@ -216,7 +219,6 @@ CSSSupportsParser::Result CSSSupportsParser::ConsumeFontTechFn(
     const CSSParserToken& first_token,
     CSSParserTokenStream& stream) {
   DCHECK(IsFontTechFn(first_token, stream.Peek()));
-  DCHECK(RuntimeEnabledFeatures::SupportsFontFormatTechEnabled());
   auto technology_block =
       stream.ConsumeUntilPeekedTypeIs<kRightParenthesisToken>();
 
@@ -228,8 +230,9 @@ CSSSupportsParser::Result CSSSupportsParser::ConsumeFontTechFn(
   CSSIdentifierValue* consumed_value =
       css_parsing_utils::ConsumeFontTechIdent(technology_block);
 
-  if (!consumed_value)
+  if (!consumed_value) {
     return Result::kUnsupported;
+  }
 
   CSSSupportsParser::Result parse_result = Result::kUnsupported;
 
@@ -239,8 +242,9 @@ CSSSupportsParser::Result CSSSupportsParser::ConsumeFontTechFn(
           : Result::kUnsupported;
 
   technology_block.ConsumeWhitespace();
-  if (!technology_block.AtEnd())
+  if (!technology_block.AtEnd()) {
     return Result::kUnsupported;
+  }
 
   return parse_result;
 }
@@ -249,23 +253,49 @@ CSSSupportsParser::Result CSSSupportsParser::ConsumeFontTechFn(
 CSSSupportsParser::Result CSSSupportsParser::ConsumeSupportsDecl(
     const CSSParserToken& first_token,
     CSSParserTokenStream& stream) {
-  if (!IsSupportsDecl(first_token, stream.Peek()))
+  if (!IsSupportsDecl(first_token, stream.Peek())) {
     return Result::kParseFailure;
-  if (parser_.ConsumeSupportsDeclaration(stream))
+  }
+  if (parser_.ConsumeSupportsDeclaration(stream)) {
     return Result::kSupported;
+  }
+
+  // ConsumeSupportsDeclaration can leave the stream in various states,
+  // see documentation near CSSParserImpl::ConsumeDeclaration.
+  if (!stream.AtEnd()) {
+    // If there are remaining tokens, then ConsumeSupportsDeclaration backed
+    // out early due to a missing colon or invalid property.
+    // This normally means it's either an invalid property (kUnsupported),
+    // or some other unknown construct (also kUnsupported). However, the unknown
+    // construct must not violate the rules of <general-enclosed>. If that
+    // happens, it is instead a kParseFailure.
+    CSSParserTokenRange remaining = stream.ConsumeUntilPeekedTypeIs<>();
+    // TODO(crbug.com/1361240): This is the same check as
+    // ConsumeGeneralEnclosed. It would be cleaner to just restart and actually
+    // call that function.
+    if (!ConsumeAnyValue(remaining) || !remaining.AtEnd()) {
+      return Result::kParseFailure;
+    }
+  }
+
   return Result::kUnsupported;
 }
 
-// <general-enclosed> = [ <function-token> <any-value> ) ]
-//                  | ( <ident> <any-value> )
+// <general-enclosed> = [ <function-token> <any-value>? ) ]
+//                  | ( <any-value>? )
 CSSSupportsParser::Result CSSSupportsParser::ConsumeGeneralEnclosed(
     const CSSParserToken& first_token,
     CSSParserTokenStream& stream) {
   if (IsGeneralEnclosed(first_token)) {
     auto block = stream.ConsumeUntilPeekedTypeIs<kRightParenthesisToken>();
-    // TODO(crbug.com/1269284): We should allow empty values here.
-    if (!ConsumeAnyValue(block) || !block.AtEnd())
+    block.ConsumeWhitespace();
+    if (block.AtEnd()) {
+      return Result::kUnsupported;
+    }
+
+    if (!ConsumeAnyValue(block) || !block.AtEnd()) {
       return Result::kParseFailure;
+    }
 
     stream.ConsumeWhitespace();
     return Result::kUnsupported;

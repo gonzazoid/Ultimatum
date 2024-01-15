@@ -16,7 +16,9 @@ namespace {
 CaptureModeSession* GetCaptureModeSession() {
   auto* controller = CaptureModeController::Get();
   DCHECK(controller->IsActive());
-  CaptureModeSession* session = controller->capture_mode_session();
+  CaptureModeSession* session =
+      static_cast<CaptureModeSession*>(controller->capture_mode_session());
+  CHECK_EQ(session->session_type(), SessionType::kReal);
   DCHECK(session->capture_mode_settings_widget());
   return session;
 }
@@ -40,6 +42,15 @@ views::View* CaptureModeSettingsTestApi::GetMicrophoneOption() {
 
 views::View* CaptureModeSettingsTestApi::GetAudioOffOption() {
   return GetAudioInputMenuGroup()->GetOptionForTesting(kAudioOff);
+}
+
+views::View* CaptureModeSettingsTestApi::GetSystemAudioOption() {
+  return GetAudioInputMenuGroup()->GetOptionForTesting(kAudioSystem);
+}
+
+views::View* CaptureModeSettingsTestApi::GetSystemAndMicrophoneAudioOption() {
+  return GetAudioInputMenuGroup()->GetOptionForTesting(
+      kAudioSystemAndMicrophone);
 }
 
 CaptureModeMenuGroup* CaptureModeSettingsTestApi::GetSaveToMenuGroup() {

@@ -6,8 +6,7 @@ package org.chromium.chrome.browser.toolbar;
 
 import static org.junit.Assert.assertEquals;
 
-import android.support.test.InstrumentationRegistry;
-
+import androidx.test.core.app.ApplicationProvider;
 import androidx.test.filters.MediumTest;
 
 import org.junit.Before;
@@ -33,9 +32,7 @@ import org.chromium.ui.test.util.UiRestriction;
 
 import java.util.concurrent.TimeoutException;
 
-/**
- * Integration tests for the toolbar progress bar.
- */
+/** Integration tests for the toolbar progress bar. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 @Restriction(UiRestriction.RESTRICTION_TYPE_PHONE)
@@ -57,21 +54,21 @@ public class ToolbarProgressBarIntegrationTest {
         TestThreadUtils.runOnUiThreadBlocking(() -> mProgressBar.finish(false));
     }
 
-    /**
-     * Test that the progress bar only traverses the page a single time per navigation.
-     */
+    /** Test that the progress bar only traverses the page a single time per navigation. */
     @Test
     @Feature({"Android-Progress-Bar"})
     @MediumTest
     @DisabledTest(message = "https://crbug.com/1269029")
     public void testProgressBarTraversesScreenOnce() throws TimeoutException {
         EmbeddedTestServer testServer =
-                EmbeddedTestServer.createAndStartServer(InstrumentationRegistry.getContext());
+                EmbeddedTestServer.createAndStartServer(
+                        ApplicationProvider.getApplicationContext());
 
         final WebContents webContents = mActivityTestRule.getWebContents();
 
-        TestWebContentsObserver observer = TestThreadUtils.runOnUiThreadBlockingNoException(
-                () -> new TestWebContentsObserver(webContents));
+        TestWebContentsObserver observer =
+                TestThreadUtils.runOnUiThreadBlockingNoException(
+                        () -> new TestWebContentsObserver(webContents));
         // Start and stop load events are carefully tracked; there should be two start-stop pairs
         // that do not overlap.
         OnPageStartedHelper startHelper = observer.getOnPageStartedHelper();
@@ -105,7 +102,9 @@ public class ToolbarProgressBarIntegrationTest {
 
         // Though the page triggered two load events, the progress bar should have only appeared a
         // single time.
-        assertEquals("The progress bar should have only started once.", 1,
+        assertEquals(
+                "The progress bar should have only started once.",
+                1,
                 mProgressBar.getStartCountForTesting());
     }
 }

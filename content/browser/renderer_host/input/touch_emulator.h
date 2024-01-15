@@ -7,15 +7,15 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "content/browser/renderer_host/input/touch_emulator_client.h"
 #include "content/common/content_export.h"
-#include "content/common/cursors/webcursor.h"
 #include "third_party/blink/public/common/input/web_touch_event.h"
 #include "third_party/blink/public/mojom/input/input_event_result.mojom-shared.h"
+#include "ui/base/cursor/cursor.h"
 #include "ui/events/gesture_detection/filtered_gesture_provider.h"
 #include "ui/events/gesture_detection/gesture_provider_config_helper.h"
 #include "ui/gfx/geometry/size_f.h"
@@ -104,10 +104,8 @@ class CONTENT_EXPORT TouchEmulator : public ui::GestureProviderClient {
   void OnGestureEvent(const ui::GestureEventData& gesture) override;
   bool RequiresDoubleTapGestureEvents() const override;
 
-  // Returns cursor size in DIP.
-  gfx::SizeF InitCursorFromResource(
-      WebCursor* cursor, float scale, int resource_id);
-  bool InitCursors(float device_scale_factor, bool force);
+  ui::Cursor InitCursorFromResource(int resource_id);
+  void InitCursors();
   void ResetState();
   void UpdateCursor();
   bool UpdateShiftPressed(bool shift_pressed);
@@ -146,13 +144,13 @@ class CONTENT_EXPORT TouchEmulator : public ui::GestureProviderClient {
   Mode mode_;
   bool double_tap_enabled_;
 
-  bool use_2x_cursors_;
   // While emulation is on, default cursor is touch. Pressing shift changes
   // cursor to the pinch one.
-  WebCursor pointer_cursor_;
-  WebCursor touch_cursor_;
-  WebCursor pinch_cursor_;
+  ui::Cursor touch_cursor_;
+  ui::Cursor pinch_cursor_;
   gfx::SizeF cursor_size_;
+
+  float cursor_scale_factor_ = 0;
 
   // These are used to drop extra mouse move events coming too quickly, so
   // we don't handle too much touches in gesture provider.

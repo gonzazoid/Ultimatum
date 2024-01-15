@@ -7,10 +7,11 @@
 
 #include "base/component_export.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
-#include "chromeos/login/login_state/login_state.h"
 
 namespace ash {
 
@@ -59,6 +60,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ESimPolicyLoginMetricsLogger
 
   // NetworkStateHandlerObserver::
   void DeviceListChanged() override;
+  void OnShuttingDown() override;
 
   void SetIsEnterpriseManaged(bool is_enterprise_managed);
 
@@ -91,9 +93,11 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ESimPolicyLoginMetricsLogger
       bool has_non_managed_cellular);
   void LogESimPolicyStatusAtLogin();
 
-  NetworkStateHandler* network_state_handler_ = nullptr;
-  ManagedNetworkConfigurationHandler* managed_network_configuration_handler_ =
-      nullptr;
+  raw_ptr<NetworkStateHandler> network_state_handler_ = nullptr;
+  raw_ptr<ManagedNetworkConfigurationHandler, DanglingUntriaged>
+      managed_network_configuration_handler_ = nullptr;
+
+  NetworkStateHandlerScopedObservation network_state_handler_observer_{this};
 
   // A timer to wait for cellular initialization. This is useful
   // to avoid tracking intermediate states when cellular network is

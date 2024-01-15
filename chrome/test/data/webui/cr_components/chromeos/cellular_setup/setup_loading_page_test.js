@@ -7,7 +7,7 @@ import 'chrome://resources/ash/common/cellular_setup/setup_loading_page.js';
 
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {assertFalse, assertTrue} from '../../../chai_assert.js';
+import {assertFalse, assertTrue} from '../../../chromeos/chai_assert.js';
 
 suite('CrComponentsSetupLoadingPageTest', function() {
   let setupLoadingPage;
@@ -18,19 +18,23 @@ suite('CrComponentsSetupLoadingPageTest', function() {
     document.body.appendChild(setupLoadingPage);
     flush();
 
-    basePage = setupLoadingPage.$$('base-page');
+    basePage = setupLoadingPage.shadowRoot.querySelector('base-page');
     assertTrue(!!basePage);
   });
 
   test('Loading animation and error graphic shown correctly', function() {
     setupLoadingPage.isSimDetectError = false;
     flush();
-    assertTrue(!!setupLoadingPage.$$('#animationContainer'));
-    assertTrue(setupLoadingPage.$$('#simDetectError').hidden);
+    assertTrue(
+        !!setupLoadingPage.shadowRoot.querySelector('#animationContainer'));
+    assertTrue(
+        setupLoadingPage.shadowRoot.querySelector('#simDetectError').hidden);
 
     setupLoadingPage.isSimDetectError = true;
     flush();
-    assertFalse(!!setupLoadingPage.$$('#animationContainer'));
-    assertFalse(setupLoadingPage.$$('#simDetectError').hidden);
+    assertFalse(
+        !!setupLoadingPage.shadowRoot.querySelector('#animationContainer'));
+    assertFalse(
+        setupLoadingPage.shadowRoot.querySelector('#simDetectError').hidden);
   });
 });

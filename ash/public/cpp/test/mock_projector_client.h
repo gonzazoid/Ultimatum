@@ -9,6 +9,7 @@
 #include "ash/public/cpp/projector/projector_annotator_controller.h"
 #include "ash/public/cpp/projector/projector_client.h"
 #include "ash/public/cpp/projector/projector_new_screencast_precondition.h"
+#include "ash/public/cpp/projector/speech_recognition_availability.h"
 #include "base/files/scoped_temp_dir.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
@@ -28,8 +29,11 @@ class MockProjectorClient : public ProjectorClient,
   ~MockProjectorClient() override;
 
   // ProjectorClient:
+  MOCK_CONST_METHOD0(GetSpeechRecognitionAvailability,
+                     SpeechRecognitionAvailability());
   MOCK_METHOD0(StartSpeechRecognition, void());
   MOCK_METHOD0(StopSpeechRecognition, void());
+  MOCK_METHOD0(ForceEndSpeechRecognition, void());
   bool GetBaseStoragePath(base::FilePath* result) const override;
   MOCK_CONST_METHOD0(IsDriveFsMounted, bool());
   MOCK_CONST_METHOD0(IsDriveFsMountFailed, bool());

@@ -7,7 +7,9 @@
 #include <memory>
 #include <utility>
 
+#include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
+#include "base/test/test_future.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
 #include "chrome/browser/ash/crostini/crostini_test_helper.h"
 #include "chrome/browser/ash/crostini/crostini_types.mojom.h"
@@ -15,9 +17,9 @@
 #include "chromeos/ash/components/dbus/chunneld/chunneld_client.h"
 #include "chromeos/ash/components/dbus/cicerone/cicerone_client.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
-#include "chromeos/ash/components/dbus/concierge/concierge_service.pb.h"
 #include "chromeos/ash/components/dbus/concierge/fake_concierge_client.h"
 #include "chromeos/ash/components/dbus/seneschal/seneschal_client.h"
+#include "chromeos/ash/components/dbus/vm_concierge/concierge_service.pb.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -35,7 +37,7 @@ class CrostiniDiskTest : public testing::Test {
   std::unique_ptr<CrostiniDiskInfo> OnListVmDisksWithResult(
       const char* vm_name,
       int64_t free_space,
-      absl::optional<vm_tools::concierge::ListVmDisksResponse>
+      std::optional<vm_tools::concierge::ListVmDisksResponse>
           list_disks_response) {
     std::unique_ptr<CrostiniDiskInfo> result;
     auto store = base::BindLambdaForTesting(
@@ -81,23 +83,16 @@ class CrostiniDiskTestDbus : public CrostiniDiskTest {
   bool OnResizeWithResult(Profile* profile,
                           const char* vm_name,
                           int64_t size_bytes) {
-    bool result;
-    base::RunLoop run_loop;
-    auto store =
-        base::BindLambdaForTesting([&result, &run_loop = run_loop](bool info) {
-          result = std::move(info);
-          run_loop.Quit();
-        });
-
-    ResizeCrostiniDisk(profile, vm_name, size_bytes, std::move(store));
-    run_loop.Run();
-    return result;
+    base::test::TestFuture<bool> result_future;
+    ResizeCrostiniDisk(profile, vm_name, size_bytes,
+                       result_future.GetCallback());
+    return result_future.Get();
   }
 
   Profile* profile() { return profile_.get(); }
 
   content::BrowserTaskEnvironment task_environment_;
-  ash::FakeConciergeClient* fake_concierge_client_;
+  raw_ptr<ash::FakeConciergeClient, DanglingUntriaged> fake_concierge_client_;
 
   std::unique_ptr<TestingProfile> profile_;
   std::unique_ptr<CrostiniTestHelper> test_helper_;
@@ -116,7 +111,7 @@ TEST_F(CrostiniDiskTest, NonResizeableDiskReturnsEarly) {
 }
 
 TEST_F(CrostiniDiskTest, CallbackGetsEmptyInfoOnError) {
-  auto disk_info_nullopt = OnListVmDisksWithResult("vm_name", 0, absl::nullopt);
+  auto disk_info_nullopt = OnListVmDisksWithResult("vm_name", 0, std::nullopt);
   EXPECT_FALSE(disk_info_nullopt);
 
   vm_tools::concierge::ListVmDisksResponse failure_response;

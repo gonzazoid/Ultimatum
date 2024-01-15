@@ -5,7 +5,6 @@
 import './strings.m.js';
 
 import {CustomElement} from 'chrome://resources/js/custom_element.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
 
 import {getTemplate} from './connectors_tabs.html.js';
 import {DeviceTrustConnectorElement} from './device_trust_connector.js';
@@ -28,10 +27,10 @@ interface ConnectorTab {
 const connectorTabs: ConnectorTab[] = [{
   title: 'Device Trust',
   directive: DeviceTrustConnectorElement.is,
-  isEnabled: loadTimeData.getBoolean('deviceTrustConnectorEnabled'),
+  isEnabled: true,
 }];
 
-export class ConnectorsTabsElement extends CustomElement {
+class ConnectorsTabsElement extends CustomElement {
   static get is() {
     return 'connectors-tabs';
   }
@@ -129,7 +128,7 @@ export class ConnectorsTabsElement extends CustomElement {
     const contentElement = document.createElement('div');
     contentElement.classList.add('tabcontent');
     contentElement.id = tab.directive;
-    contentElement.innerHTML = `<${tab.directive}></${tab.directive}>`;
+    contentElement.appendChild(document.createElement(tab.directive));
     contentRoot.appendChild(contentElement);
   }
 

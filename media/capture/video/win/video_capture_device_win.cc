@@ -13,6 +13,7 @@
 #include <utility>
 
 #include "base/feature_list.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/trace_event/trace_event.h"
@@ -237,7 +238,9 @@ ComPtr<IPin> VideoCaptureDeviceWin::GetPin(ComPtr<IBaseFilter> capture_filter,
 VideoPixelFormat VideoCaptureDeviceWin::TranslateMediaSubtypeToPixelFormat(
     const GUID& sub_type) {
   static struct {
-    const GUID& sub_type;
+    // This field is not a raw_ref<> because it was filtered by the rewriter
+    // for: #global-scope
+    RAW_PTR_EXCLUSION const GUID& sub_type;
     VideoPixelFormat format;
   } const kMediaSubtypeToPixelFormatCorrespondence[] = {
       {kMediaSubTypeI420, PIXEL_FORMAT_I420},
@@ -333,15 +336,6 @@ VideoCaptureDeviceWin::~VideoCaptureDeviceWin() {
 
   if (capture_graph_builder_.Get())
     capture_graph_builder_.Reset();
-
-  if (!take_photo_callbacks_.empty()) {
-    for (size_t k = 0; k < take_photo_callbacks_.size(); k++) {
-      LogWindowsImageCaptureOutcome(
-          VideoCaptureWinBackend::kDirectShow,
-          ImageCaptureOutcome::kFailedUsingVideoStream,
-          IsHighResolution(capture_format_));
-    }
-  }
 }
 
 bool VideoCaptureDeviceWin::Init() {
@@ -872,34 +866,35 @@ void VideoCaptureDeviceWin::FrameReceived(const uint8_t* buffer,
                                           const VideoCaptureFormat& format,
                                           base::TimeDelta timestamp,
                                           bool flip_y) {
+  // We always calculate camera rotation for the first frame. We also cache
+  // the latest value to use when AutoRotation is turned off.
+  // To avoid potential deadlock, do this without holding a lock.
+  if (!camera_rotation_.has_value() || IsAutoRotationEnabled())
+    camera_rotation_ = GetCameraRotation(device_descriptor_.facing);
+
   {
     base::AutoLock lock(lock_);
     if (state_ != kCapturing)
       return;
+
+    if (first_ref_time_.is_null())
+      first_ref_time_ = base::TimeTicks::Now();
+
+    // There is a chance that the platform does not provide us with the
+    // timestamp, in which case, we use reference time to calculate a timestamp.
+    if (timestamp == kNoTimestamp)
+      timestamp = base::TimeTicks::Now() - first_ref_time_;
+
+    // TODO(julien.isorce): retrieve the color space information using the
+    // DirectShow api, AM_MEDIA_TYPE::VIDEOINFOHEADER2::dwControlFlags. If
+    // AMCONTROL_COLORINFO_PRESENT, then reinterpret dwControlFlags as a
+    // DXVA_ExtendedFormat. Then use its fields DXVA_VideoPrimaries,
+    // DXVA_VideoTransferMatrix, DXVA_VideoTransferFunction and
+    // DXVA_NominalRangeto build a gfx::ColorSpace. See http://crbug.com/959992.
+    client_->OnIncomingCapturedData(buffer, length, format, gfx::ColorSpace(),
+                                    camera_rotation_.value(), flip_y,
+                                    base::TimeTicks::Now(), timestamp);
   }
-
-  if (first_ref_time_.is_null())
-    first_ref_time_ = base::TimeTicks::Now();
-
-  // There is a chance that the platform does not provide us with the timestamp,
-  // in which case, we use reference time to calculate a timestamp.
-  if (timestamp == kNoTimestamp)
-    timestamp = base::TimeTicks::Now() - first_ref_time_;
-
-  // We always calculate camera rotation for the first frame. We also cache the
-  // latest value to use when AutoRotation is turned off.
-  if (!camera_rotation_.has_value() || IsAutoRotationEnabled())
-    camera_rotation_ = GetCameraRotation(device_descriptor_.facing);
-
-  // TODO(julien.isorce): retrieve the color space information using the
-  // DirectShow api, AM_MEDIA_TYPE::VIDEOINFOHEADER2::dwControlFlags. If
-  // AMCONTROL_COLORINFO_PRESENT, then reinterpret dwControlFlags as a
-  // DXVA_ExtendedFormat. Then use its fields DXVA_VideoPrimaries,
-  // DXVA_VideoTransferMatrix, DXVA_VideoTransferFunction and
-  // DXVA_NominalRangeto build a gfx::ColorSpace. See http://crbug.com/959992.
-  client_->OnIncomingCapturedData(buffer, length, format, gfx::ColorSpace(),
-                                  camera_rotation_.value(), flip_y,
-                                  base::TimeTicks::Now(), timestamp);
 
   while (!take_photo_callbacks_.empty()) {
     TakePhotoCallback cb = std::move(take_photo_callbacks_.front());
@@ -908,15 +903,6 @@ void VideoCaptureDeviceWin::FrameReceived(const uint8_t* buffer,
     mojom::BlobPtr blob = RotateAndBlobify(buffer, length, format, 0);
     if (blob) {
       std::move(cb).Run(std::move(blob));
-      LogWindowsImageCaptureOutcome(
-          VideoCaptureWinBackend::kDirectShow,
-          ImageCaptureOutcome::kSucceededUsingVideoStream,
-          IsHighResolution(format));
-    } else {
-      LogWindowsImageCaptureOutcome(
-          VideoCaptureWinBackend::kDirectShow,
-          ImageCaptureOutcome::kFailedUsingVideoStream,
-          IsHighResolution(format));
     }
   }
 }
@@ -936,8 +922,8 @@ bool VideoCaptureDeviceWin::CreateCapabilityMap() {
 void VideoCaptureDeviceWin::SetAntiFlickerInCaptureFilter(
     const VideoCaptureParams& params) {
   const PowerLineFrequency power_line_frequency = GetPowerLineFrequency(params);
-  if (power_line_frequency != PowerLineFrequency::FREQUENCY_50HZ &&
-      power_line_frequency != PowerLineFrequency::FREQUENCY_60HZ) {
+  if (power_line_frequency != PowerLineFrequency::k50Hz &&
+      power_line_frequency != PowerLineFrequency::k60Hz) {
     return;
   }
   ComPtr<IKsPropertySet> ks_propset;
@@ -953,8 +939,7 @@ void VideoCaptureDeviceWin::SetAntiFlickerInCaptureFilter(
     data.Property.Set = PROPSETID_VIDCAP_VIDEOPROCAMP;
     data.Property.Id = KSPROPERTY_VIDEOPROCAMP_POWERLINE_FREQUENCY;
     data.Property.Flags = KSPROPERTY_TYPE_SET;
-    data.Value =
-        (power_line_frequency == PowerLineFrequency::FREQUENCY_50HZ) ? 1 : 2;
+    data.Value = (power_line_frequency == PowerLineFrequency::k50Hz) ? 1 : 2;
     data.Flags = KSPROPERTY_VIDEOPROCAMP_FLAGS_MANUAL;
     hr = ks_propset->Set(PROPSETID_VIDCAP_VIDEOPROCAMP,
                          KSPROPERTY_VIDEOPROCAMP_POWERLINE_FREQUENCY, &data,

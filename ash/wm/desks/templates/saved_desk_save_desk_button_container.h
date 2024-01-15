@@ -6,8 +6,10 @@
 #define ASH_WM_DESKS_TEMPLATES_SAVED_DESK_SAVE_DESK_BUTTON_CONTAINER_H_
 
 #include "ash/wm/desks/templates/saved_desk_save_desk_button.h"
+#include "base/memory/raw_ptr.h"
 
 #include "base/functional/callback.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/layout/box_layout_view.h"
 
 namespace ash {
@@ -15,6 +17,8 @@ namespace ash {
 class ASH_EXPORT SavedDeskSaveDeskButtonContainer
     : public views::BoxLayoutView {
  public:
+  METADATA_HEADER(SavedDeskSaveDeskButtonContainer);
+
   SavedDeskSaveDeskButtonContainer(
       base::RepeatingClosure save_as_template_callback,
       base::RepeatingClosure save_for_later_callback);
@@ -28,8 +32,14 @@ class ASH_EXPORT SavedDeskSaveDeskButtonContainer
   SavedDeskSaveDeskButton* save_desk_as_template_button() {
     return save_desk_as_template_button_;
   }
+  const SavedDeskSaveDeskButton* save_desk_as_template_button() const {
+    return save_desk_as_template_button_;
+  }
 
   SavedDeskSaveDeskButton* save_desk_for_later_button() {
+    return save_desk_for_later_button_;
+  }
+  const SavedDeskSaveDeskButton* save_desk_for_later_button() const {
     return save_desk_for_later_button_;
   }
 
@@ -49,8 +59,8 @@ class ASH_EXPORT SavedDeskSaveDeskButtonContainer
   SavedDeskSaveDeskButton* GetButtonFromType(
       SavedDeskSaveDeskButton::Type type);
 
-  SavedDeskSaveDeskButton* save_desk_as_template_button_ = nullptr;
-  SavedDeskSaveDeskButton* save_desk_for_later_button_ = nullptr;
+  raw_ptr<SavedDeskSaveDeskButton> save_desk_as_template_button_ = nullptr;
+  raw_ptr<SavedDeskSaveDeskButton> save_desk_for_later_button_ = nullptr;
 
   // Object responsible for observing accessibility setting changes.
   std::unique_ptr<SaveDeskButtonContainerAccessibilityObserver>

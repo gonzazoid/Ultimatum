@@ -11,9 +11,6 @@
 #include "ui/base/l10n/l10n_util.h"
 
 namespace quick_answers {
-namespace {
-
-}  // namespace
 
 SpellChecker::SpellChecker(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory)
@@ -34,9 +31,10 @@ void SpellChecker::CheckSpelling(const std::string& word,
   }
 
   iterator->get()->CheckSpelling(
-      word, base::BindOnce(&SpellChecker::CollectResults,
-                           base::Unretained(this), word, std::move(callback),
-                           iterator, languages_list_version_));
+      word,
+      base::BindOnce(&SpellChecker::CollectResults, base::Unretained(this),
+                     word, std::move(callback), iterator,
+                     iterator->get()->language(), languages_list_version_));
 }
 
 void SpellChecker::OnSettingsEnabled(bool enabled) {
@@ -114,10 +112,11 @@ void SpellChecker::CheckEligibilityAndUpdateLanguages(
 void SpellChecker::CollectResults(const std::string& word,
                                   CheckSpellingCallback callback,
                                   SpellCheckLanguageIterator iterator,
+                                  const std::string& language,
                                   int languages_list_version,
                                   bool is_correct) {
   if (is_correct) {
-    std::move(callback).Run(true, iterator->get()->language());
+    std::move(callback).Run(true, language);
     return;
   }
 
@@ -134,9 +133,10 @@ void SpellChecker::CollectResults(const std::string& word,
   }
 
   iterator->get()->CheckSpelling(
-      word, base::BindOnce(&SpellChecker::CollectResults,
-                           base::Unretained(this), word, std::move(callback),
-                           iterator, languages_list_version));
+      word,
+      base::BindOnce(&SpellChecker::CollectResults, base::Unretained(this),
+                     word, std::move(callback), iterator,
+                     iterator->get()->language(), languages_list_version));
 }
 
 }  // namespace quick_answers

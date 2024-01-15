@@ -9,7 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
+#include "build/build_config.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/gl/gl_display.h"
@@ -17,6 +18,7 @@
 #include "ui/gl/gl_surface_format.h"
 #include "ui/gl/gpu_preference.h"
 #include "ui/gl/init/gl_init_export.h"
+#include "ui/gl/presenter.h"
 
 namespace gl {
 
@@ -34,16 +36,16 @@ namespace init {
 GL_INIT_EXPORT std::vector<GLImplementationParts> GetAllowedGLImplementations();
 
 // Initializes GL bindings and extension settings.
-// |system_device_id| specifies which GPU to use on a multi-GPU system.
-// If its value is 0, use the default GPU of the system.
-GL_INIT_EXPORT GLDisplay* InitializeGLOneOff(uint64_t system_device_id);
+// |gpu_preference| specifies which GPU to use on a multi-GPU system.
+// If its value is kDefault, use the default GPU of the system.
+GL_INIT_EXPORT GLDisplay* InitializeGLOneOff(gl::GpuPreference gpu_preference);
 
 // Initializes GL bindings without initializing extension settings.
-// |system_device_id| specifies which GPU to use on a multi-GPU system.
-// If its value is 0, use the default GPU of the system.
+// |gpu_preference| specifies which GPU to use on a multi-GPU system.
+// If its value is kDefault, use the default GPU of the system.
 GL_INIT_EXPORT GLDisplay* InitializeGLNoExtensionsOneOff(
     bool init_bindings,
-    uint64_t system_device_id);
+    gl::GpuPreference gpu_preference);
 
 // Initializes GL bindings - load dlls and get proc address according to gl
 // command line switch.
@@ -63,13 +65,21 @@ GL_INIT_EXPORT bool InitializeStaticGLBindingsImplementation(
 // Initializes GL platform using the provided parameters. This might be required
 // for use in tests. This should be called only after GL bindings are initilzed
 // successfully.
-// |system_device_id| specifies which GPU to use on a multi-GPU system.
-// If its value is 0, use the default GPU of the system.
+// |gpu_preference| specifies which GPU to use on a multi-GPU system.
+// If its value is kDefault, use the default GPU of the system.
 GL_INIT_EXPORT GLDisplay* InitializeGLOneOffPlatformImplementation(
     bool fallback_to_software_gl,
     bool disable_gl_drawing,
     bool init_extensions,
-    uint64_t system_device_id);
+    gl::GpuPreference gpu_preference);
+
+// Does the same as the above, but returns a cached display if one is already
+// initialized for the requested GPU.
+GL_INIT_EXPORT GLDisplay* GetOrInitializeGLOneOffPlatformImplementation(
+    bool fallback_to_software_gl,
+    bool disable_gl_drawing,
+    bool init_extensions,
+    gl::GpuPreference gpu_preference);
 
 // Clears GL bindings and resets GL implementation.
 // Calling this function a second time on the same |display| is a no-op.
@@ -94,25 +104,20 @@ GL_INIT_EXPORT scoped_refptr<GLSurface> CreateViewGLSurface(
     GLDisplay* display,
     gfx::AcceleratedWidget window);
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 // Creates a GL surface that renders directly into a window with surfaceless
 // semantics - there is no default framebuffer and the primary surface must
 // be presented as an overlay. If surfaceless mode is not supported or
 // enabled it will return a null pointer.
-GL_INIT_EXPORT scoped_refptr<GLSurface> CreateSurfacelessViewGLSurface(
+GL_INIT_EXPORT scoped_refptr<Presenter> CreateSurfacelessViewGLSurface(
     GLDisplay* display,
     gfx::AcceleratedWidget window);
-#endif  // defined(USE_OZONE)
+#endif  // BUILDFLAG(IS_OZONE)
 
 // Creates a GL surface used for offscreen rendering.
 GL_INIT_EXPORT scoped_refptr<GLSurface> CreateOffscreenGLSurface(
     GLDisplay* display,
     const gfx::Size& size);
-
-GL_INIT_EXPORT scoped_refptr<GLSurface> CreateOffscreenGLSurfaceWithFormat(
-    GLDisplay* display,
-    const gfx::Size& size,
-    GLSurfaceFormat format);
 
 // Set platform dependent disabled extensions and re-initialize extension
 // bindings.

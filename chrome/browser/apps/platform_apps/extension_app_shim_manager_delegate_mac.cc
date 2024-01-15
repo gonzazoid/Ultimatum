@@ -18,16 +18,15 @@
 #include "chrome/browser/apps/app_service/browser_app_launcher.h"
 #include "chrome/browser/apps/app_shim/app_shim_termination_manager.h"
 #include "chrome/browser/apps/platform_apps/app_window_registry_util.h"
+#include "chrome/browser/apps/platform_apps/platform_app_launch.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/launch_util.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/extensions/app_launch_params.h"
 #include "chrome/browser/ui/extensions/extension_enable_flow.h"
 #include "chrome/browser/ui/extensions/extension_enable_flow_delegate.h"
 #include "chrome/browser/web_applications/extensions/web_app_extension_shortcut.h"
-#include "chrome/browser/web_applications/extensions/web_app_extension_shortcut_mac.h"
 #include "chrome/browser/web_applications/os_integration/web_app_shortcut_mac.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "chrome/common/extensions/extension_metrics.h"
@@ -39,6 +38,7 @@
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/constants.h"
+#include "extensions/common/extension_id.h"
 
 using extensions::AppWindowRegistry;
 using extensions::Extension;
@@ -57,7 +57,7 @@ typedef AppWindowRegistry::AppWindowList AppWindowList;
 class EnableViaPrompt : public ExtensionEnableFlowDelegate {
  public:
   EnableViaPrompt(Profile* profile,
-                  const std::string& extension_id,
+                  const extensions::ExtensionId& extension_id,
                   base::OnceCallback<void()> callback)
       : profile_(profile),
         extension_id_(extension_id),
@@ -79,19 +79,20 @@ class EnableViaPrompt : public ExtensionEnableFlowDelegate {
   void ExtensionEnableFlowAborted(bool user_initiated) override { delete this; }
 
   raw_ptr<Profile> profile_;
-  std::string extension_id_;
+  extensions::ExtensionId extension_id_;
   base::OnceCallback<void()> callback_;
   std::unique_ptr<ExtensionEnableFlow> flow_;
 };
 
-const Extension* MaybeGetAppExtension(content::BrowserContext* context,
-                                      const std::string& extension_id) {
+const Extension* MaybeGetAppExtension(
+    content::BrowserContext* context,
+    const extensions::ExtensionId& extension_id) {
   if (!context)
     return nullptr;
 
   ExtensionRegistry* registry = ExtensionRegistry::Get(context);
   const Extension* extension =
-      registry->GetExtensionById(extension_id, ExtensionRegistry::ENABLED);
+      registry->enabled_extensions().GetByID(extension_id);
   return extension &&
                  (extension->is_platform_app() || extension->is_hosted_app())
              ? extension
@@ -105,7 +106,7 @@ ExtensionAppShimManagerDelegate::~ExtensionAppShimManagerDelegate() = default;
 
 bool ExtensionAppShimManagerDelegate::ShowAppWindows(
     Profile* profile,
-    const web_app::AppId& app_id) {
+    const webapps::AppId& app_id) {
   AppWindowList windows =
       AppWindowRegistry::Get(profile)->GetAppWindowsForApp(app_id);
   for (extensions::AppWindow* window : base::Reversed(windows)) {
@@ -117,7 +118,7 @@ bool ExtensionAppShimManagerDelegate::ShowAppWindows(
 
 void ExtensionAppShimManagerDelegate::CloseAppWindows(
     Profile* profile,
-    const web_app::AppId& app_id) {
+    const webapps::AppId& app_id) {
   AppWindowList windows =
       AppWindowRegistry::Get(profile)->GetAppWindowsForApp(app_id);
   for (auto it = windows.begin(); it != windows.end(); ++it) {
@@ -128,14 +129,14 @@ void ExtensionAppShimManagerDelegate::CloseAppWindows(
 
 bool ExtensionAppShimManagerDelegate::AppIsInstalled(
     Profile* profile,
-    const web_app::AppId& app_id) {
+    const webapps::AppId& app_id) {
   const Extension* extension = MaybeGetAppExtension(profile, app_id);
   return profile && extension;
 }
 
 bool ExtensionAppShimManagerDelegate::AppCanCreateHost(
     Profile* profile,
-    const web_app::AppId& app_id) {
+    const webapps::AppId& app_id) {
   const Extension* extension = MaybeGetAppExtension(profile, app_id);
   if (!profile || !extension)
     return false;
@@ -151,13 +152,13 @@ bool ExtensionAppShimManagerDelegate::AppCanCreateHost(
 
 bool ExtensionAppShimManagerDelegate::AppIsMultiProfile(
     Profile* profile,
-    const web_app::AppId& app_id) {
+    const webapps::AppId& app_id) {
   return false;
 }
 
 bool ExtensionAppShimManagerDelegate::AppUsesRemoteCocoa(
     Profile* profile,
-    const web_app::AppId& app_id) {
+    const webapps::AppId& app_id) {
   const Extension* extension = MaybeGetAppExtension(profile, app_id);
   if (!profile || !extension)
     return false;
@@ -172,7 +173,7 @@ bool ExtensionAppShimManagerDelegate::AppUsesRemoteCocoa(
 
 void ExtensionAppShimManagerDelegate::EnableExtension(
     Profile* profile,
-    const web_app::AppId& app_id,
+    const webapps::AppId& app_id,
     base::OnceCallback<void()> callback) {
   const Extension* extension = MaybeGetAppExtension(profile, app_id);
   if (extension)
@@ -183,15 +184,22 @@ void ExtensionAppShimManagerDelegate::EnableExtension(
 
 void ExtensionAppShimManagerDelegate::LaunchApp(
     Profile* profile,
-    const web_app::AppId& app_id,
+    const webapps::AppId& app_id,
     const std::vector<base::FilePath>& files,
     const std::vector<GURL>& urls,
     const GURL& override_url,
-    chrome::mojom::AppShimLoginItemRestoreState login_item_restore_state) {
+    chrome::mojom::AppShimLoginItemRestoreState login_item_restore_state,
+    base::OnceClosure launch_finished_callback) {
+  base::ScopedClosureRunner run_launch_finished(
+      std::move(launch_finished_callback));
   const Extension* extension = MaybeGetAppExtension(profile, app_id);
   DCHECK(extension);
   extensions::RecordAppLaunchType(extension_misc::APP_LAUNCH_CMD_LINE_APP,
                                   extension->GetType());
+
+  if (apps::OpenDeprecatedApplicationPrompt(profile, app_id))
+    return;
+
   if (extension->is_hosted_app()) {
     auto params = CreateAppLaunchParamsUserContainer(
         profile, extension, WindowOpenDisposition::NEW_FOREGROUND_TAB,
@@ -199,7 +207,7 @@ void ExtensionAppShimManagerDelegate::LaunchApp(
     params.launch_files = files;
     apps::AppServiceProxyFactory::GetForProfile(profile)
         ->BrowserAppLauncher()
-        ->LaunchAppWithParams(std::move(params));
+        ->LaunchAppWithParams(std::move(params), base::DoNothing());
     return;
   }
   if (files.empty()) {
@@ -215,8 +223,9 @@ void ExtensionAppShimManagerDelegate::LaunchApp(
 
 void ExtensionAppShimManagerDelegate::LaunchShim(
     Profile* profile,
-    const web_app::AppId& app_id,
-    bool recreate_shims,
+    const webapps::AppId& app_id,
+    web_app::LaunchShimUpdateBehavior update_behavior,
+    web_app::ShimLaunchMode launch_mode,
     apps::ShimLaunchedCallback launched_callback,
     apps::ShimTerminatedCallback terminated_callback) {
   const Extension* extension = MaybeGetAppExtension(profile, app_id);
@@ -224,18 +233,18 @@ void ExtensionAppShimManagerDelegate::LaunchShim(
   // Only force recreation of shims when RemoteViews is in use (that is, for
   // PWAs). Otherwise, shims may be created unexpectedly.
   // https://crbug.com/941160
-  if (recreate_shims && AppUsesRemoteCocoa(profile, app_id)) {
+  if (web_app::RecreateShimsRequested(update_behavior) &&
+      AppUsesRemoteCocoa(profile, app_id)) {
     // Load the resources needed to build the app shim (icons, etc), and then
     // recreate the shim and launch it.
     web_app::GetShortcutInfoForApp(
         extension, profile,
-        base::BindOnce(
-            &web_app::LaunchShim,
-            web_app::LaunchShimUpdateBehavior::RECREATE_UNCONDITIONALLY,
-            std::move(launched_callback), std::move(terminated_callback)));
+        base::BindOnce(&web_app::LaunchShim, update_behavior, launch_mode,
+                       std::move(launched_callback),
+                       std::move(terminated_callback)));
   } else {
     web_app::LaunchShim(
-        web_app::LaunchShimUpdateBehavior::DO_NOT_RECREATE,
+        web_app::LaunchShimUpdateBehavior::kDoNotRecreate, launch_mode,
         std::move(launched_callback), std::move(terminated_callback),
         web_app::ShortcutInfoForExtensionAndProfile(extension, profile));
   }
@@ -248,7 +257,7 @@ bool ExtensionAppShimManagerDelegate::HasNonBookmarkAppWindowsOpen() {
 std::vector<chrome::mojom::ApplicationDockMenuItemPtr>
 ExtensionAppShimManagerDelegate::GetAppShortcutsMenuItemInfos(
     Profile* profile,
-    const web_app::AppId& app_id) {
+    const webapps::AppId& app_id) {
   return std::vector<chrome::mojom::ApplicationDockMenuItemPtr>();
 }
 

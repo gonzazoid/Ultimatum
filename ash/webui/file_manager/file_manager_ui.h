@@ -9,6 +9,7 @@
 
 #include "ash/webui/file_manager/file_manager_ui_delegate.h"
 #include "ash/webui/file_manager/mojom/file_manager.mojom.h"
+#include "ash/webui/system_apps/public/system_web_app_ui_config.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -25,8 +26,18 @@ namespace ash {
 namespace file_manager {
 
 class FileManagerPageHandler;
+class FileManagerUI;
 
-// WebUI controller for chrome://file-manager.
+// The WebUIConfig for chrome://file-manager.
+class FileManagerUIConfig : public SystemWebAppUIConfig<FileManagerUI> {
+ public:
+  explicit FileManagerUIConfig(
+      SystemWebAppUIConfig::CreateWebUIControllerFunc create_controller_func);
+
+  bool IsWebUIEnabled(content::BrowserContext* browser_context) override;
+};
+
+// The WebUI for chrome://file-manager.
 class FileManagerUI : public ui::MojoWebDialogUI,
                       public mojom::PageHandlerFactory {
  public:
@@ -46,14 +57,13 @@ class FileManagerUI : public ui::MojoWebDialogUI,
       mojo::PendingReceiver<color_change_listener::mojom::PageHandler>
           receiver);
 
-  const FileManagerUIDelegate* delegate() { return delegate_.get(); }
-
   // Get the number of open File Manager windows.
   // Should be called on UI thread.
   static int GetNumInstances();
 
  private:
-  content::WebUIDataSource* CreateTrustedAppDataSource(int window_number);
+  void CreateAndAddTrustedAppDataSource(content::WebUI* web_ui,
+                                        int window_number);
 
   // mojom::PageHandlerFactory:
   void CreatePageHandler(

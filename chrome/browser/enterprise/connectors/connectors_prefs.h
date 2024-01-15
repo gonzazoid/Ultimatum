@@ -12,9 +12,6 @@ class PrefRegistrySimple;
 
 namespace enterprise_connectors {
 
-// Pref that maps to the "SendDownloadToCloudEnterpriseConnector" policy.
-extern const char kSendDownloadToCloudPref[];
-
 // Pref that maps to the "OnFileAttachedEnterpriseConnector" policy.
 extern const char kOnFileAttachedPref[];
 
@@ -27,7 +24,7 @@ extern const char kOnBulkDataEntryPref[];
 // Pref that maps to the "OnPrintEnterpriseConnector" policy.
 extern const char kOnPrintPref[];
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 // Pref that maps to the "OnFileTransferEnterpriseConnector" policy.
 extern const char kOnFileTransferPref[];
 #endif
@@ -41,16 +38,15 @@ extern const char kOnFileAttachedScopePref[];
 extern const char kOnFileDownloadedScopePref[];
 extern const char kOnBulkDataEntryScopePref[];
 extern const char kOnPrintScopePref[];
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 extern const char kOnFileTransferScopePref[];
 #endif
 extern const char kOnSecurityEventScopePref[];
 
-void RegisterProfilePrefs(PrefRegistrySimple* registry);
+extern const char kLatestCrashReportCreationTime[];
 
-#if BUILDFLAG(IS_MAC)
-void RegisterLocalPrefs(PrefRegistrySimple* registry);
-#endif
+void RegisterProfilePrefs(PrefRegistrySimple* registry);
+void RegisterLocalStatePrefs(PrefRegistrySimple* registry);
 
 }  // namespace enterprise_connectors
 

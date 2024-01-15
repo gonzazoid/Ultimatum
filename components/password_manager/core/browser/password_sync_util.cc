@@ -6,12 +6,15 @@
 
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
+#include "components/password_manager/core/browser/features/password_features.h"
+#include "components/password_manager/core/browser/features/password_manager_features_util.h"
 #include "components/password_manager/core/browser/password_form.h"
+#include "components/password_manager/core/browser/password_manager_client.h"
 #include "components/password_manager/core/common/password_manager_features.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/sync/base/user_selectable_type.h"
-#include "components/sync/driver/sync_user_settings.h"
+#include "components/sync/service/sync_user_settings.h"
 #include "google_apis/gaia/gaia_auth_util.h"
 #include "google_apis/gaia/gaia_urls.h"
 #include "url/origin.h"
@@ -28,50 +31,26 @@ constexpr char kGoogleChangePasswordSignonRealm[] =
 namespace password_manager {
 namespace sync_util {
 
-std::string GetSyncUsernameIfSyncingPasswords(
-    const syncer::SyncService* sync_service,
-    const signin::IdentityManager* identity_manager) {
-  if (!identity_manager)
-    return std::string();
-
-  // Return early if the user has explicitly disabled password sync. Note that
-  // this does not cover the case when sync as a whole is turned off.
-  if (sync_service && !sync_service->GetUserSettings()->GetSelectedTypes().Has(
-                          syncer::UserSelectableType::kPasswords)) {
+std::string GetAccountEmailIfSyncFeatureEnabledIncludingPasswords(
+    const syncer::SyncService* sync_service) {
+  // Return early if sync-the-feature isn't turned on or if the user explicitly
+  // disabled password sync.
+  if (!IsSyncFeatureEnabledIncludingPasswords(sync_service)) {
     return std::string();
   }
 
-  return identity_manager->GetPrimaryAccountInfo(signin::ConsentLevel::kSync)
-      .email;
-}
-
-bool IsSyncAccountCredential(const GURL& url,
-                             const std::u16string& username,
-                             const syncer::SyncService* sync_service,
-                             const signin::IdentityManager* identity_manager) {
-  if (!url.DomainIs("google.com"))
-    return false;
-
-  // The empty username can mean that Chrome did not detect it correctly. For
-  // reasons described in http://crbug.com/636292#c1, the username is suspected
-  // to be the sync username unless proven otherwise.
-  if (username.empty())
-    return true;
-
-  return gaia::AreEmailsSame(
-      base::UTF16ToUTF8(username),
-      GetSyncUsernameIfSyncingPasswords(sync_service, identity_manager));
+  return sync_service->GetAccountInfo().email;
 }
 
 bool IsSyncAccountEmail(const std::string& username,
-                        const signin::IdentityManager* identity_manager) {
+                        const signin::IdentityManager* identity_manager,
+                        signin::ConsentLevel consent_level) {
   // |identity_manager| can be null if user is not signed in.
   if (!identity_manager)
     return false;
 
   std::string sync_email =
-      identity_manager->GetPrimaryAccountInfo(signin::ConsentLevel::kSync)
-          .email;
+      identity_manager->GetPrimaryAccountInfo(consent_level).email;
 
   if (sync_email.empty() || username.empty())
     return false;
@@ -100,22 +79,54 @@ bool ShouldSaveEnterprisePasswordHash(const PasswordForm& form,
   return false;
 }
 
-bool IsPasswordSyncEnabled(const syncer::SyncService* sync_service) {
+bool IsSyncFeatureEnabledIncludingPasswords(
+    const syncer::SyncService* sync_service) {
+  // TODO(crbug.com/1462552): Remove this function once IsSyncFeatureEnabled()
+  // is fully deprecated, see ConsentLevel::kSync documentation for details.
   return sync_service && sync_service->IsSyncFeatureEnabled() &&
          sync_service->GetUserSettings()->GetSelectedTypes().Has(
              syncer::UserSelectableType::kPasswords);
 }
 
-bool IsPasswordSyncActive(const syncer::SyncService* sync_service) {
-  return IsPasswordSyncEnabled(sync_service) &&
+bool IsSyncFeatureActiveIncludingPasswords(
+    const syncer::SyncService* sync_service) {
+  return IsSyncFeatureEnabledIncludingPasswords(sync_service) &&
          sync_service->GetActiveDataTypes().Has(syncer::PASSWORDS);
 }
 
-absl::optional<std::string> GetSyncingAccount(
+std::optional<std::string> GetAccountForSaving(
     const syncer::SyncService* sync_service) {
-  if (!sync_service || !IsPasswordSyncEnabled(sync_service))
-    return absl::nullopt;
-  return sync_service->GetAccountInfo().email;
+  if (!sync_service) {
+    return std::nullopt;
+  }
+  if (IsSyncFeatureEnabledIncludingPasswords(sync_service) ||
+      features_util::IsOptedInForAccountStorage(sync_service)) {
+    return sync_service->GetAccountInfo().email;
+  }
+  return std::nullopt;
+}
+
+password_manager::SyncState GetPasswordSyncState(
+    const syncer::SyncService* sync_service) {
+  if (!sync_service ||
+      !sync_service->GetActiveDataTypes().Has(syncer::PASSWORDS)) {
+    return password_manager::SyncState::kNotSyncing;
+  }
+
+  if (sync_service->IsSyncFeatureActive()) {
+    return sync_service->GetUserSettings()->IsUsingExplicitPassphrase()
+               ? password_manager::SyncState::kSyncingWithCustomPassphrase
+               : password_manager::SyncState::kSyncingNormalEncryption;
+  }
+
+  DCHECK(base::FeatureList::IsEnabled(
+      password_manager::features::kEnablePasswordsAccountStorage));
+
+  return sync_service->GetUserSettings()->IsUsingExplicitPassphrase()
+             ? password_manager::SyncState::
+                   kAccountPasswordsActiveWithCustomPassphrase
+             : password_manager::SyncState::
+                   kAccountPasswordsActiveNormalEncryption;
 }
 
 }  // namespace sync_util

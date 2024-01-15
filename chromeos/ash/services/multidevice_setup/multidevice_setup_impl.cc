@@ -251,7 +251,7 @@ void MultiDeviceSetupImpl::RemoveHostDevice() {
       VerifyAndForgetHostConfirmationState::kButtonClickedState);
 
   host_backend_delegate_->AttemptToSetMultiDeviceHostOnBackend(
-      absl::nullopt /* host_device */);
+      std::nullopt /* host_device */);
 }
 
 void MultiDeviceSetupImpl::GetHostStatus(GetHostStatusCallback callback) {
@@ -260,7 +260,7 @@ void MultiDeviceSetupImpl::GetHostStatus(GetHostStatusCallback callback) {
 
   // The Mojo API requires a raw multidevice::RemoteDevice instead of a
   // multidevice::RemoteDeviceRef.
-  absl::optional<multidevice::RemoteDevice> device_for_callback;
+  std::optional<multidevice::RemoteDevice> device_for_callback;
   if (host_status_with_device.host_device()) {
     device_for_callback =
         host_status_with_device.host_device()->GetRemoteDevice();
@@ -273,7 +273,7 @@ void MultiDeviceSetupImpl::GetHostStatus(GetHostStatusCallback callback) {
 void MultiDeviceSetupImpl::SetFeatureEnabledState(
     mojom::Feature feature,
     bool enabled,
-    const absl::optional<std::string>& auth_token,
+    const std::optional<std::string>& auth_token,
     SetFeatureEnabledStateCallback callback) {
   if (IsAuthTokenRequiredForFeatureStateChange(feature, enabled) &&
       (!auth_token || !auth_token_validator_->IsAuthTokenValid(*auth_token))) {
@@ -351,6 +351,20 @@ void MultiDeviceSetupImpl::TriggerEventForDebugging(
   std::move(callback).Run(true /* success */);
 }
 
+void MultiDeviceSetupImpl::SetQuickStartPhoneInstanceID(
+    const std::string& qs_phone_instance_id) {
+  qs_phone_instance_id_ = qs_phone_instance_id;
+}
+
+void MultiDeviceSetupImpl::GetQuickStartPhoneInstanceID(
+    GetQuickStartPhoneInstanceIDCallback callback) {
+  if (qs_phone_instance_id_.empty()) {
+    std::move(callback).Run(std::nullopt);
+    return;
+  }
+  std::move(callback).Run(qs_phone_instance_id_);
+}
+
 void MultiDeviceSetupImpl::SetHostDeviceWithoutAuthToken(
     const std::string& host_instance_id_or_legacy_device_id,
     mojom::PrivilegedHostDeviceSetter::SetHostDeviceCallback callback) {
@@ -363,7 +377,7 @@ void MultiDeviceSetupImpl::OnHostStatusChange(
 
   // The Mojo API requires a raw multidevice::RemoteDevice instead of a
   // multidevice::RemoteDeviceRef.
-  absl::optional<multidevice::RemoteDevice> device_for_callback;
+  std::optional<multidevice::RemoteDevice> device_for_callback;
   if (host_status_with_device.host_device()) {
     device_for_callback =
         host_status_with_device.host_device()->GetRemoteDevice();

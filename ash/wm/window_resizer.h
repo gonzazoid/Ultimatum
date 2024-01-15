@@ -10,6 +10,7 @@
 #include "ash/ash_export.h"
 #include "ash/wm/drag_details.h"
 #include "ash/wm/window_state.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/wm/public/window_move_client.h"
 
@@ -61,6 +62,11 @@ class ASH_EXPORT WindowResizer {
   // flags from the event.
   virtual void Drag(const gfx::PointF& location, int event_flags) = 0;
 
+  // Invoked during pinch to move and resize the window. `location` is in the
+  // coordinates of the window supplied to the constructor. `scale` is the
+  // the scale change since last gesture event.
+  virtual void Pinch(const gfx::PointF& location, float scale, float angle) {}
+
   // Invoked to complete the drag.
   virtual void CompleteDrag() = 0;
 
@@ -88,11 +94,15 @@ class ASH_EXPORT WindowResizer {
   // should not be called as the result of a revert.
   void SetBoundsDuringResize(const gfx::Rect& bounds);
 
+  // Called during an active resize to change the transform of the
+  // window.
+  void SetTransformDuringResize(const gfx::Transform& transform);
+
   void SetPresentationTimeRecorder(
       std::unique_ptr<PresentationTimeRecorder> recorder);
 
   // WindowState of the drag target.
-  WindowState* window_state_;
+  raw_ptr<WindowState> window_state_;
 
  private:
   // In case of touch resizing, adjusts deltas so that the border is positioned

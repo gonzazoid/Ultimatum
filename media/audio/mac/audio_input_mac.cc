@@ -8,14 +8,19 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/apple/osstatus_logging.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/mac/mac_logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/sparse_histogram.h"
+#include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
+
+#if BUILDFLAG(IS_MAC)
 #include "media/audio/mac/audio_manager_mac.h"
-#include "media/base/audio_bus.h"
+#else
+#include "media/audio/ios/audio_manager_ios.h"
+#endif
 
 namespace media {
 
@@ -30,7 +35,7 @@ const int kInputCallbackStartTimeoutInSeconds = 8;
 }  // namespace
 
 PCMQueueInAudioInputStream::PCMQueueInAudioInputStream(
-    AudioManagerMac* manager,
+    AudioManagerApple* manager,
     const AudioParameters& params)
     : manager_(manager),
       callback_(nullptr),
@@ -88,17 +93,19 @@ void PCMQueueInAudioInputStream::Start(AudioInputCallback* callback) {
   if (callback_ || !audio_queue_)
     return;
 
+#if BUILDFLAG(IS_MAC)
   // Check if we should defer Start() for http://crbug.com/160920.
-  if (manager_->ShouldDeferStreamStart()) {
+  base::TimeDelta defer_start = manager_->GetDeferStreamStartTimeout();
+  if (!defer_start.is_zero()) {
     // Use a cancellable closure so that if Stop() is called before Start()
     // actually runs, we can cancel the pending start.
     deferred_start_cb_.Reset(base::BindOnce(&PCMQueueInAudioInputStream::Start,
                                             base::Unretained(this), callback));
-    manager_->GetTaskRunner()->PostDelayedTask(
-        FROM_HERE, deferred_start_cb_.callback(),
-        base::Seconds(AudioManagerMac::kStartDelayInSecsForPowerEvents));
+    manager_->GetTaskRunnerForStreamClient()->PostDelayedTask(
+        FROM_HERE, deferred_start_cb_.callback(), defer_start);
     return;
   }
+#endif
 
   callback_ = callback;
   OSStatus err = AudioQueueStart(audio_queue_, NULL);
@@ -151,36 +158,48 @@ void PCMQueueInAudioInputStream::Close() {
       HandleError(err);
   }
 
-  manager_->ReleaseInputStream(this);
+  manager_->ReleaseInputStreamUsingRealDevice(this);
   // CARE: This object may now be destroyed.
 }
 
 double PCMQueueInAudioInputStream::GetMaxVolume() {
-  NOTREACHED() << "Only supported for low-latency mode.";
-  return 0.0;
+  NOTIMPLEMENTED();
+  return 1.0;
 }
 
 void PCMQueueInAudioInputStream::SetVolume(double volume) {
-  NOTREACHED() << "Only supported for low-latency mode.";
+#if BUILDFLAG(IS_MAC)
+  NOTIMPLEMENTED();
+#else
+  manager_->SetInputVolume(kAudioObjectUnknown, volume);
+#endif
 }
 
 double PCMQueueInAudioInputStream::GetVolume() {
-  NOTREACHED() << "Only supported for low-latency mode.";
-  return 0.0;
+#if BUILDFLAG(IS_MAC)
+  NOTIMPLEMENTED();
+  return 1.0;
+#else
+  return manager_->GetInputVolume(kAudioObjectUnknown);
+#endif
 }
 
 bool PCMQueueInAudioInputStream::IsMuted() {
-  NOTREACHED() << "Only supported for low-latency mode.";
+#if BUILDFLAG(IS_MAC)
+  NOTIMPLEMENTED();
   return false;
+#else
+  return manager_->IsInputMuted(kAudioObjectUnknown);
+#endif
 }
 
 bool PCMQueueInAudioInputStream::SetAutomaticGainControl(bool enabled) {
-  NOTREACHED() << "Only supported for low-latency mode.";
+  NOTIMPLEMENTED();
   return false;
 }
 
 bool PCMQueueInAudioInputStream::GetAutomaticGainControl() {
-  NOTREACHED() << "Only supported for low-latency mode.";
+  NOTIMPLEMENTED();
   return false;
 }
 
@@ -284,7 +303,7 @@ void PCMQueueInAudioInputStream::HandleInputBuffer(
     DCHECK_EQ(format_.mBitsPerChannel, 16u);
     audio_bus_->FromInterleaved<SignedInt16SampleTypeTraits>(
         reinterpret_cast<int16_t*>(audio_data), audio_bus_->frames());
-    callback_->OnData(audio_bus_.get(), capture_time, 0.0);
+    callback_->OnData(audio_bus_.get(), capture_time, 0.0, {});
 
     last_fill_ = base::TimeTicks::Now();
   }

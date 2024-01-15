@@ -13,26 +13,27 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/process/launch.h"
 #include "base/strings/string_util.h"
 #include "base/system/sys_info.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "ui/events/devices/device_data_manager.h"
 #include "ui/events/devices/device_hotplug_event_observer.h"
 #include "ui/events/devices/device_util_linux.h"
 #include "ui/events/devices/input_device.h"
+#include "ui/events/devices/keyboard_device.h"
+#include "ui/events/devices/touchpad_device.h"
 #include "ui/events/devices/touchscreen_device.h"
+#include "ui/gfx/x/atom_cache.h"
 #include "ui/gfx/x/connection.h"
 #include "ui/gfx/x/extension_manager.h"
 #include "ui/gfx/x/future.h"
-#include "ui/gfx/x/x11_atom_cache.h"
 
 namespace ui {
 
@@ -54,7 +55,10 @@ enum DeviceType {
 };
 
 using KeyboardDeviceCallback =
-    base::OnceCallback<void(const std::vector<InputDevice>&)>;
+    base::OnceCallback<void(const std::vector<KeyboardDevice>&)>;
+
+using TouchpadDeviceCallback =
+    base::OnceCallback<void(const std::vector<TouchpadDevice>&)>;
 
 using TouchscreenDeviceCallback =
     base::OnceCallback<void(const std::vector<TouchscreenDevice>&)>;
@@ -68,7 +72,7 @@ struct UiCallbacks {
   KeyboardDeviceCallback keyboard_callback;
   TouchscreenDeviceCallback touchscreen_callback;
   InputDeviceCallback mouse_callback;
-  InputDeviceCallback touchpad_callback;
+  TouchpadDeviceCallback touchpad_callback;
   base::OnceClosure hotplug_finished_callback;
 };
 
@@ -222,7 +226,7 @@ base::FilePath GetDevicePath(x11::Connection* connection,
 void HandleKeyboardDevicesInWorker(const std::vector<DeviceInfo>& device_infos,
                                    scoped_refptr<base::TaskRunner> reply_runner,
                                    KeyboardDeviceCallback callback) {
-  std::vector<InputDevice> devices;
+  std::vector<KeyboardDevice> devices;
 
   for (const DeviceInfo& device_info : device_infos) {
     if (device_info.type != DEVICE_TYPE_KEYBOARD)
@@ -265,8 +269,8 @@ void HandleMouseDevicesInWorker(const std::vector<DeviceInfo>& device_infos,
 // |reply_runner| and |callback| to update the state on the UI thread.
 void HandleTouchpadDevicesInWorker(const std::vector<DeviceInfo>& device_infos,
                                    scoped_refptr<base::TaskRunner> reply_runner,
-                                   InputDeviceCallback callback) {
-  std::vector<InputDevice> devices;
+                                   TouchpadDeviceCallback callback) {
+  std::vector<TouchpadDevice> devices;
   for (const DeviceInfo& device_info : device_infos) {
     if (device_info.type != DEVICE_TYPE_TOUCHPAD ||
         device_info.use != x11::Input::DeviceType::SlavePointer) {
@@ -365,7 +369,7 @@ DeviceHotplugEventObserver* GetHotplugEventObserver() {
   return DeviceDataManager::GetInstance();
 }
 
-void OnKeyboardDevices(const std::vector<InputDevice>& devices) {
+void OnKeyboardDevices(const std::vector<KeyboardDevice>& devices) {
   GetHotplugEventObserver()->OnKeyboardDevicesUpdated(devices);
 }
 
@@ -377,7 +381,7 @@ void OnMouseDevices(const std::vector<InputDevice>& devices) {
   GetHotplugEventObserver()->OnMouseDevicesUpdated(devices);
 }
 
-void OnTouchpadDevices(const std::vector<InputDevice>& devices) {
+void OnTouchpadDevices(const std::vector<TouchpadDevice>& devices) {
   GetHotplugEventObserver()->OnTouchpadDevicesUpdated(devices);
 }
 
@@ -461,7 +465,7 @@ void X11HotplugEventHandler::OnHotplugEvent() {
       FROM_HERE,
       {base::MayBlock(), base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
       base::BindOnce(&HandleHotplugEventInWorker, device_infos, display_state,
-                     base::ThreadTaskRunnerHandle::Get(),
+                     base::SingleThreadTaskRunner::GetCurrentDefault(),
                      std::move(callbacks)));
 }
 

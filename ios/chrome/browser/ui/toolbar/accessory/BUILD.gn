@@ -13,15 +13,13 @@ source_set("accessory") {
     ":constants",
     "//base",
     "//base:i18n",
-    "//ios/chrome/browser/ui/image_util",
+    "//ios/chrome/browser/shared/ui/util",
+    "//ios/chrome/browser/shared/ui/util/image",
     "//ios/chrome/browser/ui/presenters",
     "//ios/chrome/browser/ui/toolbar/public:constants",
-    "//ios/chrome/browser/ui/util",
     "//ios/chrome/common/ui/colors",
     "//ios/chrome/common/ui/util",
   ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
   frameworks = [ "UIKit.framework" ]
 }
 
@@ -30,6 +28,4 @@ source_set("constants") {
     "toolbar_accessory_constants.h",
     "toolbar_accessory_constants.mm",
   ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }

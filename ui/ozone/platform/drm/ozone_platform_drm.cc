@@ -10,13 +10,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/platform_thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/chromeos_buildflags.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -47,7 +47,6 @@
 #include "ui/ozone/platform/drm/mojom/drm_device.mojom.h"
 #include "ui/ozone/public/gpu_platform_support_host.h"
 #include "ui/ozone/public/ozone_platform.h"
-#include "ui/ozone/public/ozone_switches.h"
 #include "ui/ozone/public/platform_screen.h"
 #include "ui/platform_window/platform_window_init_properties.h"
 
@@ -176,7 +175,7 @@ class OzonePlatformDrm : public OzonePlatform {
       ImeKeyEventDispatcher* ime_key_event_dispatcher,
       gfx::AcceleratedWidget) override {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-    return std::make_unique<InputMethodAsh>(ime_key_event_dispatcher);
+    return std::make_unique<ash::InputMethodAsh>(ime_key_event_dispatcher);
 #else
     return std::make_unique<InputMethodMinimal>(ime_key_event_dispatcher);
 #endif
@@ -233,13 +232,7 @@ class OzonePlatformDrm : public OzonePlatform {
   }
 
   void InitializeGPU(const InitParams& args) override {
-    // Check if buffer bandwidth compression is disabled
-    if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-            switches::kDisableBufferBWCompression)) {
-      setenv("MINIGBM_DEBUG", "nocompression", 1);
-    }
-
-    gpu_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+    gpu_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
 
     // NOTE: Can't start the thread here since this is called before sandbox
     // initialization in multi-process Chrome.
@@ -277,6 +270,13 @@ class OzonePlatformDrm : public OzonePlatform {
           drm_device.InitWithNewPipeAndPassReceiver());
       drm_device_connector_->ConnectSingleThreaded(std::move(drm_device));
     }
+  }
+
+  void PostCreateMainMessageLoop(base::OnceCallback<void()> shutdown_cb,
+                                 scoped_refptr<base::SingleThreadTaskRunner>
+                                     user_input_task_runner) override {
+    event_factory_ozone_->SetUserInputTaskRunner(
+        std::move(user_input_task_runner));
   }
 
   const PlatformRuntimeProperties& GetPlatformRuntimeProperties() override {

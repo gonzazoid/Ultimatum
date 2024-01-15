@@ -8,7 +8,7 @@ import android.os.Handler;
 
 import androidx.annotation.Nullable;
 
-import org.chromium.base.annotations.JNINamespace;
+import org.jni_zero.JNINamespace;
 
 /**
  * Implementation of the abstract class {@link SingleThreadTaskRunner}. Before native initialization
@@ -17,8 +17,7 @@ import org.chromium.base.annotations.JNINamespace;
  */
 @JNINamespace("base")
 public class SingleThreadTaskRunnerImpl extends TaskRunnerImpl implements SingleThreadTaskRunner {
-    @Nullable
-    private final Handler mHandler;
+    @Nullable private final Handler mHandler;
 
     /**
      * @param handler                The backing Handler if any. Note this must run tasks on the
@@ -27,7 +26,7 @@ public class SingleThreadTaskRunnerImpl extends TaskRunnerImpl implements Single
      *                               initialized.
      * @param traits                 The TaskTraits associated with this SingleThreadTaskRunnerImpl.
      */
-    public SingleThreadTaskRunnerImpl(Handler handler, TaskTraits traits) {
+    public SingleThreadTaskRunnerImpl(Handler handler, @TaskTraits int traits) {
         super(traits, "SingleThreadTaskRunnerImpl", TaskRunnerType.SINGLE_THREAD);
         mHandler = handler;
     }
@@ -48,5 +47,16 @@ public class SingleThreadTaskRunnerImpl extends TaskRunnerImpl implements Single
         } else {
             mHandler.post(mRunPreNativeTaskClosure);
         }
+    }
+
+    @Override
+    protected boolean schedulePreNativeDelayedTask(Runnable task, long delay) {
+        if (mHandler == null) return false;
+        // In theory it would be fine to delay these tasks until native is initialized and post them
+        // to the native task runner, but in practice some tests don't initialize native and still
+        // expect delayed tasks to eventually run. There's no good reason not to support them here,
+        // there are so few of these tasks that they're very unlikely to cause performance problems.
+        mHandler.postDelayed(task, delay);
+        return true;
     }
 }

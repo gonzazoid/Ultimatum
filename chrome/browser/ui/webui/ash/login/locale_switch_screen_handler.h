@@ -9,7 +9,7 @@
 #include "chrome/browser/ui/webui/ash/login/base_screen_handler.h"
 #include "chrome/browser/ui/webui/ash/login/core_oobe_handler.h"
 
-namespace chromeos {
+namespace ash {
 
 class LocaleSwitchView : public base::SupportsWeakPtr<LocaleSwitchView> {
  public:
@@ -31,7 +31,7 @@ class LocaleSwitchScreenHandler : public BaseScreenHandler,
  public:
   using TView = LocaleSwitchView;
 
-  explicit LocaleSwitchScreenHandler(CoreOobeView* core_oobe_view);
+  LocaleSwitchScreenHandler();
   ~LocaleSwitchScreenHandler() override;
 
   // LocaleSwitchView:
@@ -40,18 +40,8 @@ class LocaleSwitchScreenHandler : public BaseScreenHandler,
   // BaseScreenHandler:
   void DeclareLocalizedValues(
       ::login::LocalizedValuesBuilder* builder) override;
-
- private:
-  base::raw_ptr<CoreOobeView> core_oobe_view_;
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace ash {
-using ::chromeos::LocaleSwitchScreenHandler;
-using ::chromeos::LocaleSwitchView;
-}
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_UI_WEBUI_ASH_LOGIN_LOCALE_SWITCH_SCREEN_HANDLER_H_

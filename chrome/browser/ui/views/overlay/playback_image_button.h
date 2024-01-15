@@ -12,9 +12,9 @@
 
 // A resizable playback button with 3 states: play/pause/replay.
 class PlaybackImageButton : public OverlayWindowImageButton {
- public:
-  METADATA_HEADER(PlaybackImageButton);
+  METADATA_HEADER(PlaybackImageButton, OverlayWindowImageButton)
 
+ public:
   explicit PlaybackImageButton(PressedCallback callback);
   PlaybackImageButton(const PlaybackImageButton&) = delete;
   PlaybackImageButton& operator=(const PlaybackImageButton&) = delete;
@@ -29,7 +29,7 @@ class PlaybackImageButton : public OverlayWindowImageButton {
   void OnBoundsChanged(const gfx::Rect& previous_bounds) override;
 
  private:
-  void UpdateImageAndTooltipText();
+  void UpdateImageAndText();
 
   VideoOverlayWindowViews::PlaybackState playback_state_ =
       VideoOverlayWindowViews::PlaybackState::kEndOfVideo;

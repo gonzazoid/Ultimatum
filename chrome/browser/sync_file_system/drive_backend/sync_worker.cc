@@ -8,8 +8,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/observer_list.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/sync_file_system/drive_backend/callback_helper.h"
@@ -185,19 +185,19 @@ void SyncWorker::GetOriginStatusMap(
   std::move(callback).Run(std::move(status_map));
 }
 
-std::unique_ptr<base::ListValue> SyncWorker::DumpFiles(const GURL& origin) {
+base::Value::List SyncWorker::DumpFiles(const GURL& origin) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (!GetMetadataDatabase())
-    return nullptr;
+    return base::Value::List();
   return GetMetadataDatabase()->DumpFiles(origin.host());
 }
 
-std::unique_ptr<base::ListValue> SyncWorker::DumpDatabase() {
+base::Value::List SyncWorker::DumpDatabase() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (!GetMetadataDatabase())
-    return nullptr;
+    return base::Value::List();
   return GetMetadataDatabase()->DumpDatabase();
 }
 
@@ -661,9 +661,9 @@ void SyncWorker::UpdateServiceState(RemoteServiceState state,
   if (old_state == GetCurrentState())
     return;
 
-  util::Log(logging::LOG_VERBOSE, FROM_HERE,
-            "Service state changed: %d->%d: %s",
-            old_state, GetCurrentState(), description.c_str());
+  util::Log(logging::LOGGING_VERBOSE, FROM_HERE,
+            "Service state changed: %d->%d: %s", old_state, GetCurrentState(),
+            description.c_str());
 
   for (auto& observer : observers_)
     observer.UpdateServiceState(GetCurrentState(), description);

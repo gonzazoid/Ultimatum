@@ -20,6 +20,10 @@ const char kDpi[] = "dpi";
 const char kHorizontalDpi[] = "horizontal_dpi";
 const char kId[] = "id";
 const char kIsDefault[] = "is_default";
+const char kMediaHeight[] = "height_microns";
+const char kMediaIsContinuousFeed[] = "is_continuous_feed";
+const char kMediaSizeKey[] = "media_size";
+const char kMediaWidth[] = "width_microns";
 const char kMediaSizes[] = "media_sizes";
 const char kPagesPerSheet[] = "Pages per sheet";
 const char kPaperType[] = "Paper Type";
@@ -163,7 +167,7 @@ void ValidateDpi(const base::Value::Dict* printer_out,
 }
 
 void ValidateCollate(const base::Value::Dict* printer_out) {
-  absl::optional<bool> collate_out = printer_out->FindBool(kCollate);
+  std::optional<bool> collate_out = printer_out->FindBool(kCollate);
   ASSERT_TRUE(collate_out.has_value());
   EXPECT_TRUE(collate_out.value());
 }
@@ -224,12 +228,24 @@ void ValidatePrinter(const base::Value::Dict& cdd_out,
 bool GetDpiResetToDefault(base::Value::Dict cdd) {
   const base::Value::Dict* printer = cdd.FindDict(kPrinter);
   const base::Value::Dict* dpi = printer->FindDict(kDpi);
-  absl::optional<bool> reset_to_default = dpi->FindBool(kResetToDefault);
+  std::optional<bool> reset_to_default = dpi->FindBool(kResetToDefault);
   if (!reset_to_default.has_value()) {
     ADD_FAILURE();
     return false;
   }
   return reset_to_default.value();
+}
+
+// Returns a CDD with the media size options populated with `options`.
+base::Value::Dict CreateCddWithMediaOptions(base::Value::List options) {
+  base::Value::Dict media_size;
+  media_size.Set(kOptionKey, std::move(options));
+  base::Value::Dict printer;
+  printer.Set(kMediaSizeKey, std::move(media_size));
+  base::Value::Dict cdd;
+  cdd.Set(kPrinter, std::move(printer));
+
+  return cdd;
 }
 
 }  // namespace
@@ -493,6 +509,71 @@ TEST_F(PrintPreviewUtilsTest, ExistingValidDpiCapabilityDoesNotChange) {
   cdd.Set(kPrinter, printer.Clone());
   auto cdd_out = ValidateCddForPrintPreview(std::move(cdd));
   ValidatePrinter(UpdateCddWithDpiIfMissing(std::move(cdd_out)), printer);
+}
+
+TEST_F(PrintPreviewUtilsTest, FilterMediaSizesNoContinuousFeed) {
+  base::Value::Dict media_1;
+  media_1.Set(kMediaWidth, 100);
+  media_1.Set(kMediaHeight, 200);
+  base::Value::Dict media_2;
+  media_2.Set(kMediaWidth, 300);
+  media_2.Set(kMediaHeight, 400);
+  base::Value::List option_list;
+  option_list.Append(std::move(media_1));
+  option_list.Append(std::move(media_2));
+
+  base::Value::List expected_list = option_list.Clone();
+
+  base::Value::Dict cdd = CreateCddWithMediaOptions(std::move(option_list));
+
+  FilterContinuousFeedMediaSizes(cdd);
+
+  const base::Value::List* options = GetMediaSizeOptionsFromCdd(cdd);
+  ASSERT_TRUE(options);
+  EXPECT_EQ(expected_list, *options);
+}
+
+TEST_F(PrintPreviewUtilsTest, FilterMediaSizesWithContinuousFeed) {
+  base::Value::Dict media_1;
+  media_1.Set(kMediaWidth, 100);
+  media_1.Set(kMediaHeight, 200);
+  base::Value::Dict media_2;
+  media_2.Set(kMediaWidth, 300);
+  media_2.Set(kMediaIsContinuousFeed, true);
+  base::Value::List option_list;
+  option_list.Append(media_1.Clone());
+  option_list.Append(std::move(media_2));
+
+  base::Value::List expected_list;
+  expected_list.Append(std::move(media_1));
+
+  base::Value::Dict cdd = CreateCddWithMediaOptions(std::move(option_list));
+
+  FilterContinuousFeedMediaSizes(cdd);
+
+  const base::Value::List* options = GetMediaSizeOptionsFromCdd(cdd);
+  ASSERT_TRUE(options);
+  EXPECT_EQ(expected_list, *options);
+}
+
+TEST_F(PrintPreviewUtilsTest, FilterMediaSizesAllContinuousFeed) {
+  base::Value::Dict media_1;
+  media_1.Set(kMediaWidth, 100);
+  media_1.Set(kMediaIsContinuousFeed, true);
+  base::Value::Dict media_2;
+  media_2.Set(kMediaWidth, 300);
+  media_2.Set(kMediaIsContinuousFeed, true);
+  base::Value::List option_list;
+  option_list.Append(std::move(media_1));
+  option_list.Append(std::move(media_2));
+
+  base::Value::Dict cdd = CreateCddWithMediaOptions(std::move(option_list));
+
+  FilterContinuousFeedMediaSizes(cdd);
+
+  const base::Value::List* options = GetMediaSizeOptionsFromCdd(cdd);
+  ASSERT_TRUE(options);
+  EXPECT_TRUE(options->empty());
 }
 
 }  // namespace printing

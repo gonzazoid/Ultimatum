@@ -118,10 +118,10 @@ bool ChromeViewsDelegate::GetSavedWindowPlacement(
 
   DCHECK(prefs->FindPreference(window_name));
   const base::Value::Dict& dictionary = prefs->GetDict(window_name);
-  absl::optional<int> left = dictionary.FindInt("left");
-  absl::optional<int> top = dictionary.FindInt("top");
-  absl::optional<int> right = dictionary.FindInt("right");
-  absl::optional<int> bottom = dictionary.FindInt("bottom");
+  std::optional<int> left = dictionary.FindInt("left");
+  std::optional<int> top = dictionary.FindInt("top");
+  std::optional<int> right = dictionary.FindInt("right");
+  std::optional<int> bottom = dictionary.FindInt("bottom");
   if (!left || !top || !right || !bottom)
     return false;
 
@@ -210,5 +210,5 @@ void ChromeViewsDelegate::OnBeforeWidgetInit(
 }
 
 std::string ChromeViewsDelegate::GetApplicationName() {
-  return version_info::GetProductName();
+  return std::string(version_info::GetProductName());
 }

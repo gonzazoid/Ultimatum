@@ -4,10 +4,12 @@
 
 #include "chromeos/printing/ppd_provider.h"
 
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "base/containers/contains.h"
 #include "base/containers/queue.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
@@ -15,6 +17,7 @@
 #include "base/notreached.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/strcat.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
@@ -25,6 +28,8 @@
 #include "chromeos/printing/printer_config_cache.h"
 #include "chromeos/printing/printer_configuration.h"
 #include "chromeos/printing/printing_constants.h"
+#include "chromeos/printing/remote_ppd_fetcher.h"
+#include "components/device_event_log/device_event_log.h"
 #include "net/base/filename_util.h"
 
 namespace chromeos {
@@ -49,10 +54,12 @@ bool PpdReferenceIsWellFormed(const Printer::PpdReference& reference) {
   if (!reference.user_supplied_ppd_url.empty()) {
     ++filled_fields;
     GURL tmp_url(reference.user_supplied_ppd_url);
-    if (!tmp_url.is_valid() || !tmp_url.SchemeIs("file")) {
+    const bool is_http = tmp_url.SchemeIsHTTPOrHTTPS();
+    const bool is_file = tmp_url.SchemeIs("file");
+    const bool has_supported_scheme = is_http || is_file;
+    if (!tmp_url.is_valid() || !has_supported_scheme) {
       LOG(ERROR) << "Invalid url for a user-supplied ppd: "
-                 << reference.user_supplied_ppd_url
-                 << " (must be a file:// URL)";
+                 << reference.user_supplied_ppd_url;
       return false;
     }
   }
@@ -73,6 +80,13 @@ bool PpdReferenceIsWellFormed(const Printer::PpdReference& reference) {
 
 std::string PpdPathInServingRoot(base::StringPiece ppd_basename) {
   return base::StrCat({"ppds_for_metadata_v3/", ppd_basename});
+}
+
+// Zebra printers that support ZPL contain "Zebra" and "ZPL" in the
+// IEEE 1284 device id make and model.
+bool SupportsGenericZebraPPD(const PrinterSearchData& search_data) {
+  return search_data.printer_id.make() == "Zebra" &&
+         base::Contains(search_data.printer_id.model(), "ZPL");
 }
 
 // Helper struct for PpdProviderImpl. Allows PpdProviderImpl to defer
@@ -118,7 +132,7 @@ struct MethodDeferralContext {
   // Dequeues and posts all |deferred_methods| onto our sequence.
   void FlushAndPostAll() {
     while (!deferred_methods.empty()) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, std::move(deferred_methods.front()));
       deferred_methods.pop();
     }
@@ -147,12 +161,14 @@ class PpdProviderImpl : public PpdProvider {
   PpdProviderImpl(const base::Version& current_version,
                   scoped_refptr<PpdCache> cache,
                   std::unique_ptr<PpdMetadataManager> metadata_manager,
-                  std::unique_ptr<PrinterConfigCache> config_cache)
+                  std::unique_ptr<PrinterConfigCache> config_cache,
+                  std::unique_ptr<RemotePpdFetcher> remote_ppd_fetcher)
       : version_(current_version),
         ppd_cache_(cache),
         deferral_context_(std::make_unique<MethodDeferralContext>()),
         metadata_manager_(std::move(metadata_manager)),
         config_cache_(std::move(config_cache)),
+        remote_ppd_fetcher_(std::move(remote_ppd_fetcher)),
         file_task_runner_(base::ThreadPool::CreateSequencedTaskRunner(
             {base::TaskPriority::USER_VISIBLE, base::MayBlock(),
              base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN})) {}
@@ -166,8 +182,8 @@ class PpdProviderImpl : public PpdProvider {
         auto failure_cb = base::BindOnce(
             std::move(cb), PpdProvider::CallbackResultCode::SERVER_ERROR,
             std::vector<std::string>());
-        base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                         std::move(failure_cb));
+        base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+            FROM_HERE, std::move(failure_cb));
         return;
       }
 
@@ -196,8 +212,8 @@ class PpdProviderImpl : public PpdProvider {
       auto failure_cb = base::BindOnce(
           std::move(cb), PpdProvider::CallbackResultCode::INTERNAL_ERROR,
           ResolvedPrintersList());
-      base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                       std::move(failure_cb));
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, std::move(failure_cb));
       return;
     }
 
@@ -231,6 +247,14 @@ class PpdProviderImpl : public PpdProvider {
       emm = base::ToLowerASCII(emm);
     }
 
+    // Any Zebra printer that supports ZPL uses the same PPD file, which is
+    // kept in the PPD index with the key "zebra zpl label printer".
+    if (SupportsGenericZebraPPD(lowercased_search_data)) {
+      lowercased_search_data.make_and_model.clear();
+      lowercased_search_data.make_and_model.push_back(
+          "zebra zpl label printer");
+    }
+
     ResolvePpdReferenceContext context(lowercased_search_data, std::move(cb));
 
     // Initiate step 1 if possible.
@@ -252,10 +276,12 @@ class PpdProviderImpl : public PpdProvider {
   // retrieved PPD appropriate for |reference|.
   //
   // As a side effect, this method may attempt
-  // *  to read a PPD from the user's files (if the PPD is
-  //    user-supplied) or
-  // *  to download a PPD from the serving root (if the PPD is not
-  //    user-supplied).
+  // *  to read a PPD from the user's files (if the PPD is a
+  //    user-supplied local file) or
+  // *  to download a PPD from an http(s) URL (if the PPD is specified by a
+  //    user-supplied remote URL
+  // *  to download a PPD from the serving root (if the PPD is specified by
+  //    effective-make-and-model).
   void ResolvePpd(const Printer::PpdReference& reference,
                   ResolvePpdCallback cb) override {
     // In v3 metadata, effective-make-and-model strings are only
@@ -265,7 +291,7 @@ class PpdProviderImpl : public PpdProvider {
         base::ToLowerASCII(lowercased_reference.effective_make_and_model);
 
     if (!PpdReferenceIsWellFormed(lowercased_reference)) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(cb),
                                     CallbackResultCode::INTERNAL_ERROR, ""));
       return;
@@ -296,8 +322,8 @@ class PpdProviderImpl : public PpdProvider {
         auto failure_cb = base::BindOnce(
             std::move(cb), PpdProvider::CallbackResultCode::SERVER_ERROR, "",
             "");
-        base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                         std::move(failure_cb));
+        base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+            FROM_HERE, std::move(failure_cb));
         return;
       }
 
@@ -447,7 +473,7 @@ class PpdProviderImpl : public PpdProvider {
                         bool succeeded,
                         const ParsedPrinters& printers) {
     if (!succeeded) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(std::move(cb), CallbackResultCode::SERVER_ERROR,
                          ResolvedPrintersList()));
@@ -464,7 +490,7 @@ class PpdProviderImpl : public PpdProvider {
             printer.user_visible_printer_name, ppd_reference});
       }
     }
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(cb), CallbackResultCode::SUCCESS,
                                   printers_available_to_our_version));
   }
@@ -498,7 +524,7 @@ class PpdProviderImpl : public PpdProvider {
       ResolvePpdReferenceCallback cb) {
     Printer::PpdReference reference;
     reference.effective_make_and_model = std::string(effective_make_and_model);
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(cb), CallbackResultCode::SUCCESS,
                                   std::move(reference), /*manufacturer=*/""));
   }
@@ -512,7 +538,7 @@ class PpdProviderImpl : public PpdProvider {
   static void FailToResolvePpdReferenceWithUsbManufacturer(
       ResolvePpdReferenceCallback cb,
       const std::string& usb_manufacturer) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(cb), CallbackResultCode::NOT_FOUND,
                                   Printer::PpdReference(), usb_manufacturer));
   }
@@ -671,7 +697,7 @@ class PpdProviderImpl : public PpdProvider {
   // Caller must provide nonempty |ppd_basename| when |ppd_origin|
   // identifies the PPD as coming from the the serving root.
   void StorePpdWithContents(const std::string& ppd_contents,
-                            absl::optional<std::string> ppd_basename,
+                            std::optional<std::string> ppd_basename,
                             ResolvedPpdOrigin ppd_origin,
                             Printer::PpdReference reference) {
     switch (ppd_origin) {
@@ -710,14 +736,14 @@ class PpdProviderImpl : public PpdProvider {
   // Called when we have the contents of the PPD being resolved; we are
   // on the cusp of being able to invoke the |cb|.
   void ResolvePpdWithContents(ResolvedPpdOrigin ppd_origin,
-                              absl::optional<std::string> ppd_basename,
+                              std::optional<std::string> ppd_basename,
                               std::string ppd_contents,
                               Printer::PpdReference reference,
                               ResolvePpdCallback cb) {
     DCHECK(!ppd_contents.empty());
 
     if (ppd_contents.size() > kMaxPpdSizeBytes) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(std::move(cb), CallbackResultCode::PPD_TOO_LARGE, ""));
       return;
@@ -725,7 +751,7 @@ class PpdProviderImpl : public PpdProvider {
 
     StorePpdWithContents(ppd_contents, std::move(ppd_basename), ppd_origin,
                          std::move(reference));
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(cb), CallbackResultCode::SUCCESS,
                                   std::move(ppd_contents)));
   }
@@ -739,7 +765,7 @@ class PpdProviderImpl : public PpdProvider {
       ResolvePpdCallback cb,
       const PrinterConfigCache::FetchResult& result) {
     if (!result.succeeded || result.contents.empty()) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(std::move(cb), CallbackResultCode::SERVER_ERROR, ""));
       return;
@@ -759,7 +785,7 @@ class PpdProviderImpl : public PpdProvider {
                                      ResolvePpdCallback cb,
                                      const PpdCache::FindResult& result) {
     if (!result.success || result.contents.empty()) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(std::move(cb), CallbackResultCode::NOT_FOUND, ""));
       return;
@@ -834,6 +860,8 @@ class PpdProviderImpl : public PpdProvider {
 
     // The forward index does advertise a best-fit PPD basename. We
     // check the local PpdCache to see if we already have it.
+    PRINTER_LOG(DEBUG) << reference.effective_make_and_model << " mapped to "
+                       << leaf->ppd_basename;
     ppd_cache_->Find(
         PpdBasenameToCacheKey(leaf->ppd_basename),
         base::BindOnce(&PpdProviderImpl::OnPpdFromServingRootSoughtInPpdCache,
@@ -847,18 +875,19 @@ class PpdProviderImpl : public PpdProvider {
   // PPD. This contrasts with the slightly more involved two-step
   // "dereference" process in searching the PpdCache for a PPD retrieved
   // from the serving root.
-  void OnUserSuppliedPpdSoughtInPpdCache(Printer::PpdReference reference,
-                                         ResolvePpdCallback cb,
-                                         const PpdCache::FindResult& result) {
+  void OnUserSuppliedPpdSoughtInPpdCache(
+      Printer::PpdReference reference,
+      CallbackResultCode result_if_unsuccessful,
+      ResolvePpdCallback cb,
+      const PpdCache::FindResult& result) {
     if (!result.success) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
-          FROM_HERE,
-          base::BindOnce(std::move(cb), CallbackResultCode::NOT_FOUND, ""));
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, base::BindOnce(std::move(cb), result_if_unsuccessful, ""));
       return;
     }
 
     ResolvePpdWithContents(ResolvedPpdOrigin::kFromPpdCache,
-                           /*ppd_basename=*/absl::nullopt, result.contents,
+                           /*ppd_basename=*/std::nullopt, result.contents,
                            std::move(reference), std::move(cb));
   }
 
@@ -866,23 +895,50 @@ class PpdProviderImpl : public PpdProvider {
   //
   // Called when we finish fetching a PPD file from device-local storage
   // (e.g. from the user's home directory, not from the PpdCache).
-  void OnUserSuppliedPpdFetched(Printer::PpdReference reference,
-                                ResolvePpdCallback cb,
-                                const std::string& result) {
+  void OnUserSuppliedPpdFetchedFromLocalFile(Printer::PpdReference reference,
+                                             ResolvePpdCallback cb,
+                                             const std::string& result) {
     if (result.empty()) {
       // We didn't find a nonempty PPD at the location specified by the
-      // user. The next step is to try searching the PpdCache.
+      // user. Try searching the PpdCache and fail with NOT_FOUND if not found
+      // in PpdCache.
       std::string cache_key = PpdReferenceToCacheKey(reference);
       ppd_cache_->Find(
           cache_key,
           base::BindOnce(&PpdProviderImpl::OnUserSuppliedPpdSoughtInPpdCache,
                          weak_factory_.GetWeakPtr(), std::move(reference),
-                         std::move(cb)));
+                         CallbackResultCode::NOT_FOUND, std::move(cb)));
       return;
     }
 
     ResolvePpdWithContents(ResolvedPpdOrigin::kFromUserSuppliedUrl,
-                           /*ppd_basename=*/absl::nullopt, result,
+                           /*ppd_basename=*/std::nullopt, result,
+                           std::move(reference), std::move(cb));
+  }
+
+  // Continues a prior call to ResolvePpd().
+  //
+  // Called when we finish fetching the contents of a PPD file from a remote
+  // URL.
+  void OnUserSuppliedPpdFetchedFromRemoteUrl(
+      Printer::PpdReference reference,
+      ResolvePpdCallback cb,
+      RemotePpdFetcher::FetchResultCode code,
+      std::string result) {
+    if (code != RemotePpdFetcher::FetchResultCode::kSuccess) {
+      // Fetching the PPD from remote URL was unsuccessful. Try searching the
+      // PpdCache and fail with SERVER_ERROR if not found in PpdCache.
+      std::string cache_key = PpdReferenceToCacheKey(reference);
+      ppd_cache_->Find(
+          cache_key,
+          base::BindOnce(&PpdProviderImpl::OnUserSuppliedPpdSoughtInPpdCache,
+                         weak_factory_.GetWeakPtr(), std::move(reference),
+                         CallbackResultCode::SERVER_ERROR, std::move(cb)));
+      return;
+    }
+
+    ResolvePpdWithContents(ResolvedPpdOrigin::kFromUserSuppliedUrl,
+                           /*ppd_basename=*/std::nullopt, std::move(result),
                            std::move(reference), std::move(cb));
   }
 
@@ -890,7 +946,7 @@ class PpdProviderImpl : public PpdProvider {
   //
   // 1. Attempts to invoke |cb| with the file named by
   //    |reference|::user_suplied_ppd_url - i.e. a live fetch from
-  //    wherever the user saved the PPD.
+  //    local disk or an http:// url.
   // 2. Attempts to search the local PpdCache instance for the file
   //    whose cache key was built from
   //    |reference|::user_supplied_ppd_url.
@@ -898,10 +954,31 @@ class PpdProviderImpl : public PpdProvider {
                               ResolvePpdCallback cb) {
     DCHECK(!reference.user_supplied_ppd_url.empty());
     GURL url(reference.user_supplied_ppd_url);
+    if (url.SchemeIsHTTPOrHTTPS()) {
+      ResolveUserSuppliedPpdFromRemoteUrl(url, std::move(reference),
+                                          std::move(cb));
+    } else {
+      ResolveUserSuppliedPpdFromLocalFile(url, std::move(reference),
+                                          std::move(cb));
+    }
+  }
 
+  void ResolveUserSuppliedPpdFromLocalFile(GURL file_url,
+                                           Printer::PpdReference reference,
+                                           ResolvePpdCallback cb) {
     file_task_runner_->PostTaskAndReplyWithResult(
-        FROM_HERE, base::BindOnce(&FetchFile, url),
-        base::BindOnce(&PpdProviderImpl::OnUserSuppliedPpdFetched,
+        FROM_HERE, base::BindOnce(&FetchFile, file_url),
+        base::BindOnce(&PpdProviderImpl::OnUserSuppliedPpdFetchedFromLocalFile,
+                       weak_factory_.GetWeakPtr(), std::move(reference),
+                       std::move(cb)));
+  }
+
+  void ResolveUserSuppliedPpdFromRemoteUrl(GURL url,
+                                           Printer::PpdReference reference,
+                                           ResolvePpdCallback cb) {
+    remote_ppd_fetcher_->Fetch(
+        url,
+        base::BindOnce(&PpdProviderImpl::OnUserSuppliedPpdFetchedFromRemoteUrl,
                        weak_factory_.GetWeakPtr(), std::move(reference),
                        std::move(cb)));
   }
@@ -919,7 +996,7 @@ class PpdProviderImpl : public PpdProvider {
       // This particular |effective_make_and_model| is invisible to the
       // current |version_|; either it is restricted or it is missing
       // entirely from the forward indices.
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(std::move(cb), CallbackResultCode::NOT_FOUND,
                          /*license_name=*/""));
@@ -929,7 +1006,7 @@ class PpdProviderImpl : public PpdProvider {
     // Note that the license can also be empty; this denotes that
     // no license is associated with this particular
     // |effective_make_and_model| in this |version_|.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(cb), CallbackResultCode::SUCCESS,
                                   index_leaf->license));
   }
@@ -954,6 +1031,9 @@ class PpdProviderImpl : public PpdProvider {
 
   // Fetches PPDs from the Chrome OS Printing team's serving root.
   std::unique_ptr<PrinterConfigCache> config_cache_;
+
+  // Fetches PPDs from remote http:// or https:// URLs.
+  std::unique_ptr<RemotePpdFetcher> remote_ppd_fetcher_;
 
   // Where to run disk operations.
   const scoped_refptr<base::SequencedTaskRunner> file_task_runner_;
@@ -997,10 +1077,27 @@ scoped_refptr<PpdProvider> PpdProvider::Create(
     const base::Version& current_version,
     scoped_refptr<PpdCache> cache,
     std::unique_ptr<PpdMetadataManager> metadata_manager,
-    std::unique_ptr<PrinterConfigCache> config_cache) {
-  return base::MakeRefCounted<PpdProviderImpl>(current_version, cache,
-                                               std::move(metadata_manager),
-                                               std::move(config_cache));
+    std::unique_ptr<PrinterConfigCache> config_cache,
+    std::unique_ptr<RemotePpdFetcher> remote_ppd_fetcher) {
+  return base::MakeRefCounted<PpdProviderImpl>(
+      current_version, cache, std::move(metadata_manager),
+      std::move(config_cache), std::move(remote_ppd_fetcher));
+}
+
+// static
+std::string_view PpdProvider::CallbackResultCodeName(CallbackResultCode code) {
+  switch (code) {
+    case SUCCESS:
+      return "SUCCESS";
+    case NOT_FOUND:
+      return "NOT_FOUND";
+    case SERVER_ERROR:
+      return "SERVER_ERROR";
+    case INTERNAL_ERROR:
+      return "INTERNAL_ERROR";
+    case PPD_TOO_LARGE:
+      return "PPD_TOO_LARGE";
+  }
 }
 
 }  // namespace chromeos

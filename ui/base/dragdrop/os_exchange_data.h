@@ -13,15 +13,20 @@
 
 #include "build/build_config.h"
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/dragdrop/os_exchange_data_provider.h"
 
 class GURL;
 
 namespace base {
 class Pickle;
+}
+
+namespace url {
+class Origin;
 }
 
 namespace ui {
@@ -75,11 +80,14 @@ class COMPONENT_EXPORT(UI_BASE) OSExchangeData {
   const OSExchangeDataProvider& provider() const { return *provider_; }
   OSExchangeDataProvider& provider() { return *provider_; }
 
-  // Marks drag data as tainted if it originates from the renderer. This is used
-  // to avoid granting privileges to a renderer when dragging in tainted data,
-  // since it could allow potential escalation of privileges.
-  void MarkOriginatedFromRenderer();
-  bool DidOriginateFromRenderer() const;
+  // Marks drag data as tainted by the renderer, with `origin` as the source of
+  // the data. This is used to:
+  // - avoid granting privileges to a renderer when dragging in tainted data,
+  //   since it could allow potential escalation of privileges.
+  // - track the origin where the drag data came from.
+  void MarkRendererTaintedFromOrigin(const url::Origin& origin);
+  bool IsRendererTainted() const;
+  absl::optional<url::Origin> GetRendererTaintedOrigin() const;
 
   // Marks drag data as from privileged WebContents. This is used to
   // make sure non-privileged WebContents will not accept drop data from
@@ -119,8 +127,7 @@ class COMPONENT_EXPORT(UI_BASE) OSExchangeData {
   bool GetURLAndTitle(FilenameToURLPolicy policy,
                       GURL* url,
                       std::u16string* title) const;
-  // Return the path of a file, if available.
-  bool GetFilename(base::FilePath* path) const;
+  // Return information about the contained files, if any.
   bool GetFilenames(std::vector<FileInfo>* file_names) const;
   bool GetPickledData(const ClipboardFormatType& format,
                       base::Pickle* data) const;
@@ -172,13 +179,13 @@ class COMPONENT_EXPORT(UI_BASE) OSExchangeData {
   // Method is called on dropping on the Chromium drop target. Since creating
   // the temp files involves file I/O, the method is asynchronous and the caller
   // must provide a callback function that receives a vector of pairs of temp
-  // file paths and display names. Method immediately returns false if there are
-  // no virtual files in the data object, in which case the callback will never
-  // be invoked.
+  // file paths and display names. The method will invoke the callback with an
+  // empty vector if there are no virtual files in the data object.
+  //
   // TODO(https://crbug.com/951574): Implement virtual file extraction to
   // dynamically stream data to the renderer when File's bytes are actually
   // requested
-  bool GetVirtualFilesAsTempFiles(
+  void GetVirtualFilesAsTempFiles(
       base::OnceCallback<void(const std::vector</*temp path*/ std::pair<
                                   base::FilePath,
                                   /*display name*/ base::FilePath>>&)> callback)

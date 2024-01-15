@@ -9,16 +9,15 @@
 #include <sstream>
 #include <utility>
 
-#include "ash/services/device_sync/proto/enum_util.h"
 #include "base/base64url.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/time_formatting.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_clock.h"
 #include "base/time/default_tick_clock.h"
 #include "base/values.h"
 #include "chromeos/ash/components/multidevice/logging/logging.h"
 #include "chromeos/ash/components/multidevice/software_feature_state.h"
+#include "chromeos/ash/services/device_sync/proto/enum_util.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_ui.h"
@@ -143,7 +142,9 @@ std::string GenerateFeaturesString(const multidevice::RemoteDeviceRef& device) {
 ProximityAuthWebUIHandler::ProximityAuthWebUIHandler(
     device_sync::DeviceSyncClient* device_sync_client)
     : device_sync_client_(device_sync_client),
-      web_contents_initialized_(false) {}
+      web_contents_initialized_(false) {
+  CHECK(device_sync_client_);
+}
 
 ProximityAuthWebUIHandler::~ProximityAuthWebUIHandler() {
   multidevice::LogBuffer::GetInstance()->RemoveObserver(this);
@@ -258,7 +259,7 @@ void ProximityAuthWebUIHandler::GetLocalState(const base::Value::List& args) {
 }
 
 base::Value ProximityAuthWebUIHandler::GetTruncatedLocalDeviceId() {
-  absl::optional<multidevice::RemoteDeviceRef> local_device_metadata =
+  std::optional<multidevice::RemoteDeviceRef> local_device_metadata =
       device_sync_client_->GetLocalDeviceMetadata();
 
   std::string device_id =
@@ -335,7 +336,8 @@ void ProximityAuthWebUIHandler::OnGetDebugInfo(
     NotifyOnEnrollmentFinished(
         true /* success */,
         CreateSyncStateDictionary(
-            debug_info_ptr->last_enrollment_time.ToJsTime(),
+            debug_info_ptr->last_enrollment_time
+                .InMillisecondsFSinceUnixEpoch(),
             ConvertNextAttemptTimeToDouble(
                 debug_info_ptr->time_to_next_enrollment_attempt),
             debug_info_ptr->is_recovering_from_enrollment_failure,
@@ -344,13 +346,14 @@ void ProximityAuthWebUIHandler::OnGetDebugInfo(
 
   if (sync_update_waiting_for_debug_info_) {
     sync_update_waiting_for_debug_info_ = false;
-    NotifyOnSyncFinished(true /* was_sync_successful */, true /* changed */,
-                         CreateSyncStateDictionary(
-                             debug_info_ptr->last_sync_time.ToJsTime(),
-                             ConvertNextAttemptTimeToDouble(
-                                 debug_info_ptr->time_to_next_sync_attempt),
-                             debug_info_ptr->is_recovering_from_sync_failure,
-                             debug_info_ptr->is_sync_in_progress));
+    NotifyOnSyncFinished(
+        true /* was_sync_successful */, true /* changed */,
+        CreateSyncStateDictionary(
+            debug_info_ptr->last_sync_time.InMillisecondsFSinceUnixEpoch(),
+            ConvertNextAttemptTimeToDouble(
+                debug_info_ptr->time_to_next_sync_attempt),
+            debug_info_ptr->is_recovering_from_sync_failure,
+            debug_info_ptr->is_sync_in_progress));
   }
 
   if (get_local_state_update_waiting_for_debug_info_) {
@@ -358,13 +361,14 @@ void ProximityAuthWebUIHandler::OnGetDebugInfo(
     NotifyGotLocalState(
         GetTruncatedLocalDeviceId(),
         CreateSyncStateDictionary(
-            debug_info_ptr->last_enrollment_time.ToJsTime(),
+            debug_info_ptr->last_enrollment_time
+                .InMillisecondsFSinceUnixEpoch(),
             ConvertNextAttemptTimeToDouble(
                 debug_info_ptr->time_to_next_enrollment_attempt),
             debug_info_ptr->is_recovering_from_enrollment_failure,
             debug_info_ptr->is_enrollment_in_progress),
         CreateSyncStateDictionary(
-            debug_info_ptr->last_sync_time.ToJsTime(),
+            debug_info_ptr->last_sync_time.InMillisecondsFSinceUnixEpoch(),
             ConvertNextAttemptTimeToDouble(
                 debug_info_ptr->time_to_next_sync_attempt),
             debug_info_ptr->is_recovering_from_sync_failure,

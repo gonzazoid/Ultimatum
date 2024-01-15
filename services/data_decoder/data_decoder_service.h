@@ -9,12 +9,12 @@
 #include "components/web_package/mojom/web_bundle_parser.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
+#include "services/data_decoder/public/mojom/cbor_parser.mojom.h"
 #include "services/data_decoder/public/mojom/data_decoder_service.mojom.h"
 #include "services/data_decoder/public/mojom/gzipper.mojom.h"
 #include "services/data_decoder/public/mojom/image_decoder.mojom.h"
 #include "services/data_decoder/public/mojom/json_parser.mojom.h"
 #include "services/data_decoder/public/mojom/structured_headers_parser.mojom.h"
-#include "services/data_decoder/public/mojom/web_bundler.mojom.h"
 #include "services/data_decoder/public/mojom/xml_parser.mojom.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -39,35 +39,6 @@ class DataDecoderService : public mojom::DataDecoderService {
   // constructed.
   void BindReceiver(mojo::PendingReceiver<mojom::DataDecoderService> receiver);
 
-  // Configures the service to drop ImageDecoder receivers instead of binding
-  // them. Useful for tests simulating service failures.
-  void SimulateImageDecoderCrashForTesting(bool drop) {
-    drop_image_decoders_ = drop;
-  }
-
-  // Same as above but for JsonParser receivers.
-  void SimulateJsonParserCrashForTesting(bool drop) {
-    drop_json_parsers_ = drop;
-  }
-
-  // Configures the service to use |binder| to bind
-  // WebBundleParserFactory in subsequent
-  // BindWebBundleParserFactory() calls.
-  void SetWebBundleParserFactoryBinderForTesting(
-      base::RepeatingCallback<void(
-          mojo::PendingReceiver<web_package::mojom::WebBundleParserFactory>)>
-          binder) {
-    web_bundle_parser_factory_binder_ = binder;
-  }
-
-  // Configures the service to use |binder| to bind WebBundler in subsequent
-  // BindWebBundler() calls.
-  void SetWebBundlerBinderForTesting(
-      base::RepeatingCallback<void(mojo::PendingReceiver<mojom::WebBundler>)>
-          binder) {
-    web_bundler_binder_ = binder;
-  }
-
  private:
   // mojom::DataDecoderService implementation:
   void BindImageDecoder(
@@ -80,9 +51,9 @@ class DataDecoderService : public mojom::DataDecoderService {
   void BindWebBundleParserFactory(
       mojo::PendingReceiver<web_package::mojom::WebBundleParserFactory>
           receiver) override;
-  void BindWebBundler(
-      mojo::PendingReceiver<mojom::WebBundler> receiver) override;
   void BindGzipper(mojo::PendingReceiver<mojom::Gzipper> receiver) override;
+  void BindCborParser(
+      mojo::PendingReceiver<mojom::CborParser> receiver) override;
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   void BindBleScanParser(
@@ -92,14 +63,6 @@ class DataDecoderService : public mojom::DataDecoderService {
   // In-process instances (e.g. on iOS or in tests) may have multiple concurrent
   // remote DataDecoderService clients.
   mojo::ReceiverSet<mojom::DataDecoderService> receivers_;
-
-  bool drop_image_decoders_ = false;
-  bool drop_json_parsers_ = false;
-  base::RepeatingCallback<void(
-      mojo::PendingReceiver<web_package::mojom::WebBundleParserFactory>)>
-      web_bundle_parser_factory_binder_;
-  base::RepeatingCallback<void(mojo::PendingReceiver<mojom::WebBundler>)>
-      web_bundler_binder_;
 };
 
 }  // namespace data_decoder

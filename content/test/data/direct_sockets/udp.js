@@ -1,8 +1,41 @@
 'use strict';
 
-async function sendLoop(writer, requiredBytes) {
+const assertEq = (actual, expected) => {
+  if (actual !== expected) {
+    throw `Expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`;
+  }
+};
+
+async function launchUdpEchoServer(server, requiredBytes, clientAddress, clientPort) {
+  let bytesEchoed = 0;
+
+  const { readable, writable } = await server.opened;
+  const reader = readable.getReader();
+  const writer = writable.getWriter();
+
+  while (bytesEchoed < requiredBytes) {
+    const { value: { data, remoteAddress, remotePort }, done } = await reader.read();
+    assertEq(done, false);
+    assertEq(remoteAddress, clientAddress);
+    assertEq(remotePort, clientPort);
+    for (let index = 0; index < data.length; index++) {
+      assertEq(data[index], bytesEchoed % 256);
+      bytesEchoed++;
+    }
+    await writer.write({ data, remoteAddress, remotePort });
+  }
+
+  assertEq(bytesEchoed, requiredBytes);
+  reader.releaseLock();
+  writer.releaseLock();
+}
+
+async function sendLoop(socket, requiredBytes) {
   let bytesWritten = 0;
   let chunkLength = 0;
+
+  const { writable } = await socket.opened;
+  const writer = writable.getWriter();
 
   while (bytesWritten < requiredBytes) {
     chunkLength = Math.min(chunkLength + 1,
@@ -15,41 +48,28 @@ async function sendLoop(writer, requiredBytes) {
     await writer.ready;
     await writer.write({ data: chunk });
   }
-  return 'send succeeded';
+  assertEq(bytesWritten, requiredBytes);
+
+  writer.releaseLock();
 }
 
-async function readLoop(reader, requiredBytes) {
+async function readLoop(socket, requiredBytes) {
   let bytesRead = 0;
+
+  const { readable } = await socket.opened;
+  const reader = readable.getReader();
+
   while (bytesRead < requiredBytes) {
-    const { value, done } = await reader.read();
-    if (done) {
-      return 'readLoop failed: stream closed prematurely.';
-    }
-
-    const { data } = value;
-    if (!data || data.length === 0) {
-      return 'readLoop failed: no data returned.';
-    }
-
+    const { value: { data }, done } = await reader.read();
+    assertEq(done, false);
     for (let index = 0; index < data.length; index++) {
-      if (data[index] != bytesRead % 256) {
-        console.log(`Expected ${bytesRead % 256}, received ${data[index]}`);
-        return 'readLoop failed: bad data.';
-      }
+      assertEq(data[index], bytesRead % 256);
       bytesRead++;
     }
   }
-  return 'readLoop succeeded.';
-}
+  assertEq(bytesRead, requiredBytes);
 
-async function sendUdp(options, requiredBytes) {
-  try {
-    let udpSocket = new UDPSocket(options);
-    let { writable } = await udpSocket.opened;
-    return await sendLoop(writable.getWriter(), requiredBytes);
-  } catch (error) {
-    return ('sendUdp failed: ' + error);
-  }
+  reader.releaseLock();
 }
 
 async function closeUdp(options) {
@@ -69,8 +89,7 @@ async function sendUdpAfterClose(options, requiredBytes) {
     let { writable } = await udpSocket.opened;
     await udpSocket.close();
 
-    const writer = writable.getWriter();
-    return await sendLoop(writer, requiredBytes);
+    return await sendLoop(udpSocket, requiredBytes);
   } catch (error) {
     return ('send failed: ' + error);
   }
@@ -160,5 +179,48 @@ async function readWriteUdpOnError(socket) {
     }
   } catch (error) {
     return 'readWriteUdpOnError failed: ' + error;
+  }
+}
+
+async function exchangeUdpPacketsBetweenClientAndServer() {
+  const kRequiredDatagrams = 35;
+  const kRequiredBytes =
+    kRequiredDatagrams * (kRequiredDatagrams + 1) / 2;
+
+  try {
+    // |localPort| is intentionally omitted so that the OS will pick one itself.
+    const serverSocket = new UDPSocket({ localAddress: "127.0.0.1" });
+    const { localPort: serverSocketPort } = await serverSocket.opened;
+
+    // Connect a client to the server.
+    const clientSocket = new UDPSocket({
+      remoteAddress: "127.0.0.1",
+      remotePort: serverSocketPort
+    });
+    const { localAddress: clientLocalAddress, localPort: clientLocalPort } = await clientSocket.opened;
+
+    launchUdpEchoServer(serverSocket, kRequiredBytes, clientLocalAddress, clientLocalPort);
+    sendLoop(clientSocket, kRequiredBytes);
+    await readLoop(clientSocket, kRequiredBytes);
+
+    await clientSocket.close();
+    await serverSocket.close();
+
+    return "exchangeUdpPacketsBetweenClientAndServer succeeded.";
+  } catch (error) {
+    return "exchangeUdpPacketsBetweenClientAndServer failed: " + error;
+  }
+}
+
+async function testUdpMessageConfiguration(socketOptions, message) {
+  try {
+    const socket = new UDPSocket(socketOptions);
+    const { writable } = await socket.opened;
+    const writer = writable.getWriter();
+
+    await writer.write(message);
+    return "testUdpMessageConfiguration succeeded.";
+  } catch (error) {
+    return "testUdpMessageConfiguration failed: " + error;
   }
 }

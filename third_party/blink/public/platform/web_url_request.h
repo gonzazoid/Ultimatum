@@ -33,7 +33,7 @@
 
 #include <memory>
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
 #include "net/base/request_priority.h"
@@ -120,11 +120,6 @@ class BLINK_PLATFORM_EXPORT WebURLRequest {
   // an isolated world.
   WebSecurityOrigin IsolatedWorldOrigin() const;
 
-  // Controls whether user name, password, and cookies may be sent with the
-  // request.
-  bool AllowStoredCredentials() const;
-  void SetAllowStoredCredentials(bool);
-
   mojom::FetchCacheMode GetCacheMode() const;
   void SetCacheMode(mojom::FetchCacheMode);
 
@@ -182,13 +177,6 @@ class BLINK_PLATFORM_EXPORT WebURLRequest {
   // requestor.
   int RequestorID() const;
   void SetRequestorID(int);
-
-  // If true, the client expects to receive the raw response pipe. Similar to
-  // UseStreamOnResponse but the stream will be a mojo DataPipe rather than a
-  // WebDataConsumerHandle.
-  // If the request is fetched synchronously the response will instead be piped
-  // to a blob if this flag is set to true.
-  bool PassResponsePipeToClient() const;
 
   // True if the requestor wants to receive the response body as a stream.
   bool UseStreamOnResponse() const;

@@ -4,7 +4,7 @@ This Chrome OS string matching library provides functionality to compute the
 similarity scores between two given strings.
 
 This library's main use is within the launcher backend ranking system
-(`chrome/browser/ui/app_list/search/`).
+(`chrome/browser/ash/app_list/search/`).
 
 The entry points to this library are via either:
 
@@ -26,11 +26,12 @@ benchmarking unit tests with verbose logging enabled. Steps:
 Add to gn args:
 
 ```
-use_runtime_vlog = true
+# For building tests.
+target_os = "chromeos"
 ```
 
-Build and run tests:
+Build and run tests, e.g.:
 
 ```sh
-autoninja -C out/Default chromeos_unittests && out/Default/chromeos_unittests --gtest_filter=*FuzzyTokenizedStringMatchTest.Benchmark* --v=1
+autoninja -C out/Default chromeos_unittests && out/Default/chromeos_unittests --gtest_filter="*FuzzyTokenizedStringMatchTest.Benchmark*" --v=1
 ```

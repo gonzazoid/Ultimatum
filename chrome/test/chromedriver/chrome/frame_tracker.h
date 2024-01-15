@@ -10,23 +10,17 @@
 #include <unordered_set>
 
 #include "base/memory/raw_ptr.h"
+#include "base/values.h"
 #include "chrome/test/chromedriver/chrome/devtools_event_listener.h"
 #include "chrome/test/chromedriver/chrome/web_view.h"
 
-namespace base {
-class DictionaryValue;
-}
-
-struct BrowserInfo;
 class DevToolsClient;
 class Status;
 
 // Tracks execution context creation.
 class FrameTracker : public DevToolsEventListener {
  public:
-  FrameTracker(DevToolsClient* client,
-               WebView* web_view = nullptr,
-               const BrowserInfo* browser_info = nullptr);
+  explicit FrameTracker(DevToolsClient* client, WebView* web_view = nullptr);
 
   FrameTracker(const FrameTracker&) = delete;
   FrameTracker& operator=(const FrameTracker&) = delete;
@@ -34,7 +28,8 @@ class FrameTracker : public DevToolsEventListener {
   ~FrameTracker() override;
 
   Status GetContextIdForFrame(const std::string& frame_id,
-                              std::string* context_id);
+                              std::string* context_id) const;
+  void SetContextIdForFrame(std::string frame_id, std::string context_id);
   WebView* GetTargetForFrame(const std::string& frame_id);
   bool IsKnownFrame(const std::string& frame_id) const;
   void DeleteTargetForFrame(const std::string& frame_id);
@@ -43,7 +38,7 @@ class FrameTracker : public DevToolsEventListener {
   Status OnConnected(DevToolsClient* client) override;
   Status OnEvent(DevToolsClient* client,
                  const std::string& method,
-                 const base::DictionaryValue& params) override;
+                 const base::Value::Dict& params) override;
 
  private:
   std::map<std::string, std::string> frame_to_context_map_;

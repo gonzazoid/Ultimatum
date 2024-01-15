@@ -13,7 +13,8 @@ class ProtocolHandlerRegistry;
 }
 
 namespace base {
-template <typename T> struct DefaultSingletonTraits;
+template <typename T>
+class NoDestructor;
 }
 
 // Singleton that owns all ProtocolHandlerRegistrys and associates them with
@@ -40,14 +41,14 @@ class ProtocolHandlerRegistryFactory : public ProfileKeyedServiceFactory {
   bool ServiceIsNULLWhileTesting() const override;
 
  private:
-  friend struct base::DefaultSingletonTraits<ProtocolHandlerRegistryFactory>;
+  friend base::NoDestructor<ProtocolHandlerRegistryFactory>;
 
   ProtocolHandlerRegistryFactory();
   ~ProtocolHandlerRegistryFactory() override;
 
   // BrowserContextKeyedServiceFactory implementation.
-  KeyedService* BuildServiceInstanceFor(
-      content::BrowserContext* profile) const override;
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
+      content::BrowserContext* context) const override;
 };
 
 #endif  // CHROME_BROWSER_CUSTOM_HANDLERS_PROTOCOL_HANDLER_REGISTRY_FACTORY_H_

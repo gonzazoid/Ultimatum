@@ -35,7 +35,6 @@ class GPU_GLES2_EXPORT SurfaceTextureGLOwner : public TextureOwner {
       const base::RepeatingClosure& frame_available_cb) override;
   gl::ScopedJavaSurface CreateJavaSurface() const override;
   void UpdateTexImage() override;
-  void EnsureTexImageBound(GLuint service_id) override;
   void ReleaseBackBuffers() override;
   std::unique_ptr<base::android::ScopedHardwareBufferFenceSync>
   GetAHardwareBuffer() override;
@@ -50,9 +49,10 @@ class GPU_GLES2_EXPORT SurfaceTextureGLOwner : public TextureOwner {
 
  private:
   friend class TextureOwner;
+  friend class SurfaceTextureGLOwnerTest;
   friend class SurfaceTextureTransformTest;
 
-  SurfaceTextureGLOwner(std::unique_ptr<gles2::AbstractTexture> texture,
+  SurfaceTextureGLOwner(std::unique_ptr<AbstractTextureAndroid> texture,
                         scoped_refptr<SharedContextState> context_state);
   ~SurfaceTextureGLOwner() override;
 

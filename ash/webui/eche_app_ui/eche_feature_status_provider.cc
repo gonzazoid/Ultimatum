@@ -4,13 +4,14 @@
 
 #include "ash/webui/eche_app_ui/eche_feature_status_provider.h"
 
-#include "ash/components/phonehub/feature_status.h"
-#include "ash/components/phonehub/phone_hub_manager.h"
-#include "ash/services/device_sync/public/cpp/device_sync_client.h"
+#include "ash/constants/ash_features.h"
 #include "chromeos/ash/components/multidevice/logging/logging.h"
 #include "chromeos/ash/components/multidevice/remote_device_ref.h"
 #include "chromeos/ash/components/multidevice/software_feature.h"
 #include "chromeos/ash/components/multidevice/software_feature_state.h"
+#include "chromeos/ash/components/phonehub/feature_status.h"
+#include "chromeos/ash/components/phonehub/phone_hub_manager.h"
+#include "chromeos/ash/services/device_sync/public/cpp/device_sync_client.h"
 
 namespace ash {
 namespace eche_app {
@@ -32,7 +33,7 @@ bool IsEnabledHost(const RemoteDeviceRef& device) {
 }
 
 bool IsEligibleForFeature(
-    const absl::optional<RemoteDeviceRef>& local_device,
+    const std::optional<RemoteDeviceRef>& local_device,
     multidevice_setup::MultiDeviceSetupClient::HostStatusWithDevice host_status,
     const RemoteDeviceRefList& remote_devices,
     FeatureState feature_state) {
@@ -69,12 +70,14 @@ EcheFeatureStatusProvider::EcheFeatureStatusProvider(
     phonehub::PhoneHubManager* phone_hub_manager,
     device_sync::DeviceSyncClient* device_sync_client,
     multidevice_setup::MultiDeviceSetupClient* multidevice_setup_client,
-    secure_channel::ConnectionManager* connection_manager)
+    secure_channel::ConnectionManager* connection_manager,
+    EcheConnectionStatusHandler* eche_connection_status_handler)
     : phone_hub_feature_status_provider_(
           phone_hub_manager->GetFeatureStatusProvider()),
       device_sync_client_(device_sync_client),
       multidevice_setup_client_(multidevice_setup_client),
       connection_manager_(connection_manager),
+      eche_connection_status_handler_(eche_connection_status_handler),
       current_phone_hub_feature_status_(
           phone_hub_feature_status_provider_->GetStatus()),
       status_(ComputeStatus()) {
@@ -127,6 +130,11 @@ void EcheFeatureStatusProvider::UpdateStatus() {
                << computed_status;
   *status_ = computed_status;
   NotifyStatusChanged();
+
+  if (features::IsEcheNetworkConnectionStateEnabled()) {
+    // TODO(b/274530047): refactor to make this a normal observer.
+    eche_connection_status_handler_->OnFeatureStatusChanged(computed_status);
+  }
 }
 
 FeatureStatus EcheFeatureStatusProvider::ComputeStatus() {

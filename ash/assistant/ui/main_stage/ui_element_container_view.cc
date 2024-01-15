@@ -19,7 +19,8 @@
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/assistant/controller/assistant_interaction_controller.h"
 #include "ash/public/cpp/style/color_provider.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "cc/base/math_util.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
@@ -63,7 +64,7 @@ class ObservableOverflowIndicator : public views::View {
   }
 
  private:
-  UiElementContainerView* ui_element_container_view_ = nullptr;
+  raw_ptr<UiElementContainerView> ui_element_container_view_ = nullptr;
 };
 
 BEGIN_METADATA(ObservableOverflowIndicator, views::View)
@@ -261,5 +262,8 @@ SkColor UiElementContainerView::GetOverflowIndicatorBackgroundColor() const {
   return ColorProvider::Get()->GetContentLayerColor(
       ColorProvider::ContentLayerType::kSeparatorColor);
 }
+
+BEGIN_METADATA(UiElementContainerView)
+END_METADATA
 
 }  // namespace ash

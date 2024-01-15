@@ -5,7 +5,8 @@
 import {FakeMethodResolver} from 'chrome://resources/ash/common/fake_method_resolver.js';
 
 import {GetConnectedDevicesResponse} from './diagnostics_types.js';
-import {ConnectedDevicesObserverRemote, InputDataProviderInterface, InternalDisplayPowerStateObserverRemote, KeyboardInfo, KeyboardObserverRemote, TabletModeObserverRemote, TouchDeviceInfo} from './input_data_provider.mojom-webui.js';
+import {KeyboardInfo} from './input.mojom-webui.js';
+import {ConnectedDevicesObserverRemote, InputDataProviderInterface, InternalDisplayPowerStateObserverRemote, KeyboardObserverRemote, LidStateObserverRemote, TabletModeObserverRemote, TouchDeviceInfo} from './input_data_provider.mojom-webui.js';
 
 /**
  * @fileoverview
@@ -13,37 +14,45 @@ import {ConnectedDevicesObserverRemote, InputDataProviderInterface, InternalDisp
  */
 
 export class FakeInputDataProvider implements InputDataProviderInterface {
-  private methods_: FakeMethodResolver = new FakeMethodResolver();
-  private observers_: ConnectedDevicesObserverRemote[] = [];
-  private keyboards_: KeyboardInfo[] = [];
-  private keyboardObservers_: KeyboardObserverRemote[][] = [];
-  private tabletModeObserver_: TabletModeObserverRemote;
-  private internalDisplayPowerStateObserver_:
+  private methods: FakeMethodResolver = new FakeMethodResolver();
+  private observers: ConnectedDevicesObserverRemote[] = [];
+  private keyboards: KeyboardInfo[] = [];
+  private keyboardObservers: KeyboardObserverRemote[][] = [];
+  private tabletModeObserver: TabletModeObserverRemote;
+  private lidStateObserver: LidStateObserverRemote;
+  private internalDisplayPowerStateObserver:
       InternalDisplayPowerStateObserverRemote;
-  private touchDevices_: TouchDeviceInfo[] = [];
+  private touchDevices: TouchDeviceInfo[] = [];
+  private moveAppToTestingScreenCalled: number = 0;
+  private moveAppBackToPreviousScreenCalled: number = 0;
+  private a11yTouchPassthroughState: boolean = false;
   constructor() {
     this.registerMethods();
   }
 
   // Resets provider to its internal state.
   reset(): void {
-    this.methods_ = new FakeMethodResolver();
-    this.observers_ = [];
-    this.keyboards_ = [];
-    this.touchDevices_ = [];
+    this.methods = new FakeMethodResolver();
+    this.observers = [];
+    this.keyboards = [];
+    this.touchDevices = [];
+    this.moveAppToTestingScreenCalled = 0;
+    this.moveAppBackToPreviousScreenCalled = 0;
+    this.a11yTouchPassthroughState = false;
 
     this.registerMethods();
   }
 
   // Setup method resolvers.
   registerMethods(): void {
-    this.methods_.register('getConnectedDevices');
-    this.methods_.register('observeKeyEvents');
-    this.methods_.register('observeTabletMode');
+    this.methods.register('getConnectedDevices');
+    this.methods.register('observeKeyEvents');
+    this.methods.register('observeTabletMode');
+    this.methods.register('observeLidState');
   }
 
   getConnectedDevices(): Promise<GetConnectedDevicesResponse> {
-    return this.methods_.resolveMethod('getConnectedDevices');
+    return this.methods.resolveMethod('getConnectedDevices');
   }
 
   /**
@@ -51,22 +60,22 @@ export class FakeInputDataProvider implements InputDataProviderInterface {
    * @param id The ID of the keyboard to observe
    */
   observeKeyEvents(id: number, remote: KeyboardObserverRemote): void {
-    if (!this.keyboardObservers_[id]) {
+    if (!this.keyboardObservers[id]) {
       return;
     }
-    this.keyboardObservers_[id].push(remote);
+    this.keyboardObservers[id].push(remote);
   }
 
   observeInternalDisplayPowerState(
       remote: InternalDisplayPowerStateObserverRemote): void {
-    this.internalDisplayPowerStateObserver_ = remote;
+    this.internalDisplayPowerStateObserver = remote;
   }
 
   /**
    * Sets the internal display power state to be on.
    */
   setInternalDisplayPowerOn(): void {
-    this.internalDisplayPowerStateObserver_.onInternalDisplayPowerStateChanged(
+    this.internalDisplayPowerStateObserver.onInternalDisplayPowerStateChanged(
         true);
   }
 
@@ -74,8 +83,40 @@ export class FakeInputDataProvider implements InputDataProviderInterface {
    * Sets the internal display power state to be off.
    */
   setInternalDisplayPowerOff(): void {
-    this.internalDisplayPowerStateObserver_.onInternalDisplayPowerStateChanged(
+    this.internalDisplayPowerStateObserver.onInternalDisplayPowerStateChanged(
         false);
+  }
+
+  /**
+   * Mock registering observer returning isTabletMode as false.
+   */
+  setStartWithLidClosed(): void {
+    this.methods.setResult('observeLidState', {isLidOpen: false});
+  }
+
+  /**
+   * Mock registering observer returning isTabletMode as true.
+   */
+  setStartWithLidOpen(): void {
+    this.methods.setResult('observeLidState', {isLidOpen: true});
+  }
+
+  /**
+   * Registers an observer for tablet mode changes and returns current tablet
+   * mode.
+   */
+  observeLidState(remote: LidStateObserverRemote):
+      Promise<{isLidOpen: boolean}> {
+    this.lidStateObserver = remote;
+    return this.methods.resolveMethod('observeLidState');
+  }
+
+  setLidStateOpen(): void {
+    this.lidStateObserver.onLidStateChanged(true);
+  }
+
+  setLidStateClosed(): void {
+    this.lidStateObserver.onLidStateChanged(false);
   }
 
   /**
@@ -84,36 +125,36 @@ export class FakeInputDataProvider implements InputDataProviderInterface {
    */
   observeTabletMode(remote: TabletModeObserverRemote):
       Promise<{isTabletMode: boolean}> {
-    this.tabletModeObserver_ = remote;
-    return this.methods_.resolveMethod('observeTabletMode');
+    this.tabletModeObserver = remote;
+    return this.methods.resolveMethod('observeTabletMode');
   }
 
   /**
    * Mock starting tablet mode.
    */
   startTabletMode(): void {
-    this.tabletModeObserver_.onTabletModeChanged(true);
+    this.tabletModeObserver.onTabletModeChanged(true);
   }
 
   /**
    * Mock ending tablet mode.
    */
   endTabletMode(): void {
-    this.tabletModeObserver_.onTabletModeChanged(false);
+    this.tabletModeObserver.onTabletModeChanged(false);
   }
 
   /**
    * Mock registering observer returning isTabletMode as false.
    */
   setStartTesterWithClamshellMode(): void {
-    this.methods_.setResult('observeTabletMode', {isTabletMode: false});
+    this.methods.setResult('observeTabletMode', {isTabletMode: false});
   }
 
   /**
    * Mock registering observer returning isTabletMode as true.
    */
   setStartTesterWithTabletMode(): void {
-    this.methods_.setResult('observeTabletMode', {isTabletMode: true});
+    this.methods.setResult('observeTabletMode', {isTabletMode: true});
   }
 
   /**
@@ -122,16 +163,16 @@ export class FakeInputDataProvider implements InputDataProviderInterface {
    */
   setFakeConnectedDevices(
       keyboards: KeyboardInfo[], touchDevices: TouchDeviceInfo[]): void {
-    this.keyboards_ = keyboards;
-    this.touchDevices_ = touchDevices;
-    this.methods_.setResult(
+    this.keyboards = keyboards;
+    this.touchDevices = touchDevices;
+    this.methods.setResult(
         'getConnectedDevices',
         {keyboards: [...keyboards], touchDevices: [...touchDevices]});
   }
 
   // Registers an observer for the set of connected devices.
   observeConnectedDevices(remote: ConnectedDevicesObserverRemote): void {
-    this.observers_.push(remote);
+    this.observers.push(remote);
   }
 
   /**
@@ -139,14 +180,14 @@ export class FakeInputDataProvider implements InputDataProviderInterface {
    * appropriately.
    */
   addFakeConnectedKeyboard(keyboard: KeyboardInfo): void {
-    this.keyboards_.push(keyboard);
-    this.keyboardObservers_[keyboard.id] = [];
-    this.methods_.setResult('getConnectedDevices', {
-      keyboards: [...this.keyboards_],
-      touchDevices: [...this.touchDevices_],
+    this.keyboards.push(keyboard);
+    this.keyboardObservers[keyboard.id] = [];
+    this.methods.setResult('getConnectedDevices', {
+      keyboards: [...this.keyboards],
+      touchDevices: [...this.touchDevices],
     });
 
-    for (const observer of this.observers_) {
+    for (const observer of this.observers) {
       observer.onKeyboardConnected(keyboard);
     }
   }
@@ -157,10 +198,10 @@ export class FakeInputDataProvider implements InputDataProviderInterface {
    * @param id The ID of the keyboard to remove
    */
   removeFakeConnectedKeyboardById(id: number): void {
-    this.keyboards_ = this.keyboards_.filter((device) => device.id !== id);
-    delete this.keyboardObservers_[id];
+    this.keyboards = this.keyboards.filter((device) => device.id !== id);
+    delete this.keyboardObservers[id];
 
-    for (const observer of this.observers_) {
+    for (const observer of this.observers) {
       observer.onKeyboardDisconnected(id);
     }
   }
@@ -170,12 +211,12 @@ export class FakeInputDataProvider implements InputDataProviderInterface {
    * appropriately.
    */
   addFakeConnectedTouchDevice(touchDevice: TouchDeviceInfo): void {
-    this.touchDevices_.push(touchDevice);
-    this.methods_.setResult(
+    this.touchDevices.push(touchDevice);
+    this.methods.setResult(
         'getConnectedDevices',
-        {keyboards: this.keyboards_, touchDevices: this.touchDevices_});
+        {keyboards: this.keyboards, touchDevices: this.touchDevices});
 
-    for (const observer of this.observers_) {
+    for (const observer of this.observers) {
       observer.onTouchDeviceConnected(touchDevice);
     }
   }
@@ -186,11 +227,52 @@ export class FakeInputDataProvider implements InputDataProviderInterface {
    * @param id The ID of the touch device to remove
    */
   removeFakeConnectedTouchDeviceById(id: number): void {
-    this.touchDevices_ =
-        this.touchDevices_.filter((device) => device.id !== id);
+    this.touchDevices = this.touchDevices.filter((device) => device.id !== id);
 
-    for (const observer of this.observers_) {
+    for (const observer of this.observers) {
       observer.onTouchDeviceDisconnected(id);
     }
+  }
+
+  /**
+   * Fakes the function to move the Diagnostics app to the testing touchscreen.
+   */
+  moveAppToTestingScreen(): void {
+    this.moveAppToTestingScreenCalled++;
+  }
+
+  /**
+   * Returns the number of times moveAppToTestingScreen function is called.
+   */
+  getMoveAppToTestingScreenCalled(): number {
+    return this.moveAppToTestingScreenCalled;
+  }
+
+  /**
+   * Fakes the function to move the Diagnostics app back to previous screen.
+   */
+  moveAppBackToPreviousScreen(): void {
+    this.moveAppBackToPreviousScreenCalled++;
+  }
+
+  /**
+   * Returns the number of times moveAppBackToPreviousScreen function is called.
+   */
+  getMoveAppBackToPreviousScreenCalled(): number {
+    return this.moveAppBackToPreviousScreenCalled;
+  }
+
+  /*
+   * Fake function to enable/disable A11y touch exploration passthough.
+   */
+  setA11yTouchPassthrough(enabled: boolean): void {
+    this.a11yTouchPassthroughState = enabled;
+  }
+
+  /**
+   * Get the current state of A11y touch passthrough.
+   */
+  getA11yTouchPassthroughState(): boolean {
+    return this.a11yTouchPassthroughState;
   }
 }

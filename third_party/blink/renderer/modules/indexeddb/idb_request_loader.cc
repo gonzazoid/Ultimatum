@@ -24,12 +24,10 @@ IDBRequestLoader::IDBRequestLoader(
     IDBRequestQueueItem* queue_item,
     Vector<std::unique_ptr<IDBValue>>& result_values)
     : queue_item_(queue_item), values_(result_values) {
-  DCHECK(IDBValueUnwrapper::IsWrapped(values_));
+  DCHECK(IDBValueUnwrapper::IsWrapped(*values_));
 }
 
-IDBRequestLoader::~IDBRequestLoader() {
-  // TODO(pwnall): Do we need to call loader_->Cancel() here?
-}
+IDBRequestLoader::~IDBRequestLoader() {}
 
 void IDBRequestLoader::Start() {
 #if DCHECK_IS_ON()
@@ -41,7 +39,7 @@ void IDBRequestLoader::Start() {
   //               Consider parallelizing. The main issue is that the Blob reads
   //               will have to be throttled somewhere, and the extra complexity
   //               only benefits applications that use getAll().
-  current_value_ = values_.begin();
+  current_value_ = values_->begin();
   StartNextValue();
 }
 
@@ -62,7 +60,7 @@ void IDBRequestLoader::StartNextValue() {
   IDBValueUnwrapper unwrapper;
 
   while (true) {
-    if (current_value_ == values_.end()) {
+    if (current_value_ == values_->end()) {
       ReportSuccess();
       return;
     }
@@ -71,7 +69,7 @@ void IDBRequestLoader::StartNextValue() {
     ++current_value_;
   }
 
-  DCHECK(current_value_ != values_.end());
+  DCHECK(current_value_ != values_->end());
 
   ExecutionContext* exection_context =
       queue_item_->Request()->GetExecutionContext();
@@ -85,20 +83,22 @@ void IDBRequestLoader::StartNextValue() {
   DCHECK(!file_reader_loading_);
   file_reader_loading_ = true;
 #endif  // DCHECK_IS_ON()
-  loader_ = std::make_unique<FileReaderLoader>(
-      FileReaderLoader::kReadByClient, this,
-      exection_context->GetTaskRunner(TaskType::kDatabaseAccess));
+  loader_ = MakeGarbageCollected<FileReaderLoader>(
+      this, exection_context->GetTaskRunner(TaskType::kDatabaseAccess));
   loader_->Start(unwrapper.WrapperBlobHandle());
 }
 
-void IDBRequestLoader::DidStartLoading() {}
+FileErrorCode IDBRequestLoader::DidStartLoading(uint64_t) {
+  return FileErrorCode::kOK;
+}
 
-void IDBRequestLoader::DidReceiveDataForClient(const char* data,
+FileErrorCode IDBRequestLoader::DidReceiveData(const char* data,
                                                unsigned data_length) {
   DCHECK_LE(wrapped_data_.size() + data_length, wrapped_data_.capacity())
       << "The reader returned more data than we were prepared for";
 
   wrapped_data_.Append(data, data_length);
+  return FileErrorCode::kOK;
 }
 
 void IDBRequestLoader::DidFinishLoading() {

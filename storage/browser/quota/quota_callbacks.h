@@ -13,10 +13,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include <optional>
 #include "base/containers/contains.h"
+#include "base/functional/callback.h"
 #include "components/services/storage/public/cpp/buckets/bucket_locator.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/quota/quota_types.mojom-forward.h"
 
 namespace blink {
@@ -39,13 +39,12 @@ using UsageWithBreakdownCallback =
                             blink::mojom::UsageBreakdownPtr usage_breakdown)>;
 using StatusCallback = base::OnceCallback<void(blink::mojom::QuotaStatusCode)>;
 using GetBucketsCallback =
-    base::OnceCallback<void(const std::set<BucketLocator>& buckets,
-                            blink::mojom::StorageType type)>;
+    base::OnceCallback<void(const std::set<BucketLocator>& buckets)>;
 using GetStorageKeysCallback =
     base::OnceCallback<void(const std::set<blink::StorageKey>& storage_keys)>;
 using GetUsageInfoCallback = base::OnceCallback<void(UsageInfoEntries)>;
 using GetBucketCallback =
-    base::OnceCallback<void(const absl::optional<BucketLocator>& bucket_info)>;
+    base::OnceCallback<void(const std::optional<BucketLocator>& bucket_info)>;
 
 // Simple template wrapper for a callback queue.
 template <typename CallbackType, typename... Args>
@@ -75,44 +74,6 @@ class CallbackQueue {
 
  private:
   std::vector<CallbackType> callbacks_;
-};
-
-template <typename CallbackType, typename Key, typename... Args>
-class CallbackQueueMap {
- public:
-  using CallbackQueueType = CallbackQueue<CallbackType, Args...>;
-  using CallbackMap = std::map<Key, CallbackQueueType>;
-  using iterator = typename CallbackMap::iterator;
-
-  bool Add(const Key& key, CallbackType callback) {
-    return callback_map_[key].Add(std::move(callback));
-  }
-
-  bool HasCallbacks(const Key& key) const {
-    return base::Contains(callback_map_, key);
-  }
-
-  bool HasAnyCallbacks() const { return !callback_map_.empty(); }
-
-  iterator Begin() { return callback_map_.begin(); }
-  iterator End() { return callback_map_.end(); }
-
-  void Clear() { callback_map_.clear(); }
-
-  // Runs the callbacks added for the given |key| and clears the key
-  // from the map.
-  template <typename... RunArgs>
-  void Run(const Key& key, RunArgs&&... args) {
-    if (!this->HasCallbacks(key))
-      return;
-    CallbackQueueType queue;
-    queue.Swap(&callback_map_[key]);
-    callback_map_.erase(key);
-    queue.Run(std::forward<RunArgs>(args)...);
-  }
-
- private:
-  CallbackMap callback_map_;
 };
 
 }  // namespace storage

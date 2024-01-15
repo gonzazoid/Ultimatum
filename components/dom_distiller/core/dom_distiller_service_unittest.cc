@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
@@ -71,6 +71,7 @@ class DomDistillerServiceTest : public testing::Test {
 
   void TearDown() override {
     base::RunLoop().RunUntilIdle();
+    distiller_page_factory_ = nullptr;
     distiller_factory_ = nullptr;
     service_.reset();
   }

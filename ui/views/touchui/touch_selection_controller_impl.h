@@ -8,52 +8,56 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
-#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "ui/base/pointer/touch_editing_controller.h"
 #include "ui/events/event_observer.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/selection_bound.h"
 #include "ui/touch_selection/touch_selection_menu_runner.h"
+#include "ui/views/touchui/touch_selection_controller.h"
 #include "ui/views/view.h"
 #include "ui/views/views_export.h"
+#include "ui/views/widget/unique_widget_ptr.h"
 #include "ui/views/widget/widget_observer.h"
+
+namespace ui {
+class TouchSelectionMagnifierAura;
+}
 
 namespace views {
 
-// Touch specific implementation of TouchEditingControllerDeprecated.
 // Responsible for displaying selection handles and menu elements relevant in a
 // touch interface.
 class VIEWS_EXPORT TouchSelectionControllerImpl
-    : public ui::TouchEditingControllerDeprecated,
+    : public TouchSelectionController,
       public ui::TouchSelectionMenuClient,
       public WidgetObserver,
       public ui::EventObserver {
  public:
   class EditingHandleView;
 
-  // Use ui::TouchEditingControllerFactory::Create() instead.
   explicit TouchSelectionControllerImpl(ui::TouchEditable* client_view);
   TouchSelectionControllerImpl(const TouchSelectionControllerImpl&) = delete;
   TouchSelectionControllerImpl& operator=(const TouchSelectionControllerImpl&) =
       delete;
   ~TouchSelectionControllerImpl() override;
 
-  // ui::TouchEditingControllerDeprecated:
+  // TouchSelectionController:
   void SelectionChanged() override;
+  void ToggleQuickMenu() override;
 
   void ShowQuickMenuImmediatelyForTesting();
 
  private:
   friend class TouchSelectionControllerImplTest;
 
-  void SetDraggingHandle(EditingHandleView* handle);
-
-  // Callback to inform the client view that the selection handle has been
-  // dragged, hence selection may need to be updated. |drag_pos| is the new
-  // position for the edge of the selection corresponding to |dragging_handle_|,
-  // specified in handle's coordinates
-  void SelectionHandleDragged(const gfx::Point& drag_pos);
+  // Callbacks to inform the client view of handle drag events, so that the
+  // client view can perform selection updates if needed. `drag_pos` is the new
+  // position for the bottom of the selection bound corresponding to the handle
+  // currently being dragged, specified in the handle's coordinates.
+  void OnDragBegin(EditingHandleView* handle);
+  void OnDragUpdate(EditingHandleView* handle, const gfx::Point& drag_pos);
+  void OnDragEnd();
 
   // Convenience method to convert a point from a selection handle's coordinate
   // system to that of the client view.
@@ -99,6 +103,25 @@ class VIEWS_EXPORT TouchSelectionControllerImpl
   // coordinates.
   gfx::Rect GetQuickMenuAnchorRect() const;
 
+  // Shows the touch selection magnifier (if there is one) at the focus bound.
+  void ShowMagnifier(const gfx::SelectionBound& focus_bound_in_screen);
+
+  // Hides the touch selection magnifier.
+  void HideMagnifier();
+
+  // Creates widgets for the selection handles and cursor handle.
+  void CreateHandleWidgets();
+
+  // Gets the contents views of the handle widgets. Returns nullptr if the
+  // handle widget has been destroyed.
+  EditingHandleView* GetSelectionHandle1();
+  EditingHandleView* GetSelectionHandle2();
+  EditingHandleView* GetCursorHandle();
+
+  // Gets the handle that is currently being dragged, or nullptr if no handle is
+  // being dragged.
+  EditingHandleView* GetDraggingHandle();
+
   // Convenience methods for testing.
   gfx::NativeView GetCursorHandleNativeView();
   gfx::SelectionBound::Type GetSelectionHandle1Type();
@@ -114,21 +137,27 @@ class VIEWS_EXPORT TouchSelectionControllerImpl
 
   raw_ptr<ui::TouchEditable, DanglingUntriaged> client_view_;
   raw_ptr<Widget, DanglingUntriaged> client_widget_ = nullptr;
-  // Non-owning pointers to EditingHandleViews. These views are owned by their
-  // Widget and cleaned up when their Widget closes.
-  raw_ptr<EditingHandleView, DanglingUntriaged> selection_handle_1_;
-  raw_ptr<EditingHandleView, DanglingUntriaged> selection_handle_2_;
-  raw_ptr<EditingHandleView, DanglingUntriaged> cursor_handle_;
-  bool command_executed_ = false;
-  base::TimeTicks selection_start_time_;
 
-  // Timer to trigger quick menu (Quick menu is not shown if the selection
-  // handles are being updated. It appears only when the handles are stationary
-  // for a certain amount of time).
+  // Widgets for the selection handles and cursor handle.
+  views::UniqueWidgetPtr selection_handle_1_widget_;
+  views::UniqueWidgetPtr selection_handle_2_widget_;
+  views::UniqueWidgetPtr cursor_handle_widget_;
+
+  // Magnifier which is shown when touch dragging to adjust the selection.
+  std::unique_ptr<ui::TouchSelectionMagnifierAura> touch_selection_magnifier_;
+
+  // Whether to enable toggling the menu by tapping the cursor or cursor handle.
+  // If enabled, the menu defaults to being hidden when the cursor handle is
+  // initially created.
+  bool toggle_menu_enabled_ = false;
+
+  // Whether the quick menu has been requested to be shown.
+  bool quick_menu_requested_ = false;
+
+  // Timer to trigger quick menu after it has been requested. If a touch handle
+  // is being dragged, the menu will be hidden and the timer will only start
+  // after the drag is lifted.
   base::OneShotTimer quick_menu_timer_;
-
-  // Pointer to the SelectionHandleView being dragged during a drag session.
-  raw_ptr<EditingHandleView, DanglingUntriaged> dragging_handle_ = nullptr;
 
   // In cursor mode, the two selection bounds are the same and correspond to
   // |cursor_handle_|; otherwise, they correspond to |selection_handle_1_| and
@@ -141,6 +170,11 @@ class VIEWS_EXPORT TouchSelectionControllerImpl
   // Selection bounds, clipped to client view's boundaries.
   gfx::SelectionBound selection_bound_1_clipped_;
   gfx::SelectionBound selection_bound_2_clipped_;
+
+  // Used to track whether the client is selection dragging. If the client's
+  // selection dragging state changes, then the handles need to be updated on
+  // the next selection change notification.
+  bool is_client_selection_dragging_ = false;
 };
 
 }  // namespace views

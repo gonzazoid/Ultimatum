@@ -17,24 +17,6 @@ import time
 # This is hardcoded to be src/ relative to this script.
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-CHROME_SANDBOX_ENV = 'CHROME_DEVEL_SANDBOX'
-CHROME_SANDBOX_PATH = '/opt/chromium/chrome_sandbox'
-
-
-def get_sandbox_env(env):
-  """Returns the environment flags needed for the SUID sandbox to work."""
-  extra_env = {}
-  chrome_sandbox_path = env.get(CHROME_SANDBOX_ENV, CHROME_SANDBOX_PATH)
-  # The above would silently disable the SUID sandbox if the env value were
-  # an empty string. We don't want to allow that. http://crbug.com/245376
-  # TODO(jln): Remove this check once it's no longer possible to disable the
-  # sandbox that way.
-  if not chrome_sandbox_path:
-    chrome_sandbox_path = CHROME_SANDBOX_PATH
-  extra_env[CHROME_SANDBOX_ENV] = chrome_sandbox_path
-
-  return extra_env
-
 
 def trim_cmd(cmd):
   """Removes internal flags from cmd since they're just used to communicate from
@@ -120,6 +102,8 @@ def get_sanitizer_env(asan, lsan, msan, tsan, cfi_diag):
     if lsan:
       msan_options.append('detect_leaks=1')
     extra_env['MSAN_OPTIONS'] = ' '.join(msan_options)
+    extra_env['VK_ICD_FILENAMES'] = ''
+    extra_env['LIBGL_DRIVERS_PATH'] = ''
 
   if tsan:
     tsan_options = symbolization_options[:]
@@ -139,8 +123,17 @@ def get_coverage_continuous_mode_env(env):
   if not llvm_profile_file:
     return {}
 
+  # Do not insert %c into LLVM_PROFILE_FILE if it's already there as that'll
+  # cause the coverage instrumentation to write coverage data to default.profraw
+  # instead of LLVM_PROFILE_FILE.
+  if "%c" in llvm_profile_file:
+    return {
+      'LLVM_PROFILE_FILE': llvm_profile_file
+    }
+
   dirname, basename = os.path.split(llvm_profile_file)
   root, ext = os.path.splitext(basename)
+
   return {
     'LLVM_PROFILE_FILE': os.path.join(dirname, root + "%c" + ext)
   }
@@ -185,6 +178,41 @@ def symbolize_snippets_in_json(cmd, env):
     print("Error: failed to symbolize snippets in JSON:\n", file=sys.stderr)
     print(stderr, file=sys.stderr)
     raise subprocess.CalledProcessError(p.returncode, symbolize_command)
+
+
+def get_escalate_sanitizer_warnings_command(json_path):
+  """Construct the command to invoke sanitizer warnings script."""
+  script_path = os.path.join(
+      ROOT_DIR, 'tools', 'memory', 'sanitizer',
+      'escalate_sanitizer_warnings.py')
+  cmd = [sys.executable, script_path]
+  cmd.append('--test-summary-json-file=%s' % json_path)
+  return cmd
+
+
+def escalate_sanitizer_warnings_in_json(cmd, env):
+  """Escalate sanitizer warnings inside the JSON test summary."""
+  json_path = get_json_path(cmd)
+  if json_path is None:
+    print("Warning: Cannot escalate sanitizer warnings without a json summary "
+          "file:\n", file=sys.stderr)
+    return 0
+
+  try:
+    escalate_command = get_escalate_sanitizer_warnings_command(json_path)
+    p = subprocess.Popen(escalate_command, stderr=subprocess.PIPE, env=env)
+    (_, stderr) = p.communicate()
+  except OSError as e:
+    print('Exception while escalating sanitizer warnings: %s' % e,
+          file=sys.stderr)
+    raise
+
+  if p.returncode != 0:
+    print("Error: failed to escalate sanitizer warnings status in JSON:\n",
+          file=sys.stderr)
+    print(stderr, file=sys.stderr)
+  return p.returncode
+
 
 
 def run_command_with_output(argv, stdoutfile, env=None, cwd=None):
@@ -324,7 +352,6 @@ def run_executable(cmd, env, stdoutfile=None, cwd=None):
   # Used by base/base_paths_linux.cc as an override. Just make sure the default
   # logic is used.
   env.pop('CR_SOURCE_ROOT', None)
-  extra_env.update(get_sandbox_env(env))
 
   # Copy logic from  tools/build/scripts/slave/runtest.py.
   asan = '--asan=1' in cmd
@@ -332,6 +359,8 @@ def run_executable(cmd, env, stdoutfile=None, cwd=None):
   msan = '--msan=1' in cmd
   tsan = '--tsan=1' in cmd
   cfi_diag = '--cfi-diag=1' in cmd
+  # Treat sanitizer warnings as test case failures.
+  use_sanitizer_warnings_script = '--fail-san=1' in cmd
   if stdoutfile or sys.platform in ['win32', 'cygwin']:
     # Symbolization works in-process on Windows even when sandboxed.
     use_symbolization_script = False
@@ -400,8 +429,16 @@ def run_executable(cmd, env, stdoutfile=None, cwd=None):
       wait_with_signals(p2)
       # Also feed the out-of-band JSON output to the symbolizer script.
       symbolize_snippets_in_json(cmd, env)
-      return p1.returncode
-    return run_command(cmd, env=env, cwd=cwd, log=False)
+      returncode = p1.returncode
+    else:
+      returncode = run_command(cmd, env=env, cwd=cwd, log=False)
+    # Check if we should post-process sanitizer warnings.
+    if use_sanitizer_warnings_script:
+      escalate_returncode = escalate_sanitizer_warnings_in_json(cmd, env)
+      if not returncode and escalate_returncode:
+        print('Tests with sanitizer warnings led to task failure.')
+        returncode = escalate_returncode
+    return returncode
   except OSError:
     print('Failed to start %s' % cmd, file=sys.stderr)
     raise

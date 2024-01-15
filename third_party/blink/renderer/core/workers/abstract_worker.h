@@ -47,7 +47,7 @@ class ExecutionContext;
 // Implementation of the AbstractWorker interface defined in the WebWorker HTML
 // spec: https://html.spec.whatwg.org/C/#abstractworker
 class CORE_EXPORT AbstractWorker
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public ExecutionContextLifecycleStateObserver {
  public:
   // EventTarget APIs
@@ -57,7 +57,7 @@ class CORE_EXPORT AbstractWorker
 
   void ContextDestroyed() override {}
 
-  DEFINE_STATIC_ATTRIBUTE_EVENT_LISTENER(error, kError)
+  DEFINE_ATTRIBUTE_EVENT_LISTENER(error, kError)
 
   explicit AbstractWorker(ExecutionContext*);
   ~AbstractWorker() override;

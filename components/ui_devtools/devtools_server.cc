@@ -6,17 +6,18 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/user_metrics.h"
 #include "base/metrics/user_metrics_action.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/values.h"
 #include "components/ui_devtools/switches.h"
@@ -37,8 +38,7 @@ const base::FilePath::CharType kUIDevToolsActivePortFileName[] =
 void WriteUIDevtoolsPortToFile(base::FilePath output_dir, int port) {
   base::FilePath path = output_dir.Append(kUIDevToolsActivePortFileName);
   std::string port_target_string = base::StringPrintf("%d", port);
-  if (base::WriteFile(path, port_target_string.c_str(),
-                      static_cast<int>(port_target_string.length())) < 0) {
+  if (!base::WriteFile(path, port_target_string)) {
     LOG(ERROR) << "Error writing UIDevTools active port to file";
   }
 }
@@ -120,8 +120,11 @@ void UiDevToolsServer::CreateTCPServerSocket(
   // Create the socket using the address 127.0.0.1 to listen on all interfaces.
   net::IPAddress address(127, 0, 0, 1);
   constexpr int kBacklog = 1;
+
+  auto options = network::mojom::TCPServerSocketOptions::New();
+  options->backlog = kBacklog;
   network_context->CreateTCPServerSocket(
-      net::IPEndPoint(address, port), kBacklog,
+      net::IPEndPoint(address, port), std::move(options),
       net::MutableNetworkTrafficAnnotationTag(tag),
       std::move(server_socket_receiver), std::move(callback));
 }
@@ -253,8 +256,13 @@ void UiDevToolsServer::OnClose(int connection_id) {
   client->Disconnect();
   connections_.erase(it);
 
-  if (connections_.empty() && on_session_ended_)
-    std::move(on_session_ended_).Run();
+  if (connections_.empty() && on_session_ended_) {
+    // The call stack might have callbacks which still have the pointer of
+    // `this` and `on_session_ended_` may destroy this. Ensure
+    // `on_session_ended_` is called in a dedicated task.
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(on_session_ended_));
+  }
 }
 
 }  // namespace ui_devtools

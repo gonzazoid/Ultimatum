@@ -4,19 +4,22 @@
 
 #include "ios/chrome/browser/promos_manager/constants.h"
 
+#include <optional>
+
 #include "base/notreached.h"
-#import "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/strings/strcat.h"
 
 namespace promos_manager {
 
-const std::string kImpressionPromoKey = "promo";
-const std::string kImpressionDayKey = "day";
+const char kImpressionPromoKey[] = "promo";
+const char kImpressionDayKey[] = "day";
+const char kImpressionFeatureEngagementMigrationCompletedKey[] =
+    "feature_engagement_migration_completed";
 const int kNumDaysImpressionHistoryStored = 365;
-const std::string kPromoStringifyPrefix = "promos_manager::Promo::";
 
 // WARNING - PLEASE READ: Sadly, we cannot switch over strings in C++, so be
 // very careful when updating this method to ensure all enums are accounted for.
-absl::optional<Promo> PromoForName(std::string promo) {
+std::optional<Promo> PromoForName(base::StringPiece promo) {
   if (promo == "promos_manager::Promo::Test")
     return promos_manager::Promo::Test;
 
@@ -38,10 +41,34 @@ absl::optional<Promo> PromoForName(std::string promo) {
   if (promo == "promos_manager::Promo::WhatsNew")
     return promos_manager::Promo::WhatsNew;
 
-  return absl::nullopt;
+  if (promo == "promos_manager::Promo::PostRestoreDefaultBrowserAlert") {
+    return promos_manager::Promo::PostRestoreDefaultBrowserAlert;
+  }
+
+  if (promo == "promos_manager::Promo::DefaultBrowserRemindMeLater") {
+    return promos_manager::Promo::DefaultBrowserRemindMeLater;
+  }
+
+  if (promo == "promos_manager::Promo::OmniboxPosition") {
+    return promos_manager::Promo::OmniboxPosition;
+  }
+
+  if (promo == "promos_manager::Promo::DockingPromo") {
+    return promos_manager::Promo::DockingPromo;
+  }
+
+  if (promo == "promos_manager::Promo::DockingPromoRemindMeLater") {
+    return promos_manager::Promo::DockingPromoRemindMeLater;
+  }
+
+  return std::nullopt;
 }
 
-std::string ShortNameForPromo(Promo promo) {
+std::string NameForPromo(Promo promo) {
+  return base::StrCat({"promos_manager::Promo::", ShortNameForPromo(promo)});
+}
+
+base::StringPiece ShortNameForPromo(Promo promo) {
   switch (promo) {
     case promos_manager::Promo::Test:
       return "Test";
@@ -57,11 +84,43 @@ std::string ShortNameForPromo(Promo promo) {
       return "PostRestoreSignInAlert";
     case promos_manager::Promo::WhatsNew:
       return "WhatsNew";
+    case promos_manager::Promo::PostRestoreDefaultBrowserAlert:
+      return "PostRestoreDefaultBrowserAlert";
+    case promos_manager::Promo::DefaultBrowserRemindMeLater:
+      return "DefaultBrowserRemindMeLater";
+    case promos_manager::Promo::OmniboxPosition:
+      return "OmniboxPosition";
+    case promos_manager::Promo::DockingPromo:
+      return "DockingPromo";
+    case promos_manager::Promo::DockingPromoRemindMeLater:
+      return "DockingPromoRemindMeLater";
   }
 }
 
-std::string NameForPromo(Promo promo) {
-  return kPromoStringifyPrefix + ShortNameForPromo(promo);
+std::optional<promos_manager::Impression> ImpressionFromDict(
+    const base::Value::Dict& dict) {
+  const std::string* stored_promo =
+      dict.FindString(promos_manager::kImpressionPromoKey);
+  std::optional<int> stored_day =
+      dict.FindInt(promos_manager::kImpressionDayKey);
+  std::optional<bool> stored_migration_complete = dict.FindBool(
+      promos_manager::kImpressionFeatureEngagementMigrationCompletedKey);
+
+  // Skip malformed impression history. (This should almost never happen.)
+  if (!stored_promo || !stored_day.has_value()) {
+    return std::nullopt;
+  }
+
+  std::optional<promos_manager::Promo> promo =
+      promos_manager::PromoForName(*stored_promo);
+
+  // Skip malformed impression history. (This should almost never happen.)
+  if (!promo.has_value()) {
+    return std::nullopt;
+  }
+
+  return promos_manager::Impression(promo.value(), stored_day.value(),
+                                    stored_migration_complete.value_or(false));
 }
 
 }  // namespace promos_manager

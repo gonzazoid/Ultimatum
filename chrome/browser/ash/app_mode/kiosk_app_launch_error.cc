@@ -6,7 +6,7 @@
 
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
-#include "chrome/browser/ash/app_mode/kiosk_app_manager.h"
+#include "chrome/browser/ash/app_mode/kiosk_chrome_app_manager.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/ash/components/login/auth/public/auth_failure.h"
@@ -24,7 +24,7 @@ constexpr char kKeyLaunchError[] = "launch_error";
 constexpr char kKeyCryptohomeFailure[] = "cryptohome_failure";
 
 // Error from the last kiosk launch.
-absl::optional<KioskAppLaunchError::Error> s_last_error = absl::nullopt;
+std::optional<KioskAppLaunchError::Error> s_last_error = std::nullopt;
 
 }  // namespace
 
@@ -39,6 +39,7 @@ std::string KioskAppLaunchError::GetErrorMessage(Error error) {
     case Error::kUnableToRetrieveHash:
     case Error::kPolicyLoadFailed:
     case Error::kArcAuthFailed:
+    case Error::kUserNotAllowlisted:
       return l10n_util::GetStringUTF8(IDS_KIOSK_APP_FAILED_TO_LAUNCH);
 
     case Error::kCryptohomedNotRunning:
@@ -77,7 +78,7 @@ std::string KioskAppLaunchError::GetErrorMessage(Error error) {
 void KioskAppLaunchError::Save(KioskAppLaunchError::Error error) {
   PrefService* local_state = g_browser_process->local_state();
   ScopedDictPrefUpdate dict_update(local_state,
-                                   KioskAppManager::kKioskDictionaryName);
+                                   KioskChromeAppManager::kKioskDictionaryName);
   dict_update->SetByDottedPath(kKeyLaunchError, static_cast<int>(error));
   s_last_error = error;
 }
@@ -87,20 +88,21 @@ void KioskAppLaunchError::SaveCryptohomeFailure(
     const AuthFailure& auth_failure) {
   PrefService* local_state = g_browser_process->local_state();
   ScopedDictPrefUpdate dict_update(local_state,
-                                   KioskAppManager::kKioskDictionaryName);
+                                   KioskChromeAppManager::kKioskDictionaryName);
   dict_update->SetByDottedPath(kKeyCryptohomeFailure, auth_failure.reason());
 }
 
 // static
 KioskAppLaunchError::Error KioskAppLaunchError::Get() {
-  if (s_last_error)
+  if (s_last_error) {
     return *s_last_error;
+  }
   s_last_error = Error::kNone;
   PrefService* local_state = g_browser_process->local_state();
   const base::Value::Dict& dict =
-      local_state->GetDict(KioskAppManager::kKioskDictionaryName);
+      local_state->GetDict(KioskChromeAppManager::kKioskDictionaryName);
 
-  absl::optional<int> error = dict.FindInt(kKeyLaunchError);
+  std::optional<int> error = dict.FindInt(kKeyLaunchError);
   if (error.has_value()) {
     s_last_error = static_cast<KioskAppLaunchError::Error>(error.value());
     return *s_last_error;
@@ -113,18 +115,18 @@ KioskAppLaunchError::Error KioskAppLaunchError::Get() {
 void KioskAppLaunchError::RecordMetricAndClear() {
   PrefService* local_state = g_browser_process->local_state();
   ScopedDictPrefUpdate dict_update(local_state,
-                                   KioskAppManager::kKioskDictionaryName);
+                                   KioskChromeAppManager::kKioskDictionaryName);
 
-  absl::optional<int> error = dict_update->FindInt(kKeyLaunchError);
+  std::optional<int> error = dict_update->FindInt(kKeyLaunchError);
   if (error) {
     base::UmaHistogramEnumeration("Kiosk.Launch.Error",
                                   static_cast<Error>(*error));
   }
 
   dict_update->Remove(kKeyLaunchError);
-  s_last_error = absl::nullopt;
+  s_last_error = std::nullopt;
 
-  absl::optional<int> cryptohome_failure =
+  std::optional<int> cryptohome_failure =
       dict_update->FindInt(kKeyCryptohomeFailure);
   if (cryptohome_failure) {
     UMA_HISTOGRAM_ENUMERATION(

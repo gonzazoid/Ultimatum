@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 
 namespace extensions {
 
@@ -41,10 +41,12 @@ class IdentityGetAuthTokenError {
     kOffTheRecord = 22,
     // kPageLoadFailure = 23,  // Deprecated
     kRemoteConsentPageLoadFailure = 24,
-    kSetAccountsInCookieFailure = 25,
+    // kSetAccountsInCookieFailure = 25, // Deprecated
     kInvalidConsentResult = 26,
     kCanceled = 27,
-    kMaxValue = kCanceled,
+    kInteractivityDenied = 28,
+    kCannotCreateWindow = 29,
+    kMaxValue = kCannotCreateWindow,
   };
 
   // Constructs a |State::kMintTokenAuthFailure| error with an

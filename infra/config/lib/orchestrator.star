@@ -16,7 +16,7 @@ load("./builder_config.star", _ = "builder_config")  # @unused
 
 # infra/infra git revision to use for the compilator_watcher luciexe sub_build
 # Used by chromium orchestrators
-_COMPILATOR_WATCHER_GIT_REVISION = "7809a690bbd935bcb3b4d922e24cabe168aaabc8"
+_COMPILATOR_WATCHER_GIT_REVISION = "27c191f304c8d7329a393d8a69020fc14032c3c3"
 
 # Nodes for the definition of an orchestrator builder
 _ORCHESTRATOR = nodes.create_bucket_scoped_node_type("orchestrator")
@@ -35,10 +35,6 @@ _COMPILATOR = nodes.create_node_type_with_builder_ref("compilator")
 # bucket-qualified names of the experimental orchestrators that can use the
 # compilator.
 _EXPERIMENTAL_ORCHESTRATOR_NAMES_BY_COMPILATOR_NAME = {
-    "try/linux-rel-compilator": ["try/linux-rel-inverse-fyi"],
-    "try/android-nougat-x86-rel-compilator": ["try/android-nougat-x86-rel-inverse-fyi"],
-    "try/win10_chromium_x64_rel_ng-compilator": ["try/win10_chromium_x64_rel_ng-inverse-fyi"],
-    "try/mac-rel-compilator": ["try/mac-rel-inverse-fyi"],
 }
 
 def register_orchestrator(bucket, name, builder_group, compilator):
@@ -136,7 +132,7 @@ def _get_compilator(bucket_name, builder):
     ]
 
     if len(orchestrator_nodes) != 1:
-        fail("compilator should have exactly 1 referring orchestrator, got: {}".format(
+        fail("compilator should have exactly 1 referring orchestrator, got: {}, {}".format(
             _builder_name(node),
             [_builder_name(n) for n in orchestrator_nodes],
         ))
@@ -185,6 +181,8 @@ def _get_orchestrators_and_compilators(ctx):
     experimental_orchestrators_by_compilator_name = {}
 
     for bucket in cfg.buckets:
+        if not proto.has(bucket, "swarming"):
+            continue
         bucket_name = bucket.name
         for builder in bucket.swarming.builders:
             compilator = _get_compilator(bucket_name, builder)
@@ -222,6 +220,10 @@ def _set_orchestrator_properties(ctx):
 
         compilator = d.compilator
         compilator_properties = dict(orchestrator_properties)
+
+        # The "cq" property doesn't inherit; compilators aren't ever triggered by CV.
+        compilator_properties.pop("cq", None)
+
         compilator_properties.update(json.decode(compilator.builder.properties))
         compilator.builder.properties = json.encode(compilator_properties)
         _update_description(

@@ -2,10 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+
+import * as Common from 'devtools/core/common/common.js';
+import * as ElementsModule from 'devtools/panels/elements/elements.js';
+
 (async function() {
   TestRunner.addResult(
       `This test verifies that revealing a whitespace text node RemoteObject reveals its parentElement DIV.\n`);
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
       <p id="description"></p>
@@ -23,7 +28,7 @@
   var childObject = await TestRunner.evaluateInPageRemoteObject('whitespaceChild()');
 
   ElementsTestRunner.firstElementsTreeOutline().addEventListener(
-      Elements.ElementsTreeOutline.Events.SelectedNodeChanged, selectedNodeChanged);
+      ElementsModule.ElementsTreeOutline.ElementsTreeOutline.Events.SelectedNodeChanged, selectedNodeChanged);
   Common.Revealer.reveal(childObject);
 
   function selectedNodeChanged(event) {

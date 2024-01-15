@@ -21,6 +21,7 @@
 #include "media/base/media_switches.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "third_party/blink/public/common/features.h"
+#include "ui/shell_dialogs/selected_file_info.h"
 
 namespace {
 
@@ -91,11 +92,13 @@ class WebRtcAudioDebugRecordingsBrowserTest
   ~WebRtcAudioDebugRecordingsBrowserTest() override {}
 };
 
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || \
+    BUILDFLAG(IS_FUCHSIA)
 // Renderer crashes under Android ASAN: https://crbug.com/408496.
 // Renderer crashes under Android: https://crbug.com/820934.
 // Failures on Android M. https://crbug.com/535728.
 // Flaky on Linux: https://crbug.com/871182
+// Failed on Fuchsia: https://crbug.com/1470981
 #define MAYBE_CallWithAudioDebugRecordings DISABLED_CallWithAudioDebugRecordings
 #else
 #define MAYBE_CallWithAudioDebugRecordings CallWithAudioDebugRecordings
@@ -138,13 +141,14 @@ IN_PROC_BROWSER_TEST_F(WebRtcAudioDebugRecordingsBrowserTest,
 
   // This fakes the behavior of another open tab with webrtc-internals, and
   // enabling audio debug recordings in that tab.
-  WebRTCInternals::GetInstance()->FileSelected(base_file_path, -1, nullptr);
+  WebRTCInternals::GetInstance()->FileSelected(
+      ui::SelectedFileInfo(base_file_path), -1, nullptr);
 
   // Make a call.
   GURL url(embedded_test_server()->GetURL("/media/peerconnection-call.html"));
   EXPECT_TRUE(NavigateToURL(shell(), url));
-  ExecuteJavascriptAndWaitForOk("call({video: true, audio: true});");
-  ExecuteJavascriptAndWaitForOk("hangup();");
+  EXPECT_TRUE(ExecJs(shell(), "call({video: true, audio: true});"));
+  EXPECT_TRUE(ExecJs(shell(), "hangup();"));
 
   WebRTCInternals::GetInstance()->DisableAudioDebugRecordings();
 
@@ -227,14 +231,15 @@ IN_PROC_BROWSER_TEST_F(WebRtcAudioDebugRecordingsBrowserTest,
 
   // This fakes the behavior of another open tab with webrtc-internals, and
   // enabling audio debug recordings in that tab, then disabling it.
-  WebRTCInternals::GetInstance()->FileSelected(base_file_path, -1, nullptr);
+  WebRTCInternals::GetInstance()->FileSelected(
+      ui::SelectedFileInfo(base_file_path), -1, nullptr);
   WebRTCInternals::GetInstance()->DisableAudioDebugRecordings();
 
   // Make a call.
   GURL url(embedded_test_server()->GetURL("/media/peerconnection-call.html"));
   EXPECT_TRUE(NavigateToURL(shell(), url));
-  ExecuteJavascriptAndWaitForOk("call({video: true, audio: true});");
-  ExecuteJavascriptAndWaitForOk("hangup();");
+  EXPECT_TRUE(ExecJs(shell(), "call({video: true, audio: true});"));
+  EXPECT_TRUE(ExecJs(shell(), "hangup();"));
 
   // Verify that no files exist and remove temp dir.
   EXPECT_TRUE(base::IsDirectoryEmpty(temp_dir_path));
@@ -278,18 +283,18 @@ IN_PROC_BROWSER_TEST_F(WebRtcAudioDebugRecordingsBrowserTest,
 
   // This fakes the behavior of another open tab with webrtc-internals, and
   // enabling audio debug recordings in that tab.
-  WebRTCInternals::GetInstance()->FileSelected(base_file_path, -1, nullptr);
+  WebRTCInternals::GetInstance()->FileSelected(
+      ui::SelectedFileInfo(base_file_path), -1, nullptr);
 
   // Make the calls.
   GURL url(embedded_test_server()->GetURL("/media/peerconnection-call.html"));
   EXPECT_TRUE(NavigateToURL(shell(), url));
   EXPECT_TRUE(NavigateToURL(shell2, url));
-  ExecuteJavascriptAndWaitForOk("call({video: true, audio: true});");
-  EXPECT_EQ("OK", EvalJs(shell2, "call({video: true, audio: true});",
-                         EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+  EXPECT_TRUE(ExecJs(shell(), "call({video: true, audio: true});"));
+  EXPECT_TRUE(ExecJs(shell2, "call({video: true, audio: true});"));
 
-  ExecuteJavascriptAndWaitForOk("hangup();");
-  EXPECT_EQ("OK", EvalJs(shell2, "hangup();", EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+  EXPECT_TRUE(ExecJs(shell(), "hangup();"));
+  EXPECT_TRUE(ExecJs(shell2, "hangup();"));
 
   WebRTCInternals::GetInstance()->DisableAudioDebugRecordings();
 

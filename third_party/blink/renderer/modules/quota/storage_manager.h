@@ -5,7 +5,6 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_QUOTA_STORAGE_MANAGER_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_QUOTA_STORAGE_MANAGER_H_
 
-#include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/blink/public/mojom/permissions/permission.mojom-blink.h"
 #include "third_party/blink/public/mojom/quota/quota_manager_host.mojom-blink.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
@@ -24,7 +23,7 @@ class ScriptPromise;
 class ScriptPromiseResolver;
 class ScriptState;
 
-class StorageManager final : public EventTargetWithInlineData,
+class StorageManager final : public EventTarget,
                              public ExecutionContextClient,
                              public mojom::blink::QuotaChangeListener {
   DEFINE_WRAPPERTYPEINFO();
@@ -40,7 +39,7 @@ class StorageManager final : public EventTargetWithInlineData,
 
   void Trace(Visitor* visitor) const override;
 
-  // EventTargetWithInlineData
+  // EventTarget
   DEFINE_ATTRIBUTE_EVENT_LISTENER(quotachange, kQuotachange)
   const AtomicString& InterfaceName() const override;
   ExecutionContext* GetExecutionContext() const override;

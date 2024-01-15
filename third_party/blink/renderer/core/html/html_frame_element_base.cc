@@ -57,41 +57,19 @@ HTMLFrameElementBase::HTMLFrameElementBase(const QualifiedName& tag_name,
       margin_width_(-1),
       margin_height_(-1) {}
 
-bool HTMLFrameElementBase::IsURLAllowed() const {
-  if (url_.empty())
-    return true;
-
-  const KURL& complete_url = GetDocument().CompleteURL(url_);
-
-  if (ContentFrame() && complete_url.ProtocolIsJavaScript()) {
-    // Check if the caller can execute script in the context of the content
-    // frame. NB: This check can be invoked without any JS on the stack for some
-    // parser operations. In such case, we use the origin of the frame element's
-    // containing document as the caller context.
-    v8::Isolate* isolate = GetExecutionContext()->GetIsolate();
-    LocalDOMWindow* accessing_window = isolate->InContext()
-                                           ? CurrentDOMWindow(isolate)
-                                           : GetDocument().domWindow();
-    if (!BindingSecurity::ShouldAllowAccessToFrame(
-            accessing_window, ContentFrame(),
-            BindingSecurity::ErrorReportOption::kReport))
-      return false;
-  }
-  return true;
-}
-
 void HTMLFrameElementBase::OpenURL(bool replace_current_item) {
-  if (!IsURLAllowed())
+  LocalFrame* parent_frame = GetDocument().GetFrame();
+  if (!parent_frame) {
     return;
+  }
 
   if (url_.empty())
     url_ = AtomicString(BlankURL().GetString());
-
-  LocalFrame* parent_frame = GetDocument().GetFrame();
-  if (!parent_frame)
-    return;
-
   KURL url = GetDocument().CompleteURL(url_);
+  if (ContentFrame() && !parent_frame->CanNavigate(*ContentFrame(), url)) {
+    return;
+  }
+
   // There is no (easy) way to tell if |url_| is relative at this point. That
   // is determined in the KURL constructor. If we fail to create an absolute
   // URL at this point, *and* the base URL is a data URL, assume |url_| was
@@ -231,11 +209,21 @@ void HTMLFrameElementBase::SetLocation(const String& str) {
     OpenURL(false);
 }
 
-bool HTMLFrameElementBase::SupportsFocus() const {
+bool HTMLFrameElementBase::SupportsFocus(UpdateBehavior) const {
   return true;
 }
 
 int HTMLFrameElementBase::DefaultTabIndex() const {
+  // The logic in focus_controller.cc requires frames to return
+  // true for IsFocusable(). However, frames are not actually
+  // focusable, and focus_controller.cc takes care of moving
+  // focus within the frame focus scope.
+  // TODO(crbug.com/1444450) It would be better to remove this
+  // override entirely, and make SupportsFocus() return false.
+  // That would require adding logic in focus_controller.cc that
+  // ignores IsFocusable for HTMLFrameElementBase. At that point,
+  // AXObject::IsKeyboardFocusable() can also have special case
+  // code removed.
   return 0;
 }
 

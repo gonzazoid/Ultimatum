@@ -28,12 +28,14 @@
 
 namespace gpu {
 
+class CommandBufferDirect;
 class CommandBufferServiceBase;
 
 // Mocks an AsyncAPIInterface, using GMock.
 class AsyncAPIMock : public AsyncAPIInterface {
  public:
   explicit AsyncAPIMock(bool default_do_commands,
+                        CommandBufferDirect* command_buffer,
                         CommandBufferServiceBase* command_buffer_service);
   ~AsyncAPIMock() override;
 
@@ -61,7 +63,8 @@ class AsyncAPIMock : public AsyncAPIInterface {
 
    private:
     unsigned int arg_count_;
-    volatile CommandBufferEntry* args_;
+    raw_ptr<volatile CommandBufferEntry, DanglingUntriaged | AllowPtrArithmetic>
+        args_;
   };
 
   void BeginDecoding() override {}
@@ -86,7 +89,8 @@ class AsyncAPIMock : public AsyncAPIInterface {
                 const volatile void* _args);
 
  private:
-  raw_ptr<CommandBufferServiceBase> command_buffer_service_;
+  raw_ptr<CommandBufferDirect> command_buffer_;
+  raw_ptr<CommandBufferServiceBase, DanglingUntriaged> command_buffer_service_;
 };
 
 class MockDecoderClient : public DecoderClient {

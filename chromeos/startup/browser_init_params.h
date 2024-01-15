@@ -18,8 +18,9 @@ class COMPONENT_EXPORT(CHROMEOS_STARTUP) BrowserInitParams {
   BrowserInitParams& operator=(const BrowserInitParams&) = delete;
 
   // Returns BrowserInitParams which is passed from ash-chrome.
-  // Useful for tests. Production code always needs to go
-  // through BrowserParamsProxy instead.
+  // Useful for tests. This should generally be called only after
+  // BrowserTestBase::SetUp.
+  // Production code always needs to go through BrowserParamsProxy instead.
   static const crosapi::mojom::BrowserInitParams* GetForTests();
 
   // Sets `init_params_` to the provided value.
@@ -28,16 +29,21 @@ class COMPONENT_EXPORT(CHROMEOS_STARTUP) BrowserInitParams {
   static void SetInitParamsForTests(
       crosapi::mojom::BrowserInitParamsPtr init_params);
 
-  // Create Mem FD from `init_params_`. This must be called after `init_params_`
-  // has initialized by calling GetInstance().
+  // Create Mem FD from `init_params_`.
   static base::ScopedFD CreateStartupData();
 
-  static bool disable_crosapi_for_testing() {
-    return disable_crosapi_for_testing_;
+  static bool is_crosapi_disabled_for_testing() {
+    return is_crosapi_disabled_for_testing_;
   }
 
  private:
   friend base::NoDestructor<BrowserInitParams>;
+
+  // Needs to access |is_crosapi_disabled_for_testing_|.
+  friend class ScopedDisableCrosapiForTesting;
+
+  // Needs to access |Get()|.
+  friend class BrowserParamsProxy;
 
   // Returns BrowserInitParams which is passed from ash-chrome. On launching
   // lacros-chrome from ash-chrome, ash-chrome creates a memory backed file,
@@ -52,17 +58,11 @@ class COMPONENT_EXPORT(CHROMEOS_STARTUP) BrowserInitParams {
   BrowserInitParams();
   ~BrowserInitParams();
 
-  // Needs to access |disable_crosapi_for_testing_|.
-  friend class ScopedDisableCrosapiForTesting;
-
-  // Needs to access |Get()|.
-  friend class BrowserParamsProxy;
-
   // Tests will set this to |true| which will make all crosapi functionality
   // unavailable. Should be set from ScopedDisableCrosapiForTesting always.
   // TODO(https://crbug.com/1131722): Ideally we could stub this out or make
   // this functional for tests without modifying production code
-  static bool disable_crosapi_for_testing_;
+  static bool is_crosapi_disabled_for_testing_;
 
   // Parameters passed from ash-chrome.
   crosapi::mojom::BrowserInitParamsPtr init_params_;

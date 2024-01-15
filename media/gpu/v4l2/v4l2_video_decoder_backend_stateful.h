@@ -31,7 +31,6 @@ class V4L2StatefulVideoDecoderBackend : public V4L2VideoDecoderBackend {
       scoped_refptr<V4L2Device> device,
       VideoCodecProfile profile,
       const VideoColorSpace& color_space,
-      bool low_latency,
       scoped_refptr<base::SequencedTaskRunner> task_runner);
   ~V4L2StatefulVideoDecoderBackend() override;
 
@@ -44,18 +43,16 @@ class V4L2StatefulVideoDecoderBackend : public V4L2VideoDecoderBackend {
   // V4L2VideoDecoderBackend implementation
   bool Initialize() override;
   void EnqueueDecodeTask(scoped_refptr<DecoderBuffer> buffer,
-                         VideoDecoder::DecodeCB decode_cb,
-                         int32_t bitstream_id) override;
+                         VideoDecoder::DecodeCB decode_cb) override;
   void OnOutputBufferDequeued(V4L2ReadableBufferRef buffer) override;
   void OnServiceDeviceTask(bool event) override;
   void OnStreamStopped(bool stop_input_queue) override;
   bool ApplyResolution(const gfx::Size& pic_size,
-                       const gfx::Rect& visible_rect,
-                       const size_t num_output_frames) override;
+                       const gfx::Rect& visible_rect) override;
   void OnChangeResolutionDone(CroStatus status) override;
   void ClearPendingRequests(DecoderStatus status) override;
   bool StopInputQueueOnResChange() const override;
-  size_t GetNumOUTPUTQueueBuffers() const override;
+  size_t GetNumOUTPUTQueueBuffers(bool secure_mode) const override;
 
  private:
   // TODO(b:149663704): merge with stateless?
@@ -68,12 +65,8 @@ class V4L2StatefulVideoDecoderBackend : public V4L2VideoDecoderBackend {
     size_t bytes_used = 0;
     // The callback function passed to EnqueueDecodeTask().
     VideoDecoder::DecodeCB decode_cb;
-    // Identifier for the decoder buffer.
-    int32_t bitstream_id;
 
-    DecodeRequest(scoped_refptr<DecoderBuffer> buf,
-                  VideoDecoder::DecodeCB cb,
-                  int32_t id);
+    DecodeRequest(scoped_refptr<DecoderBuffer> buf, VideoDecoder::DecodeCB cb);
 
     DecodeRequest(const DecodeRequest&) = delete;
     DecodeRequest& operator=(const DecodeRequest&) = delete;
@@ -104,7 +97,8 @@ class V4L2StatefulVideoDecoderBackend : public V4L2VideoDecoderBackend {
   // to actually apply the resolution.
   void ContinueChangeResolution(const gfx::Size& pic_size,
                                 const gfx::Rect& visible_rect,
-                                const size_t num_output_buffers);
+                                const size_t num_codec_reference_frames,
+                                uint8_t bit_depth);
 
   // Enqueue all output buffers that are available.
   void EnqueueOutputBuffers();
@@ -125,10 +119,11 @@ class V4L2StatefulVideoDecoderBackend : public V4L2VideoDecoderBackend {
   // The name of the running driver.
   const std::string driver_name_;
 
-  // Configuration options coming from upper layers initialization.
-  const VideoCodecProfile profile_;
-  const VideoColorSpace color_space_;
-  const bool low_latency_;
+  // Video profile we are decoding.
+  VideoCodecProfile profile_;
+
+  // Video color space we are decoding.
+  VideoColorSpace color_space_;
 
   // The task runner we are running on, for convenience.
   const scoped_refptr<base::SequencedTaskRunner> task_runner_;

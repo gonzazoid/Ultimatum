@@ -7,10 +7,10 @@
 #include <map>
 #include <string>
 
-#include "base/callback_helpers.h"
-#include "base/guid.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/uuid.h"
 #include "build/build_config.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
 #include "chrome/browser/sharing/mock_sharing_service.h"
@@ -29,6 +29,7 @@
 #include "ui/base/clipboard/clipboard_observer.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/gfx/codec/png_codec.h"
+#include "ui/gfx/image/image_unittest_util.h"
 #include "ui/gfx/skia_util.h"
 #include "ui/message_center/public/cpp/notification.h"
 
@@ -38,7 +39,6 @@ const char kText[] = "clipboard text";
 const char kEmptyDeviceName[] = "";
 const char kDeviceNameInMessage[] = "DeviceNameInMessage";
 const char16_t kDeviceNameInMessage16[] = u"DeviceNameInMessage";
-const char kHistogramName[] = "Sharing.RemoteCopyHandleMessageResult";
 const char kTestImageUrl[] = "https://foo.com/image.png";
 
 class ClipboardObserver : public ui::ClipboardObserver {
@@ -91,11 +91,12 @@ class RemoteCopyMessageHandlerTest : public SharedClipboardTestBase {
   chrome_browser_sharing::SharingMessage CreateMessageWithImage(
       const std::string& image_url) {
     image_url_ = image_url;
-    image_ = CreateTestSkBitmap(/*w=*/10, /*h=*/20, SK_ColorRED);
+    image_ = gfx::test::CreateBitmap(10, 20, SK_ColorRED);
 
     chrome_browser_sharing::SharingMessage message =
-        SharedClipboardTestBase::CreateMessage(base::GenerateGUID(),
-                                               kDeviceNameInMessage);
+        SharedClipboardTestBase::CreateMessage(
+            base::Uuid::GenerateRandomV4().AsLowercaseString(),
+            kDeviceNameInMessage);
     message.mutable_remote_copy_message()->set_image_url(image_url);
     return message;
   }
@@ -112,13 +113,6 @@ class RemoteCopyMessageHandlerTest : public SharedClipboardTestBase {
     content::URLLoaderInterceptor::WriteResponse(
         std::string(), SkBitmapToPNGString(*image_), params->client.get());
     return true;
-  }
-
-  static SkBitmap CreateTestSkBitmap(int w, int h, SkColor color) {
-    SkBitmap bitmap;
-    bitmap.allocN32Pixels(w, h);
-    bitmap.eraseColor(color);
-    return bitmap;
   }
 
   static std::string SkBitmapToPNGString(const SkBitmap& bitmap) {
@@ -138,28 +132,26 @@ class RemoteCopyMessageHandlerTest : public SharedClipboardTestBase {
 
 TEST_F(RemoteCopyMessageHandlerTest, NotificationWithoutDeviceName) {
   message_handler_->OnMessage(
-      CreateMessageWithText(base::GenerateGUID(), kEmptyDeviceName, kText),
+      CreateMessageWithText(base::Uuid::GenerateRandomV4().AsLowercaseString(),
+                            kEmptyDeviceName, kText),
       base::DoNothing());
   EXPECT_EQ(GetClipboardText(), kText);
   EXPECT_EQ(
       l10n_util::GetStringUTF16(
           IDS_SHARING_REMOTE_COPY_NOTIFICATION_TITLE_TEXT_CONTENT_UNKNOWN_DEVICE),
       GetNotification().title());
-  histograms_.ExpectUniqueSample(
-      kHistogramName, RemoteCopyHandleMessageResult::kSuccessHandledText, 1);
 }
 
 TEST_F(RemoteCopyMessageHandlerTest, NotificationWithDeviceName) {
   message_handler_->OnMessage(
-      CreateMessageWithText(base::GenerateGUID(), kDeviceNameInMessage, kText),
+      CreateMessageWithText(base::Uuid::GenerateRandomV4().AsLowercaseString(),
+                            kDeviceNameInMessage, kText),
       base::DoNothing());
   EXPECT_EQ(GetClipboardText(), kText);
   EXPECT_EQ(l10n_util::GetStringFUTF16(
                 IDS_SHARING_REMOTE_COPY_NOTIFICATION_TITLE_TEXT_CONTENT,
                 kDeviceNameInMessage16),
             GetNotification().title());
-  histograms_.ExpectUniqueSample(
-      kHistogramName, RemoteCopyHandleMessageResult::kSuccessHandledText, 1);
 }
 
 TEST_F(RemoteCopyMessageHandlerTest, IsImageSourceAllowed) {

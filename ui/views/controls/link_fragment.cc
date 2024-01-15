@@ -7,8 +7,10 @@
 #include <string>
 
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/views/controls/focus_ring.h"
 #include "ui/views/controls/link.h"
 #include "ui/views/style/typography.h"
+#include "ui/views/view_utils.h"
 
 namespace views {
 
@@ -20,8 +22,17 @@ LinkFragment::LinkFragment(const std::u16string& title,
       prev_fragment_(this),
       next_fragment_(this) {
   // Connect to the previous fragment if it exists.
-  if (other_fragment)
+  if (other_fragment) {
     Connect(other_fragment);
+  }
+
+  views::FocusRing::Install(this);
+  views::FocusRing::Get(this)->SetHasFocusPredicate(
+      base::BindRepeating([](const View* view) {
+        const auto* v = views::AsViewClass<LinkFragment>(view);
+        CHECK(v);
+        return InvokeOnFragments(&LinkFragment::HasFocus, v);
+      }));
 }
 
 LinkFragment::~LinkFragment() {
@@ -54,35 +65,29 @@ bool LinkFragment::IsUnderlined() const {
 
 void LinkFragment::RecalculateFont() {
   // Check whether any link fragment should be underlined.
-  bool should_be_underlined = IsUnderlined();
-  for (LinkFragment* current_fragment = next_fragment_;
-       !should_be_underlined && current_fragment != this;
-       current_fragment = current_fragment->next_fragment_) {
-    should_be_underlined = current_fragment->IsUnderlined();
-  }
+  const bool should_be_underlined =
+      InvokeOnFragments(&LinkFragment::IsUnderlined, this);
 
   // If the style differs from the current one, update.
   if ((font_list().GetFontStyle() & gfx::Font::UNDERLINE) !=
       should_be_underlined) {
-    auto MaybeUpdateStyle = [should_be_underlined](LinkFragment* fragment) {
-      const int style = fragment->font_list().GetFontStyle();
-      const int intended_style = should_be_underlined
-                                     ? (style | gfx::Font::UNDERLINE)
-                                     : (style & ~gfx::Font::UNDERLINE);
-      fragment->Label::SetFontList(
-          fragment->font_list().DeriveWithStyle(intended_style));
-      fragment->SchedulePaint();
-    };
-    MaybeUpdateStyle(this);
-    for (LinkFragment* current_fragment = next_fragment_;
-         current_fragment != this;
-         current_fragment = current_fragment->next_fragment_) {
-      MaybeUpdateStyle(current_fragment);
-    }
+    InvokeOnFragments(
+        [should_be_underlined](LinkFragment* fragment) {
+          const int style = fragment->font_list().GetFontStyle();
+          const int intended_style = should_be_underlined
+                                         ? (style | gfx::Font::UNDERLINE)
+                                         : (style & ~gfx::Font::UNDERLINE);
+          fragment->Label::SetFontList(
+              fragment->font_list().DeriveWithStyle(intended_style));
+          fragment->SchedulePaint();
+          views::FocusRing::Get(fragment)->SchedulePaint();
+          return false;
+        },
+        this);
   }
 }
 
-BEGIN_METADATA(LinkFragment, Link)
+BEGIN_METADATA(LinkFragment)
 END_METADATA
 
 }  // namespace views

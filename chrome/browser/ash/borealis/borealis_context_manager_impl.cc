@@ -7,17 +7,17 @@
 #include <memory>
 #include <ostream>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "chrome/browser/ash/borealis/borealis_context.h"
 #include "chrome/browser/ash/borealis/borealis_context_manager.h"
 #include "chrome/browser/ash/borealis/borealis_metrics.h"
 #include "chrome/browser/ash/borealis/borealis_task.h"
-#include "chrome/browser/ash/borealis/borealis_util.h"
 #include "chrome/browser/ash/borealis/infra/described.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/sessions/exit_type_service.h"
+#include "chrome/browser/ui/views/borealis/borealis_splash_screen_view.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
 #include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 
@@ -42,8 +42,9 @@ BorealisContextManagerImpl::Startup::Startup(
 BorealisContextManagerImpl::Startup::~Startup() = default;
 
 std::unique_ptr<BorealisContext> BorealisContextManagerImpl::Startup::Abort() {
-  while (!task_queue_.empty())
+  while (!task_queue_.empty()) {
     task_queue_.pop();
+  }
   Fail({BorealisStartupResult::kCancelled, "Startup aborted by user"});
   return std::move(context_);
 }
@@ -113,7 +114,7 @@ void BorealisContextManagerImpl::ShutDownBorealisIfRunning() {
       std::move(request),
       base::BindOnce(
           [](base::WeakPtr<BorealisContextManagerImpl> weak_this,
-             absl::optional<vm_tools::concierge::GetVmInfoResponse> reply) {
+             std::optional<vm_tools::concierge::GetVmInfoResponse> reply) {
             if (reply.has_value() && reply->success() && weak_this) {
               weak_this->SendShutdownRequest(base::DoNothing(),
                                              kBorealisVmName);
@@ -135,7 +136,7 @@ void BorealisContextManagerImpl::SendShutdownRequest(
       base::BindOnce(
           [](base::OnceCallback<void(BorealisShutdownResult)>
                  on_shutdown_callback,
-             absl::optional<vm_tools::concierge::StopVmResponse> response) {
+             std::optional<vm_tools::concierge::StopVmResponse> response) {
             // We don't have a good way to deal with a vm failing to stop (and
             // this would be a very rare occurrence anyway). We log an error if
             // it actually wasn't successful.
@@ -181,8 +182,9 @@ void BorealisContextManagerImpl::ShutDownBorealis(
   // from the running one.
   std::unique_ptr<BorealisContext> shutdown_context;
   std::swap(shutdown_context, context_);
-  if (in_progress_startup_)
+  if (in_progress_startup_) {
     shutdown_context = in_progress_startup_->Abort();
+  }
   if (!shutdown_context) {
     // TODO(b/172178036): There could be an operation in progress but we can't
     // tell because we don't record that state. Fix this by adding proper state
@@ -203,12 +205,9 @@ BorealisContextManagerImpl::GetTasks() {
   task_queue.push(std::make_unique<GetLaunchOptions>());
   task_queue.push(std::make_unique<MountDlc>());
   task_queue.push(std::make_unique<CreateDiskImage>());
-  task_queue.push(std::make_unique<RequestWaylandServer>());
   task_queue.push(std::make_unique<StartBorealisVm>());
-  task_queue.push(
-      std::make_unique<AwaitBorealisStartup>(profile_, kBorealisVmName));
+  task_queue.push(std::make_unique<AwaitBorealisStartup>());
   task_queue.push(std::make_unique<UpdateChromeFlags>(profile_));
-  task_queue.push(std::make_unique<SyncBorealisDisk>());
   return task_queue;
 }
 
@@ -221,23 +220,17 @@ void BorealisContextManagerImpl::Complete(Startup::Result completion_result) {
   DCHECK(in_progress_startup_);
   in_progress_startup_.reset();
 
-  BorealisContextManager::ContextOrFailure completion_result_for_clients =
-      completion_result.Handle(
-          base::BindOnce(
-              [](std::unique_ptr<BorealisContext>* out_context,
-                 std::unique_ptr<BorealisContext>& success) {
-                std::swap(*out_context, success);
-                return BorealisContextManager::ContextOrFailure(
-                    out_context->get());
-              },
-              &context_),
-          base::BindOnce([](Described<BorealisStartupResult>& failure) {
-            LOG(ERROR) << "Startup failed: failure=" << failure.error()
-                       << " message=" << failure.description();
-            return BorealisContextManager::ContextOrFailure::Unexpected(
-                Described<BorealisStartupResult>{failure.error(),
-                                                 failure.description()});
-          }));
+  BorealisContextManager::ContextOrFailure completion_result_for_clients;
+
+  if (completion_result.has_value()) {
+    context_ = std::move(completion_result).value();
+    completion_result_for_clients = base::ok(context_.get());
+  } else {
+    LOG(ERROR) << "Startup failed: failure="
+               << completion_result.error().error()
+               << " message=" << completion_result.error().description();
+    completion_result_for_clients = base::unexpected(completion_result.error());
+  }
 
   while (!callback_queue_.empty()) {
     ResultCallback callback = std::move(callback_queue_.front());

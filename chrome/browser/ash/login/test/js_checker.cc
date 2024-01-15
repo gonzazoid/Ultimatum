@@ -4,7 +4,7 @@
 
 #include "chrome/browser/ash/login/test/js_checker.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/string_escape.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/login/test/test_predicate_waiter.h"
@@ -19,10 +19,6 @@
 namespace ash {
 namespace test {
 namespace {
-
-std::string WrapSend(const std::string& expression) {
-  return "window.domAutomationController.send(" + expression + ")";
-}
 
 bool CheckOobeCondition(content::WebContents* web_contents,
                         const std::string& js_condition) {
@@ -90,7 +86,7 @@ JSChecker::JSChecker(content::RenderFrameHost* frame_host) {
 
 void JSChecker::Evaluate(const std::string& expression) {
   CHECK(web_contents_);
-  ASSERT_TRUE(content::ExecuteScript(web_contents_, expression));
+  ASSERT_TRUE(content::ExecJs(web_contents_.get(), expression));
 }
 
 void JSChecker::ExecuteAsync(const std::string& expression) {
@@ -102,21 +98,19 @@ void JSChecker::ExecuteAsync(const std::string& expression) {
 }
 
 bool JSChecker::GetBool(const std::string& expression) {
-  bool result;
-  GetBoolImpl(expression, &result);
-  return result;
+  CHECK(web_contents_);
+  return content::EvalJs(web_contents_.get(), "!!(" + expression + ")")
+      .ExtractBool();
 }
 
 int JSChecker::GetInt(const std::string& expression) {
-  int result;
-  GetIntImpl(expression, &result);
-  return result;
+  CHECK(web_contents_);
+  return content::EvalJs(web_contents_.get(), expression).ExtractInt();
 }
 
 std::string JSChecker::GetString(const std::string& expression) {
-  std::string result;
-  GetStringImpl(expression, &result);
-  return result;
+  CHECK(web_contents_);
+  return content::EvalJs(web_contents_.get(), expression).ExtractString();
 }
 
 bool JSChecker::GetAttributeBool(
@@ -330,23 +324,27 @@ std::unique_ptr<TestConditionWaiter> JSChecker::CreateHasClassWaiter(
   return CreateWaiterWithDescription(js_condition, description);
 }
 
-void JSChecker::GetBoolImpl(const std::string& expression, bool* result) {
-  CHECK(web_contents_);
-  ASSERT_TRUE(content::ExecuteScriptAndExtractBool(
-      web_contents_, WrapSend("!!(" + expression + ")"), result));
-}
+std::unique_ptr<TestConditionWaiter> JSChecker::CreateElementTextContentWaiter(
+    const std::string& content,
+    std::initializer_list<base::StringPiece> element_ids) {
+  TestPredicateWaiter::PredicateCheck predicate = base::BindRepeating(
+      [](JSChecker* jsChecker, const std::string& content,
+         std::initializer_list<base::StringPiece> element_ids) {
+        const std::string element_text =
+            jsChecker->GetAttributeString("textContent.trim()", element_ids);
+        return std::string::npos != element_text.find(content);
+      },
+      this, content, element_ids);
 
-void JSChecker::GetIntImpl(const std::string& expression, int* result) {
-  CHECK(web_contents_);
-  ASSERT_TRUE(content::ExecuteScriptAndExtractInt(
-      web_contents_, WrapSend(expression), result));
-}
+  auto result = std::make_unique<TestPredicateWaiter>(predicate);
 
-void JSChecker::GetStringImpl(const std::string& expression,
-                              std::string* result) {
-  CHECK(web_contents_);
-  ASSERT_TRUE(content::ExecuteScriptAndExtractString(
-      web_contents_, WrapSend(expression), result));
+  std::string description;
+  description.append(DescribePath(element_ids))
+      .append(" has text content: ")
+      .append(content);
+  result->set_description(description);
+
+  return result;
 }
 
 void JSChecker::ExpectVisiblePath(
@@ -550,7 +548,7 @@ JSChecker OobeJS() {
 }
 
 void ExecuteOobeJS(const std::string& script) {
-  ASSERT_TRUE(content::ExecuteScript(
+  ASSERT_TRUE(content::ExecJs(
       LoginDisplayHost::default_host()->GetOobeWebContents(), script));
 }
 

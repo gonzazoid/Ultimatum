@@ -6,8 +6,7 @@ import {AdapterReceiver, ConnectResult} from 'chrome://bluetooth-internals/adapt
 import {BluetoothInternalsHandlerReceiver} from 'chrome://bluetooth-internals/bluetooth_internals.mojom-webui.js';
 import {DeviceCallbackRouter} from 'chrome://bluetooth-internals/device.mojom-webui.js';
 import {assert} from 'chrome://resources/js/assert.js';
-
-import {TestBrowserProxy} from '../test_browser_proxy.js';
+import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
 /**
  * A BluetoothInternalsHandler for the chrome://bluetooth-internals
@@ -23,10 +22,17 @@ export class TestBluetoothInternalsHandler extends TestBrowserProxy {
     super([
       'getAdapter',
       'getDebugLogsChangeHandler',
+      'checkSystemPermissions',
+      'requestSystemPermissions',
+      'requestLocationServices',
     ]);
 
     this.receiver_ = new BluetoothInternalsHandlerReceiver(this);
     this.receiver_.$.bindHandle(handle);
+    this.needLocationPermission = false;
+    this.needNearbyDevicesPermission = false;
+    this.needLocationServices = false;
+    this.canRequestPermissions = false;
   }
 
   async getAdapter() {
@@ -39,13 +45,46 @@ export class TestBluetoothInternalsHandler extends TestBrowserProxy {
     return {handler: null, initialToggleValue: false};
   }
 
+  async checkSystemPermissions() {
+    this.methodCalled('checkSystemPermissions');
+    return {
+      needLocationPermission: this.needLocationPermission,
+      needNearbyDevicesPermission: this.needNearbyDevicesPermission,
+      needLocationServices: this.needLocationServices,
+      canRequestPermissions: this.canRequestPermissions,
+    };
+  }
+
+  async requestSystemPermissions() {
+    this.methodCalled('requestSystemPermissions');
+    return {};
+  }
+
+  async requestLocationServices() {
+    this.methodCalled('requestLocationServices');
+    return {};
+  }
+
   setAdapterForTesting(adapter) {
     this.adapter = adapter;
+  }
+
+  setSystemPermission(
+      needLocationPermission, needNearbyDevicesPermission, needLocationServices,
+      canRequestPermissions) {
+    this.needLocationPermission = needLocationPermission;
+    this.needNearbyDevicesPermission = needNearbyDevicesPermission;
+    this.needLocationServices = needLocationServices;
+    this.canRequestPermissions = canRequestPermissions;
   }
 
   reset() {
     super.reset();
     this.adapter.reset();
+    this.needLocationPermission = false;
+    this.needNearbyDevicesPermission = false;
+    this.needLocationServices = false;
+    this.canRequestPermissions = false;
   }
 }
 

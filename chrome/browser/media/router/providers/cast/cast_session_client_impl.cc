@@ -28,21 +28,21 @@ void ReportClientMessageParseError(const MediaRoute::Id& route_id,
 // Traverses a JSON value, recursively removing any dict entries whose value is
 // null.
 void RemoveNullFields(base::Value& value) {
-  if (value.is_list()) {
-    for (auto& item : value.GetList()) {
+  if (auto* list = value.GetIfList()) {
+    for (auto& item : *list) {
       RemoveNullFields(item);
     }
-  } else if (value.is_dict()) {
+  } else if (auto* dict = value.GetIfDict()) {
     std::vector<std::string> to_remove;
-    for (auto pair : value.GetDict()) {
-      if (pair.second.is_none()) {
-        to_remove.push_back(pair.first);
+    for (auto [key, val] : *dict) {
+      if (val.is_none()) {
+        to_remove.push_back(key);
       } else {
-        RemoveNullFields(pair.second);
+        RemoveNullFields(val);
       }
     }
     for (const auto& key : to_remove) {
-      value.RemoveKey(key);
+      dict->Remove(key);
     }
   }
 }
@@ -77,8 +77,8 @@ void CastSessionClientImpl::SendMessageToClient(
   connection_remote_->OnMessage(std::move(message));
 }
 
-void CastSessionClientImpl::SendMediaStatusToClient(
-    const base::Value::Dict& media_status,
+void CastSessionClientImpl::SendMediaMessageToClient(
+    const base::Value::Dict& payload,
     absl::optional<int> request_id) {
   // Look up if there is a pending request from this client associated with this
   // message. If so, send the media status message as a response by setting the
@@ -93,9 +93,7 @@ void CastSessionClientImpl::SendMediaStatusToClient(
       pending_media_requests_.erase(it);
     }
   }
-
-  SendMessageToClient(
-      CreateV2Message(client_id(), media_status, sequence_number));
+  SendMessageToClient(CreateV2Message(client_id(), payload, sequence_number));
 }
 
 bool CastSessionClientImpl::MatchesAutoJoinPolicy(
@@ -124,7 +122,7 @@ void CastSessionClientImpl::OnMessage(
 }
 
 void CastSessionClientImpl::DidClose(PresentationConnectionCloseReason reason) {
-  activity_->CloseConnectionOnReceiver(client_id());
+  activity_->CloseConnectionOnReceiver(client_id(), reason);
 }
 
 void CastSessionClientImpl::SendErrorCodeToClient(
@@ -274,7 +272,7 @@ void CastSessionClientImpl::CloseConnection(
   if (connection_remote_)
     connection_remote_->DidClose(close_reason);
   TearDownPresentationConnection();
-  activity_->CloseConnectionOnReceiver(client_id());
+  activity_->CloseConnectionOnReceiver(client_id(), close_reason);
 }
 
 void CastSessionClientImpl::TerminateConnection() {

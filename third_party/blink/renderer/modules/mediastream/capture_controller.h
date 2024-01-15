@@ -7,6 +7,8 @@
 
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_capture_start_focus_behavior.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_captured_wheel_action.h"
+#include "third_party/blink/renderer/core/dom/events/event_target.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_track.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
@@ -16,7 +18,7 @@ namespace blink {
 
 class ExceptionState;
 
-class MODULES_EXPORT CaptureController final : public ScriptWrappable,
+class MODULES_EXPORT CaptureController final : public EventTarget,
                                                public ExecutionContextClient {
   DEFINE_WRAPPERTYPEINFO();
 
@@ -29,12 +31,32 @@ class MODULES_EXPORT CaptureController final : public ScriptWrappable,
   // https://w3c.github.io/mediacapture-screen-share/#dom-capturecontroller-setfocusbehavior
   void setFocusBehavior(V8CaptureStartFocusBehavior, ExceptionState&);
 
+  // IDL interface, APIs related to Captured Surface Control
+  // TODO(crbug.com/1466247): Link to spec.
+  ScriptPromise sendWheel(ScriptState* script_state,
+                          CapturedWheelAction* action);
+  int getMinZoomLevel();
+  int getMaxZoomLevel();
+  ScriptPromise getZoomLevel(ScriptState* script_state);
+  ScriptPromise setZoomLevel(ScriptState* script_state, int zoom_level);
+
   void SetIsBound(bool value) { is_bound_ = value; }
   bool IsBound() const { return is_bound_; }
 
   // When getDisplayMedia() is resolved, `video_track_` and `descriptor_id_` are
   // set.
   void SetVideoTrack(MediaStreamTrack* video_track, std::string descriptor_id);
+
+  // EventTarget
+  const AtomicString& InterfaceName() const override;
+  ExecutionContext* GetExecutionContext() const override;
+
+  // https://screen-share.github.io/mouse-events/#capture-controller-extensions
+  DEFINE_ATTRIBUTE_EVENT_LISTENER(capturedmousechange, kCapturedmousechange)
+
+  // TODO(crbug.com/1466247): Link to spec.
+  DEFINE_ATTRIBUTE_EVENT_LISTENER(capturedzoomlevelchange,
+                                  kCapturedzoomlevelchange)
 
   // Close the window of opportunity to make the focus decision.
   // Further calls to setFocusBehavior() will raise an exception.
@@ -44,6 +66,8 @@ class MODULES_EXPORT CaptureController final : public ScriptWrappable,
   void Trace(Visitor* visitor) const override;
 
  private:
+  std::pair<bool, DOMException*> ValidateCapturedSurfaceControlCall() const;
+
   // Whether this CaptureController has been passed to a getDisplayMedia() call.
   // This helps enforce the requirement that any CaptureController may only
   // be used with a single getDisplayMedia() call.

@@ -33,6 +33,7 @@
 
 #include <memory>
 
+#include "base/types/pass_key.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/mojom/frame/back_forward_cache_controller.mojom-blink.h"
 #include "third_party/blink/public/mojom/worker/dedicated_worker_host.mojom-blink.h"
@@ -71,10 +72,12 @@ class CORE_EXPORT DedicatedWorkerGlobalScope final : public WorkerGlobalScope {
   // Do not call this. Use Create() instead. This is public only for
   // MakeGarbageCollected.
   DedicatedWorkerGlobalScope(
+      base::PassKey<DedicatedWorkerGlobalScope>,
       std::unique_ptr<GlobalScopeCreationParams>,
       DedicatedWorkerThread*,
       base::TimeTicks time_origin,
-      std::unique_ptr<Vector<OriginTrialFeature>> inherited_trial_features,
+      std::unique_ptr<Vector<mojom::blink::OriginTrialFeature>>
+          inherited_trial_features,
       const BeginFrameProviderParams& begin_frame_provider_params,
       bool parent_cross_origin_isolated_capability,
       bool direct_socket_isolated_capability,
@@ -88,16 +91,17 @@ class CORE_EXPORT DedicatedWorkerGlobalScope final : public WorkerGlobalScope {
   // Implements ExecutionContext.
   void SetIsInBackForwardCache(bool) override;
   bool IsDedicatedWorkerGlobalScope() const override { return true; }
+  bool HasStorageAccess() const override;
 
   // Implements EventTarget
-  // (via WorkerOrWorkletGlobalScope -> EventTargetWithInlineData).
+  // (via WorkerOrWorkletGlobalScope -> EventTarget).
   const AtomicString& InterfaceName() const override;
 
   // RequestAnimationFrame
   int requestAnimationFrame(V8FrameRequestCallback* callback, ExceptionState&);
   void cancelAnimationFrame(int id);
   WorkerAnimationFrameProvider* GetAnimationFrameProvider() {
-    return animation_frame_provider_;
+    return animation_frame_provider_.Get();
   }
 
   // Implements WorkerGlobalScope.
@@ -128,15 +132,12 @@ class CORE_EXPORT DedicatedWorkerGlobalScope final : public WorkerGlobalScope {
 
   // Implements scheduler::WorkerScheduler::Delegate.
   void UpdateBackForwardCacheDisablingFeatures(
-      uint64_t features_mask,
-      const BFCacheBlockingFeatureAndLocations&
-          non_sticky_features_and_js_locations,
-      const BFCacheBlockingFeatureAndLocations&
-          sticky_features_and_js_locations) override;
+      BlockingDetails details) override;
   // Implements BackForwardCacheLoaderHelperImpl::Delegate.
   void EvictFromBackForwardCache(
       mojom::blink::RendererEvictionReason reason) override;
-  void DidBufferLoadWhileInBackForwardCache(size_t num_bytes) override;
+  void DidBufferLoadWhileInBackForwardCache(bool update_process_wide_count,
+                                            size_t num_bytes) override;
 
   // Called by the bindings (dedicated_worker_global_scope.idl).
   const String name() const;
@@ -181,6 +182,7 @@ class CORE_EXPORT DedicatedWorkerGlobalScope final : public WorkerGlobalScope {
   struct ParsedCreationParams {
     std::unique_ptr<GlobalScopeCreationParams> creation_params;
     ExecutionContextToken parent_context_token;
+    bool parent_has_storage_access;
   };
 
   static ParsedCreationParams ParseCreationParams(
@@ -195,7 +197,8 @@ class CORE_EXPORT DedicatedWorkerGlobalScope final : public WorkerGlobalScope {
       ParsedCreationParams parsed_creation_params,
       DedicatedWorkerThread* thread,
       base::TimeTicks time_origin,
-      std::unique_ptr<Vector<OriginTrialFeature>> inherited_trial_features,
+      std::unique_ptr<Vector<mojom::blink::OriginTrialFeature>>
+          inherited_trial_features,
       const BeginFrameProviderParams& begin_frame_provider_params,
       bool parent_cross_origin_isolated_capability,
       bool is_isolated_context,
@@ -229,6 +232,10 @@ class CORE_EXPORT DedicatedWorkerGlobalScope final : public WorkerGlobalScope {
   // frozen due to back-forward cache. This number gets reset when the worker
   // gets out of the back-forward cache.
   size_t total_bytes_buffered_while_in_back_forward_cache_ = 0;
+
+  // Whether this worker has storage access (inherited from the parent
+  // ExecutionContext).
+  bool has_storage_access_;
 };
 
 template <>

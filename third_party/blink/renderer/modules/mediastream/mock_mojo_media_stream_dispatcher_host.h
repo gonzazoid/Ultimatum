@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_MEDIASTREAM_MOCK_MOJO_MEDIA_STREAM_DISPATCHER_HOST_H_
 
 #include "build/build_config.h"
+#include "media/capture/mojom/video_capture_types.mojom-blink.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -55,13 +56,24 @@ class MockMojoMediaStreamDispatcherHost
                void(const base::UnguessableToken&,
                     const base::UnguessableToken&,
                     KeepDeviceAliveForTransferCallback));
-#if !BUILDFLAG(IS_ANDROID)
-  MOCK_METHOD2(FocusCapturedSurface, void(const WTF::String&, bool));
-  MOCK_METHOD4(Crop,
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+  MOCK_METHOD3(SendWheel,
                void(const base::UnguessableToken&,
+                    mojom::blink::CapturedWheelActionPtr,
+                    SendWheelCallback));
+  MOCK_METHOD2(GetZoomLevel,
+               void(const base::UnguessableToken&, GetZoomLevelCallback));
+  MOCK_METHOD3(SetZoomLevel,
+               void(const base::UnguessableToken&,
+                    int32_t,
+                    SetZoomLevelCallback));
+  MOCK_METHOD2(FocusCapturedSurface, void(const WTF::String&, bool));
+  MOCK_METHOD5(ApplySubCaptureTarget,
+               void(const base::UnguessableToken&,
+                    media::mojom::blink::SubCaptureTargetType,
                     const base::Token&,
                     uint32_t,
-                    CropCallback));
+                    ApplySubCaptureTargetCallback));
 #endif
   void GetOpenDevice(int32_t request_id,
                      const base::UnguessableToken&,

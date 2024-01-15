@@ -83,13 +83,11 @@ class HistoryClustersMetricsBrowserTest : public InProcessBrowserTest {
             const tab = )" +
                       tab_string + R"(;
             historyApp.shadowRoot.querySelector('cr-tabs').selected = tab;
-            window.domAutomationController.send(true);
+            return true;
           });)";
-    bool result = false;
-    EXPECT_TRUE(content::ExecuteScriptAndExtractBool(
-        browser()->tab_strip_model()->GetActiveWebContents(), execute_string,
-        &result));
-    EXPECT_TRUE(result);
+    EXPECT_EQ(true, content::EvalJs(
+                        browser()->tab_strip_model()->GetActiveWebContents(),
+                        execute_string));
   }
 
   // Creates and follows an anchor link. Since we can't differentiate between
@@ -105,19 +103,17 @@ class HistoryClustersMetricsBrowserTest : public InProcessBrowserTest {
             let link = document.createElement('a');
             link.href = 'https://google.com';
             link.click();
-            window.domAutomationController.send(true);
+            return true;
           });)";
-    bool result = false;
-    EXPECT_TRUE(content::ExecuteScriptAndExtractBool(
-        browser()->tab_strip_model()->GetActiveWebContents(), execute_string,
-        &result));
-    EXPECT_TRUE(result);
+    EXPECT_EQ(true, content::EvalJs(
+                        browser()->tab_strip_model()->GetActiveWebContents(),
+                        execute_string));
   }
 
   // Navigates to the history clusters UI with `PAGE_TRANSITION_RELOAD`. Assumes
   // the current URL is also the history clusters UI.
   void RefreshHistoryClusters() {
-    NavigateParams params(browser(), GURL(kChromeUIHistoryClustersURL),
+    NavigateParams params(browser(), GURL(GetChromeUIHistoryClustersURL()),
                           ui::PAGE_TRANSITION_RELOAD);
     ui_test_utils::NavigateToURL(&params);
   }
@@ -154,13 +150,13 @@ IN_PROC_BROWSER_TEST_F(HistoryClustersMetricsBrowserTest,
                        MAYBE_DirectNavigationNoInteraction) {
   base::HistogramTester histogram_tester;
   ukm::TestAutoSetUkmRecorder ukm_recorder;
-  EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(),
-                                           GURL(kChromeUIHistoryClustersURL)));
+  EXPECT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), GURL(GetChromeUIHistoryClustersURL())));
   EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), GURL("https://foo.com")));
   auto entries =
       ukm_recorder.GetEntriesByName(ukm::builders::HistoryClusters::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  auto* entry = entries[0];
+  auto* entry = entries[0].get();
   ValidateHistoryClustersUKMEntry(
       entry, HistoryClustersInitialState::kDirectNavigation, 0, 0);
   histogram_tester.ExpectUniqueSample(
@@ -183,8 +179,8 @@ IN_PROC_BROWSER_TEST_F(HistoryClustersMetricsBrowserTest,
   base::HistogramTester histogram_tester;
   ukm::TestAutoSetUkmRecorder ukm_recorder;
 
-  EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(),
-                                           GURL(kChromeUIHistoryClustersURL)));
+  EXPECT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), GURL(GetChromeUIHistoryClustersURL())));
   EXPECT_TRUE(content::WaitForLoadStop(
       browser()->tab_strip_model()->GetActiveWebContents()));
   history_clusters::HistoryClustersHandler* page_handler =
@@ -203,7 +199,7 @@ IN_PROC_BROWSER_TEST_F(HistoryClustersMetricsBrowserTest,
   auto entries =
       ukm_recorder.GetEntriesByName(ukm::builders::HistoryClusters::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  auto* entry = entries[0];
+  auto* entry = entries[0].get();
   ValidateHistoryClustersUKMEntry(
       entry, HistoryClustersInitialState::kDirectNavigation, 2, 0);
   histogram_tester.ExpectUniqueSample(
@@ -230,15 +226,15 @@ IN_PROC_BROWSER_TEST_F(HistoryClustersMetricsBrowserTest,
   base::HistogramTester histogram_tester;
   ukm::TestAutoSetUkmRecorder ukm_recorder;
 
-  EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(),
-                                           GURL(kChromeUIHistoryClustersURL)));
+  EXPECT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), GURL(GetChromeUIHistoryClustersURL())));
   ToggleToUi(UiTab::kBasicHistory);
 
   EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), GURL("https://foo.com")));
   auto entries =
       ukm_recorder.GetEntriesByName(ukm::builders::HistoryClusters::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  auto* ukm_entry = entries[0];
+  auto* ukm_entry = entries[0].get();
   ValidateHistoryClustersUKMEntry(
       ukm_entry, HistoryClustersInitialState::kDirectNavigation, 0, 1);
   histogram_tester.ExpectUniqueSample(
@@ -255,8 +251,8 @@ IN_PROC_BROWSER_TEST_F(
   base::HistogramTester histogram_tester;
   ukm::TestAutoSetUkmRecorder ukm_recorder;
 
-  EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(),
-                                           GURL(kChromeUIHistoryClustersURL)));
+  EXPECT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), GURL(GetChromeUIHistoryClustersURL())));
   ToggleToUi(UiTab::kBasicHistory);
   ToggleToUi(UiTab::kClustersUi);
 
@@ -264,7 +260,7 @@ IN_PROC_BROWSER_TEST_F(
   auto entries =
       ukm_recorder.GetEntriesByName(ukm::builders::HistoryClusters::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  auto* ukm_entry = entries[0];
+  auto* ukm_entry = entries[0].get();
   ValidateHistoryClustersUKMEntry(
       ukm_entry, HistoryClustersInitialState::kIndirectNavigation, 0, 1);
   histogram_tester.ExpectUniqueSample(
@@ -295,7 +291,7 @@ IN_PROC_BROWSER_TEST_F(HistoryClustersMetricsBrowserTest,
   auto entries =
       ukm_recorder.GetEntriesByName(ukm::builders::HistoryClusters::kEntryName);
   EXPECT_EQ(1u, entries.size());
-  auto* ukm_entry = entries[0];
+  auto* ukm_entry = entries[0].get();
   ValidateHistoryClustersUKMEntry(
       ukm_entry, HistoryClustersInitialState::kIndirectNavigation, 0, 0);
   histogram_tester.ExpectUniqueSample(

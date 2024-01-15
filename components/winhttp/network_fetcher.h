@@ -5,33 +5,33 @@
 #ifndef COMPONENTS_WINHTTP_NETWORK_FETCHER_H_
 #define COMPONENTS_WINHTTP_NETWORK_FETCHER_H_
 
-#include <windows.h>
-
 #include <stdint.h>
+#include <windows.h>
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/containers/flat_map.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/functional/callback.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
-#include "base/strings/string_piece_forward.h"
 #include "components/winhttp/proxy_configuration.h"
 #include "components/winhttp/scoped_hinternet.h"
 #include "url/gurl.h"
 
 namespace base {
-class SingleThreadTaskRunner;
+class SequencedTaskRunner;
 }
 
 namespace winhttp {
 
 // Implements a network fetcher in terms of WinHTTP. The class is ref-counted
-// as it is accessed from the main thread and the worker threads in WinHTTP.
+// as it is accessed from the main sequence and the worker threads in WinHTTP.
 class NetworkFetcher : public base::RefCountedThreadSafe<NetworkFetcher> {
  public:
   using FetchCompleteCallback = base::OnceCallback<void(int response_code)>;
@@ -57,12 +57,13 @@ class NetworkFetcher : public base::RefCountedThreadSafe<NetworkFetcher> {
 
   // Downloads the content of the |url| to a file identified by |file_path|.
   // The content is written to the file as it is being retrieved from the
-  // network.
-  void DownloadToFile(const GURL& url,
-                      const base::FilePath& file_path,
-                      FetchStartedCallback fetch_started_callback,
-                      FetchProgressCallback fetch_progress_callback,
-                      FetchCompleteCallback fetch_complete_callback);
+  // network. Returns a closure that can be run to cancel the download.
+  base::OnceClosure DownloadToFile(
+      const GURL& url,
+      const base::FilePath& file_path,
+      FetchStartedCallback fetch_started_callback,
+      FetchProgressCallback fetch_progress_callback,
+      FetchCompleteCallback fetch_complete_callback);
 
   HRESULT QueryHeaderString(const std::wstring& name,
                             std::wstring* value) const;
@@ -112,9 +113,10 @@ class NetworkFetcher : public base::RefCountedThreadSafe<NetworkFetcher> {
   void WriteDataToFileComplete(bool is_eof);
 
   SEQUENCE_CHECKER(sequence_checker_);
-  scoped_refptr<base::SingleThreadTaskRunner> main_thread_task_runner_;
+  scoped_refptr<base::SequencedTaskRunner> main_task_runner_;
 
-  const HINTERNET& session_handle_;  // Owned by NetworkFetcherFactory.
+  const raw_ref<const HINTERNET, LeakedDanglingUntriaged>
+      session_handle_;  // Owned by NetworkFetcherFactory.
   scoped_refptr<ProxyConfiguration> proxy_configuration_;
   ScopedHInternet connect_handle_;
   ScopedHInternet request_handle_;
@@ -130,7 +132,8 @@ class NetworkFetcher : public base::RefCountedThreadSafe<NetworkFetcher> {
   int port_ = 0;
   std::string path_for_request_;
 
-  base::WStringPiece verb_;
+  std::wstring_view verb_;
+  std::string request_data_;
   // The value of Content-Type header, e.g. "application/json".
   std::string content_type_;
   WriteDataCallback write_data_callback_;

@@ -9,7 +9,8 @@
 #include <string>
 
 #include "ash/app_menu/app_menu_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/views/controls/menu/menu_model_adapter.h"
@@ -65,6 +66,8 @@ class APP_MENU_EXPORT AppMenuModelAdapter : public views::MenuModelAdapter {
   // views::MenuModelAdapter:
   void ExecuteCommand(int id, int mouse_event_flags) override;
   void OnMenuClosed(views::MenuItemView* menu) override;
+  bool ShouldExecuteCommandWithoutClosingMenu(int id,
+                                              const ui::Event& event) override;
 
   ui::SimpleMenuModel* model() { return model_.get(); }
   views::MenuItemView* root_for_testing() { return root_; }
@@ -94,7 +97,7 @@ class APP_MENU_EXPORT AppMenuModelAdapter : public views::MenuModelAdapter {
   std::unique_ptr<NotificationMenuController> notification_menu_controller_;
 
   // The parent widget of the context menu.
-  views::Widget* widget_owner_;
+  raw_ptr<views::Widget> widget_owner_;
 
   // The event type which was used to show the menu.
   const ui::MenuSourceType source_type_;
@@ -102,18 +105,20 @@ class APP_MENU_EXPORT AppMenuModelAdapter : public views::MenuModelAdapter {
   // The callback which is triggered when the menu is closed.
   base::OnceClosure on_menu_closed_callback_;
 
-  // The root MenuItemView which contains all child MenuItemViews. Owned by
-  // |menu_runner_|.
-  views::MenuItemView* root_ = nullptr;
-
   // Used to show the menu.
   std::unique_ptr<views::MenuRunner> menu_runner_;
+
+  // The root MenuItemView which contains all child MenuItemViews. Owned by
+  // `menu_runner_`.
+  raw_ptr<views::MenuItemView> root_ = nullptr;
 
   // The timestamp taken when the menu is opened. Used in metrics.
   base::TimeTicks menu_open_time_;
 
   // Whether tablet mode is active.
   bool is_tablet_mode_;
+
+  base::WeakPtrFactory<AppMenuModelAdapter> weak_ptr_factory_{this};
 };
 
 }  // namespace ash

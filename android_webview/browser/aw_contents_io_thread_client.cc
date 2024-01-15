@@ -8,6 +8,7 @@
 #include <memory>
 #include <utility>
 
+#include <optional>
 #include "android_webview/browser/aw_settings.h"
 #include "android_webview/browser/network_service/aw_web_resource_intercept_response.h"
 #include "android_webview/browser/network_service/aw_web_resource_request.h"
@@ -17,17 +18,16 @@
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "base/android/jni_weak_ref.h"
-#include "base/bind.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/logging.h"
-#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/synchronization/lock.h"
-#include "base/task/task_runner_util.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "components/embedder_support/android/util/input_stream.h"
 #include "components/embedder_support/android/util/web_resource_response.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
@@ -36,7 +36,6 @@
 #include "content/public/browser/web_contents_observer.h"
 #include "net/base/data_url.h"
 #include "services/network/public/cpp/resource_request.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using base::LazyInstance;
 using base::android::AttachCurrentThread;
@@ -55,7 +54,7 @@ namespace android_webview {
 
 namespace {
 
-typedef map<content::GlobalRenderFrameHostId, JavaObjectWeakGlobalRef>
+typedef map<content::GlobalRenderFrameHostToken, JavaObjectWeakGlobalRef>
     RenderFrameHostToWeakGlobalRefType;
 
 typedef pair<base::flat_set<RenderFrameHost*>, JavaObjectWeakGlobalRef>
@@ -73,12 +72,12 @@ typedef map<int, HostsAndWeakGlobalRefPair> FrameTreeNodeToWeakGlobalRefType;
 class RfhToIoThreadClientMap {
  public:
   static RfhToIoThreadClientMap* GetInstance();
-  void Set(content::GlobalRenderFrameHostId rfh_id,
+  void Set(const content::GlobalRenderFrameHostToken& rfh_token,
            const JavaObjectWeakGlobalRef& client);
-  absl::optional<JavaObjectWeakGlobalRef> Get(
-      content::GlobalRenderFrameHostId rfh_id);
+  std::optional<JavaObjectWeakGlobalRef> Get(
+      const content::GlobalRenderFrameHostToken& rfh_token);
 
-  absl::optional<JavaObjectWeakGlobalRef> Get(int frame_tree_node_id);
+  std::optional<JavaObjectWeakGlobalRef> Get(int frame_tree_node_id);
 
   // Prefer to call these when RenderFrameHost* is available, because they
   // update both maps at the same time.
@@ -88,8 +87,8 @@ class RfhToIoThreadClientMap {
  private:
   base::Lock map_lock_;
   // We maintain two maps simultaneously so that we can always get the correct
-  // JavaObjectWeakGlobalRef, even when only HostIdPair or FrameTreeNodeId is
-  // available.
+  // JavaObjectWeakGlobalRef, even when only GlobalRenderFrameHostToken or
+  // FrameTreeNodeId is available.
   RenderFrameHostToWeakGlobalRefType rfh_to_weak_global_ref_;
   FrameTreeNodeToWeakGlobalRefType frame_tree_node_to_weak_global_ref_;
 };
@@ -99,39 +98,36 @@ LazyInstance<RfhToIoThreadClientMap>::DestructorAtExit g_instance_ =
     LAZY_INSTANCE_INITIALIZER;
 
 // static
-LazyInstance<JavaObjectWeakGlobalRef>::DestructorAtExit g_sw_instance_ =
-    LAZY_INSTANCE_INITIALIZER;
-
-// static
 RfhToIoThreadClientMap* RfhToIoThreadClientMap::GetInstance() {
   return g_instance_.Pointer();
 }
 
-void RfhToIoThreadClientMap::Set(content::GlobalRenderFrameHostId rfh_id,
-                                 const JavaObjectWeakGlobalRef& client) {
+void RfhToIoThreadClientMap::Set(
+    const content::GlobalRenderFrameHostToken& rfh_token,
+    const JavaObjectWeakGlobalRef& client) {
   base::AutoLock lock(map_lock_);
-  rfh_to_weak_global_ref_[rfh_id] = client;
+  rfh_to_weak_global_ref_[rfh_token] = client;
 }
 
-absl::optional<JavaObjectWeakGlobalRef> RfhToIoThreadClientMap::Get(
-    content::GlobalRenderFrameHostId rfh_id) {
+std::optional<JavaObjectWeakGlobalRef> RfhToIoThreadClientMap::Get(
+    const content::GlobalRenderFrameHostToken& rfh_token) {
   base::AutoLock lock(map_lock_);
   RenderFrameHostToWeakGlobalRefType::iterator iterator =
-      rfh_to_weak_global_ref_.find(rfh_id);
+      rfh_to_weak_global_ref_.find(rfh_token);
   if (iterator == rfh_to_weak_global_ref_.end()) {
-    return absl::nullopt;
+    return std::nullopt;
   } else {
     return iterator->second;
   }
 }
 
-absl::optional<JavaObjectWeakGlobalRef> RfhToIoThreadClientMap::Get(
+std::optional<JavaObjectWeakGlobalRef> RfhToIoThreadClientMap::Get(
     int frame_tree_node_id) {
   base::AutoLock lock(map_lock_);
   FrameTreeNodeToWeakGlobalRefType::iterator iterator =
       frame_tree_node_to_weak_global_ref_.find(frame_tree_node_id);
   if (iterator == frame_tree_node_to_weak_global_ref_.end()) {
-    return absl::nullopt;
+    return std::nullopt;
   } else {
     return iterator->second.second;
   }
@@ -140,7 +136,7 @@ absl::optional<JavaObjectWeakGlobalRef> RfhToIoThreadClientMap::Get(
 void RfhToIoThreadClientMap::Set(RenderFrameHost* rfh,
                                  const JavaObjectWeakGlobalRef& client) {
   int frame_tree_node_id = rfh->GetFrameTreeNodeId();
-  content::GlobalRenderFrameHostId rfh_id = rfh->GetGlobalId();
+  auto rfh_token = rfh->GetGlobalFrameToken();
   base::AutoLock lock(map_lock_);
 
   // If this FrameTreeNodeId already has an associated JavaObjectWeakGlobalRef,
@@ -155,12 +151,12 @@ void RfhToIoThreadClientMap::Set(RenderFrameHost* rfh,
 
   // Always add the entry to the HostIdPair map, since entries are 1:1 with
   // RenderFrameHosts.
-  rfh_to_weak_global_ref_[rfh_id] = client;
+  rfh_to_weak_global_ref_[rfh_token] = client;
 }
 
 void RfhToIoThreadClientMap::Erase(RenderFrameHost* rfh) {
   int frame_tree_node_id = rfh->GetFrameTreeNodeId();
-  content::GlobalRenderFrameHostId rfh_id = rfh->GetGlobalId();
+  auto rfh_token = rfh->GetGlobalFrameToken();
   base::AutoLock lock(map_lock_);
   HostsAndWeakGlobalRefPair& current_entry =
       frame_tree_node_to_weak_global_ref_[frame_tree_node_id];
@@ -174,7 +170,7 @@ void RfhToIoThreadClientMap::Erase(RenderFrameHost* rfh) {
 
   // Always safe to remove the entry from the HostIdPair map, since entries are
   // 1:1 with RenderFrameHosts.
-  rfh_to_weak_global_ref_.erase(rfh_id);
+  rfh_to_weak_global_ref_.erase(rfh_token);
 }
 
 // ClientMapEntryUpdater ------------------------------------------------------
@@ -226,7 +222,7 @@ void ClientMapEntryUpdater::WebContentsDestroyed() {
 // a scoped local reference. This will return |nullptr| if either the optional
 // is empty or the weak reference has already expired.
 std::unique_ptr<AwContentsIoThreadClient> WrapOptionalWeakRef(
-    absl::optional<JavaObjectWeakGlobalRef> opt_delegate_weak_ref) {
+    std::optional<JavaObjectWeakGlobalRef> opt_delegate_weak_ref) {
   if (opt_delegate_weak_ref) {
     JNIEnv* env = AttachCurrentThread();
     ScopedJavaLocalRef<jobject> java_delegate = opt_delegate_weak_ref->get(env);
@@ -238,10 +234,10 @@ std::unique_ptr<AwContentsIoThreadClient> WrapOptionalWeakRef(
 }
 
 // static
-std::unique_ptr<AwContentsIoThreadClient> AwContentsIoThreadClient::FromID(
-    content::GlobalRenderFrameHostId render_frame_host_id) {
+std::unique_ptr<AwContentsIoThreadClient> AwContentsIoThreadClient::FromToken(
+    const content::GlobalRenderFrameHostToken& global_frame_token) {
   return WrapOptionalWeakRef(
-      RfhToIoThreadClientMap::GetInstance()->Get(render_frame_host_id));
+      RfhToIoThreadClientMap::GetInstance()->Get(global_frame_token));
 }
 
 std::unique_ptr<AwContentsIoThreadClient> AwContentsIoThreadClient::FromID(
@@ -251,18 +247,16 @@ std::unique_ptr<AwContentsIoThreadClient> AwContentsIoThreadClient::FromID(
 }
 
 // static
-void AwContentsIoThreadClient::SubFrameCreated(int render_process_id,
-                                               int parent_render_frame_id,
-                                               int child_render_frame_id) {
-  content::GlobalRenderFrameHostId parent_rfh_id(render_process_id,
-                                                 parent_render_frame_id);
-  content::GlobalRenderFrameHostId child_rfh_id(render_process_id,
-                                                child_render_frame_id);
+void AwContentsIoThreadClient::SubFrameCreated(
+    int child_id,
+    const blink::LocalFrameToken& parent_frame_token,
+    const blink::LocalFrameToken& child_frame_token) {
   RfhToIoThreadClientMap* map = RfhToIoThreadClientMap::GetInstance();
-  absl::optional<JavaObjectWeakGlobalRef> opt_delegate_weak_ref =
-      map->Get(parent_rfh_id);
+  std::optional<JavaObjectWeakGlobalRef> opt_delegate_weak_ref = map->Get(
+      content::GlobalRenderFrameHostToken(child_id, parent_frame_token));
   if (opt_delegate_weak_ref) {
-    map->Set(child_rfh_id, opt_delegate_weak_ref.value());
+    map->Set(content::GlobalRenderFrameHostToken(child_id, child_frame_token),
+             opt_delegate_weak_ref.value());
   } else {
     // It is possible to not find a mapping for the parent rfh_id if the WebView
     // is in the process of being destroyed, and the mapping has already been
@@ -277,23 +271,6 @@ void AwContentsIoThreadClient::Associate(WebContents* web_contents,
   JNIEnv* env = AttachCurrentThread();
   // The ClientMapEntryUpdater lifespan is tied to the WebContents.
   new ClientMapEntryUpdater(env, web_contents, jclient.obj());
-}
-
-// static
-void AwContentsIoThreadClient::SetServiceWorkerIoThreadClient(
-    const base::android::JavaRef<jobject>& jclient,
-    const base::android::JavaRef<jobject>& browser_context) {
-  // TODO: currently there is only one browser context so it is ok to
-  // store in a global variable, in the future use browser_context to
-  // obtain the correct instance.
-  JavaObjectWeakGlobalRef temp(AttachCurrentThread(), jclient.obj());
-  g_sw_instance_.Get() = temp;
-}
-
-// static
-std::unique_ptr<AwContentsIoThreadClient>
-AwContentsIoThreadClient::GetServiceWorkerIoThreadClient() {
-  return WrapOptionalWeakRef(absl::make_optional(g_sw_instance_.Get()));
 }
 
 AwContentsIoThreadClient::AwContentsIoThreadClient(const JavaRef<jobject>& obj)
@@ -313,42 +290,6 @@ AwContentsIoThreadClient::CacheMode AwContentsIoThreadClient::GetCacheMode()
 }
 
 namespace {
-// Used to specify what kind of url was intercepted by the embedded
-// using shouldIntercepterRequest callback.
-// Note: these values are persisted in UMA logs, so they should never be
-// renumbered or reused.
-// GENERATED_JAVA_ENUM_PACKAGE: org.chromium.android_webview
-enum class InterceptionType {
-  kNoIntercept,
-  kOther,
-  kHTTP,
-  kHTTPS,
-  kFILE,
-  kDATA,
-  // Magic constant used by the histogram macros.
-  kMaxValue = kDATA,
-};
-
-// Record UMA whether the request was intercepted and if so what kind of scheme.
-void RecordInterceptedScheme(bool response_is_null, const std::string& url) {
-  InterceptionType type = InterceptionType::kNoIntercept;
-  if (!response_is_null) {
-    GURL gurl(url);
-    if (gurl.SchemeIs(url::kHttpScheme)) {
-      type = InterceptionType::kHTTP;
-    } else if (gurl.SchemeIs(url::kHttpsScheme)) {
-      type = InterceptionType::kHTTPS;
-    } else if (gurl.SchemeIs(url::kFileScheme)) {
-      type = InterceptionType::kFILE;
-    } else if (gurl.SchemeIs(url::kDataScheme)) {
-      type = InterceptionType::kDATA;
-    } else {
-      type = InterceptionType::kOther;
-    }
-  }
-  UMA_HISTOGRAM_ENUMERATION(
-      "Android.WebView.ShouldInterceptRequest.InterceptionType2", type);
-}
 
 std::unique_ptr<AwWebResourceInterceptResponse> NoInterceptRequest() {
   return nullptr;
@@ -385,7 +326,9 @@ std::unique_ptr<AwWebResourceInterceptResponse> RunShouldInterceptRequest(
       std::make_unique<AwWebResourceInterceptResponse>(java_ref);
 
   bool has_response = web_resource_intercept_response->HasResponse(env);
-  RecordInterceptedScheme(!has_response, request.url);
+  UMA_HISTOGRAM_BOOLEAN(
+      "Android.WebView.ShouldInterceptRequest.IsRequestIntercepted",
+      has_response);
   return web_resource_intercept_response;
 }
 
@@ -408,9 +351,8 @@ void AwContentsIoThreadClient::ShouldInterceptRequestAsync(
         &RunShouldInterceptRequest, std::move(request),
         JavaObjectWeakGlobalRef(env, bg_thread_client_object_.obj()));
   }
-  base::PostTaskAndReplyWithResult(sequenced_task_runner_.get(), FROM_HERE,
-                                   std::move(get_response),
-                                   std::move(callback));
+  sequenced_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, std::move(get_response), std::move(callback));
 }
 
 bool AwContentsIoThreadClient::ShouldBlockContentUrls() const {
@@ -428,6 +370,14 @@ bool AwContentsIoThreadClient::ShouldBlockFileUrls() const {
   return Java_AwContentsIoThreadClient_shouldBlockFileUrls(env, java_object_);
 }
 
+bool AwContentsIoThreadClient::ShouldBlockSpecialFileUrls() const {
+  DCHECK_CURRENTLY_ON(BrowserThread::IO);
+
+  JNIEnv* env = AttachCurrentThread();
+  return Java_AwContentsIoThreadClient_shouldBlockSpecialFileUrls(env,
+                                                                  java_object_);
+}
+
 bool AwContentsIoThreadClient::ShouldAcceptThirdPartyCookies() const {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
 
@@ -437,7 +387,10 @@ bool AwContentsIoThreadClient::ShouldAcceptThirdPartyCookies() const {
 }
 
 bool AwContentsIoThreadClient::GetSafeBrowsingEnabled() const {
-  DCHECK_CURRENTLY_ON(BrowserThread::IO);
+  DCHECK_CURRENTLY_ON(
+      base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)
+          ? content::BrowserThread::UI
+          : content::BrowserThread::IO);
 
   JNIEnv* env = AttachCurrentThread();
   return Java_AwContentsIoThreadClient_getSafeBrowsingEnabled(env,

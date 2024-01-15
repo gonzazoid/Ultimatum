@@ -6,8 +6,8 @@
 
 #include <IOKit/IOKitLib.h>
 
-#include "base/mac/foundation_util.h"
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/foundation_util.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/mac/scoped_ioobject.h"
 #include "base/strings/sys_string_conversions.h"
 
@@ -18,12 +18,13 @@ MachineIdStatus GetDeterministicMachineSpecificId(std::string* machine_id) {
   if (!platform_expert.get())
     return MachineIdStatus::FAILURE;
 
-  base::ScopedCFTypeRef<CFTypeRef> uuid(IORegistryEntryCreateCFProperty(
-      platform_expert, CFSTR(kIOPlatformUUIDKey), kCFAllocatorDefault, 0));
+  base::apple::ScopedCFTypeRef<CFTypeRef> uuid(IORegistryEntryCreateCFProperty(
+      platform_expert.get(), CFSTR(kIOPlatformUUIDKey), kCFAllocatorDefault,
+      0));
   if (!uuid.get())
     return MachineIdStatus::FAILURE;
 
-  CFStringRef uuid_string = base::mac::CFCast<CFStringRef>(uuid);
+  CFStringRef uuid_string = base::apple::CFCast<CFStringRef>(uuid.get());
   if (!uuid_string)
     return MachineIdStatus::FAILURE;
 

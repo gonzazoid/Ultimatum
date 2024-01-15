@@ -7,7 +7,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "components/sync/base/model_type.h"
-#include "components/sync/driver/backend_migrator.h"
+#include "components/sync/service/backend_migrator.h"
 
 class SyncServiceImplHarness;
 class MigrationWaiter;
@@ -49,7 +49,7 @@ class MigrationWatcher : public syncer::MigrationObserver {
   syncer::ModelTypeSet migrated_types_;
 
   // The MigrationWatier that is waiting for this migration to complete.
-  raw_ptr<MigrationWaiter> migration_waiter_;
+  raw_ptr<MigrationWaiter> migration_waiter_ = nullptr;
 };
 
 #endif  // CHROME_BROWSER_SYNC_TEST_INTEGRATION_MIGRATION_WATCHER_H_

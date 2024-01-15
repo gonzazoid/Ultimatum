@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gl/gl_surface_egl.h"
@@ -44,18 +44,20 @@ class GLSurfaceWayland : public gl::NativeViewGLSurfaceEGL {
               bool has_alpha) override;
   EGLConfig GetConfig() override;
   gfx::SwapResult SwapBuffers(PresentationCallback callback,
-                              gl::FrameData data) override;
+                              gfx::FrameData data) override;
   gfx::SwapResult PostSubBuffer(int x,
                                 int y,
                                 int width,
                                 int height,
                                 PresentationCallback callback,
-                                gl::FrameData data) override;
+                                gfx::FrameData data) override;
 
  private:
   ~GLSurfaceWayland() override;
 
-  void UpdateVisualSize();
+  // Delivers sequence number information to WaylandWindow. See the comments
+  // on WaylandWindow::applied_state() for more information.
+  void OnSequencePoint(int64_t seq);
 
   WaylandEglWindowPtr egl_window_;
   const raw_ptr<WaylandWindow> window_;

@@ -7,10 +7,15 @@
 #include "base/feature_list.h"
 #include "build/build_config.h"
 
-namespace views {
-namespace features {
+namespace views::features {
 
 // Please keep alphabetized.
+
+// Implements desktop widgets reparenting. Enabling this feature allows them
+// to function correctly as tab modals.
+BASE_FEATURE(kDesktopWidgetReparentAura,
+             "kDesktopWidgetReparentAura",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // Use a high-contrast style for ink drops when in platform high-contrast mode,
 // including full opacity and a high-contrast color
@@ -25,10 +30,16 @@ BASE_FEATURE(kEnableViewPaintOptimization,
              "EnableViewPaintOptimization",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
+// Used to enable keyboard-accessible tooltips in Views UI, as opposed
+// to kKeyboardAccessibleTooltip in //ui/base/ui_base_features.cc.
+BASE_FEATURE(kKeyboardAccessibleTooltipInViews,
+             "KeyboardAccessibleTooltipInViews",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// Enables trackpad gestures to dismiss notifications. Also, updates gestures to
 // When enabled, widgets will be shown based on their z-order level
 BASE_FEATURE(kWidgetLayering,
              "WidgetLayering",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-}  // namespace features
-}  // namespace views
+}  // namespace views::features

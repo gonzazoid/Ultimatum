@@ -7,12 +7,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include <optional>
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/synchronization/condition_variable.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/simple_thread.h"
 #include "base/threading/thread_checker_impl.h"
 #include "base/threading/thread_restrictions.h"
@@ -23,7 +24,6 @@
 #include "cc/test/test_paint_worklet_input.h"
 #include "cc/tiles/image_decode_cache.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace cc {
 namespace {
@@ -33,7 +33,8 @@ class TestableCache : public StubDecodeCache {
  public:
   ~TestableCache() override { EXPECT_EQ(number_of_refs_, 0); }
 
-  TaskResult GetTaskForImageAndRef(const DrawImage& image,
+  TaskResult GetTaskForImageAndRef(uint32_t client_id,
+                                   const DrawImage& image,
                                    const TracingInfo& tracing_info) override {
     // Return false for large images to mimic "won't fit in memory"
     // behavior.
@@ -52,8 +53,9 @@ class TestableCache : public StubDecodeCache {
                       /*can_do_hardware_accelerated_decode=*/false);
   }
   TaskResult GetOutOfRasterDecodeTaskForImageAndRef(
+      uint32_t client_id,
       const DrawImage& image) override {
-    return GetTaskForImageAndRef(image, TracingInfo());
+    return GetTaskForImageAndRef(client_id, image, TracingInfo());
   }
 
   void UnrefImage(const DrawImage& image) override {
@@ -188,7 +190,8 @@ DrawImage CreateBitmapDrawImage(gfx::Size size) {
 
 class ImageControllerTest : public testing::Test {
  public:
-  ImageControllerTest() : task_runner_(base::SequencedTaskRunnerHandle::Get()) {
+  ImageControllerTest()
+      : task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {
     image_ = CreateDiscardableDrawImage(gfx::Size(1, 1));
   }
   ~ImageControllerTest() override = default;
@@ -197,7 +200,6 @@ class ImageControllerTest : public testing::Test {
     controller_ = std::make_unique<ImageController>(
         task_runner_,
         base::ThreadPool::CreateSequencedTaskRunner(base::TaskTraits()));
-    cache_ = TestableCache();
     controller_->SetImageDecodeCache(&cache_);
   }
 
@@ -405,9 +407,7 @@ TEST_F(ImageControllerTest, QueueImageDecodeMultipleImagesSameTask) {
   EXPECT_TRUE(task->HasCompleted());
 }
 
-// TODO(crbug.com/1336053): Re-enable this test
-TEST_F(ImageControllerTest,
-       DISABLED_QueueImageDecodeChangeControllerWithTaskQueued) {
+TEST_F(ImageControllerTest, QueueImageDecodeChangeControllerWithTaskQueued) {
   scoped_refptr<BlockingTask> task_one(new BlockingTask);
   cache()->SetTaskToUse(task_one);
 

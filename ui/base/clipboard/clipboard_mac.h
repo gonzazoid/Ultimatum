@@ -8,9 +8,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "base/apple/foundation_util.h"
 #include "base/component_export.h"
 #include "base/gtest_prod_util.h"
-#include "base/mac/foundation_util.h"
 #include "ui/base/clipboard/clipboard.h"
 
 @class NSPasteboard;
@@ -27,18 +27,16 @@ class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) ClipboardMac : public Clipboard {
   ClipboardMac& operator=(const ClipboardMac&) = delete;
 
  private:
-  FRIEND_TEST_ALL_PREFIXES(ClipboardMacTest, ReadImageRetina);
-  FRIEND_TEST_ALL_PREFIXES(ClipboardMacTest, ReadImageNonRetina);
-  FRIEND_TEST_ALL_PREFIXES(ClipboardMacTest, EmptyImage);
-  FRIEND_TEST_ALL_PREFIXES(ClipboardMacTest, PDFImage);
   friend class Clipboard;
+  friend class ClipboardMacTest;
 
   ClipboardMac();
   ~ClipboardMac() override;
 
   // Clipboard overrides:
   void OnPreShutdown() override;
-  DataTransferEndpoint* GetSource(ClipboardBuffer buffer) const override;
+  absl::optional<DataTransferEndpoint> GetSource(
+      ClipboardBuffer buffer) const override;
   const ClipboardSequenceNumberToken& GetSequenceNumber(
       ClipboardBuffer buffer) const override;
   std::vector<std::u16string> GetStandardFormats(
@@ -92,26 +90,33 @@ class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) ClipboardMac : public Clipboard {
       const ObjectMap& objects,
       std::vector<Clipboard::PlatformRepresentation> platform_representations,
       std::unique_ptr<DataTransferEndpoint> data_src) override;
-  void WriteText(const char* text_data, size_t text_len) override;
-  void WriteHTML(const char* markup_data,
-                 size_t markup_len,
-                 const char* url_data,
-                 size_t url_len) override;
-  void WriteSvg(const char* markup_data, size_t markup_len) override;
-  void WriteRTF(const char* rtf_data, size_t data_len) override;
+  void WriteText(base::StringPiece text) override;
+  void WriteHTML(base::StringPiece markup,
+                 absl::optional<base::StringPiece> source_url,
+                 ClipboardContentType content_type) override;
+  void WriteSvg(base::StringPiece markup) override;
+  void WriteRTF(base::StringPiece rtf) override;
   void WriteFilenames(std::vector<ui::FileInfo> filenames) override;
-  void WriteBookmark(const char* title_data,
-                     size_t title_len,
-                     const char* url_data,
-                     size_t url_len) override;
+  void WriteBookmark(base::StringPiece title, base::StringPiece url) override;
   void WriteWebSmartPaste() override;
   void WriteBitmap(const SkBitmap& bitmap) override;
   void WriteData(const ClipboardFormatType& format,
-                 const char* data_data,
-                 size_t data_len) override;
+                 base::span<const uint8_t> data) override;
 
-  std::vector<uint8_t> ReadPngInternal(ClipboardBuffer buffer,
-                                       NSPasteboard* pasteboard) const;
+  void WriteBitmapInternal(const SkBitmap& bitmap, NSPasteboard* pasteboard);
+  void ReadPngInternal(ClipboardBuffer buffer,
+                       NSPasteboard* pasteboard,
+                       ReadPngCallback callback) const;
+  absl::optional<DataTransferEndpoint> GetSourceInternal(
+      ClipboardBuffer buffer,
+      NSPasteboard* pasteboard) const;
+  void ClearInternal(ClipboardBuffer buffer, NSPasteboard* pasteboard);
+  void WritePortableAndPlatformRepresentationsInternal(
+      ClipboardBuffer buffer,
+      const ObjectMap& objects,
+      std::vector<Clipboard::PlatformRepresentation> platform_representations,
+      std::unique_ptr<DataTransferEndpoint> data_src,
+      NSPasteboard* pasteboard);
 
   // Mapping of OS-provided sequence number to a unique token.
   mutable struct {

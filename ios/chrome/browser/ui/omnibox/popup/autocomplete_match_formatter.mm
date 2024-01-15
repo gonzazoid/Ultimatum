@@ -12,29 +12,26 @@
 #import "components/omnibox/browser/autocomplete_match.h"
 #import "components/omnibox/browser/autocomplete_provider.h"
 #import "components/omnibox/browser/suggestion_answer.h"
+#import "ios/chrome/browser/net/model/crurl.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/browser/ui/omnibox/omnibox_ui_features.h"
 #import "ios/chrome/browser/ui/omnibox/omnibox_util.h"
 #import "ios/chrome/browser/ui/omnibox/popup/omnibox_icon_formatter.h"
 #import "ios/chrome/browser/ui/omnibox/popup/popup_swift.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
-// The color of the main text of a suggest cell.
+/// The color of the main text of a suggest cell.
 UIColor* SuggestionTextColor() {
   return [UIColor colorNamed:kTextPrimaryColor];
 }
-// The color of the detail text of a suggest cell.
+/// The color of the detail text of a suggest cell.
 UIColor* SuggestionDetailTextColor() {
   return [UIColor colorNamed:kTextSecondaryColor];
 }
-// The color of the text in the portion of a search suggestion that matches the
-// omnibox input text.
+/// The color of the text in the portion of a search suggestion that matches the
+/// omnibox input text.
 UIColor* DimColor() {
   return [UIColor colorWithWhite:(161 / 255.0) alpha:1.0];
 }
@@ -121,8 +118,7 @@ UIColor* DimColorIncognito() {
     // suggestions. For non-search suggestions (URLs), a highlight color is used
     // instead.
     UIColor* suggestionDetailTextColor = nil;
-    if (_match.type != AutocompleteMatchType::SEARCH_SUGGEST_ENTITY ||
-        IsOmniboxActionsVisualTreatment2()) {
+    if (_match.type != AutocompleteMatchType::SEARCH_SUGGEST_ENTITY) {
       suggestionDetailTextColor = SuggestionDetailTextColor();
     } else {
       suggestionDetailTextColor = SuggestionTextColor();
@@ -198,11 +194,28 @@ UIColor* DimColorIncognito() {
     UIColor* suggestionTextColor = SuggestionTextColor();
     UIColor* dimColor = self.incognito ? DimColorIncognito() : DimColor();
 
-    return [self attributedStringWithString:text
-                            classifications:textClassifications
-                                  smallFont:NO
-                                      color:suggestionTextColor
-                                   dimColor:dimColor];
+    NSAttributedString* attributedText =
+        [self attributedStringWithString:text
+                         classifications:textClassifications
+                               smallFont:NO
+                                   color:suggestionTextColor
+                                dimColor:dimColor];
+
+    if (self.isTailSuggestion) {
+      NSMutableAttributedString* mutableString =
+          [[NSMutableAttributedString alloc] init];
+      NSAttributedString* tailSuggestPrefix =
+          // TODO(crbug.com/1432987): Do we want to localize the ellipsis ?
+          [self attributedStringWithString:@"... "
+                           classifications:NULL
+                                 smallFont:NO
+                                     color:suggestionTextColor
+                                  dimColor:dimColor];
+      [mutableString appendAttributedString:tailSuggestPrefix];
+      [mutableString appendAttributedString:attributedText];
+      attributedText = mutableString;
+    }
+    return attributedText;
   }
 }
 
@@ -211,10 +224,10 @@ UIColor* DimColorIncognito() {
       initWithString:base::SysUTF16ToNSString(_match.fill_into_edit)];
 }
 
-// The primary purpose of this list is to omit the "what you typed" types, since
-// those are simply the input in the omnibox and copying the text back to the
-// omnibox would be a noop. However, this list also omits other types that are
-// deprecated or not launched on iOS.
+/// The primary purpose of this list is to omit the "what you typed" types,
+/// since those are simply the input in the omnibox and copying the text back to
+/// the omnibox would be a noop. However, this list also omits other types that
+/// are deprecated or not launched on iOS.
 - (BOOL)isAppendable {
   return _match.type == AutocompleteMatchType::BOOKMARK_TITLE ||
          _match.type == AutocompleteMatchType::CALCULATOR ||
@@ -238,23 +251,25 @@ UIColor* DimColorIncognito() {
   return _match.has_tab_match.value_or(false);
 }
 
-- (BOOL)isClipboardMatch {
-  return _match.type == AutocompleteMatchType::CLIPBOARD_URL ||
-         _match.type == AutocompleteMatchType::CLIPBOARD_TEXT ||
-         _match.type == AutocompleteMatchType::CLIPBOARD_IMAGE;
-}
-
 - (id<OmniboxPedal>)pedal {
   return self.pedalData;
 }
 
 - (UIImage*)matchTypeIcon {
-  return GetOmniboxSuggestionIconForAutocompleteMatchType(
-      _match.type, /* is_starred */ false);
+  return GetOmniboxSuggestionIconForAutocompleteMatchType(_match.type);
+}
+
+- (NSString*)matchTypeIconAccessibilityIdentifier {
+  return base::SysUTF8ToNSString(AutocompleteMatchType::ToString(_match.type));
 }
 
 - (BOOL)isMatchTypeSearch {
   return AutocompleteMatch::IsSearchType(_match.type);
+}
+
+- (BOOL)isWrapping {
+  return self.isMatchTypeSearch && !self.hasAnswer &&
+         _match.type != AutocompleteMatchType::SEARCH_SUGGEST_ENTITY;
 }
 
 - (CrURL*)destinationUrl {
@@ -280,7 +295,7 @@ UIColor* DimColorIncognito() {
 
 #pragma mark helpers
 
-// Create a string to display for an entire answer line.
+/// Create a string to display for an entire answer line.
 - (NSAttributedString*)
     attributedStringWithAnswerLine:(const SuggestionAnswer::ImageLine&)line
             useDeemphasizedStyling:(BOOL)useDeemphasizedStyling {
@@ -298,10 +313,10 @@ UIColor* DimColorIncognito() {
                    useDeemphasizedStyling:useDeemphasizedStyling];
 }
 
-// Adds the `additional_text` and `status_text` from `line` to the given
-// attributed string. This is necessary because answers get their main text
-// from the match contents instead of the ImageLine's text_fields. This is
-// because those fields contain server-provided formatting, which aren't used.
+/// Adds the `additional_text` and `status_text` from `line` to the given
+/// attributed string. This is necessary because answers get their main text
+/// from the match contents instead of the ImageLine's text_fields. This is
+/// because those fields contain server-provided formatting, which aren't used.
 - (NSAttributedString*)
     addExtraTextFromAnswerLine:(const SuggestionAnswer::ImageLine&)line
             toAttributedString:(NSAttributedString*)attributedString
@@ -328,8 +343,8 @@ UIColor* DimColorIncognito() {
   return result;
 }
 
-// Create a string to display for a textual part ("textfield") of a suggestion
-// answer.
+/// Create a string to display for a textual part ("textfield") of a suggestion
+/// answer.
 - (NSAttributedString*)
     attributedStringForTextfield:(const SuggestionAnswer::TextField*)field
           useDeemphasizedStyling:(BOOL)useDeemphasizedStyling {
@@ -346,10 +361,10 @@ UIColor* DimColorIncognito() {
                                          attributes:attributes];
 }
 
-// Return correct formatting attributes for the given style.
-// `useDeemphasizedStyling` is necessary because some styles (e.g. SUPERIOR)
-// should take their color from the surrounding line; they don't have a fixed
-// color.
+/// Return correct formatting attributes for the given style.
+/// `useDeemphasizedStyling` is necessary because some styles (e.g. SUPERIOR)
+/// should take their color from the surrounding line; they don't have a fixed
+/// color.
 - (NSDictionary<NSAttributedStringKey, id>*)
     formattingAttributesForSuggestionStyle:(SuggestionAnswer::TextStyle)style
                     useDeemphasizedStyling:(BOOL)useDeemphasizedStyling {
@@ -431,7 +446,7 @@ UIColor* DimColorIncognito() {
   }
 }
 
-// Create a formatted string given text and classifications.
+/// Create a formatted string given text and classifications.
 - (NSMutableAttributedString*)
     attributedStringWithString:(NSString*)text
                classifications:(const ACMatchClassifications*)classifications

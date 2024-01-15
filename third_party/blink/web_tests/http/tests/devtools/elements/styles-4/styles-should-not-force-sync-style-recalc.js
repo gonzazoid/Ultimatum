@@ -2,9 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {PerformanceTestRunner} from 'performance_test_runner';
+
+import * as UI from 'devtools/ui/legacy/legacy.js';
+import * as Timeline from 'devtools/panels/timeline/timeline.js';
+import * as TimelineModel from 'devtools/models/timeline_model/timeline_model.js';
+
 (async function() {
   TestRunner.addResult(`Tests that inspector doesn't force sync layout on operations with CSSOM.Bug 315885.\n`);
-  await TestRunner.loadLegacyModule('timeline'); await TestRunner.loadTestModule('performance_test_runner');
   await TestRunner.showPanel('timeline');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
@@ -30,7 +36,7 @@
       }
   `);
 
-  UI.context.setFlavor(Timeline.TimelinePanel, UI.panels.timeline);
+  UI.Context.Context.instance().setFlavor(Timeline.TimelinePanel.TimelinePanel, Timeline.TimelinePanel.TimelinePanel.instance());
   await PerformanceTestRunner.evaluateWithTimeline('performActions()');
 
   PerformanceTestRunner.mainTrackEvents().forEach(event => {

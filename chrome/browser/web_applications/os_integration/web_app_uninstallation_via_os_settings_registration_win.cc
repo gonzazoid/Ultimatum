@@ -8,10 +8,9 @@
 #include "base/files/file_path.h"
 #include "base/hash/md5.h"
 #include "base/path_service.h"
-#include "base/strings/stringprintf.h"
+#include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
-#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/web_applications/os_integration/web_app_shortcut_win.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
 #include "chrome/browser/win/uninstallation_via_os_settings.h"
@@ -26,36 +25,36 @@ namespace web_app {
 
 namespace {
 
+// Returns an identifier for the web app installed for the
+// profile at `profile_path`. The identifier is guaranteed to be unique among
+// all web apps installed in all profiles across all browser installations
+// for the user.
+std::wstring GetUninstallStringKey(const base::FilePath& profile_path,
+                                   const webapps::AppId& app_id) {
+  // We don't normalize (lower/upper) cases here mainly because people
+  // don't change shortcut file case. If anyone changes the file name
+  // or case, then it is the user's responsibility to clean up the apps.
+  // (we assume he/she is a power user if they change the  system created
+  // file.).
+  std::wstring key =
+      base::StrCat({profile_path.value(), base::ASCIIToWide(app_id)});
+  base::MD5Digest digest;
+  base::MD5Sum(key.c_str(), key.size() * sizeof(wchar_t), &digest);
+  return base::ASCIIToWide(base::MD5DigestToBase16(digest));
+}
+
 // UninstallationViaOsSettingsHelper is a axilliary class for calculate the
 // uninstallation registry key by |profile_path| and |app_id|.
 class UninstallationViaOsSettingsHelper {
  public:
   UninstallationViaOsSettingsHelper(const base::FilePath& profile_path,
-                                    const AppId& app_id)
+                                    const webapps::AppId& app_id)
       : profile_path_(profile_path), app_id_(app_id) {}
 
   UninstallationViaOsSettingsHelper(
       const UninstallationViaOsSettingsHelper& other) = delete;
   UninstallationViaOsSettingsHelper& operator=(
       const UninstallationViaOsSettingsHelper& other) = delete;
-
-  // Returns an identifier for the web app installed for the
-  // profile at |profile_path|. The identifier is guaranteed to be unique among
-  // all web apps installed in all profiles across all browser installations
-  // for the user.
-  std::wstring GetUninstallStringKey() const {
-    // We don't normalize (lower/upper) cases here mainly because people
-    // don't change shortcut file case. If anyone changes the file name
-    // or case, then it is the user's responsibility for cleanup the apps.
-    // (we assume he/she is a power user when could change
-    // the system created file.).
-    std::wstring key =
-        base::StringPrintf(L"%ls_%ls", profile_path_.value().c_str(),
-                           base::ASCIIToWide(app_id_).c_str());
-    base::MD5Digest digest;
-    base::MD5Sum(key.c_str(), key.size() * sizeof(wchar_t), &digest);
-    return base::ASCIIToWide(base::MD5DigestToBase16(digest));
-  }
 
   base::CommandLine GetCommandLine() const {
     base::FilePath full_exe_name;
@@ -100,46 +99,51 @@ class UninstallationViaOsSettingsHelper {
 
  private:
   const base::FilePath profile_path_;
-  const AppId app_id_;
+  const webapps::AppId app_id_;
 };
 
 }  // namespace
+
+std::wstring GetUninstallStringKeyForTesting(const base::FilePath& profile_path,
+                                             const webapps::AppId& app_id) {
+  return GetUninstallStringKey(profile_path, app_id);
+}
 
 bool ShouldRegisterUninstallationViaOsSettingsWithOs() {
   return true;
 }
 
-void RegisterUninstallationViaOsSettingsWithOs(const AppId& app_id,
-                                               const std::string& app_name,
-                                               Profile* profile) {
+bool RegisterUninstallationViaOsSettingsWithOs(
+    const webapps::AppId& app_id,
+    const std::string& app_name,
+    const base::FilePath& profile_path) {
   DCHECK(ShouldRegisterUninstallationViaOsSettingsWithOs());
 
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  UninstallationViaOsSettingsHelper uninstall_os_settings_helper(
-      profile->GetPath(), app_id);
-  std::wstring hash_key = uninstall_os_settings_helper.GetUninstallStringKey();
+  UninstallationViaOsSettingsHelper uninstall_os_settings_helper(profile_path,
+                                                                 app_id);
+  std::wstring hash_key = GetUninstallStringKey(profile_path, app_id);
 
   auto uninstall_commandline = uninstall_os_settings_helper.GetCommandLine();
   base::FilePath icon_path =
       uninstall_os_settings_helper.GetWebAppIconPath(app_name);
   std::wstring product_name = install_static::GetChromeInstallSubDirectory();
 
-  ::RegisterUninstallationViaOsSettings(hash_key, base::UTF8ToWide(app_name),
-                                        product_name, uninstall_commandline,
-                                        icon_path);
+  return ::RegisterUninstallationViaOsSettings(
+      hash_key, base::UTF8ToWide(app_name), product_name, uninstall_commandline,
+      icon_path);
 }
 
-void UnegisterUninstallationViaOsSettingsWithOs(const AppId& app_id,
-                                                Profile* profile) {
+bool UnregisterUninstallationViaOsSettingsWithOs(
+    const webapps::AppId& app_id,
+    const base::FilePath& profile_path) {
   DCHECK(ShouldRegisterUninstallationViaOsSettingsWithOs());
 
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  UninstallationViaOsSettingsHelper uninstall_os_settings_helper(
-      profile->GetPath(), app_id);
-  std::wstring hash_key = uninstall_os_settings_helper.GetUninstallStringKey();
-  ::UnregisterUninstallationViaOsSettings(hash_key);
+  return ::UnregisterUninstallationViaOsSettings(
+      GetUninstallStringKey(profile_path, app_id));
 }
 
 }  // namespace web_app

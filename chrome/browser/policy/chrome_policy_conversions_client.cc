@@ -22,6 +22,7 @@
 #include "components/policy/core/browser/policy_conversions.h"
 #include "components/policy/core/browser/policy_conversions_client.h"
 #include "components/policy/core/browser/policy_error_map.h"
+#include "components/policy/core/common/policy_logger.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/core/common/policy_namespace.h"
 #include "components/policy/core/common/policy_service.h"
@@ -36,7 +37,6 @@
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/policy/active_directory/active_directory_policy_manager.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/ash/policy/core/device_cloud_policy_manager_ash.h"
 #include "chrome/browser/ash/policy/core/device_cloud_policy_store_ash.h"
@@ -134,21 +134,22 @@ Value::List ChromePolicyConversionsClient::GetExtensionPolicies(
   const extensions::ExtensionRegistry* registry =
       extensions::ExtensionRegistry::Get(extension_profile);
   if (!registry) {
-    LOG(ERROR) << "Cannot dump extension policies, no extension registry";
+    LOG_POLICY(ERROR, POLICY_PROCESSING)
+        << "Cannot dump extension policies, no extension registry";
     return policies;
   }
   auto* schema_registry_service =
       extension_profile->GetOriginalProfile()->GetPolicySchemaRegistryService();
   if (!schema_registry_service || !schema_registry_service->registry()) {
-    LOG(ERROR) << "Cannot dump extension policies, no schema registry service";
+    LOG_POLICY(ERROR, POLICY_PROCESSING)
+        << "Cannot dump extension policies, no schema registry service";
     return policies;
   }
   const scoped_refptr<SchemaMap> schema_map =
       schema_registry_service->registry()->schema_map();
-  std::unique_ptr<extensions::ExtensionSet> extension_set =
+  const extensions::ExtensionSet extension_set =
       registry->GenerateInstalledExtensionsSet();
-  for (const scoped_refptr<const extensions::Extension>& extension :
-       *extension_set) {
+  for (const auto& extension : extension_set) {
     // Skip this extension if it's not an enterprise extension.
     if (!extension->manifest()->FindPath(
             extensions::manifest_keys::kStorageManagedSchema)) {
@@ -272,14 +273,6 @@ Value::Dict ChromePolicyConversionsClient::GetIdentityFields() {
   if (connector->IsDeviceEnterpriseManaged()) {
     identity_fields.Set("enrollment_domain",
                         connector->GetEnterpriseEnrollmentDomain());
-
-    if (connector->IsActiveDirectoryManaged()) {
-      Value::Dict active_directory_info = GetIdentityFieldsFromPolicy(
-          connector->GetDeviceActiveDirectoryPolicyManager()
-              ->store()
-              ->policy());
-      identity_fields.Merge(std::move(active_directory_info));
-    }
 
     if (connector->IsCloudManaged()) {
       Value::Dict cloud_info = GetIdentityFieldsFromPolicy(

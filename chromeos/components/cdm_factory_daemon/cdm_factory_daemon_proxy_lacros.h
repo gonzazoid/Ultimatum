@@ -7,8 +7,8 @@
 
 #include "chromeos/components/cdm_factory_daemon/cdm_factory_daemon_proxy.h"
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 
 namespace chromeos {
@@ -42,6 +42,13 @@ class COMPONENT_EXPORT(CDM_FACTORY_DAEMON) CdmFactoryDaemonProxyLacros
   void GetAndroidHwKeyData(const std::vector<uint8_t>& key_id,
                            const std::vector<uint8_t>& hw_identifier,
                            GetAndroidHwKeyDataCallback callback) override;
+  void AllocateSecureBuffer(uint32_t size,
+                            AllocateSecureBufferCallback callback) override;
+  void ParseEncryptedSliceHeader(
+      uint64_t secure_handle,
+      uint32_t offset,
+      const std::vector<uint8_t>& stream_data,
+      ParseEncryptedSliceHeaderCallback callback) override;
 
  private:
   void EstablishAshConnection(base::OnceClosure callback);

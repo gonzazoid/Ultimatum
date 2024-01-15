@@ -7,10 +7,11 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/sequenced_task_runner.h"
@@ -96,7 +97,7 @@ class HeartbeatRegistrationHelper {
                                  gcm::GCMClient::Result result);
 
   // GCMDriver to use to register.
-  gcm::GCMDriver* const gcm_driver_;
+  const raw_ptr<gcm::GCMDriver> gcm_driver_;
 
   // Callback to invoke when we have completed GCM registration.
   RegistrationHelperCallback callback_;
@@ -351,8 +352,8 @@ void HeartbeatScheduler::SendHeartbeat() {
   message.id =
       base::NumberToString(base::Time::NowFromSystemTime().ToInternalValue());
   message.data[kGcmMessageTypeKey] = kHeartbeatTypeValue;
-  message.data[kHeartbeatTimestampKey] =
-      base::NumberToString(base::Time::NowFromSystemTime().ToJavaTime());
+  message.data[kHeartbeatTimestampKey] = base::NumberToString(
+      base::Time::NowFromSystemTime().InMillisecondsSinceUnixEpoch());
   message.data[kHeartbeatCustomerIdKey] = customer_id_;
   message.data[kHeartbeatDeviceIDKey] = device_id_;
   gcm_driver_->Send(kHeartbeatGCMAppID,

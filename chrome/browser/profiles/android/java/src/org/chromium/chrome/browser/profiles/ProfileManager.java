@@ -6,12 +6,11 @@ package org.chromium.chrome.browser.profiles;
 
 import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.ObserverList;
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
 
-/**
- * Java interface to the C++ ProfileManager.
- */
+import org.chromium.base.ObserverList;
+
+/** Java interface to the C++ ProfileManager. */
 public class ProfileManager {
     private static ObserverList<Observer> sObservers = new ObserverList<>();
     private static boolean sInitialized;
@@ -31,16 +30,12 @@ public class ProfileManager {
         public void onProfileDestroyed(Profile profile);
     }
 
-    /**
-     * Add an observer to be notified when profiles get created.
-     */
+    /** Add an observer to be notified when profiles get created. */
     public static void addObserver(Observer observer) {
         sObservers.addObserver(observer);
     }
 
-    /**
-     * Remove an observer of profiles changes.
-     */
+    /** Remove an observer of profiles changes. */
     public static void removeObserver(Observer observer) {
         sObservers.removeObserver(observer);
     }
@@ -53,7 +48,8 @@ public class ProfileManager {
     }
 
     @CalledByNative
-    private static void onProfileAdded(Profile profile) {
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    public static void onProfileAdded(Profile profile) {
         // If a profile has been added, we know the ProfileManager has been initialized.
         sInitialized = true;
         for (Observer observer : sObservers) {
@@ -66,5 +62,10 @@ public class ProfileManager {
         for (Observer observer : sObservers) {
             observer.onProfileDestroyed(profile);
         }
+    }
+
+    public static void resetForTesting() {
+        sInitialized = false;
+        sObservers.clear();
     }
 }

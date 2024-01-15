@@ -5,9 +5,9 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_PAINT_RASTER_INVALIDATOR_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_PAINT_RASTER_INVALIDATOR_H_
 
-#include "base/callback.h"
 #include "base/check_op.h"
 #include "base/dcheck_is_on.h"
+#include "base/functional/callback.h"
 #include "third_party/blink/renderer/platform/graphics/compositing/chunk_to_layer_mapper.h"
 #include "third_party/blink/renderer/platform/graphics/paint/float_clip_rect.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_chunk.h"
@@ -16,6 +16,7 @@
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "ui/gfx/geometry/rect.h"
+#include "ui/gfx/geometry/transform.h"
 
 namespace blink {
 
@@ -37,13 +38,11 @@ class PLATFORM_EXPORT RasterInvalidator {
 
   // Generate raster invalidations for a subset of the paint chunks in the
   // paint artifact.
-  void Generate(
-      RasterInvalidationFunction,
-      const PaintChunkSubset&,
-      const gfx::Vector2dF& layer_offset,
-      const gfx::Size& layer_bounds,
-      const PropertyTreeState& layer_state,
-      DisplayItemClientId layer_client_id = kInvalidDisplayItemClientId);
+  void Generate(RasterInvalidationFunction,
+                const PaintChunkSubset&,
+                const gfx::Vector2dF& layer_offset,
+                const gfx::Size& layer_bounds,
+                const PropertyTreeState& layer_state);
 
   // Called when we repainted PaintArtifact but a ContentLayerClientImpl doesn't
   // have anything changed. We just need to let |old_paint_artifact_| point to
@@ -104,7 +103,7 @@ class PLATFORM_EXPORT RasterInvalidator {
 
     gfx::Rect bounds_in_layer;
     FloatClipRect chunk_to_layer_clip;
-    SkMatrix chunk_to_layer_transform;
+    gfx::Transform chunk_to_layer_transform;
   };
 
   void GenerateRasterInvalidations(RasterInvalidationFunction,
@@ -147,7 +146,9 @@ class PLATFORM_EXPORT RasterInvalidator {
                          const PaintChunk& old_chunk,
                          const PaintChunkInfo& new_chunk_info,
                          const PaintChunkInfo& old_chunk_info,
-                         const PropertyTreeState& layer_state) const;
+                         const PropertyTreeState& layer_state,
+                         const float absolute_translation_tolerance,
+                         const float other_transform_tolerance) const;
 
   // Clip a rect in the layer space by the layer bounds.
   template <typename Rect>

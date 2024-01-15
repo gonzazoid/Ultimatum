@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ struct MySubStruct {
 
   struct inner_s {
     inner_s(const inner_s&);
-    // Expected rewrite: raw_ref<int> inner_int;
+    // Expected rewrite: const raw_ref<int> inner_int;
     int& inner_int;
   };
 };
@@ -27,14 +27,22 @@ MySubStruct::inner_s::inner_s(const inner_s&) = default;
 struct MyStruct {
   MyStruct(MySubStruct& s) : ref(s) {}
 
+  // No rewrite expected for `other.ref` since `ref` itself with become a
+  // raw_ref.
+  MyStruct(const MyStruct& other) : ref(other.ref) {}
+
   const MySubStruct& get() const;
-  // Expected rewrite: raw_ref<MySubStruct> ref;
+  // Expected rewrite: const raw_ref<MySubStruct> ref;
   MySubStruct& ref;
 };
 
 template <class T>
 struct MyTemplatedStruct {
   MyTemplatedStruct(T& t) : ref(t) {}
+
+  // No rewrite expected for `other.ref` since `ref` itself with become a
+  // raw_ref.
+  MyTemplatedStruct(const MyTemplatedStruct& other) : ref(other.ref) {}
 
   // Expected rewrite: ref->member
   void setSubmember(int n) { ref.member = n; }
@@ -49,7 +57,7 @@ struct MyTemplatedStruct {
   // Expected rewrite: ref->get_member();
   int getInt() { return ref.get_member(); }
 
-  // Expected rewrite: raw_ref<T> ref;
+  // Expected rewrite: const raw_ref<T> ref;
   T& ref;
 };
 
@@ -88,12 +96,71 @@ int main() {
   int a = 0;
   int b = 0;
 
-  // No rewrite for anonymous struct.
   struct {
+    // Expected rewrite: const raw_ref<int> in;
     int& in;
+    // Expected rewrite: const raw_ref<int> out;
     int& out;
+    // Expected rewrite:
+    // report_lists[]{{raw_ref(a), raw_ref(b)}, {raw_ref(a), raw_ref(b)}};
   } report_lists[]{{a, b}, {a, b}};
+
+  // Reference members of nested anonymous structs declared in a
+  // function body are rewritten because they can end up on the heap.
+  struct A {
+    struct {
+      int& i;
+    } member;
+  };
+
+  // Expected rewrite:  A obj{raw_ref(a)};
+  A obj{a};
+  obj.member.i++;
+
+  // Expected rewrite:  A obj{.member = {raw_ref(a)}};
+  A obj2{.member = {a}};
+  obj2.member.i++;
+  ++obj2.member.i;
+  obj2.member.i--;
+  --obj2.member.i;
+
+  // No rewrite expected here for obj2.member.i since A::member::i itself will
+  // be rewritten into raw_ref.
+  A obj3{obj2.member.i};
+  obj3.member.i++;
+
+  static struct {
+    // Expected rewrite: const raw_ref<int> member;
+    int& member;
+    // Expected rewrite: st{raw_ref(a)};
+  } st{a};
+
+  struct Temp {
+    Temp(int& ref) : member(ref) {}
+    // Expected rewrite: const raw_ref<int> member;
+    int& member;
+  };
+  // No need to add raw_ref() around `a` here because the constructor will be
+  // called.
+  Temp tmp{a};
+  tmp.member++;
+
+  struct StringRefObj {
+    const std::string& member;
+  };
+
+  // No need to add raw_ref() around "abcde" here because it results in a
+  // temporary string object. A manual fix need to be applied.
+  StringRefObj r{"abcde"};
+  (void)r;
 }
+
+struct B {
+  struct {
+    // Expected rewrite: const raw_ref<int> i;
+    int& i;
+  } member;
+};
 
 template <typename T>
 const T& MyTemplatedStruct<T>::get() const {
@@ -159,4 +226,23 @@ struct VectorMemberRef {
   T get_first() { return v[0]; }
 
   std::vector<T>& v;
+};
+
+struct MyStruct2 {
+  MyStruct2(const MyStruct2& other)
+      :  // No rewrite expected for `other.int_ref` since `int_ref` itself with
+         // become a raw_ref.
+        int_ref(other.int_ref),
+        // Expected rewrite: i(*other.int_ref)
+        i(other.int_ref),
+        func_ref(other.func_ref),
+        ref_to_array_of_ints(other.ref_to_array_of_ints) {}
+
+  // Expected rewrite: const raw_ref<int> int_ref;
+  int& int_ref;
+  int i;
+  // Function references are not rewritten.
+  int (&func_ref)();
+  // References to arrays are not rewritten.
+  int (&ref_to_array_of_ints)[123];
 };

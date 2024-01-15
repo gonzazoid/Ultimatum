@@ -9,7 +9,7 @@
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/safe_browsing/content/browser/web_ui/safe_browsing_ui.h"
 #include "components/safe_browsing/core/browser/ping_manager.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 
 namespace safe_browsing {
 
@@ -33,7 +33,8 @@ AwPingManagerFactory::AwPingManagerFactory()
 
 AwPingManagerFactory::~AwPingManagerFactory() = default;
 
-KeyedService* AwPingManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AwPingManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   // Never fetch the access token for android_webview since ESB is unsupported
   auto get_should_fetch_access_token =
@@ -48,7 +49,9 @@ KeyedService* AwPingManagerFactory::BuildServiceInstanceFor(
       // TODO(crbug.com/1284979) If features get added that can alter
       // user population values in android_webview, we should consider
       // threading the user population through for client reports
-      /*get_user_population_callback=*/base::NullCallback());
+      /*get_user_population_callback=*/base::NullCallback(),
+      /*get_page_load_token_callback_=*/base::NullCallback(),
+      /*hats_delegate=*/nullptr);
 }
 
 std::string AwPingManagerFactory::GetProtocolConfigClientName() const {

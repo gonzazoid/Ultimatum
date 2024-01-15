@@ -35,8 +35,9 @@ class DirectLayerTreeFrameSink : public cc::LayerTreeFrameSink,
       const viz::FrameSinkId& frame_sink_id,
       viz::FrameSinkManagerImpl* frame_sink_manager,
       viz::Display* display,
-      scoped_refptr<viz::ContextProvider> context_provider,
-      scoped_refptr<viz::RasterContextProvider> worker_context_provider,
+      scoped_refptr<viz::RasterContextProvider> context_provider,
+      scoped_refptr<cc::RasterContextProviderWrapper>
+          worker_context_provider_wrapper,
       scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner,
       gpu::GpuMemoryBufferManager* gpu_memory_buffer_manager);
 
@@ -66,6 +67,8 @@ class DirectLayerTreeFrameSink : public cc::LayerTreeFrameSink,
   void DisplayDidReceiveCALayerParams(
       const gfx::CALayerParams& ca_layer_params) override {}
   void DisplayDidCompleteSwapWithSize(const gfx::Size& pixel_size) override {}
+  void DisplayAddChildWindowToBrowser(
+      gpu::SurfaceHandle child_window) override {}
   void SetWideColorEnabled(bool enabled) override {}
   void SetPreferredFrameInterval(base::TimeDelta interval) override {}
   base::TimeDelta GetPreferredFrameIntervalForFrameSinkId(
@@ -77,11 +80,14 @@ class DirectLayerTreeFrameSink : public cc::LayerTreeFrameSink,
   void DidReceiveCompositorFrameAck(
       std::vector<viz::ReturnedResource> resources) override;
   void OnBeginFrame(const viz::BeginFrameArgs& args,
-                    const viz::FrameTimingDetailsMap& timing_details) override;
+                    const viz::FrameTimingDetailsMap& timing_details,
+                    bool frame_ack,
+                    std::vector<viz::ReturnedResource> resource) override;
   void ReclaimResources(std::vector<viz::ReturnedResource> resources) override;
   void OnBeginFramePausedChanged(bool paused) override;
   void OnCompositorFrameTransitionDirectiveProcessed(
       uint32_t sequence_id) override {}
+  void OnSurfaceEvicted(const viz::LocalSurfaceId& local_surface_id) override {}
 
   // viz::ExternalBeginFrameSourceClient implementation:
   void OnNeedsBeginFrames(bool needs_begin_frames) override;

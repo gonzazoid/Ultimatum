@@ -6,21 +6,22 @@
 
 #include <thread>
 
-#include "base/bits.h"
 #include "base/command_line.h"
 #include "build/build_config.h"
-#include "components/viz/common/resources/resource_format.h"
-#include "components/viz/common/resources/resource_format_utils.h"
+#include "cc/test/pixel_comparator.h"
+#include "cc/test/pixel_test_utils.h"
 #include "components/viz/common/resources/resource_sizes.h"
+#include "components/viz/common/resources/shared_image_format.h"
 #include "gpu/command_buffer/common/mailbox.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
 #include "gpu/command_buffer/service/service_utils.h"
 #include "gpu/command_buffer/service/shared_context_state.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_backing.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_factory.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_format_service_utils.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_manager.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_representation.h"
-#include "gpu/command_buffer/service/shared_image/test_utils.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_test_base.h"
 #include "gpu/command_buffer/service/texture_manager.h"
 #include "gpu/config/gpu_driver_bug_workarounds.h"
 #include "gpu/config/gpu_feature_info.h"
@@ -29,44 +30,18 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/skia/include/core/SkBitmap.h"
-#include "third_party/skia/include/core/SkPromiseImageTexture.h"
 #include "third_party/skia/include/gpu/GrBackendSemaphore.h"
 #include "third_party/skia/include/gpu/GrBackendSurface.h"
+#include "third_party/skia/include/private/chromium/GrPromiseImageTexture.h"
 #include "ui/gfx/color_space.h"
 #include "ui/gfx/gpu_memory_buffer.h"
-#include "ui/gl/gl_surface.h"
-#include "ui/gl/gl_utils.h"
-#include "ui/gl/init/gl_factory.h"
+#include "ui/gl/gl_version_info.h"
 #include "ui/gl/progress_reporter.h"
 
 using testing::AtLeast;
 
 namespace gpu {
 namespace {
-
-void CreateSharedContext(const GpuDriverBugWorkarounds& workarounds,
-                         scoped_refptr<gl::GLSurface>& surface,
-                         scoped_refptr<gl::GLContext>& context,
-                         scoped_refptr<SharedContextState>& context_state,
-                         scoped_refptr<gles2::FeatureInfo>& feature_info) {
-  surface =
-      gl::init::CreateOffscreenGLSurface(gl::GetDefaultDisplay(), gfx::Size());
-  ASSERT_TRUE(surface);
-  context =
-      gl::init::CreateGLContext(nullptr, surface.get(), gl::GLContextAttribs());
-  ASSERT_TRUE(context);
-  bool result = context->MakeCurrent(surface.get());
-  ASSERT_TRUE(result);
-
-  scoped_refptr<gl::GLShareGroup> share_group = new gl::GLShareGroup();
-  feature_info =
-      base::MakeRefCounted<gles2::FeatureInfo>(workarounds, GpuFeatureInfo());
-  context_state = base::MakeRefCounted<SharedContextState>(
-      std::move(share_group), surface, context,
-      false /* use_virtualized_gl_contexts */, base::DoNothing());
-  context_state->InitializeGrContext(GpuPreferences(), workarounds, nullptr);
-  context_state->InitializeGL(GpuPreferences(), feature_info);
-}
 
 class MockProgressReporter : public gl::ProgressReporter {
  public:
@@ -77,88 +52,90 @@ class MockProgressReporter : public gl::ProgressReporter {
   MOCK_METHOD0(ReportProgress, void());
 };
 
-class GLTextureImageBackingFactoryTestBase : public testing::Test {
+class GLTextureImageBackingFactoryTestBase : public SharedImageTestBase {
  public:
-  explicit GLTextureImageBackingFactoryTestBase(bool is_thread_safe)
-      : shared_image_manager_(
-            std::make_unique<SharedImageManager>(is_thread_safe)) {}
-  ~GLTextureImageBackingFactoryTestBase() override {
-    // |context_state_| must be destroyed on its own context.
-    context_state_->MakeCurrent(surface_.get(), true /* needs_gl */);
-  }
+  GLTextureImageBackingFactoryTestBase() = default;
+  ~GLTextureImageBackingFactoryTestBase() override = default;
 
-  void SetUpBase(const GpuDriverBugWorkarounds& workarounds,
-                 bool for_cpu_upload_usage) {
-    scoped_refptr<gles2::FeatureInfo> feature_info;
-    CreateSharedContext(workarounds, surface_, context_, context_state_,
-                        feature_info);
+  void SetUpBase(bool for_cpu_upload_usage) {
+    ASSERT_NO_FATAL_FAILURE(InitializeContext(GrContextType::kGL));
+    auto* feature_info = context_state_->feature_info();
+
+    // Check if platform should support various formats.
     supports_r_rg_ =
         feature_info->validators()->texture_format.IsValid(GL_RED_EXT) &&
         feature_info->validators()->texture_format.IsValid(GL_RG_EXT);
+    supports_rg16_ =
+        supports_r_rg_ &&
+        feature_info->validators()->texture_internal_format.IsValid(
+            GL_R16_EXT) &&
+        feature_info->validators()->texture_internal_format.IsValid(
+            GL_RG16_EXT);
+    supports_rgba_f16_ =
+        feature_info->validators()->pixel_type.IsValid(GL_HALF_FLOAT_OES) ||
+        feature_info->gl_version_info().IsAtLeastGLES(3, 0);
     supports_etc1_ =
         feature_info->validators()->compressed_texture_format.IsValid(
             GL_ETC1_RGB8_OES);
     supports_ar30_ = feature_info->feature_flags().chromium_image_ar30;
     supports_ab30_ = feature_info->feature_flags().chromium_image_ab30;
 
-    GpuPreferences preferences;
-    preferences.use_passthrough_cmd_decoder = use_passthrough();
+    supports_bgra_ = feature_info->feature_flags().ext_texture_format_bgra8888;
+
     backing_factory_ = std::make_unique<GLTextureImageBackingFactory>(
-        preferences, workarounds, context_state_->feature_info(),
+        gpu_preferences_, gpu_workarounds_, context_state_->feature_info(),
         &progress_reporter_, for_cpu_upload_usage);
-
-    memory_type_tracker_ = std::make_unique<MemoryTypeTracker>(nullptr);
-    shared_image_representation_factory_ =
-        std::make_unique<SharedImageRepresentationFactory>(
-            shared_image_manager_.get(), nullptr);
-  }
-
-  bool use_passthrough() {
-    return gles2::UsePassthroughCommandDecoder(
-               base::CommandLine::ForCurrentProcess()) &&
-           gles2::PassthroughCommandDecoderSupported();
   }
 
   bool IsFormatSupport(viz::SharedImageFormat format) const {
-    auto resource_format = format.resource_format();
-    if (resource_format == viz::ResourceFormat::RED_8 ||
-        resource_format == viz::ResourceFormat::RG_88) {
+    if (format.is_multi_plane()) {
+      if (!use_passthrough()) {
+        // Validating command decoder doesn't work with multi-planar textures.
+        return false;
+      }
       return supports_r_rg_;
-    } else if (resource_format == viz::ResourceFormat::BGRA_1010102 ||
-               resource_format == viz::ResourceFormat::RGBA_1010102) {
+    }
+    if (format == viz::SinglePlaneFormat::kR_8 ||
+        format == viz::SinglePlaneFormat::kRG_88) {
+      return supports_r_rg_;
+    }
+    if (format == viz::SinglePlaneFormat::kR_16 ||
+        format == viz::SinglePlaneFormat::kRG_1616) {
+      return supports_rg16_;
+    }
+    if (format == viz::SinglePlaneFormat::kRGBA_F16) {
+      return supports_rgba_f16_;
+    }
+    if (format == viz::SinglePlaneFormat::kBGRA_1010102 ||
+        format == viz::SinglePlaneFormat::kRGBA_1010102) {
       return supports_ar30_ || supports_ab30_;
-    } else if (resource_format == viz::ResourceFormat::ETC1) {
+    }
+    if (format == viz::SinglePlaneFormat::kETC1) {
       return supports_etc1_;
     }
+    if (format == viz::SinglePlaneFormat::kBGRA_8888) {
+      return supports_bgra_;
+    }
+
     return true;
   }
 
  protected:
   ::testing::NiceMock<MockProgressReporter> progress_reporter_;
-  scoped_refptr<gl::GLSurface> surface_;
-  scoped_refptr<gl::GLContext> context_;
-  scoped_refptr<SharedContextState> context_state_;
-  std::unique_ptr<GLTextureImageBackingFactory> backing_factory_;
-  std::unique_ptr<SharedImageManager> shared_image_manager_;
-  std::unique_ptr<MemoryTypeTracker> memory_type_tracker_;
-  std::unique_ptr<SharedImageRepresentationFactory>
-      shared_image_representation_factory_;
   bool supports_r_rg_ = false;
+  bool supports_rg16_ = false;
+  bool supports_rgba_f16_ = false;
   bool supports_etc1_ = false;
   bool supports_ar30_ = false;
   bool supports_ab30_ = false;
+  bool supports_bgra_ = false;
 };
 
 // Non-parameterized tests.
 class GLTextureImageBackingFactoryTest
     : public GLTextureImageBackingFactoryTestBase {
  public:
-  GLTextureImageBackingFactoryTest()
-      : GLTextureImageBackingFactoryTestBase(false) {}
-  void SetUp() override {
-    GpuDriverBugWorkarounds workarounds;
-    SetUpBase(workarounds, /*for_cpu_upload_usage=*/false);
-  }
+  void SetUp() override { SetUpBase(/*for_cpu_upload_usage=*/false); }
 };
 
 // SharedImageFormat parameterized tests.
@@ -180,55 +157,55 @@ class GLTextureImageBackingFactoryWithUploadTest
     : public GLTextureImageBackingFactoryTestBase,
       public testing::WithParamInterface<viz::SharedImageFormat> {
  public:
-  GLTextureImageBackingFactoryWithUploadTest()
-      : GLTextureImageBackingFactoryTestBase(false) {}
-  void SetUp() override {
-    GpuDriverBugWorkarounds workarounds;
-    SetUpBase(workarounds, /*for_cpu_upload_usage=*/true);
-  }
+  void SetUp() override { SetUpBase(/*for_cpu_upload_usage=*/true); }
   viz::SharedImageFormat get_format() { return GetParam(); }
 };
 
+using GLTextureImageBackingFactoryWithReadbackTest =
+    GLTextureImageBackingFactoryWithUploadTest;
+
 TEST_F(GLTextureImageBackingFactoryTest, InvalidFormat) {
-  auto format = viz::SharedImageFormat::SinglePlane(
-      viz::ResourceFormat::YUV_420_BIPLANAR);
+  auto format = viz::LegacyMultiPlaneFormat::kNV12;
   gfx::Size size(256, 256);
-  uint32_t usage = SHARED_IMAGE_USAGE_GLES2;
-  bool supported =
-      backing_factory_->IsSupported(usage, format, size, /*thread_safe=*/false,
-                                    gfx::EMPTY_BUFFER, GrContextType::kGL, {});
+  // Note: The specific usage doesn't matter here as long as it's supported by
+  // GLTextureImageBacking.
+  uint32_t usage = SHARED_IMAGE_USAGE_GLES2_READ;
+  bool supported = backing_factory_->CanCreateSharedImage(
+      usage, format, size, /*thread_safe=*/false, gfx::EMPTY_BUFFER,
+      GrContextType::kGL, {});
   EXPECT_FALSE(supported);
 }
 
 // Ensures that GLTextureImageBacking registers it's estimated size
 // with memory tracker.
 TEST_F(GLTextureImageBackingFactoryTest, EstimatedSize) {
-  auto format = viz::SharedImageFormat::kRGBA_8888;
+  auto format = viz::SinglePlaneFormat::kRGBA_8888;
   auto mailbox = Mailbox::GenerateForSharedImage();
   gfx::Size size(256, 256);
   auto color_space = gfx::ColorSpace::CreateSRGB();
   GrSurfaceOrigin surface_origin = kTopLeft_GrSurfaceOrigin;
   SkAlphaType alpha_type = kPremul_SkAlphaType;
   gpu::SurfaceHandle surface_handle = gpu::kNullSurfaceHandle;
-  uint32_t usage = SHARED_IMAGE_USAGE_GLES2;
+  // Note: The specific usage doesn't matter here as long as it's supported by
+  // GLTextureImageBacking.
+  uint32_t usage = SHARED_IMAGE_USAGE_GLES2_READ;
 
-  bool supported =
-      backing_factory_->IsSupported(usage, format, size, /*thread_safe=*/false,
-                                    gfx::EMPTY_BUFFER, GrContextType::kGL, {});
+  bool supported = backing_factory_->CanCreateSharedImage(
+      usage, format, size, /*thread_safe=*/false, gfx::EMPTY_BUFFER,
+      GrContextType::kGL, {});
   ASSERT_TRUE(supported);
 
   auto backing = backing_factory_->CreateSharedImage(
       mailbox, format, surface_handle, size, color_space, surface_origin,
-      alpha_type, usage, false /* is_thread_safe */);
+      alpha_type, usage, "TestLabel", /*is_thread_safe=*/false);
   ASSERT_TRUE(backing);
 
-  size_t backing_estimated_size = backing->estimated_size();
+  size_t backing_estimated_size = backing->GetEstimatedSize();
   EXPECT_GT(backing_estimated_size, 0u);
 
   std::unique_ptr<SharedImageRepresentationFactoryRef> shared_image =
-      shared_image_manager_->Register(std::move(backing),
-                                      memory_type_tracker_.get());
-  EXPECT_EQ(backing_estimated_size, memory_type_tracker_->GetMemRepresented());
+      shared_image_manager_.Register(std::move(backing), &memory_type_tracker_);
+  EXPECT_EQ(backing_estimated_size, memory_type_tracker_.GetMemRepresented());
 
   shared_image.reset();
 }
@@ -243,21 +220,20 @@ TEST_F(GLTextureImageBackingFactoryTest, TexImageTexStorageEquivalence) {
                            use_passthrough(), gles2::DisallowedFeatures());
   const gles2::Validators* validators = feature_info->validators();
 
-  for (int i = 0; i <= viz::RESOURCE_FORMAT_MAX; ++i) {
-    auto format = viz::SharedImageFormat::SinglePlane(
-        static_cast<viz::ResourceFormat>(i));
-    if (!viz::GLSupportsFormat(format) ||
-        viz::IsResourceFormatCompressed(format))
+  for (auto format : viz::SinglePlaneFormat::kAll) {
+    if (format == viz::SinglePlaneFormat::kBGR_565 || format.IsCompressed()) {
       continue;
-    int storage_format = viz::TextureStorageFormat(
-        format, feature_info->feature_flags().angle_rgbx_internal_format);
+    }
 
-    int image_gl_format = viz::GLDataFormat(format);
+    GLFormatCaps caps(feature_info.get());
+    GLFormatDesc format_desc = caps.ToGLFormatDesc(format, /*plane_index=*/0);
+    int storage_format = format_desc.storage_internal_format;
+    int image_gl_format = format_desc.data_format;
     int storage_gl_format =
         gles2::TextureManager::ExtractFormatFromStorageFormat(storage_format);
     EXPECT_EQ(image_gl_format, storage_gl_format);
 
-    int image_gl_type = viz::GLDataType(format);
+    int image_gl_type = format_desc.data_type;
     int storage_gl_type =
         gles2::TextureManager::ExtractTypeFromStorageFormat(storage_format);
 
@@ -270,7 +246,7 @@ TEST_F(GLTextureImageBackingFactoryTest, TexImageTexStorageEquivalence) {
     }
 
     // confirm that we support TexStorage2D only if we support TexImage2D:
-    int image_internal_format = viz::GLInternalFormat(format);
+    int image_internal_format = format_desc.image_internal_format;
     bool supports_tex_image =
         validators->texture_internal_format.IsValid(image_internal_format) &&
         validators->texture_format.IsValid(image_gl_format) &&
@@ -285,11 +261,13 @@ TEST_F(GLTextureImageBackingFactoryTest, TexImageTexStorageEquivalence) {
 TEST_P(GLTextureImageBackingFactoryWithFormatTest, IsSupported) {
   auto format = get_format();
   gfx::Size size(256, 256);
-  uint32_t usage = SHARED_IMAGE_USAGE_GLES2;
+  // Note: The specific usage doesn't matter here as long as it's supported by
+  // GLTextureImageBacking.
+  uint32_t usage = SHARED_IMAGE_USAGE_GLES2_READ;
 
-  bool supported =
-      backing_factory_->IsSupported(usage, format, size, /*thread_safe=*/false,
-                                    gfx::EMPTY_BUFFER, GrContextType::kGL, {});
+  bool supported = backing_factory_->CanCreateSharedImage(
+      usage, format, size, /*thread_safe=*/false, gfx::EMPTY_BUFFER,
+      GrContextType::kGL, {});
   EXPECT_EQ(IsFormatSupport(format), supported);
 }
 
@@ -307,23 +285,31 @@ TEST_P(GLTextureImageBackingFactoryWithFormatTest, Basic) {
     GTEST_SKIP();
   }
 
+#if BUILDFLAG(IS_IOS)
+  if (format == viz::SinglePlaneFormat::kBGRA_1010102) {
+    // Just like Mac, producing SkSurface for BGRA_1010102 fails on iOS
+    // (crbug.com/1100975)
+    GTEST_SKIP();
+  }
+#endif  // BUILDFLAG(IS_IOS)
+
   EXPECT_CALL(progress_reporter_, ReportProgress).Times(AtLeast(1));
   auto mailbox = Mailbox::GenerateForSharedImage();
   gfx::Size size(256, 256);
   auto color_space = gfx::ColorSpace::CreateSRGB();
   GrSurfaceOrigin surface_origin = kTopLeft_GrSurfaceOrigin;
   SkAlphaType alpha_type = kPremul_SkAlphaType;
-  uint32_t usage = SHARED_IMAGE_USAGE_GLES2;
+  uint32_t usage = SHARED_IMAGE_USAGE_GLES2_READ;
   gpu::SurfaceHandle surface_handle = gpu::kNullSurfaceHandle;
 
-  bool supported =
-      backing_factory_->IsSupported(usage, format, size, /*thread_safe=*/false,
-                                    gfx::EMPTY_BUFFER, GrContextType::kGL, {});
+  bool supported = backing_factory_->CanCreateSharedImage(
+      usage, format, size, /*thread_safe=*/false, gfx::EMPTY_BUFFER,
+      GrContextType::kGL, {});
   ASSERT_TRUE(supported);
 
   auto backing = backing_factory_->CreateSharedImage(
       mailbox, format, surface_handle, size, color_space, surface_origin,
-      alpha_type, usage, false /* is_thread_safe */);
+      alpha_type, usage, "TestLabel", /*is_thread_safe=*/false);
   ASSERT_TRUE(backing);
 
   // Check clearing.
@@ -334,16 +320,16 @@ TEST_P(GLTextureImageBackingFactoryWithFormatTest, Basic) {
 
   // First, validate via a GLTextureImageRepresentation.
   std::unique_ptr<SharedImageRepresentationFactoryRef> shared_image =
-      shared_image_manager_->Register(std::move(backing),
-                                      memory_type_tracker_.get());
+      shared_image_manager_.Register(std::move(backing), &memory_type_tracker_);
   EXPECT_TRUE(shared_image);
   GLenum expected_target = GL_TEXTURE_2D;
   if (!use_passthrough()) {
     auto gl_representation =
-        shared_image_representation_factory_->ProduceGLTexture(mailbox);
+        shared_image_representation_factory_.ProduceGLTexture(mailbox);
     EXPECT_TRUE(gl_representation);
-    EXPECT_TRUE(gl_representation->GetTexture()->service_id());
-    EXPECT_EQ(expected_target, gl_representation->GetTexture()->target());
+    auto* texture = gl_representation->GetTexture(/*plane_index=*/0);
+    EXPECT_TRUE(texture->service_id());
+    EXPECT_EQ(expected_target, texture->target());
     EXPECT_EQ(size, gl_representation->size());
     EXPECT_EQ(format, gl_representation->format());
     EXPECT_EQ(color_space, gl_representation->color_space());
@@ -354,12 +340,12 @@ TEST_P(GLTextureImageBackingFactoryWithFormatTest, Basic) {
   // Next, validate a GLTexturePassthroughImageRepresentation.
   if (use_passthrough()) {
     auto gl_representation =
-        shared_image_representation_factory_->ProduceGLTexturePassthrough(
+        shared_image_representation_factory_.ProduceGLTexturePassthrough(
             mailbox);
     EXPECT_TRUE(gl_representation);
-    EXPECT_TRUE(gl_representation->GetTexturePassthrough()->service_id());
-    EXPECT_EQ(expected_target,
-              gl_representation->GetTexturePassthrough()->target());
+    auto texture = gl_representation->GetTexturePassthrough(/*plane_index=*/0);
+    EXPECT_TRUE(texture->service_id());
+    EXPECT_EQ(expected_target, texture->target());
     EXPECT_EQ(size, gl_representation->size());
     EXPECT_EQ(format, gl_representation->format());
     EXPECT_EQ(color_space, gl_representation->color_space());
@@ -368,7 +354,7 @@ TEST_P(GLTextureImageBackingFactoryWithFormatTest, Basic) {
   }
 
   // Finally, validate a SkiaImageRepresentation.
-  auto skia_representation = shared_image_representation_factory_->ProduceSkia(
+  auto skia_representation = shared_image_representation_factory_.ProduceSkia(
       mailbox, context_state_.get());
   EXPECT_TRUE(skia_representation);
   std::vector<GrBackendSemaphore> begin_semaphores;
@@ -381,14 +367,14 @@ TEST_P(GLTextureImageBackingFactoryWithFormatTest, Basic) {
   // We use |supports_ar30_| and |supports_ab30_| to detect RGB10A2/BGR10A2
   // support. It's possible Skia might support these formats even if the Chrome
   // feature flags are false. We just check here that the feature flags don't
-  // allow Chrome to do something that Skia doesn't support.
-  auto resource_format = format.resource_format();
-  if ((resource_format != viz::ResourceFormat::BGRA_1010102 ||
-       supports_ar30_) &&
-      (resource_format != viz::ResourceFormat::RGBA_1010102 ||
-       supports_ab30_)) {
+  // allow Chrome to do something that Skia doesn't support. Skia also doesn't
+  // support using R16/RG16 SkSurfaces with Ganesh so disallow those too.
+  if ((format != viz::SinglePlaneFormat::kBGRA_1010102 || supports_ar30_) &&
+      (format != viz::SinglePlaneFormat::kRGBA_1010102 || supports_ab30_) &&
+      format != viz::SinglePlaneFormat::kR_16 &&
+      format != viz::SinglePlaneFormat::kRG_1616) {
     ASSERT_TRUE(scoped_write_access);
-    auto* surface = scoped_write_access->surface();
+    auto* surface = scoped_write_access->surface(/*plane_index=*/0);
     ASSERT_TRUE(surface);
     EXPECT_EQ(size.width(), surface->width());
     EXPECT_EQ(size.height(), surface->height());
@@ -400,7 +386,8 @@ TEST_P(GLTextureImageBackingFactoryWithFormatTest, Basic) {
   std::unique_ptr<SkiaImageRepresentation::ScopedReadAccess> scoped_read_access;
   scoped_read_access = skia_representation->BeginScopedReadAccess(
       &begin_semaphores, &end_semaphores);
-  auto* promise_texture = scoped_read_access->promise_image_texture();
+  auto* promise_texture =
+      scoped_read_access->promise_image_texture(/*plane_index=*/0);
   EXPECT_TRUE(promise_texture);
   EXPECT_TRUE(begin_semaphores.empty());
   EXPECT_TRUE(end_semaphores.empty());
@@ -421,16 +408,18 @@ TEST_P(GLTextureImageBackingFactoryWithFormatTest, InvalidSize) {
   }
 
   gfx::Size size(0, 0);
-  uint32_t usage = SHARED_IMAGE_USAGE_GLES2;
-  bool supported =
-      backing_factory_->IsSupported(usage, format, size, /*thread_safe=*/false,
-                                    gfx::EMPTY_BUFFER, GrContextType::kGL, {});
+  // Note: The specific usage doesn't matter here as long as it's supported by
+  // GLTextureImageBacking.
+  uint32_t usage = SHARED_IMAGE_USAGE_GLES2_READ;
+  bool supported = backing_factory_->CanCreateSharedImage(
+      usage, format, size, /*thread_safe=*/false, gfx::EMPTY_BUFFER,
+      GrContextType::kGL, {});
   EXPECT_FALSE(supported);
 
   size = gfx::Size(INT_MAX, INT_MAX);
-  supported =
-      backing_factory_->IsSupported(usage, format, size, /*thread_safe=*/false,
-                                    gfx::EMPTY_BUFFER, GrContextType::kGL, {});
+  supported = backing_factory_->CanCreateSharedImage(
+      usage, format, size, /*thread_safe=*/false, gfx::EMPTY_BUFFER,
+      GrContextType::kGL, {});
   EXPECT_FALSE(supported);
 }
 
@@ -445,30 +434,29 @@ TEST_P(GLTextureImageBackingFactoryInitialDataTest, InitialData) {
   auto color_space = gfx::ColorSpace::CreateSRGB();
   GrSurfaceOrigin surface_origin = kTopLeft_GrSurfaceOrigin;
   SkAlphaType alpha_type = kPremul_SkAlphaType;
-  uint32_t usage = SHARED_IMAGE_USAGE_GLES2;
+  uint32_t usage = SHARED_IMAGE_USAGE_GLES2_READ;
   std::vector<uint8_t> initial_data(
       viz::ResourceSizes::CheckedSizeInBytes<unsigned int>(size, format));
 
-  bool supported = backing_factory_->IsSupported(
+  bool supported = backing_factory_->CanCreateSharedImage(
       usage, format, size, /*thread_safe=*/false, gfx::EMPTY_BUFFER,
       GrContextType::kGL, initial_data);
   ASSERT_TRUE(supported);
 
   auto backing = backing_factory_->CreateSharedImage(
       mailbox, format, size, color_space, surface_origin, alpha_type, usage,
-      initial_data);
+      "TestLabel", initial_data);
   ASSERT_TRUE(backing);
   EXPECT_TRUE(backing->IsCleared());
 
   // Validate via a GLTextureImageRepresentation(Passthrough).
   std::unique_ptr<SharedImageRepresentationFactoryRef> shared_image =
-      shared_image_manager_->Register(std::move(backing),
-                                      memory_type_tracker_.get());
+      shared_image_manager_.Register(std::move(backing), &memory_type_tracker_);
   EXPECT_TRUE(shared_image);
   GLenum expected_target = GL_TEXTURE_2D;
   if (!use_passthrough()) {
     auto gl_representation =
-        shared_image_representation_factory_->ProduceGLTexture(mailbox);
+        shared_image_representation_factory_.ProduceGLTexture(mailbox);
     EXPECT_TRUE(gl_representation);
     EXPECT_TRUE(gl_representation->GetTexture()->service_id());
     EXPECT_EQ(expected_target, gl_representation->GetTexture()->target());
@@ -479,7 +467,7 @@ TEST_P(GLTextureImageBackingFactoryInitialDataTest, InitialData) {
     gl_representation.reset();
   } else {
     auto gl_representation =
-        shared_image_representation_factory_->ProduceGLTexturePassthrough(
+        shared_image_representation_factory_.ProduceGLTexturePassthrough(
             mailbox);
     EXPECT_TRUE(gl_representation);
     EXPECT_TRUE(gl_representation->GetTexturePassthrough()->service_id());
@@ -500,20 +488,22 @@ TEST_P(GLTextureImageBackingFactoryInitialDataTest, InitialDataWrongSize) {
   }
 
   gfx::Size size(256, 256);
-  uint32_t usage = SHARED_IMAGE_USAGE_GLES2;
+  // Note: The specific usage doesn't matter here as long as it's supported by
+  // GLTextureImageBacking.
+  uint32_t usage = SHARED_IMAGE_USAGE_GLES2_READ;
   size_t required_size =
       viz::ResourceSizes::CheckedSizeInBytes<size_t>(size, format);
   std::vector<uint8_t> initial_data_small(required_size / 2);
   std::vector<uint8_t> initial_data_large(required_size * 2);
-  bool supported =
-      backing_factory_->IsSupported(usage, format, size,
-                                    /*thread_safe=*/false, gfx::EMPTY_BUFFER,
-                                    GrContextType::kGL, initial_data_small);
+  bool supported = backing_factory_->CanCreateSharedImage(
+      usage, format, size,
+      /*thread_safe=*/false, gfx::EMPTY_BUFFER, GrContextType::kGL,
+      initial_data_small);
   EXPECT_FALSE(supported);
-  supported =
-      backing_factory_->IsSupported(usage, format, size,
-                                    /*thread_safe=*/false, gfx::EMPTY_BUFFER,
-                                    GrContextType::kGL, initial_data_large);
+  supported = backing_factory_->CanCreateSharedImage(
+      usage, format, size,
+      /*thread_safe=*/false, gfx::EMPTY_BUFFER, GrContextType::kGL,
+      initial_data_large);
   EXPECT_FALSE(supported);
 }
 
@@ -528,81 +518,174 @@ TEST_P(GLTextureImageBackingFactoryWithUploadTest, UploadFromMemory) {
   auto color_space = gfx::ColorSpace::CreateSRGB();
   GrSurfaceOrigin surface_origin = kTopLeft_GrSurfaceOrigin;
   SkAlphaType alpha_type = kPremul_SkAlphaType;
-  uint32_t usage = SHARED_IMAGE_USAGE_GLES2 | SHARED_IMAGE_USAGE_CPU_UPLOAD;
+  uint32_t usage = SHARED_IMAGE_USAGE_CPU_UPLOAD;
   gpu::SurfaceHandle surface_handle = gpu::kNullSurfaceHandle;
 
-  bool supported =
-      backing_factory_->IsSupported(usage, format, size, /*thread_safe=*/false,
-                                    gfx::EMPTY_BUFFER, GrContextType::kGL, {});
+  bool supported = backing_factory_->CanCreateSharedImage(
+      usage, format, size, /*thread_safe=*/false, gfx::EMPTY_BUFFER,
+      GrContextType::kGL, {});
   ASSERT_TRUE(supported);
 
   auto backing = backing_factory_->CreateSharedImage(
       mailbox, format, surface_handle, size, color_space, surface_origin,
-      alpha_type, usage, false /* is_thread_safe */);
+      alpha_type, usage, "TestLabel", /*is_thread_safe=*/false);
   ASSERT_TRUE(backing);
 
-  SkColorType color_type =
-      viz::ResourceFormatToClosestSkColorType(true, format);
+  // Upload from bitmap with expected stride.
+  {
+    std::vector<SkBitmap> bitmaps =
+        AllocateRedBitmaps(format, size, /*added_stride=*/0);
+    EXPECT_TRUE(backing->UploadFromMemory(GetSkPixmaps(bitmaps)));
+    EXPECT_EQ(glGetError(), static_cast<GLenum>(GL_NO_ERROR));
+  }
 
-  // Allocate a bitmap with red pixels and upload from it. RED_8 will be filled
-  // with 0xFF repeating and RG_88 will be filled with OxFF00 repeating.
-  SkBitmap bitmap;
-  SkImageInfo info =
-      SkImageInfo::Make(size.width(), size.height(), color_type, alpha_type);
-  size_t stride = base::bits::AlignUp<size_t>(info.minRowBytes(), 4);
-  bitmap.allocPixels(info, stride);
-  bitmap.eraseColor(SK_ColorRED);
-
-  EXPECT_TRUE(backing->UploadFromMemory(bitmap.pixmap()));
-
-  // Allocate a bitmap with much larger stride that necessary. Upload from that
-  // bitmap should still work correctly.
-  SkBitmap larger_bitmap;
-  size_t larger_stride = stride + 100;
-  larger_bitmap.allocPixels(info, larger_stride);
-  larger_bitmap.eraseColor(SK_ColorRED);
-
-  EXPECT_TRUE(backing->UploadFromMemory(larger_bitmap.pixmap()));
+  // Upload from bitmap with larger than expected stride.
+  {
+    std::vector<SkBitmap> bitmaps =
+        AllocateRedBitmaps(format, size, /*added_stride=*/25);
+    EXPECT_TRUE(backing->UploadFromMemory(GetSkPixmaps(bitmaps)));
+    EXPECT_EQ(glGetError(), static_cast<GLenum>(GL_NO_ERROR));
+  }
 }
 
-const auto kSharedImageFormats = ::testing::Values(
-    viz::SharedImageFormat::SinglePlane(viz::ResourceFormat::RGBA_8888),
-    viz::SharedImageFormat::SinglePlane(viz::ResourceFormat::BGRA_8888),
-    viz::SharedImageFormat::SinglePlane(viz::ResourceFormat::RGBA_4444),
-    viz::SharedImageFormat::SinglePlane(viz::ResourceFormat::RED_8),
-    viz::SharedImageFormat::SinglePlane(viz::ResourceFormat::RG_88),
-    viz::SharedImageFormat::SinglePlane(viz::ResourceFormat::BGRA_1010102),
-    viz::SharedImageFormat::SinglePlane(viz::ResourceFormat::RGBA_1010102),
-    viz::SharedImageFormat::SinglePlane(viz::ResourceFormat::RGBX_8888),
-    viz::SharedImageFormat::SinglePlane(viz::ResourceFormat::BGRX_8888));
+TEST_P(GLTextureImageBackingFactoryWithReadbackTest, ReadbackToMemory) {
+  viz::SharedImageFormat format = get_format();
+
+  if (!IsFormatSupport(format)) {
+    GTEST_SKIP();
+  }
+
+  auto mailbox = Mailbox::GenerateForSharedImage();
+  gfx::Size size(9, 9);
+  auto color_space = gfx::ColorSpace::CreateSRGB();
+  GrSurfaceOrigin surface_origin = kTopLeft_GrSurfaceOrigin;
+  SkAlphaType alpha_type = kPremul_SkAlphaType;
+  uint32_t usage = SHARED_IMAGE_USAGE_GLES2_READ |
+                   SHARED_IMAGE_USAGE_CPU_UPLOAD;
+  gpu::SurfaceHandle surface_handle = gpu::kNullSurfaceHandle;
+
+  bool supported = backing_factory_->CanCreateSharedImage(
+      usage, format, size, /*thread_safe=*/false, gfx::EMPTY_BUFFER,
+      GrContextType::kGL, {});
+  ASSERT_TRUE(supported);
+
+  auto backing = backing_factory_->CreateSharedImage(
+      mailbox, format, surface_handle, size, color_space, surface_origin,
+      alpha_type, usage, "TestLabel", /*is_thread_safe=*/false);
+  ASSERT_TRUE(backing);
+
+  std::vector<SkBitmap> src_bitmaps =
+      AllocateRedBitmaps(format, size, /*added_stride=*/0);
+
+  // Upload from bitmap with expected stride.
+  ASSERT_TRUE(backing->UploadFromMemory(GetSkPixmaps(src_bitmaps)));
+  EXPECT_EQ(glGetError(), static_cast<GLenum>(GL_NO_ERROR));
+
+  const int num_planes = format.NumberOfPlanes();
+
+  {
+    // Do readback into bitmap with same stride and validate pixels match what
+    // was uploaded.
+    std::vector<SkBitmap> readback_bitmaps(num_planes);
+    for (int plane = 0; plane < num_planes; ++plane) {
+      auto& info = src_bitmaps[plane].info();
+      size_t stride = info.minRowBytes();
+      readback_bitmaps[plane].allocPixels(info, stride);
+    }
+
+    std::vector<SkPixmap> pixmaps = GetSkPixmaps(readback_bitmaps);
+    ASSERT_TRUE(backing->ReadbackToMemory(pixmaps));
+    EXPECT_EQ(glGetError(), static_cast<GLenum>(GL_NO_ERROR));
+
+    for (int plane = 0; plane < num_planes; ++plane) {
+      EXPECT_TRUE(cc::MatchesBitmap(readback_bitmaps[plane], src_bitmaps[plane],
+                                    cc::ExactPixelComparator()))
+          << "plane_index=" << plane;
+    }
+  }
+
+  {
+    // Do readback into a bitmap with larger than required stride and validate
+    // pixels match what was uploaded.
+    std::vector<SkBitmap> readback_bitmaps(num_planes);
+    for (int plane = 0; plane < num_planes; ++plane) {
+      auto& info = src_bitmaps[plane].info();
+      size_t stride = info.minRowBytes() + 25 * info.bytesPerPixel();
+      readback_bitmaps[plane].allocPixels(info, stride);
+    }
+
+    std::vector<SkPixmap> pixmaps = GetSkPixmaps(readback_bitmaps);
+    ASSERT_TRUE(backing->ReadbackToMemory(pixmaps));
+    EXPECT_EQ(glGetError(), static_cast<GLenum>(GL_NO_ERROR));
+
+    for (int plane = 0; plane < num_planes; ++plane) {
+      EXPECT_TRUE(cc::MatchesBitmap(readback_bitmaps[plane], src_bitmaps[plane],
+                                    cc::ExactPixelComparator()))
+          << "plane_index=" << plane;
+    }
+  }
+}
 
 std::string TestParamToString(
     const testing::TestParamInfo<viz::SharedImageFormat>& param_info) {
-  return param_info.param.ToString();
+  return param_info.param.ToTestParamString();
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    ,
-    GLTextureImageBackingFactoryInitialDataTest,
-    ::testing::Values(
-        viz::SharedImageFormat::SinglePlane(viz::ResourceFormat::ETC1),
-        viz::SharedImageFormat::SinglePlane(viz::ResourceFormat::RGBA_8888),
-        viz::SharedImageFormat::SinglePlane(viz::ResourceFormat::BGRA_8888),
-        viz::SharedImageFormat::SinglePlane(viz::ResourceFormat::RGBA_4444),
-        viz::SharedImageFormat::SinglePlane(viz::ResourceFormat::RED_8),
-        viz::SharedImageFormat::SinglePlane(viz::ResourceFormat::RG_88),
-        viz::SharedImageFormat::SinglePlane(viz::ResourceFormat::BGRA_1010102),
-        viz::SharedImageFormat::SinglePlane(viz::ResourceFormat::RGBA_1010102)),
-    TestParamToString);
+const auto kInitialDataFormats =
+    ::testing::Values(viz::SinglePlaneFormat::kETC1,
+                      viz::SinglePlaneFormat::kRGBA_8888,
+                      viz::SinglePlaneFormat::kBGRA_8888,
+                      viz::SinglePlaneFormat::kRGBA_4444,
+                      viz::SinglePlaneFormat::kR_8,
+                      viz::SinglePlaneFormat::kRG_88,
+                      viz::SinglePlaneFormat::kBGRA_1010102,
+                      viz::SinglePlaneFormat::kRGBA_1010102);
+
+INSTANTIATE_TEST_SUITE_P(,
+                         GLTextureImageBackingFactoryInitialDataTest,
+                         kInitialDataFormats,
+                         TestParamToString);
+
+const auto kSharedImageFormats =
+    ::testing::Values(viz::SinglePlaneFormat::kRGBA_8888,
+                      viz::SinglePlaneFormat::kBGRA_8888,
+                      viz::SinglePlaneFormat::kRGBA_4444,
+                      viz::SinglePlaneFormat::kR_8,
+                      viz::SinglePlaneFormat::kRG_88,
+                      viz::SinglePlaneFormat::kBGRA_1010102,
+                      viz::SinglePlaneFormat::kRGBA_1010102,
+                      viz::SinglePlaneFormat::kRGBX_8888,
+                      viz::SinglePlaneFormat::kBGRX_8888,
+                      viz::SinglePlaneFormat::kR_16,
+                      viz::SinglePlaneFormat::kRG_1616,
+                      viz::SinglePlaneFormat::kRGBA_F16,
+                      viz::MultiPlaneFormat::kNV12,
+                      viz::MultiPlaneFormat::kYV12,
+                      viz::MultiPlaneFormat::kI420);
 
 INSTANTIATE_TEST_SUITE_P(,
                          GLTextureImageBackingFactoryWithFormatTest,
                          kSharedImageFormats,
                          TestParamToString);
-
 INSTANTIATE_TEST_SUITE_P(,
                          GLTextureImageBackingFactoryWithUploadTest,
                          kSharedImageFormats,
+                         TestParamToString);
+
+const auto kReadbackFormats =
+    ::testing::Values(viz::SinglePlaneFormat::kRGBA_8888,
+                      viz::SinglePlaneFormat::kBGRA_8888,
+                      viz::SinglePlaneFormat::kR_8,
+                      viz::SinglePlaneFormat::kRG_88,
+                      viz::SinglePlaneFormat::kRGBX_8888,
+                      viz::SinglePlaneFormat::kBGRX_8888,
+                      viz::MultiPlaneFormat::kNV12,
+                      viz::MultiPlaneFormat::kYV12,
+                      viz::MultiPlaneFormat::kI420);
+
+INSTANTIATE_TEST_SUITE_P(,
+                         GLTextureImageBackingFactoryWithReadbackTest,
+                         kReadbackFormats,
                          TestParamToString);
 
 }  // anonymous namespace

@@ -8,9 +8,10 @@
 #include <string>
 #include <vector>
 
+#include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/apps/app_service/app_icon/app_icon_factory.h"
-#include "chrome/browser/apps/app_service/app_icon/icon_key_util.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_forward.h"
 #include "chrome/browser/apps/app_service/launch_result_type.h"
 #include "chrome/browser/apps/app_service/publishers/app_publisher.h"
@@ -22,13 +23,8 @@
 #include "components/services/app_service/public/cpp/icon_types.h"
 #include "components/services/app_service/public/cpp/menu.h"
 #include "components/services/app_service/public/cpp/permission.h"
-#include "components/services/app_service/public/cpp/publisher_base.h"
-#include "components/services/app_service/public/mojom/app_service.mojom-forward.h"
-#include "components/services/app_service/public/mojom/types.mojom-forward.h"
-#include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "mojo/public/cpp/bindings/remote_set.h"
 
 namespace apps {
 struct MenuItems;
@@ -49,12 +45,7 @@ struct AppLaunchParams;
 // publisher will also handle reconnection when the crosapi connection drops.
 //
 // See components/services/app_service/README.md.
-//
-// TODO(crbug.com/1253250):
-// 1. Remove the parent class apps::PublisherBase.
-// 2. Remove all apps::mojom related code.
 class WebAppsCrosapi : public KeyedService,
-                       public apps::PublisherBase,
                        public apps::AppPublisher,
                        public crosapi::mojom::AppPublisher {
  public:
@@ -81,14 +72,14 @@ class WebAppsCrosapi : public KeyedService,
                            WebAppsNotInitializedIfRegisterFirst);
   FRIEND_TEST_ALL_PREFIXES(StandaloneBrowserPublisherTest,
                            WebAppsInitializedForEmptyList);
+  FRIEND_TEST_ALL_PREFIXES(StandaloneBrowserPublisherTest,
+                           WebAppsCrosapiCapabilityReset);
 
   // apps::AppPublisher overrides.
-  void LoadIcon(const std::string& app_id,
-                const IconKey& icon_key,
-                IconType icon_type,
-                int32_t size_hint_in_dip,
-                bool allow_placeholder_icon,
-                apps::LoadIconCallback callback) override;
+  void GetCompressedIconData(const std::string& app_id,
+                             int32_t size_in_dip,
+                             ui::ResourceScaleFactor scale_factor,
+                             LoadIconCallback callback) override;
   void Launch(const std::string& app_id,
               int32_t event_flags,
               LaunchSource launch_source,
@@ -118,36 +109,13 @@ class WebAppsCrosapi : public KeyedService,
                     MenuType menu_type,
                     int64_t display_id,
                     base::OnceCallback<void(MenuItems)> callback) override;
+  void UpdateAppSize(const std::string& app_id) override;
   void SetWindowMode(const std::string& app_id,
                      WindowMode window_mode) override;
-
-  // apps::PublisherBase overrides.
-  void Connect(mojo::PendingRemote<apps::mojom::Subscriber> subscriber_remote,
-               apps::mojom::ConnectOptionsPtr opts) override;
-  void Launch(const std::string& app_id,
-              int32_t event_flags,
-              apps::mojom::LaunchSource launch_source,
-              apps::mojom::WindowInfoPtr window_info) override;
-  void LaunchAppWithIntent(const std::string& app_id,
-                           int32_t event_flags,
-                           apps::mojom::IntentPtr intent,
-                           apps::mojom::LaunchSource launch_source,
-                           apps::mojom::WindowInfoPtr window_info,
-                           LaunchAppWithIntentCallback callback) override;
-  void LaunchAppWithFiles(const std::string& app_id,
-                          int32_t event_flags,
-                          apps::mojom::LaunchSource launch_source,
-                          apps::mojom::FilePathsPtr file_paths) override;
-  void GetMenuModel(const std::string& app_id,
-                    apps::mojom::MenuType menu_type,
-                    int64_t display_id,
-                    GetMenuModelCallback callback) override;
   void PauseApp(const std::string& app_id) override;
   void UnpauseApp(const std::string& app_id) override;
   void StopApp(const std::string& app_id) override;
   void OpenNativeSettings(const std::string& app_id) override;
-  void SetWindowMode(const std::string& app_id,
-                     apps::mojom::WindowMode window_mode) override;
   void ExecuteContextMenuCommand(const std::string& app_id,
                                  int command_id,
                                  const std::string& shortcut_id,
@@ -171,14 +139,6 @@ class WebAppsCrosapi : public KeyedService,
       base::OnceCallback<void(MenuItems)> callback,
       crosapi::mojom::MenuItemsPtr crosapi_menu_items);
 
-  void OnLoadIcon(IconType icon_type,
-                  int size_hint_in_dip,
-                  apps::IconEffects icon_effects,
-                  apps::LoadIconCallback callback,
-                  IconValuePtr icon_value);
-  void OnApplyIconEffects(IconType icon_type,
-                          apps::LoadIconCallback callback,
-                          IconValuePtr icon_value);
   void PublishImpl(std::vector<AppPtr> deltas);
   void PublishCapabilityAccessesImpl(std::vector<CapabilityAccessPtr> deltas);
 
@@ -199,10 +159,9 @@ class WebAppsCrosapi : public KeyedService,
   // |delta_app_cache_| to initialize the web app AppType even it is empty.
   bool on_initial_apps_received_ = false;
 
-  mojo::RemoteSet<apps::mojom::Subscriber> subscribers_;
   mojo::Receiver<crosapi::mojom::AppPublisher> receiver_{this};
   mojo::Remote<crosapi::mojom::AppController> controller_;
-  AppServiceProxy* const proxy_;
+  const raw_ptr<AppServiceProxy> proxy_;
   bool should_notify_initialized_ = true;
 
   base::WeakPtrFactory<WebAppsCrosapi> weak_factory_{this};

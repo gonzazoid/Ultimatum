@@ -4,32 +4,28 @@
 
 #import "ios/chrome/browser/ui/settings/privacy/privacy_safe_browsing_coordinator.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "base/metrics/user_metrics.h"
 #import "base/metrics/user_metrics_action.h"
+#import "components/safe_browsing/core/common/safe_browsing_settings_metrics.h"
 #import "components/strings/grit/components_strings.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/signin/chrome_account_manager_service_factory.h"
-#import "ios/chrome/browser/ui/alert_coordinator/alert_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/alert/alert_coordinator.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_styler.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_utils.h"
+#import "ios/chrome/browser/signin/model/chrome_account_manager_service_factory.h"
 #import "ios/chrome/browser/ui/settings/privacy/privacy_safe_browsing_mediator.h"
 #import "ios/chrome/browser/ui/settings/privacy/privacy_safe_browsing_navigation_commands.h"
 #import "ios/chrome/browser/ui/settings/privacy/privacy_safe_browsing_view_controller.h"
 #import "ios/chrome/browser/ui/settings/privacy/safe_browsing/safe_browsing_enhanced_protection_coordinator.h"
 #import "ios/chrome/browser/ui/settings/privacy/safe_browsing/safe_browsing_standard_protection_coordinator.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_styler.h"
-#import "ios/chrome/browser/ui/table_view/table_view_utils.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
-#import "ios/chrome/browser/url/chrome_url_constants.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/grit/ios_strings.h"
-#import "ios/public/provider/chrome/browser/chrome_browser_provider.h"
 #import "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 // Currently takes into account a view controller delegate and not a command
 // handler to communicate with the mediator since there's currently no needed
@@ -62,7 +58,9 @@
 - (instancetype)initWithBaseNavigationController:
                     (UINavigationController*)navigationController
                                          browser:(Browser*)browser {
-  if ([super initWithBaseViewController:navigationController browser:browser]) {
+  self = [super initWithBaseViewController:navigationController
+                                   browser:browser];
+  if (self) {
     _baseNavigationController = navigationController;
   }
   return self;
@@ -80,10 +78,15 @@
   self.mediator.handler = self;
   self.viewController.modelDelegate = self.mediator;
   DCHECK(self.baseNavigationController);
-  base::RecordAction(
-      base::UserMetricsAction("Options_ShowSafeBrowsingEnhancedProtection"));
+  safe_browsing::LogShowEnhancedProtectionAction();
   [self.baseNavigationController pushViewController:self.viewController
                                            animated:YES];
+}
+
+- (void)stop {
+  [self stopSafeBrowsingEnhancedProtectionCoordinator];
+  [self stopSafeBrowsingStandardProtectionCoordinator];
+  [super stop];
 }
 
 #pragma mark - SafeBrowsingViewControllerPresentationDelegate
@@ -97,7 +100,13 @@
 #pragma mark - PrivacySafeBrowsingNavigationCommands
 
 - (void)showSafeBrowsingEnhancedProtection {
-  DCHECK(!self.safeBrowsingEnhancedProtectionCoordinator);
+  // Asynchronized UI sequences can cause coordinators to exist when
+  // re-initializing a new coordinator. To ensure that the object is reset
+  // properly, we forcefully stop the coordinator so that we can properly
+  // initialize a new one.
+  if (self.safeBrowsingEnhancedProtectionCoordinator) {
+    [self stopSafeBrowsingEnhancedProtectionCoordinator];
+  }
   self.safeBrowsingEnhancedProtectionCoordinator =
       [[SafeBrowsingEnhancedProtectionCoordinator alloc]
           initWithBaseNavigationController:self.baseNavigationController
@@ -107,7 +116,13 @@
 }
 
 - (void)showSafeBrowsingStandardProtection {
-  DCHECK(!self.safeBrowsingStandardProtectionCoordinator);
+  // Asynchronized UI sequences can cause coordinators to exist when
+  // re-initializing a new coordinator. To ensure that the object is reset
+  // properly, we forcefully stop the coordinator so that we can properly
+  // initialize a new one.
+  if (self.safeBrowsingStandardProtectionCoordinator) {
+    [self stopSafeBrowsingStandardProtectionCoordinator];
+  }
   self.safeBrowsingStandardProtectionCoordinator =
       [[SafeBrowsingStandardProtectionCoordinator alloc]
           initWithBaseNavigationController:self.baseNavigationController
@@ -161,9 +176,7 @@
 - (void)safeBrowsingEnhancedProtectionCoordinatorDidRemove:
     (SafeBrowsingEnhancedProtectionCoordinator*)coordinator {
   DCHECK_EQ(self.safeBrowsingEnhancedProtectionCoordinator, coordinator);
-  [self.safeBrowsingEnhancedProtectionCoordinator stop];
-  self.safeBrowsingEnhancedProtectionCoordinator.delegate = nil;
-  self.safeBrowsingEnhancedProtectionCoordinator = nil;
+  [self stopSafeBrowsingEnhancedProtectionCoordinator];
 }
 
 #pragma mark - SafeBrowsingStandardProtectionCoordinatorDelegate
@@ -171,9 +184,23 @@
 - (void)safeBrowsingStandardProtectionCoordinatorDidRemove:
     (SafeBrowsingStandardProtectionCoordinator*)coordinator {
   DCHECK_EQ(self.safeBrowsingStandardProtectionCoordinator, coordinator);
+  [self stopSafeBrowsingStandardProtectionCoordinator];
+}
+
+#pragma mark - Private
+
+- (void)stopSafeBrowsingStandardProtectionCoordinator {
   [self.safeBrowsingStandardProtectionCoordinator stop];
   self.safeBrowsingStandardProtectionCoordinator.delegate = nil;
   self.safeBrowsingStandardProtectionCoordinator = nil;
+}
+
+#pragma mark - Private
+
+- (void)stopSafeBrowsingEnhancedProtectionCoordinator {
+  [self.safeBrowsingEnhancedProtectionCoordinator stop];
+  self.safeBrowsingEnhancedProtectionCoordinator.delegate = nil;
+  self.safeBrowsingEnhancedProtectionCoordinator = nil;
 }
 
 @end

@@ -5,23 +5,25 @@
 #include "remoting/protocol/sdp_message.h"
 
 #include <algorithm>
+#include <string_view>
 #include <utility>
 
 #include "base/notreached.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 
 namespace remoting::protocol {
 
 SdpMessage::SdpMessage(const std::string& sdp) {
-  sdp_lines_ = base::SplitString(
-      sdp, "\n", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
+  sdp_lines_ = base::SplitString(sdp, "\n", base::TRIM_WHITESPACE,
+                                 base::SPLIT_WANT_NONEMPTY);
   for (const auto& line : sdp_lines_) {
-    if (base::StartsWith(line, "m=audio", base::CompareCase::SENSITIVE))
+    if (base::StartsWith(line, "m=audio", base::CompareCase::SENSITIVE)) {
       has_audio_ = true;
-    if (base::StartsWith(line, "m=video", base::CompareCase::SENSITIVE))
+    }
+    if (base::StartsWith(line, "m=video", base::CompareCase::SENSITIVE)) {
       has_video_ = true;
+    }
   }
 }
 
@@ -59,17 +61,15 @@ bool SdpMessage::PreferVideoCodec(const std::string& codec) {
     return false;
   }
 
-  for (size_t i = 0; i < sdp_lines_.size(); i++) {
-    if (!base::StartsWith(sdp_lines_[i],
-                          "m=video",
-                          base::CompareCase::SENSITIVE)) {
+  for (auto& sdp_line : sdp_lines_) {
+    if (!base::StartsWith(sdp_line, "m=video", base::CompareCase::SENSITIVE)) {
       continue;
     }
 
     // A valid SDP contains only one "m=video" line. So instead of continue, if
     // this line is invalid, we should return false immediately.
-    std::vector<base::StringPiece> fields = base::SplitStringPiece(
-        sdp_lines_[i], " ", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
+    std::vector<std::string_view> fields = base::SplitStringPiece(
+        sdp_line, " ", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
     // The first three fields are "m=video", port and proto.
     static constexpr int kSkipFields = 3;
     if (fields.size() <= kSkipFields) {
@@ -79,9 +79,8 @@ bool SdpMessage::PreferVideoCodec(const std::string& codec) {
     const auto first_codec_pos = fields.begin() + kSkipFields;
 
     for (const auto& payload : payload_types) {
-      auto pos = std::find(first_codec_pos,
-                           fields.end(),
-                           base::StringPiece(payload.second));
+      auto pos = std::find(first_codec_pos, fields.end(),
+                           std::string_view(payload.second));
       // The codec has not been found in codec list.
       if (pos == fields.end()) {
         continue;
@@ -90,7 +89,7 @@ bool SdpMessage::PreferVideoCodec(const std::string& codec) {
       std::rotate(first_codec_pos, pos, pos + 1);
     }
 
-    sdp_lines_[i] = base::JoinString(fields, " ");
+    sdp_line = base::JoinString(fields, " ");
     return true;
   }
 

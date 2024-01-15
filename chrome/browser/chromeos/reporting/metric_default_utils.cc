@@ -27,6 +27,11 @@ const base::TimeDelta GetDefaultReportUploadFrequency() {
                         kDefaultReportUploadFrequencyForTesting);
 }
 
+const base::TimeDelta GetDefaultKioskHeartbeatUploadFrequency() {
+  return GetDefaultRate(kDefaultKioskHeartbeatUploadFrequency,
+                        kDefaultKioskHeartbeatUploadFrequencyForTesting);
+}
+
 const base::TimeDelta GetDefaultCollectionRate(base::TimeDelta default_rate) {
   return GetDefaultRate(default_rate, kDefaultCollectionRateForTesting);
 }
@@ -35,18 +40,4 @@ const base::TimeDelta GetDefaultEventCheckingRate(
     base::TimeDelta default_rate) {
   return GetDefaultRate(default_rate, kDefaultEventCheckingRateForTesting);
 }
-
-// static
-base::TimeDelta InitDelayParam::init_delay = base::Minutes(1);
-
-// static
-void InitDelayParam::SetForTesting(const base::TimeDelta& delay) {
-  InitDelayParam::init_delay = delay;
-}
-
-// static
-const base::TimeDelta InitDelayParam::Get() {
-  return InitDelayParam::init_delay;
-}
-
 }  // namespace reporting::metrics

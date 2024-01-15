@@ -7,11 +7,10 @@
 #include <string>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/user_metrics.h"
 #include "base/metrics/user_metrics_action.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/extensions/extension_context_menu_model.h"
 #include "chrome/browser/themes/theme_properties.h"
 #include "chrome/browser/ui/layout_constants.h"
@@ -24,18 +23,16 @@
 #include "chrome/browser/ui/views/toolbar/toolbar_ink_drop_util.h"
 #include "components/sessions/content/session_tab_helper.h"
 #include "content/public/browser/browser_context.h"
-#include "content/public/browser/notification_source.h"
 #include "extensions/common/extension_features.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/models/image_model.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/base/theme_provider.h"
 #include "ui/compositor/paint_recorder.h"
 #include "ui/events/event.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/image/image_skia.h"
-#include "ui/gfx/image/image_skia_operations.h"
-#include "ui/gfx/image/image_skia_source.h"
 #include "ui/native_theme/native_theme.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/animation/ink_drop_impl.h"
@@ -47,13 +44,6 @@
 #include "ui/views/mouse_constants.h"
 
 using views::LabelButtonBorder;
-
-////////////////////////////////////////////////////////////////////////////////
-// ToolbarActionView::Delegate
-
-bool ToolbarActionView::Delegate::CanShowIconInToolbar() const {
-  return true;
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 // ToolbarActionView
@@ -159,13 +149,11 @@ void ToolbarActionView::UpdateState() {
   if (!sessions::SessionTabHelper::IdForTab(web_contents).is_valid())
     return;
 
-  gfx::ImageSkia icon(
-      view_controller_->GetIcon(web_contents, GetPreferredSize())
-          .AsImageSkia());
-
-  if (!icon.isNull())
-    SetImageModel(views::Button::STATE_NORMAL,
-                  ui::ImageModel::FromImageSkia(icon));
+  ui::ImageModel icon =
+      view_controller_->GetIcon(web_contents, GetPreferredSize());
+  if (!icon.IsEmpty()) {
+    SetImageModel(views::Button::STATE_NORMAL, icon);
+  }
 
   if (!base::FeatureList::IsEnabled(
           extensions_features::kExtensionsMenuAccessControl)) {
@@ -259,10 +247,6 @@ void ToolbarActionView::RemovedFromWidget() {
   MenuButton::RemovedFromWidget();
 }
 
-views::View* ToolbarActionView::GetAsView() {
-  return this;
-}
-
 views::FocusManager* ToolbarActionView::GetFocusManagerForAccelerator() {
   return GetFocusManager();
 }
@@ -277,10 +261,6 @@ views::Button* ToolbarActionView::GetReferenceButtonForPopup() {
 void ToolbarActionView::ShowContextMenuAsFallback() {
   context_menu_controller()->ShowContextMenuForView(
       this, GetKeyboardContextMenuLocation(), ui::MENU_SOURCE_NONE);
-}
-
-bool ToolbarActionView::CanShowIconInToolbar() const {
-  return delegate_->CanShowIconInToolbar();
 }
 
 void ToolbarActionView::OnPopupShown(bool by_user) {
@@ -313,5 +293,5 @@ void ToolbarActionView::ButtonPressed() {
   }
 }
 
-BEGIN_METADATA(ToolbarActionView, views::MenuButton)
+BEGIN_METADATA(ToolbarActionView)
 END_METADATA

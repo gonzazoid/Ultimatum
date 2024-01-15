@@ -9,9 +9,10 @@ import "mojo/public/mojom/base/file_error.mojom";
 
 // Routes file operations to the browser to interact with an in-memory file.
 // Used by a SyncAccessHandle in incognito mode, which creates an in-memory file
-// for the Origin-Private File System.
-// Methods are sync or async as appropriate to match the web-exposed
-// behavior of the corresponding methods of the SyncAccessHandle.
+// for a Bucket File System.
+//
+// Methods are sync to match the web-exposed behavior of the corresponding
+// methods of the SyncAccessHandle.
 interface FileSystemAccessFileDelegateHost {
   // Read up to `bytes_to_read` from the associated file starting at `offset`.
   // Ideally these would each be unsigned, but the backend code expects signed
@@ -20,6 +21,8 @@ interface FileSystemAccessFileDelegateHost {
   // buffer with the read data, the number of bytes read (which may be less than
   // the length of `data`), and an `error` of `base::File::Error::FILE_OK`.
   // `data` is null and `bytes_to_read` is 0 if the read fails.
+  // TODO(https://crbug.com/1327821): Replace this with expected<T, E> if/when
+  // it becomes available for mojom.
   [Sync]
   Read(int64 offset, int32 bytes_to_read) => (mojo_base.mojom.BigBuffer? data,
                                               mojo_base.mojom.FileError error,
@@ -30,6 +33,8 @@ interface FileSystemAccessFileDelegateHost {
   // FileSystemAccessFileDelegateHostImpl will report a bad message if `offset`
   // is negative. Returns the number of bytes written and a file error, which is
   // `base::File::Error::FILE_OK` if the write completed successfully.
+  // TODO(https://crbug.com/1327821): Replace this with expected<T, E> if/when
+  // it becomes available for mojom.
   [Sync]
   Write(int64 offset, handle<data_pipe_consumer> data) =>
       (mojo_base.mojom.FileError error, int32 bytes_written);
@@ -37,6 +42,8 @@ interface FileSystemAccessFileDelegateHost {
   // Returns the `length` of the associated file and a file error, which is
   // `base::File::Error::FILE_OK` if the operation completed successfully.
   // The returned length of the file will never be more than the max int64.
+  // TODO(https://crbug.com/1327821): Replace this with expected<T, E> if/when
+  // it becomes available for mojom.
   [Sync]
   GetLength() => (mojo_base.mojom.FileError error, int64 length);
 

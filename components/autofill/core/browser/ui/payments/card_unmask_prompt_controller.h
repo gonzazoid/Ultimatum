@@ -23,7 +23,8 @@ class CardUnmaskPromptController {
   virtual void OnUnmaskPromptAccepted(const std::u16string& cvc,
                                       const std::u16string& exp_month,
                                       const std::u16string& exp_year,
-                                      bool enable_fido_auth) = 0;
+                                      bool enable_fido_auth,
+                                      bool was_checkbox_visible) = 0;
   virtual void NewCardLinkClicked() = 0;
 
   // State.
@@ -32,21 +33,30 @@ class CardUnmaskPromptController {
   virtual std::u16string GetOkButtonLabel() const = 0;
   virtual int GetCvcImageRid() const = 0;
   virtual bool ShouldRequestExpirationDate() const = 0;
-  virtual bool GetStoreLocallyStartState() const = 0;
 #if BUILDFLAG(IS_ANDROID)
+  virtual Suggestion::Icon GetCardIcon() const = 0;
+  virtual std::u16string GetCardName() const = 0;
+  virtual std::u16string GetCardLastFourDigits() const = 0;
+  virtual std::u16string GetCardExpiration() const = 0;
+  virtual const GURL& GetCardArtUrl() const = 0;
   virtual int GetGooglePayImageRid() const = 0;
   virtual bool ShouldOfferWebauthn() const = 0;
   virtual bool GetWebauthnOfferStartState() const = 0;
-  virtual bool IsCardLocal() const = 0;
+  virtual std::u16string GetCvcImageAnnouncement() const = 0;
 #endif
   virtual base::TimeDelta GetSuccessMessageDuration() const = 0;
   virtual AutofillClient::PaymentsRpcResult GetVerificationResult() const = 0;
+  virtual bool IsVirtualCard() const = 0;
+#if !BUILDFLAG(IS_IOS)
+  virtual int GetCvcTooltipResourceId() = 0;
+#endif
 
   // Utilities.
   virtual bool InputCvcIsValid(const std::u16string& input_text) const = 0;
   virtual bool InputExpirationIsValid(const std::u16string& month,
                                       const std::u16string& year) const = 0;
   virtual int GetExpectedCvcLength() const = 0;
+  virtual bool IsChallengeOptionPresent() const = 0;
 };
 
 }  // namespace autofill

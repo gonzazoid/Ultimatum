@@ -4,6 +4,8 @@
 
 #include "extensions/renderer/content_setting.h"
 
+#include <string_view>
+
 #include "base/containers/contains.h"
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
@@ -38,14 +40,14 @@ const char* const kDeprecatedTypesToBlock[] = {
     "ppapi-broker",
 };
 
-const char* GetForcedValueForDeprecatedSetting(base::StringPiece type) {
+const char* GetForcedValueForDeprecatedSetting(std::string_view type) {
   if (base::Contains(kDeprecatedTypesToAllow, type))
     return "allow";
   DCHECK(base::Contains(kDeprecatedTypesToBlock, type));
   return "block";
 }
 
-bool IsDeprecated(base::StringPiece type) {
+bool IsDeprecated(std::string_view type) {
   return base::Contains(kDeprecatedTypesToAllow, type) ||
          base::Contains(kDeprecatedTypesToBlock, type);
 }
@@ -61,14 +63,13 @@ v8::Local<v8::Object> ContentSetting::Create(
     APITypeReferenceMap* type_refs,
     const BindingAccessChecker* access_checker) {
   CHECK_GE(property_values->size(), 2u);
+  CHECK((*property_values)[1u].is_dict());
   const std::string& pref_name = (*property_values)[0].GetString();
-  const base::Value& value_spec = (*property_values)[1u];
-  CHECK(value_spec.is_dict());
+  const base::Value::Dict& value_spec = (*property_values)[1u].GetDict();
 
   gin::Handle<ContentSetting> handle = gin::CreateHandle(
-      isolate, new ContentSetting(
-                   request_handler, type_refs, access_checker, pref_name,
-                   static_cast<const base::DictionaryValue&>(value_spec)));
+      isolate, new ContentSetting(request_handler, type_refs, access_checker,
+                                  pref_name, value_spec));
   return handle.ToV8().As<v8::Object>();
 }
 
@@ -76,7 +77,7 @@ ContentSetting::ContentSetting(APIRequestHandler* request_handler,
                                const APITypeReferenceMap* type_refs,
                                const BindingAccessChecker* access_checker,
                                const std::string& pref_name,
-                               const base::DictionaryValue& set_value_spec)
+                               const base::Value::Dict& set_value_spec)
     : request_handler_(request_handler),
       type_refs_(type_refs),
       access_checker_(access_checker),
@@ -153,7 +154,7 @@ void ContentSetting::HandleFunction(const std::string& method_name,
   if (!binding::IsContextValidOrThrowError(context))
     return;
 
-  std::vector<v8::Local<v8::Value>> argument_list = arguments->GetAll();
+  v8::LocalVector<v8::Value> argument_list = arguments->GetAll();
 
   std::string full_name = "contentSettings.ContentSetting." + method_name;
 
@@ -176,7 +177,7 @@ void ContentSetting::HandleFunction(const std::string& method_name,
                                            pref_name_.c_str()));
     // If a callback was provided, call it immediately.
     if (!parse_result.callback.IsEmpty()) {
-      std::vector<v8::Local<v8::Value>> args;
+      v8::LocalVector<v8::Value> args(isolate);
       if (method_name == "get") {
         // Populate the result to avoid breaking extensions.
         v8::Local<v8::Object> object = v8::Object::New(isolate);
@@ -211,12 +212,12 @@ void ContentSetting::HandleFunction(const std::string& method_name,
     }
   }
 
-  parse_result.arguments_list->GetList().Insert(
-      parse_result.arguments_list->GetList().begin(), base::Value(pref_name_));
+  parse_result.arguments_list->Insert(parse_result.arguments_list->begin(),
+                                      base::Value(pref_name_));
 
   v8::Local<v8::Promise> promise = request_handler_->StartRequest(
       context, "contentSettings." + method_name,
-      std::move(parse_result.arguments_list), parse_result.async_type,
+      std::move(*parse_result.arguments_list), parse_result.async_type,
       parse_result.callback, v8::Local<v8::Function>(),
       binding::ResultModifierFunction());
   if (!promise.IsEmpty())

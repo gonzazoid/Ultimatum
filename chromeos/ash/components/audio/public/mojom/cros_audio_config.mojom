@@ -25,6 +25,14 @@ enum AudioDeviceType {
   kOther
 };
 
+// Represents if a given audio effect (ex. Noise Canellation) is supported by
+// a device and if it does support, is that audio effect enabled.
+enum AudioEffectState {
+  kNotSupported,
+  kNotEnabled,
+  kEnabled,
+};
+
 // Represents the mute state of a user's audio device.
 enum MuteState {
   // The device is not muted.
@@ -34,7 +42,10 @@ enum MuteState {
   kMutedByUser,
 
   // The device is muted by the device policy.
-  kMutedByPolicy
+  kMutedByPolicy,
+
+  // The device is muted by physical switch.
+  kMutedExternally
 };
 
 // Represents a user's audio device.
@@ -54,6 +65,18 @@ struct AudioDevice {
 
   // The type of the device.
   AudioDeviceType device_type;
+
+  // The state of the noise cancellation audio effect.
+  AudioEffectState noise_cancellation_state;
+
+  // The state of the force respect ui gains.
+  // If ignore ui gains flag is set, users can force to respect ui gains by
+  // setting it to true.
+  AudioEffectState force_respect_ui_gains_state;
+
+  // The state of the Bluetooth hands-free profile(hfp) input super resolution
+  // audio effect.
+  AudioEffectState hfp_mic_sr_state;
 };
 
 // Represents the audio state of the Audio system.
@@ -65,8 +88,18 @@ struct AudioSystemProperties {
   // The volume of the active output device.
   uint8 output_volume_percent;
 
+  // The gain of the active input device.
+  uint8 input_gain_percent;
+
   // The mute state of the active output device.
   MuteState output_mute_state;
+
+  // List of input devices. UI surfaces should display devices in the order
+  // indicated by this array.
+  array<AudioDevice> input_devices;
+
+  // The mute state of the active input device.
+  MuteState input_mute_state;
 };
 
 // Observer for changes to audio system properties.
@@ -88,7 +121,38 @@ interface CrosAudioConfig {
   ObserveAudioSystemProperties(
     pending_remote<AudioSystemPropertiesObserver> observer);
 
+  // Sets the mute state of the active output device to |muted|. Ignored if
+  // device is muted by policy.
+  SetOutputMuted(bool muted);
+
   // Sets the volume of the active output device. If |volume| is above a
   // threshold and the device is muted, it's unmuted.
   SetOutputVolumePercent(int8 volume);
+
+  // Sets the gain of the active input device.
+  SetInputGainPercent(uint8 gain);
+
+  // Updates active output or input device based on the audio device ID
+  // provided.
+  SetActiveDevice(uint64 device);
+
+  // Sets mute state for primary input device if device is not muted by physical
+  // switch.
+  SetInputMuted(bool muted);
+
+  // Sets whether noise cancellation is enabled or not. This is shared between
+  // different input devices, so changing the active input device will keep the
+  // enabled state from the previous active input device.
+  SetNoiseCancellationEnabled(bool enabled);
+
+  // Sets whether force respect ui gains is enabled or not. This is shared
+  // between different input devices, so changing the active input device will
+  // keep the enabled state from the previous active input device.
+  SetForceRespectUiGainsEnabled(bool enabled);
+
+  // Sets whether Bluetooth hands-free profile(hfp) input super resolution is
+  // enabled or not. This is shared between different bluetooth input devices,
+  // so changing the active input device will keep the enabled state from the
+  // previous active bluetooth input device.
+  SetHfpMicSrEnabled(bool enabled);
 };

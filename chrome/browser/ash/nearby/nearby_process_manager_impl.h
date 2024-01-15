@@ -7,12 +7,14 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
 #include "base/unguessable_token.h"
 #include "chromeos/ash/services/nearby/public/cpp/nearby_process_manager.h"
+#include "chromeos/ash/services/nearby/public/mojom/quick_start_decoder.mojom.h"
 #include "mojo/public/cpp/bindings/shared_remote.h"
 
 namespace ash {
@@ -56,23 +58,33 @@ class NearbyProcessManagerImpl : public NearbyProcessManager {
    public:
     NearbyReferenceImpl(
         const mojo::SharedRemote<
-            location::nearby::connections::mojom::NearbyConnections>&
-            connections,
+            ::nearby::connections::mojom::NearbyConnections>& connections,
+        const mojo::SharedRemote<
+            ::ash::nearby::presence::mojom::NearbyPresence>& presence,
         const mojo::SharedRemote<sharing::mojom::NearbySharingDecoder>& decoder,
+        const mojo::SharedRemote<quick_start::mojom::QuickStartDecoder>&
+            quick_start_decoder,
         base::OnceClosure destructor_callback);
     ~NearbyReferenceImpl() override;
 
    private:
     // NearbyProcessManager::NearbyProcessReference:
-    const mojo::SharedRemote<
-        location::nearby::connections::mojom::NearbyConnections>&
+    const mojo::SharedRemote<::nearby::connections::mojom::NearbyConnections>&
     GetNearbyConnections() const override;
+    const mojo::SharedRemote<::ash::nearby::presence::mojom::NearbyPresence>&
+    GetNearbyPresence() const override;
     const mojo::SharedRemote<sharing::mojom::NearbySharingDecoder>&
     GetNearbySharingDecoder() const override;
+    const mojo::SharedRemote<quick_start::mojom::QuickStartDecoder>&
+    GetQuickStartDecoder() const override;
 
-    mojo::SharedRemote<location::nearby::connections::mojom::NearbyConnections>
+    mojo::SharedRemote<::nearby::connections::mojom::NearbyConnections>
         connections_;
+    mojo::SharedRemote<::ash::nearby::presence::mojom::NearbyPresence>
+        presence_;
     mojo::SharedRemote<sharing::mojom::NearbySharingDecoder> decoder_;
+    mojo::SharedRemote<quick_start::mojom::QuickStartDecoder>
+        quick_start_decoder_;
     base::OnceClosure destructor_callback_;
   };
 
@@ -85,6 +97,7 @@ class NearbyProcessManagerImpl : public NearbyProcessManager {
   // NearbyProcessManagerImpl:
   std::unique_ptr<NearbyProcessReference> GetNearbyProcessReference(
       NearbyProcessStoppedCallback on_process_stopped_callback) override;
+  void ShutDownProcess() override;
 
   // KeyedService:
   void Shutdown() override;
@@ -95,10 +108,10 @@ class NearbyProcessManagerImpl : public NearbyProcessManager {
   void OnSharingProcessCrash();
   void OnMojoPipeDisconnect(NearbyProcessShutdownReason shutdown_reason);
   void OnReferenceDeleted(const base::UnguessableToken& reference_id);
-  void ShutDownProcess(NearbyProcessShutdownReason shutdown_reason);
+  void DoShutDownProcess(NearbyProcessShutdownReason shutdown_reason);
   void NotifyProcessStopped(NearbyProcessShutdownReason shutdown_reason);
 
-  NearbyDependenciesProvider* nearby_dependencies_provider_;
+  raw_ptr<NearbyDependenciesProvider> nearby_dependencies_provider_;
   std::unique_ptr<base::OneShotTimer> shutdown_debounce_timer_;
   base::RepeatingCallback<mojo::PendingRemote<sharing::mojom::Sharing>()>
       sharing_binder_;
@@ -109,9 +122,12 @@ class NearbyProcessManagerImpl : public NearbyProcessManager {
 
   // Implemented as SharedRemote because copies of these are intended to be used
   // by multiple clients.
-  mojo::SharedRemote<location::nearby::connections::mojom::NearbyConnections>
+  mojo::SharedRemote<::nearby::connections::mojom::NearbyConnections>
       connections_;
+  mojo::SharedRemote<::ash::nearby::presence::mojom::NearbyPresence> presence_;
   mojo::SharedRemote<sharing::mojom::NearbySharingDecoder> decoder_;
+  mojo::SharedRemote<quick_start::mojom::QuickStartDecoder>
+      quick_start_decoder_;
 
   // Map which stores callbacks to be invoked if the Nearby process shuts down
   // unexpectedly, before clients release their references.

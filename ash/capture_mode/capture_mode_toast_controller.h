@@ -5,9 +5,11 @@
 #ifndef ASH_CAPTURE_MODE_CAPTURE_MODE_TOAST_CONTROLLER_H_
 #define ASH_CAPTURE_MODE_CAPTURE_MODE_TOAST_CONTROLLER_H_
 
+#include <optional>
+
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/views/widget/unique_widget_ptr.h"
 
 namespace gfx {
@@ -16,7 +18,6 @@ class Rect;
 
 namespace views {
 class Widget;
-class Label;
 }  // namespace views
 
 namespace ui {
@@ -26,6 +27,7 @@ class Layer;
 namespace ash {
 
 class CaptureModeSession;
+class SystemToastStyle;
 
 // Defines the capture toast type that Capture Mode is currently using.
 enum class CaptureToastType {
@@ -33,7 +35,7 @@ enum class CaptureToastType {
   kCameraPreview,
 };
 
-// Controls the capture mode toast shown in the capture session.
+// Controls the capture mode toast shown conditionally in the capture session.
 class ASH_EXPORT CaptureModeToastController {
  public:
   explicit CaptureModeToastController(CaptureModeSession* session);
@@ -75,18 +77,18 @@ class ASH_EXPORT CaptureModeToastController {
   // Initializes the toast widget and its contents.
   void BuildCaptureToastWidget(const std::u16string& label);
 
-  gfx::Rect CalculateToastWidgetScreenBounds() const;
+  gfx::Rect CalculateToastWidgetBoundsInScreen() const;
 
-  // The session that owns `this`. Guaranteed to be non null for the lifetime of
+  // The session that owns `this`. Guaranteed to be not null for the lifetime of
   // `this`.
-  CaptureModeSession* const capture_session_;
+  const raw_ptr<CaptureModeSession> capture_session_;
 
   // The capture toast widget and its contents view.
   views::UniqueWidgetPtr capture_toast_widget_;
-  views::Label* toast_label_view_ = nullptr;
+  raw_ptr<SystemToastStyle, DanglingUntriaged> toast_contents_view_ = nullptr;
 
   // Stores the toast type of the `capture_toast_widget_` after it's created.
-  absl::optional<CaptureToastType> current_toast_type_;
+  std::optional<CaptureToastType> current_toast_type_;
 
   // Started when `capture_toast_widget_` is shown for `kCameraPreview`. Runs
   // MaybeDismissCaptureToast() to fade out the capture toast if possible.

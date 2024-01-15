@@ -9,12 +9,12 @@
 
 #include <memory>
 
+#include "base/apple/bundle_locations.h"
+#include "base/apple/foundation_util.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/mac/bundle_locations.h"
-#include "base/mac/foundation_util.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "base/path_service.h"
 #include "base/strings/sys_string_conversions.h"
 #include "chrome/browser/safe_browsing/incident_reporting/incident.h"
@@ -87,9 +87,9 @@ TEST_F(BinaryIntegrityAnalyzerMacTest, GetCriticalPathsAndRequirements) {
       "certificate leaf[field.1.2.840.113635.100.6.1.13] and "
       "certificate leaf[subject.OU] = EQHXZ8M8AV";
   paths_and_requirements_expected.push_back(
-      PathAndRequirement(base::mac::OuterBundlePath(), expected_req));
+      PathAndRequirement(base::apple::OuterBundlePath(), expected_req));
   paths_and_requirements_expected.push_back(
-      PathAndRequirement(base::mac::FrameworkBundlePath(), expected_req));
+      PathAndRequirement(base::apple::FrameworkBundlePath(), expected_req));
 
   std::vector<PathAndRequirement> paths_and_requirements =
       GetCriticalPathsAndRequirements();
@@ -106,11 +106,12 @@ TEST_F(BinaryIntegrityAnalyzerMacTest, GetCriticalPathsAndRequirements) {
     EXPECT_EQ(paths_and_requirements[i].requirement,
               paths_and_requirements_expected[i].requirement);
 
-    base::ScopedCFTypeRef<SecRequirementRef> requirement;
+    base::apple::ScopedCFTypeRef<SecRequirementRef> requirement;
     EXPECT_EQ(
         errSecSuccess,
         SecRequirementCreateWithString(
-            base::SysUTF8ToCFStringRef(paths_and_requirements[i].requirement),
+            base::SysUTF8ToCFStringRef(paths_and_requirements[i].requirement)
+                .get(),
             kSecCSDefaultFlags, requirement.InitializeInto()));
   }
 }

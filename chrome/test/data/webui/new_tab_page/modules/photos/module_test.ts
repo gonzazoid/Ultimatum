@@ -2,21 +2,19 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://webui-test/mojo_webui_test_support.js';
-
 import {DisableModuleEvent, DismissModuleEvent, photosDescriptor, PhotosModuleElement, PhotosProxy} from 'chrome://new-tab-page/lazy_load.js';
 import {$$, DomIf} from 'chrome://new-tab-page/new_tab_page.js';
 import {PhotosHandlerRemote} from 'chrome://new-tab-page/photos.mojom-webui.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
+import {fakeMetricsPrivate, MetricsTracker} from 'chrome://webui-test/metrics_test_support.js';
+import {TestMock} from 'chrome://webui-test/test_mock.js';
 import {eventToPromise, isVisible} from 'chrome://webui-test/test_util.js';
 
-import {fakeMetricsPrivate, MetricsTracker} from '../../metrics_test_support.js';
 import {installMock} from '../../test_support.js';
 
 suite('NewTabPageModulesPhotosModuleTest', () => {
-  let handler: TestBrowserProxy;
+  let handler: TestMock<PhotosHandlerRemote>;
   let metrics: MetricsTracker;
 
   setup(() => {
@@ -526,10 +524,11 @@ suite('NewTabPageModulesPhotosModuleTest', () => {
     assertEquals(
         loadTimeData.getString('modulesPhotosMemoriesHiddenToday'),
         event.detail.message);
+    assertTrue(!!event.detail.restoreCallback);
     assertEquals(1, handler.getCallCount('dismissModule'));
 
     // Act.
-    event.detail.restoreCallback();
+    event.detail.restoreCallback!();
 
     // Assert.
     assertEquals(1, handler.getCallCount('restoreModule'));

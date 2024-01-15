@@ -7,8 +7,8 @@
 #include <stdint.h>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/location.h"
 #include "base/logging.h"
@@ -107,7 +107,7 @@ class VideoDecoder::ImplBase
 class VideoDecoder::Vp8Impl final : public VideoDecoder::ImplBase {
  public:
   explicit Vp8Impl(const scoped_refptr<CastEnvironment>& cast_environment)
-      : ImplBase(cast_environment, CODEC_VIDEO_VP8) {
+      : ImplBase(cast_environment, Codec::kVideoVp8) {
     if (ImplBase::operational_status_ != STATUS_UNINITIALIZED)
       return;
 
@@ -180,7 +180,7 @@ class VideoDecoder::Vp8Impl final : public VideoDecoder::ImplBase {
 class VideoDecoder::FakeImpl final : public VideoDecoder::ImplBase {
  public:
   explicit FakeImpl(const scoped_refptr<CastEnvironment>& cast_environment)
-      : ImplBase(cast_environment, CODEC_VIDEO_FAKE), last_decoded_id_(-1) {
+      : ImplBase(cast_environment, Codec::kVideoFake), last_decoded_id_(-1) {
     if (ImplBase::operational_status_ != STATUS_UNINITIALIZED)
       return;
     ImplBase::operational_status_ = STATUS_INITIALIZED;
@@ -196,12 +196,12 @@ class VideoDecoder::FakeImpl final : public VideoDecoder::ImplBase {
     // Make sure this is a JSON string.
     if (!len || data[0] != '{')
       return nullptr;
-    std::unique_ptr<base::Value> values(base::JSONReader::ReadDeprecated(
-        base::StringPiece(reinterpret_cast<char*>(data), len)));
+    absl::optional<base::Value> values = base::JSONReader::Read(
+        base::StringPiece(reinterpret_cast<char*>(data), len));
     if (!values || !values->is_dict())
       return nullptr;
 
-    int id = values->FindIntKey("id").value_or(0);
+    int id = values->GetDict().FindInt("id").value_or(0);
     DCHECK(id == last_decoded_id_ + 1);
     last_decoded_id_ = id;
     return media::VideoFrame::CreateBlackFrame(gfx::Size(2, 2));
@@ -215,13 +215,13 @@ VideoDecoder::VideoDecoder(
     Codec codec)
     : cast_environment_(cast_environment) {
   switch (codec) {
-    case CODEC_VIDEO_FAKE:
+    case Codec::kVideoFake:
       impl_ = new FakeImpl(cast_environment);
       break;
-    case CODEC_VIDEO_VP8:
+    case Codec::kVideoVp8:
       impl_ = new Vp8Impl(cast_environment);
       break;
-    case CODEC_VIDEO_H264:
+    case Codec::kVideoH264:
       NOTIMPLEMENTED();
       break;
     default:

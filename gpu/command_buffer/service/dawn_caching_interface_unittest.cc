@@ -118,8 +118,9 @@ TEST_F(DawnCachingInterfaceTest, UnableToCreateBackend) {
 }
 
 TEST_F(DawnCachingInterfaceTest, StoreTriggersHostSide) {
-  auto dawn_caching_interface =
-      factory_.CreateInstance(handle_, &decoder_client_mock_);
+  auto dawn_caching_interface = factory_.CreateInstance(
+      handle_, base::BindRepeating(&MockDecoderClient::CacheBlob,
+                                   base::Unretained(&decoder_client_mock_)));
 
   EXPECT_CALL(decoder_client_mock_,
               CacheBlob(gpu::GpuDiskCacheType::kDawnWebGPU, std::string(kKey),
@@ -185,6 +186,40 @@ TEST_F(DawnCachingInterfaceTest, TestLruEviction) {
   EXPECT_EQ(kDataSize, interface->LoadData(kKey1.data(), 1u, nullptr, 0));
   EXPECT_EQ(0u, interface->LoadData(kKey2.data(), 1u, nullptr, 0));
   EXPECT_EQ(kDataSize, interface->LoadData(kKey3.data(), 1u, nullptr, 0));
+}
+
+// Entries that are too large for the size of the cache are not cached and do
+// not cause any crashes. This is a regression test for dawn:2034.
+TEST_F(DawnCachingInterfaceTest, TestVeryLargeEntrySize) {
+  static constexpr std::string_view kSmall = "1";
+  static constexpr std::string_view kLarge = "11111";
+  static constexpr size_t kSmallSize = kSmall.size();
+  static constexpr size_t kLargeSize = kLarge.size();
+  static constexpr size_t kCacheSize = kLargeSize - 1u;
+
+  DawnCachingInterfaceFactory factory(base::BindRepeating([]() {
+    return base::MakeRefCounted<detail::DawnCachingBackend>(kCacheSize);
+  }));
+  auto interface = factory.CreateInstance();
+
+  {
+    // When the key is larger than the cache size but the value is not, caching
+    // fails.
+    interface->StoreData(kLarge.data(), kLargeSize, kSmall.data(), kSmallSize);
+    EXPECT_EQ(0u, interface->LoadData(kLarge.data(), kLargeSize, nullptr, 0));
+  }
+  {
+    // When the key is smaller than the cache size, but the value is not,
+    // caching fails.
+    interface->StoreData(kSmall.data(), kSmallSize, kLarge.data(), kLargeSize);
+    EXPECT_EQ(0u, interface->LoadData(kSmall.data(), kSmallSize, nullptr, 0));
+  }
+  {
+    // When the both the key and the value is larger than the cache size,
+    // caching fails.
+    interface->StoreData(kLarge.data(), kLargeSize, kLarge.data(), kLargeSize);
+    EXPECT_EQ(0u, interface->LoadData(kLarge.data(), kLargeSize, nullptr, 0));
+  }
 }
 
 }  // namespace

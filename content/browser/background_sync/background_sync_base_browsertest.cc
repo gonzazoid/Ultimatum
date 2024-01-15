@@ -9,10 +9,11 @@
 #include <vector>
 #include "base/metrics/field_trial_param_associator.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "content/browser/background_sync/background_sync_manager.h"
 #include "content/browser/storage_partition_impl.h"
 #include "content/public/browser/browser_context.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/service_worker_context.h"
 #include "content/public/test/background_sync_test_util.h"
 #include "content/public/test/content_browser_test_utils.h"
@@ -22,8 +23,8 @@
 
 namespace content {
 
-BackgroundSyncBaseBrowserTest::BackgroundSyncBaseBrowserTest() {}
-BackgroundSyncBaseBrowserTest::~BackgroundSyncBaseBrowserTest() {}
+BackgroundSyncBaseBrowserTest::BackgroundSyncBaseBrowserTest() = default;
+BackgroundSyncBaseBrowserTest::~BackgroundSyncBaseBrowserTest() = default;
 
 std::string BackgroundSyncBaseBrowserTest::BuildScriptString(
     const std::string& function,
@@ -52,7 +53,7 @@ bool BackgroundSyncBaseBrowserTest::RegistrationPending(
   auto callback = base::BindOnce(
       &BackgroundSyncBaseBrowserTest::RegistrationPendingCallback,
       base::Unretained(this), run_loop.QuitClosure(),
-      base::ThreadTaskRunnerHandle::Get(), &is_pending);
+      base::SingleThreadTaskRunner::GetCurrentDefault(), &is_pending);
 
   RegistrationPendingOnCoreThread(base::WrapRefCounted(sync_context),
                                   base::WrapRefCounted(service_worker_context),
@@ -63,9 +64,9 @@ bool BackgroundSyncBaseBrowserTest::RegistrationPending(
   return is_pending;
 }
 
-bool BackgroundSyncBaseBrowserTest::CompleteDelayedSyncEvent() {
-  std::string script_result = RunScript("completeDelayedSyncEvent()");
-  return script_result == BuildExpectedResult("delay", "completing");
+void BackgroundSyncBaseBrowserTest::CompleteDelayedSyncEvent() {
+  ASSERT_EQ(BuildExpectedResult("delay", "completing"),
+            EvalJs(web_contents(), "completeDelayedSyncEvent()"));
 }
 
 void BackgroundSyncBaseBrowserTest::RegistrationPendingCallback(
@@ -117,7 +118,7 @@ void BackgroundSyncBaseBrowserTest::RegistrationPendingOnCoreThread(
     const GURL& url,
     base::OnceCallback<void(bool)> callback) {
   sw_context->FindReadyRegistrationForClientUrl(
-      url, blink::StorageKey(url::Origin::Create(url)),
+      url, blink::StorageKey::CreateFirstParty(url::Origin::Create(url)),
       base::BindOnce(&BackgroundSyncBaseBrowserTest::
                          RegistrationPendingDidGetSWRegistration,
                      base::Unretained(this), sync_context, tag,
@@ -170,7 +171,7 @@ void BackgroundSyncBaseBrowserTest::SetUpOnMainThread() {
 
   SetIncognitoMode(false);
   background_sync_test_util::SetOnline(web_contents(), true);
-  ASSERT_TRUE(LoadTestPage(kDefaultTestURL));
+  LoadTestPage(kDefaultTestURL);
 
   ContentBrowserTest::SetUpOnMainThread();
 }
@@ -179,14 +180,8 @@ void BackgroundSyncBaseBrowserTest::TearDownOnMainThread() {
   https_server_.reset();
 }
 
-bool BackgroundSyncBaseBrowserTest::LoadTestPage(const std::string& path) {
-  return NavigateToURL(shell_, https_server_->GetURL(path));
-}
-
-std::string BackgroundSyncBaseBrowserTest::RunScript(
-    const std::string& script) {
-  return EvalJs(web_contents(), script, EXECUTE_SCRIPT_USE_MANUAL_REPLY)
-      .ExtractString();
+void BackgroundSyncBaseBrowserTest::LoadTestPage(const std::string& path) {
+  ASSERT_TRUE(NavigateToURL(shell_, https_server_->GetURL(path)));
 }
 
 void BackgroundSyncBaseBrowserTest::SetTestClock(base::SimpleTestClock* clock) {
@@ -221,19 +216,13 @@ void BackgroundSyncBaseBrowserTest::ClearStoragePartitionData() {
   run_loop.Run();
 }
 
-std::string BackgroundSyncBaseBrowserTest::PopConsoleString() {
-  return RunScript("resultQueue.pop()");
+EvalJsResult BackgroundSyncBaseBrowserTest::PopConsoleString() {
+  return EvalJs(web_contents(), "resultQueue.pop()");
 }
 
-bool BackgroundSyncBaseBrowserTest::PopConsole(
-    const std::string& expected_msg) {
-  std::string script_result = PopConsoleString();
-  return script_result == expected_msg;
-}
-
-bool BackgroundSyncBaseBrowserTest::RegisterServiceWorker() {
-  std::string script_result = RunScript("registerServiceWorker()");
-  return script_result == BuildExpectedResult("service worker", "registered");
+void BackgroundSyncBaseBrowserTest::RegisterServiceWorker() {
+  ASSERT_EQ(BuildExpectedResult("service worker", "registered"),
+            EvalJs(web_contents(), "registerServiceWorker()"));
 }
 
 }  // namespace content

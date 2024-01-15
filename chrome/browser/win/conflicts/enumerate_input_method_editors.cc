@@ -9,15 +9,13 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/win/registry.h"
 #include "chrome/browser/win/conflicts/module_info_util.h"
 
@@ -62,7 +60,7 @@ bool IsMicrosoftIme(const wchar_t* ime_guid) {
 // Returns the path to the in-proc server DLL for |guid|, or an empty path if
 // none is found.
 base::FilePath GetInprocServerDllPath(const wchar_t* guid) {
-  std::wstring key_name = base::StringPrintf(kClassIdRegistryKeyFormat, guid);
+  const std::wstring key_name = GuidToClsid(guid);
   base::win::RegKey registry_key;
   std::wstring value;
   if (registry_key.Open(HKEY_CLASSES_ROOT, key_name.c_str(), KEY_QUERY_VALUE) ==
@@ -121,7 +119,7 @@ void EnumerateInputMethodEditors(OnImeEnumeratedCallback on_ime_enumerated,
       {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
        base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
       base::BindOnce(&EnumerateImesOnBlockingSequence,
-                     base::SequencedTaskRunnerHandle::Get(),
+                     base::SequencedTaskRunner::GetCurrentDefault(),
                      std::move(on_ime_enumerated),
                      std::move(on_enumeration_finished)));
 }

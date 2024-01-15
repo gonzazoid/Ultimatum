@@ -11,11 +11,13 @@
 #include "media/base/timestamp_constants.h"
 #include "media/base/video_frame.h"
 #include "media/base/video_util.h"
+#include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/platform/graphics/bitmap_image_metrics.h"
 #include "third_party/blink/renderer/platform/graphics/video_frame_image_util.h"
 #include "third_party/blink/renderer/platform/image-decoders/segment_reader.h"
 #include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
 #include "third_party/skia/include/core/SkColorSpace.h"
+#include "third_party/skia/include/core/SkImage.h"
 #include "third_party/skia/include/core/SkYUVAPixmaps.h"
 
 namespace blink {
@@ -86,7 +88,7 @@ ImageDecoderCore::ImageDecoderCore(
     String mime_type,
     scoped_refptr<SegmentReader> data,
     bool data_complete,
-    const ColorBehavior& color_behavior,
+    ColorBehavior color_behavior,
     const SkISize& desired_size,
     ImageDecoder::AnimationOption animation_option)
     : mime_type_(mime_type),
@@ -213,7 +215,7 @@ std::unique_ptr<ImageDecoderCore::ImageDecodeResult> ImageDecoderCore::Decode(
   // Prefer FinalizePixelsAndGetImage() since that will mark the underlying
   // bitmap as immutable, which allows copies to be avoided.
   auto sk_image = is_complete ? image->FinalizePixelsAndGetImage()
-                              : SkImage::MakeFromBitmap(image->Bitmap());
+                              : SkImages::RasterFromBitmap(image->Bitmap());
   if (!sk_image) {
     NOTREACHED() << "Failed to retrieve SkImage for decoded image.";
     result->status = Status::kDecodeError;
@@ -249,8 +251,8 @@ std::unique_ptr<ImageDecoderCore::ImageDecodeResult> ImageDecoderCore::Decode(
     return result;
   }
 
-  frame->metadata().transformation = ImageOrientationToVideoTransformation(
-      decoder_->Orientation().Orientation());
+  frame->metadata().transformation =
+      ImageOrientationToVideoTransformation(decoder_->Orientation());
 
   // Only animated images have frame durations.
   if (decoder_->FrameCount() > 1 ||
@@ -316,7 +318,8 @@ void ImageDecoderCore::Reinitialize(
       mime_type_, segment_reader_, data_complete_,
       ImageDecoder::kAlphaNotPremultiplied,
       ImageDecoder::HighBitDepthDecodingOption::kDefaultBitDepth,
-      color_behavior_, desired_size_, animation_option_);
+      color_behavior_, Platform::GetMaxDecodedImageBytes(), desired_size_,
+      animation_option_);
   DCHECK(decoder_);
 }
 
@@ -399,8 +402,8 @@ void ImageDecoderCore::MaybeDecodeToYuv() {
   }
 
   yuv_frame_->set_timestamp(GetTimestampForFrame(0));
-  yuv_frame_->metadata().transformation = ImageOrientationToVideoTransformation(
-      decoder_->Orientation().Orientation());
+  yuv_frame_->metadata().transformation =
+      ImageOrientationToVideoTransformation(decoder_->Orientation());
 
   if (gfx_cs.IsValid()) {
     yuv_frame_->set_color_space(YUVColorSpaceToGfxColorSpace(

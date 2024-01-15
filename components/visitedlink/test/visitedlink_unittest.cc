@@ -10,9 +10,9 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/process/process_handle.h"
@@ -20,17 +20,15 @@
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/timer/mock_timer.h"
 #include "components/visitedlink/browser/visitedlink_delegate.h"
 #include "components/visitedlink/browser/visitedlink_event_listener.h"
 #include "components/visitedlink/browser/visitedlink_writer.h"
 #include "components/visitedlink/common/visitedlink.mojom.h"
+#include "components/visitedlink/common/visitedlink_common.h"
 #include "components/visitedlink/renderer/visitedlink_reader.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/browser/notification_service.h"
-#include "content/public/browser/notification_types.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/mock_render_process_host.h"
 #include "content/public/test/test_browser_context.h"
@@ -547,6 +545,64 @@ TEST_F(VisitedLinkTest, Listener) {
   EXPECT_EQ(1, listener->completely_reset_count());
 }
 
+TEST_F(VisitedLinkTest, HashRangeWraparound) {
+  ASSERT_TRUE(InitVisited(0, true, true));
+
+  // Create two fingerprints that, when added, will create a wraparound hash
+  // range.
+  const VisitedLinkCommon::Fingerprint kFingerprint0 =
+      writer_->DefaultTableSize() - 1;
+  const VisitedLinkCommon::Fingerprint kFingerprint1 = kFingerprint0 + 1;
+
+  // Add the two fingerprints.
+  const VisitedLinkCommon::Hash hash0 =
+      writer_->AddFingerprint(kFingerprint0, false);
+  const VisitedLinkCommon::Hash hash1 =
+      writer_->AddFingerprint(kFingerprint1, false);
+
+  // Verify the hashes form a range that wraps around.
+  EXPECT_EQ(hash0, VisitedLinkCommon::Hash(writer_->DefaultTableSize() - 1));
+  EXPECT_EQ(hash1, 0);
+
+  // Write the database to file.
+  writer_->WriteUsedItemCountToFile();
+  writer_->WriteHashRangeToFile(hash0, hash1);
+
+  // Close and reopen the database.
+  ClearDB();
+  ASSERT_TRUE(InitVisited(0, true, true));
+
+  // Verify database contents.
+  ASSERT_EQ(writer_->GetUsedCount(), 2);
+  ASSERT_TRUE(writer_->IsVisited(kFingerprint0));
+  ASSERT_TRUE(writer_->IsVisited(kFingerprint1));
+}
+
+TEST_F(VisitedLinkTest, ResizeErrorHandling) {
+  // Create a small database.
+  const int32_t initial_size = 17;
+  ASSERT_TRUE(InitVisited(initial_size, true, true));
+
+  // Add test URL.
+  GURL url = TestURL(0);
+  writer_->AddURL(url);
+
+  // Simulate shared memory allocation failure, causing CreateURLTable() to
+  // fail.
+  VisitedLinkWriter::fail_table_creation_for_testing_ = true;
+
+  // Expect resize to fail silently.
+  const int32_t new_size = 23;
+  writer_->ResizeTable(new_size);
+
+  // Restore global state for subsequent tests.
+  VisitedLinkWriter::fail_table_creation_for_testing_ = false;
+
+  // Verify contents.
+  ASSERT_EQ(writer_->GetUsedCount(), 1);
+  ASSERT_TRUE(writer_->IsVisited(url));
+}
+
 class VisitCountingContext : public mojom::VisitedLinkNotificationSink {
  public:
   VisitCountingContext()
@@ -637,13 +693,6 @@ class VisitRelayingRenderProcessHost : public MockRenderProcessHost {
       delete;
   VisitRelayingRenderProcessHost& operator=(
       const VisitRelayingRenderProcessHost&) = delete;
-
-  ~VisitRelayingRenderProcessHost() override {
-    content::NotificationService::current()->Notify(
-        content::NOTIFICATION_RENDERER_PROCESS_TERMINATED,
-        content::Source<content::RenderProcessHost>(this),
-        content::NotificationService::NoDetails());
-  }
 };
 
 class VisitedLinkRenderProcessHostFactory
@@ -661,12 +710,18 @@ class VisitedLinkRenderProcessHostFactory
       content::SiteInstance* site_instance) override {
     auto rph = std::make_unique<VisitRelayingRenderProcessHost>(browser_context,
                                                                 context_.get());
-
     content::RenderProcessHost* result = rph.get();
-    creation_observer_->OnRenderProcessHostCreated(result);
-
     processes_.push_back(std::move(rph));
     return result;
+  }
+
+  // RenderProcessHostImpl::OnProcessLaunched only notifies once the child
+  // process has launched. This is after RenderWidgetHost has been created. We
+  // will notify at the end of SetUp.
+  void NotifyProcessLaunced() {
+    for (auto& rph : processes_) {
+      creation_observer_->OnRenderProcessHostCreated(rph.get());
+    }
   }
 
   void SetRenderProcessHostCreationObserver(
@@ -679,8 +734,8 @@ class VisitedLinkRenderProcessHostFactory
   void DeleteRenderProcessHosts() { processes_.clear(); }
 
  private:
-  raw_ptr<content::RenderProcessHostCreationObserver> creation_observer_ =
-      nullptr;
+  raw_ptr<content::RenderProcessHostCreationObserver, DanglingUntriaged>
+      creation_observer_ = nullptr;
 
   std::list<std::unique_ptr<VisitRelayingRenderProcessHost>> processes_;
   std::unique_ptr<VisitCountingContext> context_;
@@ -691,6 +746,7 @@ class VisitedLinkEventsTest : public content::RenderViewHostTestHarness {
   void SetUp() override {
     SetRenderProcessHostFactory(&vc_rph_factory_);
     content::RenderViewHostTestHarness::SetUp();
+    vc_rph_factory_.NotifyProcessLaunced();
   }
 
   void TearDown() override {

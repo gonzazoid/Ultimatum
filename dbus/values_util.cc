@@ -9,6 +9,7 @@
 
 #include "base/json/json_writer.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/values.h"
 #include "dbus/message.h"
@@ -24,21 +25,19 @@ bool IsExactlyRepresentableByDouble(T value) {
 }
 
 // Pops values from |reader| and appends them to |list_value|.
-bool PopListElements(MessageReader* reader, base::Value* list_value) {
-  DCHECK(list_value->is_list());
+bool PopListElements(MessageReader* reader, base::Value::List& list_value) {
   while (reader->HasMoreData()) {
     base::Value element_value = PopDataAsValue(reader);
     if (element_value.is_none())
       return false;
-    list_value->Append(std::move(element_value));
+    list_value.Append(std::move(element_value));
   }
   return true;
 }
 
 // Pops dict-entries from |reader| and sets them to |dictionary_value|
 bool PopDictionaryEntries(MessageReader* reader,
-                          base::Value* dictionary_value) {
-  DCHECK(dictionary_value->is_dict());
+                          base::Value::Dict& dictionary_value) {
   while (reader->HasMoreData()) {
     DCHECK_EQ(Message::DICT_ENTRY, reader->GetDataType());
     MessageReader entry_reader(nullptr);
@@ -62,7 +61,7 @@ bool PopDictionaryEntries(MessageReader* reader,
     base::Value value = PopDataAsValue(&entry_reader);
     if (value.is_none())
       return false;
-    dictionary_value->SetKey(key_string, std::move(value));
+    dictionary_value.Set(key_string, std::move(value));
   }
   return true;
 }
@@ -81,7 +80,7 @@ std::string GetTypeSignature(base::ValueView value) {
 
     std::string operator()(double) { return "d"; }
 
-    std::string operator()(base::StringPiece) { return "s"; }
+    std::string operator()(std::string_view) { return "s"; }
 
     std::string operator()(const base::Value::BlobStorage&) { return "ay"; }
 
@@ -182,16 +181,16 @@ base::Value PopDataAsValue(MessageReader* reader) {
       MessageReader sub_reader(nullptr);
       if (reader->PopArray(&sub_reader)) {
         // If the type of the array's element is DICT_ENTRY, create a
-        // Value with type base::Value::Type::DICTIONARY, otherwise create a
-        // Value with type base::Value::Type::LIST.
+        // Value with type base::Value::Dict, otherwise create a
+        // Value with type base::Value::List.
         if (sub_reader.GetDataType() == Message::DICT_ENTRY) {
-          auto dictionary_value = base::Value(base::Value::Type::DICTIONARY);
-          if (PopDictionaryEntries(&sub_reader, &dictionary_value))
-            result = std::move(dictionary_value);
+          base::Value::Dict dictionary_value;
+          if (PopDictionaryEntries(&sub_reader, dictionary_value))
+            result = base::Value(std::move(dictionary_value));
         } else {
-          auto list_value = base::Value(base::Value::Type::LIST);
-          if (PopListElements(&sub_reader, &list_value))
-            result = std::move(list_value);
+          base::Value::List list_value;
+          if (PopListElements(&sub_reader, list_value))
+            result = base::Value(std::move(list_value));
         }
       }
       break;
@@ -199,9 +198,9 @@ base::Value PopDataAsValue(MessageReader* reader) {
     case Message::STRUCT: {
       MessageReader sub_reader(nullptr);
       if (reader->PopStruct(&sub_reader)) {
-        auto list_value = base::Value(base::Value::Type::LIST);
-        if (PopListElements(&sub_reader, &list_value))
-          result = std::move(list_value);
+        base::Value::List list_value;
+        if (PopListElements(&sub_reader, list_value))
+          result = base::Value(std::move(list_value));
       }
       break;
     }
@@ -221,7 +220,7 @@ base::Value PopDataAsValue(MessageReader* reader) {
 
 void AppendBasicTypeValueData(MessageWriter* writer, base::ValueView value) {
   struct Visitor {
-    MessageWriter* writer;
+    raw_ptr<MessageWriter> writer;
 
     void operator()(absl::monostate) {
       DLOG(ERROR) << "Unexpected type: " << base::Value::Type::NONE;
@@ -233,7 +232,7 @@ void AppendBasicTypeValueData(MessageWriter* writer, base::ValueView value) {
 
     void operator()(double value) { writer->AppendDouble(value); }
 
-    void operator()(base::StringPiece value) { writer->AppendString(value); }
+    void operator()(std::string_view value) { writer->AppendString(value); }
 
     void operator()(const base::Value::BlobStorage&) {
       DLOG(ERROR) << "Unexpected type: " << base::Value::Type::BINARY;
@@ -261,7 +260,7 @@ void AppendBasicTypeValueDataAsVariant(MessageWriter* writer,
 
 void AppendValueData(MessageWriter* writer, base::ValueView value) {
   struct Visitor {
-    MessageWriter* writer;
+    raw_ptr<MessageWriter> writer;
 
     void operator()(absl::monostate) {
       DLOG(ERROR) << "Unexpected type: " << base::Value::Type::NONE;
@@ -279,7 +278,7 @@ void AppendValueData(MessageWriter* writer, base::ValueView value) {
       return AppendBasicTypeValueData(writer, value);
     }
 
-    void operator()(base::StringPiece value) {
+    void operator()(std::string_view value) {
       return AppendBasicTypeValueData(writer, value);
     }
 

@@ -10,6 +10,7 @@
 
 #include "ash/ash_export.h"
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/services/multidevice_setup/public/mojom/multidevice_setup.mojom-forward.h"
 #include "chromeos/ui/base/window_pin_type.h"
 #include "components/version_info/channel.h"
@@ -31,19 +32,35 @@ class OSExchangeData;
 
 namespace ash {
 
+namespace api {
+class TasksDelegate;
+}  // namespace api
+
+class AcceleratorPrefsDelegate;
 class AccessibilityDelegate;
 class BackGestureContextualNudgeController;
 class BackGestureContextualNudgeDelegate;
 class CaptureModeDelegate;
-class DesksTemplatesDelegate;
-class GlanceablesController;
-class GlanceablesDelegate;
+class ClipboardHistoryControllerDelegate;
+class DeskProfilesDelegate;
+class GameDashboardDelegate;
+class MediaNotificationProvider;
 class NearbyShareController;
 class NearbyShareDelegate;
+class SavedDeskDelegate;
+class SystemSoundsDelegate;
+class UserEducationDelegate;
+class WindowState;
 
 // Delegate of the Shell.
 class ASH_EXPORT ShellDelegate {
  public:
+  enum class FeedbackSource {
+    kFocusMode,
+    kGameDashboard,
+    kWindowLayoutMenu,
+  };
+
   // The Shell owns the delegate.
   virtual ~ShellDelegate() = default;
 
@@ -55,9 +72,17 @@ class ASH_EXPORT ShellDelegate {
   virtual std::unique_ptr<CaptureModeDelegate> CreateCaptureModeDelegate()
       const = 0;
 
-  // Creates the delegate for the Glanceables feature.
-  virtual std::unique_ptr<GlanceablesDelegate> CreateGlanceablesDelegate(
-      GlanceablesController* controller) const = 0;
+  // Creates and returns the delegate of the clipboard history feature.
+  virtual std::unique_ptr<ClipboardHistoryControllerDelegate>
+  CreateClipboardHistoryControllerDelegate() const = 0;
+
+  // Creates and returns the delegate of the Game Dashboard feature.
+  virtual std::unique_ptr<GameDashboardDelegate> CreateGameDashboardDelegate()
+      const = 0;
+
+  // Creates a accelerator_prefs_delegate.
+  virtual std::unique_ptr<AcceleratorPrefsDelegate>
+  CreateAcceleratorPrefsDelegate() const = 0;
 
   // Creates a accessibility delegate. Shell takes ownership of the delegate.
   virtual AccessibilityDelegate* CreateAccessibilityDelegate() = 0;
@@ -67,10 +92,23 @@ class ASH_EXPORT ShellDelegate {
   CreateBackGestureContextualNudgeDelegate(
       BackGestureContextualNudgeController* controller) = 0;
 
+  virtual std::unique_ptr<MediaNotificationProvider>
+  CreateMediaNotificationProvider() = 0;
+
   virtual std::unique_ptr<NearbyShareDelegate> CreateNearbyShareDelegate(
       NearbyShareController* controller) const = 0;
 
-  virtual std::unique_ptr<DesksTemplatesDelegate> CreateDesksTemplatesDelegate()
+  virtual std::unique_ptr<SavedDeskDelegate> CreateSavedDeskDelegate()
+      const = 0;
+
+  virtual std::unique_ptr<api::TasksDelegate> CreateTasksDelegate() const = 0;
+
+  // Creates and returns the delegate of the System Sounds feature.
+  virtual std::unique_ptr<SystemSoundsDelegate> CreateSystemSoundsDelegate()
+      const = 0;
+
+  // Creates and returns the delegate for user education features.
+  virtual std::unique_ptr<UserEducationDelegate> CreateUserEducationDelegate()
       const = 0;
 
   // Returns the geolocation loader factory used to initialize geolocation
@@ -126,7 +164,8 @@ class ASH_EXPORT ShellDelegate {
   virtual bool IsSessionRestoreInProgress() const = 0;
 
   // Adjust system configuration for a Locked Fullscreen window.
-  virtual void SetUpEnvironmentForLockedFullscreen(bool locked) = 0;
+  virtual void SetUpEnvironmentForLockedFullscreen(
+      const WindowState& window_state) = 0;
 
   // Ui Dev Tools control.
   virtual bool IsUiDevToolsStarted() const;
@@ -141,10 +180,14 @@ class ASH_EXPORT ShellDelegate {
   // primary user Downloads folder if user has already logged in.
   virtual base::FilePath GetPrimaryUserDownloadsFolder() const = 0;
 
-  // Opens the feedback page with pre-populated description #BentoBar for
-  // persistent desks bar. Note, this will be removed once the feature is fully
-  // launched or removed.
-  virtual void OpenFeedbackPageForPersistentDesksBar() = 0;
+  // Opens the feedback page with pre-populated `source` and
+  // `description_template` fields. Note, this will only be used by features
+  // before they are fully launched or removed.
+  virtual void OpenFeedbackDialog(FeedbackSource source,
+                                  const std::string& description_template) = 0;
+
+  // Calls browser service to open the profile manager.
+  virtual void OpenProfileManager() = 0;
 
   // Returns the last committed URL from the web contents if the given |window|
   // contains a browser frame, otherwise returns GURL::EmptyURL().
@@ -156,7 +199,8 @@ class ASH_EXPORT ShellDelegate {
   // Tells browsers not to ask the user to confirm that they want to close a
   // window when that window is closed.
   virtual void ForceSkipWarningUserOnClose(
-      const std::vector<aura::Window*>& windows) = 0;
+      const std::vector<raw_ptr<aura::Window, VectorExperimental>>&
+          windows) = 0;
 
   // Retrieves the official Chrome version string e.g. 105.0.5178.0.
   virtual std::string GetVersionString() = 0;
@@ -166,6 +210,10 @@ class ASH_EXPORT ShellDelegate {
   using ShouldExitFullscreenCallback = base::OnceCallback<void(bool)>;
   virtual void ShouldExitFullscreenBeforeLock(
       ShouldExitFullscreenCallback callback);
+
+  // Returns the DeskProfilesDelegate, or nullptr if it isn't available. The
+  // delegate (when available) is owned by `CrosapiAsh`.
+  virtual DeskProfilesDelegate* GetDeskProfilesDelegate();
 };
 
 }  // namespace ash

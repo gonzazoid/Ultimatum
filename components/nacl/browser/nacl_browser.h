@@ -9,10 +9,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/containers/circular_deque.h"
 #include "base/containers/lru_cache.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -134,11 +135,6 @@ class NaClBrowser {
   bool QueryKnownToValidate(const std::string& signature, bool off_the_record);
   void SetKnownToValidate(const std::string& signature, bool off_the_record);
   void ClearValidationCache(base::OnceClosure callback);
-#if BUILDFLAG(IS_WIN)
-  // Get path to NaCl loader on the filesystem if possible.
-  // |exe_path| does not change if the method fails.
-  bool GetNaCl64ExePath(base::FilePath* exe_path);
-#endif
 
   void EarlyStartup();
 
@@ -146,7 +142,7 @@ class NaClBrowser {
   // from the Browser's UI thread. It will be leaked at browser teardown.
   static void SetDelegate(std::unique_ptr<NaClBrowserDelegate> delegate);
   static NaClBrowserDelegate* GetDelegate();
-  static void ClearAndDeleteDelegateForTest();
+  static void ClearAndDeleteDelegate();
 
   // Called whenever a NaCl process exits.
   void OnProcessEnd(int process_id);

@@ -4,6 +4,7 @@
 
 #include "ash/ambient/model/ambient_animation_attribution_provider.h"
 
+#include <optional>
 #include <string>
 
 #include "ash/ambient/model/ambient_backend_model.h"
@@ -18,7 +19,6 @@
 #include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "cc/paint/skottie_wrapper.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/re2/src/re2/re2.h"
 #include "ui/lottie/animation.h"
 
@@ -31,8 +31,8 @@ namespace {
 // 2 -> "CrOS_AttributionNode2"
 // ...
 std::string BuildAttributionNodeName(int idx) {
-  return base::StringPrintf("%s_Attribution_Text%d",
-                            kLottieCustomizableIdPrefix.data(), idx);
+  return base::StrCat({kLottieCustomizableIdPrefix, "_Attribution_Text",
+                       base::NumberToString(idx)});
 }
 
 // Not all text nodes in the animation are necessarily ones that should hold

@@ -23,9 +23,6 @@ class TestFullscreenController : public FullscreenController {
 
   // FullscreenController:
   ChromeBroadcaster* broadcaster() override;
-  void SetWebStateList(WebStateList* web_state_list) override;
-  const WebStateList* GetWebStateList() const override;
-  WebStateList* GetWebStateList() override;
   void AddObserver(FullscreenControllerObserver* observer) override;
   void RemoveObserver(FullscreenControllerObserver* observer) override;
   bool IsEnabled() const override;
@@ -40,8 +37,11 @@ class TestFullscreenController : public FullscreenController {
   UIEdgeInsets GetCurrentViewportInsets() const override;
   void EnterFullscreen() override;
   void ExitFullscreen() override;
+  void ExitFullscreenWithoutAnimation() override;
+  bool IsForceFullscreenMode() const override;
+  void EnterForceFullscreenMode() override;
+  void ExitForceFullscreenMode() override;
   void ResizeHorizontalViewport() override;
-  void FreezeToolbarHeight(bool freeze_toolbar_height) override;
 
   // Calls FullscreenViewportInsetRangeChanged() on observers.
   void OnFullscreenViewportInsetRangeChanged(UIEdgeInsets min_viewport_insets,
@@ -60,12 +60,10 @@ class TestFullscreenController : public FullscreenController {
  private:
   // The model.
   FullscreenModel* model_ = nullptr;
-  // The WebStateList.
-  WebStateList* web_state_list_ = nullptr;
   // The broadcaster.
   ChromeBroadcaster* broadcaster_ = nil;
   // The observers.
-  base::ObserverList<FullscreenControllerObserver>::Unchecked observers_;
+  base::ObserverList<FullscreenControllerObserver, true> observers_;
 };
 
 #endif  // IOS_CHROME_BROWSER_UI_FULLSCREEN_TEST_TEST_FULLSCREEN_CONTROLLER_H_

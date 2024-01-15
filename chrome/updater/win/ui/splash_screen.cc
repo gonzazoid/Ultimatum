@@ -7,15 +7,17 @@
 #include <cstdint>
 #include <utility>
 
+#include "base/check.h"
+#include "base/check_op.h"
 #include "base/logging.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/updater/win/ui/l10n_util.h"
 #include "chrome/updater/win/ui/resources/updater_installer_strings.h"
 #include "chrome/updater/win/ui/ui.h"
 #include "chrome/updater/win/ui/ui_constants.h"
 #include "chrome/updater/win/ui/ui_util.h"
 
-namespace updater {
-namespace ui {
+namespace updater::ui {
 
 namespace {
 
@@ -29,11 +31,18 @@ constexpr int kDefaultAlphaScale = 100;
 constexpr int kAlphaScales[] = {0, 30, 47, 62, 75, 85, 93, kDefaultAlphaScale};
 
 uint8_t AlphaScaleToAlphaValue(int alpha_scale) {
-  DCHECK(alpha_scale >= 0 && alpha_scale <= 100);
+  CHECK(alpha_scale >= 0 && alpha_scale <= 100);
   return static_cast<uint8_t>(alpha_scale * 255 / 100);
 }
 
 }  // namespace
+
+void SilentSplashScreen::Show() {}
+
+void SilentSplashScreen::Dismiss(base::OnceClosure callback) {
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                           std::move(callback));
+}
 
 SplashScreen::SplashScreen(const std::u16string& bundle_name)
     : timer_created_(false), alpha_index_(0) {
@@ -42,28 +51,24 @@ SplashScreen::SplashScreen(const std::u16string& bundle_name)
 }
 
 SplashScreen::~SplashScreen() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-
-  // TODO(crbug.com/1059094) this assert may fire when the dtor is called
-  // while the window is fading out.
-  DCHECK(state_ == WindowState::STATE_CREATED ||
-         state_ == WindowState::STATE_CLOSED);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
 void SplashScreen::Show() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK_EQ(WindowState::STATE_CREATED, state_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  CHECK_EQ(WindowState::STATE_CREATED, state_);
 
-  if (FAILED(Initialize()))
+  if (FAILED(Initialize())) {
     return;
+  }
 
-  DCHECK(IsWindow());
+  CHECK(IsWindow());
   ShowWindow(SW_SHOWNORMAL);
   SwitchToState(WindowState::STATE_SHOW_NORMAL);
 }
 
 void SplashScreen::Dismiss(base::OnceClosure on_close_closure) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   // After the splash screen is dismissed, but before the progress UI is shown,
   // there is a brief period of time when there are no windows for the current
@@ -87,29 +92,24 @@ void SplashScreen::Dismiss(base::OnceClosure on_close_closure) {
     case WindowState::STATE_CREATED:
       SwitchToState(WindowState::STATE_CLOSED);
       break;
-
     case WindowState::STATE_SHOW_NORMAL:
       SwitchToState(WindowState::STATE_FADING);
       break;
-
     case WindowState::STATE_CLOSED:
     case WindowState::STATE_FADING:
     case WindowState::STATE_INITIALIZED:
-      break;
-
-    default:
-      DCHECK(false);
       break;
   }
 }
 
 HRESULT SplashScreen::Initialize() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK(!IsWindow());
-  DCHECK(state_ == WindowState::STATE_CREATED);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  CHECK(!IsWindow());
+  CHECK_EQ(state_, WindowState::STATE_CREATED);
 
-  if (!Create(nullptr))
+  if (!Create(nullptr)) {
     return E_FAIL;
+  }
 
   HideWindowChildren(*this);
 
@@ -131,8 +131,9 @@ HRESULT SplashScreen::Initialize() {
   HRESULT hr = ui::SetWindowIcon(
       m_hWnd, IDI_APP,
       base::win::ScopedGDIObject<HICON>::Receiver(hicon_).get());
-  if (FAILED(hr))
+  if (FAILED(hr)) {
     VLOG(1) << "SetWindowIcon failed " << hr;
+  }
 
   default_font_.CreatePointFont(90, kDialogFont);
   SendMessageToDescendants(
@@ -155,7 +156,7 @@ HRESULT SplashScreen::Initialize() {
 }
 
 void SplashScreen::EnableSystemButtons(bool enable) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   constexpr LONG kSysStyleMask = WS_MINIMIZEBOX | WS_SYSMENU | WS_MAXIMIZEBOX;
 
@@ -166,7 +167,7 @@ void SplashScreen::EnableSystemButtons(bool enable) {
 
     // Remove Close/Minimize/Maximize from the system menu.
     HMENU menu(::GetSystemMenu(*this, false));
-    DCHECK(menu);
+    CHECK(menu);
     ::RemoveMenu(menu, SC_CLOSE, MF_BYCOMMAND);
     ::RemoveMenu(menu, SC_MINIMIZE, MF_BYCOMMAND);
     ::RemoveMenu(menu, SC_MAXIMIZE, MF_BYCOMMAND);
@@ -174,7 +175,7 @@ void SplashScreen::EnableSystemButtons(bool enable) {
 }
 
 void SplashScreen::InitProgressBar() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   progress_bar_.SubclassWindow(GetDlgItem(IDC_PROGRESS));
 
@@ -185,9 +186,9 @@ void SplashScreen::InitProgressBar() {
 }
 
 LRESULT SplashScreen::OnTimer(UINT, WPARAM, LPARAM, BOOL& handled) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK(state_ == WindowState::STATE_FADING);
-  DCHECK_GT(alpha_index_, 0);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  CHECK_EQ(state_, WindowState::STATE_FADING);
+  CHECK_GT(alpha_index_, 0);
   if (--alpha_index_) {
     ::SetLayeredWindowAttributes(
         m_hWnd, 0, AlphaScaleToAlphaValue(kAlphaScales[alpha_index_]),
@@ -200,7 +201,7 @@ LRESULT SplashScreen::OnTimer(UINT, WPARAM, LPARAM, BOOL& handled) {
 }
 
 LRESULT SplashScreen::OnClose(UINT, WPARAM, LPARAM, BOOL& handled) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   SwitchToState(WindowState::STATE_CLOSED);
   DestroyWindow();
   handled = true;
@@ -208,18 +209,20 @@ LRESULT SplashScreen::OnClose(UINT, WPARAM, LPARAM, BOOL& handled) {
 }
 
 LRESULT SplashScreen::OnDestroy(UINT, WPARAM, LPARAM, BOOL& handled) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (timer_created_) {
-    DCHECK(IsWindow());
+    CHECK(IsWindow());
     KillTimer(kClosingTimerID);
   }
-  std::move(on_close_closure_).Run();
+  if (on_close_closure_) {
+    std::move(on_close_closure_).Run();
+  }
   handled = true;
   return 0;
 }
 
 void SplashScreen::SwitchToState(WindowState new_state) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   state_ = new_state;
   switch (new_state) {
     case WindowState::STATE_CREATED:
@@ -229,10 +232,11 @@ void SplashScreen::SwitchToState(WindowState new_state) {
       alpha_index_ = std::size(kAlphaScales) - 1;
       break;
     case WindowState::STATE_FADING:
-      DCHECK(IsWindow());
+      CHECK(IsWindow());
       timer_created_ = SetTimer(kClosingTimerID, kTimerInterval, nullptr) != 0;
-      if (!timer_created_)
+      if (!timer_created_) {
         Close();
+      }
       break;
     case WindowState::STATE_CLOSED:
       break;
@@ -240,10 +244,10 @@ void SplashScreen::SwitchToState(WindowState new_state) {
 }
 
 void SplashScreen::Close() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  if (state_ != WindowState::STATE_CLOSED && IsWindow())
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (state_ != WindowState::STATE_CLOSED && IsWindow()) {
     PostMessage(WM_CLOSE, 0, 0);
+  }
 }
 
-}  // namespace ui
-}  // namespace updater
+}  // namespace updater::ui

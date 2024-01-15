@@ -4,18 +4,29 @@
 
 #include "ash/curtain/security_curtain_controller.h"
 
+#include "ash/constants/ash_features.h"
+#include "ash/constants/ash_pref_names.h"
 #include "ash/curtain/security_curtain_widget_controller.h"
 #include "ash/display/cursor_window_controller.h"
 #include "ash/display/window_tree_host_manager.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/root_window_controller.h"
 #include "ash/shell.h"
+#include "ash/system/power/power_button_controller_test_api.h"
+#include "ash/system/power/power_button_menu_view.h"
+#include "ash/system/power/power_button_test_base.h"
+#include "ash/system/privacy_hub/camera_privacy_switch_controller.h"
 #include "ash/test/ash_test_base.h"
+#include "base/check_deref.h"
+#include "base/test/scoped_feature_list.h"
 #include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/display/manager/display_manager.h"
 #include "ui/events/test/event_generator.h"
+#include "ui/views/metadata/view_factory.h"
+#include "ui/views/test/widget_test.h"
+#include "ui/views/widget/native_widget.h"
 #include "ui/views/widget/widget.h"
 
 namespace aura {
@@ -80,25 +91,66 @@ class EventTester {
   raw_ref<ui::test::EventGenerator> event_generator_;
 };
 
-class SecurityCurtainControllerImplTest : public AshTestBase {
+EventFilter only_mouse_events_filter() {
+  return base::BindRepeating([](const ui::Event& event) {
+    return event.IsMouseEvent() ? FilterResult::kKeepEvent
+                                : FilterResult::kSuppressEvent;
+  });
+}
+
+ViewFactory FakeViewFactory() {
+  return base::BindRepeating(
+      []() { return views::Builder<views::View>().Build(); });
+}
+
+EventFilter FakeEventFilter() {
+  return base::BindRepeating(
+      [](const ui::Event&) { return FilterResult::kSuppressEvent; });
+}
+
+}  // namespace
+
+class SecurityCurtainControllerImplTest : public PowerButtonTestBase {
  public:
-  SecurityCurtainControllerImplTest() = default;
+  SecurityCurtainControllerImplTest()
+      : PowerButtonTestBase(
+            base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
+
   SecurityCurtainControllerImplTest(const SecurityCurtainControllerImplTest&) =
       delete;
   SecurityCurtainControllerImplTest& operator=(
       const SecurityCurtainControllerImplTest&) = delete;
   ~SecurityCurtainControllerImplTest() override = default;
 
-  void SetUp() override { AshTestBase::SetUp(); }
+  void SetUp() override {
+    PowerButtonTestBase::SetUp();
+    InitPowerButtonControllerMembers(
+        chromeos::PowerManagerClient::TabletMode::UNSUPPORTED);
+    power_button_test_api_ = std::make_unique<PowerButtonControllerTestApi>(
+        Shell::Get()->power_button_controller());
+  }
 
-  void TearDown() override { AshTestBase::TearDown(); }
+  void TearDown() override {
+    power_button_test_api_.reset();
+    ResetPowerButtonController();
+    PowerButtonTestBase::TearDown();
+  }
 
   SecurityCurtainController& security_curtain_controller() {
     return ash::Shell::Get()->security_curtain_controller();
   }
 
+  CameraPrivacySwitchController& camera_controller() {
+    return CHECK_DEREF(CameraPrivacySwitchController::Get());
+  }
+
+  PowerButtonControllerTestApi& power_button_test_api() {
+    return *power_button_test_api_;
+  }
+
   SecurityCurtainController::InitParams init_params() {
-    return SecurityCurtainController::InitParams();
+    return SecurityCurtainController::InitParams{FakeEventFilter(),
+                                                 FakeViewFactory()};
   }
 
   bool IsNativeCursorEnabled() {
@@ -109,7 +161,11 @@ class SecurityCurtainControllerImplTest : public AshTestBase {
   }
 
   SecurityCurtainController::InitParams WithEventFilter(EventFilter filter) {
-    return SecurityCurtainController::InitParams{filter};
+    return SecurityCurtainController::InitParams{filter, FakeViewFactory()};
+  }
+
+  SecurityCurtainController::InitParams WithViewFactory(ViewFactory factory) {
+    return SecurityCurtainController::InitParams{FakeEventFilter(), factory};
   }
 
   bool IsCurtainShownOnDisplay(const display::Display& display) {
@@ -186,23 +242,46 @@ class SecurityCurtainControllerImplTest : public AshTestBase {
                        *GetEventGenerator());
   }
 
-  bool IsOutputMuted() {
+  bool IsAudioOutputMuted() {
     return CrasAudioHandler::Get()->IsOutputMutedBySecurityCurtain() &&
            CrasAudioHandler::Get()->IsOutputMuted();
+  }
+
+  bool IsAudioInputMuted() {
+    return CrasAudioHandler::Get()->IsInputMutedBySecurityCurtain() &&
+           CrasAudioHandler::Get()->IsInputMuted();
   }
 
   EventTester CreateEventTesterOnDisplay(const display::Display& display) {
     return EventTester(CreateTestWindow(display.bounds()),
                        *GetEventGenerator());
   }
-};
 
-EventFilter only_mouse_events_filter() {
-  return base::BindRepeating([](const ui::Event& event) {
-    return event.IsMouseEvent() ? FilterResult::kKeepEvent
-                                : FilterResult::kSuppressEvent;
-  });
-}
+  views::Widget& GetCurtainWidget() {
+    return Shell::GetPrimaryRootWindowController()
+        ->security_curtain_widget_controller()
+        ->GetWidget();
+  }
+
+  views::Widget& GetOpenPowerWidget() {
+    EXPECT_TRUE(power_button_test_api().IsMenuOpened());
+    return *power_button_test_api().GetPowerButtonMenuView()->GetWidget();
+  }
+
+  const aura::Window& GetPowerMenuWidgetContainerParent() {
+    EXPECT_TRUE(power_button_test_api().IsMenuOpened());
+
+    return CHECK_DEREF(Shell::GetPrimaryRootWindow()
+                           ->GetChildById(kShellWindowId_PowerMenuContainer)
+                           ->parent());
+  }
+
+ private:
+  std::unique_ptr<PowerButtonControllerTestApi> power_button_test_api_;
+
+  // Security curtain requires privacy hub to force disable the camera access.
+  base::test::ScopedFeatureList features_{features::kCrosPrivacyHubV0};
+};
 
 TEST_F(SecurityCurtainControllerImplTest,
        ShouldNotBeEnabledBeforeEnableIsCalled) {
@@ -285,6 +364,23 @@ TEST_F(SecurityCurtainControllerImplTest,
        {gfx::Size(1000, 500), gfx::Size(2000, 1000)}) {
     ResizeDisplay(display, new_resolution);
     EXPECT_THAT(curtain.GetWindowBoundsInScreen().size(), Eq(new_resolution));
+  }
+}
+
+TEST_F(SecurityCurtainControllerImplTest, CurtainShouldUseViewFactory) {
+  // To test that the view factory is used we simply create views with a very
+  // specific id, and check that the curtain views have this id.
+  constexpr int kId = 1234567;
+
+  CreateMultipleDisplays();
+
+  security_curtain_controller().Enable(WithViewFactory(base::BindRepeating(
+      []() { return views::Builder<views::View>().SetID(kId).Build(); })));
+
+  for (auto display : GetDisplays()) {
+    views::Widget& curtain = GetCurtainForDisplay(display);
+
+    EXPECT_EQ(curtain.GetContentsView()->GetID(), kId);
   }
 }
 
@@ -465,14 +561,70 @@ TEST_F(SecurityCurtainControllerImplTest,
 }
 
 TEST_F(SecurityCurtainControllerImplTest,
-       ShouldToggleAudioHandlerWhenEnabledAndDisabled) {
+       ShouldMuteAudioOutputAfterRequestedDelayWhileCurtainIsEnabled) {
   CreateSingleDisplay();
 
-  security_curtain_controller().Enable(init_params());
-  EXPECT_TRUE(IsOutputMuted());
+  auto delay = base::Minutes(5);
+  auto params = init_params();
+  params.mute_audio_output_after = delay;
+  security_curtain_controller().Enable(params);
+  EXPECT_FALSE(IsAudioOutputMuted());
+
+  task_environment()->FastForwardBy(delay - base::Seconds(10));
+  EXPECT_FALSE(IsAudioOutputMuted());
+
+  task_environment()->FastForwardBy(base::Seconds(10));
+  EXPECT_TRUE(IsAudioOutputMuted());
 
   security_curtain_controller().Disable();
-  EXPECT_FALSE(IsOutputMuted());
+  EXPECT_FALSE(IsAudioOutputMuted());
+}
+
+TEST_F(SecurityCurtainControllerImplTest,
+       ShouldMuteAudioOutputWhileCurtainIsEnabled) {
+  CreateSingleDisplay();
+
+  auto params = init_params();
+  params.mute_audio_output_after = base::TimeDelta();
+  security_curtain_controller().Enable(params);
+  task_environment()->RunUntilIdle();  // Audio is muted asynchronously.
+  EXPECT_TRUE(IsAudioOutputMuted());
+
+  security_curtain_controller().Disable();
+  EXPECT_FALSE(IsAudioOutputMuted());
+}
+
+TEST_F(SecurityCurtainControllerImplTest,
+       ShouldNotMuteAudioOutputWhenItsNotRequested) {
+  CreateSingleDisplay();
+
+  auto params = init_params();
+  params.mute_audio_output_after = base::TimeDelta::Max();
+  security_curtain_controller().Enable(params);
+  EXPECT_FALSE(IsAudioOutputMuted());
+}
+
+TEST_F(SecurityCurtainControllerImplTest,
+       ShouldMuteAudioInputMuteWhileCurtainIsEnabled) {
+  CreateSingleDisplay();
+
+  auto params = init_params();
+  params.mute_audio_input = true;
+  security_curtain_controller().Enable(params);
+  EXPECT_TRUE(IsAudioInputMuted());
+
+  security_curtain_controller().Disable();
+  EXPECT_FALSE(IsAudioInputMuted());
+}
+
+TEST_F(SecurityCurtainControllerImplTest,
+       ShouldNotMuteAudioInputMuteWhenItsNotRequested) {
+  CreateSingleDisplay();
+
+  auto params = init_params();
+  params.mute_audio_input = false;
+  security_curtain_controller().Enable(params);
+  EXPECT_FALSE(IsAudioInputMuted());
 }
 
 TEST_F(SecurityCurtainControllerImplTest,
@@ -492,5 +644,77 @@ TEST_F(SecurityCurtainControllerImplTest,
   ASSERT_THAT(IsNativeCursorEnabled(), Eq(true));
 }
 
-}  // namespace
+TEST_F(SecurityCurtainControllerImplTest,
+       ShouldMovePowerMenuWidgetAboveSecurityCurtainWhenEnabled) {
+  security_curtain_controller().Enable(init_params());
+  PressPowerButton();
+
+  views::Widget& curtain_widget = GetCurtainWidget();
+  views::Widget& power_menu_widget = GetOpenPowerWidget();
+
+  ASSERT_TRUE(power_button_test_api().IsMenuOpened());
+  EXPECT_TRUE(views::test::WidgetTest::IsWindowStackedAbove(&power_menu_widget,
+                                                            &curtain_widget));
+}
+
+TEST_F(SecurityCurtainControllerImplTest,
+       ShouldResetParentOfPowerMenuWidgetWhenDisabled) {
+  PressPowerButton();
+  const aura::Window& parent_before_enabled =
+      GetPowerMenuWidgetContainerParent();
+  ReleasePowerButton();
+
+  security_curtain_controller().Enable(init_params());
+  security_curtain_controller().Disable();
+  PressPowerButton();
+  const aura::Window& parent_after_disabled =
+      GetPowerMenuWidgetContainerParent();
+
+  ASSERT_EQ(&parent_before_enabled, &parent_after_disabled);
+}
+
+TEST_F(SecurityCurtainControllerImplTest,
+       ShouldDismissOpenPowerMenuWidgetWhenCurtainModeIsEnabled) {
+  PressPowerButton();
+
+  security_curtain_controller().Enable(init_params());
+
+  EXPECT_FALSE(power_button_test_api().IsMenuOpened());
+}
+
+TEST_F(SecurityCurtainControllerImplTest,
+       ShouldDismissOpenPowerMenuWidgetWhenCurtainModeIsDisabled) {
+  security_curtain_controller().Enable(init_params());
+  PressPowerButton();
+  security_curtain_controller().Disable();
+
+  EXPECT_FALSE(power_button_test_api().IsMenuOpened());
+}
+
+TEST_F(SecurityCurtainControllerImplTest,
+       ShouldForceDisableCameraAccessWhenCurtainModeIsEnabled) {
+  auto params = init_params();
+  params.disable_camera_access = true;
+  security_curtain_controller().Enable(params);
+  EXPECT_TRUE(camera_controller().IsCameraAccessForceDisabled());
+}
+
+TEST_F(SecurityCurtainControllerImplTest,
+       ShouldStopForceDisablingCameraAccessWhenCurtainModeIsDisabled) {
+  auto params = init_params();
+  params.disable_camera_access = true;
+  security_curtain_controller().Enable(params);
+  security_curtain_controller().Disable();
+
+  EXPECT_FALSE(camera_controller().IsCameraAccessForceDisabled());
+}
+
+TEST_F(SecurityCurtainControllerImplTest,
+       ShouldNotForceDisableCameraAccessWhenNotRequested) {
+  auto params = init_params();
+  params.disable_camera_access = false;
+  security_curtain_controller().Enable(params);
+  EXPECT_FALSE(camera_controller().IsCameraAccessForceDisabled());
+}
+
 }  // namespace ash::curtain

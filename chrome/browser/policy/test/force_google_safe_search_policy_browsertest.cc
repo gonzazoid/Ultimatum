@@ -10,13 +10,12 @@
 #include "chrome/browser/policy/safe_search_policy_test.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/common/net/safe_search_util.h"
-#include "chrome/common/pref_names.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/core/common/policy_pref_names.h"
 #include "components/policy/core/common/policy_types.h"
 #include "components/policy/policy_constants.h"
 #include "components/prefs/pref_service.h"
+#include "components/safe_search_api/safe_search_util.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/url_loader_interceptor.h"
@@ -27,17 +26,17 @@
 namespace policy {
 
 IN_PROC_BROWSER_TEST_F(SafeSearchPolicyTest, LegacySafeSearch) {
-  static_assert(safe_search_util::YOUTUBE_RESTRICT_OFF == 0 &&
-                    safe_search_util::YOUTUBE_RESTRICT_MODERATE == 1 &&
-                    safe_search_util::YOUTUBE_RESTRICT_STRICT == 2 &&
-                    safe_search_util::YOUTUBE_RESTRICT_COUNT == 3,
+  static_assert(safe_search_api::YOUTUBE_RESTRICT_OFF == 0 &&
+                    safe_search_api::YOUTUBE_RESTRICT_MODERATE == 1 &&
+                    safe_search_api::YOUTUBE_RESTRICT_STRICT == 2 &&
+                    safe_search_api::YOUTUBE_RESTRICT_COUNT == 3,
                 "This test relies on mapping ints to enum values.");
 
   // Go over all combinations of (undefined, true, false) for the policies
   // ForceSafeSearch, ForceGoogleSafeSearch and ForceYouTubeSafetyMode as well
   // as (undefined, off, moderate, strict) for ForceYouTubeRestrict and make
   // sure the prefs are set as expected.
-  const int num_restrict_modes = 1 + safe_search_util::YOUTUBE_RESTRICT_COUNT;
+  const int num_restrict_modes = 1 + safe_search_api::YOUTUBE_RESTRICT_COUNT;
   for (int i = 0; i < 3 * 3 * 3 * num_restrict_modes; i++) {
     int val = i;
     int legacy_safe_search = val % 3;
@@ -86,27 +85,30 @@ IN_PROC_BROWSER_TEST_F(SafeSearchPolicyTest, LegacySafeSearch) {
     // or the legacy safe search mode.
     PrefService* prefs = browser()->profile()->GetPrefs();
     EXPECT_EQ(google_safe_search != 0 || legacy_safe_search_in_effect,
-              prefs->IsManagedPreference(prefs::kForceGoogleSafeSearch));
+              prefs->IsManagedPreference(
+                  policy::policy_prefs::kForceGoogleSafeSearch));
     EXPECT_EQ(google_safe_search == 1 || legacy_safe_search_enabled,
-              prefs->GetBoolean(prefs::kForceGoogleSafeSearch));
+              prefs->GetBoolean(policy::policy_prefs::kForceGoogleSafeSearch));
 
     // YouTube restrict mode can be triggered by the ForceYouTubeRestrict policy
     // or any of the legacy modes.
     EXPECT_EQ(youtube_restrict != 0 || legacy_safe_search_in_effect ||
                   legacy_youtube_in_effect,
-              prefs->IsManagedPreference(prefs::kForceYouTubeRestrict));
+              prefs->IsManagedPreference(
+                  policy::policy_prefs::kForceYouTubeRestrict));
 
     if (youtube_restrict != 0) {
       // The ForceYouTubeRestrict policy should map directly to the pref.
       EXPECT_EQ(youtube_restrict - 1,
-                prefs->GetInteger(prefs::kForceYouTubeRestrict));
+                prefs->GetInteger(policy::policy_prefs::kForceYouTubeRestrict));
     } else {
       // The legacy modes should result in MODERATE strictness, if enabled.
-      safe_search_util::YouTubeRestrictMode expected_mode =
+      safe_search_api::YouTubeRestrictMode expected_mode =
           legacy_safe_search_enabled || legacy_youtube_enabled
-              ? safe_search_util::YOUTUBE_RESTRICT_MODERATE
-              : safe_search_util::YOUTUBE_RESTRICT_OFF;
-      EXPECT_EQ(prefs->GetInteger(prefs::kForceYouTubeRestrict), expected_mode);
+              ? safe_search_api::YOUTUBE_RESTRICT_MODERATE
+              : safe_search_api::YOUTUBE_RESTRICT_OFF;
+      EXPECT_EQ(prefs->GetInteger(policy::policy_prefs::kForceYouTubeRestrict),
+                expected_mode);
     }
   }
 }
@@ -145,9 +147,10 @@ IN_PROC_BROWSER_TEST_F(SafeSearchPolicyTest, ForceGoogleSafeSearch) {
     // Verify that the safe search pref behaves the way we expect.
     PrefService* prefs = browser()->profile()->GetPrefs();
     EXPECT_EQ(safe_search != 0,
-              prefs->IsManagedPreference(prefs::kForceGoogleSafeSearch));
+              prefs->IsManagedPreference(
+                  policy::policy_prefs::kForceGoogleSafeSearch));
     EXPECT_EQ(safe_search == 1,
-              prefs->GetBoolean(prefs::kForceGoogleSafeSearch));
+              prefs->GetBoolean(policy::policy_prefs::kForceGoogleSafeSearch));
 
     // Verify that safe search actually works.
     CheckSafeSearch(browser(), safe_search == 1);

@@ -12,10 +12,9 @@
 #include "base/memory/ptr_util.h"
 #include "base/notreached.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-#include "ui/accessibility/ax_enums.mojom.h"
-#include "ui/accessibility/ax_node_data.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/theme_provider.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/compositor/layer.h"
@@ -24,6 +23,7 @@
 #include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/geometry/skia_conversions.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/cascading_property.h"
 #include "ui/views/controls/focusable_border.h"
 #include "ui/views/controls/highlight_path_generator.h"
@@ -40,7 +40,9 @@ namespace {
 
 DEFINE_UI_CLASS_PROPERTY_KEY(FocusRing*, kFocusRingIdKey, nullptr)
 
+constexpr int kMinFocusRingInset = 2;
 constexpr float kOutlineThickness = 1.0f;
+constexpr float kFocusRingOutset = 2.0f;
 
 bool IsPathUsable(const SkPath& path) {
   return !path.isEmpty() && (path.isRect(nullptr) || path.isOval(nullptr) ||
@@ -58,7 +60,7 @@ SkColor GetPaintColor(FocusRing* focus_ring, bool valid) {
 
 double GetCornerRadius(float halo_thickness) {
   const double thickness = halo_thickness / 2.f;
-  return FocusableBorder::kCornerRadiusDp + thickness;
+  return FocusRing::kDefaultCornerRadiusDp + thickness;
 }
 
 SkPath GetHighlightPathInternal(const View* view, float halo_thickness) {
@@ -75,13 +77,12 @@ SkPath GetHighlightPathInternal(const View* view, float halo_thickness) {
 
   gfx::Rect client_rect = view->GetLocalBounds();
   const double corner_radius = GetCornerRadius(halo_thickness);
-  // Make sure the path is large enough to contain the corners. This covers
-  // narrow views and the case where view->GetLocalBounds() are empty. Doing so
-  // prevents DCHECK(IsPathUsable(path)) from failing in GetRingRoundRect()
-  // because the resulting path is empty.
-  if (client_rect.width() < 2 * corner_radius ||
-      client_rect.height() < 2 * corner_radius) {
-    client_rect.Outset(corner_radius);
+  // Make sure we don't return an empty focus ring. This covers narrow views and
+  // the case where view->GetLocalBounds() are empty. Doing so prevents
+  // DCHECK(IsPathUsable(path)) from failing in GetRingRoundRect() because the
+  // resulting path is empty.
+  if (client_rect.IsEmpty()) {
+    client_rect.Outset(kMinFocusRingInset);
   }
   return SkPath().addRRect(SkRRect::MakeRectXY(RectToSkRect(client_rect),
                                                corner_radius, corner_radius));
@@ -171,6 +172,17 @@ void FocusRing::SetHaloInset(float halo_inset) {
   OnPropertyChanged(&halo_inset_, PropertyEffects::kPropertyEffectsPaint);
 }
 
+void FocusRing::SetOutsetFocusRingDisabled(bool disable) {
+  outset_focus_ring_disabled_ = disable;
+}
+bool FocusRing::GetOutsetFocusRingDisabled() const {
+  return outset_focus_ring_disabled_;
+}
+
+bool FocusRing::ShouldPaintForTesting() {
+  return ShouldPaint();
+}
+
 void FocusRing::Layout() {
   // The focus ring handles its own sizing, which is simply to fill the parent
   // and extend a little beyond its borders.
@@ -198,11 +210,14 @@ void FocusRing::Layout() {
     expansion_insets.set_right(min_x_inset);
     focus_bounds.Inset(expansion_insets);
   }
-
-  focus_bounds.Inset(gfx::Insets(halo_inset_));
-
-  if (parent()->GetProperty(kDrawFocusRingBackgroundOutline))
-    focus_bounds.Inset(gfx::Insets(-2 * kOutlineThickness));
+  if (ShouldSetOutsetFocusRing()) {
+    focus_bounds.Outset(halo_thickness_ + kFocusRingOutset);
+  } else {
+    focus_bounds.Inset(gfx::Insets(halo_inset_));
+    if (parent()->GetProperty(kDrawFocusRingBackgroundOutline)) {
+      focus_bounds.Inset(gfx::Insets(-2 * kOutlineThickness));
+    }
+  }
 
   SetBoundsRect(focus_bounds);
 
@@ -229,28 +244,24 @@ void FocusRing::ViewHierarchyChanged(
 }
 
 void FocusRing::OnPaint(gfx::Canvas* canvas) {
-  // TODO(pbos): Reevaluate if this can turn into a DCHECK, e.g. we should
-  // never paint if there's no parent focus.
-  if (has_focus_predicate_) {
-    if (!(*has_focus_predicate_)(parent()))
-      return;
-  } else if (!parent()->HasFocus()) {
+  if (!ShouldPaint()) {
     return;
   }
-
-  const SkRRect ring_rect = GetRingRoundRect();
+  SkRRect ring_rect = GetRingRoundRect();
   cc::PaintFlags paint;
   paint.setAntiAlias(true);
   paint.setStyle(cc::PaintFlags::kStroke_Style);
-
-  if (parent()->GetProperty(kDrawFocusRingBackgroundOutline)) {
-    // Draw with full stroke width + 2x outline thickness to effectively paint
-    // the outline thickness on both sides of the FocusRing.
-    paint.setStrokeWidth(halo_thickness_ + 2 * kOutlineThickness);
-    paint.setColor(GetCascadingBackgroundColor(this));
-    canvas->sk_canvas()->drawRRect(ring_rect, paint);
+  if (!ShouldSetOutsetFocusRing()) {
+    // TODO(crbug.com/1417057): kDrawFocusRingBackgroundOutline should be
+    // removed when ChromeRefresh is fully rolled out.
+    if (parent()->GetProperty(kDrawFocusRingBackgroundOutline)) {
+      // Draw with full stroke width + 2x outline thickness to effectively paint
+      // the outline thickness on both sides of the FocusRing.
+      paint.setStrokeWidth(halo_thickness_ + 2 * kOutlineThickness);
+      paint.setColor(GetCascadingBackgroundColor(this));
+      canvas->sk_canvas()->drawRRect(ring_rect, paint);
+    }
   }
-
   paint.setColor(GetPaintColor(this, !invalid_));
   paint.setStrokeWidth(halo_thickness_);
   canvas->sk_canvas()->drawRRect(ring_rect, paint);
@@ -265,31 +276,21 @@ SkRRect FocusRing::GetRingRoundRect() const {
 
   SkRect bounds;
   SkRRect rbounds;
-  if (path.isRect(&bounds))
+  if (path.isRect(&bounds)) {
+    AdjustBounds(bounds);
     return RingRectFromPathRect(bounds);
+  }
 
   if (path.isOval(&bounds)) {
+    AdjustBounds(bounds);
     gfx::RectF rect = gfx::SkRectToRectF(bounds);
     View::ConvertRectToTarget(parent(), this, &rect);
     return SkRRect::MakeOval(gfx::RectFToSkRect(rect));
   }
 
-  if (path.isRRect(&rbounds))
-    return RingRectFromPathRect(rbounds);
-
-  NOTREACHED();
-  return SkRRect();
-}
-
-void FocusRing::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  // Mark the focus ring in the accessibility tree as ignored.
-  // Marking it as invisible keeps it in the accessibility tree with a "hidden"
-  // attribute where assistive technologies can still find it. Marking it as
-  // ignored causes it to be removed from the accessibility tree. This also
-  // ensures that when a non-used control, such as the minimize button in a
-  // JavaScript alert, is marked as ignored, that control's parent will not
-  // have any "invisible" FocusRing children.
-  node_data->AddState(ax::mojom::State::kIgnored);
+  CHECK(path.isRRect(&rbounds));
+  AdjustBounds(rbounds);
+  return RingRectFromPathRect(rbounds);
 }
 
 void FocusRing::OnThemeChanged() {
@@ -309,6 +310,23 @@ void FocusRing::OnViewBlurred(View* view) {
 FocusRing::FocusRing() {
   // Don't allow the view to process events.
   SetCanProcessEventsWithinSubtree(false);
+
+  // This should never be included in the accessibility tree.
+  GetViewAccessibility().OverrideIsIgnored(true);
+}
+
+void FocusRing::AdjustBounds(SkRect& rect) const {
+  if (ShouldSetOutsetFocusRing()) {
+    float focus_ring_adjustment = halo_thickness_ / 2 + kFocusRingOutset;
+    rect.outset(focus_ring_adjustment, focus_ring_adjustment);
+  }
+}
+
+void FocusRing::AdjustBounds(SkRRect& rect) const {
+  if (ShouldSetOutsetFocusRing()) {
+    float focus_ring_adjustment = halo_thickness_ / 2 + kFocusRingOutset;
+    rect.outset(focus_ring_adjustment, focus_ring_adjustment);
+  }
 }
 
 SkPath FocusRing::GetPath() const {
@@ -333,7 +351,7 @@ void FocusRing::RefreshLayer() {
   // that RefreshLayer gets called somehow whenever |has_focused_predicate_|
   // returns a new value.
   const bool should_paint =
-      has_focus_predicate_.has_value() || (parent() && parent()->HasFocus());
+      has_focus_predicate_ || (parent() && parent()->HasFocus());
   SetVisible(should_paint);
   if (should_paint) {
     // A layer is necessary to paint beyond the parent's bounds.
@@ -342,6 +360,22 @@ void FocusRing::RefreshLayer() {
   } else {
     DestroyLayer();
   }
+}
+
+bool FocusRing::ShouldSetOutsetFocusRing() const {
+  // TODO(crbug.com/1417057): Some places set a custom `halo_inset_` value to
+  // move the focus ring away from the host. If those places want to outset the
+  // focus ring in the chrome refresh style, they need to be audited separately
+  // with UX.
+  return features::IsChromeRefresh2023() && !outset_focus_ring_disabled_ &&
+         halo_inset_ == FocusRing::kDefaultHaloInset;
+}
+
+bool FocusRing::ShouldPaint() {
+  // TODO(pbos): Reevaluate if this can turn into a DCHECK, e.g. we should
+  // never paint if there's no parent focus.
+  return has_focus_predicate_ ? has_focus_predicate_.Run(parent())
+                              : parent()->HasFocus();
 }
 
 SkRRect FocusRing::RingRectFromPathRect(const SkRect& rect) const {
@@ -378,10 +412,11 @@ SkPath GetHighlightPath(const View* view, float halo_thickness) {
   return path;
 }
 
-BEGIN_METADATA(FocusRing, View)
+BEGIN_METADATA(FocusRing)
 ADD_PROPERTY_METADATA(absl::optional<ui::ColorId>, ColorId)
 ADD_PROPERTY_METADATA(float, HaloInset)
 ADD_PROPERTY_METADATA(float, HaloThickness)
+ADD_PROPERTY_METADATA(bool, OutsetFocusRingDisabled)
 END_METADATA
 
 }  // namespace views

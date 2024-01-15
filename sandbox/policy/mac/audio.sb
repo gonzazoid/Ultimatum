@@ -27,17 +27,28 @@
 
 ; Mach IPC.
 (allow mach-lookup
-  (global-name "com.apple.audio.SystemSoundServer-OSX")
-  (global-name "com.apple.audio.VDCAssistant")
+  (global-name "com.apple.audio.AudioComponentRegistrar")
+  (global-name "com.apple.audio.AudioSession")
   (global-name "com.apple.audio.audiohald")
   (global-name "com.apple.audio.coreaudiod")
+  (global-name "com.apple.audio.SystemSoundServer-OSX")
+  (global-name "com.apple.audio.VDCAssistant")
+  (xpc-service-name "com.apple.audio.SandboxHelper")
 )
 
-(if (>= os-version 1013)
-  (allow mach-lookup
-    (global-name "com.apple.audio.AudioComponentRegistrar")
-    (xpc-service-name "com.apple.audio.SandboxHelper")
-  ))
+; Needed by ScreenCaptureKit.
+(if (>= os-version 1300)
+  (begin
+    (allow mach-lookup (global-name "com.apple.replayd"))
+    (allow file-read*
+      (subpath "/System/Library/CoreServices/SystemAppearance.bundle")
+      (subpath "/System/Library/CoreServices/SystemFolderLocalizations")
+    )
+    (allow sysctl-read
+      (sysctl-name "hw.optional.f16c")
+      (sysctl-name "hw.optional.avx512bw")
+    )
+))
 
 ; sysctls.
 (allow sysctl-read

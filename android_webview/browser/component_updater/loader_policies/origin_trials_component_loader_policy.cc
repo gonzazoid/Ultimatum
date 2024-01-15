@@ -7,8 +7,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "android_webview/browser/aw_browser_process.h"
@@ -38,15 +38,14 @@ OriginTrialsComponentLoaderPolicy::~OriginTrialsComponentLoaderPolicy() =
 void OriginTrialsComponentLoaderPolicy::ComponentLoaded(
     const base::Version& version,
     base::flat_map<std::string, base::ScopedFD>& fd_map,
-    std::unique_ptr<base::DictionaryValue> manifest) {
+    base::Value::Dict manifest) {
   // Read the configuration from the manifest and set values in browser
   // local_state. These will be used on the next browser restart.
   // If an individual configuration value is missing, treat as a reset to the
   // browser defaults.
   embedder_support::ReadOriginTrialsConfigAndPopulateLocalState(
       android_webview::AwBrowserProcess::GetInstance()->local_state(),
-      manifest ? std::move(*manifest.get())
-               : base::Value(base::Value::Type::DICTIONARY));
+      std::move(manifest));
 }
 
 void OriginTrialsComponentLoaderPolicy::ComponentLoadFailed(

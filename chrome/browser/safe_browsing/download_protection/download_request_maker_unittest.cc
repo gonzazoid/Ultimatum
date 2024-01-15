@@ -4,14 +4,22 @@
 
 #include "chrome/browser/safe_browsing/download_protection/download_request_maker.h"
 
+#include "base/path_service.h"
+#include "base/strings/string_number_conversions.h"
+#include "base/test/bind.h"
+#include "base/test/test_future.h"
+#include "chrome/browser/download/download_item_warning_data.h"
+#include "chrome/common/chrome_paths.h"
 #include "chrome/common/safe_browsing/mock_binary_feature_extractor.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/download/public/common/mock_download_item.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/proto/csd.pb.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "content/public/browser/download_item_utils.h"
 #include "content/public/browser/file_system_access_write_item.h"
 #include "content/public/test/browser_task_environment.h"
+#include "content/public/test/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace safe_browsing {
@@ -43,7 +51,8 @@ TEST_F(DownloadRequestMakerTest, PopulatesUrl) {
       /*length=*/0,
       /*resources=*/std::vector<ClientDownloadRequest::Resource>(),
       /*is_user_initiated=*/true,
-      /*referrer_chain_data=*/nullptr);
+      /*referrer_chain_data=*/nullptr,
+      /*password=*/absl::nullopt, /*previous_token=*/"", base::DoNothing());
 
   EXPECT_CALL(*mock_feature_extractor_, CheckSignature(tmp_path, _))
       .WillOnce(Return());
@@ -77,7 +86,8 @@ TEST_F(DownloadRequestMakerTest, PopulatesHash) {
       /*length=*/0,
       /*resources=*/std::vector<ClientDownloadRequest::Resource>(),
       /*is_user_initiated=*/true,
-      /*referrer_chain_data=*/nullptr);
+      /*referrer_chain_data=*/nullptr, /*password=*/absl::nullopt,
+      /*previous_token=*/"", base::DoNothing());
 
   EXPECT_CALL(*mock_feature_extractor_, CheckSignature(tmp_path, _))
       .WillOnce(Return());
@@ -111,7 +121,8 @@ TEST_F(DownloadRequestMakerTest, PopulatesLength) {
       /*length=*/123,
       /*resources=*/std::vector<ClientDownloadRequest::Resource>(),
       /*is_user_initiated=*/true,
-      /*referrer_chain_data=*/nullptr);
+      /*referrer_chain_data=*/nullptr, /*password=*/absl::nullopt,
+      /*previous_token=*/"", base::DoNothing());
 
   EXPECT_CALL(*mock_feature_extractor_, CheckSignature(tmp_path, _))
       .WillOnce(Return());
@@ -149,15 +160,16 @@ TEST_F(DownloadRequestMakerTest, PopulatesResources) {
   resource2.set_type(ClientDownloadRequest::DOWNLOAD_REDIRECT);
   resources.push_back(resource2);
 
-  DownloadRequestMaker request_maker(mock_feature_extractor_, &profile_,
-                                     DownloadRequestMaker::TabUrls(),
-                                     /*target_path=*/base::FilePath(), tmp_path,
-                                     /*source_url=*/GURL(),
-                                     /*hash=*/"",
-                                     /*length=*/0,
-                                     /*resources=*/resources,
-                                     /*is_user_initiated=*/true,
-                                     /*referrer_chain_data=*/nullptr);
+  DownloadRequestMaker request_maker(
+      mock_feature_extractor_, &profile_, DownloadRequestMaker::TabUrls(),
+      /*target_path=*/base::FilePath(), tmp_path,
+      /*source_url=*/GURL(),
+      /*hash=*/"",
+      /*length=*/0,
+      /*resources=*/resources,
+      /*is_user_initiated=*/true,
+      /*referrer_chain_data=*/nullptr, /*password=*/absl::nullopt,
+      /*previous_token=*/"", base::DoNothing());
 
   EXPECT_CALL(*mock_feature_extractor_, CheckSignature(tmp_path, _))
       .WillOnce(Return());
@@ -197,7 +209,8 @@ TEST_F(DownloadRequestMakerTest, PopulatesUserInitiated) {
       /*length=*/0,
       /*resources=*/std::vector<ClientDownloadRequest::Resource>(),
       /*is_user_initiated=*/true,
-      /*referrer_chain_data=*/nullptr);
+      /*referrer_chain_data=*/nullptr, /*password=*/absl::nullopt,
+      /*previous_token=*/"", base::DoNothing());
 
   EXPECT_CALL(*mock_feature_extractor_, CheckSignature(tmp_path, _))
       .WillOnce(Return());
@@ -243,7 +256,8 @@ TEST_F(DownloadRequestMakerTest, PopulatesReferrerChain) {
       /*length=*/0,
       /*resources=*/std::vector<ClientDownloadRequest::Resource>(),
       /*is_user_initiated=*/true,
-      /*referrer_chain_data=*/&referrer_chain_data);
+      /*referrer_chain_data=*/&referrer_chain_data,
+      /*password=*/absl::nullopt, /*previous_token=*/"", base::DoNothing());
 
   EXPECT_CALL(*mock_feature_extractor_, CheckSignature(tmp_path, _))
       .WillOnce(Return());
@@ -288,7 +302,8 @@ TEST_F(DownloadRequestMakerTest, PopulatesStandardProtection) {
       /*length=*/0,
       /*resources=*/std::vector<ClientDownloadRequest::Resource>(),
       /*is_user_initiated=*/true,
-      /*referrer_chain_data=*/nullptr);
+      /*referrer_chain_data=*/nullptr, /*password=*/absl::nullopt,
+      /*previous_token=*/"", base::DoNothing());
 
   EXPECT_CALL(*mock_feature_extractor_, CheckSignature(tmp_path, _))
       .WillOnce(Return());
@@ -327,7 +342,8 @@ TEST_F(DownloadRequestMakerTest, PopulatesEnhancedProtection) {
       /*length=*/0,
       /*resources=*/std::vector<ClientDownloadRequest::Resource>(),
       /*is_user_initiated=*/true,
-      /*referrer_chain_data=*/nullptr);
+      /*referrer_chain_data=*/nullptr, /*password=*/absl::nullopt,
+      /*previous_token=*/"", base::DoNothing());
 
   EXPECT_CALL(*mock_feature_extractor_, CheckSignature(tmp_path, _))
       .WillOnce(Return());
@@ -363,7 +379,8 @@ TEST_F(DownloadRequestMakerTest, PopulateTailoredInfo) {
       /*length=*/0,
       /*resources=*/std::vector<ClientDownloadRequest::Resource>(),
       /*is_user_initiated=*/true,
-      /*referrer_chain_data=*/nullptr);
+      /*referrer_chain_data=*/nullptr, /*password=*/absl::nullopt,
+      /*previous_token=*/"", base::DoNothing());
 
   EXPECT_CALL(*mock_feature_extractor_, CheckSignature(tmp_path, _))
       .WillOnce(Return());
@@ -383,7 +400,7 @@ TEST_F(DownloadRequestMakerTest, PopulateTailoredInfo) {
   run_loop.Run();
 
   ASSERT_NE(request, nullptr);
-  EXPECT_EQ(request->tailored_info().version(), 1);
+  EXPECT_EQ(request->tailored_info().version(), 3);
 }
 
 TEST_F(DownloadRequestMakerTest, PopulatesFileBasename) {
@@ -399,7 +416,8 @@ TEST_F(DownloadRequestMakerTest, PopulatesFileBasename) {
       /*length=*/0,
       /*resources=*/std::vector<ClientDownloadRequest::Resource>(),
       /*is_user_initiated=*/true,
-      /*referrer_chain_data=*/nullptr);
+      /*referrer_chain_data=*/nullptr, /*password=*/absl::nullopt,
+      /*previous_token=*/"", base::DoNothing());
 
   EXPECT_CALL(*mock_feature_extractor_, CheckSignature(tmp_path, _))
       .WillOnce(Return());
@@ -523,6 +541,192 @@ TEST_F(DownloadRequestMakerTest, CreatesFromFileSystemAccess) {
   EXPECT_EQ(request->resources_size(), 1);
   EXPECT_EQ(request->length(), 123);
   EXPECT_EQ(request->user_initiated(), true);
+}
+
+TEST_F(DownloadRequestMakerTest, NotifiesCallback) {
+  base::RunLoop run_loop;
+  base::FilePath tmp_path(FILE_PATH_LITERAL("temp_path"));
+
+  bool callback_ran = false;
+
+  DownloadRequestMaker request_maker(
+      mock_feature_extractor_, &profile_, DownloadRequestMaker::TabUrls(),
+      /*target_path=*/base::FilePath(), tmp_path,
+      /*source_url=*/GURL(),
+      /*hash=*/"",
+      /*length=*/0,
+      /*resources=*/std::vector<ClientDownloadRequest::Resource>(),
+      /*is_user_initiated=*/true,
+      /*referrer_chain_data=*/nullptr,
+      /*password=*/absl::nullopt, /*previous_token=*/"",
+      base::BindLambdaForTesting([&callback_ran](const FileAnalyzer::Results&) {
+        callback_ran = true;
+      }));
+
+  EXPECT_CALL(*mock_feature_extractor_, CheckSignature(tmp_path, _))
+      .WillOnce(Return());
+  EXPECT_CALL(*mock_feature_extractor_, ExtractImageFeatures(tmp_path, _, _, _))
+      .WillRepeatedly(Return(true));
+
+  std::unique_ptr<ClientDownloadRequest> request;
+  request_maker.Start(base::IgnoreArgs<std::unique_ptr<ClientDownloadRequest>>(
+      run_loop.QuitClosure()));
+  run_loop.Run();
+
+  EXPECT_TRUE(callback_ran);
+}
+
+TEST_F(DownloadRequestMakerTest, SetsIsEncrypted) {
+  content::InProcessUtilityThreadHelper utility_thread_helper;
+
+  base::FilePath test_zip;
+  EXPECT_TRUE(base::PathService::Get(chrome::DIR_TEST_DATA, &test_zip));
+  test_zip =
+      test_zip.AppendASCII("safe_browsing/download_protection/encrypted.zip");
+
+  download::MockDownloadItem mock_download_item;
+  EXPECT_CALL(mock_download_item, GetUrlChain())
+      .WillRepeatedly(ReturnRefOfCopy(
+          std::vector<GURL>{GURL("https://example.com/redirect"),
+                            GURL("https://example.com/download")}));
+  EXPECT_CALL(mock_download_item, GetTabUrl())
+      .WillOnce(ReturnRefOfCopy(GURL("https://example.com/tab_url")));
+  EXPECT_CALL(mock_download_item, GetTabReferrerUrl())
+      .WillOnce(ReturnRefOfCopy(GURL("https://example.com/tab_referrer_url")));
+  EXPECT_CALL(mock_download_item, GetTargetFilePath())
+      .WillOnce(ReturnRefOfCopy(
+          base::FilePath(FILE_PATH_LITERAL("target_file_path.zip"))));
+  EXPECT_CALL(mock_download_item, GetFullPath())
+      .WillOnce(ReturnRefOfCopy(test_zip));
+  EXPECT_CALL(mock_download_item, GetURL())
+      .WillOnce(ReturnRefOfCopy(GURL("https://example.com/url")));
+  EXPECT_CALL(mock_download_item, GetReferrerUrl())
+      .WillOnce(ReturnRefOfCopy(GURL("https://example.com/referrer_url")));
+  EXPECT_CALL(mock_download_item, GetHash())
+      .WillOnce(ReturnRefOfCopy(std::string("hash")));
+  EXPECT_CALL(mock_download_item, GetReceivedBytes()).WillOnce(Return(123));
+  EXPECT_CALL(mock_download_item, HasUserGesture()).WillOnce(Return(true));
+  EXPECT_CALL(mock_download_item, GetRemoteAddress())
+      .WillRepeatedly(Return(std::string("remote_ip")));
+  content::DownloadItemUtils::AttachInfoForTesting(&mock_download_item, nullptr,
+                                                   nullptr);
+
+  base::RunLoop run_loop;
+  base::FilePath tmp_path(FILE_PATH_LITERAL("full_path.exe"));
+
+  std::unique_ptr<DownloadRequestMaker> request_maker =
+      DownloadRequestMaker::CreateFromDownloadItem(mock_feature_extractor_,
+                                                   &mock_download_item);
+
+  std::unique_ptr<ClientDownloadRequest> request;
+  request_maker->Start(base::IgnoreArgs<std::unique_ptr<ClientDownloadRequest>>(
+      run_loop.QuitClosure()));
+  run_loop.Run();
+
+  EXPECT_TRUE(DownloadItemWarningData::IsEncryptedArchive(&mock_download_item));
+}
+
+TEST_F(DownloadRequestMakerTest, UsesPassword) {
+  content::InProcessUtilityThreadHelper utility_thread_helper;
+
+  base::FilePath test_zip;
+  EXPECT_TRUE(base::PathService::Get(chrome::DIR_TEST_DATA, &test_zip));
+  test_zip =
+      test_zip.AppendASCII("safe_browsing/download_protection/encrypted.zip");
+
+  download::MockDownloadItem mock_download_item;
+  EXPECT_CALL(mock_download_item, GetUrlChain())
+      .WillRepeatedly(ReturnRefOfCopy(
+          std::vector<GURL>{GURL("https://example.com/redirect"),
+                            GURL("https://example.com/download")}));
+  EXPECT_CALL(mock_download_item, GetTabUrl())
+      .WillOnce(ReturnRefOfCopy(GURL("https://example.com/tab_url")));
+  EXPECT_CALL(mock_download_item, GetTabReferrerUrl())
+      .WillOnce(ReturnRefOfCopy(GURL("https://example.com/tab_referrer_url")));
+  EXPECT_CALL(mock_download_item, GetTargetFilePath())
+      .WillOnce(ReturnRefOfCopy(
+          base::FilePath(FILE_PATH_LITERAL("target_file_path.zip"))));
+  EXPECT_CALL(mock_download_item, GetFullPath())
+      .WillOnce(ReturnRefOfCopy(test_zip));
+  EXPECT_CALL(mock_download_item, GetURL())
+      .WillOnce(ReturnRefOfCopy(GURL("https://example.com/url")));
+  EXPECT_CALL(mock_download_item, GetReferrerUrl())
+      .WillOnce(ReturnRefOfCopy(GURL("https://example.com/referrer_url")));
+  EXPECT_CALL(mock_download_item, GetHash())
+      .WillOnce(ReturnRefOfCopy(std::string("hash")));
+  EXPECT_CALL(mock_download_item, GetReceivedBytes()).WillOnce(Return(123));
+  EXPECT_CALL(mock_download_item, HasUserGesture()).WillOnce(Return(true));
+  EXPECT_CALL(mock_download_item, GetRemoteAddress())
+      .WillRepeatedly(Return(std::string("remote_ip")));
+  content::DownloadItemUtils::AttachInfoForTesting(&mock_download_item, nullptr,
+                                                   nullptr);
+
+  base::FilePath tmp_path(FILE_PATH_LITERAL("full_path.exe"));
+
+  std::unique_ptr<DownloadRequestMaker> request_maker =
+      DownloadRequestMaker::CreateFromDownloadItem(
+          mock_feature_extractor_, &mock_download_item,
+          /*password=*/std::string("12345"));
+
+  base::test::TestFuture<std::unique_ptr<ClientDownloadRequest>> request_future;
+  request_maker->Start(request_future.GetCallback());
+
+  ASSERT_EQ(request_future.Get()->archived_binary_size(), 1);
+  std::string sha256 =
+      request_future.Get()->archived_binary(0).digests().sha256();
+  EXPECT_EQ(base::HexEncode(sha256.data(), sha256.size()),
+            "E11FFA0C9F25234453A9EDD1CB251D46107F34B536AD74642A8584ACA8C1A8CE");
+}
+
+TEST_F(DownloadRequestMakerTest, SetsFullyExtractedArchive) {
+  content::InProcessUtilityThreadHelper utility_thread_helper;
+
+  base::FilePath test_zip;
+  EXPECT_TRUE(base::PathService::Get(chrome::DIR_TEST_DATA, &test_zip));
+  test_zip = test_zip.AppendASCII(
+      "safe_browsing/download_protection/aes_encrypted_password_12345.zip");
+
+  download::MockDownloadItem mock_download_item;
+  EXPECT_CALL(mock_download_item, GetUrlChain())
+      .WillRepeatedly(ReturnRefOfCopy(
+          std::vector<GURL>{GURL("https://example.com/redirect"),
+                            GURL("https://example.com/download")}));
+  EXPECT_CALL(mock_download_item, GetTabUrl())
+      .WillOnce(ReturnRefOfCopy(GURL("https://example.com/tab_url")));
+  EXPECT_CALL(mock_download_item, GetTabReferrerUrl())
+      .WillOnce(ReturnRefOfCopy(GURL("https://example.com/tab_referrer_url")));
+  EXPECT_CALL(mock_download_item, GetTargetFilePath())
+      .WillOnce(ReturnRefOfCopy(
+          base::FilePath(FILE_PATH_LITERAL("target_file_path.zip"))));
+  EXPECT_CALL(mock_download_item, GetFullPath())
+      .WillOnce(ReturnRefOfCopy(test_zip));
+  EXPECT_CALL(mock_download_item, GetURL())
+      .WillOnce(ReturnRefOfCopy(GURL("https://example.com/url")));
+  EXPECT_CALL(mock_download_item, GetReferrerUrl())
+      .WillOnce(ReturnRefOfCopy(GURL("https://example.com/referrer_url")));
+  EXPECT_CALL(mock_download_item, GetHash())
+      .WillOnce(ReturnRefOfCopy(std::string("hash")));
+  EXPECT_CALL(mock_download_item, GetReceivedBytes()).WillOnce(Return(123));
+  EXPECT_CALL(mock_download_item, HasUserGesture()).WillOnce(Return(true));
+  EXPECT_CALL(mock_download_item, GetRemoteAddress())
+      .WillRepeatedly(Return(std::string("remote_ip")));
+  content::DownloadItemUtils::AttachInfoForTesting(&mock_download_item, nullptr,
+                                                   nullptr);
+
+  base::RunLoop run_loop;
+  base::FilePath tmp_path(FILE_PATH_LITERAL("full_path.exe"));
+
+  std::unique_ptr<DownloadRequestMaker> request_maker =
+      DownloadRequestMaker::CreateFromDownloadItem(mock_feature_extractor_,
+                                                   &mock_download_item);
+
+  std::unique_ptr<ClientDownloadRequest> request;
+  request_maker->Start(base::IgnoreArgs<std::unique_ptr<ClientDownloadRequest>>(
+      run_loop.QuitClosure()));
+  run_loop.Run();
+
+  EXPECT_FALSE(
+      DownloadItemWarningData::IsFullyExtractedArchive(&mock_download_item));
 }
 
 }  // namespace safe_browsing

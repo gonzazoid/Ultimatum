@@ -4,15 +4,15 @@
 
 #include "media/mojo/services/video_decode_perf_history.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "media/base/bind_to_current_loop.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/single_thread_task_runner.h"
 #include "media/base/key_systems.h"
 #include "media/base/media_switches.h"
 #include "media/base/video_codecs.h"
@@ -119,8 +119,8 @@ void VideoDecodePerfHistory::OnDatabaseInit(bool success) {
 
   // Post all the deferred API calls as if they're just now coming in.
   for (auto& deferred_call : init_deferred_api_calls_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  std::move(deferred_call));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(deferred_call));
   }
   init_deferred_api_calls_.clear();
 }
@@ -444,8 +444,10 @@ void VideoDecodePerfHistory::GetVideoDecodeStatsDB(GetCB get_db_cb) {
     return;
   }
 
-  // DB is already initialized. BindToCurrentLoop to avoid reentrancy.
-  std::move(BindToCurrentLoop(std::move(get_db_cb))).Run(db_.get());
+  // DB is already initialized. base::BindPostTaskToCurrentDefault to avoid
+  // reentrancy.
+  std::move(base::BindPostTaskToCurrentDefault(std::move(get_db_cb)))
+      .Run(db_.get());
 }
 
 }  // namespace media

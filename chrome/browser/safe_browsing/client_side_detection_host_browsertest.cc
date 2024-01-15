@@ -17,7 +17,9 @@
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/buildflags.h"
 #include "components/safe_browsing/content/browser/client_side_detection_service.h"
+#include "components/safe_browsing/content/browser/client_side_phishing_model.h"
 #include "components/safe_browsing/content/browser/ui_manager.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/proto/client_model.pb.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/mock_navigation_handle.h"
@@ -36,7 +38,8 @@ using ::testing::StrictMock;
 
 class FakeClientSideDetectionService : public ClientSideDetectionService {
  public:
-  FakeClientSideDetectionService() : ClientSideDetectionService(nullptr) {}
+  FakeClientSideDetectionService()
+      : ClientSideDetectionService(nullptr, nullptr, nullptr) {}
 
   void SendClientReportPhishingRequest(
       std::unique_ptr<ClientPhishingRequest> verdict,
@@ -56,13 +59,32 @@ class FakeClientSideDetectionService : public ClientSideDetectionService {
     return std::move(saved_callback_);
   }
 
-  void SetModel(const ClientSideModel& model) { model_ = model; }
+  void SetModel(std::string client_side_model) {
+    client_side_model_ = client_side_model;
+  }
 
-  CSDModelType GetModelType() override { return CSDModelType::kProtobuf; }
+  CSDModelType GetModelType() override { return CSDModelType::kFlatbuffer; }
 
-  const std::string& GetModelStr() override {
-    client_side_model_ = model_.SerializeAsString();
-    return client_side_model_;
+  bool IsModelAvailable() override { return true; }
+
+  // This is a fake CSD service which will have no TfLite models.
+  const base::File& GetVisualTfLiteModel() override {
+    return visual_tflite_model_;
+  }
+
+  base::ReadOnlySharedMemoryRegion GetModelSharedMemoryRegion() override {
+    base::MappedReadOnlyRegion mapped_region =
+        base::ReadOnlySharedMemoryRegion::Create(client_side_model_.length());
+    memcpy(mapped_region.mapping.memory(), client_side_model_.data(),
+           client_side_model_.length());
+    return mapped_region.region.Duplicate();
+  }
+
+  // This is a fake CSD service which will have no thresholds due to no TfLite
+  // models.
+  const base::flat_map<std::string, TfLiteModelMetadata::Threshold>&
+  GetVisualTfLiteModelThresholds() override {
+    return thresholds_;
   }
 
   void SetRequestCallback(const base::RepeatingClosure& closure) {
@@ -79,6 +101,8 @@ class FakeClientSideDetectionService : public ClientSideDetectionService {
   ClientSideModel model_;
   std::string access_token_;
   std::string client_side_model_;
+  base::File visual_tflite_model_;
+  base::flat_map<std::string, TfLiteModelMetadata::Threshold> thresholds_;
   base::RepeatingClosure request_callback_;
   base::WeakPtrFactory<ClientSideDetectionService> weak_factory_{this};
 };
@@ -117,15 +141,12 @@ class ClientSideDetectionHostPrerenderBrowserTest
       const ClientSideDetectionHostPrerenderBrowserTest&) = delete;
 
   void SetUp() override {
-    prerender_helper_.SetUp(embedded_test_server());
+    prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
     InProcessBrowserTest::SetUp();
   }
 
   void SetUpOnMainThread() override {
-    model_.set_version(123);
-    model_.set_max_words_per_term(1);
-    // This model will always trigger.
-    model_.set_threshold_probability(-1);
+    set_up_client_side_model();
     host_resolver()->AddRule("*", "127.0.0.1");
     ASSERT_TRUE(embedded_test_server()->Start());
   }
@@ -138,15 +159,78 @@ class ClientSideDetectionHostPrerenderBrowserTest
     return browser()->tab_strip_model()->GetActiveWebContents();
   }
 
-  ClientSideModel& client_side_model() { return model_; }
+  void set_up_client_side_model() {
+    flatbuffers::FlatBufferBuilder builder(1024);
+    std::vector<flatbuffers::Offset<flat::Hash>> hashes;
+    // Make sure this is sorted.
+    std::vector<std::string> hashes_vector = {
+        "feature1", "feature2", "feature3", "token one", "token two"};
+    for (std::string& feature : hashes_vector) {
+      std::vector<uint8_t> hash_data(feature.begin(), feature.end());
+      hashes.push_back(flat::CreateHashDirect(builder, &hash_data));
+    }
+    flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<flat::Hash>>>
+        hashes_flat = builder.CreateVector(hashes);
+
+    std::vector<flatbuffers::Offset<flat::ClientSideModel_::Rule>> rules;
+    std::vector<int32_t> rule_feature1 = {};
+    std::vector<int32_t> rule_feature2 = {0};
+    std::vector<int32_t> rule_feature3 = {0, 1};
+    rules.push_back(
+        flat::ClientSideModel_::CreateRuleDirect(builder, &rule_feature1, 0.5));
+    rules.push_back(
+        flat::ClientSideModel_::CreateRuleDirect(builder, &rule_feature2, 2));
+    rules.push_back(
+        flat::ClientSideModel_::CreateRuleDirect(builder, &rule_feature3, 3));
+    flatbuffers::Offset<
+        flatbuffers::Vector<flatbuffers::Offset<flat::ClientSideModel_::Rule>>>
+        rules_flat = builder.CreateVector(rules);
+
+    std::vector<int32_t> page_terms_vector = {3, 4};
+    flatbuffers::Offset<flatbuffers::Vector<int32_t>> page_term_flat =
+        builder.CreateVector(page_terms_vector);
+
+    std::vector<uint32_t> page_words_vector = {1000U, 2000U, 3000U};
+    flatbuffers::Offset<flatbuffers::Vector<uint32_t>> page_word_flat =
+        builder.CreateVector(page_words_vector);
+
+    std::vector<flatbuffers::Offset<
+        safe_browsing::flat::TfLiteModelMetadata_::Threshold>>
+        thresholds_vector = {};
+    flatbuffers::Offset<flat::TfLiteModelMetadata> tflite_metadata_flat =
+        flat::CreateTfLiteModelMetadataDirect(builder, 0, &thresholds_vector, 0,
+                                              0);
+    flat::ClientSideModelBuilder csd_model_builder(builder);
+    csd_model_builder.add_version(123);
+    // The model will always trigger.
+    csd_model_builder.add_threshold_probability(-1);
+    csd_model_builder.add_hashes(hashes_flat);
+    csd_model_builder.add_rule(rules_flat);
+    csd_model_builder.add_page_term(page_term_flat);
+    csd_model_builder.add_page_word(page_word_flat);
+    csd_model_builder.add_max_words_per_term(2);
+    csd_model_builder.add_murmur_hash_seed(12345U);
+    csd_model_builder.add_max_shingles_per_page(10);
+    csd_model_builder.add_shingle_size(3);
+    csd_model_builder.add_tflite_metadata(tflite_metadata_flat);
+    builder.Finish(csd_model_builder.Finish());
+    flatbuffer_model_str_ = std::string(
+        reinterpret_cast<char*>(builder.GetBufferPointer()), builder.GetSize());
+  }
+
+  std::string client_side_model() { return flatbuffer_model_str_; }
 
  private:
-  ClientSideModel model_;
   content::test::PrerenderTestHelper prerender_helper_;
+  std::string flatbuffer_model_str_;
 };
 
 IN_PROC_BROWSER_TEST_F(ClientSideDetectionHostPrerenderBrowserTest,
-                       DISABLED_PrerenderShouldNotAffectClientSideDetection) {
+                       PrerenderShouldNotAffectClientSideDetection) {
+  if (base::FeatureList::IsEnabled(kClientSideDetectionKillswitch)) {
+    GTEST_SKIP();
+  }
+
   FakeClientSideDetectionService fake_csd_service;
   fake_csd_service.SetModel(client_side_model());
 
@@ -193,7 +277,11 @@ IN_PROC_BROWSER_TEST_F(ClientSideDetectionHostPrerenderBrowserTest,
 }
 
 IN_PROC_BROWSER_TEST_F(ClientSideDetectionHostPrerenderBrowserTest,
-                       DISABLED_ClassifyPrerenderedPageAfterActivation) {
+                       ClassifyPrerenderedPageAfterActivation) {
+  if (base::FeatureList::IsEnabled(kClientSideDetectionKillswitch)) {
+    GTEST_SKIP();
+  }
+
   FakeClientSideDetectionService fake_csd_service;
   fake_csd_service.SetModel(client_side_model());
 

@@ -11,21 +11,19 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/timer/timer.h"
 #include "components/webauthn/android/jni_headers/InternalAuthenticator_jni.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
-#include "mojo/public/cpp/base/time_mojom_traits.h"
-#include "mojo/public/mojom/base/time.mojom.h"
-#include "third_party/blink/public/mojom/authenticator_mojom_traits.h"
-#include "third_party/blink/public/mojom/webauthn/authenticator.mojom-blink.h"
 #include "url/origin.h"
 
 using base::android::AttachCurrentThread;
 using base::android::ConvertUTF8ToJavaString;
+using base::android::JavaArrayOfByteArrayToBytesVector;
 using base::android::JavaRef;
 using base::android::ScopedJavaLocalRef;
 using base::android::ToJavaArrayOfByteArray;
+
+namespace webauthn {
 
 InternalAuthenticatorAndroid::InternalAuthenticatorAndroid(
     content::RenderFrameHost* render_frame_host)
@@ -50,7 +48,7 @@ void InternalAuthenticatorAndroid::SetEffectiveOrigin(
   DCHECK(!obj.is_null());
 
   Java_InternalAuthenticator_setEffectiveOrigin(env, obj,
-                                                origin.CreateJavaObject());
+                                                origin.ToJavaObject());
 }
 
 void InternalAuthenticatorAndroid::SetPaymentOptions(
@@ -227,3 +225,5 @@ JavaRef<jobject>& InternalAuthenticatorAndroid::GetJavaObject() {
   }
   return java_internal_authenticator_ref_;
 }
+
+}  // namespace webauthn

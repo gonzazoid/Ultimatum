@@ -2,16 +2,22 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 
 export interface PerformanceBrowserProxy {
+  getCurrentOpenSites(): Promise<string[]>;
   getDeviceHasBattery(): Promise<boolean>;
   openBatterySaverFeedbackDialog(): void;
-  openHighEfficiencyFeedbackDialog(): void;
+  openMemorySaverFeedbackDialog(): void;
+  openSpeedFeedbackDialog(): void;
   validateTabDiscardExceptionRule(rule: string): Promise<boolean>;
 }
 
 export class PerformanceBrowserProxyImpl implements PerformanceBrowserProxy {
+  getCurrentOpenSites() {
+    return sendWithPromise('getCurrentOpenSites');
+  }
+
   getDeviceHasBattery() {
     return sendWithPromise('getDeviceHasBattery');
   }
@@ -20,8 +26,12 @@ export class PerformanceBrowserProxyImpl implements PerformanceBrowserProxy {
     chrome.send('openBatterySaverFeedbackDialog');
   }
 
-  openHighEfficiencyFeedbackDialog() {
-    chrome.send('openHighEfficiencyFeedbackDialog');
+  openMemorySaverFeedbackDialog() {
+    chrome.send('openMemorySaverFeedbackDialog');
+  }
+
+  openSpeedFeedbackDialog() {
+    chrome.send('openSpeedFeedbackDialog');
   }
 
   validateTabDiscardExceptionRule(rule: string) {

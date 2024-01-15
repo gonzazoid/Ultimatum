@@ -311,10 +311,6 @@ xsltCompMatchAdd(xsltParserContextPtr ctxt, xsltCompMatchPtr comp,
 	     "xsltCompMatchAdd: memory re-allocation failure.\n");
 	    if (ctxt->style != NULL)
 		ctxt->style->errors++;
-	    if (value)
-	        xmlFree(value);
-	    if (value2)
-	        xmlFree(value2);
 	    return (-1);
 	}
         comp->maxStep *= 2;
@@ -483,16 +479,12 @@ xsltReverseCompMatch(xsltParserContextPtr ctxt, xsltCompMatchPtr comp) {
 static int
 xsltPatPushState(xsltTransformContextPtr ctxt, xsltStepStates *states,
                  int step, xmlNodePtr node) {
-    if ((states->states == NULL) || (states->maxstates <= 0)) {
-        states->maxstates = 4;
-	states->nbstates = 0;
-	states->states = xmlMalloc(4 * sizeof(xsltStepState));
-    }
-    else if (states->maxstates <= states->nbstates) {
+    if (states->maxstates <= states->nbstates) {
         xsltStepState *tmp;
+        int newMax = states->maxstates == 0 ? 4 : 2 * states->maxstates;
 
 	tmp = (xsltStepStatePtr) xmlRealloc(states->states,
-			       2 * states->maxstates * sizeof(xsltStepState));
+                newMax * sizeof(xsltStepState));
 	if (tmp == NULL) {
 	    xsltGenericError(xsltGenericErrorContext,
 	     "xsltPatPushState: memory re-allocation failure.\n");
@@ -500,7 +492,7 @@ xsltPatPushState(xsltTransformContextPtr ctxt, xsltStepStates *states,
 	    return(-1);
 	}
 	states->states = tmp;
-	states->maxstates *= 2;
+	states->maxstates = newMax;
     }
     states->states[states->nbstates].step = step;
     states->states[states->nbstates++].node = node;
@@ -1234,10 +1226,10 @@ xsltScanLiteral(xsltParserContextPtr ctxt) {
     if (CUR == '"') {
         NEXT;
 	cur = q = CUR_PTR;
-	val = xmlStringCurrentChar(NULL, cur, &len);
+	val = xsltGetUTF8CharZ(cur, &len);
 	while ((xmlIsCharQ(val)) && (val != '"')) {
 	    cur += len;
-	    val = xmlStringCurrentChar(NULL, cur, &len);
+	    val = xsltGetUTF8CharZ(cur, &len);
 	}
 	if (!xmlIsCharQ(val)) {
 	    ctxt->error = 1;
@@ -1250,10 +1242,10 @@ xsltScanLiteral(xsltParserContextPtr ctxt) {
     } else if (CUR == '\'') {
         NEXT;
 	cur = q = CUR_PTR;
-	val = xmlStringCurrentChar(NULL, cur, &len);
+	val = xsltGetUTF8CharZ(cur, &len);
 	while ((xmlIsCharQ(val)) && (val != '\'')) {
 	    cur += len;
-	    val = xmlStringCurrentChar(NULL, cur, &len);
+	    val = xsltGetUTF8CharZ(cur, &len);
 	}
 	if (!xmlIsCharQ(val)) {
 	    ctxt->error = 1;
@@ -1288,7 +1280,7 @@ xsltScanNCName(xsltParserContextPtr ctxt) {
     SKIP_BLANKS;
 
     cur = q = CUR_PTR;
-    val = xmlStringCurrentChar(NULL, cur, &len);
+    val = xsltGetUTF8CharZ(cur, &len);
     if (!xmlIsBaseCharQ(val) && !xmlIsIdeographicQ(val) && (val != '_'))
 	return(NULL);
 
@@ -1299,7 +1291,7 @@ xsltScanNCName(xsltParserContextPtr ctxt) {
 	   xmlIsCombiningQ(val) ||
 	   xmlIsExtenderQ(val)) {
 	cur += len;
-	val = xmlStringCurrentChar(NULL, cur, &len);
+	val = xsltGetUTF8CharZ(cur, &len);
     }
     ret = xmlStrndup(q, cur - q);
     CUR_PTR = cur;
@@ -1512,6 +1504,7 @@ xsltCompileStepPattern(xsltParserContextPtr ctxt, xmlChar *token, int novar) {
     xmlChar *name = NULL;
     const xmlChar *URI = NULL;
     xmlChar *URL = NULL;
+    xmlChar *ret = NULL;
     int level;
     xsltAxis axis = 0;
 
@@ -1588,7 +1581,6 @@ parse_node_test:
 		    xsltTransformError(NULL, NULL, NULL,
 			    "xsltCompileStepPattern : Name expected\n");
 		    ctxt->error = 1;
-                    xmlFree(URL);
 		    goto error;
 		}
 	    } else {
@@ -1651,7 +1643,6 @@ parse_predicate:
     level = 0;
     while (CUR == '[') {
 	const xmlChar *q;
-	xmlChar *ret = NULL;
 
 	level++;
 	NEXT;
@@ -1695,6 +1686,10 @@ error:
 	xmlFree(token);
     if (name != NULL)
 	xmlFree(name);
+    if (URL != NULL)
+	xmlFree(URL);
+    if (ret != NULL)
+	xmlFree(ret);
 }
 
 /**
@@ -2087,6 +2082,8 @@ xsltAddTemplate(xsltStylesheetPtr style, xsltTemplatePtr cur,
     if (pat == NULL)
 	return(-1);
     while (pat) {
+        int success = 0;
+
 	next = pat->next;
 	pat->next = NULL;
 	name = NULL;
@@ -2158,17 +2155,15 @@ xsltAddTemplate(xsltStylesheetPtr style, xsltTemplatePtr cur,
 	if (name != NULL) {
 	    if (style->templatesHash == NULL) {
 		style->templatesHash = xmlHashCreate(1024);
-		if (style->templatesHash == NULL) {
-		    xsltFreeCompMatch(pat);
-		    return(-1);
-		}
-		xmlHashAddEntry3(style->templatesHash, name, mode, modeURI, pat);
+		success = (style->templatesHash != NULL) &&
+                          (xmlHashAddEntry3(style->templatesHash, name, mode,
+                                            modeURI, pat) >= 0);
 	    } else {
 		list = (xsltCompMatchPtr) xmlHashLookup3(style->templatesHash,
 							 name, mode, modeURI);
 		if (list == NULL) {
-		    xmlHashAddEntry3(style->templatesHash, name,
-				     mode, modeURI, pat);
+		    success = (xmlHashAddEntry3(style->templatesHash, name,
+				                mode, modeURI, pat) >= 0);
 		} else {
 		    /*
 		     * Note '<=' since one must choose among the matching
@@ -2188,6 +2183,7 @@ xsltAddTemplate(xsltStylesheetPtr style, xsltTemplatePtr cur,
 			pat->next = list->next;
 			list->next = pat;
 		    }
+                    success = 1;
 		}
 	    }
 	} else if (top != NULL) {
@@ -2207,10 +2203,13 @@ xsltAddTemplate(xsltStylesheetPtr style, xsltTemplatePtr cur,
 		pat->next = list->next;
 		list->next = pat;
 	    }
-	} else {
+            success = 1;
+	}
+        if (success == 0) {
 	    xsltTransformError(NULL, style, NULL,
 			     "xsltAddTemplate: invalid compiled pattern\n");
 	    xsltFreeCompMatch(pat);
+            xsltFreeCompMatchList(next);
 	    return(-1);
 	}
 #ifdef WITH_XSLT_DEBUG_PATTERN

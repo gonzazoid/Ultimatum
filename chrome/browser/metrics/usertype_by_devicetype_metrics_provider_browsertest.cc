@@ -9,23 +9,23 @@
 #include "base/logging.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "chrome/browser/ash/app_mode/web_app/web_kiosk_app_manager.h"
 #include "chrome/browser/ash/login/app_mode/kiosk_launch_controller.h"
+#include "chrome/browser/ash/login/app_mode/test/kiosk_test_helpers.h"
+#include "chrome/browser/ash/login/demo_mode/demo_session.h"
+#include "chrome/browser/ash/login/demo_mode/demo_mode_test_utils.h"
 #include "chrome/browser/ash/login/existing_user_controller.h"
-#include "chrome/browser/ash/login/test/embedded_policy_test_server_mixin.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
-#include "chrome/browser/ash/login/test/kiosk_test_helpers.h"
 #include "chrome/browser/ash/login/test/logged_in_user_mixin.h"
 #include "chrome/browser/ash/login/test/session_manager_state_waiter.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/ownership/fake_owner_settings_service.h"
 #include "chrome/browser/ash/policy/core/device_local_account.h"
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
+#include "chrome/browser/ash/policy/test_support/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part_ash.h"
-#include "chrome/common/chrome_features.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "components/metrics/metrics_service.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
@@ -78,6 +78,7 @@ absl::optional<em::PolicyData::MetricsLogSegment> GetMetricsLogSegment(
     case UserSegment::kUnmanaged:
     case UserSegment::kKioskApp:
     case UserSegment::kManagedGuestSession:
+    case UserSegment::kDemoMode:
       return absl::nullopt;
   }
   NOTREACHED();
@@ -85,12 +86,11 @@ absl::optional<em::PolicyData::MetricsLogSegment> GetMetricsLogSegment(
 }
 
 absl::optional<AccountId> GetPrimaryAccountId() {
-  return AccountId::FromUserEmailGaiaId(
-      ash::FakeGaiaMixin::kEnterpriseUser1,
-      ash::FakeGaiaMixin::kEnterpriseUser1GaiaId);
+  return AccountId::FromUserEmailGaiaId(FakeGaiaMixin::kEnterpriseUser1,
+                                        FakeGaiaMixin::kEnterpriseUser1GaiaId);
 }
 
-void ProvideCurrentSessionData() {
+void ProvideHistograms() {
   // The purpose of the below call is to avoid a DCHECK failure in an unrelated
   // metrics provider, in |FieldTrialsProvider::ProvideCurrentSessionData()|.
   metrics::SystemProfileProto system_profile_proto;
@@ -98,18 +98,15 @@ void ProvideCurrentSessionData() {
       ->GetDelegatingProviderForTesting()
       ->ProvideSystemProfileMetricsWithLogCreationTime(base::TimeTicks::Now(),
                                                        &system_profile_proto);
-  metrics::ChromeUserMetricsExtension uma_proto;
   g_browser_process->metrics_service()
       ->GetDelegatingProviderForTesting()
-      ->ProvideCurrentSessionData(&uma_proto);
+      ->OnDidCreateMetricsLog();
 }
 
 class TestCase {
  public:
   TestCase(UserSegment user_segment, policy::MarketSegment device_segment)
-      : user_segment_(user_segment),
-        device_segment_(device_segment),
-        uma_expected_(true) {}
+      : user_segment_(user_segment), device_segment_(device_segment) {}
 
   std::string GetTestName() const {
     std::string test_name = "";
@@ -135,6 +132,9 @@ class TestCase {
         break;
       case UserSegment::kManagedGuestSession:
         test_name += "ManagedGuestSession";
+        break;
+      case UserSegment::kDemoMode:
+        test_name += "DemoMode";
         break;
     }
 
@@ -174,6 +174,10 @@ class TestCase {
 
   bool IsKioskApp() const { return GetUserSegment() == UserSegment::kKioskApp; }
 
+  bool IsDemoSession() const {
+    return GetUserSegment() == UserSegment::kDemoMode;
+  }
+
   TestCase& ExpectUmaOutput() {
     uma_expected_ = true;
     return *this;
@@ -189,7 +193,7 @@ class TestCase {
  private:
   UserSegment user_segment_;
   policy::MarketSegment device_segment_;
-  bool uma_expected_;
+  bool uma_expected_{true};
 };
 
 TestCase UserCase(UserSegment user_segment,
@@ -208,6 +212,10 @@ TestCase KioskCase(policy::MarketSegment device_segment) {
   return test_case;
 }
 
+TestCase DemoModeCase() {
+  TestCase test_case(UserSegment::kDemoMode, policy::MarketSegment::ENTERPRISE);
+  return test_case;
+}
 }  // namespace
 
 class UserTypeByDeviceTypeMetricsProviderTest
@@ -215,8 +223,10 @@ class UserTypeByDeviceTypeMetricsProviderTest
       public testing::WithParamInterface<TestCase> {
  public:
   UserTypeByDeviceTypeMetricsProviderTest() {
-    scoped_feature_list_.InitAndEnableFeature(
-        features::kUserTypeByDeviceTypeMetricsProvider);
+    if (GetParam().IsDemoSession()) {
+      device_state_.SetState(
+          ash::DeviceStateMixin::State::OOBE_COMPLETED_DEMO_MODE);
+    }
   }
 
   void SetUpInProcessBrowserTestFixture() override {
@@ -328,9 +338,21 @@ class UserTypeByDeviceTypeMetricsProviderTest
     controller->Login(user_context, ash::SigninSpecifics());
   }
 
+  void StartDemoSession() {
+    // Set Demo Mode config to online.
+    ash::DemoSession::SetDemoConfigForTesting(
+        ash::DemoSession::DemoModeConfig::kOnline);
+    ash::test::LockDemoDeviceInstallAttributes();
+    ash::DemoSession::StartIfInDemoMode();
+
+    // Start the public session, Demo Mode is a special public session.
+    StartPublicSession();
+  }
+
   void PrepareAppLaunch() {
     std::vector<policy::DeviceLocalAccount> device_local_accounts = {
         policy::DeviceLocalAccount(
+            policy::DeviceLocalAccount::EphemeralMode::kUnset,
             policy::WebKioskAppBasicInfo(kAppInstallUrl, "", ""),
             kAppInstallUrl)};
 
@@ -354,8 +376,9 @@ class UserTypeByDeviceTypeMetricsProviderTest
   }
 
   void WaitForSessionStart() {
-    if (IsSessionStarted())
+    if (IsSessionStarted()) {
       return;
+    }
     ash::test::WaitForPrimaryUserSessionStart();
   }
 
@@ -369,7 +392,6 @@ class UserTypeByDeviceTypeMetricsProviderTest
   }
 
  private:
-  base::test::ScopedFeatureList scoped_feature_list_;
   ash::LoggedInUserMixin logged_in_user_mixin_{
       &mixin_host_, ash::LoggedInUserMixin::LogInType::kRegular,
       embedded_test_server(), this,
@@ -396,7 +418,7 @@ class UserTypeByDeviceTypeMetricsProviderTest
   std::unique_ptr<ScopedDeviceSettings> settings_;
 };
 
-// Flacky on CrOS (http://crbug.com/1248669).
+// Flaky on CrOS (http://crbug.com/1248669).
 #if BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_Uma DISABLED_Uma
 #else
@@ -407,8 +429,8 @@ IN_PROC_BROWSER_TEST_P(UserTypeByDeviceTypeMetricsProviderTest, MAYBE_Uma) {
 
   SetDevicePolicy();
 
-  // Simulate calling ProvideCurrentSessionData() prior to logging in.
-  ProvideCurrentSessionData();
+  // Simulate calling ProvideHistograms() prior to logging in.
+  ProvideHistograms();
 
   // No metrics were recorded.
   histogram_tester.ExpectTotalCount(
@@ -418,12 +440,14 @@ IN_PROC_BROWSER_TEST_P(UserTypeByDeviceTypeMetricsProviderTest, MAYBE_Uma) {
     StartPublicSession();
   } else if (GetParam().IsKioskApp()) {
     StartKioskApp();
+  } else if (GetParam().IsDemoSession()) {
+    StartDemoSession();
   } else {
     LogInUser();
   }
 
-  // Simulate calling ProvideCurrentSessionData() after logging in.
-  ProvideCurrentSessionData();
+  // Simulate calling ProvideHistograms() after logging in.
+  ProvideHistograms();
 
   if (GetParam().UmaOutputExpected()) {
     histogram_tester.ExpectUniqueSample(
@@ -460,4 +484,5 @@ INSTANTIATE_TEST_SUITE_P(
         KioskCase(policy::MarketSegment::ENTERPRISE),
         MgsCase(policy::MarketSegment::UNKNOWN).DontExpectUmaOutput(),
         MgsCase(policy::MarketSegment::EDUCATION),
-        MgsCase(policy::MarketSegment::ENTERPRISE)));
+        MgsCase(policy::MarketSegment::ENTERPRISE),
+        DemoModeCase()));

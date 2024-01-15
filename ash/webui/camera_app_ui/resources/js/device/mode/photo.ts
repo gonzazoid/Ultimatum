@@ -13,7 +13,7 @@ import {
   Resolution,
 } from '../../type.js';
 import * as util from '../../util.js';
-import {WaitableEvent} from '../../waitable_event.js';
+import {CancelableEvent, WaitableEvent} from '../../waitable_event.js';
 import {StreamConstraints} from '../stream_constraints.js';
 
 import {ModeBase, ModeFactory} from './mode_base.js';
@@ -92,11 +92,11 @@ export class Photo extends ModeBase {
   }
 
   private async waitPreviewReady(): Promise<void> {
-    // Chrome use muted state on video track representing no frame input
-    // returned from preview video for a while and call |takePhoto()| with
+    // Chrome using muted state on video track representing no frame input
+    // returned from preview video for a while and calling |takePhoto()| with
     // video track in muted state will fail with |kInvalidStateError| exception.
     // To mitigate chance of hitting this error, here we ensure frame inputs
-    // from the preview and checked video muted state before taking photo.
+    // from the preview and check video muted state before taking photo.
     const track = this.video.getVideoTrack();
     const videoEl = this.video.video;
     const waitFrame = async () => {
@@ -104,8 +104,12 @@ export class Photo extends ModeBase {
       const callbackId = videoEl.requestVideoFrameCallback(() => {
         onReady.signal(true);
       });
-      (async () => {
-        await this.video.onExpired;
+      // This is indirectly waited by onReady.wait().
+      // TODO(pihsun): To avoid memory leak, we should have a callback list for
+      // things need to be done when video.onExpired, and remove the callback
+      // after onReady.wait().
+      void (async () => {
+        await this.video.onExpired.wait();
         videoEl.cancelVideoFrameCallback(callbackId);
         onReady.signal(false);
       })();
@@ -119,37 +123,51 @@ export class Photo extends ModeBase {
     } while (track.muted);
   }
 
-  private async takePhoto(): Promise<{blob: Blob, metadata: Metadata|null}> {
-    if (state.get(state.State.ENABLE_PTZ)) {
-      // Workaround for b/184089334 on PTZ camera to use preview frame as
-      // photo result.
-      const blob = await this.getImageCapture().grabJpegFrame();
+  private takePhoto(): Promise<{blob: Blob, metadata: Metadata|null}> {
+    const photoResult =
+        new CancelableEvent<{blob: Blob, metadata: Metadata | null}>();
+    const track = this.video.getVideoTrack();
+
+    function stopTakingPhoto() {
+      photoResult.signalError(new Error('Camera is disconnected.'));
+    }
+    track.addEventListener('ended', stopTakingPhoto, {once: true});
+
+    (async () => {
+      if (state.get(state.State.ENABLE_PTZ)) {
+        // Workaround for b/184089334 on PTZ camera to use preview frame as
+        // photo result.
+        const blob = await this.getImageCapture().grabJpegFrame();
+        this.handler.playShutterEffect();
+        photoResult.signal({
+          blob,
+          metadata: null,
+        });
+        return;
+      }
+      let photoSettings: PhotoSettings;
+      if (this.captureResolution !== null) {
+        photoSettings = {
+          imageWidth: this.captureResolution.width,
+          imageHeight: this.captureResolution.height,
+        };
+      } else {
+        const caps = await this.getImageCapture().getPhotoCapabilities();
+        photoSettings = {
+          imageWidth: caps.imageWidth.max,
+          imageHeight: caps.imageHeight.max,
+        };
+      }
+      await this.waitPreviewReady();
+      const results = await this.getImageCapture().takePhoto(photoSettings);
       this.handler.playShutterEffect();
-      return {
-        blob,
-        metadata: null,
-      };
-    }
-    let photoSettings: PhotoSettings;
-    if (this.captureResolution) {
-      photoSettings = {
-        imageWidth: this.captureResolution.width,
-        imageHeight: this.captureResolution.height,
-      };
-    } else {
-      const caps = await this.getImageCapture().getPhotoCapabilities();
-      photoSettings = {
-        imageWidth: caps.imageWidth.max,
-        imageHeight: caps.imageHeight.max,
-      };
-    }
-    await this.waitPreviewReady();
-    const results = await this.getImageCapture().takePhoto(photoSettings);
-    this.handler.playShutterEffect();
-    return {
-      blob: await results[0].pendingBlob,
-      metadata: await results[0].pendingMetadata,
-    };
+      photoResult.signal({
+        blob: await results[0].pendingBlob,
+        metadata: await results[0].pendingMetadata,
+      });
+    })().catch((e) => photoResult.signalError(e));
+
+    return photoResult.wait();
   }
 }
 

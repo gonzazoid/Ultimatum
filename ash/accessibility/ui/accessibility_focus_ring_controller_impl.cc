@@ -88,8 +88,17 @@ void AccessibilityFocusRingControllerImpl::SetHighlights(
 }
 
 void AccessibilityFocusRingControllerImpl::HideHighlights() {
+  bool had_rects = highlight_rects_.size();
   highlight_rects_.clear();
   UpdateHighlightFromHighlightRects();
+  if (focus_ring_observer_for_test_ && had_rects) {
+    focus_ring_observer_for_test_.Run();
+  }
+}
+
+void AccessibilityFocusRingControllerImpl::SetFocusRingObserverForTesting(
+    base::RepeatingCallback<void()> observer) {
+  focus_ring_observer_for_test_ = std::move(observer);
 }
 
 void AccessibilityFocusRingControllerImpl::UpdateHighlightFromHighlightRects() {
@@ -104,6 +113,9 @@ void AccessibilityFocusRingControllerImpl::OnLayerChange(
   animation_info->change_time = base::TimeTicks::Now();
   if (animation_info->opacity == 0)
     animation_info->start_time = animation_info->change_time;
+
+  if (focus_ring_observer_for_test_)
+    focus_ring_observer_for_test_.Run();
 }
 
 void AccessibilityFocusRingControllerImpl::SetCursorRing(
@@ -123,8 +135,13 @@ void AccessibilityFocusRingControllerImpl::SetCursorRing(
 }
 
 void AccessibilityFocusRingControllerImpl::HideCursorRing() {
-  cursor_layer_.reset();
-  cursor_animation_.reset();
+  if (cursor_layer_) {
+    cursor_layer_.reset();
+    cursor_animation_.reset();
+    if (focus_ring_observer_for_test_) {
+      focus_ring_observer_for_test_.Run();
+    }
+  }
 }
 
 void AccessibilityFocusRingControllerImpl::SetCaretRing(
@@ -146,8 +163,13 @@ void AccessibilityFocusRingControllerImpl::SetCaretRing(
 }
 
 void AccessibilityFocusRingControllerImpl::HideCaretRing() {
-  caret_layer_.reset();
-  caret_animation_.reset();
+  if (caret_layer_) {
+    caret_layer_.reset();
+    caret_animation_.reset();
+    if (focus_ring_observer_for_test_) {
+      focus_ring_observer_for_test_.Run();
+    }
+  }
 }
 
 void AccessibilityFocusRingControllerImpl::SetNoFadeForTesting() {

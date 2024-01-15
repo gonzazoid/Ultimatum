@@ -5,7 +5,7 @@
 #ifndef MEDIA_AUDIO_POWER_OBSERVER_HELPER_H_
 #define MEDIA_AUDIO_POWER_OBSERVER_HELPER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/power_monitor/power_observer.h"
@@ -18,7 +18,6 @@ namespace media {
 // task runner is given, on which suspend and resume notification callbacks are
 // run. It also provides a function to check if we are suspending on the task
 // runner.
-// Note that on Linux suspend/resume information is not supported.
 class MEDIA_EXPORT PowerObserverHelper : public base::PowerSuspendObserver {
  public:
   PowerObserverHelper(scoped_refptr<base::SequencedTaskRunner> task_runner,

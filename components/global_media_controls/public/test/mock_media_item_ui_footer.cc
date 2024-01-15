@@ -4,12 +4,19 @@
 
 #include "components/global_media_controls/public/test/mock_media_item_ui_footer.h"
 
+#include "ui/base/metadata/metadata_impl_macros.h"
+
 namespace global_media_controls {
 namespace test {
 
 MockMediaItemUIFooter::MockMediaItemUIFooter() = default;
 
-MockMediaItemUIFooter::~MockMediaItemUIFooter() = default;
+MockMediaItemUIFooter::~MockMediaItemUIFooter() {
+  Die();
+}
+
+BEGIN_METADATA(MockMediaItemUIFooter)
+END_METADATA
 
 }  // namespace test
 }  // namespace global_media_controls

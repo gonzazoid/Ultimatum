@@ -5,10 +5,13 @@
 #ifndef CHROME_UPDATER_POLICY_MANAGER_H_
 #define CHROME_UPDATER_POLICY_MANAGER_H_
 
-#include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/time/time.h"
 #include "chrome/updater/constants.h"
 
 namespace updater {
@@ -20,9 +23,6 @@ namespace updater {
 // daylight savings time changes happen in between.
 class UpdatesSuppressedTimes {
  public:
-  UpdatesSuppressedTimes();
-  ~UpdatesSuppressedTimes();
-
   bool operator==(const UpdatesSuppressedTimes& other) const;
   bool operator!=(const UpdatesSuppressedTimes& other) const;
 
@@ -39,10 +39,9 @@ class UpdatesSuppressedTimes {
 
 // The Policy Manager Interface is implemented by policy managers such as Group
 // Policy and Device Management.
-class PolicyManagerInterface {
+class PolicyManagerInterface
+    : public base::RefCountedThreadSafe<PolicyManagerInterface> {
  public:
-  virtual ~PolicyManagerInterface() = default;
-
   // This is human-readable string that indicates the policy manager being
   // queried.
   virtual std::string source() const = 0;
@@ -54,70 +53,73 @@ class PolicyManagerInterface {
   virtual bool HasActiveDevicePolicies() const = 0;
 
   // Returns the policy for how often the Updater should check for updates.
-  // Returns the time interval between update checks in minutes.
+  // Returns the time interval between update checks.
   // 0 indicates updates are disabled.
-  virtual bool GetLastCheckPeriodMinutes(int* minutes) const = 0;
+  virtual std::optional<base::TimeDelta> GetLastCheckPeriod() const = 0;
 
   // For domain-joined machines, checks the current time against the times that
   // updates are suppressed.
-  virtual bool GetUpdatesSuppressedTimes(
-      UpdatesSuppressedTimes* suppressed_times) const = 0;
+  virtual std::optional<UpdatesSuppressedTimes> GetUpdatesSuppressedTimes()
+      const = 0;
 
   // Returns the policy for the download preference.
-  virtual bool GetDownloadPreferenceGroupPolicy(
-      std::string* download_preference) const = 0;
+  virtual std::optional<std::string> GetDownloadPreference() const = 0;
 
   // Returns the policy for the package cache size limit in megabytes.
-  virtual bool GetPackageCacheSizeLimitMBytes(int* cache_size_limit) const = 0;
+  virtual std::optional<int> GetPackageCacheSizeLimitMBytes() const = 0;
 
   // Returns the policy for the package cache expiration in days.
-  virtual bool GetPackageCacheExpirationTimeDays(
-      int* cache_life_limit) const = 0;
+  virtual std::optional<int> GetPackageCacheExpirationTimeDays() const = 0;
 
   // Returns kPolicyEnabled if installation of the specified app is allowed.
   // Otherwise, returns kPolicyDisabled.
-  virtual bool GetEffectivePolicyForAppInstalls(const std::string& app_id,
-                                                int* install_policy) const = 0;
+  virtual std::optional<int> GetEffectivePolicyForAppInstalls(
+      const std::string& app_id) const = 0;
   // Returns kPolicyEnabled if updates of the specified app is allowed.
   // Otherwise, returns one of kPolicyDisabled, kPolicyManualUpdatesOnly, or
   // kPolicyAutomaticUpdatesOnly.
-  virtual bool GetEffectivePolicyForAppUpdates(const std::string& app_id,
-                                               int* update_policy) const = 0;
+  virtual std::optional<int> GetEffectivePolicyForAppUpdates(
+      const std::string& app_id) const = 0;
   // Returns the target version prefix for the app.
   // Examples:
   // * "" (or not configured): update to latest version available.
   // * "55.": update to any minor version of 55 (e.g. 55.24.34 or 55.60.2).
   // * "55.2.": update to any minor version of 55.2 (e.g. 55.2.34 or 55.2.2).
   // * "55.24.34": update to this specific version only.
-  virtual bool GetTargetVersionPrefix(
-      const std::string& app_id,
-      std::string* target_version_prefix) const = 0;
+  virtual std::optional<std::string> GetTargetVersionPrefix(
+      const std::string& app_id) const = 0;
   // Returns whether the RollbackToTargetVersion policy has been set for the
   // app. If RollbackToTargetVersion is set, the TargetVersionPrefix policy
   // governs the version to rollback clients with higher versions to.
-  virtual bool IsRollbackToTargetVersionAllowed(
-      const std::string& app_id,
-      bool* rollback_allowed) const = 0;
+  virtual std::optional<bool> IsRollbackToTargetVersionAllowed(
+      const std::string& app_id) const = 0;
   // Returns a proxy mode such as |auto_detect|.
-  virtual bool GetProxyMode(std::string* proxy_mode) const = 0;
+  virtual std::optional<std::string> GetProxyMode() const = 0;
 
   // Returns a proxy PAC URL.
-  virtual bool GetProxyPacUrl(std::string* proxy_pac_url) const = 0;
+  virtual std::optional<std::string> GetProxyPacUrl() const = 0;
 
   // Returns a proxy server.
-  virtual bool GetProxyServer(std::string* proxy_server) const = 0;
+  virtual std::optional<std::string> GetProxyServer() const = 0;
 
   // Returns a channel, for example {stable|beta|dev}.
-  virtual bool GetTargetChannel(const std::string& app_id,
-                                std::string* channel) const = 0;
+  virtual std::optional<std::string> GetTargetChannel(
+      const std::string& app_id) const = 0;
 
   // Returns a list of apps that need to be downloaded and installed by the
   // updater.
-  virtual bool GetForceInstallApps(
-      std::vector<std::string>* force_install_apps) const = 0;
+  virtual std::optional<std::vector<std::string>> GetForceInstallApps()
+      const = 0;
+
+  // Returns all apps that have some policy set.
+  virtual std::optional<std::vector<std::string>> GetAppsWithPolicy() const = 0;
+
+ protected:
+  friend class base::RefCountedThreadSafe<PolicyManagerInterface>;
+  virtual ~PolicyManagerInterface() = default;
 };
 
-std::unique_ptr<PolicyManagerInterface> GetDefaultValuesPolicyManager();
+scoped_refptr<PolicyManagerInterface> GetDefaultValuesPolicyManager();
 
 }  // namespace updater
 

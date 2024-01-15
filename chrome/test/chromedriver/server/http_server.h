@@ -6,6 +6,7 @@
 #define CHROME_TEST_CHROMEDRIVER_SERVER_HTTP_SERVER_H_
 
 #include "base/json/json_reader.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/test/chromedriver/server/http_handler.h"
 #include "net/base/url_util.h"
 #include "net/server/http_server.h"
@@ -18,7 +19,25 @@ typedef base::RepeatingCallback<void(const net::HttpServerRequestInfo&,
                                      const HttpResponseSenderFunc&)>
     HttpRequestHandlerFunc;
 
-class HttpServer : public net::HttpServer::Delegate {
+class HttpServerInterface {
+ public:
+  virtual ~HttpServerInterface() = default;
+  virtual void Close(int connection_id) = 0;
+
+  virtual void AcceptWebSocket(int connection_id,
+                               const net::HttpServerRequestInfo& request) = 0;
+
+  virtual void SendOverWebSocket(int connection_id,
+                                 const std::string& data) = 0;
+
+  virtual void SendResponse(
+      int connection_id,
+      const net::HttpServerResponseInfo& response,
+      const net::NetworkTrafficAnnotationTag& traffic_annotation) = 0;
+};
+
+class HttpServer : public net::HttpServer::Delegate,
+                   public virtual HttpServerInterface {
  public:
   explicit HttpServer(const std::string& url_base,
                       const std::vector<net::IPAddress>& whitelisted_ips,
@@ -44,16 +63,17 @@ class HttpServer : public net::HttpServer::Delegate {
 
   void OnClose(int connection_id) override;
 
-  void Close(int connection_id);
+  void Close(int connection_id) override;
 
   void AcceptWebSocket(int connection_id,
-                       const net::HttpServerRequestInfo& request);
+                       const net::HttpServerRequestInfo& request) override;
 
-  void SendOverWebSocket(int connection_id, const std::string& data);
+  void SendOverWebSocket(int connection_id, const std::string& data) override;
 
-  void SendResponse(int connection_id,
-                    const net::HttpServerResponseInfo& response,
-                    const net::NetworkTrafficAnnotationTag& traffic_annotation);
+  void SendResponse(
+      int connection_id,
+      const net::HttpServerResponseInfo& response,
+      const net::NetworkTrafficAnnotationTag& traffic_annotation) override;
 
  private:
   void OnResponse(int connection_id,

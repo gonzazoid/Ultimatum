@@ -79,6 +79,8 @@ struct PLATFORM_EXPORT ResourceLoaderOptions {
   explicit ResourceLoaderOptions(scoped_refptr<const DOMWrapperWorld> world);
   ResourceLoaderOptions(const ResourceLoaderOptions& other);
   ResourceLoaderOptions& operator=(const ResourceLoaderOptions& other);
+  ResourceLoaderOptions(ResourceLoaderOptions&& other);
+  ResourceLoaderOptions& operator=(ResourceLoaderOptions&& other);
   ~ResourceLoaderOptions();
 
   FetchInitiatorInfo initiator_info;
@@ -102,7 +104,7 @@ struct PLATFORM_EXPORT ResourceLoaderOptions {
 
   // If not null, this URLLoaderFactory should be used to load this resource
   // rather than whatever factory the system might otherwise use.
-  // Used for example for loading blob: URLs and for prefetch loading.
+  // Used for example for loading blob: URLs.
   scoped_refptr<base::RefCountedData<
       mojo::PendingRemote<network::mojom::blink::URLLoaderFactory>>>
       url_loader_factory;

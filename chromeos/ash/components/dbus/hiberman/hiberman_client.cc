@@ -8,10 +8,14 @@
 
 #include <google/protobuf/message_lite.h>
 
-#include "base/bind.h"
+#include "ash/constants/ash_features.h"
+#include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/thread_pool.h"
+#include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/dbus/hiberman/fake_hiberman_client.h"
 #include "dbus/bus.h"
@@ -21,6 +25,7 @@
 #include "third_party/cros_system_api/dbus/hiberman/dbus-constants.h"
 
 namespace ash {
+
 namespace {
 
 // The default time for the resume from hibernate method call. This method
@@ -28,7 +33,7 @@ namespace {
 // image is being loaded and prepared. As a worst case estimate, loading 8GB at
 // 100MB/s takes about 80 seconds. 5 minutes would give us a fudge factor of
 // roughly 4x.
-constexpr int kHibermanResumeTimeoutMS = 5 * 60 * 1000;
+constexpr int kHibermanResumeTimeoutMs = 5 * 60 * 1000;
 
 HibermanClient* g_instance = nullptr;
 
@@ -47,52 +52,100 @@ class HibermanClientImpl : public HibermanClient {
     proxy_ = bus->GetObjectProxy(
         ::hiberman::kHibernateServiceName,
         dbus::ObjectPath(::hiberman::kHibernateServicePath));
+    WaitForServiceToBeAvailable(
+        base::BindOnce(&HibermanClientImpl::WaitAvailableCallback,
+                       weak_factory_.GetWeakPtr()));
   }
 
   // HibermanClient override:
+  bool IsAlive() const override { return alive_; }
+
+  bool IsEnabled() const override {
+    bool enabled = base::FeatureList::IsEnabled(features::kSuspendToDisk);
+    if (enabled) {
+      LOG(WARNING) << "SuspendToDisk is enabled with value "
+                   << features::kHibernateAfterTimeHours.Get() << " hours.";
+    } else {
+      LOG(WARNING) << "SuspendToDisk is NOT enabled";
+    }
+
+    return enabled;
+  }
+
   void WaitForServiceToBeAvailable(
       chromeos::WaitForServiceToBeAvailableCallback callback) override {
+    VLOG(1) << "Start WaitForServiceToBeAvailable";
     proxy_->WaitForServiceToBeAvailable(std::move(callback));
   }
 
   void ResumeFromHibernate(const std::string& account_id,
-                           ResumeFromHibernateCallback callback) override {
-    dbus::MethodCall method_call(::hiberman::kHibernateResumeInterface,
-                                 ::hiberman::kResumeFromHibernateMethod);
-    dbus::MessageWriter writer(&method_call);
-    writer.AppendString(account_id);
-    // Bind with the weak pointer of |this| so the response is not
-    // handled once |this| is already destroyed.
-    proxy_->CallMethod(
-        &method_call, kHibermanResumeTimeoutMS,
-        base::BindOnce(&HibermanClientImpl::HandleResponse,
-                       weak_factory_.GetWeakPtr(), std::move(callback)));
-  }
-
-  void ResumeFromHibernateAS(const std::string& auth_session_id,
-                             ResumeFromHibernateCallback callback) override {
+                           const std::string& auth_session_id) override {
+    VLOG(1) << "ResumeFromHibernate";
     dbus::MethodCall method_call(::hiberman::kHibernateResumeInterface,
                                  ::hiberman::kResumeFromHibernateASMethod);
     dbus::MessageWriter writer(&method_call);
-    writer.AppendArrayOfBytes(
-        reinterpret_cast<const uint8_t*>(&auth_session_id[0]),
-        auth_session_id.length());
+    writer.AppendString(account_id);
+    writer.AppendArrayOfBytes(base::as_byte_span(auth_session_id));
     // Bind with the weak pointer of |this| so the response is not
     // handled once |this| is already destroyed.
-    proxy_->CallMethod(
-        &method_call, kHibermanResumeTimeoutMS,
-        base::BindOnce(&HibermanClientImpl::HandleResponse,
-                       weak_factory_.GetWeakPtr(), std::move(callback)));
+    proxy_->CallMethod(&method_call, kHibermanResumeTimeoutMs,
+                       base::BindOnce(&HibermanClientImpl::HandleResponse,
+                                      weak_factory_.GetWeakPtr()));
+  }
+
+  void AbortResumeHibernate(const std::string& reason) override {
+    VLOG(1) << "AbortResumeHibernate: reason=" << reason;
+    aborted_ = true;
+
+    if (!alive_) {
+      // When it becomes alive we will send the message.
+      abort_reason_ = reason;
+      VLOG(1) << "AbortResumeHibernate: service not yet available";
+      return;
+    }
+
+    dbus::MethodCall method_call(::hiberman::kHibernateResumeInterface,
+                                 ::hiberman::kAbortResumeMethod);
+    dbus::MessageWriter writer(&method_call);
+    writer.AppendString(reason);
+    proxy_->CallMethod(&method_call, DBUS_TIMEOUT_INFINITE,
+                       base::BindOnce(&HibermanClientImpl::HandleAbortResponse,
+                                      weak_factory_.GetWeakPtr()));
   }
 
  private:
-  void HandleResponse(chromeos::VoidDBusMethodCallback callback,
-                      dbus::Response* response) {
-    std::move(callback).Run(response != nullptr);
+  void HandleResponse(dbus::Response* response) {
+    VLOG(1) << "Received Resume Response: " << (response != nullptr);
   }
 
+  void HandleAbortResponse(dbus::Response* response) {
+    LOG_IF(ERROR, response == nullptr)
+        << "AbortResumeHibernate received a null response";
+  }
+
+  void WaitAvailableCallback(bool service_is_available) {
+    alive_ = service_is_available;
+
+    if (aborted_) {
+      AbortResumeHibernate(abort_reason_);
+    }
+  }
+
+  static void RunOnBlockingThread(base::OnceClosure fn) {
+    base::ThreadPool::PostTask(FROM_HERE, {base::MayBlock()}, std::move(fn));
+  }
+
+  // We need to test if hiberman is responding on the dbus interface, we do
+  // this to make sure we don't block login unnecessarily.
+  bool alive_ = false;
+
+  // If we aborted before the service was alive make sure we send the abort
+  // message when the service finally becomes available.
+  bool aborted_ = false;
+  std::string abort_reason_;
+
   // D-Bus proxy for hiberman, not owned.
-  dbus::ObjectProxy* proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy> proxy_ = nullptr;
   base::WeakPtrFactory<HibermanClientImpl> weak_factory_{this};
 };
 

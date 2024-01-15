@@ -6,12 +6,11 @@
 
 #include <cstddef>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/strcat.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
@@ -102,14 +101,15 @@ bool ResponseIndicatesValidLicense(int response_code,
 
   // Expected response body:
   // { "status": "ACTIVE", ...}
-  absl::optional<base::Value> response = base::JSONReader::Read(response_body);
-  if (!response || !response->is_dict()) {
+  absl::optional<base::Value::Dict> response =
+      base::JSONReader::ReadDict(response_body);
+  if (!response) {
     LOG(ERROR) << "response_body was of unexpected format.";
     return false;
   }
 
-  std::string* status = response->FindStringKey("status");
-  if (status == nullptr) {
+  std::string* status = response->FindString("status");
+  if (!status) {
     LOG(ERROR) << "response_body did not contain status.";
     return false;
   }
@@ -154,7 +154,8 @@ void PluginVmLicenseChecker::FetchAccessToken() {
       "ChromePluginVm", identity_manager, validation_scope,
       base::BindOnce(&PluginVmLicenseChecker::CallEndpointWithAccessToken,
                      weak_ptr_factory_.GetWeakPtr()),
-      signin::PrimaryAccountAccessTokenFetcher::Mode::kImmediate);
+      signin::PrimaryAccountAccessTokenFetcher::Mode::kImmediate,
+      signin::ConsentLevel::kSync);
 }
 
 void PluginVmLicenseChecker::CallEndpointWithAccessToken(

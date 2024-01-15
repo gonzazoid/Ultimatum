@@ -7,8 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/time/time.h"
 #include "media/base/cdm_context.h"
 #include "media/base/media_url_demuxer.h"
 #include "media/base/renderer.h"
@@ -20,7 +21,7 @@
 namespace media {
 
 // Time interval to update media time.
-const int kTimeUpdateIntervalMs = 50;
+constexpr auto kTimeUpdateInterval = base::Milliseconds(50);
 
 // static
 mojo::SelfOwnedReceiverRef<mojom::Renderer> MojoRendererService::Create(
@@ -76,8 +77,9 @@ void MojoRendererService::Initialize(
   DCHECK(!media_url_params->media_url.is_empty());
   media_resource_ = std::make_unique<MediaUrlDemuxer>(
       nullptr, media_url_params->media_url, media_url_params->site_for_cookies,
-      media_url_params->top_frame_origin, media_url_params->allow_credentials,
-      media_url_params->is_hls);
+      media_url_params->top_frame_origin, media_url_params->has_storage_access,
+      media_url_params->allow_credentials, media_url_params->is_hls);
+  media_resource_->SetHeaders(media_url_params->headers);
   renderer_->Initialize(
       media_resource_.get(), this,
       base::BindOnce(&MojoRendererService::OnRendererInitializeDone, weak_this_,
@@ -86,7 +88,12 @@ void MojoRendererService::Initialize(
 
 void MojoRendererService::Flush(FlushCallback callback) {
   DVLOG(2) << __func__;
-  DCHECK_EQ(state_, STATE_PLAYING);
+  DCHECK(state_ == STATE_PLAYING || state_ == STATE_ERROR);
+
+  if (state_ == STATE_ERROR) {
+    std::move(callback).Run();
+    return;
+  }
 
   state_ = STATE_FLUSHING;
   CancelPeriodicMediaTimeUpdates();
@@ -154,6 +161,7 @@ void MojoRendererService::SetCdm(
 void MojoRendererService::OnError(PipelineStatus error) {
   DVLOG(1) << __func__ << "(" << error << ")";
   state_ = STATE_ERROR;
+  CancelPeriodicMediaTimeUpdates();
   client_->OnError(std::move(error));
 }
 
@@ -245,7 +253,7 @@ void MojoRendererService::UpdateMediaTime(bool force) {
   base::TimeDelta max_time = media_time;
   // Allow some slop to account for delays in scheduling time update tasks.
   if (time_update_timer_.IsRunning() && (playback_rate_ > 0))
-    max_time += base::Milliseconds(2 * kTimeUpdateIntervalMs);
+    max_time += 2 * kTimeUpdateInterval;
 
   client_->OnTimeUpdate(media_time, max_time, base::TimeTicks::Now());
   last_media_time_ = media_time;
@@ -255,23 +263,26 @@ void MojoRendererService::CancelPeriodicMediaTimeUpdates() {
   DVLOG(2) << __func__;
 
   time_update_timer_.Stop();
-  UpdateMediaTime(false);
+  UpdateMediaTime(/*force=*/false);
 }
 
 void MojoRendererService::SchedulePeriodicMediaTimeUpdates() {
   DVLOG(2) << __func__;
 
-  UpdateMediaTime(true);
+  UpdateMediaTime(/*force=*/true);
   time_update_timer_.Start(
-      FROM_HERE, base::Milliseconds(kTimeUpdateIntervalMs),
+      FROM_HERE, kTimeUpdateInterval,
       base::BindRepeating(&MojoRendererService::UpdateMediaTime, weak_this_,
-                          false));
+                          /*force=*/false));
 }
 
 void MojoRendererService::OnFlushCompleted(FlushCallback callback) {
   DVLOG(1) << __func__;
-  DCHECK_EQ(state_, STATE_FLUSHING);
-  state_ = STATE_PLAYING;
+  DCHECK(state_ == STATE_FLUSHING || state_ == STATE_ERROR);
+
+  if (state_ == STATE_FLUSHING)
+    state_ = STATE_PLAYING;
+
   std::move(callback).Run();
 }
 

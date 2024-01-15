@@ -8,23 +8,20 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/functional/callback_forward.h"
-#include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
-#include "base/synchronization/lock.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
-#include "media/audio/audio_bus_pool.h"
+#include "base/test/test_file_util.h"
 #include "media/base/audio_bus.h"
+#include "media/base/audio_bus_pool.h"
 #include "media/base/audio_sample_types.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -63,8 +60,9 @@ class MockAudioDebugFileWriter : public AudioDebugFileWriter {
     for (int i = 0; i < data.channels(); ++i) {
       const float* data_ptr = data.channel(i);
       float* ref_data_ptr = reference_data_->channel(i);
-      for (int j = 0; j < data.frames(); ++j, ++data_ptr, ++ref_data_ptr)
+      for (int j = 0; j < data.frames(); ++j, ++data_ptr, ++ref_data_ptr) {
         EXPECT_EQ(*ref_data_ptr, *data_ptr);
+      }
     }
     DoWrite(data);
   }
@@ -89,15 +87,15 @@ class MockAudioDebugFileWriter : public AudioDebugFileWriter {
 // function to create the above mock instead.
 class AudioDebugRecordingHelperUnderTest : public AudioDebugRecordingHelper {
  public:
-  using CreatedWriterCallback =
+  using ChangedWriterCallback =
       base::RepeatingCallback<void(MockAudioDebugFileWriter*)>;
 
   AudioDebugRecordingHelperUnderTest(
       const AudioParameters& params,
       base::OnceClosure on_destruction_closure,
-      CreatedWriterCallback created_writer_callback)
+      ChangedWriterCallback changed_writer_callback)
       : AudioDebugRecordingHelper(params, std::move(on_destruction_closure)),
-        created_writer_callback_(std::move(created_writer_callback)) {}
+        changed_writer_callback_(std::move(changed_writer_callback)) {}
 
   AudioDebugRecordingHelperUnderTest(
       const AudioDebugRecordingHelperUnderTest&) = delete;
@@ -113,12 +111,16 @@ class AudioDebugRecordingHelperUnderTest : public AudioDebugRecordingHelper {
       base::File file) override {
     MockAudioDebugFileWriter* writer =
         new MockAudioDebugFileWriter(params, std::move(file));
-    created_writer_callback_.Run(writer);
+    changed_writer_callback_.Run(writer);
     return AudioDebugFileWriter::Ptr(
         writer, base::OnTaskRunnerDeleter(writer->GetTaskRunner()));
   }
 
-  CreatedWriterCallback created_writer_callback_;
+  void WillDestroyAudioDebugFileWriter() override {
+    changed_writer_callback_.Run(nullptr);
+  }
+
+  ChangedWriterCallback changed_writer_callback_;
 };
 
 class AudioDebugRecordingHelperTest : public ::testing::Test {
@@ -154,9 +156,8 @@ class AudioDebugRecordingHelperTest : public ::testing::Test {
     // CreateWavFileCallback with expected stream type and id.
     EXPECT_EQ(stream_type_, stream_type);
     EXPECT_EQ(id_, id);
-    base::ScopedTempDir temp_dir;
-    ASSERT_TRUE(temp_dir.CreateUniqueTempDir());
-    base::FilePath path(temp_dir.GetPath().Append(base::FilePath(kFileName)));
+    base::FilePath path(base::CreateUniqueTempDirectoryScopedToTest().Append(
+        base::FilePath(kFileName)));
     base::File debug_file(
         path, base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE);
     // Run |reply_callback| with a valid file for expected
@@ -184,7 +185,7 @@ class AudioDebugRecordingHelperTest : public ::testing::Test {
 
   // Used for testing to access the file writer having to go through the
   // internal |file_writer_lock_|.
-  MockAudioDebugFileWriter* mock_audio_file_writer_;
+  raw_ptr<MockAudioDebugFileWriter> mock_audio_file_writer_;
 
   std::vector<base::FilePath> paths_;
 };
@@ -248,8 +249,9 @@ TEST_F(AudioDebugRecordingHelperTest, OnData) {
   const int number_of_samples = number_of_frames * params.channels();
   const float step = std::numeric_limits<int16_t>::max() / number_of_frames;
   std::unique_ptr<float[]> source_data(new float[number_of_samples]);
-  for (float i = 0; i < number_of_samples; ++i)
+  for (float i = 0; i < number_of_samples; ++i) {
     source_data[i] = i * step;
+  }
   std::unique_ptr<AudioBus> audio_bus = AudioBus::Create(params);
   audio_bus->FromInterleaved<Float32SampleTypeTraits>(source_data.get(),
                                                       number_of_frames);

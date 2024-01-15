@@ -7,16 +7,17 @@
 #include <stdint.h>
 
 #include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/strings/stringprintf.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "content/services/auction_worklet/public/mojom/bidder_worklet.mojom.h"
 #include "content/services/auction_worklet/worklet_devtools_debug_test_util.h"
@@ -25,7 +26,7 @@
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/common/interest_group/ad_display_size.h"
 #include "url/gurl.h"
 #include "v8/include/v8-context.h"
 #include "v8/include/v8-forward.h"
@@ -66,37 +67,56 @@ class DebugConnector : public auction_worklet::mojom::BidderWorklet {
                                 std::move(pending_receiver));
   }
 
-  void GenerateBid(
+  void BeginGenerateBid(
       auction_worklet::mojom::BidderWorkletNonSharedParamsPtr
           bidder_worklet_non_shared_params,
       auction_worklet::mojom::KAnonymityBidMode kanon_mode,
       const url::Origin& interest_group_join_origin,
-      const absl::optional<std::string>& auction_signals_json,
-      const absl::optional<std::string>& per_buyer_signals_json,
-      const absl::optional<base::TimeDelta> per_buyer_timeout,
+      const std::optional<GURL>& direct_from_seller_per_buyer_signals,
+      const std::optional<GURL>& direct_from_seller_auction_signals,
       const url::Origin& browser_signal_seller_origin,
-      const absl::optional<url::Origin>& browser_signal_top_level_seller_origin,
+      const std::optional<url::Origin>& browser_signal_top_level_seller_origin,
+      const base::TimeDelta browser_signal_recency,
       auction_worklet::mojom::BiddingBrowserSignalsPtr bidding_browser_signals,
       base::Time auction_start_time,
+      const std::optional<blink::AdSize>& requested_ad_size,
       uint64_t trace_id,
       mojo::PendingAssociatedRemote<mojom::GenerateBidClient>
-          generate_bid_client) override {
+          generate_bid_client,
+      mojo::PendingAssociatedReceiver<mojom::GenerateBidFinalizer>
+          bid_finalizer) override {
     ADD_FAILURE() << "GenerateBid shouldn't be called on DebugConnector";
   }
 
   void ReportWin(
-      const std::string& interest_group_name,
-      const absl::optional<std::string>& auction_signals_json,
-      const absl::optional<std::string>& per_buyer_signals_json,
+      bool is_for_additional_bid,
+      mojom::ReportingIdField reporting_id_field,
+      const std::string& reporting_id,
+      const std::optional<std::string>& auction_signals_json,
+      const std::optional<std::string>& per_buyer_signals_json,
+      const std::optional<GURL>& direct_from_seller_per_buyer_signals,
+      const std::optional<std::string>&
+          direct_from_seller_per_buyer_signals_header_ad_slot,
+      const std::optional<GURL>& direct_from_seller_auction_signals,
+      const std::optional<std::string>&
+          direct_from_seller_auction_signals_header_ad_slot,
       const std::string& seller_signals_json,
+      mojom::KAnonymityBidMode kanon_mode,
+      bool bid_is_kanon,
       const GURL& browser_signal_render_url,
       double browser_signal_bid,
+      const std::optional<blink::AdCurrency>& browser_signal_bid_currency,
       double browser_signal_highest_scoring_other_bid,
+      const std::optional<blink::AdCurrency>&
+          browser_signal_highest_scoring_other_bid_currency,
       bool browser_signal_made_highest_scoring_other_bid,
+      std::optional<double> browser_signal_ad_cost,
+      std::optional<uint16_t> browser_signal_modeling_signals,
+      uint8_t browser_signal_join_count,
+      uint8_t browser_signal_recency,
       const url::Origin& browser_signal_seller_origin,
-      const absl::optional<url::Origin>& browser_signal_top_level_seller_origin,
-      uint32_t bidding_data_version,
-      bool has_biding_data_version,
+      const std::optional<url::Origin>& browser_signal_top_level_seller_origin,
+      std::optional<uint32_t> bidding_data_version,
       uint64_t trace_id,
       ReportWinCallback report_win_callback) override {
     ADD_FAILURE() << "ReportWin shouldn't be called on DebugConnector";
@@ -133,7 +153,8 @@ class AuctionV8HelperTest : public testing::Test {
       base::test::TaskEnvironment::TimeSource time_mode =
           base::test::TaskEnvironment::TimeSource::SYSTEM_TIME)
       : task_environment_(time_mode) {
-    helper_ = AuctionV8Helper::Create(base::ThreadTaskRunnerHandle::Get());
+    helper_ = AuctionV8Helper::Create(
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     // Here since we're using the same thread for everything, we need to spin
     // the event loop to let AuctionV8Helper finish initializing "off-thread";
     // normally PostTask semantics will ensure that anything that uses it on its
@@ -164,7 +185,7 @@ class AuctionV8HelperTest : public testing::Test {
               v8::Local<v8::UnboundScript> script;
               {
                 v8::Context::Scope ctx(helper->scratch_context());
-                absl::optional<std::string> error_msg;
+                std::optional<std::string> error_msg;
                 ASSERT_TRUE(
                     helper->Compile(body, url, debug_id.get(), error_msg)
                         .ToLocal(&script));
@@ -174,19 +195,26 @@ class AuctionV8HelperTest : public testing::Test {
               std::vector<std::string> error_msgs;
               v8::Context::Scope ctx(context);
               v8::Local<v8::Value> result;
-              // This is here since it needs to be before RunScript() ---
-              // doing it before Compile() doesn't work.
-              helper->MaybeTriggerInstrumentationBreakpoint(*debug_id, "start");
-              helper->MaybeTriggerInstrumentationBreakpoint(*debug_id,
-                                                            "start2");
-              bool success =
-                  helper
-                      ->RunScript(
-                          context, script, debug_id.get(),
-                          AuctionV8Helper::ExecMode::kTopLevelAndFunction,
-                          function_name, base::span<v8::Local<v8::Value>>(),
-                          /*script_timeout=*/absl::nullopt, error_msgs)
-                      .ToLocal(&result);
+
+              auto timeout =
+                  helper->CreateTimeLimit(/*script_timeout=*/std::nullopt);
+              bool success = helper->RunScript(context, script, debug_id.get(),
+                                               timeout.get(), error_msgs);
+              if (success) {
+                // This is here since it needs to be before CallFunction() ---
+                // doing it before Compile() doesn't work.
+                helper->MaybeTriggerInstrumentationBreakpoint(*debug_id,
+                                                              "start");
+                helper->MaybeTriggerInstrumentationBreakpoint(*debug_id,
+                                                              "start2");
+                success = helper
+                              ->CallFunction(context, debug_id.get(),
+                                             helper->FormatScriptName(script),
+                                             function_name,
+                                             base::span<v8::Local<v8::Value>>(),
+                                             timeout.get(), error_msgs)
+                              .ToLocal(&result);
+              }
               EXPECT_EQ(expect_success, success);
               if (result_out) {
                 // If the caller wants to look at *result_out (including to see
@@ -211,7 +239,7 @@ class AuctionV8HelperTest : public testing::Test {
       scoped_refptr<AuctionV8Helper::DebugId> debug_id,
       const GURL& url,
       const std::string& body,
-      absl::optional<std::string>* error_out) {
+      std::optional<std::string>* error_out) {
     bool success = false;
     base::RunLoop run_loop;
     helper_->v8_runner()->PostTask(
@@ -220,7 +248,7 @@ class AuctionV8HelperTest : public testing::Test {
             [](scoped_refptr<AuctionV8Helper> helper,
                scoped_refptr<AuctionV8Helper::DebugId> debug_id, GURL url,
                std::string body, bool* success_out,
-               absl::optional<std::string>* error_out, base::OnceClosure done) {
+               std::optional<std::string>* error_out, base::OnceClosure done) {
               AuctionV8Helper::FullIsolateScope isolate_scope(helper.get());
               v8::Context::Scope ctx(helper->scratch_context());
               *success_out =
@@ -242,10 +270,11 @@ class AuctionV8HelperTest : public testing::Test {
     mojo::Remote<auction_worklet::mojom::BidderWorklet> connector_pipe;
 
     helper_->v8_runner()->PostTask(
-        FROM_HERE, base::BindOnce(&DebugConnector::Create, helper_,
-                                  base::SequencedTaskRunnerHandle::Get(),
-                                  std::move(debug_id),
-                                  connector_pipe.BindNewPipeAndPassReceiver()));
+        FROM_HERE,
+        base::BindOnce(&DebugConnector::Create, helper_,
+                       base::SequencedTaskRunner::GetCurrentDefault(),
+                       std::move(debug_id),
+                       connector_pipe.BindNewPipeAndPassReceiver()));
     connector_pipe->ConnectDevToolsAgent(std::move(agent_receiver));
     return connector_pipe;
   }
@@ -262,7 +291,7 @@ TEST_F(AuctionV8HelperTest, Basic) {
   v8::Local<v8::UnboundScript> script;
   {
     v8::Context::Scope ctx(helper_->scratch_context());
-    absl::optional<std::string> error_msg;
+    std::optional<std::string> error_msg;
     ASSERT_TRUE(helper_
                     ->Compile("function foo() { return 1;}",
                               GURL("https://foo.test/"),
@@ -276,12 +305,14 @@ TEST_F(AuctionV8HelperTest, Basic) {
     std::vector<std::string> error_msgs;
     v8::Context::Scope ctx(context);
     v8::Local<v8::Value> result;
-    ASSERT_TRUE(helper_
-                    ->RunScript(context, script,
-                                /*debug_id=*/nullptr,
-                                AuctionV8Helper::ExecMode::kTopLevelAndFunction,
-                                "foo", base::span<v8::Local<v8::Value>>(),
-                                /*script_timeout=*/absl::nullopt, error_msgs)
+    ASSERT_TRUE(helper_->RunScript(context, script,
+                                   /*debug_id=*/nullptr,
+                                   /*script_timeout=*/nullptr, error_msgs) &&
+                helper_
+                    ->CallFunction(context, /*debug_id=*/nullptr,
+                                   helper_->FormatScriptName(script), "foo",
+                                   base::span<v8::Local<v8::Value>>(),
+                                   /*script_timeout=*/nullptr, error_msgs)
                     .ToLocal(&result));
     int int_result = 0;
     ASSERT_TRUE(gin::ConvertFromV8(helper_->isolate(), result, &int_result));
@@ -290,90 +321,10 @@ TEST_F(AuctionV8HelperTest, Basic) {
   }
 }
 
-TEST_F(AuctionV8HelperTest, ExecMode) {
-  const char kScript[] = R"(
-    if ('count' in globalThis)
-      ++count;
-    else
-      count = 0;
-
-    function foo() {
-      return count;
-    }
-  )";
-
-  v8::Local<v8::UnboundScript> script;
-  {
-    v8::Context::Scope ctx(helper_->scratch_context());
-    absl::optional<std::string> error_msg;
-    ASSERT_TRUE(helper_
-                    ->Compile(kScript, GURL("https://foo.test/"),
-                              /*debug_id=*/nullptr, error_msg)
-                    .ToLocal(&script));
-    EXPECT_FALSE(error_msg.has_value());
-  }
-
-  for (AuctionV8Helper::ExecMode exec_mode :
-       {AuctionV8Helper::ExecMode::kTopLevelAndFunction,
-        AuctionV8Helper::ExecMode::kFunctionOnly}) {
-    v8::Local<v8::Context> context = helper_->CreateContext();
-    std::vector<std::string> error_msgs;
-    v8::Context::Scope ctx(context);
-    v8::Local<v8::Value> result;
-    int int_result = -1;
-
-    // Run the top-level in first run.
-    ASSERT_TRUE(helper_
-                    ->RunScript(context, script,
-                                /*debug_id=*/nullptr,
-                                AuctionV8Helper::ExecMode::kTopLevelAndFunction,
-                                "foo", base::span<v8::Local<v8::Value>>(),
-                                /*script_timeout=*/absl::nullopt, error_msgs)
-                    .ToLocal(&result));
-    ASSERT_TRUE(gin::ConvertFromV8(helper_->isolate(), result, &int_result));
-    EXPECT_EQ(0, int_result);
-    EXPECT_TRUE(error_msgs.empty());
-
-    // And try with `exec_mode` in the second; that will determine whether
-    // the increment is re-run or not.
-    ASSERT_TRUE(helper_
-                    ->RunScript(context, script,
-                                /*debug_id=*/nullptr, exec_mode, "foo",
-                                base::span<v8::Local<v8::Value>>(),
-                                /*script_timeout=*/absl::nullopt, error_msgs)
-                    .ToLocal(&result));
-    ASSERT_TRUE(gin::ConvertFromV8(helper_->isolate(), result, &int_result));
-    EXPECT_EQ(
-        exec_mode == AuctionV8Helper::ExecMode::kTopLevelAndFunction ? 1 : 0,
-        int_result);
-    EXPECT_TRUE(error_msgs.empty());
-  }
-}
-
 // Check that timing out scripts works.
 TEST_F(AuctionV8HelperTest, Timeout) {
-  struct HangingScript {
-    const char* script;
-    bool top_level_hangs;
-  };
-
-  const HangingScript kHangingScripts[] = {
-      // Script that times out when run. Its foo() method returns 1, but should
-      // never be called.
-      {R"(function foo() { return 1;}
-        while(1);)",
-       true},
-
-      // Script that times out when foo() is called.
-      {"function foo() {while (1);}", false},
-
-      // Script that times out when run and when foo is called.
-      {R"(function foo() {while (1);}
-        while(1);)",
-       true}};
-
   struct Timeouts {
-    absl::optional<base::TimeDelta> script_timeout;
+    std::optional<base::TimeDelta> script_timeout;
     base::TimeDelta default_timeout;
     bool test_default_timeout;
   };
@@ -381,7 +332,7 @@ TEST_F(AuctionV8HelperTest, Timeout) {
   const Timeouts kTimeouts[] = {
       // Test default timeout. Use a shorter default timeout so test runs
       // faster.
-      {absl::nullopt, base::Milliseconds(20), true},
+      {std::nullopt, base::Milliseconds(20), true},
 
       // Test `script_timeout` parameter of AuctionV8Helper::RunScript(). Use a
       // very long default timeout, so that we know the parameter worked if the
@@ -390,37 +341,36 @@ TEST_F(AuctionV8HelperTest, Timeout) {
 
   for (const Timeouts& timeout : kTimeouts) {
     helper_->set_script_timeout_for_testing(timeout.default_timeout);
+    base::TimeDelta time_passed = timeout.test_default_timeout
+                                      ? timeout.default_timeout
+                                      : timeout.script_timeout.value();
 
-    for (const HangingScript& hanging_script : kHangingScripts) {
+    // Test top-level hang
+    {
       base::TimeTicks start_time = base::TimeTicks::Now();
       v8::Local<v8::Context> context = helper_->CreateContext();
       v8::Context::Scope context_scope(context);
 
       v8::Local<v8::UnboundScript> script;
-      absl::optional<std::string> compile_error;
+      std::optional<std::string> compile_error;
       ASSERT_TRUE(helper_
-                      ->Compile(hanging_script.script,
+                      ->Compile(R"(
+                        function foo() { return 1;}
+                        while(1);)",
                                 GURL("https://foo.test/"),
                                 /*debug_id=*/nullptr, compile_error)
                       .ToLocal(&script));
-      EXPECT_EQ(compile_error, absl::nullopt);
+      EXPECT_EQ(compile_error, std::nullopt);
 
       std::vector<std::string> error_msgs;
-      v8::MaybeLocal<v8::Value> result =
-          helper_->RunScript(context, script, /*debug_id=*/nullptr,
-                             AuctionV8Helper::ExecMode::kTopLevelAndFunction,
-                             "foo", base::span<v8::Local<v8::Value>>(),
-                             timeout.script_timeout, error_msgs);
-      EXPECT_TRUE(result.IsEmpty());
+      auto time_limit = helper_->CreateTimeLimit(timeout.script_timeout);
+      EXPECT_FALSE(helper_->RunScript(context, script,
+                                      /*debug_id=*/nullptr, time_limit.get(),
+                                      error_msgs));
       EXPECT_THAT(
           error_msgs,
-          ElementsAre(hanging_script.top_level_hangs
-                          ? "https://foo.test/ top-level execution timed out."
-                          : "https://foo.test/ execution of `foo` timed out."));
+          ElementsAre("https://foo.test/ top-level execution timed out."));
 
-      base::TimeDelta time_passed = timeout.test_default_timeout
-                                        ? timeout.default_timeout
-                                        : timeout.script_timeout.value();
       // Make sure at least `time_passed` has passed, allowing for some time
       // skew between change in base::TimeTicks::Now() and the timeout. This
       // mostly serves to make sure the script timed out, instead of immediately
@@ -429,33 +379,74 @@ TEST_F(AuctionV8HelperTest, Timeout) {
                 time_passed - base::Milliseconds(10));
     }
 
-    // Make sure it's still possible to run a script with the isolate after the
-    // timeouts.
-    v8::Local<v8::Context> context = helper_->CreateContext();
-    v8::Context::Scope context_scope(context);
-    v8::Local<v8::UnboundScript> script;
-    absl::optional<std::string> compile_error;
-    ASSERT_TRUE(helper_
-                    ->Compile("function foo() { return 1;}",
-                              GURL("https://foo.test/"),
-                              /*debug_id=*/nullptr, compile_error)
-                    .ToLocal(&script));
-    EXPECT_EQ(compile_error, absl::nullopt);
+    // function hangs
+    {
+      base::TimeTicks start_time = base::TimeTicks::Now();
+      v8::Local<v8::Context> context = helper_->CreateContext();
+      v8::Context::Scope context_scope(context);
 
-    std::vector<std::string> error_msgs;
-    v8::Local<v8::Value> result;
-    ASSERT_TRUE(helper_
-                    ->RunScript(context, script,
-                                /*debug_id=*/nullptr,
-                                AuctionV8Helper::ExecMode::kTopLevelAndFunction,
-                                "foo", base::span<v8::Local<v8::Value>>(),
-                                /*script_timeout=*/absl::nullopt, error_msgs)
-                    .ToLocal(&result));
-    EXPECT_TRUE(error_msgs.empty());
-    int int_result = 0;
-    ASSERT_TRUE(gin::ConvertFromV8(helper_->isolate(), result, &int_result));
-    EXPECT_EQ(1, int_result);
+      v8::Local<v8::UnboundScript> script;
+      std::optional<std::string> compile_error;
+      ASSERT_TRUE(helper_
+                      ->Compile(R"(
+                        function foo() {while (1);}
+                        )",
+                                GURL("https://foo.test/"),
+                                /*debug_id=*/nullptr, compile_error)
+                      .ToLocal(&script));
+      EXPECT_EQ(compile_error, std::nullopt);
+
+      std::vector<std::string> error_msgs;
+      auto time_limit = helper_->CreateTimeLimit(timeout.script_timeout);
+      EXPECT_TRUE(helper_->RunScript(context, script,
+                                     /*debug_id=*/nullptr, time_limit.get(),
+                                     error_msgs));
+
+      v8::MaybeLocal<v8::Value> result = helper_->CallFunction(
+          context, /*debug_id=*/nullptr, helper_->FormatScriptName(script),
+          "foo", base::span<v8::Local<v8::Value>>(), time_limit.get(),
+          error_msgs);
+      EXPECT_TRUE(result.IsEmpty());
+      EXPECT_THAT(
+          error_msgs,
+          ElementsAre("https://foo.test/ execution of `foo` timed out."));
+
+      // Make sure at least `time_passed` has passed, allowing for some time
+      // skew between change in base::TimeTicks::Now() and the timeout. This
+      // mostly serves to make sure the script timed out, instead of immediately
+      // terminating.
+      EXPECT_GE(base::TimeTicks::Now() - start_time,
+                time_passed - base::Milliseconds(10));
+    }
   }
+  // Make sure it's still possible to run a script with the isolate after the
+  // timeouts.
+  v8::Local<v8::Context> context = helper_->CreateContext();
+  v8::Context::Scope context_scope(context);
+  v8::Local<v8::UnboundScript> script;
+  std::optional<std::string> compile_error;
+  ASSERT_TRUE(helper_
+                  ->Compile("function foo() { return 1;}",
+                            GURL("https://foo.test/"),
+                            /*debug_id=*/nullptr, compile_error)
+                  .ToLocal(&script));
+  EXPECT_EQ(compile_error, std::nullopt);
+
+  std::vector<std::string> error_msgs;
+  v8::Local<v8::Value> result;
+  ASSERT_TRUE(helper_->RunScript(context, script,
+                                 /*debug_id=*/nullptr,
+                                 /*script_timeout=*/nullptr, error_msgs) &&
+              helper_
+                  ->CallFunction(context, /*debug_id=*/nullptr,
+                                 helper_->FormatScriptName(script), "foo",
+                                 base::span<v8::Local<v8::Value>>(),
+                                 /*script_timeout=*/nullptr, error_msgs)
+                  .ToLocal(&result));
+  EXPECT_TRUE(error_msgs.empty());
+  int int_result = 0;
+  ASSERT_TRUE(gin::ConvertFromV8(helper_->isolate(), result, &int_result));
+  EXPECT_EQ(1, int_result);
 }
 
 // Make sure the when CreateContext() is used, there's no access to the time,
@@ -466,7 +457,7 @@ TEST_F(AuctionV8HelperTest, NoTime) {
 
   // Make sure Date() is not accessible.
   v8::Local<v8::UnboundScript> script;
-  absl::optional<std::string> compile_error;
+  std::optional<std::string> compile_error;
   ASSERT_TRUE(helper_
                   ->Compile("function foo() { return Date();}",
                             GURL("https://foo.test/"),
@@ -474,12 +465,14 @@ TEST_F(AuctionV8HelperTest, NoTime) {
                   .ToLocal(&script));
   EXPECT_FALSE(compile_error.has_value());
   std::vector<std::string> error_msgs;
-  EXPECT_TRUE(helper_
-                  ->RunScript(context, script,
-                              /*debug_id=*/nullptr,
-                              AuctionV8Helper::ExecMode::kTopLevelAndFunction,
-                              "foo", base::span<v8::Local<v8::Value>>(),
-                              /*script_timeout=*/absl::nullopt, error_msgs)
+  EXPECT_TRUE(helper_->RunScript(context, script,
+                                 /*debug_id=*/nullptr,
+                                 /*script_timeout=*/nullptr, error_msgs) &&
+              helper_
+                  ->CallFunction(context, /*debug_id=*/nullptr,
+                                 helper_->FormatScriptName(script), "foo",
+                                 base::span<v8::Local<v8::Value>>(),
+                                 /*script_timeout=*/nullptr, error_msgs)
                   .IsEmpty());
   ASSERT_EQ(1u, error_msgs.size());
   EXPECT_THAT(error_msgs[0], StartsWith("https://foo.test/:1"));
@@ -491,7 +484,7 @@ TEST_F(AuctionV8HelperTest, NoTime) {
 TEST_F(AuctionV8HelperTest, CompileError) {
   v8::Local<v8::UnboundScript> script;
   v8::Context::Scope ctx(helper_->scratch_context());
-  absl::optional<std::string> error_msg;
+  std::optional<std::string> error_msg;
   ASSERT_FALSE(helper_
                    ->Compile("function foo() { ", GURL("https://foo.test/"),
                              /*debug_id=*/nullptr, error_msg)
@@ -506,7 +499,7 @@ TEST_F(AuctionV8HelperTest, RunErrorTopLevel) {
   v8::Local<v8::UnboundScript> script;
   {
     v8::Context::Scope ctx(helper_->scratch_context());
-    absl::optional<std::string> error_msg;
+    std::optional<std::string> error_msg;
     ASSERT_TRUE(helper_
                     ->Compile("\n\nthrow new Error('I am an error');",
                               GURL("https://foo.test/"),
@@ -518,14 +511,9 @@ TEST_F(AuctionV8HelperTest, RunErrorTopLevel) {
   v8::Local<v8::Context> context = helper_->CreateContext();
   std::vector<std::string> error_msgs;
   v8::Context::Scope ctx(context);
-  v8::Local<v8::Value> result;
-  ASSERT_FALSE(helper_
-                   ->RunScript(context, script,
-                               /*debug_id=*/nullptr,
-                               AuctionV8Helper::ExecMode::kTopLevelAndFunction,
-                               "foo", base::span<v8::Local<v8::Value>>(),
-                               /*script_timeout=*/absl::nullopt, error_msgs)
-                   .ToLocal(&result));
+  ASSERT_FALSE(helper_->RunScript(context, script,
+                                  /*debug_id=*/nullptr,
+                                  /*script_timeout=*/nullptr, error_msgs));
   EXPECT_THAT(
       error_msgs,
       ElementsAre("https://foo.test/:3 Uncaught Error: I am an error."));
@@ -536,7 +524,7 @@ TEST_F(AuctionV8HelperTest, TargetFunctionNotFound) {
   v8::Local<v8::UnboundScript> script;
   {
     v8::Context::Scope ctx(helper_->scratch_context());
-    absl::optional<std::string> error_msg;
+    std::optional<std::string> error_msg;
     ASSERT_TRUE(helper_
                     ->Compile("function foo() { return 1;}",
                               GURL("https://foo.test/"),
@@ -550,12 +538,14 @@ TEST_F(AuctionV8HelperTest, TargetFunctionNotFound) {
   std::vector<std::string> error_msgs;
   v8::Context::Scope ctx(context);
   v8::Local<v8::Value> result;
+  ASSERT_TRUE(helper_->RunScript(context, script,
+                                 /*debug_id=*/nullptr,
+                                 /*script_timeout=*/nullptr, error_msgs));
   ASSERT_FALSE(helper_
-                   ->RunScript(context, script,
-                               /*debug_id=*/nullptr,
-                               AuctionV8Helper::ExecMode::kTopLevelAndFunction,
-                               "bar", base::span<v8::Local<v8::Value>>(),
-                               /*script_timeout=*/absl::nullopt, error_msgs)
+                   ->CallFunction(context, /*debug_id=*/nullptr,
+                                  helper_->FormatScriptName(script), "bar",
+                                  base::span<v8::Local<v8::Value>>(),
+                                  /*script_timeout=*/nullptr, error_msgs)
                    .ToLocal(&result));
 
   // This "not a function" and not "not found" since the lookup successfully
@@ -568,7 +558,7 @@ TEST_F(AuctionV8HelperTest, TargetFunctionError) {
   v8::Local<v8::UnboundScript> script;
   {
     v8::Context::Scope ctx(helper_->scratch_context());
-    absl::optional<std::string> error_msg;
+    std::optional<std::string> error_msg;
     ASSERT_TRUE(helper_
                     ->Compile("function foo() { return notfound;}",
                               GURL("https://foo.test/"),
@@ -582,12 +572,14 @@ TEST_F(AuctionV8HelperTest, TargetFunctionError) {
   std::vector<std::string> error_msgs;
   v8::Context::Scope ctx(context);
   v8::Local<v8::Value> result;
+  ASSERT_TRUE(helper_->RunScript(context, script,
+                                 /*debug_id=*/nullptr,
+                                 /*script_timeout=*/nullptr, error_msgs));
   ASSERT_FALSE(helper_
-                   ->RunScript(context, script,
-                               /*debug_id=*/nullptr,
-                               AuctionV8Helper::ExecMode::kTopLevelAndFunction,
-                               "foo", base::span<v8::Local<v8::Value>>(),
-                               /*script_timeout=*/absl::nullopt, error_msgs)
+                   ->CallFunction(context, /*debug_id=*/nullptr,
+                                  helper_->FormatScriptName(script), "foo",
+                                  base::span<v8::Local<v8::Value>>(),
+                                  /*script_timeout=*/nullptr, error_msgs)
                    .ToLocal(&result));
   ASSERT_EQ(1u, error_msgs.size());
 
@@ -721,7 +713,7 @@ TEST_F(AuctionV8HelperTest, ConsoleLog) {
 TEST_F(AuctionV8HelperTest, FormatScriptName) {
   v8::Local<v8::UnboundScript> script;
   v8::Context::Scope ctx(helper_->scratch_context());
-  absl::optional<std::string> error_msg;
+  std::optional<std::string> error_msg;
   ASSERT_TRUE(helper_
                   ->Compile("function foo() { return 1;}",
                             GURL("https://foo.test:8443/foo.js?v=3"),
@@ -906,7 +898,7 @@ TEST_F(AuctionV8HelperTest, DebugCompileError) {
             v8::Local<v8::UnboundScript> script;
             {
               v8::Context::Scope ctx(helper->scratch_context());
-              absl::optional<std::string> error_msg;
+              std::optional<std::string> error_msg;
               ASSERT_FALSE(
                   helper->Compile(body, GURL(url), debug_id.get(), error_msg)
                       .ToLocal(&script));
@@ -977,19 +969,12 @@ TEST_F(AuctionV8HelperTest, DevToolsDebuggerBasics) {
         id, "compute", GURL("https://example.com/test.js"), kScript,
         /*expect_success=*/true, result_run_loop.QuitClosure(), &result);
 
-    // Eat completion from parsing.
-    debug_client.WaitForMethodNotification("Runtime.executionContextDestroyed");
-
     TestDevToolsAgentClient::Event script_parsed =
         debug_client.WaitForMethodNotification("Debugger.scriptParsed");
     const std::string* url =
         script_parsed.value.GetDict().FindStringByDottedPath("params.url");
     ASSERT_TRUE(url);
     EXPECT_EQ(*url, "https://example.com/test.js");
-    absl::optional<int> context_id =
-        script_parsed.value.GetDict().FindIntByDottedPath(
-            "params.executionContextId");
-    ASSERT_TRUE(context_id.has_value());
 
     // Wait for breakpoint to hit.
     TestDevToolsAgentClient::Event breakpoint_hit =
@@ -1003,13 +988,19 @@ TEST_F(AuctionV8HelperTest, DevToolsDebuggerBasics) {
     ASSERT_TRUE((*hit_breakpoints)[0].is_string());
     EXPECT_EQ("1:2:0:https://example.com/test.js",
               (*hit_breakpoints)[0].GetString());
+    std::string* callframe_id = breakpoint_hit.value.GetDict()
+                                    .FindDict("params")
+                                    ->FindList("callFrames")
+                                    ->front()
+                                    .GetDict()
+                                    .FindString("callFrameId");
 
     const char kCommandTemplate[] = R"({
       "id": 4,
-      "method": "Runtime.evaluate",
+      "method": "Debugger.evaluateOnCallFrame",
       "params": {
-        "expression": "multiplier = 10",
-        "contextId": %d
+        "callFrameId": "%s",
+        "expression": "multiplier = 10"
       }
     })";
 
@@ -1017,8 +1008,9 @@ TEST_F(AuctionV8HelperTest, DevToolsDebuggerBasics) {
     // Post-breakpoint params must be run on IO pipe, any main thread commands
     // won't do things yet.
     debug_client.RunCommandAndWaitForResult(
-        TestDevToolsAgentClient::Channel::kIO, 4, "Runtime.evaluate",
-        base::StringPrintf(kCommandTemplate, context_id.value()));
+        TestDevToolsAgentClient::Channel::kIO, 4,
+        "Debugger.evaluateOnCallFrame",
+        base::StringPrintf(kCommandTemplate, callframe_id->c_str()));
 
     // Resume.
     debug_client.RunCommandAndWaitForResult(
@@ -1371,7 +1363,7 @@ TEST_F(AuctionV8HelperTest, CompileWasm) {
   v8::Context::Scope context_scope(context);
 
   v8::Local<v8::WasmModuleObject> wasm_module;
-  absl::optional<std::string> compile_error;
+  std::optional<std::string> compile_error;
   ASSERT_TRUE(helper_
                   ->CompileWasm(std::string(kMinimalWasmModuleBytes,
                                             std::size(kMinimalWasmModuleBytes)),
@@ -1386,7 +1378,7 @@ TEST_F(AuctionV8HelperTest, CompileWasmError) {
   v8::Context::Scope context_scope(context);
 
   v8::Local<v8::WasmModuleObject> wasm_module;
-  absl::optional<std::string> compile_error;
+  std::optional<std::string> compile_error;
   EXPECT_FALSE(helper_
                    ->CompileWasm("not wasm", GURL("https://foo.test/"),
                                  /*debug_id=*/nullptr, compile_error)
@@ -1419,7 +1411,7 @@ TEST_F(AuctionV8HelperTest, CompileWasmDebug) {
       TestDevToolsAgentClient::Channel::kMain, 2, "Debugger.enable",
       R"({"id":2,"method":"Debugger.enable","params":{}})");
 
-  absl::optional<std::string> error_out;
+  std::optional<std::string> error_out;
   EXPECT_TRUE(CompileWasmOnV8ThreadAndWait(
       id, GURL("https://example.com"),
       std::string(kMinimalWasmModuleBytes, std::size(kMinimalWasmModuleBytes)),
@@ -1453,7 +1445,7 @@ TEST_F(AuctionV8HelperTest, CloneWasmModule) {
 
   // Compile the WASM module...
   v8::Local<v8::WasmModuleObject> wasm_module;
-  absl::optional<std::string> error_msg;
+  std::optional<std::string> error_msg;
   ASSERT_TRUE(helper_
                   ->CompileWasm(std::string(kMinimalWasmModuleBytes,
                                             std::size(kMinimalWasmModuleBytes)),
@@ -1471,28 +1463,32 @@ TEST_F(AuctionV8HelperTest, CloneWasmModule) {
   EXPECT_FALSE(error_msg.has_value());
 
   // Run the script a couple of times passing in the same module.
-  std::vector<v8::Local<v8::Value>> args;
+  v8::LocalVector<v8::Value> args(helper_->isolate());
   args.push_back(wasm_module);
   v8::Local<v8::Value> result;
   std::vector<std::string> error_msgs;
-  ASSERT_TRUE(helper_
-                  ->RunScript(context, script,
-                              /*debug_id=*/nullptr,
-                              AuctionV8Helper::ExecMode::kTopLevelAndFunction,
-                              "probe", args,
-                              /*script_timeout=*/absl::nullopt, error_msgs)
+  ASSERT_TRUE(helper_->RunScript(context, script,
+                                 /*debug_id=*/nullptr,
+                                 /*script_timeout=*/nullptr, error_msgs) &&
+              helper_
+                  ->CallFunction(context, /*debug_id=*/nullptr,
+                                 helper_->FormatScriptName(script), "probe",
+                                 args,
+                                 /*script_timeout=*/nullptr, error_msgs)
                   .ToLocal(&result));
   EXPECT_TRUE(error_msgs.empty());
   int int_result = 0;
   ASSERT_TRUE(gin::ConvertFromV8(helper_->isolate(), result, &int_result));
   EXPECT_EQ(-1, int_result);
 
-  ASSERT_TRUE(helper_
-                  ->RunScript(context, script,
-                              /*debug_id=*/nullptr,
-                              AuctionV8Helper::ExecMode::kTopLevelAndFunction,
-                              "probe", args,
-                              /*script_timeout=*/absl::nullopt, error_msgs)
+  ASSERT_TRUE(helper_->RunScript(context, script,
+                                 /*debug_id=*/nullptr,
+                                 /*script_timeout=*/nullptr, error_msgs) &&
+              helper_
+                  ->CallFunction(context, /*debug_id=*/nullptr,
+                                 helper_->FormatScriptName(script), "probe",
+                                 args,
+                                 /*script_timeout=*/nullptr, error_msgs)
                   .ToLocal(&result));
   EXPECT_TRUE(error_msgs.empty());
   ASSERT_TRUE(gin::ConvertFromV8(helper_->isolate(), result, &int_result));
@@ -1500,28 +1496,113 @@ TEST_F(AuctionV8HelperTest, CloneWasmModule) {
 
   // Nothing stick arounds if CloneWasmModule is consistently used, however.
   args[0] = helper_->CloneWasmModule(wasm_module).ToLocalChecked();
-  ASSERT_TRUE(helper_
-                  ->RunScript(context, script,
-                              /*debug_id=*/nullptr,
-                              AuctionV8Helper::ExecMode::kTopLevelAndFunction,
-                              "probe", args,
-                              /*script_timeout=*/absl::nullopt, error_msgs)
+  ASSERT_TRUE(helper_->RunScript(context, script,
+                                 /*debug_id=*/nullptr,
+                                 /*script_timeout=*/nullptr, error_msgs) &&
+              helper_
+                  ->CallFunction(context, /*debug_id=*/nullptr,
+                                 helper_->FormatScriptName(script), "probe",
+                                 args,
+                                 /*script_timeout=*/nullptr, error_msgs)
                   .ToLocal(&result));
   EXPECT_TRUE(error_msgs.empty());
   ASSERT_TRUE(gin::ConvertFromV8(helper_->isolate(), result, &int_result));
   EXPECT_EQ(-1, int_result);
 
   args[0] = helper_->CloneWasmModule(wasm_module).ToLocalChecked();
-  ASSERT_TRUE(helper_
-                  ->RunScript(context, script,
-                              /*debug_id=*/nullptr,
-                              AuctionV8Helper::ExecMode::kTopLevelAndFunction,
-                              "probe", args,
-                              /*script_timeout=*/absl::nullopt, error_msgs)
+  ASSERT_TRUE(helper_->RunScript(context, script,
+                                 /*debug_id=*/nullptr,
+                                 /*script_timeout=*/nullptr, error_msgs) &&
+              helper_
+                  ->CallFunction(context, /*debug_id=*/nullptr,
+                                 helper_->FormatScriptName(script), "probe",
+                                 args,
+                                 /*script_timeout=*/nullptr, error_msgs)
                   .ToLocal(&result));
   EXPECT_TRUE(error_msgs.empty());
   ASSERT_TRUE(gin::ConvertFromV8(helper_->isolate(), result, &int_result));
   EXPECT_EQ(-1, int_result);
+}
+
+TEST_F(AuctionV8HelperTest, SerializeDeserialize) {
+  {
+    v8::Local<v8::Context> context = helper_->CreateContext();
+    v8::Context::Scope context_scope(context);
+
+    v8::MaybeLocal<v8::Value> result =
+        helper_->Deserialize(context, AuctionV8Helper::SerializedValue());
+    EXPECT_TRUE(result.IsEmpty());
+  }
+
+  {
+    v8::MaybeLocal<v8::Value> in = helper_->CreateValueFromJson(
+        helper_->scratch_context(),
+        R"({"a": false, "b": 42, "c": {"d": [1,2,3] } })");
+    AuctionV8Helper::SerializedValue serialized =
+        helper_->Serialize(helper_->scratch_context(), in.ToLocalChecked());
+    EXPECT_TRUE(serialized.IsOK());
+
+    // Decode in a different context from scratch_context... Multiple times.
+    for (int run = 0; run < 3; ++run) {
+      v8::Local<v8::Context> context = helper_->CreateContext();
+      v8::Context::Scope context_scope(context);
+      v8::MaybeLocal<v8::Value> deserialized =
+          helper_->Deserialize(context, serialized);
+      ASSERT_FALSE(deserialized.IsEmpty());
+      std::string deserialized_as_json;
+      ASSERT_EQ(helper_->ExtractJson(context, deserialized.ToLocalChecked(),
+                                     &deserialized_as_json),
+                AuctionV8Helper::ExtractJsonResult::kSuccess);
+      EXPECT_EQ(R"({"a":false,"b":42,"c":{"d":[1,2,3]}})",
+                deserialized_as_json);
+    }
+  }
+}
+
+TEST_F(AuctionV8HelperTest, ExtractJsonTimeout) {
+  // Use a shorter timeout so test runs faster.
+  const base::TimeDelta kTimeout = base::Milliseconds(20);
+  auto time_limit = helper_->CreateTimeLimit(kTimeout);
+  auto time_limit_scope =
+      std::make_unique<AuctionV8Helper::TimeLimitScope>(time_limit.get());
+
+  const char kScript[] = R"(
+    function make() {
+      return {
+        get field() { while(true); }
+      }
+    }
+  )";
+
+  {
+    v8::Local<v8::Context> context = helper_->CreateContext();
+    v8::Context::Scope context_scope(context);
+
+    v8::Local<v8::UnboundScript> script;
+    std::optional<std::string> compile_error;
+    ASSERT_TRUE(helper_
+                    ->Compile(kScript, GURL("https://foo.test/"),
+                              /*debug_id=*/nullptr, compile_error)
+                    .ToLocal(&script));
+    EXPECT_EQ(compile_error, std::nullopt);
+
+    std::vector<std::string> error_msgs;
+    v8::Local<v8::Value> result;
+    ASSERT_TRUE(helper_->RunScript(context, script,
+                                   /*debug_id=*/nullptr,
+                                   /*script_timeout=*/nullptr, error_msgs) &&
+                helper_
+                    ->CallFunction(context, /*debug_id=*/nullptr,
+                                   helper_->FormatScriptName(script), "make",
+                                   base::span<v8::Local<v8::Value>>(),
+                                   /*script_timeout=*/nullptr, error_msgs)
+                    .ToLocal(&result));
+    EXPECT_TRUE(error_msgs.empty());
+
+    std::string deserialized_as_json;
+    ASSERT_EQ(helper_->ExtractJson(context, result, &deserialized_as_json),
+              AuctionV8Helper::ExtractJsonResult::kTimeout);
+  }
 }
 
 }  // namespace auction_worklet

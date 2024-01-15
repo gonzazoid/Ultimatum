@@ -47,6 +47,7 @@ COMPONENT_EXPORT(ONC) extern const char kRemove[];
 
 // Top Level Configuration
 namespace toplevel_config {
+COMPONENT_EXPORT(ONC) extern const char kAdminAPNList[];
 COMPONENT_EXPORT(ONC) extern const char kCertificates[];
 COMPONENT_EXPORT(ONC) extern const char kEncryptedConfiguration[];
 COMPONENT_EXPORT(ONC) extern const char kNetworkConfigurations[];
@@ -121,10 +122,12 @@ COMPONENT_EXPORT(ONC) extern const char kAutoConnect[];
 COMPONENT_EXPORT(ONC) extern const char kNotActivated[];
 COMPONENT_EXPORT(ONC) extern const char kPartiallyActivated[];
 COMPONENT_EXPORT(ONC) extern const char kActivationType[];
+COMPONENT_EXPORT(ONC) extern const char kAdminAssignedAPNIds[];
 COMPONENT_EXPORT(ONC) extern const char kAllowRoaming[];
 COMPONENT_EXPORT(ONC) extern const char kAPN[];
 COMPONENT_EXPORT(ONC) extern const char kAPNList[];
 COMPONENT_EXPORT(ONC) extern const char kCarrier[];
+COMPONENT_EXPORT(ONC) extern const char kCustomAPNList[];
 COMPONENT_EXPORT(ONC) extern const char kESN[];
 COMPONENT_EXPORT(ONC) extern const char kFamily[];
 COMPONENT_EXPORT(ONC) extern const char kFirmwareRevision[];
@@ -135,6 +138,8 @@ COMPONENT_EXPORT(ONC) extern const char kEID[];
 COMPONENT_EXPORT(ONC) extern const char kICCID[];
 COMPONENT_EXPORT(ONC) extern const char kIMEI[];
 COMPONENT_EXPORT(ONC) extern const char kIMSI[];
+COMPONENT_EXPORT(ONC) extern const char kLastConnectedAttachApnProperty[];
+COMPONENT_EXPORT(ONC) extern const char kLastConnectedDefaultApnProperty[];
 COMPONENT_EXPORT(ONC) extern const char kLastGoodAPN[];
 COMPONENT_EXPORT(ONC) extern const char kManufacturer[];
 COMPONENT_EXPORT(ONC) extern const char kMDN[];
@@ -153,6 +158,7 @@ COMPONENT_EXPORT(ONC) extern const char kSignalStrength[];
 COMPONENT_EXPORT(ONC) extern const char kSIMLockStatus[];
 COMPONENT_EXPORT(ONC) extern const char kSIMPresent[];
 COMPONENT_EXPORT(ONC) extern const char kSMDPAddress[];
+COMPONENT_EXPORT(ONC) extern const char kSMDSAddress[];
 COMPONENT_EXPORT(ONC) extern const char kSupportNetworkScan[];
 COMPONENT_EXPORT(ONC) extern const char kTechnologyCdma1Xrtt[];
 COMPONENT_EXPORT(ONC) extern const char kTechnologyEdge[];
@@ -165,6 +171,9 @@ COMPONENT_EXPORT(ONC) extern const char kTechnologyLte[];
 COMPONENT_EXPORT(ONC) extern const char kTechnologyLteAdvanced[];
 COMPONENT_EXPORT(ONC) extern const char kTechnologyUmts[];
 COMPONENT_EXPORT(ONC) extern const char kTechnology5gNr[];
+COMPONENT_EXPORT(ONC) extern const char kTextMessagesAllow[];
+COMPONENT_EXPORT(ONC) extern const char kTextMessagesSuppress[];
+COMPONENT_EXPORT(ONC) extern const char kTextMessagesUnset[];
 }  // namespace cellular
 
 namespace cellular_provider {
@@ -186,10 +195,9 @@ COMPONENT_EXPORT(ONC) extern const char kId[];
 COMPONENT_EXPORT(ONC) extern const char kState[];
 COMPONENT_EXPORT(ONC) extern const char kStateEnabled[];
 COMPONENT_EXPORT(ONC) extern const char kStateDisabled[];
-COMPONENT_EXPORT(ONC) extern const char kAuthenticationType[];
-COMPONENT_EXPORT(ONC) extern const char kAuthenticationTypeAutomatic[];
-COMPONENT_EXPORT(ONC) extern const char kAuthenticationTypePap[];
-COMPONENT_EXPORT(ONC) extern const char kAuthenticationTypeChap[];
+COMPONENT_EXPORT(ONC) extern const char kAuthenticationAutomatic[];
+COMPONENT_EXPORT(ONC) extern const char kAuthenticationPap[];
+COMPONENT_EXPORT(ONC) extern const char kAuthenticationChap[];
 COMPONENT_EXPORT(ONC) extern const char kIpType[];
 COMPONENT_EXPORT(ONC) extern const char kIpTypeAutomatic[];
 COMPONENT_EXPORT(ONC) extern const char kIpTypeIpv4[];
@@ -198,6 +206,7 @@ COMPONENT_EXPORT(ONC) extern const char kIpTypeIpv4Ipv6[];
 COMPONENT_EXPORT(ONC) extern const char kApnTypes[];
 COMPONENT_EXPORT(ONC) extern const char kApnTypeDefault[];
 COMPONENT_EXPORT(ONC) extern const char kApnTypeAttach[];
+COMPONENT_EXPORT(ONC) extern const char kApnTypeTether[];
 }  // namespace cellular_apn
 
 namespace cellular_found_network {
@@ -258,6 +267,8 @@ namespace wifi {
 COMPONENT_EXPORT(ONC) extern const char kAllowGatewayARPPolling[];
 COMPONENT_EXPORT(ONC) extern const char kAutoConnect[];
 COMPONENT_EXPORT(ONC) extern const char kBSSID[];
+COMPONENT_EXPORT(ONC) extern const char kBSSIDAllowlist[];
+COMPONENT_EXPORT(ONC) extern const char kBSSIDRequested[];
 COMPONENT_EXPORT(ONC) extern const char kEAP[];
 COMPONENT_EXPORT(ONC) extern const char kFrequency[];
 COMPONENT_EXPORT(ONC) extern const char kFrequencyList[];
@@ -274,6 +285,8 @@ COMPONENT_EXPORT(ONC) extern const char kWEP_8021X[];
 COMPONENT_EXPORT(ONC) extern const char kWPA_PSK[];
 COMPONENT_EXPORT(ONC) extern const char kWPA2_PSK[];
 COMPONENT_EXPORT(ONC) extern const char kWPA_EAP[];
+COMPONENT_EXPORT(ONC) extern const char kPasspointId[];
+COMPONENT_EXPORT(ONC) extern const char kPasspointMatchType[];
 }  // namespace wifi
 
 namespace wimax_deprecated {
@@ -458,9 +471,9 @@ COMPONENT_EXPORT(ONC) extern const char kVerifyX509[];
 }  // namespace openvpn
 
 namespace wireguard {
-COMPONENT_EXPORT(ONC) extern const char kAddress[];
 COMPONENT_EXPORT(ONC) extern const char kAllowedIPs[];
 COMPONENT_EXPORT(ONC) extern const char kEndpoint[];
+COMPONENT_EXPORT(ONC) extern const char kIPAddresses[];
 COMPONENT_EXPORT(ONC) extern const char kPeers[];
 COMPONENT_EXPORT(ONC) extern const char kPersistentKeepalive[];
 COMPONENT_EXPORT(ONC) extern const char kPresharedKey[];
@@ -530,15 +543,24 @@ COMPONENT_EXPORT(ONC) extern const char kWPAD[];
 }  // namespace proxy
 
 namespace global_network_config {
+COMPONENT_EXPORT(ONC) extern const char kAllowAPNModification[];
 COMPONENT_EXPORT(ONC) extern const char kAllowCellularSimLock[];
+COMPONENT_EXPORT(ONC) extern const char kAllowCellularHotspot[];
 COMPONENT_EXPORT(ONC) extern const char kAllowOnlyPolicyCellularNetworks[];
 COMPONENT_EXPORT(ONC) extern const char kAllowOnlyPolicyNetworksToAutoconnect[];
 COMPONENT_EXPORT(ONC) extern const char* const kAllowOnlyPolicyWiFiToConnect;
 COMPONENT_EXPORT(ONC)
 extern const char* const kAllowOnlyPolicyWiFiToConnectIfAvailable;
+COMPONENT_EXPORT(ONC)
+extern const char* const kAllowTextMessages;
 COMPONENT_EXPORT(ONC) extern const char kBlacklistedHexSSIDs[];  // Deprecated
 COMPONENT_EXPORT(ONC) extern const char kBlockedHexSSIDs[];
 COMPONENT_EXPORT(ONC) extern const char kDisableNetworkTypes[];
+COMPONENT_EXPORT(ONC) extern const char kRecommendedValuesAreEphemeral[];
+COMPONENT_EXPORT(ONC) extern const char kPSIMAdminAssignedAPNIds[];
+COMPONENT_EXPORT(ONC) extern const char kPSIMAdminAssignedAPNs[];
+COMPONENT_EXPORT(ONC)
+extern const char kUserCreatedNetworkConfigurationsAreEphemeral[];
 }  // namespace global_network_config
 
 namespace device_state {

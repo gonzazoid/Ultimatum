@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors
+# Copyright 2023 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -27,8 +27,8 @@ def fix_module_imports(header_path, output_path):
   header_contents = []
   with open(header_path, 'r') as header_file:
     for line in header_file:
-      if line == '#if __has_feature(modules)\n':
-        header_contents.append('#if 1  // #if __has_feature(modules)\n')
+      if line == '#if __has_feature(objc_modules)\n':
+        header_contents.append('#if 1  // #if __has_feature(objc_modules)\n')
         nesting_level = 1
         for line in header_file:
           if line == '#endif\n':
@@ -242,12 +242,8 @@ def compile_module(module, sources, settings, extras, tmpdir):
           path = os.path.relpath(path, out_dir)
         depfile_content[key].add(path)
 
-  if not settings.depfile_filter:
-    keys = depfile_content.keys()
-  else:
-    keys = (key for key in settings.depfile_filter if key in depfile_content)
-
   with open(settings.depfile, 'w') as depfile:
+    keys = sorted(depfile_content.keys())
     for key in sorted(keys):
       depfile.write('%s : %s\n' % (key, ' '.join(sorted(depfile_content[key]))))
 
@@ -279,9 +275,6 @@ def main(args):
   parser.add_argument('-depfile', help='path to the generated depfile')
   parser.add_argument('-swift-version',
                       help='version of Swift language to support')
-  parser.add_argument('-depfile-filter',
-                      action='append',
-                      help='limit depfile to those files')
   parser.add_argument('-target',
                       action='store',
                       help='generate code for the given target <triple>')

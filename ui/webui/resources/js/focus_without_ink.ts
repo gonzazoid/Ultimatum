@@ -3,8 +3,8 @@
 // found in the LICENSE file.
 
 // clang-format off
-import {assert} from './assert_ts.js';
-import {isIOS} from './cr.m.js';
+import {assert} from './assert.js';
+import {isIOS} from './platform.js';
 // clang-format on
 
 

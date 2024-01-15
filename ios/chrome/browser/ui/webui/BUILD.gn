@@ -3,10 +3,9 @@
 # found in the LICENSE file.
 
 source_set("webui") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
-    "about_ui.cc",
-    "about_ui.h",
+    "about/about_ui.cc",
+    "about/about_ui.h",
     "autofill_and_password_manager_internals/autofill_internals_ui_ios.h",
     "autofill_and_password_manager_internals/autofill_internals_ui_ios.mm",
     "autofill_and_password_manager_internals/internals_ui_handler.h",
@@ -37,6 +36,8 @@ source_set("webui") {
     "user_actions_handler.mm",
     "user_actions_ui.h",
     "user_actions_ui.mm",
+    "userdefaults_internals_ui.h",
+    "userdefaults_internals_ui.mm",
     "version_handler.cc",
     "version_handler.h",
     "version_ui.h",
@@ -47,6 +48,7 @@ source_set("webui") {
     "//base",
     "//base:i18n",
     "//build:branding_buildflags",
+    "//components/account_id",
     "//components/autofill/core/browser",
     "//components/crash/core/browser",
     "//components/crash/core/common:reporter_running_ios",
@@ -54,6 +56,7 @@ source_set("webui") {
     "//components/download/resources/download_internals:resources",
     "//components/flags_ui",
     "//components/keyed_service/core",
+    "//components/local_state",
     "//components/metrics_services_manager",
     "//components/ntp_tiles",
     "//components/password_manager/core/browser",
@@ -65,32 +68,35 @@ source_set("webui") {
     "//components/strings",
     "//components/ukm",
     "//components/ukm/debug:util",
+    "//components/variations/service",
     "//components/version_info",
     "//components/version_ui",
     "//google_apis",
     "//ios/chrome/app/resources:ios_resources",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/application_context",
-    "//ios/chrome/browser/autofill",
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/crash_report",
-    "//ios/chrome/browser/download/background_service:background_service",
+    "//ios/chrome/browser/autofill/model",
+    "//ios/chrome/browser/crash_report/model",
+    "//ios/chrome/browser/download/model/background_service:background_service",
     "//ios/chrome/browser/favicon:favicon",
     "//ios/chrome/browser/flags",
-    "//ios/chrome/browser/main:public",
-    "//ios/chrome/browser/metrics",
-    "//ios/chrome/browser/metrics:accessor",
-    "//ios/chrome/browser/ntp_tiles",
-    "//ios/chrome/browser/passwords",
-    "//ios/chrome/browser/policy",
-    "//ios/chrome/browser/ui/alert_coordinator",
-    "//ios/chrome/browser/ui/coordinators:chrome_coordinators",
-    "//ios/chrome/browser/ui/util",
-    "//ios/chrome/browser/ui/util:terms_util",
-    "//ios/chrome/browser/url:constants",
-    "//ios/chrome/browser/web/java_script_console",
-    "//ios/chrome/browser/web_state_list",
-    "//ios/chrome/browser/webui",
+    "//ios/chrome/browser/metrics/model",
+    "//ios/chrome/browser/metrics/model:accessor",
+    "//ios/chrome/browser/ntp_tiles/model",
+    "//ios/chrome/browser/passwords/model",
+    "//ios/chrome/browser/policy/model",
+    "//ios/chrome/browser/shared/coordinator/alert",
+    "//ios/chrome/browser/shared/coordinator/chrome_coordinator",
+    "//ios/chrome/browser/shared/model/application_context",
+    "//ios/chrome/browser/shared/model/browser",
+    "//ios/chrome/browser/shared/model/browser_state",
+    "//ios/chrome/browser/shared/model/url:constants",
+    "//ios/chrome/browser/shared/model/web_state_list",
+    "//ios/chrome/browser/shared/ui/util",
+    "//ios/chrome/browser/shared/ui/util:terms_util",
+    "//ios/chrome/browser/signin/model",
+    "//ios/chrome/browser/ui/policy:user_policy_scene_agent",
+    "//ios/chrome/browser/web/model/java_script_console",
+    "//ios/chrome/browser/webui/model",
     "//ios/chrome/common",
     "//ios/web/public/js_messaging",
     "//ios/web/public/webui",
@@ -101,7 +107,6 @@ source_set("webui") {
 }
 
 source_set("webui_internal") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "chrome_web_ui_ios_controller_factory.h",
     "chrome_web_ui_ios_controller_factory.mm",
@@ -113,16 +118,20 @@ source_set("webui_internal") {
   ]
   deps = [
     ":webui",
+    "//components/commerce/ios/browser",
     "//components/optimization_guide/optimization_guide_internals/webui:url_constants",
     "//components/resources",
     "//components/signin/public/identity_manager",
     "//components/sync/invalidations",
+    "//components/version_info:channel",
     "//ios/chrome/app/resources:ios_resources",
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/flags:system_flags",
-    "//ios/chrome/browser/omaha",
-    "//ios/chrome/browser/signin",
-    "//ios/chrome/browser/sync",
+    "//ios/chrome/browser/commerce/model:shopping_service",
+    "//ios/chrome/browser/omaha/model",
+    "//ios/chrome/browser/shared/model/browser_state",
+    "//ios/chrome/browser/shared/model/url:constants",
+    "//ios/chrome/browser/shared/public/features:system_flags",
+    "//ios/chrome/browser/signin/model",
+    "//ios/chrome/browser/sync/model",
     "//ios/chrome/browser/ui/webui/gcm",
     "//ios/chrome/browser/ui/webui/interstitials",
     "//ios/chrome/browser/ui/webui/local_state",
@@ -130,7 +139,6 @@ source_set("webui_internal") {
     "//ios/chrome/browser/ui/webui/optimization_guide_internals",
     "//ios/chrome/browser/ui/webui/policy",
     "//ios/chrome/browser/ui/webui/translate_internals",
-    "//ios/chrome/browser/url:constants",
     "//ios/chrome/common",
     "//ios/components/webui:provider",
     "//ios/components/webui:url_constants",
@@ -146,10 +154,7 @@ source_set("webui_internal") {
 }
 
 source_set("eg2_tests") {
-  configs += [
-    "//build/config/compiler:enable_arc",
-    "//build/config/ios:xctest_config",
-  ]
+  configs += [ "//build/config/ios:xctest_config" ]
   testonly = true
   sources = [
     "inspect/inspect_ui_egtest.mm",
@@ -162,11 +167,11 @@ source_set("eg2_tests") {
     "//components/strings",
     "//components/version_info",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/url:constants",
+    "//ios/chrome/browser/shared/model/url:constants",
+    "//ios/chrome/common",
     "//ios/chrome/test/earl_grey:eg_test_support+eg2",
     "//ios/components/webui:url_constants",
     "//ios/testing/earl_grey:eg_test_support+eg2",
-    "//ios/third_party/earl_grey2:test_lib",
     "//ios/web/public/test:element_selector",
     "//net:test_support",
     "//ui/base",
@@ -175,10 +180,7 @@ source_set("eg2_tests") {
 }
 
 source_set("eg_test_support+eg2") {
-  configs += [
-    "//build/config/compiler:enable_arc",
-    "//build/config/ios:xctest_config",
-  ]
+  configs += [ "//build/config/ios:xctest_config" ]
   testonly = true
   sources = [
     "web_ui_test_utils.h",
@@ -190,7 +192,6 @@ source_set("eg_test_support+eg2") {
     "//ios/chrome/test/earl_grey:eg_test_support+eg2",
     "//ios/components/webui:url_constants",
     "//ios/testing/earl_grey:eg_test_support+eg2",
-    "//ios/third_party/earl_grey2:test_lib",
     "//url",
   ]
 }

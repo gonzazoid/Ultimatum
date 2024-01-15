@@ -47,7 +47,9 @@ FilteredGestureProvider::OnTouchEvent(const MotionEvent& event) {
   TouchDispositionGestureFilter::PacketResult filter_result =
       gesture_filter_.OnGesturePacket(pending_gesture_packet_);
   if (filter_result != TouchDispositionGestureFilter::SUCCESS) {
-    NOTREACHED() << "Invalid touch gesture sequence detected.";
+    DCHECK_EQ(filter_result,
+              TouchDispositionGestureFilter::EMPTY_GESTURE_SEQUENCE)
+        << "Invalid touch gesture sequence detected.";
     return TouchHandlingResult();
   }
 
@@ -60,9 +62,11 @@ FilteredGestureProvider::OnTouchEvent(const MotionEvent& event) {
 void FilteredGestureProvider::OnTouchEventAck(
     uint32_t unique_event_id,
     bool event_consumed,
-    bool is_source_touch_event_set_blocking) {
+    bool is_source_touch_event_set_blocking,
+    const absl::optional<EventLatencyMetadata>& event_latency_metadata) {
   gesture_filter_.OnTouchEventAck(unique_event_id, event_consumed,
-                                  is_source_touch_event_set_blocking);
+                                  is_source_touch_event_set_blocking,
+                                  event_latency_metadata);
 }
 
 void FilteredGestureProvider::ResetGestureHandlingState() {

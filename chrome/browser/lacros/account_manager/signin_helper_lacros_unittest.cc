@@ -18,19 +18,21 @@
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile_manager.h"
 #include "components/account_manager_core/account.h"
-#include "components/account_manager_core/account_addition_result.h"
 #include "components/account_manager_core/account_manager_facade.h"
+#include "components/account_manager_core/account_upsertion_result.h"
 #include "components/account_manager_core/mock_account_manager_facade.h"
 #include "components/signin/core/browser/account_reconcilor.h"
 #include "components/signin/core/browser/account_reconcilor_delegate.h"
 #include "components/signin/core/browser/consistency_cookie_manager.h"
 #include "components/signin/core/browser/mirror_landing_account_reconcilor_delegate.h"
+#include "components/signin/public/base/signin_metrics.h"
 #include "components/signin/public/base/test_signin_client.h"
 #include "components/signin/public/identity_manager/identity_test_environment.h"
 #include "components/signin/public/identity_manager/identity_test_utils.h"
 #include "components/signin/public/identity_manager/set_accounts_in_cookie_result.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "content/public/test/browser_task_environment.h"
+#include "google_apis/gaia/core_account_id.h"
 #include "google_apis/gaia/gaia_urls.h"
 #include "services/network/test/test_cookie_manager.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -69,8 +71,10 @@ class TestAccountReconcilor : public AccountReconcilor {
                 identity_manager,
                 client->GetInitialPrimaryAccount().has_value())) {}
 
-  void SimulateSetCookiesFinished() {
-    OnSetAccountsInCookieCompleted(signin::SetAccountsInCookieResult::kSuccess);
+  void SimulateSetCookiesFinished(
+      const std::vector<CoreAccountId>& accounts_to_send) {
+    OnSetAccountsInCookieCompleted(accounts_to_send,
+                                   signin::SetAccountsInCookieResult::kSuccess);
   }
 };
 
@@ -167,12 +171,15 @@ class SigninHelperLacrosTest : public testing::Test {
   const base::FilePath& profile_path() const { return profile_path_; }
 
   void WaitForConsistentReconcilorState() {
-    while (reconcilor_.GetState() != signin_metrics::ACCOUNT_RECONCILOR_OK)
+    while (reconcilor_.GetState() !=
+           signin_metrics::AccountReconcilorState::kOk) {
       base::RunLoop().RunUntilIdle();
+    }
   }
 
-  void SimulateSetCookiesFinished() {
-    reconcilor_.SimulateSetCookiesFinished();
+  void SimulateSetCookiesFinished(
+      const std::vector<CoreAccountId>& accounts_to_send) {
+    reconcilor_.SimulateSetCookiesFinished(accounts_to_send);
   }
 
   ProfileAttributesStorage* storage() {
@@ -202,8 +209,7 @@ class SigninHelperLacrosTest : public testing::Test {
   TestSigninClient signin_client_{&prefs_, &test_url_loader_factory_};
 
   signin::IdentityTestEnvironment identity_test_env_{
-      /*test_url_loader_factory=*/nullptr, &prefs_,
-      signin::AccountConsistencyMethod::kDisabled, &signin_client_};
+      /*test_url_loader_factory=*/nullptr, &prefs_, &signin_client_};
 
   TestAccountReconcilor reconcilor_{identity_test_env_.identity_manager(),
                                     &signin_client_, &mock_facade_};
@@ -250,10 +256,10 @@ TEST_F(SigninHelperLacrosTest, NoAccountAvailable) {
           [new_account](
               account_manager::AccountManagerFacade::AccountAdditionSource,
               base::OnceCallback<void(
-                  const account_manager::AccountAdditionResult& result)>
+                  const account_manager::AccountUpsertionResult& result)>
                   callback) {
             std::move(callback).Run(
-                account_manager::AccountAdditionResult::FromAccount(
+                account_manager::AccountUpsertionResult::FromAccount(
                     new_account));
           });
   ExpectCookieSet("Updating");
@@ -265,7 +271,8 @@ TEST_F(SigninHelperLacrosTest, NoAccountAvailable) {
   // Simmulate the mapper adding the account to the profile.
   identity_test_env()->MakeAccountAvailable(email);
 
-  EXPECT_CALL(helper_complete, Run(CoreAccountId(gaia_id))).Times(1);
+  EXPECT_CALL(helper_complete, Run(CoreAccountId::FromGaiaId(gaia_id)))
+      .Times(1);
 
   // `AccountProfileMapper` expects a call of `OnAccountUpserted()` before
   // completing the account addition.
@@ -287,7 +294,9 @@ TEST_F(SigninHelperLacrosTest, NoAccountAvailable) {
 
   // The `AccountReconcilor` stops running, cookie is reset.
   ExpectCookieSet("Consistent");
-  SimulateSetCookiesFinished();
+  SimulateSetCookiesFinished(
+      /*accounts_to_send=*/std::vector<CoreAccountId>{
+          CoreAccountId::FromGaiaId(gaia_id)});
 
   testing::Mock::VerifyAndClearExpectations(cookie_manager());
   testing::Mock::VerifyAndClearExpectations(&helper_complete);

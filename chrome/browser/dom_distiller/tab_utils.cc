@@ -9,13 +9,11 @@
 #include "base/location.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/browser/dom_distiller/dom_distiller_service_factory.h"
 #include "chrome/browser/ui/tab_contents/core_tab_helper.h"
 #include "components/back_forward_cache/back_forward_cache_disable.h"
 #include "components/dom_distiller/content/browser/distiller_page_web_contents.h"
-#include "components/dom_distiller/content/browser/uma_helper.h"
 #include "components/dom_distiller/core/distiller_page.h"
 #include "components/dom_distiller/core/dom_distiller_service.h"
 #include "components/dom_distiller/core/task_tracker.h"
@@ -70,18 +68,21 @@ class SelfDeletingRequestDelegate : public ViewRequestDelegate,
 
 void SelfDeletingRequestDelegate::PrimaryPageChanged(content::Page& page) {
   Observe(nullptr);
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, this);
+  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                this);
 }
 
 void SelfDeletingRequestDelegate::PrimaryMainFrameRenderProcessGone(
     base::TerminationStatus status) {
   Observe(nullptr);
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, this);
+  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                this);
 }
 
 void SelfDeletingRequestDelegate::WebContentsDestroyed() {
   Observe(nullptr);
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, this);
+  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                this);
 }
 
 SelfDeletingRequestDelegate::SelfDeletingRequestDelegate(
@@ -158,12 +159,6 @@ void DistillCurrentPageAndView(content::WebContents* old_web_contents) {
   // Copy all navigation state from the old WebContents to the new one.
   new_web_contents->GetController().CopyStateFrom(
       &old_web_contents->GetController(), /* needs_reload */ true);
-
-#if !BUILDFLAG(IS_ANDROID)
-  // Use the old_web_contents to log time on the distillable page before
-  // navigating away from these contents.
-  dom_distiller::UMAHelper::LogTimeOnDistillablePage(old_web_contents);
-#endif
 
   // StartNavigationToDistillerViewer must come before swapping the tab contents
   // to avoid triggering a reload of the page.  This reloadmakes it very

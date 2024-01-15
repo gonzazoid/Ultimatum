@@ -11,9 +11,12 @@
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "chrome/browser/performance_manager/test_support/test_user_performance_tuning_manager_environment.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/test_browser_window.h"
 #include "chrome/test/base/testing_profile.h"
+#include "components/variations/scoped_variations_ids_provider.h"
+#include "components/variations/variations_client.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_renderer_host.h"
 #include "services/network/test/test_url_loader_factory.h"
@@ -25,8 +28,11 @@
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/test/ash_test_helper.h"
 #include "ash/test/ash_test_views_delegate.h"
+#include "chrome/browser/ash/app_mode/kiosk_chrome_app_manager.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
 #include "chromeos/ash/components/install_attributes/stub_install_attributes.h"
+#include "components/user_manager/fake_user_manager.h"
+#include "components/user_manager/scoped_user_manager.h"
 #else
 #include "ui/views/test/scoped_views_test_helper.h"
 #endif
@@ -40,7 +46,6 @@ class GURL;
 
 namespace chromeos {
 class ScopedLacrosServiceTestHelper;
-class TabletState;
 }  // namespace chromeos
 
 namespace content {
@@ -51,10 +56,6 @@ class NavigationController;
 namespace crosapi {
 class CrosapiManager;
 }
-
-namespace user_manager {
-class ScopedUserManager;
-}  // namespace user_manager
 #endif
 
 class TestingProfileManager;
@@ -99,11 +100,9 @@ class BrowserWithTestWindowTest : public testing::Test {
   // Creates a BrowserWithTestWindowTest with zero or more traits. By default
   // the initial window will be a tabbed browser created on the native desktop,
   // which is not a hosted app.
-  template <
-      typename... TaskEnvironmentTraits,
-      class CheckArgumentsAreValid = std::enable_if_t<
-          base::trait_helpers::AreValidTraits<ValidTraits,
-                                              TaskEnvironmentTraits...>::value>>
+  template <typename... TaskEnvironmentTraits>
+    requires base::trait_helpers::AreValidTraits<ValidTraits,
+                                                 TaskEnvironmentTraits...>
   NOINLINE explicit BrowserWithTestWindowTest(TaskEnvironmentTraits... traits)
       : BrowserWithTestWindowTest(
             std::make_unique<content::BrowserTaskEnvironment>(
@@ -150,6 +149,7 @@ class BrowserWithTestWindowTest : public testing::Test {
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   ash::AshTestHelper* ash_test_helper() { return &ash_test_helper_; }
+  user_manager::FakeUserManager* user_manager() { return user_manager_; }
 #endif
 
   // The context to help determine desktop type when creating new Widgets.
@@ -231,11 +231,13 @@ class BrowserWithTestWindowTest : public testing::Test {
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   ash::ScopedCrosSettingsTestHelper cros_settings_test_helper_;
+  raw_ptr<user_manager::FakeUserManager> user_manager_ = nullptr;
   std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
   std::unique_ptr<crosapi::CrosapiManager> manager_;
+  std::unique_ptr<ash::KioskChromeAppManager> kiosk_chrome_app_manager_;
 #endif
 
-  raw_ptr<TestingProfile> profile_ = nullptr;
+  raw_ptr<TestingProfile, AcrossTasksDanglingUntriaged> profile_ = nullptr;
 
   // test_url_loader_factory_ is declared before profile_manager_
   // to guarantee it outlives any profiles that might use it.
@@ -255,10 +257,6 @@ class BrowserWithTestWindowTest : public testing::Test {
           std::make_unique<ChromeTestViewsDelegate<>>());
 #endif
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  std::unique_ptr<chromeos::TabletState> tablet_state_;
-#endif
-
   // The existence of this object enables tests via RenderViewHostTester.
   std::unique_ptr<content::RenderViewHostTestEnabler> rvh_test_enabler_;
 
@@ -271,6 +269,15 @@ class BrowserWithTestWindowTest : public testing::Test {
 
   // Whether the browser is part of a hosted app.
   const bool hosted_app_;
+
+  // Initialize the variations provider.
+  variations::ScopedVariationsIdsProvider scoped_variations_ids_provider_{
+      variations::VariationsIdsProvider::Mode::kUseSignedInState};
+
+  // Some of the UI elements in top chrome need to observe the
+  // UserPerformanceTuningManager, so create and install a fake.
+  performance_manager::user_tuning::TestUserPerformanceTuningManagerEnvironment
+      user_performance_tuning_manager_environment_;
 };
 
 #endif  // CHROME_TEST_BASE_BROWSER_WITH_TEST_WINDOW_TEST_H_

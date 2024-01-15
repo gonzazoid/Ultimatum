@@ -6,12 +6,14 @@
 
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/style/dark_light_mode_controller.h"
+#include "ash/public/cpp/wallpaper/wallpaper_controller.h"
 #include "ash/shell.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/i18n/time_formatting.h"
 #include "base/path_service.h"
 #include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
@@ -26,7 +28,7 @@
 #undef ENABLED_VLOG_LEVEL
 #define ENABLED_VLOG_LEVEL 1
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -41,9 +43,7 @@ void StoreScreenshot(const base::FilePath& screenshot_dir,
   }
   base::FilePath file_path = screenshot_dir.Append(screenshot_name);
 
-  if (static_cast<size_t>(base::WriteFile(
-          file_path, reinterpret_cast<const char*>(png_data->front()),
-          static_cast<int>(png_data->size()))) != png_data->size()) {
+  if (!base::WriteFile(file_path, *png_data)) {
     LOG(ERROR) << "Failed to save screenshot to " << file_path.value();
   } else {
     VLOG(1) << "Saved screenshot to " << file_path.value();
@@ -91,12 +91,8 @@ DebugOverlayHandler::DebugOverlayHandler() {
   add_resolution_to_filename_ =
       command_line->HasSwitch(::switches::kHostWindowBounds);
 
-  base::Time::Exploded now;
-  base::Time::Now().LocalExplode(&now);
-  std::string series_name =
-      base::StringPrintf("%d-%02d-%02d - %02d.%02d.%02d", now.year, now.month,
-                         now.day_of_month, now.hour, now.minute, now.second);
-  screenshot_dir_ = base_dir.Append(series_name);
+  screenshot_dir_ = base_dir.Append(base::UnlocalizedTimeFormatWithPattern(
+      base::Time::Now(), "y-MM-dd - HH.mm.ss"));
 }
 
 DebugOverlayHandler::~DebugOverlayHandler() = default;
@@ -105,17 +101,17 @@ void DebugOverlayHandler::DeclareJSCallbacks() {
   AddCallback("debug.captureScreenshot",
               &DebugOverlayHandler::HandleCaptureScreenshot);
   AddCallback("debug.toggleColorMode", &DebugOverlayHandler::ToggleColorMode);
+  AddCallback("debug.switchWallpaper",
+              &DebugOverlayHandler::HandleSwitchWallpaper);
 }
 
 void DebugOverlayHandler::DeclareLocalizedValues(
     ::login::LocalizedValuesBuilder* builder) {}
 
-void DebugOverlayHandler::InitializeDeprecated() {}
-
 // DebugOverlayHandler, private: ----------------------------------------------
 
 void DebugOverlayHandler::HandleCaptureScreenshot(const std::string& name) {
-  aura::Window::Windows root_windows = ash::Shell::GetAllRootWindows();
+  aura::Window::Windows root_windows = Shell::GetAllRootWindows();
   if (root_windows.size() == 0)
     return;
 
@@ -134,7 +130,7 @@ void DebugOverlayHandler::HandleCaptureScreenshot(const std::string& name) {
     if (add_resolution_to_filename_)
       filename.append("_" + rect.size().ToString());
 
-    if (ash::DarkLightModeController::Get()->IsDarkModeEnabled()) {
+    if (DarkLightModeController::Get()->IsDarkModeEnabled()) {
       filename.append("_dark");
     }
 
@@ -147,8 +143,35 @@ void DebugOverlayHandler::HandleCaptureScreenshot(const std::string& name) {
 }
 
 void DebugOverlayHandler::ToggleColorMode() {
-  ash::DarkLightModeController::Get()->SetDarkModeEnabledForTest(  // IN-TEST
-      !ash::DarkLightModeController::Get()->IsDarkModeEnabled());
+  DarkLightModeController::Get()->SetDarkModeEnabledForTest(  // IN-TEST
+      !DarkLightModeController::Get()->IsDarkModeEnabled());
 }
 
-}  // namespace chromeos
+void DebugOverlayHandler::HandleSwitchWallpaper(const std::string& color) {
+  if (color == "def") {
+    ash::WallpaperController::Get()->ShowOobeWallpaper();
+    return;
+  }
+
+  SkBitmap bitmap;
+  bitmap.allocN32Pixels(1, 1);
+  if (color == "wh") {
+    bitmap.eraseColor(SK_ColorWHITE);
+  } else if (color == "bk") {
+    bitmap.eraseColor(SK_ColorBLACK);
+  } else if (color == "r") {
+    bitmap.eraseColor(SK_ColorRED);
+  } else if (color == "bl") {
+    bitmap.eraseColor(SK_ColorBLUE);
+  } else if (color == "gn") {
+    bitmap.eraseColor(SK_ColorGREEN);
+  } else if (color == "ye") {
+    bitmap.eraseColor(SK_ColorYELLOW);
+  } else {
+    return;
+  }
+  ash::WallpaperController::Get()->ShowOneShotWallpaper(
+      gfx::ImageSkia::CreateFrom1xBitmap(bitmap));
+}
+
+}  // namespace ash

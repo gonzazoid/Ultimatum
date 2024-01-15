@@ -7,6 +7,7 @@
 
 #include "base/no_destructor.h"
 #include "base/observer_list.h"
+#include "base/scoped_observation_traits.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/views/views_export.h"
 
@@ -30,6 +31,8 @@ class VIEWS_EXPORT WidgetFocusManager {
   // Returns the singleton instance.
   static WidgetFocusManager* GetInstance();
 
+  WidgetFocusManager(const WidgetFocusManager&) = delete;
+  WidgetFocusManager& operator=(const WidgetFocusManager&) = delete;
   ~WidgetFocusManager();
 
   // Adds/removes a WidgetFocusChangeListener |listener| to the set of
@@ -52,8 +55,6 @@ class VIEWS_EXPORT WidgetFocusManager {
   friend class base::NoDestructor<WidgetFocusManager>;
 
   WidgetFocusManager();
-  WidgetFocusManager(const WidgetFocusManager&) = delete;
-  WidgetFocusManager& operator=(const WidgetFocusManager&) = delete;
 
   base::ObserverList<WidgetFocusChangeListener>::Unchecked
       focus_change_listeners_;
@@ -75,5 +76,24 @@ class VIEWS_EXPORT AutoNativeNotificationDisabler {
 };
 
 }  // namespace views
+
+namespace base {
+
+// Specialization for use with base::ScopedObservation:
+template <>
+struct ScopedObservationTraits<views::WidgetFocusManager,
+                               views::WidgetFocusChangeListener> {
+ public:
+  static void AddObserver(views::WidgetFocusManager* source,
+                          views::WidgetFocusChangeListener* observer) {
+    source->AddFocusChangeListener(observer);
+  }
+  static void RemoveObserver(views::WidgetFocusManager* source,
+                             views::WidgetFocusChangeListener* observer) {
+    source->RemoveFocusChangeListener(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // UI_VIEWS_FOCUS_WIDGET_FOCUS_MANAGER_H_

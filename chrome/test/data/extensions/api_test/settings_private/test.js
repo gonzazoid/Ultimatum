@@ -23,6 +23,8 @@ var kUserSelectableValues = [0, 1, 2];
 
 var kTestPageId = 'pageId';
 
+var kTestSupervisedPrefName = 'signin.allowed_on_next_startup';
+
 function callbackResult(result) {
   if (chrome.runtime.lastError)
     chrome.test.fail(chrome.runtime.lastError.message);
@@ -55,7 +57,7 @@ var availableTests = [
     chrome.settingsPrivate.getPref(
         kTestPrefName,
         function(value) {
-          chrome.test.assertTrue(value !== null);
+          chrome.test.assertNe(null, value);
           callbackResult(true);
           chrome.test.succeed();
         });
@@ -123,7 +125,7 @@ var availableTests = [
     chrome.settingsPrivate.getPref(
         'cros.accounts.allowBWSI',
         function(value) {
-          chrome.test.assertTrue(value !== null);
+          chrome.test.assertNe(null, value);
           callbackResult(true);
           chrome.test.succeed();
         });
@@ -165,6 +167,19 @@ var availableTests = [
         false,
         kTestPageId,
         function() {});
+  },
+  function getManagedByParentPref() {
+    chrome.settingsPrivate.getPref(kTestSupervisedPrefName, function(value) {
+      chrome.test.assertEq('object', typeof value);
+      callbackResult(true);
+      chrome.test.assertEq(
+          chrome.settingsPrivate.ControlledBy.CONTROLLED_BY_CHILD_RESTRICTION,
+          value.controlledBy);
+      chrome.test.assertEq(
+          chrome.settingsPrivate.Enforcement.ENFORCEMENT_ENFORCED,
+          value.enforcement);
+      chrome.test.succeed();
+    });
   },
 ];
 

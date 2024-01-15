@@ -6,12 +6,14 @@
 #define UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_WINDOW_MANAGER_H_
 
 #include <memory>
+#include <ostream>
 
 #include "base/containers/flat_map.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "ui/gfx/geometry/size_f.h"
 #include "ui/gfx/native_widget_types.h"
+#include "ui/ozone/platform/wayland/host/wayland_subsurface.h"
 #include "ui/ozone/platform/wayland/host/wayland_window_observer.h"
 
 namespace ui {
@@ -108,12 +110,16 @@ class WaylandWindowManager {
   void RemoveSubsurface(gfx::AcceleratedWidget widget,
                         WaylandSubsurface* subsurface);
 
+  void RecycleSubsurface(std::unique_ptr<WaylandSubsurface> subsurface);
+
   // Creates a new unique gfx::AcceleratedWidget.
   gfx::AcceleratedWidget AllocateAcceleratedWidget();
 
+  void DumpState(std::ostream& out) const;
+
  private:
-  WaylandWindow* pointer_focused_window_ = nullptr;
-  WaylandWindow* keyboard_focused_window_ = nullptr;
+  raw_ptr<WaylandWindow> pointer_focused_window_ = nullptr;
+  raw_ptr<WaylandWindow> keyboard_focused_window_ = nullptr;
 
   const raw_ptr<WaylandConnection> connection_;
 
@@ -121,7 +127,12 @@ class WaylandWindowManager {
 
   base::flat_map<gfx::AcceleratedWidget, WaylandWindow*> window_map_;
 
-  raw_ptr<WaylandWindow> located_events_grabber_ = nullptr;
+  // The cache of |primary_subsurface_| of the last closed WaylandWindow. This
+  // will be destroyed lazily to make sure the window closing animation works
+  // well. See crbug.com/1324548.
+  std::unique_ptr<WaylandSubsurface> subsurface_recycle_cache_;
+
+  raw_ptr<WaylandWindow, DanglingUntriaged> located_events_grabber_ = nullptr;
 
   // Stores strictly monotonically increasing counter for allocating unique
   // AccelerateWidgets.

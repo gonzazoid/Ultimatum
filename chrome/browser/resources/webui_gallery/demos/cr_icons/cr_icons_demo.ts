@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@ import '//resources/cr_elements/cr_icons.css.js';
 import '//resources/cr_elements/cr_input/cr_input.js';
 import '//resources/cr_elements/icons.html.js';
 import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '../demo.css.js';
 
-import {assert} from '//resources/js/assert_ts.js';
+import {assert} from '//resources/js/assert.js';
 import {IronIconsetSvgElement} from '//resources/polymer/v3_0/iron-iconset-svg/iron-iconset-svg.js';
 import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
@@ -65,5 +66,7 @@ class CrIconsDemoElement extends PolymerElement {
     this.iconColor_ = color;
   }
 }
+
+export const tagName = CrIconsDemoElement.is;
 
 customElements.define(CrIconsDemoElement.is, CrIconsDemoElement);

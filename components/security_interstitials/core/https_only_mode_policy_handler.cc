@@ -11,9 +11,11 @@
 namespace policy {
 
 HttpsOnlyModePolicyHandler::HttpsOnlyModePolicyHandler(
-    const char* const pref_name)
+    const char* const main_pref_name,
+    const char* const incognito_pref_name)
     : TypeCheckingPolicyHandler(key::kHttpsOnlyMode, base::Value::Type::STRING),
-      pref_name_(pref_name) {}
+      main_pref_name_(main_pref_name),
+      incognito_pref_name_(incognito_pref_name) {}
 
 HttpsOnlyModePolicyHandler::~HttpsOnlyModePolicyHandler() = default;
 
@@ -21,9 +23,19 @@ void HttpsOnlyModePolicyHandler::ApplyPolicySettings(const PolicyMap& policies,
                                                      PrefValueMap* prefs) {
   const base::Value* value =
       policies.GetValue(key::kHttpsOnlyMode, base::Value::Type::STRING);
+  // The policy supports force-disabling the HTTPS-First Mode pref
+  // ("disallowed"), force-enabling the pref ("force_enabled"), or allowing the
+  // user to choose (no policy or setting it to "allowed").
+  //
+  // For backwards compatibility, we're stuck mapping these string-enum values
+  // to the boolean pref states, rather than being able to do a simple
+  // policy-pref mapping.
   if (value && value->GetString() == "disallowed") {
-    // Only apply the policy to the pref if it is set to "disallowed".
-    prefs->SetBoolean(pref_name_, false);
+    prefs->SetBoolean(main_pref_name_, false);
+    prefs->SetBoolean(incognito_pref_name_, false);
+  } else if (value && value->GetString() == "force_enabled") {
+    prefs->SetBoolean(main_pref_name_, true);
+    prefs->SetBoolean(incognito_pref_name_, true);
   }
 }
 

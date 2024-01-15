@@ -20,6 +20,7 @@
 #include "chrome/common/buildflags.h"
 #include "components/content_settings/core/browser/content_settings_observer.h"
 #include "components/keyed_service/core/keyed_service.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/browser/platform_notification_service.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -71,6 +72,9 @@ class PlatformNotificationServiceImpl
   void ClosePersistentNotification(const std::string& notification_id) override;
   void GetDisplayedNotifications(
       DisplayedNotificationsCallback callback) override;
+  void GetDisplayedNotificationsForOrigin(
+      const GURL& origin,
+      DisplayedNotificationsCallback callback) override;
   void ScheduleTrigger(base::Time timestamp) override;
   base::Time ReadNextTriggerTimestamp() override;
   int64_t ReadNextPersistentNotificationId() override;
@@ -95,6 +99,7 @@ class PlatformNotificationServiceImpl
                            DisplayNameForContextMessage);
   FRIEND_TEST_ALL_PREFIXES(PlatformNotificationServiceTest,
                            RecordNotificationUkmEvent);
+  FRIEND_TEST_ALL_PREFIXES(PlatformNotificationServiceTest, IncomingCallWebApp);
   FRIEND_TEST_ALL_PREFIXES(
       PlatformNotificationServiceTest_WebAppNotificationIconAndTitle,
       FindWebAppIconAndTitle_NoApp);
@@ -135,11 +140,20 @@ class PlatformNotificationServiceImpl
   // Returns a display name for an origin, to be used in the context message
   std::u16string DisplayNameForContextMessage(const GURL& origin) const;
 
-  // Finds the icon and title associated with |web_app_hint_url| when this
+  // Finds the AppId associated with |web_app_hint_url| when this is part of
+  // an installed experience, and the notification can be attributed as such.
+  absl::optional<webapps::AppId> FindWebAppId(
+      const GURL& web_app_hint_url) const;
+
+  // Finds the icon and title associated with |web_app_id| when this
   // is part of an installed experience, and the notification can be attributed
   // as such.
   absl::optional<WebAppIconAndTitle> FindWebAppIconAndTitle(
       const GURL& web_app_hint_url) const;
+
+  // Identifies whether the notification was sent from an installed web app or
+  // not.
+  bool IsActivelyInstalledWebAppScope(const GURL& web_app_url) const;
 
   // Clears |closed_notifications_|. Should only be used for testing purposes.
   void ClearClosedNotificationsForTesting() { closed_notifications_.clear(); }

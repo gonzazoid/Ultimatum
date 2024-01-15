@@ -3,14 +3,14 @@
 // found in the LICENSE file.
 
 #include "ash/system/model/system_tray_model.h"
+
 #include <memory>
 
-#include "ash/components/phonehub/phone_hub_manager.h"
 #include "ash/public/cpp/login_types.h"
 #include "ash/public/cpp/update_types.h"
 #include "ash/root_window_controller.h"
 #include "ash/shell.h"
-#include "ash/system/message_center/message_center_controller.h"
+#include "ash/system/notification_center/message_center_controller.h"
 #include "ash/system/model/clock_model.h"
 #include "ash/system/model/enterprise_domain_model.h"
 #include "ash/system/model/locale_model.h"
@@ -26,6 +26,7 @@
 #include "ash/system/time/calendar_model.h"
 #include "ash/system/time/calendar_utils.h"
 #include "ash/system/unified/unified_system_tray.h"
+#include "chromeos/ash/components/phonehub/phone_hub_manager.h"
 
 namespace ash {
 
@@ -90,10 +91,9 @@ void SystemTrayModel::SetLocaleList(
 
 void SystemTrayModel::ShowUpdateIcon(UpdateSeverity severity,
                                      bool factory_reset_required,
-                                     bool rollback,
-                                     UpdateType update_type) {
-  update_model()->SetUpdateAvailable(severity, factory_reset_required, rollback,
-                                     update_type);
+                                     bool rollback) {
+  update_model()->SetUpdateAvailable(severity, factory_reset_required,
+                                     rollback);
 }
 
 void SystemTrayModel::SetRelaunchNotificationState(
@@ -111,6 +111,10 @@ void SystemTrayModel::SetUpdateDeferred(DeferredUpdateState state) {
 
 void SystemTrayModel::SetUpdateOverCellularAvailableIconVisible(bool visible) {
   update_model()->SetUpdateOverCellularAvailable(visible);
+}
+
+void SystemTrayModel::SetShowEolNotice(bool show) {
+  update_model()->SetShowEolNotice(show);
 }
 
 void SystemTrayModel::ShowVolumeSliderBubble() {
@@ -146,6 +150,16 @@ void SystemTrayModel::SetPhoneHubManager(
       ->message_center_controller()
       ->phone_hub_notification_controller()
       ->SetManager(phone_hub_manager);
+
+  phone_hub_manager_ = phone_hub_manager;
+}
+
+bool SystemTrayModel::IsFakeModel() const {
+  return false;
+}
+
+bool SystemTrayModel::IsInUserChildSession() const {
+  return Shell::Get()->session_controller()->IsUserChild();
 }
 
 }  // namespace ash

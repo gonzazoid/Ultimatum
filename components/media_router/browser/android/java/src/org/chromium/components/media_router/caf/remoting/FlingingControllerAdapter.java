@@ -21,7 +21,7 @@ public class FlingingControllerAdapter implements FlingingController, MediaContr
 
     private final StreamPositionExtrapolator mStreamPositionExtrapolator;
     private final RemotingSessionController mSessionController;
-    private final String mMediaUrl;
+    private String mMediaUrl;
     private MediaStatusObserver mMediaStatusObserver;
     private boolean mLoaded;
     private boolean mHasEverReceivedValidMediaSession;
@@ -30,6 +30,17 @@ public class FlingingControllerAdapter implements FlingingController, MediaContr
         mSessionController = sessionController;
         mMediaUrl = mediaUrl;
         mStreamPositionExtrapolator = new StreamPositionExtrapolator();
+    }
+
+    /**
+     * Called when media source needs to be updated.
+     *
+     * @param mediaUrl The new media source URL.
+     */
+    public void updateMediaUrl(String mediaUrl) {
+        mMediaUrl = mediaUrl;
+        mLoaded = false;
+        load(/* position= */ 0, /* autoplay= */ false);
     }
 
     ////////////////////////////////////////////
@@ -67,16 +78,17 @@ public class FlingingControllerAdapter implements FlingingController, MediaContr
     ////////////////////////////////////////////
 
     /** Starts loading the media URL, from the given position. */
-    public void load(long position) {
+    public void load(long position, boolean autoplay) {
         if (!mSessionController.isConnected()) return;
 
         mLoaded = true;
 
-        MediaInfo mediaInfo = new MediaInfo.Builder(mMediaUrl)
-                                      .setContentType("*/*")
-                                      .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
-                                      .build();
-        mSessionController.getRemoteMediaClient().load(mediaInfo, /* autoplay= */ true, position);
+        MediaInfo mediaInfo =
+                new MediaInfo.Builder(mMediaUrl)
+                        .setContentType("*/*")
+                        .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
+                        .build();
+        mSessionController.getRemoteMediaClient().load(mediaInfo, autoplay, position);
     }
 
     ////////////////////////////////////////////
@@ -88,33 +100,41 @@ public class FlingingControllerAdapter implements FlingingController, MediaContr
         if (!mSessionController.isConnected()) return;
 
         if (!mLoaded) {
-            load(/* position= */ 0);
+            load(/* position= */ 0, /* autoplay= */ true);
             return;
         }
 
-        mSessionController.getRemoteMediaClient().play().setResultCallback(
-                this::onMediaCommandResult);
+        mSessionController
+                .getRemoteMediaClient()
+                .play()
+                .setResultCallback(this::onMediaCommandResult);
     }
 
     @Override
     public void pause() {
         if (!mSessionController.isConnected()) return;
-        mSessionController.getRemoteMediaClient().pause().setResultCallback(
-                this::onMediaCommandResult);
+        mSessionController
+                .getRemoteMediaClient()
+                .pause()
+                .setResultCallback(this::onMediaCommandResult);
     }
 
     @Override
     public void setMute(boolean mute) {
         if (!mSessionController.isConnected()) return;
-        mSessionController.getRemoteMediaClient().setStreamMute(mute).setResultCallback(
-                this::onMediaCommandResult);
+        mSessionController
+                .getRemoteMediaClient()
+                .setStreamMute(mute)
+                .setResultCallback(this::onMediaCommandResult);
     }
 
     @Override
     public void setVolume(double volume) {
         if (!mSessionController.isConnected()) return;
-        mSessionController.getRemoteMediaClient().setStreamVolume(volume).setResultCallback(
-                this::onMediaCommandResult);
+        mSessionController
+                .getRemoteMediaClient()
+                .setStreamVolume(volume)
+                .setResultCallback(this::onMediaCommandResult);
     }
 
     @Override
@@ -122,12 +142,14 @@ public class FlingingControllerAdapter implements FlingingController, MediaContr
         if (!mSessionController.isConnected()) return;
 
         if (!mLoaded) {
-            load(position);
+            load(position, /* autoplay= */ true);
             return;
         }
 
-        mSessionController.getRemoteMediaClient().seek(position).setResultCallback(
-                this::onMediaCommandResult);
+        mSessionController
+                .getRemoteMediaClient()
+                .seek(position)
+                .setResultCallback(this::onMediaCommandResult);
         mStreamPositionExtrapolator.onSeek(position);
     }
 
@@ -148,9 +170,11 @@ public class FlingingControllerAdapter implements FlingingController, MediaContr
                 mLoaded = false;
                 mStreamPositionExtrapolator.onFinish();
             } else {
-                mStreamPositionExtrapolator.update(remoteMediaClient.getStreamDuration(),
+                mStreamPositionExtrapolator.update(
+                        remoteMediaClient.getStreamDuration(),
                         remoteMediaClient.getApproximateStreamPosition(),
-                        remoteMediaClient.isPlaying(), mediaStatus.getPlaybackRate());
+                        remoteMediaClient.isPlaying(),
+                        mediaStatus.getPlaybackRate());
             }
 
             mMediaStatusObserver.onMediaStatusUpdate(new MediaStatusBridge(mediaStatus));
@@ -172,7 +196,9 @@ public class FlingingControllerAdapter implements FlingingController, MediaContr
         // onResult() called, so we should not rely on onResult() being called for every API call.
         // See https://crbug.com/853923.
         if (!result.getStatus().isSuccess()) {
-            Log.e(TAG, "Error when sending command. Status code: %d",
+            Log.e(
+                    TAG,
+                    "Error when sending command. Status code: %d",
                     result.getStatus().getStatusCode());
         }
     }

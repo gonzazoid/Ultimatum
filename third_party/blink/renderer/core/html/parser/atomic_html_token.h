@@ -34,22 +34,18 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/attribute.h"
+#include "third_party/blink/renderer/core/html/parser/atomic_string_cache.h"
 #include "third_party/blink/renderer/core/html/parser/html_token.h"
+#include "third_party/blink/renderer/core/html_element_attribute_name_lookup_trie.h"
 #include "third_party/blink/renderer/core/html_element_lookup_trie.h"
 #include "third_party/blink/renderer/core/html_names.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
+#include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string_hash.h"
 
-// TODO(https://crbug.com/1338583): enable on android.
-#if !BUILDFLAG(IS_ANDROID)
-#include "third_party/blink/renderer/core/html_element_attribute_name_lookup_trie.h"  // nogncheck
-#endif
-
 namespace blink {
-
-// Controls whether attribute name lookup uses LookupHTMLAttributeName().
-CORE_EXPORT extern bool g_use_html_attribute_name_lookup;
 
 class AtomicHTMLToken;
 
@@ -198,6 +194,23 @@ class CORE_EXPORT AtomicHTMLToken {
     return doctype_data_->system_identifier_;
   }
 
+  DOMPartTokenType DOMPartType() const {
+    DCHECK(RuntimeEnabledFeatures::DOMPartsAPIEnabled());
+    DCHECK_EQ(type_, HTMLToken::kDOMPart);
+    return dom_part_data_->type_;
+  }
+
+  WTF::Vector<String> DOMPartMetadata() const {
+    DCHECK(RuntimeEnabledFeatures::DOMPartsAPIEnabled());
+    DCHECK_EQ(type_, HTMLToken::kDOMPart);
+    return dom_part_data_->metadata_;
+  }
+
+  DOMPartsNeeded GetDOMPartsNeeded() {
+    DCHECK_EQ(type_, HTMLToken::kStartTag);
+    return dom_parts_needed_;
+  }
+
   explicit AtomicHTMLToken(HTMLToken& token)
       : type_(token.GetType()), name_(HTMLTokenNameFromToken(token)) {
     switch (type_) {
@@ -207,9 +220,15 @@ class CORE_EXPORT AtomicHTMLToken {
       case HTMLToken::DOCTYPE:
         doctype_data_ = token.ReleaseDoctypeData();
         break;
+      case HTMLToken::kDOMPart:
+        DCHECK(RuntimeEnabledFeatures::DOMPartsAPIEnabled());
+        dom_part_data_ = token.ReleaseDOMPartData();
+        break;
       case HTMLToken::kEndOfFile:
         break;
       case HTMLToken::kStartTag:
+        dom_parts_needed_ = token.GetDOMPartsNeeded();
+        [[fallthrough]];
       case HTMLToken::kEndTag: {
         self_closing_ = token.SelfClosing();
         const HTMLToken::AttributeList& attributes = token.Attributes();
@@ -308,6 +327,10 @@ class CORE_EXPORT AtomicHTMLToken {
   // For DOCTYPE
   std::unique_ptr<DoctypeData> doctype_data_;
 
+  // For DOM Parts
+  std::unique_ptr<DOMPartData> dom_part_data_;
+  DOMPartsNeeded dom_parts_needed_;
+
   // For StartTag and EndTag
   bool self_closing_ = false;
 
@@ -336,20 +359,10 @@ void AtomicHTMLToken::InitializeAttributes(
     if (attribute.NameIsEmpty())
       continue;
 
-#if DCHECK_IS_ON()
-    attribute.NameRange().CheckValid();
-    attribute.ValueRange().CheckValid();
-#endif
-
-    QualifiedName name = g_null_name;
-#if !BUILDFLAG(IS_ANDROID)
-    if (g_use_html_attribute_name_lookup) {
-      name = LookupHTMLAttributeName(attribute.NameBuffer().data(),
-                                     attribute.NameBuffer().size());
-    }
-#endif
+    QualifiedName name = LookupHTMLAttributeName(attribute.NameBuffer().data(),
+                                                 attribute.NameBuffer().size());
     if (name == g_null_name) {
-      name = QualifiedName(g_null_atom, attribute.GetName(), g_null_atom);
+      name = QualifiedName(attribute.GetName());
     }
 
     if constexpr (DedupWithHash) {
@@ -365,13 +378,9 @@ void AtomicHTMLToken::InitializeAttributes(
       }
     }
 
-    // The string pointer in |value| is null for attributes with no values, but
-    // the null atom is used to represent absence of attributes; attributes with
-    // no values have the value set to an empty atom instead.
-    AtomicString value(attribute.GetValue());
-    if (value.IsNull()) {
-      value = g_empty_atom;
-    }
+    AtomicString value =
+        HTMLAtomicStringCache::MakeAttributeValue(attribute.ValueBuffer());
+    DCHECK(!value.IsNull()) << "Attribute value should never be null";
     attributes_.UncheckedAppend(Attribute(std::move(name), std::move(value)));
   }
 }

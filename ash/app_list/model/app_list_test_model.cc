@@ -8,15 +8,20 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "ash/public/cpp/app_list/app_list_config.h"
+#include "ash/public/cpp/app_list/app_list_controller.h"
 #include "base/memory/ptr_util.h"
+#include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/models/menu_model.h"
 #include "ui/base/models/simple_menu_model.h"
 #include "ui/gfx/image/image_skia.h"
+#include "ui/gfx/image/image_skia_operations.h"
+#include "ui/gfx/image/image_unittest_util.h"
 
 namespace ash {
 namespace test {
@@ -39,7 +44,7 @@ AppListTestModel::AppListTestItem::AppListTestItem(const std::string& id,
   const int icon_dimension =
       SharedAppListConfig::instance().default_grid_icon_dimension();
   SetDefaultIconAndColor(CreateImageSkia(icon_dimension, icon_dimension),
-                         IconColor());
+                         IconColor(), /*is_placeholder_icon=*/false);
 }
 
 AppListTestModel::AppListTestItem::~AppListTestItem() = default;
@@ -152,6 +157,13 @@ void AppListTestModel::RequestAppListSortRevert() {
   requested_sort_order_.reset();
 }
 
+void AppListTestModel::RequestCommitTemporarySortOrder() {
+  // Committing the temporary sort order should not introduce item reorder so
+  // reset the sort order without reorder animation.
+  AppListController::Get()->UpdateAppListWithNewTemporarySortOrder(
+      /*new_order=*/std::nullopt, /*animate=*/false, base::NullCallback());
+}
+
 AppListItem* AppListTestModel::AddItemToFolder(AppListItem* item,
                                                const std::string& folder_id) {
   return AppListModel::AddItemToFolder(base::WrapUnique(item), folder_id);
@@ -202,24 +214,30 @@ AppListFolderItem* AppListTestModel::CreateSingleItemFolder(
   return static_cast<AppListFolderItem*>(folder_item);
 }
 
+AppListFolderItem* AppListTestModel::CreateSingleWebAppShortcutItemFolder(
+    const std::string& folder_id,
+    const std::string& item_id) {
+  AppListTestItem* item = CreateWebAppShortcutItem(item_id);
+  AddItemToFolder(item, folder_id);
+  AppListItem* folder_item = FindItem(folder_id);
+  DCHECK(folder_item->GetItemType() == AppListFolderItem::kItemType);
+  return static_cast<AppListFolderItem*>(folder_item);
+}
+
 void AppListTestModel::PopulateAppWithId(int id) {
   CreateAndAddItem(GetItemName(id));
 }
 
 std::string AppListTestModel::GetModelContent() {
-  std::string content;
-  for (size_t i = 0; i < top_level_item_list()->item_count(); ++i) {
-    if (i > 0)
-      content += ',';
-    AppListItem* item = top_level_item_list()->item_at(i);
-    content += item->is_page_break() ? "PageBreakItem" : item->id();
-  }
-  return content;
+  std::vector<std::string> ids;
+  ids.reserve(top_level_item_list()->item_count());
+
+  for (size_t i = 0; i < top_level_item_list()->item_count(); ++i)
+    ids.push_back(top_level_item_list()->item_at(i)->id());
+  return base::JoinString(ids, ",");
 }
 
-AppListTestModel::AppListTestItem* AppListTestModel::CreateItem(
-    const std::string& id) {
-  AppListTestItem* item = new AppListTestItem(id, this);
+syncer::StringOrdinal AppListTestModel::CalculatePosition() {
   size_t nitems = top_level_item_list()->item_count();
   syncer::StringOrdinal position;
   if (nitems == 0) {
@@ -228,15 +246,59 @@ AppListTestModel::AppListTestItem* AppListTestModel::CreateItem(
     position =
         top_level_item_list()->item_at(nitems - 1)->position().CreateAfter();
   }
-  item->SetPosition(position);
+  return position;
+}
+
+AppListTestModel::AppListTestItem* AppListTestModel::CreateItem(
+    const std::string& id) {
+  AppListTestItem* item = new AppListTestItem(id, this);
+  item->SetPosition(CalculatePosition());
   SetItemName(item, id);
   return item;
+}
+
+AppListTestModel::AppListTestItem* AppListTestModel::CreateWebAppShortcutItem(
+    const std::string& id) {
+  AppListTestItem* test_item = new AppListTestItem(id, this);
+  const int badge_icon_dimension = 48;
+  const gfx::ImageSkia fake_badge_icon =
+      CreateImageSkia(badge_icon_dimension, badge_icon_dimension);
+  test_item->UpdateAppHostBadgeForTesting(fake_badge_icon);
+  test_item->SetPosition(CalculatePosition());
+  SetItemName(test_item, id);
+
+  return test_item;
 }
 
 AppListTestModel::AppListTestItem* AppListTestModel::CreateAndAddItem(
     const std::string& id) {
   std::unique_ptr<AppListTestItem> test_item(CreateItem(id));
   AppListItem* item = AppListModel::AddItem(std::move(test_item));
+  return static_cast<AppListTestItem*>(item);
+}
+
+AppListTestModel::AppListTestItem* AppListTestModel::CreateAndAddPromiseItem(
+    const std::string& id) {
+  std::unique_ptr<AppListTestItem> test_item(CreateItem(id));
+  test_item->UpdateAppStatusForTesting(AppStatus::kPending);
+  const int icon_dimension = 48;
+  const gfx::ImageSkia fake_promise_icon =
+      gfx::ImageSkiaOperations::CreateImageWithRoundRectClip(
+          icon_dimension, CreateImageSkia(icon_dimension, icon_dimension));
+  AppListItem* item = AppListModel::AddItem(std::move(test_item));
+  return static_cast<AppListTestItem*>(item);
+}
+
+AppListTestModel::AppListTestItem*
+AppListTestModel::CreateAndAddWebAppShortcutItemWithHostBadge(
+    const std::string& id) {
+  std::unique_ptr<AppListTestItem> test_item(CreateItem(id));
+  const int badge_icon_dimension = 48;
+  const gfx::ImageSkia fake_badge_icon =
+      gfx::test::CreateImageSkia(badge_icon_dimension, SK_ColorCYAN);
+  test_item->UpdateAppHostBadgeForTesting(fake_badge_icon);
+  AppListItem* item = AppListModel::AddItem(std::move(test_item));
+  SetItemName(item, id);
   return static_cast<AppListTestItem*>(item);
 }
 

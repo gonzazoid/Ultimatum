@@ -6,14 +6,16 @@
 
 #include <utility>
 
-#include "base/callback.h"
 #include "base/containers/contains.h"
+#include "base/functional/callback.h"
+#include "content/public/browser/storage_partition.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace browsing_data {
 
-MockDatabaseHelper::MockDatabaseHelper(content::BrowserContext* browser_context)
-    : DatabaseHelper(browser_context) {}
+MockDatabaseHelper::MockDatabaseHelper(
+    content::StoragePartition* storage_partition)
+    : DatabaseHelper(storage_partition) {}
 
 MockDatabaseHelper::~MockDatabaseHelper() {}
 
@@ -30,11 +32,11 @@ void MockDatabaseHelper::DeleteDatabase(const url::Origin& origin) {
 
 void MockDatabaseHelper::AddDatabaseSamples() {
   response_.emplace_back(
-      blink::StorageKey(url::Origin::Create(GURL("http://gdbhost1:1"))), 1,
+      blink::StorageKey::CreateFromStringForTesting("http://gdbhost1:1"), 1,
       base::Time());
   databases_["http_gdbhost1_1"] = true;
   response_.emplace_back(
-      blink::StorageKey(url::Origin::Create(GURL("http://gdbhost2:2"))), 2,
+      blink::StorageKey::CreateFromStringForTesting("http://gdbhost2:2"), 2,
       base::Time());
   databases_["http_gdbhost2_2"] = true;
 }

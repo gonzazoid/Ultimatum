@@ -7,6 +7,8 @@
 
 #include "ui/base/interaction/element_identifier.h"
 #include "ui/base/interaction/element_tracker.h"
+#include "ui/base/interaction/framework_specific_implementation.h"
+#include "ui/gfx/geometry/rect.h"
 
 namespace ui::test {
 
@@ -29,16 +31,19 @@ class TestElementBase : public TrackedElement {
   // Simuate a custom event on this element.
   void SendCustomEvent(CustomElementEventType event_type);
 
+  void SetScreenBounds(const gfx::Rect& screen_bounds);
+  gfx::Rect GetScreenBounds() const override;
+
  private:
   bool visible_ = false;
+  gfx::Rect screen_bounds_;
 };
 
 // Provides a platform-less test element in a fictional UI framework.
 class TestElement : public TestElementBase {
  public:
   TestElement(ElementIdentifier id, ElementContext context);
-  static FrameworkIdentifier GetFrameworkIdentifier();
-  FrameworkIdentifier GetInstanceFrameworkIdentifier() const override;
+  DECLARE_FRAMEWORK_SPECIFIC_METADATA()
 };
 
 // Provides a platform-less test element in a fictional UI framework distinct
@@ -46,8 +51,7 @@ class TestElement : public TestElementBase {
 class TestElementOtherFramework : public TestElementBase {
  public:
   TestElementOtherFramework(ElementIdentifier id, ElementContext context);
-  static FrameworkIdentifier GetFrameworkIdentifier();
-  FrameworkIdentifier GetInstanceFrameworkIdentifier() const override;
+  DECLARE_FRAMEWORK_SPECIFIC_METADATA()
 };
 
 // Convenience typedef for unique pointers to test elements.

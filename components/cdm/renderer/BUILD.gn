@@ -11,17 +11,23 @@ static_library("renderer") {
   ]
   deps = [
     "//base",
-    "//components/cdm/common",
     "//content/public/renderer",
     "//media",
     "//media:media_buildflags",
     "//third_party/widevine/cdm:buildflags",
   ]
 
+  if (enable_library_cdms || is_win || is_android) {
+    sources += [
+      "key_system_support_update.cc",
+      "key_system_support_update.h",
+    ]
+  }
+
   if (is_android) {
     sources += [
-      "android_key_systems.cc",
-      "android_key_systems.h",
+      "android_key_system_info.cc",
+      "android_key_system_info.h",
     ]
   }
 

@@ -11,7 +11,8 @@
 #include "ash/ash_export.h"
 #include "ash/public/cpp/session/session_observer.h"
 #include "base/auto_reset.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/ash/services/multidevice_setup/public/mojom/multidevice_setup.mojom.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -63,6 +64,13 @@ class ASH_EXPORT MultiDeviceNotificationPresenter
   // nothing if that notification is not currently displayed.
   void RemoveMultiDeviceSetupNotification();
 
+  void UpdateIsSetupNotificationInteracted(
+      bool is_setup_notificaton_interacted);
+
+  // MultiDevice setup notification ID. Public so it can be accessed from
+  // phone_hub_tray.cc
+  static const char kSetupNotificationId[];
+
  protected:
   // multidevice_setup::mojom::AccountStatusChangeDelegate:
   void OnPotentialHostExistsForNewUser() override;
@@ -83,14 +91,13 @@ class ASH_EXPORT MultiDeviceNotificationPresenter
 
   void OnNotificationClicked(
       const std::string& notification_id,
-      const absl::optional<int>& button_index,
-      const absl::optional<std::u16string>& reply) override;
+      const std::optional<int>& button_index,
+      const std::optional<std::u16string>& reply) override;
 
  private:
   friend class MultiDeviceNotificationPresenterTest;
 
   // MultiDevice setup notification ID.
-  static const char kSetupNotificationId[];
   static const char kWifiSyncNotificationId[];
 
   // Represents each possible MultiDevice setup notification that the setup flow
@@ -132,7 +139,12 @@ class ASH_EXPORT MultiDeviceNotificationPresenter
 
   void FlushForTesting();
 
-  message_center::MessageCenter* message_center_;
+  // Indicates if Phone Hub icon is clicked when the setup notification is
+  // visible. If the value is true, we do not log event to
+  // MultiDevice.Setup.NotificationInteracted histogram.
+  bool is_setup_notification_interacted_ = false;
+
+  raw_ptr<message_center::MessageCenter> message_center_;
 
   // Notification currently showing or
   // Status::kNoNotificationVisible if there isn't one.

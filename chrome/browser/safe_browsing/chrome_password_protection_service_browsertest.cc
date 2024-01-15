@@ -3,8 +3,8 @@
 // found in the LICENSE file.
 #include "chrome/browser/safe_browsing/chrome_password_protection_service.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -16,6 +16,9 @@
 #include "chrome/browser/ssl/security_state_tab_helper.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/chrome_pages.h"
+#include "chrome/browser/ui/hats/mock_trust_safety_sentiment_service.h"
+#include "chrome/browser/ui/hats/trust_safety_sentiment_service.h"
+#include "chrome/browser/ui/hats/trust_safety_sentiment_service_factory.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/url_constants.h"
@@ -23,13 +26,14 @@
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/password_manager/core/browser/fake_password_store_backend.h"
 #include "components/password_manager/core/browser/hash_password_manager.h"
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_manager_metrics_util.h"
 #include "components/password_manager/core/browser/password_manager_test_utils.h"
 #include "components/password_manager/core/browser/password_reuse_manager.h"
+#include "components/password_manager/core/browser/password_store/fake_password_store_backend.h"
 #include "components/password_manager/core/browser/ui/password_check_referrer.h"
+#include "components/password_manager/core/common/password_manager_features.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
@@ -77,8 +81,9 @@ PasswordForm CreatePasswordFormWithPhishedEntry(std::string signon_realm,
   form.in_store = PasswordForm::Store::kProfileStore;
   form.password_issues = {
       {password_manager::InsecureType::kPhished,
-       password_manager::InsecurityMetadata(base::Time::FromTimeT(1),
-                                            password_manager::IsMuted(false))}};
+       password_manager::InsecurityMetadata(
+           base::Time::FromTimeT(1), password_manager::IsMuted(false),
+           password_manager::TriggerBackendNotification(false))}};
 
   return form;
 }
@@ -329,7 +334,7 @@ class ChromePasswordProtectionServiceBrowserWithFakeBackendPasswordStoreTest
         BrowserContextDependencyManager::GetInstance()
             ->RegisterCreateServicesCallbackForTesting(
                 base::BindRepeating([](content::BrowserContext* context) {
-                  PasswordStoreFactory::GetInstance()->SetTestingFactory(
+                  ProfilePasswordStoreFactory::GetInstance()->SetTestingFactory(
                       context,
                       base::BindRepeating(
                           &password_manager::BuildPasswordStoreWithFakeBackend<
@@ -388,7 +393,7 @@ IN_PROC_BROWSER_TEST_F(
   // foreground tab.
   ASSERT_EQ(2, browser()->tab_strip_model()->count());
   ASSERT_EQ(
-      chrome::GetSettingsUrl(chrome::kPasswordCheckSubPage),
+      GURL(chrome::kChromeUIPasswordManagerCheckupURL),
       browser()->tab_strip_model()->GetActiveWebContents()->GetVisibleURL());
   histograms.ExpectUniqueSample(
       password_manager::kPasswordCheckReferrerHistogram,
@@ -397,8 +402,8 @@ IN_PROC_BROWSER_TEST_F(
   // Simulate removing the compromised credentials on mark site as legitimate
   // action.
   scoped_refptr<password_manager::PasswordStoreInterface> password_store =
-      PasswordStoreFactory::GetForProfile(browser()->profile(),
-                                          ServiceAccessType::EXPLICIT_ACCESS);
+      ProfilePasswordStoreFactory::GetForProfile(
+          browser()->profile(), ServiceAccessType::EXPLICIT_ACCESS);
 
   // In order to test removal, we need to make sure it was added first.
   const std::string kSignonRealm = "https://example.test";
@@ -684,7 +689,7 @@ IN_PROC_BROWSER_TEST_F(ChromePasswordProtectionServiceBrowserTest,
   std::string script =
       "var node = document.getElementById('reset-password-button'); \n"
       "node.click();";
-  ASSERT_TRUE(content::ExecuteScript(new_web_contents, script));
+  ASSERT_TRUE(content::ExecJs(new_web_contents, script));
   content::TestNavigationObserver observer1(new_web_contents,
                                             /*number_of_navigations=*/1);
   observer1.Wait();
@@ -900,13 +905,10 @@ class ChromePasswordProtectionServiceNavigationDeferralBrowserTest
     std::vector<password_manager::MatchingReusedCredential> credentials = {
         {kSignonRealm, kUsername}};
 
-    // TODO(bokan): This issues a real request, via a URLLoader, that actually
-    // gets a response. It'd be better if this test could control the response
-    // instead of manually calling Finish.
-    service->StartRequest(GetWebContents(), GURL(), GURL(), GURL(), "",
-                          PasswordType::SAVED_PASSWORD, credentials,
-                          LoginReputationClientRequest::PASSWORD_REUSE_EVENT,
-                          true);
+    service->StartRequestForTesting(
+        GetWebContents(), GURL(), GURL(), GURL(), "",
+        PasswordType::SAVED_PASSWORD, credentials,
+        LoginReputationClientRequest::PASSWORD_REUSE_EVENT, true);
     if (service->get_pending_requests_for_testing().size() != 1ul)
       return nullptr;
 
@@ -1027,7 +1029,7 @@ IN_PROC_BROWSER_TEST_F(
   // Simulate the user dismissing the dialog. The navigation should be resumed.
   DismissModalDialog(WarningAction::IGNORE_WARNING);
 
-  navigation.WaitForNavigationFinished();
+  ASSERT_TRUE(navigation.WaitForNavigationFinished());
   ASSERT_TRUE(navigation.was_successful());
 }
 
@@ -1062,7 +1064,7 @@ IN_PROC_BROWSER_TEST_F(
   FinishRequest(request.get(), LoginReputationClientResponse::SAFE);
   ASSERT_FALSE(request->is_modal_warning_showing());
 
-  navigation.WaitForNavigationFinished();
+  ASSERT_TRUE(navigation.WaitForNavigationFinished());
   ASSERT_TRUE(navigation.was_successful());
 }
 
@@ -1101,7 +1103,7 @@ IN_PROC_BROWSER_TEST_F(
   // Simulate the user dismissing the dialog. The navigation should be resumed.
   DismissModalDialog(WarningAction::IGNORE_WARNING);
 
-  navigation.WaitForNavigationFinished();
+  ASSERT_TRUE(navigation.WaitForNavigationFinished());
   ASSERT_TRUE(navigation.was_successful());
 }
 
@@ -1115,16 +1117,13 @@ class ChromePasswordProtectionServiceDeferActivationBrowserTest
             &ChromePasswordProtectionServiceDeferActivationBrowserTest::
                 GetWebContents,
             base::Unretained(this))) {
-    std::vector<base::test::FeatureRefAndParams> additional_features = {
-        {features::kBackForwardCache, {}}};
     scoped_feature_list_.InitWithFeaturesAndParameters(
-        content::DefaultEnabledBackForwardCacheParametersForTests(
-            additional_features),
-        content::DefaultDisabledBackForwardCacheParametersForTests());
+        content::GetDefaultEnabledBackForwardCacheFeaturesForTesting(),
+        content::GetDefaultDisabledBackForwardCacheFeaturesForTesting());
   }
 
   void SetUp() override {
-    prerender_helper_.SetUp(embedded_test_server());
+    prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
     ChromePasswordProtectionServiceNavigationDeferralBrowserTest::SetUp();
   }
 
@@ -1392,5 +1391,91 @@ IN_PROC_BROWSER_TEST_F(
   prerender_manager.WaitForNavigationFinished();
   ASSERT_TRUE(prerender_manager.was_activated());
 }
+
+#if !BUILDFLAG(IS_ANDROID)
+class ChromePasswordProtectionServiceTrustSafetySentimentServiceBrowserTest
+    : public ChromePasswordProtectionServiceBrowserTest {
+ public:
+  void SetUpMockServiceExpectations() {
+    mock_sentiment_service_ = static_cast<MockTrustSafetySentimentService*>(
+        TrustSafetySentimentServiceFactory::GetInstance()
+            ->SetTestingFactoryAndUse(
+                browser()->profile(),
+                base::BindRepeating(&BuildMockTrustSafetySentimentService)));
+  }
+
+  void ExpectPhishedPasswordUpdateNotClickedCall(
+      PasswordProtectionUIType ui_type,
+      PasswordProtectionUIAction action) {
+    EXPECT_CALL(*mock_sentiment_service_,
+                PhishedPasswordUpdateNotClicked(ui_type, action));
+  }
+
+  void ExpectProtectResetOrCheckPasswordClickedCall(
+      PasswordProtectionUIType ui_type) {
+    EXPECT_CALL(*mock_sentiment_service_,
+                ProtectResetOrCheckPasswordClicked(ui_type));
+  }
+
+ private:
+  raw_ptr<MockTrustSafetySentimentService, DanglingUntriaged>
+      mock_sentiment_service_;
+};
+
+IN_PROC_BROWSER_TEST_F(
+    ChromePasswordProtectionServiceTrustSafetySentimentServiceBrowserTest,
+    NonPasswordChangeTrigger) {
+  browser()->profile()->GetPrefs()->SetBoolean(
+      prefs::kSafeBrowsingSurveysEnabled, true);
+  // Expect Trust and Safety Sentiment Service to call
+  // PhishedPasswordUpdateNotClicked.
+  SetUpMockServiceExpectations();
+  ExpectPhishedPasswordUpdateNotClickedCall(
+      PasswordProtectionUIType::MODAL_DIALOG,
+      PasswordProtectionUIAction::CLOSE);
+
+  ChromePasswordProtectionService* service = GetService(/*is_incognito=*/false);
+  content::WebContents* web_contents =
+      browser()->tab_strip_model()->GetActiveWebContents();
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), embedded_test_server()->GetURL(kLoginPageUrl)));
+
+  ReusedPasswordAccountType account_type;
+  account_type.set_account_type(ReusedPasswordAccountType::GSUITE);
+  account_type.set_is_account_syncing(true);
+  service->OnUserAction(web_contents, account_type, RequestOutcome::UNKNOWN,
+                        LoginReputationClientResponse::VERDICT_TYPE_UNSPECIFIED,
+                        "unused_token", WarningUIType::MODAL_DIALOG,
+                        WarningAction::CLOSE);
+  base::RunLoop().RunUntilIdle();
+}
+
+IN_PROC_BROWSER_TEST_F(
+    ChromePasswordProtectionServiceTrustSafetySentimentServiceBrowserTest,
+    PasswordChangeTrigger) {
+  browser()->profile()->GetPrefs()->SetBoolean(
+      prefs::kSafeBrowsingSurveysEnabled, true);
+  // Expect Trust and Safety Sentiment Service to call
+  // ProtectResetOrCheckPasswordClicked.
+  SetUpMockServiceExpectations();
+  ExpectProtectResetOrCheckPasswordClickedCall(
+      PasswordProtectionUIType::MODAL_DIALOG);
+
+  ChromePasswordProtectionService* service = GetService(/*is_incognito=*/false);
+  content::WebContents* web_contents =
+      browser()->tab_strip_model()->GetActiveWebContents();
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), embedded_test_server()->GetURL(kLoginPageUrl)));
+
+  ReusedPasswordAccountType account_type;
+  account_type.set_account_type(ReusedPasswordAccountType::GSUITE);
+  account_type.set_is_account_syncing(true);
+  service->OnUserAction(web_contents, account_type, RequestOutcome::UNKNOWN,
+                        LoginReputationClientResponse::VERDICT_TYPE_UNSPECIFIED,
+                        "unused_token", WarningUIType::MODAL_DIALOG,
+                        WarningAction::CHANGE_PASSWORD);
+  base::RunLoop().RunUntilIdle();
+}
+#endif
 
 }  // namespace safe_browsing

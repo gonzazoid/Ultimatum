@@ -6,9 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "net/base/io_buffer.h"
 #include "remoting/codec/audio_encoder.h"
@@ -112,8 +113,9 @@ std::unique_ptr<AudioStream> IceConnectionToClient::StartAudioStream(
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
   // Audio channel is disabled.
-  if (!audio_writer_)
+  if (!audio_writer_) {
     return nullptr;
+  }
 
   std::unique_ptr<AudioEncoder> audio_encoder =
       CreateAudioEncoder(session_->config());
@@ -175,8 +177,9 @@ void IceConnectionToClient::OnSessionStateChange(Session::State state) {
       video_dispatcher_->Init(transport_.GetChannelFactory(), this);
 
       audio_writer_ = AudioWriter::Create(session_->config());
-      if (audio_writer_)
+      if (audio_writer_) {
         audio_writer_->Init(transport_.GetMultiplexedChannelFactory(), this);
+      }
 
       // Notify the handler after initializing the channels, so that
       // ClientSession can get a client clipboard stub.
@@ -191,7 +194,6 @@ void IceConnectionToClient::OnSessionStateChange(Session::State state) {
       break;
   }
 }
-
 
 void IceConnectionToClient::OnIceTransportRouteChange(
     const std::string& channel_name,
@@ -220,12 +222,15 @@ void IceConnectionToClient::OnChannelClosed(
 void IceConnectionToClient::NotifyIfChannelsReady() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
-  if (!control_dispatcher_ || !control_dispatcher_->is_connected())
+  if (!control_dispatcher_ || !control_dispatcher_->is_connected()) {
     return;
-  if (!event_dispatcher_ || !event_dispatcher_->is_connected())
+  }
+  if (!event_dispatcher_ || !event_dispatcher_->is_connected()) {
     return;
-  if (!video_dispatcher_ || !video_dispatcher_->is_connected())
+  }
+  if (!video_dispatcher_ || !video_dispatcher_->is_connected()) {
     return;
+  }
   if ((!audio_writer_ || !audio_writer_->is_connected()) &&
       session_->config().is_audio_enabled()) {
     return;

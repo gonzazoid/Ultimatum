@@ -7,22 +7,28 @@
 #include <string>
 
 #include "ash/constants/ash_switches.h"
+#include "base/i18n/time_formatting.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_command_line.h"
+#include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "base/time/time.h"
 #include "build/branding_buildflags.h"
-#include "chromeos/system/factory_ping_embargo_check.h"
-#include "chromeos/system/fake_statistics_provider.h"
+#include "chrome/browser/browser_process.h"
+#include "chrome/test/base/testing_browser_process.h"
+#include "chromeos/ash/components/system/factory_ping_embargo_check.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
+#include "components/policy/core/common/cloud/enterprise_metrics.h"
+#include "net/base/load_flags.h"
+#include "services/network/public/cpp/simple_url_loader.h"
+#include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
+#include "services/network/public/mojom/fetch_api.mojom-shared.h"
+#include "services/network/test/test_url_loader_factory.h"
+#include "services/network/test/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
-
-namespace ash::system {
-// TODO(https://crbug.com/1164001): remove when migrated to ash::
-using ::chromeos::system::kEmbargoEndDateGarbageDateThreshold;
-using ::chromeos::system::kFirmwareTypeKey;
-using ::chromeos::system::kFirmwareTypeValueNonchrome;
-using ::chromeos::system::kFirmwareTypeValueNormal;
-using ::chromeos::system::kRlzBrandCodeKey;
-}  // namespace ash::system
+#include "third_party/icu/source/i18n/unicode/timezone.h"
 
 namespace {
 
@@ -32,21 +38,8 @@ constexpr char kActivateDateValue[] = "activated";
 constexpr char kMalformedEmbargoDateValue[] = "adventure_time";
 
 std::string ToUTCString(const base::Time& time) {
-  base::Time::Exploded exploded;
-  time.UTCExplode(&exploded);
-
-  const std::string time_string = base::StringPrintf(
-      "%04d-%02d-%02d", exploded.year, exploded.month, exploded.day_of_month);
-
-  base::Time reparsed_time;
-  EXPECT_TRUE(base::Time::FromUTCString(time_string.c_str(), &reparsed_time));
-  base::Time::Exploded reparsed_exploded;
-  reparsed_time.UTCExplode(&reparsed_exploded);
-  EXPECT_EQ(exploded.year, reparsed_exploded.year);
-  EXPECT_EQ(exploded.month, reparsed_exploded.month);
-  EXPECT_EQ(exploded.day_of_month, reparsed_exploded.day_of_month);
-
-  return time_string;
+  return base::UnlocalizedTimeFormatWithPattern(time, "yyyy-MM-dd",
+                                                icu::TimeZone::getGMT());
 }
 
 }  // namespace
@@ -59,6 +52,21 @@ class AutoEnrollmentTypeCheckerTest : public testing::Test {
   ~AutoEnrollmentTypeCheckerTest() override = default;
 
  protected:
+  void SetUpFlexDevice() {
+    fake_statistics_provider_.SetMachineStatistic(
+        ash::system::kFirmwareTypeKey,
+        ash::system::kFirmwareTypeValueNonchrome);
+    command_line_.GetProcessCommandLine()->AppendSwitch(
+        ash::switches::kRevenBranding);
+  }
+
+  void SetUpFlexDeviceWithCommandLineSwitchToAlways() {
+    SetUpFlexDevice();
+    command_line_.GetProcessCommandLine()->AppendSwitchASCII(
+        ash::switches::kEnterpriseEnableForcedReEnrollmentOnFlex,
+        AutoEnrollmentTypeChecker::kForcedReEnrollmentAlways);
+  }
+
   void SetupFREEnabled() {
     command_line_.GetProcessCommandLine()->AppendSwitchASCII(
         ash::switches::kEnterpriseEnableForcedReEnrollment,
@@ -132,6 +140,12 @@ class AutoEnrollmentTypeCheckerTest : public testing::Test {
         kMalformedEmbargoDateValue);
   }
 
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  static constexpr bool is_google_branded_ = true;
+#else
+  static constexpr bool is_google_branded_ = false;
+#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
+
   base::test::ScopedCommandLine command_line_;
   ash::system::ScopedFakeStatisticsProvider fake_statistics_provider_;
 };
@@ -144,40 +158,47 @@ TEST_F(AutoEnrollmentTypeCheckerTest, FREEnabledWhenSwitchIsAlways) {
   EXPECT_TRUE(AutoEnrollmentTypeChecker::IsFREEnabled());
 }
 
-// Without this macro Chrome is never branded so test always fail. Disable them
-// because there there's nothing to test in this case.
-#if !BUILDFLAG(GOOGLE_CHROME_BRANDING)
-#define MAYBE_FREEnabledWhenSwitchIsOfficialBuild \
-  DISABLED_FREEnabledWhenSwitchIsOfficialBuild
-#define MAYBE_FREEnabledWhenSwitchIsEmpty DISABLED_FREEnabledWhenSwitchIsEmpty
-#else
-#define MAYBE_FREEnabledWhenSwitchIsOfficialBuild \
-  FREEnabledWhenSwitchIsOfficialBuild
-#define MAYBE_FREEnabledWhenSwitchIsEmpty FREEnabledWhenSwitchIsEmpty
-#endif  // !BUILDFLAG(GOOGLE_CHROME_BRANDING)
+TEST_F(AutoEnrollmentTypeCheckerTest,
+       FREEnabledWhenSwitchIsAlwaysOnFlexAndFlexSpecificSwitchIsAlways) {
+  SetUpFlexDeviceWithCommandLineSwitchToAlways();
+  command_line_.GetProcessCommandLine()->AppendSwitchASCII(
+      ash::switches::kEnterpriseEnableForcedReEnrollment,
+      AutoEnrollmentTypeChecker::kForcedReEnrollmentAlways);
+
+  EXPECT_TRUE(AutoEnrollmentTypeChecker::IsFREEnabled());
+}
 
 TEST_F(AutoEnrollmentTypeCheckerTest,
-       MAYBE_FREEnabledWhenSwitchIsOfficialBuild) {
+       FREDisabledWhenSwitchIsAlwaysOnAndFlexSpecificSwitchIsNotAlways) {
+  SetUpFlexDevice();
+  command_line_.GetProcessCommandLine()->AppendSwitchASCII(
+      ash::switches::kEnterpriseEnableForcedReEnrollment,
+      AutoEnrollmentTypeChecker::kForcedReEnrollmentAlways);
+
+  EXPECT_FALSE(AutoEnrollmentTypeChecker::IsFREEnabled());
+}
+
+TEST_F(AutoEnrollmentTypeCheckerTest, FREEnabledWhenSwitchIsOfficialBuild) {
   fake_statistics_provider_.SetMachineStatistic(
       ash::system::kFirmwareTypeKey, ash::system::kFirmwareTypeValueNormal);
   command_line_.GetProcessCommandLine()->AppendSwitchASCII(
       ash::switches::kEnterpriseEnableForcedReEnrollment,
       AutoEnrollmentTypeChecker::kForcedReEnrollmentOfficialBuild);
 
-  EXPECT_TRUE(AutoEnrollmentTypeChecker::IsFREEnabled());
+  EXPECT_EQ(AutoEnrollmentTypeChecker::IsFREEnabled(), is_google_branded_);
 }
 
-TEST_F(AutoEnrollmentTypeCheckerTest, MAYBE_FREEnabledWhenSwitchIsEmpty) {
+TEST_F(AutoEnrollmentTypeCheckerTest, FREEnabledWhenSwitchIsEmpty) {
   fake_statistics_provider_.SetMachineStatistic(
       ash::system::kFirmwareTypeKey, ash::system::kFirmwareTypeValueNormal);
   command_line_.GetProcessCommandLine()->AppendSwitch(
       ash::switches::kEnterpriseEnableForcedReEnrollment);
 
-  EXPECT_TRUE(AutoEnrollmentTypeChecker::IsFREEnabled());
+  EXPECT_EQ(AutoEnrollmentTypeChecker::IsFREEnabled(), is_google_branded_);
 }
 
 TEST_F(AutoEnrollmentTypeCheckerTest,
-       FREDisabledWhenSwitchIsOfficialBuildButItsNot) {
+       FREDisabledWhenSwitchIsOfficialBuildOnNonChrome) {
   fake_statistics_provider_.SetMachineStatistic(
       ash::system::kFirmwareTypeKey, ash::system::kFirmwareTypeValueNonchrome);
   command_line_.GetProcessCommandLine()->AppendSwitchASCII(
@@ -185,6 +206,26 @@ TEST_F(AutoEnrollmentTypeCheckerTest,
       AutoEnrollmentTypeChecker::kForcedReEnrollmentOfficialBuild);
 
   EXPECT_FALSE(AutoEnrollmentTypeChecker::IsFREEnabled());
+}
+
+TEST_F(AutoEnrollmentTypeCheckerTest,
+       FREDisabledWhenSwitchIsOfficialBuildOnFlexAndFlexSwitchIsNotAlways) {
+  SetUpFlexDevice();
+  command_line_.GetProcessCommandLine()->AppendSwitchASCII(
+      ash::switches::kEnterpriseEnableForcedReEnrollment,
+      AutoEnrollmentTypeChecker::kForcedReEnrollmentOfficialBuild);
+
+  EXPECT_FALSE(AutoEnrollmentTypeChecker::IsFREEnabled());
+}
+
+TEST_F(AutoEnrollmentTypeCheckerTest,
+       FREEnabledWhenSwitchIsOfficialBuildOnFlexAndSwitchFlexIsAlways) {
+  SetUpFlexDeviceWithCommandLineSwitchToAlways();
+  command_line_.GetProcessCommandLine()->AppendSwitchASCII(
+      ash::switches::kEnterpriseEnableForcedReEnrollment,
+      AutoEnrollmentTypeChecker::kForcedReEnrollmentOfficialBuild);
+
+  EXPECT_EQ(AutoEnrollmentTypeChecker::IsFREEnabled(), is_google_branded_);
 }
 
 TEST_F(AutoEnrollmentTypeCheckerTest, FREDisabledWhenSwitchIsNever) {
@@ -204,39 +245,27 @@ TEST_F(AutoEnrollmentTypeCheckerTest,
   EXPECT_TRUE(AutoEnrollmentTypeChecker::IsInitialEnrollmentEnabled());
 }
 
-// Without this macro Chrome is never branded so test always fail. Disable them
-// because there there's nothing to test in this case.
-#if !BUILDFLAG(GOOGLE_CHROME_BRANDING)
-#define MAYBE_InitialEnrollmentEnabledWhenSwitchIsOfficialBuild \
-  DISABLED_InitialEnrollmentEnabledWhenSwitchIsOfficialBuild
-#define MAYBE_InitialEnrollmentEnabledWhenSwitchIsEmpty \
-  DISABLED_InitialEnrollmentEnabledWhenSwitchIsEmpty
-#else
-#define MAYBE_InitialEnrollmentEnabledWhenSwitchIsOfficialBuild \
-  InitialEnrollmentEnabledWhenSwitchIsOfficialBuild
-#define MAYBE_InitialEnrollmentEnabledWhenSwitchIsEmpty \
-  InitialEnrollmentEnabledWhenSwitchIsEmpty
-#endif  // !BUILDFLAG(GOOGLE_CHROME_BRANDING)
-
 TEST_F(AutoEnrollmentTypeCheckerTest,
-       MAYBE_InitialEnrollmentEnabledWhenSwitchIsOfficialBuild) {
+       InitialEnrollmentEnabledWhenSwitchIsOfficialBuild) {
   fake_statistics_provider_.SetMachineStatistic(
       ash::system::kFirmwareTypeKey, ash::system::kFirmwareTypeValueNormal);
   command_line_.GetProcessCommandLine()->AppendSwitchASCII(
       ash::switches::kEnterpriseEnableForcedReEnrollment,
       AutoEnrollmentTypeChecker::kInitialEnrollmentOfficialBuild);
 
-  EXPECT_TRUE(AutoEnrollmentTypeChecker::IsInitialEnrollmentEnabled());
+  EXPECT_EQ(AutoEnrollmentTypeChecker::IsInitialEnrollmentEnabled(),
+            is_google_branded_);
 }
 
 TEST_F(AutoEnrollmentTypeCheckerTest,
-       MAYBE_InitialEnrollmentEnabledWhenSwitchIsEmpty) {
+       InitialEnrollmentEnabledWhenSwitchIsEmpty) {
   fake_statistics_provider_.SetMachineStatistic(
       ash::system::kFirmwareTypeKey, ash::system::kFirmwareTypeValueNormal);
   command_line_.GetProcessCommandLine()->AppendSwitch(
       ash::switches::kEnterpriseEnableInitialEnrollment);
 
-  EXPECT_TRUE(AutoEnrollmentTypeChecker::IsInitialEnrollmentEnabled());
+  EXPECT_EQ(AutoEnrollmentTypeChecker::IsInitialEnrollmentEnabled(),
+            is_google_branded_);
 }
 
 TEST_F(AutoEnrollmentTypeCheckerTest,
@@ -310,27 +339,26 @@ TEST_F(AutoEnrollmentTypeCheckerTest,
                   &fake_statistics_provider_),
               AutoEnrollmentTypeChecker::FRERequirement::kNotRequired);
   }
-}
-
-TEST_F(AutoEnrollmentTypeCheckerTest,
-       FRERequiredAccordingToVPDWhenVPDIsBroken) {
-  {
-    fake_statistics_provider_.SetVpdStatus(
-        ash::system::StatisticsProvider::VpdStatus::kRwInvalid);
-
-    EXPECT_EQ(AutoEnrollmentTypeChecker::GetFRERequirementAccordingToVPD(
-                  &fake_statistics_provider_),
-              AutoEnrollmentTypeChecker::FRERequirement::kExplicitlyRequired);
-  }
 
   {
     fake_statistics_provider_.SetVpdStatus(
         ash::system::StatisticsProvider::VpdStatus::kInvalid);
+    // Not setting |kActivateDateKey| statistic to indicate a lack of ownership.
 
     EXPECT_EQ(AutoEnrollmentTypeChecker::GetFRERequirementAccordingToVPD(
                   &fake_statistics_provider_),
-              AutoEnrollmentTypeChecker::FRERequirement::kExplicitlyRequired);
+              AutoEnrollmentTypeChecker::FRERequirement::kRequired);
   }
+}
+
+TEST_F(AutoEnrollmentTypeCheckerTest,
+       FRERequiredAccordingToVPDWhenVPDIsBroken) {
+  fake_statistics_provider_.SetVpdStatus(
+      ash::system::StatisticsProvider::VpdStatus::kRwInvalid);
+
+  EXPECT_EQ(AutoEnrollmentTypeChecker::GetFRERequirementAccordingToVPD(
+                &fake_statistics_provider_),
+            AutoEnrollmentTypeChecker::FRERequirement::kExplicitlyRequired);
 }
 
 TEST_F(AutoEnrollmentTypeCheckerTest,
@@ -354,9 +382,354 @@ TEST_F(AutoEnrollmentTypeCheckerTest,
                   &fake_statistics_provider_),
               AutoEnrollmentTypeChecker::FRERequirement::kRequired);
   }
+
+  {
+    fake_statistics_provider_.SetVpdStatus(
+        ash::system::StatisticsProvider::VpdStatus::kInvalid);
+
+    EXPECT_EQ(AutoEnrollmentTypeChecker::GetFRERequirementAccordingToVPD(
+                  &fake_statistics_provider_),
+              AutoEnrollmentTypeChecker::FRERequirement::kRequired);
+  }
 }
 
 TEST_F(AutoEnrollmentTypeCheckerTest,
+       FRERequiredOnFlexEnabledByCommandLineSwitch) {
+  SetUpFlexDeviceWithCommandLineSwitchToAlways();
+
+  EXPECT_EQ(AutoEnrollmentTypeChecker::GetFRERequirementAccordingToVPD(
+                &fake_statistics_provider_),
+            AutoEnrollmentTypeChecker::FRERequirement::kExplicitlyRequired);
+}
+
+TEST_F(AutoEnrollmentTypeCheckerTest,
+       FRERequiredOnFlexOverridenByFREEnabledCommandLineSwitchSetToNever) {
+  SetUpFlexDeviceWithCommandLineSwitchToAlways();
+  command_line_.GetProcessCommandLine()->AppendSwitchASCII(
+      ash::switches::kEnterpriseEnableForcedReEnrollment,
+      AutoEnrollmentTypeChecker::kForcedReEnrollmentNever);
+
+  EXPECT_FALSE(AutoEnrollmentTypeChecker::IsFREEnabled());
+}
+
+TEST_F(AutoEnrollmentTypeCheckerTest,
+       FRERequiredOnFlexNotEnabledByCommandLineSwitch) {
+  SetUpFlexDevice();
+
+  EXPECT_FALSE(AutoEnrollmentTypeChecker::IsFREEnabled());
+  EXPECT_EQ(AutoEnrollmentTypeChecker::GetFRERequirementAccordingToVPD(
+                &fake_statistics_provider_),
+            AutoEnrollmentTypeChecker::FRERequirement::kDisabled);
+}
+
+TEST_F(AutoEnrollmentTypeCheckerTest,
+       FRERequiredOnFlexNotEnabledByCommandLineSwitchEvenWithFREAlwaysEnabled) {
+  SetUpFlexDevice();
+  command_line_.GetProcessCommandLine()->AppendSwitchASCII(
+      ash::switches::kEnterpriseEnableForcedReEnrollment,
+      AutoEnrollmentTypeChecker::kForcedReEnrollmentAlways);
+
+  EXPECT_FALSE(AutoEnrollmentTypeChecker::IsFREEnabled());
+  EXPECT_EQ(AutoEnrollmentTypeChecker::GetFRERequirementAccordingToVPD(
+                &fake_statistics_provider_),
+            AutoEnrollmentTypeChecker::FRERequirement::kDisabled);
+}
+
+class AutoEnrollmentTypeCheckerInitializationTest
+    : public AutoEnrollmentTypeCheckerTest {
+ public:
+  void SetUp() override {
+    AutoEnrollmentTypeCheckerTest::SetUp();
+    AutoEnrollmentTypeChecker::
+        ClearUnifiedStateDeterminationKillSwitchForTesting();
+    test_shared_loader_factory_ = test_url_loader_factory_.GetSafeWeakWrapper();
+  }
+
+ protected:
+  network::TestURLLoaderFactory test_url_loader_factory_;
+  scoped_refptr<network::WeakWrapperSharedURLLoaderFactory>
+      test_shared_loader_factory_;
+
+ private:
+  base::test::SingleThreadTaskEnvironment task_environment_;
+};
+
+TEST_F(AutoEnrollmentTypeCheckerInitializationTest, Request) {
+  base::test::TestFuture<void> future;
+
+  AutoEnrollmentTypeChecker::Initialize(test_shared_loader_factory_,
+                                        future.GetCallback());
+
+  ASSERT_EQ(test_url_loader_factory_.NumPending(), 1);
+  auto request = test_url_loader_factory_.GetPendingRequest(0)->request;
+  EXPECT_EQ(request.url,
+            "https://www.gstatic.com/chromeos-usd-experiment/v1.json");
+  EXPECT_EQ(request.method, "GET");
+  EXPECT_TRUE(request.load_flags & net::LOAD_DISABLE_CACHE);
+  EXPECT_EQ(request.credentials_mode, network::mojom::CredentialsMode::kOmit);
+}
+
+TEST_F(AutoEnrollmentTypeCheckerInitializationTest, RetriesAllErrors) {
+  base::test::TestFuture<void> future;
+  network::URLLoaderCompletionStatus status;
+
+  AutoEnrollmentTypeChecker::Initialize(test_shared_loader_factory_,
+                                        future.GetCallback());
+
+  // Network changed.
+  ASSERT_EQ(test_url_loader_factory_.NumPending(), 1);
+  status.error_code = net::ERR_NETWORK_CHANGED;
+  test_url_loader_factory_.SimulateResponseForPendingRequest(
+      GURL("https://www.gstatic.com/chromeos-usd-experiment/v1.json"), status,
+      network::mojom::URLResponseHead::New(), "");
+
+  // DNS failed.
+  ASSERT_EQ(test_url_loader_factory_.NumPending(), 1);
+  status.error_code = net::ERR_TIMED_OUT;
+  test_url_loader_factory_.SimulateResponseForPendingRequest(
+      GURL("https://www.gstatic.com/chromeos-usd-experiment/v1.json"), status,
+      network::mojom::URLResponseHead::New(), "");
+
+  // HTTP 5xx error.
+  ASSERT_EQ(test_url_loader_factory_.NumPending(), 1);
+  test_url_loader_factory_.SimulateResponseForPendingRequest(
+      "https://www.gstatic.com/chromeos-usd-experiment/v1.json", "",
+      net::HTTP_SERVICE_UNAVAILABLE);
+
+  EXPECT_EQ(test_url_loader_factory_.NumPending(), 1);
+  EXPECT_FALSE(future.IsReady());
+  EXPECT_FALSE(AutoEnrollmentTypeChecker::Initialized());
+}
+
+TEST_F(AutoEnrollmentTypeCheckerInitializationTest, UmaHistograms) {
+  base::HistogramTester histograms;
+  base::test::TestFuture<void> future;
+  network::URLLoaderCompletionStatus status;
+
+  AutoEnrollmentTypeChecker::Initialize(test_shared_loader_factory_,
+                                        future.GetCallback());
+
+  status.error_code = net::ERR_NETWORK_CHANGED;
+  test_url_loader_factory_.SimulateResponseForPendingRequest(
+      GURL("https://www.gstatic.com/chromeos-usd-experiment/v1.json"), status,
+      network::mojom::URLResponseHead::New(), "");
+  test_url_loader_factory_.AddResponse(
+      "https://www.gstatic.com/chromeos-usd-experiment/v1.json",
+      R"({"disable_up_to_version": 1})", net::HTTP_OK);
+
+  ASSERT_TRUE(future.Wait());
+  histograms.ExpectTotalCount(
+      kUMAStateDeterminationKillSwitchFetchNetworkErrorCode, 2);
+  histograms.ExpectBucketCount(
+      kUMAStateDeterminationKillSwitchFetchNetworkErrorCode,
+      -net::ERR_NETWORK_CHANGED, 1);
+  histograms.ExpectBucketCount(
+      kUMAStateDeterminationKillSwitchFetchNetworkErrorCode, -net::OK, 1);
+  histograms.ExpectUniqueSample(kUMAStateDeterminationKillSwitchFetchNumTries,
+                                2, 1);
+}
+
+TEST_F(AutoEnrollmentTypeCheckerInitializationTest, KilledBeforeInitStarted) {
+  EXPECT_FALSE(AutoEnrollmentTypeChecker::Initialized());
+  EXPECT_TRUE(AutoEnrollmentTypeChecker::
+                  IsUnifiedStateDeterminationDisabledByKillSwitchForTesting());
+}
+
+TEST_F(AutoEnrollmentTypeCheckerInitializationTest, KilledBeforeInitCompleted) {
+  base::test::TestFuture<void> future;
+
+  AutoEnrollmentTypeChecker::Initialize(test_shared_loader_factory_,
+                                        future.GetCallback());
+
+  EXPECT_FALSE(future.IsReady());
+  EXPECT_FALSE(AutoEnrollmentTypeChecker::Initialized());
+  EXPECT_TRUE(AutoEnrollmentTypeChecker::
+                  IsUnifiedStateDeterminationDisabledByKillSwitchForTesting());
+}
+
+TEST_F(AutoEnrollmentTypeCheckerInitializationTest, KilledOnTimeout) {
+  base::test::TestFuture<void> future;
+
+  AutoEnrollmentTypeChecker::Initialize(test_shared_loader_factory_,
+                                        future.GetCallback());
+  network::SimpleURLLoader::SetTimeoutTickClockForTest(nullptr);
+
+  ASSERT_TRUE(future.Wait());
+  EXPECT_TRUE(AutoEnrollmentTypeChecker::Initialized());
+  EXPECT_TRUE(AutoEnrollmentTypeChecker::
+                  IsUnifiedStateDeterminationDisabledByKillSwitchForTesting());
+}
+
+TEST_F(AutoEnrollmentTypeCheckerInitializationTest, KilledOnInvalidJSON) {
+  base::test::TestFuture<void> future;
+  test_url_loader_factory_.AddResponse(
+      "https://www.gstatic.com/chromeos-usd-experiment/v1.json", "!!!",
+      net::HTTP_OK);
+
+  AutoEnrollmentTypeChecker::Initialize(test_shared_loader_factory_,
+                                        future.GetCallback());
+
+  ASSERT_TRUE(future.Wait());
+  EXPECT_TRUE(AutoEnrollmentTypeChecker::
+                  IsUnifiedStateDeterminationDisabledByKillSwitchForTesting());
+}
+
+TEST_F(AutoEnrollmentTypeCheckerInitializationTest, KilledOnNonDict) {
+  base::test::TestFuture<void> future;
+  test_url_loader_factory_.AddResponse(
+      "https://www.gstatic.com/chromeos-usd-experiment/v1.json", "42",
+      net::HTTP_OK);
+
+  AutoEnrollmentTypeChecker::Initialize(test_shared_loader_factory_,
+                                        future.GetCallback());
+
+  ASSERT_TRUE(future.Wait());
+  EXPECT_TRUE(AutoEnrollmentTypeChecker::
+                  IsUnifiedStateDeterminationDisabledByKillSwitchForTesting());
+}
+
+TEST_F(AutoEnrollmentTypeCheckerInitializationTest, KilledOnMissingKey) {
+  base::test::TestFuture<void> future;
+  test_url_loader_factory_.AddResponse(
+      "https://www.gstatic.com/chromeos-usd-experiment/v1.json", "{}",
+      net::HTTP_OK);
+
+  AutoEnrollmentTypeChecker::Initialize(test_shared_loader_factory_,
+                                        future.GetCallback());
+
+  ASSERT_TRUE(future.Wait());
+  EXPECT_TRUE(AutoEnrollmentTypeChecker::
+                  IsUnifiedStateDeterminationDisabledByKillSwitchForTesting());
+}
+
+TEST_F(AutoEnrollmentTypeCheckerInitializationTest, KilledVersion) {
+  base::test::TestFuture<void> future;
+  test_url_loader_factory_.AddResponse(
+      "https://www.gstatic.com/chromeos-usd-experiment/v1.json",
+      R"({"disable_up_to_version": 1})", net::HTTP_OK);
+
+  AutoEnrollmentTypeChecker::Initialize(test_shared_loader_factory_,
+                                        future.GetCallback());
+
+  ASSERT_TRUE(future.Wait());
+  EXPECT_TRUE(AutoEnrollmentTypeChecker::
+                  IsUnifiedStateDeterminationDisabledByKillSwitchForTesting());
+}
+
+TEST_F(AutoEnrollmentTypeCheckerInitializationTest, ActiveVersion) {
+  base::test::TestFuture<void> future;
+  test_url_loader_factory_.AddResponse(
+      "https://www.gstatic.com/chromeos-usd-experiment/v1.json",
+      // TODO(b/265923216): Change to 0 when kCodeVersion is 1.
+      R"({"disable_up_to_version": -1})", net::HTTP_OK);
+
+  AutoEnrollmentTypeChecker::Initialize(test_shared_loader_factory_,
+                                        future.GetCallback());
+
+  ASSERT_TRUE(future.Wait());
+  EXPECT_FALSE(AutoEnrollmentTypeChecker::
+                   IsUnifiedStateDeterminationDisabledByKillSwitchForTesting());
+}
+
+// This is parametrized with unified_enrollment_kill_switch.
+class AutoEnrollmentTypeCheckerUnifiedStateDeterminationTestP
+    : public AutoEnrollmentTypeCheckerTest,
+      public testing::WithParamInterface<bool> {
+ protected:
+  void SetUp() override {
+    AutoEnrollmentTypeCheckerTest::SetUp();
+    AutoEnrollmentTypeChecker::SetUnifiedStateDeterminationKillSwitchForTesting(
+        kill_switch_enabled_);
+  }
+
+  const bool kill_switch_enabled_ = GetParam();
+};
+
+TEST_P(AutoEnrollmentTypeCheckerUnifiedStateDeterminationTestP, Default) {
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  EXPECT_EQ(AutoEnrollmentTypeChecker::IsUnifiedStateDeterminationEnabled(),
+            !kill_switch_enabled_);
+#else
+  EXPECT_FALSE(AutoEnrollmentTypeChecker::IsUnifiedStateDeterminationEnabled());
+#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
+}
+
+TEST_P(AutoEnrollmentTypeCheckerUnifiedStateDeterminationTestP, OfficialBuild) {
+  command_line_.GetProcessCommandLine()->AppendSwitchASCII(
+      ash::switches::kEnterpriseEnableUnifiedStateDetermination,
+      AutoEnrollmentTypeChecker::kUnifiedStateDeterminationOfficialBuild);
+
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  EXPECT_EQ(AutoEnrollmentTypeChecker::IsUnifiedStateDeterminationEnabled(),
+            !kill_switch_enabled_);
+#else
+  EXPECT_FALSE(AutoEnrollmentTypeChecker::IsUnifiedStateDeterminationEnabled());
+#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
+}
+
+TEST_P(AutoEnrollmentTypeCheckerUnifiedStateDeterminationTestP, Never) {
+  command_line_.GetProcessCommandLine()->AppendSwitchASCII(
+      ash::switches::kEnterpriseEnableUnifiedStateDetermination,
+      AutoEnrollmentTypeChecker::kUnifiedStateDeterminationNever);
+
+  EXPECT_FALSE(AutoEnrollmentTypeChecker::IsUnifiedStateDeterminationEnabled());
+
+  // Check that FRE switches are respected.
+  command_line_.GetProcessCommandLine()->AppendSwitchASCII(
+      ash::switches::kEnterpriseEnableForcedReEnrollment,
+      AutoEnrollmentTypeChecker::kForcedReEnrollmentNever);
+  EXPECT_FALSE(AutoEnrollmentTypeChecker::IsFREEnabled());
+
+  // Check that FRE requirement is read from VPD.
+  ash::system::FakeStatisticsProvider statistics_provider;
+  statistics_provider.SetMachineStatistic(ash::system::kCheckEnrollmentKey,
+                                          "0");
+  EXPECT_EQ(AutoEnrollmentTypeChecker::GetFRERequirementAccordingToVPD(
+                &statistics_provider),
+            AutoEnrollmentTypeChecker::FRERequirement::kExplicitlyNotRequired);
+  statistics_provider.SetMachineStatistic(ash::system::kCheckEnrollmentKey,
+                                          "1");
+  EXPECT_EQ(AutoEnrollmentTypeChecker::GetFRERequirementAccordingToVPD(
+                &statistics_provider),
+            AutoEnrollmentTypeChecker::FRERequirement::kExplicitlyRequired);
+}
+
+TEST_P(AutoEnrollmentTypeCheckerUnifiedStateDeterminationTestP, Always) {
+  command_line_.GetProcessCommandLine()->AppendSwitchASCII(
+      ash::switches::kEnterpriseEnableUnifiedStateDetermination,
+      AutoEnrollmentTypeChecker::kUnifiedStateDeterminationAlways);
+
+  EXPECT_TRUE(AutoEnrollmentTypeChecker::IsUnifiedStateDeterminationEnabled());
+
+  // Ensure that legacy functions behave as if FRE was explicitly enabled.
+  EXPECT_TRUE(AutoEnrollmentTypeChecker::IsFREEnabled());
+  EXPECT_EQ(AutoEnrollmentTypeChecker::GetFRERequirementAccordingToVPD(
+                /*statistics_provider=*/nullptr),
+            AutoEnrollmentTypeChecker::FRERequirement::kExplicitlyRequired);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AutoEnrollmentTypeCheckerUnifiedStateDeterminationTestSuite,
+    AutoEnrollmentTypeCheckerUnifiedStateDeterminationTestP,
+    testing::Bool());
+
+// This is parametrized with dev_disable_boot.
+class AutoEnrollmentTypeCheckerTestP
+    : public AutoEnrollmentTypeCheckerTest,
+      public testing::WithParamInterface<bool> {
+ public:
+  // Helper function for all situations in which `dev_disable_boot == true` will
+  // be interpreted as `kForcedReEnrollmentExplicitlyRequired`.
+  AutoEnrollmentTypeChecker::CheckType fre_or(
+      AutoEnrollmentTypeChecker::CheckType other) {
+    return dev_disable_boot_ ? AutoEnrollmentTypeChecker::CheckType::
+                                   kForcedReEnrollmentExplicitlyRequired
+                             : other;
+  }
+  const bool dev_disable_boot_ = GetParam();
+};
+
+TEST_P(AutoEnrollmentTypeCheckerTestP,
        AutoEnrollmentCheckNotRequiredWhenDisabled) {
   command_line_.GetProcessCommandLine()->AppendSwitchASCII(
       ash::switches::kEnterpriseEnableForcedReEnrollment,
@@ -365,17 +738,17 @@ TEST_F(AutoEnrollmentTypeCheckerTest,
       ash::switches::kEnterpriseEnableInitialEnrollment,
       AutoEnrollmentTypeChecker::kInitialEnrollmentNever);
 
-  EXPECT_EQ(
-      AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-          /*is_system_clock_synchronized=*/true, &fake_statistics_provider_),
-      AutoEnrollmentTypeChecker::CheckType::kNone);
-  EXPECT_EQ(
-      AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-          /*is_system_clock_synchronized=*/false, &fake_statistics_provider_),
-      AutoEnrollmentTypeChecker::CheckType::kNone);
+  EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                /*is_system_clock_synchronized=*/true,
+                &fake_statistics_provider_, dev_disable_boot_),
+            AutoEnrollmentTypeChecker::CheckType::kNone);
+  EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                /*is_system_clock_synchronized=*/false,
+                &fake_statistics_provider_, dev_disable_boot_),
+            AutoEnrollmentTypeChecker::CheckType::kNone);
 }
 
-TEST_F(AutoEnrollmentTypeCheckerTest,
+TEST_P(AutoEnrollmentTypeCheckerTestP,
        AutoEnrollmentCheckNotRequiredWhenGaiaServicesDisabled) {
   SetupFREEnabledAndRequired();
   SetupInitialEnrollmentEnabledAndRequired();
@@ -383,17 +756,17 @@ TEST_F(AutoEnrollmentTypeCheckerTest,
   command_line_.GetProcessCommandLine()->AppendSwitch(
       ash::switches::kDisableGaiaServices);
 
-  EXPECT_EQ(
-      AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-          /*is_system_clock_synchronized=*/true, &fake_statistics_provider_),
-      AutoEnrollmentTypeChecker::CheckType::kNone);
-  EXPECT_EQ(
-      AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-          /*is_system_clock_synchronized=*/false, &fake_statistics_provider_),
-      AutoEnrollmentTypeChecker::CheckType::kNone);
+  EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                /*is_system_clock_synchronized=*/true,
+                &fake_statistics_provider_, dev_disable_boot_),
+            AutoEnrollmentTypeChecker::CheckType::kNone);
+  EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                /*is_system_clock_synchronized=*/false,
+                &fake_statistics_provider_, dev_disable_boot_),
+            AutoEnrollmentTypeChecker::CheckType::kNone);
 }
 
-TEST_F(AutoEnrollmentTypeCheckerTest,
+TEST_P(AutoEnrollmentTypeCheckerTestP,
        AutoEnrollmentCheckNotRequiredWhenFREExplicitlyNotRequired) {
   SetupFREEnabled();
   // Set initial enrollment required. It checks that FRE has priority over
@@ -408,15 +781,17 @@ TEST_F(AutoEnrollmentTypeCheckerTest,
             AutoEnrollmentTypeChecker::FRERequirement::kExplicitlyNotRequired);
   EXPECT_EQ(
       AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-          /*is_system_clock_synchronized=*/true, &fake_statistics_provider_),
-      AutoEnrollmentTypeChecker::CheckType::kInitialStateDetermination);
+          /*is_system_clock_synchronized=*/true, &fake_statistics_provider_,
+          dev_disable_boot_),
+      fre_or(AutoEnrollmentTypeChecker::CheckType::kInitialStateDetermination));
   EXPECT_EQ(
       AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-          /*is_system_clock_synchronized=*/false, &fake_statistics_provider_),
-      AutoEnrollmentTypeChecker::CheckType::kInitialStateDetermination);
+          /*is_system_clock_synchronized=*/false, &fake_statistics_provider_,
+          dev_disable_boot_),
+      fre_or(AutoEnrollmentTypeChecker::CheckType::kInitialStateDetermination));
 }
 
-TEST_F(AutoEnrollmentTypeCheckerTest,
+TEST_P(AutoEnrollmentTypeCheckerTestP,
        AutoEnrollmentCheckNotRequiredWhenNoEnrollmentModulusSwitchPresent) {
   SetupFREEnabled();
   SetupInitialEnrollmentEnabledButNotRequired();
@@ -428,17 +803,17 @@ TEST_F(AutoEnrollmentTypeCheckerTest,
   command_line_.GetProcessCommandLine()->RemoveSwitch(
       ash::switches::kEnterpriseEnrollmentModulusLimit);
 
-  EXPECT_EQ(
-      AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-          /*is_system_clock_synchronized=*/true, &fake_statistics_provider_),
-      AutoEnrollmentTypeChecker::CheckType::kNone);
-  EXPECT_EQ(
-      AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-          /*is_system_clock_synchronized=*/false, &fake_statistics_provider_),
-      AutoEnrollmentTypeChecker::CheckType::kNone);
+  EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                /*is_system_clock_synchronized=*/true,
+                &fake_statistics_provider_, dev_disable_boot_),
+            AutoEnrollmentTypeChecker::CheckType::kNone);
+  EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                /*is_system_clock_synchronized=*/false,
+                &fake_statistics_provider_, dev_disable_boot_),
+            AutoEnrollmentTypeChecker::CheckType::kNone);
 }
 
-TEST_F(AutoEnrollmentTypeCheckerTest,
+TEST_P(AutoEnrollmentTypeCheckerTestP,
        AutoEnrollmentCheckRequiredWhenFREExplicitlyRequired) {
   SetupFREEnabled();
   // Set initial enrollment required. It checks that FRE has priority over
@@ -448,19 +823,19 @@ TEST_F(AutoEnrollmentTypeCheckerTest,
   fake_statistics_provider_.SetMachineStatistic(
       ash::system::kCheckEnrollmentKey, "1");
 
-  EXPECT_EQ(
-      AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-          /*is_system_clock_synchronized=*/true, &fake_statistics_provider_),
-      AutoEnrollmentTypeChecker::CheckType::
-          kForcedReEnrollmentExplicitlyRequired);
-  EXPECT_EQ(
-      AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-          /*is_system_clock_synchronized=*/false, &fake_statistics_provider_),
-      AutoEnrollmentTypeChecker::CheckType::
-          kForcedReEnrollmentExplicitlyRequired);
+  EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                /*is_system_clock_synchronized=*/true,
+                &fake_statistics_provider_, dev_disable_boot_),
+            AutoEnrollmentTypeChecker::CheckType::
+                kForcedReEnrollmentExplicitlyRequired);
+  EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                /*is_system_clock_synchronized=*/false,
+                &fake_statistics_provider_, dev_disable_boot_),
+            AutoEnrollmentTypeChecker::CheckType::
+                kForcedReEnrollmentExplicitlyRequired);
 }
 
-TEST_F(AutoEnrollmentTypeCheckerTest,
+TEST_P(AutoEnrollmentTypeCheckerTestP,
        AutoEnrollmentCheckRequiredWhenFREImplicitlyRequired) {
   SetupFREEnabled();
   // Set initial enrollment required. It checks that FRE has priority over
@@ -472,19 +847,19 @@ TEST_F(AutoEnrollmentTypeCheckerTest,
   fake_statistics_provider_.SetMachineStatistic(ash::system::kActivateDateKey,
                                                 kActivateDateValue);
 
-  EXPECT_EQ(
-      AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-          /*is_system_clock_synchronized=*/true, &fake_statistics_provider_),
-      AutoEnrollmentTypeChecker::CheckType::
-          kForcedReEnrollmentImplicitlyRequired);
-  EXPECT_EQ(
-      AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-          /*is_system_clock_synchronized=*/false, &fake_statistics_provider_),
-      AutoEnrollmentTypeChecker::CheckType::
-          kForcedReEnrollmentImplicitlyRequired);
+  EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                /*is_system_clock_synchronized=*/true,
+                &fake_statistics_provider_, dev_disable_boot_),
+            fre_or(AutoEnrollmentTypeChecker::CheckType::
+                       kForcedReEnrollmentImplicitlyRequired));
+  EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                /*is_system_clock_synchronized=*/false,
+                &fake_statistics_provider_, dev_disable_boot_),
+            fre_or(AutoEnrollmentTypeChecker::CheckType::
+                       kForcedReEnrollmentImplicitlyRequired));
 }
 
-TEST_F(AutoEnrollmentTypeCheckerTest,
+TEST_P(AutoEnrollmentTypeCheckerTestP,
        AutoEnrollmentCheckNotRequiredWhenInitialEnrollmentDisabled) {
   SetupFREEnabledButNotRequired();
 
@@ -492,18 +867,18 @@ TEST_F(AutoEnrollmentTypeCheckerTest,
       ash::switches::kEnterpriseEnableInitialEnrollment,
       AutoEnrollmentTypeChecker::kInitialEnrollmentNever);
 
-  EXPECT_EQ(
-      AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-          /*is_system_clock_synchronized=*/false, &fake_statistics_provider_),
-      AutoEnrollmentTypeChecker::CheckType::kNone);
-  EXPECT_EQ(
-      AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-          /*is_system_clock_synchronized=*/true, &fake_statistics_provider_),
-      AutoEnrollmentTypeChecker::CheckType::kNone);
+  EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                /*is_system_clock_synchronized=*/false,
+                &fake_statistics_provider_, dev_disable_boot_),
+            fre_or(AutoEnrollmentTypeChecker::CheckType::kNone));
+  EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                /*is_system_clock_synchronized=*/true,
+                &fake_statistics_provider_, dev_disable_boot_),
+            fre_or(AutoEnrollmentTypeChecker::CheckType::kNone));
 }
 
-TEST_F(
-    AutoEnrollmentTypeCheckerTest,
+TEST_P(
+    AutoEnrollmentTypeCheckerTestP,
     AutoEnrollmentCheckNotRequiredWhenInitialEnrollmentNotRequiredWhenVPDIsBroken) {
   // FRE turns required when it does not find serial number. Disable it
   // altogether.
@@ -513,18 +888,18 @@ TEST_F(
   fake_statistics_provider_.SetMachineStatistic(
       ash::system::kSerialNumberKeyForTest, "");
 
-  EXPECT_EQ(
-      AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-          /*is_system_clock_synchronized=*/false, &fake_statistics_provider_),
-      AutoEnrollmentTypeChecker::CheckType::kNone);
-  EXPECT_EQ(
-      AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-          /*is_system_clock_synchronized=*/true, &fake_statistics_provider_),
-      AutoEnrollmentTypeChecker::CheckType::kNone);
+  EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                /*is_system_clock_synchronized=*/false,
+                &fake_statistics_provider_, dev_disable_boot_),
+            AutoEnrollmentTypeChecker::CheckType::kNone);
+  EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                /*is_system_clock_synchronized=*/true,
+                &fake_statistics_provider_, dev_disable_boot_),
+            AutoEnrollmentTypeChecker::CheckType::kNone);
 }
 
-TEST_F(
-    AutoEnrollmentTypeCheckerTest,
+TEST_P(
+    AutoEnrollmentTypeCheckerTestP,
     AutoEnrollmentCheckNotRequiredWhenInitialEnrollmentNotRequiredWhenBrandCodeIsMissing) {
   SetupFREEnabledButNotRequired();
   SetupInitialEnrollmentEnabled();
@@ -534,18 +909,18 @@ TEST_F(
   fake_statistics_provider_.SetMachineStatistic(ash::system::kRlzBrandCodeKey,
                                                 "");
 
-  EXPECT_EQ(
-      AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-          /*is_system_clock_synchronized=*/false, &fake_statistics_provider_),
-      AutoEnrollmentTypeChecker::CheckType::kNone);
-  EXPECT_EQ(
-      AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-          /*is_system_clock_synchronized=*/true, &fake_statistics_provider_),
-      AutoEnrollmentTypeChecker::CheckType::kNone);
+  EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                /*is_system_clock_synchronized=*/false,
+                &fake_statistics_provider_, dev_disable_boot_),
+            fre_or(AutoEnrollmentTypeChecker::CheckType::kNone));
+  EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                /*is_system_clock_synchronized=*/true,
+                &fake_statistics_provider_, dev_disable_boot_),
+            fre_or(AutoEnrollmentTypeChecker::CheckType::kNone));
 }
 
-TEST_F(
-    AutoEnrollmentTypeCheckerTest,
+TEST_P(
+    AutoEnrollmentTypeCheckerTestP,
     AutoEnrollmentCheckUnknownWhenSystemClockNotSynchedAndNotRequiredWhenSynched) {
   SetupFREEnabledButNotRequired();
   SetupInitialEnrollmentEnabled();
@@ -564,15 +939,15 @@ TEST_F(
         ash::system::kEnterpriseManagementEmbargoEndDateKey,
         past_embargo_threshold);
 
-    EXPECT_EQ(
-        AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-            /*is_system_clock_synchronized=*/false, &fake_statistics_provider_),
-        AutoEnrollmentTypeChecker::CheckType::
-            kUnknownDueToMissingSystemClockSync);
-    EXPECT_EQ(
-        AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-            /*is_system_clock_synchronized=*/true, &fake_statistics_provider_),
-        AutoEnrollmentTypeChecker::CheckType::kNone);
+    EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                  /*is_system_clock_synchronized=*/false,
+                  &fake_statistics_provider_, dev_disable_boot_),
+              fre_or(AutoEnrollmentTypeChecker::CheckType::
+                         kUnknownDueToMissingSystemClockSync));
+    EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                  /*is_system_clock_synchronized=*/true,
+                  &fake_statistics_provider_, dev_disable_boot_),
+              fre_or(AutoEnrollmentTypeChecker::CheckType::kNone));
   }
 
   {
@@ -584,20 +959,20 @@ TEST_F(
         ash::system::kEnterpriseManagementEmbargoEndDateKey,
         before_embargo_threshold);
 
-    EXPECT_EQ(
-        AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-            /*is_system_clock_synchronized=*/false, &fake_statistics_provider_),
-        AutoEnrollmentTypeChecker::CheckType::
-            kUnknownDueToMissingSystemClockSync);
-    EXPECT_EQ(
-        AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-            /*is_system_clock_synchronized=*/true, &fake_statistics_provider_),
-        AutoEnrollmentTypeChecker::CheckType::kNone);
+    EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                  /*is_system_clock_synchronized=*/false,
+                  &fake_statistics_provider_, dev_disable_boot_),
+              fre_or(AutoEnrollmentTypeChecker::CheckType::
+                         kUnknownDueToMissingSystemClockSync));
+    EXPECT_EQ(AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
+                  /*is_system_clock_synchronized=*/true,
+                  &fake_statistics_provider_, dev_disable_boot_),
+              fre_or(AutoEnrollmentTypeChecker::CheckType::kNone));
   }
 }
 
-TEST_F(
-    AutoEnrollmentTypeCheckerTest,
+TEST_P(
+    AutoEnrollmentTypeCheckerTestP,
     AutoEnrollmentCheckRequiredWhenInitialEnrollmentRequiredWhenEmbargoDateMissingOrPassed) {
   SetupFREEnabledButNotRequired();
   SetupInitialEnrollmentEnabled();
@@ -613,12 +988,16 @@ TEST_F(
         kMalformedEmbargoDateValue);
     EXPECT_EQ(
         AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-            /*is_system_clock_synchronized=*/false, &fake_statistics_provider_),
-        AutoEnrollmentTypeChecker::CheckType::kInitialStateDetermination);
+            /*is_system_clock_synchronized=*/false, &fake_statistics_provider_,
+            dev_disable_boot_),
+        fre_or(
+            AutoEnrollmentTypeChecker::CheckType::kInitialStateDetermination));
     EXPECT_EQ(
         AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-            /*is_system_clock_synchronized=*/true, &fake_statistics_provider_),
-        AutoEnrollmentTypeChecker::CheckType::kInitialStateDetermination);
+            /*is_system_clock_synchronized=*/true, &fake_statistics_provider_,
+            dev_disable_boot_),
+        fre_or(
+            AutoEnrollmentTypeChecker::CheckType::kInitialStateDetermination));
   }
 
   {
@@ -629,13 +1008,21 @@ TEST_F(
         yeasterday_embargo);
     EXPECT_EQ(
         AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-            /*is_system_clock_synchronized=*/false, &fake_statistics_provider_),
-        AutoEnrollmentTypeChecker::CheckType::kInitialStateDetermination);
+            /*is_system_clock_synchronized=*/false, &fake_statistics_provider_,
+            dev_disable_boot_),
+        fre_or(
+            AutoEnrollmentTypeChecker::CheckType::kInitialStateDetermination));
     EXPECT_EQ(
         AutoEnrollmentTypeChecker::DetermineAutoEnrollmentCheckType(
-            /*is_system_clock_synchronized=*/true, &fake_statistics_provider_),
-        AutoEnrollmentTypeChecker::CheckType::kInitialStateDetermination);
+            /*is_system_clock_synchronized=*/true, &fake_statistics_provider_,
+            dev_disable_boot_),
+        fre_or(
+            AutoEnrollmentTypeChecker::CheckType::kInitialStateDetermination));
   }
 }
+
+INSTANTIATE_TEST_SUITE_P(AutoEnrollmentTypeCheckerTestSuite,
+                         AutoEnrollmentTypeCheckerTestP,
+                         testing::Bool());
 
 }  // namespace policy

@@ -6,24 +6,27 @@
 #define CHROME_BROWSER_ASH_LOGIN_SCREENS_SYNC_CONSENT_SCREEN_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/auto_reset.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ui/webui/chromeos/login/sync_consent_screen_handler.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_service_observer.h"
+#include "components/sync/base/user_selectable_type.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_service_observer.h"
 #include "components/user_manager/user.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Profile;
 
 namespace ash {
+
+class SyncConsentScreenView;
+class ScopedSessionRefresher;
 
 // This is Sync settings screen that is displayed as a part of user first
 // sign-in flow.
@@ -47,7 +50,7 @@ class SyncConsentScreen : public BaseScreen,
 
   enum ConsentGiven { CONSENT_NOT_GIVEN, CONSENT_GIVEN };
 
-  enum class Result { NEXT, NOT_APPLICABLE };
+  enum class Result { NEXT, DECLINE, NOT_APPLICABLE };
 
   static std::string GetResultString(Result result);
 
@@ -115,10 +118,17 @@ class SyncConsentScreen : public BaseScreen,
   // Called when sync engine initialization timed out.
   void OnTimeout();
 
-  void HandleContinue(const bool opted_in,
-                      const bool review_sync,
-                      const base::Value::List& consent_description_list,
-                      const std::string& consent_confirmation);
+  void OnAshContinue(const bool opted_in,
+                     const bool review_sync,
+                     const base::Value::List& consent_description_list,
+                     const std::string& consent_confirmation);
+
+  void OnLacrosContinue(const base::Value::List& consent_description_list,
+                        const std::string& consent_confirmation);
+
+  void RecordAllConsents(const bool opted_in,
+                         const base::Value::List& consent_description_list,
+                         const std::string& consent_confirmation);
 
   // Sets internal condition "Sync disabled by policy" for tests.
   static void SetProfileSyncDisabledByPolicyForTesting(bool value);
@@ -166,6 +176,9 @@ class SyncConsentScreen : public BaseScreen,
   // Returns true if profile sync has finished initialization.
   bool IsProfileSyncEngineInitialized() const;
 
+  // Check if OSSyncRevamp and Lacros are enabled.
+  bool IsOsSyncLacros();
+
   // This function does two things based on account capability: turn on "sync
   // everything" toggle for non-minor users; pass the minor mode signal to
   // the front end, which controls whether nudge techniques could be used.
@@ -186,9 +199,12 @@ class SyncConsentScreen : public BaseScreen,
   base::ScopedObservation<syncer::SyncService, syncer::SyncServiceObserver>
       sync_service_observation_{this};
 
+  // Keeps cryptohome authsession alive.
+  std::unique_ptr<ScopedSessionRefresher> session_refresher_;
+
   // Primary user ind his Profile (if screen is shown).
-  const user_manager::User* user_ = nullptr;
-  Profile* profile_ = nullptr;
+  raw_ptr<const user_manager::User> user_ = nullptr;
+  raw_ptr<Profile> profile_ = nullptr;
   bool is_initialized_ = false;
 
   // Used to record whether sync engine initialization is timed out.
@@ -199,17 +215,11 @@ class SyncConsentScreen : public BaseScreen,
   base::TimeTicks start_time_;
 
   // Notify tests.
-  SyncConsentScreenTestDelegate* test_delegate_ = nullptr;
+  raw_ptr<SyncConsentScreenTestDelegate> test_delegate_ = nullptr;
 
   base::WeakPtrFactory<SyncConsentScreen> weak_factory_{this};
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::SyncConsentScreen;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_SYNC_CONSENT_SCREEN_H_

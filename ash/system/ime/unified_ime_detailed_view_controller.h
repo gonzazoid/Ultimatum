@@ -11,6 +11,7 @@
 #include "ash/system/ime/ime_observer.h"
 #include "ash/system/unified/detailed_view_controller.h"
 #include "ash/system/virtual_keyboard/virtual_keyboard_observer.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -34,8 +35,8 @@ class UnifiedIMEDetailedViewController : public DetailedViewController,
 
   ~UnifiedIMEDetailedViewController() override;
 
-  // DetailedViewControllerBase:
-  views::View* CreateView() override;
+  // DetailedViewController:
+  std::unique_ptr<views::View> CreateView() override;
   std::u16string GetAccessibleName() const override;
 
   // VirtualKeyboardObserver:
@@ -59,7 +60,7 @@ class UnifiedIMEDetailedViewController : public DetailedViewController,
   const std::unique_ptr<DetailedViewDelegate> detailed_view_delegate_;
 
   // The view being controlled.
-  IMEDetailedView* view_ = nullptr;
+  raw_ptr<IMEDetailedView, DanglingUntriaged> view_ = nullptr;
 
   // Whether the on-screen keyboard is suppressed, for example by being in
   // tablet mode with an external keyboard attached.

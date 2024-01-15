@@ -30,13 +30,10 @@
 #include "content/public/browser/web_ui_message_handler.h"
 #include "content/public/common/url_constants.h"
 #include "ui/base/theme_provider.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/base/webui/web_ui_util.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/webui/color_change_listener/color_change_handler.h"
-
-// These data types must be in all lowercase.
-const char kWebUITabIdDataType[] = "application/vnd.chromium.tab";
-const char kWebUITabGroupIdDataType[] = "application/vnd.chromium.tabgroup";
 
 TabStripUI::TabStripUI(content::WebUI* web_ui)
     : ui::MojoWebUIController(web_ui, /* enable_chrome_send */ true),
@@ -47,15 +44,17 @@ TabStripUI::TabStripUI(content::WebUI* web_ui)
       ->SetZoomLevelForHostAndScheme(content::kChromeUIScheme,
                                      chrome::kChromeUITabStripHost, 0);
 
+  Profile* profile = Profile::FromWebUI(web_ui);
   content::WebUIDataSource* html_source =
-      content::WebUIDataSource::Create(chrome::kChromeUITabStripHost);
+      content::WebUIDataSource::CreateAndAdd(profile,
+                                             chrome::kChromeUITabStripHost);
   webui::SetupWebUIDataSource(
       html_source, base::make_span(kTabStripResources, kTabStripResourcesSize),
       IDR_TAB_STRIP_TAB_STRIP_HTML);
-  webui::EnableTrustedTypesCSP(html_source);
 
   html_source->AddString("tabIdDataType", kWebUITabIdDataType);
   html_source->AddString("tabGroupIdDataType", kWebUITabGroupIdDataType);
+  webui::SetupChromeRefresh2023(html_source);
 
   static constexpr webui::LocalizedString kStrings[] = {
       {"tabListTitle", IDS_ACCNAME_TAB_LIST},
@@ -70,6 +69,8 @@ TabStripUI::TabStripUI(content::WebUI* web_ui)
       {"hidConnected", IDS_TAB_AX_LABEL_HID_CONNECTED_FORMAT},
       {"serialConnected", IDS_TAB_AX_LABEL_SERIAL_CONNECTED_FORMAT},
       {"mediaRecording", IDS_TAB_AX_LABEL_MEDIA_RECORDING_FORMAT},
+      {"audioRecording", IDS_TAB_AX_LABEL_AUDIO_RECORDING_FORMAT},
+      {"videoRecording", IDS_TAB_AX_LABEL_VIDEO_RECORDING_FORMAT},
       {"audioMuting", IDS_TAB_AX_LABEL_AUDIO_MUTING_FORMAT},
       {"tabCapturing", IDS_TAB_AX_LABEL_DESKTOP_CAPTURING_FORMAT},
       {"pipPlaying", IDS_TAB_AX_LABEL_PIP_PLAYING_FORMAT},
@@ -79,8 +80,6 @@ TabStripUI::TabStripUI(content::WebUI* web_ui)
       {"namedGroupLabel", IDS_GROUP_AX_LABEL_NAMED_GROUP_FORMAT},
   };
   html_source->AddLocalizedStrings(kStrings);
-  Profile* profile = Profile::FromWebUI(web_ui);
-  content::WebUIDataSource::Add(profile, html_source);
 
   content::URLDataSource::Add(
       profile, std::make_unique<FaviconSource>(
@@ -131,11 +130,13 @@ void TabStripUI::Deinitialize() {
 }
 
 void TabStripUI::LayoutChanged() {
-  if (page_handler_)
+  if (page_handler_) {
     page_handler_->NotifyLayoutChanged();
+  }
 }
 
 void TabStripUI::ReceivedKeyboardFocus() {
-  if (page_handler_)
+  if (page_handler_) {
     page_handler_->NotifyReceivedKeyboardFocus();
+  }
 }

@@ -4,9 +4,8 @@
 
 #include "components/browsing_data/content/mock_shared_worker_helper.h"
 
-#include "base/callback.h"
 #include "base/containers/contains.h"
-#include "content/public/browser/browser_context.h"
+#include "base/functional/callback.h"
 #include "content/public/browser/storage_partition.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -14,8 +13,8 @@
 namespace browsing_data {
 
 MockSharedWorkerHelper::MockSharedWorkerHelper(
-    content::BrowserContext* browser_context)
-    : SharedWorkerHelper(browser_context->GetDefaultStoragePartition()) {}
+    content::StoragePartition* storage_partition)
+    : SharedWorkerHelper(storage_partition) {}
 
 MockSharedWorkerHelper::~MockSharedWorkerHelper() {}
 
@@ -37,10 +36,12 @@ void MockSharedWorkerHelper::DeleteSharedWorker(
 void MockSharedWorkerHelper::AddSharedWorkerSamples() {
   GURL worker1("https://sharedworkerhost1:1/app/worker.js");
   std::string name1("my worker");
-  blink::StorageKey storage_key1(url::Origin::Create(worker1));
+  const blink::StorageKey storage_key1 =
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(worker1));
   GURL worker2("https://sharedworkerhost2:2/worker.js");
   std::string name2("another worker");
-  blink::StorageKey storage_key2(url::Origin::Create(worker2));
+  const blink::StorageKey storage_key2 =
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(worker2));
 
   response_.emplace_back(worker1, name1, storage_key1);
   response_.emplace_back(worker2, name2, storage_key2);

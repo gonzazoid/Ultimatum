@@ -6,15 +6,16 @@
 #define CONTENT_BROWSER_MEDIA_CAPTURE_VIDEO_CAPTURE_DEVICE_PROXY_LACROS_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/crosapi/mojom/screen_manager.mojom.h"
 #include "chromeos/crosapi/mojom/video_capture.mojom.h"
 #include "content/browser/media/capture/receiver_media_to_crosapi_adapter.h"
 #include "content/common/content_export.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/desktop_media_id.h"
 #include "content/public/browser/device_service.h"
 #include "media/capture/mojom/video_capture_types.mojom.h"
@@ -25,7 +26,6 @@
 #include "services/device/public/mojom/wake_lock.mojom.h"
 #include "services/video_capture/lacros/video_frame_handler_proxy_lacros.h"
 #include "services/viz/public/cpp/compositing/video_capture_target_mojom_traits.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 
@@ -45,12 +45,6 @@ namespace content {
 class CONTENT_EXPORT VideoCaptureDeviceProxyLacros
     : public media::VideoCaptureDevice {
  public:
-  // Helper method to check if the mojom version(s) required to use this class
-  // are available.
-  // May be called from any thread; should be checked before creating (or
-  // posting a task to create) an instance of this class.
-  static bool IsAvailable();
-
   explicit VideoCaptureDeviceProxyLacros(const DesktopMediaID& device_id);
 
   VideoCaptureDeviceProxyLacros(const VideoCaptureDeviceProxyLacros&) = delete;
@@ -72,10 +66,12 @@ class CONTENT_EXPORT VideoCaptureDeviceProxyLacros
   void RequestRefreshFrame() final;
   void MaybeSuspend() final;
   void Resume() final;
-  void Crop(const base::Token& crop_id,
-            uint32_t crop_version,
-            base::OnceCallback<void(media::mojom::CropRequestResult)> callback)
-      override;
+  void ApplySubCaptureTarget(
+      media::mojom::SubCaptureTargetType type,
+      const base::Token& target,
+      uint32_t sub_capture_target_version,
+      base::OnceCallback<void(media::mojom::ApplySubCaptureTargetResult)>
+          callback) override;
   void StopAndDeAllocate() final;
   void GetPhotoState(GetPhotoStateCallback callback) final;
   void SetPhotoOptions(media::mojom::PhotoSettingsPtr settings,
@@ -101,7 +97,7 @@ class CONTENT_EXPORT VideoCaptureDeviceProxyLacros
 
   // Set when OnFatalError() is called. This prevents any future
   // AllocateAndStartWithReceiver() calls from succeeding.
-  absl::optional<std::string> fatal_error_message_;
+  std::optional<std::string> fatal_error_message_;
 
   // Note that because we do not run on the main thread and because we want to
   // set a disconnect handler on the screen manager we must bind our own remote

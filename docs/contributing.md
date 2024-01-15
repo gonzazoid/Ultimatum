@@ -86,7 +86,7 @@ contribution can be accepted:
 
 ## Initial git setup
 
-1. Visit <https://chromium-review.googlesource.com/new-password> and follow the
+1. Visit <https://chromium.googlesource.com/new-password> and follow the
    on-screen instructions to get credentials for uploading changes.
 2. Tell git about your name, email and some other settings.
    ```
@@ -202,6 +202,30 @@ git cl upload -r foo@example.com,bar@example.com -b 123456
 
 See `git cl help upload` for a full list of flags.
 
+### Uploading dependent changes
+
+If you wish to work on multiple related changes without waiting for
+them to land, you can do so in Gerrit using dependent changes.
+
+To put this into an example, let‘s say you have a commit for feature A
+and this is in the process of being reviewed on Gerrit.  Now let’s say
+you want to start more work based on it before it lands on main.
+
+```
+git checkout featureA
+git checkout -b featureB
+git branch --set-upstream-to featureA
+# ... edit some files
+# ... git add ...
+git commit
+git cl upload
+```
+
+In Gerrit, there would then be a “relation chain” shown where the
+feature A change is the parent of the feature B change.  If A
+introduces a new file which B changes, the review for B will only show
+the diff from A.
+
 ## Code review
 
 Code reviews are covered in more detail on the [code review
@@ -209,15 +233,20 @@ policies][code-reviews] page.
 
 ### Finding a reviewer
 
-Ideally, the reviewer is someone who is familiar with the area of code in
-question. If you're not sure who that should be, check with anyone in the
-nearest ancestor OWNERS file.
+Please note here that a "reviewer" in this context is someone that not
+only provides comment on the CL but also someone who can approve the
+submission by providing a CR+1.
 
-- Anybody can review code, but there must be at least one owner for each
-  affected directory.
-- If there are multiple reviewers, make it clear what each reviewer is expected
-  to review.
-- `git cl owners` automatically suggests reviewers based on the OWNERS files.
+Reviewers must be [committers](https://www.chromium.org/getting-involved/become-a-committer/).
+Ideally they should be committers who are familiar with the area of code
+in question. If you're not sure who these should be, check with anyone in
+the nearest ancestor OWNERS file.
+
+- There must be at least one owner for each affected directory.
+- If there are multiple reviewers, make it clear what each reviewer is
+expected to review.
+- `git cl owners` automatically suggests reviewers based on the OWNERS
+files.
 
 _Note:_ By default, please only select one reviewer for each file (that is, a
 single reviewer may review multiple files, but typically each file only needs
@@ -232,6 +261,11 @@ There are times when requesting multiple reviewers for the same file may be
 desirable - such as when the code is particularly complicated, or when the file
 uses multiple systems and a perspective from each is valuable. In this case,
 please make it explicit that you would like both reviewers to review.
+
+Submissions to the chromium/src repository by a change contributor who is
+not a Chromium committer will require two committers to Code-Review+1 the
+submissions. If the owner of the CL is already a committer, then only one
+other committer is needed to Code-Review+1.
 
 ### Requesting review
 
@@ -357,7 +391,7 @@ general rules of thumb can be helpful in navigating how to structure changes:
 
   When you are adding support for a new OS, a new architecture, a new port or
   a new top-level directory, please send an email to
-  chrome-eng-review@google.com and get approval. For long-term maintenance
+  chrome-atls@google.com and get approval. For long-term maintenance
   reasons, we will accept only things that are used by the Chromium project
   (including Chromium-supported projects like V8 and Skia) and things whose
   benefit to Chromium outweighs any cost increase in maintaining Chromium's
@@ -397,7 +431,7 @@ general rules of thumb can be helpful in navigating how to structure changes:
   Reducing the number of languages eases toolchain and infrastructure
   requirements, and minimizes the learning hurdles for developers to be
   successful contributing across the codebase. Additions of new languages must
-  be approved by [//ENG_REVIEW_OWNERS](../ENG_REVIEW_OWNERS).
+  be approved by [//ATL_OWNERS](../ATL_OWNERS).
 
 - **When your team is making API changes or migrating between services, the
   team mandating the change needs to do at least 80% of the work.** The
@@ -462,9 +496,6 @@ formats.
     `-r foo@example.com` when running `git cl upload`.
   * A comma-separated list of reviewer email addresses (e.g.
     foo@example.com, bar@example.com).
-* **Tbr:** The same format as the `R` footer, but indicates to the
-  commit queue that it can skip checking that all files in the change
-  have been approved by their respective `OWNERS`.
 * **Cq-Include-Trybots:**
   * A comma-separated list of trybots which should be triggered and
     checked by the CQ in addition to the normal set.

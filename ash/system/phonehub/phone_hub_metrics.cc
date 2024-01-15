@@ -7,8 +7,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/user_metrics.h"
 
-namespace ash {
-namespace phone_hub_metrics {
+namespace ash::phone_hub_metrics {
 
 namespace {
 
@@ -204,5 +203,51 @@ void LogCameraRollContentPresent() {
   base::UmaHistogramBoolean("PhoneHub.CameraRoll.Content.Present", true);
 }
 
-}  // namespace phone_hub_metrics
-}  // namespace ash
+void LogMoreAppsButtonAnimationOnShow(
+    MoreAppsButtonLoadingState loading_state) {
+  base::UmaHistogramEnumeration("PhoneHub.MoreAppsButton.LoadingState",
+                                loading_state);
+}
+
+void LogMoreAppsButtonFullAppsLatency(const base::TimeDelta latency) {
+  base::UmaHistogramTimes("PhoneHub.LauncherButton.Loading.Latency", latency);
+}
+
+void LogRecentAppsStateOnBubbleOpened(RecentAppsUiState ui_state) {
+  switch (ui_state) {
+    case RecentAppsUiState::HIDDEN:
+      [[fallthrough]];
+    case RecentAppsUiState::PLACEHOLDER_VIEW:
+      break;
+    case RecentAppsUiState::LOADING:
+      base::UmaHistogramEnumeration("PhoneHub.RecentApps.State.OnBubbleOpened",
+                                    RecentAppsViewUiState::kLoading);
+      break;
+    case RecentAppsUiState::CONNECTION_FAILED:
+      base::UmaHistogramEnumeration("PhoneHub.RecentApps.State.OnBubbleOpened",
+                                    RecentAppsViewUiState::kError);
+      break;
+    case RecentAppsUiState::ITEMS_VISIBLE:
+      base::UmaHistogramEnumeration("PhoneHub.RecentApps.State.OnBubbleOpened",
+                                    RecentAppsViewUiState::kApps);
+      break;
+    default:
+      break;
+  }
+}
+
+void LogRecentAppsTransitionToFailedLatency(const base::TimeDelta latency) {
+  base::UmaHistogramTimes("PhoneHub.RecentApps.TransitionToFailed.Latency",
+                          latency);
+}
+
+void LogRecentAppsTransitionToSuccessLatency(const base::TimeDelta latency) {
+  base::UmaHistogramTimes("PhoneHub.RecentApps.TransitionToSuccess.Latency",
+                          latency);
+}
+
+void LogMultiDeviceSetupNotificationInteraction() {
+  base::UmaHistogramCounts100("MultiDeviceSetup.NotificationInteracted", 1);
+}
+
+}  // namespace ash::phone_hub_metrics

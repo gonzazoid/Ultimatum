@@ -29,6 +29,14 @@ void RestorePrimaryUserDesks();
 // desks count or a desk name changes.
 ASH_EXPORT void UpdatePrimaryUserDeskNamesPrefs();
 
+// Called to update the desk guids restore prefs for the primary user whenever
+// a desk is created or destroyed.
+ASH_EXPORT void UpdatePrimaryUserDeskGuidsPrefs();
+
+// Called to update the desk lacros profile ID associations for the primary user
+// whenever it changes.
+ASH_EXPORT void UpdatePrimaryUserDeskLacrosProfileIdPrefs();
+
 // Called to update the desk metrics restore prefs for the primary user whenever
 // desks count changes, desks order changes or during
 // `DesksController::Shutdown()`.
@@ -37,9 +45,6 @@ ASH_EXPORT void UpdatePrimaryUserDeskMetricsPrefs();
 // Called to update the active desk restore prefs for the primary user whenever
 // the primary user switches an active desk.
 void UpdatePrimaryUserActiveDeskPrefs(int active_desk_index);
-
-// Returns true if pref `kUserHasUsedDesksRecently` of the primary user is true.
-ASH_EXPORT bool HasPrimaryUserUsedDesksRecently();
 
 // Returns the time from `g_override_clock_` if it is not nullptr, or time from
 // base::Time::Now() otherwise.
@@ -51,7 +56,6 @@ const base::Time GetTimeNow();
 ASH_EXPORT int GetDaysFromLocalEpoch();
 
 ASH_EXPORT void OverrideClockForTesting(base::Clock* test_clock);
-ASH_EXPORT void SetPrimaryUserHasUsedDesksRecentlyForTesting(bool value);
 
 }  // namespace desks_restore_util
 

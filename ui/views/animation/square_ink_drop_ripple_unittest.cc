@@ -20,8 +20,7 @@
 #include "ui/views/animation/test/test_ink_drop_ripple_observer.h"
 #include "ui/views/test/widget_test.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 namespace {
 
@@ -67,6 +66,7 @@ class SquareInkDropRippleCalculateTransformsTest : public WidgetTest {
 
   // The test target.
   SquareInkDropRipple ink_drop_ripple_{
+      nullptr,
       gfx::Size(kDrawnSize, kDrawnSize),
       2,
       gfx::Size(kHalfDrawnSize, kHalfDrawnSize),
@@ -222,7 +222,7 @@ TEST_F(SquareInkDropRippleCalculateTransformsTest, RippleIsPixelAligned) {
   // scale factor.
   constexpr gfx::Point kCenter(14, 14);
   constexpr gfx::Rect kDrawnRectBounds(0, 0, 10, 10);
-  SquareInkDropRipple ink_drop_ripple(kDrawnRectBounds.size(), 2,
+  SquareInkDropRipple ink_drop_ripple(nullptr, kDrawnRectBounds.size(), 2,
                                       gfx::Size(1, 1),  // unimportant
                                       1, kCenter, SK_ColorBLACK, 0.175f);
   SquareInkDropRippleTestApi test_api(&ink_drop_ripple);
@@ -288,5 +288,4 @@ TEST_F(SquareInkDropRippleCalculateTransformsTest, RippleIsPixelAligned) {
   widget->CloseNow();
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

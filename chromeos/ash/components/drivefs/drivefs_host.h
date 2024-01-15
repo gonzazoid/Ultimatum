@@ -11,37 +11,70 @@
 
 #include "base/component_export.h"
 #include "base/files/file_path.h"
-#include "base/files/scoped_file.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
+#include "base/observer_list_types.h"
 #include "base/time/clock.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chromeos/ash/components/disks/disk_mount_manager.h"
 #include "chromeos/ash/components/drivefs/drivefs_auth.h"
 #include "chromeos/ash/components/drivefs/drivefs_session.h"
 #include "chromeos/ash/components/drivefs/mojom/drivefs.mojom.h"
-#include "chromeos/ash/components/drivefs/sync_status_tracker.h"
-#include "components/account_id/account_id.h"
+#include "chromeos/components/drivefs/mojom/drivefs_native_messaging.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 
-namespace ash {
-namespace disks {
+namespace ash::disks {
 class DiskMountManager;
-}  // namespace disks
-}  // namespace ash
-
-namespace drive {
-class DriveNotificationManager;
-}  // namespace drive
+}  // namespace ash::disks
 
 namespace network {
 class NetworkConnectionTracker;
 }  // namespace network
 
 namespace drivefs {
+namespace mojom {
+
+class DriveError;
+class FileChange;
+class ProgressEvent;
+class SyncingStatus;
+
+}  // namespace mojom
 
 class DriveFsBootstrapListener;
-class DriveFsHostObserver;
+
+enum class SyncStatus {
+  kNotFound,
+  kCompleted,
+  kQueued,
+  kInProgress,
+  kError,
+};
+COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_DRIVEFS)
+std::ostream& operator<<(std::ostream& os, const SyncStatus& status);
+
+struct SyncState {
+  SyncStatus status;
+  float progress;  // Range: 0 to 1.
+  base::FilePath path;
+  base::Time last_updated;
+
+  friend std::ostream& operator<<(std::ostream& os, const SyncState& state) {
+    return os << "('" << state.path << "', " << state.status << ", "
+              << (int)(state.progress * 100.f) << "%"
+              << ") ";
+  }
+  bool operator==(const SyncState& state) const {
+    return state.path == path && state.status == status &&
+           std::fabs(state.progress - progress) < 1e-4;
+  }
+
+  inline static SyncState CreateNotFound(const base::FilePath path) {
+    return {SyncStatus::kNotFound, 0, std::move(path)};
+  }
+};
 
 // A host for a DriveFS process. In addition to managing its lifetime via
 // mounting and unmounting, it also bridges between the DriveFS process and the
@@ -62,16 +95,15 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_DRIVEFS) DriveFsHost {
 
     ~Delegate() override = default;
 
-    virtual drive::DriveNotificationManager& GetDriveNotificationManager() = 0;
     virtual std::unique_ptr<DriveFsBootstrapListener> CreateMojoListener();
     virtual base::FilePath GetMyFilesPath() = 0;
     virtual std::string GetLostAndFoundDirectoryName() = 0;
     virtual bool IsVerboseLoggingEnabled() = 0;
-    virtual mojom::DriveFsDelegate::ExtensionConnectionStatus
-    ConnectToExtension(
+    virtual void ConnectToExtension(
         mojom::ExtensionConnectionParamsPtr params,
         mojo::PendingReceiver<mojom::NativeMessagingPort> port,
-        mojo::PendingRemote<mojom::NativeMessagingHost> host) = 0;
+        mojo::PendingRemote<mojom::NativeMessagingHost> host,
+        mojom::DriveFsDelegate::ConnectToExtensionCallback callback) = 0;
     virtual const std::string GetMachineRootID() = 0;
     virtual void PersistMachineRootID(const std::string& id) = 0;
   };
@@ -89,8 +121,37 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_DRIVEFS) DriveFsHost {
 
   ~DriveFsHost();
 
-  void AddObserver(DriveFsHostObserver* observer);
-  void RemoveObserver(DriveFsHostObserver* observer);
+  class Observer : public base::CheckedObserver {
+   public:
+    ~Observer() override;
+
+    // Triggered when the observed DriveFsHost is being destroyed.
+    virtual void OnHostDestroyed() {}
+
+    virtual void OnUnmounted() {}
+    virtual void OnSyncingStatusUpdate(const mojom::SyncingStatus& status) {}
+    virtual void OnIndividualSyncingStatusesDelta(
+        const std::vector<const SyncState>& sync_states) {}
+    virtual void OnMirrorSyncingStatusUpdate(
+        const mojom::SyncingStatus& status) {}
+    virtual void OnFilesChanged(const std::vector<mojom::FileChange>& changes) {
+    }
+    virtual void OnError(const mojom::DriveError& error) {}
+    virtual void OnItemProgress(const mojom::ProgressEvent& event) {}
+
+    // Starts observing the given host.
+    void Observe(DriveFsHost* host);
+
+    // Stops observing the host.
+    void Reset();
+
+    // Gets a pointer to the host being observed.
+    DriveFsHost* GetHost() const { return host_; }
+
+   private:
+    // The host being observed.
+    raw_ptr<DriveFsHost> host_ = nullptr;
+  };
 
   // Mount DriveFS.
   bool Mount();
@@ -108,8 +169,6 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_DRIVEFS) DriveFsHost {
   base::FilePath GetDataPath() const;
 
   mojom::DriveFs* GetDriveFsInterface() const;
-
-  SyncStatus GetSyncStatusForPath(const base::FilePath& drive_path) const;
 
   // Starts DriveFs search query and returns whether it will be
   // performed localy or remotely. Assumes DriveFS to be mounted.
@@ -132,11 +191,11 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_DRIVEFS) DriveFsHost {
   // The path to the user's profile.
   const base::FilePath profile_path_;
 
-  Delegate* const delegate_;
-  MountObserver* const mount_observer_;
-  network::NetworkConnectionTracker* const network_connection_tracker_;
-  const base::Clock* const clock_;
-  ash::disks::DiskMountManager* const disk_mount_manager_;
+  const raw_ptr<Delegate, DanglingUntriaged> delegate_;
+  const raw_ptr<MountObserver, DanglingUntriaged> mount_observer_;
+  const raw_ptr<network::NetworkConnectionTracker> network_connection_tracker_;
+  const raw_ptr<const base::Clock> clock_;
+  const raw_ptr<ash::disks::DiskMountManager> disk_mount_manager_;
   std::unique_ptr<base::OneShotTimer> timer_;
 
   std::unique_ptr<DriveFsAuth> account_token_delegate_;
@@ -144,7 +203,7 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_DRIVEFS) DriveFsHost {
   // State specific to the current mount, or null if not mounted.
   std::unique_ptr<MountState> mount_state_;
 
-  base::ObserverList<DriveFsHostObserver>::Unchecked observers_;
+  base::ObserverList<Observer, true> observers_;
   DialogHandler dialog_handler_;
 };
 

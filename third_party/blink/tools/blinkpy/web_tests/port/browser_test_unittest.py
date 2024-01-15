@@ -28,9 +28,6 @@
 
 import optparse
 
-from blinkpy.common import exit_codes
-from blinkpy.common.system.executive_mock import MockExecutive
-from blinkpy.web_tests.models import test_run_results
 from blinkpy.web_tests.port import browser_test
 from blinkpy.web_tests.port import browser_test_driver
 from blinkpy.web_tests.port import port_testcase
@@ -38,7 +35,7 @@ from blinkpy.web_tests.port import port_testcase
 
 class _BrowserTestTestCaseMixin(object):
     def test_driver_name_option(self):
-        self.assertTrue(self.make_port()._path_to_driver().endswith(
+        self.assertTrue(self.make_port().path_to_driver().endswith(
             self.driver_name_endswith))
 
     def test_default_timeout_ms(self):
@@ -89,7 +86,7 @@ class BrowserTestWinTest(_BrowserTestTestCaseMixin,
 class BrowserTestMacTest(_BrowserTestTestCaseMixin,
                          port_testcase.PortTestCase):
     os_name = 'mac'
-    os_version = 'mac10.14'
+    os_version = 'mac10.15'
     port_name = 'mac'
     port_maker = browser_test.BrowserTestMacPort
     driver_name_endswith = 'browser_tests'
@@ -100,4 +97,4 @@ class BrowserTestMacTest(_BrowserTestTestCaseMixin,
             options=optparse.Values({
                 'driver_name': 'browser_tests'
             }))
-        self.assertNotIn('.app/Contents/MacOS', test_port._path_to_driver())
+        self.assertNotIn('.app/Contents/MacOS', test_port.path_to_driver())

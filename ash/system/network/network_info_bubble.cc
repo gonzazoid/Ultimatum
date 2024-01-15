@@ -4,15 +4,20 @@
 
 #include "ash/system/network/network_info_bubble.h"
 
-#include "ash/constants/ash_features.h"
+#include <memory>
+
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
+#include "ash/style/typography.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/network/tray_network_state_model.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chromeos/services/network_config/public/cpp/cros_network_config_util.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/ui_base_types.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
+#include "ui/compositor/layer.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/views/bubble/bubble_border.h"
 #include "ui/views/controls/label.h"
@@ -20,6 +25,7 @@
 #include "ui/views/view.h"
 
 namespace ash {
+
 namespace {
 
 using chromeos::network_config::mojom::DeviceStateProperties;
@@ -57,8 +63,6 @@ NetworkInfoBubble::NetworkInfoBubble(base::WeakPtr<Delegate> delegate,
                                      views::View* anchor)
     : views::BubbleDialogDelegateView(anchor, views::BubbleBorder::TOP_RIGHT),
       delegate_(delegate) {
-  DCHECK(ash::features::IsQuickSettingsNetworkRevampEnabled());
-
   SetButtons(ui::DIALOG_BUTTON_NONE);
   set_margins(gfx::Insets(kBubbleMargin));
   SetArrow(views::BubbleBorder::NONE);
@@ -66,8 +70,26 @@ NetworkInfoBubble::NetworkInfoBubble(base::WeakPtr<Delegate> delegate,
   SetNotifyEnterExitOnChild(true);
   SetLayoutManager(std::make_unique<views::FillLayout>());
 
-  std::unique_ptr<views::Label> label =
-      std::make_unique<views::Label>(ComputeInfoText());
+  std::u16string info_text;
+  label_container_ =
+      AddChildView(views::Builder<views::BoxLayoutView>()
+                       .SetOrientation(views::BoxLayout::Orientation::kVertical)
+                       .Build());
+
+  info_text = ComputeInfoText();
+  // If the `ComputeInfoText()` is not the no networks info label, it means
+  // labels are added and no need to add the no network label.
+  if (info_text.compare(
+          l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_NO_NETWORKS)) != 0) {
+    label_container_->SetBorder(
+        views::CreateEmptyBorder(gfx::Insets::VH(0, 8)));
+    label_container_->SetID(kNetworkInfoBubbleLabelViewId);
+    return;
+  }
+  std::unique_ptr<views::Label> label = std::make_unique<views::Label>(
+      info_text.empty() ? ComputeInfoText() : info_text);
+  label->SetEnabledColorId(cros_tokens::kCrosSysOnSurface);
+  TypographyProvider::Get()->StyleLabel(TypographyToken::kCrosButton2, *label);
   label->SetHorizontalAlignment(gfx::ALIGN_TO_HEAD);
   label->SetID(kNetworkInfoBubbleLabelViewId);
   label->SetMultiLine(true);
@@ -77,8 +99,9 @@ NetworkInfoBubble::NetworkInfoBubble(base::WeakPtr<Delegate> delegate,
 }
 
 NetworkInfoBubble::~NetworkInfoBubble() {
-  if (delegate_)
+  if (delegate_) {
     delegate_->OnInfoBubbleDestroyed();
+  }
 }
 
 gfx::Size NetworkInfoBubble::CalculatePreferredSize() const {
@@ -107,13 +130,38 @@ std::u16string NetworkInfoBubble::ComputeInfoText() {
 
   std::u16string info_text;
 
-  auto add_address_if_exists = [&info_text](std::string address, int text_id) {
-    if (address.empty())
+  auto add_address_if_exists = [&info_text](std::string address, int text_id,
+                                            views::View* label_container) {
+    if (address.empty()) {
       return;
-    if (!info_text.empty())
+    }
+    if (!info_text.empty()) {
       info_text += u"\n";
+    }
     info_text +=
         l10n_util::GetStringFUTF16(text_id, base::UTF8ToUTF16(address));
+    auto container =
+        views::Builder<views::BoxLayoutView>()
+            .SetOrientation(views::BoxLayout::Orientation::kHorizontal)
+            .Build();
+    std::unique_ptr<views::Label> title_label = std::make_unique<views::Label>(
+        l10n_util::GetStringFUTF16(text_id, u""));
+    title_label->SetHorizontalAlignment(gfx::ALIGN_TO_HEAD);
+    title_label->SetSelectable(true);
+    std::unique_ptr<views::Label> address_label =
+        std::make_unique<views::Label>(base::UTF8ToUTF16(address));
+    address_label->SetHorizontalAlignment(gfx::ALIGN_TO_HEAD);
+    address_label->SetSelectable(true);
+
+    title_label->SetEnabledColorId(cros_tokens::kCrosSysOnSurface);
+    TypographyProvider::Get()->StyleLabel(TypographyToken::kCrosButton2,
+                                          *title_label);
+    address_label->SetEnabledColorId(cros_tokens::kCrosSysOnSurfaceVariant);
+    TypographyProvider::Get()->StyleLabel(TypographyToken::kCrosBody2,
+                                          *address_label);
+    container->AddChildView(title_label.release());
+    container->AddChildView(address_label.release());
+    label_container->AddChildView(container.release());
   };
 
   const NetworkStateProperties* default_network = Shell::Get()
@@ -129,27 +177,34 @@ std::u16string NetworkInfoBubble::ComputeInfoText() {
   if (device) {
     if (device->ipv4_address) {
       add_address_if_exists(device->ipv4_address->ToString(),
-                            IDS_ASH_STATUS_TRAY_IP_ADDRESS);
+                            IDS_ASH_STATUS_TRAY_IP_ADDRESS, label_container_);
     }
     if (device->ipv6_address) {
       add_address_if_exists(device->ipv6_address->ToString(),
-                            IDS_ASH_STATUS_TRAY_IPV6_ADDRESS);
+                            IDS_ASH_STATUS_TRAY_IPV6_ADDRESS, label_container_);
     }
   }
 
   if (delegate_->ShouldIncludeDeviceAddresses()) {
     add_address_if_exists(ComputeMacAddress(NetworkType::kEthernet),
-                          IDS_ASH_STATUS_TRAY_ETHERNET_ADDRESS);
+                          IDS_ASH_STATUS_TRAY_ETHERNET_ADDRESS,
+                          label_container_);
     add_address_if_exists(ComputeMacAddress(NetworkType::kWiFi),
-                          IDS_ASH_STATUS_TRAY_WIFI_ADDRESS);
+                          IDS_ASH_STATUS_TRAY_WIFI_ADDRESS, label_container_);
     add_address_if_exists(ComputeMacAddress(NetworkType::kCellular),
-                          IDS_ASH_STATUS_TRAY_CELLULAR_ADDRESS);
+                          IDS_ASH_STATUS_TRAY_CELLULAR_ADDRESS,
+                          label_container_);
   }
 
   // Avoid returning an empty bubble when no network information is available.
-  if (info_text.empty())
+  if (info_text.empty()) {
     return l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_NO_NETWORKS);
+  }
+
   return info_text;
 }
+
+BEGIN_METADATA(NetworkInfoBubble, views::BubbleDialogDelegateView)
+END_METADATA
 
 }  // namespace ash

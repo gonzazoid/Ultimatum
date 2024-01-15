@@ -21,6 +21,7 @@ found in the LICENSE file.
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:orientation="vertical">
+
       <TextView
           android:id="@+id/account_text_primary"
           android:layout_width="match_parent"

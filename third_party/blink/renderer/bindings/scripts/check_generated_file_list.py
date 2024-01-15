@@ -86,36 +86,63 @@ def main():
     web_idl_database = bind_gen.package_initializer.package_initializer(
     ).web_idl_database()
     idl_definitions = {
-        "callback_function": web_idl_database.callback_functions,
-        "callback_interface": web_idl_database.callback_interfaces,
-        "dictionary": web_idl_database.dictionaries,
-        "enumeration": web_idl_database.enumerations,
-        "interface": web_idl_database.interfaces,
-        "namespace": web_idl_database.namespaces,
-        "observable_array": web_idl_database.observable_arrays,
-        "union": web_idl_database.union_types,
+        "async_iterator": [
+            interface.async_iterator
+            for interface in web_idl_database.interfaces
+            if interface.async_iterator
+        ],
+        "callback_function":
+        web_idl_database.callback_functions,
+        "callback_interface":
+        web_idl_database.callback_interfaces,
+        "dictionary":
+        web_idl_database.dictionaries,
+        "enumeration":
+        web_idl_database.enumerations,
+        "interface":
+        web_idl_database.interfaces,
+        "namespace":
+        web_idl_database.namespaces,
+        "observable_array":
+        web_idl_database.observable_arrays,
+        "sync_iterator": [
+            interface.sync_iterator
+            for interface in web_idl_database.interfaces
+            if interface.sync_iterator
+        ],
+        "union":
+        web_idl_database.union_types,
     }
 
     error_log = []
 
     # Read generated_file_list into `filepaths`.
-    filepaths = {}  # {kind: set(filepaths...)}
+    filepaths = {}  # {kind: set([(filepath, for_testing), ...])}
+    for_testing = False
     kind = None
     with open(options.generated_file_list) as input:
         for token in itertools.chain.from_iterable(line.split()
                                                    for line in input):
+            if token == "--for_prod":
+                for_testing = False
+                continue
+            if token == "--for_testing":
+                for_testing = True
+                continue
             if token == "--kind":
                 kind = None
                 continue
+            if token.startswith("--"):
+                raise KeyError("Unknown keyword: {}".format(token))
             if kind is None:
                 kind = token
                 filepaths.setdefault(kind, set())
                 continue
-            filepaths[kind].add(token)
+            filepaths[kind].add((token, for_testing))
 
-    def check_if_listed(file_set, path, component, kind):
+    def check_if_listed(file_set, path, for_testing, component, kind):
         try:
-            file_set.remove(path)
+            file_set.remove((path, for_testing))
         except KeyError:
             error_log.append(
                 "\"{path}\" is generated but not listed in the file list of "
@@ -124,13 +151,7 @@ def main():
 
     # Check whether all generated files are listed appropriately.
     for kind, file_set in filepaths.items():
-        for idl_definition in idl_definitions[kind]:
-            # No check about testing files for now. It's quite rare for Blink
-            # developers to add testing *.idl, so there must be almost no
-            # chance for them to break the generated file lists.
-            if idl_definition.code_generator_info.for_testing:
-                continue
-
+        for idl_definition in idl_definitions.get(kind, []):
             if kind == "callback_function" and idl_definition.identifier in (
                     "OnErrorEventHandlerNonNull",
                     "OnBeforeUnloadEventHandlerNonNull"):
@@ -140,16 +161,17 @@ def main():
                 continue
 
             path_manager = PathManager(idl_definition)
+            for_testing = idl_definition.code_generator_info.for_testing
             check_if_listed(file_set, path_manager.api_path(ext="cc"),
-                            path_manager.api_component, kind)
+                            for_testing, path_manager.api_component, kind)
             check_if_listed(file_set, path_manager.api_path(ext="h"),
-                            path_manager.api_component, kind)
+                            for_testing, path_manager.api_component, kind)
             if path_manager.is_cross_components:
                 check_if_listed(file_set, path_manager.impl_path(ext="cc"),
-                                path_manager.impl_component, kind)
+                                for_testing, path_manager.impl_component, kind)
                 check_if_listed(file_set, path_manager.impl_path(ext="h"),
-                                path_manager.impl_component, kind)
-        for path in file_set:
+                                for_testing, path_manager.impl_component, kind)
+        for path, _ in file_set:
             error_log.append(
                 "\"{path}\" is listed in the file list of \"{kind}\", but "
                 "the file is not generated as {kind}.\n".format(path=path,

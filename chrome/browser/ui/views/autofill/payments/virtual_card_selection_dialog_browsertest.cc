@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
+#include "chrome/browser/ui/autofill/payments/virtual_card_selection_dialog.h"
 #include "chrome/browser/ui/autofill/payments/virtual_card_selection_dialog_controller_impl.h"
-#include "chrome/browser/ui/autofill/payments/virtual_card_selection_dialog_view.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/test/test_browser_dialog.h"
-#include "chrome/browser/ui/views/autofill/payments/virtual_card_selection_dialog_view_impl.h"
+#include "chrome/browser/ui/views/autofill/payments/virtual_card_selection_dialog_view.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
 #include "content/public/test/browser_test.h"
 #include "ui/views/controls/button/label_button.h"
@@ -48,15 +48,15 @@ class VirtualCardSelectionDialogBrowserTest : public DialogBrowserTest {
     }
   }
 
-  VirtualCardSelectionDialogViewImpl* GetDialog() {
+  VirtualCardSelectionDialogView* GetDialog() {
     if (!controller())
       return nullptr;
 
-    VirtualCardSelectionDialogView* dialog_view = controller()->dialog_view();
-    if (!dialog_view)
+    VirtualCardSelectionDialog* dialog = controller()->dialog();
+    if (!dialog)
       return nullptr;
 
-    return static_cast<VirtualCardSelectionDialogViewImpl*>(dialog_view);
+    return static_cast<VirtualCardSelectionDialogView*>(dialog);
   }
 
   VirtualCardSelectionDialogControllerImpl* controller() {

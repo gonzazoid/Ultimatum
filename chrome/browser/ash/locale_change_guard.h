@@ -13,26 +13,22 @@
 #include "ash/public/cpp/locale_update_controller.h"
 #include "base/gtest_prod_util.h"
 #include "base/lazy_instance.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/session_manager/core/session_manager_observer.h"
-#include "content/public/browser/notification_observer.h"
-#include "content/public/browser/notification_registrar.h"
-#include "content/public/browser/notification_types.h"
 
 class Profile;
 
 namespace ash {
 
 // Performs check whether locale has been changed automatically recently
-// (based on synchronized user preference).  If so: shows notification that
+// (based on synchronized user preference). If so: shows notification that
 // allows user to revert change.
-class LocaleChangeGuard : public content::NotificationObserver,
-                          public session_manager::SessionManagerObserver,
-                          public DeviceSettingsService::Observer,
-                          public base::SupportsWeakPtr<LocaleChangeGuard> {
+class LocaleChangeGuard final : public session_manager::SessionManagerObserver,
+                                public DeviceSettingsService::Observer {
  public:
   explicit LocaleChangeGuard(Profile* profile);
 
@@ -64,11 +60,6 @@ class LocaleChangeGuard : public content::NotificationObserver,
   void AcceptLocaleChange();
   void RevertLocaleChange();
 
-  // content::NotificationObserver
-  void Observe(int type,
-               const content::NotificationSource& source,
-               const content::NotificationDetails& details) override;
-
   // session_manager::SessionManagerObserver:
   void OnUserSessionStarted(bool is_primary_user) override;
 
@@ -96,13 +87,12 @@ class LocaleChangeGuard : public content::NotificationObserver,
 
   std::string from_locale_;
   std::string to_locale_;
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   bool reverted_ = false;
-  bool main_frame_loaded_ = false;
-  content::NotificationRegistrar registrar_;
   base::ScopedObservation<session_manager::SessionManager,
                           session_manager::SessionManagerObserver>
       session_observation_{this};
+  base::WeakPtrFactory<LocaleChangeGuard> weak_ptr_factory_{this};
 };
 
 }  // namespace ash

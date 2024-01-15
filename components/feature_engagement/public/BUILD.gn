@@ -2,15 +2,22 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+if (is_chromeos) {
+  import("//build/config/chromeos/ui_mode.gni")
+}
+
 if (is_android) {
   import("//build/config/android/config.gni")
   import("//build/config/android/rules.gni")
+  import("//third_party/jni_zero/jni_zero.gni")
 }
 
 source_set("public") {
   sources = [
     "configuration.cc",
     "configuration.h",
+    "configuration_provider.cc",
+    "configuration_provider.h",
     "event_constants.cc",
     "event_constants.h",
     "feature_configurations.cc",
@@ -19,16 +26,31 @@ source_set("public") {
     "feature_constants.h",
     "feature_list.cc",
     "feature_list.h",
+    "field_trial_configuration_provider.cc",
+    "field_trial_configuration_provider.h",
+    "group_configurations.cc",
+    "group_configurations.h",
+    "group_constants.cc",
+    "group_constants.h",
+    "group_list.cc",
+    "group_list.h",
+    "local_configuration_provider.cc",
+    "local_configuration_provider.h",
+    "stats.cc",
+    "stats.h",
     "tracker.cc",
     "tracker.h",
   ]
 
+  public_deps = [ "//base" ]
   deps = [
-    "//base",
+    "//build:branding_buildflags",
     "//components/feed:feature_list",
     "//components/flags_ui",
     "//components/keyed_service/core",
+    "//extensions/buildflags",
   ]
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   if (is_android) {
     sources += [
@@ -37,6 +59,24 @@ source_set("public") {
     ]
 
     deps += [ "//components/feature_engagement/public:jni_headers" ]
+  }
+
+  if (is_ios) {
+    sources += [
+      "ios_promo_feature_configuration.cc",
+      "ios_promo_feature_configuration.h",
+    ]
+  }
+
+  if (is_chromeos && is_chromeos_ash) {
+    sources += [
+      "scalable_iph_feature_configurations.cc",
+      "scalable_iph_feature_configurations.h",
+    ]
+    deps += [
+      "//ash/constants",
+      "//chromeos/ash/components/scalable_iph:constants",
+    ]
   }
 }
 
@@ -68,12 +108,14 @@ if (is_android) {
     deps = [
       ":jni_headers",
       "//base:base_java",
-      "//base:jni_java",
       "//third_party/androidx:androidx_annotation_annotation_java",
+      "//third_party/jni_zero:jni_zero_java",
     ]
-    annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
 
-    srcjar_deps = [ ":public_java_enums_srcjar" ]
+    srcjar_deps = [
+      ":jni_headers",
+      ":public_java_enums_srcjar",
+    ]
   }
 
   java_cpp_enum("public_java_enums_srcjar") {

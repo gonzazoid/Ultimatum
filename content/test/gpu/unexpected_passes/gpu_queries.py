@@ -5,20 +5,35 @@
 
 import typing
 
+from gpu_tests import gpu_integration_test
+
 from unexpected_passes_common import constants
 from unexpected_passes_common import data_types
 from unexpected_passes_common import queries as queries_module
 
+# step_name can be either the step_name tag or test_suite variant because of the
+# way Skylab builders work. In normal Chromium test tasks, the step name is
+# reported to the task-level RDB invocation, which then gets applied to every
+# result that task reports. Skylab test steps are actually separate
+# Buildbucket builds that report results a bit differently. They do not report
+# a step_name tag, but do put the same information in for the test_suite
+# variant. So, we will look for step_name first to cover most builders and fall
+# back to test_suite for Skylab builders.
 RESULTS_SUBQUERY = """\
   results AS (
     SELECT
       exported.id,
       test_id,
       status,
-      (
-        SELECT value
-        FROM tr.tags
-        WHERE key = "step_name") as step_name,
+      IFNULL(
+        (
+          SELECT value
+          FROM tr.tags
+          WHERE key = "step_name"),
+        (
+          SELECT value
+          FROM tr.variant
+          WHERE key = "test_suite")) as step_name,
       ARRAY(
         SELECT value
         FROM tr.tags
@@ -31,7 +46,8 @@ RESULTS_SUBQUERY = """\
       `chrome-luci-data.{{builder_project}}.gpu_{builder_type}_test_results` tr,
       builds b
     WHERE
-      exported.id = build_inv_id
+      DATE(tr.partition_time) > DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+      AND exported.id = build_inv_id
       AND status != "SKIP"
       {{test_filter_clause}}
   )"""
@@ -56,7 +72,8 @@ WITH
     FROM
       `chrome-luci-data.{{builder_project}}.gpu_ci_test_results` tr
     WHERE
-      exported.realm = "{{builder_project}}:ci"
+      DATE(partition_time) > DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+      AND exported.realm = "{{builder_project}}:ci"
       AND STRUCT("builder", @builder_name) IN UNNEST(variant)
     ORDER BY partition_time DESC
     LIMIT @num_builds
@@ -90,7 +107,8 @@ WITH
       `chrome-luci-data.{{builder_project}}.gpu_try_test_results` tr,
       submitted_builds sb
     WHERE
-      exported.realm = "{{builder_project}}:try"
+      DATE(tr.partition_time) > DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+      AND exported.realm = "{{builder_project}}:try"
       AND STRUCT("builder", @builder_name) IN UNNEST(variant)
       AND exported.id = sb.id
     ORDER BY partition_time DESC
@@ -113,7 +131,8 @@ WITH
       partition_time
     FROM `chrome-luci-data.{builder_project}.gpu_{builder_type}_test_results` tr
     WHERE
-      exported.realm = "{builder_project}:{builder_type}"
+      DATE(partition_time) > DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+      AND exported.realm = "{builder_project}:{builder_type}"
       AND STRUCT("builder", @builder_name) IN UNNEST(variant)
     ORDER BY partition_time DESC
     LIMIT 50
@@ -134,7 +153,8 @@ WITH
       `chrome-luci-data.{builder_project}.gpu_{builder_type}_test_results` tr,
       builds b
     WHERE
-      exported.id = build_inv_id
+      DATE(tr.partition_time) > DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+      AND exported.id = build_inv_id
       AND status != "SKIP"
       AND REGEXP_CONTAINS(
         test_id,
@@ -146,7 +166,6 @@ WHERE
   (
     "Failure" IN UNNEST(typ_expectations)
     OR "RetryOnFailure" IN UNNEST(typ_expectations))
-  {suite_filter_clause}
 """
 
 ALL_BUILDERS_FROM_TABLE_SUBQUERY = """\
@@ -156,7 +175,9 @@ ALL_BUILDERS_FROM_TABLE_SUBQUERY = """\
         FROM tr.variant
         WHERE key = "builder") as builder_name
     FROM
-      `chrome-luci-data.{builder_project}.gpu_{builder_type}_test_results` tr"""
+      `chrome-luci-data.{builder_project}.gpu_{builder_type}_test_results` tr
+    WHERE
+      DATE(partition_time) > DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)"""
 
 ACTIVE_BUILDER_QUERY_TEMPLATE = """\
 WITH
@@ -173,50 +194,15 @@ ACTIVE_INTERNAL_BUILDER_SUBQUERY = """\
 {all_builders_from_table_subquery}""".format(
     all_builders_from_table_subquery=ALL_BUILDERS_FROM_TABLE_SUBQUERY)
 
-# The suite reported to Telemetry for selecting which suite to run is not
-# necessarily the same one that is reported to typ/ResultDB, so map any special
-# cases here.
-TELEMETRY_SUITE_TO_RDB_SUITE_EXCEPTION_MAP = {
-    'info_collection': 'info_collection_test',
-    'power': 'power_measurement_integration_test',
-    'trace_test': 'trace_integration_test',
-}
-
 
 class GpuBigQueryQuerier(queries_module.BigQueryQuerier):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
 
-    self._check_webgl_version = None
-    self._webgl_version_tag = None
-    # WebGL 1 and 2 tests are technically the same suite, but have different
-    # expectation files. This leads to us getting both WebGL 1 and 2 results
-    # when we only have expectations for one of them, which causes all the
-    # results from the other to be reported as not having a matching
-    # expectation.
-    # TODO(crbug.com/1140283): Remove this once WebGL expectations are merged
-    # and there's no need to differentiate them.
-    # pylint: disable=access-member-before-definition
-    if 'webgl_conformance' in self._suite:
-      webgl_version = self._suite[-1]
-      self._suite = 'webgl_conformance'
-      self._webgl_version_tag = 'webgl-version-%s' % webgl_version
-      self._check_webgl_version =\
-          lambda tags: self._webgl_version_tag in tags
-    else:
-      self._check_webgl_version = lambda tags: True
-    # pylint: enable=access-member-before-definition
-
-    # Most test names are |suite|_integration_test, but there are several that
-    # are not reported that way in typ, and by extension ResultDB, so adjust
-    # that here.
-    self._suite = TELEMETRY_SUITE_TO_RDB_SUITE_EXCEPTION_MAP.get(
-        self._suite, self._suite + '_integration_test')
-
-  def _ShouldSkipOverResult(self, result: queries_module.QueryResult) -> bool:
-    # Skip over the result if the WebGL version does not match the one we're
-    # looking for.
-    return not self._check_webgl_version(result['typ_tags'])
+    name_mapping = gpu_integration_test.GenerateTestNameMapping()
+    # The suite name we use for identification (return value of Name()) is not
+    # the same as the one used by ResultDB (Python module), so convert here.
+    self._suite = name_mapping[self._suite].__module__.split('.')[-1]
 
   def _GetQueryGeneratorForBuilder(
       self, builder: data_types.BuilderEntry
@@ -229,11 +215,9 @@ class GpuBigQueryQuerier(queries_module.BigQueryQuerier):
           test_id,
           r"gpu_tests\\.%s\\.")""" % self._suite)
 
-    query = TEST_FILTER_QUERY_TEMPLATE.format(
-        builder_project=builder.project,
-        builder_type=builder.builder_type,
-        suite=self._suite,
-        suite_filter_clause=self._GetSuiteFilterClause())
+    query = TEST_FILTER_QUERY_TEMPLATE.format(builder_project=builder.project,
+                                              builder_type=builder.builder_type,
+                                              suite=self._suite)
     query_results = self._RunBigQueryCommandsForJsonOutput(
         query, {'': {
             'builder_name': builder.name
@@ -255,21 +239,6 @@ class GpuBigQueryQuerier(queries_module.BigQueryQuerier):
     # Only one expectation file is ever used for the GPU tests, so just use
     # whichever one we've read in.
     return None
-
-  def _GetSuiteFilterClause(self) -> str:
-    """Returns a SQL clause to only include relevant suites.
-
-    Meant for cases where suites are differentiated by typ tag rather than
-    reported suite name, e.g. WebGL 1 vs. 2 conformance.
-
-    Returns:
-      A string containing a valid SQL clause. Will be an empty string if no
-      filtering is possible/necessary.
-    """
-    if not self._webgl_version_tag:
-      return ''
-
-    return 'AND "%s" IN UNNEST(typ_tags)' % self._webgl_version_tag
 
   def _StripPrefixFromTestId(self, test_id: str) -> str:
     # GPU test IDs provided by ResultDB are the test name as known by the test

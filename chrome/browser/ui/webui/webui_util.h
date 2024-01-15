@@ -23,8 +23,8 @@ class ThemeProvider;
 namespace webui {
 
 // Performs common setup steps for a |source| using JS modules: enable i18n
-// string replacements, adding test resources, and updating CSP/trusted types to
-// allow tests to work.
+// string replacements, adding test resources, and configuring script-src CSP
+// headers to allow tests to work.
 // UIs that don't have a dedicated grd file should generally use this utility.
 void SetJSModuleDefaults(content::WebUIDataSource* source);
 
@@ -35,11 +35,8 @@ void SetupWebUIDataSource(content::WebUIDataSource* source,
                           base::span<const ResourcePath> resources,
                           int default_resource);
 
-// Enables the 'trusted-types' CSP for the given WebUIDataSource. Normally this
-// is disabled by default as part of SetJSModuleDefaults() or
-// SetupWebUIDataSource().
-// TODO(crbug.com/1098690): Make this the default configuration as more WebUIs
-// become TrustedTypes compliant.
+// Enables the 'trusted-types' CSP for the given WebUIDataSource. This is the
+// default behavior when calling SetupWebUIDataSource().
 void EnableTrustedTypesCSP(content::WebUIDataSource* source);
 
 // Adds string for |id| to |source| and removes & from the string to allow for
@@ -48,10 +45,8 @@ void AddLocalizedString(content::WebUIDataSource* source,
                         const std::string& message,
                         int id);
 
-// Returns whether the device is enterprise managed. Note that on Linux, there's
-// no good way of detecting whether the device is managed, so always return
-// false.
-bool IsEnterpriseManaged();
+// Adds string to use on HTML to enable Refresh 2023 styles for WebUI.
+void SetupChromeRefresh2023(content::WebUIDataSource* source);
 
 #if defined(TOOLKIT_VIEWS)
 

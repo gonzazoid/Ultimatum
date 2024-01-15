@@ -9,12 +9,13 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <string_view>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_path.h"
 #include "base/files/file_path_watcher.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/free_deleter.h"
@@ -352,7 +353,7 @@ bool CheckAndRecordCompatibility(bool have_name_resolution_policy,
 
 }  // namespace
 
-std::string ParseDomainASCII(base::WStringPiece widestr) {
+std::string ParseDomainASCII(std::wstring_view widestr) {
   if (widestr.empty())
     return "";
 
@@ -364,8 +365,9 @@ std::string ParseDomainASCII(base::WStringPiece widestr) {
   // Otherwise try to convert it from IDN to punycode.
   const int kInitialBufferSize = 256;
   url::RawCanonOutputT<char16_t, kInitialBufferSize> punycode;
-  if (!url::IDNToASCII(base::as_u16cstr(widestr), widestr.length(), &punycode))
+  if (!url::IDNToASCII(base::AsStringPiece16(widestr), &punycode)) {
     return "";
+  }
 
   // |punycode_output| should now be ASCII; convert it to a std::string.
   // (We could use UTF16ToASCII() instead, but that requires an extra string
@@ -378,7 +380,7 @@ std::string ParseDomainASCII(base::WStringPiece widestr) {
   return converted;
 }
 
-std::vector<std::string> ParseSearchList(base::WStringPiece value) {
+std::vector<std::string> ParseSearchList(std::wstring_view value) {
   if (value.empty())
     return {};
 
@@ -388,7 +390,7 @@ std::vector<std::string> ParseSearchList(base::WStringPiece value) {
   // Although nslookup and network connection property tab ignore such
   // fragments ("a,b,,c" becomes ["a", "b", "c"]), our reference is getaddrinfo
   // (which sees ["a", "b"]). WMI queries also return a matching search list.
-  for (base::WStringPiece t : base::SplitStringPiece(
+  for (std::wstring_view t : base::SplitStringPiece(
            value, L",", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL)) {
     // Convert non-ASCII to punycode, although getaddrinfo does not properly
     // handle such suffixes.

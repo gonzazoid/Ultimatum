@@ -6,23 +6,25 @@
 
 #include <stdio.h>
 
+#include <limits>
 #include <string>
 #include <vector>
 
-#include "base/command_line.h"
-#include "base/format_macros.h"
 #include "base/logging.h"
+#include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
-#include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "ui/display/display.h"
 #include "ui/display/display_features.h"
 #include "ui/display/display_switches.h"
-#include "ui/display/manager/display_manager_utilities.h"
+#include "ui/display/manager/util/display_manager_test_util.h"
+#include "ui/display/manager/util/display_manager_util.h"
+#include "ui/display/types/display_constants.h"
+#include "ui/display/util/display_util.h"
 #include "ui/gfx/color_space.h"
 #include "ui/gfx/display_color_spaces.h"
 #include "ui/gfx/geometry/dip_util.h"
@@ -32,12 +34,8 @@
 #include "ui/gfx/geometry/size_f.h"
 
 namespace display {
+
 namespace {
-
-// Use larger than max int to catch overflow early.
-const int64_t kSynthesizedDisplayIdStart = 2200000000LL;
-
-int64_t next_synthesized_display_id = kSynthesizedDisplayIdStart;
 
 const float kDpi96 = 96.0;
 
@@ -91,9 +89,24 @@ bool IsWithinEpsilon(float a, float b) {
   return std::abs(a - b) < kEpsilon;
 }
 
+std::string PanelOrientationToString(PanelOrientation orientation) {
+  switch (orientation) {
+    case kNormal:
+      return "Normal";
+    case kBottomUp:
+      return "BottomUp";
+    case kLeftUp:
+      return "LeftUp";
+    case kRightUp:
+      return "RightUp";
+  }
+  NOTREACHED();
+  return "";
+}
+
 }  // namespace
 
-ManagedDisplayMode::ManagedDisplayMode() {}
+ManagedDisplayMode::ManagedDisplayMode() = default;
 
 ManagedDisplayMode::ManagedDisplayMode(const gfx::Size& size) : size_(size) {}
 
@@ -134,7 +147,7 @@ bool ManagedDisplayMode::operator==(const ManagedDisplayMode& other) const {
 
 gfx::Size ManagedDisplayMode::GetSizeInDIP() const {
   gfx::SizeF size_dip(size_);
-  size_dip.Scale(1.0f / device_scale_factor_);
+  size_dip.InvScale(device_scale_factor_);
   return gfx::ToFlooredSize(size_dip);
 }
 
@@ -172,7 +185,7 @@ ManagedDisplayInfo ManagedDisplayInfo::CreateFromSpecWithID(
                              kDefaultHostWindowWidth, kDefaultHostWindowHeight);
   base::StringPiece main_spec = spec;
 
-  gfx::RoundedCornersF rounded_corners_radii;
+  gfx::RoundedCornersF panel_corners_radii;
   std::vector<base::StringPiece> parts = base::SplitStringPiece(
       main_spec, "~", base::KEEP_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
   if (parts.size() == 2) {
@@ -190,7 +203,7 @@ ManagedDisplayInfo ManagedDisplayInfo::CreateFromSpecWithID(
       radii[idx] = static_cast<float>(radius_in_int);
     }
 
-    rounded_corners_radii =
+    panel_corners_radii =
         (radii_part.size() == 1)
             ? gfx::RoundedCornersF{radii[0]}
             : gfx::RoundedCornersF{radii[0], radii[1], radii[2], radii[3]};
@@ -281,9 +294,8 @@ ManagedDisplayInfo ManagedDisplayInfo::CreateFromSpecWithID(
           highest_refresh_rate = refresh_rate;
           native_mode = i;
         }
-        display_modes.push_back(
-            ManagedDisplayMode(size, refresh_rate, is_interlaced, false,
-                               device_scale_factor_for_mode));
+        display_modes.emplace_back(size, refresh_rate, is_interlaced, false,
+                                   device_scale_factor_for_mode);
       }
       ManagedDisplayMode dm = display_modes[native_mode];
       display_modes[native_mode] =
@@ -292,23 +304,21 @@ ManagedDisplayInfo ManagedDisplayInfo::CreateFromSpecWithID(
     }
   }
 
-  if (id == kInvalidDisplayId) {
-    id = next_synthesized_display_id;
-    next_synthesized_display_id = GetNextSynthesizedDisplayId(id);
-  }
-  ManagedDisplayInfo display_info(
-      id, base::StringPrintf("Display-%d", static_cast<int>(id)), has_overscan);
+  ManagedDisplayInfo display_info =
+      id == kInvalidDisplayId ? CreateDisplayInfo(GetASynthesizedDisplayId())
+                              : CreateDisplayInfo(id);
   display_info.set_device_scale_factor(device_scale_factor);
   display_info.SetRotation(rotation, Display::RotationSource::ACTIVE);
   display_info.SetRotation(rotation, Display::RotationSource::USER);
   display_info.set_zoom_factor(zoom_factor);
   display_info.SetBounds(bounds_in_native);
-  display_info.set_rounded_corners_radii(rounded_corners_radii);
+  display_info.set_has_overscan(has_overscan);
+  display_info.set_panel_corners_radii(panel_corners_radii);
 
   if (!display_modes.size()) {
-    display_modes.push_back(ManagedDisplayMode(
-        display_info.size_in_pixel(), 60.0f,
-        /*interlace=*/false, /*native=*/true, device_scale_factor));
+    display_modes.emplace_back(display_info.size_in_pixel(), 60.0f,
+                               /*interlace=*/false, /*native=*/true,
+                               device_scale_factor);
   }
 
   display_info.SetManagedDisplayModes(display_modes);
@@ -348,7 +358,9 @@ ManagedDisplayInfo::ManagedDisplayInfo()
       native_(false),
       is_aspect_preserving_scaling_(false),
       clear_overscan_insets_(false),
-      bits_per_channel_(0) {}
+      bits_per_channel_(0),
+      variable_refresh_rate_state_(kVrrNotCapable),
+      vsync_rate_min_(absl::nullopt) {}
 
 ManagedDisplayInfo::ManagedDisplayInfo(int64_t id,
                                        const std::string& name,
@@ -369,12 +381,14 @@ ManagedDisplayInfo::ManagedDisplayInfo(int64_t id,
       native_(false),
       is_aspect_preserving_scaling_(false),
       clear_overscan_insets_(false),
-      bits_per_channel_(0) {}
+      bits_per_channel_(0),
+      variable_refresh_rate_state_(kVrrNotCapable),
+      vsync_rate_min_(absl::nullopt) {}
 
 ManagedDisplayInfo::ManagedDisplayInfo(const ManagedDisplayInfo& other) =
     default;
 
-ManagedDisplayInfo::~ManagedDisplayInfo() {}
+ManagedDisplayInfo::~ManagedDisplayInfo() = default;
 
 void ManagedDisplayInfo::SetRotation(Display::Rotation rotation,
                                      Display::RotationSource source) {
@@ -399,8 +413,16 @@ Display::Rotation ManagedDisplayInfo::GetRotation(
   return rotations_.at(source);
 }
 
+void ManagedDisplayInfo::AddZoomFactorForSize(const std::string& size,
+                                              float zoom_factor) {
+  zoom_factor_map_[size] = zoom_factor;
+}
+
 void ManagedDisplayInfo::Copy(const ManagedDisplayInfo& native_info) {
   DCHECK(id_ == native_info.id_);
+  port_display_id_ = native_info.port_display_id_;
+  edid_display_id_ = native_info.edid_display_id_;
+  connector_index_ = native_info.connector_index_;
   manufacturer_id_ = native_info.manufacturer_id_;
   product_id_ = native_info.product_id_;
   year_of_manufacture_ = native_info.year_of_manufacture_;
@@ -428,7 +450,12 @@ void ManagedDisplayInfo::Copy(const ManagedDisplayInfo& native_info) {
   refresh_rate_ = native_info.refresh_rate_;
   is_interlaced_ = native_info.is_interlaced_;
   native_ = native_info.native_;
-  rounded_corners_radii_ = native_info.rounded_corners_radii_;
+  panel_corners_radii_ = native_info.panel_corners_radii_;
+
+  drm_formats_and_modifiers_ = native_info.drm_formats_and_modifiers_;
+  variable_refresh_rate_state_ = native_info.variable_refresh_rate_state_;
+  vsync_rate_min_ = native_info.vsync_rate_min_;
+  detected_ = native_info.detected_;
 
   // Rotation, color_profile and overscan are given by preference,
   // or unit tests. Don't copy if this native_info came from
@@ -436,7 +463,7 @@ void ManagedDisplayInfo::Copy(const ManagedDisplayInfo& native_info) {
   if (native_info.from_native_platform())
     return;
   // Update the overscan_insets_in_dip_ either if the inset should be
-  // cleared, or has non empty insts.
+  // cleared, or has non empty insets.
   if (native_info.clear_overscan_insets())
     overscan_insets_in_dip_ = gfx::Insets();
   else if (!native_info.overscan_insets_in_dip_.IsEmpty())
@@ -447,12 +474,7 @@ void ManagedDisplayInfo::Copy(const ManagedDisplayInfo& native_info) {
 }
 
 void ManagedDisplayInfo::SetBounds(const gfx::Rect& new_bounds_in_native) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  static bool reject_square = base::CommandLine::ForCurrentProcess()->HasSwitch(
-      switches::kRejectSquareDisplay);
-  if (reject_square)
-    DCHECK_NE(new_bounds_in_native.width(), new_bounds_in_native.height());
-#endif
+  DCHECK_NE(new_bounds_in_native.width(), new_bounds_in_native.height());
 
   bounds_in_native_ = new_bounds_in_native;
   size_in_pixel_ = new_bounds_in_native.size();
@@ -460,7 +482,19 @@ void ManagedDisplayInfo::SetBounds(const gfx::Rect& new_bounds_in_native) {
 }
 
 float ManagedDisplayInfo::GetEffectiveDeviceScaleFactor() const {
-  return device_scale_factor_ * zoom_factor_;
+  if (zoom_factor_ == 1.0f) {
+    return device_scale_factor_;
+  }
+  // When the display zoom is applied, try to adjust the final scale so that it
+  // will produce the integer pixel size (wider side) when the scale is applied
+  // to the logical size. Note that this a best effort and not guaranteed.
+  const float scale_factor = device_scale_factor_ * zoom_factor_;
+  const int pixel_size =
+      std::max(bounds_in_native_.width(), bounds_in_native_.height());
+  const float logical_size_f = pixel_size / scale_factor;
+  // Floor the value by default but allow very close value to be roudnd up.
+  const int32_t logical_size = base::ClampFloor(logical_size_f + 0.0005);
+  return pixel_size / static_cast<float>(logical_size);
 }
 
 gfx::Size ManagedDisplayInfo::GetSizeInPixelWithPanelOrientation() const {
@@ -527,16 +561,24 @@ std::string ManagedDisplayInfo::ToString() const {
   int rotation_degree = static_cast<int>(GetActiveRotation()) * 90;
 
   std::string result = base::StringPrintf(
-      "ManagedDisplayInfo[%lld] native bounds=%s, size=%s, device-scale=%g, "
+      "ManagedDisplayInfo[%lld] port_display_id=%lld, edid_display_id=%lld, "
+      "native bounds=%s, size=%s, device-scale=%g, "
       "display-zoom=%g, overscan=%s, rotation=%d, touchscreen=%s, "
-      "corner_radii=%s",
-      static_cast<long long int>(id_), bounds_in_native_.ToString().c_str(),
-      size_in_pixel_.ToString().c_str(), device_scale_factor_, zoom_factor_,
+      "panel_corners_radii=%s, panel_orientation=%s, detected=%s, "
+      "color_space=%s",
+      static_cast<long long int>(id_),
+      static_cast<long long int>(port_display_id_),
+      static_cast<long long int>(edid_display_id_),
+      bounds_in_native_.ToString().c_str(), size_in_pixel_.ToString().c_str(),
+      device_scale_factor_, zoom_factor_,
       overscan_insets_in_dip_.ToString().c_str(), rotation_degree,
       touch_support_ == Display::TouchSupport::AVAILABLE     ? "yes"
       : touch_support_ == Display::TouchSupport::UNAVAILABLE ? "no"
                                                              : "unknown",
-      rounded_corners_radii_.ToString().c_str());
+      panel_corners_radii_.ToString().c_str(),
+      PanelOrientationToString(panel_orientation_).c_str(),
+      detected_ ? "true" : "false",
+      display_color_spaces_.GetRasterColorSpace().ToString().c_str());
 
   return result;
 }
@@ -574,18 +616,27 @@ Display::Rotation ManagedDisplayInfo::GetRotationWithPanelOrientation(
                                         4);
 }
 
-void ResetDisplayIdForTest() {
-  next_synthesized_display_id = kSynthesizedDisplayIdStart;
-}
+ManagedDisplayInfo CreateDisplayInfo(int64_t id, const gfx::Rect& bounds) {
+  display::ManagedDisplayInfo info(
+      id, base::StringPrintf("Display-%d", static_cast<int>(id)), false);
 
-int64_t GetNextSynthesizedDisplayId(int64_t id) {
-  int next_output_index = id & 0xFF;
-  next_output_index++;
-  DCHECK_GT(0x100, next_output_index);
-  int64_t base = GetDisplayIdWithoutOutputIndex(id);
-  if (id == kSynthesizedDisplayIdStart)
-    return id + 0x100 + next_output_index;
-  return base + next_output_index;
+  const int64_t alternate_id = ProduceAlternativeSchemeIdForId(id);
+  if (features::IsEdidBasedDisplayIdsEnabled()) {
+    info.set_edid_display_id(id);
+    info.set_connector_index(GetNextSynthesizedEdidDisplayConnectorIndex());
+
+    info.set_port_display_id(alternate_id);
+  } else {
+    info.set_port_display_id(id);
+    // Output index is stored in the first 8 bits.
+    info.set_connector_index(id & 0xFF);
+
+    info.set_edid_display_id(alternate_id);
+  }
+  if (!bounds.IsEmpty()) {
+    info.SetBounds(bounds);
+  }
+  return info;
 }
 
 }  // namespace display

@@ -16,6 +16,10 @@ source_set("mojo_service_manager") {
     "//base",
     "//chromeos:features",
     "//chromeos/ash/components/mojo_service_manager",
+    "//content/public/common",
     "//mojo/public/cpp/bindings",
   ]
+  if (!use_real_chromeos_services) {
+    deps += [ "//chromeos/ash/services/cros_healthd/public/cpp" ]
+  }
 }

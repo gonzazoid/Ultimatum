@@ -6,7 +6,6 @@
 
 #include <comdef.h>
 
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
 #include "services/device/generic_sensor/gravity_fusion_algorithm_using_accelerometer.h"
 #include "services/device/generic_sensor/linear_acceleration_fusion_algorithm_using_accelerometer.h"
@@ -14,6 +13,7 @@
 #include "services/device/generic_sensor/platform_sensor_fusion.h"
 #include "services/device/generic_sensor/platform_sensor_reader_winrt.h"
 #include "services/device/generic_sensor/platform_sensor_win.h"
+#include "services/device/public/cpp/generic_sensor/sensor_reading_shared_buffer.h"
 
 namespace device {
 
@@ -65,8 +65,8 @@ void PlatformSensorProviderWinrt::CreateSensorInternal(
 
     // Try to create low-level sensors by default.
     default: {
-      base::PostTaskAndReplyWithResult(
-          com_sta_task_runner_.get(), FROM_HERE,
+      com_sta_task_runner_->PostTaskAndReplyWithResult(
+          FROM_HERE,
           base::BindOnce(&PlatformSensorProviderWinrt::CreateSensorReader,
                          base::Unretained(this), type),
           base::BindOnce(&PlatformSensorProviderWinrt::SensorReaderCreated,

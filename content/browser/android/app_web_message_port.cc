@@ -9,6 +9,7 @@
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "base/memory/ptr_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "content/public/android/content_jni_headers/AppWebMessagePort_jni.h"
 #include "content/public/browser/android/message_payload.h"
 #include "content/public/browser/android/message_port_helper.h"
@@ -44,12 +45,13 @@ base::android::ScopedJavaLocalRef<jobjectArray> CreateJavaMessagePort(
 // static
 base::android::ScopedJavaLocalRef<jobject> AppWebMessagePort::Create(
     blink::MessagePortDescriptor&& descriptor) {
-  auto ptr = base::WrapUnique(new AppWebMessagePort(std::move(descriptor)));
+  auto app_web_message_port =
+      base::WrapUnique(new AppWebMessagePort(std::move(descriptor)));
   JNIEnv* env = base::android::AttachCurrentThread();
-  auto* raw_ptr = ptr.get();
+  auto* app_web_messge_port_ptr = app_web_message_port.get();
   auto j_obj = Java_AppWebMessagePort_Constructor(
-      env, reinterpret_cast<intptr_t>(ptr.release()));
-  raw_ptr->j_obj_ = JavaObjectWeakGlobalRef(env, j_obj);
+      env, reinterpret_cast<intptr_t>(app_web_message_port.release()));
+  app_web_messge_port_ptr->j_obj_ = JavaObjectWeakGlobalRef(env, j_obj);
   return j_obj;
 }
 
@@ -73,7 +75,7 @@ std::vector<blink::MessagePortDescriptor> AppWebMessagePort::Release(
 }
 
 AppWebMessagePort::AppWebMessagePort(blink::MessagePortDescriptor&& descriptor)
-    : runner_(base::ThreadTaskRunnerHandle::Get()),
+    : runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       descriptor_(std::move(descriptor)) {
   // AppWebMessagePort can only be created on main thread.
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -100,6 +102,11 @@ void AppWebMessagePort::PostMessage(
   DCHECK(runner_->BelongsToCurrentThread());
   DCHECK(descriptor_.IsValid());
   DCHECK(connector_);
+  if (connector_->encountered_error()) {
+    LOG(ERROR)
+        << "Failed to send message to renderer, connector encountered error.";
+    return;
+  }
   blink::TransferableMessage transferable_message =
       blink::EncodeWebMessagePayload(ConvertToWebMessagePayloadFromJava(
           base::android::ScopedJavaLocalRef<jobject>(j_message_payload)));
@@ -109,7 +116,7 @@ void AppWebMessagePort::PostMessage(
   // set the agent cluster ID to the embedder's, and nullify its parent task ID.
   transferable_message.sender_agent_cluster_id =
       blink::WebMessagePort::GetEmbedderAgentClusterID();
-  transferable_message.parent_task_id = absl::nullopt;
+  transferable_message.parent_task_id = std::nullopt;
 
   mojo::Message mojo_message =
       blink::mojom::TransferableMessage::SerializeAsMessage(
@@ -152,16 +159,17 @@ bool AppWebMessagePort::Accept(mojo::Message* message) {
     // Decode mojo message failed.
     return false;
   }
+  auto ports = std::move(transferable_message.ports);
   auto optional_payload =
-      blink::DecodeToWebMessagePayload(transferable_message);
+      blink::DecodeToWebMessagePayload(std::move(transferable_message));
   if (!optional_payload) {
     // Unsupported or invalid payload.
     return true;
   }
   const auto& payload = optional_payload.value();
 
-  auto j_ports = CreateJavaMessagePort(
-      blink::MessagePortChannel::ReleaseHandles(transferable_message.ports));
+  auto j_ports =
+      CreateJavaMessagePort(blink::MessagePortChannel::ReleaseHandles(ports));
   base::android::ScopedJavaLocalRef<jobject> j_message =
       ConvertWebMessagePayloadToJava(payload);
   DCHECK(j_message);

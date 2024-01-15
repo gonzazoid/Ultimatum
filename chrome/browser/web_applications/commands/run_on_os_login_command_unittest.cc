@@ -4,6 +4,7 @@
 
 #include "chrome/browser/web_applications/commands/run_on_os_login_command.h"
 
+#include "base/feature_list.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "chrome/browser/web_applications/os_integration/os_integration_manager.h"
@@ -16,12 +17,13 @@
 #include "chrome/browser/web_applications/web_app_command_manager.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_install_manager.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/browser/web_applications/web_app_registry_update.h"
 #include "chrome/browser/web_applications/web_app_sync_bridge.h"
+#include "chrome/common/chrome_features.h"
+#include "components/webapps/common/web_app_id.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace web_app {
@@ -45,13 +47,14 @@ class TestOsIntegrationManager : public FakeOsIntegrationManager {
   ~TestOsIntegrationManager() override = default;
 
   // OsIntegrationManager:
-  void InstallOsHooks(const AppId& app_id,
+  void InstallOsHooks(const webapps::AppId& app_id,
                       InstallOsHooksCallback callback,
                       std::unique_ptr<WebAppInstallInfo> web_app_info,
                       InstallOsHooksOptions options) override {
     if (options.os_hooks[OsHookType::kRunOnOsLogin]) {
-      ScopedRegistryUpdate update(
-          &WebAppProvider::GetForTest(profile_)->sync_bridge());
+      ScopedRegistryUpdate update = WebAppProvider::GetForTest(profile_)
+                                        ->sync_bridge_unsafe()
+                                        .BeginUpdate();
       update->UpdateApp(app_id)->SetRunOnOsLoginOsIntegrationState(
           RunOnOsLoginMode::kWindowed);
     }
@@ -59,12 +62,13 @@ class TestOsIntegrationManager : public FakeOsIntegrationManager {
                                              std::move(web_app_info), options);
   }
 
-  void UninstallOsHooks(const AppId& app_id,
+  void UninstallOsHooks(const webapps::AppId& app_id,
                         const OsHooksOptions& os_hooks,
                         UninstallOsHooksCallback callback) override {
     if (os_hooks[OsHookType::kRunOnOsLogin]) {
-      ScopedRegistryUpdate update(
-          &WebAppProvider::GetForTest(profile_)->sync_bridge());
+      ScopedRegistryUpdate update = WebAppProvider::GetForTest(profile_)
+                                        ->sync_bridge_unsafe()
+                                        .BeginUpdate();
       update->UpdateApp(app_id)->SetRunOnOsLoginOsIntegrationState(
           RunOnOsLoginMode::kNotRun);
     }
@@ -78,8 +82,22 @@ class TestOsIntegrationManager : public FakeOsIntegrationManager {
 
 }  // namespace
 
-class RunOnOsLoginCommandTest : public WebAppTest {
+class RunOnOsLoginCommandTest
+    : public WebAppTest,
+      public ::testing::WithParamInterface<OsIntegrationSubManagersState> {
  public:
+  RunOnOsLoginCommandTest() {
+    if (GetParam() == OsIntegrationSubManagersState::kSaveStateToDB) {
+      scoped_feature_list_.InitWithFeaturesAndParameters(
+          {{features::kOsIntegrationSubManagers, {{"stage", "write_config"}}}},
+          /*disabled_features=*/{});
+    } else {
+      scoped_feature_list_.InitWithFeatures(
+          /*enabled_features=*/{}, {features::kOsIntegrationSubManagers});
+    }
+  }
+  ~RunOnOsLoginCommandTest() override = default;
+
   void SetUp() override {
     WebAppTest::SetUp();
     provider_ = FakeWebAppProvider::Get(profile());
@@ -94,9 +112,9 @@ class RunOnOsLoginCommandTest : public WebAppTest {
   }
 
  protected:
-  WebAppRegistrar& registrar() { return provider()->registrar(); }
+  WebAppRegistrar& registrar() { return provider()->registrar_unsafe(); }
 
-  WebAppSyncBridge& sync_bridge() { return provider()->sync_bridge(); }
+  WebAppSyncBridge& sync_bridge() { return provider()->sync_bridge_unsafe(); }
 
   FakeOsIntegrationManager* os_integration_manager() {
     return os_integration_manager_;
@@ -104,20 +122,22 @@ class RunOnOsLoginCommandTest : public WebAppTest {
 
   void RegisterApp(std::unique_ptr<WebApp> web_app) {
     web_app->SetRunOnOsLoginOsIntegrationState(RunOnOsLoginMode::kNotRun);
-    ScopedRegistryUpdate update(&sync_bridge());
+    ScopedRegistryUpdate update = sync_bridge().BeginUpdate();
     update->CreateApp(std::move(web_app));
   }
 
   WebAppProvider* provider() { return provider_; }
 
  private:
-  raw_ptr<FakeOsIntegrationManager> os_integration_manager_;
-  raw_ptr<FakeWebAppProvider> provider_;
+  raw_ptr<FakeOsIntegrationManager, DanglingUntriaged> os_integration_manager_ =
+      nullptr;
+  raw_ptr<FakeWebAppProvider, DanglingUntriaged> provider_ = nullptr;
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
-TEST_F(RunOnOsLoginCommandTest, SetRunOnOsLoginModes) {
+TEST_P(RunOnOsLoginCommandTest, SetRunOnOsLoginModes) {
   auto web_app = test::CreateWebApp();
-  const AppId app_id = web_app->app_id();
+  const webapps::AppId app_id = web_app->app_id();
   RegisterApp(std::move(web_app));
   base::HistogramTester tester;
 
@@ -133,8 +153,7 @@ TEST_F(RunOnOsLoginCommandTest, SetRunOnOsLoginModes) {
   base::RunLoop loop;
   provider()->command_manager().ScheduleCommand(
       RunOnOsLoginCommand::CreateForSetLoginMode(
-          &registrar(), os_integration_manager(), &sync_bridge(), app_id,
-          RunOnOsLoginMode::kWindowed, loop.QuitClosure()));
+          app_id, RunOnOsLoginMode::kWindowed, loop.QuitClosure()));
   loop.Run();
   tester.ExpectBucketCount(
       "WebApp.RunOnOsLogin.CommandCompletionState",
@@ -152,8 +171,7 @@ TEST_F(RunOnOsLoginCommandTest, SetRunOnOsLoginModes) {
   base::RunLoop loop1;
   provider()->command_manager().ScheduleCommand(
       RunOnOsLoginCommand::CreateForSetLoginMode(
-          &registrar(), os_integration_manager(), &sync_bridge(), app_id,
-          RunOnOsLoginMode::kMinimized, loop1.QuitClosure()));
+          app_id, RunOnOsLoginMode::kMinimized, loop1.QuitClosure()));
   loop1.Run();
   tester.ExpectBucketCount(
       "WebApp.RunOnOsLogin.CommandCompletionState",
@@ -169,27 +187,26 @@ TEST_F(RunOnOsLoginCommandTest, SetRunOnOsLoginModes) {
             os_integration_manager()->num_unregister_run_on_os_login_calls());
 }
 
-TEST_F(RunOnOsLoginCommandTest, SyncRunOnOsLoginModes) {
+TEST_P(RunOnOsLoginCommandTest, SyncRunOnOsLoginModes) {
   auto web_app_default = test::CreateWebApp();
   auto web_app_default2 = test::CreateWebApp(GURL("https:/default2.example/"));
   auto web_app_windowed = test::CreateWebApp(GURL("https://windowed.example/"));
   auto web_app_allowed = test::CreateWebApp(GURL("https://allowed.example/"));
-  const AppId app_id_default = web_app_default->app_id();
-  const AppId app_id_default2 = web_app_default2->app_id();
-  const AppId app_id_windowed = web_app_windowed->app_id();
-  const AppId app_id_allowed = web_app_allowed->app_id();
+  const webapps::AppId app_id_default = web_app_default->app_id();
+  const webapps::AppId app_id_default2 = web_app_default2->app_id();
+  const webapps::AppId app_id_windowed = web_app_windowed->app_id();
+  const webapps::AppId app_id_allowed = web_app_allowed->app_id();
 
   RegisterApp(std::move(web_app_default));
   RegisterApp(std::move(web_app_default2));
   RegisterApp(std::move(web_app_windowed));
   RegisterApp(std::move(web_app_allowed));
 
-  for (const AppId& app_id : {app_id_default2, app_id_allowed}) {
+  for (const webapps::AppId& app_id : {app_id_default2, app_id_allowed}) {
     base::RunLoop loop;
     provider()->command_manager().ScheduleCommand(
         RunOnOsLoginCommand::CreateForSetLoginMode(
-            &registrar(), os_integration_manager(), &sync_bridge(), app_id,
-            RunOnOsLoginMode::kWindowed, loop.QuitClosure()));
+            app_id, RunOnOsLoginMode::kWindowed, loop.QuitClosure()));
     loop.Run();
   }
 
@@ -282,40 +299,37 @@ TEST_F(RunOnOsLoginCommandTest, SyncRunOnOsLoginModes) {
                 .value());
 }
 
-TEST_F(RunOnOsLoginCommandTest, RepeatedCallsDoNotCauseRepeatedOSRegistration) {
+TEST_P(RunOnOsLoginCommandTest, RepeatedCallsDoNotCauseRepeatedOSRegistration) {
   auto web_app = test::CreateWebApp();
-  const AppId app_id = web_app->app_id();
+  const webapps::AppId app_id = web_app->app_id();
   RegisterApp(std::move(web_app));
 
   base::RunLoop loop1;
   provider()->command_manager().ScheduleCommand(
       RunOnOsLoginCommand::CreateForSetLoginMode(
-          &registrar(), os_integration_manager(), &sync_bridge(), app_id,
-          RunOnOsLoginMode::kWindowed, loop1.QuitClosure()));
+          app_id, RunOnOsLoginMode::kWindowed, loop1.QuitClosure()));
   loop1.Run();
   EXPECT_EQ(1u, os_integration_manager()->num_register_run_on_os_login_calls());
 
   base::RunLoop loop2;
   provider()->command_manager().ScheduleCommand(
       RunOnOsLoginCommand::CreateForSetLoginMode(
-          &registrar(), os_integration_manager(), &sync_bridge(), app_id,
-          RunOnOsLoginMode::kWindowed, loop2.QuitClosure()));
+          app_id, RunOnOsLoginMode::kWindowed, loop2.QuitClosure()));
   loop2.Run();
   // Count should still be 1 because repeated calls cause command to end early
   // as success.
   EXPECT_EQ(1u, os_integration_manager()->num_register_run_on_os_login_calls());
 }
 
-TEST_F(RunOnOsLoginCommandTest, NotRunDoesNotAtemptOSRegistration) {
+TEST_P(RunOnOsLoginCommandTest, NotRunDoesNotAtemptOSRegistration) {
   auto web_app = test::CreateWebApp();
-  const AppId app_id = web_app->app_id();
+  const webapps::AppId app_id = web_app->app_id();
   RegisterApp(std::move(web_app));
 
   base::RunLoop loop;
   provider()->command_manager().ScheduleCommand(
       RunOnOsLoginCommand::CreateForSetLoginMode(
-          &registrar(), os_integration_manager(), &sync_bridge(), app_id,
-          RunOnOsLoginMode::kNotRun, loop.QuitClosure()));
+          app_id, RunOnOsLoginMode::kNotRun, loop.QuitClosure()));
   loop.Run();
 
   // OS registration should not be attempted if the default state of Run On OS
@@ -325,20 +339,19 @@ TEST_F(RunOnOsLoginCommandTest, NotRunDoesNotAtemptOSRegistration) {
             os_integration_manager()->num_unregister_run_on_os_login_calls());
 }
 
-TEST_F(RunOnOsLoginCommandTest, SyncCommandAndUninstallOSHooks) {
+TEST_P(RunOnOsLoginCommandTest, SyncCommandAndUninstallOSHooks) {
   auto web_app = test::CreateWebApp();
-  const AppId app_id = web_app->app_id();
+  const webapps::AppId app_id = web_app->app_id();
   RegisterApp(std::move(web_app));
   {
-    ScopedRegistryUpdate update(&sync_bridge());
+    ScopedRegistryUpdate update = sync_bridge().BeginUpdate();
     update->UpdateApp(app_id)->SetRunOnOsLoginOsIntegrationState(
         RunOnOsLoginMode::kWindowed);
   }
 
   base::RunLoop loop;
   provider()->command_manager().ScheduleCommand(
-      RunOnOsLoginCommand::CreateForSyncLoginMode(
-          &registrar(), os_integration_manager(), app_id, loop.QuitClosure()));
+      RunOnOsLoginCommand::CreateForSyncLoginMode(app_id, loop.QuitClosure()));
   loop.Run();
 
   // Syncing on a web_app with a Run on OS Login mode of kNotRun will
@@ -348,7 +361,7 @@ TEST_F(RunOnOsLoginCommandTest, SyncCommandAndUninstallOSHooks) {
             os_integration_manager()->num_unregister_run_on_os_login_calls());
 }
 
-TEST_F(RunOnOsLoginCommandTest, AbortOnAppNotLocallyInstalled) {
+TEST_P(RunOnOsLoginCommandTest, AbortOnAppNotLocallyInstalled) {
   base::HistogramTester tester;
 
   tester.ExpectBucketCount(
@@ -357,8 +370,7 @@ TEST_F(RunOnOsLoginCommandTest, AbortOnAppNotLocallyInstalled) {
 
   base::RunLoop loop;
   provider()->command_manager().ScheduleCommand(
-      RunOnOsLoginCommand::CreateForSyncLoginMode(
-          &registrar(), os_integration_manager(), "abc", loop.QuitClosure()));
+      RunOnOsLoginCommand::CreateForSyncLoginMode("abc", loop.QuitClosure()));
   loop.Run();
 
   tester.ExpectBucketCount(
@@ -366,10 +378,10 @@ TEST_F(RunOnOsLoginCommandTest, AbortOnAppNotLocallyInstalled) {
       RunOnOsLoginCommandCompletionState::kAppNotLocallyInstalled, 1);
 }
 
-TEST_F(RunOnOsLoginCommandTest,
+TEST_P(RunOnOsLoginCommandTest,
        AbortCommandOnAlreadyMatchingRunOnOsLoginState) {
   auto web_app = test::CreateWebApp();
-  const AppId app_id = web_app->app_id();
+  const webapps::AppId app_id = web_app->app_id();
   RegisterApp(std::move(web_app));
   base::HistogramTester tester;
 
@@ -381,8 +393,7 @@ TEST_F(RunOnOsLoginCommandTest,
   base::RunLoop loop;
   provider()->command_manager().ScheduleCommand(
       RunOnOsLoginCommand::CreateForSetLoginMode(
-          &registrar(), os_integration_manager(), &sync_bridge(), app_id,
-          RunOnOsLoginMode::kWindowed, loop.QuitClosure()));
+          app_id, RunOnOsLoginMode::kWindowed, loop.QuitClosure()));
   loop.Run();
 
   tester.ExpectBucketCount(
@@ -397,8 +408,7 @@ TEST_F(RunOnOsLoginCommandTest,
   base::RunLoop loop1;
   provider()->command_manager().ScheduleCommand(
       RunOnOsLoginCommand::CreateForSetLoginMode(
-          &registrar(), os_integration_manager(), &sync_bridge(), app_id,
-          RunOnOsLoginMode::kWindowed, loop1.QuitClosure()));
+          app_id, RunOnOsLoginMode::kWindowed, loop1.QuitClosure()));
   loop1.Run();
 
   tester.ExpectBucketCount(
@@ -406,9 +416,9 @@ TEST_F(RunOnOsLoginCommandTest,
       RunOnOsLoginCommandCompletionState::kRunOnOsLoginModeAlreadyMatched, 1);
 }
 
-TEST_F(RunOnOsLoginCommandTest, AbortCommandOnPolicyBlockedApp) {
+TEST_P(RunOnOsLoginCommandTest, AbortCommandOnPolicyBlockedApp) {
   auto web_app = test::CreateWebApp(GURL("https:/default.example/"));
-  const AppId app_id = web_app->app_id();
+  const webapps::AppId app_id = web_app->app_id();
   RegisterApp(std::move(web_app));
   base::HistogramTester tester;
 
@@ -431,8 +441,7 @@ TEST_F(RunOnOsLoginCommandTest, AbortCommandOnPolicyBlockedApp) {
   base::RunLoop loop;
   provider()->command_manager().ScheduleCommand(
       RunOnOsLoginCommand::CreateForSetLoginMode(
-          &registrar(), os_integration_manager(), &sync_bridge(), app_id,
-          RunOnOsLoginMode::kWindowed, loop.QuitClosure()));
+          app_id, RunOnOsLoginMode::kWindowed, loop.QuitClosure()));
   loop.Run();
 
   tester.ExpectBucketCount(
@@ -440,20 +449,19 @@ TEST_F(RunOnOsLoginCommandTest, AbortCommandOnPolicyBlockedApp) {
       RunOnOsLoginCommandCompletionState::kNotAllowedByPolicy, 1);
 }
 
-TEST_F(RunOnOsLoginCommandTest, VerifySetWorksOnAppWithNoStateDefined) {
+TEST_P(RunOnOsLoginCommandTest, VerifySetWorksOnAppWithNoStateDefined) {
   auto web_app = test::CreateWebApp();
-  const AppId app_id = web_app->app_id();
+  const webapps::AppId app_id = web_app->app_id();
   // Run on OS Login state in the web_app DB is not defined.
   {
-    ScopedRegistryUpdate update(&sync_bridge());
+    ScopedRegistryUpdate update = sync_bridge().BeginUpdate();
     update->CreateApp(std::move(web_app));
   }
 
   base::RunLoop loop1;
   provider()->command_manager().ScheduleCommand(
       RunOnOsLoginCommand::CreateForSetLoginMode(
-          &registrar(), os_integration_manager(), &sync_bridge(), app_id,
-          RunOnOsLoginMode::kNotRun, loop1.QuitClosure()));
+          app_id, RunOnOsLoginMode::kNotRun, loop1.QuitClosure()));
   loop1.Run();
 
   // kNotRun should not invoke any calls.
@@ -464,8 +472,7 @@ TEST_F(RunOnOsLoginCommandTest, VerifySetWorksOnAppWithNoStateDefined) {
   base::RunLoop loop2;
   provider()->command_manager().ScheduleCommand(
       RunOnOsLoginCommand::CreateForSetLoginMode(
-          &registrar(), os_integration_manager(), &sync_bridge(), app_id,
-          RunOnOsLoginMode::kWindowed, loop2.QuitClosure()));
+          app_id, RunOnOsLoginMode::kWindowed, loop2.QuitClosure()));
   loop2.Run();
 
   // kWindowed should invoke 1 register call.
@@ -474,11 +481,11 @@ TEST_F(RunOnOsLoginCommandTest, VerifySetWorksOnAppWithNoStateDefined) {
             os_integration_manager()->num_unregister_run_on_os_login_calls());
 }
 
-TEST_F(RunOnOsLoginCommandTest, VerifySyncWorksOnAppWithNoStateDefined) {
+TEST_P(RunOnOsLoginCommandTest, VerifySyncWorksOnAppWithNoStateDefined) {
   auto web_app = test::CreateWebApp(GURL("https:/default.example/"));
-  const AppId app_id = web_app->app_id();
+  const webapps::AppId app_id = web_app->app_id();
   {
-    ScopedRegistryUpdate update(&sync_bridge());
+    ScopedRegistryUpdate update = sync_bridge().BeginUpdate();
     update->CreateApp(std::move(web_app));
   }
 
@@ -496,13 +503,19 @@ TEST_F(RunOnOsLoginCommandTest, VerifySyncWorksOnAppWithNoStateDefined) {
 
   base::RunLoop loop;
   provider()->command_manager().ScheduleCommand(
-      RunOnOsLoginCommand::CreateForSyncLoginMode(
-          &registrar(), os_integration_manager(), app_id, loop.QuitClosure()));
+      RunOnOsLoginCommand::CreateForSyncLoginMode(app_id, loop.QuitClosure()));
   loop.Run();
 
   EXPECT_EQ(0u, os_integration_manager()->num_register_run_on_os_login_calls());
   EXPECT_EQ(1u,
             os_integration_manager()->num_unregister_run_on_os_login_calls());
 }
+
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    RunOnOsLoginCommandTest,
+    ::testing::Values(OsIntegrationSubManagersState::kSaveStateToDB,
+                      OsIntegrationSubManagersState::kDisabled),
+    test::GetOsIntegrationSubManagersTestName);
 
 }  // namespace web_app

@@ -6,17 +6,18 @@
 
 #include <utility>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/strcat.h"
 #include "base/task/thread_pool.h"
+#include "base/test/protobuf_matchers.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
+#include "components/reporting/util/test_support_callbacks.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-#include "components/reporting/util/test_support_callbacks.h"
-#include "components/reporting/util/test_util.h"
-
+using ::base::test::EqualsProto;
 using ::testing::_;
 using ::testing::DoAll;
 using ::testing::Invoke;
@@ -65,7 +66,7 @@ class HealthModuleTest : public ::testing::Test {
   base::test::TaskEnvironment task_environment_;
 
   std::unique_ptr<MockHealthModuleDelegate> delegate_;
-  MockHealthModuleDelegate* mock_delegate_ = nullptr;
+  raw_ptr<MockHealthModuleDelegate> mock_delegate_ = nullptr;
   scoped_refptr<HealthModule> module_;
 };
 

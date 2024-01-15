@@ -136,6 +136,7 @@ class CORE_EXPORT WebPagePopupImpl final : public WebPagePopup,
 
  private:
   // WidgetBaseClient overrides:
+  void OnCommitRequested() override;
   void BeginMainFrame(base::TimeTicks last_frame_time) override;
   void SetSuppressFrameRequestsWorkaroundFor704763Only(bool) final;
   WebInputEventResult DispatchBufferedTouchEvents() override;
@@ -221,7 +222,7 @@ class CORE_EXPORT WebPagePopupImpl final : public WebPagePopup,
   gfx::Rect GetAnchorRectInScreen() const;
 
   // PagePopup function
-  AXObject* RootAXObject() override;
+  AXObject* RootAXObject(Element* popover_owner) override;
   void SetWindowRect(const gfx::Rect&) override;
 
   WebPagePopupImpl(
@@ -243,11 +244,10 @@ class CORE_EXPORT WebPagePopupImpl final : public WebPagePopup,
 
   gfx::Rect WindowRectInScreen() const;
 
-  void InjectGestureScrollEvent(WebGestureDevice device,
-                                const gfx::Vector2dF& delta,
-                                ui::ScrollGranularity granularity,
-                                cc::ElementId scrollable_area_element_id,
-                                WebInputEvent::Type injected_type);
+  void InjectScrollbarGestureScroll(const gfx::Vector2dF& delta,
+                                    ui::ScrollGranularity granularity,
+                                    cc::ElementId scrollable_area_element_id,
+                                    WebInputEvent::Type injected_type);
 
   void WidgetHostDisconnected();
   void DidSetBounds();

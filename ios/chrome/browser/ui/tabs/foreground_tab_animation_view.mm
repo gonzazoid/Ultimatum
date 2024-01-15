@@ -4,11 +4,7 @@
 
 #import "ios/chrome/browser/ui/tabs/foreground_tab_animation_view.h"
 
-#import "ios/chrome/browser/ui/util/property_animator_group.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/shared/ui/util/property_animator_group.h"
 
 namespace {
 const NSTimeInterval kAnimationDuration = 0.75;

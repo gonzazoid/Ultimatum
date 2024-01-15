@@ -5,27 +5,26 @@
 #include "components/services/quarantine/common_mac.h"
 
 #import <ApplicationServices/ApplicationServices.h>
+#include <Foundation/Foundation.h>
 
+#include "base/apple/foundation_util.h"
+#include "base/apple/osstatus_logging.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/files/file_path.h"
 #include "base/logging.h"
-#include "base/mac/foundation_util.h"
-#include "base/mac/mac_logging.h"
 #include "base/mac/mac_util.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "base/strings/sys_string_conversions.h"
 
 namespace quarantine {
 
-bool GetQuarantineProperties(
-    const base::FilePath& file,
-    base::scoped_nsobject<NSMutableDictionary>* properties) {
-  base::scoped_nsobject<NSURL> file_url([[NSURL alloc]
-      initFileURLWithPath:base::SysUTF8ToNSString(file.value())]);
-  if (!file_url)
-    return false;
+NSDictionary* GetQuarantineProperties(const base::FilePath& file) {
+  NSURL* file_url = base::apple::FilePathToNSURL(file);
+  if (!file_url) {
+    return nil;
+  }
 
-  NSError* error = nil;
-  id quarantine_properties = nil;
+  NSError* __autoreleasing error = nil;
+  id __autoreleasing quarantine_properties = nil;
   BOOL success = [file_url getResourceValue:&quarantine_properties
                                      forKey:NSURLQuarantinePropertiesKey
                                       error:&error];
@@ -33,23 +32,23 @@ bool GetQuarantineProperties(
     std::string error_message(error ? error.description.UTF8String : "");
     LOG(WARNING) << "Unable to get quarantine attributes for file "
                  << file.value() << ". Error: " << error_message;
-    return false;
+    return nil;
   }
 
-  if (!quarantine_properties)
-    return true;
+  if (!quarantine_properties) {
+    return @{};
+  }
 
   NSDictionary* quarantine_properties_dict =
-      base::mac::ObjCCast<NSDictionary>(quarantine_properties);
+      base::apple::ObjCCast<NSDictionary>(quarantine_properties);
   if (!quarantine_properties_dict) {
     LOG(WARNING) << "Quarantine properties have wrong class: "
                  << base::SysNSStringToUTF8(
                         [[quarantine_properties class] description]);
-    return false;
+    return nil;
   }
 
-  properties->reset([quarantine_properties_dict mutableCopy]);
-  return true;
+  return quarantine_properties_dict;
 }
 
 }  // namespace quarantine

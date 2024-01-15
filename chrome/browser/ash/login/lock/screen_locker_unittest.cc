@@ -8,11 +8,11 @@
 
 #include "ash/public/cpp/login_screen_model.h"
 #include "ash/public/cpp/login_types.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
-#include "chrome/browser/ash/input_method/mock_input_method_manager_impl.h"
 #include "chrome/browser/ash/lock_screen_apps/state_controller.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
@@ -21,7 +21,6 @@
 #include "chrome/browser/certificate_provider/certificate_provider_service.h"
 #include "chrome/browser/certificate_provider/certificate_provider_service_factory.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/ash/accessibility/fake_accessibility_controller.h"
 #include "chrome/browser/ui/ash/assistant/assistant_browser_delegate_impl.h"
 #include "chrome/browser/ui/ash/login_screen_client_impl.h"
 #include "chrome/browser/ui/ash/session_controller_client_impl.h"
@@ -39,10 +38,10 @@
 #include "chromeos/ash/components/dbus/userdataauth/cryptohome_misc_client.h"
 #include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
 #include "chromeos/ash/components/install_attributes/stub_install_attributes.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/login/session/session_termination_manager.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
 #include "chromeos/dbus/tpm_manager/tpm_manager_client.h"
-#include "chromeos/login/login_state/login_state.h"
-#include "chromeos/system/fake_statistics_provider.h"
 #include "components/account_id/account_id.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/session_manager/core/session_manager.h"
@@ -55,6 +54,7 @@
 #include "services/audio/public/cpp/sounds/sounds_manager.h"
 #include "services/audio/public/cpp/sounds/test_data.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/ime/ash/mock_input_method_manager_impl.h"
 
 namespace ash {
 namespace {
@@ -89,9 +89,7 @@ class ScreenLockerUnitTest : public testing::Test {
     // Initialize SessionControllerClientImpl and dependencies:
     LoginState::Initialize();
 
-    fake_user_manager_ = new ash::FakeChromeUserManager;
-    scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
-        base::WrapUnique(fake_user_manager_));
+    fake_user_manager_.Reset(std::make_unique<ash::FakeChromeUserManager>());
 
     testing_profile_manager_ = std::make_unique<TestingProfileManager>(
         TestingBrowserProcess::GetGlobal());
@@ -156,7 +154,7 @@ class ScreenLockerUnitTest : public testing::Test {
     session_controller_client_.reset();
 
     testing_profile_manager_.reset();
-    scoped_user_manager_.reset();
+    fake_user_manager_.Reset();
     base::RunLoop().RunUntilIdle();
 
     LoginState::Shutdown();
@@ -184,18 +182,16 @@ class ScreenLockerUnitTest : public testing::Test {
   ScopedStubInstallAttributes test_install_attributes_;
 
   // ScreenLocker dependencies:
-  // * AccessibilityManager dependencies:
-  FakeAccessibilityController fake_accessibility_controller_;
   // * LoginScreenClientImpl dependencies:
   session_manager::SessionManager session_manager_;
   TestLoginScreen test_login_screen_;
   LoginScreenClientImpl login_screen_client_;
 
   // * SessionControllerClientImpl dependencies:
-  ash::FakeChromeUserManager* fake_user_manager_ = nullptr;
-  std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_;
   std::unique_ptr<TestingProfileManager> testing_profile_manager_;
-  Profile* user_profile_ = nullptr;
+  raw_ptr<Profile, DanglingUntriaged> user_profile_ = nullptr;
 
   ScopedDeviceSettingsTestHelper device_settings_test_helper_;
   TestSessionController test_session_controller_;
@@ -210,11 +206,30 @@ class ScreenLockerUnitTest : public testing::Test {
 // the device.
 TEST_F(ScreenLockerUnitTest, VerifyAshIsNotifiedOfScreenLocked) {
   CreateSessionForUser(/*is_public_account=*/false);
-
   EXPECT_EQ(0, test_session_controller_.lock_animation_complete_call_count());
+
+  // Show the lock screen.
   ScreenLocker::Show();
   base::RunLoop().RunUntilIdle();
+  ASSERT_TRUE(ScreenLocker::default_screen_locker());
+  EXPECT_TRUE(ScreenLocker::default_screen_locker()->locked());
   EXPECT_EQ(1, test_session_controller_.lock_animation_complete_call_count());
+
+  // Hide the lock screen.
+  ScreenLocker::Hide();
+  // Needed to perform internal cleanup scheduled in ScreenLocker::Hide()
+  base::RunLoop().RunUntilIdle();
+  EXPECT_FALSE(ScreenLocker::default_screen_locker());
+}
+
+// Tests that `GetUsersToShow()` returns a list with one user when the user is
+// regular.
+TEST_F(ScreenLockerUnitTest, GetUsersToShowRegular) {
+  CreateSessionForUser(/*is_public_account=*/false);
+
+  ScreenLocker::Show();
+  base::RunLoop().RunUntilIdle();
+  EXPECT_EQ(ScreenLocker::default_screen_locker()->GetUsersToShow().size(), 1u);
   ScreenLocker::Hide();
   // Needed to perform internal cleanup scheduled in ScreenLocker::Hide()
   base::RunLoop().RunUntilIdle();
@@ -222,7 +237,7 @@ TEST_F(ScreenLockerUnitTest, VerifyAshIsNotifiedOfScreenLocked) {
 
 // Tests that `GetUsersToShow()` returns an empty list when the user is a
 // Managed Guest Session.
-TEST_F(ScreenLockerUnitTest, GetUsersToShow) {
+TEST_F(ScreenLockerUnitTest, GetUsersToShowPublicAccount) {
   CreateSessionForUser(/*is_public_account=*/true);
 
   ScreenLocker::Show();

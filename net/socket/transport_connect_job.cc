@@ -7,21 +7,21 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
-#include "base/trace_event/trace_event.h"
 #include "net/base/features.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_errors.h"
 #include "net/base/trace_constants.h"
+#include "net/base/tracing.h"
 #include "net/dns/public/host_resolver_results.h"
 #include "net/dns/public/secure_dns_policy.h"
 #include "net/log/net_log_event_type.h"
@@ -298,7 +298,7 @@ int TransportConnectJob::DoResolveHostComplete(int result) {
             ToLegacyDestinationEndpoint(params_->destination()),
             *request_->GetEndpointResults(), *request_->GetDnsAliasResults());
     if (callback_result == OnHostResolutionCallbackResult::kMayBeDeletedAsync) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(&TransportConnectJob::OnIOComplete,
                                     weak_ptr_factory_.GetWeakPtr(), OK));
       return ERR_IO_PENDING;
@@ -511,25 +511,19 @@ bool TransportConnectJob::IsSvcbOptional(
   // If SVCB/HTTPS resolution succeeded, the client supports ECH, and all routes
   // support ECH, disable the A/AAAA fallback. See Section 10.1 of
   // draft-ietf-dnsop-svcb-https-08.
+
   auto* scheme_host_port =
       absl::get_if<url::SchemeHostPort>(&params_->destination());
-  if (!base::FeatureList::IsEnabled(features::kEncryptedClientHello) ||
-      !scheme_host_port || scheme_host_port->scheme() != url::kHttpsScheme) {
+  if (!scheme_host_port || scheme_host_port->scheme() != url::kHttpsScheme) {
+    return true;  // This is not a SVCB-capable request at all.
+  }
+
+  if (!common_connect_job_params()->ssl_client_context ||
+      !common_connect_job_params()->ssl_client_context->config().ech_enabled) {
     return true;  // ECH is not supported for this request.
   }
 
-  bool has_svcb = false;
-  for (const auto& result : results) {
-    if (!result.metadata.supported_protocol_alpns.empty()) {
-      has_svcb = true;
-      if (result.metadata.ech_config_list.empty()) {
-        return true;  // There is a non-ECH SVCB/HTTPS route.
-      }
-    }
-  }
-  // Either there were no SVCB/HTTPS records (should be SVCB-optional), or there
-  // were and all supported ECH (should be SVCB-reliant).
-  return !has_svcb;
+  return !HostResolver::AllProtocolEndpointsHaveEch(results);
 }
 
 bool TransportConnectJob::IsEndpointResultUsable(

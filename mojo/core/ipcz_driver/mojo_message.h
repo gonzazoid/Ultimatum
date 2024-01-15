@@ -7,10 +7,13 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #include "base/containers/span.h"
+#include "base/memory/nonscannable_memory.h"
 #include "base/memory/ptr_util.h"
+#include "mojo/core/scoped_ipcz_handle.h"
 #include "mojo/public/c/system/message_pipe.h"
 #include "mojo/public/c/system/types.h"
 #include "third_party/ipcz/include/ipcz/ipcz.h"
@@ -45,16 +48,15 @@ class MojoMessage {
     return reinterpret_cast<MojoMessageHandle>(this);
   }
 
-  base::span<uint8_t> data() { return data_; }
+  base::span<const uint8_t> data() const { return data_; }
+  base::span<uint8_t> mutable_data() const { return data_; }
   std::vector<IpczHandle>& handles() { return handles_; }
   uintptr_t context() const { return context_; }
 
-  IpczHandle validator() const { return validator_; }
+  IpczHandle parcel() const { return parcel_.get(); }
 
-  // Sets the contents of this message, as read from a portal by ipcz.
-  bool SetContents(std::vector<uint8_t> data,
-                   std::vector<IpczHandle> handles,
-                   IpczHandle validator);
+  // Sets the received parcel object backing this message.
+  void SetParcel(ScopedIpczHandle parcel);
 
   // Appends data to a new or partially serialized message, effectively
   // implementing MojoAppendMessageData().
@@ -75,7 +77,7 @@ class MojoMessage {
 
   // Finalizes the Message by ensuring that any attached DataPipe objects also
   // attach their portals alongside the existing attachments. This operation is
-  // balanced within SetContents(), where DataPipes extract their portals from
+  // balanced within SetParcel(), where DataPipes extract their portals from
   // the tail end of the attached handles.
   void AttachDataPipePortals();
 
@@ -88,10 +90,48 @@ class MojoMessage {
   // Forcibly serializes this message if it holds an unserialized context.
   MojoResult Serialize();
 
+  // Functions provided to ipcz when boxing MojoMessage objects for lazy
+  // serialization.
+  static IpczResult SerializeForIpcz(uintptr_t object,
+                                     uint32_t,
+                                     const void*,
+                                     volatile void* data,
+                                     size_t* num_bytes,
+                                     IpczHandle* handles,
+                                     size_t* num_handles);
+  static void DestroyForIpcz(uintptr_t object, uint32_t, const void*);
+
+  // Boxes a MojoMessage object for transmission within another message. This is
+  // used to support transmission of unserialized MojoMessages through ipcz,
+  // with support for lazy serialization if needed.
+  static ScopedIpczHandle Box(std::unique_ptr<MojoMessage> message);
+
+  // Constructs a new MojoMessage from `message`, if `message` contains a single
+  // box with an application object or subparcel inside of it. In that case the
+  // application object or subparcel is interpreted as an embedded MojoMessage,
+  // and that MojoMessage is reconstituted and returned. Otherwise this returns
+  // null to indicate that `message` is not a wrapper around another
+  // MojoMessage.
+  static std::unique_ptr<MojoMessage> UnwrapFrom(MojoMessage& message);
+
  private:
-  IpczHandle validator_ = IPCZ_INVALID_HANDLE;
-  std::vector<uint8_t> data_storage_;
+  IpczResult SerializeForIpczImpl(volatile void* data,
+                                  size_t* num_bytes,
+                                  IpczHandle* handles,
+                                  size_t* num_handles);
+
+  // The parcel backing this message, if any.
+  ScopedIpczHandle parcel_;
+
+  // A heap buffer of message data, used only when `parcel_` is null.
+  using DataPtr = std::unique_ptr<uint8_t, base::NonScannableDeleter>;
+  DataPtr data_storage_;
+  size_t data_storage_size_ = 0;
+
+  // A view into the message data, whether it's backed by `parcel_` or stored in
+  // `data_storage_`.
   base::span<uint8_t> data_;
+
   std::vector<IpczHandle> handles_;
   bool handles_consumed_ = false;
   bool size_committed_ = false;

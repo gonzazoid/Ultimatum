@@ -4,9 +4,9 @@
 
 #include <stdint.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/queue.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/power_monitor/power_monitor.h"
@@ -22,6 +22,7 @@
 #include "media/base/media.h"
 #include "media/base/media_switches.h"
 #include "media/base/media_util.h"
+#include "media/base/mock_filters.h"
 #include "media/cast/common/openscreen_conversion_helpers.h"
 #include "media/cast/common/rtp_time.h"
 #include "media/cast/common/sender_encoded_frame.h"
@@ -232,6 +233,7 @@ class H264VideoToolboxEncoderTest : public ::testing::Test {
         task_environment_.GetMainThreadTaskRunner());
     encoder_ = std::make_unique<H264VideoToolboxEncoder>(
         cast_environment_, video_sender_config_,
+        std::make_unique<MockVideoEncoderMetricsProvider>(),
         base::BindRepeating(&SaveOperationalStatus, &operational_status_));
     base::RunLoop().RunUntilIdle();
     EXPECT_EQ(STATUS_INITIALIZED, operational_status_);
@@ -251,7 +253,7 @@ class H264VideoToolboxEncoderTest : public ::testing::Test {
   static void SetUpTestCase() {
     // Reusable test data.
     video_sender_config_ = GetDefaultVideoSenderConfig();
-    video_sender_config_.codec = CODEC_VIDEO_H264;
+    video_sender_config_.codec = Codec::kVideoH264;
     const gfx::Size size(kVideoWidth, kVideoHeight);
     frame_ = media::VideoFrame::CreateFrame(
         PIXEL_FORMAT_I420, size, gfx::Rect(size), size, base::TimeDelta());
@@ -268,7 +270,8 @@ class H264VideoToolboxEncoderTest : public ::testing::Test {
   scoped_refptr<CastEnvironment> cast_environment_;
   std::unique_ptr<VideoEncoder> encoder_;
   OperationalStatus operational_status_;
-  raw_ptr<TestPowerSource> power_source_;  // Owned by the power monitor.
+  raw_ptr<TestPowerSource, DanglingUntriaged>
+      power_source_;  // Owned by the power monitor.
 };
 
 // static

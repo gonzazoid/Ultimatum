@@ -28,13 +28,21 @@ RemoteAppsProxyLacrosFactory* RemoteAppsProxyLacrosFactory::GetInstance() {
 }
 
 RemoteAppsProxyLacrosFactory::RemoteAppsProxyLacrosFactory()
-    : ProfileKeyedServiceFactory("RemoteAppsProxyLacros") {
+    : ProfileKeyedServiceFactory(
+          "RemoteAppsProxyLacros",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(extensions::EventRouterFactory::GetInstance());
 }
 
 RemoteAppsProxyLacrosFactory::~RemoteAppsProxyLacrosFactory() = default;
 
-KeyedService* RemoteAppsProxyLacrosFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+RemoteAppsProxyLacrosFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* browser_context) const {
   if (!chromeos::LacrosService::Get()
            ->IsAvailable<
@@ -43,7 +51,7 @@ KeyedService* RemoteAppsProxyLacrosFactory::BuildServiceInstanceFor(
   }
 
   Profile* profile = Profile::FromBrowserContext(browser_context);
-  return new RemoteAppsProxyLacros(profile);
+  return std::make_unique<RemoteAppsProxyLacros>(profile);
 }
 
 bool RemoteAppsProxyLacrosFactory::ServiceIsNULLWhileTesting() const {

@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 #include <fuchsia/accessibility/semantics/cpp/fidl.h>
-#include <lib/ui/scenic/cpp/view_ref_pair.h>
 #include <zircon/types.h>
 
 #include "base/command_line.h"
@@ -13,13 +12,12 @@
 #include "base/strings/stringprintf.h"
 #include "base/test/bind.h"
 #include "content/public/test/browser_test.h"
+#include "fuchsia_web/common/test/frame_for_test.h"
 #include "fuchsia_web/common/test/frame_test_util.h"
 #include "fuchsia_web/common/test/test_navigation_listener.h"
-#include "fuchsia_web/webengine/browser/accessibility_bridge.h"
 #include "fuchsia_web/webengine/browser/context_impl.h"
 #include "fuchsia_web/webengine/browser/fake_semantics_manager.h"
 #include "fuchsia_web/webengine/browser/frame_impl.h"
-#include "fuchsia_web/webengine/test/frame_for_test.h"
 #include "fuchsia_web/webengine/test/test_data.h"
 #include "fuchsia_web/webengine/test/web_engine_browser_test.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
@@ -110,7 +108,6 @@ class FuchsiaFrameAccessibilityTest : public WebEngineBrowserTest {
 
     frame_impl_ = context_impl()->GetFrameImplForTest(&frame_.ptr());
     frame_impl_->set_window_size_for_test(kTestWindowSize);
-    frame_impl_->set_use_v2_accessibility_bridge(true);
     frame_->EnableHeadlessRendering();
 
     semantics_manager_.WaitUntilViewRegistered();
@@ -131,6 +128,11 @@ class FuchsiaFrameAccessibilityTest : public WebEngineBrowserTest {
                     ->IsFullAccessibilityModeForTesting());
   }
 
+  void TearDownOnMainThread() override {
+    frame_ = {};
+    WebEngineBrowserTest::TearDownOnMainThread();
+  }
+
   void LoadPage(base::StringPiece url, base::StringPiece page_title) {
     GURL page_url(embedded_test_server()->GetURL(std::string(url)));
     ASSERT_TRUE(LoadUrlAndExpectResponse(frame_.GetNavigationController(),
@@ -142,7 +144,7 @@ class FuchsiaFrameAccessibilityTest : public WebEngineBrowserTest {
 
  protected:
   // TODO(crbug.com/1038786): Maybe move to WebEngineBrowserTest.
-  absl::optional<base::TestComponentContextForProcess> test_context_;
+  std::optional<base::TestComponentContextForProcess> test_context_;
 
   FrameForTest frame_;
   FrameImpl* frame_impl_;
@@ -150,7 +152,7 @@ class FuchsiaFrameAccessibilityTest : public WebEngineBrowserTest {
 
   // Binding to the fake semantics manager.
   // Optional so that it can be instantiated outside the constructor.
-  absl::optional<base::ScopedServiceBinding<
+  std::optional<base::ScopedServiceBinding<
       fuchsia::accessibility::semantics::SemanticsManager>>
       semantics_manager_binding_;
 };
@@ -176,7 +178,7 @@ IN_PROC_BROWSER_TEST_F(FuchsiaFrameAccessibilityTest, DataSentWithBatching) {
 
   // Run until we expect more than a batch's worth of nodes to be present.
   semantics_manager_.semantic_tree()->RunUntilNodeCountAtLeast(kPage2NodeCount);
-  EXPECT_TRUE(semantics_manager_.semantic_tree()->GetNodeFromLabel(kNodeName));
+  semantics_manager_.semantic_tree()->RunUntilNodeWithLabelIsInTree(kNodeName);
 
   // Checks if the actual batching happened.
   EXPECT_GE(semantics_manager_.semantic_tree()->num_update_calls(), 18u);
@@ -206,7 +208,8 @@ IN_PROC_BROWSER_TEST_F(FuchsiaFrameAccessibilityTest, NavigateFromPageToPage) {
 
   EXPECT_TRUE(
       semantics_manager_.semantic_tree()->GetNodeFromLabel(kPage2Title));
-  EXPECT_TRUE(semantics_manager_.semantic_tree()->GetNodeFromLabel(kNodeName));
+
+  semantics_manager_.semantic_tree()->RunUntilNodeWithLabelIsInTree(kNodeName);
 
   // Check that data from the first page has been deleted successfully.
   EXPECT_FALSE(
@@ -293,7 +296,9 @@ IN_PROC_BROWSER_TEST_F(FuchsiaFrameAccessibilityTest,
       fuchsia::accessibility::semantics::Action::SECONDARY));
 }
 
-IN_PROC_BROWSER_TEST_F(FuchsiaFrameAccessibilityTest, Disconnect) {
+// This test times out frequently, presumably due to a race condition.
+// TODO(crbug.com/1421236): Re-enable this test when it is no longer flaky.
+IN_PROC_BROWSER_TEST_F(FuchsiaFrameAccessibilityTest, DISABLED_Disconnect) {
   base::RunLoop run_loop;
   frame_.ptr().set_error_handler([&run_loop](zx_status_t status) {
     EXPECT_EQ(ZX_ERR_INTERNAL, status);
@@ -520,7 +525,7 @@ IN_PROC_BROWSER_TEST_F(FuchsiaFrameAccessibilityTest, OutOfProcessIframe) {
       kPage2Title);
 
   // check that the iframe navigated to a different page.
-  EXPECT_TRUE(semantics_manager_.semantic_tree()->GetNodeFromLabel(kNodeName));
+  semantics_manager_.semantic_tree()->RunUntilNodeWithLabelIsInTree(kNodeName);
 
   // Old iframe data should be gone.
   EXPECT_FALSE(

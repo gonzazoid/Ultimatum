@@ -12,7 +12,7 @@
 #include "base/run_loop.h"
 #include "base/sequence_checker.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/external_protocol/external_protocol_handler.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/shell_integration.h"
@@ -31,22 +31,21 @@
 
 namespace {
 
-// DefaultProtocolClientWorker checks whether the browser is set as the default
+// DefaultSchemeClientWorker checks whether the browser is set as the default
 // handler for some scheme, and optionally sets the browser as the default
 // handler for some scheme. Our fake implementation pretends that the browser is
 // not the default handler.
-class FakeDefaultProtocolClientWorker
-    : public shell_integration::DefaultProtocolClientWorker {
+class FakeDefaultSchemeClientWorker
+    : public shell_integration::DefaultSchemeClientWorker {
  public:
-  explicit FakeDefaultProtocolClientWorker(const GURL& url)
-      : DefaultProtocolClientWorker(url) {}
-  FakeDefaultProtocolClientWorker(const FakeDefaultProtocolClientWorker&) =
-      delete;
-  FakeDefaultProtocolClientWorker& operator=(
-      const FakeDefaultProtocolClientWorker&) = delete;
+  explicit FakeDefaultSchemeClientWorker(const GURL& url)
+      : DefaultSchemeClientWorker(url) {}
+  FakeDefaultSchemeClientWorker(const FakeDefaultSchemeClientWorker&) = delete;
+  FakeDefaultSchemeClientWorker& operator=(
+      const FakeDefaultSchemeClientWorker&) = delete;
 
  private:
-  ~FakeDefaultProtocolClientWorker() override = default;
+  ~FakeDefaultSchemeClientWorker() override = default;
   shell_integration::DefaultWebClientState CheckIsDefaultImpl() override {
     return shell_integration::DefaultWebClientState::NOT_DEFAULT;
   }
@@ -54,7 +53,7 @@ class FakeDefaultProtocolClientWorker
   std::u16string GetDefaultClientNameImpl() override { return u"TestApp"; }
 
   void SetAsDefaultImpl(base::OnceClosure on_finished_callback) override {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, std::move(on_finished_callback));
   }
 };
@@ -73,9 +72,9 @@ class FakeProtocolHandlerDelegate : public ExternalProtocolHandler::Delegate {
   }
 
  private:
-  scoped_refptr<shell_integration::DefaultProtocolClientWorker>
-  CreateShellWorker(const GURL& url) override {
-    return base::MakeRefCounted<FakeDefaultProtocolClientWorker>(url);
+  scoped_refptr<shell_integration::DefaultSchemeClientWorker> CreateShellWorker(
+      const GURL& url) override {
+    return base::MakeRefCounted<FakeDefaultSchemeClientWorker>(url);
   }
 
   ExternalProtocolHandler::BlockState GetBlockState(const std::string& scheme,

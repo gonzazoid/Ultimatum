@@ -51,6 +51,8 @@ class ColdModeSpellCheckRequester
     fully_checked_root_editables_.erase(&element);
   }
 
+  void ElementRemoved(Element* element);
+
   void Trace(Visitor*) const;
 
  private:
@@ -91,8 +93,9 @@ class ColdModeSpellCheckRequester
   struct FullyCheckedEditableEntry {
     int previous_checked_length = 0;
     int accumulated_delta = 0;
+    uint64_t previous_checked_dom_tree_version = 0u;
   };
-  HeapHashMap<Member<const Element>, FullyCheckedEditableEntry>
+  HeapHashMap<WeakMember<const Element>, FullyCheckedEditableEntry>
       fully_checked_root_editables_;
 
   // A test-only flag for forcing lifecycle advancing.

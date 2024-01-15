@@ -11,6 +11,7 @@
 #include "base/files/file_util.h"
 #include "base/logging.h"
 #include "chromeos/services/tts/constants.h"
+#include "library_loaders/libchrometts.h"
 #include "sandbox/linux/syscall_broker/broker_command.h"
 #include "sandbox/linux/syscall_broker/broker_file_permission.h"
 
@@ -53,6 +54,14 @@ std::vector<BrokerFilePermission> GetTtsFilePermissions() {
 bool TtsPreSandboxHook(sandbox::policy::SandboxLinux::Options options) {
   if (!dlopen(kLibchromettsPath, RTLD_LAZY))
     LOG(ERROR) << "Unable to open libchrometts.so: " << dlerror();
+
+  LibChromeTtsLoader loader;
+  if (loader.Load(kLibchromettsPath)) {
+    loader.GoogleTtsPreSandboxInit();
+  } else {
+    LOG(ERROR) << "Unable to load libchrometts.so and perform pre-sandbox "
+                  "initialization";
+  }
 
   // Ensure this directory is created.
   base::FilePath temp_data_dir(kTempDataDirectory);

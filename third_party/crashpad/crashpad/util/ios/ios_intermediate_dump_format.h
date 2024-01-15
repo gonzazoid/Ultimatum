@@ -85,6 +85,8 @@ namespace internal {
     TD(kFree, 5017) \
     TD(kInactive, 5018) \
     TD(kWired, 5019) \
+    TD(kAddressMask, 5020) \
+    TD(kCrashpadUptime, 5021) \
   TD(kThreads, 6000) \
     TD(kDebugState, 6001) \
     TD(kFloatState, 6002) \
@@ -102,7 +104,6 @@ namespace internal {
     TD(kThreadName, 6014) \
   TD(kMaxValue, 65535) \
 // clang-format on
-
 
 //! \brief They key for items in the intermediate dump file.
 //!

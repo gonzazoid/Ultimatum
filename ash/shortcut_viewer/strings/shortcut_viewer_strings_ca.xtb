@@ -65,7 +65,7 @@
 <translation id="3140353188828248647">Mou el focus a la barra d'adreces</translation>
 <translation id="3256109297135787951">Deixa de destacar un element del prestatge</translation>
 <translation id="3288816184963444640">Tanca la finestra actual</translation>
-<translation id="3322797428033495633">Posa el focus a la finestra de pantalla en pantalla</translation>
+<translation id="3322797428033495633">Posa el focus a la finestra d'imatge sobre imatge</translation>
 <translation id="3350805006883559974">Fes flotar la finestra activa al damunt</translation>
 <translation id="3407560819924487926">Obre el gestor de tasques</translation>
 <translation id="3417835166382867856">Cerca pestanyes</translation>
@@ -98,6 +98,7 @@
 <translation id="4141203561740478845">Destaca la fila on hi ha la barra d'adreces</translation>
 <translation id="4148761611071495477"><ph name="CTRL" /><ph name="SEPARATOR" /><ph name="G" /> o <ph name="ENTER" /></translation>
 <translation id="4240486403425279990">Mode de visió general</translation>
+<translation id="4275283744500212192">Obre les opcions de disseny de la finestra</translation>
 <translation id="4382340674111381977">Torna a la pàgina anterior</translation>
 <translation id="4458670250301149821">Mou la icona d'una aplicació a dins o fora d'una carpeta a la quadrícula d'aplicacions</translation>
 <translation id="4472417192667361414">Configuració del sistema i de la pantalla</translation>
@@ -193,6 +194,7 @@
 <translation id="8388247778047144397">Arrossega l'enllaç a una àrea buida de la barra de pestanyes</translation>
 <translation id="8389638407792712197">Obre una finestra nova</translation>
 <translation id="8429696719963529183">Fes servir les tecles de funció (F1 a F12)</translation>
+<translation id="8539396513118402548">Llista de dreceres</translation>
 <translation id="85690795166292698">Obre l'enllaç en una pestanya nova</translation>
 <translation id="8609384513243082612">Obre una pestanya nova</translation>
 <translation id="8644639153978066712">Mostra els fitxers amagats a l'aplicació Fitxers</translation>

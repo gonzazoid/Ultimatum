@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import {$} from 'chrome://resources/js/util.js';
+
 import {setNodeDisplay, setNodePosition} from './util.js';
 
 /**

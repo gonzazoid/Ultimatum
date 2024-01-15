@@ -6,17 +6,35 @@
 
 #include <sys/errno.h>
 
+#include <atomic>
+
+#include "base/apple/mach_logging.h"
+#include "base/apple/scoped_nsautorelease_pool.h"
 #include "base/auto_reset.h"
+#include "base/feature_list.h"
 #include "base/logging.h"
 #include "base/mac/mac_util.h"
-#include "base/mac/mach_logging.h"
-#include "base/mac/scoped_nsautorelease_pool.h"
+#include "base/notreached.h"
 #include "base/posix/eintr_wrapper.h"
+#include "base/task/task_features.h"
 #include "base/time/time_override.h"
 
 namespace base {
 
 namespace {
+
+// Under this feature a simplified version of the Run() function is used. It
+// improves legibility and avoids some calls to kevent64(). Remove once
+// crbug.com/1200141 is resolved.
+BASE_FEATURE(kUseSimplifiedMessagePumpKqueueLoop,
+             "UseSimplifiedMessagePumpKqueueLoop",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Caches the state of the "UseSimplifiedMessagePumpKqueueLoop".
+std::atomic_bool g_use_simplified_version = false;
+
+// Caches the state of the "TimerSlackMac" feature for efficiency.
+std::atomic_bool g_timer_slack = false;
 
 #if DCHECK_IS_ON()
 // Prior to macOS 10.14, kqueue timers may spuriously wake up, because earlier
@@ -26,8 +44,7 @@ namespace {
 // waiting in a kevent64 invocation is still (inherently) racy.
 bool KqueueTimersSpuriouslyWakeUp() {
 #if BUILDFLAG(IS_MAC)
-  static const bool kqueue_timers_spuriously_wakeup = mac::IsAtMostOS10_13();
-  return kqueue_timers_spuriously_wakeup;
+  return false;
 #else
   // This still happens on iOS15.
   return true;
@@ -117,7 +134,7 @@ MessagePumpKqueue::MessagePumpKqueue()
   // using an EVFILT_USER event, especially when triggered across threads.
   kern_return_t kr = mach_port_allocate(
       mach_task_self(), MACH_PORT_RIGHT_RECEIVE,
-      base::mac::ScopedMachReceiveRight::Receiver(wakeup_).get());
+      base::apple::ScopedMachReceiveRight::Receiver(wakeup_).get());
   MACH_CHECK(kr == KERN_SUCCESS, kr) << "mach_port_allocate";
 
   // Configure the event to directly receive the Mach message as part of the
@@ -136,30 +153,65 @@ MessagePumpKqueue::MessagePumpKqueue()
 
 MessagePumpKqueue::~MessagePumpKqueue() {}
 
+void MessagePumpKqueue::InitializeFeatures() {
+  g_use_simplified_version.store(
+      base::FeatureList::IsEnabled(kUseSimplifiedMessagePumpKqueueLoop),
+      std::memory_order_relaxed);
+  g_timer_slack.store(FeatureList::IsEnabled(kTimerSlackMac),
+                      std::memory_order_relaxed);
+}
+
 void MessagePumpKqueue::Run(Delegate* delegate) {
   AutoReset<bool> reset_keep_running(&keep_running_, true);
 
-  while (keep_running_) {
-    mac::ScopedNSAutoreleasePool pool;
+  if (g_use_simplified_version.load(std::memory_order_relaxed)) {
+    RunSimplified(delegate);
+  } else {
+    while (keep_running_) {
+      apple::ScopedNSAutoreleasePool pool;
 
-    bool do_more_work = DoInternalWork(delegate, nullptr);
-    if (!keep_running_)
-      break;
+      bool do_more_work = DoInternalWork(delegate, nullptr);
+      if (!keep_running_)
+        break;
+
+      Delegate::NextWorkInfo next_work_info = delegate->DoWork();
+      do_more_work |= next_work_info.is_immediate();
+      if (!keep_running_)
+        break;
+
+      if (do_more_work)
+        continue;
+
+      do_more_work |= delegate->DoIdleWork();
+      if (!keep_running_)
+        break;
+
+      if (do_more_work)
+        continue;
+
+      DoInternalWork(delegate, &next_work_info);
+    }
+  }
+}
+
+void MessagePumpKqueue::RunSimplified(Delegate* delegate) {
+  // Look for native work once before the loop starts. Without this call the
+  // loop would break without checking native work even once in cases where
+  // QuitWhenIdle was used. This is sometimes the case in tests.
+  DoInternalWork(delegate, nullptr);
+
+  while (keep_running_) {
+    apple::ScopedNSAutoreleasePool pool;
 
     Delegate::NextWorkInfo next_work_info = delegate->DoWork();
-    do_more_work |= next_work_info.is_immediate();
     if (!keep_running_)
       break;
 
-    if (do_more_work)
-      continue;
-
-    do_more_work |= delegate->DoIdleWork();
+    if (!next_work_info.is_immediate()) {
+      delegate->DoIdleWork();
+    }
     if (!keep_running_)
       break;
-
-    if (do_more_work)
-      continue;
 
     DoInternalWork(delegate, &next_work_info);
   }
@@ -225,6 +277,16 @@ bool MessagePumpKqueue::WatchMachReceivePort(
   return true;
 }
 
+TimeTicks MessagePumpKqueue::AdjustDelayedRunTime(TimeTicks earliest_time,
+                                                  TimeTicks run_time,
+                                                  TimeTicks latest_time) {
+  if (g_timer_slack.load(std::memory_order_relaxed)) {
+    return earliest_time;
+  }
+  return MessagePump::AdjustDelayedRunTime(earliest_time, run_time,
+                                           latest_time);
+}
+
 bool MessagePumpKqueue::WatchFileDescriptor(int fd,
                                             bool persistent,
                                             int mode,
@@ -273,6 +335,7 @@ bool MessagePumpKqueue::WatchFileDescriptor(int fd,
 }
 
 void MessagePumpKqueue::SetWakeupTimerEvent(const base::TimeTicks& wakeup_time,
+                                            base::TimeDelta leeway,
                                             kevent64_s* timer_event) {
   // The ident of the wakeup timer. There's only the one timer as the pair
   // (ident, filter) is the identity of the event.
@@ -295,6 +358,13 @@ void MessagePumpKqueue::SetWakeupTimerEvent(const base::TimeTicks& wakeup_time,
     // timer is set immediately.
     timer_event->fflags = NOTE_USECONDS;
     timer_event->data = (wakeup_time - base::TimeTicks::Now()).InMicroseconds();
+
+    if (!leeway.is_zero() && g_timer_slack.load(std::memory_order_relaxed)) {
+      // Specify slack based on |leeway|.
+      // See "man kqueue" in recent macOSen for documentation.
+      timer_event->fflags |= NOTE_LEEWAY;
+      timer_event->ext[1] = static_cast<uint64_t>(leeway.InMicroseconds());
+    }
   }
 }
 
@@ -371,7 +441,8 @@ bool MessagePumpKqueue::DoInternalWork(Delegate* delegate,
   unsigned int flags = immediate ? KEVENT_FLAG_IMMEDIATE : 0;
 
   if (!immediate) {
-    MaybeUpdateWakeupTimer(next_work_info->delayed_run_time);
+    MaybeUpdateWakeupTimer(next_work_info->delayed_run_time,
+                           next_work_info->leeway);
     DCHECK_EQ(scheduled_wakeup_time_, next_work_info->delayed_run_time);
     delegate->BeforeWait();
   }
@@ -391,6 +462,7 @@ bool MessagePumpKqueue::DoInternalWork(Delegate* delegate,
 bool MessagePumpKqueue::ProcessEvents(Delegate* delegate, size_t count) {
   bool did_work = false;
 
+  delegate->BeginNativeWorkBeforeDoWork();
   for (size_t i = 0; i < count; ++i) {
     auto* event = &events_[i];
     if (event->filter == EVFILT_READ || event->filter == EVFILT_WRITE) {
@@ -468,7 +540,8 @@ bool MessagePumpKqueue::ProcessEvents(Delegate* delegate, size_t count) {
 }
 
 void MessagePumpKqueue::MaybeUpdateWakeupTimer(
-    const base::TimeTicks& wakeup_time) {
+    const base::TimeTicks& wakeup_time,
+    base::TimeDelta leeway) {
   if (wakeup_time == scheduled_wakeup_time_) {
     // No change in the timer setting necessary.
     return;
@@ -479,7 +552,7 @@ void MessagePumpKqueue::MaybeUpdateWakeupTimer(
     if (scheduled_wakeup_time_ != base::TimeTicks::Max()) {
       // Clear the timer.
       kevent64_s timer{};
-      SetWakeupTimerEvent(wakeup_time, &timer);
+      SetWakeupTimerEvent(wakeup_time, leeway, &timer);
       int rv = ChangeOneEvent(kqueue_, &timer);
       PCHECK(rv == 0) << "kevent64, delete timer";
       --event_count_;
@@ -487,7 +560,7 @@ void MessagePumpKqueue::MaybeUpdateWakeupTimer(
   } else {
     // Set/reset the timer.
     kevent64_s timer{};
-    SetWakeupTimerEvent(wakeup_time, &timer);
+    SetWakeupTimerEvent(wakeup_time, leeway, &timer);
     int rv = ChangeOneEvent(kqueue_, &timer);
     PCHECK(rv == 0) << "kevent64, set timer";
 

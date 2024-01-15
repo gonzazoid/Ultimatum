@@ -1,0 +1,14 @@
+# Copyright 2018 The Chromium Authors
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("//build/config/ios/asset_catalog.gni")
+
+imageset("table_view_cell_chevron") {
+  sources = [
+    "table_view_cell_chevron.imageset/Contents.json",
+    "table_view_cell_chevron.imageset/table_view_cell_chevron.png",
+    "table_view_cell_chevron.imageset/table_view_cell_chevron@2x.png",
+    "table_view_cell_chevron.imageset/table_view_cell_chevron@3x.png",
+  ]
+}

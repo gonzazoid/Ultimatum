@@ -7,20 +7,21 @@
 #include <vector>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/path_service.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_LINUX)
@@ -154,18 +155,6 @@ std::vector<base::FilePath> GetRemoteStateChangeDirPaths() {
 
 }  // namespace
 
-#if defined(NDEBUG)
-// Prod extension ID
-const base::FilePath::CharType
-    RemoteWebAuthnExtensionNotifier::kRemoteWebAuthnExtensionId[] =
-        FILE_PATH_LITERAL("djjmngfglakhkhmgcfdmjalogilepkhd");
-#else
-// Dev extension ID
-const base::FilePath::CharType
-    RemoteWebAuthnExtensionNotifier::kRemoteWebAuthnExtensionId[] =
-        FILE_PATH_LITERAL("hfmpidnhglhndeamkbopljnclamhmnaj");
-#endif
-
 // Core class for writing wakeup files on the IO sequence. Must be used and
 // deleted on the same sequence.
 class RemoteWebAuthnExtensionNotifier::Core final {
@@ -198,14 +187,34 @@ void RemoteWebAuthnExtensionNotifier::Core::WakeUpExtension() {
       VLOG(1) << "Ignored non-directory path: " << dir;
       continue;
     }
-    auto file_path = dir.Append(kRemoteWebAuthnExtensionId);
-    VLOG(1) << "Writing extension wakeup file: " << file_path;
-    base::File file(file_path,
-                    base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE);
-    file.WriteAtCurrentPos(kExtensionWakeupFileContent,
-                           sizeof(kExtensionWakeupFileContent));
-    file.Flush();
+    for (const auto& id : GetRemoteWebAuthnExtensionIds()) {
+      auto file_path = dir.Append(id);
+      VLOG(1) << "Writing extension wakeup file: " << file_path;
+      base::File file(file_path,
+                      base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE);
+      file.WriteAtCurrentPos(kExtensionWakeupFileContent,
+                             sizeof(kExtensionWakeupFileContent));
+      file.Flush();
+    }
   }
+}
+
+// static
+const std::vector<base::FilePath::StringType>&
+RemoteWebAuthnExtensionNotifier::GetRemoteWebAuthnExtensionIds() {
+  static const base::NoDestructor<std::vector<base::FilePath::StringType>> ids({
+    // Prod extension ID
+    FILE_PATH_LITERAL("djjmngfglakhkhmgcfdmjalogilepkhd"),
+
+    // For debug builds we wake up both extensions, so that developers don't
+    // have to build and install the dev extension for using WebAuthn
+    // forwarding.
+#if !defined(NDEBUG)
+        // Dev extension ID
+        FILE_PATH_LITERAL("hfmpidnhglhndeamkbopljnclamhmnaj"),
+#endif
+  });
+  return *ids;
 }
 
 RemoteWebAuthnExtensionNotifier::RemoteWebAuthnExtensionNotifier()
@@ -241,7 +250,7 @@ void RemoteWebAuthnExtensionNotifier::NotifyStateChange() {
     return;
   }
   is_wake_up_scheduled_ = true;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&RemoteWebAuthnExtensionNotifier::WakeUpExtension,
                      weak_factory_.GetWeakPtr()));

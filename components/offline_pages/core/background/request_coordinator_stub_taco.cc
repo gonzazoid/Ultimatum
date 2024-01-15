@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/offline_pages/core/background/offliner_stub.h"
 #include "components/offline_pages/core/background/request_queue.h"
 #include "components/offline_pages/core/background/request_queue_store.h"
@@ -18,11 +18,15 @@
 
 namespace offline_pages {
 
+namespace {
+
 class ActiveTabInfo : public RequestCoordinator::ActiveTabInfo {
  public:
   ~ActiveTabInfo() override {}
   bool DoesActiveTabMatch(const GURL&) override { return false; }
 };
+
+}  // namespace
 
 RequestCoordinatorStubTaco::RequestCoordinatorStubTaco() {
   policy_ = std::make_unique<OfflinerPolicy>();

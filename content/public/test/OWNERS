@@ -22,12 +22,25 @@ per-file test_aggregation_service*=file://content/browser/aggregation_service/OW
 # Network Service
 per-file network_service_test_helper.*=file://services/network/OWNERS
 
-# Cert Verifier Service
-per-file test_cert_verifier_service_factory.*=file://services/cert_verifier/OWNERS
-
 # DevTools-specific changes
 per-file *devtools*=file://content/browser/devtools/OWNERS
+
+# For BackForwardCache.
+per-file back_forward_cache*=file://content/browser/BACK_FORWARD_CACHE_OWNERS
+
+# For file system changes.
+per-file *file_system*=file://content/browser/file_system_access/OWNERS
 
 # For security presubmit checks, though test mojom really don't need review.
 per-file *.mojom=set noparent
 per-file *.mojom=file://ipc/SECURITY_OWNERS
+
+## For fenced frames changes.
+per-file fenced_frame*=file://third_party/blink/renderer/core/html/fenced_frame/OWNERS
+
+# For Service Worker tests support review.
+per-file embedded_worker_instance_test_harness.*=file://content/browser/service_worker/OWNERS
+
+# For preloading changes.
+per-file preloading*=file://content/browser/preloading/OWNERS
+per-file prerender*=file://content/browser/preloading/OWNERS

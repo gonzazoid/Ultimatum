@@ -52,6 +52,7 @@ class TestPageLoadMetricsEmbedder
   bool IsSidePanel(content::WebContents* web_contents) override {
     return false;
   }
+  bool IsNonTabWebUI() override { return false; }
 
   page_load_metrics::PageLoadMetricsMemoryTracker*
   GetMemoryTrackerForBrowserContext(
@@ -198,12 +199,12 @@ class PageLoadMetricsMemoryTrackerTest
   }
 
  protected:
-  raw_ptr<PageLoadMetricsMemoryTracker> tracker_;
+  raw_ptr<PageLoadMetricsMemoryTracker, DanglingUntriaged> tracker_;
 
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
-  raw_ptr<TestMestricsWebContentsObserver> observer_;
-  raw_ptr<TestPageLoadMetricsEmbedder> embedder_interface_;
+  raw_ptr<TestMestricsWebContentsObserver, DanglingUntriaged> observer_;
+  raw_ptr<TestPageLoadMetricsEmbedder, DanglingUntriaged> embedder_interface_;
   PageLoadMetricsTestContentBrowserClient browser_client_;
   raw_ptr<content::ContentBrowserClient> original_browser_client_ = nullptr;
 };

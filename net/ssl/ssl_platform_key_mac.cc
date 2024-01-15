@@ -14,12 +14,12 @@
 #include <utility>
 #include <vector>
 
+#include "base/apple/foundation_util.h"
+#include "base/apple/osstatus_logging.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/containers/span.h"
 #include "base/logging.h"
-#include "base/mac/foundation_util.h"
-#include "base/mac/mac_logging.h"
 #include "base/mac/mac_util.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "base/memory/scoped_policy.h"
 #include "base/numerics/safe_conversions.h"
 #include "crypto/openssl_util.h"
@@ -51,8 +51,6 @@ SecKeyAlgorithm GetSecKeyAlgorithm(uint16_t algorithm) {
       return kSecKeyAlgorithmRSASignatureDigestPKCS1v15SHA256;
     case SSL_SIGN_RSA_PKCS1_SHA1:
       return kSecKeyAlgorithmRSASignatureDigestPKCS1v15SHA1;
-    case SSL_SIGN_RSA_PKCS1_MD5_SHA1:
-      return kSecKeyAlgorithmRSASignatureDigestPKCS1v15Raw;
     case SSL_SIGN_ECDSA_SECP521R1_SHA512:
       return kSecKeyAlgorithmECDSASignatureDigestX962SHA512;
     case SSL_SIGN_ECDSA_SECP384R1_SHA384:
@@ -108,8 +106,12 @@ class SSLPlatformKeySecKey : public ThreadedSSLPrivateKey::Delegate {
     SecKeyAlgorithm sec_algorithm =
         GetSecKeyAlgorithmWithFallback(algorithm, &pss_fallback);
     if (!sec_algorithm) {
-      NOTREACHED();
-      return ERR_FAILED;
+      // The caller should not request a signature algorithm we do not support.
+      // However, it's possible `key_` previously reported it supported an
+      // algorithm but no longer does. A compromised network service could also
+      // request invalid algorithms, so cleanly fail.
+      LOG(ERROR) << "Unsupported signature algorithm: " << algorithm;
+      return ERR_SSL_CLIENT_AUTH_SIGNATURE_FAILED;
     }
 
     const EVP_MD* md = SSL_get_signature_algorithm_digest(algorithm);
@@ -134,21 +136,21 @@ class SSLPlatformKeySecKey : public ThreadedSSLPrivateKey::Delegate {
       digest = *pss_storage;
     }
 
-    base::ScopedCFTypeRef<CFDataRef> digest_ref(
+    base::apple::ScopedCFTypeRef<CFDataRef> digest_ref(
         CFDataCreate(kCFAllocatorDefault, digest.data(),
                      base::checked_cast<CFIndex>(digest.size())));
 
-    base::ScopedCFTypeRef<CFErrorRef> error;
-    base::ScopedCFTypeRef<CFDataRef> signature_ref(SecKeyCreateSignature(
-        key_, sec_algorithm, digest_ref, error.InitializeInto()));
+    base::apple::ScopedCFTypeRef<CFErrorRef> error;
+    base::apple::ScopedCFTypeRef<CFDataRef> signature_ref(SecKeyCreateSignature(
+        key_.get(), sec_algorithm, digest_ref.get(), error.InitializeInto()));
     if (!signature_ref) {
-      LOG(ERROR) << error;
+      LOG(ERROR) << error.get();
       return ERR_SSL_CLIENT_AUTH_SIGNATURE_FAILED;
     }
 
-    signature->assign(
-        CFDataGetBytePtr(signature_ref),
-        CFDataGetBytePtr(signature_ref) + CFDataGetLength(signature_ref));
+    signature->assign(CFDataGetBytePtr(signature_ref.get()),
+                      CFDataGetBytePtr(signature_ref.get()) +
+                          CFDataGetLength(signature_ref.get()));
     return OK;
   }
 
@@ -178,35 +180,21 @@ class SSLPlatformKeySecKey : public ThreadedSSLPrivateKey::Delegate {
 
   std::vector<uint16_t> preferences_;
   bssl::UniquePtr<EVP_PKEY> pubkey_;
-  base::ScopedCFTypeRef<SecKeyRef> key_;
+  base::apple::ScopedCFTypeRef<SecKeyRef> key_;
 };
+
+}  // namespace
 
 scoped_refptr<SSLPrivateKey> CreateSSLPrivateKeyForSecKey(
     const X509Certificate* certificate,
-    SecKeyRef private_key) {
+    SecKeyRef key) {
   bssl::UniquePtr<EVP_PKEY> pubkey = GetClientCertPublicKey(certificate);
   if (!pubkey)
     return nullptr;
 
   return base::MakeRefCounted<ThreadedSSLPrivateKey>(
-      std::make_unique<SSLPlatformKeySecKey>(std::move(pubkey), private_key),
+      std::make_unique<SSLPlatformKeySecKey>(std::move(pubkey), key),
       GetSSLPlatformKeyTaskRunner());
-}
-
-}  // namespace
-
-scoped_refptr<SSLPrivateKey> CreateSSLPrivateKeyForSecIdentity(
-    const X509Certificate* certificate,
-    SecIdentityRef identity) {
-  base::ScopedCFTypeRef<SecKeyRef> private_key;
-  OSStatus status =
-      SecIdentityCopyPrivateKey(identity, private_key.InitializeInto());
-  if (status != noErr) {
-    OSSTATUS_LOG(WARNING, status);
-    return nullptr;
-  }
-
-  return CreateSSLPrivateKeyForSecKey(certificate, private_key.get());
 }
 
 }  // namespace net

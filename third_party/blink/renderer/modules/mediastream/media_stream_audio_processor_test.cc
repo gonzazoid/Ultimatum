@@ -16,7 +16,6 @@
 #include "base/memory/aligned_memory.h"
 #include "base/path_service.h"
 #include "base/test/mock_callback.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromecast_buildflags.h"
@@ -29,6 +28,7 @@
 #include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
 #include "third_party/blink/renderer/modules/webrtc/webrtc_audio_device_impl.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_audio_processor_options.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/webrtc/api/media_stream_interface.h"
 #include "third_party/webrtc/rtc_base/ref_counted_object.h"
 
@@ -55,7 +55,7 @@ const int kNumberOfPacketsForTest = 100;
 
 void ReadDataFromSpeechFile(char* data, int length) {
   base::FilePath file;
-  CHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &file));
+  CHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &file));
   file = file.Append(FILE_PATH_LITERAL("media"))
              .Append(FILE_PATH_LITERAL("test"))
              .Append(FILE_PATH_LITERAL("data"))
@@ -138,34 +138,49 @@ class MediaStreamAudioProcessorTest : public ::testing::Test {
     }
   }
 
+  // TODO(bugs.webrtc.org/7494): Remove/reduce duplication with
+  // `CreateWebRtcAudioProcessingModuleTest.CheckDefaultAudioProcessingConfig`.
   void VerifyDefaultComponents(MediaStreamAudioProcessor& audio_processor) {
-    EXPECT_TRUE(audio_processor.has_webrtc_audio_processing());
+    ASSERT_TRUE(audio_processor.has_webrtc_audio_processing());
     const webrtc::AudioProcessing::Config config =
         *audio_processor.GetAudioProcessingModuleConfigForTesting();
-    EXPECT_TRUE(config.echo_canceller.enabled);
-    EXPECT_TRUE(config.gain_controller1.enabled);
+
     EXPECT_TRUE(config.high_pass_filter.enabled);
-    EXPECT_TRUE(config.noise_suppression.enabled);
-    EXPECT_EQ(config.noise_suppression.level, config.noise_suppression.kHigh);
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || \
-    BUILDFLAG(IS_CHROMEOS)
-    EXPECT_TRUE(config.gain_controller1.analog_gain_controller
-                    .clipping_predictor.enabled);
+    EXPECT_FALSE(config.pre_amplifier.enabled);
+    EXPECT_TRUE(config.echo_canceller.enabled);
+
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+    EXPECT_TRUE(config.gain_controller1.enabled);
+    EXPECT_TRUE(config.gain_controller2.enabled);
+#elif BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_FUCHSIA)
+    EXPECT_TRUE(config.gain_controller1.enabled);
+    EXPECT_FALSE(config.gain_controller2.enabled);
+#elif BUILDFLAG(IS_CASTOS) || BUILDFLAG(IS_CAST_ANDROID)
+    EXPECT_TRUE(config.gain_controller1.enabled);
+    EXPECT_FALSE(config.gain_controller2.enabled);
+#elif BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
+    EXPECT_FALSE(config.gain_controller1.enabled);
+    EXPECT_TRUE(config.gain_controller2.enabled);
 #else
-    EXPECT_FALSE(config.gain_controller1.analog_gain_controller
-                     .clipping_predictor.enabled);
+    GTEST_FAIL() << "Undefined expectation.";
 #endif
-#if BUILDFLAG(IS_ANDROID)
+
+    EXPECT_TRUE(config.noise_suppression.enabled);
+    EXPECT_EQ(config.noise_suppression.level,
+              webrtc::AudioProcessing::Config::NoiseSuppression::kHigh);
+
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
+    // Android uses echo cancellation optimized for mobiles, and does not
+    // support keytap suppression.
     EXPECT_TRUE(config.echo_canceller.mobile_mode);
-    EXPECT_EQ(config.gain_controller1.mode,
-              config.gain_controller1.kFixedDigital);
+    EXPECT_FALSE(config.transient_suppression.enabled);
 #else
     EXPECT_FALSE(config.echo_canceller.mobile_mode);
-    EXPECT_EQ(config.gain_controller1.mode,
-              config.gain_controller1.kAdaptiveAnalog);
+    EXPECT_TRUE(config.transient_suppression.enabled);
 #endif
   }
 
+  test::TaskEnvironment task_environment_;
   media::AudioParameters params_;
   MockProcessedCaptureCallback mock_capture_callback_;
 };
@@ -349,7 +364,15 @@ TEST_P(MediaStreamAudioProcessorTestMultichannel, TestStereoAudio) {
   }
 
   // Test without and with audio processing enabled.
-  for (bool use_apm : {false, true}) {
+  constexpr bool kUseApmValues[] =
+#if BUILDFLAG(IS_IOS)
+      // TODO(https://crbug.com/1417474): `false` fails on ios-blink platform
+      // due to a special case for iOS in settings.NeedWebrtcAudioProcessing()
+      {true};
+#else
+      {false, true};
+#endif
+  for (bool use_apm : kUseApmValues) {
     // No need to test stereo with APM if disabled.
     if (use_apm && !use_multichannel_processing) {
       continue;
@@ -374,7 +397,6 @@ TEST_P(MediaStreamAudioProcessorTestMultichannel, TestStereoAudio) {
 
     // Run the test consecutively to make sure the stereo channels are not
     // flipped back and forth.
-    static const int kNumberOfPacketsForTest = 100;
     const base::TimeTicks pushed_capture_time = base::TimeTicks::Now();
 
     for (int num_preferred_channels = 0; num_preferred_channels <= 5;
@@ -461,6 +483,7 @@ INSTANTIATE_TEST_SUITE_P(MediaStreamAudioProcessorMultichannelAffectedTests,
 // soon as 10 ms of audio has been received.
 TEST(MediaStreamAudioProcessorCallbackTest,
      ProcessedAudioIsDeliveredAsSoonAsPossibleWithShortBuffers) {
+  test::TaskEnvironment task_environment_;
   MockProcessedCaptureCallback mock_capture_callback;
   blink::AudioProcessingProperties properties;
   scoped_refptr<WebRtcAudioDeviceImpl> webrtc_audio_device(
@@ -519,6 +542,7 @@ TEST(MediaStreamAudioProcessorCallbackTest,
 // should trigger a comparable number of processing callbacks.
 TEST(MediaStreamAudioProcessorCallbackTest,
      ProcessedAudioIsDeliveredAsSoonAsPossibleWithLongBuffers) {
+  test::TaskEnvironment task_environment_;
   MockProcessedCaptureCallback mock_capture_callback;
   blink::AudioProcessingProperties properties;
   scoped_refptr<WebRtcAudioDeviceImpl> webrtc_audio_device(
@@ -566,6 +590,7 @@ TEST(MediaStreamAudioProcessorCallbackTest,
 // forwarded directly instead of collecting chunks of 10 ms.
 TEST(MediaStreamAudioProcessorCallbackTest,
      UnprocessedAudioIsDeliveredImmediatelyWithShortBuffers) {
+  test::TaskEnvironment task_environment_;
   MockProcessedCaptureCallback mock_capture_callback;
   blink::AudioProcessingProperties properties;
   properties.DisableDefaultProperties();
@@ -611,6 +636,7 @@ TEST(MediaStreamAudioProcessorCallbackTest,
 // greater than 10 ms are delivered in chunks of 10 ms.
 TEST(MediaStreamAudioProcessorCallbackTest,
      UnprocessedAudioIsDeliveredImmediatelyWithLongBuffers) {
+  test::TaskEnvironment task_environment_;
   MockProcessedCaptureCallback mock_capture_callback;
   blink::AudioProcessingProperties properties;
   properties.DisableDefaultProperties();
@@ -674,6 +700,7 @@ scoped_refptr<MediaStreamAudioProcessor> CreateAudioProcessorWithProperties(
 }  // namespace
 
 TEST(MediaStreamAudioProcessorWouldModifyAudioTest, TrueByDefault) {
+  test::TaskEnvironment task_environment;
   blink::AudioProcessingProperties properties;
   EXPECT_TRUE(MediaStreamAudioProcessor::WouldModifyAudio(properties));
 
@@ -684,6 +711,7 @@ TEST(MediaStreamAudioProcessorWouldModifyAudioTest, TrueByDefault) {
 
 TEST(MediaStreamAudioProcessorWouldModifyAudioTest,
      FalseWhenEverythingIsDisabled) {
+  test::TaskEnvironment task_environment_;
   blink::AudioProcessingProperties properties;
   properties.DisableDefaultProperties();
   EXPECT_FALSE(MediaStreamAudioProcessor::WouldModifyAudio(properties));
@@ -695,6 +723,7 @@ TEST(MediaStreamAudioProcessorWouldModifyAudioTest,
 
 TEST(MediaStreamAudioProcessorWouldModifyAudioTest,
      FalseWhenOnlyHardwareEffectsAreUsed) {
+  test::TaskEnvironment task_environment_;
   blink::AudioProcessingProperties properties;
   properties.DisableDefaultProperties();
   properties.echo_cancellation_type =
@@ -708,8 +737,18 @@ TEST(MediaStreamAudioProcessorWouldModifyAudioTest,
   EXPECT_FALSE(audio_processor->has_webrtc_audio_processing());
 }
 
+#if BUILDFLAG(IS_IOS)
+// TODO(https://crbug.com/1417474): Remove legacy iOS case in
+// AudioProcessingSettings::NeedWebrtcAudioProcessing().
+#define MAYBE_TrueWhenSoftwareEchoCancellationIsEnabled \
+  DISABLED_TrueWhenSoftwareEchoCancellationIsEnabled
+#else
+#define MAYBE_TrueWhenSoftwareEchoCancellationIsEnabled \
+  TrueWhenSoftwareEchoCancellationIsEnabled
+#endif  // BUILDFLAG(IS_IOS)
 TEST(MediaStreamAudioProcessorWouldModifyAudioTest,
-     TrueWhenSoftwareEchoCancellationIsEnabled) {
+     MAYBE_TrueWhenSoftwareEchoCancellationIsEnabled) {
+  test::TaskEnvironment task_environment_;
   blink::AudioProcessingProperties properties;
   properties.DisableDefaultProperties();
   properties.echo_cancellation_type =
@@ -727,8 +766,17 @@ TEST(MediaStreamAudioProcessorWouldModifyAudioTest,
   EXPECT_TRUE(audio_processor->has_webrtc_audio_processing());
 }
 
+#if BUILDFLAG(IS_IOS)
+// TODO(https://crbug.com/1417474): Remove legacy iOS case in
+// AudioProcessingSettings::NeedWebrtcAudioProcessing().
+#define MAYBE_TrueWhenStereoMirroringIsEnabled \
+  DISABLED_TrueWhenStereoMirroringIsEnabled
+#else
+#define MAYBE_TrueWhenStereoMirroringIsEnabled TrueWhenStereoMirroringIsEnabled
+#endif  // BUILDFLAG(IS_IOS)
 TEST(MediaStreamAudioProcessorWouldModifyAudioTest,
-     TrueWhenStereoMirroringIsEnabled) {
+     MAYBE_TrueWhenStereoMirroringIsEnabled) {
+  test::TaskEnvironment task_environment_;
   blink::AudioProcessingProperties properties;
   properties.DisableDefaultProperties();
   properties.goog_audio_mirroring = true;
@@ -744,8 +792,16 @@ TEST(MediaStreamAudioProcessorWouldModifyAudioTest,
   EXPECT_FALSE(audio_processor->has_webrtc_audio_processing());
 }
 
+#if BUILDFLAG(IS_IOS)
+// TODO(https://crbug.com/1417474): Remove legacy iOS case in
+// AudioProcessingSettings::NeedWebrtcAudioProcessing().
+#define MAYBE_TrueWhenGainControlIsEnabled DISABLED_TrueWhenGainControlIsEnabled
+#else
+#define MAYBE_TrueWhenGainControlIsEnabled TrueWhenGainControlIsEnabled
+#endif  // BUILDFLAG(IS_IOS)
 TEST(MediaStreamAudioProcessorWouldModifyAudioTest,
-     TrueWhenGainControlIsEnabled) {
+     MAYBE_TrueWhenGainControlIsEnabled) {
+  test::TaskEnvironment task_environment_;
   blink::AudioProcessingProperties properties;
   properties.DisableDefaultProperties();
   properties.goog_auto_gain_control = true;
@@ -762,12 +818,22 @@ TEST(MediaStreamAudioProcessorWouldModifyAudioTest,
   EXPECT_TRUE(audio_processor->has_webrtc_audio_processing());
 }
 
+#if BUILDFLAG(IS_IOS)
+// TODO(https://crbug.com/1417474): Remove legacy iOS case in
+// AudioProcessingSettings::NeedWebrtcAudioProcessing().
+#define MAYBE_TrueWhenExperimentalEchoCancellationIsEnabled \
+  DISABLED_TrueWhenExperimentalEchoCancellationIsEnabled
+#else
+#define MAYBE_TrueWhenExperimentalEchoCancellationIsEnabled \
+  TrueWhenExperimentalEchoCancellationIsEnabled
+#endif  // BUILDFLAG(IS_IOS)
 // "Experimental echo cancellation" does not map to any real effect, but still
 // enables audio processing.
 // TODO(https://crbug.com/1269723): Remove the experimental AEC option. This
 // test documents *current* behavior, not *desired* behavior.
 TEST(MediaStreamAudioProcessorWouldModifyAudioTest,
-     TrueWhenExperimentalEchoCancellationIsEnabled) {
+     MAYBE_TrueWhenExperimentalEchoCancellationIsEnabled) {
+  test::TaskEnvironment task_environment_;
   blink::AudioProcessingProperties properties;
   properties.DisableDefaultProperties();
   properties.goog_experimental_echo_cancellation = true;
@@ -790,6 +856,7 @@ TEST(MediaStreamAudioProcessorWouldModifyAudioTest,
 
 TEST(MediaStreamAudioProcessorWouldModifyAudioTest,
      TrueWhenNoiseSuppressionIsEnabled) {
+  test::TaskEnvironment task_environment_;
   blink::AudioProcessingProperties properties;
   properties.DisableDefaultProperties();
   properties.goog_noise_suppression = true;
@@ -802,6 +869,7 @@ TEST(MediaStreamAudioProcessorWouldModifyAudioTest,
 
 TEST(MediaStreamAudioProcessorWouldModifyAudioTest,
      TrueWhenExperimentalNoiseSuppression) {
+  test::TaskEnvironment task_environment_;
   blink::AudioProcessingProperties properties;
   properties.DisableDefaultProperties();
   properties.goog_experimental_noise_suppression = true;
@@ -814,6 +882,7 @@ TEST(MediaStreamAudioProcessorWouldModifyAudioTest,
 
 TEST(MediaStreamAudioProcessorWouldModifyAudioTest,
      TrueWhenHighpassFilterIsEnabled) {
+  test::TaskEnvironment task_environment_;
   blink::AudioProcessingProperties properties;
   properties.DisableDefaultProperties();
   properties.goog_highpass_filter = true;

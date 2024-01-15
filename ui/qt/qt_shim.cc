@@ -7,7 +7,7 @@
 
 #include "ui/qt/qt_shim.h"
 
-#include <stdio.h>
+#include <cmath>
 
 #include <QApplication>
 #include <QFont>
@@ -16,6 +16,7 @@
 #include <QMimeType>
 #include <QPainter>
 #include <QPalette>
+#include <QScreen>
 #include <QStyle>
 #include <QStyleOptionTitleBar>
 
@@ -52,8 +53,9 @@ FontHinting QtHintingToFontHinting(QFont::HintingPreference hinting) {
 // Obtain the average color of a gradient.
 SkColor GradientColor(const QGradient& gradient) {
   QGradientStops stops = gradient.stops();
-  if (stops.empty())
+  if (stops.empty()) {
     return qRgba(0, 0, 0, 0);
+  }
 
   float a = 0;
   float r = 0;
@@ -86,11 +88,13 @@ SkColor GradientColor(const QGradient& gradient) {
 // Obtain the average color of a texture.
 SkColor TextureColor(QImage image) {
   size_t size = image.width() * image.height();
-  if (!size)
+  if (!size) {
     return qRgba(0, 0, 0, 0);
+  }
 
-  if (image.format() != QImage::Format_ARGB32_Premultiplied)
+  if (image.format() != QImage::Format_ARGB32_Premultiplied) {
     image = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+  }
 
   size_t a = 0;
   size_t r = 0;
@@ -195,6 +199,18 @@ QPalette::ColorGroup ColorStateToColorGroup(ColorState state) {
   }
 }
 
+float GetScreenScale(const QScreen* screen) {
+  constexpr double kDefaultPixelDpi = 96.0;
+  double scale = screen->devicePixelRatio() * screen->logicalDotsPerInch() /
+                 kDefaultPixelDpi;
+  // Round to the nearest 1/16th so that UI can losslessly multiply and divide
+  // by the scale factor using floating point arithmetic.  GtkUi also rounds
+  // in this way, but to 1/64th.  1/16th is chosen here since that's what
+  // KDE settings uses.
+  scale = std::round(scale * 16) / 16;
+  return scale > 0 ? scale : 1.0;
+}
+
 }  // namespace
 
 QtShim::QtShim(QtInterface::Delegate* delegate, int* argc, char** argv)
@@ -203,12 +219,32 @@ QtShim::QtShim(QtInterface::Delegate* delegate, int* argc, char** argv)
           SLOT(FontChanged(const QFont&)));
   connect(&app_, SIGNAL(paletteChanged(const QPalette&)), this,
           SLOT(PaletteChanged(const QPalette&)));
+  connect(&app_, SIGNAL(screenAdded(QScreen*)), this,
+          SLOT(ScreenAdded(QScreen*)));
+  connect(&app_, SIGNAL(screenRemoved(QScreen*)), this,
+          SLOT(ScreenRemoved(QScreen*)));
+  for (QScreen* screen : app_.screens()) {
+    ScreenAdded(screen);
+  }
 }
 
 QtShim::~QtShim() = default;
 
-double QtShim::GetScaleFactor() const {
-  return app_.devicePixelRatio();
+size_t QtShim::GetMonitorConfig(MonitorScale** monitors, float* primary_scale) {
+  size_t n_monitors = app_.screens().size();
+  monitor_scales_.resize(n_monitors);
+  for (size_t i = 0; i < n_monitors; i++) {
+    const QScreen* screen = app_.screens()[i];
+    MonitorScale monitor = monitor_scales_[i];
+    monitor.x_px = screen->geometry().x();
+    monitor.y_px = screen->geometry().y();
+    monitor.width_px = screen->geometry().width();
+    monitor.height_px = screen->geometry().height();
+    monitor.scale = GetScreenScale(screen);
+  }
+  *monitors = monitor_scales_.data();
+  *primary_scale = GetScreenScale(app_.primaryScreen());
+  return n_monitors;
 }
 
 FontRenderParams QtShim::GetFontRenderParams() const {
@@ -241,8 +277,9 @@ Image QtShim::GetIconForContentType(const String& content_type,
       auto icon = QIcon::fromTheme(name);
       auto pixmap = icon.pixmap(size);
       auto image = pixmap.toImage();
-      if (image.format() != QImage::Format_ARGB32_Premultiplied)
+      if (image.format() != QImage::Format_ARGB32_Premultiplied) {
         image = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+      }
       if (auto bytes = image.sizeInBytes()) {
         return {image.width(), image.height(),
                 static_cast<float>(image.devicePixelRatio()),
@@ -283,6 +320,30 @@ void QtShim::PaletteChanged(const QPalette& palette) {
   delegate_->ThemeChanged();
 }
 
+DISABLE_CFI_VCALL
+void QtShim::ScreenAdded(QScreen* screen) {
+  connect(screen, SIGNAL(logicalDotsPerInchChanged(qreal)), this,
+          SLOT(LogicalDotsPerInchChanged(qreal)));
+  connect(screen, SIGNAL(physicalDotsPerInchChanged(qreal)), this,
+          SLOT(PhysicalDotsPerInchChanged(qreal)));
+  delegate_->ScaleFactorMaybeChanged();
+}
+
+DISABLE_CFI_VCALL
+void QtShim::ScreenRemoved(QScreen* screen) {
+  delegate_->ScaleFactorMaybeChanged();
+}
+
+DISABLE_CFI_VCALL
+void QtShim::LogicalDotsPerInchChanged(qreal dpi) {
+  delegate_->ScaleFactorMaybeChanged();
+}
+
+DISABLE_CFI_VCALL
+void QtShim::PhysicalDotsPerInchChanged(qreal dpi) {
+  delegate_->ScaleFactorMaybeChanged();
+}
+
 Image QtShim::DrawHeader(int width,
                          int height,
                          SkColor default_color,
@@ -309,8 +370,9 @@ QImage QtShim::DrawHeaderImpl(int width,
     QStyleOptionTitleBar opt;
     opt.rect = QRect(-kBorderWidth, -kBorderWidth, width + 2 * kBorderWidth,
                      height + 2 * kBorderWidth);
-    if (state == ColorState::kNormal)
+    if (state == ColorState::kNormal) {
       opt.titleBarState = QStyle::State_Active;
+    }
     app_.style()->drawComplexControl(QStyle::CC_TitleBar, &opt, &painter,
                                      nullptr);
   } else {

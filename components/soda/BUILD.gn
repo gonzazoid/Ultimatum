@@ -10,11 +10,13 @@ assert(!is_android)
 
 buildflag_header("buildflags") {
   header = "buildflags.h"
-  flags = [ "ENABLE_SODA=$enable_soda" ]
+  flags = [ "ENABLE_SODA_INTEGRATION_TESTS=$enable_soda_integration_tests" ]
 }
 
 component("soda") {
   sources = [
+    "soda_features.cc",
+    "soda_features.h",
     "soda_installer.cc",
     "soda_installer.h",
   ]
@@ -55,9 +57,11 @@ source_set("constants") {
 
   deps = [
     "//base",
-    "//components/component_updater",
+    "//components/component_updater:component_updater_paths",
     "//components/crx_file",
     "//components/strings/",
+    "//media",
+    "//ui/base",
   ]
 }
 

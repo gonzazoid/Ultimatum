@@ -9,14 +9,11 @@
 #import "ios/chrome/app/application_delegate/app_state.h"
 #import "ios/chrome/app/application_delegate/metrics_mediator.h"
 #import "ios/chrome/app/application_delegate/startup_information.h"
-#import "ios/chrome/browser/metrics/ios_profile_session_durations_service.h"
-#import "ios/chrome/browser/metrics/ios_profile_session_durations_service_factory.h"
-#import "ios/chrome/browser/ui/main/scene_controller.h"
-#import "ios/chrome/browser/ui/main/scene_state.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/metrics/model/ios_profile_session_durations_service.h"
+#import "ios/chrome/browser/metrics/model/ios_profile_session_durations_service_factory.h"
+#import "ios/chrome/browser/shared/coordinator/scene/scene_controller.h"
+#import "ios/chrome/browser/shared/coordinator/scene/scene_state.h"
+#import "ios/public/provider/chrome/browser/primes/primes_api.h"
 
 @interface AppMetricsAppStateAgent () <SceneStateObserver>
 
@@ -69,18 +66,12 @@
     self.appState.startupInformation.firstSceneConnectionTime =
         base::TimeTicks::Now();
     self.firstSceneHasConnected = YES;
+    if (self.appState.initStage > InitStageSafeMode)
+      [MetricsMediator createStartupTrackingTask];
   }
 
   if (self.appState.initStage <= InitStageSafeMode) {
     return;
-  }
-
-  if (level >= SceneActivationLevelForegroundActive) {
-    if (!self.firstSceneHasActivated) {
-      self.firstSceneHasActivated = YES;
-      [MetricsMediator logStartupDuration:self.appState.startupInformation
-                    connectionInformation:sceneState.controller];
-    }
   }
 
   if (level >= SceneActivationLevelForegroundInactive &&
@@ -103,6 +94,16 @@
 
     [self handleSessionEnd];
     DCHECK(self.appState.lastTimeInForeground.is_null());
+  }
+
+  if (level >= SceneActivationLevelForegroundActive) {
+    if (!self.firstSceneHasActivated) {
+      self.firstSceneHasActivated = YES;
+      [MetricsMediator logStartupDuration:self.appState.startupInformation];
+      if (ios::provider::IsPrimesSupported()) {
+        ios::provider::PrimesAppReady();
+      }
+    }
   }
 }
 

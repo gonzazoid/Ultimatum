@@ -14,12 +14,15 @@
 #include "ash/public/cpp/login_screen_model.h"
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/public/cpp/shell_window_ids.h"
+#include "ash/public/cpp/view_shadow.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/login/ui/captive_portal_dialog_delegate.h"
 #include "chrome/browser/ash/login/ui/login_display_host_mojo.h"
 #include "chrome/browser/ash/login/ui/oobe_dialog_size_utils.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/ui/ash/ash_util.h"
+#include "chrome/browser/ui/ash/login_screen_client_impl.h"
 #include "chrome/browser/ui/webui/ash/login/core_oobe_handler.h"
 #include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
 #include "chrome/browser/ui/webui/ash/login/oobe_ui.h"
@@ -38,6 +41,7 @@
 #include "ui/views/metadata/type_conversion.h"
 #include "ui/views/view.h"
 #include "ui/views/widget/widget.h"
+#include "ui/web_dialogs/web_dialog_delegate.h"
 
 namespace ash {
 namespace {
@@ -52,7 +56,13 @@ class OobeWebDialogView : public views::WebDialogView {
   OobeWebDialogView(content::BrowserContext* context,
                     ui::WebDialogDelegate* delegate,
                     std::unique_ptr<WebContentsHandler> handler)
-      : views::WebDialogView(context, delegate, std::move(handler)) {}
+      : views::WebDialogView(context, delegate, std::move(handler)) {
+    if (features::IsOobeJellyEnabled() || features::IsBootAnimationEnabled()) {
+      set_use_round_corners(/*round=*/true);
+      set_corner_radius(kOobeDialogCornerRadius);
+    }
+  }
+
   OobeWebDialogView(const OobeWebDialogView&) = delete;
   OobeWebDialogView& operator=(const OobeWebDialogView&) = delete;
 
@@ -67,7 +77,7 @@ class OobeWebDialogView : public views::WebDialogView {
   }
 
   bool CheckMediaAccessPermission(content::RenderFrameHost* render_frame_host,
-                                  const GURL& security_origin,
+                                  const url::Origin& security_origin,
                                   blink::mojom::MediaStreamType type) override {
     return MediaCaptureDevicesDispatcher::GetInstance()
         ->CheckMediaAccessPermission(render_frame_host, security_origin, type);
@@ -129,7 +139,14 @@ class LayoutWidgetDelegateView : public views::WidgetDelegateView {
                            OobeWebDialogView* oobe_view)
       : dialog_delegate_(dialog_delegate), oobe_view_(oobe_view) {
     SetFocusTraversesOut(true);
-    AddChildView(oobe_view_);
+    AddChildView(oobe_view_.get());
+
+    if (features::IsOobeJellyEnabled() || features::IsBootAnimationEnabled()) {
+      // Create a shadow for the OOBE dialog.
+      view_shadow_ = std::make_unique<ViewShadow>(oobe_view_.get(),
+                                                  kOobeDialogShadowElevation);
+      view_shadow_->SetRoundedCornerRadius(kOobeDialogCornerRadius);
+    }
   }
 
   LayoutWidgetDelegateView(const LayoutWidgetDelegateView&) = delete;
@@ -158,9 +175,7 @@ class LayoutWidgetDelegateView : public views::WidgetDelegateView {
 
   void Layout() override {
     if (fullscreen_) {
-      for (views::View* child : children()) {
-        child->SetBoundsRect(GetContentsBounds());
-      }
+      oobe_view_->SetBoundsRect(GetContentsBounds());
       return;
     }
 
@@ -171,17 +186,16 @@ class LayoutWidgetDelegateView : public views::WidgetDelegateView {
     const bool is_horizontal = display_size.width() > display_size.height();
     CalculateOobeDialogBounds(GetContentsBounds(), shelf_height, is_horizontal,
                               &bounds);
-
-    for (views::View* child : children()) {
-      child->SetBoundsRect(bounds);
-    }
+    oobe_view_->SetBoundsRect(bounds);
   }
 
   View* GetInitiallyFocusedView() override { return oobe_view_; }
 
  private:
-  OobeUIDialogDelegate* dialog_delegate_ = nullptr;  // Owned by us.
-  OobeWebDialogView* oobe_view_ = nullptr;  // Owned by views hierarchy.
+  raw_ptr<OobeUIDialogDelegate, DanglingUntriaged> dialog_delegate_ =
+      nullptr;                                      // Owned by us.
+  raw_ptr<OobeWebDialogView> oobe_view_ = nullptr;  // Owned by views hierarchy.
+  std::unique_ptr<ViewShadow> view_shadow_;
 
   // Indicates whether Oobe web view should fully occupy the hosting widget.
   bool fullscreen_ = false;
@@ -198,7 +212,12 @@ END_METADATA
 OobeUIDialogDelegate::OobeUIDialogDelegate(
     base::WeakPtr<LoginDisplayHostMojo> controller)
     : controller_(controller) {
+  set_allow_default_context_menu(false);
+  set_can_close(true);
   set_can_resize(false);
+  set_dialog_content_url(GURL(kGaiaURL));
+  set_dialog_modal_type(ui::MODAL_TYPE_WINDOW);
+  set_show_dialog_title(false);
   keyboard_observer_.Observe(ChromeKeyboardControllerClient::Get());
 
   for (size_t i = 0; i < kLoginAcceleratorDataLength; ++i) {
@@ -221,13 +240,12 @@ OobeUIDialogDelegate::OobeUIDialogDelegate(
   dialog_view_ =
       new OobeWebDialogView(ProfileHelper::GetSigninProfile(), this,
                             std::make_unique<ChromeWebContentsHandler>());
-
   views::Widget::InitParams params(
       views::Widget::InitParams::TYPE_WINDOW_FRAMELESS);
-  ash_util::SetupWidgetInitParamsForContainer(
+  ash_util::SetupWidgetInitParamsForContainerInPrimary(
       &params, kShellWindowId_LockScreenContainer);
   layout_view_ = new LayoutWidgetDelegateView(this, dialog_view_);
-  params.delegate = layout_view_;
+  params.delegate = layout_view_.get();
   params.opacity = views::Widget::InitParams::WindowOpacity::kTranslucent;
   params.show_state = ui::SHOW_STATE_FULLSCREEN;
 
@@ -237,7 +255,7 @@ OobeUIDialogDelegate::OobeUIDialogDelegate(
   layout_view_->SetHasShelf(
       !ChromeKeyboardControllerClient::Get()->is_keyboard_visible());
 
-  view_observer_.Observe(dialog_view_);
+  view_observer_.Observe(dialog_view_.get());
 
   captive_portal_delegate_ =
       (new CaptivePortalDialogDelegate(dialog_view_))->GetWeakPtr();
@@ -275,12 +293,9 @@ void OobeUIDialogDelegate::SetShouldDisplayCaptivePortal(bool should_display) {
 }
 
 void OobeUIDialogDelegate::Show() {
-  if (LoginScreenClientImpl::Get()) {
-    scoped_system_tray_observer_ = std::make_unique<base::ScopedObservation<
-        LoginScreenClientImpl, SystemTrayObserver,
-        &LoginScreenClientImpl::AddSystemTrayObserver,
-        &LoginScreenClientImpl::RemoveSystemTrayObserver>>(this);
-    scoped_system_tray_observer_->Observe(LoginScreenClientImpl::Get());
+  if (auto* client = LoginScreenClientImpl::Get()) {
+    scoped_system_tray_observer_.Reset();
+    scoped_system_tray_observer_.Observe(client);
   }
   widget_->Show();
   if (state_ == OobeDialogState::HIDDEN) {
@@ -299,7 +314,7 @@ void OobeUIDialogDelegate::ShowFullScreen() {
 }
 
 void OobeUIDialogDelegate::Hide() {
-  scoped_system_tray_observer_.reset();
+  scoped_system_tray_observer_.Reset();
   if (!widget_)
     return;
   widget_->Hide();
@@ -347,46 +362,8 @@ views::View* OobeUIDialogDelegate::GetWebDialogView() {
   return dialog_view_;
 }
 
-ui::ModalType OobeUIDialogDelegate::GetDialogModalType() const {
-  return ui::MODAL_TYPE_WINDOW;
-}
-
-std::u16string OobeUIDialogDelegate::GetDialogTitle() const {
-  return std::u16string();
-}
-
-GURL OobeUIDialogDelegate::GetDialogContentURL() const {
-  return GURL(kGaiaURL);
-}
-
-void OobeUIDialogDelegate::GetWebUIMessageHandlers(
-    std::vector<content::WebUIMessageHandler*>* handlers) const {}
-
-void OobeUIDialogDelegate::GetDialogSize(gfx::Size* size) const {
-  // Dialog will be resized externally by LayoutWidgetDelegateView.
-}
-
-std::string OobeUIDialogDelegate::GetDialogArgs() const {
-  return std::string();
-}
-
 void OobeUIDialogDelegate::OnDialogClosed(const std::string& json_retval) {
   widget_->Close();
-}
-
-void OobeUIDialogDelegate::OnCloseContents(content::WebContents* source,
-                                           bool* out_close_dialog) {
-  *out_close_dialog = true;
-}
-
-bool OobeUIDialogDelegate::ShouldShowDialogTitle() const {
-  return false;
-}
-
-bool OobeUIDialogDelegate::HandleContextMenu(
-    content::RenderFrameHost& render_frame_host,
-    const content::ContextMenuParams& params) {
-  return true;
 }
 
 std::vector<ui::Accelerator> OobeUIDialogDelegate::GetAccelerators() {
@@ -412,7 +389,7 @@ bool OobeUIDialogDelegate::AcceleratorPressed(
 void OobeUIDialogDelegate::OnViewBoundsChanged(views::View* observed_view) {
   if (!widget_)
     return;
-  GetOobeUI()->GetCoreOobeView()->UpdateClientAreaSize(
+  GetOobeUI()->GetCoreOobe()->UpdateClientAreaSize(
       layout_view_->GetContentsBounds().size());
 }
 
@@ -456,6 +433,13 @@ void OobeUIDialogDelegate::OnDestroyingOobeUI() {
 void OobeUIDialogDelegate::OnFocusLeavingSystemTray(bool reverse) {
   if (dialog_view_)
     dialog_view_->AboutToRequestFocusFromTabTraversal(reverse);
+}
+
+ui::WebDialogDelegate::FrameKind OobeUIDialogDelegate::GetWebDialogFrameKind()
+    const {
+  return (features::IsOobeJellyEnabled() || features::IsBootAnimationEnabled())
+             ? ui::WebDialogDelegate::FrameKind::kDialog
+             : ui::WebDialogDelegate::FrameKind::kNonClient;
 }
 
 }  // namespace ash

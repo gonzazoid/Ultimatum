@@ -5,7 +5,5 @@
 // https://gpuweb.github.io/gpuweb/
 
 dictionary GPUComputePassDescriptor : GPUObjectDescriptorBase {
-    GPUComputePassTimestampWrites timestampWrites = [];
+    GPUComputePassTimestampWrites timestampWrites;
 };
-
-typedef sequence<GPUComputePassTimestampWrite> GPUComputePassTimestampWrites;

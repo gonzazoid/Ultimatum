@@ -10,10 +10,11 @@
 
 #include "base/auto_reset.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "chrome/browser/ui/extensions/extension_action_test_helper.h"
 
 class Browser;
-class InstalledExtensionMenuItemView;
+class ExtensionMenuItemView;
 class ExtensionsMenuView;
 class ExtensionsToolbarContainer;
 
@@ -38,16 +39,8 @@ class ExtensionsMenuTestUtil : public ExtensionActionTestHelper {
   gfx::NativeView GetPopupNativeView() override;
   bool HasPopup() override;
   bool HidePopup() override;
-  void SetWidth(int width) override;
   ExtensionsContainer* GetExtensionsContainer() override;
   void WaitForExtensionsContainerLayout() override;
-  std::unique_ptr<ExtensionActionTestHelper> CreateOverflowBar(
-      Browser* browser) override;
-  void LayoutForOverflowBar() override;
-  // TODO(devlin): Some of these popup methods have a common implementation
-  // between this and ExtensionActionTestHelperViews. It would make sense to
-  // extract them (since they aren't dependent on the extension action UI
-  // implementation).
   gfx::Size GetMinPopupSize() override;
   gfx::Size GetMaxPopupSize() override;
   gfx::Size GetToolbarActionSize() override;
@@ -58,9 +51,9 @@ class ExtensionsMenuTestUtil : public ExtensionActionTestHelper {
   class MenuViewObserver;
   class Wrapper;
 
-  // Returns the InstalledExtensionMenuItemView for the given `id` from the
+  // Returns the ExtensionMenuItemView for the given `id` from the
   // `menu_view`.
-  InstalledExtensionMenuItemView* GetMenuItemViewForId(
+  ExtensionMenuItemView* GetMenuItemViewForId(
       const extensions::ExtensionId& id);
 
   // An override to allow test instances of the ExtensionsMenuView.
@@ -69,19 +62,18 @@ class ExtensionsMenuTestUtil : public ExtensionActionTestHelper {
 
   std::unique_ptr<Wrapper> wrapper_;
 
-  const raw_ptr<Browser> browser_;
-  raw_ptr<ExtensionsToolbarContainer> extensions_container_ = nullptr;
+  const raw_ptr<Browser, DanglingUntriaged> browser_;
+  raw_ptr<ExtensionsToolbarContainer, DanglingUntriaged> extensions_container_ =
+      nullptr;
 
-  // Helps make sure that |menu_view_| set to null when destroyed by the widget
-  // or via manual means.
+  // Helps make sure that `menu_view_`, if existent, is set to null when
+  // destroyed by the widget or via manual means.
   std::unique_ptr<MenuViewObserver> menu_view_observer_;
 
-  // The owned version of |menu_view_|. Strongly prefer using |menu_view_|. May
-  // be null when ownership is conditionally transferred to the bubble.
-  std::unique_ptr<ExtensionsMenuView> owned_menu_view_;
-
   // The actual pointer to an ExtensionsMenuView, non-null if alive.
-  ExtensionsMenuView* menu_view_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION ExtensionsMenuView* menu_view_ = nullptr;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_EXTENSIONS_EXTENSIONS_MENU_TEST_UTIL_H_

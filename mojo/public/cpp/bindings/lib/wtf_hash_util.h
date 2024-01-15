@@ -48,7 +48,7 @@ struct WTFHashTraits<T, false> {
 template <>
 struct WTFHashTraits<WTF::String, false> {
   static size_t Hash(size_t seed, const WTF::String& value) {
-    return HashCombine(seed, WTF::StringHash::GetHash(value));
+    return HashCombine(seed, WTF::GetHash(value));
   }
 };
 
@@ -63,7 +63,8 @@ size_t WTFHash(size_t seed, const T& value) {
 namespace WTF {
 
 template <typename T>
-struct DefaultHash<mojo::StructPtr<T>> {
+struct HashTraits<mojo::StructPtr<T>>
+    : public GenericHashTraits<mojo::StructPtr<T>> {
   static unsigned GetHash(const mojo::StructPtr<T>& value) {
     return static_cast<unsigned>(value.Hash(mojo::internal::kHashSeed));
   }
@@ -71,17 +72,11 @@ struct DefaultHash<mojo::StructPtr<T>> {
                     const mojo::StructPtr<T>& right) {
     return left.Equals(right);
   }
-  static const bool safe_to_compare_to_empty_or_deleted = false;
-};
-
-template <typename T>
-struct HashTraits<mojo::StructPtr<T>>
-    : public GenericHashTraits<mojo::StructPtr<T>> {
-  static const bool kHasIsEmptyValueFunction = true;
+  static constexpr bool kSafeToCompareToEmptyOrDeleted = false;
   static bool IsEmptyValue(const mojo::StructPtr<T>& value) {
     return value.is_null();
   }
-  static void ConstructDeletedValue(mojo::StructPtr<T>& slot, bool) {
+  static void ConstructDeletedValue(mojo::StructPtr<T>& slot) {
     mojo::internal::StructPtrWTFHelper<T>::ConstructDeletedValue(slot);
   }
   static bool IsDeletedValue(const mojo::StructPtr<T>& value) {
@@ -91,7 +86,8 @@ struct HashTraits<mojo::StructPtr<T>>
 };
 
 template <typename T>
-struct DefaultHash<mojo::InlinedStructPtr<T>> {
+struct HashTraits<mojo::InlinedStructPtr<T>>
+    : public GenericHashTraits<mojo::InlinedStructPtr<T>> {
   static unsigned GetHash(const mojo::InlinedStructPtr<T>& value) {
     return static_cast<unsigned>(value.Hash(mojo::internal::kHashSeed));
   }
@@ -99,17 +95,11 @@ struct DefaultHash<mojo::InlinedStructPtr<T>> {
                     const mojo::InlinedStructPtr<T>& right) {
     return left.Equals(right);
   }
-  static const bool safe_to_compare_to_empty_or_deleted = false;
-};
-
-template <typename T>
-struct HashTraits<mojo::InlinedStructPtr<T>>
-    : public GenericHashTraits<mojo::InlinedStructPtr<T>> {
-  static const bool kHasIsEmptyValueFunction = true;
+  static constexpr bool kSafeToCompareToEmptyOrDeleted = false;
   static bool IsEmptyValue(const mojo::InlinedStructPtr<T>& value) {
     return value.is_null();
   }
-  static void ConstructDeletedValue(mojo::InlinedStructPtr<T>& slot, bool) {
+  static void ConstructDeletedValue(mojo::InlinedStructPtr<T>& slot) {
     mojo::internal::InlinedStructPtrWTFHelper<T>::ConstructDeletedValue(slot);
   }
   static bool IsDeletedValue(const mojo::InlinedStructPtr<T>& value) {

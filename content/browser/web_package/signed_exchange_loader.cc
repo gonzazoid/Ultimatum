@@ -6,16 +6,15 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_macros.h"
 #include "components/web_package/web_bundle_utils.h"
 #include "content/browser/web_package/prefetched_signed_exchange_cache_entry.h"
 #include "content/browser/web_package/signed_exchange_cert_fetcher_factory.h"
 #include "content/browser/web_package/signed_exchange_devtools_proxy.h"
 #include "content/browser/web_package/signed_exchange_handler.h"
-#include "content/browser/web_package/signed_exchange_prefetch_metric_recorder.h"
 #include "content/browser/web_package/signed_exchange_reporter.h"
 #include "content/browser/web_package/signed_exchange_utils.h"
 #include "content/public/common/content_features.h"
@@ -28,6 +27,7 @@
 #include "services/network/public/cpp/data_pipe_to_source_stream.h"
 #include "services/network/public/cpp/features.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
+#include "services/network/public/cpp/record_ontransfersizeupdate_utils.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/source_stream_to_data_pipe.h"
 #include "services/network/public/cpp/url_loader_completion_status.h"
@@ -50,16 +50,10 @@ net::IsolationInfo CreateIsolationInfoForCertFetch(
   if (!outer_request.trusted_params ||
       outer_request.trusted_params->isolation_info.IsEmpty())
     return net::IsolationInfo();
-  if (net::IsolationInfo::IsFrameSiteEnabled()) {
-    return net::IsolationInfo::Create(
-        net::IsolationInfo::RequestType::kOther,
-        *outer_request.trusted_params->isolation_info.top_frame_origin(),
-        *outer_request.trusted_params->isolation_info.frame_origin(),
-        net::SiteForCookies());
-  }
-  return net::IsolationInfo::CreateDoubleKey(
+  return net::IsolationInfo::Create(
       net::IsolationInfo::RequestType::kOther,
       *outer_request.trusted_params->isolation_info.top_frame_origin(),
+      *outer_request.trusted_params->isolation_info.frame_origin(),
       net::SiteForCookies());
 }
 
@@ -79,7 +73,6 @@ SignedExchangeLoader::SignedExchangeLoader(
     URLLoaderThrottlesGetter url_loader_throttles_getter,
     const net::NetworkAnonymizationKey& network_anonymization_key,
     int frame_tree_node_id,
-    scoped_refptr<SignedExchangePrefetchMetricRecorder> metric_recorder,
     const std::string& accept_langs,
     bool keep_entry_for_prefetch_cache)
     : outer_request_(outer_request),
@@ -87,8 +80,7 @@ SignedExchangeLoader::SignedExchangeLoader(
       forwarding_client_(std::move(forwarding_client)),
       reporter_(std::move(reporter)),
       url_loader_options_(url_loader_options),
-      should_redirect_on_failure_(should_redirect_on_failure),
-      metric_recorder_(std::move(metric_recorder)) {
+      should_redirect_on_failure_(should_redirect_on_failure) {
   DCHECK(outer_request_.url.is_valid());
   DCHECK(outer_response_body);
 
@@ -96,12 +88,6 @@ SignedExchangeLoader::SignedExchangeLoader(
     cache_entry_ = std::make_unique<PrefetchedSignedExchangeCacheEntry>();
     cache_entry_->SetOuterUrl(outer_request_.url);
     cache_entry_->SetOuterResponse(outer_response_head_->Clone());
-  }
-
-  // |metric_recorder_| could be null in some tests.
-  if (!(outer_request_.load_flags & net::LOAD_PREFETCH) && metric_recorder_) {
-    metric_recorder_->OnSignedExchangeNonPrefetch(
-        outer_request_.url, outer_response_head_->response_time);
   }
 
   url_loader_.Bind(std::move(endpoints->url_loader));
@@ -133,10 +119,10 @@ SignedExchangeLoader::SignedExchangeLoader(
             std::move(outer_response_body)),
         base::BindOnce(&SignedExchangeLoader::OnHTTPExchangeFound,
                        weak_factory_.GetWeakPtr()),
-        std::move(cert_fetcher_factory), network_anonymization_key,
+        std::move(cert_fetcher_factory),
         outer_request_.trusted_params
-            ? absl::make_optional(outer_request_.trusted_params->isolation_info)
-            : absl::nullopt,
+            ? std::make_optional(outer_request_.trusted_params->isolation_info)
+            : std::nullopt,
         outer_request_.load_flags, outer_response_head_->remote_endpoint,
         std::make_unique<blink::WebPackageRequestMatcher>(
             outer_request_.headers, accept_langs),
@@ -160,7 +146,7 @@ void SignedExchangeLoader::OnReceiveEarlyHints(
 void SignedExchangeLoader::OnReceiveResponse(
     network::mojom::URLResponseHeadPtr response_head,
     mojo::ScopedDataPipeConsumerHandle body,
-    absl::optional<mojo_base::BigBuffer> cached_metadata) {
+    std::optional<mojo_base::BigBuffer> cached_metadata) {
   // Must not be called because this SignedExchangeLoader and the client
   // endpoints were bound after OnReceiveResponse() is called.
   NOTREACHED();
@@ -186,6 +172,8 @@ void SignedExchangeLoader::OnUploadProgress(
 void SignedExchangeLoader::OnTransferSizeUpdated(int32_t transfer_size_diff) {
   // TODO(https://crbug.com/803774): Implement this to progressively update the
   // encoded data length in DevTools.
+  network::RecordOnTransferSizeUpdatedUMA(
+      network::OnTransferSizeUpdatedFrom::kSignedExchangeLoader);
 }
 
 void SignedExchangeLoader::OnComplete(
@@ -201,7 +189,7 @@ void SignedExchangeLoader::FollowRedirect(
     const std::vector<std::string>& removed_headers,
     const net::HttpRequestHeaders& modified_headers,
     const net::HttpRequestHeaders& modified_cors_exempt_headers,
-    const absl::optional<GURL>& new_url) {
+    const std::optional<GURL>& new_url) {
   NOTREACHED();
 }
 
@@ -283,7 +271,7 @@ void SignedExchangeLoader::OnHTTPExchangeFound(
           *outer_response_head_, false /* is_fallback_redirect */));
   forwarding_client_.reset();
 
-  const absl::optional<net::SSLInfo>& ssl_info = resource_response->ssl_info;
+  const std::optional<net::SSLInfo>& ssl_info = resource_response->ssl_info;
   if (ssl_info.has_value() &&
       (url_loader_options_ &
        network::mojom::kURLLoadOptionSendSSLInfoForCertificateError) &&
@@ -296,7 +284,7 @@ void SignedExchangeLoader::OnHTTPExchangeFound(
   if (ssl_info.has_value() &&
       !(url_loader_options_ &
         network::mojom::kURLLoadOptionSendSSLInfoWithResponse)) {
-    inner_response_head_shown_to_client->ssl_info = absl::nullopt;
+    inner_response_head_shown_to_client->ssl_info = std::nullopt;
   }
   inner_response_head_shown_to_client->was_fetched_via_cache =
       outer_response_head_->was_fetched_via_cache;
@@ -320,7 +308,7 @@ void SignedExchangeLoader::OnHTTPExchangeFound(
   }
 
   client_->OnReceiveResponse(std::move(inner_response_head_shown_to_client),
-                             std::move(consumer_handle), absl::nullopt);
+                             std::move(consumer_handle), std::nullopt);
 
   body_data_pipe_adapter_ = std::make_unique<network::SourceStreamToDataPipe>(
       std::move(payload_stream), std::move(producer_handle));
@@ -368,11 +356,8 @@ void SignedExchangeLoader::NotifyClientOnCompleteIfReady() {
 
 void SignedExchangeLoader::ReportLoadResult(SignedExchangeLoadResult result) {
   signed_exchange_utils::RecordLoadResultHistogram(result);
-  // |metric_recorder_| could be null in some tests.
-  if ((outer_request_.load_flags & net::LOAD_PREFETCH) && metric_recorder_) {
+  if (outer_request_.load_flags & net::LOAD_PREFETCH) {
     UMA_HISTOGRAM_ENUMERATION(kPrefetchLoadResultHistogram, result);
-    metric_recorder_->OnSignedExchangePrefetchFinished(
-        outer_request_.url, outer_response_head_->response_time);
   }
 
   if (reporter_)

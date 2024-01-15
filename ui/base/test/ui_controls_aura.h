@@ -5,7 +5,7 @@
 #ifndef UI_BASE_TEST_UI_CONTROLS_AURA_H_
 #define UI_BASE_TEST_UI_CONTROLS_AURA_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "ui/base/test/ui_controls.h"
@@ -20,19 +20,17 @@ class UIControlsAura {
   UIControlsAura();
   virtual ~UIControlsAura();
 
-  virtual bool SendKeyPress(gfx::NativeWindow window,
-                            ui::KeyboardCode key,
-                            bool control,
-                            bool shift,
-                            bool alt,
-                            bool command) = 0;
-  virtual bool SendKeyPressNotifyWhenDone(gfx::NativeWindow window,
-                                          ui::KeyboardCode key,
-                                          bool control,
-                                          bool shift,
-                                          bool alt,
-                                          bool command,
-                                          base::OnceClosure task) = 0;
+  // Sends a key press and/or release message.
+  virtual bool SendKeyEvents(gfx::NativeWindow window,
+                             ui::KeyboardCode key,
+                             int key_event_types,
+                             int accerelator_state) = 0;
+  virtual bool SendKeyEventsNotifyWhenDone(gfx::NativeWindow window,
+                                           ui::KeyboardCode key,
+                                           int key_event_types,
+                                           base::OnceClosure task,
+                                           int accelerator_state,
+                                           KeyEventType wait_for) = 0;
 
   // Simulate a mouse move. (x,y) are absolute screen coordinates.
   virtual bool SendMouseMove(int x, int y) = 0;

@@ -7,10 +7,6 @@
 
 #import "base/check.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 constexpr char kPasscodeArticleURL[] = "https://support.apple.com/HT204060";
 
 @interface ReauthenticationModule () <SuccessfulReauthTimeAccessor>
@@ -48,6 +44,14 @@ constexpr char kPasscodeArticleURL[] = "https://support.apple.com/HT204060";
     _successfulReauthTimeAccessor = successfulReauthTimeAccessor;
   }
   return self;
+}
+
+- (BOOL)canAttemptReauthWithBiometrics {
+  LAContext* context = _createLAContext();
+  // The authentication method is Touch ID or Face ID.
+  return
+      [context canEvaluatePolicy:LAPolicyDeviceOwnerAuthenticationWithBiometrics
+                           error:nil];
 }
 
 - (BOOL)canAttemptReauth {

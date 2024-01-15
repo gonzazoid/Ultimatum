@@ -9,9 +9,9 @@
 #include <memory>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/unsafe_shared_memory_region.h"
@@ -21,10 +21,10 @@
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_timeouts.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/chromeos_camera/gpu_jpeg_encode_accelerator_factory.h"
@@ -382,7 +382,8 @@ void JpegClient::CreateJpegEncoder() {
   }
 
   for (const auto& create_jea_func : jea_factories) {
-    encoder_ = create_jea_func.Run(base::ThreadTaskRunnerHandle::Get());
+    encoder_ =
+        create_jea_func.Run(base::SingleThreadTaskRunner::GetCurrentDefault());
     if (encoder_)
       break;
   }
@@ -625,20 +626,20 @@ void JpegClient::SaveToFile(TestImage* test_image,
   LOG(INFO) << "Writing HW encode results to "
             << out_filename_hw.MaybeAsASCII();
 
-  ASSERT_EQ(static_cast<int>(hw_size),
-            base::WriteFile(out_filename_hw,
-                            static_cast<const char*>(
-                                hw_out_frame_ ? hw_out_frame_->data(0)
-                                              : hw_out_mapping_.memory()),
-                            hw_size));
+  ASSERT_TRUE(base::WriteFile(
+      out_filename_hw,
+      base::make_span(hw_out_frame_
+                          ? hw_out_frame_->data(0)
+                          : static_cast<uint8_t*>(hw_out_mapping_.memory()),
+                      hw_size)));
 
   base::FilePath out_filename_sw = out_filename_hw.InsertBeforeExtension("_sw");
   LOG(INFO) << "Writing SW encode results to "
             << out_filename_sw.MaybeAsASCII();
-  ASSERT_EQ(
-      static_cast<int>(sw_size),
-      base::WriteFile(out_filename_sw,
-                      static_cast<char*>(sw_out_mapping_.memory()), sw_size));
+  ASSERT_TRUE(base::WriteFile(
+      out_filename_sw,
+      base::make_span(static_cast<uint8_t*>(sw_out_mapping_.memory()),
+                      sw_size)));
 }
 
 void JpegClient::StartEncode(int32_t bitstream_buffer_id) {

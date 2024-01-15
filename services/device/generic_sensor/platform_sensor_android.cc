@@ -4,10 +4,8 @@
 
 #include "services/device/generic_sensor/platform_sensor_android.h"
 
-#include "base/bind.h"
-#include "base/metrics/field_trial_params.h"
+#include "base/functional/bind.h"
 #include "services/device/generic_sensor/jni_headers/PlatformSensor_jni.h"
-#include "services/device/public/cpp/device_features.h"
 
 using base::android::AttachCurrentThread;
 using base::android::JavaRef;
@@ -16,8 +14,8 @@ namespace device {
 namespace {
 void StartSensorBlocking(base::android::ScopedJavaGlobalRef<jobject> j_object,
                          double frequency) {
-  device::Java_PlatformSensor_startSensor2(AttachCurrentThread(), j_object,
-                                           frequency);
+  device::Java_PlatformSensor_startSensor(AttachCurrentThread(), j_object,
+                                          frequency);
 }
 
 void StopSensorBlocking(base::android::ScopedJavaGlobalRef<jobject> j_object) {
@@ -52,9 +50,7 @@ PlatformSensorAndroid::PlatformSensorAndroid(
 
 PlatformSensorAndroid::~PlatformSensorAndroid() {
   if (j_object_) {
-    if (base::FeatureList::IsEnabled(features::kAsyncSensorCalls)) {
-      StopSensor();
-    }
+    StopSensor();
     Java_PlatformSensor_sensorDestroyed(AttachCurrentThread(), j_object_);
   }
 }
@@ -79,24 +75,15 @@ double PlatformSensorAndroid::GetMaximumSupportedFrequency() {
 
 bool PlatformSensorAndroid::StartSensor(
     const PlatformSensorConfiguration& configuration) {
-  if (base::FeatureList::IsEnabled(features::kAsyncSensorCalls)) {
-    sequenced_task_runner_->PostTask(
-        FROM_HERE, base::BindOnce(&StartSensorBlocking, j_object_,
-                                  configuration.frequency()));
-    return true;
-  } else {
-    return Java_PlatformSensor_startSensor(AttachCurrentThread(), j_object_,
-                                           configuration.frequency());
-  }
+  sequenced_task_runner_->PostTask(
+      FROM_HERE, base::BindOnce(&StartSensorBlocking, j_object_,
+                                configuration.frequency()));
+  return true;
 }
 
 void PlatformSensorAndroid::StopSensor() {
-  if (base::FeatureList::IsEnabled(features::kAsyncSensorCalls)) {
-    sequenced_task_runner_->PostTask(
-        FROM_HERE, base::BindOnce(&StopSensorBlocking, j_object_));
-  } else {
-    Java_PlatformSensor_stopSensor(AttachCurrentThread(), j_object_);
-  }
+  sequenced_task_runner_->PostTask(
+      FROM_HERE, base::BindOnce(&StopSensorBlocking, j_object_));
 }
 
 bool PlatformSensorAndroid::CheckSensorConfiguration(
@@ -109,9 +96,14 @@ bool PlatformSensorAndroid::CheckSensorConfiguration(
 void PlatformSensorAndroid::NotifyPlatformSensorError(
     JNIEnv*,
     const JavaRef<jobject>& caller) {
+  // This function may be called from Java while this object's destructor is
+  // being invoked, however we know that to reach this point we must be before
+  // the completion of the call to Java_PlatformSensor_sensorDestroyed(). This
+  // means that the WeakPtrFactory is still valid. The WeakPtr will detect
+  // completion of the destructor.
   PostTaskToMainSequence(
       FROM_HERE,
-      base::BindOnce(&PlatformSensorAndroid::NotifySensorError, this));
+      base::BindOnce(&PlatformSensorAndroid::NotifySensorError, AsWeakPtr()));
 }
 
 void PlatformSensorAndroid::UpdatePlatformSensorReading(
@@ -130,6 +122,13 @@ void PlatformSensorAndroid::UpdatePlatformSensorReading(
   reading.raw.values[3] = value4;
 
   UpdateSharedBufferAndNotifyClients(reading);
+}
+
+void PlatformSensorAndroid::SimulateSensorEventFromJavaForTesting(
+    base::android::ScopedJavaGlobalRef<jobject> j_object_,
+    jint reading_values_length) {
+  Java_PlatformSensor_simulateSensorEventForTesting(  // IN-TEST
+      AttachCurrentThread(), j_object_, reading_values_length);
 }
 
 }  // namespace device

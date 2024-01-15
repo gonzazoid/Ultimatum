@@ -12,8 +12,6 @@ import "gpu/ipc/common/sync_token.mojom";
 import "gpu/ipc/common/vulkan_ycbcr_info.mojom";
 import "mojo/public/mojom/base/shared_memory.mojom";
 import "mojo/public/mojom/base/unguessable_token.mojom";
-import "mojo/public/mojom/base/generic_pending_associated_receiver.mojom";
-import "services/viz/public/mojom/compositing/resource_format.mojom";
 import "services/viz/public/mojom/compositing/shared_image_format.mojom";
 import "skia/public/mojom/image_info.mojom";
 import "skia/public/mojom/surface_origin.mojom";
@@ -21,6 +19,7 @@ import "ui/gfx/geometry/mojom/geometry.mojom";
 import "ui/gfx/mojom/buffer_types.mojom";
 import "ui/gfx/mojom/color_space.mojom";
 import "ui/gfx/mojom/gpu_fence_handle.mojom";
+import "ui/gfx/mojom/native_handle_types.mojom";
 import "ui/gfx/mojom/presentation_feedback.mojom";
 import "ui/gl/mojom/gpu_preference.mojom";
 import "url/mojom/url.mojom";
@@ -51,37 +50,23 @@ enum SchedulingPriority {
 
 // Maps to its namesake in gpu/command_buffer/common/context_creation_attribs.h.
 struct ContextCreationAttribs {
-  gfx.mojom.Size offscreen_framebuffer_size;
   gl.mojom.GpuPreference gpu_preference = kLowPower;
 
   // -1 if invalid or unspecified.
-  int32 alpha_size = -1;
-  int32 blue_size = -1;
-  int32 green_size = -1;
-  int32 red_size = -1;
-  int32 depth_size = -1;
-  int32 stencil_size = -1;
-  int32 samples = -1;
-  int32 sample_buffers = -1;
-  bool buffer_preserved = true;
+  [EnableIf=is_android] bool need_alpha = false;
   bool bind_generates_resource = true;
   bool fail_if_major_perf_caveat = false;
   bool lose_context_when_out_of_memory = false;
-  bool should_use_native_gmb_for_backbuffer = false;
-  bool own_offscreen_surface = false;
-  bool single_buffer = false;
   bool enable_gles2_interface = true;
   bool enable_grcontext = false;
   bool enable_raster_interface = false;
   bool enable_oop_rasterization = false;
-  bool enable_swap_timestamps_if_supported = false;
 
   ContextType context_type = kOpenGLES2;
-  ContextColorSpace color_space = kUnspecified;
 };
 
 struct CreateCommandBufferParams {
-  SurfaceHandle surface_handle;
+  [EnableIf=is_android] SurfaceHandle surface_handle;
   int32 share_group_id;
   int32 stream_id;
   SchedulingPriority stream_priority;
@@ -163,7 +148,8 @@ interface GpuChannel {
       mojo_base.mojom.UnsafeSharedMemoryRegion shared_state,
       pending_associated_receiver<CommandBuffer> receiver,
       pending_associated_remote<CommandBufferClient> client)
-      => (ContextResult result, Capabilities capabilties);
+      => (ContextResult result, Capabilities capabilties,
+          GLCapabilities gl_capabilities);
 
   // The CommandBufferProxy sends this to the CommandBufferStub in its
   // destructor, so that the stub deletes the actual CommandBufferService
@@ -178,6 +164,23 @@ interface GpuChannel {
 
   // Sends a batch of DeferredRequests to be executed by the service.
   FlushDeferredRequests(array<DeferredRequest> requests);
+
+  // Create a GpuMemoryBuffer on IO thread. Note that this needs to be a
+  // blocking call on calling client's thread in order to return the
+  // GpuMemoryBufferHandle before it's used to create a mailbox from it.
+  [Sync] CreateGpuMemoryBuffer(gfx.mojom.Size size,
+  viz.mojom.SharedImageFormat format, gfx.mojom.BufferUsage buffer_usage)
+  => (gfx.mojom.GpuMemoryBufferHandle buffer_handle);
+
+  // Gets the GpuMemoryBufferHandle for the corresponding `mailbox` from
+  // service side. Note that this needs to be a blocking call on calling
+  // client's thread in order to return the GpuMemoryBufferHandle and other
+  // metadata required by client to map the mailbox to CPU memory before it can
+  // read/write from/to it.
+  [Sync] GetGpuMemoryBufferHandleInfo(gpu.mojom.Mailbox mailbox)
+  => (gfx.mojom.GpuMemoryBufferHandle buffer_handle,
+      viz.mojom.SharedImageFormat format, gfx.mojom.Size size,
+      gfx.mojom.BufferUsage buffer_usage);
 
   // Creates a StreamTexture associated with the given `stream_id`.
   [Sync, EnableIf=is_android] CreateStreamTexture(
@@ -264,13 +267,6 @@ interface CommandBuffer {
   // then sends a corresponding SignalAck on the CommandBufferClient interface,
   // using `signal_id` to identify this request.
   SignalQuery(uint32 query, uint32 signal_id);
-
-  // Binds an associated interface which shares its message ordering with this
-  // CommandBuffer. This allows the Media stack above the core GPU layer to
-  // establish such interfaces without introducing a layering violation. See
-  // GpuChannel::set_command_buffer_media_binder().
-  [Sync] BindMediaReceiver(
-      mojo_base.mojom.GenericPendingAssociatedReceiver receiver) => ();
 };
 
 // Corresponds to gpu::SwapBuffersCompleteParams.
@@ -439,13 +435,9 @@ union DeferredCommandBufferRequestParams {
   // Destroys a transfer buffer identified by this ID.
   int32 destroy_transfer_buffer;
 
-  // Takes the front buffer into a mailbox. Allows another context to draw the
-  // output of this context.
-  // NOTE: This exists only to support PNaCl.
-  Mailbox take_front_buffer;
-
-  // See ReturnFrontBufferParams.
-  ReturnFrontBufferParams return_front_buffer;
+  // Allows to attach SharedImage to default framebuffer of this context.
+  // NOTE: Used only for PNaCL.
+  SetDefaultFramebufferSharedImageParams set_default_framebuffer_shared_image;
 };
 
 // Details of a batched request pertaining to shared image management.
@@ -459,6 +451,9 @@ union DeferredSharedImageRequest {
 
   // See CreateSharedImageWithDataParams.
   CreateSharedImageWithDataParams create_shared_image_with_data;
+
+  // See CreateSharedImageWithBufferParams.
+  CreateSharedImageWithBufferParams create_shared_image_with_buffer;
 
   // See CreateGMBSharedImageParams.
   CreateGMBSharedImageParams create_gmb_shared_image;
@@ -477,6 +472,8 @@ union DeferredSharedImageRequest {
   // Destroys the shared image identified by this Mailbox.
   Mailbox destroy_shared_image;
 
+  AddReferenceToSharedImageParams add_reference_to_shared_image;
+
   // See CreateSwapChainParams.
   [EnableIf=is_win]
   CreateSwapChainParams create_swap_chain;
@@ -484,6 +481,18 @@ union DeferredSharedImageRequest {
   // See PresentSwapChainParams.
   [EnableIf=is_win]
   PresentSwapChainParams present_swap_chain;
+
+  // See RegisterDxgiFenceParams.
+  [EnableIf=is_win]
+  RegisterDxgiFenceParams register_dxgi_fence;
+
+  // See UpdateDxgiFenceParams.
+  [EnableIf=is_win]
+  UpdateDxgiFenceParams update_dxgi_fence;
+
+  // See UnregisterDxgiFenceParams.
+  [EnableIf=is_win]
+  UnregisterDxgiFenceParams unregister_dxgi_fence;
 };
 
 // Asynchronously synchronize the put and get offsets of both processes.
@@ -498,15 +507,24 @@ struct AsyncFlushParams {
   array<SyncToken> sync_token_fences;
 };
 
-// Returns a front buffer taken via TakeFrontBufferParams in a previous
-// DeferredRequest. This allows it to be reused.
-// NOTE: This exists only to support PNaCl.
-struct ReturnFrontBufferParams {
-  // The mailbox which last took the front buffer in question.
+// Sets SharedImage mailbox and other framebuffer params to the default
+// framebuffer. NOTE: This exists only to support PNaCl.
+struct SetDefaultFramebufferSharedImageParams {
+  // The mailbox of the shared image. Can be empty if client wants to detach
+  // SharedImage from the color buffer.
   Mailbox mailbox;
 
-  // Indicates that the resource was lost and should be destroyed.
-  bool is_lost;
+  // Number of samples for the multisampling.
+  uint32 samples_count;
+
+  // If default framebuffer needs to presevre contents across the frames.
+  bool preserve;
+
+  // If this framebuffer needs depth buffer.
+  bool needs_depth;
+
+  // If this framebuffer needs stencil buffer.
+  bool needs_stencil;
 };
 
 // Creates a new shared image.
@@ -526,6 +544,10 @@ struct CreateSharedImageParams {
   // Usage flags corresponding to values defined in
   // gpu/command_buffer/common/shared_image_usage.h.
   uint32 usage;
+
+  // Retained for heap dumps and passed to graphics APIs for tracing tools.
+  // Pick a name that is unique to the allocation site.
+  string debug_label;
 
   // The fence to release once the image is created.
   uint32 release_id;
@@ -556,6 +578,10 @@ struct CreateSharedImageWithDataParams {
   // gpu/command_buffer/common/shared_image_usage.h.
   uint32 usage;
 
+  // Retained for heap dumps and passed to graphics APIs for tracing tools.
+  // Pick a name that is unique to the allocation site.
+  string debug_label;
+
   // The fence to release once the image is created.
   uint32 release_id;
 
@@ -569,6 +595,42 @@ struct CreateSharedImageWithDataParams {
   // If `true`, this is the last usage of the current image upload shared memory
   // region, so the region can be discarded after servicing this request.
   bool done_with_shm;
+
+  // Which corner is considered the origin of the new image.
+  skia.mojom.SurfaceOrigin surface_origin;
+
+  // Indicates how the alpha component of each pixel is interpreted.
+  skia.mojom.AlphaType alpha_type;
+};
+
+// Creates a new shared image with an existing GPU memory buffer.
+// If format is multi-planar then `buffer_handle` contains all the planes.
+struct CreateSharedImageWithBufferParams {
+  // The mailbox used to identify the shared image.
+  Mailbox mailbox;
+
+  // A handle to the existing GPU memory buffer.
+  gfx.mojom.GpuMemoryBufferHandle buffer_handle;
+
+  // The pixel format of the image.
+  viz.mojom.SharedImageFormat format;
+
+  // Size in pixels.
+  gfx.mojom.Size size;
+
+  // Color space.
+  gfx.mojom.ColorSpace color_space;
+
+  // Usage flags corresponding to values defined in
+  // gpu/command_buffer/common/shared_image_usage.h.
+  uint32 usage;
+
+  // Retained for heap dumps and passed to graphics APIs for tracing tools.
+  // Pick a name that is unique to the allocation site.
+  string debug_label;
+
+  // The fence to release once the image is created.
+  uint32 release_id;
 
   // Which corner is considered the origin of the new image.
   skia.mojom.SurfaceOrigin surface_origin;
@@ -601,6 +663,10 @@ struct CreateGMBSharedImageParams {
   // gpu/command_buffer/common/shared_image_usage.h.
   uint32 usage;
 
+  // Retained for heap dumps and passed to graphics APIs for tracing tools.
+  // Pick a name that is unique to the allocation site.
+  string debug_label;
+
   // The fence to release once the image is created.
   uint32 release_id;
 
@@ -625,6 +691,17 @@ struct UpdateSharedImageParams {
   gfx.mojom.GpuFenceHandle? in_fence_handle;
 };
 
+// Adds reference to the shared image that was created on a different
+// GpuChannel. This allows SharedImage that is shared across processes to
+// outlive original client.
+struct AddReferenceToSharedImageParams {
+  // The mailbox identifying the shared image to add ref.
+  Mailbox mailbox;
+
+  // The fence to release once the reference has been added.
+  uint32 release_id;
+};
+
 // Updates the contents of the GpuMemoryBuffer associated with the shared image.
 // Necessary on platforms like Windows where renderer cannot create native GMBs.
 [EnableIf=is_win]
@@ -645,7 +722,7 @@ struct CreateSwapChainParams {
   Mailbox back_buffer_mailbox;
 
   // Pixel format of the front and back buffers.
-  viz.mojom.ResourceFormat format;
+  viz.mojom.SharedImageFormat format;
 
   // Size of the buffers.
   gfx.mojom.Size size;
@@ -674,4 +751,38 @@ struct PresentSwapChainParams {
 
   // The fence to release once the swap chain is presented.
   uint32 release_id;
+};
+
+[EnableIf=is_win]
+struct RegisterDxgiFenceParams {
+  // Mailbox identifying the shared image backing to register fence.
+  Mailbox mailbox;
+
+  // The DXGIHandleToken to identifying the registered gpu fence handle.
+  // Use this token to update fence after registration.
+  gfx.mojom.DXGIHandleToken dxgi_token;
+
+  // The fence handle to register.
+  gfx.mojom.GpuFenceHandle fence_handle;
+};
+
+[EnableIf=is_win]
+struct UpdateDxgiFenceParams {
+  // Mailbox identifying the shared image backing to update the fence.
+  Mailbox mailbox;
+
+  // The DXGIHandleToken to identifying the fence to update.
+  gfx.mojom.DXGIHandleToken dxgi_token;
+
+  // The fence value to signal.
+  uint64 fence_value;
+};
+
+[EnableIf=is_win]
+struct UnregisterDxgiFenceParams {
+  // Mailbox identifying the shared image backing to clear the fence.
+  Mailbox mailbox;
+
+  // The DXGIHandleToken to identifying the fence needs to be cleared.
+  gfx.mojom.DXGIHandleToken dxgi_token;
 };

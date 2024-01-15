@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread.h"
 #include "chromeos/ash/services/assistant/public/mojom/assistant_audio_decoder.mojom.h"
 #include "media/filters/blocking_url_protocol.h"
@@ -79,10 +80,5 @@ class AssistantAudioDecoder : public mojom::AssistantAudioDecoder {
 };
 
 }  // namespace ash::assistant
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos::assistant {
-using ::ash::assistant::AssistantAudioDecoder;
-}
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_AUDIO_DECODER_ASSISTANT_AUDIO_DECODER_H_

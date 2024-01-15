@@ -17,25 +17,16 @@
       "name": "LayoutNGBlockFlow (positioned) DIV",
       "position": [8, 0],
       "bounds": [100, 500],
-      "contentsOpaqueForText": true,
       "drawsContent": false
     },
     {
-      "name": "LayoutNGBlockFlow (positioned) DIV",
+      "name": "LayoutNGBlockFlow (positioned, children-inline) DIV",
       "position": [8, 500],
       "bounds": [300, 154],
-      "contentsOpaqueForText": true,
       "drawsContent": false,
       "invalidations": [
         [8, 8, 31, 18]
       ]
-    },
-    {
-      "name": "VerticalScrollbar",
-      "position": [285, 0],
-      "bounds": [15, 150],
-      "contentsOpaque": true,
-      "transform": 2
     },
     {
       "name": "LayoutNGBlockFlow HTML",
@@ -43,6 +34,13 @@
       "invalidations": [
         [0, 0, 285, 216]
       ],
+      "transform": 2
+    },
+    {
+      "name": "VerticalScrollbar",
+      "position": [285, 0],
+      "bounds": [15, 150],
+      "contentsOpaque": true,
       "transform": 2
     },
     {

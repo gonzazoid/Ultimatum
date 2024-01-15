@@ -11,7 +11,7 @@
 #include "build/chromeos_buildflags.h"
 #include "components/enterprise/browser/reporting/report_type.h"
 #include "components/policy/core/common/cloud/cloud_policy_client.h"
-#include "device_management_backend.pb.h"
+#include "components/policy/proto/device_management_backend.pb.h"
 
 namespace em = enterprise_management;
 
@@ -60,6 +60,11 @@ void ReportUploader::Upload() {
     case ReportType::kBrowserVersion: {
       auto request = std::make_unique<ReportRequest::DeviceReportRequestProto>(
           requests_.front()->GetDeviceReportRequest());
+      // Because MessageLite does not support DebugMessage(), print
+      // serialize string for debugging purposes. It's a non-human-friendly
+      // binary string but still provide useful information.
+      VLOG(2) << "Uploading report: " << request->SerializeAsString();
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
       client_->UploadChromeOsUserReport(std::move(request),
                                         std::move(callback));
@@ -70,23 +75,29 @@ void ReportUploader::Upload() {
       break;
     }
     case ReportType::kProfileReport: {
-      client_->UploadChromeProfileReport(
-          std::make_unique<em::ChromeProfileReportRequest>(
-              requests_.front()->GetChromeProfileReportRequest()),
-          std::move(callback));
+      auto request = std::make_unique<em::ChromeProfileReportRequest>(
+          requests_.front()->GetChromeProfileReportRequest());
+      VLOG(2) << "Uploading report: " << request->SerializeAsString();
+      client_->UploadChromeProfileReport(std::move(request),
+                                         std::move(callback));
       break;
     }
   }
-}  // BUILDFLAG(IS_CHROMEOS_ASH)
+}
 
-void ReportUploader::OnRequestFinished(bool status) {
-  if (status) {
+void ReportUploader::OnRequestFinished(
+    policy::CloudPolicyClient::Result result) {
+  // Crash if the client is not registered, this should not happen.
+  // TODO(b/256553070) Handle unregistered case without crashing.
+  CHECK(!result.IsClientNotRegisteredError());
+
+  if (result.IsSuccess()) {
     NextRequest();
     RecordReportResponseMetrics(ReportResponseMetricsStatus::kSuccess);
     return;
   }
 
-  switch (client_->status()) {
+  switch (result.GetDMServerError()) {
     case policy::DM_STATUS_REQUEST_FAILED:  // network error
       RecordReportResponseMetrics(ReportResponseMetricsStatus::kNetworkError);
       Retry();

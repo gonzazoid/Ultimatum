@@ -5,6 +5,7 @@
 #ifndef CHROME_TEST_BASE_CHROMEOS_TEST_CHROME_BASE_H_
 #define CHROME_TEST_BASE_CHROMEOS_TEST_CHROME_BASE_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "content/public/app/content_main.h"
 #include "content/public/common/main_function_params.h"
@@ -30,12 +31,10 @@ class TestChromeBase {
   void CreatedBrowserMainPartsImpl(
       content::BrowserMainParts* browser_main_parts);
 
-  // Create fake ash browser main extra parts.
-  void CreateFakeAshTestChromeBrowserMainExtraParts();
-
  private:
   content::ContentMainParams params_;
-  ChromeBrowserMainParts* browser_main_parts_ = nullptr;
+  raw_ptr<ChromeBrowserMainParts, DanglingUntriaged> browser_main_parts_ =
+      nullptr;
   base::WeakPtrFactory<TestChromeBase> weak_ptr_factory_{this};
 };
 

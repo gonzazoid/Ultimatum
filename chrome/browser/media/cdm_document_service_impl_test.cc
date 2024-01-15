@@ -21,12 +21,14 @@
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "chrome/test/base/testing_browser_process.h"
+#include "chrome/test/base/testing_profile_manager.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "components/user_prefs/user_prefs.h"
 #include "content/public/browser/web_contents.h"
 #include "media/cdm/win/media_foundation_cdm.h"
 #include "media/mojo/mojom/cdm_document_service.mojom.h"
+#include "mojo/public/cpp/bindings/remote.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
@@ -70,6 +72,10 @@ class CdmDocumentServiceImplTest : public ChromeRenderViewHostTestHarness {
       GTEST_SKIP() << "skipping all test for this fixture when not running on "
                       "Windows 10.";
     }
+
+    // Set up a testing profile manager.
+    profile_manager_ = std::make_unique<TestingProfileManager>(
+        TestingBrowserProcess::GetGlobal());
   }
 
   void NavigateToUrlAndCreateCdmDocumentService(GURL url) {
@@ -111,9 +117,9 @@ class CdmDocumentServiceImplTest : public ChromeRenderViewHostTestHarness {
 
     // Create (or overwrite) an entry with only an origin id to simulate some
     // kind of corruption or simply an update to the preference format.
-    base::Value entry(base::Value::Type::DICTIONARY);
-    entry.SetKey(kOriginId, base::UnguessableTokenToValue(
-                                base::UnguessableToken::Create()));
+    auto entry = base::Value::Dict().Set(
+        kOriginId,
+        base::UnguessableTokenToValue(base::UnguessableToken::Create()));
 
     ScopedDictPrefUpdate update(user_prefs, prefs::kMediaCdmOriginData);
     base::Value::Dict& dict = update.Get();
@@ -126,6 +132,7 @@ class CdmDocumentServiceImplTest : public ChromeRenderViewHostTestHarness {
 
  protected:
   mojo::Remote<media::mojom::CdmDocumentService> cdm_document_service_;
+  std::unique_ptr<TestingProfileManager> profile_manager_;
 };
 
 // Verify that we get a non null origin id.
@@ -264,6 +271,41 @@ TEST_F(CdmDocumentServiceImplTest, ClearCdmPreferenceData) {
 
   base::UnguessableToken new_origin_id = GetMediaFoundationCdmData()->origin_id;
   ASSERT_NE(origin_id, new_origin_id);
+  ASSERT_FALSE(base::PathExists(cdm_data_file_path));
+}
+
+TEST_F(CdmDocumentServiceImplTest, ClearCdmPreferenceDataAfterCorruption) {
+  const auto kOrigin = url::Origin::Create(GURL(kTestOrigin));
+
+  NavigateToUrlAndCreateCdmDocumentService(GURL(kTestOrigin));
+  auto cdm_data = GetMediaFoundationCdmData();
+  base::UnguessableToken origin_id = cdm_data->origin_id;
+
+  base::FilePath cdm_data_file_path = CreateDummyCdmDataFile(
+      cdm_data->cdm_store_path_root, cdm_data->origin_id);
+
+  CorruptCdmPreference();
+
+  base::UnguessableToken new_origin_id = GetMediaFoundationCdmData()->origin_id;
+  ASSERT_NE(origin_id, new_origin_id);
+
+  // Path should still exist even though prefs were corrupted.
+  ASSERT_TRUE(base::PathExists(cdm_data_file_path));
+
+  base::Time start = base::Time::Now() - base::Hours(1);
+  base::Time end;  // null time
+
+  base::RunLoop loop1;
+
+  // With the filter returning true, the path should no longer exist.
+  CdmDocumentServiceImpl::ClearCdmData(
+      profile(), start, end,
+      base::BindRepeating([](const GURL& url) { return true; }),
+      loop1.QuitClosure());
+
+  loop1.Run();
+
+  // Path should no longer exist
   ASSERT_FALSE(base::PathExists(cdm_data_file_path));
 }
 

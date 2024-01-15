@@ -15,6 +15,7 @@
 #include "ui/gl/gl_surface.h"
 #include "ui/gl/gl_surface_stub.h"
 #include "ui/gl/init/ozone_util.h"
+#include "ui/gl/presenter.h"
 
 namespace gl {
 namespace init {
@@ -76,7 +77,7 @@ scoped_refptr<GLSurface> CreateViewGLSurface(GLDisplay* display,
   return nullptr;
 }
 
-scoped_refptr<GLSurface> CreateSurfacelessViewGLSurface(
+scoped_refptr<Presenter> CreateSurfacelessViewGLSurface(
     GLDisplay* display,
     gfx::AcceleratedWidget window) {
   TRACE_EVENT0("gpu", "gl::init::CreateSurfacelessViewGLSurface");
@@ -85,16 +86,9 @@ scoped_refptr<GLSurface> CreateSurfacelessViewGLSurface(
              : nullptr;
 }
 
-scoped_refptr<GLSurface> CreateOffscreenGLSurfaceWithFormat(
-    GLDisplay* display,
-    const gfx::Size& size,
-    GLSurfaceFormat format) {
+scoped_refptr<GLSurface> CreateOffscreenGLSurface(GLDisplay* display,
+                                                  const gfx::Size& size) {
   TRACE_EVENT0("gpu", "gl::init::CreateOffscreenGLSurface");
-
-  if (!format.IsCompatible(GLSurfaceFormat())) {
-    NOTREACHED() << "FATAL: Ozone only supports default-format surfaces.";
-    return nullptr;
-  }
 
   if (HasGLOzone())
     return GetGLOzone()->CreateOffscreenGLSurface(display, size);

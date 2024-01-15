@@ -26,7 +26,7 @@
 #include "ui/events/devices/device_data_manager_test_api.h"
 #include "ui/events/devices/touchscreen_device.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -61,15 +61,14 @@ class TestCrosDisplayConfig
     if (properties->set_primary) {
       int64_t display_id;
       base::StringToInt64(id, &display_id);
-      ash::Shell::Get()->window_tree_host_manager()->SetPrimaryDisplayId(
-          display_id);
+      Shell::Get()->window_tree_host_manager()->SetPrimaryDisplayId(display_id);
     }
     std::move(callback).Run(crosapi::mojom::DisplayConfigResult::kSuccess);
   }
   void SetUnifiedDesktopEnabled(bool enabled) override {}
   void OverscanCalibration(const std::string& display_id,
                            crosapi::mojom::DisplayConfigOperation op,
-                           const absl::optional<gfx::Insets>& delta,
+                           const std::optional<gfx::Insets>& delta,
                            OverscanCalibrationCallback callback) override {}
   void TouchCalibration(const std::string& display_id,
                         crosapi::mojom::DisplayConfigOperation op,
@@ -129,7 +128,7 @@ TEST_F(OobeDisplayChooserTest, PreferTouchAsPrimary) {
   base::RunLoop().RunUntilIdle();
 
   // Make sure the non-touch display is primary
-  ash::Shell::Get()->window_tree_host_manager()->SetPrimaryDisplayId(1);
+  Shell::Get()->window_tree_host_manager()->SetPrimaryDisplayId(1);
 
   // Setup corresponding TouchscreenDevice object
   ui::TouchscreenDevice touchscreen =
@@ -172,7 +171,7 @@ TEST_F(OobeDisplayChooserTest, DontSwitchFromTouch) {
   base::RunLoop().RunUntilIdle();
 
   // Make sure the non-touch display is primary
-  ash::Shell::Get()->window_tree_host_manager()->SetPrimaryDisplayId(1);
+  Shell::Get()->window_tree_host_manager()->SetPrimaryDisplayId(1);
 
   // Setup corresponding TouchscreenDevice object
   ui::TouchscreenDevice touchscreen =
@@ -195,4 +194,4 @@ TEST_F(OobeDisplayChooserTest, DontSwitchFromTouch) {
   EXPECT_EQ(1, GetPrimaryDisplay());
 }
 
-}  // namespace chromeos
+}  // namespace ash

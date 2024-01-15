@@ -4,19 +4,22 @@
 
 #include "chrome/browser/ui/views/page_info/page_info_permission_content_view.h"
 
+#include "base/feature_list.h"
 #include "base/ranges/algorithm.h"
-#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/layout_constants.h"
 #include "chrome/browser/ui/page_info/chrome_page_info_ui_delegate.h"
+#include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/accessibility/non_accessible_image_view.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
-#include "chrome/browser/ui/views/page_info/page_info_hover_button.h"
+#include "chrome/browser/ui/views/controls/rich_hover_button.h"
 #include "chrome/browser/ui/views/page_info/page_info_view_factory.h"
 #include "components/permissions/permission_util.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/views/controls/button/checkbox.h"
 #include "ui/views/controls/button/toggle_button.h"
 #include "ui/views/controls/label.h"
@@ -26,8 +29,12 @@
 PageInfoPermissionContentView::PageInfoPermissionContentView(
     PageInfo* presenter,
     ChromePageInfoUiDelegate* ui_delegate,
-    ContentSettingsType type)
-    : presenter_(presenter), type_(type), ui_delegate_(ui_delegate) {
+    ContentSettingsType type,
+    content::WebContents* web_contents)
+    : presenter_(presenter),
+      type_(type),
+      ui_delegate_(ui_delegate),
+      web_contents_(web_contents) {
   ChromeLayoutProvider* layout_provider = ChromeLayoutProvider::Get();
 
   // Use the same insets as buttons and permission rows in the main page for
@@ -101,16 +108,22 @@ PageInfoPermissionContentView::PageInfoPermissionContentView(
   icon_->SetProperty(views::kMarginsKey, gfx::Insets::VH(margin, 0));
   toggle_button_->SetProperty(views::kMarginsKey, gfx::Insets::VH(margin, 0));
 
-  AddChildView(PageInfoViewFactory::CreateSeparator());
+  MaybeAddMediaPreview();
+
+  AddChildView(PageInfoViewFactory::CreateSeparator(
+      ChromeLayoutProvider::Get()->GetDistanceMetric(
+          DISTANCE_HORIZONTAL_SEPARATOR_PADDING_PAGE_INFO_VIEW)));
   // TODO(crbug.com/1225563): Consider to use permission specific text.
-  AddChildView(std::make_unique<PageInfoHoverButton>(
+  AddChildView(std::make_unique<RichHoverButton>(
       base::BindRepeating(
           [](PageInfoPermissionContentView* view) {
             view->presenter_->OpenContentSettingsExceptions(view->type_);
           },
           this),
       PageInfoViewFactory::GetSiteSettingsIcon(),
-      IDS_PAGE_INFO_PERMISSIONS_SUBPAGE_MANAGE_BUTTON, std::u16string(), 0,
+      l10n_util::GetStringUTF16(
+          IDS_PAGE_INFO_PERMISSIONS_SUBPAGE_MANAGE_BUTTON),
+      std::u16string(),
       l10n_util::GetStringUTF16(
           IDS_PAGE_INFO_PERMISSIONS_SUBPAGE_MANAGE_BUTTON_TOOLTIP),
       std::u16string(), PageInfoViewFactory::GetLaunchIcon()));
@@ -150,13 +163,25 @@ void PageInfoPermissionContentView::SetPermissionInfo(
       permissions::PermissionUtil::IsPermission(type_) &&
       permissions::PermissionUtil::CanPermissionBeAllowedOnce(
           permission_.type) &&
-      (permission_.default_setting != CONTENT_SETTING_BLOCK ||
-       permission_.setting != CONTENT_SETTING_DEFAULT));
+      (permission_.setting != CONTENT_SETTING_BLOCK));
+  PreferredSizeChanged();
+}
+
+void PageInfoPermissionContentView::ChildPreferredSizeChanged(
+    views::View* child) {
   PreferredSizeChanged();
 }
 
 void PageInfoPermissionContentView::OnToggleButtonPressed() {
   PageInfoUI::ToggleBetweenAllowAndBlock(permission_);
+
+  // One time permissible permissions show a remember me checkbox only for the
+  // non-deny state.
+  if (permissions::PermissionUtil::CanPermissionBeAllowedOnce(
+          permission_.type)) {
+    PreferredSizeChanged();
+  }
+
   PermissionChanged();
 }
 
@@ -167,5 +192,32 @@ void PageInfoPermissionContentView::OnRememberSettingPressed() {
 
 void PageInfoPermissionContentView::PermissionChanged() {
   presenter_->OnSitePermissionChanged(permission_.type, permission_.setting,
+                                      permission_.requesting_origin,
                                       permission_.is_one_time);
 }
+
+void PageInfoPermissionContentView::MaybeAddMediaPreview() {
+#if !BUILDFLAG(IS_CHROMEOS) && !BUILDFLAG(IS_FUCHSIA)
+  if (!base::FeatureList::IsEnabled(features::kCameraMicPreview)) {
+    return;
+  }
+
+  if (type_ != ContentSettingsType::MEDIASTREAM_CAMERA &&
+      type_ != ContentSettingsType::MEDIASTREAM_MIC) {
+    return;
+  }
+
+  AddChildView(PageInfoViewFactory::CreateSeparator(
+      ChromeLayoutProvider::Get()->GetDistanceMetric(
+          DISTANCE_HORIZONTAL_SEPARATOR_PADDING_PAGE_INFO_VIEW)));
+
+  auto view_type = type_ == ContentSettingsType::MEDIASTREAM_CAMERA
+                       ? MediaCoordinator::ViewType::kCameraOnly
+                       : MediaCoordinator::ViewType::kMicOnly;
+  active_devices_media_preview_coordinator_.emplace(web_contents_, view_type,
+                                                    /*parent_view=*/this);
+#endif
+}
+
+BEGIN_METADATA(PageInfoPermissionContentView)
+END_METADATA

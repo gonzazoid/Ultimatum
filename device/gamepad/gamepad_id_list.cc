@@ -133,6 +133,11 @@ constexpr struct GamepadInfo {
     {0x04e8, 0xa000, kXInputTypeNone},
     // Siam United Hi-Tech
     {0x0500, 0x9b28, kXInputTypeNone},
+    // Acer, Inc.
+    {0x0502, 0x1304, kXInputTypeXbox360},
+    {0x0502, 0x1305, kXInputTypeXbox360},
+    {0x0502, 0x1316, kXInputTypeNone},
+    {0x0502, 0x1317, kXInputTypeNone},
     // Belkin Components
     {0x050d, 0x0802, kXInputTypeNone},
     {0x050d, 0x0803, kXInputTypeNone},
@@ -146,6 +151,7 @@ constexpr struct GamepadInfo {
     {0x054c, 0x09cc, kXInputTypeNone},
     {0x054c, 0x0ba0, kXInputTypeNone},
     {0x054c, 0x0ce6, kXInputTypeNone},
+    {0x054c, 0x0df2, kXInputTypeNone},
     // Elecom Co., Ltd
     {0x056e, 0x2003, kXInputTypeNone},
     {0x056e, 0x2004, kXInputTypeXbox360},
@@ -599,11 +605,13 @@ constexpr struct GamepadInfo {
     {0x2c22, 0x2302, kXInputTypeNone},
     // DJI
     {0x2ca3, 0x1020, kXInputTypeNone},
+    // 8BitDo
     {0x2dc8, 0x1003, kXInputTypeNone},
     {0x2dc8, 0x1080, kXInputTypeNone},
     {0x2dc8, 0x2830, kXInputTypeNone},
     {0x2dc8, 0x3000, kXInputTypeNone},
     {0x2dc8, 0x3001, kXInputTypeNone},
+    {0x2dc8, 0x3106, kXInputTypeXbox360},
     {0x2dc8, 0x3820, kXInputTypeNone},
     {0x2dc8, 0x9001, kXInputTypeNone},
     {0x2dfa, 0x0001, kXInputTypeNone},
@@ -662,7 +670,7 @@ XInputType GamepadIdList::GetXInputType(uint16_t vendor_id,
   return entry ? entry->xtype : kXInputTypeNone;
 }
 
-GamepadId GamepadIdList::GetGamepadId(base::StringPiece product_name,
+GamepadId GamepadIdList::GetGamepadId(std::string_view product_name,
                                       uint16_t vendor_id,
                                       uint16_t product_id) const {
   const auto* entry = GetGamepadInfo(vendor_id, product_id);

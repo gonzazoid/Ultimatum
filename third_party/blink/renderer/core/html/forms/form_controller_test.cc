@@ -13,10 +13,12 @@
 #include "third_party/blink/renderer/core/testing/dummy_page_holder.h"
 #include "third_party/blink/renderer/core/testing/null_execution_context.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
 TEST(DocumentStateTest, ToStateVectorConnected) {
+  test::TaskEnvironment task_environment;
   ScopedNullExecutionContext execution_context;
   auto& doc = *Document::CreateForTest(execution_context.GetExecutionContext());
   Element* html = doc.CreateRawElement(html_names::kHTMLTag);
@@ -35,6 +37,7 @@ TEST(DocumentStateTest, ToStateVectorConnected) {
 }
 
 TEST(FormControllerTest, FormSignature) {
+  test::TaskEnvironment task_environment;
   DummyPageHolder holder;
   Document& doc = holder.GetDocument();
   doc.GetSettings()->SetScriptEnabled(true);
@@ -50,7 +53,7 @@ TEST(FormControllerTest, FormSignature) {
           </form>`;
   )SCRIPT");
   doc.body()->appendChild(script);
-  Element* form = doc.QuerySelector("form", ASSERT_NO_EXCEPTION);
+  Element* form = doc.QuerySelector(AtomicString("form"), ASSERT_NO_EXCEPTION);
   ASSERT_TRUE(form);
   EXPECT_EQ(String("http://example.com/ [1cb 3s ]"),
             FormSignature(*To<HTMLFormElement>(form)))

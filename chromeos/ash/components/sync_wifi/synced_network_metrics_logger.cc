@@ -4,11 +4,11 @@
 
 #include "chromeos/ash/components/sync_wifi/synced_network_metrics_logger.h"
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "chromeos/ash/components/network/network_configuration_handler.h"
 #include "chromeos/ash/components/network/network_connection_handler.h"
-#include "chromeos/ash/components/network/network_event_log.h"
 #include "chromeos/ash/components/network/network_metadata_store.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/sync_wifi/network_eligibility_checker.h"
@@ -118,7 +118,7 @@ SyncedNetworkMetricsLogger::SyncedNetworkMetricsLogger(
 
   if (network_state_handler) {
     network_state_handler_ = network_state_handler;
-    network_state_handler_->AddObserver(this, FROM_HERE);
+    network_state_handler_observer_.Observe(network_state_handler_.get());
   }
 
   if (network_connection_handler) {
@@ -139,10 +139,8 @@ SyncedNetworkMetricsLogger::~SyncedNetworkMetricsLogger() {
 }
 
 void SyncedNetworkMetricsLogger::OnShuttingDown() {
-  if (network_state_handler_) {
-    network_state_handler_->RemoveObserver(this, FROM_HERE);
-    network_state_handler_ = nullptr;
-  }
+  network_state_handler_observer_.Reset();
+  network_state_handler_ = nullptr;
 
   if (network_connection_handler_) {
     network_connection_handler_->RemoveObserver(this);
@@ -231,7 +229,7 @@ bool SyncedNetworkMetricsLogger::IsEligible(const NetworkState* network) {
 void SyncedNetworkMetricsLogger::OnConnectErrorGetProperties(
     const std::string& error_name,
     const std::string& service_path,
-    absl::optional<base::Value> shill_properties) {
+    std::optional<base::Value::Dict> shill_properties) {
   if (!shill_properties) {
     base::UmaHistogramBoolean(kConnectionResultManualHistogram, false);
     base::UmaHistogramEnumeration(kConnectionFailureReasonManualHistogram,
@@ -239,7 +237,7 @@ void SyncedNetworkMetricsLogger::OnConnectErrorGetProperties(
     return;
   }
   const std::string* state =
-      shill_properties->FindStringKey(shill::kStateProperty);
+      shill_properties->FindString(shill::kStateProperty);
   if (state && (NetworkState::StateIsConnected(*state) ||
                 NetworkState::StateIsConnecting(*state))) {
     // If network is no longer in an error state, don't record it.
@@ -247,10 +245,9 @@ void SyncedNetworkMetricsLogger::OnConnectErrorGetProperties(
   }
 
   const std::string* shill_error =
-      shill_properties->FindStringKey(shill::kErrorProperty);
+      shill_properties->FindString(shill::kErrorProperty);
   if (!shill_error || !NetworkState::ErrorIsValid(*shill_error)) {
-    shill_error =
-        shill_properties->FindStringKey(shill::kPreviousErrorProperty);
+    shill_error = shill_properties->FindString(shill::kPreviousErrorProperty);
     if (!shill_error || !NetworkState::ErrorIsValid(*shill_error))
       shill_error = &error_name;
   }
@@ -264,6 +261,11 @@ void SyncedNetworkMetricsLogger::RecordApplyNetworkSuccess() {
 }
 void SyncedNetworkMetricsLogger::RecordApplyNetworkFailed() {
   base::UmaHistogramBoolean(kApplyResultHistogram, false);
+}
+
+void SyncedNetworkMetricsLogger::RecordApplyGenerateLocalNetworkConfig(
+    bool success) {
+  base::UmaHistogramBoolean(kApplyGenerateLocalNetworkConfigHistogram, success);
 }
 
 void SyncedNetworkMetricsLogger::RecordApplyNetworkFailureReason(
@@ -286,9 +288,8 @@ void SyncedNetworkMetricsLogger::RecordTotalCount(int count) {
 void SyncedNetworkMetricsLogger::RecordZeroNetworksEligibleForSync(
     base::flat_set<NetworkEligibilityStatus> network_eligibility_status_codes) {
   // There is an eligible network that was not synced for some reason.
-  if (network_eligibility_status_codes.find(
-          NetworkEligibilityStatus::kNetworkIsEligible) !=
-      network_eligibility_status_codes.end()) {
+  if (base::Contains(network_eligibility_status_codes,
+                     NetworkEligibilityStatus::kNetworkIsEligible)) {
     base::UmaHistogramEnumeration(kZeroNetworksSyncedReasonHistogram,
                                   NetworkEligibilityStatus::kNetworkIsEligible);
     return;

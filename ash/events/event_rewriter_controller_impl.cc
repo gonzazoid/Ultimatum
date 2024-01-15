@@ -7,17 +7,22 @@
 #include <utility>
 
 #include "ash/accessibility/sticky_keys/sticky_keys_controller.h"
+#include "ash/constants/ash_features.h"
 #include "ash/display/mirror_window_controller.h"
 #include "ash/display/privacy_screen_controller.h"
 #include "ash/display/window_tree_host_manager.h"
 #include "ash/events/accessibility_event_rewriter.h"
 #include "ash/events/keyboard_driven_event_rewriter.h"
+#include "ash/events/peripheral_customization_event_rewriter.h"
+#include "ash/events/prerewritten_event_forwarder.h"
 #include "ash/public/cpp/accessibility_event_rewriter_delegate.h"
 #include "ash/shell.h"
+#include "ash/system/input_device_settings/input_device_settings_controller_impl.h"
 #include "base/command_line.h"
-#include "ui/accessibility/accessibility_switches.h"
 #include "ui/aura/env.h"
 #include "ui/aura/window_tree_host.h"
+#include "ui/base/ui_base_features.h"
+#include "ui/events/ash/keyboard_device_id_event_rewriter.h"
 #include "ui/events/event_sink.h"
 #include "ui/events/event_source.h"
 
@@ -36,16 +41,17 @@ EventRewriterControllerImpl::EventRewriterControllerImpl() {
 
 EventRewriterControllerImpl::~EventRewriterControllerImpl() {
   aura::Env::GetInstance()->RemoveObserver(this);
-  // Remove the rewriters from every root window EventSource and destroy them.
-  for (const auto& rewriter : rewriters_) {
-    for (auto* window : Shell::GetAllRootWindows())
-      window->GetHost()->GetEventSource()->RemoveEventRewriter(rewriter.get());
+  // Remove the rewriters from every root window EventSource.
+  for (aura::Window* window : Shell::GetAllRootWindows()) {
+    auto* event_source = window->GetHost()->GetEventSource();
+    for (const auto& rewriter : rewriters_) {
+      event_source->RemoveEventRewriter(rewriter.get());
+    }
   }
-  rewriters_.clear();
 }
 
 void EventRewriterControllerImpl::Initialize(
-    ui::EventRewriterChromeOS::Delegate* event_rewriter_delegate,
+    ui::EventRewriterAsh::Delegate* event_rewriter_delegate,
     AccessibilityEventRewriterDelegate* accessibility_event_rewriter_delegate) {
   std::unique_ptr<KeyboardDrivenEventRewriter> keyboard_driven_event_rewriter =
       std::make_unique<KeyboardDrivenEventRewriter>();
@@ -56,35 +62,68 @@ void EventRewriterControllerImpl::Initialize(
       Shell::Get()->privacy_screen_controller()->IsSupported()) {
     privacy_screen_supported = true;
   }
-  std::unique_ptr<ui::EventRewriterChromeOS> event_rewriter_chromeos =
-      std::make_unique<ui::EventRewriterChromeOS>(
-          event_rewriter_delegate, Shell::Get()->sticky_keys_controller(),
-          privacy_screen_supported);
-  event_rewriter_chromeos_ = event_rewriter_chromeos.get();
+
+  auto keyboard_device_id_event_rewriter =
+      std::make_unique<ui::KeyboardDeviceIdEventRewriter>(
+          Shell::Get()->keyboard_capability());
+
+  event_rewriter_ash_delegate_ = event_rewriter_delegate;
+  std::unique_ptr<ui::EventRewriterAsh> event_rewriter_ash =
+      std::make_unique<ui::EventRewriterAsh>(
+          event_rewriter_delegate, Shell::Get()->keyboard_capability(),
+          Shell::Get()->sticky_keys_controller(), privacy_screen_supported);
+  event_rewriter_ash_ = event_rewriter_ash.get();
+
+  std::unique_ptr<PeripheralCustomizationEventRewriter>
+      peripheral_customization_event_rewriter;
+  if (features::IsPeripheralCustomizationEnabled() ||
+      ::features::IsShortcutCustomizationEnabled()) {
+    peripheral_customization_event_rewriter =
+        std::make_unique<PeripheralCustomizationEventRewriter>(
+            Shell::Get()->input_device_settings_controller());
+    peripheral_customization_event_rewriter_ =
+        peripheral_customization_event_rewriter.get();
+  }
+
+  std::unique_ptr<PrerewrittenEventForwarder> prerewritten_event_forwarder;
+  if (features::IsPeripheralCustomizationEnabled() ||
+      ::features::IsShortcutCustomizationEnabled()) {
+    prerewritten_event_forwarder =
+        std::make_unique<PrerewrittenEventForwarder>();
+    prerewritten_event_forwarder_ = prerewritten_event_forwarder.get();
+  }
 
   std::unique_ptr<AccessibilityEventRewriter> accessibility_event_rewriter =
       std::make_unique<AccessibilityEventRewriter>(
-          event_rewriter_chromeos.get(), accessibility_event_rewriter_delegate);
+          event_rewriter_ash.get(), accessibility_event_rewriter_delegate);
   accessibility_event_rewriter_ = accessibility_event_rewriter.get();
 
   // EventRewriters are notified in the order they are added.
+  if (features::IsPeripheralCustomizationEnabled() ||
+      ::features::IsShortcutCustomizationEnabled()) {
+    AddEventRewriter(std::move(peripheral_customization_event_rewriter));
+    AddEventRewriter(std::move(prerewritten_event_forwarder));
+  }
   AddEventRewriter(std::move(accessibility_event_rewriter));
   AddEventRewriter(std::move(keyboard_driven_event_rewriter));
-  AddEventRewriter(std::move(event_rewriter_chromeos));
+  AddEventRewriter(std::move(keyboard_device_id_event_rewriter));
+  AddEventRewriter(std::move(event_rewriter_ash));
 }
 
 void EventRewriterControllerImpl::AddEventRewriter(
     std::unique_ptr<ui::EventRewriter> rewriter) {
   // Add the rewriters to each existing root window EventSource.
-  for (auto* window : Shell::GetAllRootWindows())
+  for (aura::Window* window : Shell::GetAllRootWindows()) {
     window->GetHost()->GetEventSource()->AddEventRewriter(rewriter.get());
+  }
 
   // In case there are any mirroring displays, their hosts' EventSources won't
   // be included above.
   const auto* mirror_window_controller =
       Shell::Get()->window_tree_host_manager()->mirror_window_controller();
-  for (auto* window : mirror_window_controller->GetAllRootWindows())
+  for (aura::Window* window : mirror_window_controller->GetAllRootWindows()) {
     window->GetHost()->GetEventSource()->AddEventRewriter(rewriter.get());
+  }
 
   rewriters_.push_back(std::move(rewriter));
 }
@@ -114,8 +153,9 @@ void EventRewriterControllerImpl::SetSendMouseEvents(bool value) {
 }
 
 void EventRewriterControllerImpl::SetAltDownRemappingEnabled(bool enabled) {
-  if (event_rewriter_chromeos_)
-    event_rewriter_chromeos_->set_alt_down_remapping_enabled(enabled);
+  if (event_rewriter_ash_) {
+    event_rewriter_ash_->set_alt_down_remapping_enabled(enabled);
+  }
 }
 
 void EventRewriterControllerImpl::OnHostInitialized(

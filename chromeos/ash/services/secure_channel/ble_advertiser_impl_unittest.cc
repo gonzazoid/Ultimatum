@@ -8,7 +8,8 @@
 #include <sstream>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/gtest_util.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
@@ -42,7 +43,7 @@ class FakeErrorTolerantBleAdvertisementFactory
 
   ~FakeErrorTolerantBleAdvertisementFactory() override = default;
 
-  const absl::optional<DeviceIdPair>& last_created_device_id_pair() const {
+  const std::optional<DeviceIdPair>& last_created_device_id_pair() const {
     return last_created_device_id_pair_;
   }
 
@@ -87,10 +88,10 @@ class FakeErrorTolerantBleAdvertisementFactory
     EXPECT_EQ(1u, num_deleted);
   }
 
-  BluetoothHelper* bluetooth_helper_;
-  BleSynchronizerBase* ble_synchronizer_base_;
+  raw_ptr<BluetoothHelper> bluetooth_helper_;
+  raw_ptr<BleSynchronizerBase> ble_synchronizer_base_;
 
-  absl::optional<DeviceIdPair> last_created_device_id_pair_;
+  std::optional<DeviceIdPair> last_created_device_id_pair_;
   base::flat_map<DeviceIdPair, FakeErrorTolerantBleAdvertisement*>
       device_id_pair_to_active_advertisement_map_;
   size_t num_instances_created_ = 0u;
@@ -282,8 +283,8 @@ class SecureChannelBleAdvertiserImplTest : public testing::Test {
 
   base::UnguessableToken last_fetched_advertisement_id_;
   base::UnguessableToken last_fetched_timer_id_;
-  absl::optional<size_t> highest_slot_ended_delegate_index_verified_;
-  absl::optional<size_t> highest_failed_advertisement_delegate_index_verified_;
+  std::optional<size_t> highest_slot_ended_delegate_index_verified_;
+  std::optional<size_t> highest_failed_advertisement_delegate_index_verified_;
 
   scoped_refptr<base::TestSimpleTaskRunner> test_runner_;
 

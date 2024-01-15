@@ -7,7 +7,7 @@
 
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
 #include "content/common/buildflags.h"
 #include "content/common/content_export.h"
@@ -33,6 +33,10 @@ class OverscrollRefreshHandler;
 }
 #endif
 
+namespace url {
+class Origin;
+}
+
 namespace content {
 class RenderFrameHost;
 class RenderWidgetHostImpl;
@@ -46,7 +50,7 @@ class CONTENT_EXPORT RenderViewHostDelegateView {
   // A context menu should be shown, to be built using the context information
   // provided in the supplied params.
   //
-  // The |render_frame_host| represents the frame that requests the context menu
+  // The `render_frame_host` represents the frame that requests the context menu
   // (typically this frame is focused, but this is not necessarily the case -
   // see https://crbug.com/1257907#c14).
   virtual void ShowContextMenu(RenderFrameHost& render_frame_host,
@@ -80,6 +84,7 @@ class CONTENT_EXPORT RenderViewHostDelegateView {
   //   `blink::DragController::StartDrag()`.
   virtual void StartDragging(
       const DropData& drop_data,
+      const url::Origin& source_origin,
       blink::DragOperationsMask allowed_ops,
       const gfx::ImageSkia& image,
       const gfx::Vector2d& cursor_offset,
@@ -88,8 +93,11 @@ class CONTENT_EXPORT RenderViewHostDelegateView {
       RenderWidgetHostImpl* source_rwh) {}
 
   // The page wants to update the mouse cursor during a drag & drop operation.
-  // |operation| describes the current operation (none, move, copy, link.)
-  virtual void UpdateDragCursor(ui::mojom::DragOperation operation) {}
+  // `operation` describes the current operation (none, move, copy, link.).
+  // `document_is_handling_drag` describes if the document is handling the
+  // drop.
+  virtual void UpdateDragOperation(ui::mojom::DragOperation operation,
+                                   bool document_is_handling_drag) {}
 
   // Notification that view for this delegate got the focus.
   virtual void GotFocus(RenderWidgetHostImpl* render_widget_host) {}
@@ -102,16 +110,18 @@ class CONTENT_EXPORT RenderViewHostDelegateView {
   // retrieved by doing a Shift-Tab.
   virtual void TakeFocus(bool reverse) {}
 
-  // Returns the height of the top controls in DIP.
+  // Returns the height of the top controls in physical pixels (not DIPs).
   virtual int GetTopControlsHeight() const;
 
-  // Returns the minimum visible height the top controls can have in DIP.
+  // Returns the minimum visible height the top controls can have in physical
+  // pixels (not DIPs).
   virtual int GetTopControlsMinHeight() const;
 
-  // Returns the height of the bottom controls in DIP.
+  // Returns the height of the bottom controls in physical pixels (not DIPs).
   virtual int GetBottomControlsHeight() const;
 
-  // Returns the minimum visible height the bottom controls can have in DIP.
+  // Returns the minimum visible height the bottom controls can have in physical
+  // pixels (not DIPs).
   virtual int GetBottomControlsMinHeight() const;
 
   // Returns true if the changes in browser controls height (including min

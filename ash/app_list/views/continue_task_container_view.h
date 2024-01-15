@@ -13,7 +13,8 @@
 
 #include "ash/app_list/model/search/search_model.h"
 #include "ash/ash_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/timer/timer.h"
 #include "ui/base/models/list_model_observer.h"
@@ -66,6 +67,9 @@ class ASH_EXPORT ContinueTaskContainerView : public ui::ListModelObserver,
 
   size_t num_results() const { return num_results_; }
   size_t num_file_results() const { return num_file_results_; }
+  size_t num_desks_admin_template_results() const {
+    return num_desks_admin_template_results_;
+  }
 
   void SetResults(SearchModel::SearchResults* results);
 
@@ -161,22 +165,24 @@ class ASH_EXPORT ContinueTaskContainerView : public ui::ListModelObserver,
   // task view, or -1 if no task view is focused.
   int GetIndexOfFocusedTaskView() const;
 
-  AppListViewDelegate* const view_delegate_;
+  const raw_ptr<AppListViewDelegate> view_delegate_;
 
   // A callback to be invoked after an Update request finishes.
   OnResultsChanged update_callback_;
-  SearchModel::SearchResults* results_ = nullptr;  // Owned by SearchModel.
+  raw_ptr<SearchModel::SearchResults> results_ =
+      nullptr;  // Owned by SearchModel.
 
   // Only one of the layouts is to be set.
   // `flex_layout_`  aligns the views as a single row centered in the container.
   // Used in tablet mode.
-  views::FlexLayout* flex_layout_ = nullptr;
+  raw_ptr<views::FlexLayout> flex_layout_ = nullptr;
   // `table_layout_`  aligns the views as a table with multiple rows stretched
   // to fill the container. Used in clamshell mode.
-  views::TableLayout* table_layout_ = nullptr;
+  raw_ptr<views::TableLayout> table_layout_ = nullptr;
 
   // The list of tasks views for the container.
-  std::vector<ContinueTaskView*> suggestion_tasks_views_;
+  std::vector<raw_ptr<ContinueTaskView, VectorExperimental>>
+      suggestion_tasks_views_;
 
   // The number of results shown in the container. Each result has one view.
   size_t num_results_ = 0;
@@ -187,6 +193,9 @@ class ASH_EXPORT ContinueTaskContainerView : public ui::ListModelObserver,
   // continue section, so `num_files_results_` should be used to determine
   // whether continue section can be shown.
   size_t num_file_results_ = 0;
+
+  // The number of admin templates will be shown in the continue section.
+  size_t num_desks_admin_template_results_ = 0;
 
   // The number of columns available for the view. This is ignored in tablet
   // mode.
@@ -199,7 +208,8 @@ class ASH_EXPORT ContinueTaskContainerView : public ui::ListModelObserver,
   // of results shown in the container gets updated. The views are only still
   // needed for the update animation and should be removed once the animation
   // completes.
-  std::vector<ContinueTaskView*> views_to_remove_after_animation_;
+  std::vector<raw_ptr<ContinueTaskView, VectorExperimental>>
+      views_to_remove_after_animation_;
 
   // Timer which when active disables container update animations. The timer
   // gets started when the container gets shown. The goal is to disable update

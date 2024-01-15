@@ -8,6 +8,7 @@
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
 #include "media/base/video_frame.h"
+#include "media/video/video_encoder_info.h"
 
 namespace media {
 
@@ -24,11 +25,13 @@ VideoEncoderFallback::~VideoEncoderFallback() = default;
 
 void VideoEncoderFallback::Initialize(VideoCodecProfile profile,
                                       const Options& options,
+                                      EncoderInfoCB info_cb,
                                       OutputCB output_cb,
                                       EncoderStatusCB done_cb) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   init_done_cb_ = std::move(done_cb);
+  info_cb_ = std::move(info_cb);
   output_cb_ = std::move(output_cb);
   profile_ = profile;
   options_ = options;
@@ -45,6 +48,8 @@ void VideoEncoderFallback::Initialize(VideoCodecProfile profile,
 
   encoder_->Initialize(
       profile, options,
+      base::BindRepeating(&VideoEncoderFallback::CallInfo,
+                          weak_factory_.GetWeakPtr()),
       base::BindRepeating(&VideoEncoderFallback::CallOutput,
                           weak_factory_.GetWeakPtr()),
       base::BindOnce(done_callback, weak_factory_.GetWeakPtr()));
@@ -52,47 +57,54 @@ void VideoEncoderFallback::Initialize(VideoCodecProfile profile,
 
 VideoEncoder::PendingEncode VideoEncoderFallback::MakePendingEncode(
     scoped_refptr<VideoFrame> frame,
-    bool key_frame,
+    const EncodeOptions& encode_options,
     EncoderStatusCB done_cb) {
   PendingEncode result;
   result.done_callback = std::move(done_cb);
   result.frame = std::move(frame);
-  result.key_frame = key_frame;
+  result.options = encode_options;
   return result;
 }
 
 void VideoEncoderFallback::Encode(scoped_refptr<VideoFrame> frame,
-                                  bool key_frame,
+                                  const EncodeOptions& encode_options,
                                   EncoderStatusCB done_cb) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!init_done_cb_);
 
   if (use_fallback_) {
     if (fallback_initialized_) {
-      encoder_->Encode(std::move(frame), key_frame, std::move(done_cb));
+      encoder_->Encode(std::move(frame), encode_options, std::move(done_cb));
+    } else if (encoder_) {
+      encodes_to_retry_.push_back(
+          std::make_unique<PendingEncode>(MakePendingEncode(
+              std::move(frame), encode_options, std::move(done_cb))));
     } else {
-      encodes_to_retry_.push_back(std::make_unique<PendingEncode>(
-          MakePendingEncode(std::move(frame), key_frame, std::move(done_cb))));
+      // Failed to create fallback.
+      std::move(done_cb).Run(EncoderStatus::Codes::kEncoderFailedEncode);
     }
     return;
   }
+
+  DCHECK(encoder_);
 
   auto done_callback = [](base::WeakPtr<VideoEncoderFallback> self,
                           PendingEncode args, EncoderStatus status) {
     if (!self)
       return;
-    DCHECK(self->encoder_);
-    if (status.is_ok()) {
+    // self->encoder_ is nullptr when main encoder failed to encode and software
+    // fallback is not available.
+    if (status.is_ok() || !self->encoder_) {
       std::move(args.done_callback).Run(std::move(status));
       return;
     }
-    self->FallbackEncode(std::move(args));
+    self->FallbackEncode(std::move(args), std::move(status));
   };
 
-  encoder_->Encode(
-      frame, key_frame,
-      base::BindOnce(done_callback, weak_factory_.GetWeakPtr(),
-                     MakePendingEncode(frame, key_frame, std::move(done_cb))));
+  encoder_->Encode(frame, encode_options,
+                   base::BindOnce(done_callback, weak_factory_.GetWeakPtr(),
+                                  MakePendingEncode(frame, encode_options,
+                                                    std::move(done_cb))));
 }
 
 void VideoEncoderFallback::ChangeOptions(const Options& options,
@@ -119,7 +131,7 @@ void VideoEncoderFallback::FallbackInitCompleted(EncoderStatus status) {
 
   if (status.is_ok()) {
     for (auto& encode : encodes_to_retry_) {
-      encoder_->Encode(std::move(encode->frame), encode->key_frame,
+      encoder_->Encode(std::move(encode->frame), encode->options,
                        std::move(encode->done_callback));
     }
   } else {
@@ -142,25 +154,29 @@ void VideoEncoderFallback::FallbackInitialize() {
 
   encoder_->Initialize(
       profile_, options_,
+      base::BindRepeating(&VideoEncoderFallback::CallInfo,
+                          weak_factory_.GetWeakPtr()),
       base::BindRepeating(&VideoEncoderFallback::CallOutput,
                           weak_factory_.GetWeakPtr()),
       base::BindOnce(&VideoEncoderFallback::FallbackInitCompleted,
                      weak_factory_.GetWeakPtr()));
 }
 
-void VideoEncoderFallback::FallbackEncode(PendingEncode args) {
+void VideoEncoderFallback::FallbackEncode(PendingEncode args,
+                                          EncoderStatus main_encoder_status) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (!use_fallback_) {
     use_fallback_ = true;
     encoder_ = std::move(create_fallback_cb_).Run();
     if (!encoder_) {
-      std::move(args.done_callback)
-          .Run(EncoderStatus::Codes::kEncoderInitializationError);
+      std::move(args.done_callback).Run(main_encoder_status.code());
       return;
     }
 
     encoder_->Initialize(
         profile_, options_,
+        base::BindRepeating(&VideoEncoderFallback::CallInfo,
+                            weak_factory_.GetWeakPtr()),
         base::BindRepeating(&VideoEncoderFallback::CallOutput,
                             weak_factory_.GetWeakPtr()),
         base::BindOnce(&VideoEncoderFallback::FallbackInitCompleted,
@@ -168,12 +184,16 @@ void VideoEncoderFallback::FallbackEncode(PendingEncode args) {
   }
 
   if (fallback_initialized_) {
-    encoder_->Encode(std::move(args.frame), args.key_frame,
+    encoder_->Encode(std::move(args.frame), args.options,
                      std::move(args.done_callback));
   } else {
     encodes_to_retry_.push_back(
         std::make_unique<PendingEncode>(std::move(args)));
   }
+}
+
+void VideoEncoderFallback::CallInfo(const VideoEncoderInfo& encoder_info) {
+  info_cb_.Run(encoder_info);
 }
 
 void VideoEncoderFallback::CallOutput(VideoEncoderOutput output,

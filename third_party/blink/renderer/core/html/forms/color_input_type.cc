@@ -73,7 +73,7 @@ static bool IsValidColorString(const String& value) {
   if (value.length() != 7)
     return false;
   Color color;
-  return color.SetFromString(value) && !color.HasAlpha();
+  return color.SetFromString(value) && color.IsOpaque();
 }
 
 ColorInputType::ColorInputType(HTMLInputElement& element)
@@ -99,10 +99,6 @@ InputType::ValueMode ColorInputType::GetValueMode() const {
 
 void ColorInputType::CountUsage() {
   CountUsageIfVisible(WebFeature::kInputTypeColor);
-}
-
-const AtomicString& ColorInputType::FormControlType() const {
-  return input_type_names::kColor;
 }
 
 bool ColorInputType::SupportsRequired() const {
@@ -194,7 +190,7 @@ void ColorInputType::ClosePopupView() {
 }
 
 bool ColorInputType::HasOpenedPopup() const {
-  return chooser_;
+  return chooser_ != nullptr;
 }
 
 bool ColorInputType::ShouldRespectListAttribute() {
@@ -296,7 +292,7 @@ Vector<mojom::blink::ColorSuggestionPtr> ColorInputType::Suggestions() const {
 }
 
 AXObject* ColorInputType::PopupRootAXObject() {
-  return chooser_ ? chooser_->RootAXObject() : nullptr;
+  return chooser_ ? chooser_->RootAXObject(&GetElement()) : nullptr;
 }
 
 ColorChooserClient* ColorInputType::GetColorChooserClient() {

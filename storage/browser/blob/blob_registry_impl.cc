@@ -7,9 +7,11 @@
 #include <memory>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "net/base/features.h"
 #include "storage/browser/blob/blob_builder_from_stream.h"
 #include "storage/browser/blob/blob_data_builder.h"
@@ -281,7 +283,7 @@ void BlobRegistryImpl::BlobUnderConstruction::StartTransportation(
     // requested asynchronously later again anyway.
     for (auto& entry : elements_) {
       if (entry.element->is_bytes())
-        entry.element->get_bytes()->embedded_data = absl::nullopt;
+        entry.element->get_bytes()->embedded_data = std::nullopt;
     }
   }
 
@@ -349,7 +351,7 @@ void BlobRegistryImpl::BlobUnderConstruction::DependentBlobReady(
     // Asynchronously call ResolvedAllBlobDependencies, as otherwise |this|
     // might end up getting deleted while ResolvedAllBlobUUIDs is still
     // iterating over |referenced_blob_uuids_|.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&BlobUnderConstruction::ResolvedAllBlobDependencies,
                        weak_ptr_factory_.GetWeakPtr()));
@@ -382,9 +384,9 @@ void BlobRegistryImpl::BlobUnderConstruction::ResolvedAllBlobDependencies() {
       }
     } else if (element->is_file()) {
       const auto& f = element->get_file();
-      builder_->AppendFile(
-          f->path, f->offset, f->length,
-          f->expected_modification_time.value_or(base::Time()));
+      builder_->AppendFile(f->path, f->offset, f->length,
+                           f->expected_modification_time.value_or(base::Time()),
+                           base::NullCallback());
     } else if (element->is_blob()) {
       DCHECK(blob_uuid_it != referenced_blob_uuids_.end());
       const std::string& blob_uuid = *blob_uuid_it++;
@@ -650,7 +652,8 @@ void BlobRegistryImpl::URLStoreForOrigin(
             auto self_owned_associated_receiver =
                 mojo::MakeSelfOwnedAssociatedReceiver(
                     std::make_unique<BlobURLStoreImpl>(
-                        blink::StorageKey(origin), std::move(url_registry)),
+                        blink::StorageKey::CreateFirstParty(origin),
+                        std::move(url_registry)),
                     std::move(receiver));
             if (g_url_store_creation_hook)
               g_url_store_creation_hook->Run(self_owned_associated_receiver);

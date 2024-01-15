@@ -6,16 +6,16 @@
 #include <utility>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
-#include "content/browser/renderer_host/input/synthetic_smooth_scroll_gesture.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
 #include "content/browser/renderer_host/render_widget_host_input_event_router.h"
 #include "content/browser/renderer_host/render_widget_host_view_base.h"
 #include "content/browser/web_contents/web_contents_impl.h"
+#include "content/common/input/synthetic_smooth_scroll_gesture.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/common/content_switches.h"
@@ -161,20 +161,15 @@ class CompositorEventAckBrowserTest : public ContentBrowserTest {
     hit_test_observer.WaitForHitTestData();
   }
 
-  int ExecuteScriptAndExtractInt(const std::string& script) {
-    return EvalJs(shell(), script).ExtractInt();
-  }
-
   int GetScrollTop() {
-    return ExecuteScriptAndExtractInt("document.scrollingElement.scrollTop");
+    return EvalJs(shell(), "document.scrollingElement.scrollTop").ExtractInt();
   }
 
   void DoWheelScroll() {
     EXPECT_EQ(0, GetScrollTop());
 
-    int scrollHeight =
-        ExecuteScriptAndExtractInt("document.documentElement.scrollHeight");
-    EXPECT_EQ(kWebsiteHeight, scrollHeight);
+    EXPECT_EQ(kWebsiteHeight,
+              EvalJs(shell(), "document.documentElement.scrollHeight"));
 
     RenderFrameSubmissionObserver observer(
         GetWidgetHost()->render_frame_metadata_provider());
@@ -207,9 +202,8 @@ class CompositorEventAckBrowserTest : public ContentBrowserTest {
   void DoTouchScroll() {
     EXPECT_EQ(0, GetScrollTop());
 
-    int scrollHeight =
-        ExecuteScriptAndExtractInt("document.documentElement.scrollHeight");
-    EXPECT_EQ(kWebsiteHeight, scrollHeight);
+    EXPECT_EQ(kWebsiteHeight,
+              EvalJs(shell(), "document.documentElement.scrollHeight"));
 
     RenderFrameSubmissionObserver observer(
         GetWidgetHost()->render_frame_metadata_provider());

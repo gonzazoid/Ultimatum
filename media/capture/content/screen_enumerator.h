@@ -5,7 +5,7 @@
 #ifndef MEDIA_CAPTURE_CONTENT_SCREEN_ENUMERATOR_H_
 #define MEDIA_CAPTURE_CONTENT_SCREEN_ENUMERATOR_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 namespace blink::mojom {
 class StreamDevicesSet;
@@ -24,12 +24,6 @@ class ScreenEnumerator {
 
   // This function triggers enumeration of all available screens and calls
   // the |screens_callback| with all screen as MediaStreamDevices.
-  // The returned screen ids are sorted in the same order as in the
-  // |getScreenDetails| API.
-  // https://w3c.github.io/window-placement/#api-window-getScreenDetails-method
-  // TODO(crbug.com/1339802): Introduce matching IDs between screens returned
-  // by this function and by the ScreenDetails API to make sure the screen
-  // matching is not getting out of sync.
   virtual void EnumerateScreens(
       blink::mojom::MediaStreamType stream_type,
       base::OnceCallback<

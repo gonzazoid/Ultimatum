@@ -4,7 +4,6 @@
 
 #include "media/gpu/test/video_test_environment.h"
 
-#include "base/command_line.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_timeouts.h"
@@ -16,8 +15,8 @@
 #include "media/gpu/vaapi/vaapi_wrapper.h"
 #endif
 
-#if defined(USE_OZONE)
-#include "ui/ozone/public/ozone_platform.h"
+#if BUILDFLAG(IS_CHROMEOS)
+#include "ui/gfx/linux/gbm_util.h"  // nogncheck
 #endif
 
 namespace media {
@@ -49,23 +48,17 @@ VideoTestEnvironment::VideoTestEnvironment(
   // to initialize them before calling VaapiWrapper::PreSandboxInitialization().
   scoped_feature_list_.InitWithFeatures(enabled_features, disabled_features);
 
-  // Perform all static initialization that is required when running video
-  // codecs in a test environment.
-#if defined(USE_OZONE)
-  // Initialize Ozone. This is necessary to gain access to the GPU for hardware
-  // video acceleration.
-  // TODO(b/230370976): we may no longer need to initialize Ozone since we don't
-  // use it for buffer allocation.
-  LOG(WARNING) << "Initializing Ozone Platform...\n"
-                  "If this hangs indefinitely please call 'stop ui' first!";
-  ui::OzonePlatform::InitParams params;
-  params.single_process = true;
-  ui::OzonePlatform::InitializeForUI(params);
-  ui::OzonePlatform::InitializeForGPU(params);
-#endif
+#if BUILDFLAG(IS_CHROMEOS)
+  // At this point, the base::FeatureList has been initialized and the process
+  // should still be single threaded. Additionally, minigbm shouldn't have
+  // been used yet by this process. Therefore, it's a good time to ensure the
+  // Intel media compression environment flag for minigbm is correctly set
+  ui::EnsureIntelMediaCompressionEnvVarIsSet();
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 #if BUILDFLAG(USE_VAAPI)
-  media::VaapiWrapper::PreSandboxInitialization();
+  media::VaapiWrapper::PreSandboxInitialization(
+      /*allow_disabling_global_lock=*/true);
 #endif
 }
 

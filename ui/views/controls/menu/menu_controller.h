@@ -10,10 +10,13 @@
 #include <list>
 #include <memory>
 #include <set>
+#include <string>
 #include <utility>
 #include <vector>
 
+#include "base/callback_list.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
@@ -47,6 +50,7 @@ struct OwnedWindowAnchor;
 namespace views {
 
 class Button;
+class MenuControllerTest;
 class MenuHostRootView;
 class MenuItemView;
 class MenuPreTargetHandler;
@@ -61,7 +65,6 @@ class MenuRunnerImpl;
 }  // namespace internal
 
 namespace test {
-class MenuControllerTest;
 class MenuControllerTestApi;
 class MenuControllerUITest;
 }  // namespace test
@@ -99,18 +102,44 @@ class VIEWS_EXPORT MenuController
     kReadonly,
   };
 
+  // The direction in which a menu opens relative to its anchor.
+  enum class MenuOpenDirection {
+    kLeading,
+    kTrailing,
+  };
+
+  // Callback that is used to pass events to an "annotation" bubble or widget,
+  // such as a help bubble, that floats alongside the menu and acts as part of
+  // the menu for event-handling purposes. These require special handling
+  // because menus never actually become active, and activating any other widget
+  // causes the menu to close, so this handler should in most cases not activate
+  // the annotation widget or otherwise close the menu.
+  //
+  // Not all events will be forwarded, but mouse clicks, taps, and hover/mouse
+  // move events will be. `event.root_location()` will be the screen coordinates
+  // of the event; `event.location()` is relative to the menu and can safely be
+  // ignored.
+  //
+  // Returns true if `event` is handled by the annotation and should not be
+  // processed by the menu (except for purposes of e.g. hot-tracking).
+  using AnnotationCallback =
+      base::RepeatingCallback<bool(const ui::LocatedEvent& event)>;
+
   // If a menu is currently active, this returns the controller for it.
   static MenuController* GetActiveInstance();
+
+  MenuController(const MenuController&) = delete;
+  MenuController& operator=(const MenuController&) = delete;
 
   // Runs the menu at the specified location.
   void Run(Widget* parent,
            MenuButtonController* button_controller,
            MenuItemView* root,
-           const gfx::Rect& bounds,
+           const gfx::Rect& anchor_bounds,
            MenuAnchorPosition position,
            bool context_menu,
            bool is_nested_drag,
-           gfx::NativeView native_view_for_gestures = nullptr);
+           gfx::NativeView native_view_for_gestures = gfx::NativeView());
 
   bool for_drop() const { return for_drop_; }
 
@@ -256,23 +285,36 @@ class VIEWS_EXPORT MenuController
   // gfx::AnimationDelegate:
   void AnimationProgressed(const gfx::Animation* animation) override;
 
-  // Called from MenuScrollViewContainer when either end of the menu is reached
-  void OnMenuEdgeReached();
-
-  // Enables/disables scrolling via scroll buttons
-  void SetEnabledScrollButtons(bool enabled);
-
   // Sets the customized rounded corners of the context menu.
   void SetMenuRoundedCorners(absl::optional<gfx::RoundedCornersF> corners);
 
+  // Adds an annotation event handler. The subscription should be discarded when
+  // the calling code no longer wants to intercept events for the annotation. It
+  // is safe to discard the handle after the menu controller has been destroyed.
+  base::CallbackListSubscription AddAnnotationCallback(
+      AnnotationCallback callback);
+
+  void SetShowMenuHostDurationHistogram(absl::optional<std::string> histogram) {
+    show_menu_host_duration_histogram_ = std::move(histogram);
+  }
+
+  absl::optional<std::string> TakeShowMenuHostDurationHistogram() {
+    absl::optional<std::string> value =
+        std::move(show_menu_host_duration_histogram_);
+    show_menu_host_duration_histogram_.reset();
+    return value;
+  }
+
  private:
   friend class internal::MenuRunnerImpl;
-  friend class test::MenuControllerTest;
-  friend class test::MenuControllerTestApi;
-  friend class test::MenuControllerUITest;
+  friend class MenuControllerTest;
   friend class MenuHostRootView;
   friend class MenuItemView;
   friend class SubmenuView;
+  friend class test::MenuControllerTestApi;
+  friend class test::MenuControllerUITest;
+
+  struct MenuPart;
 
   class MenuScrollTask;
 
@@ -310,7 +352,7 @@ class VIEWS_EXPORT MenuController
     ~State();
 
     // The selected menu item.
-    raw_ptr<MenuItemView> item = nullptr;
+    raw_ptr<MenuItemView, DanglingUntriaged> item = nullptr;
 
     // Used to capture a hot tracked child button when a nested menu is opened
     // and to restore the hot tracked state when exiting a nested menu.
@@ -325,46 +367,11 @@ class VIEWS_EXPORT MenuController
     // Position of the initial menu.
     MenuAnchorPosition anchor = MenuAnchorPosition::kTopLeft;
 
-    // The direction child menus have opened in.
-    std::list<bool> open_leading;
-
     // Bounds for the monitor we're showing on.
     gfx::Rect monitor_bounds;
 
     // Is the current menu a context menu.
     bool context_menu = false;
-  };
-
-  // Used by GetMenuPart to indicate the menu part at a particular location.
-  struct MenuPart {
-    // Type of part.
-    enum class Type { kNone, kMenuItem, kScrollUp, kScrollDown };
-
-    // Convenience for testing type == kScrollDown or type == kScrollUp.
-    bool is_scroll() const {
-      return type == Type::kScrollDown || type == Type::kScrollUp;
-    }
-
-    // Type of part.
-    Type type = Type::kNone;
-
-    // If type is kMenuItem, this is the menu item the mouse is over, otherwise
-    // this is null.
-    // NOTE: if type is kMenuItem and the mouse is not over a valid menu item
-    //       but is over a menu (for example, the mouse is over a separator or
-    //       empty menu), this is null and parent is the menu the mouse was
-    //       clicked on.
-    MenuItemView* menu = nullptr;
-
-    // If type is kMenuItem but the mouse is not over a menu item this is the
-    // parent of the menu item the user clicked on. Otherwise this is null.
-    MenuItemView* parent = nullptr;
-
-    // This is the submenu the mouse is over.
-    SubmenuView* submenu = nullptr;
-
-    // Whether the controller should apply SELECTION_OPEN_SUBMENU to this item.
-    bool should_submenu_show = false;
   };
 
   // Sets the selection to |menu_item|. A value of NULL unselects
@@ -386,9 +393,6 @@ class VIEWS_EXPORT MenuController
   // Creates a MenuController. See |for_drop_| member for details on |for_drop|.
   MenuController(bool for_drop, internal::MenuControllerDelegate* delegate);
 
-  MenuController(const MenuController&) = delete;
-  MenuController& operator=(const MenuController&) = delete;
-
   ~MenuController() override;
 
   // Invokes AcceleratorPressed() on the hot tracked view if there is one.
@@ -396,7 +400,7 @@ class VIEWS_EXPORT MenuController
   // flags of the received key event.
   bool SendAcceleratorToHotTrackedView(int event_flags);
 
-  void UpdateInitialLocation(const gfx::Rect& bounds,
+  void UpdateInitialLocation(const gfx::Rect& anchor_bounds,
                              MenuAnchorPosition position,
                              bool context_menu);
 
@@ -427,18 +431,7 @@ class VIEWS_EXPORT MenuController
   // If over_any_menu is non-null it is set to indicate whether the location
   // is over any menu. It is possible for this to return NULL, but
   // over_any_menu to be true. For example, the user clicked on a separator.
-  MenuItemView* GetMenuItemAt(View* menu, int x, int y);
-
-  // If there is an empty menu item at the specified location, it is returned.
-  MenuItemView* GetEmptyMenuItemAt(View* source, int x, int y);
-
-  // Returns true if the coordinate is over the scroll buttons of the
-  // SubmenuView's MenuScrollViewContainer. If true is returned, part is set to
-  // indicate which scroll button the coordinate is.
-  bool IsScrollButtonAt(SubmenuView* source,
-                        int x,
-                        int y,
-                        MenuPart::Type* part);
+  MenuItemView* GetMenuItemAt(View* menu, const gfx::Point& location);
 
   // Returns the target for the mouse event. The coordinates are in terms of
   // source's scroll view container.
@@ -460,17 +453,6 @@ class VIEWS_EXPORT MenuController
   // target at |source_loc|.
   MenuHostRootView* GetRootView(SubmenuView* source,
                                 const gfx::Point& source_loc);
-
-  // Converts the located event from |source|'s geometry to |dst|'s geometry,
-  // iff the root view of source and dst differ.
-  void ConvertLocatedEventForRootView(View* source,
-                                      View* dst,
-                                      ui::LocatedEvent* event);
-
-  // Returns true if the SubmenuView contains the specified location. This does
-  // NOT included the scroll buttons, only the submenu view.
-  bool DoesSubmenuContainLocation(SubmenuView* submenu,
-                                  const gfx::Point& screen_loc);
 
   // Returns whether the location is over the ACTIONABLE_SUBMENU's submenu area.
   bool IsLocationOverSubmenuAreaOfActionableSubmenu(
@@ -520,24 +502,26 @@ class VIEWS_EXPORT MenuController
   void StartCancelAllTimer();
   void StopCancelAllTimer();
 
-  // Calculates the bounds of the menu to show. is_leading is set to match the
-  // direction the menu opened in. Also calculates anchor that system compositor
-  // can use to position the menu.
+  // Calculates the bounds of the menu to show. `resulting_direction` is set to
+  // match the direction the menu opened in. Also calculates anchor that system
+  // compositor can use to position the menu. Resulting menu bounds, and bounds
+  // set for the `anchor` are in screen coordinates.
   gfx::Rect CalculateMenuBounds(MenuItemView* item,
-                                bool prefer_leading,
-                                bool* is_leading,
+                                MenuOpenDirection preferred_open_direction,
+                                MenuOpenDirection* resulting_direction,
                                 ui::OwnedWindowAnchor* anchor);
 
-  // Calculates the bubble bounds of the menu to show. is_leading is set to
-  // match the direction the menu opened in. Also calculates anchor that system
-  // compositor can use to position the menu.
+  // Calculates the bubble bounds of the menu to show. `resulting_direction` is
+  // set to match the direction the menu opened in. Also calculates anchor that
+  // system compositor can use to position the menu.
   // TODO(msisov): anchor.anchor_rect equals to returned rect at the moment as
   // bubble menu bounds are used only by ash, as its backend uses menu bounds
   // instead of anchor for positioning.
-  gfx::Rect CalculateBubbleMenuBounds(MenuItemView* item,
-                                      bool prefer_leading,
-                                      bool* is_leading,
-                                      ui::OwnedWindowAnchor* anchor);
+  gfx::Rect CalculateBubbleMenuBounds(
+      MenuItemView* item,
+      MenuOpenDirection preferred_open_direction,
+      MenuOpenDirection* resulting_direction,
+      ui::OwnedWindowAnchor* anchor);
 
   // Returns the depth of the menu.
   static size_t MenuDepth(MenuItemView* item);
@@ -601,7 +585,7 @@ class VIEWS_EXPORT MenuController
   void UpdateScrolling(const MenuPart& part);
 
   // Stops scrolling.
-  void StopScrolling();
+  void StopScrollingViaButton();
 
   // Updates active mouse view from the location of the event and sends it
   // the appropriate events. This is used to send mouse events to child views so
@@ -662,6 +646,19 @@ class VIEWS_EXPORT MenuController
                                   const gfx::Point& item_loc,
                                   ui::OwnedWindowAnchor* anchor);
 
+  // Possibly forwards the specified `event` to an annotation callback, if one
+  // is present, and returns the result (default false if no callback is set).
+  bool MaybeForwardToAnnotation(SubmenuView* source,
+                                const ui::LocatedEvent& event);
+
+  // Returns the direction in which the most recent child menu opened for a menu
+  // at the given `depth`.
+  MenuOpenDirection GetChildMenuOpenDirectionAtDepth(size_t depth) const;
+
+  // Updates the direction that a child menu opened in for a menu at `depth`.
+  void SetChildMenuOpenDirectionAtDepth(size_t depth,
+                                        MenuOpenDirection direction);
+
   // The active instance.
   static MenuController* active_instance_;
 
@@ -688,6 +685,13 @@ class VIEWS_EXPORT MenuController
   // user moves the mouse all submenus don't immediately pop.
   State pending_state_;
   State state_;
+
+  // The direction in which the most recent child menu opened for a menu at a
+  // given depth. The direction for a menu at depth N is stored at position N-1.
+  // This information is used as a hint when computing child menu bounds. The
+  // intention is to have child menus at a given depth open in the same
+  // direction if possible.
+  std::vector<MenuOpenDirection> child_menu_open_direction_;
 
   // If the user accepted the selection, this is the result.
   raw_ptr<MenuItemView> result_ = nullptr;
@@ -718,7 +722,7 @@ class VIEWS_EXPORT MenuController
   base::OneShotTimer cancel_all_timer_;
 
   // Drop target.
-  raw_ptr<MenuItemView> drop_target_ = nullptr;
+  raw_ptr<MenuItemView, DanglingUntriaged> drop_target_ = nullptr;
   MenuDelegate::DropPosition drop_position_ =
       MenuDelegate::DropPosition::kUnknow;
 
@@ -728,7 +732,7 @@ class VIEWS_EXPORT MenuController
 
   // An optional NativeView to which gestures will be forwarded to if
   // RunType::SEND_GESTURE_EVENTS_TO_OWNER is set.
-  gfx::NativeView native_view_for_gestures_ = nullptr;
+  gfx::NativeView native_view_for_gestures_ = gfx::NativeView();
 
   // Indicates a possible drag operation.
   bool possible_drag_ = false;
@@ -753,8 +757,8 @@ class VIEWS_EXPORT MenuController
   // If true, we're in the middle of invoking ShowAt on a submenu.
   bool showing_submenu_ = false;
 
-  // Task for scrolling the menu. If non-null indicates a scroll is currently
-  // underway.
+  // Task for scrolling the menu via scroll button. If non-null, indicates a
+  // scroll is currently underway.
   std::unique_ptr<MenuScrollTask> scroll_task_;
 
   // The lock to keep the menu button pressed while a menu is visible.
@@ -779,10 +783,10 @@ class VIEWS_EXPORT MenuController
   // screen coordinates). Otherwise this will be (0, 0).
   gfx::Point menu_start_mouse_press_loc_;
 
-  // If the mouse was under the menu when the menu was run, this will have its
-  // location. Otherwise it will be null. This is used to ignore mouse move
-  // events triggered by the menu opening, to avoid selecting the menu item
-  // over the mouse.
+  // Set to the location, relative to the root menu item's widget, of the mouse
+  // cursor if any submenu is opened while the cursor is over that menu. This is
+  // used to ignore mouse move events triggered by the menu opening, to avoid
+  // auto-selecting the menu item under the mouse.
   absl::optional<gfx::Point> menu_open_mouse_loc_;
 
   // Controls behavior differences between a combobox and other types of menu
@@ -823,12 +827,18 @@ class VIEWS_EXPORT MenuController
   // Currently showing alerted menu items. Updated when submenus open and close.
   base::flat_set<MenuItemView*> alerted_items_;
 
-  // Whether scroll buttons are currently enabled (as they are temporarily
-  // disabled when either end of the menu is reached)
-  bool scroll_buttons_enabled = true;
-
   // The rounded corners of the context menu.
   absl::optional<gfx::RoundedCornersF> rounded_corners_ = absl::nullopt;
+
+  // The current annotation callbacks. Callbacks will be wrapped in such a way
+  // that a callback list can be used, with the return value as an out
+  // parameter. See `AnnotationCallback` for more information.
+  base::RepeatingCallbackList<void(bool&, const ui::LocatedEvent& event)>
+      annotation_callbacks_;
+
+  // A histogram name for recording the time from menu host initialization to
+  // its successful presentation
+  absl::optional<std::string> show_menu_host_duration_histogram_;
 };
 
 }  // namespace views

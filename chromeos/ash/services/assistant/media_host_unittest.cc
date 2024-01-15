@@ -91,15 +91,19 @@ class MediaControllerMock : public media_session::mojom::MediaController {
        mojo::PendingRemote<media_session::mojom::MediaControllerImageObserver>
            observer));
   MOCK_METHOD(void, SeekTo, (::base::TimeDelta seek_time));
+  MOCK_METHOD(void, SkipAd, ());
   MOCK_METHOD(void, ScrubTo, (::base::TimeDelta seek_time));
   MOCK_METHOD(void, EnterPictureInPicture, ());
   MOCK_METHOD(void, ExitPictureInPicture, ());
-  MOCK_METHOD(void, SetAudioSinkId, (const absl::optional<std::string>& id));
+  MOCK_METHOD(void, SetAudioSinkId, (const std::optional<std::string>& id));
   MOCK_METHOD(void, ToggleMicrophone, ());
   MOCK_METHOD(void, ToggleCamera, ());
   MOCK_METHOD(void, HangUp, ());
   MOCK_METHOD(void, Raise, ());
   MOCK_METHOD(void, SetMute, (bool mute));
+  MOCK_METHOD(void, RequestMediaRemoting, ());
+  MOCK_METHOD(void, EnterAutoPictureInPicture, ());
+
   void AddObserver(
       mojo::PendingRemote<media_session::mojom::MediaControllerObserver> remote)
       override {
@@ -167,7 +171,7 @@ class MediaSessionObserverMock
               (media_session::mojom::MediaSessionInfoPtr info));
   MOCK_METHOD(void,
               MediaSessionMetadataChanged,
-              (const absl::optional<::media_session::MediaMetadata>& metadata));
+              (const std::optional<::media_session::MediaMetadata>& metadata));
   MOCK_METHOD(
       void,
       MediaSessionActionsChanged,
@@ -179,7 +183,7 @@ class MediaSessionObserverMock
                   std::vector<::media_session::MediaImage>>& images)));
   MOCK_METHOD(void,
               MediaSessionPositionChanged,
-              (const absl::optional<::media_session::MediaPosition>& position));
+              (const std::optional<::media_session::MediaPosition>& position));
 
   mojo::PendingRemote<media_session::mojom::MediaSessionObserver>
   BindNewPipeAndPassRemote() {
@@ -472,7 +476,7 @@ TEST_F(MediaHostTest, ShouldForwardLibassistantMediaSessionUpdates) {
   testing::StrictMock<MediaSessionObserverMock> media_session_observer;
   AddMediaSessionObserver(media_session_observer);
 
-  absl::optional<media_session::MediaMetadata> expected_output =
+  std::optional<media_session::MediaMetadata> expected_output =
       media_session::MediaMetadata();
   expected_output->title = u"the title";
   expected_output->artist = u"the artist";

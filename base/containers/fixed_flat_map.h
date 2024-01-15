@@ -5,6 +5,7 @@
 #ifndef BASE_CONTAINERS_FIXED_FLAT_MAP_H_
 #define BASE_CONTAINERS_FIXED_FLAT_MAP_H_
 
+#include <algorithm>
 #include <array>
 #include <functional>
 #include <utility>
@@ -91,19 +92,41 @@ using fixed_flat_map = base::
 // Utility function to simplify constructing a fixed_flat_map from a fixed list
 // of keys and values. Requires that the passed in `data` contains unique keys.
 //
+// Large inputs will run into compiler limits, e.g. "constexpr evaluation hit
+// maximum step limit". In that case, use `MakeFixedFlatMap(sorted_unique)`.
+//
 // Example usage:
-//   constexpr auto kMap = base::MakeFixedFlatMap<base::StringPiece, int>(
+//   constexpr auto kMap = base::MakeFixedFlatMap<std::string_view, int>(
 //       {{"foo", 1}, {"bar", 2}, {"baz", 3}});
 template <class Key, class Mapped, size_t N, class Compare = std::less<>>
-constexpr fixed_flat_map<Key, Mapped, N, Compare> MakeFixedFlatMap(
-    std::pair<Key, Mapped>(&&data)[N],
+consteval fixed_flat_map<Key, Mapped, N, Compare> MakeFixedFlatMap(
+    std::pair<Key, Mapped> (&&data)[N],
     const Compare& comp = Compare()) {
   using FixedFlatMap = fixed_flat_map<Key, Mapped, N, Compare>;
   typename FixedFlatMap::value_compare value_comp{comp};
-  internal::InsertionSort(data, data + N, value_comp);
+  if (!internal::is_sorted_and_unique(data, value_comp)) {
+    std::sort(data, data + N, value_comp);
+    // If this CHECK fails, a compiler error will occur because CHECK failure
+    // is not consteval. Either the provided data wasn't unique, or the
+    // provided comparison can't establish a strict ordering on it.
+    CHECK(internal::is_sorted_and_unique(data, value_comp));
+  }
+  return FixedFlatMap(
+      sorted_unique, internal::ToArray<typename FixedFlatMap::value_type>(data),
+      comp);
+}
+
+// Performs sorting at runtime. Do not introduce new calls to this.
+// Use MakeFixedFlatMap() or FixedFlatMap() instead.
+// https://crbug.com/1513684
+template <class Key, class Mapped, size_t N, class Compare = std::less<>>
+constexpr fixed_flat_map<Key, Mapped, N, Compare> MakeFixedFlatMapNonConsteval(
+    std::pair<Key, Mapped> (&&data)[N],
+    const Compare& comp = Compare()) {
+  using FixedFlatMap = fixed_flat_map<Key, Mapped, N, Compare>;
+  typename FixedFlatMap::value_compare value_comp{comp};
+  std::sort(data, data + N, value_comp);
   CHECK(internal::is_sorted_and_unique(data, value_comp));
-  // Specify the value_type explicitly to ensure that the returned array has
-  // immutable keys.
   return FixedFlatMap(
       sorted_unique, internal::ToArray<typename FixedFlatMap::value_type>(data),
       comp);

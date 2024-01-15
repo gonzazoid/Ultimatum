@@ -12,6 +12,7 @@
 
 #include "base/files/file_path.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "chrome/common/buildflags.h"
@@ -36,9 +37,8 @@ class ChromeContentClient : public content::ContentClient {
   static const base::FilePath::CharType kNotPresent[];
 #endif
 
-  static const char kPDFExtensionPluginName[];
-  static const char kPDFInternalPluginName[];
-  static const base::FilePath::CharType kPDFPluginPath[];
+  static const base::FilePath::CharType kPDFExtensionPluginPath[];
+  static const base::FilePath::CharType kPDFInternalPluginPath[];
 
   ChromeContentClient();
   ~ChromeContentClient() override;
@@ -70,11 +70,6 @@ class ChromeContentClient : public content::ContentClient {
   base::RefCountedMemory* GetDataResourceBytes(int resource_id) override;
   std::string GetDataResourceString(int resource_id) override;
   gfx::Image& GetNativeImageNamed(int resource_id) override;
-#if BUILDFLAG(IS_MAC)
-  base::FilePath GetChildProcessPath(
-      int child_flags,
-      const base::FilePath& helpers_path) override;
-#endif  // BUILDFLAG(IS_MAC)
   std::string GetProcessTypeNameInEnglish(int type) override;
   blink::OriginTrialPolicy* GetOriginTrialPolicy() override;
 #if BUILDFLAG(IS_ANDROID)

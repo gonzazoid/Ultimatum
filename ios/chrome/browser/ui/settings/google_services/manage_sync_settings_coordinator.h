@@ -5,7 +5,8 @@
 #ifndef IOS_CHROME_BROWSER_UI_SETTINGS_GOOGLE_SERVICES_MANAGE_SYNC_SETTINGS_COORDINATOR_H_
 #define IOS_CHROME_BROWSER_UI_SETTINGS_GOOGLE_SERVICES_MANAGE_SYNC_SETTINGS_COORDINATOR_H_
 
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
+#import "ios/chrome/browser/ui/settings/google_services/manage_sync_settings_constants.h"
 
 @class ManageSyncSettingsCoordinator;
 
@@ -33,16 +34,27 @@
 // relies on GoogleServicesSettingsCoordinator to commit the sync changes.
 @interface ManageSyncSettingsCoordinator : ChromeCoordinator
 
-- (instancetype)initWithBaseViewController:(UIViewController*)viewController
-                                   browser:(Browser*)browser NS_UNAVAILABLE;
+// Delegate.
+@property(nonatomic, weak) id<ManageSyncSettingsCoordinatorDelegate> delegate;
 
+// Initializes ManageSyncSettingsCoordinator to present its controller modally.
+- (instancetype)initWithBaseViewController:(UIViewController*)viewController
+                                   browser:(Browser*)browser
+                              accountState:
+                                  (SyncSettingsAccountState)accountState
+    NS_DESIGNATED_INITIALIZER;
+
+// Initializes ManageSyncSettingsCoordinator to view its controller by pushing
+// it on top of the navigation stack.
 - (instancetype)initWithBaseNavigationController:
                     (UINavigationController*)navigationController
                                          browser:(Browser*)browser
+                                    accountState:
+                                        (SyncSettingsAccountState)accountState
     NS_DESIGNATED_INITIALIZER;
 
-// Delegate.
-@property(nonatomic, weak) id<ManageSyncSettingsCoordinatorDelegate> delegate;
+- (instancetype)initWithBaseViewController:(UIViewController*)viewController
+                                   browser:(Browser*)browser NS_UNAVAILABLE;
 
 @end
 

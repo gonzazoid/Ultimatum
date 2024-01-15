@@ -15,6 +15,7 @@
 #include "base/strings/stringprintf.h"
 #include "services/metrics/public/cpp/ukm_decode.h"
 #include "services/metrics/public/cpp/ukm_source.h"
+#include "services/metrics/public/cpp/ukm_source_id.h"
 #include "services/metrics/public/mojom/ukm_interface.mojom.h"
 #include "url/gurl.h"
 
@@ -27,7 +28,7 @@ static const uint64_t BIT_FILTER_LAST32 = 0xffffffffULL;
 
 struct SourceData {
   raw_ptr<UkmSource> source;
-  std::vector<mojom::UkmEntry*> entries;
+  std::vector<raw_ptr<mojom::UkmEntry, VectorExperimental>> entries;
 };
 
 std::string GetName(const ukm::builders::EntryDecoder& decoder, uint64_t hash) {
@@ -86,6 +87,9 @@ base::Value UkmDebugDataExtractor::GetStructuredData(
   base::Value::Dict ukm_data;
 
   ukm_data.Set("state", ukm_service->recording_enabled_);
+  ukm_data.Set("msbb_state", ukm_service->recording_enabled(MSBB));
+  ukm_data.Set("extension_state", ukm_service->recording_enabled(EXTENSIONS));
+  ukm_data.Set("app_state", ukm_service->recording_enabled(APPS));
   ukm_data.Set("client_id",
                base::StringPrintf("%016" PRIx64, ukm_service->client_id_));
   ukm_data.Set("session_id", static_cast<int>(ukm_service->session_id_));
@@ -111,16 +115,18 @@ base::Value UkmDebugDataExtractor::GetStructuredData(
       source_dict.Set("id",
                       UkmDebugDataExtractor::UInt64AsPairOfInt(src->id()));
       source_dict.Set("url", base::Value(src->url().spec()));
+      source_dict.Set("type", GetSourceIdTypeDebugString(src->id()));
     } else {
       source_dict.Set("id", UkmDebugDataExtractor::UInt64AsPairOfInt(kv.first));
+      source_dict.Set("type", GetSourceIdTypeDebugString(kv.first));
     }
 
     base::Value::List entries_list;
-    for (auto* entry : kv.second.entries) {
+    for (ukm::mojom::UkmEntry* entry : kv.second.entries) {
       entries_list.Append(ConvertEntryToDict(ukm_service->decode_map_, *entry));
     }
 
-    source_dict.Set("entries", std::move(entries_list));
+    source_dict.Set("events", std::move(entries_list));
 
     sources_list.Append(std::move(source_dict));
   }

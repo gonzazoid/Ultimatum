@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <memory>
 
+#include "base/callback_list.h"
 #include "base/feature_list.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
@@ -16,6 +17,7 @@
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/metrics/delegating_provider.h"
+#include "components/metrics/metrics_logs_event_manager.h"
 #include "components/metrics/metrics_provider.h"
 #include "components/metrics/metrics_rotation_scheduler.h"
 #include "components/metrics/ukm_demographic_metrics_provider.h"
@@ -28,11 +30,13 @@ class PrefService;
 FORWARD_DECLARE_TEST(ChromeMetricsServiceClientTest, TestRegisterUKMProviders);
 FORWARD_DECLARE_TEST(IOSChromeMetricsServiceClientTest,
                      TestRegisterUkmProvidersWhenUKMFeatureEnabled);
+class ChromeMetricsServiceClientTestIgnoredForAppMetrics;
 
 namespace metrics {
 class MetricsServiceClient;
 class UkmBrowserTestBase;
-}
+class UkmRecorderClientInterfaceRegistry;
+}  // namespace metrics
 
 namespace ukm {
 class Report;
@@ -91,7 +95,7 @@ class UkmService : public UkmRecorderImpl {
 #endif
 
   // Records all collected data into logs, and writes to disk.
-  void Flush();
+  void Flush(metrics::MetricsLogsEventManager::CreateReason reason);
 
   // Deletes all unsent local data (Sources, Events, aggregate info for
   // collected event metrics, etc.).
@@ -103,9 +107,15 @@ class UkmService : public UkmRecorderImpl {
   // Deletes all unsent local data related to Apps.
   void PurgeAppsData();
 
+  // Deletes all unsent local data related to MSBB.
+  void PurgeMsbbData();
+
   // Resets the client prefs (client_id/session_id). |reason| should be passed
   // to provide the reason of the reset - this is only used for UMA logging.
   void ResetClientState(ResetReason reason);
+
+  // Called if this install is detected as cloned.
+  void OnClonedInstallDetected();
 
   // Registers the specified |provider| to provide additional metrics into the
   // UKM log. Should be called during MetricsService initialization only.
@@ -124,6 +134,10 @@ class UkmService : public UkmRecorderImpl {
 
   uint64_t client_id() const { return client_id_; }
 
+  ukm::UkmReportingService& reporting_service_for_testing() {
+    return reporting_service_;
+  }
+
   // Makes sure that the serialized UKM report can be parsed.
   static bool LogCanBeParsed(const std::string& serialized_data);
 
@@ -135,13 +149,23 @@ class UkmService : public UkmRecorderImpl {
   friend ::ukm::UkmTestHelper;
   friend ::ukm::debug::UkmDebugDataExtractor;
   friend ::ukm::UkmUtilsForTest;
+
   FRIEND_TEST_ALL_PREFIXES(::ChromeMetricsServiceClientTest,
                            TestRegisterUKMProviders);
+  friend ::ChromeMetricsServiceClientTestIgnoredForAppMetrics;
   FRIEND_TEST_ALL_PREFIXES(::IOSChromeMetricsServiceClientTest,
                            TestRegisterUkmProvidersWhenUKMFeatureEnabled);
   FRIEND_TEST_ALL_PREFIXES(UkmServiceTest,
                            PurgeExtensionDataFromUnsentLogStore);
   FRIEND_TEST_ALL_PREFIXES(UkmServiceTest, PurgeAppDataFromUnsentLogStore);
+  FRIEND_TEST_ALL_PREFIXES(UkmServiceTest, PurgeMsbbDataFromUnsentLogStore);
+  FRIEND_TEST_ALL_PREFIXES(UkmServiceTest, PurgeAppDataLogMetadataUpdate);
+
+  // Updates the |recorder_client_registry_| about the changes in
+  // UkmRecorderParameters. Thread-safe.
+  void OnRecorderParametersChanged() override;
+
+  void OnRecorderParametersChangedImpl();
 
   // Starts metrics client initialization.
   void StartInitTask();
@@ -155,7 +179,7 @@ class UkmService : public UkmRecorderImpl {
 
   // Constructs a new Report from available data and stores it in
   // unsent_log_store_.
-  void BuildAndStoreLog();
+  void BuildAndStoreLog(metrics::MetricsLogsEventManager::CreateReason reason);
 
   // Starts an upload of the next log from unsent_log_store_.
   void StartScheduledUpload();
@@ -170,6 +194,13 @@ class UkmService : public UkmRecorderImpl {
   void AddSyncedUserNoiseBirthYearAndGenderToReport(Report* report);
 
   void SetInitializationCompleteCallbackForTesting(base::OnceClosure callback);
+
+  // UkmRecorderClientInterfaceRegistry keeps track of attached MojoUkmRecorder
+  // clients. This registry can be used to update all the attached clients with
+  // the new UkmRecorderParameters, which then can be used by clients to decide
+  // whether UkmInterface::AddEntry IPC needs to be sent or not.
+  std::unique_ptr<metrics::UkmRecorderClientInterfaceRegistry>
+      recorder_client_registry_;
 
   // A weak pointer to the PrefService used to read and write preferences.
   raw_ptr<PrefService> pref_service_;
@@ -212,7 +243,16 @@ class UkmService : public UkmRecorderImpl {
   // A callback invoked when initialization of the service is complete.
   base::OnceClosure initialization_complete_callback_;
 
+  // Subscription for a callback that runs if this install is detected as
+  // cloned.
+  base::CallbackListSubscription cloned_install_subscription_;
+
   SEQUENCE_CHECKER(sequence_checker_);
+
+  // SequencedTaskRunner is used to dispatch OnRecorderParametersChanged() on
+  // the correct sequence, set on construction using the instance assigned to
+  // the current thread.
+  scoped_refptr<base::SequencedTaskRunner> task_runner_;
 
   // Weak pointers factory used to post task on different threads. All weak
   // pointers managed by this factory have the same lifetime as UkmService.

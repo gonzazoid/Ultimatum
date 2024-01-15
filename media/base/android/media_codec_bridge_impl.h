@@ -11,7 +11,7 @@
 #include <string>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "media/base/android/media_codec_bridge.h"
 #include "media/base/android/media_codec_direction.h"
@@ -61,8 +61,12 @@ class MEDIA_EXPORT VideoCodecConfig {
 
   // Enables the async MediaCodec.Callback API. |on_buffers_available_cb|
   // will be called when input or output buffers are available. This will be
-  // called on an arbitrary thread, so use BindToCurrentLoop if needed.
+  // called on an arbitrary thread, so use base::BindPostTaskToCurrentDefault if
+  // needed.
   base::RepeatingClosure on_buffers_available_cb;
+
+  // The name of decoder/encoder. It's used to create the MediaCodec instance.
+  std::string name;
 };
 
 // A bridge to a Java MediaCodec.
@@ -90,7 +94,8 @@ class MEDIA_EXPORT MediaCodecBridgeImpl : public MediaCodecBridge {
       const base::android::JavaRef<jobject>& media_crypto,
       // Enables the async MediaCodec.Callback API. |on_buffers_available_cb|
       // will be called when input or output buffers are available. This will be
-      // called on an arbitrary thread, so use BindToCurrentLoop if needed.
+      // called on an arbitrary thread, so use
+      // base::BindPostTaskToCurrentDefault if needed.
       //
       // May only be used on API level 23 and higher.
       base::RepeatingClosure on_buffers_available_cb =
@@ -107,18 +112,19 @@ class MEDIA_EXPORT MediaCodecBridgeImpl : public MediaCodecBridge {
 
   // MediaCodecBridge implementation.
   void Stop() override;
-  MediaCodecStatus Flush() override;
-  MediaCodecStatus GetOutputSize(gfx::Size* size) override;
-  MediaCodecStatus GetOutputSamplingRate(int* sampling_rate) override;
-  MediaCodecStatus GetOutputChannelCount(int* channel_count) override;
-  MediaCodecStatus GetOutputColorSpace(gfx::ColorSpace* color_space) override;
-  MediaCodecStatus GetInputFormatStride(int* stride) override;
-  MediaCodecStatus GetInputFormatYPlaneHeight(int* height) override;
-  MediaCodecStatus QueueInputBuffer(int index,
+  MediaCodecResult Flush() override;
+  MediaCodecResult GetOutputSize(gfx::Size* size) override;
+  MediaCodecResult GetOutputSamplingRate(int* sampling_rate) override;
+  MediaCodecResult GetOutputChannelCount(int* channel_count) override;
+  MediaCodecResult GetOutputColorSpace(gfx::ColorSpace* color_space) override;
+  MediaCodecResult GetInputFormat(int* stride,
+                                  int* slice_height,
+                                  gfx::Size* encoded_size) override;
+  MediaCodecResult QueueInputBuffer(int index,
                                     const uint8_t* data,
                                     size_t data_size,
                                     base::TimeDelta presentation_time) override;
-  MediaCodecStatus QueueSecureInputBuffer(
+  MediaCodecResult QueueSecureInputBuffer(
       int index,
       const uint8_t* data,
       size_t data_size,
@@ -129,9 +135,9 @@ class MEDIA_EXPORT MediaCodecBridgeImpl : public MediaCodecBridge {
       absl::optional<EncryptionPattern> encryption_pattern,
       base::TimeDelta presentation_time) override;
   void QueueEOS(int input_buffer_index) override;
-  MediaCodecStatus DequeueInputBuffer(base::TimeDelta timeout,
+  MediaCodecResult DequeueInputBuffer(base::TimeDelta timeout,
                                       int* index) override;
-  MediaCodecStatus DequeueOutputBuffer(base::TimeDelta timeout,
+  MediaCodecResult DequeueOutputBuffer(base::TimeDelta timeout,
                                        int* index,
                                        size_t* offset,
                                        size_t* size,
@@ -140,10 +146,10 @@ class MEDIA_EXPORT MediaCodecBridgeImpl : public MediaCodecBridge {
                                        bool* key_frame) override;
 
   void ReleaseOutputBuffer(int index, bool render) override;
-  MediaCodecStatus GetInputBuffer(int input_buffer_index,
+  MediaCodecResult GetInputBuffer(int input_buffer_index,
                                   uint8_t** data,
                                   size_t* capacity) override;
-  MediaCodecStatus CopyFromOutputBuffer(int index,
+  MediaCodecResult CopyFromOutputBuffer(int index,
                                         size_t offset,
                                         void* dst,
                                         size_t num) override;
@@ -169,8 +175,8 @@ class MEDIA_EXPORT MediaCodecBridgeImpl : public MediaCodecBridge {
   // Gets the address of the data in the given output buffer given by |index|
   // and |offset|. The number of bytes available to read is written to
   // |*capacity| and the address is written to |*addr|. Returns
-  // MEDIA_CODEC_ERROR if an error occurs, or MEDIA_CODEC_OK otherwise.
-  MediaCodecStatus GetOutputBufferAddress(int index,
+  // kError if an error occurs, or kOk otherwise.
+  MediaCodecResult GetOutputBufferAddress(int index,
                                           size_t offset,
                                           const uint8_t** addr,
                                           size_t* capacity);
@@ -185,9 +191,6 @@ class MEDIA_EXPORT MediaCodecBridgeImpl : public MediaCodecBridge {
 
   // The Java MediaCodecBridge instance.
   base::android::ScopedJavaGlobalRef<jobject> j_bridge_;
-
-  // Controls if we return real color space or hardcode sRGB.
-  const bool use_real_color_space_;
 };
 
 }  // namespace media

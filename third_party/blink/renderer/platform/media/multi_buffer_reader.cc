@@ -8,8 +8,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
 #include "net/base/net_errors.h"
@@ -20,6 +20,7 @@ MultiBufferReader::MultiBufferReader(
     MultiBuffer* multibuffer,
     int64_t start,
     int64_t end,
+    bool is_client_audio_element,
     base::RepeatingCallback<void(int64_t, int64_t)> progress_callback,
     scoped_refptr<base::SingleThreadTaskRunner> task_runner)
     : multibuffer_(multibuffer),
@@ -32,6 +33,7 @@ MultiBufferReader::MultiBufferReader(
       current_buffer_size_(0),
       pinned_range_(0, 0),
       pos_(start),
+      is_client_audio_element_(is_client_audio_element),
       preload_pos_(-1),
       loading_(true),
       current_wait_size_(0),

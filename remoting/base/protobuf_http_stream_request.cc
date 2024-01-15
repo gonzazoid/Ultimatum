@@ -4,7 +4,7 @@
 
 #include "remoting/base/protobuf_http_stream_request.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/time/time.h"
 #include "remoting/base/protobuf_http_client.h"
@@ -89,7 +89,7 @@ base::TimeDelta ProtobufHttpStreamRequest::GetRequestTimeoutDuration() const {
   return base::TimeDelta();
 }
 
-void ProtobufHttpStreamRequest::OnDataReceived(base::StringPiece string_piece,
+void ProtobufHttpStreamRequest::OnDataReceived(std::string_view string_view,
                                                base::OnceClosure resume) {
   if (stream_ready_timeout_timer_.IsRunning()) {
     stream_ready_timeout_timer_.Stop();
@@ -100,7 +100,7 @@ void ProtobufHttpStreamRequest::OnDataReceived(base::StringPiece string_piece,
   }
 
   DCHECK(stream_parser_);
-  stream_parser_->Append(string_piece);
+  stream_parser_->Append(string_view);
   std::move(resume).Run();
 }
 

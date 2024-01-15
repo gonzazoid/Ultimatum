@@ -13,6 +13,8 @@
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/apps/app_service/browser_app_instance_registry.h"
 #include "chrome/browser/apps/app_service/publishers/borealis_apps.h"
+#include "chrome/browser/apps/app_service/publishers/browser_shortcuts_crosapi_publisher.h"
+#include "chrome/browser/apps/app_service/publishers/bruschetta_apps.h"
 #include "chrome/browser/apps/app_service/publishers/built_in_chromeos_apps.h"
 #include "chrome/browser/apps/app_service/publishers/crostini_apps.h"
 #include "chrome/browser/apps/app_service/publishers/extension_apps_chromeos.h"
@@ -21,7 +23,11 @@
 #include "chrome/browser/ash/crosapi/browser_util.h"
 #include "chrome/browser/ash/guest_os/guest_os_registry_service_factory.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
+#include "chrome/browser/web_applications/app_service/browser_shortcuts.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_helper.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "components/services/app_service/public/cpp/instance_registry.h"
+#include "components/user_manager/user_manager.h"
 #endif
 
 namespace apps {
@@ -44,6 +50,17 @@ PublisherHost::PublisherHost(AppServiceProxy* proxy) : proxy_(proxy) {
 PublisherHost::~PublisherHost() = default;
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+apps::StandaloneBrowserApps* PublisherHost::StandaloneBrowserApps() {
+  return standalone_browser_apps_ ? standalone_browser_apps_.get() : nullptr;
+}
+
+apps::BrowserShortcutsCrosapiPublisher*
+PublisherHost::BrowserShortcutsCrosapiPublisher() {
+  return browser_shortcuts_crosapi_publisher_
+             ? browser_shortcuts_crosapi_publisher_.get()
+             : nullptr;
+}
+
 void PublisherHost::SetArcIsRegistered() {
   chrome_apps_->ObserveArc();
 }
@@ -110,6 +127,9 @@ void PublisherHost::Initialize() {
     borealis_apps_->Initialize();
   }
 
+  bruschetta_apps_ = std::make_unique<BruschettaApps>(proxy_);
+  bruschetta_apps_->Initialize();
+
   crostini_apps_ = std::make_unique<CrostiniApps>(proxy_);
   crostini_apps_->Initialize();
 
@@ -125,21 +145,36 @@ void PublisherHost::Initialize() {
     plugin_vm_apps_ = std::make_unique<PluginVmApps>(proxy_);
     plugin_vm_apps_->Initialize();
   }
+
   // Lacros does not support multi-signin, so only create for the primary
   // profile. This also avoids creating an instance for the lock screen app
   // profile and ensures there is only one instance of StandaloneBrowserApps.
   if (crosapi::browser_util::IsLacrosEnabled() &&
       ash::ProfileHelper::IsPrimaryProfile(profile)) {
-    standalone_browser_apps_ = std::make_unique<StandaloneBrowserApps>(proxy_);
+    standalone_browser_apps_ =
+        std::make_unique<apps::StandaloneBrowserApps>(proxy_);
     standalone_browser_apps_->Initialize();
   }
 
   // `web_apps_` can be initialized itself.
   web_apps_ = std::make_unique<web_app::WebApps>(proxy_);
+
+  if (chromeos::features::IsCrosWebAppShortcutUiUpdateEnabled()) {
+    if (crosapi::browser_util::IsLacrosEnabled()) {
+      if (user_manager::UserManager::Get()->IsPrimaryUser(
+              ash::BrowserContextHelper::Get()->GetUserByBrowserContext(
+                  profile))) {
+        browser_shortcuts_crosapi_publisher_ =
+            std::make_unique<apps::BrowserShortcutsCrosapiPublisher>(proxy_);
+      }
+    } else {
+      browser_shortcuts_ = std::make_unique<web_app::BrowserShortcuts>(proxy_);
+    }
+  }
 #else
   web_apps_ = std::make_unique<web_app::WebApps>(proxy_);
 
-  chrome_apps_ = std::make_unique<ExtensionApps>(proxy_, AppType::kChromeApp);
+  chrome_apps_ = std::make_unique<ExtensionApps>(proxy_);
   chrome_apps_->Initialize();
 #endif
 }

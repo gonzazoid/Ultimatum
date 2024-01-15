@@ -7,127 +7,85 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
-#include "base/containers/circular_deque.h"
-#include "base/containers/flat_map.h"
-#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "chrome/browser/web_applications/commands/web_app_command.h"
-#include "chrome/browser/web_applications/os_integration/os_integration_manager.h"
-#include "chrome/browser/web_applications/web_app_id.h"
-#include "components/webapps/browser/installable/installable_metrics.h"
-#include "components/webapps/browser/uninstall_result_code.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chrome/browser/web_applications/jobs/uninstall/uninstall_job.h"
+#include "chrome/browser/web_applications/locks/all_apps_lock.h"
+#include "chrome/browser/web_applications/web_app_constants.h"
 
+class GURL;
 class Profile;
-class PrefService;
 
 namespace webapps {
 enum class UninstallResultCode;
-enum class WebappUninstallSource;
 }  // namespace webapps
 
 namespace web_app {
 
-class FullSystemLockDescription;
-class LockDescription;
-class OsIntegrationManager;
-class WebAppIconManager;
-class WebAppInstallManager;
-class WebAppRegistrar;
-class WebAppSyncBridge;
-class WebAppTranslationManager;
-class WebAppUninstallJob;
-
-// Uninstall the web app.
-class WebAppUninstallCommand : public WebAppCommand {
+// This command acquires the AllAppsLock needed by three uninstall related jobs:
+// `RemoveInstallUrlJob`, `RemoveInstallSourceJob`, and `RemoveWebAppJob`.
+class WebAppUninstallCommand
+    : public WebAppCommand<AllAppsLock, webapps::UninstallResultCode> {
  public:
-  using UninstallWebAppCallback =
-      base::OnceCallback<void(webapps::UninstallResultCode)>;
-  using RemoveManagementTypeCallback =
-      base::RepeatingCallback<void(const AppId& app_id)>;
-
-  WebAppUninstallCommand(
-      const AppId& app_id,
-      absl::optional<WebAppManagement::Type> management_type_or_all,
+  static std::unique_ptr<WebAppUninstallCommand> CreateForRemoveInstallUrl(
       webapps::WebappUninstallSource uninstall_source,
-      UninstallWebAppCallback callback,
-      Profile* profile,
-      OsIntegrationManager* os_integration_manager,
-      WebAppSyncBridge* sync_bridge,
-      WebAppIconManager* icon_manager,
-      WebAppRegistrar* registrar,
-      WebAppInstallManager* install_manager,
-      WebAppTranslationManager* translation_manager);
+      Profile& profile,
+      absl::optional<webapps::AppId> app_id,
+      WebAppManagement::Type install_source,
+      GURL install_url,
+      UninstallJob::Callback callback);
+
+  static std::unique_ptr<WebAppUninstallCommand> CreateForRemoveInstallSource(
+      webapps::WebappUninstallSource uninstall_source,
+      Profile& profile,
+      webapps::AppId app_id,
+      WebAppManagement::Type install_source,
+      UninstallJob::Callback callback);
+
+  static std::unique_ptr<WebAppUninstallCommand> CreateForRemoveWebApp(
+      webapps::WebappUninstallSource uninstall_source,
+      Profile& profile,
+      webapps::AppId app_id,
+      UninstallJob::Callback callback);
+
   ~WebAppUninstallCommand() override;
 
-  void Start() override;
-  void OnSyncSourceRemoved() override;
-  void OnShutdown() override;
+  // WebAppCommand:
+  void OnShutdown(base::PassKey<WebAppCommandManager>) const override;
 
-  LockDescription& lock_description() const override;
-  base::Value ToDebugValue() const override;
-
-  void SetRemoveManagementTypeCallbackForTesting(
-      RemoveManagementTypeCallback callback);
+ protected:
+  // WebAppCommand:
+  void StartWithLock(std::unique_ptr<AllAppsLock> lock) override;
 
  private:
-  // Used to store information needed for uninstalling an app with app_id.
-  struct UninstallInfo {
-    UninstallInfo(AppId app_id,
-                  absl::optional<WebAppManagement::Type> management_type_or_all,
-                  webapps::WebappUninstallSource uninstall_source);
-    ~UninstallInfo();
-    UninstallInfo(const UninstallInfo& uninstall_info);
-    UninstallInfo(UninstallInfo&& uninstall_info);
-    UninstallInfo& operator=(const UninstallInfo& uninstall_info) = delete;
-    UninstallInfo& operator=(UninstallInfo&& uninstall_info) = delete;
+  // Constructor for RemoveInstallUrlJob.
+  WebAppUninstallCommand(webapps::WebappUninstallSource uninstall_source,
+                         Profile& profile,
+                         absl::optional<webapps::AppId> app_id,
+                         WebAppManagement::Type install_source,
+                         GURL install_url,
+                         UninstallJob::Callback callback);
+  // Constructor for RemoveInstallSourceJob.
+  WebAppUninstallCommand(webapps::WebappUninstallSource uninstall_source,
+                         Profile& profile,
+                         webapps::AppId app_id,
+                         WebAppManagement::Type install_source,
+                         UninstallJob::Callback callback);
+  // Constructor for RemoveWebAppJob.
+  WebAppUninstallCommand(webapps::WebappUninstallSource uninstall_source,
+                         Profile& profile,
+                         webapps::AppId app_id,
+                         UninstallJob::Callback callback);
 
-    AppId app_id;
-    absl::optional<WebAppManagement::Type> management_type_or_all;
-    webapps::WebappUninstallSource uninstall_source;
-  };
+  void OnCompletion(webapps::UninstallResultCode code);
 
-  void AppendUninstallInfoToDebugLog(const UninstallInfo& uninstall_info);
-  void AppendUninstallResultsToDebugLog(const AppId& app_id);
-  void Abort(webapps::UninstallResultCode code);
-  void Uninstall(const AppId& app_id,
-                 const webapps::WebappUninstallSource& uninstall_source);
-  void QueueSubAppsForUninstallIfAny(const AppId& app_id);
-  void RemoveManagementTypeAfterOsUninstallRegistration(
-      const AppId& app_id,
-      const WebAppManagement::Type& install_source,
-      const webapps::WebappUninstallSource& uninstall_source,
-      OsHooksErrors os_hooks_errors);
-  void OnSingleUninstallComplete(const AppId& app_id,
-                                 const webapps::WebappUninstallSource& source,
-                                 webapps::UninstallResultCode code);
-  void MaybeFinishUninstallAndDestruct();
-
-  std::unique_ptr<FullSystemLockDescription> lock_description_;
-  const AppId app_id_;
-  base::circular_deque<UninstallInfo> queued_uninstalls_;
-  base::flat_map<AppId, webapps::UninstallResultCode> uninstall_results_;
-  base::flat_map<AppId, std::unique_ptr<WebAppUninstallJob>>
-      apps_pending_uninstall_;
-  base::Value::Dict debug_log_;
-  bool all_uninstalled_queued_ = false;
-
-  UninstallWebAppCallback callback_;
-  RemoveManagementTypeCallback management_type_removed_callback_for_testing_;
-
-  raw_ptr<PrefService> profile_prefs_;
-  raw_ptr<OsIntegrationManager> os_integration_manager_;
-  raw_ptr<WebAppSyncBridge> sync_bridge_;
-  raw_ptr<WebAppIconManager> icon_manager_;
-  raw_ptr<WebAppRegistrar> registrar_;
-  raw_ptr<WebAppInstallManager> install_manager_;
-  raw_ptr<WebAppTranslationManager> translation_manager_;
+  std::unique_ptr<AllAppsLock> lock_;
+  std::unique_ptr<UninstallJob> job_;
 
   base::WeakPtrFactory<WebAppUninstallCommand> weak_factory_{this};
 };
 
 }  // namespace web_app
 
-#endif  // CHROME_BROWSER_WEB_APPLICATIONS_COMMANDS_WEB_APP_INSTALL_COMMAND_H_
+#endif  // CHROME_BROWSER_WEB_APPLICATIONS_COMMANDS_WEB_APP_UNINSTALL_COMMAND_H_

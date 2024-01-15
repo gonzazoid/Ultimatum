@@ -50,6 +50,8 @@ static WebFeature AlgorithmIdToFeature(WebCryptoAlgorithmId id) {
       return WebFeature::kCryptoAlgorithmPbkdf2;
     case kWebCryptoAlgorithmIdEd25519:
       return WebFeature::kCryptoAlgorithmEd25519;
+    case kWebCryptoAlgorithmIdX25519:
+      return WebFeature::kCryptoAlgorithmX25519;
   }
 
   NOTREACHED();
@@ -135,6 +137,16 @@ void HistogramAlgorithmAndKey(ExecutionContext* context,
   // context.
   HistogramAlgorithm(context, algorithm);
   HistogramKey(context, key);
+}
+
+void HistogramDeriveBitsTruncation(ExecutionContext* context,
+                                   unsigned int length_bits,
+                                   WebCryptoWarningType status) {
+  if (length_bits == 0) {
+    UseCounter::Count(context, WebFeature::kSubtleCryptoDeriveBitsZeroLength);
+  } else if (status == blink::kWebCryptoWarningTypeDeriveBitsTruncated) {
+    UseCounter::Count(context, WebFeature::kSubtleCryptoDeriveBitsTruncation);
+  }
 }
 
 }  // namespace blink

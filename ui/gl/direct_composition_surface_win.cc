@@ -7,10 +7,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "ui/gfx/presentation_feedback.h"
 #include "ui/gfx/swap_result.h"
@@ -44,22 +44,24 @@ DirectCompositionSurfaceWin::PendingFrame::operator=(PendingFrame&& other) =
 
 DirectCompositionSurfaceWin::DirectCompositionSurfaceWin(
     GLDisplayEGL* display,
-    HWND parent_window,
     VSyncCallback vsync_callback,
     const Settings& settings)
     : GLSurfaceEGL(display),
-      child_window_(parent_window),
+      d3d11_device_(GetDirectCompositionD3D11Device()),
       vsync_callback_(std::move(vsync_callback)),
       vsync_thread_(VSyncThreadWin::GetInstance()),
-      task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       max_pending_frames_(settings.max_pending_frames),
       root_surface_(new DirectCompositionChildSurfaceWin(
           display,
+          d3d11_device_,
           settings.use_angle_texture_offset)),
       layer_tree_(std::make_unique<DCLayerTree>(
           settings.disable_nv12_dynamic_textures,
+          settings.disable_vp_auto_hdr,
           settings.disable_vp_scaling,
           settings.disable_vp_super_resolution,
+          settings.force_dcomp_triple_buffer_video_swap_chain,
           settings.no_downscaled_overlay_promotion)) {}
 
 DirectCompositionSurfaceWin::~DirectCompositionSurfaceWin() {
@@ -72,14 +74,11 @@ bool DirectCompositionSurfaceWin::Initialize(GLSurfaceFormat format) {
     return false;
   }
 
-  d3d11_device_ = QueryD3D11DeviceObjectFromANGLE();
-
   child_window_.Initialize();
 
-  window_ = child_window_.window();
-
-  if (!layer_tree_->Initialize(window_))
+  if (!layer_tree_->Initialize(window(), d3d11_device_)) {
     return false;
+  }
 
   if (!root_surface_->Initialize(GLSurfaceFormat()))
     return false;
@@ -123,10 +122,7 @@ bool DirectCompositionSurfaceWin::Resize(const gfx::Size& size,
                                          float scale_factor,
                                          const gfx::ColorSpace& color_space,
                                          bool has_alpha) {
-  // Force a resize and redraw (but not a move, activate, etc.).
-  if (!SetWindowPos(window_, nullptr, 0, 0, size.width(), size.height(),
-                    SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOCOPYBITS |
-                        SWP_NOOWNERZORDER | SWP_NOZORDER)) {
+  if (!child_window_.Resize(size)) {
     return false;
   }
   return root_surface_->Resize(size, scale_factor, color_space, has_alpha);
@@ -134,7 +130,7 @@ bool DirectCompositionSurfaceWin::Resize(const gfx::Size& size,
 
 gfx::SwapResult DirectCompositionSurfaceWin::SwapBuffers(
     PresentationCallback callback,
-    FrameData data) {
+    gfx::FrameData data) {
   TRACE_EVENT0("gpu", "DirectCompositionSurfaceWin::SwapBuffers");
 
   gfx::Rect swap_rect;
@@ -158,10 +154,10 @@ gfx::SwapResult DirectCompositionSurfaceWin::PostSubBuffer(
     int width,
     int height,
     PresentationCallback callback,
-    FrameData data) {
+    gfx::FrameData data) {
   // The arguments are ignored because SetDrawRectangle specified the area to
   // be swapped.
-  return SwapBuffers(std::move(callback), std::move(data));
+  return SwapBuffers(std::move(callback), data);
 }
 
 gfx::VSyncProvider* DirectCompositionSurfaceWin::GetVSyncProvider() {
@@ -187,7 +183,7 @@ void DirectCompositionSurfaceWin::OnVSync(base::TimeTicks vsync_time,
 }
 
 bool DirectCompositionSurfaceWin::ScheduleDCLayer(
-    std::unique_ptr<ui::DCRendererLayerParams> params) {
+    std::unique_ptr<DCLayerOverlayParams> params) {
   return layer_tree_->ScheduleDCLayer(std::move(params));
 }
 
@@ -298,10 +294,6 @@ void DirectCompositionSurfaceWin::HandleVSyncOnMainThread(
   last_vsync_interval_ = interval;
 
   CheckPendingFrames();
-
-  UMA_HISTOGRAM_COUNTS_100("GPU.DirectComposition.NumPendingFrames",
-                           pending_frames_.size());
-
   if (SupportsLowLatencyPresentation() && VSyncCallbackEnabled() &&
       pending_frames_.size() < max_pending_frames_) {
     DCHECK(vsync_callback_);

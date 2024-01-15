@@ -10,8 +10,10 @@
 #include <map>
 #include <set>
 
+#include "base/memory/raw_ref.h"
 #include "base/memory/ref_counted.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/thread_annotations.h"
 #include "base/types/pass_key.h"
 #include "base/values.h"
@@ -46,7 +48,7 @@ class GinJavaBridgeMessageFilter : public BrowserMessageFilter,
   // Called on the UI thread.
   void AddRoutingIdForHost(GinJavaBridgeDispatcherHost* host,
                            RenderFrameHost* render_frame_host);
-  void RemoveHost(GinJavaBridgeDispatcherHost* host);
+  void RemoveRoutingIdForHost(RenderFrameHost* render_frame_host);
 
   static scoped_refptr<GinJavaBridgeMessageFilter> FromHost(
       AgentSchedulingGroupHost& agent_scheduling_group,
@@ -66,14 +68,19 @@ class GinJavaBridgeMessageFilter : public BrowserMessageFilter,
   //  2. As RenderFrames pass away earlier than JavaScript wrappers,
   //     messages from the latter can arrive after the RenderFrame has been
   //     removed from the WebContents' routing table.
-  typedef std::map<int32_t, scoped_refptr<GinJavaBridgeDispatcherHost>> HostMap;
+  //
+  // A secondary map (guarded by the same lock) exists to track whether a given
+  // routing ID is a main frame, which is used exclusively for metrics.
+  using HostMap = std::map<int32_t, scoped_refptr<GinJavaBridgeDispatcherHost>>;
+  using HostPrimaryMainFrameMap = std::map<int32_t, bool>;
 
   ~GinJavaBridgeMessageFilter() override;
 
   // Called on the background thread.
-  scoped_refptr<GinJavaBridgeDispatcherHost> FindHost();
+  scoped_refptr<GinJavaBridgeDispatcherHost> FindHost(
+      bool* is_in_primary_main_frame = nullptr);
   void OnGetMethods(GinJavaBoundObject::ObjectID object_id,
-                    std::set<std::string>* returned_method_names);
+                    std::vector<std::string>* returned_method_names);
   void OnHasMethod(GinJavaBoundObject::ObjectID object_id,
                    const std::string& method_name,
                    bool* result);
@@ -81,20 +88,24 @@ class GinJavaBridgeMessageFilter : public BrowserMessageFilter,
                       const std::string& method_name,
                       const base::Value::List& arguments,
                       base::Value::List* result,
-                      content::GinJavaBridgeError* error_code);
+                      mojom::GinJavaBridgeError* error_code);
   void OnObjectWrapperDeleted(GinJavaBoundObject::ObjectID object_id);
 
   // Accessed both from UI and background threads.
   HostMap hosts_ GUARDED_BY(hosts_lock_);
+  HostPrimaryMainFrameMap hosts_is_in_primary_main_frame_
+      GUARDED_BY(hosts_lock_);
   base::Lock hosts_lock_;
 
   // The `AgentSchedulingGroupHost` that this object is associated with. This
   // filter is installed on the host's channel.
-  AgentSchedulingGroupHost& agent_scheduling_group_;
+  const raw_ref<AgentSchedulingGroupHost, AcrossTasksDanglingUntriaged>
+      agent_scheduling_group_;
 
   // The routing id of the RenderFrameHost whose request we are processing.
   // Used on the background thread.
-  int32_t current_routing_id_;
+  int32_t current_routing_id_ = MSG_ROUTING_NONE;
+  const int32_t render_process_id_;
 };
 
 }  // namespace content

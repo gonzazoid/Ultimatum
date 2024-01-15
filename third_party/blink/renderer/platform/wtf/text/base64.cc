@@ -27,296 +27,109 @@
 #include <limits.h>
 
 #include "third_party/blink/renderer/platform/wtf/text/string_buffer.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_utf8_adaptor.h"
+#include "third_party/modp_b64/modp_b64.h"
 
 namespace WTF {
 
-static const char kBase64EncMap[64] = {
-    0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B,
-    0x4C, 0x4D, 0x4E, 0x4F, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56,
-    0x57, 0x58, 0x59, 0x5A, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67,
-    0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x70, 0x71, 0x72,
-    0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x30, 0x31, 0x32,
-    0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x2B, 0x2F};
-
-static const char kBase64DecMap[128] = {
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3E, 0x00, 0x00, 0x00, 0x3F,
-    0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
-    0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12,
-    0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20, 0x21, 0x22, 0x23, 0x24,
-    0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F, 0x30,
-    0x31, 0x32, 0x33, 0x00, 0x00, 0x00, 0x00, 0x00};
-
 namespace {
 
-class Base64EncoderImpl {
- public:
-  Base64EncoderImpl(wtf_size_t len, Base64EncodePolicy policy);
-
-  wtf_size_t out_length() const { return out_length_; }
-  void Encode(base::span<const uint8_t> data, base::span<char> out) const;
-
- private:
-  wtf_size_t in_length_ = 0;
-  wtf_size_t out_length_ = 0;
-  bool insert_lfs_ = false;
-};
-
-Base64EncoderImpl::Base64EncoderImpl(wtf_size_t len,
-                                     Base64EncodePolicy policy) {
-  if (!len)
-    return;
-
-  // If the input string is pathologically large, just return nothing.
-  // Note: Keep this in sync with the "outLength" computation below.
-  // Rather than being perfectly precise, this is a bit conservative.
-  const unsigned kMaxInputBufferSize = UINT_MAX / 77 * 76 / 4 * 3 - 2;
-  if (len > kMaxInputBufferSize)
-    return;
-
-  in_length_ = len;
-  out_length_ = ((len + 2) / 3) * 4;
-
-  // Deal with the 76 character per line limit specified in RFC 2045.
-  insert_lfs_ = (policy == kBase64InsertLFs && out_length_ > 76);
-  if (insert_lfs_)
-    out_length_ += ((out_length_ - 1) / 76);
+// https://infra.spec.whatwg.org/#ascii-whitespace
+// Matches the definition of IsHTMLSpace in html_parser_idioms.h.
+template <typename CharType>
+bool IsAsciiWhitespace(CharType character) {
+  return character <= ' ' &&
+         (character == ' ' || character == '\n' || character == '\t' ||
+          character == '\r' || character == '\f');
 }
 
-void Base64EncoderImpl::Encode(base::span<const uint8_t> data,
-                               base::span<char> out) const {
-  DCHECK_EQ(in_length_, data.size());
-  DCHECK_EQ(out_length_, out.size());
-  DCHECK_NE(0u, out.size());
-
-  auto len = data.size();
-  unsigned sidx = 0;
-  unsigned didx = 0;
-
-  int count = 0;
-
-  // 3-byte to 4-byte conversion + 0-63 to ascii printable conversion
-  if (len > 1) {
-    while (sidx < len - 2) {
-      if (insert_lfs_) {
-        if (count && !(count % 76))
-          out[didx++] = '\n';
-        count += 4;
-      }
-      out[didx++] = kBase64EncMap[(data[sidx] >> 2) & 077];
-      out[didx++] = kBase64EncMap[((data[sidx + 1] >> 4) & 017) |
-                                  ((data[sidx] << 4) & 077)];
-      out[didx++] = kBase64EncMap[((data[sidx + 2] >> 6) & 003) |
-                                  ((data[sidx + 1] << 2) & 077)];
-      out[didx++] = kBase64EncMap[data[sidx + 2] & 077];
-      sidx += 3;
-    }
+ModpDecodePolicy GetModpPolicy(Base64DecodePolicy policy) {
+  switch (policy) {
+    case Base64DecodePolicy::kForgiving:
+      return ModpDecodePolicy::kForgiving;
+    case Base64DecodePolicy::kNoPaddingValidation:
+      return ModpDecodePolicy::kNoPaddingValidation;
   }
+}
 
-  if (sidx < len) {
-    if (insert_lfs_ && (count > 0) && !(count % 76))
-      out[didx++] = '\n';
+// Invokes modp_b64 without stripping whitespace.
+bool Base64DecodeRaw(const StringView& in,
+                     Vector<char>& out,
+                     Base64DecodePolicy policy) {
+  // Using StringUTF8Adaptor means we avoid allocations if the string is 8-bit
+  // ascii, which is likely given that base64 is required to be ascii.
+  StringUTF8Adaptor adaptor(in);
+  out.resize(modp_b64_decode_len(adaptor.size()));
+  size_t output_size = modp_b64_decode(out.data(), adaptor.data(), adaptor.size(),
+                                       GetModpPolicy(policy));
+  if (output_size == MODP_B64_ERROR)
+    return false;
 
-    out[didx++] = kBase64EncMap[(data[sidx] >> 2) & 077];
-    if (sidx < len - 1) {
-      out[didx++] = kBase64EncMap[((data[sidx + 1] >> 4) & 017) |
-                                  ((data[sidx] << 4) & 077)];
-      out[didx++] = kBase64EncMap[(data[sidx + 1] << 2) & 077];
-    } else {
-      out[didx++] = kBase64EncMap[(data[sidx] << 4) & 077];
-    }
-  }
-
-  // Add padding
-  while (didx < out.size()) {
-    out[didx] = '=';
-    ++didx;
-  }
+  out.resize(output_size);
+  return true;
 }
 
 }  // namespace
 
-String Base64Encode(base::span<const uint8_t> data, Base64EncodePolicy policy) {
-  Base64EncoderImpl encoder(data.size(), policy);
-  auto size = encoder.out_length();
-  if (size == 0)
+String Base64Encode(base::span<const uint8_t> data) {
+  size_t encode_len = modp_b64_encode_data_len(data.size());
+  CHECK_LE(data.size(), MODP_B64_MAX_INPUT_LEN);
+  StringBuffer<LChar> result(encode_len);
+  if (encode_len == 0)
     return String();
-
-  StringBuffer<LChar> result(size);
-  base::span<char> result_span(reinterpret_cast<char*>(result.Characters()),
-                               result.length());
-  encoder.Encode(data, result_span);
+  const size_t output_size = modp_b64_encode_data(
+      reinterpret_cast<char*>(result.Characters()),
+      reinterpret_cast<const char*>(data.data()), data.size());
+  DCHECK_EQ(output_size, encode_len);
   return result.Release();
 }
 
-void Base64Encode(base::span<const uint8_t> data,
-                  Vector<char>& out,
-                  Base64EncodePolicy policy) {
-  Base64EncoderImpl encoder(data.size(), policy);
-  auto size = encoder.out_length();
-  if (size == 0) {
+void Base64Encode(base::span<const uint8_t> data, Vector<char>& out) {
+  size_t encode_len = modp_b64_encode_data_len(data.size());
+  CHECK_LE(data.size(), MODP_B64_MAX_INPUT_LEN);
+  if (encode_len == 0) {
     out.clear();
     return;
   }
-
-  out.resize(size);
-  encoder.Encode(data, out);
+  out.resize(encode_len);
+  const size_t output_size = modp_b64_encode_data(
+      out.data(), reinterpret_cast<const char*>(data.data()), data.size());
+  DCHECK_EQ(output_size, encode_len);
 }
 
-bool Base64Decode(const Vector<char>& in,
+bool Base64Decode(const StringView& in,
                   Vector<char>& out,
-                  CharacterMatchFunctionPtr should_ignore_character,
                   Base64DecodePolicy policy) {
-  out.clear();
-
-  // If the input string is pathologically large, just return nothing.
-  if (in.size() > UINT_MAX)
-    return false;
-
-  return Base64Decode(in.data(), in.size(), out, should_ignore_character,
-                      policy);
-}
-
-template <typename T>
-static inline bool Base64DecodeInternal(
-    const T* data,
-    unsigned length,
-    Vector<char>& out,
-    CharacterMatchFunctionPtr should_ignore_character,
-    Base64DecodePolicy policy) {
-  out.clear();
-  if (!length)
-    return true;
-
-  out.Grow(length);
-
-  unsigned equals_sign_count = 0;
-  unsigned out_length = 0;
-  bool had_error = false;
-  for (unsigned idx = 0; idx < length; ++idx) {
-    UChar ch = data[idx];
-    if (ch == '=') {
-      ++equals_sign_count;
-      // There should never be more than 2 padding characters.
-      if (policy == kBase64ValidatePadding && equals_sign_count > 2) {
-        had_error = true;
-        break;
-      }
-    } else if (('0' <= ch && ch <= '9') || ('A' <= ch && ch <= 'Z') ||
-               ('a' <= ch && ch <= 'z') || ch == '+' || ch == '/') {
-      if (equals_sign_count) {
-        had_error = true;
-        break;
-      }
-      out[out_length++] = kBase64DecMap[ch];
-    } else if (!should_ignore_character || !should_ignore_character(ch)) {
-      had_error = true;
-      break;
+  switch (policy) {
+    case Base64DecodePolicy::kForgiving: {
+      // https://infra.spec.whatwg.org/#forgiving-base64-decode
+      // Step 1 is to remove all whitespace. However, checking for whitespace
+      // slows down the "happy" path. Since any whitespace will fail normal
+      // decoding from modp_b64_decode, just try again if we detect a failure.
+      // This shouldn't be much slower for whitespace inputs.
+      //
+      // TODO(csharrison): Most callers use String inputs so ToString() should
+      // be fast. Still, we should add a RemoveCharacters method to StringView
+      // to avoid a double allocation for non-String-backed StringViews.
+      return Base64DecodeRaw(in, out, policy) ||
+             Base64DecodeRaw(in.ToString().RemoveCharacters(&IsAsciiWhitespace),
+                             out, policy);
+    }
+    case Base64DecodePolicy::kNoPaddingValidation: {
+      return Base64DecodeRaw(in, out, policy);
     }
   }
-
-  if (out_length < out.size())
-    out.Shrink(out_length);
-
-  if (had_error)
-    return false;
-
-  if (!out_length)
-    return !equals_sign_count;
-
-  // There should be no padding if length is a multiple of 4.
-  // We use (outLength + equalsSignCount) instead of length because we don't
-  // want to account for ignored characters.
-  if (policy == kBase64ValidatePadding && equals_sign_count &&
-      (out_length + equals_sign_count) % 4)
-    return false;
-
-  // Valid data is (n * 4 + [0,2,3]) characters long.
-  if ((out_length % 4) == 1)
-    return false;
-
-  // 4-byte to 3-byte conversion
-  out_length -= (out_length + 3) / 4;
-  if (!out_length)
-    return false;
-
-  unsigned sidx = 0;
-  unsigned didx = 0;
-  if (out_length > 1) {
-    while (didx < out_length - 2) {
-      out[didx] = (((out[sidx] << 2) & 255) | ((out[sidx + 1] >> 4) & 003));
-      out[didx + 1] =
-          (((out[sidx + 1] << 4) & 255) | ((out[sidx + 2] >> 2) & 017));
-      out[didx + 2] = (((out[sidx + 2] << 6) & 255) | (out[sidx + 3] & 077));
-      sidx += 4;
-      didx += 3;
-    }
-  }
-
-  if (didx < out_length)
-    out[didx] = (((out[sidx] << 2) & 255) | ((out[sidx + 1] >> 4) & 003));
-
-  if (++didx < out_length)
-    out[didx] = (((out[sidx + 1] << 4) & 255) | ((out[sidx + 2] >> 2) & 017));
-
-  if (out_length < out.size())
-    out.Shrink(out_length);
-
-  return true;
 }
 
-bool Base64Decode(const char* data,
-                  unsigned length,
-                  Vector<char>& out,
-                  CharacterMatchFunctionPtr should_ignore_character,
-                  Base64DecodePolicy policy) {
-  return Base64DecodeInternal<LChar>(reinterpret_cast<const LChar*>(data),
-                                     length, out, should_ignore_character,
-                                     policy);
-}
-
-bool Base64Decode(const UChar* data,
-                  unsigned length,
-                  Vector<char>& out,
-                  CharacterMatchFunctionPtr should_ignore_character,
-                  Base64DecodePolicy policy) {
-  return Base64DecodeInternal<UChar>(data, length, out, should_ignore_character,
-                                     policy);
-}
-
-bool Base64Decode(const String& in,
-                  Vector<char>& out,
-                  CharacterMatchFunctionPtr should_ignore_character,
-                  Base64DecodePolicy policy) {
-  if (in.empty())
-    return Base64DecodeInternal<LChar>(nullptr, 0, out, should_ignore_character,
-                                       policy);
-  if (in.Is8Bit())
-    return Base64DecodeInternal<LChar>(in.Characters8(), in.length(), out,
-                                       should_ignore_character, policy);
-  return Base64DecodeInternal<UChar>(in.Characters16(), in.length(), out,
-                                     should_ignore_character, policy);
-}
-
-bool Base64UnpaddedURLDecode(const String& in,
-                             Vector<char>& out,
-                             CharacterMatchFunctionPtr should_ignore_character,
-                             Base64DecodePolicy policy) {
+bool Base64UnpaddedURLDecode(const String& in, Vector<char>& out) {
   if (in.Contains('+') || in.Contains('/') || in.Contains('='))
     return false;
 
-  return Base64Decode(NormalizeToBase64(in), out, should_ignore_character,
-                      policy);
+  return Base64Decode(NormalizeToBase64(in), out);
 }
 
-String Base64URLEncode(const char* data,
-                       unsigned length,
-                       Base64EncodePolicy policy) {
-  return Base64Encode(base::as_bytes(base::make_span(data, length)), policy)
+String Base64URLEncode(const char* data, unsigned length) {
+  return Base64Encode(base::as_bytes(base::make_span(data, length)))
       .Replace('+', '-')
       .Replace('/', '_');
 }

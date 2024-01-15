@@ -47,6 +47,8 @@ class WTF_EXPORT StringBuilder {
   StringBuilder& operator=(const StringBuilder&) = delete;
   ~StringBuilder() { ClearBuffer(); }
 
+  bool DoesAppendCauseOverflow(unsigned length) const;
+
   void Append(const UChar*, unsigned length);
   void Append(const LChar*, unsigned length);
 
@@ -167,6 +169,7 @@ class WTF_EXPORT StringBuilder {
   String ToString();
   AtomicString ToAtomicString();
   String Substring(unsigned start, unsigned length) const;
+  StringView SubstringView(unsigned start, unsigned length) const;
 
   operator StringView() const {
     if (Is8Bit()) {

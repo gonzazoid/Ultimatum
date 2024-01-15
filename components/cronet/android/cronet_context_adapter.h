@@ -11,10 +11,9 @@
 #include <memory>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/threading/thread.h"
 #include "components/cronet/cronet_context.h"
 #include "components/prefs/json_pref_store.h"
@@ -89,10 +88,6 @@ class CronetContextAdapter : public CronetContext::Callback {
   void StopNetLog(JNIEnv* env,
                   const base::android::JavaParamRef<jobject>& jcaller);
 
-  // Whether Cronet's logging should be skipped or not.
-  bool SkipLogging(JNIEnv* env,
-                   const base::android::JavaParamRef<jobject>& jcaller);
-
   // Default net::LOAD flags used to create requests.
   int default_load_flags() const;
 
@@ -156,4 +151,4 @@ class CronetContextAdapter : public CronetContext::Callback {
 
 }  // namespace cronet
 
-#endif  // COMPONENTS_CRONET_ANDROID_CRONET_ADAPTER_H_
+#endif  // COMPONENTS_CRONET_ANDROID_CRONET_CONTEXT_ADAPTER_H_

@@ -6,39 +6,37 @@
 
 #import <algorithm>
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
+#import "base/memory/scoped_refptr.h"
 #import "base/metrics/histogram_macros.h"
 #import "base/strings/sys_string_conversions.h"
 #import "components/reading_list/core/reading_list_model.h"
+#import "components/reading_list/features/reading_list_switches.h"
 #import "components/reading_list/ios/reading_list_model_bridge_observer.h"
 #import "components/url_formatter/url_formatter.h"
 #import "ios/chrome/browser/favicon/favicon_loader.h"
 #import "ios/chrome/browser/favicon/ios_chrome_favicon_loader_factory.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/sync/model/sync_observer_bridge.h"
 #import "ios/chrome/browser/ui/reading_list/reading_list_data_sink.h"
 #import "ios/chrome/browser/ui/reading_list/reading_list_list_item.h"
 #import "ios/chrome/browser/ui/reading_list/reading_list_list_item_factory.h"
 #import "ios/chrome/browser/ui/reading_list/reading_list_list_item_util.h"
 #import "ios/chrome/browser/ui/reading_list/reading_list_table_view_item.h"
 #import "ios/chrome/browser/ui/reading_list/reading_list_utils.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/favicon/favicon_constants.h"
 #import "ios/chrome/common/ui/favicon/favicon_view.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
 // Sorter function that orders ReadingListEntries by their update time.
-bool EntrySorter(const ReadingListEntry* rhs, const ReadingListEntry* lhs) {
+bool EntrySorter(scoped_refptr<const ReadingListEntry> rhs,
+                 scoped_refptr<const ReadingListEntry> lhs) {
   return rhs->UpdateTime() > lhs->UpdateTime();
 }
 }  // namespace
 
-@interface ReadingListMediator ()<ReadingListModelBridgeObserver> {
-  std::unique_ptr<ReadingListModelBridge> _modelBridge;
-  std::unique_ptr<ReadingListModel::ScopedReadingListBatchUpdate> _batchToken;
-}
+@interface ReadingListMediator () <ReadingListModelBridgeObserver,
+                                   SyncObserverModelBridge>
 
 // The model passed on initialization.
 @property(nonatomic, assign) ReadingListModel* model;
@@ -54,17 +52,19 @@ bool EntrySorter(const ReadingListEntry* rhs, const ReadingListEntry* lhs) {
 
 @end
 
-@implementation ReadingListMediator
+@implementation ReadingListMediator {
+  std::unique_ptr<ReadingListModelBridge> _modelBridge;
+  std::unique_ptr<ReadingListModel::ScopedReadingListBatchUpdate> _batchToken;
+  // Observer to keep track of the syncing status.
+  std::unique_ptr<SyncObserverBridge> _syncObserver;
+}
 
 @synthesize dataSink = _dataSink;
-@synthesize model = _model;
-@synthesize shouldMonitorModel = _shouldMonitorModel;
-@synthesize itemFactory = _itemFactory;
-@synthesize faviconLoader = _faviconLoader;
 
 #pragma mark - Public
 
 - (instancetype)initWithModel:(ReadingListModel*)model
+                  syncService:(nonnull syncer::SyncService*)syncService
                 faviconLoader:(nonnull FaviconLoader*)faviconLoader
               listItemFactory:(ReadingListListItemFactory*)itemFactory {
   self = [super init];
@@ -73,6 +73,7 @@ bool EntrySorter(const ReadingListEntry* rhs, const ReadingListEntry* lhs) {
     _itemFactory = itemFactory;
     _shouldMonitorModel = YES;
     _faviconLoader = faviconLoader;
+    _syncObserver = std::make_unique<SyncObserverBridge>(self, syncService);
 
     // This triggers the callback method. Should be created last.
     _modelBridge.reset(new ReadingListModelBridge(self, model));
@@ -80,18 +81,32 @@ bool EntrySorter(const ReadingListEntry* rhs, const ReadingListEntry* lhs) {
   return self;
 }
 
-- (const ReadingListEntry*)entryFromItem:(id<ReadingListListItem>)item {
+- (scoped_refptr<const ReadingListEntry>)entryFromItem:
+    (id<ReadingListListItem>)item {
   return self.model->GetEntryByURL(item.entryURL);
 }
 
 - (void)markEntryRead:(const GURL&)URL {
-  self.model->SetReadStatus(URL, true);
+  self.model->SetReadStatusIfExists(URL, true);
+}
+
+- (void)disconnect {
+  _dataSink = nil;
+  _model = nullptr;
+  _itemFactory = nil;
+  _faviconLoader = nullptr;
+  _modelBridge.reset();
+  _syncObserver.reset();
+}
+
+- (void)dealloc {
+  DCHECK(!_model);
 }
 
 #pragma mark - ReadingListDataSource
 
 - (BOOL)isItemRead:(id<ReadingListListItem>)item {
-  const ReadingListEntry* readingListEntry =
+  scoped_refptr<const ReadingListEntry> readingListEntry =
       self.model->GetEntryByURL(item.entryURL);
 
   if (!readingListEntry) {
@@ -108,10 +123,10 @@ bool EntrySorter(const ReadingListEntry* rhs, const ReadingListEntry* lhs) {
 }
 
 - (void)setReadStatus:(BOOL)read forItem:(id<ReadingListListItem>)item {
-  self.model->SetReadStatus(item.entryURL, read);
+  self.model->SetReadStatusIfExists(item.entryURL, read);
 }
 
-- (const ReadingListEntry*)entryWithURL:(const GURL&)URL {
+- (scoped_refptr<const ReadingListEntry>)entryWithURL:(const GURL&)URL {
   return self.model->GetEntryByURL(URL);
 }
 
@@ -122,32 +137,43 @@ bool EntrySorter(const ReadingListEntry* rhs, const ReadingListEntry* lhs) {
 
 - (void)fillReadItems:(NSMutableArray<id<ReadingListListItem>>*)readArray
           unreadItems:(NSMutableArray<id<ReadingListListItem>>*)unreadArray {
-  std::vector<const ReadingListEntry*> readEntries;
-  std::vector<const ReadingListEntry*> unreadEntries;
+  std::vector<scoped_refptr<const ReadingListEntry>> readEntries;
+  std::vector<scoped_refptr<const ReadingListEntry>> unreadEntries;
 
-  for (const auto& url : self.model->Keys()) {
-    const ReadingListEntry* entry = self.model->GetEntryByURL(url);
+  for (const auto& url : self.model->GetKeys()) {
+    scoped_refptr<const ReadingListEntry> entry =
+        self.model->GetEntryByURL(url);
     DCHECK(entry);
     if (entry->IsRead()) {
-      readEntries.push_back(entry);
+      readEntries.push_back(std::move(entry));
     } else {
-      unreadEntries.push_back(entry);
+      unreadEntries.push_back(std::move(entry));
     }
   }
 
   std::sort(readEntries.begin(), readEntries.end(), EntrySorter);
   std::sort(unreadEntries.begin(), unreadEntries.end(), EntrySorter);
 
-  for (const ReadingListEntry* entry : readEntries) {
-    [readArray addObject:[self.itemFactory cellItemForReadingListEntry:entry]];
+  for (scoped_refptr<const ReadingListEntry> entry : readEntries) {
+    bool needsExplicitUpload =
+        self.model->NeedsExplicitUploadToSyncServer(entry->URL());
+    ListItem<ReadingListListItem>* item =
+        [self.itemFactory cellItemForReadingListEntry:entry.get()
+                                  needsExplicitUpload:needsExplicitUpload];
+    [readArray addObject:item];
   }
 
-  for (const ReadingListEntry* entry : unreadEntries) {
-    [unreadArray
-        addObject:[self.itemFactory cellItemForReadingListEntry:entry]];
+  for (scoped_refptr<const ReadingListEntry> entry : unreadEntries) {
+    bool needsExplicitUpload =
+        self.model->NeedsExplicitUploadToSyncServer(entry->URL());
+    ListItem<ReadingListListItem>* item =
+        [self.itemFactory cellItemForReadingListEntry:entry.get()
+                                  needsExplicitUpload:needsExplicitUpload];
+    [unreadArray addObject:item];
   }
 
-  DCHECK(self.model->Keys().size() == [readArray count] + [unreadArray count]);
+  DCHECK(self.model->GetKeys().size() ==
+         [readArray count] + [unreadArray count]);
 }
 
 - (void)fetchFaviconForItem:(id<ReadingListListItem>)item {
@@ -232,6 +258,16 @@ bool EntrySorter(const ReadingListEntry* rhs, const ReadingListEntry* lhs) {
     [self.dataSink dataSourceChanged];
 }
 
+#pragma mark - SyncObserverModelBridge
+
+- (void)onSyncStateChanged {
+  // If the sync state, especially the account storage state changes, the UI
+  // including cloud icons on items needs to be updated.
+  if ([self hasDataSourceChanged]) {
+    [self.dataSink dataSourceChanged];
+  }
+}
+
 #pragma mark - Private
 
 // Whether the data source has changed.
@@ -268,7 +304,7 @@ bool EntrySorter(const ReadingListEntry* rhs, const ReadingListEntry* lhs) {
         oldItem.entryURL = newItem.entryURL;
         oldItem.distillationState = newItem.distillationState;
         oldItem.distillationDateText = newItem.distillationDateText;
-        oldItem.distillationSizeText = newItem.distillationSizeText;
+        oldItem.showCloudSlashIcon = newItem.showCloudSlashIcon;
       }
       if (oldItem.faviconPageURL != newItem.faviconPageURL) {
         oldItem.faviconPageURL = newItem.faviconPageURL;
@@ -286,7 +322,7 @@ bool EntrySorter(const ReadingListEntry* rhs, const ReadingListEntry* lhs) {
 
 // Logs the deletions histograms for the entry associated with `item`.
 - (void)logDeletionOfItem:(id<ReadingListListItem>)item {
-  const ReadingListEntry* entry = [self entryFromItem:item];
+  scoped_refptr<const ReadingListEntry> entry = [self entryFromItem:item];
 
   if (!entry)
     return;

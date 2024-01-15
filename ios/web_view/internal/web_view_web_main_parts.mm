@@ -13,6 +13,7 @@
 #include "components/autofill/core/common/autofill_payments_features.h"
 #include "components/component_updater/installer_policies/safety_tips_component_installer.h"
 #include "components/password_manager/core/common/password_manager_features.h"
+#import "components/signin/public/base/signin_switches.h"
 #include "components/sync/base/features.h"
 #include "components/variations/variations_ids_provider.h"
 #include "ios/web/public/webui/web_ui_ios_controller_factory.h"
@@ -23,13 +24,10 @@
 #include "ios/web_view/internal/webui/web_view_web_ui_ios_controller_factory.h"
 #include "ui/base/l10n/l10n_util_mac.h"
 #include "ui/base/resource/resource_bundle.h"
+#import "ui/base/resource/resource_scale_factor.h"
 
 #if DCHECK_IS_ON()
 #include "ui/display/screen_base.h"
-#endif
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
 #endif
 
 namespace ios_web_view {
@@ -71,19 +69,22 @@ void WebViewWebMainParts::PreCreateThreads() {
   std::string enable_features = base::JoinString(
       {
           autofill::features::kAutofillUpstream.name,
-          password_manager::features::kEnablePasswordsAccountStorage.name,
-          syncer::kSyncTrustedVaultPassphraseiOSRPC.name,
-          syncer::kSyncTrustedVaultPassphraseRecovery.name,
+          syncer::kSyncPasswordCleanUpAccidentalBatchDeletions.name,
       },
       ",");
   std::string disabled_features = base::JoinString(
       {
+          switches::kEnableFetchingAccountCapabilities.name,
       },
       ",");
-  feature_list->InitializeFromCommandLine(
+  feature_list->InitFromCommandLine(
       /*enable_features=*/enable_features,
       /*disable_features=*/disabled_features);
   base::FeatureList::SetInstance(std::move(feature_list));
+}
+
+void WebViewWebMainParts::PostCreateThreads() {
+  ApplicationContext::GetInstance()->PostCreateThreads();
 }
 
 void WebViewWebMainParts::PreMainMessageLoopRun() {
@@ -117,7 +118,7 @@ void WebViewWebMainParts::PostDestroyThreads() {
 
 void WebViewWebMainParts::LoadNonScalableResources() {
   base::FilePath pak_file;
-  base::PathService::Get(base::DIR_MODULE, &pak_file);
+  base::PathService::Get(base::DIR_ASSETS, &pak_file);
   pak_file = pak_file.Append(FILE_PATH_LITERAL("web_view_resources.pak"));
   ui::ResourceBundle& resource_bundle = ui::ResourceBundle::GetSharedInstance();
   resource_bundle.AddDataPackFromPath(pak_file, ui::kScaleFactorNone);
@@ -125,25 +126,25 @@ void WebViewWebMainParts::LoadNonScalableResources() {
 
 void WebViewWebMainParts::LoadScalableResources() {
   ui::ResourceBundle& resource_bundle = ui::ResourceBundle::GetSharedInstance();
-  if (ui::ResourceBundle::IsScaleFactorSupported(ui::k100Percent)) {
+  if (ui::IsScaleFactorSupported(ui::k100Percent)) {
     base::FilePath pak_file_100;
-    base::PathService::Get(base::DIR_MODULE, &pak_file_100);
+    base::PathService::Get(base::DIR_ASSETS, &pak_file_100);
     pak_file_100 =
         pak_file_100.Append(FILE_PATH_LITERAL("web_view_100_percent.pak"));
     resource_bundle.AddDataPackFromPath(pak_file_100, ui::k100Percent);
   }
 
-  if (ui::ResourceBundle::IsScaleFactorSupported(ui::k200Percent)) {
+  if (ui::IsScaleFactorSupported(ui::k200Percent)) {
     base::FilePath pak_file_200;
-    base::PathService::Get(base::DIR_MODULE, &pak_file_200);
+    base::PathService::Get(base::DIR_ASSETS, &pak_file_200);
     pak_file_200 =
         pak_file_200.Append(FILE_PATH_LITERAL("web_view_200_percent.pak"));
     resource_bundle.AddDataPackFromPath(pak_file_200, ui::k200Percent);
   }
 
-  if (ui::ResourceBundle::IsScaleFactorSupported(ui::k300Percent)) {
+  if (ui::IsScaleFactorSupported(ui::k300Percent)) {
     base::FilePath pak_file_300;
-    base::PathService::Get(base::DIR_MODULE, &pak_file_300);
+    base::PathService::Get(base::DIR_ASSETS, &pak_file_300);
     pak_file_300 =
         pak_file_300.Append(FILE_PATH_LITERAL("web_view_300_percent.pak"));
     resource_bundle.AddDataPackFromPath(pak_file_300, ui::k300Percent);

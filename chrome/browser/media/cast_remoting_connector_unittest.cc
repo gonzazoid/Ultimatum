@@ -8,12 +8,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
-#include "components/media_router/browser/test/mock_media_router.h"
 #include "components/media_router/common/media_route.h"
 #include "components/media_router/common/media_source.h"
 #include "components/media_router/common/pref_names.h"
@@ -103,6 +102,7 @@ class MockMediaRemoter final : public media::mojom::Remoter {
 
   // media::mojom::Remoter implementation.
   MOCK_METHOD0(RequestStart, void());
+  MOCK_METHOD0(StartWithPermissionAlreadyGranted, void());
   MOCK_METHOD1(Stop, void(RemotingStopReason));
   MOCK_METHOD1(SendMessageToSink, void(const std::vector<uint8_t>&));
   MOCK_METHOD1(
@@ -163,7 +163,7 @@ class CastRemotingConnectorTest : public ::testing::Test {
   void CreateConnector(bool remoting_allowed) {
     connector_.reset();  // Call dtor first if there is one created.
     connector_.reset(new CastRemotingConnector(
-        &media_router_, &pref_service_, kRemotingTabId,
+        &pref_service_, kRemotingTabId,
         std::make_unique<MediaRemotingDialogCoordinator>()));
     connector_->set_remoting_allowed_for_testing(remoting_allowed);
   }
@@ -174,7 +174,6 @@ class CastRemotingConnectorTest : public ::testing::Test {
 
  private:
   content::BrowserTaskEnvironment task_environment_;
-  media_router::MockMediaRouter media_router_;
   std::unique_ptr<CastRemotingConnector> connector_;
 };
 
@@ -298,6 +297,10 @@ TEST_F(CastRemotingConnectorTest, NoPermissionToStart) {
               OnStartFailed(RemotingStartFailReason::REMOTING_NOT_PERMITTED))
       .Times(1);
   remoter->Start();
+  RunUntilIdle();
+
+  EXPECT_CALL(source, OnStarted()).Times(1);
+  remoter->StartWithPermissionAlreadyGranted();
   RunUntilIdle();
 }
 

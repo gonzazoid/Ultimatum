@@ -8,15 +8,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/flat_set.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/ranges/algorithm.h"
 #include "base/trace_event/trace_event.h"
 #include "base/win/win_util.h"
-#include "base/win/windows_version.h"
 #include "third_party/skia/include/core/SkPath.h"
 #include "third_party/skia/include/core/SkRegion.h"
 #include "ui/aura/client/aura_constants.h"
@@ -29,7 +28,6 @@
 #include "ui/base/ime/input_method.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/base/win/event_creation_utils.h"
-#include "ui/base/win/shell.h"
 #include "ui/base/win/win_cursor.h"
 #include "ui/compositor/compositor.h"
 #include "ui/compositor/layer.h"
@@ -45,7 +43,6 @@
 #include "ui/gfx/native_widget_types.h"
 #include "ui/gfx/path_win.h"
 #include "ui/views/corewm/tooltip_aura.h"
-#include "ui/views/corewm/tooltip_win.h"
 #include "ui/views/views_features.h"
 #include "ui/views/views_switches.h"
 #include "ui/views/widget/desktop_aura/desktop_drag_drop_client_win.h"
@@ -78,8 +75,9 @@ namespace {
 const int kMouseCaptureRegionBorder = 5;
 
 gfx::Size GetExpandedWindowSize(bool is_translucent, gfx::Size size) {
-  if (!is_translucent || !ui::win::IsAeroGlassEnabled())
+  if (!is_translucent) {
     return size;
+  }
 
   // Some AMD drivers can't display windows that are less than 64x64 pixels,
   // so expand them to be at least that size. http://crbug.com/286609
@@ -127,16 +125,12 @@ bool DesktopWindowTreeHostWin::is_cursor_visible_ = true;
 DesktopWindowTreeHostWin::DesktopWindowTreeHostWin(
     internal::NativeWidgetDelegate* native_widget_delegate,
     DesktopNativeWidgetAura* desktop_native_widget_aura)
-    : message_handler_(new HWNDMessageHandler(
-          this,
-          native_widget_delegate->AsWidget()->GetName())),
-      native_widget_delegate_(native_widget_delegate->AsWidget()->GetWeakPtr()),
+    : native_widget_delegate_(native_widget_delegate->AsWidget()->GetWeakPtr()),
       desktop_native_widget_aura_(desktop_native_widget_aura),
       drag_drop_client_(nullptr),
       should_animate_window_close_(false),
       pending_close_(false),
-      has_non_client_view_(false),
-      tooltip_(nullptr) {}
+      has_non_client_view_(false) {}
 
 DesktopWindowTreeHostWin::~DesktopWindowTreeHostWin() {
   desktop_native_widget_aura_->OnDesktopWindowTreeHostDestroyed(this);
@@ -178,6 +172,10 @@ void DesktopWindowTreeHostWin::Init(const Widget::InitParams& params) {
       !params.remove_standard_frame)
     content_window()->SetProperty(aura::client::kAnimationsDisabledKey, true);
 
+  message_handler_ = HWNDMessageHandler::Create(
+      this, native_widget_delegate_->AsWidget()->GetName(),
+      params.ShouldInitAsHeadless());
+
   ConfigureWindowStyles(message_handler_.get(), params,
                         GetWidget()->widget_delegate(),
                         native_widget_delegate_.get());
@@ -193,7 +191,7 @@ void DesktopWindowTreeHostWin::Init(const Widget::InitParams& params) {
   // We don't have an HWND yet, so scale relative to the nearest screen.
   gfx::Rect pixel_bounds =
       display::win::ScreenWin::DIPToScreenRect(nullptr, params.bounds);
-  message_handler_->Init(parent_hwnd, pixel_bounds, params.headless_mode);
+  message_handler_->Init(parent_hwnd, pixel_bounds);
   CreateCompositor(params.force_software_compositing);
   OnAcceleratedWidgetAvailable();
   InitHost();
@@ -202,8 +200,12 @@ void DesktopWindowTreeHostWin::Init(const Widget::InitParams& params) {
   if (base::FeatureList::IsEnabled(views::features::kWidgetLayering)) {
     // Stack immedately above its parent so that it does not cover other
     // root-level windows.
-    if (params.parent)
+    //
+    // With the exception of menus, to allow them to be displayed on
+    // top of other windows.
+    if (params.parent && params.type != views::Widget::InitParams::TYPE_MENU) {
       StackAbove(params.parent);
+    }
   }
 }
 
@@ -228,14 +230,7 @@ void DesktopWindowTreeHostWin::OnActiveWindowChanged(bool active) {}
 void DesktopWindowTreeHostWin::OnWidgetInitDone() {}
 
 std::unique_ptr<corewm::Tooltip> DesktopWindowTreeHostWin::CreateTooltip() {
-  bool force_legacy_tooltips =
-      (base::win::GetVersion() < base::win::Version::WIN8);
-  if (!force_legacy_tooltips)
-    return std::make_unique<corewm::TooltipAura>();
-
-  DCHECK(!tooltip_);
-  tooltip_ = new corewm::TooltipWin(GetAcceleratedWidget());
-  return base::WrapUnique(tooltip_.get());
+  return std::make_unique<corewm::TooltipAura>();
 }
 
 std::unique_ptr<aura::client::DragDropClient>
@@ -398,6 +393,10 @@ void DesktopWindowTreeHostWin::SetShape(
   message_handler_->SetRegion(gfx::CreateHRGNFromSkRegion(shape));
 }
 
+void DesktopWindowTreeHostWin::SetParent(gfx::AcceleratedWidget parent) {
+  message_handler_->SetParentOrOwner(parent);
+}
+
 void DesktopWindowTreeHostWin::Activate() {
   message_handler_->Activate();
 }
@@ -408,6 +407,10 @@ void DesktopWindowTreeHostWin::Deactivate() {
 
 bool DesktopWindowTreeHostWin::IsActive() const {
   return message_handler_->IsActive();
+}
+
+void DesktopWindowTreeHostWin::PaintAsActiveChanged() {
+  message_handler_->PaintAsActiveChanged();
 }
 
 void DesktopWindowTreeHostWin::Maximize() {
@@ -532,7 +535,7 @@ DesktopWindowTreeHostWin::CreateNonClientFrameView() {
 }
 
 bool DesktopWindowTreeHostWin::ShouldUseNativeFrame() const {
-  return IsTranslucentWindowOpacitySupported();
+  return true;
 }
 
 bool DesktopWindowTreeHostWin::ShouldWindowContentsBeTransparent() const {
@@ -573,10 +576,12 @@ void DesktopWindowTreeHostWin::SetOpacity(float opacity) {
   content_window()->layer()->SetOpacity(opacity);
 }
 
-void DesktopWindowTreeHostWin::SetAspectRatio(const gfx::SizeF& aspect_ratio) {
+void DesktopWindowTreeHostWin::SetAspectRatio(
+    const gfx::SizeF& aspect_ratio,
+    const gfx::Size& excluded_margin) {
   DCHECK(!aspect_ratio.IsEmpty());
-  message_handler_->SetAspectRatio(aspect_ratio.width() /
-                                   aspect_ratio.height());
+  message_handler_->SetAspectRatio(aspect_ratio.width() / aspect_ratio.height(),
+                                   excluded_margin);
 }
 
 void DesktopWindowTreeHostWin::SetWindowIcons(const gfx::ImageSkia& window_icon,
@@ -594,10 +599,6 @@ void DesktopWindowTreeHostWin::FlashFrame(bool flash_frame) {
 
 bool DesktopWindowTreeHostWin::IsAnimatingClosed() const {
   return pending_close_;
-}
-
-bool DesktopWindowTreeHostWin::IsTranslucentWindowOpacitySupported() const {
-  return ui::win::IsAeroGlassEnabled();
 }
 
 void DesktopWindowTreeHostWin::SizeConstraintsChanged() {
@@ -799,6 +800,8 @@ bool DesktopWindowTreeHostWin::HasNonClientView() const {
 }
 
 FrameMode DesktopWindowTreeHostWin::GetFrameMode() const {
+  if (!GetWidget())
+    return FrameMode::SYSTEM_DRAWN;
   return GetWidget()->ShouldUseNativeFrame() ? FrameMode::SYSTEM_DRAWN
                                              : FrameMode::CUSTOM_DRAWN;
 }
@@ -808,11 +811,12 @@ bool DesktopWindowTreeHostWin::HasFrame() const {
 }
 
 void DesktopWindowTreeHostWin::SchedulePaint() {
-  GetWidget()->GetRootView()->SchedulePaint();
+  if (GetWidget())
+    GetWidget()->GetRootView()->SchedulePaint();
 }
 
 bool DesktopWindowTreeHostWin::ShouldPaintAsActive() const {
-  return GetWidget()->ShouldPaintAsActive();
+  return GetWidget() ? GetWidget()->ShouldPaintAsActive() : false;
 }
 
 bool DesktopWindowTreeHostWin::CanResize() const {
@@ -830,7 +834,8 @@ bool DesktopWindowTreeHostWin::CanMinimize() const {
 bool DesktopWindowTreeHostWin::CanActivate() const {
   if (IsModalWindowActive())
     return true;
-  return native_widget_delegate_->CanActivate();
+  return native_widget_delegate_ ? native_widget_delegate_->CanActivate()
+                                 : false;
 }
 
 bool DesktopWindowTreeHostWin::WantsMouseEventsWhenInactive() const {
@@ -838,12 +843,13 @@ bool DesktopWindowTreeHostWin::WantsMouseEventsWhenInactive() const {
 }
 
 bool DesktopWindowTreeHostWin::WidgetSizeIsClientSize() const {
-  const Widget* widget = GetWidget()->GetTopLevelWidget();
+  const Widget* widget =
+      GetWidget() ? GetWidget()->GetTopLevelWidget() : nullptr;
   return IsMaximized() || (widget && widget->ShouldUseNativeFrame());
 }
 
 bool DesktopWindowTreeHostWin::IsModal() const {
-  return native_widget_delegate_->IsModal();
+  return native_widget_delegate_ ? native_widget_delegate_->IsModal() : false;
 }
 
 int DesktopWindowTreeHostWin::GetInitialShowState() const {
@@ -961,7 +967,8 @@ void DesktopWindowTreeHostWin::HandleCreate() {
 
 void DesktopWindowTreeHostWin::HandleDestroying() {
   drag_drop_client_->OnNativeWidgetDestroying(GetHWND());
-  native_widget_delegate_->OnNativeWidgetDestroying();
+  if (native_widget_delegate_)
+    native_widget_delegate_->OnNativeWidgetDestroying();
 
   // Destroy the compositor before destroying the HWND since shutdown
   // may try to swap to the window.
@@ -990,6 +997,10 @@ void DesktopWindowTreeHostWin::HandleEndWMSizeMove() {
 }
 
 void DesktopWindowTreeHostWin::HandleMove() {
+  // Adding/removing a monitor, or changing the primary monitor can cause a
+  // WM_MOVE message before `OnDisplayChanged()`. Without this call, we would
+  // DCHECK due to stale `DisplayInfo`s. See https:://crbug.com/1413940.
+  display::win::ScreenWin::UpdateDisplayInfosIfNeeded();
   CheckForMonitorChange();
   OnHostMovedInPixels();
 }
@@ -1000,7 +1011,8 @@ void DesktopWindowTreeHostWin::HandleWorkAreaChanged() {
 }
 
 void DesktopWindowTreeHostWin::HandleVisibilityChanged(bool visible) {
-  native_widget_delegate_->OnNativeWidgetVisibilityChanged(visible);
+  if (native_widget_delegate_)
+    native_widget_delegate_->OnNativeWidgetVisibilityChanged(visible);
 }
 
 void DesktopWindowTreeHostWin::HandleWindowMinimizedOrRestored(bool restored) {
@@ -1025,8 +1037,6 @@ void DesktopWindowTreeHostWin::HandleClientSizeChanged(
 }
 
 void DesktopWindowTreeHostWin::HandleFrameChanged() {
-  CheckForMonitorChange();
-  desktop_native_widget_aura_->UpdateWindowTransparency();
   // Replace the frame and layout the contents.
   if (GetWidget()->non_client_view())
     GetWidget()->non_client_view()->UpdateFrame();
@@ -1149,12 +1159,6 @@ void DesktopWindowTreeHostWin::HandlePaintAccelerated(
     compositor()->ScheduleRedrawRect(invalid_rect);
 }
 
-bool DesktopWindowTreeHostWin::HandleTooltipNotify(int w_param,
-                                                   NMHDR* l_param,
-                                                   LRESULT* l_result) {
-  return tooltip_ && tooltip_->HandleNotify(w_param, l_param, l_result);
-}
-
 void DesktopWindowTreeHostWin::HandleMenuLoop(bool in_menu_loop) {
   if (in_menu_loop) {
     tooltip_disabler_ = std::make_unique<wm::ScopedTooltipDisabler>(window());
@@ -1213,6 +1217,11 @@ void DesktopWindowTreeHostWin::HandleWindowScaleFactorChanged(
   }
 }
 
+void DesktopWindowTreeHostWin::HandleHeadlessWindowBoundsChanged(
+    const gfx::Rect& bounds) {
+  window()->SetProperty(aura::client::kHeadlessBoundsKey, bounds);
+}
+
 DesktopNativeCursorManager*
 DesktopWindowTreeHostWin::GetSingletonDesktopNativeCursorManager() {
   return new DesktopNativeCursorManagerWin();
@@ -1233,11 +1242,13 @@ void DesktopWindowTreeHostWin::SetBoundsInDIP(const gfx::Rect& bounds) {
 // DesktopWindowTreeHostWin, private:
 
 Widget* DesktopWindowTreeHostWin::GetWidget() {
-  return native_widget_delegate_->AsWidget();
+  return native_widget_delegate_ ? native_widget_delegate_->AsWidget()
+                                 : nullptr;
 }
 
 const Widget* DesktopWindowTreeHostWin::GetWidget() const {
-  return native_widget_delegate_->AsWidget();
+  return native_widget_delegate_ ? native_widget_delegate_->AsWidget()
+                                 : nullptr;
 }
 
 HWND DesktopWindowTreeHostWin::GetHWND() const {
@@ -1250,7 +1261,7 @@ bool DesktopWindowTreeHostWin::IsModalWindowActive() const {
   if (!dispatcher())
     return false;
 
-  const auto is_active = [](const auto* child) {
+  const auto is_active = [](const aura::Window* child) {
     return child->GetProperty(aura::client::kModalKey) != ui::MODAL_TYPE_NONE &&
            child->TargetVisibility();
   };

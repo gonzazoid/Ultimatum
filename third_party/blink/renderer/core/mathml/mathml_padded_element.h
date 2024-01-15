@@ -11,19 +11,20 @@
 namespace blink {
 
 class ComputedStyle;
+class ComputedStyleBuilder;
 class Document;
 
 class CORE_EXPORT MathMLPaddedElement final : public MathMLRowElement {
  public:
   explicit MathMLPaddedElement(Document&);
 
-  void AddMathBaselineIfNeeded(ComputedStyle&,
+  void AddMathBaselineIfNeeded(ComputedStyleBuilder&,
                                const CSSToLengthConversionData&);
-  void AddMathPaddedDepthIfNeeded(ComputedStyle&,
+  void AddMathPaddedDepthIfNeeded(ComputedStyleBuilder&,
                                   const CSSToLengthConversionData&);
-  void AddMathPaddedLSpaceIfNeeded(ComputedStyle&,
+  void AddMathPaddedLSpaceIfNeeded(ComputedStyleBuilder&,
                                    const CSSToLengthConversionData&);
-  void AddMathPaddedVOffsetIfNeeded(ComputedStyle&,
+  void AddMathPaddedVOffsetIfNeeded(ComputedStyleBuilder&,
                                     const CSSToLengthConversionData&);
 
  private:
@@ -32,8 +33,7 @@ class CORE_EXPORT MathMLPaddedElement final : public MathMLRowElement {
   void CollectStyleForPresentationAttribute(const QualifiedName&,
                                             const AtomicString&,
                                             MutableCSSPropertyValueSet*) final;
-  LayoutObject* CreateLayoutObject(const ComputedStyle&,
-                                   LegacyLayout legacy) final;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) final;
 
   bool IsGroupingElement() const final { return false; }
 };

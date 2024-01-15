@@ -7,10 +7,18 @@
 
 #include "ash/ash_export.h"
 #include "ash/wm/window_state.h"
-#include "base/time/time.h"
-#include "ui/display/display.h"
+#include "ash/wm/wm_metrics.h"
+#include "chromeos/ui/frame/caption_buttons/snap_controller.h"
+#include "chromeos/ui/frame/multitask_menu/float_controller_base.h"
 #include "ui/display/display_observer.h"
-#include "ui/gfx/geometry/rect.h"
+
+namespace base {
+class TimeDelta;
+}  // namespace base
+
+namespace gfx {
+class Rect;
+}  // namespace gfx
 
 namespace ash {
 
@@ -77,9 +85,6 @@ enum WMEventType {
   // See description of WM_EVENT_CYCLE_SNAP_PRIMARY.
   WM_EVENT_CYCLE_SNAP_SECONDARY,
 
-  // A user requested to center a window.
-  WM_EVENT_CENTER,
-
   // TODO(oshima): Investigate if this can be removed from ash.
   // Widget requested to show in inactive state.
   WM_EVENT_SHOW_INACTIVE,
@@ -91,12 +96,9 @@ enum WMEventType {
   // display disconnection or dragging.
   WM_EVENT_ADDED_TO_WORKSPACE,
 
-  // Bounds of the display has changed.
-  WM_EVENT_DISPLAY_BOUNDS_CHANGED,
-
-  // Bounds of the work area has changed. This will not occur when the work
-  // area has changed as a result of DISPLAY_BOUNDS_CHANGED.
-  WM_EVENT_WORKAREA_BOUNDS_CHANGED,
+  // A display metric has changed. See DisplayObserver::DisplayMetric for
+  // display related metrics.
+  WM_EVENT_DISPLAY_METRICS_CHANGED,
 
   // A user requested to pin a window.
   WM_EVENT_PIN,
@@ -108,19 +110,14 @@ enum WMEventType {
   // WM_EVENT_PIN but does not allow user to exit the mode by shortcut key.
   WM_EVENT_TRUSTED_PIN,
 
-  // A system ui area has changed. Currently, this includes the virtual
-  // keyboard and the message center. A change can be a change in visibility
-  // or bounds.
-  // TODO(oshima): Consider consolidating this into
-  // WM_EVENT_WORKAREA_BOUNDS_CHANGED
-  WM_EVENT_SYSTEM_UI_AREA_CHANGED,
-
   // A user requested to float a window.
   WM_EVENT_FLOAT,
 };
 
 class SetBoundsWMEvent;
 class DisplayMetricsChangedWMEvent;
+class WindowFloatWMEvent;
+class WindowSnapWMEvent;
 
 class ASH_EXPORT WMEvent {
  public:
@@ -158,13 +155,12 @@ class ASH_EXPORT WMEvent {
   // True if the event is a window snap event.
   bool IsSnapEvent() const;
 
-  // True if the event has |snap_ratio| value, which is only available for
-  // WindowSnapWMEvent types. Checks that snap events are created with valid
-  // |snap_ratio| to pass ASan tests.
-  virtual bool IsSnapInfoAvailable() const;
-
   // Utility methods to downcast to specific WMEvent types.
-  const DisplayMetricsChangedWMEvent* AsDisplayMetricsChangedWMEvent() const;
+  virtual const SetBoundsWMEvent* AsSetBoundsWMEvent() const;
+  virtual const DisplayMetricsChangedWMEvent* AsDisplayMetricsChangedWMEvent()
+      const;
+  virtual const WindowFloatWMEvent* AsFloatEvent() const;
+  virtual const WindowSnapWMEvent* AsSnapEvent() const;
 
  private:
   WMEventType type_;
@@ -173,7 +169,7 @@ class ASH_EXPORT WMEvent {
 // An WMEvent to request new bounds for the window.
 class ASH_EXPORT SetBoundsWMEvent : public WMEvent {
  public:
-  SetBoundsWMEvent(
+  explicit SetBoundsWMEvent(
       const gfx::Rect& requested_bounds,
       bool animate = false,
       base::TimeDelta duration = WindowState::kBoundsChangeSlideDuration);
@@ -192,6 +188,9 @@ class ASH_EXPORT SetBoundsWMEvent : public WMEvent {
 
   int64_t display_id() const { return display_id_; }
 
+  // WMevent:
+  const SetBoundsWMEvent* AsSetBoundsWMEvent() const override;
+
  private:
   const gfx::Rect requested_bounds_;
   const int64_t display_id_ = display::kInvalidDisplayId;
@@ -199,36 +198,7 @@ class ASH_EXPORT SetBoundsWMEvent : public WMEvent {
   const base::TimeDelta duration_;
 };
 
-// An WMEvent to snap a window.
-class ASH_EXPORT WindowSnapWMEvent : public WMEvent {
- public:
-  enum class SnapRatio {
-    kDefaultSnapRatio,
-    kOneThirdSnapRatio,
-    kTwoThirdSnapRatio
-  };
-
-  explicit WindowSnapWMEvent(WMEventType type);
-  WindowSnapWMEvent(WMEventType type, SnapRatio snap_ratio);
-
-  WindowSnapWMEvent(const WindowSnapWMEvent&) = delete;
-  WindowSnapWMEvent& operator=(const WindowSnapWMEvent&) = delete;
-
-  ~WindowSnapWMEvent() override;
-
-  static float GetFloatValueForSnapRatio(SnapRatio snap_ratio);
-
-  // WMEvent:
-  bool IsSnapInfoAvailable() const override;
-
-  SnapRatio snap_ratio() const { return snap_ratio_; }
-
- private:
-  const SnapRatio snap_ratio_ = SnapRatio::kDefaultSnapRatio;
-};
-
 // A WMEvent sent when display metrics have changed.
-// TODO(oshima): Consolidate with WM_EVENT_WORKAREA_BOUNDS_CHANGED.
 class ASH_EXPORT DisplayMetricsChangedWMEvent : public WMEvent {
  public:
   explicit DisplayMetricsChangedWMEvent(int display_metrics);
@@ -239,14 +209,72 @@ class ASH_EXPORT DisplayMetricsChangedWMEvent : public WMEvent {
 
   ~DisplayMetricsChangedWMEvent() override;
 
+  bool display_bounds_changed() const {
+    return changed_metrics_ & display::DisplayObserver::DISPLAY_METRIC_BOUNDS;
+  }
+
   bool primary_changed() const {
     return changed_metrics_ & display::DisplayObserver::DISPLAY_METRIC_PRIMARY;
   }
 
-  uint32_t changed_metrics() const { return changed_metrics_; }
+  bool work_area_changed() const {
+    return changed_metrics_ &
+           display::DisplayObserver::DISPLAY_METRIC_WORK_AREA;
+  }
 
  private:
   const uint32_t changed_metrics_;
+};
+
+// An WMEvent to float a window.
+class ASH_EXPORT WindowFloatWMEvent : public WMEvent {
+ public:
+  explicit WindowFloatWMEvent(
+      chromeos::FloatStartLocation float_start_location);
+  WindowFloatWMEvent(const WindowFloatWMEvent&) = delete;
+  WindowFloatWMEvent& operator=(const WindowFloatWMEvent&) = delete;
+  ~WindowFloatWMEvent() override;
+
+  chromeos::FloatStartLocation float_start_location() const {
+    return float_start_location_;
+  }
+
+  // WMEvent:
+  const WindowFloatWMEvent* AsFloatEvent() const override;
+
+ private:
+  const chromeos::FloatStartLocation float_start_location_;
+};
+
+// An WMEvent to snap a window.
+class ASH_EXPORT WindowSnapWMEvent : public WMEvent {
+ public:
+  explicit WindowSnapWMEvent(WMEventType type);
+  WindowSnapWMEvent(WMEventType type, float snap_ratio);
+  WindowSnapWMEvent(WMEventType type,
+                    WindowSnapActionSource snap_action_source);
+  WindowSnapWMEvent(WMEventType type,
+                    float snap_ratio,
+                    WindowSnapActionSource snap_action_source);
+
+  WindowSnapWMEvent(const WindowSnapWMEvent&) = delete;
+  WindowSnapWMEvent& operator=(const WindowSnapWMEvent&) = delete;
+
+  ~WindowSnapWMEvent() override;
+
+  float snap_ratio() const { return snap_ratio_; }
+  WindowSnapActionSource snap_action_source() const {
+    return snap_action_source_;
+  }
+
+  // WMEvent:
+  const WindowSnapWMEvent* AsSnapEvent() const override;
+
+ private:
+  float snap_ratio_ = chromeos::kDefaultSnapRatio;
+
+  WindowSnapActionSource snap_action_source_ =
+      WindowSnapActionSource::kNotSpecified;
 };
 
 }  // namespace ash

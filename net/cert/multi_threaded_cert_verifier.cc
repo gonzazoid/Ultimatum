@@ -4,28 +4,22 @@
 
 #include "net/cert/multi_threaded_cert_verifier.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/trace_event/trace_event.h"
-#include "crypto/crypto_buildflags.h"
 #include "net/base/net_errors.h"
 #include "net/base/trace_constants.h"
+#include "net/base/tracing.h"
 #include "net/cert/cert_verify_proc.h"
 #include "net/cert/cert_verify_result.h"
-#include "net/cert/crl_set.h"
 #include "net/cert/x509_certificate.h"
 #include "net/log/net_log_event_type.h"
 #include "net/log/net_log_source_type.h"
 #include "net/log/net_log_with_source.h"
-
-#if BUILDFLAG(USE_NSS_CERTS)
-#include "net/cert/x509_util_nss.h"
-#endif
 
 namespace net {
 
@@ -34,8 +28,9 @@ namespace net {
 // sequence. For instance when using the NSS-based implementation of certificate
 // verification, the library requires a blocking callback for fetching OCSP and
 // AIA responses.
-class MultiThreadedCertVerifierScopedAllowBaseSyncPrimitives
-    : public base::ScopedAllowBaseSyncPrimitives {};
+class [[maybe_unused,
+        nodiscard]] MultiThreadedCertVerifierScopedAllowBaseSyncPrimitives
+    : public base::ScopedAllowBaseSyncPrimitives{};
 
 namespace {
 
@@ -70,21 +65,15 @@ std::unique_ptr<ResultHelper> DoVerifyOnWorkerThread(
     const std::string& ocsp_response,
     const std::string& sct_list,
     int flags,
-    const scoped_refptr<CRLSet>& crl_set,
-    const CertificateList& additional_trust_anchors,
     const NetLogWithSource& net_log) {
   TRACE_EVENT0(NetTracingCategory(), "DoVerifyOnWorkerThread");
   auto verify_result = std::make_unique<ResultHelper>();
   verify_result->net_log = net_log;
   MultiThreadedCertVerifierScopedAllowBaseSyncPrimitives
       allow_base_sync_primitives;
-  verify_result->error = verify_proc->Verify(
-      cert.get(), hostname, ocsp_response, sct_list, flags, crl_set.get(),
-      additional_trust_anchors, &verify_result->result, net_log);
-  // The CertVerifyResult is created and populated on the worker thread and
-  // then returned to the network thread. Detach now before returning the
-  // result, since any further access will be on the network thread.
-  verify_result->result.DetachFromSequence();
+  verify_result->error =
+      verify_proc->Verify(cert.get(), hostname, ocsp_response, sct_list, flags,
+                          &verify_result->result, net_log);
   return verify_result;
 }
 
@@ -149,17 +138,14 @@ void MultiThreadedCertVerifier::InternalRequest::Start(
 
   int flags = GetFlagsForConfig(config);
   if (params.flags() & CertVerifier::VERIFY_DISABLE_NETWORK_FETCHES) {
-    flags &= ~CertVerifyProc::VERIFY_REV_CHECKING_ENABLED;
-    flags &= ~CertVerifyProc::VERIFY_REV_CHECKING_REQUIRED_LOCAL_ANCHORS;
+    flags |= CertVerifyProc::VERIFY_DISABLE_NETWORK_FETCHES;
   }
-  DCHECK(config.crl_set);
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE,
       {base::MayBlock(), base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
       base::BindOnce(&DoVerifyOnWorkerThread, verify_proc, params.certificate(),
                      params.hostname(), params.ocsp_response(),
-                     params.sct_list(), flags, config.crl_set,
-                     config.additional_trust_anchors, net_log),
+                     params.sct_list(), flags, net_log),
       base::BindOnce(&MultiThreadedCertVerifier::InternalRequest::OnJobComplete,
                      weak_factory_.GetWeakPtr()));
 }
@@ -193,16 +179,12 @@ void MultiThreadedCertVerifier::InternalRequest::OnJobComplete(
 }
 
 MultiThreadedCertVerifier::MultiThreadedCertVerifier(
-    scoped_refptr<CertVerifyProc> verify_proc)
-    : MultiThreadedCertVerifier(std::move(verify_proc), nullptr) {}
-
-MultiThreadedCertVerifier::MultiThreadedCertVerifier(
     scoped_refptr<CertVerifyProc> verify_proc,
     scoped_refptr<CertVerifyProcFactory> verify_proc_factory)
     : verify_proc_(std::move(verify_proc)),
       verify_proc_factory_(std::move(verify_proc_factory)) {
-  // Guarantee there is always a CRLSet (this can be overridden via SetConfig).
-  config_.crl_set = CRLSet::BuiltinCRLSet();
+  CHECK(verify_proc_);
+  CHECK(verify_proc_factory_);
 }
 
 MultiThreadedCertVerifier::~MultiThreadedCertVerifier() {
@@ -224,6 +206,7 @@ int MultiThreadedCertVerifier::Verify(const RequestParams& params,
                                       CompletionOnceCallback callback,
                                       std::unique_ptr<Request>* out_req,
                                       const NetLogWithSource& net_log) {
+  CHECK(params.certificate());
   out_req->reset();
 
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
@@ -239,55 +222,38 @@ int MultiThreadedCertVerifier::Verify(const RequestParams& params,
   return ERR_IO_PENDING;
 }
 
-void MultiThreadedCertVerifier::UpdateChromeRootStoreData(
+void MultiThreadedCertVerifier::UpdateVerifyProcData(
     scoped_refptr<CertNetFetcher> cert_net_fetcher,
-    const ChromeRootStoreData* root_store_data) {
+    const net::CertVerifyProc::ImplParams& impl_params,
+    const net::CertVerifyProc::InstanceParams& instance_params) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  // TODO(hchao): investigate to see if we can make this a DCHECK.
-  if (verify_proc_factory_) {
-    verify_proc_ = verify_proc_factory_->CreateCertVerifyProc(
-        std::move(cert_net_fetcher), root_store_data);
-  }
+  verify_proc_ = verify_proc_factory_->CreateCertVerifyProc(
+      std::move(cert_net_fetcher), impl_params, instance_params);
+  CHECK(verify_proc_);
+  NotifyCertVerifierChanged();
 }
 
 void MultiThreadedCertVerifier::SetConfig(const CertVerifier::Config& config) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  LOG_IF(DFATAL, verify_proc_ &&
-                     !verify_proc_->SupportsAdditionalTrustAnchors() &&
-                     !config.additional_trust_anchors.empty())
-      << "Attempted to set a CertVerifier::Config with additional trust "
-         "anchors, but |verify_proc_| does not support additional trust "
-         "anchors.";
-
-// TODO(https://crbug.com/978854): Pass these into the actual CertVerifyProc
-// rather than relying on global side-effects.
-#if !BUILDFLAG(USE_NSS_CERTS)
-  // Not yet implemented.
-  DCHECK(config.additional_untrusted_authorities.empty());
-#else
-  // Construct a temporary list and then swap that into the member variable, to
-  // be polite to any verifications that might be in progress in a background
-  // thread. This ensures that, at least for certs that are present in both the
-  // old and new config, there will not be a time when the refcount drops to
-  // zero. For the case where a cert was in the old config and is not in the
-  // new config, it might be removed while a verification is still going on
-  // that might be able to use it. Oh well. Ideally the list should be passed
-  // into CertVerifyProc as noted by the TODO(https://crbug.com/978854), since
-  // the workers could then keep a reference to the appropriate certs as long
-  // as they need.
-  net::ScopedCERTCertificateList temp_certs;
-  for (const auto& cert : config.additional_untrusted_authorities) {
-    ScopedCERTCertificate nss_cert =
-        x509_util::CreateCERTCertificateFromX509Certificate(cert.get());
-    if (nss_cert)
-      temp_certs.push_back(std::move(nss_cert));
-  }
-  temp_certs_ = std::move(temp_certs);
-#endif
 
   config_ = config;
-  if (!config_.crl_set)
-    config_.crl_set = CRLSet::BuiltinCRLSet();
+}
+
+void MultiThreadedCertVerifier::AddObserver(Observer* observer) {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  observers_.AddObserver(observer);
+}
+
+void MultiThreadedCertVerifier::RemoveObserver(Observer* observer) {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  observers_.RemoveObserver(observer);
+}
+
+void MultiThreadedCertVerifier::NotifyCertVerifierChanged() {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  for (Observer& observer : observers_) {
+    observer.OnCertVerifierChanged();
+  }
 }
 
 }  // namespace net

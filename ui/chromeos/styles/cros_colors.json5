@@ -12,6 +12,7 @@
   options: {
     CSS: {
       prefix: 'cros',
+      preblend: true,
     },
     proto: {
       field_name: 'cros_colors',
@@ -524,6 +525,12 @@
       dark: "rgba($white.rgb, 0.12)",
     },
 
+    /* color palette swatch */
+    swatch_border: {
+      light: "rgba($google_grey_900.rgb, 0.5)",
+      dark: "rgba($white.rgb, 0.38)",
+    },
+
     /* Taken from go/ea-asset-palette. */
     illustration_color_1: {
       light: "$google_blue_500",
@@ -552,25 +559,25 @@
     },
     illustration_secondary_color: {
       light: "$google_grey_200",
-      dark: "blend(rgba($google_grey_200.rgb, 0.3), $google_grey_900)",
+      dark: "blend(rgba($google_grey_200.rgb, 0.3), $illustration_base_color)",
     },
     illustration_color_1_shade_1: {
       light: "$google_blue_300",
-      dark: "blend(rgba($google_blue_600.rgb, 0.3), $google_grey_900)",
+      dark: "blend(rgba($google_blue_600.rgb, 0.3), $illustration_base_color)",
     },
     illustration_color_1_shade_2: {
       light: "$google_blue_100",
-      dark: "blend(rgba($google_blue_300.rgb, 0.3), $google_grey_900)",
+      dark: "blend(rgba($google_blue_300.rgb, 0.3), $illustration_base_color)",
     },
     /* Elevated variants of dark mode colors for illustrations. These are only
        used in dark mode, and so do not need a light mode variant. */
     illustration_elevation_color_1_shade_1: {
       light: "$illustration_color_1_shade_1",
-      dark: "blend(rgba($google_blue_300.rgb, 0.3), $google_grey_900)",
+      dark: "blend(rgba($google_blue_600.rgb, 0.4), $illustration_elevation_base_color)",
     },
     illustration_elevation_color_1_shade_2: {
       light: "$illustration_color_1_shade_2",
-      dark: "blend(rgba($google_blue_300.rgb, 0.3), $google_grey_900)",
+      dark: "blend(rgba($google_blue_300.rgb, 0.4), $illustration_elevation_base_color)",
     },
     illustration_elevation_base_color: {
       light: "$illustration_base_color",
@@ -579,7 +586,16 @@
     illustration_elevation_secondary_color: {
       light: "$illustration_secondary_color",
       dark: "$google_grey_700",
-    }
+    },
+    /* Preview colors for color correction settings. */
+    color_preview_red: "$google_red_600",
+    color_preview_orange: "$google_orange_600",
+    color_preview_yellow: "$google_yellow_600",
+    color_preview_green: "$google_green_600",
+    color_preview_cyan: "$google_cyan_600",
+    color_preview_blue: "$google_blue_600",
+    color_preview_purple: "$google_purple_600",
+    color_preview_grey: "$google_grey_600",
   },
   opacities: {
     disabled_opacity: 0.38,

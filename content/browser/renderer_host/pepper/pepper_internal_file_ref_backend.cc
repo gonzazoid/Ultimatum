@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/strings/escape.h"
 #include "content/browser/child_process_security_policy_impl.h"
 #include "content/browser/file_system/browser_file_system_helper.h"
@@ -107,7 +107,7 @@ void CallMove(scoped_refptr<storage::FileSystemContext> file_system_context,
 void CallGetMetadata(
     scoped_refptr<storage::FileSystemContext> file_system_context,
     const storage::FileSystemURL& url,
-    int fields,
+    storage::FileSystemOperation::GetMetadataFieldSet fields,
     storage::FileSystemOperationRunner::GetMetadataCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   file_system_context->operation_runner()->GetMetadata(url, fields,
@@ -139,7 +139,8 @@ storage::FileSystemURL PepperInternalFileRefBackend::GetFileSystemURL() const {
         GetFileSystemContext();
     if (fs_context.get())
       fs_url_ = fs_context->CrackURL(
-          fs_path, blink::StorageKey(url::Origin::Create(fs_path)));
+          fs_path,
+          blink::StorageKey::CreateFirstParty(url::Origin::Create(fs_path)));
   }
   return fs_url_;
 }
@@ -300,9 +301,10 @@ int32_t PepperInternalFileRefBackend::Query(
   if (!GetFileSystemURL().is_valid())
     return PP_ERROR_FAILED;
 
-  int fields = storage::FileSystemOperation::GET_METADATA_FIELD_IS_DIRECTORY |
-               storage::FileSystemOperation::GET_METADATA_FIELD_SIZE |
-               storage::FileSystemOperation::GET_METADATA_FIELD_LAST_MODIFIED;
+  constexpr storage::FileSystemOperation::GetMetadataFieldSet fields = {
+      storage::FileSystemOperation::GetMetadataField::kIsDirectory,
+      storage::FileSystemOperation::GetMetadataField::kSize,
+      storage::FileSystemOperation::GetMetadataField::kLastModified};
   GetIOThreadTaskRunner({})->PostTask(
       FROM_HERE,
       base::BindOnce(

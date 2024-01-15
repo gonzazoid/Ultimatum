@@ -6,12 +6,12 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "storage/browser/file_system/file_system_url.h"
 #include "storage/browser/test/mock_quota_manager_proxy.h"
 #include "storage/browser/test/test_file_system_options.h"
@@ -37,9 +37,10 @@ class SandboxFileSystemBackendDelegateTest : public testing::Test {
   void SetUp() override {
     ASSERT_TRUE(data_dir_.CreateUniqueTempDir());
     quota_manager_proxy_ = base::MakeRefCounted<MockQuotaManagerProxy>(
-        nullptr, base::ThreadTaskRunnerHandle::Get());
+        nullptr, base::SingleThreadTaskRunner::GetCurrentDefault());
     delegate_ = std::make_unique<SandboxFileSystemBackendDelegate>(
-        quota_manager_proxy_.get(), base::ThreadTaskRunnerHandle::Get().get(),
+        quota_manager_proxy_.get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault().get(),
         data_dir_.GetPath(), /*special_storage_policy=*/nullptr,
         CreateAllowFileAccessOptions(), /*env_override=*/nullptr);
   }
@@ -48,12 +49,11 @@ class SandboxFileSystemBackendDelegateTest : public testing::Test {
     return delegate_->IsAccessValid(url);
   }
 
-  void OpenFileSystem(const blink::StorageKey& storage_key,
-                      const absl::optional<BucketLocator>& bucket_locator,
+  void OpenFileSystem(const BucketLocator& bucket_locator,
                       FileSystemType type,
                       OpenFileSystemMode mode) {
     delegate_->OpenFileSystem(
-        storage_key, bucket_locator, type, mode,
+        bucket_locator, type, mode,
         base::BindOnce(
             &SandboxFileSystemBackendDelegateTest::OpenFileSystemCallback,
             base::Unretained(this)),
@@ -121,7 +121,7 @@ TEST_F(SandboxFileSystemBackendDelegateTest, IsAccessValid) {
 }
 
 TEST_F(SandboxFileSystemBackendDelegateTest, OpenFileSystemAccessesStorage) {
-  EXPECT_EQ(quota_manager_proxy()->notify_storage_accessed_count(), 0);
+  EXPECT_EQ(quota_manager_proxy()->notify_bucket_accessed_count(), 0);
   EXPECT_EQ(callback_count(), 0);
 
   const blink::StorageKey& storage_key =
@@ -129,13 +129,13 @@ TEST_F(SandboxFileSystemBackendDelegateTest, OpenFileSystemAccessesStorage) {
 
   // TODO(https://crbug.com/1330608): ensure that this test suite properly
   // integrates non-default BucketLocators into OpenFileSystem.
-  OpenFileSystem(storage_key, /*bucket_locator=*/absl::nullopt,
+  OpenFileSystem(BucketLocator::ForDefaultBucket(storage_key),
                  kFileSystemTypeTemporary,
                  OPEN_FILE_SYSTEM_CREATE_IF_NONEXISTENT);
 
   EXPECT_EQ(callback_count(), 1);
   EXPECT_EQ(last_error(), base::File::FILE_OK);
-  EXPECT_EQ(quota_manager_proxy()->notify_storage_accessed_count(), 1);
+  EXPECT_EQ(quota_manager_proxy()->notify_bucket_accessed_count(), 1);
   EXPECT_EQ(quota_manager_proxy()->last_notified_storage_key(), storage_key);
   EXPECT_EQ(quota_manager_proxy()->last_notified_type(),
             blink::mojom::StorageType::kTemporary);

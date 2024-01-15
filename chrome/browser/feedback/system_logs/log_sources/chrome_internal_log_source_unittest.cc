@@ -13,6 +13,10 @@
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
+#if BUILDFLAG(IS_WIN)
+#include "base/win/windows_version.h"
+#endif
+
 #if BUILDFLAG(IS_MAC)
 #include "base/mac/mac_util.h"
 #endif
@@ -20,6 +24,14 @@
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING) && !BUILDFLAG(IS_CHROMEOS)
 #include "chrome/test/base/scoped_channel_override.h"
 #endif
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chromeos/ash/components/dbus/spaced/fake_spaced_client.h"
+#include "chromeos/ash/components/dbus/spaced/spaced_client.h"
+#include "chromeos/ash/components/login/auth/auth_events_recorder.h"
+#endif
+
+#include "gpu/config/gpu_finch_features.h"
 
 namespace system_logs {
 namespace {
@@ -37,7 +49,26 @@ std::unique_ptr<SystemLogsResponse> GetChromeInternalLogs() {
   return response;
 }
 
-using ChromeInternalLogSourceTest = BrowserWithTestWindowTest;
+class ChromeInternalLogSourceTest : public BrowserWithTestWindowTest {
+ public:
+  ChromeInternalLogSourceTest() = default;
+  ChromeInternalLogSourceTest(const ChromeInternalLogSourceTest&) = delete;
+  ChromeInternalLogSourceTest& operator=(const ChromeInternalLogSourceTest&) =
+      delete;
+  ~ChromeInternalLogSourceTest() override = default;
+
+  void SetUp() override {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+    auth_events_recorder_ = ash::AuthEventsRecorder::CreateForTesting();
+#endif
+    BrowserWithTestWindowTest::SetUp();
+  }
+
+ protected:
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  std::unique_ptr<ash::AuthEventsRecorder> auth_events_recorder_;
+#endif
+};
 
 TEST_F(ChromeInternalLogSourceTest, VersionTagContainsActualVersion) {
   auto response = GetChromeInternalLogs();
@@ -61,10 +92,22 @@ TEST_F(ChromeInternalLogSourceTest, VersionTagContainsExtendedLabel) {
 }
 #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING) && !BUILDFLAG(IS_CHROMEOS)
 
-#if BUILDFLAG(IS_MAC)
+TEST_F(ChromeInternalLogSourceTest, GraphiteEnabledPresentAndValid) {
+  auto response = GetChromeInternalLogs();
+  auto value = response->at("graphite_enabled");
+
+  std::string expected_value =
+      features::IsSkiaGraphiteEnabled(base::CommandLine::ForCurrentProcess())
+          ? "true"
+          : "false";
+  EXPECT_EQ(value, expected_value);
+}
+
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
 TEST_F(ChromeInternalLogSourceTest, CpuTypePresentAndValid) {
   auto response = GetChromeInternalLogs();
   auto value = response->at("cpu_arch");
+#if BUILDFLAG(IS_MAC)
   switch (base::mac::GetCPUType()) {
     case base::mac::CPUType::kIntel:
       EXPECT_EQ(value, "x86-64");
@@ -76,8 +119,74 @@ TEST_F(ChromeInternalLogSourceTest, CpuTypePresentAndValid) {
       EXPECT_EQ(value, "arm64");
       break;
   }
+#else
+#if defined(ARCH_CPU_ARM64)
+  EXPECT_EQ(value, "arm64");
+#else
+  bool emulated = base::win::OSInfo::IsRunningEmulatedOnArm64();
+#if defined(ARCH_CPU_X86)
+  if (emulated) {
+    EXPECT_EQ(value, "32-bit emulated");
+  } else {
+    EXPECT_EQ(value, "32-bit");
+  }
+#else   // defined(ARCH_CPU_X86)
+  if (emulated) {
+    EXPECT_EQ(value, "64-bit emulated");
+  } else {
+    EXPECT_EQ(value, "64-bit");
+  }
+#endif  // defined(ARCH_CPU_X86)
+#endif  // defined(ARCH_CPU_ARM64)
+#endif
 }
 #endif
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+TEST_F(ChromeInternalLogSourceTest, FreeAndTotalDiskSpacePresent) {
+  ash::SpacedClient::InitializeFake();
+  ash::FakeSpacedClient::Get()->set_free_disk_space(1000);
+  ash::FakeSpacedClient::Get()->set_total_disk_space(100000);
+
+  std::unique_ptr<SystemLogsResponse> response = GetChromeInternalLogs();
+  ASSERT_TRUE(response);
+  auto free_disk_space = response->at("FREE_DISK_SPACE");
+  auto total_disk_space = response->at("TOTAL_DISK_SPACE");
+
+  EXPECT_EQ(free_disk_space, "1000");
+  EXPECT_EQ(total_disk_space, "100000");
+}
+
+TEST_F(ChromeInternalLogSourceTest, KnowledgeFactorAuthFailuresPresent) {
+  auth_events_recorder_->OnKnowledgeFactorAuthFailure();
+
+  std::unique_ptr<SystemLogsResponse> response = GetChromeInternalLogs();
+  auto knowledge_factor_auth_failure_count =
+      response->at("FAILED_KNOWLEDGE_FACTOR_ATTEMPTS");
+
+  EXPECT_EQ(knowledge_factor_auth_failure_count, "1");
+}
+
+TEST_F(ChromeInternalLogSourceTest, RecordedAuthEventsPresent) {
+  auth_events_recorder_->OnAuthenticationSurfaceChange(
+      ash::AuthEventsRecorder::AuthenticationSurface::kLogin);
+  auth_events_recorder_->OnLockContentsViewUpdate();
+  auth_events_recorder_->OnAuthSubmit();
+  auth_events_recorder_->OnLoginSuccess(ash::SuccessReason::OFFLINE_ONLY,
+                                        /*is_new_user=*/false,
+                                        /*is_login_offline=*/true,
+                                        /*is_ephemeral=*/false);
+  auth_events_recorder_->OnExistingUserLoginScreenExit(
+      ash::AuthEventsRecorder::AuthenticationOutcome::kSuccess, 1);
+
+  std::unique_ptr<SystemLogsResponse> response = GetChromeInternalLogs();
+  auto auth_events = response->at("RECORDED_AUTH_EVENTS");
+
+  EXPECT_EQ(auth_events,
+            "auth_surface_change_Login,update_lock_screen_view,auth_submit,"
+            "login_offline,login_screen_exit_success,");
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 }  // namespace
 }  // namespace system_logs

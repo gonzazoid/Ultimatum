@@ -13,20 +13,11 @@ void TestPageContentAnnotator::Annotate(BatchAnnotationCallback callback,
                                         const std::vector<std::string>& inputs,
                                         AnnotationType annotation_type) {
   annotation_requests_.emplace_back(std::make_pair(inputs, annotation_type));
+  if (always_hang_) {
+    return;
+  }
 
   std::vector<BatchAnnotationResult> results;
-
-  if (annotation_type == AnnotationType::kPageTopics) {
-    for (const std::string& input : inputs) {
-      auto it = topics_by_input_.find(input);
-      absl::optional<std::vector<WeightedIdentifier>> output;
-      if (it != topics_by_input_.end()) {
-        output = it->second;
-      }
-      results.emplace_back(
-          BatchAnnotationResult::CreatePageTopicsResult(input, output));
-    }
-  }
 
   if (annotation_type == AnnotationType::kPageEntities) {
     for (const std::string& input : inputs) {
@@ -52,14 +43,27 @@ void TestPageContentAnnotator::Annotate(BatchAnnotationCallback callback,
     }
   }
 
+  if (annotation_type == AnnotationType::kTextEmbedding) {
+    for (const std::string& input : inputs) {
+      auto it = text_embeddings_for_input_.find(input);
+      absl::optional<std::vector<float>> output;
+      if (it != text_embeddings_for_input_.end()) {
+        output = it->second;
+      }
+      results.emplace_back(
+          BatchAnnotationResult::CreateTextEmbeddingResult(input, output));
+    }
+  }
+
   std::move(callback).Run(results);
+}
+
+void TestPageContentAnnotator::SetAlwaysHang(bool hang) {
+  always_hang_ = hang;
 }
 
 absl::optional<ModelInfo> TestPageContentAnnotator::GetModelInfoForType(
     AnnotationType annotation_type) const {
-  if (annotation_type == AnnotationType::kPageTopics)
-    return topics_model_info_;
-
   if (annotation_type == AnnotationType::kPageEntities)
     return entities_model_info_;
 
@@ -67,14 +71,6 @@ absl::optional<ModelInfo> TestPageContentAnnotator::GetModelInfoForType(
     return visibility_scores_model_info_;
 
   return absl::nullopt;
-}
-
-void TestPageContentAnnotator::UsePageTopics(
-    const absl::optional<ModelInfo>& model_info,
-    const base::flat_map<std::string, std::vector<WeightedIdentifier>>&
-        topics_by_input) {
-  topics_model_info_ = model_info;
-  topics_by_input_ = topics_by_input;
 }
 
 void TestPageContentAnnotator::UsePageEntities(
@@ -90,6 +86,14 @@ void TestPageContentAnnotator::UseVisibilityScores(
     const base::flat_map<std::string, double>& visibility_scores_for_input) {
   visibility_scores_model_info_ = model_info;
   visibility_scores_for_input_ = visibility_scores_for_input;
+}
+
+void TestPageContentAnnotator::UseTextEmbeddings(
+    const absl::optional<ModelInfo>& model_info,
+    const base::flat_map<std::string, std::vector<float>>&
+        text_embeddings_for_input) {
+  text_embeddings_model_info_ = model_info;
+  text_embeddings_for_input_ = text_embeddings_for_input;
 }
 
 bool TestPageContentAnnotator::ModelRequestedForType(

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {$} from 'chrome://resources/js/util.js';
+import {$, getRequiredElement} from 'chrome://resources/js/util.js';
 
 import {HistoryClustersInternalsBrowserProxy} from './history_clusters_internals_browser_proxy.js';
 
@@ -30,18 +30,20 @@ function onLogMessagesDump() {
 }
 
 /**
- * The callback to button#visits-dump to save the visits to a file.
+ * The callback to button#context-clusters-dump to save the most recent context
+ * clusters to a file.
  */
-function onVisitsDumpRequested() {
-  getProxy().getHandler().getVisitsJson().then(onVisitsJsonReady);
+function onContextClustersDumpRequest() {
+  getProxy().getHandler().getContextClustersJson().then(
+      onContextClustersJsonReady);
 }
 
 /**
- * The callback when the visits JSON string has been prepared.
+ * The callback when the context clusters JSON string has been prepared.
  */
-function onVisitsJsonReady(resp: {visitsJson: string}) {
-  const data = resp.visitsJson;
-  const filename = 'history_clusters_visits_dump.json';
+function onContextClustersJsonReady(resp: {contextClustersJson: string}) {
+  const data = resp.contextClustersJson;
+  const filename = 'history_context_clusters_dump.json';
 
   dumpFileWithJsonContents(data, filename);
 }
@@ -58,11 +60,13 @@ function onPrintKeywordBagState() {
 }
 
 function initialize() {
-  const logMessageContainer = $('log-message-container') as HTMLTableElement;
+  const logMessageContainer = $<HTMLTableElement>('log-message-container');
 
-  $('log-messages-dump').addEventListener('click', onLogMessagesDump);
-  $('visits-dump').addEventListener('click', onVisitsDumpRequested);
-  $('print-keyword-bag-state')
+  getRequiredElement('log-messages-dump')
+      .addEventListener('click', onLogMessagesDump);
+  getRequiredElement('context-clusters-dump')
+      .addEventListener('click', onContextClustersDumpRequest);
+  getRequiredElement('print-keyword-bag-state')
       .addEventListener('click', onPrintKeywordBagState);
 
   getProxy().getCallbackRouter().onLogMessageAdded.addListener(
@@ -70,7 +74,11 @@ function initialize() {
         logMessages.push(message);
         if (logMessageContainer) {
           const logmessage = logMessageContainer.insertRow();
-          logmessage.insertCell().innerHTML = `<pre>${message}</pre>`;
+          const cell = logmessage.insertCell();
+          cell.innerHTML = window.trustedTypes!.emptyHTML;
+          const pre = document.createElement('pre');
+          pre.textContent = message;
+          cell.appendChild(pre);
         }
       });
 }

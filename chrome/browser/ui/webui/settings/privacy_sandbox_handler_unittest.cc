@@ -5,7 +5,7 @@
 #include "chrome/browser/ui/webui/settings/privacy_sandbox_handler.h"
 
 #include "base/strings/utf_string_conversions.h"
-#include "chrome/browser/privacy_sandbox/privacy_sandbox_service.h"
+#include "chrome/browser/privacy_sandbox/mock_privacy_sandbox_service.h"
 #include "chrome/browser/privacy_sandbox/privacy_sandbox_service_factory.h"
 #include "chrome/browser/privacy_sandbox/privacy_sandbox_settings_factory.h"
 #include "chrome/test/base/testing_profile.h"
@@ -26,38 +26,7 @@ using Topic = browsing_topics::Topic;
 constexpr char kCallbackId1[] = "test-callback-id";
 constexpr char kCallbackId2[] = "test-callback-id-2";
 
-class MockPrivacySandboxService : public PrivacySandboxService {
- public:
-  MOCK_METHOD(void,
-              GetFledgeJoiningEtldPlusOneForDisplay,
-              (base::OnceCallback<void(std::vector<std::string>)>),
-              (override));
-  MOCK_METHOD(std::vector<std::string>,
-              GetBlockedFledgeJoiningTopFramesForDisplay,
-              (),
-              (const override));
-  MOCK_METHOD(void,
-              SetFledgeJoiningAllowed,
-              ((const std::string&), bool),
-              (const override));
-  MOCK_METHOD(std::vector<privacy_sandbox::CanonicalTopic>,
-              GetCurrentTopTopics,
-              (),
-              (const override));
-  MOCK_METHOD(std::vector<privacy_sandbox::CanonicalTopic>,
-              GetBlockedTopics,
-              (),
-              (const override));
-  MOCK_METHOD(void,
-              SetTopicAllowed,
-              (privacy_sandbox::CanonicalTopic, bool),
-              (override));
-};
-
-std::unique_ptr<KeyedService> BuildMockPrivacySandboxService(
-    content::BrowserContext* context) {
-  return std::make_unique<::testing::StrictMock<MockPrivacySandboxService>>();
-}
+constexpr int kTestTaxonomyVersion = 1;
 
 void ValidateFledgeInfo(content::TestWebUI* web_ui,
                         std::string expected_callback_id,
@@ -69,20 +38,18 @@ void ValidateFledgeInfo(content::TestWebUI* web_ui,
   ASSERT_TRUE(data.arg2()->GetBool());
   ASSERT_TRUE(data.arg3()->is_dict());
 
-  auto* blocked_sites = data.arg3()->FindListKey("blockedSites");
+  auto* blocked_sites = data.arg3()->GetDict().FindList("blockedSites");
   ASSERT_TRUE(blocked_sites);
-  ASSERT_EQ(expected_blocked_sites.size(), blocked_sites->GetList().size());
+  ASSERT_EQ(expected_blocked_sites.size(), blocked_sites->size());
   for (size_t i = 0; i < expected_blocked_sites.size(); i++) {
-    EXPECT_EQ(expected_blocked_sites[i],
-              blocked_sites->GetList()[i].GetString());
+    EXPECT_EQ(expected_blocked_sites[i], (*blocked_sites)[i].GetString());
   }
 
-  auto* joining_sites = data.arg3()->FindListKey("joiningSites");
+  auto* joining_sites = data.arg3()->GetDict().FindList("joiningSites");
   ASSERT_TRUE(joining_sites);
-  ASSERT_EQ(expected_joining_sites.size(), joining_sites->GetList().size());
+  ASSERT_EQ(expected_joining_sites.size(), joining_sites->size());
   for (size_t i = 0; i < expected_joining_sites.size(); i++) {
-    EXPECT_EQ(expected_joining_sites[i],
-              joining_sites->GetList()[i].GetString());
+    EXPECT_EQ(expected_joining_sites[i], (*joining_sites)[i].GetString());
   }
 }
 
@@ -94,12 +61,14 @@ void ValidateTopicsInfo(
     const auto& actual_topic = actual_topics[i];
     const auto& expected_topic = expected_topics[i];
     ASSERT_TRUE(actual_topic.is_dict());
+    const base::Value::Dict& actual_topic_dict = actual_topic.GetDict();
     ASSERT_EQ(expected_topic.topic_id().value(),
-              actual_topic.FindIntKey("topicId"));
+              actual_topic_dict.FindInt("topicId"));
     ASSERT_EQ(expected_topic.taxonomy_version(),
-              actual_topic.FindIntKey("taxonomyVersion"));
-    ASSERT_EQ(expected_topic.GetLocalizedRepresentation(),
-              base::UTF8ToUTF16(*actual_topic.FindStringKey("displayString")));
+              actual_topic_dict.FindInt("taxonomyVersion"));
+    ASSERT_EQ(
+        expected_topic.GetLocalizedRepresentation(),
+        base::UTF8ToUTF16(*actual_topic_dict.FindString("displayString")));
   }
 }
 
@@ -169,10 +138,10 @@ TEST_F(PrivacySandboxHandlerTestMockService, SetFledgeJoiningAllowed) {
   EXPECT_CALL(*mock_privacy_sandbox_service(),
               SetFledgeJoiningAllowed(kTestSite, true));
 
-  base::Value args(base::Value::Type::LIST);
+  base::Value::List args;
   args.Append(kTestSite);
   args.Append(true);
-  handler()->HandleSetFledgeJoiningAllowed(args.GetList());
+  handler()->HandleSetFledgeJoiningAllowed(args);
 }
 
 TEST_F(PrivacySandboxHandlerTestMockService, GetFledgeState) {
@@ -188,13 +157,13 @@ TEST_F(PrivacySandboxHandlerTestMockService, GetFledgeState) {
       .WillOnce([&](Callback callback) { callback_one = std::move(callback); })
       .WillOnce([&](Callback callback) { callback_two = std::move(callback); });
 
-  base::Value args(base::Value::Type::LIST);
+  base::Value::List args;
   args.Append(kCallbackId1);
-  handler()->HandleGetFledgeState(args.GetList());
+  handler()->HandleGetFledgeState(args);
 
-  args.ClearList();
+  args.clear();
   args.Append(kCallbackId2);
-  handler()->HandleGetFledgeState(args.GetList());
+  handler()->HandleGetFledgeState(args);
 
   // Provide different sets of information to each request to the FLEDGE
   // backend.
@@ -219,29 +188,25 @@ TEST_F(PrivacySandboxHandlerTestMockService, GetFledgeState) {
 TEST_F(PrivacySandboxHandlerTestMockService, SetTopicAllowed) {
   // Confirm that the handler correctly constructs the CanonicalTopic and
   // passes it to the PrivacySandboxService.
-  const privacy_sandbox::CanonicalTopic kTestTopic(
-      Topic(1), privacy_sandbox::CanonicalTopic::AVAILABLE_TAXONOMY);
+  const privacy_sandbox::CanonicalTopic kTestTopic(Topic(1),
+                                                   kTestTaxonomyVersion);
   EXPECT_CALL(*mock_privacy_sandbox_service(),
               SetTopicAllowed(kTestTopic, false))
       .Times(1);
-  base::Value args(base::Value::Type::LIST);
+  base::Value::List args;
   args.Append(kTestTopic.topic_id().value());
   args.Append(kTestTopic.taxonomy_version());
   args.Append(false);
-  handler()->HandleSetTopicAllowed(args.GetList());
+  handler()->HandleSetTopicAllowed(args);
 }
 
 TEST_F(PrivacySandboxHandlerTestMockService, GetTopicsState) {
   const std::vector<privacy_sandbox::CanonicalTopic> kBlockedTopics = {
-      privacy_sandbox::CanonicalTopic(
-          Topic(1), privacy_sandbox::CanonicalTopic::AVAILABLE_TAXONOMY),
-      privacy_sandbox::CanonicalTopic(
-          Topic(2), privacy_sandbox::CanonicalTopic::AVAILABLE_TAXONOMY)};
+      privacy_sandbox::CanonicalTopic(Topic(1), kTestTaxonomyVersion),
+      privacy_sandbox::CanonicalTopic(Topic(2), kTestTaxonomyVersion)};
   const std::vector<privacy_sandbox::CanonicalTopic> kTopTopics = {
-      privacy_sandbox::CanonicalTopic(
-          Topic(3), privacy_sandbox::CanonicalTopic::AVAILABLE_TAXONOMY),
-      privacy_sandbox::CanonicalTopic(
-          Topic(4), privacy_sandbox::CanonicalTopic::AVAILABLE_TAXONOMY)};
+      privacy_sandbox::CanonicalTopic(Topic(3), kTestTaxonomyVersion),
+      privacy_sandbox::CanonicalTopic(Topic(4), kTestTaxonomyVersion)};
 
   EXPECT_CALL(*mock_privacy_sandbox_service(), GetCurrentTopTopics())
       .Times(1)
@@ -250,9 +215,9 @@ TEST_F(PrivacySandboxHandlerTestMockService, GetTopicsState) {
       .Times(1)
       .WillOnce(testing::Return(kBlockedTopics));
 
-  base::Value args(base::Value::Type::LIST);
+  base::Value::List args;
   args.Append(kCallbackId1);
-  handler()->HandleGetTopicsState(args.GetList());
+  handler()->HandleGetTopicsState(args);
 
   const content::TestWebUI::CallData& data = *web_ui()->call_data().back();
   EXPECT_EQ(kCallbackId1, data.arg1()->GetString());
@@ -260,10 +225,21 @@ TEST_F(PrivacySandboxHandlerTestMockService, GetTopicsState) {
   ASSERT_TRUE(data.arg2()->GetBool());
   ASSERT_TRUE(data.arg3()->is_dict());
 
-  ValidateTopicsInfo(kTopTopics,
-                     data.arg3()->FindListKey("topTopics")->GetList());
+  ValidateTopicsInfo(kTopTopics, *data.arg3()->GetDict().FindList("topTopics"));
   ValidateTopicsInfo(kBlockedTopics,
-                     data.arg3()->FindListKey("blockedTopics")->GetList());
+                     *data.arg3()->GetDict().FindList("blockedTopics"));
+}
+
+TEST_F(PrivacySandboxHandlerTestMockService, TopicsToggleChanged) {
+  std::vector<bool> states = {true, false};
+  for (bool state : states) {
+    testing::Mock::VerifyAndClearExpectations(mock_privacy_sandbox_service());
+    EXPECT_CALL(*mock_privacy_sandbox_service(), TopicsToggleChanged(state));
+
+    base::Value::List args;
+    args.Append(state);
+    handler()->HandleTopicsToggleChanged(args);
+  }
 }
 
 }  // namespace settings

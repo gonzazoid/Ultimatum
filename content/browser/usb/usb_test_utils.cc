@@ -4,11 +4,15 @@
 
 #include "content/browser/usb/usb_test_utils.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "services/device/public/mojom/usb_device.mojom.h"
 #include "services/device/public/mojom/usb_enumeration_options.mojom.h"
 
 namespace content {
+
+MockDeviceManagerClient::MockDeviceManagerClient() = default;
+
+MockDeviceManagerClient::~MockDeviceManagerClient() = default;
 
 MockUsbDelegate::MockUsbDelegate() = default;
 
@@ -16,7 +20,7 @@ MockUsbDelegate::~MockUsbDelegate() = default;
 
 std::unique_ptr<UsbChooser> MockUsbDelegate::RunChooser(
     RenderFrameHost& frame,
-    std::vector<device::mojom::UsbDeviceFilterPtr> filters,
+    blink::mojom::WebUsbRequestDeviceOptionsPtr options,
     blink::mojom::WebUsbService::GetPermissionCallback callback) {
   std::move(callback).Run(RunChooserInternal());
   return nullptr;
@@ -24,11 +28,17 @@ std::unique_ptr<UsbChooser> MockUsbDelegate::RunChooser(
 
 void MockUsbDelegate::AddObserver(BrowserContext* browser_context,
                                   Observer* observer) {
+  if (assert_browser_context_) {
+    ASSERT_TRUE(browser_context);
+  }
   observer_list_.AddObserver(observer);
 }
 
 void MockUsbDelegate::RemoveObserver(BrowserContext* browser_context,
                                      Observer* observer) {
+  if (assert_browser_context_) {
+    ASSERT_TRUE(browser_context);
+  }
   observer_list_.RemoveObserver(observer);
 }
 
@@ -49,12 +59,14 @@ void MockUsbDelegate::OnPermissionRevoked(const url::Origin& origin) {
     observer.OnPermissionRevoked(origin);
 }
 
-UsbTestContentBrowserClient::UsbTestContentBrowserClient() = default;
+void MockUsbDelegate::OnDeviceManagerConnectionError() {
+  for (auto& observer : observer_list_) {
+    observer.OnDeviceManagerConnectionError();
+  }
+}
 
-UsbTestContentBrowserClient::~UsbTestContentBrowserClient() = default;
-
-UsbDelegate* UsbTestContentBrowserClient::GetUsbDelegate() {
-  return &delegate_;
+void MockUsbDelegate::SetAssertBrowserContext(bool assert_browser_context) {
+  assert_browser_context_ = assert_browser_context;
 }
 
 }  // namespace content

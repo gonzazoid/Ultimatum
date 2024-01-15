@@ -40,25 +40,6 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) FakeDebugDaemonClient
                     chromeos::VoidDBusMethodCallback callback) override;
   std::string GetTracingAgentName() override;
   std::string GetTraceEventLabel() override;
-  void SetSwapParameter(
-      const std::string& parameter,
-      int32_t value,
-      chromeos::DBusMethodCallback<std::string> callback) override;
-  void SwapZramEnableWriteback(
-      uint32_t size_mb,
-      chromeos::DBusMethodCallback<std::string> callback) override;
-
-  void SwapZramSetWritebackLimit(
-      uint32_t limit_pages,
-      chromeos::DBusMethodCallback<std::string> callback) override;
-
-  void SwapZramMarkIdle(
-      uint32_t age_seconds,
-      chromeos::DBusMethodCallback<std::string> callback) override;
-
-  void InitiateSwapZramWriteback(
-      debugd::ZramWritebackMode mode,
-      chromeos::DBusMethodCallback<std::string> callback) override;
   void StartAgentTracing(const base::trace_event::TraceConfig& trace_config,
                          StartAgentTracingCallback callback) override;
   void StopAgentTracing(StopAgentTracingCallback callback) override;
@@ -80,7 +61,7 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) FakeDebugDaemonClient
                      chromeos::DBusMethodCallback<uint64_t> callback) override;
   void StopPerf(uint64_t session_id,
                 chromeos::VoidDBusMethodCallback callback) override;
-  void GetFeedbackLogsV2(
+  void GetFeedbackLogs(
       const cryptohome::AccountIdentifier& id,
       const std::vector<debugd::FeedbackLogType>& requested_logs,
       GetLogsCallback callback) override;
@@ -106,10 +87,12 @@ class COMPONENT_EXPORT(DEBUG_DAEMON) FakeDebugDaemonClient
   void CupsAddManuallyConfiguredPrinter(
       const std::string& name,
       const std::string& uri,
+      const std::string& language,
       const std::string& ppd_contents,
       CupsAddPrinterCallback callback) override;
   void CupsAddAutoConfiguredPrinter(const std::string& name,
                                     const std::string& uri,
+                                    const std::string& language,
                                     CupsAddPrinterCallback callback) override;
   void CupsRemovePrinter(const std::string& name,
                          CupsRemovePrinterCallback callback,

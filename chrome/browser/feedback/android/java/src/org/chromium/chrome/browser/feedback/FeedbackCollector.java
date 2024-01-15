@@ -14,17 +14,18 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
+import com.google.common.collect.Iterables;
+
 import org.chromium.base.Callback;
-import org.chromium.base.CollectionUtil;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.task.PostTask;
+import org.chromium.base.task.TaskTraits;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
 import org.chromium.components.signin.base.CoreAccountInfo;
 import org.chromium.components.signin.identitymanager.ConsentLevel;
 import org.chromium.components.signin.identitymanager.IdentityManager;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
 
 import java.util.HashMap;
 import java.util.List;
@@ -38,6 +39,7 @@ import java.util.Map;
 public abstract class FeedbackCollector<T> implements Runnable {
     /** The timeout for gathering data asynchronously. This timeout is ignored for screenshots. */
     private static final int TIMEOUT_MS = 500;
+
     private final long mStartTime = SystemClock.elapsedRealtime();
 
     private final String mCategoryTag;
@@ -45,15 +47,16 @@ public abstract class FeedbackCollector<T> implements Runnable {
     private String mAccountInUse;
 
     private List<FeedbackSource> mSynchronousSources;
-    @VisibleForTesting
-    protected List<AsyncFeedbackSource> mAsynchronousSources;
+    @VisibleForTesting protected List<AsyncFeedbackSource> mAsynchronousSources;
 
     private ScreenshotSource mScreenshotTask;
 
     /** The callback is cleared once notified so we will never notify the caller twice. */
     private Callback<FeedbackCollector> mCallback;
 
-    public FeedbackCollector(@Nullable String categoryTag, @Nullable String description,
+    public FeedbackCollector(
+            @Nullable String categoryTag,
+            @Nullable String description,
             Callback<FeedbackCollector> callback) {
         mCategoryTag = categoryTag;
         mDescription = description;
@@ -61,7 +64,10 @@ public abstract class FeedbackCollector<T> implements Runnable {
     }
 
     // Subclasses must invoke init() at construction time.
-    protected void init(Activity activity, @Nullable ScreenshotSource screenshotTask, T initParams,
+    protected void init(
+            Activity activity,
+            @Nullable ScreenshotSource screenshotTask,
+            T initParams,
             Profile profile) {
         // 1. Build all synchronous and asynchronous sources and determine the currently signed in
         //    account.
@@ -70,11 +76,12 @@ public abstract class FeedbackCollector<T> implements Runnable {
         IdentityManager identityManager =
                 IdentityServicesProvider.get().getIdentityManager(profile);
         if (identityManager != null) {
-            mAccountInUse = CoreAccountInfo.getEmailFrom(
-                    identityManager.getPrimaryAccountInfo(ConsentLevel.SIGNIN));
+            mAccountInUse =
+                    CoreAccountInfo.getEmailFrom(
+                            identityManager.getPrimaryAccountInfo(ConsentLevel.SIGNIN));
         }
 
-        // Sanity check in case a source is added to the wrong list.
+        // Validation check in case a source is added to the wrong list.
         for (FeedbackSource source : mSynchronousSources) {
             assert !(source instanceof AsyncFeedbackSource);
         }
@@ -83,13 +90,15 @@ public abstract class FeedbackCollector<T> implements Runnable {
         if (screenshotTask != null) mScreenshotTask = screenshotTask;
 
         // 3. Start all asynchronous sources and the screenshot task.
-        CollectionUtil.forEach(mAsynchronousSources, source -> source.start(this));
+        for (var source : mAsynchronousSources) {
+            source.start(this);
+        }
         if (mScreenshotTask != null) mScreenshotTask.capture(this);
 
         // 4. Kick off a task to timeout the async sources.
         ThreadUtils.postOnUiThreadDelayed(this, TIMEOUT_MS);
 
-        // 5. Sanity check in case everything finished or we have no sources.
+        // 5. Validation check in case everything finished or we have no sources.
         checkIfReady();
     }
 
@@ -140,12 +149,14 @@ public abstract class FeedbackCollector<T> implements Runnable {
         mCallback = null;
 
         Bundle bundle = new Bundle();
-        doWorkOnAllFeedbackSources(source -> {
+        for (var source : getAllSources()) {
             Map<String, String> feedback = source.getFeedback();
-            if (feedback == null) return;
+            if (feedback == null) continue;
 
-            CollectionUtil.forEach(feedback, e -> { bundle.putString(e.getKey(), e.getValue()); });
-        });
+            for (var e : feedback.entrySet()) {
+                bundle.putString(e.getKey(), e.getValue());
+            }
+        }
         return bundle;
     }
 
@@ -163,12 +174,12 @@ public abstract class FeedbackCollector<T> implements Runnable {
         mCallback = null;
 
         Map<String, String> logs = new HashMap<>();
-        doWorkOnAllFeedbackSources(source -> {
+        for (var source : getAllSources()) {
             Pair<String, String> log = source.getLogs();
-            if (log == null) return;
+            if (log == null) continue;
 
             logs.put(log.first, log.second);
-        });
+        }
         return logs;
     }
 
@@ -205,16 +216,16 @@ public abstract class FeedbackCollector<T> implements Runnable {
             }
         }
 
-        RecordHistogram.recordMediumTimesHistogram("Feedback.Duration.FetchSystemInformation",
+        RecordHistogram.recordMediumTimesHistogram(
+                "Feedback.Duration.FetchSystemInformation",
                 SystemClock.elapsedRealtime() - mStartTime);
         final Callback<FeedbackCollector> callback = mCallback;
         mCallback = null;
 
-        PostTask.postTask(UiThreadTaskTraits.DEFAULT, callback.bind(this));
+        PostTask.postTask(TaskTraits.UI_DEFAULT, callback.bind(this));
     }
 
-    private void doWorkOnAllFeedbackSources(Callback<FeedbackSource> worker) {
-        CollectionUtil.forEach(mSynchronousSources, worker);
-        CollectionUtil.forEach(mAsynchronousSources, worker);
+    private Iterable<FeedbackSource> getAllSources() {
+        return Iterables.concat(mSynchronousSources, mAsynchronousSources);
     }
 }

@@ -4,19 +4,20 @@
 
 #include "components/subresource_filter/content/browser/ruleset_service.h"
 
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/containers/span.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/trace_event/trace_event.h"
@@ -78,7 +79,7 @@ class SentinelFile {
   SentinelFile& operator=(const SentinelFile&) = delete;
 
   bool IsPresent() { return base::PathExists(path_); }
-  bool Create() { return base::WriteFile(path_, nullptr, 0) == 0; }
+  bool Create() { return base::WriteFile(path_, std::string_view()); }
   bool Remove() { return base::DeleteFile(path_); }
 
  private:
@@ -220,8 +221,8 @@ RulesetService::RulesetService(
 
   DCHECK(publisher_->BestEffortTaskRunner()->BelongsToCurrentThread());
   publisher_->BestEffortTaskRunner()->PostTask(
-      FROM_HERE,
-      base::BindOnce(&RulesetService::FinishInitialization, AsWeakPtr()));
+      FROM_HERE, base::BindOnce(&RulesetService::FinishInitialization,
+                                weak_ptr_factory_.GetWeakPtr()));
 }
 
 RulesetService::~RulesetService() {}
@@ -250,9 +251,9 @@ void RulesetService::IndexAndStoreAndPublishRulesetIfNeeded(
     return;
   }
 
-  IndexAndStoreRuleset(
-      unindexed_ruleset_info,
-      base::BindOnce(&RulesetService::OpenAndPublishRuleset, AsWeakPtr()));
+  IndexAndStoreRuleset(unindexed_ruleset_info,
+                       base::BindOnce(&RulesetService::OpenAndPublishRuleset,
+                                      weak_ptr_factory_.GetWeakPtr()));
 }
 
 IndexedRulesetVersion RulesetService::GetMostRecentlyIndexedVersion() const {
@@ -379,11 +380,9 @@ RulesetService::IndexAndWriteRulesetResult RulesetService::WriteRuleset(
   }
 
   static_assert(sizeof(uint8_t) == sizeof(char), "Expected char = byte.");
-  const int data_size_in_chars = base::checked_cast<int>(indexed_ruleset_size);
-  if (base::WriteFile(
+  if (!base::WriteFile(
           IndexedRulesetLocator::GetRulesetDataFilePath(scratch_dir.GetPath()),
-          reinterpret_cast<const char*>(indexed_ruleset_data),
-          data_size_in_chars) != data_size_in_chars) {
+          base::make_span(indexed_ruleset_data, indexed_ruleset_size))) {
     return IndexAndWriteRulesetResult::FAILED_WRITING_RULESET_DATA;
   }
 
@@ -411,10 +410,6 @@ RulesetService::IndexAndWriteRulesetResult RulesetService::WriteRuleset(
   if (!(*g_replace_file_func)(scratch_dir_with_new_indexed_ruleset,
                               indexed_ruleset_version_dir, &error)) {
     base::DeletePathRecursively(scratch_dir_with_new_indexed_ruleset);
-    // While enumerators of base::File::Error all have negative values, the
-    // histogram records the absolute values.
-    UMA_HISTOGRAM_ENUMERATION("SubresourceFilter.WriteRuleset.ReplaceFileError",
-                              -error, -base::File::FILE_ERROR_MAX);
     return IndexAndWriteRulesetResult::FAILED_REPLACE_FILE;
   }
 
@@ -432,9 +427,9 @@ void RulesetService::FinishInitialization() {
                      indexed_ruleset_base_dir_, most_recently_indexed_version));
 
   if (!queued_unindexed_ruleset_info_.content_version.empty()) {
-    IndexAndStoreRuleset(
-        queued_unindexed_ruleset_info_,
-        base::BindOnce(&RulesetService::OpenAndPublishRuleset, AsWeakPtr()));
+    IndexAndStoreRuleset(queued_unindexed_ruleset_info_,
+                         base::BindOnce(&RulesetService::OpenAndPublishRuleset,
+                                        weak_ptr_factory_.GetWeakPtr()));
     queued_unindexed_ruleset_info_ = UnindexedRulesetInfo();
   }
 }
@@ -443,11 +438,12 @@ void RulesetService::IndexAndStoreRuleset(
     const UnindexedRulesetInfo& unindexed_ruleset_info,
     WriteRulesetCallback success_callback) {
   DCHECK(!unindexed_ruleset_info.content_version.empty());
-  base::PostTaskAndReplyWithResult(
-      background_task_runner_.get(), FROM_HERE,
+  background_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&RulesetService::IndexAndWriteRuleset,
                      indexed_ruleset_base_dir_, unindexed_ruleset_info),
-      base::BindOnce(&RulesetService::OnWrittenRuleset, AsWeakPtr(),
+      base::BindOnce(&RulesetService::OnWrittenRuleset,
+                     weak_ptr_factory_.GetWeakPtr(),
                      std::move(success_callback)));
 }
 
@@ -469,7 +465,8 @@ void RulesetService::OpenAndPublishRuleset(
 
   publisher_->TryOpenAndSetRulesetFile(
       file_path, version.checksum,
-      base::BindOnce(&RulesetService::OnRulesetSet, AsWeakPtr()));
+      base::BindOnce(&RulesetService::OnRulesetSet,
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
 void RulesetService::OnRulesetSet(RulesetFilePtr file) {

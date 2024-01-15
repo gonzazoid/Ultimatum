@@ -6,24 +6,28 @@
 
 #include <algorithm>
 #include <array>
+#include <cstring>
+#include <iterator>
+#include <optional>
 
-#include "ash/quick_pair/common/logging.h"
 #include "ash/quick_pair/fast_pair_handshake/fast_pair_key_pair.h"
 #include "base/check.h"
 #include "base/ranges/algorithm.h"
 #include "chromeos/ash/services/quick_pair/public/cpp/fast_pair_message_type.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/cross_device/logging/logging.h"
 #include "third_party/boringssl/src/include/openssl/aes.h"
 #include "third_party/boringssl/src/include/openssl/base.h"
 #include "third_party/boringssl/src/include/openssl/ec.h"
 #include "third_party/boringssl/src/include/openssl/ec_key.h"
 #include "third_party/boringssl/src/include/openssl/ecdh.h"
+#include "third_party/boringssl/src/include/openssl/evp.h"
+#include "third_party/boringssl/src/include/openssl/hmac.h"
 #include "third_party/boringssl/src/include/openssl/nid.h"
 #include "third_party/boringssl/src/include/openssl/sha.h"
 
 namespace {
 
-using ash::quick_pair::fast_pair_encryption::kBlockByteSize;
+using ash::quick_pair::fast_pair_encryption::kBlockSizeBytes;
 
 // Converts the public anti-spoofing key into an EC_Point.
 bssl::UniquePtr<EC_POINT> GetEcPointFromPublicAntiSpoofingKey(
@@ -58,13 +62,13 @@ namespace ash {
 namespace quick_pair {
 namespace fast_pair_encryption {
 
-absl::optional<KeyPair> GenerateKeysWithEcdhKeyAgreement(
+std::optional<KeyPair> GenerateKeysWithEcdhKeyAgreement(
     const std::string& decoded_public_anti_spoofing) {
   if (decoded_public_anti_spoofing.size() != kPublicKeyByteSize) {
-    QP_LOG(WARNING) << "Expected " << kPublicKeyByteSize
-                    << " byte value for anti-spoofing key. Got:"
-                    << decoded_public_anti_spoofing.size();
-    return absl::nullopt;
+    CD_LOG(WARNING, Feature::FP) << "Expected " << kPublicKeyByteSize
+                                 << " byte value for anti-spoofing key. Got:"
+                                 << decoded_public_anti_spoofing.size();
+    return std::nullopt;
   }
 
   // Generate the secp256r1 key-pair.
@@ -74,8 +78,8 @@ absl::optional<KeyPair> GenerateKeysWithEcdhKeyAgreement(
       EC_KEY_new_by_curve_name(NID_X9_62_prime256v1));
 
   if (!EC_KEY_generate_key(ec_key.get())) {
-    QP_LOG(WARNING) << __func__ << ": Failed to generate ec key";
-    return absl::nullopt;
+    CD_LOG(WARNING, Feature::FP) << __func__ << ": Failed to generate ec key";
+    return std::nullopt;
   }
 
   // The ultimate goal here is to get a 64-byte public key. We accomplish this
@@ -88,10 +92,11 @@ absl::optional<KeyPair> GenerateKeysWithEcdhKeyAgreement(
       uncompressed_private_key.size(), nullptr);
 
   if (point_bytes_written != uncompressed_private_key.size()) {
-    QP_LOG(WARNING) << __func__
-                    << ": EC_POINT_point2oct failed to convert public key to "
-                       "uncompressed x9.62 format.";
-    return absl::nullopt;
+    CD_LOG(WARNING, Feature::FP)
+        << __func__
+        << ": EC_POINT_point2oct failed to convert public key to "
+           "uncompressed x9.62 format.";
+    return std::nullopt;
   }
 
   bssl::UniquePtr<EC_POINT> public_anti_spoofing_point =
@@ -99,10 +104,10 @@ absl::optional<KeyPair> GenerateKeysWithEcdhKeyAgreement(
                                           decoded_public_anti_spoofing);
 
   if (!public_anti_spoofing_point) {
-    QP_LOG(WARNING)
+    CD_LOG(WARNING, Feature::FP)
         << __func__
         << ": Failed to convert Public Anti-Spoofing key to EC_POINT";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   uint8_t secret[SHA256_DIGEST_LENGTH];
@@ -111,8 +116,8 @@ absl::optional<KeyPair> GenerateKeysWithEcdhKeyAgreement(
                        public_anti_spoofing_point.get(), ec_key.get(), &KDF);
 
   if (computed_key_size != kPrivateKeyByteSize) {
-    QP_LOG(WARNING) << __func__ << ": ECDH_compute_key failed.";
-    return absl::nullopt;
+    CD_LOG(WARNING, Feature::FP) << __func__ << ": ECDH_compute_key failed.";
+    return std::nullopt;
   }
 
   // Take first 16 bytes from secret as the private key.
@@ -128,16 +133,86 @@ absl::optional<KeyPair> GenerateKeysWithEcdhKeyAgreement(
   return KeyPair(private_key, public_key);
 }
 
-const std::array<uint8_t, kBlockByteSize> EncryptBytes(
-    const std::array<uint8_t, kBlockByteSize>& aes_key_bytes,
-    const std::array<uint8_t, kBlockByteSize>& bytes_to_encrypt) {
+const std::array<uint8_t, kHmacSizeBytes> GenerateHmacSha256(
+    const std::array<uint8_t, kSecretKeySizeBytes>& secret_key,
+    std::array<uint8_t, kNonceSizeBytes> nonce,
+    const std::vector<uint8_t>& data) {
+  int nonce_data_concat_size = kNonceSizeBytes + data.size();
+  uint8_t nonce_data_concat[nonce_data_concat_size];
+  std::memcpy(nonce_data_concat, nonce.data(), kNonceSizeBytes);
+  std::memcpy(nonce_data_concat + kNonceSizeBytes, data.data(), data.size());
+
+  std::array<uint8_t, kHmacKeySizeBytes> K = {};
+  std::memcpy(K.data(), secret_key.data(), kSecretKeySizeBytes);
+
+  std::array<uint8_t, kHmacSizeBytes> output;
+  unsigned int output_size;
+  HMAC(/*evp_md=*/EVP_sha256(), /*key=*/&K,
+       /*key_len=*/kHmacKeySizeBytes, /*data=*/nonce_data_concat,
+       /*data_len=*/nonce_data_concat_size,
+       /*out=*/output.data(), /*out_len*/ &output_size);
+  return output;
+}
+
+const std::array<uint8_t, kBlockSizeBytes> EncryptBytes(
+    const std::array<uint8_t, kBlockSizeBytes>& aes_key_bytes,
+    const std::array<uint8_t, kBlockSizeBytes>& bytes_to_encrypt) {
   AES_KEY aes_key;
   int aes_key_was_set = AES_set_encrypt_key(aes_key_bytes.data(),
                                             aes_key_bytes.size() * 8, &aes_key);
   DCHECK(aes_key_was_set == 0) << "Invalid AES key size.";
-  std::array<uint8_t, kBlockByteSize> encrypted_bytes;
+  std::array<uint8_t, kBlockSizeBytes> encrypted_bytes;
   AES_encrypt(bytes_to_encrypt.data(), encrypted_bytes.data(), &aes_key);
   return encrypted_bytes;
+}
+
+const std::vector<uint8_t> EncryptAdditionalData(
+    const std::array<uint8_t, kSecretKeySizeBytes>& secret_key,
+    std::array<uint8_t, kNonceSizeBytes> nonce,
+    const std::vector<uint8_t>& data) {
+  if (data.empty()) {
+    return {};
+  }
+
+  AES_KEY aes_key;
+  int aes_key_was_set =
+      AES_set_encrypt_key(secret_key.data(), secret_key.size() * 8, &aes_key);
+  DCHECK(aes_key_was_set == 0) << "Invalid AES key size.";
+
+  uint bytes_read = 0;
+  unsigned char ivec[AES_BLOCK_SIZE] = {};
+  unsigned char ecount[AES_BLOCK_SIZE] = {};
+
+  uint8_t encrypted_data[data.size()];
+
+  // The Fast Pair Spec AES-CTR version increments the first byte of the
+  // initialization vector; the typical AES-CTR algorithm increments the
+  // last byte. So, instead of calling AES_ctr128_encrypt() once on all of
+  // `data`, it is called on each 128-bit block of `data` and the counter is
+  // incremented manually.
+  int bytes_to_encrypt = data.size();
+  int i = 0;
+  while (bytes_to_encrypt > 0) {
+    int block_size =
+        bytes_to_encrypt >= AES_BLOCK_SIZE ? AES_BLOCK_SIZE : bytes_to_encrypt;
+    std::memset(ivec, 0, AES_BLOCK_SIZE);
+    std::memcpy(ivec + 8, nonce.data(), kNonceSizeBytes);
+    ivec[0] = i;
+    uint offset = data.size() - bytes_to_encrypt;
+    AES_ctr128_encrypt(/*in=*/data.data() + offset,
+                       /*out=*/encrypted_data + offset,
+                       /*len=*/block_size, &aes_key, /*ivec=*/ivec,
+                       /*ecount_buf=*/ecount, &bytes_read);
+
+    bytes_to_encrypt -= block_size;
+    i++;
+  }
+
+  CHECK(!bytes_to_encrypt);
+
+  return std::vector<uint8_t>(
+      encrypted_data,
+      encrypted_data + sizeof(encrypted_data) / sizeof(uint8_t));
 }
 
 }  // namespace fast_pair_encryption

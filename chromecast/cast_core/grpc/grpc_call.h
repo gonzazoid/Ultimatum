@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "chromecast/cast_core/grpc/grpc_call_options.h"
 
 namespace cast {
@@ -23,6 +24,19 @@ class GrpcCall {
   using SyncInterface = typename TGrpcStub::SyncInterface;
   using AsyncInterface = typename TGrpcStub::AsyncInterface;
   using Request = TRequest;
+
+  // Client call context valid only through duration of the call.
+  class Context {
+   public:
+    explicit Context(grpc::ClientContext* grpc_context)
+        : grpc_context_(grpc_context) {}
+
+    // Try cancelling the call.
+    void Cancel() { grpc_context_->TryCancel(); }
+
+   private:
+    raw_ptr<grpc::ClientContext> grpc_context_;
+  };
 
   explicit GrpcCall(SyncInterface* stub) : GrpcCall(stub, Request()) {}
 
@@ -57,8 +71,8 @@ class GrpcCall {
   GrpcCallOptions&& options() && { return std::move(options_); }
 
  private:
-  SyncInterface* stub_;
-  AsyncInterface* async_;
+  raw_ptr<SyncInterface> stub_;
+  raw_ptr<AsyncInterface> async_;
   Request request_;
   GrpcCallOptions options_;
 };

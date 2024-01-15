@@ -12,6 +12,7 @@
 
 #include "base/memory/ref_counted.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/thread_annotations.h"
 #include "base/types/pass_key.h"
 #include "content/browser/android/java/gin_java_bound_object.h"
@@ -64,7 +65,8 @@ class GinJavaBridgeObjectDeletionMessageFilter
       bool create_if_not_exists);
 
   GinJavaBridgeObjectDeletionMessageFilter(
-      base::PassKey<GinJavaBridgeObjectDeletionMessageFilter> pass_key);
+      base::PassKey<GinJavaBridgeObjectDeletionMessageFilter> pass_key,
+      int render_process_id);
 
  private:
   friend class BrowserThread;
@@ -91,7 +93,8 @@ class GinJavaBridgeObjectDeletionMessageFilter
 
   // The routing id of the RenderFrameHost whose request we are processing.
   // Used on the background thread.
-  int32_t current_routing_id_;
+  int32_t current_routing_id_ = MSG_ROUTING_NONE;
+  const int32_t render_process_id_;
 };
 
 }  // namespace content

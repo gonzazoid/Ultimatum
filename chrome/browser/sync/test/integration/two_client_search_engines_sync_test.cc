@@ -12,6 +12,7 @@
 #include "chrome/test/base/search_test_utils.h"
 #include "components/search_engines/template_url.h"
 #include "components/search_engines/template_url_service.h"
+#include "components/signin/public/base/signin_switches.h"
 #include "content/public/test/browser_test.h"
 
 namespace {
@@ -32,7 +33,13 @@ using search_engines_helper::TemplateURLBuilder;
 
 class TwoClientSearchEnginesSyncTest : public SyncTest {
  public:
-  TwoClientSearchEnginesSyncTest() : SyncTest(TWO_CLIENT) {}
+  TwoClientSearchEnginesSyncTest() : SyncTest(TWO_CLIENT) {
+    // The search engine pref will stop being synced when the
+    // `kSearchEngineChoice` or `kSearchEngineChoiceFre` feature is enabled.
+    feature_list_.InitWithFeatures(
+        /*enabled_features=*/{}, /*disabled_features=*/{
+            switches::kSearchEngineChoice, switches::kSearchEngineChoiceFre});
+  }
   ~TwoClientSearchEnginesSyncTest() override = default;
 
   bool SetupClients() override {
@@ -50,6 +57,9 @@ class TwoClientSearchEnginesSyncTest : public SyncTest {
 
     return true;
   }
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
 };
 
 class TwoClientSearchEnginesSyncTestWithVerifier
@@ -295,14 +305,8 @@ IN_PROC_BROWSER_TEST_F(TwoClientSearchEnginesSyncTest,
 
 // Ensure that we can change the search engine and immediately delete it
 // without putting the clients out of sync.
-// TODO(crbug.com/1347009): Flaky on Mac.
-#if BUILDFLAG(IS_MAC)
-#define MAYBE_DeleteSyncedDefault DISABLED_DeleteSyncedDefault
-#else
-#define MAYBE_DeleteSyncedDefault DeleteSyncedDefault
-#endif
 IN_PROC_BROWSER_TEST_F(TwoClientSearchEnginesSyncTest,
-                       E2E_ENABLED(MAYBE_DeleteSyncedDefault)) {
+                       E2E_ENABLED(DeleteSyncedDefault)) {
   ResetSyncForPrimaryAccount();
   ASSERT_TRUE(SetupSync()) << "SetupSync() failed.";
   // TODO(crbug.com/953711): Ideally we could immediately assert

@@ -10,8 +10,6 @@ source_set("interstitials") {
     "interstitial_ui_util.mm",
   ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
-
   deps = [
     ":constants",
     "//base",
@@ -20,11 +18,11 @@ source_set("interstitials") {
     "//components/safe_browsing/ios/browser:allow_list",
     "//components/security_interstitials/core",
     "//components/security_interstitials/core:unsafe_resource",
-    "//ios/chrome/browser/application_context",
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/safe_browsing",
-    "//ios/chrome/browser/ssl",
-    "//ios/chrome/browser/url:constants",
+    "//ios/chrome/browser/safe_browsing/model",
+    "//ios/chrome/browser/shared/model/application_context",
+    "//ios/chrome/browser/shared/model/browser_state",
+    "//ios/chrome/browser/shared/model/url:constants",
+    "//ios/chrome/browser/ssl/model",
     "//ios/components/security_interstitials",
     "//ios/components/security_interstitials/safe_browsing",
     "//ios/web/public/security",
@@ -40,26 +38,21 @@ source_set("constants") {
     "interstitial_ui_constants.h",
     "interstitial_ui_constants.mm",
   ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("eg2_tests") {
-  configs += [
-    "//build/config/compiler:enable_arc",
-    "//build/config/ios:xctest_config",
-  ]
+  configs += [ "//build/config/ios:xctest_config" ]
   testonly = true
   sources = [ "interstitial_ui_egtest.mm" ]
   deps = [
     ":constants",
     "//base",
     "//base/test:test_support",
-    "//ios/chrome/browser/url:constants",
+    "//components/safe_browsing/core/common",
+    "//ios/chrome/browser/shared/model/url:constants",
     "//ios/chrome/test/earl_grey:eg_test_support+eg2",
     "//ios/components/webui:url_constants",
     "//ios/testing/earl_grey:eg_test_support+eg2",
-    "//ios/third_party/earl_grey2:test_lib",
     "//ios/web/public/test:element_selector",
     "//net:test_support",
     "//ui/base",

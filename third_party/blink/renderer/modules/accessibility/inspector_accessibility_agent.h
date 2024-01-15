@@ -92,7 +92,7 @@ class MODULES_EXPORT InspectorAccessibilityAgent
   // the a11y tree and fetch object properties.
   void AXReadyCallback(Document& document);
 
-  void ScheduleVisualUpdateIfNeeded(TimerBase*, Document*);
+  void ScheduleAXUpdateIfNeeded(TimerBase*, Document*);
 
  private:
   // Used to store the queries received by queryAXTree. The queries are
@@ -210,6 +210,8 @@ class MODULES_EXPORT InspectorAccessibilityAgent
       timers_;
 
   HeapHashMap<WeakMember<Document>, Vector<AXQuery>> queries_;
+
+  HeapHashSet<WeakMember<Document>> load_complete_needs_processing_;
 };
 
 }  // namespace blink

@@ -12,9 +12,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/hash/sha1.h"
 #include "base/i18n/case_conversion.h"
 #include "base/path_service.h"
@@ -169,9 +169,7 @@ class ModuleBlocklistCacheUpdaterTest : public testing::Test,
 
     std::string contents;
     if (!module_list.SerializeToString(&contents) ||
-        base::WriteFile(module_list_path, contents.data(),
-                        static_cast<int>(contents.size())) !=
-            static_cast<int>(contents.size())) {
+        !base::WriteFile(module_list_path, contents)) {
       return nullptr;
     }
 

@@ -5,13 +5,14 @@
 #ifndef COMPONENTS_PERFORMANCE_MANAGER_PUBLIC_GRAPH_PROCESS_NODE_H_
 #define COMPONENTS_PERFORMANCE_MANAGER_PUBLIC_GRAPH_PROCESS_NODE_H_
 
-#include "base/callback_forward.h"
 #include "base/containers/enum_set.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/function_ref.h"
 #include "base/process/process.h"
 #include "base/task/task_traits.h"
 #include "components/performance_manager/public/graph/node.h"
 #include "components/performance_manager/public/render_process_host_id.h"
+#include "components/performance_manager/public/resource_attribution/process_context.h"
 #include "content/public/common/process_type.h"
 
 namespace base {
@@ -24,6 +25,7 @@ class FrameNode;
 class WorkerNode;
 class ProcessNodeObserver;
 class RenderProcessHostProxy;
+class BrowserChildProcessHostProxy;
 
 // A process node follows the lifetime of a RenderProcessHost.
 // It may reference zero or one processes at a time, but during its lifetime, it
@@ -40,7 +42,8 @@ class RenderProcessHostProxy;
 // it.
 class ProcessNode : public Node {
  public:
-  using FrameNodeVisitor = base::RepeatingCallback<bool(const FrameNode*)>;
+  using FrameNodeVisitor = base::FunctionRef<bool(const FrameNode*)>;
+  using WorkerNodeVisitor = base::FunctionRef<bool(const WorkerNode*)>;
   using Observer = ProcessNodeObserver;
   class ObserverDefaultImpl;
 
@@ -87,6 +90,10 @@ class ProcessNode : public Node {
   // process if it has not yet started, or if it has exited.
   virtual const base::Process& GetProcess() const = 0;
 
+  // Gets the unique token identifying this node for resource attribution. This
+  // token will not be reused after the node is destroyed.
+  virtual resource_attribution::ProcessContext GetResourceContext() const = 0;
+
   // Returns a time captured as early as possible after the process is launched.
   virtual base::TimeTicks GetLaunchTime() const = 0;
 
@@ -102,6 +109,11 @@ class ProcessNode : public Node {
   // halted if the visitor returns false. Returns true if every call to the
   // visitor returned true, false otherwise.
   virtual bool VisitFrameNodes(const FrameNodeVisitor& visitor) const = 0;
+
+  // Visits the worker nodes that are hosted in this process. The iteration is
+  // halted if the visitor returns false. Returns true if every call to the
+  // visitor returned true, false otherwise.
+  virtual bool VisitWorkerNodes(const WorkerNodeVisitor& visitor) const = 0;
 
   // Returns the set of frame nodes that are hosted in this process. Note that
   // calling this causes the set of nodes to be generated.
@@ -133,8 +145,15 @@ class ProcessNode : public Node {
   virtual RenderProcessHostId GetRenderProcessHostId() const = 0;
 
   // Returns a proxy to the RenderProcessHost associated with this node. The
-  // proxy may only be dereferenced on the UI thread.
+  // proxy may only be dereferenced on the UI thread. The proxy is only valid
+  // for renderer processes.
   virtual const RenderProcessHostProxy& GetRenderProcessHostProxy() const = 0;
+
+  // Returns a proxy to the BrowserChildProcessHost associated with this node.
+  // The proxy may only be dereferenced on the UI thread. The proxy is only
+  // valid for non-renderer child processes.
+  virtual const BrowserChildProcessHostProxy& GetBrowserChildProcessHostProxy()
+      const = 0;
 
   // Returns the current priority of the process.
   virtual base::TaskPriority GetPriority() const = 0;

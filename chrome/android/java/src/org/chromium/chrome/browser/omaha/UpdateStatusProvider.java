@@ -7,7 +7,6 @@ package org.chromium.chrome.browser.omaha;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Environment;
 import android.os.StatFs;
@@ -21,18 +20,17 @@ import com.google.android.gms.common.GooglePlayServicesUtil;
 
 import org.chromium.base.BuildInfo;
 import org.chromium.base.Callback;
-import org.chromium.base.ContextUtils;
 import org.chromium.base.ObserverList;
+import org.chromium.base.PackageUtils;
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.task.AsyncTask;
 import org.chromium.base.task.AsyncTask.Status;
 import org.chromium.base.task.PostTask;
+import org.chromium.base.task.TaskTraits;
 import org.chromium.chrome.browser.omaha.metrics.UpdateSuccessMetrics;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.components.browser_ui.util.ConversionUtils;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
 
 import java.io.File;
 import java.lang.annotation.Retention;
@@ -134,7 +132,7 @@ public class UpdateStatusProvider {
         mObservers.addObserver(observer);
 
         if (mStatus != null) {
-            PostTask.postTask(UiThreadTaskTraits.DEFAULT, observer.bind(mStatus));
+            PostTask.postTask(TaskTraits.UI_DEFAULT, observer.bind(mStatus));
         } else {
             if (mOmahaQuery.getStatus() == Status.PENDING) {
                 mOmahaQuery.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
@@ -169,8 +167,8 @@ public class UpdateStatusProvider {
             return;
         }
 
-        SharedPreferencesManager.getInstance().writeString(
-                ChromePreferenceKeys.LATEST_UNSUPPORTED_VERSION, currentlyUsedVersion);
+        ChromeSharedPreferences.getInstance()
+                .writeString(ChromePreferenceKeys.LATEST_UNSUPPORTED_VERSION, currentlyUsedVersion);
         mStatus.latestUnsupportedVersion = currentlyUsedVersion;
         pingObservers();
     }
@@ -220,8 +218,6 @@ public class UpdateStatusProvider {
         }
 
         if (!mRecordedInitialStatus) {
-            RecordHistogram.recordEnumeratedHistogram(
-                    "GoogleUpdate.StartUp.State", mStatus.updateState, UpdateState.NUM_ENTRIES);
             mMetrics.analyzeFirstStatus();
             mRecordedInitialStatus = true;
         }
@@ -234,7 +230,6 @@ public class UpdateStatusProvider {
     }
 
     private static final class UpdateQuery extends AsyncTask<UpdateStatus> {
-        private final Context mContext = ContextUtils.getApplicationContext();
         private final Runnable mCallback;
 
         private @Nullable UpdateStatus mStatus;
@@ -251,18 +246,17 @@ public class UpdateStatusProvider {
         protected UpdateStatus doInBackground() {
             UpdateStatus testStatus = getTestStatus();
             if (testStatus != null) return testStatus;
-            return getRealStatus(mContext);
+            return getRealStatus();
         }
 
         @Override
         protected void onPostExecute(UpdateStatus result) {
             mStatus = result;
-            PostTask.postTask(UiThreadTaskTraits.DEFAULT, mCallback);
+            PostTask.postTask(TaskTraits.UI_DEFAULT, mCallback);
         }
 
         private UpdateStatus getTestStatus() {
-            @UpdateState
-            Integer forcedUpdateState = UpdateConfigs.getMockUpdateState();
+            @UpdateState Integer forcedUpdateState = UpdateConfigs.getMockUpdateState();
             if (forcedUpdateState == null) return null;
 
             UpdateStatus status = new UpdateStatus();
@@ -278,33 +272,38 @@ public class UpdateStatusProvider {
                     break;
                 case UpdateState.UNSUPPORTED_OS_VERSION:
                     status.latestUnsupportedVersion =
-                            SharedPreferencesManager.getInstance().readString(
-                                    ChromePreferenceKeys.LATEST_UNSUPPORTED_VERSION, null);
+                            ChromeSharedPreferences.getInstance()
+                                    .readString(
+                                            ChromePreferenceKeys.LATEST_UNSUPPORTED_VERSION, null);
                     break;
             }
 
             return status;
         }
 
-        private UpdateStatus getRealStatus(Context context) {
+        private UpdateStatus getRealStatus() {
             UpdateStatus status = new UpdateStatus();
 
-            if (VersionNumberGetter.isNewerVersionAvailable(context)) {
+            if (VersionNumberGetter.isNewerVersionAvailable()) {
                 status.updateUrl = MarketURLGetter.getMarketUrl();
-                status.latestVersion =
-                        VersionNumberGetter.getInstance().getLatestKnownVersion(context);
+                status.latestVersion = VersionNumberGetter.getInstance().getLatestKnownVersion();
 
                 boolean allowedToUpdate =
-                        checkForSufficientStorage() && isGooglePlayStoreAvailable(context);
+                        checkForSufficientStorage()
+                                // Disable the version update check for automotive. See b/297925838.
+                                && !BuildInfo.getInstance().isAutomotive
+                                && PackageUtils.isPackageInstalled(
+                                        GooglePlayServicesUtil.GOOGLE_PLAY_STORE_PACKAGE);
                 status.updateState =
                         allowedToUpdate ? UpdateState.UPDATE_AVAILABLE : UpdateState.NONE;
 
-                SharedPreferencesManager.getInstance().removeKey(
-                        ChromePreferenceKeys.LATEST_UNSUPPORTED_VERSION);
+                ChromeSharedPreferences.getInstance()
+                        .removeKey(ChromePreferenceKeys.LATEST_UNSUPPORTED_VERSION);
             } else if (!VersionNumberGetter.isCurrentOsVersionSupported()) {
                 status.updateState = UpdateState.UNSUPPORTED_OS_VERSION;
-                status.latestUnsupportedVersion = SharedPreferencesManager.getInstance().readString(
-                        ChromePreferenceKeys.LATEST_UNSUPPORTED_VERSION, null);
+                status.latestUnsupportedVersion =
+                        ChromeSharedPreferences.getInstance()
+                                .readString(ChromePreferenceKeys.LATEST_UNSUPPORTED_VERSION, null);
             } else {
                 status.updateState = UpdateState.NONE;
             }
@@ -318,23 +317,11 @@ public class UpdateStatusProvider {
             File path = Environment.getDataDirectory();
             StatFs statFs = new StatFs(path.getAbsolutePath());
             long size = getSize(statFs);
-            RecordHistogram.recordLinearCountHistogram(
-                    "GoogleUpdate.InfoBar.DeviceFreeSpace", (int) size, 1, 1000, 50);
 
             int minRequiredStorage = UpdateConfigs.getMinRequiredStorage();
             if (minRequiredStorage == -1) return true;
 
             return size >= minRequiredStorage;
-        }
-
-        private boolean isGooglePlayStoreAvailable(Context context) {
-            try {
-                context.getPackageManager().getPackageInfo(
-                        GooglePlayServicesUtil.GOOGLE_PLAY_STORE_PACKAGE, 0);
-            } catch (PackageManager.NameNotFoundException e) {
-                return false;
-            }
-            return true;
         }
 
         private long getSize(StatFs statFs) {

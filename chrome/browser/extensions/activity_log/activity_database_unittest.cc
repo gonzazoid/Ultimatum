@@ -14,8 +14,8 @@
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/simple_test_clock.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/extensions/activity_log/activity_action_constants.h"
@@ -80,7 +80,7 @@ bool ActivityDatabaseTestPolicy::FlushDatabase(sql::Database* db) {
     sql::Statement statement(db->GetCachedStatement(
         sql::StatementID(SQL_FROM_HERE), sql_str.c_str()));
     statement.BindString(0, action.extension_id());
-    statement.BindInt64(1, action.time().ToInternalValue());
+    statement.BindTime(1, action.time());
     statement.BindInt(2, static_cast<int>(action.action_type()));
     statement.BindString(3, action.api_name());
     if (!statement.Run()) {
@@ -104,7 +104,7 @@ class ActivityDatabaseTest : public ChromeRenderViewHostTestHarness {
   void SetUp() override {
     ChromeRenderViewHostTestHarness::SetUp();
     SetActivityLogTaskRunnerForTesting(
-        base::ThreadTaskRunnerHandle::Get().get());
+        base::SingleThreadTaskRunner::GetCurrentDefault().get());
     base::CommandLine command_line(base::CommandLine::NO_PROGRAM);
     base::CommandLine::ForCurrentProcess()->AppendSwitch(
         switches::kEnableExtensionActivityLogTesting);
@@ -150,7 +150,7 @@ class ActivityDatabaseTest : public ChromeRenderViewHostTestHarness {
   }
 
  private:
-  raw_ptr<ActivityDatabaseTestPolicy> db_delegate_;
+  raw_ptr<ActivityDatabaseTestPolicy, DanglingUntriaged> db_delegate_;
 };
 
 // Check that the database is initialized properly.

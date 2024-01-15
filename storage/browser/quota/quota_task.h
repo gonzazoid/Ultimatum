@@ -10,7 +10,7 @@
 #include "base/compiler_specific.h"
 #include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/task/sequenced_task_runner_helpers.h"
 
 namespace base {
@@ -62,7 +62,9 @@ class QuotaTask {
 
   void Abort();
 
-  raw_ptr<QuotaTaskObserver> observer_;
+  raw_ptr<QuotaTaskObserver,
+          FlakyDanglingUntriaged | AcrossTasksDanglingUntriaged>
+      observer_;
   const scoped_refptr<base::SingleThreadTaskRunner> original_task_runner_;
   bool delete_scheduled_;
 };

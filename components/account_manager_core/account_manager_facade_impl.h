@@ -8,16 +8,15 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "base/gtest_prod_util.h"
-#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "chromeos/crosapi/mojom/account_manager.mojom.h"
-#include "components/account_manager_core/account_addition_result.h"
 #include "components/account_manager_core/account_manager_facade.h"
+#include "components/account_manager_core/account_upsertion_result.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
@@ -42,7 +41,7 @@ class COMPONENT_EXPORT(ACCOUNT_MANAGER_CORE) AccountManagerFacadeImpl
   AccountManagerFacadeImpl(
       mojo::Remote<crosapi::mojom::AccountManager> account_manager_remote,
       uint32_t remote_version,
-      AccountManager* account_manager_for_tests,
+      base::WeakPtr<AccountManager> account_manager_for_tests,
       base::OnceClosure init_finished = base::DoNothing());
   AccountManagerFacadeImpl(const AccountManagerFacadeImpl&) = delete;
   AccountManagerFacadeImpl& operator=(const AccountManagerFacadeImpl&) = delete;
@@ -60,11 +59,13 @@ class COMPONENT_EXPORT(ACCOUNT_MANAGER_CORE) AccountManagerFacadeImpl
   void ShowAddAccountDialog(AccountAdditionSource source) override;
   void ShowAddAccountDialog(
       AccountAdditionSource source,
-      base::OnceCallback<void(const account_manager::AccountAdditionResult&
+      base::OnceCallback<void(const account_manager::AccountUpsertionResult&
                                   result)> callback) override;
-  void ShowReauthAccountDialog(AccountAdditionSource source,
-                               const std::string& email,
-                               base::OnceClosure callback) override;
+  void ShowReauthAccountDialog(
+      AccountAdditionSource source,
+      const std::string& email,
+      base::OnceCallback<void(const account_manager::AccountUpsertionResult&
+                                  result)> callback) override;
   void ShowManageAccountsSettings() override;
   std::unique_ptr<OAuth2AccessTokenFetcher> CreateAccessTokenFetcher(
       const AccountKey& account,
@@ -133,7 +134,7 @@ class COMPONENT_EXPORT(ACCOUNT_MANAGER_CORE) AccountManagerFacadeImpl
     kMaxValue = kVersionMismatch
   };
 
-  static std::string GetAccountAdditionResultStatusHistogramNameForTesting();
+  static std::string GetAccountUpsertionResultStatusHistogramNameForTesting();
   static std::string GetAccountsMojoStatusHistogramNameForTesting();
 
   // A utility class to fetch access tokens over Mojo.
@@ -142,14 +143,14 @@ class COMPONENT_EXPORT(ACCOUNT_MANAGER_CORE) AccountManagerFacadeImpl
   void OnReceiverReceived(
       mojo::PendingReceiver<AccountManagerObserver> receiver);
   // Callback for `crosapi::mojom::AccountManager::ShowAddAccountDialog`.
-  void OnShowAddAccountDialogFinished(
+  void OnSigninDialogActionFinished(
       base::OnceCallback<
-          void(const account_manager::AccountAdditionResult& result)> callback,
-      crosapi::mojom::AccountAdditionResultPtr mojo_result);
-  void FinishAddAccount(
+          void(const account_manager::AccountUpsertionResult& result)> callback,
+      crosapi::mojom::AccountUpsertionResultPtr mojo_result);
+  void FinishUpsertAccount(
       base::OnceCallback<
-          void(const account_manager::AccountAdditionResult& result)> callback,
-      const account_manager::AccountAdditionResult& result);
+          void(const account_manager::AccountUpsertionResult& result)> callback,
+      const account_manager::AccountUpsertionResult& result);
 
   void GetAccountsInternal(
       base::OnceCallback<void(const std::vector<Account>&)> callback);
@@ -213,7 +214,7 @@ class COMPONENT_EXPORT(ACCOUNT_MANAGER_CORE) AccountManagerFacadeImpl
 
   base::ObserverList<Observer> observer_list_;
 
-  raw_ptr<AccountManager> account_manager_for_tests_ = nullptr;
+  const base::WeakPtr<AccountManager> account_manager_for_tests_ = nullptr;
 
   base::WeakPtrFactory<AccountManagerFacadeImpl> weak_factory_{this};
 };

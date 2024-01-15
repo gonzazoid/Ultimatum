@@ -4,9 +4,6 @@
 
 #include "chrome/browser/lacros/account_manager/account_profile_mapper.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
@@ -14,11 +11,15 @@
 #include "base/containers/flat_set.h"
 #include "base/containers/unique_ptr_adapters.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/notreached.h"
 #include "base/ranges/algorithm.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/lacros/account_manager/add_account_helper.h"
+#include "chrome/browser/profiles/delete_profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
@@ -510,9 +511,11 @@ AccountProfileMapper::RemoveStaleAccounts() {
       // profile.
       // TODO(https://crbug.com/1257610): ensure that the user cannot cancel the
       // profile deletion.
-      g_browser_process->profile_manager()->MaybeScheduleProfileForDeletion(
-          entry->GetPath(), base::DoNothing(),
-          ProfileMetrics::DELETE_PROFILE_PRIMARY_ACCOUNT_REMOVED_LACROS);
+      g_browser_process->profile_manager()
+          ->GetDeleteProfileHelper()
+          .MaybeScheduleProfileForDeletion(
+              entry->GetPath(), base::DoNothing(),
+              ProfileMetrics::DELETE_PROFILE_PRIMARY_ACCOUNT_REMOVED_LACROS);
     }
   }
   return removed_ids;

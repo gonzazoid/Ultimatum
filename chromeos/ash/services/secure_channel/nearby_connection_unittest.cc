@@ -4,10 +4,10 @@
 
 #include "chromeos/ash/services/secure_channel/nearby_connection.h"
 
-#include "base/callback.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "chromeos/ash/components/multidevice/remote_device_test_util.h"
@@ -57,7 +57,7 @@ class FakeConnectionObserver : public ConnectionObserver {
   ~FakeConnectionObserver() override = default;
 
   Connection::Status last_status_update = Connection::Status::DISCONNECTED;
-  absl::optional<WireMessage> last_received_message;
+  std::optional<WireMessage> last_received_message;
   bool last_send_complete_success = false;
 
   base::OnceClosure on_status_change_closure;

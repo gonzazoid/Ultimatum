@@ -83,7 +83,7 @@ DlpContentManagerLacros* DlpContentManagerLacros::Get() {
 void DlpContentManagerLacros::CheckScreenShareRestriction(
     const content::DesktopMediaID& media_id,
     const std::u16string& application_title,
-    OnDlpRestrictionCheckedCallback callback) {
+    WarningCallback callback) {
   if (media_id.type == content::DesktopMediaID::Type::TYPE_WEB_CONTENTS) {
     ProcessScreenShareRestriction(
         application_title,
@@ -100,7 +100,7 @@ void DlpContentManagerLacros::CheckScreenShareRestriction(
   }
 
   int dlp_mojo_version =
-      lacros_service->GetInterfaceVersion(crosapi::mojom::Dlp::Uuid_);
+      lacros_service->GetInterfaceVersion<crosapi::mojom::Dlp>();
   if (dlp_mojo_version < int{crosapi::mojom::Dlp::MethodMinVersions::
                                  kCheckScreenShareRestrictionMinVersion}) {
     LOG(WARNING) << "DLP mojo service version does not support screen share "

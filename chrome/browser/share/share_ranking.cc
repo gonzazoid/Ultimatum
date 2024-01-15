@@ -4,8 +4,11 @@
 
 #include "chrome/browser/share/share_ranking.h"
 
+#include <vector>
+
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
@@ -103,10 +106,10 @@ std::vector<std::string> ReplaceUnavailableEntries(
     const std::vector<std::string>& ranking,
     const std::vector<std::string>& available) {
   std::vector<std::string> result;
-  std::transform(ranking.begin(), ranking.end(), std::back_inserter(result),
-                 [&](const std::string& e) {
-                   return RankingContains(available, e) ? e : "";
-                 });
+  base::ranges::transform(
+      ranking, std::back_inserter(result), [&](const std::string& e) {
+        return RankingContains(available, e) ? e : std::string();
+      });
   return result;
 }
 
@@ -118,12 +121,9 @@ void FillGaps(std::vector<std::string>& ranking,
   // apps used for empty slots.
   std::vector<std::string> unused_available(ranking.begin() + length,
                                             ranking.end());
-
-  unused_available.erase(
-      std::remove_if(
-          unused_available.begin(), unused_available.end(),
-          [&](const std::string& e) { return !RankingContains(available, e); }),
-      unused_available.end());
+  std::erase_if(unused_available, [&](const std::string& e) {
+    return !RankingContains(available, e);
+  });
 
   // Now, append the rest of the system apps (those not already included) to
   // unused_available. These will be the apps that can handle the share type and
@@ -317,13 +317,13 @@ void ShareRanking::GetRanking(const std::string& type,
   }
 
   if (db_init_status_ != leveldb_proto::Enums::kOK) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
     return;
   }
 
   if (ranking_.contains(type)) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback),
                                   absl::make_optional(ranking_[type])));
     return;

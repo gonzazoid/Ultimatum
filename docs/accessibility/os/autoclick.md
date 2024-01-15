@@ -40,7 +40,7 @@ Open bugs have the label
 Automatic clicks code lives mainly in three places:
 
 - A controller, event-rewriter, and widgets to draw around click locations, in
-ash/autoclick/
+ash/accessibility/autoclick/
 
 - UI through menu bubbles and their controllers, in
 ash/system/accessibility/autoclick*
@@ -49,8 +49,7 @@ ash/system/accessibility/autoclick*
 chrome/browser/resources/chromeos/accessibility/accessibility_common/
 
 In addition, there are settings for automatic clicks in
-chrome/browser/resources/settings/a11y_page/manage_a11y_page.*
-
+chrome/browser/resources/ash/settings/os_a11y_page/cursor_and_touchpad_page.*
 
 ### Tests
 
@@ -184,7 +183,7 @@ long as there is space for it on that side.
 
 #### Clicking on the bubble menus
 
-The AutomaticController cannot generate synthetic click events over the
+The AutoclickController cannot generate synthetic click events over the
 bubbles, because that would cause context and focus changes. For example, if
 the user has a drop-down menu open, clicking the autoclick menu bubble will
 cause the drop-down to close. Instead, the AutoclickController must check to

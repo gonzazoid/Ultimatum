@@ -5,50 +5,77 @@
 #import "ios/chrome/browser/ui/omnibox/omnibox_suggestion_icon_util.h"
 
 #import "base/notreached.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+namespace {
+const CGFloat kSymbolSize = 18;
+}  // namespace
 
-NSString* GetOmniboxSuggestionIconTypeAssetName(
-    OmniboxSuggestionIconType iconType) {
-  switch (iconType) {
-    case OmniboxSuggestionIconType::kBookmark:
-      return @"omnibox_completion_bookmark";
+UIImage* GetOmniboxSuggestionIcon(OmniboxSuggestionIconType icon_type) {
+  NSString* symbol_name = kGlobeSymbol;
+  bool default_symbol = true;
+  switch (icon_type) {
     case OmniboxSuggestionIconType::kCalculator:
-      return @"answer_calculator";
+      symbol_name = kEqualSymbol;
+      break;
     case OmniboxSuggestionIconType::kDefaultFavicon:
-      return @"favicon_fallback";
-    case OmniboxSuggestionIconType::kHistory:
-      return @"omnibox_completion_history";
+      if (@available(iOS 15, *)) {
+        symbol_name = kGlobeAmericasSymbol;
+      } else {
+        symbol_name = kGlobeSymbol;
+      }
+      break;
     case OmniboxSuggestionIconType::kSearch:
-      return @"search";
+      symbol_name = kSearchSymbol;
+      break;
     case OmniboxSuggestionIconType::kSearchHistory:
-      return @"omnibox_popup_recent_query";
-    case OmniboxSuggestionIconType::kConversation:
-      return @"answer_conversion";
+      symbol_name = kHistorySymbol;
+      break;
+    case OmniboxSuggestionIconType::kConversion:
+      symbol_name = kSyncEnabledSymbol;
+      break;
     case OmniboxSuggestionIconType::kDictionary:
-      return @"answer_dictionary";
+      symbol_name = kBookClosedSymbol;
+      break;
     case OmniboxSuggestionIconType::kStock:
-      return @"answer_stock";
+      symbol_name = kSortSymbol;
+      break;
     case OmniboxSuggestionIconType::kSunrise:
-      return @"answer_sunrise";
-    case OmniboxSuggestionIconType::kLocalTime:
-      return @"answer_local_time";
+      symbol_name = kSunFillSymbol;
+      break;
     case OmniboxSuggestionIconType::kWhenIs:
-      return @"answer_when_is";
+      symbol_name = kCalendarSymbol;
+      break;
     case OmniboxSuggestionIconType::kTranslation:
-      return @"answer_translation";
+      symbol_name = kTranslateSymbol;
+      default_symbol = false;
+      break;
     case OmniboxSuggestionIconType::kFallbackAnswer:
-      return @"search";
+      symbol_name = kSearchSymbol;
+      break;
+    case OmniboxSuggestionIconType::kSearchTrend:
+      symbol_name = kUpTrendSymbol;
+      default_symbol = false;
+      break;
     case OmniboxSuggestionIconType::kCount:
       NOTREACHED();
-      return @"favicon_fallback";
+      if (@available(iOS 15, *)) {
+        symbol_name = kGlobeAmericasSymbol;
+      } else {
+        symbol_name = kGlobeSymbol;
+      }
+      break;
   }
+
+  if (default_symbol) {
+    return DefaultSymbolWithPointSize(symbol_name, kSymbolSize);
+  }
+  return CustomSymbolWithPointSize(symbol_name, kSymbolSize);
 }
 
-UIImage* GetOmniboxSuggestionIcon(OmniboxSuggestionIconType iconType) {
-  NSString* imageName = GetOmniboxSuggestionIconTypeAssetName(iconType);
-  return [[UIImage imageNamed:imageName]
-      imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+#if BUILDFLAG(IOS_USE_BRANDED_SYMBOLS)
+UIImage* GetBrandedGoogleIconForOmnibox() {
+  return MakeSymbolMonochrome(
+      CustomSymbolWithPointSize(kGoogleIconSymbol, kSymbolSize));
 }
+#endif  // BUILDFLAG(IOS_USE_BRANDED_SYMBOLS)

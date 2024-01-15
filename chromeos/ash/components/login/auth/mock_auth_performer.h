@@ -15,7 +15,7 @@ namespace ash {
 
 class MockAuthPerformer : public AuthPerformer {
  public:
-  explicit MockAuthPerformer(base::raw_ptr<UserDataAuthClient> client);
+  explicit MockAuthPerformer(UserDataAuthClient* client);
   MockAuthPerformer(const MockAuthPerformer&) = delete;
   MockAuthPerformer& operator=(const MockAuthPerformer&) = delete;
   ~MockAuthPerformer() override;

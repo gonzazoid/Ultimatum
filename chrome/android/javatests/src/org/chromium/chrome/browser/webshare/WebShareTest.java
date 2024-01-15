@@ -6,8 +6,8 @@ package org.chromium.chrome.browser.webshare;
 
 import android.content.Intent;
 import android.net.Uri;
-import android.support.test.InstrumentationRegistry;
 
+import androidx.test.core.app.ApplicationProvider;
 import androidx.test.filters.MediumTest;
 
 import org.junit.After;
@@ -23,7 +23,6 @@ import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Feature;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
-import org.chromium.chrome.browser.share.ShareHelper;
 import org.chromium.chrome.browser.tab.EmptyTabObserver;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
@@ -52,10 +51,7 @@ public class WebShareTest {
 
     private static final String TEST_FILE = "/content/test/data/android/webshare.html";
     private static final String TEST_FILE_APK = "/content/test/data/android/webshare-apk.html";
-    private static final String TEST_FILE_BMP = "/content/test/data/android/webshare-bmp.html";
-    private static final String TEST_FILE_CSV = "/content/test/data/android/webshare-csv.html";
     private static final String TEST_FILE_DEX = "/content/test/data/android/webshare-dex.html";
-    private static final String TEST_FILE_OGG = "/content/test/data/android/webshare-ogg.html";
     private static final String TEST_FILE_MANY = "/content/test/data/android/webshare-many.html";
     private static final String TEST_FILE_LARGE = "/content/test/data/android/webshare-large.html";
     private static final String TEST_FILE_SEPARATOR =
@@ -97,7 +93,9 @@ public class WebShareTest {
     public void setUp() throws Exception {
         NativeLibraryTestUtils.loadNativeLibraryNoBrowserProcess();
 
-        mTestServer = EmbeddedTestServer.createAndStartServer(InstrumentationRegistry.getContext());
+        mTestServer =
+                EmbeddedTestServer.createAndStartServer(
+                        ApplicationProvider.getApplicationContext());
 
         mTab = sActivityTestRule.getActivity().getActivityTab();
         mUpdateWaiter = new WebShareUpdateWaiter();
@@ -111,15 +109,11 @@ public class WebShareTest {
         if (mTab != null) {
             TestThreadUtils.runOnUiThreadBlocking(() -> mTab.removeObserver(mUpdateWaiter));
         }
-        if (mTestServer != null) mTestServer.stopAndDestroyServer();
-
-        // Clean up some state that might have been changed by tests.
-        ShareHelper.setForceCustomChooserForTesting(false);
-        ShareHelper.setFakeIntentReceiverForTesting(null);
     }
 
     /**
      * Verify that WebShare fails if called without a user gesture.
+     *
      * @throws Exception
      */
     @Test
@@ -128,13 +122,15 @@ public class WebShareTest {
     public void testWebShareNoUserGesture() throws Exception {
         sActivityTestRule.loadUrl(mTestServer.getURL(TEST_FILE));
         sActivityTestRule.runJavaScriptCodeInCurrentTab("initiate_share()");
-        Assert.assertEquals("Fail: NotAllowedError: Failed to execute 'share' on 'Navigator': "
+        Assert.assertEquals(
+                "Fail: NotAllowedError: Failed to execute 'share' on 'Navigator': "
                         + "Must be handling a user gesture to perform a share request.",
                 mUpdateWaiter.waitForUpdate());
     }
 
     /**
      * Verify WebShare fails if share of .apk is called from a user gesture.
+     *
      * @throws Exception
      */
     @Test
@@ -150,6 +146,7 @@ public class WebShareTest {
 
     /**
      * Verify WebShare fails if share of .dex is called from a user gesture.
+     *
      * @throws Exception
      */
     @Test
@@ -165,6 +162,7 @@ public class WebShareTest {
 
     /**
      * Verify WebShare fails if share of many files is called from a user gesture.
+     *
      * @throws Exception
      */
     @Test
@@ -174,13 +172,15 @@ public class WebShareTest {
         sActivityTestRule.loadUrl(mTestServer.getURL(TEST_FILE_MANY));
         // Click (instead of directly calling the JavaScript function) to simulate a user gesture.
         TouchCommon.singleClickView(mTab.getView());
-        Assert.assertEquals("Fail: NotAllowedError: "
+        Assert.assertEquals(
+                "Fail: NotAllowedError: "
                         + "Failed to execute 'share' on 'Navigator': Permission denied",
                 mUpdateWaiter.waitForUpdate());
     }
 
     /**
      * Verify WebShare fails if share of large files is called from a user gesture.
+     *
      * @throws Exception
      */
     @Test
@@ -190,13 +190,15 @@ public class WebShareTest {
         sActivityTestRule.loadUrl(mTestServer.getURL(TEST_FILE_LARGE));
         // Click (instead of directly calling the JavaScript function) to simulate a user gesture.
         TouchCommon.singleClickView(mTab.getView());
-        Assert.assertEquals("Fail: NotAllowedError: "
+        Assert.assertEquals(
+                "Fail: NotAllowedError: "
                         + "Failed to execute 'share' on 'Navigator': Permission denied",
                 mUpdateWaiter.waitForUpdate());
     }
 
     /**
      * Verify WebShare fails if share of long text is called from a user gesture.
+     *
      * @throws Exception
      */
     @Test
@@ -206,13 +208,15 @@ public class WebShareTest {
         sActivityTestRule.loadUrl(mTestServer.getURL(TEST_LONG_TEXT));
         // Click (instead of directly calling the JavaScript function) to simulate a user gesture.
         TouchCommon.singleClickView(mTab.getView());
-        Assert.assertEquals("Fail: NotAllowedError: "
+        Assert.assertEquals(
+                "Fail: NotAllowedError: "
                         + "Failed to execute 'share' on 'Navigator': Permission denied",
                 mUpdateWaiter.waitForUpdate());
     }
 
     /**
      * Verify WebShare fails if share of file name '/' is called from a user gesture.
+     *
      * @throws Exception
      */
     @Test
@@ -222,7 +226,8 @@ public class WebShareTest {
         sActivityTestRule.loadUrl(mTestServer.getURL(TEST_FILE_SEPARATOR));
         // Click (instead of directly calling the JavaScript function) to simulate a user gesture.
         TouchCommon.singleClickView(mTab.getView());
-        Assert.assertEquals("Fail: NotAllowedError: "
+        Assert.assertEquals(
+                "Fail: NotAllowedError: "
                         + "Failed to execute 'share' on 'Navigator': Permission denied",
                 mUpdateWaiter.waitForUpdate());
     }
@@ -239,7 +244,9 @@ public class WebShareTest {
 
     private static String getFileContents(Uri fileUri) throws Exception {
         InputStream inputStream =
-                InstrumentationRegistry.getContext().getContentResolver().openInputStream(fileUri);
+                ApplicationProvider.getApplicationContext()
+                        .getContentResolver()
+                        .openInputStream(fileUri);
         byte[] buffer = new byte[1024];
         int position = 0;
         int read;
@@ -253,7 +260,8 @@ public class WebShareTest {
         Assert.assertNotNull(intent);
         Assert.assertEquals(Intent.ACTION_SEND_MULTIPLE, intent.getAction());
         Assert.assertEquals("image/*", intent.getType());
-        Assert.assertEquals(Intent.FLAG_GRANT_READ_URI_PERMISSION,
+        Assert.assertEquals(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
                 intent.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
         ArrayList<Uri> fileUris = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
@@ -266,7 +274,8 @@ public class WebShareTest {
         Assert.assertNotNull(intent);
         Assert.assertEquals(Intent.ACTION_SEND_MULTIPLE, intent.getAction());
         Assert.assertEquals("text/*", intent.getType());
-        Assert.assertEquals(Intent.FLAG_GRANT_READ_URI_PERMISSION,
+        Assert.assertEquals(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
                 intent.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
         ArrayList<Uri> fileUris = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
@@ -279,7 +288,8 @@ public class WebShareTest {
         Assert.assertNotNull(intent);
         Assert.assertEquals(Intent.ACTION_SEND, intent.getAction());
         Assert.assertEquals("video/ogg", intent.getType());
-        Assert.assertEquals(Intent.FLAG_GRANT_READ_URI_PERMISSION,
+        Assert.assertEquals(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
                 intent.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION);
         Uri fileUri = intent.getParcelableExtra(Intent.EXTRA_STREAM);
         Assert.assertEquals("contents", getFileContents(fileUri));

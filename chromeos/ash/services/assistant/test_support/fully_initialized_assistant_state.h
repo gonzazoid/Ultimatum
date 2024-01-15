@@ -9,7 +9,7 @@
 
 namespace ash::assistant {
 
-// Instance of |AssistantState| where every absl::optional value has a non-null
+// Instance of |AssistantState| where every std::optional value has a non-null
 // value. All values will be set to their equivalent of enabled.
 class FullyInitializedAssistantState : public AssistantState {
  public:
@@ -23,6 +23,8 @@ class FullyInitializedAssistantState : public AssistantState {
   ~FullyInitializedAssistantState() override = default;
 
   void SetAssistantEnabled(bool enabled);
+
+  void SetContextEnabled(bool enabled);
 
  private:
   void InitializeAllValues();

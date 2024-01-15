@@ -4,7 +4,8 @@ Use of this source code is governed by a BSD-style license that can be
 found in the LICENSE file.
 -->
 
-<style include="cr-icons cr-shared-style oobe-common-styles">
+<style include="cr-icons cr-shared-style oobe-common-styles
+    cros-color-overrides">
   cr-button {
     /*
       TODO(https://crbug.com/1320715) Revise the color
@@ -27,12 +28,13 @@ found in the LICENSE file.
   .fallback {
     font-family: var(--oobe-button-font-family);
     font-size: var(--oobe-button-font-size);
+    font-weight: var(--oobe-button-font-weight);
   }
   :host([disabled]) {
     pointer-events: none;
   }
 </style>
-<cr-button id="button" on-click="onClick_" disabled="[[disabled]]"
+<cr-button id="button" on-click="onClick" disabled="[[disabled]]"
     aria-label$="[[labelForAria_]]" class="action-button">
   <div class="flex horizontal layout center-justified center">
     <slot name="text">

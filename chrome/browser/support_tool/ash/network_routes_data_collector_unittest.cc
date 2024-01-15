@@ -14,14 +14,15 @@
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
 #include "chrome/browser/support_tool/data_collector.h"
 #include "chromeos/ash/components/dbus/debug_daemon/debug_daemon_client.h"
 #include "chromeos/ash/components/dbus/debug_daemon/fake_debug_daemon_client.h"
-#include "components/feedback/pii_types.h"
-#include "components/feedback/redaction_tool.h"
+#include "components/feedback/redaction_tool/pii_types.h"
+#include "components/feedback/redaction_tool/redaction_tool.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -80,21 +81,21 @@ const char redacted_routes_output[] =
     "9: from all lookup main\n"
     "10: from all fwmark 0x3ea0000/0xffff0000 lookup 1002\n"
     "10: from all oif eth0 lookup 1002\n"
-    "10: from <IPv4: 1>/23 lookup 1002\n"
+    "10: from (IPv4: 1)/23 lookup 1002\n"
     "10: from all iif eth0 lookup 1002\n"
     "32765: from all lookup 1002\n"
     "32766: from all lookup main\n"
     "32767: from all lookup default\n"
     "\n"
     "[ ip -4/-6 route show table all ]\n"
-    "default via <IPv4: 2> dev eth0 table 1002 metric 10\n"
+    "default via (IPv4: 2) dev eth0 table 1002 metric 10\n"
     "100.115.92.0/30 dev arcbr0 proto kernel scope link src 100.115.92.1\n"
     "100.115.92.4/30 dev arc_eth0 proto kernel scope link src "
     "100.115.92.5\n"
     "100.115.92.12/30 dev arc_wlan0 proto kernel scope link src "
     "100.115.92.13\n"
     "100.115.92.128/30 via 100.115.92.129 dev arc_ns0\n"
-    "<IPv4: 3>/23 dev eth0 proto kernel scope link src <IPv4: 1>\n"
+    "(IPv4: 3)/23 dev eth0 proto kernel scope link src (IPv4: 1)\n"
     "broadcast 100.115.92.0 dev arcbr0 table local proto kernel scope link "
     "src 100.115.92.1\n"
     "local 100.115.92.1 dev arcbr0 table local proto kernel scope host src "
@@ -107,31 +108,31 @@ const char redacted_routes_output[] =
     "100.115.92.12/30 dev arc_wlan0 proto kernel scope link src 100.115.92.13\n"
     "100.115.92.128/30 via 100.115.92.129 dev arc_ns0\n"
     "100.115.92.140/30 dev arc_ns9 proto kernel scope link src 100.115.92.141\n"
-    "<IPv4: 3>/23 dev eth0 proto kernel scope link src <IPv4: 1>\n"
+    "(IPv4: 3)/23 dev eth0 proto kernel scope link src (IPv4: 1)\n"
     "\n"
     "[ ip -4/-6 route show table 1002 ]\n"
-    "default via <IPv4: 2> dev eth0 metric 10\n"
+    "default via (IPv4: 2) dev eth0 metric 10\n"
     "\n"
     "[ ip -4/-6 rule list ]\n"
     "0: from all lookup local\n"
     "9: from all lookup main\n"
     "10: from all fwmark 0x3ea0000/0xffff0000 lookup 1002\n"
     "10: from all oif eth0 lookup 1002\n"
-    "10: from <IPv4: 1>/23 lookup 1002\n"
+    "10: from (IPv4: 1)/23 lookup 1002\n"
     "10: from all iif eth0 lookup 1002\n"
     "32765: from all lookup 1002\n"
     "32766: from all lookup main\n"
     "32767: from all lookup default\n"
     "\n"
     "[ ip -4/-6 route show table all ]\n"
-    "default via <IPv4: 2> dev eth0 table 1002 metric 10\n"
+    "default via (IPv4: 2) dev eth0 table 1002 metric 10\n"
     "100.115.92.0/30 dev arcbr0 proto kernel scope link src 100.115.92.1\n"
     "100.115.92.4/30 dev arc_eth0 proto kernel scope link src "
     "100.115.92.5\n"
     "100.115.92.12/30 dev arc_wlan0 proto kernel scope link src "
     "100.115.92.13\n"
     "100.115.92.128/30 via 100.115.92.129 dev arc_ns0\n"
-    "<IPv4: 3>/23 dev eth0 proto kernel scope link src <IPv4: 1>\n"
+    "(IPv4: 3)/23 dev eth0 proto kernel scope link src (IPv4: 1)\n"
     "broadcast 100.115.92.0 dev arcbr0 table local proto kernel scope link "
     "src 100.115.92.1\n"
     "local 100.115.92.1 dev arcbr0 table local proto kernel scope host src "
@@ -144,10 +145,10 @@ const char redacted_routes_output[] =
     "100.115.92.12/30 dev arc_wlan0 proto kernel scope link src 100.115.92.13\n"
     "100.115.92.128/30 via 100.115.92.129 dev arc_ns0\n"
     "100.115.92.140/30 dev arc_ns9 proto kernel scope link src 100.115.92.141\n"
-    "<IPv4: 3>/23 dev eth0 proto kernel scope link src <IPv4: 1>\n"
+    "(IPv4: 3)/23 dev eth0 proto kernel scope link src (IPv4: 1)\n"
     "\n"
     "[ ip -4/-6 route show table 1002 ]\n"
-    "default via <IPv4: 2> dev eth0 metric 10\n";
+    "default via (IPv4: 2) dev eth0 metric 10\n";
 }  // namespace
 
 class NetworkRoutesDataCollectorTest : public ::testing::Test {
@@ -159,7 +160,7 @@ class NetworkRoutesDataCollectorTest : public ::testing::Test {
     task_runner_for_redaction_tool_ =
         base::ThreadPool::CreateSequencedTaskRunner({});
     redaction_tool_container_ =
-        base::MakeRefCounted<feedback::RedactionToolContainer>(
+        base::MakeRefCounted<redaction::RedactionToolContainer>(
             task_runner_for_redaction_tool_, nullptr);
   }
 
@@ -189,7 +190,7 @@ class NetworkRoutesDataCollectorTest : public ::testing::Test {
   base::test::TaskEnvironment task_environment_;
   base::ScopedTempDir temp_dir_;
   scoped_refptr<base::SequencedTaskRunner> task_runner_for_redaction_tool_;
-  scoped_refptr<feedback::RedactionToolContainer> redaction_tool_container_;
+  scoped_refptr<redaction::RedactionToolContainer> redaction_tool_container_;
 };
 
 TEST_F(NetworkRoutesDataCollectorTest, CollectAndExportData) {

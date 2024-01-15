@@ -37,27 +37,29 @@ struct IdentityExtractor;
 // undefined behavior. For pointer keys this means that null pointers are not
 // allowed; for integer keys 0 or -1 can't be used as a key. This restriction
 // can be lifted if you supply custom key traits.
+// See hash_traits.h for how to define hash traits.
 template <typename ValueArg,
-          typename HashArg = DefaultHash<ValueArg>,
           typename TraitsArg = HashTraits<ValueArg>,
           typename Allocator = PartitionAllocator>
 class HashSet {
   USE_ALLOCATOR(HashSet, Allocator);
 
  private:
-  typedef HashArg HashFunctions;
   typedef TraitsArg ValueTraits;
   typedef typename ValueTraits::PeekInType ValuePeekInType;
 
  public:
   typedef typename ValueTraits::TraitType ValueType;
   using value_type = ValueType;
+  using reference = value_type&;
+  using const_reference = const value_type&;
+  using pointer = value_type*;
+  using const_pointer = const value_type*;
 
  private:
   typedef HashTable<ValueType,
                     ValueType,
                     IdentityExtractor,
-                    HashFunctions,
                     ValueTraits,
                     ValueTraits,
                     Allocator>
@@ -103,8 +105,8 @@ class HashSet {
   // An alternate version of find() that finds the object by hashing and
   // comparing with some other type, to avoid the cost of type
   // conversion. HashTranslator must have the following function members:
-  //   static unsigned hash(const T&);
-  //   static bool equal(const ValueType&, const T&);
+  //   static unsigned GetHash(const T&);
+  //   static bool Equal(const ValueType&, const T&);
   template <typename HashTranslator, typename T>
   iterator Find(const T&) const;
   template <typename HashTranslator, typename T>
@@ -115,13 +117,13 @@ class HashSet {
   template <typename IncomingValueType>
   AddResult insert(IncomingValueType&&);
 
-  // An alternate version of add() that finds the object by hashing and
+  // An alternate version of insert() that finds the object by hashing and
   // comparing with some other type, to avoid the cost of type conversion if
   // the object is already in the table. HashTranslator must have the
   // following function members:
-  //   static unsigned hash(const T&);
-  //   static bool equal(const ValueType&, const T&);
-  //   static translate(ValueType&, T&&, unsigned hashCode);
+  //   static unsigned GetHash(const T&);
+  //   static bool Equal(const ValueType&, const T&);
+  //   static Store(ValueType&, T&&, unsigned hash_code);
   template <typename HashTranslator, typename T>
   AddResult AddWithTranslator(T&&);
 
@@ -142,9 +144,9 @@ class HashSet {
     return std::make_unique<HashSet>(*this);
   }
 
-  template <typename VisitorDispatcher, typename A = Allocator>
-  std::enable_if_t<A::kIsGarbageCollected> Trace(
-      VisitorDispatcher visitor) const {
+  void Trace(auto visitor) const
+    requires Allocator::kIsGarbageCollected
+  {
     impl_.Trace(visitor);
   }
 
@@ -158,14 +160,20 @@ class HashSet {
 struct IdentityExtractor {
   STATIC_ONLY(IdentityExtractor);
   template <typename T>
-  static const T& Extract(const T& t) {
+  static const T& ExtractKey(const T& t) {
+    return t;
+  }
+  template <typename T>
+  static T& ExtractKey(T& t) {
     return t;
   }
   // Assumes out points to a buffer of size at least sizeof(T).
   template <typename T>
-  static void ExtractSafe(const T& t, void* out) {
+  static void ExtractKeyToMemory(const T& t, void* out) {
     AtomicReadMemcpy<sizeof(T), alignof(T)>(out, &t);
   }
+  template <typename T>
+  static void ClearValue(const T&) {}
 };
 
 template <typename Translator>
@@ -180,16 +188,13 @@ struct HashSetTranslatorAdapter {
     return Translator::Equal(a, b);
   }
   template <typename T, typename U, typename V>
-  static void Translate(T& location, U&& key, const V&, unsigned hash_code) {
-    Translator::Translate(location, std::forward<U>(key), hash_code);
+  static void Store(T& location, U&& key, const V&, unsigned hash_code) {
+    Translator::Store(location, std::forward<U>(key), hash_code);
   }
 };
 
-template <typename Value,
-          typename HashFunctions,
-          typename Traits,
-          typename Allocator>
-HashSet<Value, HashFunctions, Traits, Allocator>::HashSet(
+template <typename Value, typename Traits, typename Allocator>
+HashSet<Value, Traits, Allocator>::HashSet(
     std::initializer_list<ValueType> elements) {
   if (elements.size()) {
     impl_.ReserveCapacityForSize(
@@ -199,18 +204,15 @@ HashSet<Value, HashFunctions, Traits, Allocator>::HashSet(
     insert(element);
 }
 
-template <typename Value,
-          typename HashFunctions,
-          typename Traits,
-          typename Allocator>
-auto HashSet<Value, HashFunctions, Traits, Allocator>::operator=(
+template <typename Value, typename Traits, typename Allocator>
+auto HashSet<Value, Traits, Allocator>::operator=(
     std::initializer_list<ValueType> elements) -> HashSet& {
   *this = HashSet(std::move(elements));
   return *this;
 }
 
-template <typename T, typename U, typename V, typename W>
-bool operator==(const HashSet<T, U, V, W>& a, const HashSet<T, U, V, W>& b) {
+template <typename T, typename U, typename V>
+bool operator==(const HashSet<T, U, V>& a, const HashSet<T, U, V>& b) {
   if (a.size() != b.size())
     return false;
 
@@ -224,83 +226,74 @@ bool operator==(const HashSet<T, U, V, W>& a, const HashSet<T, U, V, W>& b) {
   return true;
 }
 
-template <typename T, typename U, typename V, typename W>
-inline unsigned HashSet<T, U, V, W>::size() const {
+template <typename T, typename U, typename V>
+inline bool operator!=(const HashSet<T, U, V>& a, const HashSet<T, U, V>& b) {
+  return !(a == b);
+}
+
+template <typename T, typename U, typename V>
+inline unsigned HashSet<T, U, V>::size() const {
   return impl_.size();
 }
 
-template <typename T, typename U, typename V, typename W>
-inline unsigned HashSet<T, U, V, W>::Capacity() const {
+template <typename T, typename U, typename V>
+inline unsigned HashSet<T, U, V>::Capacity() const {
   return impl_.Capacity();
 }
 
-template <typename T, typename U, typename V, typename W>
-inline bool HashSet<T, U, V, W>::empty() const {
+template <typename T, typename U, typename V>
+inline bool HashSet<T, U, V>::empty() const {
   return impl_.empty();
 }
 
-template <typename T, typename U, typename V, typename W>
-inline typename HashSet<T, U, V, W>::iterator HashSet<T, U, V, W>::begin()
-    const {
+template <typename T, typename U, typename V>
+inline typename HashSet<T, U, V>::iterator HashSet<T, U, V>::begin() const {
   return impl_.begin();
 }
 
-template <typename T, typename U, typename V, typename W>
-inline typename HashSet<T, U, V, W>::iterator HashSet<T, U, V, W>::end() const {
+template <typename T, typename U, typename V>
+inline typename HashSet<T, U, V>::iterator HashSet<T, U, V>::end() const {
   return impl_.end();
 }
 
-template <typename T, typename U, typename V, typename W>
-inline typename HashSet<T, U, V, W>::iterator HashSet<T, U, V, W>::find(
+template <typename T, typename U, typename V>
+inline typename HashSet<T, U, V>::iterator HashSet<T, U, V>::find(
     ValuePeekInType value) const {
   return impl_.find(value);
 }
 
-template <typename Value,
-          typename HashFunctions,
-          typename Traits,
-          typename Allocator>
-inline bool HashSet<Value, HashFunctions, Traits, Allocator>::Contains(
+template <typename Value, typename Traits, typename Allocator>
+inline bool HashSet<Value, Traits, Allocator>::Contains(
     ValuePeekInType value) const {
   return impl_.Contains(value);
 }
 
-template <typename Value,
-          typename HashFunctions,
-          typename Traits,
-          typename Allocator>
+template <typename Value, typename Traits, typename Allocator>
 template <typename HashTranslator, typename T>
-typename HashSet<Value, HashFunctions, Traits, Allocator>::
-    iterator inline HashSet<Value, HashFunctions, Traits, Allocator>::Find(
+typename HashSet<Value, Traits, Allocator>::
+    iterator inline HashSet<Value, Traits, Allocator>::Find(
         const T& value) const {
   return impl_.template Find<HashSetTranslatorAdapter<HashTranslator>>(value);
 }
 
-template <typename Value,
-          typename HashFunctions,
-          typename Traits,
-          typename Allocator>
+template <typename Value, typename Traits, typename Allocator>
 template <typename HashTranslator, typename T>
-inline bool HashSet<Value, HashFunctions, Traits, Allocator>::Contains(
-    const T& value) const {
+inline bool HashSet<Value, Traits, Allocator>::Contains(const T& value) const {
   return impl_.template Contains<HashSetTranslatorAdapter<HashTranslator>>(
       value);
 }
 
-template <typename T, typename U, typename V, typename W>
+template <typename T, typename U, typename V>
 template <typename IncomingValueType>
-inline typename HashSet<T, U, V, W>::AddResult HashSet<T, U, V, W>::insert(
+inline typename HashSet<T, U, V>::AddResult HashSet<T, U, V>::insert(
     IncomingValueType&& value) {
   return impl_.insert(std::forward<IncomingValueType>(value));
 }
 
-template <typename Value,
-          typename HashFunctions,
-          typename Traits,
-          typename Allocator>
+template <typename Value, typename Traits, typename Allocator>
 template <typename HashTranslator, typename T>
-inline typename HashSet<Value, HashFunctions, Traits, Allocator>::AddResult
-HashSet<Value, HashFunctions, Traits, Allocator>::AddWithTranslator(T&& value) {
+inline typename HashSet<Value, Traits, Allocator>::AddResult
+HashSet<Value, Traits, Allocator>::AddWithTranslator(T&& value) {
   // Forward only the first argument, because the second argument isn't actually
   // used in HashSetTranslatorAdapter.
   return impl_
@@ -308,23 +301,23 @@ HashSet<Value, HashFunctions, Traits, Allocator>::AddWithTranslator(T&& value) {
           std::forward<T>(value), value);
 }
 
-template <typename T, typename U, typename V, typename W>
-inline void HashSet<T, U, V, W>::erase(iterator it) {
+template <typename T, typename U, typename V>
+inline void HashSet<T, U, V>::erase(iterator it) {
   impl_.erase(it.impl_);
 }
 
-template <typename T, typename U, typename V, typename W>
-inline void HashSet<T, U, V, W>::erase(ValuePeekInType value) {
+template <typename T, typename U, typename V>
+inline void HashSet<T, U, V>::erase(ValuePeekInType value) {
   erase(find(value));
 }
 
-template <typename T, typename U, typename V, typename W>
-inline void HashSet<T, U, V, W>::clear() {
+template <typename T, typename U, typename V>
+inline void HashSet<T, U, V>::clear() {
   impl_.clear();
 }
 
-template <typename T, typename U, typename V, typename W>
-inline auto HashSet<T, U, V, W>::Take(iterator it) -> ValueType {
+template <typename T, typename U, typename V>
+inline auto HashSet<T, U, V>::Take(iterator it) -> ValueType {
   if (it == end())
     return ValueTraits::EmptyValue();
 
@@ -334,13 +327,13 @@ inline auto HashSet<T, U, V, W>::Take(iterator it) -> ValueType {
   return result;
 }
 
-template <typename T, typename U, typename V, typename W>
-inline auto HashSet<T, U, V, W>::Take(ValuePeekInType value) -> ValueType {
+template <typename T, typename U, typename V>
+inline auto HashSet<T, U, V>::Take(ValuePeekInType value) -> ValueType {
   return Take(find(value));
 }
 
-template <typename T, typename U, typename V, typename W>
-inline auto HashSet<T, U, V, W>::TakeAny() -> ValueType {
+template <typename T, typename U, typename V>
+inline auto HashSet<T, U, V>::TakeAny() -> ValueType {
   return Take(begin());
 }
 

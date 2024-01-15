@@ -97,11 +97,8 @@ public class EmptyTabObserver implements TabObserver {
     public void onUpdateUrl(Tab tab, GURL url) {}
 
     @Override
-    public void onDidStartNavigationInPrimaryMainFrame(Tab tab, NavigationHandle navigationHandle) {
-    }
-
-    @Override
-    public void onDidStartNavigationNoop(Tab tab, NavigationHandle navigationHandle) {}
+    public void onDidStartNavigationInPrimaryMainFrame(
+            Tab tab, NavigationHandle navigationHandle) {}
 
     @Override
     public void onDidRedirectNavigation(Tab tab, NavigationHandle navigationHandle) {}
@@ -111,7 +108,7 @@ public class EmptyTabObserver implements TabObserver {
             Tab tab, NavigationHandle navigationHandle) {}
 
     @Override
-    public void onDidFinishNavigationNoop(Tab tab, NavigationHandle navigationHandle) {}
+    public void onDidFinishNavigationEnd() {}
 
     @Override
     public void didFirstVisuallyNonEmptyPaint(Tab tab) {}
@@ -141,13 +138,23 @@ public class EmptyTabObserver implements TabObserver {
     public void onFindMatchRectsAvailable(FindMatchRectsDetails result) {}
 
     @Override
-    public void onBrowserControlsOffsetChanged(Tab tab, int topControlsOffsetY,
-            int bottomControlsOffsetY, int contentOffsetY, int topControlsMinHeightOffsetY,
+    public void onBrowserControlsOffsetChanged(
+            Tab tab,
+            int topControlsOffsetY,
+            int bottomControlsOffsetY,
+            int contentOffsetY,
+            int topControlsMinHeightOffsetY,
             int bottomControlsMinHeightOffsetY) {}
 
     @Override
     public void onContentViewScrollingStateChanged(boolean scrolling) {}
 
     @Override
-    public void onContentViewScrollingEnded(int verticalScrollDelta) {}
+    public void onNavigationStateChanged() {}
+
+    @Override
+    public void onDidChangeCloseSignalInterceptStatus() {}
+
+    @Override
+    public void onRootIdChanged(Tab tab, int newRootId) {}
 }

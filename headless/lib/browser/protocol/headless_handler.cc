@@ -7,8 +7,8 @@
 #include <memory>
 
 #include "base/base_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "cc/base/switches.h"
@@ -115,8 +115,6 @@ void HeadlessHandler::Wire(UberDispatcher* dispatcher) {
 }
 
 Response HeadlessHandler::Enable() {
-  if (frontend_)
-    frontend_->NeedsBeginFramesChanged(true);
   return Response::Success();
 }
 
@@ -148,17 +146,17 @@ void HeadlessHandler::BeginFrame(Maybe<double> in_frame_time_ticks,
 
   base::TimeTicks frame_time_ticks;
   base::TimeDelta interval;
-  bool no_display_updates = in_no_display_updates.fromMaybe(false);
+  bool no_display_updates = in_no_display_updates.value_or(false);
 
-  if (in_frame_time_ticks.isJust()) {
+  if (in_frame_time_ticks.has_value()) {
     frame_time_ticks =
-        base::TimeTicks() + base::Milliseconds(in_frame_time_ticks.fromJust());
+        base::TimeTicks() + base::Milliseconds(in_frame_time_ticks.value());
   } else {
     frame_time_ticks = base::TimeTicks::Now();
   }
 
-  if (in_interval.isJust()) {
-    double interval_double = in_interval.fromJust();
+  if (in_interval.has_value()) {
+    double interval_double = in_interval.value();
     if (interval_double <= 0) {
       callback->sendFailure(
           Response::InvalidParams("interval has to be greater than 0"));
@@ -172,8 +170,8 @@ void HeadlessHandler::BeginFrame(Maybe<double> in_frame_time_ticks,
   base::TimeTicks deadline = frame_time_ticks + interval;
 
   BitmapEncoder encoder;
-  if (screenshot.isJust()) {
-    ScreenshotParams& params = *screenshot.fromJust();
+  if (screenshot.has_value()) {
+    ScreenshotParams& params = screenshot.value();
     auto encoder_or_response =
         GetEncoder(params.GetFormat(ScreenshotParams::FormatEnum::Png),
                    params.GetQuality(kDefaultScreenshotQuality),

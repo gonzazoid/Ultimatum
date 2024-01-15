@@ -7,7 +7,7 @@
 
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 namespace content {
 
@@ -26,11 +26,17 @@ std::unique_ptr<HidChooser> MockHidDelegate::RunChooser(
 
 void MockHidDelegate::AddObserver(BrowserContext* browser_context,
                                   Observer* observer) {
+  if (assert_browser_context_) {
+    ASSERT_TRUE(browser_context);
+  }
   observer_list_.AddObserver(observer);
 }
 
 void MockHidDelegate::RemoveObserver(BrowserContext* browser_context,
                                      Observer* observer) {
+  if (assert_browser_context_) {
+    ASSERT_TRUE(browser_context);
+  }
   observer_list_.RemoveObserver(observer);
 }
 
@@ -55,6 +61,16 @@ void MockHidDelegate::OnDeviceChanged(
 void MockHidDelegate::OnPermissionRevoked(const url::Origin& origin) {
   for (auto& observer : observer_list_)
     observer.OnPermissionRevoked(origin);
+}
+
+void MockHidDelegate::OnHidManagerConnectionError() {
+  for (auto& observer : observer_list_) {
+    observer.OnHidManagerConnectionError();
+  }
+}
+
+void MockHidDelegate::SetAssertBrowserContext(bool assert_browser_context) {
+  assert_browser_context_ = assert_browser_context;
 }
 
 HidTestContentBrowserClient::HidTestContentBrowserClient() = default;

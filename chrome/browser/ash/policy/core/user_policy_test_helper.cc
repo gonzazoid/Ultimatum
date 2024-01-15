@@ -9,8 +9,8 @@
 #include "base/command_line.h"
 #include "base/run_loop.h"
 #include "base/values.h"
-#include "chrome/browser/ash/login/test/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/ash/policy/core/user_cloud_policy_manager_ash.h"
+#include "chrome/browser/ash/policy/test_support/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
@@ -66,7 +66,8 @@ void UserPolicyTestHelper::WaitForInitialPolicy(Profile* profile) {
   PolicyService* const policy_service = profile_connector->policy_service();
 
   base::RunLoop run_loop;
-  policy_service->RefreshPolicies(run_loop.QuitClosure());
+  policy_service->RefreshPolicies(run_loop.QuitClosure(),
+                                  PolicyFetchReason::kTest);
   run_loop.Run();
 }
 
@@ -83,7 +84,8 @@ void UserPolicyTestHelper::RefreshPolicyAndWait(Profile* profile) {
   PolicyService* const policy_service = profile_connector->policy_service();
 
   base::RunLoop run_loop;
-  policy_service->RefreshPolicies(run_loop.QuitClosure());
+  policy_service->RefreshPolicies(run_loop.QuitClosure(),
+                                  PolicyFetchReason::kTest);
   run_loop.Run();
 }
 

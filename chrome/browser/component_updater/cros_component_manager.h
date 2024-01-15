@@ -7,14 +7,33 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
+#include "base/version.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class FilePath;
-}
+class Version;
+}  // namespace base
 
 namespace component_updater {
+
+// Contains the path and version of a compatible component.
+struct CompatibleComponentInfo {
+  CompatibleComponentInfo();
+  CompatibleComponentInfo(const base::FilePath& path_in,
+                          const absl::optional<base::Version>& version_in);
+  CompatibleComponentInfo(const CompatibleComponentInfo& rhs) = delete;
+  CompatibleComponentInfo& operator=(const CompatibleComponentInfo& rhs) =
+      delete;
+  CompatibleComponentInfo(CompatibleComponentInfo&& rhs);
+  CompatibleComponentInfo& operator=(CompatibleComponentInfo&& rhs);
+  ~CompatibleComponentInfo();
+  base::FilePath path;
+  absl::optional<base::Version> version;
+};
 
 // This class contains functions used to register and install a component.
 //
@@ -104,9 +123,15 @@ class CrOSComponentManager
   // or false if it couldn't be unloaded or already wasn't loaded.
   virtual bool Unload(const std::string& name) = 0;
 
-  // Saves the name and install path of a compatible component.
+  // Gets version of a component. `version_callback` runs on the calling thread.
+  // Return invalid base::Version() as `version` if the error occurs.
+  virtual void GetVersion(const std::string& name,
+                          base::OnceCallback<void(const base::Version& version)>
+                              version_callback) const = 0;
+
+  // Saves the information related to a compatible component.
   virtual void RegisterCompatiblePath(const std::string& name,
-                                      const base::FilePath& path) = 0;
+                                      CompatibleComponentInfo info) = 0;
 
   // Removes the name and install path entry of a component.
   virtual void UnregisterCompatiblePath(const std::string& name) = 0;

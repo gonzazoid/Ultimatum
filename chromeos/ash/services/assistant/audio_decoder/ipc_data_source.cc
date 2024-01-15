@@ -7,9 +7,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/ranges/algorithm.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/message.h"
 
 namespace ash::assistant {
@@ -17,7 +17,7 @@ namespace ash::assistant {
 IPCDataSource::IPCDataSource(
     mojo::PendingRemote<mojom::AssistantMediaDataSource> media_data_source)
     : media_data_source_(std::move(media_data_source)),
-      utility_task_runner_(base::SequencedTaskRunnerHandle::Get()) {
+      utility_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {
   DETACH_FROM_THREAD(data_source_thread_checker_);
 }
 
@@ -58,6 +58,22 @@ bool IPCDataSource::IsStreaming() {
 
 void IPCDataSource::SetBitrate(int bitrate) {
   DCHECK_CALLED_ON_VALID_THREAD(data_source_thread_checker_);
+}
+
+bool IPCDataSource::PassedTimingAllowOriginCheck() {
+  // The mojo ipc channel doesn't support this yet, so cautiously return false,
+  // for now.
+  // TODO(crbug/1377053): Rework this method to be asynchronous, if possible,
+  // so that the mojo interface can be queried.
+  return false;
+}
+
+bool IPCDataSource::WouldTaintOrigin() {
+  // The mojo ipc channel doesn't support this yet, so cautiously return true,
+  // for now.
+  // TODO(crbug/1377053): Rework this method to be asynchronous, if possible,
+  // so that the mojo interface can be queried.
+  return true;
 }
 
 void IPCDataSource::ReadMediaData(uint8_t* destination,

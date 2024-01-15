@@ -6,12 +6,12 @@
 
 #include <utility>
 
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_split.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/task_environment.h"
-#include "chrome/browser/ash/file_manager/fake_disk_mount_manager.h"
 #include "chrome/browser/ash/file_manager/volume_manager.h"
 #include "chrome/browser/ash/file_manager/volume_manager_factory.h"
 #include "chrome/browser/ash/file_manager/volume_manager_observer.h"
@@ -19,6 +19,7 @@
 #include "chrome/browser/ash/smb_client/smb_url.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/disks/disk_mount_manager.h"
+#include "chromeos/ash/components/disks/fake_disk_mount_manager.h"
 #include "chromeos/ash/components/disks/mount_point.h"
 #include "chromeos/ash/components/smbfs/smbfs_host.h"
 #include "chromeos/ash/components/smbfs/smbfs_mounter.h"
@@ -121,9 +122,9 @@ class SmbFsShareTest : public testing::Test {
     file_manager::VolumeManager::Get(&profile_)->RemoveObserver(&observer_);
   }
 
-  static file_manager::FakeDiskMountManager* disk_mount_manager() {
-    static file_manager::FakeDiskMountManager* manager =
-        new file_manager::FakeDiskMountManager();
+  static disks::FakeDiskMountManager* disk_mount_manager() {
+    static disks::FakeDiskMountManager* manager =
+        new disks::FakeDiskMountManager();
     return manager;
   }
 
@@ -149,7 +150,7 @@ class SmbFsShareTest : public testing::Test {
   SmbFsShare::MounterCreationCallback mounter_creation_callback_;
   std::unique_ptr<MockSmbFsMounter> mounter_ =
       std::make_unique<MockSmbFsMounter>();
-  MockSmbFsMounter* raw_mounter_ = mounter_.get();
+  raw_ptr<MockSmbFsMounter, DanglingUntriaged> raw_mounter_ = mounter_.get();
 };
 
 TEST_F(SmbFsShareTest, Mount) {

@@ -21,9 +21,9 @@ import {
   PostMessageWithOrigin,
   WireValue,
   WireValueType,
-} from './comlink_protocol';
+} from './comlink_protocol.js';
 
-export {Endpoint};
+export type {Endpoint};
 
 export const proxyMarker = Symbol('Comlink.proxy');
 export const createEndpoint = Symbol('Comlink.endpoint');
@@ -477,7 +477,7 @@ export function transfer<T>(obj: T, transfers: Transferable[]): T {
   return obj;
 }
 
-export function proxy<T>(obj: T): T&ProxyMarked {
+export function proxy<T extends {}>(obj: T): T&ProxyMarked {
   return Object.assign(obj, {[proxyMarker]: true}) as any;
 }
 

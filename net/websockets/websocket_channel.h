@@ -5,14 +5,16 @@
 #ifndef NET_WEBSOCKETS_WEBSOCKET_CHANNEL_H_
 #define NET_WEBSOCKETS_WEBSOCKET_CHANNEL_H_
 
+#include <stddef.h>
 #include <stdint.h>
 
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/queue.h"
+#include "base/containers/span.h"
+#include "base/functional/callback.h"
 #include "base/i18n/streaming_utf8_validator.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
@@ -31,17 +33,21 @@ class Origin;
 
 namespace net {
 
+class AuthChallengeInfo;
+class AuthCredentials;
 class HttpRequestHeaders;
+class HttpResponseHeaders;
 class IOBuffer;
 class IPEndPoint;
-class NetLogWithSource;
 class IsolationInfo;
+class NetLogWithSource;
+class SSLInfo;
 class SiteForCookies;
 class URLRequest;
 class URLRequestContext;
+struct NetworkTrafficAnnotationTag;
 struct WebSocketHandshakeRequestInfo;
 struct WebSocketHandshakeResponseInfo;
-struct NetworkTrafficAnnotationTag;
 
 // Transport-independent implementation of WebSockets. Implements protocol
 // semantics that do not depend on the underlying transport. Provides the
@@ -57,6 +63,7 @@ class NET_EXPORT WebSocketChannel {
       const std::vector<std::string>&,
       const url::Origin&,
       const SiteForCookies&,
+      bool,
       const IsolationInfo&,
       const HttpRequestHeaders&,
       URLRequestContext*,
@@ -87,6 +94,7 @@ class NET_EXPORT WebSocketChannel {
       const std::vector<std::string>& requested_protocols,
       const url::Origin& origin,
       const SiteForCookies& site_for_cookies,
+      bool has_storage_access,
       const IsolationInfo& isolation_info,
       const HttpRequestHeaders& additional_headers,
       NetworkTrafficAnnotationTag traffic_annotation);
@@ -131,6 +139,7 @@ class NET_EXPORT WebSocketChannel {
       const std::vector<std::string>& requested_protocols,
       const url::Origin& origin,
       const SiteForCookies& site_for_cookies,
+      bool has_storage_access,
       const IsolationInfo& isolation_info,
       const HttpRequestHeaders& additional_headers,
       NetworkTrafficAnnotationTag traffic_annotation,
@@ -184,6 +193,7 @@ class NET_EXPORT WebSocketChannel {
       const std::vector<std::string>& requested_protocols,
       const url::Origin& origin,
       const SiteForCookies& site_for_cookies,
+      bool has_storage_access,
       const IsolationInfo& isolation_info,
       const HttpRequestHeaders& additional_headers,
       NetworkTrafficAnnotationTag traffic_annotation,
@@ -340,6 +350,7 @@ class NET_EXPORT WebSocketChannel {
   // A data structure containing a vector of frames to be sent and the total
   // number of bytes contained in the vector.
   class SendBuffer;
+
   // Data that is currently pending write, or NULL if no write is pending.
   std::unique_ptr<SendBuffer> data_being_sent_;
   // Data that is queued up to write after the current write completes.

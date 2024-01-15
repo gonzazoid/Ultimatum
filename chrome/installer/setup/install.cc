@@ -21,13 +21,13 @@
 #include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
 #include "base/process/launch.h"
+#include "base/strings/strcat_win.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "base/win/shortcut.h"
-#include "base/win/windows_version.h"
 #include "chrome/install_static/install_details.h"
 #include "chrome/install_static/install_util.h"
 #include "chrome/installer/setup/install_params.h"
@@ -37,7 +37,6 @@
 #include "chrome/installer/setup/setup_constants.h"
 #include "chrome/installer/setup/setup_util.h"
 #include "chrome/installer/setup/update_active_setup_version_work_item.h"
-#include "chrome/installer/setup/user_experiment.h"
 #include "chrome/installer/util/beacons.h"
 #include "chrome/installer/util/create_reg_key_work_item.h"
 #include "chrome/installer/util/delete_after_reboot_helper.h"
@@ -135,7 +134,6 @@ void ExecuteAndLogShortcutOperation(
   // For Start Menu shortcut creation on versions of Win10 that support
   // pinning, record whether or not the installer pinned Chrome.
   if (location == ShellUtil::SHORTCUT_LOCATION_START_MENU_ROOT &&
-      base::win::GetVersion() >= base::win::Version::WIN10 &&
       CanPinShortcutToTaskbar()) {
     SetInstallerPinnedChromeToTaskbar(properties.pin_to_taskbar && pinned);
   }
@@ -160,9 +158,9 @@ void AddChromeToMediaPlayerList() {
 // only on the first install of Chrome.
 void CopyPreferenceFileForFirstRun(const InstallerState& installer_state,
                                    const base::FilePath& prefs_source_path) {
-  base::FilePath prefs_dest_path(
-      installer_state.target_path().AppendASCII(kLegacyInitialPrefs));
-  if (!base::CopyFile(prefs_source_path, prefs_dest_path)) {
+  if (!base::CopyFile(prefs_source_path,
+                      InitialPreferences::Path(installer_state.target_path(),
+                                               /*for_read=*/false))) {
     VLOG(1) << "Failed to copy initial preferences from:"
             << prefs_source_path.value() << " gle: " << ::GetLastError();
   }
@@ -181,9 +179,9 @@ void CopyPreferenceFileForFirstRun(const InstallerState& installer_state,
 // and removes the whole directory during rollback.
 InstallStatus InstallNewVersion(const InstallParams& install_params,
                                 bool is_downgrade_allowed) {
-  const InstallerState& installer_state = install_params.installer_state;
-  const base::Version& current_version = install_params.current_version;
-  const base::Version& new_version = install_params.new_version;
+  const InstallerState& installer_state = *install_params.installer_state;
+  const base::Version& current_version = *install_params.current_version;
+  const base::Version& new_version = *install_params.new_version;
 
   installer_state.SetStage(BUILDING);
 
@@ -258,28 +256,26 @@ std::string GenerateVisualElementsManifest(const base::Version& version) {
       "<Application xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'>\r\n"
       "  <VisualElements\r\n"
       "      ShowNameOnSquare150x150Logo='on'\r\n"
-      "      Square150x150Logo='%ls\\Logo%ls.png'\r\n"
-      "      Square70x70Logo='%ls\\SmallLogo%ls.png'\r\n"
-      "      Square44x44Logo='%ls\\SmallLogo%ls.png'\r\n"
+      "      Square150x150Logo='%s\\Logo%s.png'\r\n"
+      "      Square70x70Logo='%s\\SmallLogo%s.png'\r\n"
+      "      Square44x44Logo='%s\\SmallLogo%s.png'\r\n"
       "      ForegroundText='light'\r\n"
       "      BackgroundColor='#5F6368'/>\r\n"
       "</Application>\r\n";
 
   // Construct the relative path to the versioned VisualElements directory.
-  std::wstring elements_dir(base::ASCIIToWide(version.GetString()));
-  elements_dir.push_back(base::FilePath::kSeparators[0]);
+  std::string elements_dir = version.GetString();
+  elements_dir.push_back(
+      base::checked_cast<char>(base::FilePath::kSeparators[0]));
   elements_dir.append(kVisualElements);
 
-  const std::wstring manifest_template(base::ASCIIToWide(kManifestTemplate));
-
   // Fill the manifest with the desired values.
-  const wchar_t* logo_suffix =
-      install_static::InstallDetails::Get().logo_suffix();
-  std::wstring manifest(base::StringPrintf(
-      manifest_template.c_str(), elements_dir.c_str(), logo_suffix,
-      elements_dir.c_str(), logo_suffix, elements_dir.c_str(), logo_suffix));
-
-  return base::WideToUTF8(manifest);
+  const std::string logo_suffix =
+      base::WideToUTF8(install_static::InstallDetails::Get().logo_suffix());
+  return base::StringPrintf(kManifestTemplate, elements_dir.c_str(),
+                            logo_suffix.c_str(), elements_dir.c_str(),
+                            logo_suffix.c_str(), elements_dir.c_str(),
+                            logo_suffix.c_str());
 }
 
 // Whether VisualElements assets exist for this brand and mode.
@@ -287,16 +283,16 @@ bool HasVisualElementAssets(const base::FilePath& base_path,
                             const base::Version& version) {
   // There are no assets at all if there's no VisualElements directory.
   base::FilePath visual_elements_dir =
-      base_path.AppendASCII(version.GetString()).Append(kVisualElements);
-  if (!base::DirectoryExists(visual_elements_dir))
+      base_path.AppendASCII(version.GetString()).AppendASCII(kVisualElements);
+  if (!base::DirectoryExists(visual_elements_dir)) {
     return false;
+  }
 
 // Assets are unconditionally required if there is a VisualElements directory.
 #if DCHECK_IS_ON()
-  const wchar_t* const logo_suffix =
-      install_static::InstallDetails::Get().logo_suffix();
-  DCHECK(base::PathExists(visual_elements_dir.Append(
-      base::StringPrintf(L"Logo%ls.png", logo_suffix))));
+  DCHECK(base::PathExists(visual_elements_dir.Append(base::StrCat(
+      {L"Logo", install_static::InstallDetails::Get().logo_suffix(),
+       L".png"}))));
 #endif
 
   return true;
@@ -316,9 +312,7 @@ bool CreateVisualElementsManifest(const base::FilePath& src_path,
   const std::string manifest(GenerateVisualElementsManifest(version));
 
   // Write the manifest to |src_path|.
-  int size = base::checked_cast<int>(manifest.size());
-  if (base::WriteFile(src_path.Append(kVisualElementsManifest),
-                      manifest.c_str(), size) == size) {
+  if (base::WriteFile(src_path.Append(kVisualElementsManifest), manifest)) {
     VLOG(1) << "Successfully wrote " << kVisualElementsManifest << " to "
             << src_path.value();
     return true;
@@ -506,11 +500,11 @@ void RunShortcutCreationInChildProc(
 InstallStatus InstallOrUpdateProduct(const InstallParams& install_params,
                                      const base::FilePath& prefs_path,
                                      const InitialPreferences& prefs) {
-  const InstallationState& original_state = install_params.installation_state;
-  const InstallerState& installer_state = install_params.installer_state;
-  const base::FilePath& setup_path = install_params.setup_path;
-  const base::FilePath& src_path = install_params.src_path;
-  const base::Version& new_version = install_params.new_version;
+  const InstallationState& original_state = *install_params.installation_state;
+  const InstallerState& installer_state = *install_params.installer_state;
+  const base::FilePath& setup_path = *install_params.setup_path;
+  const base::FilePath& src_path = *install_params.src_path;
+  const base::Version& new_version = *install_params.new_version;
 
   // TODO(robertshield): Removing the pending on-reboot moves should be done
   // elsewhere.
@@ -639,7 +633,7 @@ void HandleOsUpgradeForBrowser(const InstallerState& installer_state,
 
   RunShortcutCreationInChildProc(
       installer_state, setup_path,
-      installer_state.target_path().AppendASCII(kLegacyInitialPrefs), level,
+      InitialPreferences::Path(installer_state.target_path()), level,
       INSTALL_SHORTCUT_REPLACE_EXISTING);
 
   // Adapt Chrome registrations to this new OS.
@@ -710,20 +704,11 @@ void HandleActiveSetupForBrowser(const InstallerState& installer_state,
   // Use the initial preferences copied beside chrome.exe at install for the
   // sake of creating/updating shortcuts.
   const base::FilePath installation_root = installer_state.target_path();
-  RunShortcutCreationInChildProc(
-      installer_state, setup_path,
-      installation_root.AppendASCII(kLegacyInitialPrefs), CURRENT_USER,
-      install_operation);
+  RunShortcutCreationInChildProc(installer_state, setup_path,
+                                 InitialPreferences::Path(installation_root),
+                                 CURRENT_USER, install_operation);
 
   UpdateDefaultBrowserBeaconForPath(installation_root.Append(kChromeExe));
-
-  // This install may have been selected into a study for a retention
-  // experiment following a successful update. In case the experiment was not
-  // able to run immediately after the update (e.g., no user was logged on at
-  // the time), try to run it now that the installer is running in the context
-  // of a user.
-  if (ShouldRunUserExperiment(installer_state))
-    BeginUserExperiment(installer_state, setup_path, true /* user_context */);
 }
 
 }  // namespace installer

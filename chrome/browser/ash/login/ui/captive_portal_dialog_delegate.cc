@@ -48,6 +48,10 @@ CaptivePortalDialogDelegate::CaptivePortalDialogDelegate(
     : host_view_(host_dialog_view),
       web_contents_(host_dialog_view->web_contents()) {
   DCHECK(web_contents_);
+
+  set_dialog_modal_type(ui::ModalType::MODAL_TYPE_SYSTEM);
+  set_show_dialog_title(false);
+
   view_ =
       new views::WebDialogView(ProfileHelper::GetSigninProfile(), this,
                                std::make_unique<ChromeWebContentsHandler>());
@@ -55,12 +59,17 @@ CaptivePortalDialogDelegate::CaptivePortalDialogDelegate(
 
   views::Widget::InitParams params(
       views::Widget::InitParams::TYPE_WINDOW_FRAMELESS);
-  params.delegate = view_;
+  params.delegate = view_.get();
   params.opacity = views::Widget::InitParams::WindowOpacity::kTranslucent;
   ash_util::SetupWidgetInitParamsForContainer(
       &params, kShellWindowId_LockSystemModalContainer);
 
-  widget_ = new views::Widget;
+  // The ownership of the `Widget` we're allocating here is a bit unclear --
+  // it's not deleted in this class, but we sometimes try to access the Widget
+  // in this class after the widget has been deleted elsewhere. By using a weak
+  // ptr to hold onto the widget, we can at least check whether it is still
+  // alive before accessing it.
+  widget_ = (new views::Widget)->GetWeakPtr();
   widget_->Init(std::move(params));
   widget_->SetBounds(display::Screen::GetScreen()
                          ->GetDisplayNearestWindow(widget_->GetNativeWindow())
@@ -86,51 +95,22 @@ void CaptivePortalDialogDelegate::Show() {
 }
 
 void CaptivePortalDialogDelegate::Hide() {
-  widget_->Hide();
+  if (widget_) {
+    widget_->Hide();
+  }
 }
 
 void CaptivePortalDialogDelegate::Close() {
-  widget_->Close();
+  if (widget_) {
+    widget_->Close();
+  }
 }
-
-ui::ModalType CaptivePortalDialogDelegate::GetDialogModalType() const {
-  return ui::ModalType::MODAL_TYPE_SYSTEM;
-}
-
-std::u16string CaptivePortalDialogDelegate::GetDialogTitle() const {
-  return std::u16string();
-}
-
-GURL CaptivePortalDialogDelegate::GetDialogContentURL() const {
-  return GURL();
-}
-
-void CaptivePortalDialogDelegate::GetWebUIMessageHandlers(
-    std::vector<content::WebUIMessageHandler*>* handlers) const {}
 
 void CaptivePortalDialogDelegate::GetDialogSize(gfx::Size* size) const {
   *size = display::Screen::GetScreen()
               ->GetDisplayNearestWindow(widget_->GetNativeWindow())
               .work_area()
               .size();
-}
-
-std::string CaptivePortalDialogDelegate::GetDialogArgs() const {
-  return std::string();
-}
-
-void CaptivePortalDialogDelegate::OnDialogClosed(
-    const std::string& json_retval) {
-  delete this;
-}
-
-void CaptivePortalDialogDelegate::OnCloseContents(content::WebContents* source,
-                                                  bool* out_close_dialog) {
-  *out_close_dialog = false;
-}
-
-bool CaptivePortalDialogDelegate::ShouldShowDialogTitle() const {
-  return false;
 }
 
 web_modal::WebContentsModalDialogHost*

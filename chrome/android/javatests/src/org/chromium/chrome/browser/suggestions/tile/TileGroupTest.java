@@ -4,16 +4,16 @@
 
 package org.chromium.chrome.browser.suggestions.tile;
 
-import android.support.test.InstrumentationRegistry;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
+import androidx.test.core.app.ApplicationProvider;
 import androidx.test.espresso.matcher.ViewMatchers;
 import androidx.test.filters.MediumTest;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.hamcrest.Matchers;
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Before;
@@ -32,10 +32,7 @@ import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Criteria;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.Feature;
-import org.chromium.chrome.R;
 import org.chromium.chrome.browser.app.ChromeActivity;
-import org.chromium.chrome.browser.explore_sites.ExploreSitesBridge;
-import org.chromium.chrome.browser.explore_sites.ExploreSitesCategory;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.native_page.ContextMenuManager;
@@ -43,8 +40,10 @@ import org.chromium.chrome.browser.ntp.NewTabPage;
 import org.chromium.chrome.browser.suggestions.SiteSuggestion;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
+import org.chromium.chrome.features.start_surface.StartSurfaceConfiguration;
 import org.chromium.chrome.test.ChromeJUnit4RunnerDelegate;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
+import org.chromium.chrome.test.R;
 import org.chromium.chrome.test.batch.BlankCTATabInitialStateRule;
 import org.chromium.chrome.test.util.NewTabPageTestUtils;
 import org.chromium.chrome.test.util.browser.suggestions.SuggestionsDependenciesRule;
@@ -56,15 +55,12 @@ import org.chromium.net.test.EmbeddedTestServer;
 import org.chromium.ui.test.util.ViewUtils;
 import org.chromium.url.GURL;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
-/**
- * Instrumentation tests for {@link TileGroup} on the New Tab Page.
- */
+/** Instrumentation tests for {@link TileGroup} on the New Tab Page. */
 @RunWith(ParameterizedRunner.class)
 @ParameterAnnotations.UseRunnerDelegate(ChromeJUnit4RunnerDelegate.class)
 @Batch(Batch.PER_CLASS)
@@ -72,7 +68,8 @@ import java.util.concurrent.TimeoutException;
 public class TileGroupTest {
     @ParameterAnnotations.ClassParameter
     private static List<ParameterSet> sClassParams =
-            Arrays.asList(new ParameterSet().value(true).name("EnableScrollableMVTOnNTP"),
+            Arrays.asList(
+                    new ParameterSet().value(true).name("EnableScrollableMVTOnNTP"),
                     new ParameterSet().value(false).name("DisableScrollableMVTOnNTP"));
 
     @ClassRule
@@ -83,13 +80,14 @@ public class TileGroupTest {
     public final BlankCTATabInitialStateRule mInitialStateRule =
             new BlankCTATabInitialStateRule(sActivityTestRule, true);
 
-    @Rule
-    public SuggestionsDependenciesRule mSuggestionsDeps = new SuggestionsDependenciesRule();
+    @Rule public SuggestionsDependenciesRule mSuggestionsDeps = new SuggestionsDependenciesRule();
 
     private static final String[] FAKE_MOST_VISITED_URLS =
-            new String[] {"/chrome/test/data/android/navigate/one.html",
-                    "/chrome/test/data/android/navigate/two.html",
-                    "/chrome/test/data/android/navigate/three.html"};
+            new String[] {
+                "/chrome/test/data/android/navigate/one.html",
+                "/chrome/test/data/android/navigate/two.html",
+                "/chrome/test/data/android/navigate/three.html"
+            };
 
     private NewTabPage mNtp;
     private String[] mSiteSuggestionUrls;
@@ -107,9 +105,19 @@ public class TileGroupTest {
         FeatureList.TestValues testValuesOverride = new FeatureList.TestValues();
         testValuesOverride.addFeatureFlagOverride(
                 ChromeFeatureList.SHOW_SCROLLABLE_MVT_ON_NTP_ANDROID, mEnableScrollableMVT);
+        if (!ChromeFeatureList.sSurfacePolish.isEnabled()) {
+            testValuesOverride.addFeatureFlagOverride(
+                    ChromeFeatureList.SHOW_SCROLLABLE_MVT_ON_NTP_PHONE_ANDROID,
+                    mEnableScrollableMVT);
+        } else {
+            StartSurfaceConfiguration.SURFACE_POLISH_SCROLLABLE_MVT.setForTesting(
+                    mEnableScrollableMVT);
+        }
         FeatureList.setTestValues(testValuesOverride);
 
-        mTestServer = EmbeddedTestServer.createAndStartServer(InstrumentationRegistry.getContext());
+        mTestServer =
+                EmbeddedTestServer.createAndStartServer(
+                        ApplicationProvider.getApplicationContext());
 
         mSiteSuggestionUrls = mTestServer.getURLs(FAKE_MOST_VISITED_URLS);
 
@@ -130,13 +138,6 @@ public class TileGroupTest {
                 (ViewGroup) mNtp.getView(), ViewMatchers.withId(R.id.mv_tiles_layout));
     }
 
-    @After
-    public void tearDown() {
-        if (mTestServer != null) {
-            mTestServer.stopAndDestroyServer();
-        }
-    }
-
     @Test
     @MediumTest
     @Feature({"NewTabPage"})
@@ -151,29 +152,13 @@ public class TileGroupTest {
 
         // Ensure that the removal is reflected in the ui.
         Assert.assertEquals(3, getTileLayout().getChildCount());
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mMostVisitedSites.setTileSuggestions(mSiteSuggestionUrls[1], mSiteSuggestionUrls[2]);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mMostVisitedSites.setTileSuggestions(
+                            mSiteSuggestionUrls[1], mSiteSuggestionUrls[2]);
+                });
         waitForTileRemoved(siteToDismiss);
         Assert.assertEquals(2, getTileLayout().getChildCount());
-    }
-
-    @Test
-    @MediumTest
-    @Feature({"NewTabPage"})
-    public void testDismissExploreTileWithContextMenuFails() throws Exception {
-        SiteSuggestion exploreTile = recreateSuggestionsWithExploreTile();
-
-        initializeTab();
-
-        Assert.assertEquals(4, getTileLayout().getChildCount());
-
-        final View tileView = getNonNullTileViewFor(exploreTile);
-        TestTouchUtils.performLongClickOnMainSync(
-                InstrumentationRegistry.getInstrumentation(), tileView);
-        Assert.assertFalse(InstrumentationRegistry.getInstrumentation().invokeContextMenuAction(
-                sActivityTestRule.getActivity(), ContextMenuManager.ContextMenuItemId.REMOVE, 0));
-        Assert.assertEquals(4, getTileLayout().getChildCount());
     }
 
     @Test
@@ -182,8 +167,6 @@ public class TileGroupTest {
     public void testDismissTileUndo() throws Exception {
         initializeTab();
         GURL url0 = new GURL(mSiteSuggestionUrls[0]);
-        GURL url1 = new GURL(mSiteSuggestionUrls[1]);
-        GURL url2 = new GURL(mSiteSuggestionUrls[2]);
         SiteSuggestion siteToDismiss = mMostVisitedSites.getCurrentSites().get(0);
         final ViewGroup tileContainer = getTileLayout();
         final View tileView = getNonNullTileViewFor(siteToDismiss);
@@ -193,21 +176,28 @@ public class TileGroupTest {
         invokeContextMenu(tileView, ContextMenuManager.ContextMenuItemId.REMOVE);
 
         // Ensure that the removal update goes through.
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mMostVisitedSites.setTileSuggestions(mSiteSuggestionUrls[1], mSiteSuggestionUrls[2]);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mMostVisitedSites.setTileSuggestions(
+                            mSiteSuggestionUrls[1], mSiteSuggestionUrls[2]);
+                });
         waitForTileRemoved(siteToDismiss);
         Assert.assertEquals(2, tileContainer.getChildCount());
         final View snackbarButton = waitForSnackbar(sActivityTestRule.getActivity());
 
         Assert.assertTrue(mMostVisitedSites.isUrlBlocklisted(url0));
-        TestThreadUtils.runOnUiThreadBlocking(() -> { snackbarButton.callOnClick(); });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    snackbarButton.callOnClick();
+                });
 
         Assert.assertFalse(mMostVisitedSites.isUrlBlocklisted(url0));
 
         // Ensure that the removal of the update goes through.
         TestThreadUtils.runOnUiThreadBlocking(
-                () -> { mMostVisitedSites.setTileSuggestions(mSiteSuggestionUrls); });
+                () -> {
+                    mMostVisitedSites.setTileSuggestions(mSiteSuggestionUrls);
+                });
         waitForTileAdded(siteToDismiss);
         Assert.assertEquals(3, tileContainer.getChildCount());
     }
@@ -217,7 +207,8 @@ public class TileGroupTest {
         Assert.assertNotNull("Unable to retrieve the NewTabPageLayout.", newTabPageLayout);
 
         ViewGroup viewGroup = newTabPageLayout.findViewById(R.id.mv_tiles_layout);
-        Assert.assertNotNull("Unable to retrieve the "
+        Assert.assertNotNull(
+                "Unable to retrieve the "
                         + (mEnableScrollableMVT ? "MvTilesLayout." : "TileGridLayout."),
                 viewGroup);
         return viewGroup;
@@ -226,11 +217,13 @@ public class TileGroupTest {
     private View getTileViewFor(SiteSuggestion suggestion) {
         View tileView;
         if (mEnableScrollableMVT) {
-            tileView = ((MostVisitedTilesCarouselLayout) getTileLayout())
-                               .findTileViewForTesting(suggestion);
+            tileView =
+                    ((MostVisitedTilesCarouselLayout) getTileLayout())
+                            .findTileViewForTesting(suggestion);
         } else {
-            tileView = ((MostVisitedTilesGridLayout) getTileLayout())
-                               .findTileViewForTesting(suggestion);
+            tileView =
+                    ((MostVisitedTilesGridLayout) getTileLayout())
+                            .findTileViewForTesting(suggestion);
         }
         return tileView;
     }
@@ -244,22 +237,27 @@ public class TileGroupTest {
     private void invokeContextMenu(View view, int contextMenuItemId) throws ExecutionException {
         TestTouchUtils.performLongClickOnMainSync(
                 InstrumentationRegistry.getInstrumentation(), view);
-        Assert.assertTrue(InstrumentationRegistry.getInstrumentation().invokeContextMenuAction(
-                sActivityTestRule.getActivity(), contextMenuItemId, 0));
+        Assert.assertTrue(
+                InstrumentationRegistry.getInstrumentation()
+                        .invokeContextMenuAction(
+                                sActivityTestRule.getActivity(), contextMenuItemId, 0));
     }
 
     /** Wait for the snackbar associated to a tile dismissal to be shown and returns its button. */
     private static View waitForSnackbar(final ChromeActivity activity) {
         final String expectedSnackbarMessage =
                 activity.getResources().getString(R.string.most_visited_item_removed);
-        CriteriaHelper.pollUiThread(() -> {
-            SnackbarManager snackbarManager = activity.getSnackbarManager();
-            Criteria.checkThat(snackbarManager.isShowing(), Matchers.is(true));
-            TextView snackbarMessage = (TextView) activity.findViewById(R.id.snackbar_message);
-            Criteria.checkThat(snackbarMessage, Matchers.notNullValue());
-            Criteria.checkThat(
-                    snackbarMessage.getText().toString(), Matchers.is(expectedSnackbarMessage));
-        });
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    SnackbarManager snackbarManager = activity.getSnackbarManager();
+                    Criteria.checkThat(snackbarManager.isShowing(), Matchers.is(true));
+                    TextView snackbarMessage =
+                            (TextView) activity.findViewById(R.id.snackbar_message);
+                    Criteria.checkThat(snackbarMessage, Matchers.notNullValue());
+                    Criteria.checkThat(
+                            snackbarMessage.getText().toString(),
+                            Matchers.is(expectedSnackbarMessage));
+                });
 
         return activity.findViewById(R.id.snackbar_button);
     }
@@ -270,15 +268,16 @@ public class TileGroupTest {
         if (removedTile == null) return;
 
         final CallbackHelper callback = new CallbackHelper();
-        tileContainer.setOnHierarchyChangeListener(new ViewGroup.OnHierarchyChangeListener() {
-            @Override
-            public void onChildViewAdded(View parent, View child) {}
+        tileContainer.setOnHierarchyChangeListener(
+                new ViewGroup.OnHierarchyChangeListener() {
+                    @Override
+                    public void onChildViewAdded(View parent, View child) {}
 
-            @Override
-            public void onChildViewRemoved(View parent, View child) {
-                if (child == removedTile) callback.notifyCalled();
-            }
-        });
+                    @Override
+                    public void onChildViewRemoved(View parent, View child) {
+                        if (child == removedTile) callback.notifyCalled();
+                    }
+                });
         callback.waitForCallback("The expected tile was not removed.", 0);
         tileContainer.setOnHierarchyChangeListener(null);
     }
@@ -289,39 +288,20 @@ public class TileGroupTest {
         if (addedTile != null) return;
 
         final CallbackHelper callback = new CallbackHelper();
-        tileContainer.setOnHierarchyChangeListener(new ViewGroup.OnHierarchyChangeListener() {
-            @Override
-            public void onChildViewAdded(View parent, View child) {
-                if (!(child instanceof SuggestionsTileView)) return;
-                if (!((SuggestionsTileView) child).getData().equals(suggestion)) return;
+        tileContainer.setOnHierarchyChangeListener(
+                new ViewGroup.OnHierarchyChangeListener() {
+                    @Override
+                    public void onChildViewAdded(View parent, View child) {
+                        if (!(child instanceof SuggestionsTileView)) return;
+                        if (!((SuggestionsTileView) child).getData().equals(suggestion)) return;
 
-                callback.notifyCalled();
-            }
+                        callback.notifyCalled();
+                    }
 
-            @Override
-            public void onChildViewRemoved(View parent, View child) {}
-        });
+                    @Override
+                    public void onChildViewRemoved(View parent, View child) {}
+                });
         callback.waitForCallback("The expected tile was not added.", 0);
         tileContainer.setOnHierarchyChangeListener(null);
-    }
-
-    private SiteSuggestion recreateSuggestionsWithExploreTile() {
-        // need a copy of the list in order to modify it.
-        final ArrayList<SiteSuggestion> currentSuggestions =
-                new ArrayList<>(mMostVisitedSites.getCurrentSites());
-
-        SiteSuggestion exploreTile =
-                new SiteSuggestion("chrome-native://explore", new GURL("chrome-native://explore"),
-                        TileTitleSource.UNKNOWN, TileSource.EXPLORE, TileSectionType.PERSONALIZED);
-        currentSuggestions.add(exploreTile);
-        TestThreadUtils.runOnUiThreadBlocking(
-                () -> mMostVisitedSites.setTileSuggestions(currentSuggestions));
-
-        // Set up ExploreSitesBridge for testing.
-        List<ExploreSitesCategory> category = new ArrayList<>();
-        category.add(new ExploreSitesCategory(0, 1, "foo", 0, 0));
-        ExploreSitesBridge.setCatalogForTesting(category);
-
-        return exploreTile;
     }
 }

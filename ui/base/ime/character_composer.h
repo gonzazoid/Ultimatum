@@ -11,6 +11,8 @@
 #include <vector>
 
 #include "base/component_export.h"
+#include "base/memory/raw_ptr_exclusion.h"
+#include "base/memory/raw_ref.h"
 #include "base/strings/string_util.h"
 #include "ui/events/keycodes/dom/dom_key.h"
 
@@ -115,7 +117,9 @@ class TreeComposeChecker : public ComposeChecker {
   struct CompositionData {
     size_t maximum_sequence_length;
     int tree_entries;
-    const uint16_t* tree;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #reinterpret-cast-trivial-type, #global-scope
+    RAW_PTR_EXCLUSION const uint16_t* tree;
   };
 
   explicit TreeComposeChecker(const CompositionData& data) : data_(data) {}
@@ -125,7 +129,7 @@ class TreeComposeChecker : public ComposeChecker {
 
  private:
   bool Find(uint16_t index, uint16_t size, uint16_t key, uint16_t* value) const;
-  const CompositionData& data_;
+  const raw_ref<const CompositionData> data_;
 };
 
 }  // namespace ui

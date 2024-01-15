@@ -8,6 +8,10 @@ import("//testing/libfuzzer/fuzzer_test.gni")
 
 component("fido") {
   sources = [
+    "attestation_object.cc",
+    "attestation_object.h",
+    "attestation_statement.cc",
+    "attestation_statement.h",
     "attested_credential_data.cc",
     "attested_credential_data.h",
     "authenticator_data.cc",
@@ -36,8 +40,14 @@ component("fido") {
     "fido_parsing_utils.h",
     "fido_transport_protocol.cc",
     "fido_transport_protocol.h",
+    "json_request.cc",
+    "json_request.h",
+    "opaque_attestation_statement.cc",
+    "opaque_attestation_statement.h",
     "p256_public_key.cc",
     "p256_public_key.h",
+    "prf_input.cc",
+    "prf_input.h",
     "public_key.cc",
     "public_key.h",
     "public_key_credential_descriptor.cc",
@@ -62,6 +72,7 @@ component("fido") {
     "//crypto",
     "//device/base",
     "//device/fido/strings",
+    "//services/data_decoder/public/cpp",
     "//third_party/boringssl",
     "//third_party/microsoft_webauthn",
     "//ui/base",
@@ -74,6 +85,8 @@ component("fido") {
     "//services/device/public/mojom",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   # Android implementation of FIDO is delegated to GMSCore.
   if (!is_android) {
     sources += [
@@ -83,10 +96,6 @@ component("fido") {
       "aoa/android_accessory_discovery.h",
       "appid_exclude_probe_task.cc",
       "appid_exclude_probe_task.h",
-      "attestation_object.cc",
-      "attestation_object.h",
-      "attestation_statement.cc",
-      "attestation_statement.h",
       "attestation_statement_formats.cc",
       "attestation_statement_formats.h",
       "auth_token_requester.cc",
@@ -137,10 +146,22 @@ component("fido") {
       "ctap_make_credential_request.cc",
       "ctap_make_credential_request.h",
       "device_operation.h",
-      "device_public_key_extension.cc",
-      "device_public_key_extension.h",
       "device_response_converter.cc",
       "device_response_converter.h",
+      "enclave/constants.cc",
+      "enclave/constants.h",
+      "enclave/enclave_authenticator.cc",
+      "enclave/enclave_authenticator.h",
+      "enclave/enclave_discovery.cc",
+      "enclave/enclave_discovery.h",
+      "enclave/enclave_protocol_utils.cc",
+      "enclave/enclave_protocol_utils.h",
+      "enclave/enclave_websocket_client.cc",
+      "enclave/enclave_websocket_client.h",
+      "enclave/transact.cc",
+      "enclave/transact.h",
+      "enclave/types.cc",
+      "enclave/types.h",
       "fido_authenticator.cc",
       "fido_authenticator.h",
       "fido_device.cc",
@@ -174,12 +195,12 @@ component("fido") {
       "hid/fido_hid_packet.h",
       "large_blob.cc",
       "large_blob.h",
+      "mac/icloud_keychain.h",
+      "mac/icloud_keychain_sys.h",
       "make_credential_request_handler.cc",
       "make_credential_request_handler.h",
       "make_credential_task.cc",
       "make_credential_task.h",
-      "opaque_attestation_statement.cc",
-      "opaque_attestation_statement.h",
       "pin.cc",
       "pin.h",
       "pin_internal.cc",
@@ -195,6 +216,8 @@ component("fido") {
       "u2f_register_operation.h",
       "u2f_sign_operation.cc",
       "u2f_sign_operation.h",
+      "value_response_conversions.cc",
+      "value_response_conversions.h",
       "virtual_ctap2_device.cc",
       "virtual_ctap2_device.h",
       "virtual_fido_device.cc",
@@ -206,6 +229,7 @@ component("fido") {
     ]
 
     deps += [
+      "//components/sync/protocol:protocol",
       "//services/device/public/cpp/hid",
       "//services/device/public/cpp/usb",
       "//services/device/public/mojom",
@@ -227,6 +251,8 @@ component("fido") {
       "mac/discovery.h",
       "mac/get_assertion_operation.h",
       "mac/get_assertion_operation.mm",
+      "mac/icloud_keychain.mm",
+      "mac/icloud_keychain_sys.mm",
       "mac/keychain.h",
       "mac/keychain.mm",
       "mac/make_credential_operation.h",
@@ -242,7 +268,10 @@ component("fido") {
       "Foundation.framework",
       "LocalAuthentication.framework",
       "Security.framework",
+      "AuthenticationServices.framework",
     ]
+
+    deps += [ "//build:branding_buildflags" ]
   }
 
   if (is_win) {
@@ -296,6 +325,7 @@ static_library("cablev2_registration") {
     "//components/gcm_driver/instance_id",
     "//third_party/boringssl",
   ]
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 }
 
 static_library("cablev2_authenticator") {
@@ -310,6 +340,7 @@ static_library("cablev2_authenticator") {
     "//content/public/common",  # for authenticator.mojom
     "//services/network/public/mojom",
   ]
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 }
 
 static_library("cablev2_test_util") {
@@ -450,6 +481,25 @@ source_set("test_support") {
       "mac/fake_touch_id_context.mm",
       "mac/scoped_touch_id_test_environment.h",
       "mac/scoped_touch_id_test_environment.mm",
+    ]
+  }
+}
+
+# This is split from `test_support` because it requires the
+# AuthenticationServices framework to be linked in, and that can't just be done
+# as a dep/framework here.
+if (is_mac) {
+  static_library("icloud_keychain_test_support") {
+    testonly = true
+    sources = [
+      "mac/fake_icloud_keychain_sys.h",
+      "mac/fake_icloud_keychain_sys.mm",
+      "mac/scoped_icloud_keychain_test_environment.h",
+      "mac/scoped_icloud_keychain_test_environment.mm",
+    ]
+    deps = [
+      "//base",
+      "//device/fido",
     ]
   }
 }

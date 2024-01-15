@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ash/policy/value_validation/onc_user_policy_value_validator.h"
@@ -213,7 +213,8 @@ void DeviceLocalAccountPolicyStore::Validate(
     ValidateCompletionCallback callback,
     bool validate_in_background,
     ash::DeviceSettingsService::OwnershipStatus ownership_status) {
-  DCHECK_NE(ash::DeviceSettingsService::OWNERSHIP_UNKNOWN, ownership_status);
+  DCHECK_NE(ash::DeviceSettingsService::OwnershipStatus::kOwnershipUnknown,
+            ownership_status);
   const em::PolicyData* device_policy_data =
       device_settings_service_->policy_data();
   // Note that the key is obtained through the device settings service instead

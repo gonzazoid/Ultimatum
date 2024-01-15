@@ -8,10 +8,9 @@
 #include <stdint.h>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_set.h"
 #include "base/containers/span.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -22,8 +21,7 @@
 #include "services/device/usb/usb_device.h"
 #include "services/device/usb/usb_device_handle.h"
 
-namespace device {
-namespace usb {
+namespace device::usb {
 
 // Implementation of the public Device interface. Instances of this class are
 // constructed by DeviceManagerImpl and are strongly bound to their MessagePipe
@@ -128,7 +126,6 @@ class DeviceImpl : public mojom::UsbDevice, public device::UsbDevice::Observer {
   base::WeakPtrFactory<DeviceImpl> weak_factory_{this};
 };
 
-}  // namespace usb
-}  // namespace device
+}  // namespace device::usb
 
 #endif  // SERVICES_DEVICE_USB_MOJO_DEVICE_IMPL_H_

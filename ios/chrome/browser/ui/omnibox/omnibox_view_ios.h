@@ -8,6 +8,7 @@
 #import <UIKit/UIKit.h>
 
 #include <memory>
+#include <optional>
 
 #include "components/omnibox/browser/location_bar_model.h"
 #include "components/omnibox/browser/omnibox_view.h"
@@ -15,15 +16,14 @@
 #import "ios/chrome/browser/ui/omnibox/omnibox_text_field_ios.h"
 #include "ios/chrome/browser/ui/omnibox/popup/omnibox_popup_provider.h"
 #import "ios/chrome/browser/ui/omnibox/popup/omnibox_popup_view_suggestions_delegate.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
-class AutocompleteResult;
 class ChromeBrowserState;
 class GURL;
-class WebOmniboxEditController;
+class WebLocationBar;
 struct AutocompleteMatch;
 @class OmniboxTextFieldIOS;
 @protocol OmniboxCommands;
+@protocol ToolbarCommands;
 
 // iOS implementation of OmniBoxView.  Wraps a UITextField and
 // interfaces with the rest of the autocomplete system.
@@ -34,9 +34,10 @@ class OmniboxViewIOS : public OmniboxView,
  public:
   // Retains `field`.
   OmniboxViewIOS(OmniboxTextFieldIOS* field,
-                 WebOmniboxEditController* controller,
+                 WebLocationBar* location_bar,
                  ChromeBrowserState* browser_state,
-                 id<OmniboxCommands> omnibox_focuser);
+                 id<OmniboxCommands> omnibox_focuser,
+                 id<ToolbarCommands> toolbar_commands_handler);
 
   ~OmniboxViewIOS() override;
 
@@ -51,7 +52,7 @@ class OmniboxViewIOS : public OmniboxView,
       const std::u16string& pasted_text,
       size_t selected_line,
       base::TimeTicks match_selection_timestamp,
-      absl::optional<GURL> optional_gurl);
+      std::optional<GURL> optional_gurl);
 
   void OnReceiveClipboardTextForOpenMatch(
       const AutocompleteMatch& match,
@@ -60,7 +61,7 @@ class OmniboxViewIOS : public OmniboxView,
       const std::u16string& pasted_text,
       size_t selected_line,
       base::TimeTicks match_selection_timestamp,
-      absl::optional<std::u16string> optional_text);
+      std::optional<std::u16string> optional_text);
 
   void OnReceiveClipboardImageForOpenMatch(
       const AutocompleteMatch& match,
@@ -69,7 +70,7 @@ class OmniboxViewIOS : public OmniboxView,
       const std::u16string& pasted_text,
       size_t selected_line,
       base::TimeTicks match_selection_timestamp,
-      absl::optional<gfx::Image> optional_image);
+      std::optional<gfx::Image> optional_image);
 
   void OnReceiveImageMatchForOpenMatch(
       WindowOpenDisposition disposition,
@@ -77,15 +78,9 @@ class OmniboxViewIOS : public OmniboxView,
       const std::u16string& pasted_text,
       size_t selected_line,
       base::TimeTicks match_selection_timestamp,
-      absl::optional<AutocompleteMatch> optional_match);
+      std::optional<AutocompleteMatch> optional_match);
 
   // OmniboxView implementation.
-  void OpenMatch(const AutocompleteMatch& match,
-                 WindowOpenDisposition disposition,
-                 const GURL& alternate_nav_url,
-                 const std::u16string& pasted_text,
-                 size_t selected_line,
-                 base::TimeTicks match_selection_timestamp) override;
   std::u16string GetText() const override;
   void SetWindowTextAndCaretPos(const std::u16string& text,
                                 size_t caret_pos,
@@ -141,7 +136,6 @@ class OmniboxViewIOS : public OmniboxView,
   void OnAccept() override;
 
   // OmniboxPopupViewSuggestionsDelegate methods
-  void OnResultsChanged(const AutocompleteResult& result) override;
   void OnPopupDidScroll() override;
   void OnSelectedMatchForAppending(const std::u16string& str) override;
   void OnSelectedMatchForOpening(AutocompleteMatch match,
@@ -179,15 +173,15 @@ class OmniboxViewIOS : public OmniboxView,
   void SetEmphasis(bool emphasize, const gfx::Range& range) override {}
   void UpdateSchemeStyle(const gfx::Range& scheme_range) override {}
 
-  // Removes the query refinement chip from the omnibox.
-  void RemoveQueryRefinementChip();
-
   OmniboxTextFieldIOS* field_;
 
-  WebOmniboxEditController* controller_;  // weak, owns us
+  WebLocationBar* location_bar_;  // weak, owns us
   // Focuser, used to transition the location bar to focused/defocused state as
   // necessary.
   __weak id<OmniboxCommands> omnibox_focuser_;
+
+  // Handler for ToolbarCommands.
+  __weak id<ToolbarCommands> toolbar_commands_handler_;
 
   State state_before_change_;
   NSString* marked_text_before_change_;
@@ -199,6 +193,9 @@ class OmniboxViewIOS : public OmniboxView,
   // underlying problem, which is that textDidChange: is called when closing the
   // popup, and then remove this hack.  b/5877366.
   BOOL ignore_popup_updates_;
+
+  // Whether the popup was scrolled during this omnibox interaction.
+  bool suggestions_list_scrolled_ = false;
 
   OmniboxPopupProvider* popup_provider_;  // weak
 

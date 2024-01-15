@@ -83,6 +83,7 @@ class SystemSnapshotMac final : public SystemSnapshot {
                 int* daylight_offset_seconds,
                 std::string* standard_name,
                 std::string* daylight_name) const override;
+  uint64_t AddressMask() const override;
 
  private:
   std::string os_version_full_;
@@ -92,7 +93,6 @@ class SystemSnapshotMac final : public SystemSnapshot {
   int os_version_major_;
   int os_version_minor_;
   int os_version_bugfix_;
-  bool os_server_;
   InitializationStateDcheck initialized_;
 };
 

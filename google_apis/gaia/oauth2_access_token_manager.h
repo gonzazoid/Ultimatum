@@ -8,6 +8,7 @@
 #include <map>
 #include <set>
 
+#include "base/component_export.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
@@ -24,23 +25,28 @@ class SharedURLLoaderFactory;
 class OAuth2AccessTokenFetcher;
 
 // Class that manages requests for OAuth2 access tokens.
-class OAuth2AccessTokenManager {
+class COMPONENT_EXPORT(GOOGLE_APIS) OAuth2AccessTokenManager {
  public:
   // A set of scopes in OAuth2 authentication.
   typedef std::set<std::string> ScopeSet;
   class RequestImpl;
 
-  class Delegate {
+  class COMPONENT_EXPORT(GOOGLE_APIS) Delegate {
    public:
     Delegate();
     virtual ~Delegate();
 
     // Creates and returns an OAuth2AccessTokenFetcher.
+    // The server might provide `token_binding_challenge` if the refresh token
+    // is bound to the device. If `token_binding_challenge` not empty, the
+    // access token fetcher should attach the token binding assertion containing
+    // the challenge to the request.
     [[nodiscard]] virtual std::unique_ptr<OAuth2AccessTokenFetcher>
     CreateAccessTokenFetcher(
         const CoreAccountId& account_id,
         scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-        OAuth2AccessTokenConsumer* consumer) = 0;
+        OAuth2AccessTokenConsumer* consumer,
+        const std::string& token_binding_challenge) = 0;
 
     // Returns |true| if a refresh token is available for |account_id|, and
     // |false| otherwise.
@@ -79,7 +85,7 @@ class OAuth2AccessTokenManager {
   };
 
   // Class representing a request that fetches an OAuth2 access token.
-  class Request {
+  class COMPONENT_EXPORT(GOOGLE_APIS) Request {
    public:
     virtual ~Request();
     virtual CoreAccountId GetAccountId() const = 0;
@@ -90,7 +96,7 @@ class OAuth2AccessTokenManager {
 
   // Class representing the consumer of a Request passed to |StartRequest|,
   // which will be called back when the request completes.
-  class Consumer {
+  class COMPONENT_EXPORT(GOOGLE_APIS) Consumer {
    public:
     explicit Consumer(const std::string& id);
     virtual ~Consumer();
@@ -112,8 +118,9 @@ class OAuth2AccessTokenManager {
   // Implements a cancelable |OAuth2AccessTokenManager::Request|, which should
   // be operated on the UI thread.
   // TODO(davidroche): move this out of header file.
-  class RequestImpl : public base::SupportsWeakPtr<RequestImpl>,
-                      public Request {
+  class COMPONENT_EXPORT(GOOGLE_APIS) RequestImpl
+      : public base::SupportsWeakPtr<RequestImpl>,
+        public Request {
    public:
     // |consumer| is required to outlive this.
     RequestImpl(const CoreAccountId& account_id, Consumer* consumer);
@@ -140,7 +147,7 @@ class OAuth2AccessTokenManager {
   // Classes that want to monitor status of access token and access token
   // request should implement this interface and register with the
   // AddDiagnosticsObserver() call.
-  class DiagnosticsObserver {
+  class COMPONENT_EXPORT(GOOGLE_APIS) DiagnosticsObserver {
    public:
     // Called when receiving request for access token.
     virtual void OnAccessTokenRequested(const CoreAccountId& account_id,
@@ -162,7 +169,7 @@ class OAuth2AccessTokenManager {
   };
 
   // The parameters used to fetch an OAuth2 access token.
-  struct RequestParameters {
+  struct COMPONENT_EXPORT(GOOGLE_APIS) RequestParameters {
     RequestParameters(const std::string& client_id,
                       const CoreAccountId& account_id,
                       const ScopeSet& scopes);
@@ -297,7 +304,8 @@ class OAuth2AccessTokenManager {
   std::unique_ptr<OAuth2AccessTokenFetcher> CreateAccessTokenFetcher(
       const CoreAccountId& account_id,
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-      OAuth2AccessTokenConsumer* consumer);
+      OAuth2AccessTokenConsumer* consumer,
+      const std::string& token_binding_challenge);
 
   // This method does the same as |StartRequestWithContext| except it
   // uses |client_id| and |client_secret| to identify OAuth

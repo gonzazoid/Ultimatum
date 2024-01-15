@@ -23,10 +23,11 @@
 #include "base/trace_event/memory_allocator_dump_guid.h"
 #include "base/trace_event/memory_dump_provider.h"
 #include "cc/cc_export.h"
-#include "components/viz/common/resources/resource_format.h"
 #include "components/viz/common/resources/resource_id.h"
 #include "components/viz/common/resources/resource_sizes.h"
 #include "components/viz/common/resources/shared_bitmap.h"
+#include "components/viz/common/resources/shared_image_format.h"
+#include "components/viz/common/resources/transferable_resource.h"
 #include "gpu/command_buffer/common/sync_token.h"
 #include "third_party/khronos/GLES2/gl2.h"
 #include "ui/gfx/color_space.h"
@@ -38,12 +39,12 @@ class SingleThreadTaskRunner;
 }
 
 namespace gpu {
-struct Capabilities;
+class ClientSharedImage;
 }
 
 namespace viz {
 class ClientResourceProvider;
-class ContextProvider;
+class RasterContextProvider;
 }
 
 namespace cc {
@@ -59,9 +60,10 @@ class CC_EXPORT ResourcePool : public base::trace_event::MemoryDumpProvider {
 
   // A base class to hold ownership of gpu backed PoolResources. Allows the
   // client to define destruction semantics.
-  class GpuBacking {
+  class CC_EXPORT GpuBacking {
    public:
-    virtual ~GpuBacking() = default;
+    GpuBacking();
+    virtual ~GpuBacking();
 
     // Dumps information about the memory backing the GpuBacking to |pmd|.
     // The memory usage is attributed to |buffer_dump_guid|.
@@ -75,12 +77,7 @@ class CC_EXPORT ResourcePool : public base::trace_event::MemoryDumpProvider {
         uint64_t tracing_process_id,
         int importance) const = 0;
 
-    void InitOverlayCandidateAndTextureTarget(
-        const viz::ResourceFormat format,
-        const gpu::Capabilities& caps,
-        bool use_gpu_memory_buffer_resources);
-
-    gpu::Mailbox mailbox;
+    scoped_refptr<gpu::ClientSharedImage> shared_image;
     gpu::SyncToken mailbox_sync_token;
     GLenum texture_target = 0;
     bool overlay_candidate = false;
@@ -102,9 +99,10 @@ class CC_EXPORT ResourcePool : public base::trace_event::MemoryDumpProvider {
 
   // A base class to hold ownership of software backed PoolResources. Allows the
   // client to define destruction semantics.
-  class SoftwareBacking {
+  class CC_EXPORT SoftwareBacking {
    public:
-    virtual ~SoftwareBacking() = default;
+    SoftwareBacking();
+    virtual ~SoftwareBacking();
 
     // Dumps information about the memory backing the SoftwareBacking to |pmd|.
     // The memory usage is attributed to |buffer_dump_guid|.
@@ -118,7 +116,11 @@ class CC_EXPORT ResourcePool : public base::trace_event::MemoryDumpProvider {
         uint64_t tracing_process_id,
         int importance) const = 0;
 
+    // Mailbox
     viz::SharedBitmapId shared_bitmap_id;
+
+    scoped_refptr<gpu::ClientSharedImage> shared_image;
+    gpu::SyncToken mailbox_sync_token;
   };
 
   // Scoped move-only object returned when getting a resource from the pool.
@@ -148,7 +150,7 @@ class CC_EXPORT ResourcePool : public base::trace_event::MemoryDumpProvider {
     explicit operator bool() const { return !!resource_; }
 
     const gfx::Size& size() const { return resource_->size(); }
-    const viz::ResourceFormat& format() const { return resource_->format(); }
+    const viz::SharedImageFormat& format() const { return resource_->format(); }
     const gfx::ColorSpace& color_space() const {
       return resource_->color_space();
     }
@@ -208,7 +210,7 @@ class CC_EXPORT ResourcePool : public base::trace_event::MemoryDumpProvider {
   // and when holding software resources, it should be null. It is used for
   // consistency checking as well as for correctness.
   ResourcePool(viz::ClientResourceProvider* resource_provider,
-               viz::ContextProvider* context_provider,
+               viz::RasterContextProvider* context_provider,
                scoped_refptr<base::SingleThreadTaskRunner> task_runner,
                const base::TimeDelta& expiration_delay,
                bool disallow_non_exact_reuse);
@@ -221,7 +223,7 @@ class CC_EXPORT ResourcePool : public base::trace_event::MemoryDumpProvider {
   // Tries to reuse a resource. If none are available, makes a new one.
   InUsePoolResource AcquireResource(
       const gfx::Size& size,
-      viz::ResourceFormat format,
+      viz::SharedImageFormat format,
       const gfx::ColorSpace& color_space,
       const std::string& debug_name = std::string());
 
@@ -245,7 +247,9 @@ class CC_EXPORT ResourcePool : public base::trace_event::MemoryDumpProvider {
   // Returns false if the backing does not contain valid data, in particular
   // a zero mailbox for GpuBacking, in which case the resource is not exported,
   // and true otherwise.
-  bool PrepareForExport(const InUsePoolResource& resource);
+  bool PrepareForExport(
+      const InUsePoolResource& resource,
+      viz::TransferableResource::ResourceSource resource_source);
 
   // Marks any resources in the pool as invalid, preventing their reuse. Call if
   // previous resources were allocated in one way, but future resources should
@@ -290,6 +294,7 @@ class CC_EXPORT ResourcePool : public base::trace_event::MemoryDumpProvider {
 
   // Overrides internal clock for testing purposes.
   void SetClockForTesting(const base::TickClock* clock) { clock_ = clock; }
+  int tracing_id() const { return tracing_id_; }
 
  private:
   FRIEND_TEST_ALL_PREFIXES(ResourcePoolTest, ReuseResource);
@@ -299,13 +304,13 @@ class CC_EXPORT ResourcePool : public base::trace_event::MemoryDumpProvider {
     PoolResource(ResourcePool* resource_pool,
                  size_t unique_id,
                  const gfx::Size& size,
-                 viz::ResourceFormat format,
+                 viz::SharedImageFormat format,
                  const gfx::ColorSpace& color_space);
     ~PoolResource();
 
     size_t unique_id() const { return unique_id_; }
     const gfx::Size& size() const { return size_; }
-    const viz::ResourceFormat& format() const { return format_; }
+    const viz::SharedImageFormat& format() const { return format_; }
     const gfx::ColorSpace& color_space() const { return color_space_; }
 
     const viz::ResourceId& resource_id() const { return resource_id_; }
@@ -379,8 +384,7 @@ class CC_EXPORT ResourcePool : public base::trace_event::MemoryDumpProvider {
       if (!gpu_backing_ && !software_backing_)
         return 0;
 
-      size_t memory_usage =
-          viz::ResourceSizes::UncheckedSizeInBytes<size_t>(size(), format());
+      size_t memory_usage = format().EstimatedSizeInBytes(size());
 
       // Early research found with raw draw, GPU memory usage is reduced to
       // 50%, so we consider a raw draw backing uses 50% of a normal backing
@@ -397,7 +401,7 @@ class CC_EXPORT ResourcePool : public base::trace_event::MemoryDumpProvider {
     const raw_ptr<ResourcePool> resource_pool_;
     const size_t unique_id_;
     const gfx::Size size_;
-    const viz::ResourceFormat format_;
+    const viz::SharedImageFormat format_;
     const gfx::ColorSpace color_space_;
 
     uint64_t content_id_ = 0;
@@ -439,12 +443,12 @@ class CC_EXPORT ResourcePool : public base::trace_event::MemoryDumpProvider {
 
   // Tries to reuse a resource. Returns |nullptr| if none are available.
   PoolResource* ReuseResource(const gfx::Size& size,
-                              viz::ResourceFormat format,
+                              viz::SharedImageFormat format,
                               const gfx::ColorSpace& color_space);
 
   // Creates a new resource without trying to reuse an old one.
   PoolResource* CreateResource(const gfx::Size& size,
-                               viz::ResourceFormat format,
+                               viz::SharedImageFormat format,
                                const gfx::ColorSpace& color_space);
 
   void DidFinishUsingResource(std::unique_ptr<PoolResource> resource);
@@ -463,7 +467,7 @@ class CC_EXPORT ResourcePool : public base::trace_event::MemoryDumpProvider {
   void FlushEvictedResources();
 
   const raw_ptr<viz::ClientResourceProvider> resource_provider_;
-  const raw_ptr<viz::ContextProvider> context_provider_;
+  const raw_ptr<viz::RasterContextProvider> context_provider_;
   const scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
   const base::TimeDelta resource_expiration_delay_;
   const bool disallow_non_exact_reuse_ = false;

@@ -27,6 +27,7 @@
 #include "net/base/features.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/proxy_server.h"
+#include "net/base/proxy_string_util.h"
 #include "net/base/schemeful_site.h"
 #include "net/base/test_proxy_delegate.h"
 #include "net/dns/mock_host_resolver.h"
@@ -48,6 +49,8 @@
 #include "net/proxy_resolution/mock_proxy_resolver.h"
 #include "net/proxy_resolution/proxy_config_service_fixed.h"
 #include "net/proxy_resolution/proxy_info.h"
+#include "net/proxy_resolution/proxy_list.h"
+#include "net/proxy_resolution/proxy_resolution_service.h"
 #include "net/quic/crypto/proof_verifier_chromium.h"
 #include "net/quic/mock_crypto_client_stream_factory.h"
 #include "net/quic/mock_quic_context.h"
@@ -120,6 +123,29 @@ class MockPrefDelegate : public HttpServerProperties::PrefDelegate {
   void WaitForPrefLoad(base::OnceClosure pref_loaded_callback) override {}
 
   base::Value::Dict empty_dict_;
+};
+
+// A `TestProxyDelegate` which always sets a `ProxyChain` with
+// `is_for_ip_protection` set to true on the `ProxyInfo` it receives in
+// `OnResolveProxy()`.
+class TestProxyDelegateForIpProtection : public TestProxyDelegate {
+ public:
+  TestProxyDelegateForIpProtection() {
+    set_proxy_chain(net::ProxyChain::FromSchemeHostAndPort(
+                        ProxyServer::SCHEME_HTTPS, "ip-pro", 443)
+                        .ForIpProtection());
+    set_extra_header_name(net::HttpRequestHeaders::kAuthorization);
+  }
+  void OnResolveProxy(const GURL& url,
+                      const NetworkAnonymizationKey& network_anonymization_key,
+                      const std::string& method,
+                      const ProxyRetryInfoMap& proxy_retry_info,
+                      ProxyInfo* result) override {
+    net::ProxyList proxy_list;
+    proxy_list.AddProxyChain(proxy_chain());
+    proxy_list.AddProxyChain(net::ProxyChain::Direct());
+    result->UseProxyList(proxy_list);
+  }
 };
 
 }  // anonymous namespace
@@ -195,13 +221,19 @@ class JobControllerPeer {
 
 class HttpStreamFactoryJobControllerTestBase : public TestWithTaskEnvironment {
  public:
-  explicit HttpStreamFactoryJobControllerTestBase(bool dns_https_alpn_enabled)
+  explicit HttpStreamFactoryJobControllerTestBase(
+      bool dns_https_alpn_enabled,
+      std::vector<base::test::FeatureRef> enabled_features = {})
       : TestWithTaskEnvironment(
             base::test::TaskEnvironment::TimeSource::MOCK_TIME),
         dns_https_alpn_enabled_(dns_https_alpn_enabled) {
+    std::vector<base::test::FeatureRef> disabled_features;
     if (dns_https_alpn_enabled_) {
-      feature_list_.InitWithFeatures({features::kUseDnsHttpsSvcbAlpn}, {});
+      enabled_features.push_back(features::kUseDnsHttpsSvcbAlpn);
+    } else {
+      disabled_features.push_back(features::kUseDnsHttpsSvcbAlpn);
     }
+    feature_list_.InitWithFeatures(enabled_features, disabled_features);
     FLAGS_quic_enable_http3_grease_randomness = false;
     CreateSessionDeps();
   }
@@ -213,6 +245,8 @@ class HttpStreamFactoryJobControllerTestBase : public TestWithTaskEnvironment {
     job_controller_ = nullptr;
     session_.reset();
 
+    session_deps_.proxy_resolution_service->SetProxyDelegate(nullptr);
+
     session_deps_ = SpdySessionDependencies(
         ConfiguredProxyResolutionService::CreateDirect());
     session_deps_.enable_quic = true;
@@ -220,22 +254,22 @@ class HttpStreamFactoryJobControllerTestBase : public TestWithTaskEnvironment {
   }
 
   void SetPreconnect() {
-    ASSERT_FALSE(test_proxy_delegate_);
+    ASSERT_FALSE(session_deps_.proxy_delegate);
     is_preconnect_ = true;
   }
 
   void DisableIPBasedPooling() {
-    ASSERT_FALSE(test_proxy_delegate_);
+    ASSERT_FALSE(session_deps_.proxy_delegate);
     enable_ip_based_pooling_ = false;
   }
 
   void SetNotDelayMainJobWithAvailableSpdySession() {
-    ASSERT_FALSE(test_proxy_delegate_);
+    ASSERT_FALSE(session_deps_.proxy_delegate);
     delay_main_job_with_available_spdy_session_ = false;
   }
 
   void DisableAlternativeServices() {
-    ASSERT_FALSE(test_proxy_delegate_);
+    ASSERT_FALSE(session_deps_.proxy_delegate);
     enable_alternative_services_ = false;
   }
 
@@ -245,8 +279,8 @@ class HttpStreamFactoryJobControllerTestBase : public TestWithTaskEnvironment {
   }
 
   void Initialize(const HttpRequestInfo& request_info) {
-    ASSERT_FALSE(test_proxy_delegate_);
-    test_proxy_delegate_ = std::make_unique<TestProxyDelegate>();
+    ASSERT_FALSE(session_deps_.proxy_delegate);
+    session_deps_.proxy_delegate = std::make_unique<TestProxyDelegate>();
 
     if (quic_data_)
       quic_data_->AddSocketDataToFactory(session_deps_.socket_factory.get());
@@ -258,7 +292,7 @@ class HttpStreamFactoryJobControllerTestBase : public TestWithTaskEnvironment {
       session_deps_.socket_factory->AddSocketDataProvider(tcp_data2_.get());
 
     session_deps_.proxy_resolution_service->SetProxyDelegate(
-        test_proxy_delegate_.get());
+        session_deps_.proxy_delegate.get());
 
     session_deps_.net_log = NetLog::Get();
     HttpNetworkSessionParams params =
@@ -274,18 +308,14 @@ class HttpStreamFactoryJobControllerTestBase : public TestWithTaskEnvironment {
     if (create_job_controller_) {
       auto job_controller = std::make_unique<HttpStreamFactory::JobController>(
           factory_, &request_delegate_, session_.get(), &job_factory_,
-          request_info, is_preconnect_, false /* is_websocket */,
+          request_info, is_preconnect_, /*is_websocket=*/false,
           enable_ip_based_pooling_, enable_alternative_services_,
-          delay_main_job_with_available_spdy_session_, SSLConfig(),
-          SSLConfig());
+          delay_main_job_with_available_spdy_session_,
+          /*allowed_bad_certs=*/std::vector<SSLConfig::CertAndStatus>());
       job_controller_ = job_controller.get();
       HttpStreamFactoryPeer::AddJobController(factory_,
                                               std::move(job_controller));
     }
-  }
-
-  TestProxyDelegate* test_proxy_delegate() const {
-    return test_proxy_delegate_.get();
   }
 
   HttpStreamFactoryJobControllerTestBase(
@@ -294,21 +324,23 @@ class HttpStreamFactoryJobControllerTestBase : public TestWithTaskEnvironment {
       const HttpStreamFactoryJobControllerTestBase&) = delete;
 
   ~HttpStreamFactoryJobControllerTestBase() override {
-    if (quic_data_) {
-      EXPECT_TRUE(quic_data_->AllReadDataConsumed());
-      EXPECT_TRUE(quic_data_->AllWriteDataConsumed());
-    }
-    if (quic_data2_) {
-      EXPECT_TRUE(quic_data2_->AllReadDataConsumed());
-      EXPECT_TRUE(quic_data2_->AllWriteDataConsumed());
-    }
-    if (tcp_data_) {
-      EXPECT_TRUE(tcp_data_->AllReadDataConsumed());
-      EXPECT_TRUE(tcp_data_->AllWriteDataConsumed());
-    }
-    if (tcp_data2_) {
-      EXPECT_TRUE(tcp_data2_->AllReadDataConsumed());
-      EXPECT_TRUE(tcp_data2_->AllWriteDataConsumed());
+    if (should_check_data_consumed_) {
+      if (quic_data_) {
+        EXPECT_TRUE(quic_data_->AllReadDataConsumed());
+        EXPECT_TRUE(quic_data_->AllWriteDataConsumed());
+      }
+      if (quic_data2_) {
+        EXPECT_TRUE(quic_data2_->AllReadDataConsumed());
+        EXPECT_TRUE(quic_data2_->AllWriteDataConsumed());
+      }
+      if (tcp_data_) {
+        EXPECT_TRUE(tcp_data_->AllReadDataConsumed());
+        EXPECT_TRUE(tcp_data_->AllWriteDataConsumed());
+      }
+      if (tcp_data2_) {
+        EXPECT_TRUE(tcp_data2_->AllReadDataConsumed());
+        EXPECT_TRUE(tcp_data2_->AllWriteDataConsumed());
+      }
     }
   }
 
@@ -339,27 +371,58 @@ class HttpStreamFactoryJobControllerTestBase : public TestWithTaskEnvironment {
                   NetworkAnonymizationKey()));
   }
 
+  void SetAsyncQuicSession(bool async_quic_session) {
+    std::vector<base::test::FeatureRef> enabled_features = {};
+    if (dns_https_alpn_enabled_) {
+      enabled_features.push_back(features::kUseDnsHttpsSvcbAlpn);
+    }
+    if (async_quic_session) {
+      feature_list_.Reset();
+      enabled_features.push_back(features::kAsyncQuicSession);
+      feature_list_.InitWithFeatures(enabled_features, {});
+    } else {
+      feature_list_.Reset();
+      feature_list_.InitWithFeatures(enabled_features,
+                                     {features::kAsyncQuicSession});
+    }
+  }
+
   void TestAltJobSucceedsAfterMainJobFailed(
-      bool alt_job_retried_on_non_default_network);
+      bool alt_job_retried_on_non_default_network,
+      bool async_quic_session);
   void TestMainJobSucceedsAfterAltJobFailed(
-      bool alt_job_retried_on_non_default_network);
+      bool alt_job_retried_on_non_default_network,
+      bool async_quic_session);
   void TestMainJobSucceedsAfterIgnoredError(int net_error,
+                                            bool async_quic_session,
                                             bool expect_broken = false,
                                             std::string alternate_host = "");
   void TestAltJobSucceedsAfterMainJobSucceeded(
-      bool alt_job_retried_on_non_default_network);
+      bool alt_job_retried_on_non_default_network,
+      bool async_quic_session);
   void TestOnStreamFailedForBothJobs(
-      bool alt_job_retried_on_non_default_network);
+      bool alt_job_retried_on_non_default_network,
+      bool async_quic_session);
   void TestAltJobFailsAfterMainJobSucceeded(
-      bool alt_job_retried_on_non_default_network);
+      bool alt_job_retried_on_non_default_network,
+      bool async_quic_session);
   void TestMainJobSucceedsAfterAltJobSucceeded(
-      bool alt_job_retried_on_non_default_network);
+      bool alt_job_retried_on_non_default_network,
+      bool async_quic_session);
   void TestMainJobFailsAfterAltJobSucceeded(
-      bool alt_job_retried_on_non_default_network);
+      bool alt_job_retried_on_non_default_network,
+      bool async_quic_session);
   void TestAltSvcVersionSelection(
       const std::string& alt_svc_header,
       const quic::ParsedQuicVersion& expected_version,
       const quic::ParsedQuicVersionVector& supported_versions);
+  void TestResumeMainJobWhenAltJobStalls(bool async_quic_session);
+  void TestAltJobSucceedsMainJobDestroyed(bool async_quic_session);
+  void TestOrphanedJobCompletesControllerDestroyed(bool async_quic_session);
+  void TestDoNotDelayMainJobIfQuicWasRecentlyBroken(bool async_quic_session);
+  void TestDelayMainJobAfterRecentlyBrokenQuicWasConfirmed(
+      bool async_quic_session);
+  void TestDoNotDelayMainJobIfHasAvailableSpdySession(bool async_quic_session);
 
   bool dns_https_alpn_enabled() const { return dns_https_alpn_enabled_; }
 
@@ -373,7 +436,8 @@ class HttpStreamFactoryJobControllerTestBase : public TestWithTaskEnvironment {
   SpdySessionDependencies session_deps_;
   std::unique_ptr<HttpNetworkSession> session_;
   raw_ptr<HttpStreamFactory> factory_ = nullptr;
-  raw_ptr<HttpStreamFactory::JobController> job_controller_ = nullptr;
+  raw_ptr<HttpStreamFactory::JobController, AcrossTasksDanglingUntriaged>
+      job_controller_ = nullptr;
   std::unique_ptr<HttpStreamRequest> request_;
   std::unique_ptr<SequencedSocketData> tcp_data_;
   std::unique_ptr<SequencedSocketData> tcp_data2_;
@@ -393,10 +457,10 @@ class HttpStreamFactoryJobControllerTestBase : public TestWithTaskEnvironment {
   bool enable_ip_based_pooling_ = true;
   bool enable_alternative_services_ = true;
   bool delay_main_job_with_available_spdy_session_ = true;
+  bool should_check_data_consumed_ = true;
 
  private:
   bool dns_https_alpn_enabled_;
-  std::unique_ptr<TestProxyDelegate> test_proxy_delegate_;
   bool create_job_controller_ = true;
 
   base::test::ScopedFeatureList feature_list_;
@@ -431,9 +495,8 @@ TEST_P(HttpStreamFactoryJobControllerTest, ProxyResolutionFailsSync) {
 
   Initialize(request_info);
 
-  EXPECT_CALL(
-      request_delegate_,
-      OnStreamFailed(ERR_MANDATORY_PROXY_CONFIGURATION_FAILED, _, _, _, _))
+  EXPECT_CALL(request_delegate_,
+              OnStreamFailed(ERR_MANDATORY_PROXY_CONFIGURATION_FAILED, _, _, _))
       .Times(1);
   request_ =
       job_controller_->Start(&request_delegate_, nullptr, net_log_with_source_,
@@ -482,9 +545,8 @@ TEST_P(HttpStreamFactoryJobControllerTest, ProxyResolutionFailsAsync) {
   EXPECT_EQ(LOAD_STATE_RESOLVING_PROXY_FOR_URL,
             job_controller_->GetLoadState());
 
-  EXPECT_CALL(
-      request_delegate_,
-      OnStreamFailed(ERR_MANDATORY_PROXY_CONFIGURATION_FAILED, _, _, _, _))
+  EXPECT_CALL(request_delegate_,
+              OnStreamFailed(ERR_MANDATORY_PROXY_CONFIGURATION_FAILED, _, _, _))
       .Times(1);
   proxy_resolver_factory_ptr->pending_requests()[0]->CompleteNowWithForwarder(
       ERR_FAILED, &resolver);
@@ -505,7 +567,7 @@ TEST_P(HttpStreamFactoryJobControllerTest, NoSupportedProxies) {
   Initialize(request_info);
 
   EXPECT_CALL(request_delegate_,
-              OnStreamFailed(ERR_NO_SUPPORTED_PROXIES, _, _, _, _))
+              OnStreamFailed(ERR_NO_SUPPORTED_PROXIES, _, _, _))
       .Times(1);
   request_ =
       job_controller_->Start(&request_delegate_, nullptr, net_log_with_source_,
@@ -525,9 +587,13 @@ class JobControllerReconsiderProxyAfterErrorTest
   JobControllerReconsiderProxyAfterErrorTest()
       : HttpStreamFactoryJobControllerTestBase(false) {}
   void Initialize(
-      std::unique_ptr<ProxyResolutionService> proxy_resolution_service) {
+      std::unique_ptr<ProxyResolutionService> proxy_resolution_service,
+      std::unique_ptr<ProxyDelegate> proxy_delegate = nullptr) {
+    session_deps_.proxy_delegate = std::move(proxy_delegate);
     session_deps_.proxy_resolution_service =
         std::move(proxy_resolution_service);
+    session_deps_.proxy_resolution_service->SetProxyDelegate(
+        session_deps_.proxy_delegate.get());
     session_ = std::make_unique<HttpNetworkSession>(
         SpdySessionDependencies::CreateSessionParams(&session_deps_),
         SpdySessionDependencies::CreateSessionContext(&session_deps_));
@@ -538,9 +604,10 @@ class JobControllerReconsiderProxyAfterErrorTest
       const HttpRequestInfo& request_info) {
     auto job_controller = std::make_unique<HttpStreamFactory::JobController>(
         factory_, &request_delegate_, session_.get(), &default_job_factory_,
-        request_info, is_preconnect_, false /* is_websocket */,
+        request_info, is_preconnect_, /*is_websocket=*/false,
         enable_ip_based_pooling_, enable_alternative_services_,
-        delay_main_job_with_available_spdy_session_, SSLConfig(), SSLConfig());
+        delay_main_job_with_available_spdy_session_,
+        /*allowed_bad_certs=*/std::vector<SSLConfig::CertAndStatus>());
     auto* job_controller_ptr = job_controller.get();
     HttpStreamFactoryPeer::AddJobController(factory_,
                                             std::move(job_controller));
@@ -606,16 +673,26 @@ TEST_F(JobControllerReconsiderProxyAfterErrorTest,
                   "PROXY badproxy:99; PROXY badfallbackproxy:98; DIRECT",
                   TRAFFIC_ANNOTATION_FOR_TESTS);
       auto test_proxy_delegate = std::make_unique<TestProxyDelegate>();
+      test_proxy_delegate->set_extra_header_name("Foo");
 
       // Before starting the test, verify that there are no proxies marked as
       // bad.
       ASSERT_TRUE(proxy_resolution_service->proxy_retry_info().empty());
 
-      constexpr char kTunnelRequest[] =
+      constexpr char kBadProxyTunnelRequest[] =
           "CONNECT www.example.com:443 HTTP/1.1\r\n"
           "Host: www.example.com:443\r\n"
-          "Proxy-Connection: keep-alive\r\n\r\n";
-      const MockWrite kTunnelWrites[] = {{ASYNC, kTunnelRequest}};
+          "Proxy-Connection: keep-alive\r\n"
+          "Foo: badproxy:99\r\n\r\n";
+      constexpr char kBadFallbackProxyTunnelRequest[] =
+          "CONNECT www.example.com:443 HTTP/1.1\r\n"
+          "Host: www.example.com:443\r\n"
+          "Proxy-Connection: keep-alive\r\n"
+          "Foo: badfallbackproxy:98\r\n\r\n";
+      const MockWrite kBadProxyTunnelWrites[] = {
+          {ASYNC, kBadProxyTunnelRequest}};
+      const MockWrite kBadFallbackProxyTunnelWrites[] = {
+          {ASYNC, kBadFallbackProxyTunnelRequest}};
       std::vector<MockRead> reads;
 
       // Generate identical errors for both the main proxy and the fallback
@@ -646,11 +723,13 @@ TEST_F(JobControllerReconsiderProxyAfterErrorTest,
           // Tunnels aren't established for HTTP destinations.
           if (dest_url.SchemeIs(url::kHttpScheme))
             continue;
-          reads.emplace_back(MockRead(ASYNC, mock_error.error));
+          reads.emplace_back(ASYNC, mock_error.error);
           socket_data_proxy_main_job =
-              std::make_unique<StaticSocketDataProvider>(reads, kTunnelWrites);
+              std::make_unique<StaticSocketDataProvider>(reads,
+                                                         kBadProxyTunnelWrites);
           socket_data_proxy_main_job2 =
-              std::make_unique<StaticSocketDataProvider>(reads, kTunnelWrites);
+              std::make_unique<StaticSocketDataProvider>(
+                  reads, kBadFallbackProxyTunnelWrites);
           break;
       }
 
@@ -689,9 +768,8 @@ TEST_F(JobControllerReconsiderProxyAfterErrorTest,
       HttpRequestInfo request_info;
       request_info.method = "GET";
       request_info.url = dest_url;
-
-      proxy_resolution_service->SetProxyDelegate(test_proxy_delegate.get());
-      Initialize(std::move(proxy_resolution_service));
+      Initialize(std::move(proxy_resolution_service),
+                 std::move(test_proxy_delegate));
 
       // Start two requests. The first request should consume data from
       // |socket_data_proxy_main_job| and |socket_data_direct_first_request|.
@@ -700,9 +778,9 @@ TEST_F(JobControllerReconsiderProxyAfterErrorTest,
 
       for (size_t i = 0; i < 2; ++i) {
         ProxyInfo used_proxy_info;
-        EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _))
+        EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _))
             .Times(1)
-            .WillOnce(::testing::SaveArg<1>(&used_proxy_info));
+            .WillOnce(::testing::SaveArg<0>(&used_proxy_info));
 
         std::unique_ptr<HttpStreamRequest> request =
             CreateJobController(request_info);
@@ -716,14 +794,17 @@ TEST_F(JobControllerReconsiderProxyAfterErrorTest,
         const ProxyRetryInfoMap& retry_info =
             session_->proxy_resolution_service()->proxy_retry_info();
         ASSERT_THAT(retry_info, SizeIs(2));
-        EXPECT_THAT(retry_info, Contains(Key("badproxy:99")));
-        EXPECT_THAT(retry_info, Contains(Key("badfallbackproxy:98")));
+        EXPECT_THAT(retry_info, Contains(Key(ProxyUriToProxyChain(
+                                    "badproxy:99", ProxyServer::SCHEME_HTTP))));
+        EXPECT_THAT(retry_info,
+                    Contains(Key(ProxyUriToProxyChain(
+                        "badfallbackproxy:98", ProxyServer::SCHEME_HTTP))));
 
         // The idle socket should have been added back to the socket pool. Close
         // it, so the next loop iteration creates a new socket instead of
         // reusing the idle one.
         auto* socket_pool = session_->GetSocketPool(
-            HttpNetworkSession::NORMAL_SOCKET_POOL, ProxyServer::Direct());
+            HttpNetworkSession::NORMAL_SOCKET_POOL, ProxyChain::Direct());
         EXPECT_EQ(1, socket_pool->IdleSocketCount());
         socket_pool->CloseIdleSockets("Close socket reason");
       }
@@ -797,16 +878,26 @@ TEST_F(JobControllerReconsiderProxyAfterErrorTest,
                 "HTTPS badproxy:99; DIRECT", TRAFFIC_ANNOTATION_FOR_TESTS);
       }
       auto test_proxy_delegate = std::make_unique<TestProxyDelegate>();
+      test_proxy_delegate->set_extra_header_name("Foo");
 
       // Before starting the test, verify that there are no proxies marked as
       // bad.
       ASSERT_TRUE(proxy_resolution_service->proxy_retry_info().empty());
 
-      constexpr char kTunnelRequest[] =
+      constexpr char kBadProxyTunnelRequest[] =
           "CONNECT www.example.com:443 HTTP/1.1\r\n"
           "Host: www.example.com:443\r\n"
-          "Proxy-Connection: keep-alive\r\n\r\n";
-      const MockWrite kTunnelWrites[] = {{ASYNC, kTunnelRequest}};
+          "Proxy-Connection: keep-alive\r\n"
+          "Foo: https://badproxy:99\r\n\r\n";
+      constexpr char kBadFallbackProxyTunnelRequest[] =
+          "CONNECT www.example.com:443 HTTP/1.1\r\n"
+          "Host: www.example.com:443\r\n"
+          "Proxy-Connection: keep-alive\r\n"
+          "Foo: https://badfallbackproxy:98\r\n\r\n";
+      const MockWrite kBadProxyTunnelWrites[] = {
+          {ASYNC, kBadProxyTunnelRequest}};
+      const MockWrite kBadFallbackProxyTunnelWrites[] = {
+          {ASYNC, kBadFallbackProxyTunnelRequest}};
       std::vector<MockRead> reads;
 
       // Generate identical errors for both the main proxy and the fallback
@@ -849,13 +940,17 @@ TEST_F(JobControllerReconsiderProxyAfterErrorTest,
           // Tunnels aren't established for HTTP destinations.
           if (dest_url.SchemeIs(url::kHttpScheme))
             continue;
-          reads.emplace_back(MockRead(ASYNC, mock_error.error));
+          reads.emplace_back(ASYNC, mock_error.error);
           socket_data_proxy_main_job =
-              std::make_unique<StaticSocketDataProvider>(reads, kTunnelWrites);
+              std::make_unique<StaticSocketDataProvider>(reads,
+                                                         kBadProxyTunnelWrites);
           ssl_data_proxy_main_job =
               std::make_unique<SSLSocketDataProvider>(ASYNC, OK);
           socket_data_proxy_main_job2 =
-              std::make_unique<StaticSocketDataProvider>(reads, kTunnelWrites);
+              std::make_unique<StaticSocketDataProvider>(
+                  reads, mock_error.triggers_ssl_connect_job_retry_logic
+                             ? kBadProxyTunnelWrites
+                             : kBadFallbackProxyTunnelWrites);
           ssl_data_proxy_main_job2 =
               std::make_unique<SSLSocketDataProvider>(ASYNC, OK);
           break;
@@ -903,8 +998,8 @@ TEST_F(JobControllerReconsiderProxyAfterErrorTest,
       request_info.method = "GET";
       request_info.url = dest_url;
 
-      proxy_resolution_service->SetProxyDelegate(test_proxy_delegate.get());
-      Initialize(std::move(proxy_resolution_service));
+      Initialize(std::move(proxy_resolution_service),
+                 std::move(test_proxy_delegate));
 
       // Start two requests. The first request should consume data from
       // |socket_data_proxy_main_job| and |socket_data_direct_first_request|.
@@ -913,9 +1008,9 @@ TEST_F(JobControllerReconsiderProxyAfterErrorTest,
 
       for (size_t i = 0; i < 2; ++i) {
         ProxyInfo used_proxy_info;
-        EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _))
+        EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _))
             .Times(1)
-            .WillOnce(::testing::SaveArg<1>(&used_proxy_info));
+            .WillOnce(::testing::SaveArg<0>(&used_proxy_info));
 
         std::unique_ptr<HttpStreamRequest> request =
             CreateJobController(request_info);
@@ -930,24 +1025,590 @@ TEST_F(JobControllerReconsiderProxyAfterErrorTest,
             session_->proxy_resolution_service()->proxy_retry_info();
         if (!mock_error.triggers_ssl_connect_job_retry_logic) {
           ASSERT_THAT(retry_info, SizeIs(2));
-          EXPECT_THAT(retry_info, Contains(Key("https://badproxy:99")));
-          EXPECT_THAT(retry_info, Contains(Key("https://badfallbackproxy:98")));
+          EXPECT_THAT(retry_info,
+                      Contains(Key(ProxyUriToProxyChain(
+                          "https://badproxy:99", ProxyServer::SCHEME_HTTP))));
+          EXPECT_THAT(
+              retry_info,
+              Contains(Key(ProxyUriToProxyChain("https://badfallbackproxy:98",
+                                                ProxyServer::SCHEME_HTTP))));
         } else {
           ASSERT_THAT(retry_info, SizeIs(1));
-          EXPECT_THAT(retry_info, Contains(Key("https://badproxy:99")));
+          EXPECT_THAT(retry_info,
+                      Contains(Key(ProxyUriToProxyChain(
+                          "https://badproxy:99", ProxyServer::SCHEME_HTTP))));
         }
 
         // The idle socket should have been added back to the socket pool. Close
         // it, so the next loop iteration creates a new socket instead of
         // reusing the idle one.
         auto* socket_pool = session_->GetSocketPool(
-            HttpNetworkSession::NORMAL_SOCKET_POOL, ProxyServer::Direct());
+            HttpNetworkSession::NORMAL_SOCKET_POOL, ProxyChain::Direct());
         EXPECT_EQ(1, socket_pool->IdleSocketCount());
         socket_pool->CloseIdleSockets("Close socket reason");
       }
       EXPECT_TRUE(HttpStreamFactoryPeer::IsJobControllerDeleted(factory_));
     }
   }
+}
+
+// Same as above but using a multi-proxy chain, with errors encountered by the
+// first proxy server in the chain.
+TEST_F(JobControllerReconsiderProxyAfterErrorTest,
+       ReconsiderProxyAfterFirstNestedProxyErrorHttps) {
+  enum class ErrorPhase {
+    kHostResolution,
+    kTcpConnect,
+    kProxySslHandshake,
+    kTunnelRead,
+  };
+
+  const struct {
+    ErrorPhase phase;
+    net::Error error;
+    // For a description of this field, see the corresponding struct member
+    // comment in `ReconsiderProxyAfterErrorHttpsProxy`.
+    bool triggers_ssl_connect_job_retry_logic = false;
+  } kRetriableErrors[] = {
+      // These largely correspond to the list of errors in
+      // CanFalloverToNextProxy() which can occur with an HTTPS proxy.
+      //
+      // We omit `ERR_CONNECTION_CLOSED` because it is largely unreachable. The
+      // HTTP/1.1 parser maps it to `ERR_EMPTY_RESPONSE` or
+      // `ERR_RESPONSE_HEADERS_TRUNCATED` in most cases.
+      //
+      // TODO(davidben): Is omitting `ERR_EMPTY_RESPONSE` a bug in proxy error
+      // handling?
+      {ErrorPhase::kHostResolution, ERR_NAME_NOT_RESOLVED},
+      {ErrorPhase::kTcpConnect, ERR_ADDRESS_UNREACHABLE},
+      {ErrorPhase::kTcpConnect, ERR_CONNECTION_TIMED_OUT},
+      {ErrorPhase::kTcpConnect, ERR_CONNECTION_RESET},
+      {ErrorPhase::kTcpConnect, ERR_CONNECTION_ABORTED},
+      {ErrorPhase::kTcpConnect, ERR_CONNECTION_REFUSED},
+      {ErrorPhase::kProxySslHandshake, ERR_CERT_COMMON_NAME_INVALID},
+      {ErrorPhase::kProxySslHandshake, ERR_SSL_PROTOCOL_ERROR,
+       /*triggers_ssl_connect_job_retry_logic=*/true},
+      {ErrorPhase::kTunnelRead, ERR_TIMED_OUT},
+      {ErrorPhase::kTunnelRead, ERR_SSL_PROTOCOL_ERROR},
+  };
+
+  const ProxyServer kGoodProxyServer{ProxyServer::SCHEME_HTTPS,
+                                     HostPortPair("goodproxyserver", 100)};
+  const ProxyServer kBadProxyServer1{ProxyServer::SCHEME_HTTPS,
+                                     HostPortPair("badproxyserver", 99)};
+  const ProxyServer kBadProxyServer2{
+      ProxyServer::SCHEME_HTTPS, HostPortPair("badfallbackproxyserver", 98)};
+  const ProxyChain kNestedProxyChain1{{kBadProxyServer1, kGoodProxyServer}};
+  const ProxyChain kNestedProxyChain2{{kBadProxyServer2, kGoodProxyServer}};
+
+  for (GURL dest_url :
+       {GURL("http://www.example.com"), GURL("https://www.example.com")}) {
+    SCOPED_TRACE(dest_url);
+
+    for (const auto& mock_error : kRetriableErrors) {
+      SCOPED_TRACE(ErrorToString(mock_error.error));
+
+      CreateSessionDeps();
+
+      ProxyList proxy_list;
+      proxy_list.AddProxyChain(kNestedProxyChain1);
+      proxy_list.AddProxyChain(kNestedProxyChain2);
+      proxy_list.AddProxyChain(ProxyChain::Direct());
+      ProxyConfig proxy_config = ProxyConfig::CreateForTesting(proxy_list);
+
+      std::unique_ptr<ConfiguredProxyResolutionService>
+          proxy_resolution_service =
+              ConfiguredProxyResolutionService::CreateFixedForTest(
+                  ProxyConfigWithAnnotation(proxy_config,
+                                            TRAFFIC_ANNOTATION_FOR_TESTS));
+
+      if (mock_error.triggers_ssl_connect_job_retry_logic) {
+        proxy_list.Clear();
+        proxy_list.AddProxyChain(kNestedProxyChain1);
+        proxy_list.AddProxyChain(ProxyChain::Direct());
+        ProxyConfig proxy_config2 = ProxyConfig::CreateForTesting(proxy_list);
+
+        proxy_resolution_service =
+            ConfiguredProxyResolutionService::CreateFixedForTest(
+                ProxyConfigWithAnnotation(proxy_config2,
+                                          TRAFFIC_ANNOTATION_FOR_TESTS));
+      }
+      auto test_proxy_delegate = std::make_unique<TestProxyDelegate>();
+      test_proxy_delegate->set_extra_header_name("Foo");
+
+      // Before starting the test, verify that there are no proxies marked as
+      // bad.
+      ASSERT_TRUE(proxy_resolution_service->proxy_retry_info().empty());
+
+      constexpr char kBadProxyServer1TunnelRequest[] =
+          "CONNECT goodproxyserver:100 HTTP/1.1\r\n"
+          "Host: goodproxyserver:100\r\n"
+          "Proxy-Connection: keep-alive\r\n"
+          "Foo: https://badproxyserver:99\r\n\r\n";
+      constexpr char kBadProxyServer2TunnelRequest[] =
+          "CONNECT goodproxyserver:100 HTTP/1.1\r\n"
+          "Host: goodproxyserver:100\r\n"
+          "Proxy-Connection: keep-alive\r\n"
+          "Foo: https://badfallbackproxyserver:98\r\n\r\n";
+      const MockWrite kBadProxyServer1TunnelWrites[] = {
+          MockWrite(ASYNC, 0, kBadProxyServer1TunnelRequest)};
+      const MockWrite kBadProxyServer2TunnelWrites[] = {
+          MockWrite(ASYNC, 0, kBadProxyServer2TunnelRequest)};
+      std::vector<MockRead> reads;
+
+      // Generate identical errors for the first proxy server in both the main
+      // proxy chain and the fallback proxy chain. No alternative job is created
+      // for either, so only need one data provider for each, when the request
+      // makes it to the socket layer.
+      std::unique_ptr<SequencedSocketData> socket_data_proxy_main_job;
+      std::unique_ptr<SSLSocketDataProvider> ssl_data_proxy_main_job;
+      std::unique_ptr<SequencedSocketData> socket_data_proxy_main_job2;
+      std::unique_ptr<SSLSocketDataProvider> ssl_data_proxy_main_job2;
+      switch (mock_error.phase) {
+        case ErrorPhase::kHostResolution:
+          // Only ERR_NAME_NOT_RESOLVED can be returned by the mock host
+          // resolver.
+          DCHECK_EQ(ERR_NAME_NOT_RESOLVED, mock_error.error);
+          session_deps_.host_resolver->rules()->AddSimulatedFailure(
+              "badproxyserver");
+          session_deps_.host_resolver->rules()->AddSimulatedFailure(
+              "badfallbackproxyserver");
+          break;
+        case ErrorPhase::kTcpConnect:
+          socket_data_proxy_main_job = std::make_unique<SequencedSocketData>();
+          socket_data_proxy_main_job->set_connect_data(
+              MockConnect(ASYNC, mock_error.error));
+          socket_data_proxy_main_job2 = std::make_unique<SequencedSocketData>();
+          socket_data_proxy_main_job2->set_connect_data(
+              MockConnect(ASYNC, mock_error.error));
+          break;
+        case ErrorPhase::kProxySslHandshake:
+          socket_data_proxy_main_job = std::make_unique<SequencedSocketData>();
+          ssl_data_proxy_main_job =
+              std::make_unique<SSLSocketDataProvider>(ASYNC, mock_error.error);
+          socket_data_proxy_main_job2 = std::make_unique<SequencedSocketData>();
+          ssl_data_proxy_main_job2 =
+              std::make_unique<SSLSocketDataProvider>(ASYNC, mock_error.error);
+          break;
+        case ErrorPhase::kTunnelRead:
+          // Note: Unlike for single-proxy chains, tunnels are established for
+          // HTTP destinations when multi-proxy chains are in use, so simulate
+          // tunnel read failures in all cases.
+          reads.emplace_back(MockRead(ASYNC, mock_error.error, 1));
+          socket_data_proxy_main_job = std::make_unique<SequencedSocketData>(
+              reads, kBadProxyServer1TunnelWrites);
+          ssl_data_proxy_main_job =
+              std::make_unique<SSLSocketDataProvider>(ASYNC, OK);
+          socket_data_proxy_main_job2 = std::make_unique<SequencedSocketData>(
+              reads, kBadProxyServer2TunnelWrites);
+          ssl_data_proxy_main_job2 =
+              std::make_unique<SSLSocketDataProvider>(ASYNC, OK);
+          break;
+      }
+
+      if (socket_data_proxy_main_job) {
+        session_deps_.socket_factory->AddSocketDataProvider(
+            socket_data_proxy_main_job.get());
+        session_deps_.socket_factory->AddSocketDataProvider(
+            socket_data_proxy_main_job2.get());
+      }
+      if (ssl_data_proxy_main_job) {
+        session_deps_.socket_factory->AddSSLSocketDataProvider(
+            ssl_data_proxy_main_job.get());
+        session_deps_.socket_factory->AddSSLSocketDataProvider(
+            ssl_data_proxy_main_job2.get());
+      }
+
+      // After both proxy chains fail, the request should fall back to using
+      // DIRECT, and succeed.
+      SSLSocketDataProvider ssl_data_first_request(ASYNC, OK);
+      StaticSocketDataProvider socket_data_direct_first_request;
+      socket_data_direct_first_request.set_connect_data(MockConnect(ASYNC, OK));
+      session_deps_.socket_factory->AddSocketDataProvider(
+          &socket_data_direct_first_request);
+      // Only used in the HTTPS destination case, but harmless in the HTTP case.
+      session_deps_.socket_factory->AddSSLSocketDataProvider(
+          &ssl_data_first_request);
+
+      // Second request should use DIRECT, skipping the bad proxies, and
+      // succeed.
+      SSLSocketDataProvider ssl_data_second_request(ASYNC, OK);
+      StaticSocketDataProvider socket_data_direct_second_request;
+      socket_data_direct_second_request.set_connect_data(
+          MockConnect(ASYNC, OK));
+      session_deps_.socket_factory->AddSocketDataProvider(
+          &socket_data_direct_second_request);
+      session_deps_.socket_factory->AddSSLSocketDataProvider(
+          &ssl_data_second_request);
+
+      // Now request a stream. It should succeed using the DIRECT fallback proxy
+      // option.
+      HttpRequestInfo request_info;
+      request_info.method = "GET";
+      request_info.url = dest_url;
+
+      Initialize(std::move(proxy_resolution_service),
+                 std::move(test_proxy_delegate));
+
+      // Start two requests. The first request should consume data from
+      // `socket_data_proxy_main_job` and `socket_data_direct_first_request`.
+      // The second request should consume data from
+      // `socket_data_direct_second_request`.
+
+      for (size_t i = 0; i < 2; ++i) {
+        ProxyInfo used_proxy_info;
+        EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _))
+            .Times(1)
+            .WillOnce(::testing::SaveArg<0>(&used_proxy_info));
+
+        std::unique_ptr<HttpStreamRequest> request =
+            CreateJobController(request_info);
+        RunUntilIdle();
+
+        // Verify that request was fetched without proxy.
+        EXPECT_TRUE(used_proxy_info.is_direct());
+
+        // The proxies that failed should now be known to the proxy service as
+        // bad.
+        const ProxyRetryInfoMap& retry_info =
+            session_->proxy_resolution_service()->proxy_retry_info();
+        if (!mock_error.triggers_ssl_connect_job_retry_logic) {
+          ASSERT_THAT(retry_info, SizeIs(2));
+          EXPECT_THAT(retry_info, Contains(Key(kNestedProxyChain1)));
+          EXPECT_THAT(retry_info, Contains(Key(kNestedProxyChain2)));
+        } else {
+          ASSERT_THAT(retry_info, SizeIs(1));
+          EXPECT_THAT(retry_info, Contains(Key(kNestedProxyChain1)));
+        }
+
+        // The idle socket should have been added back to the socket pool. Close
+        // it, so the next loop iteration creates a new socket instead of
+        // reusing the idle one.
+        auto* socket_pool = session_->GetSocketPool(
+            HttpNetworkSession::NORMAL_SOCKET_POOL, ProxyChain::Direct());
+        EXPECT_EQ(1, socket_pool->IdleSocketCount());
+        socket_pool->CloseIdleSockets("Close socket reason");
+      }
+      EXPECT_TRUE(HttpStreamFactoryPeer::IsJobControllerDeleted(factory_));
+    }
+  }
+}
+
+// Same as above but using a multi-proxy chain, with errors encountered by the
+// second proxy server in the chain.
+TEST_F(JobControllerReconsiderProxyAfterErrorTest,
+       ReconsiderProxyAfterSecondNestedProxyErrorHttps) {
+  enum class ErrorPhase {
+    // Note: Skip the kHostResolution and kTcpConnect cases for this test since
+    // those only make sense for connections to the first proxy server.
+    kProxySslHandshake,
+    kTunnelRead,
+  };
+
+  const struct {
+    ErrorPhase phase;
+    net::Error error;
+    // For a description of this field, see the corresponding struct member
+    // comment in `ReconsiderProxyAfterErrorHttpsProxy`.
+    bool triggers_ssl_connect_job_retry_logic = false;
+  } kRetriableErrors[] = {
+      // These largely correspond to the list of errors in
+      // CanFalloverToNextProxy() which can occur with an HTTPS proxy.
+      //
+      // We omit `ERR_CONNECTION_CLOSED` because it is largely unreachable. The
+      // HTTP/1.1 parser maps it to `ERR_EMPTY_RESPONSE` or
+      // `ERR_RESPONSE_HEADERS_TRUNCATED` in most cases.
+      //
+      // TODO(davidben): Is omitting `ERR_EMPTY_RESPONSE` a bug in proxy error
+      // handling?
+      {ErrorPhase::kProxySslHandshake, ERR_CERT_COMMON_NAME_INVALID},
+      {ErrorPhase::kProxySslHandshake, ERR_SSL_PROTOCOL_ERROR,
+       /*triggers_ssl_connect_job_retry_logic=*/true},
+      {ErrorPhase::kTunnelRead, ERR_TIMED_OUT},
+      {ErrorPhase::kTunnelRead, ERR_SSL_PROTOCOL_ERROR},
+  };
+
+  const ProxyServer kGoodProxyServer{ProxyServer::SCHEME_HTTPS,
+                                     HostPortPair("goodproxyserver", 100)};
+  const ProxyServer kBadProxyServer1{ProxyServer::SCHEME_HTTPS,
+                                     HostPortPair("badproxyserver", 99)};
+  const ProxyServer kBadProxyServer2{
+      ProxyServer::SCHEME_HTTPS, HostPortPair("badfallbackproxyserver", 98)};
+  const ProxyChain kNestedProxyChain1{{kGoodProxyServer, kBadProxyServer1}};
+  const ProxyChain kNestedProxyChain2{{kGoodProxyServer, kBadProxyServer2}};
+
+  for (GURL dest_url :
+       {GURL("http://www.example.com"), GURL("https://www.example.com")}) {
+    SCOPED_TRACE(dest_url);
+
+    for (const auto& mock_error : kRetriableErrors) {
+      SCOPED_TRACE(ErrorToString(mock_error.error));
+
+      CreateSessionDeps();
+
+      ProxyList proxy_list;
+      proxy_list.AddProxyChain(kNestedProxyChain1);
+      proxy_list.AddProxyChain(kNestedProxyChain2);
+      proxy_list.AddProxyChain(ProxyChain::Direct());
+      ProxyConfig proxy_config = ProxyConfig::CreateForTesting(proxy_list);
+
+      std::unique_ptr<ConfiguredProxyResolutionService>
+          proxy_resolution_service =
+              ConfiguredProxyResolutionService::CreateFixedForTest(
+                  ProxyConfigWithAnnotation(proxy_config,
+                                            TRAFFIC_ANNOTATION_FOR_TESTS));
+
+      if (mock_error.triggers_ssl_connect_job_retry_logic) {
+        proxy_list.Clear();
+        proxy_list.AddProxyChain(kNestedProxyChain1);
+        proxy_list.AddProxyChain(ProxyChain::Direct());
+        ProxyConfig proxy_config2 = ProxyConfig::CreateForTesting(proxy_list);
+
+        proxy_resolution_service =
+            ConfiguredProxyResolutionService::CreateFixedForTest(
+                ProxyConfigWithAnnotation(proxy_config2,
+                                          TRAFFIC_ANNOTATION_FOR_TESTS));
+      }
+      auto test_proxy_delegate = std::make_unique<TestProxyDelegate>();
+      test_proxy_delegate->set_extra_header_name("Foo");
+
+      // Before starting the test, verify that there are no proxies marked as
+      // bad.
+      ASSERT_TRUE(proxy_resolution_service->proxy_retry_info().empty());
+
+      constexpr char kBadProxyServer1TunnelRequest[] =
+          "CONNECT badproxyserver:99 HTTP/1.1\r\n"
+          "Host: badproxyserver:99\r\n"
+          "Proxy-Connection: keep-alive\r\n"
+          "Foo: https://goodproxyserver:100\r\n\r\n";
+      constexpr char kBadProxyServer2TunnelRequest[] =
+          "CONNECT badfallbackproxyserver:98 HTTP/1.1\r\n"
+          "Host: badfallbackproxyserver:98\r\n"
+          "Proxy-Connection: keep-alive\r\n"
+          "Foo: https://goodproxyserver:100\r\n\r\n";
+      const std::string kBadProxyServer1EndpointTunnelRequest =
+          base::StringPrintf(
+              "CONNECT %s HTTP/1.1\r\n"
+              "Host: %s\r\n"
+              "Proxy-Connection: keep-alive\r\n"
+              "Foo: https://badproxyserver:99\r\n\r\n",
+              HostPortPair::FromURL(dest_url).ToString().c_str(),
+              HostPortPair::FromURL(dest_url).ToString().c_str());
+      const std::string kBadProxyServer2EndpointTunnelRequest =
+          base::StringPrintf(
+              "CONNECT %s HTTP/1.1\r\n"
+              "Host: %s\r\n"
+              "Proxy-Connection: keep-alive\r\n"
+              "Foo: https://badfallbackproxyserver:98\r\n\r\n",
+              HostPortPair::FromURL(dest_url).ToString().c_str(),
+              HostPortPair::FromURL(dest_url).ToString().c_str());
+      const MockWrite kNestedProxyChain1TunnelWrites[] = {
+          {ASYNC, kBadProxyServer1TunnelRequest},
+          {ASYNC, kBadProxyServer1EndpointTunnelRequest.c_str()}};
+      const MockWrite kNestedProxyChain2TunnelWrites[] = {
+          {ASYNC, kBadProxyServer2TunnelRequest},
+          {ASYNC, kBadProxyServer2EndpointTunnelRequest.c_str()}};
+
+      std::vector<MockRead> reads = {
+          MockRead(ASYNC, 1, "HTTP/1.1 200 Connection Established\r\n\r\n"),
+      };
+
+      // Generate identical errors for the second proxy server in both the main
+      // proxy chain and the fallback proxy chain. No alternative job is created
+      // for either, so only need one data provider for each, when the request
+      // makes it to the socket layer.
+      std::unique_ptr<StaticSocketDataProvider> socket_data_proxy_main_job;
+      std::unique_ptr<SSLSocketDataProvider> ssl_data_proxy_main_job_server1;
+      std::unique_ptr<SSLSocketDataProvider> ssl_data_proxy_main_job_server2;
+      std::unique_ptr<StaticSocketDataProvider> socket_data_proxy_main_job2;
+      std::unique_ptr<SSLSocketDataProvider> ssl_data_proxy_main_job2_server1;
+      std::unique_ptr<SSLSocketDataProvider> ssl_data_proxy_main_job2_server2;
+
+      ssl_data_proxy_main_job_server1 =
+          std::make_unique<SSLSocketDataProvider>(ASYNC, OK);
+      ssl_data_proxy_main_job2_server1 =
+          std::make_unique<SSLSocketDataProvider>(ASYNC, OK);
+
+      switch (mock_error.phase) {
+        case ErrorPhase::kProxySslHandshake:
+          ssl_data_proxy_main_job_server2 =
+              std::make_unique<SSLSocketDataProvider>(ASYNC, mock_error.error);
+          ssl_data_proxy_main_job2_server2 =
+              std::make_unique<SSLSocketDataProvider>(ASYNC, mock_error.error);
+          break;
+        case ErrorPhase::kTunnelRead:
+          // Note: Unlike for single-proxy chains, tunnels are established for
+          // HTTP destinations when multi-proxy chains are in use, so simulate
+          // tunnel read failures in all cases.
+          reads.emplace_back(ASYNC, mock_error.error);
+          ssl_data_proxy_main_job_server2 =
+              std::make_unique<SSLSocketDataProvider>(ASYNC, OK);
+          ssl_data_proxy_main_job2_server2 =
+              std::make_unique<SSLSocketDataProvider>(ASYNC, OK);
+          break;
+      }
+      socket_data_proxy_main_job = std::make_unique<StaticSocketDataProvider>(
+          reads, kNestedProxyChain1TunnelWrites);
+      socket_data_proxy_main_job2 = std::make_unique<StaticSocketDataProvider>(
+          reads, mock_error.triggers_ssl_connect_job_retry_logic
+                     ? kNestedProxyChain1TunnelWrites
+                     : kNestedProxyChain2TunnelWrites);
+
+      session_deps_.socket_factory->AddSocketDataProvider(
+          socket_data_proxy_main_job.get());
+      session_deps_.socket_factory->AddSSLSocketDataProvider(
+          ssl_data_proxy_main_job_server1.get());
+      session_deps_.socket_factory->AddSSLSocketDataProvider(
+          ssl_data_proxy_main_job_server2.get());
+
+      session_deps_.socket_factory->AddSocketDataProvider(
+          socket_data_proxy_main_job2.get());
+      session_deps_.socket_factory->AddSSLSocketDataProvider(
+          ssl_data_proxy_main_job2_server1.get());
+      session_deps_.socket_factory->AddSSLSocketDataProvider(
+          ssl_data_proxy_main_job2_server2.get());
+
+      // After both proxy chains fail, the request should fall back to using
+      // DIRECT, and succeed.
+      SSLSocketDataProvider ssl_data_first_request(ASYNC, OK);
+      StaticSocketDataProvider socket_data_direct_first_request;
+      socket_data_direct_first_request.set_connect_data(MockConnect(ASYNC, OK));
+      session_deps_.socket_factory->AddSocketDataProvider(
+          &socket_data_direct_first_request);
+      session_deps_.socket_factory->AddSSLSocketDataProvider(
+          &ssl_data_first_request);
+
+      // Second request should use DIRECT, skipping the bad proxies, and
+      // succeed.
+      SSLSocketDataProvider ssl_data_second_request(ASYNC, OK);
+      StaticSocketDataProvider socket_data_direct_second_request;
+      socket_data_direct_second_request.set_connect_data(
+          MockConnect(ASYNC, OK));
+      session_deps_.socket_factory->AddSocketDataProvider(
+          &socket_data_direct_second_request);
+      // Only used in the HTTPS destination case, but harmless in the HTTP case.
+      session_deps_.socket_factory->AddSSLSocketDataProvider(
+          &ssl_data_second_request);
+
+      // Now request a stream. It should succeed using the DIRECT fallback proxy
+      // option.
+      HttpRequestInfo request_info;
+      request_info.method = "GET";
+      request_info.url = dest_url;
+
+      Initialize(std::move(proxy_resolution_service),
+                 std::move(test_proxy_delegate));
+
+      // Start two requests. The first request should consume data from
+      // `socket_data_proxy_main_job` and `socket_data_direct_first_request`.
+      // The second request should consume data from
+      // `socket_data_direct_second_request`.
+
+      for (size_t i = 0; i < 2; ++i) {
+        ProxyInfo used_proxy_info;
+        EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _))
+            .Times(1)
+            .WillOnce(::testing::SaveArg<0>(&used_proxy_info));
+
+        std::unique_ptr<HttpStreamRequest> request =
+            CreateJobController(request_info);
+        RunUntilIdle();
+
+        // Verify that request was fetched without proxy.
+        EXPECT_TRUE(used_proxy_info.is_direct());
+
+        // The proxies that failed should now be known to the proxy service as
+        // bad.
+        const ProxyRetryInfoMap& retry_info =
+            session_->proxy_resolution_service()->proxy_retry_info();
+        if (!mock_error.triggers_ssl_connect_job_retry_logic) {
+          ASSERT_THAT(retry_info, SizeIs(2));
+          EXPECT_THAT(retry_info, Contains(Key(kNestedProxyChain1)));
+          EXPECT_THAT(retry_info, Contains(Key(kNestedProxyChain2)));
+        } else {
+          ASSERT_THAT(retry_info, SizeIs(1));
+          EXPECT_THAT(retry_info, Contains(Key(kNestedProxyChain1)));
+        }
+
+        // The idle socket should have been added back to the socket pool. Close
+        // it, so the next loop iteration creates a new socket instead of
+        // reusing the idle one.
+        auto* socket_pool = session_->GetSocketPool(
+            HttpNetworkSession::NORMAL_SOCKET_POOL, ProxyChain::Direct());
+        EXPECT_EQ(1, socket_pool->IdleSocketCount());
+        socket_pool->CloseIdleSockets("Close socket reason");
+      }
+      EXPECT_TRUE(HttpStreamFactoryPeer::IsJobControllerDeleted(factory_));
+    }
+  }
+}
+
+// Test proxy fallback logic for an IP Protection request.
+TEST_F(JobControllerReconsiderProxyAfterErrorTest,
+       ReconsiderProxyForIpProtection) {
+  GURL dest_url = GURL("https://www.example.com");
+
+  CreateSessionDeps();
+
+  std::unique_ptr<ConfiguredProxyResolutionService> proxy_resolution_service =
+      ConfiguredProxyResolutionService::CreateFixedFromPacResultForTest(
+          "https://not-used:70", TRAFFIC_ANNOTATION_FOR_TESTS);
+  auto test_proxy_delegate =
+      std::make_unique<TestProxyDelegateForIpProtection>();
+
+  // Before starting the test, verify that there are no proxies marked as
+  // bad.
+  ASSERT_TRUE(proxy_resolution_service->proxy_retry_info().empty());
+
+  constexpr char kTunnelRequest[] =
+      "CONNECT www.example.com:443 HTTP/1.1\r\n"
+      "Host: www.example.com:443\r\n"
+      "Proxy-Connection: keep-alive\r\n"
+      "Authorization: https://ip-pro:443\r\n\r\n";
+  const MockWrite kTunnelWrites[] = {{ASYNC, kTunnelRequest}};
+  std::vector<MockRead> reads;
+
+  // Generate errors for the first proxy server.
+  std::unique_ptr<StaticSocketDataProvider> socket_data_proxy_main_job;
+  std::unique_ptr<SSLSocketDataProvider> ssl_data_proxy_main_job;
+  reads.emplace_back(ASYNC, ERR_TUNNEL_CONNECTION_FAILED);
+  socket_data_proxy_main_job =
+      std::make_unique<StaticSocketDataProvider>(reads, kTunnelWrites);
+  ssl_data_proxy_main_job = std::make_unique<SSLSocketDataProvider>(ASYNC, OK);
+
+  session_deps_.socket_factory->AddSocketDataProvider(
+      socket_data_proxy_main_job.get());
+  session_deps_.socket_factory->AddSSLSocketDataProvider(
+      ssl_data_proxy_main_job.get());
+
+  // After proxying fails, the request should fall back to using DIRECT, and
+  // succeed.
+  SSLSocketDataProvider ssl_data_first_request(ASYNC, OK);
+  StaticSocketDataProvider socket_data_direct_first_request;
+  socket_data_direct_first_request.set_connect_data(MockConnect(ASYNC, OK));
+  session_deps_.socket_factory->AddSocketDataProvider(
+      &socket_data_direct_first_request);
+  session_deps_.socket_factory->AddSSLSocketDataProvider(
+      &ssl_data_first_request);
+
+  HttpRequestInfo request_info;
+  request_info.method = "GET";
+  request_info.url = dest_url;
+
+  Initialize(std::move(proxy_resolution_service),
+             std::move(test_proxy_delegate));
+
+  ProxyInfo used_proxy_info;
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _))
+      .Times(1)
+      .WillOnce(::testing::SaveArg<0>(&used_proxy_info));
+
+  std::unique_ptr<HttpStreamRequest> request =
+      CreateJobController(request_info);
+  RunUntilIdle();
+
+  // Verify that request was fetched without proxy.
+  EXPECT_TRUE(used_proxy_info.is_direct());
 }
 
 // Test proxy fallback logic in the case connecting through socks5 proxy.
@@ -1022,7 +1683,7 @@ TEST_F(JobControllerReconsiderProxyAfterErrorTest,
             MockConnect(ASYNC, mock_error.error));
         break;
       case ErrorPhase::kTunnelRead:
-        reads.emplace_back(MockRead(ASYNC, mock_error.error));
+        reads.emplace_back(ASYNC, mock_error.error);
         socket_data_proxy_main_job =
             std::make_unique<StaticSocketDataProvider>(reads, kTunnelWrites);
         socket_data_proxy_main_job2 =
@@ -1056,8 +1717,8 @@ TEST_F(JobControllerReconsiderProxyAfterErrorTest,
     request_info.method = "GET";
     request_info.url = kDestUrl;
 
-    proxy_resolution_service->SetProxyDelegate(test_proxy_delegate.get());
-    Initialize(std::move(proxy_resolution_service));
+    Initialize(std::move(proxy_resolution_service),
+               std::move(test_proxy_delegate));
 
     // Start two requests. The first request should consume data from
     // |socket_data_proxy_main_job| and |socket_data_direct_first_request|. The
@@ -1066,9 +1727,9 @@ TEST_F(JobControllerReconsiderProxyAfterErrorTest,
 
     for (size_t i = 0; i < 2; ++i) {
       ProxyInfo used_proxy_info;
-      EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _))
+      EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _))
           .Times(1)
-          .WillOnce(::testing::SaveArg<1>(&used_proxy_info));
+          .WillOnce(::testing::SaveArg<0>(&used_proxy_info));
 
       std::unique_ptr<HttpStreamRequest> request =
           CreateJobController(request_info);
@@ -1082,14 +1743,19 @@ TEST_F(JobControllerReconsiderProxyAfterErrorTest,
       const ProxyRetryInfoMap& retry_info =
           session_->proxy_resolution_service()->proxy_retry_info();
       ASSERT_THAT(retry_info, SizeIs(2));
-      EXPECT_THAT(retry_info, Contains(Key("socks5://badproxy:99")));
-      EXPECT_THAT(retry_info, Contains(Key("socks5://badfallbackproxy:98")));
+      EXPECT_THAT(retry_info,
+                  Contains(Key(ProxyUriToProxyChain(
+                      "socks5://badproxy:99", ProxyServer::SCHEME_SOCKS5))));
+      EXPECT_THAT(
+          retry_info,
+          Contains(Key(ProxyUriToProxyChain("socks5://badfallbackproxy:98",
+                                            ProxyServer::SCHEME_SOCKS5))));
 
       // The idle socket should have been added back to the socket pool. Close
       // it, so the next loop iteration creates a new socket instead of reusing
       // the idle one.
       auto* socket_pool = session_->GetSocketPool(
-          HttpNetworkSession::NORMAL_SOCKET_POOL, ProxyServer::Direct());
+          HttpNetworkSession::NORMAL_SOCKET_POOL, ProxyChain::Direct());
       EXPECT_EQ(1, socket_pool->IdleSocketCount());
       socket_pool->CloseIdleSockets("Close socket reason");
     }
@@ -1124,9 +1790,9 @@ TEST_F(JobControllerReconsiderProxyAfterErrorTest, ReconsiderErrMsgTooBig) {
   Initialize(std::move(proxy_resolution_service));
 
   ProxyInfo used_proxy_info;
-  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _))
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _))
       .Times(1)
-      .WillOnce(::testing::SaveArg<1>(&used_proxy_info));
+      .WillOnce(::testing::SaveArg<0>(&used_proxy_info));
 
   std::unique_ptr<HttpStreamRequest> request =
       CreateJobController(request_info);
@@ -1136,7 +1802,9 @@ TEST_F(JobControllerReconsiderProxyAfterErrorTest, ReconsiderErrMsgTooBig) {
   const ProxyRetryInfoMap& retry_info =
       session_->proxy_resolution_service()->proxy_retry_info();
   EXPECT_THAT(retry_info, SizeIs(1));
-  EXPECT_THAT(retry_info, Contains(Key("quic://badproxy:99")));
+  EXPECT_THAT(retry_info,
+              Contains(Key(ProxyUriToProxyChain("quic://badproxy:99",
+                                                ProxyServer::SCHEME_QUIC))));
 
   request.reset();
   EXPECT_TRUE(HttpStreamFactoryPeer::IsJobControllerDeleted(factory_));
@@ -1174,7 +1842,7 @@ TEST_F(JobControllerReconsiderProxyAfterErrorTest,
   Initialize(std::move(proxy_resolution_service));
 
   ProxyInfo used_proxy_info;
-  EXPECT_CALL(request_delegate_, OnStreamFailed(ERR_MSG_TOO_BIG, _, _, _, _))
+  EXPECT_CALL(request_delegate_, OnStreamFailed(ERR_MSG_TOO_BIG, _, _, _))
       .Times(1);
 
   std::unique_ptr<HttpStreamRequest> request =
@@ -1208,8 +1876,7 @@ TEST_P(HttpStreamFactoryJobControllerTest, OnStreamFailedWithNoAlternativeJob) {
 
   // There's no other alternative job. Thus when stream failed, it should
   // notify Request of the stream failure.
-  EXPECT_CALL(request_delegate_, OnStreamFailed(ERR_FAILED, _, _, _, _))
-      .Times(1);
+  EXPECT_CALL(request_delegate_, OnStreamFailed(ERR_FAILED, _, _, _)).Times(1);
   base::RunLoop().RunUntilIdle();
 }
 
@@ -1231,7 +1898,7 @@ TEST_P(HttpStreamFactoryJobControllerTest, OnStreamReadyWithNoAlternativeJob) {
   // notify Request.
   EXPECT_TRUE(job_controller_->main_job());
 
-  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _));
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _));
   base::RunLoop().RunUntilIdle();
 }
 
@@ -1260,11 +1927,13 @@ TEST_P(HttpStreamFactoryJobControllerTest, CancelJobsBeforeBinding) {
                              HttpStreamRequest::HTTP_STREAM, DEFAULT_PRIORITY);
   EXPECT_TRUE(job_controller_->main_job());
   EXPECT_TRUE(job_controller_->alternative_job());
-
   // Reset the Request will cancel all the Jobs since there's no Job determined
   // to serve Request yet and JobController will notify the factory to delete
   // itself upon completion.
   request_.reset();
+  // QuicStreamFactory::Job::Request will not complete since the Jobs are
+  // canceled, so there is no need to check if all read data was consumed.
+  should_check_data_consumed_ = false;
   VerifyBrokenAlternateProtocolMapping(request_info, false);
   EXPECT_TRUE(HttpStreamFactoryPeer::IsJobControllerDeleted(factory_));
 }
@@ -1299,8 +1968,9 @@ TEST_P(HttpStreamFactoryJobControllerTest,
   EXPECT_TRUE(HttpStreamFactoryPeer::IsJobControllerDeleted(factory_));
 }
 
-TEST_P(HttpStreamFactoryJobControllerTest,
-       DoNotDelayMainJobIfQuicWasRecentlyBroken) {
+void HttpStreamFactoryJobControllerTestBase::
+    TestDoNotDelayMainJobIfQuicWasRecentlyBroken(bool async_quic_session) {
+  SetAsyncQuicSession(async_quic_session);
   crypto_client_stream_factory_.set_handshake_mode(
       MockCryptoClientStream::COLD_START);
   quic_data_ = std::make_unique<MockQuicData>(version_);
@@ -1333,18 +2003,24 @@ TEST_P(HttpStreamFactoryJobControllerTest,
   EXPECT_TRUE(job_controller_->main_job());
   EXPECT_TRUE(job_controller_->alternative_job());
 
-  // The main job shouldn't have any delay since QUIC was recently broken.
-  EXPECT_FALSE(job_controller_->ShouldWait(
-      const_cast<net::HttpStreamFactory::Job*>(job_controller_->main_job())));
-
+  // The main job shouldn't have any delay since QUIC was recently broken. Main
+  // job should still be blocked as alt job has not succeeded or failed at least
+  // once yet.
+  EXPECT_EQ(job_controller_->get_main_job_wait_time_for_tests(),
+            base::TimeDelta());
+  if (async_quic_session) {
+    EXPECT_TRUE(JobControllerPeer::main_job_is_blocked(job_controller_));
+  } else {
+    EXPECT_FALSE(JobControllerPeer::main_job_is_blocked(job_controller_));
+  }
   // Make |alternative_job| succeed.
   auto http_stream = std::make_unique<HttpBasicStream>(
       std::make_unique<ClientSocketHandle>(), false);
-  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, http_stream.get()));
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, http_stream.get()));
 
   HttpStreamFactoryJobPeer::SetStream(job_factory_.alternative_job(),
                                       std::move(http_stream));
-  job_controller_->OnStreamReady(job_factory_.alternative_job(), SSLConfig());
+  job_controller_->OnStreamReady(job_factory_.alternative_job());
 
   base::RunLoop().RunUntilIdle();
 
@@ -1358,7 +2034,19 @@ TEST_P(HttpStreamFactoryJobControllerTest,
 }
 
 TEST_P(HttpStreamFactoryJobControllerTest,
-       DelayMainJobAfterRecentlyBrokenQuicWasConfirmed) {
+       DoNotDelayMainJobIfQuicWasRecentlyBroken) {
+  TestDoNotDelayMainJobIfQuicWasRecentlyBroken(false);
+}
+
+TEST_P(HttpStreamFactoryJobControllerTest,
+       DoNotDelayMainJobIfQuicWasRecentlyBrokenAsyncQuicSession) {
+  TestDoNotDelayMainJobIfQuicWasRecentlyBroken(true);
+}
+
+void HttpStreamFactoryJobControllerTestBase::
+    TestDelayMainJobAfterRecentlyBrokenQuicWasConfirmed(
+        bool async_quic_session) {
+  SetAsyncQuicSession(async_quic_session);
   crypto_client_stream_factory_.set_handshake_mode(
       MockCryptoClientStream::COLD_START);
   quic_data_ = std::make_unique<MockQuicData>(version_);
@@ -1395,20 +2083,27 @@ TEST_P(HttpStreamFactoryJobControllerTest,
   EXPECT_TRUE(job_controller_->main_job());
   EXPECT_TRUE(job_controller_->alternative_job());
 
-  // The main job should wait but it should be unblocked because QUIC job
-  // doesn't return immediately.
+  // The main job should wait and it should still be blocked because the new
+  // QUIC session hasn't been created yet. The wait time should be greater than
+  // 0.
   EXPECT_TRUE(job_controller_->ShouldWait(
       const_cast<net::HttpStreamFactory::Job*>(job_controller_->main_job())));
-  EXPECT_FALSE(JobControllerPeer::main_job_is_blocked(job_controller_));
+  if (async_quic_session) {
+    EXPECT_TRUE(JobControllerPeer::main_job_is_blocked(job_controller_));
+  } else {
+    EXPECT_FALSE(JobControllerPeer::main_job_is_blocked(job_controller_));
+  }
+  EXPECT_GE(job_controller_->get_main_job_wait_time_for_tests(),
+            base::TimeDelta());
 
   // Make |alternative_job| succeed.
   auto http_stream = std::make_unique<HttpBasicStream>(
       std::make_unique<ClientSocketHandle>(), false);
-  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, http_stream.get()));
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, http_stream.get()));
 
   HttpStreamFactoryJobPeer::SetStream(job_factory_.alternative_job(),
                                       std::move(http_stream));
-  job_controller_->OnStreamReady(job_factory_.alternative_job(), SSLConfig());
+  job_controller_->OnStreamReady(job_factory_.alternative_job());
 
   base::RunLoop().RunUntilIdle();
 
@@ -1421,8 +2116,20 @@ TEST_P(HttpStreamFactoryJobControllerTest,
   EXPECT_TRUE(HttpStreamFactoryPeer::IsJobControllerDeleted(factory_));
 }
 
+TEST_P(HttpStreamFactoryJobControllerTest,
+       DelayMainJobAfterRecentlyBrokenQuicWasConfirmed) {
+  TestDelayMainJobAfterRecentlyBrokenQuicWasConfirmed(false);
+}
+
+TEST_P(HttpStreamFactoryJobControllerTest,
+       DelayMainJobAfterRecentlyBrokenQuicWasConfirmedAsyncQuicSession) {
+  TestDelayMainJobAfterRecentlyBrokenQuicWasConfirmed(true);
+}
+
 void HttpStreamFactoryJobControllerTestBase::TestOnStreamFailedForBothJobs(
-    bool alt_job_retried_on_non_default_network) {
+    bool alt_job_retried_on_non_default_network,
+    bool async_quic_session) {
+  SetAsyncQuicSession(async_quic_session);
   quic_data_ = std::make_unique<MockQuicData>(version_);
   quic_data_->AddConnect(ASYNC, ERR_FAILED);
   tcp_data_ = std::make_unique<SequencedSocketData>();
@@ -1449,9 +2156,14 @@ void HttpStreamFactoryJobControllerTestBase::TestOnStreamFailedForBothJobs(
     JobControllerPeer::SetAltJobFailedOnDefaultNetwork(job_controller_);
   }
 
+  if (async_quic_session) {
+    EXPECT_CALL(*job_factory_.main_job(), Resume()).Times(1).WillOnce([this]() {
+      job_factory_.main_job()->DoResume();
+    });
+  }
   // The failure of second Job should be reported to Request as there's no more
   // pending Job to serve the Request.
-  EXPECT_CALL(request_delegate_, OnStreamFailed(_, _, _, _, _)).Times(1);
+  EXPECT_CALL(request_delegate_, OnStreamFailed(_, _, _, _)).Times(1);
   base::RunLoop().RunUntilIdle();
   VerifyBrokenAlternateProtocolMapping(request_info, false);
   request_.reset();
@@ -1462,19 +2174,38 @@ void HttpStreamFactoryJobControllerTestBase::TestOnStreamFailedForBothJobs(
 // jobs fail, and the alternative job is not retried on the alternate network.
 TEST_P(HttpStreamFactoryJobControllerTest,
        OnStreamFailedForBothJobsWithoutQuicRetry) {
-  TestOnStreamFailedForBothJobs(false);
+  TestOnStreamFailedForBothJobs(false, false);
 }
 
 // This test verifies that the alternative service is not marked broken if both
 // jobs fail, and the alternative job is retried on the alternate network.
 TEST_P(HttpStreamFactoryJobControllerTest,
        OnStreamFailedForBothJobsWithQuicRetriedOnAlternateNetwork) {
-  TestOnStreamFailedForBothJobs(true);
+  TestOnStreamFailedForBothJobs(true, false);
+}
+
+// This test verifies that the alternative service is not marked broken if both
+// jobs fail, and the alternative job is not retried on the alternate network.
+// This test uses asynchronous QUIC session creation.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       OnStreamFailedForBothJobsWithoutQuicRetryAsyncQuicSession) {
+  TestOnStreamFailedForBothJobs(false, true);
+}
+
+// This test verifies that the alternative service is not marked broken if both
+// jobs fail, and the alternative job is retried on the alternate network. This
+// test uses asynchronous QUIC session creation.
+TEST_P(
+    HttpStreamFactoryJobControllerTest,
+    OnStreamFailedForBothJobsWithQuicRetriedOnAlternateNetworkAsyncQuicSession) {
+  TestOnStreamFailedForBothJobs(true, true);
 }
 
 void HttpStreamFactoryJobControllerTestBase::
     TestAltJobFailsAfterMainJobSucceeded(
-        bool alt_job_retried_on_non_default_network) {
+        bool alt_job_retried_on_non_default_network,
+        bool async_quic_session) {
+  SetAsyncQuicSession(async_quic_session);
   quic_data_ = std::make_unique<MockQuicData>(version_);
   quic_data_->AddRead(ASYNC, ERR_FAILED);
   crypto_client_stream_factory_.set_handshake_mode(
@@ -1506,18 +2237,24 @@ void HttpStreamFactoryJobControllerTestBase::
     JobControllerPeer::SetAltJobFailedOnDefaultNetwork(job_controller_);
   }
 
+  if (async_quic_session) {
+    EXPECT_CALL(*job_factory_.main_job(), Resume()).Times(1).WillOnce([this]() {
+      job_factory_.main_job()->DoResume();
+    });
+  }
   // Main job succeeds, starts serving Request and it should report status
   // to Request. The alternative job will mark the main job complete and gets
   // orphaned.
-  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _));
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _));
   // JobController shouldn't report the status of second job as request
   // is already successfully served.
-  EXPECT_CALL(request_delegate_, OnStreamFailed(_, _, _, _, _)).Times(0);
+  EXPECT_CALL(request_delegate_, OnStreamFailed(_, _, _, _)).Times(0);
 
   base::RunLoop().RunUntilIdle();
 
   // Reset the request as it's been successfully served.
   request_.reset();
+  base::RunLoop().RunUntilIdle();
   VerifyBrokenAlternateProtocolMapping(request_info, true);
   EXPECT_TRUE(HttpStreamFactoryPeer::IsJobControllerDeleted(factory_));
 
@@ -1526,24 +2263,43 @@ void HttpStreamFactoryJobControllerTestBase::
   VerifyBrokenAlternateProtocolMapping(request_info, true);
 }
 
-// This test verifies that the alternatvie service is marked broken when the
+// This test verifies that the alternative service is marked broken when the
 // alternative job fails on default after the main job succeeded.  The
 // brokenness should not be cleared when the default network changes.
 TEST_P(HttpStreamFactoryJobControllerTest,
        AltJobFailsOnDefaultNetworkAfterMainJobSucceeded) {
-  TestAltJobFailsAfterMainJobSucceeded(false);
+  TestAltJobFailsAfterMainJobSucceeded(false, false);
 }
 
-// This test verifies that the alternatvie service is marked broken when the
+// This test verifies that the alternative service is marked broken when the
 // alternative job fails on both networks after the main job succeeded.  The
 // brokenness should not be cleared when the default network changes.
 TEST_P(HttpStreamFactoryJobControllerTest,
        AltJobFailsOnBothNetworksAfterMainJobSucceeded) {
-  TestAltJobFailsAfterMainJobSucceeded(true);
+  TestAltJobFailsAfterMainJobSucceeded(true, false);
 }
 
-// Tests that when alt job succeeds, main job is destroyed.
-TEST_P(HttpStreamFactoryJobControllerTest, AltJobSucceedsMainJobDestroyed) {
+// This test verifies that the alternative service is marked broken when the
+// alternative job fails on default after the main job succeeded. The
+// brokenness should not be cleared when the default network changes. This test
+// uses asynchronous QUIC session creation.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       AltJobFailsOnDefaultNetworkAfterMainJobSucceededAsyncQuicSession) {
+  TestAltJobFailsAfterMainJobSucceeded(false, true);
+}
+
+// This test verifies that the alternative service is marked broken when the
+// alternative job fails on both networks after the main job succeeded.  The
+// brokenness should not be cleared when the default network changes. This test
+// uses asynchronous QUIC session creation.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       AltJobFailsOnBothNetworksAfterMainJobSucceededAsyncQuicSession) {
+  TestAltJobFailsAfterMainJobSucceeded(true, true);
+}
+
+void HttpStreamFactoryJobControllerTestBase::TestAltJobSucceedsMainJobDestroyed(
+    bool async_quic_session) {
+  SetAsyncQuicSession(async_quic_session);
   quic_data_ = std::make_unique<MockQuicData>(version_);
   quic_data_->AddRead(SYNCHRONOUS, ERR_IO_PENDING);
   // Use cold start and complete alt job manually.
@@ -1566,16 +2322,19 @@ TEST_P(HttpStreamFactoryJobControllerTest, AltJobSucceedsMainJobDestroyed) {
                              HttpStreamRequest::HTTP_STREAM, DEFAULT_PRIORITY);
   EXPECT_TRUE(job_controller_->main_job());
   EXPECT_TRUE(job_controller_->alternative_job());
-  EXPECT_FALSE(JobControllerPeer::main_job_is_blocked(job_controller_));
-
+  if (async_quic_session) {
+    EXPECT_TRUE(JobControllerPeer::main_job_is_blocked(job_controller_));
+  } else {
+    EXPECT_FALSE(JobControllerPeer::main_job_is_blocked(job_controller_));
+  }
   // Make |alternative_job| succeed.
   auto http_stream = std::make_unique<HttpBasicStream>(
       std::make_unique<ClientSocketHandle>(), false);
-  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, http_stream.get()));
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, http_stream.get()));
 
   HttpStreamFactoryJobPeer::SetStream(job_factory_.alternative_job(),
                                       std::move(http_stream));
-  job_controller_->OnStreamReady(job_factory_.alternative_job(), SSLConfig());
+  job_controller_->OnStreamReady(job_factory_.alternative_job());
 
   base::RunLoop().RunUntilIdle();
 
@@ -1587,16 +2346,24 @@ TEST_P(HttpStreamFactoryJobControllerTest, AltJobSucceedsMainJobDestroyed) {
   EXPECT_TRUE(HttpStreamFactoryPeer::IsJobControllerDeleted(factory_));
 }
 
+// Tests that when alt job succeeds, main job is destroyed.
+TEST_P(HttpStreamFactoryJobControllerTest, AltJobSucceedsMainJobDestroyed) {
+  TestAltJobSucceedsMainJobDestroyed(false);
+}
+
+// Tests that when alt job succeeds, main job is destroyed.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       AltJobSucceedsMainJobDestroyedAsyncQuicSession) {
+  TestAltJobSucceedsMainJobDestroyed(true);
+}
+
 // Tests that if alt job succeeds and main job is blocked, main job should be
 // cancelled immediately. |request_| completion will clean up the JobController.
 // Regression test for crbug.com/678768.
 TEST_P(HttpStreamFactoryJobControllerTest,
        AltJobSucceedsMainJobBlockedControllerDestroyed) {
   quic_data_ = std::make_unique<MockQuicData>(version_);
-  if (version_.UsesHttp3()) {
-    quic_data_->AddWrite(SYNCHRONOUS,
-                         client_maker_.MakeInitialSettingsPacket(1));
-  }
+  quic_data_->AddWrite(SYNCHRONOUS, client_maker_.MakeInitialSettingsPacket(1));
   quic_data_->AddRead(ASYNC, ERR_CONNECTION_CLOSED);
 
   HttpRequestInfo request_info;
@@ -1616,8 +2383,7 @@ TEST_P(HttpStreamFactoryJobControllerTest,
   EXPECT_TRUE(JobControllerPeer::main_job_is_blocked(job_controller_));
 
   // |alternative_job| succeeds and should report status to |request_delegate_|.
-  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _));
-
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _));
   base::RunLoop().RunUntilIdle();
 
   EXPECT_FALSE(job_controller_->main_job());
@@ -1626,6 +2392,7 @@ TEST_P(HttpStreamFactoryJobControllerTest,
   // Invoke OnRequestComplete() which should delete |job_controller_| from
   // |factory_|.
   request_.reset();
+  // base::RunLoop().RunUntilIdle();
   VerifyBrokenAlternateProtocolMapping(request_info, false);
   // This fails without the fix for crbug.com/678768.
   EXPECT_TRUE(HttpStreamFactoryPeer::IsJobControllerDeleted(factory_));
@@ -1669,10 +2436,9 @@ TEST_P(HttpStreamFactoryJobControllerTest,
   EXPECT_EQ(origin_port, alternative_host_port_pair.port());
 }
 
-// Tests that if an orphaned job completes after |request_| is gone,
-// JobController will be cleaned up.
-TEST_P(HttpStreamFactoryJobControllerTest,
-       OrphanedJobCompletesControllerDestroyed) {
+void HttpStreamFactoryJobControllerTestBase::
+    TestOrphanedJobCompletesControllerDestroyed(bool async_quic_session) {
+  SetAsyncQuicSession(async_quic_session);
   quic_data_ = std::make_unique<MockQuicData>(version_);
   quic_data_->AddRead(SYNCHRONOUS, ERR_IO_PENDING);
   // Use cold start and complete alt job manually.
@@ -1699,10 +2465,14 @@ TEST_P(HttpStreamFactoryJobControllerTest,
                              HttpStreamRequest::HTTP_STREAM, DEFAULT_PRIORITY);
   EXPECT_TRUE(job_controller_->main_job());
   EXPECT_TRUE(job_controller_->alternative_job());
-  // main job should not be blocked because alt job returned ERR_IO_PENDING.
-  EXPECT_FALSE(JobControllerPeer::main_job_is_blocked(job_controller_));
 
-  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _));
+  if (async_quic_session) {
+    EXPECT_CALL(*job_factory_.main_job(), Resume()).Times(1).WillOnce([this]() {
+      job_factory_.main_job()->DoResume();
+    });
+  }
+
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _));
 
   // Complete main job now.
   base::RunLoop().RunUntilIdle();
@@ -1720,14 +2490,30 @@ TEST_P(HttpStreamFactoryJobControllerTest,
   HttpStreamFactoryJobPeer::SetStream(job_factory_.alternative_job(),
                                       std::move(http_stream));
   // This should not call request_delegate_::OnStreamReady.
-  job_controller_->OnStreamReady(job_factory_.alternative_job(), SSLConfig());
+  job_controller_->OnStreamReady(job_factory_.alternative_job());
   // Make sure that controller does not leak.
   EXPECT_TRUE(HttpStreamFactoryPeer::IsJobControllerDeleted(factory_));
 }
 
+// Tests that if an orphaned job completes after |request_| is gone,
+// JobController will be cleaned up.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       OrphanedJobCompletesControllerDestroyed) {
+  TestOrphanedJobCompletesControllerDestroyed(false);
+}
+
+// Tests that if an orphaned job completes after |request_| is gone,
+// JobController will be cleaned up.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       OrphanedJobCompletesControllerDestroyedAsyncQuicSession) {
+  TestOrphanedJobCompletesControllerDestroyed(true);
+}
+
 void HttpStreamFactoryJobControllerTestBase::
     TestAltJobSucceedsAfterMainJobFailed(
-        bool alt_job_retried_on_non_default_network) {
+        bool alt_job_retried_on_non_default_network,
+        bool async_quic_session) {
+  SetAsyncQuicSession(async_quic_session);
   quic_data_ = std::make_unique<MockQuicData>(version_);
   quic_data_->AddRead(SYNCHRONOUS, ERR_IO_PENDING);
   // Use cold start and complete alt job manually.
@@ -1749,7 +2535,7 @@ void HttpStreamFactoryJobControllerTestBase::
   SetAlternativeService(request_info, alternative_service);
 
   // |main_job| fails but should not report status to Request.
-  EXPECT_CALL(request_delegate_, OnStreamFailed(_, _, _, _, _)).Times(0);
+  EXPECT_CALL(request_delegate_, OnStreamFailed(_, _, _, _)).Times(0);
 
   request_ =
       job_controller_->Start(&request_delegate_, nullptr, net_log_with_source_,
@@ -1757,9 +2543,8 @@ void HttpStreamFactoryJobControllerTestBase::
   EXPECT_TRUE(job_controller_->main_job());
   EXPECT_TRUE(job_controller_->alternative_job());
 
-  base::RunLoop().RunUntilIdle();
   if (alt_job_retried_on_non_default_network) {
-    // Set the alt job as if it failed on the default network and is retired on
+    // Set the alt job as if it failed on the default network and is retried on
     // the alternate network.
     JobControllerPeer::SetAltJobFailedOnDefaultNetwork(job_controller_);
   }
@@ -1767,12 +2552,22 @@ void HttpStreamFactoryJobControllerTestBase::
   // Make |alternative_job| succeed.
   auto http_stream = std::make_unique<HttpBasicStream>(
       std::make_unique<ClientSocketHandle>(), false);
-  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, http_stream.get()));
+  if (async_quic_session) {
+    base::RunLoop run_loop;
+    EXPECT_CALL(*job_factory_.main_job(), Resume())
+        .Times(1)
+        .WillOnce([&run_loop, this]() {
+          run_loop.Quit();
+          job_factory_.main_job()->DoResume();
+        });
+    run_loop.Run();
+  }
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, http_stream.get()));
 
   HttpStreamFactoryJobPeer::SetStream(job_factory_.alternative_job(),
                                       std::move(http_stream));
-  job_controller_->OnStreamReady(job_factory_.alternative_job(), SSLConfig());
-
+  job_controller_->OnStreamReady(job_factory_.alternative_job());
+  base::RunLoop().RunUntilIdle();
   // |alternative_job| succeeds and should report status to Request.
   VerifyBrokenAlternateProtocolMapping(request_info, false);
   request_.reset();
@@ -1783,19 +2578,37 @@ void HttpStreamFactoryJobControllerTestBase::
 // alternative job succeeds on the default network after the main job failed.
 TEST_P(HttpStreamFactoryJobControllerTest,
        AltJobSucceedsOnDefaultNetworkAfterMainJobFailed) {
-  TestAltJobSucceedsAfterMainJobFailed(false);
+  TestAltJobSucceedsAfterMainJobFailed(false, false);
 }
 
 // This test verifies that the alternative service is not mark broken if the
 // alternative job succeeds on the alternate network after the main job failed.
 TEST_P(HttpStreamFactoryJobControllerTest,
-       AltJobSucceedsOnAlternateNetwrokAfterMainJobFailed) {
-  TestAltJobSucceedsAfterMainJobFailed(true);
+       AltJobSucceedsOnAlternateNetworkAfterMainJobFailed) {
+  TestAltJobSucceedsAfterMainJobFailed(true, false);
+}
+
+// This test verifies that the alternative service is not mark broken if the
+// alternative job succeeds on the default network after the main job failed.
+// This test uses asynchronous QUIC session creation.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       AltJobSucceedsOnDefaultNetworkAfterMainJobFailedAsyncQuicSession) {
+  TestAltJobSucceedsAfterMainJobFailed(false, true);
+}
+
+// This test verifies that the alternative service is not mark broken if the
+// alternative job succeeds on the alternate network after the main job failed.
+// This test uses asynchronous QUIC session creation.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       AltJobSucceedsOnAlternateNetworkAfterMainJobFailedAsyncQuicSession) {
+  TestAltJobSucceedsAfterMainJobFailed(true, true);
 }
 
 void HttpStreamFactoryJobControllerTestBase::
     TestAltJobSucceedsAfterMainJobSucceeded(
-        bool alt_job_retried_on_non_default_network) {
+        bool alt_job_retried_on_non_default_network,
+        bool async_quic_session) {
+  SetAsyncQuicSession(async_quic_session);
   quic_data_ = std::make_unique<MockQuicData>(version_);
   quic_data_->AddRead(SYNCHRONOUS, ERR_IO_PENDING);
   // Use cold start and complete alt job manually.
@@ -1818,7 +2631,7 @@ void HttpStreamFactoryJobControllerTestBase::
   SetAlternativeService(request_info, alternative_service);
 
   // |main_job| fails but should not report status to Request.
-  EXPECT_CALL(request_delegate_, OnStreamFailed(_, _, _, _, _)).Times(0);
+  EXPECT_CALL(request_delegate_, OnStreamFailed(_, _, _, _)).Times(0);
 
   request_ =
       job_controller_->Start(&request_delegate_, nullptr, net_log_with_source_,
@@ -1826,9 +2639,15 @@ void HttpStreamFactoryJobControllerTestBase::
   EXPECT_TRUE(job_controller_->main_job());
   EXPECT_TRUE(job_controller_->alternative_job());
 
+  if (async_quic_session) {
+    EXPECT_CALL(*job_factory_.main_job(), Resume()).Times(1).WillOnce([this]() {
+      job_factory_.main_job()->DoResume();
+    });
+  }
+
   // Run the message loop to make |main_job| succeed and status will be
   // reported to Request.
-  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _));
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _));
   base::RunLoop().RunUntilIdle();
   VerifyBrokenAlternateProtocolMapping(request_info, false);
 
@@ -1844,7 +2663,7 @@ void HttpStreamFactoryJobControllerTestBase::
 
   HttpStreamFactoryJobPeer::SetStream(job_factory_.alternative_job(),
                                       std::move(http_stream));
-  job_controller_->OnStreamReady(job_factory_.alternative_job(), SSLConfig());
+  job_controller_->OnStreamReady(job_factory_.alternative_job());
 
   request_.reset();
   // If alt job was retried on the alternate network, the alternative service
@@ -1863,7 +2682,7 @@ void HttpStreamFactoryJobControllerTestBase::
 // alternative job succeeds on the default network after the main job succeeded.
 TEST_P(HttpStreamFactoryJobControllerTest,
        AltJobSucceedsOnDefaultNetworkAfterMainJobSucceeded) {
-  TestAltJobSucceedsAfterMainJobSucceeded(false);
+  TestAltJobSucceedsAfterMainJobSucceeded(false, false);
 }
 
 // This test verifies that the alternative service is marked broken until the
@@ -1873,12 +2692,32 @@ TEST_P(HttpStreamFactoryJobControllerTest,
 // changes.
 TEST_P(HttpStreamFactoryJobControllerTest,
        AltJobSucceedsOnAlternateNetworkAfterMainJobSucceeded) {
-  TestAltJobSucceedsAfterMainJobSucceeded(true);
+  TestAltJobSucceedsAfterMainJobSucceeded(true, false);
+}
+
+// This test verifies that the alternative service is not marked broken if the
+// alternative job succeeds on the default network after the main job succeeded.
+// This test uses asynchronous QUIC session creation.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       AltJobSucceedsOnDefaultNetworkAfterMainJobSucceededAsyncQuicSession) {
+  TestAltJobSucceedsAfterMainJobSucceeded(false, true);
+}
+
+// This test verifies that the alternative service is marked broken until the
+// default network changes if the alternative job succeeds on the non-default
+// network, which failed on the default network previously, after the main job
+// succeeded.  The brokenness should be cleared when the default network
+// changes. This test uses asynchronous QUIC session creation.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       AltJobSucceedsOnAlternateNetworkAfterMainJobSucceededAsyncQuicSession) {
+  TestAltJobSucceedsAfterMainJobSucceeded(true, true);
 }
 
 void HttpStreamFactoryJobControllerTestBase::
     TestMainJobSucceedsAfterAltJobSucceeded(
-        bool alt_job_retried_on_non_default_network) {
+        bool alt_job_retried_on_non_default_network,
+        bool async_quic_session) {
+  SetAsyncQuicSession(async_quic_session);
   quic_data_ = std::make_unique<MockQuicData>(version_);
   quic_data_->AddRead(SYNCHRONOUS, ERR_IO_PENDING);
   // Use cold start and complete alt job manually.
@@ -1914,11 +2753,21 @@ void HttpStreamFactoryJobControllerTestBase::
   // Make |alternative_job| succeed.
   auto http_stream = std::make_unique<HttpBasicStream>(
       std::make_unique<ClientSocketHandle>(), false);
-  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, http_stream.get()));
+  if (async_quic_session) {
+    base::RunLoop run_loop;
+    EXPECT_CALL(*job_factory_.main_job(), Resume())
+        .Times(1)
+        .WillOnce([&run_loop, this]() {
+          run_loop.Quit();
+          job_factory_.main_job()->DoResume();
+        });
+    run_loop.Run();
+  }
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, http_stream.get()));
 
   HttpStreamFactoryJobPeer::SetStream(job_factory_.alternative_job(),
                                       std::move(http_stream));
-  job_controller_->OnStreamReady(job_factory_.alternative_job(), SSLConfig());
+  job_controller_->OnStreamReady(job_factory_.alternative_job());
 
   // Run message loop to make the main job succeed.
   base::RunLoop().RunUntilIdle();
@@ -1940,7 +2789,7 @@ void HttpStreamFactoryJobControllerTestBase::
 // main job succeeds after the alternative job succeeded on the default network.
 TEST_P(HttpStreamFactoryJobControllerTest,
        MainJobSucceedsAfterAltJobSucceededOnDefaultNetwork) {
-  TestMainJobSucceedsAfterAltJobSucceeded(false);
+  TestMainJobSucceedsAfterAltJobSucceeded(false, false);
 }
 
 // This test verifies that the alternative service is marked broken until the
@@ -1950,12 +2799,32 @@ TEST_P(HttpStreamFactoryJobControllerTest,
 // changes.
 TEST_P(HttpStreamFactoryJobControllerTest,
        MainJobSucceedsAfterAltJobSucceededOnAlternateNetwork) {
-  TestMainJobSucceedsAfterAltJobSucceeded(true);
+  TestMainJobSucceedsAfterAltJobSucceeded(true, false);
+}
+
+// This test verifies that the alternative service is not marked broken if the
+// main job succeeds after the alternative job succeeded on the default network.
+// This test uses asynchronous QUIC session creation.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       MainJobSucceedsAfterAltJobSucceededOnDefaultNetworkAsyncQuicSession) {
+  TestMainJobSucceedsAfterAltJobSucceeded(false, true);
+}
+
+// This test verifies that the alternative service is marked broken until the
+// default network changes if the main job succeeds after the alternative job
+// succeeded on the non-default network, i.e., failed on the default network
+// previously.  The brokenness should be cleared when the default network
+// changes. This test uses asynchronous QUIC session creation.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       MainJobSucceedsAfterAltJobSucceededOnAlternateNetworkAsyncQuicSession) {
+  TestMainJobSucceedsAfterAltJobSucceeded(true, true);
 }
 
 void HttpStreamFactoryJobControllerTestBase::
     TestMainJobFailsAfterAltJobSucceeded(
-        bool alt_job_retried_on_non_default_network) {
+        bool alt_job_retried_on_non_default_network,
+        bool async_quic_session) {
+  SetAsyncQuicSession(async_quic_session);
   quic_data_ = std::make_unique<MockQuicData>(version_);
   quic_data_->AddRead(SYNCHRONOUS, ERR_IO_PENDING);
   // Use cold start and complete alt job manually.
@@ -1989,11 +2858,21 @@ void HttpStreamFactoryJobControllerTestBase::
   // Make |alternative_job| succeed.
   auto http_stream = std::make_unique<HttpBasicStream>(
       std::make_unique<ClientSocketHandle>(), false);
-  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, http_stream.get()));
+  if (async_quic_session) {
+    base::RunLoop run_loop;
+    EXPECT_CALL(*job_factory_.main_job(), Resume())
+        .Times(1)
+        .WillOnce([&run_loop, this]() {
+          run_loop.Quit();
+          job_factory_.main_job()->DoResume();
+        });
+    run_loop.Run();
+  }
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, http_stream.get()));
 
   HttpStreamFactoryJobPeer::SetStream(job_factory_.alternative_job(),
                                       std::move(http_stream));
-  job_controller_->OnStreamReady(job_factory_.alternative_job(), SSLConfig());
+  job_controller_->OnStreamReady(job_factory_.alternative_job());
 
   // Run message loop to make the main job fail.
   base::RunLoop().RunUntilIdle();
@@ -2006,7 +2885,7 @@ void HttpStreamFactoryJobControllerTestBase::
 // main job fails after the alternative job succeeded on the default network.
 TEST_P(HttpStreamFactoryJobControllerTest,
        MainJobFailsAfterAltJobSucceededOnDefaultNetwork) {
-  TestMainJobFailsAfterAltJobSucceeded(false);
+  TestMainJobFailsAfterAltJobSucceeded(false, false);
 }
 
 // This test verifies that the alternative service is not marked broken if the
@@ -2014,12 +2893,31 @@ TEST_P(HttpStreamFactoryJobControllerTest,
 // network, i.e., failed on the default network previously.
 TEST_P(HttpStreamFactoryJobControllerTest,
        MainJobFailsAfterAltJobSucceededOnAlternateNetwork) {
-  TestMainJobFailsAfterAltJobSucceeded(true);
+  TestMainJobFailsAfterAltJobSucceeded(true, false);
+}
+
+// This test verifies that the alternative service is not marked broken if the
+// main job fails after the alternative job succeeded on the default network.
+// This test uses asynchronous QUIC session creation.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       MainJobFailsAfterAltJobSucceededOnDefaultNetworkAsyncQuicSession) {
+  TestMainJobFailsAfterAltJobSucceeded(false, true);
+}
+
+// This test verifies that the alternative service is not marked broken if the
+// main job fails after the alternative job succeeded on the non-default
+// network, i.e., failed on the default network previously. This test uses
+// asynchronous QUIC session creation.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       MainJobFailsAfterAltJobSucceededOnAlternateNetworkAsyncQuicSession) {
+  TestMainJobFailsAfterAltJobSucceeded(true, true);
 }
 
 void HttpStreamFactoryJobControllerTestBase::
     TestMainJobSucceedsAfterAltJobFailed(
-        bool alt_job_retried_on_non_default_network) {
+        bool alt_job_retried_on_non_default_network,
+        bool async_quic_session) {
+  SetAsyncQuicSession(async_quic_session);
   quic_data_ = std::make_unique<MockQuicData>(version_);
   quic_data_->AddConnect(SYNCHRONOUS, ERR_FAILED);
 
@@ -2046,9 +2944,14 @@ void HttpStreamFactoryJobControllerTestBase::
   EXPECT_TRUE(job_controller_->alternative_job());
 
   // |alternative_job| fails but should not report status to Request.
-  EXPECT_CALL(request_delegate_, OnStreamFailed(_, _, _, _, _)).Times(0);
+  EXPECT_CALL(request_delegate_, OnStreamFailed(_, _, _, _)).Times(0);
+  if (async_quic_session) {
+    EXPECT_CALL(*job_factory_.main_job(), Resume()).Times(1).WillOnce([this]() {
+      job_factory_.main_job()->DoResume();
+    });
+  }
   // |main_job| succeeds and should report status to Request.
-  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _));
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _));
 
   if (alt_job_retried_on_non_default_network) {
     // Set the alt job as if it failed on the default network and is retired on
@@ -2073,7 +2976,7 @@ void HttpStreamFactoryJobControllerTestBase::
 // the alternative job fails on the default network and main job succeeds later.
 TEST_P(HttpStreamFactoryJobControllerTest,
        MainJobSucceedsAfterAltJobFailedOnDefaultNetwork) {
-  TestMainJobSucceedsAfterAltJobFailed(false);
+  TestMainJobSucceedsAfterAltJobFailed(false, false);
 }
 
 // This test verifies that the alternative service will be marked broken when
@@ -2081,13 +2984,31 @@ TEST_P(HttpStreamFactoryJobControllerTest,
 // succeeds later.
 TEST_P(HttpStreamFactoryJobControllerTest,
        MainJobSucceedsAfterAltJobFailedOnBothNetworks) {
-  TestMainJobSucceedsAfterAltJobFailed(true);
+  TestMainJobSucceedsAfterAltJobFailed(true, false);
+}
+
+// This test verifies that the alternative service will be marked broken when
+// the alternative job fails on the default network and main job succeeds later.
+// This test uses asynchronous Quic session creation.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       MainJobSucceedsAfterAltJobFailedOnDefaultNetworkAsyncQuicSession) {
+  TestMainJobSucceedsAfterAltJobFailed(false, true);
+}
+
+// This test verifies that the alternative service will be marked broken when
+// the alternative job fails on both default and alternate networks and main job
+// succeeds later. This test uses asynchronous Quic session creation.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       MainJobSucceedsAfterAltJobFailedOnBothNetworksAsyncQuicSession) {
+  TestMainJobSucceedsAfterAltJobFailed(true, true);
 }
 
 void HttpStreamFactoryJobControllerTestBase::
     TestMainJobSucceedsAfterIgnoredError(int net_error,
+                                         bool async_quic_session,
                                          bool expect_broken,
                                          std::string alternate_host) {
+  SetAsyncQuicSession(async_quic_session);
   quic_data_ = std::make_unique<MockQuicData>(version_);
   quic_data_->AddConnect(SYNCHRONOUS, net_error);
   tcp_data_ = std::make_unique<SequencedSocketData>();
@@ -2116,9 +3037,14 @@ void HttpStreamFactoryJobControllerTestBase::
   EXPECT_TRUE(job_controller_->alternative_job());
 
   // |alternative_job| fails but should not report status to Request.
-  EXPECT_CALL(request_delegate_, OnStreamFailed(_, _, _, _, _)).Times(0);
+  EXPECT_CALL(request_delegate_, OnStreamFailed(_, _, _, _)).Times(0);
+  if (async_quic_session) {
+    EXPECT_CALL(*job_factory_.main_job(), Resume()).Times(1).WillOnce([this]() {
+      job_factory_.main_job()->DoResume();
+    });
+  }
   // |main_job| succeeds and should report status to Request.
-  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _));
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _));
   base::RunLoop().RunUntilIdle();
   request_.reset();
 
@@ -2135,27 +3061,60 @@ void HttpStreamFactoryJobControllerTestBase::
 // then the alternative service is not marked as broken.
 TEST_P(HttpStreamFactoryJobControllerTest,
        MainJobSucceedsAfterConnectionChanged) {
-  TestMainJobSucceedsAfterIgnoredError(ERR_NETWORK_CHANGED);
+  TestMainJobSucceedsAfterIgnoredError(ERR_NETWORK_CHANGED, false);
 }
 
 // Verifies that if the alternative job fails due to a disconnected network,
 // then the alternative service is not marked as broken.
 TEST_P(HttpStreamFactoryJobControllerTest,
        MainJobSucceedsAfterInternetDisconnected) {
-  TestMainJobSucceedsAfterIgnoredError(ERR_INTERNET_DISCONNECTED);
+  TestMainJobSucceedsAfterIgnoredError(ERR_INTERNET_DISCONNECTED, false);
+}
+
+// Verifies that if the alternative job fails due to a connection change event,
+// then the alternative service is not marked as broken. This test uses
+// asynchronous QUIC session creation.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       MainJobSucceedsAfterConnectionChangedAsyncQuicSession) {
+  TestMainJobSucceedsAfterIgnoredError(ERR_NETWORK_CHANGED, true);
+}
+
+// Verifies that if the alternative job fails due to a disconnected network,
+// then the alternative service is not marked as broken. This test uses
+// asynchronous QUIC session creation.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       MainJobSucceedsAfterInternetDisconnectedAsyncQuicSession) {
+  TestMainJobSucceedsAfterIgnoredError(ERR_INTERNET_DISCONNECTED, true);
 }
 
 // Verifies that if the alternative job fails due to a DNS failure,
 // then the alternative service is not marked as broken.
 TEST_P(HttpStreamFactoryJobControllerTest, MainJobSucceedsAfterDnsFailure) {
-  TestMainJobSucceedsAfterIgnoredError(ERR_NAME_NOT_RESOLVED);
+  TestMainJobSucceedsAfterIgnoredError(ERR_NAME_NOT_RESOLVED, false);
+}
+
+// Verifies that if the alternative job fails due to a DNS failure,
+// then the alternative service is not marked as broken. This test uses
+// asynchronous QUIC session creation.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       MainJobSucceedsAfterDnsFailureAsyncQuicSession) {
+  TestMainJobSucceedsAfterIgnoredError(ERR_NAME_NOT_RESOLVED, true);
 }
 
 // Verifies that if the alternative job fails due to a DNS failure on a
 // different name, then the alternative service is marked as broken.
 TEST_P(HttpStreamFactoryJobControllerTest,
        MainJobSucceedsAfterDnsFailureWithAlternateName) {
-  TestMainJobSucceedsAfterIgnoredError(ERR_NAME_NOT_RESOLVED, true,
+  TestMainJobSucceedsAfterIgnoredError(ERR_NAME_NOT_RESOLVED, false, true,
+                                       "alternate.google.com");
+}
+
+// Verifies that if the alternative job fails due to a DNS failure on a
+// different name, then the alternative service is marked as broken. This test
+// uses asynchronous QUIC session creation.
+TEST_P(HttpStreamFactoryJobControllerTest,
+       MainJobSucceedsAfterDnsFailureWithAlternateNameAsyncQuicSession) {
+  TestMainJobSucceedsAfterIgnoredError(ERR_NAME_NOT_RESOLVED, true, true,
                                        "alternate.google.com");
 }
 
@@ -2188,7 +3147,7 @@ TEST_P(HttpStreamFactoryJobControllerTest, GetLoadStateAfterMainJobFailed) {
 
   // |main_job| fails but should not report status to Request.
   // The alternative job will mark the main job complete.
-  EXPECT_CALL(request_delegate_, OnStreamFailed(_, _, _, _, _)).Times(0);
+  EXPECT_CALL(request_delegate_, OnStreamFailed(_, _, _, _)).Times(0);
 
   base::RunLoop().RunUntilIdle();
 
@@ -2198,17 +3157,19 @@ TEST_P(HttpStreamFactoryJobControllerTest, GetLoadStateAfterMainJobFailed) {
   // |alternative_job| succeeds and should report status to Request.
   auto http_stream = std::make_unique<HttpBasicStream>(
       std::make_unique<ClientSocketHandle>(), false);
-  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, http_stream.get()));
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, http_stream.get()));
 
   HttpStreamFactoryJobPeer::SetStream(job_factory_.alternative_job(),
                                       std::move(http_stream));
-  job_controller_->OnStreamReady(job_factory_.alternative_job(), SSLConfig());
+  job_controller_->OnStreamReady(job_factory_.alternative_job());
 
   request_.reset();
   EXPECT_TRUE(HttpStreamFactoryPeer::IsJobControllerDeleted(factory_));
 }
 
-TEST_P(HttpStreamFactoryJobControllerTest, ResumeMainJobWhenAltJobStalls) {
+void HttpStreamFactoryJobControllerTestBase::TestResumeMainJobWhenAltJobStalls(
+    bool async_quic_session) {
+  SetAsyncQuicSession(async_quic_session);
   // Use COLD_START to stall alt job.
   quic_data_ = std::make_unique<MockQuicData>(version_);
   quic_data_->AddRead(SYNCHRONOUS, ERR_IO_PENDING);
@@ -2234,11 +3195,24 @@ TEST_P(HttpStreamFactoryJobControllerTest, ResumeMainJobWhenAltJobStalls) {
                              HttpStreamRequest::HTTP_STREAM, DEFAULT_PRIORITY);
   EXPECT_TRUE(job_controller_->main_job());
   EXPECT_TRUE(job_controller_->alternative_job());
-
+  if (async_quic_session) {
+    EXPECT_CALL(*job_factory_.main_job(), Resume()).Times(1).WillOnce([this]() {
+      job_factory_.main_job()->DoResume();
+    });
+  }
   // Alt job is stalled and main job should complete successfully.
-  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _));
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _));
 
   base::RunLoop().RunUntilIdle();
+}
+
+TEST_P(HttpStreamFactoryJobControllerTest, ResumeMainJobWhenAltJobStalls) {
+  TestResumeMainJobWhenAltJobStalls(false);
+}
+
+TEST_P(HttpStreamFactoryJobControllerTest,
+       ResumeMainJobWhenAltJobStallsAsyncQuicSession) {
+  TestResumeMainJobWhenAltJobStalls(true);
 }
 
 TEST_P(HttpStreamFactoryJobControllerTest, InvalidPortForQuic) {
@@ -2329,79 +3303,19 @@ TEST_P(HttpStreamFactoryJobControllerTest, HostResolutionHang) {
 
   EXPECT_TRUE(job_controller_->main_job());
   EXPECT_TRUE(job_controller_->alternative_job());
-  EXPECT_FALSE(JobControllerPeer::main_job_is_blocked(job_controller_));
-  EXPECT_TRUE(JobControllerPeer::main_job_is_resumed(job_controller_));
 
   // Unpause mock quic data.
   // Will cause |alternative_job| to fail, but its failure should not be
   // reported to Request.
-  EXPECT_CALL(request_delegate_, OnStreamFailed(_, _, _, _, _)).Times(0);
+  EXPECT_CALL(request_delegate_, OnStreamFailed(_, _, _, _)).Times(0);
+  EXPECT_FALSE(JobControllerPeer::main_job_is_blocked(job_controller_));
+  EXPECT_TRUE(JobControllerPeer::main_job_is_resumed(job_controller_));
   // OnStreamFailed will post a task to resume the main job immediately but
   // won't call Resume() on the main job since it's been resumed already.
   EXPECT_CALL(*job_factory_.main_job(), Resume()).Times(0);
   quic_data.Resume();
   FastForwardUntilNoTasksRemain();
   // Alt job should be cleaned up
-  EXPECT_FALSE(job_controller_->alternative_job());
-}
-
-TEST_P(HttpStreamFactoryJobControllerTest, DelayedTCP) {
-  HttpRequestInfo request_info;
-  request_info.method = "GET";
-  request_info.url = GURL("https://www.google.com");
-
-  Initialize(request_info);
-
-  // Handshake will fail asynchronously after mock data is unpaused.
-  MockQuicData quic_data(version_);
-  quic_data.AddRead(ASYNC, ERR_IO_PENDING);  // Pause
-  quic_data.AddRead(ASYNC, ERR_FAILED);
-  quic_data.AddWrite(ASYNC, ERR_FAILED);
-  quic_data.AddSocketDataToFactory(session_deps_.socket_factory.get());
-
-  // Enable delayed TCP and set time delay for waiting job.
-  QuicStreamFactory* quic_stream_factory = session_->quic_stream_factory();
-  quic_stream_factory->set_is_quic_known_to_work_on_current_network(true);
-  ServerNetworkStats stats1;
-  stats1.srtt = base::Microseconds(10);
-  session_->http_server_properties()->SetServerNetworkStats(
-      url::SchemeHostPort(GURL("https://www.google.com")),
-      NetworkAnonymizationKey(), stats1);
-
-  url::SchemeHostPort server(request_info.url);
-  AlternativeService alternative_service(kProtoQUIC, server.host(), 443);
-  SetAlternativeService(request_info, alternative_service);
-
-  // This prevents handshake from immediately succeeding.
-  crypto_client_stream_factory_.set_handshake_mode(
-      MockCryptoClientStream::COLD_START);
-
-  request_ =
-      job_controller_->Start(&request_delegate_, nullptr, net_log_with_source_,
-                             HttpStreamRequest::HTTP_STREAM, DEFAULT_PRIORITY);
-
-  EXPECT_TRUE(job_controller_->main_job());
-  EXPECT_TRUE(job_controller_->alternative_job());
-  EXPECT_TRUE(job_controller_->main_job()->is_waiting());
-  // Main job is not blocked but hasn't resumed yet; it should resume in 15us.
-  EXPECT_FALSE(JobControllerPeer::main_job_is_blocked(job_controller_));
-  EXPECT_FALSE(JobControllerPeer::main_job_is_resumed(job_controller_));
-
-  // Task to resume main job in 15us should be posted.
-  EXPECT_NE(0u, GetPendingMainThreadTaskCount());
-  EXPECT_CALL(*job_factory_.main_job(), Resume()).Times(0);
-  FastForwardBy(base::Microseconds(14));
-  EXPECT_CALL(*job_factory_.main_job(), Resume()).Times(1);
-  FastForwardBy(base::Microseconds(1));
-
-  EXPECT_TRUE(job_controller_->main_job());
-  EXPECT_TRUE(job_controller_->alternative_job());
-  EXPECT_TRUE(JobControllerPeer::main_job_is_resumed(job_controller_));
-
-  // Unpause mock quic data and run all remaining tasks. Alt-job should fail
-  // and be cleaned up.
-  quic_data.Resume();
-  FastForwardUntilNoTasksRemain();
   EXPECT_FALSE(job_controller_->alternative_job());
 }
 
@@ -2449,7 +3363,7 @@ TEST_P(HttpStreamFactoryJobControllerTest, ResumeMainJobLaterCanceled) {
       .Times(1)
       .WillOnce(Invoke([&run_loop]() { run_loop.Quit(); }));
   job_controller_->OnStreamFailed(job_factory_.alternative_job(),
-                                  ERR_QUIC_PROTOCOL_ERROR, SSLConfig());
+                                  ERR_QUIC_PROTOCOL_ERROR);
   FastForwardBy(base::Microseconds(0));
   run_loop.Run();
   EXPECT_FALSE(job_controller_->alternative_job());
@@ -2465,8 +3379,7 @@ TEST_P(HttpStreamFactoryJobControllerTest, ResumeMainJobLaterCanceled) {
   session_->http_server_properties()->MarkAlternativeServiceBroken(
       alternative_service, NetworkAnonymizationKey());
 
-  job_controller_->OnStreamFailed(job_factory_.main_job(), ERR_FAILED,
-                                  SSLConfig());
+  job_controller_->OnStreamFailed(job_factory_.main_job(), ERR_FAILED);
   // Jobs are restarted.
   EXPECT_TRUE(job_controller_->main_job());
   EXPECT_FALSE(job_controller_->alternative_job());
@@ -2524,6 +3437,7 @@ TEST_P(HttpStreamFactoryJobControllerTest, DelayedTCPWithLargeSrtt) {
 
   EXPECT_TRUE(job_controller_->main_job());
   EXPECT_TRUE(job_controller_->alternative_job());
+  base::RunLoop().RunUntilIdle();
   // Main job is not blocked but hasn't resumed yet; it should resume in 3s.
   EXPECT_FALSE(JobControllerPeer::main_job_is_blocked(job_controller_));
   EXPECT_FALSE(JobControllerPeer::main_job_is_resumed(job_controller_));
@@ -2618,10 +3532,7 @@ TEST_P(HttpStreamFactoryJobControllerTest,
 
 TEST_P(HttpStreamFactoryJobControllerTest, PreconnectToHostWithValidAltSvc) {
   quic_data_ = std::make_unique<MockQuicData>(version_);
-  if (version_.UsesHttp3()) {
-    quic_data_->AddWrite(SYNCHRONOUS,
-                         client_maker_.MakeInitialSettingsPacket(1));
-  }
+  quic_data_->AddWrite(SYNCHRONOUS, client_maker_.MakeInitialSettingsPacket(1));
   quic_data_->AddRead(ASYNC, ERR_CONNECTION_CLOSED);
 
   HttpRequestInfo request_info;
@@ -2698,10 +3609,12 @@ TEST_P(HttpStreamFactoryJobControllerTest,
 
   const SchemefulSite kSite1(GURL("https://foo.test/"));
   const NetworkIsolationKey kNetworkIsolationKey1(kSite1, kSite1);
-  const NetworkAnonymizationKey kNetworkAnonymizationKey1(kSite1, kSite1);
+  const auto kNetworkAnonymizationKey1 =
+      NetworkAnonymizationKey::CreateSameSite(kSite1);
   const SchemefulSite kSite2(GURL("https://bar.test/"));
   const NetworkIsolationKey kNetworkIsolationKey2(kSite2, kSite2);
-  const NetworkAnonymizationKey kNetworkAnonymizationKey2(kSite2, kSite2);
+  const auto kNetworkAnonymizationKey2 =
+      NetworkAnonymizationKey::CreateSameSite(kSite2);
 
   tcp_data_ = std::make_unique<SequencedSocketData>();
   tcp_data_->set_connect_data(MockConnect(ASYNC, OK));
@@ -2752,9 +3665,10 @@ TEST_P(HttpStreamFactoryJobControllerTest,
     MockHttpStreamRequestDelegate request_delegate;
     auto job_controller = std::make_unique<HttpStreamFactory::JobController>(
         factory_, &request_delegate, session_.get(), &job_factory_,
-        request_info, is_preconnect_, false /* is_websocket */,
+        request_info, is_preconnect_, /*is_websocket=*/false,
         enable_ip_based_pooling_, enable_alternative_services_,
-        delay_main_job_with_available_spdy_session_, SSLConfig(), SSLConfig());
+        delay_main_job_with_available_spdy_session_,
+        /*allowed_bad_certs=*/std::vector<SSLConfig::CertAndStatus>());
     auto* job_controller_ptr = job_controller.get();
     HttpStreamFactoryPeer::AddJobController(factory_,
                                             std::move(job_controller));
@@ -2772,8 +3686,10 @@ TEST_P(HttpStreamFactoryJobControllerTest,
   }
 }
 
-TEST_P(HttpStreamFactoryJobControllerTest,
-       DonotDelayMainJobIfHasAvailableSpdySession) {
+void HttpStreamFactoryJobControllerTestBase::
+    TestDoNotDelayMainJobIfHasAvailableSpdySession(bool async_quic_session) {
+  SetAsyncQuicSession(async_quic_session);
+
   SetNotDelayMainJobWithAvailableSpdySession();
   HttpRequestInfo request_info;
   request_info.method = "GET";
@@ -2782,7 +3698,7 @@ TEST_P(HttpStreamFactoryJobControllerTest,
   Initialize(request_info);
   // Put a SpdySession in the pool.
   HostPortPair host_port_pair("www.google.com", 443);
-  SpdySessionKey key(host_port_pair, ProxyServer::Direct(),
+  SpdySessionKey key(host_port_pair, ProxyChain::Direct(),
                      PRIVACY_MODE_DISABLED,
                      SpdySessionKey::IsProxySession::kFalse, SocketTag(),
                      NetworkAnonymizationKey(), SecureDnsPolicy::kAllow);
@@ -2818,10 +3734,37 @@ TEST_P(HttpStreamFactoryJobControllerTest,
 
   EXPECT_TRUE(job_controller_->main_job());
   EXPECT_TRUE(job_controller_->alternative_job());
-  // The main job shouldn't have any delay since the request can be sent on
-  // available SPDY session.
-  EXPECT_FALSE(job_controller_->ShouldWait(
-      const_cast<net::HttpStreamFactory::Job*>(job_controller_->main_job())));
+  // The main job shouldn't have any delay since request can be sent on
+  // available SPDY session. When QUIC session creation is async, the main job
+  // should still be blocked as alt job has not succeeded or failed at least
+  // once yet. Otherwise the main job should not be blocked
+  EXPECT_EQ(job_controller_->get_main_job_wait_time_for_tests(),
+            base::TimeDelta());
+  if (async_quic_session) {
+    EXPECT_TRUE(JobControllerPeer::main_job_is_blocked(job_controller_));
+    // The main job should have a SPDY session available.
+    EXPECT_TRUE(job_controller_->main_job()->HasAvailableSpdySession());
+    // Wait for QUIC session creation attempt to resume and unblock the main
+    // job.
+    FastForwardBy(base::Milliseconds(1));
+    // Main job should still have no delay and should be unblocked now.
+    EXPECT_EQ(job_controller_->get_main_job_wait_time_for_tests(),
+              base::TimeDelta());
+    EXPECT_FALSE(JobControllerPeer::main_job_is_blocked(job_controller_));
+  } else {
+    EXPECT_FALSE(JobControllerPeer::main_job_is_blocked(job_controller_));
+    EXPECT_TRUE(job_controller_->main_job()->HasAvailableSpdySession());
+  }
+}
+
+TEST_P(HttpStreamFactoryJobControllerTest,
+       DoNotDelayMainJobIfHasAvailableSpdySession) {
+  TestDoNotDelayMainJobIfHasAvailableSpdySession(false);
+}
+
+TEST_P(HttpStreamFactoryJobControllerTest,
+       DoNotDelayMainJobIfHasAvailableSpdySessionAsyncQuicSession) {
+  TestDoNotDelayMainJobIfHasAvailableSpdySession(true);
 }
 
 // Check the case that while a preconnect is waiting in the H2 request queue,
@@ -2850,16 +3793,17 @@ TEST_P(HttpStreamFactoryJobControllerTest, SpdySessionInterruptsPreconnect) {
   std::unique_ptr<HttpStreamRequest> stream_request = job_controller_->Start(
       &request_delegate_, nullptr /* websocket_handshake_create_helper */,
       NetLogWithSource(), HttpStreamRequest::HTTP_STREAM, DEFAULT_PRIORITY);
-  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _));
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _));
 
   // Create and start a preconnect request, which should start watching the
   // SpdySessionPool.
   MockHttpStreamRequestDelegate preconnect_request_delegate;
   auto job_controller = std::make_unique<HttpStreamFactory::JobController>(
       factory_, &preconnect_request_delegate, session_.get(), &job_factory_,
-      request_info, true /* is_preconnect */, false /* is_websocket */,
+      request_info, /*is_preconnect=*/true, /*is_websocket=*/false,
       enable_ip_based_pooling_, enable_alternative_services_,
-      delay_main_job_with_available_spdy_session_, SSLConfig(), SSLConfig());
+      delay_main_job_with_available_spdy_session_,
+      /*allowed_bad_certs=*/std::vector<SSLConfig::CertAndStatus>());
   auto* job_controller_ptr = job_controller.get();
   HttpStreamFactoryPeer::AddJobController(factory_, std::move(job_controller));
   job_controller_ptr->Preconnect(1);
@@ -2881,11 +3825,11 @@ TEST_P(HttpStreamFactoryJobControllerTest, SpdySessionInterruptsPreconnect) {
   base::WeakPtr<SpdySession> spdy_session =
       session_->spdy_session_pool()->FindAvailableSession(
           SpdySessionKey(
-              HostPortPair::FromURL(request_info.url), ProxyServer::Direct(),
+              HostPortPair::FromURL(request_info.url), ProxyChain::Direct(),
               request_info.privacy_mode, SpdySessionKey::IsProxySession::kFalse,
               request_info.socket_tag, request_info.network_anonymization_key,
               request_info.secure_dns_policy),
-          false /* enable_ip_based_pooling */, false /* is_websocket */,
+          false /* enable_ip_based_pooling */, /*is_websocket=*/false,
           NetLogWithSource());
   EXPECT_TRUE(spdy_session);
 }
@@ -2950,7 +3894,7 @@ TEST_P(HttpStreamFactoryJobControllerTest,
           .WillOnce([this]() { job_factory_.main_job()->DoResume(); });
     }
     base::RunLoop run_loop;
-    EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _))
+    EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _))
         .WillOnce([&run_loop]() { run_loop.Quit(); });
     run_loop.Run();
   }
@@ -2960,7 +3904,7 @@ TEST_P(HttpStreamFactoryJobControllerTest,
     base::WeakPtr<SpdySession> spdy_session =
         session_->spdy_session_pool()->FindAvailableSession(
             SpdySessionKey(HostPortPair::FromURL(request_info.url),
-                           ProxyServer::Direct(), request_info.privacy_mode,
+                           ProxyChain::Direct(), request_info.privacy_mode,
                            SpdySessionKey::IsProxySession::kFalse,
                            request_info.socket_tag,
                            request_info.network_anonymization_key,
@@ -2982,8 +3926,8 @@ TEST_P(HttpStreamFactoryJobControllerTest,
           other_request_info, /*is_preconnect=*/true,
           /*is_websocket=*/false, /*enable_ip_based_pooling=*/true,
           enable_alternative_services_,
-          delay_main_job_with_available_spdy_session_, SSLConfig(),
-          SSLConfig());
+          delay_main_job_with_available_spdy_session_,
+          /*allowed_bad_certs=*/std::vector<SSLConfig::CertAndStatus>());
   auto* preconnect_job_controller_ptr = preconnect_job_controller.get();
   HttpStreamFactoryPeer::AddJobController(factory_,
                                           std::move(preconnect_job_controller));
@@ -2994,7 +3938,7 @@ TEST_P(HttpStreamFactoryJobControllerTest,
   // has finished.
   {
     const SpdySessionKey spdy_session_key = SpdySessionKey(
-        HostPortPair::FromURL(other_request_info.url), ProxyServer::Direct(),
+        HostPortPair::FromURL(other_request_info.url), ProxyChain::Direct(),
         other_request_info.privacy_mode, SpdySessionKey::IsProxySession::kFalse,
         other_request_info.socket_tag,
         other_request_info.network_anonymization_key,
@@ -3015,7 +3959,8 @@ TEST_P(HttpStreamFactoryJobControllerTest,
         other_request_info, /*is_preconnect=*/false,
         /*is_websocket=*/false, /*enable_ip_based_pooling=*/true,
         enable_alternative_services_,
-        delay_main_job_with_available_spdy_session_, SSLConfig(), SSLConfig());
+        delay_main_job_with_available_spdy_session_,
+        /*allowed_bad_certs=*/std::vector<SSLConfig::CertAndStatus>());
     auto* job_controller_ptr = job_controller.get();
     HttpStreamFactoryPeer::AddJobController(factory_,
                                             std::move(job_controller));
@@ -3027,7 +3972,7 @@ TEST_P(HttpStreamFactoryJobControllerTest,
             DEFAULT_PRIORITY);
 
     base::RunLoop run_loop;
-    EXPECT_CALL(request_delegate, OnStreamReadyImpl(_, _, _))
+    EXPECT_CALL(request_delegate, OnStreamReadyImpl(_, _))
         .WillOnce([&run_loop]() { run_loop.Quit(); });
     run_loop.Run();
     second_stream_request.reset();
@@ -3079,9 +4024,10 @@ TEST_F(JobControllerLimitMultipleH2Requests, MultipleRequests) {
         std::make_unique<MockHttpStreamRequestDelegate>());
     auto job_controller = std::make_unique<HttpStreamFactory::JobController>(
         factory_, request_delegates[i].get(), session_.get(), &job_factory_,
-        request_info, is_preconnect_, false /* is_websocket */,
+        request_info, is_preconnect_, /*is_websocket=*/false,
         enable_ip_based_pooling_, enable_alternative_services_,
-        delay_main_job_with_available_spdy_session_, SSLConfig(), SSLConfig());
+        delay_main_job_with_available_spdy_session_,
+        /*allowed_bad_certs=*/std::vector<SSLConfig::CertAndStatus>());
     auto* job_controller_ptr = job_controller.get();
     HttpStreamFactoryPeer::AddJobController(factory_,
                                             std::move(job_controller));
@@ -3094,7 +4040,7 @@ TEST_F(JobControllerLimitMultipleH2Requests, MultipleRequests) {
   }
 
   for (int i = 0; i < kNumRequests; ++i) {
-    EXPECT_CALL(*request_delegates[i].get(), OnStreamReadyImpl(_, _, _));
+    EXPECT_CALL(*request_delegates[i].get(), OnStreamReadyImpl(_, _));
   }
 
   base::RunLoop().RunUntilIdle();
@@ -3127,10 +4073,12 @@ TEST_F(JobControllerLimitMultipleH2Requests,
 
   const SchemefulSite kSite1(GURL("https://foo.test/"));
   const NetworkIsolationKey kNetworkIsolationKey1(kSite1, kSite1);
-  const NetworkAnonymizationKey kNetworkAnonymizationKey1(kSite1, kSite1);
+  const auto kNetworkAnonymizationKey1 =
+      NetworkAnonymizationKey::CreateSameSite(kSite1);
   const SchemefulSite kSite2(GURL("https://bar.test/"));
   const NetworkIsolationKey kNetworkIsolationKey2(kSite2, kSite2);
-  const NetworkAnonymizationKey kNetworkAnonymizationKey2(kSite2, kSite2);
+  const auto kNetworkAnonymizationKey2 =
+      NetworkAnonymizationKey::CreateSameSite(kSite2);
 
   tcp_data_ = std::make_unique<SequencedSocketData>(
       MockConnect(SYNCHRONOUS, ERR_IO_PENDING), base::span<MockRead>(),
@@ -3171,10 +4119,10 @@ TEST_F(JobControllerLimitMultipleH2Requests,
           std::make_unique<MockHttpStreamRequestDelegate>());
       auto job_controller = std::make_unique<HttpStreamFactory::JobController>(
           factory_, request_delegates[i].get(), session_.get(), &job_factory_,
-          request_info, is_preconnect_, false /* is_websocket */,
+          request_info, is_preconnect_, /*is_websocket=*/false,
           enable_ip_based_pooling_, enable_alternative_services_,
-          delay_main_job_with_available_spdy_session_, SSLConfig(),
-          SSLConfig());
+          delay_main_job_with_available_spdy_session_,
+          /*allowed_bad_certs=*/std::vector<SSLConfig::CertAndStatus>());
       auto* job_controller_ptr = job_controller.get();
       HttpStreamFactoryPeer::AddJobController(factory_,
                                               std::move(job_controller));
@@ -3188,7 +4136,7 @@ TEST_F(JobControllerLimitMultipleH2Requests,
   }
   TransportClientSocketPool* socket_pool =
       reinterpret_cast<TransportClientSocketPool*>(session_->GetSocketPool(
-          HttpNetworkSession::NORMAL_SOCKET_POOL, ProxyServer::Direct()));
+          HttpNetworkSession::NORMAL_SOCKET_POOL, ProxyChain::Direct()));
   ClientSocketPool::GroupId group_id0(
       url::SchemeHostPort(request_info.url), request_info.privacy_mode,
       NetworkAnonymizationKey(), SecureDnsPolicy::kAllow);
@@ -3249,9 +4197,10 @@ TEST_F(JobControllerLimitMultipleH2Requests, MultipleRequestsFirstRequestHang) {
         std::make_unique<MockHttpStreamRequestDelegate>());
     auto job_controller = std::make_unique<HttpStreamFactory::JobController>(
         factory_, request_delegates[i].get(), session_.get(), &job_factory_,
-        request_info, is_preconnect_, false /* is_websocket */,
+        request_info, is_preconnect_, /*is_websocket=*/false,
         enable_ip_based_pooling_, enable_alternative_services_,
-        delay_main_job_with_available_spdy_session_, SSLConfig(), SSLConfig());
+        delay_main_job_with_available_spdy_session_,
+        /*allowed_bad_certs=*/std::vector<SSLConfig::CertAndStatus>());
     auto* job_controller_ptr = job_controller.get();
     HttpStreamFactoryPeer::AddJobController(factory_,
                                             std::move(job_controller));
@@ -3264,7 +4213,7 @@ TEST_F(JobControllerLimitMultipleH2Requests, MultipleRequestsFirstRequestHang) {
   }
 
   for (int i = 0; i < kNumRequests; ++i) {
-    EXPECT_CALL(*request_delegates[i].get(), OnStreamReadyImpl(_, _, _));
+    EXPECT_CALL(*request_delegates[i].get(), OnStreamReadyImpl(_, _));
   }
 
   EXPECT_GT(GetPendingMainThreadTaskCount(), 0u);
@@ -3323,9 +4272,10 @@ TEST_F(JobControllerLimitMultipleH2Requests,
         std::make_unique<MockHttpStreamRequestDelegate>());
     auto job_controller = std::make_unique<HttpStreamFactory::JobController>(
         factory_, request_delegates[i].get(), session_.get(), &job_factory_,
-        request_info, is_preconnect_, false /* is_websocket */,
+        request_info, is_preconnect_, /*is_websocket=*/false,
         enable_ip_based_pooling_, enable_alternative_services_,
-        delay_main_job_with_available_spdy_session_, SSLConfig(), SSLConfig());
+        delay_main_job_with_available_spdy_session_,
+        /*allowed_bad_certs=*/std::vector<SSLConfig::CertAndStatus>());
     auto* job_controller_ptr = job_controller.get();
     HttpStreamFactoryPeer::AddJobController(factory_,
                                             std::move(job_controller));
@@ -3340,7 +4290,7 @@ TEST_F(JobControllerLimitMultipleH2Requests,
   requests[0].reset();
 
   for (int i = 1; i < kNumRequests; ++i) {
-    EXPECT_CALL(*request_delegates[i].get(), OnStreamReadyImpl(_, _, _));
+    EXPECT_CALL(*request_delegates[i].get(), OnStreamReadyImpl(_, _));
   }
   base::RunLoop().RunUntilIdle();
 
@@ -3379,9 +4329,10 @@ TEST_F(JobControllerLimitMultipleH2Requests, MultiplePreconnects) {
         std::make_unique<MockHttpStreamRequestDelegate>());
     auto job_controller = std::make_unique<HttpStreamFactory::JobController>(
         factory_, request_delegates[i].get(), session_.get(), &job_factory_,
-        request_info, is_preconnect_, false /* is_websocket */,
+        request_info, is_preconnect_, /*is_websocket=*/false,
         enable_ip_based_pooling_, enable_alternative_services_,
-        delay_main_job_with_available_spdy_session_, SSLConfig(), SSLConfig());
+        delay_main_job_with_available_spdy_session_,
+        /*allowed_bad_certs=*/std::vector<SSLConfig::CertAndStatus>());
     auto* job_controller_ptr = job_controller.get();
     HttpStreamFactoryPeer::AddJobController(factory_,
                                             std::move(job_controller));
@@ -3428,9 +4379,10 @@ TEST_F(JobControllerLimitMultipleH2Requests, H1NegotiatedForFirstRequest) {
         std::make_unique<MockHttpStreamRequestDelegate>());
     auto job_controller = std::make_unique<HttpStreamFactory::JobController>(
         factory_, request_delegates[i].get(), session_.get(), &job_factory_,
-        request_info, is_preconnect_, false /* is_websocket */,
+        request_info, is_preconnect_, /*is_websocket=*/false,
         enable_ip_based_pooling_, enable_alternative_services_,
-        delay_main_job_with_available_spdy_session_, SSLConfig(), SSLConfig());
+        delay_main_job_with_available_spdy_session_,
+        /*allowed_bad_certs=*/std::vector<SSLConfig::CertAndStatus>());
     auto* job_controller_ptr = job_controller.get();
     HttpStreamFactoryPeer::AddJobController(factory_,
                                             std::move(job_controller));
@@ -3443,7 +4395,7 @@ TEST_F(JobControllerLimitMultipleH2Requests, H1NegotiatedForFirstRequest) {
   }
 
   for (int i = 0; i < 2; ++i) {
-    EXPECT_CALL(*request_delegates[i].get(), OnStreamReadyImpl(_, _, _));
+    EXPECT_CALL(*request_delegates[i].get(), OnStreamReadyImpl(_, _));
   }
   base::RunLoop().RunUntilIdle();
 
@@ -3491,9 +4443,10 @@ TEST_F(JobControllerLimitMultipleH2Requests, QuicJobNotThrottled) {
   HttpStreamFactory::JobFactory default_job_factory;
   auto job_controller = std::make_unique<HttpStreamFactory::JobController>(
       factory_, &request_delegate_, session_.get(), &default_job_factory,
-      request_info, is_preconnect_, false /* is_websocket */,
+      request_info, is_preconnect_, /*is_websocket=*/false,
       enable_ip_based_pooling_, enable_alternative_services_,
-      delay_main_job_with_available_spdy_session_, SSLConfig(), SSLConfig());
+      delay_main_job_with_available_spdy_session_,
+      /*allowed_bad_certs=*/std::vector<SSLConfig::CertAndStatus>());
   auto* job_controller_ptr = job_controller.get();
   HttpStreamFactoryPeer::AddJobController(factory_, std::move(job_controller));
   request_ = job_controller_ptr->Start(
@@ -3502,7 +4455,7 @@ TEST_F(JobControllerLimitMultipleH2Requests, QuicJobNotThrottled) {
 
   EXPECT_TRUE(job_controller_ptr->main_job());
   EXPECT_TRUE(job_controller_ptr->alternative_job());
-  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _));
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _));
   base::RunLoop().RunUntilIdle();
   auto entries = net_log_observer_.GetEntries();
   for (const auto& entry : entries) {
@@ -3530,10 +4483,8 @@ TEST_P(HttpStreamFactoryJobControllerMisdirectedRequestRetry,
   if (enable_alternative_services) {
     quic_data_ = std::make_unique<MockQuicData>(version_);
     quic_data_->AddConnect(SYNCHRONOUS, OK);
-    if (version_.UsesHttp3()) {
-      quic_data_->AddWrite(SYNCHRONOUS,
-                           client_maker_.MakeInitialSettingsPacket(1));
-    }
+    quic_data_->AddWrite(SYNCHRONOUS,
+                         client_maker_.MakeInitialSettingsPacket(1));
     quic_data_->AddRead(ASYNC, ERR_CONNECTION_CLOSED);
   }
   tcp_data_ = std::make_unique<SequencedSocketData>();
@@ -3567,7 +4518,7 @@ TEST_P(HttpStreamFactoryJobControllerMisdirectedRequestRetry,
   }
 
   // |main_job| succeeds and should report status to Request.
-  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _));
+  EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _));
   base::RunLoop().RunUntilIdle();
 }
 
@@ -3599,8 +4550,8 @@ class HttpStreamFactoryJobControllerPreconnectTest
         /* is_websocket = */ false,
         /* enable_ip_based_pooling = */ true,
         /* enable_alternative_services = */ true,
-        /* delay_main_job_with_available_spdy_session = */ true, SSLConfig(),
-        SSLConfig());
+        /* delay_main_job_with_available_spdy_session = */ true,
+        /*allowed_bad_certs=*/std::vector<SSLConfig::CertAndStatus>());
     job_controller_ = job_controller.get();
     HttpStreamFactoryPeer::AddJobController(factory_,
                                             std::move(job_controller));
@@ -3754,8 +4705,7 @@ void HttpStreamFactoryJobControllerTestBase::TestAltSvcVersionSelection(
   NetworkIsolationKey network_isolation_key(
       SchemefulSite(GURL("https://example.com")),
       SchemefulSite(GURL("https://example.com")));
-  NetworkAnonymizationKey network_anonymization_key(
-      SchemefulSite(GURL("https://example.com")),
+  auto network_anonymization_key = NetworkAnonymizationKey::CreateSameSite(
       SchemefulSite(GURL("https://example.com")));
   request_info.network_isolation_key = network_isolation_key;
   request_info.network_anonymization_key = network_anonymization_key;
@@ -3786,30 +4736,28 @@ TEST_P(HttpStreamFactoryJobControllerTest,
       "h3-Q050=\":443\"; ma=2592000,"
       "h3-Q049=\":443\"; ma=2592000,"
       "h3-Q048=\":443\"; ma=2592000,"
-      "h3-Q046=\":443\"; ma=2592000,"
-      "h3-Q043=\":443\"; ma=2592000,",
+      "h3-Q046=\":443\"; ma=2592000,",
       quic::ParsedQuicVersion::Q050(), quic::AllSupportedVersions());
 }
 
 TEST_P(HttpStreamFactoryJobControllerTest,
        AltSvcVersionSelectionFindsFirstMatchInverse) {
   TestAltSvcVersionSelection(
-      "h3-Q043=\":443\"; ma=2592000,"
       "h3-Q046=\":443\"; ma=2592000,"
       "h3-Q048=\":443\"; ma=2592000,"
       "h3-Q049=\":443\"; ma=2592000,",
-      quic::ParsedQuicVersion::Q043(), quic::AllSupportedVersions());
+      quic::ParsedQuicVersion::Q046(), quic::AllSupportedVersions());
 }
 
 TEST_P(HttpStreamFactoryJobControllerTest,
        AltSvcVersionSelectionWithInverseOrderingNewFormat) {
-  // Server prefers Q043 but client prefers Q046.
+  // Server prefers Q046 but client prefers Q050.
   TestAltSvcVersionSelection(
-      "h3-Q043=\":443\"; ma=2592000,"
-      "h3-Q046=\":443\"; ma=2592000",
-      quic::ParsedQuicVersion::Q043(),
-      quic::ParsedQuicVersionVector{quic::ParsedQuicVersion::Q046(),
-                                    quic::ParsedQuicVersion::Q043()});
+      "h3-Q046=\":443\"; ma=2592000,"
+      "h3-Q050=\":443\"; ma=2592000",
+      quic::ParsedQuicVersion::Q046(),
+      quic::ParsedQuicVersionVector{quic::ParsedQuicVersion::Q050(),
+                                    quic::ParsedQuicVersion::Q046()});
 }
 
 // Tests that if HttpNetworkSession has a non-empty QUIC host allowlist,
@@ -3874,8 +4822,10 @@ TEST_P(HttpStreamFactoryJobControllerTest, QuicHostAllowlist) {
 class HttpStreamFactoryJobControllerDnsHttpsAlpnTest
     : public HttpStreamFactoryJobControllerTestBase {
  protected:
-  HttpStreamFactoryJobControllerDnsHttpsAlpnTest()
-      : HttpStreamFactoryJobControllerTestBase(true) {}
+  explicit HttpStreamFactoryJobControllerDnsHttpsAlpnTest(
+      std::vector<base::test::FeatureRef> enabled_features = {})
+      : HttpStreamFactoryJobControllerTestBase(true,
+                                               std::move(enabled_features)) {}
 
   void SetUp() override { SkipCreatingJobController(); }
 
@@ -3895,7 +4845,7 @@ class HttpStreamFactoryJobControllerDnsHttpsAlpnTest
     HostResolverEndpointResult endpoint_result1;
     endpoint_result1.ip_endpoints = {IPEndPoint(IPAddress::IPv4Localhost(), 0)};
     endpoint_result1.metadata.supported_protocol_alpns = {
-        quic::QuicVersionLabelToString(quic::CreateQuicVersionLabel(version_))};
+        quic::AlpnForVersion(version_)};
 
     HostResolverEndpointResult endpoint_result2;
     endpoint_result2.ip_endpoints = {IPEndPoint(IPAddress::IPv4Localhost(), 0)};
@@ -3951,7 +4901,8 @@ class HttpStreamFactoryJobControllerDnsHttpsAlpnTest
                            expect_stream_ready);
   }
 
-  void MakeQuicJobScceed(size_t index, bool expect_stream_ready) {
+  void MakeQuicJobSucceed(size_t index, bool expect_stream_ready) {
+    base::RunLoop().RunUntilIdle();
     ASSERT_GT(crypto_client_stream_factory_.streams().size(), index);
     MockCryptoClientStream* stream =
         crypto_client_stream_factory_.streams()[index].get();
@@ -3959,13 +4910,13 @@ class HttpStreamFactoryJobControllerDnsHttpsAlpnTest
 
     if (expect_stream_ready) {
       base::RunLoop run_loop;
-      EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _))
+      EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _))
           .Times(1)
           .WillOnce(Invoke([&run_loop]() { run_loop.Quit(); }));
       stream->NotifySessionOneRttKeyAvailable();
       run_loop.Run();
     } else {
-      EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _)).Times(0);
+      EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _)).Times(0);
       stream->NotifySessionOneRttKeyAvailable();
       base::RunLoop().RunUntilIdle();
     }
@@ -4013,6 +4964,7 @@ class HttpStreamFactoryJobControllerDnsHttpsAlpnTest
                  base::BindLambdaForTesting([&quic_request_result](int result) {
                    quic_request_result = result;
                  })));
+    base::RunLoop().RunUntilIdle();
     CHECK_EQ(1u, crypto_client_stream_factory_.streams().size());
     CHECK(crypto_client_stream_factory_.streams()[0]);
     crypto_client_stream_factory_.streams()[0]
@@ -4036,7 +4988,8 @@ class HttpStreamFactoryJobControllerDnsHttpsAlpnTest
         NetworkAnonymizationKey());
   }
 
-  raw_ptr<HttpStreamFactory::JobController> job_controller2_ = nullptr;
+  raw_ptr<HttpStreamFactory::JobController, AcrossTasksDanglingUntriaged>
+      job_controller2_ = nullptr;
 
   MockHttpStreamRequestDelegate request_delegate2_;
 
@@ -4050,20 +5003,23 @@ class HttpStreamFactoryJobControllerDnsHttpsAlpnTest
   }
 
   void CreateJobControllerImpl(
-      raw_ptr<HttpStreamFactory::JobController>* job_controller,
+      raw_ptr<HttpStreamFactory::JobController, AcrossTasksDanglingUntriaged>*
+          job_controller,
       MockHttpStreamRequestDelegate* request_delegate,
       const HttpRequestInfo& request_info) {
     auto controller = std::make_unique<HttpStreamFactory::JobController>(
         factory_, request_delegate, session_.get(), &default_job_factory_,
-        request_info, is_preconnect_, false /* is_websocket */,
+        request_info, is_preconnect_, /*is_websocket=*/false,
         enable_ip_based_pooling_, enable_alternative_services_,
-        delay_main_job_with_available_spdy_session_, SSLConfig(), SSLConfig());
+        delay_main_job_with_available_spdy_session_,
+        /*allowed_bad_certs=*/std::vector<SSLConfig::CertAndStatus>());
     *job_controller = controller.get();
     HttpStreamFactoryPeer::AddJobController(factory_, std::move(controller));
   }
 
   std::unique_ptr<HttpStreamRequest> CreateJobControllerAndStartImpl(
-      raw_ptr<HttpStreamFactory::JobController>* job_controller,
+      raw_ptr<HttpStreamFactory::JobController, AcrossTasksDanglingUntriaged>*
+          job_controller,
       MockHttpStreamRequestDelegate* request_delegate,
       const HttpRequestInfo& request_info) {
     CreateJobControllerImpl(job_controller, request_delegate, request_info);
@@ -4086,11 +5042,10 @@ class HttpStreamFactoryJobControllerDnsHttpsAlpnTest
         MockCryptoClientStream::COLD_START);
     *quic_data = std::make_unique<MockQuicData>(version_);
     (*quic_data)->AddRead(SYNCHRONOUS, ERR_IO_PENDING);
-    if (version_.UsesHttp3()) {
-      (*quic_data)
-          ->AddWrite(SYNCHRONOUS, CreateQuicTestPacketMakerForClient()
-                                      .MakeInitialSettingsPacket(1));
-    }
+    (*quic_data)
+        ->AddWrite(
+            SYNCHRONOUS,
+            CreateQuicTestPacketMakerForClient().MakeInitialSettingsPacket(1));
   }
 
   void PrepareForQuicJobFailureImpl(std::unique_ptr<MockQuicData>* quic_data) {
@@ -4106,13 +5061,13 @@ class HttpStreamFactoryJobControllerDnsHttpsAlpnTest
                               bool expect_stream_ready) {
     if (expect_stream_ready) {
       base::RunLoop run_loop;
-      EXPECT_CALL(request_delegate, OnStreamReadyImpl(_, _, _))
+      EXPECT_CALL(request_delegate, OnStreamReadyImpl(_, _))
           .Times(1)
           .WillOnce(Invoke([&run_loop]() { run_loop.Quit(); }));
       tcp_data->socket()->OnConnectComplete(MockConnect());
       run_loop.Run();
     } else {
-      EXPECT_CALL(request_delegate, OnStreamReadyImpl(_, _, _)).Times(0);
+      EXPECT_CALL(request_delegate, OnStreamReadyImpl(_, _)).Times(0);
       tcp_data->socket()->OnConnectComplete(MockConnect());
       base::RunLoop().RunUntilIdle();
     }
@@ -4273,13 +5228,14 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
   CheckJobsStatus(/*main_job_exists=*/true, /*alternative_job_exists=*/false,
                   /*dns_alpn_h3_job_exists=*/true,
                   "Main job and DNS ALPN job must be created.");
-  // |main_job| is not blocked, because the hostname is resolved synchronously
-  // and |is_quic_known_to_work_on_current_network| is false for this test.
-  EXPECT_FALSE(job_controller_->main_job()->is_waiting());
+  // `dns_alpn_h3_job` should not be waiting for dns host
+  // resolution as that was resolved synchronously.
+  EXPECT_FALSE(job_controller_->dns_alpn_h3_job()
+                   ->expect_on_quic_host_resolution_for_tests());
 
   base::HistogramTester histogram_tester;
   // Make |dns_alpn_h3_job| succeed.
-  MakeQuicJobScceed(0, /*expect_stream_ready=*/true);
+  MakeQuicJobSucceed(0, /*expect_stream_ready=*/true);
   histogram_tester.ExpectUniqueSample(
       "Net.AlternateProtocolUsage",
       ALTERNATE_PROTOCOL_USAGE_DNS_ALPN_H3_JOB_WON_RACE, 1);
@@ -4327,7 +5283,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
 
   base::HistogramTester histogram_tester;
   // Make |dns_alpn_h3_job| succeed.
-  MakeQuicJobScceed(0, /*expect_stream_ready=*/true);
+  MakeQuicJobSucceed(0, /*expect_stream_ready=*/true);
   histogram_tester.ExpectUniqueSample(
       "Net.AlternateProtocolUsage",
       ALTERNATE_PROTOCOL_USAGE_DNS_ALPN_H3_JOB_WON_RACE, 1);
@@ -4371,7 +5327,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
 
   base::HistogramTester histogram_tester;
   // Make |dns_alpn_h3_job| succeed.
-  MakeQuicJobScceed(0, /*expect_stream_ready=*/true);
+  MakeQuicJobSucceed(0, /*expect_stream_ready=*/true);
   histogram_tester.ExpectUniqueSample(
       "Net.AlternateProtocolUsage",
       ALTERNATE_PROTOCOL_USAGE_DNS_ALPN_H3_JOB_WON_RACE, 1);
@@ -4412,7 +5368,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
   EXPECT_TRUE(job_controller_->dns_alpn_h3_job());
 
   // Make |dns_alpn_h3_job| complete.
-  MakeQuicJobScceed(0, /*expect_stream_ready=*/false);
+  MakeQuicJobSucceed(0, /*expect_stream_ready=*/false);
 
   request_.reset();
   EXPECT_TRUE(HttpStreamFactoryPeer::IsJobControllerDeleted(factory_));
@@ -4436,7 +5392,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
 
   // Put a SpdySession in the pool.
   SpdySessionKey key(HostPortPair::FromURL(request_info.url),
-                     ProxyServer::Direct(), PRIVACY_MODE_DISABLED,
+                     ProxyChain::Direct(), PRIVACY_MODE_DISABLED,
                      SpdySessionKey::IsProxySession::kFalse, SocketTag(),
                      NetworkAnonymizationKey(), SecureDnsPolicy::kAllow);
   std::ignore = CreateFakeSpdySession(session_->spdy_session_pool(), key);
@@ -4456,7 +5412,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
   // reported to Request.
   {
     base::RunLoop run_loop;
-    EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _))
+    EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _))
         .Times(1)
         .WillOnce(Invoke([&run_loop]() { run_loop.Quit(); }));
     run_loop.Run();
@@ -4470,7 +5426,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
                   "DNS ALPN job must be alive");
 
   // Make |dns_alpn_h3_job| succeed.
-  MakeQuicJobScceed(0, /*expect_stream_ready=*/false);
+  MakeQuicJobSucceed(0, /*expect_stream_ready=*/false);
   CheckJobsStatus(/*main_job_exists=*/true, /*alternative_job_exists=*/false,
                   /*dns_alpn_h3_job_exists=*/false,
                   "DNS ALPN job must be deleted");
@@ -4596,8 +5552,9 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
 
   Initialize(HttpRequestInfo());
 
-  auto stream = ConnectQuicHttpStream(/*alt_destination=*/true,
-                                      /*require_dns_https_alpn=*/false);
+  std::unique_ptr<QuicHttpStream> stream =
+      ConnectQuicHttpStream(/*alt_destination=*/true,
+                            /*require_dns_https_alpn=*/false);
 
   url::SchemeHostPort server(request_info.url);
   AlternativeService alternative_service(kProtoQUIC, "alt.example.org", 443);
@@ -4616,7 +5573,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
   // reported to Request.
   {
     base::RunLoop run_loop;
-    EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _))
+    EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _))
         .Times(1)
         .WillOnce(Invoke([&run_loop]() { run_loop.Quit(); }));
     run_loop.Run();
@@ -4639,8 +5596,9 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
 
   Initialize(HttpRequestInfo());
 
-  auto stream = ConnectQuicHttpStream(/*alt_destination=*/false,
-                                      /*require_dns_https_alpn=*/true);
+  std::unique_ptr<QuicHttpStream> stream =
+      ConnectQuicHttpStream(/*alt_destination=*/false,
+                            /*require_dns_https_alpn=*/true);
   request_ = CreateJobControllerAndStart(CreateTestHttpRequestInfo());
 
   CheckJobsStatus(/*main_job_exists=*/false, /*alternative_job_exists=*/false,
@@ -4652,7 +5610,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
   // reported to Request.
   {
     base::RunLoop run_loop;
-    EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _))
+    EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _))
         .Times(1)
         .WillOnce(Invoke([&run_loop]() { run_loop.Quit(); }));
     run_loop.Run();
@@ -4679,13 +5637,14 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
 
   // Put a SpdySession in the pool.
   SpdySessionKey key(HostPortPair::FromURL(request_info.url),
-                     ProxyServer::Direct(), PRIVACY_MODE_DISABLED,
+                     ProxyChain::Direct(), PRIVACY_MODE_DISABLED,
                      SpdySessionKey::IsProxySession::kFalse, SocketTag(),
                      NetworkAnonymizationKey(), SecureDnsPolicy::kAllow);
   std::ignore = CreateFakeSpdySession(session_->spdy_session_pool(), key);
 
-  auto stream = ConnectQuicHttpStream(/*alt_destination=*/false,
-                                      /*require_dns_https_alpn=*/true);
+  std::unique_ptr<QuicHttpStream> stream =
+      ConnectQuicHttpStream(/*alt_destination=*/false,
+                            /*require_dns_https_alpn=*/true);
   request_ = CreateJobControllerAndStart(CreateTestHttpRequestInfo());
 
   CheckJobsStatus(/*main_job_exists=*/false, /*alternative_job_exists=*/false,
@@ -4697,7 +5656,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
   // reported to Request.
   {
     base::RunLoop run_loop;
-    EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _, _))
+    EXPECT_CALL(request_delegate_, OnStreamReadyImpl(_, _))
         .Times(1)
         .WillOnce(Invoke([&run_loop]() { run_loop.Quit(); }));
     run_loop.Run();
@@ -4715,7 +5674,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
 }
 
 TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
-       DonotStartDnsAlpnH3JobWhenSameHostDefaultPortAltJobCreated) {
+       DoNotStartDnsAlpnH3JobWhenSameHostDefaultPortAltJobCreated) {
   PrepareForMainJob();
   PrepareForFirstQuicJob();
 
@@ -4736,6 +5695,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
       true, true, false,
       "All types of jobs are created, but DNS alpn job must be deleted");
 
+  base::RunLoop().RunUntilIdle();
   base::HistogramTester histogram_tester;
   // Make |main_job| succeed.
   MakeMainJobSucceed(/*expect_stream_ready=*/true);
@@ -4748,7 +5708,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
                   "Alternate job must not be deleted");
 
   // Make |alternative_job| succeed.
-  MakeQuicJobScceed(0, /*expect_stream_ready=*/false);
+  MakeQuicJobSucceed(0, /*expect_stream_ready=*/false);
 
   request_.reset();
   EXPECT_TRUE(HttpStreamFactoryPeer::IsJobControllerDeleted(factory_));
@@ -4783,6 +5743,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
                   "All types of jobs are created");
 
   base::HistogramTester histogram_tester;
+  base::RunLoop().RunUntilIdle();
   MakeMainJobSucceed(/*expect_stream_ready=*/true);
   histogram_tester.ExpectUniqueSample(
       "Net.AlternateProtocolUsage", ALTERNATE_PROTOCOL_USAGE_MAIN_JOB_WON_RACE,
@@ -4794,13 +5755,13 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
                   /*dns_alpn_h3_job_exists=*/true, "Jobs must not be deleted.");
 
   // Make |alternative_job| succeed.
-  MakeQuicJobScceed(0, /*expect_stream_ready=*/false);
+  MakeQuicJobSucceed(0, /*expect_stream_ready=*/false);
   CheckJobsStatus(/*main_job_exists=*/true, /*alternative_job_exists=*/false,
                   /*dns_alpn_h3_job_exists=*/true,
                   "Alternate job must be deleted.");
 
   // Make |dns_alpn_h3_job| succeed.
-  MakeQuicJobScceed(1, /*expect_stream_ready=*/false);
+  MakeQuicJobSucceed(1, /*expect_stream_ready=*/false);
   CheckJobsStatus(/*main_job_exists=*/true, /*alternative_job_exists=*/false,
                   /*dns_alpn_h3_job_exists=*/false,
                   "DNS alpn job must be deleted.");
@@ -4834,7 +5795,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
 
   base::HistogramTester histogram_tester;
   // Make |alternative_job| succeed.
-  MakeQuicJobScceed(0, /*expect_stream_ready=*/true);
+  MakeQuicJobSucceed(0, /*expect_stream_ready=*/true);
   histogram_tester.ExpectUniqueSample("Net.AlternateProtocolUsage",
                                       ALTERNATE_PROTOCOL_USAGE_WON_RACE, 1);
 
@@ -4844,7 +5805,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
                   /*dns_alpn_h3_job_exists=*/true, "Jobs must not be deleted.");
 
   // Make |dns_alpn_h3_job| succeed.
-  MakeQuicJobScceed(1, /*expect_stream_ready=*/false);
+  MakeQuicJobSucceed(1, /*expect_stream_ready=*/false);
 
   // The success of |dns_alpn_h3_job| doesn't delete |main_job| and
   // |alternative_job|.
@@ -4889,7 +5850,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
 
   base::HistogramTester histogram_tester;
   // Make |dns_alpn_h3_job| succeed.
-  MakeQuicJobScceed(1, /*expect_stream_ready=*/true);
+  MakeQuicJobSucceed(1, /*expect_stream_ready=*/true);
   histogram_tester.ExpectUniqueSample(
       "Net.AlternateProtocolUsage",
       ALTERNATE_PROTOCOL_USAGE_DNS_ALPN_H3_JOB_WON_RACE, 1);
@@ -4900,7 +5861,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
                   /*dns_alpn_h3_job_exists=*/true, "Jobs must not be deleted.");
 
   // Make |alternative_job| succeed.
-  MakeQuicJobScceed(0, /*expect_stream_ready=*/false);
+  MakeQuicJobSucceed(0, /*expect_stream_ready=*/false);
 
   // The success of |alternative_job| doesn't delete |main_job| and
   // |dns_alpn_h3_job|.
@@ -4938,6 +5899,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
   CheckJobsStatus(/*main_job_exists=*/true, /*alternative_job_exists=*/false,
                   /*dns_alpn_h3_job_exists=*/true, "Jobs must not be deleted.");
 
+  base::RunLoop().RunUntilIdle();
   base::HistogramTester histogram_tester;
   // Make |dns_alpn_h3_job| fail.
   quic_data_->Resume();
@@ -4987,7 +5949,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
   JobControllerPeer::SetDnsAlpnH3JobFailedOnDefaultNetwork(job_controller_);
   CheckJobsStatus(/*main_job_exists=*/true, /*alternative_job_exists=*/false,
                   /*dns_alpn_h3_job_exists=*/true, "Jobs must not be deleted.");
-
+  base::RunLoop().RunUntilIdle();
   // Make |main_job| succeed.
   MakeMainJobSucceed(/*expect_stream_ready=*/true);
   histogram_tester.ExpectUniqueSample(
@@ -4999,7 +5961,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
                   "DNS alpn job must not be deleted.");
 
   // Make |dns_alpn_h3_job| succeed.
-  MakeQuicJobScceed(0, /*expect_stream_ready=*/false);
+  MakeQuicJobSucceed(0, /*expect_stream_ready=*/false);
 
   request_.reset();
   histogram_tester.ExpectTotalCount("Net.AlternateServiceForDnsAlpnH3Failed",
@@ -5029,7 +5991,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
 
   base::HistogramTester histogram_tester;
   // Make |dns_alpn_h3_job| succeed.
-  MakeQuicJobScceed(0, /*expect_stream_ready=*/true);
+  MakeQuicJobSucceed(0, /*expect_stream_ready=*/true);
   histogram_tester.ExpectUniqueSample(
       "Net.AlternateProtocolUsage",
       ALTERNATE_PROTOCOL_USAGE_DNS_ALPN_H3_JOB_WON_RACE, 1);
@@ -5063,7 +6025,7 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
 
   base::HistogramTester histogram_tester;
   // Make |dns_alpn_h3_job| succeed.
-  MakeQuicJobScceed(0, /*expect_stream_ready=*/true);
+  MakeQuicJobSucceed(0, /*expect_stream_ready=*/true);
   histogram_tester.ExpectUniqueSample(
       "Net.AlternateProtocolUsage",
       ALTERNATE_PROTOCOL_USAGE_DNS_ALPN_H3_JOB_WON_RACE, 1);
@@ -5098,7 +6060,39 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest, PreconnectDnsAlpnH3) {
   EXPECT_EQ(HttpStreamFactory::PRECONNECT_DNS_ALPN_H3,
             job_controller_->main_job()->job_type());
 
-  MakeQuicJobScceed(0, /*expect_stream_ready=*/false);
+  MakeQuicJobSucceed(0, /*expect_stream_ready=*/false);
+
+  base::RunLoop().RunUntilIdle();
+  EXPECT_TRUE(HttpStreamFactoryPeer::IsJobControllerDeleted(factory_));
+}
+
+TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
+       PreconnectAltSvcAvailableActiveSessionAvailable) {
+  SetPreconnect();
+  PrepareForFirstQuicJob();
+
+  HttpRequestInfo request_info = CreateTestHttpRequestInfo();
+
+  RegisterMockHttpsRecord();
+  Initialize(request_info);
+
+  // Register Alt-Svc info.
+  url::SchemeHostPort server(request_info.url);
+  AlternativeService alternative_service(kProtoQUIC, server.host(), 443);
+  SetAlternativeService(request_info, alternative_service);
+
+  // Create an active session of require_dns_https_alpn = true.
+  std::unique_ptr<QuicHttpStream> stream =
+      ConnectQuicHttpStream(/*alt_destination=*/false,
+                            /*require_dns_https_alpn=*/true);
+
+  CreateJobController(request_info);
+  // Preconnect must succeed using the existing session.
+  job_controller_->Preconnect(/*num_streams=*/1);
+  ASSERT_TRUE(job_controller_->main_job());
+  EXPECT_EQ(HttpStreamFactory::PRECONNECT_DNS_ALPN_H3,
+            job_controller_->main_job()->job_type());
+  MakeQuicJobSucceed(0, /*expect_stream_ready=*/false);
 
   base::RunLoop().RunUntilIdle();
   EXPECT_TRUE(HttpStreamFactoryPeer::IsJobControllerDeleted(factory_));
@@ -5132,6 +6126,61 @@ TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest, PreconnectNoDnsAlpnH3) {
   MakeMainJobSucceed(/*expect_stream_ready=*/false);
   base::RunLoop().RunUntilIdle();
 
+  EXPECT_TRUE(HttpStreamFactoryPeer::IsJobControllerDeleted(factory_));
+}
+
+// Test that, when an Alt-Svc-based preconnect fails with
+// `ERR_DNS_NO_MATCHING_SUPPORTED_ALPN`, the job controller handles it
+// correctly. This is a regression test for https://crbug.com/1420202.
+//
+// In a general HTTPS-RR implementation, this may happen simply because there
+// was no A/AAAA route. However, we do not implement HTTPS-RR in full yet (see
+// https://crbug.com/1417033), so instead this is only possible in a corner case
+// with ECH.
+TEST_F(HttpStreamFactoryJobControllerDnsHttpsAlpnTest,
+       PreconnectAlternateNoDnsAlpn) {
+  const char kAlternateHost[] = "alt.example.com";
+
+  EnableOndemandHostResolver();
+  PrepareForMainJob();
+  SetPreconnect();
+
+  // Register a mock HTTPS record where the HTTPS-RR route is only good for h2,
+  // which is incompatible with Alt-Svc. The A/AAAA route would be compatible,
+  // but the server supports ECH, so we enable SVCB-reliant mode and reject it.
+  // As a result, the alternate job will fail.
+  HostResolverEndpointResult endpoint_result1;
+  endpoint_result1.ip_endpoints = {IPEndPoint(IPAddress::IPv4Localhost(), 0)};
+  endpoint_result1.metadata.ech_config_list = {1, 2, 3, 4};
+  endpoint_result1.metadata.supported_protocol_alpns = {"h2"};
+  HostResolverEndpointResult endpoint_result2;
+  endpoint_result2.ip_endpoints = {IPEndPoint(IPAddress::IPv4Localhost(), 0)};
+  session_deps_.host_resolver->rules()->AddRule(
+      kAlternateHost,
+      MockHostResolverBase::RuleResolver::RuleResult(
+          {endpoint_result1, endpoint_result2}, {kAlternateHost}));
+
+  HttpRequestInfo request_info = CreateTestHttpRequestInfo();
+  Initialize(request_info);
+  CreateJobController(request_info);
+
+  url::SchemeHostPort server(request_info.url);
+  AlternativeService alternative_service(kProtoQUIC, kAlternateHost, 443);
+  SetAlternativeService(request_info, alternative_service);
+
+  job_controller_->Preconnect(/*num_streams=*/1);
+  // Only one job is started.
+  EXPECT_TRUE(job_controller_->main_job());
+  EXPECT_FALSE(job_controller_->alternative_job());
+  EXPECT_EQ(HttpStreamFactory::PRECONNECT,
+            job_controller_->main_job()->job_type());
+
+  // Resolve the DNS request.
+  session_deps_.host_resolver->ResolveAllPending();
+  base::RunLoop().RunUntilIdle();
+
+  // The jobs should have failed. We currently do not try the non-Alt-Svc route
+  // in preconnects if Alt-Svc failed.
   EXPECT_TRUE(HttpStreamFactoryPeer::IsJobControllerDeleted(factory_));
 }
 

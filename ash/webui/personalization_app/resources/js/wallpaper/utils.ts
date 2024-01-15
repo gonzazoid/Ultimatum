@@ -4,20 +4,19 @@
 
 /** @fileoverview Wallpaper related utility functions in personalization app */
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {isNonEmptyArray, isNonEmptyFilePath} from 'chrome://resources/ash/common/sea_pen/sea_pen_utils.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {FilePath} from 'chrome://resources/mojo/mojo/public/mojom/base/file_path.mojom-webui.js';
 
-import {CurrentWallpaper, GooglePhotosPhoto, WallpaperImage, WallpaperLayout, WallpaperType} from '../personalization_app.mojom-webui.js';
-import {getNumberOfGridItemsPerRow} from '../utils.js';
+import {CurrentAttribution, CurrentWallpaper, GooglePhotosAlbum, GooglePhotosPhoto, WallpaperImage, WallpaperLayout, WallpaperType} from '../../personalization_app.mojom-webui.js';
+import {getNumberOfGridItemsPerRow, isNonEmptyString} from '../utils.js';
 
 import {DefaultImageSymbol, DisplayableImage, kDefaultImageSymbol} from './constants.js';
+import {DailyRefreshState} from './wallpaper_state.js';
 
 export function isWallpaperImage(obj: any): obj is WallpaperImage {
-  return !!obj && typeof obj.assetId === 'bigint';
-}
-
-export function isFilePath(obj: any): obj is FilePath {
-  return !!obj && typeof obj.path === 'string' && obj.path;
+  return !!obj && typeof obj.unitId === 'bigint';
 }
 
 export function isDefaultImage(obj: any): obj is DefaultImageSymbol {
@@ -33,12 +32,12 @@ export function isGooglePhotosPhoto(obj: any): obj is GooglePhotosPhoto {
 export function isImageAMatchForKey(
     image: DisplayableImage, key: string|DefaultImageSymbol): boolean {
   if (isWallpaperImage(image)) {
-    return key === image.assetId.toString();
+    return key === image.unitId.toString();
   }
   if (isDefaultImage(image)) {
     return key === kDefaultImageSymbol;
   }
-  if (isFilePath(image)) {
+  if (isNonEmptyFilePath(image)) {
     return key === image.path;
   }
   assert(isGooglePhotosPhoto(image));
@@ -70,7 +69,7 @@ export function isImageEqualToSelected(
  */
 export function getPathOrSymbol(image: FilePath|DefaultImageSymbol): string|
     DefaultImageSymbol {
-  if (isFilePath(image)) {
+  if (isNonEmptyFilePath(image)) {
     return image.path;
   }
   assert(image === kDefaultImageSymbol, 'only one symbol should be present');
@@ -104,7 +103,7 @@ export function getLoadingPlaceholderAnimationDelay(index: number): string {
  */
 export function getLoadingPlaceholders<T>(factory: () => T): T[] {
   const x = getNumberOfGridItemsPerRow();
-  const y = Math.floor(window.innerHeight / /*tileHeightPx=*/ 136);
+  const y = Math.max(Math.floor(window.innerHeight / /*tileHeightPx=*/ 136), 2);
   return Array.from({length: x * y}, factory);
 }
 
@@ -123,6 +122,49 @@ export function getLocalStorageAttribution(key: string): string[] {
 }
 
 /**
+ * Get the aria label of the currently selected wallpaper.
+ */
+export function getWallpaperAriaLabel(
+    image: CurrentWallpaper|null, attribution: CurrentAttribution|null,
+    dailyRefreshState: DailyRefreshState|null): string {
+  if (!image || !attribution || image.key !== attribution.key) {
+    return `${loadTimeData.getString('currentlySet')} ${
+        loadTimeData.getString('unknownImageAttribution')}`;
+  }
+  if (image.type === WallpaperType.kDefault) {
+    return `${loadTimeData.getString('currentlySet')} ${
+        loadTimeData.getString('defaultWallpaper')}`;
+  }
+  const isDailyRefreshActive = !!dailyRefreshState;
+  if (isNonEmptyArray(attribution.attribution)) {
+    return isDailyRefreshActive ?
+        [
+          loadTimeData.getString('currentlySet'),
+          loadTimeData.getString('dailyRefresh'),
+          ...attribution.attribution,
+        ].join(' ') :
+        [
+          loadTimeData.getString('currentlySet'),
+          ...attribution.attribution,
+        ].join(' ');
+  }
+  // Fallback to cached attribution.
+  const cachedAttribution = getLocalStorageAttribution(image.key);
+  if (isNonEmptyArray(cachedAttribution)) {
+    return isDailyRefreshActive ?
+        [
+          loadTimeData.getString('currentlySet'),
+          loadTimeData.getString('dailyRefresh'),
+          ...attribution.attribution,
+        ].join(' ') :
+        [loadTimeData.getString('currentlySet'), ...cachedAttribution].join(
+            ' ');
+  }
+  return `${loadTimeData.getString('currentlySet')} ${
+      loadTimeData.getString('unknownImageAttribution')}`;
+}
+
+/**
  * Get a url to download a high quality preview of the current wallpaper.
  * Responds with null in case |image| is invalid or null.
  */
@@ -134,6 +176,26 @@ export function getWallpaperSrc(image: CurrentWallpaper|null): string|null {
     console.warn('Invalid image key received');
     return null;
   }
-  // Add a key query parameter to cache bust when the image changes.
-  return `/wallpaper.png?key=${encodeURIComponent(image.key)}`;
+  /**
+   * Add a key query parameter to cache bust when the image changes.
+   *
+   * TODO(b/276360067): UnitId is used as the key for online wallpaper images so
+   * we need to bust the cache to show the correct variant when it changes.
+   * Remove &timestamp param after b/276360067 is implemented.
+   */
+  return `/wallpaper.jpg?key=${encodeURIComponent(image.key)}&${Date.now()}`;
 }
+
+/**
+ * Finds and returns a Google Photos album from albums list with a matching id.
+ * Returns null in case invalid id or albums list or no album is found.
+ */
+export function findAlbumById(
+    albumId: string|undefined,
+    albums: GooglePhotosAlbum[]|null|undefined): GooglePhotosAlbum|null {
+  if (isNonEmptyString(albumId) && isNonEmptyArray(albums)) {
+    return albums.find(album => album.id === albumId) ?? null;
+  }
+  return null;
+}
+

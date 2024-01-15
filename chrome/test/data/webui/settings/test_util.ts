@@ -3,10 +3,10 @@
 // found in the LICENSE file.
 
 // clang-format off
-import {ChooserType, ContentSetting, ContentSettingProvider, ContentSettingsTypes, DefaultContentSetting, OriginInfo, RawChooserException, RawSiteException, SiteGroup, SiteSettingSource} from 'chrome://settings/lazy_load.js';
+import {StorageAccessEmbeddingException, StorageAccessSiteException, ChooserException, ChooserType, ContentSetting, ContentSettingProvider, ContentSettingsTypes, DefaultContentSetting, OriginInfo, PaperTooltipElement, RawChooserException, RawSiteException, SiteException, SiteGroup, SiteSettingSource} from 'chrome://settings/lazy_load.js';
 import {Route, Router} from 'chrome://settings/settings.js';
+import {assertEquals} from 'chrome://webui-test/chai_assert.js';
 // clang-format on
-
 
 /**
  * Helper to create an object containing a ContentSettingsType key to array or
@@ -119,6 +119,7 @@ export function createSiteSettingsPrefs(
     defaults[ContentSettingsTypes[type as keyof typeof ContentSettingsTypes]] =
         createDefaultContentSetting({});
   }
+  defaults[ContentSettingsTypes.ANTI_ABUSE].setting = ContentSetting.ALLOW;
   defaults[ContentSettingsTypes.COOKIES].setting = ContentSetting.ALLOW;
   defaults[ContentSettingsTypes.IMAGES].setting = ContentSetting.ALLOW;
   defaults[ContentSettingsTypes.JAVASCRIPT].setting = ContentSetting.ALLOW;
@@ -158,14 +159,28 @@ export function createSiteSettingsPrefs(
 }
 
 /**
+ * Creates a groupingKey that maps to the given id. This will not
+ * have the same internal format as the groupingKey returned by
+ * SiteSettingsHelper.
+ * @param id An id that can uniquely represent a SiteGroup.
+ */
+export function groupingKey(id: string): string {
+  // Base64 encode the id to make sure that if an eTLD+1 or origin is used
+  // somewhere instead of a groupingKey, it won't accidentally have the
+  // correct groupingKey value.
+  return btoa(id);
+}
+
+/**
  * Helper to create a mock SiteGroup.
- * @param eTLDPlus1Name The eTLD+1 of all the origins provided in |originList|.
+ * @param owningEntity The eTLD+1 or origin that owns this group.
+ * @param displayName The user-visible group name.
  * @param originList A list of the origins with the same eTLD+1.
  * @param mockUsage The override initial usage value for each origin in the site
  *     group.
  */
 export function createSiteGroup(
-    eTLDPlus1Name: string, originList: string[],
+    owningEntity: string|URL, displayName: string, originList: string[],
     mockUsage?: number): SiteGroup {
   if (mockUsage === undefined) {
     mockUsage = 0;
@@ -173,7 +188,9 @@ export function createSiteGroup(
   const originInfoList =
       originList.map((origin) => createOriginInfo(origin, {usage: mockUsage}));
   return {
-    etldPlus1: eTLDPlus1Name,
+    groupingKey: groupingKey(owningEntity.toString()),
+    etldPlus1: typeof owningEntity === 'string' ? owningEntity : undefined,
+    displayName,
     origins: originInfoList,
     numCookies: 0,
     hasInstalledPWA: false,
@@ -209,6 +226,8 @@ export function getContentSettingsTypeFromChooserType(chooserType: ChooserType):
       return ContentSettingsTypes.SERIAL_PORTS;
     case ChooserType.USB_DEVICES:
       return ContentSettingsTypes.USB_DEVICES;
+    case ChooserType.BLUETOOTH_DEVICES:
+      return ContentSettingsTypes.BLUETOOTH_DEVICES;
     default:
       return null;
   }
@@ -223,4 +242,108 @@ export function setupPopstateListener() {
             (routerInstance.getRoutes() as {BASIC: Route}).BASIC,
         new URLSearchParams(window.location.search), true);
   });
+}
+
+/**
+ * Helper to assert that a paper-tooltip element is visually hidden but still
+ * accessible by screen readers.
+ */
+export function assertTooltipIsHidden(tooltip: PaperTooltipElement) {
+  const tooltipStyle = window.getComputedStyle(tooltip);
+  assertEquals('rect(0px, 0px, 0px, 0px)', tooltipStyle.clip);
+  assertEquals('1px', tooltipStyle.height);
+  assertEquals('1px', tooltipStyle.width);
+  assertEquals('hidden', tooltipStyle.overflow);
+}
+
+/**
+ * Helper to create a mock SiteException.
+ * @param origin The origin to use for this SiteException.
+ * @param override An object with a subset of the properties of
+ *     SiteException. Properties defined in |override| will overwrite the
+ *     defaults in this function's return value.
+ */
+export function createSiteException(
+    origin: string, override?: Partial<SiteException>): SiteException {
+  return Object.assign(
+      {
+        category: ContentSettingsTypes.USB_DEVICES,
+        embeddingOrigin: origin,
+        incognito: false,
+        origin: origin,
+        displayName: origin,
+        setting: ContentSetting.DEFAULT,
+        settingDetail: null,
+        enforcement: null,
+        controlledBy: chrome.settingsPrivate.ControlledBy.PRIMARY_USER,
+        isEmbargoed: false,
+      },
+      override || {});
+}
+
+/**
+ * Helper to create a mock of a group of Storage Access Site Exceptions.
+ * @param origin The origin to use for this group.
+ * @param override An object with a subset of the properties of
+ *     StorageAccessSiteException. Properties defined in |override| will
+ * overwrite the defaults in this function's return value.
+ */
+export function createStorageAccessSiteException(
+    origin: string,
+    override?: Partial<StorageAccessSiteException>,
+    embeddingOrigin?: string,
+    ): StorageAccessSiteException {
+  return Object.assign(
+      {
+        origin: origin,
+        displayName: origin,
+        setting: ContentSetting.ALLOW,
+        openDescription: '',
+        closeDescription: '',
+        exceptions: [createStorageAccessEmbeddingException(
+            embeddingOrigin || 'google.com')],
+      },
+      override || {});
+}
+
+/**
+ * Helper to create a mock of an Storage Access embedding site exception.
+ * @param embeddingOrigin The embedding origin to use for this SiteException.
+ * @param override An object with a subset of the properties of
+ *     StorageAccessEmbeddingException. Properties defined in |override| will
+ * overwrite the defaults in this function's return value.
+ */
+export function createStorageAccessEmbeddingException(
+    embeddingOrigin: string,
+    override?: Partial<StorageAccessEmbeddingException>):
+    StorageAccessEmbeddingException {
+  return Object.assign(
+      {
+        embeddingOrigin: embeddingOrigin,
+        embeddingDisplayName: embeddingOrigin,
+        description: '',
+        incognito: false,
+      },
+      override || {});
+}
+
+/**
+ * Helper to create a mock ChooserException.
+ * @param chooserType The chooser exception type.
+ * @param sites A list of SiteExceptions corresponding to the chooser exception.
+ * @param override An object with a subset of the properties of
+ *     ChooserException. Properties defined in |override| will overwrite
+ *     the defaults in this function's return value.
+ */
+export function createChooserException(
+    chooserType: ChooserType, sites: SiteException[],
+    override?: Partial<ChooserException>): ChooserException {
+  return Object.assign(
+      {
+        chooserType: chooserType,
+        displayName: '',
+        object: {},
+        sites: sites,
+      },
+      override || {});
 }

@@ -4,6 +4,8 @@
 
 #include "components/performance_manager/graph/graph_impl_operations.h"
 
+#include "components/performance_manager/graph/frame_node_impl.h"
+#include "components/performance_manager/graph/page_node_impl.h"
 #include "components/performance_manager/graph/process_node_impl.h"
 
 namespace performance_manager {
@@ -46,6 +48,59 @@ std::vector<FrameNodeImpl*> GraphImplOperations::GetFrameNodes(
   }
 
   return frame_nodes;
+}
+
+// static
+bool GraphImplOperations::VisitFrameAndChildrenPreOrder(
+    FrameNodeImpl* frame,
+    GraphImplOperations::FrameNodeImplVisitor visitor) {
+  if (!visitor(frame)) {
+    return false;
+  }
+  for (auto* child : frame->child_frame_nodes()) {
+    if (!VisitFrameAndChildrenPreOrder(child, visitor)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// static
+bool GraphImplOperations::VisitFrameAndChildrenPostOrder(
+    FrameNodeImpl* frame,
+    GraphImplOperations::FrameNodeImplVisitor visitor) {
+  for (auto* child : frame->child_frame_nodes()) {
+    if (!VisitFrameAndChildrenPostOrder(child, visitor)) {
+      return false;
+    }
+  }
+  if (!visitor(frame)) {
+    return false;
+  }
+  return true;
+}
+
+// static
+bool GraphImplOperations::VisitFrameTreePreOrder(const PageNodeImpl* page,
+                                                 FrameNodeImplVisitor visitor) {
+  for (auto* main_frame_node : page->main_frame_nodes()) {
+    if (!VisitFrameAndChildrenPreOrder(main_frame_node, visitor)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// static
+bool GraphImplOperations::VisitFrameTreePostOrder(
+    const PageNodeImpl* page,
+    FrameNodeImplVisitor visitor) {
+  for (auto* main_frame_node : page->main_frame_nodes()) {
+    if (!VisitFrameAndChildrenPostOrder(main_frame_node, visitor)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 // static

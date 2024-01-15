@@ -4,7 +4,7 @@
 
 #import "ios/web_view/internal/safe_browsing/cwv_unsafe_url_handler_internal.h"
 
-#import "base/callback.h"
+#import "base/functional/callback.h"
 #import "base/memory/weak_ptr.h"
 #import "base/notreached.h"
 #import "components/safe_browsing/ios/browser/safe_browsing_url_allow_list.h"
@@ -13,10 +13,6 @@
 #import "ios/web/public/navigation/navigation_manager.h"
 #import "ios/web/public/web_state.h"
 #import "net/base/mac/url_conversions.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 CWVUnsafeURLThreatType CWVUnsafeURLThreatTypeFromSBThreatType(
     safe_browsing::SBThreatType threatType) {

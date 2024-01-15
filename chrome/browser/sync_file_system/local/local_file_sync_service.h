@@ -11,7 +11,7 @@
 #include <memory>
 #include <set>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
@@ -45,10 +45,8 @@ struct LocalFileSyncInfo;
 
 // Maintains local file change tracker and sync status.
 // Owned by SyncFileSystemService (which is a per-profile object).
-class LocalFileSyncService
-    : public RemoteChangeProcessor,
-      public LocalOriginChangeObserver,
-      public base::SupportsWeakPtr<LocalFileSyncService> {
+class LocalFileSyncService final : public RemoteChangeProcessor,
+                                   public LocalOriginChangeObserver {
  public:
   typedef base::RepeatingCallback<LocalChangeProcessor*(const GURL& origin)>
       GetLocalChangeProcessorCallback;
@@ -240,6 +238,7 @@ class LocalFileSyncService
   GetLocalChangeProcessorCallback get_local_change_processor_;
 
   base::ObserverList<Observer>::Unchecked change_observers_;
+  base::WeakPtrFactory<LocalFileSyncService> weak_ptr_factory_{this};
 };
 
 }  // namespace sync_file_system

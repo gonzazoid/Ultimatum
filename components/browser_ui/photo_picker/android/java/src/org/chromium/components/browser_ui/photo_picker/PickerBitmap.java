@@ -7,18 +7,13 @@ package org.chromium.components.browser_ui.photo_picker;
 import android.net.Uri;
 
 import androidx.annotation.IntDef;
-import androidx.annotation.VisibleForTesting;
-
-import org.chromium.base.ApiCompatibilityUtils;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.text.DateFormat;
 import java.util.Date;
 
-/**
- * A class to keep track of the meta data associated with a an image in the photo picker.
- */
+/** A class to keep track of the meta data associated with a an image in the photo picker. */
 public class PickerBitmap implements Comparable<PickerBitmap> {
     // The possible types of tiles involved in the viewer. Note that the values for PICTURE and
     // VIDEO matter, because they are used to prioritize still images over videos in the priority
@@ -39,11 +34,11 @@ public class PickerBitmap implements Comparable<PickerBitmap> {
     private long mLastModified;
 
     // The type of tile involved.
-    @TileTypes
-    private int mType;
+    @TileTypes private int mType;
 
     /**
      * The PickerBitmap constructor.
+     *
      * @param uri The URI for the bitmap to show.
      * @param lastModified When the bitmap was last modified on disk.
      * @param type The type of tile involved.
@@ -60,6 +55,7 @@ public class PickerBitmap implements Comparable<PickerBitmap> {
 
     /**
      * Accessor for the URI.
+     *
      * @return The URI for this PickerBitmap object.
      */
     public Uri getUri() {
@@ -68,6 +64,7 @@ public class PickerBitmap implements Comparable<PickerBitmap> {
 
     /**
      * Accessor for the filename.
+     *
      * @return The filename (without the extension and path).
      */
     public String getFilenameWithoutExtension() {
@@ -79,6 +76,7 @@ public class PickerBitmap implements Comparable<PickerBitmap> {
 
     /**
      * Accessor for the last modified date.
+     *
      * @return The last modified date in string format.
      */
     public String getLastModifiedString() {
@@ -87,6 +85,7 @@ public class PickerBitmap implements Comparable<PickerBitmap> {
 
     /**
      * Accessor for the tile type.
+     *
      * @return The type of tile involved for this bitmap object.
      */
     @TileTypes
@@ -96,19 +95,20 @@ public class PickerBitmap implements Comparable<PickerBitmap> {
 
     /**
      * A comparison function for PickerBitmaps (results in a last-modified first sort).
+     *
      * @param other The PickerBitmap to compare it to.
      * @return 0, 1, or -1, depending on which is bigger.
      */
     @Override
     public int compareTo(PickerBitmap other) {
-        return ApiCompatibilityUtils.compareLong(other.mLastModified, mLastModified);
+        return Long.compare(other.mLastModified, mLastModified);
     }
 
     /**
      * Accessor for the last modified date (for testing use only).
+     *
      * @return The last modified date.
      */
-    @VisibleForTesting
     public long getLastModifiedForTesting() {
         return mLastModified;
     }

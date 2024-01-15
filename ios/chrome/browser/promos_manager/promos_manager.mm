@@ -4,14 +4,9 @@
 
 #import "ios/chrome/browser/promos_manager/promos_manager.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 #pragma mark - Constructor/Destructor
 
 PromosManager::PromosManager() {}
-PromosManager::~PromosManager() {}
 
 #pragma mark - Internal APIs
 

@@ -8,6 +8,7 @@
 
 #include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/metrics/histogram_functions.h"
 #include "build/build_config.h"
 #include "chrome/browser/app_mode/app_mode_utils.h"
 #include "chrome/browser/ui/browser.h"
@@ -16,10 +17,29 @@
 #include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
 #include "chrome/browser/ui/exclusive_access/mouse_lock_controller.h"
 #include "chrome/common/chrome_switches.h"
-#include "content/public/browser/native_web_keyboard_event.h"
+#include "content/public/common/input/native_web_keyboard_event.h"
 #include "ui/events/keycodes/keyboard_codes.h"
 
 using content::WebContents;
+
+namespace {
+
+constexpr char kHistogramFullscreenLockStateAtEntryViaApi[] =
+    "WebCore.Fullscreen.LockStateAtEntryViaApi";
+constexpr char kHistogramFullscreenLockStateAtEntryViaBrowserUi[] =
+    "WebCore.Fullscreen.LockStateAtEntryViaBrowserUi";
+
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class LockState {
+  kUnlocked = 0,
+  kKeyboardLocked = 1,
+  kPointerLocked = 2,
+  kKeyboardAndPointerLocked = 3,
+  kMaxValue = kKeyboardAndPointerLocked,
+};
+
+}  // namespace
 
 ExclusiveAccessManager::ExclusiveAccessManager(
     ExclusiveAccessContext* exclusive_access_context)
@@ -28,8 +48,7 @@ ExclusiveAccessManager::ExclusiveAccessManager(
       keyboard_lock_controller_(this),
       mouse_lock_controller_(this) {}
 
-ExclusiveAccessManager::~ExclusiveAccessManager() {
-}
+ExclusiveAccessManager::~ExclusiveAccessManager() = default;
 
 ExclusiveAccessBubbleType
 ExclusiveAccessManager::GetExclusiveAccessExitBubbleType() const {
@@ -89,6 +108,17 @@ GURL ExclusiveAccessManager::GetExclusiveAccessBubbleURL() const {
   return result;
 }
 
+void ExclusiveAccessManager::RecordLockStateOnEnteringApiFullscreen() const {
+  RecordLockStateOnEnteringFullscreen(
+      kHistogramFullscreenLockStateAtEntryViaApi);
+}
+
+void ExclusiveAccessManager::RecordLockStateOnEnteringBrowserFullscreen()
+    const {
+  RecordLockStateOnEnteringFullscreen(
+      kHistogramFullscreenLockStateAtEntryViaBrowserUi);
+}
+
 void ExclusiveAccessManager::OnTabDeactivated(WebContents* web_contents) {
   fullscreen_controller_.OnTabDeactivated(web_contents);
   keyboard_lock_controller_.OnTabDeactivated(web_contents);
@@ -138,41 +168,17 @@ void ExclusiveAccessManager::ExitExclusiveAccess() {
   mouse_lock_controller_.LostMouseLock();
 }
 
-void ExclusiveAccessManager::RecordBubbleReshownUMA(
-    ExclusiveAccessBubbleType type) {
-  // Figure out whether fullscreen, mouselock, or keyboardlock is in effect.
-  bool fullscreen = false;
-  bool mouselock = false;
-  bool keyboardlock = false;
-  switch (type) {
-    case EXCLUSIVE_ACCESS_BUBBLE_TYPE_NONE:
-      // None in effect.
-      break;
-    case EXCLUSIVE_ACCESS_BUBBLE_TYPE_FULLSCREEN_EXIT_INSTRUCTION:
-    case EXCLUSIVE_ACCESS_BUBBLE_TYPE_BROWSER_FULLSCREEN_EXIT_INSTRUCTION:
-    case EXCLUSIVE_ACCESS_BUBBLE_TYPE_EXTENSION_FULLSCREEN_EXIT_INSTRUCTION:
-      // Only fullscreen in effect.
-      fullscreen = true;
-      break;
-    case EXCLUSIVE_ACCESS_BUBBLE_TYPE_KEYBOARD_LOCK_EXIT_INSTRUCTION:
-      fullscreen = true;
-      keyboardlock = true;
-      break;
-    case EXCLUSIVE_ACCESS_BUBBLE_TYPE_MOUSELOCK_EXIT_INSTRUCTION:
-      // Only mouselock in effect.
-      mouselock = true;
-      break;
-    case EXCLUSIVE_ACCESS_BUBBLE_TYPE_FULLSCREEN_MOUSELOCK_EXIT_INSTRUCTION:
-      // Both in effect.
-      fullscreen = true;
-      mouselock = true;
-      break;
+void ExclusiveAccessManager::RecordLockStateOnEnteringFullscreen(
+    const char histogram_name[]) const {
+  LockState lock_state = LockState::kUnlocked;
+  if (keyboard_lock_controller_.IsKeyboardLockActive()) {
+    if (mouse_lock_controller_.IsMouseLocked()) {
+      lock_state = LockState::kKeyboardAndPointerLocked;
+    } else {
+      lock_state = LockState::kKeyboardLocked;
+    }
+  } else if (mouse_lock_controller_.IsMouseLocked()) {
+    lock_state = LockState::kPointerLocked;
   }
-
-  if (fullscreen)
-    fullscreen_controller_.RecordBubbleReshownUMA();
-  if (mouselock)
-    mouse_lock_controller_.RecordBubbleReshownUMA();
-  if (keyboardlock)
-    keyboard_lock_controller_.RecordBubbleReshownUMA();
+  base::UmaHistogramEnumeration(histogram_name, lock_state);
 }

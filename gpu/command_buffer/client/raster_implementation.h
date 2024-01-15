@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include <optional>
 #include "base/memory/raw_ptr.h"
 #include "base/trace_event/memory_dump_provider.h"
 #include "cc/paint/paint_cache.h"
@@ -31,7 +32,6 @@
 #include "gpu/command_buffer/common/id_allocator.h"
 #include "gpu/command_buffer/common/raster_cmd_format.h"
 #include "gpu/raster_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace cc {
 class TransferCacheSerializeHelper;
@@ -114,28 +114,34 @@ class RASTER_EXPORT RasterImplementation : public RasterInterface,
 #include "gpu/command_buffer/client/raster_implementation_autogen.h"
 
   // RasterInterface implementation.
-  void CopySubTexture(const gpu::Mailbox& source_mailbox,
-                      const gpu::Mailbox& dest_mailbox,
-                      GLenum dest_target,
-                      GLint xoffset,
-                      GLint yoffset,
-                      GLint x,
-                      GLint y,
-                      GLsizei width,
-                      GLsizei height,
-                      GLboolean unpack_flip_y,
-                      GLboolean unpack_premultiply_alpha) override;
+  void CopySharedImage(const gpu::Mailbox& source_mailbox,
+                       const gpu::Mailbox& dest_mailbox,
+                       GLenum dest_target,
+                       GLint xoffset,
+                       GLint yoffset,
+                       GLint x,
+                       GLint y,
+                       GLsizei width,
+                       GLsizei height,
+                       GLboolean unpack_flip_y,
+                       GLboolean unpack_premultiply_alpha) override;
 
   void WritePixels(const gpu::Mailbox& dest_mailbox,
                    int dst_x_offset,
                    int dst_y_offset,
+                   int dst_plane_index,
                    GLenum texture_target,
-                   GLuint row_bytes,
-                   const SkImageInfo& src_info,
-                   const void* src_pixels) override;
+                   const SkPixmap& src_sk_pixmap) override;
+
+  void WritePixelsYUV(const gpu::Mailbox& dest_mailbox,
+                      const SkYUVAPixmaps& src_yuv_pixmap) override;
 
   void ConvertYUVAMailboxesToRGB(
       const gpu::Mailbox& dest_mailbox,
+      GLint src_x,
+      GLint src_y,
+      GLsizei width,
+      GLsizei height,
       SkYUVColorSpace planes_yuv_color_space,
       const SkColorSpace* planes_rgb_color_space,
       SkYUVAInfo::PlaneConfig plane_config,
@@ -155,6 +161,7 @@ class RASTER_EXPORT RasterImplementation : public RasterInterface,
                            GLboolean can_use_lcd_text,
                            GLboolean visible,
                            const gfx::ColorSpace& color_space,
+                           float hdr_headroom,
                            const GLbyte* mailbox) override;
   void RasterCHROMIUM(const cc::DisplayItemList* list,
                       cc::ImageProvider* provider,
@@ -164,8 +171,7 @@ class RASTER_EXPORT RasterImplementation : public RasterInterface,
                       const gfx::Vector2dF& post_translate,
                       const gfx::Vector2dF& post_scale,
                       bool requires_clear,
-                      size_t* max_op_size_hint,
-                      bool preserve_recording = true) override;
+                      size_t* max_op_size_hint) override;
   SyncToken ScheduleImageDecode(base::span<const uint8_t> encoded_data,
                                 const gfx::Size& output_size,
                                 uint32_t transfer_cache_entry_id,
@@ -175,6 +181,8 @@ class RASTER_EXPORT RasterImplementation : public RasterInterface,
       const gpu::Mailbox& source_mailbox,
       GLenum source_target,
       GrSurfaceOrigin source_origin,
+      const gfx::Size& source_size,
+      const gfx::Point& source_starting_point,
       const SkImageInfo& dst_info,
       GLuint dst_row_bytes,
       unsigned char* out,
@@ -200,8 +208,11 @@ class RASTER_EXPORT RasterImplementation : public RasterInterface,
                            GLuint dst_row_bytes,
                            int src_x,
                            int src_y,
+                           int plane_index,
                            void* dst_pixels) override;
   GLuint CreateAndConsumeForGpuRaster(const gpu::Mailbox& mailbox) override;
+  GLuint CreateAndConsumeForGpuRaster(
+      const scoped_refptr<gpu::ClientSharedImage>& shared_image) override;
   void DeleteGpuRasterTexture(GLuint texture) override;
   void BeginGpuRaster() override;
   void EndGpuRaster() override;
@@ -344,6 +355,7 @@ class RASTER_EXPORT RasterImplementation : public RasterInterface,
                                    GLuint dst_row_bytes,
                                    int src_x,
                                    int src_y,
+                                   int plane_index,
                                    base::OnceCallback<void(bool)> readback_done,
                                    void* dst_pixels);
 
@@ -389,8 +401,8 @@ class RASTER_EXPORT RasterImplementation : public RasterInterface,
   // Used to check for single threaded access.
   int use_count_;
 
-  absl::optional<ScopedMappedMemoryPtr> font_mapped_buffer_;
-  absl::optional<ScopedTransferBufferPtr> raster_mapped_buffer_;
+  std::optional<ScopedMappedMemoryPtr> font_mapped_buffer_;
+  std::optional<ScopedTransferBufferPtr> raster_mapped_buffer_;
 
   base::RepeatingCallback<void(const char*, int32_t)> error_message_callback_;
 
@@ -405,7 +417,7 @@ class RASTER_EXPORT RasterImplementation : public RasterInterface,
   ClientFontManager font_manager_;
 
   mutable base::Lock lost_lock_;
-  bool lost_;
+  bool lost_ GUARDED_BY(lost_lock_);
 
   // To avoid repeated allocations when searching the rtrees, hold onto this
   // vector between RasterCHROMIUM calls.  It is not valid outside of that
@@ -421,7 +433,7 @@ class RASTER_EXPORT RasterImplementation : public RasterInterface,
     bool can_use_lcd_text = false;
     sk_sp<SkColorSpace> color_space;
   };
-  absl::optional<RasterProperties> raster_properties_;
+  std::optional<RasterProperties> raster_properties_;
 
   uint32_t max_inlined_entry_size_;
   ClientTransferCache transfer_cache_;

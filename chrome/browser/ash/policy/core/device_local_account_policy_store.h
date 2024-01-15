@@ -8,7 +8,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
@@ -102,8 +103,8 @@ class DeviceLocalAccountPolicyStore : public UserCloudPolicyStoreBase {
       ash::DeviceSettingsService::OwnershipStatus ownership_status);
 
   const std::string account_id_;
-  ash::SessionManagerClient* session_manager_client_;
-  ash::DeviceSettingsService* device_settings_service_;
+  raw_ptr<ash::SessionManagerClient> session_manager_client_;
+  raw_ptr<ash::DeviceSettingsService> device_settings_service_;
 
   base::WeakPtrFactory<DeviceLocalAccountPolicyStore> weak_factory_{this};
 };

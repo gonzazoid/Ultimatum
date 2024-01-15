@@ -13,35 +13,24 @@ import org.chromium.ui.resources.ResourceManager;
  * render.
  */
 public interface LayoutRenderHost {
-    /**
-     * Request layout and draw.
-     */
+    /** Request layout and draw. */
     void requestRender();
 
-    /**
-     * Indicates that we are about to draw and final layout changes should be made.
-     */
+    /** Indicates that we are about to draw and final layout changes should be made. */
     void onCompositorLayout();
 
-    /**
-     * Indicates that a previously rendered frame has been swapped to the OS.
-     */
+    /** Indicates that a previously rendered frame has been swapped to the OS. */
     void didSwapFrame(int pendingFrameCount);
 
     /**
      * Indicates that the compositor swapped buffers.
      * @param swappedCurrentSize Whether the swapped buffer size is the same as the current one.
+     * @param framesUntilHideBackground The number of buffer swaps needed until the incoming surface
+     *         has a frame ready. Zero if no incoming surface or if the incoming surface is ready.
      */
-    default void didSwapBuffers(boolean swappedCurrentSize) {}
+    default void didSwapBuffers(boolean swappedCurrentSize, int framesUntilHideBackground) {}
 
-    /**
-     * Indicates that the rendering surface has just been created.
-     */
-    void onSurfaceCreated();
-
-    /**
-     * Indicates that the rendering surface has been resized.
-     */
+    /** Indicates that the rendering surface has been resized. */
     void onSurfaceResized(int width, int height);
 
     /**
@@ -57,8 +46,6 @@ public interface LayoutRenderHost {
      */
     ResourceManager getResourceManager();
 
-    /**
-     * Called when something has changed in the Compositor rendered view system.
-     */
+    /** Called when something has changed in the Compositor rendered view system. */
     void invalidateAccessibilityProvider();
 }

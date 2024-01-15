@@ -2,13 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "remoting/host/keyboard_layout_monitor.h"
-
-#include <memory>
+#include "remoting/host/linux/keyboard_layout_monitor_wayland.h"
 
 #include <xkbcommon/xkbcommon.h>
 
-#include "base/callback.h"
+#include <memory>
+
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
@@ -22,45 +22,14 @@
 
 namespace remoting {
 
-namespace {
-
-class KeyboardLayoutMonitorWayland : public KeyboardLayoutMonitor {
- public:
-  explicit KeyboardLayoutMonitorWayland(
-      base::RepeatingCallback<void(const protocol::KeyboardLayout&)> callback);
-
-  ~KeyboardLayoutMonitorWayland() override;
-
-  void Start() override;
-
- private:
-  void ProcessKeymaps(XkbKeyMapUniquePtr keymap);
-
-  // Generates a protocol layout message based on the keymap and the currently
-  // active group.
-  protocol::KeyboardLayout GenerateProtocolLayoutMessage();
-
-  // Processes the modifiers of the active keyboard layout and notifies the
-  // stored callbacks.
-  void ProcessModifiersAndNotifyCallbacks(uint32_t group);
-
-  void UpdateState();
-
-  XkbKeyMapUniquePtr keymap_;
-  base::raw_ptr<struct xkb_state> xkb_state_ = nullptr;
-  xkb_layout_index_t current_group_ = XKB_LAYOUT_INVALID;
-  base::RepeatingCallback<void(const protocol::KeyboardLayout&)>
-      layout_changed_callback_;
-  base::WeakPtrFactory<KeyboardLayoutMonitorWayland> weak_factory_{this};
-};
-
 KeyboardLayoutMonitorWayland::KeyboardLayoutMonitorWayland(
     base::RepeatingCallback<void(const protocol::KeyboardLayout&)> callback)
     : layout_changed_callback_(std::move(callback)) {}
 
 KeyboardLayoutMonitorWayland::~KeyboardLayoutMonitorWayland() {
-  if (xkb_state_)
+  if (xkb_state_) {
     xkb_state_unref(xkb_state_.get());
+  }
 }
 
 void KeyboardLayoutMonitorWayland::Start() {
@@ -73,8 +42,9 @@ void KeyboardLayoutMonitorWayland::Start() {
 }
 
 void KeyboardLayoutMonitorWayland::UpdateState() {
-  if (xkb_state_)
+  if (xkb_state_) {
     xkb_state_unref(xkb_state_.get());
+  }
   xkb_state_ = xkb_state_new(keymap_.get());
 }
 
@@ -103,19 +73,16 @@ KeyboardLayoutMonitorWayland::GenerateProtocolLayoutMessage() {
 
     std::uint32_t usb_code = ui::KeycodeConverter::DomCodeToUsbKeycode(key);
     int keycode = ui::KeycodeConverter::DomCodeToNativeKeycode(key);
-
     // Insert entry for USB code. It's fine to overwrite if we somehow process
     // the same USB code twice, since the actions will be the same.
     auto& key_actions =
         *(*layout_message.mutable_keys())[usb_code].mutable_actions();
-
     for (int shift_level = 0; shift_level < 8; ++shift_level) {
       // Don't bother capturing higher shift levels if there's no configured way
       // to access them.
       if ((shift_level & 2 && !have_altgr) || (shift_level & 4)) {
         continue;
       }
-
       // Always consider NumLock set and CapsLock unset.
       constexpr uint32_t SHIFT_MODIFIER = 1;
       constexpr uint32_t CAPSLOCK_MODIFIER = 1;
@@ -123,8 +90,9 @@ KeyboardLayoutMonitorWayland::GenerateProtocolLayoutMessage() {
       constexpr uint32_t ALTGR_MODIFIER = 128;
       uint32_t mods_locked = NUMLOCK_MODIFIER;
       uint32_t mods_latched = 0;
-      if (shift_level & 1)
+      if (shift_level & 1) {
         mods_locked |= SHIFT_MODIFIER;
+      }
       if (shift_level & 2) {
         mods_locked &= ~CAPSLOCK_MODIFIER;
         mods_latched |= ALTGR_MODIFIER;
@@ -174,7 +142,6 @@ KeyboardLayoutMonitorWayland::GenerateProtocolLayoutMessage() {
         key_actions[shift_level].set_character(dead_key_utf8);
         continue;
       }
-
       if (keyval == XKB_KEY_Caps_Lock || keyval == XKB_KEY_Num_Lock) {
         // Don't include Num Lock or Caps Lock until we decide if / how we want
         // to handle them.
@@ -201,27 +168,20 @@ KeyboardLayoutMonitorWayland::GenerateProtocolLayoutMessage() {
 void KeyboardLayoutMonitorWayland::ProcessModifiersAndNotifyCallbacks(
     uint32_t group) {
   if (current_group_ != XKB_LAYOUT_INVALID &&
-      group == static_cast<uint32_t>(current_group_))
+      group == static_cast<uint32_t>(current_group_)) {
     return;
+  }
+
+  current_group_ = static_cast<xkb_layout_index_t>(group);
 
   if (!xkb_state_) {
     LOG(WARNING) << "Received modifier without keymap?";
     return;
   }
 
-  current_group_ = static_cast<xkb_layout_index_t>(group);
-
   DCHECK(keymap_);
 
   layout_changed_callback_.Run(GenerateProtocolLayoutMessage());
-}
-
-}  // namespace
-
-std::unique_ptr<KeyboardLayoutMonitor> KeyboardLayoutMonitor::Create(
-    base::RepeatingCallback<void(const protocol::KeyboardLayout&)> callback,
-    scoped_refptr<base::SingleThreadTaskRunner> input_task_runner) {
-  return std::make_unique<KeyboardLayoutMonitorWayland>(std::move(callback));
 }
 
 }  // namespace remoting

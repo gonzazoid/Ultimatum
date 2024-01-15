@@ -9,13 +9,13 @@
 #include "base/files/file_util.h"
 #include "base/path_service.h"
 #include "build/build_config.h"
+#include "printing/buildflags/buildflags.h"
 #include "sandbox/linux/syscall_broker/broker_command.h"
 #include "sandbox/linux/syscall_broker/broker_file_permission.h"
 #include "sandbox/policy/export.h"
 #include "sandbox/policy/linux/sandbox_linux.h"
-#include "services/network/network_sandbox_hook_linux.h"
 
-#if BUILDFLAG(IS_CHROMEOS) && defined(USE_CUPS)
+#if BUILDFLAG(IS_CHROMEOS) && BUILDFLAG(USE_CUPS)
 #include "printing/backend/cups_connection_pool.h"
 #endif
 
@@ -39,14 +39,11 @@ sandbox::syscall_broker::BrokerCommandSet GetPrintBackendBrokerCommandSet() {
           sandbox::syscall_broker::COMMAND_UNLINK,
       });
 
-  // Need networking for a TCP connection to CUPS servers.
-  broker_command_set |= network::GetNetworkBrokerCommandSet();
-
   return broker_command_set;
 }
 
 std::vector<BrokerFilePermission> GetPrintBackendFilePermissions() {
-#if BUILDFLAG(IS_CHROMEOS) && defined(USE_CUPS)
+#if BUILDFLAG(IS_CHROMEOS) && BUILDFLAG(USE_CUPS)
   // No extra permissions required, as the needed socket connections to the CUPS
   // server are established before entering the sandbox.
   return std::vector<BrokerFilePermission>();
@@ -74,20 +71,15 @@ std::vector<BrokerFilePermission> GetPrintBackendFilePermissions() {
       BrokerFilePermission::ReadWriteCreateTemporary(temp_dir_path.value()),
   };
 
-  // To support networking for a TCP connection to CUPS servers.
-  auto network_permissions = network::GetNetworkFilePermissions();
-  permissions.insert(permissions.end(), network_permissions.begin(),
-                     network_permissions.end());
-
   return permissions;
-#endif  // BUILDFLAG(IS_CHROMEOS) && defined(USE_CUPS)
+#endif  // BUILDFLAG(IS_CHROMEOS) && BUILDFLAG(USE_CUPS)
 }
 
 }  // namespace
 
 bool PrintBackendPreSandboxHook(
     sandbox::policy::SandboxLinux::Options options) {
-#if BUILDFLAG(IS_CHROMEOS) && defined(USE_CUPS)
+#if BUILDFLAG(IS_CHROMEOS) && BUILDFLAG(USE_CUPS)
   // Create the socket connections to the CUPS server before engaging the
   // sandbox, since new connections cannot be made after that.
   CupsConnectionPool::Create();

@@ -4,15 +4,18 @@
 
 #include "content/public/browser/web_ui_url_loader_factory.h"
 
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/containers/span.h"
 #include "base/debug/crash_logging.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_piece.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
@@ -40,7 +43,6 @@
 #include "services/network/public/cpp/parsed_headers.h"
 #include "services/network/public/cpp/self_deleting_url_loader_factory.h"
 #include "services/network/public/mojom/network_service.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/template_expressions.h"
 
 namespace content {
@@ -66,7 +68,7 @@ void ReadData(
     bool replace_in_js,
     scoped_refptr<URLDataSourceImpl> data_source,
     mojo::PendingRemote<network::mojom::URLLoaderClient> client_remote,
-    absl::optional<net::HttpByteRange> requested_range,
+    std::optional<net::HttpByteRange> requested_range,
     base::ElapsedTimer url_request_elapsed_timer,
     scoped_refptr<base::RefCountedMemory> bytes) {
   TRACE_EVENT0("ui", "WebUIURLLoader::ReadData");
@@ -132,7 +134,8 @@ void ReadData(
   CHECK_GE(num_bytes, output_size);
   CHECK_LE(output_offset + output_size, bytes->size());
 
-  memcpy(buffer, bytes->front() + output_offset, output_size);
+  base::ranges::copy(base::span(*bytes).subspan(output_offset, output_size),
+                     static_cast<char*>(buffer));
   result = pipe_producer_handle->EndWriteData(output_size);
   CHECK_EQ(result, MOJO_RESULT_OK);
 
@@ -146,7 +149,7 @@ void ReadData(
       std::move(client_remote));
 
   client->OnReceiveResponse(std::move(headers), std::move(pipe_consumer_handle),
-                            absl::nullopt);
+                            std::nullopt);
 
   network::URLLoaderCompletionStatus status(net::OK);
   status.encoded_data_length = output_size;
@@ -164,13 +167,13 @@ void DataAvailable(
     bool replace_in_js,
     scoped_refptr<URLDataSourceImpl> source,
     mojo::PendingRemote<network::mojom::URLLoaderClient> client_remote,
-    absl::optional<net::HttpByteRange> requested_range,
+    std::optional<net::HttpByteRange> requested_range,
     base::ElapsedTimer url_request_elapsed_timer,
     scoped_refptr<base::RefCountedMemory> bytes) {
   TRACE_EVENT0("ui", "WebUIURLLoader::DataAvailable");
   // Since the bytes are from the memory mapped resource file, copying the
   // data can lead to disk access. Needs to be posted to a SequencedTaskRunner
-  // as Mojo requires a SequencedTaskRunnerHandle in scope.
+  // as Mojo requires a SequencedTaskRunner::CurrentDefaultHandle in scope.
   base::ThreadPool::CreateSequencedTaskRunner(
       {base::TaskPriority::USER_BLOCKING, base::MayBlock(),
        base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN})
@@ -209,7 +212,7 @@ void StartURLLoader(
   }
 
   // Load everything by default, but respect the Range header if present.
-  absl::optional<net::HttpByteRange> range;
+  std::optional<net::HttpByteRange> range;
   std::string range_header;
   if (request.headers.GetHeader(net::HttpRequestHeaders::kRange,
                                 &range_header)) {
@@ -331,6 +334,12 @@ class WebUIURLLoaderFactory : public network::SelfDeletingURLLoaderFactory {
       const net::MutableNetworkTrafficAnnotationTag& traffic_annotation)
       override {
     DCHECK_CURRENTLY_ON(BrowserThread::UI);
+    if (browser_context_.WasInvalidated()) {
+      DVLOG(1) << "Context has been destroyed";
+      CallOnError(std::move(client), net::ERR_FAILED);
+      DisconnectReceiversAndDestroy();
+      return;
+    }
 
     if (frame_tree_node_id_ != RenderFrameHost::kNoFrameTreeNodeId &&
         !FrameTreeNode::GloballyFindByID(frame_tree_node_id_)) {
@@ -367,7 +376,7 @@ class WebUIURLLoaderFactory : public network::SelfDeletingURLLoaderFactory {
           base::BindOnce(
               &StartBlobInternalsURLLoader, request, std::move(client),
               base::Unretained(
-                  ChromeBlobStorageContext::GetFor(browser_context_))));
+                  ChromeBlobStorageContext::GetFor(browser_context_.get()))));
       return;
     }
 
@@ -382,7 +391,7 @@ class WebUIURLLoaderFactory : public network::SelfDeletingURLLoaderFactory {
     // navigation. The URLDataSources just need the WebContents; the specific
     // frame doesn't matter.
     StartURLLoader(request, frame_tree_node_id_, std::move(client),
-                   browser_context_);
+                   browser_context_.get());
   }
 
   const std::string& scheme() const { return scheme_; }
@@ -394,12 +403,12 @@ class WebUIURLLoaderFactory : public network::SelfDeletingURLLoaderFactory {
       base::flat_set<std::string> allowed_hosts,
       mojo::PendingReceiver<network::mojom::URLLoaderFactory> factory_receiver)
       : network::SelfDeletingURLLoaderFactory(std::move(factory_receiver)),
-        browser_context_(browser_context),
+        browser_context_(browser_context->GetWeakPtr()),
         frame_tree_node_id_(frame_tree_node_id),
         scheme_(scheme),
         allowed_hosts_(std::move(allowed_hosts)) {}
 
-  raw_ptr<BrowserContext, DanglingUntriaged> browser_context_;
+  base::WeakPtr<BrowserContext> browser_context_;
   int const frame_tree_node_id_;
   const std::string scheme_;
   const base::flat_set<std::string> allowed_hosts_;  // if empty all allowed.

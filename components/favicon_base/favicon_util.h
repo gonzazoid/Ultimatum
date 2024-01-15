@@ -23,11 +23,6 @@ namespace favicon_base {
 // the default favicon.
 std::vector<float> GetFaviconScales();
 
-// Sets the color space used for converting |image| to an NSImage to the
-// system colorspace. This makes the favicon look the same in the browser UI
-// as it does in the renderer.
-void SetFaviconColorSpace(gfx::Image* image);
-
 // Takes a vector of PNG-encoded frames, and converts it to a gfx::Image of
 // size |favicon_size| in DIPS. The result gfx::Image has a gfx::ImageSkia with
 // gfx::ImageSkiaReps for each |favicon_scales|.
@@ -41,9 +36,9 @@ gfx::Image SelectFaviconFramesFromPNGs(
 // the set, it just returns that; otherwise, it will decode the PNG, scale,
 // and encode a new PNG.
 favicon_base::FaviconRawBitmapResult ResizeFaviconBitmapResult(
+    int desired_size_in_pixel,
     const std::vector<favicon_base::FaviconRawBitmapResult>&
-        favicon_bitmap_results,
-    int desired_size_in_pixel);
+        favicon_bitmap_results);
 
 }  // namespace favicon_base
 

@@ -11,16 +11,12 @@
       "position": [533, 0],
       "bounds": [2, 26],
       "contentsOpaque": true,
-      "invalidations": [
-        [0, 0, 2, 26]
-      ],
       "transform": 2
     },
     {
       "name": "LayoutNGBlockFlow DIV",
       "position": [-4, -4],
       "bounds": [1184, 35],
-      "contentsOpaqueForText": true,
       "transform": 2
     }
   ],

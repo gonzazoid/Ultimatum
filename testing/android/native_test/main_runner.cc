@@ -6,7 +6,7 @@
 
 #include "base/android/jni_array.h"
 #include "base/check.h"
-#include "testing/android/native_test/native_test_jni_headers/MainRunner_jni.h"
+#include "testing/android/native_test/native_main_runner_jni/MainRunner_jni.h"
 #include "testing/android/native_test/native_test_util.h"
 
 extern int main(int argc, char** argv);
@@ -25,7 +25,8 @@ static jint JNI_MainRunner_RunMain(
   alreadyRun = true;
 
   std::vector<std::string> cpp_command_line;
-  AppendJavaStringArrayToStringVector(env, command_line, &cpp_command_line);
+  base::android::AppendJavaStringArrayToStringVector(env, command_line,
+                                                     &cpp_command_line);
 
   std::vector<char*> argv;
   int argc = ArgsToArgv(cpp_command_line, &argv);

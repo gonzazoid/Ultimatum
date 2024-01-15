@@ -9,6 +9,7 @@
 #include <cstdint>
 
 #include "base/containers/span.h"
+#include "base/memory/raw_ptr.h"
 #include "base/types/strong_alias.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
@@ -73,10 +74,10 @@ class MODULES_EXPORT OutgoingStream final
   WritableStream* Writable() const {
     DVLOG(1) << "OutgoingStream::writable() called";
 
-    return writable_;
+    return writable_.Get();
   }
 
-  ScriptState* GetScriptState() { return script_state_; }
+  ScriptState* GetScriptState() { return script_state_.Get(); }
 
   // Called from WebTransport via a WebTransportStream.
   void OnOutgoingStreamClosed();
@@ -153,9 +154,9 @@ class MODULES_EXPORT OutgoingStream final
    private:
     // We need the isolate to call |AdjustAmountOfExternalAllocatedMemory| for
     // the memory stored in |buffer_|.
-    v8::Isolate* isolate_;
+    raw_ptr<v8::Isolate, ExperimentalRenderer> isolate_;
     size_t length_ = 0u;
-    uint8_t* buffer_ = nullptr;
+    raw_ptr<uint8_t, ExperimentalRenderer> buffer_ = nullptr;
   };
 
   const Member<ScriptState> script_state_;

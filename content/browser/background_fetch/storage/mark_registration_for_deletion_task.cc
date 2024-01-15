@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "content/browser/background_fetch/background_fetch.pb.h"
 #include "content/browser/background_fetch/background_fetch_data_manager.h"
 #include "content/browser/background_fetch/storage/database_helpers.h"
@@ -146,15 +146,10 @@ void MarkRegistrationForDeletionTask::DidGetCompletedRequests(
 
 void MarkRegistrationForDeletionTask::FinishWithError(
     blink::mojom::BackgroundFetchError error) {
-  ReportStorageError();
   if (HasStorageError())
     AbandonFetches(registration_id_.service_worker_registration_id());
   std::move(callback_).Run(error, failure_reason_);
   Finished();  // Destroys |this|.
-}
-
-std::string MarkRegistrationForDeletionTask::HistogramName() const {
-  return "MarkRegistrationForDeletionTask";
 }
 
 }  // namespace background_fetch

@@ -8,16 +8,24 @@
 #import <UIKit/UIKit.h>
 
 #include "base/memory/ref_counted.h"
-#import "ios/chrome/browser/ui/table_view/table_view_favicon_data_source.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_favicon_data_source.h"
 
 @protocol ManualFillContentInjector;
 @class ManualFillPasswordMediator;
 @protocol ManualFillPasswordConsumer;
 @protocol PasswordListNavigator;
 
+namespace autofill {
+class FormRendererId;
+}  // namespace autofill
+
 namespace password_manager {
-class PasswordStoreInterface;
+class SavedPasswordsPresenter;
 }  // namespace password_manager
+
+namespace syncer {
+class SyncService;
+}  // namespace syncer
 
 namespace web {
 class WebState;
@@ -25,11 +33,11 @@ class WebState;
 
 class FaviconLoader;
 class GURL;
-class SyncSetupService;
 
 namespace manual_fill {
 
 extern NSString* const ManagePasswordsAccessibilityIdentifier;
+extern NSString* const ManageSettingsAccessibilityIdentifier;
 extern NSString* const OtherPasswordsAccessibilityIdentifier;
 extern NSString* const SuggestPasswordAccessibilityIdentifier;
 
@@ -62,23 +70,29 @@ extern NSString* const SuggestPasswordAccessibilityIdentifier;
 @property(nonatomic, assign, getter=isActionSectionEnabled)
     BOOL actionSectionEnabled;
 
-// The designated initializer. `passwordStore` must not be nil.
-- (instancetype)initWithPasswordStore:
-                    (scoped_refptr<password_manager::PasswordStoreInterface>)
-                        passwordStore
-                        faviconLoader:(FaviconLoader*)faviconLoader
+// The designated initializer.
+- (instancetype)initWithFaviconLoader:(FaviconLoader*)faviconLoader
                              webState:(web::WebState*)webState
-                          syncService:(SyncSetupService*)syncService
+                          syncService:(syncer::SyncService*)syncService
                                   URL:(const GURL&)URL
                invokedOnPasswordField:(BOOL)invokedOnPasswordField
     NS_DESIGNATED_INITIALIZER;
 
-// Unavailable. Use `initWithPasswordStore:faviconLoader:`.
 - (instancetype)init NS_UNAVAILABLE;
 
-// Fetches passwords using the URL provided at initialisation as the filter.
-// If the URL is empty (invalid) it will fetch all the passwords.
-- (void)fetchPasswords;
+// Sets the saved passwords presenter.
+- (void)setSavedPasswordsPresenter:
+    (password_manager::SavedPasswordsPresenter*)savedPasswordsPresenter;
+
+// Fetches passwords related to the current form.
+- (void)fetchPasswordsForForm:(const autofill::FormRendererId)formID
+                        frame:(const std::string&)frameID;
+
+// Fetched all saved passwords.
+- (void)fetchAllPasswords;
+
+// Detaches observers.
+- (void)disconnect;
 
 @end
 

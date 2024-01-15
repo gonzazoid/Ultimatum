@@ -12,36 +12,47 @@
     --upload-dialog-input-box-background: var(--color-new-tab-page-background-override);
     --upload-dialog-input-box-border-color: var(--google-grey-300);
     --upload-dialog-input-box-color: var(--google-grey-800);
-    --upload-dialog-input-box-placeholder-color: var(--google-grey-600);
+    --upload-dialog-input-box-placeholder-color: var(--google-grey-700);
     --upload-dialog-input-submit-background: var(--color-new-tab-page-background-override);
     --upload-dialog-input-submit-border-color: var(--google-grey-300);
     --upload-dialog-input-submit-color: var(--google-blue-600);
-    --upload-dialog-shadow: var( --cr-elevation-3);
+    --upload-dialog-shadow: var(--cr-elevation-3);
     --upload-dialog-title-color: var(--google-grey-800);
     font-family: inherit;
-    width: calc(100% + 8px);
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :host {
-      --upload-dialog-divider-line-border-top: 1px solid var(--google-grey-800);
-      --upload-dialog-input-box-color: rgba(var(--google-grey-900-rgb), .68);
-      --upload-dialog-drag-drop-border: 1px dashed var(--google-grey-800);
-      --upload-dialog-drag-drop-error-background-color: var(--google-red-300);
-      --upload-dialog-drag-drop-upload-text-color: var(--google-blue-300);
-      --upload-dialog-error-message-color: var(--google-grey-900);
-      --upload-dialog-input-box-border-color: var(--google-grey-800);
-      --upload-dialog-input-box-color: rgba(var(--google-grey-900-rgb), .68);
-      --upload-dialog-input-box-placeholder-color: var(--google-grey-700);
-      --upload-dialog-input-submit-border-color: var(--google-grey-800);
-      --upload-dialog-input-submit-color: var(--google-blue-300);
-      --upload-dialog-title-color: var(--google-grey-100);
-    }
+    width: 100%;
   }
 
   :host([is-dragging_]),
   :host([is-loading_]) {
     --upload-dialog-drag-drop-background: var(--google-blue-50);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :host {
+      --paper-spinner-color: var(--google-blue-300);
+      --upload-dialog-background: var(--google-grey-850);
+      --upload-dialog-divider-line-border-top: 1px solid var(--google-grey-800);
+      --upload-dialog-drag-drop-background: rgba(var(--google-grey-900-rgb), .68);
+      --upload-dialog-drag-drop-border: 1px dashed var(--google-grey-800);
+      --upload-dialog-drag-drop-error-background-color: var(--google-red-300);
+      --upload-dialog-drag-drop-upload-text-color: var(--google-blue-300);
+      --upload-dialog-error-message-color: var(--google-grey-900);
+      --upload-dialog-input-box-background: transparent;
+      --upload-dialog-input-box-border-color: var(--google-grey-800);
+      --upload-dialog-input-box-color: var(--google-grey-100);
+      --upload-dialog-input-box-placeholder-color: var(--google-grey-300);
+      --upload-dialog-input-submit-background: transparent;
+      --upload-dialog-input-submit-border-color: var(--google-grey-800);
+      --upload-dialog-input-submit-color: var(--google-blue-300);
+      --upload-dialog-title-color: var(--google-grey-100);
+    }
+
+    :host([is-dragging_]),
+    :host([is-loading_]) {
+      --upload-dialog-drag-drop-background: rgba(var(--google-blue-300-rgb), .24);
+      --upload-dialog-drag-drop-border: 1px dashed var(--google-blue-300);
+      --upload-dialog-drag-drop-title-color: var(--google-blue-300);
+    }
   }
 
   #dialog {
@@ -61,6 +72,8 @@
   }
 
   #closeButton {
+    --cr-icon-button-fill-color:
+        var(--color-new-tab-page-overlay-secondary-foreground);
     align-self: flex-end;
     cursor: pointer;
     display: flex;
@@ -148,8 +161,15 @@
     white-space: nowrap;
   }
 
-  #uploadText:focus {
+  #uploadText:focus,
+  #uploadText:hover {
     text-decoration: underline;
+  }
+
+  @media (forced-colors: active) {
+    #uploadText {
+      color: LinkText;
+    }
   }
 
   #urlUploadContainer {
@@ -214,6 +234,20 @@
     --upload-dialog-input-box-border-color: var(--google-blue-700);
   }
 
+  @media (prefers-color-scheme: dark) {
+    #inputBox:hover {
+      --upload-dialog-input-box-border-color: var(--google-grey-700);
+    }
+
+    #inputBox:focus {
+      --upload-dialog-input-box-border-color: var(--google-blue-300);
+    }
+
+    #inputBox:active {
+      --upload-dialog-input-box-border-color: var(--google-blue-300);
+    }
+  }
+
   #inputSubmit {
     align-items: center;
     background: var(--upload-dialog-input-submit-background);
@@ -232,21 +266,41 @@
   }
 
   #inputSubmit:hover {
-    --upload-dialog-input-submit-background: rgba(var(--google-blue-700), 0.08);
+    --upload-dialog-input-submit-background: rgba(var(--google-blue-700-rgb), 0.08);
     --upload-dialog-input-submit-border-color: var(--google-grey-300);
     --upload-dialog-input-submit-color: var(--google-blue-600);
   }
 
   #inputSubmit:focus {
-    --upload-dialog-input-submit-background: rgba(var(--google-blue-700), 0.08);
+    --upload-dialog-input-submit-background: rgba(var(--google-blue-700-rgb), 0.08);
     --upload-dialog-input-submit-border-color: var(--google-blue-700);
     --upload-dialog-input-submit-color: var(--google-blue-600);
   }
 
   #inputSubmit:active {
-    --upload-dialog-input-submit-background: rgba(var(--google-blue-700), 0.14);
+    --upload-dialog-input-submit-background: rgba(var(--google-blue-700-rgb), 0.14);
     --upload-dialog-input-submit-border-color: var(--google-grey-300);
     --upload-dialog-input-submit-color: var(--google-blue-600);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #inputSubmit:hover {
+      --upload-dialog-input-submit-background: rgba(var(--google-blue-300-rgb), 0.04);
+      --upload-dialog-input-submit-border-color: var(--google-grey-800);
+      --upload-dialog-input-submit-color: var(--google-blue-100);
+    }
+
+    #inputSubmit:focus {
+      --upload-dialog-input-submit-background: rgba(var(--google-blue-300-rgb), 0.12);
+      --upload-dialog-input-submit-border-color: var(--google-blue-100);
+      --upload-dialog-input-submit-color: var(--google-blue-100);
+    }
+
+    #inputSubmit:active {
+      --upload-dialog-input-submit-background: rgba(var(--google-blue-300-rgb), 0.10);
+      --upload-dialog-input-submit-border-color: var(--google-grey-800);
+      --upload-dialog-input-submit-color: var(--google-blue-100);
+    }
   }
 
   #loadingContainer,
@@ -265,6 +319,7 @@
 
   #offlineTitle {
     color: var(--upload-dialog-title-color);
+    text-align: center;
   }
 
   #offlineImage {
@@ -285,24 +340,21 @@
   }
 </style>
 
-<div id="dialog" hidden$="{{isHidden_}}" tabindex="-1" lang="$i18n{language}">
-  <ntp-lens-form id="lensForm"
-                 on-loading="handleFormLoading_"
-                 on-error="handleFormError_">
+<div id="dialog" hidden$="{{isHidden_}}" tabindex="-1" lang="$i18n{language}"
+    role="dialog" aria-modal="true" on-focusout="onFocusOut_">
+  <ntp-lens-form id="lensForm" on-loading="handleFormLoading_"
+      on-error="handleFormError_">
   </ntp-lens-form>
   <div id="container">
     <cr-icon-button id="closeButton" class="icon-clear"
         title="$i18n{lensSearchUploadDialogCloseButtonLabel}"
-        on-click="onCloseButtonClick_">
+        on-click="onCloseButtonClick_" on-keydown="onCloseButtonKeydown_">
     </cr-icon-button>
     <div id="title">
       $i18n{lensSearchUploadDialogTitle}
     </div>
-    <div id="dragDropArea"
-         on-dragenter="onDragEnter_"
-         on-dragover="onDragOver_"
-         on-dragleave="onDragLeave_"
-         on-drop="onDrop_">
+    <div id="dragDropArea" on-dragenter="onDragEnter_" on-dragover="onDragOver_"
+        on-dragleave="onDragLeave_" on-drop="onDrop_">
       <!-- Error state -->
       <template is="dom-if" if="{{isError_}}">
         <div id="dragDropError">
@@ -317,10 +369,8 @@
           <div id="dragDropIllustration"></div>
           <div class="drag-drop-title">
             <span id="dragText">$i18n{lensSearchUploadDialogDragTitle}</span>
-            <span tabindex="0"
-                  role="button"
-                  id="uploadText"
-                  on-click="onUploadFileClick_">
+            <span tabindex="0" role="button" id="uploadText"
+                on-click="onUploadFileClick_" on-keydown="onUploadFileKeyDown_">
               $i18n{lensSearchUploadDialogUploadFileTitle}
             </span>
           </div>
@@ -334,13 +384,10 @@
           <div id="inputContainer">
             <input id="inputBox" autocomplete="false" autocorrect="false"
                 placeholder="$i18n{lensSearchUploadDialogTextPlaceholder}"
-                text="text"
-                value="{{uploadUrl_::input}}"
+                text="text" value="{{uploadUrl_::input}}"
                 on-keydown="onUrlKeyDown_">
-            <div id="inputSubmit"
-                 tabindex="0"
-                 role="button"
-                 on-click="onSubmitUrl_">
+            <div id="inputSubmit" tabindex="0" role="button"
+                on-click="onSubmitUrl_" on-keydown="onInputSubmitKeyDown_">
               $i18n{lensSearchUploadDialogSearchButtonLabel}
             </div>
           </div>
@@ -375,7 +422,8 @@
             $i18n{lensSearchUploadDialogOfflineSubtitleText}
           </div>
           <cr-button id="offlineRetryButton" class="action-button"
-              on-click="onOfflineRetryButtonClick_">
+              on-click="onOfflineRetryButtonClick_"
+              on-keydown="onOfflineRetryButtonKeydown_">
             $i18n{lensSearchUploadDialogOfflineButtonLabel}
           </cr-button>
         </div>

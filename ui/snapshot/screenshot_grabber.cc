@@ -8,9 +8,9 @@
 
 #include <climits>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
@@ -18,7 +18,6 @@
 #include "base/task/current_thread.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "ui/snapshot/snapshot.h"
 
@@ -91,7 +90,7 @@ void ScreenshotGrabber::TakeScreenshot(gfx::NativeWindow window,
 #endif
   ui::GrabWindowSnapshotAsyncPNG(
       window, rect,
-      base::BindOnce(&ScreenshotGrabber::GrabWindowSnapshotAsyncCallback,
+      base::BindOnce(&ScreenshotGrabber::GrabSnapshotImageCallback,
                      factory_.GetWeakPtr(), window_identifier, is_partial,
                      std::move(callback)));
 }
@@ -102,7 +101,7 @@ bool ScreenshotGrabber::CanTakeScreenshot() {
              base::Milliseconds(kScreenshotMinimumIntervalInMS);
 }
 
-void ScreenshotGrabber::GrabWindowSnapshotAsyncCallback(
+void ScreenshotGrabber::GrabSnapshotImageCallback(
     const std::string& window_identifier,
     bool is_partial,
     ScreenshotCallback callback,

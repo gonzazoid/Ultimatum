@@ -7,10 +7,10 @@
 
 #include <UIKit/UIKit.h>
 
-#import "ios/chrome/browser/ui/activity_services/activity_scenario.h"
-#import "ios/chrome/browser/ui/coordinators/chrome_coordinator.h"
+#import "ios/chrome/browser/shared/coordinator/chrome_coordinator/chrome_coordinator.h"
 
-@class ActivityParams;
+@protocol ActivityServiceCommands;
+@class SharingParams;
 class Browser;
 
 // Coordinator of sharing scenarios. Its default scenario is to share the
@@ -24,7 +24,7 @@ class Browser;
 // the activity view popover on iPad.
 - (instancetype)initWithBaseViewController:(UIViewController*)viewController
                                    browser:(Browser*)browser
-                                    params:(ActivityParams*)params
+                                    params:(SharingParams*)params
                                 originView:(UIView*)originView;
 
 // Creates a coordinator configured to share the URLs specified in `params`.
@@ -32,7 +32,7 @@ class Browser;
 // on iPad.
 - (instancetype)initWithBaseViewController:(UIViewController*)viewController
                                    browser:(Browser*)browser
-                                    params:(ActivityParams*)params
+                                    params:(SharingParams*)params
                                     anchor:(UIBarButtonItem*)barButtonItem;
 
 // Creates a coordinator configured to share the current tab's URL using the
@@ -42,7 +42,7 @@ class Browser;
 // `originRect` will be used to position the activity view popover on iPad.
 - (instancetype)initWithBaseViewController:(UIViewController*)viewController
                                    browser:(Browser*)browser
-                                    params:(ActivityParams*)params
+                                    params:(SharingParams*)params
                                 originView:(UIView*)originView
                                 originRect:(CGRect)originRect
                                     anchor:(UIBarButtonItem*)barButtonItem
@@ -51,6 +51,11 @@ class Browser;
 - (instancetype)init NS_UNAVAILABLE;
 - (instancetype)initWithBaseViewController:(UIViewController*)viewController
                                    browser:(Browser*)browser NS_UNAVAILABLE;
+
+// If there is a download currently happening, this cancels it and triggers a
+// new coordinator to be created.
+- (void)cancelIfNecessaryAndCreateNewCoordinator;
+
 @end
 
 #endif  // IOS_CHROME_BROWSER_UI_SHARING_SHARING_COORDINATOR_H_

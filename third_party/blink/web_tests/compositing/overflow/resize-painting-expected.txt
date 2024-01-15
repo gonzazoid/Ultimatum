@@ -9,7 +9,6 @@
     {
       "name": "LayoutNGBlockFlow DIV class='resizable composited box'",
       "bounds": [100, 100],
-      "contentsOpaqueForText": true,
       "transform": 1
     }
   ],

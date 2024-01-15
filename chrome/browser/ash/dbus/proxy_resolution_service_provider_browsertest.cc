@@ -3,12 +3,15 @@
 // found in the LICENSE file.
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "chrome/browser/ash/dbus/proxy_resolution_service_provider.h"
+#include "chrome/browser/ash/login/login_manager_test.h"
+#include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/net/system_proxy_manager.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/test/base/in_process_browser_test.h"
+#include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/common/content_switches.h"
@@ -22,8 +25,7 @@ constexpr char kLocalProxyUrl[] = "localhost:3128";
 
 // Encode the PAC script as a data: URL.
 std::string GetPacUrl(const char* pac_data) {
-  std::string b64_encoded;
-  base::Base64Encode(pac_data, &b64_encoded);
+  std::string b64_encoded = base::Base64Encode(pac_data);
   return "data:application/x-javascript-config;base64," + b64_encoded;
 }
 }  // namespace
@@ -87,17 +89,17 @@ class ProxyResolutionServiceProviderTestWrapper {
 // Base test fixture that exposes a way to invoke ProxyResolutionServiceProvider
 // synchronously from the UI thread.
 class ProxyResolutionServiceProviderBaseBrowserTest
-    : public InProcessBrowserTest {
+    : public MixinBasedInProcessBrowserTest {
  public:
   void SetUpOnMainThread() override {
-    InProcessBrowserTest::SetUpOnMainThread();
+    MixinBasedInProcessBrowserTest::SetUpOnMainThread();
     proxy_service_ =
         std::make_unique<ProxyResolutionServiceProviderTestWrapper>();
   }
 
   void TearDownOnMainThread() override {
     proxy_service_.reset();
-    InProcessBrowserTest::TearDownOnMainThread();
+    MixinBasedInProcessBrowserTest::TearDownOnMainThread();
   }
 
   std::string ResolveProxyAndWait(const std::string& source_url) {
@@ -204,6 +206,25 @@ IN_PROC_BROWSER_TEST_F(ProxyResolutionServiceProviderSystemProxyPolicyTest,
                        ResolveProxyDirect) {
   SetLocalProxyAddress(kLocalProxyUrl);
   EXPECT_EQ("DIRECT", ResolveProxyAndWait("http://www.test.direct.com"));
+}
+
+class ProxyResolutionServiceAtLoginScreen
+    : public ProxyResolutionServiceProviderBaseBrowserTest {
+ public:
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    command_line->AppendSwitchASCII(switches::kProxyPacUrl,
+                                    GetPacUrl(kPacData));
+  }
+
+ protected:
+  LoginManagerMixin login_manager_{&mixin_host_};
+};
+
+// Tests that the D-Bus proxy resolver returns the proxy configured at the
+// sign-in screen.
+IN_PROC_BROWSER_TEST_F(ProxyResolutionServiceAtLoginScreen, ResolveProxy) {
+  EXPECT_EQ("PROXY foo1:80;PROXY foo2:80",
+            ResolveProxyAndWait("http://www.google.com"));
 }
 
 }  // namespace ash

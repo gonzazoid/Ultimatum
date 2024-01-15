@@ -24,9 +24,8 @@
 #include "ui/views/controls/image_view.h"
 #include "ui/views/view.h"
 
-class OmniboxEditModel;
 class OmniboxMatchCellView;
-class OmniboxPopupContentsView;
+class OmniboxPopupViewViews;
 class OmniboxSuggestionButtonRowView;
 class OmniboxResultSelectionIndicator;
 enum class OmniboxPart;
@@ -42,11 +41,10 @@ class ImageButton;
 }  // namespace views
 
 class OmniboxResultView : public views::View {
+  METADATA_HEADER(OmniboxResultView, views::View)
+
  public:
-  METADATA_HEADER(OmniboxResultView);
-  OmniboxResultView(OmniboxPopupContentsView* popup_contents_view,
-                    OmniboxEditModel* model,
-                    size_t model_index);
+  OmniboxResultView(OmniboxPopupViewViews* popup_view, size_t model_index);
   OmniboxResultView(const OmniboxResultView&) = delete;
   OmniboxResultView& operator=(const OmniboxResultView&) = delete;
   ~OmniboxResultView() override;
@@ -99,6 +97,8 @@ class OmniboxResultView : public views::View {
   void OnThemeChanged() override;
 
  private:
+  FRIEND_TEST_ALL_PREFIXES(OmniboxPopupViewViewsTest, DeleteSuggestion);
+
   gfx::Image GetIcon() const;
 
   // Updates the highlight state of the row, as well as conditionally shows
@@ -109,17 +109,11 @@ class OmniboxResultView : public views::View {
   // state.
   void UpdateRemoveSuggestionVisibility();
 
-  // Sets the widths of the suggestion and keyword and calls Layout().
-  void SetWidths();
-
   // views::View:
   void OnBoundsChanged(const gfx::Rect& previous_bounds) override;
 
   // The parent view.
-  const raw_ptr<OmniboxPopupContentsView> popup_contents_view_;
-
-  // The model containing results.
-  raw_ptr<OmniboxEditModel> model_;
+  const raw_ptr<OmniboxPopupViewViews> popup_view_;
 
   // This result's model index.
   size_t model_index_;
@@ -130,13 +124,9 @@ class OmniboxResultView : public views::View {
   // Accessible name (enables to emit certain events).
   std::u16string accessible_name_;
 
-  // Container for the first row (for everything expect |button_row_|).
-  raw_ptr<views::View> suggestion_container_;
-
   // Weak pointers for easy reference.
   raw_ptr<OmniboxMatchCellView>
-      suggestion_view_;                         // The leading (or left) view.
-  raw_ptr<OmniboxMatchCellView> keyword_view_;  // The trailing (or right) view.
+      suggestion_view_;  // The leading (or left) view.
 
   // The blue bar used to indicate selection.
   raw_ptr<OmniboxResultSelectionIndicator> selection_indicator_ = nullptr;

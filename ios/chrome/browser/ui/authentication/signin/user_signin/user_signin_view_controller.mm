@@ -7,10 +7,13 @@
 #import <MaterialComponents/MaterialActivityIndicator.h>
 
 #import "base/check_op.h"
+#import "base/ios/ios_util.h"
 #import "base/logging.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/util/rtl_geometry.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/authentication/signin/signin_constants.h"
-#import "ios/chrome/browser/ui/util/rtl_geometry.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/common/button_configuration_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/elements/gradient_view.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
@@ -18,10 +21,6 @@
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/device_form_factor.h"
 #import "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 // Button corner radius.
@@ -137,22 +136,18 @@ enum AuthenticationButtonType {
 
 - (void)updatePrimaryActionButtonStyle {
   if (![self.delegate unifiedConsentCoordinatorHasIdentity]) {
-    // User does not have an account on the device.
-    [self.primaryActionButton
-        setTitle:l10n_util::GetNSString(
-                     IDS_IOS_ACCOUNT_UNIFIED_CONSENT_ADD_ACCOUNT)
-        forState:UIControlStateNormal];
-    [self.primaryActionButton setImage:nil forState:UIControlStateNormal];
+    UIButtonConfiguration* buttonConfiguration =
+        self.primaryActionButton.configuration;
+    buttonConfiguration.image = nil;
+    buttonConfiguration.title =
+        l10n_util::GetNSString(IDS_IOS_ACCOUNT_UNIFIED_CONSENT_ADD_ACCOUNT);
+    self.primaryActionButton.configuration = buttonConfiguration;
     self.primaryActionButton.tag = AuthenticationButtonTypeAddAccount;
     self.primaryActionButton.accessibilityIdentifier =
         kAddAccountAccessibilityIdentifier;
   } else if (!self.hasUnifiedConsentScreenReachedBottom) {
     // User screen is smaller than the consent text. Display option to
     // auto-scroll to the bottom of the screen.
-    [self.primaryActionButton
-        setTitle:l10n_util::GetNSString(
-                     IDS_IOS_ACCOUNT_CONSISTENCY_CONFIRMATION_SCROLL_BUTTON)
-        forState:UIControlStateNormal];
     self.primaryActionButton.tag = AuthenticationButtonTypeMore;
     self.primaryActionButton.accessibilityIdentifier =
         kMoreAccessibilityIdentifier;
@@ -160,22 +155,20 @@ enum AuthenticationButtonType {
     // Set button "more" down directional arrow image.
     UIImage* buttonImage = [[UIImage imageNamed:@"signin_confirmation_more"]
         imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-    [self.primaryActionButton setImage:buttonImage
-                              forState:UIControlStateNormal];
-    if (UIApplication.sharedApplication.userInterfaceLayoutDirection ==
-        UIUserInterfaceLayoutDirectionLeftToRight) {
-      self.primaryActionButton.imageEdgeInsets =
-          UIEdgeInsetsMake(0, -kImageInset, 0, 0);
-    } else {
-      self.primaryActionButton.imageEdgeInsets =
-          UIEdgeInsetsMake(0, 0, 0, -kImageInset);
-    }
+      UIButtonConfiguration* buttonConfiguration =
+          self.primaryActionButton.configuration;
+      buttonConfiguration.image = buttonImage;
+      buttonConfiguration.title = l10n_util::GetNSString(
+          IDS_IOS_ACCOUNT_CONSISTENCY_CONFIRMATION_SCROLL_BUTTON);
+      buttonConfiguration.imagePadding = kImageInset;
+      self.primaryActionButton.configuration = buttonConfiguration;
   } else {
-    // By default display 'Yes I'm in' button.
-    [self.primaryActionButton
-        setTitle:l10n_util::GetNSString(self.acceptSigninButtonStringId)
-        forState:UIControlStateNormal];
-    [self.primaryActionButton setImage:nil forState:UIControlStateNormal];
+    UIButtonConfiguration* buttonConfiguration =
+        self.primaryActionButton.configuration;
+    buttonConfiguration.image = nil;
+    buttonConfiguration.title =
+        l10n_util::GetNSString(self.acceptSigninButtonStringId);
+    self.primaryActionButton.configuration = buttonConfiguration;
     self.primaryActionButton.tag = AuthenticationButtonTypeConfirmation;
     self.primaryActionButton.accessibilityIdentifier =
         kConfirmationAccessibilityIdentifier;
@@ -241,14 +234,24 @@ enum AuthenticationButtonType {
   self.containerView.translatesAutoresizingMaskIntoConstraints = NO;
   [self.view addSubview:self.containerView];
 
-  self.primaryActionButton = [[UIButton alloc] init];
+  UIButtonConfiguration* primaryButtonConfiguration =
+      [UIButtonConfiguration plainButtonConfiguration];
+  self.primaryActionButton =
+      [UIButton buttonWithConfiguration:primaryButtonConfiguration
+                          primaryAction:nil];
+
   [self.primaryActionButton addTarget:self
                                action:@selector(onPrimaryActionButtonPressed:)
                      forControlEvents:UIControlEventTouchUpInside];
   [self updatePrimaryActionButtonStyle];
   self.primaryActionButton.translatesAutoresizingMaskIntoConstraints = NO;
 
-  self.secondaryActionButton = [[UIButton alloc] init];
+  UIButtonConfiguration* secondaryButtonConfiguration =
+      [UIButtonConfiguration plainButtonConfiguration];
+  self.secondaryActionButton =
+      [UIButton buttonWithConfiguration:secondaryButtonConfiguration
+                          primaryAction:nil];
+
   [self.secondaryActionButton
              addTarget:self
                 action:@selector(onSecondaryActionButtonPressed:)
@@ -358,10 +361,6 @@ enum AuthenticationButtonType {
 }
 
 - (NSString*)secondaryActionButtonTitle {
-  if (self.useFirstRunSkipButton) {
-    return l10n_util::GetNSString(
-        IDS_IOS_FIRSTRUN_ACCOUNT_CONSISTENCY_SKIP_BUTTON);
-  }
   return l10n_util::GetNSString(IDS_IOS_ACCOUNT_CONSISTENCY_SETUP_SKIP_BUTTON);
 }
 
@@ -495,14 +494,18 @@ enum AuthenticationButtonType {
       // Set the blue background button styling.
       button.backgroundColor = [UIColor colorNamed:kBlueColor];
       button.layer.cornerRadius = kButtonCornerRadius;
-      [button setTitleColor:[UIColor colorNamed:kSolidButtonTextColor]
-                   forState:UIControlStateNormal];
+
+      UIButtonConfiguration* buttonConfiguration = button.configuration;
+      buttonConfiguration.baseForegroundColor =
+          [UIColor colorNamed:kSolidButtonTextColor];
+      button.configuration = buttonConfiguration;
       break;
     }
     case SECONDARY_ACTION_STYLE: {
       // Set the blue text button styling.
-      [button setTitleColor:[UIColor colorNamed:kBlueColor]
-                   forState:UIControlStateNormal];
+      UIButtonConfiguration* buttonConfiguration = button.configuration;
+      buttonConfiguration.baseForegroundColor = [UIColor colorNamed:kBlueColor];
+      button.configuration = buttonConfiguration;
       break;
     }
   }
@@ -519,11 +522,20 @@ enum AuthenticationButtonType {
       self.authenticationViewConstants;
   CGFloat horizontalContentInset = constants.ButtonTitleContentHorizontalInset;
   CGFloat verticalContentInset = constants.ButtonTitleContentVerticalInset;
-  button.contentEdgeInsets =
-      UIEdgeInsetsMake(verticalContentInset, horizontalContentInset,
-                       verticalContentInset, horizontalContentInset);
-  button.titleLabel.font = [UIFont preferredFontForTextStyle:fontStyle];
-  button.titleLabel.numberOfLines = 0;
+
+  UIButtonConfiguration* buttonConfiguration = button.configuration;
+  buttonConfiguration.contentInsets =
+      NSDirectionalEdgeInsetsMake(verticalContentInset, horizontalContentInset,
+                                  verticalContentInset, horizontalContentInset);
+  NSString* title = button.configuration.title;
+  if (title) {
+    UIFont* font = [UIFont preferredFontForTextStyle:fontStyle];
+    NSDictionary* attributes = @{NSFontAttributeName : font};
+    NSAttributedString* attributedTitle =
+        [[NSAttributedString alloc] initWithString:title attributes:attributes];
+    buttonConfiguration.attributedTitle = attributedTitle;
+  }
+  button.configuration = buttonConfiguration;
 }
 
 #pragma mark - Events

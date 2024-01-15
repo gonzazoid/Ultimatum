@@ -7,10 +7,19 @@
 #include <memory>
 #include <utility>
 
+#include "base/containers/contains.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/strings/strcat.h"
+#include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/test/gmock_callback_support.h"
+#include "components/segmentation_platform/public/constants.h"
+#include "components/segmentation_platform/public/result.h"
+#include "components/segmentation_platform/public/testing/mock_segmentation_platform_service.h"
+#include "components/webapps/browser/banners/app_banner_manager.h"
 #include "components/webapps/browser/installable/installable_data.h"
 #include "content/public/browser/web_contents.h"
+#include "testing/gmock/include/gmock/gmock.h"
 
 namespace webapps {
 
@@ -20,6 +29,24 @@ TestAppBannerManagerDesktop::TestAppBannerManagerDesktop(
   // Ensure no real instance exists. This must be the only instance to avoid
   // observers of AppBannerManager left observing the wrong one.
   DCHECK_EQ(AppBannerManagerDesktop::FromWebContents(web_contents), nullptr);
+
+  // Create default responses for the ML system.
+  segmentation_platform_service_ = std::make_unique<
+      segmentation_platform::MockSegmentationPlatformService>();
+  segmentation_platform::ClassificationResult result(
+      segmentation_platform::PredictionStatus::kSucceeded);
+  result.ordered_labels.push_back("DontShow");
+  ON_CALL(*segmentation_platform_service_,
+          GetClassificationResult(
+              segmentation_platform::kWebAppInstallationPromoKey, testing::_,
+              testing::_, base::test::IsNotNullCallback()))
+      .WillByDefault(base::test::RunOnceCallbackRepeatedly<3>(result));
+  ON_CALL(*segmentation_platform_service_,
+          CollectTrainingData(
+              segmentation_platform::proto::SegmentId::
+                  OPTIMIZATION_TARGET_WEB_APP_INSTALLATION_PROMO,
+              testing::_, testing::_, base::test::IsNotNullCallback()))
+      .WillByDefault(base::test::RunOnceCallbackRepeatedly<3>(true));
 }
 
 TestAppBannerManagerDesktop::~TestAppBannerManagerDesktop() = default;
@@ -59,13 +86,7 @@ bool TestAppBannerManagerDesktop::WaitForInstallableCheck() {
     installable_quit_closure_ = run_loop.QuitClosure();
     run_loop.Run();
   }
-  // Only wait for worker check if it has started after the installable check.
-  if (waiting_for_worker_) {
-    base::RunLoop run_loop;
-    promotable_quit_closure_ = run_loop.QuitClosure();
-    run_loop.Run();
-  }
-  return *installable_ && promotable_;
+  return *installable_ && IsPromotableWebApp();
 }
 
 void TestAppBannerManagerDesktop::PrepareDone(base::OnceClosure on_done) {
@@ -82,40 +103,52 @@ void TestAppBannerManagerDesktop::AwaitAppInstall() {
   loop.Run();
 }
 
+segmentation_platform::MockSegmentationPlatformService*
+TestAppBannerManagerDesktop::GetMockSegmentationPlatformService() {
+  return segmentation_platform_service_.get();
+}
+
 void TestAppBannerManagerDesktop::OnDidGetManifest(
     const InstallableData& result) {
+  debug_log_.Append("OnDidGetManifest");
   AppBannerManagerDesktop::OnDidGetManifest(result);
 
-  // AppBannerManagerDesktop does not call |OnDidPerformInstallableCheck| to
-  // complete the installability check in this case, instead it early exits
-  // with failure.
-  if (!result.NoBlockingErrors())
+  // The manifest URL changing in the middle of a pipeline doesn't always mean
+  // the page data will be reset. To ensure that installable_ isn't accidentally
+  // set twice, reset it here.
+  if (base::Contains(result.errors, MANIFEST_URL_CHANGED)) {
+    installable_.reset();
+  } else if (!result.errors.empty()) {
+    // AppBannerManagerDesktop does not call
+    // |OnDidPerformInstallableWebAppCheck| to complete the installability check
+    // in this case, instead it early exits with failure.
     SetInstallable(false);
+  }
 }
 void TestAppBannerManagerDesktop::OnDidPerformInstallableWebAppCheck(
     const InstallableData& result) {
+  debug_log_.Append("OnDidPerformInstallableWebAppCheck");
   AppBannerManagerDesktop::OnDidPerformInstallableWebAppCheck(result);
-  SetInstallable(result.NoBlockingErrors());
-}
-
-void TestAppBannerManagerDesktop::PerformServiceWorkerCheck() {
-  waiting_for_worker_ = true;
-  AppBannerManagerDesktop::PerformServiceWorkerCheck();
-}
-
-void TestAppBannerManagerDesktop::OnDidPerformWorkerCheck(
-    const InstallableData& result) {
-  AppBannerManagerDesktop::OnDidPerformWorkerCheck(result);
-  SetPromotable(result.NoBlockingErrors());
+  SetInstallable(result.errors.empty());
 }
 
 void TestAppBannerManagerDesktop::ResetCurrentPageData() {
+  debug_log_.Append("ResetCurrentPageData");
   AppBannerManagerDesktop::ResetCurrentPageData();
   installable_.reset();
-  promotable_ = false;
-  waiting_for_worker_ = false;
   if (tear_down_quit_closure_)
     std::move(tear_down_quit_closure_).Run();
+}
+
+void TestAppBannerManagerDesktop::RecheckInstallabilityForLoadedPage() {
+  debug_log_.Append("RecheckInstallabilityForLoadedPage");
+  installable_.reset();
+  AppBannerManagerDesktop::RecheckInstallabilityForLoadedPage();
+}
+
+segmentation_platform::SegmentationPlatformService*
+TestAppBannerManagerDesktop::GetSegmentationPlatformService() {
+  return segmentation_platform_service_.get();
 }
 
 TestAppBannerManagerDesktop*
@@ -130,7 +163,7 @@ void TestAppBannerManagerDesktop::OnInstall(blink::mojom::DisplayMode display) {
 }
 
 void TestAppBannerManagerDesktop::DidFinishCreatingWebApp(
-    const web_app::AppId& app_id,
+    const webapps::AppId& app_id,
     webapps::InstallResultCode code) {
   AppBannerManagerDesktop::DidFinishCreatingWebApp(app_id, code);
   OnFinished();
@@ -139,7 +172,9 @@ void TestAppBannerManagerDesktop::DidFinishCreatingWebApp(
 void TestAppBannerManagerDesktop::DidFinishLoad(
     content::RenderFrameHost* render_frame_host,
     const GURL& validated_url) {
-  if (ShouldIgnore(render_frame_host, validated_url)) {
+  debug_log_.Append(base::StrCat({"DidFinishLoad ", validated_url.spec()}));
+  UrlType url_type = GetUrlType(render_frame_host, validated_url);
+  if (url_type == AppBannerManager::UrlType::kInvalidPrimaryFrameUrl) {
     SetInstallable(false);
     return;
   }
@@ -148,6 +183,8 @@ void TestAppBannerManagerDesktop::DidFinishLoad(
 }
 
 void TestAppBannerManagerDesktop::UpdateState(AppBannerManager::State state) {
+  debug_log_.Append(
+      base::StringPrintf("State updated to %d", static_cast<int>(state)));
   AppBannerManager::UpdateState(state);
 
   if (state == AppBannerManager::State::PENDING_ENGAGEMENT ||
@@ -159,24 +196,20 @@ void TestAppBannerManagerDesktop::UpdateState(AppBannerManager::State state) {
 }
 
 void TestAppBannerManagerDesktop::SetInstallable(bool installable) {
-  DCHECK(!installable_.has_value() || installable_ == installable);
+  debug_log_.Append(base::StringPrintf("SetInstallable(%d)", installable));
+  DCHECK(!installable_.has_value() || installable_ == installable)
+      << "Cannot set installable to " << installable << ", already set to "
+      << installable_.value() << ". Debug log:\n"
+      << debug_log_.DebugString();
   installable_ = installable;
   if (installable_quit_closure_)
     std::move(installable_quit_closure_).Run();
 }
 
-void TestAppBannerManagerDesktop::SetPromotable(bool promotable) {
-  DCHECK(waiting_for_worker_);
-  waiting_for_worker_ = false;
-  promotable_ = promotable;
-  if (promotable_quit_closure_)
-    std::move(promotable_quit_closure_).Run();
-}
-
 void TestAppBannerManagerDesktop::OnFinished() {
   if (on_done_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  std::move(on_done_));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(on_done_));
   }
 }
 

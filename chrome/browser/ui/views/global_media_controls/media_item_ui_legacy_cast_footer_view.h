@@ -5,10 +5,11 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_GLOBAL_MEDIA_CONTROLS_MEDIA_ITEM_UI_LEGACY_CAST_FOOTER_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_GLOBAL_MEDIA_CONTROLS_MEDIA_ITEM_UI_LEGACY_CAST_FOOTER_VIEW_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "components/global_media_controls/public/constants.h"
 #include "components/global_media_controls/public/views/media_item_ui_footer.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/color_palette.h"
 
 namespace views {
@@ -20,6 +21,8 @@ class LabelButton;
 // disabled.
 class MediaItemUILegacyCastFooterView
     : public global_media_controls::MediaItemUIFooter {
+  METADATA_HEADER(MediaItemUILegacyCastFooterView,
+                  global_media_controls::MediaItemUIFooter)
  public:
   explicit MediaItemUILegacyCastFooterView(
       base::RepeatingClosure stop_casting_callback);

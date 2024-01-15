@@ -22,8 +22,7 @@ class PairingResponse;
 // HostControlDispatcher dispatches incoming messages on the control channel to
 // HostStub or ClipboardStub, and also implements ClientStub and CursorShapeStub
 // for outgoing messages.
-class HostControlDispatcher : public ChannelDispatcherBase,
-                              public ClientStub {
+class HostControlDispatcher : public ChannelDispatcherBase, public ClientStub {
  public:
   HostControlDispatcher();
 
@@ -38,6 +37,7 @@ class HostControlDispatcher : public ChannelDispatcherBase,
   void DeliverHostMessage(const ExtensionMessage& message) override;
   void SetVideoLayout(const VideoLayout& layout) override;
   void SetTransportInfo(const TransportInfo& transport_info) override;
+  void SetActiveDisplay(const ActiveDisplay& active_display) override;
 
   // ClipboardStub implementation for sending clipboard data to client.
   void InjectClipboardEvent(const ClipboardEvent& event) override;

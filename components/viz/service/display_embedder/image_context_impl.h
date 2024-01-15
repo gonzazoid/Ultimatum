@@ -12,7 +12,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "components/viz/common/quads/aggregated_render_pass.h"
-#include "components/viz/common/resources/resource_format.h"
+#include "components/viz/common/resources/shared_image_format.h"
 #include "components/viz/service/display/external_use_client.h"
 #include "gpu/command_buffer/common/mailbox_holder.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_representation.h"
@@ -22,16 +22,16 @@
 #include "third_party/skia/include/core/SkRefCnt.h"
 #include "third_party/skia/include/gpu/GrBackendSurface.h"
 #include "third_party/skia/include/gpu/GrTypes.h"
+#include "third_party/skia/include/gpu/graphite/BackendTexture.h"
+#include "third_party/skia/include/private/chromium/GrPromiseImageTexture.h"
 #include "ui/gfx/geometry/size.h"
 
 class SkColorSpace;
-class SkPromiseImageTexture;
 
 namespace gpu {
 class MailboxManager;
 class SharedContextState;
 class SharedImageRepresentationFactory;
-class TextureBase;
 namespace gles2 {
 class TexturePassthrough;
 }
@@ -48,11 +48,11 @@ class ImageContextImpl final : public ExternalUseClient::ImageContext {
  public:
   ImageContextImpl(const gpu::MailboxHolder& mailbox_holder,
                    const gfx::Size& size,
-                   ResourceFormat resource_format,
+                   SharedImageFormat format,
                    bool maybe_concurrent_reads,
                    const absl::optional<gpu::VulkanYCbCrInfo>& ycbcr_info,
                    sk_sp<SkColorSpace> color_space,
-                   bool allow_keeping_read_access = true,
+                   bool is_for_render_pass,
                    bool raw_draw_if_possible = false);
 
   ImageContextImpl(const ImageContextImpl&) = delete;
@@ -65,19 +65,28 @@ class ImageContextImpl final : public ExternalUseClient::ImageContext {
   // Returns true if there might be concurrent reads to the backing texture.
   bool maybe_concurrent_reads() const { return maybe_concurrent_reads_; }
 
-  void set_promise_image_texture(
-      sk_sp<SkPromiseImageTexture> promise_image_texture) {
-    owned_promise_image_texture_ = std::move(promise_image_texture);
-    promise_image_texture_ = owned_promise_image_texture_.get();
+  // Return the vector of promise image textures.
+  const std::vector<raw_ptr<GrPromiseImageTexture>>& promise_image_textures()
+      const {
+    return promise_image_textures_;
   }
-  SkPromiseImageTexture* promise_image_texture() const {
-    return promise_image_texture_;
+  const std::vector<skgpu::graphite::BackendTexture>& graphite_textures()
+      const {
+    return graphite_textures_;
   }
-  std::unique_ptr<GrBackendSurfaceMutableState> TakeAccessEndState() const {
+  bool HasAccessEndState() const {
     return representation_scoped_read_access_
-               ? representation_scoped_read_access_->TakeEndState()
-               : nullptr;
+               ? representation_scoped_read_access_->HasBackendSurfaceEndState()
+               : false;
   }
+  void ApplyAccessEndState() const {
+    if (representation_scoped_read_access_) {
+      representation_scoped_read_access_->ApplyBackendSurfaceEndState();
+    }
+  }
+
+  void SetPromiseImageTextures(
+      std::vector<sk_sp<GrPromiseImageTexture>> promise_image_textures);
 
   void BeginAccessIfNecessary(
       gpu::SharedContextState* context_state,
@@ -90,6 +99,7 @@ class ImageContextImpl final : public ExternalUseClient::ImageContext {
   void EndAccessIfNecessary();
 
  private:
+  void DeleteFallbackTextures();
   void CreateFallbackImage(gpu::SharedContextState* context_state);
   bool BeginAccessIfNecessaryForSharedImage(
       gpu::SharedContextState* context_state,
@@ -97,19 +107,18 @@ class ImageContextImpl final : public ExternalUseClient::ImageContext {
       std::vector<GrBackendSemaphore>* begin_semaphores,
       std::vector<GrBackendSemaphore>* end_semaphores);
 
-  // Returns true if |texture_base| is a gles2::Texture and all necessary
-  // operations completed successfully. In this case, |*size| is the size of
-  // of level 0.
-  bool BindOrCopyTextureIfNecessary(gpu::TextureBase* texture_base,
-                                    gfx::Size* size);
-
   const bool maybe_concurrent_reads_ = false;
-  const bool allow_keeping_read_access_ = true;
+  // Indicates that this will be used to refer to allocations that originate
+  // from the renderer.
+  const bool is_for_render_pass_ = false;
   const bool raw_draw_if_possible_ = false;
 
   // Fallback in case we cannot produce a |representation_|.
   raw_ptr<gpu::SharedContextState> fallback_context_state_ = nullptr;
-  GrBackendTexture fallback_texture_;
+  std::vector<GrBackendTexture> fallback_textures_;
+  // Fallback textures used for fulfilling Graphite promise images. Owned by the
+  // ImageContextImpl and must be destroyed on ImageContextImpl destruction.
+  std::vector<skgpu::graphite::BackendTexture> graphite_fallback_textures_;
 
   // Only one of the follow should be non-null at the same time.
   scoped_refptr<gpu::gles2::TexturePassthrough> texture_passthrough_;
@@ -123,14 +132,17 @@ class ImageContextImpl final : public ExternalUseClient::ImageContext {
   std::unique_ptr<gpu::RasterImageRepresentation::ScopedReadAccess>
       representation_raster_scoped_access_;
 
-  // For holding SkPromiseImageTexture create from |fallback_texture| or legacy
-  // mailbox.
-  sk_sp<SkPromiseImageTexture> owned_promise_image_texture_;
+  // For holding GrPromiseImageTexture create from |fallback_texture| or legacy
+  // mailboxes.
+  std::vector<sk_sp<GrPromiseImageTexture>> owned_promise_image_textures_;
 
-  // The |promise_image_texture| is used for fulfilling the promise image. It is
-  // used on GPU thread.
-  raw_ptr<SkPromiseImageTexture, DanglingUntriaged> promise_image_texture_ =
-      nullptr;
+  // The |promise_image_textures| are used for fulfilling the promise images.
+  // They are used on GPU thread.
+  std::vector<raw_ptr<GrPromiseImageTexture>> promise_image_textures_;
+
+  // Graphite backend textures used for fulfilling Graphite promise images.
+  // Owned by the shared image representation / scoped access.
+  std::vector<skgpu::graphite::BackendTexture> graphite_textures_;
 };
 
 }  // namespace viz

@@ -68,7 +68,15 @@ enum class TranslationStatus {
   kRevertedManualContextMenuTranslation = 17,
   kFailedWithNoErrorManualContextMenuTranslation = 18,
   kFailedWithErrorManualContextMenuTranslation = 19,
-  kMaxValue = kFailedWithErrorManualContextMenuTranslation,
+  kSuccessFromAutomaticTranslationToPredefinedTarget = 20,
+  kRevertedAutomaticTranslationToPredefinedTarget = 21,
+  kFailedWithNoErrorAutomaticTranslationToPredefinedTarget = 22,
+  kFailedWithErrorAutomaticTranslationToPredefinedTarget = 23,
+  kSuccessFromAutomaticTranslationByHref = 24,
+  kRevertedAutomaticTranslationByHref = 25,
+  kFailedWithNoErrorAutomaticTranslationByHref = 26,
+  kFailedWithErrorAutomaticTranslationByHref = 27,
+  kMaxValue = kFailedWithErrorAutomaticTranslationByHref,
 };
 
 // These values are persisted to logs. Entries should not be renumbered and
@@ -76,7 +84,7 @@ enum class TranslationStatus {
 enum class TranslationType {
   kUninitialized = 0,
   // kManualInitialTranslation = 1,  // no longer used, split into
-  // kManualUiInitialTranslation and kManualContextMenuInitialranslation
+  // kManualUiInitialTranslation and kManualContextMenuInitialTranslation
   // kManualReTranslation = 2,  // no longer used, split into
   // kManualUiReTranslation and kManualContextMenuReTranslation
   kAutomaticTranslationByPref = 3,
@@ -85,7 +93,9 @@ enum class TranslationType {
   kManualUiReTranslation = 6,
   kManualContextMenuInitialTranslation = 7,
   kManualContextMenuReTranslation = 8,
-  kMaxValue = kManualContextMenuReTranslation,
+  kAutomaticTranslationToPredefinedTarget = 9,
+  kAutomaticTranslationByHref = 10,
+  kMaxValue = kAutomaticTranslationByHref,
 };
 
 // These values are persisted to logs. Entries should not be renumbered and
@@ -110,7 +120,9 @@ enum class TriggerDecision {
   kShowUIFromHref = 16,
   kAutomaticTranslationByHref = 17,
   kAutomaticTranslationToPredefinedTarget = 18,
-  kMaxValue = kAutomaticTranslationToPredefinedTarget,
+  kShowIcon = 19,
+  kDisabledMatchesPreviousLanguage = 20,
+  kMaxValue = kDisabledMatchesPreviousLanguage,
 };
 
 // These values are persisted to logs. Entries should not be renumbered and
@@ -119,15 +131,24 @@ enum class UIInteraction {
   kUninitialized = 0,
   kTranslate = 1,
   kRevert = 2,
-  kAlwaysTranslateLanguage = 3,
+  // kAlwaysTranslateLanguage = 3, // no longer used, split into
+  // kAddAlwaysTranslateLanguage and kRemoveAlwaysTranslateLanguage
   kChangeSourceLanguage = 4,
   kChangeTargetLanguage = 5,
-  kNeverTranslateLanguage = 6,
-  kNeverTranslateSite = 7,
+  // kNeverTranslateLanguage = 6, // no longer used, split into
+  // kAddNeverTranslateLanguage and kRemoveNeverTranslateLanguage
+  // kNeverTranslateSite = 7, // no longer used, split into
+  // kAddNeverTranslateSite and kRemoveNeverTranslateSite
   kCloseUIExplicitly = 8,
   kCloseUILostFocus = 9,
   kCloseUITimerRanOut = 10,
-  kMaxValue = kCloseUITimerRanOut,
+  kAddAlwaysTranslateLanguage = 11,
+  kRemoveAlwaysTranslateLanguage = 12,
+  kAddNeverTranslateLanguage = 13,
+  kRemoveNeverTranslateLanguage = 14,
+  kAddNeverTranslateSite = 15,
+  kRemoveNeverTranslateSite = 16,
+  kMaxValue = kRemoveNeverTranslateSite,
 };
 
 // TranslateMetricsLogger tracks and logs various UKM and UMA metrics for Chrome
@@ -161,7 +182,6 @@ class TranslateMetricsLogger {
   // highest priority trigger decision will be logged to UMA at the end of the
   // page load.
   virtual void LogTriggerDecision(TriggerDecision trigger_decision) = 0;
-  virtual void LogAutofillAssistantDeferredTriggerDecision() = 0;
 
   // Tracks the state of Translate over the course of the page load.
   virtual void LogInitialState() = 0;

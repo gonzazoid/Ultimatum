@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/hash/md5.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_run_loop_timeout.h"
@@ -21,8 +21,6 @@
 #include "media/base/null_video_sink.h"
 #include "media/base/pipeline_impl.h"
 #include "media/base/pipeline_status.h"
-#include "media/base/text_track.h"
-#include "media/base/text_track_config.h"
 #include "media/base/video_frame.h"
 #include "media/renderers/audio_renderer_impl.h"
 #include "media/renderers/video_renderer_impl.h"
@@ -120,7 +118,7 @@ class PipelineIntegrationTestBase : public Pipeline::Client {
   // Returns the hash of all audio frames seen.  Should only be called once
   // after playback completes.  Pipeline must have been started with hashing
   // enabled.
-  std::string GetAudioHash();
+  const AudioHash& GetAudioHash() const;
 
   // Reset video hash to restart hashing from scratch (e.g. after a seek or
   // after disabling a media track).
@@ -138,7 +136,7 @@ class PipelineIntegrationTestBase : public Pipeline::Client {
   }
 
   // Saves a test callback, ownership of which will be transferred to the next
-  // AudioRendererImpl created by CreateDefaultRenderer().
+  // AudioRendererImpl created by CreateRendererImpl().
   void set_audio_play_delay_cb(AudioRendererImpl::PlayDelayCBForTesting cb) {
     audio_play_delay_cb_ = std::move(cb);
   }
@@ -175,18 +173,18 @@ class PipelineIntegrationTestBase : public Pipeline::Client {
   base::TimeDelta current_duration_;
   AudioRendererImpl::PlayDelayCBForTesting audio_play_delay_cb_;
 
-  // By default RendererImpl will be created using CreateDefaultRenderer(). But
+  // By default RendererImpl will be created using CreateRendererImpl(). But
   // if |create_renderer_cb_| is set, it'll be used to create the Renderer
   // instead.
   using CreateRendererCB = base::RepeatingCallback<std::unique_ptr<Renderer>(
       absl::optional<RendererType> renderer_type)>;
   CreateRendererCB create_renderer_cb_;
 
-  std::unique_ptr<Renderer> CreateDefaultRenderer(
+  std::unique_ptr<Renderer> CreateRendererImpl(
       absl::optional<RendererType> renderer_type);
 
   // Sets |create_renderer_cb_| which will be used to wrap the Renderer created
-  // by CreateDefaultRenderer().
+  // by CreateRendererImpl().
   void SetCreateRendererCB(CreateRendererCB create_renderer_cb);
 
   PipelineStatus StartInternal(
@@ -217,6 +215,10 @@ class PipelineIntegrationTestBase : public Pipeline::Client {
       TestMediaSource* source,
       uint8_t test_type,
       CreateAudioDecodersCB prepend_audio_decoders_cb);
+
+#if BUILDFLAG(ENABLE_HLS_DEMUXER)
+  PipelineStatus StartPipelineWithHlsManifest(const std::string& filename);
+#endif  // BUILDFLAG(ENABLE_HLS_DEMUXER)
 
   void OnSeeked(base::TimeDelta seek_time, PipelineStatus status);
   void OnStatusCallback(const base::RepeatingClosure& quit_run_loop_closure,
@@ -249,8 +251,6 @@ class PipelineIntegrationTestBase : public Pipeline::Client {
   MOCK_METHOD2(OnBufferingStateChange,
                void(BufferingState, BufferingStateChangeReason));
   MOCK_METHOD0(OnDurationChange, void());
-  MOCK_METHOD2(OnAddTextTrack,
-               void(const TextTrackConfig& config, AddTextTrackDoneCB done_cb));
   MOCK_METHOD1(OnWaiting, void(WaitingReason));
   MOCK_METHOD1(OnVideoNaturalSizeChange, void(const gfx::Size&));
   MOCK_METHOD1(OnVideoConfigChange, void(const VideoDecoderConfig&));
@@ -273,8 +273,17 @@ class PipelineIntegrationTestBase : public Pipeline::Client {
   // RunUntilQuitOrError() on it.
   void RunUntilQuitOrEndedOrError(base::RunLoop* run_loop);
 
+  // Implementation of `Pipeline::Client::OnBufferingStateChange()` used during
+  // seeks.  This handles failed seeks as well as successful ones, which have
+  // different behavior around exiting the seek.
+  void OnBufferingStateChangeForSeek(BufferingState state,
+                                     BufferingStateChangeReason reason);
+
   CreateVideoDecodersCB prepend_video_decoders_cb_;
   CreateAudioDecodersCB prepend_audio_decoders_cb_;
+
+  // First buffering state we get from the pipeline.
+  absl::optional<BufferingState> buffering_state_;
 
   base::OnceClosure on_ended_closure_;
   base::OnceClosure on_error_closure_;

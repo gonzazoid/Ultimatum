@@ -13,10 +13,17 @@ class Rect;
 
 namespace ui {
 
-// Wrapper interface for different wayland xdg-shell surface versions.
+class XDGSurfaceWrapperImpl;
+
+// Wrapper interface for shell surfaces.
+//
+// This is one of three wrapper classes: Shell{Surface,Toplevel,Popup}Wrapper.
+// It has the only sub-class in Chromium, but should not be removed because it
+// eases downstream implementations.
+// See https://crbug.com/1402672
 class ShellSurfaceWrapper {
  public:
-  virtual ~ShellSurfaceWrapper() {}
+  virtual ~ShellSurfaceWrapper() = default;
 
   // Initializes the ShellSurface. The implementation should not commit surface
   // state changes and defer that to the window that owns the surface, such that
@@ -32,6 +39,9 @@ class ShellSurfaceWrapper {
 
   // Sets a desired window geometry once wayland requests client to do so.
   virtual void SetWindowGeometry(const gfx::Rect& bounds) = 0;
+
+  // Casts `this` to XDGSurfaceWrapperImpl, if it is of that type.
+  virtual XDGSurfaceWrapperImpl* AsXDGSurfaceWrapper();
 };
 
 }  // namespace ui

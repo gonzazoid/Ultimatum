@@ -36,8 +36,9 @@ DuplicateDownloadDialogBridgeDelegate::DuplicateDownloadDialogBridgeDelegate() =
 
 DuplicateDownloadDialogBridgeDelegate::
     ~DuplicateDownloadDialogBridgeDelegate() {
-  for (auto* download_item : download_items_)
+  for (download::DownloadItem* download_item : download_items_) {
     download_item->RemoveObserver(this);
+  }
 }
 
 void DuplicateDownloadDialogBridgeDelegate::CreateDialog(
@@ -72,6 +73,7 @@ void DuplicateDownloadDialogBridgeDelegate::OnConfirmed(
       &download_items_, download_guid);
   if (!download)
     return;
+  download->RemoveObserver(this);
 
   if (accepted) {
     base::FilePath download_dir;

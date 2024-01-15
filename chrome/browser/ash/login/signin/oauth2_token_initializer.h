@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/ash/login/signin/oauth2_token_fetcher.h"
 #include "chromeos/ash/components/login/auth/public/user_context.h"
 
@@ -42,11 +42,5 @@ class OAuth2TokenInitializer final : public OAuth2TokenFetcher::Delegate {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::OAuth2TokenInitializer;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SIGNIN_OAUTH2_TOKEN_INITIALIZER_H_

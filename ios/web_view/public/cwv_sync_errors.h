@@ -7,25 +7,11 @@
 
 #import <Foundation/Foundation.h>
 
-#import "cwv_export.h"
-
 NS_ASSUME_NONNULL_BEGIN
 
-// The error domain for sync errors.
-FOUNDATION_EXPORT CWV_EXPORT NSErrorDomain const CWVSyncErrorDomain;
-// NSString description for the type of error.
-FOUNDATION_EXPORT CWV_EXPORT
-    NSErrorUserInfoKey const CWVSyncErrorDescriptionKey;
-// NSString message describing the error in more detail.
-FOUNDATION_EXPORT CWV_EXPORT NSErrorUserInfoKey const CWVSyncErrorMessageKey;
-// NSValue wrapped BOOL indicating if the error is transient.
-FOUNDATION_EXPORT CWV_EXPORT
-    NSErrorUserInfoKey const CWVSyncErrorIsTransientKey;
-
-// Possible error codes during syncing.
+// Possible error codes that can result from |CWVSyncControllerDataSource|'s
+// access token fetches.
 typedef NS_ENUM(NSInteger, CWVSyncError) {
-  // No error.
-  CWVSyncErrorNone = 0,
   // The credentials supplied to GAIA were either invalid, or the locally
   // cached credentials have expired.
   CWVSyncErrorInvalidGAIACredentials = -100,

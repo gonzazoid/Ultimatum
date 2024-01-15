@@ -11,7 +11,8 @@
 #include "ash/login/ui/pin_request_view.h"
 #include "ash/login/ui/pin_request_widget.h"
 #include "ash/public/cpp/login_types.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/event.h"
@@ -72,8 +73,9 @@ class SecurityTokenRequestControllerTest : public LoginTestBase {
       generator->PressKey(ui::KeyboardCode(ui::KeyboardCode::VKEY_0 + i),
                           ui::EF_NONE);
     }
-    if (PinRequestView::TestApi(view_).submit_button()->GetEnabled())
+    if (PinRequestView::TestApi(view_).submit_button()->GetEnabled()) {
       SimulateButtonPress(PinRequestView::TestApi(view_).submit_button());
+    }
   }
 
   std::unique_ptr<SecurityTokenRequestController> controller_;
@@ -84,7 +86,8 @@ class SecurityTokenRequestControllerTest : public LoginTestBase {
   // Number of times the UI was closed.
   int ui_closed_by_user_calls_ = 0;
 
-  PinRequestView* view_ = nullptr;  // Owned by test widget view hierarchy.
+  raw_ptr<PinRequestView, DanglingUntriaged> view_ =
+      nullptr;  // Owned by test widget view hierarchy.
 
  private:
   void OnPinEntered(const std::string& user_input) { ++pin_entered_calls_; }

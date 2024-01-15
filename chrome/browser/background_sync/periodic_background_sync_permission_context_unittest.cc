@@ -9,12 +9,12 @@
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
-#include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/content_settings/core/common/content_settings_types.h"
+#include "components/permissions/permission_util.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/web_contents_tester.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -96,7 +96,8 @@ class PeriodicBackgroundSyncPermissionContextTest
     auto permission_result = permission_context_->GetPermissionStatus(
         render_frame_host, /* requesting_origin= */ url,
         /* embedding_origin= */ url);
-    return permission_result.content_setting;
+    return permissions::PermissionUtil::PermissionStatusToContentSetting(
+        permission_result.status);
   }
 
   void SetBackgroundSyncContentSetting(const GURL& url,

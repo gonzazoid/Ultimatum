@@ -8,14 +8,19 @@ import static org.chromium.support_lib_glue.SupportLibWebViewChromiumFactory.rec
 
 import org.chromium.android_webview.AwRenderProcess;
 import org.chromium.android_webview.AwSupportLibIsomorphic;
+import org.chromium.android_webview.common.Lifetime;
+import org.chromium.base.TraceEvent;
 import org.chromium.support_lib_boundary.WebViewRendererBoundaryInterface;
 import org.chromium.support_lib_glue.SupportLibWebViewChromiumFactory.ApiCall;
 
 /**
  * Adapter between WebViewRendererBoundaryInterface and AwRenderProcess.
+ *
+ * Once created, instances are kept alive by the peer AwRendererProcess.
  */
-class SupportLibWebViewRendererAdapter
-        extends IsomorphicAdapter implements WebViewRendererBoundaryInterface {
+@Lifetime.Renderer
+class SupportLibWebViewRendererAdapter extends IsomorphicAdapter
+        implements WebViewRendererBoundaryInterface {
     private AwRenderProcess mRenderer;
 
     SupportLibWebViewRendererAdapter(AwRenderProcess renderer) {
@@ -29,7 +34,10 @@ class SupportLibWebViewRendererAdapter
 
     @Override
     public boolean terminate() {
-        recordApiCall(ApiCall.WEBVIEW_RENDERER_TERMINATE);
-        return mRenderer.terminate();
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.AndroidX.WEBVIEW_RENDERER_TERMINATE")) {
+            recordApiCall(ApiCall.WEBVIEW_RENDERER_TERMINATE);
+            return mRenderer.terminate();
+        }
     }
 }

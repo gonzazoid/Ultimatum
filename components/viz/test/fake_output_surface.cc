@@ -4,13 +4,14 @@
 
 #include "components/viz/test/fake_output_surface.h"
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/viz/common/resources/returned_resource.h"
 #include "components/viz/service/display/output_surface_client.h"
 #include "components/viz/test/begin_frame_args_test.h"
+#include "gpu/command_buffer/common/swap_buffers_complete_params.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/buffer_format_util.h"
 #include "ui/gfx/presentation_feedback.h"
@@ -35,14 +36,18 @@ void FakeSoftwareOutputSurface::SwapBuffers(OutputSurfaceFrame frame) {
   last_sent_frame_ = std::make_unique<OutputSurfaceFrame>(std::move(frame));
   ++num_sent_frames_;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&FakeSoftwareOutputSurface::SwapBuffersAck,
                                 weak_ptr_factory_.GetWeakPtr()));
 }
 
 void FakeSoftwareOutputSurface::SwapBuffersAck() {
   base::TimeTicks now = base::TimeTicks::Now();
-  client_->DidReceiveSwapBuffersAck({now, now},
+
+  gpu::SwapBuffersCompleteParams params;
+  params.swap_response.timings = {now, now};
+  params.swap_response.result = gfx::SwapResult::SWAP_ACK;
+  client_->DidReceiveSwapBuffersAck(params,
                                     /*release_fence=*/gfx::GpuFenceHandle());
   client_->DidReceivePresentationFeedback({now, base::TimeDelta(), 0});
 }

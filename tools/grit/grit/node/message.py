@@ -5,11 +5,7 @@
 '''Handling of the <message> element.
 '''
 
-from __future__ import print_function
-
 import re
-
-import six
 
 from grit.node import base
 
@@ -22,7 +18,7 @@ from grit import util
 
 # Matches exactly three dots ending a line or followed by whitespace.
 _ELLIPSIS_PATTERN = lazy_re.compile(r'(?<!\.)\.\.\.(?=$|\s)')
-_ELLIPSIS_SYMBOL = u'\u2026'  # Ellipsis
+_ELLIPSIS_SYMBOL = '\u2026'  # Ellipsis
 
 # Finds whitespace at the start and end of a string which can be multiline.
 _WHITESPACE = lazy_re.compile(r'(?P<start>\s*)(?P<body>.+?)(?P<end>\s*)\Z',
@@ -62,7 +58,7 @@ class MessageNode(base.ContentNode):
   _SPLIT_RE = lazy_re.compile(r'\s*,\s*|\s+')
 
   def __init__(self):
-    super(MessageNode, self).__init__()
+    super().__init__()
     # Valid after EndParsing, this is the MessageClique that contains the
     # source message and any translations of it that have been loaded.
     self.clique = None
@@ -143,7 +139,7 @@ class MessageNode(base.ContentNode):
     superclass' implementation
     '''
     if 'offset' not in self.attrs:
-      return super(MessageNode, self).GetTextualIds()
+      return super().GetTextualIds()
 
     # we search for the first grouping node in the parents' list
     # to take care of the case where the first parent is an <if> node
@@ -160,7 +156,7 @@ class MessageNode(base.ContentNode):
     return self.attrs['translateable'] == 'true'
 
   def EndParsing(self):
-    super(MessageNode, self).EndParsing()
+    super().EndParsing()
 
     # Make the text (including placeholder references) and list of placeholders,
     # verify placeholder formats, then strip and store leading and trailing
@@ -170,7 +166,7 @@ class MessageNode(base.ContentNode):
     placeholders = []
 
     for item in self.mixed_content:
-      if isinstance(item, six.string_types):
+      if isinstance(item, str):
         # Not a <ph> element: fail if any <ph> formatters are detected.
         if _FORMATTERS.search(item):
           print(_BAD_PLACEHOLDER_MSG % (item, self.source))
@@ -272,7 +268,7 @@ class MessageNode(base.ContentNode):
     if self._replace_ellipsis:
       msg = _ELLIPSIS_PATTERN.sub(_ELLIPSIS_SYMBOL, msg)
     # Always remove all byte order marks (\uFEFF) https://crbug.com/1033305
-    msg = msg.replace(u'\uFEFF','')
+    msg = msg.replace('\uFEFF','')
     return msg.replace('[GRITLANGCODE]', lang)
 
   def NameOrOffset(self):
@@ -309,7 +305,7 @@ class MessageNode(base.ContentNode):
 
     items = message.GetContent()
     for ix, item in enumerate(items):
-      if isinstance(item, six.string_types):
+      if isinstance(item, str):
         # Ensure whitespace at front and back of message is correctly handled.
         if ix == 0:
           item = "'''" + item
@@ -347,7 +343,7 @@ class PhNode(base.ContentNode):
     return ['name']
 
   def EndParsing(self):
-    super(PhNode, self).EndParsing()
+    super().EndParsing()
     # We only allow a single example for each placeholder
     if len(self.children) > 1:
       raise exception.TooManyExamples()

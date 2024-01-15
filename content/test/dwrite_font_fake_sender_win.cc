@@ -9,7 +9,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
 #include "third_party/abseil-cpp/absl/utility/utility.h"
 
@@ -102,23 +102,30 @@ void FakeFontCollection::GetFamilyNames(uint32_t family_index,
   std::vector<blink::mojom::DWriteStringPairPtr> family_names;
   if (family_index < fonts_.size()) {
     for (const auto& name : fonts_[family_index].family_names_) {
-      family_names.emplace_back(absl::in_place, name.first, name.second);
+      family_names.emplace_back(std::in_place, name.first, name.second);
     }
   }
   std::move(callback).Run(std::move(family_names));
 }
 
-void FakeFontCollection::GetFontFiles(uint32_t family_index,
-                                      GetFontFilesCallback callback) {
-  message_types_.push_back(MessageType::kGetFontFiles);
-  std::vector<base::FilePath> file_paths;
+void FakeFontCollection::GetFontFileHandles(
+    uint32_t family_index,
+    GetFontFileHandlesCallback callback) {
+  message_types_.push_back(MessageType::kGetFontFileHandles);
   std::vector<base::File> file_handles;
   if (family_index < fonts_.size()) {
-    file_paths = fonts_[family_index].file_paths_;
+    for (const auto& font_path : fonts_[family_index].file_paths_) {
+      base::File file(base::FilePath(font_path),
+                      base::File::FLAG_OPEN | base::File::FLAG_READ |
+                          base::File::FLAG_WIN_EXCLUSIVE_WRITE);
+      if (file.IsValid()) {
+        file_handles.emplace_back(std::move(file));
+      }
+    }
     for (auto& file : fonts_[family_index].file_handles_)
       file_handles.emplace_back(file.Duplicate());
   }
-  std::move(callback).Run(file_paths, std::move(file_handles));
+  std::move(callback).Run(std::move(file_handles));
 }
 
 void FakeFontCollection::MapCharacters(
@@ -138,21 +145,6 @@ void FakeFontCollection::MapCharacters(
 
 void FakeFontCollection::MatchUniqueFont(const std::u16string& unique_font_name,
                                          MatchUniqueFontCallback callback) {}
-
-void FakeFontCollection::GetUniqueFontLookupMode(
-    GetUniqueFontLookupModeCallback callback) {}
-
-void FakeFontCollection::GetUniqueNameLookupTable(
-    GetUniqueNameLookupTableCallback callback) {}
-
-void FakeFontCollection::GetUniqueNameLookupTableIfAvailable(
-    GetUniqueNameLookupTableIfAvailableCallback callback) {}
-
-void FakeFontCollection::FallbackFamilyAndStyleForCodepoint(
-    const std::string& base_family_name,
-    const std::string& locale_name,
-    uint32_t codepoint,
-    FallbackFamilyAndStyleForCodepointCallback callback) {}
 
 FakeFontCollection::~FakeFontCollection() = default;
 

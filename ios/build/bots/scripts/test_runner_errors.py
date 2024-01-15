@@ -35,3 +35,36 @@ class XcodeMacToolchainMismatchError(XcodeInstallError):
   def __init__(self, xcode_build_version):
     super(XcodeMacToolchainMismatchError, self).__init__(
         'Legacy mac_toolchain cannot work with Xcode: %s' % xcode_build_version)
+
+
+class MacToolchainNotFoundError(XcodeInstallError):
+  """The mac_toolchain is not specified."""
+
+  def __init__(self, mac_toolchain):
+    super(MacToolchainNotFoundError, self).__init__(
+        'mac_toolchain is not specified or not found: "%s"' % mac_toolchain)
+
+
+class XcodePathNotFoundError(XcodeInstallError):
+  """The path to Xcode.app is not specified."""
+
+  def __init__(self, xcode_path):
+    super(XcodePathNotFoundError, self).__init__(
+        'xcode_path is not specified or does not exist: "%s"' % xcode_path)
+
+
+class RuntimeBuildNotFoundError(Error):
+  """The desired runtime build is not found on cipd."""
+
+  def __init__(self, ios_version):
+    super(RuntimeBuildNotFoundError, self).__init__(
+        'the desired runtime build for iOS %s is not found on cipd' %
+        ios_version)
+
+
+class SimRuntimeDeleteTimeoutError(Error):
+  """When deleting a simulator runtime exceeds timeout."""
+
+  def __init__(self, ios_version):
+    super(SimRuntimeDeleteTimeoutError, self).__init__(
+        'Unable to delete runtime %s after timeout' % ios_version)

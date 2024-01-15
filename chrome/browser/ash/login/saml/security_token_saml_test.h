@@ -8,18 +8,18 @@
 #include <string>
 
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/values.h"
 #include "chrome/browser/ash/login/saml/test_client_cert_saml_idp_mixin.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
 #include "chrome/browser/ash/scoped_test_system_nss_key_slot_mixin.h"
 #include "chrome/browser/certificate_provider/test_certificate_provider_extension.h"
 #include "chrome/browser/certificate_provider/test_certificate_provider_extension_mixin.h"
 #include "chrome/browser/policy/extension_force_install_mixin.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "components/policy/core/common/mock_configuration_policy_provider.h"
 #include "extensions/common/features/simple_feature.h"
 #include "google_apis/gaia/fake_gaia.h"
@@ -60,8 +60,7 @@ namespace ash {
 
 // Test parameter controls if new AuthSession-based cryptohome API
 // should be used.
-class SecurityTokenSamlTest : public OobeBaseTest,
-                              public testing::WithParamInterface<bool> {
+class SecurityTokenSamlTest : public OobeBaseTest {
  protected:
   SecurityTokenSamlTest();
   SecurityTokenSamlTest(const SecurityTokenSamlTest&) = delete;
@@ -124,8 +123,7 @@ class SecurityTokenSamlTest : public OobeBaseTest,
       test_certificate_provider_extension_mixin_{
           &mixin_host_, &extension_force_install_mixin_};
   int pin_dialog_shown_count_ = 0;
-  base::RunLoop* pin_dialog_shown_run_loop_ = nullptr;
-  base::test::ScopedFeatureList scoped_feature_list_;
+  raw_ptr<base::RunLoop> pin_dialog_shown_run_loop_ = nullptr;
   base::WeakPtrFactory<SecurityTokenSamlTest> weak_factory_{this};
 };
 

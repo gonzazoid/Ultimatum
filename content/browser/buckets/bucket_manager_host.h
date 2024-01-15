@@ -64,11 +64,16 @@ class BucketManagerHost : public blink::mojom::BucketManagerHost {
   void OpenBucket(const std::string& name,
                   blink::mojom::BucketPoliciesPtr policy,
                   OpenBucketCallback callback) override;
+  // Gets the bucket with the given name. Doesn't create the bucket if it
+  // doesn't exist.
+  void GetBucketForDevtools(
+      const std::string& name,
+      mojo::PendingReceiver<blink::mojom::BucketHost> receiver) override;
   void Keys(KeysCallback callback) override;
   void DeleteBucket(const std::string& name,
                     DeleteBucketCallback callback) override;
 
-  void RemoveBucketHost(const std::string& name);
+  void RemoveBucketHost(storage::BucketId id);
 
   StoragePartitionImpl* GetStoragePartition();
   storage::QuotaManagerProxy* GetQuotaManagerProxy();
@@ -89,6 +94,11 @@ class BucketManagerHost : public blink::mojom::BucketManagerHost {
                        DeleteBucketCallback callback,
                        blink::mojom::QuotaStatusCode status);
 
+  void DidGetBucketForDevtools(
+      base::WeakPtr<BucketContext> bucket_context,
+      mojo::PendingReceiver<blink::mojom::BucketHost> receiver,
+      storage::QuotaErrorOr<storage::BucketInfo> result);
+
   SEQUENCE_CHECKER(sequence_checker_);
 
   // Raw pointer is safe because BucketManager owns this BucketManagerHost, and
@@ -99,8 +109,9 @@ class BucketManagerHost : public blink::mojom::BucketManagerHost {
   // BucketManagerHost.
   const blink::StorageKey storage_key_;
 
-  // Map of currently open/used buckets.
-  std::map<std::string, std::unique_ptr<BucketHost>> bucket_map_;
+  // Map of currently open/used buckets. The lifetime matches that of the remote
+  // which means they can outlive the bucket's data.
+  std::map<storage::BucketId, std::unique_ptr<BucketHost>> bucket_map_;
 
   // Add receivers for frames & workers for `storage_key_` associated with
   // the StoragePartition that owns `manager_`.

@@ -19,7 +19,6 @@ Test CSS clip with composited layers. Left and right sides should look the same.
     {
       "name": "LayoutNGBlockFlow (relative positioned) DIV class='composited inner'",
       "bounds": [180, 180],
-      "contentsOpaqueForText": true,
       "backgroundColor": "#00000033",
       "transform": 4
     }

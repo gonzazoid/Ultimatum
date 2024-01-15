@@ -4,6 +4,7 @@
 
 package org.chromium.chrome.browser.ui.signin.fre;
 
+import android.accounts.Account;
 import android.content.Context;
 
 import androidx.annotation.MainThread;
@@ -14,14 +15,13 @@ import org.chromium.base.Promise;
 import org.chromium.base.supplier.OneshotSupplier;
 import org.chromium.chrome.browser.firstrun.MobileFreProgress;
 import org.chromium.chrome.browser.privacy.settings.PrivacyPreferencesManager;
+import org.chromium.chrome.browser.profiles.ProfileProvider;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 
-/**
- * The coordinator handles the update and interaction of the FRE sign-in screen.
- */
+/** The coordinator handles the update and interaction of the FRE sign-in screen. */
 @MainThread
 public class SigninFirstRunCoordinator {
     /** Delegate for signin fist run MVC. */
@@ -38,6 +38,9 @@ public class SigninFirstRunCoordinator {
 
         /** Called when the interaction with the page is over and the next page should be shown. */
         void advanceToNextPage();
+
+        /** Called to display the device lock page  */
+        void displayDeviceLockPage(Account selectedAccount);
 
         /**
          * Records the FRE progress histogram MobileFre.Progress.*.
@@ -57,15 +60,16 @@ public class SigninFirstRunCoordinator {
          */
         void showInfoPage(@StringRes int url);
 
+        /** Returns the supplier that provides the Profile (when available). */
+        OneshotSupplier<ProfileProvider> getProfileSupplier();
+
         /**
          * The supplier that supplies whether reading policy value is necessary.
          * See {@link PolicyLoadListener} for details.
          */
         OneshotSupplier<Boolean> getPolicyLoadListener();
 
-        /**
-         * Returns the supplier that supplies child account status.
-         */
+        /** Returns the supplier that supplies child account status. */
         OneshotSupplier<Boolean> getChildAccountStatusSupplier();
 
         /**
@@ -91,15 +95,17 @@ public class SigninFirstRunCoordinator {
      * @param privacyPreferencesManager is used to check whether metrics and crash reporting are
      *         disabled by policy and set the footer string accordingly.
      */
-    public SigninFirstRunCoordinator(Context context, ModalDialogManager modalDialogManager,
-            Delegate delegate, PrivacyPreferencesManager privacyPreferencesManager) {
-        mMediator = new SigninFirstRunMediator(
-                context, modalDialogManager, delegate, privacyPreferencesManager);
+    public SigninFirstRunCoordinator(
+            Context context,
+            ModalDialogManager modalDialogManager,
+            Delegate delegate,
+            PrivacyPreferencesManager privacyPreferencesManager) {
+        mMediator =
+                new SigninFirstRunMediator(
+                        context, modalDialogManager, delegate, privacyPreferencesManager);
     }
 
-    /**
-     * Releases the resources used by the coordinator.
-     */
+    /** Releases the resources used by the coordinator. */
     public void destroy() {
         setView(null);
         mMediator.destroy();
@@ -127,12 +133,23 @@ public class SigninFirstRunCoordinator {
         }
 
         if (view != null) {
-            mPropertyModelChangeProcessor = PropertyModelChangeProcessor.create(
-                    mMediator.getModel(), view, SigninFirstRunViewBinder::bind);
+            mPropertyModelChangeProcessor =
+                    PropertyModelChangeProcessor.create(
+                            mMediator.getModel(), view, SigninFirstRunViewBinder::bind);
         }
     }
 
     public void onAccountSelected(String accountName) {
         mMediator.onAccountSelected(accountName);
+    }
+
+    /** Continue the sign-in process with the currently selected account. */
+    public void continueSignIn() {
+        mMediator.proceedWithSignIn();
+    }
+
+    /** Abandon the sign-in process and dismiss the sign-in page. */
+    public void cancelSignInAndDismiss() {
+        mMediator.dismiss();
     }
 }

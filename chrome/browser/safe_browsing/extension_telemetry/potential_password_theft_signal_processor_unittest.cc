@@ -1,11 +1,13 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/safe_browsing/extension_telemetry/potential_password_theft_signal_processor.h"
+#include "base/test/scoped_feature_list.h"
 #include "chrome/browser/safe_browsing/extension_telemetry/password_reuse_signal.h"
 #include "chrome/browser/safe_browsing/extension_telemetry/remote_host_contacted_signal.h"
 #include "components/safe_browsing/content/browser/password_protection/password_protection_service.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/proto/csd.pb.h"
 #include "content/public/test/browser_task_environment.h"
 #include "extensions/common/extension_id.h"
@@ -22,8 +24,10 @@ using PotentialPasswordTheftInfo =
     ExtensionTelemetryReportRequest_SignalInfo_PotentialPasswordTheftInfo;
 using PasswordReuseEventInfo =
     ExtensionTelemetryReportRequest_SignalInfo_PotentialPasswordTheftInfo_PasswordReuseInfo;
-using RemoteHostInfo =
-    ExtensionTelemetryReportRequest_SignalInfo_PotentialPasswordTheftInfo_RemoteHostInfo;
+using RemoteHostData =
+    ExtensionTelemetryReportRequest_SignalInfo_PotentialPasswordTheftInfo_RemoteHostData;
+using RemoteHostContactedInfo =
+    ExtensionTelemetryReportRequest_SignalInfo_RemoteHostContactedInfo_RemoteHostInfo;
 
 using LoginReputationClientReusedPasswordAccountType =
     LoginReputationClientRequest::PasswordReuseEvent::ReusedPasswordAccountType;
@@ -31,6 +35,8 @@ using LoginReputationClientReusedPasswordAccountType =
 constexpr const char* kExtensionId[] = {"crx-0", "crx-1"};
 const char* host_urls[] = {"http://www.google.com", "http://www.youtube.com",
                            "http://www.giggle.com", "http://www.yutube.com"};
+RemoteHostContactedInfo::ProtocolType kProtocolType =
+    RemoteHostContactedInfo::HTTP_HTTPS;
 
 class PotentialPasswordTheftSignalProcessorTest : public ::testing::Test {
  protected:
@@ -62,6 +68,7 @@ class PotentialPasswordTheftSignalProcessorTest : public ::testing::Test {
     return reused_password_account_type;
   }
 
+  base::test::ScopedFeatureList scoped_feature_list;
   PotentialPasswordTheftSignalProcessor processor_;
   content::BrowserTaskEnvironment task_environment_;
 
@@ -78,8 +85,10 @@ TEST_F(PotentialPasswordTheftSignalProcessorTest,
 // signal second within one second. There will be data staged for report.
 TEST_F(PotentialPasswordTheftSignalProcessorTest, ProcessTwoSignalsInOrder) {
   auto pw_reuse_signal = PasswordReuseSignal(kExtensionId[0], pw_reuse_event_0);
-  auto remote_host_signal =
-      RemoteHostContactedSignal(kExtensionId[0], GURL(host_urls[0]));
+  auto remote_host_signal = RemoteHostContactedSignal(
+      kExtensionId[0], GURL(host_urls[0]), kProtocolType);
+  scoped_feature_list.InitAndEnableFeature(
+      kExtensionTelemetryPotentialPasswordTheft);
   processor_.ProcessSignal(pw_reuse_signal);
 
   EXPECT_FALSE(processor_.IsPasswordQueueEmptyForTest());
@@ -111,10 +120,12 @@ TEST_F(PotentialPasswordTheftSignalProcessorTest, ProcessTwoSignalsInOrder) {
 TEST_F(PotentialPasswordTheftSignalProcessorTest,
        ProcessTwoSignalsInReverseOrder) {
   auto pw_reuse_signal = PasswordReuseSignal(kExtensionId[0], pw_reuse_event_0);
-  auto remote_host_signal_0 =
-      RemoteHostContactedSignal(kExtensionId[0], GURL(host_urls[0]));
-  auto remote_host_signal_1 =
-      RemoteHostContactedSignal(kExtensionId[0], GURL(host_urls[1]));
+  auto remote_host_signal_0 = RemoteHostContactedSignal(
+      kExtensionId[0], GURL(host_urls[0]), kProtocolType);
+  auto remote_host_signal_1 = RemoteHostContactedSignal(
+      kExtensionId[0], GURL(host_urls[1]), kProtocolType);
+  scoped_feature_list.InitAndEnableFeature(
+      kExtensionTelemetryPotentialPasswordTheft);
   processor_.ProcessSignal(remote_host_signal_0);
   task_environment_.FastForwardBy(base::Milliseconds(100));
   processor_.ProcessSignal(remote_host_signal_1);
@@ -143,15 +154,17 @@ TEST_F(PotentialPasswordTheftSignalProcessorTest, VerifyProtoData) {
   auto pw_reuse_signal_2 =
       PasswordReuseSignal(kExtensionId[0], pw_reuse_event_1);
 
-  auto remote_host_signal_0 =
-      RemoteHostContactedSignal(kExtensionId[0], GURL(host_urls[0]));
-  auto remote_host_signal_1 =
-      RemoteHostContactedSignal(kExtensionId[0], GURL(host_urls[1]));
-  auto remote_host_signal_2 =
-      RemoteHostContactedSignal(kExtensionId[0], GURL(host_urls[2]));
-  auto remote_host_signal_3 =
-      RemoteHostContactedSignal(kExtensionId[0], GURL(host_urls[3]));
+  auto remote_host_signal_0 = RemoteHostContactedSignal(
+      kExtensionId[0], GURL(host_urls[0]), kProtocolType);
+  auto remote_host_signal_1 = RemoteHostContactedSignal(
+      kExtensionId[0], GURL(host_urls[1]), kProtocolType);
+  auto remote_host_signal_2 = RemoteHostContactedSignal(
+      kExtensionId[0], GURL(host_urls[2]), kProtocolType);
+  auto remote_host_signal_3 = RemoteHostContactedSignal(
+      kExtensionId[0], GURL(host_urls[3]), kProtocolType);
 
+  scoped_feature_list.InitAndEnableFeature(
+      kExtensionTelemetryPotentialPasswordTheft);
   processor_.ProcessSignal(pw_reuse_signal_0);
   task_environment_.FastForwardBy(base::Milliseconds(50));
   processor_.ProcessSignal(pw_reuse_signal_1);
@@ -187,7 +200,7 @@ TEST_F(PotentialPasswordTheftSignalProcessorTest, VerifyProtoData) {
   // 2 valid password reused signals should be reported.
   ASSERT_EQ(potential_password_theft_info.reused_password_infos_size(), 2);
   // 4 valid remote hosts signals should be reported.
-  ASSERT_EQ(potential_password_theft_info.remote_hosts_size(), 4);
+  ASSERT_EQ(potential_password_theft_info.remote_hosts_data_size(), 4);
 
   // Verify detailed password reuse info.
   {
@@ -215,15 +228,15 @@ TEST_F(PotentialPasswordTheftSignalProcessorTest, VerifyProtoData) {
   // Verify detailed remote host contacted info.
   {
     // Verify third remote host contacted info.
-    const RemoteHostInfo& remote_host_info_0 =
-        potential_password_theft_info.remote_hosts(0);
+    const RemoteHostData& remote_host_info_0 =
+        potential_password_theft_info.remote_hosts_data(0);
     ASSERT_EQ(remote_host_info_0.remote_host_url(), "www.giggle.com");
     // The count is 3 because there are 3 password reuse event.
     ASSERT_EQ(remote_host_info_0.count(), static_cast<uint32_t>(3));
 
     // Verify second remote host contacted info.
-    const RemoteHostInfo& remote_host_info_1 =
-        potential_password_theft_info.remote_hosts(1);
+    const RemoteHostData& remote_host_info_1 =
+        potential_password_theft_info.remote_hosts_data(1);
     ASSERT_EQ(remote_host_info_1.remote_host_url(), "www.google.com");
     // Only one is counted as potential password theft info because
     // www.google.com is in the reputable list of one of the 2 password reuse
@@ -231,8 +244,8 @@ TEST_F(PotentialPasswordTheftSignalProcessorTest, VerifyProtoData) {
     ASSERT_EQ(remote_host_info_1.count(), static_cast<uint32_t>(2));
 
     // Verify first remote host contacted info.
-    const RemoteHostInfo& remote_host_info_2 =
-        potential_password_theft_info.remote_hosts(2);
+    const RemoteHostData& remote_host_info_2 =
+        potential_password_theft_info.remote_hosts_data(2);
     ASSERT_EQ(remote_host_info_2.remote_host_url(), "www.youtube.com");
     // Only one is counted as potential password theft info because
     // www.youtube.com is in the reputable list of one of the 2 password reuse
@@ -240,8 +253,8 @@ TEST_F(PotentialPasswordTheftSignalProcessorTest, VerifyProtoData) {
     ASSERT_EQ(remote_host_info_2.count(), static_cast<uint32_t>(2));
 
     // Verify fourth remote host contacted info.
-    const RemoteHostInfo& remote_host_info_3 =
-        potential_password_theft_info.remote_hosts(3);
+    const RemoteHostData& remote_host_info_3 =
+        potential_password_theft_info.remote_hosts_data(3);
     ASSERT_EQ(remote_host_info_3.remote_host_url(), "www.yutube.com");
     // The count is 2 because there are 2 password reuse event.
     ASSERT_EQ(remote_host_info_3.count(), static_cast<uint32_t>(3));

@@ -11,14 +11,16 @@
 #include <vector>
 
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/values.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/supervised_user/child_accounts/family_info_fetcher.h"
-#include "chrome/browser/ui/webui/chromeos/login/network_state_informer.h"
+#include "chrome/browser/ui/webui/ash/login/network_state_informer.h"
 #include "components/image_fetcher/core/image_fetcher.h"
 #include "components/signin/public/identity_manager/access_token_info.h"
 #include "components/signin/public/identity_manager/primary_account_access_token_fetcher.h"
+#include "components/supervised_user/core/browser/proto/kidschromemanagement_messages.pb.h"
+#include "components/supervised_user/core/browser/proto_fetcher.h"
 #include "content/public/browser/web_ui_message_handler.h"
 #include "google_apis/gaia/gaia_auth_consumer.h"
 #include "google_apis/gaia/gaia_auth_fetcher.h"
@@ -27,7 +29,6 @@ namespace ash {
 
 // Handler for EDU account login flow.
 class EduAccountLoginHandler : public content::WebUIMessageHandler,
-                               public FamilyInfoFetcher::Consumer,
                                public GaiaAuthConsumer {
  public:
   explicit EduAccountLoginHandler(
@@ -72,7 +73,7 @@ class EduAccountLoginHandler : public content::WebUIMessageHandler,
                         const gfx::Image& image,
                         const image_fetcher::RequestMetadata& metadata);
 
-    image_fetcher::ImageFetcher* image_fetcher_ = nullptr;
+    raw_ptr<image_fetcher::ImageFetcher> image_fetcher_ = nullptr;
     const std::map<std::string, GURL> profile_image_urls_;
     base::OnceCallback<void(std::map<std::string, gfx::Image> profile_images)>
         callback_;
@@ -114,10 +115,15 @@ class EduAccountLoginHandler : public content::WebUIMessageHandler,
       const std::string& parent_obfuscated_gaia_id,
       const std::string& parent_credential);
 
-  // FamilyInfoFetcher::Consumer implementation.
-  void OnGetFamilyMembersSuccess(
-      const std::vector<FamilyInfoFetcher::FamilyMember>& members) override;
-  void OnFailure(FamilyInfoFetcher::ErrorCode error) override;
+  // ListFamilyMembers fetch handlers.
+  void OnListFamilyMembersResponse(
+      const supervised_user::ProtoFetcherStatus& status,
+      std::unique_ptr<kids_chrome_management::ListFamilyMembersResponse>
+          response);
+  void OnListFamilyMembersSuccess(
+      const kids_chrome_management::ListFamilyMembersResponse& response);
+  void OnListFamilyMembersFailure(
+      const supervised_user::ProtoFetcherStatus& status);
 
   // ProfileImageFetcher callback
   void OnParentProfileImagesFetched(
@@ -147,7 +153,9 @@ class EduAccountLoginHandler : public content::WebUIMessageHandler,
   // Reference to NetworkStateInformer that handles changes in network
   // state.
   scoped_refptr<NetworkStateInformer> network_state_informer_;
-  std::unique_ptr<FamilyInfoFetcher> family_fetcher_;
+  std::unique_ptr<supervised_user::ProtoFetcher<
+      kids_chrome_management::ListFamilyMembersResponse>>
+      list_family_members_fetcher_;
 
   std::unique_ptr<ProfileImageFetcher> profile_image_fetcher_;
   std::string get_parents_callback_id_;

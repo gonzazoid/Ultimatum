@@ -12,6 +12,8 @@
 #include "base/scoped_observation.h"
 #include "chrome/browser/hid/hid_chooser_context.h"
 #include "chrome/browser/hid/hid_chooser_context_factory.h"
+#include "chrome/browser/hid/hid_connection_tracker.h"
+#include "chrome/browser/hid/hid_connection_tracker_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_dialogs.h"
 #include "chrome/browser/ui/browser_finder.h"
@@ -28,8 +30,20 @@
 namespace {
 
 HidChooserContext* GetChooserContext(content::BrowserContext* browser_context) {
+  // |browser_context| might be null in a service worker case when the browser
+  // context is destroyed before service worker's destruction.
   auto* profile = Profile::FromBrowserContext(browser_context);
   return profile ? HidChooserContextFactory::GetForProfile(profile) : nullptr;
+}
+
+HidConnectionTracker* GetConnectionTracker(
+    content::BrowserContext* browser_context,
+    bool create) {
+  // |browser_context| might be null in a service worker case when the browser
+  // context is destroyed before service worker's destruction.
+  auto* profile = Profile::FromBrowserContext(browser_context);
+  return profile ? HidConnectionTrackerFactory::GetForProfile(profile, create)
+                 : nullptr;
 }
 
 }  // namespace
@@ -100,10 +114,7 @@ class ChromeHidDelegate::ContextObservation
   // Safe because `this` is destroyed when the context is lost.
   const raw_ptr<content::BrowserContext> browser_context_;
 
-  base::ScopedObservation<HidChooserContext,
-                          HidChooserContext::DeviceObserver,
-                          &HidChooserContext::AddDeviceObserver,
-                          &HidChooserContext::RemoveDeviceObserver>
+  base::ScopedObservation<HidChooserContext, HidChooserContext::DeviceObserver>
       device_observation_{this};
   base::ScopedObservation<
       permissions::ObjectPermissionContextBase,
@@ -223,4 +234,39 @@ ChromeHidDelegate::ContextObservation* ChromeHidDelegate::GetContextObserver(
                                                this, browser_context));
   }
   return observations_[browser_context].get();
+}
+
+void ChromeHidDelegate::IncrementConnectionCount(
+    content::BrowserContext* browser_context,
+    const url::Origin& origin) {
+  // Don't track connection when the feature isn't enabled or the connection
+  // isn't made by an extension origin.
+  if (!base::FeatureList::IsEnabled(
+          features::kEnableWebHidOnExtensionServiceWorker) ||
+      origin.scheme() != extensions::kExtensionScheme) {
+    return;
+  }
+
+  auto* hid_connection_tracker =
+      GetConnectionTracker(browser_context, /*create=*/true);
+  if (hid_connection_tracker) {
+    hid_connection_tracker->IncrementConnectionCount(origin);
+  }
+}
+
+void ChromeHidDelegate::DecrementConnectionCount(
+    content::BrowserContext* browser_context,
+    const url::Origin& origin) {
+  // Don't track connection when the feature isn't enabled or the connection
+  // isn't made by an extension origin.
+  if (!base::FeatureList::IsEnabled(
+          features::kEnableWebHidOnExtensionServiceWorker) ||
+      origin.scheme() != extensions::kExtensionScheme) {
+    return;
+  }
+  auto* hid_connection_tracker =
+      GetConnectionTracker(browser_context, /*create=*/false);
+  if (hid_connection_tracker) {
+    hid_connection_tracker->DecrementConnectionCount(origin);
+  }
 }

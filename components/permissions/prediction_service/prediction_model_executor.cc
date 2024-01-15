@@ -11,13 +11,19 @@
 
 namespace permissions {
 
+PredictionModelExecutorInput::PredictionModelExecutorInput() = default;
+PredictionModelExecutorInput::~PredictionModelExecutorInput() = default;
+PredictionModelExecutorInput::PredictionModelExecutorInput(
+    const PredictionModelExecutorInput&) = default;
+
 PredictionModelExecutor::PredictionModelExecutor() = default;
 PredictionModelExecutor::~PredictionModelExecutor() = default;
 
 bool PredictionModelExecutor::Preprocess(
     const std::vector<TfLiteTensor*>& input_tensors,
-    const GeneratePredictionsRequest& input) {
-  switch (input.permission_features()[0].permission_type_case()) {
+    const PredictionModelExecutorInput& input) {
+  model_metadata_ = input.metadata;
+  switch (input.request.permission_features()[0].permission_type_case()) {
     case PermissionFeatures::kNotificationPermission:
       request_type_ = RequestType::kNotifications;
       break;
@@ -29,63 +35,71 @@ bool PredictionModelExecutor::Preprocess(
   }
 
   if (!tflite::task::core::PopulateTensor<float>(
-           input.client_features().client_stats().avg_deny_rate(),
+           input.request.client_features().client_stats().avg_deny_rate(),
            input_tensors[0])
            .ok()) {
     return false;
   }
 
   if (!tflite::task::core::PopulateTensor<float>(
-           input.client_features().client_stats().avg_dismiss_rate(),
+           input.request.client_features().client_stats().avg_dismiss_rate(),
            input_tensors[1])
            .ok()) {
     return false;
   }
 
   if (!tflite::task::core::PopulateTensor<float>(
-           input.client_features().client_stats().avg_grant_rate(),
+           input.request.client_features().client_stats().avg_grant_rate(),
            input_tensors[2])
            .ok()) {
     return false;
   }
 
   if (!tflite::task::core::PopulateTensor<float>(
-           input.client_features().client_stats().avg_ignore_rate(),
+           input.request.client_features().client_stats().avg_ignore_rate(),
            input_tensors[3])
            .ok()) {
     return false;
   }
 
   if (!tflite::task::core::PopulateTensor<float>(
-           input.permission_features()[0].permission_stats().avg_deny_rate(),
+           input.request.permission_features()[0]
+               .permission_stats()
+               .avg_deny_rate(),
            input_tensors[4])
            .ok()) {
     return false;
   }
 
   if (!tflite::task::core::PopulateTensor<float>(
-           input.permission_features()[0].permission_stats().avg_dismiss_rate(),
+           input.request.permission_features()[0]
+               .permission_stats()
+               .avg_dismiss_rate(),
            input_tensors[5])
            .ok()) {
     return false;
   }
 
   if (!tflite::task::core::PopulateTensor<float>(
-           input.permission_features()[0].permission_stats().avg_grant_rate(),
+           input.request.permission_features()[0]
+               .permission_stats()
+               .avg_grant_rate(),
            input_tensors[6])
            .ok()) {
     return false;
   }
 
   if (!tflite::task::core::PopulateTensor<float>(
-           input.permission_features()[0].permission_stats().avg_ignore_rate(),
+           input.request.permission_features()[0]
+               .permission_stats()
+               .avg_ignore_rate(),
            input_tensors[7])
            .ok()) {
     return false;
   }
 
   if (!tflite::task::core::PopulateTensor<int64_t>(
-           static_cast<int64_t>(input.permission_features()[0]
+           static_cast<int64_t>(input.request.permission_features()[0]
                                     .permission_stats()
                                     .prompts_count()),
            input_tensors[8])
@@ -95,21 +109,22 @@ bool PredictionModelExecutor::Preprocess(
 
   if (!tflite::task::core::PopulateTensor<int64_t>(
            static_cast<int64_t>(
-               input.client_features().client_stats().prompts_count()),
+               input.request.client_features().client_stats().prompts_count()),
            input_tensors[9])
            .ok()) {
     return false;
   }
 
   if (!tflite::task::core::PopulateTensor<int64_t>(
-           static_cast<int64_t>(input.client_features().gesture_enum()),
+           static_cast<int64_t>(input.request.client_features().gesture_enum()),
            input_tensors[10])
            .ok()) {
     return false;
   }
 
   if (!tflite::task::core::PopulateTensor<int64_t>(
-           static_cast<int64_t>(input.client_features().platform_enum()),
+           static_cast<int64_t>(
+               input.request.client_features().platform_enum()),
            input_tensors[11])
            .ok()) {
     return false;
@@ -129,15 +144,30 @@ PredictionModelExecutor::Postprocess(
     return absl::nullopt;
   }
 
-  GeneratePredictionsResponse response;
   float threshold = request_type_ == RequestType::kNotifications
                         ? kNotificationPredictionsThreshold
                         : kGeolocationPredictionsThreshold;
+
+  // If the model has a metadata which contains a threshold value,
+  // use that threshold value.
+  if (model_metadata_ && model_metadata_->has_not_grant_thresholds()) {
+    // max_likely represents very likely to not grant
+    threshold = model_metadata_->not_grant_thresholds().max_likely();
+    base::UmaHistogramEnumeration(
+        "Permissions.PredictionService.PredictionThresholdSource",
+        PermissionPredictionThresholdSource::MODEL_METADATA);
+  } else {
+    base::UmaHistogramEnumeration(
+        "Permissions.PredictionService.PredictionThresholdSource",
+        PermissionPredictionThresholdSource::HARDCODED_FALLBACK);
+  }
+
+  GeneratePredictionsResponse response;
   response.mutable_prediction()
       ->Add()
       ->mutable_grant_likelihood()
       ->set_discretized_likelihood(
-          data[1] >= threshold
+          data[1] > threshold
               ? PermissionPrediction_Likelihood_DiscretizedLikelihood_VERY_UNLIKELY
               : PermissionPrediction_Likelihood_DiscretizedLikelihood_DISCRETIZED_LIKELIHOOD_UNSPECIFIED);
 

@@ -7,15 +7,11 @@
 #import "base/strings/sys_string_conversions.h"
 #import "base/unguessable_token.h"
 #import "ios/web/js_features/context_menu/context_menu_java_script_feature.h"
-#import "ios/web/public/js_messaging/web_frame_util.h"
+#import "ios/web/public/js_messaging/web_frames_manager.h"
 #import "ios/web/public/ui/context_menu_params.h"
 #import "ios/web/public/web_state.h"
 #import "ios/web/public/web_state_observer_bridge.h"
 #import "ios/web/web_state/ui/crw_html_element_fetch_request.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface CRWContextMenuElementFetcher () <CRWWebStateObserver> {
   std::unique_ptr<web::WebStateObserverBridge> _observer;
@@ -61,7 +57,12 @@
   if (!self.webState) {
     return;
   }
-  if (!GetMainFrame(self.webState)) {
+
+  web::ContextMenuJavaScriptFeature* context_menu_feature =
+      web::ContextMenuJavaScriptFeature::FromBrowserState(
+          self.webState->GetBrowserState());
+  if (!context_menu_feature->GetWebFramesManager(self.webState)
+           ->GetMainWebFrame()) {
     // A WebFrame may not exist for certain types of content, like PDFs.
     return;
   }
@@ -74,9 +75,6 @@
       fetchRequest;
 
   __weak __typeof(self) weakSelf = self;
-  web::ContextMenuJavaScriptFeature* context_menu_feature =
-      web::ContextMenuJavaScriptFeature::FromBrowserState(
-          self.webState->GetBrowserState());
   context_menu_feature->GetElementAtPoint(
       self.webState, requestID, point, self.webView.scrollView.contentSize,
       base::BindOnce(^(const std::string& innerRequestID,

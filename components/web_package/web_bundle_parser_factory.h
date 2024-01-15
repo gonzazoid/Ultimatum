@@ -11,6 +11,8 @@
 #include "components/web_package/mojom/web_bundle_parser.mojom.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "url/gurl.h"
 
 namespace web_package {
 
@@ -24,16 +26,18 @@ class WebBundleParserFactory : public mojom::WebBundleParserFactory {
   ~WebBundleParserFactory() override;
 
   std::unique_ptr<mojom::BundleDataSource> CreateFileDataSourceForTesting(
-      mojo::PendingReceiver<mojom::BundleDataSource> receiver,
       base::File file);
 
  private:
   // mojom::WebBundleParserFactory implementation.
-  void GetParserForFile(mojo::PendingReceiver<mojom::WebBundleParser> receiver,
-                        base::File file) override;
   void GetParserForDataSource(
       mojo::PendingReceiver<mojom::WebBundleParser> receiver,
+      const absl::optional<GURL>& base_url,
       mojo::PendingRemote<mojom::BundleDataSource> data_source) override;
+
+  void BindFileDataSource(mojo::PendingReceiver<mojom::BundleDataSource>
+                              data_source_pending_receiver,
+                          base::File file) override;
 };
 
 }  // namespace web_package

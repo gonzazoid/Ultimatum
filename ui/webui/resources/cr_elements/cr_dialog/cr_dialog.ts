@@ -24,9 +24,9 @@ import '../cr_icons.css.js';
 import '../cr_hidden_style.css.js';
 import '../cr_shared_vars.css.js';
 
+import {assert} from '//resources/js/assert.js';
 import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {assert} from '../../js/assert_ts.js';
 import {CrContainerShadowMixin} from '../cr_container_shadow_mixin.js';
 import {CrIconButtonElement} from '../cr_icon_button/cr_icon_button.js';
 import {CrInputElement} from '../cr_input/cr_input.js';
@@ -110,10 +110,15 @@ export class CrDialogElement extends CrDialogElementBase {
         type: Boolean,
         value: false,
       },
+
+      /**
+       * Text for the aria description.
+       */
+      ariaDescriptionText: String,
     };
   }
 
-  closeText: string;
+  closeText?: string;
   consumeKeydownEvent: boolean;
   ignoreEnterKey: boolean;
   ignorePopstate: boolean;
@@ -121,6 +126,7 @@ export class CrDialogElement extends CrDialogElementBase {
   open: boolean;
   showCloseButton: boolean;
   showOnAttach: boolean;
+  ariaDescriptionText: string;
 
   private intersectionObserver_: IntersectionObserver|null = null;
   private mutationObserver_: MutationObserver|null = null;

@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
@@ -29,6 +29,7 @@
 #include "components/feature_engagement/public/event_constants.h"
 #include "components/feature_engagement/public/feature_constants.h"
 #include "components/feature_engagement/public/tracker.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/omnibox/browser/vector_icons.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/user_education/common/user_education_class_properties.h"
@@ -62,6 +63,8 @@ StarView::StarView(CommandUpdater* command_updater,
   SetID(VIEW_ID_STAR_BUTTON);
   SetProperty(views::kElementIdentifierKey, kBookmarkStarViewElementId);
   SetActive(false);
+  SetAccessibilityProperties(/*role*/ std::nullopt,
+                             l10n_util::GetStringUTF16(IDS_TOOLTIP_STAR));
 }
 
 StarView::~StarView() = default;
@@ -111,6 +114,11 @@ views::BubbleDialogDelegate* StarView::GetBubble() const {
 }
 
 const gfx::VectorIcon& StarView::GetVectorIcon() const {
+  if (OmniboxFieldTrial::IsChromeRefreshIconsEnabled()) {
+    return GetActive() ? omnibox::kStarActiveChromeRefreshIcon
+                       : omnibox::kStarChromeRefreshIcon;
+  }
+
   return GetActive() ? omnibox::kStarActiveIcon : omnibox::kStarIcon;
 }
 
@@ -123,5 +131,5 @@ void StarView::EditBookmarksPrefUpdated() {
   Update();
 }
 
-BEGIN_METADATA(StarView, PageActionIconView)
+BEGIN_METADATA(StarView)
 END_METADATA

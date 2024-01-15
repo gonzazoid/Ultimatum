@@ -187,8 +187,8 @@ void KeyframeEffect::RemoveAllKeyframeModels() {
   RemoveKeyframeModelRange(keyframe_models_.begin(), keyframe_models_.end());
 }
 
-void KeyframeEffect::Tick(base::TimeTicks monotonic_time) {
-  TickInternal(monotonic_time, true);
+bool KeyframeEffect::Tick(base::TimeTicks monotonic_time) {
+  return TickInternal(monotonic_time, true);
 }
 
 void KeyframeEffect::RemoveKeyframeModelRange(
@@ -201,7 +201,8 @@ void KeyframeEffect::TickKeyframeModel(base::TimeTicks monotonic_time,
                                        KeyframeModel* keyframe_model) {
   if ((keyframe_model->run_state() != KeyframeModel::STARTING &&
        keyframe_model->run_state() != KeyframeModel::RUNNING &&
-       keyframe_model->run_state() != KeyframeModel::PAUSED) ||
+       keyframe_model->run_state() != KeyframeModel::PAUSED &&
+       keyframe_model->run_state() != KeyframeModel::WAITING_FOR_DELETION) ||
       !keyframe_model->HasActiveTime(monotonic_time)) {
     return;
   }
@@ -212,15 +213,17 @@ void KeyframeEffect::TickKeyframeModel(base::TimeTicks monotonic_time,
   curve->Tick(trimmed, keyframe_model->TargetProperty(), keyframe_model);
 }
 
-void KeyframeEffect::TickInternal(base::TimeTicks monotonic_time,
+bool KeyframeEffect::TickInternal(base::TimeTicks monotonic_time,
                                   bool include_infinite_animations) {
   StartKeyframeModels(monotonic_time, include_infinite_animations);
 
+  bool active = false;
   for (auto& keyframe_model : keyframe_models_) {
     if (!include_infinite_animations &&
         keyframe_model->iterations() == std::numeric_limits<double>::infinity())
       continue;
     TickKeyframeModel(monotonic_time, keyframe_model.get());
+    active = true;
   }
 
   // Remove finished keyframe_models.
@@ -232,6 +235,7 @@ void KeyframeEffect::TickInternal(base::TimeTicks monotonic_time,
       });
 
   StartKeyframeModels(monotonic_time, include_infinite_animations);
+  return active;
 }
 
 void KeyframeEffect::FinishAll() {

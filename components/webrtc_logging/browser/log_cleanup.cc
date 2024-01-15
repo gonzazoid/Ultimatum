@@ -81,10 +81,11 @@ bool ReadLineFromIndex(const std::string& line,
     return false;
   }
 
-  *capture_time = base::Time::FromDoubleT(capture_time_double);
+  *capture_time = base::Time::FromSecondsSinceUnixEpoch(capture_time_double);
   *upload_time =
       has_upload_time
-          ? absl::make_optional(base::Time::FromDoubleT(upload_time_double))
+          ? absl::make_optional(
+                base::Time::FromSecondsSinceUnixEpoch(upload_time_double))
           : absl::nullopt;
 
   return true;
@@ -218,8 +219,8 @@ void DeleteOldAndRecentWebRtcLogFiles(const base::FilePath& log_dir,
   if (update_log_list) {
     log_list =
         RemoveObsoleteEntriesFromLogIndex(log_list, delete_begin_time, now);
-    int written = base::WriteFile(log_list_path, &log_list[0], log_list.size());
-    DPCHECK(written == static_cast<int>(log_list.size()));
+    bool success = base::WriteFile(log_list_path, log_list);
+    DPCHECK(success);
   }
 }
 

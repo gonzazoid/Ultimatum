@@ -6,12 +6,16 @@
 
 #include "base/feature_list.h"
 #include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/common/loader/javascript_framework_detection.h"
 #include "third_party/blink/public/common/loader/loading_behavior_flag.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
+#include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_client.h"
+#include "third_party/blink/renderer/core/html/html_head_element.h"
+#include "third_party/blink/renderer/core/html/html_meta_element.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
@@ -22,11 +26,12 @@ namespace blink {
 namespace {
 
 constexpr char kGatsbyId[] = "___gatsby";
-constexpr char kNextjsId[] = "__next";
-constexpr char kNextjsData[] = "__NEXT_DATA__";
+constexpr char kNextjsData[] = "next";
 constexpr char kNuxtjsData[] = "__NUXT__";
 constexpr char kSapperData[] = "__SAPPER__";
 constexpr char kVuepressData[] = "__VUEPRESS__";
+constexpr char kShopify[] = "Shopify";
+constexpr char kSquarespace[] = "Squarespace";
 
 bool IsFrameworkVariableUsed(v8::Local<v8::Context> context,
                              const String& framework_variable_name) {
@@ -51,37 +56,45 @@ bool IsFrameworkIDUsed(Document& document, const AtomicString& framework_id) {
 }
 
 inline void CheckIdMatches(Document& document,
-                           int& loading_behavior_flag,
-                           bool& has_nextjs_id) {
+                           JavaScriptFrameworkDetectionResult& result) {
   DEFINE_STATIC_LOCAL(AtomicString, kReactId, ("react-root"));
-  if (IsFrameworkIDUsed(document, kGatsbyId))
-    loading_behavior_flag |= kLoadingBehaviorGatsbyFrameworkUsed;
-  if (IsFrameworkIDUsed(document, kNextjsId))
-    has_nextjs_id = true;
-  if (IsFrameworkIDUsed(document, kReactId))
-    loading_behavior_flag |= kLoadingBehaviorReactFrameworkUsed;
+  if (IsFrameworkIDUsed(document, AtomicString(kGatsbyId))) {
+    result.detected_versions[JavaScriptFramework::kGatsby] =
+        kNoFrameworkVersionDetected;
+  }
+  if (IsFrameworkIDUsed(document, kReactId)) {
+    result.detected_versions[JavaScriptFramework::kReact] =
+        kNoFrameworkVersionDetected;
+  }
 }
 
 inline void CheckAttributeMatches(const Element& element,
-                                  int& loading_behavior_flag) {
-  DEFINE_STATIC_LOCAL(QualifiedName, ng_version,
-                      (g_null_atom, "ng-version", g_null_atom));
+                                  JavaScriptFrameworkDetectionResult& result,
+                                  AtomicString& detected_ng_version) {
+  DEFINE_STATIC_LOCAL(QualifiedName, ng_version, (AtomicString("ng-version")));
   DEFINE_STATIC_LOCAL(QualifiedName, data_reactroot,
-                      (g_null_atom, "data-reactroot", g_null_atom));
+                      (AtomicString("data-reactroot")));
   static constexpr char kSvelte[] = "svelte-";
-  if (element.FastHasAttribute(ng_version))
-    loading_behavior_flag |= kLoadingBehaviorAngularFrameworkUsed;
-  if (element.FastHasAttribute(data_reactroot))
-    loading_behavior_flag |= kLoadingBehaviorReactFrameworkUsed;
-  if (element.GetClassAttribute().StartsWith(kSvelte))
-    loading_behavior_flag |= kLoadingBehaviorSvelteFrameworkUsed;
+  if (element.FastHasAttribute(data_reactroot)) {
+    result.detected_versions[JavaScriptFramework::kReact] =
+        kNoFrameworkVersionDetected;
+  }
+  if (element.GetClassAttribute().StartsWith(kSvelte)) {
+    result.detected_versions[JavaScriptFramework::kSvelte] =
+        kNoFrameworkVersionDetected;
+  }
+  if (element.FastHasAttribute(ng_version)) {
+    result.detected_versions[JavaScriptFramework::kAngular] =
+        kNoFrameworkVersionDetected;
+    detected_ng_version = element.FastGetAttribute(ng_version);
+  }
 }
 
 inline void CheckPropertyMatches(Element& element,
                                  DOMDataStore& dom_data_store,
                                  v8::Local<v8::Context> context,
                                  v8::Isolate* isolate,
-                                 int& loading_behavior_flag) {
+                                 JavaScriptFrameworkDetectionResult& result) {
   v8::Local<v8::Object> v8_element = dom_data_store.Get(&element, isolate);
   if (v8_element.IsEmpty())
     return;
@@ -101,54 +114,221 @@ inline void CheckPropertyMatches(Element& element,
     if (!property_names->Get(context, i).ToLocal(&key) || !key->IsString()) {
       continue;
     }
-    AtomicString key_value = ToCoreAtomicString(key.As<v8::String>());
+    AtomicString key_value = ToCoreAtomicString(isolate, key.As<v8::String>());
     if (key_value == vue_string || key_value == vue_app_string) {
-      loading_behavior_flag |= kLoadingBehaviorVueFrameworkUsed;
+      result.detected_versions[JavaScriptFramework::kVue] =
+          kNoFrameworkVersionDetected;
     } else if (key_value == k_string) {
-      loading_behavior_flag |= kLoadingBehaviorPreactFrameworkUsed;
+      result.detected_versions[JavaScriptFramework::kPreact] =
+          kNoFrameworkVersionDetected;
     } else if (key_value == reactRootContainer_string) {
-      loading_behavior_flag |= kLoadingBehaviorReactFrameworkUsed;
+      result.detected_versions[JavaScriptFramework::kReact] =
+          kNoFrameworkVersionDetected;
     } else if (key_value.StartsWith(reactListening_string) ||
                key_value.StartsWith(reactFiber_string)) {
-      loading_behavior_flag |= kLoadingBehaviorReactFrameworkUsed;
+      result.detected_versions[JavaScriptFramework::kReact] =
+          kNoFrameworkVersionDetected;
     }
   }
 }
 
-inline void CheckGlobalPropertyMatches(v8::Local<v8::Context> context,
-                                       v8::Isolate* isolate,
-                                       int& loading_behavior_flag,
-                                       bool& has_nextjs_id) {
+inline void CheckGlobalPropertyMatches(
+    v8::Local<v8::Context> context,
+    v8::Isolate* isolate,
+    JavaScriptFrameworkDetectionResult& result) {
   static constexpr char kVueData[] = "Vue";
+  static constexpr char kVue3Data[] = "__VUE__";
   static constexpr char kReactData[] = "React";
-  if (has_nextjs_id && IsFrameworkVariableUsed(context, kNextjsData))
-    loading_behavior_flag |= kLoadingBehaviorNextJSFrameworkUsed;
-  if (IsFrameworkVariableUsed(context, kNuxtjsData))
-    loading_behavior_flag |= kLoadingBehaviorNuxtJSFrameworkUsed;
-  if (IsFrameworkVariableUsed(context, kSapperData))
-    loading_behavior_flag |= kLoadingBehaviorSapperFrameworkUsed;
-  if (IsFrameworkVariableUsed(context, kVuepressData))
-    loading_behavior_flag |= kLoadingBehaviorVuePressFrameworkUsed;
-  if (IsFrameworkVariableUsed(context, kVueData))
-    loading_behavior_flag |= kLoadingBehaviorVueFrameworkUsed;
+  if (IsFrameworkVariableUsed(context, kNextjsData)) {
+    result.detected_versions[JavaScriptFramework::kNext] =
+        kNoFrameworkVersionDetected;
+  }
+  if (IsFrameworkVariableUsed(context, kNuxtjsData)) {
+    result.detected_versions[JavaScriptFramework::kNuxt] =
+        kNoFrameworkVersionDetected;
+  }
+  if (IsFrameworkVariableUsed(context, kSapperData)) {
+    result.detected_versions[JavaScriptFramework::kSapper] =
+        kNoFrameworkVersionDetected;
+  }
+  if (IsFrameworkVariableUsed(context, kVuepressData)) {
+    result.detected_versions[JavaScriptFramework::kVuePress] =
+        kNoFrameworkVersionDetected;
+  }
+  if (IsFrameworkVariableUsed(context, kVueData) ||
+      IsFrameworkVariableUsed(context, kVue3Data)) {
+    result.detected_versions[JavaScriptFramework::kVue] =
+        kNoFrameworkVersionDetected;
+  }
   // TODO(npm): Add check for window.React.Component, not just window.React.
-  if (IsFrameworkVariableUsed(context, kReactData))
-    loading_behavior_flag |= kLoadingBehaviorReactFrameworkUsed;
+  if (IsFrameworkVariableUsed(context, kReactData)) {
+    result.detected_versions[JavaScriptFramework::kReact] =
+        kNoFrameworkVersionDetected;
+  }
+  if (IsFrameworkVariableUsed(context, kShopify)) {
+    result.detected_versions[JavaScriptFramework::kShopify] =
+        kNoFrameworkVersionDetected;
+  }
+  if (IsFrameworkVariableUsed(context, kSquarespace)) {
+    result.detected_versions[JavaScriptFramework::kSquarespace] =
+        kNoFrameworkVersionDetected;
+  }
 }
 
-void DidObserveLoadingBehaviors(Document& document, int loading_behavior_flag) {
-  // TODO(npm): ideally we'd be able to surface multiple loading behaviors to
-  // the document loader at once.
-  static constexpr LoadingBehaviorFlag flags[] = {
-      kLoadingBehaviorAngularFrameworkUsed, kLoadingBehaviorGatsbyFrameworkUsed,
-      kLoadingBehaviorNextJSFrameworkUsed,  kLoadingBehaviorNextJSFrameworkUsed,
-      kLoadingBehaviorNuxtJSFrameworkUsed,  kLoadingBehaviorPreactFrameworkUsed,
-      kLoadingBehaviorReactFrameworkUsed,   kLoadingBehaviorSapperFrameworkUsed,
-      kLoadingBehaviorSvelteFrameworkUsed,  kLoadingBehaviorVueFrameworkUsed,
-      kLoadingBehaviorVuePressFrameworkUsed};
-  for (LoadingBehaviorFlag flag : flags) {
-    if (loading_behavior_flag & flag) {
-      document.Loader()->DidObserveLoadingBehavior(flag);
+int64_t ExtractVersion(v8::Local<v8::RegExp> regexp,
+                       v8::Local<v8::Context> context,
+                       v8::Local<v8::Value> version) {
+  v8::Local<v8::Object> groups;
+  v8::Local<v8::Value> major;
+  v8::Local<v8::Value> minor;
+  bool success =
+      regexp->Exec(context, version.As<v8::String>()).ToLocal(&groups);
+  if (!success || !groups->IsArray()) {
+    return kNoFrameworkVersionDetected;
+  }
+  v8::Local<v8::Array> groups_array = groups.As<v8::Array>();
+  if (!groups_array->Get(context, 1).ToLocal(&major) ||
+      !groups_array->Get(context, 2).ToLocal(&minor) || !major->IsString() ||
+      !minor->IsString()) {
+    return kNoFrameworkVersionDetected;
+  }
+
+  v8::Local<v8::Value> major_number;
+  v8::Local<v8::Value> minor_number;
+  if (!major->ToNumber(context).ToLocal(&major_number) ||
+      !minor->ToNumber(context).ToLocal(&minor_number)) {
+    return kNoFrameworkVersionDetected;
+  }
+
+  // Major & minor versions are clamped to 8bits to avoid using this as a
+  // vector to identify users.
+  return ((major_number->IntegerValue(context).FromMaybe(0) & 0xff) << 8) |
+         (minor_number->IntegerValue(context).FromMaybe(0) & 0xff);
+}
+
+void DetectFrameworkVersions(Document& document,
+                             v8::Local<v8::Context> context,
+                             v8::Isolate* isolate,
+                             JavaScriptFrameworkDetectionResult& result,
+                             const AtomicString& detected_ng_version) {
+  v8::Local<v8::Object> global = context->Global();
+  static constexpr char kVersionPattern[] = "([0-9]+)\\.([0-9]+)";
+  v8::Local<v8::RegExp> version_regexp;
+
+  if (!v8::RegExp::New(context, V8AtomicString(isolate, kVersionPattern),
+                       v8::RegExp::kNone)
+           .ToLocal(&version_regexp)) {
+    return;
+  }
+
+  auto SafeGetProperty = [&](v8::Local<v8::Value> object,
+                             const char* prop_name) -> v8::Local<v8::Value> {
+    if (object.IsEmpty() || !object->IsObject()) {
+      return v8::Undefined(isolate);
+    }
+
+    v8::Local<v8::Value> value;
+    if (!object.As<v8::Object>()
+             ->GetRealNamedProperty(context, V8AtomicString(isolate, prop_name))
+             .ToLocal(&value)) {
+      return v8::Undefined(isolate);
+    }
+
+    return value;
+  };
+
+  if (result.detected_versions.contains(JavaScriptFramework::kNext)) {
+    static constexpr char kNext[] = "next";
+    static constexpr char kVersion[] = "version";
+    int64_t version = kNoFrameworkVersionDetected;
+    v8::Local<v8::Value> version_string =
+        SafeGetProperty(SafeGetProperty(global, kNext), kVersion);
+    if (!version_string.IsEmpty() && version_string->IsString()) {
+      version = ExtractVersion(version_regexp, context, version_string);
+    }
+
+    result.detected_versions[JavaScriptFramework::kNext] = version;
+  }
+
+  if (!detected_ng_version.IsNull()) {
+    result.detected_versions[JavaScriptFramework::kAngular] = ExtractVersion(
+        version_regexp, context,
+        v8::String::NewFromUtf8(isolate,
+                                detected_ng_version.GetString().Utf8().c_str())
+            .FromMaybe(v8::String::Empty(isolate)));
+  }
+
+  if (result.detected_versions.contains(JavaScriptFramework::kVue)) {
+    static constexpr char kVue2[] = "Vue";
+    static constexpr char kVersion[] = "version";
+    if (global->HasRealNamedProperty(context, V8AtomicString(isolate, kVue2))
+            .FromMaybe(false)) {
+      v8::Local<v8::Value> version_string =
+          SafeGetProperty(SafeGetProperty(global, kVue2), kVersion);
+      if (!version_string.IsEmpty() && version_string->IsString()) {
+        result.detected_versions[JavaScriptFramework::kVue] =
+            ExtractVersion(version_regexp, context, version_string);
+      }
+    } else {
+      static constexpr char kVue3[] = "__VUE__";
+      bool vue3 = false;
+      if (global->HasRealNamedProperty(context, V8AtomicString(isolate, kVue3))
+              .To(&vue3) &&
+          vue3) {
+        result.detected_versions[JavaScriptFramework::kVue] = 0x300;
+      }
+    }
+  }
+
+  HTMLMetaElement* generator_meta = nullptr;
+
+  if (document.head()) {
+    for (HTMLMetaElement& meta_element :
+         Traversal<HTMLMetaElement>::DescendantsOf(*document.head())) {
+      if (EqualIgnoringASCIICase(meta_element.GetName(), "generator")) {
+        generator_meta = &meta_element;
+        break;
+      }
+    }
+  }
+
+  if (generator_meta) {
+    const AtomicString& content = generator_meta->Content();
+    if (!content.empty()) {
+      if (content.StartsWith("Wix")) {
+        result.detected_versions[JavaScriptFramework::kWix] =
+            kNoFrameworkVersionDetected;
+      } else if (content.StartsWith("Joomla")) {
+        result.detected_versions[JavaScriptFramework::kJoomla] =
+            kNoFrameworkVersionDetected;
+      } else {
+        constexpr char wordpress_prefix[] = "WordPress ";
+        constexpr size_t wordpress_prefix_length =
+            std::char_traits<char>::length(wordpress_prefix);
+
+        if (content.StartsWith(wordpress_prefix)) {
+          String version_string =
+              String(content).Substring(wordpress_prefix_length);
+          result.detected_versions[JavaScriptFramework::kWordPress] =
+              ExtractVersion(version_regexp, context,
+                             V8String(isolate, version_string));
+        }
+
+        constexpr char drupal_prefix[] = "Drupal ";
+        constexpr size_t drupal_prefix_length =
+            std::char_traits<char>::length(drupal_prefix);
+
+        if (content.StartsWith(drupal_prefix)) {
+          String version_string =
+              String(content).Substring(drupal_prefix_length);
+          String trimmed =
+              version_string.Substring(0, version_string.Find(" "));
+          bool ok = true;
+          int version = trimmed.ToInt(&ok);
+          result.detected_versions[JavaScriptFramework::kDrupal] =
+              ok ? ((version & 0xff) << 8) : kNoFrameworkVersionDetected;
+        }
+      }
     }
   }
 }
@@ -157,22 +337,23 @@ void TraverseTreeForFrameworks(Document& document,
                                v8::Local<v8::Context> context) {
   v8::Isolate* isolate = context->GetIsolate();
   v8::TryCatch try_catch(isolate);
-  int loading_behavior_flag = kLoadingBehaviorNone;
-  bool has_nextjs_id = false;
+  JavaScriptFrameworkDetectionResult result;
+  AtomicString detected_ng_version;
   if (!document.documentElement())
     return;
-  DOMDataStore& dom_data_store = DOMWrapperWorld::MainWorld().DomDataStore();
+  DOMDataStore& dom_data_store =
+      DOMWrapperWorld::MainWorld(isolate).DomDataStore();
   for (Element& element :
        ElementTraversal::InclusiveDescendantsOf(*document.documentElement())) {
-    CheckAttributeMatches(element, loading_behavior_flag);
-    CheckPropertyMatches(element, dom_data_store, context, isolate,
-                         loading_behavior_flag);
+    CheckAttributeMatches(element, result, detected_ng_version);
+    CheckPropertyMatches(element, dom_data_store, context, isolate, result);
   }
-  CheckIdMatches(document, loading_behavior_flag, has_nextjs_id);
-  CheckGlobalPropertyMatches(context, isolate, loading_behavior_flag,
-                             has_nextjs_id);
+  CheckIdMatches(document, result);
+  CheckGlobalPropertyMatches(context, isolate, result);
+  DetectFrameworkVersions(document, context, isolate, result,
+                          detected_ng_version);
   DCHECK(!try_catch.HasCaught());
-  DidObserveLoadingBehaviors(document, loading_behavior_flag);
+  document.Loader()->DidObserveJavaScriptFrameworks(result);
 }
 
 }  // namespace

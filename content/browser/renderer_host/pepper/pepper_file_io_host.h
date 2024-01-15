@@ -7,10 +7,10 @@
 
 #include <stdint.h>
 
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
 #include "base/files/file.h"
 #include "base/files/file_proxy.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
@@ -38,8 +38,7 @@ struct FileGrowth;
 namespace content {
 class PepperFileSystemBrowserHost;
 
-class PepperFileIOHost : public ppapi::host::ResourceHost,
-                         public base::SupportsWeakPtr<PepperFileIOHost> {
+class PepperFileIOHost final : public ppapi::host::ResourceHost {
  public:
   PepperFileIOHost(BrowserPpapiHostImpl* host,
                    PP_Instance instance,
@@ -152,6 +151,8 @@ class PepperFileIOHost : public ppapi::host::ResourceHost,
   bool check_quota_;
 
   ppapi::FileIOStateManager state_manager_;
+
+  base::WeakPtrFactory<PepperFileIOHost> weak_ptr_factory_{this};
 };
 
 }  // namespace content

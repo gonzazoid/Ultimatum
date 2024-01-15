@@ -6,17 +6,17 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/observer_list.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/buildflag.h"
 #include "media/audio/audio_device_description.h"
@@ -65,6 +65,23 @@ enum StreamFormat {
   STREAM_FORMAT_FAKE = 4,
   STREAM_FORMAT_MAX = 4,
 };
+
+// Used to log errors in `AudioManagerBase::MakeAudioInputStream`.
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class MakeAudioInputStreamResult {
+  kNoError = 0,
+  kErrorSwitchFailAudioStreamCreation = 1,
+  kErrorInvalidParams = 2,
+  kErrorExcessiveInputStreams = 3,
+  kErrorCreateStream = 4,
+  kMaxValue = kErrorCreateStream
+};
+
+void LogMakeAudioInputStreamResult(MakeAudioInputStreamResult result) {
+  base::UmaHistogramEnumeration("Media.Audio.MakeAudioInputStreamStatus",
+                                result);
+}
 
 PRINTF_FORMAT(2, 3)
 void SendLogMessage(const AudioManagerBase::LogCallback& callback,
@@ -161,14 +178,17 @@ void AudioManagerBase::GetAudioDeviceDescriptions(
   }
 
   for (auto& name : device_names) {
-    if (AudioDeviceDescription::IsDefaultDevice(name.unique_id))
+    bool is_system_default = name.unique_id == real_default_device_id;
+    if (AudioDeviceDescription::IsDefaultDevice(name.unique_id)) {
       name.device_name = real_default_name;
-    else if (AudioDeviceDescription::IsCommunicationsDevice(name.unique_id))
+      is_system_default = true;
+    } else if (AudioDeviceDescription::IsCommunicationsDevice(name.unique_id)) {
       name.device_name = real_communications_name;
+    }
     std::string group_id = (this->*get_group_id)(name.unique_id);
     device_descriptions->emplace_back(std::move(name.device_name),
                                       std::move(name.unique_id),
-                                      std::move(group_id));
+                                      std::move(group_id), is_system_default);
   }
 }
 
@@ -241,14 +261,23 @@ AudioOutputStream* AudioManagerBase::MakeBitstreamOutputStream(
 }
 
 AudioInputStream* AudioManagerBase::MakeAudioInputStream(
-    const AudioParameters& params,
+    const AudioParameters& input_params,
     const std::string& device_id,
     const LogCallback& log_callback) {
   CHECK(GetTaskRunner()->BelongsToCurrentThread());
 
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kFailAudioStreamCreation)) {
+    LogMakeAudioInputStreamResult(
+        MakeAudioInputStreamResult::kErrorSwitchFailAudioStreamCreation);
     return nullptr;
+  }
+
+  // If audio has been disabled force usage of a fake audio stream.
+  auto params = input_params;
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kDisableAudioInput)) {
+    params.set_format(AudioParameters::AUDIO_FAKE);
   }
 
   SendLogMessage(log_callback, "%s({device_id=%s}, {params=[%s]})", __func__,
@@ -258,6 +287,8 @@ AudioInputStream* AudioManagerBase::MakeAudioInputStream(
       device_id.empty()) {
     DLOG(ERROR) << "Audio parameters are invalid for device " << device_id
                 << ", params: " << params.AsHumanReadableString();
+    LogMakeAudioInputStreamResult(
+        MakeAudioInputStreamResult::kErrorInvalidParams);
     return nullptr;
   }
 
@@ -265,6 +296,8 @@ AudioInputStream* AudioManagerBase::MakeAudioInputStream(
     LOG(ERROR) << "Number of opened input audio streams "
                << input_stream_count() << " exceed the max allowed number "
                << kMaxInputStreams;
+    LogMakeAudioInputStreamResult(
+        MakeAudioInputStreamResult::kErrorExcessiveInputStreams);
     return nullptr;
   }
 
@@ -309,6 +342,10 @@ AudioInputStream* AudioManagerBase::MakeAudioInputStream(
           stream);
     }
   }
+
+  LogMakeAudioInputStreamResult(
+      stream ? MakeAudioInputStreamResult::kNoError
+             : MakeAudioInputStreamResult::kErrorCreateStream);
 
   return stream;
 }
@@ -513,8 +550,7 @@ AudioParameters AudioManagerBase::GetOutputStreamParameters(
 
 AudioParameters AudioManagerBase::GetInputStreamParameters(
     const std::string& device_id) {
-  NOTREACHED();
-  return AudioParameters();
+  NOTREACHED_NORETURN();
 }
 
 std::string AudioManagerBase::GetAssociatedOutputDeviceID(

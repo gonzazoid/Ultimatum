@@ -4,11 +4,15 @@
 
 #include "chrome/browser/ash/crostini/crostini_installer.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/run_loop.h"
+#include <optional>
+
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "chrome/browser/ash/crostini/ansible/ansible_management_test_helper.h"
 #include "chrome/browser/ash/crostini/crostini_installer_ui_delegate.h"
 #include "chrome/browser/ash/crostini/crostini_test_helper.h"
@@ -23,18 +27,17 @@
 #include "chromeos/ash/components/dbus/cicerone/cicerone_client.h"
 #include "chromeos/ash/components/dbus/cicerone/fake_cicerone_client.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
-#include "chromeos/ash/components/dbus/concierge/concierge_service.pb.h"
 #include "chromeos/ash/components/dbus/concierge/fake_concierge_client.h"
 #include "chromeos/ash/components/dbus/debug_daemon/debug_daemon_client.h"
 #include "chromeos/ash/components/dbus/dlcservice/dlcservice_client.h"
 #include "chromeos/ash/components/dbus/seneschal/seneschal_client.h"
 #include "chromeos/ash/components/dbus/spaced/fake_spaced_client.h"
+#include "chromeos/ash/components/dbus/vm_concierge/concierge_service.pb.h"
 #include "chromeos/ash/components/disks/disk_mount_manager.h"
 #include "chromeos/ash/components/disks/mock_disk_mount_manager.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using crostini::mojom::InstallerError;
 using crostini::mojom::InstallerState;
@@ -73,21 +76,17 @@ class CrostiniInstallerTest : public testing::Test {
         chromeos::DBusMethodCallback<vm_tools::concierge::StartVmResponse>
             callback) override {
       ash::FakeConciergeClient::StartVm(request, std::move(callback));
-      if (quit_closure_) {
-        base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                      std::move(quit_closure_));
-      }
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, result_future_.GetCallback());
     }
 
     void WaitForStartTerminaVmCalled() {
-      base::RunLoop loop;
-      quit_closure_ = loop.QuitClosure();
-      loop.Run();
+      EXPECT_TRUE(result_future_.Wait());
       EXPECT_GE(start_vm_call_count(), 1);
     }
 
    private:
-    base::OnceClosure quit_closure_;
+    base::test::TestFuture<void> result_future_;
   };
 
   CrostiniInstallerTest()
@@ -101,7 +100,7 @@ class CrostiniInstallerTest : public testing::Test {
   void SetOSRelease() {
     vm_tools::cicerone::OsRelease os_release;
     os_release.set_id("debian");
-    os_release.set_version_id("10");
+    os_release.set_version_id("11");
     ash::FakeCiceroneClient::Get()->set_lxd_container_os_release(os_release);
   }
 
@@ -191,9 +190,11 @@ class CrostiniInstallerTest : public testing::Test {
   base::HistogramTester histogram_tester_;
 
   // Owned by DiskMountManager
-  ash::disks::MockDiskMountManager* disk_mount_manager_mock_ = nullptr;
+  raw_ptr<ash::disks::MockDiskMountManager, DanglingUntriaged>
+      disk_mount_manager_mock_ = nullptr;
 
-  WaitingFakeConciergeClient* waiting_fake_concierge_client_ = nullptr;
+  raw_ptr<WaitingFakeConciergeClient, DanglingUntriaged>
+      waiting_fake_concierge_client_ = nullptr;
 
   std::unique_ptr<TestingProfile> profile_;
   std::unique_ptr<CrostiniTestHelper> crostini_test_helper_;

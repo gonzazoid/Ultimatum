@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "content/browser/background_fetch/background_fetch.pb.h"
 #include "content/browser/background_fetch/background_fetch_registration_id.h"
 #include "content/browser/background_fetch/storage/database_task.h"
@@ -46,8 +46,6 @@ class GetRegistrationTask : public DatabaseTask {
       std::unique_ptr<proto::BackgroundFetchMetadata> metadata_proto);
 
   void FinishWithError(blink::mojom::BackgroundFetchError error) override;
-
-  std::string HistogramName() const override;
 
   int64_t service_worker_registration_id_;
   blink::StorageKey storage_key_;

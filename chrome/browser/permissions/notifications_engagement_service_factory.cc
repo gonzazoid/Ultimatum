@@ -4,7 +4,7 @@
 
 #include "chrome/browser/permissions/notifications_engagement_service_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/permissions/notifications_engagement_service.h"
@@ -12,7 +12,8 @@
 // static
 NotificationsEngagementServiceFactory*
 NotificationsEngagementServiceFactory::GetInstance() {
-  return base::Singleton<NotificationsEngagementServiceFactory>::get();
+  static base::NoDestructor<NotificationsEngagementServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -23,7 +24,14 @@ NotificationsEngagementServiceFactory::GetForProfile(Profile* profile) {
 }
 
 NotificationsEngagementServiceFactory::NotificationsEngagementServiceFactory()
-    : ProfileKeyedServiceFactory("NotificationsEngagementService") {
+    : ProfileKeyedServiceFactory(
+          "NotificationsEngagementService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(HostContentSettingsMapFactory::GetInstance());
 }
 

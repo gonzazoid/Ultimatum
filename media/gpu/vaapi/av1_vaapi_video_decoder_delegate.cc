@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <vector>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "build/chromeos_buildflags.h"
@@ -712,8 +712,8 @@ bool FillAV1SliceParameters(
     if (!safe_va_slice_data_end.AssignIfValid(&va_slice_data_end) ||
         va_slice_data_end > data.size()) {
       DLOG(ERROR) << "Invalid tile offset and size"
-                  << ", offset=" << va_tile_param.slice_data_size
-                  << ", size=" << va_tile_param.slice_data_offset
+                  << ", offset=" << va_tile_param.slice_data_offset
+                  << ", size=" << va_tile_param.slice_data_size
                   << ", entire data size=" << data.size();
       return false;
     }

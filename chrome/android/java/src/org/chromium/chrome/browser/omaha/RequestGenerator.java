@@ -4,7 +4,6 @@
 
 package org.chromium.chrome.browser.omaha;
 
-import android.content.Context;
 import android.os.Build;
 import android.text.format.DateUtils;
 import android.util.Xml;
@@ -14,7 +13,6 @@ import androidx.annotation.VisibleForTesting;
 import org.xmlpull.v1.XmlSerializer;
 
 import org.chromium.base.BuildInfo;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.uid.SettingsSecureBasedIdentificationGenerator;
 import org.chromium.chrome.browser.uid.UniqueIdentificationGeneratorFactory;
 import org.chromium.ui.base.DeviceFormFactor;
@@ -23,25 +21,19 @@ import java.io.IOException;
 import java.io.StringWriter;
 import java.util.Locale;
 
-/**
- * Generates XML requests to send to the Omaha server.
- */
+/** Generates XML requests to send to the Omaha server. */
 public abstract class RequestGenerator {
-    private static final String TAG = "RequestGenerator";
-
     // The Omaha specs say that new installs should use "-1".
     public static final int INSTALL_AGE_IMMEDIATELY_AFTER_INSTALLING = -1;
 
     private static final String SALT = "omahaSalt";
     private static final String URL_OMAHA_SERVER = "https://update.googleapis.com/service/update2";
 
-    private final Context mApplicationContext;
-
-    protected RequestGenerator(Context context) {
-        mApplicationContext = context.getApplicationContext();
+    protected RequestGenerator() {
         UniqueIdentificationGeneratorFactory.registerGenerator(
                 SettingsSecureBasedIdentificationGenerator.GENERATOR_ID,
-                new SettingsSecureBasedIdentificationGenerator(getContext()), false);
+                new SettingsSecureBasedIdentificationGenerator(),
+                false);
     }
 
     /**
@@ -60,10 +52,15 @@ public abstract class RequestGenerator {
     /**
      * Generates the XML for the current request. Follows the format laid out at
      * https://github.com/google/omaha/blob/master/doc/ServerProtocolV3.md
-     * with some additional dummy values supplied.
+     * with some additional placeholder values supplied.
      */
-    public String generateXML(String sessionID, String versionName, long installAge,
-            int lastCheckDate, RequestData data) throws RequestFailureException {
+    public String generateXML(
+            String sessionID,
+            String versionName,
+            long installAge,
+            int lastCheckDate,
+            RequestData data)
+            throws RequestFailureException {
         XmlSerializer serializer = Xml.newSerializer();
         StringWriter writer = new StringWriter();
         try {
@@ -75,18 +72,15 @@ public abstract class RequestGenerator {
             serializer.attribute(null, "protocol", "3.0");
             serializer.attribute(null, "updater", "Android");
             serializer.attribute(null, "updaterversion", versionName);
-            serializer.attribute(null, "updaterchannel",
+            serializer.attribute(
+                    null,
+                    "updaterchannel",
                     StringSanitizer.sanitize(BuildInfo.getInstance().hostPackageLabel));
             serializer.attribute(null, "ismachine", "1");
             serializer.attribute(null, "requestid", "{" + data.getRequestID() + "}");
             serializer.attribute(null, "sessionid", "{" + sessionID + "}");
             serializer.attribute(null, "installsource", data.getInstallSource());
-            if (ChromeFeatureList.sAnonymousUpdateChecks.isEnabled()) {
-                serializer.attribute(null, "dedup", "cr");
-            } else {
-                serializer.attribute(null, "userid", "{" + getDeviceID() + "}");
-                serializer.attribute(null, "dedup", "uid");
-            }
+            serializer.attribute(null, "dedup", "cr");
 
             // Set up <os platform="android"... />
             serializer.startTag(null, "os");
@@ -136,13 +130,6 @@ public abstract class RequestGenerator {
         return writer.toString();
     }
 
-    /**
-     * Returns the application context.
-     */
-    protected Context getContext() {
-        return mApplicationContext;
-    }
-
     @VisibleForTesting
     public String getAppId() {
         return getLayoutIsTablet() ? getAppIdTablet() : getAppIdHandset();
@@ -177,13 +164,11 @@ public abstract class RequestGenerator {
         return applicationLabel + ";" + brand + ";" + model;
     }
 
-    /**
-     * Return a device-specific ID.
-     */
+    /** Return a device-specific ID. */
     public String getDeviceID() {
         try {
-            return UniqueIdentificationGeneratorFactory
-                    .getInstance(SettingsSecureBasedIdentificationGenerator.GENERATOR_ID)
+            return UniqueIdentificationGeneratorFactory.getInstance(
+                            SettingsSecureBasedIdentificationGenerator.GENERATOR_ID)
                     .getUniqueId(SALT);
         } catch (SecurityException unused) {
             // In some cases the browser lacks permission to get the ID. Consult crbug.com/1158707.

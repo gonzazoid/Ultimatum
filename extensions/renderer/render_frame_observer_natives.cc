@@ -6,10 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/render_frame_observer.h"
 #include "extensions/renderer/extension_frame_helper.h"
@@ -43,7 +42,7 @@ class LoadWatcher : public content::RenderFrameObserver {
   void DidFailProvisionalLoad() override {
     // Use PostTask to avoid running user scripts while handling this
     // DidFailProvisionalLoad notification.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback_), false));
     delete this;
   }
@@ -59,7 +58,7 @@ class LoadWatcher : public content::RenderFrameObserver {
 RenderFrameObserverNatives::RenderFrameObserverNatives(ScriptContext* context)
     : ObjectBackedNativeHandler(context) {}
 
-RenderFrameObserverNatives::~RenderFrameObserverNatives() {}
+RenderFrameObserverNatives::~RenderFrameObserverNatives() = default;
 
 void RenderFrameObserverNatives::AddRoutes() {
   RouteHandlerFunction(
@@ -76,12 +75,12 @@ void RenderFrameObserverNatives::Invalidate() {
 void RenderFrameObserverNatives::OnDocumentElementCreated(
     const v8::FunctionCallbackInfo<v8::Value>& args) {
   CHECK(args.Length() == 2);
-  CHECK(args[0]->IsInt32());
+  CHECK(args[0]->IsString());
   CHECK(args[1]->IsFunction());
 
-  int frame_id = args[0].As<v8::Int32>()->Value();
-
-  content::RenderFrame* frame = content::RenderFrame::FromRoutingID(frame_id);
+  content::RenderFrame* frame =
+      ExtensionFrameHelper::FindFrameFromFrameTokenString(context()->isolate(),
+                                                          args[0]);
   if (!frame) {
     LOG(WARNING) << "No render frame found to register LoadWatcher.";
     return;
@@ -96,7 +95,7 @@ void RenderFrameObserverNatives::OnDocumentElementCreated(
     // If the document element is already created, then we can call the callback
     // immediately (though use PostTask to ensure that the callback is called
     // asynchronously).
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), true));
   } else {
     new LoadWatcher(frame, std::move(callback));

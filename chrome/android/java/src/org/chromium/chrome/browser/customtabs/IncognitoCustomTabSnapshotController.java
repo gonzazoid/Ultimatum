@@ -19,7 +19,7 @@ public class IncognitoCustomTabSnapshotController extends IncognitoSnapshotContr
     /**
      * @param window The {@link Window} on which the snapshot capability needs to be controlled.
      * @param isShowingIncognitoSupplier {@link Supplier<Boolean>} which indicates whether we are
-     *         showing Incognito or not currently.
+     *     showing Incognito or not currently.
      */
     IncognitoCustomTabSnapshotController(
             @NonNull Window window, @NonNull Supplier<Boolean> isShowingIncognitoSupplier) {

@@ -15,12 +15,10 @@
 namespace headless {
 
 namespace {
-
-#if BUILDFLAG(ENABLE_PRINT_PREVIEW) || BUILDFLAG(ENABLE_TAGGED_PDF)
+#if BUILDFLAG(ENABLE_PRINT_PREVIEW)
 constexpr char kUnexpectedPrintManagerCall[] =
     "Headless Print Manager: Unexpected Print Manager call";
 #endif
-
 }  // namespace
 
 HeadlessPrintManager::HeadlessPrintManager(content::WebContents* web_contents)
@@ -57,21 +55,18 @@ void HeadlessPrintManager::PrintToPdf(
 void HeadlessPrintManager::GetDefaultPrintSettings(
     GetDefaultPrintSettingsCallback callback) {
   DLOG(ERROR) << "Scripted print is not supported";
-  std::move(callback).Run(printing::mojom::PrintParams::New());
+  std::move(callback).Run(nullptr);
 }
 
 void HeadlessPrintManager::ScriptedPrint(
     printing::mojom::ScriptedPrintParamsPtr params,
     ScriptedPrintCallback callback) {
-  auto default_param = printing::mojom::PrintPagesParams::New();
-  default_param->params = printing::mojom::PrintParams::New();
   DLOG(ERROR) << "Scripted print is not supported";
-  std::move(callback).Run(std::move(default_param));
+  std::move(callback).Run(nullptr);
 }
 
 #if BUILDFLAG(ENABLE_PRINT_PREVIEW)
 void HeadlessPrintManager::UpdatePrintSettings(
-    int32_t cookie,
     base::Value::Dict job_settings,
     UpdatePrintSettingsCallback callback) {
   mojo::ReportBadMessage(kUnexpectedPrintManagerCall);
@@ -79,11 +74,12 @@ void HeadlessPrintManager::UpdatePrintSettings(
 
 void HeadlessPrintManager::SetupScriptedPrintPreview(
     SetupScriptedPrintPreviewCallback callback) {
-  mojo::ReportBadMessage(kUnexpectedPrintManagerCall);
+  DLOG(ERROR) << "Scripted print preview is not supported";
+  std::move(callback).Run();
 }
 
 void HeadlessPrintManager::ShowScriptedPrintPreview(bool source_is_modifiable) {
-  mojo::ReportBadMessage(kUnexpectedPrintManagerCall);
+  DLOG(ERROR) << "Scripted print preview is not supported";
 }
 
 void HeadlessPrintManager::RequestPrintPreview(
@@ -96,15 +92,13 @@ void HeadlessPrintManager::CheckForCancel(int32_t preview_ui_id,
                                           CheckForCancelCallback callback) {
   mojo::ReportBadMessage(kUnexpectedPrintManagerCall);
 }
-#endif  // BUILDFLAG(ENABLE_PRINT_PREVIEW)
 
-#if BUILDFLAG(ENABLE_TAGGED_PDF)
 void HeadlessPrintManager::SetAccessibilityTree(
     int32_t cookie,
     const ui::AXTreeUpdate& accessibility_tree) {
   mojo::ReportBadMessage(kUnexpectedPrintManagerCall);
 }
-#endif
+#endif  // BUILDFLAG(ENABLE_PRINT_PREVIEW)
 
 #if BUILDFLAG(IS_ANDROID)
 void HeadlessPrintManager::PdfWritingDone(int page_count) {}

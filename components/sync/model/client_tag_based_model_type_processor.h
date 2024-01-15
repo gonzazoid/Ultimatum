@@ -107,6 +107,9 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
                         UpdateResponseDataList updates,
                         absl::optional<sync_pb::GarbageCollectionDirective>
                             gc_directive) override;
+  void StorePendingInvalidations(
+      std::vector<sync_pb::ModelTypeState::Invalidation> invalidations_to_store)
+      override;
 
   // ModelTypeControllerDelegate implementation.
   // |start_callback| will never be called synchronously.
@@ -118,6 +121,8 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
       base::OnceCallback<void(const TypeEntitiesCount&)> callback)
       const override;
   void RecordMemoryUsageAndCountsHistograms() override;
+  void ClearMetadataIfStopped() override;
+  void ReportBridgeErrorForTest() override;
 
   // Returns the estimate of dynamically allocated memory in bytes.
   size_t EstimateMemoryUsage() const;
@@ -131,7 +136,7 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
   // These values are persisted to logs. Entries should not be renumbered and
   // numeric values should never be reused. Public for tests.
   enum class ErrorSite {
-    kBridgeInitiated = 0,
+    kReportedByBridge = 0,
     kApplyFullUpdates = 1,
     kApplyIncrementalUpdates = 2,
     kApplyUpdatesOnCommitResponse = 3,
@@ -231,10 +236,15 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
   void MergeDataWithMetadataForDebugging(AllNodesCallback callback,
                                          std::unique_ptr<DataBatch> batch);
 
-  // Checks for valid persisted state. Resets state (incl. the persisted data)
+  // Verifies that the persisted ModelTypeState (in `entity_tracker_`) is valid.
+  // May modify the state (incl. the persisted data) or even clear it entirely
   // if it is invalid.
-  void CheckForInvalidPersistedModelTypeState();
-  bool CheckForInvalidPersistedMetadata(const EntityMetadataMap& metadata_map);
+  void ClearPersistedMetadataIfInconsistentWithActivationRequest();
+
+  // Verifies that the passed-in metadata (ModelTypeState plus entity metadata)
+  // is valid, and clears it (incl. the persisted data) if not. Returns whether
+  // the metadata was cleared.
+  bool ClearPersistedMetadataIfInvalid(const MetadataBatch& metadata);
 
   // Reports error and records a metric about |site| where the error occurred.
   void ReportErrorImpl(const ModelError& error, ErrorSite site);
@@ -248,10 +258,14 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
 
   // ModelTypeSyncBridge linked to this processor. The bridge owns this
   // processor instance so the pointer should never become invalid.
-  raw_ptr<ModelTypeSyncBridge> bridge_;
+  raw_ptr<ModelTypeSyncBridge, DanglingUntriaged> bridge_ = nullptr;
 
   // Function to capture and upload a stack trace when an error occurs.
   const base::RepeatingClosure dump_stack_;
+
+  // Whether there is an ongoing processing of incoming updates, used to detect
+  // local updates based on remote changes.
+  bool processing_incremental_updates_ = false;
 
   /////////////////
   // Model state //
@@ -264,6 +278,10 @@ class ClientTagBasedModelTypeProcessor : public ModelTypeProcessor,
   // Whether the model has initialized its internal state for sync (and provided
   // metadata).
   bool model_ready_to_sync_ = false;
+
+  // Marks whether metadata should be cleared upon ModelReadyToSync(). True if
+  // ClearMetadataIfStopped() is called before ModelReadyToSync().
+  bool pending_clear_metadata_ = false;
 
   ////////////////
   // Sync state //

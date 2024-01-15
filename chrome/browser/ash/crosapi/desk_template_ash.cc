@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/crosapi/desk_template_ash.h"
+#include "ui/base/ui_base_types.h"
 
 namespace crosapi {
 
@@ -26,23 +27,23 @@ void DeskTemplateAsh::BindReceiver(
   receivers_.Add(this, std::move(pending_receiver));
 }
 
-void DeskTemplateAsh::GetTabStripModelUrls(
+void DeskTemplateAsh::GetBrowserInformation(
     const std::string& window_unique_id,
     base::OnceCallback<void(crosapi::mojom::DeskTemplateStatePtr)> callback) {
   const auto current_serial = serial_++;
   calls_.emplace_back(current_serial, window_unique_id, remotes_.size(),
                       std::move(callback));
   for (const auto& remote : remotes_) {
-    remote->GetTabStripModelUrls(
+    remote->GetBrowserInformation(
         current_serial, window_unique_id,
-        base::BindOnce(&DeskTemplateAsh::OnGetTabStripModelUrlsFromRemote,
+        base::BindOnce(&DeskTemplateAsh::OnGetBrowserInformationFromRemote,
                        weak_factory_.GetWeakPtr()));
   }
 }
 
 void DeskTemplateAsh::CreateBrowserWithRestoredData(
     const gfx::Rect& bounds,
-    const ui::mojom::WindowShowState show_state,
+    const ui::WindowShowState show_state,
     crosapi::mojom::DeskTemplateStatePtr additional_state) {
   if (remotes_.empty())
     return;
@@ -67,7 +68,7 @@ void DeskTemplateAsh::AddDeskTemplateClient(
   remotes_.Add(mojo::Remote<mojom::DeskTemplateClient>(std::move(client)));
 }
 
-void DeskTemplateAsh::OnGetTabStripModelUrlsFromRemote(
+void DeskTemplateAsh::OnGetBrowserInformationFromRemote(
     uint32_t serial,
     const std::string& window_unique_id,
     mojom::DeskTemplateStatePtr state) {

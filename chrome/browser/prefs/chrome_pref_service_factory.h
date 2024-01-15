@@ -8,17 +8,17 @@
 #include <memory>
 
 #include "base/memory/ref_counted.h"
+#include "base/values.h"
 #include "components/prefs/persistent_pref_store.h"
 #include "components/prefs/pref_value_store.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/preferences/public/mojom/tracked_preference_validation_delegate.mojom-forward.h"
 
 namespace base {
-class DictionaryValue;
 class FilePath;
 class SequencedTaskRunner;
 class Time;
-}
+}  // namespace base
 
 namespace policy {
 class PolicyService;
@@ -38,7 +38,10 @@ class PrefService;
 
 class PrefStore;
 class Profile;
+
+namespace supervised_user {
 class SupervisedUserSettingsService;
+}  // namespace supervised_user
 
 namespace chrome_prefs {
 
@@ -67,7 +70,7 @@ std::unique_ptr<sync_preferences::PrefServiceSyncable> CreateProfilePrefs(
     mojo::PendingRemote<prefs::mojom::TrackedPreferenceValidationDelegate>
         validation_delegate,
     policy::PolicyService* policy_service,
-    SupervisedUserSettingsService* supervised_user_settings,
+    supervised_user::SupervisedUserSettingsService* supervised_user_settings,
     scoped_refptr<PrefStore> extension_prefs,
     scoped_refptr<user_prefs::PrefRegistrySyncable> pref_registry,
     policy::BrowserPolicyConnector* connector,
@@ -79,9 +82,8 @@ void DisableDomainCheckForTesting();
 
 // Initializes the preferences for the profile at |profile_path| with the
 // preference values in |master_prefs|. Returns true on success.
-bool InitializePrefsFromMasterPrefs(
-    const base::FilePath& profile_path,
-    std::unique_ptr<base::DictionaryValue> master_prefs);
+bool InitializePrefsFromMasterPrefs(const base::FilePath& profile_path,
+                                    base::Value::Dict master_prefs);
 
 // Retrieves the time of the last preference reset event, if any, for the
 // provided profile. If no reset has occurred, returns a null |Time|.

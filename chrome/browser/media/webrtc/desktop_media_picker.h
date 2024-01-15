@@ -9,9 +9,8 @@
 #include <string>
 #include <utility>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "content/public/browser/desktop_media_id.h"
 #include "content/public/browser/media_stream_request.h"
 #include "content/public/browser/web_contents_observer.h"
@@ -33,6 +32,17 @@ class DesktopMediaPicker {
   using DoneCallback = base::OnceCallback<void(content::DesktopMediaID id)>;
 
   struct Params {
+    // Possible sources of the request.
+    enum class RequestSource {
+      kUnknown,
+      kCast,
+      kExtension,
+      kGetDisplayMedia,
+      kScreenshotDataCollector,
+      kArcScreenCapture,
+    };
+
+    explicit Params(RequestSource request_source);
     Params();
     Params(const Params&);
     Params& operator=(const Params&);
@@ -42,9 +52,9 @@ class DesktopMediaPicker {
     raw_ptr<content::WebContents> web_contents = nullptr;
     // The context whose root window is used for dialog placement, cannot be
     // null for Aura.
-    gfx::NativeWindow context = nullptr;
+    gfx::NativeWindow context = gfx::NativeWindow();
     // Parent window the dialog is relative to, only used on Mac.
-    gfx::NativeWindow parent = nullptr;
+    gfx::NativeWindow parent = gfx::NativeWindow();
     // The modality used for showing the dialog.
     ui::ModalType modality = ui::ModalType::MODAL_TYPE_CHILD;
     // The name used in the dialog for what is requesting the picker to be
@@ -83,18 +93,17 @@ class DesktopMediaPicker {
     // picker.
     blink::mojom::PreferredDisplaySurface preferred_display_surface =
         blink::mojom::PreferredDisplaySurface::NO_PREFERENCE;
-    // True if the source of the call is getDisplayMedia(), false if it's
-    // another source, like an extension or ARC. This is useful for UMA that
+    // Indicates the source of the request. This is useful for UMA that
     // track the result of the picker, because the behavior with the
     // Extension API is different, and could therefore lead to mismeasurement.
-    bool is_get_display_media_call = false;
+    RequestSource request_source = RequestSource::kUnknown;
   };
 
   // Creates a picker dialog/confirmation box depending on the value of
   // |request|. If no request is available the default picker, namely
   // DesktopMediaPickerViews is used.
   static std::unique_ptr<DesktopMediaPicker> Create(
-      const content::MediaStreamRequest* request = nullptr);
+      const content::MediaStreamRequest* request);
 
   DesktopMediaPicker() = default;
 

@@ -17,7 +17,7 @@ import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 
 import java.util.concurrent.TimeoutException;
 
-/** Web payments test for blob URL.  */
+/** Web payments test for blob URL. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 public class PaymentRequestBlobUrlTest {
@@ -30,7 +30,7 @@ public class PaymentRequestBlobUrlTest {
     @Feature({"Payments"})
     public void test() throws TimeoutException {
         // Trigger the Blob URL load, and wait for it to finish.
-        mPaymentRequestTestRule.openPageAndClickNode("buy");
+        mPaymentRequestTestRule.clickNode("buy");
         mPaymentRequestTestRule.assertWaitForPageScaleFactorMatch(2);
 
         // Trigger the PaymentRequest, which should be rejected.

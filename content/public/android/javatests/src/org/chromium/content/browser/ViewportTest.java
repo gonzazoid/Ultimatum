@@ -5,10 +5,10 @@
 package org.chromium.content.browser;
 
 import android.content.Context;
-import android.support.test.InstrumentationRegistry;
 import android.util.DisplayMetrics;
 import android.view.WindowManager;
 
+import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.MediumTest;
 
 import org.junit.Assert;
@@ -17,13 +17,13 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import org.chromium.base.test.BaseJUnit4ClassRunner;
+import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Feature;
 import org.chromium.content_public.browser.test.util.JavaScriptUtils;
 import org.chromium.content_shell_apk.ContentShellActivityTestRule;
+import org.chromium.ui.base.DeviceFormFactor;
 
-/**
- * Test suite for viewport-related properties.
- */
+/** Test suite for viewport-related properties. */
 @RunWith(BaseJUnit4ClassRunner.class)
 public class ViewportTest {
     @Rule
@@ -45,7 +45,20 @@ public class ViewportTest {
     @Test
     @MediumTest
     @Feature({"Viewport", "InitialViewportSize"})
-    public void testDefaultViewportSize() throws Throwable {
+    @CommandLineFlags.Add({"enable-features=DefaultViewportIsDeviceWidth"})
+    public void testDefaultViewportSize_DefaultViewportIsDeviceWidth() throws Throwable {
+        testDefaultViewportSize(/* isDefaultViewportDeviceWidth= */ true);
+    }
+
+    @Test
+    @MediumTest
+    @Feature({"Viewport", "InitialViewportSize"})
+    @CommandLineFlags.Add({"disable-features=DefaultViewportIsDeviceWidth"})
+    public void testDefaultViewportSize_DefaultViewportIs980() throws Throwable {
+        testDefaultViewportSize(/* isDefaultViewportDeviceWidth= */ false);
+    }
+
+    private void testDefaultViewportSize(boolean isDefaultViewportDeviceWidth) throws Throwable {
         mActivityTestRule.launchContentShellWithUrl("about:blank");
         mActivityTestRule.waitForActiveShellToBeDoneLoading();
 
@@ -61,8 +74,19 @@ public class ViewportTest {
         // Check that the viewport width is vaguely sensible.
         int viewportWidth = evaluateIntegerValue("document.documentElement.clientWidth");
         Assert.assertTrue(Math.abs(evaluateIntegerValue("window.innerWidth") - viewportWidth) <= 1);
-        Assert.assertTrue(viewportWidth >= 979);
-        Assert.assertTrue(
-                viewportWidth <= Math.max(981, metrics.widthPixels / metrics.density + 1));
+        if (isDefaultViewportDeviceWidth && isTablet()) {
+            // On tablets, when the DefaultViewportIsDeviceWidth flag is enabled, viewport width
+            // will default to device width without viewport tag.
+            Assert.assertTrue(viewportWidth >= metrics.widthPixels / metrics.density - 1);
+            Assert.assertTrue(viewportWidth <= metrics.widthPixels / metrics.density + 1);
+        } else {
+            Assert.assertTrue(viewportWidth >= 979);
+            Assert.assertTrue(
+                    viewportWidth <= Math.max(981, metrics.widthPixels / metrics.density + 1));
+        }
+    }
+
+    private boolean isTablet() {
+        return DeviceFormFactor.isNonMultiDisplayContextOnTablet(mActivityTestRule.getActivity());
     }
 }

@@ -5,22 +5,21 @@
 #include "chromeos/ash/components/local_search_service/inverted_index_search.h"
 
 #include <cstdint>
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/rtl.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/local_search_service/content_extraction_utils.h"
 #include "chromeos/ash/components/local_search_service/inverted_index.h"
 #include "chromeos/ash/components/string_matching/tokenized_string.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash::local_search_service {
 
@@ -99,9 +98,8 @@ void InvertedIndexSearch::AddOrUpdate(const std::vector<Data>& data,
                                       AddOrUpdateCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!data.empty());
-  base::PostTaskAndReplyWithResult(
-      blocking_task_runner_.get(), FROM_HERE,
-      base::BindOnce(&ExtractDocumentsContent, data),
+  blocking_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&ExtractDocumentsContent, data),
       base::BindOnce(
           &InvertedIndexSearch::FinalizeAddOrUpdate,
           weak_ptr_factory_.GetWeakPtr(),
@@ -128,9 +126,8 @@ void InvertedIndexSearch::UpdateDocuments(const std::vector<Data>& data,
                                           UpdateDocumentsCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!data.empty());
-  base::PostTaskAndReplyWithResult(
-      blocking_task_runner_.get(), FROM_HERE,
-      base::BindOnce(&ExtractDocumentsContent, data),
+  blocking_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&ExtractDocumentsContent, data),
       base::BindOnce(
           &InvertedIndexSearch::FinalizeUpdateDocuments,
           weak_ptr_factory_.GetWeakPtr(),
@@ -147,13 +144,13 @@ void InvertedIndexSearch::Find(const std::u16string& query,
   if (query.empty()) {
     const ResponseStatus status = ResponseStatus::kEmptyQuery;
     MaybeLogSearchResultsStats(status, 0u, base::TimeDelta());
-    std::move(callback).Run(status, absl::nullopt);
+    std::move(callback).Run(status, std::nullopt);
     return;
   }
   if (inverted_index_->NumberDocuments() == 0u) {
     const ResponseStatus status = ResponseStatus::kEmptyIndex;
     MaybeLogSearchResultsStats(status, 0u, base::TimeDelta());
-    std::move(callback).Run(status, absl::nullopt);
+    std::move(callback).Run(status, std::nullopt);
     return;
   }
 

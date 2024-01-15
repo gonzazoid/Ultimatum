@@ -10,10 +10,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/sequenced_task_runner.h"
@@ -41,8 +42,7 @@ namespace {
 
 class FakeDownloadFeedback : public DownloadFeedback {
  public:
-  FakeDownloadFeedback(base::TaskRunner* file_task_runner,
-                       const std::string& ping_request,
+  FakeDownloadFeedback(const std::string& ping_request,
                        const std::string& ping_response,
                        base::OnceClosure deletion_callback)
       : ping_request_(ping_request),
@@ -85,12 +85,12 @@ class FakeDownloadFeedbackFactory : public DownloadFeedbackFactory {
 
   std::unique_ptr<DownloadFeedback> CreateDownloadFeedback(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-      base::TaskRunner* file_task_runner,
       const base::FilePath& file_path,
+      uint64_t file_size,
       const std::string& ping_request,
       const std::string& ping_response) override {
     FakeDownloadFeedback* feedback = new FakeDownloadFeedback(
-        file_task_runner, ping_request, ping_response,
+        ping_request, ping_response,
         base::BindOnce(&FakeDownloadFeedbackFactory::DownloadFeedbackSent,
                        base::Unretained(this), feedbacks_.size()));
     feedbacks_.push_back(feedback);
@@ -104,7 +104,7 @@ class FakeDownloadFeedbackFactory : public DownloadFeedbackFactory {
   size_t num_feedbacks() const { return feedbacks_.size(); }
 
  private:
-  std::vector<FakeDownloadFeedback*> feedbacks_;
+  std::vector<raw_ptr<FakeDownloadFeedback, VectorExperimental>> feedbacks_;
 };
 
 class FakeDownloadProtectionService : public DownloadProtectionService {
@@ -148,9 +148,7 @@ class DownloadFeedbackServiceTest : public testing::Test {
     base::FilePath upload_file_path(temp_dir_.GetPath().AppendASCII(
         "test file " + base::NumberToString(n)));
     const std::string upload_file_data = "data";
-    int wrote = base::WriteFile(upload_file_path, upload_file_data.data(),
-                                upload_file_data.size());
-    EXPECT_EQ(static_cast<int>(upload_file_data.size()), wrote);
+    EXPECT_TRUE(base::WriteFile(upload_file_path, upload_file_data));
     return upload_file_path;
   }
 
@@ -278,9 +276,6 @@ TEST_F(DownloadFeedbackServiceTest, SingleFeedbackCompleteAndKeepDownload) {
                     bool _, download::DownloadItem::AcquireFileCallback arg) {
         download_discarded_callback = std::move(arg);
       });
-  EXPECT_CALL(item, ValidateDangerousDownload()).Times(1);
-  GURL empty_url;
-  EXPECT_CALL(item, GetURL()).WillOnce(ReturnRef(empty_url));
 
   DownloadFeedbackService service(&fake_download_service_,
                                   file_task_runner_.get());

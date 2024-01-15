@@ -27,11 +27,11 @@ class NetworkingPrivateEventRouter : public KeyedService,
   NetworkingPrivateEventRouter& operator=(const NetworkingPrivateEventRouter&) =
       delete;
 
-  static NetworkingPrivateEventRouter* Create(
+  static std::unique_ptr<NetworkingPrivateEventRouter> Create(
       content::BrowserContext* browser_context);
 
  protected:
-  NetworkingPrivateEventRouter() {}
+  NetworkingPrivateEventRouter() = default;
 };
 
 }  // namespace extensions

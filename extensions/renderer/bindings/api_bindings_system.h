@@ -9,7 +9,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "extensions/common/mojom/event_dispatcher.mojom-forward.h"
 #include "extensions/renderer/bindings/api_binding.h"
@@ -23,6 +23,7 @@
 
 namespace extensions {
 class APIBindingHooks;
+class APIBindingHooksDelegate;
 class InteractionProvider;
 
 // A class encompassing the necessary pieces to construct the JS entry points
@@ -78,14 +79,10 @@ class APIBindingsSystem {
                           const base::Value::List& response,
                           mojom::EventFilteringInfoPtr filter);
 
-  // Returns the APIBindingHooks object for the given api to allow for
-  // registering custom hooks. These must be registered *before* the
-  // binding is instantiated.
-  // TODO(devlin): It's a little weird that we don't just expose a
-  // RegisterHooks-type method. Depending on how complex the hook interface
-  // is, maybe we should rethink this. Downside would be that it's less
-  // efficient to register multiple hooks for the same API.
-  APIBindingHooks* GetHooksForAPI(const std::string& api_name);
+  // Registers the custom hook on the APIBindingHooks object for the given API.
+  // These must be registered *before* the binding is instantiated.
+  void RegisterHooksDelegate(const std::string& api_name,
+                             std::unique_ptr<APIBindingHooksDelegate> delegate);
 
   // Registers the handler for creating a custom type with the given
   // |type_name|, where |type_name| is the fully-qualified type (e.g.
@@ -148,7 +145,7 @@ class APIBindingsSystem {
 
   std::map<std::string, CustomTypeHandler> custom_types_;
 
-  // The method to retrieve the DictionaryValue describing a given extension
+  // The method to retrieve the dictionary describing a given extension
   // API. Curried in for testing purposes so we can use fake APIs.
   GetAPISchemaMethod get_api_schema_;
 

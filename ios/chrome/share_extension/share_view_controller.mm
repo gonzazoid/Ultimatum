@@ -2,22 +2,20 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#import <MobileCoreServices/MobileCoreServices.h>
-
 #import "ios/chrome/share_extension/share_view_controller.h"
 
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+
+#import "base/apple/bundle_locations.h"
+#import "base/apple/foundation_util.h"
 #import "base/ios/block_types.h"
-#import "base/mac/foundation_util.h"
 #import "base/strings/sys_string_conversions.h"
 #import "ios/chrome/common/app_group/app_group_command.h"
 #import "ios/chrome/common/app_group/app_group_constants.h"
 #import "ios/chrome/common/crash_report/crash_helper.h"
+#import "ios/chrome/common/extension_open_url.h"
 #import "ios/chrome/share_extension/share_extension_view.h"
 #import "ios/chrome/share_extension/ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 // Type for completion handler to fetch the components of the share items.
 // `idResponse` type depends on the element beeing fetched.
@@ -35,21 +33,20 @@ const CGFloat kMediumAlpha = 0.5;
 
 }  // namespace
 
-@interface ShareViewController ()<ShareExtensionViewActionTarget> {
-  // This constrains the center of the widget to be vertically in the center
-  // of the the screen. It has to be modified for the appearance and dismissal
-  // animation.
-  NSLayoutConstraint* _widgetVerticalPlacementConstraint;
-
-  NSURL* _shareURL;
-  NSString* _shareTitle;
-  UIImage* _image;
-  NSExtensionItem* _shareItem;
-}
+@interface ShareViewController () <ShareExtensionViewActionTarget>
 
 @property(nonatomic, weak) UIView* maskView;
 @property(nonatomic, weak) ShareExtensionView* shareView;
 @property(nonatomic, assign) app_group::ShareExtensionItemType itemType;
+@property(nonatomic, strong) NSExtensionItem* shareItem;
+@property(nonatomic, strong) NSURL* shareURL;
+@property(nonatomic, copy) NSString* shareTitle;
+@property(nonatomic, strong) UIImage* image;
+// This constrains the center of the widget to be vertically in the center
+// of the the screen. It has to be modified for the appearance and dismissal
+// animation.
+@property(nonatomic, strong)
+    NSLayoutConstraint* widgetVerticalPlacementConstraint;
 
 // Creates a files in `app_group::ShareExtensionItemsFolder()` containing a
 // serialized NSDictionary.
@@ -84,9 +81,7 @@ const CGFloat kMediumAlpha = 0.5;
 
 + (void)initialize {
   if (self == [ShareViewController self]) {
-    if (crash_helper::common::CanUseCrashpad()) {
-      crash_helper::common::StartCrashpad();
-    }
+    crash_helper::common::StartCrashpad();
   }
 }
 
@@ -136,17 +131,19 @@ const CGFloat kMediumAlpha = 0.5;
   if (_image) {
     [self.shareView setScreenshot:_image];
   }
+  __weak ShareViewController* weakSelf = self;
   dispatch_async(dispatch_get_main_queue(), ^{
     // Center the widget.
-    [self->_widgetVerticalPlacementConstraint setActive:NO];
-    self->_widgetVerticalPlacementConstraint = [self->_shareView.centerYAnchor
-        constraintEqualToAnchor:self.view.centerYAnchor];
-    [self->_widgetVerticalPlacementConstraint setActive:YES];
-    [self.maskView setAlpha:0];
+    [weakSelf.widgetVerticalPlacementConstraint setActive:NO];
+    weakSelf.widgetVerticalPlacementConstraint =
+        [weakSelf.shareView.centerYAnchor
+            constraintEqualToAnchor:self.view.centerYAnchor];
+    [weakSelf.widgetVerticalPlacementConstraint setActive:YES];
+    [weakSelf.maskView setAlpha:0];
     [UIView animateWithDuration:ui_util::kAnimationDuration
                      animations:^{
-                       [self.maskView setAlpha:1];
-                       [self.view layoutIfNeeded];
+                       [weakSelf.maskView setAlpha:1];
+                       [weakSelf.view layoutIfNeeded];
                      }];
   });
 }
@@ -165,7 +162,7 @@ const CGFloat kMediumAlpha = 0.5;
   NSString* okButton =
       NSLocalizedString(@"IDS_IOS_OK_BUTTON_SHARE_EXTENSION",
                         @"The label of the OK button in share extension.");
-  NSString* applicationName = [[[NSBundle mainBundle] infoDictionary]
+  NSString* applicationName = [[base::apple::FrameworkBundle() infoDictionary]
       valueForKey:@"CFBundleDisplayName"];
   errorMessage =
       [errorMessage stringByReplacingOccurrencesOfString:@"APPLICATION_NAME"
@@ -174,6 +171,7 @@ const CGFloat kMediumAlpha = 0.5;
       [UIAlertController alertControllerWithTitle:errorMessage
                                           message:[_shareURL absoluteString]
                                    preferredStyle:UIAlertControllerStyleAlert];
+  __weak ShareViewController* weakSelf = self;
   UIAlertAction* defaultAction = [UIAlertAction
       actionWithTitle:okButton
                 style:UIAlertActionStyleDefault
@@ -182,7 +180,7 @@ const CGFloat kMediumAlpha = 0.5;
                     [NSError errorWithDomain:NSURLErrorDomain
                                         code:NSURLErrorUnsupportedURL
                                     userInfo:nil];
-                [self dismissAndReturnItem:nil error:unsupportedURLError];
+                [weakSelf dismissAndReturnItem:nil error:unsupportedURLError];
               }];
   [alert addAction:defaultAction];
   [self presentViewController:alert animated:YES completion:nil];
@@ -220,30 +218,51 @@ const CGFloat kMediumAlpha = 0.5;
                                       forAxis:UILayoutConstraintAxisHorizontal];
 }
 
+- (void)handleURL:(id)idURL
+          forItem:(NSExtensionItem*)item
+        withError:(NSError*)error {
+  NSURL* URL = base::apple::ObjCCast<NSURL>(idURL);
+  if (!URL) {
+    [self displayErrorView];
+    return;
+  }
+  self.shareItem = item;
+  self.shareURL = URL;
+  self.shareTitle = [[item attributedContentText] string];
+  if ([self.shareTitle length] == 0) {
+    self.shareTitle = [URL host];
+  }
+  if ([[self.shareURL scheme] isEqualToString:@"http"] ||
+      [[self.shareURL scheme] isEqualToString:@"https"]) {
+    [self displayShareView];
+  } else {
+    [self displayErrorView];
+  }
+}
+
+- (void)handleImage:(id)idImage
+            forItem:(NSExtensionItem*)item
+          withError:(NSError*)error {
+  self.image = base::apple::ObjCCast<UIImage>(idImage);
+  if (self.image && self.shareView) {
+    [self.shareView setScreenshot:self.image];
+  }
+}
+
 - (void)loadElementsFromContext {
-  NSString* typeURL = (__bridge NSString*)(kUTTypeURL);
+  NSString* typeURL = UTTypeURL.identifier;
+  __weak ShareViewController* weakSelf = self;
+  // TODO(crbug.com/1472758): Reorganize sharing extension handler.
+  BOOL foundMatch = false;
   for (NSExtensionItem* item in self.extensionContext.inputItems) {
     for (NSItemProvider* itemProvider in item.attachments) {
       if ([itemProvider hasItemConformingToTypeIdentifier:typeURL]) {
+        foundMatch = true;
         ItemBlock URLCompletion = ^(id idURL, NSError* error) {
-          NSURL* URL = base::mac::ObjCCast<NSURL>(idURL);
-          if (!URL) {
-            [self displayErrorView];
-            return;
-          }
+          // Crash reports showed that this block can be called on a background
+          // thread. Move back the UI updating code to main thread.
           dispatch_async(dispatch_get_main_queue(), ^{
-            self->_shareItem = [item copy];
-            self->_shareURL = [URL copy];
-            self->_shareTitle = [[[item attributedContentText] string] copy];
-            if ([self->_shareTitle length] == 0) {
-              self->_shareTitle = [URL host];
-            }
-            if ([[self->_shareURL scheme] isEqualToString:@"http"] ||
-                [[self->_shareURL scheme] isEqualToString:@"https"]) {
-              [self displayShareView];
-            } else {
-              [self displayErrorView];
-            }
+            [weakSelf handleURL:idURL forItem:item withError:error];
           });
         };
         [itemProvider loadItemForTypeIdentifier:typeURL
@@ -254,17 +273,21 @@ const CGFloat kMediumAlpha = 0.5;
               valueWithCGSize:CGSizeMake(kScreenShotWidth, kScreenShotHeight)]
         };
         ItemBlock imageCompletion = ^(id imageData, NSError* error) {
-          self->_image = base::mac::ObjCCast<UIImage>(imageData);
-          if (self->_image && self.shareView) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-              [self.shareView setScreenshot:self->_image];
-            });
-          }
+          // Crash reports showed that this block can be called on a background
+          // thread. Move back the UI updating code to main thread.
+          dispatch_async(dispatch_get_main_queue(), ^{
+            [weakSelf handleImage:imageData forItem:item withError:error];
+          });
         };
         [itemProvider loadPreviewImageWithOptions:imageOptions
                                 completionHandler:imageCompletion];
       }
     }
+  }
+
+  // Display the error view when no match have been found.
+  if (!foundMatch) {
+    [self displayErrorView];
   }
 }
 
@@ -281,18 +304,19 @@ const CGFloat kMediumAlpha = 0.5;
         [_shareView.topAnchor constraintEqualToAnchor:self.view.bottomAnchor];
   }
   [_widgetVerticalPlacementConstraint setActive:YES];
+  __weak ShareViewController* weakSelf = self;
   [UIView animateWithDuration:ui_util::kAnimationDuration
       animations:^{
-        [self.maskView setAlpha:0];
-        [self.view layoutIfNeeded];
+        [weakSelf.maskView setAlpha:0];
+        [weakSelf.view layoutIfNeeded];
       }
       completion:^(BOOL finished) {
         NSArray* returnItem = item ? @[ item ] : @[];
         if (error) {
-          [self.extensionContext cancelRequestWithError:error];
+          [weakSelf.extensionContext cancelRequestWithError:error];
         } else {
-          [self.extensionContext completeRequestReturningItems:returnItem
-                                             completionHandler:nil];
+          [weakSelf.extensionContext completeRequestReturningItems:returnItem
+                                                 completionHandler:nil];
         }
       }];
 }
@@ -359,13 +383,14 @@ const CGFloat kMediumAlpha = 0.5;
 #pragma mark - ShareExtensionViewActionTarget
 
 - (void)shareExtensionViewDidSelectCancel:(id)sender {
+  __weak ShareViewController* weakSelf = self;
   [self
       queueActionItemURL:nil
                    title:nil
                   action:app_group::READING_LIST_ITEM  // Ignored
                   cancel:YES
               completion:^{
-                [self
+                [weakSelf
                     dismissAndReturnItem:nil
                                    error:
                                        [NSError
@@ -376,46 +401,43 @@ const CGFloat kMediumAlpha = 0.5;
 }
 
 - (void)shareExtensionViewDidSelectAddToReadingList:(id)sender {
+  __weak ShareViewController* weakSelf = self;
   [self queueActionItemURL:_shareURL
                      title:_shareTitle
                     action:app_group::READING_LIST_ITEM
                     cancel:NO
                 completion:^{
-                  [self dismissAndReturnItem:self->_shareItem error:nil];
+                  [weakSelf dismissAndReturnItem:weakSelf.shareItem error:nil];
                 }];
 }
 
 - (void)shareExtensionViewDidSelectAddToBookmarks:(id)sender {
+  __weak ShareViewController* weakSelf = self;
   [self queueActionItemURL:_shareURL
                      title:_shareTitle
                     action:app_group::BOOKMARK_ITEM
                     cancel:NO
                 completion:^{
-                  [self dismissAndReturnItem:self->_shareItem error:nil];
+                  [weakSelf dismissAndReturnItem:weakSelf.shareItem error:nil];
                 }];
 }
 
 - (void)shareExtensionViewDidSelectOpenInChrome:(id)sender {
-  UIResponder* responder = self;
-  while ((responder = responder.nextResponder)) {
-    if ([responder respondsToSelector:@selector(openURL:)]) {
-      AppGroupCommand* command = [[AppGroupCommand alloc]
-          initWithSourceApp:app_group::kOpenCommandSourceShareExtension
-             URLOpenerBlock:^(NSURL* openURL) {
-               [responder performSelector:@selector(openURL:)
-                               withObject:openURL];
-             }];
-      [command prepareToOpenURL:_shareURL];
-      [command executeInApp];
-      break;
-    }
-  }
+  __weak ShareViewController* weakSelf = self;
+  AppGroupCommand* command = [[AppGroupCommand alloc]
+      initWithSourceApp:app_group::kOpenCommandSourceShareExtension
+         URLOpenerBlock:^(NSURL* openURL) {
+           ExtensionOpenURL(openURL, weakSelf, nil);
+         }];
+  [command prepareToOpenURL:_shareURL];
+  [command executeInApp];
+
   [self queueActionItemURL:_shareURL
                      title:_shareTitle
                     action:app_group::OPEN_IN_CHROME_ITEM
                     cancel:NO
                 completion:^{
-                  [self dismissAndReturnItem:self->_shareItem error:nil];
+                  [weakSelf dismissAndReturnItem:weakSelf.shareItem error:nil];
                 }];
 }
 

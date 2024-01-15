@@ -56,6 +56,10 @@ void HttpAuthManagerImpl::SetObserverAndDeliverCredentials(
   if (observer_)
     observer_->OnLoginModelDestroying();
   observer_ = observer;
+
+  if (!client_->IsFillingEnabled(observed_form.url)) {
+    return;
+  }
   // Initialize the form manager.
   form_manager_ = std::make_unique<PasswordFormManager>(
       client_, PasswordFormDigest(observed_form), nullptr /* form_fetcher */,
@@ -141,6 +145,11 @@ void HttpAuthManagerImpl::OnLoginSuccesfull() {
     client_->PromptUserToSaveOrUpdatePassword(std::move(form_manager_),
                                               is_update);
     LogMessage(Logger::STRING_HTTPAUTH_ON_PROMPT_USER);
+  } else {
+    // For existing credentials that haven't been updated invoke
+    // form_manager_->Save() in order to update meta data fields (e.g. last used
+    // timestamp).
+    form_manager_->Save();
   }
 }
 

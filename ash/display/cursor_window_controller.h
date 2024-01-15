@@ -9,6 +9,7 @@
 
 #include "ash/ash_export.h"
 #include "ash/constants/ash_constants.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "ui/aura/window.h"
@@ -20,7 +21,6 @@
 
 namespace gfx {
 class ImageSkia;
-class ImageSkiaRep;
 }  // namespace gfx
 
 namespace ash {
@@ -32,7 +32,7 @@ class CursorWindowDelegate;
 // When cursor compositing is disabled, draw nothing as the native cursor is
 // shown.
 // When cursor compositing is enabled, just draw the cursor as-is.
-class ASH_EXPORT CursorWindowController {
+class ASH_EXPORT CursorWindowController : public aura::WindowObserver {
  public:
   class Observer : public base::CheckedObserver {
    public:
@@ -47,7 +47,7 @@ class ASH_EXPORT CursorWindowController {
   CursorWindowController(const CursorWindowController&) = delete;
   CursorWindowController& operator=(const CursorWindowController&) = delete;
 
-  ~CursorWindowController();
+  ~CursorWindowController() override;
 
   bool is_cursor_compositing_enabled() const {
     return is_cursor_compositing_enabled_;
@@ -87,8 +87,17 @@ class ASH_EXPORT CursorWindowController {
   void SetCursorSize(ui::CursorSize cursor_size);
   void SetVisibility(bool visible);
 
+  // aura::WindowObserver:
+  void OnWindowBoundsChanged(aura::Window* window,
+                             const gfx::Rect& old_bounds,
+                             const gfx::Rect& new_bounds,
+                             ui::PropertyChangeReason reason) override;
+  void OnWindowDestroying(aura::Window* window) override;
+
   // Gets the cursor container for testing purposes.
   const aura::Window* GetContainerForTest() const;
+  SkColor GetCursorColorForTest() const;
+  gfx::Rect GetBoundsForTest() const;
 
  private:
   friend class CursorWindowControllerTest;
@@ -111,14 +120,11 @@ class ASH_EXPORT CursorWindowController {
   // Updates cursor view based on current cursor state.
   void UpdateCursorView();
 
-  // Gets the bitmap representing the cursor, adjusting as needed for color.
-  SkBitmap GetAdjustedBitmap(const gfx::ImageSkiaRep& image_rep) const;
-
   const gfx::ImageSkia& GetCursorImageForTest() const;
 
   base::ObserverList<Observer> observers_;
 
-  aura::Window* container_ = nullptr;
+  raw_ptr<aura::Window, DanglingUntriaged> container_ = nullptr;
 
   // The current cursor-compositing state.
   bool is_cursor_compositing_enabled_ = false;
@@ -149,7 +155,9 @@ class ASH_EXPORT CursorWindowController {
   std::unique_ptr<CursorWindowDelegate> delegate_;
   views::UniqueWidgetPtr cursor_view_widget_;
 
-  const bool is_cursor_motion_blur_enabled_;
+  const bool is_fast_ink_enabled_;
+  base::ScopedObservation<aura::Window, aura::WindowObserver>
+      scoped_container_observer_{this};
 };
 
 }  // namespace ash

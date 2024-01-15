@@ -46,6 +46,7 @@ class NativeWebContentsModalDialogManagerViews
   void Close() override;
   void Focus() override;
   void Pulse() override;
+  bool IsActive() const override;
 
   // web_modal::ModalDialogHostObserver:
   void OnPositionRequiresUpdate() override;
@@ -62,6 +63,7 @@ class NativeWebContentsModalDialogManagerViews
   // situation occurs with app windows.  WidgetClosing removes the observer, so
   // only one of these two functions is ever invoked for a given widget.
   void OnWidgetClosing(views::Widget* widget) override;
+  void OnWidgetActivationChanged(views::Widget* widget, bool active) override;
   void OnWidgetDestroying(views::Widget* widget) override;
   void HostChanged(web_modal::WebContentsModalDialogHost* new_host) override;
   gfx::NativeWindow dialog() override;

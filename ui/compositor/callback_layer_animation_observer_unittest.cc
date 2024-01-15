@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/compositor/layer_animation_sequence.h"
@@ -126,11 +126,11 @@ class TestCallbacksThatExplicitlyDeletesObserver : public TestCallbacks {
 
  private:
   // The observer to delete, if non-NULL, in AnimationsStarted().
-  raw_ptr<CallbackLayerAnimationObserver>
+  raw_ptr<CallbackLayerAnimationObserver, DanglingUntriaged>
       observer_to_delete_in_animation_started_ = nullptr;
 
   // The observer to delete, if non-NULL, in AnimationsEnded().
-  raw_ptr<CallbackLayerAnimationObserver>
+  raw_ptr<CallbackLayerAnimationObserver, DanglingUntriaged>
       observer_to_delete_in_animation_ended_ = nullptr;
 };
 

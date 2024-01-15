@@ -8,11 +8,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/cancelable_callback.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "chrome/browser/printing/printing_service.h"
@@ -28,6 +28,7 @@
 #include "printing/pdf_render_settings.h"
 #include "printing/pwg_raster_settings.h"
 #include "printing/units.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 
@@ -47,7 +48,8 @@ class PwgRasterConverterHelper
   PwgRasterConverterHelper(const PwgRasterConverterHelper&) = delete;
   PwgRasterConverterHelper& operator=(const PwgRasterConverterHelper&) = delete;
 
-  void Convert(const base::RefCountedMemory* data,
+  void Convert(const absl::optional<bool>& use_skia,
+               const base::RefCountedMemory* data,
                PwgRasterConverter::ResultCallback callback);
 
  private:
@@ -77,6 +79,7 @@ PwgRasterConverterHelper::~PwgRasterConverterHelper() {
 }
 
 void PwgRasterConverterHelper::Convert(
+    const absl::optional<bool>& use_skia,
     const base::RefCountedMemory* data,
     PwgRasterConverter::ResultCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -94,6 +97,10 @@ void PwgRasterConverterHelper::Convert(
   if (!memory.IsValid()) {
     RunCallback(base::ReadOnlySharedMemoryRegion(), /*page_count=*/0);
     return;
+  }
+
+  if (use_skia) {
+    pdf_to_pwg_raster_converter_remote_->SetUseSkiaRendererPolicy(*use_skia);
   }
 
   // TODO(thestig): Write `data` into shared memory in the first place, to avoid
@@ -132,7 +139,8 @@ class PwgRasterConverterImpl : public PwgRasterConverter {
 
   ~PwgRasterConverterImpl() override;
 
-  void Start(const base::RefCountedMemory* data,
+  void Start(const absl::optional<bool>& use_skia,
+             const base::RefCountedMemory* data,
              const PdfRenderSettings& conversion_settings,
              const PwgRasterSettings& bitmap_settings,
              ResultCallback callback) override;
@@ -149,14 +157,15 @@ PwgRasterConverterImpl::PwgRasterConverterImpl() = default;
 
 PwgRasterConverterImpl::~PwgRasterConverterImpl() = default;
 
-void PwgRasterConverterImpl::Start(const base::RefCountedMemory* data,
+void PwgRasterConverterImpl::Start(const absl::optional<bool>& use_skia,
+                                   const base::RefCountedMemory* data,
                                    const PdfRenderSettings& conversion_settings,
                                    const PwgRasterSettings& bitmap_settings,
                                    ResultCallback callback) {
   cancelable_callback_.Reset(std::move(callback));
   utility_client_ = base::MakeRefCounted<PwgRasterConverterHelper>(
       conversion_settings, bitmap_settings);
-  utility_client_->Convert(data, cancelable_callback_.callback());
+  utility_client_->Convert(use_skia, data, cancelable_callback_.callback());
 }
 
 }  // namespace
@@ -253,12 +262,15 @@ PwgRasterSettings PwgRasterConverter::GetBitmapSettings(
       result.odd_page_transform = TRANSFORM_NORMAL;
       break;
     case cloud_devices::printer::DuplexType::LONG_EDGE:
+      result.duplex_mode = mojom::DuplexMode::kLongEdge;
       if (document_sheet_back ==
           cloud_devices::printer::DocumentSheetBack::ROTATED) {
         result.odd_page_transform = TRANSFORM_ROTATE_180;
       } else if (document_sheet_back ==
                  cloud_devices::printer::DocumentSheetBack::FLIPPED) {
         result.odd_page_transform = TRANSFORM_FLIP_VERTICAL;
+      } else {
+        result.odd_page_transform = TRANSFORM_NORMAL;
       }
       break;
     case cloud_devices::printer::DuplexType::SHORT_EDGE:
@@ -269,6 +281,8 @@ PwgRasterSettings PwgRasterConverter::GetBitmapSettings(
       } else if (document_sheet_back ==
                  cloud_devices::printer::DocumentSheetBack::FLIPPED) {
         result.odd_page_transform = TRANSFORM_FLIP_HORIZONTAL;
+      } else {
+        result.odd_page_transform = TRANSFORM_NORMAL;
       }
       break;
   }

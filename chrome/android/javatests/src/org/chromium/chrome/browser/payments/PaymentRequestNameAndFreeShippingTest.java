@@ -7,6 +7,7 @@ package org.chromium.chrome.browser.payments;
 import androidx.test.filters.MediumTest;
 
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -15,13 +16,12 @@ import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
-import org.chromium.chrome.R;
 import org.chromium.chrome.browser.autofill.AutofillTestHelper;
-import org.chromium.chrome.browser.autofill.PersonalDataManager.AutofillProfile;
 import org.chromium.chrome.browser.autofill.PersonalDataManager.CreditCard;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
-import org.chromium.chrome.browser.payments.PaymentRequestTestRule.MainActivityStartCallback;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
+import org.chromium.chrome.test.R;
+import org.chromium.components.autofill.AutofillProfile;
 import org.chromium.components.payments.Event;
 import org.chromium.ui.modaldialog.ModalDialogProperties;
 
@@ -33,21 +33,43 @@ import java.util.concurrent.TimeoutException;
  */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
-public class PaymentRequestNameAndFreeShippingTest implements MainActivityStartCallback {
+public class PaymentRequestNameAndFreeShippingTest {
     @Rule
     public PaymentRequestTestRule mPaymentRequestTestRule =
-            new PaymentRequestTestRule("payment_request_name_and_free_shipping_test.html", this);
+            new PaymentRequestTestRule("payment_request_name_and_free_shipping_test.html");
 
-    @Override
-    public void onMainActivityStarted() throws TimeoutException {
+    @Before
+    public void setUp() throws TimeoutException {
         AutofillTestHelper helper = new AutofillTestHelper();
         // The user has a shipping address with a valid payer name on disk.
-        String billingAddressId = helper.setProfile(new AutofillProfile("", "https://example.com",
-                true, "" /* honorific prefix */, "Jon Doe", "Google", "340 Main St", "CA",
-                "Los Angeles", "", "90291", "", "US", "555-555-5555", "", "en-US"));
-        helper.setCreditCard(new CreditCard("", "https://example.com", true, true, "Jon Doe",
-                "4111111111111111", "1111", "12", "2050", "visa", R.drawable.visa_card,
-                billingAddressId, "" /* serverId */));
+        String billingAddressId =
+                helper.setProfile(
+                        AutofillProfile.builder()
+                                .setFullName("Jon Doe")
+                                .setCompanyName("Google")
+                                .setStreetAddress("340 Main St")
+                                .setRegion("CA")
+                                .setLocality("Los Angeles")
+                                .setPostalCode("90291")
+                                .setCountryCode("US")
+                                .setPhoneNumber("555-555-5555")
+                                .setLanguageCode("en-US")
+                                .build());
+        helper.setCreditCard(
+                new CreditCard(
+                        "",
+                        "https://example.test",
+                        true,
+                        true,
+                        "Jon Doe",
+                        "4111111111111111",
+                        "1111",
+                        "12",
+                        "2050",
+                        "visa",
+                        R.drawable.visa_card,
+                        billingAddressId,
+                        /* serverId= */ ""));
     }
 
     /** Submit the payer name and shipping address to the merchant when the user clicks "Pay." */
@@ -56,21 +78,36 @@ public class PaymentRequestNameAndFreeShippingTest implements MainActivityStartC
     @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testPay() throws TimeoutException {
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.triggerUIAndWait("buy", mPaymentRequestTestRule.getReadyToPay());
         mPaymentRequestTestRule.clickAndWait(
                 R.id.button_primary, mPaymentRequestTestRule.getReadyForUnmaskInput());
         mPaymentRequestTestRule.setTextInCardUnmaskDialogAndWait(
                 R.id.card_unmask_input, "123", mPaymentRequestTestRule.getReadyToUnmask());
         mPaymentRequestTestRule.clickCardUnmaskButtonAndWait(
                 ModalDialogProperties.ButtonType.POSITIVE, mPaymentRequestTestRule.getDismissed());
-        mPaymentRequestTestRule.expectResultContains(new String[] {"Jon Doe", "Jon Doe",
-                "4111111111111111", "12", "2050", "basic-card", "123", "Google", "340 Main St",
-                "CA", "Los Angeles", "90291", "US", "en", "freeShippingOption"});
+        mPaymentRequestTestRule.expectResultContains(
+                new String[] {
+                    "Jon Doe",
+                    "Jon Doe",
+                    "4111111111111111",
+                    "12",
+                    "2050",
+                    "basic-card",
+                    "123",
+                    "Google",
+                    "340 Main St",
+                    "CA",
+                    "Los Angeles",
+                    "90291",
+                    "US",
+                    "en",
+                    "freeShippingOption"
+                });
     }
 
     /**
-     * Test that ending a payment request that requires a payer name and a shipping address
-     * results in the appropriate metric being logged in PaymentRequest.Events.
+     * Test that ending a payment request that requires a payer name and a shipping address results
+     * in the appropriate metric being logged in PaymentRequest.Events.
      */
     @Test
     @MediumTest
@@ -78,17 +115,23 @@ public class PaymentRequestNameAndFreeShippingTest implements MainActivityStartC
     @Feature({"Payments"})
     public void testPaymentRequestEventsMetric() throws TimeoutException {
         // Start and cancel the Payment Request.
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyToPay());
+        mPaymentRequestTestRule.triggerUIAndWait("buy", mPaymentRequestTestRule.getReadyToPay());
         mPaymentRequestTestRule.clickAndWait(
                 R.id.close_button, mPaymentRequestTestRule.getDismissed());
         mPaymentRequestTestRule.expectResultContains(
                 new String[] {"User closed the Payment Request UI."});
 
-        int expectedSample = Event.SHOWN | Event.USER_ABORTED | Event.HAD_INITIAL_FORM_OF_PAYMENT
-                | Event.HAD_NECESSARY_COMPLETE_SUGGESTIONS | Event.REQUEST_SHIPPING
-                | Event.REQUEST_PAYER_NAME | Event.REQUEST_METHOD_BASIC_CARD
-                | Event.AVAILABLE_METHOD_BASIC_CARD;
-        Assert.assertEquals(1,
+        int expectedSample =
+                Event.SHOWN
+                        | Event.USER_ABORTED
+                        | Event.HAD_INITIAL_FORM_OF_PAYMENT
+                        | Event.HAD_NECESSARY_COMPLETE_SUGGESTIONS
+                        | Event.REQUEST_SHIPPING
+                        | Event.REQUEST_PAYER_NAME
+                        | Event.REQUEST_METHOD_BASIC_CARD
+                        | Event.AVAILABLE_METHOD_BASIC_CARD;
+        Assert.assertEquals(
+                1,
                 RecordHistogram.getHistogramValueCountForTesting(
                         "PaymentRequest.Events", expectedSample));
     }

@@ -4,7 +4,7 @@
 
 #include "chromeos/ash/components/network/network_test_helper_base.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/logging.h"
 #include "base/run_loop.h"
@@ -70,11 +70,11 @@ void NetworkTestHelperBase::ResetDevicesAndServices() {
 
   // Set initial IPConfigs for the wifi device. The IPConfigs are set up in
   // FakeShillManagerClient::SetupDefaultEnvironment() and do not get cleared.
-  base::Value ip_configs(base::Value::Type::LIST);
+  base::Value::List ip_configs;
   ip_configs.Append("ipconfig_v4_path");
   ip_configs.Append("ipconfig_v6_path");
   device_test_->SetDeviceProperty(kDevicePath, shill::kIPConfigsProperty,
-                                  ip_configs,
+                                  base::Value(std::move(ip_configs)),
                                   /*notify_changed=*/false);
   base::RunLoop().RunUntilIdle();
 }
@@ -100,9 +100,9 @@ std::string NetworkTestHelperBase::ConfigureService(
     const std::string& shill_json_string) {
   last_created_service_path_.clear();
 
-  base::Value shill_json_dict =
+  std::optional<base::Value::Dict> shill_json_dict =
       chromeos::onc::ReadDictionaryFromJson(shill_json_string);
-  if (!shill_json_dict.is_dict()) {
+  if (!shill_json_dict.has_value()) {
     LOG(ERROR) << "Error parsing json: " << shill_json_string;
     return last_created_service_path_;
   }
@@ -113,7 +113,7 @@ std::string NetworkTestHelperBase::ConfigureService(
   // error cases, ConfigureCallback() will not run, resulting in "" being
   // returned from this function.
   ShillManagerClient::Get()->ConfigureService(
-      shill_json_dict,
+      *shill_json_dict,
       base::BindOnce(&NetworkTestHelperBase::ConfigureCallback,
                      weak_ptr_factory_.GetWeakPtr()),
       base::BindOnce(&FailErrorCallback));
@@ -140,24 +140,24 @@ void NetworkTestHelperBase::ConfigureCallback(const dbus::ObjectPath& result) {
   last_created_service_path_ = result.value();
 }
 
-absl::optional<double> NetworkTestHelperBase::GetServiceDoubleProperty(
+std::optional<double> NetworkTestHelperBase::GetServiceDoubleProperty(
     const std::string& service_path,
     const std::string& key) {
-  const base::Value* properties =
+  const base::Value::Dict* properties =
       service_test_->GetServiceProperties(service_path);
   if (properties) {
-    return properties->FindDoubleKey(key);
+    return properties->FindDouble(key);
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 std::string NetworkTestHelperBase::GetServiceStringProperty(
     const std::string& service_path,
     const std::string& key) {
-  const base::Value* properties =
+  const base::Value::Dict* properties =
       service_test_->GetServiceProperties(service_path);
   if (properties) {
-    const std::string* result = properties->FindStringKey(key);
+    const std::string* result = properties->FindString(key);
     if (result)
       return *result;
   }
@@ -174,10 +174,12 @@ void NetworkTestHelperBase::SetServiceProperty(const std::string& service_path,
 std::string NetworkTestHelperBase::GetProfileStringProperty(
     const std::string& profile_path,
     const std::string& key) {
-  base::Value properties = profile_test_->GetProfileProperties(profile_path);
-  std::string* result = properties.FindStringKey(key);
-  if (result)
+  base::Value::Dict properties =
+      profile_test_->GetProfileProperties(profile_path);
+  std::string* result = properties.FindString(key);
+  if (result) {
     return *result;
+  }
   return std::string();
 }
 

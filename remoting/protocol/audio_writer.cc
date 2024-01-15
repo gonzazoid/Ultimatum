@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "net/socket/stream_socket.h"
 #include "remoting/base/compound_buffer.h"
@@ -28,8 +28,9 @@ void AudioWriter::ProcessAudioPacket(std::unique_ptr<AudioPacket> packet,
 
 // static
 std::unique_ptr<AudioWriter> AudioWriter::Create(const SessionConfig& config) {
-  if (!config.is_audio_enabled())
+  if (!config.is_audio_enabled()) {
     return nullptr;
+  }
   return base::WrapUnique(new AudioWriter());
 }
 

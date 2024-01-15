@@ -8,7 +8,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom-forward.h"
@@ -42,15 +42,17 @@ using DoBookmarkDragCallback =
                             int operation)>;
 
 struct BookmarkDragParams {
-  BookmarkDragParams(std::vector<const bookmarks::BookmarkNode*> nodes,
-                     int drag_node_index,
-                     content::WebContents* web_contents,
-                     ui::mojom::DragEventSource source,
-                     gfx::Point start_point);
+  BookmarkDragParams(
+      std::vector<raw_ptr<const bookmarks::BookmarkNode, VectorExperimental>>
+          nodes,
+      int drag_node_index,
+      content::WebContents* web_contents,
+      ui::mojom::DragEventSource source,
+      gfx::Point start_point);
   ~BookmarkDragParams();
 
   // The bookmark nodes to be dragged.
-  std::vector<const bookmarks::BookmarkNode*> nodes;
+  std::vector<raw_ptr<const bookmarks::BookmarkNode, VectorExperimental>> nodes;
 
   // The index of the main dragged node.
   int drag_node_index;

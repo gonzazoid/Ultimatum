@@ -3,18 +3,25 @@
 // found in the LICENSE file.
 
 import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
+import './strings.m.js';
 
 import {KeyboardDiagramElement, MechanicalLayout as DiagramMechanicalLayout, PhysicalLayout as DiagramPhysicalLayout, TopRightKey as DiagramTopRightKey, TopRowKey as DiagramTopRowKey} from 'chrome://resources/ash/common/keyboard_diagram.js';
 import {KeyboardKeyState} from 'chrome://resources/ash/common/keyboard_key.js';
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
+import {getInstance} from 'chrome://resources/cr_elements/cr_a11y_announcer/cr_a11y_announcer.js';
 import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
 import {CrToastElement} from 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {EventTracker} from 'chrome://resources/js/event_tracker.js';
+import {PolymerElementProperties} from 'chrome://resources/polymer/v3_0/polymer/interfaces.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {InputDataProviderInterface, KeyboardInfo, KeyboardObserverReceiver, KeyEvent, KeyEventType, MechanicalLayout, NumberPadPresence, PhysicalLayout, TopRightKey, TopRowKey} from './input_data_provider.mojom-webui.js';
+import {KeyboardInfo, MechanicalLayout, NumberPadPresence, PhysicalLayout, TopRightKey, TopRowKey} from './input.mojom-webui.js';
+import {InputDataProviderInterface, KeyboardObserverReceiver, KeyEvent, KeyEventType} from './input_data_provider.mojom-webui.js';
 import {getTemplate} from './keyboard_tester.html.js';
 import {getInputDataProvider} from './mojo_interface_provider.js';
 
@@ -23,6 +30,20 @@ export interface KeyboardTesterElement {
     dialog: CrDialogElement,
     lostFocusToast: CrToastElement,
   };
+}
+
+export type AnnounceTextEvent = CustomEvent<{text: string}>;
+
+declare global {
+  interface HTMLElementEventMap {
+    'announce-text': AnnounceTextEvent;
+  }
+}
+
+export interface KeyboardDiagramTopRowKey {
+  icon?: string;
+  ariaNameI18n?: string;
+  text?: string;
 }
 
 /**
@@ -34,37 +55,33 @@ export interface KeyboardTesterElement {
  * Map from Mojo TopRowKey constants to keyboard diagram top row key
  * definitions.
  */
-const topRowKeyMap:
-    {[index: number]: {icon?: string, ariaNameI18n?: string, text?: string}} = {
-      [TopRowKey.kNone]: DiagramTopRowKey['kNone'],
-      [TopRowKey.kBack]: DiagramTopRowKey['kBack'],
-      [TopRowKey.kForward]: DiagramTopRowKey['kForward'],
-      [TopRowKey.kRefresh]: DiagramTopRowKey['kRefresh'],
-      [TopRowKey.kFullscreen]: DiagramTopRowKey['kFullscreen'],
-      [TopRowKey.kOverview]: DiagramTopRowKey['kOverview'],
-      [TopRowKey.kScreenshot]: DiagramTopRowKey['kScreenshot'],
-      [TopRowKey.kScreenBrightnessDown]:
-          DiagramTopRowKey['kScreenBrightnessDown'],
-      [TopRowKey.kScreenBrightnessUp]: DiagramTopRowKey['kScreenBrightnessUp'],
-      [TopRowKey.kPrivacyScreenToggle]:
-          DiagramTopRowKey['kPrivacyScreenToggle'],
-      [TopRowKey.kMicrophoneMute]: DiagramTopRowKey['kMicrophoneMute'],
-      [TopRowKey.kVolumeMute]: DiagramTopRowKey['kVolumeMute'],
-      [TopRowKey.kVolumeDown]: DiagramTopRowKey['kVolumeDown'],
-      [TopRowKey.kVolumeUp]: DiagramTopRowKey['kVolumeUp'],
-      [TopRowKey.kKeyboardBacklightToggle]:
-          DiagramTopRowKey['kKeyboardBacklightToggle'],
-      [TopRowKey.kKeyboardBacklightDown]:
-          DiagramTopRowKey['kKeyboardBacklightDown'],
-      [TopRowKey.kKeyboardBacklightUp]:
-          DiagramTopRowKey['kKeyboardBacklightUp'],
-      [TopRowKey.kNextTrack]: DiagramTopRowKey['kNextTrack'],
-      [TopRowKey.kPreviousTrack]: DiagramTopRowKey['kPreviousTrack'],
-      [TopRowKey.kPlayPause]: DiagramTopRowKey['kPlayPause'],
-      [TopRowKey.kScreenMirror]: DiagramTopRowKey['kScreenMirror'],
-      [TopRowKey.kDelete]: DiagramTopRowKey['kDelete'],
-      [TopRowKey.kUnknown]: DiagramTopRowKey['kUnknown'],
-    };
+const topRowKeyMap: {[index: number]: KeyboardDiagramTopRowKey} = {
+  [TopRowKey.kNone]: DiagramTopRowKey['kNone'],
+  [TopRowKey.kBack]: DiagramTopRowKey['kBack'],
+  [TopRowKey.kForward]: DiagramTopRowKey['kForward'],
+  [TopRowKey.kRefresh]: DiagramTopRowKey['kRefresh'],
+  [TopRowKey.kFullscreen]: DiagramTopRowKey['kFullscreen'],
+  [TopRowKey.kOverview]: DiagramTopRowKey['kOverview'],
+  [TopRowKey.kScreenshot]: DiagramTopRowKey['kScreenshot'],
+  [TopRowKey.kScreenBrightnessDown]: DiagramTopRowKey['kScreenBrightnessDown'],
+  [TopRowKey.kScreenBrightnessUp]: DiagramTopRowKey['kScreenBrightnessUp'],
+  [TopRowKey.kPrivacyScreenToggle]: DiagramTopRowKey['kPrivacyScreenToggle'],
+  [TopRowKey.kMicrophoneMute]: DiagramTopRowKey['kMicrophoneMute'],
+  [TopRowKey.kVolumeMute]: DiagramTopRowKey['kVolumeMute'],
+  [TopRowKey.kVolumeDown]: DiagramTopRowKey['kVolumeDown'],
+  [TopRowKey.kVolumeUp]: DiagramTopRowKey['kVolumeUp'],
+  [TopRowKey.kKeyboardBacklightToggle]:
+      DiagramTopRowKey['kKeyboardBacklightToggle'],
+  [TopRowKey.kKeyboardBacklightDown]:
+      DiagramTopRowKey['kKeyboardBacklightDown'],
+  [TopRowKey.kKeyboardBacklightUp]: DiagramTopRowKey['kKeyboardBacklightUp'],
+  [TopRowKey.kNextTrack]: DiagramTopRowKey['kNextTrack'],
+  [TopRowKey.kPreviousTrack]: DiagramTopRowKey['kPreviousTrack'],
+  [TopRowKey.kPlayPause]: DiagramTopRowKey['kPlayPause'],
+  [TopRowKey.kScreenMirror]: DiagramTopRowKey['kScreenMirror'],
+  [TopRowKey.kDelete]: DiagramTopRowKey['kDelete'],
+  [TopRowKey.kUnknown]: DiagramTopRowKey['kUnknown'],
+};
 
 /** Maps top-right key evdev codes to the corresponding DiagramTopRightKey. */
 const topRightKeyByCode: Map<number, DiagramTopRightKey> = new Map([
@@ -105,18 +122,21 @@ const standardNumberPadCodes: Set<number> = new Set([
   111,  // KEY_DELETE
 ]);
 
+const DISPLAY_TOAST_INDEFINITELY_MS = 0;
+const TOAST_LINGER_MS = 1000;
+
 const KeyboardTesterElementBase = I18nMixin(PolymerElement);
 
 export class KeyboardTesterElement extends KeyboardTesterElementBase {
-  static get is() {
+  static get is(): string {
     return 'keyboard-tester';
   }
 
-  static get template() {
+  static get template(): HTMLTemplateElement {
     return getTemplate();
   }
 
-  static get properties() {
+  static get properties(): PolymerElementProperties {
     return {
       /**
        * The keyboard being tested, or null if none is being tested at the
@@ -124,64 +144,79 @@ export class KeyboardTesterElement extends KeyboardTesterElementBase {
        */
       keyboard: KeyboardInfo,
 
-      layoutIsKnown_: {
+      layoutIsKnown: {
         type: Boolean,
-        computed: 'computeLayoutIsKnown_(keyboard)',
+        computed: 'computeLayoutIsKnown(keyboard)',
       },
 
-      diagramMechanicalLayout_: {
+      diagramMechanicalLayout: {
         type: String,
-        computed: 'computeDiagramMechanicalLayout_(keyboard)',
+        computed: 'computeDiagramMechanicalLayout(keyboard)',
       },
 
-      diagramPhysicalLayout_: {
+      diagramPhysicalLayout: {
         type: String,
-        computed: 'computeDiagramPhysicalLayout_(keyboard)',
+        computed: 'computeDiagramPhysicalLayout(keyboard)',
       },
 
-      diagramTopRightKey_: {
+      diagramTopRightKey: {
         type: String,
-        computed: 'computeDiagramTopRightKey_(keyboard)',
+        computed: 'computeDiagramTopRightKey(keyboard)',
       },
 
-      showNumberPad_: {
+      showNumberPad: {
         type: Boolean,
-        computed: 'computeShowNumberPad_(keyboard)',
+        computed: 'computeShowNumberPad(keyboard)',
       },
 
-      topRowKeys_: {
+      topRowKeys: {
         type: Array,
-        computed: 'computeTopRowKeys_(keyboard)',
+        computed: 'computeTopRowKeys(keyboard)',
       },
+
+      isLoggedIn: {
+        type: Boolean,
+        value: loadTimeData.getBoolean('isLoggedIn'),
+      },
+
+      lostFocusToastLingerMs: {
+        type: Number,
+        value: DISPLAY_TOAST_INDEFINITELY_MS,
+      },
+
     };
   }
 
   keyboard: KeyboardInfo;
-  // TODO(crbug.com/1257138): use the proper type annotation instead of
-  // string.
-  protected diagramTopRightKey_: string;
-  private layoutIsKnown_: boolean;
-  // TODO(crbug.com/1257138): use the proper type annotation instead of
-  // string.
-  private diagramMechanicalLayout_: string;
-  // TODO(crbug.com/1257138): use the proper type annotation instead of
-  // string.
-  private diagramPhysicalLayout_: string;
-  private showNumberPad_: boolean;
-  // TODO(crbug.com/1257138): use the proper type annotation instead of
-  // Object.
-  private topRowKeys_: Object[];
-  private receiver_: KeyboardObserverReceiver|null = null;
+  protected isLoggedIn: boolean;
+  protected diagramTopRightKey: DiagramTopRightKey|null;
+  private lostFocusToastLingerMs: number;
+  private layoutIsKnown: boolean;
+  private diagramMechanicalLayout: DiagramMechanicalLayout|null;
+  private diagramPhysicalLayout: DiagramPhysicalLayout|null;
+  private showNumberPad: boolean;
+  private topRowKeys: KeyboardDiagramTopRowKey[];
+  private receiver: KeyboardObserverReceiver|null = null;
   private inputDataProvider: InputDataProviderInterface =
       getInputDataProvider();
+  private eventTracker: EventTracker = new EventTracker();
 
-  constructor() {
-    super();
-    this.addEventListener('keydown', this.onKeyDown.bind(this));
-    this.addEventListener('keyup', this.onKeyUp.bind(this));
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this.eventTracker.removeAll();
   }
 
-  private computeLayoutIsKnown_(keyboard?: KeyboardInfo): boolean {
+  /**
+   * Event callback for 'announce-text' which is triggered from keyboard-key.
+   * Event will contain text to announce to screen readers.
+   */
+  private announceTextHandler = (e: AnnounceTextEvent): void => {
+    assert(e.detail.text);
+    e.stopPropagation();
+    getInstance(this.$.dialog.getNative()).announce(e.detail.text);
+  };
+
+  private computeLayoutIsKnown(keyboard?: KeyboardInfo): boolean {
     if (!keyboard) {
       return false;
     }
@@ -191,11 +226,8 @@ export class KeyboardTesterElement extends KeyboardTesterElementBase {
     // a number pad event we weren't expecting.
   }
 
-  /**
-   * TODO(crbug.com/1257138): use the proper type annotation instead of string.
-   */
-  private computeDiagramMechanicalLayout_(keyboardInfo?: KeyboardInfo): string
-      |null {
+  private computeDiagramMechanicalLayout(keyboardInfo?: KeyboardInfo):
+      DiagramMechanicalLayout|null {
     if (!keyboardInfo) {
       return null;
     }
@@ -207,8 +239,8 @@ export class KeyboardTesterElement extends KeyboardTesterElementBase {
     }[keyboardInfo.mechanicalLayout];
   }
 
-  private computeDiagramPhysicalLayout_(keyboardInfo?: KeyboardInfo): string
-      |null {
+  private computeDiagramPhysicalLayout(keyboardInfo?: KeyboardInfo):
+      DiagramPhysicalLayout|null {
     if (!keyboardInfo) {
       return null;
     }
@@ -222,10 +254,8 @@ export class KeyboardTesterElement extends KeyboardTesterElementBase {
     }[keyboardInfo.physicalLayout];
   }
 
-  /**
-   * TODO(crbug.com/1257138): use the proper type annotation instead of string.
-   */
-  private computeDiagramTopRightKey_(keyboardInfo?: KeyboardInfo): string|null {
+  private computeDiagramTopRightKey(keyboardInfo?: KeyboardInfo):
+      DiagramTopRightKey|null {
     if (!keyboardInfo) {
       return null;
     }
@@ -237,39 +267,64 @@ export class KeyboardTesterElement extends KeyboardTesterElementBase {
     }[keyboardInfo.topRightKey];
   }
 
-  private computeShowNumberPad_(keyboard?: KeyboardInfo): boolean {
+  private computeShowNumberPad(keyboard?: KeyboardInfo): boolean {
     return !!keyboard &&
         keyboard.numberPadPresent === NumberPadPresence.kPresent;
   }
 
 
-  private computeTopRowKeys_(keyboard?: KeyboardInfo): Object[] {
+  private computeTopRowKeys(keyboard?: KeyboardInfo):
+      KeyboardDiagramTopRowKey[] {
     if (!keyboard) {
       return [];
     }
     return keyboard.topRowKeys.map((keyId: TopRowKey) => topRowKeyMap[keyId]);
   }
 
+  protected getDescriptionLabel(): string {
+    return this.i18n('keyboardTesterInstruction');
+  }
+
+  protected getShortcutInstructionLabel(): TrustedHTML {
+    return this.i18nAdvanced(
+        'keyboardTesterShortcutInstruction', {attrs: ['id']});
+  }
+
+  private addEventListeners(): void {
+    this.eventTracker.add(
+        document, 'keydown', (e: KeyboardEvent) => this.onKeyPress(e));
+    this.eventTracker.add(
+        document, 'keyup', (e: KeyboardEvent) => this.onKeyPress(e));
+    this.eventTracker.add(
+        document, 'announce-text',
+        (e: AnnounceTextEvent) => this.announceTextHandler(e));
+  }
+
   /** Shows the tester's dialog. */
   show(): void {
     assert(this.inputDataProvider);
-    this.receiver_ = new KeyboardObserverReceiver(this);
+    this.receiver = new KeyboardObserverReceiver(this);
     this.inputDataProvider.observeKeyEvents(
-        this.keyboard.id, this.receiver_.$.bindNewPipeAndPassRemote());
+        this.keyboard.id, this.receiver.$.bindNewPipeAndPassRemote());
+    this.addEventListeners();
+    const title: HTMLElement|null =
+        this.shadowRoot!.querySelector('div[slot="title"]');
+    this.$.dialog.getNative().removeAttribute('aria-describedby');
     this.$.dialog.showModal();
+    title?.focus();
   }
 
-  onKeyUp(e: KeyboardEvent): void {
+  // Prevent the default behavior for keydown/keyup only when the keyboard
+  // tester dialog is opened.
+  onKeyPress(e: KeyboardEvent): void {
+    if (!this.isOpen()) {
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
-  }
 
-  onKeyDown(e: KeyboardEvent): void {
-    e.preventDefault();
-    e.stopPropagation();
-
-    // If we receive alt + esc we should close the app
-    if (e.altKey && e.key === 'Escape') {
+    // If we receive alt + esc we should close the tester.
+    if (e.type === 'keydown' && e.altKey && e.key === 'Escape') {
       this.close();
     }
   }
@@ -285,20 +340,21 @@ export class KeyboardTesterElement extends KeyboardTesterElementBase {
     const diagram: KeyboardDiagramElement|null =
         this.shadowRoot!.querySelector('#diagram');
     assert(diagram);
-    diagram.clearPressedKeys();
+    diagram.resetAllKeys();
     this.$.dialog.close();
   }
 
   handleClose(): void {
-    if (this.receiver_) {
-      this.receiver_.$.close();
+    this.eventTracker.removeAll();
+    if (this.receiver) {
+      this.receiver.$.close();
     }
   }
 
   /**
    * Returns whether a key is part of the number pad on this keyboard layout.
    */
-  private isNumberPadKey_(evdevCode: number): boolean {
+  private isNumberPadKey(evdevCode: number): boolean {
     // Some keys that are on the number pad on standard ChromeOS keyboards are
     // elsewhere on Dell Enterprise keyboards, so we should only check them if
     // we know this is a standard layout.
@@ -331,9 +387,6 @@ export class KeyboardTesterElement extends KeyboardTesterElementBase {
           diagram.topRightKey !== topRightKeyByCode.get(keyEvent.keyCode)) {
         const newValue =
             topRightKeyByCode.get(keyEvent.keyCode) as DiagramTopRightKey;
-        console.warn(
-            'Corrected diagram top right key from ' +
-            `${this.diagramTopRightKey_} to ${newValue}`);
         diagram.topRightKey = newValue;
       }
 
@@ -345,10 +398,7 @@ export class KeyboardTesterElement extends KeyboardTesterElementBase {
 
       // There may be Chromebooks where hasNumberPad is incorrect, so if we see
       // any number pad key codes we need to adapt on-the-fly.
-      if (!diagram.showNumberPad && this.isNumberPadKey_(keyEvent.keyCode)) {
-        console.warn(
-            'Corrected number pad presence due to key code ' +
-            keyEvent.keyCode);
+      if (!diagram.showNumberPad && this.isNumberPadKey(keyEvent.keyCode)) {
         diagram.showNumberPad = true;
       }
 
@@ -360,11 +410,11 @@ export class KeyboardTesterElement extends KeyboardTesterElementBase {
    * Implements KeyboardObserver.OnKeyEventsPaused.
    */
   onKeyEventsPaused(): void {
-    console.log('Key events paused');
     const diagram: KeyboardDiagramElement|null =
         this.shadowRoot!.querySelector('#diagram');
     assert(diagram);
     diagram.clearPressedKeys();
+    this.lostFocusToastLingerMs = DISPLAY_TOAST_INDEFINITELY_MS;
     this.$.lostFocusToast.show();
   }
 
@@ -372,8 +422,12 @@ export class KeyboardTesterElement extends KeyboardTesterElementBase {
    * Implements KeyboardObserver.OnKeyEventsResumed.
    */
   onKeyEventsResumed(): void {
-    console.log('Key events resumed');
-    this.$.lostFocusToast.hide();
+    if (this.isOpen()) {
+      this.$.dialog.focus();
+    }
+
+    // Show focus lost toast for 1 second after regaining focus.
+    this.lostFocusToastLingerMs = TOAST_LINGER_MS;
   }
 }
 

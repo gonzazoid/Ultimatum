@@ -4,6 +4,8 @@
 
 #include "components/feed/core/v2/image_fetcher.h"
 
+#include "base/trace_event/trace_event.h"
+#include "base/trace_event/typed_macros.h"
 #include "components/feed/core/v2/metrics_reporter.h"
 #include "components/feed/core/v2/public/types.h"
 #include "net/base/net_errors.h"
@@ -22,6 +24,9 @@ ImageFetcher::ImageFetcher(
 ImageFetcher::~ImageFetcher() = default;
 
 ImageFetchId ImageFetcher::Fetch(const GURL& url, ImageCallback callback) {
+  ImageFetchId id = id_generator_.GenerateNextId();
+  TRACE_EVENT_BEGIN("android.ui.jank", "FeedImage",
+                    perfetto::Track(GetTrackId(id)), "url", url);
   net::NetworkTrafficAnnotationTag traffic_annotation =
       net::DefineNetworkTrafficAnnotation("interest_feedv2_image_send", R"(
         semantics {
@@ -52,7 +57,6 @@ ImageFetchId ImageFetcher::Fetch(const GURL& url, ImageCallback callback) {
       std::move(resource_request), traffic_annotation);
   auto* const simple_loader_ptr = simple_loader.get();
 
-  ImageFetchId id = id_generator_.GenerateNextId();
   bool inserted =
       pending_requests_
           .try_emplace(id, std::move(simple_loader), std::move(callback))
@@ -70,6 +74,8 @@ ImageFetchId ImageFetcher::Fetch(const GURL& url, ImageCallback callback) {
 void ImageFetcher::OnFetchComplete(ImageFetchId id,
                                    const GURL& url,
                                    std::unique_ptr<std::string> response_data) {
+  TRACE_EVENT_END("android.ui.jank", perfetto::Track(GetTrackId(id)), "bytes",
+                  response_data ? response_data->size() : 0);
   absl::optional<PendingRequest> request = RemovePending(id);
   if (!request)
     return;
@@ -109,6 +115,11 @@ absl::optional<ImageFetcher::PendingRequest> ImageFetcher::RemovePending(
   auto request = absl::make_optional(std::move(iterator->second));
   pending_requests_.erase(iterator);
   return request;
+}
+
+uint64_t ImageFetcher::GetTrackId(ImageFetchId id) const {
+  return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this)) +
+         id.GetUnsafeValue();
 }
 
 ImageFetcher::PendingRequest::PendingRequest(

@@ -4,8 +4,8 @@
 
 #include "gpu/command_buffer/service/command_buffer_direct.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "gpu/command_buffer/service/transfer_buffer_manager.h"
 
 namespace gpu {
@@ -55,8 +55,9 @@ void CommandBufferDirect::SetGetBuffer(int32_t transfer_buffer_id) {
 scoped_refptr<Buffer> CommandBufferDirect::CreateTransferBuffer(
     uint32_t size,
     int32_t* id,
+    uint32_t alignment,
     TransferBufferAllocationOption option) {
-  return service_.CreateTransferBuffer(size, id);
+  return service_.CreateTransferBuffer(size, id, alignment);
 }
 
 void CommandBufferDirect::DestroyTransferBuffer(int32_t id) {

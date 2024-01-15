@@ -4,9 +4,10 @@
 
 #include "chrome/browser/media/router/discovery/dial/dial_media_sink_service_impl.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/mock_callback.h"
 #include "base/timer/mock_timer.h"
 #include "chrome/browser/media/router/discovery/dial/dial_device_data.h"
@@ -39,7 +40,7 @@ class DialMediaSinkServiceImplTest : public ::testing::Test {
       : task_environment_(content::BrowserTaskEnvironment::IO_MAINLOOP),
         media_sink_service_(new DialMediaSinkServiceImpl(
             mock_sink_discovered_cb_.Get(),
-            base::SequencedTaskRunnerHandle::Get())) {}
+            base::SequencedTaskRunner::GetCurrentDefault())) {}
 
   void SetUp() override {
     auto mock_description_service =
@@ -95,9 +96,11 @@ class DialMediaSinkServiceImplTest : public ::testing::Test {
       MockDeviceDescriptionService::DeviceDescriptionParseErrorCallback>
       mock_error_cb_;
 
-  raw_ptr<MockDeviceDescriptionService> mock_description_service_;
-  raw_ptr<MockDialAppDiscoveryService> mock_app_discovery_service_;
-  raw_ptr<base::MockOneShotTimer> mock_timer_;
+  raw_ptr<MockDeviceDescriptionService, DanglingUntriaged>
+      mock_description_service_;
+  raw_ptr<MockDialAppDiscoveryService, DanglingUntriaged>
+      mock_app_discovery_service_;
+  raw_ptr<base::MockOneShotTimer, DanglingUntriaged> mock_timer_;
 
   std::unique_ptr<DialMediaSinkServiceImpl> media_sink_service_;
 

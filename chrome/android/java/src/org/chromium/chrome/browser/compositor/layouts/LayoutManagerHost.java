@@ -22,9 +22,7 @@ public interface LayoutManagerHost {
      */
     static final boolean LOG_CHROME_VIEW_SHOW_TIME = false;
 
-    /**
-     * Requests a refresh of the visuals.
-     */
+    /** Requests a refresh of the visuals. */
     void requestRender();
 
     /**
@@ -72,12 +70,6 @@ public interface LayoutManagerHost {
     void getViewportFullControls(RectF outRect);
 
     /**
-     * @return The height of the screen minus the height of the top and bottom browser controls
-     *         when not hidden.
-     */
-    float getHeightMinusBrowserControls();
-
-    /**
      * @return The height of the top browser controls in pixels.
      */
     int getTopControlsHeightPixels();
@@ -109,9 +101,7 @@ public interface LayoutManagerHost {
      */
     FullscreenManager getFullscreenManager();
 
-    /**
-     * Called when the currently visible content has been changed.
-     */
+    /** Called when the currently visible content has been changed. */
     void onContentChanged();
 
     /**

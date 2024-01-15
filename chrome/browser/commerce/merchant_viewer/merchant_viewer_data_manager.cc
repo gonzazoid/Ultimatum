@@ -4,8 +4,8 @@
 
 #include "chrome/browser/commerce/merchant_viewer/merchant_viewer_data_manager.h"
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/histogram_macros_local.h"
@@ -38,7 +38,7 @@ void MerchantViewerDataManager::OnLoadAllEntriesForTimeRangeCallback(
   int deleted_items_count = 0;
   for (const auto& item : data) {
     MerchantSignalProto proto = std::move(item.second);
-    base::Time time_created = base::Time::FromDoubleT(
+    base::Time time_created = base::Time::FromSecondsSinceUnixEpoch(
         proto.trust_signals_message_displayed_timestamp());
     if (time_created >= begin && time_created <= end) {
       proto_db_->DeleteOneEntry(proto.key(), base::BindOnce(&OnUpdateCallback));

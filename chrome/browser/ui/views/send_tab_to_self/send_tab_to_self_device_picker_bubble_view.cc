@@ -21,6 +21,7 @@
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/color/color_id.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -77,7 +78,7 @@ bool SendTabToSelfDevicePickerBubbleView::ShouldShowCloseButton() const {
 }
 
 std::u16string SendTabToSelfDevicePickerBubbleView::GetWindowTitle() const {
-  return l10n_util::GetStringUTF16(IDS_CONTEXT_MENU_SEND_TAB_TO_SELF);
+  return l10n_util::GetStringUTF16(IDS_SEND_TAB_TO_SELF);
 }
 
 void SendTabToSelfDevicePickerBubbleView::WindowClosing() {
@@ -181,5 +182,8 @@ void SendTabToSelfDevicePickerBubbleView::CreateDevicesScrollView() {
   if (!device_list_view->children().empty())
     SetInitiallyFocusedView(device_list_view->children()[0]);
 }
+
+BEGIN_METADATA(SendTabToSelfDevicePickerBubbleView)
+END_METADATA
 
 }  // namespace send_tab_to_self

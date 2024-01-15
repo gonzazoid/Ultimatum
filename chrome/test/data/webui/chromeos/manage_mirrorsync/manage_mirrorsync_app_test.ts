@@ -3,13 +3,15 @@
 // found in the LICENSE file.
 
 import 'chrome://manage-mirrorsync/components/manage_mirrorsync.js';
-import 'chrome://webui-test/mojo_webui_test_support.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
 import {BrowserProxy} from 'chrome://manage-mirrorsync/browser_proxy.js';
 import {FolderSelector} from 'chrome://manage-mirrorsync/components/folder_selector.js';
 import {PageHandlerRemote} from 'chrome://manage-mirrorsync/manage_mirrorsync.mojom-webui.js';
+import {assert} from 'chrome://resources/js/assert.js';
 import {assertArrayEquals, assertNotEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
+import {TestMock} from 'chrome://webui-test/test_mock.js';
 import {isVisible} from 'chrome://webui-test/test_util.js';
 
 /**
@@ -18,11 +20,11 @@ import {isVisible} from 'chrome://webui-test/test_util.js';
  */
 class ManageMirrorSyncTestBrowserProxy extends TestBrowserProxy implements
     BrowserProxy {
-  handler: PageHandlerRemote&TestBrowserProxy;
+  handler: TestMock<PageHandlerRemote>&PageHandlerRemote;
 
   constructor() {
     super(['getChildFolders']);
-    this.handler = TestBrowserProxy.fromClass(PageHandlerRemote);
+    this.handler = TestMock.fromClass(PageHandlerRemote);
   }
 }
 
@@ -80,7 +82,8 @@ suite('<manage-mirrorsync>', () => {
    * <manage-mirrorsync> components.
    */
   setup(() => {
-    appHolder.innerHTML = '';
+    assert(window.trustedTypes);
+    appHolder.innerHTML = window.trustedTypes.emptyHTML;
     testProxy = new ManageMirrorSyncTestBrowserProxy();
     BrowserProxy.setInstance(testProxy);
     manageMirrorSyncApp = document.createElement('manage-mirrorsync');
@@ -92,7 +95,7 @@ suite('<manage-mirrorsync>', () => {
    * the <manage-mirrorsync> component.
    */
   teardown(() => {
-    appHolder.innerHTML = '';
+    appHolder.innerHTML = window.trustedTypes!.emptyHTML;
   });
 
   /**

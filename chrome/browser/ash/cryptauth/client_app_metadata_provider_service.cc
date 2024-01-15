@@ -8,10 +8,8 @@
 
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
-#include "ash/services/device_sync/proto/cryptauth_better_together_feature_metadata.pb.h"
-#include "ash/services/device_sync/public/cpp/gcm_constants.h"
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/callback.h"
 #include "base/linux_util.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
@@ -26,6 +24,8 @@
 #include "chromeos/ash/components/multidevice/logging/logging.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_type_pattern.h"
+#include "chromeos/ash/services/device_sync/proto/cryptauth_better_together_feature_metadata.pb.h"
+#include "chromeos/ash/services/device_sync/public/cpp/gcm_constants.h"
 #include "components/gcm_driver/instance_id/instance_id_driver.h"
 #include "components/gcm_driver/instance_id/instance_id_profile_service.h"
 #include "components/prefs/pref_registry_simple.h"
@@ -53,14 +53,6 @@ const cryptauthv2::FeatureMetadata& GenerateFeatureMetadata() {
         inner_metadata.add_supported_features(
             cryptauthv2::
                 BetterTogetherFeatureMetadata_FeatureName_BETTER_TOGETHER_CLIENT);
-
-        // Disable Messages integration when pre-installing app on all devices.
-        if (!base::FeatureList::IsEnabled(
-                features::kDisableMessagesCrossDeviceIntegration)) {
-          inner_metadata.add_supported_features(
-              cryptauthv2::
-                  BetterTogetherFeatureMetadata_FeatureName_SMS_CONNECT_CLIENT);
-        }
 
         // Instant Tethering is only supported if the associated flag enabled.
         if (base::FeatureList::IsEnabled(features::kInstantTethering)) {
@@ -332,8 +324,8 @@ void ClientAppMetadataProviderService::OnInstanceIdTokenFetched(
   metadata.set_locale(ChromeContentBrowserClient().GetApplicationLocale());
   metadata.set_device_os_version(base::GetLinuxDistro());
   metadata.set_device_os_version_code(SoftwareVersionCodeAsInt64());
-  metadata.set_device_os_release(version_info::GetVersionNumber());
-  metadata.set_device_os_codename(version_info::GetProductName());
+  metadata.set_device_os_release(std::string(version_info::GetVersionNumber()));
+  metadata.set_device_os_codename(std::string(version_info::GetProductName()));
 
   // device_display_diagonal_mils is unused because it only applies to
   // phones/tablets.
@@ -423,7 +415,7 @@ instance_id::InstanceID* ClientAppMetadataProviderService::GetInstanceId() {
 
 int64_t ClientAppMetadataProviderService::SoftwareVersionCodeAsInt64() {
   static const int64_t version_code =
-      ConvertVersionCodeToInt64(version_info::GetVersionNumber());
+      ConvertVersionCodeToInt64(std::string(version_info::GetVersionNumber()));
   return version_code;
 }
 

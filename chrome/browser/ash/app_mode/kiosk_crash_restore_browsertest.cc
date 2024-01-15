@@ -11,16 +11,14 @@
 #include "base/run_loop.h"
 #include "base/values.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_launch_error.h"
-#include "chrome/browser/ash/app_mode/kiosk_app_manager.h"
+#include "chrome/browser/ash/login/app_mode/test/kiosk_apps_mixin.h"
+#include "chrome/browser/ash/login/app_mode/test/kiosk_test_helpers.h"
 #include "chrome/browser/ash/login/test/embedded_test_server_setup_mixin.h"
-#include "chrome/browser/ash/login/test/kiosk_apps_mixin.h"
-#include "chrome/browser/ash/login/test/kiosk_test_helpers.h"
 #include "chrome/browser/ash/login/test/local_state_mixin.h"
 #include "chrome/browser/ash/ownership/owner_settings_service_ash_factory.h"
 #include "chrome/browser/ash/policy/core/device_local_account.h"
 #include "chrome/browser/ash/policy/core/device_policy_builder.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/common/chrome_constants.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
@@ -90,16 +88,15 @@ class KioskCrashRestoreTest : public MixinBasedInProcessBrowserTest,
     CHECK(device_policy_.payload().SerializeToString(
         policy_data.mutable_policy_value()));
     const std::string policy_data_string = policy_data.SerializeAsString();
-    std::string encoded;
-    base::Base64Encode(policy_data_string, &encoded);
 
     // Store policy data and existing device local accounts in local state.
     g_browser_process->local_state()->SetString(prefs::kDeviceSettingsCache,
-                                                encoded);
+                                               base::Base64Encode(policy_data_string));
 
-    base::Value accounts(base::Value::Type::LIST);
+    base::Value::List accounts;
     accounts.Append(GetTestAppUserId());
-    g_browser_process->local_state()->Set("PublicAccounts", accounts);
+    g_browser_process->local_state()->SetList("PublicAccounts",
+                                              std::move(accounts));
   }
 
   policy::DevicePolicyBuilder device_policy_;

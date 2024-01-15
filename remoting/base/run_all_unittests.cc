@@ -2,10 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/base_switches.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/path_service.h"
+#include "base/process/process_handle.h"
 #include "base/test/launcher/unit_test_launcher.h"
 #include "base/test/test_suite.h"
 #include "base/threading/thread.h"
@@ -29,7 +31,14 @@ int main(int argc, char** argv) {
   ipc_thread.StartWithOptions(
       base::Thread::Options(base::MessagePumpType::IO, 0));
 
-  mojo::core::Init();
+  const auto* cmd = base::CommandLine::ForCurrentProcess();
+  // We just assume that the main test process is a mojo broker, and all child
+  // processes are non-brokers, since by default, the process sending
+  // invitations needs to be a broker, while the process accepting invitations
+  // needs to be a non-broker.
+  bool is_broker_process = mojo::core::IsMojoIpczEnabled() &&
+                           !cmd->HasSwitch(switches::kTestChildProcess);
+  mojo::core::Init({.is_broker_process = is_broker_process});
   mojo::core::ScopedIPCSupport ipc_support(
       ipc_thread.task_runner(),
       mojo::core::ScopedIPCSupport::ShutdownPolicy::CLEAN);

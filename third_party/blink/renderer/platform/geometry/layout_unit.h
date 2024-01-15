@@ -98,6 +98,13 @@ class LayoutUnit {
 
  public:
   constexpr LayoutUnit() : value_(0) {}
+  // Creates a LayoutUnit with the specified integer value.
+  // If the specified value is smaller than LayoutUnit::Min(), the new
+  // LayoutUnit is equivalent to LayoutUnit::Min().
+  // If the specified value is greater than the maximum integer value which
+  // LayoutUnit can represent, the new LayoutUnit is equivalent to
+  // LayoutUnit(kIntMaxForLayoutUnit) in 32-bit Arm, or is equivalent to
+  // LayoutUnit::Max() otherwise.
   template <typename IntegerType>
   constexpr explicit LayoutUnit(IntegerType value) : value_(0) {
     if (std::is_signed<IntegerType>::value)
@@ -107,19 +114,26 @@ class LayoutUnit {
   }
   constexpr explicit LayoutUnit(uint64_t value)
       : value_(base::saturated_cast<int>(value * kFixedPointDenominator)) {}
-  // A |value| is clamped by Min() and Max().
-  // A NaN |value| produces LayoutUnit(0).
+  // The specified `value` is truncated to a multiple of 1/64 near 0, and
+  // is clamped by Min() and Max().
+  // A NaN `value` produces LayoutUnit(0).
   constexpr explicit LayoutUnit(float value)
       : value_(base::saturated_cast<int>(value * kFixedPointDenominator)) {}
   constexpr explicit LayoutUnit(double value)
       : value_(base::saturated_cast<int>(value * kFixedPointDenominator)) {}
 
+  // The specified `value` is rounded up to a multiple of 1/64, and
+  // is clamped by Min() and Max().
+  // A NaN `value` produces LayoutUnit(0).
   static LayoutUnit FromFloatCeil(float value) {
     LayoutUnit v;
     v.value_ = base::saturated_cast<int>(ceilf(value * kFixedPointDenominator));
     return v;
   }
 
+  // The specified `value` is truncated to a multiple of 1/64, and is clamped
+  // by Min() and Max().
+  // A NaN `value` produces LayoutUnit(0).
   static LayoutUnit FromFloatFloor(float value) {
     LayoutUnit v;
     v.value_ =
@@ -127,6 +141,9 @@ class LayoutUnit {
     return v;
   }
 
+  // The specified `value` is rounded to a multiple of 1/64, and
+  // is clamped by Min() and Max().
+  // A NaN `value` produces LayoutUnit(0).
   static LayoutUnit FromFloatRound(float value) {
     LayoutUnit v;
     v.value_ =
@@ -367,16 +384,16 @@ class LayoutUnit {
     value_ = result;
   }
 #else  // end of 32-bit ARM GCC
-  constexpr ALWAYS_INLINE void SaturatedSet(int value) {
+  ALWAYS_INLINE constexpr void SaturatedSet(int value) {
     SaturatedSetNonAsm(value);
   }
 
-  constexpr ALWAYS_INLINE void SaturatedSet(unsigned value) {
+  ALWAYS_INLINE constexpr void SaturatedSet(unsigned value) {
     SaturatedSetNonAsm(value);
   }
 #endif
 
-  constexpr ALWAYS_INLINE void SaturatedSetNonAsm(int value) {
+  ALWAYS_INLINE constexpr void SaturatedSetNonAsm(int value) {
     if (value > kIntMaxForLayoutUnit)
       value_ = std::numeric_limits<int>::max();
     else if (value < kIntMinForLayoutUnit)
@@ -385,7 +402,7 @@ class LayoutUnit {
       value_ = static_cast<unsigned>(value) << kLayoutUnitFractionalBits;
   }
 
-  constexpr ALWAYS_INLINE void SaturatedSetNonAsm(unsigned value) {
+  ALWAYS_INLINE constexpr void SaturatedSetNonAsm(unsigned value) {
     if (value >= static_cast<unsigned>(kIntMaxForLayoutUnit))
       value_ = std::numeric_limits<int>::max();
     else
@@ -695,22 +712,6 @@ inline LayoutUnit IntMod(const LayoutUnit& a, const LayoutUnit& b) {
   LayoutUnit return_val;
   return_val.SetRawValue(a.RawValue() % b.RawValue());
   return return_val;
-}
-
-// Returns the remainder after a division with LayoutUnit results.
-// This calculates the modulo so that: a = (a / b) * b + LayoutMod(a, b).
-inline LayoutUnit LayoutMod(const LayoutUnit& a, const LayoutUnit& b) {
-  LayoutUnit return_val;
-  int64_t raw_val =
-      (static_cast<int64_t>(kFixedPointDenominator) * a.RawValue()) %
-      b.RawValue();
-  return_val.SetRawValue(raw_val / kFixedPointDenominator);
-  return return_val;
-}
-
-template <typename IntegerType>
-inline LayoutUnit LayoutMod(const LayoutUnit& a, IntegerType b) {
-  return LayoutMod(a, LayoutUnit(b));
 }
 
 inline LayoutUnit& operator+=(LayoutUnit& a, const LayoutUnit& b) {

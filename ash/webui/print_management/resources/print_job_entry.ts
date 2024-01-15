@@ -13,10 +13,10 @@ import './print_management_fonts.css.js';
 import './print_management_shared.css.js';
 import './strings.m.js';
 
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
+import {FocusRowMixin} from 'chrome://resources/cr_elements/focus_row_mixin.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
-import {FocusRowMixin} from 'chrome://resources/js/focus_row_mixin.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
 import {String16} from 'chrome://resources/mojo/mojo/public/mojom/base/string16.mojom-webui.js';
 import {Time} from 'chrome://resources/mojo/mojo/public/mojom/base/time.mojom-webui.js';
 import {IronA11yAnnouncer} from 'chrome://resources/polymer/v3_0/iron-a11y-announcer/iron-a11y-announcer.js';
@@ -380,7 +380,6 @@ export class PrintJobEntryElement extends PrintJobEntryElementBase {
         return loadTimeData.getString('completionStatusPrinted');
       default:
         assertNotReached();
-        return loadTimeData.getString('unknownPrinterError');
     }
   }
 
@@ -435,7 +434,16 @@ export class PrintJobEntryElement extends PrintJobEntryElementBase {
       totalPages: number,
       ): number {
     assert(printedPages >= 0);
+    // TODO(b/235534580): Remove print statements once resolved.
+    if (totalPages <= 0) {
+      console.error('Total pages should be > 0. totalPages: ' + totalPages);
+    }
     assert(totalPages > 0);
+    if (printedPages > totalPages) {
+      console.error(
+          'Total pages should be more than printed pages. totalPages: ' +
+          totalPages + ' printedPages: ' + printedPages);
+    }
     assert(printedPages <= totalPages);
     return (printedPages * 100) / totalPages;
   }
@@ -498,9 +506,10 @@ export class PrintJobEntryElement extends PrintJobEntryElementBase {
         return loadTimeData.getString('unknownPrinterError');
       case PrinterErrorCode.kClientUnauthorized:
         return loadTimeData.getString('clientUnauthorized');
+      case PrinterErrorCode.kExpiredCertificate:
+        return loadTimeData.getString('expiredCertificate');
       default:
         assertNotReached();
-        return loadTimeData.getString('unknownPrinterError');
     }
   }
 
@@ -534,12 +543,12 @@ export class PrintJobEntryElement extends PrintJobEntryElementBase {
         return loadTimeData.getString('unknownPrinterErrorStopped');
       case PrinterErrorCode.kClientUnauthorized:
         return loadTimeData.getString('clientUnauthorized');
+      case PrinterErrorCode.kExpiredCertificate:
+        return loadTimeData.getString('expiredCertificate');
       case PrinterErrorCode.kPrinterUnreachable:
-        assertNotReached();
-        return loadTimeData.getString('unknownPrinterErrorStopped');
+        return loadTimeData.getString('printerUnreachableStopped');
       default:
         assertNotReached();
-        return loadTimeData.getString('unknownPrinterErrorStopped');
     }
   }
 }

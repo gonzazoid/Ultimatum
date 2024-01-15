@@ -8,6 +8,7 @@
 
 #include "base/base64.h"
 #include "base/i18n/rtl.h"
+#include "base/json/json_string_value_serializer.h"
 #include "base/logging.h"
 #include "base/strings/escape.h"
 #include "base/strings/string_number_conversions.h"
@@ -23,7 +24,7 @@
 #include "ui/base/window_open_disposition_utils.h"
 #include "ui/gfx/codec/png_codec.h"
 #include "ui/gfx/font.h"
-#include "ui/resources/grit/webui_generated_resources.h"
+#include "ui/resources/grit/webui_resources.h"
 #include "ui/strings/grit/app_locale_settings.h"
 #include "url/gurl.h"
 
@@ -37,11 +38,20 @@ namespace {
 // Generous cap to guard against out-of-memory issues.
 constexpr float kMaxScaleFactor = 1000.0f;
 
+std::string GetFontFamilyMd() {
+#if BUILDFLAG(IS_LINUX)
+  return "Roboto, " + GetFontFamily();
+#else
+  return GetFontFamily();
+#endif
+}
+
 std::string GetWebUiCssTextDefaults(const std::string& css_template) {
   ui::TemplateReplacements placeholders;
-  placeholders["textDirection"] = GetTextDirection();
-  placeholders["fontFamily"] = GetFontFamily();
-  placeholders["fontSize"] = GetFontSize();
+  placeholders["textdirection"] = GetTextDirection();
+  placeholders["fontfamily"] = GetFontFamily();
+  placeholders["fontfamilyMd"] = GetFontFamilyMd();
+  placeholders["fontsize"] = GetFontSize();
   return ui::ReplaceTemplateExpressions(css_template, placeholders);
 }
 
@@ -147,7 +157,7 @@ void ParsePathAndImageSpec(const GURL& url,
             pos + 1, stripped_path.length() - pos - 1), &factor)) {
       // Strip scale factor specification from path.
       stripped_path.remove_suffix(stripped_path.length() - pos);
-      path->assign(stripped_path.data(), stripped_path.size());
+      *path = std::string(stripped_path);
     }
     if (scale_factor)
       *scale_factor = factor;
@@ -164,22 +174,17 @@ void ParsePathAndImageSpec(const GURL& url,
             &index)) {
       // Strip frame index specification from path.
       stripped_path.remove_suffix(stripped_path.length() - pos);
-      path->assign(stripped_path.data(), stripped_path.size());
+      *path = std::string(stripped_path);
     }
     if (frame_index)
       *frame_index = index;
   }
 }
 
-void ParsePathAndScale(const GURL& url,
-                       std::string* path,
-                       float* scale_factor) {
-  ParsePathAndImageSpec(url, path, scale_factor, nullptr);
-}
-
 void SetLoadTimeDataDefaults(const std::string& app_locale,
                              base::Value::Dict* localized_strings) {
   localized_strings->Set("fontfamily", GetFontFamily());
+  localized_strings->Set("fontfamilyMd", GetFontFamilyMd());
   localized_strings->Set("fontsize", GetFontSize());
   localized_strings->Set("language", l10n_util::GetLanguage(app_locale));
   localized_strings->Set("textdirection", GetTextDirection());
@@ -188,6 +193,7 @@ void SetLoadTimeDataDefaults(const std::string& app_locale,
 void SetLoadTimeDataDefaults(const std::string& app_locale,
                              ui::TemplateReplacements* replacements) {
   (*replacements)["fontfamily"] = GetFontFamily();
+  (*replacements)["fontfamilyMd"] = GetFontFamilyMd();
   (*replacements)["fontsize"] = GetFontSize();
   (*replacements)["language"] = l10n_util::GetLanguage(app_locale);
   (*replacements)["textdirection"] = GetTextDirection();
@@ -198,13 +204,6 @@ std::string GetWebUiCssTextDefaults() {
       ui::ResourceBundle::GetSharedInstance();
   return GetWebUiCssTextDefaults(
       resource_bundle.LoadDataResourceString(IDR_WEBUI_CSS_TEXT_DEFAULTS_CSS));
-}
-
-std::string GetWebUiCssTextDefaultsMd() {
-  const ui::ResourceBundle& resource_bundle =
-      ui::ResourceBundle::GetSharedInstance();
-  return GetWebUiCssTextDefaults(resource_bundle.LoadDataResourceString(
-      IDR_WEBUI_CSS_TEXT_DEFAULTS_MD_CSS));
 }
 
 void AppendWebUiCssTextDefaults(std::string* html) {
@@ -236,6 +235,28 @@ std::string GetFontSize() {
 
 std::string GetTextDirection() {
   return base::i18n::IsRTL() ? "rtl" : "ltr";
+}
+
+std::string GetLocalizedHtml(base::StringPiece html_template,
+                             const base::Value::Dict& strings) {
+  // Populate $i18n{...} placeholders.
+  ui::TemplateReplacements replacements;
+  ui::TemplateReplacementsFromDictionaryValue(strings, &replacements);
+  std::string output =
+      ui::ReplaceTemplateExpressions(html_template, replacements);
+
+  // Inject data to the UI that will be used to populate loadTimeData upon
+  // initialization.
+  std::string json;
+  JSONStringValueSerializer serializer(&json);
+  serializer.Serialize(strings);
+  output.append("<script>");
+  output.append("var loadTimeDataRaw = ");
+  output.append(json);
+  output.append(";");
+  output.append("</script>");
+
+  return output;
 }
 
 }  // namespace webui

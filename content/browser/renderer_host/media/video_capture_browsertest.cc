@@ -2,11 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -21,7 +23,6 @@
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/content_browser_test.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/media_switches.h"
 #include "media/capture/video_capture_types.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -52,12 +53,17 @@ class MockVideoCaptureControllerEventHandler
                     int buffer_id));
   MOCK_METHOD2(OnBufferDestroyed,
                void(const VideoCaptureControllerID&, int buffer_id));
-  MOCK_METHOD2(OnNewCropVersion,
-               void(const VideoCaptureControllerID&, uint32_t crop_version));
-  MOCK_METHOD3(OnBufferReady,
+  MOCK_METHOD1(OnCaptureConfigurationChanged,
+               void(const VideoCaptureControllerID&));
+  MOCK_METHOD2(OnNewSubCaptureTargetVersion,
+               void(const VideoCaptureControllerID&,
+                    uint32_t sub_capture_target_version));
+  MOCK_METHOD2(OnBufferReady,
                void(const VideoCaptureControllerID& id,
-                    const ReadyBuffer& fullsized_buffer,
-                    const std::vector<ReadyBuffer>& downscaled_buffers));
+                    const ReadyBuffer& fullsized_buffer));
+  MOCK_METHOD2(OnFrameDropped,
+               void(const VideoCaptureControllerID& id,
+                    media::VideoCaptureFrameDropReason reason));
   MOCK_METHOD1(OnFrameWithEmptyRegionCapture,
                void(const VideoCaptureControllerID&));
   MOCK_METHOD1(OnStarted, void(const VideoCaptureControllerID&));
@@ -161,7 +167,7 @@ class VideoCaptureBrowserTest : public ContentBrowserTest,
     // VideoCaptureControllerEventHandler. To satisfy this, we have to post our
     // invocation to the end of the IO message queue.
     if (post_to_end_of_message_queue) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(
               &VideoCaptureBrowserTest::TearDownCaptureDeviceOnIOThread,
@@ -209,7 +215,9 @@ class VideoCaptureBrowserTest : public ContentBrowserTest,
 
   void OnDeviceDescriptorsReceived(
       base::OnceClosure continuation,
+      media::mojom::DeviceEnumerationResult result,
       const media::VideoCaptureDeviceDescriptors& descriptors) {
+    ASSERT_EQ(media::mojom::DeviceEnumerationResult::kSuccess, result);
     ASSERT_TRUE(params_.device_index_to_use < descriptors.size());
     const auto& descriptor = descriptors[params_.device_index_to_use];
     blink::MediaStreamDevice media_stream_device(
@@ -226,7 +234,8 @@ class VideoCaptureBrowserTest : public ContentBrowserTest,
         &mock_controller_event_handler_,
         base::BindOnce(
             &VideoCaptureBrowserTest::OnConnectClientToControllerAnswer,
-            base::Unretained(this), std::move(continuation)));
+            base::Unretained(this), std::move(continuation)),
+        /*browser_context=*/nullptr);
   }
 
   void OnConnectClientToControllerAnswer(
@@ -258,7 +267,7 @@ IN_PROC_BROWSER_TEST_P(VideoCaptureBrowserTest, StartAndImmediatelyStop) {
   SetUpRequiringBrowserMainLoopOnMainThread();
   base::RunLoop run_loop;
   base::OnceClosure quit_run_loop_on_current_thread_cb =
-      media::BindToCurrentLoop(run_loop.QuitClosure());
+      base::BindPostTaskToCurrentDefault(run_loop.QuitClosure());
   base::OnceClosure after_start_continuation =
       base::BindOnce(&VideoCaptureBrowserTest::TearDownCaptureDeviceOnIOThread,
                      base::Unretained(this),
@@ -295,7 +304,7 @@ IN_PROC_BROWSER_TEST_P(VideoCaptureBrowserTest,
   base::RunLoop run_loop;
 
   base::OnceClosure quit_run_loop_on_current_thread_cb =
-      media::BindToCurrentLoop(run_loop.QuitClosure());
+      base::BindPostTaskToCurrentDefault(run_loop.QuitClosure());
   base::OnceClosure finish_test_cb =
       base::BindOnce(&VideoCaptureBrowserTest::TearDownCaptureDeviceOnIOThread,
                      base::Unretained(this),
@@ -318,12 +327,11 @@ IN_PROC_BROWSER_TEST_P(VideoCaptureBrowserTest,
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   EXPECT_CALL(mock_controller_event_handler_, DoOnNewBuffer(_, _, _))
       .Times(AtLeast(1));
-  EXPECT_CALL(mock_controller_event_handler_, OnBufferReady(_, _, _))
+  EXPECT_CALL(mock_controller_event_handler_, OnBufferReady(_, _))
       .WillRepeatedly(Invoke(
           [this, &received_frame_infos, &must_wait_for_gpu_decode_to_start,
            &finish_test_cb](const VideoCaptureControllerID& id,
-                            const ReadyBuffer& buffer,
-                            const std::vector<ReadyBuffer>& scaled_buffers) {
+                            const ReadyBuffer& buffer) {
             FrameInfo received_frame_info;
             received_frame_info.pixel_format = buffer.frame_info->pixel_format;
             received_frame_info.size = buffer.frame_info->coded_size;

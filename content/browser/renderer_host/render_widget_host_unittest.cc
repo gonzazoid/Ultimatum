@@ -7,9 +7,10 @@
 
 #include <memory>
 #include <tuple>
+#include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
@@ -17,7 +18,6 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_tick_clock.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "build/build_config.h"
@@ -37,6 +37,7 @@
 #include "content/browser/renderer_host/render_view_host_delegate_view.h"
 #include "content/browser/renderer_host/render_widget_host_delegate.h"
 #include "content/browser/renderer_host/render_widget_host_view_base.h"
+#include "content/browser/renderer_host/visible_time_request_trigger.h"
 #include "content/browser/site_instance_group.h"
 #include "content/browser/storage_partition_impl.h"
 #include "content/common/content_constants_internal.h"
@@ -64,6 +65,7 @@
 #include "third_party/blink/public/mojom/drag/drag.mojom.h"
 #include "third_party/blink/public/mojom/input/input_handler.mojom-shared.h"
 #include "third_party/blink/public/mojom/input/touch_event.mojom.h"
+#include "ui/base/cursor/cursor.h"
 #include "ui/display/display_util.h"
 #include "ui/display/screen.h"
 #include "ui/events/base_event_utils.h"
@@ -84,7 +86,11 @@
 #include "ui/display/test/test_screen.h"
 #endif
 
-#if defined(USE_AURA) || BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_IOS)
+#include "content/browser/renderer_host/test_render_widget_host_view_ios_factory.h"
+#endif
+
+#if defined(USE_AURA) || BUILDFLAG(IS_APPLE)
 #include "content/browser/compositor/test/test_image_transport_factory.h"
 #endif
 
@@ -228,8 +234,7 @@ class TestView : public TestRenderWidgetHostView {
   }
   void GestureEventAck(
       const WebGestureEvent& event,
-      blink::mojom::InputEventResultState ack_result,
-      blink::mojom::ScrollResultDataPtr scroll_result_data) override {
+      blink::mojom::InputEventResultState ack_result) override {
     gesture_event_type_ = event.GetType();
     ack_result_ = ack_result;
   }
@@ -270,6 +275,7 @@ class MockRenderViewHostDelegateView : public RenderViewHostDelegateView {
 
   // RenderViewHostDelegateView:
   void StartDragging(const DropData& drop_data,
+                     const url::Origin& source_origin,
                      blink::DragOperationsMask allowed_ops,
                      const gfx::ImageSkia& image,
                      const gfx::Vector2d& cursor_offset,
@@ -306,7 +312,8 @@ class FakeRenderFrameMetadataObserver
   ~FakeRenderFrameMetadataObserver() override {}
 
 #if BUILDFLAG(IS_ANDROID)
-  void ReportAllRootScrolls(bool enabled) override {}
+  void UpdateRootScrollOffsetUpdateFrequency(
+      cc::mojom::RootScrollOffsetUpdateFrequency frequency) override {}
 #endif
   void ReportAllFrameSubmissionsForTesting(bool enabled) override {}
 
@@ -461,9 +468,9 @@ class MockRenderWidgetHostDelegate : public RenderWidgetHostDelegate {
 
   bool ShouldIgnoreInputEvents() override { return ignore_input_events_; }
 
-  void ExecuteEditCommand(
-      const std::string& command,
-      const absl::optional<std::u16string>& value) override {}
+  void ExecuteEditCommand(const std::string& command,
+                          const std::optional<std::u16string>& value) override {
+  }
 
   void Undo() override {}
   void Redo() override {}
@@ -472,6 +479,10 @@ class MockRenderWidgetHostDelegate : public RenderWidgetHostDelegate {
   void Paste() override {}
   void PasteAndMatchStyle() override {}
   void SelectAll() override {}
+
+  VisibleTimeRequestTrigger& GetVisibleTimeRequestTrigger() override {
+    return visible_time_request_trigger_;
+  }
 
  private:
   bool prehandle_keyboard_event_;
@@ -501,6 +512,8 @@ class MockRenderWidgetHostDelegate : public RenderWidgetHostDelegate {
       viz::VerticalScrollDirection::kNull;
 
   bool is_fullscreen_ = false;
+
+  VisibleTimeRequestTrigger visible_time_request_trigger_;
 };
 
 class MockRenderWidgetHostOwnerDelegate
@@ -550,10 +563,11 @@ class RenderWidgetHostTest : public testing::Test {
     delegate_ = std::make_unique<MockRenderWidgetHostDelegate>();
     process_ =
         std::make_unique<RenderWidgetHostProcess>(browser_context_.get());
-    site_instance_group_ = base::WrapRefCounted(new SiteInstanceGroup(
-        SiteInstanceImpl::NextBrowsingInstanceId(), process_.get()));
+    site_instance_group_ =
+        base::WrapRefCounted(SiteInstanceGroup::CreateForTesting(
+            browser_context_.get(), process_.get()));
     sink_ = &process_->sink();
-#if defined(USE_AURA) || BUILDFLAG(IS_MAC)
+#if defined(USE_AURA) || BUILDFLAG(IS_APPLE)
     ImageTransportFactory::SetFactory(
         std::make_unique<TestImageTransportFactory>());
 #endif
@@ -617,6 +631,7 @@ class RenderWidgetHostTest : public testing::Test {
   }
 
   void TearDown() override {
+    sink_ = nullptr;
     view_.reset();
     host_.reset();
     delegate_.reset();
@@ -624,24 +639,19 @@ class RenderWidgetHostTest : public testing::Test {
     site_instance_group_.reset();
     process_.reset();
     browser_context_.reset();
-
-#if defined(USE_AURA)
+#if defined(USE_AURA) || BUILDFLAG(IS_APPLE)
     ImageTransportFactory::Terminate();
 #endif
-#if defined(USE_AURA) || BUILDFLAG(IS_MAC)
+#if defined(USE_AURA) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_ANDROID)
     display::Screen::SetScreenInstance(nullptr);
     screen_.reset();
-#endif
-#if BUILDFLAG(IS_ANDROID)
-    display::Screen::SetScreenInstance(nullptr);
 #endif
 
     // Process all pending tasks to avoid leaks.
     base::RunLoop().RunUntilIdle();
   }
 
-  virtual void ConfigureView(TestView* view) {
-  }
+  virtual void ConfigureView(TestView* view) {}
 
   void ReinitalizeHost() {
     host_->BindWidgetInterfaces(
@@ -962,7 +972,7 @@ TEST_F(RenderWidgetHostTest, SynchronizeVisualProperties) {
   EXPECT_EQ(original_size.size(), host_->old_visual_properties_->new_size);
   cc::RenderFrameMetadata metadata;
   metadata.viewport_size_in_pixels = original_size.size();
-  metadata.local_surface_id = absl::nullopt;
+  metadata.local_surface_id = std::nullopt;
   static_cast<RenderFrameMetadataProvider::Observer&>(*host_)
       .OnLocalSurfaceIdChanged(metadata);
   EXPECT_FALSE(host_->visual_properties_ack_pending_);
@@ -995,7 +1005,7 @@ TEST_F(RenderWidgetHostTest, SynchronizeVisualProperties) {
   // sent. Since this isn't the second_size, the message handler should
   // immediately send a new resize message for the new size to the renderer.
   metadata.viewport_size_in_pixels = original_size.size();
-  metadata.local_surface_id = absl::nullopt;
+  metadata.local_surface_id = std::nullopt;
   static_cast<RenderFrameMetadataProvider::Observer&>(*host_)
       .OnLocalSurfaceIdChanged(metadata);
   EXPECT_TRUE(host_->visual_properties_ack_pending_);
@@ -1007,7 +1017,7 @@ TEST_F(RenderWidgetHostTest, SynchronizeVisualProperties) {
 
   // Send the visual properties ACK for the latest size.
   metadata.viewport_size_in_pixels = third_size.size();
-  metadata.local_surface_id = absl::nullopt;
+  metadata.local_surface_id = std::nullopt;
   static_cast<RenderFrameMetadataProvider::Observer&>(*host_)
       .OnLocalSurfaceIdChanged(metadata);
   EXPECT_FALSE(host_->visual_properties_ack_pending_);
@@ -1074,10 +1084,8 @@ TEST_F(RenderWidgetHostTest, SynchronizeVisualProperties) {
 // after a ScreenInfo change.
 TEST_F(RenderWidgetHostTest, ResizeScreenInfo) {
   display::ScreenInfo screen_info;
-  screen_info.device_scale_factor = 1.f;
   screen_info.rect = gfx::Rect(0, 0, 800, 600);
   screen_info.available_rect = gfx::Rect(0, 0, 800, 600);
-  screen_info.orientation_angle = 0;
   screen_info.orientation_type =
       display::mojom::ScreenOrientation::kPortraitPrimary;
 
@@ -1126,17 +1134,15 @@ TEST_F(RenderWidgetHostTest, ResizeScreenInfo) {
   EXPECT_FALSE(host_->visual_properties_ack_pending_);
 }
 
-// Tests that a resize event is sent when entering fullscreen mode, and the
-// screen_info rects are overridden to match the view bounds.
-TEST_F(RenderWidgetHostTest, OverrideScreenInfoDuringFullscreenMode) {
+// Ensure VisualProperties continues reporting the size of the current screen,
+// not the viewport, when the frame is fullscreen. See crbug.com/1367416.
+TEST_F(RenderWidgetHostTest, ScreenSizeInFullscreen) {
   const gfx::Rect kScreenBounds(0, 0, 800, 600);
   const gfx::Rect kViewBounds(55, 66, 600, 500);
 
   display::ScreenInfo screen_info;
-  screen_info.device_scale_factor = 1.f;
   screen_info.rect = kScreenBounds;
   screen_info.available_rect = kScreenBounds;
-  screen_info.orientation_angle = 0;
   screen_info.orientation_type =
       display::mojom::ScreenOrientation::kPortraitPrimary;
   view_->SetScreenInfo(screen_info);
@@ -1153,6 +1159,7 @@ TEST_F(RenderWidgetHostTest, OverrideScreenInfoDuringFullscreenMode) {
   blink::VisualProperties props = widget_.ReceivedVisualProperties().at(0);
   EXPECT_EQ(kScreenBounds, props.screen_infos.current().rect);
   EXPECT_EQ(kScreenBounds, props.screen_infos.current().available_rect);
+  EXPECT_EQ(kViewBounds.size(), props.new_size);
 
   // Enter fullscreen and do another VisualProperties sync.
   delegate_->set_is_fullscreen(true);
@@ -1161,9 +1168,9 @@ TEST_F(RenderWidgetHostTest, OverrideScreenInfoDuringFullscreenMode) {
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(2u, widget_.ReceivedVisualProperties().size());
   props = widget_.ReceivedVisualProperties().at(1);
-  EXPECT_EQ(kViewBounds.size(), props.screen_infos.current().rect.size());
-  EXPECT_EQ(kViewBounds.size(),
-            props.screen_infos.current().available_rect.size());
+  EXPECT_EQ(kScreenBounds, props.screen_infos.current().rect);
+  EXPECT_EQ(kScreenBounds, props.screen_infos.current().available_rect);
+  EXPECT_EQ(kViewBounds.size(), props.new_size);
 
   // Exit fullscreen and do another VisualProperties sync.
   delegate_->set_is_fullscreen(false);
@@ -1174,15 +1181,14 @@ TEST_F(RenderWidgetHostTest, OverrideScreenInfoDuringFullscreenMode) {
   props = widget_.ReceivedVisualProperties().at(2);
   EXPECT_EQ(kScreenBounds, props.screen_infos.current().rect);
   EXPECT_EQ(kScreenBounds, props.screen_infos.current().available_rect);
+  EXPECT_EQ(kViewBounds.size(), props.new_size);
 }
 
 TEST_F(RenderWidgetHostTest, RootWindowSegments) {
   gfx::Rect screen_rect(0, 0, 800, 600);
   display::ScreenInfo screen_info;
-  screen_info.device_scale_factor = 1.f;
   screen_info.rect = screen_rect;
   screen_info.available_rect = screen_rect;
-  screen_info.orientation_angle = 0;
   screen_info.orientation_type =
       display::mojom::ScreenOrientation::kPortraitPrimary;
   view_->SetScreenInfo(screen_info);
@@ -1336,16 +1342,18 @@ TEST_F(RenderWidgetHostTest, Background) {
 #if defined(USE_AURA)
   view = new RenderWidgetHostViewAura(host_.get());
 #elif BUILDFLAG(IS_ANDROID)
-  view = new RenderWidgetHostViewAndroid(host_.get(), nullptr);
+  view = new RenderWidgetHostViewAndroid(host_.get(),
+                                         /*parent_native_view=*/nullptr,
+                                         /*parent_layer=*/nullptr);
 #elif BUILDFLAG(IS_MAC)
   view = CreateRenderWidgetHostViewMacForTesting(host_.get());
-#else
-#error "This test isn't implemented for this platform."
+#elif BUILDFLAG(IS_IOS)
+  view = CreateRenderWidgetHostViewIOSForTesting(host_.get());
 #endif
 
 #if !BUILDFLAG(IS_ANDROID)
   // TODO(derat): Call this on all platforms: http://crbug.com/102450.
-  view->InitAsChild(nullptr);
+  view->InitAsChild(gfx::NativeView());
 #endif
   host_->SetView(view);
 
@@ -1386,6 +1394,14 @@ TEST_F(RenderWidgetHostTest, Background) {
     EXPECT_EQ(unsigned{SK_ColorBLUE}, *view->GetBackgroundColor());
   }
 
+#if BUILDFLAG(IS_ANDROID)
+  // Surface Eviction attempts to crawl the FrameTree. This makes use of
+  // RenderViewHostImpl::From which performs a static_cast on the
+  // RenderWidgetHostOwnerDelegate. Our MockRenderWidgetHostOwnerDelegate is not
+  // a RenderViewHostImpl, so it crashes. Clear this here as it is not needed
+  // for TearDown.
+  host_->set_owner_delegate(nullptr);
+#endif  // BUILDFLAG(IS_ANDROID)
   host_->SetView(nullptr);
   view->Destroy();
 }
@@ -1409,7 +1425,7 @@ TEST_F(RenderWidgetHostTest, HideShowMessages) {
   process_->sink().ClearMessages();
   cc::RenderFrameMetadata metadata;
   metadata.viewport_size_in_pixels = gfx::Size(100, 100);
-  metadata.local_surface_id = absl::nullopt;
+  metadata.local_surface_id = std::nullopt;
   static_cast<RenderFrameMetadataProvider::Observer&>(*host_)
       .OnLocalSurfaceIdChanged(metadata);
 
@@ -2124,7 +2140,7 @@ TEST_F(RenderWidgetHostTest, RendererExitedNoDrag) {
       DropDataToDragData(
           drop_data, file_system_manager, process_->GetID(),
           ChromeBlobStorageContext::GetFor(process_->GetBrowserContext())),
-      drag_operation, SkBitmap(), gfx::Vector2d(), gfx::Rect(),
+      url::Origin(), drag_operation, SkBitmap(), gfx::Vector2d(), gfx::Rect(),
       blink::mojom::DragEventSourceInfo::New());
   EXPECT_EQ(delegate_->mock_delegate_view()->start_dragging_count(), 1);
 
@@ -2135,7 +2151,7 @@ TEST_F(RenderWidgetHostTest, RendererExitedNoDrag) {
       DropDataToDragData(
           drop_data, file_system_manager, process_->GetID(),
           ChromeBlobStorageContext::GetFor(process_->GetBrowserContext())),
-      drag_operation, SkBitmap(), gfx::Vector2d(), gfx::Rect(),
+      url::Origin(), drag_operation, SkBitmap(), gfx::Vector2d(), gfx::Rect(),
       blink::mojom::DragEventSourceInfo::New());
   EXPECT_EQ(delegate_->mock_delegate_view()->start_dragging_count(), 1);
 }
@@ -2211,6 +2227,7 @@ TEST_F(RenderWidgetHostTest, NavigateInBackgroundShowsBlank) {
   // ClearDisplayedGraphics.
   host_->WasShown({} /* record_tab_switch_time_request */);
   host_->DidNavigate();
+  host_->StartNewContentRenderingTimeout();
   EXPECT_FALSE(host_->new_content_rendering_timeout_fired());
 
   // Hide then show. ClearDisplayedGraphics must be called.
@@ -2222,6 +2239,7 @@ TEST_F(RenderWidgetHostTest, NavigateInBackgroundShowsBlank) {
   // Hide, navigate, then show. ClearDisplayedGraphics must be called.
   host_->WasHidden();
   host_->DidNavigate();
+  host_->StartNewContentRenderingTimeout();
   host_->WasShown({} /* record_tab_switch_time_request */);
   EXPECT_TRUE(host_->new_content_rendering_timeout_fired());
 }
@@ -2317,8 +2335,10 @@ TEST_F(RenderWidgetHostTest, AddAndRemoveInputEventObserver) {
   NativeWebKeyboardEvent native_event(WebInputEvent::Type::kChar, 0,
                                       GetNextSimulatedEventTime());
   ui::LatencyInfo latency_info = ui::LatencyInfo();
+  ui::EventLatencyMetadata event_latency_metadata;
   EXPECT_CALL(observer, OnInputEvent(_)).Times(1);
-  host_->DispatchInputEventWithLatencyInfo(native_event, &latency_info);
+  host_->DispatchInputEventWithLatencyInfo(native_event, &latency_info,
+                                           &event_latency_metadata);
 
   // Remove InputEventObserver.
   host_->RemoveInputEventObserver(&observer);
@@ -2326,7 +2346,40 @@ TEST_F(RenderWidgetHostTest, AddAndRemoveInputEventObserver) {
   // Confirm InputEventObserver is removed.
   EXPECT_CALL(observer, OnInputEvent(_)).Times(0);
   latency_info = ui::LatencyInfo();
-  host_->DispatchInputEventWithLatencyInfo(native_event, &latency_info);
+  event_latency_metadata = ui::EventLatencyMetadata();
+  host_->DispatchInputEventWithLatencyInfo(native_event, &latency_info,
+                                           &event_latency_metadata);
+}
+
+TEST_F(RenderWidgetHostTest, ScopedObservationWithInputEventObserver) {
+  // Verify that the specialization of `ScopedObserverationTraits` correctly
+  // adds and removes InputEventObservers.
+  MockInputEventObserver observer;
+  base::ScopedObservation<RenderWidgetHost,
+                          RenderWidgetHost::InputEventObserver>
+      scoped_observation(&observer);
+
+  // Add InputEventObserver.
+  scoped_observation.Observe(host_.get());
+
+  // Confirm OnInputEvent is triggered.
+  NativeWebKeyboardEvent native_event(WebInputEvent::Type::kChar, 0,
+                                      GetNextSimulatedEventTime());
+  ui::LatencyInfo latency_info = ui::LatencyInfo();
+  ui::EventLatencyMetadata event_latency_metadata;
+  EXPECT_CALL(observer, OnInputEvent(_)).Times(1);
+  host_->DispatchInputEventWithLatencyInfo(native_event, &latency_info,
+                                           &event_latency_metadata);
+
+  // Remove InputEventObserver.
+  scoped_observation.Reset();
+
+  // Confirm InputEventObserver is removed.
+  EXPECT_CALL(observer, OnInputEvent(_)).Times(0);
+  latency_info = ui::LatencyInfo();
+  event_latency_metadata = ui::EventLatencyMetadata();
+  host_->DispatchInputEventWithLatencyInfo(native_event, &latency_info,
+                                           &event_latency_metadata);
 }
 
 #if BUILDFLAG(IS_ANDROID)
@@ -2390,15 +2443,14 @@ TEST_F(RenderWidgetHostTest, OnVerticalScrollDirectionChanged) {
 }
 
 TEST_F(RenderWidgetHostTest, SetCursorWithBitmap) {
-  ui::Cursor cursor(ui::mojom::CursorType::kCustom);
-
   SkBitmap bitmap;
   bitmap.allocN32Pixels(1, 1);
   bitmap.eraseColor(SK_ColorGREEN);
-  cursor.set_custom_bitmap(bitmap);
 
+  const ui::Cursor cursor =
+      ui::Cursor::NewCustom(std::move(bitmap), gfx::Point());
   host_->SetCursor(cursor);
-  EXPECT_EQ(WebCursor(cursor), view_->last_cursor());
+  EXPECT_EQ(cursor, view_->last_cursor());
 }
 
 }  // namespace content

@@ -8,16 +8,17 @@
 
 #include <list>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/notreached.h"
@@ -25,7 +26,6 @@
 #include "base/run_loop.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
@@ -56,7 +56,6 @@
 #include "services/network/public/cpp/features.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/simple_url_loader_stream_consumer.h"
-#include "services/network/public/cpp/simple_url_loader_throttle.h"
 #include "services/network/public/cpp/url_loader_completion_status.h"
 #include "services/network/public/mojom/data_pipe_getter.mojom.h"
 #include "services/network/public/mojom/network_service.mojom.h"
@@ -65,6 +64,7 @@
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "services/network/test/fake_test_cert_verifier_params_factory.h"
 #include "services/network/test/test_network_context_client.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
@@ -75,6 +75,8 @@
 
 namespace network {
 namespace {
+
+using ::testing::ElementsAre;
 
 // Server path that returns a response containing as many a's as are specified
 // in the query part of the URL.
@@ -423,7 +425,7 @@ class SimpleLoaderTestHelper : public SimpleURLLoaderStreamConsumer {
 
   // SimpleURLLoaderStreamConsumer implementation:
 
-  void OnDataReceived(base::StringPiece string_piece,
+  void OnDataReceived(std::string_view string_piece,
                       base::OnceClosure resume) override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     EXPECT_FALSE(done_);
@@ -452,8 +454,8 @@ class SimpleLoaderTestHelper : public SimpleURLLoaderStreamConsumer {
     }
 
     if (download_to_stream_async_resume_) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                       std::move(resume));
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, std::move(resume));
       return;
     }
     std::move(resume).Run();
@@ -501,8 +503,8 @@ class SimpleLoaderTestHelper : public SimpleURLLoaderStreamConsumer {
     }
 
     if (download_to_stream_async_retry_) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                       std::move(start_retry));
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, std::move(start_retry));
       return;
     }
     std::move(start_retry).Run();
@@ -685,7 +687,7 @@ class SimpleURLLoaderTestBase {
   // Returns the path of a file that can be used in upload tests.
   static base::FilePath GetTestFilePath() {
     base::FilePath test_data_dir;
-    base::PathService::Get(base::DIR_SOURCE_ROOT, &test_data_dir);
+    base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &test_data_dir);
     return test_data_dir.AppendASCII("services/test/data/title1.html");
   }
 
@@ -856,25 +858,30 @@ TEST_P(SimpleURLLoaderTest, RedirectData) {
 
 // Make sure OnRedirectCallback is invoked on a redirect.
 TEST_P(SimpleURLLoaderTest, OnRedirectCallback) {
+  const GURL kInitialURL = test_server_.GetURL(
+      "/server-redirect?" + test_server_.GetURL("/echo").spec());
   std::unique_ptr<SimpleLoaderTestHelper> test_helper =
-      CreateHelperForURL(test_server_.GetURL(
-          "/server-redirect?" + test_server_.GetURL("/echo").spec()));
+      CreateHelperForURL(kInitialURL);
 
   int num_redirects = 0;
   net::RedirectInfo redirect_info;
   network::mojom::URLResponseHeadPtr response_head;
+  GURL url_before_redirect;
   test_helper->simple_url_loader()->SetOnRedirectCallback(base::BindRepeating(
-      [](int* num_redirects, net::RedirectInfo* redirect_info_ptr,
+      [](int* num_redirects, GURL* url_before_redirect_ptr,
+         net::RedirectInfo* redirect_info_ptr,
          network::mojom::URLResponseHeadPtr* response_head_ptr,
+         const GURL& url_before_redirect,
          const net::RedirectInfo& redirect_info,
          const network::mojom::URLResponseHead& response_head,
          std::vector<std::string>* to_be_removed_headers) {
         ++*num_redirects;
+        *url_before_redirect_ptr = url_before_redirect;
         *redirect_info_ptr = redirect_info;
         *response_head_ptr = response_head.Clone();
       },
-      base::Unretained(&num_redirects), base::Unretained(&redirect_info),
-      base::Unretained(&response_head)));
+      base::Unretained(&num_redirects), base::Unretained(&url_before_redirect),
+      base::Unretained(&redirect_info), base::Unretained(&response_head)));
 
   test_helper->StartSimpleLoaderAndWait(url_loader_factory_.get());
 
@@ -884,6 +891,7 @@ TEST_P(SimpleURLLoaderTest, OnRedirectCallback) {
   }
 
   EXPECT_EQ(1, num_redirects);
+  EXPECT_EQ(kInitialURL, url_before_redirect);
   EXPECT_EQ(test_server_.GetURL("/echo"), redirect_info.new_url);
   ASSERT_TRUE(response_head->headers);
   EXPECT_EQ(301, response_head->headers->response_code());
@@ -891,18 +899,25 @@ TEST_P(SimpleURLLoaderTest, OnRedirectCallback) {
 
 // Make sure OnRedirectCallback is invoked on each redirect.
 TEST_P(SimpleURLLoaderTest, OnRedirectCallbackTwoRedirects) {
+  const GURL kRedirectURL = test_server_.GetURL(
+      "/server-redirect?" + test_server_.GetURL("/echo").spec());
+  const GURL kInitialURL =
+      test_server_.GetURL("/server-redirect?" + kRedirectURL.spec());
   std::unique_ptr<SimpleLoaderTestHelper> test_helper =
-      CreateHelperForURL(test_server_.GetURL(
-          "/server-redirect?" +
-          test_server_
-              .GetURL("/server-redirect?" + test_server_.GetURL("/echo").spec())
-              .spec()));
+      CreateHelperForURL(kInitialURL);
   int num_redirects = 0;
+  std::vector<GURL> urls_before_redirect;
   test_helper->simple_url_loader()->SetOnRedirectCallback(base::BindRepeating(
-      [](int* num_redirects, const net::RedirectInfo& redirect_info,
+      [](int* num_redirects, std::vector<GURL>* urls_before_redirect,
+         const GURL& url_before_redirect,
+         const net::RedirectInfo& redirect_info,
          const network::mojom::URLResponseHead& response_head,
-         std::vector<std::string>* to_be_removed_headers) { ++*num_redirects; },
-      base::Unretained(&num_redirects)));
+         std::vector<std::string>* to_be_removed_headers) {
+        ++*num_redirects;
+        urls_before_redirect->push_back(url_before_redirect);
+      },
+      base::Unretained(&num_redirects),
+      base::Unretained(&urls_before_redirect)));
 
   test_helper->StartSimpleLoaderAndWait(url_loader_factory_.get());
 
@@ -912,6 +927,7 @@ TEST_P(SimpleURLLoaderTest, OnRedirectCallbackTwoRedirects) {
   }
 
   EXPECT_EQ(2, num_redirects);
+  EXPECT_THAT(urls_before_redirect, ElementsAre(kInitialURL, kRedirectURL));
 }
 
 TEST_P(SimpleURLLoaderTest, DeleteInOnRedirectCallback) {
@@ -919,26 +935,24 @@ TEST_P(SimpleURLLoaderTest, DeleteInOnRedirectCallback) {
       CreateHelperForURL(test_server_.GetURL(
           "/server-redirect?" + test_server_.GetURL("/echo").spec()));
 
-  SimpleLoaderTestHelper* unowned_test_helper = test_helper.get();
   base::RunLoop run_loop;
-  unowned_test_helper->simple_url_loader()->SetOnRedirectCallback(
-      base::BindRepeating(
-          [](std::unique_ptr<SimpleLoaderTestHelper> test_helper,
-             base::RunLoop* run_loop, const net::RedirectInfo& redirect_info,
-             const network::mojom::URLResponseHead& response_head,
-             std::vector<std::string>* to_be_removed_headers) {
+  test_helper->simple_url_loader()->SetOnRedirectCallback(
+      base::BindLambdaForTesting(
+          [&](const GURL& url_before_redirect,
+              const net::RedirectInfo& redirect_info,
+              const network::mojom::URLResponseHead& response_head,
+              std::vector<std::string>* to_be_removed_headers) {
+            CHECK(test_helper);
             test_helper.reset();
             // Access the parameters to trigger a memory error if they have been
             // deleted. (ASAN build should catch it)
             EXPECT_FALSE(response_head.request_start.is_null());
+            EXPECT_TRUE(url_before_redirect.is_valid());
             EXPECT_FALSE(redirect_info.new_url.is_empty());
             EXPECT_NE(to_be_removed_headers, nullptr);
-
-            run_loop->Quit();
-          },
-          base::Passed(std::move(test_helper)), &run_loop));
-
-  unowned_test_helper->StartSimpleLoader(url_loader_factory_.get());
+            run_loop.Quit();
+          }));
+  test_helper->StartSimpleLoader(url_loader_factory_.get());
 
   run_loop.Run();
 }
@@ -954,7 +968,8 @@ TEST_P(SimpleURLLoaderTest, UploadShortStringWithRedirect) {
 
   int num_redirects = 0;
   test_helper->simple_url_loader()->SetOnRedirectCallback(base::BindRepeating(
-      [](int* num_redirects, const net::RedirectInfo& redirect_info,
+      [](int* num_redirects, const GURL& url_before_redirect,
+         const net::RedirectInfo& redirect_info,
          const network::mojom::URLResponseHead& response_head,
          std::vector<std::string>* to_be_removed_headers) { ++*num_redirects; },
       base::Unretained(&num_redirects)));
@@ -985,7 +1000,8 @@ TEST_P(SimpleURLLoaderTest, UploadLongStringWithRedirect) {
 
   int num_redirects = 0;
   test_helper->simple_url_loader()->SetOnRedirectCallback(base::BindRepeating(
-      [](int* num_redirects, const net::RedirectInfo& redirect_info,
+      [](int* num_redirects, const GURL& url_before_redirect,
+         const net::RedirectInfo& redirect_info,
          const network::mojom::URLResponseHead& response_head,
          std::vector<std::string>* to_be_removed_headers) { ++*num_redirects; },
       base::Unretained(&num_redirects)));
@@ -1020,7 +1036,8 @@ TEST_P(SimpleURLLoaderTest,
 
   int num_redirects = 0;
   test_helper->simple_url_loader()->SetOnRedirectCallback(base::BindRepeating(
-      [](int* num_redirects, const net::RedirectInfo& redirect_info,
+      [](int* num_redirects, const GURL& url_before_redirect,
+         const net::RedirectInfo& redirect_info,
          const network::mojom::URLResponseHead& response_head,
          std::vector<std::string>* to_be_removed_headers) {
         ++*num_redirects;
@@ -1057,7 +1074,8 @@ TEST_P(SimpleURLLoaderTest,
 
   int num_redirects = 0;
   test_helper->simple_url_loader()->SetOnRedirectCallback(base::BindRepeating(
-      [](int* num_redirects, const net::RedirectInfo& redirect_info,
+      [](int* num_redirects, const GURL& url_before_redirect,
+         const net::RedirectInfo& redirect_info,
          const network::mojom::URLResponseHead& response_head,
          std::vector<std::string>* to_be_removed_headers) {
         ++*num_redirects;
@@ -2939,16 +2957,23 @@ TEST_P(SimpleURLLoaderTest, RetryAfterRedirect) {
        TestLoaderEvent::kBodyBufferClosed, TestLoaderEvent::kResponseComplete});
 
   int num_redirects = 0;
+  std::vector<GURL> urls_before_redirect;
 
   std::unique_ptr<SimpleLoaderTestHelper> test_helper =
       CreateHelperForURL(kInitialURL);
   test_helper->simple_url_loader()->SetRetryOptions(
       1, SimpleURLLoader::RETRY_ON_5XX);
   test_helper->simple_url_loader()->SetOnRedirectCallback(base::BindRepeating(
-      [](int* num_redirects, const net::RedirectInfo& redirect_info,
+      [](int* num_redirects, std::vector<GURL>* urls_before_redirect,
+         const GURL& url_before_redirect,
+         const net::RedirectInfo& redirect_info,
          const network::mojom::URLResponseHead& response_head,
-         std::vector<std::string>* to_be_removed_headers) { ++*num_redirects; },
-      base::Unretained(&num_redirects)));
+         std::vector<std::string>* to_be_removed_headers) {
+        ++*num_redirects;
+        urls_before_redirect->push_back(url_before_redirect);
+      },
+      base::Unretained(&num_redirects),
+      base::Unretained(&urls_before_redirect)));
   loader_factory.RunTest(test_helper.get());
 
   EXPECT_EQ(200, test_helper->GetResponseCode());
@@ -2960,6 +2985,8 @@ TEST_P(SimpleURLLoaderTest, RetryAfterRedirect) {
   for (const auto& url : loader_factory.requested_urls()) {
     EXPECT_EQ(kInitialURL, url);
   }
+
+  EXPECT_THAT(urls_before_redirect, ElementsAre(kInitialURL, kInitialURL));
 
   if (GetParam() == SimpleLoaderTestHelper::DownloadType::AS_STREAM)
     EXPECT_EQ(1, test_helper->download_as_stream_retries());
@@ -3262,9 +3289,7 @@ TEST_F(SimpleURLLoaderFileTest, OverwriteFile) {
       CreateHelperForURL(test_server_.GetURL("/echo"));
   {
     base::ScopedAllowBlockingForTesting allow_blocking;
-    ASSERT_EQ(static_cast<int>(junk_data.size()),
-              base::WriteFile(test_helper->dest_path(), junk_data.data(),
-                              junk_data.size()));
+    EXPECT_TRUE(base::WriteFile(test_helper->dest_path(), junk_data));
     ASSERT_TRUE(base::PathExists(test_helper->dest_path()));
   }
 
@@ -3522,8 +3547,8 @@ TEST_F(SimpleURLLoaderMockTimeTest, StreamResumeAfterTimeout) {
 
   base::OnceClosure captured_resume = test_helper->TakeCapturedStreamResume();
   ASSERT_TRUE(captured_resume);
-  base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                   std::move(captured_resume));
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, std::move(captured_resume));
   // Make sure no pending task results in a crash.
   base::RunLoop().RunUntilIdle();
 }
@@ -3691,20 +3716,13 @@ TEST_P(SimpleURLLoaderTest, DeleteInOnUploadProgressCallback) {
   test_helper->simple_url_loader()->AttachStringForUpload(long_string,
                                                           "text/plain");
 
-  SimpleLoaderTestHelper* unowned_test_helper = test_helper.get();
   base::RunLoop run_loop;
-  unowned_test_helper->simple_url_loader()->SetOnUploadProgressCallback(
-      base::BindRepeating(
-          [](std::unique_ptr<SimpleLoaderTestHelper> test_helper,
-             base::RepeatingClosure quit_closure, uint64_t current,
-             uint64_t total) {
-            test_helper.reset();
-            std::move(quit_closure).Run();
-          },
-          base::Passed(std::move(test_helper)), run_loop.QuitClosure()));
-
-  unowned_test_helper->StartSimpleLoader(url_loader_factory_.get());
-
+  test_helper->simple_url_loader()->SetOnUploadProgressCallback(
+      base::BindLambdaForTesting([&](uint64_t current, uint64_t total) {
+        test_helper.reset();
+        run_loop.Quit();
+      }));
+  test_helper->StartSimpleLoader(url_loader_factory_.get());
   run_loop.Run();
 }
 
@@ -3755,210 +3773,6 @@ TEST_P(SimpleURLLoaderTest, DeleteInDownloadProgressCallback2) {
   test_helper->simple_url_loader()->SetOnDownloadProgressCallback(callback);
   test_helper->StartSimpleLoader(url_loader_factory_.get());
   run_loop.Run();
-}
-
-namespace {
-
-class FakeSimpleURLLoaderThrottleDelegate
-    : public SimpleURLLoaderThrottle::Delegate {
- public:
-  FakeSimpleURLLoaderThrottleDelegate() = default;
-  ~FakeSimpleURLLoaderThrottleDelegate() override = default;
-
-  bool ShouldThrottle() override { return true; }
-};
-
-}  // namespace
-
-TEST_P(SimpleURLLoaderTest, BatchingSuccess) {
-  std::unique_ptr<network::ResourceRequest> resource_request =
-      std::make_unique<network::ResourceRequest>();
-  resource_request->url = test_server_.GetURL("/echoheader?foo");
-  resource_request->headers.SetHeader("foo", kExpectedResponse);
-  std::unique_ptr<SimpleLoaderTestHelper> test_helper =
-      CreateHelper(std::move(resource_request));
-
-  test_helper->simple_url_loader()->SetAllowBatching();
-  SimpleURLLoaderThrottle* throttle =
-      test_helper->simple_url_loader()->GetThrottleForTesting();
-  throttle->SetDelegateForTesting(
-      std::make_unique<FakeSimpleURLLoaderThrottleDelegate>());
-
-  test_helper->StartSimpleLoader(url_loader_factory_.get());
-
-  throttle->OnReadyToStart();
-  test_helper->Wait();
-
-  EXPECT_EQ(net::OK, test_helper->simple_url_loader()->NetError());
-  EXPECT_EQ(200, test_helper->GetResponseCode());
-  if (GetParam() != SimpleLoaderTestHelper::DownloadType::HEADERS_ONLY) {
-    EXPECT_TRUE(test_helper->simple_url_loader()->CompletionStatus());
-    EXPECT_EQ(kExpectedResponse, *test_helper->response_body());
-  }
-}
-
-TEST_P(SimpleURLLoaderTest, BatchingURLLoaderDisconnected) {
-  std::unique_ptr<network::ResourceRequest> resource_request =
-      std::make_unique<network::ResourceRequest>();
-  resource_request->url = test_server_.GetURL("/echoheader?foo");
-  resource_request->headers.SetHeader("foo", kExpectedResponse);
-  std::unique_ptr<SimpleLoaderTestHelper> test_helper =
-      CreateHelper(std::move(resource_request));
-
-  test_helper->simple_url_loader()->SetAllowBatching();
-  SimpleURLLoaderThrottle* throttle =
-      test_helper->simple_url_loader()->GetThrottleForTesting();
-  throttle->SetDelegateForTesting(
-      std::make_unique<FakeSimpleURLLoaderThrottleDelegate>());
-
-  test_helper->StartSimpleLoader(url_loader_factory_.get());
-
-  // Destroy the NetworkContext to disconnect the URLLoaderFactory.
-  network_context_.reset();
-  base::RunLoop().RunUntilIdle();
-
-  throttle->OnReadyToStart();
-  test_helper->Wait();
-
-  EXPECT_EQ(net::ERR_FAILED, test_helper->simple_url_loader()->NetError());
-  EXPECT_FALSE(test_helper->simple_url_loader()->CompletionStatus());
-  EXPECT_FALSE(test_helper->simple_url_loader()->ResponseInfo());
-}
-
-TEST_P(SimpleURLLoaderTest, BatchingTimeout) {
-  constexpr base::TimeDelta kTimeout = base::Microseconds(1);
-
-  std::unique_ptr<network::ResourceRequest> resource_request =
-      std::make_unique<network::ResourceRequest>();
-  resource_request->url = test_server_.GetURL("/echoheader?foo");
-  resource_request->headers.SetHeader("foo", kExpectedResponse);
-  std::unique_ptr<SimpleLoaderTestHelper> test_helper =
-      CreateHelper(std::move(resource_request));
-
-  test_helper->simple_url_loader()->SetAllowBatching();
-  SimpleURLLoaderThrottle* throttle =
-      test_helper->simple_url_loader()->GetThrottleForTesting();
-  throttle->SetDelegateForTesting(
-      std::make_unique<FakeSimpleURLLoaderThrottleDelegate>());
-  throttle->SetTimeoutForTesting(kTimeout);
-
-  test_helper->StartSimpleLoaderAndWait(url_loader_factory_.get());
-
-  EXPECT_EQ(net::OK, test_helper->simple_url_loader()->NetError());
-  EXPECT_EQ(200, test_helper->GetResponseCode());
-  if (GetParam() != SimpleLoaderTestHelper::DownloadType::HEADERS_ONLY) {
-    EXPECT_TRUE(test_helper->simple_url_loader()->CompletionStatus());
-    EXPECT_EQ(kExpectedResponse, *test_helper->response_body());
-  }
-}
-
-TEST(SimpleURLLoaderThrottleTest, ShouldThrottle) {
-  base::test::TaskEnvironment task_environment(
-      base::test::TaskEnvironment::MainThreadType::IO);
-  base::test::ScopedPowerMonitorTestSource power_monitor_source;
-  auto notifier = net::test::MockNetworkChangeNotifier::Create();
-  SimpleURLLoaderThrottle throttle = SimpleURLLoaderThrottle();
-
-  // Device NOT on battery power
-  power_monitor_source.SetOnBatteryPower(false);
-
-  // Device's DefaultNetwork NOT Active
-  notifier.get()->ForceNetworkHandlesSupported();
-  notifier.get()->SetIsDefaultNetworkActiveInternalForTesting(false);
-
-// Device's RadioConnectionType is kCell
-#if BUILDFLAG(IS_ANDROID)
-  base::android::RadioUtils::OverrideForTesting radio_utils_test;
-  radio_utils_test.SetConnectionTypeForTesting(
-      base::android::RadioConnectionType::kCell);
-#endif  // BUILDFLAG(IS_ANDROID)
-
-  EXPECT_FALSE(throttle.GetDelegateForTesting().ShouldThrottle());
-  power_monitor_source.SetOnBatteryPower(true);
-
-  // Device's DefaultNetwork is active
-  notifier.get()->SetIsDefaultNetworkActiveInternalForTesting(true);
-
-  EXPECT_FALSE(throttle.GetDelegateForTesting().ShouldThrottle());
-  notifier.get()->SetIsDefaultNetworkActiveInternalForTesting(false);
-
-// Device's connection type is != kCell
-#if BUILDFLAG(IS_ANDROID)
-  radio_utils_test.SetConnectionTypeForTesting(
-      base::android::RadioConnectionType::kWifi);
-
-  EXPECT_FALSE(throttle.GetDelegateForTesting().ShouldThrottle());
-  radio_utils_test.SetConnectionTypeForTesting(
-      base::android::RadioConnectionType::kCell);
-#endif  // BUILDFLAG(IS_ANDROID)
-
-  EXPECT_TRUE(throttle.GetDelegateForTesting().ShouldThrottle());
-}
-
-TEST(SimpleURLLoaderThrottleTest, BatchingDisabled_FeatureDisabled) {
-  SimpleURLLoaderThrottle::ResetConfigForTesting();
-  net::NetworkTrafficAnnotationTag traffic_annotation =
-      TRAFFIC_ANNOTATION_FOR_TESTS;
-
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndDisableFeature(features::kBatchSimpleURLLoader);
-
-  ASSERT_FALSE(SimpleURLLoaderThrottle::IsBatchingEnabled(traffic_annotation));
-}
-
-TEST(SimpleURLLoaderThrottleTest,
-     BatchingDisabled_TrafficAnnotationIsNotSpecified) {
-  SimpleURLLoaderThrottle::ResetConfigForTesting();
-  net::NetworkTrafficAnnotationTag traffic_annotation =
-      TRAFFIC_ANNOTATION_FOR_TESTS;
-
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(features::kBatchSimpleURLLoader);
-
-  ASSERT_FALSE(SimpleURLLoaderThrottle::IsBatchingEnabled(traffic_annotation));
-}
-
-TEST(SimpleURLLoaderThrottleTest, BatchingEnabled_OneTrafficAnnotation) {
-  SimpleURLLoaderThrottle::ResetConfigForTesting();
-  net::NetworkTrafficAnnotationTag traffic_annotation =
-      TRAFFIC_ANNOTATION_FOR_TESTS;
-
-  std::string traffic_annotation_hashes =
-      base::StringPrintf("%d", traffic_annotation.unique_id_hash_code);
-
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeatureWithParameters(
-      features::kBatchSimpleURLLoader,
-      {{kBatchSimpleURLLoaderEnabledTrafficAnnotationHashesParam,
-        traffic_annotation_hashes}});
-
-  ASSERT_TRUE(SimpleURLLoaderThrottle::IsBatchingEnabled(traffic_annotation));
-}
-
-TEST(SimpleURLLoaderThrottleTest, BatchingEnabled_TwoTrafficAnnotations) {
-  SimpleURLLoaderThrottle::ResetConfigForTesting();
-  net::NetworkTrafficAnnotationTag traffic_annotation1 =
-      TRAFFIC_ANNOTATION_FOR_TESTS;
-  net::NetworkTrafficAnnotationTag traffic_annotation2 =
-      net::DefineNetworkTrafficAnnotation(
-          "test2", "Second traffic annotation for tests");
-  net::NetworkTrafficAnnotationTag traffic_annotation3 =
-      net::DefineNetworkTrafficAnnotation("test3",
-                                          "Third traffic annotation for tests");
-
-  std::string traffic_annotation_hashes =
-      base::StringPrintf("%d,%d", traffic_annotation1.unique_id_hash_code,
-                         traffic_annotation2.unique_id_hash_code);
-
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeatureWithParameters(
-      features::kBatchSimpleURLLoader,
-      {{kBatchSimpleURLLoaderEnabledTrafficAnnotationHashesParam,
-        traffic_annotation_hashes}});
-
-  ASSERT_TRUE(SimpleURLLoaderThrottle::IsBatchingEnabled(traffic_annotation1));
-  ASSERT_TRUE(SimpleURLLoaderThrottle::IsBatchingEnabled(traffic_annotation2));
-  ASSERT_FALSE(SimpleURLLoaderThrottle::IsBatchingEnabled(traffic_annotation3));
 }
 
 }  // namespace

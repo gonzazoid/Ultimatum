@@ -4,6 +4,7 @@
 
 #include "content/browser/renderer_host/ipc_utils.h"
 
+#include <optional>
 #include <utility>
 
 #include "content/browser/bad_message.h"
@@ -15,12 +16,10 @@
 #include "content/common/navigation_params_utils.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/render_process_host.h"
-#include "content/public/browser/site_instance.h"
-#include "content/public/common/child_process_host.h"
 #include "content/public/common/url_constants.h"
 #include "mojo/public/cpp/system/message_pipe.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/navigation/navigation_params.mojom.h"
 
 namespace content {
@@ -45,8 +44,12 @@ bool VerifyBlobToken(
   return true;
 }
 
-bool VerifyInitiatorOrigin(int process_id,
-                           const url::Origin& initiator_origin) {
+bool VerifyInitiatorOrigin(
+    int process_id,
+    const url::Origin& initiator_origin,
+    const RenderFrameHostImpl* current_rfh = nullptr,
+    GURL* navigation_url = nullptr,
+    std::optional<blink::LocalFrameToken>* initiator_frame_token = nullptr) {
   // TODO(acolwell, nasko): https://crbug.com/1029092: Ensure the precursor of
   // opaque origins matches the origin lock.  One known problematic case are
   // reloads initiated from error pages - see the following
@@ -62,6 +65,80 @@ bool VerifyInitiatorOrigin(int process_id,
 
   auto* policy = ChildProcessSecurityPolicyImpl::GetInstance();
   if (!policy->CanAccessDataForOrigin(process_id, initiator_origin)) {
+    if (navigation_url) {
+      static auto* const navigation_url_key =
+          base::debug::AllocateCrashKeyString(
+              "navigation_url", base::debug::CrashKeySize::Size256);
+      base::debug::SetCrashKeyString(
+          navigation_url_key,
+          navigation_url->DeprecatedGetOriginAsURL().spec());
+    }
+    if (initiator_frame_token && initiator_frame_token->has_value()) {
+      if (RenderFrameHostImpl* initiator_render_frame_host =
+              RenderFrameHostImpl::FromFrameToken(
+                  process_id, initiator_frame_token->value())) {
+        static auto* const initiator_rfh_origin_key =
+            base::debug::AllocateCrashKeyString(
+                "initiator_rfh_origin", base::debug::CrashKeySize::Size256);
+        base::debug::SetCrashKeyString(
+            initiator_rfh_origin_key,
+            initiator_render_frame_host->GetLastCommittedOrigin()
+                .GetDebugString());
+      }
+    }
+
+    if (current_rfh) {
+      auto bool_to_crash_key = [](bool b) { return b ? "true" : "false"; };
+      static auto* const is_main_frame_key =
+          base::debug::AllocateCrashKeyString(
+              "is_main_frame", base::debug::CrashKeySize::Size32);
+      base::debug::SetCrashKeyString(
+          is_main_frame_key, bool_to_crash_key(current_rfh->is_main_frame()));
+
+      static auto* const is_outermost_frame_key =
+          base::debug::AllocateCrashKeyString(
+              "is_outermost_frame", base::debug::CrashKeySize::Size32);
+      base::debug::SetCrashKeyString(
+          is_outermost_frame_key,
+          bool_to_crash_key(current_rfh->IsOutermostMainFrame()));
+
+      static auto* const is_on_initial_empty_document_key =
+          base::debug::AllocateCrashKeyString(
+              "is_on_initial_empty_doc", base::debug::CrashKeySize::Size32);
+      base::debug::SetCrashKeyString(
+          is_on_initial_empty_document_key,
+          bool_to_crash_key(
+              current_rfh->frame_tree_node()->is_on_initial_empty_document()));
+
+      static auto* const last_committed_origin_key =
+          base::debug::AllocateCrashKeyString(
+              "last_committed_origin", base::debug::CrashKeySize::Size256);
+      base::debug::SetCrashKeyString(
+          last_committed_origin_key,
+          current_rfh->GetLastCommittedOrigin().GetDebugString());
+
+      if (current_rfh->GetParentOrOuterDocumentOrEmbedder()) {
+        static auto* const parent_etc_origin_key =
+            base::debug::AllocateCrashKeyString(
+                "parent_etc_origin", base::debug::CrashKeySize::Size256);
+        base::debug::SetCrashKeyString(
+            parent_etc_origin_key,
+            current_rfh->GetParentOrOuterDocumentOrEmbedder()
+                ->GetLastCommittedOrigin()
+                .GetDebugString());
+      }
+
+      if (FrameTreeNode* opener = current_rfh->frame_tree_node()->opener()) {
+        static auto* const opener_origin_key =
+            base::debug::AllocateCrashKeyString(
+                "opener_origin", base::debug::CrashKeySize::Size256);
+        base::debug::SetCrashKeyString(opener_origin_key,
+                                       opener->current_frame_host()
+                                           ->GetLastCommittedOrigin()
+                                           .GetDebugString());
+      }
+    }
+
     bad_message::ReceivedBadMessage(process_id,
                                     bad_message::INVALID_INITIATOR_ORIGIN);
     return false;
@@ -72,11 +149,10 @@ bool VerifyInitiatorOrigin(int process_id,
 
 }  // namespace
 
-bool VerifyDownloadUrlParams(SiteInstance* site_instance,
+bool VerifyDownloadUrlParams(RenderProcessHost* process,
                              const blink::mojom::DownloadURLParams& params) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  DCHECK(site_instance);
-  RenderProcessHost* process = site_instance->GetProcess();
+  CHECK(process);
   int process_id = process->GetID();
 
   // Verifies |params.blob_url_token| is appropriately set.
@@ -98,17 +174,16 @@ bool VerifyDownloadUrlParams(SiteInstance* site_instance,
 }
 
 bool VerifyOpenURLParams(RenderFrameHostImpl* current_rfh,
-                         SiteInstance* site_instance,
+                         RenderProcessHost* process,
                          const blink::mojom::OpenURLParamsPtr& params,
                          GURL* out_validated_url,
                          scoped_refptr<network::SharedURLLoaderFactory>*
                              out_blob_url_loader_factory) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(current_rfh);
-  DCHECK(site_instance);
+  DCHECK(process);
   DCHECK(out_validated_url);
   DCHECK(out_blob_url_loader_factory);
-  RenderProcessHost* process = site_instance->GetProcess();
   int process_id = process->GetID();
 
   // Verify |params.url| and populate |out_validated_url|.
@@ -122,22 +197,33 @@ bool VerifyOpenURLParams(RenderFrameHostImpl* current_rfh,
   if (params->blob_url_token.is_valid()) {
     *out_blob_url_loader_factory =
         ChromeBlobStorageContext::URLLoaderFactoryForToken(
-            site_instance->GetBrowserContext()->GetStoragePartition(
-                site_instance),
-            std::move(params->blob_url_token));
+            process->GetStoragePartition(), std::move(params->blob_url_token));
   }
 
   // Verify |params.post_body|.
   auto* policy = ChildProcessSecurityPolicyImpl::GetInstance();
-  if (!policy->CanReadRequestBody(site_instance, params->post_body)) {
+  if (!policy->CanReadRequestBody(process, params->post_body)) {
     bad_message::ReceivedBadMessage(process,
                                     bad_message::ILLEGAL_UPLOAD_PARAMS);
     return false;
   }
 
   // Verify |params.initiator_origin|.
-  if (!VerifyInitiatorOrigin(process_id, params->initiator_origin))
+  if (!VerifyInitiatorOrigin(process_id, params->initiator_origin, current_rfh,
+                             &params->url, &params->initiator_frame_token)) {
     return false;
+  }
+
+  if (params->initiator_base_url) {
+    // `initiator_base_url` should only be defined for about:blank and
+    // about:srcdoc navigations, and should never be an empty GURL (if it is not
+    // nullopt).
+    if (params->initiator_base_url->is_empty() ||
+        !(out_validated_url->IsAboutBlank() ||
+          out_validated_url->IsAboutSrcdoc())) {
+      return false;
+    }
+  }
 
   // Verify that the initiator frame can navigate `current_rfh`.
   if (!VerifyNavigationInitiator(current_rfh, params->initiator_frame_token,
@@ -145,17 +231,27 @@ bool VerifyOpenURLParams(RenderFrameHostImpl* current_rfh,
     return false;
   }
 
+  if (params->is_container_initiated) {
+    if (!current_rfh->GetParent() ||
+        (current_rfh->GetParent()->GetFrameToken() !=
+         params->initiator_frame_token)) {
+      mojo::ReportBadMessage(
+          "container initiated navigation from non-parent process");
+      return false;
+    }
+  }
+
   // Verification succeeded.
   return true;
 }
 
 bool VerifyBeginNavigationCommonParams(
-    SiteInstance* site_instance,
-    blink::mojom::CommonNavigationParams* common_params) {
+    const RenderFrameHostImpl& current_rfh,
+    blink::mojom::CommonNavigationParams* common_params,
+    std::optional<blink::LocalFrameToken>& initiator_frame_token) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  DCHECK(site_instance);
   DCHECK(common_params);
-  RenderProcessHost* process = site_instance->GetProcess();
+  RenderProcessHost* process = current_rfh.GetProcess();
   int process_id = process->GetID();
 
   // Verify (and possibly rewrite) |url|.
@@ -167,7 +263,7 @@ bool VerifyBeginNavigationCommonParams(
 
   // Verify |post_data|.
   auto* policy = ChildProcessSecurityPolicyImpl::GetInstance();
-  if (!policy->CanReadRequestBody(site_instance, common_params->post_data)) {
+  if (!policy->CanReadRequestBody(process, common_params->post_data)) {
     bad_message::ReceivedBadMessage(process,
                                     bad_message::ILLEGAL_UPLOAD_PARAMS);
     return false;
@@ -187,8 +283,9 @@ bool VerifyBeginNavigationCommonParams(
         process, bad_message::RFHI_BEGIN_NAVIGATION_MISSING_INITIATOR_ORIGIN);
     return false;
   }
-  if (!VerifyInitiatorOrigin(process_id,
-                             common_params->initiator_origin.value())) {
+  if (!VerifyInitiatorOrigin(
+          process_id, common_params->initiator_origin.value(), &current_rfh,
+          &common_params->url, &initiator_frame_token)) {
     return false;
   }
 
@@ -212,7 +309,7 @@ bool VerifyBeginNavigationCommonParams(
 
 bool VerifyNavigationInitiator(
     RenderFrameHostImpl* current_rfh,
-    const absl::optional<blink::LocalFrameToken>& initiator_frame_token,
+    const std::optional<blink::LocalFrameToken>& initiator_frame_token,
     int initiator_process_id) {
   // Verify that a frame inside a fenced frame cannot navigate its ancestors,
   // unless the frame being navigated is the outermost main frame.
@@ -232,7 +329,7 @@ bool VerifyNavigationInitiator(
   // nonce, unless the navigating frame is a fenced frame root and its owner
   // frame has the same fenced frame nonce as the initiator frame (e.g. in a
   // A(A1,A2(FF)) setup, A, A1, and A2 are all allowed to navigate FF).
-  absl::optional<base::UnguessableToken> initiator_fenced_frame_nonce =
+  std::optional<base::UnguessableToken> initiator_fenced_frame_nonce =
       initiator_render_frame_host->frame_tree_node()->GetFencedFrameNonce();
   if (initiator_fenced_frame_nonce !=
       current_rfh->frame_tree_node()->GetFencedFrameNonce()) {

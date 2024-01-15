@@ -21,6 +21,8 @@
 #include "components/viz/service/display/display_client.h"
 #include "components/viz/service/frame_sinks/frame_sink_manager_impl.h"
 #include "components/viz/test/test_shared_bitmap_manager.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_manager.h"
+#include "gpu/command_buffer/service/sync_point_manager.h"
 #include "services/viz/public/mojom/compositing/compositor_frame_sink.mojom.h"
 
 namespace viz {
@@ -62,7 +64,7 @@ class TestLayerTreeFrameSink : public LayerTreeFrameSink,
   // If |begin_frame_source| is specified, |disable_display_vsync| and
   // |refresh_rate| are ignored.
   TestLayerTreeFrameSink(
-      scoped_refptr<viz::ContextProvider> compositor_context_provider,
+      scoped_refptr<viz::RasterContextProvider> compositor_context_provider,
       scoped_refptr<viz::RasterContextProvider> worker_context_provider,
       gpu::GpuMemoryBufferManager* gpu_memory_buffer_manager,
       const viz::RendererSettings& renderer_settings,
@@ -105,11 +107,14 @@ class TestLayerTreeFrameSink : public LayerTreeFrameSink,
   void DidReceiveCompositorFrameAck(
       std::vector<viz::ReturnedResource> resources) override;
   void OnBeginFrame(const viz::BeginFrameArgs& args,
-                    const viz::FrameTimingDetailsMap& timing_details) override;
+                    const viz::FrameTimingDetailsMap& timing_details,
+                    bool frame_ack,
+                    std::vector<viz::ReturnedResource> resources) override;
   void ReclaimResources(std::vector<viz::ReturnedResource> resources) override;
   void OnBeginFramePausedChanged(bool paused) override;
   void OnCompositorFrameTransitionDirectiveProcessed(
       uint32_t sequence_id) override {}
+  void OnSurfaceEvicted(const viz::LocalSurfaceId& local_surface_id) override {}
 
   // DisplayClient implementation.
   void DisplayOutputSurfaceLost() override;
@@ -120,6 +125,7 @@ class TestLayerTreeFrameSink : public LayerTreeFrameSink,
   void DisplayDidReceiveCALayerParams(
       const gfx::CALayerParams& ca_layer_params) override;
   void DisplayDidCompleteSwapWithSize(const gfx::Size& pixel_size) override;
+  void DisplayAddChildWindowToBrowser(gpu::SurfaceHandle child_window) override;
   void SetWideColorEnabled(bool enabled) override {}
   void SetPreferredFrameInterval(base::TimeDelta interval) override {}
   base::TimeDelta GetPreferredFrameIntervalForFrameSinkId(
@@ -146,6 +152,9 @@ class TestLayerTreeFrameSink : public LayerTreeFrameSink,
   // TODO(danakj): These don't need to be stored in unique_ptrs when
   // LayerTreeFrameSink is owned/destroyed on the compositor thread.
   std::unique_ptr<viz::TestSharedBitmapManager> shared_bitmap_manager_;
+  std::unique_ptr<gpu::SharedImageManager> shared_image_manager_;
+  std::unique_ptr<gpu::SyncPointManager> sync_point_manager_;
+
   std::unique_ptr<viz::FrameSinkManagerImpl> frame_sink_manager_;
   std::unique_ptr<viz::ParentLocalSurfaceIdAllocator>
       parent_local_surface_id_allocator_;

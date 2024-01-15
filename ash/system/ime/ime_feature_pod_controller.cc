@@ -4,6 +4,8 @@
 
 #include "ash/system/ime/ime_feature_pod_controller.h"
 
+#include <string>
+
 #include "ash/constants/quick_settings_catalogs.h"
 #include "ash/ime/ime_controller_impl.h"
 #include "ash/keyboard/ui/keyboard_util.h"
@@ -11,8 +13,10 @@
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/tray/system_tray_notifier.h"
-#include "ash/system/unified/feature_pod_button.h"
+#include "ash/system/unified/feature_tile.h"
+#include "ash/system/unified/quick_settings_metrics_util.h"
 #include "ash/system/unified/unified_system_tray_controller.h"
+#include "base/functional/bind.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace ash {
@@ -64,15 +68,20 @@ IMEFeaturePodController::~IMEFeaturePodController() {
   Shell::Get()->system_tray_notifier()->RemoveIMEObserver(this);
 }
 
-FeaturePodButton* IMEFeaturePodController::CreateButton() {
-  button_ = new FeaturePodButton(this, /*is_togglable=*/false);
-  button_->SetVectorIcon(kUnifiedMenuKeyboardIcon);
-  button_->SetLabel(l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_IME_SHORT));
-  button_->SetIconAndLabelTooltips(GetTooltipString());
-  button_->ShowDetailedViewArrow();
-  button_->DisableLabelButtonFocus();
+std::unique_ptr<FeatureTile> IMEFeaturePodController::CreateTile(bool compact) {
+  auto tile = std::make_unique<FeatureTile>(
+      base::BindRepeating(&IMEFeaturePodController::OnIconPressed,
+                          weak_factory_.GetWeakPtr()),
+      /*is_togglable=*/false);
+  tile_ = tile.get();
+  tile_->SetVectorIcon(kUnifiedMenuKeyboardIcon);
+  tile_->SetLabel(l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_IME_SHORT));
+  tile_->SetTooltipText(GetTooltipString());
+  tile_->CreateDecorativeDrillInArrow();
+  // `Update` will update the visibility.
+  tile_->SetVisible(false);
   Update();
-  return button_;
+  return tile;
 }
 
 QsFeatureCatalogName IMEFeaturePodController::GetCatalogName() {
@@ -93,8 +102,22 @@ void IMEFeaturePodController::OnIMEMenuActivationChanged(bool is_active) {
 }
 
 void IMEFeaturePodController::Update() {
-  button_->SetSubLabel(GetLabelString());
-  button_->SetVisible(IsButtonVisible());
+  bool is_button_visible = IsButtonVisible();
+  const std::u16string tooltip = GetTooltipString();
+  std::u16string label_string = GetLabelString();
+  if (label_string.empty()) {
+    tile_->SetSubLabelVisibility(false);
+  } else {
+    tile_->SetSubLabel(label_string);
+    tile_->SetSubLabelVisibility(true);
+  }
+  tile_->SetTooltipText(tooltip);
+  // If the tile's visibility changes from invisible to visible, log its
+  // visibility.
+  if (!tile_->GetVisible() && is_button_visible) {
+    TrackVisibilityUMA();
+  }
+  tile_->SetVisible(is_button_visible);
 }
 
 }  // namespace ash

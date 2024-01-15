@@ -6,23 +6,25 @@
 
 #include <algorithm>
 #include <array>
+#include <optional>
 #include <utility>
 
 #include "ash/public/cpp/ambient/ambient_backend_controller.h"
 #include "ash/public/cpp/ambient/common/ambient_settings.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "ash/webui/personalization_app/mojom/personalization_app.mojom-shared.h"
 #include "base/check.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/task/sequenced_task_runner.h"
+#include "ui/gfx/geometry/size.h"
 #include "url/gurl.h"
 
 namespace ash {
 
 namespace {
 
-constexpr AmbientModeTopicSource kTopicSource =
-    AmbientModeTopicSource::kGooglePhotos;
+constexpr personalization_app::mojom::TopicSource kTopicSource =
+    personalization_app::mojom::TopicSource::kGooglePhotos;
 
 constexpr AmbientModeTemperatureUnit kTemperatureUnit =
     AmbientModeTemperatureUnit::kCelsius;
@@ -31,8 +33,8 @@ constexpr char kFakeUrl[] = "chrome://ambient";
 
 constexpr char kFakeDetails[] = "fake-photo-attribution";
 
-constexpr std::array<const char*, 2> kFakeBackupPhotoUrls = {kFakeUrl,
-                                                             kFakeUrl};
+constexpr std::array<const char*, 2> kFakeBackupPhotoUrls = {
+    "http://fake-backup-photo-1.com", "http://fake-backup-photo-2.com"};
 
 AmbientSettings CreateFakeSettings() {
   AmbientSettings settings;
@@ -124,34 +126,31 @@ void FakeAmbientBackendControllerImpl::FetchScreenUpdateInfo(
   }
 
   // Pretend to respond asynchronously.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), update));
 }
 
-void FakeAmbientBackendControllerImpl::GetSettings(
-    GetSettingsCallback callback) {
+void FakeAmbientBackendControllerImpl::FetchPreviewImages(
+    const gfx::Size& preview_size,
+    OnPreviewImagesFetchedCallback callback) {
+  std::vector<GURL> urls = {GURL(kFakeUrl)};
   // Pretend to respond asynchronously.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), CreateFakeSettings()));
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback), urls));
 }
 
 void FakeAmbientBackendControllerImpl::UpdateSettings(
-    const AmbientSettings& settings,
+    const AmbientSettings settings,
     UpdateSettingsCallback callback) {
   // |show_weather| should always be set to true.
   DCHECK(settings.show_weather);
+  current_temperature_unit_ = settings.temperature_unit;
+  if (update_auto_reply_.has_value()) {
+    std::move(callback).Run(update_auto_reply_.value(), settings);
+    return;
+  }
   pending_update_callback_ = std::move(callback);
-}
-
-void FakeAmbientBackendControllerImpl::FetchPersonalAlbums(
-    int banner_width,
-    int banner_height,
-    int num_albums,
-    const std::string& resume_token,
-    OnPersonalAlbumsFetchedCallback callback) {
-  // Pretend to respond asynchronously.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), CreateFakeAlbums()));
+  pending_settings_ = settings;
 }
 
 void FakeAmbientBackendControllerImpl::FetchSettingsAndAlbums(
@@ -167,23 +166,28 @@ void FakeAmbientBackendControllerImpl::FetchWeather(
   std::move(callback).Run(weather_info_);
 }
 
-void FakeAmbientBackendControllerImpl::GetGooglePhotosAlbumsPreview(
-    const std::vector<std::string>& album_ids,
-    int preview_width,
-    int preview_height,
-    int num_previews,
-    GetGooglePhotosAlbumsPreviewCallback callback) {
-  std::move(callback).Run({GURL("http://example.com/0")});
-}
-
 const std::array<const char*, 2>&
 FakeAmbientBackendControllerImpl::GetBackupPhotoUrls() const {
   return kFakeBackupPhotoUrls;
 }
 
+std::array<const char*, 2>
+FakeAmbientBackendControllerImpl::GetTimeOfDayVideoPreviewImageUrls(
+    AmbientVideo video) const {
+  return kFakeBackupPhotoUrls;
+}
+
+const char* FakeAmbientBackendControllerImpl::GetPromoBannerUrl() const {
+  return kFakeUrl;
+}
+
+const char* FakeAmbientBackendControllerImpl::GetTimeOfDayProductName() const {
+  return "Product Name";
+}
+
 void FakeAmbientBackendControllerImpl::ReplyFetchSettingsAndAlbums(
     bool success,
-    const absl::optional<AmbientSettings>& settings) {
+    const std::optional<AmbientSettings>& settings) {
   if (!pending_fetch_settings_albums_callback_)
     return;
 
@@ -192,7 +196,7 @@ void FakeAmbientBackendControllerImpl::ReplyFetchSettingsAndAlbums(
         .Run(settings.value_or(CreateFakeSettings()), CreateFakeAlbums());
   } else {
     std::move(pending_fetch_settings_albums_callback_)
-        .Run(/*settings=*/absl::nullopt, PersonalAlbums());
+        .Run(/*settings=*/std::nullopt, PersonalAlbums());
   }
 }
 
@@ -210,15 +214,20 @@ void FakeAmbientBackendControllerImpl::ReplyUpdateSettings(bool success) {
   if (!pending_update_callback_)
     return;
 
-  std::move(pending_update_callback_).Run(success);
+  std::move(pending_update_callback_).Run(success, pending_settings_);
 }
 
 bool FakeAmbientBackendControllerImpl::IsUpdateSettingsPending() const {
   return !pending_update_callback_.is_null();
 }
 
+void FakeAmbientBackendControllerImpl::EnableUpdateSettingsAutoReply(
+    bool success) {
+  update_auto_reply_.emplace(success);
+}
+
 void FakeAmbientBackendControllerImpl::SetWeatherInfo(
-    absl::optional<WeatherInfo> info) {
+    std::optional<WeatherInfo> info) {
   weather_info_ = std::move(info);
 }
 

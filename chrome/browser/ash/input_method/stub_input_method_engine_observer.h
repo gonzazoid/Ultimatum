@@ -22,13 +22,11 @@ class StubInputMethodEngineObserver : public InputMethodEngineObserver {
   void OnDeactivated(const std::string& engine_id) override {}
   void OnFocus(const std::string& engine_id,
                int context_id,
-               const ui::TextInputMethod::InputContext& context) override {}
-  void OnTouch(ui::EventPointerType pointerType) override {}
+               const TextInputMethod::InputContext& context) override {}
   void OnBlur(const std::string& engine_id, int context_id) override {}
   void OnKeyEvent(const std::string& engine_id,
                   const ui::KeyEvent& event,
-                  ui::TextInputMethod::KeyEventDoneCallback callback) override {
-  }
+                  TextInputMethod::KeyEventDoneCallback callback) override {}
   void OnCandidateClicked(const std::string& engine_id,
                           int candidate_id,
                           MouseButtonEvent button) override {}
@@ -38,11 +36,8 @@ class StubInputMethodEngineObserver : public InputMethodEngineObserver {
                            const std::string& menu_id) override {}
   void OnSurroundingTextChanged(const std::string& engine_id,
                                 const std::u16string& text,
-                                int cursor_pos,
-                                int anchor_pos,
+                                const gfx::Range selection_range,
                                 int offset) override {}
-  void OnCompositionBoundsChanged(
-      const std::vector<gfx::Rect>& bounds) override {}
   void OnCaretBoundsChanged(const gfx::Rect& caret_bounds) override {}
   void OnScreenProjectionChanged(bool is_projected) override {}
   void OnReset(const std::string& engine_id) override {}

@@ -4,11 +4,10 @@
 
 #include "net/cookies/cookie_monster_store_test.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "net/cookies/cookie_constants.h"
 #include "net/cookies/cookie_util.h"
@@ -51,7 +50,7 @@ void MockPersistentCookieStore::Load(LoadedCallback loaded_callback,
     out_cookies.swap(load_result_);
     loaded_ = true;
   }
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(loaded_callback), std::move(out_cookies)));
 }
@@ -69,7 +68,7 @@ void MockPersistentCookieStore::LoadCookiesForKey(
     Load(std::move(loaded_callback), NetLogWithSource());
   } else {
     std::vector<std::unique_ptr<CanonicalCookie>> empty_cookies;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(loaded_callback), std::move(empty_cookies)));
   }
@@ -94,8 +93,8 @@ void MockPersistentCookieStore::SetBeforeCommitCallback(
 
 void MockPersistentCookieStore::Flush(base::OnceClosure callback) {
   if (!callback.is_null())
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  std::move(callback));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(callback));
 }
 
 MockPersistentCookieStore::~MockPersistentCookieStore() = default;
@@ -121,7 +120,7 @@ std::unique_ptr<CanonicalCookie> BuildCanonicalCookie(
   return CanonicalCookie::CreateUnsafeCookieForTesting(
       pc.Name(), pc.Value(), "." + url.host(), cookie_path, creation_time,
       cookie_expires, base::Time(), base::Time(), pc.IsSecure(),
-      pc.IsHttpOnly(), pc.SameSite(), pc.Priority(), pc.IsSameParty());
+      pc.IsHttpOnly(), pc.SameSite(), pc.Priority());
 }
 
 void AddCookieToList(const GURL& url,
@@ -146,7 +145,7 @@ void MockSimplePersistentCookieStore::Load(
         std::make_unique<CanonicalCookie>(cookie_map_it.second));
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(loaded_callback), std::move(out_cookies)));
   loaded_ = true;
@@ -159,7 +158,7 @@ void MockSimplePersistentCookieStore::LoadCookiesForKey(
     Load(std::move(loaded_callback), NetLogWithSource());
   } else {
     std::vector<std::unique_ptr<CanonicalCookie>> empty_cookies;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(loaded_callback), std::move(empty_cookies)));
   }
@@ -193,8 +192,8 @@ void MockSimplePersistentCookieStore::SetBeforeCommitCallback(
 
 void MockSimplePersistentCookieStore::Flush(base::OnceClosure callback) {
   if (!callback.is_null())
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  std::move(callback));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(callback));
 }
 
 std::unique_ptr<CookieMonster> CreateMonsterFromStoreForGC(
@@ -233,8 +232,7 @@ std::unique_ptr<CookieMonster> CreateMonsterFromStoreForGC(
         CanonicalCookie::CreateUnsafeCookieForTesting(
             "a", "1", base::StringPrintf("h%05d.izzle", i), "/path",
             creation_time, expiration_time, base::Time(), base::Time(), secure,
-            false, CookieSameSite::NO_RESTRICTION, COOKIE_PRIORITY_DEFAULT,
-            false);
+            false, CookieSameSite::NO_RESTRICTION, COOKIE_PRIORITY_DEFAULT);
     cc->SetLastAccessDate(last_access_time);
     store->AddCookie(*cc);
   }

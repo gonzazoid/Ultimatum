@@ -25,10 +25,10 @@
 #include <stdint.h>
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/base_export.h"
-#include "base/strings/string_piece.h"
 #include "base/win/windows_types.h"
 
 struct IPropertyStore;
@@ -83,9 +83,8 @@ BASE_EXPORT bool SetClsidForPropertyStore(IPropertyStore* property_store,
                                           const PROPERTYKEY& property_key,
                                           const CLSID& property_clsid_value);
 
-// Sets the application id in given IPropertyStore. The function is intended
-// for tagging application/chromium shortcut, browser window and jump list for
-// Win7.
+// Sets the application id in given IPropertyStore. The function is used to tag
+// application/Chrome shortcuts, and set app details for Chrome windows.
 BASE_EXPORT bool SetAppIdForPropertyStore(IPropertyStore* property_store,
                                           const wchar_t* app_id);
 
@@ -197,14 +196,11 @@ BASE_EXPORT bool GetLoadedModulesSnapshot(HANDLE process,
 BASE_EXPORT void EnableFlicks(HWND hwnd);
 BASE_EXPORT void DisableFlicks(HWND hwnd);
 
-// Returns true if the process is per monitor DPI aware.
-BASE_EXPORT bool IsProcessPerMonitorDpiAware();
-
 // Enable high-DPI support for the current process.
 BASE_EXPORT void EnableHighDPISupport();
 
 // Returns a string representation of |rguid|.
-BASE_EXPORT std::wstring WStringFromGUID(REFGUID rguid);
+BASE_EXPORT std::wstring WStringFromGUID(const ::GUID& rguid);
 
 // Attempts to pin user32.dll to ensure it remains loaded. If it isn't loaded
 // yet, the module will first be loaded and then the pin will be attempted. If
@@ -227,7 +223,7 @@ BASE_EXPORT std::wstring GetWindowObjectName(HANDLE handle);
 // Checks if the calling thread is running under a desktop with the name
 // given by |desktop_name|. |desktop_name| is ASCII case insensitive (non-ASCII
 // characters will be compared with exact matches).
-BASE_EXPORT bool IsRunningUnderDesktopName(WStringPiece desktop_name);
+BASE_EXPORT bool IsRunningUnderDesktopName(std::wstring_view desktop_name);
 
 // Returns true if current session is a remote session.
 BASE_EXPORT bool IsCurrentSessionRemote();

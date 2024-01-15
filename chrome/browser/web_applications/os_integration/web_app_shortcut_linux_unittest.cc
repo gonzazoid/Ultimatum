@@ -29,9 +29,9 @@
 #include "chrome/browser/web_applications/os_integration/web_app_shortcut.h"
 #include "chrome/browser/web_applications/test/web_app_test.h"
 #include "chrome/browser/web_applications/web_app_constants.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/common/chrome_constants.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/image/image_skia.h"
@@ -145,7 +145,7 @@ class WebAppShortcutLinuxTest : public WebAppTest {
 
   std::unique_ptr<ShortcutInfo> GetShortcutInfo() {
     auto shortcut_info = std::make_unique<ShortcutInfo>();
-    shortcut_info->extension_id = GetAppId();
+    shortcut_info->app_id = GetAppId();
     shortcut_info->title = u"app";
     shortcut_info->profile_path =
         base::FilePath("/a/b/c").Append(GetProfilePath());
@@ -484,7 +484,7 @@ TEST_F(WebAppShortcutLinuxTest, CreateDesktopShortcut) {
         shell_integration_linux::GetDesktopFileContents(
             shell_integration_linux::internal::GetChromeExePath(),
             GenerateApplicationNameFromInfo(*shortcut_info), shortcut_info->url,
-            shortcut_info->extension_id, shortcut_info->title,
+            shortcut_info->app_id, shortcut_info->title,
             "chrome-test_extension-Profile_1", shortcut_info->profile_path, "",
             "", false, "", shortcut_info->actions);
 
@@ -503,7 +503,7 @@ TEST_F(WebAppShortcutLinuxTest, CreateDesktopShortcut) {
         shell_integration_linux::GetDesktopFileContents(
             shell_integration_linux::internal::GetChromeExePath(),
             GenerateApplicationNameFromInfo(*shortcut_info), shortcut_info->url,
-            shortcut_info->extension_id, shortcut_info->title,
+            shortcut_info->app_id, shortcut_info->title,
             "chrome-test_extension-Profile_1", shortcut_info->profile_path, "",
             "", false, kRunOnOsLoginModeWindowed, shortcut_info->actions);
     base::FilePath autostart_shortcut_path =
@@ -554,7 +554,7 @@ TEST_F(WebAppShortcutLinuxTest, CreateDesktopShortcutWithProtocols) {
               shell_integration_linux::GetDesktopFileContents(
                   shell_integration_linux::internal::GetChromeExePath(),
                   GenerateApplicationNameFromInfo(*shortcut_info),
-                  shortcut_info->url, shortcut_info->extension_id,
+                  shortcut_info->url, shortcut_info->app_id,
                   shortcut_info->title, "chrome-test_extension-Profile_1",
                   shortcut_info->profile_path, "",
                   "x-scheme-handler/mailto;x-scheme-handler/web+testing", false,
@@ -590,7 +590,7 @@ TEST_F(WebAppShortcutLinuxTest, CreateDesktopShortcutWithProtocols) {
         shell_integration_linux::GetDesktopFileContents(
             shell_integration_linux::internal::GetChromeExePath(),
             GenerateApplicationNameFromInfo(*shortcut_info), shortcut_info->url,
-            shortcut_info->extension_id, shortcut_info->title,
+            shortcut_info->app_id, shortcut_info->title,
             "chrome-test_extension-Profile_1", shortcut_info->profile_path, "",
             "", false, "", shortcut_info->actions);
 
@@ -609,7 +609,7 @@ TEST_F(WebAppShortcutLinuxTest, CreateDesktopShortcutWithProtocols) {
         shell_integration_linux::GetDesktopFileContents(
             shell_integration_linux::internal::GetChromeExePath(),
             GenerateApplicationNameFromInfo(*shortcut_info), shortcut_info->url,
-            shortcut_info->extension_id, shortcut_info->title,
+            shortcut_info->app_id, shortcut_info->title,
             "chrome-test_extension-Profile_1", shortcut_info->profile_path, "",
             "", false, kRunOnOsLoginModeWindowed, shortcut_info->actions);
     base::FilePath autostart_shortcut_path =
@@ -664,7 +664,7 @@ TEST_F(WebAppShortcutLinuxTest,
       shell_integration_linux::GetDesktopFileContents(
           shell_integration_linux::internal::GetChromeExePath(),
           GenerateApplicationNameFromInfo(*shortcut_info), shortcut_info->url,
-          shortcut_info->extension_id, shortcut_info->title,
+          shortcut_info->app_id, shortcut_info->title,
           "chrome-test_extension-Profile_1", shortcut_info->profile_path, "",
           "", false, kRunOnOsLoginModeWindowed, shortcut_info->actions);
 
@@ -762,7 +762,7 @@ TEST_F(WebAppShortcutLinuxTest, CreateDesktopShortcutEmptyExtension) {
   SetLaunchXdgUtilityForTesting(CreateDesktopShortcutLaunchXdgUtility);
 
   std::unique_ptr<ShortcutInfo> shortcut_info = GetShortcutInfo();
-  shortcut_info->extension_id = "";
+  shortcut_info->app_id = "";
   shortcut_info->url = GURL("https://example.com");
 
   ShortcutLocations locations;
@@ -783,7 +783,7 @@ TEST_F(WebAppShortcutLinuxTest, CreateDesktopShortcutEmptyExtension) {
         shell_integration_linux::GetDesktopFileContents(
             shell_integration_linux::internal::GetChromeExePath(),
             GenerateApplicationNameFromInfo(*shortcut_info), shortcut_info->url,
-            shortcut_info->extension_id, shortcut_info->title,
+            shortcut_info->app_id, shortcut_info->title,
             "chrome-https___example.com_", shortcut_info->profile_path, "", "",
             false, "", shortcut_info->actions);
 
@@ -802,7 +802,7 @@ TEST_F(WebAppShortcutLinuxTest, CreateDesktopShortcutEmptyExtension) {
         shell_integration_linux::GetDesktopFileContents(
             shell_integration_linux::internal::GetChromeExePath(),
             GenerateApplicationNameFromInfo(*shortcut_info), shortcut_info->url,
-            shortcut_info->extension_id, shortcut_info->title,
+            shortcut_info->app_id, shortcut_info->title,
             "chrome-https___example.com_", shortcut_info->profile_path, "", "",
             false, kRunOnOsLoginModeWindowed, shortcut_info->actions);
 
@@ -844,7 +844,8 @@ TEST_F(WebAppShortcutLinuxTest, UpdateDesktopShortcuts) {
 
   std::unique_ptr<ShortcutInfo> shortcut_info = GetShortcutInfo();
 
-  UpdateDesktopShortcuts(&env, *shortcut_info);
+  UpdateDesktopShortcuts(&env, *shortcut_info,
+                         /*user_specified_locations=*/absl::nullopt);
   EXPECT_EQ(invoke_count, 4);
 
   // At this point, we've already validated creation in the Application menu
@@ -855,7 +856,7 @@ TEST_F(WebAppShortcutLinuxTest, UpdateDesktopShortcuts) {
       shell_integration_linux::GetDesktopFileContents(
           shell_integration_linux::internal::GetChromeExePath(),
           GenerateApplicationNameFromInfo(*shortcut_info), shortcut_info->url,
-          shortcut_info->extension_id, shortcut_info->title,
+          shortcut_info->app_id, shortcut_info->title,
           "chrome-test_extension-Profile_1", shortcut_info->profile_path, "",
           "", false, "", shortcut_info->actions);
 
@@ -989,7 +990,7 @@ TEST_F(WebAppShortcutLinuxTest, CreateDesktopShortcutWithShortcutMenuActions) {
               shell_integration_linux::GetDesktopFileContents(
                   shell_integration_linux::internal::GetChromeExePath(),
                   GenerateApplicationNameFromInfo(*shortcut_info),
-                  shortcut_info->url, shortcut_info->extension_id,
+                  shortcut_info->url, shortcut_info->app_id,
                   shortcut_info->title, "chrome-test_extension-Profile_1",
                   shortcut_info->profile_path, "", "", false, "",
                   shortcut_info->actions);
@@ -1024,7 +1025,7 @@ TEST_F(WebAppShortcutLinuxTest, CreateDesktopShortcutWithShortcutMenuActions) {
         shell_integration_linux::GetDesktopFileContents(
             shell_integration_linux::internal::GetChromeExePath(),
             GenerateApplicationNameFromInfo(*shortcut_info), shortcut_info->url,
-            shortcut_info->extension_id, shortcut_info->title,
+            shortcut_info->app_id, shortcut_info->title,
             "chrome-test_extension-Profile_1", shortcut_info->profile_path, "",
             "", false, "", shortcut_info->actions);
 
@@ -1043,7 +1044,7 @@ TEST_F(WebAppShortcutLinuxTest, CreateDesktopShortcutWithShortcutMenuActions) {
         shell_integration_linux::GetDesktopFileContents(
             shell_integration_linux::internal::GetChromeExePath(),
             GenerateApplicationNameFromInfo(*shortcut_info), shortcut_info->url,
-            shortcut_info->extension_id, shortcut_info->title,
+            shortcut_info->app_id, shortcut_info->title,
             "chrome-test_extension-Profile_1", shortcut_info->profile_path, "",
             "", false, kRunOnOsLoginModeWindowed, shortcut_info->actions);
     base::FilePath autostart_shortcut_path =

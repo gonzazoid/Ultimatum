@@ -9,16 +9,16 @@ import android.app.job.JobScheduler;
 import android.app.job.JobService;
 import android.content.Context;
 import android.os.PersistableBundle;
-import android.os.SystemClock;
 
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
-import org.chromium.build.BuildConfig;
+import org.chromium.base.TimeUtils;
 
-/**
- * Class that interacts with the Android JobScheduler to upload Minidumps at appropriate times.
- */
-public abstract class MinidumpUploadJobService extends JobService {
+import javax.annotation.concurrent.GuardedBy;
+
+/** Class that interacts with the Android JobScheduler to upload Minidumps at appropriate times. */
+public abstract class MinidumpUploadJobService extends JobService
+        implements MinidumpUploadJob.UploadsFinishedCallback {
     private static final String TAG = "MinidumpJobService";
 
     // Initial back-off time for upload-job, i.e. the minimum delay when a job is retried. A retry
@@ -31,12 +31,19 @@ public abstract class MinidumpUploadJobService extends JobService {
     // Back-off policy for upload-job.
     private static final int JOB_BACKOFF_POLICY = JobInfo.BACKOFF_POLICY_EXPONENTIAL;
 
-    private MinidumpUploadJob mMinidumpUploadJob;
+    private final Object mLock = new Object();
 
-    // Used in Debug builds to assert that this job service never attempts to run more than one job
-    // at a time:
-    private final Object mRunningLock = new Object();
-    private boolean mRunningJob;
+    @GuardedBy("mLock")
+    private MinidumpUploadJob mActiveJob;
+
+    @GuardedBy("mLock")
+    private JobParameters mActiveJobParams;
+
+    @GuardedBy("mLock")
+    private long mActiveJobStartTime;
+
+    @GuardedBy("mLock")
+    private boolean mShouldReschedule;
 
     /**
      * Schedules uploading of all pending minidumps.
@@ -47,10 +54,11 @@ public abstract class MinidumpUploadJobService extends JobService {
     public static void scheduleUpload(JobInfo.Builder jobInfoBuilder) {
         Log.i(TAG, "Scheduling upload of all pending minidumps.");
         JobScheduler scheduler =
-                (JobScheduler) ContextUtils.getApplicationContext().getSystemService(
-                        Context.JOB_SCHEDULER_SERVICE);
+                (JobScheduler)
+                        ContextUtils.getApplicationContext()
+                                .getSystemService(Context.JOB_SCHEDULER_SERVICE);
         JobInfo uploadJob =
-                jobInfoBuilder.setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED)
+                jobInfoBuilder
                         .setBackoffCriteria(JOB_INITIAL_BACKOFF_TIME_IN_MS, JOB_BACKOFF_POLICY)
                         .build();
         int result = scheduler.schedule(uploadJob);
@@ -59,54 +67,61 @@ public abstract class MinidumpUploadJobService extends JobService {
 
     @Override
     public boolean onStartJob(JobParameters params) {
-        // Ensure we only run one job at a time.
-        if (BuildConfig.ENABLE_ASSERTS) {
-            synchronized (mRunningLock) {
-                assert !mRunningJob;
-                mRunningJob = true;
+        synchronized (mLock) {
+            // If a job is scheduled while one is already running, then just tell the active one to
+            // reschedule when it's done. This works because:
+            // 1) each job uploads all pending minidumps, so scheduling an extra one is a no-op.
+            // 2) each time a job is scheduled, it has the same params.getExtras().
+            mShouldReschedule = mActiveJob != null;
+            if (mShouldReschedule) {
+                // Querying size forces unparcelling, which changes the output of toString().
+                assert params.getExtras().size() + mActiveJobParams.getExtras().size() < 10000;
+                assert params.getExtras().toString().equals(mActiveJobParams.getExtras().toString())
+                        : params.getExtras().toString()
+                                + " vs "
+                                + mActiveJobParams.getExtras().toString();
+                return false;
             }
+
+            mActiveJob = createMinidumpUploadJob(params.getExtras());
+            mActiveJobParams = params;
+            mActiveJobStartTime = TimeUtils.uptimeMillis();
+            mActiveJob.uploadAllMinidumps(this);
         }
-        mMinidumpUploadJob = createMinidumpUploadJob(params.getExtras());
-        mMinidumpUploadJob.uploadAllMinidumps(createJobFinishedCallback(params));
         return true; // true = processing work on a separate thread, false = done already.
     }
 
     @Override
     public boolean onStopJob(JobParameters params) {
         Log.i(TAG, "Canceling pending uploads due to change in networking status.");
-        boolean reschedule = mMinidumpUploadJob.cancelUploads();
-        if (BuildConfig.ENABLE_ASSERTS) {
-            synchronized (mRunningLock) {
-                mRunningJob = false;
-            }
+        boolean reschedule;
+        // JobScheduler may call this on a background thread. https://crbug.com/1401509
+        synchronized (mLock) {
+            reschedule = (mActiveJob != null && mActiveJob.cancelUploads()) || mShouldReschedule;
         }
         return reschedule;
     }
 
-    private MinidumpUploadJob.UploadsFinishedCallback createJobFinishedCallback(
-            final JobParameters params) {
-        return new MinidumpUploadJob.UploadsFinishedCallback() {
-            private final long mTaskStartTimeMs = SystemClock.uptimeMillis();
+    @Override
+    public void uploadsFinished(boolean reschedule) {
+        if (reschedule) {
+            Log.i(TAG, "Some minidumps remain un-uploaded; rescheduling.");
+        }
 
-            @Override
-            public void uploadsFinished(boolean reschedule) {
-                if (reschedule) {
-                    Log.i(TAG, "Some minidumps remain un-uploaded; rescheduling.");
-                }
-                if (BuildConfig.ENABLE_ASSERTS) {
-                    synchronized (mRunningLock) {
-                        mRunningJob = false;
-                    }
-                }
-                MinidumpUploadJobService.this.jobFinished(params, reschedule);
-                recordMinidumpUploadingTime(SystemClock.uptimeMillis() - mTaskStartTimeMs);
-            }
-        };
+        JobParameters jobParams;
+        long startTime;
+        synchronized (mLock) {
+            jobParams = mActiveJobParams;
+            startTime = mActiveJobStartTime;
+            reschedule = reschedule || mShouldReschedule;
+            mActiveJob = null;
+            mActiveJobParams = null;
+        }
+        jobFinished(jobParams, reschedule);
+        recordMinidumpUploadingTime(TimeUtils.uptimeMillis() - startTime);
     }
 
-    /**
-     * Records minidump uploading time.
-     */
+    /** Records minidump uploading time. */
     protected void recordMinidumpUploadingTime(long taskDurationMs) {}
 
     /**

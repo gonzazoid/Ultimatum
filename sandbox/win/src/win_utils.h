@@ -12,8 +12,8 @@
 #include <string>
 #include <vector>
 
+#include <optional>
 #include "base/win/windows_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace sandbox {
 
@@ -70,29 +70,21 @@ DWORD IsReparsePoint(const std::wstring& full_path);
 // Returns true if the handle corresponds to the object pointed by this path.
 bool SameObject(HANDLE handle, const wchar_t* full_path);
 
-// Resolves a handle to an nt path. Returns true if the handle can be resolved.
-bool GetPathFromHandle(HANDLE handle, std::wstring* path);
+// Resolves a handle to an nt path or nullopt if the path cannot be resolved.
+std::optional<std::wstring> GetPathFromHandle(HANDLE handle);
 
 // Resolves a win32 path to an nt path using GetPathFromHandle. The path must
-// exist. Returns true if the translation was successful.
-bool GetNtPathFromWin32Path(const std::wstring& path, std::wstring* nt_path);
+// exist. Returns the path if the translation was successful.
+std::optional<std::wstring> GetNtPathFromWin32Path(const std::wstring& path);
 
-// Resolves a handle to its type name. Returns true if successful.
-bool GetTypeNameFromHandle(HANDLE handle, std::wstring* type_name);
+// Resolves a handle to its type name. Returns the typename if successful.
+std::optional<std::wstring> GetTypeNameFromHandle(HANDLE handle);
 
 // Resolves a user-readable registry path to a system-readable registry path.
 // For example, HKEY_LOCAL_MACHINE\\Software\\microsoft is translated to
-// \\registry\\machine\\software\\microsoft. Returns false if the path
+// \\registry\\machine\\software\\microsoft. Returns nullopt if the path
 // cannot be resolved.
-bool ResolveRegistryName(std::wstring name, std::wstring* resolved_name);
-
-// Writes |length| bytes from the provided |buffer| into the address space of
-// |child_process|, at the specified |address|, preserving the original write
-// protection attributes. Returns true on success.
-bool WriteProtectedChildMemory(HANDLE child_process,
-                               void* address,
-                               const void* buffer,
-                               size_t length);
+std::optional<std::wstring> ResolveRegistryName(std::wstring name);
 
 // Allocates |buffer_bytes| in child (PAGE_READWRITE) and copies data
 // from |local_buffer| in this process into |child|. |remote_buffer|
@@ -116,17 +108,12 @@ DWORD GetLastErrorFromNtStatus(NTSTATUS status);
 // the base address. This should only be called on new, suspended processes.
 void* GetProcessBaseAddress(HANDLE process);
 
-// Returns a map of handles open in the current process. The call will only
-// works on Windows 8+. The map is keyed by the kernel object type name. If
-// querying the handles fails an empty optional value is returned. Note that
-// unless all threads are suspended in the process the valid handles could
-// change between the return of the list and when you use them.
-absl::optional<ProcessHandleMap> GetCurrentProcessHandles();
-
-// Fallback function for GetCurrentProcessHandles. Should only be needed on
-// Windows 7 which doesn't support the API to query all process handles. This
-// uses a brute force method to get the process handles.
-absl::optional<ProcessHandleMap> GetCurrentProcessHandlesWin7();
+// Returns a map of handles open in the current process. The map is keyed by the
+// kernel object type name. If querying the handles fails an empty optional
+// value is returned. Note that unless all threads are suspended in the process
+// the valid handles could change between the return of the list and when you
+// use them.
+std::optional<ProcessHandleMap> GetCurrentProcessHandles();
 
 }  // namespace sandbox
 

@@ -4,10 +4,17 @@
 
 import("//build/config/ios/ios_test_runner_wrapper.gni")
 import("//build/config/ios/rules.gni")
+import("//ios/build/chrome_build.gni")
+import("//ios/chrome/app/chrome_app.gni")
 import("//ios/public/provider/chrome/browser/build_config.gni")
 
 template("ios_eg2_test_app_host") {
-  ios_app_bundle(target_name) {
+  _target_type = "ios_app_bundle"
+  if (defined(invoker.target_type)) {
+    _target_type = invoker.target_type
+  }
+
+  target(_target_type, target_name) {
     testonly = true
     forward_variables_from(invoker, "*")
 
@@ -47,6 +54,11 @@ template("ios_eg2_test_app_host") {
       ]
     }
 
+    # XCTestSupport framework is required for running EG tests with Xcode 14.3 or later.
+    if (xcode_version_int >= 1430) {
+      extra_system_frameworks += [ "$ios_sdk_platform_path/Developer/Library/PrivateFrameworks/XCTestSupport.framework" ]
+    }
+
     if (!defined(ldflags)) {
       ldflags = []
     }
@@ -76,6 +88,7 @@ template("ios_eg2_test") {
                            [
                              "xcode_test_application_name",
                              "xctest_bundle_principal_class",
+                             "runner_only_bundle_deps",
                              "bundle_deps",
                              "deps",
                              "data_deps",
@@ -84,23 +97,37 @@ template("ios_eg2_test") {
     if (!defined(deps)) {
       deps = []
     }
-    deps += [ "//ios/third_party/earl_grey2:test_lib" ]
+    deps += [ "//ios/testing/earl_grey:eg_test_support+eg2" ]
 
     # TODO(crbug.com/1056328) Because we change the target name, the subnodes
     # are going to append with the _test in the naming, which won't be backwards
     # compatible during migration from iOS recipe to Chromium.
     output_name = "${_target_name}"
+
+    # Performance tests use EarlGrey and are run in google3 mobile
+    # harness. The mobile harness test runner expects to be passed the test
+    # module (not runner) and will fail if TestTraceProcessor is not present
+    # in the module's Frameworks directory
+    if (!ios_is_perf_test) {
+      # Those frameworks are force-linked via //base/test:test_support, so
+      # ensure the framework bundles are packaged in the test runner and
+      # not the test module.
+      if (!defined(runner_only_bundle_deps)) {
+        runner_only_bundle_deps = []
+      }
+      runner_only_bundle_deps += [ "//base/test:test_trace_processor+bundle" ]
+    }
   }
 
   ios_test_runner_wrapper(target_name) {
     forward_variables_from(invoker,
                            [
+                             "clones",
                              "data",
                              "data_deps",
                              "deps",
                              "executable_args",
                              "retries",
-                             "shards",
                              "xcode_test_application_name",
                            ])
     _root_build_dir = rebase_path("${root_build_dir}", root_build_dir)

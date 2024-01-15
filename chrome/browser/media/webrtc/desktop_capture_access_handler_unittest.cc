@@ -8,8 +8,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
@@ -20,8 +20,6 @@
 #include "content/public/browser/desktop_media_id.h"
 #include "content/public/browser/desktop_streams_registry.h"
 #include "content/public/browser/media_stream_request.h"
-#include "content/public/browser/notification_service.h"
-#include "content/public/browser/notification_types.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
@@ -34,7 +32,7 @@
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom.h"
 
 #if BUILDFLAG(IS_CHROMEOS)
-#include "chrome/browser/chromeos/policy/dlp/mock_dlp_content_manager.h"
+#include "chrome/browser/chromeos/policy/dlp/test/mock_dlp_content_manager.h"
 #include "ui/aura/window.h"
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
@@ -74,8 +72,8 @@ class DesktopCaptureAccessHandlerTest : public ChromeRenderViewHostTestHarness {
     content::MediaStreamRequest request(
         web_contents()->GetPrimaryMainFrame()->GetProcess()->GetID(),
         web_contents()->GetPrimaryMainFrame()->GetRoutingID(),
-        /*page_request_id=*/0, origin, /*user_gesture=*/false,
-        blink::MEDIA_GENERATE_STREAM,
+        /*page_request_id=*/0, url::Origin::Create(origin),
+        /*user_gesture=*/false, blink::MEDIA_GENERATE_STREAM,
         /*requested_audio_device_id=*/std::string(), requested_video_device_id,
         blink::mojom::MediaStreamType::NO_SERVICE,
         blink::mojom::MediaStreamType::GUM_DESKTOP_VIDEO_CAPTURE,
@@ -127,8 +125,8 @@ class DesktopCaptureAccessHandlerTest : public ChromeRenderViewHostTestHarness {
         request_audio ? blink::mojom::MediaStreamType::GUM_DESKTOP_AUDIO_CAPTURE
                       : blink::mojom::MediaStreamType::NO_SERVICE;
     content::MediaStreamRequest request(
-        0, 0, 0, GURL(kOrigin), false, request_type, std::string(),
-        std::string(), audio_type,
+        0, 0, 0, url::Origin::Create(GURL(kOrigin)), false, request_type,
+        std::string(), std::string(), audio_type,
         blink::mojom::MediaStreamType::GUM_DESKTOP_VIDEO_CAPTURE,
         /*disable_local_echo=*/false,
         /*request_pan_tilt_zoom_permission=*/false);
@@ -174,7 +172,7 @@ class DesktopCaptureAccessHandlerTest : public ChromeRenderViewHostTestHarness {
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
  protected:
-  raw_ptr<FakeDesktopMediaPickerFactory> picker_factory_;
+  raw_ptr<FakeDesktopMediaPickerFactory, DanglingUntriaged> picker_factory_;
   std::unique_ptr<DesktopCaptureAccessHandler> access_handler_;
 };
 
@@ -235,9 +233,10 @@ TEST_F(DesktopCaptureAccessHandlerTest,
        true /* cancelled */}};
   picker_factory_->SetTestFlags(test_flags, std::size(test_flags));
   content::MediaStreamRequest request(
-      render_process_id, render_frame_id, page_request_id, GURL(kOrigin), false,
-      blink::MEDIA_DEVICE_UPDATE, std::string(), std::string(),
-      blink::mojom::MediaStreamType::NO_SERVICE, stream_type,
+      render_process_id, render_frame_id, page_request_id,
+      url::Origin::Create(GURL(kOrigin)), false, blink::MEDIA_DEVICE_UPDATE,
+      std::string(), std::string(), blink::mojom::MediaStreamType::NO_SERVICE,
+      stream_type,
       /*disable_local_echo=*/false, /*request_pan_tilt_zoom_permission=*/false);
   content::MediaResponseCallback callback;
   access_handler_->HandleRequest(web_contents(), request, std::move(callback),
@@ -267,8 +266,9 @@ TEST_F(DesktopCaptureAccessHandlerTest, ChangeSourceWebContentsDestroyed) {
        true /* cancelled */}};
   picker_factory_->SetTestFlags(test_flags, std::size(test_flags));
   content::MediaStreamRequest request(
-      0, 0, 0, GURL(kOrigin), false, blink::MEDIA_DEVICE_UPDATE, std::string(),
-      std::string(), blink::mojom::MediaStreamType::NO_SERVICE,
+      0, 0, 0, url::Origin::Create(GURL(kOrigin)), false,
+      blink::MEDIA_DEVICE_UPDATE, std::string(), std::string(),
+      blink::mojom::MediaStreamType::NO_SERVICE,
       blink::mojom::MediaStreamType::GUM_DESKTOP_VIDEO_CAPTURE,
       /*disable_local_echo=*/false, /*request_pan_tilt_zoom_permission=*/false);
   content::MediaResponseCallback callback;
@@ -307,8 +307,9 @@ TEST_F(DesktopCaptureAccessHandlerTest, ChangeSourceMultipleRequests) {
   base::RunLoop wait_loop[kTestFlagCount];
   for (base::RunLoop& loop : wait_loop) {
     content::MediaStreamRequest request(
-        0, 0, 0, GURL(kOrigin), false, blink::MEDIA_DEVICE_UPDATE,
-        std::string(), std::string(), blink::mojom::MediaStreamType::NO_SERVICE,
+        0, 0, 0, url::Origin::Create(GURL(kOrigin)), false,
+        blink::MEDIA_DEVICE_UPDATE, std::string(), std::string(),
+        blink::mojom::MediaStreamType::NO_SERVICE,
         blink::mojom::MediaStreamType::GUM_DESKTOP_VIDEO_CAPTURE,
         /*disable_local_echo=*/false,
         /*request_pan_tilt_zoom_permission=*/false);
@@ -361,7 +362,6 @@ TEST_F(DesktopCaptureAccessHandlerTest, GenerateStreamSuccess) {
           url::Origin::Create(origin),
           content::DesktopMediaID(content::DesktopMediaID::TYPE_SCREEN,
                                   content::DesktopMediaID::kFakeId),
-          /*extension_name=*/"",
           content::DesktopStreamRegistryType::kRegistryStreamTypeDesktop);
 
   ProcessGenerateStreamRequest(id, origin, /*extension=*/nullptr, &result,
@@ -524,7 +524,6 @@ TEST_F(DesktopCaptureAccessHandlerTest, GenerateStreamDlpRestricted) {
           url::Origin::Create(GURL(kOrigin)),
           content::DesktopMediaID(content::DesktopMediaID::TYPE_SCREEN,
                                   content::DesktopMediaID::kFakeId),
-          /*extension_name=*/"",
           content::DesktopStreamRegistryType::kRegistryStreamTypeDesktop);
   blink::mojom::MediaStreamRequestResult result =
       blink::mojom::MediaStreamRequestResult::NOT_SUPPORTED;
@@ -557,7 +556,6 @@ TEST_F(DesktopCaptureAccessHandlerTest, GenerateStreamDlpNotRestricted) {
           url::Origin::Create(GURL(kOrigin)),
           content::DesktopMediaID(content::DesktopMediaID::TYPE_SCREEN,
                                   content::DesktopMediaID::kFakeId),
-          /*extension_name=*/"",
           content::DesktopStreamRegistryType::kRegistryStreamTypeDesktop);
   blink::mojom::MediaStreamRequestResult result =
       blink::mojom::MediaStreamRequestResult::NOT_SUPPORTED;

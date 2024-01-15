@@ -7,12 +7,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "gpu/command_buffer/common/gles2_cmd_utils.h"
@@ -331,7 +330,10 @@ void GPUTracer::ProcessTraces() {
     }
   }
 
-  DCHECK(GL_NO_ERROR == glGetError());
+  // When `can_trace_dev_` is false, there might be no current context and
+  // calling `glGetError()` might lead to a crash. To avoid that, skip calling
+  // the function in that case.
+  DCHECK(!can_trace_dev_ || GL_NO_ERROR == glGetError());
 }
 
 bool GPUTracer::IsTracing() {

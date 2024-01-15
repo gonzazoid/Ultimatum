@@ -11,14 +11,14 @@
 #include <utility>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/task/bind_post_task.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "storage/browser/blob/shareable_file_reference.h"
 #include "storage/browser/file_system/copy_or_move_hook_delegate.h"
 #include "storage/browser/file_system/file_observers.h"
@@ -54,7 +54,8 @@ OperationID FileSystemOperationRunner::CreateFile(const FileSystemURL& url,
                                                   StatusCallback callback) {
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(url, &error);
+      file_system_context_->CreateFileSystemOperation(
+          OperationType::kCreateFile, url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -77,7 +78,8 @@ OperationID FileSystemOperationRunner::CreateDirectory(
     StatusCallback callback) {
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(url, &error);
+      file_system_context_->CreateFileSystemOperation(
+          OperationType::kCreateDirectory, url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -103,7 +105,8 @@ OperationID FileSystemOperationRunner::Copy(
   DCHECK(copy_or_move_hook_delegate);
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(dest_url, &error);
+      file_system_context_->CreateFileSystemOperation(OperationType::kCopy,
+                                                      dest_url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -130,7 +133,8 @@ OperationID FileSystemOperationRunner::Move(
   DCHECK(copy_or_move_hook_delegate);
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(dest_url, &error);
+      file_system_context_->CreateFileSystemOperation(OperationType::kMove,
+                                                      dest_url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -152,7 +156,8 @@ OperationID FileSystemOperationRunner::DirectoryExists(
     StatusCallback callback) {
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(url, &error);
+      file_system_context_->CreateFileSystemOperation(
+          OperationType::kDirectoryExists, url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -171,7 +176,8 @@ OperationID FileSystemOperationRunner::FileExists(const FileSystemURL& url,
                                                   StatusCallback callback) {
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(url, &error);
+      file_system_context_->CreateFileSystemOperation(
+          OperationType::kFileExists, url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -188,11 +194,12 @@ OperationID FileSystemOperationRunner::FileExists(const FileSystemURL& url,
 
 OperationID FileSystemOperationRunner::GetMetadata(
     const FileSystemURL& url,
-    int fields,
+    GetMetadataFieldSet fields,
     GetMetadataCallback callback) {
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(url, &error);
+      file_system_context_->CreateFileSystemOperation(
+          OperationType::kGetMetadata, url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -213,7 +220,8 @@ OperationID FileSystemOperationRunner::ReadDirectory(
     const ReadDirectoryCallback& callback) {
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(url, &error);
+      file_system_context_->CreateFileSystemOperation(
+          OperationType::kReadDirectory, url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -234,7 +242,8 @@ OperationID FileSystemOperationRunner::Remove(const FileSystemURL& url,
                                               StatusCallback callback) {
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(url, &error);
+      file_system_context_->CreateFileSystemOperation(OperationType::kRemove,
+                                                      url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -256,7 +265,8 @@ OperationID FileSystemOperationRunner::Write(
     const WriteCallback& callback) {
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(url, &error);
+      file_system_context_->CreateFileSystemOperation(OperationType::kWrite,
+                                                      url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -295,7 +305,8 @@ OperationID FileSystemOperationRunner::WriteStream(
     const WriteCallback& callback) {
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(url, &error);
+      file_system_context_->CreateFileSystemOperation(OperationType::kWrite,
+                                                      url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -327,7 +338,8 @@ OperationID FileSystemOperationRunner::Truncate(const FileSystemURL& url,
                                                 StatusCallback callback) {
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(url, &error);
+      file_system_context_->CreateFileSystemOperation(OperationType::kTruncate,
+                                                      url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -366,7 +378,8 @@ OperationID FileSystemOperationRunner::TouchFile(
     StatusCallback callback) {
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(url, &error);
+      file_system_context_->CreateFileSystemOperation(OperationType::kTouchFile,
+                                                      url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -386,7 +399,8 @@ OperationID FileSystemOperationRunner::OpenFile(const FileSystemURL& url,
                                                 OpenFileCallback callback) {
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(url, &error);
+      file_system_context_->CreateFileSystemOperation(OperationType::kOpenFile,
+                                                      url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -395,6 +409,10 @@ OperationID FileSystemOperationRunner::OpenFile(const FileSystemURL& url,
                 base::OnceClosure());
     return id;
   }
+
+  // This file might be passed to an untrusted process.
+  file_flags = base::File::AddFlagsForPassingToUntrustedProcess(file_flags);
+
   if (file_flags &
       (base::File::FLAG_CREATE | base::File::FLAG_OPEN_ALWAYS |
        base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_OPEN_TRUNCATED |
@@ -416,7 +434,8 @@ OperationID FileSystemOperationRunner::CreateSnapshotFile(
     SnapshotFileCallback callback) {
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(url, &error);
+      file_system_context_->CreateFileSystemOperation(
+          OperationType::kCreateSnapshotFile, url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -438,7 +457,8 @@ OperationID FileSystemOperationRunner::CopyInForeignFile(
     StatusCallback callback) {
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(dest_url, &error);
+      file_system_context_->CreateFileSystemOperation(
+          OperationType::kCopyInForeignFile, dest_url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -458,7 +478,8 @@ OperationID FileSystemOperationRunner::RemoveFile(const FileSystemURL& url,
                                                   StatusCallback callback) {
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(url, &error);
+      file_system_context_->CreateFileSystemOperation(OperationType::kRemove,
+                                                      url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -478,7 +499,8 @@ OperationID FileSystemOperationRunner::RemoveDirectory(
     StatusCallback callback) {
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(url, &error);
+      file_system_context_->CreateFileSystemOperation(OperationType::kRemove,
+                                                      url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -501,7 +523,8 @@ OperationID FileSystemOperationRunner::CopyFileLocal(
     StatusCallback callback) {
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(src_url, &error);
+      file_system_context_->CreateFileSystemOperation(OperationType::kCopy,
+                                                      src_url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -525,7 +548,8 @@ OperationID FileSystemOperationRunner::MoveFileLocal(
     StatusCallback callback) {
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation =
-      file_system_context_->CreateFileSystemOperation(src_url, &error);
+      file_system_context_->CreateFileSystemOperation(OperationType::kMove,
+                                                      src_url, &error);
   FileSystemOperation* operation_raw = operation.get();
   OperationID id = BeginOperation(std::move(operation));
   base::AutoReset<bool> beginning(&is_beginning_operation_, true);
@@ -547,7 +571,8 @@ base::File::Error FileSystemOperationRunner::SyncGetPlatformPath(
     base::FilePath* platform_path) {
   base::File::Error error = base::File::FILE_OK;
   std::unique_ptr<FileSystemOperation> operation(
-      file_system_context_->CreateFileSystemOperation(url, &error));
+      file_system_context_->CreateFileSystemOperation(
+          OperationType::kGetLocalPath, url, &error));
   if (!operation.get())
     return error;
   return operation->SyncGetPlatformPath(url, platform_path);
@@ -569,7 +594,7 @@ void FileSystemOperationRunner::DidFinish(const OperationID id,
 
   if (is_beginning_operation_) {
     finished_operations_.insert(id);
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&FileSystemOperationRunner::DidFinish,
                                   weak_ptr_, id, std::move(callback), rv));
     return;
@@ -590,7 +615,7 @@ void FileSystemOperationRunner::DidGetMetadata(
 
   if (is_beginning_operation_) {
     finished_operations_.insert(id);
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&FileSystemOperationRunner::DidGetMetadata, weak_ptr_,
                        id, std::move(callback), rv, file_info));
@@ -613,7 +638,7 @@ void FileSystemOperationRunner::DidReadDirectory(
 
   if (is_beginning_operation_) {
     finished_operations_.insert(id);
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&FileSystemOperationRunner::DidReadDirectory, weak_ptr_,
                        id, callback, rv, std::move(entries), has_more));
@@ -636,7 +661,7 @@ void FileSystemOperationRunner::DidWrite(const OperationID id,
 
   if (is_beginning_operation_) {
     finished_operations_.insert(id);
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&FileSystemOperationRunner::DidWrite, weak_ptr_, id,
                        callback, rv, bytes, complete));
@@ -659,7 +684,7 @@ void FileSystemOperationRunner::DidOpenFile(
 
   if (is_beginning_operation_) {
     finished_operations_.insert(id);
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&FileSystemOperationRunner::DidOpenFile, weak_ptr_, id,
                        std::move(callback), std::move(file),
@@ -669,8 +694,8 @@ void FileSystemOperationRunner::DidOpenFile(
   base::ScopedClosureRunner scoped_on_close_callback;
   if (on_close_callback) {
     // Wrap `on_close_callback` to ensure it always runs, and on the IO thread.
-    scoped_on_close_callback = base::ScopedClosureRunner(base::BindPostTask(
-        base::SequencedTaskRunnerHandle::Get(), std::move(on_close_callback)));
+    scoped_on_close_callback = base::ScopedClosureRunner(
+        base::BindPostTaskToCurrentDefault(std::move(on_close_callback)));
   }
 
   std::move(callback).Run(std::move(file), std::move(scoped_on_close_callback));
@@ -691,7 +716,7 @@ void FileSystemOperationRunner::DidCreateSnapshot(
 
   if (is_beginning_operation_) {
     finished_operations_.insert(id);
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&FileSystemOperationRunner::DidCreateSnapshot, weak_ptr_,
                        id, std::move(callback), rv, file_info, platform_path,
@@ -723,7 +748,7 @@ OperationID FileSystemOperationRunner::BeginOperation(
     std::unique_ptr<FileSystemOperation> operation) {
   OperationID id = next_operation_id_++;
 
-  DCHECK(operations_.find(id) == operations_.end());
+  DCHECK(!base::Contains(operations_, id));
   operations_[id] = std::move(operation);
   return id;
 }

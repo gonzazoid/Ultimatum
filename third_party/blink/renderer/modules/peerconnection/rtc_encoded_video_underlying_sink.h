@@ -5,7 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_PEERCONNECTION_RTC_ENCODED_VIDEO_UNDERLYING_SINK_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_PEERCONNECTION_RTC_ENCODED_VIDEO_UNDERLYING_SINK_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "third_party/blink/renderer/core/streams/underlying_sink_base.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_encoded_video_stream_transformer.h"
@@ -21,8 +21,7 @@ class MODULES_EXPORT RTCEncodedVideoUnderlyingSink final
  public:
   RTCEncodedVideoUnderlyingSink(
       ScriptState*,
-      scoped_refptr<blink::RTCEncodedVideoStreamTransformer::Broker>,
-      webrtc::TransformableFrameInterface::Direction);
+      scoped_refptr<blink::RTCEncodedVideoStreamTransformer::Broker>);
 
   // UnderlyingSinkBase
   ScriptPromise start(ScriptState*,
@@ -42,7 +41,6 @@ class MODULES_EXPORT RTCEncodedVideoUnderlyingSink final
  private:
   scoped_refptr<blink::RTCEncodedVideoStreamTransformer::Broker>
       transformer_broker_;
-  webrtc::TransformableFrameInterface::Direction expected_direction_;
   THREAD_CHECKER(thread_checker_);
 };
 

@@ -118,7 +118,7 @@ void OmniboxFieldTrialTest::VerifySuggestPollingStrategy(
         OmniboxFieldTrial::kSuggestPollingDelayMsRule)] =
         polling_delay_ms_rule_value;
   }
-  ASSERT_TRUE(variations::AssociateVariationParams(
+  ASSERT_TRUE(base::AssociateFieldTrialParams(
       OmniboxFieldTrial::kBundledExperimentFieldTrialName, "A", params));
   base::FieldTrialList::CreateFieldTrial(
       OmniboxFieldTrial::kBundledExperimentFieldTrialName, "A");
@@ -139,7 +139,7 @@ TEST_F(OmniboxFieldTrialTest, GetDisabledProviderTypes) {
     SCOPED_TRACE("Valid field trial, missing param.");
     ResetFieldTrialList();
     std::map<std::string, std::string> params;
-    ASSERT_TRUE(variations::AssociateVariationParams(
+    ASSERT_TRUE(base::AssociateFieldTrialParams(
         OmniboxFieldTrial::kBundledExperimentFieldTrialName, "A", params));
     base::FieldTrialList::CreateFieldTrial(
         OmniboxFieldTrial::kBundledExperimentFieldTrialName, "A");
@@ -151,7 +151,7 @@ TEST_F(OmniboxFieldTrialTest, GetDisabledProviderTypes) {
     ResetFieldTrialList();
     std::map<std::string, std::string> params;
     params[std::string(OmniboxFieldTrial::kDisableProvidersRule)] = "";
-    ASSERT_TRUE(variations::AssociateVariationParams(
+    ASSERT_TRUE(base::AssociateFieldTrialParams(
         OmniboxFieldTrial::kBundledExperimentFieldTrialName, "A", params));
     base::FieldTrialList::CreateFieldTrial(
         OmniboxFieldTrial::kBundledExperimentFieldTrialName, "A");
@@ -163,7 +163,7 @@ TEST_F(OmniboxFieldTrialTest, GetDisabledProviderTypes) {
     ResetFieldTrialList();
     std::map<std::string, std::string> params;
     params[std::string(OmniboxFieldTrial::kDisableProvidersRule)] = "aaa";
-    ASSERT_TRUE(variations::AssociateVariationParams(
+    ASSERT_TRUE(base::AssociateFieldTrialParams(
         OmniboxFieldTrial::kBundledExperimentFieldTrialName, "A", params));
     base::FieldTrialList::CreateFieldTrial(
         OmniboxFieldTrial::kBundledExperimentFieldTrialName, "A");
@@ -175,7 +175,7 @@ TEST_F(OmniboxFieldTrialTest, GetDisabledProviderTypes) {
     ResetFieldTrialList();
     std::map<std::string, std::string> params;
     params[std::string(OmniboxFieldTrial::kDisableProvidersRule)] = "12321";
-    ASSERT_TRUE(variations::AssociateVariationParams(
+    ASSERT_TRUE(base::AssociateFieldTrialParams(
         OmniboxFieldTrial::kBundledExperimentFieldTrialName, "A", params));
     base::FieldTrialList::CreateFieldTrial(
         OmniboxFieldTrial::kBundledExperimentFieldTrialName, "A");
@@ -191,7 +191,7 @@ TEST_F(OmniboxFieldTrialTest, GetDemotionsByTypeWithFallback) {
     params[std::string(OmniboxFieldTrial::kDemoteByTypeRule) + ":3:*"] =
         "5:100";
     params[std::string(OmniboxFieldTrial::kDemoteByTypeRule) + ":*:*"] = "1:25";
-    ASSERT_TRUE(variations::AssociateVariationParams(
+    ASSERT_TRUE(base::AssociateFieldTrialParams(
         OmniboxFieldTrial::kBundledExperimentFieldTrialName, "A", params));
   }
   base::FieldTrialList::CreateFieldTrial(
@@ -238,6 +238,22 @@ TEST_F(OmniboxFieldTrialTest, GetProviderMaxMatches) {
                         AutocompleteProvider::Type::TYPE_HISTORY_QUICK));
   }
   {
+    OmniboxFieldTrial::ScopedMLConfigForTesting scoped_ml_config;
+    scoped_ml_config.GetMLConfig().ml_url_scoring = true;
+    scoped_ml_config.GetMLConfig().url_scoring_model = true;
+    scoped_ml_config.GetMLConfig().ml_url_scoring_max_matches_by_provider =
+        "1:10,4:10,8:10,64:10,65536:10";
+
+    ASSERT_EQ(10ul, OmniboxFieldTrial::GetProviderMaxMatches(
+                        AutocompleteProvider::Type::TYPE_BOOKMARK));
+    ASSERT_EQ(10ul, OmniboxFieldTrial::GetProviderMaxMatches(
+                        AutocompleteProvider::Type::TYPE_HISTORY_QUICK));
+    ASSERT_EQ(10ul, OmniboxFieldTrial::GetProviderMaxMatches(
+                        AutocompleteProvider::Type::TYPE_HISTORY_URL));
+    ASSERT_EQ(10ul, OmniboxFieldTrial::GetProviderMaxMatches(
+                        AutocompleteProvider::Type::TYPE_HISTORY_FUZZY));
+  }
+  {
     ResetFieldTrialList();
     ASSERT_EQ(3ul, OmniboxFieldTrial::GetProviderMaxMatches(
                        AutocompleteProvider::Type::TYPE_BOOKMARK));
@@ -268,7 +284,7 @@ TEST_F(OmniboxFieldTrialTest, GetValueForRuleInContext) {
     params["rule4:4:0"] = "rule4-4-0-value";  // OTHER
     // Add a malformed rule to make sure it doesn't screw things up.
     params["unrecognized"] = "unrecognized-value";
-    ASSERT_TRUE(variations::AssociateVariationParams(
+    ASSERT_TRUE(base::AssociateFieldTrialParams(
         OmniboxFieldTrial::kBundledExperimentFieldTrialName, "A", params));
   }
 
@@ -354,29 +370,6 @@ TEST_F(OmniboxFieldTrialTest, GetValueForRuleInContext) {
   }
 }
 
-TEST_F(OmniboxFieldTrialTest, LocalZeroSuggestAgeThreshold) {
-  base::test::ScopedFeatureList scoped_feature_list_;
-
-  // Verify the default value.
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
-  const int expected_age_threshold_days = 60;
-#else
-  const int expected_age_threshold_days = 90;
-#endif
-  base::Time age_threshold =
-      OmniboxFieldTrial::GetLocalHistoryZeroSuggestAgeThreshold();
-  EXPECT_EQ(expected_age_threshold_days,
-            base::TimeDelta(base::Time::Now() - age_threshold).InDays());
-
-  // The default value can be overridden.
-  scoped_feature_list_.InitAndEnableFeatureWithParameters(
-      omnibox::kOmniboxLocalZeroSuggestAgeThreshold,
-      {{OmniboxFieldTrial::kOmniboxLocalZeroSuggestAgeThresholdParam.name,
-        "3"}});
-  age_threshold = OmniboxFieldTrial::GetLocalHistoryZeroSuggestAgeThreshold();
-  EXPECT_EQ(3, base::TimeDelta(base::Time::Now() - age_threshold).InDays());
-}
-
 TEST_F(OmniboxFieldTrialTest, HUPNewScoringFieldTrial) {
   {
     std::map<std::string, std::string> params;
@@ -394,7 +387,7 @@ TEST_F(OmniboxFieldTrialTest, HUPNewScoringFieldTrial) {
     params[std::string(
         OmniboxFieldTrial::kHUPNewScoringVisitedCountScoreBucketsParam)] =
         "5:300,0:200";
-    ASSERT_TRUE(variations::AssociateVariationParams(
+    ASSERT_TRUE(base::AssociateFieldTrialParams(
         OmniboxFieldTrial::kBundledExperimentFieldTrialName, "A", params));
   }
   base::FieldTrialList::CreateFieldTrial(
@@ -428,7 +421,7 @@ TEST_F(OmniboxFieldTrialTest, HUPNewScoringFieldTrialWithDecayFactor) {
         "1";
     params[OmniboxFieldTrial::kHUPNewScoringTypedCountScoreBucketsParam] =
         "0.1:100,0.5:500,1.0:1000";
-    ASSERT_TRUE(variations::AssociateVariationParams(
+    ASSERT_TRUE(base::AssociateFieldTrialParams(
         OmniboxFieldTrial::kBundledExperimentFieldTrialName, "A", params));
   }
   base::FieldTrialList::CreateFieldTrial(

@@ -18,8 +18,9 @@ namespace blink {
 namespace {
 
 CSSProperty::Flags InheritedFlag(const PropertyRegistration* registration) {
-  if (!registration || registration->Inherits())
+  if (!registration || registration->Inherits()) {
     return CSSProperty::kInherited;
+  }
   return 0;
 }
 
@@ -60,16 +61,20 @@ CSSPropertyName CustomProperty::GetCSSPropertyName() const {
 }
 
 bool CustomProperty::HasEqualCSSPropertyName(const CSSProperty& other) const {
-  if (PropertyID() != other.PropertyID())
+  if (PropertyID() != other.PropertyID()) {
     return false;
+  }
   return name_ == other.GetPropertyNameAtomicString();
 }
 
 void CustomProperty::ApplyInitial(StyleResolverState& state) const {
+  ComputedStyleBuilder& builder = state.StyleBuilder();
   bool is_inherited_property = IsInherited();
 
+  builder.SetHasVariableDeclaration();
+
   if (!registration_) {
-    state.Style()->SetVariableData(name_, nullptr, is_inherited_property);
+    builder.SetVariableData(name_, nullptr, is_inherited_property);
     return;
   }
 
@@ -78,60 +83,83 @@ void CustomProperty::ApplyInitial(StyleResolverState& state) const {
   // StyleInitialData may also be missing. We just disable initial values in
   // this case, since we shouldn't really be returning a style for those
   // elements anyway.
-  if (state.StyleRef().IsEnsuredOutsideFlatTree())
+  if (state.StyleBuilder().IsEnsuredOutsideFlatTree()) {
     return;
+  }
 
-  const StyleInitialData* initial_data = state.StyleRef().InitialData().get();
+  const StyleInitialData* initial_data =
+      state.StyleBuilder().InitialData().get();
   DCHECK(initial_data);
   CSSVariableData* initial_variable_data = initial_data->GetVariableData(name_);
   const CSSValue* initial_value = initial_data->GetVariableValue(name_);
 
-  state.Style()->SetVariableData(name_, initial_variable_data,
-                                 is_inherited_property);
-  state.Style()->SetVariableValue(name_, initial_value, is_inherited_property);
+  builder.SetVariableData(name_, initial_variable_data, is_inherited_property);
+  builder.SetVariableValue(name_, initial_value, is_inherited_property);
 }
 
 void CustomProperty::ApplyInherit(StyleResolverState& state) const {
+  ComputedStyleBuilder& builder = state.StyleBuilder();
   bool is_inherited_property = IsInherited();
 
   CSSVariableData* parent_data =
       state.ParentStyle()->GetVariableData(name_, is_inherited_property);
 
-  state.Style()->SetVariableData(name_, parent_data, is_inherited_property);
+  builder.SetVariableData(name_, parent_data, is_inherited_property);
 
   if (registration_) {
     const CSSValue* parent_value = state.ParentStyle()->GetVariableValue(name_);
-    state.Style()->SetVariableValue(name_, parent_value, is_inherited_property);
+    builder.SetVariableValue(name_, parent_value, is_inherited_property);
   }
 }
 
 void CustomProperty::ApplyValue(StyleResolverState& state,
-                                const CSSValue& value) const {
+                                const CSSValue& value,
+                                ValueMode value_mode) const {
+  ComputedStyleBuilder& builder = state.StyleBuilder();
   DCHECK(!value.IsCSSWideKeyword());
+
+  builder.SetHasVariableDeclaration();
 
   if (value.IsInvalidVariableValue()) {
     if (!SupportsGuaranteedInvalid()) {
       ApplyUnset(state);
       return;
     }
-    state.Style()->SetVariableData(name_, nullptr, IsInherited());
-    if (registration_)
-      state.Style()->SetVariableValue(name_, nullptr, IsInherited());
+    builder.SetVariableData(name_, nullptr, IsInherited());
+    if (registration_) {
+      builder.SetVariableValue(name_, nullptr, IsInherited());
+    }
     return;
   }
 
-  const auto& declaration = To<CSSCustomPropertyDeclaration>(value);
-
   bool is_inherited_property = IsInherited();
 
-  scoped_refptr<CSSVariableData> data = &declaration.Value();
-  DCHECK(!data->NeedsVariableResolution());
+  const auto* declaration = DynamicTo<CSSCustomPropertyDeclaration>(value);
 
-  state.Style()->SetVariableData(name_, data, is_inherited_property);
+  // Unregistered custom properties can only accept
+  // CSSCustomPropertyDeclaration objects.
+  if (!registration_) {
+    // We can reach here without a CSSCustomPropertyDeclaration
+    // if we're removing a property registration while animating.
+    // TODO(andruud): Cancel animations if the registration changed.
+    if (declaration) {
+      CSSVariableData& data = declaration->Value();
+      DCHECK(!data.NeedsVariableResolution());
+      builder.SetVariableData(name_, &data, is_inherited_property);
+    }
+    return;
+  }
 
-  if (registration_) {
-    const CSSParserContext* context = declaration.ParserContext();
+  // Registered custom properties can accept either
+  // - A CSSCustomPropertyDeclaration, in which case we produce the
+  //   `registered_value` value from that, or:
+  // - Some other value (typically an interpolated value), which we'll use
+  //   as the `registered_value` directly.
 
+  const CSSParserContext* context =
+      declaration ? declaration->ParserContext() : nullptr;
+
+  if (!context) {
     // There is no "originating" CSSParserContext associated with the
     // declaration if it represents a "synthetic" token sequence such as those
     // constructed to represent interpolated (registered) custom properties. [1]
@@ -141,50 +169,50 @@ void CustomProperty::ApplyValue(StyleResolverState& state,
     //
     // [1]
     // https://drafts.css-houdini.org/css-properties-values-api-1/#equivalent-token-sequence
-    if (!context) {
-      context = StrictCSSParserContext(
-          state.GetDocument().GetExecutionContext()->GetSecureContextMode());
-    }
-    auto mode = CSSParserLocalContext::VariableMode::kTyped;
-    auto local_context = CSSParserLocalContext().WithVariableMode(mode);
-    CSSParserTokenRange range = data->TokenRange();
-    const CSSValue* registered_value =
-        ParseSingleValue(range, *context, local_context);
-    if (!registered_value) {
-      if (is_inherited_property)
-        ApplyInherit(state);
-      else
-        ApplyInitial(state);
-      return;
-    }
-
-    registered_value = &StyleBuilderConverter::ConvertRegisteredPropertyValue(
-        state, *registered_value, context);
-    data = StyleBuilderConverter::ConvertRegisteredPropertyVariableData(
-        *registered_value, data->IsAnimationTainted());
-
-    state.Style()->SetVariableData(name_, data, is_inherited_property);
-    state.Style()->SetVariableValue(name_, registered_value,
-                                    is_inherited_property);
+    context = StrictCSSParserContext(
+        state.GetDocument().GetExecutionContext()->GetSecureContextMode());
   }
+
+  const CSSValue* registered_value = declaration ? nullptr : &value;
+
+  if (!registered_value) {
+    DCHECK(declaration);
+    CSSVariableData& data = declaration->Value();
+    CSSTokenizer tokenizer(data.OriginalText());
+    Vector<CSSParserToken, 32> tokens = tokenizer.TokenizeToEOF();
+    CSSTokenizedValue tokenized_value{CSSParserTokenRange(tokens),
+                                      data.OriginalText()};
+    registered_value =
+        Parse(tokenized_value, *context, CSSParserLocalContext());
+  }
+
+  if (!registered_value) {
+    if (is_inherited_property) {
+      ApplyInherit(state);
+    } else {
+      ApplyInitial(state);
+    }
+    return;
+  }
+
+  bool is_animation_tainted = value_mode == ValueMode::kAnimated;
+
+  registered_value = &StyleBuilderConverter::ConvertRegisteredPropertyValue(
+      state, *registered_value, context);
+  scoped_refptr<CSSVariableData> data =
+      StyleBuilderConverter::ConvertRegisteredPropertyVariableData(
+          *registered_value, is_animation_tainted);
+
+  builder.SetVariableData(name_, data, is_inherited_property);
+  builder.SetVariableValue(name_, registered_value, is_inherited_property);
 }
 
 const CSSValue* CustomProperty::ParseSingleValue(
     CSSParserTokenRange& range,
     const CSSParserContext& context,
     const CSSParserLocalContext& local_context) const {
-  using VariableMode = CSSParserLocalContext::VariableMode;
-
-  switch (local_context.GetVariableMode()) {
-    case VariableMode::kTyped:
-      return ParseTyped(range, context, local_context);
-    case VariableMode::kUntyped:
-      return ParseUntyped(range, context, local_context);
-    case VariableMode::kValidatedUntyped:
-      if (registration_ && !ParseTyped(range, context, local_context))
-        return nullptr;
-      return ParseUntyped(range, context, local_context);
-  }
+  NOTREACHED();
+  return nullptr;
 }
 
 const CSSValue* CustomProperty::CSSValueFromComputedStyleInternal(
@@ -193,8 +221,9 @@ const CSSValue* CustomProperty::CSSValueFromComputedStyleInternal(
     bool allow_visited_style) const {
   if (registration_) {
     const CSSValue* value = style.GetVariableValue(name_, IsInherited());
-    if (value)
+    if (value) {
       return value;
+    }
     // If we don't have CSSValue for this registered property, it means that
     // that the property was not registered at the time |style| was calculated,
     // hence we proceed with unregistered behavior.
@@ -202,40 +231,46 @@ const CSSValue* CustomProperty::CSSValueFromComputedStyleInternal(
 
   CSSVariableData* data = style.GetVariableData(name_, IsInherited());
 
-  if (!data)
+  if (!data) {
     return nullptr;
+  }
 
   return MakeGarbageCollected<CSSCustomPropertyDeclaration>(
       data, /* parser_context */ nullptr);
 }
 
 const CSSValue* CustomProperty::ParseUntyped(
-    CSSParserTokenRange range,
+    const CSSTokenizedValue& value,
     const CSSParserContext& context,
     const CSSParserLocalContext& local_context) const {
-  // TODO(crbug.com/661854): Pass through the original string when we have it.
   return CSSVariableParser::ParseDeclarationValue(
-      {range, StringView()}, local_context.IsAnimationTainted(), context);
+      value, local_context.IsAnimationTainted(), context);
 }
 
-const CSSValue* CustomProperty::ParseTyped(
-    CSSParserTokenRange range,
+const CSSValue* CustomProperty::Parse(
+    CSSTokenizedValue value,
     const CSSParserContext& context,
     const CSSParserLocalContext& local_context) const {
-  if (!registration_)
-    return ParseUntyped(range, context, local_context);
-  return registration_->Syntax().Parse(range, context,
+  if (!registration_) {
+    return ParseUntyped(value, context, local_context);
+  }
+  return registration_->Syntax().Parse(value, context,
                                        local_context.IsAnimationTainted());
 }
 
 bool CustomProperty::HasInitialValue() const {
-  if (!registration_)
+  if (!registration_) {
     return false;
+  }
   return registration_->Initial();
 }
 
 bool CustomProperty::SupportsGuaranteedInvalid() const {
   return !registration_ || registration_->Syntax().IsUniversal();
+}
+
+bool CustomProperty::HasUniversalSyntax() const {
+  return registration_ && registration_->Syntax().IsUniversal();
 }
 
 }  // namespace blink

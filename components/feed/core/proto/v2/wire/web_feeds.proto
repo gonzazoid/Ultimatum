@@ -7,6 +7,8 @@ syntax = "proto3";
 package feedwire.webfeed;
 
 import "components/feed/core/proto/v2/wire/consistency_token.proto";
+import "components/feed/core/proto/v2/wire/request.proto";
+import "components/feed/core/proto/v2/wire/response.proto";
 import "components/feed/core/proto/v2/wire/web_feed_matcher.proto";
 
 option optimize_for = LITE_RUNTIME;
@@ -19,6 +21,7 @@ enum WebFeedChangeReason {
   IN_FEED_RECOMMENDATION = 4;
   BACK_OF_CARD_UNFOLLOW = 5;
   RECOMMENDATION_WEB_PAGE_ACCELERATOR = 6;
+  SINGLE_WEB_FEED = 7;
 }
 message WebFeed {
   enum State {
@@ -57,6 +60,17 @@ message FollowWebFeedRequest {
   ConsistencyToken consistency_token = 4;
   WebFeedChangeReason change_reason = 6;
 }
+message QueryWebFeedRequest {
+  oneof identifier {
+    string name = 1;
+    WebFeedUris web_feed_uris = 2;
+  }
+  ConsistencyToken consistency_token = 3;
+}
+message QueryWebFeedResponse {
+  WebFeed web_feed = 1;
+  ConsistencyToken consistency_token = 2;
+}
 message FollowWebFeedResponse {
   WebFeed web_feed = 1;
   ConsistencyToken consistency_token = 2;
@@ -74,4 +88,15 @@ message ListRecommendedWebFeedsRequest {
 }
 message ListRecommendedWebFeedsResponse {
   repeated WebFeed recommended_web_feeds = 1;
+}
+message QueryWebFeedsContentsRequest {
+  Request request = 1;
+}
+message QueryWebFeedsContentsResponse {
+  Response response = 1;
+}
+message WebFeedUris {
+  string web_page_uri = 1;
+  string canonical_uri = 2;
+  repeated string page_rss_uris = 3;
 }

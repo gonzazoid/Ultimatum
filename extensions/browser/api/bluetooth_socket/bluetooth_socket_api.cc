@@ -6,11 +6,10 @@
 
 #include <stdint.h>
 
-#include <memory>
 #include <unordered_set>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/hash/hash.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/types/optional_util.h"
@@ -123,9 +122,9 @@ bool IsValidPsm(int psm) {
 
 }  // namespace
 
-BluetoothSocketAsyncApiFunction::BluetoothSocketAsyncApiFunction() {}
+BluetoothSocketAsyncApiFunction::BluetoothSocketAsyncApiFunction() = default;
 
-BluetoothSocketAsyncApiFunction::~BluetoothSocketAsyncApiFunction() {}
+BluetoothSocketAsyncApiFunction::~BluetoothSocketAsyncApiFunction() = default;
 
 bool BluetoothSocketAsyncApiFunction::PreRunValidation(std::string* error) {
   if (!ExtensionFunction::PreRunValidation(error))
@@ -172,15 +171,15 @@ std::unordered_set<int>* BluetoothSocketAsyncApiFunction::GetSocketIds() {
   return manager_->GetResourceIds(extension_id());
 }
 
-BluetoothSocketCreateFunction::BluetoothSocketCreateFunction() {}
+BluetoothSocketCreateFunction::BluetoothSocketCreateFunction() = default;
 
-BluetoothSocketCreateFunction::~BluetoothSocketCreateFunction() {}
+BluetoothSocketCreateFunction::~BluetoothSocketCreateFunction() = default;
 
 ExtensionFunction::ResponseAction BluetoothSocketCreateFunction::Run() {
   DCHECK_CURRENTLY_ON(work_thread_id());
 
   auto params = bluetooth_socket::Create::Params::Create(args());
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   BluetoothApiSocket* socket = new BluetoothApiSocket(extension_id());
 
@@ -195,13 +194,13 @@ ExtensionFunction::ResponseAction BluetoothSocketCreateFunction::Run() {
       ArgumentList(bluetooth_socket::Create::Results::Create(create_info)));
 }
 
-BluetoothSocketUpdateFunction::BluetoothSocketUpdateFunction() {}
+BluetoothSocketUpdateFunction::BluetoothSocketUpdateFunction() = default;
 
-BluetoothSocketUpdateFunction::~BluetoothSocketUpdateFunction() {}
+BluetoothSocketUpdateFunction::~BluetoothSocketUpdateFunction() = default;
 
 ExtensionFunction::ResponseAction BluetoothSocketUpdateFunction::Run() {
   auto params = bluetooth_socket::Update::Params::Create(args());
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   BluetoothApiSocket* socket = GetSocket(params->socket_id);
   if (!socket)
@@ -211,13 +210,13 @@ ExtensionFunction::ResponseAction BluetoothSocketUpdateFunction::Run() {
   return RespondNow(ArgumentList(bluetooth_socket::Update::Results::Create()));
 }
 
-BluetoothSocketSetPausedFunction::BluetoothSocketSetPausedFunction() {}
+BluetoothSocketSetPausedFunction::BluetoothSocketSetPausedFunction() = default;
 
-BluetoothSocketSetPausedFunction::~BluetoothSocketSetPausedFunction() {}
+BluetoothSocketSetPausedFunction::~BluetoothSocketSetPausedFunction() = default;
 
 ExtensionFunction::ResponseAction BluetoothSocketSetPausedFunction::Run() {
   auto params = bluetooth_socket::SetPaused::Params::Create(args());
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   BluetoothSocketEventDispatcher* socket_event_dispatcher =
       GetSocketEventDispatcher(browser_context());
@@ -240,9 +239,9 @@ ExtensionFunction::ResponseAction BluetoothSocketSetPausedFunction::Run() {
       ArgumentList(bluetooth_socket::SetPaused::Results::Create()));
 }
 
-BluetoothSocketListenFunction::BluetoothSocketListenFunction() {}
+BluetoothSocketListenFunction::BluetoothSocketListenFunction() = default;
 
-BluetoothSocketListenFunction::~BluetoothSocketListenFunction() {}
+BluetoothSocketListenFunction::~BluetoothSocketListenFunction() = default;
 
 bool BluetoothSocketListenFunction::PreRunValidation(std::string* error) {
   if (!BluetoothSocketAsyncApiFunction::PreRunValidation(error))
@@ -281,7 +280,7 @@ void BluetoothSocketListenFunction::OnGetAdapter(
     return;
   }
 
-  absl::optional<std::string> name;
+  std::optional<std::string> name;
   if (socket->name())
     name = *socket->name();
 
@@ -333,19 +332,19 @@ const std::string& BluetoothSocketListenUsingRfcommFunction::uuid() const {
 
 bool BluetoothSocketListenUsingRfcommFunction::CreateParams() {
   params_ = bluetooth_socket::ListenUsingRfcomm::Params::Create(args());
-  return params_ != nullptr;
+  return params_.has_value();
 }
 
 void BluetoothSocketListenUsingRfcommFunction::CreateService(
     scoped_refptr<device::BluetoothAdapter> adapter,
     const device::BluetoothUUID& uuid,
-    const absl::optional<std::string>& name,
+    const std::optional<std::string>& name,
     device::BluetoothAdapter::CreateServiceCallback callback,
     device::BluetoothAdapter::CreateServiceErrorCallback error_callback) {
   device::BluetoothAdapter::ServiceOptions service_options;
   service_options.name = std::move(name);
 
-  const absl::optional<ListenOptions>& options = params_->options;
+  const std::optional<ListenOptions>& options = params_->options;
   if (options && options->channel)
     service_options.channel = *options->channel;
 
@@ -373,19 +372,19 @@ const std::string& BluetoothSocketListenUsingL2capFunction::uuid() const {
 
 bool BluetoothSocketListenUsingL2capFunction::CreateParams() {
   params_ = bluetooth_socket::ListenUsingL2cap::Params::Create(args());
-  return params_ != nullptr;
+  return params_.has_value();
 }
 
 void BluetoothSocketListenUsingL2capFunction::CreateService(
     scoped_refptr<device::BluetoothAdapter> adapter,
     const device::BluetoothUUID& uuid,
-    const absl::optional<std::string>& name,
+    const std::optional<std::string>& name,
     device::BluetoothAdapter::CreateServiceCallback callback,
     device::BluetoothAdapter::CreateServiceErrorCallback error_callback) {
   device::BluetoothAdapter::ServiceOptions service_options;
   service_options.name = std::move(name);
 
-  const absl::optional<ListenOptions>& options = params_->options;
+  const std::optional<ListenOptions>& options = params_->options;
   if (options && options->psm) {
     int psm = *options->psm;
     if (!IsValidPsm(psm)) {
@@ -417,7 +416,7 @@ bool BluetoothSocketAbstractConnectFunction::PreRunValidation(
     return false;
 
   params_ = bluetooth_socket::Connect::Params::Create(args());
-  EXTENSION_FUNCTION_PRERUN_VALIDATE(params_.get());
+  EXTENSION_FUNCTION_PRERUN_VALIDATE(params_);
 
   socket_event_dispatcher_ = GetSocketEventDispatcher(browser_context());
   return socket_event_dispatcher_ != nullptr;
@@ -489,9 +488,9 @@ void BluetoothSocketAbstractConnectFunction::OnConnectError(
   Respond(Error(message));
 }
 
-BluetoothSocketConnectFunction::BluetoothSocketConnectFunction() {}
+BluetoothSocketConnectFunction::BluetoothSocketConnectFunction() = default;
 
-BluetoothSocketConnectFunction::~BluetoothSocketConnectFunction() {}
+BluetoothSocketConnectFunction::~BluetoothSocketConnectFunction() = default;
 
 void BluetoothSocketConnectFunction::ConnectToService(
     device::BluetoothDevice* device,
@@ -501,15 +500,17 @@ void BluetoothSocketConnectFunction::ConnectToService(
       base::BindOnce(&BluetoothSocketConnectFunction::OnConnectError, this));
 }
 
-BluetoothSocketDisconnectFunction::BluetoothSocketDisconnectFunction() {}
+BluetoothSocketDisconnectFunction::BluetoothSocketDisconnectFunction() =
+    default;
 
-BluetoothSocketDisconnectFunction::~BluetoothSocketDisconnectFunction() {}
+BluetoothSocketDisconnectFunction::~BluetoothSocketDisconnectFunction() =
+    default;
 
 ExtensionFunction::ResponseAction BluetoothSocketDisconnectFunction::Run() {
   DCHECK_CURRENTLY_ON(work_thread_id());
 
   auto params = bluetooth_socket::Disconnect::Params::Create(args());
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   BluetoothApiSocket* socket = GetSocket(params->socket_id);
   if (!socket)
@@ -525,13 +526,13 @@ void BluetoothSocketDisconnectFunction::OnSuccess() {
   Respond(ArgumentList(bluetooth_socket::Disconnect::Results::Create()));
 }
 
-BluetoothSocketCloseFunction::BluetoothSocketCloseFunction() {}
+BluetoothSocketCloseFunction::BluetoothSocketCloseFunction() = default;
 
 BluetoothSocketCloseFunction::~BluetoothSocketCloseFunction() = default;
 
 ExtensionFunction::ResponseAction BluetoothSocketCloseFunction::Run() {
   auto params = bluetooth_socket::Close::Params::Create(args());
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  EXTENSION_FUNCTION_VALIDATE(params);
   BluetoothApiSocket* socket = GetSocket(params->socket_id);
   if (!socket)
     return RespondNow(Error(kSocketNotFoundError));
@@ -543,17 +544,16 @@ ExtensionFunction::ResponseAction BluetoothSocketCloseFunction::Run() {
 BluetoothSocketSendFunction::BluetoothSocketSendFunction()
     : io_buffer_size_(0) {}
 
-BluetoothSocketSendFunction::~BluetoothSocketSendFunction() {}
+BluetoothSocketSendFunction::~BluetoothSocketSendFunction() = default;
 
 ExtensionFunction::ResponseAction BluetoothSocketSendFunction::Run() {
   DCHECK_CURRENTLY_ON(work_thread_id());
 
   params_ = bluetooth_socket::Send::Params::Create(args());
-  EXTENSION_FUNCTION_VALIDATE(params_.get());
+  EXTENSION_FUNCTION_VALIDATE(params_);
 
   io_buffer_size_ = params_->data.size();
-  io_buffer_ = base::MakeRefCounted<net::WrappedIOBuffer>(
-      reinterpret_cast<const char*>(params_->data.data()));
+  io_buffer_ = base::MakeRefCounted<net::WrappedIOBuffer>(params_->data);
 
   BluetoothApiSocket* socket = GetSocket(params_->socket_id);
   if (!socket)
@@ -577,13 +577,13 @@ void BluetoothSocketSendFunction::OnError(
   Respond(Error(message));
 }
 
-BluetoothSocketGetInfoFunction::BluetoothSocketGetInfoFunction() {}
+BluetoothSocketGetInfoFunction::BluetoothSocketGetInfoFunction() = default;
 
-BluetoothSocketGetInfoFunction::~BluetoothSocketGetInfoFunction() {}
+BluetoothSocketGetInfoFunction::~BluetoothSocketGetInfoFunction() = default;
 
 ExtensionFunction::ResponseAction BluetoothSocketGetInfoFunction::Run() {
   auto params = bluetooth_socket::GetInfo::Params::Create(args());
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   BluetoothApiSocket* socket = GetSocket(params->socket_id);
   if (!socket)
@@ -593,9 +593,11 @@ ExtensionFunction::ResponseAction BluetoothSocketGetInfoFunction::Run() {
       CreateSocketInfo(params->socket_id, socket))));
 }
 
-BluetoothSocketGetSocketsFunction::BluetoothSocketGetSocketsFunction() {}
+BluetoothSocketGetSocketsFunction::BluetoothSocketGetSocketsFunction() =
+    default;
 
-BluetoothSocketGetSocketsFunction::~BluetoothSocketGetSocketsFunction() {}
+BluetoothSocketGetSocketsFunction::~BluetoothSocketGetSocketsFunction() =
+    default;
 
 ExtensionFunction::ResponseAction BluetoothSocketGetSocketsFunction::Run() {
   std::vector<bluetooth_socket::SocketInfo> socket_infos;

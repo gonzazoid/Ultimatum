@@ -6,9 +6,9 @@
 
 #include <string>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/extensions/api/messaging/incognito_connectability_infobar_delegate.h"
@@ -204,6 +204,11 @@ static base::LazyInstance<
 BrowserContextKeyedAPIFactory<IncognitoConnectability>*
 IncognitoConnectability::GetFactoryInstance() {
   return g_incognito_connectability_factory.Pointer();
+}
+
+// static
+void IncognitoConnectability::EnsureFactoryBuilt() {
+  GetFactoryInstance();
 }
 
 }  // namespace extensions

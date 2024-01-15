@@ -10,11 +10,12 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
-#include "chrome/browser/web_applications/app_registrar_observer.h"
-#include "chrome/browser/web_applications/web_app_id.h"
+#include "chrome/browser/ui/web_applications/web_app_dialog_utils.h"
 #include "chrome/browser/web_applications/web_app_install_manager.h"
 #include "chrome/browser/web_applications/web_app_install_manager_observer.h"
+#include "chrome/browser/web_applications/web_app_registrar.h"
 #include "components/webapps/browser/banners/app_banner_manager.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/browser/web_contents_user_data.h"
 
 namespace extensions {
@@ -39,9 +40,6 @@ class AppBannerManagerDesktop
   static void CreateForWebContents(content::WebContents* web_contents);
   using content::WebContentsUserData<AppBannerManagerDesktop>::FromWebContents;
 
-  // Turn off triggering on engagement notifications or navigates, for testing
-  // purposes only.
-  static void DisableTriggeringForTesting();
   virtual TestAppBannerManagerDesktop*
   AsTestAppBannerManagerDesktopForTesting();
 
@@ -54,21 +52,27 @@ class AppBannerManagerDesktop
       override_app_banner_manager_desktop_for_testing_;
 
   // AppBannerManager overrides.
-  base::WeakPtr<AppBannerManager> GetWeakPtr() override;
-  void InvalidateWeakPtrs() override;
+  base::WeakPtr<AppBannerManager> GetWeakPtrForThisNavigation() override;
+  void InvalidateWeakPtrsForThisNavigation() override;
   bool IsSupportedNonWebAppPlatform(
       const std::u16string& platform) const override;
   bool IsRelatedNonWebAppInstalled(
       const blink::Manifest::RelatedApplication& related_app) const override;
   bool IsWebAppConsideredInstalled() const override;
-  std::string GetAppIdentifier() override;
-
-  // content::WebContentsObserver override.
-  void DidFinishLoad(content::RenderFrameHost* render_frame_host,
-                     const GURL& validated_url) override;
+  bool IsAppFullyInstalledForSiteUrl(const GURL& site_url) const override;
+  bool IsAppPartiallyInstalledForSiteUrl(const GURL& site_url) const override;
+  bool IsInAppBrowsingContext() const override;
+  void SaveInstallationDismissedForMl(const GURL& manifest_id) override;
+  void SaveInstallationIgnoredForMl(const GURL& manifest_id) override;
+  void SaveInstallationAcceptedForMl(const GURL& manifest_id) override;
+  bool IsMlPromotionBlockedByHistoryGuardrail(const GURL& manifest_id) override;
+  void OnMlInstallPrediction(base::PassKey<MLInstallabilityPromoter>,
+                             std::string result_label) override;
+  segmentation_platform::SegmentationPlatformService*
+  GetSegmentationPlatformService() override;
 
   // Called when the web app install initiated by a banner has completed.
-  virtual void DidFinishCreatingWebApp(const web_app::AppId& app_id,
+  virtual void DidFinishCreatingWebApp(const webapps::AppId& app_id,
                                        webapps::InstallResultCode code);
 
  private:
@@ -81,22 +85,25 @@ class AppBannerManagerDesktop
   bool ShouldAllowWebAppReplacementInstall() override;
   void ShowBannerUi(WebappInstallSource install_source) override;
 
-  // SiteEngagementObserver override.
-  void OnEngagementEvent(content::WebContents* web_contents,
-                         const GURL& url,
-                         double score,
-                         site_engagement::EngagementType type) override;
-
   // web_app::WebAppInstallManagerObserver:
-  void OnWebAppInstalled(const web_app::AppId& app_id) override;
-  void OnWebAppWillBeUninstalled(const web_app::AppId& app_id) override;
-  void OnWebAppUninstalled(const web_app::AppId& app_id) override;
+  void OnWebAppInstalled(const webapps::AppId& app_id) override;
+  void OnWebAppWillBeUninstalled(const webapps::AppId& app_id) override;
+  void OnWebAppUninstalled(
+      const webapps::AppId& app_id,
+      webapps::WebappUninstallSource uninstall_source) override;
   void OnWebAppInstallManagerDestroyed() override;
 
-  void CreateWebApp(WebappInstallSource install_source);
+  void CreateWebApp(WebappInstallSource install_source,
+                    web_app::WebAppInstalledCallback install_callback);
+  // Catch only kSuccessNewInstall and kUserInstallDeclined user responses if
+  // the dialog is triggered by ML.
+  void DidCreateWebAppFromMLDialog(const webapps::AppId& app_id,
+                                   webapps::InstallResultCode code);
 
+  raw_ptr<segmentation_platform::SegmentationPlatformService>
+      segmentation_platform_service_;
   raw_ptr<extensions::ExtensionRegistry> extension_registry_;
-  web_app::AppId uninstalling_app_id_;
+  webapps::AppId uninstalling_app_id_;
 
   base::ScopedObservation<web_app::WebAppInstallManager,
                           web_app::WebAppInstallManagerObserver>

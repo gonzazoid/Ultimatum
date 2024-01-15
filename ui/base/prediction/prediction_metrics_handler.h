@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/component_export.h"
+#include "base/memory/raw_ref.h"
 #include "base/metrics/histogram_base.h"
 #include "base/time/time.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -116,14 +117,14 @@ class COMPONENT_EXPORT(UI_BASE_PREDICTION) PredictionMetricsHandler {
 
   // Histograms are never deleted we leak them at shutdown so it is fine to keep
   // a reference here.
-  base::HistogramBase& over_prediction_histogram_;
-  base::HistogramBase& under_prediction_histogram_;
-  base::HistogramBase& prediction_score_histogram_;
-  base::HistogramBase& frame_over_prediction_histogram_;
-  base::HistogramBase& frame_under_prediction_histogram_;
-  base::HistogramBase& frame_prediction_score_histogram_;
-  base::HistogramBase& prediction_jitter_histogram_;
-  base::HistogramBase& visual_jitter_histogram_;
+  const raw_ref<base::HistogramBase> over_prediction_histogram_;
+  const raw_ref<base::HistogramBase> under_prediction_histogram_;
+  const raw_ref<base::HistogramBase> prediction_score_histogram_;
+  const raw_ref<base::HistogramBase> frame_over_prediction_histogram_;
+  const raw_ref<base::HistogramBase> frame_under_prediction_histogram_;
+  const raw_ref<base::HistogramBase> frame_prediction_score_histogram_;
+  const raw_ref<base::HistogramBase> prediction_jitter_histogram_;
+  const raw_ref<base::HistogramBase> visual_jitter_histogram_;
 };
 
 }  // namespace ui

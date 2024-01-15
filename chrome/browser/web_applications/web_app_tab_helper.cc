@@ -9,6 +9,7 @@
 
 #include "base/unguessable_token.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/task_manager/web_contents_tags.h"
 #include "chrome/browser/web_applications/manifest_update_manager.h"
 #include "chrome/browser/web_applications/os_integration/os_integration_manager.h"
 #include "chrome/browser/web_applications/policy/web_app_policy_manager.h"
@@ -30,7 +31,8 @@ void WebAppTabHelper::CreateForWebContents(content::WebContents* contents) {
   }
 }
 
-const AppId* WebAppTabHelper::GetAppId(content::WebContents* web_contents) {
+const webapps::AppId* WebAppTabHelper::GetAppId(
+    content::WebContents* web_contents) {
   auto* tab_helper = WebAppTabHelper::FromWebContents(web_contents);
   if (!tab_helper)
     return nullptr;
@@ -58,21 +60,22 @@ const base::UnguessableToken& WebAppTabHelper::GetAudioFocusGroupIdForTesting()
 
 WebAppLaunchQueue& WebAppTabHelper::EnsureLaunchQueue() {
   if (!launch_queue_) {
-    launch_queue_ = std::make_unique<WebAppLaunchQueue>(web_contents(),
-                                                        provider_->registrar());
+    launch_queue_ = std::make_unique<WebAppLaunchQueue>(
+        web_contents(), provider_->registrar_unsafe());
   }
   return *launch_queue_;
 }
 
-void WebAppTabHelper::SetAppId(absl::optional<AppId> app_id) {
+void WebAppTabHelper::SetAppId(absl::optional<webapps::AppId> app_id) {
   // Empty string should not be used to indicate "no app ID".
   DCHECK(!app_id || !app_id->empty());
-  DCHECK(!app_id || provider_->registrar().IsInstalled(*app_id) ||
-         provider_->registrar().IsUninstalling(*app_id));
-  if (app_id_ == app_id)
+  DCHECK(!app_id || provider_->registrar_unsafe().IsInstalled(*app_id) ||
+         provider_->registrar_unsafe().IsUninstalling(*app_id));
+  if (app_id_ == app_id) {
     return;
+  }
 
-  absl::optional<AppId> previous_app_id = std::move(app_id_);
+  absl::optional<webapps::AppId> previous_app_id = std::move(app_id_);
   app_id_ = std::move(app_id);
 
   OnAssociatedAppChanged(previous_app_id, app_id_);
@@ -138,16 +141,17 @@ bool WebAppTabHelper::IsInAppWindow() const {
   return provider_->ui_manager().IsInAppWindow(web_contents());
 }
 
-void WebAppTabHelper::OnWebAppInstalled(const AppId& installed_app_id) {
+void WebAppTabHelper::OnWebAppInstalled(
+    const webapps::AppId& installed_app_id) {
   // Check if current web_contents url is in scope for the newly installed app.
-  absl::optional<AppId> app_id =
+  absl::optional<webapps::AppId> app_id =
       FindAppWithUrlInScope(web_contents()->GetURL());
   if (app_id == installed_app_id)
     SetAppId(app_id);
 }
 
 void WebAppTabHelper::OnWebAppWillBeUninstalled(
-    const AppId& uninstalled_app_id) {
+    const webapps::AppId& uninstalled_app_id) {
   if (app_id_ == uninstalled_app_id)
     SetAppId(absl::nullopt);
 }
@@ -158,10 +162,36 @@ void WebAppTabHelper::OnWebAppInstallManagerDestroyed() {
 }
 
 void WebAppTabHelper::OnAssociatedAppChanged(
-    const absl::optional<AppId>& previous_app_id,
-    const absl::optional<AppId>& new_app_id) {
+    const absl::optional<webapps::AppId>& previous_app_id,
+    const absl::optional<webapps::AppId>& new_app_id) {
   provider_->ui_manager().NotifyOnAssociatedAppChanged(
       web_contents(), previous_app_id, new_app_id);
+
+  // Tag WebContents for Task Manager.
+  // cases to consider:
+  // 1. non-app -> app (association added)
+  // 2. non-app -> non-app
+  // 3. app -> app (association changed)
+  // 4. app -> non-app (association removed)
+
+  if (new_app_id.has_value() && !new_app_id->empty()) {
+    // case 1 & 3:
+    // WebContents could already be tagged with TabContentsTag or WebAppTag,
+    // therefore we want to clear it.
+    task_manager::WebContentsTags::ClearTag(web_contents());
+    task_manager::WebContentsTags::CreateForWebApp(
+        web_contents(), new_app_id.value(),
+        provider_->registrar_unsafe().IsIsolated(new_app_id.value()));
+  } else {
+    // case 4:
+    if (previous_app_id.has_value() && !previous_app_id->empty()) {
+      // remove WebAppTag, add TabContentsTag.
+      task_manager::WebContentsTags::ClearTag(web_contents());
+      task_manager::WebContentsTags::CreateForTabContents(web_contents());
+    }
+    // case 2: do nothing
+  }
+
   UpdateAudioFocusGroupId();
 }
 
@@ -178,12 +208,13 @@ void WebAppTabHelper::UpdateAudioFocusGroupId() {
 }
 
 void WebAppTabHelper::ReinstallPlaceholderAppIfNecessary(const GURL& url) {
-  provider_->policy_manager().ReinstallPlaceholderAppIfNecessary(url);
+  provider_->policy_manager().ReinstallPlaceholderAppIfNecessary(
+      url, base::DoNothing());
 }
 
-absl::optional<AppId> WebAppTabHelper::FindAppWithUrlInScope(
+absl::optional<webapps::AppId> WebAppTabHelper::FindAppWithUrlInScope(
     const GURL& url) const {
-  return provider_->registrar().FindAppWithUrlInScope(url);
+  return provider_->registrar_unsafe().FindAppWithUrlInScope(url);
 }
 
 WEB_CONTENTS_USER_DATA_KEY_IMPL(WebAppTabHelper);

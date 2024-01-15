@@ -9,132 +9,131 @@
 #include <string>
 #include <vector>
 
-#include "ash/public/cpp/tablet_mode_observer.h"
-#include "base/callback.h"
 #include "base/values.h"
-#include "chrome/browser/ash/login/help_app_launcher.h"
 #include "chrome/browser/ash/login/oobe_configuration.h"
 #include "chrome/browser/ash/login/oobe_screen.h"
-#include "chrome/browser/ash/login/version_info_updater.h"
-#include "chrome/browser/ash/tpm_firmware_update.h"
-#include "chrome/browser/ui/ash/keyboard/chrome_keyboard_controller_client.h"
 #include "chrome/browser/ui/webui/ash/login/base_webui_handler.h"
-#include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chrome/browser/ui/webui/ash/login/user_creation_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/welcome_screen_handler.h"
 #include "ui/events/event_source.h"
 
 namespace ui {
 class EventSink;
 }
 
-namespace chromeos {
+namespace ash {
 
-class CoreOobeView {
+class PriorityScreenChecker {
  public:
+  static bool IsPriorityScreen(OobeScreenId screen_id) {
+    for (const auto& priority_screen : priority_screens_) {
+      if (screen_id == priority_screen) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+ private:
+  constexpr static StaticOobeScreenId priority_screens_[] = {
+      WelcomeView::kScreenId, UserCreationView::kScreenId};
+};
+
+class CoreOobeView : public base::SupportsWeakPtr<CoreOobeView> {
+ public:
+  // Possible Initialization States of the UI
+  enum class UiState {
+    kUninitialized,           // Start of things
+    kCoreHandlerInitialized,  // First oobe.js instruction
+    kPriorityScreensLoaded,   // Priority screens are loaded and could be shown.
+    kFullyInitialized,        // Fully initialized a.k.a 'screenStateInitialize'
+  };
+
   virtual ~CoreOobeView() = default;
 
-  virtual void ShowScreenWithData(const ash::OobeScreenId& screen,
-                                  absl::optional<base::Value::Dict> data) = 0;
-  virtual void ReloadContent(base::Value::Dict dictionary) = 0;
-  virtual void UpdateClientAreaSize(const gfx::Size& size) = 0;
-  virtual void ToggleSystemInfo() = 0;
+  // The following methods must only be called once the UI is fully initialized
+  // (kFullyInitialized). It is the responsibility of the client (CoreOobe) to
+  // ensure that this invariant is met. Otherwise it will CHECK().
+  virtual void ShowScreenWithData(const OobeScreenId& screen,
+                                  std::optional<base::Value::Dict> data) = 0;
+  virtual void UpdateOobeConfiguration() = 0;
+  virtual void ReloadContent() = 0;
   virtual void ForwardCancel() = 0;
-  virtual void LaunchHelpApp(int help_topic_id) = 0;
+  virtual void SetTabletModeState(bool tablet_mode_enabled) = 0;
+
+  // The following methods are safe to be called at any |UiState|, although the
+  // existing mechanism inside |BaseWebUIHandler| will defer the calls until
+  // JavaScript is allowed in this handler (kCoreHandlerInitialized)
+  virtual void ToggleSystemInfo() = 0;
+  virtual void TriggerDown() = 0;
+  virtual void EnableKeyboardFlow() = 0;
+  virtual void SetShelfHeight(int height) = 0;
+  virtual void SetOrientation(bool is_horizontal) = 0;
+  virtual void SetDialogSize(int width, int height) = 0;
+  virtual void SetVirtualKeyboardShown(bool shown) = 0;
+  virtual void SetOsVersionLabelText(const std::string& label_text) = 0;
+  virtual void SetBluetoothDeviceInfo(const std::string& bluetooth_name) = 0;
 };
 
 // The core handler for Javascript messages related to the "oobe" view.
 class CoreOobeHandler : public BaseWebUIHandler,
-                        public VersionInfoUpdater::Delegate,
                         public CoreOobeView,
-                        public ui::EventSource,
-                        public ash::TabletModeObserver,
-                        public OobeConfiguration::Observer,
-                        public ChromeKeyboardControllerClient::Observer {
+                        public ui::EventSource {
  public:
-  explicit CoreOobeHandler(const std::string& display_type);
-
+  CoreOobeHandler();
   CoreOobeHandler(const CoreOobeHandler&) = delete;
   CoreOobeHandler& operator=(const CoreOobeHandler&) = delete;
-
   ~CoreOobeHandler() override;
 
   // BaseScreenHandler implementation:
   void DeclareLocalizedValues(
       ::login::LocalizedValuesBuilder* builder) override;
-
-  // BaseScreenHandler implementation:
+  void DeclareJSCallbacks() override;
   void GetAdditionalParameters(base::Value::Dict* dict) override;
 
-  // WebUIMessageHandler implementation.
-  void RegisterMessages() override;
-
-  // VersionInfoUpdater::Delegate implementation:
-  void OnOSVersionLabelTextUpdated(
-      const std::string& os_version_label_text) override;
-  void OnEnterpriseInfoUpdated(const std::string& message_text,
-                               const std::string& asset_id) override;
-  void OnDeviceInfoUpdated(const std::string& bluetooth_name) override;
-  void OnAdbSideloadStatusUpdated(bool enabled) override {}
-
+ private:
   // ui::EventSource implementation:
   ui::EventSink* GetEventSink() override;
 
-  // Show or hide OOBE UI.
-  void ShowOobeUI(bool show);
-
- private:
-  // CoreOobeView implementation:
-  void ShowScreenWithData(const ash::OobeScreenId& screen,
-                          absl::optional<base::Value::Dict> data) override;
-  void ReloadContent(base::Value::Dict dictionary) override;
-  // Updates client area size based on the primary screen size.
-  void UpdateClientAreaSize(const gfx::Size& size) override;
-  void ToggleSystemInfo() override;
-  // Forwards the cancel accelerator value to the shown screen.
+  // ---- BEGIN --- CoreOobeView
+  void ShowScreenWithData(const OobeScreenId& screen,
+                          std::optional<base::Value::Dict> data) override;
+  void UpdateOobeConfiguration() override;
+  void ReloadContent() override;
   void ForwardCancel() override;
-  void LaunchHelpApp(int help_topic_id) override;
+  void SetTabletModeState(bool tablet_mode_enabled) override;
+  // Calls above will CHECK() if not |kFullyInitialized|
+  // Calls below are safe at any moment
+  void ToggleSystemInfo() override;
+  void TriggerDown() override;
+  void EnableKeyboardFlow() override;
+  void SetShelfHeight(int height) override;
+  void SetOrientation(bool is_horizontal) override;
+  void SetDialogSize(int width, int height) override;
+  void SetVirtualKeyboardShown(bool shown) override;
+  void SetOsVersionLabelText(const std::string& label_text) override;
+  void SetBluetoothDeviceInfo(const std::string& bluetooth_name) override;
+  // ---- END --- CoreOobeView
 
-  // ash::TabletModeObserver:
-  void OnTabletModeStarted() override;
-  void OnTabletModeEnded() override;
-
-  // OobeConfiguration::Observer:
-  void OnOobeConfigurationChanged() override;
-
-  // ChromeKeyboardControllerClient::Observer:
-  void OnKeyboardVisibilityChanged(bool visible) override;
-
-  // Handlers for JS WebUI messages.
+  // ---- Handlers for JS WebUI messages.
+  void HandleInitializeCoreHandler();
+  void HandlePrriorityScreensLoaded();
+  void HandleScreenStateInitialize();
   void HandleEnableShelfButtons(bool enable);
-  void HandleInitialized();
   void HandleUpdateCurrentScreen(const std::string& screen);
+  void HandleBackdropLoaded();
   void HandleLaunchHelpApp(int help_topic_id);
   // Handles demo mode setup for tests. Accepts 'online' and 'offline' as
   // `demo_config`.
   void HandleUpdateOobeUIState(int state);
-
   // When keyboard_utils.js arrow key down event is reached, raise it
   // to tab/shift-tab event.
   void HandleRaiseTabKeyEvent(bool reverse);
 
-  // Updates label with specified id with specified text.
-  void UpdateLabel(const std::string& id, const std::string& text);
-
-  // Updates when version info is changed.
-  VersionInfoUpdater version_info_updater_{this};
-
-  // Help application used for help dialogs.
-  scoped_refptr<HelpAppLauncher> help_app_;
-
-  bool is_oobe_display_ = false;
+  // Initialization state that is kept in sync with |CoreOobe|.
+  UiState ui_init_state_ = UiState::kUninitialized;
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace ash {
-using ::chromeos::CoreOobeView;
-}
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_UI_WEBUI_ASH_LOGIN_CORE_OOBE_HANDLER_H_

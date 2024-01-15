@@ -31,7 +31,7 @@ GFX_EXPORT void SetGetMinimumFontSizeCallback(
 // of the embedding application. Optional. If not specified, no adjustments
 // are performed other than clamping to a minimum font size if
 // |get_minimum_font_size_callback| is specified.
-typedef void (*AdjustFontCallback)(FontAdjustment* font_adjustment);
+typedef void (*AdjustFontCallback)(FontAdjustment& font_adjustment);
 GFX_EXPORT void SetAdjustFontCallback(AdjustFontCallback callback);
 
 // Returns the specified Windows default system font. By default, this is the
@@ -41,11 +41,6 @@ GFX_EXPORT const Font& GetDefaultSystemFont();
 // Returns the specified Windows system font, suitable for drawing on screen
 // elements.
 GFX_EXPORT const Font& GetSystemFont(SystemFont system_font);
-
-// Applies a font adjustment to an existing native font.
-GFX_EXPORT NativeFont
-AdjustExistingSystemFont(NativeFont existing_font,
-                         const FontAdjustment& font_adjustment);
 
 // Computes and returns the adjusted size of a font, subject to the global
 // minimum size. |lf_height| is the height as reported by the LOGFONT structure,

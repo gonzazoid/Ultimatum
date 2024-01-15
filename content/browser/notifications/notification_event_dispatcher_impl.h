@@ -9,7 +9,7 @@
 #include <string>
 #include <utility>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/singleton.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/notification_database_data.h"
@@ -39,8 +39,8 @@ class CONTENT_EXPORT NotificationEventDispatcherImpl
       BrowserContext* browser_context,
       const std::string& notification_id,
       const GURL& origin,
-      const absl::optional<int>& action_index,
-      const absl::optional<std::u16string>& reply,
+      const std::optional<int>& action_index,
+      const std::optional<std::u16string>& reply,
       NotificationDispatchCompleteCallback dispatch_complete_callback) override;
   void DispatchNotificationCloseEvent(
       BrowserContext* browser_context,

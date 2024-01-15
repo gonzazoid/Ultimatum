@@ -10,15 +10,19 @@
 import {BackgroundBridge} from '../common/background_bridge.js';
 import {BrailleCommandData} from '../common/braille/braille_command_data.js';
 import {BrailleKeyCommand, BrailleKeyEvent} from '../common/braille/braille_key_types.js';
-import {NavBraille} from '../common/braille/nav_braille.js';
-import {Command, CommandStore} from '../common/command_store.js';
+import {BridgeConstants} from '../common/bridge_constants.js';
+import {BridgeHelper} from '../common/bridge_helper.js';
+import {Command} from '../common/command.js';
+import {CommandStore} from '../common/command_store.js';
 import {GestureCommandData} from '../common/gesture_command_data.js';
 import {KeyMap} from '../common/key_map.js';
 import {KeyUtil} from '../common/key_util.js';
 import {ChromeVoxKbHandler} from '../common/keyboard_handler.js';
 import {Msgs} from '../common/msgs.js';
-import {Spannable} from '../common/spannable.js';
-import {QueueMode, TtsSpeechProperties} from '../common/tts_interface.js';
+import {QueueMode, TtsSpeechProperties} from '../common/tts_types.js';
+
+const TARGET = BridgeConstants.LearnMode.TARGET;
+const Action = BridgeConstants.LearnMode.Action;
 
 /**
  * Class to manage the keyboard explorer.
@@ -27,10 +31,9 @@ export class LearnMode {
   /**
    * Initialize keyboard explorer.
    */
-  static async init() {
+  static init() {
     // Export global objects from the background page context into this one.
     window.backgroundWindow = chrome.extension.getBackgroundPage();
-    window.ChromeVox = window.backgroundWindow['ChromeVox'];
 
     window.backgroundWindow.addEventListener(
         'keydown', LearnMode.onKeyDown, true);
@@ -42,30 +45,34 @@ export class LearnMode {
     chrome.accessibilityPrivate.onAccessibilityGesture.addListener(
         LearnMode.onAccessibilityGesture);
     chrome.accessibilityPrivate.setKeyboardListener(true, true);
-    BackgroundBridge.BrailleCommandHandler.setEnabled(false);
-    BackgroundBridge.GestureCommandHandler.setEnabled(false);
+    BackgroundBridge.Braille.setBypass(true);
+    BackgroundBridge.GestureCommandHandler.setBypass(true);
 
     ChromeVoxKbHandler.commandHandler = LearnMode.onCommand;
 
     $('instruction').textContent = Msgs.getMsg('learn_mode_intro');
     LearnMode.shouldFlushSpeech_ = true;
 
-    chrome.runtime.onMessage.addListener(message => {
-      if (message['target'] !== 'LearnMode') {
-        return;
-      }
+    // Learn mode may be created more than once. Clear the listeners to avoid
+    // duplicate assignment errors.
+    BridgeHelper.clearAllHandlersForTarget(TARGET);
 
-      switch (message['action']) {
-        case 'onKeyDown':
-        case 'onKeyUp':
-        case 'onAccessibilityGesture':
-        case 'onBrailleKeyEvent':
-          LearnMode[message['action']].apply(LearnMode, message['args']);
-          break;
-        case 'clearTouchExploreOutputTime':
-          LearnMode.MIN_TOUCH_EXPLORE_OUTPUT_TIME_MS_ = 0;
-      }
-    });
+    BridgeHelper.registerHandler(
+        TARGET, Action.CLEAR_TOUCH_EXPLORE_OUTPUT_TIME,
+        () => LearnMode.MIN_TOUCH_EXPLORE_OUTPUT_TIME_MS_ = 0);
+    BridgeHelper.registerHandler(
+        TARGET, Action.ON_ACCESSIBILITY_GESTURE,
+        gesture => LearnMode.onAccessibilityGesture(gesture));
+    BridgeHelper.registerHandler(
+        TARGET, Action.ON_BRAILLE_KEY_EVENT,
+        event => LearnMode.onBrailleKeyEvent(event));
+    BridgeHelper.registerHandler(
+        TARGET, Action.ON_KEY_DOWN, event => LearnMode.onKeyDown(event));
+    BridgeHelper.registerHandler(
+        TARGET, Action.ON_KEY_UP, event => LearnMode.onKeyUp(event));
+    BridgeHelper.registerHandler(TARGET, Action.READY, () => readyPromise);
+
+    readyCallback();
   }
 
   /**
@@ -86,7 +93,7 @@ export class LearnMode {
         return true;
       }
 
-      BackgroundBridge.UserActionMonitor.onKeyDown(evt).then(
+      BackgroundBridge.ForcedActionPath.onKeyDown(evt).then(
           (shouldPropagate) => {
             if (shouldPropagate) {
               ChromeVoxKbHandler.basicKeyDownActionsListener(evt);
@@ -205,7 +212,7 @@ export class LearnMode {
         const cells = new ArrayBuffer(1);
         const view = new Uint8Array(cells);
         view[0] = dots;
-        BackgroundBridge.BrailleBackground.backTranslate(cells).then(res => {
+        BackgroundBridge.Braille.backTranslate(cells).then(res => {
           if (res !== null) {
             LearnMode.output(res);
           }
@@ -275,23 +282,25 @@ export class LearnMode {
 
   /**
    * @param {string} text
-   * @param {function()=} opt_speakCallback A callback to run when speech
-   *     finishes.
+   * @param {function()=} opt_outputCallback A callback to run after output is
+   *     requested.
    */
-  static output(text, opt_speakCallback) {
-    const ChromeVox = window.ChromeVox;
-    ChromeVox.tts.speak(
+  static output(text, opt_outputCallback) {
+    BackgroundBridge.TtsBackground.speak(
         text,
         LearnMode.shouldFlushSpeech_ ? QueueMode.CATEGORY_FLUSH :
                                        QueueMode.QUEUE,
-        new TtsSpeechProperties({endCallback: opt_speakCallback}));
-    ChromeVox.braille.write(new NavBraille({text: new Spannable(text)}));
+        new TtsSpeechProperties({endCallback: opt_outputCallback}));
+    BackgroundBridge.Braille.write(text);
     LearnMode.shouldFlushSpeech_ = false;
+    if (opt_outputCallback) {
+      opt_outputCallback();
+    }
   }
 
   /** Clears ChromeVox range. */
   static async clearRange() {
-    await BackgroundBridge.ChromeVoxState.clearCurrentRange();
+    await BackgroundBridge.ChromeVoxRange.clearCurrentRange();
   }
 
   /** @private */
@@ -307,9 +316,8 @@ export class LearnMode {
     chrome.accessibilityPrivate.onAccessibilityGesture.removeListener(
         LearnMode.onAccessibilityGesture);
     chrome.accessibilityPrivate.setKeyboardListener(true, false);
-    BackgroundBridge.BrailleCommandHandler.setEnabled(true);
-    chrome.runtime.sendMessage(
-        {target: 'GestureCommandHandler', action: 'setEnabled', value: true});
+    BackgroundBridge.Braille.setBypass(false);
+    BackgroundBridge.GestureCommandHandler.setBypass(false);
   }
 
   /** @private */
@@ -366,3 +374,9 @@ document.addEventListener('DOMContentLoaded', function() {
 function $(id) {
   return document.getElementById(id);
 }
+
+/** @private {function()} */
+let readyCallback;
+
+/** @private {!Promise} */
+const readyPromise = new Promise(resolve => readyCallback = resolve);

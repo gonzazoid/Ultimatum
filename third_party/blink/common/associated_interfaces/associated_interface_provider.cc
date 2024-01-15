@@ -6,8 +6,9 @@
 
 #include <map>
 
+#include "base/containers/contains.h"
 #include "base/no_destructor.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 
 namespace blink {
@@ -33,8 +34,10 @@ class AssociatedInterfaceProvider::LocalProvider
     binders_[name] = binder;
   }
 
+  void ResetBinderForName(const std::string& name) { binders_.erase(name); }
+
   bool HasInterface(const std::string& name) const {
-    return binders_.find(name) != binders_.end();
+    return base::Contains(binders_, name);
   }
 
   void GetInterface(const std::string& name,
@@ -93,15 +96,21 @@ void AssociatedInterfaceProvider::OverrideBinderForTesting(
     const std::string& name,
     const base::RepeatingCallback<void(mojo::ScopedInterfaceEndpointHandle)>&
         binder) {
-  if (!local_provider_)
-    local_provider_ = std::make_unique<LocalProvider>(task_runner_);
-  local_provider_->SetBinderForName(name, binder);
+  if (binder) {
+    if (!local_provider_) {
+      local_provider_ = std::make_unique<LocalProvider>(task_runner_);
+    }
+    local_provider_->SetBinderForName(name, binder);
+  } else if (local_provider_) {
+    local_provider_->ResetBinderForName(name);
+  }
 }
 
 AssociatedInterfaceProvider*
 AssociatedInterfaceProvider::GetEmptyAssociatedInterfaceProvider() {
   static base::NoDestructor<AssociatedInterfaceProvider>
-      associated_interface_provider(base::ThreadTaskRunnerHandle::Get());
+      associated_interface_provider(
+          base::SingleThreadTaskRunner::GetCurrentDefault());
   return associated_interface_provider.get();
 }
 

@@ -10,7 +10,7 @@
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/webui/ash/login/base_screen_handler.h"
 
-namespace chromeos {
+namespace ash {
 
 // Interface for dependency injection between GaiaPasswordChangedScreen and its
 // WebUI representation.
@@ -24,6 +24,10 @@ class GaiaPasswordChangedView
 
   // Shows the contents of the screen.
   virtual void Show(const std::string& email, bool has_error) = 0;
+
+  virtual void Show(const std::string& email) = 0;
+  virtual void ShowWrongPasswordError() = 0;
+  virtual void SuggestRecovery() = 0;
 };
 
 class GaiaPasswordChangedScreenHandler : public GaiaPasswordChangedView,
@@ -40,20 +44,15 @@ class GaiaPasswordChangedScreenHandler : public GaiaPasswordChangedView,
 
  private:
   void Show(const std::string& email, bool has_error) override;
+  void Show(const std::string& email) override;
+  void ShowWrongPasswordError() override;
+  void SuggestRecovery() override;
 
   // BaseScreenHandler:
   void DeclareLocalizedValues(
       ::login::LocalizedValuesBuilder* builder) override;
-  void GetAdditionalParameters(base::Value::Dict* dict) override;
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace ash {
-using ::chromeos::GaiaPasswordChangedScreenHandler;
-using ::chromeos::GaiaPasswordChangedView;
-}
+}  // namespace ash
 
 #endif  // CHROME_BROWSER_UI_WEBUI_ASH_LOGIN_GAIA_PASSWORD_CHANGED_SCREEN_HANDLER_H_

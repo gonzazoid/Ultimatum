@@ -6,14 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/base/net_errors.h"
@@ -77,7 +76,7 @@ void HttpServer::AcceptWebSocket(
 
 void HttpServer::SendOverWebSocket(
     int connection_id,
-    base::StringPiece data,
+    std::string_view data,
     net::NetworkTrafficAnnotationTag traffic_annotation) {
   HttpConnection* connection = FindConnection(connection_id);
   if (connection == NULL)
@@ -155,14 +154,18 @@ void HttpServer::Close(int connection_id) {
 
   std::unique_ptr<HttpConnection> connection = std::move(it->second);
   id_to_connection_.erase(it);
-  delegate_->OnClose(connection_id);
 
   // The call stack might have callbacks which still have the pointer of
   // connection. Instead of referencing connection with ID all the time,
   // destroys the connection in next run loop to make sure any pending
   // callbacks in the call stack return.
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE,
-                                                  connection.release());
+  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(
+      FROM_HERE, connection.release());
+
+  // Note: delegate may decide to destroy `this` in a dedicated task, so it is
+  // important to post connection deletion task first to guarantee that
+  // connection doesn't outlive `this`.
+  delegate_->OnClose(connection_id);
 }
 
 bool HttpServer::SetReceiveBufferSize(int connection_id, int32_t size) {

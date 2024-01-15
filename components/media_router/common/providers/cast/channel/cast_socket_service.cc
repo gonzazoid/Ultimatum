@@ -4,12 +4,11 @@
 
 #include "components/media_router/common/providers/cast/channel/cast_socket_service.h"
 
-#include "base/feature_list.h"
 #include "base/memory/ptr_util.h"
+#include "base/numerics/checked_math.h"
 #include "base/observer_list.h"
 #include "base/ranges/algorithm.h"
 #include "components/media_router/common/providers/cast/channel/cast_socket.h"
-#include "components/media_router/common/providers/cast/channel/libcast_socket_service.h"
 #include "components/media_router/common/providers/cast/channel/logger.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -18,16 +17,9 @@ using content::BrowserThread;
 
 namespace cast_channel {
 
-BASE_FEATURE(kLibcastSocketService,
-             "LibcastSocketService",
-             base::FEATURE_DISABLED_BY_DEFAULT);
-
 // static
 CastSocketService* CastSocketService::GetInstance() {
-  static CastSocketService* service =
-      base::FeatureList::IsEnabled(kLibcastSocketService)
-          ? static_cast<CastSocketService*>(new LibcastSocketService())
-          : static_cast<CastSocketService*>(new CastSocketServiceImpl());
+  static CastSocketService* service = new CastSocketServiceImpl();
   return service;
 }
 
@@ -52,11 +44,13 @@ CastSocket* CastSocketServiceImpl::AddSocket(
     std::unique_ptr<CastSocket> socket) {
   DCHECK(task_runner_->BelongsToCurrentThread());
   DCHECK(socket);
-  int id = ++last_channel_id_;
-  socket->set_id(id);
+  CHECK(base::CheckAdd(last_channel_id_, 1).AssignIfValid(&last_channel_id_))
+      << "Overflow in channel_id!";
+  socket->set_id(last_channel_id_);
 
   auto* socket_ptr = socket.get();
-  sockets_.insert(std::make_pair(id, std::move(socket)));
+  CHECK(sockets_.insert(std::make_pair(last_channel_id_, std::move(socket)))
+            .second);
   return socket_ptr;
 }
 

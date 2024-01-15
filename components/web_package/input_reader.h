@@ -7,7 +7,7 @@
 
 #include "base/big_endian.h"
 #include "base/containers/span.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace web_package {
@@ -44,8 +44,9 @@ class InputReader {
   template <typename T>
   bool ReadBigEndian(T* out) {
     auto bytes = ReadBytes(sizeof(T));
-    if (!bytes)
+    if (!bytes) {
       return false;
+    }
     base::ReadBigEndian(bytes->data(), out);
     return true;
   }

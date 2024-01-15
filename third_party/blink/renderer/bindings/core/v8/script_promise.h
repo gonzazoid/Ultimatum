@@ -150,7 +150,7 @@ class CORE_EXPORT ScriptPromise final {
     void Resolve(v8::Local<v8::Value>);
     void Reject(v8::Local<v8::Value>);
     void Clear() { resolver_.Clear(); }
-    ScriptState* GetScriptState() const { return script_state_; }
+    ScriptState* GetScriptState() const { return script_state_.Get(); }
     void Trace(Visitor* visitor) const {
       visitor->Trace(script_state_);
       visitor->Trace(resolver_);
@@ -166,9 +166,6 @@ class CORE_EXPORT ScriptPromise final {
   }
 
  private:
-  static void IncreaseInstanceCount();
-  static void DecreaseInstanceCount();
-
   Member<ScriptState> script_state_;
   ScriptValue promise_;
 };

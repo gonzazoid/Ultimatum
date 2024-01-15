@@ -9,6 +9,8 @@
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 #include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/mojom/origin_trial_feature/origin_trial_feature.mojom-shared.h"
+#include "third_party/blink/renderer/platform/runtime_feature_state/runtime_feature_state_override_context.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
 namespace blink {
@@ -112,9 +114,38 @@ void RuntimeEnabledFeaturesBase::UpdateStatusFromBaseFeatures() {
   }
 }
 
+{% for feature in features %}
+{%if feature.is_overridable_feature and not feature.in_origin_trial%}
+bool RuntimeEnabledFeaturesBase::{{feature.name}}Enabled(const FeatureContext* context) {
+  if(context && context->GetRuntimeFeatureStateOverrideContext()
+                    ->Is{{feature.name}}ForceEnabled()) {
+    return true;
+  }
+  if(context && context->GetRuntimeFeatureStateOverrideContext()
+                    ->Is{{feature.name}}ForceDisabled()) {
+    return false;
+  }
+
+  return {{feature.name}}Enabled();
+}
+
+{% endif %}
+{% endfor %}
+
 {% for feature in origin_trial_controlled_features %}
 
 bool RuntimeEnabledFeaturesBase::{{feature.name}}Enabled(const FeatureContext* context) {
+  {% if feature.is_overridable_feature%}
+  if(context && context->GetRuntimeFeatureStateOverrideContext()
+                    ->Is{{feature.name}}ForceEnabled()) {
+    return true;
+  }
+  if(context && context->GetRuntimeFeatureStateOverrideContext()
+                    ->Is{{feature.name}}ForceDisabled()) {
+    return false;
+  }
+
+  {% endif %}
   {% for depends_on in feature.depends_on %}
   if (!RuntimeEnabledFeaturesBase::{{depends_on}}Enabled(context))
     return false;
@@ -130,7 +161,7 @@ bool RuntimeEnabledFeaturesBase::{{feature.name}}Enabled(const FeatureContext* c
   // is not enabled.
   return false;
   {% else %}
-  return context && context->FeatureEnabled(OriginTrialFeature::k{{feature.name}});
+  return context && context->FeatureEnabled(mojom::blink::OriginTrialFeature::k{{feature.name}});
   {% endif %}
 }
 

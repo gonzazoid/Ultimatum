@@ -6,10 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
@@ -90,8 +90,10 @@ class TCPServerSocketFactory : public content::DevToolsSocketFactory {
     std::unique_ptr<net::ServerSocket> socket(
         new net::TCPServerSocket(nullptr, net::NetLogSource()));
 
-    if (socket->Listen(endpoint_, kBackLog) != net::OK)
+    if (socket->Listen(endpoint_, kBackLog, /*ipv6_only=*/std::nullopt) !=
+        net::OK) {
       return nullptr;
+    }
 
     return socket;
   }

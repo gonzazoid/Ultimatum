@@ -10,14 +10,11 @@
 #import "ios/chrome/browser/ui/reading_list/text_badge_view.h"
 #import "ios/chrome/common/material_timing.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
-const CGFloat kAnimationDuration = kMaterialDuration3;
+
 // The margin on all sides of the label.
 const CGFloat kLabelMargin = 2.5f;
+
 }  // namespace
 
 @interface NumberBadgeView ()
@@ -55,7 +52,7 @@ const CGFloat kLabelMargin = 2.5f;
       // `NO`. Otherwise the view is being animated out, in which case `hidden`
       // is already `NO`.
       self.hidden = NO;
-      [UIView animateWithDuration:kAnimationDuration
+      [UIView animateWithDuration:kMaterialDuration3
           animations:^{
             if (number > 0) {
               self.alpha = 1.0;
@@ -84,7 +81,7 @@ const CGFloat kLabelMargin = 2.5f;
 
 - (void)setBackgroundColor:(UIColor*)backgroundColor animated:(BOOL)animated {
   if (animated) {
-    [UIView animateWithDuration:kAnimationDuration
+    [UIView animateWithDuration:kMaterialDuration3
                      animations:^{
                        [self.textBadge setBackgroundColor:backgroundColor];
                      }];

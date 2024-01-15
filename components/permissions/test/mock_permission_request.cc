@@ -32,13 +32,24 @@ MockPermissionRequest::MockPermissionRequest(
           requesting_origin,
           request_type,
           gesture_type == PermissionRequestGestureType::GESTURE,
-          base::BindOnce(&MockPermissionRequest::PermissionDecided,
-                         base::Unretained(this)),
+          base::BindRepeating(&MockPermissionRequest::PermissionDecided,
+                              base::Unretained(this)),
           base::BindOnce(&MockPermissionRequest::MarkFinished,
                          base::Unretained(this))),
       granted_(false),
       cancelled_(false),
       finished_(false) {}
+
+MockPermissionRequest::MockPermissionRequest(
+    RequestType request_type,
+    bool embedded_permission_element_initiated)
+    : MockPermissionRequest(request_type,
+                            embedded_permission_element_initiated
+                                ? PermissionRequestGestureType::GESTURE
+                                : PermissionRequestGestureType::NO_GESTURE) {
+  SetEmbeddedPermissionElementInitiatedForTesting(
+      embedded_permission_element_initiated);
+}
 
 MockPermissionRequest::~MockPermissionRequest() {
   // TODO(crbug.com/1110905): `PermissionRequest` enforces that
@@ -50,7 +61,8 @@ MockPermissionRequest::~MockPermissionRequest() {
 }
 
 void MockPermissionRequest::PermissionDecided(ContentSetting result,
-                                              bool is_one_time) {
+                                              bool is_one_time,
+                                              bool is_final_decision) {
   granted_ = result == CONTENT_SETTING_ALLOW;
   if (result == CONTENT_SETTING_DEFAULT)
     cancelled_ = true;

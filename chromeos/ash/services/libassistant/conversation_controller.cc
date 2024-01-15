@@ -6,10 +6,11 @@
 
 #include <memory>
 
+#include "base/memory/raw_ref.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/thread_annotations.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "chromeos/ash/services/libassistant/grpc/assistant_client.h"
 #include "chromeos/ash/services/libassistant/public/mojom/conversation_controller.mojom.h"
@@ -75,7 +76,8 @@ assistant::AssistantNotification ToAssistantNotification(
 
   if (notification.expiry_timestamp_ms) {
     assistant_notification.expiry_time =
-        base::Time::FromJavaTime(notification.expiry_timestamp_ms);
+        base::Time::FromMillisecondsSinceUnixEpoch(
+            notification.expiry_timestamp_ms);
   }
 
   // The server sometimes sends an empty |notification_id|, but our client
@@ -140,8 +142,9 @@ class ConversationController::GrpcEventsObserver
           AssistantQuerySource::kLibAssistantInitiated;
     }
 
-    for (auto& observer : parent_.observers_)
+    for (auto& observer : parent_->observers_) {
       observer->OnInteractionStarted(interaction_metadata);
+    }
   }
 
   // Invoked when a device state event has been received.
@@ -162,20 +165,21 @@ class ConversationController::GrpcEventsObserver
       if (event.on_communication_error().error_code() ==
           ::assistant::api::events::DeviceStateEvent::OnCommunicationError::
               AUTH_TOKEN_FAIL) {
-        for (auto& observer : parent_.authentication_state_observers_)
+        for (auto& observer : parent_->authentication_state_observers_) {
           observer->OnAuthenticationError();
+        }
       }
     }
   }
 
  private:
   void RemoveAllNotifications() {
-    parent_.notification_delegate_->RemoveAllNotifications(
+    parent_->notification_delegate_->RemoveAllNotifications(
         /*from_server=*/true);
   }
 
   void RemoveNotification(const std::string& id) {
-    parent_.notification_delegate_->RemoveNotificationByGroupingKey(
+    parent_->notification_delegate_->RemoveNotificationByGroupingKey(
         id, /*from_server=*/true);
   }
 
@@ -190,7 +194,7 @@ class ConversationController::GrpcEventsObserver
 
   int next_interaction_id_ = 1;
   std::map<std::string, AssistantInteractionMetadata> pending_interactions_;
-  ConversationController& parent_;
+  const raw_ref<ConversationController> parent_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -204,7 +208,7 @@ ConversationController::ConversationController()
           std::make_unique<chromeos::assistant::action::CrosActionModule>(
               assistant::features::IsAppSupportEnabled(),
               assistant::features::IsWaitSchedulingEnabled())),
-      mojom_task_runner_(base::SequencedTaskRunnerHandle::Get()) {
+      mojom_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {
   action_module_->AddObserver(this);
 }
 
@@ -231,26 +235,15 @@ void ConversationController::AddAuthenticationStateObserver(
   authentication_state_observers_.Add(std::move(observer));
 }
 
-void ConversationController::OnAssistantClientCreated(
-    AssistantClient* assistant_client) {
-  if (!chromeos::assistant::features::IsLibAssistantV2Enabled()) {
-    // Registers ActionModule when AssistantClient has been created but not yet
-    // started.
-    assistant_client->RegisterActionModule(action_module_.get());
-  }
-}
-
 void ConversationController::OnAssistantClientRunning(
     AssistantClient* assistant_client) {
   // Only when Libassistant is running we can start sending queries.
   assistant_client_ = assistant_client;
   requests_are_allowed_ = true;
 
-  if (chromeos::assistant::features::IsLibAssistantV2Enabled()) {
-    // Register the action module when all libassistant services are ready.
-    // `action_module_` outlives gRPC services.
-    assistant_client->RegisterActionModule(action_module_.get());
-  }
+  // Register the action module when all libassistant services are ready.
+  // `action_module_` outlives gRPC services.
+  assistant_client->RegisterActionModule(action_module_.get());
 
   assistant_client_->AddConversationStateEventObserver(events_observer_.get());
   assistant_client_->AddDeviceStateEventObserver(events_observer_.get());
@@ -326,40 +319,6 @@ void ConversationController::StartEditReminderInteraction(
   assistant_client_->SendVoicelessInteraction(
       CreateEditReminderInteraction(client_id),
       /*description=*/std::string(), options, base::DoNothing());
-}
-
-void ConversationController::StartScreenContextInteraction(
-    ax::mojom::AssistantStructurePtr assistant_structure,
-    const std::vector<uint8_t>& screenshot) {
-  DCHECK(requests_are_allowed_)
-      << "Should not receive requests before Libassistant is running";
-  if (!assistant_client_)
-    return;
-
-  MaybeStopPreviousInteraction();
-
-  std::vector<std::string> context_protos;
-  // Screen context can have the |assistant_structure|, or |assistant_extra| and
-  // |assistant_tree| set to nullptr. This happens in the case where the screen
-  // context is coming from the metalayer or there is no active window. For this
-  // scenario, we don't create a context proto for the AssistantBundle that
-  // consists of the |assistant_extra| and |assistant_tree|.
-  if (assistant_structure && assistant_structure->assistant_extra &&
-      assistant_structure->assistant_tree) {
-    // Note: the value of |is_first_query| for screen context query is a no-op
-    // because it is not used for metalayer and "What's on my screen" queries.
-    context_protos.emplace_back(chromeos::assistant::CreateContextProto(
-        chromeos::assistant::AssistantBundle{
-            assistant_structure->assistant_extra.get(),
-            assistant_structure->assistant_tree.get()},
-        /*is_first_query=*/true));
-  }
-
-  // Note: the value of |is_first_query| for screen context query is a no-op.
-  context_protos.emplace_back(
-      chromeos::assistant::CreateContextProto(screenshot,
-                                              /*is_first_query=*/true));
-  assistant_client_->SendScreenContextRequest(context_protos);
 }
 
 void ConversationController::StopActiveInteraction(bool cancel_conversation) {
@@ -473,14 +432,6 @@ void ConversationController::OnShowText(const std::string& text) {
 }
 
 // Called from Libassistant thread.
-// Note that we should deprecate this API when the server provides a fallback.
-void ConversationController::OnShowContextualQueryFallback() {
-  // Show fallback message.
-  OnShowText(l10n_util::GetStringUTF8(
-      IDS_ASSISTANT_SCREEN_CONTEXT_QUERY_FALLBACK_TEXT));
-}
-
-// Called from Libassistant thread.
 void ConversationController::OnShowSuggestions(
     const std::vector<chromeos::assistant::action::Suggestion>& suggestions) {
   ENSURE_MOJOM_THREAD(&ConversationController::OnShowSuggestions, suggestions);
@@ -565,8 +516,13 @@ void ConversationController::OnInteractionStarted(
 }
 
 void ConversationController::OnInteractionFinished(
-    chromeos::assistant::AssistantInteractionResolution resolution) {
+    assistant::AssistantInteractionResolution resolution) {
   stop_interaction_closure_.reset();
+}
+
+void ConversationController::OnGrpcMessageForTesting(
+    const ::assistant::api::OnDeviceStateEventRequest& request) {
+  events_observer_->OnGrpcMessage(request);
 }
 
 void ConversationController::MaybeStopPreviousInteraction() {

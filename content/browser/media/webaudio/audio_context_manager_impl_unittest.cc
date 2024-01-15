@@ -30,6 +30,11 @@ class AudioContextManagerImplTest : public RenderViewHostTestHarness {
     audio_context_manager_->set_clock_for_testing(&clock_);
   }
 
+  void TearDown() override {
+    audio_context_manager_ = nullptr;
+    RenderViewHostTestHarness::TearDown();
+  }
+
   AudioContextManagerImpl* audio_context_manager() {
     return audio_context_manager_;
   }

@@ -10,14 +10,17 @@
 #include "ash/components/arc/metrics/stability_metrics_manager.h"
 #include "ash/components/arc/mojom/app.mojom.h"
 #include "ash/components/arc/mojom/auth.mojom.h"
+#include "ash/shell.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/metrics/histogram_macros_local.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/policy/arc_policy_util.h"
 #include "chrome/browser/ash/arc/session/arc_provisioning_result.h"
 #include "chrome/browser/ash/login/demo_mode/demo_session.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_helper.h"
+#include "components/user_manager/user_manager.h"
 
 // Enable VLOG level 1.
 #undef ENABLED_VLOG_LEVEL
@@ -57,14 +60,25 @@ ArcEnabledState ComputeEnabledState(bool enabled, const Profile* profile) {
 }  // namespace
 
 void UpdateEnabledStateByUserTypeUMA() {
-  const Profile* profile = ProfileManager::GetPrimaryUserProfile();
-
-  // Don't record UMA if current primary user profile should be ignored in the
-  // first place, or we're currently in guest session.
-  if (!IsRealUserProfile(profile) || profile->IsGuestSession())
+  auto* primary_user = user_manager::UserManager::Get()->GetPrimaryUser();
+  // Don't record UMA if there is no primary user.
+  if (!primary_user) {
     return;
+  }
 
-  absl::optional<bool> enabled_state;
+  const Profile* profile = Profile::FromBrowserContext(
+      ash::BrowserContextHelper::Get()->GetBrowserContextByUser(primary_user));
+  // Don't record UMA if the primary user profile is not loaded.
+  if (!profile) {
+    return;
+  }
+
+  // Don't record UMA if we're currently in guest session.
+  if (profile->IsGuestSession()) {
+    return;
+  }
+
+  std::optional<bool> enabled_state;
   if (auto* stability_metrics_manager = StabilityMetricsManager::Get())
     enabled_state = stability_metrics_manager->GetArcEnabledState();
 
@@ -159,10 +173,19 @@ void UpdatePlayAutoInstallRequestTime(const base::TimeDelta& elapsed_time,
 void UpdateArcUiAvailableTime(const base::TimeDelta& elapsed_time,
                               const std::string& mode,
                               const Profile* profile) {
+  if (ash::Shell::HasInstance()) {
+    ash::Shell::Get()
+        ->login_unlock_throughput_recorder()
+        ->ArcUiAvailableAfterLogin();
+  }
   base::UmaHistogramCustomTimes(
       GetHistogramNameByUserType("Arc.UiAvailable." + mode + ".TimeDelta",
                                  profile),
       elapsed_time, base::Seconds(1), base::Minutes(5), 50);
+
+  // This is local test-only histogram.
+  LOCAL_HISTOGRAM_CUSTOM_TIMES("Arc.Tast.UiAvailable.TimeDelta", elapsed_time,
+                               base::Seconds(1), base::Minutes(5), 50);
 }
 
 void UpdatePlayStoreLaunchTime(const base::TimeDelta& elapsed_time) {
@@ -197,13 +220,6 @@ void UpdateAuthAccountCheckStatus(mojom::AccountCheckStatus status,
   LogStabilityUmaEnum(
       GetHistogramNameByUserType("Arc.Auth.AccountCheck.Status", profile),
       status);
-}
-
-void UpdateAuthCodeFetcherProxyBypassUMA(bool proxy_bypassed,
-                                         const Profile* profile) {
-  base::UmaHistogramBoolean(
-      GetHistogramNameByUserType("Arc.Auth.CodeFetcher.ProxyBypass", profile),
-      proxy_bypassed);
 }
 
 void UpdateAccountReauthReason(mojom::ReauthReason reason,

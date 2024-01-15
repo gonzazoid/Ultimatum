@@ -8,9 +8,14 @@
 #include "base/component_export.h"
 #include "base/containers/flat_set.h"
 #include "services/media_session/public/mojom/media_session.mojom.h"
+#include "url/origin.h"
 
 namespace views {
 class Button;
+}
+
+namespace gfx {
+struct VectorIcon;
 }
 
 namespace media_message_center {
@@ -24,6 +29,14 @@ COMPONENT_EXPORT(MEDIA_MESSAGE_CENTER) extern const char kCountHistogramName[];
 COMPONENT_EXPORT(MEDIA_MESSAGE_CENTER)
 std::u16string GetAccessibleNameFromMetadata(
     media_session::MediaMetadata session_metadata);
+
+// Checks if the origin has a human-friendly url.
+COMPONENT_EXPORT(MEDIA_MESSAGE_CENTER)
+bool IsOriginGoodForDisplay(const url::Origin& origin);
+
+// Creates a string formatting a url::Origin in a human-friendly way.
+COMPONENT_EXPORT(MEDIA_MESSAGE_CENTER)
+std::u16string GetOriginNameForDisplay(const url::Origin& origin);
 
 // Returns actions that can be displayed as buttons in the media controller UI
 // from the set (|enabled_actions| - |ignored_actions|). This will return at
@@ -54,6 +67,16 @@ media_session::mojom::MediaSessionAction GetPlayPauseIgnoredAction(
 COMPONENT_EXPORT(MEDIA_MESSAGE_CENTER)
 media_session::mojom::MediaSessionAction GetPictureInPictureIgnoredAction(
     media_session::mojom::MediaSessionAction current_action);
+
+// Returns the vector icon corresponding to the |action|.
+COMPONENT_EXPORT(MEDIA_MESSAGE_CENTER)
+const gfx::VectorIcon* GetVectorIconForMediaAction(
+    media_session::mojom::MediaSessionAction action);
+
+// Returns the accessible name corresponding to the |action|.
+COMPONENT_EXPORT(MEDIA_MESSAGE_CENTER)
+const std::u16string GetAccessibleNameForMediaAction(
+    media_session::mojom::MediaSessionAction action);
 
 // Records the concurrent number of media notifications displayed.
 COMPONENT_EXPORT(MEDIA_MESSAGE_CENTER)

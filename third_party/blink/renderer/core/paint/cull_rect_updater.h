@@ -13,7 +13,7 @@
 
 namespace blink {
 
-class DocumentTransitionSupplement;
+class ViewTransitionSupplement;
 class FragmentData;
 class LayoutObject;
 class PaintLayer;
@@ -33,7 +33,11 @@ class CORE_EXPORT CullRectUpdater {
  public:
   explicit CullRectUpdater(PaintLayer& starting_layer);
 
-  void Update(const CullRect& input_cull_rect = CullRect::Infinite());
+  void Update();
+
+  // For testing painting behavior with cull rect with a custom top-level cull
+  // rect.
+  void UpdateForTesting(const CullRect& input_cull_rect);
 
   static void PaintPropertiesChanged(const LayoutObject&,
                                      const PaintPropertiesChangeInfo&);
@@ -79,7 +83,8 @@ class CORE_EXPORT CullRectUpdater {
 
   PaintLayer& starting_layer_;
   PropertyTreeState root_state_ = PropertyTreeState::Uninitialized();
-  DocumentTransitionSupplement* document_transition_supplement_;
+  ViewTransitionSupplement* view_transition_supplement_;
+  bool disable_expansion_ = false;
 };
 
 // Used when painting with a custom top-level cull rect, e.g. when printing a
@@ -90,7 +95,7 @@ class CORE_EXPORT OverriddenCullRectScope {
   STACK_ALLOCATED();
 
  public:
-  OverriddenCullRectScope(PaintLayer&, const CullRect&);
+  OverriddenCullRectScope(PaintLayer&, const CullRect&, bool disable_expansion);
   ~OverriddenCullRectScope();
 
   struct FragmentCullRects {

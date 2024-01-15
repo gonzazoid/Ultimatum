@@ -7,11 +7,12 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_piece.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
+#include "base/types/expected.h"
 #include "components/reporting/encryption/encryption_module_interface.h"
 #include "components/reporting/proto/synced/record.pb.h"
 #include "components/reporting/util/status.h"
@@ -22,7 +23,7 @@ namespace reporting {
 namespace {
 
 // Helper function for asynchronous encryption.
-void AddToRecord(base::StringPiece record,
+void AddToRecord(std::string_view record,
                  Encryptor::Handle* handle,
                  base::OnceCallback<void(StatusOr<EncryptedRecord>)> cb) {
   handle->AddToRecord(
@@ -32,7 +33,7 @@ void AddToRecord(base::StringPiece record,
              base::OnceCallback<void(StatusOr<EncryptedRecord>)> cb,
              Status status) {
             if (!status.ok()) {
-              std::move(cb).Run(status);
+              std::move(cb).Run(base::unexpected(std::move(status)));
               return;
             }
             base::ThreadPool::PostTask(
@@ -50,35 +51,34 @@ EncryptionModule::EncryptionModule(base::TimeDelta renew_encryption_key_period)
   static_assert(std::is_same<PublicKeyId, Encryptor::PublicKeyId>::value,
                 "Public key id types must match");
   auto encryptor_result = Encryptor::Create();
-  DCHECK(encryptor_result.ok());
-  encryptor_ = std::move(encryptor_result.ValueOrDie());
+  CHECK(encryptor_result.has_value()) << encryptor_result.error();
+  encryptor_ = std::move(encryptor_result.value());
 }
 
 EncryptionModule::~EncryptionModule() = default;
 
 void EncryptionModule::EncryptRecordImpl(
-    base::StringPiece record,
+    std::string_view record,
     base::OnceCallback<void(StatusOr<EncryptedRecord>)> cb) const {
   // Encryption key is available, encrypt.
   encryptor_->OpenRecord(base::BindOnce(
       [](std::string record,
          base::OnceCallback<void(StatusOr<EncryptedRecord>)> cb,
          StatusOr<Encryptor::Handle*> handle_result) {
-        if (!handle_result.ok()) {
-          std::move(cb).Run(handle_result.status());
+        if (!handle_result.has_value()) {
+          std::move(cb).Run(base::unexpected(std::move(handle_result).error()));
           return;
         }
         base::ThreadPool::PostTask(
-            FROM_HERE,
-            base::BindOnce(&AddToRecord, record,
-                           base::Unretained(handle_result.ValueOrDie()),
-                           std::move(cb)));
+            FROM_HERE, base::BindOnce(&AddToRecord, record,
+                                      base::Unretained(handle_result.value()),
+                                      std::move(cb)));
       },
       std::string(record), std::move(cb)));
 }
 
 void EncryptionModule::UpdateAsymmetricKeyImpl(
-    base::StringPiece new_public_key,
+    std::string_view new_public_key,
     PublicKeyId new_public_key_id,
     base::OnceCallback<void(Status)> response_cb) {
   encryptor_->UpdateAsymmetricKey(new_public_key, new_public_key_id,

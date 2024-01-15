@@ -13,16 +13,12 @@
 #import "components/shared_highlighting/core/common/shared_highlighting_metrics.h"
 #import "ios/web/common/features.h"
 #import "ios/web/public/js_messaging/web_frame.h"
-#import "ios/web/public/js_messaging/web_frame_util.h"
+#import "ios/web/public/js_messaging/web_frames_manager.h"
 #import "ios/web/public/navigation/navigation_context.h"
 #import "ios/web/public/navigation/navigation_item.h"
 #import "ios/web/public/navigation/navigation_manager.h"
 #import "ios/web/public/navigation/referrer.h"
 #import "ios/web/public/web_state.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 // Returns a rgb hexadecimal color, suitable for processing in JavaScript
@@ -41,6 +37,9 @@ TextFragmentsManagerImpl::TextFragmentsManagerImpl(WebState* web_state)
     : web_state_(web_state) {
   DCHECK(web_state_);
   web_state_->AddObserver(this);
+  web::WebFramesManager* web_frames_manager =
+      GetJSFeature()->GetWebFramesManager(web_state);
+  web_frames_manager->AddObserver(this);
 }
 
 TextFragmentsManagerImpl::~TextFragmentsManagerImpl() {
@@ -109,6 +108,14 @@ void TextFragmentsManagerImpl::OnClickWithSender(
   }
 }
 
+void TextFragmentsManagerImpl::WebFrameBecameAvailable(
+    WebFramesManager* web_frames_manager,
+    WebFrame* web_frame) {
+  if (web_frame->IsMainFrame() && deferred_processing_params_) {
+    DoHighlight();
+  }
+}
+
 void TextFragmentsManagerImpl::DidFinishNavigation(
     WebState* web_state,
     NavigationContext* navigation_context) {
@@ -125,14 +132,7 @@ void TextFragmentsManagerImpl::DidFinishNavigation(
     return;
   }
   deferred_processing_params_ = std::move(params);
-  if (web::GetMainFrame(web_state_)) {
-    DoHighlight();
-  }
-}
-
-void TextFragmentsManagerImpl::WebFrameDidBecomeAvailable(WebState* web_state,
-                                                          WebFrame* web_frame) {
-  if (web_frame->IsMainFrame() && deferred_processing_params_) {
+  if (GetJSFeature()->GetWebFramesManager(web_state_)->GetMainWebFrame()) {
     DoHighlight();
   }
 }
@@ -144,7 +144,7 @@ void TextFragmentsManagerImpl::WebStateDestroyed(WebState* web_state) {
 
 #pragma mark - Private Methods
 
-absl::optional<TextFragmentsManagerImpl::TextFragmentProcessingParams>
+std::optional<TextFragmentsManagerImpl::TextFragmentProcessingParams>
 TextFragmentsManagerImpl::ProcessTextFragments(
     const web::NavigationContext* context,
     const web::Referrer& referrer) {
@@ -162,7 +162,7 @@ TextFragmentsManagerImpl::ProcessTextFragments(
 
   // Log metrics and cache Referrer for UKM logging.
   shared_highlighting::LogTextFragmentSelectorCount(
-      parsed_fragments.GetListDeprecated().size());
+      parsed_fragments.GetList().size());
   shared_highlighting::LogTextFragmentLinkOpenSource(referrer.url);
   latest_source_id_ = ukm::ConvertToSourceId(context->GetNavigationId(),
                                              ukm::SourceIdType::NAVIGATION_ID);
@@ -179,7 +179,7 @@ TextFragmentsManagerImpl::ProcessTextFragments(
         ToHexStringRGB(shared_highlighting::kFragmentTextForegroundColorARGB);
   }
 
-  return absl::optional<TextFragmentProcessingParams>(
+  return std::optional<TextFragmentProcessingParams>(
       {std::move(parsed_fragments), bg_color, fg_color});
 }
 

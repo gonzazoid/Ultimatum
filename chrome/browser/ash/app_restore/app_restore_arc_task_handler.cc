@@ -17,6 +17,7 @@
 #include "components/app_restore/features.h"
 
 namespace ash::app_restore {
+
 namespace {
 
 ::app_restore::AppRestoreArcInfo* GetAppRestoreArcInfo() {
@@ -84,6 +85,10 @@ bool AppRestoreArcTaskHandler::IsAppPendingRestore(
     if (launcher->IsAppPendingRestore(arc_app_id))
       return true;
   }
+  for (auto& [unused, launcher] : arc_app_single_restore_handlers_) {
+    if (launcher->IsAppPendingRestore(arc_app_id))
+      return true;
+  }
   return false;
 }
 
@@ -105,8 +110,6 @@ void AppRestoreArcTaskHandler::OnAppStatesChanged(
     const ArcAppListPrefs::AppInfo& app_info) {
   if (window_handler_)
     window_handler_->OnAppStatesUpdate(id, app_info.ready, app_info.need_fixup);
-  for (auto& [unused, launcher] : arc_app_single_restore_handlers_)
-    launcher->OnAppStatesUpdate(id);
 }
 
 void AppRestoreArcTaskHandler::OnTaskCreated(int32_t task_id,

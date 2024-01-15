@@ -36,6 +36,7 @@ bool FeatureEntry::InternalNameMatches(const std::string& name) const {
     case FeatureEntry::SINGLE_VALUE:
     case FeatureEntry::SINGLE_DISABLE_VALUE:
     case FeatureEntry::ORIGIN_LIST_VALUE:
+    case FeatureEntry::STRING_VALUE:
       return name.size() == internal_name_length;
 
     case FeatureEntry::MULTI_VALUE:
@@ -199,6 +200,7 @@ bool FeatureEntry::IsValid() const {
     case FeatureEntry::SINGLE_VALUE:
     case FeatureEntry::SINGLE_DISABLE_VALUE:
     case FeatureEntry::ORIGIN_LIST_VALUE:
+    case FeatureEntry::STRING_VALUE:
       return true;
     case FeatureEntry::MULTI_VALUE:
       if (choices.size() == 0) {
@@ -258,6 +260,14 @@ bool FeatureEntry::IsValid() const {
         LOG(ERROR) << "no feature name is set";
         return false;
       }
+#if BUILDFLAG(ENABLE_BANNED_BASE_FEATURE_PREFIX)
+      if (!base::StartsWith(platform_feature_name.name,
+                            BUILDFLAG(BANNED_BASE_FEATURE_PREFIX))) {
+        LOG(ERROR) << "missing required feature name prefix, please check "
+                      "BANNED_BASE_FEATURE_PREFIX";
+        return false;
+      }
+#endif  // BUILDFLAG(ENABLED_BANNED_BASE_FEATURE_PREFIX)
       return true;
     case FeatureEntry::PLATFORM_FEATURE_NAME_WITH_PARAMS_VALUE:
       if (!platform_feature_name.name) {
@@ -272,6 +282,14 @@ bool FeatureEntry::IsValid() const {
         LOG(ERROR) << "feature_trial_name is null";
         return false;
       }
+#if BUILDFLAG(ENABLE_BANNED_BASE_FEATURE_PREFIX)
+      if (!base::StartsWith(platform_feature_name.name,
+                            BUILDFLAG(BANNED_BASE_FEATURE_PREFIX))) {
+        LOG(ERROR) << "missing required feature name prefix, please check "
+                      "BANNED_BASE_FEATURE_PREFIX";
+        return false;
+      }
+#endif  // BUILDFLAG(ENABLED_BANNED_BASE_FEATURE_PREFIX)
       return true;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   }

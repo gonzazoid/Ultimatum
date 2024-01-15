@@ -4,8 +4,8 @@
 
 #include "content/web_test/browser/web_test_shell_platform_delegate.h"
 
+#import "base/apple/foundation_util.h"
 #include "base/containers/contains.h"
-#import "base/mac/foundation_util.h"
 #include "content/browser/renderer_host/render_widget_host_view_mac.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_widget_host.h"
@@ -138,13 +138,13 @@ void WebTestShellPlatformDelegate::ResizeWebContent(
   }
 
   NSView* web_view = shell->web_contents()->GetNativeView().GetNativeNSView();
-  NSRect frame = NSMakeRect(0, 0, content_size.width(), content_size.height());
-  [web_view setFrame:frame];
+  web_view.frame =
+      NSMakeRect(0, 0, content_size.width(), content_size.height());
 
   // The above code changes the RenderWidgetHostView's size, but does not change
-  // the widget's screen rects, since the RenerWidgetHostView is not attached to
-  // a window in headless mode. So this call causes them to be updated so they
-  // are not left as 0x0.
+  // the widget's screen rects, since the RenderWidgetHostView is not attached
+  // to a window in headless mode. So this call causes them to be updated so
+  // they are not left as 0x0.
   auto* rwhv_mac = shell->web_contents()->GetPrimaryMainFrame()->GetView();
   if (rwhv_mac)
     rwhv_mac->SetWindowFrameInScreen(gfx::Rect(content_size));

@@ -8,20 +8,19 @@
 #include <memory>
 #include <tuple>
 
-#include "base/callback.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
-#include "content/browser/indexed_db/indexed_db_bucket_state_handle.h"
+#include "content/browser/indexed_db/indexed_db_bucket_context.h"
 #include "content/browser/indexed_db/indexed_db_task_helper.h"
 #include "content/browser/indexed_db/list_set.h"
 #include "content/common/content_export.h"
 #include "third_party/leveldatabase/src/include/leveldb/status.h"
 
 namespace content {
-class IndexedDBBucketStateHandle;
-class IndexedDBCallbacks;
+class IndexedDBFactoryClient;
 class IndexedDBConnection;
 class IndexedDBDatabase;
 struct IndexedDBPendingConnection;
@@ -31,9 +30,8 @@ class CONTENT_EXPORT IndexedDBConnectionCoordinator {
   static const int64_t kInvalidDatabaseId = 0;
   static const int64_t kMinimumIndexId = 30;
 
-  IndexedDBConnectionCoordinator(
-      IndexedDBDatabase* db,
-      TasksAvailableCallback tasks_available_callback);
+  IndexedDBConnectionCoordinator(IndexedDBDatabase* db,
+                                 IndexedDBBucketContext& bucket_context);
 
   IndexedDBConnectionCoordinator(const IndexedDBConnectionCoordinator&) =
       delete;
@@ -43,12 +41,11 @@ class CONTENT_EXPORT IndexedDBConnectionCoordinator {
   ~IndexedDBConnectionCoordinator();
 
   void ScheduleOpenConnection(
-      IndexedDBBucketStateHandle bucket_state_handle,
       std::unique_ptr<IndexedDBPendingConnection> connection);
 
-  void ScheduleDeleteDatabase(IndexedDBBucketStateHandle bucket_state_handle,
-                              scoped_refptr<IndexedDBCallbacks> callbacks,
-                              base::OnceClosure on_deletion_complete);
+  void ScheduleDeleteDatabase(
+      std::unique_ptr<IndexedDBFactoryClient> factory_client,
+      base::OnceClosure on_deletion_complete);
 
   // Call this method to prune any tasks that don't want to be run during
   // force close. Returns any error caused by rolling back changes.
@@ -63,7 +60,7 @@ class CONTENT_EXPORT IndexedDBConnectionCoordinator {
   // pending connection.
   void OnVersionChangeIgnored();
 
-  void CreateAndBindUpgradeTransaction();
+  void BindVersionChangeTransactionReceiver();
 
   void OnUpgradeTransactionStarted(int64_t old_version);
 
@@ -106,7 +103,7 @@ class CONTENT_EXPORT IndexedDBConnectionCoordinator {
 
   raw_ptr<IndexedDBDatabase> db_;
 
-  TasksAvailableCallback tasks_available_callback_;
+  raw_ref<IndexedDBBucketContext> bucket_context_;
 
   base::queue<std::unique_ptr<ConnectionRequest>> request_queue_;
 

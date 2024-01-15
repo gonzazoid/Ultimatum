@@ -3,11 +3,10 @@
 // found in the LICENSE file.
 
 #include "cc/base/unique_notifier.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace cc {
@@ -49,9 +48,10 @@ class UniqueNotifierTest : public testing::Test {
 // 50000 can be any number bigger than 1. The bigger the easier to more runs.
 TEST_F(UniqueNotifierTest, Schedule) {
   {
-    UniqueNotifier notifier(base::ThreadTaskRunnerHandle::Get().get(),
-                            base::BindRepeating(&UniqueNotifierTest::Notify,
-                                                base::Unretained(this)));
+    UniqueNotifier notifier(
+        base::SingleThreadTaskRunner::GetCurrentDefault().get(),
+        base::BindRepeating(&UniqueNotifierTest::Notify,
+                            base::Unretained(this)));
 
     EXPECT_EQ(0, NotificationCount());
 

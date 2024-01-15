@@ -19,10 +19,11 @@ import '//resources/cr_elements/cr_shared_style.css.js';
 import '//resources/cr_elements/cr_shared_vars.css.js';
 import '//resources/cr_elements/md_select.css.js';
 import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '//resources/cros_components/checkbox/checkbox.js';
 
 import {I18nBehavior} from '//resources/ash/common/i18n_behavior.js';
+import {loadTimeData} from '//resources/ash/common/load_time_data.m.js';
 import {WebUIListenerBehavior} from '//resources/ash/common/web_ui_listener_behavior.js';
-import {loadTimeData} from '//resources/js/load_time_data.m.js';
 import {Polymer} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './add_smb_share_dialog.html.js';
@@ -188,13 +189,16 @@ Polymer({
   /** @private */
   onAddButtonTap_() {
     this.resetErrorState_();
+    const saveCredentialsCheckbox = this.$$(
+        this.isCrosComponentsEnabled_() ? '#saveCredentialsCheckboxJelly' :
+                                          '#saveCredentialsCheckbox');
     this.inProgress_ = true;
     this.browserProxy_
         .smbMount(
             this.mountUrl_, this.mountName_.trim(), this.username_,
             this.password_, this.authenticationMethod_,
             this.shouldOpenFileManagerAfterMount,
-            this.$.saveCredentialsCheckbox.checked)
+            saveCredentialsCheckbox.checked)
         .then(result => {
           this.onAddShare_(result);
         });
@@ -271,6 +275,9 @@ Polymer({
 
     // Success case. Close dialog.
     if (result === SmbMountResult.SUCCESS) {
+      this.dispatchEvent(new CustomEvent(
+          'smb-successfully-mounted-once', {bubbles: true, composed: true}));
+
       this.$.dialog.close();
       return;
     }
@@ -392,5 +399,13 @@ Polymer({
       return false;
     }
     return SMB_SHARE_URL_REGEX.test(this.mountUrl_);
+  },
+
+  isJellyEnabled_() {
+    return !!loadTimeData.getBoolean('isJellyEnabled');
+  },
+
+  isCrosComponentsEnabled_() {
+    return !!loadTimeData.getBoolean('isCrosComponentsEnabled');
   },
 });

@@ -6,17 +6,18 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/containers/cxx20_erase_vector.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/observer_list.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
+#include "base/trace_event/trace_event.h"
+#include "base/uuid.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/send_tab_to_self/features.h"
 #include "components/send_tab_to_self/metrics_util.h"
@@ -123,15 +124,16 @@ SendTabToSelfBridge::CreateMetadataChangeList() {
   return ModelTypeStore::WriteBatch::CreateMetadataChangeList();
 }
 
-absl::optional<syncer::ModelError> SendTabToSelfBridge::MergeSyncData(
+absl::optional<syncer::ModelError> SendTabToSelfBridge::MergeFullSyncData(
     std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
     syncer::EntityChangeList entity_data) {
   DCHECK(entries_.empty());
-  return ApplySyncChanges(std::move(metadata_change_list),
-                          std::move(entity_data));
+  return ApplyIncrementalSyncChanges(std::move(metadata_change_list),
+                                     std::move(entity_data));
 }
 
-absl::optional<syncer::ModelError> SendTabToSelfBridge::ApplySyncChanges(
+absl::optional<syncer::ModelError>
+SendTabToSelfBridge::ApplyIncrementalSyncChanges(
     std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
     syncer::EntityChangeList entity_changes) {
   std::vector<const SendTabToSelfEntry*> added;
@@ -236,14 +238,8 @@ std::string SendTabToSelfBridge::GetStorageKey(
   return entity_data.specifics.send_tab_to_self().guid();
 }
 
-void SendTabToSelfBridge::ApplyStopSyncChanges(
+void SendTabToSelfBridge::ApplyDisableSyncChanges(
     std::unique_ptr<syncer::MetadataChangeList> delete_metadata_change_list) {
-  // If |delete_metadata_change_list| is null, it indicates that sync metadata
-  // shouldn't be deleted, for example chrome is shutting down.
-  if (!delete_metadata_change_list) {
-    return;
-  }
-
   DCHECK(store_);
 
   store_->DeleteAllDataAndMetadata(base::DoNothing());
@@ -298,7 +294,7 @@ const SendTabToSelfEntry* SendTabToSelfBridge::AddEntry(
     return mru_entry_;
   }
 
-  std::string guid = base::GenerateGUID();
+  std::string guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
 
   // Assure that we don't have a guid collision.
   DCHECK_EQ(GetEntryByGUID(guid), nullptr);
@@ -421,6 +417,7 @@ void SendTabToSelfBridge::OnURLsDeleted(
 }
 
 void SendTabToSelfBridge::OnDeviceInfoChange() {
+  TRACE_EVENT0("ui", "SendTabToSelfBridge::OnDeviceInfoChange");
   ComputeTargetDeviceInfoSortedList();
 }
 
@@ -561,6 +558,7 @@ void SendTabToSelfBridge::OnReadAllData(
 void SendTabToSelfBridge::OnReadAllMetadata(
     const absl::optional<syncer::ModelError>& error,
     std::unique_ptr<syncer::MetadataBatch> metadata_batch) {
+  TRACE_EVENT0("ui", "SendTabToSelfBridge::OnReadAllMetadata");
   if (error) {
     change_processor()->ReportError(*error);
     return;
@@ -613,17 +611,18 @@ void SendTabToSelfBridge::DoGarbageCollection() {
 }
 
 void SendTabToSelfBridge::ComputeTargetDeviceInfoSortedList() {
+  TRACE_EVENT0("ui", "SendTabToSelfBridge::ComputeTargetDeviceInfoSortedList");
   if (!device_info_tracker_->IsSyncing()) {
     return;
   }
 
-  std::vector<std::unique_ptr<syncer::DeviceInfo>> all_devices =
+  std::vector<const syncer::DeviceInfo*> all_devices =
       device_info_tracker_->GetAllDeviceInfo();
 
   // Sort the DeviceInfo vector so the most recently modified devices are first.
   std::stable_sort(all_devices.begin(), all_devices.end(),
-                   [](const std::unique_ptr<syncer::DeviceInfo>& device1,
-                      const std::unique_ptr<syncer::DeviceInfo>& device2) {
+                   [](const syncer::DeviceInfo* device1,
+                      const syncer::DeviceInfo* device2) {
                      return device1->last_updated_timestamp() >
                             device2->last_updated_timestamp();
                    });
@@ -631,7 +630,7 @@ void SendTabToSelfBridge::ComputeTargetDeviceInfoSortedList() {
   target_device_info_sorted_list_.clear();
   std::set<std::string> unique_device_names;
   std::unordered_map<std::string, int> short_names_counter;
-  for (const auto& device : all_devices) {
+  for (const syncer::DeviceInfo* device : all_devices) {
     // If the current device is considered expired for our purposes, stop here
     // since the next devices in the vector are at least as expired than this
     // one.
@@ -652,7 +651,7 @@ void SendTabToSelfBridge::ComputeTargetDeviceInfoSortedList() {
       continue;
     }
 
-    SharingDeviceNames device_names = GetSharingDeviceNames(device.get());
+    SharingDeviceNames device_names = GetSharingDeviceNames(device);
 
     // Don't include this device if it has the same name as the local device.
     if (device_names.full_name == local_device_name_) {

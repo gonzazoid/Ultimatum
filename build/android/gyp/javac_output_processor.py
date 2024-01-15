@@ -8,27 +8,24 @@
 import os
 import pathlib
 import re
+import shlex
 import sys
 import traceback
 
 from util import build_utils
+from util import dep_utils
 
 sys.path.insert(
     0,
     os.path.join(build_utils.DIR_SOURCE_ROOT, 'third_party', 'colorama', 'src'))
 import colorama
-sys.path.insert(
-    0,
-    os.path.join(build_utils.DIR_SOURCE_ROOT, 'tools', 'android',
-                 'modularization', 'convenience'))
-import lookup_dep
 
 
 class JavacOutputProcessor:
   def __init__(self, target_name):
     self._target_name = self._RemoveSuffixesIfPresent(
         ["__compile_java", "__errorprone", "__header"], target_name)
-    self._suggested_deps = set()
+    self._suggested_targets_list = set()
 
     # Example: ../../ui/android/java/src/org/chromium/ui/base/Clipboard.java:45:
     fileline_prefix = (
@@ -75,7 +72,7 @@ class JavacOutputProcessor:
     lines = self._ElaborateLinesForUnknownSymbol(iter(lines))
     for line in lines:
       yield self._ApplyColors(line)
-    if self._suggested_deps:
+    if self._suggested_targets_list:
 
       def yellow(text):
         return colorama.Fore.YELLOW + text + colorama.Fore.RESET
@@ -84,8 +81,21 @@ class JavacOutputProcessor:
       yield yellow('Hint:') + ' One or more errors due to missing GN deps.'
       yield (yellow('Hint:') + ' Try adding the following to ' +
              yellow(self._target_name))
-      for dep in sorted(self._suggested_deps):
-        yield '    "{}",'.format(dep)
+
+      for targets in sorted(self._suggested_targets_list):
+        if len(targets) > 1:
+          suggested_targets_str = 'one of: ' + ', '.join(targets)
+        else:
+          suggested_targets_str = targets[0]
+        yield '    "{}",'.format(suggested_targets_str)
+
+      yield ''
+      yield yellow('Hint:') + (' Run the following command to add the missing '
+                               'deps:')
+      missing_targets = {targets[0] for targets in self._suggested_targets_list}
+      cmd = dep_utils.CreateAddDepsCommand(self._target_name,
+                                           sorted(missing_targets))
+      yield f'    {shlex.join(cmd)}\n '  # Extra space necessary for new line.
 
   def _ElaborateLinesForUnknownSymbol(self, lines):
     """ Elaborates passed-in javac output for unresolved symbols.
@@ -142,7 +152,7 @@ class JavacOutputProcessor:
       return
 
     if self._class_lookup_index is None:
-      self._class_lookup_index = lookup_dep.ClassLookupIndex(
+      self._class_lookup_index = dep_utils.ClassLookupIndex(
           pathlib.Path(os.getcwd()),
           should_build=False,
       )
@@ -151,34 +161,11 @@ class JavacOutputProcessor:
     suggested_deps = self._class_lookup_index.match(class_to_lookup)
 
     if not suggested_deps:
+      print(f'No suggested deps for {class_to_lookup}')
       return
 
-    suggested_deps = self._DisambiguateDeps(suggested_deps)
-    suggested_deps_str = ', '.join(s.target for s in suggested_deps)
-
-    if len(suggested_deps) > 1:
-      suggested_deps_str = 'one of: ' + suggested_deps_str
-
-    self._suggested_deps.add(suggested_deps_str)
-
-  @staticmethod
-  def _DisambiguateDeps(class_entries):
-    if len(class_entries) == 1:
-      return class_entries
-
-    # android_library_factory() targets set low_classpath_priority=true, and any
-    # target that is the "impl" side of a target that uses jar_excluded_patterns
-    # should use this as well.
-    # We should generally always suggest depending on the non-impl library
-    # target.
-    # TODO(crbug.com/1296711): Also use "visibility" a hint here.
-    low_entries = [x for x in class_entries if x.low_classpath_priority]
-    class_entries = low_entries or class_entries
-
-    # E.g. javax_annotation_jsr250_api_java.
-    jsr_entries = [x for x in class_entries if 'jsr' in x.target]
-    class_entries = jsr_entries or class_entries
-    return class_entries
+    suggested_deps = dep_utils.DisambiguateDeps(suggested_deps)
+    self._suggested_targets_list.add(tuple(d.target for d in suggested_deps))
 
   @staticmethod
   def _RemoveSuffixesIfPresent(suffixes, text):

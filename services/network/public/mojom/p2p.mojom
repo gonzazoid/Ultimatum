@@ -5,6 +5,7 @@
 module network.mojom;
 
 import "mojo/public/mojom/base/time.mojom";
+import "mojo/public/mojom/base/read_only_buffer.mojom";
 import "services/network/public/mojom/network_interface.mojom";
 import "services/network/public/mojom/ip_address.mojom";
 import "services/network/public/mojom/ip_endpoint.mojom";
@@ -27,6 +28,19 @@ struct P2PSendPacketMetrics;
 
 [Native]
 enum P2PSocketOption;
+
+// Represents the packet received on the socket.
+struct P2PReceivedPacket {
+  mojo_base.mojom.ReadOnlyBuffer data;
+  IPEndPoint socket_address;
+  mojo_base.mojom.TimeTicks timestamp;
+};
+
+// Represents a packet sent through a socket.
+struct P2PSendPacket {
+  mojo_base.mojom.ReadOnlyBuffer data;
+  P2PPacketInfo packet_info;
+};
 
 interface P2PNetworkNotificationClient {
   NetworkListChanged(array<NetworkInterface> networks,
@@ -52,22 +66,29 @@ interface P2PSocketManager {
                IPEndPoint local_address,
                P2PPortRange port_range,
                P2PHostAndIPEndPoint remote_address,
+               MutableNetworkTrafficAnnotationTag traffic_annotation,
                pending_remote<P2PSocketClient> client,
                pending_receiver<P2PSocket> socket);
 };
 
 interface P2PSocket {
-  // TODO(sergeyu): Use shared memory to pass the data.
-  Send(array<int8> data,
-       P2PPacketInfo packet_info,
-       network.mojom.MutableNetworkTrafficAnnotationTag traffic_annotation);
+  Send(mojo_base.mojom.ReadOnlyBuffer data,
+       P2PPacketInfo packet_info);
+  // Sends a batch of packets to the socket.
+  SendBatch(array<P2PSendPacket> packet_batch);
   SetOption(P2PSocketOption option, int32 value);
 };
 
 interface P2PSocketClient {
+  // Invoked when socket is created.
   SocketCreated(IPEndPoint local_address, IPEndPoint remote_address);
+
+  // Invoked once for each packet after the send is complete.
   SendComplete(P2PSendPacketMetrics send_metrics);
-  DataReceived(IPEndPoint socket_address,
-               array<int8> data,
-               mojo_base.mojom.TimeTicks timestamp);
+
+  // Invoked once for each batch of sent packets after the send is complete.
+  SendBatchComplete(array<P2PSendPacketMetrics> send_metrics_batch);
+
+  // Invoked when packets are received on the socket.
+  DataReceived(array<P2PReceivedPacket> packets);
 };

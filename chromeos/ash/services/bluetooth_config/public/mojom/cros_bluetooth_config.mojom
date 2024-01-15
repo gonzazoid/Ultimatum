@@ -132,6 +132,14 @@ struct BluetoothDeviceProperties {
   bool is_blocked_by_policy;
 };
 
+// Fast Pairable Device's current pairing state. No success state is necessary,
+// as a paired Fast Pair device becomes a standard Paired device.
+enum FastPairableDevicePairingState {
+  kReady,
+  kPairing,
+  kError
+};
+
 // Properties belonging to a Bluetooth device which has been paired to this
 // Chrome OS device.
 struct PairedBluetoothDeviceProperties {
@@ -141,6 +149,11 @@ struct PairedBluetoothDeviceProperties {
   // (i.e., other devices do not have access to this name). Null if the
   // device has not been nicknamed by the user.
   string? nickname;
+
+  // The existence of this field denotes this device is a Fast Pairable
+  // device, i.e. one that is linked to the user's account but not paired to
+  // this Chromebook. Used to communicate the pairing state to the UI.
+  FastPairableDevicePairingState? fast_pairable_device_pairing_state;
 };
 
 // Describes the high-level status of system Bluetooth.
@@ -151,6 +164,10 @@ struct BluetoothSystemProperties {
   // List of paired devices. UI surfaces should display devices in the order
   // indicated by this array.
   array<PairedBluetoothDeviceProperties> paired_devices;
+
+  // Devices detected by Fast Pair that are available to pair.
+  array<PairedBluetoothDeviceProperties> fast_pairable_devices;
+
 };
 
 // Observer for changes to Bluetooth system properties.
@@ -250,6 +267,9 @@ interface DevicePairingHandler {
   // |result| is returned when the pairing attempt completes. It is
   // possible that |result| is returned before any delegate function
   // is invoked.
+  // Only one pairing request should be made at a time. If a second request
+  // is made while a request is pending the second request will return with
+  // mojom::PairingResult::kNonAuthFailure.
   PairDevice(
       string device_id,
       pending_remote<DevicePairingDelegate> delegate) =>

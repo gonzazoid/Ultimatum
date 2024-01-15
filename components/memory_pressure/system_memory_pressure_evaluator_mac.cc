@@ -12,11 +12,11 @@
 
 #include <cmath>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/mac/mac_util.h"
 #include "base/memory/memory_pressure_monitor.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 
 namespace memory_pressure::mac {
 
@@ -43,17 +43,23 @@ SystemMemoryPressureEvaluator::SystemMemoryPressureEvaluator(
           DISPATCH_MEMORYPRESSURE_WARN | DISPATCH_MEMORYPRESSURE_CRITICAL |
               DISPATCH_MEMORYPRESSURE_NORMAL,
           dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0))),
+      renotify_current_vote_timer_(
+          FROM_HERE,
+          kRenotifyVotePeriod,
+          base::BindRepeating(&SystemMemoryPressureEvaluator::SendCurrentVote,
+                              base::Unretained(this),
+                              /*notify=*/true)),
       weak_ptr_factory_(this) {
   // WeakPtr needed because there is no guarantee that |this| is still be alive
   // when the task posted to the TaskRunner or event handler runs.
   base::WeakPtr<SystemMemoryPressureEvaluator> weak_this =
       weak_ptr_factory_.GetWeakPtr();
   scoped_refptr<base::TaskRunner> task_runner =
-      base::SequencedTaskRunnerHandle::Get();
+      base::SequencedTaskRunner::GetCurrentDefault();
 
   // Attach an event handler to the memory pressure event source.
   if (memory_level_event_source_.get()) {
-    dispatch_source_set_event_handler(memory_level_event_source_, ^{
+    dispatch_source_set_event_handler(memory_level_event_source_.get(), ^{
       task_runner->PostTask(
           FROM_HERE,
           base::BindRepeating(
@@ -62,14 +68,14 @@ SystemMemoryPressureEvaluator::SystemMemoryPressureEvaluator(
     });
 
     // Start monitoring the event source.
-    dispatch_resume(memory_level_event_source_);
+    dispatch_resume(memory_level_event_source_.get());
   }
 }
 
 SystemMemoryPressureEvaluator::~SystemMemoryPressureEvaluator() {
   // Remove the memory pressure event source.
   if (memory_level_event_source_.get()) {
-    dispatch_source_cancel(memory_level_event_source_);
+    dispatch_source_cancel(memory_level_event_source_.get());
   }
 }
 
@@ -105,6 +111,12 @@ void SystemMemoryPressureEvaluator::OnMemoryPressureChanged() {
   bool notify = current_vote() !=
                 base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_NONE;
   SendCurrentVote(notify);
+
+  if (notify) {
+    renotify_current_vote_timer_.Reset();
+  } else {
+    renotify_current_vote_timer_.Stop();
+  }
 }
 
 }  // namespace memory_pressure::mac

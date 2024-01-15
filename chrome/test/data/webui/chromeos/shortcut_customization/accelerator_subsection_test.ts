@@ -3,17 +3,20 @@
 // found in the LICENSE file.
 
 import 'chrome://shortcut-customization/js/accelerator_subsection.js';
-import 'chrome://webui-test/mojo_webui_test_support.js';
+import 'chrome://webui-test/chromeos/mojo_webui_test_support.js';
 
+import {strictQuery} from 'chrome://resources/ash/common/typescript_utils/strict_query.js';
+import {CrIconButtonElement} from 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {AcceleratorLookupManager} from 'chrome://shortcut-customization/js/accelerator_lookup_manager.js';
 import {AcceleratorSubsectionElement} from 'chrome://shortcut-customization/js/accelerator_subsection.js';
 import {fakeAcceleratorConfig, fakeLayoutInfo} from 'chrome://shortcut-customization/js/fake_data.js';
-import {AcceleratorSource, Modifier} from 'chrome://shortcut-customization/js/shortcut_types.js';
-import {assertEquals} from 'chrome://webui-test/chai_assert.js';
+import {AcceleratorCategory, AcceleratorSource, AcceleratorSubcategory, LayoutInfo, LayoutStyle, Modifier} from 'chrome://shortcut-customization/js/shortcut_types.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
-import {createUserAccelerator} from './shortcut_customization_test_util.js';
+import {createUserAcceleratorInfo} from './shortcut_customization_test_util.js';
 
 suite('acceleratorSubsectionTest', function() {
   let sectionElement: AcceleratorSubsectionElement|null = null;
@@ -21,12 +24,10 @@ suite('acceleratorSubsectionTest', function() {
   let manager: AcceleratorLookupManager|null = null;
 
   setup(() => {
+    loadTimeData.overrideValues({isCustomizationAllowed: true});
     manager = AcceleratorLookupManager.getInstance();
     manager!.setAcceleratorLookup(fakeAcceleratorConfig);
     manager!.setAcceleratorLayoutLookup(fakeLayoutInfo);
-
-    sectionElement = document.createElement('accelerator-subsection');
-    document.body.appendChild(sectionElement);
   });
 
   teardown(() => {
@@ -37,29 +38,45 @@ suite('acceleratorSubsectionTest', function() {
     sectionElement = null;
   });
 
+  async function initAcceleratorSubsectionElement(
+      category: AcceleratorCategory) {
+    sectionElement = document.createElement('accelerator-subsection');
+    sectionElement.category = category;
+    document.body.appendChild(sectionElement);
+    return flushTasks();
+  }
+
   // TODO(jimmyxgong): Update this test after retrieving accelerators is
   // implemented for a subsection.
   test('LoadsBasicSection', async () => {
-    const acceleratorInfo1 = createUserAccelerator(
+    await initAcceleratorSubsectionElement(
+        AcceleratorCategory.kWindowsAndDesks);
+    const acceleratorInfo1 = createUserAcceleratorInfo(
         Modifier.CONTROL | Modifier.SHIFT,
         /*key=*/ 71,
         /*keyDisplay=*/ 'g');
 
-    const acceleratorInfo2 = createUserAccelerator(
+    const acceleratorInfo2 = createUserAcceleratorInfo(
         Modifier.CONTROL | Modifier.SHIFT,
         /*key=*/ 67,
         /*keyDisplay=*/ 'c');
 
-    const accelerators = [acceleratorInfo1, acceleratorInfo2];
+    const expectedAccelInfos = [acceleratorInfo1, acceleratorInfo2];
     const description = 'test shortcut';
     const title = 'test title';
+    const expectedLayoutInfo: LayoutInfo = {
+      action: 0,
+      category: AcceleratorCategory.kWindowsAndDesks,
+      description,
+      source: AcceleratorSource.kAsh,
+      style: LayoutStyle.kDefault,
+      subCategory: AcceleratorSubcategory.kWindows,
+    };
 
     sectionElement!.title = title;
-    sectionElement!.acceleratorContainer = [{
-      description: description,
-      acceleratorInfos: accelerators,
-      source: AcceleratorSource.kAsh,
-      action: 0,
+    sectionElement!.accelRowDataArray = [{
+      acceleratorInfos: expectedAccelInfos,
+      layoutInfo: expectedLayoutInfo,
     }];
 
     await flush();
@@ -70,23 +87,123 @@ suite('acceleratorSubsectionTest', function() {
   });
 
   test('LoadCategoryAndConfirmDescriptions', async () => {
+    await initAcceleratorSubsectionElement(
+        AcceleratorCategory.kWindowsAndDesks);
     const expectedTitle = 'test title';
     sectionElement!.title = expectedTitle;
-    sectionElement!.category = /*Chromeos*/ 0;
-    sectionElement!.subcategory = /*Window Management*/ 0;
+    sectionElement!.subcategory = AcceleratorSubcategory.kWindows;
 
     await flushTasks();
 
     const rowListElement =
         sectionElement!.shadowRoot!.querySelectorAll('accelerator-row');
 
-    // First accelerator-row corresponds to 'Snap Window Left'.
+    // First accelerator-row corresponds to 'Snap Window Left', and its category
+    // is kWindowsAndDesks.
     assertEquals(
         manager!.getAcceleratorName(/*source=*/ 0, /*action=*/ 0)!,
         rowListElement[0]!.description);
-    // Second accelerator-row corresponds to 'Snap Window Right'.
+    assertEquals(
+        manager!.getAcceleratorCategory(/*source=*/ 0, /*action=*/ 0)!,
+        AcceleratorCategory.kWindowsAndDesks);
+    // Second accelerator-row corresponds to 'Snap Window Right', and its
+    // category is kWindowsAndDesks.
     assertEquals(
         manager!.getAcceleratorName(/*source=*/ 0, /*action=*/ 1)!,
         rowListElement[1]!.description);
+    assertEquals(
+        manager!.getAcceleratorCategory(/*source=*/ 0, /*action=*/ 1)!,
+        AcceleratorCategory.kWindowsAndDesks);
   });
+
+  test('ShowEmptyRowWhenCertainKeysAreUnavailable', async () => {
+    await initAcceleratorSubsectionElement(AcceleratorCategory.kGeneral);
+    const expectedTitle = 'test title';
+    sectionElement!.title = expectedTitle;
+    sectionElement!.subcategory = AcceleratorSubcategory.kApps;
+
+    await flushTasks();
+
+    const rowListElement =
+        sectionElement!.shadowRoot!.querySelectorAll('accelerator-row');
+
+    // There are two accelerators in General -> Apps category: 'Open
+    // Calculator app' and 'Open Diagnostic app'.
+    assertEquals(2, rowListElement.length);
+
+    // First accelerator row in General -> Apps category
+    // corresponds to 'Open Diagnostic app'. And its category is kGeneral.
+    assertEquals(
+        manager!.getAcceleratorName(/*source=*/ 0, /*action=*/ 5)!,
+        rowListElement[1]!.description);
+    assertEquals(
+        manager!.getAcceleratorCategory(/*source=*/ 0, /*action=*/ 5)!,
+        AcceleratorCategory.kGeneral);
+    let shortcutsAssignedElement =
+        rowListElement[1]!.shadowRoot!.querySelector(
+            '#noShortcutAssignedContainer') as HTMLDivElement;
+    assertTrue(shortcutsAssignedElement.hidden);
+
+    // Second accelerator row in General -> Apps category corresponds to
+    // 'Open calculator app'. It should have an empty row.
+    assertEquals(
+        manager!.getAcceleratorName(/*source=*/ 0, /*action=*/ 4)!,
+        rowListElement[0]!.description);
+    assertEquals(
+        manager!.getAcceleratorCategory(/*source=*/ 0, /*action=*/ 4)!,
+        AcceleratorCategory.kGeneral);
+    // Expect the `noShortcutsAssigned` view to be available.
+    shortcutsAssignedElement =
+        rowListElement[0]!.shadowRoot!.querySelector(
+            '#noShortcutAssignedContainer') as HTMLDivElement;
+    assertFalse(shortcutsAssignedElement.hidden);
+
+    // Expect 'noShortcutsAssigned' has an edit button.
+    const editButton = strictQuery(
+        '.edit-button', rowListElement[0]!.shadowRoot, CrIconButtonElement);
+    assertTrue(!!editButton);
+
+    // Add event listend and verify clicking edit-button will open the dialog.
+    let showDialogListenerCalled = false;
+    rowListElement[0]!.addEventListener('show-edit-dialog', () => {
+      showDialogListenerCalled = true;
+    });
+
+    editButton.click();
+    await flushTasks();
+
+    // Expect the dialog is opened.
+    assertTrue(showDialogListenerCalled);
+  });
+
+  test('RemoveAcceleratorWhenCertainKeysAreUnavailable', async () => {
+    await initAcceleratorSubsectionElement(AcceleratorCategory.kGeneral);
+    const expectedTitle = 'test title';
+    sectionElement!.title = expectedTitle;
+    sectionElement!.subcategory = AcceleratorSubcategory.kGeneralControls;
+
+    await flushTasks();
+
+    const rowListElement =
+        sectionElement!.shadowRoot!.querySelectorAll('accelerator-row');
+
+    // 'Open/close Google assistant' has two accelerators:
+    // 1. [Search] + [A].
+    // 2. [LauncheAssistant] key.
+    // In fakeData, [LauncheAssistant] key is set to be unavailable and the
+    // accelerator state is kDisabledByUnavailableKey. Therefore, only one
+    // accelerator will be shown.
+    assertEquals(1, rowListElement[0]!.acceleratorInfos.length);
+
+    // First and the only accelerator row in General -> GeneralControls category
+    // corresponds to 'Open/close Google assistant', and its category is
+    // kGeneral.
+    assertEquals(
+        manager!.getAcceleratorName(/*source=*/ 0, /*action=*/ 6)!,
+        rowListElement[0]!.description);
+    assertEquals(
+        manager!.getAcceleratorCategory(/*source=*/ 0, /*action=*/ 6)!,
+        AcceleratorCategory.kGeneral);
+  });
+
 });

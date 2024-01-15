@@ -5,17 +5,30 @@
 #include "chromeos/ash/components/login/auth/auth_status_consumer.h"
 
 #include "base/notreached.h"
+#include "chromeos/ash/components/login/auth/public/user_context.h"
 
 namespace ash {
 
-void AuthStatusConsumer::OnPasswordChangeDetected(
-    const UserContext& user_context) {
+void AuthStatusConsumer::OnOnlinePasswordUnusable(
+    std::unique_ptr<UserContext> user_context,
+    bool online_password_mismatch) {
+  if (online_password_mismatch) {
+    OnPasswordChangeDetectedFor(user_context->GetAccountId());
+  }
+}
+
+void AuthStatusConsumer::OnPasswordChangeDetectedFor(const AccountId& account) {
   NOTREACHED();
 }
 
 void AuthStatusConsumer::OnOldEncryptionDetected(
-    const UserContext& user_context,
+    std::unique_ptr<UserContext> user_context,
     bool has_incomplete_migration) {
+  NOTREACHED();
+}
+
+void AuthStatusConsumer::OnLocalAuthenticationRequired(
+    std::unique_ptr<UserContext> user_context) {
   NOTREACHED();
 }
 

@@ -7,16 +7,16 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/hash/md5.h"
 #include "base/stl_util.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/atomic_flag.h"
-#include "base/task/task_runner_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
+#include "base/uuid.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
@@ -27,7 +27,7 @@
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/common/channel_info.h"
 #include "chrome/common/pref_names.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/embedder_support/user_agent_utils.h"
 #include "components/prefs/pref_service.h"
@@ -85,7 +85,7 @@ ResettableSettingsSnapshot::ResettableSettingsSnapshot(Profile* profile)
 
   // Calculate the MD5 sum of the GUID to make sure that no part of the GUID
   // contains information identifying the sender of the report.
-  guid_ = base::MD5String(base::GenerateGUID());
+  guid_ = base::MD5String(base::Uuid::GenerateRandomV4().AsLowercaseString());
 }
 
 ResettableSettingsSnapshot::~ResettableSettingsSnapshot() {
@@ -137,17 +137,17 @@ void ResettableSettingsSnapshot::RequestShortcuts(base::OnceClosure callback) {
 
   cancellation_flag_ = new SharedCancellationFlag;
 #if BUILDFLAG(IS_WIN)
-  base::PostTaskAndReplyWithResult(
-      base::ThreadPool::CreateCOMSTATaskRunner(
-          {base::MayBlock(), base::TaskPriority::USER_VISIBLE})
-          .get(),
-      FROM_HERE, base::BindOnce(&GetChromeLaunchShortcuts, cancellation_flag_),
-      base::BindOnce(&ResettableSettingsSnapshot::SetShortcutsAndReport,
-                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+  base::ThreadPool::CreateCOMSTATaskRunner(
+      {base::MayBlock(), base::TaskPriority::USER_VISIBLE})
+      ->PostTaskAndReplyWithResult(
+          FROM_HERE,
+          base::BindOnce(&GetChromeLaunchShortcuts, cancellation_flag_),
+          base::BindOnce(&ResettableSettingsSnapshot::SetShortcutsAndReport,
+                         weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 #else   // BUILDFLAG(IS_WIN)
   // Shortcuts are only supported on Windows.
   std::vector<ShortcutCommand> no_shortcuts;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&ResettableSettingsSnapshot::SetShortcutsAndReport,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback),
@@ -175,8 +175,20 @@ std::unique_ptr<reset_report::ChromeResetReport> SerializeSettingsReportToProto(
       new reset_report::ChromeResetReport());
 
   if (field_mask & ResettableSettingsSnapshot::STARTUP_MODE) {
-    for (const auto& url : snapshot.startup_urls())
-      report->add_startup_url_path(url.spec());
+    for (const auto& url : snapshot.startup_urls()) {
+      // TODO(crbug.com/1501983) Delete the following if-block once we have
+      // seen some samples.
+      if (!url.is_valid()) {
+        // This is intentionally a DUMP_WILL_BE_NOTREACHED_NORETURN() instead of
+        // a DCHECK() so that it generates crash dumps with debug data. A
+        // similar NOTREACHED() used to be triggered by url.spec() and the
+        // volume is not incredibly high. A DCHECK() would probably not be
+        // sufficient because we had very few cases of url.is_valid() being
+        // false on the pre-stable channels.
+        DUMP_WILL_BE_NOTREACHED_NORETURN() << url.possibly_invalid_spec();
+      }
+      report->add_startup_url_path(url.is_valid() ? url.spec() : std::string());
+    }
     switch (snapshot.startup_type()) {
       case SessionStartupPref::DEFAULT:
         report->set_startup_type(
@@ -244,7 +256,7 @@ base::Value::List GetReadableFeedbackForSnapshot(
           g_browser_process->GetApplicationLocale());
   AddPair(list, l10n_util::GetStringUTF16(IDS_VERSION_UI_USER_AGENT),
           embedder_support::GetUserAgent());
-  std::string version = version_info::GetVersionNumber();
+  std::string version(version_info::GetVersionNumber());
   version += chrome::GetChannelName(chrome::WithExtendedStable(true));
   AddPair(list,
           l10n_util::GetStringUTF16(IDS_PRODUCT_NAME),

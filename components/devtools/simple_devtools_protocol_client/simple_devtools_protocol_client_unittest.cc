@@ -7,12 +7,15 @@
 #include <string>
 #include <vector>
 
+#include "base/containers/span.h"
 #include "base/json/json_writer.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/values.h"
 #include "content/public/browser/devtools_agent_host.h"
+#include "content/public/test/browser_task_environment.h"
+#include "content/public/test/mock_devtools_agent_host.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -20,72 +23,19 @@ using testing::ElementsAre;
 
 namespace simple_devtools_protocol_client {
 
-class MockDevToolsAgentHost : public content::DevToolsAgentHost {
- public:
-  MockDevToolsAgentHost() = default;
-
-  // content::DevToolsAgentHost
-  std::string CreateIOStreamFromData(
-      scoped_refptr<base::RefCountedMemory>) override {
-    return std::string();
-  }
-  bool AttachClient(content::DevToolsAgentHostClient* client) override {
-    DCHECK(!client_);
-    client_ = client;
-    return true;
-  }
-  bool AttachClientWithoutWakeLock(
-      content::DevToolsAgentHostClient* client) override {
-    return AttachClient(client);
-  }
-  bool DetachClient(content::DevToolsAgentHostClient* client) override {
-    if (client != client_)
-      return false;
-    client_ = nullptr;
-    return true;
-  }
-  bool IsAttached() override { return client_ != nullptr; }
-  void DispatchProtocolMessage(content::DevToolsAgentHostClient* client,
-                               base::span<const uint8_t> message) override {
-    DCHECK_EQ(client, client_);
-    client->DispatchProtocolMessage(this, message);
-  }
-  void InspectElement(content::RenderFrameHost* frame_host,
-                      int x,
-                      int y) override {}
-  std::string GetId() override { return std::string(); }
-  std::string GetParentId() override { return std::string(); }
-  std::string GetOpenerId() override { return std::string(); }
-  bool CanAccessOpener() override { return true; }
-  std::string GetOpenerFrameId() override { return std::string(); }
-  content::WebContents* GetWebContents() override { return nullptr; }
-  content::BrowserContext* GetBrowserContext() override { return nullptr; }
-  void DisconnectWebContents() override {}
-  void ConnectWebContents(content::WebContents* web_contents) override {}
-  std::string GetType() override { return std::string(); }
-  std::string GetTitle() override { return std::string(); }
-  std::string GetDescription() override { return std::string(); }
-  GURL GetURL() override { return GURL(); }
-  GURL GetFaviconURL() override { return GURL(); }
-  std::string GetFrontendURL() override { return std::string(); }
-  bool Activate() override { return true; }
-  void Reload() override {}
-  bool Close() override { return true; }
-  base::TimeTicks GetLastActivityTime() override { return base::TimeTicks(); }
-  content::RenderProcessHost* GetProcessHost() override { return nullptr; }
-
- protected:
-  ~MockDevToolsAgentHost() override = default;
-
-  base::raw_ptr<content::DevToolsAgentHostClient> client_ = nullptr;
-};
+namespace {
 
 class SimpleDevToolsProtocolClientTest : public SimpleDevToolsProtocolClient,
                                          public testing::Test {
  public:
   SimpleDevToolsProtocolClientTest() {
-    AttachClient(new MockDevToolsAgentHost);
+    AttachClient(new content::MockDevToolsAgentHost);
   }
+
+  void RunUntilIdle() { task_environment_.RunUntilIdle(); }
+
+ private:
+  content::BrowserTaskEnvironment task_environment_;
 };
 
 class SimpleDevToolsProtocolClientSendCommandTest
@@ -99,6 +49,7 @@ class SimpleDevToolsProtocolClientSendCommandTest
                 base::BindOnce(&SimpleDevToolsProtocolClientSendCommandTest::
                                    OnSendCommand1Response,
                                base::Unretained(this)));
+    RunUntilIdle();
   }
 
   void OnSendCommand1Response(base::Value::Dict params) {
@@ -108,6 +59,7 @@ class SimpleDevToolsProtocolClientSendCommandTest
                 base::BindOnce(&SimpleDevToolsProtocolClientSendCommandTest::
                                    OnSendCommand2Response,
                                base::Unretained(this)));
+    RunUntilIdle();
   }
 
   void OnSendCommand2Response(base::Value::Dict params) {
@@ -120,6 +72,7 @@ class SimpleDevToolsProtocolClientSendCommandTest
                       self->OnSendCommand3Response(std::move(params));
                     },
                     base::Unretained(this)));
+    RunUntilIdle();
   }
 
   void OnSendCommand3Response(base::Value::Dict params) {
@@ -147,6 +100,7 @@ class SimpleDevToolsProtocolClientEventHandlerTest
     base::JSONWriter::Write(base::Value(std::move(params)), &json);
     DispatchProtocolMessage(agent_host_.get(),
                             base::as_bytes(base::make_span(json)));
+    RunUntilIdle();
   }
 };
 
@@ -393,5 +347,33 @@ TEST_F(SimpleDevToolsProtocolClientEventHandlerNestedRemoveTest,
   // only register the very first event.
   EXPECT_THAT(received_events_, ElementsAre("event"));
 }
+
+class SelfDestructingSimpleDevToolsProtocolClient
+    : public SimpleDevToolsProtocolClient {
+ public:
+  void TryIt() {
+    std::string json_message = "{}";
+    SimpleDevToolsProtocolClient::DispatchProtocolMessage(
+        agent_host_.get(), base::as_bytes(base::make_span(json_message)));
+
+    // Delete self so that the task posted by the previous call has nowhere to
+    // go.
+    delete this;
+  }
+
+  void DispatchProtocolMessageTask(base::Value::Dict message) override {
+    CHECK(false) << "use-after-free";
+  }
+};
+
+TEST(SimpleDevToolsProtocolClientTest, DestoroyClientInFlight) {
+  content::BrowserTaskEnvironment task_environment;
+
+  (new SelfDestructingSimpleDevToolsProtocolClient)->TryIt();
+
+  task_environment.RunUntilIdle();
+}
+
+}  // namespace
 
 }  // namespace simple_devtools_protocol_client

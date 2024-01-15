@@ -7,9 +7,10 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chromeos/ash/components/login/auth/public/auth_callbacks.h"
 #include "chromeos/ash/components/login/auth/public/key.h"
+#include "chromeos/ash/services/auth_factor_config/chrome_browser_delegates.h"
 #include "components/prefs/pref_service.h"
 
 class AccountId;
@@ -18,12 +19,13 @@ class ScopedKeepAlive;
 
 namespace ash {
 namespace quick_unlock {
+
 class PinStorageCryptohome;
 enum class Purpose;
 
 // Provides high-level access to the user's PIN. The underlying storage can be
 // either cryptohome or prefs.
-class PinBackend {
+class PinBackend : public ash::auth::PinBackendDelegate {
  public:
   using BoolCallback = base::OnceCallback<void(bool)>;
 
@@ -44,7 +46,7 @@ class PinBackend {
   PinBackend(const PinBackend&) = delete;
   PinBackend& operator=(const PinBackend&) = delete;
 
-  ~PinBackend();
+  ~PinBackend() override;
 
   // Check to see if the PinBackend supports login. This is true when the
   // cryptohome backend is available.
@@ -60,7 +62,7 @@ class PinBackend {
   void Set(const AccountId& account_id,
            const std::string& auth_token,
            const std::string& pin,
-           BoolCallback did_set);
+           BoolCallback did_set) override;
 
   // Set the state of PIN auto submit for the given user. Called when enabling
   // auto submit through the confirmation dialog in Settings.
@@ -72,7 +74,7 @@ class PinBackend {
   // Remove the given user's PIN.
   void Remove(const AccountId& account_id,
               const std::string& auth_token,
-              BoolCallback did_remove);
+              BoolCallback did_remove) override;
 
   // Is PIN authentication available for the given account? Even if PIN is set,
   // it may not be available for authentication due to some additional
@@ -127,7 +129,7 @@ class PinBackend {
   // should be cleared from prefs.
   void OnPinMigrationAttemptComplete(Profile* profile,
                                      std::unique_ptr<UserContext>,
-                                     absl::optional<AuthenticationError>);
+                                     std::optional<AuthenticationError>);
 
   // Actions to be performed after an authentication attempt with Cryptohome.
   // The only use case right now is for PIN auto submit, where we might want to
@@ -136,7 +138,7 @@ class PinBackend {
       const Key& key,
       AuthOperationCallback result,
       std::unique_ptr<UserContext> user_context,
-      absl::optional<AuthenticationError> error);
+      std::optional<AuthenticationError> error);
 
   // Called after checking the user's PIN when enabling auto submit.
   // If the authentication was `success`ful, the `pin_length` will be
@@ -144,13 +146,23 @@ class PinBackend {
   void OnPinAutosubmitCheckComplete(size_t pin_length,
                                     BoolCallback result,
                                     std::unique_ptr<UserContext> user_context,
-                                    absl::optional<AuthenticationError> error);
+                                    std::optional<AuthenticationError> error);
 
   // Help method for working with the PIN auto submit preference.
   PrefService* PrefService(const AccountId& account_id);
 
   // Simple operations to be performed for PIN auto submit during the common
   // operations in PinBackend - Set, Remove, TryAuthenticate
+
+  void SetWithContext(const AccountId& account_id,
+                      const std::string& auth_token,
+                      const std::string& pin,
+                      BoolCallback did_set,
+                      std::unique_ptr<UserContext> user_context);
+  void RemoveWithContext(const AccountId& account_id,
+                         const std::string& auth_token,
+                         BoolCallback did_remove,
+                         std::unique_ptr<UserContext> user_context);
 
   // When setting/updating a PIN. After every 'Set' operation the
   // exposed length can only be either the true PIN length, or zero.
@@ -179,7 +191,7 @@ class PinBackend {
   static void OnAuthOperation(std::string auth_token,
                               BoolCallback callback,
                               std::unique_ptr<UserContext>,
-                              absl::optional<AuthenticationError>);
+                              std::optional<AuthenticationError>);
 
   // True if still trying to determine which backend should be used.
   bool resolving_backend_ = true;
@@ -199,13 +211,5 @@ class PinBackend {
 
 }  // namespace quick_unlock
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-namespace quick_unlock {
-using ::ash::quick_unlock::PinBackend;
-}
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_QUICK_UNLOCK_PIN_BACKEND_H_

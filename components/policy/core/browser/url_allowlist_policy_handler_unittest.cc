@@ -92,9 +92,9 @@ TEST_F(URLAllowlistPolicyHandlerTest, ApplyPolicySettings_Empty) {
 
 TEST_F(URLAllowlistPolicyHandlerTest, ApplyPolicySettings_WrongElementType) {
   // The policy expects string-valued elements. Give it booleans.
-  base::Value in(base::Value::Type::LIST);
+  base::Value::List in;
   in.Append(false);
-  SetPolicy(key::kURLAllowlist, std::move(in));
+  SetPolicy(key::kURLAllowlist, base::Value(std::move(in)));
   ApplyPolicies();
 
   // The element should be skipped.
@@ -105,9 +105,9 @@ TEST_F(URLAllowlistPolicyHandlerTest, ApplyPolicySettings_WrongElementType) {
 }
 
 TEST_F(URLAllowlistPolicyHandlerTest, ApplyPolicySettings_Successful) {
-  base::Value in_url_allowlist(base::Value::Type::LIST);
+  base::Value::List in_url_allowlist;
   in_url_allowlist.Append(kTestAllowlistValue);
-  SetPolicy(key::kURLAllowlist, std::move(in_url_allowlist));
+  SetPolicy(key::kURLAllowlist, base::Value(std::move(in_url_allowlist)));
   ApplyPolicies();
 
   base::Value* out;
@@ -173,6 +173,20 @@ TEST_F(URLAllowlistPolicyHandlerTest, ValidatePolicy) {
   EXPECT_TRUE(ValidatePolicy("127.0.0.1:1"));
   EXPECT_TRUE(ValidatePolicy("127.0.0.1:65535"));
   EXPECT_FALSE(ValidatePolicy("127.0.0.1:65536"));
+
+  EXPECT_TRUE(ValidatePolicy("*"));
+  EXPECT_FALSE(ValidatePolicy("*.developers.com"));
+}
+
+// When the invalid sequence with '*' in the host is added to the allowlist, the
+// policy can still be applied, but an error is added to the error map to
+// indicate an invalid URL.
+TEST_F(URLAllowlistPolicyHandlerTest, CheckPolicyURLHostWithAsterik) {
+  base::Value::List allowed_urls;
+  allowed_urls.Append("*.developers.com");
+  EXPECT_TRUE(
+      CheckPolicy(key::kURLAllowlist, base::Value(std::move(allowed_urls))));
+  EXPECT_EQ(1U, errors_.size());
 }
 
 }  // namespace policy

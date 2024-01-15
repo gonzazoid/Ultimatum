@@ -12,22 +12,28 @@
 #include <stdint.h>
 #include <string.h>  // for memcpy() and memset().
 
+#include <iterator>
 #include <utility>
 
 #include "base/big_endian.h"
 #include "base/containers/span.h"
+#include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "net/base/io_buffer.h"
+#include "net/base/net_errors.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/base/privacy_mode.h"
+#include "net/base/request_priority.h"
 #include "net/base/test_completion_callback.h"
 #include "net/dns/public/secure_dns_policy.h"
-#include "net/log/test_net_log.h"
+#include "net/socket/client_socket_handle.h"
+#include "net/socket/client_socket_pool.h"
 #include "net/socket/connect_job.h"
 #include "net/socket/socket_tag.h"
 #include "net/socket/socket_test_util.h"
-#include "net/socket/ssl_client_socket.h"
 #include "net/test/gtest_util.h"
 #include "net/test/test_with_task_environment.h"
+#include "net/traffic_annotation/network_traffic_annotation.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -114,19 +120,23 @@ class WebSocketBasicStreamSocketTest : public TestWithTaskEnvironment {
   WebSocketBasicStreamSocketTest()
       : common_connect_job_params_(
             &factory_,
-            nullptr /* host_resolver */,
-            nullptr /* http_auth_cache */,
-            nullptr /* http_auth_handler_factory */,
-            nullptr /* spdy_session_pool */,
-            nullptr /* quic_supported_versions */,
-            nullptr /* quic_stream_factory */,
-            nullptr /* proxy_delegate */,
-            nullptr /* http_user_agent_settings */,
-            nullptr /* ssl_client_context */,
-            nullptr /* socket_performance_watcher_factory */,
-            nullptr /* network_quality_estimator */,
-            nullptr /* net_log */,
-            nullptr /* websocket_endpoint_lock_manager */),
+            /*host_resolver=*/nullptr,
+            /*http_auth_cache=*/nullptr,
+            /*http_auth_handler_factory=*/nullptr,
+            /*spdy_session_pool=*/nullptr,
+            /*quic_supported_versions=*/nullptr,
+            /*quic_stream_factory=*/nullptr,
+            /*proxy_delegate=*/nullptr,
+            /*http_user_agent_settings=*/nullptr,
+            /*ssl_client_context=*/nullptr,
+            /*socket_performance_watcher_factory=*/nullptr,
+            /*network_quality_estimator=*/nullptr,
+            /*net_log=*/nullptr,
+            /*websocket_endpoint_lock_manager=*/nullptr,
+            /*http_server_properties*/ nullptr,
+            /*alpn_protos=*/nullptr,
+            /*application_settings=*/nullptr,
+            /*ignore_certificate_errors=*/nullptr),
         pool_(1, 1, &common_connect_job_params_),
         generator_(&GenerateNulMaskingKey) {}
 
@@ -258,7 +268,7 @@ class WebSocketBasicStreamSocketWriteTest
     const size_t payload_size =
         kWriteFrameSize - (WebSocketFrameHeader::kBaseHeaderSize +
                            WebSocketFrameHeader::kMaskingKeyLength);
-    auto buffer = base::MakeRefCounted<IOBuffer>(payload_size);
+    auto buffer = base::MakeRefCounted<IOBufferWithSize>(payload_size);
     frame_buffers_.push_back(buffer);
     memcpy(buffer->data(), kWriteFrame + kWriteFrameSize - payload_size,
            payload_size);
@@ -963,7 +973,7 @@ TEST_F(WebSocketBasicStreamSocketTest, WriteNonNulMask) {
       std::make_unique<WebSocketFrame>(WebSocketFrameHeader::kOpCodeText);
   const std::string unmasked_payload = "graphics";
   const size_t payload_size = unmasked_payload.size();
-  auto buffer = base::MakeRefCounted<IOBuffer>(payload_size);
+  auto buffer = base::MakeRefCounted<IOBufferWithSize>(payload_size);
   memcpy(buffer->data(), unmasked_payload.data(), payload_size);
   frame->payload = buffer->data();
   WebSocketFrameHeader& header = frame->header;

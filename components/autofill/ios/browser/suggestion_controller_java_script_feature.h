@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/no_destructor.h"
 #include "ios/web/public/js_messaging/java_script_feature.h"
 
@@ -63,9 +63,6 @@ class SuggestionControllerJavaScriptFeature : public web::JavaScriptFeature {
       const std::string& form_name,
       const std::string& field_name,
       base::OnceCallback<void(bool, bool)> completion_handler);
-
-  // Closes the keyboard and defocuses the active input element in |frame|.
-  void CloseKeyboardForFrame(web::WebFrame* frame);
 
  private:
   friend class base::NoDestructor<SuggestionControllerJavaScriptFeature>;

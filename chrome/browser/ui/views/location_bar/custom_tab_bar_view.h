@@ -41,8 +41,9 @@ class CustomTabBarView : public views::AccessiblePaneView,
                          public views::ContextMenuController,
                          public IconLabelBubbleView::Delegate,
                          public LocationIconView::Delegate {
+  METADATA_HEADER(CustomTabBarView, views::AccessiblePaneView)
+
  public:
-  METADATA_HEADER(CustomTabBarView);
   CustomTabBarView(BrowserView* browser_view,
                    LocationBarView::Delegate* delegate);
   CustomTabBarView(const CustomTabBarView&) = delete;
@@ -68,6 +69,8 @@ class CustomTabBarView : public views::AccessiblePaneView,
   // IconLabelBubbleView::Delegate:
   SkColor GetIconLabelBubbleSurroundingForegroundColor() const override;
   SkColor GetIconLabelBubbleBackgroundColor() const override;
+  std::optional<ui::ColorId> GetLocationIconBackgroundColorOverride()
+      const override;
 
   // LocationIconView::Delegate:
   content::WebContents* GetWebContents() override;
@@ -90,6 +93,7 @@ class CustomTabBarView : public views::AccessiblePaneView,
   }
   void GoBackToAppForTesting();
   bool IsShowingOriginForTesting() const;
+  bool IsShowingCloseButtonForTesting() const;
 
  private:
   // Takes the web contents for the custom tab bar back to the app scope.

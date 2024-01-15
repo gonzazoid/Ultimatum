@@ -4,6 +4,8 @@
 
 #include "ash/system/update/update_notification_controller.h"
 
+#include <optional>
+
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
 #include "ash/public/cpp/system_tray_client.h"
@@ -15,14 +17,13 @@
 #include "ash/system/model/enterprise_domain_model.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/session/shutdown_confirmation_dialog.h"
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
 #include "components/vector_icons/vector_icons.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/chromeos/devicetype_utils.h"
 #include "ui/gfx/vector_icon_types.h"
@@ -77,18 +78,18 @@ UpdateNotificationController::~UpdateNotificationController() {
 }
 
 void UpdateNotificationController::GenerateUpdateNotification(
-    absl::optional<bool> slow_boot_file_path_exists) {
+    std::optional<bool> slow_boot_file_path_exists) {
   if (!ShouldShowUpdate()) {
     message_center::MessageCenter::Get()->RemoveNotification(
         kNotificationId, false /* by_user */);
     return;
   }
 
-  if (slow_boot_file_path_exists != absl::nullopt) {
+  if (slow_boot_file_path_exists != std::nullopt) {
     slow_boot_file_path_exists_ = slow_boot_file_path_exists.value();
   }
 
-  std::unique_ptr<Notification> notification = CreateSystemNotification(
+  std::unique_ptr<Notification> notification = CreateSystemNotificationPtr(
       message_center::NOTIFICATION_TYPE_SIMPLE, kNotificationId, GetTitle(),
       GetMessage(), std::u16string() /* display_source */, GURL(),
       message_center::NotifierId(message_center::NotifierType::SYSTEM_COMPONENT,
@@ -148,9 +149,6 @@ bool UpdateNotificationController::ShouldShowDeferredUpdate() const {
 }
 
 std::u16string UpdateNotificationController::GetTitle() const {
-  if (model_->update_type() == UpdateType::kLacros)
-    return l10n_util::GetStringUTF16(IDS_UPDATE_NOTIFICATION_TITLE_LACROS);
-
   switch (model_->relaunch_notification_state().requirement_type) {
     case RelaunchNotificationState::kRecommendedAndOverdue:
       return model_->rollback() ? l10n_util::GetStringUTF16(
@@ -198,9 +196,6 @@ std::u16string UpdateNotificationController::GetTitle() const {
 }
 
 std::u16string UpdateNotificationController::GetMessage() const {
-  if (model_->update_type() == UpdateType::kLacros)
-    return l10n_util::GetStringUTF16(IDS_UPDATE_NOTIFICATION_MESSAGE_LACROS);
-
   if (ShouldShowDeferredUpdate()) {
     return l10n_util::GetStringUTF16(
         IDS_UPDATE_NOTIFICATION_MESSAGE_DEFERRED_UPDATE);
@@ -214,7 +209,7 @@ std::u16string UpdateNotificationController::GetMessage() const {
                                       system_app_name);
   }
 
-  absl::optional<int> body_message_id = absl::nullopt;
+  std::optional<int> body_message_id = std::nullopt;
   switch (model_->relaunch_notification_state().requirement_type) {
     case RelaunchNotificationState::kRecommendedNotOverdue:
       body_message_id = model_->rollback()
@@ -240,8 +235,7 @@ std::u16string UpdateNotificationController::GetMessage() const {
   std::u16string update_text;
   std::u16string domain_manager =
       GetDomainManager(model_->relaunch_notification_state().policy_source);
-  if (body_message_id.has_value() && !domain_manager.empty() &&
-      model_->update_type() == UpdateType::kSystem) {
+  if (body_message_id.has_value() && !domain_manager.empty()) {
     update_text = l10n_util::GetStringFUTF16(*body_message_id, domain_manager,
                                              ui::GetChromeOSDeviceName());
   } else {
@@ -284,12 +278,6 @@ UpdateNotificationController::GetWarningLevel() const {
 
 void UpdateNotificationController::RestartForUpdate() {
   confirmation_dialog_ = nullptr;
-  if (model_->update_type() == UpdateType::kLacros) {
-    // Lacros only needs to restart the browser to cause the component updater
-    // to use the new lacros component.
-    Shell::Get()->session_controller()->AttemptRestartChrome();
-    return;
-  }
   // System updates require restarting the device.
   Shell::Get()->session_controller()->RequestRestartForUpdate();
 }
@@ -297,11 +285,11 @@ void UpdateNotificationController::RestartForUpdate() {
 void UpdateNotificationController::RestartCancelled() {
   confirmation_dialog_ = nullptr;
   // Put the notification back.
-  GenerateUpdateNotification(absl::nullopt);
+  GenerateUpdateNotification(std::nullopt);
 }
 
 void UpdateNotificationController::HandleNotificationClick(
-    absl::optional<int> button_index) {
+    std::optional<int> button_index) {
   DCHECK(ShouldShowUpdate());
 
   if (!button_index) {

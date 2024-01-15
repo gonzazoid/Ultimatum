@@ -8,7 +8,7 @@
 namespace gfx {
 class Rect;
 class RectF;
-}
+}  // namespace gfx
 
 namespace aura {
 class Window;

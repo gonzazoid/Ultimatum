@@ -4,16 +4,16 @@
 
 #include "ash/components/arc/pay/arc_payment_app_bridge.h"
 
+#include <optional>
 #include <utility>
 
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "ash/components/arc/session/arc_service_manager.h"
 #include "ash/components/arc/test/arc_payment_app_bridge_test_support.h"
-#include "ash/components/arc/test/test_browser_context.h"
+#include "chromeos/components/payments/mojom/payment_app_types.mojom.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace arc {
 namespace {
@@ -28,25 +28,27 @@ class ArcPaymentAppBridgeTest : public testing::Test {
       delete;
 
   void OnPaymentImplementedResponse(
-      mojom::IsPaymentImplementedResultPtr response) {
+      chromeos::payments::mojom::IsPaymentImplementedResultPtr response) {
     is_implemented_ = std::move(response);
   }
 
-  void OnIsReadyToPayResponse(mojom::IsReadyToPayResultPtr response) {
+  void OnIsReadyToPayResponse(
+      chromeos::payments::mojom::IsReadyToPayResultPtr response) {
     is_ready_to_pay_ = std::move(response);
   }
 
-  void OnInvokePaymentAppResponse(mojom::InvokePaymentAppResultPtr response) {
+  void OnInvokePaymentAppResponse(
+      chromeos::payments::mojom::InvokePaymentAppResultPtr response) {
     invoke_app_ = std::move(response);
   }
 
   void OnAbortPaymentAppResponse(bool response) { abort_app_ = response; }
 
   ArcPaymentAppBridgeTestSupport support_;
-  mojom::IsPaymentImplementedResultPtr is_implemented_;
-  mojom::IsReadyToPayResultPtr is_ready_to_pay_;
-  mojom::InvokePaymentAppResultPtr invoke_app_;
-  absl::optional<bool> abort_app_;
+  chromeos::payments::mojom::IsPaymentImplementedResultPtr is_implemented_;
+  chromeos::payments::mojom::IsReadyToPayResultPtr is_ready_to_pay_;
+  chromeos::payments::mojom::InvokePaymentAppResultPtr invoke_app_;
+  std::optional<bool> abort_app_;
 };
 
 TEST_F(ArcPaymentAppBridgeTest, UnableToConnectInIsImplemented) {
@@ -73,15 +75,17 @@ TEST_F(ArcPaymentAppBridgeTest, IsImplemented) {
 
   EXPECT_CALL(*support_.instance(),
               IsPaymentImplemented(testing::_, testing::_))
-      .WillOnce(testing::Invoke(
-          [](const std::string& package_name,
-             ArcPaymentAppBridge::IsPaymentImplementedCallback callback) {
-            auto valid = mojom::IsPaymentImplementedValidResult::New();
-            valid->activity_names.push_back("com.example.Activity");
-            valid->service_names.push_back("com.example.Service");
-            std::move(callback).Run(
-                mojom::IsPaymentImplementedResult::NewValid(std::move(valid)));
-          }));
+      .WillOnce(testing::Invoke([](const std::string& package_name,
+                                   ArcPaymentAppBridge::
+                                       IsPaymentImplementedCallback callback) {
+        auto valid =
+            chromeos::payments::mojom::IsPaymentImplementedValidResult::New();
+        valid->activity_names.push_back("com.example.Activity");
+        valid->service_names.push_back("com.example.Service");
+        std::move(callback).Run(
+            chromeos::payments::mojom::IsPaymentImplementedResult::NewValid(
+                std::move(valid)));
+      }));
 
   ArcPaymentAppBridge::GetForBrowserContextForTesting(support_.context())
       ->IsPaymentImplemented(
@@ -107,8 +111,10 @@ TEST_F(ArcPaymentAppBridgeTest, IsNotImplemented) {
       .WillOnce(testing::Invoke(
           [](const std::string& package_name,
              ArcPaymentAppBridge::IsPaymentImplementedCallback callback) {
-            std::move(callback).Run(mojom::IsPaymentImplementedResult::NewValid(
-                mojom::IsPaymentImplementedValidResult::New()));
+            std::move(callback).Run(
+                chromeos::payments::mojom::IsPaymentImplementedResult::NewValid(
+                    chromeos::payments::mojom::IsPaymentImplementedValidResult::
+                        New()));
           }));
 
   ArcPaymentAppBridge::GetForBrowserContextForTesting(support_.context())
@@ -134,7 +140,8 @@ TEST_F(ArcPaymentAppBridgeTest, ImplementationCheckError) {
           [](const std::string& package_name,
              ArcPaymentAppBridge::IsPaymentImplementedCallback callback) {
             std::move(callback).Run(
-                mojom::IsPaymentImplementedResult::NewError("Error message."));
+                chromeos::payments::mojom::IsPaymentImplementedResult::NewError(
+                    "Error message."));
           }));
 
   ArcPaymentAppBridge::GetForBrowserContextForTesting(support_.context())
@@ -157,7 +164,7 @@ TEST_F(ArcPaymentAppBridgeTest, UnableToConnectInIsReadyToPay) {
 
   ArcPaymentAppBridge::GetForBrowserContextForTesting(support_.context())
       ->IsReadyToPay(
-          mojom::PaymentParameters::New(),
+          chromeos::payments::mojom::PaymentParameters::New(),
           base::BindOnce(&ArcPaymentAppBridgeTest::OnIsReadyToPayResponse,
                          base::Unretained(this)));
 
@@ -172,15 +179,16 @@ TEST_F(ArcPaymentAppBridgeTest, IsReadyToPay) {
 
   EXPECT_CALL(*support_.instance(), IsReadyToPay(testing::_, testing::_))
       .WillOnce(testing::Invoke(
-          [](mojom::PaymentParametersPtr parameters,
+          [](chromeos::payments::mojom::PaymentParametersPtr parameters,
              ArcPaymentAppBridge::IsReadyToPayCallback callback) {
             std::move(callback).Run(
-                mojom::IsReadyToPayResult::NewResponse(true));
+                chromeos::payments::mojom::IsReadyToPayResult::NewResponse(
+                    true));
           }));
 
   ArcPaymentAppBridge::GetForBrowserContextForTesting(support_.context())
       ->IsReadyToPay(
-          mojom::PaymentParameters::New(),
+          chromeos::payments::mojom::PaymentParameters::New(),
           base::BindOnce(&ArcPaymentAppBridgeTest::OnIsReadyToPayResponse,
                          base::Unretained(this)));
 
@@ -195,15 +203,16 @@ TEST_F(ArcPaymentAppBridgeTest, IsNotReadyToPay) {
 
   EXPECT_CALL(*support_.instance(), IsReadyToPay(testing::_, testing::_))
       .WillOnce(testing::Invoke(
-          [](mojom::PaymentParametersPtr parameters,
+          [](chromeos::payments::mojom::PaymentParametersPtr parameters,
              ArcPaymentAppBridge::IsReadyToPayCallback callback) {
             std::move(callback).Run(
-                mojom::IsReadyToPayResult::NewResponse(false));
+                chromeos::payments::mojom::IsReadyToPayResult::NewResponse(
+                    false));
           }));
 
   ArcPaymentAppBridge::GetForBrowserContextForTesting(support_.context())
       ->IsReadyToPay(
-          mojom::PaymentParameters::New(),
+          chromeos::payments::mojom::PaymentParameters::New(),
           base::BindOnce(&ArcPaymentAppBridgeTest::OnIsReadyToPayResponse,
                          base::Unretained(this)));
 
@@ -221,7 +230,7 @@ TEST_F(ArcPaymentAppBridgeTest, UnableToConnectInInvokePaymentApp) {
 
   ArcPaymentAppBridge::GetForBrowserContextForTesting(support_.context())
       ->InvokePaymentApp(
-          mojom::PaymentParameters::New(),
+          chromeos::payments::mojom::PaymentParameters::New(),
           base::BindOnce(&ArcPaymentAppBridgeTest::OnInvokePaymentAppResponse,
                          base::Unretained(this)));
 
@@ -236,18 +245,20 @@ TEST_F(ArcPaymentAppBridgeTest, InvokePaymentAppResultOK) {
 
   EXPECT_CALL(*support_.instance(), InvokePaymentApp(testing::_, testing::_))
       .WillOnce(testing::Invoke(
-          [](mojom::PaymentParametersPtr parameters,
+          [](chromeos::payments::mojom::PaymentParametersPtr parameters,
              ArcPaymentAppBridge::InvokePaymentAppCallback callback) {
-            auto valid = mojom::InvokePaymentAppValidResult::New();
+            auto valid =
+                chromeos::payments::mojom::InvokePaymentAppValidResult::New();
             valid->is_activity_result_ok = true;
             valid->stringified_details = "{}";
             std::move(callback).Run(
-                mojom::InvokePaymentAppResult::NewValid(std::move(valid)));
+                chromeos::payments::mojom::InvokePaymentAppResult::NewValid(
+                    std::move(valid)));
           }));
 
   ArcPaymentAppBridge::GetForBrowserContextForTesting(support_.context())
       ->InvokePaymentApp(
-          mojom::PaymentParameters::New(),
+          chromeos::payments::mojom::PaymentParameters::New(),
           base::BindOnce(&ArcPaymentAppBridgeTest::OnInvokePaymentAppResponse,
                          base::Unretained(this)));
 
@@ -264,18 +275,20 @@ TEST_F(ArcPaymentAppBridgeTest, InvokePaymentAppResultCancelled) {
 
   EXPECT_CALL(*support_.instance(), InvokePaymentApp(testing::_, testing::_))
       .WillOnce(testing::Invoke(
-          [](mojom::PaymentParametersPtr parameters,
+          [](chromeos::payments::mojom::PaymentParametersPtr parameters,
              ArcPaymentAppBridge::InvokePaymentAppCallback callback) {
-            auto valid = mojom::InvokePaymentAppValidResult::New();
+            auto valid =
+                chromeos::payments::mojom::InvokePaymentAppValidResult::New();
             // User cancelled payment.
             valid->is_activity_result_ok = false;
             std::move(callback).Run(
-                mojom::InvokePaymentAppResult::NewValid(std::move(valid)));
+                chromeos::payments::mojom::InvokePaymentAppResult::NewValid(
+                    std::move(valid)));
           }));
 
   ArcPaymentAppBridge::GetForBrowserContextForTesting(support_.context())
       ->InvokePaymentApp(
-          mojom::PaymentParameters::New(),
+          chromeos::payments::mojom::PaymentParameters::New(),
           base::BindOnce(&ArcPaymentAppBridgeTest::OnInvokePaymentAppResponse,
                          base::Unretained(this)));
 
@@ -291,15 +304,16 @@ TEST_F(ArcPaymentAppBridgeTest, InvokePaymentAppError) {
 
   EXPECT_CALL(*support_.instance(), InvokePaymentApp(testing::_, testing::_))
       .WillOnce(testing::Invoke(
-          [](mojom::PaymentParametersPtr parameters,
+          [](chromeos::payments::mojom::PaymentParametersPtr parameters,
              ArcPaymentAppBridge::InvokePaymentAppCallback callback) {
             std::move(callback).Run(
-                mojom::InvokePaymentAppResult::NewError("Error message."));
+                chromeos::payments::mojom::InvokePaymentAppResult::NewError(
+                    "Error message."));
           }));
 
   ArcPaymentAppBridge::GetForBrowserContextForTesting(support_.context())
       ->InvokePaymentApp(
-          mojom::PaymentParameters::New(),
+          chromeos::payments::mojom::PaymentParameters::New(),
           base::BindOnce(&ArcPaymentAppBridgeTest::OnInvokePaymentAppResponse,
                          base::Unretained(this)));
 

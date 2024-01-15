@@ -6,7 +6,10 @@
 """
 
 from collections import defaultdict
+import datetime
 import logging
+import re
+import os
 from typing import List, Set
 
 from models import Action
@@ -15,7 +18,8 @@ from models import CoverageTestsByPlatform
 from models import ActionType
 from models import CoverageTestsByPlatformSet
 from models import TestId
-from models import TestIdsByPlatformSet
+from models import TestIdsTestNamesByPlatformSet
+from models import TestIdTestNameTuple
 from models import TestPartitionDescription
 from models import TestPlatform
 
@@ -35,10 +39,10 @@ def filter_tests_for_partition(tests: List[CoverageTest],
 
 
 def compare_and_print_tests_to_remove_and_add(
-        existing_tests: TestIdsByPlatformSet,
+        existing_tests: TestIdsTestNamesByPlatformSet,
         required_tests: CoverageTestsByPlatformSet,
         test_partitions: List[TestPartitionDescription],
-        default_partition: TestPartitionDescription):
+        default_partition: TestPartitionDescription, add_to_file: bool):
     """
     Given the existing tests on disk and the required tests, print out the
     changes that need to happen to make them match. This also takes into account
@@ -47,12 +51,47 @@ def compare_and_print_tests_to_remove_and_add(
     Note: This does NOT support moving tests between partition files. If a test
     was found in any partition file, then it is ignored.
     """
+    def print_tests(filename: str, tests: List[CoverageTest],
+                    partition: TestPartitionDescription, add_to_file: bool):
+        new_test_str: str = ""
+        for test in tests:
+            new_test_str += ("\n" + test.generate_browsertest(partition) +
+                             "\n")
+        if add_to_file:
+            if os.path.exists(filename):
+                with open(filename, "r") as f:
+                    test_file = f.read()
+                # Find the last test in the test file
+                if re.search(r"IN_PROC_BROWSER_TEST_F(.|\n)*?}\n", test_file):
+                    res = re.finditer(r"IN_PROC_BROWSER_TEST_F(.|\n)*?}\n",
+                                      test_file)
+                    last_test_end_index = list(res)[-1].end()
+                # Find the first closing parenthesis (end of namespace) if
+                # there is no test in the file
+                elif "}" in test_file:
+                    last_test_end_index = test_file.find("}") - 1
+                else:
+                    last_test_end_index = len(test_file)
+                new_content = (test_file[:last_test_end_index] + new_test_str +
+                               test_file[last_test_end_index:])
+                with open(filename, "w") as f:
+                    f.write(new_content)
+            else:
+                print(f"\n\nCreate a new test file: {filename}\n"
+                      "Remember to add the new test file to the BUILD file.\n"
+                      "Add the following tests to the new test file:\n"
+                      f"{new_test_str}")
+        else:
+            print(f"\n\nAdd the following tests to {filename}:\n"
+                  f"{new_test_str}")
+
     test_ids_to_keep: TestIdsByPlatformSet = defaultdict(lambda: set())
     for platforms, tests in required_tests.items():
         tests_to_add: List[CoverageTest] = []
         for test in tests:
             if platforms in existing_tests:
-                existing_test_set = existing_tests[platforms]
+                existing_test_set = set(
+                    [test_id for (test_id, _) in existing_tests[platforms]])
                 if test.id not in existing_test_set:
                     tests_to_add.append(test)
                 else:
@@ -73,26 +112,21 @@ def compare_and_print_tests_to_remove_and_add(
                         "Cannot have a test written to multiple test files.")
                 tests_added_to_partition.add(test.id)
             filename = partition.generate_browsertest_filepath(platforms)
-            print(f"\n\nAdd this following tests to {filename}:\n")
-            for test in tests_to_add_partition:
-                print(test.generate_browsertest(partition) + "\n")
+            print_tests(filename, tests_to_add_partition, partition,
+                        add_to_file)
 
         # All remaining tests go into the default partition
         default_tests: List[CoverageTest] = [
             test for test in tests_to_add
             if test.id not in tests_added_to_partition
         ]
-
         if not default_tests:
             continue
         filename = default_partition.generate_browsertest_filepath(platforms)
-        print(f"\n\nAdd this following tests to {filename}:\n")
-        for test in default_tests:
-            print(test.generate_browsertest(default_partition) + "\n")
-
+        print_tests(filename, default_tests, default_partition, add_to_file)
     # Print out all tests to remove. To keep the algorithm simple the partition
     # is not kept track of.
-    for platforms, test_ids in existing_tests.items():
+    for platforms, test_ids_names in existing_tests.items():
         tests_to_remove = []
         prompt_str = ""
         nice_platform_str = ", ".join(
@@ -100,14 +134,15 @@ def compare_and_print_tests_to_remove_and_add(
         if platforms not in test_ids_to_keep:
             prompt_str = (f"\n\nRemove ALL tests from the file for the "
                           f"platforms [{nice_platform_str}]:\n")
-            tests_to_remove = test_ids
+            tests_to_remove = [test_name for (_, test_name) in test_ids_names]
         else:
             prompt_str = (f"\n\nRemove these tests from the file for the "
-                          f" platforms [{nice_platform_str}]:\n")
+                          f"platforms [{nice_platform_str}]:\n")
             tests_to_remove = [
-                test_id for test_id in test_ids
+                test_name for (test_id, test_name) in test_ids_names
                 if test_id not in test_ids_to_keep[platforms]
             ]
+
         if not tests_to_remove:
             continue
         print(f"{prompt_str}{', '.join(tests_to_remove)}")

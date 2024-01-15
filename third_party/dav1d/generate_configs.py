@@ -21,7 +21,7 @@ CHROMIUM_ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, '..', '..'))
 sys.path.append(os.path.join(CHROMIUM_ROOT_DIR, 'build'))
 import gn_helpers
 
-MESON = ['meson.py']
+MESON = ['meson']
 
 DEFAULT_BUILD_ARGS = [
     '-Denable_tools=false', '-Denable_tests=false', '-Ddefault_library=static',
@@ -130,19 +130,17 @@ def GenerateConfig(config_dir, env, special_args=[]):
             (r'(#define _WIN32_WINNT .*)',
              r'// \1 -- Windows version is controlled by Chromium'),
 
-            # Clang LTO doesn't respect stack alignment, so we must use the
-            # platform's default stack alignment; https://crbug.com/928743.
-            (r'(#define STACK_ALIGNMENT \d{1,2})',
-             r'// \1 -- Stack alignment is controlled by Chromium'),
-
-            # Android doesn't have pthread_getaffinity_np.
-            (r'(#define HAVE_PTHREAD_GETAFFINITY_NP \d{1,2})',
+            # Android doesn't have pthread_{get,set}affinity_np.
+            (r'(#define HAVE_PTHREAD_(GET|SET)AFFINITY_NP \d{1,2})',
              r'// \1 -- Controlled by Chomium'),
         ])
 
     config_asm_path = os.path.join(temp_dir, 'config.asm')
     if (os.path.exists(config_asm_path)):
         RewriteFile(config_asm_path,
+                    # Clang LTO doesn't respect stack alignment, so we must use
+                    # the platform's default stack alignment;
+                    # https://crbug.com/928743.
                     [(r'(%define STACK_ALIGNMENT \d{1,2})',
                       r'; \1 -- Stack alignment is controlled by Chromium')])
 
@@ -163,6 +161,19 @@ def GenerateWindowsArm64Config(src_dir):
                 [(r'#define ARCH_X86 1', r'#define ARCH_X86 0'),
                  (r'#define ARCH_X86_64 1', r'#define ARCH_X86_64 0'),
                  (r'#define ARCH_AARCH64 0', r'#define ARCH_AARCH64 1')])
+
+
+def GenerateGenericConfig(src_dir):
+    generic_dir = 'config/linux-noasm/generic'
+    if not os.path.exists(generic_dir):
+        os.makedirs(generic_dir)
+
+    shutil.copy(os.path.join(src_dir, 'config.h'), generic_dir)
+
+    # Mark architecture as unknown.
+    RewriteFile(os.path.join(generic_dir, 'config.h'),
+                [(r'#define ARCH_X86 1', r'#define ARCH_X86 0'),
+                 (r'#define ARCH_X86_64 1', r'#define ARCH_X86_64 0')])
 
 
 def CopyVersions(src_dir, dest_dir):
@@ -193,8 +204,10 @@ def main():
     linux_env['CC'] = 'clang'
 
     GenerateConfig('config/linux/x64', linux_env)
-    GenerateConfig('config/linux-noasm/x64', linux_env, ['-Denable_asm=false'])
-    GenerateConfig('config/linux-noasm/generic', linux_env, ['-Denable_asm=false'])
+
+    noasm_dir = 'config/linux-noasm/x64'
+    GenerateConfig(noasm_dir, linux_env, ['-Denable_asm=false'])
+    GenerateGenericConfig(noasm_dir)
 
     GenerateConfig('config/linux/x86', linux_env,
                    ['--cross-file', '../crossfiles/linux32.crossfile'])
@@ -202,8 +215,6 @@ def main():
                    ['--cross-file', '../crossfiles/arm.crossfile'])
     GenerateConfig('config/linux/arm64', linux_env,
                    ['--cross-file', '../crossfiles/arm64.crossfile'])
-
-    GenerateConfig('config/linux/ppc64', linux_env)
 
     win_x86_env = SetupWindowsCrossCompileToolchain('x86')
     GenerateConfig('config/win/x86', win_x86_env,

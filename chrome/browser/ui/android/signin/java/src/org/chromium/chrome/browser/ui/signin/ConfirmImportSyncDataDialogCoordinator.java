@@ -16,6 +16,7 @@ import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
 import org.chromium.components.browser_ui.settings.ManagedPreferencesUtils;
 import org.chromium.components.browser_ui.widget.RadioButtonWithDescription;
+import org.chromium.components.signin.AccountEmailDomainDisplayability;
 import org.chromium.ui.modaldialog.DialogDismissalCause;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.modaldialog.ModalDialogManager.ModalDialogType;
@@ -26,6 +27,7 @@ import org.chromium.ui.modelutil.PropertyModel;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * A coordinator to show a modal dialog that is displayed when the user switches account they are
@@ -43,9 +45,7 @@ public class ConfirmImportSyncDataDialogCoordinator {
          */
         void onConfirm(boolean wipeData);
 
-        /**
-         * The user dismisses the dialog through any means other than the positive button.
-         */
+        /** The user dismisses the dialog through any means other than the positive button. */
         void onCancel();
     }
 
@@ -57,21 +57,45 @@ public class ConfirmImportSyncDataDialogCoordinator {
 
     private final PropertyModel mModel;
     private final ModalDialogManager mDialogManager;
+    private final Predicate<String> mCheckIfDisplayableEmailAddress;
+
+    public ConfirmImportSyncDataDialogCoordinator(
+            Context context,
+            ModalDialogManager dialogManager,
+            Listener listener,
+            String currentAccountName,
+            String newAccountName) {
+        this(
+                context,
+                dialogManager,
+                listener,
+                currentAccountName,
+                newAccountName,
+                AccountEmailDomainDisplayability::checkIfDisplayableEmailAddress);
+    }
 
     /**
      * Creates a new instance of ConfirmImportSyncDataDialogCoordinator and shows a dialog that
      * gives the user the option to merge data between the account they are attempting to sign in
      * to and the account they are currently signed into, or to keep the data separate. This dialog
      * is shown before signing out the current sync account.
-     * @param context                  Context to create the view.
-     * @param listener                 Callback to be called if the user completes the dialog (as
-     *                                 opposed to hitting cancel).
-     * @param currentAccountName       The current sync account name.
-     * @param newAccountName           The potential next sync account name.
+     * @param context                           Context to create the view.
+     * @param listener                          Callback to be called if the user completes the
+     *                                          dialog (as opposed to hitting cancel).
+     * @param currentAccountName                The current sync account name.
+     * @param newAccountName                    The potential next sync account name.
+     * @param checkIfDisplayableEmailAddress    Predicate testing if an email is displayable.
      */
     @MainThread
-    public ConfirmImportSyncDataDialogCoordinator(Context context, ModalDialogManager dialogManager,
-            Listener listener, String currentAccountName, String newAccountName) {
+    public ConfirmImportSyncDataDialogCoordinator(
+            Context context,
+            ModalDialogManager dialogManager,
+            Listener listener,
+            String currentAccountName,
+            String newAccountName,
+            Predicate<String> checkIfDisplayableEmailAddress) {
+        mCheckIfDisplayableEmailAddress = checkIfDisplayableEmailAddress;
+
         mListener = listener;
         mConfirmImportSyncDataView =
                 LayoutInflater.from(context).inflate(R.layout.confirm_import_sync_data, null);
@@ -82,22 +106,26 @@ public class ConfirmImportSyncDataDialogCoordinator {
 
         boolean isCurrentAccountManaged =
                 IdentityServicesProvider.get()
-                        .getSigninManager(Profile.getLastUsedRegularProfile())
-                        .getManagementDomain()
-                != null;
-        mModel = new PropertyModel.Builder(ModalDialogProperties.ALL_KEYS)
-                         .with(ModalDialogProperties.CANCEL_ON_TOUCH_OUTSIDE, true)
-                         .with(ModalDialogProperties.POSITIVE_BUTTON_TEXT,
-                                 context.getString(R.string.continue_button))
-                         // For non-managed accounts, the confirmation button starts out disabled,
-                         // since none of the options are chosen by default.
-                         .with(ModalDialogProperties.POSITIVE_BUTTON_DISABLED,
-                                 !isCurrentAccountManaged)
-                         .with(ModalDialogProperties.NEGATIVE_BUTTON_TEXT,
-                                 context.getString(R.string.cancel))
-                         .with(ModalDialogProperties.CUSTOM_VIEW, mConfirmImportSyncDataView)
-                         .with(ModalDialogProperties.CONTROLLER, createController())
-                         .build();
+                                .getSigninManager(Profile.getLastUsedRegularProfile())
+                                .getManagementDomain()
+                        != null;
+        mModel =
+                new PropertyModel.Builder(ModalDialogProperties.ALL_KEYS)
+                        .with(ModalDialogProperties.CANCEL_ON_TOUCH_OUTSIDE, true)
+                        .with(
+                                ModalDialogProperties.POSITIVE_BUTTON_TEXT,
+                                context.getString(R.string.continue_button))
+                        // For non-managed accounts, the confirmation button starts out disabled,
+                        // since none of the options are chosen by default.
+                        .with(
+                                ModalDialogProperties.POSITIVE_BUTTON_DISABLED,
+                                !isCurrentAccountManaged)
+                        .with(
+                                ModalDialogProperties.NEGATIVE_BUTTON_TEXT,
+                                context.getString(R.string.cancel))
+                        .with(ModalDialogProperties.CUSTOM_VIEW, mConfirmImportSyncDataView)
+                        .with(ModalDialogProperties.CONTROLLER, createController())
+                        .build();
         mDialogManager = dialogManager;
 
         setUpConfirmImportSyncDataView(
@@ -105,9 +133,7 @@ public class ConfirmImportSyncDataDialogCoordinator {
         mDialogManager.showDialog(mModel, ModalDialogType.APP);
     }
 
-    /**
-     * Dismisses the confirm import sync data dialog.
-     */
+    /** Dismisses the confirm import sync data dialog. */
     @MainThread
     public void dismissDialog() {
         mDialogManager.dismissDialog(mModel, DialogDismissalCause.UNKNOWN);
@@ -120,7 +146,8 @@ public class ConfirmImportSyncDataDialogCoordinator {
                 if (buttonType == ButtonType.POSITIVE) {
                     assert mConfirmImportOption.isChecked() ^ mKeepSeparateOption.isChecked();
 
-                    RecordUserAction.record(mKeepSeparateOption.isChecked()
+                    RecordUserAction.record(
+                            mKeepSeparateOption.isChecked()
                                     ? "Signin_ImportDataPrompt_DontImport"
                                     : "Signin_ImportDataPrompt_ImportData");
                     mListener.onConfirm(mKeepSeparateOption.isChecked());
@@ -143,10 +170,20 @@ public class ConfirmImportSyncDataDialogCoordinator {
         };
     }
 
-    private void setUpConfirmImportSyncDataView(Context context, String currentAccountName,
-            String newAccountName, boolean isCurrentAccountManaged) {
+    private void setUpConfirmImportSyncDataView(
+            Context context,
+            String currentAccountName,
+            String newAccountName,
+            boolean isCurrentAccountManaged) {
         TextView prompt = mConfirmImportSyncDataView.findViewById(R.id.sync_import_data_prompt);
-        prompt.setText(context.getString(R.string.sync_import_data_prompt, currentAccountName));
+
+        if (!mCheckIfDisplayableEmailAddress.test(currentAccountName)) {
+            final String defaultAccountName =
+                    context.getString(R.string.default_google_account_username);
+            prompt.setText(context.getString(R.string.sync_import_data_prompt, defaultAccountName));
+        } else {
+            prompt.setText(context.getString(R.string.sync_import_data_prompt, currentAccountName));
+        }
 
         mConfirmImportOption.setDescriptionText(
                 context.getString(R.string.sync_import_existing_data_subtext, newAccountName));
@@ -166,10 +203,12 @@ public class ConfirmImportSyncDataDialogCoordinator {
         } else {
             // The confirmation button gets enabled as soon as either of the radio button options
             // was selected.
-            mKeepSeparateOption.setOnCheckedChangeListener(radioButton
-                    -> mModel.set(ModalDialogProperties.POSITIVE_BUTTON_DISABLED, false));
-            mConfirmImportOption.setOnCheckedChangeListener(radioButton
-                    -> mModel.set(ModalDialogProperties.POSITIVE_BUTTON_DISABLED, false));
+            mKeepSeparateOption.setOnCheckedChangeListener(
+                    radioButton ->
+                            mModel.set(ModalDialogProperties.POSITIVE_BUTTON_DISABLED, false));
+            mConfirmImportOption.setOnCheckedChangeListener(
+                    radioButton ->
+                            mModel.set(ModalDialogProperties.POSITIVE_BUTTON_DISABLED, false));
         }
     }
 }

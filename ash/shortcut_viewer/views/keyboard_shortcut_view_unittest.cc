@@ -11,13 +11,15 @@
 #include "ash/shortcut_viewer/views/ksv_search_box_view.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
 #include "ash/test/ash_test_base.h"
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "chromeos/constants/chromeos_features.h"
 #include "chromeos/ui/base/window_properties.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/strings/ascii.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/aura/window.h"
 #include "ui/display/display.h"
@@ -25,6 +27,7 @@
 #include "ui/events/devices/device_data_manager_test_api.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/gfx/color_palette.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/test/button_test_api.h"
 #include "ui/views/widget/widget.h"
@@ -52,6 +55,8 @@ class KeyboardShortcutViewTest : public ash::AshTestBase {
 
   // ash::AshTestBase:
   void SetUp() override {
+    // TODO(b/291803593): This is the old UI so it's not compatible with Jelly.
+    scoped_features_.InitAndDisableFeature(chromeos::features::kJelly);
     ash::AshTestBase::SetUp();
     // Simulate the complete listing of input devices, required by the viewer.
     ui::DeviceDataManagerTestApi().OnDeviceListsComplete();
@@ -74,7 +79,8 @@ class KeyboardShortcutViewTest : public ash::AshTestBase {
     return GetView()->GetSearchBoxViewForTesting();
   }
 
-  const std::vector<KeyboardShortcutItemView*>& GetFoundShortcutItems() const {
+  const std::vector<raw_ptr<KeyboardShortcutItemView, VectorExperimental>>&
+  GetFoundShortcutItems() const {
     DCHECK(GetView());
     return GetView()->GetFoundShortcutItemsForTesting();
   }
@@ -86,8 +92,8 @@ class KeyboardShortcutViewTest : public ash::AshTestBase {
       return;
 
     // Emulates the input method.
-    if (::isalnum(static_cast<int>(key_code))) {
-      char16_t character = ::tolower(static_cast<int>(key_code));
+    if (absl::ascii_isalnum(key_code)) {
+      char16_t character = absl::ascii_tolower(key_code);
       GetSearchBoxView()->search_box()->InsertText(
           std::u16string(1, character),
           ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorAfterText);
@@ -97,6 +103,9 @@ class KeyboardShortcutViewTest : public ash::AshTestBase {
   KeyboardShortcutView* GetView() const {
     return KeyboardShortcutView::GetInstanceForTesting();
   }
+
+ private:
+  base::test::ScopedFeatureList scoped_features_;
 };
 
 // Shows and closes the widget for KeyboardShortcutViewer.
@@ -270,7 +279,8 @@ TEST_F(KeyboardShortcutViewTest, ShouldAlignSubLabelsInSearchResults) {
   base::RunLoop().RunUntilIdle();
   EXPECT_FALSE(GetFoundShortcutItems().empty());
 
-  for (const auto* item_view : GetFoundShortcutItems()) {
+  for (const keyboard_shortcut_viewer::KeyboardShortcutItemView* item_view :
+       GetFoundShortcutItems()) {
     ASSERT_EQ(2u, item_view->children().size());
 
     const views::View* description = item_view->children()[0];
@@ -282,7 +292,7 @@ TEST_F(KeyboardShortcutViewTest, ShouldAlignSubLabelsInSearchResults) {
     // vertically aligned in each line.
     int height = 0;
     int center_y = 0;
-    for (const auto* child : description->children()) {
+    for (const views::View* child : description->children()) {
       // The first view in each line.
       if (child->bounds().x() == 0) {
         height = child->bounds().height();
@@ -297,8 +307,6 @@ TEST_F(KeyboardShortcutViewTest, ShouldAlignSubLabelsInSearchResults) {
 }
 
 TEST_F(KeyboardShortcutViewTest, FrameAndBackgroundColorUpdates) {
-  base::test::ScopedFeatureList scoped_features;
-  scoped_features.InitAndEnableFeature(chromeos::features::kDarkLightMode);
   ash::AshTestBase::SimulateGuestLogin();
   auto* dark_light_mode_controller = ash::DarkLightModeControllerImpl::Get();
   dark_light_mode_controller->SetDarkModeEnabledForTest(false);
@@ -319,6 +327,83 @@ TEST_F(KeyboardShortcutViewTest, FrameAndBackgroundColorUpdates) {
   EXPECT_EQ(kTitleAndFrameColorDark,
             window->GetProperty(chromeos::kFrameInactiveColorKey));
   EXPECT_EQ(kTitleAndFrameColorDark, GetView()->GetBackground()->get_color());
+}
+
+// TODO(https://crbug.com/1439747): Flaky on ASAN and chromeos, probably due to
+// hard-coded timeout.
+#if (BUILDFLAG(IS_LINUX) && defined(ADDRESS_SANITIZER)) || \
+    BUILDFLAG(IS_CHROMEOS)
+#define MAYBE_AccessibilityProperties DISABLED_AccessibilityProperties
+#else
+#define MAYBE_AccessibilityProperties AccessibilityProperties
+#endif
+TEST_F(KeyboardShortcutViewTest, MAYBE_AccessibilityProperties) {
+  // Show the widget.
+  Toggle();
+
+  EXPECT_TRUE(GetFoundShortcutItems().empty());
+  // Type a letter and show the search results.
+  KeyPress(ui::VKEY_A, /*should_insert=*/true);
+  auto time_out = base::Milliseconds(300);
+  task_environment()->FastForwardBy(time_out);
+  base::RunLoop().RunUntilIdle();
+
+  const std::vector<raw_ptr<KeyboardShortcutItemView, VectorExperimental>>&
+      items = GetFoundShortcutItems();
+  EXPECT_FALSE(items.empty());
+
+  auto* first_item = items.front().get();
+  ui::AXNodeData first_item_data;
+  first_item->GetViewAccessibility().GetAccessibleNodeData(&first_item_data);
+  EXPECT_EQ(first_item_data.role, ax::mojom::Role::kListItem);
+  EXPECT_EQ(first_item->GetAccessibleRole(), first_item_data.role);
+  EXPECT_FALSE(first_item->GetAccessibleName().empty());
+  EXPECT_EQ(
+      first_item_data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+      first_item->GetAccessibleName());
+  EXPECT_EQ(first_item_data.GetIntAttribute(ax::mojom::IntAttribute::kPosInSet),
+            1);
+  EXPECT_EQ(first_item_data.GetIntAttribute(ax::mojom::IntAttribute::kSetSize),
+            static_cast<int>(items.size()));
+
+  auto* last_item = items.back().get();
+  ui::AXNodeData last_item_data;
+  last_item->GetViewAccessibility().GetAccessibleNodeData(&last_item_data);
+  EXPECT_EQ(last_item_data.role, ax::mojom::Role::kListItem);
+  EXPECT_EQ(last_item->GetAccessibleRole(), last_item_data.role);
+  EXPECT_EQ(
+      last_item_data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+      last_item->GetAccessibleName());
+  EXPECT_FALSE(last_item->GetAccessibleName().empty());
+  EXPECT_EQ(last_item_data.GetIntAttribute(ax::mojom::IntAttribute::kPosInSet),
+            static_cast<int>(items.size()));
+  EXPECT_EQ(last_item_data.GetIntAttribute(ax::mojom::IntAttribute::kSetSize),
+            static_cast<int>(items.size()));
+
+  auto* list = last_item->parent();
+  while (list && list->GetAccessibleRole() != ax::mojom::Role::kList) {
+    list = list->parent();
+  }
+
+  EXPECT_TRUE(list);
+  ui::AXNodeData list_data;
+  list->GetViewAccessibility().GetAccessibleNodeData(&list_data);
+  EXPECT_EQ(list_data.role, ax::mojom::Role::kList);
+
+  auto* scroll_view = list->parent();
+  while (scroll_view &&
+         scroll_view->GetAccessibleRole() != ax::mojom::Role::kScrollView) {
+    scroll_view = scroll_view->parent();
+  }
+
+  EXPECT_TRUE(scroll_view);
+  ui::AXNodeData scroll_view_data;
+  scroll_view->GetViewAccessibility().GetAccessibleNodeData(&scroll_view_data);
+  EXPECT_EQ(scroll_view_data.role, ax::mojom::Role::kScrollView);
+  EXPECT_FALSE(scroll_view->GetAccessibleName().empty());
+  EXPECT_EQ(
+      scroll_view_data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+      scroll_view->GetAccessibleName());
 }
 
 }  // namespace keyboard_shortcut_viewer

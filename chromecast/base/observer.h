@@ -105,17 +105,16 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/ref_counted.h"
 #include "base/notreached.h"
 #include "base/sequence_checker.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 
 namespace chromecast {
 
@@ -216,8 +215,8 @@ class ObservableInternals
 
   const T& AddObserver(Observer<T>* observer) {
     DCHECK(observer);
-    DCHECK(base::SequencedTaskRunnerHandle::IsSet());
-    auto task_runner = base::SequencedTaskRunnerHandle::Get();
+    DCHECK(base::SequencedTaskRunner::HasCurrentDefault());
+    auto task_runner = base::SequencedTaskRunner::GetCurrentDefault();
 
     base::AutoLock lock(lock_);
     auto it = per_sequence_.begin();
@@ -234,8 +233,8 @@ class ObservableInternals
 
   void RemoveObserver(Observer<T>* observer) {
     DCHECK(observer);
-    DCHECK(base::SequencedTaskRunnerHandle::IsSet());
-    auto task_runner = base::SequencedTaskRunnerHandle::Get();
+    DCHECK(base::SequencedTaskRunner::HasCurrentDefault());
+    auto task_runner = base::SequencedTaskRunner::GetCurrentDefault();
 
     base::AutoLock lock(lock_);
     for (size_t i = 0; i < per_sequence_.size(); ++i) {

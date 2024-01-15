@@ -21,11 +21,11 @@
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
@@ -57,9 +57,8 @@ class BitSet {
     size_t end = data_.size();
     while (end > 0 && data_[end - 1] == '\0')
       --end;
-    std::string b64_string;
-    base::Base64Encode(base::StringPiece(data_.data(), end), &b64_string);
-    return b64_string;
+
+    return base::Base64Encode(base::StringPiece(data_.data(), end));
   }
 
  private:
@@ -380,7 +379,6 @@ void DumpProcessesMemoryMapsInShortFormat(
     const std::vector<ProcessMemory>& processes_memory) {
   const int KB_PER_PAGE = kPageSize >> 10;
   std::vector<int> totals_app_shared(processes_memory.size());
-  std::string buf;
   std::cout << "pid\tprivate\t\tshared_app\tshared_other (KB)\n";
   for (std::vector<ProcessMemory>::const_iterator memory_it =
            processes_memory.begin();
@@ -400,19 +398,15 @@ void DumpProcessesMemoryMapsInShortFormat(
     double total_app_shared = 0;
     for (size_t i = 0; i < totals_app_shared.size(); ++i)
       total_app_shared += static_cast<double>(totals_app_shared[i]) / (i + 2);
-    base::SStringPrintf(
-        &buf, "%d\t%d\t\t%d\t\t%d\n",
-        process_memory.pid,
-        total_private * KB_PER_PAGE,
+    std::cout << base::StringPrintf(
+        "%d\t%d\t\t%d\t\t%d\n", process_memory.pid, total_private * KB_PER_PAGE,
         static_cast<int>(total_app_shared) * KB_PER_PAGE,
         total_other_shared * KB_PER_PAGE);
-    std::cout << buf;
   }
 }
 
 void DumpProcessesMemoryMapsInExtendedFormat(
     const std::vector<ProcessMemory>& processes_memory) {
-  std::string buf;
   std::string app_shared_buf;
   for (std::vector<ProcessMemory>::const_iterator memory_it =
            processes_memory.begin();
@@ -425,15 +419,13 @@ void DumpProcessesMemoryMapsInExtendedFormat(
       const MemoryMap& memory_map = *map_it;
       app_shared_buf.clear();
       AppendAppSharedField(memory_map.app_shared_pages, &app_shared_buf);
-      base::SStringPrintf(
-          &buf,
-          "%" PRIx64 "-%" PRIx64 " %s %" PRIx64 " private_unevictable=%d "
+      std::cout << base::StringPrintf(
+          "%" PRIx64 "-%" PRIx64 " %s %" PRIx64
+          " private_unevictable=%d "
           "private=%d shared_app=%s shared_other_unevictable=%d "
           "shared_other=%d \"%s\" [%s]\n",
-          memory_map.start_address,
-          memory_map.end_address,
-          memory_map.flags.c_str(),
-          memory_map.offset,
+          memory_map.start_address, memory_map.end_address,
+          memory_map.flags.c_str(), memory_map.offset,
           memory_map.private_pages.unevictable_count * kPageSize,
           memory_map.private_pages.total_count * kPageSize,
           app_shared_buf.c_str(),
@@ -441,7 +433,6 @@ void DumpProcessesMemoryMapsInExtendedFormat(
           memory_map.other_shared_pages.total_count * kPageSize,
           memory_map.name.c_str(),
           memory_map.committed_pages_bits.AsB64String().c_str());
-      std::cout << buf;
     }
   }
 }

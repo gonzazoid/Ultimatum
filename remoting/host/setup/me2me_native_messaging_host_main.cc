@@ -13,6 +13,7 @@
 #include "base/command_line.h"
 #include "base/files/file.h"
 #include "base/i18n/icu_util.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
@@ -39,7 +40,7 @@
 #include "services/network/transitional_url_loader_factory_owner.h"
 
 #if BUILDFLAG(IS_APPLE)
-#include "base/mac/scoped_nsautorelease_pool.h"
+#include "base/apple/scoped_nsautorelease_pool.h"
 #endif  // BUILDFLAG(IS_APPLE)
 
 #if BUILDFLAG(IS_WIN)
@@ -53,6 +54,10 @@
 #if defined(USE_GLIB) && !BUILDFLAG(IS_CHROMEOS_ASH)
 #include <glib-object.h>
 #endif  // defined(USE_GLIB) && !BUILDFLAG(IS_CHROMEOS_ASH)
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "remoting/host/chromeos/browser_interop.h"
+#endif
 
 using remoting::protocol::PairingRegistry;
 
@@ -71,7 +76,7 @@ int Me2MeNativeMessagingHostMain(int argc, char** argv) {
 
 #if BUILDFLAG(IS_APPLE)
   // Needed so we don't leak objects when threads are created.
-  base::mac::ScopedNSAutoreleasePool pool;
+  base::apple::ScopedNSAutoreleasePool pool;
 #endif  // BUILDFLAG(IS_APPLE)
 
 #if defined(USE_GLIB) && !BUILDFLAG(IS_CHROMEOS_ASH)
@@ -159,10 +164,10 @@ int Me2MeNativeMessagingHostMain(int argc, char** argv) {
 
     // presubmit: allow wstring
     std::wstring input_pipe_name =
-      command_line->GetSwitchValueNative(kInputSwitchName);
+        command_line->GetSwitchValueNative(kInputSwitchName);
     // presubmit: allow wstring
     std::wstring output_pipe_name =
-      command_line->GetSwitchValueNative(kOutputSwitchName);
+        command_line->GetSwitchValueNative(kOutputSwitchName);
 
     // A NULL SECURITY_ATTRIBUTES signifies that the handle can't be inherited.
     read_file =
@@ -173,9 +178,9 @@ int Me2MeNativeMessagingHostMain(int argc, char** argv) {
       return kInitializationFailed;
     }
 
-    write_file = base::File(CreateFile(
-        output_pipe_name.c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
-        FILE_ATTRIBUTE_NORMAL, nullptr));
+    write_file = base::File(CreateFile(output_pipe_name.c_str(), GENERIC_WRITE,
+                                       0, nullptr, OPEN_EXISTING,
+                                       FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!write_file.IsValid()) {
       PLOG(ERROR) << "CreateFile failed on '" << output_pipe_name << "'";
       return kInitializationFailed;
@@ -220,8 +225,8 @@ int Me2MeNativeMessagingHostMain(int argc, char** argv) {
 
 #if BUILDFLAG(IS_WIN)
   base::win::RegKey root;
-  LONG result = root.Open(HKEY_LOCAL_MACHINE, kPairingRegistryKeyName,
-                          KEY_READ);
+  LONG result =
+      root.Open(HKEY_LOCAL_MACHINE, kPairingRegistryKeyName, KEY_READ);
   if (result != ERROR_SUCCESS) {
     SetLastError(result);
     PLOG(ERROR) << "Failed to open HKLM\\" << kPairingRegistryKeyName;
@@ -233,8 +238,8 @@ int Me2MeNativeMessagingHostMain(int argc, char** argv) {
                              needs_elevation ? KEY_READ : KEY_READ | KEY_WRITE);
   if (result != ERROR_SUCCESS) {
     SetLastError(result);
-    PLOG(ERROR) << "Failed to open HKLM\\" << kPairingRegistryKeyName
-                << "\\" << kPairingRegistryClientsKeyName;
+    PLOG(ERROR) << "Failed to open HKLM\\" << kPairingRegistryKeyName << "\\"
+                << kPairingRegistryClientsKeyName;
     return kInitializationFailed;
   }
 
@@ -254,14 +259,14 @@ int Me2MeNativeMessagingHostMain(int argc, char** argv) {
   // Initialize the pairing registry delegate and set the root keys.
   std::unique_ptr<PairingRegistryDelegateWin> delegate(
       new PairingRegistryDelegateWin());
-  if (!delegate->SetRootKeys(privileged.Take(), unprivileged.Take()))
+  if (!delegate->SetRootKeys(privileged.Take(), unprivileged.Take())) {
     return kInitializationFailed;
+  }
 
   pairing_registry =
       new PairingRegistry(io_thread.task_runner(), std::move(delegate));
 #else   // BUILDFLAG(IS_WIN)
-  pairing_registry =
-      CreatePairingRegistry(io_thread.task_runner());
+  pairing_registry = CreatePairingRegistry(io_thread.task_runner());
 #endif  // !BUILDFLAG(IS_WIN)
 
   std::unique_ptr<NativeMessagingPipe> native_messaging_pipe(
@@ -276,8 +281,12 @@ int Me2MeNativeMessagingHostMain(int argc, char** argv) {
 #endif  // BUILDFLAG(IS_POSIX)
 
   std::unique_ptr<ChromotingHostContext> context =
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
       ChromotingHostContext::Create(new remoting::AutoThreadTaskRunner(
           main_task_executor.task_runner(), run_loop.QuitClosure()));
+#else   // !BUILDFLAG(IS_CHROMEOS_ASH)
+      base::MakeRefCounted<BrowserInterop>()->CreateChromotingHostContext();
+#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
   // Create the native messaging host.
   std::unique_ptr<extensions::NativeMessageHost> host(

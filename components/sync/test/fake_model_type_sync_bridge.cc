@@ -7,8 +7,8 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
@@ -61,7 +61,7 @@ class TestMetadataChangeList : public MetadataChangeList {
   }
 
  private:
-  raw_ptr<FakeModelTypeSyncBridge::Store> db_;
+  const raw_ptr<FakeModelTypeSyncBridge::Store> db_;
 };
 
 }  // namespace
@@ -185,7 +185,7 @@ FakeModelTypeSyncBridge::CreateMetadataChangeList() {
   return std::make_unique<InMemoryMetadataChangeList>();
 }
 
-absl::optional<ModelError> FakeModelTypeSyncBridge::MergeSyncData(
+absl::optional<ModelError> FakeModelTypeSyncBridge::MergeFullSyncData(
     std::unique_ptr<MetadataChangeList> metadata_change_list,
     EntityChangeList entity_data) {
   if (error_next_) {
@@ -230,7 +230,7 @@ absl::optional<ModelError> FakeModelTypeSyncBridge::MergeSyncData(
   return {};
 }
 
-absl::optional<ModelError> FakeModelTypeSyncBridge::ApplySyncChanges(
+absl::optional<ModelError> FakeModelTypeSyncBridge::ApplyIncrementalSyncChanges(
     std::unique_ptr<MetadataChangeList> metadata_changes,
     EntityChangeList entity_changes) {
   if (error_next_) {
@@ -360,13 +360,8 @@ ConflictResolution FakeModelTypeSyncBridge::ResolveConflict(
   return conflict_resolution_;
 }
 
-void FakeModelTypeSyncBridge::ApplyStopSyncChanges(
-    std::unique_ptr<MetadataChangeList> delete_metadata_change_list) {
-  ModelTypeSyncBridge::ApplyStopSyncChanges(
-      std::move(delete_metadata_change_list));
-}
-
-sync_pb::EntitySpecifics FakeModelTypeSyncBridge::TrimRemoteSpecificsForCaching(
+sync_pb::EntitySpecifics
+FakeModelTypeSyncBridge::TrimAllSupportedFieldsFromRemoteSpecifics(
     const sync_pb::EntitySpecifics& entity_specifics) const {
   if (entity_specifics.unknown_fields().empty()) {
     return sync_pb::EntitySpecifics();
@@ -379,6 +374,12 @@ sync_pb::EntitySpecifics FakeModelTypeSyncBridge::TrimRemoteSpecificsForCaching(
   *trimmed_specifics.mutable_unknown_fields() =
       entity_specifics.unknown_fields();
   return trimmed_specifics;
+}
+
+bool FakeModelTypeSyncBridge::IsEntityDataValid(
+    const EntityData& entity_data) const {
+  return invalid_remote_updates_.find(entity_data.client_tag_hash) ==
+         invalid_remote_updates_.end();
 }
 
 void FakeModelTypeSyncBridge::SetConflictResolution(
@@ -426,6 +427,11 @@ std::string FakeModelTypeSyncBridge::GetLastGeneratedStorageKey() const {
 void FakeModelTypeSyncBridge::AddPrefValueToIgnore(const std::string& value) {
   DCHECK_EQ(type_, PREFERENCES);
   values_to_ignore_.insert(value);
+}
+
+void FakeModelTypeSyncBridge::TreatRemoteUpdateAsInvalid(
+    const ClientTagHash& client_tag_hash) {
+  invalid_remote_updates_.insert(client_tag_hash);
 }
 
 }  // namespace syncer

@@ -6,9 +6,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/notifications/idle_app_name_notification_view.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/common/chrome_switches.h"
@@ -61,12 +61,14 @@ KioskModeIdleAppNameNotification::KioskModeIdleAppNameNotification()
 KioskModeIdleAppNameNotification::~KioskModeIdleAppNameNotification() {
   ui::UserActivityDetector* user_activity_detector =
       ui::UserActivityDetector::Get();
-  if (user_activity_detector && user_activity_detector->HasObserver(this))
+  if (user_activity_detector && user_activity_detector->HasObserver(this)) {
     user_activity_detector->RemoveObserver(this);
+  }
 
   auto* power_manager = chromeos::PowerManagerClient::Get();
-  if (power_manager && power_manager->HasObserver(this))
+  if (power_manager && power_manager->HasObserver(this)) {
     power_manager->RemoveObserver(this);
+  }
 }
 
 void KioskModeIdleAppNameNotification::Setup() {

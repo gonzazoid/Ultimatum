@@ -9,10 +9,9 @@
 #include "ash/assistant/util/histogram_util.h"
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/assistant/controller/assistant_ui_controller.h"
-#include "ash/public/cpp/style/scoped_light_mode_as_default.h"
 #include "ash/style/ash_color_id.h"
 #include "ash/style/style_util.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_provider.h"
@@ -103,12 +102,10 @@ std::unique_ptr<AssistantButton> AssistantButton::Create(
     return button;
   }
 
-  // `icon_color` does not change so we can set the color and icon for the
-  // button now.
-  icon_description.color = params.icon_color;
-
-  button->SetImage(views::Button::STATE_NORMAL,
-                   gfx::CreateVectorIcon(icon_description));
+  button->SetImageModel(
+      views::Button::STATE_NORMAL,
+      ui::ImageModel::FromVectorIcon(*icon_description.icon, params.icon_color,
+                                     icon_description.dip_size));
   return button;
 }
 
@@ -163,8 +160,10 @@ void AssistantButton::OnThemeChanged() {
   // This might be the first time the image is rendered since `icon_color_type_`
   // may not resolvable until now.
   icon_description_->color = GetColorProvider()->GetColor(*icon_color_type_);
-  SetImage(views::Button::STATE_NORMAL,
-           gfx::CreateVectorIcon(icon_description_.value()));
+  SetImageModel(views::Button::STATE_NORMAL,
+                ui::ImageModel::FromVectorIcon(*icon_description_->icon,
+                                               icon_description_->color,
+                                               icon_description_->dip_size));
 }
 
 void AssistantButton::OnButtonPressed() {

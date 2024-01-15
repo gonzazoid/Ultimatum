@@ -4,12 +4,14 @@
 
 #include "chrome/browser/ui/webui/settings/safety_check_handler.h"
 
+#include <optional>
 #include <string>
 #include <unordered_map>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
@@ -31,11 +33,11 @@
 #include "chrome/common/extensions/api/passwords_private.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/crx_file/id_util.h"
-#include "components/password_manager/core/browser/bulk_leak_check_service.h"
+#include "components/password_manager/core/browser/affiliation/fake_affiliation_service.h"
 #include "components/password_manager/core/browser/leak_detection/bulk_leak_check.h"
+#include "components/password_manager/core/browser/leak_detection/bulk_leak_check_service.h"
 #include "components/password_manager/core/browser/password_form.h"
-#include "components/password_manager/core/browser/site_affiliation/mock_affiliation_service.h"
-#include "components/password_manager/core/browser/test_password_store.h"
+#include "components/password_manager/core/browser/password_store/test_password_store.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "components/safety_check/test_update_check_helper.h"
@@ -51,11 +53,6 @@
 #include "extensions/common/extension_builder.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-
-#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-#include "chrome/browser/safe_browsing/chrome_cleaner/chrome_cleaner_controller_impl_win.h"
-#endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ui/chromeos/devicetype_utils.h"
@@ -71,9 +68,6 @@ constexpr char kUpdates[] = "updates";
 constexpr char kPasswords[] = "passwords";
 constexpr char kSafeBrowsing[] = "safe-browsing";
 constexpr char kExtensions[] = "extensions";
-#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-constexpr char kChromeCleaner[] = "chrome-cleaner";
-#endif
 
 namespace {
 using Enabled = base::StrongAlias<class EnabledTag, bool>;
@@ -133,16 +127,9 @@ class TestTimestampDelegate : public TimestampDelegate {
     // 1 second before midnight Dec 31st 2020, so that -(24h-1s) is still on the
     // same day. This test time is hard coded to prevent DST flakiness, see
     // crbug.com/1066576.
-    return base::Time::FromDoubleT(1609459199).LocalMidnight() -
+    return base::Time::FromSecondsSinceUnixEpoch(1609459199).LocalMidnight() -
            base::Seconds(1);
   }
-#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  base::Time FetchChromeCleanerScanCompletionTimestamp() override {
-    // 2 seconds before midnight Dec 31st 2020.
-    return base::Time::FromDoubleT(1609459199).LocalMidnight() -
-           base::Seconds(2);
-  }
-#endif
 };
 
 bool TestDestructionVersionUpdater::destructor_invoked_ = false;
@@ -151,13 +138,10 @@ class TestPasswordsDelegate : public extensions::TestPasswordsPrivateDelegate {
  public:
   TestPasswordsDelegate() {
     store_->Init(/*prefs=*/nullptr, /*affiliated_match_helper=*/nullptr);
+    presenter_.Init();
   }
 
-  void TearDown() {
-    store_->ShutdownOnUIThread();
-    // Needs to be invoked in the test's TearDown() - before the destructor.
-    base::RunLoop().RunUntilIdle();
-  }
+  void TearDown() { store_->ShutdownOnUIThread(); }
 
   void SetBulkLeakCheckService(
       password_manager::BulkLeakCheckService* leak_service) {
@@ -179,6 +163,10 @@ class TestPasswordsDelegate : public extensions::TestPasswordsPrivateDelegate {
     weak_password_count_ = weak_password_count;
   }
 
+  void SetNumReusedCredentials(int reused_password_count) {
+    reused_password_count_ = reused_password_count;
+  }
+
   void SetPasswordCheckState(
       extensions::api::passwords_private::PasswordCheckState state) {
     state_ = state;
@@ -189,7 +177,7 @@ class TestPasswordsDelegate : public extensions::TestPasswordsPrivateDelegate {
     total_ = total;
   }
 
-  void InvokeOnCompromisedCredentialsChanged() {
+  void StoreCompromisedPassword() {
     // Compromised credentials can be added only after password form to which
     // they corresponds exists.
     password_manager::PasswordForm form;
@@ -200,12 +188,12 @@ class TestPasswordsDelegate : public extensions::TestPasswordsPrivateDelegate {
         "test" + base::NumberToString(test_credential_counter_++));
     form.password_value = u"password";
     form.username_element = u"username_element";
-    store_->AddLogin(form);
     form.password_issues = {
         {password_manager::InsecureType::kLeaked,
          password_manager::InsecurityMetadata(
-             base::Time(), password_manager::IsMuted(false))}};
-    base::RunLoop().RunUntilIdle();
+             base::Time(), password_manager::IsMuted(false),
+             password_manager::TriggerBackendNotification(false))}};
+    store_->AddLogin(form);
   }
 
   std::vector<extensions::api::passwords_private::PasswordUiEntry>
@@ -213,7 +201,7 @@ class TestPasswordsDelegate : public extensions::TestPasswordsPrivateDelegate {
     std::vector<extensions::api::passwords_private::PasswordUiEntry> insecure;
     for (int i = 0; i < leaked_password_count_; ++i) {
       insecure.push_back(CreateInsecureCredential(
-          i, extensions::api::passwords_private::COMPROMISE_TYPE_LEAKED));
+          i, extensions::api::passwords_private::CompromiseType::kLeaked));
       if (i < muted_leaked_password_count_) {
         insecure[i].compromised_info->is_muted = true;
       }
@@ -221,12 +209,17 @@ class TestPasswordsDelegate : public extensions::TestPasswordsPrivateDelegate {
     for (int i = 0; i < phished_password_count_; ++i) {
       insecure.push_back(CreateInsecureCredential(
           insecure.size(),
-          extensions::api::passwords_private::COMPROMISE_TYPE_PHISHED));
+          extensions::api::passwords_private::CompromiseType::kPhished));
     }
     for (int i = 0; i < weak_password_count_; ++i) {
       insecure.push_back(CreateInsecureCredential(
           insecure.size(),
-          extensions::api::passwords_private::COMPROMISE_TYPE_WEAK));
+          extensions::api::passwords_private::CompromiseType::kWeak));
+    }
+    for (int i = 0; i < reused_password_count_; ++i) {
+      insecure.push_back(CreateInsecureCredential(
+          insecure.size(),
+          extensions::api::passwords_private::CompromiseType::kReused));
     }
     return insecure;
   }
@@ -248,23 +241,26 @@ class TestPasswordsDelegate : public extensions::TestPasswordsPrivateDelegate {
   }
 
  private:
+  ~TestPasswordsDelegate() override = default;
+
   raw_ptr<password_manager::BulkLeakCheckService> leak_service_ = nullptr;
   int leaked_password_count_ = 0;
   int muted_leaked_password_count_ = 0;
   int phished_password_count_ = 0;
   int weak_password_count_ = 0;
+  int reused_password_count_ = 0;
   int done_ = 0;
   int total_ = 0;
   int test_credential_counter_ = 0;
   extensions::api::passwords_private::PasswordCheckState state_ =
-      extensions::api::passwords_private::PASSWORD_CHECK_STATE_IDLE;
+      extensions::api::passwords_private::PasswordCheckState::kIdle;
   scoped_refptr<password_manager::TestPasswordStore> store_ =
       base::MakeRefCounted<password_manager::TestPasswordStore>();
-  password_manager::MockAffiliationService affiliation_service_;
-  password_manager::SavedPasswordsPresenter presenter_{&affiliation_service_,
-                                                       store_};
-  password_manager::InsecureCredentialsManager credentials_manager_{&presenter_,
-                                                                    store_};
+  password_manager::FakeAffiliationService affiliation_service_;
+  password_manager::SavedPasswordsPresenter presenter_{
+      &affiliation_service_, store_, /*account_store=*/nullptr};
+  password_manager::InsecureCredentialsManager credentials_manager_{
+      &presenter_, store_, /*account_store=*/nullptr};
 };
 
 class TestSafetyCheckExtensionService : public TestExtensionService {
@@ -302,14 +298,6 @@ class TestSafetyCheckExtensionService : public TestExtensionService {
   std::unordered_map<std::string, ExtensionState> state_map_;
 };
 
-#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-class TestChromeCleanerControllerDelegate
-    : public safe_browsing::ChromeCleanerControllerDelegate {
- public:
-  bool IsAllowedByPolicy() override { return false; }
-};
-#endif
-
 }  // namespace
 
 class SafetyCheckHandlerTest : public testing::Test {
@@ -340,19 +328,17 @@ class SafetyCheckHandlerTest : public testing::Test {
   content::BrowserTaskEnvironment browser_task_environment_;
   std::unique_ptr<TestingProfile> profile_;
   std::unique_ptr<content::WebContents> web_contents_;
-  raw_ptr<safety_check::TestUpdateCheckHelper> update_helper_ = nullptr;
-  raw_ptr<TestVersionUpdater> version_updater_ = nullptr;
+  raw_ptr<safety_check::TestUpdateCheckHelper, DanglingUntriaged>
+      update_helper_ = nullptr;
+  raw_ptr<TestVersionUpdater, DanglingUntriaged> version_updater_ = nullptr;
   std::unique_ptr<password_manager::BulkLeakCheckService> test_leak_service_;
-  TestPasswordsDelegate test_passwords_delegate_;
+  scoped_refptr<TestPasswordsDelegate> test_passwords_delegate_;
   raw_ptr<extensions::ExtensionPrefs> test_extension_prefs_ = nullptr;
   TestSafetyCheckExtensionService test_extension_service_;
   content::TestWebUI test_web_ui_;
   std::unique_ptr<TestingSafetyCheckHandler> safety_check_;
   base::HistogramTester histogram_tester_;
   base::test::ScopedFeatureList feature_list_;
-#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  TestChromeCleanerControllerDelegate test_chrome_cleaner_controller_delegate_;
-#endif
 };
 
 void SafetyCheckHandlerTest::SetUp() {
@@ -371,13 +357,14 @@ void SafetyCheckHandlerTest::SetUp() {
   version_updater_ = version_updater.get();
   test_leak_service_ = std::make_unique<password_manager::BulkLeakCheckService>(
       nullptr, nullptr);
-  test_passwords_delegate_.SetBulkLeakCheckService(test_leak_service_.get());
+  test_passwords_delegate_ = base::MakeRefCounted<TestPasswordsDelegate>();
+  test_passwords_delegate_->SetBulkLeakCheckService(test_leak_service_.get());
   test_web_ui_.set_web_contents(web_contents_.get());
   test_extension_prefs_ = extensions::ExtensionPrefs::Get(profile_.get());
   auto timestamp_delegate = std::make_unique<TestTimestampDelegate>();
   safety_check_ = std::make_unique<TestingSafetyCheckHandler>(
       std::move(update_helper), std::move(version_updater),
-      test_leak_service_.get(), &test_passwords_delegate_,
+      test_leak_service_.get(), test_passwords_delegate_.get(),
       test_extension_prefs_, &test_extension_service_,
       std::move(timestamp_delegate));
   test_web_ui_.ClearTrackedCalls();
@@ -388,7 +375,8 @@ void SafetyCheckHandlerTest::SetUp() {
 }
 
 void SafetyCheckHandlerTest::TearDown() {
-  test_passwords_delegate_.TearDown();
+  test_passwords_delegate_->TearDown();
+  browser_task_environment_.RunUntilIdle();
 }
 
 const base::Value::Dict*
@@ -410,7 +398,7 @@ SafetyCheckHandlerTest::GetSafetyCheckStatusChangedWithDataIfExists(
     if (!dictionary) {
       continue;
     }
-    absl::optional<int> cur_new_state = dictionary->FindInt("newState");
+    std::optional<int> cur_new_state = dictionary->FindInt("newState");
     if (cur_new_state == new_state)
       return dictionary;
   }
@@ -602,6 +590,23 @@ TEST_F(SafetyCheckHandlerTest, CheckUpdates_DestroyedOnJavascriptDisallowed) {
   EXPECT_TRUE(TestDestructionVersionUpdater::GetDestructorInvoked());
 }
 
+TEST_F(SafetyCheckHandlerTest, CheckUpdates_UpdateToRollbackVersionDisallowed) {
+  version_updater_->SetReturnedStatus(
+      VersionUpdater::Status::UPDATE_TO_ROLLBACK_VERSION_DISALLOWED);
+  safety_check_->PerformSafetyCheck();
+  const base::Value::Dict* event = GetSafetyCheckStatusChangedWithDataIfExists(
+      kUpdates, static_cast<int>(SafetyCheckHandler::UpdateStatus::
+                                     kUpdateToRollbackVersionDisallowed));
+  ASSERT_TRUE(event);
+  VerifyDisplayString(
+      event,
+      "You reverted to a previous version of ChromeOS. "
+      "To get updates, wait until the next version is available.");
+  histogram_tester_.ExpectBucketCount(
+      "Settings.SafetyCheck.UpdatesResult",
+      SafetyCheckHandler::UpdateStatus::kUpdateToRollbackVersionDisallowed, 1);
+}
+
 TEST_F(SafetyCheckHandlerTest, CheckSafeBrowsing_EnabledStandard) {
   TestingProfile::FromWebUI(&test_web_ui_)
       ->AsTestingProfile()
@@ -748,7 +753,8 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_ObserverRemovedAfterError) {
       static_cast<int>(SafetyCheckHandler::PasswordsStatus::kChecking));
   ASSERT_TRUE(event);
   VerifyDisplayString(event, u"");
-  histogram_tester_.ExpectTotalCount("Settings.SafetyCheck.PasswordsResult", 0);
+  histogram_tester_.ExpectTotalCount("Settings.SafetyCheck.PasswordsResult2",
+                                     0);
   // Second, an "offline" state.
   test_leak_service_->set_state_and_notify(
       password_manager::BulkLeakCheckService::State::kNetworkError);
@@ -760,7 +766,7 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_ObserverRemovedAfterError) {
                       "Browser can't check your passwords. Try checking your "
                       "internet connection.");
   histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.PasswordsResult",
+      "Settings.SafetyCheck.PasswordsResult2",
       SafetyCheckHandler::PasswordsStatus::kOffline, 1);
   // Another error, but since the previous state is terminal, the handler
   // should no longer be observing the BulkLeakCheckService state.
@@ -771,7 +777,7 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_ObserverRemovedAfterError) {
       static_cast<int>(SafetyCheckHandler::PasswordsStatus::kOffline));
   ASSERT_TRUE(event3);
   histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.PasswordsResult",
+      "Settings.SafetyCheck.PasswordsResult2",
       SafetyCheckHandler::PasswordsStatus::kOffline, 1);
 }
 
@@ -810,7 +816,7 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_InterruptedAndRefreshed) {
                       "Browser can't check your passwords because you're not "
                       "signed in");
   histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.PasswordsResult",
+      "Settings.SafetyCheck.PasswordsResult2",
       SafetyCheckHandler::PasswordsStatus::kSignedOut, 1);
 }
 
@@ -835,13 +841,13 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_StartedTwice) {
                       "Browser can't check your passwords. Try checking your "
                       "internet connection.");
   histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.PasswordsResult",
+      "Settings.SafetyCheck.PasswordsResult2",
       SafetyCheckHandler::PasswordsStatus::kOffline, 1);
 }
 
 TEST_F(SafetyCheckHandlerTest, CheckPasswords_ObserverNotifiedTwice) {
   safety_check_->PerformSafetyCheck();
-  EXPECT_TRUE(test_passwords_delegate_.StartPasswordCheckTriggered());
+  EXPECT_TRUE(test_passwords_delegate_->StartPasswordCheckTriggered());
   static_cast<password_manager::BulkLeakCheckService::Observer*>(
       safety_check_.get())
       ->OnStateChanged(
@@ -873,7 +879,7 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_Safe) {
   EXPECT_TRUE(event);
   VerifyDisplayString(event, "No compromised passwords found");
   histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.PasswordsResult",
+      "Settings.SafetyCheck.PasswordsResult2",
       SafetyCheckHandler::PasswordsStatus::kSafe, 1);
 }
 
@@ -883,8 +889,8 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_StaleSafeThenCompromised) {
   // First, a "running" change of state.
   test_leak_service_->set_state_and_notify(
       password_manager::BulkLeakCheckService::State::kRunning);
-  test_passwords_delegate_.SetPasswordCheckState(
-      extensions::api::passwords_private::PASSWORD_CHECK_STATE_RUNNING);
+  test_passwords_delegate_->SetPasswordCheckState(
+      extensions::api::passwords_private::PasswordCheckState::kRunning);
   EXPECT_TRUE(GetSafetyCheckStatusChangedWithDataIfExists(
       kPasswords,
       static_cast<int>(SafetyCheckHandler::PasswordsStatus::kChecking)));
@@ -896,19 +902,20 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_StaleSafeThenCompromised) {
   // The service goes idle, but the disk still has a stale "safe" state.
   test_leak_service_->set_state_and_notify(
       password_manager::BulkLeakCheckService::State::kIdle);
-  test_passwords_delegate_.SetPasswordCheckState(
-      extensions::api::passwords_private::PASSWORD_CHECK_STATE_IDLE);
+  test_passwords_delegate_->SetPasswordCheckState(
+      extensions::api::passwords_private::PasswordCheckState::kIdle);
   const base::Value::Dict* event = GetSafetyCheckStatusChangedWithDataIfExists(
       kPasswords, static_cast<int>(SafetyCheckHandler::PasswordsStatus::kSafe));
   EXPECT_TRUE(event);
   // An InsecureCredentialsManager callback fires once the compromised passwords
   // get written to disk.
-  test_passwords_delegate_.SetNumLeakedCredentials(kCompromised);
-  test_passwords_delegate_.InvokeOnCompromisedCredentialsChanged();
+  test_passwords_delegate_->SetNumLeakedCredentials(kCompromised);
+  test_passwords_delegate_->StoreCompromisedPassword();
+  browser_task_environment_.RunUntilIdle();
   const base::Value::Dict* event2 = GetSafetyCheckStatusChangedWithDataIfExists(
       kPasswords,
       static_cast<int>(SafetyCheckHandler::PasswordsStatus::kCompromisedExist));
-  EXPECT_TRUE(event2);
+  ASSERT_TRUE(event2);
   VerifyDisplayString(
       event2, base::NumberToString(kCompromised) + " compromised passwords");
 }
@@ -918,23 +925,24 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_SafeStateThenMoreEvents) {
   // Running state.
   test_leak_service_->set_state_and_notify(
       password_manager::BulkLeakCheckService::State::kRunning);
-  test_passwords_delegate_.SetPasswordCheckState(
-      extensions::api::passwords_private::PASSWORD_CHECK_STATE_RUNNING);
+  test_passwords_delegate_->SetPasswordCheckState(
+      extensions::api::passwords_private::PasswordCheckState::kRunning);
   EXPECT_TRUE(GetSafetyCheckStatusChangedWithDataIfExists(
       kPasswords,
       static_cast<int>(SafetyCheckHandler::PasswordsStatus::kChecking)));
 
   // Previous safe state got loaded.
-  test_passwords_delegate_.SetNumLeakedCredentials(0);
-  test_passwords_delegate_.InvokeOnCompromisedCredentialsChanged();
+  test_passwords_delegate_->SetNumLeakedCredentials(0);
+  test_passwords_delegate_->StoreCompromisedPassword();
+  browser_task_environment_.RunUntilIdle();
   // The event should get ignored, since the state is still running.
   const base::Value::Dict* event = GetSafetyCheckStatusChangedWithDataIfExists(
       kPasswords, static_cast<int>(SafetyCheckHandler::PasswordsStatus::kSafe));
   EXPECT_FALSE(event);
 
   // The check is completed with another safe state.
-  test_passwords_delegate_.SetPasswordCheckState(
-      extensions::api::passwords_private::PASSWORD_CHECK_STATE_IDLE);
+  test_passwords_delegate_->SetPasswordCheckState(
+      extensions::api::passwords_private::PasswordCheckState::kIdle);
   test_leak_service_->set_state_and_notify(
       password_manager::BulkLeakCheckService::State::kIdle);
   // This time the safe state should be reflected.
@@ -944,8 +952,9 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_SafeStateThenMoreEvents) {
 
   // After some time, some compromises were discovered (unrelated to SC).
   constexpr int kCompromised = 7;
-  test_passwords_delegate_.SetNumLeakedCredentials(kCompromised);
-  test_passwords_delegate_.InvokeOnCompromisedCredentialsChanged();
+  test_passwords_delegate_->SetNumLeakedCredentials(kCompromised);
+  test_passwords_delegate_->StoreCompromisedPassword();
+  browser_task_environment_.RunUntilIdle();
   // The new event should get ignored, since the safe state was final.
   const base::Value::Dict* event2 = GetSafetyCheckStatusChangedWithDataIfExists(
       kPasswords,
@@ -955,7 +964,7 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_SafeStateThenMoreEvents) {
 
 TEST_F(SafetyCheckHandlerTest, CheckPasswords_OnlyLeakedExist) {
   constexpr int kLeaked = 7;
-  test_passwords_delegate_.SetNumLeakedCredentials(kLeaked);
+  test_passwords_delegate_->SetNumLeakedCredentials(kLeaked);
   safety_check_->PerformSafetyCheck();
   // First, a "running" change of state.
   test_leak_service_->set_state_and_notify(
@@ -973,13 +982,13 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_OnlyLeakedExist) {
   VerifyDisplayString(event2,
                       base::NumberToString(kLeaked) + " compromised passwords");
   histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.PasswordsResult",
+      "Settings.SafetyCheck.PasswordsResult2",
       SafetyCheckHandler::PasswordsStatus::kCompromisedExist, 1);
 }
 
 TEST_F(SafetyCheckHandlerTest, CheckPasswords_OnlyPhishedExist) {
   constexpr int kPhished = 7;
-  test_passwords_delegate_.SetNumPhishedCredentials(kPhished);
+  test_passwords_delegate_->SetNumPhishedCredentials(kPhished);
   safety_check_->PerformSafetyCheck();
   // First, a "running" change of state.
   test_leak_service_->set_state_and_notify(
@@ -997,14 +1006,14 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_OnlyPhishedExist) {
   VerifyDisplayString(
       event2, base::NumberToString(kPhished) + " compromised passwords");
   histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.PasswordsResult",
+      "Settings.SafetyCheck.PasswordsResult2",
       SafetyCheckHandler::PasswordsStatus::kCompromisedExist, 1);
 }
 
 TEST_F(SafetyCheckHandlerTest, CheckPasswords_LeakedAndPhishedExist) {
   constexpr int kLeaked = 7, kPhished = 7;
-  test_passwords_delegate_.SetNumLeakedCredentials(kLeaked);
-  test_passwords_delegate_.SetNumPhishedCredentials(kPhished);
+  test_passwords_delegate_->SetNumLeakedCredentials(kLeaked);
+  test_passwords_delegate_->SetNumPhishedCredentials(kPhished);
   safety_check_->PerformSafetyCheck();
   // First, a "running" change of state.
   test_leak_service_->set_state_and_notify(
@@ -1022,15 +1031,15 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_LeakedAndPhishedExist) {
   VerifyDisplayString(event2, base::NumberToString(kLeaked + kPhished) +
                                   " compromised passwords");
   histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.PasswordsResult",
+      "Settings.SafetyCheck.PasswordsResult2",
       SafetyCheckHandler::PasswordsStatus::kCompromisedExist, 1);
 }
 
 TEST_F(SafetyCheckHandlerTest, CheckPasswords_CompromisedAndWeakExist) {
   constexpr int kCompromised = 7;
   constexpr int kWeak = 13;
-  test_passwords_delegate_.SetNumLeakedCredentials(kCompromised);
-  test_passwords_delegate_.SetNumWeakCredentials(kWeak);
+  test_passwords_delegate_->SetNumLeakedCredentials(kCompromised);
+  test_passwords_delegate_->SetNumWeakCredentials(kWeak);
   safety_check_->PerformSafetyCheck();
   // First, a "running" change of state.
   test_leak_service_->set_state_and_notify(
@@ -1049,13 +1058,99 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_CompromisedAndWeakExist) {
       event2, base::NumberToString(kCompromised) + " compromised passwords, " +
                   base::NumberToString(kWeak) + " weak passwords");
   histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.PasswordsResult",
+      "Settings.SafetyCheck.PasswordsResult2",
       SafetyCheckHandler::PasswordsStatus::kCompromisedExist, 1);
+}
+
+TEST_F(SafetyCheckHandlerTest, CheckPasswords_CompromisedAndReusedExist) {
+  constexpr int kCompromised = 7;
+  constexpr int kReused = 13;
+  test_passwords_delegate_->SetNumLeakedCredentials(kCompromised);
+  test_passwords_delegate_->SetNumReusedCredentials(kReused);
+  safety_check_->PerformSafetyCheck();
+  // First, a "running" change of state.
+  test_leak_service_->set_state_and_notify(
+      password_manager::BulkLeakCheckService::State::kRunning);
+  EXPECT_TRUE(GetSafetyCheckStatusChangedWithDataIfExists(
+      kPasswords,
+      static_cast<int>(SafetyCheckHandler::PasswordsStatus::kChecking)));
+  // Compromised passwords found state.
+  test_leak_service_->set_state_and_notify(
+      password_manager::BulkLeakCheckService::State::kIdle);
+  const base::Value::Dict* event2 = GetSafetyCheckStatusChangedWithDataIfExists(
+      kPasswords,
+      static_cast<int>(SafetyCheckHandler::PasswordsStatus::kCompromisedExist));
+  ASSERT_TRUE(event2);
+  VerifyDisplayString(
+      event2, base::NumberToString(kCompromised) + " compromised passwords, " +
+                  base::NumberToString(kReused) + " reused passwords");
+  histogram_tester_.ExpectBucketCount(
+      "Settings.SafetyCheck.PasswordsResult2",
+      SafetyCheckHandler::PasswordsStatus::kCompromisedExist, 1);
+}
+
+TEST_F(SafetyCheckHandlerTest,
+       CheckPasswords_CompromisedAndWeakAndReusedExist) {
+  constexpr int kCompromised = 7;
+  constexpr int kWeak = 13;
+  constexpr int kReused = 6;
+  test_passwords_delegate_->SetNumLeakedCredentials(kCompromised);
+  test_passwords_delegate_->SetNumWeakCredentials(kWeak);
+  test_passwords_delegate_->SetNumReusedCredentials(kReused);
+  safety_check_->PerformSafetyCheck();
+  // First, a "running" change of state.
+  test_leak_service_->set_state_and_notify(
+      password_manager::BulkLeakCheckService::State::kRunning);
+  EXPECT_TRUE(GetSafetyCheckStatusChangedWithDataIfExists(
+      kPasswords,
+      static_cast<int>(SafetyCheckHandler::PasswordsStatus::kChecking)));
+  // Compromised passwords found state.
+  test_leak_service_->set_state_and_notify(
+      password_manager::BulkLeakCheckService::State::kIdle);
+  const base::Value::Dict* event2 = GetSafetyCheckStatusChangedWithDataIfExists(
+      kPasswords,
+      static_cast<int>(SafetyCheckHandler::PasswordsStatus::kCompromisedExist));
+  ASSERT_TRUE(event2);
+  VerifyDisplayString(
+      event2, base::NumberToString(kCompromised) + " compromised passwords, " +
+                  base::NumberToString(kWeak) + " weak passwords, " +
+                  base::NumberToString(kReused) + " reused passwords");
+  histogram_tester_.ExpectBucketCount(
+      "Settings.SafetyCheck.PasswordsResult2",
+      SafetyCheckHandler::PasswordsStatus::kCompromisedExist, 1);
+}
+
+TEST_F(SafetyCheckHandlerTest, CheckPasswords_WeakAndReusedExist) {
+  constexpr int kWeak = 13;
+  constexpr int kReused = 6;
+  test_passwords_delegate_->SetNumWeakCredentials(kWeak);
+  test_passwords_delegate_->SetNumReusedCredentials(kReused);
+  safety_check_->PerformSafetyCheck();
+  // First, a "running" change of state.
+  test_leak_service_->set_state_and_notify(
+      password_manager::BulkLeakCheckService::State::kRunning);
+  EXPECT_TRUE(GetSafetyCheckStatusChangedWithDataIfExists(
+      kPasswords,
+      static_cast<int>(SafetyCheckHandler::PasswordsStatus::kChecking)));
+  // Compromised passwords found state.
+  test_leak_service_->set_state_and_notify(
+      password_manager::BulkLeakCheckService::State::kIdle);
+  const base::Value::Dict* event2 = GetSafetyCheckStatusChangedWithDataIfExists(
+      kPasswords,
+      static_cast<int>(
+          SafetyCheckHandler::PasswordsStatus::kWeakPasswordsExist));
+  ASSERT_TRUE(event2);
+  VerifyDisplayString(event2,
+                      base::NumberToString(kWeak) + " weak passwords, " +
+                          base::NumberToString(kReused) + " reused passwords");
+  histogram_tester_.ExpectBucketCount(
+      "Settings.SafetyCheck.PasswordsResult2",
+      SafetyCheckHandler::PasswordsStatus::kWeakPasswordsExist, 1);
 }
 
 TEST_F(SafetyCheckHandlerTest, CheckPasswords_OnlyWeakExist) {
   constexpr int kWeak = 13;
-  test_passwords_delegate_.SetNumWeakCredentials(kWeak);
+  test_passwords_delegate_->SetNumWeakCredentials(kWeak);
   safety_check_->PerformSafetyCheck();
   // First, a "running" change of state.
   test_leak_service_->set_state_and_notify(
@@ -1073,13 +1168,38 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_OnlyWeakExist) {
   ASSERT_TRUE(event2);
   VerifyDisplayString(event2, base::NumberToString(kWeak) + " weak passwords");
   histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.PasswordsResult",
+      "Settings.SafetyCheck.PasswordsResult2",
       SafetyCheckHandler::PasswordsStatus::kWeakPasswordsExist, 1);
+}
+
+TEST_F(SafetyCheckHandlerTest, CheckPasswords_OnlyReusedExist) {
+  constexpr int kReused = 13;
+  test_passwords_delegate_->SetNumReusedCredentials(kReused);
+  safety_check_->PerformSafetyCheck();
+  // First, a "running" change of state.
+  test_leak_service_->set_state_and_notify(
+      password_manager::BulkLeakCheckService::State::kRunning);
+  EXPECT_TRUE(GetSafetyCheckStatusChangedWithDataIfExists(
+      kPasswords,
+      static_cast<int>(SafetyCheckHandler::PasswordsStatus::kChecking)));
+  // Compromised passwords found state.
+  test_leak_service_->set_state_and_notify(
+      password_manager::BulkLeakCheckService::State::kIdle);
+  const base::Value::Dict* event = GetSafetyCheckStatusChangedWithDataIfExists(
+      kPasswords,
+      static_cast<int>(
+          SafetyCheckHandler::PasswordsStatus::kReusedPasswordsExist));
+  ASSERT_TRUE(event);
+  VerifyDisplayString(event,
+                      base::NumberToString(kReused) + " reused passwords");
+  histogram_tester_.ExpectBucketCount(
+      "Settings.SafetyCheck.PasswordsResult2",
+      SafetyCheckHandler::PasswordsStatus::kReusedPasswordsExist, 1);
 }
 
 TEST_F(SafetyCheckHandlerTest, CheckPasswords_Error) {
   safety_check_->PerformSafetyCheck();
-  EXPECT_TRUE(test_passwords_delegate_.StartPasswordCheckTriggered());
+  EXPECT_TRUE(test_passwords_delegate_->StartPasswordCheckTriggered());
   static_cast<password_manager::BulkLeakCheckService::Observer*>(
       safety_check_.get())
       ->OnStateChanged(
@@ -1092,14 +1212,14 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_Error) {
                       "Browser can't check your passwords. Try again "
                       "later.");
   histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.PasswordsResult",
+      "Settings.SafetyCheck.PasswordsResult2",
       SafetyCheckHandler::PasswordsStatus::kError, 1);
 }
 
 TEST_F(SafetyCheckHandlerTest, CheckPasswords_MutedCompromisedExist) {
   constexpr int kCompromised = 7;
   constexpr int kMuted = 3;
-  test_passwords_delegate_.SetNumLeakedCredentials(kCompromised, kMuted);
+  test_passwords_delegate_->SetNumLeakedCredentials(kCompromised, kMuted);
   safety_check_->PerformSafetyCheck();
   // First, a "running" change of state.
   test_leak_service_->set_state_and_notify(
@@ -1117,13 +1237,13 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_MutedCompromisedExist) {
   VerifyDisplayString(event2, base::NumberToString(kCompromised - kMuted) +
                                   " compromised passwords");
   histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.PasswordsResult",
+      "Settings.SafetyCheck.PasswordsResult2",
       SafetyCheckHandler::PasswordsStatus::kCompromisedExist, 1);
 }
 
 TEST_F(SafetyCheckHandlerTest, CheckPasswords_AllMutedCompromisedCredentials) {
   constexpr int kCompromised = 7;
-  test_passwords_delegate_.SetNumLeakedCredentials(kCompromised, kCompromised);
+  test_passwords_delegate_->SetNumLeakedCredentials(kCompromised, kCompromised);
   safety_check_->PerformSafetyCheck();
   // First, a "running" change of state.
   test_leak_service_->set_state_and_notify(
@@ -1138,13 +1258,13 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_AllMutedCompromisedCredentials) {
       kPasswords, static_cast<int>(SafetyCheckHandler::PasswordsStatus::kSafe));
   ASSERT_TRUE(event);
   histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.PasswordsResult",
+      "Settings.SafetyCheck.PasswordsResult2",
       SafetyCheckHandler::PasswordsStatus::kSafe, 1);
 }
 
 TEST_F(SafetyCheckHandlerTest, CheckPasswords_Error_FutureEventsIgnored) {
   safety_check_->PerformSafetyCheck();
-  EXPECT_TRUE(test_passwords_delegate_.StartPasswordCheckTriggered());
+  EXPECT_TRUE(test_passwords_delegate_->StartPasswordCheckTriggered());
   static_cast<password_manager::BulkLeakCheckService::Observer*>(
       safety_check_.get())
       ->OnStateChanged(
@@ -1157,7 +1277,7 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_Error_FutureEventsIgnored) {
                       "Browser can't check your passwords. Try again "
                       "later.");
   histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.PasswordsResult",
+      "Settings.SafetyCheck.PasswordsResult2",
       SafetyCheckHandler::PasswordsStatus::kError, 1);
   // At some point later, the service discovers compromised passwords and goes
   // idle.
@@ -1170,8 +1290,9 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_Error_FutureEventsIgnored) {
       ->OnStateChanged(password_manager::BulkLeakCheckService::State::kIdle);
   // An InsecureCredentialsManager callback fires once the compromised passwords
   // get written to disk.
-  test_passwords_delegate_.SetNumLeakedCredentials(kCompromised);
-  test_passwords_delegate_.InvokeOnCompromisedCredentialsChanged();
+  test_passwords_delegate_->SetNumLeakedCredentials(kCompromised);
+  test_passwords_delegate_->StoreCompromisedPassword();
+  browser_task_environment_.RunUntilIdle();
   const base::Value::Dict* event2 = GetSafetyCheckStatusChangedWithDataIfExists(
       kPasswords,
       static_cast<int>(SafetyCheckHandler::PasswordsStatus::kCompromisedExist));
@@ -1182,7 +1303,7 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_Error_FutureEventsIgnored) {
 
 TEST_F(SafetyCheckHandlerTest, CheckPasswords_FeatureUnavailable) {
   safety_check_->PerformSafetyCheck();
-  EXPECT_TRUE(test_passwords_delegate_.StartPasswordCheckTriggered());
+  EXPECT_TRUE(test_passwords_delegate_->StartPasswordCheckTriggered());
   static_cast<password_manager::BulkLeakCheckService::Observer*>(
       safety_check_.get())
       ->OnStateChanged(
@@ -1194,14 +1315,14 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_FeatureUnavailable) {
   ASSERT_TRUE(event);
   VerifyDisplayString(event, "Password check is not available in Chromium");
   histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.PasswordsResult",
+      "Settings.SafetyCheck.PasswordsResult2",
       SafetyCheckHandler::PasswordsStatus::kFeatureUnavailable, 1);
 }
 
 TEST_F(SafetyCheckHandlerTest, CheckPasswords_RunningOneCompromised) {
-  test_passwords_delegate_.SetNumLeakedCredentials(1);
+  test_passwords_delegate_->SetNumLeakedCredentials(1);
   safety_check_->PerformSafetyCheck();
-  EXPECT_TRUE(test_passwords_delegate_.StartPasswordCheckTriggered());
+  EXPECT_TRUE(test_passwords_delegate_->StartPasswordCheckTriggered());
   static_cast<password_manager::BulkLeakCheckService::Observer*>(
       safety_check_.get())
       ->OnStateChanged(password_manager::BulkLeakCheckService::State::kIdle);
@@ -1211,13 +1332,13 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_RunningOneCompromised) {
   ASSERT_TRUE(event);
   VerifyDisplayString(event, "1 compromised password");
   histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.PasswordsResult",
+      "Settings.SafetyCheck.PasswordsResult2",
       SafetyCheckHandler::PasswordsStatus::kCompromisedExist, 1);
 }
 
 TEST_F(SafetyCheckHandlerTest, CheckPasswords_NoPasswords) {
-  test_passwords_delegate_.ClearSavedPasswordsList();
-  test_passwords_delegate_.SetStartPasswordCheckState(
+  test_passwords_delegate_->ClearSavedPasswordsList();
+  test_passwords_delegate_->SetStartPasswordCheckState(
       password_manager::BulkLeakCheckService::State::kIdle);
   safety_check_->PerformSafetyCheck();
   const base::Value::Dict* event = GetSafetyCheckStatusChangedWithDataIfExists(
@@ -1228,7 +1349,7 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_NoPasswords) {
                       "No saved passwords. Chrome can check your passwords "
                       "when you save them.");
   histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.PasswordsResult",
+      "Settings.SafetyCheck.PasswordsResult2",
       SafetyCheckHandler::PasswordsStatus::kNoPasswords, 1);
 }
 
@@ -1236,9 +1357,9 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_Progress) {
   auto credential = password_manager::LeakCheckCredential(u"test", u"test");
   auto is_leaked = password_manager::IsLeaked(false);
   safety_check_->PerformSafetyCheck();
-  test_passwords_delegate_.SetPasswordCheckState(
-      extensions::api::passwords_private::PASSWORD_CHECK_STATE_RUNNING);
-  test_passwords_delegate_.SetProgress(1, 3);
+  test_passwords_delegate_->SetPasswordCheckState(
+      extensions::api::passwords_private::PasswordCheckState::kRunning);
+  test_passwords_delegate_->SetProgress(1, 3);
   static_cast<password_manager::BulkLeakCheckService::Observer*>(
       safety_check_.get())
       ->OnCredentialDone(credential, is_leaked);
@@ -1248,7 +1369,7 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_Progress) {
   EXPECT_TRUE(event);
   VerifyDisplayString(event, u"Checking passwords (1 of 3)…");
 
-  test_passwords_delegate_.SetProgress(2, 3);
+  test_passwords_delegate_->SetProgress(2, 3);
   static_cast<password_manager::BulkLeakCheckService::Observer*>(
       safety_check_.get())
       ->OnCredentialDone(credential, is_leaked);
@@ -1260,9 +1381,9 @@ TEST_F(SafetyCheckHandlerTest, CheckPasswords_Progress) {
 
   // Final update comes after status change, so no new progress message should
   // be present.
-  test_passwords_delegate_.SetPasswordCheckState(
-      extensions::api::passwords_private::PASSWORD_CHECK_STATE_IDLE);
-  test_passwords_delegate_.SetProgress(3, 3);
+  test_passwords_delegate_->SetPasswordCheckState(
+      extensions::api::passwords_private::PasswordCheckState::kIdle);
+  test_passwords_delegate_->SetProgress(3, 3);
   static_cast<password_manager::BulkLeakCheckService::Observer*>(
       safety_check_.get())
       ->OnCredentialDone(credential, is_leaked);
@@ -1280,9 +1401,6 @@ TEST_F(SafetyCheckHandlerTest, CheckExtensions_NoExtensions) {
       kExtensions,
       static_cast<int>(
           SafetyCheckHandler::ExtensionsStatus::kNoneBlocklisted)));
-  histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.ExtensionsResult",
-      SafetyCheckHandler::ExtensionsStatus::kNoneBlocklisted, 1);
 }
 
 TEST_F(SafetyCheckHandlerTest, CheckExtensions_NoneBlocklisted) {
@@ -1302,9 +1420,6 @@ TEST_F(SafetyCheckHandlerTest, CheckExtensions_NoneBlocklisted) {
   EXPECT_TRUE(event);
   VerifyDisplayString(event,
                       "You're protected from potentially harmful extensions");
-  histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.ExtensionsResult",
-      SafetyCheckHandler::ExtensionsStatus::kNoneBlocklisted, 1);
 }
 
 TEST_F(SafetyCheckHandlerTest, CheckExtensions_BlocklistedAllDisabled) {
@@ -1327,9 +1442,6 @@ TEST_F(SafetyCheckHandlerTest, CheckExtensions_BlocklistedAllDisabled) {
   EXPECT_TRUE(event);
   VerifyDisplayString(
       event, "1 potentially harmful extension is off. You can also remove it.");
-  histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.ExtensionsResult",
-      SafetyCheckHandler::ExtensionsStatus::kBlocklistedAllDisabled, 1);
 }
 
 TEST_F(SafetyCheckHandlerTest, CheckExtensions_BlocklistedReenabledAllByUser) {
@@ -1352,9 +1464,6 @@ TEST_F(SafetyCheckHandlerTest, CheckExtensions_BlocklistedReenabledAllByUser) {
   EXPECT_TRUE(event);
   VerifyDisplayString(event,
                       "You turned 1 potentially harmful extension back on");
-  histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.ExtensionsResult",
-      SafetyCheckHandler::ExtensionsStatus::kBlocklistedReenabledAllByUser, 1);
 }
 
 TEST_F(SafetyCheckHandlerTest, CheckExtensions_BlocklistedReenabledAllByAdmin) {
@@ -1377,9 +1486,6 @@ TEST_F(SafetyCheckHandlerTest, CheckExtensions_BlocklistedReenabledAllByAdmin) {
   VerifyDisplayString(event,
                       "Your administrator turned 1 potentially harmful "
                       "extension back on");
-  histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.ExtensionsResult",
-      SafetyCheckHandler::ExtensionsStatus::kBlocklistedReenabledAllByAdmin, 1);
 }
 
 TEST_F(SafetyCheckHandlerTest, CheckExtensions_BlocklistedReenabledSomeByUser) {
@@ -1418,281 +1524,15 @@ TEST_F(SafetyCheckHandlerTest, CheckExtensions_BlocklistedReenabledSomeByUser) {
                       "You turned 1 potentially harmful extension back "
                       "on. Your administrator "
                       "turned 1 potentially harmful extension back on.");
-  histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.ExtensionsResult",
-      SafetyCheckHandler::ExtensionsStatus::kBlocklistedReenabledSomeByUser, 1);
 }
-
-#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-class SafetyCheckHandlerChromeCleanerIdleTest
-    : public SafetyCheckHandlerTest,
-      public testing::WithParamInterface<
-          std::tuple<safe_browsing::ChromeCleanerController::IdleReason,
-                     SafetyCheckHandler::ChromeCleanerStatus,
-                     std::u16string>> {
- protected:
-  void SetUp() override {
-    SafetyCheckHandlerTest::SetUp();
-    idle_reason_ = testing::get<0>(GetParam());
-    expected_cct_status_ = testing::get<1>(GetParam());
-    expected_display_string_ = testing::get<2>(GetParam());
-  }
-
-  safe_browsing::ChromeCleanerController::IdleReason idle_reason_;
-  SafetyCheckHandler::ChromeCleanerStatus expected_cct_status_;
-  std::u16string expected_display_string_;
-};
-
-TEST_P(SafetyCheckHandlerChromeCleanerIdleTest, CheckChromeCleanerIdleStates) {
-  safe_browsing::ChromeCleanerControllerImpl::ResetInstanceForTesting();
-  safe_browsing::ChromeCleanerControllerImpl::GetInstance()->SetIdleForTesting(
-      idle_reason_);
-  safety_check_->PerformSafetyCheck();
-  // Ensure WebUI event is sent.
-  const base::Value::Dict* event = GetSafetyCheckStatusChangedWithDataIfExists(
-      kChromeCleaner, static_cast<int>(expected_cct_status_));
-  ASSERT_TRUE(event);
-  VerifyDisplayString(event, expected_display_string_);
-  // Ensure UMA is logged.
-  if (expected_cct_status_ ==
-          SafetyCheckHandler::ChromeCleanerStatus::kHidden ||
-      expected_cct_status_ ==
-          SafetyCheckHandler::ChromeCleanerStatus::kChecking) {
-    // Hidden and checking state should not get recorded.
-    histogram_tester_.ExpectTotalCount(
-        "Settings.SafetyCheck.ChromeCleanerResult", 0);
-  } else {
-    histogram_tester_.ExpectBucketCount(
-        "Settings.SafetyCheck.ChromeCleanerResult", expected_cct_status_, 1);
-  }
-}
-
-INSTANTIATE_TEST_SUITE_P(
-    CheckChromeCleaner_Initial,
-    SafetyCheckHandlerChromeCleanerIdleTest,
-    ::testing::Values(std::make_tuple(
-        safe_browsing::ChromeCleanerController::IdleReason::kInitial,
-        SafetyCheckHandler::ChromeCleanerStatus::kNoUwsFoundWithTimestamp,
-        u"Browser didn't find harmful software on your computer • Checked just "
-        u"now")));
-
-INSTANTIATE_TEST_SUITE_P(
-    CheckChromeCleaner_ReporterFoundNothing,
-    SafetyCheckHandlerChromeCleanerIdleTest,
-    ::testing::Values(std::make_tuple(
-        safe_browsing::ChromeCleanerController::IdleReason::
-            kReporterFoundNothing,
-        SafetyCheckHandler::ChromeCleanerStatus::kNoUwsFoundWithTimestamp,
-        u"Browser didn't find harmful software on your computer • Checked just "
-        u"now")));
-
-INSTANTIATE_TEST_SUITE_P(
-    CheckChromeCleaner_ReporterFailed,
-    SafetyCheckHandlerChromeCleanerIdleTest,
-    ::testing::Values(std::make_tuple(
-        safe_browsing::ChromeCleanerController::IdleReason::kReporterFailed,
-        SafetyCheckHandler::ChromeCleanerStatus::kError,
-        u"Something went wrong. Click for more details.")));
-
-INSTANTIATE_TEST_SUITE_P(
-    CheckChromeCleaner_ScanningFoundNothing,
-    SafetyCheckHandlerChromeCleanerIdleTest,
-    ::testing::Values(std::make_tuple(
-        safe_browsing::ChromeCleanerController::IdleReason::
-            kScanningFoundNothing,
-        SafetyCheckHandler::ChromeCleanerStatus::kNoUwsFoundWithTimestamp,
-        u"Browser didn't find harmful software on your computer • Checked just "
-        u"now")));
-
-INSTANTIATE_TEST_SUITE_P(
-    CheckChromeCleaner_ScanningFailed,
-    SafetyCheckHandlerChromeCleanerIdleTest,
-    ::testing::Values(std::make_tuple(
-        safe_browsing::ChromeCleanerController::IdleReason::kScanningFailed,
-        SafetyCheckHandler::ChromeCleanerStatus::kError,
-        u"Something went wrong. Click for more details.")));
-
-INSTANTIATE_TEST_SUITE_P(
-    CheckChromeCleaner_ConnectionLost,
-    SafetyCheckHandlerChromeCleanerIdleTest,
-    ::testing::Values(std::make_tuple(
-        safe_browsing::ChromeCleanerController::IdleReason::kConnectionLost,
-        SafetyCheckHandler::ChromeCleanerStatus::kInfected,
-        u"Browser found harmful software on your computer")));
-
-INSTANTIATE_TEST_SUITE_P(
-    CheckChromeCleaner_UserDeclinedCleanup,
-    SafetyCheckHandlerChromeCleanerIdleTest,
-    ::testing::Values(
-        std::make_tuple(safe_browsing::ChromeCleanerController::IdleReason::
-                            kUserDeclinedCleanup,
-                        SafetyCheckHandler::ChromeCleanerStatus::kInfected,
-                        u"Browser found harmful software on your computer")));
-
-INSTANTIATE_TEST_SUITE_P(
-    CheckChromeCleaner_CleaningFailed,
-    SafetyCheckHandlerChromeCleanerIdleTest,
-    ::testing::Values(std::make_tuple(
-        safe_browsing::ChromeCleanerController::IdleReason::kCleaningFailed,
-        SafetyCheckHandler::ChromeCleanerStatus::kError,
-        u"Something went wrong. Click for more details.")));
-
-INSTANTIATE_TEST_SUITE_P(
-    CheckChromeCleaner_CleaningSucceed,
-    SafetyCheckHandlerChromeCleanerIdleTest,
-    ::testing::Values(std::make_tuple(
-        safe_browsing::ChromeCleanerController::IdleReason::kCleaningSucceeded,
-        SafetyCheckHandler::ChromeCleanerStatus::kNoUwsFoundWithTimestamp,
-        u"Browser didn't find harmful software on your computer • Checked just "
-        u"now")));
-
-INSTANTIATE_TEST_SUITE_P(
-    CheckChromeCleaner_CleanerDownloadFailed,
-    SafetyCheckHandlerChromeCleanerIdleTest,
-    ::testing::Values(
-        std::make_tuple(safe_browsing::ChromeCleanerController::IdleReason::
-                            kCleanerDownloadFailed,
-                        SafetyCheckHandler::ChromeCleanerStatus::kError,
-                        u"Something went wrong. Click for more details.")));
-
-class SafetyCheckHandlerChromeCleanerNonIdleTest
-    : public SafetyCheckHandlerTest,
-      public testing::WithParamInterface<
-          std::tuple<safe_browsing::ChromeCleanerController::State,
-                     SafetyCheckHandler::ChromeCleanerStatus,
-                     std::u16string>> {
- protected:
-  void SetUp() override {
-    SafetyCheckHandlerTest::SetUp();
-    state_ = testing::get<0>(GetParam());
-    expected_cct_status_ = testing::get<1>(GetParam());
-    expected_display_string_ = testing::get<2>(GetParam());
-  }
-
-  safe_browsing::ChromeCleanerController::State state_;
-  SafetyCheckHandler::ChromeCleanerStatus expected_cct_status_;
-  std::u16string expected_display_string_;
-};
-
-TEST_P(SafetyCheckHandlerChromeCleanerNonIdleTest,
-       CheckChromeCleanerNonIdleStates) {
-  safe_browsing::ChromeCleanerControllerImpl::ResetInstanceForTesting();
-  safe_browsing::ChromeCleanerControllerImpl::GetInstance()->SetStateForTesting(
-      state_);
-  safety_check_->PerformSafetyCheck();
-  const base::Value::Dict* event = GetSafetyCheckStatusChangedWithDataIfExists(
-      kChromeCleaner, static_cast<int>(expected_cct_status_));
-  ASSERT_TRUE(event);
-  VerifyDisplayString(event, expected_display_string_);
-  // Ensure UMA is logged.
-  if (expected_cct_status_ ==
-          SafetyCheckHandler::ChromeCleanerStatus::kHidden ||
-      expected_cct_status_ ==
-          SafetyCheckHandler::ChromeCleanerStatus::kChecking) {
-    // Hidden and checking state should not get recorded.
-    histogram_tester_.ExpectTotalCount(
-        "Settings.SafetyCheck.ChromeCleanerResult", 0);
-  } else {
-    histogram_tester_.ExpectBucketCount(
-        "Settings.SafetyCheck.ChromeCleanerResult", expected_cct_status_, 1);
-  }
-}
-
-INSTANTIATE_TEST_SUITE_P(
-    CheckChromeCleaner_ReporterRunning,
-    SafetyCheckHandlerChromeCleanerNonIdleTest,
-    ::testing::Values(std::make_tuple(
-        safe_browsing::ChromeCleanerController::State::kReporterRunning,
-        SafetyCheckHandler::ChromeCleanerStatus::kScanningForUws,
-        u"Browser is checking your computer for harmful software…")));
-
-INSTANTIATE_TEST_SUITE_P(
-    CheckChromeCleaner_Scanning,
-    SafetyCheckHandlerChromeCleanerNonIdleTest,
-    ::testing::Values(std::make_tuple(
-        safe_browsing::ChromeCleanerController::State::kScanning,
-        SafetyCheckHandler::ChromeCleanerStatus::kScanningForUws,
-        u"Browser is checking your computer for harmful software…")));
-
-INSTANTIATE_TEST_SUITE_P(
-    CheckChromeCleaner_Cleaning,
-    SafetyCheckHandlerChromeCleanerNonIdleTest,
-    ::testing::Values(std::make_tuple(
-        safe_browsing::ChromeCleanerController::State::kCleaning,
-        SafetyCheckHandler::ChromeCleanerStatus::kRemovingUws,
-        u"Browser is removing harmful software from your computer…")));
-
-INSTANTIATE_TEST_SUITE_P(
-    CheckChromeCleaner_Infected,
-    SafetyCheckHandlerChromeCleanerNonIdleTest,
-    ::testing::Values(std::make_tuple(
-        safe_browsing::ChromeCleanerController::State::kInfected,
-        SafetyCheckHandler::ChromeCleanerStatus::kInfected,
-        u"Browser found harmful software on your computer")));
-
-INSTANTIATE_TEST_SUITE_P(
-    CheckChromeCleaner_RebootRequired,
-    SafetyCheckHandlerChromeCleanerNonIdleTest,
-    ::testing::Values(std::make_tuple(
-        safe_browsing::ChromeCleanerController::State::kRebootRequired,
-        SafetyCheckHandler::ChromeCleanerStatus::kRebootRequired,
-        u"To finish removing harmful software, restart your computer")));
-
-TEST_F(SafetyCheckHandlerTest, CheckChromeCleaner_DisabledByAdmin) {
-  safe_browsing::ChromeCleanerControllerImpl::ResetInstanceForTesting();
-  safe_browsing::ChromeCleanerControllerImpl::GetInstance()
-      ->SetDelegateForTesting(&test_chrome_cleaner_controller_delegate_);
-
-  safety_check_->PerformSafetyCheck();
-  const base::Value::Dict* event = GetSafetyCheckStatusChangedWithDataIfExists(
-      kChromeCleaner,
-      static_cast<int>(
-          SafetyCheckHandler::ChromeCleanerStatus::kDisabledByAdmin));
-  ASSERT_TRUE(event);
-  VerifyDisplayString(
-      event,
-      "<a target=\"_blank\" "
-      "href=\"https://support.google.com/chrome?p=your_administrator\">Your "
-      "administrator</a> has turned off checking for harmful software");
-}
-
-TEST_F(SafetyCheckHandlerTest, CheckChromeCleaner_ObserverUpdateLogging) {
-  safe_browsing::ChromeCleanerControllerImpl::ResetInstanceForTesting();
-  safe_browsing::ChromeCleanerControllerImpl::GetInstance()->SetIdleForTesting(
-      safe_browsing::ChromeCleanerController::IdleReason::
-          kReporterFoundNothing);
-  // We expect a user triggering a safety check to log the Chrome cleaner
-  // result.
-  safety_check_->PerformSafetyCheck();
-  histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.ChromeCleanerResult",
-      SafetyCheckHandler::ChromeCleanerStatus::kNoUwsFoundWithTimestamp, 1);
-  // Subsequent Chrome cleaner status updates without the user running safety
-  // check again should not trigger logging.
-  safety_check_->OnIdle(safe_browsing::ChromeCleanerController::IdleReason::
-                            kReporterFoundNothing);
-  safety_check_->OnReporterRunning();
-  safety_check_->OnScanning();
-  safety_check_->OnRebootRequired();
-  safety_check_->OnRebootFailed();
-  histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.ChromeCleanerResult",
-      SafetyCheckHandler::ChromeCleanerStatus::kNoUwsFoundWithTimestamp, 1);
-  histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.ChromeCleanerResult",
-      SafetyCheckHandler::ChromeCleanerStatus::kRebootRequired, 0);
-  histogram_tester_.ExpectBucketCount(
-      "Settings.SafetyCheck.ChromeCleanerResult",
-      SafetyCheckHandler::ChromeCleanerStatus::kScanningForUws, 0);
-}
-#endif
 
 TEST_F(SafetyCheckHandlerTest, CheckParentRanDisplayString) {
   // 1 second before midnight Dec 31st 2020, so that -(24h-1s) is still on the
   // same day. This test time is hard coded to prevent DST flakiness, see
   // crbug.com/1066576.
   const base::Time system_time =
-      base::Time::FromDoubleT(1609459199).LocalMidnight() - base::Seconds(1);
+      base::Time::FromSecondsSinceUnixEpoch(1609459199).LocalMidnight() -
+      base::Seconds(1);
   // Display strings for given time deltas in seconds.
   std::vector<std::tuple<std::u16string, int>> tuples{
       std::make_tuple(u"a moment ago", 1),
@@ -1718,51 +1558,6 @@ TEST_F(SafetyCheckHandlerTest, CheckParentRanDisplayString) {
               display_string);
   }
 }
-
-#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-TEST_F(SafetyCheckHandlerTest, CheckChromeCleanerRanDisplayString) {
-  // Test string without timestamp.
-  base::Time null_time;
-  std::u16string display_string =
-      safety_check_->GetStringForChromeCleanerRan(null_time, null_time);
-  ReplaceBrowserName(&display_string);
-  EXPECT_EQ(display_string,
-            u"Browser can check your computer for harmful software");
-  // Test strings with timestamp.
-  // 1 second before midnight Dec 31st 2020, so that -(24h-1s) is still on the
-  // same day. This test time is hard coded to prevent DST flakiness, see
-  // crbug.com/1066576.
-  const base::Time system_time =
-      base::Time::FromDoubleT(1609459199).LocalMidnight() - base::Seconds(1);
-  // Display strings for given time deltas in seconds.
-  std::vector<std::tuple<std::u16string, int>> tuples{
-      std::make_tuple(u"just now", 1),
-      std::make_tuple(u"just now", 59),
-      std::make_tuple(u"1 minute ago", 60),
-      std::make_tuple(u"2 minutes ago", 60 * 2),
-      std::make_tuple(u"59 minutes ago", 60 * 60 - 1),
-      std::make_tuple(u"1 hour ago", 60 * 60),
-      std::make_tuple(u"2 hours ago", 60 * 60 * 2),
-      std::make_tuple(u"23 hours ago", 60 * 60 * 23),
-      std::make_tuple(u"yesterday", 60 * 60 * 24),
-      std::make_tuple(u"yesterday", 60 * 60 * 24 * 2 - 1),
-      std::make_tuple(u"2 days ago", 60 * 60 * 24 * 2),
-      std::make_tuple(u"2 days ago", 60 * 60 * 24 * 3 - 1),
-      std::make_tuple(u"3 days ago", 60 * 60 * 24 * 3),
-      std::make_tuple(u"3 days ago", 60 * 60 * 24 * 4 - 1)};
-  // Test that above time deltas produce the corresponding display strings.
-  for (auto tuple : tuples) {
-    const base::Time time = system_time - base::Seconds(std::get<1>(tuple));
-    display_string =
-        safety_check_->GetStringForChromeCleanerRan(time, system_time);
-    ReplaceBrowserName(&display_string);
-    EXPECT_EQ(base::StrCat({u"Browser didn't find harmful software on your "
-                            u"computer • Checked ",
-                            std::get<0>(tuple)}),
-              display_string);
-  }
-}
-#endif
 
 TEST_F(SafetyCheckHandlerTest, CheckSafetyCheckStartedWebUiEvents) {
   safety_check_->SendSafetyCheckStartedWebUiUpdates();
@@ -1808,30 +1603,12 @@ TEST_F(SafetyCheckHandlerTest, CheckSafetyCheckCompletedWebUiEvents) {
   test_leak_service_->set_state_and_notify(
       password_manager::BulkLeakCheckService::State::kSignedOut);
 
-#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  // Set the Chrome cleaner mock response.
-  safe_browsing::ChromeCleanerControllerImpl::ResetInstanceForTesting();
-  safe_browsing::ChromeCleanerControllerImpl::GetInstance()->SetStateForTesting(
-      safe_browsing::ChromeCleanerController::State::kInfected);
-#endif
-
   // Check that the parent update is sent after all children checks completed.
   const base::Value::Dict* event_parent =
       GetSafetyCheckStatusChangedWithDataIfExists(
           kParent, static_cast<int>(SafetyCheckHandler::ParentStatus::kAfter));
   ASSERT_TRUE(event_parent);
   VerifyDisplayString(event_parent, u"Safety check ran a moment ago");
-
-#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  // Subsequent Chrome cleaner status updates without the user running safety
-  // check again should not trigger further parent element completion events.
-  safety_check_->OnIdle(safe_browsing::ChromeCleanerController::IdleReason::
-                            kReporterFoundNothing);
-  safety_check_->OnReporterRunning();
-  safety_check_->OnScanning();
-  safety_check_->OnRebootRequired();
-  safety_check_->OnRebootFailed();
-#endif
 
   // Check that there is no new parent completion event.
   const base::Value::Dict* event_parent2 =

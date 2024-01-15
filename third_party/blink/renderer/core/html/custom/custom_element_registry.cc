@@ -29,7 +29,6 @@
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
-#include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 
 namespace blink {
 
@@ -86,14 +85,15 @@ CustomElementRegistry::CustomElementRegistry(const LocalDOMWindow* owner)
     : element_definition_is_running_(false),
       owner_(owner),
       upgrade_candidates_(MakeGarbageCollected<UpgradeCandidateMap>()),
-      reaction_stack_(&CustomElementReactionStack::Current()) {}
+      associated_documents_(MakeGarbageCollected<AssociatedDocumentSet>()) {}
 
 void CustomElementRegistry::Trace(Visitor* visitor) const {
-  visitor->Trace(definitions_);
+  visitor->Trace(constructor_map_);
+  visitor->Trace(name_map_);
   visitor->Trace(owner_);
   visitor->Trace(upgrade_candidates_);
   visitor->Trace(when_defined_promise_map_);
-  visitor->Trace(reaction_stack_);
+  visitor->Trace(associated_documents_);
   ScriptWrappable::Trace(visitor);
 }
 
@@ -108,7 +108,7 @@ CustomElementDefinition* CustomElementRegistry::define(
   return DefineInternal(script_state, name, builder, options, exception_state);
 }
 
-// http://w3c.github.io/webcomponents/spec/custom/#dfn-element-definition
+// https://html.spec.whatwg.org/C/#element-definition
 CustomElementDefinition* CustomElementRegistry::DefineInternal(
     ScriptState* script_state,
     const AtomicString& name,
@@ -198,19 +198,18 @@ CustomElementDefinition* CustomElementRegistry::DefineInternal(
   }
 
   CustomElementDescriptor descriptor(name, local_name);
-  if (UNLIKELY(definitions_.size() >=
-               std::numeric_limits<CustomElementDefinition::Id>::max()))
-    return nullptr;
-  CustomElementDefinition::Id id = definitions_.size() + 1;
-  CustomElementDefinition* definition = builder.Build(descriptor, id);
+  CustomElementDefinition* definition = builder.Build(descriptor);
   CHECK(!exception_state.HadException());
   CHECK(definition->Descriptor() == descriptor);
-  if (RuntimeEnabledFeatures::CustomElementDefaultStyleEnabled() &&
-      options->hasStyles())
-    definition->SetDefaultStyleSheets(options->styles());
-  definitions_.emplace_back(definition);
-  NameIdMap::AddResult result = name_id_map_.insert(descriptor.GetName(), id);
-  CHECK(result.is_new_entry);
+
+  auto name_add_result = name_map_.insert(descriptor.GetName(), definition);
+  // This CHECK follows from the NameIsDefined call above.
+  CHECK(name_add_result.is_new_entry);
+
+  auto constructor_add_result =
+      constructor_map_.insert(builder.Constructor(), definition);
+  // This CHECK follows from the CheckConstructorNotRegistered call above.
+  CHECK(constructor_add_result.is_new_entry);
 
   if (definition->IsFormAssociated()) {
     if (Document* document = owner_->document())
@@ -246,6 +245,19 @@ ScriptValue CustomElementRegistry::get(const AtomicString& name) {
   return definition->GetConstructorForScript();
 }
 
+// https://html.spec.whatwg.org/C/#dom-customelementregistry-getname
+const AtomicString& CustomElementRegistry::getName(
+    V8CustomElementConstructor* constructor) {
+  if (!constructor) {
+    return g_null_atom;
+  }
+  CustomElementDefinition* definition = DefinitionForConstructor(constructor);
+  if (!definition) {
+    return g_null_atom;
+  }
+  return definition->Descriptor().GetName();
+}
+
 // https://html.spec.whatwg.org/C/#look-up-a-custom-element-definition
 // At this point, what the spec calls 'is' is 'name' from desc
 CustomElementDefinition* CustomElementRegistry::DefinitionFor(
@@ -265,20 +277,33 @@ CustomElementDefinition* CustomElementRegistry::DefinitionFor(
 }
 
 bool CustomElementRegistry::NameIsDefined(const AtomicString& name) const {
-  return name_id_map_.Contains(name);
+  return name_map_.Contains(name);
 }
 
 CustomElementDefinition* CustomElementRegistry::DefinitionForName(
     const AtomicString& name) const {
-  const auto it = name_id_map_.find(name);
-  if (it == name_id_map_.end())
+  const auto it = name_map_.find(name);
+  if (it == name_map_.end())
     return nullptr;
-  return DefinitionForId(it->value);
+  return it->value.Get();
 }
 
-CustomElementDefinition* CustomElementRegistry::DefinitionForId(
-    CustomElementDefinition::Id id) const {
-  return id ? definitions_[id - 1].Get() : nullptr;
+CustomElementDefinition* CustomElementRegistry::DefinitionForConstructor(
+    V8CustomElementConstructor* constructor) const {
+  const auto it = constructor_map_.find(constructor);
+  if (it == constructor_map_.end())
+    return nullptr;
+  return it->value.Get();
+}
+
+CustomElementDefinition* CustomElementRegistry::DefinitionForConstructor(
+    v8::Local<v8::Object> constructor) const {
+  const auto it =
+      constructor_map_.Find<V8CustomElementConstructorHashTranslator>(
+          constructor);
+  if (it == constructor_map_.end())
+    return nullptr;
+  return it->value.Get();
 }
 
 void CustomElementRegistry::AddCandidate(Element& candidate) {
@@ -317,8 +342,8 @@ ScriptPromise CustomElementRegistry::whenDefined(
   const auto it = when_defined_promise_map_.find(name);
   if (it != when_defined_promise_map_.end())
     return it->value->Promise();
-  auto* new_resolver =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* new_resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   when_defined_promise_map_.insert(name, new_resolver);
   return new_resolver->Promise();
 }
@@ -333,16 +358,23 @@ void CustomElementRegistry::CollectCandidates(
   for (Element* element : *it.Get()->value) {
     if (!element || !desc.Matches(*element))
       continue;
+    if (RuntimeEnabledFeatures::ScopedCustomElementRegistryEnabled()) {
+      if (CustomElement::Registry(*element) != this) {
+        // The element has been moved away from the original tree scope and no
+        // longer uses this registry.
+        continue;
+      }
+    }
     sorter.Add(element);
   }
 
   upgrade_candidates_->erase(it);
 
-  Document* document = owner_->document();
-  if (!document)
-    return;
-
-  sorter.Sorted(elements, document);
+  for (Document* document : *associated_documents_) {
+    if (document && document->GetFrame()) {
+      sorter.Sorted(elements, document);
+    }
+  }
 }
 
 // https://html.spec.whatwg.org/C/#dom-customelementregistry-upgrade
@@ -357,6 +389,14 @@ void CustomElementRegistry::upgrade(Node* root) {
   // 2. For each candidate of candidates, try to upgrade candidate.
   for (auto& candidate : candidates)
     CustomElement::TryToUpgrade(*candidate);
+}
+
+bool CustomElementRegistry::IsGlobalRegistry() const {
+  return this == owner_->customElements();
+}
+
+void CustomElementRegistry::AssociatedWith(Document& document) {
+  associated_documents_->insert(&document);
 }
 
 }  // namespace blink

@@ -6,9 +6,9 @@
 
 enum TimelinePhase { "inactive", "before", "active", "after" };
 [
-    RuntimeEnabled=WebAnimationsAPI,
     Exposed=Window
 ] interface AnimationTimeline {
     readonly attribute CSSNumberish? currentTime;
     [RuntimeEnabled=ScrollTimeline] readonly attribute CSSNumberish? duration;
+    [RuntimeEnabled=ScrollTimelineCurrentTime] CSSNumericValue? getCurrentTime(optional DOMString rangeName = "cover");
 };

@@ -21,11 +21,13 @@
 #include "content/public/common/content_client.h"
 #include "content/public/common/content_constants.h"
 #include "content/public/common/content_switches.h"
+#include "content/public/common/url_constants.h"
 #include "content/public/test/mock_render_process_host.h"
 #include "content/public/test/navigation_simulator.h"
 #include "content/public/test/scoped_web_ui_controller_factory_registration.h"
 #include "content/public/test/test_browser_context.h"
 #include "content/public/test/test_utils.h"
+#include "content/public/test/web_ui_browsertest_util.h"
 #include "content/test/storage_partition_test_helpers.h"
 #include "content/test/test_render_frame_host.h"
 #include "content/test/test_render_view_host.h"
@@ -174,7 +176,7 @@ TEST_F(RenderProcessHostUnitTest, ReuseCommittedSite) {
       blink::LocalFrameToken(), base::UnguessableToken::Create(),
       blink::DocumentToken(), blink::FramePolicy(),
       blink::mojom::FrameOwnerProperties(),
-      blink::FrameOwnerElementType::kIframe);
+      blink::FrameOwnerElementType::kIframe, ukm::kInvalidSourceId);
   TestRenderFrameHost* subframe =
       static_cast<TestRenderFrameHost*>(contents()
                                             ->GetPrimaryFrameTree()
@@ -435,6 +437,135 @@ TEST_F(RenderProcessHostUnitTest, DoNotReuseOtherSiteServiceWorkerProcess) {
             sw_site_instance2->GetLastProcessAssignmentOutcome());
 }
 
+class RenderProcessHostWebUIUnitTest : public RenderProcessHostUnitTest {
+ public:
+  void SetUp() override {
+    RenderProcessHostUnitTest::SetUp();
+    scoped_feature_list_.InitAndEnableFeature(
+        features::kEnableServiceWorkersForChromeScheme);
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+TEST_F(RenderProcessHostWebUIUnitTest,
+       DontReuseServiceWorkerProcessForDifferentWebUI) {
+  ScopedWebUIConfigRegistration config_registration1(
+      std::make_unique<TestWebUIConfig>("test-host"));
+  ScopedWebUIConfigRegistration config_registration2(
+      std::make_unique<TestWebUIConfig>("second-host"));
+
+  const GURL kWebUI1("chrome://test-host/");
+  const GURL kWebUI2("chrome://second-host/");
+
+  // Gets a RenderProcessHost for an unmatched service worker.
+  scoped_refptr<SiteInstanceImpl> sw_site_instance1 =
+      CreateForServiceWorker(kWebUI1);
+  RenderProcessHost* sw_host = sw_site_instance1->GetProcess();
+  EXPECT_EQ(SiteInstanceProcessAssignment::CREATED_NEW_PROCESS,
+            sw_site_instance1->GetLastProcessAssignmentOutcome());
+
+  // Getting RenderProcessHost for a service worker for a different WebUI
+  // should return a new process because there is no reusable process.
+  scoped_refptr<SiteInstanceImpl> sw_site_instance2 = CreateForUrl(kWebUI2);
+  EXPECT_NE(sw_host, sw_site_instance2->GetProcess());
+  EXPECT_EQ(SiteInstanceProcessAssignment::CREATED_NEW_PROCESS,
+            sw_site_instance2->GetLastProcessAssignmentOutcome());
+}
+
+TEST_F(RenderProcessHostWebUIUnitTest, DontReuseServiceWorkerProcessForWebUrl) {
+  ScopedWebUIConfigRegistration config_registration1(
+      std::make_unique<TestWebUIConfig>("test-host"));
+
+  const GURL kWebUI1("chrome://test-host/");
+
+  // Gets a RenderProcessHost for an unmatched service worker.
+  scoped_refptr<SiteInstanceImpl> sw_site_instance1 =
+      CreateForServiceWorker(kWebUI1);
+  RenderProcessHost* sw_host = sw_site_instance1->GetProcess();
+  EXPECT_EQ(SiteInstanceProcessAssignment::CREATED_NEW_PROCESS,
+            sw_site_instance1->GetLastProcessAssignmentOutcome());
+
+  const GURL kWebUrl("https://test.example/");
+
+  // Getting RenderProcessHost for a service worker for a regular site should
+  // return a new process because there is no reusable process.
+  scoped_refptr<SiteInstanceImpl> web_sw_site_instance =
+      CreateForServiceWorker(kWebUrl);
+  EXPECT_NE(sw_host, web_sw_site_instance->GetProcess());
+  EXPECT_EQ(SiteInstanceProcessAssignment::CREATED_NEW_PROCESS,
+            web_sw_site_instance->GetLastProcessAssignmentOutcome());
+
+  // Getting RenderProcessHost for a navigation to a regular site should
+  // re-use the Web Service Worker process and not the WebUI one.
+  scoped_refptr<SiteInstanceImpl> web_site_instance = CreateForUrl(kWebUrl);
+  EXPECT_NE(sw_host, web_site_instance->GetProcess());
+  EXPECT_EQ(SiteInstanceProcessAssignment::REUSED_EXISTING_PROCESS,
+            web_site_instance->GetLastProcessAssignmentOutcome());
+}
+
+// Tests that Service Worker processes for WebUIs are not re-used even
+// for the same WebUI. Ideally we would re-use the process if it's for
+// the same WebUI but we currently don't because of crbug.com/1158277.
+TEST_F(RenderProcessHostWebUIUnitTest,
+       DontReuseServiceWorkerProcessForSameWebUI) {
+  ScopedWebUIConfigRegistration config_registration(
+      std::make_unique<TestWebUIConfig>("test-host"));
+  const GURL kUrl("chrome://test-host");
+
+  // Gets a RenderProcessHost for a service worker.
+  scoped_refptr<SiteInstanceImpl> sw_site_instance1 =
+      CreateForServiceWorker(kUrl,
+                             /*can_reuse_process=*/true);
+  RenderProcessHost* sw_host1 = sw_site_instance1->GetProcess();
+  EXPECT_EQ(SiteInstanceProcessAssignment::CREATED_NEW_PROCESS,
+            sw_site_instance1->GetLastProcessAssignmentOutcome());
+
+  // Getting a RenderProcessHost for a service worker with DEFAULT reuse policy
+  // should not reuse the existing service worker's process. This is because
+  // we use DEFAULT reuse policy for a service worker when we have failed to
+  // start the service worker and want to use a new process. We create this
+  // second service worker to test the "find the newest process" logic later.
+  scoped_refptr<SiteInstanceImpl> sw_site_instance2 =
+      CreateForServiceWorker(kUrl);
+  RenderProcessHost* sw_host2 = sw_site_instance2->GetProcess();
+  EXPECT_NE(sw_host1, sw_host2);
+  EXPECT_EQ(SiteInstanceProcessAssignment::CREATED_NEW_PROCESS,
+            sw_site_instance2->GetLastProcessAssignmentOutcome());
+
+  // Getting a RenderProcessHost for a service worker of the same WebUI with
+  // the same WebUI and allow process reuse policy doesn't reuse any service
+  // worker processes.
+  scoped_refptr<SiteInstanceImpl> sw_site_instance3 =
+      CreateForServiceWorker(kUrl,
+                             /*can_reuse_process=*/true);
+  RenderProcessHost* sw_host3 = sw_site_instance3->GetProcess();
+  EXPECT_NE(sw_host1, sw_host3);
+  EXPECT_NE(sw_host2, sw_host3);
+  EXPECT_EQ(SiteInstanceProcessAssignment::CREATED_NEW_PROCESS,
+            sw_site_instance3->GetLastProcessAssignmentOutcome());
+
+  // Getting a RenderProcessHost for a navigation to the same WebUI doesn't
+  // reuse any service worker's processes.
+  scoped_refptr<SiteInstanceImpl> site_instance1 = CreateForUrl(kUrl);
+  EXPECT_NE(sw_host1, site_instance1->GetProcess());
+  EXPECT_NE(sw_host2, site_instance1->GetProcess());
+  EXPECT_NE(sw_host3, site_instance1->GetProcess());
+  EXPECT_EQ(SiteInstanceProcessAssignment::CREATED_NEW_PROCESS,
+            site_instance1->GetLastProcessAssignmentOutcome());
+
+  // Getting a RenderProcessHost for a navigation to a web URL doesn't reuse any
+  // service worker's processes.
+  const GURL kWebUrl("https://test.example");
+  scoped_refptr<SiteInstanceImpl> web_site_instance = CreateForUrl(kWebUrl);
+  EXPECT_NE(sw_host1, web_site_instance->GetProcess());
+  EXPECT_NE(sw_host2, web_site_instance->GetProcess());
+  EXPECT_NE(sw_host3, web_site_instance->GetProcess());
+  EXPECT_EQ(SiteInstanceProcessAssignment::CREATED_NEW_PROCESS,
+            web_site_instance->GetLastProcessAssignmentOutcome());
+}
+
 class RenderProcessHostUntrustedWebUIUnitTest
     : public RenderProcessHostUnitTest {
  public:
@@ -464,9 +595,6 @@ TEST_F(RenderProcessHostUntrustedWebUIUnitTest,
   RenderProcessHost* sw_host = sw_site_instance1->GetProcess();
   EXPECT_EQ(SiteInstanceProcessAssignment::CREATED_NEW_PROCESS,
             sw_site_instance1->GetLastProcessAssignmentOutcome());
-
-  // Discard the spare, so it cannot be considered by the GetProcess call below.
-  RenderProcessHostImpl::DiscardSpareRenderProcessHostForTesting();
 
   // Getting RenderProcessHost for a service worker for a different WebUI
   // should return a new process because there is no reusable process.
@@ -816,78 +944,6 @@ TEST_F(RenderProcessHostUnitTest,
   site_instance = SiteInstanceImpl::CreateReusableInstanceForTesting(
       browser_context(), kRedirectUrl2);
   EXPECT_EQ(speculative_process_host_id, site_instance->GetProcess()->GetID());
-}
-
-// Tests that RenderProcessHost reuse works correctly even if the site URL of a
-// URL changes.
-TEST_F(RenderProcessHostUnitTest, ReuseSiteURLChanges) {
-  const GURL kUrl("http://foo.com");
-  const GURL kModifiedSiteUrl("custom-scheme://custom");
-
-  // At first, trying to get a RenderProcessHost with the
-  // REUSE_PENDING_OR_COMMITTED_SITE policy should return a new process.
-  scoped_refptr<SiteInstanceImpl> site_instance =
-      SiteInstanceImpl::CreateReusableInstanceForTesting(browser_context(),
-                                                         kUrl);
-  EXPECT_NE(main_test_rfh()->GetProcess(), site_instance->GetProcess());
-
-  // Have the main frame navigate to the first url. Getting a RenderProcessHost
-  // with the REUSE_PENDING_OR_COMMITTED_SITE policy should now return the
-  // process of the main RFH.
-  NavigateAndCommit(kUrl);
-  site_instance = SiteInstanceImpl::CreateReusableInstanceForTesting(
-      browser_context(), kUrl);
-  EXPECT_EQ(main_test_rfh()->GetProcess(), site_instance->GetProcess());
-
-  // Install the custom ContentBrowserClient. Site URLs are now modified.
-  // Getting a RenderProcessHost with the REUSE_PENDING_OR_COMMITTED_SITE policy
-  // should no longer return the process of the main RFH, as the RFH is
-  // registered with the normal site URL.
-  EffectiveURLContentBrowserClient modified_client(
-      kUrl, kModifiedSiteUrl,
-      /* requires_dedicated_process */ false);
-  ContentBrowserClient* regular_client =
-      SetBrowserClientForTesting(&modified_client);
-  site_instance = SiteInstanceImpl::CreateReusableInstanceForTesting(
-      browser_context(), kUrl);
-  EXPECT_NE(main_test_rfh()->GetProcess(), site_instance->GetProcess());
-
-  // Reload. Getting a RenderProcessHost with the
-  // REUSE_PENDING_OR_COMMITTED_SITE policy should now return the process of the
-  // main RFH, as it is now registered with the modified site URL.
-  contents()->GetController().Reload(ReloadType::NORMAL, false);
-  TestRenderFrameHost* rfh = main_test_rfh();
-  // In --site-per-process, the reload will use the pending/speculative RFH
-  // instead of the current one.
-  if (contents()->GetSpeculativePrimaryMainFrame())
-    rfh = contents()->GetSpeculativePrimaryMainFrame();
-  rfh->PrepareForCommit();
-  rfh->SendNavigate(0, true, kUrl);
-  site_instance = SiteInstanceImpl::CreateReusableInstanceForTesting(
-      browser_context(), kUrl);
-  EXPECT_EQ(rfh->GetProcess(), site_instance->GetProcess());
-
-  // Remove the custom ContentBrowserClient. Site URLs are back to normal.
-  // Getting a RenderProcessHost with the REUSE_PENDING_OR_COMMITTED_SITE policy
-  // should no longer return the process of the main RFH, as it is registered
-  // with the modified site URL.
-  SetBrowserClientForTesting(regular_client);
-  site_instance = SiteInstanceImpl::CreateReusableInstanceForTesting(
-      browser_context(), kUrl);
-  EXPECT_NE(rfh->GetProcess(), site_instance->GetProcess());
-
-  // Reload. Getting a RenderProcessHost with the
-  // REUSE_PENDING_OR_COMMITTED_SITE policy should now return the process of the
-  // main RFH, as it is now registered with the regular site URL.
-  contents()->GetController().Reload(ReloadType::NORMAL, false);
-  rfh = contents()->GetSpeculativePrimaryMainFrame()
-            ? contents()->GetSpeculativePrimaryMainFrame()
-            : main_test_rfh();
-  rfh->PrepareForCommit();
-  rfh->SendNavigate(0, true, kUrl);
-  site_instance = SiteInstanceImpl::CreateReusableInstanceForTesting(
-      browser_context(), kUrl);
-  EXPECT_EQ(rfh->GetProcess(), site_instance->GetProcess());
 }
 
 // Tests that RenderProcessHost reuse works correctly even if the site URL of a

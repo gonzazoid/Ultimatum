@@ -37,7 +37,7 @@ if (is_win) {
       "//base",
       "//build:branding_buildflags",
       "//build/win:default_exe_manifest",
-      "//chrome/browser/enterprise/connectors/device_trust/key_management/core/network",
+      "//chrome/browser/enterprise/connectors/device_trust/key_management/core/network:win_key_network_delegate",
       "//chrome/browser/enterprise/connectors/device_trust/key_management/installer:elevated_rotation",
       "//chrome/browser/enterprise/connectors/device_trust/key_management/installer/management_service:rotate_util",
       "//chrome/chrome_elf:constants",
@@ -57,7 +57,7 @@ if (is_win) {
 
   static_library("lib") {
     sources = [
-      "${branding_path_component}_behaviors.cc",
+      "${branding_path_product}_behaviors.cc",
       "archive_patch_helper.cc",
       "archive_patch_helper.h",
       "brand_behaviors.h",
@@ -91,8 +91,6 @@ if (is_win) {
       "setup_util.h",
       "update_active_setup_version_work_item.cc",
       "update_active_setup_version_work_item.h",
-      "user_experiment.cc",
-      "user_experiment.h",
       "user_hive_visitor.cc",
       "user_hive_visitor.h",
     ]
@@ -112,7 +110,8 @@ if (is_win) {
       "//components/base32",
       "//components/crash/core/app",
       "//components/crash/core/common",
-      "//components/metrics",
+      "//components/metrics:client_info",
+      "//components/metrics:metrics_pref_names",
       "//components/version_info:channel",
       "//components/zucchini:zucchini_io",
       "//components/zucchini:zucchini_lib",
@@ -153,7 +152,6 @@ if (is_win) {
       "setup_util_unittest.h",
       "taskbar_util_unittest.cc",
       "update_active_setup_version_work_item_unittest.cc",
-      "user_experiment_unittest.cc",
       "user_hive_visitor_unittest.cc",
     ]
 

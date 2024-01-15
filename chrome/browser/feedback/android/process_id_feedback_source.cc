@@ -5,10 +5,10 @@
 #include "chrome/browser/feedback/android/process_id_feedback_source.h"
 
 #include "chrome/browser/feedback/android/jni_headers/ProcessIdFeedbackSource_jni.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 
 #include "base/android/jni_array.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "content/public/browser/browser_child_process_host_iterator.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/child_process_data.h"

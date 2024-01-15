@@ -6,12 +6,12 @@
 
 #include <stdint.h>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/notreached.h"
 #include "base/numerics/ranges.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "chromecast/media/audio/audio_io_thread.h"
 #include "chromecast/media/audio/audio_output_service/audio_output_service.pb.h"
@@ -89,7 +89,7 @@ void CastAudioRenderer::Initialize(::media::DemuxerStream* stream,
   DCHECK(!init_cb_);
   DCHECK(!application_media_info_manager_remote_);
 
-  main_task_runner_ = base::SequencedTaskRunnerHandle::Get();
+  main_task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
   init_cb_ = std::move(init_cb);
 
   demuxer_stream_ = stream;
@@ -200,7 +200,7 @@ void CastAudioRenderer::SetVolume(float volume) {
 }
 
 void CastAudioRenderer::SetLatencyHint(
-    absl::optional<base::TimeDelta> latency_hint) {
+    std::optional<base::TimeDelta> latency_hint) {
   NOTIMPLEMENTED();
 }
 
@@ -470,7 +470,7 @@ void CastAudioRenderer::OnNewBuffer(
   size_t io_buffer_size =
       audio_output_service::OutputSocket::kAudioMessageHeaderSize +
       filled_bytes;
-  auto io_buffer = base::MakeRefCounted<net::IOBuffer>(io_buffer_size);
+  auto io_buffer = base::MakeRefCounted<net::IOBufferWithSize>(io_buffer_size);
   if (buffer->end_of_stream()) {
     OnEndOfStream();
     return;

@@ -54,7 +54,7 @@ class ShellNativeAppWindow : public NativeAppWindow {
   void UpdateWindowIcon() override;
   void UpdateWindowTitle() override;
   void UpdateDraggableRegions(
-      const std::vector<DraggableRegion>& regions) override;
+      const std::vector<mojom::DraggableRegionPtr>& regions) override;
   SkRegion* GetDraggableRegion() override;
   void UpdateShape(std::unique_ptr<ShapeRects> rects) override;
   bool HandleKeyboardEvent(
@@ -71,7 +71,7 @@ class ShellNativeAppWindow : public NativeAppWindow {
   void SetActivateOnPointer(bool activate_on_pointer) override;
 
  private:
-  raw_ptr<AppWindow> app_window_;
+  raw_ptr<AppWindow, DanglingUntriaged> app_window_;
 };
 
 }  // namespace extensions

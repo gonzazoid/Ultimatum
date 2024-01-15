@@ -9,9 +9,10 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "media/base/cdm_context.h"
 #include "media/base/decryptor.h"
+#include "mojo/public/cpp/platform/platform_handle.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace media {
@@ -34,6 +35,13 @@ class ChromeOsCdmContext {
                               const std::vector<uint8_t>& config_data)>;
   using GetScreenResolutionsCB =
       base::OnceCallback<void(const std::vector<gfx::Size>& resolutions)>;
+
+  using AllocateSecureBufferCB =
+      base::OnceCallback<void(mojo::PlatformHandle secure_fd)>;
+
+  using ParseEncryptedSliceHeaderCB =
+      base::OnceCallback<void(bool success,
+                              const std::vector<uint8_t>& slice_hdr)>;
 
   // Gets the HW specific key information for the key specified in
   // |decrypt_config| and returns it via |callback|.
@@ -59,6 +67,21 @@ class ChromeOsCdmContext {
   // operating system. This is used to determine if certain processing has
   // already been done on the data such as transcryption.
   virtual bool IsRemoteCdm() const = 0;
+
+  // Used to allocate a secure buffer for the target of decryption on ARM Trust
+  // Zone implementations.
+  virtual void AllocateSecureBuffer(uint32_t size,
+                                    AllocateSecureBufferCB callback) = 0;
+
+  // Parses the H264 slice header contained in the secure buffer referenced by
+  // |secure_handle| at |offset| bytes into the data. The required SPS/PPS data
+  // is in |stream_data|. The invoked callback will contain the H264 slice
+  // header details.
+  virtual void ParseEncryptedSliceHeader(
+      uint64_t secure_handle,
+      uint32_t offset,
+      const std::vector<uint8_t>& stream_data,
+      ParseEncryptedSliceHeaderCB callback) = 0;
 
  protected:
   virtual ~ChromeOsCdmContext() = default;

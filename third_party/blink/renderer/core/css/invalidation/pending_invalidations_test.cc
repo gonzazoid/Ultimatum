@@ -9,6 +9,7 @@
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/core/testing/dummy_page_holder.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
@@ -23,6 +24,7 @@ class PendingInvalidationsTest : public testing::Test {
   }
 
  private:
+  test::TaskEnvironment task_environment_;
   std::unique_ptr<DummyPageHolder> dummy_page_holder_;
 };
 
@@ -39,8 +41,8 @@ TEST_F(PendingInvalidationsTest, ScheduleOnDocumentNode) {
 
   scoped_refptr<DescendantInvalidationSet> set =
       DescendantInvalidationSet::Create();
-  set->AddTagName("div");
-  set->AddTagName("span");
+  set->AddTagName(AtomicString("div"));
+  set->AddTagName(AtomicString("span"));
 
   InvalidationLists lists;
   lists.descendants.push_back(set);
@@ -77,7 +79,9 @@ TEST_F(PendingInvalidationsTest, DescendantInvalidationOnDisplayNone) {
   GetDocument().View()->UpdateAllLifecyclePhasesForTest();
 
   // We skip scheduling descendant invalidations on display:none elements.
-  GetDocument().getElementById("a")->setAttribute(html_names::kClassAttr, "a");
+  GetDocument()
+      .getElementById(AtomicString("a"))
+      ->setAttribute(html_names::kClassAttr, AtomicString("a"));
   EXPECT_FALSE(GetDocument().NeedsLayoutTreeUpdate());
 }
 

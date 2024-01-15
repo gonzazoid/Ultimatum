@@ -10,20 +10,26 @@
 #include <memory>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
 #include "ui/display/types/display_constants.h"
 #include "ui/gfx/color_space.h"
 #include "ui/gfx/geometry/point.h"
+#include "ui/gfx/hdr_static_metadata.h"
 #include "ui/ozone/platform/drm/common/scoped_drm_types.h"
 
 typedef struct _drmModeModeInfo drmModeModeInfo;
 
 namespace display {
 class DisplaySnapshot;
-struct GammaRampRGBEntry;
+class GammaCurve;
+struct ColorTemperatureAdjustment;
+struct ColorCalibration;
+struct GammaAdjustment;
 }  // namespace display
 
 namespace ui {
+
 class DrmDevice;
 class HardwareDisplayControllerInfo;
 
@@ -47,7 +53,7 @@ class DrmDisplay {
     drmModePropertyRes* GetWritePrivacyScreenProperty() const;
 
     const scoped_refptr<DrmDevice> drm_;
-    drmModeConnector* connector_ = nullptr;  // not owned.
+    raw_ptr<drmModeConnector> connector_ = nullptr;  // not owned.
 
     display::PrivacyScreenState property_last_ =
         display::kPrivacyScreenStateLast;
@@ -56,7 +62,11 @@ class DrmDisplay {
     ScopedDrmPropertyPtr privacy_screen_legacy_;
   };
 
-  explicit DrmDisplay(const scoped_refptr<DrmDevice>& drm);
+  // Note that some of |info|'s references ownership will be handed to this
+  // DrmDisplay instance.
+  explicit DrmDisplay(const scoped_refptr<DrmDevice>& drm,
+                      HardwareDisplayControllerInfo* info,
+                      const display::DisplaySnapshot& display_snapshot);
 
   DrmDisplay(const DrmDisplay&) = delete;
   DrmDisplay& operator=(const DrmDisplay&) = delete;
@@ -69,40 +79,45 @@ class DrmDisplay {
   uint32_t crtc() const { return crtc_; }
   uint32_t connector() const;
   const std::vector<drmModeModeInfo>& modes() const { return modes_; }
-
-  std::unique_ptr<display::DisplaySnapshot> Update(
-      HardwareDisplayControllerInfo* info,
-      uint8_t device_index);
+  const gfx::Point& origin() { return origin_; }
 
   void SetOrigin(const gfx::Point origin) { origin_ = origin; }
+  bool SetHdcpKeyProp(const std::string& key);
   bool GetHDCPState(display::HDCPState* state,
                     display::ContentProtectionMethod* protection_method);
   bool SetHDCPState(display::HDCPState state,
                     display::ContentProtectionMethod protection_method);
+  void SetColorTemperatureAdjustment(
+      const display::ColorTemperatureAdjustment& cta);
+  void SetColorCalibration(const display::ColorCalibration& calibration);
+  void SetGammaAdjustment(const display::GammaAdjustment& adjustment);
   void SetColorMatrix(const std::vector<float>& color_matrix);
   void SetBackgroundColor(const uint64_t background_color);
-  void SetGammaCorrection(
-      const std::vector<display::GammaRampRGBEntry>& degamma_lut,
-      const std::vector<display::GammaRampRGBEntry>& gamma_lut);
+  void SetGammaCorrection(const display::GammaCurve& degamma,
+                          const display::GammaCurve& gamma);
   bool SetPrivacyScreen(bool enabled);
+  bool SetHdrOutputMetadata(const gfx::ColorSpace color_space);
+  bool SetColorspaceProperty(const gfx::ColorSpace color_space);
   void SetColorSpace(const gfx::ColorSpace& color_space);
 
   void set_is_hdr_capable_for_testing(bool value) { is_hdr_capable_ = value; }
 
  private:
-  void CommitGammaCorrection(
-      const std::vector<display::GammaRampRGBEntry>& degamma_lut,
-      const std::vector<display::GammaRampRGBEntry>& gamma_lut);
+  void CommitGammaCorrection(const display::GammaCurve& degamma,
+                             const display::GammaCurve& gamma);
+  gfx::HDRStaticMetadata::Eotf GetEotf(
+      const gfx::ColorSpace::TransferID transfer_id);
 
-  int64_t display_id_ = -1;
-  int64_t base_connector_id_ = 0;
+  const int64_t display_id_;
+  const int64_t base_connector_id_;
   const scoped_refptr<DrmDevice> drm_;
-  uint32_t crtc_ = 0;
-  ScopedDrmConnectorPtr connector_;
+  const uint32_t crtc_;
+  const ScopedDrmConnectorPtr connector_;
   std::vector<drmModeModeInfo> modes_;
   gfx::Point origin_;
   bool is_hdr_capable_ = false;
   gfx::ColorSpace current_color_space_;
+  absl::optional<gfx::HDRStaticMetadata> hdr_static_metadata_;
   std::unique_ptr<PrivacyScreenProperty> privacy_screen_property_;
 };
 

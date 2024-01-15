@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,10 +15,8 @@
 #include "chrome/browser/policy/messaging_layer/proto/synced/lock_unlock_event.pb.h"
 
 namespace reporting {
-
 class UserEventReporterHelper;
-
-}  // namespace reporting
+}
 
 namespace ash {
 namespace reporting {
@@ -55,7 +53,7 @@ class LockUnlockReporter : public policy::ManagedSessionService::Observer {
       policy::ManagedSessionService* managed_session_service,
       base::Clock* clock = base::DefaultClock::GetInstance());
 
-  void MaybeReportEvent(ash::reporting::LockUnlockRecord record);
+  void MaybeReportEvent(LockUnlockRecord record);
 
   raw_ptr<base::Clock> const clock_;
 

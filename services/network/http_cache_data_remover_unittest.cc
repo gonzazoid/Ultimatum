@@ -6,14 +6,14 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/cache_type.h"
@@ -30,6 +30,7 @@
 #include "net/url_request/url_request_context_builder.h"
 #include "services/network/network_context.h"
 #include "services/network/network_service.h"
+#include "services/network/public/mojom/clear_data_filter.mojom.h"
 #include "services/network/test/fake_test_cert_verifier_params_factory.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -123,8 +124,9 @@ class HttpCacheDataRemoverTest : public testing::Test {
     request_info.method = "GET";
     request_info.network_isolation_key =
         net::NetworkIsolationKey(kOrigin, kOrigin);
-    request_info.network_anonymization_key = net::NetworkAnonymizationKey(
-        net::SchemefulSite(kOrigin), net::SchemefulSite(kOrigin));
+    request_info.network_anonymization_key =
+        net::NetworkAnonymizationKey::CreateSameSite(
+            net::SchemefulSite(kOrigin));
     return *cache_->GenerateCacheKeyForRequest(&request_info);
   }
 
@@ -156,6 +158,7 @@ class HttpCacheDataRemoverTest : public testing::Test {
 
  protected:
   void InitNetworkContext() {
+    cache_ = nullptr;
     mojom::NetworkContextParamsPtr context_params = CreateContextParams();
     context_params->http_cache_enabled = true;
     network_context_remote_.reset();
@@ -172,7 +175,9 @@ class HttpCacheDataRemoverTest : public testing::Test {
   // Stores the mojo::Remote<NetworkContext> of the most recently created
   // NetworkContext.
   mojo::Remote<mojom::NetworkContext> network_context_remote_;
-  disk_cache::Backend* backend_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION disk_cache::Backend* backend_ = nullptr;
 
  private:
   raw_ptr<net::HttpCache> cache_;

@@ -1,38 +1,31 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.messages;
 
-import org.chromium.base.FeatureList;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
-import org.chromium.build.annotations.MainDex;
-
 /**
- * Provides an API for querying the status of Message features.
+ * Lists base::Features that can be accessed through {@link MessageFeatureMap}.
+ *
+ * Should be kept in sync with |kFeaturesExposedToJava| in
+ * //components/messages/android/messages_feature.cc
  */
-@JNINamespace("messages")
-@MainDex
-public class MessageFeatureList {
+public abstract class MessageFeatureList {
     public static final String MESSAGES_FOR_ANDROID_STACKING_ANIMATION =
             "MessagesForAndroidStackingAnimation";
-
-    private MessageFeatureList() {}
-
-    public static boolean isEnabled(String featureName) {
-        Boolean testValue = FeatureList.getTestValueForFeature(featureName);
-        if (testValue != null) return testValue;
-        assert FeatureList.isNativeInitialized();
-        return MessageFeatureListJni.get().isEnabled(featureName);
-    }
+    public static final String MESSAGES_FOR_ANDROID_FULLY_VISIBLE_CALLBACK =
+            "MessagesForAndroidFullyVisibleCallback";
+    public static final String MESSAGES_ANDROID_EXTRA_HISTOGRAMS = "MessagesAndroidExtraHistograms";
 
     public static boolean isStackAnimationEnabled() {
-        return isEnabled(MESSAGES_FOR_ANDROID_STACKING_ANIMATION);
+        return MessageFeatureMap.isEnabled(MESSAGES_FOR_ANDROID_STACKING_ANIMATION);
     }
 
-    @NativeMethods
-    interface Natives {
-        boolean isEnabled(String featureName);
+    public static boolean isFullyVisibleCallbackEnabled() {
+        return MessageFeatureMap.isEnabled(MESSAGES_FOR_ANDROID_FULLY_VISIBLE_CALLBACK);
+    }
+
+    public static boolean areExtraHistogramsEnabled() {
+        return MessageFeatureMap.isEnabled(MESSAGES_ANDROID_EXTRA_HISTOGRAMS);
     }
 }

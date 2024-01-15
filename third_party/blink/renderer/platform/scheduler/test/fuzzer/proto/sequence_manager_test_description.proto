@@ -7,18 +7,22 @@ package base.sequence_manager;
 message SequenceManagerTestDescription {
   // NEXT ID = 2
 
-  // This should be consistent with TaskQueue::QueuePriority.
+  // This should be consistent with blink::scheduler::TaskPriority.
   enum QueuePriority {
-    // NEXT ID = 7
+    // NEXT ID = 12
 
     UNDEFINED = 0;
     BEST_EFFORT = 1;
     LOW = 2;
-    NORMAL = 3;
-    HIGH = 4;
-    VERY_HIGH = 5;
-    HIGHEST = 6;
-    CONTROL = 7;
+    LOW_CONTINUATION = 3;
+    NORMAL = 4;
+    NORMAL_CONTINUATION = 5;
+    HIGH = 6;
+    HIGH_CONTINUATION = 7;
+    VERY_HIGH = 8;
+    EXTREMELY_HIGH = 9;
+    HIGHEST = 10;
+    CONTROL = 11;
   }
 
   message Action {

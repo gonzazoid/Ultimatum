@@ -5,10 +5,16 @@
 #ifndef ASH_SYSTEM_PHONEHUB_PHONE_HUB_METRICS_H_
 #define ASH_SYSTEM_PHONEHUB_PHONE_HUB_METRICS_H_
 
-namespace ash {
-namespace phone_hub_metrics {
+#include "base/time/time.h"
+#include "chromeos/ash/components/phonehub/recent_apps_interaction_handler.h"
 
-// Keep in sync with corresponding enum in tools/metrics/histograms/enums.xml.
+namespace ash::phone_hub_metrics {
+
+using RecentAppsUiState =
+    phonehub::RecentAppsInteractionHandler::RecentAppsUiState;
+
+// Keep in sync with corresponding PhoneHubInterstitialScreenEvent enum in
+// //tools/metrics/histograms/metadata/phonehub/enums.xml.
 enum class InterstitialScreenEvent {
   kShown = 0,
   kLearnMore = 1,
@@ -17,9 +23,10 @@ enum class InterstitialScreenEvent {
   kMaxValue = kConfirm
 };
 
-// Keep in sync with corresponding enum in tools/metrics/histograms/enums.xml.
-// These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused.
+// Keep in sync with corresponding PhoneHubScreen enum in
+// //tools/metrics/histograms/metadata/phonehub/enums.xml. These values are
+// persisted to logs. Entries should not be renumbered and numeric values should
+// never be reused.
 // Note that value 2 and 3 have been deprecated and should not be reused.
 enum class Screen {
   kBluetoothOrWifiDisabled = 0,
@@ -31,10 +38,12 @@ enum class Screen {
   kInvalid = 8,
   kPhoneConnecting = 9,
   kTetherConnectionPending = 10,
-  kMaxValue = kTetherConnectionPending
+  kMiniLauncher = 11,
+  kMaxValue = kMiniLauncher
 };
 
-// Keep in sync with corresponding enum in tools/metrics/histograms/enums.xml.
+// Keep in sync with corresponding PhoneHubQuickAction enum in
+// //tools/metrics/histograms/metadata/phonehub/enums.xml.
 enum class QuickAction {
   kToggleHotspotOn = 0,
   kToggleHotspotOff,
@@ -46,16 +55,18 @@ enum class QuickAction {
 };
 
 // Enumeration of possible interactions with a PhoneHub notification. Keep in
-// sync with corresponding enum in tools/metrics/histograms/enums.xml. These
-// values are persisted to logs. Entries should not be renumbered and numeric
-// values should never be reused.
+// sync with corresponding PhoneHubNotificationInteraction enum in
+// //tools/metrics/histograms/metadata/phonehub/enums.xml. Values are persisted
+// to logs. Entries should not be renumbered and numeric values should never be
+// reused.
 enum class NotificationInteraction {
   kInlineReply = 0,
   kDismiss = 1,
   kMaxValue = kDismiss,
 };
 
-// Keep in sync with corresponding enum in tools/metrics/histograms/enums.xml.
+// Keep in sync with corresponding PhoneHubCameraRollContentShown enum in
+// //tools/metrics/histograms/metadata/phonehub/enums.xml.
 enum class CameraRollContentShown {
   kContentShown1 = 1,
   kContentShown2 = 2,
@@ -65,7 +76,8 @@ enum class CameraRollContentShown {
   kMaxValue = kContentShownGTE5
 };
 
-// Keep in sync with corresponding enum in tools/metrics/histograms/enums.xml.
+// Keep in sync with corresponding PhoneHubCameraRollContentClicked enum in
+// //tools/metrics/histograms/metadata/phonehub/enums.xml.
 enum class CameraRollContentClicked {
   kContentClicked1 = 11,
   kContentClicked2 = 21,
@@ -75,7 +87,8 @@ enum class CameraRollContentClicked {
   kMaxValue = kContentClickedGTE5
 };
 
-// Keep in sync with corresponding enum in tools/metrics/histograms/enums.xml.
+// Keep in sync with corresponding PhoneHubCameraRollContextMenuDownload enum in
+// //tools/metrics/histograms/metadata/phonehub/enums.xml.
 enum class CameraRollContextMenuDownload {
   kDownload1 = 111,
   kDownload2 = 211,
@@ -83,6 +96,31 @@ enum class CameraRollContextMenuDownload {
   kDownload4 = 411,
   kDownloadGTE5 = 511,
   kMaxValue = kDownloadGTE5
+};
+
+// Keep in sync with corresponding MoreAppsButtonLoadingState enum in
+// //tools/metrics/histograms/metadata/phonehub/enums.xml.
+enum class MoreAppsButtonLoadingState {
+  kAnimationShown = 0,
+  kMoreAppsButtonLoaded = 1,
+  kMaxValue = kMoreAppsButtonLoaded
+};
+
+// Keep in sync with corresponding RecentAppsViewUiState enum in
+// //tools/metrics/histograms/metadata/phonehub/enums.xml.
+enum class RecentAppsViewUiState {
+  kLoading = 0,
+  kError = 1,
+  kApps = 2,
+  kMaxValue = kApps,
+};
+
+// Keep in sync with MultideviceSetupNudgeInteraction enum in
+// //tools/metrics/histograms/enums.xml.
+enum class MultideviceSetupNudgeInteraction {
+  kNudgeClicked = 0,
+  kPhoneHubIconClicked = 1,
+  kMaxValue = kPhoneHubIconClicked,
 };
 
 enum class CameraRollMediaType { kPhoto = 0, kVideo = 1, kMaxValue = kVideo };
@@ -126,7 +164,29 @@ void LogCameraRollContextMenuDownload(int index, CameraRollMediaType mediaType);
 // Logs the display of any Camera Roll item. Emits once per opening of bubble.
 void LogCameraRollContentPresent();
 
-}  // namespace phone_hub_metrics
-}  // namespace ash
+// Logs if the glimmer animation was shown or not (more apps button was shown
+// instead) when Phone Hub is opened.
+void LogMoreAppsButtonAnimationOnShow(MoreAppsButtonLoadingState loading_state);
+
+// Logs the time latency from initializing the More Apps button and when we
+// receive/load the full apps list.
+void LogMoreAppsButtonFullAppsLatency(const base::TimeDelta latency);
+
+// Logs the recent apps UI state when the Phone Hub bubble is opened.
+void LogRecentAppsStateOnBubbleOpened(RecentAppsUiState ui_state);
+
+// Logs the latency between showing the loading animation in the Recent Apps
+// view to the connection failed error button.
+void LogRecentAppsTransitionToFailedLatency(const base::TimeDelta latency);
+
+// Logs the latency between showing the loading animation in the Recent Apps
+// view to showing the recent apps icons and more apps button.
+void LogRecentAppsTransitionToSuccessLatency(const base::TimeDelta latency);
+
+// Logs the interaction with Multidedevice setup notification when it is
+// visible.
+void LogMultiDeviceSetupNotificationInteraction();
+
+}  // namespace ash::phone_hub_metrics
 
 #endif  // ASH_SYSTEM_PHONEHUB_PHONE_HUB_METRICS_H_

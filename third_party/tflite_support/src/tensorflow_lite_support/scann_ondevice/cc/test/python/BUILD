@@ -5,7 +5,11 @@ package(licenses = ["notice"])
 pybind_extension(
     name = "leveldb_testing_utils",
     srcs = ["leveldb_testing_utils_py_wrapper.cc"],
+    enable_stub_generation = True,
     module_name = "leveldb_testing_utils",
+    pytype_srcs = [
+        "leveldb_testing_utils.pyi",
+    ],
     visibility = [
         "//nlp/sage/learning/asqp:__subpackages__",
         "//tensorflow_lite_support:internal",

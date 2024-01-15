@@ -7,7 +7,6 @@
 #include <memory>
 #include <string>
 
-#include "ash/constants/ash_features.h"
 #include "ash/constants/quick_settings_catalogs.h"
 #include "ash/session/test_session_controller_client.h"
 #include "ash/shell.h"
@@ -15,20 +14,21 @@
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/network/active_network_icon.h"
 #include "ash/system/network/network_icon.h"
+#include "ash/system/unified/feature_tile.h"
 #include "ash/system/unified/unified_system_tray.h"
 #include "ash/system/unified/unified_system_tray_bubble.h"
 #include "ash/system/unified/unified_system_tray_controller.h"
 #include "ash/system/unified/unified_system_tray_model.h"
-#include "ash/system/unified/unified_system_tray_view.h"
 #include "ash/test/ash_test_base.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
 #include "chromeos/ash/components/network/network_handler_callbacks.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_state_test_helper.h"
 #include "chromeos/ash/components/network/network_type_pattern.h"
-#include "chromeos/services/network_config/public/cpp/cros_network_config_test_helper.h"
+#include "chromeos/ash/components/network/technology_state_controller.h"
+#include "chromeos/ash/services/network_config/public/cpp/cros_network_config_test_helper.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/gfx/image/image.h"
@@ -38,6 +38,7 @@
 #include "ui/views/controls/button/image_button.h"
 
 namespace ash {
+
 namespace {
 
 const char* kStubCellularDevice = "/device/stub_cellular_device";
@@ -91,13 +92,9 @@ class NetworkFeaturePodControllerTest : public AshTestBase {
   void SetUp() override {
     AshTestBase::SetUp();
 
-    feature_list_.InitAndEnableFeature(features::kQuickSettingsNetworkRevamp);
-
+    // Create the feature tile.
     GetPrimaryUnifiedSystemTray()->ShowBubble();
-
-    network_feature_pod_controller_ =
-        std::make_unique<NetworkFeaturePodController>(tray_controller());
-    feature_pod_button_.reset(network_feature_pod_controller_->CreateButton());
+    CreateFeatureTile();
 
     // Add the non-default cellular and ethernet devices to Shill.
     network_state_helper()->manager_test()->AddTechnology(shill::kTypeCellular,
@@ -115,12 +112,18 @@ class NetworkFeaturePodControllerTest : public AshTestBase {
 
   void TearDown() override {
     network_feature_pod_controller_.reset();
-    feature_pod_button_.reset();
 
     AshTestBase::TearDown();
   }
 
  protected:
+  void CreateFeatureTile() {
+    network_feature_pod_controller_ =
+        std::make_unique<NetworkFeaturePodController>(tray_controller());
+    feature_tile_ = quick_settings_view()->AddChildView(
+        network_feature_pod_controller_->CreateTile());
+  }
+
   // Disabling a network technology does not remove corresponding networks from
   // the testing fakes. This function is used to clear the existing networks.
   void ClearNetworks() {
@@ -131,6 +134,24 @@ class NetworkFeaturePodControllerTest : public AshTestBase {
 
   void LockScreen() {
     GetSessionControllerClient()->LockScreen();
+
+    // Changing the lock state closes the system tray bubble which destroys all
+    // feature tiles, so open the bubble and recreate the feature tile.
+    GetPrimaryUnifiedSystemTray()->ShowBubble();
+    CreateFeatureTile();
+
+    // Perform an action to cause the button to be updated since we do not
+    // actually observe session state changes.
+    PressLabel();
+  }
+
+  void UnlockScreen() {
+    GetSessionControllerClient()->UnlockScreen();
+
+    // Changing the lock state closes the system tray bubble which destroys all
+    // feature tiles, so open the bubble and recreate the feature tile.
+    GetPrimaryUnifiedSystemTray()->ShowBubble();
+    CreateFeatureTile();
 
     // Perform an action to cause the button to be updated since we do not
     // actually observe session state changes.
@@ -209,11 +230,17 @@ class NetworkFeaturePodControllerTest : public AshTestBase {
     base::RunLoop().RunUntilIdle();
   }
 
+  bool IsDetailedViewEmpty() {
+    auto* container = quick_settings_view()->detailed_view_container();
+    return container->children().empty();
+  }
+
   void CheckNetworkDetailedViewFocused() {
-    EXPECT_TRUE(tray_view()->detailed_view());
-    const views::View::Views& children =
-        tray_view()->detailed_view()->children();
-    EXPECT_EQ(1u, children.size());
+    views::View::Views children;
+    EXPECT_TRUE(quick_settings_view()->detailed_view_container());
+    children = quick_settings_view()->detailed_view_container()->children();
+
+    ASSERT_EQ(1u, children.size());
     EXPECT_STREQ("NetworkDetailedNetworkViewImpl",
                  children.at(0)->GetClassName());
   }
@@ -225,25 +252,51 @@ class NetworkFeaturePodControllerTest : public AshTestBase {
     set_signal_strength.Run(signal_strength);
     EXPECT_EQ(
         l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_NETWORK_STATUS_CONNECTED),
-        feature_pod_label_button()->GetSubLabelText());
+        GetSubLabelText());
 
     signal_strength = ComputeNextSignalStrength(signal_strength);
     set_signal_strength.Run(signal_strength);
     EXPECT_EQ(l10n_util::GetStringUTF16(
                   IDS_ASH_STATUS_TRAY_NETWORK_SIGNAL_WEAK_SUBLABEL),
-              feature_pod_label_button()->GetSubLabelText());
+              GetSubLabelText());
 
     signal_strength = ComputeNextSignalStrength(signal_strength);
     set_signal_strength.Run(signal_strength);
     EXPECT_EQ(l10n_util::GetStringUTF16(
                   IDS_ASH_STATUS_TRAY_NETWORK_SIGNAL_MEDIUM_SUBLABEL),
-              feature_pod_label_button()->GetSubLabelText());
+              GetSubLabelText());
 
     signal_strength = ComputeNextSignalStrength(signal_strength);
     set_signal_strength.Run(signal_strength);
     EXPECT_EQ(l10n_util::GetStringUTF16(
                   IDS_ASH_STATUS_TRAY_NETWORK_SIGNAL_STRONG_SUBLABEL),
-              feature_pod_label_button()->GetSubLabelText());
+              GetSubLabelText());
+  }
+
+  bool IsButtonVisible() { return feature_tile_->GetVisible(); }
+
+  bool IsButtonEnabled() { return feature_tile_->GetEnabled(); }
+
+  bool IsDiveInButtonEnabled() { return feature_tile_->GetEnabled(); }
+
+  void SetButtonEnabled(bool enabled) { feature_tile_->SetEnabled(enabled); }
+
+  bool IsButtonToggled() { return feature_tile_->IsToggled(); }
+
+  const std::u16string GetLabelText() {
+    return feature_tile_->label()->GetText();
+  }
+
+  const std::u16string GetSubLabelText() {
+    return feature_tile_->sub_label()->GetText();
+  }
+
+  const std::u16string GetIconTooltipText() {
+    return feature_tile_->icon_button()->GetTooltipText();
+  }
+
+  const std::u16string GetLabelTooltipText() {
+    return feature_tile_->GetTooltipText();
   }
 
   NetworkStateTestHelper* network_state_helper() {
@@ -254,15 +307,11 @@ class NetworkFeaturePodControllerTest : public AshTestBase {
     return network_state_helper()->network_state_handler();
   }
 
-  FeaturePodButton* feature_pod_button() { return feature_pod_button_.get(); }
-
-  FeaturePodIconButton* feature_pod_icon_button() {
-    return feature_pod_button_->icon_button_;
+  TechnologyStateController* technology_state_controller() {
+    return network_state_helper()->technology_state_controller();
   }
 
-  FeaturePodLabelButton* feature_pod_label_button() {
-    return feature_pod_button_->label_button_;
-  }
+  FeatureTile* feature_tile() { return feature_tile_; }
 
   UnifiedSystemTrayController* tray_controller() {
     return GetPrimaryUnifiedSystemTray()
@@ -270,8 +319,8 @@ class NetworkFeaturePodControllerTest : public AshTestBase {
         ->unified_system_tray_controller();
   }
 
-  UnifiedSystemTrayView* tray_view() {
-    return GetPrimaryUnifiedSystemTray()->bubble()->unified_view();
+  QuickSettingsView* quick_settings_view() {
+    return GetPrimaryUnifiedSystemTray()->bubble()->quick_settings_view();
   }
 
   const std::string& cellular_path() const { return cellular_path_; }
@@ -284,44 +333,19 @@ class NetworkFeaturePodControllerTest : public AshTestBase {
     return network_state_helper()->ConfigureService(shill_json_string);
   }
 
-  chromeos::network_config::CrosNetworkConfigTestHelper network_config_helper_;
-  base::test::ScopedFeatureList feature_list_;
+  network_config::CrosNetworkConfigTestHelper network_config_helper_;
   std::string cellular_path_;
   std::string ethernet_path_;
   std::string wifi_path_;
   std::string tether_path_;
   std::string tether_wifi_path_;
-  std::unique_ptr<FeaturePodButton> feature_pod_button_;
+  raw_ptr<FeatureTile, DanglingUntriaged> feature_tile_;
   std::unique_ptr<NetworkFeaturePodController> network_feature_pod_controller_;
 };
 
 TEST_F(NetworkFeaturePodControllerTest, PressingLabelShowsNetworkDetailedView) {
-  ASSERT_TRUE(tray_view()->detailed_view()->children().empty());
+  ASSERT_TRUE(IsDetailedViewEmpty());
   PressLabel();
-  CheckNetworkDetailedViewFocused();
-}
-
-// This test validates that pressing the icon will show the detailed Network
-// view when the Quick Settings is collapsed and the technology of the active
-// network cannot be toggled, e.g. ethernet.
-TEST_F(NetworkFeaturePodControllerTest,
-       PressingIconConditionallyShowsDetailedView) {
-  EXPECT_TRUE(tray_view()->detailed_view()->children().empty());
-
-  tray_controller()->CollapseWithoutAnimating();
-  base::RunLoop().RunUntilIdle();
-
-  // Disable WiFi.
-  PressIcon();
-  EXPECT_TRUE(tray_view()->detailed_view()->children().empty());
-
-  // Disable Cellular.
-  PressIcon();
-  EXPECT_TRUE(tray_view()->detailed_view()->children().empty());
-
-  SetupEthernet();
-
-  PressIcon();
   CheckNetworkDetailedViewFocused();
 }
 
@@ -332,7 +356,7 @@ TEST_F(NetworkFeaturePodControllerTest,
 
   // We do not navigate to the detailed view when a network technology becomes
   // disabled.
-  EXPECT_TRUE(tray_view()->detailed_view()->children().empty());
+  EXPECT_TRUE(IsDetailedViewEmpty());
 
   PressIcon();
   CheckNetworkDetailedViewFocused();
@@ -340,42 +364,44 @@ TEST_F(NetworkFeaturePodControllerTest,
 
 TEST_F(NetworkFeaturePodControllerTest,
        HasCorrectButtonStateWhenNetworkStateChanges) {
-  EXPECT_TRUE(feature_pod_button()->GetEnabled());
-  EXPECT_TRUE(feature_pod_button()->GetVisible());
+  EXPECT_TRUE(IsButtonEnabled());
+  EXPECT_TRUE(IsButtonVisible());
 
   // When WiFi is available the button will always be toggled, even when there
   // are no connected networks.
-  EXPECT_TRUE(feature_pod_button()->IsToggled());
+  EXPECT_TRUE(IsButtonToggled());
 
   SetupWiFi();
-  EXPECT_TRUE(feature_pod_button()->IsToggled());
+  EXPECT_TRUE(IsButtonToggled());
   ClearNetworks();
 
   SetupTether();
-  EXPECT_TRUE(feature_pod_button()->IsToggled());
+  EXPECT_TRUE(IsButtonToggled());
   ClearNetworks();
 
-  network_state_handler()->SetTechnologyEnabled(
+  technology_state_controller()->SetTechnologiesEnabled(
       NetworkTypePattern::WiFi(), /*enabled=*/false,
       network_handler::ErrorCallback());
   base::RunLoop().RunUntilIdle();
 
   // Any connected network should cause the button to be toggled.
-  EXPECT_FALSE(feature_pod_button()->IsToggled());
+  EXPECT_FALSE(IsButtonToggled());
   SetupCellular();
-  EXPECT_TRUE(feature_pod_button()->IsToggled());
+  EXPECT_TRUE(IsButtonToggled());
   ClearNetworks();
 
-  EXPECT_FALSE(feature_pod_button()->IsToggled());
+  EXPECT_FALSE(IsButtonToggled());
   SetupEthernet();
-  EXPECT_TRUE(feature_pod_button()->IsToggled());
+  EXPECT_TRUE(IsButtonToggled());
   ClearNetworks();
 }
 
 TEST_F(NetworkFeaturePodControllerTest, CannotBeModifiedWhenScreenIsLocked) {
-  EXPECT_TRUE(feature_pod_button()->GetEnabled());
+  EXPECT_TRUE(IsButtonEnabled());
+  EXPECT_TRUE(IsDiveInButtonEnabled());
   LockScreen();
-  EXPECT_FALSE(feature_pod_button()->GetEnabled());
+  EXPECT_FALSE(IsButtonEnabled());
+  EXPECT_FALSE(IsDiveInButtonEnabled());
 }
 
 TEST_F(NetworkFeaturePodControllerTest,
@@ -464,34 +490,31 @@ TEST_F(NetworkFeaturePodControllerTest,
 TEST_F(NetworkFeaturePodControllerTest, HasCorrectLabel) {
   EXPECT_EQ(
       l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_NETWORK_DISCONNECTED_LABEL),
-      feature_pod_label_button()->GetLabelText());
+      GetLabelText());
 
   // For Ethernet we use a generic label.
   SetupEthernet();
   EXPECT_EQ(l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_ETHERNET),
-            feature_pod_label_button()->GetLabelText());
+            GetLabelText());
   ClearNetworks();
 
   // For all other networks we use the name.
   SetupCellular();
-  EXPECT_EQ(base::ASCIIToUTF16(kNetworkGuidCellular),
-            feature_pod_label_button()->GetLabelText());
+  EXPECT_EQ(base::ASCIIToUTF16(kNetworkGuidCellular), GetLabelText());
   ClearNetworks();
 
   SetupTether();
-  EXPECT_EQ(base::ASCIIToUTF16(kNetworkGuidTether),
-            feature_pod_label_button()->GetLabelText());
+  EXPECT_EQ(base::ASCIIToUTF16(kNetworkGuidTether), GetLabelText());
   ClearNetworks();
 
   SetupWiFi();
-  EXPECT_EQ(base::ASCIIToUTF16(kNetworkGuidWifi),
-            feature_pod_label_button()->GetLabelText());
+  EXPECT_EQ(base::ASCIIToUTF16(kNetworkGuidWifi), GetLabelText());
 }
 
 TEST_F(NetworkFeaturePodControllerTest, HasCorrectSubLabel_Cellular) {
   EXPECT_EQ(l10n_util::GetStringUTF16(
                 IDS_ASH_STATUS_TRAY_NETWORK_DISCONNECTED_SUBLABEL),
-            feature_pod_label_button()->GetSubLabelText());
+            GetSubLabelText());
 
   SetupCellular();
 
@@ -500,14 +523,14 @@ TEST_F(NetworkFeaturePodControllerTest, HasCorrectSubLabel_Cellular) {
                      base::Value(shill::kStateIdle));
   EXPECT_EQ(l10n_util::GetStringUTF16(
                 IDS_ASH_STATUS_TRAY_NETWORK_DISCONNECTED_SUBLABEL),
-            feature_pod_label_button()->GetSubLabelText());
+            GetSubLabelText());
 
   // Mark the network as currently connecting.
   SetServiceProperty(cellular_path(), shill::kStateProperty,
                      base::Value(shill::kStateAssociation));
   EXPECT_EQ(l10n_util::GetStringUTF16(
                 IDS_ASH_STATUS_TRAY_NETWORK_CONNECTING_SUBLABEL),
-            feature_pod_label_button()->GetSubLabelText());
+            GetSubLabelText());
 
   // Cellular networks in the process of activating have a specific sub-label,
   // even if the network is in the connecting state.
@@ -515,7 +538,7 @@ TEST_F(NetworkFeaturePodControllerTest, HasCorrectSubLabel_Cellular) {
                      base::Value(shill::kActivationStateActivating));
   EXPECT_EQ(l10n_util::GetStringUTF16(
                 IDS_ASH_STATUS_TRAY_NETWORK_ACTIVATING_SUBLABEL),
-            feature_pod_label_button()->GetSubLabelText());
+            GetSubLabelText());
 
   // Cellular networks that are activated and online have a specific sub-label
   // depending on the network technology (e.g. LTE).
@@ -550,15 +573,14 @@ TEST_F(NetworkFeaturePodControllerTest, HasCorrectSubLabel_Cellular) {
   for (const auto& it : network_technology_to_text_id) {
     SetServiceProperty(cellular_path(), shill::kNetworkTechnologyProperty,
                        base::Value(it.first));
-    EXPECT_EQ(l10n_util::GetStringUTF16(it.second),
-              feature_pod_label_button()->GetSubLabelText());
+    EXPECT_EQ(l10n_util::GetStringUTF16(it.second), GetSubLabelText());
   }
 }
 
 TEST_F(NetworkFeaturePodControllerTest, HasCorrectSubLabel_Ethernet) {
   EXPECT_EQ(l10n_util::GetStringUTF16(
                 IDS_ASH_STATUS_TRAY_NETWORK_DISCONNECTED_SUBLABEL),
-            feature_pod_label_button()->GetSubLabelText());
+            GetSubLabelText());
 
   SetupEthernet();
 
@@ -567,7 +589,7 @@ TEST_F(NetworkFeaturePodControllerTest, HasCorrectSubLabel_Ethernet) {
                      base::Value(shill::kStateIdle));
   EXPECT_EQ(l10n_util::GetStringUTF16(
                 IDS_ASH_STATUS_TRAY_NETWORK_DISCONNECTED_SUBLABEL),
-            feature_pod_label_button()->GetSubLabelText());
+            GetSubLabelText());
 
   // Ethernet is not eligible to be the default network until it is connected.
   // Mark the network as currently connecting and ensure this is true.
@@ -578,19 +600,19 @@ TEST_F(NetworkFeaturePodControllerTest, HasCorrectSubLabel_Ethernet) {
 
   EXPECT_EQ(l10n_util::GetStringUTF16(
                 IDS_ASH_STATUS_TRAY_NETWORK_DISCONNECTED_SUBLABEL),
-            feature_pod_label_button()->GetSubLabelText());
+            GetSubLabelText());
 
   SetServiceProperty(ethernet_path(), shill::kStateProperty,
                      base::Value(shill::kStateOnline));
   EXPECT_EQ(
       l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_NETWORK_STATUS_CONNECTED),
-      feature_pod_label_button()->GetSubLabelText());
+      GetSubLabelText());
 }
 
 TEST_F(NetworkFeaturePodControllerTest, HasCorrectSubLabel_Tether) {
   EXPECT_EQ(l10n_util::GetStringUTF16(
                 IDS_ASH_STATUS_TRAY_NETWORK_DISCONNECTED_SUBLABEL),
-            feature_pod_label_button()->GetSubLabelText());
+            GetSubLabelText());
 
   SetupTether();
 
@@ -601,7 +623,7 @@ TEST_F(NetworkFeaturePodControllerTest, HasCorrectSubLabel_Tether) {
 
   EXPECT_EQ(l10n_util::GetStringUTF16(
                 IDS_ASH_STATUS_TRAY_NETWORK_DISCONNECTED_SUBLABEL),
-            feature_pod_label_button()->GetSubLabelText());
+            GetSubLabelText());
 
   // Mark the network as currently connecting.
   network_state_handler()->SetTetherNetworkStateConnecting(
@@ -610,7 +632,7 @@ TEST_F(NetworkFeaturePodControllerTest, HasCorrectSubLabel_Tether) {
 
   EXPECT_EQ(l10n_util::GetStringUTF16(
                 IDS_ASH_STATUS_TRAY_NETWORK_CONNECTING_SUBLABEL),
-            feature_pod_label_button()->GetSubLabelText());
+            GetSubLabelText());
 
   // Mark the network as connected.
   network_state_handler()->SetTetherNetworkStateConnected(
@@ -630,7 +652,7 @@ TEST_F(NetworkFeaturePodControllerTest, HasCorrectSubLabel_Tether) {
 TEST_F(NetworkFeaturePodControllerTest, HasCorrectSubLabel_WiFi) {
   EXPECT_EQ(l10n_util::GetStringUTF16(
                 IDS_ASH_STATUS_TRAY_NETWORK_DISCONNECTED_SUBLABEL),
-            feature_pod_label_button()->GetSubLabelText());
+            GetSubLabelText());
 
   SetupWiFi();
 
@@ -639,7 +661,7 @@ TEST_F(NetworkFeaturePodControllerTest, HasCorrectSubLabel_WiFi) {
                      base::Value(shill::kStateIdle));
   EXPECT_EQ(l10n_util::GetStringUTF16(
                 IDS_ASH_STATUS_TRAY_NETWORK_DISCONNECTED_SUBLABEL),
-            feature_pod_label_button()->GetSubLabelText());
+            GetSubLabelText());
 
   // Mark the network as currently connecting.
   SetServiceProperty(wifi_path(), shill::kStateProperty,
@@ -649,7 +671,7 @@ TEST_F(NetworkFeaturePodControllerTest, HasCorrectSubLabel_WiFi) {
 
   EXPECT_EQ(l10n_util::GetStringUTF16(
                 IDS_ASH_STATUS_TRAY_NETWORK_CONNECTING_SUBLABEL),
-            feature_pod_label_button()->GetSubLabelText());
+            GetSubLabelText());
 
   SetServiceProperty(wifi_path(), shill::kStateProperty,
                      base::Value(shill::kStateOnline));
@@ -679,10 +701,10 @@ TEST_F(NetworkFeaturePodControllerTest, HasCorrectTooltips) {
   // same for the icon as it is for the label.
   EXPECT_EQ(l10n_util::GetStringFUTF16(
                 IDS_ASH_STATUS_TRAY_NETWORK_SETTINGS_TOOLTIP, tooltip),
-            feature_pod_icon_button()->GetTooltipText());
+            GetIconTooltipText());
   EXPECT_EQ(l10n_util::GetStringFUTF16(
                 IDS_ASH_STATUS_TRAY_NETWORK_SETTINGS_TOOLTIP, tooltip),
-            feature_pod_label_button()->GetTooltipText());
+            GetLabelTooltipText());
 
   ClearNetworks();
 
@@ -693,22 +715,22 @@ TEST_F(NetworkFeaturePodControllerTest, HasCorrectTooltips) {
 
   EXPECT_EQ(l10n_util::GetStringFUTF16(
                 IDS_ASH_STATUS_TRAY_NETWORK_TOGGLE_TOOLTIP, tooltip),
-            feature_pod_icon_button()->GetTooltipText());
+            GetIconTooltipText());
   EXPECT_EQ(l10n_util::GetStringFUTF16(
                 IDS_ASH_STATUS_TRAY_NETWORK_SETTINGS_TOOLTIP, tooltip),
-            feature_pod_label_button()->GetTooltipText());
+            GetLabelTooltipText());
 
   PressIcon();
 
   EXPECT_EQ(l10n_util::GetStringFUTF16(
                 IDS_ASH_STATUS_TRAY_NETWORK_TOGGLE_TOOLTIP, tooltip),
-            feature_pod_icon_button()->GetTooltipText());
+            GetIconTooltipText());
 
   // Pressing the label when the network type is disabled but can be enabled
   // will enable that network type.
   EXPECT_EQ(l10n_util::GetStringFUTF16(
                 IDS_ASH_STATUS_TRAY_NETWORK_TOGGLE_TOOLTIP, tooltip),
-            feature_pod_label_button()->GetTooltipText());
+            GetLabelTooltipText());
 
   LockScreen();
 
@@ -717,8 +739,8 @@ TEST_F(NetworkFeaturePodControllerTest, HasCorrectTooltips) {
       /*a11y_name=*/nullptr,
       /*a11y_desc=*/nullptr, &tooltip);
 
-  EXPECT_EQ(tooltip, feature_pod_icon_button()->GetTooltipText());
-  EXPECT_EQ(tooltip, feature_pod_label_button()->GetTooltipText());
+  EXPECT_EQ(tooltip, GetIconTooltipText());
+  EXPECT_EQ(tooltip, GetLabelTooltipText());
 }
 
 // This test does not check whether the icons are correct, and is only intended
@@ -727,75 +749,85 @@ TEST_F(NetworkFeaturePodControllerTest, HasCorrectIcons) {
   ActiveNetworkIcon* active_network_icon =
       Shell::Get()->system_tray_model()->active_network_icon();
 
-  EXPECT_TRUE(gfx::test::AreImagesEqual(
-      gfx::Image(active_network_icon->GetImage(
-          ActiveNetworkIcon::Type::kSingle,
-          network_icon::ICON_TYPE_FEATURE_POD_TOGGLED, /*animating=*/nullptr)),
-      gfx::Image(
-          feature_pod_icon_button()->GetImage(views::Button::STATE_NORMAL))));
+  views::ImageButton* icon_button = feature_tile()->icon_button();
+  gfx::Image image =
+      gfx::Image(icon_button->GetImage(views::Button::STATE_NORMAL));
 
-  feature_pod_button()->SetEnabled(false);
+  ui::ColorProvider* color_provider = quick_settings_view()->GetColorProvider();
 
   EXPECT_TRUE(gfx::test::AreImagesEqual(
       gfx::Image(active_network_icon->GetImage(
-          ActiveNetworkIcon::Type::kSingle,
+          color_provider, ActiveNetworkIcon::Type::kSingle,
+          network_icon::ICON_TYPE_FEATURE_POD_TOGGLED,
+          /*animating=*/nullptr)),
+      image));
+
+  // Lock screen to get the button's disabled state.
+  LockScreen();
+  icon_button = feature_tile()->icon_button();
+  image = gfx::Image(icon_button->GetImage(views::Button::STATE_DISABLED));
+
+  EXPECT_TRUE(gfx::test::AreImagesEqual(
+      gfx::Image(active_network_icon->GetImage(
+          color_provider, ActiveNetworkIcon::Type::kSingle,
           network_icon::ICON_TYPE_FEATURE_POD_DISABLED, /*animating=*/nullptr)),
-      gfx::Image(
-          feature_pod_icon_button()->GetImage(views::Button::STATE_DISABLED))));
+      image));
+
+  // Unlock screen to get the button's normal state again.
+  UnlockScreen();
 
   // Disable WiFi which will update the feature pod button state to be enabled
   // but not toggled.
-  network_state_handler()->SetTechnologyEnabled(
+  technology_state_controller()->SetTechnologiesEnabled(
       NetworkTypePattern::WiFi(), /*enabled=*/false,
       network_handler::ErrorCallback());
   base::RunLoop().RunUntilIdle();
 
+  icon_button = feature_tile()->icon_button();
+  image = gfx::Image(icon_button->GetImage(views::Button::STATE_NORMAL));
+
   EXPECT_TRUE(gfx::test::AreImagesEqual(
       gfx::Image(active_network_icon->GetImage(
-          ActiveNetworkIcon::Type::kSingle, network_icon::ICON_TYPE_FEATURE_POD,
+          color_provider, ActiveNetworkIcon::Type::kSingle,
+          network_icon::ICON_TYPE_FEATURE_POD,
           /*animating=*/nullptr)),
-      gfx::Image(
-          feature_pod_icon_button()->GetImage(views::Button::STATE_NORMAL))));
+      image));
 }
 
 TEST_F(NetworkFeaturePodControllerTest, UMATracking) {
+  std::string histogram_prefix;
+  histogram_prefix = "Ash.QuickSettings.FeaturePod.";
+
   // No metrics logged before clicking on any views.
   auto histogram_tester = std::make_unique<base::HistogramTester>();
-  histogram_tester->ExpectTotalCount(
-      "Ash.UnifiedSystemView.FeaturePod.ToggledOn",
-      /*count=*/0);
-  histogram_tester->ExpectTotalCount(
-      "Ash.UnifiedSystemView.FeaturePod.ToggledOff",
-      /*count=*/0);
-  histogram_tester->ExpectTotalCount("Ash.UnifiedSystemView.FeaturePod.DiveIn",
-                                     /*count=*/0);
+  histogram_tester->ExpectTotalCount(histogram_prefix + "ToggledOn",
+                                     /*expected_count=*/0);
+  histogram_tester->ExpectTotalCount(histogram_prefix + "ToggledOff",
+                                     /*expected_count=*/0);
+  histogram_tester->ExpectTotalCount(histogram_prefix + "DiveIn",
+                                     /*expected_count=*/0);
 
   // Disable WiFi.
   PressIcon();
-  histogram_tester->ExpectTotalCount(
-      "Ash.UnifiedSystemView.FeaturePod.ToggledOn",
-      /*count=*/0);
-  histogram_tester->ExpectTotalCount(
-      "Ash.UnifiedSystemView.FeaturePod.ToggledOff",
-      /*count=*/1);
-  histogram_tester->ExpectBucketCount(
-      "Ash.UnifiedSystemView.FeaturePod.ToggledOff",
-      QsFeatureCatalogName::kNetwork,
-      /*expected_count=*/1);
-  histogram_tester->ExpectTotalCount("Ash.UnifiedSystemView.FeaturePod.DiveIn",
-                                     /*count=*/0);
+  histogram_tester->ExpectTotalCount(histogram_prefix + "ToggledOn",
+                                     /*expected_count=*/0);
+  histogram_tester->ExpectTotalCount(histogram_prefix + "ToggledOff",
+                                     /*expected_count=*/1);
+  histogram_tester->ExpectBucketCount(histogram_prefix + "ToggledOff",
+                                      QsFeatureCatalogName::kNetwork,
+                                      /*expected_count=*/1);
+  histogram_tester->ExpectTotalCount(histogram_prefix + "DiveIn",
+                                     /*expected_count=*/0);
 
   // Go to the detailed page.
   PressLabel();
-  histogram_tester->ExpectTotalCount(
-      "Ash.UnifiedSystemView.FeaturePod.ToggledOn",
-      /*count=*/0);
-  histogram_tester->ExpectTotalCount(
-      "Ash.UnifiedSystemView.FeaturePod.ToggledOff",
-      /*count=*/1);
-  histogram_tester->ExpectTotalCount("Ash.UnifiedSystemView.FeaturePod.DiveIn",
-                                     /*count=*/1);
-  histogram_tester->ExpectBucketCount("Ash.UnifiedSystemView.FeaturePod.DiveIn",
+  histogram_tester->ExpectTotalCount(histogram_prefix + "ToggledOn",
+                                     /*expected_count=*/0);
+  histogram_tester->ExpectTotalCount(histogram_prefix + "ToggledOff",
+                                     /*expected_count=*/1);
+  histogram_tester->ExpectTotalCount(histogram_prefix + "DiveIn",
+                                     /*expected_count=*/1);
+  histogram_tester->ExpectBucketCount(histogram_prefix + "DiveIn",
                                       QsFeatureCatalogName::kNetwork,
                                       /*expected_count=*/1);
 }

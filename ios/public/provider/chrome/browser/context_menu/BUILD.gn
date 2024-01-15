@@ -3,16 +3,16 @@
 # found in the LICENSE file.
 
 source_set("context_menu_api") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "context_menu_api.h",
     "context_menu_api.mm",
   ]
 
+  public_deps = [ "//base" ]
   deps = [
-    "//base",
+    "//ios/web/common",
     "//ios/web/public/ui",
+    "//services/metrics/public/cpp:metrics_cpp",
   ]
   frameworks = [ "UIKit.framework" ]
-  public_deps = [ "//third_party/abseil-cpp:absl" ]
 }

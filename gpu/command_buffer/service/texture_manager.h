@@ -20,6 +20,7 @@
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
+#include "build/build_config.h"
 #include "gpu/command_buffer/service/feature_info.h"
 #include "gpu/command_buffer/service/gl_utils.h"
 #include "gpu/command_buffer/service/memory_tracking.h"
@@ -30,7 +31,6 @@
 #include "ui/gfx/geometry/rect.h"
 
 namespace gl {
-class GLImage;
 class ProgressReporter;
 }
 
@@ -56,15 +56,6 @@ class GPU_GLES2_EXPORT TexturePassthrough final
       public base::SupportsWeakPtr<TexturePassthrough> {
  public:
   TexturePassthrough(GLuint service_id, GLenum target);
-  TexturePassthrough(GLuint service_id,
-                     GLenum target,
-                     GLenum internal_format,
-                     GLsizei width,
-                     GLsizei height,
-                     GLsizei depth,
-                     GLint border,
-                     GLenum format,
-                     GLenum type);
 
   TexturePassthrough(const TexturePassthrough&) = delete;
   TexturePassthrough& operator=(const TexturePassthrough&) = delete;
@@ -78,20 +69,9 @@ class GPU_GLES2_EXPORT TexturePassthrough final
   // native GL texture in the destructor
   void MarkContextLost();
 
-  void SetLevelImage(GLenum target, GLint level, gl::GLImage* image);
-  gl::GLImage* GetLevelImage(GLenum target, GLint level) const;
-
-  void SetStreamLevelImage(GLenum target,
-                           GLint level,
-                           gl::GLImage* stream_texture_image,
-                           GLuint service_id);
-
-  // Return true if and only if the decoder should BindTexImage / CopyTexImage
-  // us before sampling.
-  bool is_bind_pending() const { return is_bind_pending_; }
-  void set_is_bind_pending(bool is_bind_pending) {
-    is_bind_pending_ = is_bind_pending;
-  }
+#if BUILDFLAG(IS_ANDROID)
+  void BindToServiceId(GLuint service_id);
+#endif
 
   void SetEstimatedSize(size_t size);
   size_t estimated_size() const { return estimated_size_; }
@@ -100,43 +80,13 @@ class GPU_GLES2_EXPORT TexturePassthrough final
   ~TexturePassthrough() override;
 
  private:
-  bool LevelInfoExists(GLenum target, GLint level, size_t* out_face_idx) const;
-
-  void SetLevelImageInternal(GLenum target,
-                             GLint level,
-                             gl::GLImage* image,
-                             GLuint service_id);
-  void UpdateStreamTextureServiceId(GLenum target, GLint level);
-
   friend class base::RefCounted<TexturePassthrough>;
 
   const GLuint owned_service_id_ = 0;
 
   bool have_context_;
-  bool is_bind_pending_ = false;
 
   size_t estimated_size_ = 0;
-
-  // Bound images divided into faces and then levels
-  struct LevelInfo {
-    LevelInfo();
-    LevelInfo(const LevelInfo& rhs);
-    ~LevelInfo();
-
-    GLenum internal_format = 0;
-    GLsizei width = 0;
-    GLsizei height = 0;
-    GLsizei depth = 0;
-    GLint border = 0;
-    GLenum format = 0;
-    GLenum type = 0;
-
-    scoped_refptr<gl::GLImage> image;
-  };
-
-  LevelInfo* GetLevelInfo(GLenum target, GLint level);
-
-  std::vector<std::vector<LevelInfo>> level_images_;
 };
 
 // Info about Textures currently in the system.
@@ -144,22 +94,6 @@ class GPU_GLES2_EXPORT TexturePassthrough final
 // jointly owned by possibly multiple TextureRef.
 class GPU_GLES2_EXPORT Texture final : public TextureBase {
  public:
-  enum ImageState {
-    // If an image is associated with the texture and image state is UNBOUND,
-    // then sampling out of the texture or using it as a target for drawing
-    // will not read/write from/to the image.
-    UNBOUND,
-    // If image state is BOUND, then sampling from the texture will return the
-    // contents of the image and using it as a target will modify the image.
-    BOUND,
-    // Image state is set to COPIED if the contents of the image has been
-    // copied to the texture. Sampling from the texture will be equivalent
-    // to sampling out the image (assuming image has not been changed since
-    // it was copied). Using the texture as a target for drawing will only
-    // modify the texture and not the image.
-    COPIED
-  };
-
   struct CompatibilitySwizzle {
     GLenum format;
     GLenum dest_format;
@@ -184,10 +118,11 @@ class GPU_GLES2_EXPORT Texture final : public TextureBase {
     GLint border = 0;
     GLenum format = 0;
     GLenum type = 0;
-    scoped_refptr<gl::GLImage> image;
-    ImageState image_state = UNBOUND;
     uint32_t estimated_size = 0;
     bool internal_workaround = false;
+
+   private:
+    friend class Texture;
   };
 
   explicit Texture(GLuint service_id);
@@ -301,42 +236,16 @@ class GPU_GLES2_EXPORT Texture final : public TextureBase {
   bool GetLevelType(
       GLint target, GLint level, GLenum* type, GLenum* internal_format) const;
 
-  // Set the image for a particular level. If a GLImage was previously set with
-  // SetLevelStreamTextureImage(), this will reset |service_id_| back to
-  // |owned_service_id_|, removing the service id override set by the
-  // SetLevelStreamTextureImage.
-  void SetLevelImage(GLenum target,
-                     GLint level,
-                     gl::GLImage* image,
-                     ImageState state);
-
-  // Set the GLImage for a particular level.  This is like SetLevelImage, but it
-  // also makes it optional to override |service_id_| with a texture bound to
-  // the stream texture. See SetStreamTextureServiceId() for the details of how
-  // |service_id| is used.
-  void SetLevelStreamTextureImage(GLenum target,
-                                  GLint level,
-                                  gl::GLImage* image,
-                                  ImageState state,
-                                  GLuint service_id);
-
-  // Set the ImageState for the image bound to the given level.
-  void SetLevelImageState(GLenum target, GLint level, ImageState state);
+#if BUILDFLAG(IS_ANDROID)
+  // Overrides |service_id_| with a texture bound to
+  // the stream texture. See SetStreamTextureServiceId() for the details of
+  // how |service_id| is used.
+  void BindToServiceId(GLuint service_id);
+#endif
 
   bool CompatibleWithSamplerUniformType(
       GLenum type,
       const SamplerState& sampler_state) const;
-
-  // Get the image associated with a particular level. Returns NULL if level
-  // does not exist.
-  gl::GLImage* GetLevelImage(GLint target,
-                             GLint level,
-                             ImageState* state) const;
-  gl::GLImage* GetLevelImage(GLint target, GLint level) const;
-
-  bool HasImages() const {
-    return has_images_;
-  }
 
   // Returns true of the given dimensions are inside the dimensions of the
   // level.
@@ -403,16 +312,11 @@ class GPU_GLES2_EXPORT Texture final : public TextureBase {
     return estimated_size() > 0;
   }
 
-  // Initialize TEXTURE_MAX_ANISOTROPY to 1 if we haven't done so yet.
-  void InitTextureMaxAnisotropyIfNeeded(GLenum target);
-
   void DumpLevelMemory(base::trace_event::ProcessMemoryDump* pmd,
                        uint64_t client_tracing_id,
                        const std::string& dump_name) const;
 
   void ApplyFormatWorkarounds(const FeatureInfo* feature_info);
-
-  bool EmulatingRGB();
 
   // In GLES2 "texture complete" means it has all required mips for filtering
   // down to a 1x1 pixel texture, they are in the correct order, they are all
@@ -470,6 +374,11 @@ class GPU_GLES2_EXPORT Texture final : public TextureBase {
            sampler_state_.min_filter != GL_LINEAR;
   }
 
+  size_t MaxValidMipLevel() const {
+    DCHECK(!face_infos_.empty());
+    return face_infos_[0].level_infos.size();
+  }
+
  private:
   friend class MailboxManagerTest;
   friend class TextureManager;
@@ -504,12 +413,6 @@ class GPU_GLES2_EXPORT Texture final : public TextureBase {
     // This contains slots for all levels starting at 0.
     std::vector<LevelInfo> level_infos;
   };
-
-  // Helper for SetLevel*Image.
-  void SetLevelImageInternal(GLenum target,
-                             GLint level,
-                             gl::GLImage* image,
-                             ImageState state);
 
   // Returns NULL if the base level is not defined.
   const LevelInfo* GetBaseLevelInfo() const;
@@ -622,14 +525,6 @@ class GPU_GLES2_EXPORT Texture final : public TextureBase {
   // texture.
   void UpdateCanRenderCondition();
 
-  // Updates the images count in all the managers referencing this
-  // texture.
-  void UpdateHasImages();
-
-  // Updates the flag that indicates whether this texture requires RGB
-  // emulation.
-  void UpdateEmulatingRGB();
-
   // Increment the framebuffer state change count in all the managers
   // referencing this texture.
   void IncAllFramebufferStateChangeCount();
@@ -721,21 +616,13 @@ class GPU_GLES2_EXPORT Texture final : public TextureBase {
   // functions.
   bool immutable_storage_ = false;
 
-  // Whether or not this texture has images.
-  bool has_images_ = false;
-
   // Size in bytes this texture is assumed to take in memory.
   uint32_t estimated_size_ = 0;
 
   // Cache of the computed CanRenderCondition flag.
   CanRenderCondition can_render_condition_ = CAN_RENDER_ALWAYS;
 
-  // Whether we have initialized TEXTURE_MAX_ANISOTROPY to 1.
-  bool texture_max_anisotropy_initialized_ = false;
-
   raw_ptr<const CompatibilitySwizzle> compatibility_swizzle_ = nullptr;
-
-  bool emulating_rgb_ = false;
 };
 
 // This class represents a texture in a client context group. It's mostly 1:1
@@ -819,7 +706,6 @@ struct DecoderTextureState {
   bool force_int_or_srgb_cube_texture_complete;
   bool unpack_alignment_workaround_with_unpack_buffer;
   bool unpack_overlapping_rows_separately_unpack_buffer;
-  bool unpack_image_height_workaround_with_unpack_buffer;
 };
 
 // This class keeps track of the textures and their sizes so we can do NPOT and
@@ -932,6 +818,11 @@ class GPU_GLES2_EXPORT TextureManager
   bool ValidForTarget(
       GLenum target, GLint level,
       GLsizei width, GLsizei height, GLsizei depth);
+  bool ValidForTextureTarget(const Texture* texture,
+                             GLint level,
+                             GLsizei width,
+                             GLsizei height,
+                             GLsizei depth);
 
   // True if this texture meets all the GLES2 criteria for rendering.
   // See section 3.8.2 of the GLES2 spec.
@@ -1065,10 +956,6 @@ class GPU_GLES2_EXPORT TextureManager
     return num_uncleared_mips_ > 0;
   }
 
-  bool HaveImages() const {
-    return num_images_ > 0;
-  }
-
   GLuint black_texture_id(GLenum target) const {
     switch (target) {
       case GL_SAMPLER_2D:
@@ -1096,24 +983,6 @@ class GPU_GLES2_EXPORT TextureManager
   size_t mem_represented() const {
     return memory_type_tracker_->GetMemRepresented();
   }
-
-  void SetLevelImage(TextureRef* ref,
-                     GLenum target,
-                     GLint level,
-                     gl::GLImage* image,
-                     Texture::ImageState state);
-
-  void SetLevelStreamTextureImage(TextureRef* ref,
-                                  GLenum target,
-                                  GLint level,
-                                  gl::GLImage* image,
-                                  Texture::ImageState state,
-                                  GLuint service_id);
-
-  void SetLevelImageState(TextureRef* ref,
-                          GLenum target,
-                          GLint level,
-                          Texture::ImageState state);
 
   size_t GetSignatureSize() const;
 
@@ -1153,7 +1022,8 @@ class GPU_GLES2_EXPORT TextureManager
     GLint border;
     GLenum format;
     GLenum type;
-    const void* pixels;
+    // `pixels` is not a raw_ptr<...> to avoid adding an out-of-line destructor.
+    RAW_PTR_EXCLUSION const void* pixels;
     uint32_t pixels_size;
     uint32_t padding;
     CommandType command_type;
@@ -1190,7 +1060,8 @@ class GPU_GLES2_EXPORT TextureManager
     GLsizei depth;
     GLenum format;
     GLenum type;
-    const void* pixels;
+    // `pixels` is not a raw_ptr<...> to avoid adding an out-of-line destructor.
+    RAW_PTR_EXCLUSION const void* pixels;
     uint32_t pixels_size;
     uint32_t padding;
     CommandType command_type;
@@ -1337,7 +1208,8 @@ class GPU_GLES2_EXPORT TextureManager
 
   scoped_refptr<FeatureInfo> feature_info_;
 
-  std::vector<FramebufferManager*> framebuffer_managers_;
+  std::vector<raw_ptr<FramebufferManager, VectorExperimental>>
+      framebuffer_managers_;
 
   // Info for each texture in the system.
   typedef std::unordered_map<GLuint, scoped_refptr<TextureRef>> TextureMap;
@@ -1356,7 +1228,6 @@ class GPU_GLES2_EXPORT TextureManager
 
   int num_unsafe_textures_;
   int num_uncleared_mips_;
-  int num_images_;
 
   // Counts the number of Textures allocated with 'this' as its manager.
   // Allows to check no Texture will outlive this.
@@ -1372,7 +1243,8 @@ class GPU_GLES2_EXPORT TextureManager
   // The default textures for each target (texture name = 0)
   scoped_refptr<TextureRef> default_textures_[kNumDefaultTextures];
 
-  std::vector<DestructionObserver*> destruction_observers_;
+  std::vector<raw_ptr<DestructionObserver, VectorExperimental>>
+      destruction_observers_;
 
   uint32_t current_service_id_generation_;
 

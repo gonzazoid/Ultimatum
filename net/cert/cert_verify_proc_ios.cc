@@ -6,30 +6,24 @@
 
 #include <CommonCrypto/CommonDigest.h>
 
+#include "base/apple/foundation_util.h"
+#include "base/apple/osstatus_logging.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/logging.h"
-#include "base/mac/foundation_util.h"
-#include "base/mac/mac_logging.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "base/notreached.h"
 #include "crypto/sha2.h"
 #include "net/base/net_errors.h"
 #include "net/cert/asn1_util.h"
 #include "net/cert/cert_verify_result.h"
+#include "net/cert/crl_set.h"
 #include "net/cert/ct_serialization.h"
 #include "net/cert/known_roots.h"
 #include "net/cert/test_root_certs.h"
 #include "net/cert/x509_certificate.h"
+#include "net/cert/x509_util.h"
 #include "net/cert/x509_util_apple.h"
 
-using base::ScopedCFTypeRef;
-
-extern "C" {
-// Declared in <Security/SecTrust.h>, available in iOS 12.1.1+
-// TODO(mattm): Remove this weak_import once chromium requires a new enough
-// iOS SDK.
-OSStatus SecTrustSetSignedCertificateTimestamps(SecTrustRef, CFArrayRef)
-    __attribute__((weak_import));
-}  // extern "C"
+using base::apple::ScopedCFTypeRef;
 
 namespace net {
 
@@ -151,14 +145,13 @@ OSStatus CreateTrustPolicies(ScopedCFTypeRef<CFArrayRef>* policies) {
   if (!local_policies)
     return errSecAllocate;
 
-  SecPolicyRef ssl_policy = SecPolicyCreateBasicX509();
-  CFArrayAppendValue(local_policies, ssl_policy);
-  CFRelease(ssl_policy);
-  ssl_policy = SecPolicyCreateSSL(true, nullptr);
-  CFArrayAppendValue(local_policies, ssl_policy);
-  CFRelease(ssl_policy);
+  base::apple::ScopedCFTypeRef<SecPolicyRef> ssl_policy(
+      SecPolicyCreateBasicX509());
+  CFArrayAppendValue(local_policies.get(), ssl_policy.get());
+  ssl_policy.reset(SecPolicyCreateSSL(/*server=*/true, /*hostname=*/nullptr));
+  CFArrayAppendValue(local_policies.get(), ssl_policy.get());
 
-  policies->reset(local_policies.release());
+  *policies = std::move(local_policies);
   return noErr;
 }
 
@@ -177,28 +170,28 @@ int BuildAndEvaluateSecTrustRef(CFArrayRef cert_array,
                                 ScopedCFTypeRef<CFArrayRef>* verified_chain,
                                 bool* is_trusted,
                                 ScopedCFTypeRef<CFErrorRef>* trust_error) {
-  SecTrustRef tmp_trust = nullptr;
-  OSStatus status =
-      SecTrustCreateWithCertificates(cert_array, trust_policies, &tmp_trust);
+  ScopedCFTypeRef<SecTrustRef> tmp_trust;
+  OSStatus status = SecTrustCreateWithCertificates(cert_array, trust_policies,
+                                                   tmp_trust.InitializeInto());
   if (status)
     return NetErrorFromOSStatus(status);
-  ScopedCFTypeRef<SecTrustRef> scoped_tmp_trust(tmp_trust);
 
   if (TestRootCerts::HasInstance()) {
-    status = TestRootCerts::GetInstance()->FixupSecTrustRef(tmp_trust);
+    status = TestRootCerts::GetInstance()->FixupSecTrustRef(tmp_trust.get());
     if (status)
       return NetErrorFromOSStatus(status);
   }
 
   if (ocsp_response_ref) {
-    status = SecTrustSetOCSPResponse(tmp_trust, ocsp_response_ref);
+    status = SecTrustSetOCSPResponse(tmp_trust.get(), ocsp_response_ref);
     if (status)
       return NetErrorFromOSStatus(status);
   }
 
   if (sct_array_ref) {
     if (__builtin_available(iOS 12.1.1, *)) {
-      status = SecTrustSetSignedCertificateTimestamps(tmp_trust, sct_array_ref);
+      status = SecTrustSetSignedCertificateTimestamps(tmp_trust.get(),
+                                                      sct_array_ref);
       if (status)
         return NetErrorFromOSStatus(status);
     }
@@ -208,11 +201,11 @@ int BuildAndEvaluateSecTrustRef(CFArrayRef cert_array,
   bool tmp_is_trusted = false;
   if (__builtin_available(iOS 12.0, *)) {
     tmp_is_trusted =
-        SecTrustEvaluateWithError(tmp_trust, tmp_error.InitializeInto());
+        SecTrustEvaluateWithError(tmp_trust.get(), tmp_error.InitializeInto());
   } else {
 #if !defined(__IPHONE_12_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_12_0
     SecTrustResultType tmp_trust_result;
-    status = SecTrustEvaluate(tmp_trust, &tmp_trust_result);
+    status = SecTrustEvaluate(tmp_trust.get(), &tmp_trust_result);
     if (status)
       return NetErrorFromOSStatus(status);
     switch (tmp_trust_result) {
@@ -228,9 +221,9 @@ int BuildAndEvaluateSecTrustRef(CFArrayRef cert_array,
 #endif
   }
 
-  trust_ref->swap(scoped_tmp_trust);
+  trust_ref->swap(tmp_trust);
   trust_error->swap(tmp_error);
-  *verified_chain = x509_util::CertificateChainFromSecTrust(tmp_trust);
+  *verified_chain = x509_util::CertificateChainFromSecTrust(trust_ref->get());
   *is_trusted = tmp_is_trusted;
   return OK;
 }
@@ -238,8 +231,8 @@ int BuildAndEvaluateSecTrustRef(CFArrayRef cert_array,
 void GetCertChainInfo(CFArrayRef cert_chain, CertVerifyResult* verify_result) {
   DCHECK_LT(0, CFArrayGetCount(cert_chain));
 
-  base::ScopedCFTypeRef<SecCertificateRef> verified_cert;
-  std::vector<base::ScopedCFTypeRef<SecCertificateRef>> verified_chain;
+  base::apple::ScopedCFTypeRef<SecCertificateRef> verified_cert;
+  std::vector<base::apple::ScopedCFTypeRef<SecCertificateRef>> verified_chain;
   for (CFIndex i = 0, count = CFArrayGetCount(cert_chain); i < count; ++i) {
     SecCertificateRef chain_cert = reinterpret_cast<SecCertificateRef>(
         const_cast<void*>(CFArrayGetValueAtIndex(cert_chain, i)));
@@ -249,7 +242,7 @@ void GetCertChainInfo(CFArrayRef cert_chain, CertVerifyResult* verify_result) {
       verified_chain.emplace_back(chain_cert, base::scoped_policy::RETAIN);
     }
 
-    base::ScopedCFTypeRef<CFDataRef> der_data(
+    base::apple::ScopedCFTypeRef<CFDataRef> der_data(
         SecCertificateCopyData(chain_cert));
     if (!der_data) {
       verify_result->cert_status |= CERT_STATUS_INVALID;
@@ -259,8 +252,8 @@ void GetCertChainInfo(CFArrayRef cert_chain, CertVerifyResult* verify_result) {
     base::StringPiece spki_bytes;
     if (!asn1::ExtractSPKIFromDERCert(
             base::StringPiece(
-                reinterpret_cast<const char*>(CFDataGetBytePtr(der_data)),
-                CFDataGetLength(der_data)),
+                reinterpret_cast<const char*>(CFDataGetBytePtr(der_data.get())),
+                CFDataGetLength(der_data.get())),
             &spki_bytes)) {
       verify_result->cert_status |= CERT_STATUS_INVALID;
       return;
@@ -287,17 +280,19 @@ void GetCertChainInfo(CFArrayRef cert_chain, CertVerifyResult* verify_result) {
 
 }  // namespace
 
-CertVerifyProcIOS::CertVerifyProcIOS() {}
+CertVerifyProcIOS::CertVerifyProcIOS(scoped_refptr<CRLSet> crl_set)
+    : CertVerifyProc(std::move(crl_set)) {}
 
 // static
 CertStatus CertVerifyProcIOS::GetCertFailureStatusFromError(CFErrorRef error) {
   if (!error)
     return CERT_STATUS_INVALID;
 
-  base::ScopedCFTypeRef<CFStringRef> error_domain(CFErrorGetDomain(error));
+  base::apple::ScopedCFTypeRef<CFStringRef> error_domain(
+      CFErrorGetDomain(error));
   CFIndex error_code = CFErrorGetCode(error);
 
-  if (error_domain != kCFErrorDomainOSStatus) {
+  if (error_domain.get() != kCFErrorDomainOSStatus) {
     LOG(WARNING) << "Unhandled error domain: " << error;
     return CERT_STATUS_INVALID;
   }
@@ -322,11 +317,12 @@ CertStatus CertVerifyProcIOS::GetCertFailureStatusFromError(CFErrorRef error) {
 CertStatus CertVerifyProcIOS::GetCertFailureStatusFromTrust(SecTrustRef trust) {
   CertStatus reason = 0;
 
-  base::ScopedCFTypeRef<CFArrayRef> properties(SecTrustCopyProperties(trust));
+  base::apple::ScopedCFTypeRef<CFArrayRef> properties(
+      SecTrustCopyProperties(trust));
   if (!properties)
     return CERT_STATUS_INVALID;
 
-  const CFIndex properties_length = CFArrayGetCount(properties);
+  const CFIndex properties_length = CFArrayGetCount(properties.get());
   if (properties_length == 0)
     return CERT_STATUS_INVALID;
 
@@ -363,21 +359,21 @@ CertStatus CertVerifyProcIOS::GetCertFailureStatusFromTrust(SecTrustRef trust) {
 
   for (CFIndex i = 0; i < properties_length; ++i) {
     CFDictionaryRef dict = reinterpret_cast<CFDictionaryRef>(
-        const_cast<void*>(CFArrayGetValueAtIndex(properties, i)));
+        const_cast<void*>(CFArrayGetValueAtIndex(properties.get(), i)));
     CFStringRef error = reinterpret_cast<CFStringRef>(
         const_cast<void*>(CFDictionaryGetValue(dict, CFSTR("value"))));
 
-    if (CFEqual(error, date_error)) {
+    if (CFEqual(error, date_error.get())) {
       reason |= CERT_STATUS_DATE_INVALID;
-    } else if (CFEqual(error, trust_error)) {
+    } else if (CFEqual(error, trust_error.get())) {
       reason |= CERT_STATUS_AUTHORITY_INVALID;
-    } else if (CFEqual(error, weak_error)) {
+    } else if (CFEqual(error, weak_error.get())) {
       reason |= CERT_STATUS_WEAK_KEY;
-    } else if (CFEqual(error, hostname_mismatch_error)) {
+    } else if (CFEqual(error, hostname_mismatch_error.get())) {
       reason |= CERT_STATUS_COMMON_NAME_INVALID;
-    } else if (CFEqual(error, policy_requirements_not_met_error)) {
+    } else if (CFEqual(error, policy_requirements_not_met_error.get())) {
       reason |= CERT_STATUS_INVALID | CERT_STATUS_AUTHORITY_INVALID;
-    } else if (CFEqual(error, root_certificate_error)) {
+    } else if (CFEqual(error, root_certificate_error.get())) {
       reason |= CERT_STATUS_AUTHORITY_INVALID;
     } else {
       LOG(ERROR) << "Unrecognized error: " << error;
@@ -390,10 +386,6 @@ CertStatus CertVerifyProcIOS::GetCertFailureStatusFromTrust(SecTrustRef trust) {
 #endif  // !defined(__IPHONE_12_0) || __IPHONE_OS_VERSION_MIN_REQUIRED <
         // __IPHONE_12_0
 
-bool CertVerifyProcIOS::SupportsAdditionalTrustAnchors() const {
-  return false;
-}
-
 CertVerifyProcIOS::~CertVerifyProcIOS() = default;
 
 int CertVerifyProcIOS::VerifyInternal(
@@ -402,8 +394,6 @@ int CertVerifyProcIOS::VerifyInternal(
     const std::string& ocsp_response,
     const std::string& sct_list,
     int flags,
-    CRLSet* crl_set,
-    const CertificateList& additional_trust_anchors,
     CertVerifyResult* verify_result,
     const NetLogWithSource& net_log) {
   ScopedCFTypeRef<CFArrayRef> trust_policies;
@@ -457,18 +447,20 @@ int CertVerifyProcIOS::VerifyInternal(
   ScopedCFTypeRef<CFErrorRef> trust_error;
 
   int err = BuildAndEvaluateSecTrustRef(
-      cert_array, trust_policies, ocsp_response_ref.get(), sct_array_ref.get(),
-      &trust_ref, &final_chain, &is_trusted, &trust_error);
+      cert_array.get(), trust_policies.get(), ocsp_response_ref.get(),
+      sct_array_ref.get(), &trust_ref, &final_chain, &is_trusted, &trust_error);
   if (err)
     return err;
 
-  if (CFArrayGetCount(final_chain) == 0)
+  if (CFArrayGetCount(final_chain.get()) == 0) {
     return ERR_FAILED;
+  }
 
   // TODO(rsleevi): Support CRLSet revocation.
   if (!is_trusted) {
     if (__builtin_available(iOS 12.0, *)) {
-      verify_result->cert_status |= GetCertFailureStatusFromError(trust_error);
+      verify_result->cert_status |=
+          GetCertFailureStatusFromError(trust_error.get());
     } else {
 #if !defined(__IPHONE_12_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_12_0
       SecTrustResultType trust_result = kSecTrustResultInvalid;
@@ -485,7 +477,7 @@ int CertVerifyProcIOS::VerifyInternal(
           break;
         default:
           verify_result->cert_status |=
-              GetCertFailureStatusFromTrust(trust_ref);
+              GetCertFailureStatusFromTrust(trust_ref.get());
       }
 #else
       // It should be impossible to reach this code, but if somehow it is
@@ -495,7 +487,7 @@ int CertVerifyProcIOS::VerifyInternal(
 #endif
     }
   }
-  GetCertChainInfo(final_chain, verify_result);
+  GetCertChainInfo(final_chain.get(), verify_result);
 
   // While iOS lacks the ability to distinguish system-trusted versus
   // user-installed roots, the set of roots that are expected to comply with
@@ -512,6 +504,13 @@ int CertVerifyProcIOS::VerifyInternal(
 
   if (IsCertStatusError(verify_result->cert_status))
     return MapCertStatusToNetError(verify_result->cert_status);
+
+  if (TestRootCerts::HasInstance() &&
+      !verify_result->verified_cert->intermediate_buffers().empty() &&
+      TestRootCerts::GetInstance()->IsKnownRoot(x509_util::CryptoBufferAsSpan(
+          verify_result->verified_cert->intermediate_buffers().back().get()))) {
+    verify_result->is_issued_by_known_root = true;
+  }
 
   LogNameNormalizationMetrics(".IOS", verify_result->verified_cert.get(),
                               verify_result->is_issued_by_known_root);

@@ -3,7 +3,7 @@
 # found in the LICENSE file.
 
 import("//build/buildflag_header.gni")
-import("//build/config/chromecast_build.gni")
+import("//build/config/cast.gni")
 import("//chromecast/chromecast.gni")
 import("//media/media_options.gni")
 
@@ -195,6 +195,7 @@ test("cast_audio_backend_unittests") {
     ":volume_map",
     "//base",
     "//base/test:run_all_unittests",
+    "//base/test:test_support",
     "//chromecast/media/cma/backend/mixer:unittests",
     "//media",
     "//testing/gmock",

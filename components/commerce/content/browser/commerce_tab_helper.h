@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/weak_ptr.h"
 #include "components/commerce/content/browser/web_contents_wrapper.h"
 #include "components/commerce/core/shopping_service.h"
 #include "components/commerce/core/web_wrapper.h"
@@ -37,6 +36,8 @@ class CommerceTabHelper
   // content::WebContentsObserver implementation
   void DidFinishNavigation(
       content::NavigationHandle* navigation_handle) override;
+
+  void DidStopLoading() override;
 
   void DidFinishLoad(content::RenderFrameHost* render_frame_host,
                      const GURL& validated_url) override;

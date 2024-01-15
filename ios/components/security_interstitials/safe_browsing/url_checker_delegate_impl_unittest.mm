@@ -4,8 +4,8 @@
 
 #import "ios/components/security_interstitials/safe_browsing/url_checker_delegate_impl.h"
 
-#import "base/bind.h"
-#import "base/callback.h"
+#import "base/functional/bind.h"
+#import "base/functional/callback.h"
 #import "base/memory/ref_counted.h"
 #import "base/run_loop.h"
 #import "base/test/ios/wait_util.h"
@@ -22,10 +22,6 @@
 #import "net/http/http_request_headers.h"
 #import "testing/platform_test.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using base::test::ios::kWaitForFileOperationTimeout;
 using base::test::ios::WaitUntilConditionOrTimeout;
 using security_interstitials::UnsafeResource;
@@ -39,11 +35,10 @@ struct UnsafeResourceCallbackState {
 };
 // Function used as the callback for UnsafeResources.
 void PopulateCallbackState(UnsafeResourceCallbackState* state,
-                           bool proceed,
-                           bool show_interstitial) {
+                           UnsafeResource::UrlCheckResult result) {
   state->executed = true;
-  state->proceed = proceed;
-  state->show_interstitial = show_interstitial;
+  state->proceed = result.proceed;
+  state->show_interstitial = result.showed_interstitial;
 }
 }  // namespace
 

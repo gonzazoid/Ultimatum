@@ -7,10 +7,9 @@
 
 #include <memory>
 
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/tether/tether_component.h"
-#include "components/prefs/pref_registry_simple.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 
 class PrefService;
@@ -33,10 +32,7 @@ namespace secure_channel {
 class SecureChannelClient;
 }
 
-class ManagedNetworkConfigurationHandler;
 class NetworkConnect;
-class NetworkConnectionHandler;
-class NetworkStateHandler;
 
 namespace tether {
 
@@ -62,11 +58,8 @@ class TetherComponentImpl : public TetherComponent {
         GmsCoreNotificationsStateTrackerImpl*
             gms_core_notifications_state_tracker,
         PrefService* pref_service,
-        NetworkStateHandler* network_state_handler,
-        ManagedNetworkConfigurationHandler*
-            managed_network_configuration_handler,
+        NetworkHandler* network_handler,
         NetworkConnect* network_connect,
-        NetworkConnectionHandler* network_connection_handler,
         scoped_refptr<device::BluetoothAdapter> adapter,
         session_manager::SessionManager* session_manager);
 
@@ -81,11 +74,8 @@ class TetherComponentImpl : public TetherComponent {
         GmsCoreNotificationsStateTrackerImpl*
             gms_core_notifications_state_tracker,
         PrefService* pref_service,
-        NetworkStateHandler* network_state_handler,
-        ManagedNetworkConfigurationHandler*
-            managed_network_configuration_handler,
+        NetworkHandler* network_handler,
         NetworkConnect* network_connect,
-        NetworkConnectionHandler* network_connection_handler,
         scoped_refptr<device::BluetoothAdapter> adapter,
         session_manager::SessionManager* session_manager) = 0;
 
@@ -110,10 +100,8 @@ class TetherComponentImpl : public TetherComponent {
       GmsCoreNotificationsStateTrackerImpl*
           gms_core_notifications_state_tracker,
       PrefService* pref_service,
-      NetworkStateHandler* network_state_handler,
-      ManagedNetworkConfigurationHandler* managed_network_configuration_handler,
+      NetworkHandler* network_handler,
       NetworkConnect* network_connect,
-      NetworkConnectionHandler* network_connection_handler,
       scoped_refptr<device::BluetoothAdapter> adapter,
       session_manager::SessionManager* session_manager);
 

@@ -211,9 +211,7 @@ class VideoDetectorTest : public testing::Test {
     return frame_sink;
   }
 
-  raw_ptr<VideoDetector> detector_;
   TestObserver observer_;
-
   scoped_refptr<base::TestMockTimeTaskRunner> mock_task_runner_;
 
  protected:
@@ -245,14 +243,18 @@ class VideoDetectorTest : public testing::Test {
 
   base::test::ScopedFeatureList scoped_feature_list_;
   ServerSharedBitmapManager shared_bitmap_manager_;
+  gpu::SharedImageManager shared_image_manager_;
+  gpu::SyncPointManager sync_point_manager_;
   FrameSinkManagerImpl frame_sink_manager_{
       FrameSinkManagerImpl::InitParams(&shared_bitmap_manager_)};
-  DisplayResourceProviderSoftware resource_provider_{&shared_bitmap_manager_};
+  DisplayResourceProviderSoftware resource_provider_{
+      &shared_bitmap_manager_, &shared_image_manager_, &sync_point_manager_};
   FakeCompositorFrameSinkClient frame_sink_client_;
   SurfaceIdAllocatorSet allocators_;
   SurfaceAggregator surface_aggregator_;
   std::unique_ptr<CompositorFrameSinkSupport> root_frame_sink_;
   std::set<CompositorFrameSinkSupport*> embedded_clients_;
+  raw_ptr<VideoDetector> detector_;
 };
 
 class VideoDetectorIncludeNonVideoTest : public VideoDetectorTest {

@@ -4,9 +4,10 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/preloading/prefetch/zero_suggest_prefetch/zero_suggest_prefetch_tab_helper.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
@@ -16,7 +17,7 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/omnibox/browser/autocomplete_controller.h"
 #include "components/omnibox/browser/mock_autocomplete_provider_client.h"
-#include "components/omnibox/browser/omnibox_edit_model.h"
+#include "components/omnibox/browser/omnibox_controller.h"
 #include "components/omnibox/browser/omnibox_view.h"
 #include "components/omnibox/common/omnibox_features.h"
 #include "components/search_engines/template_url_service.h"
@@ -53,7 +54,11 @@ class ZeroSuggestPrefetchTabHelperBrowserTest : public InProcessBrowserTest {
     auto template_url_service = std::make_unique<TemplateURLService>(
         /*prefs=*/nullptr, std::make_unique<SearchTermsData>(),
         /*web_data_service=*/nullptr,
-        std::unique_ptr<TemplateURLServiceClient>(), base::RepeatingClosure());
+        std::unique_ptr<TemplateURLServiceClient>(), base::RepeatingClosure()
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+        , /*for_lacros_main_profile=*/false
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+    );
 
     auto client_ = std::make_unique<MockAutocompleteProviderClient>();
     client_->set_template_url_service(std::move(template_url_service));
@@ -66,12 +71,13 @@ class ZeroSuggestPrefetchTabHelperBrowserTest : public InProcessBrowserTest {
         ->window()
         ->GetLocationBar()
         ->GetOmniboxView()
-        ->model()
-        ->set_autocomplete_controller(std::move(controller));
+        ->controller()
+        ->SetAutocompleteControllerForTesting(std::move(controller));
   }
 
   base::test::ScopedFeatureList feature_list_;
-  raw_ptr<testing::NiceMock<MockAutocompleteController>, DanglingUntriaged>
+  raw_ptr<testing::NiceMock<MockAutocompleteController>,
+          AcrossTasksDanglingUntriaged>
       controller_;
 };
 

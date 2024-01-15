@@ -6,24 +6,77 @@
 
 #include "base/check.h"
 #include "base/notreached.h"
+#include "base/task/single_thread_task_runner.h"
 #include "ui/display/display.h"
 #include "ui/display/screen_base.h"
+#include "ui/gfx/native_widget_types.h"
+
+namespace display {
+namespace {
+class ScreenNotification {
+ public:
+  virtual void ScreenChanged() = 0;
+};
+}  // namespace
+}  // namespace display
+
+@interface ScreenObserver : NSObject {
+  raw_ptr<display::ScreenNotification> _notifier;
+}
+- (void)mainScreenChanged;
+@end
+
+@implementation ScreenObserver
+
+- (instancetype)initWithNotifier:(display::ScreenNotification*)notifier {
+  if (self = [super init]) {
+    _notifier = notifier;
+    NSNotificationCenter* defaultCenter = [NSNotificationCenter defaultCenter];
+    [defaultCenter addObserver:self
+                      selector:@selector(mainScreenChanged)
+                          name:UIDeviceOrientationDidChangeNotification
+                        object:nil];
+  }
+  return self;
+}
+
+- (void)mainScreenChanged {
+  if (!base::SingleThreadTaskRunner::HasCurrentDefault()) {
+    return;
+  }
+  // This notification comes before UIScreen can change its bounds so post a
+  // task so the update occurs after the UIScreen has been updated.
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&display::ScreenNotification::ScreenChanged,
+                                base::Unretained(_notifier)));
+}
+
+@end
 
 namespace display {
 namespace {
 
-class ScreenIos : public ScreenBase {
+class ScreenIos : public ScreenBase, public ScreenNotification {
  public:
   ScreenIos() {
-    UIScreen* mainScreen = [UIScreen mainScreen];
-    CHECK(mainScreen);
-    Display display(0, gfx::Rect(mainScreen.bounds));
-    display.set_device_scale_factor([mainScreen scale]);
-    ProcessDisplayChanged(display, true /* is_primary */);
+    observer_ = [[ScreenObserver alloc] initWithNotifier:this];
+    ScreenChanged();
   }
 
   ScreenIos(const ScreenIos&) = delete;
   ScreenIos& operator=(const ScreenIos&) = delete;
+
+  void ScreenChanged() override {
+    UIScreen* mainScreen = [UIScreen mainScreen];
+    CHECK(mainScreen);
+    Display display(0, gfx::Rect(mainScreen.bounds));
+    CGFloat scale = [mainScreen scale];
+    if (Display::HasForceDeviceScaleFactor()) {
+      scale = Display::GetForcedDeviceScaleFactor();
+    }
+    display.set_device_scale_factor(scale);
+    ProcessDisplayChanged(display, true /* is_primary */);
+  }
 
   gfx::Point GetCursorScreenPoint() override {
     NOTIMPLEMENTED();
@@ -48,17 +101,20 @@ class ScreenIos : public ScreenBase {
     return [[UIScreen screens] count];
 #endif
   }
+
+ private:
+  ScreenObserver* __strong observer_;
 };
 
 }  // namespace
 
 // static
 gfx::NativeWindow Screen::GetWindowForView(gfx::NativeView view) {
-  return [view window];
+  return gfx::NativeWindow(view.Get().window);
 }
 
 Screen* CreateNativeScreen() {
   return new ScreenIos;
 }
 
-}  // namespace gfx
+}  // namespace display

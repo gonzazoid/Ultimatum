@@ -106,7 +106,7 @@ struct GFX_EXPORT TextRunHarfBuzz {
     Font::Weight weight = Font::Weight::NORMAL;
     int font_size = 0;
     int baseline_offset = 0;
-    int baseline_type = 0;
+    BaselineStyle baseline_type = BaselineStyle::kNormalBaseline;
     bool italic = false;
     bool strike = false;
     bool underline = false;
@@ -280,11 +280,15 @@ class GFX_EXPORT RenderTextHarfBuzz : public RenderText {
   // resulting shaping has fewer missing glyphs than the existing shape, then
   // write |font_params| and the resulting ShapeOutput to that run. Remove all
   // runs with no missing glyphs from |in_out_runs| (the caller, ShapeRuns, will
-  // terminate when no runs with missing glyphs remain).
+  // terminate when no runs with missing glyphs remain). Runs that were shaped
+  // during this function call will be returned in |sucessfully_shaped_runs| if
+  // a vector is passed in for that parameter.
   void ShapeRunsWithFont(
       const std::u16string& text,
       const internal::TextRunHarfBuzz::FontParams& font_params,
-      std::vector<internal::TextRunHarfBuzz*>* in_out_runs);
+      std::vector<internal::TextRunHarfBuzz*>* in_out_runs,
+      std::vector<internal::TextRunHarfBuzz*>* sucessfully_shaped_runs =
+          nullptr);
 
   // Itemize |text| into runs in |out_run_list|, shape the runs, and populate
   // |out_run_list|'s visual <-> logical maps.
@@ -301,7 +305,7 @@ class GFX_EXPORT RenderTextHarfBuzz : public RenderText {
   // RenderText:
   internal::TextRunList* GetRunList() override;
   const internal::TextRunList* GetRunList() const override;
-  bool GetDecoratedTextForRange(const Range& range,
+  void GetDecoratedTextForRange(const Range& range,
                                 DecoratedText* decorated_text) override;
 
   // Text run list for |layout_text_| and |display_text_|.

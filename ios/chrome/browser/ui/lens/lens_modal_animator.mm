@@ -3,13 +3,19 @@
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/lens/lens_modal_animator.h"
+#import "ios/chrome/browser/shared/public/commands/open_lens_input_selection_command.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+// The time it takes for the presenting animation to complete.
+static const CGFloat kPresentingTransitionAnimationDuration = .4;
 
-// The time it takes for the animation to complete.
-static const CGFloat kTransitionAnimationDuration = .4;
+// The time it takes for the dismissal animation to complete.
+static const CGFloat kDismissalTransitionAnimationDuration = .3;
+
+// Motion curves for the presentation animation.
+static const CGFloat kPresentationAnimationCurve0 = 0.05;
+static const CGFloat kPresentationAnimationCurve1 = 0.7;
+static const CGFloat kPresentationAnimationCurve2 = 0.1;
+static const CGFloat kPresentationAnimationCurve3 = 1.;
 
 @interface LensModalAnimator ()
 
@@ -35,12 +41,11 @@ static const CGFloat kTransitionAnimationDuration = .4;
     animationControllerForPresentedController:(UIViewController*)presented
                          presentingController:(UIViewController*)presenting
                              sourceController:(UIViewController*)source {
-  return nil;
+  return self;
 }
 
 - (id<UIViewControllerAnimatedTransitioning>)
     animationControllerForDismissedController:(UIViewController*)dismissed {
-  // Only use this transitioning delegate for Lens modal dismissal.
   return self;
 }
 
@@ -48,12 +53,74 @@ static const CGFloat kTransitionAnimationDuration = .4;
 
 - (NSTimeInterval)transitionDuration:
     (id<UIViewControllerContextTransitioning>)transitionContext {
-  return kTransitionAnimationDuration;
+  return [self isPresentingFromContext:transitionContext]
+             ? kPresentingTransitionAnimationDuration
+             : kDismissalTransitionAnimationDuration;
 }
 
 - (void)animateTransition:
     (id<UIViewControllerContextTransitioning>)transitionContext {
-  // This animator will only be used when dismissing Lens.
+  BOOL presenting = [self isPresentingFromContext:transitionContext];
+  if (presenting) {
+    [self animatePresenting:transitionContext];
+  } else {
+    [self animateDismissal:transitionContext];
+  }
+}
+
+#pragma mark - Private methods
+
+- (void)animatePresenting:
+    (id<UIViewControllerContextTransitioning>)transitionContext {
+  UIView* containerView = [transitionContext containerView];
+  UIView* lensView =
+      [transitionContext viewForKey:UITransitionContextToViewKey];
+  UIViewController* lensViewController = [transitionContext
+      viewControllerForKey:UITransitionContextToViewControllerKey];
+
+  [containerView addSubview:lensView];
+  [containerView bringSubviewToFront:lensView];
+  CGRect startingFrame = containerView.bounds;
+  if (self.presentationStyle ==
+      LensInputSelectionPresentationStyle::SlideFromLeft) {
+    startingFrame.origin.x = -startingFrame.size.width;
+  } else {
+    startingFrame.origin.x = containerView.bounds.size.width;
+  }
+
+  lensView.frame = startingFrame;
+
+  UIViewPropertyAnimator* animator = [[UIViewPropertyAnimator alloc]
+      initWithDuration:[self transitionDuration:transitionContext]
+         controlPoint1:CGPointMake(kPresentationAnimationCurve0,
+                                   kPresentationAnimationCurve1)
+         controlPoint2:CGPointMake(kPresentationAnimationCurve2,
+                                   kPresentationAnimationCurve3)
+            animations:^{
+              lensView.frame = [transitionContext
+                  finalFrameForViewController:lensViewController];
+            }];
+
+  // Completions should only be run once.
+  const ProceduralBlock presentationCompletion = _presentationCompletion;
+  _presentationCompletion = nil;
+
+  [animator addCompletion:^(UIViewAnimatingPosition finalPosition) {
+    BOOL success = ![transitionContext transitionWasCancelled];
+
+    if (success && presentationCompletion) {
+      dispatch_async(dispatch_get_main_queue(), ^{
+        presentationCompletion();
+      });
+    }
+
+    [transitionContext completeTransition:success];
+  }];
+  [animator startAnimation];
+}
+
+- (void)animateDismissal:
+    (id<UIViewControllerContextTransitioning>)transitionContext {
   UIView* containerView = [transitionContext containerView];
   UIView* toView = [transitionContext viewForKey:UITransitionContextToViewKey];
   UIView* lensView =
@@ -83,6 +150,17 @@ static const CGFloat kTransitionAnimationDuration = .4;
 
         [transitionContext completeTransition:success];
       }];
+}
+
+- (BOOL)isPresentingFromContext:
+    (id<UIViewControllerContextTransitioning>)transitionContext {
+  UIViewController* fromViewController = [transitionContext
+      viewControllerForKey:UITransitionContextFromViewControllerKey];
+  UIViewController* toViewController = [transitionContext
+      viewControllerForKey:UITransitionContextToViewControllerKey];
+  UIViewController* toPresentingViewController =
+      toViewController.presentingViewController;
+  return (toPresentingViewController == fromViewController) ? YES : NO;
 }
 
 @end

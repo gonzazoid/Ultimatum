@@ -5,10 +5,11 @@
 #ifndef SERVICES_NETWORK_PUBLIC_CPP_IP_ADDRESS_SPACE_UTIL_H_
 #define SERVICES_NETWORK_PUBLIC_CPP_IP_ADDRESS_SPACE_UTIL_H_
 
+#include <string_view>
 #include <vector>
 
 #include "base/component_export.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "services/network/public/mojom/ip_address_space.mojom-forward.h"
 #include "services/network/public/mojom/parsed_headers.mojom-forward.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -17,6 +18,7 @@ class GURL;
 
 namespace net {
 
+class IPAddress;
 class IPEndPoint;
 struct TransportInfo;
 
@@ -25,8 +27,17 @@ struct TransportInfo;
 namespace network {
 
 // Returns a human-readable string representing `space`, suitable for logging.
-base::StringPiece COMPONENT_EXPORT(NETWORK_CPP)
+std::string_view COMPONENT_EXPORT(NETWORK_CPP)
     IPAddressSpaceToStringPiece(mojom::IPAddressSpace space);
+
+// Returns the `IPAddressSpace` to which `address` belongs.
+// Returns `kUnknown` for invalid IP addresses.
+//
+// WARNING: Most callers will want to use `TransportInfoToIPAddressSpace()`
+// below instead, as this does not properly account for proxies nor for
+// command-line overrides.
+mojom::IPAddressSpace COMPONENT_EXPORT(NETWORK_CPP)
+    IPAddressToIPAddressSpace(const net::IPAddress& address);
 
 // Returns the `IPAddressSpace` to which the endpoint of `transport` belongs.
 //
@@ -76,9 +87,15 @@ struct COMPONENT_EXPORT(NETWORK_CPP) CalculateClientAddressSpaceParams {
       const net::IPEndPoint& remote_endpoint);
   ~CalculateClientAddressSpaceParams();
 
-  const std::vector<GURL>& url_list_via_service_worker;
-  const mojom::ParsedHeadersPtr& parsed_headers;
-  const net::IPEndPoint& remote_endpoint;
+  // This field is not a raw_ref<> because it was filtered by the rewriter for:
+  // #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION const std::vector<GURL>& url_list_via_service_worker;
+  // This field is not a raw_ref<> because it was filtered by the rewriter for:
+  // #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION const mojom::ParsedHeadersPtr& parsed_headers;
+  // This field is not a raw_ref<> because it was filtered by the rewriter for:
+  // #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION const net::IPEndPoint& remote_endpoint;
 };
 
 // Given a request URL and `params`, this function calculates the

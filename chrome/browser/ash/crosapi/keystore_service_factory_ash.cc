@@ -41,14 +41,22 @@ KeystoreServiceFactoryAsh* KeystoreServiceFactoryAsh::GetInstance() {
 }
 
 KeystoreServiceFactoryAsh::KeystoreServiceFactoryAsh()
-    : ProfileKeyedServiceFactory("KeystoreServiceFactoryAsh") {
+    : ProfileKeyedServiceFactory(
+          "KeystoreServiceFactoryAsh",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(ash::platform_keys::PlatformKeysServiceFactory::GetInstance());
   DependsOn(ash::platform_keys::KeyPermissionsServiceFactory::GetInstance());
 }
 
-KeyedService* KeystoreServiceFactoryAsh::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+KeystoreServiceFactoryAsh::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new KeystoreServiceAsh(context);
+  return std::make_unique<KeystoreServiceAsh>(context);
 }
 
 }  // namespace crosapi

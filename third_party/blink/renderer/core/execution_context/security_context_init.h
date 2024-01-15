@@ -5,7 +5,9 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_EXECUTION_CONTEXT_SECURITY_CONTEXT_INIT_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_EXECUTION_CONTEXT_SECURITY_CONTEXT_INIT_H_
 
+#include "base/types/optional_ref.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/common/fenced_frame/redacted_fenced_frame_config.h"
 #include "third_party/blink/public/common/frame/frame_policy.h"
 #include "third_party/blink/public/common/permissions_policy/document_policy.h"
 #include "third_party/blink/public/common/permissions_policy/permissions_policy.h"
@@ -44,7 +46,9 @@ class CORE_EXPORT SecurityContextInit {
       LocalFrame& frame,
       const ResourceResponse& response,
       const FramePolicy& frame_policy,
-      const absl::optional<ParsedPermissionsPolicy>& isolated_app_policy);
+      const absl::optional<ParsedPermissionsPolicy>& isolated_app_policy,
+      const base::optional_ref<const FencedFrame::RedactedFencedFrameProperties>
+          fenced_frame_properties);
   void ApplyDocumentPolicy(
       DocumentPolicy::ParsedDocumentPolicy& document_policy,
       const String& report_only_document_policy_header);

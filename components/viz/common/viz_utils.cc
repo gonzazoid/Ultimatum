@@ -29,13 +29,11 @@
 
 namespace viz {
 
-bool PreferRGB565ResourcesForDisplay() {
 #if BUILDFLAG(IS_ANDROID)
+bool PreferRGB565ResourcesForDisplay() {
   return base::SysInfo::AmountOfPhysicalMemoryMB() <= 512;
-#else
-  return false;
-#endif
 }
+#endif
 
 #if BUILDFLAG(IS_ANDROID)
 bool AlwaysUseWideColorGamut() {
@@ -167,14 +165,52 @@ gfx::Rect GetExpandedRectWithPixelMovingForegroundFilter(
     const DrawQuad& rpdq,
     const cc::FilterOperations& filters) {
   const SharedQuadState* shared_quad_state = rpdq.shared_quad_state;
-  float max_pixel_movement = filters.MaximumPixelMovement();
-  gfx::RectF rect(rpdq.rect);
-  rect.Inset(-max_pixel_movement);
-  gfx::Rect expanded_rect = gfx::ToEnclosingRect(rect);
+  gfx::Rect expanded_rect = filters.ExpandRectForPixelMovement(rpdq.rect);
 
   // expanded_rect in the target space
   return cc::MathUtil::MapEnclosingClippedRect(
       shared_quad_state->quad_to_target_transform, expanded_rect);
+}
+
+gfx::Transform GetViewTransitionTransform(
+    gfx::Rect shared_element_quad,
+    gfx::Rect view_transition_content_output) {
+  gfx::Transform view_transition_transform;
+
+  view_transition_transform.Scale(
+      shared_element_quad.width() /
+          static_cast<SkScalar>(view_transition_content_output.width()),
+      shared_element_quad.height() /
+          static_cast<SkScalar>(view_transition_content_output.height()));
+
+  view_transition_transform.Translate(-view_transition_content_output.x(),
+                                      -view_transition_content_output.y());
+
+  return view_transition_transform;
+}
+
+bool QuadRoundedCornersBoundsIntersects(const DrawQuad* quad,
+                                        const gfx::RectF& target_quad) {
+  const SharedQuadState* sqs = quad->shared_quad_state;
+  const gfx::MaskFilterInfo& mask_filter_info = sqs->mask_filter_info;
+
+  // There is no rounded corner set.
+  if (!mask_filter_info.HasRoundedCorners()) {
+    return false;
+  }
+
+  const gfx::RRectF& rounded_corner_bounds =
+      mask_filter_info.rounded_corner_bounds();
+
+  const gfx::RRectF::Corner corners[] = {
+      gfx::RRectF::Corner::kUpperLeft, gfx::RRectF::Corner::kUpperRight,
+      gfx::RRectF::Corner::kLowerRight, gfx::RRectF::Corner::kLowerLeft};
+  for (auto c : corners) {
+    if (rounded_corner_bounds.CornerBoundingRect(c).Intersects(target_quad)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 }  // namespace viz

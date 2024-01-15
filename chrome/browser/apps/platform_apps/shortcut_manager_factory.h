@@ -8,8 +8,8 @@
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace base {
-template <typename Type>
-struct DefaultSingletonTraits;
+template <typename T>
+class NoDestructor;
 }
 
 class Profile;
@@ -19,7 +19,7 @@ class AppShortcutManager;
 // Singleton that owns all AppShortcutManagers and associates them with
 // Profiles. Listens for the Profile's destruction notification and cleans up
 // the associated AppShortcutManager.
-// AppShortcutManagers should not exist in incognito profiles.
+// AppShortcutManager should only exist for profiles where web apps are enabled.
 class AppShortcutManagerFactory : public ProfileKeyedServiceFactory {
  public:
   static AppShortcutManager* GetForProfile(Profile* profile);
@@ -27,14 +27,14 @@ class AppShortcutManagerFactory : public ProfileKeyedServiceFactory {
   static AppShortcutManagerFactory* GetInstance();
 
  private:
-  friend struct base::DefaultSingletonTraits<AppShortcutManagerFactory>;
+  friend base::NoDestructor<AppShortcutManagerFactory>;
 
   AppShortcutManagerFactory();
   ~AppShortcutManagerFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
-      content::BrowserContext* profile) const override;
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
+      content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
   bool ServiceIsNULLWhileTesting() const override;
 };

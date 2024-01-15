@@ -8,7 +8,6 @@
 #include <utility>
 
 #include "ash/app_list/app_list_view_delegate.h"
-#include "ash/app_list/views/app_list_main_view.h"
 #include "ash/app_list/views/app_list_view.h"
 #include "ash/app_list/views/assistant/assistant_main_view.h"
 #include "ash/app_list/views/contents_view.h"
@@ -16,11 +15,7 @@
 #include "ash/assistant/model/assistant_ui_model.h"
 #include "ash/assistant/ui/assistant_ui_constants.h"
 #include "ash/assistant/ui/assistant_view_delegate.h"
-#include "ash/assistant/ui/colors/assistant_colors.h"
-#include "ash/assistant/ui/colors/assistant_colors_util.h"
 #include "ash/assistant/util/assistant_util.h"
-#include "ash/constants/ash_features.h"
-#include "ash/public/cpp/app_list/app_list_config.h"
 #include "ash/public/cpp/assistant/assistant_state.h"
 #include "ash/public/cpp/assistant/controller/assistant_ui_controller.h"
 #include "ash/public/cpp/style/color_provider.h"
@@ -29,9 +24,9 @@
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_id.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/strings/utf_string_conversions.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "third_party/skia/include/core/SkTypes.h"
 #include "ui/accessibility/ax_node_data.h"
@@ -42,7 +37,9 @@
 #include "ui/compositor/layer_type.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/compositor_extra/shadow.h"
-#include "ui/views/background.h"
+#include "ui/display/screen.h"
+#include "ui/display/tablet_state.h"
+#include "ui/gfx/geometry/transform_util.h"
 #include "ui/views/layout/layout_manager_base.h"
 
 namespace ash {
@@ -111,7 +108,7 @@ class AssistantPageViewLayout : public views::LayoutManagerBase {
         std::max(preferred_height, host->GetMinimumSize().height());
 
     // Snap to |kMaxHeightDip| if |child| exceeds |preferred_height|.
-    for (const auto* child : host->children()) {
+    for (const views::View* child : host->children()) {
       if (child->GetHeightForWidth(width) > preferred_height)
         return kMaxHeightDip;
     }
@@ -131,7 +128,7 @@ class AssistantPageViewLayout : public views::LayoutManagerBase {
 
     views::ProposedLayout proposed_layout;
     proposed_layout.host_size = host_view()->size();
-    for (auto* child : host_view()->children()) {
+    for (views::View* child : host_view()->children()) {
       proposed_layout.child_layouts.push_back(views::ChildLayout{
           child, child->GetVisible(), bounds, views::SizeBounds()});
     }
@@ -140,7 +137,7 @@ class AssistantPageViewLayout : public views::LayoutManagerBase {
   }
 
  private:
-  AssistantPageView* const assistant_page_view_;
+  const raw_ptr<AssistantPageView> assistant_page_view_;
 };
 
 }  // namespace
@@ -159,8 +156,7 @@ AssistantPageView::AssistantPageView(
   if (AssistantUiController::Get())  // May be |nullptr| in tests.
     AssistantUiController::Get()->GetModel()->AddObserver(this);
 
-  if (Shell::HasInstance())  // Shell might not has an instance in tests.
-    tablet_mode_observation_.Observe(Shell::Get()->tablet_mode_controller());
+  display_observation_.Observe(display::Screen::GetScreen());
 }
 
 AssistantPageView::~AssistantPageView() {
@@ -203,15 +199,7 @@ void AssistantPageView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
 }
 
 void AssistantPageView::ChildPreferredSizeChanged(views::View* child) {
-  MaybeUpdateAppListState(child->GetHeightForWidth(width()));
   PreferredSizeChanged();
-}
-
-void AssistantPageView::ChildVisibilityChanged(views::View* child) {
-  if (!child->GetVisible())
-    return;
-
-  MaybeUpdateAppListState(child->GetHeightForWidth(width()));
 }
 
 void AssistantPageView::VisibilityChanged(views::View* starting_from,
@@ -244,14 +232,6 @@ void AssistantPageView::OnGestureEvent(ui::GestureEvent* event) {
     default:
       break;
   }
-}
-
-void AssistantPageView::OnWillBeShown() {
-  // Our preferred size may require a change in AppListState in order to ensure
-  // that the AssistantPageView renders fully on screen w/o being clipped. We do
-  // this in OnWillBeShown(), as opposed to waiting for OnShown(), so that the
-  // AppListState change animation can run in sync with page change animations.
-  MaybeUpdateAppListState(GetPreferredSize().height());
 }
 
 void AssistantPageView::OnAnimationStarted(AppListState from_state,
@@ -298,7 +278,7 @@ void AssistantPageView::OnAnimationStarted(AppListState from_state,
 
     ui::AnimationThroughputReporter reporter(
         settings->GetAnimator(),
-        metrics_util::ForSmoothness(base::BindRepeating([](int value) {
+        metrics_util::ForSmoothnessV3(base::BindRepeating([](int value) {
           base::UmaHistogramPercentage(
               "Ash.Assistant.AnimationSmoothness.ResizeAssistantPageView",
               value);
@@ -315,10 +295,17 @@ void AssistantPageView::OnAnimationStarted(AppListState from_state,
 
   // Animate the shadow's bounds through transform.
   {
-    gfx::Transform transform;
-    transform.Translate(from_rect.origin() - to_rect.origin());
-    transform.Scale(static_cast<float>(from_rect.width()) / to_rect.width(),
-                    static_cast<float>(from_rect.height()) / to_rect.height());
+    // `view_shadow_` can't be accurately scaled and translated because while
+    // its bounds need animation, the shadow size needs to remain the same. This
+    // causes the transformed shadow to be visually misplaced. To fix this,
+    // inset the `from_rect` so that the transformed shadow is completely hidden
+    // behind the view layer at the start of animation and slowly reveals itself
+    // when animating to the proper size.
+    gfx::Rect shadow_from_rect = from_rect;
+    shadow_from_rect.Inset(kShadowElevation);
+
+    const gfx::Transform transform = gfx::TransformBetweenRects(
+        gfx::RectF(to_rect), gfx::RectF(shadow_from_rect));
     view_shadow_->shadow()->layer()->SetTransform(transform);
 
     auto settings = contents_view()->CreateTransitionAnimationSettings(
@@ -329,24 +316,6 @@ void AssistantPageView::OnAnimationStarted(AppListState from_state,
 
 gfx::Size AssistantPageView::GetPreferredSearchBoxSize() const {
   return gfx::Size(kPreferredWidthDip, kSearchBoxHeightDip);
-}
-
-void AssistantPageView::AnimateYPosition(AppListViewState target_view_state,
-                                         const TransformAnimator& animator,
-                                         float default_offset) {
-  // Assistant page view may host native views for its content. The native view
-  // hosts use view to widget coordinate conversion to calculate the native view
-  // bounds, and thus depend on the view transform values.
-  // Make sure the view is laid out before starting the transform animation so
-  // native views are not placed according to interim, animated page transform
-  // value.
-  layer()->GetAnimator()->StopAnimatingProperty(
-      ui::LayerAnimationElement::TRANSFORM);
-  if (needs_layout())
-    Layout();
-
-  animator.Run(default_offset, layer());
-  animator.Run(default_offset, view_shadow_->shadow()->shadow_layer());
 }
 
 void AssistantPageView::UpdatePageOpacityForState(AppListState state,
@@ -393,8 +362,8 @@ void AssistantPageView::OnAssistantControllerDestroying() {
 void AssistantPageView::OnUiVisibilityChanged(
     AssistantVisibility new_visibility,
     AssistantVisibility old_visibility,
-    absl::optional<AssistantEntryPoint> entry_point,
-    absl::optional<AssistantExitPoint> exit_point) {
+    std::optional<AssistantEntryPoint> entry_point,
+    std::optional<AssistantExitPoint> exit_point) {
   if (!assistant_view_delegate_)
     return;
 
@@ -415,12 +384,19 @@ void AssistantPageView::OnUiVisibilityChanged(
   }
 }
 
-void AssistantPageView::OnTabletModeStarted() {
-  UpdateBackground(/*in_tablet_mode=*/true);
-}
-
-void AssistantPageView::OnTabletModeEnded() {
-  UpdateBackground(/*in_tablet_mode=*/false);
+void AssistantPageView::OnDisplayTabletStateChanged(
+    display::TabletState state) {
+  switch (state) {
+    case display::TabletState::kEnteringTabletMode:
+    case display::TabletState::kExitingTabletMode:
+      // Do nothing when the tablet mode is in process of changing.
+      break;
+    case display::TabletState::kInTabletMode:
+      UpdateBackground(/*in_tablet_mode=*/true);
+      break;
+    case display::TabletState::kInClamshellMode:
+      UpdateBackground(/*in_tablet_mode=*/false);
+  }
 }
 
 void AssistantPageView::OnThemeChanged() {
@@ -464,9 +440,6 @@ void AssistantPageView::UpdateBackground(bool in_tablet_mode) {
   else
     layer()->SetColor(SK_ColorWHITE);
 }
-
-// TODO(crbug.com/1359096): Clean up this function and its relative code path.
-void AssistantPageView::MaybeUpdateAppListState(int child_height) {}
 
 BEGIN_METADATA(AssistantPageView, views::View)
 END_METADATA

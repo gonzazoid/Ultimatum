@@ -12,6 +12,7 @@
 #include "ash/app_list/app_list_controller_impl.h"
 #include "ash/app_list/app_list_model_provider.h"
 #include "ash/app_list/app_list_presenter_impl.h"
+#include "ash/app_list/app_list_public_test_util.h"
 #include "ash/app_list/model/app_list_folder_item.h"
 #include "ash/app_list/model/app_list_item.h"
 #include "ash/app_list/model/app_list_model.h"
@@ -33,12 +34,12 @@
 #include "ash/app_list/views/recent_apps_view.h"
 #include "ash/app_list/views/scrollable_apps_grid_view.h"
 #include "ash/app_list/views/search_box_view.h"
-#include "ash/constants/ash_features.h"
+#include "ash/constants/ash_pref_names.h"
 #include "ash/public/cpp/accelerators.h"
 #include "ash/shell.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
-#include "components/services/app_service/public/cpp/features.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/aura/window_observer.h"
 #include "ui/compositor/layer.h"
@@ -60,30 +61,6 @@ namespace {
 // disabler exists at a time.
 class ScopedItemMoveAnimationDisabler;
 ScopedItemMoveAnimationDisabler* g_disabler_ptr = nullptr;
-
-AppListView* GetAppListView() {
-  return Shell::Get()->app_list_controller()->fullscreen_presenter()->GetView();
-}
-
-// An app list should be either a bubble app list or a fullscreen app list.
-// Returns true if a bubble app list should be used under the current mode.
-bool ShouldUseBubbleAppList() {
-  // A bubble app list should be used only when it is in clamshell mode
-  return !Shell::Get()->IsInTabletMode();
-}
-
-// Creates a RunLoop that waits until the context menu of app list item is
-// shown.
-void WaitUntilItemMenuShown(ash::AppListItemView* item_view) {
-  base::RunLoop run_loop;
-
-  // Set the callback that will quit the RunLoop when context menu is shown.
-  item_view->SetContextMenuShownCallbackForTest(run_loop.QuitClosure());
-  run_loop.Run();
-
-  // Reset the callback.
-  item_view->SetContextMenuShownCallbackForTest(base::RepeatingClosure());
-}
 
 // Returns the menu item indicated by `order` from a non-folder item menu.
 views::MenuItemView* GetReorderOptionForNonFolderItemMenu(
@@ -186,10 +163,6 @@ views::MenuItemView* ShowRootMenuAndReturn(
       if (is_folder_item) {
         root_menu = item_view->context_menu_for_folder()->root_menu_item_view();
       } else {
-        if (!base::FeatureList::IsEnabled(
-                apps::kAppServiceGetMenuWithoutMojom)) {
-          WaitUntilItemMenuShown(item_view);
-        }
         ash::AppListMenuModelAdapter* menu_model_adapter =
             item_view->item_menu_model_adapter();
         root_menu = menu_model_adapter->root_for_testing();
@@ -205,17 +178,6 @@ PagedAppsGridView* GetPagedAppsGridView() {
   // This view only exists for tablet launcher and legacy peeking launcher.
   DCHECK(!ShouldUseBubbleAppList());
   return AppListView::TestApi(GetAppListView()).GetRootAppsGridView();
-}
-
-AppListBubbleView* GetAppListBubbleView() {
-  AppListBubbleView* bubble_view = Shell::Get()
-                                       ->app_list_controller()
-                                       ->bubble_presenter_for_test()
-                                       ->bubble_view_for_test();
-  DCHECK(bubble_view) << "Bubble launcher view not yet created. Tests must "
-                         "show the launcher and may need to call "
-                         "WaitForBubbleWindow() if animations are enabled.";
-  return bubble_view;
 }
 
 AppsContainerView* GetAppsContainerView() {
@@ -234,14 +196,12 @@ AppListFolderView* GetAppListFolderView() {
 }
 
 AppListToastContainerView* GetToastContainerViewFromBubble() {
-  DCHECK(features::IsLauncherAppSortEnabled());
   return GetAppListBubbleView()
       ->apps_page_for_test()
       ->toast_container_for_test();
 }
 
 AppListToastContainerView* GetToastContainerViewFromFullscreenAppList() {
-  DCHECK(features::IsLauncherAppSortEnabled());
   return GetAppsContainerView()->toast_container();
 }
 
@@ -250,12 +210,6 @@ RecentAppsView* GetRecentAppsView() {
     return GetAppListBubbleView()->apps_page_for_test()->recent_apps_for_test();
 
   return GetAppsContainerView()->GetRecentAppsView();
-}
-
-SearchBoxView* GetSearchBoxView() {
-  if (ShouldUseBubbleAppList())
-    return GetAppListBubbleView()->search_box_view_for_test();
-  return GetAppListView()->app_list_main_view()->search_box_view();
 }
 
 // AppListVisibilityChangedWaiter ----------------------------------------------
@@ -310,8 +264,8 @@ class WindowAddedWaiter : public aura::WindowObserver {
     run_loop_.Quit();
   }
 
-  aura::Window* const container_;
-  aura::Window* added_window_ = nullptr;
+  const raw_ptr<aura::Window> container_;
+  raw_ptr<aura::Window> added_window_ = nullptr;
   base::RunLoop run_loop_;
 };
 
@@ -337,7 +291,7 @@ class ScopedItemMoveAnimationDisabler {
   }
 
  private:
-  AppsGridView* const apps_grid_;
+  const raw_ptr<AppsGridView> apps_grid_;
 };
 
 }  // namespace
@@ -351,20 +305,27 @@ AppListModel* AppListTestApi::GetAppListModel() {
 
 void AppListTestApi::ShowBubbleAppListAndWait() {
   ash::AcceleratorController::Get()->PerformActionIfEnabled(
-      ash::TOGGLE_APP_LIST, {});
+      AcceleratorAction::kToggleAppList, {});
   WaitForBubbleWindow(
       /*wait_for_opening_animation=*/true);
 }
 
 void AppListTestApi::WaitForBubbleWindow(bool wait_for_opening_animation) {
+  WaitForBubbleWindowInRootWindow(Shell::GetPrimaryRootWindow(),
+                                  wait_for_opening_animation);
+}
+
+void AppListTestApi::WaitForBubbleWindowInRootWindow(
+    aura::Window* root_window,
+    bool wait_for_opening_animation) {
   DCHECK(!Shell::Get()->IsInTabletMode());
 
   // Wait for the window only when the app list window does not exist.
   auto* app_list_controller = Shell::Get()->app_list_controller();
   if (!app_list_controller->GetWindow()) {
     // Wait for a child window to be added to the app list container.
-    aura::Window* container = Shell::GetContainer(
-        Shell::GetPrimaryRootWindow(), kShellWindowId_AppListContainer);
+    aura::Window* container =
+        Shell::GetContainer(root_window, kShellWindowId_AppListContainer);
     WindowAddedWaiter waiter(container);
     waiter.Wait();
 
@@ -525,10 +486,6 @@ PaginationModel* AppListTestApi::GetPaginationModel() {
   return GetPagedAppsGridView()->pagination_model();
 }
 
-void AppListTestApi::UpdatePagedViewStructure() {
-  GetPagedAppsGridView()->UpdatePagedViewStructure();
-}
-
 AppsGridView* AppListTestApi::GetTopLevelAppsGridView() {
   if (ShouldUseBubbleAppList()) {
     return GetAppListBubbleView()
@@ -592,19 +549,16 @@ views::View* AppListTestApi::GetToastContainerView() {
 
 void AppListTestApi::AddReorderAnimationCallback(
     AppsGridView::TestReorderDoneCallbackType callback) {
-  DCHECK(features::IsLauncherAppSortEnabled());
   GetTopLevelAppsGridView()->AddReorderCallbackForTest(std::move(callback));
 }
 
 void AppListTestApi::AddFadeOutAnimationStartClosure(
     base::OnceClosure closure) {
-  DCHECK(features::IsLauncherAppSortEnabled());
   GetTopLevelAppsGridView()->AddFadeOutAnimationStartClosureForTest(
       std::move(closure));
 }
 
 bool AppListTestApi::HasAnyWaitingReorderDoneCallback() const {
-  DCHECK(features::IsLauncherAppSortEnabled());
   return GetTopLevelAppsGridView()->HasAnyWaitingReorderDoneCallbackForTest();
 }
 
@@ -632,7 +586,7 @@ views::View* AppListTestApi::GetVisibleSearchResultView(int index) {
   app_list->GetViewsInGroup(kSearchResultViewGroup, &search_results);
 
   int current_visible_index = -1;
-  for (auto* view : search_results) {
+  for (views::View* view : search_results) {
     if (view->GetVisible())
       ++current_visible_index;
     if (current_visible_index == index)
@@ -661,6 +615,15 @@ void AppListTestApi::VerifyTopLevelItemVisibility() {
 
 views::View* AppListTestApi::GetRecentAppAt(int index) {
   return GetRecentAppsView()->GetItemViewAt(index);
+}
+
+std::vector<std::string> AppListTestApi::GetRecentAppIds() {
+  std::vector<std::string> ids;
+  RecentAppsView* recent_apps = GetRecentAppsView();
+  for (int i = 0; i < recent_apps->GetItemViewCount(); ++i) {
+    ids.push_back(recent_apps->GetItemViewAt(i)->item()->id());
+  }
+  return ids;
 }
 
 void AppListTestApi::SimulateSearch(const std::u16string& query) {
@@ -788,12 +751,13 @@ ui::Layer* AppListTestApi::GetAppListViewLayer() {
 
 void AppListTestApi::RegisterReorderAnimationDoneCallback(
     ReorderAnimationEndState* actual_state) {
-  AddReorderAnimationCallback(
-      base::BindRepeating(&AppListTestApi::OnReorderAnimationDone,
-                          weak_factory_.GetWeakPtr(), actual_state));
+  AddReorderAnimationCallback(base::BindRepeating(
+      &AppListTestApi::OnReorderAnimationDone, weak_factory_.GetWeakPtr(),
+      !ash::Shell::Get()->IsInTabletMode(), actual_state));
 }
 
-void AppListTestApi::OnReorderAnimationDone(ReorderAnimationEndState* result,
+void AppListTestApi::OnReorderAnimationDone(bool for_bubble_app_list,
+                                            ReorderAnimationEndState* result,
                                             bool abort,
                                             AppListGridAnimationStatus status) {
   DCHECK(status == AppListGridAnimationStatus::kReorderFadeOut ||
@@ -811,9 +775,8 @@ void AppListTestApi::OnReorderAnimationDone(ReorderAnimationEndState* result,
 
     // Verify that the toast container under the clamshell mode does not have
     // a layer after reorder animation completes.
-    views::View* toast_container = GetToastContainerView();
-    if (toast_container && !ash::Shell::Get()->IsInTabletMode())
-      EXPECT_FALSE(toast_container->layer());
+    if (for_bubble_app_list)
+      EXPECT_FALSE(GetToastContainerView()->layer());
   }
 
   // Callback can be registered without a running loop.

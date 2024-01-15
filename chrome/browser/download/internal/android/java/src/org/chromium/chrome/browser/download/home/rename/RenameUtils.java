@@ -3,14 +3,11 @@
 // found in the LICENSE file.
 package org.chromium.chrome.browser.download.home.rename;
 
-import androidx.annotation.VisibleForTesting;
+import org.jni_zero.NativeMethods;
 
 import org.chromium.base.FileUtils;
-import org.chromium.base.annotations.NativeMethods;
 
-/**
- * A class containing some utility static methods for rename.
- */
+/** A class containing some utility static methods for rename. */
 public class RenameUtils {
     private static boolean sIsDisabledNativeForTesting;
 
@@ -24,14 +21,12 @@ public class RenameUtils {
      * the path "foo/bar.tar.gz".
      */
     public static String getFileExtension(String fileName) {
-        return sIsDisabledNativeForTesting ? FileUtils.getExtension(fileName)
-                                           : RenameUtilsJni.get().getFileExtension(fileName);
+        return sIsDisabledNativeForTesting
+                ? FileUtils.getExtension(fileName)
+                : RenameUtilsJni.get().getFileExtension(fileName);
     }
 
-    /**
-     * Disables the native APIs. This is only intended for testing purposes.
-     */
-    @VisibleForTesting
+    /** Disables the native APIs. This is only intended for testing purposes. */
     public static void disableNativeForTesting() {
         sIsDisabledNativeForTesting = true;
     }

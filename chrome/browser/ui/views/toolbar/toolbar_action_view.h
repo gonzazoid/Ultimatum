@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_TOOLBAR_TOOLBAR_ACTION_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_TOOLBAR_TOOLBAR_ACTION_VIEW_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_action_hover_card_controller.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_action_view_delegate_views.h"
@@ -15,7 +15,6 @@
 #include "ui/views/controls/button/menu_button_controller.h"
 #include "ui/views/controls/menu/menu_model_adapter.h"
 #include "ui/views/drag_controller.h"
-#include "ui/views/view.h"
 
 class ExtensionContextMenuController;
 
@@ -25,18 +24,15 @@ class ExtensionContextMenuController;
 // action in the browser's toolbar.
 class ToolbarActionView : public views::MenuButton,
                           public ToolbarActionViewDelegateViews {
- public:
-  METADATA_HEADER(ToolbarActionView);
+  METADATA_HEADER(ToolbarActionView, views::MenuButton)
 
+ public:
   // Need DragController here because ToolbarActionView could be
   // dragged/dropped.
   class Delegate : public views::DragController {
    public:
     // Returns the current web contents.
     virtual content::WebContents* GetCurrentWebContents() = 0;
-
-    // Whether the container supports showing extensions outside of the menu.
-    virtual bool CanShowIconInToolbar() const;
 
     // Returns the view of the toolbar actions overflow menu to use as a
     // reference point for a popup when this view isn't visible.
@@ -93,11 +89,9 @@ class ToolbarActionView : public views::MenuButton,
   void RemovedFromWidget() override;
 
   // ToolbarActionViewDelegateViews:
-  views::View* GetAsView() override;
   views::FocusManager* GetFocusManagerForAccelerator() override;
   views::Button* GetReferenceButtonForPopup() override;
   void ShowContextMenuAsFallback() override;
-  bool CanShowIconInToolbar() const override;
   void OnPopupShown(bool by_user) override;
   void OnPopupClosed() override;
 

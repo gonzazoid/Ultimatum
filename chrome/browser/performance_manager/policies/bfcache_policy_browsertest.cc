@@ -5,7 +5,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
@@ -20,6 +20,7 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/common/content_features.h"
+#include "content/public/test/back_forward_cache_util.h"
 #include "content/public/test/browser_test.h"
 #include "net/dns/mock_host_resolver.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -84,12 +85,6 @@ class BFCachePolicyBrowserTest
   ~BFCachePolicyBrowserTest() override = default;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
-    EnableFeature(::features::kBackForwardCache,
-                  {{"foreground_cache_size", "10"},
-                   {"cache_size", "10"},
-                   {"TimeToLiveInBackForwardCacheInSeconds", "3600"},
-                   {"ignore_outstanding_network_request_for_testing", "true"}});
-    DisableFeature(::features::kBackForwardCacheMemoryControls);
     // Occlusion can cause the web_contents to be marked visible between the
     // time the test calls WasHidden and BFCachePolicy::MaybeFlushBFCache is
     // called, which kills the timer set by BFCachePolicy::OnIsVisibleChanged.
@@ -116,8 +111,11 @@ class BFCachePolicyBrowserTest
           performance_manager::features::kBFCachePerformanceManagerPolicy);
     }
 
-    feature_list_.InitWithFeaturesAndParameters(enabled_features_,
-                                                disabled_features_);
+    feature_list_.InitWithFeaturesAndParameters(
+        content::GetDefaultEnabledBackForwardCacheFeaturesForTesting(
+            enabled_features_, /*cache_size=*/10, /*foreground_cache_size=*/10),
+        content::GetDefaultDisabledBackForwardCacheFeaturesForTesting(
+            disabled_features_));
   }
 
   void SetUpOnMainThread() override {
@@ -174,8 +172,8 @@ class BFCachePolicyBrowserTest
 
 }  // namespace
 
-// TODO(https://crbug.com/1335514): Flaky.
-#if BUILDFLAG(IS_WIN)
+// TODO(https://crbug.com/1335514, https://crbug.com/1494579): Flaky.
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
 #define MAYBE_CacheFlushed DISABLED_CacheFlushed
 #else
 #define MAYBE_CacheFlushed CacheFlushed

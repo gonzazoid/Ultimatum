@@ -7,7 +7,6 @@
 
 #include <map>
 #include <memory>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -20,20 +19,24 @@
 #include "mojo/public/cpp/bindings/associated_remote.h"
 
 namespace content {
+class NavigationRequest;
 class RenderFrameHost;
 class RenderFrameHostImpl;
-class WebContentsImpl;
 class WebUIMainFrameObserver;
 
-class CONTENT_EXPORT WebUIImpl : public WebUI,
-                                 public mojom::WebUIHost,
-                                 public base::SupportsWeakPtr<WebUIImpl> {
+class CONTENT_EXPORT WebUIImpl : public WebUI, public mojom::WebUIHost {
  public:
-  explicit WebUIImpl(WebContentsImpl* contents,
-                     RenderFrameHostImpl* frame_host);
-  ~WebUIImpl() override;
+  explicit WebUIImpl(WebContents* web_contents);
+  explicit WebUIImpl(NavigationRequest* request);
   WebUIImpl(const WebUIImpl&) = delete;
   WebUIImpl& operator=(const WebUIImpl&) = delete;
+  ~WebUIImpl() override;
+
+  // A WebUIImpl object is created and owned by the WebUI navigation's
+  // NavigationRequest, until a RenderFrameHost has been picked for the
+  // navigation, at which point the ownership of the WebUIImpl object is moved
+  // to the RenderFrameHost. This function is called when that happens.
+  void SetRenderFrameHost(RenderFrameHost* render_frame_host);
 
   // Called when a RenderFrame is created for a WebUI (reload after a renderer
   // crash) or when a WebUI is created for a RenderFrame (i.e. navigating from
@@ -64,6 +67,7 @@ class CONTENT_EXPORT WebUIImpl : public WebUI,
   // WebUI implementation:
   WebContents* GetWebContents() override;
   WebUIController* GetController() override;
+  RenderFrameHost* GetRenderFrameHost() override;
   void SetController(std::unique_ptr<WebUIController> controller) override;
   float GetDeviceScaleFactor() override;
   const std::u16string& GetOverriddenTitle() override;
@@ -93,7 +97,7 @@ class CONTENT_EXPORT WebUIImpl : public WebUI,
     return web_contents_observer_.get();
   }
 
-  RenderFrameHostImpl* frame_host() const { return frame_host_; }
+  bool HasRenderFrameHost() const;
 
  private:
   friend class WebUIMainFrameObserver;
@@ -113,8 +117,8 @@ class CONTENT_EXPORT WebUIImpl : public WebUI,
   // Options that may be overridden by individual Web UI implementations. The
   // bool options default to false. See the public getters for more information.
   std::u16string overridden_title_;  // Defaults to empty string.
-  int bindings_;  // The bindings from BindingsPolicy that should be enabled for
-                  // this page.
+  // The bindings from BindingsPolicy that should be enabled for this page.
+  int bindings_;
 
   // The URL schemes that can be requested by this document.
   std::vector<std::string> requestable_schemes_;
@@ -128,14 +132,24 @@ class CONTENT_EXPORT WebUIImpl : public WebUI,
   // This lead to one UAF. See https://crbug.com/1308391
   // See regression test:
   // `WebUIImplBrowserTest::SynchronousWebContentDeletionInUnload`
-  raw_ptr<WebContents, DisableDanglingPtrDetection> web_contents_;
-  raw_ptr<RenderFrameHostImpl, DisableDanglingPtrDetection> frame_host_;
+  const raw_ptr<WebContents, DisableDanglingPtrDetection> web_contents_;
+
+  // During WebUI construction, `frame_host_` might stay unset for a while,
+  // as the WebUIImpl object is created early in a navigation, and a
+  // RenderFrameHost for the navigation might not be created until the final
+  // response for the navigation is received in some cases
+  // (after `NavigationRequest::OnResponseStarted()`).
+  // During WebUI destruction, `frame_host_` is always valid except
+  // if the WebContents is destroyed by the WebUIController subclass.
+  // See regression test:
+  // `WebUIImplBrowserTest::SynchronousWebContentDeletionInUnload`
+  base::WeakPtr<RenderFrameHostImpl> frame_host_;
 
   // The WebUIMessageHandlers we own.
   std::vector<std::unique_ptr<WebUIMessageHandler>> handlers_;
 
   // Notifies this WebUI about notifications in the main frame.
-  std::unique_ptr<WebUIMainFrameObserver> web_contents_observer_;
+  const std::unique_ptr<WebUIMainFrameObserver> web_contents_observer_;
 
   std::unique_ptr<WebUIController> controller_;
 

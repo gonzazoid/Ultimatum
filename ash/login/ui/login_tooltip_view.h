@@ -6,7 +6,9 @@
 #define ASH_LOGIN_UI_LOGIN_TOOLTIP_VIEW_H_
 
 #include "ash/login/ui/login_base_bubble_view.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
 namespace views {
@@ -16,8 +18,11 @@ class Label;
 namespace ash {
 
 class LoginTooltipView : public LoginBaseBubbleView {
+  METADATA_HEADER(LoginTooltipView, LoginBaseBubbleView)
+
  public:
-  LoginTooltipView(const std::u16string& message, views::View* anchor_view);
+  LoginTooltipView(const std::u16string& message,
+                   base::WeakPtr<views::View> anchor_view);
 
   LoginTooltipView(const LoginTooltipView&) = delete;
   LoginTooltipView& operator=(const LoginTooltipView&) = delete;
@@ -30,14 +35,13 @@ class LoginTooltipView : public LoginBaseBubbleView {
 
   // LoginBaseBubbleView:
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
-  void OnThemeChanged() override;
 
  protected:
   views::Label* label() { return label_; }
 
  private:
-  views::Label* label_ = nullptr;
-  views::ImageView* info_icon_ = nullptr;
+  raw_ptr<views::Label> label_ = nullptr;
+  raw_ptr<views::ImageView> info_icon_ = nullptr;
 };
 
 }  // namespace ash

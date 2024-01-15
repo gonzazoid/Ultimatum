@@ -11,10 +11,12 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
+#include "media/base/audio_glitch_info.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/modules/webrtc/webrtc_audio_device_not_impl.h"
 #include "third_party/blink/renderer/platform/webrtc/webrtc_source.h"
@@ -120,7 +122,8 @@ class MODULES_EXPORT WebRtcAudioDeviceImpl
   void RenderData(media::AudioBus* audio_bus,
                   int sample_rate,
                   base::TimeDelta audio_delay,
-                  base::TimeDelta* current_time) override;
+                  base::TimeDelta* current_time,
+                  const media::AudioGlitchInfo& glitch_info) override;
 
   // Called on the main render thread.
   void RemoveAudioRenderer(blink::WebRtcAudioRenderer* renderer) override;
@@ -130,6 +133,8 @@ class MODULES_EXPORT WebRtcAudioDeviceImpl
   // blink::WebRtcPlayoutDataSource implementation.
   void AddPlayoutSink(blink::WebRtcPlayoutDataSource::Sink* sink) override;
   void RemovePlayoutSink(blink::WebRtcPlayoutDataSource::Sink* sink) override;
+
+  absl::optional<webrtc::AudioDeviceModule::Stats> GetStats() const override;
 
  private:
   using CapturerList = std::list<ProcessedLocalAudioSource*>;
@@ -161,7 +166,7 @@ class MODULES_EXPORT WebRtcAudioDeviceImpl
   // Weak reference to the audio callback.
   // The webrtc client defines |audio_transport_callback_| by calling
   // RegisterAudioCallback().
-  webrtc::AudioTransport* audio_transport_callback_;
+  raw_ptr<webrtc::AudioTransport, DanglingUntriaged> audio_transport_callback_;
 
   // Cached value of the current audio delay on the output/renderer side.
   base::TimeDelta output_delay_ GUARDED_BY(lock_);
@@ -180,6 +185,13 @@ class MODULES_EXPORT WebRtcAudioDeviceImpl
 
   // The output device used for echo cancellation
   String output_device_id_for_aec_;
+
+  // Corresponds to RTCAudioPlayoutStats as defined in
+  // https://w3c.github.io/webrtc-stats/#playoutstats-dict*
+  media::AudioGlitchInfo cumulative_glitch_info_ GUARDED_BY(lock_);
+  base::TimeDelta total_samples_duration_ GUARDED_BY(lock_);
+  base::TimeDelta total_playout_delay_ GUARDED_BY(lock_);
+  uint64_t total_samples_count_ GUARDED_BY(lock_) = 0;
 };
 
 }  // namespace blink

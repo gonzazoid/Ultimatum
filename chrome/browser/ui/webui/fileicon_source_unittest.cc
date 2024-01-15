@@ -13,7 +13,7 @@
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/base/layout.h"
+#include "ui/base/resource/resource_scale_factor.h"
 
 namespace {
 
@@ -28,11 +28,12 @@ class TestFileIconSource : public FileIconSource {
       content::URLDataSource::GotDataCallback callback) override {
     FetchFileIcon_(path, scale_factor, icon_size, callback);
   }
-  MOCK_METHOD4(FetchFileIcon_,
-               void(const base::FilePath& path,
-                    float scale_factor,
-                    IconLoader::IconSize icon_size,
-                    content::URLDataSource::GotDataCallback& callback));
+  MOCK_METHOD(void,
+              FetchFileIcon_,
+              (const base::FilePath& path,
+               float scale_factor,
+               IconLoader::IconSize icon_size,
+               content::URLDataSource::GotDataCallback& callback));
 
   ~TestFileIconSource() override {}
 };
@@ -81,9 +82,9 @@ const struct FetchFileIconExpectation {
      FILE_PATH_LITERAL("c:\\users\\foo user\\bar.txt"), 1.0f,
      IconLoader::NORMAL},
     {"?path=c%3A%2Fusers%2F%C2%A9%202000.pdf",
-     FILE_PATH_LITERAL("c:\\users\\\xa9 2000.pdf"), 1.0f, IconLoader::NORMAL},
+     FILE_PATH_LITERAL("c:\\users\\\u00a9 2000.pdf"), 1.0f, IconLoader::NORMAL},
     {"?path=%E0%B6%9A%E0%B6%BB%E0%B7%9D%E0%B6%B8%E0%B7%8A",
-     FILE_PATH_LITERAL("\x0d9a\x0dbb\x0ddd\x0db8\x0dca"), 1.0f,
+     FILE_PATH_LITERAL("\u0d9a\u0dbb\u0ddd\u0db8\u0dca"), 1.0f,
      IconLoader::NORMAL},
     {"?path=%2Ffoo%2Fbar", FILE_PATH_LITERAL("\\foo\\bar"), 1.0f,
      IconLoader::NORMAL},
@@ -94,8 +95,8 @@ const struct FetchFileIconExpectation {
      IconLoader::NORMAL},
     {"?path=%2Ffoo&bar", FILE_PATH_LITERAL("/foo"), 1.0f, IconLoader::NORMAL},
     {"?path=%2Ffoo%2f%E0%B6%9A%E0%B6%BB%E0%B7%9D%E0%B6%B8%E0%B7%8A",
-     FILE_PATH_LITERAL("/foo/\xe0\xb6\x9a\xe0\xb6\xbb\xe0\xb7\x9d")
-         FILE_PATH_LITERAL("\xe0\xb6\xb8\xe0\xb7\x8a"),
+     FILE_PATH_LITERAL("/foo/\u0d9a\u0dbb\u0ddd")
+         FILE_PATH_LITERAL("\u0db8\u0dca"),
      1.0f, IconLoader::NORMAL},
     {"?path=%2Ffoo%2Fbar", FILE_PATH_LITERAL("/foo/bar"), 1.0f,
      IconLoader::NORMAL},
@@ -112,11 +113,8 @@ MATCHER(CallbackIsNull, "") {
 }  // namespace
 
 TEST_F(FileIconSourceTest, FileIconSource_Parse) {
-  std::vector<ui::ResourceScaleFactor> supported_scale_factors;
-  supported_scale_factors.push_back(ui::k100Percent);
-  supported_scale_factors.push_back(ui::k200Percent);
   ui::test::ScopedSetSupportedResourceScaleFactors scoped_supported(
-      supported_scale_factors);
+      {ui::k100Percent, ui::k200Percent});
 
   for (unsigned i = 0; i < std::size(kBasicExpectations); i++) {
     auto source = std::make_unique<TestFileIconSource>();

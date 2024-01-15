@@ -13,7 +13,6 @@ import logging
 import os
 import posixpath
 import re
-import string
 import subprocess
 import sys
 import tempfile
@@ -220,69 +219,6 @@ def _AssignNmAliasPathsAndCreatePathAliases(raw_symbols, object_paths_by_name):
   return ret
 
 
-def _ComputeAncestorPath(path_list, symbol_count):
-  """Returns the common ancestor of the given paths."""
-  if not path_list:
-    return ''
-
-  prefix = os.path.commonprefix(path_list)
-  # Check if all paths were the same.
-  if prefix == path_list[0]:
-    return prefix
-
-  # Put in buckets to cut down on the number of unique paths.
-  if symbol_count >= 100:
-    symbol_count_str = '100+'
-  elif symbol_count >= 50:
-    symbol_count_str = '50-99'
-  elif symbol_count >= 20:
-    symbol_count_str = '20-49'
-  elif symbol_count >= 10:
-    symbol_count_str = '10-19'
-  else:
-    symbol_count_str = str(symbol_count)
-
-  # Put the path count as a subdirectory so that grouping by path will show
-  # "{shared}" as a bucket, and the symbol counts as leafs.
-  if not prefix:
-    return os.path.join('{shared}', symbol_count_str)
-  return os.path.join(os.path.dirname(prefix), '{shared}', symbol_count_str)
-
-
-def _CompactLargeAliasesIntoSharedSymbols(raw_symbols, max_count):
-  """Converts symbols with large number of aliases into single symbols.
-
-  The merged symbol's path fields are changed to common-ancestor paths in
-  the form: common/dir/{shared}/$SYMBOL_COUNT
-
-  Assumes aliases differ only by path (not by name).
-  """
-  num_raw_symbols = len(raw_symbols)
-  num_shared_symbols = 0
-  src_cursor = 0
-  dst_cursor = 0
-  while src_cursor < num_raw_symbols:
-    symbol = raw_symbols[src_cursor]
-    raw_symbols[dst_cursor] = symbol
-    dst_cursor += 1
-    aliases = symbol.aliases
-    if aliases and len(aliases) > max_count:
-      symbol.source_path = _ComputeAncestorPath(
-          [s.source_path for s in aliases if s.source_path], len(aliases))
-      symbol.object_path = _ComputeAncestorPath(
-          [s.object_path for s in aliases if s.object_path], len(aliases))
-      symbol.generated_source = all(s.generated_source for s in aliases)
-      symbol.aliases = None
-      num_shared_symbols += 1
-      src_cursor += len(aliases)
-    else:
-      src_cursor += 1
-  raw_symbols[dst_cursor:] = []
-  num_removed = src_cursor - dst_cursor
-  logging.debug('Converted %d aliases into %d shared-path symbols', num_removed,
-                num_shared_symbols)
-
-
 def _DiscoverMissedObjectPaths(raw_symbols, known_inputs):
   # Missing object paths are caused by .a files added by -l flags, which are not
   # listed as explicit inputs within .ninja rules.
@@ -437,7 +373,7 @@ def _AddNmAliases(raw_symbols, names_by_address):
     new_syms = []
     for full_name in name_list:
       # Do not set |aliases| in order to avoid being pruned by
-      # _CompactLargeAliasesIntoSharedSymbols(), which assumes aliases differ
+      # CompactLargeAliasesIntoSharedSymbols(), which assumes aliases differ
       # only by path. The field will be set afterwards by _ConnectNmAliases().
       new_syms.append(
           models.Symbol(sym.section_name,
@@ -492,29 +428,6 @@ def _DeduceObjectPathForSwitchTables(raw_symbols, object_paths_by_name):
         'Found %d switch tables: Deduced %d object paths with ' +
         '%d arbitrations. %d remain unassigned.', num_switch_tables,
         num_deduced, num_arbitrations, num_unassigned)
-
-
-def _NameStringLiterals(raw_symbols, elf_path):
-  # Assign ASCII-readable string literals names like "string contents".
-  STRING_LENGTH_CUTOFF = 30
-
-  PRINTABLE_TBL = [False] * 256
-  for ch in string.printable:
-    PRINTABLE_TBL[ord(ch)] = True
-
-  for sym, name in string_extract.ReadStringLiterals(raw_symbols, elf_path):
-    # Newlines and tabs are used as delimiters in file_format.py
-    # At this point, names still have a terminating null byte.
-    name = name.replace(b'\n', b'').replace(b'\t', b'').strip(b'\00')
-    is_printable = all(PRINTABLE_TBL[c] for c in name)
-    if is_printable:
-      name = name.decode('ascii')
-      if len(name) > STRING_LENGTH_CUTOFF:
-        sym.full_name = '"{}[...]"'.format(name[:STRING_LENGTH_CUTOFF])
-      else:
-        sym.full_name = '"{}"'.format(name)
-    else:
-      sym.full_name = models.STRING_LITERAL_NAME
 
 
 def _ParseElfInfo(native_spec, outdir_context=None):
@@ -646,7 +559,10 @@ def _ParseElfInfo(native_spec, outdir_context=None):
                                                    linker_map_extras)
 
   if native_spec.elf_path and native_spec.track_string_literals:
-    _NameStringLiterals(raw_symbols, native_spec.elf_path)
+    sym_and_string_literals = string_extract.ReadStringLiterals(
+        raw_symbols, native_spec.elf_path)
+    for sym, data in sym_and_string_literals:
+      sym.full_name = string_extract.GetNameOfStringLiteralBytes(data)
 
   # If we have an ELF file, use its ranges as the source of truth, since some
   # sections can differ from the .map.
@@ -779,9 +695,6 @@ def CreateMetadata(*, native_spec, elf_info, shorten_path):
     timestamp = calendar.timegm(timestamp_obj.timetuple())
     native_metadata[models.METADATA_ELF_MTIME] = timestamp
 
-    relocations_count = _CountRelocationsFromElf(native_spec.elf_path)
-    native_metadata[models.METADATA_ELF_RELOCATIONS_COUNT] = relocations_count
-
   if native_spec.map_path:
     native_metadata[models.METADATA_MAP_FILENAME] = shorten_path(
         native_spec.map_path)
@@ -803,7 +716,8 @@ def CreateSymbols(*,
     pak_id_map: Instance of PakIdMap.
 
   Returns:
-    A tuple of (section_ranges, raw_symbols, elf_info).
+    A tuple of (section_ranges, raw_symbols, elf_info, metrics_by_file), where
+    metrics_by_file is a dict from file name to a dict of {metric_name: value}.
   """
   apk_elf_info_result = None
   if apk_spec and native_spec.apk_so_path:
@@ -816,6 +730,7 @@ def CreateSymbols(*,
   dwarf_source_mapper = None
   section_ranges = {}
   ninja_elf_object_paths = None
+  metrics_by_file = {}
   if output_directory and native_spec.map_path:
     # Finds all objects passed to the linker and creates a map of .o -> .cc.
     ninja_source_mapper, ninja_elf_object_paths = _ParseNinjaFiles(
@@ -888,6 +803,16 @@ def CreateSymbols(*,
 
   if elf_info:
     section_ranges = elf_info.section_ranges.copy()
+    if native_spec.elf_path:
+      key = posixpath.basename(native_spec.elf_path)
+      metrics_by_file[key] = {
+          f'{models.METRICS_SIZE}/{k}': size
+          for (k, (offset, size)) in section_ranges.items()
+      }
+      relocations_count = _CountRelocationsFromElf(native_spec.elf_path)
+      metrics_by_file[key][
+          f'{models.METRICS_COUNT}/{models.METRICS_COUNT_RELOCATIONS}'] = (
+              relocations_count)
 
   source_path = ''
   if native_spec.apk_so_path:
@@ -926,10 +851,10 @@ def CreateSymbols(*,
 
   if native_spec.elf_path or native_spec.map_path:
     logging.info('Converting excessive aliases into shared-path symbols')
-    _CompactLargeAliasesIntoSharedSymbols(raw_symbols,
-                                          _MAX_SAME_NAME_ALIAS_COUNT)
+    archive_util.CompactLargeAliasesIntoSharedSymbols(
+        raw_symbols, _MAX_SAME_NAME_ALIAS_COUNT)
 
     logging.debug('Connecting nm aliases')
     _ConnectNmAliases(raw_symbols)
 
-  return section_ranges, raw_symbols, elf_info
+  return section_ranges, raw_symbols, elf_info, metrics_by_file

@@ -10,7 +10,6 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.pm.ApplicationInfo;
-import android.os.Build;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -19,6 +18,7 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 
 import androidx.annotation.ColorInt;
+import androidx.annotation.IntDef;
 import androidx.annotation.StringRes;
 import androidx.annotation.StyleRes;
 
@@ -26,11 +26,18 @@ import org.chromium.base.SysUtils;
 import org.chromium.ui.R;
 import org.chromium.ui.display.DisplayAndroid;
 
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+
 /**
  * Toast wrapper, makes sure toasts are not HW accelerated on low-end devices and presented
  * correctly (i.e. use VrToast while in virtual reality).
  *
  * Can (and should) also be used for Chromium-related additions and extensions.
+ *
+ * When {@link ToastManager} is enabled, priority {@code HIGH} can be used when it is critical
+ * that the toast be shown sooner than those of priority {@code NORMAL} queued for their turn.
+ * See {@link ToastManager} for more details.
  */
 public class Toast {
 
@@ -39,29 +46,38 @@ public class Toast {
 
     private static int sExtraYOffset;
 
+    /** The different priorities that a toast can have. */
+    @IntDef({ToastPriority.HIGH, ToastPriority.NORMAL})
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface ToastPriority {
+        int HIGH = 0;
+        int NORMAL = 1;
+    }
+
     private android.widget.Toast mToast;
     private ViewGroup mSWLayout;
+    private @ToastPriority int mPriority;
+    private CharSequence mText;
 
     public Toast(Context context, View toastView) {
         if (SysUtils.isLowEndDevice()) {
             // Don't HW accelerate Toasts. Unfortunately the only way to do that is to make
             // toast.getView().getContext().getApplicationInfo() return lies to prevent
             // WindowManagerGlobal.addView() from adding LayoutParams.FLAG_HARDWARE_ACCELERATED.
-            mSWLayout = new FrameLayout(new ContextWrapper(context) {
-                @Override
-                public ApplicationInfo getApplicationInfo() {
-                    ApplicationInfo info = new ApplicationInfo(super.getApplicationInfo());
-                    // On Lollipop the condition we need to fail is
-                    // "targetSdkVersion >= Build.VERSION_CODES.LOLLIPOP"
-                    // (and for Chrome targetSdkVersion is always the latest)
-                    info.targetSdkVersion = Build.VERSION_CODES.KITKAT;
+            mSWLayout =
+                    new FrameLayout(
+                            new ContextWrapper(context) {
+                                @Override
+                                public ApplicationInfo getApplicationInfo() {
+                                    ApplicationInfo info =
+                                            new ApplicationInfo(super.getApplicationInfo());
 
-                    // On M+ the condition we need to fail is
-                    // "flags & ApplicationInfo.FLAG_HARDWARE_ACCELERATED"
-                    info.flags &= ~ApplicationInfo.FLAG_HARDWARE_ACCELERATED;
-                    return info;
-                }
-            });
+                                    // On M+ the condition we need to fail is
+                                    // "flags & ApplicationInfo.FLAG_HARDWARE_ACCELERATED"
+                                    info.flags &= ~ApplicationInfo.FLAG_HARDWARE_ACCELERATED;
+                                    return info;
+                                }
+                            });
         }
 
         mToast = UiWidgetFactory.getInstance().createToast(context);
@@ -71,11 +87,11 @@ public class Toast {
     }
 
     public void show() {
-        mToast.show();
+        ToastManager.getInstance().requestShow(this);
     }
 
     public void cancel() {
-        mToast.cancel();
+        ToastManager.getInstance().cancel(this);
     }
 
     public void setView(View view) {
@@ -109,8 +125,29 @@ public class Toast {
         mToast.setDuration(duration);
     }
 
-    public int getDuration() {
+    int getDuration() {
         return mToast.getDuration();
+    }
+
+    void setPriority(@ToastPriority int priority) {
+        mPriority = priority;
+    }
+
+    @ToastPriority
+    int getPriority() {
+        return mPriority;
+    }
+
+    void setText(CharSequence text) {
+        mText = text;
+    }
+
+    CharSequence getText() {
+        return mText;
+    }
+
+    android.widget.Toast getAndroidToast() {
+        return mToast;
     }
 
     @SuppressLint("RtlHardcoded")
@@ -188,6 +225,23 @@ public class Toast {
     }
 
     /**
+     * Create a new {@link Toast} with a given priority. See Javadoc for when to use it.
+     * @param context {@link Context} in which the toast is created.
+     * @param resId Resource of for the text message.
+     * @param duration Duration of the toast. Either {@link android.widget.Toast#LENGTH_SHORT}
+     *        or {@link android.widget.Toast#LENGTH_LONG}.
+     * @param priority {@link ToastPriority} to be assigned to the toast.
+     */
+    public static Toast makeTextWithPriority(
+            Context context, int resId, int duration, int priority) {
+        return new Builder(context)
+                .withTextStringRes(resId)
+                .withDuration(duration)
+                .withPriority(priority)
+                .build();
+    }
+
+    /**
      * Shows a toast anchored on a view.
      * @param context The context to use for the toast.
      * @param anchoredView The view to anchor the toast.
@@ -210,6 +264,7 @@ public class Toast {
         private Integer mBackgroundColor;
         private Integer mTextAppearance;
         private int mDuration = LENGTH_SHORT;
+        private @ToastPriority int mPriority = ToastPriority.NORMAL;
 
         public Builder(Context context) {
             mContext = context;
@@ -245,6 +300,11 @@ public class Toast {
             return this;
         }
 
+        public Builder withPriority(@ToastPriority int priority) {
+            mPriority = priority;
+            return this;
+        }
+
         private TextView inflateTextView() {
             LayoutInflater inflater = LayoutInflater.from(mContext);
             TextView textView = (TextView) inflater.inflate(R.layout.custom_toast_layout, null);
@@ -269,6 +329,8 @@ public class Toast {
                 toast.anchor(mContext, mAnchoredView);
             }
             toast.setDuration(mDuration);
+            toast.setPriority(mPriority);
+            toast.setText(mText);
             return toast;
         }
 

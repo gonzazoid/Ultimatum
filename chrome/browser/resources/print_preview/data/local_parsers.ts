@@ -2,12 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assertNotReached} from 'chrome://resources/js/assert_ts.js';
-import {isChromeOS, isLacros} from 'chrome://resources/js/cr.m.js';
+import {assertNotReached} from 'chrome://resources/js/assert.js';
+import {isChromeOS, isLacros} from 'chrome://resources/js/platform.js';
 
 import {Destination, DestinationOptionalParams, DestinationOrigin, PrinterType} from './destination.js';
 // <if expr="is_chromeos">
 import {DestinationProvisionalType} from './destination.js';
+import {PrinterStatus} from './printer_status_cros.js';
 // </if>
 
 interface ObjectMap {
@@ -20,6 +21,9 @@ export interface LocalDestinationInfo {
   printerDescription?: string;
   cupsEnterprisePrinter?: boolean;
   printerOptions?: ObjectMap;
+  // <if expr="is_chromeos">
+  printerStatus?: PrinterStatus;
+  // </if>
 }
 
 export interface ExtensionDestinationInfo {

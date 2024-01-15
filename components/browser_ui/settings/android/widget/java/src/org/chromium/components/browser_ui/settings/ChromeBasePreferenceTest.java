@@ -5,6 +5,7 @@
 package org.chromium.components.browser_ui.settings;
 
 import static androidx.test.espresso.Espresso.onView;
+import static androidx.test.espresso.assertion.ViewAssertions.doesNotExist;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
 import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
@@ -15,19 +16,13 @@ import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.stringContainsInOrder;
 
 import android.app.Activity;
-import android.view.View;
-import android.widget.TextView;
 
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.PreferenceScreen;
-import androidx.test.espresso.ViewInteraction;
-import androidx.test.filters.SmallTest;
+import androidx.test.filters.LargeTest;
 
 import com.google.common.collect.ImmutableList;
 
-import org.hamcrest.Description;
-import org.hamcrest.Matcher;
-import org.hamcrest.TypeSafeMatcher;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -35,25 +30,20 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import org.chromium.base.FeatureList;
-import org.chromium.base.test.params.ParameterAnnotations;
-import org.chromium.base.test.params.ParameterSet;
-import org.chromium.base.test.params.ParameterizedRunner;
+import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.base.test.util.Batch;
+import org.chromium.components.browser_ui.settings.test.R;
+import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.ui.test.util.DisableAnimationsTestRule;
 
-import java.util.Arrays;
-import java.util.List;
-
-/**
- * Tests of {@link ChromeBasePreference}.
- */
-@RunWith(ParameterizedRunner.class)
+/** Tests of {@link ChromeBasePreference}. */
+@RunWith(BaseJUnit4ClassRunner.class)
 @Batch(Batch.PER_CLASS)
 public class ChromeBasePreferenceTest {
     @ClassRule
     public static final DisableAnimationsTestRule disableAnimationsRule =
             new DisableAnimationsTestRule();
+
     @Rule
     public final BlankUiTestActivitySettingsTestRule mSettingsRule =
             new BlankUiTestActivitySettingsTestRule();
@@ -61,162 +51,240 @@ public class ChromeBasePreferenceTest {
     private static final String TITLE = "Preference Title";
     private static final String SUMMARY = "This is a summary.";
 
+    private static final String CUSTOM_LAYOUT_PREF_NAME = "preference_with_custom_layout";
+
     private Activity mActivity;
-    private PreferenceFragmentCompat mPreferenceFragment;
     private PreferenceScreen mPreferenceScreen;
-
-    private boolean mEnableHighlightManagedPrefDisclaimerAndroid;
-
-    public ChromeBasePreferenceTest(boolean enableHighlightManagedPrefDisclaimerAndroid) {
-        mEnableHighlightManagedPrefDisclaimerAndroid = enableHighlightManagedPrefDisclaimerAndroid;
-    }
 
     @Before
     public void setUp() {
-        FeatureList.TestValues testValuesOverride = new FeatureList.TestValues();
-        testValuesOverride.addFeatureFlagOverride(
-                SettingsFeatureList.HIGHLIGHT_MANAGED_PREF_DISCLAIMER_ANDROID,
-                mEnableHighlightManagedPrefDisclaimerAndroid);
-        FeatureList.setTestValues(testValuesOverride);
-
         mSettingsRule.launchPreference(PlaceholderSettingsForTest.class);
         mActivity = mSettingsRule.getActivity();
-        mPreferenceFragment = mSettingsRule.getPreferenceFragment();
         mPreferenceScreen = mSettingsRule.getPreferenceScreen();
     }
 
     @Test
-    @SmallTest
+    @LargeTest
     public void testUnmanagedPreference() {
         ChromeBasePreference preference = new ChromeBasePreference(mActivity);
         preference.setTitle(TITLE);
         preference.setSummary(SUMMARY);
-        preference.setManagedPreferenceDelegate(ManagedPreferencesUtilsTest.UNMANAGED_DELEGATE);
+        preference.setManagedPreferenceDelegate(ManagedPreferenceTestDelegates.UNMANAGED_DELEGATE);
         mPreferenceScreen.addPreference(preference);
 
         Assert.assertTrue(preference.isEnabled());
 
-        getTitleView().check(matches(allOf(withText(TITLE), isDisplayed())));
-        getSummaryView().check(matches(allOf(withText(SUMMARY), isDisplayed())));
-        getIconView().check(matches(not(isDisplayed())));
+        onView(withId(android.R.id.title)).check(matches(allOf(withText(TITLE), isDisplayed())));
+        onView(withId(android.R.id.summary))
+                .check(matches(allOf(withText(SUMMARY), isDisplayed())));
+        // Unmanaged preferences do not use {@code chrome_managed_preference}, so a disclaimer text
+        // view does not exist.
+        onView(withId(R.id.managed_disclaimer_text)).check(doesNotExist());
+        onView(withId(android.R.id.icon)).check(matches(not(isDisplayed())));
     }
 
     @Test
-    @SmallTest
+    @LargeTest
     public void testPolicyManagedPreferenceWithoutSummary() {
         ChromeBasePreference preference = new ChromeBasePreference(mActivity);
         preference.setTitle(TITLE);
-        preference.setManagedPreferenceDelegate(ManagedPreferencesUtilsTest.POLICY_DELEGATE);
+        preference.setManagedPreferenceDelegate(ManagedPreferenceTestDelegates.POLICY_DELEGATE);
         mPreferenceScreen.addPreference(preference);
 
         Assert.assertFalse(preference.isEnabled());
 
-        getTitleView().check(matches(allOf(withText(TITLE), isDisplayed())));
-        if (mEnableHighlightManagedPrefDisclaimerAndroid) {
-            getManagedDisclaimerView().check(
-                    matches(allOf(withText(R.string.managed_by_your_organization),
-                            hasDrawableStart(), isDisplayed())));
-            getIconView().check(matches(not(isDisplayed())));
-        } else {
-            getSummaryView().check(
-                    matches(allOf(withText(R.string.managed_by_your_organization), isDisplayed())));
-            getIconView().check(matches(isDisplayed()));
-        }
+        onView(withId(android.R.id.title)).check(matches(allOf(withText(TITLE), isDisplayed())));
+        onView(withId(android.R.id.summary)).check(matches(not(isDisplayed())));
+        onView(withId(R.id.managed_disclaimer_text))
+                .check(
+                        matches(
+                                allOf(
+                                        withText(R.string.managed_by_your_organization),
+                                        Matchers.hasDrawableStart(),
+                                        isDisplayed())));
+        onView(withId(android.R.id.icon)).check(matches(not(isDisplayed())));
     }
 
     @Test
-    @SmallTest
+    @LargeTest
     public void testPolicyManagedPreferenceWithSummary() {
         ChromeBasePreference preference = new ChromeBasePreference(mActivity);
         preference.setTitle(TITLE);
         preference.setSummary(SUMMARY);
-        preference.setManagedPreferenceDelegate(ManagedPreferencesUtilsTest.POLICY_DELEGATE);
+        preference.setManagedPreferenceDelegate(ManagedPreferenceTestDelegates.POLICY_DELEGATE);
         mPreferenceScreen.addPreference(preference);
-
         Assert.assertFalse(preference.isEnabled());
 
-        getTitleView().check(matches(allOf(withText(TITLE), isDisplayed())));
-        if (mEnableHighlightManagedPrefDisclaimerAndroid) {
-            getSummaryView().check(matches(allOf(withText(SUMMARY), isDisplayed())));
-            getManagedDisclaimerView().check(
-                    matches(allOf(withText(R.string.managed_by_your_organization),
-                            hasDrawableStart(), isDisplayed())));
-            getIconView().check(matches(not(isDisplayed())));
-        } else {
-            List<String> expectedSummaryContains = ImmutableList.of(
-                    SUMMARY, mActivity.getString(R.string.managed_by_your_organization));
-            getSummaryView().check(matches(allOf(
-                    withText(stringContainsInOrder(expectedSummaryContains)), isDisplayed())));
-            getIconView().check(matches(isDisplayed()));
-        }
+        onView(withId(android.R.id.title)).check(matches(allOf(withText(TITLE), isDisplayed())));
+        onView(withId(android.R.id.summary))
+                .check(matches(allOf(withText(SUMMARY), isDisplayed())));
+        onView(withId(R.id.managed_disclaimer_text))
+                .check(
+                        matches(
+                                allOf(
+                                        withText(R.string.managed_by_your_organization),
+                                        Matchers.hasDrawableStart(),
+                                        isDisplayed())));
+        onView(withId(android.R.id.icon)).check(matches(not(isDisplayed())));
     }
 
     @Test
-    @SmallTest
+    @LargeTest
     public void testSingleCustodianManagedPreference() {
         ChromeBasePreference preference = new ChromeBasePreference(mActivity);
         preference.setTitle(TITLE);
         preference.setManagedPreferenceDelegate(
-                ManagedPreferencesUtilsTest.SINGLE_CUSTODIAN_DELEGATE);
+                ManagedPreferenceTestDelegates.SINGLE_CUSTODIAN_DELEGATE);
         mPreferenceScreen.addPreference(preference);
 
         Assert.assertFalse(preference.isEnabled());
 
-        getTitleView().check(matches(allOf(withText(TITLE), isDisplayed())));
-        getSummaryView().check(
-                matches(allOf(withText(R.string.managed_by_your_parent), isDisplayed())));
-        getIconView().check(matches(isDisplayed()));
+        onView(withId(android.R.id.title)).check(matches(allOf(withText(TITLE), isDisplayed())));
+        onView(withId(android.R.id.summary))
+                .check(matches(allOf(withText(R.string.managed_by_your_parent), isDisplayed())));
+        onView(withId(R.id.managed_disclaimer_text)).check(doesNotExist());
+        onView(withId(android.R.id.icon)).check(matches(isDisplayed()));
     }
 
     @Test
-    @SmallTest
+    @LargeTest
     public void testMultipleCustodianManagedPreference() {
         ChromeBasePreference preference = new ChromeBasePreference(mActivity);
         preference.setTitle(TITLE);
         preference.setManagedPreferenceDelegate(
-                ManagedPreferencesUtilsTest.MULTI_CUSTODIAN_DELEGATE);
+                ManagedPreferenceTestDelegates.MULTI_CUSTODIAN_DELEGATE);
         mPreferenceScreen.addPreference(preference);
 
         Assert.assertFalse(preference.isEnabled());
 
-        getTitleView().check(matches(allOf(withText(TITLE), isDisplayed())));
-        getSummaryView().check(
-                matches(allOf(withText(R.string.managed_by_your_parents), isDisplayed())));
-        getIconView().check(matches(isDisplayed()));
+        onView(withId(android.R.id.title)).check(matches(allOf(withText(TITLE), isDisplayed())));
+        onView(withId(android.R.id.summary))
+                .check(matches(allOf(withText(R.string.managed_by_your_parents), isDisplayed())));
+        onView(withId(R.id.managed_disclaimer_text)).check(doesNotExist());
+        onView(withId(android.R.id.icon)).check(matches(isDisplayed()));
     }
 
-    private ViewInteraction getTitleView() {
-        return onView(withId(android.R.id.title));
+    @Test
+    @LargeTest
+    public void testUnmanagedPreferenceWithCustomLayout() throws Exception {
+        PreferenceFragmentCompat fragment = mSettingsRule.getPreferenceFragment();
+        SettingsUtils.addPreferencesFromResource(
+                fragment, R.xml.test_chrome_base_preference_screen);
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    ChromeBasePreference preference =
+                            fragment.findPreference(CUSTOM_LAYOUT_PREF_NAME);
+                    preference.setTitle(TITLE);
+                    preference.setSummary(SUMMARY);
+                    preference.setManagedPreferenceDelegate(
+                            ManagedPreferenceTestDelegates.UNMANAGED_DELEGATE);
+                });
+
+        ChromeBasePreference preference = fragment.findPreference(CUSTOM_LAYOUT_PREF_NAME);
+        Assert.assertEquals(
+                preference.getLayoutResource(),
+                R.layout.chrome_managed_preference_with_custom_layout);
+        Assert.assertTrue(preference.isEnabled());
+        onView(withId(android.R.id.title)).check(matches(allOf(withText(TITLE), isDisplayed())));
+        onView(withId(android.R.id.summary))
+                .check(matches(allOf(withText(SUMMARY), isDisplayed())));
+        onView(withId(R.id.managed_disclaimer_text)).check(doesNotExist());
+        onView(withId(android.R.id.icon)).check(matches(not(isDisplayed())));
     }
 
-    private ViewInteraction getSummaryView() {
-        return onView(withId(android.R.id.summary));
+    @Test
+    @LargeTest
+    public void testPolicyManagedPreferenceWithSummaryAndCustomLayout() {
+        PreferenceFragmentCompat fragment = mSettingsRule.getPreferenceFragment();
+        SettingsUtils.addPreferencesFromResource(
+                fragment, R.xml.test_chrome_base_preference_screen);
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    ChromeBasePreference preference =
+                            fragment.findPreference(CUSTOM_LAYOUT_PREF_NAME);
+                    preference.setTitle(TITLE);
+                    preference.setSummary(SUMMARY);
+                    preference.setManagedPreferenceDelegate(
+                            ManagedPreferenceTestDelegates.POLICY_DELEGATE);
+                });
+
+        ChromeBasePreference preference = fragment.findPreference(CUSTOM_LAYOUT_PREF_NAME);
+        Assert.assertEquals(
+                preference.getLayoutResource(),
+                R.layout.chrome_managed_preference_with_custom_layout);
+        Assert.assertFalse(preference.isEnabled());
+        onView(withId(android.R.id.title)).check(matches(allOf(withText(TITLE), isDisplayed())));
+        onView(withId(android.R.id.summary))
+                .check(
+                        matches(
+                                allOf(
+                                        withText(
+                                                stringContainsInOrder(
+                                                        ImmutableList.of(
+                                                                SUMMARY,
+                                                                mActivity.getString(
+                                                                        R.string
+                                                                                .managed_by_your_organization)))),
+                                        isDisplayed())));
+        onView(withId(R.id.managed_disclaimer_text)).check(doesNotExist());
+        onView(withId(android.R.id.icon)).check(matches(isDisplayed()));
     }
 
-    private ViewInteraction getManagedDisclaimerView() {
-        return onView(withId(R.id.managed_disclaimer_text));
+    @Test
+    @LargeTest
+    public void testPolicyManagedPreferenceWithoutSummaryWithCustomLayout() {
+        PreferenceFragmentCompat fragment = mSettingsRule.getPreferenceFragment();
+        SettingsUtils.addPreferencesFromResource(
+                fragment, R.xml.test_chrome_base_preference_screen);
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    ChromeBasePreference preference =
+                            fragment.findPreference(CUSTOM_LAYOUT_PREF_NAME);
+                    preference.setTitle(TITLE);
+                    preference.setManagedPreferenceDelegate(
+                            ManagedPreferenceTestDelegates.POLICY_DELEGATE);
+                });
+
+        ChromeBasePreference preference = fragment.findPreference(CUSTOM_LAYOUT_PREF_NAME);
+        Assert.assertEquals(
+                preference.getLayoutResource(),
+                R.layout.chrome_managed_preference_with_custom_layout);
+        Assert.assertFalse(preference.isEnabled());
+        onView(withId(android.R.id.title)).check(matches(allOf(withText(TITLE), isDisplayed())));
+        onView(withId(android.R.id.summary))
+                .check(
+                        matches(
+                                allOf(
+                                        withText(R.string.managed_by_your_organization),
+                                        isDisplayed())));
+        onView(withId(R.id.managed_disclaimer_text)).check(doesNotExist());
+        onView(withId(android.R.id.icon)).check(matches(isDisplayed()));
     }
 
-    private ViewInteraction getIconView() {
-        return onView(withId(android.R.id.icon));
+    @Test
+    @LargeTest
+    public void testSingleCustodianManagedPreferenceWithCustomLayout() {
+        PreferenceFragmentCompat fragment = mSettingsRule.getPreferenceFragment();
+        SettingsUtils.addPreferencesFromResource(
+                fragment, R.xml.test_chrome_base_preference_screen);
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    ChromeBasePreference preference =
+                            fragment.findPreference(CUSTOM_LAYOUT_PREF_NAME);
+                    preference.setTitle(TITLE);
+                    preference.setManagedPreferenceDelegate(
+                            ManagedPreferenceTestDelegates.SINGLE_CUSTODIAN_DELEGATE);
+                });
+
+        ChromeBasePreference preference = fragment.findPreference(CUSTOM_LAYOUT_PREF_NAME);
+        Assert.assertEquals(
+                preference.getLayoutResource(),
+                R.layout.chrome_managed_preference_with_custom_layout);
+        Assert.assertFalse(preference.isEnabled());
+        onView(withId(android.R.id.title)).check(matches(allOf(withText(TITLE), isDisplayed())));
+        onView(withId(android.R.id.summary))
+                .check(matches(allOf(withText(R.string.managed_by_your_parent), isDisplayed())));
+        onView(withId(R.id.managed_disclaimer_text)).check(doesNotExist());
+        onView(withId(android.R.id.icon)).check(matches(isDisplayed()));
     }
-
-    private static Matcher<View> hasDrawableStart() {
-        return new TypeSafeMatcher<View>() {
-            @Override
-            protected boolean matchesSafely(View view) {
-                return ((TextView) view).getCompoundDrawablesRelative()[0] != null;
-            }
-
-            @Override
-            public void describeTo(Description description) {
-                description.appendText("Expected TextView to define android:drawableStart");
-            }
-        };
-    }
-
-    @ParameterAnnotations.ClassParameter
-    private static List<ParameterSet> sClassParams = Arrays.asList(
-            new ParameterSet().value(true).name("EnableHighlightManagedPrefDisclaimerAndroid"),
-            new ParameterSet().value(false).name("DisableHighlightManagedPrefDisclaimerAndroid"));
 }

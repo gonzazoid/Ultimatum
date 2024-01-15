@@ -14,28 +14,21 @@ import org.chromium.chrome.browser.suggestions.SiteSuggestion;
 import org.chromium.components.favicon.IconType;
 import org.chromium.url.GURL;
 
-/**
- * Holds the details to populate a site suggestion tile.
- */
+/** Holds the details to populate a site suggestion tile. */
 public class Tile implements OfflinableSuggestion {
     private final SiteSuggestion mSiteData;
 
     private final int mIndex;
 
-    @TileVisualType
-    private int mType = TileVisualType.NONE;
+    private @TileVisualType int mType = TileVisualType.NONE;
 
-    @IconType
-    private int mIconType = IconType.INVALID;
+    private @IconType int mIconType = IconType.INVALID;
 
-    @Nullable
-    private Drawable mIcon;
+    @Nullable private Drawable mIcon;
 
-    @Nullable
-    private ColorStateList mIconTint;
+    @Nullable private ColorStateList mIconTint;
 
-    @Nullable
-    private Long mOfflinePageOfflineId;
+    @Nullable private Long mOfflinePageOfflineId;
 
     /**
      * @param suggestion The site data we want to populate the tile with.
@@ -96,8 +89,7 @@ public class Tile implements OfflinableSuggestion {
      * @return The source of this tile's title. Used for metrics tracking. Valid values are listed
      * in {@code TileTitleSource}.
      */
-    @TileTitleSource
-    public int getTitleSource() {
+    public @TileTitleSource int getTitleSource() {
         return mSiteData.titleSource;
     }
 
@@ -105,16 +97,14 @@ public class Tile implements OfflinableSuggestion {
      * @return The source of this tile. Used for metrics tracking. Valid values are listed in
      * {@code TileSource}.
      */
-    @TileSource
-    public int getSource() {
+    public @TileSource int getSource() {
         return mSiteData.source;
     }
 
     /**
      * @return The visual type of this tile. Valid values are listed in {@link TileVisualType}.
      */
-    @TileVisualType
-    public int getType() {
+    public @TileVisualType int getType() {
         return mType;
     }
 
@@ -129,14 +119,11 @@ public class Tile implements OfflinableSuggestion {
     /**
      * @return The icon type of this tile. Valid values are listed in {@link IconType}.
      */
-    @IconType
-    public int getIconType() {
+    public @IconType int getIconType() {
         return mIconType;
     }
 
-    /**
-     * Sets the icon type of this tile. Valid values are listed in {@link IconType}.
-     */
+    /** Sets the icon type of this tile. Valid values are listed in {@link IconType}. */
     public void setIconType(@IconType int iconType) {
         mIconType = iconType;
     }
@@ -144,21 +131,16 @@ public class Tile implements OfflinableSuggestion {
     /**
      * @return The icon, may be null.
      */
-    @Nullable
-    public Drawable getIcon() {
+    public @Nullable Drawable getIcon() {
         return mIcon;
     }
 
-    /**
-     * Updates the icon drawable.
-     */
+    /** Updates the icon drawable. */
     public void setIcon(@Nullable Drawable icon) {
         mIcon = icon;
     }
 
-    /**
-     * Updates the icon tint color.
-     */
+    /** Updates the icon tint color. */
     public void setIconTint(@Nullable ColorStateList iconTint) {
         mIconTint = iconTint;
     }
@@ -167,8 +149,7 @@ public class Tile implements OfflinableSuggestion {
         return mIconTint;
     }
 
-    @TileSectionType
-    public int getSectionType() {
+    public @TileSectionType int getSectionType() {
         return mSiteData.sectionType;
     }
 }

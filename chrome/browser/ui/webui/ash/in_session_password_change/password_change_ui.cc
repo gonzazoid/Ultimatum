@@ -7,8 +7,9 @@
 #include <memory>
 
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
+#include "ash/webui/common/trusted_types_util.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/login/login_pref_names.h"
@@ -80,19 +81,25 @@ void AddSize(content::WebUIDataSource* source,
 
 }  // namespace
 
+bool PasswordChangeUIConfig::IsWebUIEnabled(
+    content::BrowserContext* browser_context) {
+  return Profile::FromBrowserContext(browser_context)
+      ->GetPrefs()
+      ->GetBoolean(ash::prefs::kSamlInSessionPasswordChangeEnabled);
+}
+
 PasswordChangeUI::PasswordChangeUI(content::WebUI* web_ui)
     : ui::WebDialogUI(web_ui) {
   Profile* profile = Profile::FromWebUI(web_ui);
   CHECK(profile->GetPrefs()->GetBoolean(
       prefs::kSamlInSessionPasswordChangeEnabled));
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUIPasswordChangeHost);
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile, chrome::kChromeUIPasswordChangeHost);
+  ash::EnableTrustedTypesCSP(source);
 
   const std::string password_change_url = GetPasswordChangeUrl(profile);
   web_ui->AddMessageHandler(
       std::make_unique<PasswordChangeHandler>(password_change_url));
-
-  source->DisableTrustedTypesCSP();
 
   source->AddString("hostedHeader", GetHostedHeaderText(password_change_url));
   source->UseStringsJs();
@@ -104,21 +111,25 @@ PasswordChangeUI::PasswordChangeUI(content::WebUI* web_ui)
   // Add Gaia Authenticator resources
   source->AddResourcePaths(
       base::make_span(kGaiaAuthHostResources, kGaiaAuthHostResourcesSize));
-
-  content::WebUIDataSource::Add(profile, source);
 }
 
 PasswordChangeUI::~PasswordChangeUI() = default;
+
+bool ConfirmPasswordChangeUIConfig::IsWebUIEnabled(
+    content::BrowserContext* browser_context) {
+  return Profile::FromBrowserContext(browser_context)
+      ->GetPrefs()
+      ->GetBoolean(ash::prefs::kSamlInSessionPasswordChangeEnabled);
+}
 
 ConfirmPasswordChangeUI::ConfirmPasswordChangeUI(content::WebUI* web_ui)
     : ui::WebDialogUI(web_ui) {
   Profile* profile = Profile::FromWebUI(web_ui);
   CHECK(profile->GetPrefs()->GetBoolean(
       prefs::kSamlInSessionPasswordChangeEnabled));
-  content::WebUIDataSource* source = content::WebUIDataSource::Create(
-      chrome::kChromeUIConfirmPasswordChangeHost);
-
-  source->DisableTrustedTypesCSP();
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile, chrome::kChromeUIConfirmPasswordChangeHost);
+  ash::EnableTrustedTypesCSP(source);
 
   static constexpr webui::LocalizedString kLocalizedStrings[] = {
       {"title", IDS_PASSWORD_CHANGE_CONFIRM_DIALOG_TITLE},
@@ -150,11 +161,16 @@ ConfirmPasswordChangeUI::ConfirmPasswordChangeUI(content::WebUI* web_ui)
 
   // The ConfirmPasswordChangeHandler is added by the dialog, so no need to add
   // it here.
-
-  content::WebUIDataSource::Add(profile, source);
 }
 
 ConfirmPasswordChangeUI::~ConfirmPasswordChangeUI() = default;
+
+bool UrgentPasswordExpiryNotificationUIConfig::IsWebUIEnabled(
+    content::BrowserContext* browser_context) {
+  return Profile::FromBrowserContext(browser_context)
+      ->GetPrefs()
+      ->GetBoolean(ash::prefs::kSamlInSessionPasswordChangeEnabled);
+}
 
 UrgentPasswordExpiryNotificationUI::UrgentPasswordExpiryNotificationUI(
     content::WebUI* web_ui)
@@ -163,18 +179,18 @@ UrgentPasswordExpiryNotificationUI::UrgentPasswordExpiryNotificationUI(
   PrefService* prefs = profile->GetPrefs();
   CHECK(prefs->GetBoolean(prefs::kSamlInSessionPasswordChangeEnabled));
 
-  content::WebUIDataSource* source = content::WebUIDataSource::Create(
-      chrome::kChromeUIUrgentPasswordExpiryNotificationHost);
-
-  source->DisableTrustedTypesCSP();
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile, chrome::kChromeUIUrgentPasswordExpiryNotificationHost);
+  ash::EnableTrustedTypesCSP(source);
 
   SamlPasswordAttributes attrs = SamlPasswordAttributes::LoadFromPrefs(prefs);
   if (attrs.has_expiration_time()) {
     const base::Time expiration_time = attrs.expiration_time();
     source->AddString("initialTitle", PasswordExpiryNotification::GetTitleText(
                                           expiration_time - base::Time::Now()));
-    source->AddString("expirationTime",
-                      base::NumberToString(expiration_time.ToJsTime()));
+    source->AddString(
+        "expirationTime",
+        base::NumberToString(expiration_time.InMillisecondsFSinceUnixEpoch()));
   }
 
   static constexpr webui::LocalizedString kLocalizedStrings[] = {
@@ -191,8 +207,6 @@ UrgentPasswordExpiryNotificationUI::UrgentPasswordExpiryNotificationUI(
 
   web_ui->AddMessageHandler(
       std::make_unique<UrgentPasswordExpiryNotificationHandler>());
-
-  content::WebUIDataSource::Add(profile, source);
 }
 
 UrgentPasswordExpiryNotificationUI::~UrgentPasswordExpiryNotificationUI() =

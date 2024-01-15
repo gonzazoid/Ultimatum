@@ -1,7 +1,13 @@
 <style include="cr-shared-style">
   :host {
     --cr-localized-link-display: inline;
-    --cr-subsequent-anchors-of-span-margin: 0;
+    display: block;
+  }
+
+  :host([link-disabled]) {
+    cursor: pointer;
+    opacity: var(--cr-disabled-opacity);
+    pointer-events: none;
   }
 
   a {
@@ -20,11 +26,9 @@
     user-select: none;
   }
 
-  :host([link-disabled]) #container {
-    cursor: pointer;
-    opacity: var(--cr-disabled-opacity);
-    pointer-events: none;
+  #container {
+    display: contents;
   }
 </style>
-<!-- innerHTML is set via setContainerInnerHTML_. -->
+<!-- innerHTML is set via setContainerInnerHtml_. -->
 <div id="container"></div>

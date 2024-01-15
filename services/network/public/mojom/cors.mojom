@@ -124,6 +124,33 @@ enum CorsError {
   // a private network request.
   // See: https://wicg.github.io/private-network-access/#request-target-ip-address-space
   kUnexpectedPrivateNetworkAccess,
+
+  // Could not request permission to access the private network from the user,
+  // because the Private-Network-Access-Id header was missing from the preflight
+  // response.
+  // See: https://github.com/WICG/private-network-access/blob/main/permission_prompt/explainer.md
+  // TODO(https://crbug.com/1455153): link to the spec.
+  kPreflightMissingPrivateNetworkAccessId,
+
+  // Could not request permission to access the private network from the user,
+  // because the Private-Network-Access-Name header was missing from the
+  // preflight response.
+  // See: https://github.com/WICG/private-network-access/blob/main/permission_prompt/explainer.md
+  // TODO(https://crbug.com/1455153): link to the spec.
+  kPreflightMissingPrivateNetworkAccessName,
+
+  // Could not request permission to access the private network from the user.
+  // See: https://github.com/WICG/private-network-access/blob/main/permission_prompt/explainer.md
+  // TODO(https://crbug.com/1455153): link to the spec.
+  kPrivateNetworkAccessPermissionUnavailable,
+
+  // User did not grant permission to access the private network.
+  //
+  // Permission is only required for requests that bypass mixed content
+  // using the `targetAddressSpace` fetch option.
+  // See: https://github.com/WICG/private-network-access/blob/main/permission_prompt/explainer.md
+  // TODO(https://crbug.com/1455153): link to the spec.
+  kPrivateNetworkAccessPermissionDenied,
 };
 
 // Contains additional details about a CORS-related error.
@@ -162,4 +189,20 @@ struct CorsErrorStatus {
   bool has_authorization_covered_by_wildcard_on_preflight = false;
 
   mojo_base.mojom.UnguessableToken issue_id;
+};
+
+// Describes what happened wrt PNA preflights during a request.
+// TODO(https://crbug.com/1268378): Remove this once preflights are enforced.
+enum PrivateNetworkAccessPreflightResult {
+  // No preflight was sent.
+  kNone,
+
+  // A preflight was sent and succeeded.
+  kSuccess,
+
+  // A preflight was sent in warning-only mode and failed.
+  kWarning,
+
+  // A preflight was sent and failed.
+  kError,
 };

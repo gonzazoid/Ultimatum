@@ -11,9 +11,11 @@ include_rules = [
   "+components/discardable_memory/public",
   "+components/discardable_memory/service/discardable_shared_memory_manager.h",
   "+components/fullscreen_control",
+  "+components/global_media_controls",
   "+components/language/core/browser/pref_names.h",
   "+components/live_caption",
   "+components/media_message_center",
+  "+components/metrics/structured/structured_events.h",
   "+components/pref_registry",
   "+components/prefs",
   "+components/quirks",
@@ -23,6 +25,8 @@ include_rules = [
   "+components/sync",
   "+components/ui_devtools",
   "+components/url_matcher",
+  "+components/user_education/common",
+  "+components/user_education/views",
   "+components/vector_icons",
   "+components/version_info",
   "+components/viz/common",
@@ -67,7 +71,10 @@ include_rules = [
   "+chromeos/ash/components/local_search_service",
   "+chromeos/ash/components/login/auth",
   "+chromeos/ash/components/multidevice",
+  "+chromeos/ash/components/osauth/public",
+  "+chromeos/ash/components/peripheral_notification",
   "+chromeos/ash/components/proximity_auth",
+  "+chromeos/ash/components/system",
   "+chromeos/components/quick_answers",
   "+chromeos/components/security_token_pin",
   "+chromeos/components/sensors",
@@ -79,28 +86,30 @@ include_rules = [
   # limit D-Bus communication to a subset of OS daemons, but that project
   # stopped in 2019. See //ash/README.md.
   "+chromeos/ash/components/dbus",
-  # TODO(https://crbug.com/1164001): removed after all clients have migrated.
   "+chromeos/dbus",
   # //ash should use code in //ash/session to get login state. The state in
-  # //ash/session and the state in //chromeos/login/login_state are both
-  # derived from the canonical state in the browser. Using both sources could
-  # create subtle inconsistencies based on when observers are called.
-  "-chromeos/login/login_state",
+  # //ash/session and the state in //chromeos/ash/components/login/login_state
+  # are both derived from the canonical state in the browser. Using both sources
+  # could create subtle inconsistencies based on when observers are called.
+  "-chromeos/ash/compoments/login/login_state",
   "+chromeos/ash/components/network",
   # //ash can use the public interfaces of various services.
   "+chromeos/ash/services/assistant/public/cpp" ,
   "+chromeos/ash/services/assistant/test_support",
   "+chromeos/ash/services/bluetooth_config",
+  "+chromeos/ash/services/hotspot_config",
+  "+chromeos/ash/services/federated/public",
   "+chromeos/ash/services/libassistant/public",
   "+chromeos/ash/services/nearby/public",
   "+chromeos/ash/services/multidevice_setup/public",
   "+chromeos/ash/services/secure_channel/public",
+  "+chromeos/ash/services/network_config/public",
   "+chromeos/services/machine_learning/public",
   "+chromeos/services/network_config/public",
   "+chromeos/services/power/public",
   "+chromeos/strings",
-  "+chromeos/system",
   "+chromeos/ui",
+  "+chromeos/utils",
 
   # ui/base/idle depends on SessionManagerClient so disallow it.
   "-ui/base/idle",
@@ -115,22 +124,33 @@ include_rules = [
   "+components/session_manager/session_manager_types.h",
   "-components/user_manager",
   "+components/user_manager/known_user.h",
+  "+components/user_manager/multi_user/multi_user_sign_in_policy.h",
+  "+components/user_manager/user_directory_integrity_manager.h",
   "+components/user_manager/user_names.h",
   "+components/user_manager/user_type.h",
   "+components/user_manager/user.h",
 ]
 
 specific_include_rules = {
+  "keyboard_capability_unittest\.cc": [
+    "+device/udev_linux/fake_udev_loader.h",
+  ],
   "policy_recommendation_restorer_unittest.cc": [
     "+components/sync_preferences/testing_pref_service_syncable.h"
   ],
-  "root_window_controller\.*": [
+  "root_window_controller\.(cc|h)": [
     "+ash/host"
   ],
   "shell.cc": [
-    "+ash/host/ash_window_tree_host_init_params.h"
+    "+ash/host/ash_window_tree_host_init_params.h",
+    "+chromeos/ash/components/fwupd",
   ],
   "window_manager.cc": [
     "+ash/host/ash_window_tree_host.h"
   ],
+  ".*test\.cc": [
+    # Allowed to access user_manager in test code to set up testing environment
+    # close to the production.
+    "+components/user_manager",
+  ]
 }

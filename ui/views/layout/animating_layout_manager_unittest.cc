@@ -12,11 +12,13 @@
 #include "base/memory/raw_ptr.h"
 #include "base/ranges/algorithm.h"
 #include "base/scoped_observation.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/animation/animation_test_api.h"
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/layout/flex_layout.h"
@@ -32,11 +34,6 @@ namespace views {
 
 namespace {
 
-// This should probably be a definition on AnimationTestApi.
-using RenderModeLock = std::invoke_result<
-    decltype(&gfx::AnimationTestApi::SetRichAnimationRenderMode),
-    gfx::Animation::RichAnimationRenderMode>::type;
-
 constexpr gfx::Size kChildViewSize{10, 10};
 
 // Returns a size which is the intersection of |size| and the constraints
@@ -49,6 +46,8 @@ gfx::Size ConstrainSizeToBounds(const gfx::Size& size,
 
 // View that allows directly setting minimum size.
 class TestView : public View {
+  METADATA_HEADER(TestView, View)
+
  public:
   using View::View;
   ~TestView() override = default;
@@ -72,6 +71,9 @@ class TestView : public View {
   absl::optional<gfx::Size> minimum_size_;
   bool fix_area_ = false;
 };
+
+BEGIN_METADATA(TestView)
+END_METADATA
 
 // Layout that provides a predictable target layout for an
 // AnimatingLayoutManager.
@@ -162,29 +164,27 @@ class AnimatingLayoutManagerTest : public testing::Test {
       child->SetPreferredSize(kChildViewSize);
       children_.push_back(view_->AddChildView(std::move(child)));
     }
-
-    animating_layout_manager_ =
-        view_->SetLayoutManager(std::make_unique<AnimatingLayoutManager>());
+    view_->SetLayoutManager(std::make_unique<AnimatingLayoutManager>());
 
     // Use linear transitions to make expected values predictable.
-    animating_layout_manager_->SetTweenType(gfx::Tween::Type::LINEAR);
-    animating_layout_manager_->SetAnimationDuration(base::Seconds(1));
+    layout()->SetTweenType(gfx::Tween::Type::LINEAR);
+    layout()->SetAnimationDuration(base::Seconds(1));
 
     if (UseContainerTestApi()) {
       container_test_api_ = std::make_unique<gfx::AnimationContainerTestApi>(
-          animating_layout_manager_->GetAnimationContainerForTesting());
+          layout()->GetAnimationContainerForTesting());
     }
 
     // These can't be constructed statically since they depend on the child
     // views.
     layout1_ = {{100, 100},
-                {{children_[0], true, {5, 5, 10, 10}},
-                 {children_[1], false},
-                 {children_[2], true, {20, 20, 20, 20}}}};
+                {{children_[0].get(), true, {5, 5, 10, 10}},
+                 {children_[1].get(), false},
+                 {children_[2].get(), true, {20, 20, 20, 20}}}};
     layout2_ = {{200, 200},
-                {{children_[0], true, {10, 20, 20, 30}},
-                 {children_[1], false},
-                 {children_[2], true, {10, 100, 10, 10}}}};
+                {{children_[0].get(), true, {10, 20, 20, 30}},
+                 {children_[1].get(), false},
+                 {children_[2].get(), true, {10, 100, 10, 10}}}};
   }
 
   void TearDown() override {
@@ -196,7 +196,9 @@ class AnimatingLayoutManagerTest : public testing::Test {
   View* view() { return view_; }
   TestView* child(size_t index) const { return children_[index]; }
   size_t num_children() const { return children_.size(); }
-  AnimatingLayoutManager* layout() { return animating_layout_manager_; }
+  AnimatingLayoutManager* layout() {
+    return static_cast<AnimatingLayoutManager*>(view_->GetLayoutManager());
+  }
   gfx::AnimationContainerTestApi* animation_api() {
     return container_test_api_.get();
   }
@@ -205,8 +207,8 @@ class AnimatingLayoutManagerTest : public testing::Test {
 
   void RunCurrentTasks() {
     base::RunLoop loop;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  loop.QuitClosure());
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, loop.QuitClosure());
     loop.Run();
   }
 
@@ -238,8 +240,7 @@ class AnimatingLayoutManagerTest : public testing::Test {
 
   void DestroyView() {
     if (view_) {
-      delete view_;
-      view_ = nullptr;
+      delete view_.ExtractAsDangling();
     }
   }
 
@@ -258,12 +259,11 @@ class AnimatingLayoutManagerTest : public testing::Test {
   const bool enable_animations_;
   ProposedLayout layout1_;
   ProposedLayout layout2_;
-  raw_ptr<View> view_;
-  std::vector<TestView*> children_;
-  raw_ptr<AnimatingLayoutManager> animating_layout_manager_ = nullptr;
+  raw_ptr<View> view_ = nullptr;
+  std::vector<raw_ptr<TestView, VectorExperimental>> children_;
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<gfx::AnimationContainerTestApi> container_test_api_;
-  RenderModeLock render_mode_lock_;
+  gfx::AnimationTestApi::RenderModeResetter render_mode_lock_;
 };
 
 const FlexSpecification AnimatingLayoutManagerTest::kDropOut =
@@ -2701,7 +2701,8 @@ TEST_F(AnimatingLayoutManagerTest, ZOrder_FadingOutViewMovedToBack) {
                                       {child(1), false},
                                       {child(2), true, {5, 5, 2, 2}}}};
 
-  const std::vector<View*> expected_order{child(1), child(0), child(2)};
+  const std::vector<raw_ptr<View, VectorExperimental>> expected_order{
+      child(1), child(0), child(2)};
 
   layout()->SetBoundsAnimationMode(
       AnimatingLayoutManager::BoundsAnimationMode::kAnimateBothAxes);
@@ -2741,7 +2742,8 @@ TEST_F(AnimatingLayoutManagerTest, ZOrder_FadingInViewMovedToBack) {
                                       {child(1), true, {3, 3, 2, 2}},
                                       {child(2), true, {7, 7, 2, 2}}}};
 
-  const std::vector<View*> expected_order{child(1), child(0), child(2)};
+  const std::vector<raw_ptr<View, VectorExperimental>> expected_order{
+      child(1), child(0), child(2)};
 
   layout()->SetBoundsAnimationMode(
       AnimatingLayoutManager::BoundsAnimationMode::kAnimateBothAxes);
@@ -4187,22 +4189,23 @@ class AnimatingLayoutManagerFlexRuleTest : public AnimatingLayoutManagerTest {
         child(i)->SetFixArea(true);
     }
     layout()->SetOrientation(orientation);
-    flex_layout_ =
-        layout()->SetTargetLayoutManager(std::make_unique<FlexLayout>());
-    flex_layout_->SetOrientation(orientation);
-    flex_layout_->SetCollapseMargins(true);
-    flex_layout_->SetDefault(kMarginsKey, gfx::Insets(5));
-    flex_layout_->SetDefault(kFlexBehaviorKey, default_flex);
+    layout()->SetTargetLayoutManager(std::make_unique<FlexLayout>());
+    flex_layout()->SetOrientation(orientation);
+    flex_layout()->SetCollapseMargins(true);
+    flex_layout()->SetDefault(kMarginsKey, gfx::Insets(5));
+    flex_layout()->SetDefault(kFlexBehaviorKey, default_flex);
     flex_rule_ = layout()->GetDefaultFlexRule();
   }
 
-  size_t GetVisibleChildCount(const gfx::Size& size) const {
-    ProposedLayout layout = flex_layout_->GetProposedLayout(size);
+  size_t GetVisibleChildCount(const gfx::Size& size) {
+    ProposedLayout layout = flex_layout()->GetProposedLayout(size);
     EXPECT_EQ(size, layout.host_size);
     return base::ranges::count_if(layout.child_layouts, &ChildLayout::visible);
   }
 
-  FlexLayout* flex_layout() { return flex_layout_; }
+  FlexLayout* flex_layout() {
+    return static_cast<FlexLayout*>(layout()->target_layout_manager());
+  }
 
   gfx::Size RunFlexRule(const SizeBounds& bounds) const {
     return flex_rule_.Run(view(), bounds);
@@ -4211,7 +4214,6 @@ class AnimatingLayoutManagerFlexRuleTest : public AnimatingLayoutManagerTest {
   static const FlexSpecification kScaleToMinimumSnapToZero;
 
  private:
-  raw_ptr<FlexLayout> flex_layout_;
   FlexRule flex_rule_;
 };
 
@@ -5131,23 +5133,25 @@ class AnimatingLayoutManagerSequenceTest : public ViewsTestBase {
 
   void TearDown() override {
     // Do before rest of tear down.
+    parent_view_ = nullptr;
+    layout_view_ = nullptr;
+    child_view_ = nullptr;
     widget_.reset();
     ViewsTestBase::TearDown();
     render_mode_lock_.reset();
   }
 
   void ConfigureLayoutView() {
-    layout_manager_ = layout_view_->SetLayoutManager(
-        std::make_unique<AnimatingLayoutManager>());
-    layout_manager_->SetTweenType(gfx::Tween::Type::LINEAR);
-    layout_manager_->SetAnimationDuration(kMinimumAnimationTime);
-    auto* const flex_layout =
-        layout_manager_->SetTargetLayoutManager(std::make_unique<FlexLayout>());
+    layout_view_->SetLayoutManager(std::make_unique<AnimatingLayoutManager>());
+    layout_manager()->SetTweenType(gfx::Tween::Type::LINEAR);
+    layout_manager()->SetAnimationDuration(kMinimumAnimationTime);
+    auto* const flex_layout = layout_manager()->SetTargetLayoutManager(
+        std::make_unique<FlexLayout>());
     flex_layout->SetOrientation(LayoutOrientation::kHorizontal);
     flex_layout->SetCollapseMargins(true);
     flex_layout->SetCrossAxisAlignment(LayoutAlignment::kStart);
     flex_layout->SetDefault(kMarginsKey, gfx::Insets(5));
-    layout_manager_->SetBoundsAnimationMode(
+    layout_manager()->SetBoundsAnimationMode(
         AnimatingLayoutManager::BoundsAnimationMode::kAnimateBothAxes);
   }
 
@@ -5166,17 +5170,22 @@ class AnimatingLayoutManagerSequenceTest : public ViewsTestBase {
   }
 
   void ExpectResetToLayout() {
-    EXPECT_FALSE(layout_manager_->is_animating());
+    EXPECT_FALSE(layout_manager()->is_animating());
     EXPECT_EQ(gfx::Size(20, 20), layout_view_->size());
     EXPECT_EQ(gfx::Rect(5, 5, 10, 10), child_view_->bounds());
   }
 
   void ExpectAnimateToLayout() {
-    EXPECT_TRUE(layout_manager_->is_animating());
-    AnimationWatcher animation_watcher(layout_manager_);
+    EXPECT_TRUE(layout_manager()->is_animating());
+    AnimationWatcher animation_watcher(layout_manager());
     animation_watcher.WaitForAnimationToComplete();
     EXPECT_EQ(gfx::Size(20, 20), layout_view_->size());
     EXPECT_EQ(gfx::Rect(5, 5, 10, 10), child_view_->bounds());
+  }
+
+  AnimatingLayoutManager* layout_manager() {
+    return static_cast<AnimatingLayoutManager*>(
+        layout_view_->GetLayoutManager());
   }
 
  private:
@@ -5186,14 +5195,13 @@ class AnimatingLayoutManagerSequenceTest : public ViewsTestBase {
 
   using WidgetAutoclosePtr = std::unique_ptr<Widget, WidgetCloser>;
 
-  raw_ptr<AnimatingLayoutManager> layout_manager_ = nullptr;
   raw_ptr<View> child_view_ = nullptr;
   raw_ptr<View> parent_view_ = nullptr;
   raw_ptr<View> layout_view_ = nullptr;
   std::unique_ptr<View> parent_view_ptr_;
   std::unique_ptr<View> layout_view_ptr_;
   WidgetAutoclosePtr widget_;
-  RenderModeLock render_mode_lock_;
+  gfx::AnimationTestApi::RenderModeResetter render_mode_lock_;
 };
 
 TEST_F(AnimatingLayoutManagerSequenceTest,

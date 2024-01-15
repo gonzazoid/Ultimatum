@@ -2,14 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <memory>
-
-#include "base/bind.h"
 #include "chromeos/ash/components/sync_wifi/pending_network_configuration_tracker_impl.h"
+
+#include <memory>
+#include <optional>
+
+#include "base/functional/bind.h"
 #include "chromeos/ash/components/sync_wifi/test_data_generator.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
 namespace ash::sync_wifi {
@@ -46,18 +47,20 @@ class PendingNetworkConfigurationTrackerImplTest : public testing::Test {
 
   PendingNetworkConfigurationTrackerImpl* tracker() { return tracker_.get(); }
 
-  const base::Value* GetPref() const {
-    return test_pref_service_.get()->GetUserPref(
-        kPendingNetworkConfigurationsPref);
+  const base::Value::Dict* GetPref() const {
+    return &test_pref_service_.get()
+                ->GetUserPref(kPendingNetworkConfigurationsPref)
+                ->GetDict();
   }
 
   bool DoesPrefContainPendingUpdate(const NetworkIdentifier& id,
                                     const std::string& update_guid) const {
-    const base::Value* dict = GetPref()->FindPath(id.SerializeToString());
-    if (!dict)
+    const base::Value::Dict* dict = GetPref()->FindDict(id.SerializeToString());
+    if (!dict) {
       return false;
+    }
 
-    const std::string* found_guid = dict->FindStringKey(kChangeGuidKey);
+    const std::string* found_guid = dict->FindString(kChangeGuidKey);
     return found_guid && *found_guid == update_guid;
   }
 
@@ -65,9 +68,9 @@ class PendingNetworkConfigurationTrackerImplTest : public testing::Test {
       const std::string& update_guid,
       const NetworkIdentifier& id,
       int completed_attempts = 0,
-      const absl::optional<sync_pb::WifiConfigurationSpecifics> specifics =
-          absl::nullopt) {
-    absl::optional<PendingNetworkConfigurationUpdate> update =
+      const std::optional<sync_pb::WifiConfigurationSpecifics> specifics =
+          std::nullopt) {
+    std::optional<PendingNetworkConfigurationUpdate> update =
         tracker()->GetPendingUpdate(update_guid, id);
     ASSERT_TRUE(update);
     ASSERT_EQ(id, update->id());
@@ -98,64 +101,64 @@ class PendingNetworkConfigurationTrackerImplTest : public testing::Test {
 
 TEST_F(PendingNetworkConfigurationTrackerImplTest, TestMarkComplete) {
   std::string change_guid = tracker()->TrackPendingUpdate(
-      fred_network_id(), /*specifics=*/absl::nullopt);
+      fred_network_id(), /*specifics=*/std::nullopt);
   AssertTrackerHasMatchingUpdate(change_guid, fred_network_id());
-  EXPECT_EQ(1u, GetPref()->DictSize());
+  EXPECT_EQ(1u, GetPref()->size());
   EXPECT_TRUE(DoesPrefContainPendingUpdate(fred_network_id(), change_guid));
   tracker()->MarkComplete(change_guid, fred_network_id());
   EXPECT_FALSE(tracker()->GetPendingUpdate(change_guid, fred_network_id()));
-  EXPECT_EQ(0u, GetPref()->DictSize());
+  EXPECT_EQ(0u, GetPref()->size());
 }
 
 TEST_F(PendingNetworkConfigurationTrackerImplTest, TestTwoChangesSameNetwork) {
   std::string change_guid =
       tracker()->TrackPendingUpdate(fred_network_id(),
-                                    /*specifics=*/absl::nullopt);
+                                    /*specifics=*/std::nullopt);
   tracker()->IncrementCompletedAttempts(change_guid, fred_network_id());
   AssertTrackerHasMatchingUpdate(change_guid, fred_network_id(),
                                  /*completed_attempts=*/1);
-  EXPECT_EQ(1u, GetPref()->DictSize());
+  EXPECT_EQ(1u, GetPref()->size());
   EXPECT_EQ(1, tracker()
                    ->GetPendingUpdate(change_guid, fred_network_id())
                    ->completed_attempts());
 
   std::string second_change_guid =
       tracker()->TrackPendingUpdate(fred_network_id(),
-                                    /*specifics=*/absl::nullopt);
+                                    /*specifics=*/std::nullopt);
   EXPECT_FALSE(tracker()->GetPendingUpdate(change_guid, fred_network_id()));
   AssertTrackerHasMatchingUpdate(second_change_guid, fred_network_id());
   EXPECT_EQ(0, tracker()
                    ->GetPendingUpdate(second_change_guid, fred_network_id())
                    ->completed_attempts());
-  EXPECT_EQ(1u, GetPref()->DictSize());
+  EXPECT_EQ(1u, GetPref()->size());
 }
 
 TEST_F(PendingNetworkConfigurationTrackerImplTest,
        TestTwoChangesDifferentNetworks) {
   std::string change_guid =
       tracker()->TrackPendingUpdate(fred_network_id(),
-                                    /*specifics=*/absl::nullopt);
+                                    /*specifics=*/std::nullopt);
   AssertTrackerHasMatchingUpdate(change_guid, fred_network_id());
   EXPECT_TRUE(DoesPrefContainPendingUpdate(fred_network_id(), change_guid));
-  EXPECT_EQ(1u, GetPref()->DictSize());
+  EXPECT_EQ(1u, GetPref()->size());
   std::string second_change_guid =
       tracker()->TrackPendingUpdate(mango_network_id(),
-                                    /*specifics=*/absl::nullopt);
+                                    /*specifics=*/std::nullopt);
   AssertTrackerHasMatchingUpdate(change_guid, fred_network_id());
   AssertTrackerHasMatchingUpdate(second_change_guid, mango_network_id());
   EXPECT_TRUE(DoesPrefContainPendingUpdate(fred_network_id(), change_guid));
   EXPECT_TRUE(
       DoesPrefContainPendingUpdate(mango_network_id(), second_change_guid));
-  EXPECT_EQ(2u, GetPref()->DictSize());
+  EXPECT_EQ(2u, GetPref()->size());
 }
 
 TEST_F(PendingNetworkConfigurationTrackerImplTest, TestGetPendingUpdates) {
   std::string change_guid =
       tracker()->TrackPendingUpdate(fred_network_id(),
-                                    /*specifics=*/absl::nullopt);
+                                    /*specifics=*/std::nullopt);
   std::string second_change_guid =
       tracker()->TrackPendingUpdate(mango_network_id(),
-                                    /*specifics=*/absl::nullopt);
+                                    /*specifics=*/std::nullopt);
   std::vector<PendingNetworkConfigurationUpdate> list =
       tracker()->GetPendingUpdates();
   EXPECT_EQ(2u, list.size());
@@ -184,9 +187,9 @@ TEST_F(PendingNetworkConfigurationTrackerImplTest, TestGetPendingUpdate) {
 TEST_F(PendingNetworkConfigurationTrackerImplTest, TestRetryCounting) {
   std::string change_guid =
       tracker()->TrackPendingUpdate(fred_network_id(),
-                                    /*specifics=*/absl::nullopt);
+                                    /*specifics=*/std::nullopt);
   AssertTrackerHasMatchingUpdate(change_guid, fred_network_id());
-  EXPECT_EQ(1u, GetPref()->DictSize());
+  EXPECT_EQ(1u, GetPref()->size());
   EXPECT_EQ(0, tracker()
                    ->GetPendingUpdate(change_guid, fred_network_id())
                    ->completed_attempts());

@@ -11,12 +11,16 @@ viz::mojom::PlaneConfig
 EnumTraits<viz::mojom::PlaneConfig, viz::SharedImageFormat::PlaneConfig>::
     ToMojom(viz::SharedImageFormat::PlaneConfig plane_config) {
   switch (plane_config) {
+    case viz::SharedImageFormat::PlaneConfig::kY_U_V:
+      return viz::mojom::PlaneConfig::kY_U_V;
     case viz::SharedImageFormat::PlaneConfig::kY_V_U:
       return viz::mojom::PlaneConfig::kY_V_U;
     case viz::SharedImageFormat::PlaneConfig::kY_UV:
       return viz::mojom::PlaneConfig::kY_UV;
     case viz::SharedImageFormat::PlaneConfig::kY_UV_A:
       return viz::mojom::PlaneConfig::kY_UV_A;
+    case viz::SharedImageFormat::PlaneConfig::kY_U_V_A:
+      return viz::mojom::PlaneConfig::kY_U_V_A;
   }
   NOTREACHED();
   return viz::mojom::PlaneConfig::kY_UV;
@@ -27,6 +31,9 @@ bool EnumTraits<viz::mojom::PlaneConfig, viz::SharedImageFormat::PlaneConfig>::
     FromMojom(viz::mojom::PlaneConfig input,
               viz::SharedImageFormat::PlaneConfig* out) {
   switch (input) {
+    case viz::mojom::PlaneConfig::kY_U_V:
+      *out = viz::SharedImageFormat::PlaneConfig::kY_U_V;
+      return true;
     case viz::mojom::PlaneConfig::kY_V_U:
       *out = viz::SharedImageFormat::PlaneConfig::kY_V_U;
       return true;
@@ -35,6 +42,9 @@ bool EnumTraits<viz::mojom::PlaneConfig, viz::SharedImageFormat::PlaneConfig>::
       return true;
     case viz::mojom::PlaneConfig::kY_UV_A:
       *out = viz::SharedImageFormat::PlaneConfig::kY_UV_A;
+      return true;
+    case viz::mojom::PlaneConfig::kY_U_V_A:
+      *out = viz::SharedImageFormat::PlaneConfig::kY_U_V_A;
       return true;
   }
   return false;
@@ -47,6 +57,10 @@ EnumTraits<viz::mojom::Subsampling, viz::SharedImageFormat::Subsampling>::
   switch (subsampling) {
     case viz::SharedImageFormat::Subsampling::k420:
       return viz::mojom::Subsampling::k420;
+    case viz::SharedImageFormat::Subsampling::k422:
+      return viz::mojom::Subsampling::k422;
+    case viz::SharedImageFormat::Subsampling::k444:
+      return viz::mojom::Subsampling::k444;
   }
   NOTREACHED();
   return viz::mojom::Subsampling::k420;
@@ -59,6 +73,12 @@ bool EnumTraits<viz::mojom::Subsampling, viz::SharedImageFormat::Subsampling>::
   switch (input) {
     case viz::mojom::Subsampling::k420:
       *out = viz::SharedImageFormat::Subsampling::k420;
+      return true;
+    case viz::mojom::Subsampling::k422:
+      *out = viz::SharedImageFormat::Subsampling::k422;
+      return true;
+    case viz::mojom::Subsampling::k444:
+      *out = viz::SharedImageFormat::Subsampling::k444;
       return true;
   }
   return false;
@@ -117,6 +137,9 @@ bool StructTraits<
     return false;
   if (!data.ReadChannelFormat(&out->channel_format))
     return false;
+#if BUILDFLAG(IS_OZONE)
+  out->prefers_external_sampler = data.prefers_external_sampler();
+#endif
 
   return true;
 }
@@ -126,9 +149,10 @@ bool UnionTraits<
     viz::SharedImageFormat>::Read(viz::mojom::SharedImageFormatDataView data,
                                   viz::SharedImageFormat* out) {
   switch (data.tag()) {
-    case viz::mojom::SharedImageFormatDataView::Tag::kResourceFormat:
-      if (!data.ReadResourceFormat(&out->format_.resource_format))
+    case viz::mojom::SharedImageFormatDataView::Tag::kSingleplanarFormat:
+      if (!data.ReadSingleplanarFormat(&out->format_.singleplanar_format)) {
         return false;
+      }
       out->plane_type_ = viz::SharedImageFormat::PlaneType::kSinglePlane;
       return true;
     case viz::mojom::SharedImageFormatDataView::Tag::kMultiplanarFormat:

@@ -3,7 +3,6 @@
 # found in the LICENSE file.
 
 source_set("permissions") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "infobar_permissions_table_view_controller.h",
     "infobar_permissions_table_view_controller.mm",
@@ -11,7 +10,9 @@ source_set("permissions") {
   deps = [
     "//base",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/infobars:public",
+    "//ios/chrome/browser/infobars/model:public",
+    "//ios/chrome/browser/shared/ui/table_view",
+    "//ios/chrome/browser/shared/ui/table_view:styler",
     "//ios/chrome/browser/ui/infobars/modals",
     "//ios/chrome/browser/ui/infobars/modals:public",
     "//ios/chrome/browser/ui/infobars/presentation",
@@ -19,8 +20,6 @@ source_set("permissions") {
     "//ios/chrome/browser/ui/permissions:constants",
     "//ios/chrome/browser/ui/permissions:permission_info",
     "//ios/chrome/browser/ui/settings/cells:cells",
-    "//ios/chrome/browser/ui/table_view",
-    "//ios/chrome/browser/ui/table_view:styler",
     "//ios/chrome/common:string_util",
     "//ios/chrome/common/ui/table_view:cells_constants",
     "//ios/web/public/permissions",

@@ -4,14 +4,15 @@
 
 #include <tuple>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "content/browser/renderer_host/input/synthetic_smooth_scroll_gesture.h"
 #include "content/browser/renderer_host/render_widget_host_input_event_router.h"
 #include "content/browser/web_contents/web_contents_impl.h"
+#include "content/common/input/synthetic_smooth_scroll_gesture.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test.h"
@@ -266,7 +267,7 @@ class BrowserSideFlingBrowserTest : public ContentBrowserTest {
 
   void GiveItSomeTime(int64_t time_delta_ms = 10) {
     base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(time_delta_ms));
     run_loop.Run();
   }
@@ -484,8 +485,10 @@ IN_PROC_BROWSER_TEST_F(BrowserSideFlingBrowserTest,
 
 // Checks that the fling controller of the oopif stops the fling when the
 // bubbled inertial GSUs are not consumed by the parent's renderer.
-IN_PROC_BROWSER_TEST_F(BrowserSideFlingBrowserTest,
-                       DISABLE_InertialGSUBubblingStopsWhenParentCannotScroll) {
+// Flaky test https://crbug.com/1344075
+IN_PROC_BROWSER_TEST_F(
+    BrowserSideFlingBrowserTest,
+    DISABLED_InertialGSUBubblingStopsWhenParentCannotScroll) {
   LoadPageWithOOPIF();
   // Scroll the parent down so that it is scrollable upward.
 

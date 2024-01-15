@@ -28,9 +28,10 @@ class WebContentsCollection {
     virtual void WebContentsDestroyed(content::WebContents* web_contents) {}
     virtual void RenderProcessGone(content::WebContents* web_contents,
                                    base::TerminationStatus status) {}
-    virtual void NavigationEntryCommitted(
+    virtual void DidFinishNavigation(
         content::WebContents* web_contents,
-        const content::LoadCommittedDetails& load_details) {}
+        content::NavigationHandle* navigation_handle) {}
+    virtual void DidStartLoading(content::WebContents* web_contents) {}
 
    protected:
     virtual ~Observer() = default;

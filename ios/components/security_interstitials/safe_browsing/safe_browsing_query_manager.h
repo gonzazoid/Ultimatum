@@ -6,6 +6,7 @@
 #define IOS_COMPONENTS_SECURITY_INTERSTITIALS_SAFE_BROWSING_SAFE_BROWSING_QUERY_MANAGER_H_
 
 #include <map>
+#include <optional>
 #include <string>
 
 #include "base/containers/flat_map.h"
@@ -18,7 +19,6 @@
 #include "components/security_interstitials/core/unsafe_resource.h"
 #import "ios/web/public/navigation/web_state_policy_decider.h"
 #import "ios/web/public/web_state_user_data.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace web {
@@ -70,16 +70,20 @@ class SafeBrowsingQueryManager
     // Whether an error page should be shown for the URL.
     bool show_error_page = false;
     // The UnsafeResource created for the URL check, if any.
-    absl::optional<security_interstitials::UnsafeResource> resource;
+    std::optional<security_interstitials::UnsafeResource> resource;
   };
 
   // Observer class for the query manager.
   class Observer : public base::CheckedObserver {
    public:
-    // Notifies observers that `query` has completed with `result`.
-    virtual void SafeBrowsingQueryFinished(SafeBrowsingQueryManager* manager,
-                                           const Query& query,
-                                           const Result& result) {}
+    // Notifies observers that `query` has completed with `result` after
+    // performing a check of type `performed_check`.
+    virtual void SafeBrowsingQueryFinished(
+        SafeBrowsingQueryManager* manager,
+        const Query& query,
+        const Result& result,
+        safe_browsing::SafeBrowsingUrlCheckerImpl::PerformedCheck
+            performed_check) {}
 
     // Called when `manager` is about to be destroyed.
     virtual void SafeBrowsingQueryManagerDestroyed(
@@ -111,7 +115,8 @@ class SafeBrowsingQueryManager
 
   // Queries the Safe Browsing database using SafeBrowsingUrlCheckerImpls. This
   // class may be constructed on the UI thread but otherwise must only be used
-  // and destroyed on the IO thread.
+  // and destroyed on the IO thread. If kSafeBrowsingOnUIThread is enabled this
+  // is used and destroyed on the UI thread.
   class UrlCheckerClient : public base::SupportsWeakPtr<UrlCheckerClient> {
    public:
     UrlCheckerClient();
@@ -130,8 +135,8 @@ class SafeBrowsingQueryManager
         const std::string& method,
         base::OnceCallback<void(bool proceed,
                                 bool show_error_page,
-                                bool did_perform_real_time_check,
-                                bool did_check_allowlist)> callback);
+                                safe_browsing::SafeBrowsingUrlCheckerImpl::
+                                    PerformedCheck performed_check)> callback);
 
    private:
     // Called by `url_checker` with the initial result of performing a url
@@ -145,43 +150,49 @@ class SafeBrowsingQueryManager
             slow_check_notifier,
         bool proceed,
         bool showed_interstitial,
-        bool did_perform_real_time_check,
-        bool did_check_allowlist);
+        bool has_post_commit_interstitial_skipped,
+        safe_browsing::SafeBrowsingUrlCheckerImpl::PerformedCheck
+            performed_check);
 
     // Called by `url_checker` with the final result of performing a url check.
     // `url_checker` must be non-null. This is an implementation of
     // SafeBrowsingUrlCheckerImpl::NativeUrlCheckNotifier.
-    void OnCheckComplete(safe_browsing::SafeBrowsingUrlCheckerImpl* url_checker,
-                         bool proceed,
-                         bool showed_interstitial,
-                         bool did_perform_real_time_check,
-                         bool did_check_allowlist);
+    void OnCheckComplete(
+        safe_browsing::SafeBrowsingUrlCheckerImpl* url_checker,
+        bool proceed,
+        bool showed_interstitial,
+        bool has_post_commit_interstitial_skipped,
+        safe_browsing::SafeBrowsingUrlCheckerImpl::PerformedCheck
+            performed_check);
 
     // This maps SafeBrowsingUrlCheckerImpls that have started but not completed
     // a url check to the callback that should be invoked once the url check is
     // complete.
     base::flat_map<std::unique_ptr<safe_browsing::SafeBrowsingUrlCheckerImpl>,
-                   base::OnceCallback<void(bool proceed,
-                                           bool show_error_page,
-                                           bool did_perform_real_time_check,
-                                           bool did_check_allowlist)>,
+                   base::OnceCallback<void(
+                       bool proceed,
+                       bool show_error_page,
+                       safe_browsing::SafeBrowsingUrlCheckerImpl::PerformedCheck
+                           performed_check)>,
                    base::UniquePtrComparator>
         active_url_checkers_;
   };
 
   // Used as the completion callback for URL queries executed by
   // `url_checker_client_`.
-  void UrlCheckFinished(const Query query,
-                        bool proceed,
-                        bool show_error_page,
-                        bool did_perform_real_time_check,
-                        bool did_check_allowlist);
+  void UrlCheckFinished(
+      const Query query,
+      bool proceed,
+      bool show_error_page,
+      safe_browsing::SafeBrowsingUrlCheckerImpl::PerformedCheck
+          performed_check);
 
   // The WebState whose URL queries are being managed.
   web::WebState* web_state_ = nullptr;
   // The safe browsing client.
   SafeBrowsingClient* client_ = nullptr;
   // The checker client.  Used to communicate with the database on the IO
+  // thread. If kSafeBrowsingOnUIThread is enabled it'll be used on the UI
   // thread.
   std::unique_ptr<UrlCheckerClient> url_checker_client_;
   // The results for each active query.

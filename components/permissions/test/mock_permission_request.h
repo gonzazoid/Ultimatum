@@ -23,10 +23,14 @@ class MockPermissionRequest : public PermissionRequest {
   MockPermissionRequest(const GURL& requesting_origin,
                         RequestType request_type,
                         PermissionRequestGestureType gesture_type);
+  MockPermissionRequest(RequestType request_type,
+                        bool embedded_permission_element_initiated);
 
   ~MockPermissionRequest() override;
 
-  void PermissionDecided(ContentSetting result, bool is_one_time);
+  void PermissionDecided(ContentSetting result,
+                         bool is_one_time,
+                         bool is_final_decision);
   void MarkFinished();
 
   bool granted();

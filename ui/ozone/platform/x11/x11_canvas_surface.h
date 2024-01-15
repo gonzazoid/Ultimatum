@@ -9,10 +9,10 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
 #include "third_party/skia/include/core/SkSurface.h"
 #include "ui/base/x/x11_software_bitmap_presenter.h"
+#include "ui/gfx/frame_data.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/ozone/public/surface_ozone_canvas.h"
@@ -40,7 +40,8 @@ class X11CanvasSurface : public SurfaceOzoneCanvas {
   void PresentCanvas(const gfx::Rect& damage) override;
   std::unique_ptr<gfx::VSyncProvider> CreateVSyncProvider() override;
   bool SupportsAsyncBufferSwap() const override;
-  void OnSwapBuffers(SwapBuffersCallback swap_ack_callback) override;
+  void OnSwapBuffers(SwapBuffersCallback swap_ack_callback,
+                     gfx::FrameData data) override;
   int MaxFramesPending() const override;
 
  private:

@@ -6,24 +6,8 @@
 
 namespace apps {
 
-BASE_FEATURE(kAppServiceLaunchWithoutMojom,
-             "AppServiceLaunchWithoutMojom",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-BASE_FEATURE(kAppServiceWithoutMojom,
-             "AppServiceWithoutMojom",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-BASE_FEATURE(kAppServiceGetMenuWithoutMojom,
-             "AppServiceGetMenuWithoutMojom",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-BASE_FEATURE(kAppServiceCapabilityAccessWithoutMojom,
-             "AppServiceCapabilityAccessWithoutMojom",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-BASE_FEATURE(kStopMojomAppService,
-             "StopMojomAppService",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kAppServiceStorage,
+             "AppServiceStorage",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 }  // namespace apps

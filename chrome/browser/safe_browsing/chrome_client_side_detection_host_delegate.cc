@@ -7,6 +7,7 @@
 #include "base/metrics/histogram_macros.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/safe_browsing/chrome_user_population_helper.h"
 #include "chrome/browser/safe_browsing/client_side_detection_service_factory.h"
 #include "chrome/browser/safe_browsing/safe_browsing_navigation_observer_manager_factory.h"
 #include "chrome/browser/safe_browsing/safe_browsing_service.h"
@@ -20,6 +21,7 @@
 #include "components/safe_browsing/core/browser/db/database_manager.h"
 #include "components/safe_browsing/core/browser/sync/safe_browsing_primary_account_token_fetcher.h"
 #include "components/safe_browsing/core/browser/sync/sync_utils.h"
+#include "components/signin/public/identity_manager/identity_manager.h"
 #include "content/public/browser/global_routing_id.h"
 
 namespace safe_browsing {
@@ -91,8 +93,7 @@ ChromeClientSideDetectionHostDelegate::GetClientSideDetectionService() {
   return service ? service->GetWeakPtr() : nullptr;
 }
 
-raw_ptr<VerdictCacheManager>
-ChromeClientSideDetectionHostDelegate::GetCacheManager() {
+VerdictCacheManager* ChromeClientSideDetectionHostDelegate::GetCacheManager() {
   return VerdictCacheManagerFactory::GetForProfile(
       Profile::FromBrowserContext(web_contents_->GetBrowserContext()));
 }
@@ -136,6 +137,13 @@ size_t ChromeClientSideDetectionHostDelegate::CountOfRecentNavigationsToAppend(
                              CountOfRecentNavigationsToAppend(
                                  profile, profile->GetPrefs(), result)
                        : 0u;
+}
+
+ChromeUserPopulation
+ChromeClientSideDetectionHostDelegate::GetUserPopulation() {
+  Profile* profile =
+      Profile::FromBrowserContext(web_contents_->GetBrowserContext());
+  return ::safe_browsing::GetUserPopulationForProfile(profile);
 }
 
 }  // namespace safe_browsing

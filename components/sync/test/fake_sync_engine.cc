@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/sync/engine/data_type_activation_response.h"
 #include "components/sync/engine/nigori/nigori.h"
 #include "components/sync/engine/sync_engine_host.h"
@@ -35,6 +35,14 @@ void FakeSyncEngine::TriggerInitializationCompletion(bool success) {
   host_->OnEngineInitialized(success, is_first_time_sync_configure_);
 }
 
+void FakeSyncEngine::SetPollIntervalElapsed(bool elapsed) {
+  is_next_poll_time_in_the_past_ = elapsed;
+}
+
+void FakeSyncEngine::SetDetailedStatus(const SyncStatus& status) {
+  sync_status_ = status;
+}
+
 void FakeSyncEngine::Initialize(InitParams params) {
   DCHECK(params.host);
 
@@ -61,7 +69,9 @@ std::string FakeSyncEngine::GetCacheGuid() const {
 }
 
 std::string FakeSyncEngine::GetBirthday() const {
-  return kTestBirthday;
+  // The birthday becomes known the very first time sync completes.
+  return (initialized_ || !is_first_time_sync_configure_) ? kTestBirthday
+                                                          : std::string();
 }
 
 base::Time FakeSyncEngine::GetLastSyncedTimeForDebugging() const {
@@ -109,10 +119,8 @@ void FakeSyncEngine::ConnectDataType(
 
 void FakeSyncEngine::DisconnectDataType(ModelType type) {}
 
-void FakeSyncEngine::SetProxyTabsDatatypeEnabled(bool enabled) {}
-
 const SyncStatus& FakeSyncEngine::GetDetailedStatus() const {
-  return default_sync_status_;
+  return sync_status_;
 }
 
 void FakeSyncEngine::HasUnsyncedItemsForTest(
@@ -132,8 +140,17 @@ void FakeSyncEngine::OnCookieJarChanged(bool account_mismatch,
   }
 }
 
-void FakeSyncEngine::SetInvalidationsForSessionsEnabled(bool enabled) {}
+bool FakeSyncEngine::IsNextPollTimeInThePast() const {
+  return is_next_poll_time_in_the_past_;
+}
 
 void FakeSyncEngine::GetNigoriNodeForDebugging(AllNodesCallback callback) {}
+
+void FakeSyncEngine::RecordNigoriMemoryUsageAndCountsHistograms() {}
+
+void FakeSyncEngine::GetTypesWithUnsyncedData(
+    base::OnceCallback<void(ModelTypeSet)> cb) const {
+  std::move(cb).Run(ModelTypeSet());
+}
 
 }  // namespace syncer

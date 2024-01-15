@@ -16,19 +16,24 @@
 #include "components/viz/service/display/display.h"
 #include "components/viz/service/frame_sinks/frame_sink_manager_impl.h"
 #include "components/viz/test/test_gpu_memory_buffer_manager.h"
-#include "components/viz/test/test_image_factory.h"
 #include "components/viz/test/test_shared_bitmap_manager.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_manager.h"
+#include "gpu/command_buffer/service/sync_point_manager.h"
 #include "gpu/ipc/common/surface_handle.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/viz/privileged/mojom/compositing/vsync_parameter_observer.mojom.h"
 #include "ui/compositor/compositor.h"
 
+namespace cc {
+class RasterContextProviderWrapper;
+}
+
 namespace viz {
 class HostFrameSinkManager;
+class TestInProcessContextProvider;
 }
 
 namespace ui {
-class InProcessContextProvider;
 
 class InProcessContextFactory : public ContextFactory {
  public:
@@ -51,9 +56,13 @@ class InProcessContextFactory : public ContextFactory {
     return frame_sink_manager_;
   }
 
-  // Set refresh rate will be set to 200 to spend less time waiting for
-  // BeginFrame when used for tests.
-  void SetUseFastRefreshRateForTests();
+  // Setting a higher refresh rate will spend less time waiting for BeginFrame;
+  // while setting a lower refresh rate will reduce the workload per unit of
+  // time, which could be useful, e.g., when using mock time and fast forwarding
+  // by a long duration.
+  //
+  // Takes effect for the next CreateLayerTreeFrameSink() call.
+  void SetRefreshRateForTests(double refresh_rate);
 
   // ContextFactory implementation.
   void CreateLayerTreeFrameSink(base::WeakPtr<Compositor> compositor) override;
@@ -74,6 +83,8 @@ class InProcessContextFactory : public ContextFactory {
   gfx::DisplayColorSpaces GetDisplayColorSpaces(Compositor* compositor) const;
   base::TimeTicks GetDisplayVSyncTimeBase(Compositor* compositor) const;
   base::TimeDelta GetDisplayVSyncTimeInterval(Compositor* compositor) const;
+  absl::optional<base::TimeDelta> GetMaxVrrInterval(
+      Compositor* compositor) const;
   void ResetDisplayOutputParameters(Compositor* compositor);
 
  private:
@@ -81,11 +92,13 @@ class InProcessContextFactory : public ContextFactory {
 
   PerCompositorData* CreatePerCompositorData(Compositor* compositor);
 
-  scoped_refptr<InProcessContextProvider> shared_main_thread_contexts_;
-  scoped_refptr<InProcessContextProvider> shared_worker_context_provider_;
+  scoped_refptr<viz::TestInProcessContextProvider> shared_main_thread_contexts_;
+  scoped_refptr<cc::RasterContextProviderWrapper>
+      shared_worker_context_provider_wrapper_;
   viz::TestSharedBitmapManager shared_bitmap_manager_;
+  gpu::SharedImageManager shared_image_manager_;
+  gpu::SyncPointManager sync_point_manager_;
   viz::TestGpuMemoryBufferManager gpu_memory_buffer_manager_;
-  viz::TestImageFactory image_factory_;
   cc::TestTaskGraphRunner task_graph_runner_;
   viz::FrameSinkIdAllocator frame_sink_id_allocator_;
   viz::SubtreeCaptureIdAllocator subtree_capture_id_allocator_;

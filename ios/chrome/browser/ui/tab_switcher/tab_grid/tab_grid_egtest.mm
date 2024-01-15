@@ -2,7 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#import "base/containers/contains.h"
 #import "base/format_macros.h"
+#import "base/i18n/message_formatter.h"
 #import "base/ios/ios_util.h"
 #import "base/strings/string_util.h"
 #import "base/strings/stringprintf.h"
@@ -10,22 +12,37 @@
 #import "base/test/ios/wait_util.h"
 #import "base/time/time.h"
 #import "components/bookmarks/common/bookmark_pref_names.h"
+#import "components/bookmarks/common/storage_type.h"
+#import "components/sync/base/features.h"
+#import "ios/chrome/browser/metrics/model/metrics_app_interface.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/signin/model/fake_system_identity.h"
+#import "ios/chrome/browser/tabs/model/inactive_tabs/features.h"
+#import "ios/chrome/browser/ui/authentication/signin/signin_constants.h"
+#import "ios/chrome/browser/ui/authentication/signin_earl_grey.h"
+#import "ios/chrome/browser/ui/authentication/signin_earl_grey_ui_test_util.h"
+#import "ios/chrome/browser/ui/bookmarks/bookmark_earl_grey.h"
 #import "ios/chrome/browser/ui/history/history_ui_constants.h"
 #import "ios/chrome/browser/ui/popup_menu/popup_menu_constants.h"
+#import "ios/chrome/browser/ui/reading_list/reading_list_app_interface.h"
 #import "ios/chrome/browser/ui/recent_tabs/recent_tabs_app_interface.h"
 #import "ios/chrome/browser/ui/recent_tabs/recent_tabs_constants.h"
 #import "ios/chrome/browser/ui/settings/settings_app_interface.h"
 #import "ios/chrome/browser/ui/start_surface/start_surface_features.h"
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/grid/grid_constants.h"
 #import "ios/chrome/browser/ui/tab_switcher/tab_grid/tab_grid_constants.h"
+#import "ios/chrome/browser/ui/tab_switcher/test/tabs_egtest_util.h"
 #import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
 #import "ios/chrome/grit/ios_strings.h"
+#import "ios/chrome/test/earl_grey/chrome_actions.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_app_interface.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_xcui_actions.h"
 #import "ios/chrome/test/earl_grey/web_http_server_chrome_test_case.h"
+#import "ios/testing/earl_grey/app_launch_configuration.h"
+#import "ios/testing/earl_grey/app_launch_manager.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #import "ios/web/public/test/http_server/data_response_provider.h"
 #import "ios/web/public/test/http_server/http_server.h"
@@ -34,27 +51,27 @@
 #import "ui/base/device_form_factor.h"
 #import "ui/base/l10n/l10n_util.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using base::test::ios::kWaitForUIElementTimeout;
-using chrome_test_util::TabGridOtherDevicesPanelButton;
-using chrome_test_util::LongPressCellAndDragToEdge;
-using chrome_test_util::LongPressCellAndDragToOffsetOf;
-using chrome_test_util::TapAtOffsetOf;
-using chrome_test_util::WindowWithNumber;
 using chrome_test_util::AddToBookmarksButton;
 using chrome_test_util::AddToReadingListButton;
 using chrome_test_util::CloseTabMenuButton;
+using chrome_test_util::IncognitoTabGrid;
+using chrome_test_util::LongPressCellAndDragToEdge;
+using chrome_test_util::LongPressCellAndDragToOffsetOf;
+using chrome_test_util::RegularTabGrid;
 using chrome_test_util::TabGridCellAtIndex;
+using chrome_test_util::TabGridEditMenuCloseAllButton;
+using chrome_test_util::TabGridIncognitoTabsPanelButton;
 using chrome_test_util::TabGridNormalModePageControl;
+using chrome_test_util::TabGridOpenTabsPanelButton;
+using chrome_test_util::TabGridOtherDevicesPanelButton;
 using chrome_test_util::TabGridSearchBar;
 using chrome_test_util::TabGridSearchCancelButton;
 using chrome_test_util::TabGridSearchModeToolbar;
 using chrome_test_util::TabGridSearchTabsButton;
 using chrome_test_util::TabGridSelectTabsMenuButton;
-using chrome_test_util::RegularTabGrid;
+using chrome_test_util::TapAtOffsetOf;
+using chrome_test_util::WindowWithNumber;
 
 namespace {
 const char kSearchEngineURL[] = "http://searchengine/?q={searchTerms}";
@@ -64,38 +81,18 @@ char kURL1[] = "http://firstURL";
 char kURL2[] = "http://secondURL";
 char kURL3[] = "http://thirdURL";
 char kURL4[] = "http://fourthURL";
-char kTitle1[] = "Page one";
-char kTitle2[] = "Page two";
-char kTitle4[] = "Page four";
+NSString* const kTitle1 = @"Page one";
+NSString* const kTitle2 = @"Page two";
+NSString* const kTitle4 = @"Page four";
 char kResponse1[] = "Test Page 1 content";
 char kResponse2[] = "Test Page 2 content";
 char kResponse3[] = "Test Page 3 content";
 char kResponse4[] = "Test Page 4 content";
 
-constexpr base::TimeDelta kSnackbarAppearanceTimeout = base::Seconds(5);
-constexpr base::TimeDelta kSnackbarDisappearanceTimeout = base::Seconds(11);
-
-id<GREYMatcher> TabGridCell() {
-  return grey_allOf(grey_kindOfClassName(@"GridCell"),
-                    grey_sufficientlyVisible(), nil);
-}
-
-id<GREYMatcher> TabWithTitle(char* title) {
-  return grey_allOf(
-      TabGridCell(),
-      grey_accessibilityLabel([NSString stringWithUTF8String:title]),
-      grey_sufficientlyVisible(), nil);
-}
-
-id<GREYMatcher> TabWithTitleAndIndex(char* title, unsigned int index) {
-  return grey_allOf(TabWithTitle(title), TabGridCellAtIndex(index), nil);
-}
-
-id<GREYMatcher> RecentlyClosedTabWithTitle(char* title) {
+id<GREYMatcher> RecentlyClosedTabWithTitle(NSString* title) {
   return grey_allOf(grey_ancestor(grey_accessibilityID(
                         kRecentTabsTableViewControllerAccessibilityIdentifier)),
-                    chrome_test_util::StaticTextWithAccessibilityLabel(
-                        base::SysUTF8ToNSString(title)),
+                    chrome_test_util::StaticTextWithAccessibilityLabel(title),
                     grey_sufficientlyVisible(), nil);
 }
 
@@ -125,25 +122,6 @@ id<GREYMatcher> SelectAllButton() {
 id<GREYMatcher> VisibleTabGridEditButton() {
   return grey_allOf(chrome_test_util::TabGridEditButton(),
                     grey_sufficientlyVisible(), nil);
-}
-
-void WaitForTabGridFullscreen() {
-  if (![ChromeEarlGrey isThumbstripEnabledForWindowWithNumber:0]) {
-    return;
-  }
-
-  // Check that the kRegularTabGridIdentifier is visible.
-  ConditionBlock condition = ^{
-    NSError* error = nil;
-    [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
-                                            kRegularTabGridIdentifier)]
-        assertWithMatcher:grey_sufficientlyVisible()
-                    error:&error];
-    return error == nil;
-  };
-  bool fullscreenAchieved = base::test::ios::WaitUntilConditionOrTimeout(
-      base::test::ios::kWaitForUIElementTimeout, condition);
-  GREYAssertTrue(fullscreenAchieved, @"kRegularTabGridIdentifier not visible");
 }
 
 // Returns the matcher for the Recent Tabs table.
@@ -268,8 +246,17 @@ id<GREYMatcher> SearchSuggestedActionsSectionWithHistoryMatchesCount(
 }
 // Matcher for the select tabs button in the context menu.
 id<GREYMatcher> SelectTabsContextMenuItem() {
-  return chrome_test_util::ButtonWithAccessibilityLabelId(
+  return chrome_test_util::ContextMenuItemWithAccessibilityLabelId(
       IDS_IOS_CONTENT_CONTEXT_SELECTTABS);
+}
+
+// Type `text` into the TabGridSearchBar and press enter.
+void PerformTabGridSearch(NSString* text) {
+  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
+      performAction:grey_replaceText(text)];
+  // TODO(crbug.com/1454516): Use simulatePhysicalKeyboardEvent until
+  // replaceText can properly handle \n.
+  [ChromeEarlGrey simulatePhysicalKeyboardEvent:@"\n" flags:0];
 }
 
 #pragma mark - TestResponseProvider
@@ -288,7 +275,7 @@ class EchoURLDefaultSearchEngineResponseProvider
 
 bool EchoURLDefaultSearchEngineResponseProvider::CanHandleRequest(
     const Request& request) {
-  return request.url.spec().find(kSearchEngineHost) != std::string::npos;
+  return base::Contains(request.url.spec(), kSearchEngineHost);
 }
 
 void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
@@ -324,11 +311,14 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 
   std::map<GURL, std::string> responses;
   const char kPageFormat[] = "<head><title>%s</title></head><body>%s</body>";
-  responses[_URL1] = base::StringPrintf(kPageFormat, kTitle1, kResponse1);
-  responses[_URL2] = base::StringPrintf(kPageFormat, kTitle2, kResponse2);
+  responses[_URL1] = base::StringPrintf(
+      kPageFormat, base::SysNSStringToUTF8(kTitle1).c_str(), kResponse1);
+  responses[_URL2] = base::StringPrintf(
+      kPageFormat, base::SysNSStringToUTF8(kTitle2).c_str(), kResponse2);
   // Page 3 does not have <title> tag, so URL will be its title.
   responses[_URL3] = kResponse3;
-  responses[_URL4] = base::StringPrintf(kPageFormat, kTitle4, kResponse4);
+  responses[_URL4] = base::StringPrintf(
+      kPageFormat, base::SysNSStringToUTF8(kTitle4).c_str(), kResponse4);
   web::test::SetUpSimpleHttpServer(responses);
 }
 
@@ -351,7 +341,30 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
                          bookmarks::prefs::kEditBookmarksEnabled)];
   }
 
+  // Shutdown network process after tests run to avoid hanging from
+  // clearing browsing data.
+  // See https://crbug.com/1419875.
+  [ChromeEarlGrey killWebKitNetworkProcess];
+
+  // Wait for the end of sign-out before starting following tests.
+  // See https://crbug.com/1448618.
+  // Should be removed after TODO(crbug.com/1451733).
+  if ([self isRunningTest:@selector
+            (testSyncSpinnerDismissedInRecentlyClosedTabs)]) {
+    [ChromeEarlGrey signOutAndClearIdentitiesAndWaitForCompletion];
+  }
+
   [super tearDown];
+}
+
+- (AppLaunchConfiguration)appConfigurationForTestCase {
+  AppLaunchConfiguration config = [super appConfigurationForTestCase];
+  if ([self isRunningTest:@selector
+            (testPromoInTabsFromOtherDevicesListensToSignin)]) {
+    config.features_enabled.push_back(
+        syncer::kReplaceSyncPromosWithSignInPromos);
+  }
+  return config;
 }
 
 // Tests entering and leaving the tab grid.
@@ -384,23 +397,36 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 }
 
 // Tests that tapping Close All shows no tabs, shows Undo button, and displays
-// the empty state. Then tests tapping Undo shows Close All button again.
-// Validates this case when Tab Grid Bulk Actions feature is enabled.
+// the empty state, and ensures that it doesn't affect the other tab grid. Then
+// tests tapping Undo shows Close All button again. Validates this case when Tab
+// Grid Bulk Actions feature is enabled.
 - (void)testCloseAllAndUndoCloseAll {
-  [ChromeEarlGreyUI openTabGrid];
+  // Also add a tab in incognito.
+  [ChromeEarlGrey openNewIncognitoTab];
+  [ChromeEarlGrey waitForIncognitoTabCount:1];
 
-  // Close all tabs
+  // Open tab grid and go to regular tab page.
+  [ChromeEarlGreyUI openTabGrid];
+  [[EarlGrey selectElementWithMatcher:TabGridNormalModePageControl()]
+      performAction:grey_tap()];
+
+  // Close all tabs.
   [[EarlGrey selectElementWithMatcher:VisibleTabGridEditButton()]
       performAction:grey_tap()];
   [[EarlGrey selectElementWithMatcher:chrome_test_util::
                                           TabGridEditMenuCloseAllButton()]
       performAction:grey_tap()];
 
-  // Ensure tabs were closed
+  // Ensure normal tabs were closed.
   [[EarlGrey selectElementWithMatcher:chrome_test_util::TabGridCellAtIndex(0)]
       assertWithMatcher:grey_nil()];
 
-  // Ensure undo button is visible and edit button is not visible
+  // Ensure the incognito tab isn't closed.
+  GREYAssertEqual(1, [ChromeEarlGrey incognitoTabCount],
+                  @"Expected that the \"Close All Tabs\" button should not "
+                  @"close tabs in other pages.");
+
+  // Ensure undo button is visible and edit button is not visible.
   [[EarlGrey
       selectElementWithMatcher:chrome_test_util::TabGridUndoCloseAllButton()]
       assertWithMatcher:grey_sufficientlyVisible()];
@@ -411,13 +437,147 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
                                           TabGridRegularTabsEmptyStateView()]
       assertWithMatcher:grey_sufficientlyVisible()];
 
-  // Tap Undo button
+  // Tap Undo button.
   [[EarlGrey
       selectElementWithMatcher:chrome_test_util::TabGridUndoCloseAllButton()]
       performAction:grey_tap()];
 
   [[EarlGrey selectElementWithMatcher:chrome_test_util::TabGridCellAtIndex(0)]
       assertWithMatcher:grey_sufficientlyVisible()];
+  [[EarlGrey selectElementWithMatcher:VisibleTabGridEditButton()]
+      assertWithMatcher:grey_sufficientlyVisible()];
+}
+
+// Tests that tapping Close All close also inactive tabs. Ensure it is correctly
+// recovered when pressing undo and there is no selection mode when there are
+// inactive tabs but no regular tabs.
+- (void)testCloseAllAndUndoCloseAllWithInactiveTabs {
+  if ([ChromeEarlGrey isIPadIdiom]) {
+    EARL_GREY_TEST_SKIPPED(@"Skipped for iPad. The Inactive Tabs feature is "
+                           @"only supported on iPhone.");
+  }
+  [self loadTestURLsInNewTabs];
+  [self relaunchAppWithInactiveTabsEnabled];
+
+  [ChromeEarlGreyUI openTabGrid];
+  GREYAssertEqual(1, [ChromeEarlGrey mainTabCount],
+                  @"Expected only one tab (NTP), all other tabs should have "
+                  @"been in inactive tab grid.");
+  GREYAssertEqual(4, [ChromeEarlGrey inactiveTabCount],
+                  @"Expected 4 inactive tabs.");
+
+  // Ensure the edit button is visible.
+  [[EarlGrey selectElementWithMatcher:VisibleTabGridEditButton()]
+      assertWithMatcher:grey_sufficientlyVisible()];
+
+  // Close all tabs.
+  [[EarlGrey selectElementWithMatcher:VisibleTabGridEditButton()]
+      performAction:grey_tap()];
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::
+                                          TabGridEditMenuCloseAllButton()]
+      performAction:grey_tap()];
+
+  // Ensure regular and inactive tabs were closed.
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::
+                                          TabGridRegularTabsEmptyStateView()]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  GREYAssertEqual(0, [ChromeEarlGrey mainTabCount],
+                  @"Expected all regular tab to be closed.");
+  GREYAssertEqual(0, [ChromeEarlGrey inactiveTabCount],
+                  @"Expected all inactive tab to be closed.");
+
+  // Tap Undo button.
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::TabGridUndoCloseAllButton()]
+      performAction:grey_tap()];
+  GREYAssertEqual(1, [ChromeEarlGrey mainTabCount],
+                  @"Expected only one tab (NTP), all other tabs should have "
+                  @"been in inactive tab grid.");
+  GREYAssertEqual(4, [ChromeEarlGrey inactiveTabCount],
+                  @"Expected 4 inactive tabs.");
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::TabGridCellAtIndex(0)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+
+  // Closing the only tab in the regular tab grid and verify there is an empty
+  // grid.
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::
+                                          TabGridCloseButtonForCellAtIndex(0)]
+      performAction:grey_tap()];
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::
+                                          TabGridRegularTabsEmptyStateView()]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  GREYAssertEqual(0, [ChromeEarlGrey mainTabCount],
+                  @"Expected no tab in regular tab grid.");
+  GREYAssertEqual(4, [ChromeEarlGrey inactiveTabCount],
+                  @"Expected 4 inactive tabs.");
+
+  // Ensure there is no selection mode available when there is no tab in regular
+  // tab grid.
+  [[EarlGrey selectElementWithMatcher:VisibleTabGridEditButton()]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  [[EarlGrey selectElementWithMatcher:VisibleTabGridEditButton()]
+      performAction:grey_tap()];
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::TabGridSelectTabsMenuButton()]
+      assertWithMatcher:grey_nil()];
+
+  // Close all.
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::
+                                          TabGridEditMenuCloseAllButton()]
+      performAction:grey_tap()];
+  GREYAssertEqual(0, [ChromeEarlGrey mainTabCount],
+                  @"Expected all regular tab to be closed.");
+  GREYAssertEqual(0, [ChromeEarlGrey inactiveTabCount],
+                  @"Expected all inactive tab to be closed.");
+
+  // Tap on Undo button.
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::TabGridUndoCloseAllButton()]
+      performAction:grey_tap()];
+  GREYAssertEqual(0, [ChromeEarlGrey mainTabCount],
+                  @"Expected no tab in regular tab grid.");
+  GREYAssertEqual(4, [ChromeEarlGrey inactiveTabCount],
+                  @"Expected 4 inactive tabs.");
+}
+
+// Tests that tapping Close All from the incognito grid shows no tabs and does
+// not shows Undo button. Also ensure that it close the expected tabs to avoid
+// crbug.com/1475005.
+- (void)testCloseAllAndUndoCloseAllForIncognitoGrid {
+  // Opens 3 incognito tabs and 1 regular.
+  [ChromeEarlGrey openNewIncognitoTab];
+  [ChromeEarlGrey openNewIncognitoTab];
+  [ChromeEarlGrey openNewIncognitoTab];
+  [ChromeEarlGrey openNewTab];
+
+  [ChromeEarlGrey waitForMainTabCount:2];
+  [ChromeEarlGrey waitForIncognitoTabCount:3];
+
+  // Open the regular grid.
+  [ChromeEarlGreyUI openTabGrid];
+
+  // Scroll the tab grid to switch from regular grid to incognito grid.
+  [[EarlGrey
+      selectElementWithMatcher:grey_allOf(grey_accessibilityID(
+                                              kTabGridScrollViewIdentifier),
+                                          grey_sufficientlyVisible(), nil)]
+      performAction:grey_scrollToContentEdge(kGREYContentEdgeLeft)];
+
+  // Close all incognito tabs
+  [[EarlGrey selectElementWithMatcher:VisibleTabGridEditButton()]
+      performAction:grey_tap()];
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::
+                                          TabGridEditMenuCloseAllButton()]
+      performAction:grey_tap()];
+
+  // Ensure only incognito tabs were closed
+  [ChromeEarlGrey waitForMainTabCount:2];
+  [ChromeEarlGrey waitForIncognitoTabCount:0];
+
+  // Ensure undo button is not visible and edit button is visible
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::TabGridUndoCloseAllButton()]
+      assertWithMatcher:grey_nil()];
   [[EarlGrey selectElementWithMatcher:VisibleTabGridEditButton()]
       assertWithMatcher:grey_sufficientlyVisible()];
 }
@@ -450,9 +610,28 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
       assertWithMatcher:grey_sufficientlyVisible()];
 }
 
+// Tests simulating a swipe with Voice Over from the Recent Tabs, making sure
+// that the new tab button is working as expected.
+- (void)testSwipeUsingVoiceOver {
+  [ChromeEarlGreyUI openTabGrid];
+
+  // Switch over to Recent Tabs.
+  [[EarlGrey selectElementWithMatcher:TabGridOtherDevicesPanelButton()]
+      performAction:grey_tap()];
+
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::TabGridNewTabButton()]
+      assertWithMatcher:grey_nil()];
+
+  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
+                                          kTabGridScrollViewIdentifier)]
+      performAction:chrome_test_util::AccessibilitySwipeRight()];
+
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::TabGridNewTabButton()]
+      performAction:grey_tap()];
+}
+
 // Tests that Clear Browsing Data can be successfully done from tab grid.
-// TODO(crbug.com/1379374):
-- (void)DISABLED_testClearBrowsingData {
+- (void)FLAKY_testClearBrowsingData {
   // Load history
   [self loadTestURLs];
 
@@ -471,29 +650,124 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   [ChromeEarlGreyUI assertHistoryHasNoEntries];
 }
 
+#pragma mark - Recent Tabs
+
+// Tests reopening a closed tab from an incognito tab.
+- (void)testOpenCloseTabFromIncognito {
+  [ChromeEarlGrey loadURL:_URL1];
+  [ChromeEarlGrey waitForWebStateContainingText:kResponse1];
+
+  // Close the tab, making it appear in Recent Tabs.
+  [ChromeEarlGrey closeAllNormalTabs];
+
+  [ChromeEarlGrey openNewIncognitoTab];
+  [ChromeEarlGreyUI openTabGrid];
+
+  [[EarlGrey selectElementWithMatcher:TabGridOtherDevicesPanelButton()]
+      performAction:grey_tap()];
+
+  [ChromeEarlGrey waitForMainTabCount:0];
+  [ChromeEarlGrey waitForIncognitoTabCount:1];
+
+  [[[EarlGrey
+      selectElementWithMatcher:grey_allOf(grey_accessibilityLabel(kTitle1),
+                                          grey_sufficientlyVisible(), nil)]
+      atIndex:0] performAction:grey_tap()];
+
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::Omnibox()]
+      assertWithMatcher:chrome_test_util::OmniboxText(_URL1.GetContent())];
+
+  [ChromeEarlGrey waitForMainTabCount:1];
+  [ChromeEarlGrey waitForIncognitoTabCount:1];
+}
+
+// Tests that done button is disabled if there is no tab in the last active
+// page. This also ensure that the last active page is the correct one
+// (incognito if the last opened tab was incognito and regular if the last
+// active page was a regular.) so the done button open a tab in the correct page
+// (Do not open a regular tab if the active page is an incognito one).
+- (void)testRecentTabDoneButtonAndLastActivePage {
+  // Load 1 regular tab.
+  [ChromeEarlGrey loadURL:_URL1];
+  [ChromeEarlGrey waitForWebStateContainingText:kResponse1];
+  [ChromeEarlGrey waitForMainTabCount:1];
+  [ChromeEarlGrey waitForIncognitoTabCount:0];
+
+  // Open 1 incognito tab.
+  [ChromeEarlGrey openNewIncognitoTab];
+  [ChromeEarlGrey loadURL:_URL2];
+  [ChromeEarlGrey waitForWebStateContainingText:kResponse2];
+  [ChromeEarlGrey waitForMainTabCount:1];
+  [ChromeEarlGrey waitForIncognitoTabCount:1];
+
+  // Go to regular and open the previously created tab.
+  [ChromeEarlGreyUI openTabGrid];
+  [[EarlGrey selectElementWithMatcher:TabGridOpenTabsPanelButton()]
+      performAction:grey_tap()];
+  [self verifyVisibleTabsCount:1];
+  [[EarlGrey selectElementWithMatcher:TabWithTitleAndIndex(kTitle1, 0)]
+      performAction:grey_tap()];
+
+  // Go to remote grid and tap on Done button.
+  [ChromeEarlGreyUI openTabGrid];
+  [[EarlGrey selectElementWithMatcher:TabGridOtherDevicesPanelButton()]
+      performAction:grey_tap()];
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::TabGridDoneButton()]
+      performAction:grey_tap()];
+
+  // Ensure that we opened a regular tab as the last open tab was a regular one.
+  [ChromeEarlGreyUI openTabGrid];
+  [[EarlGrey selectElementWithMatcher:RegularTabGrid()]
+      assertWithMatcher:grey_sufficientlyVisible()];
+
+  // Go to incognito and open the previously created tab.
+  [[EarlGrey selectElementWithMatcher:TabGridIncognitoTabsPanelButton()]
+      performAction:grey_tap()];
+  [self verifyVisibleTabsCount:1];
+  [[EarlGrey selectElementWithMatcher:TabWithTitleAndIndex(kTitle2, 0)]
+      performAction:grey_tap()];
+
+  // Go to remote grid and tap on Done button.
+  [ChromeEarlGreyUI openTabGrid];
+  [[EarlGrey selectElementWithMatcher:TabGridOtherDevicesPanelButton()]
+      performAction:grey_tap()];
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::TabGridDoneButton()]
+      performAction:grey_tap()];
+
+  // Ensure that we opened an incognito tab as the last open tab was an
+  // incognito one.
+  [ChromeEarlGreyUI openTabGrid];
+  [[EarlGrey selectElementWithMatcher:IncognitoTabGrid()]
+      assertWithMatcher:grey_sufficientlyVisible()];
+
+  // Close all incognito tab.
+  [[EarlGrey selectElementWithMatcher:VisibleTabGridEditButton()]
+      performAction:grey_tap()];
+  [[EarlGrey selectElementWithMatcher:TabGridEditMenuCloseAllButton()]
+      performAction:grey_tap()];
+  [ChromeEarlGrey waitForMainTabCount:1];
+  [ChromeEarlGrey waitForIncognitoTabCount:0];
+
+  // Go to remote grid.
+  [[EarlGrey selectElementWithMatcher:TabGridOtherDevicesPanelButton()]
+      performAction:grey_tap()];
+  // Ensures Done button is disabled.
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::TabGridDoneButton()]
+      assertWithMatcher:grey_accessibilityTrait(
+                            UIAccessibilityTraitNotEnabled)];
+}
+
 #pragma mark - Recent Tabs Context Menu
 
 // Tests the Copy Link action on a recent tab's context menu.
 - (void)testRecentTabsContextMenuCopyLink {
   [self prepareRecentTabWithURL:_URL1 response:kResponse1];
-  [self longPressTabWithTitle:[NSString stringWithUTF8String:kTitle1]];
+  [self longPressTabWithTitle:kTitle1];
 
   [ChromeEarlGrey
       verifyCopyLinkActionWithText:[NSString
                                        stringWithUTF8String:_URL1.spec()
                                                                 .c_str()]];
-}
-
-// Tests the Open in New Tab action on a recent tab's context menu.
-- (void)testRecentTabsContextMenuOpenInNewTab {
-  [self prepareRecentTabWithURL:_URL1 response:kResponse1];
-  [self longPressTabWithTitle:[NSString stringWithUTF8String:kTitle1]];
-
-  [ChromeEarlGrey verifyOpenInNewTabActionWithURL:_URL1.GetContent()];
-
-  // Verify that the Tab Grid is closed.
-  [[EarlGrey selectElementWithMatcher:TabGridOtherDevicesPanelButton()]
-      assertWithMatcher:grey_notVisible()];
 }
 
 // Tests the Open in New Window action on a recent tab's context menu.
@@ -503,7 +777,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   }
 
   [self prepareRecentTabWithURL:_URL1 response:kResponse1];
-  [self longPressTabWithTitle:[NSString stringWithUTF8String:kTitle1]];
+  [self longPressTabWithTitle:kTitle1];
 
   [ChromeEarlGrey verifyOpenInNewWindowActionWithContent:kResponse1];
 }
@@ -511,11 +785,9 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 // Tests the Share action on a recent tab's context menu.
 - (void)testRecentTabsContextMenuShare {
   [self prepareRecentTabWithURL:_URL1 response:kResponse1];
-  [self longPressTabWithTitle:[NSString stringWithUTF8String:kTitle1]];
+  [self longPressTabWithTitle:kTitle1];
 
-  [ChromeEarlGrey
-      verifyShareActionWithURL:_URL1
-                     pageTitle:[NSString stringWithUTF8String:kTitle1]];
+  [ChromeEarlGrey verifyShareActionWithURL:_URL1 pageTitle:kTitle1];
 }
 
 #pragma mark - Tab Grid Item Context Menu
@@ -527,11 +799,9 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 
   [ChromeEarlGreyUI openTabGrid];
 
-  [self longPressTabWithTitle:[NSString stringWithUTF8String:kTitle1]];
+  [self longPressTabWithTitle:kTitle1];
 
-  [ChromeEarlGrey
-      verifyShareActionWithURL:_URL1
-                     pageTitle:[NSString stringWithUTF8String:kTitle1]];
+  [ChromeEarlGrey verifyShareActionWithURL:_URL1 pageTitle:kTitle1];
 }
 
 // Tests the Add to Reading list action on a tab grid item's context menu.
@@ -541,7 +811,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 
   [ChromeEarlGreyUI openTabGrid];
 
-  [self longPressTabWithTitle:[NSString stringWithUTF8String:kTitle1]];
+  [self longPressTabWithTitle:kTitle1];
 
   [self waitForSnackBarMessage:IDS_IOS_READING_LIST_SNACKBAR_MESSAGE
       triggeredByTappingItemWithMatcher:AddToReadingListButton()];
@@ -552,24 +822,33 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   [ChromeEarlGrey loadURL:_URL1];
   [ChromeEarlGrey waitForWebStateContainingText:kResponse1];
 
+  [BookmarkEarlGrey waitForBookmarkModelsLoaded];
   [ChromeEarlGreyUI openTabGrid];
 
-  [self longPressTabWithTitle:[NSString stringWithUTF8String:kTitle1]];
+  [self longPressTabWithTitle:kTitle1];
 
-  [self waitForSnackBarMessage:IDS_IOS_BOOKMARK_PAGE_SAVED
+  NSString* snackbarMessage = base::SysUTF16ToNSString(
+      l10n_util::GetPluralStringFUTF16(IDS_IOS_BOOKMARK_PAGE_SAVED, 1));
+  [self waitForSnackBarMessageText:snackbarMessage
       triggeredByTappingItemWithMatcher:AddToBookmarksButton()];
 
-  [self longPressTabWithTitle:[NSString stringWithUTF8String:kTitle1]];
+  [self longPressTabWithTitle:kTitle1];
 
-  [[EarlGrey
-      selectElementWithMatcher:chrome_test_util::ButtonWithAccessibilityLabelId(
-                                   IDS_IOS_TOOLS_MENU_EDIT_BOOKMARK)]
+  [[EarlGrey selectElementWithMatcher:
+                 chrome_test_util::ContextMenuItemWithAccessibilityLabelId(
+                     IDS_IOS_TOOLS_MENU_EDIT_BOOKMARK)]
       performAction:grey_tap()];
 
   [[EarlGrey selectElementWithMatcher:
                  chrome_test_util::NavigationBarTitleWithAccessibilityLabelId(
                      IDS_IOS_BOOKMARK_EDIT_SCREEN_TITLE)]
       assertWithMatcher:grey_notNil()];
+
+  [BookmarkEarlGrey
+      verifyExistenceOfBookmarkWithURL:base::SysUTF8ToNSString(_URL1.spec())
+                                  name:kTitle1
+                             inStorage:bookmarks::StorageType::
+                                           kLocalOrSyncable];
 }
 
 // Tests that Add to Bookmarks action is greyed out when editBookmarksEnabled
@@ -585,7 +864,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 
   [ChromeEarlGreyUI openTabGrid];
 
-  [self longPressTabWithTitle:[NSString stringWithUTF8String:kTitle1]];
+  [self longPressTabWithTitle:kTitle1];
   [[EarlGrey selectElementWithMatcher:AddToBookmarksButton()]
       assertWithMatcher:grey_allOf(grey_notNil(),
                                    grey_accessibilityTrait(
@@ -604,7 +883,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 
   [ChromeEarlGreyUI openTabGrid];
 
-  [self longPressTabWithTitle:[NSString stringWithUTF8String:kTitle1]];
+  [self longPressTabWithTitle:kTitle1];
 
   // Close Tab.
   [[EarlGrey selectElementWithMatcher:CloseTabMenuButton()]
@@ -625,11 +904,10 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 
   [ChromeEarlGreyUI openTabGrid];
 
-  [self longPressTabWithTitle:[NSString stringWithUTF8String:kTitle1]];
+  [self longPressTabWithTitle:kTitle1];
 
   [[EarlGrey selectElementWithMatcher:SelectTabsContextMenuItem()]
       performAction:grey_tap()];
-  WaitForTabGridFullscreen();
 
   // Wait for the select all button to appear to confirm that edit mode was
   // entered.
@@ -639,11 +917,28 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
         selectElementWithMatcher:chrome_test_util::TabGridEditSelectAllButton()]
         assertWithMatcher:grey_sufficientlyVisible()
                     error:&error];
+    if (error == nil) {
+      // Bypass egtest bug on iOS 15 in which the grid cell element briefly
+      // unselectable.
+      [[EarlGrey
+          selectElementWithMatcher:chrome_test_util::TabGridCellAtIndex(0)]
+          assertWithMatcher:grey_sufficientlyVisible()
+                      error:&error];
+    }
     return (error == nil);
   };
   GREYAssert(base::test::ios::WaitUntilConditionOrTimeout(
                  kWaitForUIElementTimeout, condition),
              @"Wait for select all button to appear in tab grid mode.");
+
+  // Confirm that the tab is selectable.
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::TabGridCellAtIndex(0)]
+      performAction:grey_tap()];
+  NSString* tabSelected = base::SysUTF16ToNSString(
+      l10n_util::GetPluralStringFUTF16(IDS_IOS_TAB_GRID_SELECTED_TABS_TITLE,
+                                       /*number=*/1));
+  [[EarlGrey selectElementWithMatcher:grey_text(tabSelected)]
+      assertWithMatcher:grey_sufficientlyVisible()];
 }
 
 #pragma mark - Drag and drop in Multiwindow
@@ -1113,7 +1408,6 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   [[EarlGrey
       selectElementWithMatcher:chrome_test_util::TabGridSelectTabsMenuButton()]
       performAction:grey_tap()];
-  WaitForTabGridFullscreen();
 
   // Tap tab to select.
   [[EarlGrey selectElementWithMatcher:chrome_test_util::TabGridCellAtIndex(0)]
@@ -1260,9 +1554,10 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   [ChromeEarlGrey waitForWebStateContainingText:kResponse2];
 
   [ChromeEarlGrey openNewTab];
-  [ChromeEarlGrey loadURL:_URL3];
-  [ChromeEarlGrey waitForWebStateContainingText:kResponse3];
+  [ChromeEarlGrey loadURL:_URL4];
+  [ChromeEarlGrey waitForWebStateContainingText:kResponse4];
 
+  [BookmarkEarlGrey waitForBookmarkModelsLoaded];
   [ChromeEarlGreyUI openTabGrid];
 
   [[EarlGrey selectElementWithMatcher:VisibleTabGridEditButton()]
@@ -1285,27 +1580,49 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   [[EarlGrey selectElementWithMatcher:AddToBookmarksButton()]
       performAction:grey_tap()];
 
-  [[EarlGrey selectElementWithMatcher:
-                 chrome_test_util::NavigationBarTitleWithAccessibilityLabelId(
-                     IDS_IOS_BOOKMARK_CHOOSE_GROUP_BUTTON)]
+  [[EarlGrey
+      selectElementWithMatcher:grey_accessibilityLabel(l10n_util::GetNSString(
+                                   IDS_IOS_BOOKMARK_CHOOSE_GROUP_BUTTON))]
       assertWithMatcher:grey_notNil()];
 
   // Choose "Mobile Bookmarks" folder as the destination.
   // Duplicate matcher here instead of using +[BookmarkEarlGreyUI
   // openMobileBookmarks] in order to properly wait for the snackbar message.
-  NSString* snackBarMessage =
-      l10n_util::GetNSStringF(IDS_IOS_BOOKMARK_PAGE_SAVED_FOLDER,
-                              base::SysNSStringToUTF16(@"Mobile Bookmarks"));
-  [self waitForSnackBarMessageText:snackBarMessage
+  std::u16string pattern =
+      l10n_util::GetStringUTF16(IDS_IOS_BOOKMARK_PAGE_SAVED_FOLDER);
+  NSString* snackbarMessage = base::SysUTF16ToNSString(
+      base::i18n::MessageFormatter::FormatWithNamedArgs(
+          pattern, "count", 2, "title",
+          base::SysNSStringToUTF16(@"Mobile Bookmarks")));
+  [self waitForSnackBarMessageText:snackbarMessage
       triggeredByTappingItemWithMatcher:grey_allOf(grey_kindOfClassName(
                                                        @"UITableViewCell"),
                                                    grey_descendant(grey_text(
                                                        @"Mobile Bookmarks")),
                                                    nil)];
+
+  [BookmarkEarlGrey
+      verifyExistenceOfBookmarkWithURL:base::SysUTF8ToNSString(_URL1.spec())
+                                  name:kTitle1
+                             inStorage:bookmarks::StorageType::
+                                           kLocalOrSyncable];
+  [BookmarkEarlGrey
+      verifyExistenceOfBookmarkWithURL:base::SysUTF8ToNSString(_URL4.spec())
+                                  name:kTitle4
+                             inStorage:bookmarks::StorageType::
+                                           kLocalOrSyncable];
+  [BookmarkEarlGrey
+      verifyAbsenceOfBookmarkWithURL:base::SysUTF8ToNSString(_URL2.spec())
+                           inStorage:bookmarks::StorageType::kLocalOrSyncable];
 }
 
 // Tests adding items to the readinglist from the tab grid edit mode.
 - (void)testTabGridBulkActionAddToReadingList {
+  // TODO(crbug.com/1428591): Test flakes when run on iOS 16.
+  if (@available(iOS 16, *)) {
+    EARL_GREY_TEST_DISABLED(@"Fails on iOS 16.");
+  }
+
   [ChromeEarlGrey loadURL:_URL1];
   [ChromeEarlGrey waitForWebStateContainingText:kResponse1];
 
@@ -1380,8 +1697,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
       selectElementWithMatcher:chrome_test_util::TabGridEditShareButton()]
       performAction:grey_tap()];
 
-  [[EarlGrey selectElementWithMatcher:chrome_test_util::CopyActivityButton()]
-      performAction:grey_tap()];
+  [ChromeEarlGrey tapButtonInActivitySheetWithID:@"Copy"];
 
   NSString* URL1String = base::SysUTF8ToNSString(_URL1.spec());
   NSString* URL3String = base::SysUTF8ToNSString(_URL3.spec());
@@ -1423,7 +1739,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   [[EarlGrey selectElementWithMatcher:TabGridSearchTabsButton()]
       performAction:grey_tap()];
   [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(@"hello")];
+      performAction:grey_replaceText(@"hello")];
 
   // Verify that search reduced the number of visible tabs.
   [self verifyVisibleTabsCount:0];
@@ -1454,13 +1770,14 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 
   // Searching with any query should render scrim invisible.
   [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(@"text")];
+      performAction:grey_replaceText(@"text")];
   [[EarlGrey selectElementWithMatcher:VisibleSearchScrim()]
       assertWithMatcher:grey_nil()];
 
   // Clearing search bar text should render scrim visible again.
+  // TODO(crbug.com/1454514): Revert to grey_clearText when fixed in EG.
   [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_clearText()];
+      performAction:grey_replaceText(@"")];
   [[EarlGrey selectElementWithMatcher:VisibleSearchScrim()]
       assertWithMatcher:grey_notNil()];
 
@@ -1509,7 +1826,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
       performAction:grey_tap()];
 
   [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(@"Page")];
+      performAction:grey_replaceText(@"Page")];
 
   // Verify that the header of the open tabs section has the correct results
   // count.
@@ -1528,7 +1845,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 
   // Update the search query with one that doesn't match any results.
   [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(@"Foo")];
+      performAction:grey_replaceText(@"Foo")];
 
   // Verify that the header of the open tabs section has 0 as the results count.
   [[EarlGrey selectElementWithMatcher:SearchOpenTabsHeaderWithValue(0)]
@@ -1564,21 +1881,22 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
       assertWithMatcher:grey_nil()];
 
   // Searching with any query should render the header visible.
-  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(@"text\n")];
+  PerformTabGridSearch(@"text");
+
   [[EarlGrey selectElementWithMatcher:SearchOpenTabsSectionHeader()]
       assertWithMatcher:grey_notNil()];
 
   // Clearing search bar text should render the header invisible again.
+  // TODO(crbug.com/1454514): Revert to grey_clearText when fixed in EG.
   [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_clearText()];
+      performAction:grey_replaceText(@"")];
   [[EarlGrey selectElementWithMatcher:SearchOpenTabsSectionHeader()]
       assertWithMatcher:grey_nil()];
 
   // Searching a word then canceling the search mode should hide the section
   // header.
-  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(@"page\n")];
+  PerformTabGridSearch(@"page");
+
   [[EarlGrey selectElementWithMatcher:TabGridSearchCancelButton()]
       performAction:grey_tap()];
   [[self scrollUpViewMatcher:RegularTabGrid()
@@ -1611,8 +1929,8 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 
   // Searching with a query with no results should show the suggested actions
   // section.
-  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(@"text\n")];
+  PerformTabGridSearch(@"text");
+
   [[EarlGrey selectElementWithMatcher:SearchOpenTabsHeaderWithValue(0)]
       assertWithMatcher:grey_notNil()];
   [[EarlGrey selectElementWithMatcher:SearchSuggestedActionsSectionHeader()]
@@ -1621,8 +1939,9 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
       assertWithMatcher:grey_notNil()];
 
   // Clearing search bar text should hide the suggested actions section.
+  // TODO(crbug.com/1454514): Revert to grey_clearText when fixed in EG.
   [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_clearText()];
+      performAction:grey_replaceText(@"")];
   [[EarlGrey selectElementWithMatcher:SearchSuggestedActionsSectionHeader()]
       assertWithMatcher:grey_nil()];
   [[EarlGrey selectElementWithMatcher:SearchSuggestedActionsSection()]
@@ -1630,11 +1949,10 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 
   // Searching with a query with results should show the suggested actions
   // section.
-  NSString* query = [NSString stringWithFormat:@"%s\n", kTitle2];
+  // TODO(crbug.com/1454514): Revert to grey_clearText when fixed in EG.
   [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_clearText()];
-  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(query)];
+      performAction:grey_replaceText(@"")];
+  PerformTabGridSearch(kTitle2);
 
   // Check that the header is set correctly.
   [[EarlGrey selectElementWithMatcher:SearchOpenTabsHeaderWithValue(1)]
@@ -1674,9 +1992,8 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
       assertWithMatcher:grey_nil()];
 
   // Searching with a query should not show suggested actions section.
-  NSString* query = [NSString stringWithFormat:@"%s\n", kTitle2];
-  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(query)];
+  PerformTabGridSearch(kTitle2);
+
   [[EarlGrey selectElementWithMatcher:SearchSuggestedActionsSectionHeader()]
       assertWithMatcher:grey_nil()];
   [[self scrollDownViewMatcher:chrome_test_util::IncognitoTabGrid()
@@ -1696,9 +2013,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   // TODO(crbug.com/1306246): Scrolling doesn't work properly in very small
   // devices. Once that is fixed a more broad query can be used for searching
   // (eg. "page").
-  NSString* query = [NSString stringWithFormat:@"%s\n", kTitle2];
-  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(query)];
+  PerformTabGridSearch(kTitle2);
 
   // Verify that the suggested actions section exist and has "Search on web",
   // "Search recent tabs", "Search history" rows.
@@ -1736,9 +2051,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   // TODO(crbug.com/1306246): Scrolling doesn't work properly in very small
   // devices. Once that is fixed a more broad query can be used for searching
   // (eg. "page").
-  NSString* query = [NSString stringWithFormat:@"%s\n", kTitle2];
-  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(query)];
+  PerformTabGridSearch(kTitle2);
 
   // Verify that the suggested actions section exist and has "Search on web",
   // "Search open tabs", "Search history" rows.
@@ -1773,8 +2086,8 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
       assertWithMatcher:grey_nil()];
 
   // Searching the word "page" matches 2 items from history.
-  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(@"page\n")];
+  PerformTabGridSearch(@"page");
+
   [[self scrollDownViewMatcher:RegularTabGrid()
                toSelectMatcher:
                    SearchSuggestedActionsSectionWithHistoryMatchesCount(2)]
@@ -1782,8 +2095,8 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 
   // Adding to the existing query " two" will search for "page two" and should
   // only match 1 item from the history.
-  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(@" two\n")];
+  PerformTabGridSearch(@"page two");
+
   [[self scrollDownViewMatcher:RegularTabGrid()
                toSelectMatcher:
                    SearchSuggestedActionsSectionWithHistoryMatchesCount(1)]
@@ -1818,8 +2131,8 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
       assertWithMatcher:grey_notVisible()];
 
   // Searching the word "page" matches 2 items from history.
-  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(@"page\n")];
+  PerformTabGridSearch(@"page");
+
   [[self
       scrollDownViewMatcher:RecentTabsTable()
             toSelectMatcher:RecentTabsSearchHistorySuggestedActionWithMatches(
@@ -1828,8 +2141,8 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 
   // Adding to the existing query " two" will search for "page two" and should
   // only match 1 item from the history.
-  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(@" two\n")];
+  PerformTabGridSearch(@"page two");
+
   [[self
       scrollDownViewMatcher:RecentTabsTable()
             toSelectMatcher:RecentTabsSearchHistorySuggestedActionWithMatches(
@@ -1851,9 +2164,8 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   [[EarlGrey selectElementWithMatcher:TabGridSearchTabsButton()]
       performAction:grey_tap()];
 
-  NSString* title2 = base::SysUTF8ToNSString(kTitle2);
   [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(title2)];
+      performAction:grey_replaceText(kTitle2)];
 
   [[EarlGrey selectElementWithMatcher:TabWithTitle(kTitle2)]
       performAction:grey_tap()];
@@ -1877,9 +2189,8 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   [[EarlGrey selectElementWithMatcher:TabGridSearchTabsButton()]
       performAction:grey_tap()];
 
-  NSString* title2 = base::SysUTF8ToNSString(kTitle2);
   [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(title2)];
+      performAction:grey_replaceText(kTitle2)];
 
   [[EarlGrey selectElementWithMatcher:TabWithTitle(kTitle2)]
       performAction:grey_tap()];
@@ -1903,18 +2214,23 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   [[EarlGrey selectElementWithMatcher:TabGridSearchTabsButton()]
       performAction:grey_tap()];
 
-  NSString* title2 = base::SysUTF8ToNSString(kTitle2);
   [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(title2)];
+      performAction:grey_replaceText(kTitle2)];
 
-  [self longPressTabWithTitle:title2];
+  [self longPressTabWithTitle:kTitle2];
 
-  [ChromeEarlGrey verifyShareActionWithURL:_URL1 pageTitle:title2];
+  [ChromeEarlGrey verifyShareActionWithURL:_URL1 pageTitle:kTitle2];
 }
 
 // Tests that add to reading list action works successfully from the long press
 // context menu on search results.
 - (void)testSearchOpenTabsContextMenuAddToReadingList {
+  // Clear the Reading List.
+  GREYAssertNil([ReadingListAppInterface clearEntries],
+                @"Unable to clear Reading List entries");
+  GREYAssertEqual(0, [ReadingListAppInterface unreadEntriesCount],
+                  @"Reading List should be empty");
+
   [self loadTestURLsInNewTabs];
   [ChromeEarlGreyUI openTabGrid];
 
@@ -1922,14 +2238,17 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   [[EarlGrey selectElementWithMatcher:TabGridSearchTabsButton()]
       performAction:grey_tap()];
 
-  NSString* title2 = base::SysUTF8ToNSString(kTitle2);
   [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(title2)];
+      performAction:grey_replaceText(kTitle2)];
 
-  [self longPressTabWithTitle:title2];
+  [self longPressTabWithTitle:kTitle2];
 
-  [self waitForSnackBarMessage:IDS_IOS_READING_LIST_SNACKBAR_MESSAGE
-      triggeredByTappingItemWithMatcher:AddToReadingListButton()];
+  [[EarlGrey selectElementWithMatcher:AddToReadingListButton()]
+      performAction:grey_tap()];
+
+  // Check that the tab was added to Reading List.
+  GREYAssertEqual(1, [ReadingListAppInterface unreadEntriesCount],
+                  @"Reading List should have one element");
 }
 
 // Tests that add to bookmarks action works successfully from the long press
@@ -1942,20 +2261,21 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   [[EarlGrey selectElementWithMatcher:TabGridSearchTabsButton()]
       performAction:grey_tap()];
 
-  NSString* title2 = base::SysUTF8ToNSString(kTitle2);
   [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(title2)];
+      performAction:grey_replaceText(kTitle2)];
 
-  [self longPressTabWithTitle:title2];
+  [self longPressTabWithTitle:kTitle2];
 
-  [self waitForSnackBarMessage:IDS_IOS_BOOKMARK_PAGE_SAVED
+  NSString* snackbarMessage = base::SysUTF16ToNSString(
+      l10n_util::GetPluralStringFUTF16(IDS_IOS_BOOKMARK_PAGE_SAVED, 1));
+  [self waitForSnackBarMessageText:snackbarMessage
       triggeredByTappingItemWithMatcher:AddToBookmarksButton()];
 
-  [self longPressTabWithTitle:title2];
+  [self longPressTabWithTitle:kTitle2];
 
-  [[EarlGrey
-      selectElementWithMatcher:chrome_test_util::ButtonWithAccessibilityLabelId(
-                                   IDS_IOS_TOOLS_MENU_EDIT_BOOKMARK)]
+  [[EarlGrey selectElementWithMatcher:
+                 chrome_test_util::ContextMenuItemWithAccessibilityLabelId(
+                     IDS_IOS_TOOLS_MENU_EDIT_BOOKMARK)]
       performAction:grey_tap()];
 
   [[EarlGrey selectElementWithMatcher:
@@ -1974,11 +2294,10 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   [[EarlGrey selectElementWithMatcher:TabGridSearchTabsButton()]
       performAction:grey_tap()];
 
-  NSString* title2 = base::SysUTF8ToNSString(kTitle2);
   [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(title2)];
+      performAction:grey_replaceText(kTitle2)];
 
-  [self longPressTabWithTitle:title2];
+  [self longPressTabWithTitle:kTitle2];
 
   // Close Tab.
   [[EarlGrey selectElementWithMatcher:CloseTabMenuButton()]
@@ -1997,11 +2316,10 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   [[EarlGrey selectElementWithMatcher:TabGridSearchTabsButton()]
       performAction:grey_tap()];
 
-  NSString* title2 = base::SysUTF8ToNSString(kTitle2);
   [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(title2)];
+      performAction:grey_replaceText(kTitle2)];
 
-  [self longPressTabWithTitle:title2];
+  [self longPressTabWithTitle:kTitle2];
 
   [[EarlGrey selectElementWithMatcher:SelectTabsContextMenuItem()]
       assertWithMatcher:grey_nil()];
@@ -2019,14 +2337,14 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   // Enter search mode & perform a seach.
   [[EarlGrey selectElementWithMatcher:TabGridSearchTabsButton()]
       performAction:grey_tap()];
-  NSString* query = [NSString stringWithFormat:@"%s\n", kTitle2];
-  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(query)];
-  // Verify that the RegularGridView is visible, use 60% for the visibility
+
+  PerformTabGridSearch(kTitle2);
+
+  // Verify that the RegularGridView is visible, use 50% for the visibility
   // percentage as in smaller devices the toolbars can occupy more space on the
   // screen.
   [[EarlGrey selectElementWithMatcher:RegularTabGrid()]
-      assertWithMatcher:grey_minimumVisiblePercent(0.6)];
+      assertWithMatcher:grey_minimumVisiblePercent(0.5)];
 
   // Tap on search recent tabs.
   [[self scrollDownViewMatcher:RegularTabGrid()
@@ -2037,8 +2355,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   // and search text set to the original query.
   [[EarlGrey selectElementWithMatcher:TabGridSearchModeToolbar()]
       assertWithMatcher:grey_notNil()];
-  [[EarlGrey selectElementWithMatcher:SearchBarWithSearchText(
-                                          base::SysUTF8ToNSString(kTitle2))]
+  [[EarlGrey selectElementWithMatcher:SearchBarWithSearchText(kTitle2)]
       assertWithMatcher:grey_sufficientlyVisible()];
   [[EarlGrey selectElementWithMatcher:RecentTabsTable()]
       assertWithMatcher:grey_sufficientlyVisible()];
@@ -2054,11 +2371,10 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   // on and search text set to the original query.
   [[EarlGrey selectElementWithMatcher:TabGridSearchModeToolbar()]
       assertWithMatcher:grey_notNil()];
-  [[EarlGrey selectElementWithMatcher:SearchBarWithSearchText(
-                                          base::SysUTF8ToNSString(kTitle2))]
+  [[EarlGrey selectElementWithMatcher:SearchBarWithSearchText(kTitle2)]
       assertWithMatcher:grey_sufficientlyVisible()];
   [[EarlGrey selectElementWithMatcher:RegularTabGrid()]
-      assertWithMatcher:grey_minimumVisiblePercent(0.6)];
+      assertWithMatcher:grey_minimumVisiblePercent(0.5)];
   [[EarlGrey selectElementWithMatcher:RecentTabsTable()]
       assertWithMatcher:grey_notVisible()];
 }
@@ -2071,9 +2387,8 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   // Enter search mode & perform a search.
   [[EarlGrey selectElementWithMatcher:TabGridSearchTabsButton()]
       performAction:grey_tap()];
-  NSString* query = [NSString stringWithFormat:@"%s\n", kTitle2];
-  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(query)];
+
+  PerformTabGridSearch(kTitle2);
 
   // Tap on search history.
   [[self scrollDownViewMatcher:RegularTabGrid()
@@ -2093,8 +2408,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   // Make sure that search mode is still active and searching the same query.
   [[EarlGrey selectElementWithMatcher:TabGridSearchModeToolbar()]
       assertWithMatcher:grey_notNil()];
-  [[EarlGrey selectElementWithMatcher:SearchBarWithSearchText(
-                                          base::SysUTF8ToNSString(kTitle2))]
+  [[EarlGrey selectElementWithMatcher:SearchBarWithSearchText(kTitle2)]
       assertWithMatcher:grey_sufficientlyVisible()];
 }
 
@@ -2112,9 +2426,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   // Enter search mode & perform a search.
   [[EarlGrey selectElementWithMatcher:TabGridSearchTabsButton()]
       performAction:grey_tap()];
-  NSString* query = [NSString stringWithFormat:@"%s\n", kTitle2];
-  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(query)];
+  PerformTabGridSearch(kTitle2);
 
   // Tap on search history.
   [[self scrollDownViewMatcher:RecentTabsTable()
@@ -2134,8 +2446,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   // Make sure that search mode is still active and searching the same query.
   [[EarlGrey selectElementWithMatcher:TabGridSearchModeToolbar()]
       assertWithMatcher:grey_notNil()];
-  [[EarlGrey selectElementWithMatcher:SearchBarWithSearchText(
-                                          base::SysUTF8ToNSString(kTitle2))]
+  [[EarlGrey selectElementWithMatcher:SearchBarWithSearchText(kTitle2)]
       assertWithMatcher:grey_sufficientlyVisible()];
 }
 
@@ -2156,10 +2467,8 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   [ChromeEarlGreyUI openTabGrid];
   [[EarlGrey selectElementWithMatcher:TabGridSearchTabsButton()]
       performAction:grey_tap()];
-  const std::string searchQuery("queryfromtabsearch");
-  NSString* query = [NSString stringWithFormat:@"%s\n", searchQuery.c_str()];
-  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(query)];
+
+  PerformTabGridSearch(@"queryfromtabsearch");
 
   // Scroll to search on web.
   [[self scrollDownViewMatcher:RegularTabGrid()
@@ -2172,7 +2481,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 
   // Ensure the loaded page is a default search engine page for `searchQuery`.
   [ChromeEarlGrey waitForWebStateContainingText:kSearchEngineHost];
-  [ChromeEarlGrey waitForWebStateContainingText:searchQuery];
+  [ChromeEarlGrey waitForWebStateContainingText:"queryfromtabsearch"];
 
   // Re-enter the tab grid and ensure search mode was exited.
   [ChromeEarlGreyUI openTabGrid];
@@ -2204,10 +2513,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 
   [[EarlGrey selectElementWithMatcher:TabGridSearchTabsButton()]
       performAction:grey_tap()];
-  const std::string searchQuery("queryfromtabsearch");
-  NSString* query = [NSString stringWithFormat:@"%s\n", searchQuery.c_str()];
-  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(query)];
+  PerformTabGridSearch(@"queryfromtabsearch");
 
   [[self scrollDownViewMatcher:RecentTabsTable()
                toSelectMatcher:SearchOnWebSuggestedAction()]
@@ -2219,7 +2525,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 
   // Ensure the loaded page is a default search engine page for `searchQuery`.
   [ChromeEarlGrey waitForWebStateContainingText:kSearchEngineHost];
-  [ChromeEarlGrey waitForWebStateContainingText:searchQuery];
+  [ChromeEarlGrey waitForWebStateContainingText:"queryfromtabsearch"];
 
   // Re-enter the tab grid and ensure search mode was exited.
   [ChromeEarlGreyUI openTabGrid];
@@ -2241,8 +2547,8 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 
   // Search with a word that will produce no results and verify that the header
   // has 0 found results and that the empty state is visible.
-  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(@"text\n")];
+  PerformTabGridSearch(@"text");
+
   [[EarlGrey selectElementWithMatcher:SearchOpenTabsHeaderWithValue(0)]
       assertWithMatcher:grey_notNil()];
 
@@ -2261,9 +2567,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   [[EarlGrey selectElementWithMatcher:TabGridSearchTabsButton()]
       performAction:grey_tap()];
 
-  NSString* query = [NSString stringWithFormat:@"%s\n", kTitle2];
-  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(query)];
+  PerformTabGridSearch(kTitle2);
 
   [self verifyVisibleTabsCount:1];
   [[EarlGrey selectElementWithMatcher:TabWithTitleAndIndex(kTitle2, 0)]
@@ -2288,9 +2592,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   [[EarlGrey selectElementWithMatcher:TabGridSearchTabsButton()]
       performAction:grey_tap()];
 
-  NSString* query = [NSString stringWithFormat:@"%s\n", kTitle2];
-  [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(query)];
+  PerformTabGridSearch(kTitle2);
 
   [self verifyVisibleTabsCount:1];
   [[EarlGrey selectElementWithMatcher:TabWithTitleAndIndex(kTitle2, 0)]
@@ -2328,7 +2630,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   [[EarlGrey selectElementWithMatcher:TabGridSearchTabsButton()]
       performAction:grey_tap()];
   [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(base::SysUTF8ToNSString(kTitle2))];
+      performAction:grey_replaceText(kTitle2)];
 
   // The recently closed section header should be visible.
   [[EarlGrey selectElementWithMatcher:RecentlyClosedTabsSectionHeader()]
@@ -2376,7 +2678,7 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
   [[EarlGrey selectElementWithMatcher:TabGridSearchTabsButton()]
       performAction:grey_tap()];
   [[EarlGrey selectElementWithMatcher:TabGridSearchBar()]
-      performAction:grey_typeText(@"foo")];
+      performAction:grey_replaceText(@"foo")];
 
   // The recently closed section header should not be visible.
   [[EarlGrey selectElementWithMatcher:RecentlyClosedTabsSectionHeader()]
@@ -2397,6 +2699,169 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
       assertWithMatcher:grey_notNil()];
   [[EarlGrey selectElementWithMatcher:RecentlyClosedTabWithTitle(kTitle2)]
       assertWithMatcher:grey_notNil()];
+}
+
+// Tests that once an account is signed in, the syncing spinner is eventually
+// dismissed: https://crbug.com/1422634.
+- (void)testSyncSpinnerDismissedInRecentlyClosedTabs {
+  // Clear browsing history to reduce delay during sign-in and fix this test's
+  // flakiness on iOS 16.
+  [ChromeEarlGrey clearBrowsingHistory];
+
+  // Sign-in with fake identity.
+  FakeSystemIdentity* fakeIdentity = [FakeSystemIdentity fakeIdentity1];
+  [SigninEarlGreyUI signinWithFakeIdentity:fakeIdentity];
+
+  [ChromeEarlGrey loadURL:_URL1];
+  [ChromeEarlGrey waitForWebStateContainingText:kResponse1];
+
+  // Open recently closed tabs.
+  [ChromeEarlGreyUI openTabGrid];
+  [[EarlGrey selectElementWithMatcher:TabGridOtherDevicesPanelButton()]
+      performAction:grey_tap()];
+
+  // Wait for the syncing view to disappear.
+  [ChromeEarlGrey
+      waitForUIElementToDisappearWithMatcher:
+          grey_accessibilityID(kTableViewActivityIndicatorHeaderFooterViewId)];
+}
+
+// Regression test for crbug.com/1474793. Tests the sign-in promo in "tabs from
+// other devices" reacts accordingly if the user signs in via a different
+// surface. More specifically: on tap the promo shouldn't offer the sign-in
+// sheet but only the history opt-in.
+// kReplaceSyncPromosWithSignInPromos is enabled.
+- (void)testPromoInTabsFromOtherDevicesListensToSignin {
+  [SigninEarlGreyUI signinWithFakeIdentity:[FakeSystemIdentity fakeIdentity1]
+                                enableSync:NO];
+
+  [ChromeEarlGreyUI openTabGrid];
+  [[EarlGrey selectElementWithMatcher:TabGridOtherDevicesPanelButton()]
+      performAction:grey_tap()];
+  [[EarlGrey
+      selectElementWithMatcher:
+          grey_allOf(grey_accessibilityID(
+                         kRecentTabsTabSyncOffButtonAccessibilityIdentifier),
+                     grey_accessibilityElement(), nil)]
+      performAction:grey_tap()];
+
+  [[EarlGrey
+      selectElementWithMatcher:grey_accessibilityLabel(l10n_util::GetNSString(
+                                   IDS_IOS_HISTORY_SYNC_TITLE))]
+      assertWithMatcher:grey_sufficientlyVisible()];
+}
+
+// Tests that closing a tab works successfully in incognito search results.
+- (void)testLastIncognitoTabCloses {
+  [ChromeEarlGrey openNewIncognitoTab];
+  [ChromeEarlGrey loadURL:_URL1];
+  [ChromeEarlGrey waitForWebStateContainingText:kResponse1];
+
+  [ChromeEarlGreyUI openTabGrid];
+
+  [self verifyVisibleTabsCount:1];
+  [[EarlGrey selectElementWithMatcher:TabWithTitleAndIndex(kTitle1, 0)]
+      assertWithMatcher:grey_notNil()];
+
+  // Close Tab.
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::
+                                          TabGridCloseButtonForCellAtIndex(0)]
+      performAction:grey_tap()];
+
+  // Make sure that the tab is no longer present.
+  [[EarlGrey selectElementWithMatcher:TabWithTitle(kTitle1)]
+      assertWithMatcher:grey_nil()];
+}
+
+// Tests that "undo" is still possible after navigating to the "recently
+// closed tabs" panel.
+- (void)testClosedTabsAddedToRecentlyClosedTabsAfterConfirmation {
+  // Clear all recently closed tabs.
+  [self clearAllRecentlyClosedItems];
+
+  // Load some real URL (NTP is not added to recently closed tabs).
+  [ChromeEarlGrey loadURL:_URL1];
+  [ChromeEarlGrey waitForWebStateContainingText:kResponse1];
+
+  // Open the tab grid.
+  [ChromeEarlGreyUI openTabGrid];
+
+  // Close all tabs
+  [[EarlGrey selectElementWithMatcher:VisibleTabGridEditButton()]
+      performAction:grey_tap()];
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::
+                                          TabGridEditMenuCloseAllButton()]
+      performAction:grey_tap()];
+
+  // Ensure tabs were closed
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::TabGridCellAtIndex(0)]
+      assertWithMatcher:grey_nil()];
+
+  // Ensure undo button is visible and edit button is not visible
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::TabGridUndoCloseAllButton()]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  [[EarlGrey selectElementWithMatcher:VisibleTabGridEditButton()]
+      assertWithMatcher:grey_nil()];
+
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::
+                                          TabGridRegularTabsEmptyStateView()]
+      assertWithMatcher:grey_sufficientlyVisible()];
+
+  // Navigate to the "recently closed" panel.
+  [[EarlGrey selectElementWithMatcher:TabGridOtherDevicesPanelButton()]
+      performAction:grey_tap()];
+
+  // Check that there are no "recently closed" tabs visible.
+  [[EarlGrey selectElementWithMatcher:RecentlyClosedTabWithTitle(kTitle1)]
+      assertWithMatcher:grey_nil()];
+
+  // Navigate back to the tab grid.
+  [[EarlGrey selectElementWithMatcher:TabGridOpenTabsPanelButton()]
+      performAction:grey_tap()];
+
+  // Tap Undo button
+  [[EarlGrey
+      selectElementWithMatcher:chrome_test_util::TabGridUndoCloseAllButton()]
+      performAction:grey_tap()];
+
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::TabGridCellAtIndex(0)]
+      assertWithMatcher:grey_sufficientlyVisible()];
+  [[EarlGrey selectElementWithMatcher:VisibleTabGridEditButton()]
+      assertWithMatcher:grey_sufficientlyVisible()];
+
+  // Close all the tabs (again).
+  [[EarlGrey selectElementWithMatcher:VisibleTabGridEditButton()]
+      performAction:grey_tap()];
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::
+                                          TabGridEditMenuCloseAllButton()]
+      performAction:grey_tap()];
+
+  // Open a new tab. This should result in closing the tab grid, which will
+  // confirm the close operation and add the tabs to recently closed.
+  [ChromeEarlGrey openNewTab];
+  [ChromeEarlGrey loadURL:_URL2];
+  [ChromeEarlGrey waitForWebStateContainingText:kResponse2];
+
+  // Open the tab grid.
+  [ChromeEarlGreyUI openTabGrid];
+
+  // Navigate to the "recently closed" panel.
+  [[EarlGrey selectElementWithMatcher:TabGridOtherDevicesPanelButton()]
+      performAction:grey_tap()];
+
+  // Check that the tabs closed are now visible.
+  [[EarlGrey selectElementWithMatcher:RecentlyClosedTabWithTitle(kTitle1)]
+      assertWithMatcher:grey_notNil()];
+  [[EarlGrey selectElementWithMatcher:RecentlyClosedTabWithTitle(kTitle2)]
+      assertWithMatcher:grey_nil()];
+
+  // Navigate back to the tab grid.
+  [[EarlGrey selectElementWithMatcher:TabGridOpenTabsPanelButton()]
+      performAction:grey_tap()];
+
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::TabGridCellAtIndex(0)]
+      performAction:grey_tap()];
 }
 
 #pragma mark - Helper Methods
@@ -2505,66 +2970,12 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 - (void)waitForSnackBarMessage:(int)messageIdentifier
     triggeredByTappingItemWithMatcher:(id<GREYMatcher>)matcher {
   NSString* snackBarLabel = l10n_util::GetNSStringWithFixup(messageIdentifier);
-  // Start custom monitor, because there's a chance the snackbar is
-  // already gone by the time we wait for it (and it was like that sometimes).
-  [ChromeEarlGrey watchForButtonsWithLabels:@[ snackBarLabel ]
-                                    timeout:kSnackbarAppearanceTimeout];
-
-  [[EarlGrey selectElementWithMatcher:matcher] performAction:grey_tap()];
-
-  // Wait for the snackbar to appear.
-  id<GREYMatcher> snackbar_matcher =
-      chrome_test_util::ButtonWithAccessibilityLabelId(messageIdentifier);
-  ConditionBlock wait_for_appearance = ^{
-    return [ChromeEarlGrey watcherDetectedButtonWithLabel:snackBarLabel];
-  };
-  GREYAssert(base::test::ios::WaitUntilConditionOrTimeout(
-                 kSnackbarAppearanceTimeout, wait_for_appearance),
-             @"Snackbar did not appear.");
-
-  // Wait for the snackbar to disappear.
-  ConditionBlock wait_for_disappearance = ^{
-    NSError* error = nil;
-    [[EarlGrey selectElementWithMatcher:snackbar_matcher]
-        assertWithMatcher:grey_nil()
-                    error:&error];
-    return error == nil;
-  };
-  GREYAssert(base::test::ios::WaitUntilConditionOrTimeout(
-                 kSnackbarDisappearanceTimeout, wait_for_disappearance),
-             @"Snackbar did not disappear.");
+  WaitForSnackbarTriggeredByTappingItem(snackBarLabel, matcher);
 }
 
 - (void)waitForSnackBarMessageText:(NSString*)snackBarLabel
     triggeredByTappingItemWithMatcher:(id<GREYMatcher>)matcher {
-  // Start custom monitor, because there's a chance the snackbar is
-  // already gone by the time we wait for it (and it was like that sometimes).
-  [ChromeEarlGrey watchForButtonsWithLabels:@[ snackBarLabel ]
-                                    timeout:kSnackbarAppearanceTimeout];
-
-  [[EarlGrey selectElementWithMatcher:matcher] performAction:grey_tap()];
-
-  // Wait for the snackbar to appear.
-  id<GREYMatcher> snackbar_matcher =
-      chrome_test_util::ButtonWithAccessibilityLabel(snackBarLabel);
-  ConditionBlock wait_for_appearance = ^{
-    return [ChromeEarlGrey watcherDetectedButtonWithLabel:snackBarLabel];
-  };
-  GREYAssert(base::test::ios::WaitUntilConditionOrTimeout(
-                 kSnackbarAppearanceTimeout, wait_for_appearance),
-             @"Snackbar did not appear.");
-
-  // Wait for the snackbar to disappear.
-  ConditionBlock wait_for_disappearance = ^{
-    NSError* error = nil;
-    [[EarlGrey selectElementWithMatcher:snackbar_matcher]
-        assertWithMatcher:grey_nil()
-                    error:&error];
-    return error == nil;
-  };
-  GREYAssert(base::test::ios::WaitUntilConditionOrTimeout(
-                 kSnackbarDisappearanceTimeout, wait_for_disappearance),
-             @"Snackbar did not disappear.");
+  WaitForSnackbarTriggeredByTappingItem(snackBarLabel, matcher);
 }
 
 // Verifies that the tab grid has exactly `expectedCount` tabs.
@@ -2612,6 +3023,17 @@ void EchoURLDefaultSearchEngineResponseProvider::GetResponseHeadersAndBody(
 - (void)clearAllRecentlyClosedItems {
   [ChromeEarlGrey clearBrowsingHistory];
   [RecentTabsAppInterface clearCollapsedListViewSectionStates];
+}
+
+// Relaunches the app with Inactive Tabs enabled.
+- (void)relaunchAppWithInactiveTabsEnabled {
+  AppLaunchConfiguration config;
+  config.relaunch_policy = ForceRelaunchByCleanShutdown;
+  config.additional_args.push_back(
+      "--enable-features=" + std::string(kTabInactivityThreshold.name) + ":" +
+      kTabInactivityThresholdParameterName + "/" +
+      kTabInactivityThresholdImmediateDemoParam);
+  [[AppLaunchManager sharedManager] ensureAppLaunchedWithConfiguration:config];
 }
 
 @end

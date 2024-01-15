@@ -5,15 +5,18 @@
 #include "chrome/browser/ash/release_notes/release_notes_storage.h"
 
 #include <memory>
+#include <utility>
+#include <vector>
 
 #include "ash/constants/ash_features.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/version.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_profile.h"
-#include "chromeos/login/login_state/login_state.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "components/account_id/account_id.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/scoped_user_manager.h"
@@ -56,7 +59,11 @@ class ReleaseNotesStorageTest : public testing::Test,
       builder.OverridePolicyConnectorIsManagedForTesting(is_managed_);
       if (is_ephemeral_) {
         // Enabling ephemeral users passes the |IsEphemeralUserProfile| check.
-        user_manager_->set_ephemeral_users_enabled(true);
+        user_manager_->set_ephemeral_mode_config(
+            user_manager::UserManager::EphemeralModeConfig(
+                /* included_by_default= */ true,
+                /* include_list= */ std::vector<AccountId>{},
+                /* exclude_list= */ std::vector<AccountId>{}));
       } else if (is_unicorn_) {
         user_manager_->set_current_user_child(true);
         builder.SetIsSupervisedProfile();
@@ -74,7 +81,7 @@ class ReleaseNotesStorageTest : public testing::Test,
         /*disabled_features=*/{});
   }
 
-  FakeChromeUserManager* user_manager_;
+  raw_ptr<FakeChromeUserManager, DanglingUntriaged> user_manager_;
   user_manager::ScopedUserManager scoped_user_manager_;
   content::BrowserTaskEnvironment task_environment_;
   base::test::ScopedFeatureList scoped_feature_list_;

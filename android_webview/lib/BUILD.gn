@@ -2,9 +2,8 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//components/gwp_asan/buildflags/buildflags.gni")
+import("//build/config/android/config.gni")
 import("//components/spellcheck/spellcheck_build_features.gni")
-import("//weblayer/variables.gni")
 
 source_set("lib") {
   sources = [
@@ -26,13 +25,12 @@ source_set("lib") {
     "//components/autofill/core/common",
     "//components/crash/core/common",
     "//components/embedder_support:embedder_support",
-    "//components/gwp_asan/buildflags",
+    "//components/gwp_asan/common:crash_keys",
+    "//components/memory_system",
     "//components/metrics",
-    "//components/power_scheduler",
     "//components/safe_browsing/android:safe_browsing_api_handler",
     "//components/services/heap_profiling/public/cpp",
     "//components/spellcheck:buildflags",
-    "//components/translate/core/common",
     "//components/variations",
     "//components/version_info",
     "//components/version_info/android:channel_getter",
@@ -48,13 +46,10 @@ source_set("lib") {
     "//media",
     "//media:media_buildflags",
     "//third_party/blink/public/common:headers",
+    "//tools/v8_context_snapshot:buildflags",
     "//ui/base",
     "//ui/events:gesture_detection",
   ]
-
-  if (enable_gwp_asan) {
-    deps += [ "//components/gwp_asan/client" ]
-  }
 
   if (enable_spellcheck) {
     deps += [ "//components/spellcheck/common" ]
@@ -67,9 +62,4 @@ source_set("webview_entry_point") {
     "//base",
   ]
   sources = [ "webview_entry_point.cc" ]
-
-  if (webview_includes_weblayer) {
-    defines = [ "WEBVIEW_INCLUDES_WEBLAYER" ]
-    deps += [ "//weblayer:weblayer_lib_webview" ]
-  }
 }

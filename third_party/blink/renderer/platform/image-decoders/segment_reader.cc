@@ -9,8 +9,6 @@
 #include "base/containers/span.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"
-#include "third_party/blink/renderer/platform/graphics/parkable_image.h"
-#include "third_party/blink/renderer/platform/graphics/rw_buffer.h"
 #include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
 #include "third_party/blink/renderer/platform/wtf/threading_primitives.h"
 #include "third_party/skia/include/core/SkData.h"
@@ -37,8 +35,9 @@ size_t BufferGetSomeData(Iter& iter,
     }
 
     // Move to next block.
-    if (!iter.Next())
+    if (!iter.Next()) {
       break;
+    }
   }
   return 0;
 }
@@ -62,7 +61,7 @@ sk_sp<SkData> BufferCopyAsSkData(Iter iter, size_t available) {
 // Interface for ImageDecoder to read a SharedBuffer.
 class SharedBufferSegmentReader final : public SegmentReader {
  public:
-  explicit SharedBufferSegmentReader(scoped_refptr<SharedBuffer>);
+  explicit SharedBufferSegmentReader(scoped_refptr<const SharedBuffer>);
   SharedBufferSegmentReader(const SharedBufferSegmentReader&) = delete;
   SharedBufferSegmentReader& operator=(const SharedBufferSegmentReader&) =
       delete;
@@ -71,11 +70,12 @@ class SharedBufferSegmentReader final : public SegmentReader {
   sk_sp<SkData> GetAsSkData() const override;
 
  private:
-  scoped_refptr<SharedBuffer> shared_buffer_;
+  ~SharedBufferSegmentReader() override = default;
+  scoped_refptr<const SharedBuffer> shared_buffer_;
 };
 
 SharedBufferSegmentReader::SharedBufferSegmentReader(
-    scoped_refptr<SharedBuffer> buffer)
+    scoped_refptr<const SharedBuffer> buffer)
     : shared_buffer_(std::move(buffer)) {}
 
 size_t SharedBufferSegmentReader::size() const {
@@ -86,8 +86,9 @@ size_t SharedBufferSegmentReader::GetSomeData(const char*& data,
                                               size_t position) const {
   data = nullptr;
   auto it = shared_buffer_->GetIteratorAt(position);
-  if (it == shared_buffer_->cend())
+  if (it == shared_buffer_->cend()) {
     return 0;
+  }
   data = it->data();
   return it->size();
 }
@@ -117,6 +118,7 @@ class DataSegmentReader final : public SegmentReader {
   sk_sp<SkData> GetAsSkData() const override;
 
  private:
+  ~DataSegmentReader() override = default;
   sk_sp<SkData> data_;
 };
 
@@ -129,8 +131,9 @@ size_t DataSegmentReader::size() const {
 
 size_t DataSegmentReader::GetSomeData(const char*& data,
                                       size_t position) const {
-  if (position >= data_->size())
+  if (position >= data_->size()) {
     return 0;
+  }
 
   data = reinterpret_cast<const char*>(data_->bytes() + position);
   return data_->size() - position;
@@ -153,6 +156,7 @@ class ROBufferSegmentReader final : public SegmentReader {
   sk_sp<SkData> GetAsSkData() const override;
 
  private:
+  ~ROBufferSegmentReader() override = default;
   scoped_refptr<ROBuffer> ro_buffer_;
   mutable base::Lock read_lock_;
   // Position of the first char in the current block of iter_.
@@ -171,8 +175,9 @@ size_t ROBufferSegmentReader::size() const {
 
 size_t ROBufferSegmentReader::GetSomeData(const char*& data,
                                           size_t position) const {
-  if (!ro_buffer_)
+  if (!ro_buffer_) {
     return 0;
+  }
 
   base::AutoLock lock(read_lock_);
 
@@ -198,8 +203,9 @@ static void UnrefROBuffer(const void* ptr, void* context) {
 }
 
 sk_sp<SkData> ROBufferSegmentReader::GetAsSkData() const {
-  if (!ro_buffer_)
+  if (!ro_buffer_) {
     return nullptr;
+  }
 
   // Check to see if the data is already contiguous.
   ROBuffer::Iter iter(ro_buffer_.get());
@@ -216,100 +222,10 @@ sk_sp<SkData> ROBufferSegmentReader::GetAsSkData() const {
   return BufferCopyAsSkData(iter, ro_buffer_->size());
 }
 
-// ParkableImageSegmentReader
-
-class ParkableImageSegmentReader : public SegmentReader {
- public:
-  explicit ParkableImageSegmentReader(scoped_refptr<ParkableImage> image);
-  ~ParkableImageSegmentReader() override = default;
-  size_t size() const override;
-  size_t GetSomeData(const char*& data, size_t position) const override;
-  sk_sp<SkData> GetAsSkData() const override;
-  void LockData() override;
-  void UnlockData() override;
-
- private:
-  scoped_refptr<ParkableImage> parkable_image_;
-  size_t available_;
-};
-
-ParkableImageSegmentReader::ParkableImageSegmentReader(
-    scoped_refptr<ParkableImage> image)
-    : parkable_image_(std::move(image)), available_(parkable_image_->size()) {
-}
-
-size_t ParkableImageSegmentReader::size() const {
-  return available_;
-}
-
-size_t ParkableImageSegmentReader::GetSomeData(const char*& data,
-                                               size_t position) const {
-  if (!parkable_image_)
-    return 0;
-
-  base::AutoLock lock(parkable_image_->impl_->lock_);
-  DCHECK(parkable_image_->impl_->is_locked());
-
-  RWBuffer::ROIter iter(parkable_image_->impl_->rw_buffer_.get(), available_);
-  size_t position_of_block = 0;
-
-  return BufferGetSomeData(iter, position_of_block, data, position);
-}
-
-sk_sp<SkData> ParkableImageSegmentReader::GetAsSkData() const {
-  if (!parkable_image_)
-    return nullptr;
-
-  base::AutoLock lock(parkable_image_->impl_->lock_);
-  parkable_image_->impl_->Unpark();
-
-  RWBuffer::ROIter iter(parkable_image_->impl_->rw_buffer_.get(), available_);
-
-  if (!iter.HasNext()) {  // No need to copy because the data is contiguous.
-    // We lock here so that we don't get a use-after-free. ParkableImage can
-    // not be parked while it is locked, so the buffer is valid for the whole
-    // lifetime of the SkData. We add the ref so that the ParkableImage has a
-    // longer limetime than the SkData.
-    parkable_image_->AddRef();
-    parkable_image_->LockData();
-    return SkData::MakeWithProc(
-        iter.data(), available_,
-        [](const void* ptr, void* context) -> void {
-          auto* parkable_image = static_cast<ParkableImage*>(context);
-          {
-            base::AutoLock lock(parkable_image->impl_->lock_);
-            parkable_image->UnlockData();
-          }
-          // Don't hold the mutex while we call |Release|, since |Release| can
-          // free the ParkableImage, if this is the last reference to it;
-          // Freeing the ParkableImage while the mutex is held causes a UAF when
-          // the dtor for base::AutoLock is called.
-          parkable_image->Release();
-        },
-        parkable_image_.get());
-  }
-
-  // Data is not contiguous so we need to copy.
-  return BufferCopyAsSkData(iter, available_);
-}
-
-void ParkableImageSegmentReader::LockData() {
-  base::AutoLock lock(parkable_image_->impl_->lock_);
-  parkable_image_->impl_->Unpark();
-
-  parkable_image_->LockData();
-}
-
-void ParkableImageSegmentReader::UnlockData() {
-  base::AutoLock lock(parkable_image_->impl_->lock_);
-
-  parkable_image_->UnlockData();
-}
-
 // SegmentReader ---------------------------------------------------------------
 
 scoped_refptr<SegmentReader> SegmentReader::CreateFromSharedBuffer(
-    scoped_refptr<SharedBuffer> buffer) {
+    scoped_refptr<const SharedBuffer> buffer) {
   return base::AdoptRef(new SharedBufferSegmentReader(std::move(buffer)));
 }
 
@@ -323,9 +239,18 @@ scoped_refptr<SegmentReader> SegmentReader::CreateFromROBuffer(
   return base::AdoptRef(new ROBufferSegmentReader(std::move(buffer)));
 }
 
-scoped_refptr<SegmentReader> SegmentReader::CreateFromParkableImage(
-    scoped_refptr<ParkableImage> image) {
-  return base::AdoptRef(new ParkableImageSegmentReader(std::move(image)));
+// static
+sk_sp<SkData> SegmentReader::RWBufferCopyAsSkData(RWBuffer::ROIter iter,
+                                                  size_t available) {
+  return BufferCopyAsSkData(iter, available);
+}
+
+// static
+size_t SegmentReader::RWBufferGetSomeData(RWBuffer::ROIter& iter,
+                                          size_t& position_of_block,
+                                          const char*& data,
+                                          size_t position) {
+  return BufferGetSomeData(iter, position_of_block, data, position);
 }
 
 }  // namespace blink

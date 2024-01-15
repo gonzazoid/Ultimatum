@@ -15,18 +15,19 @@
 #include "base/scoped_observation.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/common/buildflags.h"
+#include "components/supervised_user/core/common/buildflags.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/image/image.h"
 
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-#include "chrome/browser/supervised_user/supervised_user_service.h"
-#include "chrome/browser/supervised_user/supervised_user_service_observer.h"
+#include "components/supervised_user/core/browser/supervised_user_service.h"
+#include "components/supervised_user/core/browser/supervised_user_service_observer.h"
 #endif
 
 class AvatarMenuObserver;
 class Browser;
 class ProfileAttributesStorage;
-class ProfileList;
+class ProfileListDesktop;
 
 // This class represents the menu-like interface used to select profiles,
 // such as the bubble that appears when the avatar icon is clicked in the
@@ -132,16 +133,12 @@ class AvatarMenu :
   const Item& GetItemAt(size_t index) const;
 
   // Gets the index in this menu for which profile_path is equal to |path|.
-  size_t GetIndexOfItemWithProfilePath(const base::FilePath& path) const;
+  size_t GetIndexOfItemWithProfilePathForTesting(
+      const base::FilePath& path) const;
 
   // Returns the index of the active profile or `absl::nullopt` if there is no
   // active profile.
   absl::optional<size_t> GetActiveProfileIndex() const;
-
-  // Returns information about a supervised user which will be displayed in the
-  // avatar menu. If the profile does not belong to a supervised user, an empty
-  // string will be returned.
-  std::u16string GetSupervisedUserInformation() const;
 
   // This menu is also used for the always-present Mac and Linux system menubar.
   // If the last active browser changes, the menu will need to reference that
@@ -178,11 +175,12 @@ class AvatarMenu :
   void Update();
 
   // The model that provides the list of menu items.
-  std::unique_ptr<ProfileList> profile_list_;
+  std::unique_ptr<ProfileListDesktop> profile_list_;
 
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
   // Observes changes to a supervised user's custodian info.
-  base::ScopedObservation<SupervisedUserService, SupervisedUserServiceObserver>
+  base::ScopedObservation<supervised_user::SupervisedUserService,
+                          SupervisedUserServiceObserver>
       supervised_user_observation_{this};
 #endif
 
@@ -190,10 +188,10 @@ class AvatarMenu :
   base::WeakPtr<ProfileAttributesStorage> profile_storage_;
 
   // The observer of this model, which is notified of changes. Weak.
-  raw_ptr<AvatarMenuObserver> observer_;
+  raw_ptr<AvatarMenuObserver, DanglingUntriaged> observer_;
 
   // Browser in which this avatar menu resides. Weak.
-  raw_ptr<Browser> browser_;
+  raw_ptr<Browser, AcrossTasksDanglingUntriaged> browser_;
 };
 
 #endif  // CHROME_BROWSER_PROFILES_AVATAR_MENU_H_

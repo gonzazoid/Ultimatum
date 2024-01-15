@@ -2,9 +2,34 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/buildflag_header.gni")
+import("//build/config/rust.gni")
+import("//testing/libfuzzer/fuzzer_test.gni")
+
 declare_args() {
   # Enables building a development / debugging binary.
   enable_qr_print = false
+}
+
+# Separate target to:
+# - Limit `visibility` (stricter than dir-level `DEPS` would allow)
+# - Allow `//chrome/services/qr_code_generator_service/public/cpp` to check the
+#   feature state without depending directly on `:qr_code_generator`
+#
+# TODO(https://crbug.com/1431991): Remove the `qr_code_generator_features`
+# target once the Rusty QR Code Generator project is completed.
+source_set("qr_code_generator_features") {
+  sources = [
+    "features.cc",
+    "features.h",
+  ]
+  deps = [ "//base" ]
+  visibility = [
+    ":qr_code_generator",
+    ":unit_tests",
+    "//chrome/services/qrcode_generator",
+    "//chrome/services/qrcode_generator/public/cpp:cpp",
+  ]
 }
 
 source_set("qr_code_generator") {
@@ -13,10 +38,21 @@ source_set("qr_code_generator") {
     "qr_code_generator.cc",
     "qr_code_generator.h",
   ]
-
-  deps = [ "//base" ]
-
+  deps = [
+    ":qr_code_generator_features",
+    ":qr_code_generator_ffi_glue",
+    "//base",
+  ]
   public_deps = [ "//base" ]
+}
+
+rust_static_library("qr_code_generator_ffi_glue") {
+  allow_unsafe = true  # Needed for FFI that underpins the `cxx` crate.
+  crate_root = "qr_code_generator_ffi_glue.rs"
+  sources = [ "qr_code_generator_ffi_glue.rs" ]
+  cxx_bindings = [ "qr_code_generator_ffi_glue.rs" ]
+  visibility = [ ":qr_code_generator" ]
+  deps = [ "//third_party/rust/qr_code/v2:lib" ]
 }
 
 source_set("unit_tests") {
@@ -24,7 +60,9 @@ source_set("unit_tests") {
   sources = [ "qr_code_generator_unittest.cc" ]
   deps = [
     ":qr_code_generator",
+    ":qr_code_generator_features",
     "//base",
+    "//base/test:test_support",
     "//testing/gtest",
   ]
 }
@@ -34,4 +72,9 @@ if (enable_qr_print) {
     sources = [ "qr_print.cc" ]
     deps = [ ":qr_code_generator" ]
   }
+}
+
+fuzzer_test("qr_code_generator_fuzzer") {
+  sources = [ "qr_code_generator_fuzzer.cc" ]
+  deps = [ ":qr_code_generator" ]
 }

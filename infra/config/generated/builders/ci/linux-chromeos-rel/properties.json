@@ -1,6 +1,9 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/ci/linux-chromeos-rel/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
@@ -42,15 +45,7 @@
       ],
       "mirroring_builder_group_and_names": [
         {
-          "builder": "linux-chromeos-inverse-fieldtrials-fyi-rel",
-          "group": "tryserver.chromium.chromiumos"
-        },
-        {
           "builder": "linux-chromeos-rel",
-          "group": "tryserver.chromium.chromiumos"
-        },
-        {
-          "builder": "linux-chromeos-rel-rts",
           "group": "tryserver.chromium.chromiumos"
         }
       ]
@@ -59,7 +54,8 @@
   "$build/reclient": {
     "instance": "rbe-chromium-trusted",
     "jobs": 500,
-    "metrics_project": "chromium-reclient-metrics"
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],

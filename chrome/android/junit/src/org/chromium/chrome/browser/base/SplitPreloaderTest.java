@@ -29,9 +29,7 @@ import org.chromium.base.test.util.CallbackHelper;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Unit tests for {@link SplitPreloader}.
- */
+/** Unit tests for {@link SplitPreloader}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE, sdk = Build.VERSION_CODES.O)
 public class SplitPreloaderTest {
@@ -120,12 +118,18 @@ public class SplitPreloaderTest {
     @Before
     public void setUp() {
         mContext = new MainContext(ContextUtils.getApplicationContext());
+        ContextUtils.initApplicationContextForTests(mContext);
         mPreloader = new SplitPreloader(mContext);
+    }
+
+    private void initSplits(String... names) {
+        mContext.getApplicationInfo().splitNames = names;
+        mContext.getApplicationInfo().splitSourceDirs = names;
     }
 
     @Test
     public void testPreload_splitInstalled() {
-        mContext.getApplicationInfo().splitNames = new String[] {SPLIT_A};
+        initSplits(SPLIT_A);
 
         mPreloader.preload(SPLIT_A, null);
         mPreloader.wait(SPLIT_A);
@@ -136,7 +140,7 @@ public class SplitPreloaderTest {
 
     @Test
     public void testPreload_withOnComplete_splitInstalled() {
-        mContext.getApplicationInfo().splitNames = new String[] {SPLIT_A};
+        initSplits(SPLIT_A);
 
         OnCompleteTracker tracker = new OnCompleteTracker();
         mPreloader.preload(SPLIT_A, tracker);
@@ -152,7 +156,7 @@ public class SplitPreloaderTest {
 
     @Test
     public void testPreload_multipleWaitCalls() {
-        mContext.getApplicationInfo().splitNames = new String[] {SPLIT_A};
+        initSplits(SPLIT_A);
 
         OnCompleteTracker tracker = new OnCompleteTracker();
         mPreloader.preload(SPLIT_A, tracker);
@@ -168,7 +172,7 @@ public class SplitPreloaderTest {
 
     @Test
     public void testPreload_withOnComplete_multipleSplitsInstalled() {
-        mContext.getApplicationInfo().splitNames = new String[] {SPLIT_A, SPLIT_B};
+        initSplits(SPLIT_A, SPLIT_B);
 
         OnCompleteTracker trackerA = new OnCompleteTracker();
         mPreloader.preload(SPLIT_A, trackerA);
@@ -201,18 +205,20 @@ public class SplitPreloaderTest {
         Context[] backgroundContextHolder = new Context[1];
         Context[] uiContextHolder = new Context[1];
         CallbackHelper helper = new CallbackHelper();
-        mPreloader.preload(SPLIT_A, new SplitPreloader.OnComplete() {
-            @Override
-            public void runImmediatelyInBackgroundThread(Context context) {
-                backgroundContextHolder[0] = context;
-                helper.notifyCalled();
-            }
+        mPreloader.preload(
+                SPLIT_A,
+                new SplitPreloader.OnComplete() {
+                    @Override
+                    public void runImmediatelyInBackgroundThread(Context context) {
+                        backgroundContextHolder[0] = context;
+                        helper.notifyCalled();
+                    }
 
-            @Override
-            public void runInUiThread(Context context) {
-                uiContextHolder[0] = context;
-            }
-        });
+                    @Override
+                    public void runInUiThread(Context context) {
+                        uiContextHolder[0] = context;
+                    }
+                });
         helper.waitForFirst();
         assertEquals(backgroundContextHolder[0], mContext);
 

@@ -20,6 +20,15 @@ supervised_user_refresh_token_fetcher
               "64-bit identifier for the profile.\n* The device name, to "
               "identify the refresh token in account management."
             destination: GOOGLE_OWNED_SERVICE
+            internal {
+              contacts {
+                email: "chromium-dev@google.com"
+              }
+            }
+            user_data {
+              type: NONE
+            }
+            last_reviewed: "2022-12-22"
           }
           policy {
             cookies_allowed: NO
@@ -30,6 +39,11 @@ supervised_user_refresh_token_fetcher
               SupervisedUserCreationEnabled {
                 policy_options {mode: MANDATORY}
                 SupervisedUserCreationEnabled: false
+              }
+            }
+            chrome_device_policy {
+              device_printers {
+                external_policy: ""
               }
             }
           }

@@ -7,8 +7,8 @@
 #include <Foundation/Foundation.h>
 #import <IOKit/IOKitLib.h>
 
-#include "base/mac/foundation_util.h"
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/foundation_util.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/mac/scoped_ioobject.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/time/time.h"
@@ -21,14 +21,14 @@ namespace {
 
 NSDictionary* MaybeGetDictionaryFromPath(const base::FilePath& path) {
   // The folder where the energy coefficient plist files are stored.
-  NSString* plist_path_string = base::SysUTF8ToNSString(path.value().c_str());
-  return [NSDictionary dictionaryWithContentsOfFile:plist_path_string];
+  return [NSDictionary
+      dictionaryWithContentsOfURL:base::apple::FilePathToNSURL(path)
+                            error:nil];
 }
 
 double GetNamedCoefficientOrZero(NSDictionary* dict, NSString* key) {
-  NSObject* value = [dict objectForKey:key];
-  NSNumber* num = base::mac::ObjCCast<NSNumber>(value);
-  return [num floatValue];
+  NSNumber* num = base::apple::ObjCCast<NSNumber>(dict[key]);
+  return num.floatValue;
 }
 
 }  // namespace
@@ -112,12 +112,14 @@ absl::optional<EnergyImpactCoefficients> ReadCoefficientsFromPath(
     const base::FilePath& plist_file) {
   @autoreleasepool {
     NSDictionary* dict = MaybeGetDictionaryFromPath(plist_file);
-    if (!dict)
+    if (!dict) {
       return absl::nullopt;
+    }
 
-    NSDictionary* energy_constants = [dict objectForKey:@"energy_constants"];
-    if (!energy_constants)
+    NSDictionary* energy_constants = dict[@"energy_constants"];
+    if (!energy_constants) {
       return absl::nullopt;
+    }
 
     EnergyImpactCoefficients coefficients{};
     coefficients.kcpu_time =
@@ -180,14 +182,14 @@ absl::optional<std::string> GetBoardIdForThisMachine() {
 
   // This is what libpmenergy is observed to do in order to retrieve the correct
   // coefficients file for the local computer.
-  base::ScopedCFTypeRef<CFDataRef> board_id_data(
-      base::mac::CFCast<CFDataRef>(IORegistryEntryCreateCFProperty(
-          platform_expert, CFSTR("board-id"), kCFAllocatorDefault, 0)));
+  base::apple::ScopedCFTypeRef<CFDataRef> board_id_data(
+      base::apple::CFCast<CFDataRef>(IORegistryEntryCreateCFProperty(
+          platform_expert.get(), CFSTR("board-id"), kCFAllocatorDefault, 0)));
 
   if (!board_id_data)
     return absl::nullopt;
 
-  return reinterpret_cast<const char*>(CFDataGetBytePtr(board_id_data));
+  return reinterpret_cast<const char*>(CFDataGetBytePtr(board_id_data.get()));
 }
 
 }  // namespace internal

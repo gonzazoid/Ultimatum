@@ -12,10 +12,10 @@
 # - use_allocator_shim
 # - use_partition_alloc_as_malloc
 # - enable_backup_ref_ptr_support
-# - enable_mte_checked_ptr_support
 # - put_ref_count_in_previous_slot
 # - enable_backup_ref_ptr_slow_checks
 # - enable_dangling_raw_ptr_checks
+# - backup_ref_ptr_poison_oob_ptr
 #
 # Temporarily defines use_allocator_shim here. After deciding what
 # allocator_shim should be (e.g. a part of PartitionAlloc, a new component:
@@ -24,24 +24,29 @@
 #
 # {variable}_default works as the default value of {variable}.
 
-import("//build/config/chromecast_build.gni")
+import("//build/config/cast.gni")
 import("//build/config/sanitizers/sanitizers.gni")
 if (is_ios) {
-  import("//build/config/ios/ios_sdk.gni")
+  import("//ios/features.gni")
 }
 
 # Sanitizers replace the allocator, don't use our own.
 _is_using_sanitizers = is_asan || is_hwasan || is_lsan || is_tsan || is_msan
 
-# - Component build support is disabled on all platforms. It is known to cause
-#   issues on some (e.g. Windows with shims, Android with non-universal symbol
-#   wrapping), and has not been validated on others.
+# - Component build support is disabled on all platforms except Linux. It is
+#   known to cause issues on some (e.g. Windows with shims, Android with
+#   non-universal symbol wrapping), and has not been validated on others.
 # - Windows: debug CRT is not compatible, see below.
-_disable_partition_alloc_everywhere = is_component_build || (is_win && is_debug)
+_disable_partition_alloc_everywhere =
+    (!is_linux && is_component_build) || (is_win && is_debug)
 
 # - NaCl: No plans to support it.
-# - iOS: not done yet.
-_is_partition_alloc_everywhere_platform = !is_nacl && !is_ios
+# - iOS: Depends on ios_partition_alloc_enabled.
+if (is_ios) {
+  _is_partition_alloc_everywhere_platform = ios_partition_alloc_enabled
+} else {
+  _is_partition_alloc_everywhere_platform = !is_nacl
+}
 
 # Under Windows debug build, the allocator shim is not compatible with CRT.
 #     NaCl in particular does seem to link some binaries statically
@@ -70,14 +75,14 @@ use_allocator_shim_default = _default_use_allocator_shim
 _is_brp_supported = (is_win || is_android || is_linux || is_mac ||
                      is_chromeos) && use_partition_alloc_as_malloc_default
 
-_is_mcp_supported = is_win && use_partition_alloc_as_malloc_default
-
 enable_backup_ref_ptr_support_default = _is_brp_supported
-
-# We jam MTECheckedPtr off by default, but can set it to
-# `_is_mcp_supported` to activate it.
-enable_mte_checked_ptr_support_default = false
 
 put_ref_count_in_previous_slot_default = true
 enable_backup_ref_ptr_slow_checks_default = false
-enable_dangling_raw_ptr_checks_default = false
+enable_dangling_raw_ptr_checks_default =
+    enable_backup_ref_ptr_support_default && is_linux && !is_official_build &&
+    (is_debug || dcheck_always_on)
+
+raw_ptr_zero_on_construct_default = true
+raw_ptr_zero_on_move_default = true
+raw_ptr_zero_on_destruct_default = false

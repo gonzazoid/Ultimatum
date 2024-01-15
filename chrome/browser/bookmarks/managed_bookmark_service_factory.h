@@ -11,7 +11,7 @@
 
 namespace base {
 template <typename T>
-struct DefaultSingletonTraits;
+class NoDestructor;
 }  // namespace base
 
 class Profile;
@@ -36,13 +36,13 @@ class ManagedBookmarkServiceFactory : public ProfileKeyedServiceFactory {
   static std::string GetManagedBookmarksManager(Profile* profile);
 
  private:
-  friend struct base::DefaultSingletonTraits<ManagedBookmarkServiceFactory>;
+  friend base::NoDestructor<ManagedBookmarkServiceFactory>;
 
   ManagedBookmarkServiceFactory();
   ~ManagedBookmarkServiceFactory() override;
 
   // BrowserStateKeyedServiceFactory implementation.
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsNULLWhileTesting() const override;
 };

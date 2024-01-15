@@ -24,23 +24,24 @@ source_set("socket") {
     "udp_socket.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
     "//build:chromeos_buildflags",
     "//content/public/browser",
     "//content/public/common",
-    "//extensions/browser/api",
     "//extensions/common",
     "//extensions/common/api",
   ]
 
-  if (is_chromeos_ash) {
+  if (is_chromeos) {
     sources += [
       "app_firewall_hole_manager.cc",
       "app_firewall_hole_manager.h",
     ]
 
     deps += [
-      "//chromeos/ash/components/network",
+      "//chromeos/components/firewall_hole",
       "//components/keyed_service/content",
     ]
   }

@@ -6,8 +6,8 @@
 
 #include <string>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/pattern.h"
@@ -15,8 +15,8 @@
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/lookalikes/safety_tip_web_contents_observer.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/reputation/reputation_web_contents_observer.h"
 #include "chrome/browser/safe_browsing/safe_browsing_service.h"
 #include "chrome/browser/ssl/https_only_mode_tab_helper.h"
 #include "chrome/browser/ssl/known_interception_disclosure_infobar_delegate.h"
@@ -86,11 +86,11 @@ SecurityStateTabHelper::GetVisibleSecurityState() {
   // information is still being initialized, thus no need to check for that.
   state->malicious_content_status = GetMaliciousContentStatus();
 
-  ReputationWebContentsObserver* reputation_web_contents_observer =
-      ReputationWebContentsObserver::FromWebContents(web_contents());
+  SafetyTipWebContentsObserver* safety_tip_web_contents_observer =
+      SafetyTipWebContentsObserver::FromWebContents(web_contents());
   state->safety_tip_info =
-      reputation_web_contents_observer
-          ? reputation_web_contents_observer
+      safety_tip_web_contents_observer
+          ? safety_tip_web_contents_observer
                 ->GetSafetyTipInfoForVisibleNavigation()
           : security_state::SafetyTipInfo(
                 {security_state::SafetyTipStatus::kUnknown, GURL()});
@@ -104,10 +104,16 @@ SecurityStateTabHelper::GetVisibleSecurityState() {
     state->should_treat_displayed_mixed_forms_as_secure = true;
   }
 
+  // TODO(crbug.com/1394910): Track upgrade/fallback state per-navigation.
+  // Currently HTTPS Upgrades state is tracked via a TabHelper attached to the
+  // current WebContents (i.e., per tab), which can cause this state to "leak"
+  // across multiple different navigations, potentially causing the wrong
+  // security state to be computed.
   auto* https_only_mode_tab_helper =
       HttpsOnlyModeTabHelper::FromWebContents(web_contents());
   if (https_only_mode_tab_helper &&
-      https_only_mode_tab_helper->is_navigation_upgraded()) {
+      (https_only_mode_tab_helper->is_navigation_upgraded() ||
+       https_only_mode_tab_helper->is_navigation_fallback())) {
     state->is_https_only_mode_upgraded = true;
   }
 
@@ -187,7 +193,6 @@ SecurityStateTabHelper::GetMaliciousContentStatus() const {
       case safe_browsing::SB_THREAT_TYPE_URL_CLIENT_SIDE_PHISHING:
         return security_state::MALICIOUS_CONTENT_STATUS_SOCIAL_ENGINEERING;
       case safe_browsing::SB_THREAT_TYPE_URL_MALWARE:
-      case safe_browsing::SB_THREAT_TYPE_URL_CLIENT_SIDE_MALWARE:
         return security_state::MALICIOUS_CONTENT_STATUS_MALWARE;
       case safe_browsing::SB_THREAT_TYPE_URL_UNWANTED:
         return security_state::MALICIOUS_CONTENT_STATUS_UNWANTED_SOFTWARE;
@@ -229,8 +234,13 @@ SecurityStateTabHelper::GetMaliciousContentStatus() const {
         return security_state::MALICIOUS_CONTENT_STATUS_SOCIAL_ENGINEERING;
       case safe_browsing::SB_THREAT_TYPE_BILLING:
         return security_state::MALICIOUS_CONTENT_STATUS_BILLING;
+      case safe_browsing::SB_THREAT_TYPE_MANAGED_POLICY_BLOCK:
+        return security_state::MALICIOUS_CONTENT_STATUS_MANAGED_POLICY_BLOCK;
+      case safe_browsing::SB_THREAT_TYPE_MANAGED_POLICY_WARN:
+        return security_state::MALICIOUS_CONTENT_STATUS_MANAGED_POLICY_WARN;
       case safe_browsing::
           DEPRECATED_SB_THREAT_TYPE_URL_PASSWORD_PROTECTION_PHISHING:
+      case safe_browsing::DEPRECATED_SB_THREAT_TYPE_URL_CLIENT_SIDE_MALWARE:
       case safe_browsing::SB_THREAT_TYPE_URL_BINARY_MALWARE:
       case safe_browsing::SB_THREAT_TYPE_EXTENSION:
       case safe_browsing::SB_THREAT_TYPE_BLOCKLISTED_RESOURCE:
@@ -243,7 +253,6 @@ SecurityStateTabHelper::GetMaliciousContentStatus() const {
       case safe_browsing::SB_THREAT_TYPE_SUSPICIOUS_SITE:
       case safe_browsing::SB_THREAT_TYPE_APK_DOWNLOAD:
       case safe_browsing::SB_THREAT_TYPE_HIGH_CONFIDENCE_ALLOWLIST:
-      case safe_browsing::SB_THREAT_TYPE_ACCURACY_TIPS:
         // These threat types are not currently associated with
         // interstitials, and thus resources with these threat types are
         // not ever whitelisted or pending whitelisting.

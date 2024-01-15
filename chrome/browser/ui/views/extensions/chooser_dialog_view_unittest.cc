@@ -35,7 +35,7 @@ class ChooserDialogViewTest : public ChromeViewsTestBase {
     controller_->SetBluetoothStatus(
         FakeBluetoothChooserController::BluetoothStatus::IDLE);
 
-    gfx::NativeView parent = gfx::kNullNativeView;
+    gfx::NativeView parent = gfx::NativeView();
 #if BUILDFLAG(IS_MAC)
     // We need a native view parent for the dialog to avoid a DCHECK
     // on Mac.
@@ -81,12 +81,13 @@ class ChooserDialogViewTest : public ChromeViewsTestBase {
   }
 
  protected:
-  raw_ptr<ChooserDialogView> dialog_ = nullptr;
-  raw_ptr<FakeBluetoothChooserController> controller_ = nullptr;
+  raw_ptr<ChooserDialogView, DanglingUntriaged> dialog_ = nullptr;
+  raw_ptr<FakeBluetoothChooserController, DanglingUntriaged> controller_ =
+      nullptr;
 
  private:
   std::unique_ptr<views::Widget> parent_widget_;
-  raw_ptr<views::Widget> widget_ = nullptr;
+  raw_ptr<views::Widget, DanglingUntriaged> widget_ = nullptr;
 };
 
 TEST_F(ChooserDialogViewTest, ButtonState) {

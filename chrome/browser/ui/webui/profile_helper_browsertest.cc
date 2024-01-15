@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
@@ -36,7 +36,7 @@ namespace {
 Profile* CreateProfile() {
   ProfileManager* profile_manager = g_browser_process->profile_manager();
   base::FilePath new_path = profile_manager->GenerateNextProfileDirectoryPath();
-  return profiles::testing::CreateProfileSync(profile_manager, new_path);
+  return &profiles::testing::CreateProfileSync(profile_manager, new_path);
 }
 
 // An observer returns back to test code after brower window associated with
@@ -109,7 +109,13 @@ class ProfileHelperTest : public InProcessBrowserTest {
   }
 };
 
-IN_PROC_BROWSER_TEST_F(ProfileHelperTest, OpenNewWindowForProfile) {
+// TODO(crbug.com/1486054): Times out consistently on lacros asan builds.
+#if BUILDFLAG(IS_CHROMEOS_LACROS) && defined(ADDRESS_SANITIZER)
+#define MAYBE_OpenNewWindowForProfile DISABLED_OpenNewWindowForProfile
+#else
+#define MAYBE_OpenNewWindowForProfile OpenNewWindowForProfile
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS) && defined(ADDRESS_SANITIZER)
+IN_PROC_BROWSER_TEST_F(ProfileHelperTest, MAYBE_OpenNewWindowForProfile) {
   BrowserList* browser_list = BrowserList::GetInstance();
 
   Browser* original_browser = browser();
@@ -245,8 +251,9 @@ class ProfileHelperTestWithDestroyProfile
   base::test::ScopedFeatureList feature_list_;
 };
 
+// TODO(crbug.com/1504677): Fix this flaky test. Probably a timing issue.
 IN_PROC_BROWSER_TEST_P(ProfileHelperTestWithDestroyProfile,
-                       DeleteInactiveProfile) {
+                       DISABLED_DeleteInactiveProfile) {
   content::TestWebUI web_ui;
   Browser* original_browser = browser();
   ProfileAttributesStorage& storage =

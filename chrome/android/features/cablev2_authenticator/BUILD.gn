@@ -4,8 +4,10 @@
 
 import("//build/config/android/rules.gni")
 import("//chrome/android/modules/buildflags.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 android_library("java") {
+  srcjar_deps = [ ":jni_headers" ]
   sources = [
     "java/src/org/chromium/chrome/browser/webauth/authenticator/BLEAdvert.java",
     "java/src/org/chromium/chrome/browser/webauth/authenticator/CableAuthenticator.java",
@@ -15,29 +17,26 @@ android_library("java") {
 
   deps = [
     ":java_resources",
-    ":logging_java",
     "$google_play_services_package:google_play_services_base_java",
     "$google_play_services_package:google_play_services_tasks_java",
     "//base:base_java",
-    "//base:jni_java",
     "//build/android:build_java",
     "//chrome/browser/webauthn/android:java_resources",
     "//components/webauthn/android:java",
     "//content/public/android:content_java",
     "//mojo/public/mojom/base:base_java",
+    "//services/device/public/java:device_feature_list_java",
     "//third_party/androidx:androidx_annotation_annotation_java",
+    "//third_party/androidx:androidx_core_core_java",
     "//third_party/androidx:androidx_fragment_fragment_java",
     "//third_party/androidx:androidx_vectordrawable_vectordrawable_animated_java",
     "//third_party/blink/public/mojom:android_mojo_bindings_java",
+    "//third_party/jni_zero:jni_zero_java",
     "//ui/android:ui_full_java",
+    "//url:gurl_java",
   ]
 
-  annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
   resources_package = "org.chromium.chrome.browser.webauth.authenticator"
-}
-
-android_library("logging_java") {
-  sources = [ "java/src/org/chromium/chrome/browser/webauth/authenticator/CableEventLogger.java" ]
 }
 
 generate_jni("jni_headers") {

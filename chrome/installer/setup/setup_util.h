@@ -89,10 +89,10 @@ base::FilePath FindArchiveToPatch(const InstallationState& original_state,
 bool DeleteFileFromTempProcess(const base::FilePath& path,
                                uint32_t delay_before_delete_ms);
 
-// Drops the process down to background processing mode on supported OSes if it
+// Drops the thread down to background processing mode on supported OSes if it
 // was launched below the normal process priority. Returns true when background
 // processing mode is entered.
-bool AdjustProcessPriority();
+bool AdjustThreadPriority();
 
 // Returns true if |install_status| represents a successful uninstall code.
 bool IsUninstallSuccess(InstallStatus install_status);
@@ -102,9 +102,6 @@ bool ContainsUnsupportedSwitch(const base::CommandLine& cmd_line);
 
 // Returns true if the processor is supported by chrome.
 bool IsProcessorSupported();
-
-// Returns the "...\\Commands\\|name|" registry key for a product's |reg_data|.
-std::wstring GetCommandKey(const wchar_t* name);
 
 // Deletes all values and subkeys of the key |path| under |root|, preserving
 // the keys named in |keys_to_preserve| (each of which must be an ASCII string).

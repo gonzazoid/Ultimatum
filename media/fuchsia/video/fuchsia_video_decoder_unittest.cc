@@ -8,29 +8,36 @@
 #include <fuchsia/sysmem/cpp/fidl.h>
 #include <lib/sys/cpp/component_context.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include <memory>
+
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
 #include "base/fuchsia/fuchsia_logging.h"
 #include "base/fuchsia/koid.h"
 #include "base/fuchsia/process_context.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/notreached.h"
 #include "base/process/process_handle.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "components/viz/common/gpu/raster_context_provider.h"
 #include "components/viz/test/test_context_support.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
+#include "gpu/command_buffer/common/shared_image_capabilities.h"
 #include "gpu/config/gpu_feature_info.h"
 #include "media/base/test_data_util.h"
 #include "media/base/test_helpers.h"
 #include "media/base/video_decoder.h"
 #include "media/base/video_frame.h"
-#include "media/fuchsia/mojom/fuchsia_media_resource_provider.mojom.h"
+#include "media/mojo/mojom/fuchsia_media.mojom.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/gfx/client_native_pixmap_factory.h"
 #include "ui/gfx/gpu_fence.h"
 #include "ui/gfx/gpu_memory_buffer.h"
+#include "ui/gfx/native_pixmap_handle.h"
 
 namespace media {
 
@@ -97,51 +104,84 @@ class TestSharedImageInterface : public gpu::SharedImageInterface {
   TestSharedImageInterface() = default;
   ~TestSharedImageInterface() override = default;
 
-  gpu::Mailbox CreateSharedImage(viz::ResourceFormat format,
-                                 const gfx::Size& size,
-                                 const gfx::ColorSpace& color_space,
-                                 GrSurfaceOrigin surface_origin,
-                                 SkAlphaType alpha_type,
-                                 uint32_t usage,
-                                 gpu::SurfaceHandle surface_handle) override {
-    ADD_FAILURE();
-    return gpu::Mailbox();
-  }
-
-  gpu::Mailbox CreateSharedImage(
-      viz::ResourceFormat format,
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage(
+      viz::SharedImageFormat format,
       const gfx::Size& size,
       const gfx::ColorSpace& color_space,
       GrSurfaceOrigin surface_origin,
       SkAlphaType alpha_type,
       uint32_t usage,
-      base::span<const uint8_t> pixel_data) override {
+      base::StringPiece debug_label,
+      gpu::SurfaceHandle surface_handle) override {
     ADD_FAILURE();
-    return gpu::Mailbox();
+    return base::MakeRefCounted<gpu::ClientSharedImage>(gpu::Mailbox());
   }
 
-  gpu::Mailbox CreateSharedImage(
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage(
+      viz::SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      base::StringPiece debug_label,
+      base::span<const uint8_t> pixel_data) override {
+    ADD_FAILURE();
+    return base::MakeRefCounted<gpu::ClientSharedImage>(gpu::Mailbox());
+  }
+
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage(
+      viz::SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      base::StringPiece debug_label,
+      gpu::SurfaceHandle surface_handle,
+      gfx::BufferUsage buffer_usage,
+      gfx::GpuMemoryBufferHandle buffer_handle) override {
+    ADD_FAILURE();
+    return base::MakeRefCounted<gpu::ClientSharedImage>(gpu::Mailbox());
+  }
+
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage(
+      viz::SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      base::StringPiece debug_label,
+      gfx::GpuMemoryBufferHandle buffer_handle) override {
+    auto result = GenerateMailboxForGMBHandle(std::move(buffer_handle));
+    mailboxes_.insert(result);
+    return base::MakeRefCounted<gpu::ClientSharedImage>(result);
+  }
+
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage(
+      viz::SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage,
+      base::StringPiece debug_label) override {
+    return base::MakeRefCounted<gpu::ClientSharedImage>(gpu::Mailbox());
+  }
+
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage(
       gfx::GpuMemoryBuffer* gpu_memory_buffer,
       gpu::GpuMemoryBufferManager* gpu_memory_buffer_manager,
       gfx::BufferPlane plane,
       const gfx::ColorSpace& color_space,
       GrSurfaceOrigin surface_origin,
       SkAlphaType alpha_type,
-      uint32_t usage) override {
-    gfx::GpuMemoryBufferHandle handle = gpu_memory_buffer->CloneHandle();
-    CHECK_EQ(handle.type, gfx::GpuMemoryBufferType::NATIVE_PIXMAP);
-
-    zx_koid_t id = base::GetRelatedKoid(
-                       handle.native_pixmap_handle.buffer_collection_handle)
-                       .value();
-    auto collection_it = sysmem_buffer_collections_.find(id);
-    CHECK(collection_it != sysmem_buffer_collections_.end());
-    CHECK_LT(handle.native_pixmap_handle.buffer_index,
-             collection_it->second->GetNumBuffers());
-
-    auto result = gpu::Mailbox::Generate();
+      uint32_t usage,
+      base::StringPiece debug_label) override {
+    auto result = GenerateMailboxForGMBHandle(gpu_memory_buffer->CloneHandle());
     mailboxes_.insert(result);
-    return result;
+    return base::MakeRefCounted<gpu::ClientSharedImage>(result);
   }
 
   void UpdateSharedImage(const gpu::SyncToken& sync_token,
@@ -154,19 +194,35 @@ class TestSharedImageInterface : public gpu::SharedImageInterface {
     ADD_FAILURE();
   }
 
+  scoped_refptr<gpu::ClientSharedImage> AddReferenceToSharedImage(
+      const gpu::SyncToken& sync_token,
+      const gpu::Mailbox& mailbox,
+      uint32_t usage) override {
+    ADD_FAILURE();
+    return nullptr;
+  }
+
   void DestroySharedImage(const gpu::SyncToken& sync_token,
                           const gpu::Mailbox& mailbox) override {
     CHECK_EQ(mailboxes_.erase(mailbox), 1U);
   }
 
-  SwapChainMailboxes CreateSwapChain(viz::ResourceFormat format,
-                                     const gfx::Size& size,
-                                     const gfx::ColorSpace& color_space,
-                                     GrSurfaceOrigin surface_origin,
-                                     SkAlphaType alpha_type,
-                                     uint32_t usage) override {
+  void DestroySharedImage(
+      const gpu::SyncToken& sync_token,
+      scoped_refptr<gpu::ClientSharedImage> client_shared_image) override {
+    CHECK(client_shared_image->HasOneRef());
+    DestroySharedImage(sync_token, client_shared_image->mailbox());
+  }
+
+  gpu::SharedImageInterface::SwapChainSharedImages CreateSwapChain(
+      viz::SharedImageFormat format,
+      const gfx::Size& size,
+      const gfx::ColorSpace& color_space,
+      GrSurfaceOrigin surface_origin,
+      SkAlphaType alpha_type,
+      uint32_t usage) override {
     ADD_FAILURE();
-    return SwapChainMailboxes();
+    return gpu::SharedImageInterface::SwapChainSharedImages(nullptr, nullptr);
   }
   void PresentSwapChain(const gpu::SyncToken& sync_token,
                         const gpu::Mailbox& mailbox) override {
@@ -211,11 +267,33 @@ class TestSharedImageInterface : public gpu::SharedImageInterface {
     return nullptr;
   }
 
+  const gpu::SharedImageCapabilities& GetCapabilities() override {
+    return shared_image_capabilities_;
+  }
+
  private:
+  gpu::Mailbox GenerateMailboxForGMBHandle(
+      gfx::GpuMemoryBufferHandle buffer_handle) {
+    CHECK_EQ(buffer_handle.type, gfx::GpuMemoryBufferType::NATIVE_PIXMAP);
+
+    zx_koid_t id =
+        base::GetRelatedKoid(
+            buffer_handle.native_pixmap_handle.buffer_collection_handle)
+            .value();
+    auto collection_it = sysmem_buffer_collections_.find(id);
+    CHECK(collection_it != sysmem_buffer_collections_.end());
+    CHECK_LT(buffer_handle.native_pixmap_handle.buffer_index,
+             collection_it->second->GetNumBuffers());
+
+    return gpu::Mailbox::GenerateForSharedImage();
+  }
+
   base::flat_map<zx_koid_t, std::unique_ptr<TestBufferCollection>>
       sysmem_buffer_collections_;
 
   base::flat_set<gpu::Mailbox> mailboxes_;
+
+  gpu::SharedImageCapabilities shared_image_capabilities_;
 };
 
 class TestRasterContextProvider
@@ -280,6 +358,11 @@ class TestRasterContextProvider
     ADD_FAILURE();
     return nullptr;
   }
+  unsigned int GetGrGLTextureFormat(
+      viz::SharedImageFormat format) const override {
+    ADD_FAILURE();
+    return 0;
+  }
 
  private:
   friend class base::RefCountedThreadSafe<TestRasterContextProvider>;
@@ -295,16 +378,10 @@ class TestRasterContextProvider
   base::OnceClosure on_destroyed_;
 };
 
-class TestFuchsiaMediaResourceProvider
-    : public media::mojom::FuchsiaMediaResourceProvider {
+class TestFuchsiaMediaCodecProvider
+    : public media::mojom::FuchsiaMediaCodecProvider {
  public:
-  // media::mojom::FuchsiaMediaResourceProvider implementation.
-  void CreateCdm(
-      const std::string& key_system,
-      fidl::InterfaceRequest<fuchsia::media::drm::ContentDecryptionModule>
-          request) final {
-    ADD_FAILURE();
-  }
+  // media::mojom::FuchsiaMediaCodecProvider implementation.
   void CreateVideoDecoder(
       media::VideoCodec codec,
       media::mojom::VideoDecoderSecureMemoryMode secure_mode,
@@ -341,7 +418,49 @@ class TestFuchsiaMediaResourceProvider
                                    std::move(stream_processor_request));
   }
 
-  mojo::Receiver<media::mojom::FuchsiaMediaResourceProvider> receiver_{this};
+  void GetSupportedVideoDecoderConfigs(
+      GetSupportedVideoDecoderConfigsCallback callback) override {
+    ADD_FAILURE();
+  }
+
+  mojo::Receiver<media::mojom::FuchsiaMediaCodecProvider> receiver_{this};
+};
+
+class FakeClientNativePixmap : public gfx::ClientNativePixmap {
+ public:
+  FakeClientNativePixmap(gfx::NativePixmapHandle handle)
+      : handle_(std::move(handle)) {
+    CHECK(handle_.buffer_collection_handle);
+  }
+
+  ~FakeClientNativePixmap() override = default;
+
+  // gfx::ClientNativePixmap implementation.
+  bool Map() override { NOTREACHED_NORETURN(); }
+  void Unmap() override { NOTREACHED(); }
+  size_t GetNumberOfPlanes() const override { NOTREACHED_NORETURN(); }
+  void* GetMemoryAddress(size_t plane) const override { NOTREACHED_NORETURN(); }
+  int GetStride(size_t plane) const override { NOTREACHED_NORETURN(); }
+  gfx::NativePixmapHandle CloneHandleForIPC() const override {
+    return gfx::CloneHandleForIPC(handle_);
+  }
+
+ private:
+  gfx::NativePixmapHandle handle_;
+};
+
+class FakeClientNativePixmapFactory : public gfx::ClientNativePixmapFactory {
+ public:
+  FakeClientNativePixmapFactory() = default;
+  ~FakeClientNativePixmapFactory() override = default;
+
+  std::unique_ptr<gfx::ClientNativePixmap> ImportFromHandle(
+      gfx::NativePixmapHandle handle,
+      const gfx::Size& size,
+      gfx::BufferFormat format,
+      gfx::BufferUsage usage) override {
+    return std::make_unique<FakeClientNativePixmap>(std::move(handle));
+  }
 };
 
 }  // namespace
@@ -350,13 +469,16 @@ class FuchsiaVideoDecoderTest : public testing::Test {
  public:
   FuchsiaVideoDecoderTest()
       : raster_context_provider_(
-            base::MakeRefCounted<TestRasterContextProvider>()),
-        decoder_(std::make_unique<FuchsiaVideoDecoder>(
-            raster_context_provider_.get(),
-            mojo::SharedRemote<media::mojom::FuchsiaMediaResourceProvider>(
-                test_media_resource_provider_.receiver_
-                    .BindNewPipeAndPassRemote()),
-            /*allow_overlays=*/false)) {}
+            base::MakeRefCounted<TestRasterContextProvider>()) {
+    auto decoder = std::make_unique<FuchsiaVideoDecoder>(
+        raster_context_provider_.get(),
+        mojo::SharedRemote<media::mojom::FuchsiaMediaCodecProvider>(
+            test_media_codec_provider_.receiver_.BindNewPipeAndPassRemote()),
+        /*allow_overlays=*/false);
+    decoder->SetClientNativePixmapFactoryForTests(
+        std::make_unique<FakeClientNativePixmapFactory>());
+    decoder_ = std::move(decoder);
+  }
 
   FuchsiaVideoDecoderTest(const FuchsiaVideoDecoderTest&) = delete;
   FuchsiaVideoDecoderTest& operator=(const FuchsiaVideoDecoderTest&) = delete;
@@ -443,7 +565,7 @@ class FuchsiaVideoDecoderTest : public testing::Test {
   base::test::SingleThreadTaskEnvironment task_environment_{
       base::test::SingleThreadTaskEnvironment::MainThreadType::IO};
 
-  TestFuchsiaMediaResourceProvider test_media_resource_provider_;
+  TestFuchsiaMediaCodecProvider test_media_codec_provider_;
 
   scoped_refptr<TestRasterContextProvider> raster_context_provider_;
 

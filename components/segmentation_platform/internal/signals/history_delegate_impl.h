@@ -21,19 +21,19 @@
 
 namespace history {
 class HistoryService;
-}
+}  // namespace history
 
 namespace segmentation_platform {
-
 // Provides an API to query history service to check if an URL exists.
 class HistoryDelegateImpl : public UrlSignalHandler::HistoryDelegate {
  public:
   HistoryDelegateImpl(history::HistoryService* history_service,
-                      UrlSignalHandler* url_signal_handler);
+                      UrlSignalHandler* url_signal_handler,
+                      const std::string& profile_id);
 
   ~HistoryDelegateImpl() override;
-  HistoryDelegateImpl(HistoryDelegateImpl&) = delete;
-  HistoryDelegateImpl& operator=(HistoryDelegateImpl&) = delete;
+  HistoryDelegateImpl(const HistoryDelegateImpl&) = delete;
+  HistoryDelegateImpl& operator=(const HistoryDelegateImpl&) = delete;
 
   // Called by history observer when URLs are added/removed in the history
   // database, useful to store a cache of recent visits.
@@ -44,6 +44,9 @@ class HistoryDelegateImpl : public UrlSignalHandler::HistoryDelegate {
   bool FastCheckUrl(const GURL& url) override;
   void FindUrlInHistory(const GURL& url,
                         UrlSignalHandler::FindCallback callback) override;
+  const std::string& profile_id() override;
+
+  // Getters.
 
  private:
   void OnHistoryQueryResult(UrlId url_id,
@@ -52,14 +55,14 @@ class HistoryDelegateImpl : public UrlSignalHandler::HistoryDelegate {
 
   raw_ptr<history::HistoryService> history_service_;
 
-  // The task tracker for the HistoryService callbacks, destroyed after observer
-  // is unregistered.
+  // The task tracker for the HistoryService callbacks, destroyed after
+  // observer is unregistered.
   base::CancelableTaskTracker task_tracker_;
 
-  base::ScopedObservation<UrlSignalHandler,
-                          UrlSignalHandler::HistoryDelegate,
-                          &UrlSignalHandler::AddHistoryDelegate,
-                          &UrlSignalHandler::RemoveHistoryDelegate>
+  // ProfileId associated with the current profile.
+  const std::string profile_id_;
+
+  base::ScopedObservation<UrlSignalHandler, UrlSignalHandler::HistoryDelegate>
       ukm_db_observation_{this};
 
   // List of URLs visited in the current session.

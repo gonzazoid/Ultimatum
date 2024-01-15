@@ -142,13 +142,19 @@ TEST_F(LocaleICUTest, monthFormat) {
 
 TEST_F(LocaleICUTest, localizedDateFormatText) {
   // Note: EXPECT_EQ(String, String) doesn't print result as string.
-  EXPECT_EQ("h:mm:ss a", LocalizedDateFormatText("en_US"));
+  EXPECT_EQ(
+      "h:mm:ss\xE2\x80\xAF"
+      "a",
+      LocalizedDateFormatText("en_US").Utf8());
   EXPECT_EQ("HH:mm:ss", LocalizedDateFormatText("fr"));
   EXPECT_EQ("H:mm:ss", LocalizedDateFormatText("ja"));
 }
 
 TEST_F(LocaleICUTest, localizedShortDateFormatText) {
-  EXPECT_EQ("h:mm a", LocalizedShortDateFormatText("en_US"));
+  EXPECT_EQ(
+      "h:mm\xE2\x80\xAF"
+      "a",
+      LocalizedShortDateFormatText("en_US").Utf8());
   EXPECT_EQ("HH:mm", LocalizedShortDateFormatText("fr"));
   EXPECT_EQ("H:mm", LocalizedShortDateFormatText("ja"));
 }
@@ -243,8 +249,8 @@ static String TestDecimalSeparator(const AtomicString& locale_identifier) {
 }
 
 TEST_F(LocaleICUTest, localizedDecimalSeparator) {
-  EXPECT_EQ(String("."), TestDecimalSeparator("en_US"));
-  EXPECT_EQ(String(","), TestDecimalSeparator("fr"));
+  EXPECT_EQ(String("."), TestDecimalSeparator(AtomicString("en_US")));
+  EXPECT_EQ(String(","), TestDecimalSeparator(AtomicString("fr")));
 }
 
 void TestNumberIsReversible(const AtomicString& locale_identifier,
@@ -258,7 +264,8 @@ void TestNumberIsReversible(const AtomicString& locale_identifier,
   EXPECT_EQ(original, converted);
 }
 
-void TestNumbers(const char* locale_string) {
+void TestNumbers(const char* locale) {
+  AtomicString locale_string(locale);
   TestNumberIsReversible(locale_string, "123456789012345678901234567890");
   TestNumberIsReversible(locale_string, "-123.456");
   TestNumberIsReversible(locale_string, ".456");
@@ -266,15 +273,17 @@ void TestNumbers(const char* locale_string) {
 }
 
 TEST_F(LocaleICUTest, reversible) {
-  TestNumberIsReversible("en_US", "123456789012345678901234567890");
-  TestNumberIsReversible("en_US", "-123.456", ".");
-  TestNumberIsReversible("en_US", ".456", ".");
-  TestNumberIsReversible("en_US", "-0.456", ".");
+  AtomicString en_us_locale("en_US");
+  TestNumberIsReversible(en_us_locale, "123456789012345678901234567890");
+  TestNumberIsReversible(en_us_locale, "-123.456", ".");
+  TestNumberIsReversible(en_us_locale, ".456", ".");
+  TestNumberIsReversible(en_us_locale, "-0.456", ".");
 
-  TestNumberIsReversible("fr", "123456789012345678901234567890");
-  TestNumberIsReversible("fr", "-123.456", ",");
-  TestNumberIsReversible("fr", ".456", ",");
-  TestNumberIsReversible("fr", "-0.456", ",");
+  AtomicString fr_locale("fr");
+  TestNumberIsReversible(fr_locale, "123456789012345678901234567890");
+  TestNumberIsReversible(fr_locale, "-123.456", ",");
+  TestNumberIsReversible(fr_locale, ".456", ",");
+  TestNumberIsReversible(fr_locale, "-0.456", ",");
 
   // Persian locale has a negative prefix and a negative suffix.
   TestNumbers("fa");

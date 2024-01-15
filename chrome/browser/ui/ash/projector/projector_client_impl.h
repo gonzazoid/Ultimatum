@@ -10,11 +10,14 @@
 #include "ash/public/cpp/projector/projector_annotator_controller.h"
 #include "ash/public/cpp/projector/projector_client.h"
 #include "ash/public/cpp/projector/projector_controller.h"
+#include "ash/public/cpp/projector/speech_recognition_availability.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/ash/drive/drive_integration_service.h"
 #include "chrome/browser/speech/speech_recognizer_delegate.h"
 #include "chrome/browser/ui/ash/projector/projector_drivefs_provider.h"
+#include "chrome/browser/ui/ash/projector/projector_soda_installation_controller.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/session_manager/core/session_manager_observer.h"
@@ -30,8 +33,8 @@ class SpeechRecognitionRecognizerClientImpl;
 class ProjectorClientImpl : public ash::ProjectorClient,
                             public SpeechRecognizerDelegate,
                             public ash::ProjectorAnnotatorController,
-                            public drive::DriveIntegrationServiceObserver,
-                            public session_manager::SessionManagerObserver {
+                            drive::DriveIntegrationService::Observer,
+                            session_manager::SessionManagerObserver {
  public:
   // RecordingOverlayViewImpl calls this function to initialize the annotator
   // tool.
@@ -45,8 +48,11 @@ class ProjectorClientImpl : public ash::ProjectorClient,
   ~ProjectorClientImpl() override;
 
   // ash::ProjectorClient:
+  ash::SpeechRecognitionAvailability GetSpeechRecognitionAvailability()
+      const override;
   void StartSpeechRecognition() override;
   void StopSpeechRecognition() override;
+  void ForceEndSpeechRecognition() override;
   bool GetBaseStoragePath(base::FilePath* result) const override;
   bool IsDriveFsMounted() const override;
   bool IsDriveFsMountFailed() const override;
@@ -63,7 +69,7 @@ class ProjectorClientImpl : public ash::ProjectorClient,
   void OnSpeechResult(
       const std::u16string& text,
       bool is_final,
-      const absl::optional<media::SpeechRecognitionResult>& timing) override;
+      const std::optional<media::SpeechRecognitionResult>& timing) override;
   // This class is not utilizing the information about sound level.
   void OnSpeechSoundLevelChanged(int16_t level) override {}
   void OnSpeechRecognitionStateChanged(
@@ -76,7 +82,7 @@ class ProjectorClientImpl : public ash::ProjectorClient,
   void Redo() override;
   void Clear() override;
 
-  // drive::DriveIntegrationServiceObserver:
+  // DriveIntegrationService::Observer implementation.
   void OnFileSystemMounted() override;
   void OnFileSystemBeingUnmounted() override;
   void OnFileSystemMountFailed() override;
@@ -84,11 +90,13 @@ class ProjectorClientImpl : public ash::ProjectorClient,
   // session_manager::SessionManagerObserver:
   void OnUserSessionStarted(bool is_primary_user) override;
 
-  // Maybe reset |drive_observation_| and observe the Drive integration service
-  // of active profile when ActiveUserChanged and OnUserProfileLoaded.
+  // Maybe observe the Drive integration service of active profile when
+  // ActiveUserChanged and OnUserProfileLoaded.
   void MaybeSwitchDriveIntegrationServiceObservation();
 
  private:
+  void SpeechRecognitionEnded(bool forced);
+
   // Called when any of the policies change that control whether the Projector
   // app is enabled.
   void OnEnablementPolicyChanged();
@@ -96,7 +104,7 @@ class ProjectorClientImpl : public ash::ProjectorClient,
   // Called when app registry becomes ready.
   void SetAppIsDisabled(bool disabled);
 
-  ash::ProjectorController* const controller_;
+  const raw_ptr<ash::ProjectorController> controller_;
   SpeechRecognizerStatus recognizer_status_ =
       SpeechRecognizerStatus::SPEECH_RECOGNIZER_OFF;
   std::unique_ptr<SpeechRecognitionRecognizerClientImpl> speech_recognizer_;
@@ -107,11 +115,11 @@ class ProjectorClientImpl : public ash::ProjectorClient,
 
   PrefChangeRegistrar pref_change_registrar_;
 
-  base::ScopedObservation<drive::DriveIntegrationService,
-                          drive::DriveIntegrationServiceObserver>
-      drive_observation_{this};
-
   ProjectorDriveFsProvider drive_helper_;
+
+  std::unique_ptr<ProjectorSodaInstallationController>
+      soda_installation_controller_;
+
   base::WeakPtrFactory<ProjectorClientImpl> weak_ptr_factory_{this};
 };
 

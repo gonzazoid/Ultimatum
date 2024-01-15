@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "build/buildflag.h"
 #include "chrome/browser/browsing_data/chrome_browsing_data_remover_constants.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
@@ -13,6 +14,7 @@
 #include "components/autofill/core/browser/test_autofill_manager_waiter.h"
 #include "content/public/browser/browsing_data_remover.h"
 #include "content/public/browser/render_widget_host_view.h"
+#include "content/public/test/back_forward_cache_util.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browsing_data_remover_test_util.h"
 #include "net/dns/mock_host_resolver.h"
@@ -32,27 +34,24 @@ const char kEditPhoneAndEmailFieldScript[] = R"(
     email_input.blur();
   )";
 
-class TestAutofillManager : public autofill::BrowserAutofillManager {
- public:
-  TestAutofillManager(autofill::ContentAutofillDriver* driver,
-                      autofill::AutofillClient* client)
-      : BrowserAutofillManager(driver,
-                               client,
-                               "en-US",
-                               EnableDownloadManager(false)) {}
-
-  autofill::TestAutofillManagerWaiter& waiter() { return waiter_; }
-
- private:
-  autofill::TestAutofillManagerWaiter waiter_{
-      *this,
-      {&AutofillManager::Observer::OnAfterFormsSeen}};
-};
-
 }  // namespace
 
 class FormfillPageLoadMetricsObserverBrowserTest : public InProcessBrowserTest {
  public:
+  class TestAutofillManager : public autofill::BrowserAutofillManager {
+   public:
+    TestAutofillManager(autofill::ContentAutofillDriver* driver,
+                        autofill::AutofillClient* client)
+        : BrowserAutofillManager(driver, client, "en-US") {}
+
+    autofill::TestAutofillManagerWaiter& waiter() { return waiter_; }
+
+   private:
+    autofill::TestAutofillManagerWaiter waiter_{
+        *this,
+        {autofill::AutofillManagerEvent::kFormsSeen}};
+  };
+
   void SetUpOnMainThread() override {
     host_resolver()->AddRule("*", "127.0.0.1");
     content::SetupCrossSiteRedirector(embedded_test_server());
@@ -72,6 +71,14 @@ class FormfillPageLoadMetricsObserverBrowserTest : public InProcessBrowserTest {
   content::WebContents* web_contents() {
     return browser()->tab_strip_model()->GetActiveWebContents();
   }
+
+  TestAutofillManager* autofill_manager() {
+    return autofill_manager_injector_[web_contents()];
+  }
+
+ private:
+  autofill::TestAutofillManagerInjector<TestAutofillManager>
+      autofill_manager_injector_;
 };
 
 IN_PROC_BROWSER_TEST_F(FormfillPageLoadMetricsObserverBrowserTest,
@@ -79,16 +86,12 @@ IN_PROC_BROWSER_TEST_F(FormfillPageLoadMetricsObserverBrowserTest,
   base::HistogramTester histogram_tester;
 
   // When loading the page, wait until OnFormsSeen().
-  autofill::TestAutofillManagerInjector<TestAutofillManager>
-      autofill_manager_injector(web_contents());
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(),
       embedded_test_server()->GetURL("/autofill/autofill_test_form.html")));
-  ASSERT_TRUE(
-      autofill_manager_injector.GetForPrimaryMainFrame()->waiter().Wait(1));
+  ASSERT_TRUE(autofill_manager()->waiter().Wait(1));
 
-  ASSERT_TRUE(
-      content::ExecuteScript(web_contents(), kEditPhoneAndEmailFieldScript));
+  ASSERT_TRUE(content::ExecJs(web_contents(), kEditPhoneAndEmailFieldScript));
 
   ASSERT_TRUE(
       ui_test_utils::NavigateToURL(browser(), GURL(url::kAboutBlankURL)));
@@ -110,16 +113,16 @@ IN_PROC_BROWSER_TEST_F(FormfillPageLoadMetricsObserverBrowserTest,
       blink::mojom::WebFeature::kUserDataFieldFilledPreviously, 0);
 }
 
+// TODO(crbug.com/1373542): test is flaky across platforms.
 IN_PROC_BROWSER_TEST_F(FormfillPageLoadMetricsObserverBrowserTest,
-                       UserDataFieldFilledPreviouslyUseCounter) {
+                       DISABLED_UserDataFieldFilledPreviouslyUseCounter) {
   base::HistogramTester histogram_tester;
 
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(), embedded_test_server()->GetURL(
                      "a.com", "/autofill/autofill_test_form.html")));
 
-  ASSERT_TRUE(
-      content::ExecuteScript(web_contents(), kEditPhoneAndEmailFieldScript));
+  ASSERT_TRUE(content::ExecJs(web_contents(), kEditPhoneAndEmailFieldScript));
 
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(), embedded_test_server()->GetURL("a.com", "/title1.html")));
@@ -143,16 +146,24 @@ IN_PROC_BROWSER_TEST_F(FormfillPageLoadMetricsObserverBrowserTest,
       blink::mojom::WebFeature::kUserDataFieldFilledPreviously, 2);
 }
 
+#if BUILDFLAG(IS_LINUX)
+#define MAYBE_ClearBrowsingData DISABLED_ClearBrowsingData
+#else
+#define MAYBE_ClearBrowsingData ClearBrowsingData
+#endif
 IN_PROC_BROWSER_TEST_F(FormfillPageLoadMetricsObserverBrowserTest,
-                       ClearBrowsingData) {
+                       MAYBE_ClearBrowsingData) {
+  // TODO(https://crbug.com/1487593): Re-enable this test on bfcache bot.
+  if (content::BackForwardCache::IsBackForwardCacheFeatureEnabled()) {
+    return;
+  }
   base::HistogramTester histogram_tester;
 
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(),
       embedded_test_server()->GetURL("/autofill/autofill_test_form.html")));
 
-  ASSERT_TRUE(
-      content::ExecuteScript(web_contents(), kEditPhoneAndEmailFieldScript));
+  ASSERT_TRUE(content::ExecJs(web_contents(), kEditPhoneAndEmailFieldScript));
 
   ASSERT_TRUE(
       ui_test_utils::NavigateToURL(browser(), GURL(url::kAboutBlankURL)));

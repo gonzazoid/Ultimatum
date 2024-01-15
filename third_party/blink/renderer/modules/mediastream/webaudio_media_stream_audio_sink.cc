@@ -104,6 +104,9 @@ void WebAudioMediaStreamAudioSink::OnData(
 
   if (fifo_->frames() + audio_bus.frames() <= fifo_->max_frames()) {
     fifo_->Push(&audio_bus);
+    TRACE_COUNTER_ID1(TRACE_DISABLED_BY_DEFAULT("mediastream"),
+                      "WebAudioMediaStreamAudioSink fifo space", this,
+                      fifo_->max_frames() - fifo_->frames());
   } else {
     // This can happen if the data in FIFO is too slowly consumed or
     // WebAudio stops consuming data.
@@ -153,15 +156,19 @@ void WebAudioMediaStreamAudioSink::ProvideInput(
 // AudioConverter which in turn is called by the above ProvideInput() function.
 // Thus thread safety analysis is disabled here and |lock_| acquire manually
 // asserted.
-double WebAudioMediaStreamAudioSink::ProvideInput(media::AudioBus* audio_bus,
-                                                  uint32_t frames_delayed)
-    NO_THREAD_SAFETY_ANALYSIS {
+double WebAudioMediaStreamAudioSink::ProvideInput(
+    media::AudioBus* audio_bus,
+    uint32_t frames_delayed,
+    const media::AudioGlitchInfo& glitch_info) NO_THREAD_SAFETY_ANALYSIS {
   TRACE_EVENT0(TRACE_DISABLED_BY_DEFAULT("mediastream"),
                "WebAudioMediaStreamAudioSink::ProvideInput 2");
 
   lock_.AssertAcquired();
   if (fifo_->frames() >= audio_bus->frames()) {
     fifo_->Consume(audio_bus, 0, audio_bus->frames());
+    TRACE_COUNTER_ID1(TRACE_DISABLED_BY_DEFAULT("mediastream"),
+                      "WebAudioMediaStreamAudioSink fifo space", this,
+                      fifo_->max_frames() - fifo_->frames());
   } else {
     audio_bus->Zero();
     TRACE_EVENT1(TRACE_DISABLED_BY_DEFAULT("mediastream"),

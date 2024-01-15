@@ -8,10 +8,10 @@
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "ash/components/arc/session/arc_service_manager.h"
 #include "base/barrier_closure.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/apps/app_service/app_icon/app_icon_factory.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 
 namespace arc {
 
@@ -123,7 +123,7 @@ void ArcIntentHelperMojoAsh::OnRequestTextSelectionActions(
     std::vector<mojom::TextSelectionActionPtr> actions) {
   size_t actions_count = actions.size();
   auto converted_actions = std::vector<TextSelectionAction*>(actions_count);
-  TextSelectionAction** converted_actions_ptr = &converted_actions[0];
+  TextSelectionAction** converted_actions_ptr = converted_actions.data();
   base::RepeatingClosure barrier_closure = base::BarrierClosure(
       actions_count, base::BindOnce(
                          [](std::vector<TextSelectionAction*> actions,

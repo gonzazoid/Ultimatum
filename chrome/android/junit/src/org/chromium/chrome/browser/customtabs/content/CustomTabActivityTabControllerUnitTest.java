@@ -5,7 +5,6 @@
 package org.chromium.chrome.browser.customtabs.content;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -13,8 +12,8 @@ import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -25,55 +24,45 @@ import static org.mockito.Mockito.when;
 import android.content.Intent;
 import android.os.Bundle;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.chrome.browser.privacy.settings.PrivacyPreferencesManagerImpl;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
-import org.chromium.chrome.browser.tab.TabObserver;
 import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.chrome.test.util.browser.Features.DisableFeatures;
 import org.chromium.components.embedder_support.util.ShadowUrlUtilities;
 import org.chromium.content_public.browser.WebContents;
 
-/**
- * Tests for {@link CustomTabActivityTabController}.
- */
+/** Tests for {@link CustomTabActivityTabController}. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE, shadows = {ShadowUrlUtilities.class})
-@DisableFeatures({ChromeFeatureList.CCT_REAL_TIME_ENGAGEMENT_SIGNALS})
+@Config(
+        manifest = Config.NONE,
+        shadows = {ShadowUrlUtilities.class})
 public class CustomTabActivityTabControllerUnitTest {
     @Rule
     public final CustomTabActivityContentTestEnvironment env =
             new CustomTabActivityContentTestEnvironment();
 
-    @Rule
-    public Features.JUnitProcessor processor = new Features.JUnitProcessor();
+    @Rule public Features.JUnitProcessor processor = new Features.JUnitProcessor();
 
     private CustomTabActivityTabController mTabController;
 
-    @Mock
-    private Profile mProfile;
+    @Mock private Profile mProfile;
+    @Mock private PrivacyPreferencesManagerImpl mPrivacyPreferencesManager;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         Profile.setLastUsedProfileForTesting(mProfile);
         mTabController = env.createTabController();
-    }
-
-    @After
-    public void tearDown() {
-        Profile.setLastUsedProfileForTesting(null);
+        PrivacyPreferencesManagerImpl.setInstanceForTesting(mPrivacyPreferencesManager);
     }
 
     @Test
@@ -198,10 +187,13 @@ public class CustomTabActivityTabControllerUnitTest {
     // Some websites replace the tab with a new one.
     @Test
     public void doesNotSetHeaderWhenIncognito() {
-        doAnswer((mock) -> {
-            fail("setClientDataHeaderForNewTab() should not be called for incognito tabs");
-            return null;
-        })
+        doAnswer(
+                        (mock) -> {
+                            fail(
+                                    "setClientDataHeaderForNewTab() should not be called for"
+                                            + " incognito tabs");
+                            return null;
+                        })
                 .when(env.connection)
                 .setClientDataHeaderForNewTab(any(), any());
         env.isIncognito = true;
@@ -212,30 +204,12 @@ public class CustomTabActivityTabControllerUnitTest {
     }
 
     @Test
-    @Features.DisableFeatures({ChromeFeatureList.CCT_REAL_TIME_ENGAGEMENT_SIGNALS})
-    public void doesNotSetGreatestScrollPercentageSupplierIfFeatureIsDisabled() {
+    public void setsTabObserverRegistrarOnEngagementSignalsHandler() {
+        var handler = mock(EngagementSignalsHandler.class);
+        when(env.connection.getEngagementSignalsHandler(eq(env.session))).thenReturn(handler);
+        when(env.connection.isDynamicFeatureEnabled(anyString())).thenReturn(true);
+        when(mPrivacyPreferencesManager.isUsageAndCrashReportingPermitted()).thenReturn(true);
         env.reachNativeInit(mTabController);
-
-        ArgumentCaptor<TabObserver> tabObservers = ArgumentCaptor.forClass(TabObserver.class);
-        verify(env.tabObserverRegistrar, atLeastOnce()).registerTabObserver(tabObservers.capture());
-        for (TabObserver observer : tabObservers.getAllValues()) {
-            assertFalse("RealtimeEngagementSignalObserver is not attached.",
-                    observer instanceof RealtimeEngagementSignalObserver);
-        }
-    }
-
-    @Test
-    @Features.EnableFeatures({ChromeFeatureList.CCT_REAL_TIME_ENGAGEMENT_SIGNALS})
-    public void attachEngagementSignalObserver() {
-        env.reachNativeInit(mTabController);
-
-        ArgumentCaptor<TabObserver> tabObservers = ArgumentCaptor.forClass(TabObserver.class);
-        verify(env.tabObserverRegistrar, atLeastOnce()).registerTabObserver(tabObservers.capture());
-        for (TabObserver observer : tabObservers.getAllValues()) {
-            if (observer instanceof RealtimeEngagementSignalObserver) {
-                return;
-            }
-        }
-        throw new AssertionError("RealtimeEngagementSignalObserver is not attached.");
+        verify(handler).setTabObserverRegistrar(env.tabObserverRegistrar);
     }
 }

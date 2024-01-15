@@ -7,10 +7,11 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/services/storage/public/cpp/buckets/bucket_info.h"
 #include "components/services/storage/public/cpp/buckets/constants.h"
 #include "content/browser/child_process_security_policy_impl.h"
@@ -125,8 +126,9 @@ void WebDatabaseHostImpl::OpenFileValidated(const std::u16string& vfs_file_name,
                                                    database_name)) {
     DCHECK(db_tracker_->quota_manager_proxy());
     db_tracker_->quota_manager_proxy()->UpdateOrCreateBucket(
-        storage::BucketInitParams::ForDefaultBucket(blink::StorageKey(
-            storage::GetOriginFromIdentifier(origin_identifier))),
+        storage::BucketInitParams::ForDefaultBucket(
+            blink::StorageKey::CreateFirstParty(
+                storage::GetOriginFromIdentifier(origin_identifier))),
         db_tracker_->task_runner(),
         base::BindOnce(&WebDatabaseHostImpl::OpenFileWithBucketCreated,
                        weak_ptr_factory_.GetWeakPtr(), vfs_file_name,
@@ -148,7 +150,7 @@ void WebDatabaseHostImpl::OpenFileWithBucketCreated(
     OpenFileCallback callback,
     storage::QuotaErrorOr<storage::BucketInfo> bucket) {
   // Return invalid file path on `UpdateOrCreateBucket` error.
-  if (!bucket.ok()) {
+  if (!bucket.has_value()) {
     std::move(callback).Run(base::File());
     return;
   }
@@ -271,8 +273,8 @@ void WebDatabaseHostImpl::GetSpaceAvailableValidated(
 
   DCHECK(db_tracker_->quota_manager_proxy());
   db_tracker_->quota_manager_proxy()->GetUsageAndQuota(
-      blink::StorageKey(origin), blink::mojom::StorageType::kTemporary,
-      db_tracker_->task_runner(),
+      blink::StorageKey::CreateFirstParty(origin),
+      blink::mojom::StorageType::kTemporary, db_tracker_->task_runner(),
       base::BindOnce(
           [](GetSpaceAvailableCallback callback,
              blink::mojom::QuotaStatusCode status, int64_t usage,

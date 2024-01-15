@@ -91,83 +91,148 @@ class VideoFrameHandlerProxyLacros::VideoFrameAccessHandlerProxy
 
 VideoFrameHandlerProxyLacros::VideoFrameHandlerProxyLacros(
     mojo::PendingReceiver<crosapi::mojom::VideoFrameHandler> proxy_receiver,
-    mojo::PendingRemote<mojom::VideoFrameHandler> handler_remote)
-    : handler_(std::move(handler_remote)) {
+    absl::optional<mojo::PendingRemote<mojom::VideoFrameHandler>>
+        handler_remote,
+    base::WeakPtr<media::VideoFrameReceiver> handler_remote_in_process) {
+  CHECK(handler_remote || handler_remote_in_process);
   receiver_.Bind(std::move(proxy_receiver));
+  if (handler_remote)
+    handler_.Bind(std::move(*handler_remote));
+  else if (handler_remote_in_process)
+    handler_in_process_ = handler_remote_in_process;
 }
 
 VideoFrameHandlerProxyLacros::~VideoFrameHandlerProxyLacros() = default;
 
+void VideoFrameHandlerProxyLacros::OnCaptureConfigurationChanged() {
+  if (handler_.is_bound()) {
+    handler_->OnCaptureConfigurationChanged();
+  } else if (handler_in_process_) {
+    handler_in_process_->OnCaptureConfigurationChanged();
+  }
+}
+
 void VideoFrameHandlerProxyLacros::OnNewBuffer(
     int buffer_id,
     crosapi::mojom::VideoBufferHandlePtr buffer_handle) {
-  handler_->OnNewBuffer(buffer_id,
-                        ConvertToMediaVideoBuffer(std::move(buffer_handle)));
+  if (handler_.is_bound()) {
+    handler_->OnNewBuffer(buffer_id,
+                          ConvertToMediaVideoBuffer(std::move(buffer_handle)));
+  } else if (handler_in_process_) {
+    handler_in_process_->OnNewBuffer(
+        buffer_id, ConvertToMediaVideoBuffer(std::move(buffer_handle)));
+  }
+}
+
+void VideoFrameHandlerProxyLacros::DEPRECATED_OnFrameReadyInBuffer(
+    crosapi::mojom::ReadyFrameInBufferPtr buffer,
+    std::vector<crosapi::mojom::ReadyFrameInBufferPtr> /*scaled_buffers*/) {
+  OnFrameReadyInBuffer(std::move(buffer));
 }
 
 void VideoFrameHandlerProxyLacros::OnFrameReadyInBuffer(
-    crosapi::mojom::ReadyFrameInBufferPtr buffer,
-    std::vector<crosapi::mojom::ReadyFrameInBufferPtr> scaled_buffers) {
-  if (!access_permission_proxy_map_) {
-    access_permission_proxy_map_ = new AccessPermissionProxyMap();
-    mojo::PendingRemote<mojom::VideoFrameAccessHandler> pending_remote;
-    mojo::MakeSelfOwnedReceiver<mojom::VideoFrameAccessHandler>(
-        std::make_unique<VideoFrameAccessHandlerProxy>(
-            access_permission_proxy_map_),
-        pending_remote.InitWithNewPipeAndPassReceiver());
-    handler_->OnFrameAccessHandlerReady(std::move(pending_remote));
-  }
+    crosapi::mojom::ReadyFrameInBufferPtr buffer) {
+  if (handler_.is_bound()) {
+    if (!access_permission_proxy_map_) {
+      access_permission_proxy_map_ = new AccessPermissionProxyMap();
+      mojo::PendingRemote<mojom::VideoFrameAccessHandler> pending_remote;
+      mojo::MakeSelfOwnedReceiver<mojom::VideoFrameAccessHandler>(
+          std::make_unique<VideoFrameAccessHandlerProxy>(
+              access_permission_proxy_map_),
+          pending_remote.InitWithNewPipeAndPassReceiver());
+      handler_->OnFrameAccessHandlerReady(std::move(pending_remote));
+    }
 
-  access_permission_proxy_map_->InsertAccessPermission(
-      buffer->buffer_id, std::move(buffer->access_permission));
-  mojom::ReadyFrameInBufferPtr video_capture_buffer =
-      ToVideoCaptureBuffer(std::move(buffer));
-  std::vector<mojom::ReadyFrameInBufferPtr> video_capture_scaled_buffers;
-  for (auto& b : scaled_buffers) {
     access_permission_proxy_map_->InsertAccessPermission(
-        b->buffer_id, std::move(b->access_permission));
-    video_capture_scaled_buffers.push_back(ToVideoCaptureBuffer(std::move(b)));
-  }
+        buffer->buffer_id, std::move(buffer->access_permission));
+    mojom::ReadyFrameInBufferPtr video_capture_buffer =
+        ToVideoCaptureBuffer(std::move(buffer));
 
-  handler_->OnFrameReadyInBuffer(std::move(video_capture_buffer),
-                                 std::move(video_capture_scaled_buffers));
+    handler_->OnFrameReadyInBuffer(std::move(video_capture_buffer));
+  } else if (handler_in_process_) {
+    handler_in_process_->OnFrameReadyInBuffer(
+        ConvertToMediaReadyFrame(std::move(buffer)));
+  }
 }
 
 void VideoFrameHandlerProxyLacros::OnBufferRetired(int buffer_id) {
-  handler_->OnBufferRetired(buffer_id);
+  if (handler_.is_bound()) {
+    handler_->OnBufferRetired(buffer_id);
+  } else if (handler_in_process_) {
+    handler_in_process_->OnBufferRetired(buffer_id);
+  }
 }
 
 void VideoFrameHandlerProxyLacros::OnError(media::VideoCaptureError error) {
-  handler_->OnError(error);
+  if (handler_.is_bound()) {
+    handler_->OnError(error);
+  } else if (handler_in_process_) {
+    handler_in_process_->OnError(error);
+  }
 }
 
 void VideoFrameHandlerProxyLacros::OnFrameDropped(
     media::VideoCaptureFrameDropReason reason) {
-  handler_->OnFrameDropped(reason);
+  if (handler_.is_bound()) {
+    handler_->OnFrameDropped(reason);
+  } else if (handler_in_process_) {
+    handler_in_process_->OnFrameDropped(reason);
+  }
 }
 
-void VideoFrameHandlerProxyLacros::OnNewCropVersion(uint32_t crop_version) {
-  handler_->OnNewCropVersion(crop_version);
+void VideoFrameHandlerProxyLacros::DEPRECATED_OnNewCropVersion(
+    uint32_t crop_version) {
+  OnNewSubCaptureTargetVersion(crop_version);
+}
+
+void VideoFrameHandlerProxyLacros::OnNewSubCaptureTargetVersion(
+    uint32_t sub_capture_target_version) {
+  if (handler_.is_bound()) {
+    handler_->OnNewSubCaptureTargetVersion(sub_capture_target_version);
+  } else if (handler_in_process_) {
+    handler_in_process_->OnNewSubCaptureTargetVersion(
+        sub_capture_target_version);
+  }
 }
 
 void VideoFrameHandlerProxyLacros::OnFrameWithEmptyRegionCapture() {
-  handler_->OnFrameWithEmptyRegionCapture();
+  if (handler_.is_bound()) {
+    handler_->OnFrameWithEmptyRegionCapture();
+  } else if (handler_in_process_) {
+    handler_in_process_->OnFrameWithEmptyRegionCapture();
+  }
 }
 
 void VideoFrameHandlerProxyLacros::OnLog(const std::string& message) {
-  handler_->OnLog(message);
+  if (handler_.is_bound()) {
+    handler_->OnLog(message);
+  } else if (handler_in_process_) {
+    handler_in_process_->OnLog(message);
+  }
 }
 
 void VideoFrameHandlerProxyLacros::OnStarted() {
-  handler_->OnStarted();
+  if (handler_.is_bound()) {
+    handler_->OnStarted();
+  } else if (handler_in_process_) {
+    handler_in_process_->OnStarted();
+  }
 }
 
 void VideoFrameHandlerProxyLacros::OnStartedUsingGpuDecode() {
-  handler_->OnStartedUsingGpuDecode();
+  if (handler_.is_bound()) {
+    handler_->OnStartedUsingGpuDecode();
+  } else if (handler_in_process_) {
+    handler_in_process_->OnStartedUsingGpuDecode();
+  }
 }
 
 void VideoFrameHandlerProxyLacros::OnStopped() {
-  handler_->OnStopped();
+  if (handler_.is_bound()) {
+    handler_->OnStopped();
+  } else if (handler_in_process_) {
+    handler_in_process_->OnStopped();
+  }
 }
 
 }  // namespace video_capture

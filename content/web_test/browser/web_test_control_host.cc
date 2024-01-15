@@ -18,30 +18,32 @@
 
 #include "base/barrier_closure.h"
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/path_service.h"
 #include "base/ranges/algorithm.h"
-#include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "cc/paint/skia_paint_canvas.h"
+#include "content/browser/aggregation_service/aggregation_service.h"
+#include "content/browser/attribution_reporting/attribution_manager.h"
 #include "content/browser/renderer_host/frame_tree.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
 #include "content/browser/renderer_host/navigation_request.h"
 #include "content/browser/web_contents/web_contents_impl.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/child_process_security_policy.h"
 #include "content/public/browser/child_process_termination_info.h"
 #include "content/public/browser/client_hints_controller_delegate.h"
@@ -51,8 +53,6 @@
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/network_service_instance.h"
-#include "content/public/browser/notification_service.h"
-#include "content/public/browser/notification_types.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/render_widget_host.h"
@@ -69,6 +69,7 @@
 #include "content/shell/browser/shell_content_browser_client.h"
 #include "content/shell/browser/shell_content_index_provider.h"
 #include "content/shell/browser/shell_devtools_frontend.h"
+#include "content/shell/browser/shell_federated_permission_context.h"
 #include "content/test/mock_platform_notification_service.h"
 #include "content/test/storage_partition_test_helpers.h"
 #include "content/web_test/browser/devtools_protocol_test_bindings.h"
@@ -86,6 +87,7 @@
 #include "ipc/ipc_channel_proxy.h"
 #include "mojo/public/cpp/bindings/sync_call_restrictions.h"
 #include "services/network/public/cpp/features.h"
+#include "services/network/public/mojom/clear_data_filter.mojom.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "services/network/public/mojom/network_service.mojom.h"
 #include "storage/browser/database/database_tracker.h"
@@ -102,11 +104,12 @@
 #include "ui/shell_dialogs/select_file_dialog.h"
 #include "ui/shell_dialogs/select_file_dialog_factory.h"
 #include "ui/shell_dialogs/select_file_policy.h"
+#include "ui/shell_dialogs/selected_file_info.h"
 #include "url/gurl.h"
 #include "url/url_constants.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
 #endif
 
 namespace content {
@@ -260,14 +263,22 @@ void ApplyWebTestDefaultPreferences(blink::web_pref::WebPreferences* prefs) {
   prefs->webgl_errors_to_console_enabled = false;
   prefs->enable_scroll_animator =
       !command_line.HasSwitch(switches::kDisableSmoothScrolling);
-  prefs->threaded_scrolling_enabled =
-      command_line.HasSwitch(switches::kEnableThreadedCompositing) &&
-      !command_line.HasSwitch(blink::switches::kDisableThreadedScrolling);
   prefs->minimum_logical_font_size = 9;
   prefs->accelerated_2d_canvas_enabled =
       command_line.HasSwitch(switches::kEnableAccelerated2DCanvas);
   prefs->smart_insert_delete_enabled = true;
+  // On iOS platform, kEnableViewport is enabled by default (see
+  // content_main.cc::RunContentProcess). When the viewport is enabled,
+  // the visual viewport always provides its own scrollbars even if
+  // the test includes <body style=overflow:hidden>.
+  // To ensure the testing expectations are consistent with MacPort
+  // and to avoid this scrollbar behavior in web-platform-tests,
+  // set viewport_enabled to false for iOS.
+#if BUILDFLAG(IS_IOS)
+  prefs->viewport_enabled = false;
+#else
   prefs->viewport_enabled = command_line.HasSwitch(switches::kEnableViewport);
+#endif
   prefs->default_minimum_page_scale_factor = 1.f;
   prefs->default_maximum_page_scale_factor = 4.f;
   prefs->presentation_receiver =
@@ -281,12 +292,13 @@ void ApplyWebTestDefaultPreferences(blink::web_pref::WebPreferences* prefs) {
       blink::mojom::EditingBehavior::kEditingWindowsBehavior;
 #endif
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   prefs->cursive_font_family_map[blink::web_pref::kCommonScript] =
       u"Apple Chancery";
   prefs->fantasy_font_family_map[blink::web_pref::kCommonScript] = u"Papyrus";
   prefs->serif_font_family_map[blink::web_pref::kCommonScript] = u"Times";
   prefs->standard_font_family_map[blink::web_pref::kCommonScript] = u"Times";
+  prefs->fixed_font_family_map[blink::web_pref::kCommonScript] = u"Menlo";
 #else
   prefs->cursive_font_family_map[blink::web_pref::kCommonScript] =
       u"Comic Sans MS";
@@ -295,8 +307,8 @@ void ApplyWebTestDefaultPreferences(blink::web_pref::WebPreferences* prefs) {
       u"times new roman";
   prefs->standard_font_family_map[blink::web_pref::kCommonScript] =
       u"times new roman";
-#endif
   prefs->fixed_font_family_map[blink::web_pref::kCommonScript] = u"Courier";
+#endif
   prefs->sans_serif_font_family_map[blink::web_pref::kCommonScript] =
       u"Helvetica";
 }
@@ -515,7 +527,6 @@ WebTestControlHost::WebTestControlHost() {
                                     ->GetDefaultStoragePartition());
 
   GpuDataManager::GetInstance()->AddObserver(this);
-  ResetBrowserAfterWebTest();
 }
 
 WebTestControlHost::~WebTestControlHost() {
@@ -528,7 +539,7 @@ WebTestControlHost::~WebTestControlHost() {
   // WebTestBrowserMainRunner will close all Shell windows including those.
 }
 
-bool WebTestControlHost::PrepareForWebTest(const TestInfo& test_info) {
+void WebTestControlHost::PrepareForWebTest(const TestInfo& test_info) {
   TRACE_EVENT0("shell", "WebTestControlHost::PrepareForWebTest");
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   current_working_directory_ = test_info.current_working_directory;
@@ -553,6 +564,11 @@ bool WebTestControlHost::PrepareForWebTest(const TestInfo& test_info) {
   all_observed_render_process_hosts_.clear();
   render_process_host_observations_.RemoveAllObservations();
   frame_to_layout_dump_map_.clear();
+
+  if (!test_info.trace_file.empty()) {
+    tracing_controller_.emplace(test_info.trace_file);
+    tracing_controller_->StartTracing();
+  }
 
   ShellBrowserContext* browser_context =
       ShellContentBrowserClient::Get()->browser_context();
@@ -658,11 +674,9 @@ bool WebTestControlHost::PrepareForWebTest(const TestInfo& test_info) {
     params.should_clear_history_list = true;
     main_window_->web_contents()->GetController().LoadURLWithParams(params);
   }
-
-  return true;
 }
 
-bool WebTestControlHost::ResetBrowserAfterWebTest() {
+void WebTestControlHost::ResetBrowserAfterWebTest() {
   TRACE_EVENT0("shell", "WebTestControlHost::ResetBrowserAfterWebTest");
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
@@ -673,8 +687,14 @@ bool WebTestControlHost::ResetBrowserAfterWebTest() {
   // Close IPC channels to avoid unexpected messages or replies after the test
   // is done. New channels will be opened for the next test.
   web_test_render_frame_map_.clear();
-  web_test_render_thread_map_.clear();
   receiver_bindings_.Clear();
+
+  // StopTracing() must be called before the printer_ calls, to ensure the trace
+  // file is flushed to disk before control returns to the test runner
+  if (tracing_controller_.has_value()) {
+    tracing_controller_->StopTracing();
+    tracing_controller_.reset();
+  }
 
   printer_->PrintTextFooter();
   printer_->PrintImageFooter();
@@ -683,10 +703,10 @@ bool WebTestControlHost::ResetBrowserAfterWebTest() {
   expected_pixel_hash_.clear();
   test_url_ = GURL();
   prefs_ = blink::web_pref::WebPreferences();
+  lcpp_hint_ = std::nullopt;
   should_override_prefs_ = false;
   WebTestContentBrowserClient::Get()->SetPopupBlockingEnabled(true);
   WebTestContentBrowserClient::Get()->ResetMockClipboardHosts();
-  WebTestContentBrowserClient::Get()->SetScreenOrientationChanged(false);
   WebTestContentBrowserClient::Get()->ResetFakeBluetoothDelegate();
   WebTestContentBrowserClient::Get()
       ->GetWebTestBrowserContext()
@@ -708,7 +728,7 @@ bool WebTestControlHost::ResetBrowserAfterWebTest() {
   SetBluetoothManualChooser(false);
   SetDatabaseQuota(content::kDefaultDatabaseQuota);
 
-  // Delete all cookies.
+  // Delete all cookies, Attribution Reporting data and Aggregation service data
   {
     BrowserContext* browser_context =
         ShellContentBrowserClient::Get()->browser_context();
@@ -716,6 +736,24 @@ bool WebTestControlHost::ResetBrowserAfterWebTest() {
         browser_context->GetDefaultStoragePartition();
     storage_partition->GetCookieManagerForBrowserProcess()->DeleteCookies(
         network::mojom::CookieDeletionFilter::New(), base::DoNothing());
+
+    if (auto* attribution_manager =
+            AttributionManager::FromBrowserContext(browser_context)) {
+      attribution_manager->ClearData(
+          /*delete_begin=*/base::Time::Min(), /*delete_end=*/base::Time::Max(),
+          /*filter=*/StoragePartition::StorageKeyMatcherFunction(),
+          /*filter_builder=*/nullptr,
+          /*delete_rate_limit_data=*/true,
+          /*done=*/base::DoNothing());
+    }
+
+    if (auto* aggregation_service =
+            AggregationService::GetService(browser_context)) {
+      aggregation_service->ClearData(
+          /*delete_begin=*/base::Time::Min(), /*delete_end=*/base::Time::Max(),
+          /*filter=*/StoragePartition::StorageKeyMatcherFunction(),
+          /*done=*/base::DoNothing());
+    }
   }
 
   ui::SelectFileDialog::SetFactory(nullptr);
@@ -728,8 +766,6 @@ bool WebTestControlHost::ResetBrowserAfterWebTest() {
   }
 
   weak_factory_.InvalidateWeakPtrs();
-
-  return true;
 }
 
 void WebTestControlHost::DidCreateOrAttachWebContents(
@@ -819,20 +855,9 @@ void WebTestControlHost::InitiateCaptureDump(
 
   if (capture_pixels) {
     waiting_for_pixel_results_ = true;
-    auto* rwhv = main_window_->web_contents()->GetRenderWidgetHostView();
-    // If we're running in threaded mode, then the frames will be produced via a
-    // scheduler elsewhere, all we need to do is to ensure that the surface is
-    // synchronized before we copy from it. In single threaded mode, we have to
-    // force each renderer to produce a frame.
-    if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-            switches::kEnableThreadedCompositing)) {
-      rwhv->EnsureSurfaceSynchronizedForWebTest();
-      EnqueueSurfaceCopyRequest();
-    } else {
-      CompositeAllFramesThen(
-          base::BindOnce(&WebTestControlHost::EnqueueSurfaceCopyRequest,
-                         weak_factory_.GetWeakPtr()));
-    }
+    CompositeAllFramesThen(
+        base::BindOnce(&WebTestControlHost::EnqueueSurfaceCopyRequest,
+                       weak_factory_.GetWeakPtr()));
   }
 
   // Try to report results now, if we aren't waiting for anything.
@@ -840,10 +865,8 @@ void WebTestControlHost::InitiateCaptureDump(
 }
 
 void WebTestControlHost::TestFinishedInSecondaryRenderer() {
-  GetWebTestRenderThreadRemote(main_window_->web_contents()
-                                   ->GetPrimaryMainFrame()
-                                   ->GetRenderViewHost()
-                                   ->GetProcess())
+  GetWebTestRenderFrameRemote(
+      main_window_->web_contents()->GetPrimaryMainFrame())
       ->TestFinishedFromSecondaryRenderer();
 }
 
@@ -869,14 +892,9 @@ void WebTestControlHost::CompositeAllFramesThen(
   // Only allow a single call to CompositeAllFramesThen(), without a call to
   // ResetBrowserAfterWebTest() in between. More than once risks overlapping
   // calls, due to the asynchronous nature of CompositeNodeQueueThen(), which
-  // can lead to use-after-free, e.g.
-  // https://clusterfuzz.com/v2/testcase-detail/4929420383748096
+  // can lead to use-after-free, e.g. crbug.com/899465.
   if (!composite_all_frames_node_storage_.empty() ||
       !composite_all_frames_node_queue_.empty()) {
-    // Using NOTREACHED + return here because we want to disallow the second
-    // call if this happens in release builds, while still catching this
-    // condition in debug builds.
-    NOTREACHED();
     return;
   }
   // Build the frame storage and depth first queue.
@@ -925,8 +943,9 @@ void WebTestControlHost::CompositeNodeQueueThen(
 }
 
 void WebTestControlHost::BuildDepthFirstQueue(Node* node) {
-  for (auto* child : node->children)
+  for (content::WebTestControlHost::Node* child : node->children) {
     BuildDepthFirstQueue(child);
+  }
   composite_all_frames_node_queue_.push(node);
 }
 
@@ -1016,7 +1035,7 @@ void WebTestControlHost::PluginCrashed(const base::FilePath& plugin_path,
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   printer_->AddErrorMessage(
       base::StringPrintf("#CRASHED - plugin (pid %" CrPRIdPid ")", plugin_pid));
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(base::IgnoreResult(&WebTestControlHost::DiscardMainWindow),
                      weak_factory_.GetWeakPtr()));
@@ -1057,31 +1076,45 @@ void WebTestControlHost::DidUpdateFaviconURL(
   }
 }
 
-void WebTestControlHost::RenderViewHostChanged(RenderViewHost* old_host,
-                                               RenderViewHost* new_host) {
-  // Notifies the main frame of |old_host| that it is deactivated while it's
-  // kept alive in back-forward cache.
-  RenderViewHostImpl* rvhi = static_cast<RenderViewHostImpl*>(old_host);
-  GetWebTestRenderFrameRemote(rvhi->GetMainRenderFrameHost())->OnDeactivated();
+void WebTestControlHost::RenderFrameHostChanged(RenderFrameHost* old_host,
+                                                RenderFrameHost* new_host) {
+  if (!old_host || !old_host->IsInPrimaryMainFrame())
+    return;
+
+  GetWebTestRenderFrameRemote(old_host)->OnDeactivated();
 }
 
 void WebTestControlHost::RenderViewDeleted(RenderViewHost* render_view_host) {
   main_window_render_view_hosts_.erase(render_view_host);
 }
 
+void WebTestControlHost::DidStartNavigation(
+    NavigationHandle* navigation_handle) {
+  if (lcpp_hint_) {
+    navigation_handle->SetLCPPNavigationHint(lcpp_hint_.value());
+  }
+}
+
 void WebTestControlHost::ReadyToCommitNavigation(
     NavigationHandle* navigation_handle) {
   NavigationRequest* request = NavigationRequest::From(navigation_handle);
-  RenderFrameHostImpl* rfh = request->rfh_restored_from_back_forward_cache();
+  RenderFrameHostImpl* rfh =
+      request->GetRenderFrameHostRestoredFromBackForwardCache();
   if (rfh)
     GetWebTestRenderFrameRemote(rfh)->OnReactivated();
+
+  if (navigation_handle->IsInPrimaryMainFrame() &&
+      next_non_blank_nav_is_new_test_ &&
+      navigation_handle->GetURL() != GURL(kAboutBlankResetWebTest)) {
+    GetWebTestRenderFrameRemote(navigation_handle->GetRenderFrameHost())
+        ->BlockTestUntilStart();
+  }
 }
 
 void WebTestControlHost::RenderProcessHostDestroyed(
     RenderProcessHost* render_process_host) {
   render_process_host_observations_.RemoveObservation(render_process_host);
   all_observed_render_process_hosts_.erase(render_process_host);
-  web_test_render_thread_map_.erase(render_process_host);
   main_window_render_process_hosts_.erase(render_process_host);
 }
 
@@ -1163,8 +1196,7 @@ void WebTestControlHost::HandleNewRenderFrameHost(RenderFrameHost* frame) {
     return;
 
   const bool main_window =
-      FrameTreeNode::From(frame)->frame_tree()->type() ==
-          FrameTree::Type::kPrimary &&
+      FrameTreeNode::From(frame)->frame_tree().is_primary() &&
       WebContents::FromRenderFrameHost(frame) == main_window_->web_contents();
 
   RenderProcessHost* process_host = frame->GetProcess();
@@ -1216,15 +1248,14 @@ void WebTestControlHost::HandleNewRenderFrameHost(RenderFrameHost* frame) {
     all_observed_render_process_hosts_.insert(process_host);
 
     if (!main_window) {
-      GetWebTestRenderThreadRemote(process_host)
+      GetWebTestRenderFrameRemote(frame)
           ->SetupRendererProcessForNonTestWindow();
     }
 
-    GetWebTestRenderThreadRemote(process_host)
-        ->ReplicateWebTestRuntimeFlagsChanges(
-            accumulated_web_test_runtime_flags_changes_.Clone());
-    GetWebTestRenderThreadRemote(process_host)
-        ->ReplicateWorkQueueStates(work_queue_states_.Clone());
+    GetWebTestRenderFrameRemote(frame)->ReplicateWebTestRuntimeFlagsChanges(
+        accumulated_web_test_runtime_flags_changes_.Clone());
+    GetWebTestRenderFrameRemote(frame)->ReplicateWorkQueueStates(
+        work_queue_states_.Clone());
   }
 }
 
@@ -1293,11 +1324,11 @@ void WebTestControlHost::OnPixelDumpCaptured(const SkBitmap& snapshot) {
   // In the test: test_runner/notify_done_and_defered_close_dump_surface.html,
   // the |main_window_| is closed while waiting for the pixel dump. When this
   // happens, every window is closed and while pumping the message queue,
-  // OnPixelDumpCaptured is called with an empty snapshot.
-  if (!main_window_)
+  // OnPixelDumpCaptured is called with an empty snapshot. It is also possible
+  // to use a redirect to capture an empty snapshot - see crbug.com/1443169.
+  if (!main_window_ || snapshot.drawsNothing()) {
     return;
-
-  DCHECK(!snapshot.drawsNothing());
+  }
   pixel_dump_ = snapshot;
   waiting_for_pixel_results_ = false;
   ReportResults();
@@ -1373,6 +1404,8 @@ void WebTestControlHost::OnImageDump(const std::string& actual_pixel_hash,
     }
 
     std::vector<gfx::PNGCodec::Comment> comments;
+    // Used by
+    // //third_party/blink/tools/blinkpy/common/read_checksum_from_png.py
     comments.push_back(gfx::PNGCodec::Comment("checksum", actual_pixel_hash));
     bool success = gfx::PNGCodec::Encode(
         static_cast<const unsigned char*>(image.getPixels()), pixel_format,
@@ -1424,8 +1457,10 @@ void WebTestControlHost::SetPopupBlockingEnabled(bool block_popups) {
   WebTestContentBrowserClient::Get()->SetPopupBlockingEnabled(block_popups);
 }
 
-void WebTestControlHost::SetScreenOrientationChanged() {
-  WebTestContentBrowserClient::Get()->SetScreenOrientationChanged(true);
+void WebTestControlHost::SimulateScreenOrientationChanged() {
+  content::WebContentsImpl* web_contents =
+      static_cast<WebContentsImpl*>(main_window_->web_contents());
+  web_contents->DidChangeScreenOrientation();
 }
 
 void WebTestControlHost::SetPermission(const std::string& name,
@@ -1468,6 +1503,8 @@ void WebTestControlHost::SetPermission(const std::string& name,
     type = blink::PermissionType::NFC;
   } else if (name == "storage-access") {
     type = blink::PermissionType::STORAGE_ACCESS_GRANT;
+  } else if (name == "top-level-storage-access") {
+    type = blink::PermissionType::TOP_LEVEL_STORAGE_ACCESS;
   } else {
     NOTREACHED();
     type = blink::PermissionType::NOTIFICATIONS;
@@ -1476,7 +1513,8 @@ void WebTestControlHost::SetPermission(const std::string& name,
   WebTestContentBrowserClient::Get()
       ->GetWebTestBrowserContext()
       ->GetWebTestPermissionManager()
-      ->SetPermission(type, status, origin, embedding_origin);
+      ->SetPermission(type, status, origin, embedding_origin,
+                      base::DoNothing());
 }
 
 void WebTestControlHost::GetWritableDirectory(
@@ -1514,13 +1552,13 @@ class FakeSelectFileDialog : public ui::SelectFileDialog {
                       gfx::NativeWindow owning_window,
                       void* params,
                       const GURL* caller) override {
-    listener_->FileSelected(result_, 0, params);
+    listener_->FileSelected(ui::SelectedFileInfo(result_), 0, params);
   }
 
   bool IsRunning(gfx::NativeWindow owning_window) const override {
     return false;
   }
-  void ListenerDestroyed() override {}
+  void ListenerDestroyed() override { listener_ = nullptr; }
   bool HasMultipleFileTypeChoicesImpl() override { return false; }
 
  private:
@@ -1547,7 +1585,8 @@ class FakeSelectFileDialogFactory : public ui::SelectFileDialogFactory {
 
 void WebTestControlHost::SetFilePathForMockFileDialog(
     const base::FilePath& path) {
-  ui::SelectFileDialog::SetFactory(new FakeSelectFileDialogFactory(path));
+  ui::SelectFileDialog::SetFactory(
+      std::make_unique<FakeSelectFileDialogFactory>(path));
 }
 
 void WebTestControlHost::FocusDevtoolsSecondaryWindow() {
@@ -1627,15 +1666,15 @@ void WebTestControlHost::ClearAllDatabases() {
 void WebTestControlHost::SimulateWebNotificationClick(
     const std::string& title,
     int32_t action_index,
-    const absl::optional<std::u16string>& reply) {
+    const std::optional<std::u16string>& reply) {
   auto* client = WebTestContentBrowserClient::Get();
   auto* context = client->GetWebTestBrowserContext();
   auto* service = context->GetPlatformNotificationService();
   static_cast<MockPlatformNotificationService*>(service)->SimulateClick(
       title,
       action_index == std::numeric_limits<int32_t>::min()
-          ? absl::optional<int>()
-          : absl::optional<int>(action_index),
+          ? std::optional<int>()
+          : std::optional<int>(action_index),
       reply);
 }
 
@@ -1675,15 +1714,21 @@ void WebTestControlHost::WebTestRuntimeFlagsChanged(
   web_test_runtime_flags_.tracked_dictionary().ApplyUntrackedChanges(
       accumulated_web_test_runtime_flags_changes_);
 
-  // Propagate the changes to all the tracked renderer processes.
-  for (RenderProcessHost* process : all_observed_render_process_hosts_) {
-    // Do not propagate the changes back to the process that originated
-    // them. Propagating them back could also clobber subsequent changes in the
-    // originator.
-    if (process->GetID() == render_process_id)
-      continue;
+  base::flat_map<int, mojom::WebTestRenderFrame*> process_to_frame_map;
 
-    GetWebTestRenderThreadRemote(process)->ReplicateWebTestRuntimeFlagsChanges(
+  // Propagate the changes to all the renderer processes, we only
+  // need to send it once per process so we build a list of the first
+  // frame we find per process.
+  for (auto& item : web_test_render_frame_map_) {
+    if (item.first.child_id == render_process_id) {
+      continue;
+    }
+    process_to_frame_map.emplace(item.first.child_id, item.second.get());
+  }
+
+  // Then we send the new flags to those frames.
+  for (auto [id, frame] : process_to_frame_map) {
+    frame->ReplicateWebTestRuntimeFlagsChanges(
         changed_web_test_runtime_flags.Clone());
   }
 }
@@ -1738,17 +1783,14 @@ void WebTestControlHost::WorkItemAdded(mojom::WorkItemPtr work_item) {
 
 void WebTestControlHost::RequestWorkItem() {
   DCHECK(main_window_);
-  RenderProcessHost* main_frame_process = main_window_->web_contents()
-                                              ->GetPrimaryMainFrame()
-                                              ->GetRenderViewHost()
-                                              ->GetProcess();
+  auto* frame = main_window_->web_contents()->GetPrimaryMainFrame();
   if (work_queue_.empty()) {
     work_queue_states_.SetByDottedPath(kDictKeyWorkQueueHasItems, false);
-    GetWebTestRenderThreadRemote(main_frame_process)
-        ->ReplicateWorkQueueStates(work_queue_states_.Clone());
+    GetWebTestRenderFrameRemote(frame)->ReplicateWorkQueueStates(
+        work_queue_states_.Clone());
   } else {
-    GetWebTestRenderThreadRemote(main_frame_process)
-        ->ProcessWorkItem(work_queue_.front()->Clone());
+    GetWebTestRenderFrameRemote(frame)->ProcessWorkItem(
+        work_queue_.front()->Clone());
     work_queue_.pop_front();
   }
 }
@@ -1779,6 +1821,11 @@ void WebTestControlHost::EnableAutoResize(const gfx::Size& min_size,
 void WebTestControlHost::DisableAutoResize(const gfx::Size& new_size) {
   web_contents()->GetRenderWidgetHostView()->DisableAutoResize(new_size);
   main_window_->ResizeWebContentForTests(new_size);
+}
+
+void WebTestControlHost::SetLCPPNavigationHint(
+    blink::mojom::LCPCriticalPathPredictorNavigationTimeHintPtr hint) {
+  lcpp_hint_ = *hint.get();
 }
 
 void WebTestControlHost::GoToOffset(int offset) {
@@ -1842,6 +1889,10 @@ void WebTestControlHost::PrepareRendererForNextWebTest() {
   //
   // Note: this navigation might happen in a new process, depending on the
   // COOP policy of the previous document.
+
+  // Avoid sending LCPP hint on the about:blank navigation.
+  lcpp_hint_ = std::nullopt;
+
   NavigationController::LoadURLParams params((GURL(kAboutBlankResetWebTest)));
   params.transition_type = ui::PageTransitionFromInt(ui::PAGE_TRANSITION_TYPED);
   params.should_clear_history_list = true;
@@ -1859,26 +1910,58 @@ void WebTestControlHost::PrepareRendererForNextWebTest() {
   // |WebTestControlHost::DidFinishNavigation|.
 }
 
+void WebTestControlHost::FlushInputAndStartTest(WeakDocumentPtr doc) {
+  RenderFrameHost* rfh = doc.AsRenderFrameHostIfValid();
+  if (!rfh) {
+    return;
+  }
+
+  // Ensures any synthetic input (e.g. mouse enter/leave/move events as a
+  // result of navigation) have been handled by the renderer.
+  rfh->GetRenderWidgetHost()->FlushForTesting();
+  GetWebTestRenderFrameRemote(rfh)->StartTest();
+}
+
 void WebTestControlHost::DidFinishNavigation(NavigationHandle* navigation) {
-  if (navigation->GetURL() != GURL(kAboutBlankResetWebTest))
-    return;
+  if (navigation->GetURL() == GURL(kAboutBlankResetWebTest)) {
+    // During fuzzing, the |main_window_| might close itself using
+    // window.close(). This might happens after the end of the test, during the
+    // cleanup phase. In this case, the pending about:blank navigation might be
+    // canceled, within the |main_window_| destructor. It is no longer safe to
+    // access |main_window_| here. See https://crbug.com/1221183
+    if (!navigation->HasCommitted()) {
+      return;
+    }
 
-  // During fuzzing, the |main_window_| might close itself using window.close().
-  // This might happens after the end of the test, during the cleanup phase. In
-  // this case, the pending about:blank navigation might be canceled, within the
-  // |main_window_| destructor. It is no longer safe to access |main_window_|
-  // here. See https://crbug.com/1221183
-  if (!navigation->HasCommitted())
-    return;
+    next_non_blank_nav_is_new_test_ = true;
 
-  // Request additional web test specific cleanup in the renderer process:
-  content::WebContentsImpl* web_contents =
-      static_cast<WebContentsImpl*>(main_window_->web_contents());
-  RenderProcessHost* main_rfh_process =
-      web_contents->GetPrimaryMainFrame()->GetProcess();
-  GetWebTestRenderThreadRemote(main_rfh_process)->ResetRendererAfterWebTest();
+    // Request additional web test specific cleanup in the renderer process:
+    content::WebContentsImpl* web_contents =
+        static_cast<WebContentsImpl*>(main_window_->web_contents());
+    GetWebTestRenderFrameRemote(web_contents->GetPrimaryMainFrame())
+        ->ResetRendererAfterWebTest();
 
-  PrepareRendererForNextWebTestDone();
+    PrepareRendererForNextWebTestDone();
+  } else if (navigation->IsInPrimaryMainFrame() &&
+             !navigation->GetURL().IsAboutBlank() &&
+             next_non_blank_nav_is_new_test_) {
+    next_non_blank_nav_is_new_test_ = false;
+
+    if (navigation->HasCommitted()) {
+      // If the browser is injecting synthetic mouse moves, it does so at
+      // CommitPending time by posting a task to perform the dispatch. Hence,
+      // that task must already be queued (or complete) by this time. Post the
+      // flush input task to ensure it runs after the synthetic mouse event
+      // dispatch task. See comments on next_non_blank_nav_is_new_test_ for
+      // more details.
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE,
+          base::BindOnce(
+              &WebTestControlHost::FlushInputAndStartTest,
+              weak_factory_.GetWeakPtr(),
+              navigation->GetRenderFrameHost()->GetWeakDocumentPtr()));
+    }
+  }
 }
 
 void WebTestControlHost::PrepareRendererForNextWebTestDone() {
@@ -1999,12 +2082,16 @@ void WebTestControlHost::BindWebTestControlHostForRenderer(
   receiver_bindings_.Add(this, std::move(receiver), render_process_id);
 }
 
+void WebTestControlHost::BindNonAssociatedWebTestControlHost(
+    mojo::PendingReceiver<mojom::NonAssociatedWebTestControlHost> receiver) {
+  non_associated_receiver_bindings_.Add(this, std::move(receiver));
+}
+
 mojo::AssociatedRemote<mojom::WebTestRenderFrame>&
 WebTestControlHost::GetWebTestRenderFrameRemote(RenderFrameHost* frame) {
   GlobalRenderFrameHostId key(frame->GetProcess()->GetID(),
                               frame->GetRoutingID());
-  if (web_test_render_frame_map_.find(key) ==
-      web_test_render_frame_map_.end()) {
+  if (!base::Contains(web_test_render_frame_map_, key)) {
     mojo::AssociatedRemote<mojom::WebTestRenderFrame>& new_ptr =
         web_test_render_frame_map_[key];
     frame->GetRemoteAssociatedInterfaces()->GetInterface(&new_ptr);
@@ -2016,33 +2103,9 @@ WebTestControlHost::GetWebTestRenderFrameRemote(RenderFrameHost* frame) {
   return web_test_render_frame_map_[key];
 }
 
-mojo::AssociatedRemote<mojom::WebTestRenderThread>&
-WebTestControlHost::GetWebTestRenderThreadRemote(RenderProcessHost* process) {
-  if (web_test_render_thread_map_.find(process) ==
-      web_test_render_thread_map_.end()) {
-    IPC::ChannelProxy* channel = process->GetChannel();
-    // channel might be null in tests.
-    if (process->IsInitializedAndNotDead() && channel) {
-      mojo::AssociatedRemote<mojom::WebTestRenderThread>& new_ptr =
-          web_test_render_thread_map_[process];
-      channel->GetRemoteAssociatedInterface(&new_ptr);
-      new_ptr.set_disconnect_handler(base::BindOnce(
-          &WebTestControlHost::HandleWebTestRenderThreadRemoteError,
-          weak_factory_.GetWeakPtr(), process));
-    }
-  }
-  DCHECK(web_test_render_thread_map_[process].get());
-  return web_test_render_thread_map_[process];
-}
-
 void WebTestControlHost::HandleWebTestRenderFrameRemoteError(
     const GlobalRenderFrameHostId& key) {
   web_test_render_frame_map_.erase(key);
-}
-
-void WebTestControlHost::HandleWebTestRenderThreadRemoteError(
-    RenderProcessHost* key) {
-  web_test_render_thread_map_.erase(key);
 }
 
 WebTestControlHost::Node::Node(RenderFrameHost* host)

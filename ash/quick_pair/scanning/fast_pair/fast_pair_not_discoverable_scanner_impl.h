@@ -11,8 +11,8 @@
 
 #include "ash/quick_pair/scanning/fast_pair/fast_pair_not_discoverable_scanner.h"
 #include "ash/quick_pair/scanning/fast_pair/fast_pair_scanner.h"
-#include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
@@ -80,9 +80,9 @@ class FastPairNotDiscoverableScannerImpl
  private:
   void OnAdvertisementParsed(
       const std::string& address,
-      const absl::optional<NotDiscoverableAdvertisement>& advertisement);
+      const std::optional<NotDiscoverableAdvertisement>& advertisement);
   void OnAccountKeyFilterCheckResult(const std::string& address,
-                                     absl::optional<PairingMetadata> metadata);
+                                     std::optional<PairingMetadata> metadata);
   void NotifyDeviceFound(scoped_refptr<Device> device);
   void OnUtilityProcessStopped(
       const std::string& address,

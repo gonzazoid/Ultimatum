@@ -7,6 +7,7 @@
 
 #include "ash/constants/quick_settings_catalogs.h"
 #include "ash/system/unified/unified_slider_view.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -15,7 +16,8 @@ class UnifiedSystemTrayModel;
 // Controller of a toast showing enable/disable of keyboard backlight.
 class KeyboardBacklightToggleController : public UnifiedSliderListener {
  public:
-  explicit KeyboardBacklightToggleController(UnifiedSystemTrayModel* model);
+  explicit KeyboardBacklightToggleController(UnifiedSystemTrayModel* model,
+                                             bool toggled_on);
 
   KeyboardBacklightToggleController(const KeyboardBacklightToggleController&) =
       delete;
@@ -25,7 +27,7 @@ class KeyboardBacklightToggleController : public UnifiedSliderListener {
   ~KeyboardBacklightToggleController() override;
 
   // UnifiedSliderListener:
-  views::View* CreateView() override;
+  std::unique_ptr<UnifiedSliderView> CreateView() override;
   QsSliderCatalogName GetCatalogName() override;
   void SliderValueChanged(views::Slider* sender,
                           float value,
@@ -33,8 +35,13 @@ class KeyboardBacklightToggleController : public UnifiedSliderListener {
                           views::SliderChangeReason reason) override;
 
  private:
-  UnifiedSystemTrayModel* const model_;
-  UnifiedSliderView* slider_ = nullptr;
+  const raw_ptr<UnifiedSystemTrayModel> model_;
+  raw_ptr<UnifiedSliderView> slider_ = nullptr;
+
+  // TODO(b/298085976): This state was added as a temporary solution to fix
+  // dialog showing with empty contents (b/286102843). After this fix, this
+  // component will be replaced by a regular toast.
+  const bool toggled_on_;
 };
 
 }  // namespace ash

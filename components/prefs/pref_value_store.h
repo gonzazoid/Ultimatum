@@ -12,7 +12,7 @@
 #include <type_traits>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_piece.h"
@@ -108,13 +108,12 @@ class COMPONENTS_PREFS_EXPORT PrefValueStore {
       PrefStore* default_prefs,
       PrefNotifier* pref_notifier);
 
-  // A PrefValueStore can have exactly one callback that is directly
-  // notified of preferences changing in the store. This does not
-  // filter through the PrefNotifier mechanism, which may not forward
-  // certain changes (e.g. unregistered prefs).
-  void set_callback(PrefChangedCallback callback) {
-    pref_changed_callback_ = std::move(callback);
-  }
+  // Returns the pref store type identifying the source that controls the
+  // Preference identified by |name|. If none of the sources has a value,
+  // INVALID_STORE is returned. In practice, the default PrefStore
+  // should always have a value for any registered preferencem, so INVALID_STORE
+  // indicates an error.
+  PrefStoreType ControllingPrefStoreForPref(const std::string& name) const;
 
   // Gets the value for the given preference name that has the specified value
   // type. Values stored in a PrefStore that have the matching |name| but
@@ -221,13 +220,6 @@ class COMPONENTS_PREFS_EXPORT PrefValueStore {
                              PrefStoreType first_checked_store,
                              PrefStoreType last_checked_store) const;
 
-  // Returns the pref store type identifying the source that controls the
-  // Preference identified by |name|. If none of the sources has a value,
-  // INVALID_STORE is returned. In practice, the default PrefStore
-  // should always have a value for any registered preferencem, so INVALID_STORE
-  // indicates an error.
-  PrefStoreType ControllingPrefStoreForPref(const std::string& name) const;
-
   // Get a value from the specified |store|.
   bool GetValueFromStore(base::StringPiece name,
                          PrefStoreType store,
@@ -271,8 +263,6 @@ class COMPONENTS_PREFS_EXPORT PrefValueStore {
 
   // Keeps the PrefStore references in order of precedence.
   PrefStoreKeeper pref_stores_[PREF_STORE_TYPE_MAX + 1];
-
-  PrefChangedCallback pref_changed_callback_;
 
   // Used for generating notifications. This is a weak reference,
   // since the notifier is owned by the corresponding PrefService.

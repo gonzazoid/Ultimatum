@@ -6,9 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/auto_reset.h"
 #include "base/containers/adapters.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/process/process.h"
@@ -30,6 +31,8 @@ namespace {
 // Result for getting the shared buffer in InitSharedMemoryIfNeeded.
 constexpr char kSharedBufferIsValidMetricName[] = "Tracing.SharedBufferIsValid";
 }  // namespace
+
+using ShmemMode = perfetto::SharedMemoryArbiter::ShmemMode;
 
 namespace tracing {
 
@@ -262,7 +265,7 @@ void ProducerClient::StopDataSource(uint64_t id,
     }
   }
 
-  LOG(DFATAL) << "Invalid data source ID.";
+  DLOG(ERROR) << "Invalid data source ID.";
 }
 
 void ProducerClient::Flush(uint64_t flush_request_id,
@@ -308,9 +311,9 @@ void ProducerClient::CommitData(const perfetto::CommitDataRequest& commit,
   // We need to make sure the CommitData IPC is sent off without triggering any
   // trace events, as that could stall waiting for SMB chunks to be freed up
   // which requires the tracing service to receive the IPC.
-  if (!base::tracing::GetThreadIsInTraceEventTLS()->Get()) {
-    base::tracing::AutoThreadLocalBoolean thread_is_in_trace_event(
-        base::tracing::GetThreadIsInTraceEventTLS());
+  if (!*base::tracing::GetThreadIsInTraceEvent()) {
+    const base::AutoReset<bool> resetter(
+        base::tracing::GetThreadIsInTraceEvent(), true);
 
     producer_host_->CommitData(commit, std::move(commit_callback));
     return;
@@ -419,7 +422,7 @@ bool ProducerClient::InitSharedMemoryIfNeeded() {
   }
 
   shared_memory_arbiter_ = perfetto::SharedMemoryArbiter::CreateUnboundInstance(
-      shared_memory_.get(), kSMBPageSizeBytes);
+      shared_memory_.get(), kSMBPageSizeBytes, ShmemMode::kDefault);
   shared_memory_arbiter_->SetDirectSMBPatchingSupportedByService();
   shared_memory_arbiter_->EnableDirectSMBPatching();
   shared_memory_arbiter_->SetBatchCommitsDuration(

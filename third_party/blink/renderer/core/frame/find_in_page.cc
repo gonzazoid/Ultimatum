@@ -86,7 +86,7 @@ void FindInPage::Find(int request_id,
   }
 
   // Send "no results" if this frame has no visible content.
-  if (!frame_->HasVisibleContent() && !options->force) {
+  if (!frame_->HasVisibleContent()) {
     ReportFindInPageMatchCount(request_id, 0 /* count */,
                                true /* final_update */);
     return;
@@ -220,7 +220,8 @@ void FindInPage::SetClient(
   // TODO(crbug.com/984878): Having to call reset() to try to bind a remote that
   // might be bound is questionable behavior and suggests code may be buggy.
   client_.reset();
-  client_.Bind(std::move(remote));
+  client_.Bind(std::move(remote),
+               frame_->GetTaskRunner(blink::TaskType::kInternalDefault));
 }
 
 #if BUILDFLAG(IS_ANDROID)
@@ -299,7 +300,7 @@ TextFinder* WebLocalFrameImpl::GetTextFinder() const {
 }
 
 TextFinder* FindInPage::GetTextFinder() const {
-  return text_finder_;
+  return text_finder_.Get();
 }
 
 TextFinder& WebLocalFrameImpl::EnsureTextFinder() {

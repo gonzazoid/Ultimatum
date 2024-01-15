@@ -4,12 +4,13 @@
 
 #include "chrome/browser/optimization_guide/optimization_guide_web_contents_observer.h"
 
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/optimization_guide/chrome_hints_manager.h"
 #include "chrome/browser/optimization_guide/optimization_guide_keyed_service.h"
 #include "chrome/browser/optimization_guide/optimization_guide_keyed_service_factory.h"
 #include "chrome/browser/preloading/prefetch/no_state_prefetch/no_state_prefetch_manager_factory.h"
 #include "chrome/browser/profiles/profile.h"
+#include "components/google/core/common/google_util.h"
 #include "components/no_state_prefetch/browser/no_state_prefetch_manager.h"
 #include "components/optimization_guide/core/hints_fetcher.h"
 #include "components/optimization_guide/core/hints_processing_util.h"
@@ -131,7 +132,7 @@ void OptimizationGuideWebContentsObserver::DidFinishNavigation(
       NavigationHandleData::GetForNavigationHandle(*navigation_handle);
   if (!navigation_handle_data)
     return;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           &OptimizationGuideWebContentsObserver::NotifyNavigationFinish,
@@ -140,24 +141,36 @@ void OptimizationGuideWebContentsObserver::DidFinishNavigation(
           navigation_handle->GetRedirectChain()));
 }
 
-void OptimizationGuideWebContentsObserver::PostFetchHintsUsingManager() {
+void OptimizationGuideWebContentsObserver::WebContentsDestroyed() {
+  // The web contents are being destroyed. Stop observing.
+  Observe(/*web_contents=*/nullptr);
+}
+
+void OptimizationGuideWebContentsObserver::
+    DocumentOnLoadCompletedInPrimaryMainFrame() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  if (!web_contents()
-           ->GetPrimaryMainFrame()
-           ->GetLastCommittedURL()
-           .SchemeIsHTTPOrHTTPS())
+  if (!web_contents() || !web_contents()
+                              ->GetPrimaryMainFrame()
+                              ->GetLastCommittedURL()
+                              .SchemeIsHTTPOrHTTPS()) {
     return;
+  }
 
   if (!optimization_guide_keyed_service_)
     return;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE,
-      base::BindOnce(
-          &OptimizationGuideWebContentsObserver::FetchHintsUsingManager,
-          weak_factory_.GetWeakPtr(),
-          optimization_guide_keyed_service_->GetHintsManager(),
-          web_contents()->GetPrimaryPage().GetWeakPtr()));
+  if (optimization_guide::features::IsSRPFetchingEnabled() &&
+      google_util::IsGoogleSearchUrl(
+          web_contents()->GetPrimaryMainFrame()->GetLastCommittedURL())) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+        FROM_HERE,
+        base::BindOnce(
+            &OptimizationGuideWebContentsObserver::FetchHintsUsingManager,
+            weak_factory_.GetWeakPtr(),
+            optimization_guide_keyed_service_->GetHintsManager(),
+            web_contents()->GetPrimaryPage().GetWeakPtr()),
+        optimization_guide::features::GetOnloadDelayForHintsFetching());
+  }
 }
 
 void OptimizationGuideWebContentsObserver::FetchHintsUsingManager(
@@ -168,19 +181,25 @@ void OptimizationGuideWebContentsObserver::FetchHintsUsingManager(
   if (!page)
     return;
 
+  CHECK(optimization_guide::features::IsSRPFetchingEnabled());
   PageData& page_data = GetPageData(*page);
-  page_data.set_sent_batched_hints_request();
 
-  hints_manager->FetchHintsForURLs(
-      page_data.GetHintsTargetUrls(),
-      optimization_guide::proto::CONTEXT_BATCH_UPDATE_GOOGLE_SRP);
+  std::vector<GURL> top_urls = page_data.GetHintsTargetUrls();
+
+  if (!top_urls.empty()) {
+    page_data.set_sent_batched_hints_request();
+    top_urls.resize(
+        std::min(top_urls.size(),
+                 optimization_guide::features::MaxResultsForSRPFetch()));
+    hints_manager->FetchHintsForURLs(
+        top_urls, optimization_guide::proto::CONTEXT_BATCH_UPDATE_GOOGLE_SRP);
+  }
 }
 
 void OptimizationGuideWebContentsObserver::NotifyNavigationFinish(
     std::unique_ptr<OptimizationGuideNavigationData> navigation_data,
     const std::vector<GURL>& navigation_redirect_chain) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-
   if (optimization_guide_keyed_service_) {
     optimization_guide_keyed_service_->OnNavigationFinish(
         navigation_redirect_chain);
@@ -190,12 +209,18 @@ void OptimizationGuideWebContentsObserver::NotifyNavigationFinish(
   // happening for the navigation that can happen after commit, such as a fetch
   // for the navigation successfully completing (which is not guaranteed to come
   // back before commit, if at all).
+  if (!web_contents()) {
+    return;
+  }
   PageData& page_data = GetPageData(web_contents()->GetPrimaryPage());
   page_data.SetNavigationData(std::move(navigation_data));
 }
 
 void OptimizationGuideWebContentsObserver::FlushLastNavigationData() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  if (!web_contents()) {
+    return;
+  }
   PageData& page_data = GetPageData(web_contents()->GetPrimaryPage());
   page_data.SetNavigationData(nullptr);
 }
@@ -214,7 +239,18 @@ void OptimizationGuideWebContentsObserver::AddURLsToBatchFetchBasedOnPrediction(
     return;
   page_data.InsertHintTargetUrls(urls);
 
-  PostFetchHintsUsingManager();
+  // In rare cases (such as some in browsertests), the onload event could come
+  // earlier than the first predictions, in which case we should attempt the
+  // fetch as prediction URLs are received.
+  if (web_contents->IsDocumentOnLoadCompletedInPrimaryMainFrame()) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE,
+        base::BindOnce(
+            &OptimizationGuideWebContentsObserver::FetchHintsUsingManager,
+            weak_factory_.GetWeakPtr(),
+            optimization_guide_keyed_service_->GetHintsManager(),
+            web_contents->GetPrimaryPage().GetWeakPtr()));
+  }
 }
 
 OptimizationGuideWebContentsObserver::PageData&

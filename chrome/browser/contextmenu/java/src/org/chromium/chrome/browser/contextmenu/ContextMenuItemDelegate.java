@@ -7,18 +7,17 @@ package org.chromium.chrome.browser.contextmenu;
 import android.net.Uri;
 
 import androidx.annotation.IntDef;
+import androidx.annotation.Nullable;
 
+import org.chromium.content_public.browser.AdditionalNavigationParams;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.common.Referrer;
 import org.chromium.url.GURL;
-import org.chromium.url.Origin;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
-/**
- * A delegate responsible for taking actions based on context menu selections.
- */
+/** A delegate responsible for taking actions based on context menu selections. */
 public interface ContextMenuItemDelegate {
     // The type of the data to save to the clipboard.
     @IntDef({ClipboardType.LINK_URL, ClipboardType.LINK_TEXT, ClipboardType.IMAGE_URL})
@@ -29,9 +28,7 @@ public interface ContextMenuItemDelegate {
         int IMAGE_URL = 2;
     }
 
-    /**
-     * Called when this ContextMenuItemDelegate is about to be destroyed.
-     */
+    /** Called when this ContextMenuItemDelegate is about to be destroyed. */
     void onDestroy();
 
     /**
@@ -84,8 +81,15 @@ public interface ContextMenuItemDelegate {
      * the current {@link Tab}.
      * @param url The URL to open.
      * @param navigateToTab Whether or not to navigate to the new tab.
+     * @param impression The attribution impression to associate with the navigation.
+     * @param additionalNavigationParams Additional information that needs to be passed to the
+     * navigation request.
      */
-    void onOpenInNewTab(GURL url, Referrer referrer, boolean navigateToTab);
+    void onOpenInNewTab(
+            GURL url,
+            Referrer referrer,
+            boolean navigateToTab,
+            @Nullable AdditionalNavigationParams additionalNavigationParams);
 
     /**
      * Called when {@code url} should be opened in a new tab in the same group as the current
@@ -97,10 +101,8 @@ public interface ContextMenuItemDelegate {
     /**
      * Called when the {@code url} should be opened in a new incognito tab.
      * @param url The URL to open.
-     * @param initiatorOrigin the origin from which the navigation is initiated, used elsewhere in
-     *         the navigation stack for privacy decisions.
      */
-    void onOpenInNewIncognitoTab(GURL url, Origin initiatorOrigin);
+    void onOpenInNewIncognitoTab(GURL url);
 
     /**
      * Called when the {@code url} is of an image and should be opened in the same tab.

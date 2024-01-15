@@ -6,10 +6,8 @@
 
 #include "chrome/browser/invalidation/profile_invalidation_provider_factory.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/sync/sync_service_factory.h"
 #include "components/drive/drive_notification_manager.h"
 #include "components/invalidation/impl/profile_invalidation_provider.h"
-#include "components/sync/base/command_line_switches.h"
 
 namespace drive {
 namespace {
@@ -40,8 +38,6 @@ DriveNotificationManagerFactory::FindForBrowserContext(
 DriveNotificationManager*
 DriveNotificationManagerFactory::GetForBrowserContext(
     content::BrowserContext* context) {
-  if (!syncer::IsSyncAllowedByFlag())
-    return nullptr;
   if (!GetInvalidationService(Profile::FromBrowserContext(context))) {
     // Do not create a DriveNotificationManager for |context|s that do not
     // support invalidation.
@@ -55,20 +51,28 @@ DriveNotificationManagerFactory::GetForBrowserContext(
 // static
 DriveNotificationManagerFactory*
 DriveNotificationManagerFactory::GetInstance() {
-  return base::Singleton<DriveNotificationManagerFactory>::get();
+  static base::NoDestructor<DriveNotificationManagerFactory> instance;
+  return instance.get();
 }
 
 DriveNotificationManagerFactory::DriveNotificationManagerFactory()
-    : ProfileKeyedServiceFactory("DriveNotificationManager") {
-  DependsOn(SyncServiceFactory::GetInstance());
+    : ProfileKeyedServiceFactory(
+          "DriveNotificationManager",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(invalidation::ProfileInvalidationProviderFactory::GetInstance());
 }
 
-DriveNotificationManagerFactory::~DriveNotificationManagerFactory() {}
+DriveNotificationManagerFactory::~DriveNotificationManagerFactory() = default;
 
-KeyedService* DriveNotificationManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+DriveNotificationManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new DriveNotificationManager(
+  return std::make_unique<DriveNotificationManager>(
       GetInvalidationService(Profile::FromBrowserContext(context)));
 }
 

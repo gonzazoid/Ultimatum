@@ -5,15 +5,16 @@
 #include "extensions/browser/updater/update_service.h"
 
 #include <algorithm>
+#include <optional>
+#include <string>
 #include <utility>
 #include <vector>
-
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "components/update_client/crx_update_item.h"
@@ -21,20 +22,16 @@
 #include "components/update_client/update_client_errors.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/browser/notification_details.h"
-#include "content/public/browser/notification_service.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_system.h"
 #include "extensions/browser/extensions_browser_client.h"
-#include "extensions/browser/notification_types.h"
 #include "extensions/browser/updater/extension_downloader.h"
 #include "extensions/browser/updater/extension_update_data.h"
 #include "extensions/browser/updater/scoped_extension_updater_keep_alive.h"
 #include "extensions/browser/updater/update_data_provider.h"
 #include "extensions/browser/updater/update_service_factory.h"
 #include "extensions/common/extension_features.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace extensions {
 
@@ -76,7 +73,6 @@ void UpdateService::Shutdown() {
     update_data_provider_->Shutdown();
     update_data_provider_ = nullptr;
   }
-  RemoveUpdateClientObserver(this);
   update_client_ = nullptr;
   browser_context_ = nullptr;
 }
@@ -99,38 +95,44 @@ void UpdateService::SendUninstallPing(const std::string& id,
                          browser_context_)));
 }
 
-void UpdateService::OnEvent(Events event, const std::string& extension_id) {
+void UpdateService::OnCrxStateChange(UpdateFoundCallback update_found_callback,
+                                     update_client::CrxUpdateItem item) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  VLOG(2) << "UpdateService::OnEvent " << static_cast<int>(event) << " "
-          << extension_id;
 
   // Custom attributes can only be sent for NOT_UPDATED/UPDATE_FOUND events.
   bool should_perform_action_on_omaha_attributes = false;
 
-  switch (event) {
-    case Events::COMPONENT_ALREADY_UP_TO_DATE:
+  switch (item.state) {
+    case update_client::ComponentState::kUpToDate:
       should_perform_action_on_omaha_attributes = true;
       break;
-    case Events::COMPONENT_UPDATE_FOUND:
+    case update_client::ComponentState::kCanUpdate:
       should_perform_action_on_omaha_attributes = true;
-      HandleComponentUpdateFoundEvent(extension_id);
+      if (update_found_callback) {
+        update_found_callback.Run(item.id, item.next_version);
+      }
       break;
-    case Events::COMPONENT_CHECKING_FOR_UPDATES:
-    case Events::COMPONENT_WAIT:
-    case Events::COMPONENT_UPDATE_READY:
-    case Events::COMPONENT_UPDATE_DOWNLOADING:
-    case Events::COMPONENT_UPDATE_UPDATING:
-    case Events::COMPONENT_UPDATED:
-    case Events::COMPONENT_UPDATE_ERROR:
+    case update_client::ComponentState::kNew:
+    case update_client::ComponentState::kChecking:
+    case update_client::ComponentState::kDownloadingDiff:
+    case update_client::ComponentState::kDownloading:
+    case update_client::ComponentState::kDownloaded:
+    case update_client::ComponentState::kUpdatingDiff:
+    case update_client::ComponentState::kUpdating:
+    case update_client::ComponentState::kUpdated:
+    case update_client::ComponentState::kUpdateError:
+    case update_client::ComponentState::kPingOnly:
+    case update_client::ComponentState::kRun:
+    case update_client::ComponentState::kLastStatus:
       break;
   }
 
   if (should_perform_action_on_omaha_attributes) {
-    base::Value attributes = GetExtensionOmahaAttributes(extension_id);
+    base::Value::Dict attributes = GetExtensionOmahaAttributes(item);
     // Note that it's important to perform actions even if |attributes| is
     // empty, missing values may default to false and have associated logic.
     ExtensionSystem::Get(browser_context_)
-        ->PerformActionBasedOnOmahaAttributes(extension_id, attributes);
+        ->PerformActionBasedOnOmahaAttributes(item.id, attributes);
   }
 }
 
@@ -141,17 +143,15 @@ UpdateService::UpdateService(
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   update_data_provider_ =
       base::MakeRefCounted<UpdateDataProvider>(browser_context_);
-  AddUpdateClientObserver(this);
 }
 
 UpdateService::~UpdateService() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  if (update_client_)
-    update_client_->RemoveObserver(this);
 }
 
 void UpdateService::StartUpdateCheck(
     const ExtensionUpdateCheckParams& update_params,
+    UpdateFoundCallback update_found_callback,
     base::OnceClosure callback) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(!update_params.update_info.empty());
@@ -198,16 +198,20 @@ void UpdateService::StartUpdateCheck(
       base::BindOnce(&UpdateService::UpdateCheckComplete,
                      weak_ptr_factory_.GetWeakPtr(), std::move(update)));
 
-  base::RepeatingCallback<
-      std::vector<absl::optional<update_client::CrxComponent>>(
-          const std::vector<std::string>&)>
+  base::RepeatingCallback<void(
+      const std::vector<std::string>&,
+      base::OnceCallback<void(
+          const std::vector<std::optional<update_client::CrxComponent>>&)>)>
       get_data = base::BindRepeating(
           &UpdateDataProvider::GetData, update_data_provider_,
           update_params.install_immediately, std::move(update_data));
 
   for (const std::vector<std::string>& update_id_group : update_ids) {
     update_client_->Update(
-        update_id_group, get_data, {},
+        update_id_group, get_data,
+        base::BindRepeating(&UpdateService::OnCrxStateChange,
+                            weak_ptr_factory_.GetWeakPtr(),
+                            update_found_callback),
         update_params.priority == ExtensionUpdateCheckParams::FOREGROUND,
         base::BindOnce([](base::RepeatingClosure callback,
                           update_client::Error /*error*/) { callback.Run(); },
@@ -247,28 +251,9 @@ void UpdateService::RemoveUpdateClientObserver(
     update_client_->RemoveObserver(observer);
 }
 
-void UpdateService::HandleComponentUpdateFoundEvent(
-    const std::string& extension_id) const {
-  update_client::CrxUpdateItem update_item;
-  if (!update_client_->GetCrxUpdateState(extension_id, &update_item)) {
-    return;
-  }
-
-  VLOG(3) << "UpdateService::OnEvent COMPONENT_UPDATE_FOUND: " << extension_id
-          << " " << update_item.next_version.GetString();
-  UpdateDetails update_info(extension_id, update_item.next_version);
-  content::NotificationService::current()->Notify(
-      extensions::NOTIFICATION_EXTENSION_UPDATE_FOUND,
-      content::NotificationService::AllBrowserContextsAndSources(),
-      content::Details<UpdateDetails>(&update_info));
-}
-
-base::Value UpdateService::GetExtensionOmahaAttributes(
-    const std::string& extension_id) {
-  update_client::CrxUpdateItem update_item;
-  base::Value attributes(base::Value::Type::DICTIONARY);
-  if (!update_client_->GetCrxUpdateState(extension_id, &update_item))
-    return attributes;
+base::Value::Dict UpdateService::GetExtensionOmahaAttributes(
+    update_client::CrxUpdateItem& update_item) {
+  base::Value::Dict attributes;
 
   for (const char* key : kOmahaAttributes) {
     auto iter = update_item.custom_updatecheck_data.find(key);
@@ -277,7 +262,7 @@ base::Value UpdateService::GetExtensionOmahaAttributes(
     // Only create the attribute if it's defined in the custom update check
     // data. We want to distinguish true, false and undefined values.
     if (iter != update_item.custom_updatecheck_data.end())
-      attributes.SetKey(key, base::Value(iter->second == "true"));
+      attributes.Set(key, iter->second == "true");
   }
   return attributes;
 }

@@ -77,4 +77,15 @@ blink_modules_sources("accessibility") {
   # The modules/accessibility/ depends closely on core/ --
   # include the core pch for faster Windows compilation times.
   configs += [ "//third_party/blink/renderer/core:blink_core_pch" ]
+
+  if (is_debug || dcheck_always_on) {
+    sources += [
+      "ax_debug_utils.cc",
+      "ax_debug_utils.h",
+    ]
+  }
+
+  if (is_android) {
+    defines = [ " REDUCE_AX_INLINE_TEXTBOXES " ]
+  }
 }

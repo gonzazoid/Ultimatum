@@ -3,19 +3,20 @@
 // found in the LICENSE file.
 #include "chromeos/ash/components/dbus/kerberos/kerberos_client.h"
 
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/callback_list.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromeos/ash/components/dbus/kerberos/fake_kerberos_client.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
 #include "dbus/object_proxy.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/kerberos/dbus-constants.h"
 
 namespace ash {
@@ -195,7 +196,7 @@ class KerberosClientImpl : public KerberosClient {
     if (!writer.AppendProtoAsArrayOfBytes(request)) {
       TResponse response;
       response.set_error(kerberos::ERROR_DBUS_FAILURE);
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), response));
       return;
     }
@@ -229,7 +230,7 @@ class KerberosClientImpl : public KerberosClient {
   }
 
   // D-Bus proxy for the Kerberos daemon, not owned.
-  dbus::ObjectProxy* proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy> proxy_ = nullptr;
 
   // Signal callback lists.
   KerberosFilesChangedCallbackList kerberos_files_changed_callback_list_;

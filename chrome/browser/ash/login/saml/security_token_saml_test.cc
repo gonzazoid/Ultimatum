@@ -8,15 +8,13 @@
 #include <iterator>
 #include <string>
 
-#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "base/values.h"
 #include "chrome/browser/ash/login/saml/test_client_cert_saml_idp_mixin.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
 #include "chrome/browser/ash/login/test/scoped_policy_update.h"
 #include "chrome/browser/ash/login/ui/login_display_host.h"
@@ -28,6 +26,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
 #include "chrome/browser/ui/webui/ash/login/oobe_ui.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "components/policy/core/browser/browser_policy_connector.h"
 #include "components/policy/core/common/mock_configuration_policy_provider.h"
 #include "components/policy/core/common/policy_map.h"
@@ -44,6 +43,7 @@
 #include "url/gurl.h"
 
 namespace ash {
+
 namespace {
 
 // Pattern for the DeviceLoginScreenAutoSelectCertificateForUrls admin policy
@@ -77,11 +77,6 @@ SecurityTokenSamlTest::SecurityTokenSamlTest()
     : saml_idp_mixin_(&mixin_host_,
                       &gaia_mixin_,
                       /*client_cert_authorities=*/{GetClientCertCaName()}) {
-  if (GetParam()) {
-    scoped_feature_list_.InitAndEnableFeature(ash::features::kUseAuthFactors);
-  } else {
-    scoped_feature_list_.InitAndDisableFeature(ash::features::kUseAuthFactors);
-  }
   // Allow the forced installation of extensions in the background.
   needs_background_networking_ = true;
 
@@ -189,14 +184,17 @@ void SecurityTokenSamlTest::SetClientCertAutoSelectPolicy() {
       policy_map.GetMutable(policy::key::kAutoSelectCertificateForUrls);
   if (existing_entry) {
     // Append to the existing policy.
-    existing_entry->value(base::Value::Type::LIST)->Append(policy_item_value);
+    existing_entry->value(base::Value::Type::LIST)
+        ->GetList()
+        .Append(policy_item_value);
   } else {
     // Set the new policy value.
-    base::Value policy_value(base::Value::Type::LIST);
+    base::Value::List policy_value;
     policy_value.Append(policy_item_value);
     policy_map.Set(policy::key::kAutoSelectCertificateForUrls,
                    policy::POLICY_LEVEL_MANDATORY, policy::POLICY_SCOPE_MACHINE,
-                   policy::POLICY_SOURCE_CLOUD, std::move(policy_value),
+                   policy::POLICY_SOURCE_CLOUD,
+                   base::Value(std::move(policy_value)),
                    /*external_data_fetcher=*/nullptr);
   }
   policy_provider_.UpdateChromePolicy(policy_map);
@@ -205,8 +203,8 @@ void SecurityTokenSamlTest::SetClientCertAutoSelectPolicy() {
 void SecurityTokenSamlTest::ConfigureFakeGaia() {
   // FakeGaia uses the fake merge session parameters for preparing the result
   // of the SAML sign-in.
-  gaia_mixin_.set_initialize_fake_merge_session(false);
-  gaia_mixin_.fake_gaia()->SetFakeMergeSessionParams(
+  gaia_mixin_.set_initialize_configuration(false);
+  gaia_mixin_.fake_gaia()->SetConfigurationHelper(
       saml_test_users::kFirstUserCorpExampleComEmail,
       /*auth_sid_cookie=*/std::string(),
       /*auth_lsid_cookie=*/std::string());

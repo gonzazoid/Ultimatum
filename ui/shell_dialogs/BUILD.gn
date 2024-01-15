@@ -64,7 +64,10 @@ component("shell_dialogs") {
         "select_file_dialog_linux_portal.cc",
         "select_file_dialog_linux_portal.h",
       ]
-      deps += [ "//dbus" ]
+      deps += [
+        "//dbus",
+        "//ui/views",
+      ]
     }
   }
 
@@ -75,8 +78,17 @@ component("shell_dialogs") {
     ]
   }
 
+  if (is_ios) {
+    sources += [
+      "select_file_dialog_ios.h",
+      "select_file_dialog_ios.mm",
+    ]
+  }
+
   if (is_win) {
     sources += [
+      "auto_close_dialog_event_handler_win.cc",
+      "auto_close_dialog_event_handler_win.h",
       "base_shell_dialog_win.cc",
       "base_shell_dialog_win.h",
       "execute_select_file_win.cc",
@@ -149,6 +161,9 @@ test("shell_dialogs_unittests") {
 
   if (is_mac) {
     sources += [ "select_file_dialog_mac_unittest.mm" ]
+    weak_frameworks = [
+      "UniformTypeIdentifiers.framework",  # macOS 11
+    ]
   }
 
   if (is_win) {
@@ -176,6 +191,10 @@ test("shell_dialogs_unittests") {
   # TODO: Remove once http://crbug.com/951419 is fixed.
   if (is_android) {
     deps += [ "//ui/android:ui_java" ]
+  }
+
+  if (is_ios) {
+    bundle_deps = [ "//ui/resources:ui_test_pak_bundle_data" ]
   }
 }
 

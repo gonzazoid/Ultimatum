@@ -1,32 +1,6 @@
-/*
- * Copyright (C) 2013 Google Inc. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *
- *     * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above
- * copyright notice, this list of conditions and the following disclaimer
- * in the documentation and/or other materials provided with the
- * distribution.
- *     * Neither the name of Google Inc. nor the names of its
- * contributors may be used to endorse or promote products derived from
- * this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+// Copyright 2013 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/image-decoders/image_decoder.h"
 
@@ -35,6 +9,7 @@
 #include "media/media_buildflags.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/platform/image-decoders/image_frame.h"
+#include "third_party/blink/renderer/platform/wtf/forward.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace blink {
@@ -43,22 +18,24 @@ class TestImageDecoder : public ImageDecoder {
  public:
   explicit TestImageDecoder(
       ImageDecoder::HighBitDepthDecodingOption high_bit_depth_decoding_option,
-      size_t max_decoded_bytes = kNoDecodedImageByteLimit)
+      wtf_size_t max_decoded_bytes = kNoDecodedImageByteLimit)
       : ImageDecoder(kAlphaNotPremultiplied,
                      high_bit_depth_decoding_option,
-                     ColorBehavior::TransformToSRGB(),
+                     ColorBehavior::kTransformToSRGB,
                      max_decoded_bytes) {}
 
   TestImageDecoder() : TestImageDecoder(ImageDecoder::kDefaultBitDepth) {}
 
   String FilenameExtension() const override { return ""; }
+  const AtomicString& MimeType() const override { return g_empty_atom; }
 
   Vector<ImageFrame, 1>& FrameBufferCache() { return frame_buffer_cache_; }
 
   void ResetRequiredPreviousFrames(bool known_opaque = false) {
-    for (size_t i = 0; i < frame_buffer_cache_.size(); ++i)
+    for (size_t i = 0; i < frame_buffer_cache_.size(); ++i) {
       frame_buffer_cache_[i].SetRequiredPreviousFrameIndex(
           FindRequiredPreviousFrame(i, known_opaque));
+    }
   }
 
   void InitFrames(wtf_size_t num_frames,
@@ -66,8 +43,9 @@ class TestImageDecoder : public ImageDecoder {
                   unsigned height = 100) {
     SetSize(width, height);
     frame_buffer_cache_.resize(num_frames);
-    for (wtf_size_t i = 0; i < num_frames; ++i)
+    for (wtf_size_t i = 0; i < num_frames; ++i) {
       frame_buffer_cache_[i].SetOriginalFrameRect(gfx::Rect(width, height));
+    }
   }
 
   bool ImageIsHighBitDepth() override { return image_is_high_bit_depth_; }
@@ -97,12 +75,14 @@ TEST(ImageDecoderTest, sizeCalculationMayOverflow) {
       } else {
         decoder = std::make_unique<TestImageDecoder>();
       }
-      if (high_bit_depth_image)
+      if (high_bit_depth_image) {
         decoder->SetImageToHighBitDepthForTest();
+      }
 
       unsigned log_pixel_size = 2;  // pixel is 4 bytes
-      if (high_bit_depth_decoder && high_bit_depth_image)
+      if (high_bit_depth_decoder && high_bit_depth_image) {
         log_pixel_size = 3;  // pixel is 8 byts
+      }
       unsigned overflow_dim_shift = 31 - log_pixel_size;
       unsigned overflow_dim_shift_half = (overflow_dim_shift + 1) / 2;
 
@@ -270,9 +250,10 @@ TEST(ImageDecoderTest, clearCacheExceptFrameAll) {
       std::make_unique<TestImageDecoder>());
   decoder->InitFrames(kNumFrames);
   Vector<ImageFrame, 1>& frame_buffers = decoder->FrameBufferCache();
-  for (size_t i = 0; i < kNumFrames; ++i)
+  for (size_t i = 0; i < kNumFrames; ++i) {
     frame_buffers[i].SetStatus(i % 2 ? ImageFrame::kFramePartial
                                      : ImageFrame::kFrameComplete);
+  }
 
   decoder->ClearCacheExceptFrame(kNotFound);
 
@@ -288,17 +269,19 @@ TEST(ImageDecoderTest, clearCacheExceptFramePreverveClearExceptFrame) {
       std::make_unique<TestImageDecoder>());
   decoder->InitFrames(kNumFrames);
   Vector<ImageFrame, 1>& frame_buffers = decoder->FrameBufferCache();
-  for (size_t i = 0; i < kNumFrames; ++i)
+  for (size_t i = 0; i < kNumFrames; ++i) {
     frame_buffers[i].SetStatus(ImageFrame::kFrameComplete);
+  }
 
   decoder->ResetRequiredPreviousFrames();
   decoder->ClearCacheExceptFrame(5);
   for (wtf_size_t i = 0; i < kNumFrames; ++i) {
     SCOPED_TRACE(testing::Message() << i);
-    if (i == 5)
+    if (i == 5) {
       EXPECT_EQ(ImageFrame::kFrameComplete, frame_buffers[i].GetStatus());
-    else
+    } else {
       EXPECT_EQ(ImageFrame::kFrameEmpty, frame_buffers[i].GetStatus());
+    }
   }
 }
 

@@ -11,8 +11,9 @@
 #include "ash/system/system_notification_controller.h"
 #include "ash/system/toast/toast_manager_impl.h"
 #include "ash/test/ash_test_base.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/timer/mock_timer.h"
 #include "chromeos/ash/components/dbus/shill/shill_service_client.h"
@@ -21,7 +22,7 @@
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "chromeos/ash/components/network/system_token_cert_db_storage.h"
-#include "chromeos/services/network_config/public/cpp/cros_network_config_test_helper.h"
+#include "chromeos/ash/services/network_config/public/cpp/cros_network_config_test_helper.h"
 #include "dbus/object_path.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -51,8 +52,8 @@ class AutoConnectNotifierTest : public AshTestBase {
     NetworkCertLoader::ForceAvailableForNetworkAuthForTesting();
     network_handler_test_helper_ = std::make_unique<NetworkHandlerTestHelper>();
     CHECK(NetworkHandler::Get()->auto_connect_handler());
-    network_config_helper_ = std::make_unique<
-        chromeos::network_config::CrosNetworkConfigTestHelper>();
+    network_config_helper_ =
+        std::make_unique<network_config::CrosNetworkConfigTestHelper>();
 
     AshTestBase::SetUp();
 
@@ -62,7 +63,7 @@ class AutoConnectNotifierTest : public AshTestBase {
     Shell::Get()
         ->system_notification_controller()
         ->auto_connect_->set_timer_for_testing(
-            base::WrapUnique(mock_notification_timer_));
+            base::WrapUnique(mock_notification_timer_.get()));
 
     ShillServiceClient::Get()->GetTestInterface()->AddService(
         kTestServicePath, kTestServiceGuid, kTestServiceName, shill::kTypeWifi,
@@ -109,13 +110,13 @@ class AutoConnectNotifierTest : public AshTestBase {
   }
 
   // Ownership passed to Shell owned AutoConnectNotifier instance.
-  base::MockOneShotTimer* mock_notification_timer_;
+  raw_ptr<base::MockOneShotTimer, DanglingUntriaged> mock_notification_timer_;
 
  private:
   std::unique_ptr<NetworkHandlerTestHelper> network_handler_test_helper_;
-  std::unique_ptr<chromeos::network_config::CrosNetworkConfigTestHelper>
+  std::unique_ptr<network_config::CrosNetworkConfigTestHelper>
       network_config_helper_;
-  ToastManagerImpl* toast_manager_ = nullptr;
+  raw_ptr<ToastManagerImpl, DanglingUntriaged> toast_manager_ = nullptr;
 };
 
 TEST_F(AutoConnectNotifierTest, NoExplicitConnectionRequested) {

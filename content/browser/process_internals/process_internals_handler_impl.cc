@@ -17,7 +17,9 @@
 #include "content/browser/renderer_host/back_forward_cache_impl.h"
 #include "content/browser/renderer_host/navigation_controller_impl.h"
 #include "content/browser/renderer_host/navigation_entry_impl.h"
+#include "content/browser/renderer_host/render_process_host_impl.h"
 #include "content/browser/web_contents/web_contents_impl.h"
+#include "content/public/browser/render_process_host.h"
 #include "content/public/browser/site_isolation_policy.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_client.h"
@@ -42,8 +44,8 @@ using IsolatedOriginSource = ChildProcessSecurityPolicy::IsolatedOriginSource;
   frame_info->process_id = frame->GetProcess()->GetID();
   frame_info->last_committed_url =
       frame->GetLastCommittedURL().is_valid()
-          ? absl::make_optional(frame->GetLastCommittedURL())
-          : absl::nullopt;
+          ? std::make_optional(frame->GetLastCommittedURL())
+          : std::nullopt;
   frame_info->type = type;
 
   SiteInstanceImpl* site_instance =
@@ -54,11 +56,16 @@ using IsolatedOriginSource = ChildProcessSecurityPolicy::IsolatedOriginSource;
       site_instance->GetProcess()->GetProcessLock().is_locked_to_site();
   frame_info->site_instance->site_url =
       site_instance->HasSite()
-          ? absl::make_optional(site_instance->GetSiteInfo().site_url())
-          : absl::nullopt;
+          ? std::make_optional(site_instance->GetSiteInfo().site_url())
+          : std::nullopt;
   frame_info->site_instance->is_guest = site_instance->IsGuest();
+  frame_info->site_instance->is_pdf = site_instance->IsPdf();
   frame_info->site_instance->is_sandbox_for_iframes =
       site_instance->GetSiteInfo().is_sandboxed();
+  frame_info->site_instance->site_instance_group_id =
+      site_instance->group() ? site_instance->group()->GetId().value() : 0;
+  frame_info->site_instance->browsing_instance_id =
+      site_instance->GetBrowsingInstanceId().value();
 
   // If the SiteInstance has a non-default StoragePartition, include a basic
   // string representation of it.  Skip cases where the StoragePartition is
@@ -72,7 +79,7 @@ using IsolatedOriginSource = ChildProcessSecurityPolicy::IsolatedOriginSource;
                       partition.partition_name().c_str(),
                       partition.in_memory() ? "" : "?persist"});
     frame_info->site_instance->storage_partition =
-        absl::make_optional(partition_description);
+        std::make_optional(partition_description);
   }
 
   // Only send a process lock URL if it's different from the site URL.  In the
@@ -83,8 +90,8 @@ using IsolatedOriginSource = ChildProcessSecurityPolicy::IsolatedOriginSource;
                                   site_instance->GetSiteInfo().site_url();
   frame_info->site_instance->process_lock_url =
       should_show_lock_url
-          ? absl::make_optional(site_instance->GetSiteInfo().process_lock_url())
-          : absl::nullopt;
+          ? std::make_optional(site_instance->GetSiteInfo().process_lock_url())
+          : std::nullopt;
 
   frame_info->site_instance->requires_origin_keyed_process =
       site_instance->GetSiteInfo().requires_origin_keyed_process();
@@ -177,6 +184,18 @@ ProcessInternalsHandlerImpl::ProcessInternalsHandlerImpl(
     : browser_context_(browser_context), receiver_(this, std::move(receiver)) {}
 
 ProcessInternalsHandlerImpl::~ProcessInternalsHandlerImpl() = default;
+
+void ProcessInternalsHandlerImpl::GetProcessCountInfo(
+    GetProcessCountInfoCallback callback) {
+  ::mojom::ProcessCountInfoPtr info = ::mojom::ProcessCountInfo::New();
+  info->renderer_process_count_total = RenderProcessHostImpl::GetProcessCount();
+  info->renderer_process_count_for_limit =
+      RenderProcessHostImpl::GetProcessCountForLimit();
+  info->renderer_process_limit =
+      RenderProcessHost::GetMaxRendererProcessCount();
+
+  std::move(callback).Run(std::move(info));
+}
 
 void ProcessInternalsHandlerImpl::GetIsolationMode(
     GetIsolationModeCallback callback) {

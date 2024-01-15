@@ -15,7 +15,15 @@
 #include "crypto/crypto_buildflags.h"
 #include "net/base/hash_value.h"
 #include "net/base/net_export.h"
+#include "net/cert/ct_log_verifier.h"
+#include "net/cert/ct_policy_enforcer.h"
+#include "net/cert/ct_verifier.h"
 #include "net/net_buildflags.h"
+#include "third_party/boringssl/src/pki/parsed_certificate.h"
+
+#if BUILDFLAG(CHROME_ROOT_STORE_SUPPORTED)
+#include "net/cert/internal/trust_store_chrome.h"
+#endif
 
 namespace net {
 
@@ -24,7 +32,6 @@ class CertVerifyResult;
 class CRLSet;
 class NetLogWithSource;
 class X509Certificate;
-class ChromeRootStoreData;
 typedef std::vector<scoped_refptr<X509Certificate>> CertificateList;
 
 // Class to perform certificate path building and verification for various
@@ -36,17 +43,14 @@ class NET_EXPORT CertVerifyProc
   enum VerifyFlags {
     // If set, enables online revocation checking via CRLs and OCSP for the
     // certificate chain.
+    // Note: has no effect if VERIFY_DISABLE_NETWORK_FETCHES is set.
     VERIFY_REV_CHECKING_ENABLED = 1 << 0,
 
     // If set, this is equivalent to VERIFY_REV_CHECKING_ENABLED, in that it
     // enables online revocation checking via CRLs or OCSP, but only
     // for certificates issued by non-public trust anchors. Failure to check
     // revocation is treated as a hard failure.
-    // Note: If VERIFY_CERT_IO_ENABLE is not also supplied, certificates
-    // that chain to local trust anchors will likely fail - for example, due to
-    // lacking fresh cached revocation issue (Windows) or because OCSP stapling
-    // can only provide information for the leaf, and not for any
-    // intermediates.
+    // Note: has no effect if VERIFY_DISABLE_NETWORK_FETCHES is set.
     VERIFY_REV_CHECKING_REQUIRED_LOCAL_ANCHORS = 1 << 1,
 
     // If set, certificates with SHA-1 signatures will be allowed, but only if
@@ -56,6 +60,69 @@ class NET_EXPORT CertVerifyProc
     // If set, disables the policy enforcement described at
     // https://security.googleblog.com/2017/09/chromes-plan-to-distrust-symantec.html
     VERIFY_DISABLE_SYMANTEC_ENFORCEMENT = 1 << 3,
+
+    // Disable network fetches during verification. This will override
+    // VERIFY_REV_CHECKING_ENABLED and
+    // VERIFY_REV_CHECKING_REQUIRED_LOCAL_ANCHORS if they are also specified.
+    // (Note that this entirely disables the online revocation/AIA code paths.
+    // Theoretically we could still check for cached results.)
+    VERIFY_DISABLE_NETWORK_FETCHES = 1 << 4,
+
+    // Also update GetNetConstants() in net/log/net_log_util.cc when updating
+    // this enum.
+    VERIFY_FLAGS_LAST = VERIFY_DISABLE_NETWORK_FETCHES
+  };
+
+  // The set factory parameters that are variable over time, but are expected to
+  // be consistent between multiple verifiers that are created. For example,
+  // CertNetFetcher is not in this struct as it is expected that different
+  // verifiers will have different net fetchers. (There is no technical
+  // restriction against creating different verifiers with different ImplParams,
+  // structuring the parameters this way just makes some APIs more convenient
+  // for the common case.)
+  struct NET_EXPORT ImplParams {
+    ImplParams();
+    ~ImplParams();
+    ImplParams(const ImplParams&);
+    ImplParams& operator=(const ImplParams& other);
+    ImplParams(ImplParams&&);
+    ImplParams& operator=(ImplParams&& other);
+
+    scoped_refptr<CRLSet> crl_set;
+    std::vector<scoped_refptr<const net::CTLogVerifier>> ct_logs;
+    scoped_refptr<net::CTPolicyEnforcer> ct_policy_enforcer;
+#if BUILDFLAG(CHROME_ROOT_STORE_SUPPORTED)
+    absl::optional<net::ChromeRootStoreData> root_store_data;
+#endif
+#if BUILDFLAG(CHROME_ROOT_STORE_OPTIONAL)
+    bool use_chrome_root_store;
+#endif
+  };
+
+  // The set of parameters that are variable over time and can differ between
+  // different verifiers created by a CertVerifierProcFactory.
+  struct NET_EXPORT InstanceParams {
+    InstanceParams();
+    ~InstanceParams();
+    InstanceParams(const InstanceParams&);
+    InstanceParams& operator=(const InstanceParams& other);
+    InstanceParams(InstanceParams&&);
+    InstanceParams& operator=(InstanceParams&& other);
+
+    // Additional trust anchors to consider during path validation. Ordinarily,
+    // implementations of CertVerifier use trust anchors from the configured
+    // system store. This is implementation-specific plumbing for passing
+    // additional anchors through.
+    bssl::ParsedCertificateList additional_trust_anchors;
+
+    // Additional temporary certs to consider as intermediates during path
+    // validation. Ordinarily, implementations of CertVerifier use intermediate
+    // certs from the configured system store. This is implementation-specific
+    // plumbing for passing additional intermediates through.
+    bssl::ParsedCertificateList additional_untrusted_authorities;
+
+    //  Additional SPKIs to consider as distrusted during path validation.
+    std::vector<std::vector<uint8_t>> additional_distrusted_spkis;
   };
 
   // These values are persisted to logs. Entries should not be renumbered and
@@ -68,37 +135,36 @@ class NET_EXPORT CertVerifyProc
     kMaxValue = kChainLengthOne
   };
 
-  // These values are persisted to logs. Entries should not be renumbered and
-  // numeric values should never be reused.
-  enum class EKUStatus {
-    kInvalid = 0,
-    kNoEKU = 1,
-    kAnyEKU = 2,
-    kServerAuthOnly = 3,
-    kServerAuthAndClientAuthOnly = 4,
-    kServerAuthAndOthers = 5,
-    kOther = 6,
-    kMaxValue = kOther
-  };
-
-#if !(BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS))
+#if !(BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_LINUX) || \
+      BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(CHROME_ROOT_STORE_ONLY))
   // Creates and returns a CertVerifyProc that uses the system verifier.
   // |cert_net_fetcher| may not be used, depending on the implementation.
   static scoped_refptr<CertVerifyProc> CreateSystemVerifyProc(
-      scoped_refptr<CertNetFetcher> cert_net_fetcher);
+      scoped_refptr<CertNetFetcher> cert_net_fetcher,
+      scoped_refptr<CRLSet> crl_set);
 #endif
 
-#if BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(USE_NSS_CERTS)
+#if BUILDFLAG(IS_FUCHSIA)
   // Creates and returns a CertVerifyProcBuiltin using the SSL SystemTrustStore.
   static scoped_refptr<CertVerifyProc> CreateBuiltinVerifyProc(
-      scoped_refptr<CertNetFetcher> cert_net_fetcher);
+      scoped_refptr<CertNetFetcher> cert_net_fetcher,
+      scoped_refptr<CRLSet> crl_set,
+      std::unique_ptr<CTVerifier> ct_verifier,
+      scoped_refptr<CTPolicyEnforcer> ct_policy_enforcer,
+      const InstanceParams instance_params);
 #endif
 
 #if BUILDFLAG(CHROME_ROOT_STORE_SUPPORTED)
   // Creates and returns a CertVerifyProcBuiltin using the Chrome Root Store
-  // SystemTrustStore.
+  // SystemTrustStore and the given |root_store_data|, which may be nullptr to
+  // use the default.
   static scoped_refptr<CertVerifyProc> CreateBuiltinWithChromeRootStore(
-      scoped_refptr<CertNetFetcher> cert_net_fetcher);
+      scoped_refptr<CertNetFetcher> cert_net_fetcher,
+      scoped_refptr<CRLSet> crl_set,
+      std::unique_ptr<CTVerifier> ct_verifier,
+      scoped_refptr<CTPolicyEnforcer> ct_policy_enforcer,
+      const ChromeRootStoreData* root_store_data,
+      const InstanceParams instance_params);
 #endif
 
   CertVerifyProc(const CertVerifyProc&) = delete;
@@ -122,34 +188,20 @@ class NET_EXPORT CertVerifyProc
   //
   // If VERIFY_REV_CHECKING_ENABLED is set in |flags|, online certificate
   // revocation checking is performed (i.e. OCSP and downloading CRLs). CRLSet
-  // based revocation checking is always enabled, regardless of this flag, if
-  // |crl_set| is given.
-  //
-  // |crl_set|, which is required, points to an CRLSet structure which can be
-  // used to avoid revocation checks over the network.  If you do not have one
-  // handy, use CRLSet::BuiltinCRLSet().
-  //
-  // |additional_trust_anchors| lists certificates that can be trusted when
-  // building a certificate chain, in addition to the anchors known to the
-  // implementation.
+  // based revocation checking is always enabled, regardless of this flag.
   int Verify(X509Certificate* cert,
              const std::string& hostname,
              const std::string& ocsp_response,
              const std::string& sct_list,
              int flags,
-             CRLSet* crl_set,
-             const CertificateList& additional_trust_anchors,
              CertVerifyResult* verify_result,
              const NetLogWithSource& net_log);
 
-  // Returns true if the implementation supports passing additional trust
-  // anchors to the Verify() call. The |additional_trust_anchors| parameter
-  // passed to Verify() is ignored when this returns false.
-  virtual bool SupportsAdditionalTrustAnchors() const = 0;
-
  protected:
-  CertVerifyProc();
+  explicit CertVerifyProc(scoped_refptr<CRLSet> crl_set);
   virtual ~CertVerifyProc();
+
+  CRLSet* crl_set() const { return crl_set_.get(); }
 
   // Record a histogram of whether Name normalization was used in verifying the
   // chain. This should only be called for successfully validated chains.
@@ -179,7 +231,6 @@ class NET_EXPORT CertVerifyProc
   //
   // * ocsp_result
   // * has_sha1
-  // * has_sha1_leaf
   //
   // which will be filled in by |Verify()|. If an error code is returned,
   // |verify_result->cert_status| should be non-zero, indicating an
@@ -192,8 +243,6 @@ class NET_EXPORT CertVerifyProc
                              const std::string& ocsp_response,
                              const std::string& sct_list,
                              int flags,
-                             CRLSet* crl_set,
-                             const CertificateList& additional_trust_anchors,
                              CertVerifyResult* verify_result,
                              const NetLogWithSource& net_log) = 0;
 
@@ -206,28 +255,25 @@ class NET_EXPORT CertVerifyProc
       const std::vector<std::string>& dns_names,
       const std::vector<std::string>& ip_addrs);
 
-  // The CA/Browser Forum's Baseline Requirements specify maximum validity
-  // periods (https://cabforum.org/baseline-requirements-documents/).
-  //
-  // For certificates issued after 1 July 2012: 60 months.
-  // For certificates issued after 1 April 2015: 39 months.
-  // For certificates issued after 1 March 2018: 825 days.
-  //
-  // For certificates issued before the BRs took effect, there were no
-  // guidelines, but clamp them at a maximum of 10 year validity, with the
-  // requirement they expire within 7 years after the effective date of the BRs
-  // (i.e. by 1 July 2019).
+  // Checks the validity period of the certificate against the maximum
+  // allowable validity period for publicly trusted certificates. Returns true
+  // if the validity period is too long.
   static bool HasTooLongValidity(const X509Certificate& cert);
+
+  const scoped_refptr<CRLSet> crl_set_;
 };
 
 // Factory for creating new CertVerifyProcs when they need to be updated.
 class NET_EXPORT CertVerifyProcFactory
     : public base::RefCountedThreadSafe<CertVerifyProcFactory> {
  public:
-  // Create a new CertVerifyProc that uses the passed in ChromeRootStoreData.
+
+  // Create a new CertVerifyProc that uses the passed in CRLSet and
+  // ChromeRootStoreData.
   virtual scoped_refptr<CertVerifyProc> CreateCertVerifyProc(
       scoped_refptr<CertNetFetcher> cert_net_fetcher,
-      const ChromeRootStoreData* root_store_data) = 0;
+      const CertVerifyProc::ImplParams& impl_params,
+      const CertVerifyProc::InstanceParams& instance_params) = 0;
 
  protected:
   virtual ~CertVerifyProcFactory() = default;

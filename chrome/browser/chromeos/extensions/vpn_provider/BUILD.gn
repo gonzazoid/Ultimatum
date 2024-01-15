@@ -29,12 +29,13 @@ source_set("vpn_provider") {
     "//components/keyed_service/content",
     "//content/public/browser",
     "//extensions/browser",
+    "//extensions/common",
   ]
 
   if (is_chromeos_ash) {
     deps += [
       "//chrome/browser/ash/crosapi",
-      "//chromeos/login/login_state",
+      "//chromeos/ash/components/login/login_state",
     ]
   }
 

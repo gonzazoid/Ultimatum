@@ -135,6 +135,60 @@ IN_PROC_BROWSER_TEST_F(NewTabPageNavigationThrottleTest, 204Throttle) {
   EXPECT_EQ(chrome::kChromeUINewTabPageThirdPartyURL, NavigateToNewTabPage());
 }
 
+class OverrideNavigationParamsObserver : public content::WebContentsObserver {
+ public:
+  explicit OverrideNavigationParamsObserver(content::WebContents* contents)
+      : WebContentsObserver(contents) {}
+
+  // WebContentsObserver overrides:
+  void DidFinishNavigation(content::NavigationHandle* handle) override {
+    EXPECT_TRUE(handle);
+
+    // Check the values that are changed in OverrideNavigationParams.
+    EXPECT_EQ(std::nullopt, handle->GetInitiatorOrigin());
+    EXPECT_FALSE(handle->IsRendererInitiated());
+    ui::PageTransitionCoreTypeIs(handle->GetPageTransition(),
+                                 ui::PAGE_TRANSITION_AUTO_BOOKMARK);
+  }
+};
+
+// Check that ChromeContentBrowserClient::OverrideNavigationParams behaves
+// correctly when navigating from a custom 3P NTP with an HTTPS scheme.
+// OverrideNavigationParams changes the params on renderer initiated navigations
+// from the NTP. It identifies a page as an NTP by using the site URL, not the
+// lock URL, of the initiator process.
+IN_PROC_BROWSER_TEST_F(NewTabPageNavigationThrottleTest,
+                       OverrideNavigationParams_ThirdPartyNTP) {
+  ASSERT_TRUE(https_test_server()->Start());
+  std::string ntp_url =
+      https_test_server()->GetURL("/instant_extended.html").spec();
+  SetNewTabPage(ntp_url);
+  EXPECT_EQ(ntp_url, NavigateToNewTabPage());
+
+  const GURL page_url = https_test_server()->GetURL("/simple.html");
+  auto* web_contents = browser()->tab_strip_model()->GetActiveWebContents();
+  OverrideNavigationParamsObserver observer(web_contents);
+  EXPECT_TRUE(content::NavigateToURLFromRenderer(web_contents, page_url));
+}
+
+// Check that ChromeContentBrowserClient::OverrideNavigationParams behaves
+// correctly when navigating from a chrome:// NTP.
+// OverrideNavigationParams changes the params on renderer initiated navigations
+// from the NTP. It identifies a page as an NTP by using the site URL, not the
+// lock URL, of the initiator process. This test uses a chrome:// URL for the
+// NTP, so the lock and site URLs are the same.
+IN_PROC_BROWSER_TEST_F(NewTabPageNavigationThrottleTest,
+                       OverrideNavigationParams_ChromeURLNTP) {
+  ASSERT_TRUE(https_test_server()->Start());
+  SetNewTabPage(chrome::kChromeUINewTabPageThirdPartyURL);
+  EXPECT_EQ(chrome::kChromeUINewTabPageThirdPartyURL, NavigateToNewTabPage());
+
+  const GURL page_url = https_test_server()->GetURL("/simple.html");
+  auto* web_contents = browser()->tab_strip_model()->GetActiveWebContents();
+  OverrideNavigationParamsObserver observer(web_contents);
+  EXPECT_TRUE(content::NavigateToURLFromRenderer(web_contents, page_url));
+}
+
 class NewTabPageNavigationThrottlePrerenderTest
     : public NewTabPageNavigationThrottleTest {
  public:
@@ -150,7 +204,7 @@ class NewTabPageNavigationThrottlePrerenderTest
       const NewTabPageNavigationThrottlePrerenderTest&) = delete;
 
   void SetUp() override {
-    prerender_test_helper_.SetUp(https_test_server());
+    prerender_test_helper_.RegisterServerRequestMonitor(https_test_server());
     NewTabPageNavigationThrottleTest::SetUp();
   }
 
@@ -179,12 +233,15 @@ IN_PROC_BROWSER_TEST_F(NewTabPageNavigationThrottlePrerenderTest,
   // Prerendering should not change the title of the web contents.
   EXPECT_EQ(u"Title Of Awesomeness", web_contents()->GetTitle());
 
-  // Activate the prerender page.
   SetNewTabPage(ntp_url.spec());
-  prerender_test_helper().NavigatePrimaryPage(ntp_url);
-  EXPECT_TRUE(host_observer.was_activated());
 
-  // The title should be changed after activating.
+  // Now `ntp_url` has an effective URL
+  // (chrome-search://remote-ntp/instant_extended.html), so this navigation
+  // should not activate the prerendered page.
+  prerender_test_helper().NavigatePrimaryPage(ntp_url);
+  EXPECT_FALSE(host_observer.was_activated());
+
+  // The title should be changed after navigation.
   EXPECT_NE(u"Title Of Awesomeness", web_contents()->GetTitle());
 }
 
@@ -222,11 +279,9 @@ IN_PROC_BROWSER_TEST_F(NewTabPageNavigationThrottleFencedFrameTest,
   CoreTabHelper* core_tab_helper =
       CoreTabHelper::FromWebContents(web_contents());
   core_tab_helper->set_new_tab_start_time(base::TimeTicks().Now());
-  histogram_tester.ExpectTotalCount("Tab.NewTabOnload.Other", 0);
 
   EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), ntp_url));
   EXPECT_TRUE(core_tab_helper->new_tab_start_time().is_null());
-  histogram_tester.ExpectTotalCount("Tab.NewTabOnload.Other", 1);
 
   core_tab_helper->set_new_tab_start_time(base::TimeTicks().Now());
   GURL fenced_frame_url =
@@ -236,7 +291,6 @@ IN_PROC_BROWSER_TEST_F(NewTabPageNavigationThrottleFencedFrameTest,
           web_contents()->GetPrimaryMainFrame(), fenced_frame_url);
   EXPECT_NE(nullptr, fenced_frame_host);
   EXPECT_FALSE(core_tab_helper->new_tab_start_time().is_null());
-  histogram_tester.ExpectTotalCount("Tab.NewTabOnload.Other", 1);
 }
 
 IN_PROC_BROWSER_TEST_F(NewTabPageNavigationThrottleFencedFrameTest,

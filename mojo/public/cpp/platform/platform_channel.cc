@@ -12,15 +12,14 @@
 
 #include "base/logging.h"
 #include "base/numerics/clamped_math.h"
-#include "base/rand_util.h"
-#include "base/strings/stringprintf.h"
-#include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
+#include "mojo/buildflags.h"
 
 #if BUILDFLAG(IS_WIN)
 #include <windows.h>
 
 #include "base/win/scoped_handle.h"
+#include "mojo/public/cpp/platform/named_platform_channel.h"
 #elif BUILDFLAG(IS_FUCHSIA)
 #include <lib/zx/channel.h>
 #include <zircon/process.h>
@@ -36,11 +35,11 @@
 #include "base/posix/global_descriptors.h"
 #endif
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(MOJO_USE_APPLE_CHANNEL)
 #include <mach/port.h>
 
-#include "base/mac/mach_logging.h"
-#include "base/mac/scoped_mach_port.h"
+#include "base/apple/mach_logging.h"
+#include "base/apple/scoped_mach_port.h"
 #endif
 
 #if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_NACL)
@@ -56,9 +55,8 @@ namespace {
 #if BUILDFLAG(IS_WIN)
 void CreateChannel(PlatformHandle* local_endpoint,
                    PlatformHandle* remote_endpoint) {
-  std::wstring pipe_name = base::StringPrintf(
-      L"\\\\.\\pipe\\mojo.%lu.%lu.%I64u", ::GetCurrentProcessId(),
-      ::GetCurrentThreadId(), base::RandUint64());
+  std::wstring pipe_name = NamedPlatformChannel::GetPipeNameFromServerName(
+      NamedPlatformChannel::GenerateRandomServerName());
   DWORD kOpenMode =
       PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE;
   const DWORD kPipeMode = PIPE_TYPE_BYTE | PIPE_READMODE_BYTE;
@@ -101,7 +99,7 @@ void CreateChannel(PlatformHandle* local_endpoint,
   DCHECK(local_endpoint->is_valid());
   DCHECK(remote_endpoint->is_valid());
 }
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(MOJO_USE_APPLE_CHANNEL)
 void CreateChannel(PlatformHandle* local_endpoint,
                    PlatformHandle* remote_endpoint) {
   // Mach messaging is simplex; and in order to enable full-duplex
@@ -109,11 +107,11 @@ void CreateChannel(PlatformHandle* local_endpoint,
   // handshake with its peer to establish two sets of Mach receive and send
   // rights. The handshake process starts with the creation of one
   // PlatformChannel endpoint.
-  base::mac::ScopedMachReceiveRight receive;
-  base::mac::ScopedMachSendRight send;
+  base::apple::ScopedMachReceiveRight receive;
+  base::apple::ScopedMachSendRight send;
   // The mpl_qlimit specified here should stay in sync with
   // NamedPlatformChannel.
-  CHECK(base::mac::CreateMachPort(&receive, &send, MACH_PORT_QLIMIT_LARGE));
+  CHECK(base::apple::CreateMachPort(&receive, &send, MACH_PORT_QLIMIT_LARGE));
 
   // In a reverse of Mach messaging semantics, in Mojo the "local" endpoint is
   // the send right, while the "remote" end is the receive right.
@@ -168,9 +166,9 @@ PlatformChannel::PlatformChannel() {
 
 PlatformChannel::PlatformChannel(PlatformChannel&& other) = default;
 
-PlatformChannel::~PlatformChannel() = default;
-
 PlatformChannel& PlatformChannel::operator=(PlatformChannel&& other) = default;
+
+PlatformChannel::~PlatformChannel() = default;
 
 void PlatformChannel::PrepareToPassRemoteEndpoint(HandlePassingInfo* info,
                                                   std::string* value) {
@@ -195,7 +193,7 @@ void PlatformChannel::RemoteProcessLaunchAttempted() {
 
 // static
 PlatformChannelEndpoint PlatformChannel::RecoverPassedEndpointFromString(
-    base::StringPiece value) {
+    std::string_view value) {
   return PlatformChannelEndpoint::RecoverFromString(value);
 }
 

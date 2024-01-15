@@ -4,23 +4,18 @@
 
 #include "ui/views/touchui/touch_selection_menu_runner_views.h"
 
+#include "base/test/metrics/histogram_tester.h"
 #include "ui/events/event_utils.h"
+#include "ui/events/test/event_generator.h"
 #include "ui/touch_selection/touch_selection_menu_runner.h"
+#include "ui/touch_selection/touch_selection_metrics.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/test/views_test_base.h"
 #include "ui/views/touchui/touch_selection_menu_views.h"
 
 namespace views {
+
 namespace {
-
-// Should match |kMenuButtonWidth| in touch_selection_menu_runner_views.cc.
-const int kMenuButtonWidth = 63;
-
-// Should match size of |kMenuCommands| array in
-// touch_selection_menu_runner_views.cc.
-const int kMenuCommandCount = 4;
-
-}  // namespace
 
 class TouchSelectionMenuRunnerViewsTest : public ViewsTestBase,
                                           public ui::TouchSelectionMenuClient {
@@ -97,34 +92,46 @@ TEST_F(TouchSelectionMenuRunnerViewsTest, InstalledAndWorksProperly) {
   EXPECT_FALSE(ui::TouchSelectionMenuRunner::GetInstance()->IsRunning());
 }
 
-// Tests that anchor rect for the quick menu is adjusted correctly based on the
-// distance of handles.
+// Tests that the anchor rect for the quick menu is adjusted to account for the
+// handles. When the width of the anchor rect is too small to fit the quick
+// menu, the bottom of the anchor rect should be expanded so that the quick menu
+// will not overlap with the handles.
 TEST_F(TouchSelectionMenuRunnerViewsTest, QuickMenuAdjustsAnchorRect) {
-  gfx::Size handle_size(10, 10);
   TouchSelectionMenuRunnerViews::TestApi test_api(
       static_cast<TouchSelectionMenuRunnerViews*>(
           ui::TouchSelectionMenuRunner::GetInstance()));
 
-  // Calculate the width of quick menu. In addition to |kMenuCommandCount|
-  // commands, there is an item for ellipsis.
-  int quick_menu_width =
-      (kMenuCommandCount + 1) * kMenuButtonWidth + kMenuCommandCount;
-
-  // Set anchor rect's width a bit smaller than the quick menu width plus handle
-  // image width and check that anchor rect's height is adjusted.
-  gfx::Rect anchor_rect(0, 0, quick_menu_width + handle_size.width() - 10, 20);
+  // When the provided anchor rect has zero width (e.g. when an insertion handle
+  // is visible), the anchor rect should be expanded below the bottom of the
+  // handles to prevent the menu and handles from overlapping.
+  gfx::Rect anchor_rect(0, 10);
+  constexpr gfx::Size kHandleSize(15, 15);
   ui::TouchSelectionMenuRunner::GetInstance()->OpenMenu(
-      GetWeakPtr(), anchor_rect, handle_size, GetContext());
-  anchor_rect.Inset(gfx::Insets::TLBR(0, 0, -handle_size.height(), 0));
-  EXPECT_EQ(anchor_rect, test_api.GetAnchorRect());
+      GetWeakPtr(), anchor_rect, kHandleSize, GetContext());
+  EXPECT_GE(test_api.GetAnchorRect().bottom(),
+            anchor_rect.bottom() + kHandleSize.height());
 
-  // Set anchor rect's width a bit greater than the quick menu width plus handle
-  // image width and check that anchor rect's height is not adjusted.
+  // When the provided anchor rect's width is greater than the quick menu width
+  // plus the handle width, the menu can fit between the selection handles. In
+  // this case the anchor rect is still slightly adjusted to add padding, but
+  // does not need to expand below the handles.
   anchor_rect =
-      gfx::Rect(0, 0, quick_menu_width + handle_size.width() + 10, 20);
+      gfx::Rect(test_api.GetMenuWidth() + kHandleSize.width() + 10, 20);
   ui::TouchSelectionMenuRunner::GetInstance()->OpenMenu(
-      GetWeakPtr(), anchor_rect, handle_size, GetContext());
-  EXPECT_EQ(anchor_rect, test_api.GetAnchorRect());
+      GetWeakPtr(), anchor_rect, kHandleSize, GetContext());
+  EXPECT_GE(test_api.GetAnchorRect().bottom(), anchor_rect.bottom());
+  EXPECT_LE(test_api.GetAnchorRect().bottom(),
+            anchor_rect.bottom() + kHandleSize.height());
+
+  // When the provided anchor rect's width is less than the quick menu width
+  // plus the handle width, the anchor rect should be expanded below the bottom
+  // of the handles to prevent the menu and handles from overlapping.
+  anchor_rect =
+      gfx::Rect(test_api.GetMenuWidth() + kHandleSize.width() - 10, 20);
+  ui::TouchSelectionMenuRunner::GetInstance()->OpenMenu(
+      GetWeakPtr(), anchor_rect, kHandleSize, GetContext());
+  EXPECT_GE(test_api.GetAnchorRect().bottom(),
+            anchor_rect.bottom() + kHandleSize.height());
 
   ui::TouchSelectionMenuRunner::GetInstance()->CloseMenu();
   RunPendingMessages();
@@ -213,5 +220,35 @@ TEST_F(TouchSelectionMenuRunnerViewsTest, ShowMenuTwiceOpensOneMenu) {
   widget2->Close();
   RunPendingMessages();
 }
+
+// Tests that pressing a menu button records a histogram entry.
+TEST_F(TouchSelectionMenuRunnerViewsTest, MenuActionMetrics) {
+  base::HistogramTester histogram_tester;
+  TouchSelectionMenuRunnerViews::TestApi test_api(
+      static_cast<TouchSelectionMenuRunnerViews*>(
+          ui::TouchSelectionMenuRunner::GetInstance()));
+
+  // Open the menu.
+  ui::TouchSelectionMenuRunner::GetInstance()->OpenMenu(
+      GetWeakPtr(), /*anchor_rect=*/gfx::Rect(20, 30),
+      /*handle_image_size=*/gfx::Size(10, 10), GetContext());
+
+  EXPECT_TRUE(ui::TouchSelectionMenuRunner::GetInstance()->IsRunning());
+  histogram_tester.ExpectTotalCount(ui::kTouchSelectionMenuActionHistogramName,
+                                    0);
+
+  // Tap the first action on the menu.
+  ui::test::EventGenerator generator(
+      test_api.GetWidget()->GetNativeView()->GetRootWindow());
+  gfx::Point button_center = test_api.GetFirstButton()->bounds().CenterPoint();
+  generator.delegate()->ConvertPointFromTarget(
+      test_api.GetWidget()->GetNativeView(), &button_center);
+  generator.GestureTapAt(button_center);
+
+  histogram_tester.ExpectTotalCount(ui::kTouchSelectionMenuActionHistogramName,
+                                    1);
+}
+
+}  // namespace
 
 }  // namespace views

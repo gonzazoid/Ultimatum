@@ -7,14 +7,14 @@
 #include <vector>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/eme_constants.h"
 #include "media/base/media.h"
 #include "media/base/media_switches.h"
@@ -130,7 +130,7 @@ void OnEncryptedMediaInitData(media::PipelineIntegrationTestBase* test,
   // Note: Since the callback is on the media task runner but the test is on
   // the main task runner, this must be posted.
   // TODO(xhwang): Support encrypted media in this fuzzer test.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&PipelineIntegrationTestBase::FailTest,
                                 base::Unretained(test),
                                 media::PIPELINE_ERROR_INITIALIZATION_FAILED));
@@ -142,7 +142,7 @@ void OnAudioPlayDelay(media::PipelineIntegrationTestBase* test,
   if (play_delay > kMaxPlayDelay) {
     // Note: Since the callback is on the media task runner but the test is on
     // the main task runner, this must be posted.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&PipelineIntegrationTestBase::FailTest,
                                   base::Unretained(test),
                                   media::PIPELINE_ERROR_INITIALIZATION_FAILED));
@@ -155,8 +155,8 @@ class ProgressivePipelineIntegrationFuzzerTest
   ProgressivePipelineIntegrationFuzzerTest() {
     set_encrypted_media_init_data_cb(
         base::BindRepeating(&OnEncryptedMediaInitData, this));
-    set_audio_play_delay_cb(
-        BindToCurrentLoop(base::BindRepeating(&OnAudioPlayDelay, this)));
+    set_audio_play_delay_cb(base::BindPostTaskToCurrentDefault(
+        base::BindRepeating(&OnAudioPlayDelay, this)));
   }
 
   ~ProgressivePipelineIntegrationFuzzerTest() override = default;
@@ -179,8 +179,8 @@ class MediaSourcePipelineIntegrationFuzzerTest
   MediaSourcePipelineIntegrationFuzzerTest() {
     set_encrypted_media_init_data_cb(
         base::BindRepeating(&OnEncryptedMediaInitData, this));
-    set_audio_play_delay_cb(
-        BindToCurrentLoop(base::BindRepeating(&OnAudioPlayDelay, this)));
+    set_audio_play_delay_cb(base::BindPostTaskToCurrentDefault(
+        base::BindRepeating(&OnAudioPlayDelay, this)));
   }
 
   ~MediaSourcePipelineIntegrationFuzzerTest() override = default;
@@ -233,9 +233,9 @@ struct Environment {
 
     media::InitializeMediaLibrary();
 
-    // Note, instead of LOG_FATAL, use a value at or below logging::LOG_VERBOSE
-    // here to assist local debugging.
-    logging::SetMinLogLevel(logging::LOG_FATAL);
+    // Note, instead of LOGGING_FATAL, use a value at or below
+    // logging::LOGGING_VERBOSE here to assist local debugging.
+    logging::SetMinLogLevel(logging::LOGGING_FATAL);
   }
 };
 

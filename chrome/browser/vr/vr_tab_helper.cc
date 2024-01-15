@@ -81,7 +81,7 @@ void VrTabHelper::SetIsContentDisplayedInHeadset(content::WebContents* contents,
   vr_tab_helper->SetIsContentDisplayedInHeadset(state);
   if (old_state != state) {
 #if !BUILDFLAG(IS_ANDROID)
-    Browser* browser = chrome::FindBrowserWithWebContents(contents);
+    Browser* browser = chrome::FindBrowserWithTab(contents);
     if (browser) {
       TabStripModel* tab_strip_model = browser->tab_strip_model();
       if (tab_strip_model) {
@@ -103,38 +103,6 @@ void VrTabHelper::ExitVrPresentation() {
 
 void VrTabHelper::SetIsContentDisplayedInHeadset(bool state) {
   is_content_displayed_in_headset_ = state;
-}
-
-bool VrTabHelper::IsUiSuppressedInVr(content::WebContents* contents,
-                                     UiSuppressedElement element) {
-  if (!IsInVr(contents))
-    return false;
-
-  switch (element) {
-    // The following are suppressed if in VR.
-    case UiSuppressedElement::kHttpAuth:
-    case UiSuppressedElement::kSslClientCertificate:
-    case UiSuppressedElement::kUsbChooser:
-    case UiSuppressedElement::kFileChooser:
-    case UiSuppressedElement::kBluetoothChooser:
-    case UiSuppressedElement::kPasswordManager:
-    case UiSuppressedElement::kMediaRouterPresentationRequest:
-    // Note that this enum suppresses two type of UIs. One is Chrome's missing
-    // storage permission Dialog which is an Android AlertDialog. And if user
-    // clicked positive button on the AlertDialog, Chrome will request storage
-    // permission from Android which triggers standard permission request
-    // dialog. Permission request dialog is not supported in VR either (see
-    // https://crbug.com/642934). So we need to make sure that both AlertDialog
-    // and permission request dialog are supported in VR before we disable this
-    // suppression.
-    case UiSuppressedElement::kFileAccessPermission:
-    case UiSuppressedElement::kContextMenu:
-      return true;
-    case UiSuppressedElement::kPlaceholderForPreviousHighValue:
-    case UiSuppressedElement::kCount:
-      NOTREACHED();
-      return false;
-  }
 }
 
 WEB_CONTENTS_USER_DATA_KEY_IMPL(VrTabHelper);

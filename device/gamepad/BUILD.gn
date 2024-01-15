@@ -7,7 +7,8 @@ import("//build/config/features.gni")
 
 if (is_android) {
   import("//build/config/android/config.gni")
-  import("//build/config/android/rules.gni")  # For generate_jni().
+  import("//build/config/android/rules.gni")
+  import("//third_party/jni_zero/jni_zero.gni")
 }
 
 component("gamepad") {
@@ -124,7 +125,7 @@ component("gamepad") {
     deps += [ ":jni_headers" ]
   }
 
-  if (!is_android && !is_fuchsia) {
+  if (!is_android && !is_fuchsia && !is_ios) {
     sources += [
       "nintendo_controller.cc",
       "nintendo_controller.h",
@@ -133,29 +134,34 @@ component("gamepad") {
     ]
   }
 
-  if (is_mac) {
+  if (is_apple) {
     sources += [
       "game_controller_data_fetcher_mac.h",
       "game_controller_data_fetcher_mac.mm",
-      "gamepad_device_mac.h",
-      "gamepad_device_mac.mm",
-      "gamepad_platform_data_fetcher_mac.h",
-      "gamepad_platform_data_fetcher_mac.mm",
       "gamepad_standard_mappings_mac.mm",
-      "hid_writer_mac.cc",
-      "hid_writer_mac.h",
-      "xbox_controller_mac.h",
-      "xbox_controller_mac.mm",
-      "xbox_data_fetcher_mac.cc",
-      "xbox_data_fetcher_mac.h",
     ]
     frameworks = [
       "CoreFoundation.framework",
       "Foundation.framework",
-      "ForceFeedback.framework",
       "GameController.framework",
       "IOKit.framework",
     ]
+
+    if (is_mac) {
+      sources += [
+        "gamepad_device_mac.h",
+        "gamepad_device_mac.mm",
+        "gamepad_platform_data_fetcher_mac.h",
+        "gamepad_platform_data_fetcher_mac.mm",
+        "hid_writer_mac.cc",
+        "hid_writer_mac.h",
+        "xbox_controller_mac.h",
+        "xbox_controller_mac.mm",
+        "xbox_data_fetcher_mac.cc",
+        "xbox_data_fetcher_mac.h",
+      ]
+      frameworks += [ "ForceFeedback.framework" ]
+    }
   }
 
   if (is_chromeos) {
@@ -208,12 +214,15 @@ if (is_android) {
     ]
     deps = [
       "//base:base_java",
-      "//base:jni_java",
       "//build/android:build_java",
       "//third_party/androidx:androidx_annotation_annotation_java",
+      "//third_party/jni_zero:jni_zero_java",
     ]
-    annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
-    srcjar_deps = [ ":java_enums_srcjar" ]
+
+    srcjar_deps = [
+      ":java_enums_srcjar",
+      ":jni_headers",
+    ]
   }
 
   java_cpp_enum("java_enums_srcjar") {

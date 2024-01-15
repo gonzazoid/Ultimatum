@@ -7,13 +7,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/platform_thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
 #include "net/base/request_priority.h"
@@ -45,7 +44,7 @@ DiskCacheTest::~DiskCacheTest() = default;
 
 bool DiskCacheTest::CopyTestCache(const std::string& name) {
   base::FilePath path;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &path);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &path);
   path = path.AppendASCII("net");
   path = path.AppendASCII("data");
   path = path.AppendASCII("cache_tests");
@@ -103,7 +102,7 @@ void DiskCacheTestWithCache::SimulateCrash() {
   ASSERT_THAT(cb.GetResult(rv), IsOk());
   cache_impl_->ClearRefCountForTest();
 
-  cache_.reset();
+  ResetCaches();
   EXPECT_TRUE(CheckCacheIntegrity(cache_path_, new_eviction_, size_, mask_));
 
   CreateBackend(disk_cache::kNoRandom);
@@ -337,18 +336,29 @@ void DiskCacheTestWithCache::OnExternalCacheHit(const std::string& key) {
   cache_->OnExternalCacheHit(key);
 }
 
+std::unique_ptr<disk_cache::Backend> DiskCacheTestWithCache::TakeCache() {
+  mem_cache_ = nullptr;
+  simple_cache_impl_ = nullptr;
+  cache_impl_ = nullptr;
+  return std::move(cache_);
+}
+
 void DiskCacheTestWithCache::TearDown() {
   RunUntilIdle();
-  cache_.reset();
-
+  ResetCaches();
   if (!memory_only_ && !simple_cache_mode_ && integrity_) {
     EXPECT_TRUE(CheckCacheIntegrity(cache_path_, new_eviction_, size_, mask_));
   }
   RunUntilIdle();
-  if (simple_cache_mode_ && simple_file_tracker_)
+  if (simple_cache_mode_ && simple_file_tracker_) {
     EXPECT_TRUE(simple_file_tracker_->IsEmptyForTesting());
-
+  }
   DiskCacheTest::TearDown();
+}
+
+void DiskCacheTestWithCache::ResetCaches() {
+  // Deletion occurs by `cache` going out of scope.
+  std::unique_ptr<disk_cache::Backend> cache = TakeCache();
 }
 
 void DiskCacheTestWithCache::InitMemoryCache() {
@@ -373,7 +383,7 @@ void DiskCacheTestWithCache::InitDiskCache() {
 void DiskCacheTestWithCache::CreateBackend(uint32_t flags) {
   scoped_refptr<base::SingleThreadTaskRunner> runner;
   if (use_current_thread_)
-    runner = base::ThreadTaskRunnerHandle::Get();
+    runner = base::SingleThreadTaskRunner::GetCurrentDefault();
   else
     runner = nullptr;  // let the backend sort it out.
 

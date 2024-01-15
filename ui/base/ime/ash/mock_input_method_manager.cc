@@ -6,6 +6,8 @@
 
 #include <utility>
 
+#include "ui/base/ime/ash/input_method_util.h"
+
 namespace ash {
 namespace input_method {
 
@@ -19,7 +21,7 @@ scoped_refptr<InputMethodManager::State> MockInputMethodManager::State::Clone()
 void MockInputMethodManager::State::AddInputMethodExtension(
     const std::string& extension_id,
     const InputMethodDescriptors& descriptors,
-    ui::TextInputMethod* instance) {}
+    TextInputMethod* instance) {}
 
 void MockInputMethodManager::State::RemoveInputMethodExtension(
     const std::string& extension_id) {}
@@ -48,14 +50,14 @@ void MockInputMethodManager::State::DisableNonLockScreenLayouts() {}
 void MockInputMethodManager::State::GetInputMethodExtensions(
     InputMethodDescriptors* result) {}
 
-std::unique_ptr<InputMethodDescriptors> MockInputMethodManager::State::
+InputMethodDescriptors MockInputMethodManager::State::
     GetEnabledInputMethodsSortedByLocalizedDisplayNames() const {
-  return nullptr;
+  return {};
 }
 
-std::unique_ptr<InputMethodDescriptors>
-MockInputMethodManager::State::GetEnabledInputMethods() const {
-  return nullptr;
+InputMethodDescriptors MockInputMethodManager::State::GetEnabledInputMethods()
+    const {
+  return {};
 }
 
 const std::vector<std::string>&
@@ -74,7 +76,7 @@ size_t MockInputMethodManager::State::GetNumEnabledInputMethods() const {
 }
 
 void MockInputMethodManager::State::SetEnabledExtensionImes(
-    std::vector<std::string>* ids) {}
+    base::span<const std::string> ids) {}
 
 void MockInputMethodManager::State::SetInputMethodLoginDefault() {}
 
@@ -192,6 +194,11 @@ bool MockInputMethodManager::IsLoginKeyboard(const std::string& layout) const {
   return true;
 }
 
+std::string MockInputMethodManager::GetMigratedInputMethodID(
+    const std::string& input_method_id) {
+  return "";
+}
+
 bool MockInputMethodManager::MigrateInputMethods(
     std::vector<std::string>* input_method_ids) {
   return false;
@@ -234,39 +241,11 @@ bool MockInputMethodManager::GetImeMenuFeatureEnabled(
 
 void MockInputMethodManager::NotifyObserversImeExtraInputStateChange() {}
 
-ui::VirtualKeyboardController*
-MockInputMethodManager::GetVirtualKeyboardController() {
-  return virtual_keyboard_enabled_ ? this : nullptr;
-}
-
 void MockInputMethodManager::NotifyInputMethodExtensionAdded(
     const std::string& extension_id) {}
 
 void MockInputMethodManager::NotifyInputMethodExtensionRemoved(
     const std::string& extension_id) {}
-
-bool MockInputMethodManager::DisplayVirtualKeyboard() {
-  return false;
-}
-
-void MockInputMethodManager::DismissVirtualKeyboard() {
-  for (auto& observer : observer_list_)
-    observer.OnKeyboardHidden();
-}
-
-void MockInputMethodManager::AddObserver(
-    ui::VirtualKeyboardControllerObserver* observer) {
-  observer_list_.AddObserver(observer);
-}
-
-void MockInputMethodManager::RemoveObserver(
-    ui::VirtualKeyboardControllerObserver* observer) {
-  observer_list_.RemoveObserver(observer);
-}
-
-bool MockInputMethodManager::IsKeyboardVisible() {
-  return false;
-}
 
 }  // namespace input_method
 }  // namespace ash

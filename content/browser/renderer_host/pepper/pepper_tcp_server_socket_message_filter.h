@@ -9,10 +9,12 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "content/common/content_export.h"
@@ -25,12 +27,6 @@
 #include "ppapi/c/private/ppb_net_address_private.h"
 #include "ppapi/host/resource_message_filter.h"
 #include "services/network/public/mojom/tcp_socket.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/ash/components/network/firewall_hole.h"
-#include "content/public/browser/browser_thread.h"
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 namespace network {
 namespace mojom {
@@ -42,7 +38,11 @@ namespace ppapi {
 namespace host {
 class PpapiHost;
 }
-}
+}  // namespace ppapi
+
+namespace chromeos {
+class FirewallHole;
+}  // namespace chromeos
 
 namespace content {
 
@@ -102,13 +102,13 @@ class CONTENT_EXPORT PepperTCPServerSocketMessageFilter
 
   void OnListenCompleted(const ppapi::host::ReplyMessageContext& context,
                          int net_result,
-                         const absl::optional<net::IPEndPoint>& local_addr);
+                         const std::optional<net::IPEndPoint>& local_addr);
   void OnAcceptCompleted(
       const ppapi::host::ReplyMessageContext& context,
       mojo::PendingReceiver<network::mojom::SocketObserver>
           socket_observer_receiver,
       int net_result,
-      const absl::optional<net::IPEndPoint>& remote_addr,
+      const std::optional<net::IPEndPoint>& remote_addr,
       mojo::PendingRemote<network::mojom::TCPConnectedSocket> connected_socket,
       mojo::ScopedDataPipeConsumerHandle receive_stream,
       mojo::ScopedDataPipeProducerHandle send_stream);
@@ -139,20 +139,21 @@ class CONTENT_EXPORT PepperTCPServerSocketMessageFilter
   void SendAcceptError(const ppapi::host::ReplyMessageContext& context,
                        int32_t pp_result);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   void OpenFirewallHole(const ppapi::host::ReplyMessageContext& context,
                         const net::IPEndPoint& local_addr);
   void OnFirewallHoleOpened(const ppapi::host::ReplyMessageContext& context,
-                            std::unique_ptr<ash::FirewallHole> hole);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+                            std::unique_ptr<chromeos::FirewallHole> hole);
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   // Following fields are initialized and used only on the IO thread.
   // Non-owning ptr.
-  raw_ptr<BrowserPpapiHostImpl, DanglingUntriaged> host_;
+  raw_ptr<BrowserPpapiHostImpl, AcrossTasksDanglingUntriaged> host_;
   // Non-owning ptr.
-  raw_ptr<ppapi::host::PpapiHost, DanglingUntriaged> ppapi_host_;
+  raw_ptr<ppapi::host::PpapiHost, AcrossTasksDanglingUntriaged> ppapi_host_;
   // Non-owning ptr.
-  raw_ptr<ContentBrowserPepperHostFactory, DanglingUntriaged> factory_;
+  raw_ptr<ContentBrowserPepperHostFactory, AcrossTasksDanglingUntriaged>
+      factory_;
   PP_Instance instance_;
 
   State state_;
@@ -160,10 +161,9 @@ class CONTENT_EXPORT PepperTCPServerSocketMessageFilter
 
   PP_NetAddress_Private bound_addr_;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  std::unique_ptr<ash::FirewallHole, content::BrowserThread::DeleteOnUIThread>
-      firewall_hole_;
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
+  std::unique_ptr<chromeos::FirewallHole> firewall_hole_;
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   // Following fields are initialized on the IO thread but used only
   // on the UI thread.

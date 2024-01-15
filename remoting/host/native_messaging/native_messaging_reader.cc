@@ -9,8 +9,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/location.h"
 #include "base/logging.h"
@@ -18,7 +18,6 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "build/build_config.h"
 
@@ -84,8 +83,7 @@ NativeMessagingReader::Core::Core(
     : read_stream_(std::move(file)),
       reader_(reader),
       caller_task_runner_(caller_task_runner),
-      read_task_runner_(read_task_runner) {
-}
+      read_task_runner_(read_task_runner) {}
 
 NativeMessagingReader::Core::~Core() = default;
 
@@ -123,10 +121,9 @@ void NativeMessagingReader::Core::ReadMessage() {
       return;
     }
 
-    std::unique_ptr<base::Value> message =
-        base::JSONReader::ReadDeprecated(message_json);
+    std::optional<base::Value> message = base::JSONReader::Read(message_json);
     if (!message) {
-      LOG(ERROR) << "Failed to parse JSON message: " << message.get();
+      LOG(ERROR) << "Failed to parse JSON message: " << message_json;
       NotifyEof();
       return;
     }
@@ -134,7 +131,7 @@ void NativeMessagingReader::Core::ReadMessage() {
     // Notify callback of new message.
     caller_task_runner_->PostTask(
         FROM_HERE, base::BindOnce(&NativeMessagingReader::InvokeMessageCallback,
-                                  reader_, std::move(message)));
+                                  reader_, std::move(*message)));
   }
 }
 
@@ -151,9 +148,9 @@ NativeMessagingReader::NativeMessagingReader(base::File file)
       base::Thread::Options(base::MessagePumpType::IO, /*size=*/0));
 
   read_task_runner_ = reader_thread_.task_runner();
-  core_ = std::make_unique<Core>(std::move(file),
-                                 base::ThreadTaskRunnerHandle::Get(),
-                                 read_task_runner_, weak_factory_.GetWeakPtr());
+  core_ = std::make_unique<Core>(
+      std::move(file), base::SingleThreadTaskRunner::GetCurrentDefault(),
+      read_task_runner_, weak_factory_.GetWeakPtr());
 }
 
 NativeMessagingReader::~NativeMessagingReader() {
@@ -195,8 +192,7 @@ void NativeMessagingReader::Start(const MessageCallback& message_callback,
                                 base::Unretained(core_.get())));
 }
 
-void NativeMessagingReader::InvokeMessageCallback(
-    std::unique_ptr<base::Value> message) {
+void NativeMessagingReader::InvokeMessageCallback(base::Value message) {
   message_callback_.Run(std::move(message));
 }
 

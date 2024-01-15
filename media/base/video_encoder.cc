@@ -4,9 +4,11 @@
 
 #include "media/base/video_encoder.h"
 
-#include "base/cxx17_backports.h"
+#include <algorithm>
+
+#include "base/numerics/checked_math.h"
 #include "base/numerics/clamped_math.h"
-#include "media/base/bind_to_current_loop.h"
+#include "base/system/sys_info.h"
 #include "media/base/video_frame.h"
 
 namespace media {
@@ -22,10 +24,32 @@ uint32_t GetDefaultVideoEncodeBitrate(gfx::Size frame_size,
 
   // Scale default bitrate to the given frame size and fps
   base::ClampedNumeric<uint64_t> result = kDefaultBitrateForHD30fps;
-  result *= base::clamp(framerate, 1u, 300u);
-  result *= base::clamp(frame_size.GetArea(), 1, kMaxArea);
+  result *= std::clamp(framerate, 1u, 300u);
+  result *= std::clamp(frame_size.GetArea(), 1, kMaxArea);
   result /= kHDArea * 30u;  // HD resolution, 30 fps
-  return base::clamp(result.RawValue(), kMinBitrate, kMaxBitrate);
+  return std::clamp(result.RawValue(), kMinBitrate, kMaxBitrate);
+}
+
+int GetNumberOfThreadsForSoftwareEncoding(gfx::Size frame_size) {
+  int area = frame_size.GetCheckedArea().ValueOrDefault(1);
+  // Default to 1 thread for less than VGA.
+  int desired_threads = 1;
+
+  if (area >= 3840 * 2160) {
+    desired_threads = 16;
+  } else if (area >= 1920 * 1080) {
+    desired_threads = 8;
+  } else if (area >= 1280 * 720) {
+    desired_threads = 4;
+  } else if (area >= 640 * 480) {
+    desired_threads = 2;
+  }
+
+  // Clamp to the number of available logical processors/cores.
+  desired_threads =
+      std::min(desired_threads, base::SysInfo::NumberOfProcessors());
+
+  return desired_threads;
 }
 
 VideoEncoderOutput::VideoEncoderOutput() = default;
@@ -43,20 +67,14 @@ VideoEncoder::PendingEncode::PendingEncode() = default;
 VideoEncoder::PendingEncode::PendingEncode(PendingEncode&&) = default;
 VideoEncoder::PendingEncode::~PendingEncode() = default;
 
+VideoEncoder::EncodeOptions::EncodeOptions(bool key_frame)
+    : key_frame(key_frame) {}
+VideoEncoder::EncodeOptions::EncodeOptions() = default;
+VideoEncoder::EncodeOptions::EncodeOptions(const EncodeOptions&) = default;
+VideoEncoder::EncodeOptions::~EncodeOptions() = default;
+
 void VideoEncoder::DisablePostedCallbacks() {
   post_callbacks_ = false;
-}
-
-VideoEncoder::OutputCB VideoEncoder::BindCallbackToCurrentLoopIfNeeded(
-    OutputCB&& callback) {
-  return post_callbacks_ ? BindToCurrentLoop(std::move(callback))
-                         : std::move(callback);
-}
-
-VideoEncoder::EncoderStatusCB VideoEncoder::BindCallbackToCurrentLoopIfNeeded(
-    EncoderStatusCB&& callback) {
-  return post_callbacks_ ? BindToCurrentLoop(std::move(callback))
-                         : std::move(callback);
 }
 
 }  // namespace media

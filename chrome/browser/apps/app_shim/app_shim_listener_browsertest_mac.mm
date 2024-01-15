@@ -7,13 +7,14 @@
 #include <unistd.h>
 
 #include <memory>
+#include <optional>
 
-#include "base/bind.h"
+#include "base/apple/foundation_util.h"
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/mac/foundation_util.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
@@ -41,7 +42,6 @@
 #include "mojo/public/cpp/platform/platform_channel.h"
 #include "mojo/public/cpp/system/handle.h"
 #include "mojo/public/cpp/system/isolated_connection.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/ipcz/include/ipcz/ipcz.h"
 
 // A test version of the AppShimController mojo client in chrome_main_app_mode.
@@ -84,10 +84,14 @@ class TestShimClient : public chrome::mojom::AppShim {
   void UpdateApplicationDockMenu(
       std::vector<chrome::mojom::ApplicationDockMenuItemPtr> dock_menu_items)
       override {}
+  void BindNotificationProvider(
+      mojo::PendingReceiver<mac_notifications::mojom::MacNotificationProvider>
+          provider) override {}
 
  private:
   void OnShimConnectedDone(
       chrome::mojom::AppShimLaunchResult result,
+      variations::VariationsCommandLine feature_state,
       mojo::PendingReceiver<chrome::mojom::AppShim> app_shim_receiver) {
     shim_receiver_.Bind(std::move(app_shim_receiver));
   }
@@ -104,9 +108,9 @@ class TestShimClient : public chrome::mojom::AppShim {
     // lifetime here.
     const IpczAPI& ipcz = mojo::core::GetIpczAPIForMojo();
     IpczHandle node;
-    IpczResult result = ipcz.CreateNode(
-        &mojo::core::GetIpczDriverForMojo(), IPCZ_INVALID_DRIVER_HANDLE,
-        IPCZ_CREATE_NODE_AS_BROKER, nullptr, &node);
+    IpczResult result =
+        ipcz.CreateNode(&mojo::core::GetIpczDriverForMojo(),
+                        IPCZ_CREATE_NODE_AS_BROKER, nullptr, &node);
     CHECK_EQ(IPCZ_RESULT_OK, result);
     secondary_ipcz_broker_.reset(mojo::Handle{node});
 
@@ -137,9 +141,10 @@ TestShimClient::TestShimClient() {
   base::FilePath user_data_dir;
   CHECK(base::PathService::Get(chrome::DIR_USER_DATA, &user_data_dir));
 
-  std::string name_fragment = base::StrCat(
-      {base::mac::BaseBundleID(), ".", app_mode::kAppShimBootstrapNameFragment,
-       ".", base::MD5String(user_data_dir.value())});
+  std::string name_fragment =
+      base::StrCat({base::apple::BaseBundleID(), ".",
+                    app_mode::kAppShimBootstrapNameFragment, ".",
+                    base::MD5String(user_data_dir.value())});
   mojo::PlatformChannelEndpoint endpoint = ConnectToBrowser(name_fragment);
 
   mojo::ScopedMessagePipeHandle message_pipe;
@@ -198,7 +203,7 @@ class AppShimListenerBrowserTest : public InProcessBrowserTest,
 
   std::unique_ptr<TestShimClient> test_client_;
   std::vector<base::FilePath> last_launch_files_;
-  absl::optional<chrome::mojom::AppShimLaunchType> last_launch_type_;
+  std::optional<chrome::mojom::AppShimLaunchType> last_launch_type_;
 
  private:
   // chrome::mojom::AppShimHost.
@@ -206,8 +211,10 @@ class AppShimListenerBrowserTest : public InProcessBrowserTest,
   void ReopenApp() override {}
   void FilesOpened(const std::vector<base::FilePath>& files) override {}
   void ProfileSelectedFromMenu(const base::FilePath& profile_path) override {}
+  void OpenAppSettings() override {}
   void UrlsOpened(const std::vector<GURL>& urls) override {}
   void OpenAppWithOverrideUrl(const GURL& override_url) override {}
+  void ApplicationWillTerminate() override {}
 
   std::unique_ptr<base::RunLoop> runner_;
   mojo::Receiver<chrome::mojom::AppShimHost> receiver_{this};
@@ -252,6 +259,10 @@ IN_PROC_BROWSER_TEST_F(AppShimListenerBrowserTest, LaunchNormal) {
   app_shim_info->app_id = "test_app";
   app_shim_info->app_url = GURL("https://example.com");
   app_shim_info->launch_type = chrome::mojom::AppShimLaunchType::kNormal;
+  app_shim_info->notification_action_handler =
+      mojo::PendingRemote<
+          mac_notifications::mojom::MacNotificationActionHandler>()
+          .InitWithNewPipeAndPassReceiver();
   test_client_->host_bootstrap()->OnShimConnected(
       test_client_->GetHostReceiver(), std::move(app_shim_info),
       test_client_->GetOnShimConnectedCallback());
@@ -268,6 +279,10 @@ IN_PROC_BROWSER_TEST_F(AppShimListenerBrowserTest, LaunchRegisterOnly) {
   app_shim_info->app_id = "test_app";
   app_shim_info->app_url = GURL("https://example.com");
   app_shim_info->launch_type = chrome::mojom::AppShimLaunchType::kRegisterOnly;
+  app_shim_info->notification_action_handler =
+      mojo::PendingRemote<
+          mac_notifications::mojom::MacNotificationActionHandler>()
+          .InitWithNewPipeAndPassReceiver();
   test_client_->host_bootstrap()->OnShimConnected(
       test_client_->GetHostReceiver(), std::move(app_shim_info),
       test_client_->GetOnShimConnectedCallback());

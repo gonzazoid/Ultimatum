@@ -208,19 +208,11 @@ bool TextSuggestionController::IsMenuOpen() const {
 
 void TextSuggestionController::HandlePotentialSuggestionTap(
     const PositionInFlatTree& caret_position) {
-  if (!IsAvailable()) {
-    // TODO(crbug.com/1054955): We should fix caller not to make this happens.
-    NOTREACHED();
+  if (!IsAvailable() || GetFrame() != GetDocument().GetFrame()) {
+    // TODO(crbug.com/1054955, crbug.com/1409155, crbug.com/1412036): Callsites
+    // should not call this function in these conditions.
     return;
   }
-  if (GetFrame() != GetDocument().GetFrame()) {
-    // TODO(crbug.com/1054955): We should fix caller not to make this happens.
-    NOTREACHED();
-    return;
-  }
-  // TODO(crbug.com/779126): add support for suggestions in immersive mode.
-  if (GetFrame().GetSettings()->GetImmersiveModeEnabled())
-    return;
 
   // It's theoretically possible, but extremely unlikely, that the user has
   // managed to tap on some text after TextSuggestionController has told the

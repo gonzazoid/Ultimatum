@@ -30,10 +30,7 @@ struct NamedGridLine {
 };
 
 using OrderedNamedGridLines =
-    HashMap<size_t,
-            Vector<NamedGridLine>,
-            WTF::IntHash<size_t>,
-            WTF::UnsignedWithZeroKeyHashTraits<size_t>>;
+    HashMap<size_t, Vector<NamedGridLine>, IntWithZeroKeyHashTraits<size_t>>;
 
 }  // namespace blink
 

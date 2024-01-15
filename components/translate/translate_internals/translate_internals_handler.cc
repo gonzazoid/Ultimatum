@@ -9,8 +9,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/types/cxx23_to_underlying.h"
 #include "base/values.h"
 #include "components/language/core/browser/pref_names.h"
@@ -91,7 +91,8 @@ void TranslateInternalsHandler::RegisterMessageCallbacks() {
 void TranslateInternalsHandler::AddLanguageDetectionDetails(
     const translate::LanguageDetectionDetails& details) {
   base::Value::Dict dict;
-  dict.Set("time", details.time.ToJsTime());
+  dict.Set("has_run_lang_detection", details.has_run_lang_detection);
+  dict.Set("time", details.time.InMillisecondsFSinceUnixEpoch());
   dict.Set("url", details.url.spec());
   dict.Set("content_language", details.content_language);
   dict.Set("model_detected_language", details.model_detected_language);
@@ -108,7 +109,7 @@ void TranslateInternalsHandler::AddLanguageDetectionDetails(
 void TranslateInternalsHandler::OnTranslateError(
     const translate::TranslateErrorDetails& details) {
   base::Value::Dict dict;
-  dict.Set("time", details.time.ToJsTime());
+  dict.Set("time", details.time.InMillisecondsFSinceUnixEpoch());
   dict.Set("url", details.url.spec());
   dict.Set("error", base::to_underlying(details.error));
   SendMessageToJs("translateErrorDetailsAdded", dict);
@@ -119,7 +120,7 @@ void TranslateInternalsHandler::OnTranslateInit(
   if (!GetTranslateClient()->IsTranslatableURL(details.url))
     return;
   base::Value::Dict dict;
-  dict.Set("time", details.time.ToJsTime());
+  dict.Set("time", details.time.InMillisecondsFSinceUnixEpoch());
   dict.Set("url", details.url.spec());
 
   dict.Set("page_language_code", details.page_language_code);
@@ -151,7 +152,7 @@ void TranslateInternalsHandler::OnTranslateInit(
 void TranslateInternalsHandler::OnTranslateEvent(
     const translate::TranslateEventDetails& details) {
   base::Value::Dict dict;
-  dict.Set("time", details.time.ToJsTime());
+  dict.Set("time", details.time.InMillisecondsFSinceUnixEpoch());
   dict.Set("filename", details.filename);
   dict.Set("line", details.line);
   dict.Set("message", details.message);
@@ -276,7 +277,7 @@ void TranslateInternalsHandler::SendSupportedLanguagesToJs() {
 
   base::Value::Dict dict;
   dict.Set("languages", std::move(languages_list));
-  dict.Set("last_updated", last_updated.ToJsTime());
+  dict.Set("last_updated", last_updated.InMillisecondsFSinceUnixEpoch());
   SendMessageToJs("supportedLanguagesUpdated", dict);
 }
 

@@ -6,6 +6,7 @@
 
 #include "third_party/blink/renderer/core/animation/animation_timeline.h"
 #include "third_party/blink/renderer/core/animation/document_timeline.h"
+#include "third_party/blink/renderer/core/animation/scroll_snapshot_timeline.h"
 #include "third_party/blink/renderer/core/dom/node.h"
 #include "third_party/blink/renderer/core/layout/layout_box.h"
 #include "third_party/blink/renderer/platform/graphics/compositor_element_id.h"
@@ -19,19 +20,21 @@ scoped_refptr<CompositorScrollTimeline> ToCompositorScrollTimeline(
   if (!timeline || IsA<DocumentTimeline>(timeline))
     return nullptr;
 
-  auto* scroll_timeline = To<ScrollTimeline>(timeline);
-  Node* scroll_source = scroll_timeline->ResolvedSource();
+  auto* scroll_snapshot_timeline = To<ScrollSnapshotTimeline>(timeline);
+  Node* scroll_source = scroll_snapshot_timeline->ResolvedSource();
   absl::optional<CompositorElementId> element_id =
       GetCompositorScrollElementId(scroll_source);
 
-  LayoutBox* box =
-      scroll_timeline->IsActive() ? scroll_source->GetLayoutBox() : nullptr;
+  LayoutBox* box = scroll_snapshot_timeline->IsActive()
+                       ? scroll_source->GetLayoutBox()
+                       : nullptr;
 
   CompositorScrollTimeline::ScrollDirection orientation = ConvertOrientation(
-      scroll_timeline->GetOrientation(), box ? box->Style() : nullptr);
+      scroll_snapshot_timeline->GetAxis(), box ? box->Style() : nullptr);
 
   return CompositorScrollTimeline::Create(
-      element_id, orientation, scroll_timeline->GetResolvedScrollOffsets());
+      element_id, orientation,
+      scroll_snapshot_timeline->GetResolvedScrollOffsets());
 }
 
 absl::optional<CompositorElementId> GetCompositorScrollElementId(
@@ -49,13 +52,15 @@ absl::optional<CompositorElementId> GetCompositorScrollElementId(
 // web concepts of 'block' and 'inline' direction into absolute vertical or
 // horizontal directions.
 CompositorScrollTimeline::ScrollDirection ConvertOrientation(
-    ScrollTimeline::ScrollDirection orientation,
+    ScrollAxis axis,
     const ComputedStyle* style) {
   // Easy cases; physical is always physical.
-  if (orientation == ScrollTimeline::ScrollDirection::kHorizontal)
+  if (axis == ScrollAxis::kX) {
     return CompositorScrollTimeline::ScrollRight;
-  if (orientation == ScrollTimeline::ScrollDirection::kVertical)
+  }
+  if (axis == ScrollAxis::kY) {
     return CompositorScrollTimeline::ScrollDown;
+  }
 
   // Harder cases; first work out which axis is which, and then for each check
   // which edge we start at.
@@ -69,7 +74,7 @@ CompositorScrollTimeline::ScrollDirection ConvertOrientation(
   // direction: ltr;
   bool is_ltr_direction = style ? style->IsLeftToRightDirection() : true;
 
-  if (orientation == ScrollTimeline::ScrollDirection::kBlock) {
+  if (axis == ScrollAxis::kBlock) {
     if (is_horizontal_writing_mode) {
       // For horizontal writing mode, block is vertical. The starting edge is
       // always the top.
@@ -81,7 +86,7 @@ CompositorScrollTimeline::ScrollDirection ConvertOrientation(
                                          : CompositorScrollTimeline::ScrollLeft;
   }
 
-  DCHECK_EQ(orientation, ScrollTimeline::ScrollDirection::kInline);
+  DCHECK_EQ(axis, ScrollAxis::kInline);
   if (is_horizontal_writing_mode) {
     // For horizontal writing mode, inline is horizontal. The starting edge
     // depends on the directionality.

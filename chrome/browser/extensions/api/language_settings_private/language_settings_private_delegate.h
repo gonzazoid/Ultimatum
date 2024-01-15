@@ -16,8 +16,6 @@
 #include "chrome/common/extensions/api/language_settings_private.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/prefs/pref_change_registrar.h"
-#include "content/public/browser/notification_observer.h"
-#include "content/public/browser/notification_registrar.h"
 #include "extensions/browser/event_router.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -35,16 +33,16 @@ namespace extensions {
 class LanguageSettingsPrivateDelegate
     : public KeyedService,
       public EventRouter::Observer,
-      public content::NotificationObserver,
 #if BUILDFLAG(IS_CHROMEOS_ASH)
       public ash::input_method::InputMethodManager::Observer,
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
       public SpellcheckHunspellDictionary::Observer,
       public SpellcheckCustomDictionary::Observer {
  public:
-  static LanguageSettingsPrivateDelegate* Create(
+  static std::unique_ptr<LanguageSettingsPrivateDelegate> Create(
       content::BrowserContext* browser_context);
 
+  explicit LanguageSettingsPrivateDelegate(content::BrowserContext* context);
   LanguageSettingsPrivateDelegate(const LanguageSettingsPrivateDelegate&) =
       delete;
   LanguageSettingsPrivateDelegate& operator=(
@@ -60,14 +58,7 @@ class LanguageSettingsPrivateDelegate
   // Retry downloading the spellcheck dictionary.
   virtual void RetryDownloadHunspellDictionary(const std::string& language);
 
-  // content::NotificationObserver implementation.
-  void Observe(int type,
-               const content::NotificationSource& source,
-               const content::NotificationDetails& details) override;
-
  protected:
-  explicit LanguageSettingsPrivateDelegate(content::BrowserContext* context);
-
   // KeyedService implementation.
   void Shutdown() override;
 
@@ -143,11 +134,6 @@ class LanguageSettingsPrivateDelegate
   bool listening_spellcheck_;
   // True if there are observers listening for input method events.
   bool listening_input_method_;
-
-  // True if the profile has finished initializing.
-  bool profile_added_;
-
-  content::NotificationRegistrar notification_registrar_;
 
   PrefChangeRegistrar pref_change_registrar_;
 };

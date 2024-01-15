@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_ASH_INPUT_METHOD_MULTI_WORD_SUGGESTER_H_
 #define CHROME_BROWSER_ASH_INPUT_METHOD_MULTI_WORD_SUGGESTER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/input_method/suggester.h"
 #include "chrome/browser/ash/input_method/suggestion_enums.h"
@@ -30,11 +31,11 @@ class MultiWordSuggester : public Suggester {
   void OnFocus(int context_id) override;
   void OnBlur() override;
   void OnExternalSuggestionsUpdated(
-      const std::vector<ime::AssistiveSuggestion>& suggestions) override;
+      const std::vector<ime::AssistiveSuggestion>& suggestions,
+      const absl::optional<ime::SuggestionsTextContext>& context) override;
   SuggestionStatus HandleKeyEvent(const ui::KeyEvent& event) override;
   bool TrySuggestWithSurroundingText(const std::u16string& text,
-                                     int cursor_pos,
-                                     int anchor_pos) override;
+                                     gfx::Range selection_range) override;
   bool AcceptSuggestion(size_t index = 0) override;
   void DismissSuggestion() override;
   AssistiveType GetProposeActionType() override;
@@ -43,8 +44,7 @@ class MultiWordSuggester : public Suggester {
 
   // Used to capture any changes to the current input text.
   void OnSurroundingTextChanged(const std::u16string& text,
-                                size_t cursor_pos,
-                                size_t anchor_pos);
+                                gfx::Range selection_range);
 
  private:
   // Used to capture any internal state around the previously or currently
@@ -67,6 +67,7 @@ class MultiWordSuggester : public Suggester {
       size_t initial_confirmed_length;
       base::TimeTicks time_first_shown;
       bool highlighted = false;
+      size_t original_surrounding_text_length;
     };
 
     struct SurroundingText {
@@ -87,7 +88,14 @@ class MultiWordSuggester : public Suggester {
     void UpdateSurroundingText(const SurroundingText& surrounding_text);
 
     // Captures new suggestion context.
-    void UpdateSuggestion(const Suggestion& suggestion);
+    void UpdateSuggestion(const Suggestion& suggestion,
+                          bool new_tracking_behavior);
+
+    // Validates the given suggestion text context with the current surrounding
+    // text, and returns the state of the given suggestion context.
+    MultiWordSuggestionState ValidateSuggestion(
+        const Suggestion& suggestion,
+        const ime::SuggestionsTextContext& context);
 
     // Takes the current suggestion and surrounding text state, and ensures the
     // confirmed length or any other suggestion details are correct.
@@ -118,7 +126,7 @@ class MultiWordSuggester : public Suggester {
 
    private:
     // Not owned by this class
-    MultiWordSuggester* suggester_;
+    raw_ptr<MultiWordSuggester> suggester_;
 
     // The current state of the suggester (eg is a suggestion shown or not).
     State state_ = State::kNoSuggestionShown;
@@ -148,7 +156,7 @@ class MultiWordSuggester : public Suggester {
   absl::optional<int> focused_context_id_;
 
   // Not owned by this class
-  SuggestionHandlerInterface* suggestion_handler_;
+  raw_ptr<SuggestionHandlerInterface, DanglingUntriaged> suggestion_handler_;
 
   // Current suggestion state
   SuggestionState state_;
@@ -156,7 +164,7 @@ class MultiWordSuggester : public Suggester {
   ui::ime::AssistiveWindowButton suggestion_button_;
 
   // The current user's Chrome user profile.
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
 };
 
 }  // namespace input_method

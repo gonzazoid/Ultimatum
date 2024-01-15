@@ -28,15 +28,21 @@ class TestPersistenceProvider : public OriginTrialsPersistenceProvider {
 
   // OriginTrialsPersistenceProvider
   base::flat_set<origin_trials::PersistedTrialToken> GetPersistentTrialTokens(
-      const url::Origin& origin) const override;
+      const url::Origin& origin) override;
+  SiteOriginTrialTokens GetPotentialPersistentTrialTokens(
+      const url::Origin& origin) override;
   void SavePersistentTrialTokens(
       const url::Origin& origin,
       const base::flat_set<origin_trials::PersistedTrialToken>& tokens)
       override;
+  void ClearPersistedTokens() override;
 
  private:
   std::map<url::Origin, base::flat_set<origin_trials::PersistedTrialToken>>
       storage_;
+  std::map<SiteKey, base::flat_set<url::Origin>> sitekey_map_;
+
+  void UpdateSiteToOriginsMap(const url::Origin& origin, bool insert);
 };
 
 }  // namespace origin_trials::test

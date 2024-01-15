@@ -14,7 +14,7 @@
 #include "chrome/browser/extensions/event_router_forwarder.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/extensions/api/system_private.h"
-#include "chrome/common/pref_names.h"
+#include "components/policy/core/common/policy_pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "google_apis/google_api_keys.h"
 
@@ -26,8 +26,8 @@
 
 namespace {
 
-// Maps prefs::kIncognitoModeAvailability values (0 = enabled, ...)
-// to strings exposed to extensions.
+// Maps policy::policy_prefs::kIncognitoModeAvailability values (0 = enabled,
+// ...) to strings exposed to extensions.
 const char* const kIncognitoModeAvailabilityStrings[] = {
   "enabled",
   "disabled",
@@ -56,12 +56,12 @@ ExtensionFunction::ResponseAction
 SystemPrivateGetIncognitoModeAvailabilityFunction::Run() {
   PrefService* prefs =
       Profile::FromBrowserContext(browser_context())->GetPrefs();
-  int value = prefs->GetInteger(prefs::kIncognitoModeAvailability);
+  int value =
+      prefs->GetInteger(policy::policy_prefs::kIncognitoModeAvailability);
   EXTENSION_FUNCTION_VALIDATE(
       value >= 0 &&
       value < static_cast<int>(std::size(kIncognitoModeAvailabilityStrings)));
-  return RespondNow(
-      OneArgument(base::Value(kIncognitoModeAvailabilityStrings[value])));
+  return RespondNow(WithArguments(kIncognitoModeAvailabilityStrings[value]));
 }
 
 ExtensionFunction::ResponseAction SystemPrivateGetUpdateStatusFunction::Run() {
@@ -127,11 +127,11 @@ ExtensionFunction::ResponseAction SystemPrivateGetUpdateStatusFunction::Run() {
   base::Value::Dict dict;
   dict.Set(kStateKey, state);
   dict.Set(kDownloadProgressKey, download_progress);
-  return RespondNow(OneArgument(base::Value(std::move(dict))));
+  return RespondNow(WithArguments(std::move(dict)));
 }
 
 ExtensionFunction::ResponseAction SystemPrivateGetApiKeyFunction::Run() {
-  return RespondNow(OneArgument(base::Value(google_apis::GetAPIKey())));
+  return RespondNow(WithArguments(google_apis::GetAPIKey()));
 }
 
 }  // namespace extensions

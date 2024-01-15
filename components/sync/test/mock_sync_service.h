@@ -5,18 +5,25 @@
 #ifndef COMPONENTS_SYNC_TEST_MOCK_SYNC_SERVICE_H_
 #define COMPONENTS_SYNC_TEST_MOCK_SYNC_SERVICE_H_
 
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "base/values.h"
+#include "build/build_config.h"
 #include "components/signin/public/identity_manager/account_info.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_token_status.h"
 #include "components/sync/engine/cycle/sync_cycle_snapshot.h"
 #include "components/sync/model/type_entities_count.h"
+#include "components/sync/service/local_data_description.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_token_status.h"
 #include "components/sync/test/sync_user_settings_mock.h"
 #include "testing/gmock/include/gmock/gmock.h"
+
+#if BUILDFLAG(IS_ANDROID)
+#include "base/android/scoped_java_ref.h"
+#endif
 
 namespace syncer {
 
@@ -34,8 +41,19 @@ class MockSyncService : public SyncService {
   // SyncService implementation.
   syncer::SyncUserSettings* GetUserSettings() override;
   const syncer::SyncUserSettings* GetUserSettings() const override;
+#if BUILDFLAG(IS_ANDROID)
+  MOCK_METHOD(base::android::ScopedJavaLocalRef<jobject>,
+              GetJavaObject,
+              (),
+              (override));
+#endif  // BUILDFLAG(IS_ANDROID)
+  MOCK_METHOD(void, SetSyncFeatureRequested, (), (override));
   MOCK_METHOD(DisableReasonSet, GetDisableReasons, (), (const override));
   MOCK_METHOD(TransportState, GetTransportState, (), (const override));
+  MOCK_METHOD(UserActionableError,
+              GetUserActionableError,
+              (),
+              (const override));
   MOCK_METHOD(bool, IsLocalSyncEnabled, (), (const override));
   MOCK_METHOD(CoreAccountInfo, GetAccountInfo, (), (const override));
   MOCK_METHOD(bool, HasSyncConsent, (), (const override));
@@ -49,6 +67,10 @@ class MockSyncService : public SyncService {
   MOCK_METHOD(bool, IsSetupInProgress, (), (const override));
   MOCK_METHOD(ModelTypeSet, GetPreferredDataTypes, (), (const override));
   MOCK_METHOD(ModelTypeSet, GetActiveDataTypes, (), (const override));
+  MOCK_METHOD(ModelTypeSet,
+              GetTypesWithPendingDownloadForInitialSync,
+              (),
+              (const override));
   MOCK_METHOD(void, StopAndClear, (), (override));
   MOCK_METHOD(void,
               OnDataTypeRequestsSyncStartup,
@@ -62,19 +84,6 @@ class MockSyncService : public SyncService {
   MOCK_METHOD(void,
               SetInvalidationsForSessionsEnabled,
               (bool enabled),
-              (override));
-  MOCK_METHOD(void,
-              AddTrustedVaultDecryptionKeysFromWeb,
-              (const std::string& gaia_id,
-               const std::vector<std::vector<uint8_t>>& keys,
-               int last_key_version),
-              (override));
-  MOCK_METHOD(void,
-              AddTrustedVaultRecoveryMethodFromWeb,
-              (const std::string& gaia_id,
-               const std::vector<uint8_t>& public_key,
-               int method_type_hint,
-               base::OnceClosure callback),
               (override));
   MOCK_METHOD(void, AddObserver, (SyncServiceObserver * observer), (override));
   MOCK_METHOD(void,
@@ -126,6 +135,29 @@ class MockSyncService : public SyncService {
   MOCK_METHOD(void,
               GetAllNodesForDebugging,
               (base::OnceCallback<void(base::Value::List)> callback),
+              (override));
+  MOCK_METHOD(ModelTypeDownloadStatus,
+              GetDownloadStatusFor,
+              (ModelType type),
+              (const override));
+  MOCK_METHOD(void,
+              RecordReasonIfWaitingForUpdates,
+              (ModelType, const std::string&),
+              (const override));
+  MOCK_METHOD(void,
+              GetTypesWithUnsyncedData,
+              (ModelTypeSet, base::OnceCallback<void(ModelTypeSet)>),
+              (const override));
+  MOCK_METHOD(
+      void,
+      GetLocalDataDescriptions,
+      (ModelTypeSet types,
+       base::OnceCallback<void(std::map<ModelType, LocalDataDescription>)>
+           callback),
+      (override));
+  MOCK_METHOD(void,
+              TriggerLocalDataMigration,
+              (ModelTypeSet types),
               (override));
 
   // KeyedService implementation.

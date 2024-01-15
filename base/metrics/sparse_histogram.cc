@@ -53,7 +53,6 @@ HistogramBase* SparseHistogram::FactoryGet(const std::string& name,
     // persistent allocation fails (perhaps because it is full).
     if (!tentative_histogram) {
       DCHECK(!histogram_ref);  // Should never have been set.
-      DCHECK(!allocator);      // Shouldn't have failed.
       flags &= ~HistogramBase::kIsPersistent;
       tentative_histogram.reset(new SparseHistogram(GetPermanentName(name)));
       tentative_histogram->SetFlags(flags);
@@ -132,14 +131,31 @@ std::unique_ptr<HistogramSamples> SparseHistogram::SnapshotSamples() const {
   return std::move(snapshot);
 }
 
-std::unique_ptr<HistogramSamples> SparseHistogram::SnapshotDelta() {
-  DCHECK(!final_delta_created_);
-
+std::unique_ptr<HistogramSamples> SparseHistogram::SnapshotUnloggedSamples()
+    const {
   std::unique_ptr<SampleMap> snapshot(new SampleMap(name_hash()));
+
   base::AutoLock auto_lock(lock_);
   snapshot->Add(*unlogged_samples_);
 
-  unlogged_samples_->Subtract(*snapshot);
+  return std::move(snapshot);
+}
+
+void SparseHistogram::MarkSamplesAsLogged(const HistogramSamples& samples) {
+  DCHECK(!final_delta_created_);
+
+  base::AutoLock auto_lock(lock_);
+  unlogged_samples_->Subtract(samples);
+  logged_samples_->Add(samples);
+}
+
+std::unique_ptr<HistogramSamples> SparseHistogram::SnapshotDelta() {
+  DCHECK(!final_delta_created_);
+
+  std::unique_ptr<SampleMap> snapshot =
+      std::make_unique<SampleMap>(name_hash());
+  base::AutoLock auto_lock(lock_);
+  snapshot->Extract(*unlogged_samples_);
   logged_samples_->Add(*snapshot);
   return std::move(snapshot);
 }

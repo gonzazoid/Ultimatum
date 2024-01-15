@@ -8,10 +8,13 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
-#include "chrome/browser/ui/autofill/payments/autofill_error_dialog_controller.h"
 #include "chrome/browser/ui/autofill/payments/autofill_error_dialog_view.h"
 #include "components/autofill/core/browser/payments/autofill_error_dialog_context.h"
-#include "content/public/browser/web_contents.h"
+#include "components/autofill/core/browser/ui/payments/autofill_error_dialog_controller.h"
+
+namespace content {
+class WebContents;
+}  // namespace content
 
 namespace autofill {
 
@@ -37,7 +40,6 @@ class AutofillErrorDialogControllerImpl : public AutofillErrorDialogController {
   const std::u16string GetTitle() override;
   const std::u16string GetDescription() override;
   const std::u16string GetButtonLabel() override;
-  content::WebContents* GetWebContents() override;
 
   AutofillErrorDialogView* autofill_error_dialog_view() {
     return autofill_error_dialog_view_;
@@ -47,7 +49,7 @@ class AutofillErrorDialogControllerImpl : public AutofillErrorDialogController {
   // Dismiss the error dialog if showing.
   void Dismiss();
 
-  raw_ptr<content::WebContents, DanglingUntriaged> web_contents_;
+  const raw_ptr<content::WebContents> web_contents_;
   // The context of the error dialog that is being displayed. Contains
   // information such as the type of the error dialog that is being displayed.
   // |error_dialog_context_| may also contain extra information such as a

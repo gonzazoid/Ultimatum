@@ -5,6 +5,8 @@
 #ifndef UI_ACCESSIBILITY_PLATFORM_AUTOMATION_AUTOMATION_AX_TREE_WRAPPER_H_
 #define UI_ACCESSIBILITY_PLATFORM_AUTOMATION_AUTOMATION_AX_TREE_WRAPPER_H_
 
+#include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/accessibility/ax_enums.mojom-shared.h"
 #include "ui/accessibility/ax_event_generator.h"
 #include "ui/accessibility/ax_node.h"
@@ -18,9 +20,10 @@ class AutomationTreeManagerOwner;
 
 // A class that wraps one AXTree and all of the additional state
 // and helper methods needed to use it for the automation API.
-class AX_EXPORT AutomationAXTreeWrapper : public AXTreeManager {
+class COMPONENT_EXPORT(AX_PLATFORM) AutomationAXTreeWrapper
+    : public AXTreeManager {
  public:
-  AutomationAXTreeWrapper(AXTreeID tree_id, AutomationTreeManagerOwner* owner);
+  explicit AutomationAXTreeWrapper(AutomationTreeManagerOwner* owner);
 
   AutomationAXTreeWrapper(const AutomationAXTreeWrapper&) = delete;
   AutomationAXTreeWrapper& operator=(const AutomationAXTreeWrapper&) = delete;
@@ -47,15 +50,14 @@ class AX_EXPORT AutomationAXTreeWrapper : public AXTreeManager {
 
   AutomationTreeManagerOwner* owner() { return owner_; }
 
-  // Called by AutomationInternalCustomBindings::OnAccessibilityEvents on
+  // Called by AutomationInternalCustomBindings::DispatchAccessibilityEvents on
   // the AutomationAXTreeWrapper instance for the correct tree corresponding
   // to this event. Unserializes the tree update and calls back to
   // AutomationTreeManagerOwner to fire any automation events needed.
   bool OnAccessibilityEvents(const AXTreeID& tree_id,
                              const std::vector<AXTreeUpdate>& updates,
                              const std::vector<AXEvent>& events,
-                             gfx::Point mouse_location,
-                             bool is_active_profile);
+                             gfx::Point mouse_location);
 
   // Returns true if this is the desktop tree.
   bool IsDesktopTree() const;
@@ -135,7 +137,7 @@ class AX_EXPORT AutomationAXTreeWrapper : public AXTreeManager {
                         AXNode* node,
                         bool is_ignored_new_value) override;
 
-  AutomationTreeManagerOwner* owner_;
+  raw_ptr<AutomationTreeManagerOwner> owner_;
   std::vector<int> deleted_node_ids_;
   std::vector<int> text_changed_node_ids_;
 

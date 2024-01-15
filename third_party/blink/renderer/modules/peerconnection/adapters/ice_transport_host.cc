@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/modules/peerconnection/adapters/ice_transport_host.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/modules/peerconnection/adapters/ice_transport_adapter_impl.h"
 #include "third_party/blink/renderer/modules/peerconnection/adapters/ice_transport_proxy.h"
 #include "third_party/blink/renderer/modules/peerconnection/adapters/web_rtc_cross_thread_copier.h"
@@ -28,7 +29,6 @@ IceTransportHost::IceTransportHost(
 
 IceTransportHost::~IceTransportHost() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK(!HasConsumer());
 }
 
 void IceTransportHost::Initialize(
@@ -48,57 +48,6 @@ scoped_refptr<base::SingleThreadTaskRunner> IceTransportHost::host_thread()
     const {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   return host_thread_;
-}
-
-void IceTransportHost::StartGathering(
-    const cricket::IceParameters& local_parameters,
-    const cricket::ServerAddresses& stun_servers,
-    const WebVector<cricket::RelayServerConfig>& turn_servers,
-    IceTransportPolicy policy) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  transport_->StartGathering(local_parameters, stun_servers, turn_servers,
-                             policy);
-}
-
-void IceTransportHost::Start(
-    const cricket::IceParameters& remote_parameters,
-    cricket::IceRole role,
-    const Vector<cricket::Candidate>& initial_remote_candidates) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  transport_->Start(remote_parameters, role, initial_remote_candidates);
-}
-
-void IceTransportHost::HandleRemoteRestart(
-    const cricket::IceParameters& new_remote_parameters) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  transport_->HandleRemoteRestart(new_remote_parameters);
-}
-
-void IceTransportHost::AddRemoteCandidate(const cricket::Candidate& candidate) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  transport_->AddRemoteCandidate(candidate);
-
-}
-
-bool IceTransportHost::HasConsumer() const {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  return consumer_host_;
-}
-
-IceTransportAdapter* IceTransportHost::ConnectConsumer(
-    QuicTransportHost* consumer_host) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK(consumer_host);
-  DCHECK(!consumer_host_);
-  consumer_host_ = consumer_host;
-  return transport_.get();
-}
-
-void IceTransportHost::DisconnectConsumer(QuicTransportHost* consumer_host) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK(consumer_host);
-  DCHECK_EQ(consumer_host, consumer_host_);
-  consumer_host_ = nullptr;
 }
 
 void IceTransportHost::OnGatheringStateChanged(

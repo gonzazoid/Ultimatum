@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/content_settings/core/common/content_settings_types.h"
 #include "ui/android/window_android.h"
 
@@ -46,15 +46,5 @@ class PermissionUpdateRequester {
   std::vector<ContentSettingsType> content_settings_types_;
   base::OnceCallback<void(bool)> callback_;
 };
-
-std::vector<ContentSettingsType>
-GetContentSettingsWithMissingRequiredAndroidPermissions(
-    const std::vector<ContentSettingsType>& content_settings_types,
-    ui::WindowAndroid* window_android);
-
-void AppendRequiredAndOptionalAndroidPermissionsForContentSettings(
-    const std::vector<ContentSettingsType>& content_settings_types,
-    std::vector<std::string>& out_required_permissions,
-    std::vector<std::string>& out_optional_permissions);
 
 #endif  // CHROME_BROWSER_PERMISSIONS_PERMISSION_UPDATE_REQUESTER_ANDROID_H_

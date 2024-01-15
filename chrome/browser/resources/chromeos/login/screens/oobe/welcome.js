@@ -6,26 +6,30 @@
  * @fileoverview Polymer element for displaying material design OOBE.
  */
 
+import '//resources/cr_elements/chromeos/cros_color_overrides.css.js';
 import '//resources/cr_elements/cr_input/cr_input.js';
 import '//resources/cr_elements/cr_shared_vars.css.js';
 import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
-import '../../components/oobe_icons.m.js';
+import '../../components/oobe_a11y_option.js';
+import '../../components/oobe_icons.html.js';
 import '../../components/oobe_i18n_dropdown.js';
-import '../../components/common_styles/common_styles.m.js';
-import '../../components/common_styles/oobe_dialog_host_styles.m.js';
-import '../../components/dialogs/oobe_adaptive_dialog.m.js';
-import '../../components/dialogs/oobe_modal_dialog.m.js';
+import '../../components/common_styles/oobe_common_styles.css.js';
+import '../../components/common_styles/oobe_dialog_host_styles.css.js';
+import '../../components/dialogs/oobe_adaptive_dialog.js';
 
-import {loadTimeData} from '//resources/js/load_time_data.m.js';
-import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {loadTimeData} from '//resources/ash/common/load_time_data.m.js';
+import {mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.m.js';
-import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.m.js';
-import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.m.js';
-import {getSelectedTitle, SelectListType} from '../../components/oobe_select.m.js';
-import {OobeTypes} from '../../components/oobe_types.m.js';
-import {Oobe} from '../../cr_ui.m.js';
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+import {OobeModalDialog} from '../../components/dialogs/oobe_modal_dialog.js';
+import {getSelectedTitle, SelectListType} from '../../components/oobe_select.js';
+import {OobeTypes} from '../../components/oobe_types.js';
+import {Oobe} from '../../cr_ui.js';
+import {traceWelcomeAnimationPlay} from '../../oobe_trace.js';
 
+import {getTemplate} from './welcome.html.js';
 import {OobeWelcomeDialog} from './welcome_dialog.js';
 
 /** @const {string} */
@@ -67,13 +71,22 @@ const OobeWelcomeScreenBase = mixinBehaviors(
 /**
  * @typedef {{
  *   welcomeScreen:  OobeWelcomeDialog,
- *   demoModeConfirmationDialog:  OobeModalDialogElement,
- *   editRequisitionDialog:  OobeModalDialogElement,
+ *   demoModeConfirmationDialog:  OobeModalDialog,
+ *   editRequisitionDialog:  OobeModalDialog,
  *   editRequisitionInput: CrInputElement,
- *   remoraRequisitionDialog: OobeModalDialogElement,
+ *   remoraRequisitionDialog: OobeModalDialog,
  * }}
  */
 OobeWelcomeScreenBase.$;
+
+/**
+ * Data that is passed to the screen during onBeforeShow.
+ * @typedef {{
+ *   isDeveloperMode: boolean,
+ * }}
+ */
+let WelcomeScreenData;
+
 /**
  * @polymer
  */
@@ -83,7 +96,7 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -166,6 +179,32 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
        * @private
        */
       chromeVoxHintGiven_: Boolean,
+
+      /**
+       * If it is a meet device.
+       * @private
+       */
+      isMeet_: {
+        type: Boolean,
+        value: function() {
+          return (
+              loadTimeData.valueExists('deviceFlowType') &&
+              loadTimeData.getString('deviceFlowType') == 'meet');
+        },
+        readOnly: true,
+      },
+
+      /**
+       * If device requisition is configurable.
+       * @private
+       */
+      isDeviceRequisitionConfigurable_: {
+        type: Boolean,
+        value: function() {
+          return loadTimeData.getBoolean('isDeviceRequisitionConfigurable');
+        },
+        readOnly: true,
+      },
     };
   }
 
@@ -198,6 +237,7 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
       'showRemoraRequisitionDialog',
       'maybeGiveChromeVoxHint',
       'setQuickStartEnabled',
+      'showQuickStartBluetoothDialog',
     ];
   }
 
@@ -208,20 +248,25 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
   /** @override */
   ready() {
     super.ready();
+    this.addEventListener('cr-lottie-playing', this.measureAnimationPlayDelay_);
     this.initializeLoginScreen('WelcomeScreen');
     this.updateLocalizedContent();
   }
 
   /**
    * Event handler that is invoked just before the screen is shown.
-   * TODO (https://crbug.com/948932): Define this type.
-   * @param {Object} data Screen init payload.
+   * @param {WelcomeScreenData} data Screen init payload.
    */
   onBeforeShow(data) {
     this.debuggingLinkVisible_ =
         data && 'isDeveloperMode' in data && data['isDeveloperMode'];
 
     window.setTimeout(() => void this.applyOobeConfiguration_(), 0);
+  }
+
+  measureAnimationPlayDelay_(e) {
+    e.stopPropagation();
+    traceWelcomeAnimationPlay();
   }
 
   /**
@@ -260,12 +305,12 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
     this.$.welcomeScreen.i18nUpdateLocale();
     this.i18nUpdateLocale();
 
-    var currentLanguage = loadTimeData.getString('language');
+    const currentLanguage = loadTimeData.getString('language');
 
     // We might have changed language via configuration. In this case
     // we need to proceed with rest of configuration after language change
     // was fully resolved.
-    var configuration = Oobe.getInstance().getOobeConfiguration();
+    const configuration = Oobe.getInstance().getOobeConfiguration();
     if (configuration && configuration.language &&
         configuration.language == currentLanguage) {
       window.setTimeout(() => void this.applyOobeConfiguration_(), 0);
@@ -291,13 +336,13 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
     if (this.configuration_applied_) {
       return;
     }
-    var configuration = Oobe.getInstance().getOobeConfiguration();
+    const configuration = Oobe.getInstance().getOobeConfiguration();
     if (!configuration) {
       return;
     }
 
     if (configuration.language) {
-      var currentLanguage = loadTimeData.getString('language');
+      const currentLanguage = loadTimeData.getString('language');
       if (currentLanguage != configuration.language) {
         this.applySelectedLanguage_(configuration.language);
         // Trigger language change without marking it as applied.
@@ -345,15 +390,6 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
    */
   onWelcomeNextButtonClicked_() {
     this.userActed('continue');
-  }
-
-  /**
-   * Handle "Quick Start" button for "Welcome" screen.
-   *
-   * @private
-   */
-  onQuickStartButtonClicked_() {
-    this.userActed('activateQuickStart');
   }
 
   /**
@@ -412,8 +448,8 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
    * @private
    */
   onLanguageSelected_(event) {
-    var item = event.detail;
-    var languageId = item.value;
+    const item = event.detail;
+    const languageId = item.value;
     this.currentLanguage = item.title;
     this.applySelectedLanguage_(languageId);
   }
@@ -425,7 +461,7 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
    * @private
    */
   applySelectedLanguage_(languageId) {
-    chrome.send('WelcomeScreen.setLocaleId', [languageId]);
+    this.userActed(['setLocaleId', languageId]);
   }
 
   /**
@@ -435,8 +471,8 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
    * @private
    */
   onKeyboardSelected_(event) {
-    var item = event.detail;
-    var inputMethodId = item.value;
+    const item = event.detail;
+    const inputMethodId = item.value;
     this.currentKeyboard = item.title;
     this.applySelectedLkeyboard_(inputMethodId);
   }
@@ -448,7 +484,7 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
    * @private
    */
   applySelectedLkeyboard_(inputMethodId) {
-    chrome.send('WelcomeScreen.setInputMethodId', [inputMethodId]);
+    this.userActed(['setInputMethodId', inputMethodId]);
   }
 
   onLanguagesChanged_() {
@@ -457,8 +493,8 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
   }
 
   onInputMethodIdSetFromBackend(keyboard_id) {
-    var found = false;
-    for (var i = 0; i < this.keyboards.length; ++i) {
+    let found = false;
+    for (let i = 0; i < this.keyboards.length; ++i) {
       if (this.keyboards[i].value != keyboard_id) {
         this.keyboards[i].selected = false;
         continue;
@@ -526,13 +562,13 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
   }
 
   onEditRequisitionCancel_() {
-    chrome.send('WelcomeScreen.setDeviceRequisition', ['none']);
+    this.userActed(['setDeviceRequisition', 'none']);
     this.$.editRequisitionDialog.hideDialog();
   }
 
   onEditRequisitionConfirm_() {
     const requisition = this.$.editRequisitionInput.value;
-    chrome.send('WelcomeScreen.setDeviceRequisition', [requisition]);
+    this.userActed(['setDeviceRequisition', requisition]);
     this.$.editRequisitionDialog.hideDialog();
   }
 
@@ -547,7 +583,7 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
    * Shows the special remora/shark device requisition prompt.
    */
   onRemoraCancel_() {
-    chrome.send('WelcomeScreen.setDeviceRequisition', ['none']);
+    this.userActed(['setDeviceRequisition', 'none']);
     this.$.remoraRequisitionDialog.hideDialog();
   }
 
@@ -555,7 +591,7 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
    * Shows the special remora/shark device requisition prompt.
    */
   onRemoraConfirm_() {
-    chrome.send('WelcomeScreen.setDeviceRequisition', ['remora']);
+    this.userActed(['setDeviceRequisition', 'remora']);
     this.$.remoraRequisitionDialog.hideDialog();
   }
 
@@ -607,8 +643,9 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
    * @param {!Event} event
    */
   onA11yOptionChanged_(event) {
-    var a11ytarget = /** @type {{chromeMessage: string, checked: boolean}} */ (
-        event.currentTarget);
+    const a11ytarget =
+        /** @type {{chromeMessage: string, checked: boolean}} */ (
+            event.currentTarget);
     if (a11ytarget.checked) {
       this.userActed(a11ytarget.id + '-enable');
     } else {
@@ -634,12 +671,12 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
    * @private
    */
   onTimezoneSelected_(event) {
-    var item = event.detail;
+    const item = event.detail;
     if (!item) {
       return;
     }
 
-    chrome.send('WelcomeScreen.setTimezoneId', [item.value]);
+    this.userActed(['setTimezoneId', item.value]);
   }
 
   /** ******************** AdvancedOptions section ******************* */
@@ -731,9 +768,6 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
     });
   }
 
-  setQuickStartEnabled() {
-    this.$.welcomeScreen.isQuickStartEnabled = true;
-  }
 
   /**
    * Returns a voice name from |voices| that matches |locale|.
@@ -809,9 +843,11 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
           ', giving default hint in English.');
     }
     this.cleanupChromeVoxHint_();
+    // |msgId| depends on both feature enabled status and tablet mode.
     const msgId = this.$.welcomeScreen.isInTabletMode ?
-        'chromeVoxHintAnnouncementTextTablet' :
-        'chromeVoxHintAnnouncementTextLaptop';
+        'chromeVoxHintAnnouncementTextTabletExpanded' :
+        'chromeVoxHintAnnouncementTextLaptopExpanded';
+
     const message = this.i18n(msgId);
     chrome.tts.speak(message, options, () => {
       this.showChromeVoxHint_();
@@ -833,6 +869,36 @@ class OobeWelcomeScreen extends OobeWelcomeScreenBase {
         (this.voicesChangedListenerMaybeGiveChromeVoxHint_),
         /* useCapture */ false);
     this.voicesChangedListenerMaybeGiveChromeVoxHint_ = null;
+  }
+
+  /**
+   * If it is possible to set up CFM.
+   */
+  hideCFMSetupButton_(isDeviceRequisitionConfigurable, isMeet) {
+    return !isDeviceRequisitionConfigurable && !isMeet;
+  }
+
+  /** ******************** Quick Start section ******************* */
+
+  setQuickStartEnabled() {
+    this.$.welcomeScreen.isQuickStartEnabled = true;
+  }
+
+  showQuickStartBluetoothDialog() {
+    this.$.welcomeScreen.onShowQuickStartBluetoothDialog_();
+  }
+
+  /**
+   * Handle "Quick Start" button for "Welcome" screen.
+   *
+   * @private
+   */
+  onActivateQuickStart_(e) {
+    if (e.detail.enableBluetooth) {
+      this.userActed('quickStartEnableBluetooth');
+    } else {
+      this.userActed('quickStartClicked');
+    }
   }
 }
 

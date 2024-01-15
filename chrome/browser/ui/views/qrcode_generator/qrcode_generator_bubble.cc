@@ -8,6 +8,7 @@
 #include "base/metrics/user_metrics.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/sharing/features.h"
 #include "chrome/browser/themes/theme_properties.h"
 #include "chrome/browser/ui/browser.h"
@@ -29,6 +30,7 @@
 #include "content/public/browser/download_request_utils.h"
 #include "content/public/browser/web_contents.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
+#include "ui/base/clipboard/scoped_clipboard_writer.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/theme_provider.h"
@@ -40,6 +42,7 @@
 #include "ui/gfx/image/image_skia_source.h"
 #include "ui/native_theme/native_theme.h"
 #include "ui/resources/grit/ui_resources.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/border.h"
 #include "ui/views/bubble/bubble_frame_view.h"
 #include "ui/views/bubble/tooltip_icon.h"
@@ -81,7 +84,7 @@ namespace qrcode_generator {
 
 QRCodeGeneratorBubble::QRCodeGeneratorBubble(
     views::View* anchor_view,
-    content::WebContents* web_contents,
+    base::WeakPtr<content::WebContents> web_contents,
     base::OnceClosure on_closing,
     base::OnceClosure on_back_button_pressed,
     const GURL& url)
@@ -101,7 +104,7 @@ QRCodeGeneratorBubble::QRCodeGeneratorBubble(
 QRCodeGeneratorBubble::~QRCodeGeneratorBubble() = default;
 
 void QRCodeGeneratorBubble::Show() {
-  textfield_url_->SetText(base::ASCIIToUTF16(url_.possibly_invalid_spec()));
+  textfield_url_->SetText(base::UTF8ToUTF16(url_.possibly_invalid_spec()));
   textfield_url_->SelectAll(false);
   UpdateQRContent();
   ShowForReason(USER_GESTURE);
@@ -134,18 +137,21 @@ void QRCodeGeneratorBubble::UpdateQRContent() {
   }
 
   mojom::GenerateQRCodeRequestPtr request = mojom::GenerateQRCodeRequest::New();
-  request->data = base::UTF16ToASCII(textfield_url_->GetText());
-  request->should_render = true;
+  request->data = base::UTF16ToUTF8(textfield_url_->GetText());
   request->center_image = mojom::CenterImage::CHROME_DINO;
   request->render_module_style = mojom::ModuleStyle::CIRCLES;
   request->render_locator_style = mojom::LocatorStyle::ROUNDED;
 
-  mojom::QRCodeGeneratorService* generator = qr_code_service_remote_.get();
-  // Rationale for Unretained(): Closing dialog closes the communication
-  // channel; callback will not run.
+  // Rationale for Unretained(): Closing dialog destroys `qrcode_service_` and
+  // `qrcode_service_override_` - the callback will not run (see also the doc
+  // comment of `QRImageGenerator::GenerateQRCode`).
   auto callback = base::BindOnce(
       &QRCodeGeneratorBubble::OnCodeGeneratorResponse, base::Unretained(this));
-  generator->GenerateQRCode(std::move(request), std::move(callback));
+  if (qrcode_service_override_.is_null()) {
+    qrcode_service_->GenerateQRCode(std::move(request), std::move(callback));
+  } else {
+    qrcode_service_override_.Run(std::move(request), std::move(callback));
+  }
 }
 
 void QRCodeGeneratorBubble::OnCodeGeneratorResponse(
@@ -162,7 +168,7 @@ void QRCodeGeneratorBubble::OnCodeGeneratorResponse(
 }
 
 void QRCodeGeneratorBubble::UpdateQRImage(gfx::ImageSkia qr_image) {
-  qr_code_image_->SetImage(qr_image);
+  qr_code_image_->SetImage(ui::ImageModel::FromImageSkia(qr_image));
   const int border_radius = views::LayoutProvider::Get()->GetCornerRadiusMetric(
       views::Emphasis::kHigh);
   qr_code_image_->SetPreferredSize(GetQRCodeImageSize() +
@@ -176,23 +182,28 @@ void QRCodeGeneratorBubble::DisplayPlaceholderImage() {
 }
 
 void QRCodeGeneratorBubble::DisplayError(mojom::QRCodeGeneratorError error) {
+  copy_button_->SetEnabled(false);
   download_button_->SetEnabled(false);
   if (error == mojom::QRCodeGeneratorError::INPUT_TOO_LONG) {
     ShrinkAndHideDisplay(center_error_label_);
     DisplayPlaceholderImage();
     bottom_error_label_->SetVisible(true);
+    bottom_error_label_->GetViewAccessibility().OverrideIsIgnored(false);
     return;
   }
   ShrinkAndHideDisplay(qr_code_image_);
   bottom_error_label_->SetVisible(false);
+  bottom_error_label_->GetViewAccessibility().OverrideIsIgnored(true);
   center_error_label_->SetPreferredSize(GetQRCodeImageSize());
   center_error_label_->SetVisible(true);
 }
 
-void QRCodeGeneratorBubble::HideErrors(bool enable_download_button) {
+void QRCodeGeneratorBubble::HideErrors(bool enable_button) {
   ShrinkAndHideDisplay(center_error_label_);
   bottom_error_label_->SetVisible(false);
-  download_button_->SetEnabled(enable_download_button);
+  bottom_error_label_->GetViewAccessibility().OverrideIsIgnored(true);
+  copy_button_->SetEnabled(enable_button);
+  download_button_->SetEnabled(enable_button);
 }
 
 void QRCodeGeneratorBubble::ShrinkAndHideDisplay(views::View* view) {
@@ -253,8 +264,7 @@ void QRCodeGeneratorBubble::Init() {
   auto textfield_url = std::make_unique<views::Textfield>();
   textfield_url->SetAccessibleName(l10n_util::GetStringUTF16(
       IDS_BROWSER_SHARING_QR_CODE_DIALOG_URL_TEXTFIELD_ACCESSIBLE_NAME));
-  textfield_url->SetText(
-      base::ASCIIToUTF16(url_.spec()));  // TODO(skare): check
+  textfield_url->SetText(base::UTF8ToUTF16(url_.spec()));
   textfield_url->set_controller(this);
   textfield_url->SetProperty(
       views::kMarginsKey,
@@ -276,6 +286,7 @@ void QRCodeGeneratorBubble::Init() {
       views::style::CONTEXT_LABEL, views::style::STYLE_SECONDARY);
   bottom_error_label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
   bottom_error_label->SetVisible(false);
+  bottom_error_label->GetViewAccessibility().OverrideIsIgnored(true);
   auto* bottom_error_container = AddChildView(std::make_unique<views::View>());
   bottom_error_container->SetUseDefaultFillLayout(true);
   bottom_error_label_ =
@@ -297,13 +308,16 @@ void QRCodeGeneratorBubble::Init() {
       AddChildView(std::make_unique<views::BoxLayoutView>());
   button_container->SetCrossAxisAlignment(
       views::BoxLayout::CrossAxisAlignment::kCenter);
+  button_container->SetBetweenChildSpacing(
+      ChromeLayoutProvider::Get()->GetDistanceMetric(
+          views::DISTANCE_RELATED_BUTTON_HORIZONTAL));
 
   // "More info" tooltip; looks like (i).
   auto tooltip_icon = std::make_unique<views::TooltipIcon>(
       l10n_util::GetStringUTF16(IDS_BROWSER_SHARING_QR_CODE_DIALOG_TOOLTIP));
-  tooltip_icon->set_bubble_width(ChromeLayoutProvider::Get()->GetDistanceMetric(
+  tooltip_icon->SetBubbleWidth(ChromeLayoutProvider::Get()->GetDistanceMetric(
       views::DISTANCE_BUBBLE_PREFERRED_WIDTH));
-  tooltip_icon->set_anchor_point_arrow(views::BubbleBorder::Arrow::TOP_LEFT);
+  tooltip_icon->SetAnchorPointArrow(views::BubbleBorder::Arrow::TOP_LEFT);
   tooltip_icon->SetProperty(
       views::kMarginsKey,
       gfx::Insets::TLBR(0, 0, 0, kPaddingTooltipDownloadButtonPx));
@@ -311,6 +325,15 @@ void QRCodeGeneratorBubble::Init() {
 
   auto* flex = button_container->AddChildView(std::make_unique<views::View>());
   button_container->SetFlexForView(flex, 1);
+
+  // Copy button.
+  copy_button_ =
+      button_container->AddChildView(std::make_unique<views::MdTextButton>(
+          base::BindRepeating(&QRCodeGeneratorBubble::CopyButtonPressed,
+                              base::Unretained(this)),
+          l10n_util::GetStringUTF16(
+              IDS_BROWSER_SHARING_QR_CODE_DIALOG_COPY_BUTTON_LABEL)));
+  copy_button_->SetHorizontalAlignment(gfx::ALIGN_CENTER);
 
   // Download button.
   download_button_ =
@@ -323,8 +346,9 @@ void QRCodeGeneratorBubble::Init() {
   // End controls row
 
   // Initialize Service
-  if (!qr_code_service_remote_)
-    qr_code_service_remote_ = qrcode_generator::LaunchQRCodeGeneratorService();
+  if (!qrcode_service_ && qrcode_service_override_.is_null()) {
+    qrcode_service_ = std::make_unique<qrcode_generator::QRImageGenerator>();
+  }
 }
 
 void QRCodeGeneratorBubble::AddedToWidget() {
@@ -373,7 +397,7 @@ const std::u16string QRCodeGeneratorBubble::GetQRCodeFilenameForURL(
   if (!url.has_host() || url.HostIsIPAddress())
     return u"qrcode_chrome.png";
 
-  return base::ASCIIToUTF16(base::StrCat({"qrcode_", url.host(), ".png"}));
+  return base::UTF8ToUTF16(base::StrCat({"qrcode_", url.host(), ".png"}));
 }
 
 // Given a square |image| and a size in QR code tiles (*not* in pixels or
@@ -404,19 +428,33 @@ gfx::ImageSkia QRCodeGeneratorBubble::AddQRCodeQuietZone(
 }
 
 void QRCodeGeneratorBubble::SetQRCodeServiceForTesting(
-    mojo::Remote<mojom::QRCodeGeneratorService>&& remote) {
-  qr_code_service_remote_ = std::move(remote);
+    base::RepeatingCallback<void(mojom::GenerateQRCodeRequestPtr request,
+                                 QRImageGenerator::ResponseCallback callback)>
+        qrcode_service_override) {
+  qrcode_service_override_ = std::move(qrcode_service_override);
 }
 
-void QRCodeGeneratorBubble::DownloadButtonPressed() {
+const SkBitmap QRCodeGeneratorBubble::GetBitmap() {
   const gfx::ImageSkia& image_ref = qr_code_image_->GetImage();
   // Returns closest scaling to parameter (1.0).
   // Should be exact since we generated the bitmap.
   const gfx::ImageSkiaRep& image_rep = image_ref.GetRepresentation(1.0f);
-  const SkBitmap& bitmap = image_rep.GetBitmap();
+  return image_rep.GetBitmap();
+}
+
+// Copy image to system clipboard.
+void QRCodeGeneratorBubble::CopyButtonPressed() {
+  const SkBitmap& bitmap = GetBitmap();
+  ui::ScopedClipboardWriter(ui::ClipboardBuffer::kCopyPaste).WriteImage(bitmap);
+}
+
+void QRCodeGeneratorBubble::DownloadButtonPressed() {
+  const SkBitmap& bitmap = GetBitmap();
   const GURL data_url = GURL(webui::GetBitmapDataUrl(bitmap));
 
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents_);
+  CHECK(web_contents_);
+
+  Browser* browser = chrome::FindBrowserWithTab(web_contents_.get());
   content::DownloadManager* download_manager =
       browser->profile()->GetDownloadManager();
   net::NetworkTrafficAnnotationTag traffic_annotation =
@@ -445,7 +483,7 @@ void QRCodeGeneratorBubble::DownloadButtonPressed() {
       })");
   std::unique_ptr<download::DownloadUrlParameters> params =
       content::DownloadRequestUtils::CreateDownloadForWebContentsMainFrame(
-          web_contents_, data_url, traffic_annotation);
+          web_contents_.get(), data_url, traffic_annotation);
   // Suggest a name incorporating the hostname. Protocol, TLD, etc are
   // not taken into consideration. Duplicate names get automatic suffixes.
   params->set_suggested_name(GetQRCodeFilenameForURL(url_));
@@ -460,7 +498,7 @@ void QRCodeGeneratorBubble::BackButtonPressed() {
   std::move(on_back_button_pressed_).Run();
 }
 
-BEGIN_METADATA(QRCodeGeneratorBubble, LocationBarBubbleDelegateView)
+BEGIN_METADATA(QRCodeGeneratorBubble)
 END_METADATA
 
 }  // namespace qrcode_generator

@@ -7,7 +7,8 @@
 
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/time/time.h"
 
 namespace gcm {
 
@@ -33,8 +34,10 @@ class GCMDelayedTaskController {
  private:
   void RunTasks();
 
+  const base::TimeTicks time_created_ = base::TimeTicks::Now();
+
   // Flag that indicates that controlled component is ready.
-  bool ready_;
+  bool ready_ = false;
 
   std::vector<base::OnceClosure> delayed_tasks_;
 };

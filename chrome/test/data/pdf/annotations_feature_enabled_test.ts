@@ -3,7 +3,8 @@
 // found in the LICENSE file.
 
 import {AnnotationTool, SaveRequestType, ViewerInkHostElement} from 'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/pdf_viewer_wrapper.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 
 import {waitFor} from './test_util.js';
 
@@ -71,8 +72,8 @@ chrome.test.runTests([
         dark_light_left: -105.75,
         right: 718.5,
         dark_light_right: 717.75,
-        bottom: -412.5,
-        dark_light_bottom: -411.75,
+        bottom: -408.75,
+        dark_light_bottom: -408.0,
       },
       {
         top: 2.25,
@@ -81,8 +82,8 @@ chrome.test.runTests([
         dark_light_left: -3.75,
         right: 408.75,
         dark_light_right: 408,
-        bottom: -205.125,
-        dark_light_bottom: -204.75,
+        bottom: -203.25,
+        dark_light_bottom: -202.875,
       },
       {
         top: -35.25,
@@ -91,8 +92,8 @@ chrome.test.runTests([
         dark_light_left: 33.75,
         right: 446.25,
         dark_light_right: 445.5,
-        bottom: -242.625,
-        dark_light_bottom: -242.25,
+        bottom: -240.75,
+        dark_light_bottom: -240.375,
       },
     ];
 
@@ -450,6 +451,7 @@ chrome.test.runTests([
   async function testSaveAfterAnnotationMode() {
     const saveData = await viewer.getCurrentControllerForTesting()!.save(
         SaveRequestType.EDITED);
+    assert(saveData);
     chrome.test.assertTrue(saveData.editModeForTesting!);
     chrome.test.succeed();
   },

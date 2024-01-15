@@ -12,7 +12,7 @@ namespace extensions {
 
 namespace {
 
-typedef PlatformAppBrowserTest AppWindowBrowserTest;
+using AppWindowBrowserTest = PlatformAppBrowserTest;
 
 // This test is disabled on Linux because of the unpredictable nature of native
 // windows. We cannot assume that the window manager will insert any title bar
@@ -70,9 +70,51 @@ IN_PROC_BROWSER_TEST_F(AppWindowBrowserTest, FrameInsetsForNoFrame) {
   CloseAppWindow(app_window);
 }
 
+IN_PROC_BROWSER_TEST_F(AppWindowBrowserTest, IncognitoOpenUrl) {
+  AppWindow* app_window = CreateTestAppWindow("{}");
+
+  content::WebContents* app_contents =
+      app_window->app_window_contents_for_test()->GetWebContents();
+
+  content::OpenURLParams params(GURL(url::kAboutBlankURL), {},
+                                WindowOpenDisposition::OFF_THE_RECORD,
+                                ui::PAGE_TRANSITION_LINK, false);
+  content::WebContents* new_contents = app_contents->OpenURL(params);
+
+  Profile* profile =
+      Profile::FromBrowserContext(new_contents->GetBrowserContext());
+  EXPECT_TRUE(profile->IsOffTheRecord());
+
+  CloseAppWindow(app_window);
+}
+
+IN_PROC_BROWSER_TEST_F(AppWindowBrowserTest, DraggableFramelessWindow) {
+  AppWindow* app_window = CreateTestAppWindow(R"({ "frame": "none" })");
+
+  base::RunLoop run_loop;
+  app_window->SetOnUpdateDraggableRegionsForTesting(run_loop.QuitClosure());
+
+  static constexpr char kTestScript[] =
+      "window.document.body.style.height = '50px';"
+      "window.document.body.style.width = '100px';"
+      "window.document.body.style.appRegion = 'drag';";
+  content::WebContents* app_contents =
+      app_window->app_window_contents_for_test()->GetWebContents();
+  EXPECT_TRUE(ExecJs(app_contents->GetPrimaryMainFrame(), kTestScript));
+
+  run_loop.Run();
+
+  NativeAppWindow* native_window = GetNativeAppWindowForAppWindow(app_window);
+  SkRegion* draggable_region = native_window->GetDraggableRegion();
+  ASSERT_TRUE(draggable_region);
+  EXPECT_FALSE(draggable_region->isEmpty());
+}
+
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 
-IN_PROC_BROWSER_TEST_F(AppWindowBrowserTest, ShouldShowStaleContentOnEviction) {
+// Disabled due to flake. https://crbug.com/1416579
+IN_PROC_BROWSER_TEST_F(AppWindowBrowserTest,
+                       DISABLED_ShouldShowStaleContentOnEviction) {
   AppWindow* app_window = CreateTestAppWindow("{}");
   // Make sure that a surface gets embedded in the frame evictor of the
   // DelegateFrameHost.

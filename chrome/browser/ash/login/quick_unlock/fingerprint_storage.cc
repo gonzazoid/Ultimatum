@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ash/login/quick_unlock/fingerprint_storage.h"
 #include <memory>
+#include <optional>
 
 #include "ash/constants/ash_pref_names.h"
 #include "base/metrics/histogram_functions.h"
@@ -11,6 +12,7 @@
 #include "chrome/browser/ash/login/quick_unlock/quick_unlock_utils.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/ash/auth/legacy_fingerprint_engine.h"
 #include "chromeos/ash/components/dbus/biod/biod_client.h"
 #include "chromeos/ash/components/feature_usage/feature_usage_metrics.h"
 #include "chromeos/dbus/power/power_manager_client.h"
@@ -18,7 +20,6 @@
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/device_service.h"
 #include "services/device/public/mojom/fingerprint.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 namespace quick_unlock {
@@ -33,7 +34,10 @@ void FingerprintStorage::RegisterProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterIntegerPref(prefs::kQuickUnlockFingerprintRecord, 0);
 }
 
-FingerprintStorage::FingerprintStorage(Profile* profile) : profile_(profile) {
+FingerprintStorage::FingerprintStorage(Profile* profile)
+    : profile_(profile),
+      auth_performer_(UserDataAuthClient::Get()),
+      legacy_fingerprint_engine_(&auth_performer_) {
   if (!BiodClient::Get()) {
     // Could be nullptr in tests.
     return;
@@ -72,8 +76,9 @@ bool FingerprintStorage::IsEligible() const {
   return IsFingerprintSupported();
 }
 
-absl::optional<bool> FingerprintStorage::IsAccessible() const {
-  return IsFingerprintEnabled(profile_, Purpose::kAny);
+std::optional<bool> FingerprintStorage::IsAccessible() const {
+  return legacy_fingerprint_engine_.IsFingerprintEnabled(
+      *profile_->GetPrefs(), LegacyFingerprintEngine::Purpose::kAny);
 }
 
 bool FingerprintStorage::IsEnabled() const {
@@ -97,7 +102,10 @@ void FingerprintStorage::RecordFingerprintUnlockResult(
 }
 
 bool FingerprintStorage::IsFingerprintAvailable(Purpose purpose) const {
-  return !ExceededUnlockAttempts() && IsFingerprintEnabled(profile_, purpose) &&
+  return !ExceededUnlockAttempts() &&
+         legacy_fingerprint_engine_.IsFingerprintEnabled(
+             *profile_->GetPrefs(),
+             legacy_fingerprint_engine_.FromQuickUnlockPurpose(purpose)) &&
          HasRecord();
 }
 
@@ -136,7 +144,18 @@ int FingerprintStorage::GetRecentUnlockAttemptCount(base::TimeTicks timestamp) {
 }
 
 void FingerprintStorage::OnRestarted() {
-  GetRecordsForUser();
+  LOG(WARNING) << "Biod restarted";
+}
+
+void FingerprintStorage::OnStatusChanged(
+    device::mojom::BiometricsManagerStatus status) {
+  LOG(WARNING) << "Biod status changed";
+  if (status == device::mojom::BiometricsManagerStatus::INITIALIZED) {
+    GetRecordsForUser();
+  } else {
+    LOG(ERROR) << "FingerprintStorage StatusChanged to an unknown state"
+               << static_cast<int>(status);
+  }
 }
 
 void FingerprintStorage::OnEnrollScanDone(device::mojom::ScanResult scan_result,
@@ -169,8 +188,14 @@ void FingerprintStorage::OnAuthScanDone(
 void FingerprintStorage::OnSessionFailed() {}
 
 void FingerprintStorage::OnGetRecords(
-    const base::flat_map<std::string, std::string>& fingerprints_list_mapping) {
-  if (!IsFingerprintDisabledByPolicy(profile_->GetPrefs(), Purpose::kAny)) {
+    const base::flat_map<std::string, std::string>& fingerprints_list_mapping,
+    bool success) {
+  if (!success) {
+    LOG(ERROR) << "Get Records failure";
+    return;
+  }
+  if (!legacy_fingerprint_engine_.IsFingerprintDisabledByPolicy(
+          *profile_->GetPrefs(), LegacyFingerprintEngine::Purpose::kAny)) {
     profile_->GetPrefs()->SetInteger(prefs::kQuickUnlockFingerprintRecord,
                                      fingerprints_list_mapping.size());
     return;

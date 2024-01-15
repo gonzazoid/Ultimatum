@@ -9,6 +9,7 @@
 #include "chrome/browser/ash/app_restore/app_launch_handler.h"
 #include "chrome/browser/ash/app_restore/app_restore_arc_task_handler.h"
 #include "chrome/browser/ash/app_restore/arc_app_single_restore_handler.h"
+#include "chrome/browser/ash/app_restore/arc_ghost_window_handler.h"
 #include "chromeos/ui/base/window_state_type.h"
 #include "ui/display/screen.h"
 #include "ui/gfx/geometry/point.h"
@@ -19,7 +20,8 @@ namespace {
 
 constexpr char kWindowPredictorLaunchHistogram[] = "Arc.WindowPredictorLaunch";
 
-// Reason for Window Predictor launch action enumeration; Used for UMA counter.
+// Reason for Window Predictor launch action when failed to launch App
+// enumeration; Used for UMA counter.
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
 enum class WindowPredictorLaunchType {
@@ -30,24 +32,33 @@ enum class WindowPredictorLaunchType {
   kMaxValue = kFailedNoArcAppLaunchHandler,
 };
 
+constexpr char kWindowPredictorUseCaseHistogram[] =
+    "Arc.WindowPredictorUseCase";
+
 // Pre-defined screen size for ARC. See ArcLaunchParamsModifier.java in ARC
 // codebase.
 
-// Screen size of Nexus 5x
+// Screen size of Nexus 5x. The default bounds in default scale in Android.
 constexpr gfx::Size kDefaultPortraitPhoneSize(412, 732);
 constexpr gfx::Size kDefaultLandscapeTabletSize(1064, 600);
 
-// In ARC R and above, the uniform scale factor is applied on ARC window render
-// process.
-// TODO(sstan): Replace by calculating from real display scale factor.
+// TODO(sstan): User may apply zoom on per-display. The final DP value of the
+// Android bounds should be FinalBounds = AndroidDpSize * AndroidDensityRound(
+// kArcUniformScaleFactor * kChromeDpToAndroidDp * ChromeOSDisplayZoomFactor).
+// Here AndroidDensityRound is a function to round density into one of a set
+// of allowed density according to Android CDD. Here just ignore it. Also leave
+// zoom facter as TODO here.
 constexpr float kArcUniformScaleFactor = 1.2;
+constexpr float kChromeDpToAndroidDp = 0.75;
 
 gfx::Size GetPhoneSize() {
-  return ScaleToCeiledSize(kDefaultPortraitPhoneSize, kArcUniformScaleFactor);
+  return ScaleToCeiledSize(kDefaultPortraitPhoneSize,
+                           kArcUniformScaleFactor * kChromeDpToAndroidDp);
 }
 
 gfx::Size GetTabletSize() {
-  return ScaleToCeiledSize(kDefaultLandscapeTabletSize, kArcUniformScaleFactor);
+  return ScaleToCeiledSize(kDefaultLandscapeTabletSize,
+                           kArcUniformScaleFactor * kChromeDpToAndroidDp);
 }
 
 // Get window bounds in the middle of a display in global coordinate.
@@ -80,9 +91,14 @@ bool WindowPredictor::LaunchArcAppWithGhostWindow(
     Profile* profile,
     const std::string& arc_app_id,
     const ArcAppListPrefs::AppInfo& app_info,
+    const apps::IntentPtr& intent,
     int event_flags,
     GhostWindowType window_type,
+    WindowPredictorUseCase use_case,
     const arc::mojom::WindowInfoPtr& window_info) {
+  // ArcGhostWindowHandler maybe null in the test env.
+  if (!ash::full_restore::ArcGhostWindowHandler::Get())
+    return false;
   auto* arc_task_handler =
       ash::app_restore::AppRestoreArcTaskHandler::GetForProfile(profile);
   if (!arc_task_handler) {
@@ -106,13 +122,16 @@ bool WindowPredictor::LaunchArcAppWithGhostWindow(
   arc::mojom::WindowInfoPtr predict_window_info =
       PredictAppWindowInfo(app_info, window_info.Clone());
 
+  DCHECK(predict_window_info);
+
   arc_task_handler->GetWindowPredictorArcAppRestoreHandler(launch_counter)
-      ->LaunchGhostWindowWithApp(profile, arc_app_id, event_flags,
-                                 GhostWindowType::kAppLaunch,
-                                 std::move(predict_window_info));
+      ->LaunchGhostWindowWithApp(
+          profile, arc_app_id, intent ? intent->Clone() : nullptr, event_flags,
+          window_type, std::move(predict_window_info));
 
   base::UmaHistogramEnumeration(kWindowPredictorLaunchHistogram,
                                 WindowPredictorLaunchType::kSuccess);
+  base::UmaHistogramEnumeration(kWindowPredictorUseCaseHistogram, use_case);
   return true;
 }
 
@@ -124,10 +143,17 @@ arc::mojom::WindowInfoPtr WindowPredictor::PredictAppWindowInfo(
   // TODO(sstan): Consider multi display case.
   if (!window_info)
     return nullptr;
-  auto disp = display::Display::GetDefaultDisplay();
+  auto disp = display::Screen::GetScreen()->GetPrimaryDisplay();
   if (window_info->display_id != display::kInvalidDisplayId) {
     display::Screen::GetScreen()->GetDisplayWithDisplayId(
         window_info->display_id, &disp);
+  }
+
+  if (display::Screen::GetScreen()->InTabletMode()) {
+    // TODO: Figure out why setting kMaximized doesn't work.
+    window_info->state =
+        static_cast<int32_t>(chromeos::WindowStateType::kDefault);
+    return window_info;
   }
 
   const auto& layout = app_info.initial_window_layout;
@@ -135,6 +161,7 @@ arc::mojom::WindowInfoPtr WindowPredictor::PredictAppWindowInfo(
     case arc::mojom::WindowSizeType::kMaximize:
       window_info->state =
           static_cast<int32_t>(chromeos::WindowStateType::kMaximized);
+      window_info->bounds = disp.work_area();
       break;
     case arc::mojom::WindowSizeType::kTabletSize:
       window_info->state =
@@ -142,14 +169,26 @@ arc::mojom::WindowInfoPtr WindowPredictor::PredictAppWindowInfo(
       window_info->bounds = GetMiddleBounds(disp, GetTabletSize());
       break;
     case arc::mojom::WindowSizeType::kPhoneSize:
+      window_info->state =
+          static_cast<int32_t>(chromeos::WindowStateType::kNormal);
+      window_info->bounds = GetMiddleBounds(disp, GetPhoneSize());
+      break;
     case arc::mojom::WindowSizeType::kUnknown:
     default:
       window_info->state =
-          static_cast<int32_t>(chromeos::WindowStateType::kNormal);
+          static_cast<int32_t>(chromeos::WindowStateType::kDefault);
       window_info->bounds = GetMiddleBounds(disp, GetPhoneSize());
   }
 
   return window_info;
+}
+
+bool WindowPredictor::IsAppPendingLaunch(Profile* profile,
+                                         const std::string& app_id) {
+  auto* arc_task_handler =
+      ash::app_restore::AppRestoreArcTaskHandler::GetForProfile(profile);
+
+  return arc_task_handler && arc_task_handler->IsAppPendingRestore(app_id);
 }
 
 }  // namespace arc

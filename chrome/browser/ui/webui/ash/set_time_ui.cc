@@ -11,9 +11,9 @@
 
 #include "ash/public/cpp/child_accounts/parent_access_controller.h"
 #include "ash/public/cpp/login_screen.h"
-#include "base/bind.h"
 #include "base/build_time.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/scoped_observation.h"
 #include "base/values.h"
 #include "chrome/browser/ash/child_accounts/parent_access_code/parent_access_service.h"
@@ -23,10 +23,12 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/url_constants.h"
-#include "chrome/grit/browser_resources.h"
 #include "chrome/grit/generated_resources.h"
+#include "chrome/grit/set_time_dialog_resources.h"
+#include "chrome/grit/set_time_dialog_resources_map.h"
 #include "chromeos/ash/components/dbus/system_clock/system_clock_client.h"
 #include "chromeos/ash/components/settings/timezone_settings.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/browser/web_contents.h"
@@ -35,7 +37,9 @@
 #include "content/public/browser/web_ui_message_handler.h"
 #include "services/network/public/mojom/content_security_policy.mojom.h"
 #include "ui/base/webui/web_ui_util.h"
-#include "ui/resources/grit/webui_generated_resources.h"
+#include "ui/resources/grit/webui_resources.h"
+#include "ui/webui/color_change_listener/color_change_handler.h"
+#include "ui/webui/mojo_web_ui_controller.h"
 
 namespace ash {
 
@@ -141,7 +145,7 @@ class SetTimeMessageHandler : public content::WebUIMessageHandler,
         base::BindOnce(&SetTimeMessageHandler::OnParentAccessValidation,
                        weak_factory_.GetWeakPtr()),
         SupervisedAction::kUpdateClock, !is_user_logged_in /* extra_dimmer */,
-        base::Time::FromDoubleT(seconds));
+        base::Time::FromSecondsSinceUnixEpoch(seconds));
   }
 
   void OnParentAccessValidation(bool success) {
@@ -159,13 +163,14 @@ class SetTimeMessageHandler : public content::WebUIMessageHandler,
 
 }  // namespace
 
-SetTimeUI::SetTimeUI(content::WebUI* web_ui) : WebDialogUI(web_ui) {
+SetTimeUI::SetTimeUI(content::WebUI* web_ui) : MojoWebDialogUI(web_ui) {
   web_ui->AddMessageHandler(std::make_unique<SetTimeMessageHandler>());
 
   // Set up the chrome://set-time source.
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUISetTimeHost);
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      Profile::FromWebUI(web_ui), chrome::kChromeUISetTimeHost);
   webui::SetJSModuleDefaults(source);
+  webui::EnableTrustedTypesCSP(source);
   static constexpr webui::LocalizedString kStrings[] = {
       {"setTimeTitle", IDS_SET_TIME_TITLE},
       {"prompt", IDS_SET_TIME_PROMPT},
@@ -185,20 +190,26 @@ SetTimeUI::SetTimeUI(content::WebUI* web_ui) : WebDialogUI(web_ui) {
   std::string current_timezone_id;
   CrosSettings::Get()->GetString(kSystemTimezone, &current_timezone_id);
   values.Set("currentTimezoneId", current_timezone_id);
-  values.Set("buildTime", base::GetBuildTime().ToJsTime());
+  values.Set("buildTime", base::GetBuildTime().InMillisecondsFSinceUnixEpoch());
 
   source->AddLocalizedStrings(values);
 
-  source->AddResourcePath("set_time_browser_proxy.js",
-                          IDR_SET_TIME_BROWSER_PROXY_JS);
-  source->AddResourcePath("set_time_dialog.html.js",
-                          IDR_SET_TIME_DIALOG_HTML_JS);
-  source->AddResourcePath("set_time_dialog.js", IDR_SET_TIME_DIALOG_JS);
-  source->SetDefaultResource(IDR_SET_TIME_HTML);
+  webui::SetupWebUIDataSource(
+      source,
+      base::make_span(kSetTimeDialogResources, kSetTimeDialogResourcesSize),
+      IDR_SET_TIME_DIALOG_SET_TIME_HTML);
 
-  content::WebUIDataSource::Add(Profile::FromWebUI(web_ui), source);
+  source->AddBoolean("isJellyEnabled", chromeos::features::IsJellyEnabled());
 }
 
 SetTimeUI::~SetTimeUI() = default;
+
+void SetTimeUI::BindInterface(
+    mojo::PendingReceiver<color_change_listener::mojom::PageHandler> receiver) {
+  color_provider_handler_ = std::make_unique<ui::ColorChangeHandler>(
+      web_ui()->GetWebContents(), std::move(receiver));
+}
+
+WEB_UI_CONTROLLER_TYPE_IMPL(SetTimeUI)
 
 }  // namespace ash

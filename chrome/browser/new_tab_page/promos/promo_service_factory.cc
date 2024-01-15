@@ -26,20 +26,29 @@ PromoService* PromoServiceFactory::GetForProfile(Profile* profile) {
 
 // static
 PromoServiceFactory* PromoServiceFactory::GetInstance() {
-  return base::Singleton<PromoServiceFactory>::get();
+  static base::NoDestructor<PromoServiceFactory> instance;
+  return instance.get();
 }
 
 PromoServiceFactory::PromoServiceFactory()
-    : ProfileKeyedServiceFactory("PromoService") {
+    : ProfileKeyedServiceFactory(
+          "PromoService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(CookieSettingsFactory::GetInstance());
 }
 
 PromoServiceFactory::~PromoServiceFactory() = default;
 
-KeyedService* PromoServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+PromoServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   auto url_loader_factory = context->GetDefaultStoragePartition()
                                 ->GetURLLoaderFactoryForBrowserProcess();
-  return new PromoService(url_loader_factory,
-                          Profile::FromBrowserContext(context));
+  return std::make_unique<PromoService>(url_loader_factory,
+                                        Profile::FromBrowserContext(context));
 }

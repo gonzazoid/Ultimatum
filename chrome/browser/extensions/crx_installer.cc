@@ -8,10 +8,10 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_util.h"
@@ -42,7 +42,6 @@
 #include "components/crx_file/crx_verifier.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/browser/notification_service.h"
 #include "extensions/browser/content_verifier.h"
 #include "extensions/browser/extension_file_task_runner.h"
 #include "extensions/browser/extension_prefs.h"
@@ -52,7 +51,6 @@
 #include "extensions/browser/install/extension_install_ui.h"
 #include "extensions/browser/install_flag.h"
 #include "extensions/browser/install_stage.h"
-#include "extensions/browser/notification_types.h"
 #include "extensions/browser/policy_check.h"
 #include "extensions/browser/preload_check_group.h"
 #include "extensions/browser/requirements_checker.h"
@@ -84,7 +82,7 @@ namespace extensions {
 // static
 scoped_refptr<CrxInstaller> CrxInstaller::CreateSilent(
     ExtensionService* frontend) {
-  return new CrxInstaller(frontend->AsWeakPtr(),
+  return new CrxInstaller(frontend->AsExtensionServiceWeakPtr(),
                           std::unique_ptr<ExtensionInstallPrompt>(), nullptr);
 }
 
@@ -92,7 +90,8 @@ scoped_refptr<CrxInstaller> CrxInstaller::CreateSilent(
 scoped_refptr<CrxInstaller> CrxInstaller::Create(
     ExtensionService* frontend,
     std::unique_ptr<ExtensionInstallPrompt> client) {
-  return new CrxInstaller(frontend->AsWeakPtr(), std::move(client), nullptr);
+  return new CrxInstaller(frontend->AsExtensionServiceWeakPtr(),
+                          std::move(client), nullptr);
 }
 
 // static
@@ -100,7 +99,8 @@ scoped_refptr<CrxInstaller> CrxInstaller::Create(
     ExtensionService* service,
     std::unique_ptr<ExtensionInstallPrompt> client,
     const WebstoreInstaller::Approval* approval) {
-  return new CrxInstaller(service->AsWeakPtr(), std::move(client), approval);
+  return new CrxInstaller(service->AsExtensionServiceWeakPtr(),
+                          std::move(client), approval);
 }
 
 CrxInstaller::CrxInstaller(base::WeakPtr<ExtensionService> service_weak,
@@ -148,8 +148,8 @@ CrxInstaller::CrxInstaller(base::WeakPtr<ExtensionService> service_weak,
     expected_manifest_check_level_ = approval->manifest_check_level;
     if (expected_manifest_check_level_ !=
         WebstoreInstaller::MANIFEST_CHECK_LEVEL_NONE) {
-      expected_manifest_ = base::DictionaryValue::From(
-          base::Value::ToUniquePtrValue(approval->manifest->value()->Clone()));
+      expected_manifest_ = std::make_unique<base::Value::Dict>(
+          approval->manifest->value()->Clone());
     }
     expected_id_ = approval->extension_id;
   }
@@ -524,7 +524,7 @@ void CrxInstaller::OnUnpackFailure(const CrxInstallError& error) {
 void CrxInstaller::OnUnpackSuccess(
     const base::FilePath& temp_dir,
     const base::FilePath& extension_dir,
-    std::unique_ptr<base::DictionaryValue> original_manifest,
+    std::unique_ptr<base::Value::Dict> original_manifest,
     const Extension* extension,
     const SkBitmap& install_icon,
     declarative_net_request::RulesetInstallPrefs ruleset_install_prefs) {
@@ -540,7 +540,7 @@ void CrxInstaller::OnUnpackSuccess(
 void CrxInstaller::OnUnpackSuccessOnSharedFileThread(
     base::FilePath temp_dir,
     base::FilePath extension_dir,
-    std::unique_ptr<base::DictionaryValue> original_manifest,
+    std::unique_ptr<base::Value::Dict> original_manifest,
     scoped_refptr<const Extension> extension,
     SkBitmap install_icon,
     declarative_net_request::RulesetInstallPrefs ruleset_install_prefs) {
@@ -977,12 +977,6 @@ void CrxInstaller::ReportFailureFromUIThread(const CrxInstallError& error) {
   if (!service_weak_.get() || service_weak_->browser_terminating())
     return;
 
-  content::NotificationService* service =
-      content::NotificationService::current();
-  service->Notify(NOTIFICATION_EXTENSION_INSTALL_ERROR,
-                  content::Source<CrxInstaller>(this),
-                  content::Details<const CrxInstallError>(&error));
-
   // This isn't really necessary, it is only used because unit tests expect to
   // see errors get reported via this interface.
   //
@@ -1073,8 +1067,8 @@ void CrxInstaller::NotifyCrxInstallBegin() {
   profile_keep_alive_ = std::make_unique<ScopedProfileKeepAlive>(
       profile_, ProfileKeepAliveOrigin::kCrxInstaller);
 
-  InstallTrackerFactory::GetForBrowserContext(profile())
-      ->OnBeginCrxInstall(expected_id_);
+  InstallTrackerFactory::GetForBrowserContext(profile())->OnBeginCrxInstall(
+      *this, expected_id_);
 }
 
 void CrxInstaller::NotifyCrxInstallComplete(
@@ -1117,17 +1111,8 @@ void CrxInstaller::NotifyCrxInstallComplete(
     }
   }
 
-  // Some users (such as the download shelf) need to know when a
-  // CRXInstaller is done.  Listening for the EXTENSION_* events
-  // is problematic because they don't know anything about the
-  // extension before it is unpacked, so they cannot filter based
-  // on the extension.
-  content::NotificationService::current()->Notify(
-      NOTIFICATION_CRX_INSTALLER_DONE, content::Source<CrxInstaller>(this),
-      content::Details<const Extension>(success ? extension() : nullptr));
-
-  InstallTrackerFactory::GetForBrowserContext(profile())
-      ->OnFinishCrxInstall(success ? extension()->id() : expected_id_, success);
+  InstallTrackerFactory::GetForBrowserContext(profile())->OnFinishCrxInstall(
+      *this, success ? extension()->id() : expected_id_, success);
 
   if (success)
     ConfirmReEnable();

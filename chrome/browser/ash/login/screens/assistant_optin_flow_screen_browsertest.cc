@@ -7,11 +7,12 @@
 #include <memory>
 #include <set>
 
-#include "base/bind.h"
+#include "ash/constants/ash_features.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
-#include "base/run_loop.h"
 #include "base/strings/string_piece.h"
+#include "base/test/test_future.h"
 #include "chrome/browser/ash/login/login_wizard.h"
 #include "chrome/browser/ash/login/oobe_screen.h"
 #include "chrome/browser/ash/login/screens/sync_consent_screen.h"
@@ -332,14 +333,14 @@ class ScopedAssistantSettings : public assistant::AssistantSettings {
   bool is_minor_user_ = false;
 };
 
-class AssistantOptInFlowTest : public OobeBaseTest {
+class AssistantOptInFlowBaseTest : public OobeBaseTest {
  public:
-  AssistantOptInFlowTest() = default;
-  ~AssistantOptInFlowTest() override = default;
+  AssistantOptInFlowBaseTest() = default;
+  ~AssistantOptInFlowBaseTest() override = default;
 
   void RegisterAdditionalRequestHandlers() override {
     embedded_test_server()->RegisterRequestHandler(base::BindRepeating(
-        &AssistantOptInFlowTest::HandleRequest, base::Unretained(this)));
+        &AssistantOptInFlowBaseTest::HandleRequest, base::Unretained(this)));
   }
 
   void SetUpOnMainThread() override {
@@ -352,7 +353,7 @@ class AssistantOptInFlowTest : public OobeBaseTest {
     original_callback_ =
         assistant_optin_flow_screen->get_exit_callback_for_testing();
     assistant_optin_flow_screen->set_exit_callback_for_testing(
-        base::BindRepeating(&AssistantOptInFlowTest::HandleScreenExit,
+        base::BindRepeating(&AssistantOptInFlowBaseTest::HandleScreenExit,
                             base::Unretained(this)));
   }
 
@@ -415,24 +416,23 @@ class AssistantOptInFlowTest : public OobeBaseTest {
   }
 
   void WaitForScreenExit() {
-    if (screen_exited_)
+    if (screen_exited_) {
       return;
-
-    base::RunLoop run_loop;
-    screen_exit_callback_ = run_loop.QuitClosure();
-    run_loop.Run();
+    }
+    base::test::TestFuture<void> waiter;
+    screen_exit_callback_ = waiter.GetCallback();
+    EXPECT_TRUE(waiter.Wait());
   }
 
   std::unique_ptr<ScopedAssistantSettings> assistant_settings_;
 
-  absl::optional<AssistantOptInFlowScreen::Result> screen_result_;
+  std::optional<AssistantOptInFlowScreen::Result> screen_result_;
   base::HistogramTester histogram_tester_;
 
   // If set, HandleRequest will return an error for the next value prop URL
   // request..
   bool fail_next_value_prop_url_request_ = false;
 
- protected:
   base::test::ScopedFeatureList scoped_feature_list_;
 
  private:
@@ -464,6 +464,15 @@ class AssistantOptInFlowTest : public OobeBaseTest {
   AssistantOptInFlowScreen::ScreenExitCallback original_callback_;
 
   LoginManagerMixin login_manager_{&mixin_host_};
+};
+
+class AssistantOptInFlowTest : public AssistantOptInFlowBaseTest {
+ public:
+  AssistantOptInFlowTest() {
+    scoped_feature_list_.InitAndDisableFeature(
+        ash::features::kOobeSkipAssistant);
+  }
+  ~AssistantOptInFlowTest() override = default;
 };
 
 IN_PROC_BROWSER_TEST_F(AssistantOptInFlowTest, Basic) {
@@ -573,7 +582,9 @@ IN_PROC_BROWSER_TEST_F(AssistantOptInFlowTest, AssistantStateUpdateAfterShow) {
                                      1);
 }
 
-IN_PROC_BROWSER_TEST_F(AssistantOptInFlowTest, RetryOnWebviewLoadFail) {
+// TODO(crbug.com/1513726): Flaky on ChromeOS.
+IN_PROC_BROWSER_TEST_F(AssistantOptInFlowTest,
+                       DISABLED_RetryOnWebviewLoadFail) {
   auto force_lib_assistant_enabled =
       AssistantOptInFlowScreen::ForceLibAssistantEnabledForTesting(true);
   SetUpAssistantScreensForTest();
@@ -642,7 +653,13 @@ IN_PROC_BROWSER_TEST_F(AssistantOptInFlowTest, RejectValueProp) {
                                      1);
 }
 
-IN_PROC_BROWSER_TEST_F(AssistantOptInFlowTest, SkipShowingValueProp) {
+// TODO(crbug.com/1454755): Flaky on ChromeOS.
+#if BUILDFLAG(IS_CHROMEOS)
+#define MAYBE_SkipShowingValueProp DISABLED_SkipShowingValueProp
+#else
+#define MAYBE_SkipShowingValueProp SkipShowingValueProp
+#endif
+IN_PROC_BROWSER_TEST_F(AssistantOptInFlowTest, MAYBE_SkipShowingValueProp) {
   auto force_lib_assistant_enabled =
       AssistantOptInFlowScreen::ForceLibAssistantEnabledForTesting(true);
   assistant_settings_->set_consent_ui_flags(
@@ -737,6 +754,47 @@ IN_PROC_BROWSER_TEST_F(AssistantOptInFlowTest, SpeakerIdEnrollment) {
   EXPECT_EQ(assistant::prefs::ConsentStatus::kActivityControlAccepted,
             prefs->GetInteger(assistant::prefs::kAssistantConsentStatus));
   EXPECT_TRUE(prefs->GetBoolean(assistant::prefs::kAssistantHotwordEnabled));
+  EXPECT_TRUE(prefs->GetBoolean(assistant::prefs::kAssistantContextEnabled));
+  EXPECT_EQ(screen_result_.value(), AssistantOptInFlowScreen::Result::NEXT);
+  histogram_tester_.ExpectTotalCount(kAssistantOptInScreenExitReason, 1);
+  histogram_tester_.ExpectTotalCount(kAssistantOptInScreenStepCompletionTime,
+                                     1);
+}
+
+IN_PROC_BROWSER_TEST_F(AssistantOptInFlowTest,
+                       FeatureDisabledDuringSpeakerIdEnrollment) {
+  auto force_lib_assistant_enabled =
+      AssistantOptInFlowScreen::ForceLibAssistantEnabledForTesting(true);
+  assistant_settings_->set_consent_ui_flags(
+      ScopedAssistantSettings::CONSENT_UI_FLAG_SKIP_ACTIVITY_CONTROL);
+  assistant_settings_->set_speaker_id_enrollment_mode(
+      ScopedAssistantSettings::SpeakerIdEnrollmentMode::STEP_BY_STEP);
+
+  SetUpAssistantScreensForTest();
+  AssistantState::Get()->NotifyStatusChanged(assistant::AssistantStatus::READY);
+
+  ShowAssistantOptInFlowScreen();
+
+  OobeScreenWaiter screen_waiter(AssistantOptInFlowScreenView::kScreenId);
+  screen_waiter.Wait();
+
+  test::OobeJS().CreateVisibilityWaiter(true, kAssistantRelatedInfo)->Wait();
+  TapWhenEnabled(kRelatedInfoNextButton);
+
+  PrefService* const prefs = ProfileManager::GetActiveUserProfile()->GetPrefs();
+  prefs->SetBoolean(assistant::prefs::kAssistantEnabled, false);
+
+  test::OobeJS().CreateVisibilityWaiter(true, kAssistantVoiceMatch)->Wait();
+  TapWhenEnabled(kVoiceMatchAgreeButton);
+
+  EXPECT_FALSE(assistant_settings_->IsSpeakerIdEnrollmentActive());
+
+  WaitForScreenExit();
+
+  ExpectCollectedOptIns({});
+  EXPECT_EQ(assistant::prefs::ConsentStatus::kActivityControlAccepted,
+            prefs->GetInteger(assistant::prefs::kAssistantConsentStatus));
+  EXPECT_FALSE(prefs->GetBoolean(assistant::prefs::kAssistantHotwordEnabled));
   EXPECT_TRUE(prefs->GetBoolean(assistant::prefs::kAssistantContextEnabled));
   EXPECT_EQ(screen_result_.value(), AssistantOptInFlowScreen::Result::NEXT);
   histogram_tester_.ExpectTotalCount(kAssistantOptInScreenExitReason, 1);
@@ -1069,6 +1127,31 @@ IN_PROC_BROWSER_TEST_F(AssistantOptInFlowMinorModeTest,
   histogram_tester_.ExpectTotalCount(kAssistantOptInScreenExitReason, 1);
   histogram_tester_.ExpectTotalCount(kAssistantOptInScreenStepCompletionTime,
                                      1);
+}
+
+class AssistantOptInFlowSkipFeatureTest : public AssistantOptInFlowBaseTest {
+ public:
+  AssistantOptInFlowSkipFeatureTest() {
+    scoped_feature_list_.InitAndEnableFeature(
+        ash::features::kOobeSkipAssistant);
+  }
+};
+
+IN_PROC_BROWSER_TEST_F(AssistantOptInFlowSkipFeatureTest, AssistantSkipped) {
+  AssistantState::Get()->NotifyStatusChanged(assistant::AssistantStatus::READY);
+  ShowAssistantOptInFlowScreen();
+  WaitForScreenExit();
+  EXPECT_EQ(screen_result_.value(),
+            AssistantOptInFlowScreen::Result::NOT_APPLICABLE);
+
+  ExpectCollectedOptIns({});
+  histogram_tester_.ExpectTotalCount(kAssistantOptInScreenExitReason, 0);
+  histogram_tester_.ExpectTotalCount(kAssistantOptInScreenStepCompletionTime,
+                                     0);
+
+  PrefService* const prefs = ProfileManager::GetActiveUserProfile()->GetPrefs();
+  EXPECT_FALSE(prefs->GetBoolean(assistant::prefs::kAssistantHotwordEnabled));
+  EXPECT_FALSE(prefs->GetBoolean(assistant::prefs::kAssistantContextEnabled));
 }
 
 }  // namespace

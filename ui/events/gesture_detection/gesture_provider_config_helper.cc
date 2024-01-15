@@ -4,13 +4,12 @@
 
 #include "ui/events/gesture_detection/gesture_provider_config_helper.h"
 
+#include "base/task/sequenced_task_runner.h"
 #include "ui/display/screen.h"
 #include "ui/events/gesture_detection/gesture_configuration.h"
 
 namespace ui {
 namespace {
-
-constexpr float kSlopScaleForVr = 3.0f;
 
 class GenericDesktopGestureConfiguration : public GestureConfiguration {
  public:
@@ -31,6 +30,7 @@ GestureDetector::Config BuildGestureDetectorConfig(
       base::Milliseconds(gesture_config.show_press_delay_in_ms());
   config.double_tap_timeout =
       base::Milliseconds(gesture_config.double_tap_timeout_in_ms());
+  config.stylus_slop = gesture_config.max_stylus_move_in_pixels_for_click();
   config.touch_slop = gesture_config.max_touch_move_in_pixels_for_click();
   config.double_tap_slop =
       gesture_config.max_distance_between_taps_for_double_tap();
@@ -79,10 +79,6 @@ GestureProvider::Config BuildGestureProviderConfig(
   return config;
 }
 
-void TuneGestureProviderConfigForVr(GestureProvider::Config* config) {
-  config->gesture_detector_config.touch_slop *= kSlopScaleForVr;
-}
-
 }  // namespace
 
 GestureProvider::Config GetGestureProviderConfig(
@@ -93,11 +89,6 @@ GestureProvider::Config GetGestureProviderConfig(
     case GestureProviderConfigType::CURRENT_PLATFORM:
       config = BuildGestureProviderConfig(*GestureConfiguration::GetInstance(),
                                           task_runner);
-      break;
-    case GestureProviderConfigType::CURRENT_PLATFORM_VR:
-      config = BuildGestureProviderConfig(*GestureConfiguration::GetInstance(),
-                                          task_runner);
-      TuneGestureProviderConfigForVr(&config);
       break;
     case GestureProviderConfigType::GENERIC_DESKTOP:
       config = BuildGestureProviderConfig(GenericDesktopGestureConfiguration(),

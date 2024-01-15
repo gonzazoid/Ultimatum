@@ -61,12 +61,12 @@ await resetEventLevelReports();
 
 ### registerAttributionSrc
 
-This works to register a source or a trigger. You just need to pass in the name
-of the header and the body of the header.
+This works to register a source or a trigger. You just need to pass the body of
+the headers that you want to register.
 
 ```javascript
 const sourceEvent = {...};
-registerAttributionSrc('Attribution-Reporting-Register-Source', sourceEvent);
+registerAttributionSrc({ source: sourceEvent });
 ```
 
 The
@@ -94,6 +94,11 @@ in between requests. The method keeps polling until at least 1 report is
 returned by the server or the test times out. Please note that receiving reports
 from the server is a destructive operation on the server-side. This would
 essentially clear the server of all the reports.
+
+### waitForSourceToBeRegistered
+
+Waits for a previously initiated source registration `registerAttributionSrc` to
+complete. Please note that a source can be "waited on" once.
 
 ```javascript
 // then syntax

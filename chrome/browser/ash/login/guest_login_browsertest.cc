@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/keyboard/keyboard_controller.h"
 #include "ash/public/cpp/login_screen_test_api.h"
 #include "base/command_line.h"
@@ -16,7 +15,7 @@
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_manager.h"
 #include "chrome/browser/ui/webui/ash/login/guest_tos_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/user_creation_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/user_creation_screen_handler.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "chromeos/ash/components/dbus/userdataauth/fake_userdataauth_client.h"
@@ -29,7 +28,7 @@
 namespace ash {
 
 constexpr char kGuestTosId[] = "guest-tos";
-const test::UIPath kLoadedDialog = {kGuestTosId, "loaded"};
+const test::UIPath kOverviewDialog = {kGuestTosId, "overview"};
 const test::UIPath kGuestTosAcceptButton = {kGuestTosId, "acceptButton"};
 
 // Tests guest user log in.
@@ -57,11 +56,9 @@ class GuestLoginTest : public MixinBasedInProcessBrowserTest {
     OobeScreenWaiter(UserCreationView::kScreenId).Wait();
     ASSERT_TRUE(LoginScreenTestApi::ClickGuestButton());
 
-    if (chromeos::features::IsOobeConsolidatedConsentEnabled()) {
-      OobeScreenWaiter(GuestTosScreenView::kScreenId).Wait();
-      test::OobeJS().CreateVisibilityWaiter(true, kLoadedDialog)->Wait();
-      test::OobeJS().ClickOnPath(kGuestTosAcceptButton);
-    }
+    OobeScreenWaiter(GuestTosScreenView::kScreenId).Wait();
+    test::OobeJS().CreateVisibilityWaiter(true, kOverviewDialog)->Wait();
+    test::OobeJS().ClickOnPath(kGuestTosAcceptButton);
   }
 
   void CheckCryptohomeMountAssertions() {
@@ -107,12 +104,10 @@ IN_PROC_BROWSER_TEST_F(GuestLoginTest, PRE_Login) {
   EXPECT_TRUE(FakeSessionManagerClient::Get()->restart_job_argv().has_value());
   CheckCryptohomeMountAssertions();
 
-  if (chromeos::features::IsOobeConsolidatedConsentEnabled()) {
-    histogram_tester_.ExpectTotalCount("OOBE.StepCompletionTime.Guest-tos", 1);
-    histogram_tester_.ExpectTotalCount(
-        "OOBE.StepCompletionTimeByExitReason.Guest-tos.Accept", 1);
-    histogram_tester_.ExpectTotalCount("OOBE.StepShownStatus.Guest-tos", 1);
-  }
+  histogram_tester_.ExpectTotalCount("OOBE.StepCompletionTime.Guest-tos", 1);
+  histogram_tester_.ExpectTotalCount(
+      "OOBE.StepCompletionTimeByExitReason.Guest-tos.Accept", 1);
+  histogram_tester_.ExpectTotalCount("OOBE.StepShownStatus.Guest-tos", 1);
 }
 
 IN_PROC_BROWSER_TEST_F(GuestLoginTest, Login) {
@@ -240,10 +235,9 @@ IN_PROC_BROWSER_TEST_F(GuestLoginTest, PRE_SkipGuestToS) {
 
   restart_job_waiter.Run();
   EXPECT_TRUE(FakeSessionManagerClient::Get()->restart_job_argv().has_value());
-  if (chromeos::features::IsOobeConsolidatedConsentEnabled()) {
-    histogram_tester_.ExpectTotalCount("OOBE.StepCompletionTime.Guest-tos", 0);
-    histogram_tester_.ExpectTotalCount("OOBE.StepShownStatus.Guest-tos", 0);
-  }
+
+  histogram_tester_.ExpectTotalCount("OOBE.StepCompletionTime.Guest-tos", 0);
+  histogram_tester_.ExpectTotalCount("OOBE.StepShownStatus.Guest-tos", 0);
 }
 
 IN_PROC_BROWSER_TEST_F(GuestLoginTest, SkipGuestToS) {

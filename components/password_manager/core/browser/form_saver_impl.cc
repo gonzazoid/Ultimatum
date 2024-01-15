@@ -8,10 +8,12 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
+#include "components/password_manager/core/browser/affiliation/affiliation_utils.h"
 #include "components/password_manager/core/browser/password_manager_util.h"
-#include "components/password_manager/core/browser/password_store_interface.h"
+#include "components/password_manager/core/browser/password_store/password_store_interface.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -39,14 +41,15 @@ void SanitizeFormData(FormData* form) {
 }
 
 // Do the clean up of |matches| after |pending| was just pushed to the store.
-void PostProcessMatches(const PasswordForm& pending,
-                        const std::vector<const PasswordForm*>& matches,
-                        const std::u16string& old_password,
-                        PasswordStoreInterface* store) {
+void PostProcessMatches(
+    const PasswordForm& pending,
+    const std::vector<raw_ptr<const PasswordForm, VectorExperimental>>& matches,
+    const std::u16string& old_password,
+    PasswordStoreInterface* store) {
   DCHECK(!pending.blocked_by_user);
 
   // Update existing matches in the password store.
-  for (const auto* match : matches) {
+  for (const password_manager::PasswordForm* match : matches) {
     if (match->IsFederatedCredential() ||
         ArePasswordFormUniqueKeysEqual(pending, *match))
       continue;
@@ -54,9 +57,16 @@ void PostProcessMatches(const PasswordForm& pending,
     const bool same_password = match->password_value == pending.password_value;
     const bool username_was_added =
         match->username_value.empty() && !pending.username_value.empty();
+    const password_manager_util::GetLoginMatchType match_type =
+        password_manager_util::GetMatchType(*match);
+    const bool is_affiliated_android_match =
+        match_type == password_manager_util::GetLoginMatchType::kAffiliated &&
+        password_manager::IsValidAndroidFacetURI(match->signon_realm);
+    // TODO(crbug.com/1428539): include affiliated website matches when Android
+    // supports them.
     if (same_password && username_was_added &&
-        password_manager_util::GetMatchType(*match) ==
-            password_manager_util::GetLoginMatchType::kExact) {
+        (match_type == password_manager_util::GetLoginMatchType::kExact ||
+         is_affiliated_android_match)) {
       store->RemoveLogin(*match);
       continue;
     }
@@ -78,7 +88,6 @@ void PostProcessMatches(const PasswordForm& pending,
 }  // namespace
 
 FormSaverImpl::FormSaverImpl(PasswordStoreInterface* store) : store_(store) {
-  DCHECK(store);
 }
 
 FormSaverImpl::~FormSaverImpl() = default;
@@ -95,9 +104,10 @@ void FormSaverImpl::Unblocklist(const PasswordFormDigest& digest) {
   store_->Unblocklist(digest);
 }
 
-void FormSaverImpl::Save(PasswordForm pending,
-                         const std::vector<const PasswordForm*>& matches,
-                         const std::u16string& old_password) {
+void FormSaverImpl::Save(
+    PasswordForm pending,
+    const std::vector<raw_ptr<const PasswordForm, VectorExperimental>>& matches,
+    const std::u16string& old_password) {
   SanitizeFormData(&pending.form_data);
   pending.date_password_modified = base::Time::Now();
   store_->AddLogin(pending);
@@ -105,9 +115,10 @@ void FormSaverImpl::Save(PasswordForm pending,
   PostProcessMatches(pending, matches, old_password, store_);
 }
 
-void FormSaverImpl::Update(PasswordForm pending,
-                           const std::vector<const PasswordForm*>& matches,
-                           const std::u16string& old_password) {
+void FormSaverImpl::Update(
+    PasswordForm pending,
+    const std::vector<raw_ptr<const PasswordForm, VectorExperimental>>& matches,
+    const std::u16string& old_password) {
   SanitizeFormData(&pending.form_data);
   if (old_password != pending.password_value)
     pending.date_password_modified = base::Time::Now();
@@ -118,7 +129,7 @@ void FormSaverImpl::Update(PasswordForm pending,
 
 void FormSaverImpl::UpdateReplace(
     PasswordForm pending,
-    const std::vector<const PasswordForm*>& matches,
+    const std::vector<raw_ptr<const PasswordForm, VectorExperimental>>& matches,
     const std::u16string& old_password,
     const PasswordForm& old_unique_key) {
   SanitizeFormData(&pending.form_data);

@@ -1,5 +1,5 @@
 include_rules = [
-    "+base/atomicops.h",
+    "+base/apple/scoped_cftyperef.h",
     "+base/check.h",
     "+base/check_op.h",
     "+base/containers/flat_set.h",
@@ -8,7 +8,6 @@ include_rules = [
     "+base/files/file.h",
     "+base/location.h",
     "+base/logging.h",
-    "+base/mac/scoped_cftyperef.h",
     "+base/memory/memory_pressure_listener.h",
     "+base/memory/ref_counted.h",
     "+base/memory/scoped_refptr.h",
@@ -16,14 +15,15 @@ include_rules = [
     "+base/metrics",
     "+base/task/sequenced_task_runner.h",
     "+base/task/single_thread_task_runner.h",
+    "+base/sequence_checker.h",
     "+base/strings",
     "+base/synchronization/lock.h",
     "+base/synchronization/waitable_event.h",
     "+base/threading/platform_thread.h",
     "+base/threading/thread.h",
     "+base/threading/thread_checker.h",
+    "+base/types/optional_ref.h",
     "+base/time",
-    "+base/trace_event",
     "+build/build_config.h",
     "+cc",
     "+components/viz/common",
@@ -33,11 +33,13 @@ include_rules = [
     "+media/base/eme_constants.h",
     "+media/base/media_content_type.h",
     "+media/base/media_log.h",
+    "+media/base/output_device_info.h",
     "+media/base/stream_parser.h",
     "+media/base/video_frame.h",
     "+media/base/video_frame_metadata.h",
     "+media/base/video_transformation.h",
     "+mojo/public",
+    "+net/base/auth.h",
     "+net/base/host_port_pair.h",
     "+net/base/net_errors.h",
     "+net/base/ip_endpoint.h",
@@ -51,6 +53,7 @@ include_rules = [
     "+services/network/public/cpp/cors/preflight_result.h",
     "+services/network/public/cpp/resource_request_body.h",
     "+services/network/public/cpp/shared_url_loader_factory.h",
+    "+services/network/public/cpp/trigger_verification.h",
 
     # Enforce to use mojom-shared.h in blink/public so that it can compile
     # inside and outside Blink.
@@ -58,6 +61,7 @@ include_rules = [
     "+services/network/public/mojom/blocked_by_response_reason.mojom-shared.h",
     "+services/network/public/mojom/content_security_policy.mojom-shared.h",
     "+services/network/public/mojom/cors.mojom-shared.h",
+    "+services/network/public/mojom/attribution.mojom-shared.h",
     "+services/network/public/mojom/cross_origin_embedder_policy.mojom-shared.h",
     "+services/network/public/mojom/data_pipe_getter.mojom-shared.h",
     "+services/network/public/mojom/fetch_api.mojom-forward.h",
@@ -88,6 +92,7 @@ include_rules = [
     "+ui/color",
     "+ui/events/types",
     "+ui/gfx",
+    "+ui/gl/angle_implementation.h",
     "+url",
     "-web",
 
@@ -95,3 +100,14 @@ include_rules = [
     "+third_party/blink/renderer/core",
     "+third_party/blink/renderer/platform",
 ]
+
+specific_include_rules = {
+    # Allow WebPrivatePtr to hold actual typed handles (refcounted, GCed roots)
+    # to objects. WebPrivatePtr ensures that no implementation details leak.
+    "web_private_ptr.h" : [
+        "+base/memory/scoped_refptr.h",
+        "+third_party/blink/renderer/platform/heap/cross_thread_persistent.h",
+        "+third_party/blink/renderer/platform/heap/persistent.h",
+        "+third_party/blink/renderer/platform/wtf/type_traits.h",
+    ]
+}

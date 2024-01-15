@@ -7,6 +7,7 @@
 
 #include "ash/ash_export.h"
 #include "ash/shelf/shelf_button.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/button.h"
 
 namespace ash {
@@ -15,6 +16,8 @@ class ShelfButtonDelegate;
 // Base class for controls shown on the shelf that are not app shortcuts, such
 // as the app list, back, and overflow buttons.
 class ASH_EXPORT ShelfControlButton : public ShelfButton {
+  METADATA_HEADER(ShelfControlButton, ShelfButton)
+
  public:
   ShelfControlButton(Shelf* shelf, ShelfButtonDelegate* shelf_button_delegate_);
 
@@ -32,15 +35,8 @@ class ASH_EXPORT ShelfControlButton : public ShelfButton {
   void set_ideal_bounds(const gfx::Rect& bounds) { ideal_bounds_ = bounds; }
 
   // ShelfButton:
-  const char* GetClassName() const override;
   gfx::Size CalculatePreferredSize() const override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
-
- protected:
-  void PaintBackground(gfx::Canvas* canvas, const gfx::Rect& bounds);
-
-  // ShelfButton:
-  void PaintButtonContents(gfx::Canvas* canvas) override;
 
  private:
   gfx::Rect ideal_bounds_;

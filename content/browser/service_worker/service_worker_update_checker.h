@@ -9,7 +9,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "content/browser/renderer_host/policy_container_host.h"
@@ -75,10 +75,16 @@ class CONTENT_EXPORT ServiceWorkerUpdateChecker {
   //    Some script changed, update is needed. |failure_info| is nullptr.
   // 3. ServiceWorkerSingleScriptUpdateChecker::Result::kFailed
   //    The update check failed, detailed error info is in |failure_info|.
+  //
+  // |updated_sha256_script_checksums| contains the pair of updated hash string
+  // and its script url. It's normally empty, except for the case when
+  // |main_script_sha256_checksum_| has a value, and the update check finished
+  // with kIdentical.
   using UpdateStatusCallback = base::OnceCallback<void(
       ServiceWorkerSingleScriptUpdateChecker::Result result,
       std::unique_ptr<ServiceWorkerSingleScriptUpdateChecker::FailureInfo>
-          failure_info)>;
+          failure_info,
+      const std::map<GURL, std::string>& updated_sha256_script_checksums)>;
 
   ServiceWorkerUpdateChecker() = delete;
 
@@ -87,6 +93,7 @@ class CONTENT_EXPORT ServiceWorkerUpdateChecker {
           scripts_to_compare,
       const GURL& main_script_url,
       int64_t main_script_resource_id,
+      const std::optional<std::string>& main_script_sha256_checksum,
       scoped_refptr<ServiceWorkerVersion> version_to_update,
       scoped_refptr<network::SharedURLLoaderFactory> loader_factory,
       bool force_bypass_cache,
@@ -116,13 +123,11 @@ class CONTENT_EXPORT ServiceWorkerUpdateChecker {
       std::unique_ptr<ServiceWorkerSingleScriptUpdateChecker::FailureInfo>
           failure_info,
       std::unique_ptr<ServiceWorkerSingleScriptUpdateChecker::PausedState>
-          paused_state);
+          paused_state,
+      const std::optional<std::string>& sha256_checksum);
 
   const GURL& updated_script_url() const { return updated_script_url_; }
   bool network_accessed() const { return network_accessed_; }
-  network::CrossOriginEmbedderPolicy cross_origin_embedder_policy() const {
-    return cross_origin_embedder_policy_;
-  }
   const scoped_refptr<PolicyContainerHost> policy_container_host() const {
     return policy_container_host_;
   }
@@ -135,6 +140,7 @@ class CONTENT_EXPORT ServiceWorkerUpdateChecker {
 
   const GURL main_script_url_;
   const int64_t main_script_resource_id_;
+  const std::optional<std::string> main_script_sha256_checksum_;
 
   std::vector<storage::mojom::ServiceWorkerResourceRecordPtr>
       scripts_to_compare_;
@@ -162,8 +168,11 @@ class CONTENT_EXPORT ServiceWorkerUpdateChecker {
   // True if any at least one of the scripts is fetched by network.
   bool network_accessed_ = false;
 
-  // The Cross-Origin-Embedder-Policy header for the updated main script.
-  network::CrossOriginEmbedderPolicy cross_origin_embedder_policy_;
+  // Contains the pair of updated hash string and its script url.
+  // This manages newly calculated checksum strings so that we store them on
+  // memory and database.
+  std::map<GURL, std::string> updated_sha256_script_checksums_;
+
   scoped_refptr<PolicyContainerHost> policy_container_host_;
 
   // |context_| outlives |this| because it owns |this| through

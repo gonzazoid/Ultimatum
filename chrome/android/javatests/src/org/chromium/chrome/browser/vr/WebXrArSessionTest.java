@@ -7,8 +7,6 @@ package org.chromium.chrome.browser.vr;
 import static org.chromium.chrome.browser.vr.WebXrArTestFramework.PAGE_LOAD_TIMEOUT_S;
 import static org.chromium.chrome.browser.vr.WebXrArTestFramework.POLL_TIMEOUT_SHORT_MS;
 
-import android.os.Build;
-
 import androidx.test.filters.MediumTest;
 
 import org.junit.Assert;
@@ -23,7 +21,6 @@ import org.chromium.base.test.params.ParameterAnnotations.UseRunnerDelegate;
 import org.chromium.base.test.params.ParameterSet;
 import org.chromium.base.test.params.ParameterizedRunner;
 import org.chromium.base.test.util.CommandLineFlags;
-import org.chromium.base.test.util.MinAndroidSdkLevel;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.modaldialog.ChromeModalDialogTestUtils;
 import org.chromium.chrome.browser.vr.rules.XrActivityRestriction;
@@ -38,20 +35,19 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeoutException;
 
-/**
- * End-to-end tests for testing WebXR for AR's requestSession behavior.
- */
+/** End-to-end tests for testing WebXR for AR's requestSession behavior. */
 @RunWith(ParameterizedRunner.class)
 @UseRunnerDelegate(ChromeJUnit4RunnerDelegate.class)
-@CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE,
-        "enable-features=WebXR,WebXRARModule,WebXRHitTest,LogJsConsoleMessages"})
-@MinAndroidSdkLevel(Build.VERSION_CODES.N) // WebXR for AR is only supported on N+
+@CommandLineFlags.Add({
+    ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE,
+    "enable-features=WebXR,WebXRARModule,WebXRHitTest,LogJsConsoleMessages"
+})
 public class WebXrArSessionTest {
     @ClassParameter
     private static List<ParameterSet> sClassParams =
             ArTestRuleUtils.generateDefaultTestRuleParameters();
-    @Rule
-    public RuleChain mRuleChain;
+
+    @Rule public RuleChain mRuleChain;
 
     private ChromeActivityTestRule mTestRule;
     private WebXrArTestFramework mWebXrArTestFramework;
@@ -66,9 +62,7 @@ public class WebXrArSessionTest {
         mWebXrArTestFramework = new WebXrArTestFramework(mTestRule);
     }
 
-    /**
-     * Tests that a session request for AR succeeds.
-     */
+    /** Tests that a session request for AR succeeds. */
     @Test
     @MediumTest
     @XrActivityRestriction({XrActivityRestriction.SupportedActivity.ALL})
@@ -91,7 +85,7 @@ public class WebXrArSessionTest {
                 "test_ar_request_session_succeeds", PAGE_LOAD_TIMEOUT_S);
 
         // Start new session, accepting the consent prompt
-        mWebXrArTestFramework.enterSessionWithUserGestureOrFail(/*needsCameraPermission=*/false);
+        mWebXrArTestFramework.enterSessionWithUserGestureOrFail(/* needsCameraPermission= */ false);
         mWebXrArTestFramework.endSession();
         mWebXrArTestFramework.assertNoJavaScriptErrors();
         mWebXrArTestFramework.pollJavaScriptBooleanOrFail(
@@ -135,7 +129,7 @@ public class WebXrArSessionTest {
         WebContents contents = mWebXrArTestFramework.getCurrentWebContents();
 
         // Start new session, accepting the consent prompt
-        mWebXrArTestFramework.enterSessionWithUserGestureOrFail(/*needsCameraPermission=*/false);
+        mWebXrArTestFramework.enterSessionWithUserGestureOrFail(/* needsCameraPermission= */ false);
         mWebXrArTestFramework.assertNoJavaScriptErrors();
 
         // Trigger a new permission prompt to show when tapping on the canvas, then tap on it.
@@ -146,8 +140,11 @@ public class WebXrArSessionTest {
         // Now that the new permission prompt is showing, ensure that the browser controls have
         // shown themselves and that we still have an AR Session.
         ChromeModalDialogTestUtils.checkBrowserControls(mTestRule.getActivity(), true);
-        Assert.assertTrue(Boolean.valueOf(mWebXrArTestFramework.runJavaScriptOrFail(
-                "sessionInfos[sessionTypes.AR].currentSession != null", POLL_TIMEOUT_SHORT_MS)));
+        Assert.assertTrue(
+                Boolean.valueOf(
+                        mWebXrArTestFramework.runJavaScriptOrFail(
+                                "sessionInfos[sessionTypes.AR].currentSession != null",
+                                POLL_TIMEOUT_SHORT_MS)));
 
         // Reject the permission prompt to hide it again.
         PermissionUtils.denyPermissionPrompt();
@@ -156,8 +153,11 @@ public class WebXrArSessionTest {
         // Now that the new permission prompt is dismissed, ensure that the browser controls have
         // hidden themselves and that we still have an AR Session.
         ChromeModalDialogTestUtils.checkBrowserControls(mTestRule.getActivity(), false);
-        Assert.assertTrue(Boolean.valueOf(mWebXrArTestFramework.runJavaScriptOrFail(
-                "sessionInfos[sessionTypes.AR].currentSession != null", POLL_TIMEOUT_SHORT_MS)));
+        Assert.assertTrue(
+                Boolean.valueOf(
+                        mWebXrArTestFramework.runJavaScriptOrFail(
+                                "sessionInfos[sessionTypes.AR].currentSession != null",
+                                POLL_TIMEOUT_SHORT_MS)));
 
         mWebXrArTestFramework.assertNoJavaScriptErrors();
     }

@@ -8,20 +8,18 @@
 #include "ash/wm/desks/desks_controller.h"
 #include "base/run_loop.h"
 
-namespace ui {
-namespace test {
+namespace ui::test {
 class EventGenerator;
-}  // namespace test
-}  // namespace ui
+}  // namespace ui::test
 
 namespace ash {
 
 class CloseButton;
 class DeskActivationAnimation;
 class DeskMiniView;
-class DesksBarView;
+class LegacyDeskBarView;
 
-constexpr int kNumFingersForHighlight = 3;
+constexpr int kNumFingersForFocus = 3;
 constexpr int kNumFingersForDesksSwitch = 4;
 
 // Used for waiting for the desk switch animations on all root windows to
@@ -72,17 +70,13 @@ void ScrollToSwitchDesks(bool scroll_left,
 void WaitUntilEndingScreenshotTaken(DeskActivationAnimation* animation);
 
 // Returns the desk bar view for the primary display.
-const DesksBarView* GetPrimaryRootDesksBarView();
+const LegacyDeskBarView* GetPrimaryRootDesksBarView();
 
-// Returns the legacy close button if `features::kDesksCloseAll` is not enabled,
-// and otherwise returns the available button in the `desk_action_view` that
-// performs the same action (i.e. the combine desks button if it is available,
-// and otherwise the close-all button).
+// Returns the combine desks button if it is available, and otherwise the
+// close-all button.
 const CloseButton* GetCloseDeskButtonForMiniView(const DeskMiniView* mini_view);
 
-// Returns the visibility state of the desk action interface for the mini view
-// (i.e. `desk_action_view` if `features::kDesksCloseAll` is enabled,
-// `close_desk_button` otherwise).
+// Returns the visibility state of the desk action interface for the mini view.
 bool GetDeskActionVisibilityForMiniView(const DeskMiniView* mini_view);
 
 // Wait for `milliseconds` to be finished.

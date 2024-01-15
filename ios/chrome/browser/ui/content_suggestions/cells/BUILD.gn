@@ -2,16 +2,9 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-# TODO(crbug.com/1344830): Migrate away from deprecated MDC APIs.
-config("disable_deprecated_declarations") {
-  cflags = [ "-Wno-deprecated-declarations" ]
-}
-
 source_set("cells") {
   sources = [
     "content_suggestions_gesture_commands.h",
-    "content_suggestions_module_container.h",
-    "content_suggestions_module_container.mm",
     "content_suggestions_most_visited_action_item.h",
     "content_suggestions_most_visited_action_item.mm",
     "content_suggestions_most_visited_constants.h",
@@ -27,40 +20,27 @@ source_set("cells") {
     "content_suggestions_selection_actions.h",
     "content_suggestions_shortcut_tile_view.h",
     "content_suggestions_shortcut_tile_view.mm",
-    "content_suggestions_text_item.h",
-    "content_suggestions_text_item.mm",
-    "content_suggestions_tile_layout_util.h",
-    "content_suggestions_tile_layout_util.mm",
     "content_suggestions_tile_view.h",
     "content_suggestions_tile_view.mm",
+    "multi_row_container_view.h",
+    "multi_row_container_view.mm",
     "query_suggestion_view.h",
     "query_suggestion_view.mm",
     "suggested_content.h",
   ]
   deps = [
     ":constants",
-    "resources:ntp_bookmarks_icon",
-    "resources:ntp_history_icon",
     "resources:ntp_most_visited_tile",
-    "resources:ntp_readinglist_icon",
-    "resources:ntp_recent_icon",
-    "resources:ntp_whats_new_icon",
     "//base",
     "//components/ntp_tiles",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/ui:feature_flags",
-    "//ios/chrome/browser/ui/collection_view",
+    "//ios/chrome/browser/shared/public/features",
+    "//ios/chrome/browser/shared/ui/symbols",
+    "//ios/chrome/browser/shared/ui/util",
     "//ios/chrome/browser/ui/content_suggestions:constants",
     "//ios/chrome/browser/ui/content_suggestions:content_suggestions_constant",
-    "//ios/chrome/browser/ui/content_suggestions:content_suggestions_ui_util",
-    "//ios/chrome/browser/ui/content_suggestions:feature_flags",
     "//ios/chrome/browser/ui/content_suggestions:public",
-    "//ios/chrome/browser/ui/content_suggestions/identifier",
-    "//ios/chrome/browser/ui/icons:symbols",
-    "//ios/chrome/browser/ui/image_util",
-    "//ios/chrome/browser/ui/resources:module_shadow",
-    "//ios/chrome/browser/ui/util",
-    "//ios/chrome/common:string_util",
+    "//ios/chrome/browser/ui/ntp:constants",
     "//ios/chrome/common:timing",
     "//ios/chrome/common/ui/colors",
     "//ios/chrome/common/ui/favicon",
@@ -70,25 +50,24 @@ source_set("cells") {
     "//ui/base",
     "//url",
   ]
-  configs += [
-    ":disable_deprecated_declarations",
-    "//build/config/compiler:enable_arc",
-  ]
+  frameworks = [ "UIKit.framework" ]
 }
 
 source_set("constants") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "content_suggestions_cells_constants.h",
     "content_suggestions_cells_constants.mm",
     "content_suggestions_tile_constants.h",
     "content_suggestions_tile_constants.mm",
+    "content_suggestions_tile_layout_util.h",
+    "content_suggestions_tile_layout_util.mm",
   ]
 
   deps = [
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/ui/content_suggestions:feature_flags",
-    "//ios/chrome/browser/ui/icons:symbols",
+    "//ios/chrome/browser/shared/ui/symbols",
+    "//ios/chrome/browser/shared/ui/util",
+    "//ios/chrome/common/ui/util",
     "//ui/base:base",
   ]
 }
@@ -98,16 +77,12 @@ source_set("unit_tests") {
   sources = [ "content_suggestions_tile_layout_util_unittest.mm" ]
   deps = [
     ":cells",
+    ":constants",
     "//base",
-    "//ios/chrome/browser/ui/collection_view",
     "//ios/chrome/common/ui/favicon",
     "//testing/gtest",
     "//third_party/ocmock",
     "//ui/base",
     "//url",
-  ]
-  configs += [
-    ":disable_deprecated_declarations",
-    "//build/config/compiler:enable_arc",
   ]
 }

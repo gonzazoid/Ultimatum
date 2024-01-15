@@ -22,7 +22,8 @@ enum WiFiSecurityMode {
 enum WiFiBand {
   // 2.4GHz bandwidth
   k2_4GHz,
-  k5GHz,
+  // Bandwidth auto chosen based on the device. Could either be 2.4GHz or 5GHz.
+  kAutoChoose,
 };
 
 // Configuration properties for Hotspot.
@@ -32,7 +33,7 @@ struct HotspotConfig {
   bool auto_disable;
   // Security mode for WiFi downstream.
   WiFiSecurityMode security;
-  // The tethering band preference, this should be one of "2.4GHz" or "5GHz".
+  // The tethering WiFi band preference.
   WiFiBand band;
   // SSID of WiFi downstream.
   string ssid;
@@ -52,6 +53,8 @@ enum SetHotspotConfigResult {
   kFailedNotLogin,
   // Failed for invalid hotspot configuration.
   kFailedInvalidConfiguration,
+  // Failed due to Shill operation failure.
+  kFailedShillOperation,
 };
 
 // Status about whether Hotspot is allowed or not.
@@ -79,19 +82,49 @@ enum HotspotControlResult {
   kNotAllowed,
   // Tethering readiness check failed.
   kReadinessCheckFailed,
+  // Couldn't disable Wifi before enabling hotspot.
+  kDisableWifiFailed,
   // Invalid tethering configuration.
   kInvalidConfiguration,
-  // Upstream is not ready.
-  kUpstreamNotReady,
-  // Network setup failure
+  // Upstream network is not available.
+  kUpstreamNotAvailable,
+  // Failed to setup or tear down network layer for hotspot.
   kNetworkSetupFailure,
-  // Wifi driver setup failure.
-  kWifiDriverFailure,
-  // Cellular attach failure.
-  kCellularAttachFailure,
-  // No upstream cellular connection.
-  kNoUpstreamConnection,
+  // Downstream WiFi operation failure.
+  kDownstreamWifiFailure,
+  // Upstream network operation failure.
+  kUpstreamFailure,
+  // Failed due to Shill operation error.
+  kShillOperationFailed,
+  // The hotspot's current state is the same as the state requested.
+  kAlreadyFulfilled,
+  // Hotspot enable request has been aborted.
+  kAborted,
+  // Invalid hotspot enable request.
+  kInvalid,
   kUnknownFailure,
+};
+
+// Reason for why hotspot was turned off.
+enum DisableReason {
+  // Disabled automatically because no clients were connected for a
+  // fixed amount of time. Note that HotspotConfig’s |auto_disabled|
+  // has to be true for this to have happened.
+  kAutoDisabled,
+  // Disabled because of an internal reason.
+  kInternalError,
+  // Disabled because user switched off Hotspot tethering manually.
+  kUserInitiated,
+  // Disabled because WiFi was enabled.
+  kWifiEnabled,
+  // Disabled because Hotspot was prohibited by policy.
+  kProhibitedByPolicy,
+  // Disabled because there is no Mobile Data.
+  kUpstreamNetworkNotAvailable,
+  // Disabled because the device has been suspended.
+  kSuspended,
+  // Disabled because hotspot need to be restarted.
+  kRestart,
 };
 
 // Information about Hotspot feature including current state, active client
@@ -105,15 +138,22 @@ struct HotspotInfo {
   HotspotAllowStatus allow_status;
   // Supported WiFi security modes for WiFi downstream.
   array<WiFiSecurityMode> allowed_wifi_security_modes;
-  // Hotspot configuration properties.
-  HotspotConfig config;
+  // Hotspot configuration properties. Null if the user is not logged in or
+  // initialization has not completed. Observers listen for this value to be set
+  // later by implementing the OnHotspotInfoChanged() method.
+  HotspotConfig? config;
 };
 
 // CrosHotspotConfig interface provides methods to get current hotspot status,
 // configure, enable or disable hotspot.
 interface CrosHotspotConfig {
-  // Adds an observer that can listen to hotspot related events.
+  // Adds an observer that can listen to hotspot related events. Invokes
+  // OnHotspotInfoChange() when observer is added.
   AddObserver(pending_remote<CrosHotspotConfigObserver> observer);
+
+  // Adds an observer to listen to hotspot turned on/off events.
+  ObserveEnabledStateChanges(
+    pending_remote<HotspotEnabledStateObserver> observer);
 
   // Returns HotspotInfo structure containing state, client count, capabilities,
   // supported security modes and configuration properties of Hotspot.
@@ -136,7 +176,15 @@ interface CrosHotspotConfigObserver {
   // Called when there is a state, client count, configuration or capability
   // change within Hotspot.
   OnHotspotInfoChanged();
+};
 
-  // Called when hotspot state become failure with |error_code|.
-  OnHotspotStateFailed(string error_code);
+// HotspotEnabledStateObserver is implemented by any module that needs
+// to observe changes to the hotspot enabled state.
+interface HotspotEnabledStateObserver {
+  // Called when Hotspot is successfully turned on.
+  OnHotspotTurnedOn();
+
+  // Called when Hotspot is successfully turned off. `disable_reason`
+  // indicates the reason why Hotspot was turned off.
+  OnHotspotTurnedOff(DisableReason reason);
 };

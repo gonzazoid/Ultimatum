@@ -6,12 +6,13 @@
 
 #include <string>
 
+#include "ash/constants/ash_features.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
-#include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/ui/webui/ash/login/device_disabled_screen_handler.h"
+#include "chromeos/ash/components/install_attributes/install_attributes.h"
 
 namespace ash {
 namespace {
@@ -31,18 +32,23 @@ DeviceDisabledScreen::DeviceDisabledScreen(
 DeviceDisabledScreen::~DeviceDisabledScreen() = default;
 
 void DeviceDisabledScreen::ShowImpl() {
-  if (!view_ || !is_hidden())
+  if (!view_ || !is_hidden()) {
     return;
+  }
 
-  view_->Show(DeviceDisablingManager()->serial_number(),
-              DeviceDisablingManager()->enrollment_domain(),
-              DeviceDisablingManager()->disabled_message());
+  view_->Show(
+      DeviceDisablingManager()->serial_number(),
+      DeviceDisablingManager()->enrollment_domain(),
+      DeviceDisablingManager()->disabled_message(),
+      // TODO() remove this parameter from DeviceDisabledScreenHandler::Show.
+      /*is_disabled_ad_device=*/false);
   DeviceDisablingManager()->AddObserver(this);
 }
 
 void DeviceDisabledScreen::HideImpl() {
-  if (is_hidden())
+  if (is_hidden()) {
     return;
+  }
 
   NOTREACHED() << "Device disabled screen can't be hidden";
   DeviceDisablingManager()->RemoveObserver(this);
@@ -50,8 +56,9 @@ void DeviceDisabledScreen::HideImpl() {
 
 void DeviceDisabledScreen::OnDisabledMessageChanged(
     const std::string& disabled_message) {
-  if (view_)
+  if (view_) {
     view_->UpdateMessage(disabled_message);
+  }
 }
 
 }  // namespace ash

@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/sync/engine/commit_and_get_updates_types.h"
 #include "components/sync/model/entity_change.h"
 #include "components/sync/model/model_type_change_processor.h"
@@ -73,7 +73,7 @@ class ModelTypeSyncBridge {
   // For datatypes that do not support incremental updates, the processor will
   // call this method every time it gets new sync data from the server. It is
   // then the responsibility of the bridge to clear all existing sync data, and
-  // replace it with the passed in |entity_data|.
+  // replace it with the passed in `entity_data`.
   //
   // Storage key in entity_data elements will be set to result of
   // GetStorageKey() call if the bridge supports it. Otherwise it will be left
@@ -89,25 +89,25 @@ class ModelTypeSyncBridge {
   // storage writes, if not able to combine all change atomically, should save
   // the metadata after the data changes, so that this merge will be re-driven
   // by sync if is not completely saved during the current run.
-  virtual absl::optional<ModelError> MergeSyncData(
+  virtual absl::optional<ModelError> MergeFullSyncData(
       std::unique_ptr<MetadataChangeList> metadata_change_list,
       EntityChangeList entity_data) = 0;
 
   // Apply changes from the sync server locally.
-  // Please note that |entity_changes| might have fewer entries than
-  // |metadata_change_list| in case when some of the data changes are filtered
+  // Please note that `entity_changes` might have fewer entries than
+  // `metadata_change_list` in case when some of the data changes are filtered
   // out, or even be empty in case when a commit confirmation is processed and
   // only the metadata needs to persisted.
-  virtual absl::optional<ModelError> ApplySyncChanges(
+  virtual absl::optional<ModelError> ApplyIncrementalSyncChanges(
       std::unique_ptr<MetadataChangeList> metadata_change_list,
       EntityChangeList entity_changes) = 0;
 
-  // Asynchronously retrieve the corresponding sync data for |storage_keys|.
-  // |callback| should be invoked if the operation is successful, otherwise
+  // Asynchronously retrieve the corresponding sync data for `storage_keys`.
+  // `callback` should be invoked if the operation is successful, otherwise
   // the processor's ReportError method should be called.
   virtual void GetData(StorageKeyList storage_keys, DataCallback callback) = 0;
 
-  // Asynchronously retrieve all of the local sync data. |callback| should be
+  // Asynchronously retrieve all of the local sync data. `callback` should be
   // invoked if the operation is successful, otherwise the processor's
   // ReportError method should be called.
   // Used for getting all data in Sync Node Browser of chrome://sync-internals.
@@ -115,18 +115,20 @@ class ModelTypeSyncBridge {
 
   // Must not be called unless SupportsGetClientTag() returns true.
   //
-  // Get or generate a client tag for |entity_data|. This must be the same tag
+  // Get or generate a client tag for `entity_data`. This must be the same tag
   // that was/would have been generated in the SyncableService/Directory world
   // for backward compatibility with pre-USS clients. The only time this
   // theoretically needs to be called is on the creation of local data.
   //
   // If a model type was never launched pre-USS, then method does not need to be
   // different from GetStorageKey(). Only the hash of this value is kept.
+  //
+  // IsEntityDataValid() is guaranteed to hold for the `entity_data`.
   virtual std::string GetClientTag(const EntityData& entity_data) = 0;
 
   // Must not be called unless SupportsGetStorageKey() returns true.
   //
-  // Get or generate a storage key for |entity_data|. This will only ever be
+  // Get or generate a storage key for `entity_data`. This will only ever be
   // called once when first encountering a remote entity. Local changes will
   // provide their storage keys directly to Put instead of using this method.
   // Theoretically this function doesn't need to be stable across multiple calls
@@ -135,13 +137,12 @@ class ModelTypeSyncBridge {
   // type should strive to keep these keys as small as possible.
   // Returning an empty string means the remote creation should be ignored (i.e.
   // it contains invalid data).
-  // TODO(crbug.com/1057947): introduce a dedicated method to validate data from
-  // the server to solve the inconsistency with bridges that don't support
-  // GetStorageKey() and with remote updates which are not creations.
+  //
+  // IsEntityDataValid() is guaranteed to hold for the `entity_data`.
   virtual std::string GetStorageKey(const EntityData& entity_data) = 0;
 
   // Whether or not the bridge is capable of producing a client tag from
-  // |EntityData| (usually remote changes), via GetClientTag(). Most bridges do,
+  // `EntityData` (usually remote changes), via GetClientTag(). Most bridges do,
   // but in rare cases including commit-only types and read-only types, it may
   // not.
   virtual bool SupportsGetClientTag() const;
@@ -149,21 +150,22 @@ class ModelTypeSyncBridge {
   // By returning true in this function datatype indicates that it can generate
   // storage key from EntityData. In this case for all new entities received
   // from server, change processor will call GetStorageKey and update
-  // EntityChange structures before passing them to MergeSyncData and
-  // ApplySyncChanges.
+  // EntityChange structures before passing them to MergeFullSyncData and
+  // ApplyIncrementalSyncChanges.
   //
   // This function should return false when datatype's native storage is not
   // indexed by some combination of values from EntityData, when key into the
   // storage is obtained at the time the record is inserted into it (e.g. ROWID
   // in SQLite). In this case entity changes for new entities passed to
-  // MergeSyncData and ApplySyncChanges will have empty storage_key. It is
-  // datatype's responsibility to call UpdateStorageKey for such entities.
+  // MergeFullSyncData and ApplyIncrementalSyncChanges will have empty
+  // storage_key. It is datatype's responsibility to call UpdateStorageKey for
+  // such entities.
   virtual bool SupportsGetStorageKey() const;
 
   // By returning true in this function, the datatype indicates that it supports
   // receiving partial (incremental) updates. If it returns false, the type
   // indicates that it requires the full data set to be sent to it through
-  // MergeSyncData for any change to the data set.
+  // MergeFullSyncData for any change to the data set.
   virtual bool SupportsIncrementalUpdates() const;
 
   // Resolve a conflict between the client and server versions of data. They are
@@ -173,14 +175,18 @@ class ModelTypeSyncBridge {
       const std::string& storage_key,
       const EntityData& remote_data) const;
 
-  // Similar to ApplySyncChanges() but called by the processor when sync
-  // is in the process of being stopped. If |delete_metadata_change_list| is not
-  // null, it indicates that sync metadata must be deleted (i.e. the datatype
-  // was disabled), and |*delete_metadata_change_list| contains a change list to
-  // remove all metadata that the processor knows about (the bridge may decide
-  // to implement deletion by other means).
-  virtual void ApplyStopSyncChanges(
+  // Similar to ApplyIncrementalSyncChanges() but called by the processor when
+  // sync is in the process of being disabled and metadata needs to cleared.
+  // `delete_metadata_change_list` must not be null, and contains a change list
+  // to remove all metadata that the processor knows about (the bridge may
+  // decide to implement deletion by other means).
+  virtual void ApplyDisableSyncChanges(
       std::unique_ptr<MetadataChangeList> delete_metadata_change_list);
+
+  // Invoked when the datatype is stopped without clearing metadata. This is
+  // usually interesting for bridges that have advanced logic in
+  // OnSyncStarting().
+  virtual void OnSyncPaused();
 
   // Called only when some items in a commit haven't been committed due to an
   // error.
@@ -198,16 +204,29 @@ class ModelTypeSyncBridge {
   // SyncableService by other means.
   virtual size_t EstimateSyncOverheadMemoryUsage() const;
 
-  // Returns a copy of |entity_specifics| where fields that do not need to be
-  // preserved in EntityMetadata cache are cleared. This allows each data type
-  // to specify which fields are supported in the current version. This usually
-  // means all known proto fields (i.e. all except unknown proto fields synced
-  // from more recent versions of the browser) but not always, since there are
-  // cases where a proto field is defined, but its implementation is not
-  // complete yet or exists behind a feature flag.
+  // Returns a copy of `entity_specifics` with fields that need to be preserved,
+  // resulting in caching them in EntityMetadata and allowing to use them on
+  // commits to the Sync server in order to prevent the data loss.
+  // This means that a data-specific bridge must override this function with the
+  // implementation that clears all supported proto fields (i.e. fields that are
+  // actively used by the implementation and fully launched).
+  // Fields that should not be marked as supported (cleared) include:
+  // * Unknown fields in the current browser version
+  // * Known fields that are just defined in the proto and not actively used
+  // (e.g. a partially-implemented functionality or a functionality guarded by a
+  // feature toggle).
+  // TODO(crbug.com/1408144): Consider changing the default to preserve unknown
+  // fields at least.
   // By default, empty EntitySpecifics is returned.
-  virtual sync_pb::EntitySpecifics TrimRemoteSpecificsForCaching(
+  virtual sync_pb::EntitySpecifics TrimAllSupportedFieldsFromRemoteSpecifics(
       const sync_pb::EntitySpecifics& entity_specifics) const;
+
+  // Returns true if the provided `entity_data` is valid. This method should be
+  // implemented by the bridges and can be used to validate the incoming remote
+  // updates.
+  // TODO(crbug.com/1057947): Mark this method as pure virtual to force all the
+  // bridges to implement this.
+  virtual bool IsEntityDataValid(const EntityData& entity_data) const;
 
   // Needs to be informed about any model change occurring via Delete() and
   // Put(). The changing metadata should be stored to persistent storage

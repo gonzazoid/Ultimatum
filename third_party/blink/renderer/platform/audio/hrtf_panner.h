@@ -26,16 +26,15 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_AUDIO_HRTF_PANNER_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_AUDIO_HRTF_PANNER_H_
 
-#include "third_party/blink/renderer/platform/audio/audio_delay_dsp_kernel.h"
+#include "third_party/blink/renderer/platform/audio/delay.h"
 #include "third_party/blink/renderer/platform/audio/fft_convolver.h"
 #include "third_party/blink/renderer/platform/audio/panner.h"
-#include "third_party/blink/renderer/platform/platform_export.h"
 
 namespace blink {
 
 class HRTFDatabaseLoader;
 
-class PLATFORM_EXPORT HRTFPanner final : public Panner {
+class HRTFPanner final : public Panner {
  public:
   HRTFPanner(float sample_rate,
              unsigned render_quantum_frames,
@@ -110,8 +109,8 @@ class PLATFORM_EXPORT HRTFPanner final : public Panner {
   FFTConvolver convolver_l2_;
   FFTConvolver convolver_r2_;
 
-  AudioDelayDSPKernel delay_line_l_;
-  AudioDelayDSPKernel delay_line_r_;
+  Delay delay_line_l_;
+  Delay delay_line_r_;
 
   AudioFloatArray temp_l1_;
   AudioFloatArray temp_r1_;

@@ -10,15 +10,15 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/environment.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_path_override.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
 #include "base/values.h"
@@ -28,7 +28,7 @@
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_controller.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_time_limits_policy_builder.h"
 #include "chrome/browser/ash/child_accounts/time_limits/app_types.h"
-#include "chrome/browser/ash/login/users/mock_user_manager.h"
+#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/ownership/fake_owner_settings_service.h"
 #include "chrome/browser/ash/policy/status_collector/child_status_collector.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
@@ -46,12 +46,12 @@
 #include "chromeos/ash/components/dbus/seneschal/seneschal_client.h"
 #include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "chromeos/ash/components/settings/timezone_settings.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "chromeos/dbus/power_manager/idle.pb.h"
-#include "chromeos/login/login_state/login_state.h"
-#include "chromeos/system/fake_statistics_provider.h"
 #include "components/account_id/account_id.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "components/prefs/pref_service.h"
@@ -87,8 +87,6 @@ constexpr base::TimeDelta kSixAm = base::Hours(6);
 // Time delta representing 1 hour time interval.
 constexpr base::TimeDelta kHour = base::Hours(1);
 
-constexpr int64_t kMillisecondsPerDay = Time::kMicrosecondsPerDay / 1000;
-
 constexpr int kIdlePollIntervalSeconds = 30;
 
 constexpr char kStartTime[] = "1 Jan 2020 21:15";
@@ -113,7 +111,7 @@ class TestingChildStatusCollector : public ChildStatusCollector {
   TestingChildStatusCollector(
       PrefService* pref_service,
       Profile* profile,
-      chromeos::system::StatisticsProvider* provider,
+      ash::system::StatisticsProvider* provider,
       const StatusCollector::AndroidStatusFetcher& android_status_fetcher,
       base::TimeDelta activity_day_start)
       : ChildStatusCollector(pref_service,
@@ -149,7 +147,7 @@ void CallAndroidStatusReceiver(
 
 bool GetEmptyAndroidStatus(StatusCollector::AndroidStatusReceiver receiver) {
   // Post it to the thread because this call is expected to be asynchronous.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&CallAndroidStatusReceiver, std::move(receiver), "", ""));
   return true;
@@ -159,7 +157,7 @@ bool GetFakeAndroidStatus(const std::string& status,
                           const std::string& droid_guard_info,
                           StatusCollector::AndroidStatusReceiver receiver) {
   // Post it to the thread because this call is expected to be asynchronous.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&CallAndroidStatusReceiver, std::move(receiver),
                                 status, droid_guard_info));
   return true;
@@ -173,12 +171,10 @@ bool GetFakeAndroidStatus(const std::string& status,
 class ChildStatusCollectorTest : public testing::Test {
  public:
   ChildStatusCollectorTest()
-      : user_manager_(new ash::MockUserManager()),
-        user_manager_enabler_(base::WrapUnique(user_manager_)),
+      : user_manager_enabler_(std::make_unique<ash::FakeChromeUserManager>()),
         user_data_dir_override_(chrome::DIR_USER_DATA) {
     scoped_stub_install_attributes_.Get()->SetCloudManaged("managed.com",
                                                            "device_id");
-    EXPECT_CALL(*user_manager_, Shutdown()).Times(1);
 
     // Ensure mojo is started, otherwise browser context keyed services that
     // rely on mojo will explode.
@@ -206,13 +202,13 @@ class ChildStatusCollectorTest : public testing::Test {
     ash::ConciergeClient::InitializeFake();
     ash::SeneschalClient::InitializeFake();
     chromeos::PowerManagerClient::InitializeFake();
-    chromeos::LoginState::Initialize();
+    ash::LoginState::Initialize();
 
-    MockChildUser(AccountId::FromUserEmail("user0@gmail.com"));
+    AddChildUser(AccountId::FromUserEmail("user0@gmail.com"));
   }
 
   ~ChildStatusCollectorTest() override {
-    chromeos::LoginState::Shutdown();
+    ash::LoginState::Shutdown();
     chromeos::PowerManagerClient::Shutdown();
     ash::SeneschalClient::Shutdown();
     // |testing_profile_| must be destructed while ConciergeClient is alive.
@@ -258,6 +254,11 @@ class ChildStatusCollectorTest : public testing::Test {
     kLeaveSessionActive,
     kPeriodicCheckTriggered
   };
+
+  ash::FakeChromeUserManager* GetFakeUserManager() {
+    return static_cast<ash::FakeChromeUserManager*>(
+        user_manager::UserManager::Get());
+  }
 
   void SimulateStateChanges(DeviceStateTransitions* states, int len) {
     for (int i = 0; i < len; i++) {
@@ -349,36 +350,32 @@ class ChildStatusCollectorTest : public testing::Test {
     run_loop_->Quit();
   }
 
-  void MockUserWithTypeAndAffiliation(const AccountId& account_id,
-                                      user_manager::UserType user_type,
-                                      bool is_affiliated) {
-    user_manager_->AddUserWithAffiliationAndType(account_id, is_affiliated,
-                                                 user_type);
-    // The user just added will be the active user because there's only one
-    // user.
-    user_manager::User* user = user_manager_->GetActiveUser();
-
+  void AddUserWithTypeAndAffiliation(const AccountId& account_id,
+                                     user_manager::UserType user_type,
+                                     bool is_affiliated) {
     // Build a profile with profile name=account e-mail because our testing
     // version of GetDMTokenForProfile returns the profile name.
     TestingProfile::Builder profile_builder;
     profile_builder.SetProfileName(account_id.GetUserEmail());
     testing_profile_ = profile_builder.Build();
-    ash::ProfileHelper::Get()->SetUserToProfileMappingForTesting(
-        user, testing_profile_.get());
 
-    EXPECT_CALL(*user_manager_, IsLoggedInAsKioskApp())
-        .WillRepeatedly(Return(false));
+    auto* user_manager = GetFakeUserManager();
+    auto* user = user_manager->AddUserWithAffiliationAndTypeAndProfile(
+        account_id, is_affiliated, user_type, testing_profile_.get());
+    user_manager->UserLoggedIn(user->GetAccountId(), user->username_hash(),
+                               /*browser_restart=*/false, /*is_child=*/false);
   }
 
-  void MockChildUser(const AccountId& account_id) {
-    MockUserWithTypeAndAffiliation(account_id, user_manager::USER_TYPE_CHILD,
-                                   false);
-    EXPECT_CALL(*user_manager_, IsLoggedInAsChildUser())
-        .WillRepeatedly(Return(true));
+  void AddChildUser(const AccountId& account_id) {
+    AddUserWithTypeAndAffiliation(account_id, user_manager::USER_TYPE_CHILD,
+                                  false);
+    GetFakeUserManager()->set_current_user_child(true);
   }
 
   // Convenience method.
-  int64_t ActivePeriodMilliseconds() { return kIdlePollIntervalSeconds * 1000; }
+  static int64_t ActivePeriodMilliseconds() {
+    return kIdlePollIntervalSeconds * base::Time::kMillisecondsPerSecond;
+  }
 
   void ExpectChildScreenTimeMilliseconds(int64_t duration) {
     pref_service()->CommitPendingWrite(
@@ -420,7 +417,7 @@ class ChildStatusCollectorTest : public testing::Test {
 
   ChromeContentClient content_client_;
   ChromeContentBrowserClient browser_content_client_;
-  chromeos::system::ScopedFakeStatisticsProvider fake_statistics_provider_;
+  ash::system::ScopedFakeStatisticsProvider fake_statistics_provider_;
   ash::ScopedStubInstallAttributes scoped_stub_install_attributes_;
   ash::ScopedTestingCrosSettings scoped_testing_cros_settings_;
   ash::FakeOwnerSettingsService owner_settings_service_{
@@ -428,7 +425,6 @@ class ChildStatusCollectorTest : public testing::Test {
   // local_state_ should be destructed after TestingProfile.
   TestingPrefServiceSimple local_state_;
   std::unique_ptr<TestingProfile> testing_profile_;
-  ash::MockUserManager* const user_manager_;
   user_manager::ScopedUserManager user_manager_enabler_;
   em::ChildStatusReportRequest child_status_;
   std::unique_ptr<TestingChildStatusCollector> status_collector_;
@@ -442,8 +438,7 @@ class ChildStatusCollectorTest : public testing::Test {
 
 TEST_F(ChildStatusCollectorTest, ReportingBootMode) {
   fake_statistics_provider_.SetMachineStatistic(
-      chromeos::system::kDevSwitchBootKey,
-      chromeos::system::kDevSwitchBootValueVerified);
+      ash::system::kDevSwitchBootKey, ash::system::kDevSwitchBootValueVerified);
 
   GetStatus();
 
@@ -664,9 +659,9 @@ TEST_F(ChildStatusCollectorTest, ActivityCrossingMidnight) {
 
   // Ensure that the start and end times for the period are a day apart.
   EXPECT_EQ(timespan0period.end_timestamp() - timespan0period.start_timestamp(),
-            kMillisecondsPerDay);
+            base::Time::kMillisecondsPerDay);
   EXPECT_EQ(timespan1period.end_timestamp() - timespan1period.start_timestamp(),
-            kMillisecondsPerDay);
+            base::Time::kMillisecondsPerDay);
   ExpectChildScreenTimeMilliseconds(0.5 * ActivePeriodMilliseconds());
 }
 
@@ -719,9 +714,11 @@ TEST_F(ChildStatusCollectorTest, ReportingAppActivity) {
       EXPECT_EQ(3, app_activity.active_time_periods_size());
       Time start = start_time;
       for (const auto& active_period : app_activity.active_time_periods()) {
-        EXPECT_EQ(start.ToJavaTime(), active_period.start_timestamp());
+        EXPECT_EQ(start.InMillisecondsSinceUnixEpoch(),
+                  active_period.start_timestamp());
         const Time end = start + app1_interval;
-        EXPECT_EQ(end.ToJavaTime(), active_period.end_timestamp());
+        EXPECT_EQ(end.InMillisecondsSinceUnixEpoch(),
+                  active_period.end_timestamp());
         start = end + app2_interval;
       }
       continue;
@@ -733,9 +730,11 @@ TEST_F(ChildStatusCollectorTest, ReportingAppActivity) {
       EXPECT_EQ(2, app_activity.active_time_periods_size());
       Time start = start_time + app1_interval;
       for (const auto& active_period : app_activity.active_time_periods()) {
-        EXPECT_EQ(start.ToJavaTime(), active_period.start_timestamp());
+        EXPECT_EQ(start.InMillisecondsSinceUnixEpoch(),
+                  active_period.start_timestamp());
         const Time end = start + app2_interval;
-        EXPECT_EQ(end.ToJavaTime(), active_period.end_timestamp());
+        EXPECT_EQ(end.InMillisecondsSinceUnixEpoch(),
+                  active_period.end_timestamp());
         start = end + app1_interval;
       }
       continue;
@@ -769,7 +768,7 @@ TEST_F(ChildStatusCollectorTest, ReportingAppActivityNoReport) {
     ash::app_time::AppTimeLimitsPolicyBuilder builder;
     builder.SetAppActivityReportingEnabled(/* enabled */ false);
     testing_profile()->GetPrefs()->SetDict(prefs::kPerAppTimeLimitsPolicy,
-                                           builder.value().GetDict().Clone());
+                                           builder.value().Clone());
   }
 
   SimulateAppActivity(app1, app1_interval);

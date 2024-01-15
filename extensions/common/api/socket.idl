@@ -112,9 +112,13 @@ namespace socket {
   };
 
   dictionary TLSVersionConstraints {
-    // The minimum and maximum acceptable versions of TLS. These will
-    // be <code>tls1</code>, <code>tls1.1</code>, <code>tls1.2</code>, or
-    // <code>tls1.3</code>.
+    // The minimum and maximum acceptable versions of TLS. Supported values are
+    // <code>tls1.2</code> or <code>tls1.3</code>.
+    //
+    // The values <code>tls1</code> and <code>tls1.1</code> are no longer
+    // supported. If |min| is set to one of these values, it will be silently
+    // clamped to <code>tls1.2</code>. If |max| is set to one of those values,
+    // or any other unrecognized value, it will be silently ignored.
     DOMString? min;
     DOMString? max;
   };
@@ -168,6 +172,8 @@ namespace socket {
     // |hostname| : The hostname or IP address of the remote machine.
     // |port| : The port of the remote machine.
     // |callback| : Called when the connection attempt is complete.
+    [doesNotSupportPromises=
+        "Sets error along with callback arguments crbug.com/1504372"]
     static void connect(long socketId,
                         DOMString hostname,
                         long port,
@@ -179,6 +185,8 @@ namespace socket {
     // |address| : The address of the local machine.
     // |port| : The port of the local machine.
     // |callback| : Called when the bind attempt is complete.
+    [doesNotSupportPromises=
+        "Sets error along with callback arguments crbug.com/1504372"]
     static void bind(long socketId,
                      DOMString address,
                      long port,
@@ -194,6 +202,8 @@ namespace socket {
     // |bufferSize| : The read buffer size.
     // |callback| : Delivers data that was available to be read without
     // blocking.
+    [doesNotSupportPromises=
+        "Sets error along with callback arguments crbug.com/1504372"]
     static void read(long socketId,
                      optional long bufferSize,
                      ReadCallback callback);
@@ -203,6 +213,8 @@ namespace socket {
     // |data| : The data to write.
     // |callback| : Called when the write operation completes without blocking
     // or an error occurs.
+    [doesNotSupportPromises=
+        "Sets error along with callback arguments crbug.com/1504372"]
     static void write(long socketId,
                       ArrayBuffer data,
                       WriteCallback callback);
@@ -211,6 +223,8 @@ namespace socket {
     // |socketId| : The socketId.
     // |bufferSize| : The receive buffer size.
     // |callback| : Returns result of the recvFrom operation.
+    [doesNotSupportPromises=
+        "Sets error along with callback arguments crbug.com/1504372"]
     static void recvFrom(long socketId,
                          optional long bufferSize,
                          RecvFromCallback callback);
@@ -222,6 +236,8 @@ namespace socket {
     // |port| : The port of the remote machine.
     // |callback| : Called when the send operation completes without blocking
     // or an error occurs.
+    [doesNotSupportPromises=
+        "Sets error along with callback arguments crbug.com/1504372"]
     static void sendTo(long socketId,
                        ArrayBuffer data,
                        DOMString address,
@@ -237,6 +253,8 @@ namespace socket {
     // |port| : The port of the local machine.
     // |backlog| : Length of the socket's listen queue.
     // |callback| : Called when listen operation completes.
+    [doesNotSupportPromises=
+        "Sets error along with callback arguments crbug.com/1504372"]
     static void listen(long socketId,
                        DOMString address,
                        long port,
@@ -250,6 +268,8 @@ namespace socket {
     // invoked immediately with an error as the resultCode.
     // |socketId| : The socketId.
     // |callback| : The callback is invoked when a new socket is accepted.
+    [doesNotSupportPromises=
+        "Sets error along with callback arguments crbug.com/1504372"]
     static void accept(long socketId,
                        AcceptCallback callback);
 
@@ -259,6 +279,8 @@ namespace socket {
     // |delay| : Set the delay seconds between the last data packet received
     // and the first keepalive probe. Default is 0.
     // |callback| : Called when the setKeepAlive attempt is complete.
+    [doesNotSupportPromises=
+        "Sets error along with callback arguments crbug.com/1504372"]
     static void setKeepAlive(long socketId,
                              boolean enable,
                              optional long delay,
@@ -269,6 +291,8 @@ namespace socket {
     // |socketId| : The socketId.
     // |noDelay| : If true, disables Nagle's algorithm.
     // |callback| : Called when the setNoDelay attempt is complete.
+    [doesNotSupportPromises=
+        "Sets error along with callback arguments crbug.com/1504372"]
     static void setNoDelay(long socketId,
                            boolean noDelay,
                            SetNoDelayCallback callback);
@@ -290,6 +314,8 @@ namespace socket {
     // |address| : The group address to join. Domain names are not supported.
     // |callback| : Called when the join group operation is done with an
     // integer parameter indicating the platform-independent error code.
+    [doesNotSupportPromises=
+        "Sets error along with callback arguments crbug.com/1504372"]
     static void joinGroup(long socketId,
                           DOMString address,
                           JoinGroupCallback callback);
@@ -306,6 +332,8 @@ namespace socket {
     // |address| : The group address to leave. Domain names are not supported.
     // |callback| : Called when the leave group operation is done with an
     // integer parameter indicating the platform-independent error code.
+    [doesNotSupportPromises=
+        "Sets error along with callback arguments crbug.com/1504372"]
     static void leaveGroup(long socketId, DOMString address,
                            LeaveGroupCallback callback);
 
@@ -316,6 +344,8 @@ namespace socket {
     // |socketId| : The socketId.
     // |ttl| : The time-to-live value.
     // |callback| : Called when the configuration operation is done.
+    [doesNotSupportPromises=
+        "Sets error along with callback arguments crbug.com/1504372"]
     static void setMulticastTimeToLive(
         long socketId,
         long ttl,
@@ -338,6 +368,8 @@ namespace socket {
     // |socketId| : The socketId.
     // |enabled| : Indicate whether to enable loopback mode.
     // |callback| : Called when the configuration operation is done.
+    [doesNotSupportPromises=
+        "Sets error along with callback arguments crbug.com/1504372"]
     static void setMulticastLoopbackMode(
         long socketId,
         boolean enabled,
@@ -346,6 +378,8 @@ namespace socket {
     // Get the multicast group addresses the socket is currently joined to.
     // |socketId| : The socketId.
     // |callback| : Called with an array of strings of the result.
+    [doesNotSupportPromises=
+        "Sets error along with callback arguments crbug.com/1504372"]
     static void getJoinedGroups(long socketId,
                                 GetJoinedGroupsCallback callback);
 
@@ -353,6 +387,8 @@ namespace socket {
     // |socketId| : The connected socket to use.
     // |options| : Constraints and parameters for the TLS connection.
     // |callback| : Called when the TLS connection attempt is complete.
+    [doesNotSupportPromises=
+        "Sets error along with callback arguments crbug.com/1504372"]
     static void secure(long socketId,
                        optional SecureOptions options,
                        SecureCallback callback);

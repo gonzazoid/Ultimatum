@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/span.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
@@ -25,6 +25,7 @@
 #include "components/user_manager/common_types.h"
 #include "components/user_manager/known_user.h"
 #include "dbus/message.h"
+#include "extensions/common/extension_id.h"
 #include "net/base/net_errors.h"
 #include "third_party/boringssl/src/include/openssl/ssl.h"
 #include "third_party/cros_system_api/dbus/cryptohome/dbus-constants.h"
@@ -140,7 +141,7 @@ void HandleSignatureKeyChallenge(
   }
 
   std::vector<uint16_t> supported_ssl_algorithms;
-  std::string extension_id_ignored;
+  extensions::ExtensionId extension_id_ignored;
   if (!certificate_provider_service->LookUpSpki(
           challenge_request_data.public_key_spki_der(),
           &supported_ssl_algorithms, &extension_id_ignored)) {
@@ -158,8 +159,7 @@ void HandleSignatureKeyChallenge(
 
   certificate_provider_service->RequestSignatureBySpki(
       challenge_request_data.public_key_spki_der(), ssl_algorithm,
-      base::as_bytes(base::make_span(challenge_request_data.data_to_sign())),
-      account_id,
+      base::as_byte_span(challenge_request_data.data_to_sign()), account_id,
       base::BindOnce(&CompleteSignatureKeyChallenge,
                      base::Unretained(method_call),
                      std::move(response_sender)));

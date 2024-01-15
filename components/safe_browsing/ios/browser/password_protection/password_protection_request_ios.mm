@@ -4,20 +4,12 @@
 
 #import "components/safe_browsing/ios/browser/password_protection/password_protection_request_ios.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 #import "components/safe_browsing/core/browser/password_protection/request_canceler.h"
 #import "components/safe_browsing/ios/browser/password_protection/password_protection_service.h"
 #include "ios/web/public/thread/web_task_traits.h"
 #include "ios/web/public/thread/web_thread.h"
 #import "ios/web/public/web_state.h"
 #include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using password_manager::metrics_util::PasswordType;
 
@@ -51,8 +43,13 @@ PasswordProtectionRequestIOS::PasswordProtectionRequestIOS(
                                 pps,
                                 request_timeout_in_ms),
       web_state_(web_state) {
-  request_canceler_ =
-      RequestCanceler::CreateRequestCanceler(AsWeakPtr(), web_state);
+  request_canceler_ = RequestCanceler::CreateRequestCanceler(
+      weak_factory_.GetWeakPtr(), web_state);
+}
+
+base::WeakPtr<PasswordProtectionRequest>
+PasswordProtectionRequestIOS::AsWeakPtr() {
+  return weak_factory_.GetWeakPtr();
 }
 
 void PasswordProtectionRequestIOS::MaybeLogPasswordReuseLookupEvent(

@@ -17,27 +17,38 @@ namespace features {
 
 // Alphabetical:
 BASE_DECLARE_FEATURE(kWebViewBrotliSupport);
-BASE_DECLARE_FEATURE(kWebViewCheckReturnResources);
 BASE_DECLARE_FEATURE(kWebViewConnectionlessSafeBrowsing);
+BASE_DECLARE_FEATURE(kWebViewCheckPakFileDescriptors);
+BASE_DECLARE_FEATURE(kWebViewClearFunctorInBackground);
 BASE_DECLARE_FEATURE(kWebViewDisplayCutout);
 BASE_DECLARE_FEATURE(kWebViewEmptyComponentLoaderPolicy);
+BASE_DECLARE_FEATURE(kWebViewEnumerateDevicesCache);
+BASE_DECLARE_FEATURE(kWebViewExitReasonMetric);
 BASE_DECLARE_FEATURE(kWebViewExtraHeadersSameOriginOnly);
 BASE_DECLARE_FEATURE(kWebViewForceDarkModeMatchTheme);
 BASE_DECLARE_FEATURE(kWebViewHitTestInBlinkOnTouchStart);
+BASE_DECLARE_FEATURE(kWebViewImageDrag);
+BASE_DECLARE_FEATURE(kWebViewInjectPlatformJsApis);
 BASE_DECLARE_FEATURE(kWebViewJavaJsBridgeMojo);
-BASE_DECLARE_FEATURE(kWebViewMeasureScreenCoverage);
+BASE_DECLARE_FEATURE(kWebViewMediaIntegrityApi);
 BASE_DECLARE_FEATURE(kWebViewMixedContentAutoupgrades);
 BASE_DECLARE_FEATURE(kWebViewOriginTrials);
 BASE_DECLARE_FEATURE(kWebViewRecordAppDataDirectorySize);
+BASE_DECLARE_FEATURE(kWebViewRestrictSensitiveContent);
+BASE_DECLARE_FEATURE(kWebViewSupervisedUserSiteDetection);
+BASE_DECLARE_FEATURE(kWebViewSupervisedUserSiteBlock);
 BASE_DECLARE_FEATURE(kWebViewSuppressDifferentOriginSubframeJSDialogs);
-BASE_DECLARE_FEATURE(kWebViewSynthesizePageLoadOnlyOnInitialMainDocumentAccess);
 BASE_DECLARE_FEATURE(kWebViewTestFeature);
 BASE_DECLARE_FEATURE(kWebViewUseMetricsUploadService);
+BASE_DECLARE_FEATURE(kWebViewUseMetricsUploadServiceOnlySdkRuntime);
+BASE_DECLARE_FEATURE(kWebViewPropagateNetworkChangeSignals);
+BASE_DECLARE_FEATURE(kWebViewUnreducedProductVersion);
 BASE_DECLARE_FEATURE(kWebViewWideColorGamutSupport);
 BASE_DECLARE_FEATURE(kWebViewXRequestedWithHeaderControl);
 extern const base::FeatureParam<int> kWebViewXRequestedWithHeaderMode;
 BASE_DECLARE_FEATURE(kWebViewXRequestedWithHeaderManifestAllowList);
-BASE_DECLARE_FEATURE(kWebViewClientHintsControllerDelegate);
+BASE_DECLARE_FEATURE(kWebViewUmaUploadQualityOfServiceSetToDefault);
+BASE_DECLARE_FEATURE(kWebViewZoomKeyboardShortcuts);
 
 }  // namespace features
 }  // namespace android_webview

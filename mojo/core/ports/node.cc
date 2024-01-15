@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/containers/stack_container.h"
+#include <optional>
 #include "base/lazy_instance.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
@@ -23,7 +23,7 @@
 #include "mojo/core/ports/event.h"
 #include "mojo/core/ports/node_delegate.h"
 #include "mojo/core/ports/port_locker.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/abseil-cpp/absl/container/inlined_vector.h"
 
 #if !BUILDFLAG(IS_NACL)
 #include "crypto/random.h"
@@ -1290,7 +1290,7 @@ int Node::MergePortsInternal(const PortRef& port0_ref,
     PortLocker::AssertNoPortsLockedOnCurrentThread();
     base::ReleasableAutoLock ports_locker(&ports_lock_);
 
-    absl::optional<PortLocker> locker(absl::in_place, port_refs, 2);
+    std::optional<PortLocker> locker(std::in_place, port_refs, 2);
     auto* port0 = locker->GetPort(port0_ref);
     auto* port1 = locker->GetPort(port1_ref);
 
@@ -1543,10 +1543,10 @@ int Node::PrepareToForwardUserMessage(const PortRef& forwarding_port_ref,
     base::AutoLock ports_locker(ports_lock_);
 
     // Simultaneously lock the forwarding port as well as all attached ports.
-    base::StackVector<PortRef, 4> attached_port_refs;
-    base::StackVector<const PortRef*, 5> ports_to_lock;
-    attached_port_refs.container().resize(message->num_ports());
-    ports_to_lock.container().resize(message->num_ports() + 1);
+    absl::InlinedVector<PortRef, 4> attached_port_refs;
+    absl::InlinedVector<const PortRef*, 5> ports_to_lock;
+    attached_port_refs.resize(message->num_ports());
+    ports_to_lock.resize(message->num_ports() + 1);
     ports_to_lock[0] = &forwarding_port_ref;
     for (size_t i = 0; i < message->num_ports(); ++i) {
       const PortName& attached_port_name = message->ports()[i];
@@ -1555,8 +1555,7 @@ int Node::PrepareToForwardUserMessage(const PortRef& forwarding_port_ref,
       attached_port_refs[i] = PortRef(attached_port_name, iter->second);
       ports_to_lock[i + 1] = &attached_port_refs[i];
     }
-    PortLocker locker(ports_to_lock.container().data(),
-                      ports_to_lock.container().size());
+    PortLocker locker(ports_to_lock.data(), ports_to_lock.size());
     auto* forwarding_port = locker.GetPort(forwarding_port_ref);
 
     if (forwarding_port->peer_node_name != target_node_name) {
@@ -1593,7 +1592,7 @@ int Node::PrepareToForwardUserMessage(const PortRef& forwarding_port_ref,
       // Sanity check to make sure we can actually send all the attached ports.
       // They must all be in the |kReceiving| state and must not be the sender's
       // own peer.
-      DCHECK_EQ(message->num_ports(), attached_port_refs.container().size());
+      DCHECK_EQ(message->num_ports(), attached_port_refs.size());
       for (size_t i = 0; i < message->num_ports(); ++i) {
         auto* attached_port = locker.GetPort(attached_port_refs[i]);
         int error = OK;

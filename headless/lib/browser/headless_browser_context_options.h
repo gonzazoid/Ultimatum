@@ -7,12 +7,11 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include <optional>
 #include "base/files/file_path.h"
 #include "base/memory/raw_ptr.h"
 #include "headless/public/headless_browser.h"
-#include "headless/public/headless_browser_context.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/gfx/font_render_params.h"
 
 namespace headless {
 
@@ -32,7 +31,6 @@ class HeadlessBrowserContextOptions {
   HeadlessBrowserContextOptions& operator=(
       HeadlessBrowserContextOptions&& options);
 
-  const std::string& product_name_and_version() const;
   const std::string& accept_language() const;
   const std::string& user_agent() const;
 
@@ -44,6 +42,9 @@ class HeadlessBrowserContextOptions {
   // See HeadlessBrowser::Options::user_data_dir.
   const base::FilePath& user_data_dir() const;
 
+  // See HeadlessBrowser::Options::disk_cache_dir.
+  const base::FilePath& disk_cache_dir() const;
+
   // See HeadlessBrowser::Options::incognito_mode.
   bool incognito_mode() const;
 
@@ -53,11 +54,6 @@ class HeadlessBrowserContextOptions {
   // See HeadlessBrowser::Options::font_render_hinting.
   gfx::FontRenderParams::Hinting font_render_hinting() const;
 
-  // Callback that is invoked to override WebPreferences for RenderViews
-  // created within this HeadlessBrowserContext.
-  base::RepeatingCallback<void(blink::web_pref::WebPreferences*)>
-  override_web_preferences_callback() const;
-
  private:
   friend class HeadlessBrowserContext::Builder;
 
@@ -65,20 +61,16 @@ class HeadlessBrowserContextOptions {
 
   raw_ptr<HeadlessBrowser::Options> browser_options_;
 
-  absl::optional<std::string> product_name_and_version_;
-  absl::optional<std::string> accept_language_;
-  absl::optional<std::string> user_agent_;
+  std::optional<std::string> accept_language_;
+  std::optional<std::string> user_agent_;
   std::unique_ptr<net::ProxyConfig> proxy_config_;
-  absl::optional<std::string> host_resolver_rules_;
-  absl::optional<gfx::Size> window_size_;
-  absl::optional<base::FilePath> user_data_dir_;
-  absl::optional<bool> incognito_mode_;
-  absl::optional<bool> block_new_web_contents_;
-  absl::optional<
-      base::RepeatingCallback<void(blink::web_pref::WebPreferences*)>>
-      override_web_preferences_callback_;
+  std::optional<gfx::Size> window_size_;
+  std::optional<base::FilePath> user_data_dir_;
+  std::optional<base::FilePath> disk_cache_dir_;
+  std::optional<bool> incognito_mode_;
+  std::optional<bool> block_new_web_contents_;
 
-  absl::optional<gfx::FontRenderParams::Hinting> font_render_hinting_;
+  std::optional<gfx::FontRenderParams::Hinting> font_render_hinting_;
 };
 
 }  // namespace headless

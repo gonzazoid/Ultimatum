@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,11 @@
 #define COMPONENTS_USER_EDUCATION_TEST_FEATURE_PROMO_TEST_UTIL_H_
 
 #include "base/feature_list.h"
+#include "base/time/time.h"
+
+namespace base {
+class Clock;
+}
 
 namespace feature_engagement {
 class Tracker;
@@ -43,6 +48,13 @@ bool WaitForStartupPromo(feature_engagement::Tracker* tracker,
 // If `controller` is null or does not have a tracker, returns false.
 bool WaitForStartupPromo(FeaturePromoControllerCommon* controller,
                          const base::Feature& iph_feature);
+
+// Set a testing clock for the feature engagement backend to allow tests to have
+// more control on the time, e.g. advance days. It's recommended to use
+// a SimpleTestClock in test.
+bool SetClock(FeaturePromoControllerCommon* controller,
+              const base::Clock& clock,
+              base::Time initial_time = base::Time());
 
 }  // namespace test
 }  // namespace user_education

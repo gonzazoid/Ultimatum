@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
@@ -58,6 +58,7 @@ class HostScanSchedulerImpl : public HostScanScheduler,
   // NetworkStateHandlerObserver:
   void DefaultNetworkChanged(const NetworkState* network) override;
   void ScanRequested(const NetworkTypePattern& type) override;
+  void OnShuttingDown() override;
 
   // HostScanner::Observer:
   void ScanFinished() override;
@@ -78,12 +79,15 @@ class HostScanSchedulerImpl : public HostScanScheduler,
       base::Clock* test_clock,
       scoped_refptr<base::TaskRunner> test_task_runner);
 
-  NetworkStateHandler* network_state_handler_;
-  HostScanner* host_scanner_;
-  session_manager::SessionManager* session_manager_;
+  raw_ptr<NetworkStateHandler> network_state_handler_;
+
+  NetworkStateHandlerScopedObservation network_state_handler_observer_{this};
+
+  raw_ptr<HostScanner> host_scanner_;
+  raw_ptr<session_manager::SessionManager> session_manager_;
 
   std::unique_ptr<base::OneShotTimer> host_scan_batch_timer_;
-  base::Clock* clock_;
+  raw_ptr<base::Clock> clock_;
   scoped_refptr<base::TaskRunner> task_runner_;
 
   base::Time last_scan_batch_start_timestamp_;

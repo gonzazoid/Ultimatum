@@ -18,24 +18,26 @@ The tables in this file are parsed as action templates for critical user journey
 
 ## Enums Table
 
-| #Enum Name | Values (* = default) |  |  |  |  |  |  |  |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Site | Standalone* | MinimalUi | NotPromotable | StandaloneNestedA | StandaloneNestedB | Wco | Isolated | FileHandler | NotInstalled | StandaloneNotStartUrl | Screenshots |
-| InstallableSite | Standalone* | MinimalUi | StandaloneNestedA | StandaloneNestedB | Wco | NotInstalled | StandaloneNotStartUrl | Screenshots |
+| #Enum Name | Values (* = default) |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Site | Standalone* | MinimalUi | Tabbed | NotPromotable | StandaloneNestedA | StandaloneNestedB | Wco | Isolated | FileHandler | NotInstalled | StandaloneNotStartUrl | Screenshots | HasSubApps | SubApp1 | SubApp2 | TabbedWithHomeTab | TabbedNestedA | TabbedNestedB | TabbedNestedC |
+| InstallableSite | Standalone* | MinimalUi | Tabbed | StandaloneNestedA | StandaloneNestedB | Wco | NotInstalled | StandaloneNotStartUrl | Screenshots | HasSubApps | SubApp1 | SubApp2 | TabbedWithHomeTab|
 | Title | StandaloneOriginal | StandaloneUpdated |  |  |  |  |  |
 | Color | Red | Green |  |  |  |  |  |
 | ProfileClient | Client2* | Client1 |  |  |  |  |  |
 | UserDisplayPreference | Standalone | Browser |  |  |  |  |  |
 | IsShown | Shown | NotShown |  |  |  |  |  |
 | IsOn | On | Off |  |  |  |  |  |
-| Display | Standalone | MinimalUi | Wco | Browser |  |  |  |
-| FileExtension | Txt | Png |  |  |  |  |  |
-| Location | StartUrl | FileHandleUrlForTxt | FileHandleUrlForPng |  |  |  |  |
+| Display | Standalone | MinimalUi | Tabbed | Wco | Browser |  |  |  |
+| FileExtension | Foo | Bar |  |  |  |  |  |
+| Location | StartUrl | FileHandleUrlForFoo | FileHandleUrlForBar |  |  |  |  |
 | Number | One | Two |  |  |  |  |  |
-| FilesOptions | OneTextFile | MultipleTextFiles | OnePngFile | MultiplePngFiles | AllTestAndPngFiles |  |  |
+| FilesOptions | OneFooFile | MultipleFooFiles | OneBarFile | MultipleBarFiles | AllFooAndBarFiles |  |  |
 | AllowDenyOptions | Allow | Deny |
 | AskAgainOptions | AskAgain | Remember |
 | ShortcutOptions | WithShortcut | NoShortcut |
 | WindowOptions | Windowed | Browser |
 | InstallMode | WebApp* | WebShortcut |
-| UpdateDialogResponse | AcceptUpdate | CancelDialogAndUninstall | SkipUpdate |
+| UpdateDialogResponse | AcceptUpdate | CancelDialogAndUninstall | CancelUninstallAndAcceptUpdate | SkipDialog |
+| SubAppInstallDialogOptions | UserAllow* | UserDeny | PolicyOverride |
+| ProfileName | Default | Profile2 |

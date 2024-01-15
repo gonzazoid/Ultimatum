@@ -16,8 +16,10 @@ struct WindowFeatures {
     bool has_width = false;
     bool has_height = false;
 
-    bool menu_bar_visible = true;
-    bool status_bar_visible = true;
-    bool tool_bar_visible = true;
-    bool scrollbars_visible = true;
+    bool is_popup = false;
+
+    // True if the new window was requested to be shown fullscreen.
+    // Window management permission must be granted on the opener.
+    // See: https://chromestatus.com/feature/6002307972464640
+    bool is_fullscreen = false;
 };

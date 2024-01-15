@@ -5,7 +5,7 @@
 #ifndef COMPONENTS_PAYMENTS_CONTENT_SECURE_PAYMENT_CONFIRMATION_VIEW_H_
 #define COMPONENTS_PAYMENTS_CONTENT_SECURE_PAYMENT_CONFIRMATION_VIEW_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 
 namespace content {
@@ -16,17 +16,6 @@ namespace payments {
 
 class PaymentUIObserver;
 class SecurePaymentConfirmationModel;
-
-// These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused. Keep in sync with
-// src/tools/metrics/histograms/enums.xml.
-enum class SecurePaymentConfirmationAuthenticationDialogResult {
-  kCanceled = 0,
-  kAccepted = 1,
-  kClosed = 2,
-  kOptOut = 3,
-  kMaxValue = kOptOut,
-};
 
 // Draws the user interface in the secure payment confirmation flow. Owned by
 // the SecurePaymentConfirmationController.

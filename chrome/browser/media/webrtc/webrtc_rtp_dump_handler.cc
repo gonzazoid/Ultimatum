@@ -6,13 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chrome/browser/media/webrtc/webrtc_rtp_dump_writer.h"
 
@@ -31,7 +31,7 @@ void FireGenericDoneCallback(WebRtcRtpDumpHandler::GenericDoneCallback callback,
                              const std::string& error_message) {
   DCHECK(!callback.is_null());
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), success, error_message));
 }
 
@@ -106,7 +106,8 @@ bool WebRtcRtpDumpHandler::StartDump(RtpDumpType type,
     static const char kSendDumpFilePrefix[] = "rtpdump_send_";
     static const size_t kMaxDumpSize = 5 * 1024 * 1024;  // 5MB
 
-    std::string dump_id = base::NumberToString(base::Time::Now().ToDoubleT());
+    std::string dump_id =
+        base::NumberToString(base::Time::Now().InSecondsFSinceUnixEpoch());
     incoming_dump_path_ =
         dump_dir_.AppendASCII(std::string(kRecvDumpFilePrefix) + dump_id)
             .AddExtension(FILE_PATH_LITERAL(".gz"));

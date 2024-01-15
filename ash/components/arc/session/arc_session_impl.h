@@ -11,11 +11,12 @@
 
 #include "ash/components/arc/session/arc_client_adapter.h"
 #include "ash/components/arc/session/arc_session.h"
-#include "base/callback.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
-#include "chromeos/system/scheduler_configuration_manager_base.h"
+#include "chromeos/ash/components/system/scheduler_configuration_manager_base.h"
 
 namespace base {
 struct SystemMemoryInfoKB;
@@ -33,10 +34,9 @@ class ArcBridgeHost;
 
 constexpr int64_t kMinimumFreeDiskSpaceBytes = 64 << 20;  // 64MB
 
-class ArcSessionImpl
-    : public ArcSession,
-      public ArcClientAdapter::Observer,
-      public chromeos::SchedulerConfigurationManagerBase::Observer {
+class ArcSessionImpl : public ArcSession,
+                       public ArcClientAdapter::Observer,
+                       public ash::SchedulerConfigurationManagerBase::Observer {
  public:
   // The possible states of the session. Expected state changes are as follows.
   //
@@ -151,7 +151,7 @@ class ArcSessionImpl
 
     // Gets the available disk space under /home. The result is in bytes.
     using GetFreeDiskSpaceCallback =
-        base::OnceCallback<void(absl::optional<int64_t>)>;
+        base::OnceCallback<void(std::optional<int64_t>)>;
     virtual void GetFreeDiskSpace(GetFreeDiskSpaceCallback callback) = 0;
 
     // Returns the channel for the installation.
@@ -164,11 +164,11 @@ class ArcSessionImpl
   using SystemMemoryInfoCallback =
       base::RepeatingCallback<bool(base::SystemMemoryInfoKB*)>;
 
-  ArcSessionImpl(std::unique_ptr<Delegate> delegate,
-                 chromeos::SchedulerConfigurationManagerBase*
-                     scheduler_configuration_manager,
-                 AdbSideloadingAvailabilityDelegate*
-                     adb_sideloading_availability_delegate);
+  ArcSessionImpl(
+      std::unique_ptr<Delegate> delegate,
+      ash::SchedulerConfigurationManagerBase* scheduler_configuration_manager,
+      AdbSideloadingAvailabilityDelegate*
+          adb_sideloading_availability_delegate);
 
   ArcSessionImpl(const ArcSessionImpl&) = delete;
   ArcSessionImpl& operator=(const ArcSessionImpl&) = delete;
@@ -198,8 +198,10 @@ class ArcSessionImpl
       ArcClientAdapter::DemoModeDelegate* delegate) override;
   void TrimVmMemory(TrimVmMemoryCallback callback, int page_limit) override;
   void SetDefaultDeviceScaleFactor(float scale_factor) override;
+  void SetUseVirtioBlkData(bool use_virtio_blk_data) override;
+  void SetArcSignedIn(bool arc_signed_in) override;
 
-  // chromeos::SchedulerConfigurationManagerBase::Observer overrides:
+  // ash::SchedulerConfigurationManagerBase::Observer overrides:
   void OnConfigurationSet(bool success, size_t num_cores_disabled) override;
 
  private:
@@ -211,15 +213,6 @@ class ArcSessionImpl
 
   // Called when arcbridge socket is created.
   void OnSocketCreated(base::ScopedFD fd);
-
-  // Loads ARC data/ snapshot if necessary.
-  // |callback| is called once the load process is finished.
-  void StartLoadingDataSnapshot(base::OnceClosure callback);
-
-  // Called when ARC data/ snapshot step is done: either snapshot is loaded or
-  // skipped.
-  // |socket_fd| should be a socket to be passed to OnUpgraded.
-  void OnDataSnapshotLoaded(base::ScopedFD scoped_fd);
 
   // D-Bus callback for UpgradeArcContainer(). |socket_fd| should be a socket
   // which should be accept(2)ed to connect ArcBridgeService Mojo channel.
@@ -249,7 +242,7 @@ class ArcSessionImpl
   void DoStartMiniInstance(size_t num_cores_disabled);
 
   // Free disk space under /home in bytes.
-  void OnFreeDiskSpace(absl::optional<int64_t> space);
+  void OnFreeDiskSpace(std::optional<int64_t> space);
 
   // Whether adb sideloading can be changed
   void OnCanChangeAdbSideloading(bool can_change_adb_sideloading);
@@ -276,6 +269,12 @@ class ArcSessionImpl
   // Whether there's insufficient disk space to start the container.
   bool insufficient_disk_space_ = false;
 
+  // Whether ARCVM uses virtio-blk for /data.
+  bool use_virtio_blk_data_ = false;
+
+  // Whether ARC is already signed in (provisioned).
+  bool arc_signed_in_ = false;
+
   // In CONNECTING_MOJO state, this is set to the write side of the pipe
   // to notify cancelling of the procedure.
   base::ScopedFD accept_cancel_pipe_;
@@ -287,11 +286,11 @@ class ArcSessionImpl
   std::unique_ptr<mojom::ArcBridgeHost> arc_bridge_host_;
 
   int lcd_density_ = 0;
-  chromeos::SchedulerConfigurationManagerBase* const
+  const raw_ptr<ash::SchedulerConfigurationManagerBase>
       scheduler_configuration_manager_;
 
   // Owned by ArcSessionManager.
-  AdbSideloadingAvailabilityDelegate* const
+  const raw_ptr<AdbSideloadingAvailabilityDelegate>
       adb_sideloading_availability_delegate_;
 
   // Callback to read system memory info.

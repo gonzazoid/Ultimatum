@@ -13,6 +13,7 @@
 #include "ash/public/cpp/window_properties.h"
 #include "ash/shelf/shelf_window_watcher.h"
 #include "ash/shell.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/scoped_multi_source_observation.h"
@@ -265,7 +266,7 @@ class DemoSessionMetricsRecorder::ActiveAppArcPackageNameObserver
   }
 
  private:
-  DemoSessionMetricsRecorder* metrics_recorder_;
+  raw_ptr<DemoSessionMetricsRecorder> metrics_recorder_;
   base::ScopedMultiSourceObservation<aura::Window, aura::WindowObserver>
       scoped_observations_{this};
 };
@@ -304,16 +305,17 @@ class DemoSessionMetricsRecorder::UniqueAppsLaunchedArcPackageNameObserver
   }
 
   void OnWindowDestroyed(aura::Window* window) override {
-    if (scoped_observation_.IsObservingSource(window))
-      scoped_observation_.Reset();
+    DCHECK(scoped_observation_.IsObservingSource(window));
+    scoped_observation_.Reset();
   }
 
   void ObserveWindow(aura::Window* window) {
+    scoped_observation_.Reset();
     scoped_observation_.Observe(window);
   }
 
  private:
-  DemoSessionMetricsRecorder* metrics_recorder_;
+  raw_ptr<DemoSessionMetricsRecorder> metrics_recorder_;
   base::ScopedObservation<aura::Window, aura::WindowObserver>
       scoped_observation_{this};
 };

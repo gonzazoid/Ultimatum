@@ -1,11 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://resources/cr_elements/cr_button/cr_button.js';
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
 import '//resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
 
+import {CrIconButtonElement} from 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {afterNextRender, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
@@ -45,11 +45,19 @@ enum LensErrorMessage {
   MULTIPLE_URLS,
 }
 
+const EventKeys = {
+  ENTER: 'Enter',
+  ESCAPE: 'Escape',
+  SPACE: ' ',
+  TAB: 'Tab',
+};
+
 export interface LensUploadDialogElement {
   $: {
     dialog: HTMLDivElement,
     lensForm: LensFormElement,
     dragDropArea: HTMLDivElement,
+    closeButton: CrIconButtonElement,
   };
 }
 
@@ -185,6 +193,7 @@ export class LensUploadDialogElement extends LensUploadDialogElementBase {
 
   override connectedCallback() {
     super.connectedCallback();
+    this.openDialog();
   }
 
   override disconnectedCallback() {
@@ -198,7 +207,14 @@ export class LensUploadDialogElement extends LensUploadDialogElementBase {
     // otherwise the click of the icon which initially opened the dialog would
     // also be registered in the outside click handler, causing the dialog to
     // immediately close after opening.
-    afterNextRender(this, () => this.attachOutsideHandler_());
+    afterNextRender(this, () => {
+      this.attachOutsideHandler_();
+      if (this.computeIsOffline_(this.dialogState_)) {
+        this.shadowRoot!.getElementById('offlineRetryButton')?.focus();
+      } else {
+        this.shadowRoot!.getElementById('uploadText')?.focus();
+      }
+    });
     recordLensUploadDialogAction(LensUploadDialogAction.DIALOG_OPENED);
   }
 
@@ -237,22 +253,14 @@ export class LensUploadDialogElement extends LensUploadDialogElementBase {
                                                            DialogState.OFFLINE;
   }
 
-  private outsideClickHandler_ = (event: MouseEvent) => {
-    const outsideDialog = !event.composedPath().includes(this.$.dialog);
-    if (outsideDialog) {
-      this.closeDialog();
-    }
-  };
-
   private outsideKeyHandler_ = (event: KeyboardEvent) => {
-    if (event.key === 'Escape') {
+    if (event.key === EventKeys.ESCAPE) {
       this.closeDialog();
     }
   };
 
   private attachOutsideHandler_() {
     if (!this.outsideHandlerAttached_) {
-      document.addEventListener('click', this.outsideClickHandler_);
       document.addEventListener('keydown', this.outsideKeyHandler_);
       this.outsideHandlerAttached_ = true;
     }
@@ -260,11 +268,34 @@ export class LensUploadDialogElement extends LensUploadDialogElementBase {
 
   private detachOutsideHandler_() {
     if (this.outsideHandlerAttached_) {
-      document.removeEventListener('click', this.outsideClickHandler_);
       document.removeEventListener('keydown', this.outsideKeyHandler_);
       this.outsideHandlerAttached_ = false;
     }
   }
+
+  private onCloseButtonKeydown_ = (event: KeyboardEvent) => {
+    if (event.key === EventKeys.TAB &&
+        (this.computeIsDragging_(this.dialogState_) ||
+         this.computeIsLoading_(this.dialogState_))) {
+      event.preventDefault();
+      // In the dragging and loading states, the close button is the only
+      // tabbable element in the dialog, so focus should stay on it.
+    } else if (event.key === EventKeys.TAB && event.shiftKey) {
+      event.preventDefault();
+      if (this.computeIsNormalOrError_(this.dialogState_)) {
+        this.shadowRoot!.getElementById('inputSubmit')?.focus();
+      } else if (this.computeIsOffline_(this.dialogState_)) {
+        this.shadowRoot!.getElementById('offlineRetryButton')?.focus();
+      }
+    }
+  };
+
+  private onOfflineRetryButtonKeydown_ = (event: KeyboardEvent) => {
+    if (event.key === EventKeys.TAB && !event.shiftKey) {
+      event.preventDefault();
+      this.$.closeButton.focus();
+    }
+  };
 
   private onCloseButtonClick_() {
     this.closeDialog();
@@ -272,6 +303,12 @@ export class LensUploadDialogElement extends LensUploadDialogElementBase {
 
   private onOfflineRetryButtonClick_() {
     this.setOnlineState_();
+  }
+
+  private onUploadFileKeyDown_(event: KeyboardEvent) {
+    if (event.key === EventKeys.ENTER || event.key === EventKeys.SPACE) {
+      this.$.lensForm.openSystemFilePicker();
+    }
   }
 
   private onUploadFileClick_() {
@@ -339,9 +376,18 @@ export class LensUploadDialogElement extends LensUploadDialogElementBase {
   }
 
   private onUrlKeyDown_(event: KeyboardEvent) {
-    if (event.key === 'Enter') {
+    if (event.key === EventKeys.ENTER) {
       event.preventDefault();
       this.onSubmitUrl_();
+    }
+  }
+
+  private onInputSubmitKeyDown_(event: KeyboardEvent) {
+    if (event.key === EventKeys.ENTER || event.key === EventKeys.SPACE) {
+      this.onSubmitUrl_();
+    } else if (event.key === EventKeys.TAB && !event.shiftKey) {
+      event.preventDefault();
+      this.$.closeButton.focus();
     }
   }
 
@@ -381,6 +427,23 @@ export class LensUploadDialogElement extends LensUploadDialogElementBase {
     if (e.dataTransfer) {
       this.$.lensForm.submitFileList(e.dataTransfer.files);
       recordLensUploadDialogAction(LensUploadDialogAction.IMAGE_DROPPED);
+    }
+  }
+
+  private onFocusOut_(event: FocusEvent) {
+    // If the focus event is occurring during a drag into the upload dialog,
+    // do nothing. See b/284201957#6 for scenario in which this is necessary.
+    if (this.dragCount === 1) {
+      return;
+    }
+
+    // Focus ensures that the file picker pop-up does not close dialog.
+    const outsideDialog = document.hasFocus() &&
+        (!event.relatedTarget ||
+         !this.$.dialog.contains(event.relatedTarget as Node));
+
+    if (outsideDialog) {
+      this.closeDialog();
     }
   }
 }

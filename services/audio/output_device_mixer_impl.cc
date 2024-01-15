@@ -23,21 +23,6 @@ constexpr double OutputDeviceMixerImpl::kDefaultVolume;
 
 namespace {
 
-const char* LatencyToUmaSuffix(media::AudioLatency::LatencyType latency) {
-  switch (latency) {
-    case media::AudioLatency::LATENCY_EXACT_MS:
-      return "LatencyExactMs";
-    case media::AudioLatency::LATENCY_INTERACTIVE:
-      return "LatencyInteractive";
-    case media::AudioLatency::LATENCY_RTC:
-      return "LatencyRtc";
-    case media::AudioLatency::LATENCY_PLAYBACK:
-      return "LatencyPlayback";
-    default:
-      return "LatencyUnknown";
-  }
-}
-
 const char* DeviceIdToUmaSuffix(const std::string& device_id) {
   if (device_id == "")
     return ".Default";
@@ -101,7 +86,7 @@ class OutputDeviceMixerImpl::MixTrack final
   ~MixTrack() final {
     DCHECK(!audio_source_callback_);
     base::UmaHistogramEnumeration(
-        "Media.Audio.OutputDeviceMixer.StreamPlaybackStatus", error_);
+        "Media.Audio.OutputDeviceMixer.StreamStatus", error_);
   }
 
   void SetSource(
@@ -124,7 +109,6 @@ class OutputDeviceMixerImpl::MixTrack final
                  "MixTrack::StartProvidingAudioToMixingGraph", "this",
                  static_cast<void*>(this));
     DCHECK(audio_source_callback_);
-    RegisterPlaybackStarted();
     graph_input_->Start(audio_source_callback_);
   }
 
@@ -134,7 +118,6 @@ class OutputDeviceMixerImpl::MixTrack final
                  static_cast<void*>(this));
     DCHECK(audio_source_callback_);
     graph_input_->Stop();
-    RegisterPlaybackStopped(PlaybackType::kMixed);
   }
 
   bool OpenIndependentRenderingStream() {
@@ -167,7 +150,6 @@ class OutputDeviceMixerImpl::MixTrack final
       }
     }
 
-    RegisterPlaybackStarted();
     rendering_stream_->Start(this);
   }
 
@@ -178,7 +160,6 @@ class OutputDeviceMixerImpl::MixTrack final
     DCHECK(audio_source_callback_);
     if (rendering_stream_) {
       rendering_stream_->Stop();
-      RegisterPlaybackStopped(PlaybackType::kIndependent);
     }
   }
 
@@ -209,38 +190,15 @@ class OutputDeviceMixerImpl::MixTrack final
   }
 
  private:
-  enum class PlaybackType { kMixed, kIndependent };
-
-  void RegisterPlaybackStarted() {
-    DCHECK(playback_activation_time_for_uma_.is_null());
-    playback_activation_time_for_uma_ = base::TimeTicks::Now();
-  }
-
-  void RegisterPlaybackStopped(PlaybackType playback_type) {
-    if (playback_type == PlaybackType::kIndependent &&
-        playback_activation_time_for_uma_.is_null()) {
-      return;  // Stop() for an independent stream can be called multiple times.
-    }
-    DCHECK(!playback_activation_time_for_uma_.is_null());
-
-    base::UmaHistogramLongTimes(
-        base::StrCat(
-            {"Media.Audio.OutputDeviceMixer.StreamDuration.",
-             ((playback_type == PlaybackType::kMixed) ? "Mixed." : "Unmixed."),
-             LatencyToUmaSuffix(graph_input_->GetParams().latency_tag())}),
-        base::TimeTicks::Now() - playback_activation_time_for_uma_);
-    playback_activation_time_for_uma_ = base::TimeTicks();
-  }
-
   // media::AudioOutputStream::AudioSourceCallback implementation to intercept
   // error reporting during independent playback.
   int OnMoreData(base::TimeDelta delay,
                  base::TimeTicks delay_timestamp,
-                 int prior_frames_skipped,
+                 const media::AudioGlitchInfo& glitch_info,
                  media::AudioBus* dest) final {
     DCHECK(audio_source_callback_);
     return audio_source_callback_->OnMoreData(delay, delay_timestamp,
-                                              prior_frames_skipped, dest);
+                                              glitch_info, dest);
   }
 
   void OnError(ErrorType type) final {
@@ -273,8 +231,6 @@ class OutputDeviceMixerImpl::MixTrack final
   // the audio output independently when mixing is not required.
   std::unique_ptr<media::AudioOutputStream, StreamAutoClose> rendering_stream_ =
       nullptr;
-
-  base::TimeTicks playback_activation_time_for_uma_;
 
   TrackError error_ = TrackError::kNone;
 };
@@ -383,10 +339,6 @@ class OutputDeviceMixerImpl::MixingStats {
   }
 
   ~MixingStats() {
-    if (!noop_mixing_start_.is_null()) {
-      LogNoopMixingDuration();
-    }
-
     DCHECK(!start_.is_null());
     base::TimeDelta duration = base::TimeTicks::Now() - start_;
     LogPerDeviceUma(duration, suffix_);
@@ -397,24 +349,9 @@ class OutputDeviceMixerImpl::MixingStats {
 
   void RemoveListener() { listener_count_.Decrement(); }
 
-  void AddActiveTrack() {
-    active_track_count_.Increment();
-    if (!noop_mixing_start_.is_null()) {
-      // First track after a period of feeding silence to the listeners.
-      DCHECK_EQ(active_track_count_.GetCurrent(), 1);
-      DCHECK(listener_count_.GetCurrent());
-      LogNoopMixingDuration();
-    }
-  }
+  void AddActiveTrack() { active_track_count_.Increment(); }
 
-  void RemoveActiveTrack() {
-    active_track_count_.Decrement();
-    if (listener_count_.GetCurrent() && !active_track_count_.GetCurrent()) {
-      // No more tracks, so we start feeding silence to listeners.
-      DCHECK(noop_mixing_start_.is_null());
-      noop_mixing_start_ = base::TimeTicks::Now();
-    }
-  }
+  void RemoveActiveTrack() { active_track_count_.Decrement(); }
 
  private:
   // A helper to track the max value.
@@ -437,14 +374,6 @@ class OutputDeviceMixerImpl::MixingStats {
     int max_value_;
   };
 
-  void LogNoopMixingDuration() {
-    DCHECK(!noop_mixing_start_.is_null());
-    base::UmaHistogramLongTimes(
-        "Media.Audio.OutputDeviceMixer.NoopMixingDuration",
-        base::TimeTicks::Now() - noop_mixing_start_);
-    noop_mixing_start_ = base::TimeTicks();
-  }
-
   void LogPerDeviceUma(base::TimeDelta duration, const char* suffix) {
     constexpr int kMaxActiveStreamCount = 50;
     constexpr int kMaxListeners = 20;
@@ -466,10 +395,6 @@ class OutputDeviceMixerImpl::MixingStats {
   MaxTracker active_track_count_;
   MaxTracker listener_count_;
   const base::TimeTicks start_;
-
-  // Start of the period when there are no active tracks and we play and feed
-  // silence to the listeners.
-  base::TimeTicks noop_mixing_start_;
 };
 
 OutputDeviceMixerImpl::OutputDeviceMixerImpl(

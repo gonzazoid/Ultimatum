@@ -11,6 +11,7 @@
 #import "base/check.h"
 #import "base/memory/ptr_util.h"
 #import "base/memory/ref_counted.h"
+#import "base/task/single_thread_task_runner.h"
 #import "ios/net/cookies/cookie_store_ios.h"
 #import "ios/web/public/browsing_data/system_cookie_store_util.h"
 #import "ios/web/public/web_client.h"
@@ -24,10 +25,6 @@
 #import "net/url_request/static_http_user_agent_settings.h"
 #import "net/url_request/url_request_context.h"
 #import "net/url_request/url_request_context_builder.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 

@@ -20,20 +20,20 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/containers/flat_map.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/sequence_checker.h"
 #include "base/time/time.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/safe_browsing/content/browser/client_side_phishing_model.h"
 #include "components/safe_browsing/core/common/proto/csd.pb.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/browser/notification_observer.h"
-#include "content/public/browser/notification_registrar.h"
 #include "content/public/browser/render_process_host_creation_observer.h"
 #include "net/base/ip_address.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
@@ -47,6 +47,16 @@ class SharedURLLoaderFactory;
 namespace safe_browsing {
 class ClientPhishingRequest;
 class ClientSideDetectionHost;
+
+// Enum used to keep stats on classification using threshold comparison.
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class SBClientDetectionClassifyThresholdsResult {
+  kSuccess = 0,
+  kModelSizeMismatch = 1,
+  kModelLabelNotFound = 2,
+  kMaxValue = kModelLabelNotFound,
+};
 
 // Main service which pushes models to the renderers, responds to classification
 // requests. This owns two ModelLoader objects.
@@ -70,11 +80,12 @@ class ClientSideDetectionService
     GetURLLoaderFactory() = 0;
     virtual scoped_refptr<network::SharedURLLoaderFactory>
     GetSafeBrowsingURLLoaderFactory() = 0;
-    // Returns the management status for current profile.
-    virtual ChromeUserPopulation GetUserPopulation() = 0;
   };
 
-  explicit ClientSideDetectionService(std::unique_ptr<Delegate> delegate);
+  ClientSideDetectionService(
+      std::unique_ptr<Delegate> delegate,
+      optimization_guide::OptimizationGuideModelProvider* opt_guide,
+      const scoped_refptr<base::SequencedTaskRunner>& background_task_runner);
 
   ClientSideDetectionService(const ClientSideDetectionService&) = delete;
   ClientSideDetectionService& operator=(const ClientSideDetectionService&) =
@@ -133,10 +144,6 @@ class ClientSideDetectionService
   // Sends a model to each renderer.
   virtual void SendModelToRenderers();
 
-  // Returns the model string. Used only for protobuf model. Virtual so that
-  // mock implementation can override it.
-  virtual const std::string& GetModelStr();
-
   // Returns the model type (protobuf or flatbuffer). Virtual so that mock
   // implementation can override it.
   virtual CSDModelType GetModelType();
@@ -149,15 +156,46 @@ class ClientSideDetectionService
   // override it.
   virtual const base::File& GetVisualTfLiteModel();
 
+  // Returns the Image Embedding model file. Virtual so that mock implementation
+  // can override it.
+  virtual const base::File& GetImageEmbeddingModel();
+
+  virtual bool IsModelMetadataImageEmbeddingVersionMatching();
+
+  // Returns the visual TFLite model thresholds from the model class
+  virtual const base::flat_map<std::string, TfLiteModelMetadata::Threshold>&
+  GetVisualTfLiteModelThresholds();
+
+  // Compare the scores from classification to TFLite model thresholds
+  void ClassifyPhishingThroughThresholds(ClientPhishingRequest* verdict);
+
   // Overrides the SharedURLLoaderFactory
   void SetURLLoaderFactoryForTesting(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory);
 
   // Sends a model to each renderer.
-  void SetPhishingModel(content::RenderProcessHost* rph);
+  void SetPhishingModel(content::RenderProcessHost* rph,
+                        bool new_renderer_process_host);
 
   // Returns a WeakPtr for this service.
   base::WeakPtr<ClientSideDetectionService> GetWeakPtr();
+
+  // Checks whether the model class has a model available or not. Virtual so
+  // that mock classes can override it.
+  virtual bool IsModelAvailable();
+
+  // Checks whether the model class has an image embedding model available or
+  // not.
+  bool HasImageEmbeddingModel();
+
+  // For testing the model in browser test.
+  void SetModelAndVisualTfLiteForTesting(const base::FilePath& model,
+                                         const base::FilePath& visual_tf_lite);
+
+  bool IsSubscribedToImageEmbeddingModelUpdates();
+
+  base::CallbackListSubscription RegisterCallbackForModelUpdates(
+      base::RepeatingClosure callback);
 
  private:
   friend class ClientSideDetectionServiceTest;
@@ -168,6 +206,7 @@ class ClientSideDetectionService
   FRIEND_TEST_ALL_PREFIXES(ClientSideDetectionServiceTest,
                            SendClientReportPhishingRequest);
   FRIEND_TEST_ALL_PREFIXES(ClientSideDetectionServiceTest, GetNumReportTest);
+  FRIEND_TEST_ALL_PREFIXES(ClientSideDetectionServiceTest, GetNumReportTestESB);
   FRIEND_TEST_ALL_PREFIXES(ClientSideDetectionServiceTest,
                            TestModelFollowsPrefs);
 
@@ -236,6 +275,18 @@ class ClientSideDetectionService
   // choice of model.
   bool extended_reporting_ = false;
 
+  // Whether the trigger models have been sent or not. This is used to determine
+  // whether an empty model in the model class determines whether the models
+  // haven't been sent or we should clear the models in the scorer because they
+  // have been sent.
+  bool sent_trigger_models_ = false;
+
+  // This is to keep track of the trigger model version that was last sent to
+  // the renderer host processes. This is used to determine, when the image
+  // embedding model arrives, whether a new scorer should be made with all
+  // models or the image embedding model can be attached to the current scorer.
+  int trigger_model_version_ = 0;
+
   // Map of client report phishing request to the corresponding callback that
   // has to be invoked when the request is done.
   struct ClientPhishingReportInfo;
@@ -264,6 +315,10 @@ class ClientSideDetectionService
   std::unique_ptr<Delegate> delegate_;
 
   base::CallbackListSubscription update_model_subscription_;
+
+  std::unique_ptr<ClientSidePhishingModel> client_side_phishing_model_;
+
+  SEQUENCE_CHECKER(sequence_checker_);
 
   // Used to asynchronously call the callbacks for
   // SendClientReportPhishingRequest.

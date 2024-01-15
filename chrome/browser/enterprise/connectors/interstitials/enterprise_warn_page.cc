@@ -7,8 +7,10 @@
 #include <utility>
 
 #include "components/grit/components_resources.h"
+#include "components/safe_browsing/content/browser/base_ui_manager.h"
 #include "components/security_interstitials/content/security_interstitial_controller_client.h"
 #include "components/security_interstitials/core/common_string_util.h"
+#include "components/security_interstitials/core/urls.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/web_contents.h"
@@ -22,15 +24,24 @@ const security_interstitials::SecurityInterstitialPage::TypeID
     EnterpriseWarnPage::kTypeForTesting = &EnterpriseWarnPage::kTypeForTesting;
 
 EnterpriseWarnPage::EnterpriseWarnPage(
+    safe_browsing::BaseUIManager* ui_manager,
     content::WebContents* web_contents,
     const GURL& request_url,
+    const safe_browsing::SafeBrowsingBlockingPage::UnsafeResourceList&
+        unsafe_resources,
     std::unique_ptr<
         security_interstitials::SecurityInterstitialControllerClient>
         controller_client)
     : security_interstitials::SecurityInterstitialPage(
           web_contents,
           request_url,
-          std::move(controller_client)) {}
+          std::move(controller_client)),
+      ui_manager_(ui_manager),
+      unsafe_resources_(unsafe_resources) {
+  controller()->metrics_helper()->RecordUserDecision(MetricsHelper::SHOW);
+  controller()->metrics_helper()->RecordUserInteraction(
+      MetricsHelper::TOTAL_VISITS);
+}
 
 EnterpriseWarnPage::~EnterpriseWarnPage() = default;
 
@@ -57,7 +68,9 @@ void EnterpriseWarnPage::PopulateInterstitialStrings(
       l10n_util::GetStringFUTF16(
           IDS_ENTERPRISE_WARN_PRIMARY_PARAGRAPH,
           security_interstitials::common_string_util::GetFormattedHostName(
-              request_url())));
+              request_url()),
+          l10n_util::GetStringUTF16(
+              IDS_ENTERPRISE_INTERSTITIALS_LEARN_MORE_ACCCESSIBILITY_TEXT)));
   load_time_data.Set(
       "proceedButtonText",
       l10n_util::GetStringUTF16(IDS_ENTERPRISE_WARN_CONTINUE_TO_SITE));
@@ -82,8 +95,19 @@ void EnterpriseWarnPage::CommandReceived(const std::string& command) {
     case security_interstitials::CMD_DONT_PROCEED:
       controller()->GoBack();
       break;
-    case security_interstitials::CMD_PROCEED:
+    case security_interstitials::CMD_PROCEED: {
+      controller()->metrics_helper()->RecordUserDecision(
+          MetricsHelper::PROCEED);
+      // Add to allowlist.
+      ui_manager_->OnBlockingPageDone(unsafe_resources_, /*proceed=*/true,
+                                      web_contents(), request_url(),
+                                      /*showed_interstitial=*/true);
       controller()->Proceed();
+      break;
+    }
+    case security_interstitials::CMD_OPEN_HELP_CENTER:
+      controller()->OpenUrlInNewForegroundTab(
+          GURL(security_interstitials::kEnterpriseInterstitialHelpLink));
       break;
     case security_interstitials::CMD_DO_REPORT:
     case security_interstitials::CMD_DONT_REPORT:
@@ -91,7 +115,6 @@ void EnterpriseWarnPage::CommandReceived(const std::string& command) {
     case security_interstitials::CMD_OPEN_DATE_SETTINGS:
     case security_interstitials::CMD_OPEN_REPORTING_PRIVACY:
     case security_interstitials::CMD_OPEN_WHITEPAPER:
-    case security_interstitials::CMD_OPEN_HELP_CENTER:
     case security_interstitials::CMD_RELOAD:
     case security_interstitials::CMD_OPEN_DIAGNOSTIC:
     case security_interstitials::CMD_OPEN_LOGIN:

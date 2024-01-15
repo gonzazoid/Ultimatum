@@ -14,19 +14,16 @@ import android.text.TextUtils;
 
 import androidx.annotation.Nullable;
 
-import org.chromium.base.Log;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.chrome.R;
-import org.chromium.chrome.browser.AppHooks;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileKeyedMap;
 import org.chromium.components.embedder_support.util.UrlConstants;
 import org.chromium.components.embedder_support.util.UrlUtilitiesJni;
 
 import java.util.Map;
-
-import javax.annotation.Nonnull;
 
 /**
  * Launches an activity that displays a relevant support page and has an option to provide feedback.
@@ -34,19 +31,28 @@ import javax.annotation.Nonnull;
 public class HelpAndFeedbackLauncherImpl implements HelpAndFeedbackLauncher {
     protected static final String FALLBACK_SUPPORT_URL =
             "https://support.google.com/chrome/topic/6069782";
-    private static final String TAG = "HelpAndFeedback";
 
-    private static HelpAndFeedbackLauncher sInstance;
+    private static ProfileKeyedMap<HelpAndFeedbackLauncher> sProfileToLauncherMap;
+    private final HelpAndFeedbackLauncherDelegate mDelegate;
+    private final Profile mProfile;
 
     /**
-     * Returns the singleton instance of HelpAndFeedbackLauncher, creating it if needed.
+     * @return The HelpAndFeedbackLauncher for a given profile, creating it if needed.
      */
-    public static HelpAndFeedbackLauncher getInstance() {
+    public static HelpAndFeedbackLauncher getForProfile(Profile profile) {
         ThreadUtils.assertOnUiThread();
-        if (sInstance == null) {
-            sInstance = AppHooks.get().createHelpAndFeedbackLauncher();
+
+        if (sProfileToLauncherMap == null) {
+            sProfileToLauncherMap =
+                    new ProfileKeyedMap<>(ProfileKeyedMap.NO_REQUIRED_CLEANUP_ACTION);
         }
-        return sInstance;
+        return sProfileToLauncherMap.getForProfile(
+                profile, () -> new HelpAndFeedbackLauncherImpl(profile));
+    }
+
+    private HelpAndFeedbackLauncherImpl(Profile profile) {
+        mProfile = profile;
+        mDelegate = new HelpAndFeedbackLauncherDelegateImpl();
     }
 
     /**
@@ -56,44 +62,19 @@ public class HelpAndFeedbackLauncherImpl implements HelpAndFeedbackLauncher {
      *                 screenshot of.
      * @param helpContext One of the CONTEXT_* constants. This should describe the user's current
      *                    context and will be used to show a more relevant help page.
-     * @param collector the {@link FeedbackCollector} to use for extra data. Must not be null.
-     */
-    protected void show(
-            Activity activity, String helpContext, @Nonnull FeedbackCollector collector) {
-        Log.d(TAG, "Feedback data: " + collector.getBundle());
-        launchFallbackSupportUri(activity);
-    }
-
-    /**
-     * Starts an activity prompting the user to enter feedback.
-     *
-     * @param activity The activity to use for starting the feedback activity and to take a
-     *                 screenshot of.
-     * @param collector the {@link FeedbackCollector} to use for extra data. Must not be null.
-     */
-    protected void showFeedback(Activity activity, @Nonnull FeedbackCollector collector) {
-        Log.d(TAG, "Feedback data: " + collector.getBundle());
-        launchFallbackSupportUri(activity);
-    }
-
-    /**
-     * Starts an activity showing a help page for the specified context ID.
-     *
-     * @param activity The activity to use for starting the help activity and to take a
-     *                 screenshot of.
-     * @param helpContext One of the CONTEXT_* constants. This should describe the user's current
-     *                    context and will be used to show a more relevant help page.
-     * @param profile the current profile.
      * @param url the current URL. May be null.
      */
     @Override
-    public void show(final Activity activity, final String helpContext, Profile profile,
-            @Nullable String url) {
+    public void show(final Activity activity, final String helpContext, @Nullable String url) {
         RecordUserAction.record("MobileHelpAndFeedback");
-        new ChromeFeedbackCollector(activity, null /* categoryTag */, null /* description */,
+        new ChromeFeedbackCollector(
+                activity,
+                /* categoryTag= */ null,
+                /* description= */ null,
                 new ScreenshotTask(activity),
-                new ChromeFeedbackCollector.InitParams(profile, url, helpContext),
-                collector -> show(activity, helpContext, collector), profile);
+                new ChromeFeedbackCollector.InitParams(mProfile, url, helpContext),
+                collector -> mDelegate.show(activity, helpContext, collector),
+                mProfile);
     }
 
     /**
@@ -101,27 +82,32 @@ public class HelpAndFeedbackLauncherImpl implements HelpAndFeedbackLauncher {
      *
      * @param activity The activity to use for starting the feedback activity and to take a
      *                 screenshot of.
-     * @param profile the current profile.
      * @param url the current URL. May be null.
      * @param categoryTag The category that this feedback report falls under.
      * @param screenshotMode The kind of screenshot to include with the feedback.
      * @param feedbackContext The context that describes the current feature being used.
      */
     @Override
-    public void showFeedback(final Activity activity, Profile profile, @Nullable String url,
-            @Nullable final String categoryTag, @ScreenshotMode int screenshotMode,
+    public void showFeedback(
+            final Activity activity,
+            @Nullable String url,
+            @Nullable final String categoryTag,
+            @ScreenshotMode int screenshotMode,
             @Nullable final String feedbackContext) {
         long startTime = SystemClock.elapsedRealtime();
-        new ChromeFeedbackCollector(activity, categoryTag, null /* description */,
+        new ChromeFeedbackCollector(
+                activity,
+                categoryTag,
+                /* description= */ null,
                 new ScreenshotTask(activity, screenshotMode),
-                new ChromeFeedbackCollector.InitParams(profile, url, feedbackContext),
-                (collector)
-                        -> {
-                    RecordHistogram.recordLongTimesHistogram("Feedback.Duration.FormOpenToSubmit",
+                new ChromeFeedbackCollector.InitParams(mProfile, url, feedbackContext),
+                (collector) -> {
+                    RecordHistogram.recordLongTimesHistogram(
+                            "Feedback.Duration.FormOpenToSubmit",
                             SystemClock.elapsedRealtime() - startTime);
-                    showFeedback(activity, collector);
+                    mDelegate.showFeedback(activity, collector);
                 },
-                profile);
+                mProfile);
     }
 
     /**
@@ -129,14 +115,13 @@ public class HelpAndFeedbackLauncherImpl implements HelpAndFeedbackLauncher {
      *
      * @param activity The activity to use for starting the feedback activity and to take a
      *                 screenshot of.
-     * @param profile the current profile.
      * @param url the current URL. May be null.
      * @param categoryTag The category that this feedback report falls under.
      */
     @Override
-    public void showFeedback(final Activity activity, Profile profile, @Nullable String url,
-            @Nullable final String categoryTag) {
-        showFeedback(activity, profile, url, categoryTag, ScreenshotMode.DEFAULT, null);
+    public void showFeedback(
+            final Activity activity, @Nullable String url, @Nullable final String categoryTag) {
+        showFeedback(activity, url, categoryTag, ScreenshotMode.DEFAULT, null);
     }
 
     /**
@@ -144,17 +129,23 @@ public class HelpAndFeedbackLauncherImpl implements HelpAndFeedbackLauncher {
      *
      * @param activity The activity to use for starting the feedback activity and to take a
      *                 screenshot of.
-     * @param profile the current profile.
      * @param categoryTag The category that this feedback report falls under.
      * @param feedContext Feed specific parameters (url, title, etc) to include with feedback.
      */
     @Override
-    public void showFeedback(final Activity activity, Profile profile, @Nullable String url,
-            @Nullable final String categoryTag, @Nullable final Map<String, String> feedContext) {
-        new FeedFeedbackCollector(activity, categoryTag, null /* description */,
+    public void showFeedback(
+            final Activity activity,
+            @Nullable String url,
+            @Nullable final String categoryTag,
+            @Nullable final Map<String, String> feedContext) {
+        new FeedFeedbackCollector(
+                activity,
+                categoryTag,
+                /* description= */ null,
                 new ScreenshotTask(activity),
-                new FeedFeedbackCollector.InitParams(profile, url, feedContext),
-                collector -> showFeedback(activity, collector), profile);
+                new FeedFeedbackCollector.InitParams(mProfile, url, feedContext),
+                collector -> mDelegate.showFeedback(activity, collector),
+                mProfile);
     }
 
     /**

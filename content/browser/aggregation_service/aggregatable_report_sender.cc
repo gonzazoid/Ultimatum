@@ -5,11 +5,13 @@
 #include "content/browser/aggregation_service/aggregatable_report_sender.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
@@ -29,7 +31,6 @@
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace content {
@@ -81,18 +82,15 @@ void AggregatableReportSender::SendReport(const GURL& url,
   resource_request->trusted_params->isolation_info =
       net::IsolationInfo::CreateTransient();
 
-  // TODO(crbug.com/1238343): Update the "policy" field in the traffic
-  // annotation when a setting to disable the API is properly
-  // surfaced/implemented.
   net::NetworkTrafficAnnotationTag traffic_annotation =
       net::DefineNetworkTrafficAnnotation("aggregation_service_report", R"(
         semantics {
           sender: "Aggregation Service"
           description:
             "Sends the aggregatable report to reporting endpoint requested by "
-            "APIs that rely on private, secure aggregation (e.g. Attribution "
-            "Reporting API, see "
-            "https://github.com/WICG/attribution-reporting-api)."
+            "the Private Aggregation API, see "
+            "https://github.com/patcg-individual-drafts/private-aggregation-api"
+            "."
           trigger:
             "When an aggregatable report has become eligible for reporting."
           data:
@@ -102,10 +100,13 @@ void AggregatableReportSender::SendReport(const GURL& url,
         policy {
           cookies_allowed: NO
           setting:
-            "This feature cannot be disabled by settings."
-          policy_exception_justification:
-            "Not implemented yet. The feature is used by a command line tool, "
-            "but not yet integrated with the browser."
+            "This feature can be controlled via the 'Ad measurement' setting "
+            "in the 'Ad privacy' section of 'Privacy and Security'."
+          chrome_policy {
+            PrivacySandboxAdMeasurementEnabled {
+              PrivacySandboxAdMeasurementEnabled: false
+            }
+          }
         })");
 
   auto simple_url_loader = network::SimpleURLLoader::Create(
@@ -151,7 +152,7 @@ void AggregatableReportSender::OnReportSent(
     scoped_refptr<net::HttpResponseHeaders> headers) {
   RequestStatus status;
 
-  absl::optional<int> http_response_code;
+  std::optional<int> http_response_code;
   if (headers)
     http_response_code = headers->response_code();
 

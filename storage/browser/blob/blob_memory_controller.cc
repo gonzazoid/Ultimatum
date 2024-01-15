@@ -8,14 +8,14 @@
 #include <memory>
 #include <numeric>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/containers/small_map.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
@@ -26,7 +26,6 @@
 #include "base/system/sys_info.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
@@ -76,7 +75,7 @@ File::Error CreateBlobDirectory(const FilePath& blob_storage_dir) {
 BlobStorageLimits CalculateBlobStorageLimitsImpl(
     const FilePath& storage_dir,
     bool disk_enabled,
-    absl::optional<uint64_t> optional_memory_size_for_testing) {
+    std::optional<uint64_t> optional_memory_size_for_testing) {
   int64_t disk_size = 0ull;
   uint64_t memory_size = optional_memory_size_for_testing
                              ? optional_memory_size_for_testing.value()
@@ -171,7 +170,11 @@ EmptyFilesResult CreateEmptyFiles(
   for (const base::FilePath& file_path : file_paths) {
     FileCreationInfo creation_info;
     // Try to open our file.
-    File file(file_path, File::FLAG_CREATE_ALWAYS | File::FLAG_WRITE);
+    uint32_t flags = File::FLAG_CREATE_ALWAYS | File::FLAG_WRITE;
+
+    // This File may be passed to an untrusted process.
+    flags = base::File::AddFlagsForPassingToUntrustedProcess(flags);
+    File file(file_path, flags);
     creation_info.path = std::move(file_path);
     creation_info.file_deletion_runner = file_task_runner;
     creation_info.error = file.error_details();
@@ -220,7 +223,12 @@ std::pair<FileCreationInfo, int64_t> CreateFileAndWriteItems(
           : free_disk_space - static_cast<int64_t>(total_size_bytes);
 
   // Create the page file.
-  File file(file_path, File::FLAG_CREATE_ALWAYS | File::FLAG_WRITE);
+  uint32_t flags = File::FLAG_CREATE_ALWAYS | File::FLAG_WRITE;
+
+  // This File may be passed to an untrusted process.
+  flags = base::File::AddFlagsForPassingToUntrustedProcess(flags);
+
+  File file(file_path, flags);
   creation_info.path = file_path;
   creation_info.error = file.error_details();
   if (creation_info.error != File::FILE_OK)
@@ -418,8 +426,8 @@ class BlobMemoryController::FileQuotaAllocationTask
           controller_->file_runner_.get()));
     }
     // Send file creation task to file thread.
-    base::PostTaskAndReplyWithResult(
-        controller_->file_runner_.get(), FROM_HERE,
+    controller_->file_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&CreateEmptyFiles, controller_->blob_storage_dir_,
                        disk_space_function, controller_->file_runner_,
                        std::move(file_paths)),
@@ -723,8 +731,7 @@ void BlobMemoryController::NotifyMemoryItemsUsed(
       continue;
     }
     // We don't want to re-add the item if we're currently paging it to disk.
-    if (items_paging_to_file_.find(item->item_id()) !=
-        items_paging_to_file_.end()) {
+    if (base::Contains(items_paging_to_file_, item->item_id())) {
       return;
     }
     auto iterator = populated_memory_items_.Get(item->item_id());
@@ -753,10 +760,10 @@ void BlobMemoryController::CalculateBlobStorageLimits() {
     return;
   did_schedule_limit_calculation_ = true;
   if (file_runner_) {
-    PostTaskAndReplyWithResult(
-        file_runner_.get(), FROM_HERE,
-        base::BindOnce(&CalculateBlobStorageLimitsImpl, blob_storage_dir_,
-                       true, amount_of_memory_for_testing_),
+    file_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
+        base::BindOnce(&CalculateBlobStorageLimitsImpl, blob_storage_dir_, true,
+                       amount_of_memory_for_testing_),
         base::BindOnce(&BlobMemoryController::OnStorageLimitsCalculated,
                        weak_factory_.GetWeakPtr()));
   } else {
@@ -919,8 +926,8 @@ void BlobMemoryController::MaybeScheduleEvictionUntilSystemHealthy(
                        weak_factory_.GetWeakPtr(), total_items_size));
 
     // Post the file writing task.
-    base::PostTaskAndReplyWithResult(
-        file_runner_.get(), FROM_HERE,
+    file_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&CreateFileAndWriteItems, blob_storage_dir_,
                        disk_space_function_, std::move(page_file_path),
                        file_runner_, std::move(data_for_paging),

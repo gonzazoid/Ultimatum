@@ -11,44 +11,59 @@ export enum BatterySaverModeState {
   ENABLED_BELOW_THRESHOLD = 1,
   ENABLED_ON_BATTERY = 2,
   ENABLED = 3,
+
+  // Must be last.
+  COUNT = 4,
 }
 
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
-export enum HighEfficiencyModeExceptionListAction {
-  ADD = 0,
+export enum MemorySaverModeExceptionListAction {
+  ADD_MANUAL = 0,
   EDIT = 1,
   REMOVE = 2,
+  ADD_FROM_CURRENT = 3,
+
+  // Must be last.
+  COUNT = 4,
 }
 
-function getNumericEnumLength(e: Object) {
-  // numeric enums have reverse mapping when compiled to js, so must divide by 2
-  return Object.keys(e).length / 2;
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+// This must be kept in sync with MemorySaverModeState in
+// components/performance_manager/public/user_tuning/prefs.h
+export enum MemorySaverModeState {
+  DISABLED = 0,
+  ENABLED = 1,
+  ENABLED_ON_TIMER = 2,
+
+  // Must be last.
+  COUNT = 3,
 }
 
 export interface PerformanceMetricsProxy {
   recordBatterySaverModeChanged(state: BatterySaverModeState): void;
-  recordHighEfficiencyModeChanged(enabled: boolean): void;
-  recordExceptionListAction(action: HighEfficiencyModeExceptionListAction):
-      void;
+  recordMemorySaverModeChanged(state: MemorySaverModeState): void;
+  recordExceptionListAction(action: MemorySaverModeExceptionListAction): void;
 }
 
 export class PerformanceMetricsProxyImpl implements PerformanceMetricsProxy {
   recordBatterySaverModeChanged(state: BatterySaverModeState) {
     chrome.metricsPrivate.recordEnumerationValue(
         'PerformanceControls.BatterySaver.SettingsChangeMode', state,
-        getNumericEnumLength(BatterySaverModeState));
+        BatterySaverModeState.COUNT);
   }
 
-  recordHighEfficiencyModeChanged(enabled: boolean): void {
-    chrome.metricsPrivate.recordBoolean(
-        'PerformanceControls.HighEfficiency.SettingsChangeMode', enabled);
-  }
-
-  recordExceptionListAction(action: HighEfficiencyModeExceptionListAction) {
+  recordMemorySaverModeChanged(state: MemorySaverModeState): void {
     chrome.metricsPrivate.recordEnumerationValue(
-        'PerformanceControls.HighEfficiency.SettingsChangeExceptionList',
-        action, getNumericEnumLength(HighEfficiencyModeExceptionListAction));
+        'PerformanceControls.MemorySaver.SettingsChangeMode', state,
+        MemorySaverModeState.COUNT);
+  }
+
+  recordExceptionListAction(action: MemorySaverModeExceptionListAction) {
+    chrome.metricsPrivate.recordEnumerationValue(
+        'PerformanceControls.MemorySaver.SettingsChangeExceptionList', action,
+        MemorySaverModeExceptionListAction.COUNT);
   }
 
   static getInstance(): PerformanceMetricsProxy {

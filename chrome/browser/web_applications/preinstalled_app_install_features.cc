@@ -4,143 +4,125 @@
 
 #include "chrome/browser/web_applications/preinstalled_app_install_features.h"
 
+#include <string>
+#include <string_view>
+
 #include "base/feature_list.h"
+#include "base/memory/raw_ref.h"
 #include "build/build_config.h"
-#include "chrome/browser/policy/profile_policy_connector.h"
-#include "chrome/browser/profiles/profile.h"
 
 #if BUILDFLAG(IS_CHROMEOS)
+#include "chrome/browser/enterprise/browser_management/management_service_factory.h"
 #include "chromeos/constants/chromeos_features.h"
-#endif  // IS_CHROMEOS
+#include "components/policy/core/common/management/management_service.h"
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 namespace web_app {
+
+namespace {
 
 // A hard coded list of features available for externally installed apps to
 // gate their installation on via their config file settings. See
 // |kFeatureName| in preinstalled_web_app_utils.h.
-constexpr const base::Feature* kPreinstalledAppInstallFeatures[] = {
-    &kMigrateDefaultChromeAppToWebAppsGSuite,
-    &kMigrateDefaultChromeAppToWebAppsNonGSuite,
-    &kDefaultCalculatorWebApp,
-#if BUILDFLAG(IS_CHROMEOS)
-    &kCursiveManagedStylusPreinstall,
-    &kMessagesPreinstall,
-#endif
+// After a feature flag has been shipped and should be cleaned up, move it into
+// kShippedPreinstalledAppInstallFeatures to ensure any external installation
+// configs that reference it continue to see it as enabled.
+constexpr const base::Feature* kPreinstalledAppInstallFeatures[] = {};
+
+constexpr const base::StringPiece kShippedPreinstalledAppInstallFeatures[] = {
+    // Enables installing the PWA version of the chrome os calculator instead of
+    // the deprecated chrome app.
+    "DefaultCalculatorWebApp",
+
+    // Enables migration of default installed GSuite apps over to their
+    // replacement web apps.
+    "MigrateDefaultChromeAppToWebAppsGSuite",
+
+    // Enables migration of default installed non-GSuite apps over to their
+    // replacement web apps.
+    "MigrateDefaultChromeAppToWebAppsNonGSuite",
+
+    // Enables installing the Messages app on unmanaged devices.
+    "MessagesPreinstall",
+
+    // Enables installing the Cursive device on managed stylus-enabled devices.
+    "CursiveManagedStylusPreinstall",
 };
 
 bool g_always_enabled_for_testing = false;
 
-namespace {
-
 struct FeatureWithEnabledFunction {
-  const char* const name;
+  raw_ref<const base::Feature> feature;
   bool (*enabled_func)();
 };
 
 // Features which have a function to be run to determine whether they are
 // enabled. Prefer using a base::Feature with |kPreinstalledAppInstallFeatures|
 // when possible.
-const FeatureWithEnabledFunction
+constexpr const FeatureWithEnabledFunction
     kPreinstalledAppInstallFeaturesWithEnabledFunctions[] = {
 #if BUILDFLAG(IS_CHROMEOS)
-        {chromeos::features::kCloudGamingDevice.name,
+        {raw_ref(chromeos::features::kCloudGamingDevice),
          &chromeos::features::IsCloudGamingDeviceEnabled}
 #endif
 };
 
-// Checks if the feature being passed matches any of the migration features
-// above.
-bool IsMigrationFeature(const base::Feature& feature) {
-  return &feature == &kMigrateDefaultChromeAppToWebAppsGSuite ||
-         &feature == &kMigrateDefaultChromeAppToWebAppsNonGSuite;
-}
-
 }  // namespace
 
-// Enables migration of default installed GSuite apps over to their replacement
-// web apps.
-BASE_FEATURE(kMigrateDefaultChromeAppToWebAppsGSuite,
-             "MigrateDefaultChromeAppToWebAppsGSuite",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-// Enables migration of default installed non-GSuite apps over to their
-// replacement web apps.
-BASE_FEATURE(kMigrateDefaultChromeAppToWebAppsNonGSuite,
-             "MigrateDefaultChromeAppToWebAppsNonGSuite",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-// Enables installing the PWA version of the chrome os calculator instead of the
-// deprecated chrome app.
-BASE_FEATURE(kDefaultCalculatorWebApp,
-             "DefaultCalculatorWebApp",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
 #if BUILDFLAG(IS_CHROMEOS)
-// Whether to allow the MigrateDefaultChromeAppToWebAppsGSuite and
-// MigrateDefaultChromeAppToWebAppsNonGSuite flags for managed users.
-// Without this flag enabled managed users will not undergo the default web app
-// migration.
-//
-// Why have a separate flag?
-// Field trials are not able to accurately distinguish managed Chrome OS users.
-// Because admin installed Chrome apps conflict with the default web app
-// migration we need to maintain separate control over the rollout for mananged
-// users.
-BASE_FEATURE(kAllowDefaultWebAppMigrationForChromeOsManagedUsers,
-             "AllowDefaultWebAppMigrationForChromeOsManagedUsers",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-// Enables installing the Cursive app on managed devices with a built-in
-// stylus-capable screen.
-BASE_FEATURE(kCursiveManagedStylusPreinstall,
-             "CursiveManagedStylusPreinstall",
+// Use `IsPreinstalledDocsSheetsSlidesDriveStandaloneTabbed` instead of checking
+// this flag directly to correctly exclude managed devices.
+BASE_FEATURE(kDocsSheetsSlidesDrivePreinstallStandaloneTabbed,
+             "DocsSheetsSlidesDrivePreinstallStandaloneTabbed",
              base::FEATURE_DISABLED_BY_DEFAULT);
-
-// Enables installing the Messages app on unmanaged devices.
-BASE_FEATURE(kMessagesPreinstall,
-             "MessagesPreinstall",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
 #endif  // BUILDFLAG(IS_CHROMEOS)
+
+bool IsPreinstalledDocsSheetsSlidesDriveStandaloneTabbed(Profile& profile) {
+#if BUILDFLAG(IS_CHROMEOS)
+  if (!base::FeatureList::IsEnabled(
+          kDocsSheetsSlidesDrivePreinstallStandaloneTabbed)) {
+    return false;
+  }
+  // Exclude managed devices.
+  if (policy::ManagementServiceFactory::GetForPlatform()->IsManaged()) {
+    return false;
+  }
+  // Exclude managed profiles.
+  if (policy::ManagementServiceFactory::GetForProfile(&profile)->IsManaged()) {
+    return false;
+  }
+  return true;
+#else
+  return false;
+#endif  // BUILDFLAG(IS_CHROMEOS)
+}
 
 bool IsPreinstalledAppInstallFeatureEnabled(base::StringPiece feature_name,
                                             const Profile& profile) {
-  if (g_always_enabled_for_testing)
+  if (g_always_enabled_for_testing) {
     return true;
+  }
+
+  for (const base::StringPiece& feature :
+       kShippedPreinstalledAppInstallFeatures) {
+    if (feature == feature_name) {
+      return true;
+    }
+  }
 
   for (const base::Feature* feature : kPreinstalledAppInstallFeatures) {
-#if BUILDFLAG(IS_CHROMEOS)
-    // See |kAllowDefaultWebAppMigrationForChromeOsManagedUsers| comment above.
-    if (base::FeatureList::IsEnabled(*feature) &&
-        feature->name == feature_name && IsMigrationFeature(*feature) &&
-        profile.GetProfilePolicyConnector() &&
-        profile.GetProfilePolicyConnector()->IsManaged()) {
-      return base::FeatureList::IsEnabled(
-          kAllowDefaultWebAppMigrationForChromeOsManagedUsers);
-    }
-#endif  // BUILDFLAG(IS_CHROMEOS)
-
-    if (feature->name == feature_name)
+    if (feature->name == feature_name) {
       return base::FeatureList::IsEnabled(*feature);
-  }
-
-  for (const auto& feature :
-       kPreinstalledAppInstallFeaturesWithEnabledFunctions) {
-    if (feature.name == feature_name)
-      return feature.enabled_func();
-  }
-
-  return false;
-}
-
-bool IsAnyChromeAppToWebAppMigrationEnabled(const Profile& profile) {
-  for (const base::Feature* feature : kPreinstalledAppInstallFeatures) {
-    if (IsMigrationFeature(*feature)) {
-      if (IsPreinstalledAppInstallFeatureEnabled(feature->name, profile)) {
-        return true;
-      }
     }
   }
+
+  for (const auto& feature_with_function :
+       kPreinstalledAppInstallFeaturesWithEnabledFunctions) {
+    if (feature_with_function.feature->name == feature_name) {
+      return feature_with_function.enabled_func();
+    }
+  }
+
   return false;
 }
 

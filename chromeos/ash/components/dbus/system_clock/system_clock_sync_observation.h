@@ -6,14 +6,15 @@
 #define CHROMEOS_ASH_COMPONENTS_DBUS_SYSTEM_CLOCK_SYSTEM_CLOCK_SYNC_OBSERVATION_H_
 
 #include <memory>
+#include <optional>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/timer/timer.h"
 #include "chromeos/ash/components/dbus/system_clock/system_clock_client.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -70,7 +71,7 @@ class COMPONENT_EXPORT(SYSTEM_CLOCK) SystemClockSyncObservation
   // SystemClockClient::Observer:
   void SystemClockUpdated() override;
 
-  SystemClockClient* const system_clock_client_;
+  const raw_ptr<SystemClockClient> system_clock_client_;
 
   // The callback to be called when the system clock has been synchronized or
   // the timeout tracked by `timeout_timer_` has been reached.

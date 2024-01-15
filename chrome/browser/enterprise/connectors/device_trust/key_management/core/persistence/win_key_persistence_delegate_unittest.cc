@@ -68,7 +68,7 @@ namespace enterprise_connectors {
 class WinKeyPersistenceDelegateTest : public testing::Test {
  public:
   void SetUp() override {
-    persistence_delegate_ = absl::WrapUnique(new WinKeyPersistenceDelegate());
+    persistence_delegate_ = std::make_unique<WinKeyPersistenceDelegate>();
     key_path_ = GetKeyPath();
     registry_override_manager_.OverrideRegistry(HKEY_LOCAL_MACHINE, &key_path_);
   }
@@ -88,21 +88,11 @@ class WinKeyPersistenceDelegateTest : public testing::Test {
         InstallUtil::GetDeviceTrustSigningKeyLocation(
             InstallUtil::ReadOnly(false));
 
+    ASSERT_TRUE(key.Valid());
     EXPECT_TRUE(key.WriteValue(signingkey_name.c_str(), wrapped.data(),
                                wrapped.size(), REG_BINARY) == ERROR_SUCCESS);
     EXPECT_TRUE(key.WriteValue(trustlevel_name.c_str(), trust_level) ==
                 ERROR_SUCCESS);
-  }
-
-  // Sets an ECDSA_SHA256 key algorithm for generating an unexportable key.
-  // This is used because it is the only algorithm the scoped unexportable key
-  // provider supports.
-  void SetAcceptableTestingAlgorithm() {
-    auto acceptable_algorithms = {
-        crypto::SignatureVerifier::ECDSA_SHA256,
-    };
-    persistence_delegate_->SetAcceptableKeyAlgorithmForTesting(
-        acceptable_algorithms);
   }
 
   std::unique_ptr<WinKeyPersistenceDelegate> persistence_delegate_;
@@ -120,8 +110,12 @@ TEST_F(WinKeyPersistenceDelegateTest, DeleteKey) {
   SetRegistryKeyInfo();
   EXPECT_TRUE(persistence_delegate_->StoreKeyPair(
       BPKUR::KEY_TRUST_LEVEL_UNSPECIFIED, std::vector<uint8_t>()));
-  EXPECT_FALSE(persistence_delegate_->LoadKeyPair());
 
+  LoadPersistedKeyResult result;
+  EXPECT_FALSE(
+      persistence_delegate_->LoadKeyPair(KeyStorageType::kPermanent, &result));
+
+  EXPECT_EQ(result, LoadPersistedKeyResult::kNotFound);
   histogram_tester.ExpectUniqueSample(
       base::StringPrintf(kErrorHistogramFormat, "LoadKeyPair"),
       KeyPersistenceError::kKeyPairMissingTrustLevel, 1);
@@ -132,8 +126,11 @@ TEST_F(WinKeyPersistenceDelegateTest, DeleteKey) {
 TEST_F(WinKeyPersistenceDelegateTest, LoadKeyPair_OpenSigningKeyFailure) {
   base::HistogramTester histogram_tester;
 
-  auto loaded_key_pair = persistence_delegate_->LoadKeyPair();
+  LoadPersistedKeyResult result;
+  EXPECT_FALSE(
+      persistence_delegate_->LoadKeyPair(KeyStorageType::kPermanent, &result));
 
+  EXPECT_EQ(result, LoadPersistedKeyResult::kNotFound);
   histogram_tester.ExpectUniqueSample(
       base::StringPrintf(kErrorHistogramFormat, "LoadKeyPair"),
       KeyPersistenceError::kOpenPersistenceStorageFailed, 1);
@@ -156,11 +153,16 @@ TEST_F(WinKeyPersistenceDelegateTest, LoadKeyPair_InvalidTrustLevel) {
   std::tie(key, signingkey_name, trustlevel_name) =
       InstallUtil::GetDeviceTrustSigningKeyLocation(
           InstallUtil::ReadOnly(false));
+  ASSERT_TRUE(key.Valid());
   EXPECT_TRUE(key.WriteValue(signingkey_name.c_str(), wrapped.data(),
                              wrapped.size(), REG_BINARY) == ERROR_SUCCESS);
   EXPECT_TRUE(key.WriteValue(trustlevel_name.c_str(), 20) == ERROR_SUCCESS);
-  auto loaded_key_pair = persistence_delegate_->LoadKeyPair();
 
+  LoadPersistedKeyResult result;
+  EXPECT_FALSE(
+      persistence_delegate_->LoadKeyPair(KeyStorageType::kPermanent, &result));
+
+  EXPECT_EQ(result, LoadPersistedKeyResult::kMalformedKey);
   histogram_tester.ExpectUniqueSample(
       base::StringPrintf(kErrorHistogramFormat, "LoadKeyPair"),
       KeyPersistenceError::kInvalidTrustLevel, 1);
@@ -181,40 +183,20 @@ TEST_F(WinKeyPersistenceDelegateTest, LoadKeyPair_InvalidSigningKey) {
   std::tie(key, signingkey_name, trustlevel_name) =
       InstallUtil::GetDeviceTrustSigningKeyLocation(
           InstallUtil::ReadOnly(false));
+  ASSERT_TRUE(key.Valid());
   EXPECT_TRUE(key.WriteValue(signingkey_name.c_str(), invalid_key.c_str()) ==
               ERROR_SUCCESS);
   EXPECT_TRUE(key.WriteValue(trustlevel_name.c_str(), trust_level) ==
               ERROR_SUCCESS);
-  auto loaded_key_pair = persistence_delegate_->LoadKeyPair();
 
+  LoadPersistedKeyResult result;
+  EXPECT_FALSE(
+      persistence_delegate_->LoadKeyPair(KeyStorageType::kPermanent, &result));
+
+  EXPECT_EQ(result, LoadPersistedKeyResult::kMalformedKey);
   histogram_tester.ExpectUniqueSample(
       base::StringPrintf(kErrorHistogramFormat, "LoadKeyPair"),
       KeyPersistenceError::kInvalidSigningKey, 1);
-}
-
-// Tests creating an OS key pair when the EC key algorithm is not set and the
-// TPM key provider fails to create a TPM key. By design we fall back on to the
-// OS key provider and create an OS key pair. Also tests storing and loading the
-// key pair.
-TEST_F(WinKeyPersistenceDelegateTest, ValidOsKeyPair_Success) {
-  base::HistogramTester histogram_tester;
-
-  auto key_pair = persistence_delegate_->CreateKeyPair();
-  auto trust_level = BPKUR::CHROME_BROWSER_OS_KEY;
-  ValidateSigningKey(key_pair.get(), trust_level);
-
-  SetRegistryKeyInfo();
-  EXPECT_TRUE(persistence_delegate_->StoreKeyPair(
-      trust_level, key_pair->key()->GetWrappedKey()));
-
-  SetRegistryKeyInfo(trust_level, key_pair->key()->GetWrappedKey());
-  auto loaded_key_pair = persistence_delegate_->LoadKeyPair();
-  EXPECT_EQ(key_pair.get()->key()->GetWrappedKey(),
-            loaded_key_pair.get()->key()->GetWrappedKey());
-
-  // Should expect no failure metrics.
-  histogram_tester.ExpectTotalCount(
-      base::StringPrintf(kErrorHistogramFormat, "LoadKeyPair"), 0);
 }
 
 // Tests creating a hardware key pair when the EC key algorithm is set and the
@@ -223,7 +205,6 @@ TEST_F(WinKeyPersistenceDelegateTest, ValidOsKeyPair_Success) {
 TEST_F(WinKeyPersistenceDelegateTest, ValidHardwareKeyPair_Success) {
   base::HistogramTester histogram_tester;
 
-  SetAcceptableTestingAlgorithm();
   auto key_pair = persistence_delegate_->CreateKeyPair();
   auto trust_level = BPKUR::CHROME_BROWSER_HW_KEY;
   ValidateSigningKey(key_pair.get(), trust_level);
@@ -233,13 +214,29 @@ TEST_F(WinKeyPersistenceDelegateTest, ValidHardwareKeyPair_Success) {
       trust_level, key_pair->key()->GetWrappedKey()));
 
   SetRegistryKeyInfo(trust_level, key_pair->key()->GetWrappedKey());
-  auto loaded_key_pair = persistence_delegate_->LoadKeyPair();
+
+  LoadPersistedKeyResult result;
+  auto loaded_key_pair =
+      persistence_delegate_->LoadKeyPair(KeyStorageType::kPermanent, &result);
+
+  ASSERT_TRUE(loaded_key_pair);
+  EXPECT_EQ(result, LoadPersistedKeyResult::kSuccess);
   EXPECT_EQ(key_pair.get()->key()->GetWrappedKey(),
             loaded_key_pair.get()->key()->GetWrappedKey());
 
   // Should expect no failure metrics.
   histogram_tester.ExpectTotalCount(
       base::StringPrintf(kErrorHistogramFormat, "LoadKeyPair"), 0);
+}
+
+// TODO(b/290068551): Add test coverage for this method.
+TEST_F(WinKeyPersistenceDelegateTest, PromoteTemporaryKeyPair) {
+  EXPECT_TRUE(persistence_delegate_->PromoteTemporaryKeyPair());
+}
+
+// TODO(b/290068551): Add test coverage for this method.
+TEST_F(WinKeyPersistenceDelegateTest, DeleteKeyPair) {
+  EXPECT_TRUE(persistence_delegate_->DeleteKeyPair(KeyStorageType::kTemporary));
 }
 
 }  // namespace enterprise_connectors

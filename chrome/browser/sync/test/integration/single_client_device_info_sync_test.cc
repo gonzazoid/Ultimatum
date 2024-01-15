@@ -24,6 +24,7 @@
 #include "components/sync/protocol/sync_entity.pb.h"
 #include "components/sync/protocol/sync_enums.pb.h"
 #include "components/sync/test/fake_server.h"
+#include "components/sync/test/fake_server_http_post_provider.h"
 #include "components/sync_device_info/device_info.h"
 #include "components/sync_device_info/device_info_sync_service.h"
 #include "components/sync_device_info/device_info_tracker.h"
@@ -41,6 +42,7 @@ using syncer::ModelTypeSet;
 using testing::AllOf;
 using testing::Contains;
 using testing::ElementsAre;
+using testing::IsEmpty;
 using testing::IsSupersetOf;
 using testing::Not;
 using testing::UnorderedElementsAre;
@@ -162,9 +164,7 @@ class SingleClientDeviceInfoSyncTest : public SyncTest {
  public:
   SingleClientDeviceInfoSyncTest() : SyncTest(SINGLE_CLIENT) {
     override_features_.InitWithFeatures(
-        {syncer::kSkipInvalidationOptimizationsWhenDeviceInfoUpdated,
-         syncer::kUseSyncInvalidations},
-        {});
+        {syncer::kSkipInvalidationOptimizationsWhenDeviceInfoUpdated}, {});
   }
 
   SingleClientDeviceInfoSyncTest(const SingleClientDeviceInfoSyncTest&) =
@@ -202,9 +202,6 @@ class SingleClientDeviceInfoSyncTest : public SyncTest {
             specifics,
             /*creation_time=*/0, /*last_modified_time=*/0));
   }
-
-  // SyncTest overrides.
-  bool UseConfigurationRefresher() override { return false; }
 
  private:
   base::test::ScopedFeatureList override_features_;
@@ -313,19 +310,20 @@ IN_PROC_BROWSER_TEST_F(SingleClientDeviceInfoSyncTest,
                            ModelEntryHasCacheGuid(CacheGuidForSuffix(1))));
 }
 
-// CommitLocalDevice_TransportOnly and DownloadRemoteDevices_TransportOnly are
-// flaky on Android.
-#if !BUILDFLAG(IS_ANDROID)
-IN_PROC_BROWSER_TEST_F(SingleClientDeviceInfoSyncTest,
-                       CommitLocalDevice_TransportOnly) {
-  ASSERT_TRUE(SetupClients());
+// On ChromeOS, Sync-the-feature gets started automatically once a primary
+// account is signed in and transport mode is not a thing.
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // On ChromeOS, Sync-the-feature gets started automatically once a primary
-  // account is signed in. To prevent that, explicitly set SyncRequested to
-  // false.
-  GetSyncService(0)->GetUserSettings()->SetSyncRequested(false);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+// TODO(crbug.com/1191225): Flaky on Android.
+#if BUILDFLAG(IS_ANDROID)
+#define MAYBE_CommitLocalDevice_TransportOnly \
+  DISABLED_CommitLocalDevice_TransportOnly
+#else
+#define MAYBE_CommitLocalDevice_TransportOnly CommitLocalDevice_TransportOnly
+#endif  // BUILDFLAG(IS_ANDROID)
+IN_PROC_BROWSER_TEST_F(SingleClientDeviceInfoSyncTest,
+                       MAYBE_CommitLocalDevice_TransportOnly) {
+  ASSERT_TRUE(SetupClients());
 
   // Setup a primary account, but don't actually enable Sync-the-feature (so
   // that Sync will start in transport mode).
@@ -341,19 +339,20 @@ IN_PROC_BROWSER_TEST_F(SingleClientDeviceInfoSyncTest,
                   .Wait());
 }
 
+// TODO(crbug.com/1191225): Flaky on Android.
+#if BUILDFLAG(IS_ANDROID)
+#define MAYBE_DownloadRemoteDevices_TransportOnly \
+  DISABLED_DownloadRemoteDevices_TransportOnly
+#else
+#define MAYBE_DownloadRemoteDevices_TransportOnly \
+  DownloadRemoteDevices_TransportOnly
+#endif  // BUILDFLAG(IS_ANDROID)
 IN_PROC_BROWSER_TEST_F(SingleClientDeviceInfoSyncTest,
-                       DownloadRemoteDevices_TransportOnly) {
+                       MAYBE_DownloadRemoteDevices_TransportOnly) {
   InjectDeviceInfoEntityToServer(/*suffix=*/1);
   InjectDeviceInfoEntityToServer(/*suffix=*/2);
 
   ASSERT_TRUE(SetupClients());
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // On ChromeOS, Sync-the-feature gets started automatically once a primary
-  // account is signed in. To prevent that, explicitly set SyncRequested to
-  // false.
-  GetSyncService(0)->GetUserSettings()->SetSyncRequested(false);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   // Setup a primary account, but don't actually enable Sync-the-feature (so
   // that Sync will start in transport mode).
@@ -367,7 +366,8 @@ IN_PROC_BROWSER_TEST_F(SingleClientDeviceInfoSyncTest,
               IsSupersetOf({HasCacheGuid(CacheGuidForSuffix(1)),
                             HasCacheGuid(CacheGuidForSuffix(2))}));
 }
-#endif  // !BUILDFLAG(IS_ANDROID)
+
+#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
 IN_PROC_BROWSER_TEST_F(SingleClientDeviceInfoSyncTest,
                        ShouldSetTheOnlyClientFlag) {
@@ -522,16 +522,24 @@ IN_PROC_BROWSER_TEST_F(SingleClientDeviceInfoSyncTest,
   ASSERT_THAT(server_device_infos,
               ElementsAre(HasCacheGuid(GetLocalCacheGuid())));
 
-  GetClient(0)->StopSyncServiceWithoutClearingData();
-  // Add a DeviceInfo tombstone to cause a commit request within the same sync
-  // cycle (removing local DeviceInfo will cause its reupload).
+  // Simulate going offline to have both downloading and committing updates in
+  // the same sync cycle.
+  fake_server::FakeServerHttpPostProvider::DisableNetwork();
+
+  // Add a DeviceInfo tombstone to cause a commit request (removing local
+  // DeviceInfo will cause its reupload).
   GetFakeServer()->InjectEntity(
       syncer::PersistentTombstoneEntity::CreateFromEntity(
           server_device_infos.front()));
-  // Add a new remote device to verify that single_client flag is not set.
-  InjectDeviceInfoEntityToServer(/*suffix=*/1);
-  GetClient(0)->StartSyncService();
 
+  // Simulate DeviceInfo update from a new remote client.
+  InjectDeviceInfoEntityToServer(/*suffix=*/1);
+
+  // Simulate going online. This starts a new sync cycle with both GetUpdates
+  // and Commit requests.
+  fake_server::FakeServerHttpPostProvider::EnableNetwork();
+
+  // Waiting for a local DeviceInfo reupload.
   ASSERT_TRUE(ServerDeviceInfoMatchChecker(
                   UnorderedElementsAre(HasCacheGuid(GetLocalCacheGuid()),
                                        HasCacheGuid(CacheGuidForSuffix(1))))
@@ -540,10 +548,15 @@ IN_PROC_BROWSER_TEST_F(SingleClientDeviceInfoSyncTest,
   sync_pb::ClientToServerMessage message;
   GetFakeServer()->GetLastCommitMessage(&message);
 
+  // Verify that all the optimization flags are omitted.
   EXPECT_FALSE(message.commit().config_params().single_client());
   EXPECT_FALSE(message.commit()
                    .config_params()
                    .single_client_with_standalone_invalidations());
+  EXPECT_THAT(message.commit()
+                  .config_params()
+                  .fcm_registration_tokens_for_interested_clients(),
+              IsEmpty());
 }
 
 IN_PROC_BROWSER_TEST_F(SingleClientDeviceInfoSyncTest,
@@ -600,6 +613,7 @@ IN_PROC_BROWSER_TEST_F(SingleClientDeviceInfoSyncTest,
   ASSERT_TRUE(SetupClients());
   ASSERT_TRUE(GetClient(0)->AwaitEngineInitialization());
   ASSERT_TRUE(GetClient(0)->AwaitSyncSetupCompletion());
+  ASSERT_TRUE(GetClient(0)->AwaitInvalidationsStatus(/*expected_status=*/true));
 
   bool has_local_changes = false;
   base::RunLoop run_loop;

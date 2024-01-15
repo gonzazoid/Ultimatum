@@ -9,7 +9,7 @@
 #include <list>
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/numerics/safe_conversions.h"
@@ -18,7 +18,6 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/sys_byteorder.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "content/browser/speech/speech_recognition_engine.h"
 #include "content/browser/speech/speech_recognition_manager_impl.h"
@@ -26,7 +25,6 @@
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/google_streaming_api.pb.h"
-#include "content/public/browser/notification_types.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
@@ -124,7 +122,7 @@ class MockCapturerSource : public media::AudioCapturerSource {
  private:
   StartCallback start_callback_;
   StopCallback stop_callback_;
-  raw_ptr<CaptureCallback, DanglingUntriaged> capture_callback_;
+  raw_ptr<CaptureCallback, AcrossTasksDanglingUntriaged> capture_callback_;
   media::AudioParameters audio_parameters_;
 };
 
@@ -276,7 +274,7 @@ class SpeechRecognitionBrowserTest : public ContentBrowserTest {
 
     const int n_buffers = duration_ms / ms_per_buffer;
     for (int i = 0; i < n_buffers; ++i) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(&FeedSingleBufferToAudioCapturerSource, audio_params,
                          capture_callback, buffer_size, feed_with_noise));

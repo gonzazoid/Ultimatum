@@ -9,6 +9,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/timer/timer.h"
 #include "net/base/completion_repeating_callback.h"
 #include "net/base/io_buffer.h"
@@ -30,7 +31,7 @@ class NET_EXPORT_PRIVATE QuicChromiumPacketWriter
   // repeated memory allocations.  This packet writer only ever has a
   // single write in flight, a constraint inherited from the interface
   // of the underlying datagram Socket.
-  class NET_EXPORT_PRIVATE ReusableIOBuffer : public IOBuffer {
+  class NET_EXPORT_PRIVATE ReusableIOBuffer : public IOBufferWithSize {
    public:
     explicit ReusableIOBuffer(size_t capacity);
 
@@ -86,11 +87,13 @@ class NET_EXPORT_PRIVATE QuicChromiumPacketWriter
   void WritePacketToSocket(scoped_refptr<ReusableIOBuffer> packet);
 
   // quic::QuicPacketWriter
-  quic::WriteResult WritePacket(const char* buffer,
-                                size_t buf_len,
-                                const quic::QuicIpAddress& self_address,
-                                const quic::QuicSocketAddress& peer_address,
-                                quic::PerPacketOptions* options) override;
+  quic::WriteResult WritePacket(
+      const char* buffer,
+      size_t buf_len,
+      const quic::QuicIpAddress& self_address,
+      const quic::QuicSocketAddress& peer_address,
+      quic::PerPacketOptions* options,
+      const quic::QuicPacketWriterParams& params) override;
   bool IsWriteBlocked() const override;
   void SetWritable() override;
   absl::optional<int> MessageTooBigErrorCode() const override;
@@ -98,6 +101,7 @@ class NET_EXPORT_PRIVATE QuicChromiumPacketWriter
       const quic::QuicSocketAddress& peer_address) const override;
   bool SupportsReleaseTime() const override;
   bool IsBatchMode() const override;
+  bool SupportsEcn() const override;
   quic::QuicPacketBuffer GetNextWriteLocation(
       const quic::QuicIpAddress& self_address,
       const quic::QuicSocketAddress& peer_address) override;
@@ -105,13 +109,17 @@ class NET_EXPORT_PRIVATE QuicChromiumPacketWriter
 
   void OnWriteComplete(int rv);
 
+  // If the writer has enqueued a task to retry, OnSocketClosed() must be called
+  // when the socket is closed to avoid using an invalid socket.
+  bool OnSocketClosed(DatagramClientSocket* socket);
+
  private:
   void SetPacket(const char* buffer, size_t buf_len);
   bool MaybeRetryAfterWriteError(int rv);
   void RetryPacketAfterNoBuffers();
   quic::WriteResult WritePacketToSocketImpl();
   raw_ptr<DatagramClientSocket, DanglingUntriaged> socket_;  // Unowned.
-  raw_ptr<Delegate, DanglingUntriaged> delegate_ = nullptr;  // Unowned.
+  raw_ptr<Delegate> delegate_ = nullptr;  // Unowned.
   // Reused for every packet write for the lifetime of the writer.  Is
   // moved to the delegate in the case of a write error.
   scoped_refptr<ReusableIOBuffer> packet_;

@@ -5,6 +5,7 @@
 #include "ui/base/x/x11_user_input_monitor.h"
 
 #include "base/logging.h"
+#include "base/task/single_thread_task_runner.h"
 #include "ui/events/devices/x11/xinput_util.h"
 #include "ui/events/keycodes/keyboard_code_conversion_x.h"
 #include "ui/gfx/x/future.h"
@@ -61,7 +62,7 @@ void XUserInputMonitor::StartMonitor(WriteKeyPressCallback& callback) {
   if (!connection_) {
     // TODO(jamiewalch): We should pass the connection in.
     if (auto* connection = x11::Connection::Get()) {
-      connection_ = x11::Connection::Get()->Clone();
+      connection_ = connection->Clone();
     } else {
       LOG(ERROR) << "Couldn't open X connection";
       StopMonitor();
@@ -75,9 +76,6 @@ void XUserInputMonitor::StartMonitor(WriteKeyPressCallback& callback) {
     StopMonitor();
     return;
   }
-  // Let the server know the client XInput version.
-  connection_->xinput().XIQueryVersion(
-      {x11::Input::major_version, x11::Input::minor_version});
 
   x11::Input::XIEventMask mask{};
   SetXinputMask(&mask, x11::Input::RawDeviceEvent::RawKeyPress);

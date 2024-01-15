@@ -110,7 +110,7 @@ class MediaKeys::PendingAction final
 
   DOMArrayBuffer* Data() const {
     DCHECK_EQ(Type::kSetServerCertificate, type_);
-    return data_;
+    return data_.Get();
   }
 
   const String& StringData() const {
@@ -274,7 +274,8 @@ MediaKeys::MediaKeys(
     const WebVector<WebEncryptedMediaSessionType>& supported_session_types,
     std::unique_ptr<WebContentDecryptionModule> cdm,
     const MediaKeysConfig& config)
-    : ExecutionContextLifecycleObserver(context),
+    : ActiveScriptWrappable<MediaKeys>({}),
+      ExecutionContextLifecycleObserver(context),
       supported_session_types_(supported_session_types),
       cdm_(std::move(cdm)),
       config_(config),

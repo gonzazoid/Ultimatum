@@ -12,6 +12,7 @@ android_library("java") {
     "java/src/org/chromium/chrome/browser/uid/UuidBasedUniqueIdentificationGenerator.java",
   ]
   deps = [
+    "//base:base_java",
     "//chrome/browser/preferences:java",
     "//chrome/browser/util:java",
     "//third_party/androidx:androidx_annotation_annotation_java",
@@ -33,8 +34,6 @@ robolectric_library("junit") {
     "//chrome/browser/preferences:java",
     "//chrome/browser/util:java",
     "//chrome/test/android:chrome_java_unit_test_support",
-    "//third_party/android_deps:robolectric_all_java",
-    "//third_party/android_support_test_runner:runner_java",
     "//third_party/androidx:androidx_annotation_annotation_java",
     "//third_party/androidx:androidx_test_core_java",
     "//third_party/androidx:androidx_test_runner_java",

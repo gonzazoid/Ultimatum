@@ -7,9 +7,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 #include "device/bluetooth/bluetooth_discovery_filter.h"

@@ -18,8 +18,6 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size);
 
 namespace blink {
 
-// The enum entries below are written to histograms and thus cannot be deleted
-// or reordered.
 // New entries must be added immediately before the end.
 enum class OriginTrialTokenStatus {
   kSuccess = 0,
@@ -88,7 +86,8 @@ class BLINK_COMMON_EXPORT TrialToken {
       const std::string& feature_name,
       base::Time expiry_time,
       bool is_third_party,
-      UsageRestriction usage_restriction);
+      UsageRestriction usage_restriction,
+      const std::string& signature);
 
  protected:
   // Tests can access the Parse method directly to validate it, and so are

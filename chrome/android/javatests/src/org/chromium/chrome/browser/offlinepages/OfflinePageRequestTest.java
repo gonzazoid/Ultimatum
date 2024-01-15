@@ -4,8 +4,7 @@
 
 package org.chromium.chrome.browser.offlinepages;
 
-import android.support.test.InstrumentationRegistry;
-
+import androidx.test.core.app.ApplicationProvider;
 import androidx.test.filters.SmallTest;
 
 import org.junit.Assert;
@@ -47,21 +46,22 @@ public class OfflinePageRequestTest {
     @Before
     public void setUp() throws Exception {
         mActivityTestRule.startMainActivityOnBlankPage();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            if (!NetworkChangeNotifier.isInitialized()) {
-                NetworkChangeNotifier.init();
-            }
-            NetworkChangeNotifier.forceConnectivityState(true);
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    if (!NetworkChangeNotifier.isInitialized()) {
+                        NetworkChangeNotifier.init();
+                    }
+                    NetworkChangeNotifier.forceConnectivityState(true);
+                });
         mOfflinePageBridge = OfflineTestUtil.getOfflinePageBridge();
     }
 
     @Test
     @SmallTest
-    @DisabledTest(message = "crbug.com/786233")
     public void testLoadOfflinePageOnDisconnectedNetwork() throws Exception {
         EmbeddedTestServer testServer =
-                EmbeddedTestServer.createAndStartServer(InstrumentationRegistry.getContext());
+                EmbeddedTestServer.createAndStartServer(
+                        ApplicationProvider.getApplicationContext());
         String testUrl = testServer.getURL(TEST_PAGE);
         String aboutUrl = testServer.getURL(ABOUT_PAGE);
 
@@ -80,7 +80,9 @@ public class OfflinePageRequestTest {
         // Stop the server and also disconnect the network.
         testServer.stopAndDestroyServer();
         TestThreadUtils.runOnUiThreadBlocking(
-                () -> { NetworkChangeNotifier.forceConnectivityState(false); });
+                () -> {
+                    NetworkChangeNotifier.forceConnectivityState(false);
+                });
 
         // Load the page that has an offline copy. The offline page should be shown.
         mActivityTestRule.loadUrl(testUrl);
@@ -90,10 +92,10 @@ public class OfflinePageRequestTest {
 
     @Test
     @SmallTest
-    @DisabledTest(message = "crbug.com/786233")
     public void testLoadOfflinePageWithFragmentOnDisconnectedNetwork() throws Exception {
         EmbeddedTestServer testServer =
-                EmbeddedTestServer.createAndStartServer(InstrumentationRegistry.getContext());
+                EmbeddedTestServer.createAndStartServer(
+                        ApplicationProvider.getApplicationContext());
         String testUrl = testServer.getURL(TEST_PAGE);
         String testUrlWithFragment = testUrl + "#ref";
 
@@ -107,7 +109,9 @@ public class OfflinePageRequestTest {
         // Stop the server and also disconnect the network.
         testServer.stopAndDestroyServer();
         TestThreadUtils.runOnUiThreadBlocking(
-                () -> { NetworkChangeNotifier.forceConnectivityState(false); });
+                () -> {
+                    NetworkChangeNotifier.forceConnectivityState(false);
+                });
 
         // Load the URL without the fragment. The offline page should be shown.
         mActivityTestRule.loadUrl(testUrl);
@@ -121,7 +125,8 @@ public class OfflinePageRequestTest {
     public void testLoadOfflinePageFromDownloadsOnDisconnectedNetwork() throws Exception {
         // Specifically tests saving to and loading from Downloads.
         EmbeddedTestServer testServer =
-                EmbeddedTestServer.createAndStartServer(InstrumentationRegistry.getContext());
+                EmbeddedTestServer.createAndStartServer(
+                        ApplicationProvider.getApplicationContext());
         String testUrl = testServer.getURL(TEST_PAGE);
         String aboutUrl = testServer.getURL(ABOUT_PAGE);
 
@@ -141,7 +146,9 @@ public class OfflinePageRequestTest {
         // Stop the server and also disconnect the network.
         testServer.stopAndDestroyServer();
         TestThreadUtils.runOnUiThreadBlocking(
-                () -> { NetworkChangeNotifier.forceConnectivityState(false); });
+                () -> {
+                    NetworkChangeNotifier.forceConnectivityState(false);
+                });
 
         // Load the page that has an offline copy. The offline page should be shown.
         mActivityTestRule.loadUrl(testUrl);
@@ -153,31 +160,39 @@ public class OfflinePageRequestTest {
         mActivityTestRule.loadUrl(url);
 
         final Semaphore semaphore = new Semaphore(0);
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mOfflinePageBridge.savePage(
-                    mActivityTestRule.getWebContents(), clientId, new SavePageCallback() {
-                        @Override
-                        public void onSavePageDone(int savePageResult, String url, long offlineId) {
-                            Assert.assertEquals(
-                                    "Save failed.", SavePageResult.SUCCESS, savePageResult);
-                            semaphore.release();
-                        }
-                    });
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mOfflinePageBridge.savePage(
+                            mActivityTestRule.getWebContents(),
+                            clientId,
+                            new SavePageCallback() {
+                                @Override
+                                public void onSavePageDone(
+                                        int savePageResult, String url, long offlineId) {
+                                    Assert.assertEquals(
+                                            "Save failed.", SavePageResult.SUCCESS, savePageResult);
+                                    semaphore.release();
+                                }
+                            });
+                });
         Assert.assertTrue(semaphore.tryAcquire(TIMEOUT_MS, TimeUnit.MILLISECONDS));
     }
 
     private boolean isOfflinePage(final Tab tab) {
         final boolean[] isOffline = new boolean[1];
         TestThreadUtils.runOnUiThreadBlocking(
-                () -> { isOffline[0] = OfflinePageUtils.isOfflinePage(tab); });
+                () -> {
+                    isOffline[0] = OfflinePageUtils.isOfflinePage(tab);
+                });
         return isOffline[0];
     }
 
     private boolean isErrorPage(final Tab tab) {
         final boolean[] isShowingError = new boolean[1];
         TestThreadUtils.runOnUiThreadBlocking(
-                () -> { isShowingError[0] = tab.isShowingErrorPage(); });
+                () -> {
+                    isShowingError[0] = tab.isShowingErrorPage();
+                });
         return isShowingError[0];
     }
 }

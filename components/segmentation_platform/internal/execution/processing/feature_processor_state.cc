@@ -4,9 +4,11 @@
 
 #include "components/segmentation_platform/internal/execution/processing/feature_processor_state.h"
 
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "components/segmentation_platform/internal/database/ukm_types.h"
 #include "components/segmentation_platform/internal/metadata/metadata_utils.h"
+#include "components/segmentation_platform/internal/stats.h"
 #include "components/segmentation_platform/public/config.h"
 
 namespace segmentation_platform::processing {
@@ -17,20 +19,22 @@ FeatureProcessorState::FeatureProcessorState()
       segment_id_(SegmentId::OPTIMIZATION_TARGET_UNKNOWN) {}
 
 FeatureProcessorState::FeatureProcessorState(
+    FeatureProcessorStateId id,
     base::Time prediction_time,
+    base::Time observation_time,
     base::TimeDelta bucket_duration,
     SegmentId segment_id,
     scoped_refptr<InputContext> input_context,
     FeatureListQueryProcessor::FeatureProcessorCallback callback)
-    : prediction_time_(prediction_time),
+    : id_(id),
+      prediction_time_(prediction_time),
+      observation_time_(observation_time),
       bucket_duration_(bucket_duration),
       segment_id_(segment_id),
       input_context_(std::move(input_context)),
       callback_(std::move(callback)) {}
 
-FeatureProcessorState::~FeatureProcessorState() {
-  DCHECK(callback_.is_null());
-}
+FeatureProcessorState::~FeatureProcessorState() = default;
 
 void FeatureProcessorState::SetError(stats::FeatureProcessingError error,
                                      const std::string& message) {
@@ -41,6 +45,10 @@ void FeatureProcessorState::SetError(stats::FeatureProcessingError error,
              << ", message: " << message;
   error_ = true;
   input_tensor_.clear();
+}
+
+base::WeakPtr<FeatureProcessorState> FeatureProcessorState::GetWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 absl::optional<std::pair<std::unique_ptr<QueryProcessor>, bool>>
@@ -91,8 +99,10 @@ void FeatureProcessorState::OnFinishProcessing() {
   if (!error_) {
     input = MergeTensors(std::move(input_tensor_));
     output = MergeTensors(std::move(output_tensor_));
+    stats::RecordFeatureProcessingError(
+        segment_id_, stats::FeatureProcessingError::kSuccess);
   }
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback_), error_, std::move(input),
                                 std::move(output)));
 }
@@ -108,7 +118,7 @@ std::vector<float> FeatureProcessorState::MergeTensors(
     SetError(stats::FeatureProcessingError::kResultTensorError);
   } else {
     for (size_t i = 0; i < tensor.size(); ++i) {
-      for (auto& value : tensor.at(i)) {
+      for (const ProcessedValue& value : tensor.at(i)) {
         if (value.type == ProcessedValue::Type::FLOAT) {
           result.push_back(value.float_val);
         } else {

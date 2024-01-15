@@ -15,9 +15,8 @@
 #include "ui/base/ime/ash/text_input_method.h"
 
 namespace ui {
-class TextInputMethod;
 class KeyEvent;
-}  // namespace ui
+}
 
 namespace ash {
 namespace ime {
@@ -26,7 +25,7 @@ struct AssistiveWindow;
 
 namespace input_method {
 
-class MockInputMethodEngine : public ui::TextInputMethod {
+class MockInputMethodEngine : public TextInputMethod {
  public:
   MockInputMethodEngine();
   ~MockInputMethodEngine() override;
@@ -34,24 +33,21 @@ class MockInputMethodEngine : public ui::TextInputMethod {
   // TextInputMethod overrides.
   void Focus(const InputContext& input_context) override;
   void Blur() override;
-  void OnTouch(ui::EventPointerType pointerType) override;
   void Enable(const std::string& component_id) override;
   void Disable() override;
   void Reset() override;
   void ProcessKeyEvent(const ui::KeyEvent& key_event,
                        KeyEventDoneCallback callback) override;
   void SetSurroundingText(const std::u16string& text,
-                          uint32_t cursor_pos,
-                          uint32_t anchor_pos,
+                          gfx::Range selection_range,
                           uint32_t offset_pos) override;
-  void SetCompositionBounds(const std::vector<gfx::Rect>& bounds) override;
   void SetCaretBounds(const gfx::Rect& caret_bounds) override;
   ui::VirtualKeyboardController* GetVirtualKeyboardController() const override;
   void PropertyActivate(const std::string& property_name) override;
   void CandidateClicked(uint32_t index) override;
   void AssistiveWindowChanged(const ash::ime::AssistiveWindow& window) override;
-  void SetMirroringEnabled(bool mirroring_enabled) override;
-  void SetCastingEnabled(bool casting_enabled) override;
+  void SetMirroringEnabled(bool mirroring_enabled);
+  void SetCastingEnabled(bool casting_enabled);
   bool IsReadyForTesting() override;
 
   const std::string& GetActiveComponentId() const;
@@ -68,12 +64,5 @@ class MockInputMethodEngine : public ui::TextInputMethod {
 
 }  // namespace input_method
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-namespace input_method {
-using ::ash::input_method::MockInputMethodEngine;
-}  // namespace input_method
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_INPUT_METHOD_MOCK_INPUT_METHOD_ENGINE_H_

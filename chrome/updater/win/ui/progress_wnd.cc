@@ -4,8 +4,12 @@
 
 #include "chrome/updater/win/ui/progress_wnd.h"
 
+#include <memory>
+#include <string>
+
+#include "base/check.h"
 #include "base/check_op.h"
-#include "base/i18n/message_formatter.h"
+#include "base/logging.h"
 #include "base/notreached.h"
 #include "base/process/launch.h"
 #include "base/ranges/algorithm.h"
@@ -14,22 +18,19 @@
 #include "base/strings/string_util_win.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
-#include "chrome/updater/constants.h"
-#include "chrome/updater/util.h"
+#include "base/win/scoped_localalloc.h"
+#include "chrome/updater/app/app_install_progress.h"
+#include "chrome/updater/app/app_install_util_win.h"
+#include "chrome/updater/util/win_util.h"
 #include "chrome/updater/win/ui/l10n_util.h"
 #include "chrome/updater/win/ui/resources/updater_installer_strings.h"
 #include "chrome/updater/win/ui/ui_constants.h"
 #include "chrome/updater/win/ui/ui_ctls.h"
 #include "chrome/updater/win/ui/ui_util.h"
-#include "chrome/updater/win/win_util.h"
 
-namespace updater {
-namespace ui {
+namespace updater::ui {
 
 namespace {
-
-// TODO(crbug.com/1065588): remove this symbol.
-const char16_t kChromeAppId[] = u"{8A69D345-D564-463C-AFF1-A69D9E530F96}";
 
 // The current UI shows to the user only one completion type, even though
 // there could be multiple applications in a bundle, where each application
@@ -62,8 +63,9 @@ static_assert(
 
 int GetPriority(CompletionCodes code) {
   for (size_t i = 0; i < std::size(kCompletionCodesActionPriority); ++i) {
-    if (kCompletionCodesActionPriority[i] == code)
+    if (kCompletionCodesActionPriority[i] == code) {
       return i;
+    }
   }
 
   NOTREACHED();
@@ -82,14 +84,15 @@ bool AreAllAppsCanceled(const std::vector<AppCompletionInfo>& apps_info) {
 InstallStoppedWnd::InstallStoppedWnd(WTL::CMessageLoop* message_loop,
                                      HWND parent)
     : message_loop_(message_loop), parent_(parent) {
-  DCHECK(message_loop);
-  DCHECK(::IsWindow(parent));
+  CHECK(message_loop);
+  CHECK(::IsWindow(parent));
 }
 
 InstallStoppedWnd::~InstallStoppedWnd() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  if (IsWindow())
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (IsWindow()) {
     CloseWindow();
+  }
 }
 
 BOOL InstallStoppedWnd::PreTranslateMessage(MSG* msg) {
@@ -97,8 +100,8 @@ BOOL InstallStoppedWnd::PreTranslateMessage(MSG* msg) {
 }
 
 HRESULT InstallStoppedWnd::CloseWindow() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK(IsWindow());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  CHECK(IsWindow());
   ::EnableWindow(parent_, true);
   return DestroyWindow() ? S_OK : HRESULTFromLastError();
 }
@@ -125,7 +128,7 @@ LRESULT InstallStoppedWnd::OnInitDialog(UINT, WPARAM, LPARAM, BOOL& handled) {
 }
 
 LRESULT InstallStoppedWnd::OnClickButton(WORD, WORD id, HWND, BOOL& handled) {
-  DCHECK(id == IDOK || id == IDCANCEL);
+  CHECK(id == IDOK || id == IDCANCEL);
   ::PostMessage(parent_, WM_INSTALL_STOPPED, id, 0);
   handled = true;
   return 0;
@@ -144,8 +147,8 @@ ProgressWnd::ProgressWnd(WTL::CMessageLoop* message_loop, HWND parent)
                   parent) {}
 
 ProgressWnd::~ProgressWnd() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK(!IsWindow());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  CHECK(!IsWindow());
   cur_state_ = States::STATE_END;
 }
 
@@ -158,7 +161,7 @@ LRESULT ProgressWnd::OnInitDialog(UINT message,
                                   WPARAM w_param,
                                   LPARAM l_param,
                                   BOOL& handled) {
-  // TODO(sorin): remove this when https://crbug.com/1010653 is fixed.
+  // TODO(crbug.com/1010653): remove this when the bug is fixed.
   HideWindowChildren(*this);
 
   InitializeDialog();
@@ -178,9 +181,10 @@ LRESULT ProgressWnd::OnInitDialog(UINT message,
 // Otherwise, the InstallStoppedWnd is displayed and the window is closed only
 // if the user chooses cancel.
 bool ProgressWnd::MaybeCloseWindow() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  if (!is_close_enabled())
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!is_close_enabled()) {
     return false;
+  }
 
   if (cur_state_ != States::STATE_COMPLETE_SUCCESS &&
       cur_state_ != States::STATE_COMPLETE_ERROR &&
@@ -222,8 +226,8 @@ LRESULT ProgressWnd::OnClickedButton(WORD notify_code,
                                      WORD id,
                                      HWND wnd_ctl,
                                      BOOL& handled) {
-  DCHECK(id == IDC_BUTTON1 || id == IDC_BUTTON2 || id == IDC_CLOSE);
-  DCHECK(events_sink_);
+  CHECK(id == IDC_BUTTON1 || id == IDC_BUTTON2 || id == IDC_CLOSE);
+  CHECK(events_sink_);
 
   switch (id) {
     case IDC_BUTTON1:
@@ -277,8 +281,8 @@ LRESULT ProgressWnd::OnInstallStopped(UINT msg,
                                       BOOL& handled) {
   install_stopped_wnd_.reset();
 
-  DCHECK(msg == WM_INSTALL_STOPPED);
-  DCHECK(wparam == IDOK || wparam == IDCANCEL);
+  CHECK_EQ(msg, WM_INSTALL_STOPPED);
+  CHECK(wparam == IDOK || wparam == IDCANCEL);
   switch (wparam) {
     case IDOK:
       break;
@@ -298,17 +302,20 @@ void ProgressWnd::HandleCancelRequest() {
   SetDlgItemText(IDC_INSTALLER_STATE_TEXT,
                  GetLocalizedString(IDS_CANCELING_BASE).c_str());
 
-  if (is_canceled_)
+  if (is_canceled_) {
     return;
+  }
   is_canceled_ = true;
-  if (events_sink_)
+  if (events_sink_) {
     events_sink_->DoCancel();
+  }
 }
 
 void ProgressWnd::OnCheckingForUpdate() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  if (!IsWindow())
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!IsWindow()) {
     return;
+  }
 
   cur_state_ = States::STATE_CHECKING_FOR_UPDATE;
 
@@ -318,29 +325,18 @@ void ProgressWnd::OnCheckingForUpdate() {
   ChangeControlState();
 }
 
-void ProgressWnd::OnUpdateAvailable(const std::u16string& app_id,
+void ProgressWnd::OnUpdateAvailable(const std::string& app_id,
                                     const std::u16string& app_name,
-                                    const std::u16string& version_string) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-
-  if (base::EqualsCaseInsensitiveASCII(app_id, kChromeAppId)) {
-    HBITMAP app_bitmap = reinterpret_cast<HBITMAP>(
-        ::LoadImage(GetCurrentModuleHandle(), MAKEINTRESOURCE(IDB_CHROME),
-                    IMAGE_BITMAP, 0, 0, LR_SHARED));
-    DCHECK(app_bitmap);
-    SendDlgItemMessage(IDC_APP_BITMAP, STM_SETIMAGE, IMAGE_BITMAP,
-                       reinterpret_cast<LPARAM>(app_bitmap));
-  }
-
-  if (!IsWindow())
-    return;
+                                    const base::Version& version) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
-void ProgressWnd::OnWaitingToDownload(const std::u16string& app_id,
+void ProgressWnd::OnWaitingToDownload(const std::string& app_id,
                                       const std::u16string& app_name) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  if (!IsWindow())
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!IsWindow()) {
     return;
+  }
 
   cur_state_ = States::STATE_WAITING_TO_DOWNLOAD;
 
@@ -352,21 +348,22 @@ void ProgressWnd::OnWaitingToDownload(const std::u16string& app_id,
 }
 
 // May be called repeatedly during download.
-void ProgressWnd::OnDownloading(const std::u16string& app_id,
+void ProgressWnd::OnDownloading(const std::string& app_id,
                                 const std::u16string& app_name,
                                 int time_remaining_ms,
                                 int pos) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  if (!IsWindow())
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!IsWindow()) {
     return;
+  }
 
-  DCHECK(0 <= pos && pos <= 100);
+  CHECK(0 <= pos && pos <= 100);
 
   cur_state_ = States::STATE_DOWNLOADING;
 
   std::wstring s;
 
-  // TODO(sorin): should use base::TimeDelta, https://crbug.com/1016921
+  // TODO(crbug.com/1016921): use base::TimeDelta.
   int time_remaining_sec = CeilingDivide(time_remaining_ms, kMsPerSec);
   if (is_canceled_) {
     s = GetLocalizedString(IDS_CANCELING_BASE);
@@ -393,22 +390,27 @@ void ProgressWnd::OnDownloading(const std::u16string& app_id,
   // Reduces flicker by only updating the control if the text has changed.
   std::wstring current_text;
   ui::GetDlgItemText(*this, IDC_INSTALLER_STATE_TEXT, &current_text);
-  if (s != current_text)
+  if (s != current_text) {
     SetDlgItemText(IDC_INSTALLER_STATE_TEXT, s.c_str());
+  }
 
   SetMarqueeMode(pos == 0);
-  if (pos > 0)
+  if (pos > 0) {
     SendDlgItemMessage(IDC_PROGRESS, PBM_SETPOS, pos, 0);
+  }
 
   ChangeControlState();
 }
 
-void ProgressWnd::OnWaitingRetryDownload(const std::u16string& app_id,
+void ProgressWnd::OnWaitingRetryDownload(const std::string& app_id,
                                          const std::u16string& app_name,
                                          const base::Time& next_retry_time) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  if (!IsWindow())
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!IsWindow()) {
     return;
+  }
+
+  cur_state_ = States::STATE_WAITING_TO_DOWNLOAD;
 
   // Display the next retry time interval if |next_retry_time| is in the future.
   const auto retry_time_in_sec =
@@ -422,13 +424,14 @@ void ProgressWnd::OnWaitingRetryDownload(const std::u16string& app_id,
   }
 }
 
-void ProgressWnd::OnWaitingToInstall(const std::u16string& app_id,
+// TODO(crbug.com/1290331): handle the install cancellation.
+void ProgressWnd::OnWaitingToInstall(const std::string& app_id,
                                      const std::u16string& app_name,
-                                     bool* can_start_install) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK(can_start_install);
-  if (!IsWindow())
+                                     bool* /*can_start_install*/) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!IsWindow()) {
     return;
+  }
 
   if (States::STATE_WAITING_TO_INSTALL != cur_state_) {
     cur_state_ = States::STATE_WAITING_TO_INSTALL;
@@ -436,18 +439,17 @@ void ProgressWnd::OnWaitingToInstall(const std::u16string& app_id,
                    GetLocalizedString(IDS_WAITING_TO_INSTALL_BASE).c_str());
     ChangeControlState();
   }
-
-  *can_start_install = !IsInstallStoppedWindowPresent();
 }
 
 // May be called repeatedly during install.
-void ProgressWnd::OnInstalling(const std::u16string& app_id,
+void ProgressWnd::OnInstalling(const std::string& app_id,
                                const std::u16string& app_name,
                                int time_remaining_ms,
                                int pos) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  if (!IsWindow())
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!IsWindow()) {
     return;
+  }
 
   if (States::STATE_INSTALLING != cur_state_) {
     cur_state_ = States::STATE_INSTALLING;
@@ -457,25 +459,27 @@ void ProgressWnd::OnInstalling(const std::u16string& app_id,
   }
 
   SetMarqueeMode(pos <= 0);
-  if (pos > 0)
+  if (pos > 0) {
     SendDlgItemMessage(IDC_PROGRESS, PBM_SETPOS, pos, 0);
+  }
 }
 
 void ProgressWnd::OnPause() {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  if (!IsWindow())
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!IsWindow()) {
     return;
+  }
 
   cur_state_ = States::STATE_PAUSED;
   ChangeControlState();
 }
 
 void ProgressWnd::DeterminePostInstallUrls(const ObserverCompletionInfo& info) {
-  DCHECK(post_install_urls_.empty());
+  CHECK(post_install_urls_.empty());
   post_install_urls_.clear();
 
   for (const AppCompletionInfo& app_info : info.apps_info) {
-    if (!app_info.post_install_url.empty() &&
+    if (!app_info.post_install_url.is_empty() &&
         (app_info.completion_code ==
              CompletionCodes::COMPLETION_CODE_RESTART_ALL_BROWSERS ||
          app_info.completion_code ==
@@ -483,18 +487,18 @@ void ProgressWnd::DeterminePostInstallUrls(const ObserverCompletionInfo& info) {
       post_install_urls_.push_back(app_info.post_install_url);
     }
   }
-  DCHECK(!post_install_urls_.empty());
+  CHECK(!post_install_urls_.empty());
 }
 
-CompletionCodes ProgressWnd::GetBundleOverallCompletionCode(
-    const ObserverCompletionInfo& info) const {
+CompletionCodes ProgressWnd::GetBundleCompletionCode(
+    const ObserverCompletionInfo& info) {
   if (info.completion_code == CompletionCodes::COMPLETION_CODE_ERROR ||
       info.completion_code ==
           CompletionCodes::COMPLETION_CODE_INSTALL_FINISHED_BEFORE_CANCEL) {
     return info.completion_code;
   }
 
-  DCHECK(info.completion_code == CompletionCodes::COMPLETION_CODE_SUCCESS);
+  CHECK_EQ(info.completion_code, CompletionCodes::COMPLETION_CODE_SUCCESS);
 
   return info.apps_info.empty()
              ? kCompletionCodesActionPriority[0]
@@ -508,46 +512,45 @@ CompletionCodes ProgressWnd::GetBundleOverallCompletionCode(
 }
 
 std::wstring ProgressWnd::GetBundleCompletionErrorMessages(
-    const ObserverCompletionInfo& info) const {
+    const ObserverCompletionInfo& info) {
   // Combine non-empty app installation completion messages. App-specific
   // installation error message usually gives more details than the generic one.
-  std::vector<std::wstring> completion_texts;
+  std::vector<std::u16string> completion_texts;
   for (const AppCompletionInfo& app_info : info.apps_info) {
-    if (!app_info.completion_message.empty())
-      completion_texts.push_back(base::AsWString(app_info.completion_message));
+    if (!app_info.completion_message.empty()) {
+      completion_texts.push_back(app_info.completion_message);
+    }
   }
 
   // Or fallback to the default bundle failure message if nothing is available.
-  if (completion_texts.empty() && !info.completion_text.empty())
+  if (completion_texts.empty() && !info.completion_text.empty()) {
     completion_texts.push_back(info.completion_text);
+  }
 
-  // TODO(crbug.com/1353148): Legacy updater allows simple HTML elements in the
-  // completion message for better presentation of the installation result.
-  // Review if feature parity is needed, which also enables a better message
-  // layout.
-  //
-  return base::JoinString(completion_texts, L"\n");
+  return base::UTF16ToWide(base::JoinString(completion_texts, u"\n"));
 }
 
 void ProgressWnd::OnComplete(const ObserverCompletionInfo& observer_info) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (!CompleteWnd::OnComplete())
+  if (!CompleteWnd::OnComplete()) {
     return;
+  }
 
   CloseInstallStoppedWindow();
 
   bool launch_commands_succeeded = LaunchCmdLines(observer_info);
 
   CompletionCodes overall_completion_code =
-      GetBundleOverallCompletionCode(observer_info);
+      GetBundleCompletionCode(observer_info);
   switch (overall_completion_code) {
     case CompletionCodes::COMPLETION_CODE_SUCCESS:
     case CompletionCodes::COMPLETION_CODE_LAUNCH_COMMAND:
     case CompletionCodes::COMPLETION_CODE_INSTALL_FINISHED_BEFORE_CANCEL:
       cur_state_ = States::STATE_COMPLETE_SUCCESS;
-      CompleteWnd::DisplayCompletionDialog(true, observer_info.completion_text,
-                                           observer_info.help_url);
+      CompleteWnd::DisplayCompletionDialog(
+          true, base::UTF16ToWide(observer_info.completion_text),
+          observer_info.help_url.possibly_invalid_spec());
       break;
     case CompletionCodes::COMPLETION_CODE_ERROR:
       if (AreAllAppsCanceled(observer_info.apps_info)) {
@@ -557,7 +560,7 @@ void ProgressWnd::OnComplete(const ObserverCompletionInfo& observer_info) {
       cur_state_ = States::STATE_COMPLETE_ERROR;
       CompleteWnd::DisplayCompletionDialog(
           false, GetBundleCompletionErrorMessages(observer_info),
-          observer_info.help_url);
+          observer_info.help_url.possibly_invalid_spec());
       break;
     case CompletionCodes::COMPLETION_CODE_RESTART_ALL_BROWSERS:
       cur_state_ = States::STATE_COMPLETE_RESTART_ALL_BROWSERS;
@@ -567,7 +570,7 @@ void ProgressWnd::OnComplete(const ObserverCompletionInfo& observer_info) {
                      GetLocalizedString(IDS_RESTART_LATER_BASE).c_str());
       SetDlgItemText(IDC_COMPLETE_TEXT,
                      GetLocalizedStringF(IDS_TEXT_RESTART_ALL_BROWSERS_BASE,
-                                         base::AsWString(bundle_name()))
+                                         base::UTF16ToWide(bundle_name()))
                          .c_str());
       DeterminePostInstallUrls(observer_info);
       break;
@@ -579,7 +582,7 @@ void ProgressWnd::OnComplete(const ObserverCompletionInfo& observer_info) {
                      GetLocalizedString(IDS_RESTART_LATER_BASE).c_str());
       SetDlgItemText(IDC_COMPLETE_TEXT,
                      GetLocalizedStringF(IDS_TEXT_RESTART_BROWSER_BASE,
-                                         base::AsWString(bundle_name()))
+                                         base::UTF16ToWide(bundle_name()))
                          .c_str());
       DeterminePostInstallUrls(observer_info);
       break;
@@ -591,7 +594,7 @@ void ProgressWnd::OnComplete(const ObserverCompletionInfo& observer_info) {
                      GetLocalizedString(IDS_RESTART_LATER_BASE).c_str());
       SetDlgItemText(IDC_COMPLETE_TEXT,
                      GetLocalizedStringF(IDS_TEXT_RESTART_COMPUTER_BASE,
-                                         base::AsWString(bundle_name()))
+                                         base::UTF16ToWide(bundle_name()))
                          .c_str());
       break;
     case CompletionCodes::COMPLETION_CODE_RESTART_ALL_BROWSERS_NOTICE_ONLY:
@@ -599,24 +602,24 @@ void ProgressWnd::OnComplete(const ObserverCompletionInfo& observer_info) {
       CompleteWnd::DisplayCompletionDialog(
           true,
           GetLocalizedStringF(IDS_TEXT_RESTART_ALL_BROWSERS_BASE,
-                              base::AsWString(bundle_name())),
-          observer_info.help_url);
+                              base::UTF16ToWide(bundle_name())),
+          observer_info.help_url.possibly_invalid_spec());
       break;
     case CompletionCodes::COMPLETION_CODE_REBOOT_NOTICE_ONLY:
       cur_state_ = States::STATE_COMPLETE_SUCCESS;
       CompleteWnd::DisplayCompletionDialog(
           true,
           GetLocalizedStringF(IDS_TEXT_RESTART_COMPUTER_BASE,
-                              base::AsWString(bundle_name())),
-          observer_info.help_url);
+                              base::UTF16ToWide(bundle_name())),
+          observer_info.help_url.possibly_invalid_spec());
       break;
     case CompletionCodes::COMPLETION_CODE_RESTART_BROWSER_NOTICE_ONLY:
       cur_state_ = States::STATE_COMPLETE_SUCCESS;
       CompleteWnd::DisplayCompletionDialog(
           true,
           GetLocalizedStringF(IDS_TEXT_RESTART_BROWSER_BASE,
-                              base::AsWString(bundle_name())),
-          observer_info.help_url);
+                              base::UTF16ToWide(bundle_name())),
+          observer_info.help_url.possibly_invalid_spec());
       break;
     case CompletionCodes::COMPLETION_CODE_EXIT_SILENTLY_ON_LAUNCH_COMMAND:
       cur_state_ = States::STATE_COMPLETE_SUCCESS;
@@ -624,69 +627,36 @@ void ProgressWnd::OnComplete(const ObserverCompletionInfo& observer_info) {
         CloseWindow();
         return;
       }
-      CompleteWnd::DisplayCompletionDialog(true, observer_info.completion_text,
-                                           observer_info.help_url);
+      CompleteWnd::DisplayCompletionDialog(
+          true, base::UTF16ToWide(observer_info.completion_text),
+          observer_info.help_url.possibly_invalid_spec());
       break;
     case CompletionCodes::COMPLETION_CODE_EXIT_SILENTLY:
       cur_state_ = States::STATE_COMPLETE_SUCCESS;
       CloseWindow();
       return;
-    default:
-      NOTREACHED();
-      break;
   }
 
   ChangeControlState();
 }
 
-HRESULT ProgressWnd::LaunchCmdLine(const AppCompletionInfo& app_info) {
-  if (app_info.post_install_launch_command_line.empty())
-    return S_OK;
-
-  if (app_info.completion_code !=
-          CompletionCodes::COMPLETION_CODE_LAUNCH_COMMAND &&
-      app_info.completion_code !=
-          CompletionCodes::COMPLETION_CODE_EXIT_SILENTLY_ON_LAUNCH_COMMAND) {
-    return S_OK;
-  }
-
-  DCHECK(SUCCEEDED(app_info.error_code));
-  DCHECK(!app_info.is_noupdate);
-
-  auto process =
-      base::LaunchProcess(app_info.post_install_launch_command_line, {});
-  return process.IsValid() ? S_OK : HRESULTFromLastError();
-}
-
-bool ProgressWnd::LaunchCmdLines(const ObserverCompletionInfo& info) {
-  bool result = true;
-
-  for (size_t i = 0; i < info.apps_info.size(); ++i) {
-    const AppCompletionInfo& app_info = info.apps_info[i];
-    if (FAILED(app_info.error_code)) {
-      continue;
-    }
-    result &= SUCCEEDED(LaunchCmdLine(app_info));
-  }
-
-  return result;
-}
-
 HRESULT ProgressWnd::ChangeControlState() {
-  for (const auto& ctl : ctls_)
+  for (const auto& ctl : ctls_) {
     SetControlAttributes(ctl.id, ctl.attr[static_cast<size_t>(cur_state_)]);
+  }
   return S_OK;
 }
 
 HRESULT ProgressWnd::SetMarqueeMode(bool is_marquee) {
   CWindow progress_bar = GetDlgItem(IDC_PROGRESS);
   LONG_PTR style = progress_bar.GetWindowLongPtr(GWL_STYLE);
-  if (is_marquee)
+  if (is_marquee) {
     style |= PBS_MARQUEE;
-  else
+  } else {
     style &= ~PBS_MARQUEE;
+  }
   progress_bar.SetWindowLongPtr(GWL_STYLE, style);
-  progress_bar.SendMessage(PBM_SETMARQUEE, !!is_marquee, 0);
+  progress_bar.SendMessage(PBM_SETMARQUEE, is_marquee, 0);
 
   return S_OK;
 }
@@ -704,5 +674,4 @@ bool ProgressWnd::CloseInstallStoppedWindow() {
   return false;
 }
 
-}  // namespace ui
-}  // namespace updater
+}  // namespace updater::ui

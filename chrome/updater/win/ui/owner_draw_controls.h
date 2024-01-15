@@ -8,21 +8,19 @@
 #include <windows.h>
 
 #include "base/win/atl.h"
+
+#include <atltypes.h>
+
 #include "chrome/updater/win/ui/ui_constants.h"
-
-// These headers must be included after base/win/atl.h.
-#include "./atlapp.h"
-#include "./atltypes.h"
-
+#include "third_party/wtl/include/atlapp.h"
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-but-set-variable"
 #pragma clang diagnostic ignored "-Wmissing-braces"
-#include "./atlctrls.h"
-#include "./atlframe.h"
+#include "third_party/wtl/include/atlctrls.h"
+#include "third_party/wtl/include/atlframe.h"
 #pragma clang diagnostic pop
 
-namespace updater {
-namespace ui {
+namespace updater::ui {
 
 class CaptionButton : public CWindowImpl<CaptionButton, WTL::CButton>,
                       public WTL::COwnerDraw<CaptionButton> {
@@ -331,7 +329,6 @@ class CustomProgressBarCtrl : public CWindowImpl<CustomProgressBarCtrl> {
   WTL::CBrush empty_frame_brush_;
 };
 
-}  // namespace ui
-}  // namespace updater
+}  // namespace updater::ui
 
 #endif  // CHROME_UPDATER_WIN_UI_OWNER_DRAW_CONTROLS_H_

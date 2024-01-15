@@ -25,16 +25,20 @@ class WebView;
 class WebUIBubbleDialogView : public views::WidgetObserver,
                               public views::BubbleDialogDelegateView,
                               public BubbleContentsWrapper::Host {
- public:
-  METADATA_HEADER(WebUIBubbleDialogView);
+  METADATA_HEADER(WebUIBubbleDialogView, views::BubbleDialogDelegateView)
 
+ public:
   // An optional anchor_rect can be passed to anchor the dialog to a specific
   // point on the screen. The provided anchor_rect will take precedent over the
   // anchor_view.
   WebUIBubbleDialogView(
       views::View* anchor_view,
-      BubbleContentsWrapper* contents_wrapper,
-      const absl::optional<gfx::Rect>& anchor_rect = absl::nullopt);
+      // Note that `contents_wrapper` has a lifetime that is unrelated
+      // to this View, so it needs to reference via a WeakPtr in case
+      // the contents wrapper is destroyed before `this`.
+      base::WeakPtr<BubbleContentsWrapper> contents_wrapper,
+      const std::optional<gfx::Rect>& anchor_rect = std::nullopt,
+      views::BubbleBorder::Arrow arrow = views::BubbleBorder::TOP_RIGHT);
   WebUIBubbleDialogView(const WebUIBubbleDialogView&) = delete;
   WebUIBubbleDialogView& operator=(const WebUIBubbleDialogView&) = delete;
   ~WebUIBubbleDialogView() override;
@@ -60,7 +64,7 @@ class WebUIBubbleDialogView : public views::WidgetObserver,
       const content::NativeWebKeyboardEvent& event) override;
 
   BubbleContentsWrapper* get_contents_wrapper_for_testing() {
-    return contents_wrapper_;
+    return contents_wrapper_.get();
   }
   void ResetWebUIContentsForTesting();
 
@@ -80,9 +84,9 @@ class WebUIBubbleDialogView : public views::WidgetObserver,
   // renderer process.
   views::UnhandledKeyboardEventHandler unhandled_keyboard_event_handler_;
 
-  raw_ptr<BubbleContentsWrapper> contents_wrapper_;
+  base::WeakPtr<BubbleContentsWrapper> contents_wrapper_;
   raw_ptr<views::WebView> web_view_;
-  absl::optional<gfx::Rect> bubble_anchor_;
+  std::optional<gfx::Rect> bubble_anchor_;
 
   base::ScopedObservation<views::Widget, views::WidgetObserver>
       bubble_widget_observation_{this};

@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "extensions/browser/api/lock_screen_data/data_item.h"
 #include "extensions/browser/api/lock_screen_data/lock_screen_item_storage.h"
@@ -42,9 +42,9 @@ std::string GetErrorString(lock_screen_data::OperationResult result) {
 
 }  // namespace
 
-LockScreenDataCreateFunction::LockScreenDataCreateFunction() {}
+LockScreenDataCreateFunction::LockScreenDataCreateFunction() = default;
 
-LockScreenDataCreateFunction::~LockScreenDataCreateFunction() {}
+LockScreenDataCreateFunction::~LockScreenDataCreateFunction() = default;
 
 ExtensionFunction::ResponseAction LockScreenDataCreateFunction::Run() {
   lock_screen_data::LockScreenItemStorage* storage =
@@ -64,10 +64,6 @@ ExtensionFunction::ResponseAction LockScreenDataCreateFunction::Run() {
 void LockScreenDataCreateFunction::OnDone(
     lock_screen_data::OperationResult result,
     const lock_screen_data::DataItem* item) {
-  UMA_HISTOGRAM_ENUMERATION(
-      "Apps.LockScreen.DataItemStorage.OperationResult.RegisterItem", result,
-      lock_screen_data::OperationResult::kCount);
-
   if (result != lock_screen_data::OperationResult::kSuccess) {
     Respond(Error(GetErrorString(result)));
     return;
@@ -79,9 +75,9 @@ void LockScreenDataCreateFunction::OnDone(
       ArgumentList(api::lock_screen_data::Create::Results::Create(item_info)));
 }
 
-LockScreenDataGetAllFunction::LockScreenDataGetAllFunction() {}
+LockScreenDataGetAllFunction::LockScreenDataGetAllFunction() = default;
 
-LockScreenDataGetAllFunction::~LockScreenDataGetAllFunction() {}
+LockScreenDataGetAllFunction::~LockScreenDataGetAllFunction() = default;
 
 ExtensionFunction::ResponseAction LockScreenDataGetAllFunction::Run() {
   lock_screen_data::LockScreenItemStorage* storage =
@@ -110,9 +106,9 @@ void LockScreenDataGetAllFunction::OnDone(
       ArgumentList(api::lock_screen_data::GetAll::Results::Create(items_info)));
 }
 
-LockScreenDataGetContentFunction::LockScreenDataGetContentFunction() {}
+LockScreenDataGetContentFunction::LockScreenDataGetContentFunction() = default;
 
-LockScreenDataGetContentFunction::~LockScreenDataGetContentFunction() {}
+LockScreenDataGetContentFunction::~LockScreenDataGetContentFunction() = default;
 
 ExtensionFunction::ResponseAction LockScreenDataGetContentFunction::Run() {
   lock_screen_data::LockScreenItemStorage* storage =
@@ -120,9 +116,9 @@ ExtensionFunction::ResponseAction LockScreenDataGetContentFunction::Run() {
   if (!storage)
     return RespondNow(Error("Not available"));
 
-  std::unique_ptr<api::lock_screen_data::GetContent::Params> params(
-      api::lock_screen_data::GetContent::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  std::optional<api::lock_screen_data::GetContent::Params> params =
+      api::lock_screen_data::GetContent::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   storage->GetItemContent(
       extension_id(), params->id,
@@ -133,10 +129,6 @@ ExtensionFunction::ResponseAction LockScreenDataGetContentFunction::Run() {
 void LockScreenDataGetContentFunction::OnDone(
     lock_screen_data::OperationResult result,
     std::unique_ptr<std::vector<char>> data) {
-  UMA_HISTOGRAM_ENUMERATION(
-      "Apps.LockScreen.DataItemStorage.OperationResult.ReadItem", result,
-      lock_screen_data::OperationResult::kCount);
-
   if (result == lock_screen_data::OperationResult::kSuccess) {
     Respond(ArgumentList(api::lock_screen_data::GetContent::Results::Create(
         std::vector<uint8_t>(data->begin(), data->end()))));
@@ -145,14 +137,14 @@ void LockScreenDataGetContentFunction::OnDone(
   Respond(Error(GetErrorString(result)));
 }
 
-LockScreenDataSetContentFunction::LockScreenDataSetContentFunction() {}
+LockScreenDataSetContentFunction::LockScreenDataSetContentFunction() = default;
 
-LockScreenDataSetContentFunction::~LockScreenDataSetContentFunction() {}
+LockScreenDataSetContentFunction::~LockScreenDataSetContentFunction() = default;
 
 ExtensionFunction::ResponseAction LockScreenDataSetContentFunction::Run() {
-  std::unique_ptr<api::lock_screen_data::SetContent::Params> params(
-      api::lock_screen_data::SetContent::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  std::optional<api::lock_screen_data::SetContent::Params> params =
+      api::lock_screen_data::SetContent::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   lock_screen_data::LockScreenItemStorage* storage =
       lock_screen_data::LockScreenItemStorage::GetIfAllowed(browser_context());
@@ -168,10 +160,6 @@ ExtensionFunction::ResponseAction LockScreenDataSetContentFunction::Run() {
 
 void LockScreenDataSetContentFunction::OnDone(
     lock_screen_data::OperationResult result) {
-  UMA_HISTOGRAM_ENUMERATION(
-      "Apps.LockScreen.DataItemStorage.OperationResult.WriteItem", result,
-      lock_screen_data::OperationResult::kCount);
-
   if (result == lock_screen_data::OperationResult::kSuccess) {
     Respond(NoArguments());
     return;
@@ -179,14 +167,14 @@ void LockScreenDataSetContentFunction::OnDone(
   Respond(Error(GetErrorString(result)));
 }
 
-LockScreenDataDeleteFunction::LockScreenDataDeleteFunction() {}
+LockScreenDataDeleteFunction::LockScreenDataDeleteFunction() = default;
 
-LockScreenDataDeleteFunction::~LockScreenDataDeleteFunction() {}
+LockScreenDataDeleteFunction::~LockScreenDataDeleteFunction() = default;
 
 ExtensionFunction::ResponseAction LockScreenDataDeleteFunction::Run() {
-  std::unique_ptr<api::lock_screen_data::Delete::Params> params(
-      api::lock_screen_data::Delete::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  std::optional<api::lock_screen_data::Delete::Params> params =
+      api::lock_screen_data::Delete::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   lock_screen_data::LockScreenItemStorage* storage =
       lock_screen_data::LockScreenItemStorage::GetIfAllowed(browser_context());
@@ -201,10 +189,6 @@ ExtensionFunction::ResponseAction LockScreenDataDeleteFunction::Run() {
 
 void LockScreenDataDeleteFunction::OnDone(
     lock_screen_data::OperationResult result) {
-  UMA_HISTOGRAM_ENUMERATION(
-      "Apps.LockScreen.DataItemStorage.OperationResult.DeleteItem", result,
-      lock_screen_data::OperationResult::kCount);
-
   if (result == lock_screen_data::OperationResult::kSuccess) {
     Respond(NoArguments());
     return;

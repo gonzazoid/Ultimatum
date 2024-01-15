@@ -12,14 +12,30 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "build/build_config.h"
+#include "components/metrics/metrics_features.h"
 #include "components/metrics/metrics_switches.h"
 #include "components/metrics/url_constants.h"
+#include "metrics_service_client.h"
 
 namespace metrics {
+
+// TODO(b/282078734): Names "max_*" are the original names when the experiment
+// first started. These should be renamed after the experiment is over.
+const base::FeatureParam<int> kMinLogQueueBytes{
+    &features::kStructuredMetrics, "max_log_queue_bytes",
+    300 * 1024  // 300 KiB
+};
+
+const base::FeatureParam<int> kMinOngoingLogQueueCount{
+    &features::kStructuredMetrics, "max_ongoing_log_queue_count", 8};
+
 namespace {
 
 // The minimum time in seconds between consecutive metrics report uploads.
 constexpr int kMetricsUploadIntervalSecMinimum = 20;
+
+// Initial logs can be of any size.
+constexpr size_t kMaxInitialLogSize = 0;
 
 // If a metrics log upload fails, and the transmission is over this byte count,
 // then we will discard the log, and not try to retransmit it. We also don't
@@ -32,26 +48,9 @@ constexpr size_t kMaxOngoingLogSize = 1024 * 1024;  // 1 MiB
 constexpr size_t kMaxOngoingLogSize = 100 * 1024;  // 100 KiB
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
-// The number of bytes of logs to save of each type (initial/ongoing). This
-// ensures that a reasonable amount of history will be stored even if there is a
-// long series of very small logs.
-constexpr size_t kMinLogQueueSize = 300 * 1024;  // 300 KiB
-
-// The minimum number of "initial" logs to save, and hope to send during a
-// future Chrome session. Initial logs contain crash stats, and are pretty
-// small.
+// The minimum number of "initial" logs to save before logs are dropped. Initial
+// logs contain crash stats, and are pretty small.
 constexpr size_t kMinInitialLogQueueCount = 20;
-
-// The minimum number of ongoing logs to save persistently, and hope to send
-// during a this or future sessions. Note that each log may be pretty large, as
-// presumably the related "initial" log wasn't sent (probably nothing was, as
-// the user was probably off-line). As a result, the log probably kept
-// accumulating while the "initial" log was stalled, and couldn't be sent. As a
-// result, we don't want to save too many of these mega-logs. A "standard
-// shutdown" will create a small log, including just the data that was not yet
-// been transmitted, and that is normal (to have exactly one ongoing_log_ at
-// startup).
-constexpr size_t kMinOngoingLogQueueCount = 8;
 
 }  // namespace
 
@@ -63,31 +62,29 @@ ukm::UkmService* MetricsServiceClient::GetUkmService() {
   return nullptr;
 }
 
+structured::StructuredMetricsService*
+MetricsServiceClient::GetStructuredMetricsService() {
+  return nullptr;
+}
+
 bool MetricsServiceClient::ShouldUploadMetricsForUserId(uint64_t user_id) {
   return true;
 }
 
 GURL MetricsServiceClient::GetMetricsServerUrl() {
-#ifndef NDEBUG
-  // Only allow overriding the server URL through the command line in debug
-  // builds. This is to prevent, for example, rerouting metrics due to malware.
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-  if (command_line->HasSwitch(switches::kUmaServerUrl))
+  if (command_line->HasSwitch(switches::kUmaServerUrl)) {
     return GURL(command_line->GetSwitchValueASCII(switches::kUmaServerUrl));
-#endif  // NDEBUG
+  }
   return GURL(kNewMetricsServerUrl);
 }
 
 GURL MetricsServiceClient::GetInsecureMetricsServerUrl() {
-#ifndef NDEBUG
-  // Only allow overriding the server URL through the command line in debug
-  // builds. This is to prevent, for example, rerouting metrics due to malware.
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   if (command_line->HasSwitch(switches::kUmaInsecureServerUrl)) {
     return GURL(
         command_line->GetSwitchValueASCII(switches::kUmaInsecureServerUrl));
   }
-#endif  // NDEBUG
   return GURL(kNewMetricsServerUrlInsecure);
 }
 
@@ -122,7 +119,7 @@ EnableMetricsDefault MetricsServiceClient::GetMetricsReportingDefaultState() {
   return EnableMetricsDefault::DEFAULT_UNKNOWN;
 }
 
-bool MetricsServiceClient::IsUMACellularUploadLogicEnabled() {
+bool MetricsServiceClient::IsOnCellularConnection() {
   return false;
 }
 
@@ -150,13 +147,29 @@ bool MetricsServiceClient::ShouldResetClientIdsOnClonedInstall() {
   return false;
 }
 
+base::CallbackListSubscription
+MetricsServiceClient::AddOnClonedInstallDetectedCallback(
+    base::OnceClosure callback) {
+  return base::CallbackListSubscription();
+}
+
 MetricsLogStore::StorageLimits MetricsServiceClient::GetStorageLimits() const {
   return {
-      /*min_initial_log_queue_count=*/kMinInitialLogQueueCount,
-      /*min_initial_log_queue_size=*/kMinLogQueueSize,
-      /*min_ongoing_log_queue_count=*/kMinOngoingLogQueueCount,
-      /*min_ongoing_log_queue_size=*/kMinLogQueueSize,
-      /*max_ongoing_log_size=*/kMaxOngoingLogSize,
+      .initial_log_queue_limits =
+          UnsentLogStore::UnsentLogStoreLimits{
+              .min_log_count = kMinInitialLogQueueCount,
+              .min_queue_size_bytes =
+                  static_cast<size_t>(kMinLogQueueBytes.Get()),
+              .max_log_size_bytes = static_cast<size_t>(kMaxInitialLogSize),
+          },
+      .ongoing_log_queue_limits =
+          UnsentLogStore::UnsentLogStoreLimits{
+              .min_log_count =
+                  static_cast<size_t>(kMinOngoingLogQueueCount.Get()),
+              .min_queue_size_bytes =
+                  static_cast<size_t>(kMinLogQueueBytes.Get()),
+              .max_log_size_bytes = static_cast<size_t>(kMaxOngoingLogSize),
+          },
   };
 }
 
@@ -166,8 +179,9 @@ void MetricsServiceClient::SetUpdateRunningServicesCallback(
 }
 
 void MetricsServiceClient::UpdateRunningServices() {
-  if (update_running_services_)
+  if (update_running_services_) {
     update_running_services_.Run();
+  }
 }
 
 bool MetricsServiceClient::IsMetricsReportingForceEnabled() const {

@@ -1,1 +1,2 @@
-Set-Cookie: cookie=1; SameSite=Strict; Secure
+Content-Type: text/html
+Set-Cookie: cookie=1; SameSite=None; Secure

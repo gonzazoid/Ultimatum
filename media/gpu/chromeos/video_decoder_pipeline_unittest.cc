@@ -4,15 +4,16 @@
 
 #include "media/gpu/chromeos/video_decoder_pipeline.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "gpu/config/gpu_driver_bug_workarounds.h"
 #include "media/base/cdm_context.h"
@@ -22,7 +23,6 @@
 #include "media/base/status.h"
 #include "media/base/video_decoder_config.h"
 #include "media/gpu/chromeos/dmabuf_video_frame_pool.h"
-#include "media/gpu/chromeos/mailbox_video_frame_converter.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/libdrm/src/include/drm/drm_fourcc.h"
@@ -69,6 +69,7 @@ class MockVideoFramePool : public DmabufVideoFramePool {
   MOCK_METHOD0(IsExhausted, bool());
   MOCK_METHOD1(NotifyWhenFrameAvailable, void(base::OnceClosure));
   MOCK_METHOD0(ReleaseAllFrames, void());
+  MOCK_METHOD0(GetGpuBufferLayout, absl::optional<GpuBufferLayout>());
 
   bool IsFakeVideoFramePool() override { return true; }
 };
@@ -77,7 +78,7 @@ class MockDecoder : public VideoDecoderMixin {
  public:
   MockDecoder()
       : VideoDecoderMixin(std::make_unique<MockMediaLog>(),
-                          base::ThreadTaskRunnerHandle::Get(),
+                          base::SequencedTaskRunner::GetCurrentDefault(),
                           base::WeakPtr<VideoDecoderMixin::Client>(nullptr)) {}
   ~MockDecoder() override = default;
 
@@ -92,12 +93,15 @@ class MockDecoder : public VideoDecoderMixin {
   MOCK_METHOD1(Reset, void(base::OnceClosure));
   MOCK_METHOD0(ApplyResolutionChange, void());
   MOCK_METHOD0(NeedsTranscryption, bool());
+  MOCK_METHOD1(AttachSecureBuffer, CroStatus(scoped_refptr<DecoderBuffer>&));
+  MOCK_METHOD1(ReleaseSecureBuffer, void(uint64_t));
   MOCK_CONST_METHOD0(GetDecoderType, VideoDecoderType());
 };
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 constexpr uint8_t kEncryptedData[] = {1, 8, 9};
 constexpr uint8_t kTranscryptedData[] = {9, 2, 4};
+constexpr uint64_t kFakeSecureHandle = 75;
 class MockChromeOsCdmContext : public chromeos::ChromeOsCdmContext {
  public:
   MockChromeOsCdmContext() : chromeos::ChromeOsCdmContext() {}
@@ -114,6 +118,14 @@ class MockChromeOsCdmContext : public chromeos::ChromeOsCdmContext {
   MOCK_METHOD0(GetCdmContextRef, std::unique_ptr<CdmContextRef>());
   MOCK_CONST_METHOD0(UsingArcCdm, bool());
   MOCK_CONST_METHOD0(IsRemoteCdm, bool());
+  MOCK_METHOD2(AllocateSecureBuffer,
+               void(uint32_t,
+                    chromeos::ChromeOsCdmContext::AllocateSecureBufferCB));
+  MOCK_METHOD4(ParseEncryptedSliceHeader,
+               void(uint64_t,
+                    uint32_t,
+                    const std::vector<uint8_t>&,
+                    ParseEncryptedSliceHeaderCB));
 };
 // A real implementation of this class would actually hold onto a reference of
 // the owner of the CdmContext to ensure it is not destructed before the
@@ -129,7 +141,7 @@ class FakeCdmContextRef : public CdmContextRef {
   CdmContext* GetCdmContext() override { return cdm_context_; }
 
  private:
-  CdmContext* cdm_context_;
+  raw_ptr<CdmContext> cdm_context_;
 };
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
@@ -178,16 +190,19 @@ class VideoDecoderPipelineTest
                 gfx::Rect(kCodedSize),
                 kCodedSize,
                 EmptyExtraData(),
-                EncryptionScheme::kUnencrypted),
-        converter_(new VideoFrameConverter) {
+                EncryptionScheme::kUnencrypted) {
     auto pool = std::make_unique<MockVideoFramePool>();
     pool_ = pool.get();
     decoder_ = base::WrapUnique(new VideoDecoderPipeline(
-        gpu::GpuDriverBugWorkarounds(), base::ThreadTaskRunnerHandle::Get(),
-        std::move(pool), std::move(converter_),
+        gpu::GpuDriverBugWorkarounds(),
+        base::SingleThreadTaskRunner::GetCurrentDefault(), std::move(pool),
+        /*frame_converter=*/nullptr,
+        VideoDecoderPipeline::DefaultPreferredRenderableFourccs(),
         std::make_unique<MockMediaLog>(),
         // This callback needs to be configured in the individual tests.
-        base::BindOnce(&VideoDecoderPipelineTest::CreateNullMockDecoder)));
+        base::BindOnce(&VideoDecoderPipelineTest::CreateNullMockDecoder),
+        /*uses_oop_video_decoder=*/false,
+        /*in_video_decoder_process=*/true));
 
     SetSupportedVideoDecoderConfigs({SupportedVideoDecoderConfig(
         /*profile_min,=*/VP8PROFILE_ANY,
@@ -376,7 +391,6 @@ class VideoDecoderPipelineTest
   scoped_refptr<DecoderBuffer> transcrypted_buffer_;
   media::CallbackRegistry<CdmContext::EventCB::RunType> event_callbacks_;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-  std::unique_ptr<VideoFrameConverter> converter_;
   std::unique_ptr<VideoDecoderPipeline> decoder_;
   raw_ptr<MockVideoFramePool> pool_;
 };
@@ -468,6 +482,9 @@ TEST_F(VideoDecoderPipelineTest, TranscryptThenEos) {
   // First send in a DecoderBuffer.
   {
     InSequence sequence;
+    EXPECT_CALL(*reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()),
+                AttachSecureBuffer(encrypted_buffer_))
+        .WillOnce(Return(CroStatus::Codes::kOk));
     EXPECT_CALL(decryptor_, Decrypt(Decryptor::kVideo, encrypted_buffer_, _))
         .WillOnce([this](Decryptor::StreamType stream_type,
                          scoped_refptr<DecoderBuffer> encrypted,
@@ -518,8 +535,14 @@ TEST_F(VideoDecoderPipelineTest, TranscryptReset) {
       &kEncryptedData[1], std::size(kEncryptedData) - 1);
   // Send in a buffer, but don't invoke the Decrypt callback so it stays as
   // pending. Then send in 2 more buffers so they are in the queue.
-  EXPECT_CALL(decryptor_, Decrypt(Decryptor::kVideo, encrypted_buffer_, _))
-      .Times(1);
+  {
+    InSequence sequence;
+    EXPECT_CALL(*reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()),
+                AttachSecureBuffer(encrypted_buffer_))
+        .WillOnce(Return(CroStatus::Codes::kOk));
+    EXPECT_CALL(decryptor_, Decrypt(Decryptor::kVideo, encrypted_buffer_, _))
+        .Times(1);
+  }
   decoder_->Decode(encrypted_buffer_,
                    base::BindOnce(&VideoDecoderPipelineTest::OnDecodeDone,
                                   base::Unretained(this)));
@@ -530,6 +553,8 @@ TEST_F(VideoDecoderPipelineTest, TranscryptReset) {
                    base::BindOnce(&VideoDecoderPipelineTest::OnDecodeDone,
                                   base::Unretained(this)));
   task_environment_.RunUntilIdle();
+  testing::Mock::VerifyAndClearExpectations(
+      reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()));
   testing::Mock::VerifyAndClearExpectations(&decryptor_);
 
   // Now when we reset, we should see 3 decode callbacks occur as well as the
@@ -549,6 +574,71 @@ TEST_F(VideoDecoderPipelineTest, TranscryptReset) {
   task_environment_.RunUntilIdle();
 }
 
+// Verifies that any decode calls from
+// VideoDecoderPipeline::OnBufferTranscrypted() received while the underlying
+// VideoDecoderMixin is performing a reset operation are aborted.
+TEST_F(VideoDecoderPipelineTest, TranscryptDecodeDuringReset) {
+  InitializeForTranscrypt();
+
+  // First send in a buffer, which will go to the decryptor and hold on to that
+  // callback.
+  Decryptor::DecryptCB saved_decrypt_cb;
+  {
+    InSequence sequence;
+
+    EXPECT_CALL(*reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()),
+                AttachSecureBuffer(encrypted_buffer_))
+        .WillOnce(Return(CroStatus::Codes::kOk));
+    EXPECT_CALL(decryptor_, Decrypt(Decryptor::kVideo, encrypted_buffer_, _))
+        .WillOnce([&saved_decrypt_cb](Decryptor::StreamType stream_type,
+                                      scoped_refptr<DecoderBuffer> encrypted,
+                                      Decryptor::DecryptCB decrypt_cb) {
+          saved_decrypt_cb =
+              base::BindPostTaskToCurrentDefault(std::move(decrypt_cb));
+        });
+  }
+
+  // Reset the underlying decoder but don't invoke the reset callback yet. Save
+  // it for later.
+  base::OnceClosure saved_reset_cb;
+  EXPECT_CALL(*reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()), Reset(_))
+      .WillOnce([&saved_reset_cb](base::OnceClosure closure) {
+        saved_reset_cb = base::BindPostTaskToCurrentDefault(std::move(closure));
+      });
+
+  decoder_->Decode(encrypted_buffer_,
+                   base::BindOnce(&VideoDecoderPipelineTest::OnDecodeDone,
+                                  base::Unretained(this)));
+  decoder_->Reset(base::BindOnce(&VideoDecoderPipelineTest::OnResetDone,
+                                 base::Unretained(this)));
+  task_environment_.RunUntilIdle();
+
+  testing::Mock::VerifyAndClearExpectations(
+      reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()));
+  testing::Mock::VerifyAndClearExpectations(&decryptor_);
+
+  ASSERT_TRUE(saved_decrypt_cb);
+  ASSERT_TRUE(saved_reset_cb);
+
+  EXPECT_CALL(*reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()),
+              Decode(_, _))
+      .Times(0);
+
+  EXPECT_CALL(*this,
+              OnDecodeDone(MatchesStatusCode(DecoderStatus::Codes::kAborted)))
+      .Times(1);
+
+  std::move(saved_decrypt_cb).Run(Decryptor::kSuccess, transcrypted_buffer_);
+  task_environment_.RunUntilIdle();
+
+  testing::Mock::VerifyAndClearExpectations(this);
+
+  EXPECT_CALL(*this, OnResetDone()).Times(1);
+
+  std::move(saved_reset_cb).Run();
+  task_environment_.RunUntilIdle();
+}
+
 // Verifies that if we get notified about a new decrypt key while we are
 // performing a transcrypt that fails w/out a key, we immediately retry again.
 TEST_F(VideoDecoderPipelineTest, TranscryptKeyAddedDuringTranscrypt) {
@@ -556,16 +646,25 @@ TEST_F(VideoDecoderPipelineTest, TranscryptKeyAddedDuringTranscrypt) {
   // First send in a buffer, which will go to the decryptor and hold on to that
   // callback.
   Decryptor::DecryptCB saved_decrypt_cb;
-  EXPECT_CALL(decryptor_, Decrypt(Decryptor::kVideo, encrypted_buffer_, _))
-      .WillOnce([&saved_decrypt_cb](Decryptor::StreamType stream_type,
-                                    scoped_refptr<DecoderBuffer> encrypted,
-                                    Decryptor::DecryptCB decrypt_cb) {
-        saved_decrypt_cb = BindToCurrentLoop(std::move(decrypt_cb));
-      });
+  {
+    InSequence sequence;
+    EXPECT_CALL(*reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()),
+                AttachSecureBuffer(encrypted_buffer_))
+        .WillOnce(Return(CroStatus::Codes::kOk));
+    EXPECT_CALL(decryptor_, Decrypt(Decryptor::kVideo, encrypted_buffer_, _))
+        .WillOnce([&saved_decrypt_cb](Decryptor::StreamType stream_type,
+                                      scoped_refptr<DecoderBuffer> encrypted,
+                                      Decryptor::DecryptCB decrypt_cb) {
+          saved_decrypt_cb =
+              base::BindPostTaskToCurrentDefault(std::move(decrypt_cb));
+        });
+  }
   decoder_->Decode(encrypted_buffer_,
                    base::BindOnce(&VideoDecoderPipelineTest::OnDecodeDone,
                                   base::Unretained(this)));
   task_environment_.RunUntilIdle();
+  testing::Mock::VerifyAndClearExpectations(
+      reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()));
   testing::Mock::VerifyAndClearExpectations(&decryptor_);
 
   // Now we invoke the CDM callback to indicate there is a new key available.
@@ -577,6 +676,9 @@ TEST_F(VideoDecoderPipelineTest, TranscryptKeyAddedDuringTranscrypt) {
   // that should go through decoding. This should not invoke the waiting CB.
   {
     InSequence sequence;
+    EXPECT_CALL(*reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()),
+                AttachSecureBuffer(encrypted_buffer_))
+        .WillOnce(Return(CroStatus::Codes::kOk));
     EXPECT_CALL(decryptor_, Decrypt(Decryptor::kVideo, encrypted_buffer_, _))
         .WillOnce([this](Decryptor::StreamType stream_type,
                          scoped_refptr<DecoderBuffer> encrypted,
@@ -597,6 +699,75 @@ TEST_F(VideoDecoderPipelineTest, TranscryptKeyAddedDuringTranscrypt) {
   task_environment_.RunUntilIdle();
 }
 
+// Verifies that if we have a condition where we need to retry a pending
+// transcrypt task that it doesn't try to reacquire a secure buffer if it
+// already has one.
+TEST_F(VideoDecoderPipelineTest, RetryDoesntReattachSecureBuffer) {
+  InitializeForTranscrypt();
+  // First send in a buffer, which will go to the decryptor and hold on to that
+  // callback.
+  Decryptor::DecryptCB saved_decrypt_cb;
+  {
+    InSequence sequence;
+    EXPECT_CALL(*reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()),
+                AttachSecureBuffer(encrypted_buffer_))
+        .WillOnce([](scoped_refptr<DecoderBuffer>& buffer) {
+          buffer->WritableSideData().secure_handle = kFakeSecureHandle;
+          return CroStatus::Codes::kOk;
+        });
+    EXPECT_CALL(decryptor_, Decrypt(Decryptor::kVideo, encrypted_buffer_, _))
+        .WillOnce([&saved_decrypt_cb](Decryptor::StreamType stream_type,
+                                      scoped_refptr<DecoderBuffer> encrypted,
+                                      Decryptor::DecryptCB decrypt_cb) {
+          saved_decrypt_cb =
+              base::BindPostTaskToCurrentDefault(std::move(decrypt_cb));
+        });
+  }
+  decoder_->Decode(encrypted_buffer_,
+                   base::BindOnce(&VideoDecoderPipelineTest::OnDecodeDone,
+                                  base::Unretained(this)));
+  task_environment_.RunUntilIdle();
+  testing::Mock::VerifyAndClearExpectations(
+      reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()));
+  testing::Mock::VerifyAndClearExpectations(&decryptor_);
+
+  // Now we invoke the CDM callback to indicate there is a new key available.
+  event_callbacks_.Notify(CdmContext::Event::kHasAdditionalUsableKey);
+  task_environment_.RunUntilIdle();
+
+  // Now we have the decryptor callback return with kNoKey which should then
+  // cause another call into the decryptor which we will have succeed and then
+  // that should go through decoding. This should not invoke the call to attach
+  // a secure buffer, but after it's done decoding it should invoke the call to
+  // release the secure buffer.
+  {
+    InSequence sequence;
+    EXPECT_CALL(*reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()),
+                AttachSecureBuffer(_))
+        .Times(0);
+    EXPECT_CALL(decryptor_, Decrypt(Decryptor::kVideo, encrypted_buffer_, _))
+        .WillOnce([this](Decryptor::StreamType stream_type,
+                         scoped_refptr<DecoderBuffer> encrypted,
+                         Decryptor::DecryptCB decrypt_cb) {
+          std::move(decrypt_cb).Run(Decryptor::kSuccess, transcrypted_buffer_);
+        });
+    EXPECT_CALL(*reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()),
+                Decode(transcrypted_buffer_, _))
+        .WillOnce([](scoped_refptr<DecoderBuffer> transcrypted,
+                     VideoDecoderMixin::DecodeCB decode_cb) {
+          std::move(decode_cb).Run(DecoderStatus::Codes::kOk);
+        });
+    EXPECT_CALL(*reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()),
+                ReleaseSecureBuffer(kFakeSecureHandle))
+        .Times(1);
+    EXPECT_CALL(*this,
+                OnDecodeDone(MatchesStatusCode(DecoderStatus::Codes::kOk)));
+  }
+  EXPECT_CALL(*this, OnWaiting(_)).Times(0);
+  std::move(saved_decrypt_cb).Run(Decryptor::kNoKey, nullptr);
+  task_environment_.RunUntilIdle();
+}
+
 // Verifies that if we don't have the key during transcrypt, the WaitingCB is
 // invoked and then it retries again when we notify it of the new key.
 TEST_F(VideoDecoderPipelineTest, TranscryptNoKeyWaitRetry) {
@@ -605,6 +776,9 @@ TEST_F(VideoDecoderPipelineTest, TranscryptNoKeyWaitRetry) {
   // is no key. This should also invoke the WaitingCB.
   {
     InSequence sequence;
+    EXPECT_CALL(*reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()),
+                AttachSecureBuffer(encrypted_buffer_))
+        .WillOnce(Return(CroStatus::Codes::kOk));
     EXPECT_CALL(decryptor_, Decrypt(Decryptor::kVideo, encrypted_buffer_, _))
         .WillOnce([](Decryptor::StreamType stream_type,
                      scoped_refptr<DecoderBuffer> encrypted,
@@ -617,6 +791,8 @@ TEST_F(VideoDecoderPipelineTest, TranscryptNoKeyWaitRetry) {
                    base::BindOnce(&VideoDecoderPipelineTest::OnDecodeDone,
                                   base::Unretained(this)));
   task_environment_.RunUntilIdle();
+  testing::Mock::VerifyAndClearExpectations(
+      reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()));
   testing::Mock::VerifyAndClearExpectations(&decryptor_);
   testing::Mock::VerifyAndClearExpectations(this);
 
@@ -625,6 +801,9 @@ TEST_F(VideoDecoderPipelineTest, TranscryptNoKeyWaitRetry) {
   // complete the decode operation.
   {
     InSequence sequence;
+    EXPECT_CALL(*reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()),
+                AttachSecureBuffer(encrypted_buffer_))
+        .WillOnce(Return(CroStatus::Codes::kOk));
     EXPECT_CALL(decryptor_, Decrypt(Decryptor::kVideo, encrypted_buffer_, _))
         .WillOnce([this](Decryptor::StreamType stream_type,
                          scoped_refptr<DecoderBuffer> encrypted,
@@ -648,12 +827,31 @@ TEST_F(VideoDecoderPipelineTest, TranscryptError) {
   InitializeForTranscrypt();
   {
     InSequence sequence;
+    EXPECT_CALL(*reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()),
+                AttachSecureBuffer(encrypted_buffer_))
+        .WillOnce(Return(CroStatus::Codes::kOk));
     EXPECT_CALL(decryptor_, Decrypt(Decryptor::kVideo, encrypted_buffer_, _))
         .WillOnce([](Decryptor::StreamType stream_type,
                      scoped_refptr<DecoderBuffer> encrypted,
                      Decryptor::DecryptCB decrypt_cb) {
           std::move(decrypt_cb).Run(Decryptor::kError, nullptr);
         });
+    EXPECT_CALL(*this,
+                OnDecodeDone(MatchesStatusCode(DecoderStatus::Codes::kFailed)));
+  }
+  decoder_->Decode(encrypted_buffer_,
+                   base::BindOnce(&VideoDecoderPipelineTest::OnDecodeDone,
+                                  base::Unretained(this)));
+  task_environment_.RunUntilIdle();
+}
+
+TEST_F(VideoDecoderPipelineTest, SecureBufferFailure) {
+  InitializeForTranscrypt();
+  {
+    InSequence sequence;
+    EXPECT_CALL(*reinterpret_cast<MockDecoder*>(GetUnderlyingDecoder()),
+                AttachSecureBuffer(encrypted_buffer_))
+        .WillOnce(Return(CroStatus::Codes::kUnableToAllocateSecureBuffer));
     EXPECT_CALL(*this,
                 OnDecodeDone(MatchesStatusCode(DecoderStatus::Codes::kFailed)));
   }
@@ -669,7 +867,7 @@ TEST_F(VideoDecoderPipelineTest, TranscryptError) {
 TEST_F(VideoDecoderPipelineTest, PickDecoderOutputFormat) {
   constexpr gfx::Size kSize(320, 240);
   constexpr gfx::Rect kVisibleRect(320, 240);
-  constexpr size_t kMaxNumOfFrames = 4u;
+  constexpr size_t kNumCodecReferenceFrames = 4u;
   constexpr uint64_t kModifier = ~DRM_FORMAT_MOD_LINEAR;
 
   const struct {
@@ -711,18 +909,21 @@ TEST_F(VideoDecoderPipelineTest, PickDecoderOutputFormat) {
         test_vector.expected_chosen_candidate.size;
     std::vector<ColorPlaneLayout> planes(
         VideoFrame::NumPlanes(expected_fourcc.ToVideoPixelFormat()));
-    EXPECT_CALL(*pool_,
-                Initialize(expected_fourcc, expected_coded_size, kVisibleRect,
-                           /*natural_size=*/kVisibleRect.size(),
-                           kMaxNumOfFrames, /*use_protected=*/false,
-                           /*use_linear_buffers=*/false))
+    EXPECT_CALL(
+        *pool_,
+        Initialize(expected_fourcc, expected_coded_size, kVisibleRect,
+                   /*natural_size=*/kVisibleRect.size(),
+                   /*max_num_frames=*/::testing::Gt(kNumCodecReferenceFrames),
+                   /*use_protected=*/false,
+                   /*use_linear_buffers=*/false))
         .WillOnce(Return(*GpuBufferLayout::Create(
             expected_fourcc, expected_coded_size, std::move(planes),
             /*modifier=*/kModifier)));
     auto status_or_chosen_candidate = decoder_->PickDecoderOutputFormat(
         test_vector.input_candidates, kVisibleRect,
         /*decoder_natural_size=*/kVisibleRect.size(),
-        /*output_size=*/absl::nullopt, /*num_of_pictures=*/kMaxNumOfFrames,
+        /*output_size=*/absl::nullopt,
+        /*num_codec_reference_frames=*/kNumCodecReferenceFrames,
         /*use_protected=*/false, /*need_aux_frame_pool=*/false, absl::nullopt);
     ASSERT_TRUE(status_or_chosen_candidate.has_value());
     const PixelLayoutCandidate chosen_candidate =
@@ -748,7 +949,7 @@ TEST_F(VideoDecoderPipelineTest, PickDecoderOutputFormat) {
 TEST_F(VideoDecoderPipelineTest, PickDecoderOutputFormatLinearModifier) {
   constexpr gfx::Size kSize(320, 240);
   constexpr gfx::Rect kVisibleRect(320, 240);
-  constexpr size_t kMaxNumOfFrames = 4u;
+  constexpr size_t kNumCodecReferenceFrames = 4u;
   const Fourcc kFourcc(Fourcc::NV12);
 
   auto image_processor =
@@ -780,7 +981,8 @@ TEST_F(VideoDecoderPipelineTest, PickDecoderOutputFormatLinearModifier) {
   auto status_or_chosen_candidate = decoder_->PickDecoderOutputFormat(
       {candidate}, kVisibleRect,
       /*decoder_natural_size=*/kVisibleRect.size(),
-      /*output_size=*/absl::nullopt, /*num_of_pictures=*/kMaxNumOfFrames,
+      /*output_size=*/absl::nullopt,
+      /*num_codec_reference_frames=*/kNumCodecReferenceFrames,
       /*use_protected=*/false, /*need_aux_frame_pool=*/false, absl::nullopt);
 
   EXPECT_TRUE(status_or_chosen_candidate.has_value());
@@ -795,7 +997,7 @@ TEST_F(VideoDecoderPipelineTest, PickDecoderOutputFormatLinearModifier) {
 TEST_F(VideoDecoderPipelineTest, PickDecoderOutputFormatUnsupportedModifier) {
   constexpr gfx::Size kSize(320, 240);
   constexpr gfx::Rect kVisibleRect(320, 240);
-  constexpr size_t kMaxNumOfFrames = 4u;
+  constexpr size_t kNumCodecReferenceFrames = 4u;
   const Fourcc kFourcc(Fourcc::NV12);
 
   // Modifier is *not* the linear format.
@@ -813,7 +1015,8 @@ TEST_F(VideoDecoderPipelineTest, PickDecoderOutputFormatUnsupportedModifier) {
   auto status_or_chosen_candidate = decoder_->PickDecoderOutputFormat(
       {candidate}, kVisibleRect,
       /*decoder_natural_size=*/kVisibleRect.size(),
-      /*output_size=*/absl::nullopt, /*num_of_pictures=*/kMaxNumOfFrames,
+      /*output_size=*/absl::nullopt,
+      /*num_codec_reference_frames=*/kNumCodecReferenceFrames,
       /*use_protected=*/false, /*need_aux_frame_pool=*/false, absl::nullopt);
 
   EXPECT_FALSE(status_or_chosen_candidate.has_value());

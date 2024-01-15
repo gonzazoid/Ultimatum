@@ -5,15 +5,14 @@
 #ifndef CHROME_BROWSER_ASH_POLICY_AFFILIATION_AFFILIATION_TEST_HELPER_H_
 #define CHROME_BROWSER_ASH_POLICY_AFFILIATION_AFFILIATION_TEST_HELPER_H_
 
-#include <set>
-#include <string>
-
+#include "base/containers/span.h"
+#include "base/memory/raw_ptr.h"
+#include "base/strings/string_piece.h"
 #include "components/policy/core/common/cloud/test/policy_builder.h"
 
 class AccountId;
 
 namespace ash {
-class FakeAuthPolicyClient;
 class FakeSessionManagerClient;
 }  // namespace ash
 
@@ -33,12 +32,6 @@ class AffiliationTestHelper {
   static AffiliationTestHelper CreateForCloud(
       ash::FakeSessionManagerClient* fake_session_manager_client);
 
-  // Creates an |AffiliationTestHelper| for Active Directory management (Active
-  // Directory accounts). The pointers must outlive this object.
-  static AffiliationTestHelper CreateForActiveDirectory(
-      ash::FakeSessionManagerClient* fake_session_manager_client,
-      ash::FakeAuthPolicyClient* fake_authpolicy_client);
-
   // Allow move construction, so the static constructors can be used despite
   // deleted constructors.
   AffiliationTestHelper(AffiliationTestHelper&& other);
@@ -53,16 +46,17 @@ class AffiliationTestHelper {
   // modified by this function.
   void SetDeviceAffiliationIDs(
       DevicePolicyCrosTestHelper* test_helper,
-      const std::set<std::string>& device_affiliation_ids);
+      const base::span<const base::StringPiece>& device_affiliation_ids);
 
   // Sets user affiliation IDs to |user_affiliation_ids| in
   // |fake_session_manager_client| and modifies |user_policy| so that it
   // contains correct values of user affiliation IDs for future use. To add user
   // policies and have user affiliation IDs valid please use |user_policy|
   // modified by this function.
-  void SetUserAffiliationIDs(UserPolicyBuilder* user_policy,
-                             const AccountId& user_account_id,
-                             const std::set<std::string>& user_affiliation_ids);
+  void SetUserAffiliationIDs(
+      UserPolicyBuilder* user_policy,
+      const AccountId& user_account_id,
+      const base::span<const base::StringPiece>& user_affiliation_ids);
 
   // Registers the user with the given |account_id| on the device and marks OOBE
   // as completed. This method should be called in PRE_* test.
@@ -82,19 +76,14 @@ class AffiliationTestHelper {
   static const char kEnterpriseUserGaiaId[];
 
  private:
-  enum class ManagementType { kCloud, kActiveDirectory };
-
-  AffiliationTestHelper(
-      ManagementType management_type,
-      ash::FakeSessionManagerClient* fake_session_manager_client,
-      ash::FakeAuthPolicyClient* fake_authpolicy_client);
+  explicit AffiliationTestHelper(
+      ash::FakeSessionManagerClient* fake_session_manager_client);
 
   // ASSERTs on pointer validity.
   void CheckPreconditions();
 
-  ManagementType management_type_;
-  ash::FakeSessionManagerClient* fake_session_manager_client_;  // Not owned.
-  ash::FakeAuthPolicyClient* fake_authpolicy_client_;       // Not owned.
+  raw_ptr<ash::FakeSessionManagerClient>
+      fake_session_manager_client_;  // Not owned.
 };
 
 }  // namespace policy

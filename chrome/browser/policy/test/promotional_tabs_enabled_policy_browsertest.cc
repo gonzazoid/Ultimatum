@@ -9,15 +9,16 @@
 #include "base/files/file_util.h"
 #include "base/json/json_writer.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/policy/policy_test_utils.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
 #include "chrome/browser/search/search.h"
+#include "chrome/browser/signin/signin_features.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/ui_features.h"
@@ -37,6 +38,7 @@
 #include "content/public/test/browser_test.h"
 #include "net/base/url_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/ui_base_features.h"
 #include "url/gurl.h"
 
 #if !BUILDFLAG(IS_CHROMEOS)
@@ -58,7 +60,7 @@ class PromotionalTabsEnabledPolicyTest
  protected:
   PromotionalTabsEnabledPolicyTest() {
     const std::vector<base::test::FeatureRef> kEnabledFeatures = {
-      features::kChromeWhatsNewUI,
+      whats_new::kForceEnabled,
 #if !BUILDFLAG(IS_CHROMEOS)
       welcome::kForceEnabled,
 #endif
@@ -115,15 +117,63 @@ class PromotionalTabsEnabledPolicyWelcomeTest
       const PromotionalTabsEnabledPolicyWelcomeTest&) = delete;
 
  protected:
-  PromotionalTabsEnabledPolicyWelcomeTest() = default;
+  PromotionalTabsEnabledPolicyWelcomeTest() {
+    scoped_feature_list_.InitAndEnableFeature(kForYouFre);
+  }
   ~PromotionalTabsEnabledPolicyWelcomeTest() override = default;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     command_line->AppendSwitch(switches::kForceFirstRun);
   }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 IN_PROC_BROWSER_TEST_P(PromotionalTabsEnabledPolicyWelcomeTest, RunTest) {
+  TabStripModel* tab_strip = browser()->tab_strip_model();
+  ASSERT_GE(tab_strip->count(), 1);
+  const auto& url = tab_strip->GetWebContentsAt(0)->GetLastCommittedURL();
+
+  // Only the NTP should show, regardless of the policy state.
+  EXPECT_EQ(tab_strip->count(), 1);
+  if (url.possibly_invalid_spec() != chrome::kChromeUINewTabURL) {
+    EXPECT_PRED2(search::IsNTPOrRelatedURL, url, browser()->profile());
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    PromotionalTabsEnabledPolicyWelcomeTest,
+    ::testing::Values(PolicyTest::BooleanPolicy::kNotConfigured,
+                      PolicyTest::BooleanPolicy::kFalse,
+                      PolicyTest::BooleanPolicy::kTrue));
+
+// Tests that the PromotionalTabsEnabled policy properly suppresses the welcome
+// page for browser first-runs.
+class PromotionalTabsEnabledPolicyWelcomeNoFreTest
+    : public PromotionalTabsEnabledPolicyTest {
+ public:
+  PromotionalTabsEnabledPolicyWelcomeNoFreTest(
+      const PromotionalTabsEnabledPolicyWelcomeNoFreTest&) = delete;
+  PromotionalTabsEnabledPolicyWelcomeNoFreTest& operator=(
+      const PromotionalTabsEnabledPolicyWelcomeNoFreTest&) = delete;
+
+ protected:
+  PromotionalTabsEnabledPolicyWelcomeNoFreTest() {
+    scoped_feature_list_.InitAndDisableFeature(kForYouFre);
+  }
+  ~PromotionalTabsEnabledPolicyWelcomeNoFreTest() override = default;
+
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    command_line->AppendSwitch(switches::kForceFirstRun);
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_P(PromotionalTabsEnabledPolicyWelcomeNoFreTest, RunTest) {
   TabStripModel* tab_strip = browser()->tab_strip_model();
   ASSERT_GE(tab_strip->count(), 1);
   const auto& url = tab_strip->GetWebContentsAt(0)->GetLastCommittedURL();
@@ -147,7 +197,7 @@ IN_PROC_BROWSER_TEST_P(PromotionalTabsEnabledPolicyWelcomeTest, RunTest) {
 
 INSTANTIATE_TEST_SUITE_P(
     All,
-    PromotionalTabsEnabledPolicyWelcomeTest,
+    PromotionalTabsEnabledPolicyWelcomeNoFreTest,
     ::testing::Values(PolicyTest::BooleanPolicy::kNotConfigured,
                       PolicyTest::BooleanPolicy::kFalse,
                       PolicyTest::BooleanPolicy::kTrue));
@@ -179,14 +229,14 @@ class PromotionalTabsEnabledPolicyWhatsNewTest
     // already been seen. This is necessary because welcome/onboarding takes
     // precedence over What's New.
     std::string json;
-    base::Value prefs(base::Value::Type::DICTIONARY);
-    prefs.SetBoolPath(prefs::kHasSeenWelcomePage, true);
+    base::Value::Dict prefs;
+    prefs.SetByDottedPath(prefs::kHasSeenWelcomePage, true);
     // Set the session startup pref to NewTab. This enables consistent test
     // expectations across platforms - we should always expect to see the NTP.
     // Without this line, on ChromeOS only, the default type is LAST, which
     // tries to restore the last session and suppresses the NTP.
-    prefs.SetIntPath(prefs::kRestoreOnStartup,
-                     SessionStartupPref::kPrefValueNewTab);
+    prefs.SetByDottedPath(prefs::kRestoreOnStartup,
+                          SessionStartupPref::kPrefValueNewTab);
     base::JSONWriter::Write(prefs, &json);
 
     base::FilePath default_dir =
@@ -199,9 +249,9 @@ class PromotionalTabsEnabledPolicyWhatsNewTest
         default_dir.Append(chrome::kPreferencesFilename), json));
 
     // Also set the version for What's New in the local state.
-    base::Value local_state(base::Value::Type::DICTIONARY);
-    local_state.SetIntPath(prefs::kLastWhatsNewVersion,
-                           WhatsNewVersionForPref());
+    base::Value::Dict local_state;
+    local_state.SetByDottedPath(prefs::kLastWhatsNewVersion,
+                                WhatsNewVersionForPref());
     std::string local_state_string;
     base::JSONWriter::Write(local_state, &local_state_string);
     ASSERT_TRUE(
@@ -214,16 +264,12 @@ class PromotionalTabsEnabledPolicyWhatsNewTest
 };
 
 // This is disabled due to flakiness: https://crbug.com/1362518
-#if BUILDFLAG(IS_MAC)
 #define MAYBE_RunTest DISABLED_RunTest
-#else
-#define MAYBE_RunTest RunTest
-#endif
 IN_PROC_BROWSER_TEST_P(PromotionalTabsEnabledPolicyWhatsNewTest,
                        MAYBE_RunTest) {
   // Delay to allow the network request simulation to finish.
   base::RunLoop run_loop;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(), TestTimeouts::action_timeout());
   run_loop.Run();
   TabStripModel* tab_strip = browser()->tab_strip_model();
@@ -278,17 +324,36 @@ IN_PROC_BROWSER_TEST_P(PromotionalTabsEnabledPolicyWhatsNewInvalidTest,
                        RunTest) {
   // Delay to allow the network request simulation to finish.
   base::RunLoop run_loop;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(), TestTimeouts::action_timeout());
   run_loop.Run();
   TabStripModel* tab_strip = browser()->tab_strip_model();
   ASSERT_GE(tab_strip->count(), 1);
   const auto& url = tab_strip->GetWebContentsAt(0)->GetLastCommittedURL();
-  // Only the NTP should show. There are no other relevant tabs since
-  // welcome and What's New have both already been shown.
-  EXPECT_EQ(tab_strip->count(), 1);
-  if (url.possibly_invalid_spec() != chrome::kChromeUINewTabURL)
-    EXPECT_PRED2(search::IsNTPOrRelatedURL, url, browser()->profile());
+
+  if ((!features::IsChromeRefresh2023() ||
+       GetParam() == BooleanPolicy::kFalse) ||
+      CHROME_VERSION_MAJOR > 121) {
+    // Only the NTP should show. There are no other relevant tabs since
+    // welcome and What's New have both already been shown or promotional tabs
+    // are disabled.
+    EXPECT_EQ(tab_strip->count(), 1);
+    if (url.possibly_invalid_spec() != chrome::kChromeUINewTabURL) {
+      EXPECT_PRED2(search::IsNTPOrRelatedURL, url, browser()->profile());
+    }
+  } else {
+    // TODO(mickeyburks): Cleanup test case after M121 is released.
+    // Always show What's New for CR2023 because the launch is active
+    // until after M121.
+    EXPECT_EQ(tab_strip->count(), 2);
+    // Whats's New should show and be the active tab.
+    EXPECT_EQ(url.possibly_invalid_spec(), chrome::kChromeUIWhatsNewURL);
+    EXPECT_EQ(0, tab_strip->active_index());
+    // The second tab should be the NTP.
+    const auto& url_tab1 =
+        tab_strip->GetWebContentsAt(1)->GetLastCommittedURL();
+    EXPECT_EQ(url_tab1.possibly_invalid_spec(), chrome::kChromeUINewTabURL);
+  }
 }
 
 INSTANTIATE_TEST_SUITE_P(

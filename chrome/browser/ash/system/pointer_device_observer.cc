@@ -4,8 +4,8 @@
 
 #include "chrome/browser/ash/system/pointer_device_observer.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "chrome/browser/ash/system/input_device_settings.h"
 #include "content/public/browser/browser_thread.h"
 #include "ui/events/devices/device_data_manager.h"
@@ -43,7 +43,8 @@ void PointerDeviceObserver::RemoveObserver(Observer* observer) {
 void PointerDeviceObserver::OnInputDeviceConfigurationChanged(
     uint8_t input_device_types) {
   if (input_device_types & (ui::InputDeviceEventObserver::kMouse |
-                            ui::InputDeviceEventObserver::kTouchpad)) {
+                            ui::InputDeviceEventObserver::kTouchpad |
+                            ui::InputDeviceEventObserver::kPointingStick)) {
     CheckDevices();
   }
 }

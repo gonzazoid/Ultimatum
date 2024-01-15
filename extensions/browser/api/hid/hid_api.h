@@ -7,11 +7,9 @@
 
 #include <stddef.h>
 
-#include <memory>
 #include <string>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "extensions/browser/api/api_resource_manager.h"
 #include "extensions/browser/api/hid/hid_connection_resource.h"
 #include "extensions/browser/api/hid/hid_device_manager.h"
@@ -21,8 +19,6 @@
 #include "services/device/public/mojom/hid.mojom.h"
 
 namespace extensions {
-
-class DevicePermissionsPrompt;
 
 class HidGetDevicesFunction : public ExtensionFunction {
  public:
@@ -40,29 +36,6 @@ class HidGetDevicesFunction : public ExtensionFunction {
   ResponseAction Run() override;
 
   void OnEnumerationComplete(base::Value::List devices);
-};
-
-class HidGetUserSelectedDevicesFunction : public ExtensionFunction {
- public:
-  DECLARE_EXTENSION_FUNCTION("hid.getUserSelectedDevices",
-                             HID_GETUSERSELECTEDDEVICES)
-
-  HidGetUserSelectedDevicesFunction();
-
-  HidGetUserSelectedDevicesFunction(const HidGetUserSelectedDevicesFunction&) =
-      delete;
-  HidGetUserSelectedDevicesFunction& operator=(
-      const HidGetUserSelectedDevicesFunction&) = delete;
-
- private:
-  ~HidGetUserSelectedDevicesFunction() override;
-
-  // ExtensionFunction:
-  ResponseAction Run() override;
-
-  void OnDevicesChosen(std::vector<device::mojom::HidDeviceInfoPtr> devices);
-
-  std::unique_ptr<DevicePermissionsPrompt> prompt_;
 };
 
 class HidConnectFunction : public ExtensionFunction {
@@ -142,9 +115,9 @@ class HidReceiveFunction : public HidConnectionIoFunction {
 
   void OnFinished(bool success,
                   uint8_t report_id,
-                  const absl::optional<std::vector<uint8_t>>& buffer);
+                  const std::optional<std::vector<uint8_t>>& buffer);
 
-  std::unique_ptr<api::hid::Receive::Params> parameters_;
+  std::optional<api::hid::Receive::Params> parameters_;
 };
 
 class HidSendFunction : public HidConnectionIoFunction {
@@ -165,7 +138,7 @@ class HidSendFunction : public HidConnectionIoFunction {
 
   void OnFinished(bool success);
 
-  std::unique_ptr<api::hid::Send::Params> parameters_;
+  std::optional<api::hid::Send::Params> parameters_;
 };
 
 class HidReceiveFeatureReportFunction : public HidConnectionIoFunction {
@@ -188,9 +161,9 @@ class HidReceiveFeatureReportFunction : public HidConnectionIoFunction {
   void StartWork(device::mojom::HidConnection* connection) override;
 
   void OnFinished(bool success,
-                  const absl::optional<std::vector<uint8_t>>& buffer);
+                  const std::optional<std::vector<uint8_t>>& buffer);
 
-  std::unique_ptr<api::hid::ReceiveFeatureReport::Params> parameters_;
+  std::optional<api::hid::ReceiveFeatureReport::Params> parameters_;
 };
 
 class HidSendFeatureReportFunction : public HidConnectionIoFunction {
@@ -212,7 +185,7 @@ class HidSendFeatureReportFunction : public HidConnectionIoFunction {
 
   void OnFinished(bool success);
 
-  std::unique_ptr<api::hid::SendFeatureReport::Params> parameters_;
+  std::optional<api::hid::SendFeatureReport::Params> parameters_;
 };
 
 }  // namespace extensions

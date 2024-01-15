@@ -30,15 +30,16 @@ promise_test(() => {
 
 // The deviceId constraint must be rejected, since the source of a track cannot
 // be changed with applyConstraints.
-promise_test(test => {
-  return promise_rejects_js(test,
-                            OverconstrainedError,
-                            navigator.mediaDevices.getUserMedia({audio: true})
-      .then(s => {
-    return s.getAudioTracks()[0].applyConstraints(
-        { deviceId: {exact: 'mydevice-id'}});
-  }));
-}, 'Attempting to change the deviceId with applyConstraints() fails');
+promise_test(async t => {
+  let stream = await navigator.mediaDevices.getUserMedia({audio: true});
+  let audioTrack = stream.getAudioTracks()[0];
+  return audioTrack.applyConstraints(
+        { deviceId: {exact: 'mydevice-id'}}).catch((error) => {
+          assert_equals(error.name, "OverconstrainedError");
+          assert_equals(error.constraint, "deviceId");
+
+        });
+}, `Attempting to change the deviceId with applyConstraints() fails`);
 
 promise_test(() => {
   let track;
@@ -101,6 +102,7 @@ promise_test(() => {
     echoCancellation: { ideal: false, exact: true },
     autoGainControl: { ideal: false, exact: true },
     noiseSuppression: { ideal: false, exact: true },
+    voiceIsolation: { ideal: false, exact: true },
     latency: 0.22,
     channelCount: 2,
     deviceId: { ideal: ["foo", "fooz"] },
@@ -189,6 +191,11 @@ constraintSyntaxTest('noiseSuppression with simple boolean value', { noiseSuppre
 constraintSyntaxTest('noiseSuppression with ideal boolean value', { noiseSuppression: { ideal: true }});
 constraintSyntaxTestWithChange('noiseSuppression with exact unwrapped boolean value',
     { noiseSuppression: { exact: true } }, { noiseSuppression: true });
+
+constraintSyntaxTest('voiceIsolation with simple boolean value', { voiceIsolation: true });
+constraintSyntaxTest('voiceIsolation with ideal boolean value', { voiceIsolation: { ideal: true }});
+constraintSyntaxTestWithChange('voiceIsolation with exact unwrapped boolean value',
+    { voiceIsolation: { exact: true } }, { voiceIsolation: true });
 
 promise_test(async t => {
   let stream = await navigator.mediaDevices.getUserMedia(

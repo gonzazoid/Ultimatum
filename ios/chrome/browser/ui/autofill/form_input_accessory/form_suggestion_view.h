@@ -52,9 +52,6 @@
 // thing.
 - (void)lockTrailingView;
 
-// Animates the first suggestion label.
-- (void)animateSuggestionLabel;
-
 @end
 
 #endif  // IOS_CHROME_BROWSER_UI_AUTOFILL_FORM_INPUT_ACCESSORY_FORM_SUGGESTION_VIEW_H_

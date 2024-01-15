@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/test/launcher/unit_test_launcher.h"
 #include "base/test/test_suite.h"
@@ -13,7 +13,7 @@
 #include "ui/base/ui_base_paths.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/bundle_locations.h"
+#include "base/apple/bundle_locations.h"
 #include "base/test/mock_chrome_application_mac.h"
 #endif
 
@@ -56,7 +56,7 @@ void UIBaseTestSuite::Initialize() {
 
   // On Mac, a test Framework bundle is created that links locale.pak and
   // chrome_100_percent.pak at the appropriate places to ui_test.pak.
-  base::mac::SetOverrideFrameworkBundlePath(
+  base::apple::SetOverrideFrameworkBundlePath(
       exe_path.AppendASCII("ui_unittests Framework.framework"));
   ui::ResourceBundle::InitSharedInstanceWithLocale(
       "en-US", NULL, ui::ResourceBundle::LOAD_COMMON_RESOURCES);
@@ -87,8 +87,10 @@ void UIBaseTestSuite::Initialize() {
 #if BUILDFLAG(IS_ANDROID)
   result =
       base::PathService::Get(ui::DIR_RESOURCE_PAKS_ANDROID, &dir_resources);
-#elif BUILDFLAG(IS_APPLE)
+#elif BUILDFLAG(IS_MAC)
   result = base::PathService::Get(base::DIR_MODULE, &dir_resources);
+#elif BUILDFLAG(IS_IOS)
+  result = base::PathService::Get(base::DIR_ASSETS, &dir_resources);
 #else
   dir_resources = assets_path;
   result = true;
@@ -104,7 +106,7 @@ void UIBaseTestSuite::Shutdown() {
   ui::ResourceBundle::CleanupSharedInstance();
 
 #if BUILDFLAG(IS_MAC)
-  base::mac::SetOverrideFrameworkBundle(NULL);
+  base::apple::SetOverrideFrameworkBundlePath({});
 #endif
   base::TestSuite::Shutdown();
 }

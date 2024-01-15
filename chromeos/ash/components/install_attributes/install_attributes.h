@@ -6,18 +6,19 @@
 #define CHROMEOS_ASH_COMPONENTS_INSTALL_ATTRIBUTES_INSTALL_ATTRIBUTES_H_
 
 #include <map>
+#include <optional>
 #include <string>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
 #include "base/component_export.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/ash/components/dbus/userdataauth/install_attributes_client.h"
 #include "chromeos/dbus/tpm_manager/tpm_manager.pb.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -105,9 +106,6 @@ class COMPONENT_EXPORT(ASH_INSTALL_ATTRIBUTES) InstallAttributes {
   // Checks whether this is a cloud (DM server) managed enterprise device.
   bool IsCloudManaged() const;
 
-  // Checks whether this is an Active Directory managed enterprise device.
-  bool IsActiveDirectoryManaged() const;
-
   // Checks whether this is a consumer kiosk enabled device.
   bool IsConsumerKioskDeviceWithAutoLaunch();
 
@@ -163,7 +161,6 @@ class COMPONENT_EXPORT(ASH_INSTALL_ATTRIBUTES) InstallAttributes {
   // Constants for the possible device modes that can be stored in the lockbox.
   static const char kConsumerDeviceMode[];
   static const char kEnterpriseDeviceMode[];
-  static const char kEnterpriseADDeviceMode[];
   static const char kLegacyRetailDeviceMode[];
   static const char kConsumerKioskDeviceMode[];
   static const char kDemoDeviceMode[];
@@ -196,7 +193,7 @@ class COMPONENT_EXPORT(ASH_INSTALL_ATTRIBUTES) InstallAttributes {
   // Helper for ReadImmutableAttributes.
   void ReadAttributesIfReady(
       base::OnceClosure callback,
-      absl::optional<user_data_auth::InstallAttributesGetStatusReply> reply);
+      std::optional<user_data_auth::InstallAttributesGetStatusReply> reply);
 
   // Helper for LockDevice(). Handles the result of InstallAttributesIsReady()
   // and continue processing LockDevice if the result is true.
@@ -206,7 +203,7 @@ class COMPONENT_EXPORT(ASH_INSTALL_ATTRIBUTES) InstallAttributes {
       const std::string& realm,
       const std::string& device_id,
       LockResultCallback callback,
-      absl::optional<user_data_auth::InstallAttributesGetStatusReply> reply);
+      std::optional<user_data_auth::InstallAttributesGetStatusReply> reply);
 
   // Confirms the registered user and invoke the callback.
   void OnReadImmutableAttributes(policy::DeviceMode mode,
@@ -231,16 +228,12 @@ class COMPONENT_EXPORT(ASH_INSTALL_ATTRIBUTES) InstallAttributes {
   void OnClearStoredOwnerPassword(
       const ::tpm_manager::ClearStoredOwnerPasswordReply& reply);
 
-  InstallAttributesClient* install_attributes_client_;
+  raw_ptr<InstallAttributesClient, DanglingUntriaged>
+      install_attributes_client_;
 
   base::WeakPtrFactory<InstallAttributes> weak_ptr_factory_{this};
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace chromeos {
-using ::ash::InstallAttributes;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_INSTALL_ATTRIBUTES_INSTALL_ATTRIBUTES_H_

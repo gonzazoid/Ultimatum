@@ -6,7 +6,6 @@ import {CrButtonElement, NativeInitialSettings, NativeLayerImpl, PluginProxyImpl
 // <if expr="is_chromeos">
 import {GooglePromotedDestinationId} from 'chrome://print/print_preview.js';
 // </if>
-import {assert} from 'chrome://resources/js/assert.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 
 // <if expr="is_chromeos">
@@ -17,18 +16,7 @@ import {NativeLayerStub} from './native_layer_stub.js';
 import {getDefaultInitialSettings} from './print_preview_test_utils.js';
 import {TestPluginProxy} from './test_plugin_proxy.js';
 
-const print_button_test = {
-  suiteName: 'PrintButtonTest',
-  TestNames: {
-    LocalPrintHidePreview: 'local print hide preview',
-    PDFPrintVisiblePreview: 'pdf print visible preview',
-    SaveToDriveVisiblePreviewCros: 'save to drive visible preview cros',
-  },
-};
-
-Object.assign(window, {print_button_test: print_button_test});
-
-suite(print_button_test.suiteName, function() {
+suite('PrintButtonTest', function() {
   let page: PrintPreviewAppElement;
 
   let nativeLayer: NativeLayerStub;
@@ -89,15 +77,15 @@ suite(print_button_test.suiteName, function() {
     ]);
   }
 
-  // Tests that hidePreview() is called before print() if a local printer is
+  // Tests that hidePreview() is called before doPrint() if a local printer is
   // selected and the user clicks print while the preview is loading.
-  test(assert(print_button_test.TestNames.LocalPrintHidePreview), function() {
+  test('LocalPrintHidePreview', function() {
     printBeforePreviewReady = true;
 
     return waitForInitialPreview()
         .then(function() {
           // Wait for the print request.
-          return nativeLayer.whenCalled('print');
+          return nativeLayer.whenCalled('doPrint');
         })
         .then(function(printTicket: string) {
           assertTrue(previewHidden);
@@ -111,7 +99,7 @@ suite(print_button_test.suiteName, function() {
 
   // Tests that hidePreview() is not called if Save as PDF is selected and
   // the user clicks print while the preview is loading.
-  test(assert(print_button_test.TestNames.PDFPrintVisiblePreview), function() {
+  test('PDFPrintVisiblePreview', function() {
     printBeforePreviewReady = false;
 
     return waitForInitialPreview()
@@ -134,7 +122,7 @@ suite(print_button_test.suiteName, function() {
               pdfDestination!);
 
           // Reload preview and wait for print.
-          return nativeLayer.whenCalled('print');
+          return nativeLayer.whenCalled('doPrint');
         })
         .then(function(printTicket) {
           assertFalse(previewHidden);
@@ -152,8 +140,7 @@ suite(print_button_test.suiteName, function() {
   // Chrome OS and the user clicks print while the preview is loading because
   // Save to Drive needs to be treated like Save as PDF.
   test(
-      assert(print_button_test.TestNames.SaveToDriveVisiblePreviewCros),
-      function() {
+      'SaveToDriveVisiblePreviewCros', function() {
         printBeforePreviewReady = false;
 
         return waitForInitialPreview()
@@ -178,7 +165,7 @@ suite(print_button_test.suiteName, function() {
                   .selectDestination(driveDestination!);
 
               // Reload preview and wait for print.
-              return nativeLayer.whenCalled('print');
+              return nativeLayer.whenCalled('doPrint');
             })
             .then(function(printTicket) {
               assertFalse(previewHidden);

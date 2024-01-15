@@ -4,11 +4,10 @@
 
 #include "content/browser/cache_storage/cache_storage_context_impl.h"
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "components/services/storage/public/cpp/buckets/bucket_info.h"
 #include "components/services/storage/public/cpp/buckets/constants.h"
@@ -38,9 +37,10 @@ CacheStorageContextImpl::CacheStorageContextImpl(
 CacheStorageContextImpl::~CacheStorageContextImpl() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  for (const auto& storage_key : storage_keys_to_purge_on_shutdown_) {
-    cache_manager_->DeleteStorageKeyData(
-        storage_key, storage::mojom::CacheStorageOwner::kCacheAPI,
+  if (!origins_to_purge_on_shutdown_.empty()) {
+    cache_manager_->DeleteOriginData(
+        origins_to_purge_on_shutdown_,
+        storage::mojom::CacheStorageOwner::kCacheAPI,
 
         // Retain a reference to the manager until the deletion is
         // complete, since it internally uses weak pointers for
@@ -85,7 +85,7 @@ void CacheStorageContextImpl::Init(
   DCHECK(!cache_manager_);
   cache_manager_ = CacheStorageManager::Create(
       user_data_directory, std::move(cache_task_runner),
-      base::SequencedTaskRunnerHandle::Get(), quota_manager_proxy_,
+      base::SequencedTaskRunner::GetCurrentDefault(), quota_manager_proxy_,
       base::MakeRefCounted<BlobStorageContextWrapper>(
           std::move(blob_storage_context)),
       dispatcher_host_->AsWeakPtr());
@@ -109,19 +109,25 @@ void CacheStorageContextImpl::AddReceiver(
     mojo::PendingReceiver<blink::mojom::CacheStorage> receiver) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
+  auto add_receiver =
+      base::BindOnce(&CacheStorageContextImpl::AddReceiverWithBucketInfo,
+                     weak_factory_.GetWeakPtr(), cross_origin_embedder_policy,
+                     std::move(coep_reporter), bucket_locator.storage_key,
+                     owner, std::move(receiver));
+
   if (bucket_locator.is_default) {
     DCHECK_EQ(storage::BucketId(), bucket_locator.id);
     quota_manager_proxy_->UpdateOrCreateBucket(
         storage::BucketInitParams::ForDefaultBucket(bucket_locator.storage_key),
-        base::SequencedTaskRunnerHandle::Get(),
-        base::BindOnce(&CacheStorageContextImpl::AddReceiverWithBucketInfo,
-                       weak_factory_.GetWeakPtr(), cross_origin_embedder_policy,
-                       std::move(coep_reporter), bucket_locator.storage_key,
-                       owner, std::move(receiver)));
+        base::SequencedTaskRunner::GetCurrentDefault(),
+        std::move(add_receiver));
+  } else if (!bucket_locator.is_null()) {
+    quota_manager_proxy_->GetBucketById(
+        bucket_locator.id, base::SequencedTaskRunner::GetCurrentDefault(),
+        std::move(add_receiver));
   } else {
-    dispatcher_host_->AddReceiver(
-        cross_origin_embedder_policy, std::move(coep_reporter),
-        bucket_locator.storage_key, bucket_locator, owner, std::move(receiver));
+    std::move(add_receiver)
+        .Run(base::unexpected(storage::QuotaError::kNotFound));
   }
 }
 
@@ -151,11 +157,9 @@ void CacheStorageContextImpl::ApplyPolicyUpdates(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   for (const auto& update : policy_updates) {
     if (!update->purge_on_shutdown)
-      storage_keys_to_purge_on_shutdown_.erase(
-          blink::StorageKey(update->origin));
+      origins_to_purge_on_shutdown_.erase(update->origin);
     else
-      storage_keys_to_purge_on_shutdown_.insert(
-          blink::StorageKey(std::move(update->origin)));
+      origins_to_purge_on_shutdown_.insert(std::move(update->origin));
   }
 }
 
@@ -169,9 +173,9 @@ void CacheStorageContextImpl::AddReceiverWithBucketInfo(
     storage::QuotaErrorOr<storage::BucketInfo> result) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  const absl::optional<storage::BucketLocator> bucket =
-      result.ok() ? absl::make_optional(result->ToBucketLocator())
-                  : absl::nullopt;
+  const std::optional<storage::BucketLocator> bucket =
+      result.has_value() ? std::make_optional(result->ToBucketLocator())
+                         : std::nullopt;
 
   dispatcher_host_->AddReceiver(cross_origin_embedder_policy,
                                 std::move(coep_reporter), storage_key, bucket,

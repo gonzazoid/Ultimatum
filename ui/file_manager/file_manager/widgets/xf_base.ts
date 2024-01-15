@@ -4,27 +4,34 @@
 
 /**
  * @fileoverview A base class for all Files app(xf) widgets.
- * @suppress {checkTypes} closure can't recognize LitElement
  */
 
 import '../common/js/tslib_shim.js';
 
-import {customElement, property, query, state} from 'chrome://resources/mwc/lit/decorators.js';
-import {classMap} from 'chrome://resources/mwc/lit/directives/class-map.js';
-import {css, html, LitElement, PropertyValues} from 'chrome://resources/mwc/lit/index.js';
+import {classMap, css, CSSResult, type CSSResultGroup, customElement, html, ifDefined, LitElement, nothing, property, type PropertyValues, query, repeat, state, styleMap, svg} from 'chrome://resources/mwc/lit/index.js';
 
 export {
   classMap,
   css,
+  CSSResult,
+  type CSSResultGroup,
   customElement,
   html,
+  ifDefined,
+  nothing,
   property,
-  PropertyValues,
+  type PropertyValues,
   query,
+  repeat,
   state,
+  styleMap,
+  svg,
 };
 
 /**
  * A base class for all Files app(xf) widgets.
  */
 export class XfBase extends LitElement {}
+
+// Expose shadowRootOptions so child classes can use this from XfBase directly.
+XfBase.shadowRootOptions = LitElement.shadowRootOptions;

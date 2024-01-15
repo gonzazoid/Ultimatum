@@ -6,7 +6,7 @@
 #define ASH_QUICK_PAIR_UI_FAST_PAIR_FAST_PAIR_PRESENTER_H_
 
 #include "ash/quick_pair/ui/actions.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 namespace message_center {
 class MessageCenter;
@@ -15,7 +15,7 @@ class MessageCenter;
 namespace ash {
 namespace quick_pair {
 
-struct Device;
+class Device;
 class DeviceMetadata;
 
 using DiscoveryCallback = base::RepeatingCallback<void(DiscoveryAction)>;
@@ -34,13 +34,12 @@ class FastPairPresenter {
                                  PairingFailedCallback callback) = 0;
   virtual void ShowAssociateAccount(scoped_refptr<Device> device,
                                     AssociateAccountCallback callback) = 0;
-  virtual void ShowCompanionApp(scoped_refptr<Device> device,
-                                CompanionAppCallback callback) = 0;
-  virtual void RemoveNotifications(
-      bool clear_already_shown_discovery_notification_cache) = 0;
-  virtual void RemoveDeviceFromAlreadyShownDiscoveryNotificationCache(
-      scoped_refptr<Device> device) = 0;
-  virtual void StartDeviceLostTimer(scoped_refptr<Device> device) = 0;
+  virtual void ShowInstallCompanionApp(scoped_refptr<Device> device,
+                                       CompanionAppCallback callback) = 0;
+  virtual void ShowLaunchCompanionApp(scoped_refptr<Device> device,
+                                      CompanionAppCallback callback) = 0;
+  virtual void RemoveNotifications() = 0;
+  virtual void ExtendNotification() = 0;
 
   virtual ~FastPairPresenter() = default;
 };

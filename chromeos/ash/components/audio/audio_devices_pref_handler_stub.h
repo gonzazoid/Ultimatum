@@ -62,6 +62,11 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_AUDIO)
 
   void SetAudioOutputAllowedValue(bool is_audio_output_allowed);
 
+  bool GetForceRespectUiGainsState() override;
+  void SetForceRespectUiGainsState(bool force_respect_ui_gains) override;
+  bool GetHfpMicSrState() override;
+  void SetHfpMicSrState(bool hfp_mic_sr_state) override;
+
  protected:
   ~AudioDevicesPrefHandlerStub() override;
 
@@ -75,6 +80,8 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_AUDIO)
 
   bool is_audio_output_allowed_ = true;
   bool noise_cancellation_state_ = true;
+  bool force_respect_ui_gains_ = false;
+  bool hfp_mic_sr_ = false;
 };
 
 }  // namespace ash

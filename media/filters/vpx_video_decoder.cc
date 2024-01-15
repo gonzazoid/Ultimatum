@@ -11,19 +11,20 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/sys_byteorder.h"
+#include "base/task/bind_post_task.h"
 #include "base/trace_event/trace_event.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/decoder_buffer.h"
 #include "media/base/limits.h"
 #include "media/base/media_switches.h"
 #include "media/base/video_aspect_ratio.h"
+#include "media/filters/ffmpeg_video_decoder.h"
 #include "media/filters/frame_buffer_pool.h"
 #include "third_party/libvpx/source/libvpx/vpx/vp8dx.h"
 #include "third_party/libvpx/source/libvpx/vpx/vpx_decoder.h"
@@ -143,8 +144,9 @@ void VpxVideoDecoder::Initialize(const VideoDecoderConfig& config,
 
   CloseDecoder();
 
-  InitCB bound_init_cb = bind_callbacks_ ? BindToCurrentLoop(std::move(init_cb))
-                                         : std::move(init_cb);
+  InitCB bound_init_cb =
+      bind_callbacks_ ? base::BindPostTaskToCurrentDefault(std::move(init_cb))
+                      : std::move(init_cb);
   if (config.is_encrypted()) {
     std::move(bound_init_cb)
         .Run(DecoderStatus::Codes::kUnsupportedEncryptionMode);
@@ -172,9 +174,9 @@ void VpxVideoDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
   DCHECK_NE(state_, DecoderState::kUninitialized)
       << "Called Decode() before successful Initialize()";
 
-  DecodeCB bound_decode_cb = bind_callbacks_
-                                 ? BindToCurrentLoop(std::move(decode_cb))
-                                 : std::move(decode_cb);
+  DecodeCB bound_decode_cb =
+      bind_callbacks_ ? base::BindPostTaskToCurrentDefault(std::move(decode_cb))
+                      : std::move(decode_cb);
 
   if (state_ == DecoderState::kError) {
     std::move(bound_decode_cb).Run(DecoderStatus::Codes::kFailed);
@@ -215,7 +217,7 @@ void VpxVideoDecoder::Reset(base::OnceClosure reset_cb) {
   state_ = DecoderState::kNormal;
 
   if (bind_callbacks_)
-    BindToCurrentLoop(std::move(reset_cb)).Run();
+    base::BindPostTaskToCurrentDefault(std::move(reset_cb)).Run();
   else
     std::move(reset_cb).Run();
 
@@ -232,8 +234,8 @@ bool VpxVideoDecoder::ConfigureDecoder(const VideoDecoderConfig& config) {
   // When enabled, ffmpeg handles VP8 that doesn't have alpha, and
   // VpxVideoDecoder will handle VP8 with alpha. FFvp8 is being deprecated.
   // See http://crbug.com/992235.
-  if (base::FeatureList::IsEnabled(kFFmpegDecodeOpaqueVP8) &&
-      config.codec() == VideoCodec::kVP8 &&
+  if (config.codec() == VideoCodec::kVP8 &&
+      FFmpegVideoDecoder::IsCodecSupported(config.codec()) &&
       config.alpha_mode() == VideoDecoderConfig::AlphaMode::kIsOpaque) {
     return false;
   }
@@ -252,7 +254,7 @@ bool VpxVideoDecoder::ConfigureDecoder(const VideoDecoderConfig& config) {
            VPX_CODEC_CAP_EXTERNAL_FRAME_BUFFER);
 
     DCHECK(!memory_pool_);
-    memory_pool_ = new FrameBufferPool();
+    memory_pool_ = base::MakeRefCounted<FrameBufferPool>();
 
     if (vpx_codec_set_frame_buffer_functions(
             vpx_codec_.get(), &GetVP9FrameBuffer, &ReleaseVP9FrameBuffer,
@@ -363,15 +365,15 @@ bool VpxVideoDecoder::VpxDecode(const DecoderBuffer* buffer,
 
   // Prefer the color space from the config if available. It generally comes
   // from the color tag which is more expressive than the vp8 and vp9 bitstream.
-  if (config_.color_space_info().IsSpecified()) {
-    (*video_frame)
-        ->set_color_space(config_.color_space_info().ToGfxColorSpace());
+  auto config_cs = config_.color_space_info().ToGfxColorSpace();
+  if (config_cs.IsValid()) {
+    (*video_frame)->set_color_space(config_cs);
     return true;
   }
 
-  auto primaries = gfx::ColorSpace::PrimaryID::INVALID;
-  auto transfer = gfx::ColorSpace::TransferID::INVALID;
-  auto matrix = gfx::ColorSpace::MatrixID::INVALID;
+  auto primaries = VideoColorSpace::PrimaryID::UNSPECIFIED;
+  auto transfer = VideoColorSpace::TransferID::UNSPECIFIED;
+  auto matrix = VideoColorSpace::MatrixID::UNSPECIFIED;
   auto range = vpx_image->range == VPX_CR_FULL_RANGE
                    ? gfx::ColorSpace::RangeID::FULL
                    : gfx::ColorSpace::RangeID::LIMITED;
@@ -379,45 +381,42 @@ bool VpxVideoDecoder::VpxDecode(const DecoderBuffer* buffer,
   switch (vpx_image->cs) {
     case VPX_CS_BT_601:
     case VPX_CS_SMPTE_170:
-      primaries = gfx::ColorSpace::PrimaryID::SMPTE170M;
-      transfer = gfx::ColorSpace::TransferID::SMPTE170M;
-      matrix = gfx::ColorSpace::MatrixID::SMPTE170M;
+      primaries = VideoColorSpace::PrimaryID::SMPTE170M;
+      transfer = VideoColorSpace::TransferID::SMPTE170M;
+      matrix = VideoColorSpace::MatrixID::SMPTE170M;
       break;
     case VPX_CS_SMPTE_240:
-      primaries = gfx::ColorSpace::PrimaryID::SMPTE240M;
-      transfer = gfx::ColorSpace::TransferID::SMPTE240M;
-      matrix = gfx::ColorSpace::MatrixID::SMPTE240M;
+      primaries = VideoColorSpace::PrimaryID::SMPTE240M;
+      transfer = VideoColorSpace::TransferID::SMPTE240M;
+      matrix = VideoColorSpace::MatrixID::SMPTE240M;
       break;
     case VPX_CS_BT_709:
-      primaries = gfx::ColorSpace::PrimaryID::BT709;
-      transfer = gfx::ColorSpace::TransferID::BT709;
-      matrix = gfx::ColorSpace::MatrixID::BT709;
+      primaries = VideoColorSpace::PrimaryID::BT709;
+      transfer = VideoColorSpace::TransferID::BT709;
+      matrix = VideoColorSpace::MatrixID::BT709;
       break;
     case VPX_CS_BT_2020:
-      primaries = gfx::ColorSpace::PrimaryID::BT2020;
+      primaries = VideoColorSpace::PrimaryID::BT2020;
       if (vpx_image->bit_depth >= 12)
-        transfer = gfx::ColorSpace::TransferID::BT2020_12;
+        transfer = VideoColorSpace::TransferID::BT2020_12;
       else if (vpx_image->bit_depth >= 10)
-        transfer = gfx::ColorSpace::TransferID::BT2020_10;
+        transfer = VideoColorSpace::TransferID::BT2020_10;
       else
-        transfer = gfx::ColorSpace::TransferID::BT709;
-      matrix = gfx::ColorSpace::MatrixID::BT2020_NCL;  // is this right?
+        transfer = VideoColorSpace::TransferID::BT709;
+      matrix = VideoColorSpace::MatrixID::BT2020_NCL;
       break;
     case VPX_CS_SRGB:
-      primaries = gfx::ColorSpace::PrimaryID::BT709;
-      transfer = gfx::ColorSpace::TransferID::SRGB;
-      matrix = gfx::ColorSpace::MatrixID::GBR;
+      primaries = VideoColorSpace::PrimaryID::BT709;
+      transfer = VideoColorSpace::TransferID::IEC61966_2_1;
+      matrix = VideoColorSpace::MatrixID::RGB;
       break;
     default:
       break;
   }
 
-  // TODO(ccameron): Set a color space even for unspecified values.
-  if (primaries != gfx::ColorSpace::PrimaryID::INVALID) {
-    (*video_frame)
-        ->set_color_space(gfx::ColorSpace(primaries, transfer, matrix, range));
-  }
-
+  (*video_frame)
+      ->set_color_space(VideoColorSpace(primaries, transfer, matrix, range)
+                            .ToGfxColorSpace());
   return true;
 }
 
@@ -426,26 +425,28 @@ VpxVideoDecoder::AlphaDecodeStatus VpxVideoDecoder::DecodeAlphaPlane(
     const struct vpx_image** vpx_image_alpha,
     const DecoderBuffer* buffer) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (!vpx_codec_alpha_ || buffer->side_data_size() < 8) {
+  if (!vpx_codec_alpha_ || !buffer->has_side_data() ||
+      buffer->side_data()->alpha_data.size() < 8) {
     return kAlphaPlaneProcessed;
   }
 
   // First 8 bytes of side data is |side_data_id| in big endian.
-  const uint64_t side_data_id = base::NetToHost64(
-      *(reinterpret_cast<const uint64_t*>(buffer->side_data())));
+  const uint64_t side_data_id =
+      base::NetToHost64(*(reinterpret_cast<const uint64_t*>(
+          buffer->side_data()->alpha_data.data())));
   if (side_data_id != 1) {
     return kAlphaPlaneProcessed;
   }
 
-  // Try and decode buffer->side_data() minus the first 8 bytes as a full
+  // Try and decode buffer->raw_side_data() minus the first 8 bytes as a full
   // frame.
   {
     TRACE_EVENT1("media", "vpx_codec_decode_alpha", "buffer",
                  buffer->AsHumanReadableString());
-    vpx_codec_err_t status =
-        vpx_codec_decode(vpx_codec_alpha_.get(), buffer->side_data() + 8,
-                         buffer->side_data_size() - 8, nullptr /* user_priv */,
-                         0 /* deadline */);
+    vpx_codec_err_t status = vpx_codec_decode(
+        vpx_codec_alpha_.get(), buffer->side_data()->alpha_data.data() + 8,
+        buffer->side_data()->alpha_data.size() - 8, nullptr /* user_priv */,
+        0 /* deadline */);
     if (status != VPX_CODEC_OK) {
       DLOG(ERROR) << "vpx_codec_decode() failed for the alpha: "
                   << vpx_codec_error(vpx_codec_.get());

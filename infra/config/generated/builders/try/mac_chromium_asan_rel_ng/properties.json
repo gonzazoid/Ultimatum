@@ -1,6 +1,9 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/try/mac_chromium_asan_rel_ng/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
@@ -72,10 +75,11 @@
       ]
     }
   },
-  "$build/goma": {
-    "jobs": 150,
-    "rpc_extra_params": "?prod",
-    "server_host": "goma.chromium.org"
+  "$build/reclient": {
+    "instance": "rbe-chromium-untrusted",
+    "jobs": 500,
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],

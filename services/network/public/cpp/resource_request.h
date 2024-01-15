@@ -10,8 +10,10 @@
 
 #include "base/component_export.h"
 #include "base/debug/crash_logging.h"
-#include "base/memory/ref_counted.h"
+#include "base/location.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/unguessable_token.h"
+#include "build/buildflag.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/isolation_info.h"
 #include "net/base/request_priority.h"
@@ -20,9 +22,11 @@
 #include "net/http/http_request_headers.h"
 #include "net/log/net_log_source.h"
 #include "net/url_request/referrer_policy.h"
+#include "services/network/public/cpp/attribution_reporting_runtime_features.h"
 #include "services/network/public/cpp/optional_trust_token_params.h"
 #include "services/network/public/cpp/resource_request_body.h"
 #include "services/network/public/mojom/accept_ch_frame_observer.mojom.h"
+#include "services/network/public/mojom/attribution.mojom.h"
 #include "services/network/public/mojom/client_security_state.mojom.h"
 #include "services/network/public/mojom/cookie_access_observer.mojom-forward.h"
 #include "services/network/public/mojom/cors.mojom-shared.h"
@@ -30,6 +34,8 @@
 #include "services/network/public/mojom/fetch_api.mojom-shared.h"
 #include "services/network/public/mojom/ip_address_space.mojom-shared.h"
 #include "services/network/public/mojom/referrer_policy.mojom-shared.h"
+#include "services/network/public/mojom/shared_dictionary_access_observer.mojom.h"
+#include "services/network/public/mojom/trust_token_access_observer.mojom-forward.h"
 #include "services/network/public/mojom/trust_tokens.mojom.h"
 #include "services/network/public/mojom/url_loader_network_service_observer.mojom.h"
 #include "services/network/public/mojom/url_request.mojom-forward.h"
@@ -62,12 +68,16 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE) ResourceRequest {
     net::IsolationInfo isolation_info;
     bool disable_secure_dns = false;
     bool has_user_activation = false;
+    bool allow_cookies_from_browser = false;
     mojo::PendingRemote<mojom::CookieAccessObserver> cookie_observer;
+    mojo::PendingRemote<mojom::TrustTokenAccessObserver> trust_token_observer;
     mojo::PendingRemote<mojom::URLLoaderNetworkServiceObserver>
         url_loader_network_observer;
     mojo::PendingRemote<mojom::DevToolsObserver> devtools_observer;
     mojom::ClientSecurityStatePtr client_security_state;
     mojo::PendingRemote<mojom::AcceptCHFrameObserver> accept_ch_frame_observer;
+    mojo::PendingRemote<mojom::SharedDictionaryAccessObserver>
+        shared_dictionary_observer;
   };
 
   // Typemapped to network.mojom.WebBundleTokenParams, see comments there
@@ -102,7 +112,11 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE) ResourceRequest {
     int32_t render_process_id = -1;
   };
 
+#if BUILDFLAG(IS_ANDROID)
+  explicit ResourceRequest(const base::Location& = base::Location::Current());
+#else
   ResourceRequest();
+#endif
   ResourceRequest(const ResourceRequest& request);
   ~ResourceRequest();
 
@@ -138,13 +152,20 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE) ResourceRequest {
   // frames are considered a kSubframe for ResourceType.
   int resource_type = 0;
   net::RequestPriority priority = net::IDLE;
+  bool priority_incremental = net::kDefaultPriorityIncremental;
   mojom::CorsPreflightPolicy cors_preflight_policy =
       mojom::CorsPreflightPolicy::kConsiderPreflight;
   bool originated_from_service_worker = false;
   bool skip_service_worker = false;
   bool corb_detachable = false;
+  // `kNoCors` mode is the default request mode for legacy reasons, however this
+  // mode is highly discouraged for new requests made on the web platform;
+  // please consider using another mode like `kCors` instead, and only use
+  // `kNoCors` with strong rationale and approval from security experts. See
+  // https://fetch.spec.whatwg.org/#concept-request-mode.
   mojom::RequestMode mode = mojom::RequestMode::kNoCors;
-  mojom::IPAddressSpace target_address_space = mojom::IPAddressSpace::kUnknown;
+  mojom::IPAddressSpace required_ip_address_space =
+      mojom::IPAddressSpace::kUnknown;
   mojom::CredentialsMode credentials_mode = mojom::CredentialsMode::kInclude;
   mojom::RedirectMode redirect_mode = mojom::RedirectMode::kFollow;
   std::string fetch_integrity;
@@ -153,6 +174,9 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE) ResourceRequest {
       mojom::RequestDestination::kEmpty;
   scoped_refptr<ResourceRequestBody> request_body;
   bool keepalive = false;
+  bool browsing_topics = false;
+  bool ad_auction_headers = false;
+  bool shared_storage_writable_eligible = false;
   bool has_user_gesture = false;
   bool enable_load_timing = false;
   bool enable_upload_progress = false;
@@ -169,6 +193,7 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE) ResourceRequest {
   absl::optional<std::string> devtools_request_id;
   absl::optional<std::string> devtools_stack_id;
   bool is_fetch_like_api = false;
+  bool is_fetch_later_api = false;
   bool is_favicon = false;
   absl::optional<base::UnguessableToken> recursive_prefetch_token;
   absl::optional<TrustedParams> trusted_params;
@@ -186,6 +211,20 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE) ResourceRequest {
   absl::optional<net::NetLogSource> net_log_reference_info;
   mojom::IPAddressSpace target_ip_address_space =
       mojom::IPAddressSpace::kUnknown;
+  bool has_storage_access = false;
+  network::mojom::AttributionSupport attribution_reporting_support =
+      network::mojom::AttributionSupport::kWeb;
+  mojom::AttributionReportingEligibility attribution_reporting_eligibility =
+      mojom::AttributionReportingEligibility::kUnset;
+  network::AttributionReportingRuntimeFeatures
+      attribution_reporting_runtime_features;
+  bool shared_dictionary_writer_enabled = false;
+  absl::optional<base::UnguessableToken> attribution_reporting_src_token;
+  bool is_ad_tagged = false;
+#if BUILDFLAG(IS_ANDROID)
+  // TODO(https://crbug.com/1456586): Remove this once the issue is fixed.
+  std::string created_location;
+#endif
 };
 
 // This does not accept |kDefault| referrer policy.

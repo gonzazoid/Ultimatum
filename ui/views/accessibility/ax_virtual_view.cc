@@ -10,12 +10,13 @@
 #include <map>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/containers/adapters.h"
+#include "base/functional/callback.h"
 #include "base/no_destructor.h"
 #include "base/ranges/algorithm.h"
 #include "build/build_config.h"
 #include "ui/accessibility/ax_action_data.h"
+#include "ui/accessibility/ax_role_properties.h"
 #include "ui/accessibility/ax_tree_data.h"
 #include "ui/accessibility/platform/ax_platform_node.h"
 #include "ui/base/layout.h"
@@ -27,7 +28,7 @@
 #include "ui/views/view.h"
 #include "ui/views/widget/widget.h"
 
-#if OS_WIN
+#if BUILDFLAG(IS_WIN)
 #include "ui/views/win/hwnd_util.h"
 #endif
 
@@ -130,12 +131,10 @@ std::unique_ptr<AXVirtualView> AXVirtualView::RemoveFromParentView() {
   if (parent_view_)
     return parent_view_->RemoveVirtualChildView(this);
 
-  if (virtual_parent_view_)
-    return virtual_parent_view_->RemoveChildView(this);
-
   // This virtual view hasn't been added to a parent view yet.
-  NOTREACHED() << "Cannot remove from parent view if there is no parent.";
-  return {};
+  CHECK(virtual_parent_view_)
+      << "Cannot remove from parent view if there is no parent.";
+  return virtual_parent_view_->RemoveChildView(this);
 }
 
 std::unique_ptr<AXVirtualView> AXVirtualView::RemoveChildView(
@@ -207,6 +206,12 @@ gfx::NativeViewAccessible AXVirtualView::GetNativeObject() const {
 
 void AXVirtualView::NotifyAccessibilityEvent(ax::mojom::Event event_type) {
   DCHECK(ax_platform_node_);
+  if (event_type == ax::mojom::Event::kAlert) {
+    CHECK(ui::IsAlert(GetRole()))
+        << "On some platforms, the alert event does not work correctly unless "
+           "it is fired on an object with an alert role. Role was "
+        << GetRole();
+  }
   if (GetOwnerView()) {
     const ViewAccessibility::AccessibilityEventsCallback& events_callback =
         GetOwnerView()->GetViewAccessibility().accessibility_events_callback();
@@ -279,7 +284,7 @@ size_t AXVirtualView::GetChildCount() const {
   return count;
 }
 
-gfx::NativeViewAccessible AXVirtualView::ChildAtIndex(size_t index) {
+gfx::NativeViewAccessible AXVirtualView::ChildAtIndex(size_t index) const {
   DCHECK_LT(index, GetChildCount())
       << "|index| should be less than the child count.";
 
@@ -296,14 +301,12 @@ gfx::NativeViewAccessible AXVirtualView::ChildAtIndex(size_t index) {
     }
   }
 
-  NOTREACHED() << "|index| should be less than the child count.";
-  return nullptr;
+  NOTREACHED_NORETURN() << "|index| should be less than the child count.";
 }
 
 #if !BUILDFLAG(IS_MAC)
 gfx::NativeViewAccessible AXVirtualView::GetNSWindow() {
-  NOTREACHED();
-  return nullptr;
+  NOTREACHED_NORETURN();
 }
 #endif
 
@@ -442,10 +445,6 @@ gfx::AcceleratedWidget AXVirtualView::GetTargetForNativeAccessibilityEvent() {
     return HWNDForView(GetOwnerView());
 #endif
   return gfx::kNullAcceleratedWidget;
-}
-
-absl::optional<bool> AXVirtualView::GetTableHasColumnOrRowHeaderNode() const {
-  return GetDelegate()->GetTableHasColumnOrRowHeaderNode();
 }
 
 std::vector<int32_t> AXVirtualView::GetColHeaderNodeIds() const {

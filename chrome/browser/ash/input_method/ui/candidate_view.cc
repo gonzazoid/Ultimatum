@@ -13,13 +13,15 @@
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/color_utils.h"
+#include "ui/gfx/text_constants.h"
 #include "ui/views/background.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/label.h"
+#include "ui/views/style/typography.h"
+#include "ui/views/style/typography_provider.h"
 #include "ui/views/widget/widget.h"
 
-namespace ui {
-namespace ime {
+namespace ui::ime {
 
 namespace {
 
@@ -37,8 +39,9 @@ class VerticalCandidateLabel : public views::Label {
   // views::Label:
   // Returns the preferred size, but guarantees that the width has at
   // least kMinCandidateLabelWidth pixels.
-  gfx::Size CalculatePreferredSize() const override {
-    gfx::Size size = Label::CalculatePreferredSize();
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override {
+    gfx::Size size = Label::CalculatePreferredSize(available_size);
     size.SetToMax(gfx::Size(kMinCandidateLabelWidth, 0));
     size.SetToMin(gfx::Size(kMaxCandidateLabelWidth, size.height()));
     return size;
@@ -98,30 +101,16 @@ class ShortcutLabel : public views::Label {
 BEGIN_METADATA(ShortcutLabel, views::Label)
 END_METADATA
 
-// The label text is not set in this class.
-class AnnotationLabel : public views::Label {
- public:
-  METADATA_HEADER(AnnotationLabel);
-  AnnotationLabel() {
-    // Change the font size and color.
-    SetFontList(font_list().DeriveWithSizeDelta(kFontSizeDelta));
-    SetHorizontalAlignment(gfx::ALIGN_LEFT);
-    SetElideBehavior(gfx::NO_ELIDE);
-  }
-  AnnotationLabel(const AnnotationLabel&) = delete;
-  AnnotationLabel& operator=(const AnnotationLabel&) = delete;
-  ~AnnotationLabel() override = default;
-
-  // views::Label:
-  void OnThemeChanged() override {
-    Label::OnThemeChanged();
-    SetEnabledColor(
-        GetColorProvider()->GetColor(ui::kColorLabelForegroundSecondary));
-  }
-};
-
-BEGIN_METADATA(AnnotationLabel, views::Label)
-END_METADATA
+// Creates an annotation label. Sets no text by default.
+std::unique_ptr<views::Label> CreateAnnotationLabel() {
+  auto label = views::Builder<views::Label>()
+                   .SetHorizontalAlignment(gfx::ALIGN_LEFT)
+                   .SetElideBehavior(gfx::NO_ELIDE)
+                   .SetEnabledColorId(ui::kColorLabelForegroundSecondary)
+                   .Build();
+  label->SetFontList(label->font_list().DeriveWithSizeDelta(kFontSizeDelta));
+  return label;
+}
 
 // Creates the candidate label, and returns it (never returns nullptr).
 // The label text is not set in this function.
@@ -153,10 +142,15 @@ CandidateView::CandidateView(PressedCallback callback,
 
   shortcut_label_ = AddChildView(std::make_unique<ShortcutLabel>(orientation));
   candidate_label_ = AddChildView(CreateCandidateLabel(orientation));
-  annotation_label_ = AddChildView(std::make_unique<AnnotationLabel>());
+  annotation_label_ = AddChildView(CreateAnnotationLabel());
 
-  if (orientation == ui::CandidateWindow::VERTICAL)
-    infolist_icon_ = AddChildView(std::make_unique<views::View>());
+  if (orientation == ui::CandidateWindow::VERTICAL) {
+    infolist_icon_ =
+        AddChildView(views::Builder<views::View>()
+                         .SetBackground(views::CreateThemedSolidBackground(
+                             ui::kColorFocusableBorderFocused))
+                         .Build());
+  }
 
   SetFocusBehavior(views::View::FocusBehavior::ACCESSIBLE_ONLY);
 }
@@ -195,12 +189,10 @@ void CandidateView::SetHighlighted(bool highlighted) {
 
   highlighted_ = highlighted;
   if (highlighted) {
-    NotifyAccessibilityEvent(ax::mojom::Event::kSelection, false);
-    const ui::ColorProvider* color_provider = GetColorProvider();
-    SetBackground(views::CreateSolidBackground(
-        color_provider->GetColor(ui::kColorTextfieldSelectionBackground)));
-    SetBorder(views::CreateSolidBorder(
-        1, color_provider->GetColor(ui::kColorFocusableBorderFocused)));
+    SetBackground(views::CreateThemedSolidBackground(
+        ui::kColorTextfieldSelectionBackground));
+    SetBorder(
+        views::CreateThemedSolidBorder(1, ui::kColorFocusableBorderFocused));
 
     // Cancel currently focused one.
     for (View* view : parent()->children()) {
@@ -218,8 +210,9 @@ void CandidateView::StateChanged(ButtonState old_state) {
   Button::StateChanged(old_state);
   int text_style = GetState() == STATE_DISABLED ? views::style::STYLE_DISABLED
                                                 : views::style::STYLE_PRIMARY;
-  shortcut_label_->SetEnabledColor(views::style::GetColor(
-      *shortcut_label_, views::style::CONTEXT_LABEL, text_style));
+  shortcut_label_->SetEnabledColorId(
+      views::TypographyProvider::Get().GetColorId(views::style::CONTEXT_LABEL,
+                                                  text_style));
   if (GetState() == STATE_PRESSED)
     SetHighlighted(true);
 }
@@ -309,16 +302,7 @@ void CandidateView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
                              total_candidates_);
 }
 
-void CandidateView::OnThemeChanged() {
-  Button::OnThemeChanged();
-  if (infolist_icon_) {
-    infolist_icon_->SetBackground(views::CreateSolidBackground(
-        GetColorProvider()->GetColor(ui::kColorFocusableBorderFocused)));
-  }
-}
-
 BEGIN_METADATA(CandidateView, views::Button)
 END_METADATA
 
-}  // namespace ime
-}  // namespace ui
+}  // namespace ui::ime

@@ -14,14 +14,15 @@ import android.content.Intent;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.net.Uri;
-import android.support.test.InstrumentationRegistry;
 import android.util.Size;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.RemoteViews;
 
 import androidx.annotation.LayoutRes;
+import androidx.test.core.app.ApplicationProvider;
 import androidx.test.filters.SmallTest;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.junit.After;
 import org.junit.Assert;
@@ -50,9 +51,7 @@ import org.chromium.components.embedder_support.util.UrlConstants;
 
 import java.util.Locale;
 
-/**
- * Tests for the QuickActionSearchWidgetProviderDelegate.
- */
+/** Tests for the QuickActionSearchWidgetProviderDelegate. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add(ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE)
 public class QuickActionSearchWidgetProviderDelegateTest {
@@ -70,22 +69,26 @@ public class QuickActionSearchWidgetProviderDelegateTest {
     private int mMediumWidgetMinHeightDp;
     private int mDinoWidgetEdgeSizeDp;
 
-    @Mock
-    RemoteViews mMockRemoteViews;
+    @Mock RemoteViews mMockRemoteViews;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
-        ChromeApplicationTestUtils.setUp(InstrumentationRegistry.getTargetContext());
-        mContext = InstrumentationRegistry.getInstrumentation()
-                           .getTargetContext()
-                           .getApplicationContext();
+        ChromeApplicationTestUtils.setUp(ApplicationProvider.getApplicationContext());
+        mContext =
+                InstrumentationRegistry.getInstrumentation()
+                        .getTargetContext()
+                        .getApplicationContext();
 
         ComponentName searchActivityComponent = new ComponentName(mContext, SearchActivity.class);
 
-        mDelegate = new QuickActionSearchWidgetProviderDelegate(mContext, searchActivityComponent,
-                IntentHandler.createTrustedOpenNewTabIntent(mContext, /*incognito=*/true),
-                createDinoIntent(mContext));
+        mDelegate =
+                new QuickActionSearchWidgetProviderDelegate(
+                        mContext,
+                        searchActivityComponent,
+                        IntentHandler.createTrustedOpenNewTabIntent(
+                                mContext, /* incognito= */ true),
+                        createDinoIntent(mContext));
 
         Resources res = mContext.getResources();
         float density = res.getDisplayMetrics().density;
@@ -93,13 +96,15 @@ public class QuickActionSearchWidgetProviderDelegateTest {
         // Depend on device-supplied defaults to test also on different form factors.
         // The computation below infers the size specific to a particular device running tests.
         mXSmallWidgetMinHeightDp =
-                (int) (res.getDimension(R.dimen.quick_action_search_widget_xsmall_height)
-                        / density);
+                (int)
+                        (res.getDimension(R.dimen.quick_action_search_widget_xsmall_height)
+                                / density);
         mSmallWidgetMinHeightDp =
                 (int) (res.getDimension(R.dimen.quick_action_search_widget_small_height) / density);
         mMediumWidgetMinHeightDp =
-                (int) (res.getDimension(R.dimen.quick_action_search_widget_medium_height)
-                        / density);
+                (int)
+                        (res.getDimension(R.dimen.quick_action_search_widget_medium_height)
+                                / density);
         mDefaultWidgetWidthDp =
                 (int) (res.getDimension(R.dimen.quick_action_search_widget_width) / density);
         mDinoWidgetEdgeSizeDp =
@@ -110,17 +115,19 @@ public class QuickActionSearchWidgetProviderDelegateTest {
 
     @After
     public void tearDown() {
-        ChromeApplicationTestUtils.tearDown(InstrumentationRegistry.getTargetContext());
+        ChromeApplicationTestUtils.tearDown(ApplicationProvider.getApplicationContext());
     }
 
     @Test
     @SmallTest
     public void testSearchBarClick() throws Exception {
         QuickActionSearchWidgetTestUtils.assertSearchActivityLaunchedAfterAction(
-                mActivityTestRule, () -> {
+                mActivityTestRule,
+                () -> {
                     QuickActionSearchWidgetTestUtils.clickOnView(
                             mWidgetView, R.id.quick_action_search_widget_search_bar_container);
-                }, /*shouldActivityLaunchVoiceMode=*/false);
+                },
+                /* shouldActivityLaunchVoiceMode= */ false);
         ApplicationTestUtils.finishActivity(mActivityTestRule.getActivity());
     }
 
@@ -128,7 +135,8 @@ public class QuickActionSearchWidgetProviderDelegateTest {
     @SmallTest
     public void testIncognitoTabClick() throws Exception {
         QuickActionSearchWidgetTestUtils.assertIncognitoModeLaunchedAfterAction(
-                mActivityTestRule, () -> {
+                mActivityTestRule,
+                () -> {
                     QuickActionSearchWidgetTestUtils.clickOnView(
                             mWidgetView, R.id.incognito_quick_action_button);
                 });
@@ -139,10 +147,12 @@ public class QuickActionSearchWidgetProviderDelegateTest {
     @SmallTest
     public void testVoiceButtonClick() throws Exception {
         QuickActionSearchWidgetTestUtils.assertSearchActivityLaunchedAfterAction(
-                mActivityTestRule, () -> {
+                mActivityTestRule,
+                () -> {
                     QuickActionSearchWidgetTestUtils.clickOnView(
                             mWidgetView, R.id.voice_search_quick_action_button);
-                }, /*shouldActivityLaunchVoiceMode=*/true);
+                },
+                /* shouldActivityLaunchVoiceMode= */ true);
         ApplicationTestUtils.finishActivity(mActivityTestRule.getActivity());
     }
 
@@ -150,7 +160,8 @@ public class QuickActionSearchWidgetProviderDelegateTest {
     @SmallTest
     public void testDinoButtonClick() throws Exception {
         QuickActionSearchWidgetTestUtils.assertDinoGameLaunchedAfterAction(
-                mActivityTestRule, () -> {
+                mActivityTestRule,
+                () -> {
                     QuickActionSearchWidgetTestUtils.clickOnView(
                             mWidgetView, R.id.dino_quick_action_button);
                 });
@@ -161,7 +172,8 @@ public class QuickActionSearchWidgetProviderDelegateTest {
     @SmallTest
     public void testDinoWidgetDinoButtonClick() throws Exception {
         QuickActionSearchWidgetTestUtils.assertDinoGameLaunchedAfterAction(
-                mActivityTestRule, () -> {
+                mActivityTestRule,
+                () -> {
                     QuickActionSearchWidgetTestUtils.clickOnView(
                             mDinoWidgetView, R.id.dino_quick_action_button);
                 });
@@ -178,28 +190,21 @@ public class QuickActionSearchWidgetProviderDelegateTest {
         Resources res = mContext.getResources();
         float density = res.getDisplayMetrics().density;
 
-        mWidgetView = mDelegate
-                              .createSearchWidgetRemoteViews(mContext, prefs,
-                                      // Simulate optimally sized rectangular screen:
-                                      // Portrait mode dimensions:
-                                      mDefaultWidgetWidthDp, mMediumWidgetMinHeightDp,
-                                      // Landscape mode dimensions:
-                                      mDefaultWidgetWidthDp, mMediumWidgetMinHeightDp)
-                              .apply(mContext, null);
+        mWidgetView =
+                mDelegate
+                        .createSearchWidgetRemoteViews(
+                                mContext, prefs, mDefaultWidgetWidthDp, mMediumWidgetMinHeightDp)
+                        .apply(mContext, null);
         mDinoWidgetView =
                 mDelegate
-                        .createDinoWidgetRemoteViews(mContext, prefs, mDinoWidgetEdgeSizeDp,
-                                mDinoWidgetEdgeSizeDp, mDinoWidgetEdgeSizeDp, mDinoWidgetEdgeSizeDp)
+                        .createDinoWidgetRemoteViews(
+                                mContext, prefs, mDinoWidgetEdgeSizeDp, mDinoWidgetEdgeSizeDp)
                         .apply(mContext, null);
     }
 
-    /**
-     * Test copy of {@link QuickActionSearchWidgetProvider#createDinoIntent}.
-     */
+    /** Test copy of {@link QuickActionSearchWidgetProvider#createDinoIntent}. */
     private static Intent createDinoIntent(final Context context) {
-        String chromeDinoUrl = UrlConstants.CHROME_DINO_URL + "/";
-
-        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(chromeDinoUrl));
+        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(UrlConstants.CHROME_DINO_URL));
         intent.setComponent(new ComponentName(context, ChromeLauncherActivity.class));
         intent.putExtra(WebappConstants.REUSE_URL_MATCHING_TAB_ELSE_NEW_TAB, true);
         intent.putExtra(IntentHandler.EXTRA_INVOKED_FROM_APP_WIDGET, true);
@@ -212,8 +217,10 @@ public class QuickActionSearchWidgetProviderDelegateTest {
     static class VerticalResizeHeightVariant {
         /** Reported widget height (in distance point) for this variant. */
         public final int heightDp;
+
         /** String representation (for human readable logs). */
         public final String variantName;
+
         /** Expected Layout Resource ID for that height. */
         public final Integer layoutRes;
 
@@ -225,8 +232,8 @@ public class QuickActionSearchWidgetProviderDelegateTest {
     }
 
     /**
-     * Test that the same delegate is used for all small size widgets.
-     * This takes under consideration the fact that "dipi" and "dpi" dimensions are different
+     * Test that the same delegate is used for all small size widgets. This takes under
+     * consideration the fact that "dipi" and "dpi" dimensions are different
      */
     @Test
     @SmallTest
@@ -236,38 +243,61 @@ public class QuickActionSearchWidgetProviderDelegateTest {
         // MIN_HEIGHT <= MAX_HEIGHT does not have to hold true.
         // We want to be thorough and test both the lower and the upper boundary against what we
         // expect to be returned.
-        VerticalResizeHeightVariant[] variants = new VerticalResizeHeightVariant[] {
-                // The following 2 variants "should never happen" and technically violate any
-                // assumptions that could be made about Android widget sizing, but we keep these to
-                // verify that we're not doing anything unexpected / bad, like crashing.
-                new VerticalResizeHeightVariant(0, //
-                        "zero", R.layout.quick_action_search_widget_xsmall_layout),
-                new VerticalResizeHeightVariant(mXSmallWidgetMinHeightDp - 1,
-                        "XSmallMinHeightDp - 1", R.layout.quick_action_search_widget_xsmall_layout),
+        VerticalResizeHeightVariant[] variants =
+                new VerticalResizeHeightVariant[] {
+                    // The following 2 variants "should never happen" and technically violate any
+                    // assumptions that could be made about Android widget sizing, but we keep these
+                    // to verify that we're not doing anything unexpected / bad, like crashing.
+                    new VerticalResizeHeightVariant(
+                            0, //
+                            "zero",
+                            R.layout.quick_action_search_widget_xsmall_layout),
+                    new VerticalResizeHeightVariant(
+                            mXSmallWidgetMinHeightDp - 1,
+                            "XSmallMinHeightDp - 1",
+                            R.layout.quick_action_search_widget_xsmall_layout),
 
-                // The following variants test every valid variant at its boundaries.
-                new VerticalResizeHeightVariant(mXSmallWidgetMinHeightDp, //
-                        "XSmallMinHeightDp", R.layout.quick_action_search_widget_xsmall_layout),
-                new VerticalResizeHeightVariant(mXSmallWidgetMinHeightDp + 1,
-                        "XSmallMinHeightDp + 1", R.layout.quick_action_search_widget_xsmall_layout),
-                new VerticalResizeHeightVariant(mSmallWidgetMinHeightDp - 1, //
-                        "SmallMinHeightDp - 1", R.layout.quick_action_search_widget_xsmall_layout),
-                new VerticalResizeHeightVariant(mSmallWidgetMinHeightDp, //
-                        "SmallMinHeightDp", R.layout.quick_action_search_widget_small_layout),
-                new VerticalResizeHeightVariant(mSmallWidgetMinHeightDp + 1, //
-                        "SmallMinHeightDp + 1", R.layout.quick_action_search_widget_small_layout),
-                new VerticalResizeHeightVariant(mMediumWidgetMinHeightDp - 1,
-                        "MediumMinHeightDp - 1", R.layout.quick_action_search_widget_small_layout),
-                new VerticalResizeHeightVariant(mMediumWidgetMinHeightDp, //
-                        "MediumMinHeightDp", R.layout.quick_action_search_widget_medium_layout),
-                new VerticalResizeHeightVariant(mMediumWidgetMinHeightDp + 1,
-                        "MediumMinHeightDp + 1", R.layout.quick_action_search_widget_medium_layout),
-        };
+                    // The following variants test every valid variant at its boundaries.
+                    new VerticalResizeHeightVariant(
+                            mXSmallWidgetMinHeightDp, //
+                            "XSmallMinHeightDp",
+                            R.layout.quick_action_search_widget_xsmall_layout),
+                    new VerticalResizeHeightVariant(
+                            mXSmallWidgetMinHeightDp + 1,
+                            "XSmallMinHeightDp + 1",
+                            R.layout.quick_action_search_widget_xsmall_layout),
+                    new VerticalResizeHeightVariant(
+                            mSmallWidgetMinHeightDp - 1, //
+                            "SmallMinHeightDp - 1",
+                            R.layout.quick_action_search_widget_xsmall_layout),
+                    new VerticalResizeHeightVariant(
+                            mSmallWidgetMinHeightDp, //
+                            "SmallMinHeightDp",
+                            R.layout.quick_action_search_widget_small_layout),
+                    new VerticalResizeHeightVariant(
+                            mSmallWidgetMinHeightDp + 1, //
+                            "SmallMinHeightDp + 1",
+                            R.layout.quick_action_search_widget_small_layout),
+                    new VerticalResizeHeightVariant(
+                            mMediumWidgetMinHeightDp - 1,
+                            "MediumMinHeightDp - 1",
+                            R.layout.quick_action_search_widget_small_layout),
+                    new VerticalResizeHeightVariant(
+                            mMediumWidgetMinHeightDp, //
+                            "MediumMinHeightDp",
+                            R.layout.quick_action_search_widget_medium_layout),
+                    new VerticalResizeHeightVariant(
+                            mMediumWidgetMinHeightDp + 1,
+                            "MediumMinHeightDp + 1",
+                            R.layout.quick_action_search_widget_medium_layout),
+                };
 
         for (VerticalResizeHeightVariant variant : variants) {
             Integer layoutRes = mDelegate.getSearchWidgetVariantForHeight(variant.heightDp).layout;
-            Assert.assertEquals("Unexpected layout where height=" + variant.variantName,
-                    variant.layoutRes, layoutRes);
+            Assert.assertEquals(
+                    "Unexpected layout where height=" + variant.variantName,
+                    variant.layoutRes,
+                    layoutRes);
         }
     }
 
@@ -298,13 +328,16 @@ public class QuickActionSearchWidgetProviderDelegateTest {
 
         // Target area width < reference width:
         Assert.assertEquals(1, variant.computeNumberOfButtonsToHide(variant.widgetWidthDp - 1));
-        Assert.assertEquals(1,
+        Assert.assertEquals(
+                1,
                 variant.computeNumberOfButtonsToHide(
                         variant.widgetWidthDp - variant.buttonWidthDp));
-        Assert.assertEquals(2,
+        Assert.assertEquals(
+                2,
                 variant.computeNumberOfButtonsToHide(
                         variant.widgetWidthDp - variant.buttonWidthDp - 1));
-        Assert.assertEquals(3,
+        Assert.assertEquals(
+                3,
                 variant.computeNumberOfButtonsToHide(
                         variant.widgetWidthDp - variant.buttonWidthDp * 3));
     }
@@ -317,10 +350,11 @@ public class QuickActionSearchWidgetProviderDelegateTest {
         // Convert a simple dimension into DP.
         float expectedSizeDp =
                 res.getDimension(R.dimen.quick_action_search_widget_medium_button_width)
-                / res.getDisplayMetrics().density;
+                        / res.getDisplayMetrics().density;
 
         // Check that the method returns that same value after conversion.
-        Assert.assertEquals((int) expectedSizeDp,
+        Assert.assertEquals(
+                (int) expectedSizeDp,
                 WidgetVariant.getElementSizeInDP(
                         res, R.dimen.quick_action_search_widget_medium_button_width, 0));
     }
@@ -333,14 +367,17 @@ public class QuickActionSearchWidgetProviderDelegateTest {
         // Convert a single dimension + surrounding margins into DP.
         float expectedSizeDp =
                 (res.getDimension(R.dimen.quick_action_search_widget_medium_button_width)
-                        + res.getDimension(
-                                  R.dimen.quick_action_search_widget_medium_button_horizontal_margin)
-                                * 2)
-                / res.getDisplayMetrics().density;
+                                + res.getDimension(
+                                                R.dimen
+                                                        .quick_action_search_widget_medium_button_horizontal_margin)
+                                        * 2)
+                        / res.getDisplayMetrics().density;
 
         // Check that the method returns that same value after conversion.
-        Assert.assertEquals((int) expectedSizeDp,
-                WidgetVariant.getElementSizeInDP(res,
+        Assert.assertEquals(
+                (int) expectedSizeDp,
+                WidgetVariant.getElementSizeInDP(
+                        res,
                         R.dimen.quick_action_search_widget_medium_button_width,
                         R.dimen.quick_action_search_widget_medium_button_horizontal_margin));
     }
@@ -516,19 +553,23 @@ public class QuickActionSearchWidgetProviderDelegateTest {
         // a scale factor of 1.0 means the area will host the widget as it was designed
         // without any scaling.
         Resources r = mContext.getResources();
-        Assert.assertEquals(1.f,
+        Assert.assertEquals(
+                1.f,
                 mDelegate.computeScaleFactorForDinoWidget(
                         mDinoWidgetEdgeSizeDp, mDinoWidgetEdgeSizeDp),
                 0.001f);
-        Assert.assertEquals(1.f,
+        Assert.assertEquals(
+                1.f,
                 mDelegate.computeScaleFactorForDinoWidget(
                         mDinoWidgetEdgeSizeDp, mDinoWidgetEdgeSizeDp * 2),
                 0.001f);
-        Assert.assertEquals(2.f,
+        Assert.assertEquals(
+                2.f,
                 mDelegate.computeScaleFactorForDinoWidget(
                         mDinoWidgetEdgeSizeDp * 3, mDinoWidgetEdgeSizeDp * 2),
                 0.001f);
-        Assert.assertEquals(0.5f,
+        Assert.assertEquals(
+                0.5f,
                 mDelegate.computeScaleFactorForDinoWidget(
                         mDinoWidgetEdgeSizeDp, mDinoWidgetEdgeSizeDp / 2),
                 0.001f);
@@ -590,11 +631,16 @@ public class QuickActionSearchWidgetProviderDelegateTest {
         int imagePadLeft =
                 (int) (r.getDimension(R.dimen.quick_action_search_widget_dino_padding_start) / 2.f);
         int imagePadVertical =
-                (int) (r.getDimension(R.dimen.quick_action_search_widget_dino_padding_vertical)
-                        / 2.f);
+                (int)
+                        (r.getDimension(R.dimen.quick_action_search_widget_dino_padding_vertical)
+                                / 2.f);
 
         verify(mMockRemoteViews)
-                .setViewPadding(R.id.dino_quick_action_button, imagePadLeft, imagePadVertical, 0,
+                .setViewPadding(
+                        R.id.dino_quick_action_button,
+                        imagePadLeft,
+                        imagePadVertical,
+                        0,
                         imagePadVertical);
     }
 
@@ -618,11 +664,16 @@ public class QuickActionSearchWidgetProviderDelegateTest {
         int imagePadRight =
                 (int) (r.getDimension(R.dimen.quick_action_search_widget_dino_padding_start) / 4.f);
         int imagePadVertical =
-                (int) (r.getDimension(R.dimen.quick_action_search_widget_dino_padding_vertical)
-                        / 4.f);
+                (int)
+                        (r.getDimension(R.dimen.quick_action_search_widget_dino_padding_vertical)
+                                / 4.f);
 
         verify(mMockRemoteViews)
-                .setViewPadding(R.id.dino_quick_action_button, 0, imagePadVertical, imagePadRight,
+                .setViewPadding(
+                        R.id.dino_quick_action_button,
+                        0,
+                        imagePadVertical,
+                        imagePadRight,
                         imagePadVertical);
     }
 }

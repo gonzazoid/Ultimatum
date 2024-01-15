@@ -2,10 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ApplicationTestRunner} from 'application_test_runner';
+
+import * as Application from 'devtools/panels/application/application.js';
+
 (async function() {
   TestRunner.addResult(
       `Test that storage panel is present and that it contains correct data for local and session DOM storages.\n`);
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('application_test_runner');
     // Note: every test that uses a storage API must manually clean-up state from previous tests.
   await ApplicationTestRunner.resetState();
 
@@ -50,11 +54,11 @@
       TestRunner.completeTest();
       return;
     }
-    UI.panels.resources.showDOMStorage(storage);
+    Application.ResourcesPanel.ResourcesPanel.instance().showDOMStorage(storage);
     TestRunner.addResult('Did show: ' + name(storage));
     TestRunner.deprecatedRunAfterPendingDispatches(function() {
       TestRunner.addResult(name(storage) + ' content: ');
-      var view = UI.panels.resources.domStorageView;
+      var view = Application.ResourcesPanel.ResourcesPanel.instance().domStorageView;
       dumpDataGridContent(view.dataGrid);
       TestRunner.deprecatedRunAfterPendingDispatches(() => testStorageInView(storages));
     });

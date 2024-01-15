@@ -6,9 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/check_deref.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "build/build_config.h"
@@ -26,20 +27,20 @@
 #include "components/ntp_tiles/icon_cacher_impl.h"
 #include "components/ntp_tiles/metrics.h"
 #include "components/ntp_tiles/most_visited_sites.h"
+#include "components/supervised_user/core/common/buildflags.h"
 #include "content/public/browser/storage_partition.h"
 #include "services/data_decoder/public/cpp/data_decoder.h"
 
-#if BUILDFLAG(IS_ANDROID)
-#include "chrome/browser/android/explore_sites/most_visited_client.h"
-#else
+#if !BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/web_applications/preinstalled_app_install_features.h"
 #endif
 
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-#include "chrome/browser/supervised_user/supervised_user_service.h"
 #include "chrome/browser/supervised_user/supervised_user_service_factory.h"
-#include "chrome/browser/supervised_user/supervised_user_service_observer.h"
-#include "chrome/browser/supervised_user/supervised_user_url_filter.h"  // nogncheck
+#include "components/supervised_user/core/browser/supervised_user_service.h"
+#include "components/supervised_user/core/browser/supervised_user_service_observer.h"
+#include "components/supervised_user/core/browser/supervised_user_url_filter.h"  // nogncheck
+#include "components/supervised_user/core/common/supervised_user_utils.h"
 #endif
 
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
@@ -61,7 +62,8 @@ class SupervisorBridge : public ntp_tiles::MostVisitedSitesSupervisor,
  private:
   const raw_ptr<Profile> profile_;
   raw_ptr<Observer> supervisor_observer_;
-  base::ScopedObservation<SupervisedUserService, SupervisedUserServiceObserver>
+  base::ScopedObservation<supervised_user::SupervisedUserService,
+                          SupervisedUserServiceObserver>
       register_observation_{this};
 };
 
@@ -84,11 +86,11 @@ void SupervisorBridge::SetObserver(Observer* new_observer) {
 }
 
 bool SupervisorBridge::IsBlocked(const GURL& url) {
-  SupervisedUserService* supervised_user_service =
+  supervised_user::SupervisedUserService* supervised_user_service =
       SupervisedUserServiceFactory::GetForProfile(profile_);
   auto* url_filter = supervised_user_service->GetURLFilter();
   return url_filter->GetFilteringBehaviorForURL(url) ==
-         SupervisedUserURLFilter::FilteringBehavior::BLOCK;
+         supervised_user::FilteringBehavior::kBlock;
 }
 
 bool SupervisorBridge::IsChildProfile() {
@@ -119,6 +121,14 @@ ChromeMostVisitedSitesFactory::NewForProfile(Profile* profile) {
     data_decoder = std::make_unique<data_decoder::DataDecoder>();
   }
 #endif
+
+  bool is_default_chrome_app_migrated;
+#if BUILDFLAG(IS_ANDROID)
+  is_default_chrome_app_migrated = false;
+#else
+  is_default_chrome_app_migrated = true;
+#endif
+
   auto most_visited_sites = std::make_unique<ntp_tiles::MostVisitedSites>(
       profile->GetPrefs(), TopSitesFactory::GetForProfile(profile),
 #if BUILDFLAG(IS_ANDROID)
@@ -145,15 +155,6 @@ ChromeMostVisitedSitesFactory::NewForProfile(Profile* profile) {
 #else
       nullptr,
 #endif
-#if !BUILDFLAG(IS_ANDROID)
-      web_app::IsAnyChromeAppToWebAppMigrationEnabled(*profile)
-#else
-      false
-#endif
-  );
-#if BUILDFLAG(IS_ANDROID)
-  most_visited_sites->SetExploreSitesClient(
-      explore_sites::MostVisitedClient::Create());
-#endif
+      is_default_chrome_app_migrated);
   return most_visited_sites;
 }

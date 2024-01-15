@@ -1,9 +1,10 @@
-<style include="common">  
+<style>  
   .after-screen-content {
     color: var(--cros-color-primary);
   }
 
   .subtitle {
+    font-family: var(--cros-font-family-google-sans);
     font-size: 24px;
     font-weight: 500;
     margin-top: 32px;
@@ -24,11 +25,13 @@
 </style>
 
 <div class="after-screen-content">
-  <!-- TODO(b/199753545): Replace the hardcoded content when it's
-    available. -->
-  <div class="subtitle"></div>
+  <h2 class="subtitle">
+    [[i18n('localWebApprovalsAfterSubtitle', childName)]]
+  </h2>
   <div class="details">
-    <img class="favicon"></img>
-    <div class="details-text"></div>
+    <img class="favicon" src="[[favicon]]" alt=""></img>
+    <div class="details-text">
+      [[i18n('localWebApprovalsAfterDetails', url)]]
+    </div>
   </div>
 </div>

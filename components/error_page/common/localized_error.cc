@@ -28,7 +28,7 @@
 #include "components/error_page/common/error_page_switches.h"
 #include "components/error_page/common/net_error_info.h"
 #include "components/offline_pages/core/offline_page_feature.h"
-#include "components/strings/grit/components_chromium_strings.h"
+#include "components/strings/grit/components_branded_strings.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/url_formatter/url_formatter.h"
 #include "net/base/net_errors.h"
@@ -64,11 +64,12 @@ enum NAV_SUGGESTIONS {
   SUGGEST_UNSUPPORTED_CIPHER = 1 << 8,
   SUGGEST_ANTIVIRUS_CONFIG = 1 << 9,
   SUGGEST_OFFLINE_CHECKS = 1 << 10,
-  SUGGEST_COMPLETE_SETUP = 1 << 11,
   // Reload page suggestion for pages created by a post.
-  SUGGEST_REPOST_RELOAD = 1 << 12,
-  SUGGEST_NAVIGATE_TO_ORIGIN = 1 << 13,
-  SUGGEST_SECURE_DNS_CONFIG = 1 << 14,
+  SUGGEST_REPOST_RELOAD = 1 << 11,
+  SUGGEST_NAVIGATE_TO_ORIGIN = 1 << 12,
+  SUGGEST_SECURE_DNS_CONFIG = 1 << 13,
+  SUGGEST_CAPTIVE_PORTAL_SIGNIN = 1 << 14,
+  SUGGEST_RELOAD_PRIVATE_NETWORK_ACCESS = 1 << 15,
 };
 
 enum SHOW_BUTTONS {
@@ -92,47 +93,49 @@ const LocalizedErrorMap net_error_options[] = {
    IDS_ERRORPAGES_HEADING_NOT_AVAILABLE,
    IDS_ERRORPAGES_SUMMARY_TIMED_OUT,
    SUGGEST_CHECK_CONNECTION | SUGGEST_FIREWALL_CONFIG | SUGGEST_PROXY_CONFIG |
-       SUGGEST_DIAGNOSE_TOOL,
+       SUGGEST_DIAGNOSE_TOOL | SUGGEST_CAPTIVE_PORTAL_SIGNIN,
    SHOW_BUTTON_RELOAD,
   },
   {net::ERR_CONNECTION_TIMED_OUT,
    IDS_ERRORPAGES_HEADING_NOT_AVAILABLE,
    IDS_ERRORPAGES_SUMMARY_TIMED_OUT,
    SUGGEST_CHECK_CONNECTION | SUGGEST_FIREWALL_CONFIG | SUGGEST_PROXY_CONFIG |
-       SUGGEST_DIAGNOSE_TOOL,
+       SUGGEST_DIAGNOSE_TOOL | SUGGEST_CAPTIVE_PORTAL_SIGNIN,
    SHOW_BUTTON_RELOAD,
   },
   {net::ERR_CONNECTION_CLOSED,
    IDS_ERRORPAGES_HEADING_NOT_AVAILABLE,
    IDS_ERRORPAGES_SUMMARY_CONNECTION_CLOSED,
    SUGGEST_CHECK_CONNECTION | SUGGEST_FIREWALL_CONFIG | SUGGEST_PROXY_CONFIG |
-       SUGGEST_DIAGNOSE_TOOL,
+       SUGGEST_DIAGNOSE_TOOL | SUGGEST_CAPTIVE_PORTAL_SIGNIN,
    SHOW_BUTTON_RELOAD,
   },
   {net::ERR_CONNECTION_RESET,
    IDS_ERRORPAGES_HEADING_NOT_AVAILABLE,
    IDS_ERRORPAGES_SUMMARY_CONNECTION_RESET,
    SUGGEST_CHECK_CONNECTION | SUGGEST_FIREWALL_CONFIG | SUGGEST_PROXY_CONFIG |
-       SUGGEST_DIAGNOSE_TOOL,
+       SUGGEST_DIAGNOSE_TOOL | SUGGEST_CAPTIVE_PORTAL_SIGNIN,
    SHOW_BUTTON_RELOAD,
   },
   {net::ERR_CONNECTION_REFUSED,
    IDS_ERRORPAGES_HEADING_NOT_AVAILABLE,
    IDS_ERRORPAGES_SUMMARY_CONNECTION_REFUSED,
-   SUGGEST_CHECK_CONNECTION | SUGGEST_FIREWALL_CONFIG | SUGGEST_PROXY_CONFIG,
+   SUGGEST_CHECK_CONNECTION | SUGGEST_FIREWALL_CONFIG | SUGGEST_PROXY_CONFIG |
+       SUGGEST_CAPTIVE_PORTAL_SIGNIN,
    SHOW_BUTTON_RELOAD,
   },
   {net::ERR_CONNECTION_FAILED,
    IDS_ERRORPAGES_HEADING_NOT_AVAILABLE,
    IDS_ERRORPAGES_SUMMARY_CONNECTION_FAILED,
-   SUGGEST_DIAGNOSE_TOOL,
+   SUGGEST_DIAGNOSE_TOOL | SUGGEST_CAPTIVE_PORTAL_SIGNIN,
    SHOW_BUTTON_RELOAD,
   },
   {net::ERR_NAME_NOT_RESOLVED,
    IDS_ERRORPAGES_HEADING_NOT_AVAILABLE,
    IDS_ERRORPAGES_SUMMARY_NAME_NOT_RESOLVED,
    SUGGEST_CHECK_CONNECTION | SUGGEST_DNS_CONFIG | SUGGEST_FIREWALL_CONFIG |
-       SUGGEST_PROXY_CONFIG | SUGGEST_DIAGNOSE_TOOL,
+   SUGGEST_DIAGNOSE_TOOL | SUGGEST_CAPTIVE_PORTAL_SIGNIN |
+       SUGGEST_PROXY_CONFIG,
    SHOW_BUTTON_RELOAD,
   },
   {net::ERR_ICANN_NAME_COLLISION,
@@ -144,26 +147,29 @@ const LocalizedErrorMap net_error_options[] = {
   {net::ERR_ADDRESS_UNREACHABLE,
    IDS_ERRORPAGES_HEADING_NOT_AVAILABLE,
    IDS_ERRORPAGES_SUMMARY_ADDRESS_UNREACHABLE,
-   SUGGEST_DIAGNOSE_TOOL,
+   SUGGEST_DIAGNOSE_TOOL | SUGGEST_CAPTIVE_PORTAL_SIGNIN,
    SHOW_BUTTON_RELOAD,
   },
   {net::ERR_NETWORK_ACCESS_DENIED,
    IDS_ERRORPAGES_HEADING_NETWORK_ACCESS_DENIED,
    IDS_ERRORPAGES_SUMMARY_NETWORK_ACCESS_DENIED,
    SUGGEST_CHECK_CONNECTION | SUGGEST_FIREWALL_CONFIG |
-       SUGGEST_ANTIVIRUS_CONFIG | SUGGEST_DIAGNOSE_TOOL,
+       SUGGEST_ANTIVIRUS_CONFIG | SUGGEST_DIAGNOSE_TOOL |
+       SUGGEST_CAPTIVE_PORTAL_SIGNIN,
    SHOW_NO_BUTTONS,
   },
   {net::ERR_PROXY_CONNECTION_FAILED,
    IDS_ERRORPAGES_HEADING_INTERNET_DISCONNECTED,
    IDS_ERRORPAGES_SUMMARY_PROXY_CONNECTION_FAILED,
-   SUGGEST_PROXY_CONFIG | SUGGEST_CONTACT_ADMINISTRATOR | SUGGEST_DIAGNOSE_TOOL,
+   SUGGEST_PROXY_CONFIG | SUGGEST_CONTACT_ADMINISTRATOR |
+       SUGGEST_DIAGNOSE_TOOL | SUGGEST_CAPTIVE_PORTAL_SIGNIN,
    SHOW_NO_BUTTONS,
   },
   {net::ERR_INTERNET_DISCONNECTED,
    IDS_ERRORPAGES_HEADING_INTERNET_DISCONNECTED,
    IDS_ERRORPAGES_HEADING_INTERNET_DISCONNECTED,
-   SUGGEST_OFFLINE_CHECKS | SUGGEST_DIAGNOSE_TOOL,
+   SUGGEST_OFFLINE_CHECKS | SUGGEST_DIAGNOSE_TOOL |
+       SUGGEST_CAPTIVE_PORTAL_SIGNIN,
    SHOW_NO_BUTTONS,
   },
   {net::ERR_FILE_NOT_FOUND,
@@ -286,6 +292,12 @@ const LocalizedErrorMap net_error_options[] = {
    SUGGEST_NONE,
    SHOW_BUTTON_RELOAD,
   },
+  {net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+   IDS_ERRORPAGES_HEADING_BLOCKED,
+   IDS_ERRORPAGES_SUMMARY_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS,
+   SUGGEST_RELOAD_PRIVATE_NETWORK_ACCESS,
+   SHOW_BUTTON_RELOAD,
+  },
   {net::ERR_BLOCKED_BY_CSP,
    IDS_ERRORPAGES_HEADING_BLOCKED,
    IDS_ERRORPAGES_SUMMARY_BLOCKED_BY_SECURITY,
@@ -301,13 +313,7 @@ const LocalizedErrorMap net_error_options[] = {
   {net::ERR_BLOCKED_BY_ADMINISTRATOR,
    IDS_ERRORPAGES_HEADING_BLOCKED,
    IDS_ERRORPAGES_SUMMARY_BLOCKED_BY_ADMINISTRATOR,
-   SUGGEST_CONTACT_ADMINISTRATOR,
-   SHOW_NO_BUTTONS,
-  },
-  {net::ERR_BLOCKED_ENROLLMENT_CHECK_PENDING,
-   IDS_ERRORPAGES_HEADING_INTERNET_DISCONNECTED,
-   IDS_ERRORPAGES_SUMMARY_BLOCKED_ENROLLMENT_CHECK_PENDING,
-   SUGGEST_COMPLETE_SETUP,
+   SUGGEST_NONE,
    SHOW_NO_BUTTONS,
   },
   {net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH,
@@ -461,7 +467,7 @@ const LocalizedErrorMap dns_probe_error_options[] = {
         error_page::DNS_PROBE_FINISHED_NXDOMAIN,
         IDS_ERRORPAGES_HEADING_NOT_AVAILABLE,
         IDS_ERRORPAGES_CHECK_TYPO_SUMMARY,
-        SUGGEST_DIAGNOSE_TOOL,
+        SUGGEST_DIAGNOSE_TOOL | SUGGEST_CAPTIVE_PORTAL_SIGNIN,
         SHOW_BUTTON_RELOAD,
     },
 };
@@ -529,7 +535,8 @@ const char* GetIconClassForError(const std::string& error_domain,
                                  int error_code) {
   return LocalizedError::IsOfflineError(error_domain, error_code)
              ? "icon-offline"
-             : "icon-generic";
+         : error_code == net::ERR_BLOCKED_BY_ADMINISTRATOR ? "icon-info"
+                                                           : "icon-generic";
 }
 
 base::Value::Dict SingleEntryDictionary(base::StringPiece path,
@@ -556,7 +563,7 @@ void AddLinkedSuggestionToList(const int error_code,
     case net::ERR_TOO_MANY_REDIRECTS:
       learn_more_url = GURL(kRedirectLoopLearnMoreUrl);
       suggestion_string = l10n_util::GetStringUTF16(
-          IDS_ERRORPAGES_SUGGESTION_CLEAR_COOKIES_SUMMARY);
+          IDS_ERRORPAGES_SUGGESTION_DELETE_COOKIES_SUMMARY);
       break;
     default:
       NOTREACHED();
@@ -594,12 +601,18 @@ void GetSuggestionsSummaryList(int error_code,
                                const std::string& locale,
                                base::Value::List& suggestions_summary_list,
                                bool can_show_network_diagnostics_dialog,
-                               const GURL& failed_url) {
+                               const GURL& failed_url,
+                               const base::Value::Dict* error_page_params) {
   // Remove the diagnostic tool suggestion if the platform doesn't support it
   // or the url isn't valid.
   if (!can_show_network_diagnostics_dialog || !failed_url.is_valid() ||
       !failed_url.SchemeIsHTTPOrHTTPS()) {
     suggestions &= ~SUGGEST_DIAGNOSE_TOOL;
+  }
+  // Remove the captive portal signin suggestion if not in a portal state.
+  if (!error_page_params ||
+      !error_page_params->FindBool(kIsPortalStateKey).value_or(false)) {
+    suggestions &= ~SUGGEST_CAPTIVE_PORTAL_SIGNIN;
   }
 
   if (suggestions == SUGGEST_NONE)
@@ -617,17 +630,6 @@ void GetSuggestionsSummaryList(int error_code,
         "summary", IDS_ERRORPAGES_SUGGESTION_CONTACT_ADMIN_SUMMARY));
   }
 
-  if (IsOnlySuggestion(suggestions, SUGGEST_COMPLETE_SETUP)) {
-    DCHECK(suggestions_summary_list.empty());
-    DCHECK(!(suggestions & ~SUGGEST_COMPLETE_SETUP));
-    suggestions_summary_list.Append(SingleEntryDictionary(
-        "summary", IDS_ERRORPAGES_SUGGESTION_DIAGNOSE_CONNECTION_SUMMARY));
-    suggestions_summary_list.Append(SingleEntryDictionary(
-        "summary", IDS_ERRORPAGES_SUGGESTION_COMPLETE_SETUP_SUMMARY));
-    return;
-  }
-  DCHECK(!IsSuggested(suggestions, SUGGEST_COMPLETE_SETUP));
-
   if (IsOnlySuggestion(suggestions,SUGGEST_REPOST_RELOAD)) {
     DCHECK(suggestions_summary_list.empty());
     DCHECK(!(suggestions & ~SUGGEST_REPOST_RELOAD));
@@ -640,6 +642,11 @@ void GetSuggestionsSummaryList(int error_code,
     return;
   }
   DCHECK(!IsSuggested(suggestions, SUGGEST_REPOST_RELOAD));
+
+  if (IsSuggested(suggestions, SUGGEST_RELOAD_PRIVATE_NETWORK_ACCESS)) {
+    suggestions_summary_list.Append(SingleEntryDictionary(
+        "summary", IDS_ERRORPAGES_SUGGESTION_RELOAD_PRIVATE_NETWORK_ACCESS));
+  }
 
   if (IsOnlySuggestion(suggestions, SUGGEST_NAVIGATE_TO_ORIGIN)) {
     DCHECK(suggestions_summary_list.empty());
@@ -667,6 +674,11 @@ void GetSuggestionsSummaryList(int error_code,
   if (IsSuggested(suggestions, SUGGEST_LEARNMORE)) {
     AddLinkedSuggestionToList(error_code, locale, suggestions_summary_list,
                               false);
+  }
+
+  if (suggestions & SUGGEST_CAPTIVE_PORTAL_SIGNIN) {
+    suggestions_summary_list.Append(SingleEntryDictionary(
+        "summary", IDS_ERRORPAGES_SUGGESTION_CAPTIVE_PORTAL_SIGNIN));
   }
 
   if (suggestions & SUGGEST_DISABLE_EXTENSION) {
@@ -810,7 +822,7 @@ void AddSuggestionsDetails(int error_code,
         suggestions_details,
         IDS_ERRORPAGES_SUGGESTION_NETWORK_PREDICTION_HEADER,
         IDS_ERRORPAGES_SUGGESTION_NETWORK_PREDICTION_BODY, true);
-    suggestions_details.back().SetStringPath(
+    suggestions_details.back().GetDict().Set(
         "noNetworkPredictionTitle",
         l10n_util::GetStringUTF16(IDS_NETWORK_PREDICTION_ENABLED_DESCRIPTION));
   }
@@ -829,12 +841,12 @@ void AddSuggestionsDetails(int error_code,
         true);
 
     // Custom body string.
-    suggestions_details.back().SetStringPath(
+    suggestions_details.back().GetDict().Set(
         "body", l10n_util::GetStringFUTF16(
                     IDS_ERRORPAGES_SUGGESTION_PROXY_CONFIG_BODY,
                     l10n_util::GetStringUTF16(
                         IDS_ERRORPAGES_SUGGESTION_PROXY_DISABLE_PLATFORM)));
-    suggestions_details.back().SetStringPath(
+    suggestions_details.back().GetDict().Set(
         "proxyTitle",
         l10n_util::GetStringUTF16(IDS_OPTIONS_PROXIES_CONFIGURE_BUTTON));
   }
@@ -880,7 +892,8 @@ LocalizedError::PageState LocalizedError::GetPageState(
     bool auto_fetch_feature_enabled,
     bool is_kiosk_mode,
     const std::string& locale,
-    bool is_blocked_by_extension) {
+    bool is_blocked_by_extension,
+    const base::Value::Dict* error_page_params) {
   LocalizedError::PageState result;
   if (LocalizedError::IsOfflineError(error_domain, error_code)) {
     result.is_offline_error = true;
@@ -1036,7 +1049,9 @@ LocalizedError::PageState LocalizedError::GetPageState(
   std::u16string error_string;
   if (error_domain == Error::kNetErrorDomain) {
     // Non-internationalized error string, for debugging Chrome itself.
-    error_string = base::ASCIIToUTF16(net::ErrorToShortString(error_code));
+    if (error_code != net::ERR_BLOCKED_BY_ADMINISTRATOR) {
+      error_string = base::ASCIIToUTF16(net::ErrorToShortString(error_code));
+    }
   } else if (error_domain == Error::kDnsProbeErrorDomain) {
     std::string ascii_error_string =
         error_page::DnsProbeStatusToString(error_code);
@@ -1070,7 +1085,8 @@ LocalizedError::PageState LocalizedError::GetPageState(
   // Add default suggestions and any relevant supporting details.
   GetSuggestionsSummaryList(error_code, result.strings, options.suggestions,
                             locale, suggestions_summary_list,
-                            can_show_network_diagnostics_dialog, failed_url);
+                            can_show_network_diagnostics_dialog, failed_url,
+                            error_page_params);
   AddSuggestionsDetails(error_code, options.suggestions, suggestions_details);
 
 #if BUILDFLAG(IS_ANDROID)

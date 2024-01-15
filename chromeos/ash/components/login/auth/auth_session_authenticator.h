@@ -6,10 +6,11 @@
 #define CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH_AUTH_SESSION_AUTHENTICATOR_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chromeos/ash/components/dbus/cryptohome/UserDataAuth.pb.h"
@@ -22,7 +23,6 @@
 #include "chromeos/ash/components/login/hibernate/hibernate_manager.h"
 #include "components/account_id/account_id.h"
 #include "components/user_manager/user_type.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class AuthFailure;
 
@@ -67,32 +67,37 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH)
   // `user_recorder` is used during user creation of the user when
   // challenge-response authentication is used, so that
   // CryptohomeKeyDelegateServiceProvider would work correctly.
-  // `is_ephemeral_mount_enforced` forces usage of ephemeral mounts for all
-  // user types (including regular users and kiosks).
   // `local_state` used to persist login-related state across reboots via
   // `UserDirectoryIntegrityManager`
   AuthSessionAuthenticator(
       AuthStatusConsumer* consumer,
       std::unique_ptr<SafeModeDelegate> safe_mode_delegate,
       base::RepeatingCallback<void(const AccountId&)> user_recorder,
-      bool is_ephemeral_mount_enforced,
       PrefService* local_state);
 
   // Authenticator overrides.
-  void CompleteLogin(std::unique_ptr<UserContext> user_context) override;
+  void CompleteLogin(bool ephemeral,
+                     std::unique_ptr<UserContext> user_context) override;
 
-  void AuthenticateToLogin(std::unique_ptr<UserContext> user_context) override;
-  void AuthenticateToUnlock(std::unique_ptr<UserContext> user_context) override;
+  void AuthenticateToLogin(bool ephemeral,
+                           std::unique_ptr<UserContext> user_context) override;
+  void AuthenticateToUnlock(bool ephemeral,
+                            std::unique_ptr<UserContext> user_context) override;
   void LoginOffTheRecord() override;
   void LoginAsPublicSession(const UserContext& user_context) override;
-  void LoginAsKioskAccount(const AccountId& app_account_id) override;
-  void LoginAsArcKioskAccount(const AccountId& app_account_id) override;
-  void LoginAsWebKioskAccount(const AccountId& app_account_id) override;
+  void LoginAsKioskAccount(const AccountId& app_account_id,
+                           bool ephemeral) override;
+  void LoginAsArcKioskAccount(const AccountId& app_account_id,
+                              bool ephemeral) override;
+  void LoginAsWebKioskAccount(const AccountId& app_account_id,
+                              bool ephemeral) override;
+  void LoginAuthenticated(std::unique_ptr<UserContext> user_context) override;
   void OnAuthSuccess() override;
   void OnAuthFailure(const AuthFailure& error) override;
   void RecoverEncryptedData(std::unique_ptr<UserContext> user_context,
                             const std::string& old_password) override;
-  void ResyncEncryptedData(std::unique_ptr<UserContext> user_context) override;
+  void ResyncEncryptedData(bool ephemeral,
+                           std::unique_ptr<UserContext> user_context) override;
 
  protected:
   ~AuthSessionAuthenticator() override;
@@ -101,7 +106,7 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH)
   using StartAuthSessionCallback =
       base::OnceCallback<void(bool user_exists,
                               std::unique_ptr<UserContext> context,
-                              absl::optional<AuthenticationError> error)>;
+                              std::optional<AuthenticationError> error)>;
 
   // Callbacks that handles auth session started for particular login flows.
   // |user_exists| indicates if cryptohome actually exists on the disk,
@@ -109,39 +114,45 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH)
   // the keys.
   void DoLoginAsPublicSession(bool user_exists,
                               std::unique_ptr<UserContext> context,
-                              absl::optional<AuthenticationError> error);
-  void DoLoginAsKiosk(bool user_exists,
+                              std::optional<AuthenticationError> error);
+  void DoLoginAsKiosk(bool ephemeral,
+                      bool user_exists,
                       std::unique_ptr<UserContext> context,
-                      absl::optional<AuthenticationError> error);
-  void DoLoginAsExistingUser(bool user_exists,
+                      std::optional<AuthenticationError> error);
+  void DoLoginAsExistingUser(bool ephemeral,
+                             bool user_exists,
                              std::unique_ptr<UserContext> context,
-                             absl::optional<AuthenticationError> error);
-  void DoCompleteLogin(bool user_exists,
+                             std::optional<AuthenticationError> error);
+  void DoCompleteLogin(bool ephemeral,
+                       bool user_exists,
                        std::unique_ptr<UserContext> context,
-                       absl::optional<AuthenticationError> error);
-  void DoUnlock(bool user_exists,
+                       std::optional<AuthenticationError> error);
+  void DoUnlock(bool ephemeral,
+                bool user_exists,
                 std::unique_ptr<UserContext> context,
-                absl::optional<AuthenticationError> error);
+                std::optional<AuthenticationError> error);
 
   // Common part of login logic shared by user creation flow and flow when
   // user have changed password elsewhere and decides to re-create cryptohome.
-  void CompleteLoginImpl(std::unique_ptr<UserContext> user_context);
+  void CompleteLoginImpl(bool ephemeral,
+                         std::unique_ptr<UserContext> user_context);
   void LoginAsKioskImpl(const AccountId& app_account_id,
                         user_manager::UserType user_type,
-                        bool force_dircrypto);
+                        bool force_dircrypto,
+                        bool ephemeral);
 
   // Helpers for starting the auth session and cleaning stale data during that.
-  void StartAuthSessionForLogin(std::unique_ptr<UserContext> context,
-                                bool ephemeral,
+  void StartAuthSessionForLogin(bool ephemeral,
+                                std::unique_ptr<UserContext> context,
                                 AuthSessionIntent intent,
                                 StartAuthSessionCallback callback);
-  void OnStartAuthSessionForLogin(std::unique_ptr<UserContext> original_context,
-                                  bool ephemeral,
+  void OnStartAuthSessionForLogin(bool ephemeral,
+                                  std::unique_ptr<UserContext> original_context,
                                   AuthSessionIntent intent,
                                   StartAuthSessionCallback callback,
                                   bool user_exists,
                                   std::unique_ptr<UserContext> context,
-                                  absl::optional<AuthenticationError> error);
+                                  std::optional<AuthenticationError> error);
   void RemoveStaleUserForEphemeral(
       const std::string& auth_session_id,
       std::unique_ptr<UserContext> original_context,
@@ -151,16 +162,16 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH)
       std::unique_ptr<UserContext> original_context,
       AuthSessionIntent intent,
       StartAuthSessionCallback callback,
-      absl::optional<user_data_auth::RemoveReply> reply);
+      std::optional<user_data_auth::RemoveReply> reply);
   void OnStartAuthSessionForLoginAfterStaleRemoval(
       StartAuthSessionCallback callback,
       bool user_exists,
       std::unique_ptr<UserContext> context,
-      absl::optional<AuthenticationError> error);
+      std::optional<AuthenticationError> error);
   // Similar to `StartAuthSessionForLogin()`, but doesn't trigger the stale data
   // removal logic.
-  void StartAuthSessionForLoggedIn(std::unique_ptr<UserContext> context,
-                                   bool ephemeral,
+  void StartAuthSessionForLoggedIn(bool ephemeral,
+                                   std::unique_ptr<UserContext> context,
                                    AuthSessionIntent intent,
                                    StartAuthSessionCallback callback);
 
@@ -171,13 +182,15 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH)
 
   // Notifies `UserDirectoryIntegrityManager` that the newly created user
   // has added a first auth factor.
-  void RecordFirstAuthFactorAdded(std::unique_ptr<UserContext> context,
-                                  AuthOperationCallback callback);
+  virtual void RecordFirstAuthFactorAdded(std::unique_ptr<UserContext> context,
+                                          AuthOperationCallback callback);
 
   void PrepareForNewAttempt(const std::string& method_id,
                             const std::string& long_desc);
 
   // Simple callback that notifies about mount success / failure.
+  void NotifyOnlinePasswordUnusable(std::unique_ptr<UserContext> context,
+                                    bool online_password_mismatch);
   void NotifyAuthSuccess(std::unique_ptr<UserContext> context);
   void NotifyGuestSuccess(std::unique_ptr<UserContext> context);
   void NotifyFailure(AuthFailure::FailureReason reason,
@@ -215,22 +228,20 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_LOGIN_AUTH)
                                 AuthOperationCallback callback,
                                 bool is_owner);
   void OnUnmountForNonOwner(std::unique_ptr<UserContext> context,
-                            absl::optional<AuthenticationError> error);
+                            std::optional<AuthenticationError> error);
 
   // Save information about user so that it can be used by
   // `CryptohomeKeyDelegateServiceProvider`.
   void SaveKnownUser(std::unique_ptr<UserContext> context,
                      AuthOperationCallback callback);
 
-  const bool is_ephemeral_mount_enforced_;
   base::RepeatingCallback<void(const AccountId&)> user_recorder_;
   std::unique_ptr<SafeModeDelegate> safe_mode_delegate_;
   std::unique_ptr<AuthFactorEditor> auth_factor_editor_;
   std::unique_ptr<AuthPerformer> auth_performer_;
-  std::unique_ptr<HibernateManager> hibernate_manager_;
   std::unique_ptr<MountPerformer> mount_performer_;
 
-  const base::raw_ptr<PrefService> local_state_;
+  const raw_ptr<PrefService, DanglingUntriaged> local_state_;
 
   base::WeakPtrFactory<AuthSessionAuthenticator> weak_factory_{this};
 };

@@ -8,12 +8,13 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/moving_window.h"
 #include "base/time/time.h"
 #include "base/types/pass_key.h"
 #include "media/base/audio_decoder.h"
@@ -22,7 +23,6 @@
 #include "media/base/demuxer_stream.h"
 #include "media/base/media_export.h"
 #include "media/base/media_log.h"
-#include "media/base/moving_average.h"
 #include "media/base/pipeline_status.h"
 #include "media/base/timestamp_constants.h"
 #include "media/base/waiting.h"
@@ -213,9 +213,8 @@ class MEDIA_EXPORT DecoderStream {
   // Reads a buffer from |stream_| and returns the result via OnBufferReady().
   void ReadFromDemuxerStream();
 
-  // Callback for DemuxerStream::Read().
-  void OnBufferReady(DemuxerStream::Status status,
-                     scoped_refptr<DecoderBuffer> buffer);
+  void OnBuffersReady(DemuxerStream::Status status,
+                      DemuxerStream::DecoderBufferVector buffers);
 
   void ReinitializeDecoder();
 
@@ -246,7 +245,7 @@ class MEDIA_EXPORT DecoderStream {
   ReadCB read_cb_;
   base::OnceClosure reset_cb_;
 
-  raw_ptr<DemuxerStream> stream_;
+  raw_ptr<DemuxerStream, DanglingUntriaged> stream_;
 
   raw_ptr<CdmContext> cdm_context_;
 
@@ -283,7 +282,7 @@ class MEDIA_EXPORT DecoderStream {
   int pending_decode_requests_;
 
   // Tracks the duration of incoming packets over time.
-  MovingAverage duration_tracker_;
+  base::MovingAverage<base::TimeDelta, base::TimeDelta> duration_tracker_;
 
   // Stores buffers that might be reused if the decoder fails right after
   // Initialize().

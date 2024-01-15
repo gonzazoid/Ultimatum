@@ -14,7 +14,7 @@ constexpr size_t kBufferSize = 1024;
 
 TEST(FrameBufferPool, BasicFunctionality) {
   base::TestMessageLoop message_loop;
-  scoped_refptr<FrameBufferPool> pool = new FrameBufferPool();
+  auto pool = base::MakeRefCounted<FrameBufferPool>();
 
   void* priv1 = nullptr;
   uint8_t* buf1 = pool->GetFrameBuffer(kBufferSize, &priv1);
@@ -59,7 +59,7 @@ TEST(FrameBufferPool, BasicFunctionality) {
 
 TEST(FrameBufferPool, ForceAllocationError) {
   base::TestMessageLoop message_loop;
-  scoped_refptr<FrameBufferPool> pool = new FrameBufferPool();
+  auto pool = base::MakeRefCounted<FrameBufferPool>();
   pool->force_allocation_error_for_testing();
 
   void* priv1 = nullptr;
@@ -71,7 +71,7 @@ TEST(FrameBufferPool, ForceAllocationError) {
 
 TEST(FrameBufferPool, DeferredDestruction) {
   base::TestMessageLoop message_loop;
-  scoped_refptr<FrameBufferPool> pool = new FrameBufferPool();
+  auto pool = base::MakeRefCounted<FrameBufferPool>();
   base::SimpleTestTickClock test_clock;
   pool->set_tick_clock_for_testing(&test_clock);
 
@@ -110,6 +110,23 @@ TEST(FrameBufferPool, DeferredDestruction) {
   std::move(frame_release_cb).Run();
   EXPECT_EQ(1u, pool->get_pool_size_for_testing());
 
+  pool->Shutdown();
+}
+
+TEST(FrameBufferPool, DoesClearAllocations) {
+  base::TestMessageLoop message_loop;
+  scoped_refptr<FrameBufferPool> pool =
+      new FrameBufferPool(/*clear_allocations=*/true);
+
+  // Certainly this is not foolproof, but even flaky failures here indicate that
+  // something is broken.
+  void* priv1 = nullptr;
+  uint8_t* buf = pool->GetFrameBuffer(kBufferSize, &priv1);
+  bool nonzero = false;
+  for (size_t i = 0; i < kBufferSize; i++) {
+    nonzero |= !!buf[i];
+  }
+  EXPECT_FALSE(nonzero);
   pool->Shutdown();
 }
 

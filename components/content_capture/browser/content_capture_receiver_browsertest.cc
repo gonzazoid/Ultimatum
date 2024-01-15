@@ -46,6 +46,12 @@ class ContentCaptureBrowserTest : public content::ContentBrowserTest {
                          base::UTF8ToUTF16(fenced_frame_url.spec()));
   }
 
+  void TearDownOnMainThread() override {
+    main_frame_ = nullptr;
+    fenced_frame_ = nullptr;
+    content::ContentBrowserTest::TearDownOnMainThread();
+  }
+
   int64_t GetFrameId(bool main_frame) {
     return ContentCaptureReceiver::GetIdFrom(main_frame ? main_frame_.get()
                                                         : fenced_frame_.get());
@@ -71,8 +77,8 @@ class ContentCaptureBrowserTest : public content::ContentBrowserTest {
  protected:
   ContentCaptureTestHelper helper_;
 
-  raw_ptr<content::RenderFrameHost, DanglingUntriaged> main_frame_ = nullptr;
-  raw_ptr<content::RenderFrameHost, DanglingUntriaged> fenced_frame_ = nullptr;
+  raw_ptr<content::RenderFrameHost> main_frame_ = nullptr;
+  raw_ptr<content::RenderFrameHost> fenced_frame_ = nullptr;
 
   FakeContentCaptureSender main_frame_sender_;
   FakeContentCaptureSender fenced_frame_sender_;
@@ -80,7 +86,17 @@ class ContentCaptureBrowserTest : public content::ContentBrowserTest {
   content::test::FencedFrameTestHelper fenced_frame_helper_;
 };
 
-IN_PROC_BROWSER_TEST_F(ContentCaptureBrowserTest,
+// TODO(crbug.com/1491942): This fails with the field trial testing config.
+class ContentCaptureBrowserTestNoTestingConfig
+    : public ContentCaptureBrowserTest {
+ public:
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    ContentCaptureBrowserTest::SetUpCommandLine(command_line);
+    command_line->AppendSwitch("disable-field-trial-config");
+  }
+};
+
+IN_PROC_BROWSER_TEST_F(ContentCaptureBrowserTestNoTestingConfig,
                        FencedFrameDidCaptureContent) {
   // 2 frames - main & fenced
   EXPECT_EQ(2u, provider()->GetFrameMapSizeForTesting());

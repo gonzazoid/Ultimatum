@@ -22,11 +22,6 @@ namespace {
 // to the crashing child process.
 const char kPipeVariableName[] = "REMOTING_BREAKPAD_WIN_DEATH_TEST_PIPE_NAME";
 
-// The prefix string used to generate a unique crash server pipe name.
-// The name has to be unique as multiple test instances can be running
-// simultaneously.
-const wchar_t kPipeNamePrefix[] = L"\\\\.\\pipe\\";
-
 class MockCrashServerCallbacks {
  public:
   MockCrashServerCallbacks();
@@ -46,11 +41,9 @@ class MockCrashServerCallbacks {
       const std::wstring* file_path);
 };
 
-MockCrashServerCallbacks::MockCrashServerCallbacks() {
-}
+MockCrashServerCallbacks::MockCrashServerCallbacks() {}
 
-MockCrashServerCallbacks::~MockCrashServerCallbacks() {
-}
+MockCrashServerCallbacks::~MockCrashServerCallbacks() {}
 
 // static
 void MockCrashServerCallbacks::OnClientDumpRequestCallback(
@@ -79,11 +72,9 @@ class BreakpadWinDeathTest : public testing::Test {
   std::wstring pipe_name_;
 };
 
-BreakpadWinDeathTest::BreakpadWinDeathTest() {
-}
+BreakpadWinDeathTest::BreakpadWinDeathTest() {}
 
-BreakpadWinDeathTest::~BreakpadWinDeathTest() {
-}
+BreakpadWinDeathTest::~BreakpadWinDeathTest() {}
 
 void BreakpadWinDeathTest::SetUp() {
   std::unique_ptr<base::Environment> environment(base::Environment::Create());
@@ -100,40 +91,20 @@ void BreakpadWinDeathTest::SetUp() {
     RPC_STATUS status = UuidCreate(&guid);
     EXPECT_TRUE(status == RPC_S_OK || status == RPC_S_UUID_LOCAL_ONLY);
 
-    pipe_name_ =
-        base::StringPrintf(
-            L"%ls%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-            kPipeNamePrefix,
-            guid.Data1,
-            guid.Data2,
-            guid.Data3,
-            guid.Data4[0],
-            guid.Data4[1],
-            guid.Data4[2],
-            guid.Data4[3],
-            guid.Data4[4],
-            guid.Data4[5],
-            guid.Data4[6],
-            guid.Data4[7]);
-    EXPECT_TRUE(environment->SetVar(kPipeVariableName,
-                                    base::WideToUTF8(pipe_name_)));
+    pipe_name_ = base::ASCIIToWide(base::StringPrintf(
+        "\\\\.\\pipe\\%08lx-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+        guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1],
+        guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5],
+        guid.Data4[6], guid.Data4[7]));
+    EXPECT_TRUE(
+        environment->SetVar(kPipeVariableName, base::WideToUTF8(pipe_name_)));
 
     // Setup a dummy crash dump server.
     callbacks_.reset(new MockCrashServerCallbacks());
-    crash_server_.reset(
-        new google_breakpad::CrashGenerationServer(
-            pipe_name_,
-            NULL,
-            NULL,
-            NULL,
-            MockCrashServerCallbacks::OnClientDumpRequestCallback,
-            callbacks_.get(),
-            NULL,
-            NULL,
-            NULL,
-            NULL,
-            false,
-            NULL));
+    crash_server_.reset(new google_breakpad::CrashGenerationServer(
+        pipe_name_, NULL, NULL, NULL,
+        MockCrashServerCallbacks::OnClientDumpRequestCallback, callbacks_.get(),
+        NULL, NULL, NULL, NULL, false, NULL));
     ASSERT_TRUE(crash_server_->Start());
   }
 }

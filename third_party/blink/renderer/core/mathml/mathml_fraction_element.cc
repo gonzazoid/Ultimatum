@@ -14,25 +14,20 @@ MathMLFractionElement::MathMLFractionElement(Document& doc)
     : MathMLElement(mathml_names::kMfracTag, doc) {}
 
 void MathMLFractionElement::AddMathFractionBarThicknessIfNeeded(
-    ComputedStyle& style,
+    ComputedStyleBuilder& builder,
     const CSSToLengthConversionData& conversion_data) {
   if (auto length_or_percentage_value = AddMathLengthToComputedStyle(
           conversion_data, mathml_names::kLinethicknessAttr))
-    style.SetMathFractionBarThickness(std::move(*length_or_percentage_value));
+    builder.SetMathFractionBarThickness(std::move(*length_or_percentage_value));
 }
 
 void MathMLFractionElement::ParseAttribute(
     const AttributeModificationParams& param) {
-  if (GetLayoutObject() && GetLayoutObject()->IsMathML() &&
-      param.name == mathml_names::kLinethicknessAttr &&
+  if (param.name == mathml_names::kLinethicknessAttr &&
       param.new_value != param.old_value) {
-    // TODO(crbug.com/1121113): Isn't it enough to set needs style recalc and
-    // let the style system perform proper layout and paint invalidation?
     SetNeedsStyleRecalc(
         kLocalStyleChange,
         StyleChangeReasonForTracing::Create(style_change_reason::kAttribute));
-    GetLayoutObject()->SetNeedsLayoutAndFullPaintInvalidation(
-        layout_invalidation_reason::kAttributeChanged);
   }
   MathMLElement::ParseAttribute(param);
 }

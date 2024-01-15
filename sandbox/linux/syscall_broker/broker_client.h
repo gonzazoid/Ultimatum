@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "base/memory/raw_ref.h"
 #include "sandbox/linux/syscall_broker/broker_channel.h"
 #include "sandbox/linux/syscall_broker/broker_command.h"
 #include "sandbox/linux/syscall_broker/broker_sandbox_config.h"
@@ -67,8 +68,11 @@ class SANDBOX_EXPORT BrokerClient : public SyscallDispatcher {
              bool follow_links,
              struct kernel_stat64* sb) const override;
   int Unlink(const char* unlink) const override;
+  int InotifyAddWatch(int fd,
+                      const char* pathname,
+                      uint32_t mask) const override;
 
-  const BrokerSandboxConfig& policy() const { return policy_; }
+  const BrokerSandboxConfig& policy() const { return *policy_; }
 
  private:
   int PathOnlySyscall(BrokerCommand syscall_type, const char* pathname) const;
@@ -87,7 +91,7 @@ class SANDBOX_EXPORT BrokerClient : public SyscallDispatcher {
                         void* result_ptr,
                         size_t expected_result_size) const;
 
-  const BrokerSandboxConfig& policy_;
+  const raw_ref<const BrokerSandboxConfig> policy_;
   const BrokerChannel::EndPoint ipc_channel_;
   const bool fast_check_in_client_;  // Whether to forward a request that we
                                      // know will be denied to the broker. (Used

@@ -11,17 +11,16 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/extensions/crx_installer.h"
 #include "chrome/browser/extensions/extension_management.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/forced_extensions/install_stage_tracker.h"
@@ -59,8 +58,8 @@
 
 using base::RandDouble;
 using base::UnguessableToken;
-typedef extensions::ExtensionDownloaderDelegate::Error Error;
-typedef extensions::ExtensionDownloaderDelegate::PingResult PingResult;
+using Error = extensions::ExtensionDownloaderDelegate::Error;
+using PingResult = extensions::ExtensionDownloaderDelegate::PingResult;
 
 namespace {
 
@@ -275,9 +274,9 @@ void ExtensionUpdater::UpdateImmediatelyForFirstRun() {
 }
 
 void ExtensionUpdater::SetBackoffPolicyForTesting(
-    const net::BackoffEntry::Policy* backoff_policy) {
+    const net::BackoffEntry::Policy& backoff_policy) {
   EnsureDownloaderCreated();
-  downloader_->SetBackoffPolicyForTesting(backoff_policy);
+  downloader_->SetBackoffPolicy(backoff_policy);
 }
 
 // static
@@ -288,6 +287,11 @@ base::AutoReset<bool> ExtensionUpdater::GetScopedUseUpdateServiceForTesting() {
 void ExtensionUpdater::SetUpdatingStartedCallbackForTesting(
     base::RepeatingClosure callback) {
   updating_started_callback_ = callback;
+}
+
+void ExtensionUpdater::SetCrxInstallerResultCallbackForTesting(
+    CrxInstaller::InstallerResultCallback callback) {
+  installer_result_callback_for_testing_ = std::move(callback);
 }
 
 void ExtensionUpdater::DoCheckSoon() {
@@ -392,6 +396,7 @@ void ExtensionUpdater::CheckNow(CheckParams params) {
   DCHECK(alive_);
 
   InProgressCheck& request = requests_in_progress_[request_id];
+  request.update_found_callback = params.update_found_callback;
   request.callback = std::move(params.callback);
   request.install_immediately = params.install_immediately;
   request.profile_keep_alive = std::make_unique<ScopedProfileKeepAlive>(
@@ -441,7 +446,7 @@ void ExtensionUpdater::CheckNow(CheckParams params) {
       // repaired.
       if (!info) {
         const Extension* extension = registry_->GetExtensionById(
-            pending_id, extensions::ExtensionRegistry::EVERYTHING);
+            pending_id, ExtensionRegistry::EVERYTHING);
 
         // It is possible that the user deletes the extension between the time
         // it was detected as corrupted and now. In that case, `extension` will
@@ -510,8 +515,8 @@ void ExtensionUpdater::CheckNow(CheckParams params) {
                     params.fetch_priority, &update_check_params);
   } else {
     for (const ExtensionId& id : params.ids) {
-      const Extension* extension = registry_->GetExtensionById(
-          id, extensions::ExtensionRegistry::EVERYTHING);
+      const Extension* extension =
+          registry_->GetExtensionById(id, ExtensionRegistry::EVERYTHING);
       if (extension) {
         if (CanUseUpdateService(id)) {
           update_check_params.update_info[id] = ExtensionUpdateData();
@@ -544,7 +549,7 @@ void ExtensionUpdater::CheckNow(CheckParams params) {
             : ExtensionUpdateCheckParams::UpdateCheckPriority::FOREGROUND;
     update_check_params.install_immediately = params.install_immediately;
     update_service_->StartUpdateCheck(
-        update_check_params,
+        update_check_params, params.update_found_callback,
         base::BindOnce(&ExtensionUpdater::OnUpdateServiceFinished,
                        base::Unretained(this), request_id));
   } else if (empty_downloader) {
@@ -555,6 +560,17 @@ void ExtensionUpdater::CheckNow(CheckParams params) {
 void ExtensionUpdater::OnExtensionDownloadStageChanged(const ExtensionId& id,
                                                        Stage stage) {
   InstallStageTracker::Get(profile_)->ReportDownloadingStage(id, stage);
+}
+
+void ExtensionUpdater::OnExtensionUpdateFound(const ExtensionId& id,
+                                              const std::set<int>& request_ids,
+                                              const base::Version& version) {
+  for (const int request_id : request_ids) {
+    InProgressCheck& request = requests_in_progress_[request_id];
+    if (request.update_found_callback) {
+      request.update_found_callback.Run(id, version);
+    }
+  }
 }
 
 void ExtensionUpdater::OnExtensionDownloadCacheStatusRetrieved(
@@ -674,8 +690,8 @@ bool ExtensionUpdater::IsExtensionPending(const ExtensionId& id) {
 bool ExtensionUpdater::GetExtensionExistingVersion(const ExtensionId& id,
                                                    std::string* version) {
   DCHECK(alive_);
-  const Extension* extension = registry_->GetExtensionById(
-      id, extensions::ExtensionRegistry::EVERYTHING);
+  const Extension* extension =
+      registry_->GetExtensionById(id, ExtensionRegistry::EVERYTHING);
   if (!extension)
     return false;
   const Extension* update = service_->GetPendingExtensionUpdate(id);
@@ -837,6 +853,10 @@ void ExtensionUpdater::OnInstallerDone(
   }
 
   running_crx_installs_.erase(iter);
+
+  if (installer_result_callback_for_testing_) {
+    std::move(installer_result_callback_for_testing_).Run(error);
+  }
 }
 
 void ExtensionUpdater::NotifyStarted() {

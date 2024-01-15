@@ -14,9 +14,10 @@ import 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
 import './diagnostics_shared.css.js';
 
 import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {assert, assertNotReached} from 'chrome://resources/js/assert_ts.js';
+import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
 import {CellularStateProperties, NetworkStateProperties, SecurityType as MojomSecurityType, WiFiStateProperties} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/cros_network_config.mojom-webui.js';
 import {ConnectionStateType as MojomConnectionStateType, NetworkType as MojomNetworkType} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/network_types.mojom-webui.js';
+import {PolymerElementProperties} from 'chrome://resources/polymer/v3_0/polymer/interfaces.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './diagnostics_network_icon.html.js';
@@ -215,15 +216,15 @@ export function networkToNetworkStateAdapter(network: Network):
 const DiagnosticsNetworkIconBase = I18nMixin(PolymerElement);
 
 export class DiagnosticsNetworkIconElement extends DiagnosticsNetworkIconBase {
-  static get is() {
+  static get is(): string {
     return 'diagnostics-network-icon';
   }
 
-  static get template() {
+  static get template(): HTMLTemplateElement {
     return getTemplate();
   }
 
-  static get properties() {
+  static get properties(): PolymerElementProperties {
     return {
       network: {
         type: Object,
@@ -233,7 +234,7 @@ export class DiagnosticsNetworkIconElement extends DiagnosticsNetworkIconBase {
 
   network: Network;
 
-  protected computeNetworkState_(): NetworkIconNetworkState|null {
+  protected computeNetworkState(): NetworkIconNetworkState|null {
     // Block should only be entered when element is being initialized.
     if (!this.network) {
       return null;
@@ -242,7 +243,7 @@ export class DiagnosticsNetworkIconElement extends DiagnosticsNetworkIconBase {
     return networkToNetworkStateAdapter(this.network);
   }
 
-  protected computeShouldDisplaySpinner_(): boolean {
+  protected computeShouldDisplaySpinner(): boolean {
     if (!this.network) {
       return false;
     }
@@ -250,7 +251,7 @@ export class DiagnosticsNetworkIconElement extends DiagnosticsNetworkIconBase {
     return this.network.state === NetworkState.kConnecting;
   }
 
-  protected computeSpinnerAriaLabel_(): string {
+  protected computeSpinnerAriaLabel(): string {
     if (!this.network) {
       return '';
     }

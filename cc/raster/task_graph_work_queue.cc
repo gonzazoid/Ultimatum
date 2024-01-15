@@ -15,6 +15,8 @@
 #include "base/memory/raw_ptr_exclusion.h"
 #include "base/ranges/algorithm.h"
 #include "base/trace_event/trace_event.h"
+#include "base/trace_event/trace_id_helper.h"
+#include "base/trace_event/typed_macros.h"
 
 namespace cc {
 namespace {
@@ -82,7 +84,7 @@ class DependentIterator {
 
     // Now find the node for the dependent of this edge.
     auto it = base::ranges::find(graph_->nodes,
-                                 graph_->edges[current_index_].dependent,
+                                 graph_->edges[current_index_].dependent.get(),
                                  &TaskGraph::Node::task);
     DCHECK(it != graph_->nodes.end());
     current_node_ = &(*it);
@@ -133,7 +135,7 @@ TaskGraphWorkQueue::PrioritizedTask::~PrioritizedTask() = default;
 
 NamespaceToken TaskGraphWorkQueue::GenerateNamespaceToken() {
   NamespaceToken token(next_namespace_id_++);
-  DCHECK(namespaces_.find(token) == namespaces_.end());
+  DCHECK(!base::Contains(namespaces_, token));
   return token;
 }
 
@@ -153,6 +155,17 @@ void TaskGraphWorkQueue::ScheduleTasks(NamespaceToken token, TaskGraph* graph) {
   for (auto& ready_to_run_tasks_it : task_namespace.ready_to_run_tasks) {
     ready_to_run_tasks_it.second.clear();
   }
+
+  TRACE_EVENT(
+      "toplevel", "cc::TaskGraphWorkQueue::ScheduleTasks",
+      [&](perfetto::EventContext ctx) {
+        for (const TaskGraph::Node& node : graph->nodes) {
+          DCHECK(node.task->trace_task_id() != 0)
+              << "Every raster task should be associated with a task id.\n";
+          ctx.event()->add_flow_ids(node.task->trace_task_id());
+        }
+      });
+
   for (const TaskGraph::Node& node : graph->nodes) {
     // Remove any old nodes that are associated with this task. The result is
     // that the old graph is left with all nodes not present in this graph,
@@ -178,7 +191,7 @@ void TaskGraphWorkQueue::ScheduleTasks(NamespaceToken token, TaskGraph* graph) {
       continue;
 
     // Skip if already running.
-    if (base::Contains(task_namespace.running_tasks, node.task,
+    if (base::Contains(task_namespace.running_tasks, node.task.get(),
                        &CategorizedTask::second)) {
       continue;
     }
@@ -208,12 +221,12 @@ void TaskGraphWorkQueue::ScheduleTasks(NamespaceToken token, TaskGraph* graph) {
       continue;
 
     // Skip if already running.
-    if (base::Contains(task_namespace.running_tasks, node.task,
+    if (base::Contains(task_namespace.running_tasks, node.task.get(),
                        &CategorizedTask::second)) {
       continue;
     }
 
-    DCHECK(!base::Contains(task_namespace.completed_tasks, node.task));
+    DCHECK(!base::Contains(task_namespace.completed_tasks, node.task.get()));
     node.task->state().DidCancel();
     task_namespace.completed_tasks.push_back(node.task);
   }

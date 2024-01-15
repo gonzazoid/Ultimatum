@@ -242,7 +242,7 @@ class MODULES_EXPORT MediaControlsImpl final : public HTMLDivElement,
   void UpdateCSSClassFromState();
 
   // Sets/removes a CSS class from this element based on |should_have_class|.
-  void SetClass(const AtomicString& class_name, bool should_have_class);
+  void SetClass(const String& class_name, bool should_have_class);
 
   // Get the HTMLVideoElement that the controls are attached to. The caller must
   // check that the element is a video element first.
@@ -316,6 +316,10 @@ class MODULES_EXPORT MediaControlsImpl final : public HTMLDivElement,
 
   // Returns true/false based on which set of controls to display.
   bool ShouldShowVideoControls() const;
+
+  // Returns true/false based on whether this player is showing live content,
+  // and should have no seek bar or timestamp.
+  bool IsLivePlayback() const;
 
   // Node
   bool IsMediaControls() const override { return true; }

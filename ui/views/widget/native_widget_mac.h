@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/callback_list.h"
 #include "base/memory/raw_ptr.h"
 #include "ui/base/ime/ime_key_event_dispatcher.h"
 #include "ui/base/window_open_disposition.h"
@@ -112,6 +113,7 @@ class VIEWS_EXPORT NativeWidgetMac : public internal::NativeWidgetPrivate,
   // internal::NativeWidgetPrivate:
   void InitNativeWidget(Widget::InitParams params) override;
   void OnWidgetInitDone() override;
+  void ReparentNativeViewImpl(gfx::NativeView new_parent) override;
   std::unique_ptr<NonClientFrameView> CreateNonClientFrameView() override;
   bool ShouldUseNativeFrame() const override;
   bool ShouldWindowContentsBeTransparent() const override;
@@ -175,7 +177,8 @@ class VIEWS_EXPORT NativeWidgetMac : public internal::NativeWidgetPrivate,
   void SetCanAppearInExistingFullscreenSpaces(
       bool can_appear_in_existing_fullscreen_spaces) override;
   void SetOpacity(float opacity) override;
-  void SetAspectRatio(const gfx::SizeF& aspect_ratio) override;
+  void SetAspectRatio(const gfx::SizeF& aspect_ratio,
+                      const gfx::Size& excluded_margin) override;
   void FlashFrame(bool flash_frame) override;
   void RunShellDrag(View* view,
                     std::unique_ptr<ui::OSExchangeData> data,
@@ -199,18 +202,18 @@ class VIEWS_EXPORT NativeWidgetMac : public internal::NativeWidgetPrivate,
   void SetVisibilityAnimationDuration(const base::TimeDelta& duration) override;
   void SetVisibilityAnimationTransition(
       Widget::VisibilityTransition transition) override;
-  bool IsTranslucentWindowOpacitySupported() const override;
   ui::GestureRecognizer* GetGestureRecognizer() override;
   ui::GestureConsumer* GetGestureConsumer() override;
   void OnSizeConstraintsChanged() override;
   void OnNativeViewHierarchyWillChange() override;
   void OnNativeViewHierarchyChanged() override;
   std::string GetName() const override;
+  base::WeakPtr<internal::NativeWidgetPrivate> GetWeakPtr() override;
 
   // Calls |callback| with the newly created NativeWidget whenever a
   // NativeWidget is created.
-  static void SetInitNativeWidgetCallback(
-      base::RepeatingCallback<void(NativeWidgetMac*)> callback);
+  static base::CallbackListSubscription RegisterInitNativeWidgetCallback(
+      const base::RepeatingCallback<void(NativeWidgetMac*)>& callback);
 
  protected:
   // The argument to SetBounds is sometimes in screen coordinates and sometimes
@@ -223,11 +226,7 @@ class VIEWS_EXPORT NativeWidgetMac : public internal::NativeWidgetPrivate,
       remote_cocoa::mojom::CreateWindowParams* params) {}
 
   // Creates the NSWindow that will be passed to the NativeWidgetNSWindowBridge.
-  // Called by InitNativeWidget. The return value will be autoreleased.
-  // Note that some tests (in particular, views_unittests that interact
-  // with ScopedFakeNSWindowFullscreen, on 10.10) assume that these windows
-  // are autoreleased, and will crash if the window has a more precise
-  // lifetime.
+  // Called by InitNativeWidget.
   virtual NativeWidgetMacNSWindow* CreateNSWindow(
       const remote_cocoa::mojom::CreateWindowParams* params);
 
@@ -275,7 +274,8 @@ class VIEWS_EXPORT NativeWidgetMac : public internal::NativeWidgetPrivate,
   raw_ptr<internal::NativeWidgetDelegate, DanglingUntriaged> delegate_;
   std::unique_ptr<NativeWidgetMacNSWindowHost> ns_window_host_;
 
-  Widget::InitParams::Ownership ownership_;
+  Widget::InitParams::Ownership ownership_ =
+      Widget::InitParams::NATIVE_WIDGET_OWNS_WIDGET;
 
   // Internal name.
   std::string name_;
@@ -291,6 +291,9 @@ class VIEWS_EXPORT NativeWidgetMac : public internal::NativeWidgetPrivate,
   std::unique_ptr<ZoomFocusMonitor> zoom_focus_monitor_;
   // Held while this widget is active if it's a child.
   std::unique_ptr<Widget::PaintAsActiveLock> parent_key_lock_;
+  // The following factory is used to provide references to the NativeWidgetMac
+  // instance.
+  base::WeakPtrFactory<NativeWidgetMac> weak_factory{this};
 };
 
 }  // namespace views

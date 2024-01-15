@@ -5,17 +5,26 @@
 #ifndef CHROME_BROWSER_ASH_FILE_MANAGER_PATH_UTIL_H_
 #define CHROME_BROWSER_ASH_FILE_MANAGER_PATH_UTIL_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/ash/guest_os/guest_id.h"
 #include "storage/browser/file_system/file_system_url.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class GURL;
 class Profile;
+
+namespace base {
+class Pickle;
+}  // namespace base
+
+namespace ui {
+class DataTransferEndpoint;
+struct FileInfo;
+}  // namespace ui
 
 namespace file_manager {
 namespace util {
@@ -57,6 +66,7 @@ extern const char kFuseBoxMountNamePrefix[];
 // e.g. $PATH-like environment variables are colon separated.
 extern const char kFuseBoxSubdirPrefixADP[];
 extern const char kFuseBoxSubdirPrefixFSP[];
+extern const char kFuseBoxSubdirPrefixLOC[];
 extern const char kFuseBoxSubdirPrefixMTP[];
 extern const char kFuseBoxSubdirPrefixTMP[];
 
@@ -138,12 +148,6 @@ base::FilePath GetCrostiniMountDirectory(Profile* profile);
 
 // The actual directory the Guest OS with `mountPointName` is mounted in.
 base::FilePath GetGuestOsMountDirectory(std::string mountPointName);
-
-// The sshfs mount options for crostini "Linux files" mount.
-std::vector<std::string> GetCrostiniMountOptions(
-    const std::string& hostname,
-    const std::string& host_private_key,
-    const std::string& container_public_key);
 
 // Convert a cracked |file_system_url| to a path inside a VM mounted at
 // |vm_mount| (e.g. /mnt/chromeos). If |map_crostini_home| is set, paths under
@@ -237,11 +241,17 @@ std::u16string GetDisplayableFileName16(storage::FileSystemURL file_url);
 
 // Turns an absolute path into one suitable for display. Returns nullopt if the
 // given path is invalid or not on a mounted volume.
-absl::optional<base::FilePath> GetDisplayablePath(Profile* profile,
-                                                  base::FilePath path);
-absl::optional<base::FilePath> GetDisplayablePath(
+std::optional<base::FilePath> GetDisplayablePath(Profile* profile,
+                                                 base::FilePath path);
+std::optional<base::FilePath> GetDisplayablePath(
     Profile* profile,
     storage::FileSystemURL file_url);
+
+// Reads pickle for FilesApp fs/sources with newline-separated filesystem
+// URLs. Validates that |source| is FilesApp.
+std::vector<ui::FileInfo> ParseFileSystemSources(
+    const ui::DataTransferEndpoint* source,
+    const base::Pickle& pickle);
 
 }  // namespace util
 }  // namespace file_manager

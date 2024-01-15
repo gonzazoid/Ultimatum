@@ -11,22 +11,14 @@
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "ppapi/c/pp_stdint.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/ash/components/network/firewall_hole.h"
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/components/firewall_hole/firewall_hole.h"
 #include "net/base/ip_endpoint.h"
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 struct PP_NetAddress_Private;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-namespace chromeos {
-class FirewallHole;
-}
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-
-namespace content {
-
-namespace pepper_socket_utils {
+namespace content::pepper_socket_utils {
 
 SocketPermissionRequest CreateSocketPermissionRequest(
     SocketPermissionRequest::OperationType type,
@@ -41,23 +33,21 @@ bool CanUseSocketAPIs(bool external_plugin,
                       int render_process_id,
                       int render_frame_id);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 
-// Returns true if the open operation is in progress.
 void OpenTCPFirewallHole(const net::IPEndPoint& address,
-                         ash::FirewallHole::OpenCallback callback);
+                         chromeos::FirewallHole::OpenCallback callback);
 
 void OpenUDPFirewallHole(const net::IPEndPoint& address,
-                         ash::FirewallHole::OpenCallback callback);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+                         chromeos::FirewallHole::OpenCallback callback);
+
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 // Annotations for TCP and UDP network requests. Defined here to make it easier
 // to keep them in sync.
 net::MutableNetworkTrafficAnnotationTag PepperTCPNetworkAnnotationTag();
 net::MutableNetworkTrafficAnnotationTag PepperUDPNetworkAnnotationTag();
 
-}  // namespace pepper_socket_utils
-
-}  // namespace content
+}  // namespace content::pepper_socket_utils
 
 #endif  // CONTENT_BROWSER_RENDERER_HOST_PEPPER_PEPPER_SOCKET_UTILS_H_

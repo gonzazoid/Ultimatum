@@ -4,6 +4,7 @@
 
 #include "ui/message_center/fake_message_center.h"
 
+#include <string>
 #include <utility>
 
 #include "base/strings/string_util.h"
@@ -65,8 +66,9 @@ Notification* FakeMessageCenter::FindVisibleNotificationById(
     const std::string& id) {
   const auto& notifications = GetVisibleNotifications();
   for (auto* notification : notifications) {
-    if (notification->id() == id)
+    if (notification->id() == id) {
       return notification;
+    }
   }
 
   return nullptr;
@@ -86,6 +88,12 @@ FakeMessageCenter::GetVisibleNotifications() {
   return visible_notifications_;
 }
 
+NotificationList::Notifications
+FakeMessageCenter::GetVisibleNotificationsWithoutBlocker(
+    const NotificationBlocker* blocker) const {
+  return visible_notifications_;
+}
+
 NotificationList::PopupNotifications
 FakeMessageCenter::GetPopupNotifications() {
   return NotificationList::PopupNotifications();
@@ -102,8 +110,9 @@ void FakeMessageCenter::AddNotification(
   std::string id = notification->id();
   notifications_.AddNotification(std::move(notification));
   visible_notifications_ = notifications_.GetVisibleNotifications(blockers_);
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.OnNotificationAdded(id);
+  }
 }
 
 void FakeMessageCenter::UpdateNotification(
@@ -126,8 +135,9 @@ void FakeMessageCenter::RemoveNotification(const std::string& id,
                                            bool by_user) {
   notifications_.RemoveNotification(id);
   visible_notifications_ = notifications_.GetVisibleNotifications(blockers_);
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.OnNotificationRemoved(id, by_user);
+  }
 }
 
 void FakeMessageCenter::RemoveNotificationsForNotifierId(
@@ -160,6 +170,8 @@ void FakeMessageCenter::ClickOnNotificationButtonWithReply(
 
 void FakeMessageCenter::ClickOnSettingsButton(const std::string& id) {}
 
+void FakeMessageCenter::ClickOnSnoozeButton(const std::string& id) {}
+
 void FakeMessageCenter::DisableNotification(const std::string& id) {}
 
 void FakeMessageCenter::MarkSinglePopupAsShown(const std::string& id,
@@ -173,7 +185,13 @@ void FakeMessageCenter::ResetSinglePopup(const std::string& id) {}
 void FakeMessageCenter::DisplayedNotification(const std::string& id,
                                               const DisplaySource source) {}
 
-void FakeMessageCenter::SetQuietMode(bool in_quiet_mode) {}
+void FakeMessageCenter::SetQuietMode(bool in_quiet_mode,
+                                     QuietModeSourceType type) {}
+
+QuietModeSourceType FakeMessageCenter::GetLastQuietModeChangeSourceType()
+    const {
+  return QuietModeSourceType::kUserAction;
+}
 
 void FakeMessageCenter::SetSpokenFeedbackEnabled(bool enabled) {}
 
@@ -185,6 +203,16 @@ void FakeMessageCenter::SetVisibility(Visibility visible) {}
 bool FakeMessageCenter::IsMessageCenterVisible() const {
   return false;
 }
+
+ExpandState FakeMessageCenter::GetNotificationExpandState(
+    const std::string& id) {
+  return ExpandState::DEFAULT;
+}
+
+void FakeMessageCenter::SetNotificationExpandState(const std::string& id,
+                                                   const ExpandState state) {}
+
+void FakeMessageCenter::OnSetExpanded(const std::string& id, bool expanded) {}
 
 void FakeMessageCenter::SetHasMessageCenterView(bool has_message_center_view) {
   has_message_center_view_ = has_message_center_view;

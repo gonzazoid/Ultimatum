@@ -5,6 +5,7 @@
 #include "components/segmentation_platform/internal/signals/history_service_observer.h"
 
 #include "base/metrics/user_metrics.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/browser/history_service_observer.h"
@@ -19,14 +20,17 @@ namespace segmentation_platform {
 HistoryServiceObserver::HistoryServiceObserver(
     history::HistoryService* history_service,
     StorageService* storage_service,
+    const std::string& profile_id,
     base::RepeatingClosure models_refresh_callback)
     : storage_service_(storage_service),
       url_signal_handler_(
           storage_service->ukm_data_manager()->GetOrCreateUrlHandler()),
       models_refresh_callback_(models_refresh_callback),
+      profile_id_(profile_id),
       history_delegate_(
           std::make_unique<HistoryDelegateImpl>(history_service,
-                                                url_signal_handler_)) {
+                                                url_signal_handler_,
+                                                profile_id)) {
   history_observation_.Observe(history_service);
 }
 HistoryServiceObserver::HistoryServiceObserver()
@@ -38,7 +42,7 @@ void HistoryServiceObserver::OnURLVisited(
     history::HistoryService* history_service,
     const history::URLRow& url_row,
     const history::VisitRow& new_visit) {
-  url_signal_handler_->OnHistoryVisit(url_row.url());
+  url_signal_handler_->OnHistoryVisit(url_row.url(), profile_id_);
   history_delegate_->OnUrlAdded(url_row.url());
 }
 
@@ -69,7 +73,7 @@ void HistoryServiceObserver::OnURLsDeleted(
 }
 
 void HistoryServiceObserver::SetHistoryBasedSegments(
-    base::flat_set<proto::SegmentId>&& history_based_segments) {
+    base::flat_set<proto::SegmentId> history_based_segments) {
   history_based_segments_ = std::move(history_based_segments);
   // If a delete is pending, clear the results now.
   if (pending_deletion_based_on_history_based_segments_) {
@@ -89,8 +93,15 @@ void HistoryServiceObserver::DeleteResultsForHistoryBasedSegments() {
     return;
   }
   for (const auto segment_id : *history_based_segments_) {
+    // For Server models.
     storage_service_->segment_info_database()->SaveSegmentResult(
-        segment_id, absl::nullopt, base::DoNothing());
+        segment_id, proto::ModelSource::SERVER_MODEL_SOURCE, absl::nullopt,
+        base::DoNothing());
+
+    // For Default models.
+    storage_service_->segment_info_database()->SaveSegmentResult(
+        segment_id, proto::ModelSource::DEFAULT_MODEL_SOURCE, absl::nullopt,
+        base::DoNothing());
   }
 
   // If a model refresh was recently posted, then cancel the task and restart
@@ -101,7 +112,7 @@ void HistoryServiceObserver::DeleteResultsForHistoryBasedSegments() {
   }
   posted_model_refresh_task_ = std::make_unique<base::CancelableOnceClosure>(
       base::BindOnce(models_refresh_callback_));
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, posted_model_refresh_task_->callback(), base::Minutes(1));
 }
 

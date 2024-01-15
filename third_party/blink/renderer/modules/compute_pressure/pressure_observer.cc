@@ -4,15 +4,20 @@
 
 #include "third_party/blink/renderer/modules/compute_pressure/pressure_observer.h"
 
+#include "base/ranges/algorithm.h"
+#include "base/task/sequenced_task_runner.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom-blink.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_pressure_observer_options.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_pressure_record.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_pressure_source.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/execution_context/security_context.h"
-#include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/modules/compute_pressure/pressure_observer_manager.h"
 #include "third_party/blink/renderer/modules/compute_pressure/pressure_record.h"
+#include "third_party/blink/renderer/modules/compute_pressure/pressure_source_index.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -54,14 +59,20 @@ Vector<V8PressureSource> PressureObserver::supportedSources() {
       {V8PressureSource(V8PressureSource::Enum::kCpu)});
 }
 
-void PressureObserver::observe(ScriptState* script_state,
-                               V8PressureSource source,
-                               ExceptionState& exception_state) {
+ScriptPromise PressureObserver::observe(ScriptState* script_state,
+                                        V8PressureSource source,
+                                        ExceptionState& exception_state) {
+  if (!base::FeatureList::IsEnabled(blink::features::kComputePressure)) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
+                                      "Compute Pressure API is not available.");
+    return ScriptPromise();
+  }
+
   ExecutionContext* execution_context = ExecutionContext::From(script_state);
   if (execution_context->IsContextDestroyed()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
                                       "Execution context is detached.");
-    return;
+    return ScriptPromise();
   }
 
   // Checks whether the document is allowed by Permissions Policy to call
@@ -71,53 +82,74 @@ void PressureObserver::observe(ScriptState* script_state,
           ReportOptions::kReportOnFailure)) {
     exception_state.ThrowDOMException(DOMExceptionCode::kNotAllowedError,
                                       kFeaturePolicyBlocked);
-    return;
+    return ScriptPromise();
   }
+
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
+  pending_resolvers_[ToSourceIndex(source.AsEnum())].insert(resolver);
 
   if (!manager_) {
-    LocalDOMWindow* window = To<LocalDOMWindow>(execution_context);
-    manager_ = PressureObserverManager::From(*window);
+    manager_ = PressureObserverManager::From(execution_context);
   }
+  manager_->AddObserver(source.AsEnum(), this);
 
-  manager_->AddObserver(source, this);
+  return resolver->Promise();
 }
 
-// TODO(crbug.com/1306819): Unobserve is supposed to only stop observing
-// one source but should continue to observe other sources.
-// For now, since "cpu" is the only source, unobserve() has the same
-// functionality as disconnect().
 void PressureObserver::unobserve(V8PressureSource source) {
   // Wrong order of calls.
-  if (!manager_)
+  if (!manager_) {
     return;
-
-  // TODO(crbug.com/1306819):
-  // 1. observer needs to be dequeued from active observer list of
-  // requested source.
-  // 2. observer records from the source need to be removed from `records_`
-  // For now 'cpu' is the only source.
-  manager_->RemoveObserver(source, this);
-  switch (source.AsEnum()) {
-    case V8PressureSource::Enum::kCpu:
-      records_.clear();
-      break;
   }
+  const auto source_index = ToSourceIndex(source.AsEnum());
+  // https://w3c.github.io/compute-pressure/#the-unobserve-method
+  manager_->RemoveObserver(source.AsEnum(), this);
+  last_record_map_[source_index].Clear();
+  after_penalty_records_[source_index].Clear();
+  // Reject all pending promises for `source`.
+  RejectPendingResolvers(source.AsEnum(), DOMExceptionCode::kAbortError,
+                         "Called unobserve method.");
+  records_.erase(base::ranges::remove_if(records_,
+                                         [source](const auto& record) {
+                                           return record->source() == source;
+                                         }),
+                 records_.end());
 }
 
 void PressureObserver::disconnect() {
   // Wrong order of calls.
-  if (!manager_)
+  if (!manager_) {
     return;
-
+  }
+  // https://w3c.github.io/compute-pressure/#the-disconnect-method
   manager_->RemoveObserverFromAllSources(this);
+  for (auto& last_record : last_record_map_) {
+    last_record.Clear();
+  }
+  for (auto& after_penalty_record : after_penalty_records_) {
+    after_penalty_record.Clear();
+  }
+  // Reject all pending promises.
+  for (const auto& source : supportedSources()) {
+    RejectPendingResolvers(source.AsEnum(), DOMExceptionCode::kAbortError,
+                           "Called disconnect method.");
+  }
   records_.clear();
 }
 
 void PressureObserver::Trace(blink::Visitor* visitor) const {
   visitor->Trace(manager_);
   visitor->Trace(observer_callback_);
-  for (const auto& last_record : last_record_map_)
+  for (const auto& after_penalty_record : after_penalty_records_) {
+    visitor->Trace(after_penalty_record);
+  }
+  for (const auto& last_record : last_record_map_) {
     visitor->Trace(last_record);
+  }
+  for (const auto& pending_resolver_set : pending_resolvers_) {
+    visitor->Trace(pending_resolver_set);
+  }
   visitor->Trace(records_);
   ScriptWrappable::Trace(visitor);
 }
@@ -125,27 +157,74 @@ void PressureObserver::Trace(blink::Visitor* visitor) const {
 void PressureObserver::OnUpdate(ExecutionContext* execution_context,
                                 V8PressureSource::Enum source,
                                 V8PressureState::Enum state,
-                                const Vector<V8PressureFactor>& factors,
                                 DOMHighResTimeStamp timestamp) {
-  if (!PassesRateTest(source, timestamp))
+  if (!PassesRateTest(source, timestamp)) {
     return;
+  }
 
-  if (!HasChangeInData(source, state, factors))
+  if (!HasChangeInData(source, state)) {
     return;
+  }
 
-  auto* record =
-      MakeGarbageCollected<PressureRecord>(source, state, factors, timestamp);
+  auto* record = MakeGarbageCollected<PressureRecord>(source, state, timestamp);
 
-  last_record_map_[static_cast<size_t>(source)] = record;
+  if (base::FeatureList::IsEnabled(
+          features::kComputePressureRateObfuscationMitigation)) {
+    const auto source_index = ToSourceIndex(source);
+    // Steps 4.5.1 and 4.5.2
+    // https://w3c.github.io/compute-pressure/#dfn-data-delivery
+    if (pending_delayed_report_to_callback_[source_index].IsActive()) {
+      after_penalty_records_[source_index] = record;
+      return;
+    }
 
+    change_rate_monitor_.ResetIfNeeded();
+    change_rate_monitor_.IncreaseChangeCount(source);
+
+    if (!PassesRateObfuscation(source)) {
+      // Steps 4.6.1 and 4.6.2
+      // https://w3c.github.io/compute-pressure/#dfn-data-delivery
+      after_penalty_records_[source_index] = record;
+      pending_delayed_report_to_callback_[source_index] =
+          PostDelayedCancellableTask(
+              *execution_context->GetTaskRunner(TaskType::kMiscPlatformAPI),
+              FROM_HERE,
+              WTF::BindOnce(&PressureObserver::QueueAfterPenaltyRecord,
+                            WrapWeakPersistent(this),
+                            WrapWeakPersistent(execution_context), source),
+              change_rate_monitor_.penalty_duration());
+      change_rate_monitor_.ResetChangeCount(source);
+      return;
+    }
+  }
+
+  QueuePressureRecord(execution_context, source, record);
+}
+
+// Steps 4.6.3.1.1-3 of
+// https://w3c.github.io/compute-pressure/#dfn-data-delivery
+void PressureObserver::QueueAfterPenaltyRecord(
+    ExecutionContext* execution_context,
+    V8PressureSource::Enum source) {
+  const auto source_index = ToSourceIndex(source);
+  CHECK(after_penalty_records_[source_index]);
+  auto& record = after_penalty_records_[source_index];
+  QueuePressureRecord(execution_context, source, record);
+}
+
+// https://w3c.github.io/compute-pressure/#queue-a-pressurerecord
+void PressureObserver::QueuePressureRecord(ExecutionContext* execution_context,
+                                           V8PressureSource::Enum source,
+                                           PressureRecord* record) {
   // This should happen infrequently since `records_` is supposed
   // to be emptied at every callback invoking or takeRecords().
   if (records_.size() >= kMaxQueuedRecords)
     records_.erase(records_.begin());
 
   records_.push_back(record);
-  DCHECK_LE(records_.size(), kMaxQueuedRecords);
+  CHECK_LE(records_.size(), kMaxQueuedRecords);
 
+  last_record_map_[ToSourceIndex(source)] = record;
   if (pending_report_to_callback_.IsActive())
     return;
 
@@ -156,14 +235,34 @@ void PressureObserver::OnUpdate(ExecutionContext* execution_context,
                     WrapWeakPersistent(execution_context)));
 }
 
+void PressureObserver::OnBindingSucceeded(V8PressureSource::Enum source) {
+  ResolvePendingResolvers(source);
+}
+
+void PressureObserver::OnBindingFailed(V8PressureSource::Enum source,
+                                       DOMExceptionCode exception_code) {
+  RejectPendingResolvers(source, exception_code,
+                         "Not available on this platform.");
+}
+
+void PressureObserver::OnConnectionError() {
+  for (const auto& source : supportedSources()) {
+    RejectPendingResolvers(source.AsEnum(),
+                           DOMExceptionCode::kNotSupportedError,
+                           "Connection error.");
+  }
+}
+
 void PressureObserver::ReportToCallback(ExecutionContext* execution_context) {
-  DCHECK(observer_callback_);
-  if (!execution_context || execution_context->IsContextDestroyed())
+  CHECK(observer_callback_);
+  if (!execution_context || execution_context->IsContextDestroyed()) {
     return;
+  }
 
   // Cleared by takeRecords, for example.
-  if (records_.empty())
+  if (records_.empty()) {
     return;
+  }
 
   HeapVector<Member<PressureRecord>, kMaxQueuedRecords> records;
   records_.swap(records);
@@ -177,11 +276,11 @@ HeapVector<Member<PressureRecord>> PressureObserver::takeRecords() {
   return records;
 }
 
-// https://wicg.github.io/compute-pressure/#dfn-passes-rate-test
+// https://w3c.github.io/compute-pressure/#dfn-passes-rate-test
 bool PressureObserver::PassesRateTest(
     V8PressureSource::Enum source,
     const DOMHighResTimeStamp& timestamp) const {
-  const auto& last_record = last_record_map_[static_cast<size_t>(source)];
+  const auto& last_record = last_record_map_[ToSourceIndex(source)];
 
   if (!last_record)
     return true;
@@ -191,18 +290,55 @@ bool PressureObserver::PassesRateTest(
   return (time_delta_milliseconds / 1000.0) >= interval_seconds;
 }
 
-// https://wicg.github.io/compute-pressure/#dfn-has-change-in-data
-bool PressureObserver::HasChangeInData(
-    V8PressureSource::Enum source,
-    V8PressureState::Enum state,
-    const Vector<V8PressureFactor>& factors) const {
-  const auto& last_record = last_record_map_[static_cast<size_t>(source)];
+// https://w3c.github.io/compute-pressure/#dfn-has-change-in-data
+bool PressureObserver::HasChangeInData(V8PressureSource::Enum source,
+                                       V8PressureState::Enum state) const {
+  const auto& last_record = last_record_map_[ToSourceIndex(source)];
 
   if (!last_record)
     return true;
 
-  return last_record->state() != state ||
-         !base::ranges::equal(last_record->factors(), factors);
+  return last_record->state() != state;
+}
+
+// This function only checks the status of the rate obfuscation test.
+// Incrementing of change count should happen before this call as described in
+// https://w3c.github.io/compute-pressure/#dfn-passes-rate-obfuscation-test
+bool PressureObserver::PassesRateObfuscation(
+    V8PressureSource::Enum source) const {
+  return !change_rate_monitor_.ChangeCountExceedsLimit(source);
+}
+
+void PressureObserver::ResolvePendingResolvers(V8PressureSource::Enum source) {
+  const auto source_index = ToSourceIndex(source);
+  for (const auto& resolver : pending_resolvers_[source_index]) {
+    ScriptState* const script_state = resolver->GetScriptState();
+    // Check if callback's resolver is still valid.
+    if (!IsInParallelAlgorithmRunnable(resolver->GetExecutionContext(),
+                                       script_state)) {
+      continue;
+    }
+    resolver->Resolve();
+  }
+  pending_resolvers_[source_index].clear();
+}
+
+void PressureObserver::RejectPendingResolvers(V8PressureSource::Enum source,
+                                              DOMExceptionCode exception_code,
+                                              const String& message) {
+  const auto source_index = ToSourceIndex(source);
+  for (const auto& resolver : pending_resolvers_[source_index]) {
+    ScriptState* const script_state = resolver->GetScriptState();
+    // Check if callback's resolver is still valid.
+    if (!IsInParallelAlgorithmRunnable(resolver->GetExecutionContext(),
+                                       script_state)) {
+      continue;
+    }
+    // Enter into resolver's context to support creating DOMException.
+    ScriptState::Scope script_state_scope(resolver->GetScriptState());
+    resolver->RejectWithDOMException(exception_code, message);
+  }
+  pending_resolvers_[source_index].clear();
 }
 
 }  // namespace blink

@@ -4,9 +4,9 @@
 
 #include "chrome/browser/sync/test/integration/exponential_backoff_helper.h"
 
+#include <algorithm>
 #include <ostream>
 
-#include "base/cxx17_backports.h"
 #include "components/sync/engine/cycle/model_neutral_state.h"
 #include "components/sync/engine/cycle/sync_cycle_snapshot.h"
 #include "components/sync/engine/polling_constants.h"
@@ -30,7 +30,7 @@ bool DidLastSyncCycleFail(syncer::SyncService* sync_service) {
 }
 
 base::TimeDelta ClampBackoffDelay(base::TimeDelta delay) {
-  return base::clamp(delay, syncer::kMinBackoffTime, syncer::kMaxBackoffTime);
+  return std::clamp(delay, syncer::kMinBackoffTime, syncer::kMaxBackoffTime);
 }
 
 }  // namespace
@@ -44,12 +44,10 @@ ExponentialBackoffChecker::CalculateDelayRange(base::TimeDelta current_delay) {
   const base::TimeDelta backoff = std::max(
       base::Seconds(1), current_delay * syncer::kBackoffMultiplyFactor);
 
-  DelayRange delay_range;
-  delay_range.min_delay =
-      ClampBackoffDelay(backoff - current_delay * syncer::kBackoffJitterFactor);
-  delay_range.max_delay =
-      ClampBackoffDelay(backoff + current_delay * syncer::kBackoffJitterFactor);
-  return delay_range;
+  return {.min_delay = ClampBackoffDelay(
+              backoff - current_delay * syncer::kBackoffJitterFactor),
+          .max_delay = ClampBackoffDelay(
+              backoff + current_delay * syncer::kBackoffJitterFactor)};
 }
 
 // static

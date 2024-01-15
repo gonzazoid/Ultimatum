@@ -2,23 +2,29 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ConsoleTestRunner} from 'console_test_runner';
+import {ExtensionsTestRunner} from 'extensions_test_runner';
+import {SourcesTestRunner} from 'sources_test_runner';
+
+import * as UI from 'devtools/ui/legacy/legacy.js';
+import * as Console from 'devtools/panels/console/console.js';
+import * as SDK from 'devtools/core/sdk/sdk.js';
+import * as Components from 'devtools/ui/legacy/components/utils/utils.js';
+
 (async function() {
   TestRunner.addResult(`Tests resource-related methods of WebInspector extension API\n`);
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('console_test_runner');
-  await TestRunner.loadTestModule('extensions_test_runner');
-  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
-  await TestRunner.loadLegacyModule('components');
 
   TestRunner.clickOnURL = async function() {
-    await UI.viewManager.showView("console").then(() => {
-      Console.ConsoleView.instance().updateMessageList();
+    await UI.ViewManager.ViewManager.instance().showView("console").then(() => {
+      Console.ConsoleView.ConsoleView.instance().updateMessageList();
 
       // Trigger link creation so we can properly await pending live location updates. Needed so we can
       // click the link in the first place.
-      for (const messageView of Console.ConsoleView.instance().visibleViewMessages) messageView.element();
+      for (const messageView of Console.ConsoleView.ConsoleView.instance().visibleViewMessages) messageView.element();
       TestRunner.waitForPendingLiveLocationUpdates().then(() => {
         var xpathResult = document.evaluate("//span[@class='devtools-link' and starts-with(., 'test-script.js')]",
-                                            Console.ConsoleView.instance().element, null, XPathResult.ANY_UNORDERED_NODE_TYPE, null);
+                                            Console.ConsoleView.ConsoleView.instance().element, null, XPathResult.ANY_UNORDERED_NODE_TYPE, null);
 
         var click = document.createEvent("MouseEvent");
         click.initMouseEvent("click", true, true);
@@ -28,7 +34,7 @@
   }
 
   TestRunner.waitForStyleSheetChangedEvent = function(reply) {
-    TestRunner.addSniffer(SDK.CSSModel.prototype, "fireStyleSheetChanged", reply);
+    TestRunner.addSniffer(SDK.CSSModel.CSSModel.prototype, "fireStyleSheetChanged", reply);
   }
 
   await TestRunner.evaluateInPageAnonymously(`
@@ -160,7 +166,7 @@
       webInspector.panels.setOpenResourceHandler(handleOpenResource);
       webInspector.inspectedWindow.eval("logMessage()", function() {
         evaluateOnFrontend("TestRunner.clickOnURL();");
-        evaluateOnFrontend("Components.Linkifier.linkHandlerSetting().set('test extension'); TestRunner.clickOnURL();");
+        evaluateOnFrontend("Components.Linkifier.Linkifier.linkHandlerSetting().set('test extension'); TestRunner.clickOnURL();");
       });
     },
   ]);

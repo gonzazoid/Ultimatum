@@ -6,13 +6,11 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_WORKER_WORKER_THREAD_SCHEDULER_H_
 
 #include "base/task/single_thread_task_runner.h"
-#include "components/scheduling_metrics/task_duration_metric_reporter.h"
 #include "third_party/blink/renderer/platform/scheduler/common/idle_helper.h"
 #include "third_party/blink/renderer/platform/scheduler/public/frame_scheduler.h"
 #include "third_party/blink/renderer/platform/scheduler/public/frame_status.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread_type.h"
 #include "third_party/blink/renderer/platform/scheduler/worker/non_main_thread_scheduler_base.h"
-#include "third_party/blink/renderer/platform/scheduler/worker/worker_metrics_helper.h"
 
 namespace base {
 class LazyNow;
@@ -29,7 +27,7 @@ class UkmRecorder;
 namespace blink {
 namespace scheduler {
 
-class WorkerScheduler;
+class WorkerSchedulerImpl;
 class WorkerSchedulerProxy;
 class WakeUpBudgetPool;
 class CPUTimeBudgetPool;
@@ -87,8 +85,8 @@ class PLATFORM_EXPORT WorkerThreadScheduler : public NonMainThreadSchedulerBase,
 
   // Each WorkerScheduler should notify NonMainThreadSchedulerImpl when it is
   // created or destroyed.
-  void RegisterWorkerScheduler(WorkerScheduler* worker_scheduler);
-  void UnregisterWorkerScheduler(WorkerScheduler* worker_scheduler);
+  void RegisterWorkerScheduler(WorkerSchedulerImpl* worker_scheduler);
+  void UnregisterWorkerScheduler(WorkerSchedulerImpl* worker_scheduler);
 
   // Returns the control task queue.  Tasks posted to this queue are executed
   // with the highest priority. Care must be taken to avoid starvation of other
@@ -117,7 +115,7 @@ class PLATFORM_EXPORT WorkerThreadScheduler : public NonMainThreadSchedulerBase,
   void SetCPUTimeBudgetPoolForTesting(
       std::unique_ptr<CPUTimeBudgetPool> cpu_time_budget_pool);
 
-  HashSet<WorkerScheduler*>& GetWorkerSchedulersForTesting();
+  HashSet<WorkerSchedulerImpl*>& GetWorkerSchedulersForTesting();
 
   void SetUkmTaskSamplingRateForTest(double rate);
   void SetUkmRecorderForTest(std::unique_ptr<ukm::UkmRecorder> ukm_recorder);
@@ -125,6 +123,12 @@ class PLATFORM_EXPORT WorkerThreadScheduler : public NonMainThreadSchedulerBase,
   virtual void PerformMicrotaskCheckpoint();
 
  private:
+  // ThreadSchedulerBase overrides
+  base::SequencedTaskRunner* GetVirtualTimeTaskRunner() override;
+  void OnVirtualTimeDisabled() override;
+  void OnVirtualTimePaused() override;
+  void OnVirtualTimeResumed() override;
+
   void MaybeStartLongIdlePeriod();
 
   void RecordTaskUkm(
@@ -136,19 +140,16 @@ class PLATFORM_EXPORT WorkerThreadScheduler : public NonMainThreadSchedulerBase,
   scoped_refptr<NonMainThreadTaskQueue> idle_helper_queue_;
   IdleHelper idle_helper_;
   bool initialized_ = false;
-  scoped_refptr<NonMainThreadTaskQueue> control_task_queue_;
   scoped_refptr<base::SingleThreadTaskRunner> v8_task_runner_;
   scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner_;
   SchedulingLifecycleState lifecycle_state_;
-
-  WorkerMetricsHelper worker_metrics_helper_;
 
   // This controller should be initialized before any TraceableVariables
   // because they require one to initialize themselves.
   TraceableVariableController traceable_variable_controller_;
 
   // Worker schedulers associated with this thread.
-  HashSet<WorkerScheduler*> worker_schedulers_;
+  HashSet<WorkerSchedulerImpl*> worker_schedulers_;
 
   std::unique_ptr<WakeUpBudgetPool> wake_up_budget_pool_;
   std::unique_ptr<CPUTimeBudgetPool> cpu_time_budget_pool_;

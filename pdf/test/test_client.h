@@ -32,6 +32,7 @@ class TestClient : public PDFEngine::Client {
                      const std::string& default_answer) override;
   std::string GetURL() override;
   std::unique_ptr<UrlLoader> CreateUrlLoader() override;
+  v8::Isolate* GetIsolate() override;
   std::vector<SearchStringResult> SearchString(const char16_t* string,
                                                const char16_t* term,
                                                bool case_sensitive) override;
@@ -44,7 +45,7 @@ class TestClient : public PDFEngine::Client {
  private:
   // Not owned. Expected to dangle briefly, as the engine usually is destroyed
   // before the client.
-  raw_ptr<PDFEngine> engine_ = nullptr;
+  raw_ptr<PDFEngine, DisableDanglingPtrDetection> engine_ = nullptr;
 };
 
 }  // namespace chrome_pdf

@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 
@@ -24,6 +24,11 @@ class FilePath;
 
 namespace extensions {
 namespace app_file_handler_util {
+
+// Gets is-a-directory-ness for a local path and returns it with |callback|.
+void GetIsDirectoryForLocalPath(content::BrowserContext* context,
+                                const base::FilePath& local_path,
+                                base::OnceCallback<void(bool)> callback);
 
 class IsDirectoryCollector {
  public:
@@ -45,7 +50,7 @@ class IsDirectoryCollector {
  private:
   void OnIsDirectoryCollected(size_t index, bool directory);
 
-  raw_ptr<content::BrowserContext> context_;
+  raw_ptr<content::BrowserContext, FlakyDanglingUntriaged> context_;
   std::vector<base::FilePath> paths_;
   std::unique_ptr<std::set<base::FilePath>> result_;
   size_t left_;

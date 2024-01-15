@@ -2,8 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assertInstanceof} from 'chrome://resources/js/assert_ts.js';
-import {decorate} from 'chrome://resources/js/cr/ui.js';
+import {assert, assertInstanceof} from 'chrome://resources/js/assert.js';
+
+// Only import types from the DirectoryTree/DirectoryItem/XfTree/XfTreeItem to
+// prevent circular imports.
+import type {DirectoryItem, DirectoryTree} from '../../foreground/js/ui/directory_tree.js';
+import type {XfTree} from '../../widgets/xf_tree.js';
+import type {XfTreeItem} from '../../widgets/xf_tree_item.js';
+import {isTreeItem, isXfTree} from '../../widgets/xf_tree_util.js';
+
+import {crInjectTypeAndInit, type DecoratableElement} from './cr_ui.js';
 
 /**
  * Function to be used as event listener for `mouseenter`, it sets the `title`
@@ -95,7 +103,8 @@ export function createChild(
  *     context object for querySelector.
  */
 export function queryRequiredElement(
-    selectors: string, context?: Document|DocumentFragment|Element): Element {
+    selectors: string,
+    context?: Document|DocumentFragment|Element|HTMLElement): HTMLElement {
   const element = (context || document).querySelector(selectors);
   assertInstanceof(
       element, HTMLElement, 'Missing required element: ' + selectors);
@@ -108,11 +117,31 @@ export function queryRequiredElement(
  * @param query Query for the element.
  * @param type Type used to decorate.
  */
-export function queryDecoratedElement<T>(
+export function queryDecoratedElement<T extends DecoratableElement>(
     query: string, type: {new (...args: any): T}): T {
   const element = queryRequiredElement(query);
-  decorate(element, type);
+  crInjectTypeAndInit(element, type);
   return element as any as T;
+}
+
+/**
+ * Returns an array of elements, based on the `selectors`. Exactly one of these
+ *  elements is required to exist. The rest will be null.
+ * @param selectors A list of CSS selectors to query for elements.
+ * @param {(!Document|!DocumentFragment|!Element)=} context An optional
+ *     context object for querySelector.
+ * @returns A list of query results, with the same indices as the provided
+ *     `selectors`. One element will exist, and the rest will be null padding.
+ */
+export function queryRequiredExactlyOne(
+    selectors: string[], context: Document|DocumentFragment|Element = document):
+    Array<HTMLElement|null> {
+  const elements = selectors.map(
+      selector => context.querySelector(selector) as HTMLElement | null);
+  assert(
+      elements.filter(el => !!el).length === 1,
+      'Exactly one of the elements should exist.');
+  return elements;
 }
 
 /**
@@ -138,7 +167,6 @@ class UserDomError extends DOMError {
   /**
    * @param name Error name for the file error.
    * @param {string=} message Optional message for this error.
-   * @suppress {checkTypes} Closure externs for DOMError doesn't have
    * constructor with 1 arg.
    */
   constructor(name: string, message?: string) {
@@ -157,4 +185,58 @@ class UserDomError extends DOMError {
   override get message(): string {
     return this.message_;
   }
+}
+
+/**
+ * A util function to get the correct "top" value when calling
+ * <cr-action-menu>'s `showAt` method.
+ *
+ * @param triggerElement The he element which triggers the menu dropdown.
+ * @param marginTop The gap between the trigger element and the menu dialog.
+ */
+export function getCrActionMenuTop(
+    triggerElement: HTMLElement, marginTop: number): number {
+  let top = triggerElement.offsetHeight;
+  let offsetElement: Element|null = triggerElement;
+  // The menu dialog from <cr-action-menu> is "absolute" positioned, we need to
+  // start from the trigger element and go upwards to add all offsetTop from all
+  // offset parents because each level can have its own offsetTop.
+  while (offsetElement instanceof HTMLElement) {
+    top += offsetElement.offsetTop;
+    offsetElement = offsetElement.offsetParent;
+  }
+  top += marginTop;
+  return top;
+}
+
+/**
+ * Util functions to check if an HTML element is a tree or tree item, these
+ * functions cater both the old tree (cr.ui.Tree/cr.ui.TreeItem) and the new
+ * tree (<xf-tree>/<xf-tree-item>).
+ *
+ * Note: for focused item, the old tree use `selectedItem`, but in the context
+ * of the new tree, `selectedItem` means the item being selected, `focusedItem`
+ * means the item being focused by keyboard.
+ *
+ * Use `element: any` here because `DirectoryTree` and `DirectoryItem` are not
+ * compatible with Element's type definition, which prevents the type guard. No
+ * `instanceof` here to prevent circular imports issue.
+ *
+ * TODO(b/285977941): Remove the old tree support.
+ */
+export function isDirectoryTree(element: any): element is DirectoryTree|XfTree {
+  return element.typeName === 'directory_tree' || isXfTree(element);
+}
+export function isDirectoryTreeItem(element: any): element is DirectoryItem|
+    XfTreeItem {
+  return element.typeName === 'directory_item' || isTreeItem(element);
+}
+export function getFocusedTreeItem(tree: any): DirectoryItem|XfTreeItem|null {
+  if (tree.typeName === 'directory_tree') {
+    return tree.selectedItem;
+  }
+  if (isXfTree(tree)) {
+    return tree.focusedItem;
+  }
+  return null;
 }

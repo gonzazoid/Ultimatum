@@ -3,32 +3,54 @@
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/canvas/canvas2d/canvas_filter_operation_resolver.h"
+
+#include <stdint.h>
+#include <algorithm>
+#include <string>
+#include <utility>
+
+#include "base/types/expected.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/mojom/devtools/console_message.mojom-shared.h"
 #include "third_party/blink/renderer/bindings/core/v8/dictionary.h"
+#include "third_party/blink/renderer/bindings/core/v8/idl_types.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_value.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_union_object_objectarray_string.h"
+#include "third_party/blink/renderer/core/css/parser/css_parser.h"
+#include "third_party/blink/renderer/core/css/resolver/filter_operation_resolver.h"
+#include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
+#include "third_party/blink/renderer/core/css/style_color.h"
+#include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
+#include "third_party/blink/renderer/core/style/filter_operation.h"
+#include "third_party/blink/renderer/core/style/shadow_data.h"
+#include "third_party/blink/renderer/core/svg/svg_enumeration.h"
 #include "third_party/blink/renderer/core/svg/svg_enumeration_map.h"
-#include "third_party/blink/renderer/core/svg/svg_fe_convolve_matrix_element.h"
 #include "third_party/blink/renderer/core/svg/svg_fe_turbulence_element.h"
+#include "third_party/blink/renderer/modules/canvas/canvas2d/canvas_style.h"
+#include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/geometry/length.h"
+#include "third_party/blink/renderer/platform/geometry/length_point.h"
+#include "third_party/blink/renderer/platform/graphics/color.h"
+#include "third_party/blink/renderer/platform/graphics/filters/fe_component_transfer.h"
+#include "third_party/blink/renderer/platform/graphics/filters/fe_convolve_matrix.h"
+#include "third_party/blink/renderer/platform/graphics/filters/fe_turbulence.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_view.h"
+#include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
+#include "third_party/blink/renderer/platform/wtf/vector.h"
+#include "ui/gfx/geometry/point.h"
+#include "ui/gfx/geometry/point_f.h"
+#include "ui/gfx/geometry/size.h"
 
 namespace blink {
 
+class ScriptValue;
+
 namespace {
 int num_canvas_filter_errors_to_console_allowed_ = 64;
-
-BlurFilterOperation* ResolveBlur(const Dictionary& blur_dict,
-                                 ExceptionState& exception_state) {
-  absl::optional<double> std_deviation =
-      blur_dict.Get<IDLDouble>("stdDeviation", exception_state);
-  if (!std_deviation) {
-    exception_state.ThrowTypeError(
-        "Failed to construct blur filter, 'stdDeviation' required and must be "
-        "a number.");
-    return nullptr;
-  }
-
-  return MakeGarbageCollected<BlurFilterOperation>(
-      Length::Fixed(*std_deviation));
-}
 
 ColorMatrixFilterOperation* ResolveColorMatrix(
     const Dictionary& dict,
@@ -36,7 +58,7 @@ ColorMatrixFilterOperation* ResolveColorMatrix(
   absl::optional<Vector<float>> values =
       dict.Get<IDLSequence<IDLFloat>>("values", exception_state);
 
-  if (!values) {
+  if (!values.has_value()) {
     exception_state.ThrowTypeError(
         "Failed to construct color matrix filter, 'values' array required.");
     return nullptr;
@@ -65,7 +87,8 @@ absl::optional<KernelMatrix> GetKernelMatrix(const Dictionary& dict,
   absl::optional<Vector<Vector<float>>> km_input =
       dict.Get<IDLSequence<IDLSequence<IDLFloat>>>("kernelMatrix",
                                                    exception_state);
-  if (!km_input || km_input->size() == 0) {
+  if (!km_input.has_value() || km_input->size() == 0 ||
+      (km_input->size() >= 2 && km_input->at(0).size() == 0)) {
     exception_state.ThrowTypeError(
         "Failed to construct convolve matrix filter. 'kernelMatrix' must be an "
         "array of arrays of numbers representing an n by m matrix.");
@@ -73,20 +96,20 @@ absl::optional<KernelMatrix> GetKernelMatrix(const Dictionary& dict,
   }
   KernelMatrix result;
   result.height = km_input->size();
-  result.width = km_input.value()[0].size();
+  result.width = km_input->at(0).size();
 
-  for (uint32_t y = 0; y < result.height; ++y) {
-    if (km_input.value()[y].size() != result.width) {
+  for (const Vector<float>& row : *km_input) {
+    if (row.size() != result.width) {
       exception_state.ThrowTypeError(
           "Failed to construct convolve matrix filter. All rows of the "
           "'kernelMatrix' must be the same length.");
       return absl::nullopt;
     }
 
-    result.values.AppendVector(km_input.value()[y]);
+    result.values.AppendVector(row);
   }
 
-  return absl::optional<KernelMatrix>(result);
+  return result;
 }
 
 ConvolveMatrixFilterOperation* ResolveConvolveMatrix(
@@ -95,8 +118,9 @@ ConvolveMatrixFilterOperation* ResolveConvolveMatrix(
   absl::optional<KernelMatrix> kernel_matrix =
       GetKernelMatrix(dict, exception_state);
 
-  if (!kernel_matrix)
+  if (!kernel_matrix.has_value()) {
     return nullptr;
+  }
 
   gfx::Size kernel_size(kernel_matrix->width, kernel_matrix->height);
   double divisor = dict.Get<IDLDouble>("divisor", exception_state).value_or(1);
@@ -159,8 +183,9 @@ ComponentTransferFunction GetComponentTransferFunction(
 
   absl::optional<Vector<float>> table_values =
       transfer_dict.Get<IDLSequence<IDLFloat>>("tableValues", exception_state);
-  if (table_values)
-    result.table_values.AppendVector(table_values.value());
+  if (table_values.has_value()) {
+    result.table_values.AppendVector(*table_values);
+  }
 
   return result;
 }
@@ -173,6 +198,142 @@ ComponentTransferFilterOperation* ResolveComponentTransfer(
       GetComponentTransferFunction("funcG", dict, exception_state),
       GetComponentTransferFunction("funcB", dict, exception_state),
       GetComponentTransferFunction("funcA", dict, exception_state));
+}
+
+StyleColor ResolveFloodColor(ExecutionContext& execution_context,
+                             const Dictionary& dict,
+                             ExceptionState& exception_state) {
+  NonThrowableExceptionState no_throw;
+  if (!dict.HasProperty("floodColor", no_throw)) {
+    return StyleColor(Color::kBlack);
+  }
+
+  // TODO(crbug.com/1430532): CurrentColor and system colors dependeing on
+  // the color-scheme should be stored unresolved, and resolved only when the
+  // filter is associated with a context.
+  absl::optional<String> flood_color =
+      dict.Get<IDLString>("floodColor", exception_state);
+  Color parsed_color;
+  if (exception_state.HadException() || !flood_color.has_value() ||
+      !ParseCanvasColorString(*flood_color, parsed_color)) {
+    exception_state.ThrowTypeError(
+        "Invalid color value for \"floodColor\" property.");
+    return StyleColor(Color::kBlack);
+  }
+
+  return StyleColor(parsed_color);
+}
+
+base::expected<gfx::PointF, String> ResolveFloatOrVec2f(
+    const String property_name,
+    const Dictionary& dict,
+    ExceptionState& exception_state) {
+  // First try to get stdDeviation as a float.
+  absl::optional<float> single_float =
+      dict.Get<IDLFloat>(property_name, exception_state);
+  if (!exception_state.HadException() && single_float.has_value()) {
+    return gfx::PointF(*single_float, *single_float);
+  } else {
+    // Clear the exception if it exists in order to try again as a vector.
+    exception_state.ClearException();
+
+    absl::optional<Vector<float>> two_floats =
+        dict.Get<IDLSequence<IDLFloat>>(property_name, exception_state);
+    if (exception_state.HadException() || !two_floats.has_value() ||
+        two_floats->size() != 2) {
+      return base::unexpected(String::Format(
+          "\"%s\" must either be a number or an array of two numbers",
+          property_name.Ascii().c_str()));
+    }
+    return gfx::PointF(two_floats->at(0), two_floats->at(1));
+  }
+}
+
+BlurFilterOperation* ResolveBlur(const Dictionary& blur_dict,
+                                 ExceptionState& exception_state) {
+  base::expected<gfx::PointF, String> blur_xy =
+      ResolveFloatOrVec2f("stdDeviation", blur_dict, exception_state);
+
+  if (exception_state.HadException() || !blur_xy.has_value()) {
+    exception_state.ThrowTypeError(
+        String::Format("Failed to construct blur filter. %s.",
+                       blur_xy.error().Utf8().c_str()));
+    return nullptr;
+  }
+
+  return MakeGarbageCollected<BlurFilterOperation>(
+      Length::Fixed(std::max(0.0f, blur_xy->x())),
+      Length::Fixed(std::max(0.0f, blur_xy->y())));
+}
+
+DropShadowFilterOperation* ResolveDropShadow(
+    ExecutionContext& execution_context,
+    const Dictionary& dict,
+    ExceptionState& exception_state) {
+  // For checking the presence of keys.
+  NonThrowableExceptionState no_throw;
+
+  float dx = 2.0f;
+  if (dict.HasProperty("dx", no_throw)) {
+    absl::optional<float> input = dict.Get<IDLFloat>("dx", exception_state);
+    if (exception_state.HadException() || !input.has_value()) {
+      exception_state.ThrowTypeError(
+          "Failed to construct dropShadow filter, \"dx\" must be a number.");
+      return nullptr;
+    }
+    dx = *input;
+  }
+
+  float dy = 2.0f;
+  if (dict.HasProperty("dy", no_throw)) {
+    absl::optional<float> input = dict.Get<IDLFloat>("dy", exception_state);
+    if (exception_state.HadException() || !input.has_value()) {
+      exception_state.ThrowTypeError(
+          "Failed to construct dropShadow filter, \"dy\" must be a number.");
+      return nullptr;
+    }
+    dy = *input;
+  }
+
+  // The shadow blur can have different standard deviations in the X and Y
+  // directions. `stdDeviation` can be specified as either a single number
+  // (same X & Y blur) or a vector of two numbers (different X & Y blurs).
+  gfx::PointF blur = {2.0f, 2.0f};
+  if (dict.HasProperty("stdDeviation", no_throw)) {
+    base::expected<gfx::PointF, String> std_deviation =
+        ResolveFloatOrVec2f("stdDeviation", dict, exception_state);
+    if (exception_state.HadException() || !std_deviation.has_value()) {
+      exception_state.ThrowTypeError(
+          String::Format("Failed to construct dropShadow filter, %s.",
+                         std_deviation.error().Utf8().c_str()));
+      return nullptr;
+    }
+    blur = *std_deviation;
+    blur.SetToMax({0.0f, 0.0f});
+  }
+
+  StyleColor flood_color =
+      ResolveFloodColor(execution_context, dict, exception_state);
+  if (exception_state.HadException()) {
+    return nullptr;
+  }
+
+  float opacity = 1.0f;
+  if (dict.HasProperty("floodOpacity", no_throw)) {
+    absl::optional<float> input =
+        dict.Get<IDLFloat>("floodOpacity", exception_state);
+    if (exception_state.HadException() || !input.has_value()) {
+      exception_state.ThrowTypeError(
+          "Failed to construct dropShadow filter, \"floodOpacity\" must be a "
+          "number.");
+      return nullptr;
+    }
+    opacity = *input;
+  }
+
+  return MakeGarbageCollected<DropShadowFilterOperation>(
+      ShadowData(gfx::Vector2dF(dx, dy), blur, /*spread=*/0,
+                 ShadowStyle::kNormal, std::move(flood_color), opacity));
 }
 
 // https://drafts.fxtf.org/filter-effects/#feTurbulenceElement
@@ -191,28 +352,17 @@ TurbulenceFilterOperation* ResolveTurbulence(const Dictionary& dict,
 
   // baseFrequency can be either a number or a list of numbers.
   if (dict.HasProperty("baseFrequency", no_throw)) {
-    // Try first to get baseFrequency as an array.
-    absl::optional<Vector<float>> base_frequency_array =
-        dict.Get<IDLSequence<IDLFloat>>("baseFrequency", exception_state);
-    // Clear the exception if it exists in order to try again as a float
-    exception_state.ClearException();
-    // An array size of one is parse-able as a float.
-    if (base_frequency_array.has_value() && base_frequency_array->size() == 2) {
-      base_frequency_x = base_frequency_array.value()[0];
-      base_frequency_y = base_frequency_array.value()[1];
-    } else {
-      // Otherwise, see if it the input can be interpreted as a float.
-      absl::optional<float> base_frequency_float =
-          dict.Get<IDLFloat>("baseFrequency", exception_state);
-      if (exception_state.HadException() || !base_frequency_float.has_value()) {
-        exception_state.ThrowTypeError(
-            "Failed to construct turbulence filter, \"baseFrequency\" must be "
-            "a number or list of two numbers.");
-        return nullptr;
-      }
-      base_frequency_x = base_frequency_float.value();
-      base_frequency_y = base_frequency_float.value();
+    base::expected<gfx::PointF, String> base_frequency =
+        ResolveFloatOrVec2f("baseFrequency", dict, exception_state);
+    if (exception_state.HadException() || !base_frequency.has_value()) {
+      exception_state.ThrowTypeError(
+          String::Format("Failed to construct turbulence filter, %s.",
+                         base_frequency.error().Utf8().c_str()));
+      return nullptr;
     }
+    base_frequency_x = base_frequency->x();
+    base_frequency_y = base_frequency->y();
+
     if (base_frequency_x < 0 || base_frequency_y < 0) {
       exception_state.ThrowTypeError(
           "Failed to construct turbulence filter, negative values for "
@@ -229,7 +379,7 @@ TurbulenceFilterOperation* ResolveTurbulence(const Dictionary& dict,
           "Failed to construct turbulence filter, \"seed\" must be a number.");
       return nullptr;
     }
-    seed = seed_input.value();
+    seed = *seed_input;
   }
 
   if (dict.HasProperty("numOctaves", no_throw)) {
@@ -238,13 +388,13 @@ TurbulenceFilterOperation* ResolveTurbulence(const Dictionary& dict,
     absl::optional<float> num_octaves_input =
         dict.Get<IDLFloat>("numOctaves", exception_state);
     if (exception_state.HadException() || !num_octaves_input.has_value() ||
-        num_octaves_input.value() < 0) {
+        *num_octaves_input < 0) {
       exception_state.ThrowTypeError(
           "Failed to construct turbulence filter, \"numOctaves\" must be a "
           "positive number.");
       return nullptr;
     }
-    num_octaves = static_cast<int>(num_octaves_input.value());
+    num_octaves = static_cast<int>(*num_octaves_input);
   }
 
   if (dict.HasProperty("stitchTiles", no_throw)) {
@@ -253,7 +403,7 @@ TurbulenceFilterOperation* ResolveTurbulence(const Dictionary& dict,
     if (exception_state.HadException() || !stitch_tiles_input.has_value() ||
         (stitch_tiles = static_cast<SVGStitchOptions>(
              GetEnumerationMap<SVGStitchOptions>().ValueFromName(
-                 stitch_tiles_input.value()))) == 0) {
+                 *stitch_tiles_input))) == 0) {
       exception_state.ThrowTypeError(
           "Failed to construct turbulence filter, \"stitchTiles\" must be "
           "either \"stitch\" or \"noStitch\".");
@@ -266,8 +416,8 @@ TurbulenceFilterOperation* ResolveTurbulence(const Dictionary& dict,
         dict.Get<IDLString>("type", exception_state);
     if (exception_state.HadException() || !type_input.has_value() ||
         (type = static_cast<TurbulenceType>(
-             GetEnumerationMap<TurbulenceType>().ValueFromName(
-                 type_input.value()))) == 0) {
+             GetEnumerationMap<TurbulenceType>().ValueFromName(*type_input))) ==
+            0) {
       exception_state.ThrowTypeError(
           "Failed to construct turbulence filter, \"type\" must be either "
           "\"turbulence\" or \"fractalNoise\".");
@@ -279,18 +429,18 @@ TurbulenceFilterOperation* ResolveTurbulence(const Dictionary& dict,
       type, base_frequency_x, base_frequency_y, num_octaves, seed,
       stitch_tiles == kSvgStitchtypeStitch ? true : false);
 }
+
 }  // namespace
 
-FilterOperations CanvasFilterOperationResolver::CreateFilterOperations(
-    ExecutionContext* execution_context,
-    HeapVector<ScriptValue> filters,
+FilterOperations CanvasFilterOperationResolver::CreateFilterOperationsFromList(
+    const HeapVector<ScriptValue>& filters,
+    ExecutionContext& execution_context,
     ExceptionState& exception_state) {
   FilterOperations operations;
-
   for (auto filter : filters) {
     Dictionary filter_dict = Dictionary(filter);
     absl::optional<String> name =
-        filter_dict.Get<IDLString>("filter", exception_state);
+        filter_dict.Get<IDLString>("name", exception_state);
     if (name == "gaussianBlur") {
       if (auto* blur_operation = ResolveBlur(filter_dict, exception_state)) {
         operations.Operations().push_back(blur_operation);
@@ -328,6 +478,11 @@ FilterOperations CanvasFilterOperationResolver::CreateFilterOperations(
               ResolveComponentTransfer(filter_dict, exception_state)) {
         operations.Operations().push_back(component_transfer_operation);
       }
+    } else if (name == "dropShadow") {
+      if (FilterOperation* drop_shadow_operation = ResolveDropShadow(
+              execution_context, filter_dict, exception_state)) {
+        operations.Operations().push_back(drop_shadow_operation);
+      }
     } else if (name == "turbulence") {
       if (auto* turbulence_operation =
               ResolveTurbulence(filter_dict, exception_state)) {
@@ -340,20 +495,20 @@ FilterOperations CanvasFilterOperationResolver::CreateFilterOperations(
       {
         const String& message =
             (!name.has_value())
-                ? "CanvasFilters require key 'filter' to specify filter type."
+                ? "Canvas filter require key 'name' to specify filter type."
                 : String::Format(
-                      "\"%s\" is not among supported CanvasFilter types.",
+                      "\"%s\" is not among supported canvas filter types.",
                       name->Utf8().c_str());
-        execution_context->AddConsoleMessage(
+        execution_context.AddConsoleMessage(
             MakeGarbageCollected<ConsoleMessage>(
                 mojom::blink::ConsoleMessageSource::kRendering,
                 mojom::blink::ConsoleMessageLevel::kWarning, message));
       }
       if (num_canvas_filter_errors_to_console_allowed_ == 0) {
         const String& message =
-            "CanvasFilter: too many errors, no more errors will be reported to "
-            "the console for this process.";
-        execution_context->AddConsoleMessage(
+            "Canvas filter: too many errors, no more errors will be reported "
+            "to the console for this process.";
+        execution_context.AddConsoleMessage(
             MakeGarbageCollected<ConsoleMessage>(
                 mojom::blink::ConsoleMessageSource::kRendering,
                 mojom::blink::ConsoleMessageLevel::kWarning, message));
@@ -362,6 +517,32 @@ FilterOperations CanvasFilterOperationResolver::CreateFilterOperations(
   }
 
   return operations;
+}
+
+FilterOperations
+CanvasFilterOperationResolver::CreateFilterOperationsFromCSSFilter(
+    const String& filter_string,
+    const ExecutionContext& execution_context,
+    Element* style_resolution_host,
+    const Font& font) {
+  FilterOperations operations;
+  const CSSValue* css_value = CSSParser::ParseSingleValue(
+      CSSPropertyID::kFilter, filter_string,
+      MakeGarbageCollected<CSSParserContext>(
+          kHTMLStandardMode, execution_context.GetSecureContextMode()));
+  if (!css_value || css_value->IsCSSWideKeyword()) {
+    return operations;
+  }
+  // The style resolution for fonts is not available in frame-less documents.
+  if (style_resolution_host != nullptr &&
+      style_resolution_host->GetDocument().GetFrame() != nullptr) {
+    return style_resolution_host->GetDocument()
+        .GetStyleResolver()
+        .ComputeFilterOperations(style_resolution_host, font, *css_value);
+  } else {
+    return FilterOperationResolver::CreateOffscreenFilterOperations(*css_value,
+                                                                    font);
+  }
 }
 
 }  // namespace blink

@@ -4,7 +4,6 @@ Metadata:
     elf_build_id=WhatAnAmazingBuildId
     elf_file_name=elf
     elf_mtime={redacted}
-    elf_relocations_count=394087
     git_revision=abc123
     gn_args=var1=true var2="foo"
     map_file_name=../../../test.map
@@ -43,6 +42,11 @@ Other section sizes:
     .rel.plt: 2.75kb (2816 bytes) (counted in .other)
     .shstrtab: 436 bytes (436 bytes) (counted in .other)
 
+Section .arsc: 0 bytes from 0 symbols.
+* Padding accounts for 0 bytes (0.0%)
+* 0 have source paths. Accounts for 0 bytes (0.0%).
+* 0 have a component assigned. Accounts for 0 bytes (0.0%).
+* 0 symbols have shared ownership.
 Section .text: has 100.0% of 35982248 bytes accounted for from 23 symbols. 0 bytes are unaccounted for.
 * Padding accounts for 13808 bytes (0.0%)
 * 16 have source paths. Accounts for 73986 bytes (0.2%).
@@ -64,7 +68,7 @@ Section .rodata: has 100.0% of 5927636 bytes accounted for from 12 symbols. 16 b
 * 0 symbols have shared ownership.
 * 2 symbols are from generated sources. Accounts for 21 bytes (0.0%).
 Large padding of 675992 between:
-  A) .rodata@284e398(size_without_padding=32,padding=0,full_name=chrome::mojom::FilePatcher::Name_,object_path=third_party/sub/ContiguousContainer.o,source_path=third_party/container/container.c,flags={},num_aliases=1,component=UI>Browser)
+  A) .rodata@284e398(size_without_padding=32,padding=0,full_name=chrome::mojom::FilePatcher::Name_,object_path=third_party/sub/ContiguousContainer.o,source_path=third_party/container/container.c,flags={},num_aliases=1,component=ContainerOverride)
   B) .rodata@28f3450(size_without_padding=48,padding=675992,full_name=kAnimationFrameTimeHistogramClassPath,object_path=third_party/sub/PaintChunker.o,source_path=third_party/paint.cc,flags={anon},num_aliases=1,component=Internal>Android)
 Section .data.rel.ro: has 100.0% of 1065224 bytes accounted for from 4 symbols. 0 bytes are unaccounted for.
 * Padding accounts for 0 bytes (0.0%)

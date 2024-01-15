@@ -28,7 +28,7 @@ class GuestView : public GuestViewBase {
   }
 
   // Prefer using FromRenderFrameHost. See https://crbug.com/1362569.
-  static T* FromWebContents(const content::WebContents* contents) {
+  static T* FromWebContents(content::WebContents* contents) {
     return AsDerivedGuest(GuestViewBase::FromWebContents(contents));
   }
 
@@ -49,8 +49,8 @@ class GuestView : public GuestViewBase {
   }
 
  protected:
-  explicit GuestView(content::WebContents* owner_web_contents)
-      : GuestViewBase(owner_web_contents) {}
+  explicit GuestView(content::RenderFrameHost* owner_rfh)
+      : GuestViewBase(owner_rfh) {}
   ~GuestView() override = default;
 
   T* GetOpener() const { return AsDerivedGuest(GuestViewBase::GetOpener()); }

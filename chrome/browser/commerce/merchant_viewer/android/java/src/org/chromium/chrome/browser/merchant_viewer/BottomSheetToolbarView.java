@@ -23,7 +23,6 @@ import org.chromium.url.GURL;
 
 /** BottomSheetToolbar UI. */
 public class BottomSheetToolbarView {
-    private final int mToolbarHeightPx;
     private final View mToolbarView;
 
     /**
@@ -32,8 +31,6 @@ public class BottomSheetToolbarView {
      * @param context The context where the bottom-sheet should be shown.
      */
     public BottomSheetToolbarView(Context context) {
-        mToolbarHeightPx =
-                context.getResources().getDimensionPixelSize(R.dimen.sheet_tab_toolbar_height);
         mToolbarView = LayoutInflater.from(context).inflate(R.layout.sheet_tab_toolbar, null);
 
         FadingShadowView shadow = mToolbarView.findViewById(R.id.shadow);
@@ -68,17 +65,19 @@ public class BottomSheetToolbarView {
     /** Sets the security icon click callback. */
     public void setSecurityIconClickCallback(Runnable callback) {
         ImageView securityIcon = mToolbarView.findViewById(R.id.security_icon);
-        securityIcon.setOnClickListener(v -> {
-            if (callback != null) callback.run();
-        });
+        securityIcon.setOnClickListener(
+                v -> {
+                    if (callback != null) callback.run();
+                });
     }
 
     /** Sets the close button click callback. */
     public void setCloseButtonClickCallback(Runnable callback) {
         ImageView closeButton = mToolbarView.findViewById(R.id.close);
-        closeButton.setOnClickListener(v -> {
-            if (callback != null) callback.run();
-        });
+        closeButton.setOnClickListener(
+                v -> {
+                    if (callback != null) callback.run();
+                });
     }
 
     /** Sets the progress on the progress bar. */
@@ -119,7 +118,7 @@ public class BottomSheetToolbarView {
 
     /** @return The height of the toolbar in pixels. */
     public int getToolbarHeightPx() {
-        return mToolbarHeightPx;
+        return mToolbarView.getHeight();
     }
 
     /** @return The android {@link View} representing this BottomSheetToolbar. */

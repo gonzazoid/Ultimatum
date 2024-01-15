@@ -18,8 +18,16 @@ const char kAccountIdsKey[] = "account-ids";
 const char kRpRequesterKey[] = "rp-requester";
 const char kRpEmbedderKey[] = "rp-embedder";
 
-base::Value::List* ExtractAccountList(base::Value& value) {
-  return value.GetDict().FindList(kAccountIdsKey);
+void AddToAccountList(base::Value::Dict& dict, const std::string& account_id) {
+  base::Value::List* account_list = dict.FindList(kAccountIdsKey);
+  if (account_list) {
+    account_list->Append(account_id);
+    return;
+  }
+
+  base::Value::List new_list;
+  new_list.Append(account_id);
+  dict.Set(kAccountIdsKey, base::Value(std::move(new_list)));
 }
 
 std::string BuildKey(const absl::optional<std::string>& relying_party_requester,
@@ -59,10 +67,22 @@ FederatedIdentityAccountKeyedPermissionContext::
       idp_origin_key_(idp_origin_key) {}
 
 bool FederatedIdentityAccountKeyedPermissionContext::HasPermission(
+    const url::Origin& relying_party_requester) {
+  for (const auto& object : GetGrantedObjects(relying_party_requester)) {
+    const base::Value::List* account_list =
+        object->value.FindList(kAccountIdsKey);
+    if (account_list) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool FederatedIdentityAccountKeyedPermissionContext::HasPermission(
     const url::Origin& relying_party_requester,
     const url::Origin& relying_party_embedder,
     const url::Origin& identity_provider,
-    const std::string& account_id) {
+    const absl::optional<std::string>& account_id) {
   // TODO(crbug.com/1334019): This is currently origin-bound, but we would like
   // this grant to apply at the 'site' (aka eTLD+1) level. We should override
   // GetGrantedObject to find a grant that matches the RP's site rather
@@ -75,7 +95,14 @@ bool FederatedIdentityAccountKeyedPermissionContext::HasPermission(
     return false;
 
   const base::Value::List* account_list =
-      ExtractAccountList(granted_object->value);
+      granted_object->value.FindList(kAccountIdsKey);
+  if (!account_list)
+    return false;
+
+  if (!account_id) {
+    return true;
+  }
+
   for (auto& account_id_value : *account_list) {
     if (account_id_value.GetString() == account_id)
       return true;
@@ -97,11 +124,8 @@ void FederatedIdentityAccountKeyedPermissionContext::GrantPermission(
                              identity_provider);
   const auto granted_object = GetGrantedObject(relying_party_requester, key);
   if (granted_object) {
-    // There is an existing account so update its account list rather than
-    // creating a new entry.
-    base::Value new_object = granted_object->value.Clone();
-    base::Value::List* new_object_list = ExtractAccountList(new_object);
-    new_object_list->Append(account_id);
+    base::Value::Dict new_object = granted_object->value.Clone();
+    AddToAccountList(new_object, account_id);
     UpdateObjectPermission(relying_party_requester, granted_object->value,
                            std::move(new_object));
   } else {
@@ -109,11 +133,8 @@ void FederatedIdentityAccountKeyedPermissionContext::GrantPermission(
     new_object.Set(kRpRequesterKey, relying_party_requester.Serialize());
     new_object.Set(kRpEmbedderKey, relying_party_embedder.Serialize());
     new_object.Set(idp_origin_key_, identity_provider.Serialize());
-    base::Value::List account_list;
-    account_list.Append(account_id);
-    new_object.Set(kAccountIdsKey, base::Value(std::move(account_list)));
-    GrantObjectPermission(relying_party_requester,
-                          base::Value(std::move(new_object)));
+    AddToAccountList(new_object, account_id);
+    GrantObjectPermission(relying_party_requester, std::move(new_object));
   }
 }
 
@@ -125,19 +146,19 @@ void FederatedIdentityAccountKeyedPermissionContext::RevokePermission(
   std::string key = BuildKey(relying_party_requester, relying_party_embedder,
                              identity_provider);
   const auto object = GetGrantedObject(relying_party_requester, key);
-  // TODO(crbug.com/1311268): If the provided `account_id` does not match the
-  // one we used when granting the permission, early return will leave an entry
-  // in the storage that cannot be removed afterwards.
   if (!object)
     return;
 
-  base::Value new_object = object->value.Clone();
-  base::Value::List& account_ids =
-      new_object.FindListKey(kAccountIdsKey)->GetList();
-  account_ids.EraseValue(base::Value(account_id));
+  base::Value::Dict new_object = object->value.Clone();
+  base::Value::List* account_ids = new_object.FindList(kAccountIdsKey);
+  if (account_ids) {
+    if (!account_ids->EraseValue(base::Value(account_id))) {
+      account_ids->clear();
+    }
+  }
 
   // Remove the permission object if there is no account left.
-  if (account_ids.size() == 0) {
+  if (!account_ids || account_ids->size() == 0) {
     RevokeObjectPermission(relying_party_requester, key);
   } else {
     UpdateObjectPermission(relying_party_requester, object->value,
@@ -146,13 +167,11 @@ void FederatedIdentityAccountKeyedPermissionContext::RevokePermission(
 }
 
 std::string FederatedIdentityAccountKeyedPermissionContext::GetKeyForObject(
-    const base::Value& object) {
+    const base::Value::Dict& object) {
   DCHECK(IsValidObject(object));
-  const std::string* rp_requester_origin =
-      object.GetDict().FindString(kRpRequesterKey);
-  const std::string* rp_embedder_origin =
-      object.GetDict().FindString(kRpEmbedderKey);
-  const std::string* idp_origin = object.GetDict().FindString(idp_origin_key_);
+  const std::string* rp_requester_origin = object.FindString(kRpRequesterKey);
+  const std::string* rp_embedder_origin = object.FindString(kRpEmbedderKey);
+  const std::string* idp_origin = object.FindString(idp_origin_key_);
   return BuildKey(
       rp_requester_origin ? absl::optional<std::string>(*rp_requester_origin)
                           : absl::nullopt,
@@ -162,13 +181,51 @@ std::string FederatedIdentityAccountKeyedPermissionContext::GetKeyForObject(
 }
 
 bool FederatedIdentityAccountKeyedPermissionContext::IsValidObject(
-    const base::Value& object) {
-  return object.is_dict() && object.FindStringKey(idp_origin_key_);
+    const base::Value::Dict& object) {
+  return object.FindString(idp_origin_key_);
 }
 
 std::u16string
 FederatedIdentityAccountKeyedPermissionContext::GetObjectDisplayName(
-    const base::Value& object) {
+    const base::Value::Dict& object) {
   DCHECK(IsValidObject(object));
-  return base::UTF8ToUTF16(*object.FindStringKey(idp_origin_key_));
+  return base::UTF8ToUTF16(*object.FindString(idp_origin_key_));
+}
+
+void FederatedIdentityAccountKeyedPermissionContext::GetAllDataKeys(
+    base::OnceCallback<void(
+        std::vector<webid::FederatedIdentityDataModel::DataKey>)> callback) {
+  auto granted_objects = GetAllGrantedObjects();
+  std::vector<webid::FederatedIdentityDataModel::DataKey> data_keys;
+  for (const auto& obj : granted_objects) {
+    const base::Value::List* accounts = obj->value.FindList(kAccountIdsKey);
+    const std::string* rp_requester_origin =
+        obj->value.FindString(kRpRequesterKey);
+    const std::string* rp_embedder_origin =
+        obj->value.FindString(kRpEmbedderKey);
+    const std::string* idp_origin = obj->value.FindString(idp_origin_key_);
+
+    if (!accounts || accounts->empty()) {
+      continue;
+    }
+
+    CHECK(idp_origin && rp_requester_origin && rp_embedder_origin);
+    for (const auto& account : *accounts) {
+      data_keys.emplace_back(url::Origin::Create(GURL(*rp_requester_origin)),
+                             url::Origin::Create(GURL(*rp_embedder_origin)),
+                             url::Origin::Create(GURL(*idp_origin)),
+                             account.GetString());
+    }
+  }
+  std::move(callback).Run(std::move(data_keys));
+}
+
+void FederatedIdentityAccountKeyedPermissionContext::
+    RemoveFederatedIdentityDataByDataKey(
+        const webid::FederatedIdentityDataModel::DataKey& data_key,
+        base::OnceClosure callback) {
+  RevokePermission(data_key.relying_party_requester(),
+                   data_key.relying_party_embedder(),
+                   data_key.identity_provider(), data_key.account_id());
+  std::move(callback).Run();
 }

@@ -23,8 +23,7 @@ std::unique_ptr<TemplateURLData> TemplateURLDataFromDictionary(
     const base::Value::Dict& dict);
 
 // Serializes a TemplateURLData to |dict|.
-std::unique_ptr<base::DictionaryValue> TemplateURLDataToDictionary(
-    const TemplateURLData& turl_data);
+base::Value::Dict TemplateURLDataToDictionary(const TemplateURLData& turl_data);
 
 // Create TemplateURLData structure from PrepopulatedEngine structure.
 std::unique_ptr<TemplateURLData> TemplateURLDataFromPrepopulatedEngine(
@@ -35,7 +34,7 @@ std::unique_ptr<TemplateURLData> TemplateURLDataFromPrepopulatedEngine(
 // used in the To/FromDictionary functions above for historical reasons.
 // TODO(a-v-y) Migrate to single TemplateURLData serialization format.
 std::unique_ptr<TemplateURLData> TemplateURLDataFromOverrideDictionary(
-    const base::Value& engine);
+    const base::Value::Dict& engine);
 
 // Creates a TemplateURLData structure from a StarterPackEngine struct.
 std::unique_ptr<TemplateURLData> TemplateURLDataFromStarterPackEngine(

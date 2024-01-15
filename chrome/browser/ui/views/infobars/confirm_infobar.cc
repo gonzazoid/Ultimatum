@@ -7,15 +7,16 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
-#include "chrome/browser/ui/views/elevation_icon_setter.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/base/window_open_disposition.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/controls/button/md_text_button.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/link.h"
+#include "ui/views/style/platform_style.h"
 #include "ui/views/view_class_properties.h"
 
 ConfirmInfoBar::ConfirmInfoBar(std::unique_ptr<ConfirmInfoBarDelegate> delegate)
@@ -41,12 +42,7 @@ ConfirmInfoBar::ConfirmInfoBar(std::unique_ptr<ConfirmInfoBarDelegate> delegate)
   if (buttons & ConfirmInfoBarDelegate::BUTTON_OK) {
     ok_button_ = create_button(ConfirmInfoBarDelegate::BUTTON_OK,
                                &ConfirmInfoBar::OkButtonPressed);
-    ok_button_->SetProminent(true);
-    if (delegate_ptr->OKButtonTriggersUACPrompt()) {
-      elevation_icon_setter_ = std::make_unique<ElevationIconSetter>(
-          ok_button_,
-          base::BindOnce(&ConfirmInfoBar::Layout, base::Unretained(this)));
-    }
+    ok_button_->SetStyle(ui::ButtonStyle::kProminent);
     ok_button_->SetImageModel(
         views::Button::STATE_NORMAL,
         delegate_ptr->GetButtonImage(ConfirmInfoBarDelegate::BUTTON_OK));
@@ -59,8 +55,11 @@ ConfirmInfoBar::ConfirmInfoBar(std::unique_ptr<ConfirmInfoBarDelegate> delegate)
   if (buttons & ConfirmInfoBarDelegate::BUTTON_CANCEL) {
     cancel_button_ = create_button(ConfirmInfoBarDelegate::BUTTON_CANCEL,
                                    &ConfirmInfoBar::CancelButtonPressed);
+    if (features::IsChromeRefresh2023()) {
+      cancel_button_->SetStyle(ui::ButtonStyle::kTonal);
+    }
     if (buttons == ConfirmInfoBarDelegate::BUTTON_CANCEL) {
-      cancel_button_->SetProminent(true);
+      cancel_button_->SetStyle(ui::ButtonStyle::kProminent);
     }
     cancel_button_->SetImageModel(
         views::Button::STATE_NORMAL,
@@ -71,13 +70,29 @@ ConfirmInfoBar::ConfirmInfoBar(std::unique_ptr<ConfirmInfoBarDelegate> delegate)
         delegate_ptr->GetButtonTooltip(ConfirmInfoBarDelegate::BUTTON_CANCEL));
   }
 
+  if (buttons & ConfirmInfoBarDelegate::BUTTON_EXTRA) {
+    extra_button_ = create_button(ConfirmInfoBarDelegate::BUTTON_EXTRA,
+                                  &ConfirmInfoBar::ExtraButtonPressed);
+    if (features::IsChromeRefresh2023()) {
+      extra_button_->SetStyle(ui::ButtonStyle::kTonal);
+    }
+    if (buttons == ConfirmInfoBarDelegate::BUTTON_EXTRA) {
+      extra_button_->SetStyle(ui::ButtonStyle::kProminent);
+    }
+    extra_button_->SetImageModel(
+        views::Button::STATE_NORMAL,
+        delegate_ptr->GetButtonImage(ConfirmInfoBarDelegate::BUTTON_EXTRA));
+    extra_button_->SetEnabled(
+        delegate_ptr->GetButtonEnabled(ConfirmInfoBarDelegate::BUTTON_EXTRA));
+    extra_button_->SetTooltipText(
+        delegate_ptr->GetButtonTooltip(ConfirmInfoBarDelegate::BUTTON_EXTRA));
+  }
+  // TODO(josephjoopark): It seems like link_ isn't always needed, but it's
+  // added regardless. See about only adding when necessary.
   link_ = AddChildView(CreateLink(delegate_ptr->GetLinkText()));
 }
 
-ConfirmInfoBar::~ConfirmInfoBar() {
-  // Ensure |elevation_icon_setter_| is destroyed before |ok_button_|.
-  elevation_icon_setter_.reset();
-}
+ConfirmInfoBar::~ConfirmInfoBar() = default;
 
 void ConfirmInfoBar::Layout() {
   InfoBarView::Layout();
@@ -90,10 +105,14 @@ void ConfirmInfoBar::Layout() {
     cancel_button_->SizeToPreferredSize();
   }
 
+  if (extra_button_) {
+    extra_button_->SizeToPreferredSize();
+  }
+
   int x = GetStartX();
   Views views;
-  views.push_back(label_);
-  views.push_back(link_);
+  views.push_back(label_.get());
+  views.push_back(link_.get());
   AssignWidths(&views, std::max(0, GetEndX() - x - NonLabelWidth()));
 
   ChromeLayoutProvider* layout_provider = ChromeLayoutProvider::Get();
@@ -102,18 +121,33 @@ void ConfirmInfoBar::Layout() {
   if (!label_->GetText().empty()) {
     x = label_->bounds().right() +
         layout_provider->GetDistanceMetric(
-            views::DISTANCE_RELATED_LABEL_HORIZONTAL);
+            DISTANCE_INFOBAR_HORIZONTAL_ICON_LABEL_PADDING);
   }
 
+  // Add buttons into a vector to be displayed in an ordered row.
+  // Depending on the PlatformStyle, reverse the vector so the ok button will be
+  // on the correct leading style.
+  std::vector<views::MdTextButton*> order_of_buttons;
   if (ok_button_) {
-    ok_button_->SetPosition(gfx::Point(x, OffsetY(ok_button_)));
-    x = ok_button_->bounds().right() +
+    order_of_buttons.push_back(ok_button_);
+  }
+  if (cancel_button_) {
+    order_of_buttons.push_back(cancel_button_);
+  }
+  if (extra_button_) {
+    order_of_buttons.push_back(extra_button_);
+  }
+
+  if (!views::PlatformStyle::kIsOkButtonLeading) {
+    base::ranges::reverse(order_of_buttons);
+  }
+
+  for (views::MdTextButton* button : order_of_buttons) {
+    button->SetPosition(gfx::Point(x, OffsetY(button)));
+    x = button->bounds().right() +
         layout_provider->GetDistanceMetric(
             views::DISTANCE_RELATED_BUTTON_HORIZONTAL);
   }
-
-  if (cancel_button_)
-    cancel_button_->SetPosition(gfx::Point(x, OffsetY(cancel_button_)));
 
   link_->SetPosition(gfx::Point(GetEndX() - link_->width(), OffsetY(link_)));
 }
@@ -129,6 +163,13 @@ void ConfirmInfoBar::CancelButtonPressed() {
   if (!owner())
     return;  // We're closing; don't call anything, it might access the owner.
   if (GetDelegate()->Cancel())
+    RemoveSelf();
+}
+
+void ConfirmInfoBar::ExtraButtonPressed() {
+  if (!owner())
+    return;  // We're closing; don't call anything, it might access the owner.
+  if (GetDelegate()->ExtraButtonPressed())
     RemoveSelf();
 }
 
@@ -149,11 +190,17 @@ int ConfirmInfoBar::NonLabelWidth() const {
   const int button_spacing = layout_provider->GetDistanceMetric(
       views::DISTANCE_RELATED_BUTTON_HORIZONTAL);
 
-  int width = (label_->GetText().empty() || (!ok_button_ && !cancel_button_))
-                  ? 0
-                  : label_spacing;
-  if (ok_button_)
-    width += ok_button_->width() + (cancel_button_ ? button_spacing : 0);
+  const int button_count =
+      (ok_button_ ? 1 : 0) + (cancel_button_ ? 1 : 0) + (extra_button_ ? 1 : 0);
+
+  int width =
+      (label_->GetText().empty() || button_count == 0) ? 0 : label_spacing;
+
+  width += std::max(0, button_spacing * (button_count - 1));
+
+  width += ok_button_ ? ok_button_->width() : 0;
   width += cancel_button_ ? cancel_button_->width() : 0;
+  width += extra_button_ ? extra_button_->width() : 0;
+
   return width + ((link_->GetText().empty() || !width) ? 0 : label_spacing);
 }

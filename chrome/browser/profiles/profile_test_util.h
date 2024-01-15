@@ -6,16 +6,23 @@
 #define CHROME_BROWSER_PROFILES_PROFILE_TEST_UTIL_H_
 
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
+#include "chrome/browser/profiles/profile_selections.h"
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chromeos/crosapi/mojom/crosapi.mojom.h"
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
 class Profile;
+class ProfileKeyedServiceFactory;
 class ProfileManager;
 
 namespace profiles::testing {
 
 // Helper to call `ProfileManager::CreateProfileAsync` synchronously during
 // tests. Returns the created `Profile`.
-Profile* CreateProfileSync(ProfileManager* profile_manager,
+Profile& CreateProfileSync(ProfileManager* profile_manager,
                            const base::FilePath& path);
 
 #if !BUILDFLAG(IS_ANDROID)
@@ -37,6 +44,37 @@ class ScopedNonEnterpriseDomainSetterForTesting {
   virtual ~ScopedNonEnterpriseDomainSetterForTesting();
 };
 #endif  // BUILDFLAG(IS_ANDROID)
+
+// Overrides the ProfileSelections that a ProfileKeyedServiceFactory uses to
+// determine which profiles to create a service for.
+class ScopedProfileSelectionsForFactoryTesting {
+ public:
+  ScopedProfileSelectionsForFactoryTesting(ProfileKeyedServiceFactory* factory,
+                                           ProfileSelections selections);
+
+  ~ScopedProfileSelectionsForFactoryTesting();
+
+ private:
+  raw_ptr<ProfileKeyedServiceFactory> factory_;
+  ProfileSelections old_selections_;
+};
+
+// A testing wrapper to simulate a logged-in managed guest session.
+// These sessions are only available for ChromeOS in Ash and Lacros modes.
+class ScopedTestManagedGuestSession {
+ public:
+  ScopedTestManagedGuestSession();
+  ~ScopedTestManagedGuestSession();
+
+  ScopedTestManagedGuestSession(const ScopedTestManagedGuestSession&) = delete;
+  ScopedTestManagedGuestSession& operator=(
+      const ScopedTestManagedGuestSession&) = delete;
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+ private:
+  crosapi::mojom::BrowserInitParamsPtr init_params_;
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+};
 
 }  // namespace profiles::testing
 #endif  // CHROME_BROWSER_PROFILES_PROFILE_TEST_UTIL_H_

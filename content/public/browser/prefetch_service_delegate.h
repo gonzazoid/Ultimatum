@@ -9,6 +9,7 @@
 
 #include "base/time/time.h"
 #include "content/common/content_export.h"
+#include "content/public/browser/preloading.h"
 #include "url/gurl.h"
 
 namespace content {
@@ -60,8 +61,11 @@ class CONTENT_EXPORT PrefetchServiceDelegate {
   virtual bool DisableDecoysBasedOnUserSettings() = 0;
 
   // Get the state of the user's preloading settings.
-  virtual bool IsSomePreloadingEnabled() = 0;
+  virtual PreloadingEligibility IsSomePreloadingEnabled() = 0;
   virtual bool IsExtendedPreloadingEnabled() = 0;
+  virtual bool IsPreloadingPrefEnabled() = 0;
+  virtual bool IsDataSaverEnabled() = 0;
+  virtual bool IsBatterySaverEnabled() = 0;
 
   // Checks if the referring page is in the allow list to make prefetches.
   virtual bool IsDomainInPrefetchAllowList(const GURL& referring_url) = 0;

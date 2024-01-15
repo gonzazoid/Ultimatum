@@ -8,9 +8,9 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
 #include "base/containers/span.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "net/http/http_request_headers.h"
 #include "net/log/net_log_with_source.h"
@@ -76,7 +76,7 @@ class TrustTokenRequestSigningHelper : public TrustTokenRequestHelper {
   TrustTokenRequestSigningHelper& operator=(
       const TrustTokenRequestSigningHelper&) = delete;
 
-  // Attempts to attach Redemption Records (RRs) corresponding to |request|'s
+  // Attempts to attach Redemption Records (RRs) corresponding to request's
   // initiating top-level origin and the provided issuer origins.
   //
   // ATTACHING THE REDEMPTION RECORD:
@@ -96,13 +96,14 @@ class TrustTokenRequestSigningHelper : public TrustTokenRequestHelper {
   // - On failure, the request will contain an empty
   // Sec-Redemption-Record header.
   void Begin(
-      net::URLRequest* request,
-      base::OnceCallback<void(mojom::TrustTokenOperationStatus)> done) override;
+      const GURL& url,
+      base::OnceCallback<void(absl::optional<net::HttpRequestHeaders>,
+                              mojom::TrustTokenOperationStatus)> done) override;
 
   // Immediately returns kOk with no other effect. (Signing is an operation that
   // only needs to process requests, not their corresponding responses.)
   void Finalize(
-      mojom::URLResponseHead* response,
+      net::HttpResponseHeaders& response_headers,
       base::OnceCallback<void(mojom::TrustTokenOperationStatus)> done) override;
 
   mojom::TrustTokenOperationResultPtr CollectOperationResultWithStatus(

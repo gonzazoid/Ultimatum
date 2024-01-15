@@ -8,19 +8,12 @@
 
 #include "ash/metrics/task_switch_time_tracker.h"
 #include "base/check_op.h"
+#include "base/containers/contains.h"
 #include "base/notreached.h"
 
 namespace ash {
 
 namespace {
-
-const char kAshTaskSwitchHistogramName[] = "Ash.TimeBetweenTaskSwitches";
-
-const char kDesktopHistogramName[] =
-    "Ash.Desktop.TimeBetweenNavigateToTaskSwitches";
-
-const char kShelfHistogramName[] =
-    "Ash.Shelf.TimeBetweenNavigateToTaskSwitches";
 
 const char kAcceleratorWindowCycleHistogramName[] =
     "Ash.WindowCycleController.TimeBetweenTaskSwitches";
@@ -31,16 +24,14 @@ const char kOverviewModeHistogramName[] =
 // Returns the histogram name for the given |task_switch_source|.
 const char* GetHistogramName(TaskSwitchSource task_switch_source) {
   switch (task_switch_source) {
-    case TaskSwitchSource::ANY:
-      return kAshTaskSwitchHistogramName;
-    case TaskSwitchSource::DESKTOP:
-      return kDesktopHistogramName;
     case TaskSwitchSource::OVERVIEW_MODE:
       return kOverviewModeHistogramName;
-    case TaskSwitchSource::SHELF:
-      return kShelfHistogramName;
     case TaskSwitchSource::WINDOW_CYCLE_CONTROLLER:
       return kAcceleratorWindowCycleHistogramName;
+    case TaskSwitchSource::ANY:
+    case TaskSwitchSource::DESKTOP:
+    case TaskSwitchSource::SHELF:
+      return nullptr;
   }
   NOTREACHED();
   return nullptr;
@@ -69,9 +60,9 @@ void TaskSwitchMetricsRecorder::OnTaskSwitchInternal(
     AddTaskSwitchTimeTracker(task_switch_source);
 
   task_switch_time_tracker = FindTaskSwitchTimeTracker(task_switch_source);
-  CHECK(task_switch_time_tracker);
-
-  task_switch_time_tracker->OnTaskSwitch();
+  if (task_switch_time_tracker) {
+    task_switch_time_tracker->OnTaskSwitch();
+  }
 }
 
 TaskSwitchTimeTracker* TaskSwitchMetricsRecorder::FindTaskSwitchTimeTracker(
@@ -85,14 +76,13 @@ TaskSwitchTimeTracker* TaskSwitchMetricsRecorder::FindTaskSwitchTimeTracker(
 
 void TaskSwitchMetricsRecorder::AddTaskSwitchTimeTracker(
     TaskSwitchSource task_switch_source) {
-  CHECK(histogram_map_.find(static_cast<int>(task_switch_source)) ==
-        histogram_map_.end());
+  CHECK(!base::Contains(histogram_map_, static_cast<int>(task_switch_source)));
 
   const char* histogram_name = GetHistogramName(task_switch_source);
-  DCHECK(histogram_name);
-
-  histogram_map_[static_cast<int>(task_switch_source)] =
-      std::make_unique<TaskSwitchTimeTracker>(histogram_name);
+  if (histogram_name) {
+    histogram_map_[static_cast<int>(task_switch_source)] =
+        std::make_unique<TaskSwitchTimeTracker>(histogram_name);
+  }
 }
 
 }  // namespace ash

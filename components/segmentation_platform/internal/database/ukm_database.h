@@ -9,7 +9,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "components/segmentation_platform/internal/database/ukm_types.h"
@@ -27,8 +27,8 @@ class UkmDatabase {
   UkmDatabase() = default;
   virtual ~UkmDatabase() = default;
 
-  UkmDatabase(UkmDatabase&) = delete;
-  UkmDatabase& operator=(UkmDatabase&) = delete;
+  UkmDatabase(const UkmDatabase&) = delete;
+  UkmDatabase& operator=(const UkmDatabase&) = delete;
 
   using SuccessCallback = base::OnceCallback<void(bool)>;
 
@@ -47,14 +47,16 @@ class UkmDatabase {
   // index metrics with the same |source_id| with the URL.
   virtual void UpdateUrlForUkmSource(ukm::SourceId source_id,
                                      const GURL& url,
-                                     bool is_validated) = 0;
+                                     bool is_validated,
+                                     const std::string& profile_id) = 0;
 
   // Called to validate an URL, see also UpdateUrlForUkmSource(). Safe to call
   // with unneeded URLs, since the database will only persist the URLs already
   // pending for known |source_id|s. Note that this call will not automatically
   // validate future URLs given by UpdateUrlForUkmSource(). They need to have
   // |is_validated| set to be persisted.
-  virtual void OnUrlValidated(const GURL& url) = 0;
+  virtual void OnUrlValidated(const GURL& url,
+                              const std::string& profile_id) = 0;
 
   // Removes all the URLs from URL table and all the associated metrics in
   // metrics table, on best effort. Any new metrics added with the URL will
@@ -92,6 +94,8 @@ class UkmDatabase {
   // Removes metrics older than or equal to the given `time` from the database.
   // URLs are removed when there are no references to the metrics.
   virtual void DeleteEntriesOlderThan(base::Time time) = 0;
+
+  virtual void CommitTransactionForTesting() = 0;
 };
 
 }  // namespace segmentation_platform

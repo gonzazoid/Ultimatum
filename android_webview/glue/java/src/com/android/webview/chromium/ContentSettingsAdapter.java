@@ -5,16 +5,18 @@
 package com.android.webview.chromium;
 
 import android.annotation.SuppressLint;
-import android.os.Build;
 import android.webkit.WebSettings;
 import android.webkit.WebSettings.LayoutAlgorithm;
 import android.webkit.WebSettings.PluginState;
 import android.webkit.WebSettings.RenderPriority;
 import android.webkit.WebSettings.ZoomDensity;
 
+import com.android.webview.chromium.WebViewChromium.ApiCall;
+
 import org.chromium.android_webview.AwDarkMode;
 import org.chromium.android_webview.AwSettings;
 import org.chromium.base.Log;
+import org.chromium.base.TraceEvent;
 
 /**
  * Type adaptation layer between {@link android.webkit.WebSettings} and
@@ -49,72 +51,138 @@ public class ContentSettingsAdapter extends android.webkit.WebSettings {
 
     @Override
     public void setSupportZoom(boolean support) {
-        mAwSettings.setSupportZoom(support);
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_SET_SUPPORT_ZOOM")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_SUPPORT_ZOOM);
+            mAwSettings.setSupportZoom(support);
+        }
     }
 
     @Override
     public boolean supportZoom() {
-        return mAwSettings.supportZoom();
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_SUPPORT_ZOOM")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SUPPORT_ZOOM);
+            return mAwSettings.supportZoom();
+        }
     }
 
     @Override
     public void setBuiltInZoomControls(boolean enabled) {
-        mAwSettings.setBuiltInZoomControls(enabled);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_BUILT_IN_ZOOM_CONTROLS")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_BUILT_IN_ZOOM_CONTROLS);
+            mAwSettings.setBuiltInZoomControls(enabled);
+        }
     }
 
     @Override
     public boolean getBuiltInZoomControls() {
-        return mAwSettings.getBuiltInZoomControls();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_BUILT_IN_ZOOM_CONTROLS")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_BUILT_IN_ZOOM_CONTROLS);
+            return mAwSettings.getBuiltInZoomControls();
+        }
     }
 
     @Override
     public void setDisplayZoomControls(boolean enabled) {
-        mAwSettings.setDisplayZoomControls(enabled);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_DISPLAY_ZOOM_CONTROLS")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_DISPLAY_ZOOM_CONTROLS);
+            mAwSettings.setDisplayZoomControls(enabled);
+        }
     }
 
     @Override
     public boolean getDisplayZoomControls() {
-        return mAwSettings.getDisplayZoomControls();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_DISPLAY_ZOOM_CONTROLS")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_DISPLAY_ZOOM_CONTROLS);
+            return mAwSettings.getDisplayZoomControls();
+        }
     }
 
     @Override
     public void setAllowFileAccess(boolean allow) {
-        mAwSettings.setAllowFileAccess(allow);
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_SET_ALLOW_FILE_ACCESS")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_ALLOW_FILE_ACCESS);
+            mAwSettings.setAllowFileAccess(allow);
+        }
     }
 
     @Override
     public boolean getAllowFileAccess() {
-        return mAwSettings.getAllowFileAccess();
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_GET_ALLOW_FILE_ACCESS")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_ALLOW_FILE_ACCESS);
+            return mAwSettings.getAllowFileAccess();
+        }
     }
 
     @Override
     public void setAllowContentAccess(boolean allow) {
-        mAwSettings.setAllowContentAccess(allow);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_ALLOW_CONTENT_ACCESS")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_ALLOW_CONTENT_ACCESS);
+            mAwSettings.setAllowContentAccess(allow);
+        }
     }
 
     @Override
     public boolean getAllowContentAccess() {
-        return mAwSettings.getAllowContentAccess();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_ALLOW_CONTENT_ACCESS")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_ALLOW_CONTENT_ACCESS);
+            return mAwSettings.getAllowContentAccess();
+        }
     }
 
     @Override
     public void setLoadWithOverviewMode(boolean overview) {
-        mAwSettings.setLoadWithOverviewMode(overview);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_LOAD_WITH_OVERVIEW_MODE")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_LOAD_WITH_OVERVIEW_MODE);
+            mAwSettings.setLoadWithOverviewMode(overview);
+        }
     }
 
     @Override
     public boolean getLoadWithOverviewMode() {
-        return mAwSettings.getLoadWithOverviewMode();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_LOAD_WITH_OVERVIEW_MODE")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_LOAD_WITH_OVERVIEW_MODE);
+            return mAwSettings.getLoadWithOverviewMode();
+        }
     }
 
     @Override
     public void setSafeBrowsingEnabled(boolean accept) {
-        mAwSettings.setSafeBrowsingEnabled(accept);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_SAFE_BROWSING_ENABLED")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_SAFE_BROWSING_ENABLED);
+            mAwSettings.setSafeBrowsingEnabled(accept);
+        }
     }
 
     @Override
     public boolean getSafeBrowsingEnabled() {
-        return mAwSettings.getSafeBrowsingEnabled();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_SAFE_BROWSING_ENABLED")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_SAFE_BROWSING_ENABLED);
+            return mAwSettings.getSafeBrowsingEnabled();
+        }
     }
 
     @Override
@@ -151,16 +219,13 @@ public class ContentSettingsAdapter extends android.webkit.WebSettings {
 
     @Override
     public void setSaveFormData(boolean save) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) return;
-
-        mAwSettings.setSaveFormData(save);
+        // Intentional no-op since Android O.
     }
 
     @Override
     public boolean getSaveFormData() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) return false;
-
-        return mAwSettings.getSaveFormData();
+        // Intentional no-op since Android O.
+        return false;
     }
 
     @Override
@@ -176,12 +241,20 @@ public class ContentSettingsAdapter extends android.webkit.WebSettings {
 
     @Override
     public synchronized void setTextZoom(int textZoom) {
-        mAwSettings.setTextZoom(textZoom);
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_SET_TEXT_ZOOM")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_TEXT_ZOOM);
+            mAwSettings.setTextZoom(textZoom);
+        }
     }
 
     @Override
     public synchronized int getTextZoom() {
-        return mAwSettings.getTextZoom();
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_GET_TEXT_ZOOM")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_TEXT_ZOOM);
+            return mAwSettings.getTextZoom();
+        }
     }
 
     @Override
@@ -208,7 +281,11 @@ public class ContentSettingsAdapter extends android.webkit.WebSettings {
 
     @Override
     public synchronized void setUserAgent(int ua) {
-        mAwSettings.setUserAgent(ua);
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_SET_USER_AGENT")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_USER_AGENT);
+            mAwSettings.setUserAgent(ua);
+        }
     }
 
     @Override
@@ -219,204 +296,376 @@ public class ContentSettingsAdapter extends android.webkit.WebSettings {
 
     @Override
     public synchronized void setUseWideViewPort(boolean use) {
-        mAwSettings.setUseWideViewPort(use);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_USE_WIDE_VIEW_PORT")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_USE_WIDE_VIEW_PORT);
+            mAwSettings.setUseWideViewPort(use);
+        }
     }
 
     @Override
     public synchronized boolean getUseWideViewPort() {
-        return mAwSettings.getUseWideViewPort();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_USE_WIDE_VIEW_PORT")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_USE_WIDE_VIEW_PORT);
+            return mAwSettings.getUseWideViewPort();
+        }
     }
 
     @Override
     public synchronized void setSupportMultipleWindows(boolean support) {
-        mAwSettings.setSupportMultipleWindows(support);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_SUPPORT_MULTIPLE_WINDOWS")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_SUPPORT_MULTIPLE_WINDOWS);
+            mAwSettings.setSupportMultipleWindows(support);
+        }
     }
 
     @Override
     public synchronized boolean supportMultipleWindows() {
-        return mAwSettings.supportMultipleWindows();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SUPPORT_MULTIPLE_WINDOWS")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SUPPORT_MULTIPLE_WINDOWS);
+            return mAwSettings.supportMultipleWindows();
+        }
     }
 
     @Override
     public synchronized void setLayoutAlgorithm(LayoutAlgorithm l) {
-        switch (l) {
-            case NORMAL:
-                mAwSettings.setLayoutAlgorithm(AwSettings.LAYOUT_ALGORITHM_NORMAL);
-                return;
-            case SINGLE_COLUMN:
-                mAwSettings.setLayoutAlgorithm(AwSettings.LAYOUT_ALGORITHM_SINGLE_COLUMN);
-                return;
-            case NARROW_COLUMNS:
-                mAwSettings.setLayoutAlgorithm(AwSettings.LAYOUT_ALGORITHM_NARROW_COLUMNS);
-                return;
-            case TEXT_AUTOSIZING:
-                mAwSettings.setLayoutAlgorithm(AwSettings.LAYOUT_ALGORITHM_TEXT_AUTOSIZING);
-                return;
-            default:
-                throw new IllegalArgumentException("Unsupported value: " + l);
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_SET_LAYOUT_ALGORITHM")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_LAYOUT_ALGORITHM);
+            switch (l) {
+                case NORMAL:
+                    mAwSettings.setLayoutAlgorithm(AwSettings.LAYOUT_ALGORITHM_NORMAL);
+                    return;
+                case SINGLE_COLUMN:
+                    mAwSettings.setLayoutAlgorithm(AwSettings.LAYOUT_ALGORITHM_SINGLE_COLUMN);
+                    return;
+                case NARROW_COLUMNS:
+                    mAwSettings.setLayoutAlgorithm(AwSettings.LAYOUT_ALGORITHM_NARROW_COLUMNS);
+                    return;
+                case TEXT_AUTOSIZING:
+                    mAwSettings.setLayoutAlgorithm(AwSettings.LAYOUT_ALGORITHM_TEXT_AUTOSIZING);
+                    return;
+                default:
+                    throw new IllegalArgumentException("Unsupported value: " + l);
+            }
         }
     }
 
     @Override
     public synchronized LayoutAlgorithm getLayoutAlgorithm() {
-        int value = mAwSettings.getLayoutAlgorithm();
-        switch (value) {
-            case AwSettings.LAYOUT_ALGORITHM_NORMAL:
-                return LayoutAlgorithm.NORMAL;
-            case AwSettings.LAYOUT_ALGORITHM_SINGLE_COLUMN:
-                return LayoutAlgorithm.SINGLE_COLUMN;
-            case AwSettings.LAYOUT_ALGORITHM_NARROW_COLUMNS:
-                return LayoutAlgorithm.NARROW_COLUMNS;
-            case AwSettings.LAYOUT_ALGORITHM_TEXT_AUTOSIZING:
-                return LayoutAlgorithm.TEXT_AUTOSIZING;
-            default:
-                throw new IllegalArgumentException("Unsupported value: " + value);
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_GET_LAYOUT_ALGORITHM")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_LAYOUT_ALGORITHM);
+            int value = mAwSettings.getLayoutAlgorithm();
+            switch (value) {
+                case AwSettings.LAYOUT_ALGORITHM_NORMAL:
+                    return LayoutAlgorithm.NORMAL;
+                case AwSettings.LAYOUT_ALGORITHM_SINGLE_COLUMN:
+                    return LayoutAlgorithm.SINGLE_COLUMN;
+                case AwSettings.LAYOUT_ALGORITHM_NARROW_COLUMNS:
+                    return LayoutAlgorithm.NARROW_COLUMNS;
+                case AwSettings.LAYOUT_ALGORITHM_TEXT_AUTOSIZING:
+                    return LayoutAlgorithm.TEXT_AUTOSIZING;
+                default:
+                    throw new IllegalArgumentException("Unsupported value: " + value);
+            }
         }
     }
 
     @Override
     public synchronized void setStandardFontFamily(String font) {
-        mAwSettings.setStandardFontFamily(font);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_STANDARD_FONT_FAMILY")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_STANDARD_FONT_FAMILY);
+            mAwSettings.setStandardFontFamily(font);
+        }
     }
 
     @Override
     public synchronized String getStandardFontFamily() {
-        return mAwSettings.getStandardFontFamily();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_STANDARD_FONT_FAMILY")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_STANDARD_FONT_FAMILY);
+            return mAwSettings.getStandardFontFamily();
+        }
     }
 
     @Override
     public synchronized void setFixedFontFamily(String font) {
-        mAwSettings.setFixedFontFamily(font);
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_SET_FIXED_FONT_FAMILY")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_FIXED_FONT_FAMILY);
+            mAwSettings.setFixedFontFamily(font);
+        }
     }
 
     @Override
     public synchronized String getFixedFontFamily() {
-        return mAwSettings.getFixedFontFamily();
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_GET_FIXED_FONT_FAMILY")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_FIXED_FONT_FAMILY);
+            return mAwSettings.getFixedFontFamily();
+        }
     }
 
     @Override
     public synchronized void setSansSerifFontFamily(String font) {
-        mAwSettings.setSansSerifFontFamily(font);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_SANS_SERIF_FONT_FAMILY")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_SANS_SERIF_FONT_FAMILY);
+            mAwSettings.setSansSerifFontFamily(font);
+        }
     }
 
     @Override
     public synchronized String getSansSerifFontFamily() {
-        return mAwSettings.getSansSerifFontFamily();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_SANS_SERIF_FONT_FAMILY")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_SANS_SERIF_FONT_FAMILY);
+            return mAwSettings.getSansSerifFontFamily();
+        }
     }
 
     @Override
     public synchronized void setSerifFontFamily(String font) {
-        mAwSettings.setSerifFontFamily(font);
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_SET_SERIF_FONT_FAMILY")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_SERIF_FONT_FAMILY);
+            mAwSettings.setSerifFontFamily(font);
+        }
     }
 
     @Override
     public synchronized String getSerifFontFamily() {
-        return mAwSettings.getSerifFontFamily();
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_GET_SERIF_FONT_FAMILY")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_SERIF_FONT_FAMILY);
+            return mAwSettings.getSerifFontFamily();
+        }
     }
 
     @Override
     public synchronized void setCursiveFontFamily(String font) {
-        mAwSettings.setCursiveFontFamily(font);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_CURSIVE_FONT_FAMILY")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_CURSIVE_FONT_FAMILY);
+            mAwSettings.setCursiveFontFamily(font);
+        }
     }
 
     @Override
     public synchronized String getCursiveFontFamily() {
-        return mAwSettings.getCursiveFontFamily();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_CURSIVE_FONT_FAMILY")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_CURSIVE_FONT_FAMILY);
+            return mAwSettings.getCursiveFontFamily();
+        }
     }
 
     @Override
     public synchronized void setFantasyFontFamily(String font) {
-        mAwSettings.setFantasyFontFamily(font);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_FANTASY_FONT_FAMILY")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_FANTASY_FONT_FAMILY);
+            mAwSettings.setFantasyFontFamily(font);
+        }
     }
 
     @Override
     public synchronized String getFantasyFontFamily() {
-        return mAwSettings.getFantasyFontFamily();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_FANTASY_FONT_FAMILY")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_FANTASY_FONT_FAMILY);
+            return mAwSettings.getFantasyFontFamily();
+        }
     }
 
     @Override
     public synchronized void setMinimumFontSize(int size) {
-        mAwSettings.setMinimumFontSize(size);
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_SET_MINIMUM_FONT_SIZE")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_MINIMUM_FONT_SIZE);
+            mAwSettings.setMinimumFontSize(size);
+        }
     }
 
     @Override
     public synchronized int getMinimumFontSize() {
-        return mAwSettings.getMinimumFontSize();
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_GET_MINIMUM_FONT_SIZE")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_MINIMUM_FONT_SIZE);
+            return mAwSettings.getMinimumFontSize();
+        }
     }
 
     @Override
     public synchronized void setMinimumLogicalFontSize(int size) {
-        mAwSettings.setMinimumLogicalFontSize(size);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_MINIMUM_LOGICAL_FONT_SIZE")) {
+            WebViewChromium.recordWebViewApiCall(
+                    ApiCall.WEB_SETTINGS_SET_MINIMUM_LOGICAL_FONT_SIZE);
+            mAwSettings.setMinimumLogicalFontSize(size);
+        }
     }
 
     @Override
     public synchronized int getMinimumLogicalFontSize() {
-        return mAwSettings.getMinimumLogicalFontSize();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_MINIMUM_LOGICAL_FONT_SIZE")) {
+            WebViewChromium.recordWebViewApiCall(
+                    ApiCall.WEB_SETTINGS_GET_MINIMUM_LOGICAL_FONT_SIZE);
+            return mAwSettings.getMinimumLogicalFontSize();
+        }
     }
 
     @Override
     public synchronized void setDefaultFontSize(int size) {
-        mAwSettings.setDefaultFontSize(size);
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_SET_DEFAULT_FONT_SIZE")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_DEFAULT_FONT_SIZE);
+            mAwSettings.setDefaultFontSize(size);
+        }
     }
 
     @Override
     public synchronized int getDefaultFontSize() {
-        return mAwSettings.getDefaultFontSize();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_DEFAULT_FIXED_FONT_SIZE")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_DEFAULT_FIXED_FONT_SIZE);
+            return mAwSettings.getDefaultFontSize();
+        }
     }
 
     @Override
     public synchronized void setDefaultFixedFontSize(int size) {
-        mAwSettings.setDefaultFixedFontSize(size);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_DEFAULT_FIXED_FONT_SIZE")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_DEFAULT_FIXED_FONT_SIZE);
+            mAwSettings.setDefaultFixedFontSize(size);
+        }
     }
 
     @Override
     public synchronized int getDefaultFixedFontSize() {
-        return mAwSettings.getDefaultFixedFontSize();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_DEFAULT_FIXED_FONT_SIZE")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_DEFAULT_FIXED_FONT_SIZE);
+            return mAwSettings.getDefaultFixedFontSize();
+        }
     }
 
     @Override
     public synchronized void setLoadsImagesAutomatically(boolean flag) {
-        mAwSettings.setLoadsImagesAutomatically(flag);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_LOADS_IMAGES_AUTOMATICALLY")) {
+            WebViewChromium.recordWebViewApiCall(
+                    ApiCall.WEB_SETTINGS_SET_LOADS_IMAGES_AUTOMATICALLY);
+            mAwSettings.setLoadsImagesAutomatically(flag);
+        }
     }
 
     @Override
     public synchronized boolean getLoadsImagesAutomatically() {
-        return mAwSettings.getLoadsImagesAutomatically();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_LOADS_IMAGES_AUTOMATICALLY")) {
+            WebViewChromium.recordWebViewApiCall(
+                    ApiCall.WEB_SETTINGS_GET_LOADS_IMAGES_AUTOMATICALLY);
+            return mAwSettings.getLoadsImagesAutomatically();
+        }
     }
 
     @Override
     public synchronized void setBlockNetworkImage(boolean flag) {
-        mAwSettings.setImagesEnabled(!flag);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_BLOCK_NETWORK_IMAGE")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_BLOCK_NETWORK_IMAGE);
+            mAwSettings.setImagesEnabled(!flag);
+        }
     }
 
     @Override
     public synchronized boolean getBlockNetworkImage() {
-        return !mAwSettings.getImagesEnabled();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_BLOCK_NETWORK_IMAGE")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_BLOCK_NETWORK_IMAGE);
+            return !mAwSettings.getImagesEnabled();
+        }
     }
 
     @Override
     public synchronized void setBlockNetworkLoads(boolean flag) {
-        mAwSettings.setBlockNetworkLoads(flag);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_BLOCK_NETWORK_LOADS")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_BLOCK_NETWORK_LOADS);
+            mAwSettings.setBlockNetworkLoads(flag);
+        }
     }
 
     @Override
     public synchronized boolean getBlockNetworkLoads() {
-        return mAwSettings.getBlockNetworkLoads();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_BLOCK_NETWORK_LOADS")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_BLOCK_NETWORK_LOADS);
+            return mAwSettings.getBlockNetworkLoads();
+        }
     }
 
     @Override
     public synchronized void setJavaScriptEnabled(boolean flag) {
-        mAwSettings.setJavaScriptEnabled(flag);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_JAVA_SCRIPT_ENABLED")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_JAVA_SCRIPT_ENABLED);
+            mAwSettings.setJavaScriptEnabled(flag);
+        }
     }
 
     @Override
     public void setAllowUniversalAccessFromFileURLs(boolean flag) {
-        mAwSettings.setAllowUniversalAccessFromFileURLs(flag);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.ApiCall.WEB_SETTINGS_SET_ALLOW_UNIVERSAL_ACCESS_FROM_FILE_URLS")) {
+            WebViewChromium.recordWebViewApiCall(
+                    ApiCall.WEB_SETTINGS_SET_ALLOW_UNIVERSAL_ACCESS_FROM_FILE_URLS);
+            mAwSettings.setAllowUniversalAccessFromFileURLs(flag);
+        }
     }
 
     @Override
     public void setAllowFileAccessFromFileURLs(boolean flag) {
-        mAwSettings.setAllowFileAccessFromFileURLs(flag);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.ApiCall.WEB_SETTINGS_SET_ALLOW_FILE_ACCESS_FROM_FILE_URLS")) {
+            WebViewChromium.recordWebViewApiCall(
+                    ApiCall.WEB_SETTINGS_SET_ALLOW_FILE_ACCESS_FROM_FILE_URLS);
+            mAwSettings.setAllowFileAccessFromFileURLs(flag);
+        }
     }
 
     @Override
@@ -426,7 +675,11 @@ public class ContentSettingsAdapter extends android.webkit.WebSettings {
 
     @Override
     public synchronized void setPluginState(PluginState state) {
-        mPluginState = state;
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_SET_PLUGIN_STATE")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_PLUGIN_STATE);
+            mPluginState = state;
+        }
     }
 
     @Override
@@ -459,17 +712,31 @@ public class ContentSettingsAdapter extends android.webkit.WebSettings {
 
     @Override
     public synchronized void setDatabaseEnabled(boolean flag) {
-        mAwSettings.setDatabaseEnabled(flag);
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_SET_DATABASE_ENABLED")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_DATABASE_ENABLED);
+            mAwSettings.setDatabaseEnabled(flag);
+        }
     }
 
     @Override
     public synchronized void setDomStorageEnabled(boolean flag) {
-        mAwSettings.setDomStorageEnabled(flag);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_DOM_STORAGE_ENABLED")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_DOM_STORAGE_ENABLED);
+            mAwSettings.setDomStorageEnabled(flag);
+        }
     }
 
     @Override
     public synchronized boolean getDomStorageEnabled() {
-        return mAwSettings.getDomStorageEnabled();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_DOM_STORAGE_ENABLED")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_DOM_STORAGE_ENABLED);
+            return mAwSettings.getDomStorageEnabled();
+        }
     }
 
     @Override
@@ -480,27 +747,53 @@ public class ContentSettingsAdapter extends android.webkit.WebSettings {
 
     @Override
     public synchronized boolean getDatabaseEnabled() {
-        return mAwSettings.getDatabaseEnabled();
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_GET_DATABASE_ENABLED")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_DATABASE_ENABLED);
+            return mAwSettings.getDatabaseEnabled();
+        }
     }
 
     @Override
     public synchronized void setGeolocationEnabled(boolean flag) {
-        mAwSettings.setGeolocationEnabled(flag);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_GEOLOCATION_ENABLED")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_GEOLOCATION_ENABLED);
+            mAwSettings.setGeolocationEnabled(flag);
+        }
     }
 
     @Override
     public synchronized boolean getJavaScriptEnabled() {
-        return mAwSettings.getJavaScriptEnabled();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_JAVA_SCRIPT_ENABLED")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_JAVA_SCRIPT_ENABLED);
+            return mAwSettings.getJavaScriptEnabled();
+        }
     }
 
     @Override
     public boolean getAllowUniversalAccessFromFileURLs() {
-        return mAwSettings.getAllowUniversalAccessFromFileURLs();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.ApiCall.WEB_SETTINGS_GET_ALLOW_UNIVERSAL_ACCESS_FROM_FILE_URLS")) {
+            WebViewChromium.recordWebViewApiCall(
+                    ApiCall.WEB_SETTINGS_GET_ALLOW_UNIVERSAL_ACCESS_FROM_FILE_URLS);
+            return mAwSettings.getAllowUniversalAccessFromFileURLs();
+        }
     }
 
     @Override
     public boolean getAllowFileAccessFromFileURLs() {
-        return mAwSettings.getAllowFileAccessFromFileURLs();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.ApiCall.WEB_SETTINGS_GET_ALLOW_FILE_ACCESS_FROM_FILE_URLS")) {
+            WebViewChromium.recordWebViewApiCall(
+                    ApiCall.WEB_SETTINGS_GET_ALLOW_FILE_ACCESS_FROM_FILE_URLS);
+            return mAwSettings.getAllowFileAccessFromFileURLs();
+        }
     }
 
     @Override
@@ -510,42 +803,83 @@ public class ContentSettingsAdapter extends android.webkit.WebSettings {
 
     @Override
     public synchronized PluginState getPluginState() {
-        return mPluginState;
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_GET_PLUGIN_STATE")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_PLUGIN_STATE);
+            return mPluginState;
+        }
     }
 
     @Override
     public synchronized void setJavaScriptCanOpenWindowsAutomatically(boolean flag) {
-        mAwSettings.setJavaScriptCanOpenWindowsAutomatically(flag);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.ApiCall.WEB_SETTINGS_SET_JAVA_SCRIPT_CAN_OPEN_WINDOWS_AUTOMATICALLY")) {
+            WebViewChromium.recordWebViewApiCall(
+                    ApiCall.WEB_SETTINGS_SET_JAVA_SCRIPT_CAN_OPEN_WINDOWS_AUTOMATICALLY);
+            mAwSettings.setJavaScriptCanOpenWindowsAutomatically(flag);
+        }
     }
 
     @Override
     public synchronized boolean getJavaScriptCanOpenWindowsAutomatically() {
-        return mAwSettings.getJavaScriptCanOpenWindowsAutomatically();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.ApiCall.WEB_SETTINGS_GET_JAVA_SCRIPT_CAN_OPEN_WINDOWS_AUTOMATICALLY")) {
+            WebViewChromium.recordWebViewApiCall(
+                    ApiCall.WEB_SETTINGS_GET_JAVA_SCRIPT_CAN_OPEN_WINDOWS_AUTOMATICALLY);
+            return mAwSettings.getJavaScriptCanOpenWindowsAutomatically();
+        }
     }
 
     @Override
     public synchronized void setDefaultTextEncodingName(String encoding) {
-        mAwSettings.setDefaultTextEncodingName(encoding);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_DEFAULT_TEXT_ENCODING_NAME")) {
+            WebViewChromium.recordWebViewApiCall(
+                    ApiCall.WEB_SETTINGS_SET_DEFAULT_TEXT_ENCODING_NAME);
+            mAwSettings.setDefaultTextEncodingName(encoding);
+        }
     }
 
     @Override
     public synchronized String getDefaultTextEncodingName() {
-        return mAwSettings.getDefaultTextEncodingName();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_DEFAULT_TEXT_ENCODING_NAME")) {
+            WebViewChromium.recordWebViewApiCall(
+                    ApiCall.WEB_SETTINGS_GET_DEFAULT_TEXT_ENCODING_NAME);
+            return mAwSettings.getDefaultTextEncodingName();
+        }
     }
 
     @Override
     public synchronized void setUserAgentString(String ua) {
-        mAwSettings.setUserAgentString(ua);
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_SET_USER_AGENT_STRING")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_USER_AGENT_STRING);
+            mAwSettings.setUserAgentString(ua);
+        }
     }
 
     @Override
     public synchronized String getUserAgentString() {
-        return mAwSettings.getUserAgentString();
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_GET_USER_AGENT_STRING")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_USER_AGENT_STRING);
+            return mAwSettings.getUserAgentString();
+        }
     }
 
     @Override
     public void setNeedInitialFocus(boolean flag) {
-        mAwSettings.setShouldFocusFirstNode(flag);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_NEED_INITIAL_FOCUS")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_NEED_INITIAL_FOCUS);
+            mAwSettings.setShouldFocusFirstNode(flag);
+        }
     }
 
     @Override
@@ -555,52 +889,104 @@ public class ContentSettingsAdapter extends android.webkit.WebSettings {
 
     @Override
     public void setCacheMode(int mode) {
-        mAwSettings.setCacheMode(mode);
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_SET_CACHE_MODE")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_CACHE_MODE);
+            mAwSettings.setCacheMode(mode);
+        }
     }
 
     @Override
     public int getCacheMode() {
-        return mAwSettings.getCacheMode();
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_GET_CACHE_MODE")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_CACHE_MODE);
+            return mAwSettings.getCacheMode();
+        }
     }
 
     @Override
     public void setMediaPlaybackRequiresUserGesture(boolean require) {
-        mAwSettings.setMediaPlaybackRequiresUserGesture(require);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.ApiCall.WEB_SETTINGS_SET_MEDIA_PLAYBACK_REQUIRES_USER_GESTURE")) {
+            WebViewChromium.recordWebViewApiCall(
+                    ApiCall.WEB_SETTINGS_SET_MEDIA_PLAYBACK_REQUIRES_USER_GESTURE);
+            mAwSettings.setMediaPlaybackRequiresUserGesture(require);
+        }
     }
 
     @Override
     public boolean getMediaPlaybackRequiresUserGesture() {
-        return mAwSettings.getMediaPlaybackRequiresUserGesture();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.ApiCall.WEB_SETTINGS_GET_MEDIA_PLAYBACK_REQUIRES_USER_GESTURE")) {
+            WebViewChromium.recordWebViewApiCall(
+                    ApiCall.WEB_SETTINGS_GET_MEDIA_PLAYBACK_REQUIRES_USER_GESTURE);
+            return mAwSettings.getMediaPlaybackRequiresUserGesture();
+        }
     }
 
     @Override
     public void setMixedContentMode(int mode) {
-        mAwSettings.setMixedContentMode(mode);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_MIXED_CONTENT_MODE")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_MIXED_CONTENT_MODE);
+            mAwSettings.setMixedContentMode(mode);
+        }
     }
 
     @Override
     public int getMixedContentMode() {
-        return mAwSettings.getMixedContentMode();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_MIXED_CONTENT_MODE")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_MIXED_CONTENT_MODE);
+            return mAwSettings.getMixedContentMode();
+        }
     }
 
     @Override
     public void setOffscreenPreRaster(boolean enabled) {
-        mAwSettings.setOffscreenPreRaster(enabled);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_OFFSCREEN_PRE_RASTER")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_OFFSCREEN_PRE_RASTER);
+            mAwSettings.setOffscreenPreRaster(enabled);
+        }
     }
 
     @Override
     public boolean getOffscreenPreRaster() {
-        return mAwSettings.getOffscreenPreRaster();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_GET_OFFSCREEN_PRE_RASTER")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_OFFSCREEN_PRE_RASTER);
+            return mAwSettings.getOffscreenPreRaster();
+        }
     }
 
     @Override
     public void setDisabledActionModeMenuItems(int menuItems) {
-        mAwSettings.setDisabledActionModeMenuItems(menuItems);
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.ApiCall.WEB_SETTINGS_SET_DISABLED_ACTION_MODE_MENU_ITEMS")) {
+            WebViewChromium.recordWebViewApiCall(
+                    ApiCall.WEB_SETTINGS_SET_DISABLED_ACTION_MODE_MENU_ITEMS);
+            mAwSettings.setDisabledActionModeMenuItems(menuItems);
+        }
     }
 
     @Override
     public int getDisabledActionModeMenuItems() {
-        return mAwSettings.getDisabledActionModeMenuItems();
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.ApiCall.WEB_SETTINGS_GET_DISABLED_ACTION_MODE_MENU_ITEMS")) {
+            WebViewChromium.recordWebViewApiCall(
+                    ApiCall.WEB_SETTINGS_GET_DISABLED_ACTION_MODE_MENU_ITEMS);
+            return mAwSettings.getDisabledActionModeMenuItems();
+        }
     }
 
     @Override
@@ -617,42 +1003,50 @@ public class ContentSettingsAdapter extends android.webkit.WebSettings {
     @Override
     @SuppressLint("Override")
     public void setForceDark(int forceDarkMode) {
-        if (AwDarkMode.isSimplifiedDarkModeEnabled()) {
-            Log.w(TAG, "setForceDark() is a no-op in an app with targetSdkVersion>=T");
-            return;
-        }
-        switch (forceDarkMode) {
-            case WebSettings.FORCE_DARK_OFF:
-                getAwSettings().setForceDarkMode(AwSettings.FORCE_DARK_OFF);
-                break;
-            case WebSettings.FORCE_DARK_AUTO:
-                getAwSettings().setForceDarkMode(AwSettings.FORCE_DARK_AUTO);
-                break;
-            case WebSettings.FORCE_DARK_ON:
-                getAwSettings().setForceDarkMode(AwSettings.FORCE_DARK_ON);
-                break;
-            default:
-                throw new IllegalArgumentException(
-                        "Force dark mode is not one of FORCE_DARK_(ON|OFF|AUTO)");
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_SET_FORCE_DARK")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_SET_FORCE_DARK);
+            if (AwDarkMode.isSimplifiedDarkModeEnabled()) {
+                Log.w(TAG, "setForceDark() is a no-op in an app with targetSdkVersion>=T");
+                return;
+            }
+            switch (forceDarkMode) {
+                case WebSettings.FORCE_DARK_OFF:
+                    getAwSettings().setForceDarkMode(AwSettings.FORCE_DARK_OFF);
+                    break;
+                case WebSettings.FORCE_DARK_AUTO:
+                    getAwSettings().setForceDarkMode(AwSettings.FORCE_DARK_AUTO);
+                    break;
+                case WebSettings.FORCE_DARK_ON:
+                    getAwSettings().setForceDarkMode(AwSettings.FORCE_DARK_ON);
+                    break;
+                default:
+                    throw new IllegalArgumentException(
+                            "Force dark mode is not one of FORCE_DARK_(ON|OFF|AUTO)");
+            }
         }
     }
 
     @Override
     @SuppressLint("Override")
     public int getForceDark() {
-        if (AwDarkMode.isSimplifiedDarkModeEnabled()) {
-            Log.w(TAG, "getForceDark() is a no-op in an app with targetSdkVersion>=T");
+        try (TraceEvent event =
+                TraceEvent.scoped("WebView.APICall.Framework.WEB_SETTINGS_GET_FORCE_DARK")) {
+            WebViewChromium.recordWebViewApiCall(ApiCall.WEB_SETTINGS_GET_FORCE_DARK);
+            if (AwDarkMode.isSimplifiedDarkModeEnabled()) {
+                Log.w(TAG, "getForceDark() is a no-op in an app with targetSdkVersion>=T");
+                return WebSettings.FORCE_DARK_AUTO;
+            }
+            switch (getAwSettings().getForceDarkMode()) {
+                case AwSettings.FORCE_DARK_OFF:
+                    return WebSettings.FORCE_DARK_OFF;
+                case AwSettings.FORCE_DARK_AUTO:
+                    return WebSettings.FORCE_DARK_AUTO;
+                case AwSettings.FORCE_DARK_ON:
+                    return WebSettings.FORCE_DARK_ON;
+            }
             return WebSettings.FORCE_DARK_AUTO;
         }
-        switch (getAwSettings().getForceDarkMode()) {
-            case AwSettings.FORCE_DARK_OFF:
-                return WebSettings.FORCE_DARK_OFF;
-            case AwSettings.FORCE_DARK_AUTO:
-                return WebSettings.FORCE_DARK_AUTO;
-            case AwSettings.FORCE_DARK_ON:
-                return WebSettings.FORCE_DARK_ON;
-        }
-        return WebSettings.FORCE_DARK_AUTO;
     }
 
     // Lint thinks we are targeting 32 so complains that this only overrides in 33, suppress until
@@ -660,13 +1054,20 @@ public class ContentSettingsAdapter extends android.webkit.WebSettings {
     @SuppressWarnings("Override")
     @Override
     public void setAlgorithmicDarkeningAllowed(boolean allow) {
-        if (!AwDarkMode.isSimplifiedDarkModeEnabled()) {
-            Log.w(TAG,
-                    "setAlgorithmicDarkeningAllowed() is a no-op in an app with "
-                            + "targetSdkVersion<T");
-            return;
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_SET_ALGORITHMIC_DARKENING_ALLOWED")) {
+            WebViewChromium.recordWebViewApiCall(
+                    ApiCall.WEB_SETTINGS_SET_ALGORITHMIC_DARKENING_ALLOWED);
+            if (!AwDarkMode.isSimplifiedDarkModeEnabled()) {
+                Log.w(
+                        TAG,
+                        "setAlgorithmicDarkeningAllowed() is a no-op in an app with "
+                                + "targetSdkVersion<T");
+                return;
+            }
+            getAwSettings().setAlgorithmicDarkeningAllowed(allow);
         }
-        getAwSettings().setAlgorithmicDarkeningAllowed(allow);
     }
 
     // Lint thinks we are targeting 32 so complains that this only overrides in 33, suppress until
@@ -674,11 +1075,19 @@ public class ContentSettingsAdapter extends android.webkit.WebSettings {
     @SuppressWarnings("Override")
     @Override
     public boolean isAlgorithmicDarkeningAllowed() {
-        if (!AwDarkMode.isSimplifiedDarkModeEnabled()) {
-            Log.w(TAG,
-                    "isAlgorithmicDarkeningAllowed() is a no-op in an app with targetSdkVersion<T");
-            return false;
+        try (TraceEvent event =
+                TraceEvent.scoped(
+                        "WebView.APICall.Framework.WEB_SETTINGS_IS_ALGORITHMIC_DARKENING_ALLOWED")) {
+            WebViewChromium.recordWebViewApiCall(
+                    ApiCall.WEB_SETTINGS_IS_ALGORITHMIC_DARKENING_ALLOWED);
+            if (!AwDarkMode.isSimplifiedDarkModeEnabled()) {
+                Log.w(
+                        TAG,
+                        "isAlgorithmicDarkeningAllowed() is a no-op in an app with "
+                                + "targetSdkVersion<T");
+                return false;
+            }
+            return getAwSettings().isAlgorithmicDarkeningAllowed();
         }
-        return getAwSettings().isAlgorithmicDarkeningAllowed();
     }
 }

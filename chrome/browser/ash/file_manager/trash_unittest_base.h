@@ -9,11 +9,13 @@
 
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
 #include "chrome/browser/ash/drive/drive_integration_service.h"
 #include "chrome/browser/ash/drive/drivefs_test_support.h"
-#include "chrome/browser/ash/file_manager/fake_disk_mount_manager.h"
+#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/test/base/testing_profile.h"
+#include "chromeos/ash/components/disks/fake_disk_mount_manager.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "content/public/test/browser_task_environment.h"
 #include "storage/browser/file_system/file_system_context.h"
@@ -57,22 +59,24 @@ class TrashBaseTest : public testing::Test {
   bool EnsureTrashDirectorySetup(const base::FilePath& parent_path);
 
   content::BrowserTaskEnvironment task_environment_;
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_;
   std::unique_ptr<TestingProfile> profile_;
   const blink::StorageKey kTestStorageKey =
       blink::StorageKey::CreateFromStringForTesting("chrome-extension://abc");
 
   // DriveFS setup methods to ensure the tests have access to a mock
   // DriveIntegrationService tied to the TestingProfile.
-  std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
   std::unique_ptr<drive::FakeDriveFsHelper> fake_drivefs_helper_;
-  drive::DriveIntegrationService* integration_service_ = nullptr;
+  raw_ptr<drive::DriveIntegrationService, DanglingUntriaged>
+      integration_service_ = nullptr;
   drive::DriveIntegrationServiceFactory::FactoryCallback
       create_drive_integration_service_;
   std::unique_ptr<drive::DriveIntegrationServiceFactory::ScopedFactoryForTest>
       service_factory_for_test_;
 
-  crostini::CrostiniManager* crostini_manager_;
-  file_manager::FakeDiskMountManager disk_mount_manager_;
+  raw_ptr<crostini::CrostiniManager, DanglingUntriaged> crostini_manager_;
+  ash::disks::FakeDiskMountManager disk_mount_manager_;
 
   base::ScopedTempDir temp_dir_;
   base::FilePath downloads_dir_;
@@ -85,4 +89,4 @@ class TrashBaseTest : public testing::Test {
 
 }  // namespace file_manager::io_task
 
-#endif  // CHROME_BROWSER_ASH_FILE_MANAGER_TRASH_IO_TASK_H_
+#endif  // CHROME_BROWSER_ASH_FILE_MANAGER_TRASH_UNITTEST_BASE_H_

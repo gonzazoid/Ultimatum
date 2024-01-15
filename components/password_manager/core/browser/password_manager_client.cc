@@ -4,9 +4,10 @@
 
 #include <utility>
 
+#include "base/memory/raw_ptr.h"
 #include "components/autofill/core/common/password_generation_util.h"
-#include "components/autofill/core/common/unique_ids.h"
-#include "components/device_reauth/biometric_authenticator.h"
+#include "components/device_reauth/device_authenticator.h"
+#include "components/password_manager/core/browser/field_info_manager.h"
 #include "components/password_manager/core/browser/http_auth_manager.h"
 #include "components/password_manager/core/browser/password_form_manager_for_ui.h"
 #include "components/password_manager/core/browser/password_manager_client.h"
@@ -24,10 +25,6 @@ bool PasswordManagerClient::IsFillingEnabled(const GURL& url) const {
   return true;
 }
 
-bool PasswordManagerClient::IsFillingFallbackEnabled(const GURL& url) const {
-  return true;
-}
-
 bool PasswordManagerClient::IsAutoSignInEnabled() const {
   return false;
 }
@@ -37,15 +34,16 @@ void PasswordManagerClient::ShowPasswordManagerErrorMessage(
     ErrorMessageFlowType flow_type,
     password_manager::PasswordStoreBackendErrorType error_type) {}
 
-void PasswordManagerClient::ShowTouchToFill(
+bool PasswordManagerClient::ShowKeyboardReplacingSurface(
     PasswordManagerDriver* driver,
-    autofill::mojom::SubmissionReadinessState submission_readiness) {}
-
-void PasswordManagerClient::OnPasswordSelected(const std::u16string& text) {}
+    const SubmissionReadinessParams& submission_readiness_params,
+    bool is_webauthn_form) {
+  return false;
+}
 #endif
 
-scoped_refptr<device_reauth::BiometricAuthenticator>
-PasswordManagerClient::GetBiometricAuthenticator() {
+std::unique_ptr<device_reauth::DeviceAuthenticator>
+PasswordManagerClient::GetDeviceAuthenticator() {
   return nullptr;
 }
 
@@ -54,13 +52,16 @@ void PasswordManagerClient::GeneratePassword(
 
 void PasswordManagerClient::UpdateCredentialCache(
     const url::Origin& origin,
-    const std::vector<const PasswordForm*>& best_matches,
+    const std::vector<raw_ptr<const PasswordForm, VectorExperimental>>&
+        best_matches,
     bool is_blocklisted) {}
 
 void PasswordManagerClient::PasswordWasAutofilled(
-    const std::vector<const PasswordForm*>& best_matches,
+    const std::vector<raw_ptr<const PasswordForm, VectorExperimental>>&
+        best_matches,
     const url::Origin& origin,
-    const std::vector<const PasswordForm*>* federated_matches,
+    const std::vector<raw_ptr<const PasswordForm, VectorExperimental>>*
+        federated_matches,
     bool was_autofilled_on_pageload) {}
 
 void PasswordManagerClient::AutofillHttpAuth(
@@ -70,7 +71,8 @@ void PasswordManagerClient::AutofillHttpAuth(
 void PasswordManagerClient::NotifyUserCredentialsWereLeaked(
     password_manager::CredentialLeakType leak_type,
     const GURL& origin,
-    const std::u16string& username) {}
+    const std::u16string& username,
+    bool in_account_store) {}
 
 void PasswordManagerClient::TriggerReauthForPrimaryAccount(
     signin_metrics::ReauthAccessPoint access_point,
@@ -94,7 +96,7 @@ net::CertStatus PasswordManagerClient::GetMainFrameCertStatus() const {
 
 void PasswordManagerClient::PromptUserToEnableAutosignin() {}
 
-bool PasswordManagerClient::IsIncognito() const {
+bool PasswordManagerClient::IsOffTheRecord() const {
   return false;
 }
 
@@ -129,8 +131,8 @@ HttpAuthManager* PasswordManagerClient::GetHttpAuthManager() {
   return nullptr;
 }
 
-autofill::AutofillDownloadManager*
-PasswordManagerClient::GetAutofillDownloadManager() {
+autofill::AutofillCrowdsourcingManager*
+PasswordManagerClient::GetAutofillCrowdsourcingManager() {
   return nullptr;
 }
 
@@ -159,6 +161,11 @@ favicon::FaviconService* PasswordManagerClient::GetFaviconService() {
   return nullptr;
 }
 
+password_manager::FieldInfoManager* PasswordManagerClient::GetFieldInfoManager()
+    const {
+  return nullptr;
+}
+
 network::mojom::NetworkContext* PasswordManagerClient::GetNetworkContext()
     const {
   return nullptr;
@@ -169,6 +176,17 @@ PasswordManagerClient::GetWebAuthnCredentialsDelegateForDriver(
     PasswordManagerDriver* driver) {
   return nullptr;
 }
+
+#if BUILDFLAG(IS_ANDROID)
+webauthn::WebAuthnCredManDelegate*
+PasswordManagerClient::GetWebAuthnCredManDelegateForDriver(
+    PasswordManagerDriver* driver) {
+  return nullptr;
+}
+
+void PasswordManagerClient::MarkSharedCredentialsAsNotified(const GURL& url) {}
+
+#endif  // BUILDFLAG(IS_ANDROID)
 
 version_info::Channel PasswordManagerClient::GetChannel() const {
   return version_info::Channel::UNKNOWN;

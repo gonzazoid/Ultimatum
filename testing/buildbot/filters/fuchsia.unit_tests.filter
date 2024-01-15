@@ -1,4 +1,6 @@
 -All/PasswordManagerPorterStoreTest.Import/2
+-All/OsIntegrationSynchronizeCommandTest.SynchronizeWorks/*
+-BookmarkBubbleViewTest.SyncPromo*
 -CartServiceTest.TestExpiredDataDeleted
 -CartServiceTest.TestHiddenFlipedByCartAction
 -DiagnosticsController*
@@ -17,6 +19,8 @@
 -ExtensionsToolbarControlsUnitTest.RequestAccessButtonVisibility_NavigationBetweenPages
 -ExtensionUserScriptLoaderTest.Component*
 -FileAnalysisRequestTest.Invalid*
+-GalleryWatchManagerTest.AddAndRemoveTwoWatches
+-GalleryWatchManagerTest.RemoveAllWatches
 -LayoutProviderTest.Legacy*
 -PermissionMessageCombinationsUnittest.USBSerial*
 -ProfilesState/IsGuestModeRequestedTest.Requested/0
@@ -31,10 +35,8 @@
 -UDPSocketUnitTest.TestUDPMulticastRecv
 -UserNoteUICoordinatorTest.AddNoteEndUserSidePanel
 -UserNoteUICoordinatorTest.AddNoteMiddleUserSidePanel
+-UserNoteUICoordinatorTest.CleanScrollViewOnSidePanelCloseWithNotes
 -UserNoteUICoordinatorTest.PopulateUserNoteSidePanel
 -UserNoteUICoordinatorTest.RemoveAllNoteUserSidePanel
 -UserNoteUICoordinatorTest.RemoveEndUserSidePanel
 -UserNoteUICoordinatorTest.RemoveMiddleUserSidePanel
-
-# https://crbug.com/851641
--DevToolsFileWatcher*

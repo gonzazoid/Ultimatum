@@ -4,16 +4,19 @@
 
 #include "chrome/browser/lacros/sync/sync_explicit_passphrase_client_lacros.h"
 
+#include <utility>
+
 #include "base/observer_list.h"
 #include "base/test/task_environment.h"
 #include "chromeos/crosapi/mojom/account_manager.mojom.h"
+#include "chromeos/crosapi/mojom/sync.mojom.h"
 #include "components/account_manager_core/account.h"
 #include "components/account_manager_core/account_manager_util.h"
 #include "components/signin/public/identity_manager/account_info.h"
 #include "components/sync/chromeos/explicit_passphrase_mojo_utils.h"
-#include "components/sync/driver/sync_service_observer.h"
 #include "components/sync/engine/nigori/key_derivation_params.h"
 #include "components/sync/engine/nigori/nigori.h"
+#include "components/sync/service/sync_service_observer.h"
 #include "components/sync/test/fake_sync_explicit_passphrase_client_ash.h"
 #include "components/sync/test/fake_sync_mojo_service.h"
 #include "components/sync/test/mock_sync_service.h"
@@ -60,15 +63,15 @@ class SyncExplicitPassphraseClientLacrosTest : public testing::Test {
           sync_service_observers_.RemoveObserver(observer);
         });
 
-    sync_mojo_service_.BindReceiver(
-        sync_mojo_service_remote_.BindNewPipeAndPassReceiver());
-    sync_mojo_service_.GetFakeSyncExplicitPassphraseClientAsh()
-        .SetExpectedAccountKey(MakeMojoAccountKey(sync_account_info_));
+    mojo::Remote<crosapi::mojom::SyncExplicitPassphraseClient> client_remote;
+    client_ash_.BindReceiver(client_remote.BindNewPipeAndPassReceiver());
+
+    client_ash_.SetExpectedAccountKey(MakeMojoAccountKey(sync_account_info_));
 
     client_lacros_ = std::make_unique<SyncExplicitPassphraseClientLacros>(
-        &sync_service_, &sync_mojo_service_remote_);
+        std::move(client_remote), &sync_service_);
     // Needed to trigger AddObserver() call.
-    sync_mojo_service_remote_.FlushForTesting();
+    client_lacros_->FlushMojoForTesting();
   }
 
   void MimicLacrosPassphraseRequired() {
@@ -76,7 +79,8 @@ class SyncExplicitPassphraseClientLacrosTest : public testing::Test {
         .WillByDefault(Return(true));
     ON_CALL(*sync_service_.GetMockUserSettings(), IsUsingExplicitPassphrase())
         .WillByDefault(Return(true));
-    ON_CALL(*sync_service_.GetMockUserSettings(), GetDecryptionNigoriKey())
+    ON_CALL(*sync_service_.GetMockUserSettings(),
+            GetExplicitPassphraseDecryptionNigoriKey())
         .WillByDefault(Return(ByMove(nullptr)));
     for (auto& observer : sync_service_observers_) {
       observer.OnStateChanged(&sync_service_);
@@ -88,7 +92,8 @@ class SyncExplicitPassphraseClientLacrosTest : public testing::Test {
         .WillByDefault(Return(false));
     ON_CALL(*sync_service_.GetMockUserSettings(), IsUsingExplicitPassphrase())
         .WillByDefault(Return(true));
-    ON_CALL(*sync_service_.GetMockUserSettings(), GetDecryptionNigoriKey())
+    ON_CALL(*sync_service_.GetMockUserSettings(),
+            GetExplicitPassphraseDecryptionNigoriKey())
         .WillByDefault(MakeTestNigoriKey);
     for (auto& observer : sync_service_observers_) {
       observer.OnStateChanged(&sync_service_);
@@ -100,7 +105,7 @@ class SyncExplicitPassphraseClientLacrosTest : public testing::Test {
   }
 
   syncer::FakeSyncExplicitPassphraseClientAsh& client_ash() {
-    return sync_mojo_service_.GetFakeSyncExplicitPassphraseClientAsh();
+    return client_ash_;
   }
 
   syncer::SyncUserSettingsMock& user_settings() {
@@ -115,8 +120,7 @@ class SyncExplicitPassphraseClientLacrosTest : public testing::Test {
                      /*check_empty=*/true>::Unchecked sync_service_observers_;
 
   CoreAccountInfo sync_account_info_;
-  mojo::Remote<crosapi::mojom::SyncService> sync_mojo_service_remote_;
-  syncer::FakeSyncMojoService sync_mojo_service_;
+  syncer::FakeSyncExplicitPassphraseClientAsh client_ash_;
 
   std::unique_ptr<SyncExplicitPassphraseClientLacros> client_lacros_;
 };
@@ -152,7 +156,8 @@ TEST_F(SyncExplicitPassphraseClientLacrosTest,
 TEST_F(SyncExplicitPassphraseClientLacrosTest, ShouldGetNigoriKeyFromAsh) {
   MimicLacrosPassphraseRequired();
 
-  EXPECT_CALL(user_settings(), SetDecryptionNigoriKey(NotNull()));
+  EXPECT_CALL(user_settings(),
+              SetExplicitPassphraseDecryptionNigoriKey(NotNull()));
   client_ash().MimicPassphraseAvailable(MakeTestMojoNigoriKey());
 }
 
@@ -162,8 +167,9 @@ TEST_F(SyncExplicitPassphraseClientLacrosTest,
   // client_ash() will notify observers that passphrase is available, but expose
   // nullptr when GetDecryptionNigoriKey() is called. Lacros client should
   // handle this nullptr and shouldn't call
-  // SyncUserSettings::SetDecryptionNigoriKey().
-  EXPECT_CALL(user_settings(), SetDecryptionNigoriKey(_)).Times(0);
+  // SyncUserSettings::SetExplicitPassphraseDecryptionNigoriKey().
+  EXPECT_CALL(user_settings(), SetExplicitPassphraseDecryptionNigoriKey(_))
+      .Times(0);
   client_ash().MimicPassphraseAvailable(/*nigori_key=*/nullptr);
 }
 
@@ -172,7 +178,7 @@ TEST_F(SyncExplicitPassphraseClientLacrosTest,
   MimicLacrosPassphraseAvailable();
   // Mimic rare corner case, when IsPassphraseAvailable() false positive
   // detection happens.
-  ON_CALL(user_settings(), GetDecryptionNigoriKey())
+  ON_CALL(user_settings(), GetExplicitPassphraseDecryptionNigoriKey())
       .WillByDefault(Return(ByMove(nullptr)));
   client_ash().MimicPassphraseRequired(MakeTestMojoNigoriKey());
   client_lacros().FlushMojoForTesting();

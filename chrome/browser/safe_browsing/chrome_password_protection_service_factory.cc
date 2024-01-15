@@ -6,8 +6,9 @@
 
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/history/history_service_factory.h"
+#include "chrome/browser/password_manager/account_password_store_factory.h"
 #include "chrome/browser/password_manager/password_reuse_manager_factory.h"
-#include "chrome/browser/password_manager/password_store_factory.h"
+#include "chrome/browser/password_manager/profile_password_store_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/safe_browsing/chrome_password_protection_service.h"
 #include "chrome/browser/safe_browsing/safe_browsing_navigation_observer_manager_factory.h"
@@ -30,30 +31,38 @@ ChromePasswordProtectionServiceFactory::GetForProfile(Profile* profile) {
 // static
 ChromePasswordProtectionServiceFactory*
 ChromePasswordProtectionServiceFactory::GetInstance() {
-  return base::Singleton<ChromePasswordProtectionServiceFactory>::get();
+  static base::NoDestructor<ChromePasswordProtectionServiceFactory> instance;
+  return instance.get();
 }
 
 ChromePasswordProtectionServiceFactory::ChromePasswordProtectionServiceFactory()
     : ProfileKeyedServiceFactory(
           "ChromePasswordProtectionService",
-          ProfileSelections::BuildForRegularAndIncognito()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
   DependsOn(HistoryServiceFactory::GetInstance());
   DependsOn(VerdictCacheManagerFactory::GetInstance());
   DependsOn(IdentityManagerFactory::GetInstance());
   DependsOn(SyncServiceFactory::GetInstance());
-  DependsOn(PasswordStoreFactory::GetInstance());
+  DependsOn(ProfilePasswordStoreFactory::GetInstance());
+  DependsOn(AccountPasswordStoreFactory::GetInstance());
   DependsOn(PasswordReuseManagerFactory::GetInstance());
   DependsOn(browser_sync::UserEventServiceFactory::GetInstance());
   DependsOn(SafeBrowsingNavigationObserverManagerFactory::GetInstance());
 }
 
-KeyedService* ChromePasswordProtectionServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ChromePasswordProtectionServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   if (!g_browser_process->safe_browsing_service()) {
     return nullptr;
   }
   Profile* profile = Profile::FromBrowserContext(context);
-  return new ChromePasswordProtectionService(
+  return std::make_unique<ChromePasswordProtectionService>(
       g_browser_process->safe_browsing_service(), profile);
 }
 

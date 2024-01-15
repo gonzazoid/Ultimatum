@@ -6,7 +6,11 @@
 #define CHROME_BROWSER_EXTENSIONS_API_SIDE_PANEL_SIDE_PANEL_SERVICE_H_
 
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
+#include "base/observer_list.h"
+#include "base/observer_list_types.h"
 #include "base/scoped_observation.h"
+#include "base/types/expected.h"
 #include "chrome/common/extensions/api/side_panel.h"
 #include "extensions/browser/browser_context_keyed_api_factory.h"
 #include "extensions/browser/extension_registry.h"
@@ -21,6 +25,14 @@ namespace extensions {
 class SidePanelService : public BrowserContextKeyedAPI,
                          public ExtensionRegistryObserver {
  public:
+  class Observer : public base::CheckedObserver {
+   public:
+    virtual void OnPanelOptionsChanged(
+        const ExtensionId& extension_id,
+        const api::side_panel::PanelOptions& updated_options) = 0;
+    virtual void OnSidePanelServiceShutdown() = 0;
+  };
+
   explicit SidePanelService(content::BrowserContext* context);
 
   SidePanelService(const SidePanelService&) = delete;
@@ -34,11 +46,27 @@ class SidePanelService : public BrowserContextKeyedAPI,
   // BrowserContextKeyedAPI implementation.
   static BrowserContextKeyedAPIFactory<SidePanelService>* GetFactoryInstance();
 
-  // Get options for tab_id. Options are loaded in order first from service
-  // storage, manifest, or an empty object will be returned, if they're unset.
   using TabId = int;
+
+  // Returns if there is an action to toggle the side panel for the given
+  // `extension` and `tab_id`.
+  bool HasSidePanelActionForTab(const Extension& extension, TabId tab_id);
+
+  // Returns if there is an action to toggle the side panel from the extension
+  // context menu for the given `extension` and `tab_id`.
+  bool HasSidePanelContextMenuActionForTab(const Extension& extension,
+                                           TabId tab_id);
+
+  // Get options for `tab_id`. Options are loaded in order first from service
+  // storage, manifest, or an empty object will be returned, if they're unset.
   api::side_panel::PanelOptions GetOptions(const Extension& extension,
                                            absl::optional<TabId> tab_id);
+
+  // Get options that were set for `tab_id`. If no options were specifically
+  // set, returns an empty object instead of falling back to default options.
+  api::side_panel::PanelOptions GetSpecificOptionsForTab(
+      const Extension& extension,
+      TabId tab_id);
 
   // Set options for tab_id if specified. Otherwise set default options.
   void SetOptions(const Extension& extension,
@@ -47,15 +75,60 @@ class SidePanelService : public BrowserContextKeyedAPI,
   // Determine if panel options have been set for extension id. Used in tests.
   bool HasExtensionPanelOptionsForTest(const ExtensionId& id);
 
+  // Returns whether the extension will open its side panel entry when its icon
+  // in the toolbar is clicked.
+  bool OpenSidePanelOnIconClick(const ExtensionId& extension_id);
+
+  // Updates whether the extension will open its side panel entry when its icon
+  // in the toolbar is clicked.
+  void SetOpenSidePanelOnIconClick(const ExtensionId& extension_id,
+                                   bool open_side_panel_on_icon_click);
+
+  // Opens the `extension`'s side panel for the specified `tab_id`.
+  // Handles properly determining if the side panel to be opened is a global or
+  // contextual panel. `include_incognito_information` indicates whether the
+  // registry should allow crossing incognito contexts when looking up `tab_id`.
+  // If `window_id` is specified, checks that the given `tab_id` belongs to the
+  // `window_id`. Returns true on success; returns an error string on failure.
+  // TODO(https://crbug.com/1446022): Return an enum here to indicate if the
+  // panel was newly-opened vs already-opened in order to support waiting for
+  // the panel to open?
+  base::expected<bool, std::string> OpenSidePanelForTab(
+      const Extension& extension,
+      int tab_id,
+      absl::optional<int> window_id,
+      bool include_incognito_information);
+
+  // Opens the `extension`'s side panel for the specified `window_id`. This is
+  // only valid if the extension has a registered global side panel. This will
+  // not override any contextual panels in the window.
+  // `include_incognito_information` indicates whether the registry should
+  // allow crossing incognito contexts when looking up `tab_id`.  Returns true
+  // on success; returns an error string on failure.
+  // TODO(https://crbug.com/1446022): Return an enum here to indicate if the
+  // panel was newly-opened vs already-opened in order to support waiting for
+  // the panel to open?
+  base::expected<bool, std::string> OpenSidePanelForWindow(
+      const Extension& extension,
+      int window_id,
+      bool include_incognito_information);
+
+  // Adds or removes observers.
+  void AddObserver(Observer* observer);
+  void RemoveObserver(Observer* observer);
+
  private:
   friend class BrowserContextKeyedAPIFactory<SidePanelService>;
 
-  content::BrowserContext* const browser_context_;
+  const raw_ptr<content::BrowserContext> browser_context_;
 
   // BrowserContextKeyedAPI implementation.
   static const char* service_name() { return "SidePanelService"; }
   static const bool kServiceRedirectedInIncognito = true;
   static const bool kServiceIsNULLWhileTesting = true;
+
+  // Returns if there is an extension side panel for `tab_id`.
+  bool HasSidePanelAvailableForTab(const Extension& extension, TabId tab_id);
 
   // Remove extension id and associated options from `panels_`.
   void RemoveExtensionOptions(const ExtensionId& id);
@@ -69,6 +142,12 @@ class SidePanelService : public BrowserContextKeyedAPI,
   void OnExtensionUninstalled(content::BrowserContext* browser_context,
                               const Extension* extension,
                               UninstallReason reason) override;
+
+  // KeyedService implementation.
+  void Shutdown() override;
+
+  // The associated observers.
+  base::ObserverList<Observer> observers_;
 
   // ExtensionRegistry observer.
   base::ScopedObservation<extensions::ExtensionRegistry,

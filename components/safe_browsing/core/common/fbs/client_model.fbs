@@ -10,7 +10,7 @@
 // sync with the server-side copy.  Otherwise, the client may not be able to
 // parse the server generated model anymore.  If you want to change this
 // flatbuffer definition or you have questions regarding its format please contact
-// chrome-anti-phishing@googlegroups.com.
+// safebrowsing@chromium.org.
 
 include "components/safe_browsing/core/common/fbs/csd.fbs";
 
@@ -39,6 +39,7 @@ table ClientSideModel {
   tflite_model_input_width: int (deprecated);
   tflite_model_input_height: int (deprecated);
   tflite_metadata:safe_browsing.flat.TfLiteModelMetadata;
+  img_embedding_metadata:safe_browsing.flat.TfLiteModelMetadata;
   dom_model_version:int;
 }
 
@@ -70,6 +71,7 @@ namespace safe_browsing.flat.TfLiteModelMetadata_;
 table Threshold {
   label:string;
   threshold:float;
+  esb_threshold:float;
 }
 
 namespace safe_browsing.flat;

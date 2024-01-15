@@ -43,8 +43,7 @@ class WebGPUInProcessContext {
   // process.
   ContextResult Initialize(CommandBufferTaskExecutor* task_executor,
                            const ContextCreationAttribs& attribs,
-                           const SharedMemoryLimits& memory_limits,
-                           ImageFactory* image_factory);
+                           const SharedMemoryLimits& memory_limits);
 
   const Capabilities& GetCapabilities() const;
   const GpuFeatureInfo& GetGpuFeatureInfo() const;
@@ -57,6 +56,7 @@ class WebGPUInProcessContext {
   // Test only functions.
   ServiceTransferCache* GetTransferCacheForTest() const;
   InProcessCommandBuffer* GetCommandBufferForTest() const;
+  CommandBufferHelper* GetCommandBufferHelperForTest() const;
 
  private:
   std::unique_ptr<CommandBufferHelper> helper_;

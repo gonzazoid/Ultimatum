@@ -37,6 +37,10 @@ enum WebAppInstallResultCode {
   kUpdateTaskFailed,
   [MinVersion=1] kAppNotInRegistrarAfterCommit,
   [MinVersion=2] kHaltedBySyncUninstall,
+  [MinVersion=3] kInstallURLInvalid,
+  [MinVersion=4] kIconDownloadingFailed,
+  [MinVersion=5] kCancelledDueToMainFrameNavigation,
+  [MinVersion=6] kNoValidIconsInManifest,
 };
 
 // See |webapps::UninstallResultCode|.
@@ -45,7 +49,8 @@ enum WebAppUninstallResultCode {
   kSuccess,
   kNoAppToUninstall,
   kCancelled,
-  kError,
+  [Default] kError,
+  [MinVersion=1] kShutdown,
 };
 
 // A subset of |WebAppInstallInfo| necessary to install a web app originated in
@@ -57,4 +62,32 @@ struct ArcWebAppInstallInfo {
   url.mojom.Url scope@2;
   skia.mojom.SkColor? theme_color@3;
   gfx.mojom.ImageSkia icon@4;
+  [MinVersion=1] array<string>? additional_policy_ids@5;
+};
+
+[Stable, Extensible]
+enum PreloadWebAppInstallSource {
+  // The app is preloaded by the device OEM.
+  [Default] kOemPreload,
+  // The app is preloaded by Google by default.
+  kDefaultPreload,
+};
+
+// The set of information necessary to install a preloaded web app in Lacros.
+[Stable]
+struct PreloadWebAppInstallInfo {
+  // The url from which the web app is installed.
+  url.mojom.Url document_url@0;
+
+  // The url from which the manifest is fetched.
+  url.mojom.Url manifest_url@1;
+
+  // The expected app id for the installed web app.
+  string expected_app_id@2;
+
+  // The standard web app manifest, encoded as a JSON string.
+  string manifest@3;
+
+  // The source of this app installation.
+  [MinVersion=1] PreloadWebAppInstallSource install_source@4;
 };

@@ -4,7 +4,7 @@
 
 #include <string>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/browser_dialogs.h"
@@ -27,7 +27,11 @@
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "chrome/browser/extensions/chrome_extension_chooser_dialog.h"
+#include "chrome/browser/ui/views/extensions/extensions_toolbar_container.h"
+#include "chrome/browser/ui/views/frame/browser_view.h"
+#include "chrome/browser/ui/views/frame/toolbar_button_provider.h"
 #include "extensions/browser/app_window/app_window_registry.h"
+#include "extensions/common/extension.h"
 #endif
 
 using bubble_anchor_util::AnchorConfiguration;
@@ -185,22 +189,71 @@ END_METADATA
 
 namespace chrome {
 
+namespace {
+
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+base::OnceClosure ShowDeviceChooserDialogForExtension(
+    content::RenderFrameHost* owner,
+    const extensions::Extension* extension,
+    std::unique_ptr<permissions::ChooserController> controller) {
+  auto* contents = content::WebContents::FromRenderFrameHost(owner);
+  auto* browser = chrome::FindBrowserWithTab(contents);
+  if (!browser)
+    return base::DoNothing();
+
+  if (browser->tab_strip_model()->GetActiveWebContents() != contents)
+    return base::DoNothing();
+
+  // `GetExtensionsToolbarContainer` may return `nullptr`, for instance in
+  // extension popup windows.
+  auto* extensions_toolbar_container =
+      BrowserView::GetBrowserViewForBrowser(browser)
+          ->toolbar_button_provider()
+          ->GetExtensionsToolbarContainer();
+  if (!extensions_toolbar_container) {
+    return base::DoNothing();
+  }
+
+  auto bubble = std::make_unique<ChooserBubbleUiViewDelegate>(
+      browser, contents, std::move(controller));
+  base::OnceClosure close_closure = bubble->MakeCloseClosure();
+  extensions_toolbar_container->ShowWidgetForExtension(
+      views::BubbleDialogDelegateView::CreateBubble(std::move(bubble)),
+      extension->id());
+  return close_closure;
+}
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+
+}  // namespace
+
 base::OnceClosure ShowDeviceChooserDialog(
     content::RenderFrameHost* owner,
     std::unique_ptr<permissions::ChooserController> controller) {
   auto* contents = content::WebContents::FromRenderFrameHost(owner);
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
-  if (extensions::AppWindowRegistry::Get(owner->GetBrowserContext())
+  auto* browser_context = owner->GetBrowserContext();
+  if (extensions::AppWindowRegistry::Get(browser_context)
           ->GetAppWindowForWebContents(contents)) {
     ShowConstrainedDeviceChooserDialog(contents, std::move(controller));
     // This version of the chooser dialog does not support being closed by the
     // code which created it.
     return base::DoNothing();
   }
-#endif
 
-  auto* browser = chrome::FindBrowserWithWebContents(contents);
+  auto origin = owner->GetMainFrame()->GetLastCommittedOrigin();
+  if (origin.scheme() == extensions::kExtensionScheme) {
+    const auto* extension =
+        extensions::ExtensionRegistry::Get(browser_context)
+            ->GetExtensionById(origin.host(),
+                               extensions::ExtensionRegistry::EVERYTHING);
+    DCHECK(extension);
+    return ShowDeviceChooserDialogForExtension(owner, extension,
+                                               std::move(controller));
+  }
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+
+  auto* browser = chrome::FindBrowserWithTab(contents);
   if (!browser)
     return base::DoNothing();
 

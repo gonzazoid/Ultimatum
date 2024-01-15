@@ -7,9 +7,10 @@
 
 #include <memory>
 
+#include "base/auto_reset.h"
 #include "base/base_export.h"
-#include "base/callback.h"
 #include "base/dcheck_is_on.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/message_loop/message_pump_for_io.h"
@@ -75,9 +76,7 @@ class BASE_EXPORT FileDescriptorWatcher {
     // Controller is deleted, ownership of |watcher_| is transfered to a delete
     // task posted to the MessageLoopForIO. This ensures that |watcher_| isn't
     // deleted while it is being used by the MessageLoopForIO.
-    //
-    // TODO(crbug.com/1298696): Breaks base_unittests.
-    raw_ptr<Watcher, DanglingUntriagedDegradeToNoOpWhenMTE> watcher_;
+    raw_ptr<Watcher, AcrossTasksDanglingUntriaged> watcher_;
 
     // An event for the watcher to notify controller that it's destroyed.
     // As the |watcher_| is owned by Controller, always outlives the Watcher.
@@ -107,11 +106,11 @@ class BASE_EXPORT FileDescriptorWatcher {
   // returned Controller is deleted (deletion must happen on the current
   // sequence).
   // Usage note: To call these methods, a FileDescriptorWatcher must have been
-  // instantiated on the current thread and SequencedTaskRunnerHandle::IsSet()
-  // must return true (these conditions are met at least on all ThreadPool
-  // threads as well as on threads backed by a MessageLoopForIO). |fd| must
-  // outlive the returned Controller.
-  // Shutdown note: notifications aren't guaranteed to be emitted once the bound
+  // instantiated on the current thread and
+  // SequencedTaskRunner::HasCurrentDefault() must return true (these conditions
+  // are met at least on all ThreadPool threads as well as on threads backed by
+  // a MessageLoopForIO). |fd| must outlive the returned Controller. Shutdown
+  // note: notifications aren't guaranteed to be emitted once the bound
   // (current) SequencedTaskRunner enters its shutdown phase (i.e.
   // ThreadPool::Shutdown() or Thread::Stop()) regardless of the
   // SequencedTaskRunner's TaskShutdownBehavior.
@@ -123,12 +122,10 @@ class BASE_EXPORT FileDescriptorWatcher {
       const RepeatingClosure& callback);
 
   // Asserts that usage of this API is allowed on this thread.
-  static void AssertAllowed()
 #if DCHECK_IS_ON()
-      ;
+  static void AssertAllowed();
 #else
-  {
-  }
+  static void AssertAllowed() {}
 #endif
 
  private:
@@ -136,6 +133,7 @@ class BASE_EXPORT FileDescriptorWatcher {
     return io_thread_task_runner_;
   }
 
+  const AutoReset<FileDescriptorWatcher*> resetter_;
   const scoped_refptr<SingleThreadTaskRunner> io_thread_task_runner_;
 };
 

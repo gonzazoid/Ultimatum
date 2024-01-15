@@ -12,7 +12,7 @@
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/tray/tray_popup_utils.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chromeos/ash/components/network/cellular_metrics_logger.h"
 #include "components/onc/onc_constants.h"
 #include "components/session_manager/session_manager_types.h"
@@ -161,9 +161,8 @@ void ManagedSimLockNotifier::Close(bool by_user) {
   }
 }
 
-void ManagedSimLockNotifier::Click(
-    const absl::optional<int>& button_index,
-    const absl::optional<std::u16string>& reply) {
+void ManagedSimLockNotifier::Click(const std::optional<int>& button_index,
+                                   const std::optional<std::u16string>& reply) {
   CellularMetricsLogger::RecordSimLockNotificationEvent(
       CellularMetricsLogger::SimLockNotificationEvent::kClicked);
 
@@ -179,7 +178,7 @@ void ManagedSimLockNotifier::Click(
 
 void ManagedSimLockNotifier::ShowNotification() {
   std::unique_ptr<message_center::Notification> notification =
-      ash::CreateSystemNotification(
+      ash::CreateSystemNotificationPtr(
           message_center::NOTIFICATION_TYPE_SIMPLE,
           kManagedSimLockNotificationId,
           l10n_util::GetStringUTF16(

@@ -6,12 +6,12 @@
 
 #include <utility>
 
+#include <optional>
 #include "ash/shell.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "remoting/host/chromeos/skia_bitmap_desktop_frame.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/webrtc/modules/desktop_capture/mouse_cursor.h"
 #include "ui/aura/client/cursor_shape_client.h"
@@ -37,9 +37,7 @@ webrtc::MouseCursor* CreateEmptyMouseCursor() {
 namespace remoting {
 
 MouseCursorMonitorAura::MouseCursorMonitorAura()
-    : callback_(nullptr),
-      mode_(SHAPE_AND_POSITION) {
-}
+    : callback_(nullptr), mode_(SHAPE_AND_POSITION) {}
 
 void MouseCursorMonitorAura::Init(Callback* callback, Mode mode) {
   DCHECK(!callback_);
@@ -76,8 +74,8 @@ void MouseCursorMonitorAura::NotifyCursorChanged(const ui::Cursor& cursor) {
     return;
   }
 
-  absl::optional<ui::CursorData> cursor_data =
-      aura::client::GetCursorShapeClient()->GetCursorData(cursor);
+  std::optional<ui::CursorData> cursor_data =
+      aura::client::GetCursorShapeClient().GetCursorData(cursor);
   if (!cursor_data) {
     LOG(ERROR) << "Failed to load bitmap for cursor type: " << cursor.type();
     return;

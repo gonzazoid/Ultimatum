@@ -6,12 +6,12 @@
 
 namespace enterprise_connectors {
 
-BASE_FEATURE(kDeviceTrustConnectorEnabled,
-             "DeviceTrustConnectorEnabled",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kDTCKeyRotationEnabled,
+             "DTCKeyRotationEnabled",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-bool IsDeviceTrustConnectorFeatureEnabled() {
-  return base::FeatureList::IsEnabled(kDeviceTrustConnectorEnabled);
+bool IsKeyRotationEnabled() {
+  return base::FeatureList::IsEnabled(kDTCKeyRotationEnabled);
 }
 
 }  // namespace enterprise_connectors

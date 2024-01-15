@@ -14,25 +14,25 @@
 #include <vector>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
 #include "base/callback_list.h"
 #include "base/containers/contains.h"
-#include "base/cxx17_backports.h"
 #include "base/environment.h"
 #include "base/files/file_path.h"
 #include "base/files/file_path_watcher.h"
 #include "base/files/file_util.h"
+#include "base/files/scoped_temp_file.h"
+#include "base/functional/bind.h"
 #include "base/i18n/number_formatting.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/strings/escape.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/version.h"
 #include "chrome/browser/browser_process.h"
@@ -43,8 +43,8 @@
 #include "chrome/browser/themes/theme_service_factory.h"
 #include "chrome/common/channel_info.h"
 #include "chrome/common/notifications/notification_operation.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/chrome_unscaled_resources.h"
-#include "chrome/grit/chromium_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/dbus/thread_linux/dbus_thread_linux.h"
 #include "components/url_formatter/elide_url.h"
@@ -59,6 +59,7 @@
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/message_center/public/cpp/notification.h"
+#include "url/origin.h"
 
 namespace {
 
@@ -80,17 +81,13 @@ const char kSignalNotificationClosed[] = "NotificationClosed";
 const char kSignalNotificationReplied[] = "NotificationReplied";
 
 // Capabilities.
-const char kCapabilityActionIcons[] = "action-icons";
 const char kCapabilityActions[] = "actions";
 const char kCapabilityBody[] = "body";
 const char kCapabilityBodyHyperlinks[] = "body-hyperlinks";
 const char kCapabilityBodyImages[] = "body-images";
 const char kCapabilityBodyMarkup[] = "body-markup";
-const char kCapabilityIconMulti[] = "icon-multi";
-const char kCapabilityIconStatic[] = "icon-static";
 const char kCapabilityInlineReply[] = "inline-reply";
 const char kCapabilityPersistence[] = "persistence";
-const char kCapabilitySound[] = "sound";
 const char kCapabilityXKdeOriginName[] = "x-kde-origin-name";
 const char kCapabilityXKdeReplyPlaceholderText[] =
     "x-kde-reply-placeholder-text";
@@ -185,8 +182,8 @@ gfx::Image ResizeImageToFdoMaxSize(const gfx::Image& image) {
   const SkBitmap* image_bitmap = image.ToSkBitmap();
   double scale = std::min(static_cast<double>(kMaxImageWidth) / width,
                           static_cast<double>(kMaxImageHeight) / height);
-  width = base::clamp<int>(scale * width, 1, kMaxImageWidth);
-  height = base::clamp<int>(scale * height, 1, kMaxImageHeight);
+  width = std::clamp<int>(scale * width, 1, kMaxImageWidth);
+  height = std::clamp<int>(scale * height, 1, kMaxImageHeight);
   return gfx::Image(
       gfx::ImageSkia::CreateFrom1xBitmap(skia::ImageOperations::Resize(
           *image_bitmap, skia::ImageOperations::RESIZE_LANCZOS3, width,
@@ -243,40 +240,22 @@ void ForwardNotificationOperationOnUiThread(
                      action_index, reply, by_user));
 }
 
-class ResourceFile {
- public:
-  explicit ResourceFile(const base::FilePath& file_path)
-      : file_path_(file_path) {
-    DCHECK(!file_path.empty());
-    DCHECK(file_path.IsAbsolute());
-  }
-  ResourceFile(const ResourceFile&) = delete;
-  ResourceFile& operator=(const ResourceFile&) = delete;
-  ~ResourceFile() { base::DeleteFile(file_path_); }
-
-  const base::FilePath& file_path() const { return file_path_; }
-
- private:
-  const base::FilePath file_path_;
-};
-
-// Writes |data| to a new temporary file and returns the ResourceFile
-// that holds it.
-std::unique_ptr<ResourceFile> WriteDataToTmpFile(
+// Writes `data` to a new temporary file and returns the temporary file
+base::ScopedTempFile WriteDataToTmpFile(
     const scoped_refptr<base::RefCountedMemory>& data) {
-  int data_len = data->size();
-  if (data_len == 0)
-    return nullptr;
-  base::FilePath file_path;
-  if (!base::CreateTemporaryFile(&file_path))
-    return nullptr;
-
-  auto resource_file = std::make_unique<ResourceFile>(file_path);
-  if (base::WriteFile(file_path, data->front_as<char>(), data_len) !=
-      data_len) {
-    resource_file.reset();
+  if (data->size() == 0) {
+    return {};
   }
-  return resource_file;
+
+  base::ScopedTempFile file;
+  if (!file.Create()) {
+    return file;
+  }
+
+  if (!base::WriteFile(file.path(), *data)) {
+    return {};
+  }
+  return file;
 }
 
 bool CheckNotificationsNameHasOwnerOrIsActivatable(dbus::Bus* bus) {
@@ -287,8 +266,10 @@ bool CheckNotificationsNameHasOwnerOrIsActivatable(dbus::Bus* bus) {
   dbus::MessageWriter writer(&name_has_owner_call);
   writer.AppendString(kFreedesktopNotificationsName);
   std::unique_ptr<dbus::Response> name_has_owner_response =
-      dbus_proxy->CallMethodAndBlock(&name_has_owner_call,
-                                     dbus::ObjectProxy::TIMEOUT_USE_DEFAULT);
+      dbus_proxy
+          ->CallMethodAndBlock(&name_has_owner_call,
+                               dbus::ObjectProxy::TIMEOUT_USE_DEFAULT)
+          .value_or(nullptr);
   dbus::MessageReader owner_reader(name_has_owner_response.get());
   bool owned = false;
   if (name_has_owner_response && owner_reader.PopBool(&owned) && owned)
@@ -298,8 +279,10 @@ bool CheckNotificationsNameHasOwnerOrIsActivatable(dbus::Bus* bus) {
   dbus::MethodCall list_activatable_names_call(DBUS_INTERFACE_DBUS,
                                                kMethodListActivatableNames);
   std::unique_ptr<dbus::Response> list_activatable_names_response =
-      dbus_proxy->CallMethodAndBlock(&list_activatable_names_call,
-                                     dbus::ObjectProxy::TIMEOUT_USE_DEFAULT);
+      dbus_proxy
+          ->CallMethodAndBlock(&list_activatable_names_call,
+                               dbus::ObjectProxy::TIMEOUT_USE_DEFAULT)
+          .value_or(nullptr);
   if (list_activatable_names_response) {
     dbus::MessageReader reader(list_activatable_names_response.get());
     std::vector<std::string> activatable_names;
@@ -310,8 +293,11 @@ bool CheckNotificationsNameHasOwnerOrIsActivatable(dbus::Bus* bus) {
       dbus::MessageWriter start_service_writer(&start_service_call);
       start_service_writer.AppendString(kFreedesktopNotificationsName);
       start_service_writer.AppendUint32(/*flags=*/0);
-      auto start_service_response = dbus_proxy->CallMethodAndBlock(
-          &start_service_call, kStartServiceTimeout.InMilliseconds());
+      auto start_service_response =
+          dbus_proxy
+              ->CallMethodAndBlock(&start_service_call,
+                                   kStartServiceTimeout.InMilliseconds())
+              .value_or(nullptr);
       if (!start_service_response)
         return false;
       dbus::MessageReader start_service_reader(start_service_response.get());
@@ -419,6 +405,19 @@ class NotificationPlatformBridgeLinuxImpl
             std::move(callback)));
   }
 
+  void GetDisplayedForOrigin(
+      Profile* profile,
+      const GURL& origin,
+      GetDisplayedNotificationsCallback callback) const override {
+    DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+    task_runner_->PostTask(
+        FROM_HERE,
+        base::BindOnce(&NotificationPlatformBridgeLinuxImpl::
+                           GetDisplayedForOriginOnTaskRunner,
+                       this, GetProfileId(profile), profile->IsOffTheRecord(),
+                       origin, std::move(callback)));
+  }
+
   void SetReadyCallback(NotificationBridgeReadyCallback callback) override {
     DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
     if (connected_.has_value()) {
@@ -477,7 +476,7 @@ class NotificationPlatformBridgeLinuxImpl
     // Temporary resource files associated with the notification that
     // should be cleaned up when the notification is closed or on
     // shutdown.
-    std::vector<std::unique_ptr<ResourceFile>> resource_files;
+    std::vector<base::ScopedTempFile> resource_files;
   };
 
   ~NotificationPlatformBridgeLinuxImpl() override {
@@ -524,8 +523,10 @@ class NotificationPlatformBridgeLinuxImpl
     dbus::MethodCall get_capabilities_call(kFreedesktopNotificationsName,
                                            kMethodGetCapabilities);
     std::unique_ptr<dbus::Response> capabilities_response =
-        notification_proxy_->CallMethodAndBlock(
-            &get_capabilities_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT);
+        notification_proxy_
+            ->CallMethodAndBlock(&get_capabilities_call,
+                                 dbus::ObjectProxy::TIMEOUT_USE_DEFAULT)
+            .value_or(nullptr);
     if (capabilities_response) {
       dbus::MessageReader reader(capabilities_response.get());
       std::vector<std::string> capabilities;
@@ -533,7 +534,6 @@ class NotificationPlatformBridgeLinuxImpl
       for (const std::string& capability : capabilities)
         capabilities_.insert(capability);
     }
-    RecordMetricsForCapabilities();
     if (!base::Contains(capabilities_, kCapabilityBody) ||
         !base::Contains(capabilities_, kCapabilityActions)) {
       OnConnectionInitializationFinishedOnTaskRunner(
@@ -549,9 +549,10 @@ class NotificationPlatformBridgeLinuxImpl
     dbus::MethodCall get_server_information_call(kFreedesktopNotificationsName,
                                                  "GetServerInformation");
     std::unique_ptr<dbus::Response> server_information_response =
-        notification_proxy_->CallMethodAndBlock(
-            &get_server_information_call,
-            dbus::ObjectProxy::TIMEOUT_USE_DEFAULT);
+        notification_proxy_
+            ->CallMethodAndBlock(&get_server_information_call,
+                                 dbus::ObjectProxy::TIMEOUT_USE_DEFAULT)
+            .value_or(nullptr);
     if (server_information_response) {
       dbus::MessageReader reader(server_information_response.get());
       reader.PopString(&server_name_);
@@ -595,12 +596,12 @@ class NotificationPlatformBridgeLinuxImpl
     }
 
     DCHECK(task_runner_->RunsTasksInCurrentSequence());
+    notification_proxy_ = nullptr;
     if (bus_)
       bus_->ShutdownAndBlock();
     bus_ = nullptr;
-    notification_proxy_ = nullptr;
     product_logo_png_bytes_ = nullptr;
-    product_logo_file_.reset();
+    product_logo_file_.Reset();
     product_logo_file_watcher_.reset();
     notifications_.clear();
     clean_up_on_task_runner_called_ = true;
@@ -639,9 +640,9 @@ class NotificationPlatformBridgeLinuxImpl
     if (!product_logo_file_) {
       RewriteProductLogoFile();
     }
-    writer.AppendString(
-        product_logo_file_ ? "file://" + product_logo_file_->file_path().value()
-                           : "");
+    writer.AppendString(product_logo_file_
+                            ? "file://" + product_logo_file_.path().value()
+                            : "");
 
     writer.AppendString(
         base::UTF16ToUTF8(CreateNotificationTitle(*notification)));
@@ -714,11 +715,11 @@ class NotificationPlatformBridgeLinuxImpl
       } else if (notification->type() ==
                      message_center::NOTIFICATION_TYPE_IMAGE &&
                  base::Contains(capabilities_, kCapabilityBodyImages)) {
-        std::unique_ptr<ResourceFile> image_file = WriteDataToTmpFile(
+        auto image_file = WriteDataToTmpFile(
             ResizeImageToFdoMaxSize(notification->image()).As1xPNGBytes());
         if (image_file) {
           body << "<img src=\""
-               << "file://" + base::EscapePath(image_file->file_path().value())
+               << "file://" + base::EscapePath(image_file.path().value())
                << "\" alt=\"\"/>\n";
           data->resource_files.push_back(std::move(image_file));
         }
@@ -813,14 +814,14 @@ class NotificationPlatformBridgeLinuxImpl
     desktop_entry_writer.AppendVariantOfString(desktop_file.value());
     hints_writer.CloseContainer(&desktop_entry_writer);
 
-    std::unique_ptr<ResourceFile> icon_file = WriteDataToTmpFile(
+    auto icon_file = WriteDataToTmpFile(
         gfx::Image(notification->icon().Rasterize(nullptr)).As1xPNGBytes());
     if (icon_file) {
       for (const std::string& hint_name : {"image_path", "image-path"}) {
         dbus::MessageWriter image_path_writer(nullptr);
         hints_writer.OpenDictEntry(&image_path_writer);
         image_path_writer.AppendString(hint_name);
-        image_path_writer.AppendVariantOfString(icon_file->file_path().value());
+        image_path_writer.AppendVariantOfString(icon_file.path().value());
         hints_writer.CloseContainer(&image_path_writer);
       }
       data->resource_files.push_back(std::move(icon_file));
@@ -855,8 +856,10 @@ class NotificationPlatformBridgeLinuxImpl
                   : kExpireTimeout);
 
     std::unique_ptr<dbus::Response> response =
-        notification_proxy_->CallMethodAndBlock(
-            &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT);
+        notification_proxy_
+            ->CallMethodAndBlock(&method_call,
+                                 dbus::ObjectProxy::TIMEOUT_USE_DEFAULT)
+            .value_or(nullptr);
     if (response) {
       dbus::MessageReader reader(response.get());
       reader.PopUint32(&data->dbus_id);
@@ -880,7 +883,8 @@ class NotificationPlatformBridgeLinuxImpl
                                      kMethodCloseNotification);
         dbus::MessageWriter writer(&method_call);
         writer.AppendUint32(data->dbus_id);
-        notification_proxy_->CallMethodAndBlock(
+        // TODO: resolve if std::ignore is ok.
+        std::ignore = notification_proxy_->CallMethodAndBlock(
             &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT);
         to_erase.push_back(data);
       }
@@ -897,8 +901,28 @@ class NotificationPlatformBridgeLinuxImpl
     std::set<std::string> displayed;
     for (const auto& pair : notifications_) {
       NotificationData* data = pair.first;
-      if (data->profile_id == profile_id && data->is_incognito == incognito)
+      if (data->profile_id == profile_id && data->is_incognito == incognito) {
         displayed.insert(data->notification_id);
+      }
+    }
+    content::GetUIThreadTaskRunner({})->PostTask(
+        FROM_HERE,
+        base::BindOnce(std::move(callback), std::move(displayed), true));
+  }
+
+  void GetDisplayedForOriginOnTaskRunner(
+      const std::string& profile_id,
+      bool incognito,
+      const GURL& origin,
+      GetDisplayedNotificationsCallback callback) const {
+    DCHECK(task_runner_->RunsTasksInCurrentSequence());
+    std::set<std::string> displayed;
+    for (const auto& pair : notifications_) {
+      NotificationData* data = pair.first;
+      if (data->profile_id == profile_id && data->is_incognito == incognito &&
+          url::IsSameOriginWith(data->origin_url, origin)) {
+        displayed.insert(data->notification_id);
+      }
     }
     content::GetUIThreadTaskRunner({})->PostTask(
         FROM_HERE,
@@ -1046,10 +1070,6 @@ class NotificationPlatformBridgeLinuxImpl
   void OnConnectionInitializationFinishedOnTaskRunner(
       ConnectionInitializationStatusCode status) {
     DCHECK(task_runner_->RunsTasksInCurrentSequence());
-    UMA_HISTOGRAM_ENUMERATION(
-        "Notifications.Linux.BridgeInitializationStatus",
-        static_cast<int>(status),
-        static_cast<int>(ConnectionInitializationStatusCode::NUM_ITEMS));
     bool success = status == ConnectionInitializationStatusCode::SUCCESS;
 
     // Note: Not all code paths set connect_signals_in_progress_ to true!
@@ -1088,57 +1108,27 @@ class NotificationPlatformBridgeLinuxImpl
     DCHECK(!error);
     // This callback runs whenever the file is deleted or modified.
     // In either case, we want to rewrite the file.
-    product_logo_file_.reset();
+    product_logo_file_.Reset();
     product_logo_file_watcher_.reset();
-  }
-
-  void RecordMetricsForCapabilities() {
-    // Histogram macros must be called with the same name for each
-    // callsite, so we can't roll the below into a nice loop.
-    UMA_HISTOGRAM_BOOLEAN(
-        "Notifications.Freedesktop.Capabilities.ActionIcons",
-        base::Contains(capabilities_, kCapabilityActionIcons));
-    UMA_HISTOGRAM_BOOLEAN("Notifications.Freedesktop.Capabilities.Actions",
-                          base::Contains(capabilities_, kCapabilityActions));
-    UMA_HISTOGRAM_BOOLEAN("Notifications.Freedesktop.Capabilities.Body",
-                          base::Contains(capabilities_, kCapabilityBody));
-    UMA_HISTOGRAM_BOOLEAN(
-        "Notifications.Freedesktop.Capabilities.BodyHyperlinks",
-        base::Contains(capabilities_, kCapabilityBodyHyperlinks));
-    UMA_HISTOGRAM_BOOLEAN("Notifications.Freedesktop.Capabilities.BodyImages",
-                          base::Contains(capabilities_, kCapabilityBodyImages));
-    UMA_HISTOGRAM_BOOLEAN("Notifications.Freedesktop.Capabilities.BodyMarkup",
-                          base::Contains(capabilities_, kCapabilityBodyMarkup));
-    UMA_HISTOGRAM_BOOLEAN("Notifications.Freedesktop.Capabilities.IconMulti",
-                          base::Contains(capabilities_, kCapabilityIconMulti));
-    UMA_HISTOGRAM_BOOLEAN("Notifications.Freedesktop.Capabilities.IconStatic",
-                          base::Contains(capabilities_, kCapabilityIconStatic));
-    UMA_HISTOGRAM_BOOLEAN(
-        "Notifications.Freedesktop.Capabilities.InlineReply",
-        base::Contains(capabilities_, kCapabilityInlineReply));
-    UMA_HISTOGRAM_BOOLEAN(
-        "Notifications.Freedesktop.Capabilities.Persistence",
-        base::Contains(capabilities_, kCapabilityPersistence));
-    UMA_HISTOGRAM_BOOLEAN("Notifications.Freedesktop.Capabilities.Sound",
-                          base::Contains(capabilities_, kCapabilitySound));
   }
 
   void RewriteProductLogoFile() {
     product_logo_file_watcher_.reset();
     product_logo_file_ = WriteDataToTmpFile(product_logo_png_bytes_);
-    if (!product_logo_file_)
+    if (!product_logo_file_) {
       return;
+    }
     // Temporary files may periodically get cleaned up on Linux.
     // Watch for file deletion and rewrite the file in case we have a
     // long-running Chrome process.
     product_logo_file_watcher_ = std::make_unique<base::FilePathWatcher>();
     if (!product_logo_file_watcher_->Watch(
-            product_logo_file_->file_path(),
+            product_logo_file_.path(),
             base::FilePathWatcher::Type::kNonRecursive,
             base::BindRepeating(
                 &NotificationPlatformBridgeLinuxImpl::OnProductLogoFileChanged,
                 this))) {
-      product_logo_file_.reset();
+      product_logo_file_.Reset();
       product_logo_file_watcher_.reset();
     }
   }
@@ -1164,7 +1154,8 @@ class NotificationPlatformBridgeLinuxImpl
 
   scoped_refptr<dbus::Bus> bus_;
 
-  raw_ptr<dbus::ObjectProxy, DanglingUntriaged> notification_proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy, FlakyDanglingUntriaged> notification_proxy_ =
+      nullptr;
 
   std::unordered_set<std::string> capabilities_;
 
@@ -1185,7 +1176,7 @@ class NotificationPlatformBridgeLinuxImpl
   bool should_cleanup_on_signal_connected_ = false;
 
   scoped_refptr<base::RefCountedMemory> product_logo_png_bytes_;
-  std::unique_ptr<ResourceFile> product_logo_file_;
+  base::ScopedTempFile product_logo_file_;
   std::unique_ptr<base::FilePathWatcher> product_logo_file_watcher_;
 
   // A std::set<std::unique_ptr<T>> doesn't work well because
@@ -1228,6 +1219,13 @@ void NotificationPlatformBridgeLinux::GetDisplayed(
     Profile* profile,
     GetDisplayedNotificationsCallback callback) const {
   impl_->GetDisplayed(profile, std::move(callback));
+}
+
+void NotificationPlatformBridgeLinux::GetDisplayedForOrigin(
+    Profile* profile,
+    const GURL& origin,
+    GetDisplayedNotificationsCallback callback) const {
+  impl_->GetDisplayedForOrigin(profile, origin, std::move(callback));
 }
 
 void NotificationPlatformBridgeLinux::SetReadyCallback(

@@ -22,10 +22,11 @@
 namespace {
 // |kIsTrapHandlerSupported| indicates whether the trap handler is supported
 // (i.e. allowed to be enabled) on the currently platform. Currently we only
-// support non-Android, Linux x64, Windows x64 and Mac x64 and arm64. In the
-// future more platforms will be supported. Though this file is a browser test
-// that is not built on Android.
-#if (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)) && defined(ARCH_CPU_X86_64)
+// support non-Android, Linux x64 and AArch64, Windows x64 and Mac.
+// In the future more platforms will be supported. Though this file is a
+// browser test that is not built on Android.
+#if (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)) && \
+    (defined(ARCH_CPU_X86_64) || defined(ARCH_CPU_ARM64))
 constexpr bool kIsTrapHandlerSupported = true;
 #elif BUILDFLAG(IS_WIN) && defined(ARCH_CPU_X86_64)
 constexpr bool kIsTrapHandlerSupported = true;
@@ -48,39 +49,50 @@ class WasmTrapHandlerBrowserTest : public InProcessBrowserTest {
  protected:
   void RunJSTest(const std::string& js) const {
     auto* const tab = browser()->tab_strip_model()->GetActiveWebContents();
-    bool result = false;
 
-    ASSERT_TRUE(content::ExecuteScriptAndExtractBool(tab, js, &result));
-    ASSERT_TRUE(result);
+    ASSERT_EQ(true, content::EvalJs(tab, js));
   }
 
-  void RunJSTestAndEnsureTrapHandlerRan(const std::string& js) const {
+  void RunJSTestAndEnsureTrapHandlerRan(const std::string& js,
+                                        int num_oob_loads,
+                                        int num_oob_stores) const {
     if (IsTrapHandlerEnabled()) {
-      const auto* get_fault_count =
-          "domAutomationController.send(%GetWasmRecoveredTrapCount())";
-      int original_count = 0;
-      auto* const tab = browser()->tab_strip_model()->GetActiveWebContents();
-      ASSERT_TRUE(content::ExecuteScriptAndExtractInt(tab, get_fault_count,
-                                                      &original_count));
+      int original_count = GetRecoveredTrapCount();
       ASSERT_NO_FATAL_FAILURE(RunJSTest(js));
-      int new_count = 0;
-      ASSERT_TRUE(content::ExecuteScriptAndExtractInt(tab, get_fault_count,
-                                                      &new_count));
-      ASSERT_GT(new_count, original_count);
+      int new_count = GetRecoveredTrapCount();
+      // Out-of-bounds writes, on AArch64 Linux platforms, can perform partial
+      // writes. On these platforms, we do not use trap handlers to perform
+      // bounds checks on writes. So, for tests that are attempting to access
+      // OoB memory using a store, we only expect the trap count to increase
+      // when trap handlers are used to perform bounds checks on stores.
+      int expected_count = IsPartialOOBWriteNoop()
+                               ? original_count + num_oob_loads + num_oob_stores
+                               : original_count + num_oob_loads;
+      ASSERT_EQ(new_count, expected_count);
     } else {
       ASSERT_NO_FATAL_FAILURE(RunJSTest(js));
     }
   }
 
+  // Calls %GetWasmRecoveredTrapCount and returns the result.
+  int GetRecoveredTrapCount() const {
+    const char* script = "%GetWasmRecoveredTrapCount()";
+    auto* const tab = browser()->tab_strip_model()->GetActiveWebContents();
+    return content::EvalJs(tab, script).ExtractInt();
+  }
+
+  // Calls %IsWasmPartialOOBWriteNoop and returns the result.
+  bool IsPartialOOBWriteNoop() const {
+    const char* script = "%IsWasmPartialOOBWriteNoop()";
+    auto* const tab = browser()->tab_strip_model()->GetActiveWebContents();
+    return content::EvalJs(tab, script).ExtractBool();
+  }
+
   // Calls %IsWasmTrapHandlerEnabled and returns the result.
   bool IsTrapHandlerEnabled() const {
-    bool is_trap_handler_enabled = false;
-    const char* script =
-        "domAutomationController.send(%IsWasmTrapHandlerEnabled())";
+    const char* script = "%IsWasmTrapHandlerEnabled()";
     auto* const tab = browser()->tab_strip_model()->GetActiveWebContents();
-    CHECK(content::ExecuteScriptAndExtractBool(tab, script,
-                                               &is_trap_handler_enabled));
-    return is_trap_handler_enabled;
+    return content::EvalJs(tab, script).ExtractBool();
   }
 
  private:
@@ -101,27 +113,27 @@ IN_PROC_BROWSER_TEST_F(WasmTrapHandlerBrowserTest, OutOfBounds) {
 
   ASSERT_NO_FATAL_FAILURE(RunJSTest("peek_in_bounds()"));
   ASSERT_NO_FATAL_FAILURE(
-      RunJSTestAndEnsureTrapHandlerRan("peek_out_of_bounds()"));
+      RunJSTestAndEnsureTrapHandlerRan("peek_out_of_bounds()", 6, 0));
   ASSERT_NO_FATAL_FAILURE(RunJSTestAndEnsureTrapHandlerRan(
-      "peek_out_of_bounds_grow_memory_from_zero_js()"));
-  ASSERT_NO_FATAL_FAILURE(
-      RunJSTestAndEnsureTrapHandlerRan("peek_out_of_bounds_grow_memory_js()"));
+      "peek_out_of_bounds_grow_memory_from_zero_js()", 1, 0));
   ASSERT_NO_FATAL_FAILURE(RunJSTestAndEnsureTrapHandlerRan(
-      "peek_out_of_bounds_grow_memory_from_zero_wasm()"));
+      "peek_out_of_bounds_grow_memory_js()", 1, 0));
   ASSERT_NO_FATAL_FAILURE(RunJSTestAndEnsureTrapHandlerRan(
-      "peek_out_of_bounds_grow_memory_wasm()"));
+      "peek_out_of_bounds_grow_memory_from_zero_wasm()", 1, 0));
+  ASSERT_NO_FATAL_FAILURE(RunJSTestAndEnsureTrapHandlerRan(
+      "peek_out_of_bounds_grow_memory_wasm()", 1, 0));
 
   ASSERT_NO_FATAL_FAILURE(RunJSTest("poke_in_bounds()"));
   ASSERT_NO_FATAL_FAILURE(
-      RunJSTestAndEnsureTrapHandlerRan("poke_out_of_bounds()"));
+      RunJSTestAndEnsureTrapHandlerRan("poke_out_of_bounds()", 0, 6));
   ASSERT_NO_FATAL_FAILURE(RunJSTestAndEnsureTrapHandlerRan(
-      "poke_out_of_bounds_grow_memory_from_zero_js()"));
-  ASSERT_NO_FATAL_FAILURE(
-      RunJSTestAndEnsureTrapHandlerRan("poke_out_of_bounds_grow_memory_js()"));
+      "poke_out_of_bounds_grow_memory_from_zero_js()", 0, 1));
   ASSERT_NO_FATAL_FAILURE(RunJSTestAndEnsureTrapHandlerRan(
-      "poke_out_of_bounds_grow_memory_from_zero_wasm()"));
+      "poke_out_of_bounds_grow_memory_js()", 0, 1));
   ASSERT_NO_FATAL_FAILURE(RunJSTestAndEnsureTrapHandlerRan(
-      "poke_out_of_bounds_grow_memory_wasm()"));
+      "poke_out_of_bounds_grow_memory_from_zero_wasm()", 0, 1));
+  ASSERT_NO_FATAL_FAILURE(RunJSTestAndEnsureTrapHandlerRan(
+      "poke_out_of_bounds_grow_memory_wasm()", 0, 1));
 }
 
 IN_PROC_BROWSER_TEST_F(WasmTrapHandlerBrowserTest,

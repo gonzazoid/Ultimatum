@@ -16,13 +16,16 @@
 #include <vector>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/observer_list.h"
 #include "base/strings/string_util.h"
+#include "base/system/sys_info.h"
 #include "chromeos/ash/components/dbus/cros_disks/cros_disks_client.h"
 #include "chromeos/ash/components/disks/disk.h"
 #include "chromeos/ash/components/disks/suspend_unmount_manager.h"
@@ -495,8 +498,10 @@ class DiskMountManagerImpl : public DiskMountManager,
         VLOG(1) << "Updated mount point '" << mount_info.mount_path << "'";
       }
     } else {
-      LOG(ERROR) << "Cannot mount '" << mount_info.source_path << "' as '"
-                 << mount_info.mount_path << "': " << entry.mount_error;
+      if (base::SysInfo::IsRunningOnChromeOS()) {
+        LOG(ERROR) << "Cannot mount '" << mount_info.source_path << "' as '"
+                   << mount_info.mount_path << "': " << entry.mount_error;
+      }
       if (const MountPoints::const_iterator it =
               mount_points_.find(mount_info.mount_path);
           it != mount_points_.end()) {
@@ -1068,8 +1073,7 @@ class DiskMountManagerImpl : public DiskMountManager,
   }
 
   bool IsPendingPartitioningDisk(const std::string& device_path) {
-    if (pending_partitioning_disks_.find(device_path) !=
-        pending_partitioning_disks_.end()) {
+    if (base::Contains(pending_partitioning_disks_, device_path)) {
       return true;
     }
 
@@ -1085,7 +1089,7 @@ class DiskMountManagerImpl : public DiskMountManager,
   // Mount event change observers.
   base::ObserverList<DiskMountManager::Observer> observers_;
 
-  CrosDisksClient* const cros_disks_client_ = CrosDisksClient::Get();
+  const raw_ptr<CrosDisksClient> cros_disks_client_ = CrosDisksClient::Get();
 
   // The list of disks found.
   Disks disks_;

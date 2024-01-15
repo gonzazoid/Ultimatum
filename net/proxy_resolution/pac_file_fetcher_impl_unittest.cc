@@ -18,13 +18,11 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/features.h"
 #include "net/base/filename_util.h"
 #include "net/base/load_flags.h"
 #include "net/base/network_delegate_impl.h"
 #include "net/base/test_completion_callback.h"
-#include "net/cert/ct_policy_enforcer.h"
 #include "net/cert/mock_cert_verifier.h"
 #include "net/cert/multi_log_ct_verifier.h"
 #include "net/disk_cache/disk_cache.h"
@@ -77,7 +75,7 @@ struct FetchResult {
 // Get a file:// url relative to net/data/proxy/pac_file_fetcher_unittest.
 GURL GetTestFileUrl(const std::string& relpath) {
   base::FilePath path;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &path);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &path);
   path = path.AppendASCII("net");
   path = path.AppendASCII("data");
   path = path.AppendASCII("pac_file_fetcher_unittest");
@@ -514,10 +512,9 @@ TEST_F(PacFileFetcherImplTest, IgnoresLimits) {
   test_server_.SetConnectionListener(&connection_listener);
   ASSERT_TRUE(test_server_.Start());
 
-  std::vector<std::unique_ptr<PacFileFetcherImpl>> pac_fetchers;
-
-  TestCompletionCallback callback;
   std::u16string text;
+  TestCompletionCallback callback;
+  std::vector<std::unique_ptr<PacFileFetcherImpl>> pac_fetchers;
   for (int i = 0; i < num_requests; i++) {
     auto pac_fetcher = PacFileFetcherImpl::Create(context_.get());
     GURL url(test_server_.GetURL("/hung"));

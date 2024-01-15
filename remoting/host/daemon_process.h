@@ -12,7 +12,7 @@
 #include <string>
 
 #include "base/compiler_specific.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/process/process.h"
 #include "base/time/time.h"
 #include "ipc/ipc_message.h"
@@ -142,6 +142,8 @@ class DaemonProcess : public ConfigWatcher::Delegate,
   // Notifies the network process that the daemon has disconnected the desktop
   // session from the associated desktop environment.
   virtual void SendTerminalDisconnected(int terminal_id) = 0;
+
+  virtual void StartChromotingHostServices() = 0;
 
   scoped_refptr<AutoThreadTaskRunner> caller_task_runner() {
     return caller_task_runner_;

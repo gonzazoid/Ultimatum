@@ -5,37 +5,52 @@
 #import "ios/chrome/browser/ui/lens/lens_coordinator.h"
 
 #import "base/strings/sys_string_conversions.h"
-#import "ios/chrome/browser/application_context/application_context.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/signin/authentication_service.h"
-#import "ios/chrome/browser/signin/authentication_service_factory.h"
-#import "ios/chrome/browser/ui/commands/browser_commands.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
-#import "ios/chrome/browser/ui/commands/lens_commands.h"
-#import "ios/chrome/browser/ui/commands/omnibox_commands.h"
-#import "ios/chrome/browser/ui/commands/search_image_with_lens_command.h"
-#import "ios/chrome/browser/ui/commands/toolbar_commands.h"
+#import "components/feature_engagement/public/event_constants.h"
+#import "components/feature_engagement/public/feature_constants.h"
+#import "components/feature_engagement/public/tracker.h"
+#import "components/lens/lens_metrics.h"
+#import "components/prefs/pref_service.h"
+#import "components/search_engines/template_url.h"
+#import "components/search_engines/template_url_service.h"
+#import "ios/chrome/browser/feature_engagement/model/tracker_factory.h"
+#import "ios/chrome/browser/intents/intents_donation_helper.h"
+#import "ios/chrome/browser/search_engines/model/template_url_service_factory.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
+#import "ios/chrome/browser/shared/model/url/url_util.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list_observer_bridge.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/lens_commands.h"
+#import "ios/chrome/browser/shared/public/commands/omnibox_commands.h"
+#import "ios/chrome/browser/shared/public/commands/open_lens_input_selection_command.h"
+#import "ios/chrome/browser/shared/public/commands/search_image_with_lens_command.h"
+#import "ios/chrome/browser/shared/public/commands/toolbar_commands.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service_factory.h"
+#import "ios/chrome/browser/ui/lens/lens_availability.h"
 #import "ios/chrome/browser/ui/lens/lens_entrypoint.h"
 #import "ios/chrome/browser/ui/lens/lens_modal_animator.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
-#import "ios/chrome/browser/url_loading/url_loading_browser_agent.h"
-#import "ios/chrome/browser/url_loading/url_loading_params.h"
-#import "ios/chrome/browser/web/web_navigation_util.h"
-#import "ios/chrome/browser/web_state_list/web_state_dependency_installer_bridge.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
-#import "ios/chrome/browser/web_state_list/web_state_list_observer_bridge.h"
+#import "ios/chrome/browser/url_loading/model/url_loading_browser_agent.h"
+#import "ios/chrome/browser/url_loading/model/url_loading_params.h"
+#import "ios/chrome/browser/web/model/web_navigation_util.h"
+#import "ios/chrome/browser/web_state_list/model/web_state_dependency_installer_bridge.h"
 #import "ios/chrome/common/app_group/app_group_constants.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/public/provider/chrome/browser/lens/lens_api.h"
 #import "ios/public/provider/chrome/browser/lens/lens_configuration.h"
 #import "ios/web/public/navigation/navigation_manager.h"
 #import "ios/web/public/web_state.h"
 #import "ios/web/public/web_state_observer_bridge.h"
 #import "net/base/mac/url_conversions.h"
+#import "ui/base/device_form_factor.h"
+#import "ui/base/l10n/l10n_util_mac.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+using lens::CameraOpenEntryPoint;
 
 @interface LensCoordinator () <ChromeLensControllerDelegate,
                                LensCommands,
@@ -56,6 +71,12 @@
 
 // The WebState that is loading a Lens results page, if any.
 @property(nonatomic, assign) web::WebState* loadingWebState;
+
+// TemplateURL used to get the search engine.
+@property(nonatomic, assign) TemplateURLService* templateURLService;
+
+// Feature Engagement Tracker used to handle promo events.
+@property(nonatomic, assign) feature_engagement::Tracker* tracker;
 
 @end
 
@@ -108,11 +129,19 @@ const base::TimeDelta kCloseLensViewTimeout = base::Seconds(10);
       base::ScopedObservation<web::WebState, web::WebStateObserver>>(
       _webStateObserverBridge.get());
 
+  ChromeBrowserState* browserState = browser->GetBrowserState();
+  DCHECK(browserState);
+
+  self.templateURLService =
+      ios::TemplateURLServiceFactory::GetForBrowserState(browserState);
+  self.tracker =
+      feature_engagement::TrackerFactory::GetForBrowserState(browserState);
   self.loadingWebState = nil;
   self.lensWebPageLoadTriggeredFromInputSelection = NO;
   self.transitionAnimator = [[LensModalAnimator alloc] init];
   _webStateListObservation->Observe(browser->GetWebStateList());
-  [self updateLensAvailibilityForExtensions];
+  [self updateLensAvailabilityForWidgets];
+  [self updateQRCodeOrLensAppShortcutItem];
 }
 
 - (void)stop {
@@ -123,6 +152,8 @@ const base::TimeDelta kCloseLensViewTimeout = base::Seconds(10);
   self.loadingWebState = nullptr;
   self.transitionAnimator = nil;
   self.lensWebPageLoadTriggeredFromInputSelection = NO;
+  self.templateURLService = nil;
+  self.tracker = nil;
 
   _webStateListObservation.reset();
   _webStateObservation.reset();
@@ -136,12 +167,21 @@ const base::TimeDelta kCloseLensViewTimeout = base::Seconds(10);
 
 - (void)searchImageWithLens:(SearchImageWithLensCommand*)command {
   const bool isIncognito = self.browser->GetBrowserState()->IsOffTheRecord();
-  [self openWebLoadParams:ios::provider::GenerateLensLoadParamsForImage(
-                              command.image, LensEntrypoint::ContextMenu,
-                              isIncognito)];
+  __weak LensCoordinator* weakSelf = self;
+
+  LensQuery* lensQuery = [LensQuery alloc];
+  lensQuery.image = command.image;
+  lensQuery.isIncognito = isIncognito;
+  lensQuery.entrypoint = command.entryPoint;
+  lensQuery.webviewSize = [self webContentFrame].size;
+  ios::provider::GenerateLensLoadParamsAsync(
+      lensQuery,
+      base::BindOnce(^(const web::NavigationManager::WebLoadParams params) {
+        [weakSelf openWebLoadParams:params];
+      }));
 }
 
-- (void)openInputSelectionForEntrypoint:(LensEntrypoint)entrypoint {
+- (void)openLensInputSelection:(OpenLensInputSelectionCommand*)command {
   // Cancel any omnibox editing.
   Browser* browser = self.browser;
   CommandDispatcher* dispatcher = browser->GetCommandDispatcher();
@@ -154,13 +194,28 @@ const base::TimeDelta kCloseLensViewTimeout = base::Seconds(10);
     return;
   }
 
+  [IntentDonationHelper donateIntent:IntentType::kStartLens];
+
   // Create a Lens configuration for this request.
+  const LensEntrypoint entrypoint = command.entryPoint;
   ChromeBrowserState* browserState = browser->GetBrowserState();
   const bool isIncognito = browserState->IsOffTheRecord();
   LensConfiguration* configuration = [[LensConfiguration alloc] init];
   configuration.isIncognito = isIncognito;
   configuration.ssoService = GetApplicationContext()->GetSSOService();
   configuration.entrypoint = entrypoint;
+
+  // Mark IPHs as completed.
+  if (entrypoint == LensEntrypoint::Keyboard) {
+    feature_engagement::Tracker* featureTracker = self.tracker;
+    DCHECK(featureTracker);
+    featureTracker->NotifyEvent(
+        feature_engagement::events::kLensButtonKeyboardUsed);
+    featureTracker->Dismissed(feature_engagement::kIPHiOSLensKeyboardFeature);
+  } else if (entrypoint == LensEntrypoint::NewTabPage) {
+    browserState->GetPrefs()->SetInteger(
+        prefs::kNTPLensEntryPointNewBadgeShownCount, INT_MAX);
+  }
 
   if (!isIncognito) {
     AuthenticationService* authenticationService =
@@ -186,8 +241,8 @@ const base::TimeDelta kCloseLensViewTimeout = base::Seconds(10);
     contentArea = [delegate webContentAreaForLensCoordinator:self];
   }
 
-  UIViewController* viewController = [lensController
-      inputSelectionViewControllerWithWebContentFrame:contentArea];
+  UIViewController* viewController =
+      [lensController inputSelectionViewController];
 
   // TODO(crbug.com/1353430): the returned UIViewController
   // must not be nil, remove this check once the internal
@@ -202,6 +257,8 @@ const base::TimeDelta kCloseLensViewTimeout = base::Seconds(10);
   // modal dismiss animations.
   const LensModalAnimator* transitionAnimator = self.transitionAnimator;
   DCHECK(transitionAnimator);
+  transitionAnimator.presentationStyle = command.presentationStyle;
+  transitionAnimator.presentationCompletion = command.presentationCompletion;
   [viewController setTransitioningDelegate:transitionAnimator];
 
   [viewController
@@ -210,6 +267,24 @@ const base::TimeDelta kCloseLensViewTimeout = base::Seconds(10);
   [self.baseViewController presentViewController:viewController
                                         animated:YES
                                       completion:nil];
+
+  switch (entrypoint) {
+    case LensEntrypoint::HomeScreenWidget:
+      RecordCameraOpen(CameraOpenEntryPoint::WIDGET);
+      break;
+    case LensEntrypoint::NewTabPage:
+      RecordCameraOpen(CameraOpenEntryPoint::NEW_TAB_PAGE);
+      break;
+    case LensEntrypoint::Keyboard:
+      RecordCameraOpen(CameraOpenEntryPoint::KEYBOARD);
+      break;
+    case LensEntrypoint::Spotlight:
+      RecordCameraOpen(CameraOpenEntryPoint::SPOTLIGHT);
+      break;
+    default:
+      // Do not record the camera open histogram for other entry points.
+      break;
+  }
 }
 
 #pragma mark - ChromeLensControllerDelegate
@@ -275,15 +350,23 @@ const base::TimeDelta kCloseLensViewTimeout = base::Seconds(10);
   [self dismissViewController];
 }
 
+- (CGRect)webContentFrame {
+  id<LensPresentationDelegate> delegate = self.delegate;
+  if (delegate) {
+    return [delegate webContentAreaForLensCoordinator:self];
+  }
+
+  return [UIScreen mainScreen].bounds;
+}
+
 #pragma mark - WebStateListObserving methods
 
-- (void)webStateList:(WebStateList*)webStateList
-    didChangeActiveWebState:(web::WebState*)newWebState
-                oldWebState:(web::WebState*)oldWebState
-                    atIndex:(int)atIndex
-                     reason:(ActiveWebStateChangeReason)reason {
-  if (self.lensWebPageLoadTriggeredFromInputSelection) {
-    self.loadingWebState = newWebState;
+- (void)didChangeWebStateList:(WebStateList*)webStateList
+                       change:(const WebStateListChange&)change
+                       status:(const WebStateListStatus&)status {
+  if (status.active_web_state_change() &&
+      self.lensWebPageLoadTriggeredFromInputSelection) {
+    self.loadingWebState = status.new_active_web_state;
   }
 }
 
@@ -308,6 +391,13 @@ const base::TimeDelta kCloseLensViewTimeout = base::Seconds(10);
   }
 }
 
+- (void)webStateDidStartLoading:(web::WebState*)webState {
+  const id<ChromeLensController> lensController = self.lensController;
+  if (self.lensWebPageLoadTriggeredFromInputSelection && lensController) {
+    [lensController triggerSecondaryTransitionAnimation];
+  }
+}
+
 - (void)webStateDestroyed:(web::WebState*)webState {
   DCHECK_EQ(webState, self.loadingWebState);
   self.loadingWebState = nil;
@@ -318,10 +408,20 @@ const base::TimeDelta kCloseLensViewTimeout = base::Seconds(10);
 - (void)openWebLoadParams:(const web::NavigationManager::WebLoadParams&)params {
   if (!self.browser)
     return;
-  UrlLoadParams loadParams = UrlLoadParams::InNewTab(params);
-  loadParams.SetInBackground(NO);
+  web::WebState* webState =
+      self.browser->GetWebStateList()->GetActiveWebState();
+  UrlLoadParams loadParams;
+
+  // Open in the current tab if the current tab is a NTP.
+  if (webState && IsUrlNtp(webState->GetLastCommittedURL())) {
+    loadParams = UrlLoadParams::InCurrentTab(params);
+    self.loadingWebState = webState;
+  } else {
+    loadParams = UrlLoadParams::InNewTab(params);
+    loadParams.append_to = OpenPosition::kCurrentTab;
+    loadParams.SetInBackground(NO);
+  }
   loadParams.in_incognito = self.browser->GetBrowserState()->IsOffTheRecord();
-  loadParams.append_to = kCurrentTab;
   UrlLoadingBrowserAgent::FromBrowser(self.browser)->Load(loadParams);
 }
 
@@ -342,17 +442,64 @@ const base::TimeDelta kCloseLensViewTimeout = base::Seconds(10);
   }
 }
 
+- (BOOL)isGoogleDefaultSearchEngine {
+  DCHECK(self.templateURLService);
+  const TemplateURL* defaultURL =
+      self.templateURLService->GetDefaultSearchProvider();
+  BOOL isGoogleDefaultSearchProvider =
+      defaultURL &&
+      defaultURL->GetEngineType(self.templateURLService->search_terms_data()) ==
+          SEARCH_ENGINE_GOOGLE;
+  return isGoogleDefaultSearchProvider;
+}
+
 // Sets the visibility of the Lens replacement for the QR code scanner in the
 // home screen widget.
-- (void)updateLensAvailibilityForExtensions {
+- (void)updateLensAvailabilityForWidgets {
   NSUserDefaults* sharedDefaults = app_group::GetGroupUserDefaults();
   NSString* enableLensInWidgetKey =
       base::SysUTF8ToNSString(app_group::kChromeAppGroupEnableLensInWidget);
 
+  // Determine the availability of the Lens entrypoint in the home screen
+  // widget. We don't use LensAvailability here because the seach engine status
+  // is determined elsewhere in the Extension Search Engine Data Updater.
   const bool enableLensInWidget =
       ios::provider::IsLensSupported() &&
-      base::FeatureList::IsEnabled(kEnableLensInHomeScreenWidget);
+      GetApplicationContext()->GetLocalState()->GetBoolean(
+          prefs::kLensCameraAssistedSearchPolicyAllowed) &&
+      ui::GetDeviceFormFactor() != ui::DEVICE_FORM_FACTOR_TABLET;
   [sharedDefaults setBool:enableLensInWidget forKey:enableLensInWidgetKey];
+}
+
+// Sets the app shortcut item for either the QR code scanner or Lens.
+- (void)updateQRCodeOrLensAppShortcutItem {
+  const bool useLens =
+      lens_availability::CheckAndLogAvailabilityForLensEntryPoint(
+          LensEntrypoint::AppIconLongPress, [self isGoogleDefaultSearchEngine]);
+
+  NSString* shortcutType;
+  NSString* shortcutTitle;
+  UIApplicationShortcutIcon* shortcutIcon;
+  if (useLens) {
+    shortcutType = @"OpenLensFromAppIconLongPress";
+    shortcutTitle = l10n_util::GetNSStringWithFixup(
+        IDS_IOS_APPLICATION_SHORTCUT_LENS_TITLE);
+    shortcutIcon =
+        [UIApplicationShortcutIcon iconWithTemplateImageName:kCameraLensSymbol];
+  } else {
+    shortcutType = @"OpenQRScanner";
+    shortcutTitle = l10n_util::GetNSStringWithFixup(
+        IDS_IOS_APPLICATION_SHORTCUT_QR_SCANNER_TITLE);
+    shortcutIcon =
+        [UIApplicationShortcutIcon iconWithSystemImageName:@"qrcode"];
+  }
+  UIApplicationShortcutItem* item =
+      [[UIApplicationShortcutItem alloc] initWithType:shortcutType
+                                       localizedTitle:shortcutTitle
+                                    localizedSubtitle:nil
+                                                 icon:shortcutIcon
+                                             userInfo:nil];
+  [[UIApplication sharedApplication] setShortcutItems:@[ item ]];
 }
 
 @end

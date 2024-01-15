@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 
 namespace net {
 
@@ -41,6 +41,12 @@ void CookieStore::DeleteAllAsync(DeleteCallback callback) {
 void CookieStore::SetCookieAccessDelegate(
     std::unique_ptr<CookieAccessDelegate> delegate) {
   cookie_access_delegate_ = std::move(delegate);
+}
+
+absl::optional<bool> CookieStore::SiteHasCookieInOtherPartition(
+    const net::SchemefulSite& site,
+    const absl::optional<CookiePartitionKey>& partition_key) const {
+  return absl::nullopt;
 }
 
 }  // namespace net

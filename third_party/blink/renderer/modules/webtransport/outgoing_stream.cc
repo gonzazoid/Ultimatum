@@ -7,7 +7,7 @@
 #include <cstring>
 #include <utility>
 
-#include "base/allocator/partition_allocator/partition_alloc.h"
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc.h"
 #include "base/numerics/safe_conversions.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
@@ -124,7 +124,7 @@ class OutgoingStream::UnderlyingSink final : public UnderlyingSinkBase {
     DCHECK(!reason.IsEmpty());
 
     uint8_t code = 0;
-    WebTransportError* exception = V8WebTransportError::ToImplWithTypeCheck(
+    WebTransportError* exception = V8WebTransportError::ToWrappable(
         script_state->GetIsolate(), reason.V8Value());
     if (exception) {
       code = exception->streamErrorCode().value_or(0);
@@ -473,6 +473,11 @@ void OutgoingStream::ErrorStreamAbortAndReset(ScriptValue reason) {
   } else if (controller_) {
     controller_->error(script_state_, reason);
     controller_ = nullptr;
+  }
+  if (close_promise_resolver_) {
+    pending_operation_ = nullptr;
+    close_promise_resolver_->Reject(reason);
+    close_promise_resolver_ = nullptr;
   }
 
   AbortAndReset();

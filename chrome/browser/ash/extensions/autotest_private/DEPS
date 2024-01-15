@@ -1,0 +1,11 @@
+include_rules = [
+  "+chrome/browser/ui/views/bruschetta",
+  "+chrome/browser/ui/views/crostini",
+  "+chrome/browser/ui/views/plugin_vm",
+]
+
+specific_include_rules = {
+  "autotest_private_api\.cc": [
+    "+ui/message_center",
+  ],
+}

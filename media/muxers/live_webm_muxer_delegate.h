@@ -5,7 +5,7 @@
 #ifndef MEDIA_MUXERS_LIVE_WEBM_MUXER_DELEGATE_H_
 #define MEDIA_MUXERS_LIVE_WEBM_MUXER_DELEGATE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_piece.h"
 #include "base/thread_annotations.h"
 #include "media/base/media_export.h"
@@ -19,11 +19,7 @@ namespace media {
 // |write_data_callback|.
 class MEDIA_EXPORT LiveWebmMuxerDelegate : public WebmMuxer::Delegate {
  public:
-  // Defines the type of a callback to be called when WebmMuxer is ready to
-  // write a chunk of data.
-  using WriteDataCB = base::RepeatingCallback<void(base::StringPiece)>;
-
-  explicit LiveWebmMuxerDelegate(WriteDataCB write_data_callback);
+  explicit LiveWebmMuxerDelegate(Muxer::WriteDataCB write_data_callback);
   LiveWebmMuxerDelegate(const LiveWebmMuxerDelegate&) = delete;
   LiveWebmMuxerDelegate& operator=(const LiveWebmMuxerDelegate&) = delete;
   ~LiveWebmMuxerDelegate() override;
@@ -44,7 +40,8 @@ class MEDIA_EXPORT LiveWebmMuxerDelegate : public WebmMuxer::Delegate {
 
  private:
   // Callback to dump written data as being called by libwebm.
-  const WriteDataCB write_data_callback_ GUARDED_BY_CONTEXT(sequence_checker_);
+  const Muxer::WriteDataCB write_data_callback_
+      GUARDED_BY_CONTEXT(sequence_checker_);
 };
 
 }  // namespace media

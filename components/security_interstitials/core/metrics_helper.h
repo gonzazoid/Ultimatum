@@ -7,7 +7,6 @@
 
 #include <string>
 
-#include "base/memory/weak_ptr.h"
 #include "base/task/cancelable_task_tracker.h"
 #include "url/gurl.h"
 
@@ -53,6 +52,7 @@ class MetricsHelper {
     SHOW_WHITEPAPER,
     SHOW_ENHANCED_PROTECTION,
     OPEN_ENHANCED_PROTECTION,
+    CLOSE_INTERSTITIAL_WITHOUT_UI,
     MAX_INTERACTION
   };
 

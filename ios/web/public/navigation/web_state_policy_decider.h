@@ -7,7 +7,7 @@
 
 #import <Foundation/Foundation.h>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/observer_list_types.h"
 #include "ui/base/page_transition_types.h"
 #include "url/gurl.h"
@@ -127,15 +127,6 @@ class WebStatePolicyDecider : public base::CheckedObserver {
                                   PolicyDecisionCallback callback);
 
   // Asks the decider whether the navigation corresponding to `response` should
-  // be allowed to display an error page if an error occurs. Defaults to
-  // true if not overridden. This can be used to suppress error pages in certain
-  // cases such as attempting to upgrade an omnibox navigation to HTTPS. In that
-  // scenario, failed upgrade attempts (e.g. due to SSL or DNS resolution
-  // errors) should immediately fall back to HTTP without showing an error page.
-  virtual bool ShouldAllowErrorPageToBeDisplayed(NSURLResponse* response,
-                                                 bool for_main_frame);
-
-  // Asks the decider whether the navigation corresponding to `response` should
   // be allowed to continue. Defaults to PolicyDecision::Allow() if not
   // overridden. Called before WebStateObserver::DidFinishNavigation. Calls
   // `callback` with the decision.
@@ -160,8 +151,9 @@ class WebStatePolicyDecider : public base::CheckedObserver {
   explicit WebStatePolicyDecider(WebState* web_state);
 
  private:
-  friend class WebStateImpl;
+  friend class ContentWebState;
   friend class FakeWebState;
+  friend class WebStateImpl;
 
   // Resets the current web state.
   void ResetWebState();

@@ -12,14 +12,12 @@ source_set("mdc") {
     "MDCActionImageView.m",
   ]
 
-  frameworks = [ "UIKit.framework" ]
-
-  deps = [ "//ios/third_party/material_components_ios" ]
-
-  configs += [
-    ":disable_deprecated_declarations",
-    "//build/config/compiler:enable_arc",
+  frameworks = [
+    "Foundation.framework",
+    "UIKit.framework",
   ]
+
+  configs += [ ":disable_deprecated_declarations" ]
 }
 
 # TODO(crbug.com/1344830): Migrate away from deprecated MDC APIs.

@@ -8,8 +8,8 @@
 #include <jni.h>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "components/gcm_driver/gcm_driver.h"
 #include "components/gcm_driver/gcm_stats_recorder_android.h"
@@ -60,8 +60,6 @@ class GCMDriverAndroid : public GCMDriver,
                             const std::vector<std::string>& sender_ids,
                             const std::string& registration_id,
                             ValidateRegistrationCallback callback) override;
-  void OnSignedIn() override;
-  void OnSignedOut() override;
   void AddConnectionObserver(GCMConnectionObserver* observer) override;
   void RemoveConnectionObserver(GCMConnectionObserver* observer) override;
   GCMClient* GetGCMClientForTesting() const override;

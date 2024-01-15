@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
@@ -58,8 +58,6 @@ class MockVideoEncoder : public VideoEncoder {
   MockVideoEncoder() = default;
   ~MockVideoEncoder() override = default;
 
-  MOCK_METHOD1(SetLosslessEncode, void(bool));
-  MOCK_METHOD1(SetLosslessColor, void(bool));
   MOCK_METHOD1(EncodePtr, VideoPacket*(const webrtc::DesktopFrame&));
 
   std::unique_ptr<VideoPacket> Encode(
@@ -77,8 +75,7 @@ class ThreadCheckVideoEncoder : public VideoEncoderVerbatim {
  public:
   ThreadCheckVideoEncoder(
       scoped_refptr<base::SingleThreadTaskRunner> task_runner)
-      : task_runner_(task_runner) {
-  }
+      : task_runner_(task_runner) {}
 
   ThreadCheckVideoEncoder(const ThreadCheckVideoEncoder&) = delete;
   ThreadCheckVideoEncoder& operator=(const ThreadCheckVideoEncoder&) = delete;

@@ -7,13 +7,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_util.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
@@ -131,7 +130,7 @@ void PhishingDOMFeatureExtractor::ExtractFeatures(blink::WebDocument document,
   page_feature_state_ = std::make_unique<PageFeatureState>(clock_->NowTicks());
   cur_document_ = document;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&PhishingDOMFeatureExtractor::ExtractFeaturesWithTimeout,
                      weak_factory_.GetWeakPtr()));
@@ -164,10 +163,7 @@ void PhishingDOMFeatureExtractor::ExtractFeaturesWithTimeout() {
       cur_element = cur_frame_data_->elements.NextItem();
       // When we resume the traversal, the first call to nextItem() potentially
       // has to walk through the document again from the beginning, if it was
-      // modified between our chunks of work.  Log how long this takes, so we
-      // can tell if it's too slow.
-      UMA_HISTOGRAM_TIMES("SBClientPhishing.DOMFeatureResumeTime",
-                          clock_->NowTicks() - current_chunk_start_time);
+      // modified between our chunks of work.
     } else {
       // We just moved to a new frame, so update our frame state
       // and advance to the first element.
@@ -194,8 +190,6 @@ void PhishingDOMFeatureExtractor::ExtractFeaturesWithTimeout() {
         base::TimeTicks now = clock_->NowTicks();
         if (now - page_feature_state_->start_time >=
             base::Milliseconds(kMaxTotalTimeMs)) {
-          // We expect this to happen infrequently, so record when it does.
-          UMA_HISTOGRAM_COUNTS_1M("SBClientPhishing.DOMFeatureTimeout", 1);
           RunCallback(false);
           return;
         }
@@ -207,9 +201,7 @@ void PhishingDOMFeatureExtractor::ExtractFeaturesWithTimeout() {
           // Record how much time we actually spent on the chunk. If this is
           // much higher than kMaxTimePerChunkMs, we may need to adjust the
           // clock granularity.
-          UMA_HISTOGRAM_TIMES("SBClientPhishing.DOMFeatureChunkTime",
-                              chunk_elapsed);
-          base::ThreadTaskRunnerHandle::Get()->PostTask(
+          base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
               FROM_HERE,
               base::BindOnce(
                   &PhishingDOMFeatureExtractor::ExtractFeaturesWithTimeout,
@@ -326,14 +318,7 @@ void PhishingDOMFeatureExtractor::HandleScript(
 }
 
 void PhishingDOMFeatureExtractor::RunCallback(bool success) {
-  // Record some timing stats that we can use to evaluate feature extraction
-  // performance.  These include both successful and failed extractions.
   DCHECK(page_feature_state_.get());
-  UMA_HISTOGRAM_COUNTS_1M("SBClientPhishing.DOMFeatureIterations",
-                          page_feature_state_->num_iterations);
-  UMA_HISTOGRAM_TIMES("SBClientPhishing.DOMFeatureTotalTime",
-                      clock_->NowTicks() - page_feature_state_->start_time);
-
   DCHECK(!done_callback_.is_null());
   TRACE_EVENT_NESTABLE_ASYNC_END0("safe_browsing", "ExtractDomFeatures", this);
   std::move(done_callback_).Run(success);

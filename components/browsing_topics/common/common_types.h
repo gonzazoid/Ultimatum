@@ -17,16 +17,35 @@ using HashedHost = base::StrongAlias<class HashedHostTag, int64_t>;
 using HashedDomain = base::StrongAlias<class HashedHostTag, int64_t>;
 using Topic = base::StrongAlias<class TopicTag, int>;
 
+// Explicitly typed config version.
+enum ConfigVersion {
+  kInitial = 1,
+  kUsePrioritizedTopicsList = 2,
+
+  kMaxValue = kUsePrioritizedTopicsList,
+};
+
+// Returns the current configuration version.
+COMPONENT_EXPORT(BROWSING_TOPICS_COMMON) ConfigVersion CurrentConfigVersion();
+
 // Represents the source of the caller.
 enum class ApiCallerSource {
   // The API usage is from document.browsingTopics().
   kJavaScript,
+
+  // The API usage is from fetch-like APIs. That is,
+  // fetch(<url>, {browsingTopics: true}), or XMLHttpRequest.send() with the
+  // `deprecatedBrowsingTopics` property set to true.
+  kFetch,
+
+  // The API usage is from <iframe src=[url] browsingtopics>.
+  kIframeAttribute,
 };
 
 // Represents the different reasons why the topics API access is denied. These
 // values are persisted to logs. Entries should not be renumbered and numeric
 // values should never be reused.
-enum class ApiAccessFailureReason {
+enum class ApiAccessResult {
   // The requesting context doesn't allow the API (e.g. permissions policy).
   kInvalidRequestingContext = 0,
 
@@ -36,7 +55,10 @@ enum class ApiAccessFailureReason {
   // Access is disallowed by user settings.
   kAccessDisallowedBySettings = 2,
 
-  kMaxValue = kAccessDisallowedBySettings,
+  // Call was a success and not a failure.
+  kSuccess = 3,
+
+  kMaxValue = kSuccess,
 };
 
 struct COMPONENT_EXPORT(BROWSING_TOPICS_COMMON) ApiUsageContext {

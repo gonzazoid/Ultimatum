@@ -5,6 +5,8 @@
 import("//build/config/chromeos/ui_mode.gni")
 import("//third_party/node/node.gni")
 
+assert(is_chromeos_ash)
+
 template("ts_definitions") {
   node(target_name) {
     script = "//tools/typescript/ts_definitions.py"
@@ -14,6 +16,7 @@ template("ts_definitions") {
                              "deps",
                              "extra_deps",
                              "js_files",
+                             "visibility",
                            ])
 
     inputs = [ "//tools/typescript/tsconfig_definitions_base.json" ]
@@ -65,11 +68,9 @@ template("ts_definitions") {
 
     path_mappings = [
       "chrome://resources/*|" +
-          rebase_path("$root_gen_dir/ui/webui/resources/preprocessed/*",
-                      target_gen_dir),
+          rebase_path("$root_gen_dir/ui/webui/resources/tsc/*", target_gen_dir),
       "//resources/*|" +
-          rebase_path("$root_gen_dir/ui/webui/resources/preprocessed/*",
-                      target_gen_dir),
+          rebase_path("$root_gen_dir/ui/webui/resources/tsc/*", target_gen_dir),
       "chrome://resources/polymer/v3_0/*|" +
           rebase_path("//third_party/polymer/v3_0/components-chromium/*",
                       target_gen_dir),

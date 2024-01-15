@@ -8,11 +8,13 @@
 #include "components/content_settings/core/common/content_settings.h"
 #include "ui/base/interaction/element_identifier.h"
 #include "ui/base/interaction/element_tracker.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/image_button.h"
 #include "ui/views/view.h"
 #include "url/origin.h"
 
 class FaviconCache;
+class Profile;
 
 namespace gfx {
 class Image;
@@ -41,8 +43,11 @@ DECLARE_CUSTOM_ELEMENT_EVENT_TYPE(kSiteRowMenuItemClicked);
 // fallback icon), a hostname and a menu icon. The menu allows to change the
 // cookies content setting for the site or delete the site data.
 class SiteDataRowView : public views::View {
+  METADATA_HEADER(SiteDataRowView, views::View)
+
  public:
   SiteDataRowView(
+      Profile* profile,
       const url::Origin& origin,
       ContentSetting setting,
       bool is_fully_partitioned,
@@ -60,6 +65,7 @@ class SiteDataRowView : public views::View {
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kBlockMenuItem);
   DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kClearOnExitMenuItem);
 
+  views::Label* hostname_label_for_testing() { return hostname_label_; }
   views::Label* state_label_for_testing() { return state_label_; }
   views::ImageButton* menu_button_for_testing() { return menu_button_; }
   views::ImageButton* delete_button_for_testing() { return delete_button_; }
@@ -90,6 +96,7 @@ class SiteDataRowView : public views::View {
   base::RepeatingCallback<void(const url::Origin&, ContentSetting)>
       create_exception_callback_;
 
+  raw_ptr<views::Label> hostname_label_ = nullptr;
   raw_ptr<views::Label> state_label_ = nullptr;
   raw_ptr<views::ImageView> favicon_image_ = nullptr;
   raw_ptr<views::ImageButton> menu_button_ = nullptr;

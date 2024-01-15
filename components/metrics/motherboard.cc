@@ -142,7 +142,7 @@ void ReadWin32Bios(const ComPtr<IWbemServices>& services,
 
 void ReadFirmwareType(absl::optional<Motherboard::BiosType>* bios_type) {
   FIRMWARE_TYPE firmware_type = FirmwareTypeUnknown;
-  if (GetFirmwareType(&firmware_type)) {
+  if (::GetFirmwareType(&firmware_type)) {
     if (firmware_type == FirmwareTypeBios) {
       *bios_type = Motherboard::BiosType::kLegacy;
     } else if (firmware_type == FirmwareTypeUefi) {

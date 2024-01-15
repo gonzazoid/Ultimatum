@@ -6,8 +6,8 @@
 
 #include "base/callback_list.h"
 #include "base/files/file_util.h"
-#include "base/guid.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/uuid.h"
 #include "chrome/browser/ash/login/login_pref_names.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
@@ -17,7 +17,6 @@
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/metrics/profile_pref_names.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/common/pref_names.h"
 #include "components/metrics/metrics_pref_names.h"
 #include "components/metrics/metrics_service_client.h"
@@ -42,7 +41,7 @@ constexpr char kWriteFileFailMetric[] =
 absl::optional<bool> g_is_managed_for_testing;
 
 std::string GenerateUserId() {
-  return base::GenerateGUID();
+  return base::Uuid::GenerateRandomV4().AsLowercaseString();
 }
 
 // Keep in sync with PerUserDaemonStoreFail enum.
@@ -179,8 +178,9 @@ absl::optional<std::string> PerUserStateManagerChromeOS::GetCurrentUserId()
 absl::optional<bool>
 PerUserStateManagerChromeOS::GetCurrentUserReportingConsentIfApplicable()
     const {
-  if (state_ != State::USER_LOG_STORE_HANDLED)
+  if (state_ != State::USER_LOG_STORE_HANDLED || !IsDeviceStatusKnown()) {
     return absl::nullopt;
+  }
 
   // Guest sessions with no device owner should use the guest's metrics
   // consent set during guest OOBE flow with no device owner.
@@ -228,6 +228,12 @@ void PerUserStateManagerChromeOS::SetCurrentUserMetricsConsent(
 bool PerUserStateManagerChromeOS::ShouldUseUserLogStore() const {
   DCHECK(state_ > State::CONSTRUCTED);
 
+  if (!IsDeviceStatusKnown()) {
+    LOG(ERROR) << "Device ownership status unknown. Cannot accurately "
+                  "determine whether per-user should be used or not.";
+    return false;
+  }
+
   if (user_manager_->IsCurrentUserCryptohomeDataEphemeral()) {
     // Sessions using ephemeral cryptohome should hold the logs if owner has
     // disabled metrics reporting. This way the recorded logs are deleted when
@@ -255,6 +261,15 @@ bool PerUserStateManagerChromeOS::IsUserAllowedToChangeConsent(
   if (user->GetAccountId() == user_manager_->GetOwnerAccountId())
     return false;
 
+  // If the device status is not known yet, then the user should not be allowed
+  // to opt-in until the status is known.
+  DCHECK(IsDeviceStatusKnown());
+  if (!IsDeviceStatusKnown()) {
+    LOG(ERROR) << "Device ownership status unknown. Cannot accurately "
+                  "determine whether per-user should be used or not.";
+    return false;
+  }
+
   auto user_type = user->GetType();
 
   // Guest sessions for non-owned devices should be allowed to modify metrics
@@ -267,8 +282,7 @@ bool PerUserStateManagerChromeOS::IsUserAllowedToChangeConsent(
   if (!GetDeviceMetricsConsent())
     return false;
 
-  return user_type == user_manager::USER_TYPE_REGULAR ||
-         user_type == user_manager::USER_TYPE_ACTIVE_DIRECTORY;
+  return user_type == user_manager::USER_TYPE_REGULAR;
 }
 
 base::CallbackListSubscription PerUserStateManagerChromeOS::AddObserver(
@@ -326,12 +340,7 @@ bool PerUserStateManagerChromeOS::IsReportingPolicyManaged() const {
 }
 
 bool PerUserStateManagerChromeOS::GetDeviceMetricsConsent() const {
-  DCHECK_NE(ash::DeviceSettingsService::Get()->GetOwnershipStatus(),
-            ash::DeviceSettingsService::OWNERSHIP_UNKNOWN);
-
-  return ash::DeviceSettingsService::Get()->GetOwnershipStatus() ==
-             ash::DeviceSettingsService::OWNERSHIP_TAKEN &&
-         ash::StatsReportingController::Get()->IsEnabled();
+  return ash::StatsReportingController::Get()->IsEnabled();
 }
 
 bool PerUserStateManagerChromeOS::HasUserLogStore() const {
@@ -339,8 +348,15 @@ bool PerUserStateManagerChromeOS::HasUserLogStore() const {
 }
 
 bool PerUserStateManagerChromeOS::IsDeviceOwned() const {
+  DCHECK(IsDeviceStatusKnown());
+
   return ash::DeviceSettingsService::Get()->GetOwnershipStatus() ==
-         ash::DeviceSettingsService::OwnershipStatus::OWNERSHIP_TAKEN;
+         ash::DeviceSettingsService::OwnershipStatus::kOwnershipTaken;
+}
+
+bool PerUserStateManagerChromeOS::IsDeviceStatusKnown() const {
+  return ash::DeviceSettingsService::Get()->GetOwnershipStatus() !=
+         ash::DeviceSettingsService::OwnershipStatus::kOwnershipUnknown;
 }
 
 void PerUserStateManagerChromeOS::ActiveUserChanged(user_manager::User* user) {
@@ -387,7 +403,8 @@ void PerUserStateManagerChromeOS::WaitForOwnershipStatus() {
 
 void PerUserStateManagerChromeOS::InitializeProfileMetricsState(
     ash::DeviceSettingsService::OwnershipStatus status) {
-  DCHECK_NE(status, ash::DeviceSettingsService::OWNERSHIP_UNKNOWN);
+  DCHECK_NE(status,
+            ash::DeviceSettingsService::OwnershipStatus::kOwnershipUnknown);
   DCHECK_EQ(state_, State::USER_LOGIN);
 
   state_ = State::USER_PROFILE_READY;
@@ -408,6 +425,8 @@ void PerUserStateManagerChromeOS::InitializeProfileMetricsState(
   // If a guest session is about to be started, the metrics reporting will
   // normally inherit from the device owner's setting. If there is no owner,
   // then the guest will set metrics reporting during ToS.
+  //
+  // Note that device status is guaranteed to be known.
   if (is_guest && !IsDeviceOwned()) {
     SetReportingState(
         local_state_->GetBoolean(ash::prefs::kOobeGuestMetricsEnabled));
@@ -432,9 +451,6 @@ void PerUserStateManagerChromeOS::InitializeProfileMetricsState(
 
   auto* user_prefs = GetCurrentUserPrefs();
 
-  // Inherit owner consent if needed. This is to migrate existing users logging
-  // in for the first time since the feature was enabled.
-  //
   // New users will inherit the device owner consent initially but will be asked
   // on OOBE to set the consent.
   bool should_inherit_owner_consent =
@@ -506,9 +522,7 @@ void PerUserStateManagerChromeOS::AssignUserLogStore() {
   SetUserLogStore(std::make_unique<UnsentLogStore>(
       std::make_unique<UnsentLogStoreMetricsImpl>(), GetCurrentUserPrefs(),
       prefs::kMetricsUserMetricLogs, prefs::kMetricsUserMetricLogsMetadata,
-      storage_limits_.min_ongoing_log_queue_count,
-      storage_limits_.min_ongoing_log_queue_size,
-      storage_limits_.max_ongoing_log_size, signing_key_,
+      storage_limits_.ongoing_log_queue_limits, signing_key_,
       // |logs_event_manager| will be set by the metrics service directly in
       // MetricsLogStore::SetAlternateOngoingLogStore().
       /*logs_event_manager=*/nullptr));

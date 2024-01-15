@@ -1,4 +1,5 @@
 include_rules = [
+  "+components/fuchsia_component_support",
   "+fuchsia_web/webinstance_host",
 ]
 
@@ -13,5 +14,8 @@ specific_include_rules = {
     # and use of the switch is no longer required.
     "+media/base",
     "+media/gpu/test",
-  ]
+  ],
+  "web_engine_shell\.cc": [
+    "+third_party/widevine/cdm/buildflags.h",
+  ],
 }

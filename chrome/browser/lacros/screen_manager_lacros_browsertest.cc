@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/rand_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -14,7 +14,7 @@
 #include "base/timer/timer.h"
 #include "chrome/browser/lacros/browser_test_util.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "chromeos/crosapi/mojom/screen_manager.mojom.h"
@@ -25,12 +25,11 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/sync_call_restrictions.h"
 #include "third_party/skia/include/core/SkBitmap.h"
-#include "ui/base/l10n/l10n_util.h"
 #include "url/gurl.h"
 
 namespace {
-const char* kLacrosPageTitleFormat = "Title Of Lacros Browser Test %lu";
-const char* kLacrosPageTitleHTMLFormat =
+constexpr char kLacrosPageTitleFormat[] = "Title Of Lacros Browser Test %lu";
+constexpr char kLacrosPageTitleHTMLFormat[] =
     "<html><head><title>%s</title></head>"
     "<body>This page has a title.</body></html>";
 
@@ -49,20 +48,16 @@ uint64_t WaitForWindow(std::string title) {
 
   base::RunLoop run_loop;
   uint64_t window_id;
-  std::u16string tab_title(base::ASCIIToUTF16(title));
   auto look_for_window = base::BindRepeating(
       [](mojo::Remote<crosapi::mojom::SnapshotCapturer>* capturer,
-         base::RunLoop* run_loop, uint64_t* window_id,
-         std::u16string tab_title) {
-        std::string expected_window_title = l10n_util::GetStringFUTF8(
-            IDS_BROWSER_WINDOW_TITLE_FORMAT, tab_title);
+         base::RunLoop* run_loop, uint64_t* window_id, std::string tab_title) {
         std::vector<crosapi::mojom::SnapshotSourcePtr> windows;
         {
           mojo::ScopedAllowSyncCallForTesting allow_sync_call;
           (*capturer)->ListSources(&windows);
         }
         for (auto& window : windows) {
-          if (window->title == expected_window_title) {
+          if (window->title == tab_title) {
             if (window_id)
               (*window_id) = window->id;
             run_loop->Quit();
@@ -70,7 +65,7 @@ uint64_t WaitForWindow(std::string title) {
           }
         }
       },
-      &capturer, &run_loop, &window_id, std::move(tab_title));
+      &capturer, &run_loop, &window_id, std::move(title));
 
   // When the browser test start, there is no guarantee that the window is
   // open from ash's perspective.
@@ -149,6 +144,28 @@ IN_PROC_BROWSER_TEST_F(ScreenManagerLacrosBrowserTest, WindowCapturer) {
       capturer.BindNewPipeAndPassReceiver());
 
   uint64_t window_id = WaitForLacrosToBeAvailableInAsh(browser());
+
+  bool success = false;
+  SkBitmap snapshot;
+  {
+    mojo::ScopedAllowSyncCallForTesting allow_sync_call;
+    capturer->TakeSnapshot(window_id, &success, &snapshot);
+  }
+  ASSERT_TRUE(success);
+  // Verify the snapshot is non-empty.
+  EXPECT_GT(snapshot.height(), 0);
+  EXPECT_GT(snapshot.width(), 0);
+}
+
+IN_PROC_BROWSER_TEST_F(ScreenManagerLacrosBrowserTest, AppWindowCapturer) {
+  mojo::Remote<crosapi::mojom::SnapshotCapturer> capturer;
+  auto* lacros_service = chromeos::LacrosService::Get();
+  lacros_service->GetRemote<crosapi::mojom::ScreenManager>()->GetWindowCapturer(
+      capturer.BindNewPipeAndPassReceiver());
+
+  Browser* app_browser =
+      CreateBrowserForApp("test_app_name", browser()->profile());
+  uint64_t window_id = WaitForLacrosToBeAvailableInAsh(app_browser);
 
   bool success = false;
   SkBitmap snapshot;

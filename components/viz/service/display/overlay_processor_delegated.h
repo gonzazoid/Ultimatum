@@ -65,6 +65,8 @@ class VIZ_SERVICE_EXPORT OverlayProcessorDelegated
   void AdjustOutputSurfaceOverlay(
       absl::optional<OutputSurfaceOverlayPlane>* output_surface_plane) override;
 
+  gfx::RectF GetUnassignedDamage() const override;
+
  private:
   // These values are persisted to logs. Entries should not be renumbered and
   // numeric values should never be reused. For some cases in
@@ -82,7 +84,17 @@ class VIZ_SERVICE_EXPORT OverlayProcessorDelegated
     kCompositedHas3dTransform = 8,
     kCompositedHas2dShear = 9,
     kCompositedHas2dRotation = 10,
-    kMaxValue = kCompositedHas2dRotation
+    kCompositedFeatureDisabled = 11,
+    kCompositedCandidateFailed = 12,
+    kCompositedCandidateBlending = 13,
+    kCompositedCandidateQuadMaterial = 14,
+    kCompositedCandidateBufferFormat = 15,
+    kCompositedCandidateNearFilter = 16,
+    kCompositedCandidateNotSharedImage = 17,
+    kCompositedCandidateMaskFilter = 18,
+    kCompositedCandidateTransformCantClip = 19,
+    kCompositedCandidateRpdqWithTransform = 20,
+    kMaxValue = kCompositedCandidateRpdqWithTransform
   };
 
   gfx::RectF GetPrimaryPlaneDisplayRect(
@@ -97,6 +109,7 @@ class VIZ_SERVICE_EXPORT OverlayProcessorDelegated
   // |primary_plane|'s blending setting.
   bool AttemptWithStrategies(
       const SkM44& output_color_matrix,
+      const OverlayProcessorInterface::FilterOperationsMap& render_pass_filters,
       const OverlayProcessorInterface::FilterOperationsMap&
           render_pass_backdrop_filters,
       DisplayResourceProvider* resource_provider,
@@ -106,8 +119,24 @@ class VIZ_SERVICE_EXPORT OverlayProcessorDelegated
       OverlayCandidateList* candidates,
       std::vector<gfx::Rect>* content_bounds);
 
+  // Should delegation be blocked because we have recently had copy output
+  // requests on any render passes. The root render pass must not be delegated
+  // if there is a copy request in order to draw correctly. For non-root passes,
+  // this is done to prevent execessive power usage that can occur if copy
+  // output requests happen approximately every other frame, causing a lot of
+  // delegation overhead.
+  bool BlockForCopyRequests(const AggregatedRenderPassList* render_pass_list);
+
   DelegationStatus delegated_status_ = DelegationStatus::kCompositedOther;
   bool supports_clip_rect_ = false;
+  bool supports_out_of_window_clip_rect_ = false;
+  bool needs_background_image_ = false;
+  bool supports_affine_transform_ = false;
+  bool has_transformation_fix_ = false;
+  gfx::RectF unassigned_damage_;
+  // Used to count the number of frames we should wait until allowing delegation
+  // again.
+  int copy_request_counter_ = 0;
 };
 }  // namespace viz
 

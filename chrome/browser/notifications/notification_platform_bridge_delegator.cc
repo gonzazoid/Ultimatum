@@ -9,8 +9,8 @@
 #include <vector>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "build/build_config.h"
 #include "build/buildflag.h"
@@ -144,6 +144,18 @@ void NotificationPlatformBridgeDelegator::GetDisplayed(
       system_bridge_ ? system_bridge_.get() : message_center_bridge_.get();
   DCHECK(bridge);
   bridge->GetDisplayed(profile_, std::move(callback));
+}
+
+void NotificationPlatformBridgeDelegator::GetDisplayedForOrigin(
+    const GURL& origin,
+    GetDisplayedNotificationsCallback callback) const {
+  // TODO(crbug.com/1245242): We currently only query one of the bridges for
+  // displayed notifications which may not return TRANSIENT style ones. Ideally
+  // there would be only one bridge to query from.
+  NotificationPlatformBridge* bridge =
+      system_bridge_ ? system_bridge_.get() : message_center_bridge_.get();
+  DCHECK(bridge);
+  bridge->GetDisplayedForOrigin(profile_, origin, std::move(callback));
 }
 
 void NotificationPlatformBridgeDelegator::DisplayServiceShutDown() {

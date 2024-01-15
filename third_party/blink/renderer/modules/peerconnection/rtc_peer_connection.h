@@ -44,6 +44,7 @@
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/modules/crypto/normalize_algorithm.h"
 #include "third_party/blink/renderer/modules/event_target_modules.h"
+#include "third_party/blink/renderer/modules/mediastream/media_constraints.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream.h"
 #include "third_party/blink/renderer/modules/peerconnection/rtc_ice_candidate.h"
 #include "third_party/blink/renderer/modules/peerconnection/rtc_peer_connection_controller.h"
@@ -55,7 +56,6 @@
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
 #include "third_party/blink/renderer/platform/heap/prefinalizer.h"
-#include "third_party/blink/renderer/platform/mediastream/media_constraints.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_peer_connection_handler_client.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_session_description_request.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_void_request.h"
@@ -87,12 +87,11 @@ class RTCSessionDescriptionInit;
 class ScriptState;
 class V8RTCPeerConnectionErrorCallback;
 class V8RTCSessionDescriptionCallback;
-class V8RTCStatsCallback;
 class V8UnionMediaStreamTrackOrString;
 class V8VoidFunction;
 
 class MODULES_EXPORT RTCPeerConnection final
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public RTCPeerConnectionHandlerClient,
       public ActiveScriptWrappable<RTCPeerConnection>,
       public ExecutionContextLifecycleObserver,
@@ -200,23 +199,9 @@ class MODULES_EXPORT RTCPeerConnection final
 
   void removeStream(MediaStream*, ExceptionState&);
 
-  // Calls LegacyCallbackBasedGetStats() or PromiseBasedGetStats() (or rejects
-  // with an exception) depending on type, see rtc_peer_connection.idl.
-  ScriptPromise getStats(ScriptState* script_state, ExceptionState&);
   ScriptPromise getStats(ScriptState* script_state,
-                         ScriptValue callback_or_selector,
+                         MediaStreamTrack* selector,
                          ExceptionState&);
-  ScriptPromise getStats(ScriptState* script_state,
-                         ScriptValue callback_or_selector,
-                         ScriptValue legacy_selector,
-                         ExceptionState&);
-  ScriptPromise LegacyCallbackBasedGetStats(
-      ScriptState*,
-      V8RTCStatsCallback* success_callback,
-      MediaStreamTrack* selector);
-  ScriptPromise PromiseBasedGetStats(ScriptState*,
-                                     MediaStreamTrack* selector,
-                                     ExceptionState&);
 
   const HeapVector<Member<RTCRtpTransceiver>>& getTransceivers() const;
   const HeapVector<Member<RTCRtpSender>>& getSenders() const;
@@ -275,8 +260,12 @@ class MODULES_EXPORT RTCPeerConnection final
   };
 
   // MediaStreamObserver
-  void OnStreamAddTrack(MediaStream*, MediaStreamTrack*) override;
-  void OnStreamRemoveTrack(MediaStream*, MediaStreamTrack*) override;
+  void OnStreamAddTrack(MediaStream*,
+                        MediaStreamTrack*,
+                        ExceptionState& exception_state) override;
+  void OnStreamRemoveTrack(MediaStream*,
+                           MediaStreamTrack*,
+                           ExceptionState& exception_state) override;
 
   // RTCPeerConnectionHandlerClient
   void NegotiationNeeded() override;
@@ -303,7 +292,7 @@ class MODULES_EXPORT RTCPeerConnection final
                              Vector<uintptr_t>,
                              bool is_remote_description_or_rollback) override;
   void DidAddRemoteDataChannel(
-      scoped_refptr<webrtc::DataChannelInterface> channel) override;
+      rtc::scoped_refptr<webrtc::DataChannelInterface> channel) override;
   void DidNoteInterestingUsage(int usage_pattern) override;
   void UnregisterPeerConnectionHandler() override;
   void ClosePeerConnection() override;

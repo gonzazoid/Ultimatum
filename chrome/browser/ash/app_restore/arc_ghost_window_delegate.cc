@@ -4,17 +4,21 @@
 
 #include "chrome/browser/ash/app_restore/arc_ghost_window_delegate.h"
 
+#include "base/notreached.h"
 #include "chrome/browser/ash/app_restore/arc_ghost_window_shell_surface.h"
 #include "chrome/browser/ash/app_restore/arc_window_utils.h"
 #include "chrome/browser/ash/arc/window_predictor/window_predictor_utils.h"
+#include "chromeos/ui/base/window_state_type.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 
-namespace {
-const int kNullWindowState = -1;
-}  // namespace
-
 namespace ash::full_restore {
+
+namespace {
+
+const int kNullWindowState = -1;
+
+}  // namespace
 
 ArcGhostWindowDelegate::ArcGhostWindowDelegate(
     exo::ClientControlledShellSurface* shell_surface,
@@ -45,7 +49,7 @@ void ArcGhostWindowDelegate::OnStateChanged(
     return;
 
   auto* window_state =
-      ash::WindowState::Get(shell_surface_->GetWidget()->GetNativeWindow());
+      WindowState::Get(shell_surface_->GetWidget()->GetNativeWindow());
 
   if (!window_state || !shell_surface_->host_window()->GetRootWindow())
     return;
@@ -72,7 +76,7 @@ void ArcGhostWindowDelegate::OnStateChanged(
       break;
     case chromeos::WindowStateType::kFullscreen:
       // TODO(sstan): Adjust bounds like maximized state.
-      shell_surface_->SetFullscreen(true);
+      shell_surface_->SetFullscreen(true, display::kInvalidDisplayId);
       break;
     default:
       NOTIMPLEMENTED();
@@ -90,7 +94,7 @@ void ArcGhostWindowDelegate::OnBoundsChanged(
     bool is_resize,
     int bounds_change) {
   auto* window_state =
-      ash::WindowState::Get(shell_surface_->GetWidget()->GetNativeWindow());
+      WindowState::Get(shell_surface_->GetWidget()->GetNativeWindow());
 
   if (!window_state || !shell_surface_->host_window()->GetRootWindow())
     return;
@@ -112,18 +116,25 @@ void ArcGhostWindowDelegate::OnBoundsChanged(
     return;
   }
 
-  shell_surface_->SetBounds(display_id, bounds_in_screen);
-
-  if (requested_state != window_state->GetStateType()) {
-    DCHECK(requested_state == chromeos::WindowStateType::kPrimarySnapped ||
-           requested_state == chromeos::WindowStateType::kSecondarySnapped);
-
-    if (requested_state == chromeos::WindowStateType::kPrimarySnapped)
-      shell_surface_->SetSnappedToPrimary();
-    else
-      shell_surface_->SetSnappedToSecondary();
-    // TODO(sstan): Currently the snap state will be ignored. Sync it to ARC.
+  switch (requested_state) {
+    case chromeos::WindowStateType::kPrimarySnapped:
+      // TODO(b/279530665): Maybe sync to ARC.
+      shell_surface_->SetSnapPrimary(chromeos::kDefaultSnapRatio);
+      break;
+    case chromeos::WindowStateType::kSecondarySnapped:
+      // TODO(b/279530665): Maybe sync to ARC.
+      shell_surface_->SetSnapSecondary(chromeos::kDefaultSnapRatio);
+      break;
+    case chromeos::WindowStateType::kFloated:
+      // Ignore the unsupported request.
+      return;
+    default:
+      if (requested_state != window_state->GetStateType()) {
+        NOTREACHED();
+      }
   }
+
+  shell_surface_->SetBounds(display_id, bounds_in_screen);
   shell_surface_->OnSurfaceCommit();
   bounds_ = gfx::Rect(bounds_in_screen);
   UpdateWindowInfoToArc();
@@ -164,7 +175,7 @@ void ArcGhostWindowDelegate::OnAppStatesUpdate(const std::string& app_id,
 }
 
 bool ArcGhostWindowDelegate::SetDisplayId(int64_t display_id) {
-  absl::optional<double> scale_factor = GetDisplayScaleFactor(display_id);
+  std::optional<double> scale_factor = GetDisplayScaleFactor(display_id);
   if (!scale_factor.has_value()) {
     LOG(ERROR) << "Invalid display id for ARC Ghost Window";
     scale_factor_ = 1.;

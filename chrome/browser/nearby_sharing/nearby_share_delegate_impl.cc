@@ -6,14 +6,22 @@
 
 #include "ash/public/cpp/nearby_share_controller.h"
 #include "ash/public/cpp/session/session_controller.h"
+#include "ash/webui/settings/public/constants/routes.mojom.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/time/time.h"
+#include "build/branding_buildflags.h"
+#include "chrome/browser/nearby_sharing/common/nearby_share_features.h"
+#include "chrome/browser/nearby_sharing/common/nearby_share_resource_getter.h"
 #include "chrome/browser/nearby_sharing/nearby_sharing_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/ash/session_util.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
+#include "ui/gfx/vector_icon_types.h"
+
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+#include "chrome/browser/nearby_sharing/internal/icons/vector_icons.h"
+#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
 
 namespace {
 
@@ -26,6 +34,8 @@ std::string GetTimestampString() {
   return base::NumberToString(
       base::Time::Now().ToDeltaSinceWindowsEpoch().InMicroseconds());
 }
+
+const gfx::VectorIcon kEmptyIcon;
 
 }  // namespace
 
@@ -45,6 +55,11 @@ NearbyShareDelegateImpl::~NearbyShareDelegateImpl() {
   ash::SessionController::Get()->RemoveObserver(this);
   if (nearby_share_service_)
     RemoveNearbyShareServiceObservers();
+}
+
+bool NearbyShareDelegateImpl::IsEnabled() {
+  return nearby_share_service_ != nullptr &&
+         nearby_share_service_->GetSettings()->GetEnabled();
 }
 
 bool NearbyShareDelegateImpl::IsPodButtonVisible() {
@@ -167,4 +182,22 @@ void NearbyShareDelegateImpl::SettingsOpener::ShowSettingsPage(
       ProfileManager::GetPrimaryUserProfile(),
       std::string(chromeos::settings::mojom::kNearbyShareSubpagePath) +
           query_string);
+}
+
+const gfx::VectorIcon& NearbyShareDelegateImpl::GetIcon(bool on_icon) const {
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  if (features::IsNameEnabled()) {
+    return on_icon ? kNearbyShareInternalIcon : kNearbyShareInternalOffIcon;
+  }
+#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  return kEmptyIcon;
+}
+
+std::u16string NearbyShareDelegateImpl::GetPlaceholderFeatureName() const {
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  if (features::IsNameEnabled()) {
+    return NearbyShareResourceGetter::GetInstance()->GetFeatureName();
+  }
+#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  return u"";
 }

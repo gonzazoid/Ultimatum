@@ -16,7 +16,6 @@
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
-#include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/task/cancelable_task_tracker.h"
 #include "base/threading/thread_checker.h"
@@ -32,6 +31,7 @@
 
 class FakeAutocompleteProviderClient;
 class HistoryQuickProviderTest;
+class OmniboxTriggeredFeatureService;
 
 namespace base {
 class SequencedTaskRunner;
@@ -44,7 +44,7 @@ class BookmarkModel;
 namespace history {
 class HistoryDatabase;
 class HQPPerfTestOnePopularURL;
-}
+}  // namespace history
 
 class URLIndexPrivateData;
 
@@ -53,7 +53,7 @@ typedef std::set<std::string> SchemeSet;
 // The URL history source.
 // Holds portions of the URL database in memory in an indexed form.  Used to
 // quickly look up matching URLs for a given query string.  Used by
-// the HistoryURLProvider for inline autocomplete and to provide URL
+// the HistoryQuickProvider for inline autocomplete and to provide URL
 // matches to the omnibox.
 //
 // Note about multi-byte codepoints and the data structures in the
@@ -71,7 +71,6 @@ typedef std::set<std::string> SchemeSet;
 // multi-char16 instance.
 class InMemoryURLIndex : public KeyedService,
                          public history::HistoryServiceObserver,
-                         public base::SupportsWeakPtr<InMemoryURLIndex>,
                          public base::trace_event::MemoryDumpProvider {
  public:
   // `history_service` may be null during unit testing.
@@ -95,21 +94,21 @@ class InMemoryURLIndex : public KeyedService,
   // anything special with the cursor; this is equivalent to the cursor being at
   // the end. If `host_filter` is not empty, filters matches by host. In total,
   // `max_matches` of items will be returned.
-  ScoredHistoryMatches HistoryItemsForTerms(const std::u16string& term_string,
-                                            size_t cursor_position,
-                                            const std::string& host_filter,
-                                            size_t max_matches);
+  ScoredHistoryMatches HistoryItemsForTerms(
+      const std::u16string& term_string,
+      size_t cursor_position,
+      const std::string& host_filter,
+      size_t max_matches,
+      OmniboxTriggeredFeatureService* triggered_feature_service);
 
   // Returns URL hosts that have been visited more than a threshold.
-  std::vector<std::string> HighlyVisitedHosts() const;
+  const std::vector<std::string>& HighlyVisitedHosts() const;
 
   // Deletes the index entry, if any, for the given |url|.
   void DeleteURL(const GURL& url);
 
   // Indicates that the index restoration is complete.
-  bool restored() const {
-    return restored_;
-  }
+  bool restored() const { return restored_; }
 
  private:
   friend class ::FakeAutocompleteProviderClient;
@@ -136,9 +135,10 @@ class InMemoryURLIndex : public KeyedService,
     void DoneRunOnMainThread() override;
 
    private:
-    raw_ptr<InMemoryURLIndex> index_;  // Call back to this index at completion.
+    raw_ptr<InMemoryURLIndex, AcrossTasksDanglingUntriaged>
+        index_;                   // Call back to this index at completion.
     SchemeSet scheme_allowlist_;  // Schemes to be indexed.
-    bool succeeded_;  // Indicates if the rebuild was successful.
+    bool succeeded_ = false;      // Indicates if the rebuild was successful.
     scoped_refptr<URLIndexPrivateData> data_;  // The rebuilt private data.
     // When the task was first requested from the main thread. This is the same
     // time as when this task object is constructed.

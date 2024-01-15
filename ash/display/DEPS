@@ -1,12 +1,11 @@
 include_rules = [
   "+ash/host",
+  "+components/device_event_log",
 ]
 
 specific_include_rules = {
   "display_color_manager.cc": [
     "+third_party/qcms/src/qcms.h",
-  ],
-  "cursor_window_controller.cc": [
-    "+ash/components/cursor",
+    "+third_party/zlib/google/compression_utils.h",
   ],
 }

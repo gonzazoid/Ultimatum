@@ -10,15 +10,16 @@
 #include <utility>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/singleton.h"
 #include "base/system/sys_info.h"
 #include "base/version.h"
 #include "build/build_config.h"
 #include "ui/display/display.h"
+#include "ui/events/devices/keyboard_device.h"
 #include "ui/events/devices/x11/device_list_cache_x11.h"
 #include "ui/events/devices/x11/touch_factory_x11.h"
 #include "ui/events/devices/x11/xinput_util.h"
@@ -26,8 +27,8 @@
 #include "ui/events/event_switches.h"
 #include "ui/events/keycodes/keyboard_code_conversion_x.h"
 #include "ui/gfx/geometry/point3_f.h"
+#include "ui/gfx/x/atom_cache.h"
 #include "ui/gfx/x/future.h"
-#include "ui/gfx/x/x11_atom_cache.h"
 
 // XIScrollClass was introduced in XI 2.1 so we need to define it here
 // for backward-compatibility with older versions of XInput.
@@ -216,10 +217,8 @@ DeviceDataManagerX11* DeviceDataManagerX11::GetInstance() {
 }
 
 DeviceDataManagerX11::DeviceDataManagerX11()
-    : xi_opcode_(-1),
-      high_precision_scrolling_disabled_(IsHighPrecisionScrollingDisabled()) {
+    : high_precision_scrolling_disabled_(IsHighPrecisionScrollingDisabled()) {
   CHECK(x11::Connection::Get());
-  InitializeXInputInternal();
 
   UpdateDeviceList(x11::Connection::Get());
   UpdateButtonMap();
@@ -227,39 +226,9 @@ DeviceDataManagerX11::DeviceDataManagerX11()
 
 DeviceDataManagerX11::~DeviceDataManagerX11() = default;
 
-bool DeviceDataManagerX11::InitializeXInputInternal() {
-  // Check if XInput is available on the system.
-  xi_opcode_ = -1;
-  auto* connection = x11::Connection::Get();
-  if (!connection->xinput().present()) {
-    VLOG(1) << "X Input extension not available";
-    return false;
-  }
-
-  // Check the XInput version.
-  auto version = connection->xinput().XIQueryVersion(
-      {x11::Input::major_version, x11::Input::minor_version});
-  if (auto reply = version.Sync()) {
-    if (base::Version({reply->major_version, reply->minor_version}) <
-        base::Version("2.2")) {
-      DVLOG(1) << "XI version on server is " << reply->major_version << "."
-               << reply->minor_version << ". "
-               << "But 2.2 is required.";
-      return false;
-    }
-  } else {
-    VLOG(1) << "XInput2 not supported in the server.";
-    return false;
-  }
-
-  xi_opcode_ = connection->xinput().major_opcode();
-  CHECK_NE(-1, xi_opcode_);
-
-  return true;
-}
-
 bool DeviceDataManagerX11::IsXInput2Available() const {
-  return xi_opcode_ != -1;
+  return x11::Connection::Get()->xinput_version() >=
+         std::pair<uint32_t, uint32_t>{2, 2};
 }
 
 void DeviceDataManagerX11::UpdateDeviceList(x11::Connection* connection) {
@@ -877,7 +846,7 @@ void DeviceDataManagerX11::SetDisabledKeyboardAllowedKeys(
 void DeviceDataManagerX11::DisableDevice(x11::Input::DeviceId deviceid) {
   blocked_devices_.set(static_cast<uint32_t>(deviceid), true);
   // TODO(rsadam@): Support blocking touchscreen devices.
-  std::vector<InputDevice> keyboards = GetKeyboardDevices();
+  std::vector<KeyboardDevice> keyboards = GetKeyboardDevices();
   auto it = FindDeviceWithId(keyboards.begin(), keyboards.end(), deviceid);
   if (it != std::end(keyboards)) {
     blocked_keyboard_devices_.emplace(deviceid, *it);
@@ -890,7 +859,7 @@ void DeviceDataManagerX11::EnableDevice(x11::Input::DeviceId deviceid) {
   blocked_devices_.set(static_cast<uint32_t>(deviceid), false);
   auto it = blocked_keyboard_devices_.find(deviceid);
   if (it != blocked_keyboard_devices_.end()) {
-    std::vector<InputDevice> devices = GetKeyboardDevices();
+    std::vector<KeyboardDevice> devices = GetKeyboardDevices();
     // Add device to current list of active devices.
     devices.push_back((*it).second);
     blocked_keyboard_devices_.erase(it);
@@ -920,8 +889,8 @@ bool DeviceDataManagerX11::IsEventBlocked(const x11::Event& x11_event) {
 }
 
 void DeviceDataManagerX11::OnKeyboardDevicesUpdated(
-    const std::vector<InputDevice>& devices) {
-  std::vector<InputDevice> keyboards(devices);
+    const std::vector<KeyboardDevice>& devices) {
+  std::vector<KeyboardDevice> keyboards(devices);
   for (auto blocked_iter = blocked_keyboard_devices_.begin();
        blocked_iter != blocked_keyboard_devices_.end();) {
     // Check if the blocked device still exists in list of devices.

@@ -2,9 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {HeapProfilerTestRunner} from 'heap_profiler_test_runner';
+
+import * as Common from 'devtools/core/common/common.js';
+import * as SDK from 'devtools/core/sdk/sdk.js';
+import * as UI from 'devtools/ui/legacy/legacy.js';
+import * as Profiler from 'devtools/panels/profiler/profiler.js';
+import * as Workspace from 'devtools/models/workspace/workspace.js';
+
 (async function() {
   TestRunner.addResult(`This test checks HeapSnapshots loader.\n`);
-  await TestRunner.loadTestModule('heap_profiler_test_runner');
   await TestRunner.showPanel('heap_profiler');
 
   var source = HeapProfilerTestRunner.createHeapSnapshotMockRaw();
@@ -12,33 +20,40 @@
   var partSize = sourceStringified.length >> 3;
 
   async function injectMockProfile(callback) {
-    var dispatcher = TestRunner.mainTarget._dispatchers['HeapProfiler']._dispatchers[0];
-    var panel = UI.panels.heap_profiler;
-    panel._reset();
+    var heapProfilerModel = TestRunner.mainTarget.model(SDK.HeapProfilerModel.HeapProfilerModel);
+    var panel = Profiler.HeapProfilerPanel.HeapProfilerPanel.instance();
+    panel.reset();
 
     var profileType = Profiler.ProfileTypeRegistry.instance.heapSnapshotProfileType;
 
     TestRunner.override(TestRunner.HeapProfilerAgent, 'invoke_takeHeapSnapshot', takeHeapSnapshotMock);
     function takeHeapSnapshotMock(reportProgress) {
       if (reportProgress) {
-        profileType._reportHeapSnapshotProgress({data: {done: 50, total: 100, finished: false}});
-        profileType._reportHeapSnapshotProgress({data: {done: 100, total: 100, finished: true}});
+        profileType.reportHeapSnapshotProgress(
+            {data: {done: 50, total: 100, finished: false}});
+        profileType.reportHeapSnapshotProgress(
+            {data: {done: 100, total: 100, finished: true}});
       }
-      for (var i = 0, l = sourceStringified.length; i < l; i += partSize)
-        dispatcher.addHeapSnapshotChunk(sourceStringified.slice(i, i + partSize));
+      for (var i = 0, l = sourceStringified.length; i < l; i += partSize) {
+        heapProfilerModel.addHeapSnapshotChunk(
+            sourceStringified.slice(i, i + partSize));
+      }
       return Promise.resolve();
     }
 
     function tempFileReady() {
       callback(this);
     }
-    TestRunner.addSniffer(Profiler.HeapProfileHeader.prototype, '_didWriteToTempFile', tempFileReady);
-    if (!UI.context.flavor(SDK.HeapProfilerModel))
-      await new Promise(resolve => UI.context.addFlavorChangeListener(SDK.HeapProfilerModel, resolve));
-    profileType._takeHeapSnapshot();
+    TestRunner.addSniffer(
+        Profiler.HeapSnapshotView.HeapProfileHeader.prototype, 'didWriteToTempFile',
+        tempFileReady);
+    if (!UI.Context.Context.instance().flavor(SDK.HeapProfilerModel.HeapProfilerModel)) {
+      await new Promise(resolve => UI.Context.Context.instance().addFlavorChangeListener(SDK.HeapProfilerModel.HeapProfilerModel, resolve));
+    }
+    profileType.takeHeapSnapshot();
   }
 
-  Common.console.log = function(message) {
+  Common.Console.Console.instance().log = function(message) {
     TestRunner.addResult('SDK.consoleModel.log: ' + message);
   };
 
@@ -48,21 +63,22 @@
         var savedSnapshotData;
         function saveMock(url, data) {
           savedSnapshotData = data;
-          setTimeout(() => Workspace.fileManager._savedURL({data: {url: url}}), 0);
+          setTimeout(
+              () => Workspace.FileManager.FileManager.instance().savedURL({data: {url: url}}), 0);
         }
         TestRunner.override(InspectorFrontendHost, 'save', saveMock);
 
         var oldAppend = InspectorFrontendHost.append;
         InspectorFrontendHost.append = function appendMock(url, data) {
           savedSnapshotData += data;
-          Workspace.fileManager._appendedToURL({data: url});
+          Workspace.FileManager.FileManager.instance().appendedToURL({data: url});
         };
         function closeMock(url) {
           TestRunner.assertEquals(sourceStringified, savedSnapshotData, 'Saved snapshot data');
           InspectorFrontendHost.append = oldAppend;
           next();
         }
-        TestRunner.override(Workspace.FileManager.prototype, 'close', closeMock);
+        TestRunner.override(Workspace.FileManager.FileManager.prototype, 'close', closeMock);
         profileHeader.saveToFile();
       }
 
@@ -70,34 +86,12 @@
     },
 
     function heapSnapshotLoadFromFileTest(next) {
-      var panel = UI.panels.heap_profiler;
-
-      var fileMock = {name: 'mock.heapsnapshot', size: sourceStringified.length};
-
-      Bindings.ChunkedFileReader = class {
-        constructor() {
-        }
-
-        read(receiver) {
-          receiver.write(sourceStringified);
-          receiver.close();
-          return Promise.resolve(true);
-        }
-
-        loadedSize() {
-          return fileMock.size;
-        }
-
-        fileSize() {
-          return fileMock.size;
-        }
-
-        fileName() {
-          return fileMock.name;
-        }
-      };
-      TestRunner.addSniffer(Profiler.HeapProfileHeader.prototype, '_snapshotReceived', next);
-      panel._loadFromFile(fileMock);
+      var panel = Profiler.HeapProfilerPanel.HeapProfilerPanel.instance();
+      var file = new File(
+          [sourceStringified], 'mock.heapsnapshot', {type: 'text/plain'});
+      TestRunner.addSniffer(
+          Profiler.HeapSnapshotView.HeapProfileHeader.prototype, 'snapshotReceived', next);
+      panel.loadFromFile(file);
     },
 
     function heapSnapshotRejectToSaveToFileTest(next) {

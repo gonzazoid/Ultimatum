@@ -4,6 +4,7 @@
 
 package org.chromium.components.browser_ui.settings;
 
+import androidx.annotation.LayoutRes;
 import androidx.preference.Preference;
 
 /**
@@ -50,13 +51,24 @@ public interface ManagedPreferenceDelegate {
     boolean doesProfileHaveMultipleCustodians();
 
     /**
-     * Returns whether clicking on the given Preference is disabled due to a policy. The default
+     * Returns the layout resource to be used by default for preferences that can be managed, when
+     * a custom layout is not defined. Return value 0 can be used to indicate that Android's default
+     * preference layout should be used.
+     *
+     * <p>Embedders should define the default behavior that should apply to all preferences that
+     * can be managed. This way, only embedders that do require custom layouts to pay the price in
+     * binary size increase due to dependencies.
+     */
+    @LayoutRes
+    int defaultPreferenceLayoutResource();
+
+    /**
+     * Returns whether clicking on the given Preference is disabled. The default
      * implementation just returns whether the preference is not modifiable by the user.
      * However, some preferences that are controlled by policy may still be clicked to show an
      * informational subscreen, in which case this method needs a custom implementation.
      */
-    // TODO(bauerb): Rename to isPreferenceClickDisabled.
-    default boolean isPreferenceClickDisabledByPolicy(Preference preference) {
+    default boolean isPreferenceClickDisabled(Preference preference) {
         return isPreferenceControlledByPolicy(preference)
                 || isPreferenceControlledByCustodian(preference);
     }

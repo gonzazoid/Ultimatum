@@ -4,8 +4,11 @@
 
 #include "third_party/blink/renderer/core/frame/viewport_data.h"
 
+#include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom-blink.h"
+
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "third_party/blink/renderer/core/dom/document.h"
+#include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_client.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
@@ -18,10 +21,13 @@
 
 namespace blink {
 
-ViewportData::ViewportData(Document& document) : document_(document) {}
+ViewportData::ViewportData(Document& document)
+    : document_(document),
+      display_cutout_host_(document_->GetExecutionContext()) {}
 
 void ViewportData::Trace(Visitor* visitor) const {
   visitor->Trace(document_);
+  visitor->Trace(display_cutout_host_);
 }
 
 void ViewportData::Shutdown() {
@@ -47,8 +53,8 @@ void ViewportData::SetViewportDescription(
       return;
     viewport_description_ = viewport_description;
 
-    // The UA-defined min-width is considered specifically by Android WebView
-    // quirks mode.
+    // Store the UA specified width to be used as the default "fallback" width.
+    // i.e. the width to use if the author doesn't specify a layout width.
     if (!viewport_description.IsSpecifiedByAuthor())
       viewport_default_min_width_ = viewport_description.min_width;
   }
@@ -100,13 +106,33 @@ void ViewportData::UpdateViewportDescription() {
                 ->GetRemoteNavigationAssociatedInterfaces()) {
       // Bind the mojo interface.
       if (!display_cutout_host_.is_bound()) {
-        provider->GetInterface(&display_cutout_host_);
+        provider->GetInterface(
+            display_cutout_host_.BindNewEndpointAndPassReceiver(
+                provider->GetTaskRunner()));
         DCHECK(display_cutout_host_.is_bound());
       }
 
       // Even though we bind the mojo interface above there still may be cases
       // where this will fail (e.g. unit tests).
       display_cutout_host_->NotifyViewportFitChanged(current_viewport_fit);
+
+      // Track usage of any non-default viewport-fit.
+      if (document_->GetFrame()->IsOutermostMainFrame()) {
+        if (current_viewport_fit == mojom::blink::ViewportFit::kContain) {
+          UseCounter::Count(document_, WebFeature::kViewportFitContain);
+        } else if (current_viewport_fit == mojom::blink::ViewportFit::kCover ||
+                   current_viewport_fit ==
+                       mojom::blink::ViewportFit::kCoverForcedByUserAgent) {
+          UseCounter::Count(document_, WebFeature::kViewportFitCover);
+          // TODO(https://crbug.com/1482559) remove tracking this union of
+          // features after data collected (end of '23)
+          UseCounter::Count(document_,
+                            WebFeature::kViewportFitCoverOrSafeAreaInsetBottom);
+          // TODO(https://crbug.com/1482559#c23) remove this line by end of
+          // 2023.
+          VLOG(0) << "E2E_Used ViewportFitCover";
+        }
+      }
     }
 
     viewport_fit_ = current_viewport_fit;

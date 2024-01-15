@@ -8,7 +8,6 @@
 
 #include "base/observer_list.h"
 #include "base/ranges/algorithm.h"
-#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/global_error/global_error.h"
 #include "chrome/browser/ui/global_error/global_error_bubble_view_base.h"
 
@@ -56,9 +55,10 @@ void GlobalErrorService::RemoveUnownedGlobalError(GlobalError* error) {
 
 GlobalError* GlobalErrorService::GetGlobalErrorByMenuItemCommandID(
     int command_id) const {
-  for (auto* error : all_errors_)
+  for (GlobalError* error : all_errors_) {
     if (error->HasMenuItem() && command_id == error->MenuItemCommandID())
       return error;
+  }
 
   return nullptr;
 }
@@ -68,7 +68,7 @@ GlobalErrorService::GetHighestSeverityGlobalErrorWithAppMenuItem() const {
   GlobalError::Severity highest_severity = GlobalError::SEVERITY_LOW;
   GlobalError* highest_severity_error = nullptr;
 
-  for (auto* error : all_errors_) {
+  for (GlobalError* error : all_errors_) {
     if (error->HasMenuItem()) {
       if (!highest_severity_error || error->GetSeverity() > highest_severity) {
         highest_severity = error->GetSeverity();
@@ -81,7 +81,7 @@ GlobalErrorService::GetHighestSeverityGlobalErrorWithAppMenuItem() const {
 }
 
 GlobalError* GlobalErrorService::GetFirstGlobalErrorWithBubbleView() const {
-  for (auto* error : all_errors_) {
+  for (GlobalError* error : all_errors_) {
     if (error->HasBubbleView() && !error->HasShownBubbleView())
       return error;
   }

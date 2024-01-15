@@ -8,18 +8,22 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "chrome/browser/custom_handlers/protocol_handler_registry_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/web_applications/os_integration/os_integration_manager.h"
+#include "chrome/browser/web_applications/web_app_command_scheduler.h"
+#include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_sync_bridge.h"
 #include "chrome/common/url_constants.h"
 #include "components/custom_handlers/protocol_handler.h"
 #include "components/google/core/common/google_util.h"
 #include "components/prefs/pref_service.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/browser/web_ui.h"
 
 namespace settings {
@@ -58,7 +62,7 @@ ProtocolHandlersHandler::~ProtocolHandlersHandler() = default;
 void ProtocolHandlersHandler::OnJavascriptAllowed() {
   registry_observation_.Observe(GetProtocolHandlerRegistry());
   if (web_app_provider_) {
-    app_observation_.Observe(&web_app_provider_->registrar());
+    app_observation_.Observe(&web_app_provider_->registrar_unsafe());
     install_manager_observation_.Observe(&web_app_provider_->install_manager());
   }
 }
@@ -102,12 +106,12 @@ void ProtocolHandlersHandler::RegisterMessages() {
   web_ui()->RegisterMessageCallback(
       "removeAppAllowedHandler",
       base::BindRepeating(
-          &ProtocolHandlersHandler::HandleRemoveAllowedAppHandler,
+          &ProtocolHandlersHandler::ResetProtocolHandlerUserApproval,
           base::Unretained(this)));
   web_ui()->RegisterMessageCallback(
       "removeAppDisallowedHandler",
       base::BindRepeating(
-          &ProtocolHandlersHandler::HandleRemoveDisallowedAppHandler,
+          &ProtocolHandlersHandler::ResetProtocolHandlerUserApproval,
           base::Unretained(this)));
 }
 
@@ -121,8 +125,13 @@ void ProtocolHandlersHandler::OnWebAppProtocolSettingsChanged() {
   UpdateAllDisallowedLaunchProtocols();
 }
 
+void ProtocolHandlersHandler::OnAppRegistrarDestroyed() {
+  app_observation_.Reset();
+}
+
 void ProtocolHandlersHandler::OnWebAppUninstalled(
-    const web_app::AppId& app_id) {
+    const webapps::AppId& app_id,
+    webapps::WebappUninstallSource uninstall_source) {
   OnWebAppProtocolSettingsChanged();
 }
 
@@ -254,7 +263,7 @@ void ProtocolHandlersHandler::UpdateAllAllowedLaunchProtocols() {
     return;
 
   base::flat_set<std::string> protocols(
-      web_app_provider_->registrar().GetAllAllowedLaunchProtocols());
+      web_app_provider_->registrar_unsafe().GetAllAllowedLaunchProtocols());
   web_app::OsIntegrationManager& os_integration_manager =
       web_app_provider_->os_integration_manager();
 
@@ -275,7 +284,7 @@ void ProtocolHandlersHandler::UpdateAllDisallowedLaunchProtocols() {
     return;
 
   base::flat_set<std::string> protocols(
-      web_app_provider_->registrar().GetAllDisallowedLaunchProtocols());
+      web_app_provider_->registrar_unsafe().GetAllDisallowedLaunchProtocols());
   web_app::OsIntegrationManager& os_integration_manager =
       web_app_provider_->os_integration_manager();
 
@@ -297,32 +306,15 @@ void ProtocolHandlersHandler::HandleObserveAppProtocolHandlers(
   UpdateAllDisallowedLaunchProtocols();
 }
 
-void ProtocolHandlersHandler::HandleRemoveAllowedAppHandler(
+void ProtocolHandlersHandler::ResetProtocolHandlerUserApproval(
     const base::Value::List& args) {
   custom_handlers::ProtocolHandler handler(ParseAppHandlerFromArgs(args));
   CHECK(!handler.IsEmpty());
   DCHECK(web_app_provider_);
 
-  web_app_provider_->sync_bridge().RemoveAllowedLaunchProtocol(
-      handler.web_app_id().value(), handler.protocol());
-
-  // No need to call UpdateAllAllowedLaunchProtocols() - we should receive a
-  // notification that the Web App Protocol Settings has changed and we will
-  // update the view then.
-}
-
-void ProtocolHandlersHandler::HandleRemoveDisallowedAppHandler(
-    const base::Value::List& args) {
-  custom_handlers::ProtocolHandler handler(ParseAppHandlerFromArgs(args));
-  CHECK(!handler.IsEmpty());
-  DCHECK(web_app_provider_);
-
-  web_app_provider_->sync_bridge().RemoveDisallowedLaunchProtocol(
-      handler.web_app_id().value(), handler.protocol());
-
-  // Update registration with the OS.
-  web_app_provider_->os_integration_manager().UpdateProtocolHandlers(
-      handler.web_app_id().value(), /*force_shortcut_updates_if_needed=*/true,
+  const webapps::AppId& app_id = handler.web_app_id().value();
+  web_app_provider_->scheduler().UpdateProtocolHandlerUserApproval(
+      app_id, handler.protocol(), web_app::ApiApprovalState::kRequiresPrompt,
       base::DoNothing());
 
   // No need to call UpdateAllDisallowedLaunchProtocols() - we should receive a

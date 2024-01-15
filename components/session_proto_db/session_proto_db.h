@@ -5,19 +5,21 @@
 #ifndef COMPONENTS_SESSION_PROTO_DB_SESSION_PROTO_DB_H_
 #define COMPONENTS_SESSION_PROTO_DB_SESSION_PROTO_DB_H_
 
+#include <memory>
 #include <queue>
 #include <string>
+#include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/commerce/core/proto/persisted_state_db_content.pb.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/leveldb_proto/public/proto_database.h"
@@ -67,9 +69,11 @@ class SessionProtoDB : public KeyedService, public SessionProtoStorage<T> {
   using ContentEntry = typename leveldb_proto::ProtoDatabase<T>::KeyEntryVector;
 
   // Initializes the database.
-  SessionProtoDB(leveldb_proto::ProtoDatabaseProvider* proto_database_provider,
-                 const base::FilePath& database_dir,
-                 leveldb_proto::ProtoDbType proto_db_type);
+  SessionProtoDB(
+      leveldb_proto::ProtoDatabaseProvider* proto_database_provider,
+      const base::FilePath& database_dir,
+      leveldb_proto::ProtoDbType proto_db_type,
+      scoped_refptr<base::SingleThreadTaskRunner> ui_thread_task_runner);
 
   SessionProtoDB(const SessionProtoDB&) = delete;
   SessionProtoDB& operator=(const SessionProtoDB&) = delete;
@@ -94,6 +98,10 @@ class SessionProtoDB : public KeyedService, public SessionProtoStorage<T> {
   void DeleteOneEntry(const std::string& key,
                       OperationCallback callback) override;
 
+  void UpdateEntries(std::unique_ptr<ContentEntry> entries_to_update,
+                     std::unique_ptr<std::vector<std::string>> keys_to_remove,
+                     OperationCallback callback) override;
+
   void DeleteContentWithPrefix(const std::string& key_prefix,
                                OperationCallback callback) override;
 
@@ -109,7 +117,8 @@ class SessionProtoDB : public KeyedService, public SessionProtoStorage<T> {
   // Used for testing.
   SessionProtoDB(
       std::unique_ptr<leveldb_proto::ProtoDatabase<T>> storage_database,
-      scoped_refptr<base::SequencedTaskRunner> task_runner);
+      scoped_refptr<base::SequencedTaskRunner> task_runner,
+      scoped_refptr<base::SingleThreadTaskRunner> ui_thread_task_runner);
 
   // Passes back database status following database initialization.
   void OnDatabaseInitialized(leveldb_proto::Enums::InitStatus status);
@@ -153,6 +162,9 @@ class SessionProtoDB : public KeyedService, public SessionProtoStorage<T> {
   // |deferred_operations_| is flushed and all operations are executed.
   std::vector<base::OnceClosure> deferred_operations_;
 
+  // Task Runner for posting tasks to UI thread.
+  scoped_refptr<base::SingleThreadTaskRunner> ui_thread_task_runner_;
+
   base::WeakPtrFactory<SessionProtoDB> weak_ptr_factory_{this};
 };
 
@@ -160,14 +172,16 @@ template <typename T>
 SessionProtoDB<T>::SessionProtoDB(
     leveldb_proto::ProtoDatabaseProvider* proto_database_provider,
     const base::FilePath& database_dir,
-    leveldb_proto::ProtoDbType proto_db_type)
+    leveldb_proto::ProtoDbType proto_db_type,
+    scoped_refptr<base::SingleThreadTaskRunner> ui_thread_task_runner)
     : SessionProtoStorage<T>(),
       database_status_(absl::nullopt),
       storage_database_(proto_database_provider->GetDB<T>(
           proto_db_type,
           database_dir,
           base::ThreadPool::CreateSequencedTaskRunner(
-              {base::MayBlock(), base::TaskPriority::USER_VISIBLE}))) {
+              {base::MayBlock(), base::TaskPriority::USER_VISIBLE}))),
+      ui_thread_task_runner_(ui_thread_task_runner) {
   static_assert(std::is_base_of<google::protobuf::MessageLite, T>::value,
                 "T must implement 'google::protobuf::MessageLite'");
   storage_database_->Init(base::BindOnce(&SessionProtoDB::OnDatabaseInitialized,
@@ -185,7 +199,7 @@ void SessionProtoDB<T>::LoadOneEntry(const std::string& key,
         &SessionProtoDB::LoadOneEntry, weak_ptr_factory_.GetWeakPtr(), key,
         std::move(callback)));
   } else if (FailedToInit()) {
-    base::ThreadPool::PostTask(
+    ui_thread_task_runner_->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), false, std::vector<KeyAndValue>()));
   } else {
@@ -203,7 +217,7 @@ void SessionProtoDB<T>::LoadAllEntries(LoadCallback callback) {
         base::BindOnce(&SessionProtoDB::LoadAllEntries,
                        weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
   } else if (FailedToInit()) {
-    base::ThreadPool::PostTask(
+    ui_thread_task_runner_->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), false, std::vector<KeyAndValue>()));
   } else {
@@ -221,7 +235,7 @@ void SessionProtoDB<T>::LoadContentWithPrefix(const std::string& key_prefix,
         &SessionProtoDB::LoadContentWithPrefix, weak_ptr_factory_.GetWeakPtr(),
         key_prefix, std::move(callback)));
   } else if (FailedToInit()) {
-    base::ThreadPool::PostTask(
+    ui_thread_task_runner_->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), false, std::vector<KeyAndValue>()));
   } else {
@@ -244,8 +258,8 @@ void SessionProtoDB<T>::PerformMaintenance(
         &SessionProtoDB::PerformMaintenance, weak_ptr_factory_.GetWeakPtr(),
         keys_to_keep, key_substring_to_match, std::move(callback)));
   } else if (FailedToInit()) {
-    base::ThreadPool::PostTask(FROM_HERE,
-                               base::BindOnce(std::move(callback), false));
+    ui_thread_task_runner_->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), false));
   } else {
     // The following could be achieved with UpdateEntriesWithRemoveFilter rather
     // than LoadEntriesWithFilter followed by UpdateEntries, however, that would
@@ -279,8 +293,8 @@ void SessionProtoDB<T>::InsertContent(const std::string& key,
         &SessionProtoDB::InsertContent, weak_ptr_factory_.GetWeakPtr(), key,
         std::move(value), std::move(callback)));
   } else if (FailedToInit()) {
-    base::ThreadPool::PostTask(FROM_HERE,
-                               base::BindOnce(std::move(callback), false));
+    ui_thread_task_runner_->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), false));
   } else {
     auto contents_to_save = std::make_unique<ContentEntry>();
     contents_to_save->emplace_back(key, value);
@@ -300,13 +314,34 @@ void SessionProtoDB<T>::DeleteOneEntry(const std::string& key,
         &SessionProtoDB::DeleteOneEntry, weak_ptr_factory_.GetWeakPtr(), key,
         std::move(callback)));
   } else if (FailedToInit()) {
-    base::ThreadPool::PostTask(FROM_HERE,
-                               base::BindOnce(std::move(callback), false));
+    ui_thread_task_runner_->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), false));
   } else {
     auto keys = std::make_unique<std::vector<std::string>>();
     keys->push_back(key);
     storage_database_->UpdateEntries(
         std::make_unique<ContentEntry>(), std::move(keys),
+        base::BindOnce(&SessionProtoDB::OnOperationCommitted,
+                       weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+  }
+}
+
+template <typename T>
+void SessionProtoDB<T>::UpdateEntries(
+    std::unique_ptr<ContentEntry> entries_to_update,
+    std::unique_ptr<std::vector<std::string>> keys_to_remove,
+    OperationCallback callback) {
+  if (InitStatusUnknown()) {
+    deferred_operations_.push_back(base::BindOnce(
+        &SessionProtoDB::UpdateEntries, weak_ptr_factory_.GetWeakPtr(),
+        std::move(entries_to_update), std::move(keys_to_remove),
+        std::move(callback)));
+  } else if (FailedToInit()) {
+    ui_thread_task_runner_->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), false));
+  } else {
+    storage_database_->UpdateEntries(
+        std::move(entries_to_update), std::move(keys_to_remove),
         base::BindOnce(&SessionProtoDB::OnOperationCommitted,
                        weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
   }
@@ -322,12 +357,13 @@ void SessionProtoDB<T>::DeleteContentWithPrefix(const std::string& key_prefix,
         &SessionProtoDB::DeleteContentWithPrefix,
         weak_ptr_factory_.GetWeakPtr(), key_prefix, std::move(callback)));
   } else if (FailedToInit()) {
-    base::ThreadPool::PostTask(FROM_HERE,
-                               base::BindOnce(std::move(callback), false));
+    ui_thread_task_runner_->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), false));
+
   } else {
     storage_database_->UpdateEntriesWithRemoveFilter(
         std::make_unique<ContentEntry>(),
-        std::move(base::BindRepeating(&DatabasePrefixFilter, key_prefix)),
+        base::BindRepeating(&DatabasePrefixFilter, key_prefix),
         base::BindOnce(&SessionProtoDB::OnOperationCommitted,
                        weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
   }
@@ -341,8 +377,8 @@ void SessionProtoDB<T>::DeleteAllContent(OperationCallback callback) {
         base::BindOnce(&SessionProtoDB::DeleteAllContent,
                        weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
   } else if (FailedToInit()) {
-    base::ThreadPool::PostTask(FROM_HERE,
-                               base::BindOnce(std::move(callback), false));
+    ui_thread_task_runner_->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), false));
   } else {
     storage_database_->Destroy(std::move(callback));
   }
@@ -359,10 +395,12 @@ void SessionProtoDB<T>::Destroy() const {
 template <typename T>
 SessionProtoDB<T>::SessionProtoDB(
     std::unique_ptr<leveldb_proto::ProtoDatabase<T>> storage_database,
-    scoped_refptr<base::SequencedTaskRunner> task_runner)
+    scoped_refptr<base::SequencedTaskRunner> task_runner,
+    scoped_refptr<base::SingleThreadTaskRunner> ui_thread_task_runner)
     : SessionProtoStorage<T>(),
       database_status_(absl::nullopt),
-      storage_database_(std::move(storage_database)) {
+      storage_database_(std::move(storage_database)),
+      ui_thread_task_runner_(ui_thread_task_runner) {
   static_assert(std::is_base_of<google::protobuf::MessageLite, T>::value,
                 "T must implement 'google::protobuf::MessageLite'");
   storage_database_->Init(base::BindOnce(&SessionProtoDB::OnDatabaseInitialized,

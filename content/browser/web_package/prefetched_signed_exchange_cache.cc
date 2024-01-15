@@ -13,7 +13,7 @@
 #include "components/link_header_util/link_header_util.h"
 #include "content/browser/loader/cross_origin_read_blocking_checker.h"
 #include "content/browser/loader/navigation_loader_interceptor.h"
-#include "content/browser/loader/single_request_url_loader_factory.h"
+#include "content/browser/loader/response_head_update_params.h"
 #include "content/browser/navigation_subresource_loader_params.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
@@ -28,6 +28,8 @@
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
+#include "net/base/network_anonymization_key.h"
+#include "net/cookies/cookie_setting_override.h"
 #include "net/http/http_cache.h"
 #include "net/http/http_util.h"
 #include "net/url_request/redirect_util.h"
@@ -38,6 +40,7 @@
 #include "services/network/public/cpp/initiator_lock_compatibility.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
+#include "services/network/public/cpp/single_request_url_loader_factory.h"
 #include "services/network/public/cpp/url_loader_completion_status.h"
 #include "services/network/public/cpp/wrapper_shared_url_loader_factory.h"
 #include "services/network/public/mojom/fetch_api.mojom-shared.h"
@@ -159,7 +162,7 @@ class RedirectResponseURLLoader : public network::mojom::URLLoader {
       const std::vector<std::string>& removed_headers,
       const net::HttpRequestHeaders& modified_headers,
       const net::HttpRequestHeaders& modified_cors_exempt_headers,
-      const absl::optional<GURL>& new_url) override {
+      const std::optional<GURL>& new_url) override {
     NOTREACHED();
   }
   void SetPriority(net::RequestPriority priority,
@@ -210,7 +213,7 @@ class InnerResponseURLLoader : public network::mojom::URLLoader {
     // DevTools' Security panel.
     if (request.destination != network::mojom::RequestDestination::kDocument &&
         !request.devtools_request_id) {
-      response_->ssl_info = absl::nullopt;
+      response_->ssl_info = std::nullopt;
     }
     UpdateRequestResponseStartTime(response_.get());
     response_->encoded_data_length = 0;
@@ -249,13 +252,13 @@ class InnerResponseURLLoader : public network::mojom::URLLoader {
   ~InnerResponseURLLoader() override {}
 
  private:
-  static absl::optional<std::string> GetHeaderString(
+  static std::optional<std::string> GetHeaderString(
       const network::mojom::URLResponseHead& response,
       const std::string& header_name) {
     DCHECK(response.headers);
     std::string header_value;
     if (!response.headers->GetNormalizedHeader(header_name, &header_value))
-      return absl::nullopt;
+      return std::nullopt;
     return header_value;
   }
 
@@ -289,7 +292,7 @@ class InnerResponseURLLoader : public network::mojom::URLLoader {
       return;
     }
     client_->OnReceiveResponse(std::move(response_),
-                               std::move(pipe_consumer_handle), absl::nullopt);
+                               std::move(pipe_consumer_handle), std::nullopt);
 
     // Send a dummy OnComplete message.
     network::URLLoaderCompletionStatus status =
@@ -304,7 +307,7 @@ class InnerResponseURLLoader : public network::mojom::URLLoader {
       const std::vector<std::string>& removed_headers,
       const net::HttpRequestHeaders& modified_headers,
       const net::HttpRequestHeaders& modified_cors_exempt_headers,
-      const absl::optional<GURL>& new_url) override {
+      const std::optional<GURL>& new_url) override {
     NOTREACHED();
   }
   void SetPriority(net::RequestPriority priority,
@@ -346,7 +349,7 @@ class InnerResponseURLLoader : public network::mojom::URLLoader {
             std::make_unique<storage::BlobDataHandle>(*blob_data_handle_)));
 
     client_->OnReceiveResponse(std::move(response_),
-                               std::move(pipe_consumer_handle), absl::nullopt);
+                               std::move(pipe_consumer_handle), std::nullopt);
   }
 
   void BlobReaderComplete(net::Error result) {
@@ -497,9 +500,10 @@ class PrefetchedNavigationLoaderInterceptor
         tentative_resource_request.url == exchange_->outer_url()) {
       state_ = State::kOuterRequestRequested;
       std::move(callback).Run(
-          base::MakeRefCounted<SingleRequestURLLoaderFactory>(base::BindOnce(
-              &PrefetchedNavigationLoaderInterceptor::StartRedirectResponse,
-              weak_factory_.GetWeakPtr())));
+          base::MakeRefCounted<network::SingleRequestURLLoaderFactory>(
+              base::BindOnce(
+                  &PrefetchedNavigationLoaderInterceptor::StartRedirectResponse,
+                  weak_factory_.GetWeakPtr())));
       return;
     }
     if (tentative_resource_request.url == exchange_->inner_url()) {
@@ -514,23 +518,24 @@ class PrefetchedNavigationLoaderInterceptor
       } else {
         state_ = State::kInnerResponseRequested;
         std::move(callback).Run(
-            base::MakeRefCounted<SingleRequestURLLoaderFactory>(base::BindOnce(
-                &PrefetchedNavigationLoaderInterceptor::StartInnerResponse,
-                weak_factory_.GetWeakPtr())));
+            base::MakeRefCounted<network::SingleRequestURLLoaderFactory>(
+                base::BindOnce(
+                    &PrefetchedNavigationLoaderInterceptor::StartInnerResponse,
+                    weak_factory_.GetWeakPtr())));
         return;
       }
     }
-    NOTREACHED();
+    DUMP_WILL_BE_NOTREACHED_NORETURN();
   }
 
-  absl::optional<SubresourceLoaderParams> MaybeCreateSubresourceLoaderParams()
+  std::optional<SubresourceLoaderParams> MaybeCreateSubresourceLoaderParams()
       override {
     if (state_ != State::kInnerResponseRequested)
-      return absl::nullopt;
+      return std::nullopt;
 
     SubresourceLoaderParams params;
     params.prefetched_signed_exchanges = std::move(info_list_);
-    return absl::make_optional(std::move(params));
+    return std::make_optional(std::move(params));
   }
 
  private:
@@ -550,8 +555,8 @@ class PrefetchedNavigationLoaderInterceptor
     cookie_manager_->GetAllForUrl(
         request.url, request.trusted_params->isolation_info.site_for_cookies(),
         *request.trusted_params->isolation_info.top_frame_origin(),
-        std::move(match_options),
-        /*partitioned_cookies_runtime_feature_enabled=*/false,
+        request.has_storage_access, std::move(match_options),
+        request.is_ad_tagged,
         base::BindOnce(&PrefetchedNavigationLoaderInterceptor::OnGetCookies,
                        weak_factory_.GetWeakPtr(), std::move(callback),
                        std::move(fallback_callback)));
@@ -564,15 +569,22 @@ class PrefetchedNavigationLoaderInterceptor
     if (!results.empty()) {
       signed_exchange_utils::RecordLoadResultHistogram(
           SignedExchangeLoadResult::kHadCookieForCookielessOnlySXG);
+
+      ResponseHeadUpdateParams head_update_params;
+      head_update_params.load_timing_info =
+          this->exchange_->outer_response()->load_timing;
       std::move(fallback_callback)
-          .Run(true /* reset_subresource_loader_params */);
+          .Run(true /* reset_subresource_loader_params */,
+               // TODO(crbug.com/1441384) test workerStart in SXG scenarios
+               head_update_params);
       return;
     }
     state_ = State::kInnerResponseRequested;
     std::move(callback).Run(
-        base::MakeRefCounted<SingleRequestURLLoaderFactory>(base::BindOnce(
-            &PrefetchedNavigationLoaderInterceptor::StartInnerResponse,
-            weak_factory_.GetWeakPtr())));
+        base::MakeRefCounted<network::SingleRequestURLLoaderFactory>(
+            base::BindOnce(
+                &PrefetchedNavigationLoaderInterceptor::StartInnerResponse,
+                weak_factory_.GetWeakPtr())));
   }
 
   void StartRedirectResponse(
@@ -702,7 +714,7 @@ std::map<GURL, net::SHA256HashValue> GetAllowedAltSXG(
 
   for (const auto& value : link_header_util::SplitLinkHeader(link_header)) {
     std::string link_url;
-    std::unordered_map<std::string, absl::optional<std::string>> link_params;
+    std::unordered_map<std::string, std::optional<std::string>> link_params;
     if (!link_header_util::ParseLinkHeaderValue(value.first, value.second,
                                                 &link_url, &link_params)) {
       continue;
@@ -795,6 +807,8 @@ PrefetchedSignedExchangeCache::MaybeCreateInterceptor(
             render_frame_host ? render_frame_host->GetProcess()->GetID() : -1,
             render_frame_host ? render_frame_host->GetRoutingID()
                               : MSG_ROUTING_NONE,
+            render_frame_host ? render_frame_host->GetCookieSettingOverrides()
+                              : net::CookieSettingOverrides(),
             cookie_manager.BindNewPipeAndPassReceiver(),
             render_frame_host ? render_frame_host->CreateCookieAccessObserver()
                               : mojo::NullRemote());

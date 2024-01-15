@@ -12,14 +12,10 @@
 #import "components/prefs/pref_service.h"
 #import "components/reading_list/core/reading_list_model.h"
 #import "components/ukm/ios/ukm_url_recorder.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
 #import "ios/chrome/browser/ui/reading_list/reading_list_constants.h"
 #import "ios/web/public/web_state.h"
 #import "services/metrics/public/cpp/ukm_builders.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 // static
 IOSAddToReadingListInfobarDelegate*
@@ -84,9 +80,9 @@ void IOSAddToReadingListInfobarDelegate::InfoBarDismissed() {
 }
 
 bool IOSAddToReadingListInfobarDelegate::Accept() {
-  model_->AddEntry(url_, base::UTF16ToUTF8(title_),
-                   reading_list::ADDED_VIA_CURRENT_APP,
-                   base::Minutes(estimated_read_time_));
+  model_->AddOrReplaceEntry(url_, base::UTF16ToUTF8(title_),
+                            reading_list::ADDED_VIA_CURRENT_APP,
+                            base::Minutes(estimated_read_time_));
   ukm::SourceId sourceID = ukm::GetSourceIdForWebStateDocument(web_state_);
   if (sourceID != ukm::kInvalidSourceId) {
     ukm::builders::IOS_PageAddedToReadingList(sourceID)

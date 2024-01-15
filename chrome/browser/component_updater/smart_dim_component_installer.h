@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "components/component_updater/component_installer.h"
 
@@ -41,14 +42,14 @@ class SmartDimComponentInstallerPolicy : public ComponentInstallerPolicy {
   bool SupportsGroupPolicyEnabledComponentUpdates() const override;
   bool RequiresNetworkEncryption() const override;
   update_client::CrxInstaller::Result OnCustomInstall(
-      const base::Value& manifest,
+      const base::Value::Dict& manifest,
       const base::FilePath& install_dir) override;
   void OnCustomUninstall() override;
-  bool VerifyInstallation(const base::Value& manifest,
+  bool VerifyInstallation(const base::Value::Dict& manifest,
                           const base::FilePath& install_dir) const override;
   void ComponentReady(const base::Version& version,
                       const base::FilePath& install_dir,
-                      base::Value manifest) override;
+                      base::Value::Dict manifest) override;
   base::FilePath GetRelativeInstallDir() const override;
   void GetHash(std::vector<uint8_t>* hash) const override;
   std::string GetName() const override;
@@ -61,8 +62,10 @@ class SmartDimComponentInstallerPolicy : public ComponentInstallerPolicy {
 };
 
 // Call once during startup to make the component update service aware of
-// the smart dim component.
-void RegisterSmartDimComponent(ComponentUpdateService* cus);
+// the smart dim component. The optional `callback` is invoked when registration
+// is complete.
+void RegisterSmartDimComponent(ComponentUpdateService* cus,
+                               base::OnceClosure callback = {});
 
 }  // namespace component_updater
 

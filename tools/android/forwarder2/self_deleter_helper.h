@@ -7,14 +7,14 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace base {
 
@@ -99,7 +99,7 @@ class SelfDeleterHelper {
   using DeletionCallback = base::OnceCallback<void(std::unique_ptr<T>)>;
 
   SelfDeleterHelper(T* self_deleting_object, DeletionCallback deletion_callback)
-      : construction_runner_(base::ThreadTaskRunnerHandle::Get()),
+      : construction_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
         self_deleting_object_(self_deleting_object),
         deletion_callback_(std::move(deletion_callback)) {}
 

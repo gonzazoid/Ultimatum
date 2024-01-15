@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "media/cast/cast_config.h"
 #include "media/cast/constants.h"
 #include "media/cast/net/cast_transport_config.h"
@@ -23,7 +23,7 @@ FrameReceiverConfig GetDefaultAudioReceiverConfig() {
   config.rtp_timebase = 48000;
   config.channels = 2;
   config.target_frame_rate = 100;  // 10ms of signal per frame
-  config.codec = media::cast::CODEC_AUDIO_OPUS;
+  config.codec = media::cast::Codec::kAudioOpus;
   return config;
 }
 
@@ -36,7 +36,7 @@ FrameReceiverConfig GetDefaultVideoReceiverConfig() {
   config.rtp_timebase = kVideoFrequency;
   config.channels = 1;
   config.target_frame_rate = kDefaultMaxFrameRate;
-  config.codec = media::cast::CODEC_VIDEO_VP8;
+  config.codec = media::cast::Codec::kVideoVp8;
   return config;
 }
 
@@ -46,7 +46,7 @@ FrameSenderConfig GetDefaultAudioSenderConfig() {
   config.sender_ssrc = recv_config.sender_ssrc;
   config.receiver_ssrc = recv_config.receiver_ssrc;
   config.rtp_payload_type = recv_config.rtp_payload_type;
-  config.use_external_encoder = false;
+  config.use_hardware_encoder = false;
   config.rtp_timebase = recv_config.rtp_timebase;
   config.channels = recv_config.channels;
   config.max_bitrate = config.min_bitrate = config.start_bitrate =
@@ -62,7 +62,7 @@ FrameSenderConfig GetDefaultVideoSenderConfig() {
   config.sender_ssrc = recv_config.sender_ssrc;
   config.receiver_ssrc = recv_config.receiver_ssrc;
   config.rtp_payload_type = recv_config.rtp_payload_type;
-  config.use_external_encoder = false;
+  config.use_hardware_encoder = false;
   config.rtp_timebase = recv_config.rtp_timebase;
   config.max_bitrate = kDefaultMaxVideoBitrate;
   config.min_bitrate = kDefaultMinVideoBitrate;

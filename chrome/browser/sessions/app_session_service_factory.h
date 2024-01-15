@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_SESSIONS_APP_SESSION_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_SESSIONS_APP_SESSION_SERVICE_FACTORY_H_
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
 #include "chrome/browser/sessions/app_session_service.h"
 
@@ -56,13 +56,13 @@ class AppSessionServiceFactory : public ProfileKeyedServiceFactory {
   static AppSessionServiceFactory* GetInstance();
 
  private:
-  friend struct base::DefaultSingletonTraits<AppSessionServiceFactory>;
+  friend base::NoDestructor<AppSessionServiceFactory>;
 
   AppSessionServiceFactory();
   ~AppSessionServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* profile) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
   bool ServiceIsNULLWhileTesting() const override;

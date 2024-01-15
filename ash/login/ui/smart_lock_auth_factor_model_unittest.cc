@@ -8,6 +8,7 @@
 #include "ash/login/ui/auth_icon_view.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/test/ash_test_base.h"
+#include "base/memory/raw_ptr.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -19,7 +20,7 @@ using AuthFactorState = AuthFactorModel::AuthFactorState;
 
 struct LabelTestcase {
   SmartLockState state;
-  absl::optional<bool> can_use_pin;
+  std::optional<bool> can_use_pin;
   int label_id;
   int accessible_name_id;
 };
@@ -37,12 +38,6 @@ constexpr LabelTestcase kLabelTestcases[] = {
     {SmartLockState::kInactive, /*can_use_pin=*/false,
      IDS_AUTH_FACTOR_LABEL_PASSWORD_REQUIRED,
      IDS_AUTH_FACTOR_LABEL_PASSWORD_REQUIRED},
-    {SmartLockState::kPasswordReentryRequired, /*can_use_pin=*/true,
-     IDS_AUTH_FACTOR_LABEL_PASSWORD_OR_PIN_REQUIRED,
-     IDS_AUTH_FACTOR_LABEL_PASSWORD_OR_PIN_REQUIRED},
-    {SmartLockState::kPasswordReentryRequired, /*can_use_pin=*/false,
-     IDS_AUTH_FACTOR_LABEL_PASSWORD_REQUIRED,
-     IDS_AUTH_FACTOR_LABEL_PASSWORD_REQUIRED},
     {SmartLockState::kPrimaryUserAbsent, /*can_use_pin=*/true,
      IDS_AUTH_FACTOR_LABEL_PASSWORD_OR_PIN_REQUIRED,
      IDS_AUTH_FACTOR_LABEL_PASSWORD_OR_PIN_REQUIRED},
@@ -55,25 +50,25 @@ constexpr LabelTestcase kLabelTestcases[] = {
     {SmartLockState::kPhoneNotAuthenticated, /*can_use_pin=*/false,
      IDS_AUTH_FACTOR_LABEL_PASSWORD_REQUIRED,
      IDS_AUTH_FACTOR_LABEL_PASSWORD_REQUIRED},
-    {SmartLockState::kBluetoothDisabled, /*can_use_pin=*/absl::nullopt,
+    {SmartLockState::kBluetoothDisabled, /*can_use_pin=*/std::nullopt,
      IDS_SMART_LOCK_LABEL_NO_BLUETOOTH, IDS_SMART_LOCK_LABEL_NO_BLUETOOTH},
-    {SmartLockState::kPhoneNotLockable, /*can_use_pin=*/absl::nullopt,
+    {SmartLockState::kPhoneNotLockable, /*can_use_pin=*/std::nullopt,
      IDS_SMART_LOCK_LABEL_NO_PHONE_LOCK_SCREEN,
      IDS_SMART_LOCK_LABEL_NO_PHONE_LOCK_SCREEN},
-    {SmartLockState::kConnectingToPhone, /*can_use_pin=*/absl::nullopt,
+    {SmartLockState::kConnectingToPhone, /*can_use_pin=*/std::nullopt,
      IDS_SMART_LOCK_LABEL_LOOKING_FOR_PHONE,
      IDS_SMART_LOCK_LABEL_LOOKING_FOR_PHONE},
-    {SmartLockState::kPhoneFoundLockedAndDistant, /*can_use_pin=*/absl::nullopt,
+    {SmartLockState::kPhoneFoundLockedAndDistant, /*can_use_pin=*/std::nullopt,
      IDS_SMART_LOCK_LABEL_PHONE_TOO_FAR, IDS_SMART_LOCK_LABEL_PHONE_TOO_FAR},
     {SmartLockState::kPhoneFoundUnlockedAndDistant,
-     /*can_use_pin=*/absl::nullopt, IDS_SMART_LOCK_LABEL_PHONE_TOO_FAR,
+     /*can_use_pin=*/std::nullopt, IDS_SMART_LOCK_LABEL_PHONE_TOO_FAR,
      IDS_SMART_LOCK_LABEL_PHONE_TOO_FAR},
-    {SmartLockState::kPhoneNotFound, /*can_use_pin=*/absl::nullopt,
+    {SmartLockState::kPhoneNotFound, /*can_use_pin=*/std::nullopt,
      IDS_SMART_LOCK_LABEL_NO_PHONE, IDS_SMART_LOCK_LABEL_NO_PHONE},
     {SmartLockState::kPhoneFoundLockedAndProximate,
-     /*can_use_pin=*/absl::nullopt, IDS_SMART_LOCK_LABEL_PHONE_LOCKED,
+     /*can_use_pin=*/std::nullopt, IDS_SMART_LOCK_LABEL_PHONE_LOCKED,
      IDS_SMART_LOCK_LABEL_PHONE_LOCKED},
-    {SmartLockState::kPhoneAuthenticated, /*can_use_pin=*/absl::nullopt,
+    {SmartLockState::kPhoneAuthenticated, /*can_use_pin=*/std::nullopt,
      IDS_AUTH_FACTOR_LABEL_CLICK_TO_ENTER,
      IDS_AUTH_FACTOR_LABEL_CLICK_TO_ENTER},
 };
@@ -116,7 +111,7 @@ class SmartLockAuthFactorModelUnittest : public AshTestBase {
   }
 
   std::unique_ptr<SmartLockAuthFactorModel> smart_lock_model_;
-  AuthFactorModel* model_ = nullptr;
+  raw_ptr<AuthFactorModel> model_ = nullptr;
   AuthIconView icon_;
   bool on_state_changed_called_ = false;
   bool arrow_button_tap_callback_called_ = false;
@@ -178,8 +173,7 @@ TEST_F(SmartLockAuthFactorModelUnittest, AvailableStates) {
 
 TEST_F(SmartLockAuthFactorModelUnittest, ErrorStates) {
   InitializeSmartLockAuthFactorModel();
-  for (SmartLockState state : {SmartLockState::kPasswordReentryRequired,
-                               SmartLockState::kPrimaryUserAbsent,
+  for (SmartLockState state : {SmartLockState::kPrimaryUserAbsent,
                                SmartLockState::kPhoneNotAuthenticated,
                                SmartLockState::kBluetoothDisabled,
                                SmartLockState::kPhoneNotLockable}) {
@@ -239,8 +233,6 @@ TEST_F(SmartLockAuthFactorModelUnittest, ArrowButtonTapCallback) {
       SmartLockState::kPhoneFoundUnlockedAndDistant, false);
   TestArrowButtonAndCheckCallbackCalled(SmartLockState::kPhoneAuthenticated,
                                         true);
-  TestArrowButtonAndCheckCallbackCalled(
-      SmartLockState::kPasswordReentryRequired, false);
   TestArrowButtonAndCheckCallbackCalled(SmartLockState::kPrimaryUserAbsent,
                                         false);
 }

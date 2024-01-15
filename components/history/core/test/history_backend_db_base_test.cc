@@ -10,7 +10,6 @@
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/history/core/browser/download_constants.h"
 #include "components/history/core/browser/download_row.h"
 #include "components/history/core/browser/history_backend.h"
@@ -31,6 +30,7 @@ class BackendDelegate : public HistoryBackend::Delegate {
       : history_test_(history_test) {}
 
   // HistoryBackend::Delegate implementation.
+  bool CanAddURL(const GURL& url) const override { return true; }
   void NotifyProfileError(sql::InitStatus init_status,
                           const std::string& diagnostics) override {
     history_test_->last_profile_error_ = init_status;
@@ -44,16 +44,14 @@ class BackendDelegate : public HistoryBackend::Delegate {
   void NotifyFaviconsChanged(const std::set<GURL>& page_urls,
                              const GURL& icon_url) override {}
   void NotifyURLVisited(const URLRow& url_row,
-                        const VisitRow& visit_row) override {}
+                        const VisitRow& visit_row,
+                        absl::optional<int64_t> local_navigation_id) override {}
   void NotifyURLsModified(const URLRows& changed_urls) override {}
   void NotifyURLsDeleted(DeletionInfo deletion_info) override {}
   void NotifyKeywordSearchTermUpdated(const URLRow& row,
                                       KeywordID keyword_id,
                                       const std::u16string& term) override {}
   void NotifyKeywordSearchTermDeleted(URLID url_id) override {}
-  void NotifyContentModelAnnotationModified(
-      const URLRow& row,
-      const VisitContentModelAnnotations& model_annotations) override {}
   void DBLoaded() override {}
 
  private:
@@ -86,7 +84,7 @@ void HistoryBackendDBBaseTest::TearDown() {
 void HistoryBackendDBBaseTest::CreateBackendAndDatabase() {
   backend_ = base::MakeRefCounted<HistoryBackend>(
       std::make_unique<BackendDelegate>(this), nullptr,
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   backend_->Init(false,
                  TestHistoryDatabaseParamsForPath(history_dir_));
   db_ = backend_->db_.get();
@@ -97,7 +95,7 @@ void HistoryBackendDBBaseTest::CreateBackendAndDatabase() {
 void HistoryBackendDBBaseTest::CreateBackendAndDatabaseAllowFail() {
   backend_ = base::MakeRefCounted<HistoryBackend>(
       std::make_unique<BackendDelegate>(this), nullptr,
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   backend_->Init(false,
                  TestHistoryDatabaseParamsForPath(history_dir_));
   db_ = backend_->db_.get();
@@ -115,6 +113,7 @@ void HistoryBackendDBBaseTest::CreateDBVersion(int version) {
 void HistoryBackendDBBaseTest::DeleteBackend() {
   if (backend_) {
     backend_->Closing();
+    db_ = nullptr;
     backend_ = nullptr;
   }
 }
@@ -149,6 +148,7 @@ bool HistoryBackendDBBaseTest::AddDownload(uint32_t id,
   download.transient = true;
   download.by_ext_id = "by_ext_id";
   download.by_ext_name = "by_ext_name";
+  download.by_web_app_id = "by_web_app_id";
   return db_->CreateDownload(download);
 }
 

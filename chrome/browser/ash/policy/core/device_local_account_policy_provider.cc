@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "chrome/browser/ash/policy/external_data/device_local_account_external_data_manager.h"
 #include "chromeos/dbus/power/power_policy_controller.h"
@@ -75,13 +75,15 @@ bool DeviceLocalAccountPolicyProvider::IsFirstPolicyLoadComplete(
   return IsInitializationComplete(domain);
 }
 
-void DeviceLocalAccountPolicyProvider::RefreshPolicies() {
+void DeviceLocalAccountPolicyProvider::RefreshPolicies(
+    PolicyFetchReason reason) {
   DeviceLocalAccountPolicyBroker* broker = GetBroker();
   if (broker && broker->core()->service()) {
     waiting_for_policy_refresh_ = true;
     broker->core()->service()->RefreshPolicy(
         base::BindOnce(&DeviceLocalAccountPolicyProvider::ReportPolicyRefresh,
-                       weak_factory_.GetWeakPtr()));
+                       weak_factory_.GetWeakPtr()),
+        reason);
   } else {
     UpdateFromBroker();
   }
@@ -128,7 +130,7 @@ void DeviceLocalAccountPolicyProvider::UpdateFromBroker() {
     // Keep existing policy, but do send an update.
     waiting_for_policy_refresh_ = false;
     weak_factory_.InvalidateWeakPtrs();
-    bundle.CopyFrom(policies());
+    bundle = policies().Clone();
   }
 
   PolicyMap& chrome_policy =

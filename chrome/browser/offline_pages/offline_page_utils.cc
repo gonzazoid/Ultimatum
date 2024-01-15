@@ -8,13 +8,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/net/net_error_tab_helper.h"
@@ -88,13 +88,6 @@ void CheckDuplicateOngoingDownloads(
           std::move(callback).Run(
               OfflinePageUtils::DuplicateCheckResult::NOT_FOUND);
         } else {
-          // Using CUSTOM_COUNTS instead of time-oriented histogram to record
-          // samples in seconds rather than milliseconds.
-          UMA_HISTOGRAM_CUSTOM_COUNTS(
-              "OfflinePages.DownloadRequestTimeSinceDuplicateRequested",
-              (OfflineTimeNow() - latest_request_time).InSeconds(),
-              base::Seconds(1).InSeconds(), base::Days(7).InSeconds(), 50);
-
           std::move(callback).Run(
               OfflinePageUtils::DuplicateCheckResult::DUPLICATE_REQUEST_FOUND);
         }
@@ -146,7 +139,7 @@ content::WebContents::Getter GetWebContentsGetter(
 }
 
 void AcquireFileAccessPermissionDoneForScheduleDownload(
-    content::WebContents* web_contents,
+    const content::WebContents::Getter& wc_getter,
     const std::string& name_space,
     const GURL& url,
     OfflinePageUtils::DownloadUIActionFlags ui_action,
@@ -154,6 +147,11 @@ void AcquireFileAccessPermissionDoneForScheduleDownload(
     bool granted) {
   if (!granted)
     return;
+  content::WebContents* web_contents = wc_getter.Run();
+  if (!web_contents) {
+    return;
+  }
+
   OfflinePageTabHelper* tab_helper =
       OfflinePageTabHelper::FromWebContents(web_contents);
   if (!tab_helper)
@@ -188,7 +186,7 @@ void OfflinePageUtils::SelectPagesWithCriteria(
   OfflinePageModel* offline_page_model =
       OfflinePageModelFactory::GetForKey(key);
   if (!offline_page_model) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback), std::vector<OfflinePageItem>()));
     return;
@@ -279,13 +277,6 @@ void OfflinePageUtils::CheckDuplicateDownloads(
       // Then check for ongoing downloads, that is, requests.
       CheckDuplicateOngoingDownloads(browser_context, url, std::move(callback));
     } else {
-      // Using CUSTOM_COUNTS instead of time-oriented histogram to record
-      // samples in seconds rather than milliseconds.
-      UMA_HISTOGRAM_CUSTOM_COUNTS(
-          "OfflinePages.DownloadRequestTimeSinceDuplicateSaved",
-          (OfflineTimeNow() - latest_saved_time).InSeconds(),
-          base::Seconds(1).InSeconds(), base::Days(7).InSeconds(), 50);
-
       std::move(callback).Run(DuplicateCheckResult::DUPLICATE_PAGE_FOUND);
     }
   };
@@ -310,7 +301,8 @@ void OfflinePageUtils::ScheduleDownload(content::WebContents* web_contents,
   AcquireFileAccessPermission(
       web_contents,
       base::BindOnce(&AcquireFileAccessPermissionDoneForScheduleDownload,
-                     web_contents, name_space, url, ui_action, request_origin));
+                     GetWebContentsGetter(web_contents), name_space, url,
+                     ui_action, request_origin));
 }
 
 // static

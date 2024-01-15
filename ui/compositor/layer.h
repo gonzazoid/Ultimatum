@@ -103,6 +103,13 @@ class COMPOSITOR_EXPORT Layer : public LayerAnimationDelegate,
     sync_visibility_with_source_ = sync_visibility;
   }
 
+  // This method is relevant only if this layer is a mirror destination layer.
+  // Sets whether this mirror layer's rounded corners are synchronized with the
+  // source layer's rounded corners.
+  void set_sync_rounded_corners_with_source(bool sync_rounded_corners) {
+    sync_rounded_corners_with_source_ = sync_rounded_corners;
+  }
+
   // Sets up this layer to mirror output of |subtree_reflected_layer|, including
   // its entire hierarchy. |this| should be of type LAYER_SOLID_COLOR and should
   // not be a descendant of |subtree_reflected_layer|. This is achieved by using
@@ -160,7 +167,9 @@ class COMPOSITOR_EXPORT Layer : public LayerAnimationDelegate,
   void StackBelow(Layer* child, Layer* other);
 
   // Returns the child Layers.
-  const std::vector<Layer*>& children() const { return children_; }
+  const std::vector<raw_ptr<Layer, VectorExperimental>>& children() const {
+    return children_;
+  }
 
   // The parent.
   const Layer* parent() const { return parent_; }
@@ -174,7 +183,7 @@ class COMPOSITOR_EXPORT Layer : public LayerAnimationDelegate,
   // The layer's animator is responsible for causing automatic animations when
   // properties are set. It also manages a queue of pending animations and
   // handles blending of animations. The layer takes ownership of the animator.
-  void SetAnimator(LayerAnimator* animator);
+  void SetAnimator(scoped_refptr<LayerAnimator> animator);
 
   // Returns the layer's animator. Creates a default animator of one has not
   // been set. Will not return NULL.
@@ -301,9 +310,26 @@ class COMPOSITOR_EXPORT Layer : public LayerAnimationDelegate,
   // If a custom layer color matrix was set, this clears it.
   void ClearLayerCustomColorMatrix();
 
+  // Applies an offset to the Layer, after all other backdrop and filter effects
+  // other than clipping. This offset is not reflected in the layer bounds.
+  void SetLayerOffset(const gfx::Point& offset);
+  const gfx::Point& layer_offset() const { return layer_offset_; }
+
   // Zoom the background by a factor of |zoom|. The effect is blended along the
   // edge across |inset| pixels.
+  // NOTE: Background zoom does not currently work with software compositing,
+  // see crbug.com/1451898. Usage should generally be limited to ash chrome,
+  // which does not rely on software compositing. Elsewhere, background zoom can
+  // still be set, but it will have no effect when software compositing is used
+  // (e.g. as a fallback when the GPU process has crashed too many times).
   void SetBackgroundZoom(float zoom, int inset);
+
+  // Set the rounded clip bounds of the backdrop filter effect, relative to
+  // this Layer's coordinate space. Backdrop effects are only visible and can
+  // only sample from the intersection of the Layer's bounds and any set
+  // backdrop filter bounds.
+  void SetBackdropFilterBounds(const gfx::RRectF& backdrop_filter_bounds);
+  void ClearBackdropFilterBounds();
 
   // Set the shape of this layer.
   const ShapeRects* alpha_shape() const { return alpha_shape_.get(); }
@@ -326,10 +352,10 @@ class COMPOSITOR_EXPORT Layer : public LayerAnimationDelegate,
   Layer* layer_mask_layer() { return layer_mask_; }
   const Layer* layer_mask_layer() const { return layer_mask_; }
 
-  // Sets the visibility of the Layer. A Layer may be visible but not drawn.
-  // This happens if any ancestor of a Layer is not visible.
-  // Any changes made to this in the source layer will override the visibility
-  // of its mirror layer.
+  // Sets the visibility of the Layer. A Layer itself may be visible but not
+  // fully visible in the layer tree.  This happens if any ancestor of a
+  // Layer is not visible.  Any changes made to this in the source layer will
+  // override the visibility of its mirror layer.
   void SetVisible(bool visible);
   bool visible() const { return visible_; }
 
@@ -337,9 +363,9 @@ class COMPOSITOR_EXPORT Layer : public LayerAnimationDelegate,
   // returns the current visibility.
   bool GetTargetVisibility() const;
 
-  // Returns true if this Layer is drawn. A Layer is drawn only if all ancestors
-  // are visible.
-  bool IsDrawn() const;
+  // Returns true if this Layer is visible. A Layer is visible only if
+  // all ancestors are visible.
+  bool IsVisible() const;
 
   // If set to true, this layer can receive hit test events, this property does
   // not affect the layer's descendants.
@@ -357,6 +383,7 @@ class COMPOSITOR_EXPORT Layer : public LayerAnimationDelegate,
   const gfx::LinearGradient& gradient_mask() const {
     return cc_layer_->gradient_mask();
   }
+  bool HasGradientMask() { return !cc_layer_->gradient_mask().IsEmpty(); }
 
   // If set to true, this layer would not trigger a render surface (if possible)
   // due to having a rounded corner resulting in a better performance at the
@@ -398,7 +425,8 @@ class COMPOSITOR_EXPORT Layer : public LayerAnimationDelegate,
   void SetName(const std::string& name);
 
   // Set new TransferableResource for this layer. This method only supports
-  // a gpu-backed |resource|.
+  // a gpu-backed |resource| which is assumed to have top-left origin. Clients
+  // should call SetTextureFlipped(true) for bottom-left origin resources.
   void SetTransferableResource(const viz::TransferableResource& resource,
                                viz::ReleaseCallback release_callback,
                                gfx::Size texture_size_in_dip);
@@ -406,10 +434,18 @@ class COMPOSITOR_EXPORT Layer : public LayerAnimationDelegate,
   void SetTextureFlipped(bool flipped);
   bool TextureFlipped() const;
 
-  // TODO(fsamuel): Update this comment.
   // Begins showing content from a surface with a particular ID.
+  // TODO(crbug.com/1491605): with surface sync, size shouldn't rely on
+  // `frame_size_in_dip` anymore, so this method can be deleted, and
+  // surface_size uses `bounds_` instead.
   void SetShowSurface(const viz::SurfaceId& surface_id,
                       const gfx::Size& frame_size_in_dip,
+                      SkColor default_background_color,
+                      const cc::DeadlinePolicy& deadline_policy,
+                      bool stretch_content_to_fill_bounds);
+
+  // Updates the surface to a particular ID without changing size.
+  void SetShowSurface(const viz::SurfaceId& surface_id,
                       SkColor default_background_color,
                       const cc::DeadlinePolicy& deadline_policy,
                       bool stretch_content_to_fill_bounds);
@@ -566,11 +602,15 @@ class COMPOSITOR_EXPORT Layer : public LayerAnimationDelegate,
   // set to stretch to fill bounds.
   void SetSurfaceSize(gfx::Size surface_size_in_dip);
 
+  base::WeakPtr<Layer> AsWeakPtr();
+
   bool ContainsMirrorForTest(Layer* mirror) const;
 
   void SetCompositorForTesting(Compositor* compositor) {
     compositor_ = compositor;
   }
+
+  void set_no_mutation(bool no_mutation) { no_mutation_ = no_mutation; }
 
  private:
   // TODO(https://crbug.com/1242749): temporary while tracking down crash.
@@ -694,7 +734,7 @@ class COMPOSITOR_EXPORT Layer : public LayerAnimationDelegate,
   raw_ptr<Layer> parent_;
 
   // This layer's children, in bottom-to-top stacking order.
-  std::vector<Layer*> children_;
+  std::vector<raw_ptr<Layer, VectorExperimental>> children_;
 
   std::vector<std::unique_ptr<LayerMirror>> mirrors_;
 
@@ -712,11 +752,15 @@ class COMPOSITOR_EXPORT Layer : public LayerAnimationDelegate,
   // layer's visibility are propagated to this mirror layer.
   bool sync_visibility_with_source_ = true;
 
+  // If true, and this is a destination mirror layer, changes in the rounded
+  // corners of the source layer are propagated to this mirror layer.
+  bool sync_rounded_corners_with_source_ = true;
+
   gfx::Rect bounds_;
 
   std::unique_ptr<SubpixelPositionOffsetCache> subpixel_position_offset_;
 
-  // Visibility of this layer. See SetVisible/IsDrawn for more details.
+  // Visibility of this layer. See SetVisible/IsVisible for more details.
   bool visible_;
 
   // Whether or not the layer wants to receive hit testing events. When set to
@@ -749,6 +793,8 @@ class COMPOSITOR_EXPORT Layer : public LayerAnimationDelegate,
   float layer_sepia_;
   float layer_hue_rotation_;
   std::unique_ptr<cc::FilterOperation::Matrix> layer_custom_color_matrix_;
+  // Offset to apply when drawing pixels for the layer.
+  gfx::Point layer_offset_;
 
   // The associated mask layer with this layer.
   raw_ptr<Layer> layer_mask_;
@@ -769,7 +815,7 @@ class COMPOSITOR_EXPORT Layer : public LayerAnimationDelegate,
 
   std::string name_;
 
-  raw_ptr<LayerDelegate> delegate_;
+  raw_ptr<LayerDelegate, DanglingUntriaged> delegate_;
 
   base::ObserverList<LayerObserver>::Unchecked observer_list_;
 
@@ -827,6 +873,7 @@ class COMPOSITOR_EXPORT Layer : public LayerAnimationDelegate,
   // TODO(https://crbug.com/1242749): temporary while tracking down crash.
   bool in_send_damaged_rects_ = false;
   bool sending_damaged_rects_for_descendants_ = false;
+  bool no_mutation_ = false;  // CHECK on Add/SetMakeLayer if true.
 
   base::WeakPtrFactory<Layer> weak_ptr_factory_{this};
 };

@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/timer/timer.h"
@@ -38,7 +39,7 @@ class RemoteDeviceLifeCycleImpl
   // |proximity_auth_client| is not owned.
   RemoteDeviceLifeCycleImpl(
       ash::multidevice::RemoteDeviceRef remote_device,
-      absl::optional<ash::multidevice::RemoteDeviceRef> local_device,
+      std::optional<ash::multidevice::RemoteDeviceRef> local_device,
       ash::secure_channel::SecureChannelClient* secure_channel_client);
 
   RemoteDeviceLifeCycleImpl(const RemoteDeviceLifeCycleImpl&) = delete;
@@ -82,10 +83,10 @@ class RemoteDeviceLifeCycleImpl
   const ash::multidevice::RemoteDeviceRef remote_device_;
 
   // Represents this device (i.e. this Chromebook) for a particular profile.
-  absl::optional<ash::multidevice::RemoteDeviceRef> local_device_;
+  std::optional<ash::multidevice::RemoteDeviceRef> local_device_;
 
   // The entrypoint to the SecureChannel API.
-  ash::secure_channel::SecureChannelClient* secure_channel_client_;
+  raw_ptr<ash::secure_channel::SecureChannelClient> secure_channel_client_;
 
   // The current state in the life cycle.
   RemoteDeviceLifeCycle::State state_;

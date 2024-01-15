@@ -7,12 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/token.h"
 #include "chromeos/crosapi/mojom/screen_manager.mojom.h"
 #include "chromeos/crosapi/mojom/video_capture.mojom.h"
@@ -32,8 +31,6 @@ namespace content {
 
 namespace {
 
-const int kVideoCaptureMinVersion = crosapi::mojom::ScreenManager::
-    MethodMinVersions::kGetScreenVideoCapturerMinVersion;
 const int kRequestRefreshFrameMinVersion = crosapi::mojom::VideoCaptureDevice::
     MethodMinVersions::kRequestRefreshFrameMinVersion;
 
@@ -45,29 +42,17 @@ void BindWakeLockProvider(
 
 }  // namespace
 
-// static
-bool VideoCaptureDeviceProxyLacros::IsAvailable() {
-  auto* service = chromeos::LacrosService::Get();
-
-  if (!service)
-    return false;
-
-  return service->GetInterfaceVersion(crosapi::mojom::ScreenManager::Uuid_) >=
-         kVideoCaptureMinVersion;
-}
-
 VideoCaptureDeviceProxyLacros::VideoCaptureDeviceProxyLacros(
     const DesktopMediaID& device_id)
     : capture_id_(device_id) {
-  CHECK(IsAvailable());
   CHECK(capture_id_.type == DesktopMediaID::TYPE_SCREEN ||
         capture_id_.type == DesktopMediaID::TYPE_WINDOW);
 
   // The LacrosService exists at all times except during early start-up and
   // late shut-down. This class should never be used in those two times.
   auto* lacros_service = chromeos::LacrosService::Get();
-  DCHECK(lacros_service);
-  DCHECK(lacros_service->IsAvailable<crosapi::mojom::ScreenManager>());
+  CHECK(lacros_service);
+  CHECK(lacros_service->IsAvailable<crosapi::mojom::ScreenManager>());
   lacros_service->BindScreenManagerReceiver(
       screen_manager_.BindNewPipeAndPassReceiver());
 
@@ -159,15 +144,17 @@ void VideoCaptureDeviceProxyLacros::Resume() {
     device_->Resume();
 }
 
-void VideoCaptureDeviceProxyLacros::Crop(
-    const base::Token& crop_id,
-    uint32_t crop_version,
-    base::OnceCallback<void(media::mojom::CropRequestResult)> callback) {
+void VideoCaptureDeviceProxyLacros::ApplySubCaptureTarget(
+    media::mojom::SubCaptureTargetType type,
+    const base::Token& target,
+    uint32_t sub_capture_target_version,
+    base::OnceCallback<void(media::mojom::ApplySubCaptureTargetResult)>
+        callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(callback);
 
   std::move(callback).Run(
-      media::mojom::CropRequestResult::kUnsupportedCaptureDevice);
+      media::mojom::ApplySubCaptureTargetResult::kUnsupportedCaptureDevice);
 }
 
 void VideoCaptureDeviceProxyLacros::StopAndDeAllocate() {

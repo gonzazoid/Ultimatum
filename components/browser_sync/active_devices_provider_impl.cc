@@ -11,6 +11,7 @@
 #include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/ranges/algorithm.h"
+#include "base/trace_event/trace_event.h"
 #include "components/browser_sync/active_devices_provider_impl.h"
 #include "components/browser_sync/browser_sync_switches.h"
 #include "components/sync/base/model_type.h"
@@ -22,21 +23,21 @@ ActiveDevicesProviderImpl::ActiveDevicesProviderImpl(
     base::Clock* clock)
     : device_info_tracker_(device_info_tracker), clock_(clock) {
   DCHECK(device_info_tracker_);
-  device_info_tracker_->AddObserver(this);
+  device_info_tracker_observation_.Observe(device_info_tracker_);
 }
 
 ActiveDevicesProviderImpl::~ActiveDevicesProviderImpl() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(callback_.is_null());
-  device_info_tracker_->RemoveObserver(this);
 }
 
 syncer::ActiveDevicesInvalidationInfo
 ActiveDevicesProviderImpl::CalculateInvalidationInfo(
     const std::string& local_cache_guid) const {
+  TRACE_EVENT0("ui", "ActiveDevicesProviderImpl::CalculateInvalidationInfo");
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  const std::vector<std::unique_ptr<syncer::DeviceInfo>> active_devices =
+  const std::vector<const syncer::DeviceInfo*> active_devices =
       GetActiveDevicesSortedByUpdateTime();
   if (active_devices.empty()) {
     // This may happen if the engine is not initialized yet. In other cases,
@@ -49,12 +50,14 @@ ActiveDevicesProviderImpl::CalculateInvalidationInfo(
   // List of interested data types for all other clients.
   syncer::ModelTypeSet all_interested_data_types;
 
+  syncer::ModelTypeSet old_invalidations_interested_data_types;
+
   // FCM registration tokens with corresponding interested data types for all
   // the clients with enabled sync standalone invalidations.
   std::map<std::string, syncer::ModelTypeSet>
       fcm_token_and_interested_data_types;
 
-  for (const std::unique_ptr<syncer::DeviceInfo>& device : active_devices) {
+  for (const syncer::DeviceInfo* device : active_devices) {
     if (!local_cache_guid.empty() && device->guid() == local_cache_guid) {
       continue;
     }
@@ -72,6 +75,19 @@ ActiveDevicesProviderImpl::CalculateInvalidationInfo(
               switches::kSyncUseFCMRegistrationTokensList)) {
         all_fcm_registration_tokens.push_back(device->fcm_registration_token());
       }
+    } else if (!device->interested_data_types().Empty()) {
+      // An empty FCM registration token may be set for old clients, and for
+      // modern clients supporting sync standalone invalidatoins if there was an
+      // error during FCM registration. This does not matter in this case since
+      // the error case should be rare, and in the worst case the
+      // |single_client_old_invalidations| flag will not be provided (and this
+      // is just an optimization flag).
+      old_invalidations_interested_data_types.PutAll(
+          device->interested_data_types());
+    } else {
+      // For old clients which do not support interested data types assume that
+      // they are subscribed to all data types.
+      old_invalidations_interested_data_types.PutAll(syncer::ProtocolTypes());
     }
   }
 
@@ -84,10 +100,14 @@ ActiveDevicesProviderImpl::CalculateInvalidationInfo(
           switches::kSyncFCMRegistrationTokensListMaxSize.Get())) {
     all_fcm_registration_tokens.clear();
   }
+  TRACE_EVENT0("ui",
+               "ActiveDevicesProviderImpl::CalculateInvalidationInfo() => "
+               "ActiveDevicesInvalidationInfo::Create");
 
   return syncer::ActiveDevicesInvalidationInfo::Create(
       std::move(all_fcm_registration_tokens), all_interested_data_types,
-      std::move(fcm_token_and_interested_data_types));
+      std::move(fcm_token_and_interested_data_types),
+      old_invalidations_interested_data_types);
 }
 
 void ActiveDevicesProviderImpl::SetActiveDevicesChangedCallback(
@@ -106,30 +126,28 @@ void ActiveDevicesProviderImpl::OnDeviceInfoChange() {
   }
 }
 
-std::vector<std::unique_ptr<syncer::DeviceInfo>>
+std::vector<const syncer::DeviceInfo*>
 ActiveDevicesProviderImpl::GetActiveDevicesSortedByUpdateTime() const {
-  std::vector<std::unique_ptr<syncer::DeviceInfo>> all_devices =
+  std::vector<const syncer::DeviceInfo*> all_devices =
       device_info_tracker_->GetAllDeviceInfo();
-  base::ranges::sort(
-      all_devices, [](const std::unique_ptr<syncer::DeviceInfo>& left_device,
-                      const std::unique_ptr<syncer::DeviceInfo>& right_device) {
-        return left_device->last_updated_timestamp() <
-               right_device->last_updated_timestamp();
-      });
-  if (!base::FeatureList::IsEnabled(
+
+  if (base::FeatureList::IsEnabled(
           switches::kSyncFilterOutInactiveDevicesForSingleClient)) {
-    return all_devices;
+    base::EraseIf(all_devices, [this](const syncer::DeviceInfo* device) {
+      const base::Time expected_expiration_time =
+          device->last_updated_timestamp() + device->pulse_interval() +
+          switches::kSyncActiveDeviceMargin.Get();
+      // If the device's expiration time hasn't been reached, then
+      // it is considered active device.
+      return expected_expiration_time <= clock_->Now();
+    });
   }
 
-  base::EraseIf(
-      all_devices, [this](const std::unique_ptr<syncer::DeviceInfo>& device) {
-        const base::Time expected_expiration_time =
-            device->last_updated_timestamp() + device->pulse_interval() +
-            switches::kSyncActiveDeviceMargin.Get();
-        // If the device's expiration time hasn't been reached, then
-        // it is considered active device.
-        return expected_expiration_time <= clock_->Now();
-      });
+  base::ranges::sort(all_devices, [](const syncer::DeviceInfo* left_device,
+                                     const syncer::DeviceInfo* right_device) {
+    return left_device->last_updated_timestamp() <
+           right_device->last_updated_timestamp();
+  });
 
   return all_devices;
 }

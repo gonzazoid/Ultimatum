@@ -20,6 +20,7 @@ namespace blink {
 
 class ExecutionContext;
 class SVGStringListTearOff;
+class FontDescription;
 
 class CORE_EXPORT Dactyloscoper {
   DISALLOW_NEW();
@@ -28,12 +29,22 @@ class CORE_EXPORT Dactyloscoper {
   // HighEntropyTracer traces calls of HighEntropy APIs to perfetto.
   //
   // NOTE: This class must always be instantiated on the stack.
-  class HighEntropyTracer {
+  class CORE_EXPORT HighEntropyTracer {
    public:
     HighEntropyTracer(const char* called_api,
                       const v8::FunctionCallbackInfo<v8::Value>& info);
     ~HighEntropyTracer();
   };
+
+  enum class FontLookupType {
+    kUniqueOrFamilyName,
+    kUniqueNameOnly,
+  };
+
+  static void TraceFontLookup(ExecutionContext* execution_context,
+                              const AtomicString& name,
+                              const FontDescription& font_description,
+                              FontLookupType lookup_type);
 
   Dactyloscoper();
   Dactyloscoper(const Dactyloscoper&) = delete;

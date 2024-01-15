@@ -2,10 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "components/viz/test/test_gpu_service_holder.h"
 #include "gpu/GLES2/gl2extchromium.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
 #include "gpu/command_buffer/client/gles2_implementation.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
 #include "gpu/command_buffer/client/webgpu_implementation.h"
@@ -45,20 +45,12 @@ class SharedImageGLBackingProduceDawnTest : public WebGPUTest {
     }
 
     gpu::ContextCreationAttribs attributes;
-    attributes.alpha_size = 8;
-    attributes.depth_size = 24;
-    attributes.red_size = 8;
-    attributes.green_size = 8;
-    attributes.blue_size = 8;
-    attributes.stencil_size = 8;
-    attributes.samples = 4;
-    attributes.sample_buffers = 1;
     attributes.bind_generates_resource = false;
 
     gl_context_ = std::make_unique<GLInProcessContext>();
-    ContextResult result = gl_context_->Initialize(
-        GetGpuServiceHolder()->task_executor(), attributes,
-        option.shared_memory_limits, /*image_factory=*/nullptr);
+    ContextResult result =
+        gl_context_->Initialize(GetGpuServiceHolder()->task_executor(),
+                                attributes, option.shared_memory_limits);
     ASSERT_EQ(result, ContextResult::kSuccess);
     mock_buffer_map_callback =
         std::make_unique<testing::StrictMock<MockBufferMapCallback>>();
@@ -104,10 +96,13 @@ TEST_F(SharedImageGLBackingProduceDawnTest, Basic) {
 
   // Create the shared image
   SharedImageInterface* sii = gl_context_->GetSharedImageInterface();
-  Mailbox gl_mailbox = sii->CreateSharedImage(
-      viz::ResourceFormat::RGBA_8888, {1, 1}, gfx::ColorSpace::CreateSRGB(),
-      kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType, SHARED_IMAGE_USAGE_GLES2,
-      kNullSurfaceHandle);
+  Mailbox gl_mailbox =
+      sii->CreateSharedImage(viz::SinglePlaneFormat::kRGBA_8888, {1, 1},
+                             gfx::ColorSpace::CreateSRGB(),
+                             kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
+                             SHARED_IMAGE_USAGE_GLES2_WRITE, "TestLabel",
+                             kNullSurfaceHandle)
+          ->mailbox();
   SyncToken mailbox_produced_token = sii->GenVerifiedSyncToken();
   gl()->WaitSyncTokenCHROMIUM(mailbox_produced_token.GetConstData());
   GLuint texture =
@@ -140,10 +135,10 @@ TEST_F(SharedImageGLBackingProduceDawnTest, Basic) {
     gpu::webgpu::ReservedTexture reservation =
         webgpu()->ReserveTexture(device.Get());
 
-    webgpu()->AssociateMailbox(
-        reservation.deviceId, reservation.deviceGeneration, reservation.id,
-        reservation.generation, WGPUTextureUsage_CopySrc,
-        webgpu::WEBGPU_MAILBOX_NONE, reinterpret_cast<GLbyte*>(&gl_mailbox));
+    webgpu()->AssociateMailbox(reservation.deviceId,
+                               reservation.deviceGeneration, reservation.id,
+                               reservation.generation, WGPUTextureUsage_CopySrc,
+                               webgpu::WEBGPU_MAILBOX_NONE, gl_mailbox);
     wgpu::Texture wgpu_texture = wgpu::Texture::Acquire(reservation.texture);
 
     // Copy the texture in a mappable buffer.

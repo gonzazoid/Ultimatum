@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/synchronization/waitable_event.h"
 #include "components/viz/service/display_embedder/skia_output_surface_dependency.h"
 #include "gpu/command_buffer/service/scheduler_sequence.h"
@@ -60,7 +60,6 @@ void DisplayCompositorMemoryAndTaskController::InitializeOnGpu(
       std::make_unique<gpu::DisplayCompositorMemoryAndTaskControllerOnGpu>(
           skia_dependency->GetSharedContextState(),
           skia_dependency->GetMailboxManager(),
-          skia_dependency->GetGpuImageFactory(),
           skia_dependency->GetSharedImageManager(),
           skia_dependency->GetSyncPointManager(),
           skia_dependency->GetGpuPreferences(),

@@ -8,18 +8,19 @@
 #include <stdint.h>
 
 #include <memory>
-#include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
+#include "media/base/cross_origin_data_source.h"
 #include "media/base/data_source.h"
 #include "media/base/ranges.h"
 #include "media/base/tuneable.h"
 #include "third_party/blink/public/platform/media/url_index.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
-
-class GURL;
+#include "third_party/blink/renderer/platform/wtf/vector.h"
+#include "url/gurl.h"
 
 namespace base {
 class SingleThreadTaskRunner;
@@ -38,7 +39,8 @@ class MultiBufferReader;
 //
 // MultiBufferDataSource must be created and destroyed on the thread associated
 // with the |task_runner| passed in the constructor.
-class PLATFORM_EXPORT MultiBufferDataSource : public media::DataSource {
+class PLATFORM_EXPORT MultiBufferDataSource
+    : public media::CrossOriginDataSource {
  public:
   using DownloadingCB = base::RepeatingCallback<void(bool)>;
   using RedirectCB = base::RepeatingCallback<void()>;
@@ -56,14 +58,19 @@ class PLATFORM_EXPORT MultiBufferDataSource : public media::DataSource {
   MultiBufferDataSource& operator=(const MultiBufferDataSource&) = delete;
   ~MultiBufferDataSource() override;
 
-  // Executes |init_cb| with the result of initialization when it has completed.
-  //
+  // CrossOriginDataSource overrides.
+  bool IsCorsCrossOrigin() const override;
+  bool HasAccessControl() const override;
+  const std::string& GetMimeType() const override {
+    return url_data_->mime_type();
+  }
+
   // Method called on the render thread.
   using InitializeCB = base::OnceCallback<void(bool)>;
-  void Initialize(InitializeCB init_cb);
+  void Initialize(InitializeCB init_cb) override;
 
   // Adjusts the buffering algorithm based on the given preload value.
-  void SetPreload(media::DataSource::Preload preload);
+  void SetPreload(media::DataSource::Preload preload) override;
 
   // Returns true if the media resource has a single origin, false otherwise.
   // Only valid to call after Initialize() has completed.
@@ -71,41 +78,30 @@ class PLATFORM_EXPORT MultiBufferDataSource : public media::DataSource {
   // Method called on the render thread.
   bool HasSingleOrigin();
 
-  // https://html.spec.whatwg.org/#cors-cross-origin
-  // This must be called after the response arrives.
-  bool IsCorsCrossOrigin() const;
-
   // Provides a callback to be run when the underlying url is redirected.
   void OnRedirect(RedirectCB callback);
 
-  // Returns true if the response includes an Access-Control-Allow-Origin
-  // header (that is not "null").
-  bool HasAccessControl() const;
+  bool PassedTimingAllowOriginCheck() override;
 
-  bool PassedTimingAllowOriginCheck();
+  bool WouldTaintOrigin() override;
 
   // Returns the CorsMode of the underlying UrlData.
   UrlData::CorsMode cors_mode() const;
 
   // Notifies changes in playback state for controlling media buffering
   // behavior.
-  void MediaPlaybackRateChanged(double playback_rate);
-  void MediaIsPlaying();
+  void OnMediaPlaybackRateChanged(double playback_rate) override;
+  void OnMediaIsPlaying() override;
   bool media_has_played() const;
 
   // Returns true if the resource is local.
   bool AssumeFullyBuffered() const override;
 
-  // Cancels any open network connections once reaching the deferred state. If
-  // |always_cancel| is false this is done only for preload=metadata, non-
-  // streaming resources that have not started playback. If |always_cancel| is
-  // true, all resource types will have their connections canceled. If already
-  // deferred, connections will be immediately closed.
-  void OnBufferingHaveEnough(bool always_cancel);
+  void OnBufferingHaveEnough(bool must_cancel_netops) override;
 
   int64_t GetMemoryUsage() override;
 
-  GURL GetUrlAfterRedirects() const;
+  GURL GetUrlAfterRedirects() const override;
 
   // media::DataSource implementation.
   // Called from demuxer thread.
@@ -123,9 +119,9 @@ class PLATFORM_EXPORT MultiBufferDataSource : public media::DataSource {
     is_client_audio_element_ = is_client_audio_element;
   }
 
-  bool cancel_on_defer_for_testing() const { return cancel_on_defer_; }
+  CrossOriginDataSource* GetAsCrossOriginDataSource() override { return this; }
 
-  const std::string& mime_type() const { return url_data_->mime_type(); }
+  bool cancel_on_defer_for_testing() const { return cancel_on_defer_; }
 
  protected:
   void OnRedirected(const scoped_refptr<UrlData>& new_destination);
@@ -199,7 +195,7 @@ class PLATFORM_EXPORT MultiBufferDataSource : public media::DataSource {
   // Places we might want to seek to. After each read we add another
   // location here, and when SeekTask() is called, it picks the best
   // position and then clears it out.
-  std::vector<int64_t> seek_positions_;
+  Vector<int64_t> seek_positions_;
 
   // This value will be true if this data source can only support streaming.
   // i.e. range request is not supported.
@@ -259,14 +255,14 @@ class PLATFORM_EXPORT MultiBufferDataSource : public media::DataSource {
   // Current playback rate.
   double playback_rate_;
 
-  media::MediaLog* media_log_;
+  std::unique_ptr<media::MediaLog> media_log_;
 
   bool is_client_audio_element_ = false;
 
   int buffer_size_update_counter_;
 
   // Host object to report buffered byte range changes to.
-  BufferedDataSourceHost* host_;
+  raw_ptr<BufferedDataSourceHost, DanglingUntriaged> host_;
 
   DownloadingCB downloading_cb_;
 

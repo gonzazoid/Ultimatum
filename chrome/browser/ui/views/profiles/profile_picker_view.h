@@ -5,19 +5,20 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_PROFILES_PROFILE_PICKER_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_PROFILES_PROFILE_PICKER_VIEW_H_
 
-#include "base/callback_forward.h"
+#include <optional>
+
+#include "base/functional/callback_forward.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "build/buildflag.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/profile_picker.h"
+#include "chrome/browser/ui/profiles/profile_picker.h"
 #include "chrome/browser/ui/views/profiles/profile_picker_force_signin_dialog_host.h"
 #include "chrome/browser/ui/views/profiles/profile_picker_web_contents_host.h"
 #include "components/keep_alive_registry/scoped_keep_alive.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/webview/unhandled_keyboard_event_handler.h"
 #include "ui/views/controls/webview/webview.h"
 #include "ui/views/view.h"
@@ -41,7 +42,9 @@ class WebContents;
 
 // Dialog widget that contains the Desktop Profile picker webui.
 class ProfilePickerView : public views::WidgetDelegateView,
-                          public ProfilePickerWebContentsHost {
+                          public ProfilePickerWebContentsHost,
+                          public content::WebContentsDelegate,
+                          public web_modal::WebContentsModalDialogHost {
  public:
   ProfilePickerView(const ProfilePickerView&) = delete;
   ProfilePickerView& operator=(const ProfilePickerView&) = delete;
@@ -66,9 +69,13 @@ class ProfilePickerView : public views::WidgetDelegateView,
           base::OnceClosure()) override;
   bool ShouldUseDarkColors() const override;
   content::WebContents* GetPickerContents() const override;
+  web_modal::WebContentsModalDialogHost* GetWebContentsModalDialogHost()
+      override;
+  content::WebContentsDelegate* GetWebContentsDelegate() override;
 
 #if BUILDFLAG(ENABLE_DICE_SUPPORT)
   void SetNativeToolbarVisible(bool visible) override;
+  bool IsNativeToolbarVisibleForTesting() const;
   SkColor GetPreferredBackgroundColor() const override;
 #endif
 
@@ -85,6 +92,36 @@ class ProfilePickerView : public views::WidgetDelegateView,
   gfx::Size GetMaximumDialogSize() override;
   void AddObserver(web_modal::ModalDialogHostObserver* observer) override;
   void RemoveObserver(web_modal::ModalDialogHostObserver* observer) override;
+
+  // views::WidgetDelegateView:
+  void WindowClosing() override;
+  views::ClientView* CreateClientView(views::Widget* widget) override;
+  views::View* GetContentsView() override;
+  std::u16string GetAccessibleWindowTitle() const override;
+  gfx::Size CalculatePreferredSize() const override;
+  gfx::Size GetMinimumSize() const override;
+  bool AcceleratorPressed(const ui::Accelerator& accelerator) override;
+
+  // Exposed for testing
+  enum State {
+    // The view has just been created.
+    kNotStarted = 0,
+
+    // The view received a request to be displayed, but nothing has been shown
+    // yet.
+    kInitializing = 1,
+
+    // The view is currently shown.
+    kDisplayed = 2,
+
+    // The view received a request to close, and will be deleted shortly.
+    kClosing = 3
+  };
+
+  State state_for_testing() { return state_; }
+  content::WebContents* get_dialog_web_contents_for_testing() const {
+    return dialog_host_.get_web_contents_for_testing();
+  }
 
  protected:
   // To display the Profile picker, use ProfilePicker::Show().
@@ -105,11 +142,9 @@ class ProfilePickerView : public views::WidgetDelegateView,
   FRIEND_TEST_ALL_PREFIXES(ProfilePickerCreationFlowBrowserTest,
                            CreateForceSignedInProfile);
 
-  enum State { kNotStarted = 0, kInitializing = 1, kReady = 2, kClosing = 3 };
-
   class NavigationFinishedObserver : public content::WebContentsObserver {
    public:
-    NavigationFinishedObserver(const GURL& url,
+    NavigationFinishedObserver(const GURL& requested_url,
                                base::OnceClosure closure,
                                content::WebContents* contents);
     NavigationFinishedObserver(const NavigationFinishedObserver&) = delete;
@@ -122,7 +157,7 @@ class ProfilePickerView : public views::WidgetDelegateView,
         content::NavigationHandle* navigation_handle) override;
 
    private:
-    const GURL url_;
+    const GURL requested_url_;
     base::OnceClosure closure_;
   };
 
@@ -139,11 +174,15 @@ class ProfilePickerView : public views::WidgetDelegateView,
   // Creates and shows the dialog.
   void Init(Profile* picker_profile);
 
+  // Finalizes the Init (entering the `kDisplayed` state), called along with the
+  // first time `ShowScreen()`.
+  void FinishInit();
+
 #if BUILDFLAG(ENABLE_DICE_SUPPORT)
-  // Switches the layout to the sign-in screen (and creates a new profile).
-  // absl::nullopt `profile_color` corresponds to the default theme.
+  // Switches the layout to the sign-in screen (and creates a new profile or
+  // load an existing one based on the `profile_info` content).
   void SwitchToDiceSignIn(
-      absl::optional<SkColor> profile_color,
+      ProfilePicker::ProfileInfo profile_info,
       base::OnceCallback<void(bool)> switch_finished_callback);
 
   // Starts the forced sign-in flow (and creates a new profile).
@@ -156,25 +195,23 @@ class ProfilePickerView : public views::WidgetDelegateView,
   void OnProfileForDiceForcedSigninCreated(
       base::OnceCallback<void(bool)> switch_finished_callback,
       Profile* new_profile);
+  // Switches the profile picker layout to display the reauth page to the main
+  // account of the given `profile` if needed. On success the `profile` is
+  // unlocked and a browser is opend. On failure the user is redirected to the
+  // profile picker main page with an popup error dialog displayed through
+  // `on_error_callback`.
+  void SwitchToReauth(
+      Profile* profile,
+      base::OnceCallback<void(ReauthUIError)> on_error_callback);
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   void SwitchToSignedInFlow(Profile* signed_in_profile,
+                            std::optional<SkColor> profile_color,
                             std::unique_ptr<content::WebContents> contents);
 #endif
 
-  // views::WidgetDelegate:
-  void WindowClosing() override;
-  views::ClientView* CreateClientView(views::Widget* widget) override;
-  views::View* GetContentsView() override;
-  std::u16string GetAccessibleWindowTitle() const override;
-
-  // views::View:
-  gfx::Size CalculatePreferredSize() const override;
-  gfx::Size GetMinimumSize() const override;
-  bool AcceleratorPressed(const ui::Accelerator& accelerator) override;
-
-  // Builds the views hieararchy.
+  // Builds the views hierarchy.
   void BuildLayout();
 
   void ShowScreenFinished(
@@ -202,9 +239,10 @@ class ProfilePickerView : public views::WidgetDelegateView,
   ProfilePickerFlowController* GetProfilePickerFlowController() const;
 
   // Returns a closure that can be executed to clear (see
-  // `ProfilePickerView::Clear()`) the view. It is the owner's responsibility to
-  // make sure that the `ProfilePickerView` is still alive and that the callback
-  // is valid, before running it.
+  // `ProfilePickerView::Clear()`) the view. Uses a weak pointer internally, so
+  // it can be called after the view has been destroyed. It is different from
+  // `ProfilePicker::Hide()` because it only clears this specific instance of
+  // the picker view, whereas `Hide()` would close any picker view.
   ClearHostClosure GetClearClosure();
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)

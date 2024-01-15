@@ -4,6 +4,7 @@
 
 #include "net/base/ip_address.h"
 
+#include <optional>
 #include <vector>
 
 #include "base/format_macros.h"
@@ -11,7 +12,6 @@
 #include "base/strings/stringprintf.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using testing::Optional;
 
@@ -678,6 +678,32 @@ TEST(IPAddressTest, IsLinkLocal) {
     IPAddress ip_address;
     ASSERT_TRUE(ip_address.AssignFromIPLiteral(literal));
     EXPECT_FALSE(ip_address.IsLinkLocal()) << literal;
+  }
+}
+
+TEST(IPAddressTest, IsUniqueLocalIPv6) {
+  const char* kPositive[] = {
+      "fc00::1",
+      "fc80::1",
+      "fd00::1",
+  };
+
+  for (const char* literal : kPositive) {
+    IPAddress ip_address;
+    ASSERT_TRUE(ip_address.AssignFromIPLiteral(literal));
+    EXPECT_TRUE(ip_address.IsUniqueLocalIPv6()) << literal;
+  }
+
+  const char* kNegative[] = {
+      "fe00::1",
+      "ff00::1",
+      "252.0.0.1",
+  };
+
+  for (const char* literal : kNegative) {
+    IPAddress ip_address;
+    ASSERT_TRUE(ip_address.AssignFromIPLiteral(literal));
+    EXPECT_FALSE(ip_address.IsUniqueLocalIPv6()) << literal;
   }
 }
 

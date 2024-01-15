@@ -1,9 +1,9 @@
 include_rules = [
-  "+components/services/app_service/app_service_mojom_impl.h",
   "+components/services/app_service/public",
   "+components/app_constants",
   "+components/app_restore",
   "+components/webapk",
+  "+chrome/grit/app_icon_resources.h"
 ]
 
 specific_include_rules = {

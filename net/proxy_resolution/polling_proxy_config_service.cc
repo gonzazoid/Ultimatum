@@ -6,13 +6,12 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/observer_list.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/proxy_resolution/proxy_config_with_annotation.h"
 
 namespace net {
@@ -139,7 +138,7 @@ class PollingProxyConfigService::Core
     //               can't cache the main thread for the purpose of DCHECKs
     //               until the first call is made.
     if (!have_initialized_origin_runner_) {
-      origin_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+      origin_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
       have_initialized_origin_runner_ = true;
     }
   }
@@ -177,6 +176,10 @@ PollingProxyConfigService::GetLatestProxyConfig(
 
 void PollingProxyConfigService::OnLazyPoll() {
   core_->OnLazyPoll();
+}
+
+bool PollingProxyConfigService::UsesPolling() {
+  return true;
 }
 
 PollingProxyConfigService::PollingProxyConfigService(

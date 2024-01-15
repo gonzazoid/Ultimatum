@@ -4,6 +4,7 @@
 
 #include "remoting/test/test_token_storage.h"
 
+#include <optional>
 #include "base/files/file_util.h"
 #include "base/files/important_file_writer.h"
 #include "base/json/json_reader.h"
@@ -11,7 +12,6 @@
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/values.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 const base::FilePath::CharType kTokenFileName[] =
@@ -123,14 +123,15 @@ std::string TestTokenStorageOnDisk::FetchTokenFromKey(const std::string& key) {
     return std::string();
   }
 
-  absl::optional<base::Value> token_data(base::JSONReader::Read(file_contents));
+  std::optional<base::Value> token_data(base::JSONReader::Read(file_contents));
   if (!token_data.has_value() || !token_data->is_dict()) {
     LOG(ERROR) << "File contents were not valid JSON, "
                << "could not retrieve token.";
     return std::string();
   }
 
-  const std::string* token = token_data->FindStringPath(user_name_ + '.' + key);
+  const std::string* token =
+      token_data->GetDict().FindStringByDottedPath(user_name_ + '.' + key);
   if (!token) {
     VLOG(1) << "Could not find token for: " << key;
     return std::string();
@@ -161,14 +162,14 @@ bool TestTokenStorageOnDisk::StoreTokenForKey(const std::string& key,
     }
   }
 
-  absl::optional<base::Value> token_data(base::JSONReader::Read(file_contents));
+  std::optional<base::Value> token_data(base::JSONReader::Read(file_contents));
   if (!token_data.has_value() || !token_data->is_dict()) {
     LOG(ERROR) << "Invalid token file format, could not store token.";
     return false;
   }
 
   std::string json_string;
-  token_data->SetStringPath(user_name_ + '.' + key, value);
+  token_data->GetDict().SetByDottedPath(user_name_ + '.' + key, value);
   if (!base::JSONWriter::Write(*token_data, &json_string)) {
     LOG(ERROR) << "Couldn't convert JSON data to string";
     return false;

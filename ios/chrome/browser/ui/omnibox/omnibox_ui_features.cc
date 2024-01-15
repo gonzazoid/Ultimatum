@@ -5,49 +5,29 @@
 #import "ios/chrome/browser/ui/omnibox/omnibox_ui_features.h"
 
 #include "base/metrics/field_trial_params.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
+#import "ui/base/device_form_factor.h"
 
 BASE_FEATURE(kEnableSuggestionsScrollingOnIPad,
              "EnableSuggestionsScrollingOnIPad",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-BASE_FEATURE(kOmniboxPasteButton,
-             "OmniboxPasteButton",
+BASE_FEATURE(kEnablePopoutOmniboxIpad,
+             "EnablePopoutOmniboxIpad",
              base::FEATURE_DISABLED_BY_DEFAULT);
-
-const char kOmniboxPasteButtonParameterName[] = "PasteButtonVariant";
-const char kOmniboxPasteButtonParameterBlueIconCapsule[] = "SuggestionIcon";
-const char kOmniboxPasteButtonParameterBlueFullCapsule[] = "SuggestionTextIcon";
 
 BASE_FEATURE(kOmniboxKeyboardPasteButton,
              "OmniboxKeyboardPasteButton",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-BASE_FEATURE(kOmniboxCarouselDynamicSpacing,
-             "OmniboxCarouselDynamicSpacing",
+BASE_FEATURE(kOmniboxSuggestionsRTLImprovements,
+             "OmniboxSuggestionsRTLImprovements",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-bool IsOmniboxActionsEnabled() {
-  return base::FeatureList::IsEnabled(kIOSOmniboxUpdatedPopupUI);
-}
+BASE_FEATURE(kOmniboxLockIconEnabled,
+             "OmniboxLockIconEnabled",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-bool IsOmniboxActionsVisualTreatment1() {
-  if (!IsOmniboxActionsEnabled()) {
-    return false;
-  }
-  auto param = base::GetFieldTrialParamValueByFeature(
-      kIOSOmniboxUpdatedPopupUI, kIOSOmniboxUpdatedPopupUIVariationName);
-  return param == kIOSOmniboxUpdatedPopupUIVariation1 ||
-         param == kIOSOmniboxUpdatedPopupUIVariation1UIKit;
-}
-
-bool IsOmniboxActionsVisualTreatment2() {
-  if (!IsOmniboxActionsEnabled()) {
-    return false;
-  }
-  return !IsOmniboxActionsVisualTreatment1();
-}
-
-bool IsSwiftUIPopupEnabled() {
-  return false;
+bool IsIpadPopoutOmniboxEnabled() {
+  return base::FeatureList::IsEnabled(kEnablePopoutOmniboxIpad) &&
+         ui::GetDeviceFormFactor() == ui::DEVICE_FORM_FACTOR_TABLET;
 }

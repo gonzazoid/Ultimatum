@@ -4,24 +4,39 @@
 
 #include "chrome/browser/pdf/pdf_extension_util.h"
 
-#include "base/containers/cxx20_erase.h"
+#include <string>
+
+#include "base/feature_list.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
+#include "build/branding_buildflags.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/common/chrome_content_client.h"
+#include "chrome/browser/pdf/pdf_viewer_stream_manager.h"
+#include "chrome/common/extensions/api/pdf_viewer_private.h"
 #include "chrome/grit/browser_resources.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/services/screen_ai/buildflags/buildflags.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/zoom/page_zoom_constants.h"
+#include "content/public/browser/browser_context.h"
+#include "content/public/browser/render_frame_host.h"
+#include "content/public/browser/web_contents.h"
+#include "extensions/browser/event_router.h"
+#include "extensions/browser/extension_event_histogram_value.h"
+#include "extensions/browser/guest_view/mime_handler_view/mime_handler_view_guest.h"
+#include "extensions/common/api/mime_handler_private.h"
+#include "pdf/pdf_features.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/base/webui/web_ui_util.h"
+#include "url/gurl.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/login/ui/login_display_host.h"
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+#include "ui/accessibility/accessibility_features.h"
+#endif  // BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
 
 namespace pdf_extension_util {
 
@@ -47,7 +62,13 @@ void AddCommonStrings(base::Value::Dict* dict) {
   for (const auto& resource : kPdfResources)
     dict->Set(resource.name, l10n_util::GetStringUTF16(resource.id));
 
+  dict->Set("chromeRefresh2023Attribute",
+            features::IsChromeWebuiRefresh2023() ? "chrome-refresh-2023" : "");
   dict->Set("presetZoomFactors", zoom::GetPresetZoomFactorsAsJSON());
+  dict->Set("pdfOopifEnabled",
+            base::FeatureList::IsEnabled(chrome_pdf::features::kPdfOopif)
+                ? "pdfOopifEnabled"
+                : "");
 }
 
 // Adds strings that are used only by the stand-alone PDF Viewer.
@@ -61,6 +82,7 @@ void AddPdfViewerStrings(base::Value::Dict* dict) {
     {"labelPageNumber", IDS_PDF_LABEL_PAGE_NUMBER},
     {"menu", IDS_MENU},
     {"moreActions", IDS_DOWNLOAD_MORE_ACTIONS},
+    {"oversizeAttachmentWarning", IDS_PDF_OVERSIZE_ATTACHMENT_WARNING},
     {"passwordDialogTitle", IDS_PDF_PASSWORD_DIALOG_TITLE},
     {"passwordInvalid", IDS_PDF_PASSWORD_INVALID},
     {"passwordPrompt", IDS_PDF_NEED_PASSWORD},
@@ -84,13 +106,22 @@ void AddPdfViewerStrings(base::Value::Dict* dict) {
     {"propertiesPdfVersion", IDS_PDF_PROPERTIES_PDF_VERSION},
     {"propertiesSubject", IDS_PDF_PROPERTIES_SUBJECT},
     {"propertiesTitle", IDS_PDF_PROPERTIES_TITLE},
+    {"rotationStateLabel0", IDS_PDF_ROTATION_STATE_LABEL_0},
+    {"rotationStateLabel90", IDS_PDF_ROTATION_STATE_LABEL_90},
+    {"rotationStateLabel180", IDS_PDF_ROTATION_STATE_LABEL_180},
+    {"rotationStateLabel270", IDS_PDF_ROTATION_STATE_LABEL_270},
     {"thumbnailPageAriaLabel", IDS_PDF_THUMBNAIL_PAGE_ARIA_LABEL},
+    {"tooltipAttachments", IDS_PDF_TOOLTIP_ATTACHMENTS},
     {"tooltipDocumentOutline", IDS_PDF_TOOLTIP_DOCUMENT_OUTLINE},
     {"tooltipDownload", IDS_PDF_TOOLTIP_DOWNLOAD},
+    {"tooltipDownloadAttachment", IDS_PDF_TOOLTIP_DOWNLOAD_ATTACHMENT},
     {"tooltipPrint", IDS_PDF_TOOLTIP_PRINT},
     {"tooltipRotateCCW", IDS_PDF_TOOLTIP_ROTATE_CCW},
     {"tooltipThumbnails", IDS_PDF_TOOLTIP_THUMBNAILS},
     {"zoomTextInputAriaLabel", IDS_PDF_ZOOM_TEXT_INPUT_ARIA_LABEL},
+#if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+    {"pdfOcrShowToggle", IDS_CONTENT_CONTEXT_PDF_OCR_MENU_OPTION},
+#endif  // BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     {"tooltipAnnotate", IDS_PDF_ANNOTATION_ANNOTATE},
     {"annotationDocumentTooLarge", IDS_PDF_ANNOTATION_DOCUMENT_TOO_LARGE},
@@ -151,7 +182,7 @@ void AddPdfViewerStrings(base::Value::Dict* dict) {
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   std::u16string edit_string = l10n_util::GetStringUTF16(IDS_EDIT);
-  base::Erase(edit_string, '&');
+  std::erase(edit_string, '&');
   dict->Set("editButton", edit_string);
 #endif
 
@@ -162,13 +193,18 @@ void AddPdfViewerStrings(base::Value::Dict* dict) {
 }  // namespace
 
 std::string GetManifest() {
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  static constexpr char kExtensionName[] = "Chrome PDF Viewer";
+#else
+  static constexpr char kExtensionName[] = "Chromium PDF Viewer";
+#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
+
   std::string manifest_contents(
       ui::ResourceBundle::GetSharedInstance().GetRawDataResource(
           IDR_PDF_MANIFEST));
   DCHECK(manifest_contents.find(kNameTag) != std::string::npos);
-  base::ReplaceFirstSubstringAfterOffset(
-      &manifest_contents, 0, kNameTag,
-      ChromeContentClient::kPDFExtensionPluginName);
+  base::ReplaceFirstSubstringAfterOffset(&manifest_contents, 0, kNameTag,
+                                         kExtensionName);
 
   return manifest_contents;
 }
@@ -185,16 +221,56 @@ void AddStrings(PdfViewerContext context, base::Value::Dict* dict) {
   }
 }
 
-void AddAdditionalData(bool enable_annotations, base::Value::Dict* dict) {
+void AddAdditionalData(bool enable_printing,
+                       bool enable_annotations,
+                       base::Value::Dict* dict) {
+  // NOTE: This function should not include any data used for $i18n{}
+  // replacements. The i18n string resources should be added using AddStrings()
+  // above instead.
   bool printing_enabled = true;
   bool annotations_enabled = false;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  // For Chrome OS, enable printing only if we are not at OOBE.
-  printing_enabled = !ash::LoginDisplayHost::default_host();
+  printing_enabled = enable_printing;
   annotations_enabled = enable_annotations;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   dict->Set("printingEnabled", printing_enabled);
   dict->Set("pdfAnnotationsEnabled", annotations_enabled);
+#if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+  // TODO(crbug.com/1444895): Re-enable it when integrating PDF OCR with
+  // Select-to-Speak. Consider adding a feature flag.
+  dict->Set("pdfOcrEnabled", false);
+#endif  // BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+}
+
+bool MaybeDispatchSaveEvent(content::RenderFrameHost* embedder_host) {
+  CHECK(base::FeatureList::IsEnabled(chrome_pdf::features::kPdfOopif));
+
+  auto* pdf_viewer_stream_manager =
+      pdf::PdfViewerStreamManager::FromRenderFrameHost(embedder_host);
+  if (!pdf_viewer_stream_manager) {
+    return false;
+  }
+
+  // Continue only if the PDF plugin should handle the save event.
+  if (!pdf_viewer_stream_manager->PluginCanSave(embedder_host)) {
+    return false;
+  }
+
+  base::WeakPtr<extensions::StreamContainer> stream =
+      pdf_viewer_stream_manager->GetStreamContainer(embedder_host);
+
+  base::Value::List args;
+  args.Append(stream->stream_url().spec());
+
+  content::BrowserContext* context = embedder_host->GetBrowserContext();
+  auto event = std::make_unique<extensions::Event>(
+      extensions::events::PDF_VIEWER_PRIVATE_ON_SAVE,
+      extensions::api::pdf_viewer_private::OnSave::kEventName, std::move(args),
+      context);
+  extensions::EventRouter* event_router = extensions::EventRouter::Get(context);
+  event_router->DispatchEventToExtension(extension_misc::kPdfExtensionId,
+                                         std::move(event));
+  return true;
 }
 
 }  // namespace pdf_extension_util

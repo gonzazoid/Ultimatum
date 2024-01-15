@@ -9,14 +9,15 @@
 #include <utility>
 
 #include "ash/constants/ash_features.h"
-#include "ash/services/device_sync/proto/cryptauth_common.pb.h"
-#include "ash/services/device_sync/public/cpp/fake_device_sync_client.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_clock.h"
 #include "base/timer/mock_timer.h"
 #include "chromeos/ash/components/multidevice/remote_device_test_util.h"
 #include "chromeos/ash/components/multidevice/software_feature.h"
 #include "chromeos/ash/components/multidevice/software_feature_state.h"
+#include "chromeos/ash/services/device_sync/proto/cryptauth_common.pb.h"
+#include "chromeos/ash/services/device_sync/public/cpp/fake_device_sync_client.h"
 #include "chromeos/ash/services/multidevice_setup/fake_host_backend_delegate.h"
 #include "chromeos/ash/services/multidevice_setup/fake_host_verifier.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
@@ -98,7 +99,8 @@ class MultiDeviceSetupHostVerifierImplTest
     HostVerifierImpl::RegisterPrefs(test_pref_service_->registry());
 
     test_clock_ = std::make_unique<base::SimpleTestClock>();
-    test_clock_->SetNow(base::Time::FromJavaTime(kTestTimeMs));
+    test_clock_->SetNow(
+        base::Time::FromMillisecondsSinceUnixEpoch(kTestTimeMs));
   }
 
   void TearDown() override {
@@ -145,7 +147,7 @@ class MultiDeviceSetupHostVerifierImplTest
     }
 
     if (host_state == HostState::kHostNotSet)
-      fake_host_backend_delegate_->NotifyHostChangedOnBackend(absl::nullopt);
+      fake_host_backend_delegate_->NotifyHostChangedOnBackend(std::nullopt);
     else
       fake_host_backend_delegate_->NotifyHostChangedOnBackend(test_device_);
 
@@ -255,15 +257,13 @@ class MultiDeviceSetupHostVerifierImplTest
 
     // These flags have no direct effect; however, v2 Enrollment and v2
     // DeviceSync are prerequisites for disabling v1 DeviceSync.
-    enabled_features.push_back(chromeos::features::kCryptAuthV2Enrollment);
-    enabled_features.push_back(chromeos::features::kCryptAuthV2DeviceSync);
+    enabled_features.push_back(features::kCryptAuthV2Enrollment);
+    enabled_features.push_back(features::kCryptAuthV2DeviceSync);
 
     if (use_v1) {
-      disabled_features.push_back(
-          chromeos::features::kDisableCryptAuthV1DeviceSync);
+      disabled_features.push_back(features::kDisableCryptAuthV1DeviceSync);
     } else {
-      enabled_features.push_back(
-          chromeos::features::kDisableCryptAuthV1DeviceSync);
+      enabled_features.push_back(features::kDisableCryptAuthV1DeviceSync);
     }
 
     scoped_feature_list_.InitWithFeatures(enabled_features, disabled_features);
@@ -277,8 +277,9 @@ class MultiDeviceSetupHostVerifierImplTest
   std::unique_ptr<sync_preferences::TestingPrefServiceSyncable>
       test_pref_service_;
   std::unique_ptr<base::SimpleTestClock> test_clock_;
-  base::MockOneShotTimer* mock_retry_timer_ = nullptr;
-  base::MockOneShotTimer* mock_sync_timer_ = nullptr;
+  raw_ptr<base::MockOneShotTimer, DanglingUntriaged> mock_retry_timer_ =
+      nullptr;
+  raw_ptr<base::MockOneShotTimer, DanglingUntriaged> mock_sync_timer_ = nullptr;
 
   std::unique_ptr<HostVerifier> host_verifier_;
 
@@ -485,7 +486,7 @@ TEST_P(MultiDeviceSetupHostVerifierImplTest,
               0 /* expected_retry_delta_value */);
 
   fake_host_backend_delegate()->AttemptToSetMultiDeviceHostOnBackend(
-      absl::nullopt /* host_device */);
+      std::nullopt /* host_device */);
   VerifyState(false /* expected_is_verified */,
               0u /* expected_num_verified_events */,
               0 /* expected_retry_timestamp_value */,

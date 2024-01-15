@@ -34,13 +34,10 @@ AXMockObject::AXMockObject(AXObjectCacheImpl& ax_object_cache)
 
 AXMockObject::~AXMockObject() = default;
 
-bool AXMockObject::ComputeAccessibilityIsIgnored(
-    IgnoredReasons* ignored_reasons) const {
-  return AccessibilityIsIgnoredByDefault(ignored_reasons);
-}
-
 Document* AXMockObject::GetDocument() const {
-  return ParentObject() ? ParentObject()->GetDocument() : nullptr;
+  // This assumes that the mock object (only used for <select> popups) will not
+  // occur within another popup document (a popup within another popup).
+  return &AXObjectCache().GetDocument();
 }
 
 ax::mojom::blink::Role AXMockObject::NativeRoleIgnoringAria() const {

@@ -21,11 +21,12 @@
 #include <TargetConditionals.h>
 #import <UIKit/UIKit.h>
 
-#include "base/mac/mach_logging.h"
+#include "base/apple/mach_logging.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/sys_string_conversions.h"
 #include "build/build_config.h"
+#include "util/misc/clock.h"
 
 namespace {
 
@@ -86,7 +87,8 @@ IOSSystemDataCollector::IOSSystemDataCollector()
       standard_offset_seconds_(0),
       daylight_offset_seconds_(0),
       standard_name_(),
-      daylight_name_() {
+      daylight_name_(),
+      initialization_time_ns_(ClockMonotonicNanoseconds()) {
   NSOperatingSystemVersion version =
       [[NSProcessInfo processInfo] operatingSystemVersion];
   major_version_ = base::saturated_cast<int>(version.majorVersion);
@@ -102,6 +104,16 @@ IOSSystemDataCollector::IOSSystemDataCollector()
 #if defined(ARCH_CPU_X86_64)
   cpu_vendor_ = ReadStringSysctlByName("machdep.cpu.vendor");
 #endif
+  uint32_t addressable_bits = 0;
+  size_t len = sizeof(uint32_t);
+  // `machdep.virtual_address_size` is the number of addressable bits in
+  // userspace virtual addresses
+  if (sysctlbyname(
+          "machdep.virtual_address_size", &addressable_bits, &len, NULL, 0) !=
+      0) {
+    addressable_bits = 0;
+  }
+  address_mask_ = ~((1UL << addressable_bits) - 1);
 
 #if TARGET_OS_SIMULATOR
   // TODO(justincohen): Consider adding board and model information to

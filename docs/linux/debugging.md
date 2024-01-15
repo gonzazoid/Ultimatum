@@ -22,6 +22,27 @@ GDB-7.7 is required in order to debug Chrome on Linux.
 
 Any prior version will fail to resolve symbols or segfault.
 
+### Setup
+
+#### Build setup
+
+In your build set the GN build variable `symbol_level = 2` for interactive
+debugging. (`symbol_level = 1` only provides backtrace information). And while
+release-mode debugging is possible, things will be much easier in a debug build.
+Set your build args with `gn args out/<your_dir>` (substituting your build
+directory), and set:
+
+```
+is_debug = true
+symbol_level = 2
+```
+
+#### GDB setup
+
+The Chrome build requires some GDB configuration for it to be able to find
+source files. See [gdbinit](../gdbinit.md) to configure GDB. There is a similar
+process for [LLDB](../lldbinit.md).
+
 ### Basic browser process debugging
 
     gdb -tui -ex=r --args out/Debug/chrome --disable-seccomp-sandbox \
@@ -103,6 +124,56 @@ if [ "$input" = "y" ] ; then
 else
   $*
 fi
+```
+
+#### Choosing renderer to debug by URL
+
+In most cases you'll want to debug the renderer which is loading a particular
+site. If you want a script which will automatically debug the renderer which has
+visited a given target URL and continue all other renderers, you can use the
+following:
+
+```sh
+./third_party/blink/tools/debug_renderer out/Default/content_shell https://example.domain/path
+```
+
+The script also supports specifying a different URL than the navigation URL.
+This is useful when the renderer you want to debug is not the top frame but one
+of the subframes on the page. For example, you could debug a particular subframe
+on a page with:
+
+```sh
+./third_party/blink/tools/debug_renderer -d https://subframe.url/path out/Default/content_shell https://example.domain/path
+```
+
+However, if you need more fine-grained control over which renderers to debug
+you can run chrome or content_shell directly with the
+`--wait-for-debugger-on-navigation` flag which will pause each renderer at the
+point of navigation (when the URL is known).
+
+This will result in a series of lines such as the following in the output:
+```
+...:content_switches_internal.cc(119)] Renderer url="https://example.domain/path" (PID) paused waiting for debugger to attach. Send SIGUSR1 to unpause.
+```
+
+You can signal the renderers you aren't interested in to continue running with:
+```sh
+kill -s SIGUSR1 <pid>
+```
+
+And debug the renderer you are interested in debugging with:
+```sh
+gdb -p <pid>
+```
+
+#### Debugging run_web_tests.py renderers
+
+The `debug_renderer` script can also be used to debug the renderer running
+a web test. To do so, simply call `run_{web,wpt}_tests.py` from `debug_renderer`
+with all of the standard arguments for `run_{web,wpt}_tests.py`. For example:
+
+```sh
+./third_party/blink/tools/debug_renderer ./third_party/blink/tools/run_web_tests.py [run_web_test args]
 ```
 
 #### Selective breakpoints
@@ -211,7 +282,7 @@ three) but you'll still need to use `--plugin-launcher` or another approach.
 ### Printing Chromium types
 
 gdb 7 lets us use Python to write pretty-printers for Chromium types. See
-[gdbinit](https://chromium.googlesource.com/chromium/src/+/main/docs/gdbinit.md)
+[gdbinit](../gdbinit.md)
 to enable pretty-printing of Chromium types.  This will import Blink
 pretty-printers as well.
 
@@ -342,14 +413,6 @@ You can improve GDB load time significantly at the cost of link time by not
 splitting symbols from the object files. In GN, set `use_debug_fission=false` in
 your "gn args".
 
-### Source level debug with -fdebug-compilation-dir
-
-When `strip_absolute_paths_from_debug_symbols` is enabled (which is the
-default), gdb may not be able to find debug files, making source-level debugging
-impossible. See
-[gdbinit](https://chromium.googlesource.com/chromium/src/+/main/docs/gdbinit.md)
-to configure gdb to be able to find debug files.
-
 ## Core files
 
 `ulimit -c unlimited` should cause all Chrome processes (run from that shell) to
@@ -373,6 +436,7 @@ Many of our tests bring up windows on screen. This can be annoying (they steal
 your focus) and hard to debug (they receive extra events as you mouse over them).
 Instead, use `Xvfb` or `Xephyr` to run a nested X session to debug them, as
 outlined on [testing/web_tests_linux.md](../testing/web_tests_linux.md).
+
 ### Browser tests
 
 By default the `browser_tests` forks a new browser for each test. To debug the
@@ -385,6 +449,8 @@ gdb --args out/Debug/browser_tests --single-process-tests --gtest_filter=MyTestN
 **note the use of `single-process-tests`** -- this makes the test harness and
 browser process share the outermost process.
 
+The switch `--gtest_break_on_failure` can also be useful to automatically stop
+debugger upon `ASSERT` or `EXPECT` failures.
 
 To debug a renderer process in this case, use the tips above about renderers.
 

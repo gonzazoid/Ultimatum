@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr.h"
 #include "components/account_manager_core/chromeos/account_manager_facade_factory.h"
 
 #include <limits>
@@ -22,7 +23,8 @@ mojo::Remote<crosapi::mojom::AccountManager> GetAccountManagerRemote() {
 
   auto* lacros_chrome_service_impl = chromeos::LacrosService::Get();
   DCHECK(lacros_chrome_service_impl);
-  if (!lacros_chrome_service_impl->IsAccountManagerAvailable()) {
+  if (!lacros_chrome_service_impl
+           ->IsSupported<crosapi::mojom::AccountManager>()) {
     LOG(WARNING) << "Connected to an older version of ash. Account "
                     "consistency will not be available";
     return remote;
@@ -95,7 +97,7 @@ class AccountManagerFacadeFactoryLacros {
           std::make_unique<account_manager::AccountManagerFacadeImpl>(
               std::move(remote),
               /*remote_version=*/std::numeric_limits<uint32_t>::max(),
-              /*account_manager_for_tests=*/ash_account_manager_.get());
+              /*account_manager_for_tests=*/ash_account_manager_->GetWeakPtr());
       return;
     }
 
@@ -103,8 +105,8 @@ class AccountManagerFacadeFactoryLacros {
         std::make_unique<account_manager::AccountManagerFacadeImpl>(
             GetAccountManagerRemote(),
             /*remote_version=*/
-            chromeos::LacrosService::Get()->GetInterfaceVersion(
-                crosapi::mojom::AccountManager::Uuid_),
+            chromeos::LacrosService::Get()
+                ->GetInterfaceVersion<crosapi::mojom::AccountManager>(),
             /*account_manager_for_tests=*/nullptr);
   }
 
@@ -116,7 +118,7 @@ class AccountManagerFacadeFactoryLacros {
   std::unique_ptr<crosapi::AccountManagerMojoService>
       account_manager_mojo_service_;
   // Owned by `account_manager_mojo_service_`:
-  account_manager::AccountManagerUI* account_manager_ui_ = nullptr;
+  raw_ptr<account_manager::AccountManagerUI> account_manager_ui_ = nullptr;
 };
 
 AccountManagerFacadeFactoryLacros* GetAccountManagerFacadeFactoryLacros() {

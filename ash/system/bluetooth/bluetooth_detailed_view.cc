@@ -17,8 +17,9 @@ BluetoothDetailedView::BluetoothDetailedView(Delegate* delegate)
 std::unique_ptr<BluetoothDetailedView> BluetoothDetailedView::Factory::Create(
     DetailedViewDelegate* detailed_view_delegate,
     Delegate* delegate) {
-  if (g_test_factory)
+  if (g_test_factory) {
     return g_test_factory->CreateForTesting(delegate);  // IN-TEST
+  }
   return std::make_unique<BluetoothDetailedViewImpl>(detailed_view_delegate,
                                                      delegate);
 }

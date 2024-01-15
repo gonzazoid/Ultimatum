@@ -7,10 +7,9 @@
 #include <vector>
 
 #include "base/memory/memory_pressure_listener.h"
+#include "base/memory/raw_ptr.h"
 #include "base/ranges/algorithm.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/test_mock_time_task_runner.h"
-#include "components/viz/common/features.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace viz {
@@ -42,7 +41,7 @@ class TestFrameEvictionManagerClient : public FrameEvictionManagerClient {
   bool has_frame() const { return has_frame_; }
 
  private:
-  FrameEvictionManager* manager_ = FrameEvictionManager::GetInstance();
+  raw_ptr<FrameEvictionManager> manager_ = FrameEvictionManager::GetInstance();
   bool has_frame_ = true;
 };
 
@@ -76,7 +75,6 @@ TEST_F(FrameEvictionManagerTest, ScopedPause) {
 }
 
 TEST_F(FrameEvictionManagerTest, PeriodicCulling) {
-  base::test::ScopedFeatureList feature_list{features::kAggressiveFrameCulling};
   // Cannot use a TaskEnvironment as there is already one which is not using
   // MOCK_TIME.
   auto task_runner = base::MakeRefCounted<base::TestMockTimeTaskRunner>();
@@ -121,20 +119,7 @@ TEST_F(FrameEvictionManagerTest, MemoryPressure) {
   manager->AddFrame(&frame1, false);
   manager->AddFrame(&frame2, false);
 
-  // We keep one frame around, no matter how many times we get a memory pressure
-  // notification.
-  manager->OnMemoryPressure(
-      base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL);
-  EXPECT_FALSE(frame1.has_frame());
-  EXPECT_TRUE(frame2.has_frame());
-
-  manager->OnMemoryPressure(
-      base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL);
-  EXPECT_FALSE(frame1.has_frame());
-  EXPECT_TRUE(frame2.has_frame());
-
-  // Unless aggressive frame culling is enabled.
-  base::test::ScopedFeatureList feature_list{features::kAggressiveFrameCulling};
+  // Critical memory pressure culls all unlocked frames.
   manager->OnMemoryPressure(
       base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL);
   EXPECT_FALSE(frame1.has_frame());

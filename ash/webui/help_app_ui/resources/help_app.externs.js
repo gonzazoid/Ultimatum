@@ -163,6 +163,35 @@ helpApp.FindResponse = function() {};
 helpApp.FindResponse.prototype.results;
 
 /**
+ * Device info supplied by the DeviceInfoManager.
+ * @record
+ * @struct
+ */
+helpApp.DeviceInfo = function() {};
+/**
+ * The board family of the device. e.g. "brya".
+ * @type {string}
+ */
+helpApp.DeviceInfo.prototype.board;
+/**
+ * The model of the device. e.g. "taniks".
+ * @type {string}
+ */
+helpApp.DeviceInfo.prototype.model;
+/**
+ * The user type of the profile currently running. e.g. "unmanaged".
+ * The possible values for this can be found at
+ * https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/apps/user_type_filter.cc;l=27;drc=0d0b76e40dfff0f4ad58d0640cdf2c4df72030d3.
+ * @type {string}
+ */
+helpApp.DeviceInfo.prototype.userType;
+/**
+ * If Steam is allowed for the device, regardless of install status.
+ * @type {boolean}
+ */
+helpApp.DeviceInfo.prototype.isSteamAllowed;
+
+/**
  * The delegate which exposes open source privileged WebUi functions to
  * HelpApp.
  * @record
@@ -183,6 +212,14 @@ helpApp.ClientApiDelegate.prototype.openFeedbackDialog = function() {};
  * @return {!Promise<undefined>}
  */
 helpApp.ClientApiDelegate.prototype.showParentalControls = function() {};
+
+/**
+ * Triggers the call-to-action associated with the given action type id.
+ * @param {number} actionTypeId
+ * @return {!Promise<undefined>}
+ */
+helpApp.ClientApiDelegate.prototype.triggerWelcomeTipCallToAction = function(
+    actionTypeId) {};
 
 /**
  * Add or update the content that is stored in the Search Index.
@@ -222,6 +259,13 @@ helpApp.ClientApiDelegate.prototype.updateLauncherSearchIndex
     = function(data) {};
 
 /**
+ * Launches the MS365 setup flow (or shows the final screen of the flow if it
+ * was already completed).
+ * @return {!Promise<undefined>}
+ */
+helpApp.ClientApiDelegate.prototype.launchMicrosoft365Setup = function() {};
+
+/**
  * Request for the discover page notification to be shown to the user. The
  * notification will only be shown if the relevant heuristics are true, i.e.
  * user is a child, is using a supported language etc.
@@ -238,6 +282,26 @@ helpApp.ClientApiDelegate.prototype.maybeShowDiscoverNotification =
  */
 helpApp.ClientApiDelegate.prototype.maybeShowReleaseNotesNotification =
     function() {};
+
+/**
+ * Gets device info supplied by the DeviceInfoManager. This has to be a MOJO
+ * method rather than additional fields in loadTimeData because the info is
+ * obtained asynchronously.
+ * @return {!Promise<!helpApp.DeviceInfo>}
+ */
+helpApp.ClientApiDelegate.prototype.getDeviceInfo = function() {};
+
+/**
+ * Opens a valid https:// URL in a new browser tab without getting intercepted
+ * by URL capturing logic. If the "HelpAppAutoTriggerInstallDialog" feature flag
+ * is enabled, this will automatically trigger the install dialog.
+ * Failure to provide a valid https:// URL will cause the Help app renderer
+ * process to crash.
+ * @param {string} url
+ * @return {!Promise<undefined>}
+ */
+helpApp.ClientApiDelegate.prototype.openUrlInBrowserAndTriggerInstallDialog =
+    function(url) {};
 
 /**
  * Launch data that can be read by the app when it first loads.

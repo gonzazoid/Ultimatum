@@ -8,6 +8,9 @@
   <message name="IDS_SETTINGS_SUBPAGE_BACK_BUTTON_ARIA_ROLE_DESCRIPTION" desc="Description read by screen readers when focusing on the back button. Indicates to the user that activating the back button will cause the settings page to navigate away from the currently displaying subpage to the previous visited page. This text will only be announced by ChromeVox and will not be visible in the UI.">
     Click to navigate away from <ph name="SUBPAGE_TITLE">$1<ex>Bluetooth</ex> subpage</ph>.
   </message>
+  <message name="IDS_SETTINGS_SUBPAGE_LEARN_MORE_ARIA_LABEL" desc="Text read by screen readers when focusing the learn more icon button which corresponds to the subpage title. If the icon button is activated, an external page with the corresponding help article is opened. This text will only be announced by screen readers and will not be visible in the UI.">
+    Learn more about: <ph name="SUBPAGE_TITLE">$1<ex>Payment methods</ex></ph>
+  </message>
 
   <!-- Caption Subpage (strings used by the <settings-captions> element) -->
   <message name="IDS_SETTINGS_CAPTIONS" desc="Title of the subpage for settings related to captions">
@@ -91,10 +94,28 @@
   <message name="IDS_SETTINGS_CAPTIONS_DEFAULT_SETTING" desc="Name of the default setting for the caption text.">
     Default
   </message>
+  <message name="IDS_SETTINGS_CAPTIONS_LANGUAGE" desc="Name of the language setting for the caption text.">
+    Preferred caption language
+  </message>
+  <message name="IDS_SETTINGS_CAPTIONS_MANAGE_LANGUAGES_TITLE" desc="Name of the caption settings section for managing language packs.">
+    Manage languages
+  </message>
+  <message name="IDS_SETTINGS_CAPTIONS_MANAGE_LANGUAGES_SUBTITLE" desc="Subtitle for the caption settings section for managing language packs.">
+    Language packs are used for Live Caption and are stored on your device
+  </message>
+  <message name="IDS_SETTINGS_CAPTIONS_LIVE_TRANSLATE_TARGET_LANGUAGE" desc="Description of the target language setting for the Live Translate feature.">
+    Translate to
+  </message>
+  <message name="IDS_SETTINGS_CAPTIONS_REMOVE_LANGUAGE_ARIA_LABEL" desc="Text read by screen readers when focusing on the remove icon for language packs. Activating this button will remove the selected language pack. This text only announced by screen readers and is not visible in the UI.">
+    Remove <ph name="LANGUAGE_NAME">$1<ex>English</ex></ph>
+  </message>
 
   <!-- Nearby Share -->
   <message name="IDS_SETTINGS_NEARBY_SHARE_TITLE" desc="Name of the settings page for the Nearby Share feature">
     Nearby Share
+  </message>
+  <message name="IDS_SETTINGS_NEARBY_SHARE_TITLE_PH" desc="Feature name placeholder: Name of the settings page for the sharing feature">
+    <ph name="FEATURE_NAME">$1<ex>Nearby Share</ex></ph>
   </message>
   <message name="IDS_SETTINGS_NEARBY_SHARE_SET_UP_BUTTON_TITLE" desc="Title of the button that lets the user set up and enable the Nearby Share feature for the first time.">
     Set up
@@ -206,29 +227,38 @@
   <message name="IDS_SETTINGS_SPELLING_PREF" desc="The documentation string of the 'Use Spelling' preference">
     Enhanced spell check
   </message>
-  <message name="IDS_SETTINGS_SUGGEST_PREF" desc="The documentation string of the 'Use Suggest' preference">
-    Autocomplete searches and URLs
-  </message>
-  <message name="IDS_SETTINGS_SUGGEST_PREF_DESC" desc="The description of the 'Use Suggest' preference">
-    Sends some cookies and searches from the address bar and search box to your default search engine
-  </message>
   <message name="IDS_SETTINGS_ENABLE_LOGGING_PREF" desc="The label of the checkbox to enable/disable crash and user metrics logging. This string does not need a Chromium counter-part because it will only be visible if Google-branded.">
     Help improve Chrome's features and performance
   </message>
-  <message name="IDS_SETTINGS_ENABLE_LOGGING_PREF_DESC" desc="The description of the checkbox to enable/disable crash and user metrics logging">
-    Automatically sends usage statistics and crash reports to Google
-  </message>
+  <if expr="is_fuchsia">
+    <then>
+      <message name="IDS_SETTINGS_ENABLE_LOGGING_PREF_DESC" desc="The description of the checkbox to enable/disable crash and user metrics logging">
+        Automatically sends usage statistics to Google. You can turn crash reports on or off in your device's settings.
+      </message>
+    </then>
+    <else>
+      <message name="IDS_SETTINGS_ENABLE_LOGGING_PREF_DESC" desc="The description of the checkbox to enable/disable crash and user metrics logging">
+        Automatically sends usage statistics and crash reports to Google
+      </message>
+    </else>
+  </if>
   <message name="IDS_SETTINGS_LINKDOCTOR_PREF" desc="The documentation string of the 'Use Link Doctor' preference to help with navigation errors.">
     Show suggestions for similar pages when a page can't be found
   </message>
   <message name="IDS_SETTINGS_LINKDOCTOR_PREF_DESC" desc="The description of the 'Use Link Doctor' preference to help with navigation errors.">
     Sends the web address of the page you're trying to reach to Google
   </message>
-  <message name="IDS_DRIVE_SUGGEST_PREF" desc="The documentation string of the 'Show Drive Results in Omnibox' preference - short description">
-    Google Drive search suggestions
+  <message name="IDS_SETTINGS_SUGGEST_PREF" desc="The label of the checkbox to enable/disable sending omnibox input to the user's default search engine to get additional suggestions.">
+    Improve search suggestions
+  </message>
+  <message name="IDS_SETTINGS_DRIVE_SUGGEST_PREF" desc="The label of the checkbox to enable/disable sending omnibox input to Google Drive to get suggestions for documents and other items in Drive.">
+    Show Google Drive suggestions
   </message>
 
   <!-- Sync Accounts page (used by the <settings-sync-account-control> element) -->
+  <message name="IDS_SETTINGS_PEOPLE_SIGNED_IN_TO_ACCOUNT" desc="The text displayed to the user that the profile is currently signed in to a specific account.">
+    Signed in to <ph name="EMAIL">$1<ex>abcd@google.com</ex></ph>
+  </message>
   <message name="IDS_SETTINGS_PEOPLE_SYNCING_TO_ACCOUNT" desc="The text displayed to the user that the profile is currently syncing to a specific account.">
     Syncing to <ph name="EMAIL">$1<ex>abcd@google.com</ex></ph>
   </message>
@@ -262,7 +292,7 @@
 
   <!-- Signout Subpage (strings used by the <settings-signout-dialog> element) -->
   <message name="IDS_SETTINGS_SYNC_DISCONNECT_CONFIRM" desc="The text to display on the button to confirm the user wishes to stop syncing.">
-    Clear and Sign Out
+    Delete and Sign Out
   </message>
   <message name="IDS_SETTINGS_PEOPLE_SIGN_OUT" desc="The label of the button that lets user sign-out of Chrome.">
     Sign out
@@ -280,6 +310,9 @@
   <message name="IDS_SETTINGS_OPEN_TABS_CHECKBOX_LABEL" desc="Label for the checkbox which enables or disables syncing open tabs between multiple browser instances.">
     Open tabs
   </message>
+  <message name="IDS_SETTINGS_SAVED_TAB_GROUPS_CHECKBOX_LABEL" desc="Label for the checkbox which enables or disables syncing saved tab groups between multiple browser instances.">
+    Saved tab groups
+  </message>
   <message name="IDS_SETTINGS_WIFI_CONFIGURATIONS_CHECKBOX_LABEL" desc="Label for the checkbox which enables syncing of Wi-Fi networks across devices.">
     Wi-Fi networks
   </message>
@@ -288,6 +321,9 @@
   </message>
   <message name="IDS_SETTINGS_APPS_CHECKBOX_LABEL" desc="Label for the checkbox which enables or disables syncing apps between multiple browser instances.">
     Apps
+  </message>
+  <message name="IDS_SETTINGS_APPS_CHECKBOX_SUBLABEL" desc="Sublabel for the checkbox which enables or disables syncing apps between multiple browser instances.">
+    Apps sync is set in device Settings
   </message>
   <message name="IDS_SETTINGS_NON_PERSONALIZED_SERVICES_SECTION_LABEL" desc="Title for a section that shows options for various Google services">
     Other Google services
@@ -302,6 +338,9 @@
   <!-- Sync page (strings used by the <settings-sync-page> element) -->
   <message name="IDS_SETTINGS_PASSWORDS_CHECKBOX_LABEL" desc="Label for the checkbox which enables or disables syncing passwords between multiple browser instances.">
     Passwords
+  </message>
+  <message name="IDS_SETTINGS_PASSWORDS_AND_PASSKEYS_CHECKBOX_LABEL" desc="Label for the checkbox which enables or disables syncing passwords and passkey metadata (i.e. their username and sites) between multiple browser instances. See the glossary for a definition of 'passkey', do not translate 'passkey' as 'password'.">
+    Passwords and passkeys
   </message>
   <message name="IDS_SETTINGS_PASSPHRASE_PLACEHOLDER" desc="Placeholder for the passphrase field.">
     Passphrase
@@ -336,6 +375,18 @@
   <message name="IDS_SETTINGS_NEW_MANAGE_SYNCED_DATA_TITLE_UNIFIED_CONSENT" desc="Title for the link to manage Chrome Sync data via Google Dashboard when unified consent is enabled.">
     Review your synced data
   </message>
+  <message name="IDS_SETTINGS_NEW_SYNC_ADVANCED_DEVICE_PAGE_TITLE" desc="Name of the settings page which manages device data used by sync when lacros is enabled." >
+    Manage device sync
+  </message>
+  <message name="IDS_SETTINGS_NEW_SYNC_ADVANCED_BROWSER_PAGE_TITLE" desc="Name of the settings page which manages browser data used by sync when lacros is enabled." >
+    Manage browser sync
+  </message>
+  <message name="IDS_SETTINGS_NEW_MANAGE_SYNCED_DATA_SUBTITLE_UNIFIED_CONSENT" desc="Subtitle for the link to manage Chrome Sync data via Google Dashboard when unified consent is enabled.">
+    Across your apps and Chrome browser
+  </message>
+  <message name="IDS_SETTINGS_NEW_MANAGE_BROWSER_SYNCED_DATA_TITLE" desc="Title for the link to manage Chrome Browser Sync data via browser settings.">
+    Manage Chrome browser sync
+  </message>
   <message name="IDS_SETTINGS_SYNC_SYNC_AND_NON_PERSONALIZED_SERVICES" desc="The name of the settings page and the label of the button that takes the user to manage their sync and non-personalized services settings.">
     Sync and Google services
   </message>
@@ -360,19 +411,6 @@
   <message name="IDS_SETTINGS_SYNC_SETUP_CANCEL_DIALOG_BODY" desc="The body text of the dialog to confirm the sync cancellation.">
     You can turn on sync anytime in settings
   </message>
-    <if expr="chromeos_ash">
-    <!-- TODO(crbug.com/1231500): Remove this string after Lacros side-by-side rollout stage. -->
-    <message name="IDS_SYNC_SETTINGS_SIDE_BY_SIDE_WARNING_ASH" desc="The warning message that is shown when lacros side-by-side mode is enabled.">
-      Changes you make here apply only to Chrome Browser. To make changes to your Lacros Chrome Browser settings, open Lacros Chrome Browser and go to settings.
-    </message>
-  </if>
-
-  <if expr="chromeos_lacros">
-    <!-- TODO(crbug.com/1231500): Remove this string after Lacros side-by-side rollout stage. -->
-    <message name="IDS_SYNC_SETTINGS_SIDE_BY_SIDE_WARNING_LACROS" desc="The warning message that is shown when lacros side-by-side mode is enabled.">
-      Changes you make here apply only to Lacros Chrome Browser. To make changes to your Chrome Browser settings, open Chrome Browser and go to settings.
-    </message>
-  </if>
 
   <if expr="is_chromeos">
     <message name="IDS_BROWSER_SETTINGS_SYNC_FEATURE_LABEL" desc="Label describing the browser sync feature.">
@@ -383,6 +421,9 @@
   <!-- About Subpage-->
   <message name="IDS_SETTINGS_ABOUT_UPGRADE_CHECK_STARTED" desc="Status label: About to start checking for updates">
     Checking for updates
+  </message>
+  <message name="IDS_SETTINGS_UPDATE_TO_ROLLBACK_VERSION_DISALLOWED" desc="Status label: After a consumer rollback, updating to the previously installed version just rolledback from is disallowed (ChromiumOS/ChromeOS)">
+    You reverted to a previous version of ChromeOS. To get updates, wait until the next version is available.
   </message>
 
   <if expr="chromeos_ash">

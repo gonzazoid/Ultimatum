@@ -8,12 +8,13 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "base/timer/timer.h"
+#include "base/values.h"
 #include "components/language/content/browser/test_utils.h"
 #include "components/language/content/browser/ulp_language_code_locator/ulp_language_code_locator.h"
 #include "components/language/core/common/language_experiments.h"
@@ -65,11 +66,12 @@ class GeoLanguageProviderTest : public testing::Test {
 
   void SetUpCachedLanguages(const std::vector<std::string>& languages,
                             const double update_time) {
-    base::ListValue cache_list;
+    base::Value::List cache_list;
     for (const std::string& language : languages) {
       cache_list.Append(language);
     }
-    local_state_.Set(GeoLanguageProvider::kCachedGeoLanguagesPref, cache_list);
+    local_state_.SetList(GeoLanguageProvider::kCachedGeoLanguagesPref,
+                         std::move(cache_list));
     local_state_.SetDouble(
         GeoLanguageProvider::kTimeOfLastGeoLanguagesUpdatePref, update_time);
   }
@@ -154,8 +156,9 @@ TEST_F(GeoLanguageProviderTest, ButDoCallInTheNextDay) {
 }
 
 TEST_F(GeoLanguageProviderTest, CachedLanguagesUpdatedOnStartup) {
-  SetUpCachedLanguages({"en", "fr"},
-                       (base::Time::Now() - base::Hours(25)).ToDoubleT());
+  SetUpCachedLanguages(
+      {"en", "fr"},
+      (base::Time::Now() - base::Hours(25)).InSecondsFSinceUnixEpoch());
   MoveToLocation(23.0, 80.0);
   StartGeoLanguageProvider();
 
@@ -170,7 +173,8 @@ TEST_F(GeoLanguageProviderTest, CachedLanguagesUpdatedOnStartup) {
 }
 
 TEST_F(GeoLanguageProviderTest, CachedLanguagesNotUpdatedOnStartup) {
-  SetUpCachedLanguages({"en", "fr"}, base::Time::Now().ToDoubleT());
+  SetUpCachedLanguages({"en", "fr"},
+                       base::Time::Now().InSecondsFSinceUnixEpoch());
   MoveToLocation(23.0, 80.0);
   StartGeoLanguageProvider();
 

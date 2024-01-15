@@ -4,11 +4,11 @@
 
 package org.chromium.webview_shell.page_cycler;
 
-import android.support.test.InstrumentationRegistry;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.LargeTest;
 
 import org.junit.Assert;
@@ -53,8 +53,7 @@ public class PageCyclerTest {
                     new ParameterSet().value("http://youtube.com").name("Youtube"),
                     new ParameterSet().value("http://yahoo.com").name("Yahoo"),
                     new ParameterSet().value("http://ebay.com").name("Ebay"),
-                    new ParameterSet().value("http://reddit.com").name("reddit")
-            );
+                    new ParameterSet().value("http://reddit.com").name("reddit"));
         }
     }
 
@@ -73,15 +72,17 @@ public class PageCyclerTest {
     @Restriction(Restriction.RESTRICTION_TYPE_INTERNET)
     public void testVisitPage(String url) {
         final PageCyclerWebViewClient pageCyclerWebViewClient = new PageCyclerWebViewClient();
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(new Runnable() {
-            @Override
-            public void run() {
-                final WebView view = mRule.getActivity().getWebView();
-                WebSettings settings = view.getSettings();
-                settings.setJavaScriptEnabled(true);
-                view.setWebViewClient(pageCyclerWebViewClient);
-            }
-        });
+        InstrumentationRegistry.getInstrumentation()
+                .runOnMainSync(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                final WebView view = mRule.getActivity().getWebView();
+                                WebSettings settings = view.getSettings();
+                                settings.setJavaScriptEnabled(true);
+                                view.setWebViewClient(pageCyclerWebViewClient);
+                            }
+                        });
         CallbackHelper pageFinishedCallback = pageCyclerWebViewClient.getPageFinishedCallback();
         CallbackHelper errorCallback = pageCyclerWebViewClient.getErrorCallback();
         loadUrlSync(url, pageFinishedCallback, errorCallback);
@@ -112,36 +113,42 @@ public class PageCyclerTest {
 
         // TODO(yolandyan@): create helper class to manage network error
         @Override
-        public void onReceivedError(WebView webview, int code, String description,
-                String failingUrl) {
+        public void onReceivedError(
+                WebView webview, int code, String description, String failingUrl) {
             mErrorCallback.notifyCalled();
         }
     }
 
-    private void loadUrlSync(final String url, final CallbackHelper pageFinishedCallback,
+    private void loadUrlSync(
+            final String url,
+            final CallbackHelper pageFinishedCallback,
             final CallbackHelper errorCallback) {
         boolean timeout = false;
         int pageFinishedCount = pageFinishedCallback.getCallCount();
         int errorCount = errorCallback.getCallCount();
         loadUrlAsync(url);
         try {
-            pageFinishedCallback.waitForCallback(pageFinishedCount, pageFinishedCount + 1,
-                    TIMEOUT_IN_SECS, TimeUnit.SECONDS);
+            pageFinishedCallback.waitForCallback(
+                    pageFinishedCount, pageFinishedCount + 1, TIMEOUT_IN_SECS, TimeUnit.SECONDS);
         } catch (TimeoutException ex) {
             timeout = true;
         }
-        Assert.assertEquals(String.format("Network error while accessing %s", url), errorCount,
+        Assert.assertEquals(
+                String.format("Network error while accessing %s", url),
+                errorCount,
                 errorCallback.getCallCount());
         Assert.assertFalse(String.format("Timeout error while accessing %s", url), timeout);
     }
 
     private void loadUrlAsync(final String url) {
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(new Runnable() {
-            @Override
-            public void run() {
-                WebView view = mRule.getActivity().getWebView();
-                view.loadUrl(url);
-            }
-        });
+        InstrumentationRegistry.getInstrumentation()
+                .runOnMainSync(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                WebView view = mRule.getActivity().getWebView();
+                                view.loadUrl(url);
+                            }
+                        });
     }
 }

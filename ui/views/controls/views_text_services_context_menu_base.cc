@@ -18,6 +18,10 @@
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/widget/widget.h"
 
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/constants/chromeos_features.h"
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
 namespace views {
 
 namespace {
@@ -54,7 +58,7 @@ bool ViewsTextServicesContextMenuBase::GetAcceleratorForCommandId(
     *accelerator = ui::Accelerator(ui::VKEY_SPACE,
                                    ui::EF_COMMAND_DOWN | ui::EF_CONTROL_DOWN);
     return true;
-#elif BUILDFLAG(IS_CHROMEOS_ASH)
+#elif BUILDFLAG(IS_CHROMEOS)
     *accelerator = ui::Accelerator(ui::VKEY_SPACE,
                                    ui::EF_SHIFT_DOWN | ui::EF_COMMAND_DOWN);
     return true;
@@ -88,13 +92,21 @@ bool ViewsTextServicesContextMenuBase::SupportsCommand(int command_id) const {
   return command_id == IDS_CONTENT_CONTEXT_EMOJI;
 }
 
-#if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
+int ViewsTextServicesContextMenuBase::GetClipboardHistoryStringId() const {
+  return chromeos::features::IsClipboardHistoryRefreshEnabled()
+             ? IDS_APP_PASTE_FROM_CLIPBOARD
+             : IDS_APP_SHOW_CLIPBOARD_HISTORY;
+}
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
+#if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_CHROMEOS)
 // static
 std::unique_ptr<ViewsTextServicesContextMenu>
 ViewsTextServicesContextMenu::Create(ui::SimpleMenuModel* menu,
                                      Textfield* client) {
   return std::make_unique<ViewsTextServicesContextMenuBase>(menu, client);
 }
-#endif
+#endif  // !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace views

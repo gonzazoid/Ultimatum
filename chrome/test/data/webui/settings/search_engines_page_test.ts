@@ -5,43 +5,15 @@
 // clang-format off
 import 'chrome://settings/lazy_load.js';
 
-import {webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
+import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {CrInputElement, SettingsOmniboxExtensionEntryElement, SettingsSearchEngineEditDialogElement, SettingsSearchEngineEntryElement, SettingsSearchEnginesListElement, SettingsSearchEnginesPageElement} from 'chrome://settings/lazy_load.js';
-import {ExtensionControlBrowserProxyImpl, loadTimeData, SearchEngine, SearchEnginesBrowserProxyImpl, SearchEnginesInfo, SearchEnginesInteractions} from 'chrome://settings/settings.js';
+import {CrInputElement, SettingsSearchEngineEditDialogElement, SettingsSearchEnginesListElement, SettingsSearchEnginesPageElement} from 'chrome://settings/lazy_load.js';
+import {SearchEnginesBrowserProxyImpl, SearchEnginesInfo, SearchEnginesInteractions} from 'chrome://settings/settings.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
-import {TestExtensionControlBrowserProxy} from './test_extension_control_browser_proxy.js';
-import {createSampleSearchEngine, TestSearchEnginesBrowserProxy} from './test_search_engines_browser_proxy.js';
-
+import {createSampleOmniboxExtension, createSampleSearchEngine, TestSearchEnginesBrowserProxy} from './test_search_engines_browser_proxy.js';
 // clang-format on
-
-function createSampleOmniboxExtension(): SearchEngine {
-  return {
-    canBeDefault: false,
-    canBeEdited: false,
-    canBeRemoved: false,
-    canBeActivated: false,
-    canBeDeactivated: false,
-    default: false,
-    displayName: 'Omnibox extension displayName',
-    extension: {
-      icon: 'chrome://extension-icon/some-extension-icon',
-      id: 'dummyextensionid',
-      name: 'Omnibox extension',
-      canBeDisabled: false,
-    },
-    id: 0,
-    isOmniboxExtension: true,
-    keyword: 'oe',
-    modelIndex: 6,
-    name: 'Omnibox extension',
-    shouldConfirmDeletion: false,
-    url: 'chrome-extension://dummyextensionid/?q=%s',
-    urlLocked: false,
-  };
-}
 
 suite('AddSearchEngineDialogTests', function() {
   let dialog: SettingsSearchEngineEditDialogElement;
@@ -73,7 +45,7 @@ suite('AddSearchEngineDialogTests', function() {
   //  - validation is triggered on 'input' event.
   //  - action button is enabled when all fields are valid.
   //  - action button triggers appropriate browser signal when tapped.
-  test('DialogAddSearchEngine', function() {
+  test('DialogAddSearchEngine', async function() {
     /**
      * Triggers an 'input' event on the cr-input element and checks that
      * validation is triggered.
@@ -92,34 +64,33 @@ suite('AddSearchEngineDialogTests', function() {
 
     const actionButton = dialog.$.actionButton;
 
-    return browserProxy.whenCalled('searchEngineEditStarted')
-        .then(() => {
-          assertEquals('', dialog.$.searchEngine.value);
-          assertEquals('', dialog.$.keyword.value);
-          assertEquals('', dialog.$.queryUrl.value);
-          assertTrue(actionButton.disabled);
-        })
-        .then(() => inputAndValidate('searchEngine'))
-        .then(() => inputAndValidate('keyword'))
-        .then(() => inputAndValidate('queryUrl'))
-        .then(() => {
-          // Manually set the text to a non-empty string for all fields.
-          dialog.$.searchEngine.value = 'foo';
-          dialog.$.keyword.value = 'bar';
-          dialog.$.queryUrl.value = 'baz';
+    await browserProxy.whenCalled('searchEngineEditStarted');
+    assertEquals('', dialog.$.searchEngine.value);
+    assertEquals('', dialog.$.keyword.value);
+    assertEquals('', dialog.$.queryUrl.value);
+    assertFalse(dialog.$.queryUrl.readonly);
+    assertFalse(dialog.$.cancel.disabled);
+    assertTrue(actionButton.disabled);
+    assertEquals(
+        actionButton.textContent!.trim(), loadTimeData.getString('add'));
+    await inputAndValidate('searchEngine');
+    await inputAndValidate('keyword');
+    await inputAndValidate('queryUrl');
 
-          return inputAndValidate('searchEngine');
-        })
-        .then(() => {
-          // Assert that the action button has been enabled now that all
-          // input is valid and non-empty.
-          assertFalse(actionButton.disabled);
-          actionButton.click();
-          return browserProxy.whenCalled('searchEngineEditCompleted');
-        });
+    // Manually set the text to a non-empty string for all fields.
+    dialog.$.searchEngine.value = 'foo';
+    dialog.$.keyword.value = 'bar';
+    dialog.$.queryUrl.value = 'baz';
+
+    await inputAndValidate('searchEngine');
+    // Assert that the action button has been enabled now that all
+    // input is valid and non-empty.
+    assertFalse(actionButton.disabled);
+    actionButton.click();
+    await browserProxy.whenCalled('searchEngineEditCompleted');
   });
 
-  test('DialogCloseWhenEnginesChangedModelEngineNotFound', function() {
+  test('DialogCloseWhenEnginesChangedModelEngineNotFound', async function() {
     dialog.set('model', createSampleSearchEngine({id: 0, name: 'G'}));
     webUIListenerCallback('search-engines-changed', {
       defaults: [],
@@ -127,10 +98,10 @@ suite('AddSearchEngineDialogTests', function() {
       others: [createSampleSearchEngine({id: 1, name: 'H'})],
       extensions: [],
     });
-    return browserProxy.whenCalled('searchEngineEditCancelled');
+    await browserProxy.whenCalled('searchEngineEditCancelled');
   });
 
-  test('DialogValidateInputsWhenEnginesChanged', function() {
+  test('DialogValidateInputsWhenEnginesChanged', async function() {
     dialog.set('model', createSampleSearchEngine({name: 'G'}));
     dialog.set('keyword_', 'G');
     webUIListenerCallback('search-engines-changed', {
@@ -139,219 +110,7 @@ suite('AddSearchEngineDialogTests', function() {
       others: [createSampleSearchEngine({name: 'G'})],
       extensions: [],
     });
-    return browserProxy.whenCalled('validateSearchEngineInput');
-  });
-});
-
-suite('SearchEngineEntryTests', function() {
-  let entry: SettingsSearchEngineEntryElement;
-  let browserProxy: TestSearchEnginesBrowserProxy;
-
-  const searchEngine = createSampleSearchEngine(
-      {canBeDefault: true, canBeEdited: true, canBeRemoved: true});
-
-  setup(function() {
-    browserProxy = new TestSearchEnginesBrowserProxy();
-    SearchEnginesBrowserProxyImpl.setInstance(browserProxy);
-    document.body.innerHTML = window.trustedTypes!.emptyHTML;
-    entry = document.createElement('settings-search-engine-entry');
-    entry.set('engine', searchEngine);
-    entry.set('isActiveSearchEnginesFlagEnabled', false);
-    document.body.appendChild(entry);
-  });
-
-  teardown(function() {
-    entry.remove();
-  });
-
-  // Test that the <search-engine-entry> is populated according to its
-  // underlying SearchEngine model. If the #omnibox-active-search-engines flag
-  // is enabled, show the shortcut column instead of the keyword column.
-  test('Initialization', function() {
-    flush();
-    assertEquals(
-        searchEngine.displayName,
-        entry.shadowRoot!.querySelector('#name-column')!.textContent!.trim());
-    assertEquals(
-        searchEngine.keyword,
-        entry.shadowRoot!.querySelector('#shortcut-column')!.textContent);
-    assertEquals(
-        searchEngine.url,
-        entry.shadowRoot!.querySelector('#url-column-padded')!.textContent);
-  });
-
-  // Tests that columns are hidden and shown appropriately.
-  test('ColumnVisibility', function() {
-    flush();
-
-    // Test shortcut column visibility.
-    entry.set('showShortcut', true);
-    assertFalse(
-        entry.shadowRoot!.querySelector<HTMLElement>(
-                             '#shortcut-column')!.hidden);
-    entry.set('showShortcut', false);
-    assertTrue(entry.shadowRoot!.querySelector<HTMLElement>(
-                                    '#shortcut-column')!.hidden);
-
-    // Test query URL column visibility.
-    entry.set('showQueryUrl', true);
-    assertFalse(
-        entry.shadowRoot!.querySelector<HTMLElement>(
-                             '#url-column-padded')!.hidden);
-    entry.set('showQueryUrl', false);
-    assertTrue(
-        entry.shadowRoot!.querySelector<HTMLElement>(
-                             '#url-column-padded')!.hidden);
-  });
-
-  // Open and return the action menu
-  function openActionMenu() {
-    const menuButton = entry.shadowRoot!.querySelector<HTMLElement>(
-        'cr-icon-button.icon-more-vert');
-    assertTrue(!!menuButton);
-    menuButton!.click();
-    const menu = entry.shadowRoot!.querySelector('cr-action-menu')!;
-    assertTrue(menu.open);
-    return menu;
-  }
-
-  test('Remove_Enabled', async function() {
-    const menu = openActionMenu();
-
-    const deleteButton = entry.$.delete;
-    assertTrue(!!deleteButton);
-    assertFalse(deleteButton.hidden);
-    deleteButton.click();
-    const modelIndex = await browserProxy.whenCalled('removeSearchEngine');
-    assertFalse(menu.open);
-    assertEquals(entry.engine.modelIndex, modelIndex);
-  });
-
-  test('MakeDefault_Enabled', async function() {
-    const menu = openActionMenu();
-
-    const makeDefaultButton = entry.$.makeDefault;
-    assertTrue(!!makeDefaultButton);
-    makeDefaultButton.click();
-    const modelIndex = await browserProxy.whenCalled('setDefaultSearchEngine');
-    assertFalse(menu.open);
-    assertEquals(entry.engine.modelIndex, modelIndex);
-  });
-
-  // Test that clicking the "edit" menu item fires an edit event.
-  test('Edit_Enabled', function() {
-    flush();
-
-    const engine = entry.engine;
-    const editButton =
-        entry.shadowRoot!.querySelector<HTMLButtonElement>(`#editIconButton`)!;
-    assertTrue(!!editButton);
-    assertFalse(editButton.hidden);
-
-    const promise = eventToPromise('edit-search-engine', entry).then(e => {
-      assertEquals(engine, e.detail.engine);
-      assertEquals(
-          entry.shadowRoot!.querySelector('cr-icon-button'),
-          e.detail.anchorElement);
-    });
-    editButton.click();
-    return promise;
-  });
-
-  /**
-   * Checks that the given button is hidden for the given search engine.
-   */
-  function testButtonHidden(searchEngine: SearchEngine, buttonId: string) {
-    entry.engine = searchEngine;
-    const button =
-        entry.shadowRoot!.querySelector<HTMLButtonElement>(`#${buttonId}`);
-    assertTrue(!!button);
-    assertTrue(button!.hidden);
-  }
-
-  test('Remove_Hidden', function() {
-    testButtonHidden(createSampleSearchEngine({canBeRemoved: false}), 'delete');
-  });
-
-  test('Activate_Hidden', function() {
-    flush();
-    testButtonHidden(
-        createSampleSearchEngine({canBeActivated: false}), 'activate');
-  });
-
-  test('Deactivate_Hidden', function() {
-    flush();
-    testButtonHidden(
-        createSampleSearchEngine({canBeDeactivated: false}), 'deactivate');
-  });
-
-  test('Edit_Hidden', function() {
-    flush();
-    testButtonHidden(
-        createSampleSearchEngine({canBeActivated: true}), 'editIconButton');
-  });
-  /**
-   * Checks that the given button is disabled for the given search engine.
-   */
-  function testButtonDisabled(searchEngine: SearchEngine, buttonId: string) {
-    entry.engine = searchEngine;
-    const button =
-        entry.shadowRoot!.querySelector<HTMLButtonElement>(`#${buttonId}`);
-    assertTrue(!!button);
-    assertTrue(button!.disabled);
-  }
-
-  test('MakeDefault_Disabled', function() {
-    testButtonDisabled(
-        createSampleSearchEngine({canBeDefault: false}), 'makeDefault');
-  });
-
-  test('Edit_Disabled', function() {
-    flush();
-    testButtonDisabled(
-        createSampleSearchEngine({canBeEdited: false}), 'editIconButton');
-  });
-
-  // Test that clicking the "activate" button fires an activate event.
-  test('Activate', async function() {
-    flush();
-    entry.engine = createSampleSearchEngine({canBeActivated: true});
-
-    const activateButton = entry.shadowRoot!.querySelector<HTMLButtonElement>(
-        'cr-button.secondary-button')!;
-    assertTrue(!!activateButton);
-    assertFalse(activateButton.hidden);
-    activateButton.click();
-
-    // Ensure that the activate event is fired.
-    const [modelIndex, isActive] =
-        await browserProxy.whenCalled('setIsActiveSearchEngine');
-    assertEquals(entry.engine.modelIndex, modelIndex);
-    assertTrue(isActive);
-  });
-
-  // Test that clicking the "Deactivate" button fires a deactivate event.
-  test('Deactivate', async function() {
-    flush();
-    entry.engine = createSampleSearchEngine({canBeDeactivated: true});
-
-    // Open action menu.
-    entry.shadowRoot!
-        .querySelector<HTMLElement>('cr-icon-button.icon-more-vert')!.click();
-    const menu = entry.shadowRoot!.querySelector('cr-action-menu')!;
-    assertTrue(menu.open);
-
-    const deactivateButton = entry.shadowRoot!.querySelector<HTMLButtonElement>(
-        'button#deactivate.dropdown-item')!;
-    assertTrue(!!deactivateButton);
-    assertFalse(deactivateButton.hidden);
-    deactivateButton.click();
-
-    // Ensure that the deactivate event is fired.
-    const [modelIndex, isActive] =
-        await browserProxy.whenCalled('setIsActiveSearchEngine');
-    assertEquals(entry.engine.modelIndex, modelIndex);
-    assertFalse(isActive);
+    await browserProxy.whenCalled('validateSearchEngineInput');
   });
 });
 
@@ -372,13 +131,17 @@ suite('SearchEnginePageTests', function() {
         id: 1,
         name: 'search_engine_default_B',
         displayName: 'B displayName',
+        isManaged: true,
         keyword: 'default B',
+        url: 'https://www.default_b.com/search?q=%s',
       }),
       createSampleSearchEngine({
         id: 2,
         name: 'search_engine_default_C',
         displayName: 'C displayName',
         keyword: 'default C',
+        url: 'https://www.default_c.com/search?q=%s',
+        urlLocked: true,
       }),
       createSampleSearchEngine({
         id: 3,
@@ -417,7 +180,7 @@ suite('SearchEnginePageTests', function() {
     extensions: [createSampleOmniboxExtension()],
   };
 
-  setup(function() {
+  setup(async function() {
     browserProxy = new TestSearchEnginesBrowserProxy();
 
     // Purposefully pass a clone of |searchEnginesInfo| to avoid any
@@ -428,7 +191,6 @@ suite('SearchEnginePageTests', function() {
       others: searchEnginesInfo.others.slice(),
       extensions: searchEnginesInfo.extensions.slice(),
     });
-    loadTimeData.overrideValues({'isActiveSearchEnginesFlagEnabled': false});
     SearchEnginesBrowserProxyImpl.setInstance(browserProxy);
     document.body.innerHTML = window.trustedTypes!.emptyHTML;
     page = document.createElement('settings-search-engines-page');
@@ -438,7 +200,7 @@ suite('SearchEnginePageTests', function() {
       value: true,
     });
     document.body.appendChild(page);
-    return browserProxy.whenCalled('getSearchEnginesList');
+    await browserProxy.whenCalled('getSearchEnginesList');
   });
 
   teardown(function() {
@@ -464,8 +226,9 @@ suite('SearchEnginePageTests', function() {
             'hidden'));
     assertFalse(defaultsListElement.shadowRoot!.querySelector('.shortcut')!
                     .hasAttribute('hidden'));
-    assertTrue(defaultsListElement.shadowRoot!.querySelector('.url-padded')!
-                   .hasAttribute('hidden'));
+    assertTrue(
+        defaultsListElement.shadowRoot!.querySelector('.url')!.hasAttribute(
+            'hidden'));
 
     // The default engines list should not collapse and should show all entries
     // in the list by default.
@@ -486,8 +249,9 @@ suite('SearchEnginePageTests', function() {
     assertFalse(
         activesListElement.shadowRoot!.querySelector('.shortcut')!.hasAttribute(
             'hidden'));
-    assertTrue(activesListElement.shadowRoot!.querySelector('.url-padded')!
-                   .hasAttribute('hidden'));
+    assertTrue(
+        activesListElement.shadowRoot!.querySelector('.url')!.hasAttribute(
+            'hidden'));
 
     // With less than `visibleEnginesSize` elements in the list, all elements
     // should be visible and the collapsible section should not be present.
@@ -513,8 +277,9 @@ suite('SearchEnginePageTests', function() {
     assertTrue(
         othersListElement.shadowRoot!.querySelector('.shortcut')!.hasAttribute(
             'hidden'));
-    assertFalse(othersListElement.shadowRoot!.querySelector('.url-padded')!
-                    .hasAttribute('hidden'));
+    assertFalse(
+        othersListElement.shadowRoot!.querySelector('.url')!.hasAttribute(
+            'hidden'));
 
     // Any engines greater than `visibleEnginesSize` will be in a second list
     // under the collapsible section. The button to expand this section must be
@@ -620,9 +385,9 @@ suite('SearchEnginePageTests', function() {
         !!page.shadowRoot!.querySelector('settings-search-engine-edit-dialog'));
   });
 
-  test('EditSearchEngineDialog', function() {
+  test('EditSearchEngineDialog', async function() {
     const engine = searchEnginesInfo.others[0]!;
-    page.dispatchEvent(new CustomEvent('edit-search-engine', {
+    page.dispatchEvent(new CustomEvent('view-or-edit-search-engine', {
       bubbles: true,
       composed: true,
       detail: {
@@ -630,20 +395,87 @@ suite('SearchEnginePageTests', function() {
         anchorElement: page.shadowRoot!.querySelector('#addSearchEngine')!,
       },
     }));
-    return browserProxy.whenCalled('searchEngineEditStarted')
-        .then(modelIndex => {
-          assertEquals(engine.modelIndex, modelIndex);
-          const dialog = page.shadowRoot!.querySelector(
-              'settings-search-engine-edit-dialog')!;
-          assertTrue(!!dialog);
+    const modelIndex = await browserProxy.whenCalled('searchEngineEditStarted');
+    assertEquals(engine.modelIndex, modelIndex);
+    const dialog =
+        page.shadowRoot!.querySelector('settings-search-engine-edit-dialog')!;
+    assertTrue(!!dialog);
 
-          // Check that the cr-input fields are pre-populated.
-          assertEquals(engine.name, dialog.$.searchEngine.value);
-          assertEquals(engine.keyword, dialog.$.keyword.value);
-          assertEquals(engine.url, dialog.$.queryUrl.value);
+    // Check that the cr-input fields are pre-populated.
+    assertEquals(engine.name, dialog.$.searchEngine.value);
+    assertEquals(engine.keyword, dialog.$.keyword.value);
+    assertEquals(engine.url, dialog.$.queryUrl.value);
 
-          assertFalse(dialog.$.actionButton.disabled);
-        });
+    assertFalse(dialog.$.cancel.hidden);
+    assertFalse(dialog.$.cancel.disabled);
+    assertFalse(dialog.$.actionButton.hidden);
+    assertFalse(dialog.$.actionButton.disabled);
+    assertEquals(
+        dialog.$.actionButton.textContent!.trim(),
+        loadTimeData.getString('save'));
+  });
+
+  test('EditSearchEngineDialog_IsManaged', async function() {
+    const engine = searchEnginesInfo.defaults[1]!;
+    page.dispatchEvent(new CustomEvent('view-or-edit-search-engine', {
+      bubbles: true,
+      composed: true,
+      detail: {
+        engine,
+        anchorElement: page.shadowRoot!.querySelector('#addSearchEngine')!,
+      },
+    }));
+    const modelIndex = await browserProxy.whenCalled('searchEngineEditStarted');
+    assertEquals(engine.modelIndex, modelIndex);
+    const dialog =
+        page.shadowRoot!.querySelector('settings-search-engine-edit-dialog')!;
+    assertTrue(!!dialog);
+
+    // Check that the cr-input fields are pre-populated.
+    assertEquals(engine.name, dialog.$.searchEngine.value);
+    assertTrue(dialog.$.searchEngine.readonly);
+    assertEquals(engine.keyword, dialog.$.keyword.value);
+    assertTrue(dialog.$.keyword.readonly);
+    assertEquals(engine.url, dialog.$.queryUrl.value);
+    assertTrue(dialog.$.queryUrl.readonly);
+
+    assertTrue(dialog.$.cancel.hidden);
+    assertFalse(dialog.$.actionButton.hidden);
+    assertFalse(dialog.$.actionButton.disabled);
+    assertEquals(
+        dialog.$.actionButton.textContent!.trim(),
+        loadTimeData.getString('done'));
+  });
+
+  test('EditSearchEngineDialog_UrlLocked', async function() {
+    const engine = searchEnginesInfo.defaults[2]!;
+    page.dispatchEvent(new CustomEvent('view-or-edit-search-engine', {
+      bubbles: true,
+      composed: true,
+      detail: {
+        engine,
+        anchorElement: page.shadowRoot!.querySelector('#addSearchEngine')!,
+      },
+    }));
+    const modelIndex = await browserProxy.whenCalled('searchEngineEditStarted');
+    assertEquals(engine.modelIndex, modelIndex);
+    const dialog =
+        page.shadowRoot!.querySelector('settings-search-engine-edit-dialog')!;
+    assertTrue(!!dialog);
+
+    // Check that the cr-input fields are pre-populated.
+    assertEquals(engine.name, dialog.$.searchEngine.value);
+    assertEquals(engine.keyword, dialog.$.keyword.value);
+    assertEquals(engine.url, dialog.$.queryUrl.value);
+    assertTrue(dialog.$.queryUrl.readonly);
+
+    assertFalse(dialog.$.cancel.hidden);
+    assertFalse(dialog.$.cancel.disabled);
+    assertFalse(dialog.$.actionButton.hidden);
+    assertFalse(dialog.$.actionButton.disabled);
+    assertEquals(
+        dialog.$.actionButton.textContent!.trim(),
+        loadTimeData.getString('save'));
   });
 
   // Tests that filtering the three search engines lists works, and that the
@@ -737,46 +569,5 @@ suite('SearchEnginePageTests', function() {
     });
     assertTrue(messageActive!.hasAttribute('hidden'));
     assertTrue(messageOther!.hasAttribute('hidden'));
-  });
-});
-
-suite('OmniboxExtensionEntryTests', function() {
-  let entry: SettingsOmniboxExtensionEntryElement;
-  let browserProxy: TestExtensionControlBrowserProxy;
-
-  setup(function() {
-    browserProxy = new TestExtensionControlBrowserProxy();
-    ExtensionControlBrowserProxyImpl.setInstance(browserProxy);
-    document.body.innerHTML = window.trustedTypes!.emptyHTML;
-    entry = document.createElement('settings-omnibox-extension-entry');
-    entry.set('engine', createSampleOmniboxExtension());
-    document.body.appendChild(entry);
-
-    // Open action menu.
-    entry.shadowRoot!.querySelector('cr-icon-button')!.click();
-  });
-
-  teardown(function() {
-    entry.remove();
-  });
-
-  test('Manage', function() {
-    const manageButton = entry.$.manage;
-    assertTrue(!!manageButton);
-    manageButton.click();
-    return browserProxy.whenCalled('manageExtension')
-        .then(function(extensionId) {
-          assertEquals(entry.engine.extension!.id, extensionId);
-        });
-  });
-
-  test('Disable', function() {
-    const disableButton = entry.$.disable;
-    assertTrue(!!disableButton);
-    disableButton.click();
-    return browserProxy.whenCalled('disableExtension')
-        .then(function(extensionId) {
-          assertEquals(entry.engine.extension!.id, extensionId);
-        });
   });
 });

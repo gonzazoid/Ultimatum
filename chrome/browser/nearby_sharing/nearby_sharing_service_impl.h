@@ -12,11 +12,12 @@
 #include <vector>
 
 #include "ash/public/cpp/session/session_observer.h"
-#include "base/callback_helpers.h"
 #include "base/cancelable_callback.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
@@ -30,22 +31,29 @@
 #include "chrome/browser/nearby_sharing/incoming_frames_reader.h"
 #include "chrome/browser/nearby_sharing/incoming_share_target_info.h"
 #include "chrome/browser/nearby_sharing/local_device_data/nearby_share_local_device_data_manager.h"
-#include "chrome/browser/nearby_sharing/nearby_connections_manager.h"
+#include "chrome/browser/nearby_sharing/metrics/attachment_metric_logger.h"
+#include "chrome/browser/nearby_sharing/metrics/discovery_metric_logger.h"
+#include "chrome/browser/nearby_sharing/metrics/nearby_share_metric_logger.h"
+#include "chrome/browser/nearby_sharing/metrics/throughput_metric_logger.h"
 #include "chrome/browser/nearby_sharing/nearby_file_handler.h"
 #include "chrome/browser/nearby_sharing/nearby_notification_manager.h"
 #include "chrome/browser/nearby_sharing/nearby_share_feature_usage_metrics.h"
+#include "chrome/browser/nearby_sharing/nearby_share_logger.h"
 #include "chrome/browser/nearby_sharing/nearby_share_profile_info_provider_impl.h"
 #include "chrome/browser/nearby_sharing/nearby_share_settings.h"
+#include "chrome/browser/nearby_sharing/nearby_share_transfer_profiler.h"
 #include "chrome/browser/nearby_sharing/nearby_sharing_service.h"
 #include "chrome/browser/nearby_sharing/outgoing_share_target_info.h"
 #include "chrome/browser/nearby_sharing/power_client.h"
+#include "chrome/browser/nearby_sharing/public/cpp/nearby_connections_manager.h"
 #include "chrome/browser/nearby_sharing/share_target.h"
 #include "chrome/browser/nearby_sharing/transfer_metadata.h"
 #include "chrome/browser/nearby_sharing/wifi_network_configuration/wifi_network_configuration_handler.h"
-#include "chrome/browser/ui/webui/nearby_share/public/mojom/nearby_share_settings.mojom.h"
 #include "chrome/services/sharing/public/proto/wire_format.pb.h"
 #include "chromeos/ash/services/nearby/public/cpp/nearby_process_manager.h"
 #include "chromeos/ash/services/nearby/public/mojom/nearby_decoder_types.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_share_settings.mojom-shared.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_share_settings.mojom.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 #include "net/base/network_change_notifier.h"
@@ -73,6 +81,7 @@ class NearbySharingServiceImpl
       public device::BluetoothAdapter::Observer,
       public NearbyConnectionsManager::IncomingConnectionListener,
       public NearbyConnectionsManager::DiscoveryListener,
+      public NearbyConnectionsManager::BandwidthUpgradeListener,
       public ash::SessionObserver,
       public PowerClient::Observer,
       public net::NetworkChangeNotifier::NetworkChangeObserver {
@@ -137,11 +146,15 @@ class NearbySharingServiceImpl
   NearbyShareLocalDeviceDataManager* GetLocalDeviceDataManager() override;
   NearbyShareContactManager* GetContactManager() override;
   NearbyShareCertificateManager* GetCertificateManager() override;
+  NearbyNotificationManager* GetNotificationManager() override;
 
   // NearbyConnectionsManager::IncomingConnectionListener:
-  void OnIncomingConnection(const std::string& endpoint_id,
-                            const std::vector<uint8_t>& endpoint_info,
-                            NearbyConnection* connection) override;
+  void OnIncomingConnectionInitiated(
+      const std::string& endpoint_id,
+      const std::vector<uint8_t>& endpoint_info) override {}
+  void OnIncomingConnectionAccepted(const std::string& endpoint_id,
+                                    const std::vector<uint8_t>& endpoint_info,
+                                    NearbyConnection* connection) override;
 
   // net::NetworkChangeNotifier::NetworkChangeObserver:
   void OnNetworkChanged(
@@ -180,6 +193,10 @@ class NearbySharingServiceImpl
   void OnEndpointDiscovered(const std::string& endpoint_id,
                             const std::vector<uint8_t>& endpoint_info) override;
   void OnEndpointLost(const std::string& endpoint_id) override;
+
+  // NearbyConnectionsManager::BandwidthUpgradeListener:
+  void OnBandwidthUpgrade(const std::string& endpoint_id,
+                          const Medium medium) override;
 
   // ash::SessionObserver:
   void OnLockStateChanged(bool locked) override;
@@ -268,13 +285,11 @@ class NearbySharingServiceImpl
   void OnUniquePathFetched(
       int64_t attachment_id,
       int64_t payload_id,
-      base::OnceCallback<void(location::nearby::connections::mojom::Status)>
-          callback,
+      base::OnceCallback<void(nearby::connections::mojom::Status)> callback,
       base::FilePath path);
-  void OnPayloadPathRegistered(
-      base::ScopedClosureRunner closure_runner,
-      bool* aggregated_success,
-      location::nearby::connections::mojom::Status status);
+  void OnPayloadPathRegistered(base::ScopedClosureRunner closure_runner,
+                               bool* aggregated_success,
+                               nearby::connections::mojom::Status status);
   void OnPayloadPathsRegistered(const ShareTarget& share_target,
                                 std::unique_ptr<bool> aggregated_success,
                                 StatusCodesCallback status_codes_callback);
@@ -293,8 +308,8 @@ class NearbySharingServiceImpl
   void OnOpenFiles(ShareTarget share_target,
                    base::OnceCallback<void(ShareTarget, bool)> callback,
                    std::vector<NearbyFileHandler::FileInfo> files);
-  std::vector<location::nearby::connections::mojom::PayloadPtr>
-  CreateTextPayloads(const std::vector<TextAttachment>& attachments);
+  std::vector<nearby::connections::mojom::PayloadPtr> CreateTextPayloads(
+      const std::vector<TextAttachment>& attachments);
 
   void WriteResponse(
       NearbyConnection& connection,
@@ -427,10 +442,10 @@ class NearbySharingServiceImpl
   void OnVisibilityReminderTimerFired();
   base::TimeDelta GetTimeUntilNextVisibilityReminder();
 
-  PrefService* prefs_ = nullptr;
-  Profile* profile_;
+  raw_ptr<PrefService> prefs_ = nullptr;
+  raw_ptr<Profile> profile_;
   std::unique_ptr<NearbyConnectionsManager> nearby_connections_manager_;
-  ash::nearby::NearbyProcessManager* process_manager_;
+  raw_ptr<ash::nearby::NearbyProcessManager> process_manager_;
   std::unique_ptr<ash::nearby::NearbyProcessManager::NearbyProcessReference>
       process_reference_;
   std::unique_ptr<PowerClient> power_client_;
@@ -449,6 +464,8 @@ class NearbySharingServiceImpl
   std::unique_ptr<NearbyShareLocalDeviceDataManager> local_device_data_manager_;
   std::unique_ptr<NearbyShareContactManager> contact_manager_;
   std::unique_ptr<NearbyShareCertificateManager> certificate_manager_;
+  std::unique_ptr<NearbyShareTransferProfiler> transfer_profiler_;
+  std::unique_ptr<NearbyShareLogger> logger_;
   NearbyShareSettings settings_;
   NearbyShareFeatureUsageMetrics feature_usage_metrics_;
   std::unique_ptr<FastInitiationScannerFeatureUsageMetrics>
@@ -513,6 +530,11 @@ class NearbySharingServiceImpl
   // retry certificate decryption.
   base::flat_map<std::string, std::vector<uint8_t>>
       discovered_advertisements_to_retry_map_;
+
+  // Mapping of Endpoint Id to share targets.
+  base::flat_map<std::string, ShareTarget> share_target_map_;
+  // Mapping of Endpoint Id to total transfer size.
+  base::flat_map<std::string, int64_t> transfer_size_map_;
 
   // A mapping of Attachment Id to additional AttachmentInfo related to the
   // Attachment.
@@ -588,6 +610,21 @@ class NearbySharingServiceImpl
 
   // Called when cleanup for ARC is needed as part of the transfer.
   base::OnceCallback<void()> arc_transfer_cleanup_callback_;
+
+  // Stores the user's selected visibility state and allowed contacts when the
+  // screen is locked and visibility is set to kYourDevices.
+  nearby_share::mojom::Visibility user_visibility_;
+  std::set<std::string> user_allowed_contacts_ = {};
+
+  // Metrics loggers.
+  std::unique_ptr<nearby::share::metrics::DiscoveryMetricLogger>
+      discovery_metric_logger_;
+  std::unique_ptr<nearby::share::metrics::ThroughputMetricLogger>
+      throughput_metric_logger_;
+  std::unique_ptr<nearby::share::metrics::AttachmentMetricLogger>
+      attachment_metric_logger_;
+  std::unique_ptr<nearby::share::metrics::NearbyShareMetricLogger>
+      neaby_share_metric_logger_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 

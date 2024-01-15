@@ -8,9 +8,9 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
@@ -81,6 +81,7 @@ class ComponentCloudPolicyUpdaterTest : public testing::Test {
 
   const PolicyNamespace kTestPolicyNS{POLICY_DOMAIN_EXTENSIONS, kTestExtension};
   base::test::TaskEnvironment task_env_;
+  std::unique_ptr<ResourceCache> cache_;
   std::unique_ptr<ComponentCloudPolicyStore> store_;
   MockComponentCloudPolicyStoreDelegate store_delegate_;
   network::TestURLLoaderFactory loader_factory_;
@@ -90,7 +91,6 @@ class ComponentCloudPolicyUpdaterTest : public testing::Test {
 
  private:
   base::ScopedTempDir temp_dir_;
-  std::unique_ptr<ResourceCache> cache_;
   std::string public_key_;
 };
 

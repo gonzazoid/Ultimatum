@@ -9,7 +9,6 @@ import android.view.View;
 import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
 
-import org.chromium.base.Callback;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 
 import java.lang.annotation.Retention;
@@ -30,11 +29,13 @@ public interface BottomSheetContent {
          * exception that uses the feature's toolbar height.
          */
         int DEFAULT = 0;
+
         /**
          * The sheet will set its height so the content is completely visible. This mode cannot
          * be used for the peek state.
          */
         int WRAP_CONTENT = -1;
+
         /**
          * The state this mode is used for will be disabled. For example, disabling the peek state
          * would cause the sheet to automatically expand when triggered.
@@ -72,9 +73,7 @@ public interface BottomSheetContent {
     @Nullable
     View getToolbarView();
 
-    /**
-     * @return The vertical scroll offset of the content view.
-     */
+    /** @return The vertical scroll offset of the content view. */
     int getVerticalScrollOffset();
 
     /**
@@ -86,27 +85,32 @@ public interface BottomSheetContent {
      */
     void destroy();
 
-    /**
-     * @return The priority of this content.
-     */
+    /** @return The priority of this content. */
     @ContentPriority
     int getPriority();
 
-    /**
-     * @return Whether swiping the sheet down hard enough will cause the sheet to be dismissed.
-     */
+    /** @return Whether swiping the sheet down hard enough will cause the sheet to be dismissed. */
     boolean swipeToDismissEnabled();
 
-    /**
-     * @return Whether the sheet will always skip the half state once it was fully extended.
-     */
+    /** @return Whether the sheet will always skip the half state once it was fully extended. */
     default boolean skipHalfStateOnScrollingDown() {
         return true;
-    };
+    }
+    ;
 
     /**
-     * @return Whether this content owns its lifecycle. If false, the content will be hidden
-     *         when the user navigates away from the page or switches tab.
+     * @return Whether this content owns its lifecycle. If false, the content will be dismissed
+     *         when the user navigates away from the page, switches tabs, or a layout change
+     *         occurs.
+     *
+     * If a BottomSheetContent ever needs to suppress across a layout state change rather than
+     * being dismissed this can be addressed by:
+     * * Registering a LayoutStateObserver to re-request to be shown when the correct LayoutType
+     *   finishes showing.
+     * * For LayoutType.BROWSING also registering a TabModelSelectorObserver to dismiss if
+     *   a tab switch occurs.
+     * * The client is responsible for restoring any previous state of the BottomSheetContent
+     *   and the View's it hosts.
      */
     default boolean hasCustomLifecycle() {
         return false;
@@ -155,19 +159,7 @@ public interface BottomSheetContent {
     }
 
     /**
-     * Set a {@link ContentSizeListener} that should be notified when the size of the content
-     * has changed. This will be called only if {@link #getFullHeightRatio()} returns {@link
-     * HeightMode#WRAP_CONTENT}. Note that you need to implement this method only if the content
-     * view height changes are animated.
-     *
-     * @return Whether the listener was correctly set.
-     */
-    default boolean setContentSizeListener(@Nullable ContentSizeListener listener) {
-        return false;
-    }
-
-    /**
-     * @return Whether the sheet should be hidden when it is in the PEEK state and the user
+     * @return Whether the sheet should be hidden when it is in the PEEK/HALF state and the user
      *         scrolls down the page.
      */
     default boolean hideOnScroll() {
@@ -227,21 +219,11 @@ public interface BottomSheetContent {
     int getSheetClosedAccessibilityStringId();
 
     /**
-     * Return {@code true} if the content expects {@link #setOffsetController} to be called.
-     *
-     * This is an experimental feature. Use it at your own risks. TODO(b/177037825): Remove or
-     * cleanup.
+     * @return True if this content should hide when higher-priority content is requested to be
+     *     shown, even if the sheet is expanded. Otherwise the new content will only be shown after
+     *     the sheet is dismissed. If returning true here, this content's priority should be LOW.
      */
-    default boolean contentControlsOffset() {
+    default boolean canSuppressInAnyState() {
         return false;
     }
-
-    /**
-     * Set or reset the set offset callback.
-     *
-     * The active content can use this callback to move the sheet to the given offset.
-     *
-     * Only called if {@link #contentControlsOffset} returns {@code true}.
-     */
-    default void setOffsetController(@Nullable Callback<Integer> setOffset) {}
 }

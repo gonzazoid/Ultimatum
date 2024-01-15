@@ -5,9 +5,12 @@
 package org.chromium.ui;
 
 import android.content.Context;
+import android.content.res.ColorStateList;
+import android.content.res.Configuration;
 import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
@@ -18,6 +21,8 @@ import android.view.SurfaceView;
 import android.view.View;
 import android.view.View.MeasureSpec;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
 import android.view.inputmethod.InputMethodInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.view.inputmethod.InputMethodSubtype;
@@ -31,7 +36,8 @@ import androidx.annotation.StyleableRes;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.core.graphics.drawable.DrawableCompat;
 
-import org.chromium.base.ApiCompatibilityUtils;
+import org.chromium.base.BuildInfo;
+import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
 
 import java.io.File;
@@ -54,16 +60,18 @@ public class UiUtils {
     // Keep this variable in sync with the value defined in file_paths.xml.
     public static final String IMAGE_FILE_PATH = "images";
 
+    // crbug.com/1413586: Prevent potentially unintentional user interaction with any prompt for
+    // this long after the prompt is displayed.
+    public static long PROMPT_INPUT_PROTECTION_SHORT_DELAY_MS = 600;
+
     /**
      * A static map of manufacturers to the version where theming Android UI is completely
      * supported. If there is no entry, it means the manufacturer supports theming at the same
      * version Android did.
      */
     private static final Map<String, Integer> sAndroidUiThemeBlocklist = new HashMap<>();
+
     static {
-        // Xiaomi doesn't support SYSTEM_UI_FLAG_LIGHT_STATUS_BAR until Android N; more info at
-        // https://crbug.com/823264.
-        sAndroidUiThemeBlocklist.put("xiaomi", Build.VERSION_CODES.N);
         // HTC doesn't respect theming flags on activity restart until Android O; this affects both
         // the system nav and status bar. More info at https://crbug.com/831737.
         sAndroidUiThemeBlocklist.put("htc", Build.VERSION_CODES.O);
@@ -72,11 +80,8 @@ public class UiUtils {
     /** Whether theming the Android system UI has been disabled. */
     private static Boolean sSystemUiThemingDisabled;
 
-    /**
-     * Guards this class from being instantiated.
-     */
-    private UiUtils() {
-    }
+    /** Guards this class from being instantiated. */
+    private UiUtils() {}
 
     /**
      * Gets the set of locales supported by the current enabled Input Methods.
@@ -93,7 +98,7 @@ public class UiUtils {
                     imManager.getEnabledInputMethodSubtypeList(enabledMethods.get(i), true);
             if (subtypes == null) continue;
             for (int j = 0; j < subtypes.size(); j++) {
-                String locale = ApiCompatibilityUtils.getLocale(subtypes.get(j));
+                String locale = subtypes.get(j).getLanguageTag();
                 if (!TextUtils.isEmpty(locale)) locales.add(locale);
             }
         }
@@ -190,8 +195,8 @@ public class UiUtils {
                 }
                 Bitmap bitmap = Bitmap.createBitmap(newWidth, newHeight, bitmapConfig);
                 Canvas canvas = new Canvas(bitmap);
-                canvas.scale((float) (newWidth / originalWidth),
-                        (float) (newHeight / originalHeight));
+                canvas.scale(
+                        (float) (newWidth / originalWidth), (float) (newHeight / originalHeight));
                 currentView.draw(canvas);
                 screenshot = bitmap;
             }
@@ -236,9 +241,11 @@ public class UiUtils {
             } else {
                 File externalDataDir =
                         Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM);
-                path = new File(externalDataDir.getAbsolutePath()
-                                + File.separator
-                                + EXTERNAL_IMAGE_FILE_PATH);
+                path =
+                        new File(
+                                externalDataDir.getAbsolutePath()
+                                        + File.separator
+                                        + EXTERNAL_IMAGE_FILE_PATH);
                 if (!path.exists() && !path.mkdirs()) {
                     path = externalDataDir;
                 }
@@ -281,14 +288,16 @@ public class UiUtils {
      * will be terrible since it measures every single item.
      *
      * @param adapter The ListAdapter whose widest item's width will be returned.
-     * @param parentView The parent view.
+     * @param parentView The parent view. This can be null.
      * @return The measured width (in pixels) of the widest item in the passed-in ListAdapter.
      */
     public static int computeMaxWidthOfListAdapterItems(ListAdapter adapter, ViewGroup parentView) {
         final int widthMeasureSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
         final int heightMeasureSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
-        AbsListView.LayoutParams params = new AbsListView.LayoutParams(
-                AbsListView.LayoutParams.WRAP_CONTENT, AbsListView.LayoutParams.WRAP_CONTENT);
+        AbsListView.LayoutParams params =
+                new AbsListView.LayoutParams(
+                        AbsListView.LayoutParams.WRAP_CONTENT,
+                        AbsListView.LayoutParams.WRAP_CONTENT);
 
         int maxWidth = 0;
         View[] itemViews = new View[adapter.getViewTypeCount()];
@@ -310,21 +319,6 @@ public class UiUtils {
         }
 
         return maxWidth;
-    }
-
-    /**
-     * Iterates through all items in the specified ListAdapter (including header and footer views)
-     * and returns the width of the widest item (when laid out with height and width set to
-     * WRAP_CONTENT).
-     *
-     * WARNING: do not call this on a ListAdapter with more than a handful of items, the performance
-     * will be terrible since it measures every single item.
-     *
-     * @param adapter The ListAdapter whose widest item's width will be returned.
-     * @return The measured width (in pixels) of the widest item in the passed-in ListAdapter.
-     */
-    public static int computeMaxWidthOfListAdapterItems(ListAdapter adapter) {
-        return computeMaxWidthOfListAdapterItems(adapter, null);
     }
 
     /**
@@ -357,8 +351,7 @@ public class UiUtils {
             Context context, @Nullable TypedArray attrs, @StyleableRes int attrId) {
         if (attrs == null) return null;
 
-        @DrawableRes
-        int resId = attrs.getResourceId(attrId, -1);
+        @DrawableRes int resId = attrs.getResourceId(attrId, -1);
         if (resId == -1) return null;
         return AppCompatResources.getDrawable(context, resId);
     }
@@ -367,15 +360,26 @@ public class UiUtils {
      * Gets a drawable from the resources and applies the specified tint to it. Uses Support Library
      * for vector drawables and tinting on older Android versions.
      * @param drawableId The resource id for the drawable.
-     * @param tintColorId The resource id for the color or ColorStateList.
+     * @param tintColorId The resource id for the color to build ColorStateList with.
      */
     public static Drawable getTintedDrawable(
             Context context, @DrawableRes int drawableId, @ColorRes int tintColorId) {
+        return getTintedDrawable(
+                context, drawableId, AppCompatResources.getColorStateList(context, tintColorId));
+    }
+
+    /**
+     * Gets a drawable from the resources and applies the specified tint to it. Uses Support Library
+     * for vector drawables and tinting on older Android versions.
+     * @param drawableId The resource id for the drawable.
+     * @param colorStateList The color state list to apply to the drawable.
+     */
+    public static Drawable getTintedDrawable(
+            Context context, @DrawableRes int drawableId, ColorStateList list) {
         Drawable drawable = AppCompatResources.getDrawable(context, drawableId);
         assert drawable != null;
         drawable = DrawableCompat.wrap(drawable).mutate();
-        DrawableCompat.setTintList(
-                drawable, AppCompatResources.getColorStateList(context, tintColorId));
+        DrawableCompat.setTintList(drawable, list);
         return drawable;
     }
 
@@ -387,8 +391,10 @@ public class UiUtils {
         if (sSystemUiThemingDisabled == null) {
             sSystemUiThemingDisabled = false;
             if (sAndroidUiThemeBlocklist.containsKey(Build.MANUFACTURER.toLowerCase(Locale.US))) {
-                sSystemUiThemingDisabled = Build.VERSION.SDK_INT
-                        < sAndroidUiThemeBlocklist.get(Build.MANUFACTURER.toLowerCase(Locale.US));
+                sSystemUiThemingDisabled =
+                        Build.VERSION.SDK_INT
+                                < sAndroidUiThemeBlocklist.get(
+                                        Build.MANUFACTURER.toLowerCase(Locale.US));
             }
         }
         return sSystemUiThemingDisabled;
@@ -410,5 +416,52 @@ public class UiUtils {
             systemUiVisibility &= ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
         }
         rootView.setSystemUiVisibility(systemUiVisibility);
+    }
+
+    /**
+     * @see android.view.Window#setStatusBarColor(int color).
+     */
+    public static void setStatusBarColor(Window window, int statusBarColor) {
+        if (0
+                == (window.getAttributes().flags
+                        & WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+        }
+        // The status bar should always be black in automotive devices to match the black back
+        // button toolbar.
+        if (BuildInfo.getInstance().isAutomotive) {
+            window.setStatusBarColor(Color.BLACK);
+        } else {
+            window.setStatusBarColor(statusBarColor);
+        }
+    }
+
+    /**
+     * Sets the status bar icons to dark or light. Note that this is only valid for
+     * Android M+.
+     *
+     * TODO: migrate to WindowInsetsController API for Android R+ (API 30+)
+     *
+     * @param rootView The root view used to request updates to the system UI theming.
+     * @param useDarkIcons Whether the status bar icons should be dark.
+     */
+    public static void setStatusBarIconColor(View rootView, boolean useDarkIcons) {
+        int systemUiVisibility = rootView.getSystemUiVisibility();
+        // The status bar should always be black in automotive devices to match the black back
+        // button toolbar, so we should use dark theme icons.
+        if (useDarkIcons || BuildInfo.getInstance().isAutomotive) {
+            systemUiVisibility |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+        } else {
+            systemUiVisibility &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+        }
+        rootView.setSystemUiVisibility(systemUiVisibility);
+    }
+
+    /**
+     * @return True if a hardware keyboard is detected.
+     */
+    public static boolean isHardwareKeyboardAttached() {
+        return ContextUtils.getApplicationContext().getResources().getConfiguration().keyboard
+                != Configuration.KEYBOARD_NOKEYS;
     }
 }

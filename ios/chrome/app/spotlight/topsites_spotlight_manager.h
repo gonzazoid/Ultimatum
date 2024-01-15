@@ -20,12 +20,10 @@ class ChromeBrowserState;
 + (TopSitesSpotlightManager*)topSitesSpotlightManagerWithBrowserState:
     (ChromeBrowserState*)browserState;
 
+- (instancetype)init NS_UNAVAILABLE;
+
 // Reindexes all top sites, batching reindexes by 1 second.
 - (void)reindexTopSites;
-
-// Called before the instance is deallocated. This method should be overridden
-// by the subclasses and de-activate the instance.
-- (void)shutdown;
 
 @end
 

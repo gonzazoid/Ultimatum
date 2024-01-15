@@ -1,8 +1,8 @@
 // Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-import {addWebUIListener} from 'chrome://resources/js/cr.m.js';
-import {$} from 'chrome://resources/js/util.js';
+import {addWebUIListener} from 'chrome://resources/ash/common/cr.m.js';
+import {$} from 'chrome://resources/ash/common/util.js';
 
 /** @type {boolean} */
 let initialized = false;

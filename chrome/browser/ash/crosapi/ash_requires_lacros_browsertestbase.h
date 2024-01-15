@@ -11,7 +11,8 @@
 #include "chrome/browser/ash/crosapi/test_controller_ash.h"
 #include "chrome/test/base/chromeos/ash_browser_test_starter.h"
 #include "chromeos/crosapi/mojom/test_controller.mojom.h"
-#include "mojo/public/cpp/bindings/remote.h"
+
+class Profile;
 
 namespace crosapi {
 
@@ -22,12 +23,22 @@ class AshRequiresLacrosBrowserTestBase : public InProcessBrowserTest {
   AshRequiresLacrosBrowserTestBase();
   ~AshRequiresLacrosBrowserTestBase() override;
 
+  // Gets user profile in ash.
+  Profile* GetAshProfile() const;
+
  protected:
   void SetUpInProcessBrowserTestFixture() override;
 
   // Waits for Lacros to start, and for the StandaloneBrowserTestController to
   // connect.
   void SetUpOnMainThread() override;
+
+  // Adds features as command line flags for the Lacros Chrome instance.
+  // Must be called after `SetUpInProcessBrowserTestFixture()` and before
+  // `SetUpOnMainThread()`, has no effect otherwise.
+  // Does not handle duplicate `--enable-features` flags.
+  void EnableFeaturesInLacros(
+      const std::vector<base::test::FeatureRef>& features);
 
   // Returns whether the --lacros-chrome-path is provided.
   // If returns false, we should not do any Lacros related testing
@@ -38,7 +49,6 @@ class AshRequiresLacrosBrowserTestBase : public InProcessBrowserTest {
   mojom::StandaloneBrowserTestController* GetStandaloneBrowserTestController();
 
  private:
-  base::test::ScopedFeatureList scoped_feature_list_;
   test::AshBrowserTestStarter ash_starter_;
   std::unique_ptr<crosapi::TestControllerAsh> test_controller_ash_;
 };

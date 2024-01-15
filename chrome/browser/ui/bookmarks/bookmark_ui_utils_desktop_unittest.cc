@@ -2,12 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ui/bookmarks/bookmark_utils.h"
 #include "chrome/browser/ui/bookmarks/bookmark_utils_desktop.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/bookmarks/browser/bookmark_model.h"
+#include "components/bookmarks/common/bookmark_metrics.h"
 #include "components/bookmarks/test/test_bookmark_client.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -26,7 +28,7 @@ TEST_F(BookmarkUIUtilsTest, HasBookmarkURLs) {
   std::unique_ptr<BookmarkModel> model(
       bookmarks::TestBookmarkClient::CreateModel());
 
-  std::vector<const BookmarkNode*> nodes;
+  std::vector<raw_ptr<const BookmarkNode, VectorExperimental>> nodes;
 
   // This tests that |nodes| contains an URL.
   const BookmarkNode* page1 = model->AddURL(
@@ -52,7 +54,8 @@ TEST_F(BookmarkUIUtilsTest, HasBookmarkURLs) {
   // folder to create a two level hierarchy.
 
   // But first we have to remove the URL from |folder1|.
-  model->Remove(folder1->children().front().get());
+  model->Remove(folder1->children().front().get(),
+                bookmarks::metrics::BookmarkEditSource::kOther);
 
   const BookmarkNode* subfolder1 = model->AddFolder(folder1, 0, u"Subfolder1");
 
@@ -66,7 +69,7 @@ TEST_F(BookmarkUIUtilsTest, HasBookmarkURLsAllowedInIncognitoMode) {
       bookmarks::TestBookmarkClient::CreateModel());
   TestingProfile profile;
 
-  std::vector<const BookmarkNode*> nodes;
+  std::vector<raw_ptr<const BookmarkNode, VectorExperimental>> nodes;
 
   // This tests that |nodes| contains an disabled-in-incognito URL.
   const BookmarkNode* page1 =
@@ -107,7 +110,8 @@ TEST_F(BookmarkUIUtilsTest, HasBookmarkURLsAllowedInIncognitoMode) {
   // folder to create a two level hierarchy.
 
   // But first we have to remove the URL from |folder1|.
-  model->Remove(folder1->children().front().get());
+  model->Remove(folder1->children().front().get(),
+                bookmarks::metrics::BookmarkEditSource::kOther);
 
   const BookmarkNode* subfolder1 = model->AddFolder(folder1, 0, u"Subfolder1");
 

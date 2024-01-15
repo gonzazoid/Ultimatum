@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/values.h"
@@ -49,11 +49,13 @@ class LocalPrinterHandlerDefault : public PrinterHandler {
                   PrintCallback callback) override;
 
  private:
-  static PrinterList EnumeratePrintersAsync(const std::string& locale);
-  static base::Value::Dict FetchCapabilitiesAsync(
+  static PrinterList EnumeratePrintersOnBlockingTaskRunner(
+      const std::string& locale);
+  static base::Value::Dict FetchCapabilitiesOnBlockingTaskRunner(
       const std::string& device_name,
       const std::string& locale);
-  static std::string GetDefaultPrinterAsync(const std::string& locale);
+  static std::string GetDefaultPrinterOnBlockingTaskRunner(
+      const std::string& locale);
 
   const raw_ptr<content::WebContents> preview_web_contents_;
 

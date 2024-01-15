@@ -5,11 +5,13 @@
 #include "chrome/browser/ui/webui/signin/ash/user_cloud_signin_restriction_policy_fetcher.h"
 
 #include <memory>
+#include <optional>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "base/time/time.h"
 #include "google_apis/gaia/gaia_access_token_fetcher.h"
 #include "google_apis/gaia/gaia_urls.h"
@@ -20,7 +22,6 @@
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -94,19 +95,14 @@ class UserCloudSigninRestrictionPolicyFetcherTest : public ::testing::Test {
   void GetSecondaryGoogleAccountUsageBlocking(
       UserCloudSigninRestrictionPolicyFetcher* restriction_fetcher,
       std::unique_ptr<OAuth2AccessTokenFetcher> access_token_fetcher) {
-    base::RunLoop run_loop;
+    base::test::TestFuture<UserCloudSigninRestrictionPolicyFetcher::Status,
+                           std::optional<std::string>, const std::string&>
+        future;
     restriction_fetcher->GetSecondaryGoogleAccountUsage(
-        std::move(access_token_fetcher),
-        base::BindLambdaForTesting(
-            [this, &run_loop](
-                UserCloudSigninRestrictionPolicyFetcher::Status st,
-                absl::optional<std::string> res, const std::string& hd) {
-              this->policy_result_ = res;
-              this->status_ = st;
-              this->hosted_domain_ = hd;
-              run_loop.Quit();
-            }));
-    run_loop.Run();
+        std::move(access_token_fetcher), future.GetCallback());
+    this->status_ = future.Get<0>();
+    this->policy_result_ = future.Get<1>();
+    this->hosted_domain_ = future.Get<2>();
   }
 
   const std::string& oauth_user_info_url() const {
@@ -120,7 +116,7 @@ class UserCloudSigninRestrictionPolicyFetcherTest : public ::testing::Test {
 
   UserCloudSigninRestrictionPolicyFetcher::Status status_ =
       UserCloudSigninRestrictionPolicyFetcher::Status::kUnknownError;
-  absl::optional<std::string> policy_result_;
+  std::optional<std::string> policy_result_;
   std::string hosted_domain_;
   network::TestURLLoaderFactory url_loader_factory_;
 };
@@ -128,8 +124,8 @@ class UserCloudSigninRestrictionPolicyFetcherTest : public ::testing::Test {
 TEST_F(UserCloudSigninRestrictionPolicyFetcherTest,
        FetchingPolicyValueSucceeds) {
   // Set API response.
-  base::Value expected_response(base::Value::Type::DICTIONARY);
-  expected_response.SetStringKey("policyValue", "primary_account_signin");
+  base::Value::Dict expected_response;
+  expected_response.Set("policyValue", "primary_account_signin");
   std::string response;
   JSONStringValueSerializer serializer(&response);
   ASSERT_TRUE(serializer.Serialize(expected_response));

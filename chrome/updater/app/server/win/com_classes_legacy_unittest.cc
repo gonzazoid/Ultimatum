@@ -13,36 +13,32 @@
 
 #include "base/command_line.h"
 #include "base/files/file_path.h"
-#include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/path_service.h"
 #include "base/strings/strcat.h"
-#include "base/strings/string_number_conversions.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/test/bind.h"
-#include "base/test/test_timeouts.h"
-#include "base/time/time.h"
-#include "base/win/scoped_handle.h"
 #include "base/win/scoped_variant.h"
 #include "base/win/win_util.h"
+#include "build/branding_buildflags.h"
 #include "chrome/updater/test/integration_tests_impl.h"
 #include "chrome/updater/test_scope.h"
-#include "chrome/updater/unittest_util_win.h"
-#include "chrome/updater/util.h"
+#include "chrome/updater/util/unit_test_util.h"
+#include "chrome/updater/util/unit_test_util_win.h"
+#include "chrome/updater/util/util.h"
+#include "chrome/updater/util/win_util.h"
 #include "chrome/updater/win/setup/setup_util.h"
 #include "chrome/updater/win/test/test_executables.h"
 #include "chrome/updater/win/test/test_strings.h"
-#include "chrome/updater/win/win_util.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace updater {
 namespace {
 
 constexpr wchar_t kAppId1[] = L"{3B1A3CCA-0525-4418-93E6-A0DB3398EC9B}";
 
-constexpr wchar_t kBadCmdLine[] = L"\"c:\\Program Files\\cmd.exe\"";
+constexpr wchar_t kBadCmdLine[] = L"\"c:\\Program Files (x86)\\cmd.exe\"";
 constexpr wchar_t kCmdLineValid[] =
     L"\"C:\\Program Files\\Windows Media Player\\wmpnscfg.exe\" /Close";
 
@@ -63,25 +59,24 @@ class LegacyAppCommandWebImplTest : public testing::Test {
 
   void TearDown() override { DeleteAppClientKey(GetTestScope(), kAppId1); }
 
-  HRESULT CreateAppCommandWeb(
+  [[nodiscard]] HRESULT CreateAppCommandWeb(
       const std::wstring& app_id,
       const std::wstring& command_id,
       const std::wstring& command_line_format,
       Microsoft::WRL::ComPtr<LegacyAppCommandWebImpl>& app_command_web) {
     CreateAppCommandRegistry(GetTestScope(), app_id, command_id,
                              command_line_format);
-
-    return Microsoft::WRL::MakeAndInitialize<LegacyAppCommandWebImpl>(
-        &app_command_web, GetTestScope(), app_id, command_id);
+    return MakeAndInitializeComObject<LegacyAppCommandWebImpl>(
+        app_command_web, GetTestScope(), app_id, command_id);
   }
 
   void WaitForUpdateCompletion(
       Microsoft::WRL::ComPtr<LegacyAppCommandWebImpl>& app_command_web) {
-    EXPECT_TRUE(test::WaitFor(base::BindLambdaForTesting([&]() {
+    EXPECT_TRUE(test::WaitFor([&] {
       UINT status = 0;
       EXPECT_HRESULT_SUCCEEDED(app_command_web->get_status(&status));
       return status == COMMAND_STATUS_COMPLETE;
-    })));
+    }));
   }
 
   base::CommandLine cmd_exe_command_line_;
@@ -90,18 +85,15 @@ class LegacyAppCommandWebImplTest : public testing::Test {
 
 TEST_F(LegacyAppCommandWebImplTest, NoApp) {
   Microsoft::WRL::ComPtr<LegacyAppCommandWebImpl> app_command_web;
-  EXPECT_HRESULT_FAILED(
-      Microsoft::WRL::MakeAndInitialize<LegacyAppCommandWebImpl>(
-          &app_command_web, GetTestScope(), kAppId1, kCmdId1));
+  EXPECT_HRESULT_FAILED(MakeAndInitializeComObject<LegacyAppCommandWebImpl>(
+      app_command_web, GetTestScope(), kAppId1, kCmdId1));
 }
 
 TEST_F(LegacyAppCommandWebImplTest, NoCmd) {
   Microsoft::WRL::ComPtr<LegacyAppCommandWebImpl> app_command_web;
   CreateAppCommandRegistry(GetTestScope(), kAppId1, kCmdId1, kCmdLineValid);
-
-  EXPECT_HRESULT_FAILED(
-      Microsoft::WRL::MakeAndInitialize<LegacyAppCommandWebImpl>(
-          &app_command_web, GetTestScope(), kAppId1, kCmdId2));
+  EXPECT_HRESULT_FAILED(MakeAndInitializeComObject<LegacyAppCommandWebImpl>(
+      app_command_web, GetTestScope(), kAppId1, kCmdId2));
 }
 
 TEST_F(LegacyAppCommandWebImplTest, Execute) {
@@ -183,21 +175,13 @@ TEST_F(LegacyAppCommandWebImplTest, FailedToLaunchStatus) {
 }
 
 TEST_F(LegacyAppCommandWebImplTest, CommandRunningStatus) {
-  if (GetTestScope() == UpdaterScope::kSystem)
+  if (IsSystemInstall(GetTestScope())) {
     return;
+  }
 
   Microsoft::WRL::ComPtr<LegacyAppCommandWebImpl> app_command_web;
-  base::CommandLine command_line = GetTestProcessCommandLine(GetTestScope());
-
-  const std::wstring event_name =
-      base::StrCat({kTestProcessExecutableName, L"-",
-                    base::NumberToWString(::GetCurrentProcessId())});
-  NamedObjectAttributes attr =
-      GetNamedObjectAttributes(event_name.c_str(), GetTestScope());
-
-  base::WaitableEvent event(base::win::ScopedHandle(
-      ::CreateEvent(&attr.sa, FALSE, FALSE, attr.name.c_str())));
-  ASSERT_NE(event.handle(), nullptr);
+  base::CommandLine command_line =
+      GetTestProcessCommandLine(GetTestScope(), test::GetTestName());
 
   command_line.AppendSwitchNative(kTestEventToWaitOn, L"%1");
   command_line.AppendSwitchNative(kTestExitCode, L"%2");
@@ -207,8 +191,10 @@ TEST_F(LegacyAppCommandWebImplTest, CommandRunningStatus) {
       command_line.GetCommandLineStringWithUnsafeInsertSequences(),
       app_command_web));
 
+  test::EventHolder event_holder(test::CreateWaitableEventForTest());
+
   ASSERT_HRESULT_SUCCEEDED(app_command_web->execute(
-      base::win::ScopedVariant(attr.name.c_str()),
+      base::win::ScopedVariant(event_holder.name.c_str()),
       base::win::ScopedVariant(L"999"), base::win::ScopedVariant::kEmptyVariant,
       base::win::ScopedVariant::kEmptyVariant,
       base::win::ScopedVariant::kEmptyVariant,
@@ -221,7 +207,7 @@ TEST_F(LegacyAppCommandWebImplTest, CommandRunningStatus) {
   EXPECT_HRESULT_SUCCEEDED(app_command_web->get_status(&status));
   EXPECT_EQ(status, COMMAND_STATUS_RUNNING);
 
-  event.Signal();
+  event_holder.event.Signal();
 
   WaitForUpdateCompletion(app_command_web);
 
@@ -256,12 +242,16 @@ TEST(LegacyCOMClassesTest, CheckLegacyInterfaceIDs) {
             L"{22181302-A8A6-4F84-A541-E5CBFC70CC43}");
   EXPECT_EQ(base::win::WStringFromGUID(__uuidof(GoogleUpdate3WebSystemClass)),
             L"{8A1D4361-2C08-4700-A351-3EAA9CBFF5E4}");
+  EXPECT_EQ(base::win::WStringFromGUID(__uuidof(GoogleUpdate3WebServiceClass)),
+            L"{534F5323-3569-4F42-919D-1E1CF93E5BF6}");
   EXPECT_EQ(base::win::WStringFromGUID(__uuidof(PolicyStatusUserClass)),
             L"{6DDCE70D-A4AE-4E97-908C-BE7B2DB750AD}");
   EXPECT_EQ(base::win::WStringFromGUID(__uuidof(PolicyStatusSystemClass)),
             L"{521FDB42-7130-4806-822A-FC5163FAD983}");
   EXPECT_EQ(base::win::WStringFromGUID(__uuidof(ProcessLauncherClass)),
             L"{ABC01078-F197-4B0B-ADBC-CFE684B39C82}");
+  EXPECT_EQ(base::win::WStringFromGUID(__uuidof(IAppVersionWeb)),
+            L"{0CD01D1E-4A1C-489D-93B9-9B6672877C57}");
   EXPECT_EQ(base::win::WStringFromGUID(__uuidof(ICurrentState)),
             L"{247954F9-9EDC-4E68-8CC3-150C2B89EADF}");
   EXPECT_EQ(base::win::WStringFromGUID(__uuidof(IGoogleUpdate3Web)),
@@ -289,12 +279,16 @@ TEST(LegacyCOMClassesTest, CheckLegacyInterfaceIDs) {
             L"{75828ED1-7BE8-45D0-8950-AA85CBF74510}");
   EXPECT_EQ(base::win::WStringFromGUID(__uuidof(GoogleUpdate3WebSystemClass)),
             L"{283209B7-C761-41CA-BE8D-B5321CD78FD6}");
+  EXPECT_EQ(base::win::WStringFromGUID(__uuidof(GoogleUpdate3WebServiceClass)),
+            L"{B52C8B56-9541-4B78-9B2F-665366B78A9C}");
   EXPECT_EQ(base::win::WStringFromGUID(__uuidof(PolicyStatusUserClass)),
             L"{4DAC24AB-B340-4B7E-AD01-1504A7F59EEA}");
   EXPECT_EQ(base::win::WStringFromGUID(__uuidof(PolicyStatusSystemClass)),
             L"{83FE19AC-72A6-4A72-B136-724444121586}");
   EXPECT_EQ(base::win::WStringFromGUID(__uuidof(ProcessLauncherClass)),
             L"{811A664F-703E-407C-A323-E6E31D1EFFA0}");
+  EXPECT_EQ(base::win::WStringFromGUID(__uuidof(IAppVersionWeb)),
+            L"{3057E1F8-2498-4C19-99B5-F7F207DA4DC7}");
   EXPECT_EQ(base::win::WStringFromGUID(__uuidof(ICurrentState)),
             L"{BE5D3E90-A66C-4A0A-9B7B-1A6B9BF3971E}");
   EXPECT_EQ(base::win::WStringFromGUID(__uuidof(IGoogleUpdate3Web)),

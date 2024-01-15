@@ -1,0 +1,16 @@
+ALERT: Initial URL loaded.
+ALERT: Final URL loaded.
+ALERT: Going back.
+ALERT: Final URL loaded.
+Tests that iframe restored from history does not report resource timing without explicitly setting src.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+PASS resources.length is 1
+PASS resources[0].name is "http://127.0.0.1:8000/js-test-resources/js-test.js"
+PASS successfullyParsed is true
+
+TEST COMPLETE
+
+
+Back-forward cache keeps and restores the resource timing of the iframe on back navigation. Back-forward cache needs to be disabled to run this test.

@@ -9,10 +9,10 @@
 
 namespace external_intents {
 
-// Alphabetical:
-BASE_DECLARE_FEATURE(kAutofillAssistantGoogleInitiatorOriginCheck);
-BASE_DECLARE_FEATURE(kBlockExternalFormSubmitWithoutGesture);
 BASE_DECLARE_FEATURE(kExternalNavigationDebugLogs);
+BASE_DECLARE_FEATURE(kBlockFrameRenavigations);
+BASE_DECLARE_FEATURE(kBlockIntentsToSelf);
+BASE_DECLARE_FEATURE(kTrustedClientGestureBypass);
 
 }  // namespace external_intents
 

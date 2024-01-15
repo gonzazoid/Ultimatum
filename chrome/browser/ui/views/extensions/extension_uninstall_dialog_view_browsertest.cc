@@ -4,8 +4,9 @@
 
 #include <memory>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
+#include "build/build_config.h"
 #include "chrome/browser/extensions/browsertest_util.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_uninstall_dialog.h"
@@ -18,8 +19,8 @@
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
 #include "chrome/browser/ui/web_applications/test/web_app_browsertest_util.h"
+#include "chrome/browser/web_applications/mojom/user_display_mode.mojom.h"
 #include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
-#include "chrome/browser/web_applications/user_display_mode.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "content/public/test/browser_test.h"
@@ -32,7 +33,6 @@
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_builder.h"
 #include "extensions/common/extension_urls.h"
-#include "extensions/common/value_builder.h"
 #include "ui/views/layout/animating_layout_manager_test_util.h"
 #include "ui/views/test/widget_test.h"
 
@@ -60,7 +60,7 @@ std::string GetActiveUrl(Browser* browser) {
 void SetUninstallURL(extensions::ExtensionPrefs* prefs,
                      const std::string& extension_id) {
   prefs->UpdateExtensionPref(extension_id, kUninstallUrlPrefKey,
-                             std::make_unique<base::Value>(kUninstallUrl));
+                             base::Value(kUninstallUrl));
 }
 
 void CloseUninstallDialog(views::Widget* const bubble_widget) {
@@ -106,7 +106,7 @@ class TestExtensionUninstallDialogDelegate
 
 }  // namespace
 
-typedef InProcessBrowserTest ExtensionUninstallDialogViewBrowserTest;
+using ExtensionUninstallDialogViewBrowserTest = InProcessBrowserTest;
 
 // Test that ExtensionUninstallDialog cancels the uninstall if the Window which
 // is passed to ExtensionUninstallDialog::Create() is destroyed before
@@ -212,11 +212,12 @@ IN_PROC_BROWSER_TEST_F(ExtensionUninstallDialogViewBrowserTest,
       ->AddExtension(extension.get());
 
   const GURL start_url = GURL("https://test.com/");
-  auto web_app_info = std::make_unique<WebAppInstallInfo>();
+  auto web_app_info = std::make_unique<web_app::WebAppInstallInfo>();
   web_app_info->start_url = start_url;
   web_app_info->scope = start_url;
-  web_app_info->user_display_mode = web_app::UserDisplayMode::kStandalone;
-  web_app::AppId app_id = web_app::test::InstallWebApp(browser()->profile(),
+  web_app_info->user_display_mode =
+      web_app::mojom::UserDisplayMode::kStandalone;
+  webapps::AppId app_id = web_app::test::InstallWebApp(browser()->profile(),
                                                        std::move(web_app_info));
   Browser* app_browser =
       web_app::LaunchWebAppBrowser(browser()->profile(), app_id);
@@ -540,23 +541,52 @@ class ExtensionUninstallDialogViewInteractiveBrowserTest
   ExtensionOrigin extension_origin_;
 };
 
+#if BUILDFLAG(IS_WIN)
+// TODO(crbug.com/1471425): Enable the test again.
+#define MAYBE_InvokeUi_ManualUninstall DISABLED_InvokeUi_ManualUninstall
+#else
+#define MAYBE_InvokeUi_ManualUninstall InvokeUi_ManualUninstall
+#endif
 IN_PROC_BROWSER_TEST_F(ExtensionUninstallDialogViewInteractiveBrowserTest,
-                       InvokeUi_ManualUninstall) {
+                       MAYBE_InvokeUi_ManualUninstall) {
   RunTest(MANUAL_UNINSTALL, EXTENSION_LOCAL_SOURCE);
 }
 
+// TODO(crbug.com/1472311): Re-enable this test
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_InvokeUi_ManualUninstallShowReportAbuse \
+  DISABLED_InvokeUi_ManualUninstallShowReportAbuse
+#else
+#define MAYBE_InvokeUi_ManualUninstallShowReportAbuse \
+  InvokeUi_ManualUninstallShowReportAbuse
+#endif
 IN_PROC_BROWSER_TEST_F(ExtensionUninstallDialogViewInteractiveBrowserTest,
-                       InvokeUi_ManualUninstallShowReportAbuse) {
+                       MAYBE_InvokeUi_ManualUninstallShowReportAbuse) {
   RunTest(MANUAL_UNINSTALL, EXTENSION_FROM_WEBSTORE);
 }
 
+#if BUILDFLAG(IS_WIN)
+// TODO(crbug.com/1471425): Enable the test again.
+#define MAYBE_InvokeUi_UninstallByExtension \
+  DISABLED_InvokeUi_UninstallByExtension
+#else
+#define MAYBE_InvokeUi_UninstallByExtension InvokeUi_UninstallByExtension
+#endif
 IN_PROC_BROWSER_TEST_F(ExtensionUninstallDialogViewInteractiveBrowserTest,
-                       InvokeUi_UninstallByExtension) {
+                       MAYBE_InvokeUi_UninstallByExtension) {
   RunTest(UNINSTALL_BY_EXTENSION, EXTENSION_LOCAL_SOURCE);
 }
 
+// TODO(crbug.com/1472311): Fix flakiness and re-enable this test.
+#if BUILDFLAG(IS_WIN)
+#define MAYBE_InvokeUi_UninstallByExtensionShowReportAbuse \
+  DISABLED_InvokeUi_UninstallByExtensionShowReportAbuse
+#else
+#define MAYBE_InvokeUi_UninstallByExtensionShowReportAbuse \
+  InvokeUi_UninstallByExtensionShowReportAbuse
+#endif
 IN_PROC_BROWSER_TEST_F(ExtensionUninstallDialogViewInteractiveBrowserTest,
-                       InvokeUi_UninstallByExtensionShowReportAbuse) {
+                       MAYBE_InvokeUi_UninstallByExtensionShowReportAbuse) {
   RunTest(UNINSTALL_BY_EXTENSION, EXTENSION_FROM_WEBSTORE);
 }
 

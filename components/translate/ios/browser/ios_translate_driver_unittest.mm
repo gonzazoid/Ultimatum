@@ -12,14 +12,12 @@
 #include "components/translate/core/browser/mock_translate_ranker.h"
 #include "components/translate/core/browser/translate_manager.h"
 #include "components/translate/core/browser/translate_pref_names.h"
+#import "components/translate/ios/browser/translate_java_script_feature.h"
 #include "ios/web/public/test/fakes/fake_browser_state.h"
+#import "ios/web/public/test/fakes/fake_web_frames_manager.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
 #include "ios/web/public/test/web_task_environment.h"
 #include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using testing::_;
 
@@ -45,6 +43,12 @@ class IOSTranslateDriverTest : public PlatformTest {
         std::make_unique<sync_preferences::TestingPrefServiceSyncable>();
     pref_service_->registry()->RegisterBooleanPref(
         prefs::kOfferTranslateEnabled, true);
+
+    auto web_frames_manager = std::make_unique<web::FakeWebFramesManager>();
+    web::ContentWorld content_world =
+        TranslateJavaScriptFeature::GetInstance()->GetSupportedContentWorld();
+    fake_web_state_->SetWebFramesManager(content_world,
+                                         std::move(web_frames_manager));
     language::IOSLanguageDetectionTabHelper::CreateForWebState(
         fake_web_state_.get(), nullptr, nullptr, pref_service_.get());
 

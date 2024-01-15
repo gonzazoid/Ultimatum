@@ -56,7 +56,7 @@ struct BLINK_COMMON_EXPORT
       case blink::FrameToken::IndexOf<blink::RemoteFrameToken>():
         return DataView::Tag::kRemoteFrameToken;
     }
-    IMMEDIATE_CRASH();
+    base::ImmediateCrash();
   }
 
   static const blink::LocalFrameToken& local_frame_token(
@@ -112,7 +112,7 @@ struct BLINK_COMMON_EXPORT
       case blink::WorkerToken::IndexOf<blink::SharedWorkerToken>():
         return DataView::Tag::kSharedWorkerToken;
     }
-    IMMEDIATE_CRASH();
+    base::ImmediateCrash();
   }
 
   static const blink::DedicatedWorkerToken& dedicated_worker_token(
@@ -161,6 +161,13 @@ struct StructTraits<blink::mojom::PaintWorkletTokenDataView,
           blink::PaintWorkletToken> {};
 
 template <>
+struct StructTraits<blink::mojom::SharedStorageWorkletTokenDataView,
+                    blink::SharedStorageWorkletToken>
+    : public blink::TokenMojomTraitsHelper<
+          blink::mojom::SharedStorageWorkletTokenDataView,
+          blink::SharedStorageWorkletToken> {};
+
+template <>
 struct BLINK_COMMON_EXPORT
     UnionTraits<blink::mojom::WorkletTokenDataView, blink::WorkletToken> {
  private:
@@ -180,8 +187,10 @@ struct BLINK_COMMON_EXPORT
         return DataView::Tag::kLayoutWorkletToken;
       case blink::WorkletToken::IndexOf<blink::PaintWorkletToken>():
         return DataView::Tag::kPaintWorkletToken;
+      case blink::WorkletToken::IndexOf<blink::SharedStorageWorkletToken>():
+        return DataView::Tag::kSharedStorageWorkletToken;
     }
-    IMMEDIATE_CRASH();
+    base::ImmediateCrash();
   }
 
   static const blink::AnimationWorkletToken& animation_worklet_token(
@@ -200,7 +209,21 @@ struct BLINK_COMMON_EXPORT
       const blink::WorkletToken& token) {
     return token.GetAs<blink::PaintWorkletToken>();
   }
+  static const blink::SharedStorageWorkletToken& shared_storage_worklet_token(
+      const blink::WorkletToken& token) {
+    return token.GetAs<blink::SharedStorageWorkletToken>();
+  }
 };
+
+////////////////////////////////////////////////////////////////////////////////
+// SHADOW REALM TOKENS
+
+template <>
+struct StructTraits<blink::mojom::ShadowRealmTokenDataView,
+                    blink::ShadowRealmToken>
+    : public blink::TokenMojomTraitsHelper<
+          blink::mojom::ShadowRealmTokenDataView,
+          blink::ShadowRealmToken> {};
 
 ////////////////////////////////////////////////////////////////////////////////
 // OTHER TOKENS
@@ -255,8 +278,13 @@ struct BLINK_COMMON_EXPORT
         return DataView::Tag::kLayoutWorkletToken;
       case blink::ExecutionContextToken::IndexOf<blink::PaintWorkletToken>():
         return DataView::Tag::kPaintWorkletToken;
+      case blink::ExecutionContextToken::IndexOf<
+          blink::SharedStorageWorkletToken>():
+        return DataView::Tag::kSharedStorageWorkletToken;
+      case blink::ExecutionContextToken::IndexOf<blink::ShadowRealmToken>():
+        return DataView::Tag::kShadowRealmToken;
     }
-    IMMEDIATE_CRASH();
+    base::ImmediateCrash();
   }
 
   static const blink::LocalFrameToken& local_frame_token(
@@ -291,12 +319,15 @@ struct BLINK_COMMON_EXPORT
       const blink::ExecutionContextToken& token) {
     return token.GetAs<blink::PaintWorkletToken>();
   }
+  static const blink::SharedStorageWorkletToken& shared_storage_worklet_token(
+      const blink::ExecutionContextToken& token) {
+    return token.GetAs<blink::SharedStorageWorkletToken>();
+  }
+  static const blink::ShadowRealmToken& shadow_realm_token(
+      const blink::ExecutionContextToken& token) {
+    return token.GetAs<blink::ShadowRealmToken>();
+  }
 };
-
-template <>
-struct StructTraits<blink::mojom::PortalTokenDataView, blink::PortalToken>
-    : public blink::TokenMojomTraitsHelper<blink::mojom::PortalTokenDataView,
-                                           blink::PortalToken> {};
 
 template <>
 struct StructTraits<blink::mojom::V8ContextTokenDataView, blink::V8ContextToken>
@@ -321,7 +352,7 @@ struct BLINK_COMMON_EXPORT
           blink::DedicatedWorkerToken>():
         return DataView::Tag::kDedicatedWorkerToken;
     }
-    IMMEDIATE_CRASH();
+    base::ImmediateCrash();
   }
 
   static const blink::DocumentToken& document_token(

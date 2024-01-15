@@ -6,14 +6,16 @@ import("//third_party/blink/renderer/modules/modules.gni")
 
 blink_modules_sources("direct_sockets") {
   sources = [
-    "direct_sockets_service_mojo_remote.cc",
-    "direct_sockets_service_mojo_remote.h",
     "socket.cc",
     "socket.h",
     "stream_wrapper.cc",
     "stream_wrapper.h",
     "tcp_readable_stream_wrapper.cc",
     "tcp_readable_stream_wrapper.h",
+    "tcp_server_readable_stream_wrapper.cc",
+    "tcp_server_readable_stream_wrapper.h",
+    "tcp_server_socket.cc",
+    "tcp_server_socket.h",
     "tcp_socket.cc",
     "tcp_socket.h",
     "tcp_writable_stream_wrapper.cc",
@@ -50,6 +52,7 @@ source_set("unit_tests") {
     "//base/test:test_support",
     "//testing/gmock",
     "//testing/gtest",
+    "//third_party/blink/public/mojom:mojom_platform_blink_headers",
     "//third_party/blink/renderer/controller:blink_bindings_test_sources",
     "//third_party/blink/renderer/modules",
     "//third_party/blink/renderer/platform",

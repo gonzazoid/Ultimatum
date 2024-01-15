@@ -8,8 +8,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "chromeos/ash/components/dbus/shill/fake_modem_messaging_client.h"
@@ -106,14 +107,14 @@ class ModemMessagingProxy {
   // Handles responses of List method calls.
   void OnList(ListCallback callback, dbus::Response* response) {
     if (!response) {
-      std::move(callback).Run(absl::nullopt);
+      std::move(callback).Run(std::nullopt);
       return;
     }
     dbus::MessageReader reader(response);
     std::vector<dbus::ObjectPath> sms_paths;
     if (!reader.PopArrayOfObjectPaths(&sms_paths)) {
       LOG(WARNING) << "Invalid response: " << response->ToString();
-      std::move(callback).Run(absl::nullopt);
+      std::move(callback).Run(std::nullopt);
       return;
     }
     std::move(callback).Run(std::move(sms_paths));
@@ -127,7 +128,7 @@ class ModemMessagingProxy {
         << "Connect to " << interface << " " << signal << " failed.";
   }
 
-  dbus::ObjectProxy* proxy_;
+  raw_ptr<dbus::ObjectProxy> proxy_;
   std::string service_name_;
   SmsReceivedHandler sms_received_handler_;
 
@@ -192,7 +193,7 @@ class COMPONENT_EXPORT(CHROMEOS_DBUS) ModemMessagingClientImpl
     return proxy_ptr;
   }
 
-  dbus::Bus* bus_;
+  raw_ptr<dbus::Bus> bus_;
   ProxyMap proxies_;
 };
 

@@ -8,12 +8,12 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/reporting/client/mock_report_queue.h"
 #include "components/reporting/client/mock_report_queue_provider.h"
 #include "components/reporting/client/report_queue.h"
@@ -53,8 +53,6 @@ class ReportQueueProviderTest : public ::testing::Test {
 
   std::unique_ptr<MockReportQueueProvider> provider_;
   const Destination destination_ = Destination::UPLOAD_EVENTS;
-  ReportQueueConfiguration::PolicyCheckCallback policy_checker_callback_ =
-      base::BindRepeating([]() { return Status::StatusOK(); });
 };
 
 // Asynchronously creates ReportingQueue and enqueue message.
@@ -71,14 +69,14 @@ void CreateQueuePostData(
              ReportQueue::EnqueueCallback done_cb,
              StatusOr<std::unique_ptr<ReportQueue>> report_queue_result) {
             // Bail out if queue failed to create.
-            if (!report_queue_result.ok()) {
-              std::move(done_cb).Run(report_queue_result.status());
+            if (!report_queue_result.has_value()) {
+              std::move(done_cb).Run(report_queue_result.error());
               return;
             }
             // Queue created successfully, enqueue the message on a random
             // thread and verify.
             EXPECT_CALL(*static_cast<MockReportQueue*>(
-                            report_queue_result.ValueOrDie().get()),
+                            report_queue_result.value().get()),
                         AddRecord(StrEq(data), Eq(priority), _))
                 .WillOnce(
                     WithArg<2>(Invoke([](ReportQueue::EnqueueCallback cb) {
@@ -92,7 +90,7 @@ void CreateQueuePostData(
                        ReportQueue::EnqueueCallback done_cb) {
                       queue->Enqueue(data, priority, std::move(done_cb));
                     },
-                    std::move(report_queue_result.ValueOrDie()), data, priority,
+                    std::move(report_queue_result.value()), data, priority,
                     std::move(done_cb)));
           },
           std::string(data), priority, std::move(done_cb));
@@ -114,15 +112,14 @@ void CreateSpeculativeQueuePostData(
   auto report_queue_result =
       ReportQueueProvider::CreateSpeculativeQueue(std::move(config));
   // Bail out if queue failed to create.
-  if (!report_queue_result.ok()) {
-    std::move(done_cb).Run(report_queue_result.status());
+  if (!report_queue_result.has_value()) {
+    std::move(done_cb).Run(report_queue_result.error());
     return;
   }
   // Queue created successfully, enqueue the message on a random thread and
   // verify.
-  EXPECT_CALL(
-      *static_cast<MockReportQueue*>(report_queue_result.ValueOrDie().get()),
-      AddRecord(StrEq(data), Eq(priority), _))
+  EXPECT_CALL(*static_cast<MockReportQueue*>(report_queue_result.value().get()),
+              AddRecord(StrEq(data), Eq(priority), _))
       .WillOnce(WithArg<2>(Invoke([](ReportQueue::EnqueueCallback cb) {
         std::move(cb).Run(Status::StatusOK());
       })));
@@ -135,7 +132,7 @@ void CreateSpeculativeQueuePostData(
              ReportQueue::EnqueueCallback done_cb) {
             queue->Enqueue(data, priority, std::move(done_cb));
           },
-          std::move(report_queue_result.ValueOrDie()), data, priority,
+          std::move(report_queue_result.value()), data, priority,
           // Verification callback needs to be serialized, because EXPECT_... do
           // not support multithreading.
           base::BindPostTask(sequenced_task_runner, std::move(done_cb))));
@@ -143,9 +140,11 @@ void CreateSpeculativeQueuePostData(
 
 TEST_F(ReportQueueProviderTest, CreateAndGetQueue) {
   // Create configuration.
-  auto config_result = ReportQueueConfiguration::Create(
-      EventType::kDevice, destination_, policy_checker_callback_);
-  ASSERT_OK(config_result);
+  auto config_result =
+      ReportQueueConfiguration::Create(
+          {.event_type = EventType::kDevice, .destination = destination_})
+          .Build();
+  ASSERT_TRUE(config_result.has_value());
   EXPECT_CALL(*provider_.get(), OnInitCompletedMock()).Times(1);
   provider_->ExpectCreateNewQueueAndReturnNewMockQueue(1);
   // Use it to asynchronously create ReportingQueue and then asynchronously
@@ -154,8 +153,8 @@ TEST_F(ReportQueueProviderTest, CreateAndGetQueue) {
   base::ThreadPool::PostTask(
       FROM_HERE,
       base::BindOnce(&CreateQueuePostData, kTestMessage, FAST_BATCH,
-                     std::move(config_result.ValueOrDie()),
-                     base::SequencedTaskRunnerHandle::Get(), e.cb()));
+                     std::move(config_result.value()),
+                     base::SequencedTaskRunner::GetCurrentDefault(), e.cb()));
   const auto res = e.result();
   EXPECT_OK(res) << res;
 }
@@ -180,9 +179,11 @@ TEST_F(ReportQueueProviderTest, CreateMultipleQueues) {
   provider_->ExpectCreateNewQueueAndReturnNewMockQueue(send_as.size());
   for (const auto& s : send_as) {
     // Create configuration.
-    auto config_result = ReportQueueConfiguration::Create(
-        EventType::kDevice, /*destination=*/s.second, policy_checker_callback_);
-    ASSERT_OK(config_result);
+    auto config_result =
+        ReportQueueConfiguration::Create(
+            {.event_type = EventType::kDevice, .destination = s.second})
+            .Build();
+    ASSERT_TRUE(config_result.has_value());
     // Compose the message.
     std::string message = std::string(kTestMessage)
                               .append(" priority=")
@@ -198,11 +199,11 @@ TEST_F(ReportQueueProviderTest, CreateMultipleQueues) {
         },
         &waiter);
     base::ThreadPool::PostTask(
-        FROM_HERE, base::BindOnce(&CreateQueuePostData, std::move(message),
-                                  /*priority=*/s.first,
-                                  std::move(config_result.ValueOrDie()),
-                                  base::SequencedTaskRunnerHandle::Get(),
-                                  std::move(done_cb)));
+        FROM_HERE,
+        base::BindOnce(&CreateQueuePostData, std::move(message),
+                       /*priority=*/s.first, std::move(config_result.value()),
+                       base::SequencedTaskRunner::GetCurrentDefault(),
+                       std::move(done_cb)));
   }
   waiter.Signal();  // Release the waiter
 }
@@ -228,9 +229,11 @@ TEST_F(ReportQueueProviderTest, CreateMultipleSpeculativeQueues) {
       send_as.size());
   for (const auto& s : send_as) {
     // Create configuration.
-    auto config_result = ReportQueueConfiguration::Create(
-        EventType::kDevice, /*destination=*/s.second, policy_checker_callback_);
-    ASSERT_OK(config_result);
+    auto config_result =
+        ReportQueueConfiguration::Create(
+            {.event_type = EventType::kDevice, .destination = s.second})
+            .Build();
+    ASSERT_TRUE(config_result.has_value());
     // Compose the message.
     std::string message = std::string(kTestMessage)
                               .append(" priority=")
@@ -247,8 +250,8 @@ TEST_F(ReportQueueProviderTest, CreateMultipleSpeculativeQueues) {
         &waiter);
     CreateSpeculativeQueuePostData(
         std::move(message),
-        /*priority=*/s.first, std::move(config_result.ValueOrDie()),
-        base::SequencedTaskRunnerHandle::Get(), std::move(done_cb));
+        /*priority=*/s.first, std::move(config_result.value()),
+        base::SequencedTaskRunner::GetCurrentDefault(), std::move(done_cb));
   }
   waiter.Signal();  // Release the waiter
 }
@@ -259,17 +262,19 @@ TEST_F(ReportQueueProviderTest,
   feature_list.InitAndDisableFeature(kEncryptedReportingPipeline);
 
   // Create configuration
-  auto config_result = ReportQueueConfiguration::Create(
-      EventType::kDevice, destination_, policy_checker_callback_);
-  ASSERT_OK(config_result);
+  auto config_result =
+      ReportQueueConfiguration::Create(
+          {.event_type = EventType::kDevice, .destination = destination_})
+          .Build();
+  ASSERT_TRUE(config_result.has_value());
 
   test::TestEvent<ReportQueueProvider::CreateReportQueueResponse> event;
-  ReportQueueProvider::CreateQueue(std::move(config_result.ValueOrDie()),
+  ReportQueueProvider::CreateQueue(std::move(config_result.value()),
                                    event.cb());
   const auto result = event.result();
 
-  ASSERT_FALSE(result.ok());
-  EXPECT_EQ(result.status().code(), error::FAILED_PRECONDITION);
+  ASSERT_FALSE(result.has_value());
+  EXPECT_EQ(result.error().code(), error::FAILED_PRECONDITION);
 }
 
 TEST_F(ReportQueueProviderTest,
@@ -278,14 +283,16 @@ TEST_F(ReportQueueProviderTest,
   feature_list.InitAndDisableFeature(kEncryptedReportingPipeline);
 
   // Create configuration
-  auto config_result = ReportQueueConfiguration::Create(
-      EventType::kDevice, destination_, policy_checker_callback_);
-  ASSERT_OK(config_result);
+  auto config_result =
+      ReportQueueConfiguration::Create(
+          {.event_type = EventType::kDevice, .destination = destination_})
+          .Build();
+  ASSERT_TRUE(config_result.has_value());
 
   const auto result = ReportQueueProvider::CreateSpeculativeQueue(
-      std::move(config_result.ValueOrDie()));
-  ASSERT_FALSE(result.ok());
-  EXPECT_EQ(result.status().code(), error::FAILED_PRECONDITION);
+      std::move(config_result.value()));
+  ASSERT_FALSE(result.has_value());
+  EXPECT_EQ(result.error().code(), error::FAILED_PRECONDITION);
 }
 }  // namespace
 }  // namespace reporting

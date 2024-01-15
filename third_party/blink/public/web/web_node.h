@@ -31,6 +31,7 @@
 #ifndef THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_NODE_H_
 #define THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_NODE_H_
 
+#include "cc/paint/element_id.h"
 #include "third_party/blink/public/platform/web_common.h"
 #include "third_party/blink/public/platform/web_private_ptr.h"
 #include "third_party/blink/public/platform/web_string.h"
@@ -53,6 +54,8 @@ class WebPluginContainer;
 // reason, subclasses must not add any additional data members.
 class BLINK_EXPORT WebNode {
  public:
+  static WebNode FromDomNodeId(int dom_node_id);
+
   virtual ~WebNode();
 
   WebNode();
@@ -68,6 +71,8 @@ class BLINK_EXPORT WebNode {
   bool LessThan(const WebNode&) const;
 
   bool IsNull() const;
+
+  bool IsConnected() const;
 
   WebNode ParentNode() const;
   WebString NodeValue() const;
@@ -88,7 +93,7 @@ class BLINK_EXPORT WebNode {
   void SimulateClick();
 
   // See cc/paint/element_id.h for the definition of these ids.
-  uint64_t ScrollingElementIdForTesting() const;
+  cc::ElementId ScrollingElementIdForTesting() const;
 
   // The argument should be lower-cased.
   WebElementCollection GetElementsByHTMLTagName(const WebString&) const;
@@ -99,16 +104,20 @@ class BLINK_EXPORT WebNode {
 
   WebVector<WebElement> QuerySelectorAll(const WebString& selector) const;
 
+  // Returns the contents of the first descendant element, if any, that contains
+  // only text, a part of which is the given substring. The search is
+  // case-sensitive.
+  WebString FindTextInElementWith(const WebString& substring) const;
+
   bool Focused() const;
 
   WebPluginContainer* PluginContainer() const;
 
   bool IsInsideFocusableElementOrARIAWidget() const;
 
-  v8::Local<v8::Value> ToV8Value(v8::Local<v8::Object> creation_context,
-                                 v8::Isolate*);
+  v8::Local<v8::Value> ToV8Value(v8::Isolate*);
 
-  int GetDevToolsNodeIdForTest() const;
+  int GetDomNodeId() const;
 
   // Helper to downcast to `T`. Will fail with a CHECK() if converting to `T` is
   // not legal. The returned `T` will always be non-null if `this` is non-null.
@@ -137,7 +146,7 @@ class BLINK_EXPORT WebNode {
 #endif
 
  protected:
-  WebPrivatePtr<Node> private_;
+  WebPrivatePtrForGC<Node> private_;
 };
 
 #define DECLARE_WEB_NODE_TYPE_CASTS(type)      \

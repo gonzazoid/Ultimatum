@@ -7,13 +7,6 @@
       "backgroundColor": "#FFFFFF"
     },
     {
-      "name": "VerticalScrollbar",
-      "position": [285, 0],
-      "bounds": [15, 150],
-      "contentsOpaque": true,
-      "transform": 1
-    },
-    {
       "name": "Scrolling background of LayoutView #document",
       "bounds": [285, 230],
       "contentsOpaque": true,
@@ -28,10 +21,16 @@
       "transform": 2
     },
     {
+      "name": "VerticalScrollbar",
+      "position": [285, 0],
+      "bounds": [15, 150],
+      "contentsOpaque": true,
+      "transform": 1
+    },
+    {
       "name": "LayoutNGBlockFlow (positioned) DIV class='overlay'",
       "position": [5, 5],
       "bounds": [50, 50],
-      "contentsOpaqueForText": true,
       "backgroundColor": "#00000033"
     }
   ],

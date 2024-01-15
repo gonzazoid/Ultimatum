@@ -8,7 +8,13 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_ml_context_options.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
+#include "third_party/blink/renderer/modules/ml/buildflags.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+
+#if !BUILDFLAG(IS_CHROMEOS)
+#include "third_party/blink/public/common/features.h"
+#include "third_party/blink/renderer/modules/ml/webnn/ml_context_mojo.h"
+#endif
 
 namespace blink {
 
@@ -20,72 +26,124 @@ using ml::model_loader::mojom::blink::MLService;
 }  // namespace
 
 ML::ML(ExecutionContext* execution_context)
-    : execution_context_(execution_context),
-      remote_service_(execution_context_.Get()) {}
+    : ExecutionContextClient(execution_context),
+      model_loader_service_(execution_context),
+      webnn_context_provider_(execution_context) {}
 
 void ML::CreateModelLoader(ScriptState* script_state,
-                           ExceptionState& exception_state,
                            CreateModelLoaderOptionsPtr options,
                            MLService::CreateModelLoaderCallback callback) {
-  if (!BootstrapMojoConnectionIfNeeded(script_state, exception_state)) {
-    // An exception has already been thrown in
-    // `BootstrapMojoConnectionIfNeeded()`.
-    return;
-  }
-  remote_service_->CreateModelLoader(std::move(options), std::move(callback));
+  EnsureModelLoaderServiceConnection(script_state);
+
+  model_loader_service_->CreateModelLoader(std::move(options),
+                                           std::move(callback));
+}
+
+void ML::CreateWebNNContext(
+    webnn::mojom::blink::CreateContextOptionsPtr options,
+    webnn::mojom::blink::WebNNContextProvider::CreateWebNNContextCallback
+        callback) {
+  // Connect WebNN Service if needed.
+  EnsureWebNNServiceConnection();
+
+  // Create `WebNNGraph` message pipe with `WebNNContext` mojo interface.
+  webnn_context_provider_->CreateWebNNContext(std::move(options),
+                                              std::move(callback));
+}
+
+bool ML::CreateWebNNContextSync(
+    webnn::mojom::blink::CreateContextOptionsPtr options,
+    webnn::mojom::blink::CreateContextResultPtr* out_result) {
+  CHECK(!IsMainThread());
+  // Connect to the WebNN Service if needed.
+  EnsureWebNNServiceConnection();
+  return webnn_context_provider_->CreateWebNNContext(std::move(options),
+                                                     out_result);
 }
 
 void ML::Trace(Visitor* visitor) const {
-  visitor->Trace(execution_context_);
-  visitor->Trace(remote_service_);
-
+  visitor->Trace(model_loader_service_);
+  visitor->Trace(webnn_context_provider_);
+  ExecutionContextClient::Trace(visitor);
   ScriptWrappable::Trace(visitor);
 }
 
 ScriptPromise ML::createContext(ScriptState* script_state,
-                                MLContextOptions* option,
+                                MLContextOptions* options,
                                 ExceptionState& exception_state) {
+  ScopedMLTrace scoped_trace("ML::createContext");
   if (!script_state->ContextIsValid()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       "Invalid script state");
     return ScriptPromise();
   }
 
-  ScriptPromiseResolver* resolver =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  ScriptPromiseResolver* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
 
   auto promise = resolver->Promise();
+
+#if !BUILDFLAG(IS_CHROMEOS)
+  if (options->deviceType() == V8MLDeviceType::Enum::kGpu) {
+    MLContextMojo::ValidateAndCreateAsync(resolver, options, this);
+    return promise;
+  }
+#endif
 
   // Notice that currently, we just create the context in the renderer. In the
   // future we may add backend query ability to check whether a context is
   // supportable or not. At that time, this function will be truly asynced.
-  auto* ml_context = MakeGarbageCollected<MLContext>(
-      option->devicePreference(), option->powerPreference(),
-      option->modelFormat(), option->numThreads(), this);
-  resolver->Resolve(ml_context);
-
+  //
+  // TODO(crbug.com/1273291): Support async context creation for all contexts.
+  resolver->Resolve(MLContext::ValidateAndCreateSync(options, this));
   return promise;
 }
 
-bool ML::BootstrapMojoConnectionIfNeeded(ScriptState* script_state,
-                                         ExceptionState& exception_state) {
-  // We need to do the following check because the execution context of this
-  // navigator may be invalid (e.g. the frame is detached).
+MLContext* ML::createContextSync(ScriptState* script_state,
+                                 MLContextOptions* options,
+                                 ExceptionState& exception_state) {
+  ScopedMLTrace scoped_trace("ML::createContextSync");
   if (!script_state->ContextIsValid()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
-                                      "The execution context is invalid");
-    return false;
+                                      "Invalid script state");
+    return nullptr;
   }
+
+#if !BUILDFLAG(IS_CHROMEOS)
+  // The runtime enable feature is used to disable the cross process hardware
+  // acceleration by default.
+  if (options->deviceType() == V8MLDeviceType::Enum::kGpu) {
+      return MLContextMojo::ValidateAndCreateSync(script_state, exception_state,
+                                                  options, this);
+  }
+#endif
+
+  return MLContext::ValidateAndCreateSync(options, this);
+}
+
+void ML::EnsureModelLoaderServiceConnection(ScriptState* script_state) {
+  // The execution context of this navigator is valid here because it has been
+  // verified at the beginning of `MLModelLoader::load()` function.
+  CHECK(script_state->ContextIsValid());
+
   // Note that we do not use `ExecutionContext::From(script_state)` because
   // the ScriptState passed in may not be guaranteed to match the execution
   // context associated with this navigator, especially with
   // cross-browsing-context calls.
-  if (!remote_service_.is_bound()) {
-    execution_context_->GetBrowserInterfaceBroker().GetInterface(
-        remote_service_.BindNewPipeAndPassReceiver(
-            execution_context_->GetTaskRunner(TaskType::kInternalDefault)));
+  if (!model_loader_service_.is_bound()) {
+    GetExecutionContext()->GetBrowserInterfaceBroker().GetInterface(
+        model_loader_service_.BindNewPipeAndPassReceiver(
+            GetExecutionContext()->GetTaskRunner(TaskType::kInternalDefault)));
   }
-  return true;
+}
+
+void ML::EnsureWebNNServiceConnection() {
+  if (webnn_context_provider_.is_bound()) {
+    return;
+  }
+  GetExecutionContext()->GetBrowserInterfaceBroker().GetInterface(
+      webnn_context_provider_.BindNewPipeAndPassReceiver(
+          GetExecutionContext()->GetTaskRunner(TaskType::kInternalDefault)));
 }
 
 }  // namespace blink

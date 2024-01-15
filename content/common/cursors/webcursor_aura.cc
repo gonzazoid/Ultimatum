@@ -5,6 +5,7 @@
 #include "content/common/cursors/webcursor.h"
 
 #include "base/check_op.h"
+#include "build/build_config.h"
 #include "ui/base/cursor/cursor.h"
 #include "ui/base/cursor/cursor_factory.h"
 #include "ui/base/cursor/mojom/cursor_type.mojom-shared.h"
@@ -15,53 +16,50 @@ namespace content {
 gfx::NativeCursor WebCursor::GetNativeCursor() {
   if (cursor_.type() == ui::mojom::CursorType::kCustom) {
     if (!custom_cursor_) {
-      custom_cursor_.emplace(ui::mojom::CursorType::kCustom);
-      SkBitmap bitmap;
-      gfx::Point hotspot;
-      float scale;
-      CreateScaledBitmapAndHotspotFromCustomData(&bitmap, &hotspot, &scale);
-      custom_cursor_->set_custom_bitmap(bitmap);
-      custom_cursor_->set_custom_hotspot(hotspot);
-      custom_cursor_->set_image_scale_factor(device_scale_factor_);
+      SkBitmap bitmap = cursor_.custom_bitmap();
+      gfx::Point hotspot = cursor_.custom_hotspot();
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+      // In lacros, cursor should not be scaled to device scale
+      // factor because device scale factor is not always integer
+      // which could cause rounding errors. We should keep the
+      // image scale factor and handle the actual scaling in ash.
+      // Cursor rotation is also handled in ash.
+      float cursor_image_scale = cursor_.image_scale_factor();
+#else
+      float cursor_image_scale = device_scale_factor_;
+      wm::ScaleAndRotateCursorBitmapAndHotpoint(GetCursorScaleFactor(&bitmap),
+                                                rotation_, &bitmap, &hotspot);
+#endif
+      custom_cursor_ = ui::Cursor::NewCustom(
+          std::move(bitmap), std::move(hotspot), cursor_image_scale);
       custom_cursor_->SetPlatformCursor(
           ui::CursorFactory::GetInstance()->CreateImageCursor(
-              ui::mojom::CursorType::kCustom, bitmap, hotspot));
+              custom_cursor_->type(), custom_cursor_->custom_bitmap(),
+              custom_cursor_->custom_hotspot(),
+              custom_cursor_->image_scale_factor()));
     }
     return *custom_cursor_;
   }
   return cursor_.type();
 }
 
-void WebCursor::CreateScaledBitmapAndHotspotFromCustomData(SkBitmap* bitmap,
-                                                           gfx::Point* hotspot,
-                                                           float* scale) {
-  DCHECK_EQ(ui::mojom::CursorType::kCustom, cursor_.type());
-  *bitmap = cursor_.custom_bitmap();
-  *hotspot = cursor_.custom_hotspot();
-  *scale = GetCursorScaleFactor(bitmap);
-  wm::ScaleAndRotateCursorBitmapAndHotpoint(*scale, rotation_, bitmap, hotspot);
-}
-
-#if !defined(USE_OZONE)
-// ozone has its own SetDisplayInfo that takes rotation into account
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
+// Ash has its own SetDisplayInfo that takes rotation into account.
 void WebCursor::SetDisplayInfo(const display::Display& display) {
   if (device_scale_factor_ == display.device_scale_factor())
     return;
 
   device_scale_factor_ = display.device_scale_factor();
-  CleanupPlatformData();
+  custom_cursor_.reset();
 }
 
-// ozone also has extra calculations for scale factor (taking max cursor size
+// Ash also has extra calculations for scale factor (taking max cursor size
 // into account).
 float WebCursor::GetCursorScaleFactor(SkBitmap* bitmap) {
   DCHECK_NE(0, cursor_.image_scale_factor());
   return device_scale_factor_ / cursor_.image_scale_factor();
 }
 #endif
-
-void WebCursor::CleanupPlatformData() {
-  custom_cursor_.reset();
-}
 
 }  // namespace content

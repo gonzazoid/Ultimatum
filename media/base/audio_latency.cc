@@ -68,7 +68,7 @@ int LCM(int a, int b) {
 }  // namespace
 
 // static
-bool AudioLatency::IsResamplingPassthroughSupported(LatencyType type) {
+bool AudioLatency::IsResamplingPassthroughSupported(Type type) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   return true;
 #elif BUILDFLAG(IS_FUCHSIA)
@@ -78,7 +78,7 @@ bool AudioLatency::IsResamplingPassthroughSupported(LatencyType type) {
   // power efficient playback. Per the Android audio team, we shouldn't waste
   // cycles on resampling when using the playback mode. See OpenSLESOutputStream
   // for additional implementation details.
-  return type == LATENCY_PLAYBACK &&
+  return type == Type::kPlayback &&
          base::android::BuildInfo::GetInstance()->sdk_int() >=
              base::android::SDK_VERSION_NOUGAT_MR1;
 #else
@@ -146,7 +146,7 @@ int AudioLatency::GetRtcBufferSize(int sample_rate, int hardware_buffer_size) {
     return frames_per_buffer;
   }
 
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC) || \
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_APPLE) || \
     BUILDFLAG(IS_FUCHSIA)
   // On Linux, MacOS and Fuchsia, the low level IO implementations on the
   // browser side supports all buffer size the clients want. We use the native
@@ -207,14 +207,14 @@ int AudioLatency::GetExactBufferSize(base::TimeDelta duration,
   DCHECK_GE(max_hardware_buffer_size, min_hardware_buffer_size);
   DCHECK(max_hardware_buffer_size == 0 ||
          hardware_buffer_size <= max_hardware_buffer_size);
-  DCHECK(max_hardware_buffer_size == 0 ||
-         max_hardware_buffer_size <= max_allowed_buffer_size);
+  DCHECK_LE(hardware_buffer_size, max_allowed_buffer_size);
 
   int requested_buffer_size = std::round(duration.InSecondsF() * sample_rate);
 
   if (min_hardware_buffer_size &&
-      requested_buffer_size <= min_hardware_buffer_size)
+      requested_buffer_size <= min_hardware_buffer_size) {
     return min_hardware_buffer_size;
+  }
 
   if (requested_buffer_size <= hardware_buffer_size)
     return hardware_buffer_size;
@@ -244,11 +244,29 @@ int AudioLatency::GetExactBufferSize(base::TimeDelta duration,
   }
 
   const int platform_max_buffer_size =
-      max_hardware_buffer_size
+      (max_hardware_buffer_size &&
+       max_hardware_buffer_size <= max_allowed_buffer_size)
           ? (max_allowed_buffer_size / max_hardware_buffer_size) *
                 max_hardware_buffer_size
           : (max_allowed_buffer_size / multiplier) * multiplier;
 
   return std::min(buffer_size, platform_max_buffer_size);
+}
+
+// static
+// Used for UMA histogram names, do not change the lookup.
+const char* AudioLatency::ToString(Type type) {
+  switch (type) {
+    case Type::kExactMS:
+      return "LatencyExactMs";
+    case Type::kInteractive:
+      return "LatencyInteractive";
+    case Type::kRtc:
+      return "LatencyRtc";
+    case Type::kPlayback:
+      return "LatencyPlayback";
+    case Type::kUnknown:
+      return "LatencyUnknown";
+  }
 }
 }  // namespace media

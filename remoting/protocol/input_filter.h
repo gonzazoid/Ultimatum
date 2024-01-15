@@ -25,17 +25,11 @@ class InputFilter : public InputStub {
   ~InputFilter() override;
 
   // Set the InputStub that events will be forwarded to.
-  void set_input_stub(InputStub* input_stub) {
-    input_stub_ = input_stub;
-  }
+  void set_input_stub(InputStub* input_stub) { input_stub_ = input_stub; }
 
   // Enable/disable routing of events to the InputStub.
-  void set_enabled(bool enabled) {
-    enabled_ = enabled;
-  }
-  bool enabled() const {
-    return enabled_;
-  }
+  void set_enabled(bool enabled) { enabled_ = enabled; }
+  bool enabled() const { return enabled_; }
 
   // InputStub interface.
   void InjectKeyEvent(const KeyEvent& event) override;
@@ -44,10 +38,10 @@ class InputFilter : public InputStub {
   void InjectTouchEvent(const TouchEvent& event) override;
 
  private:
-  raw_ptr<InputStub> input_stub_;
+  raw_ptr<InputStub, DanglingUntriaged> input_stub_;
   bool enabled_;
 };
 
 }  // namespace remoting::protocol
 
-#endif // REMOTING_PROTOCOL_INPUT_FILTER_H_
+#endif  // REMOTING_PROTOCOL_INPUT_FILTER_H_

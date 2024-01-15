@@ -5,13 +5,14 @@
 #include "ui/views/animation/test/test_ink_drop.h"
 #include "ui/gfx/geometry/transform.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 TestInkDrop::TestInkDrop() = default;
 TestInkDrop::~TestInkDrop() = default;
 
 void TestInkDrop::HostSizeChanged(const gfx::Size& new_size) {}
+
+void TestInkDrop::HostViewThemeChanged() {}
 
 void TestInkDrop::HostTransformChanged(const gfx::Transform& new_transform) {}
 
@@ -49,5 +50,4 @@ void TestInkDrop::SetShowHighlightOnHover(bool show_highlight_on_hover) {}
 
 void TestInkDrop::SetShowHighlightOnFocus(bool show_highlight_on_focus) {}
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

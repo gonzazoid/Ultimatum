@@ -9,9 +9,9 @@
  */
 import '//resources/cr_elements/cr_button/cr_button.js';
 import '//resources/cr_elements/cr_toggle/cr_toggle.js';
-import '../controls/settings_toggle_button.js';
+import 'chrome://resources/cr_components/settings_prefs/prefs.js';
+import '/shared/settings/controls/settings_toggle_button.js';
 import '../people_page/signout_dialog.js';
-import '../prefs/prefs.js';
 // <if expr="not chromeos_ash">
 import '../relaunch_confirmation_dialog.js';
 // </if>
@@ -21,34 +21,44 @@ import '//resources/cr_elements/cr_toast/cr_toast.js';
 
 // </if>
 
+import {CrLinkRowElement} from '//resources/cr_elements/cr_link_row/cr_link_row.js';
 import {CrToastElement} from '//resources/cr_elements/cr_toast/cr_toast.js';
-import {assert} from '//resources/js/assert_ts.js';
 import {WebUiListenerMixin} from '//resources/cr_elements/web_ui_listener_mixin.js';
+import {assert} from '//resources/js/assert.js';
+import {focusWithoutInk} from '//resources/js/focus_without_ink.js';
 import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {SettingsToggleButtonElement} from '/shared/settings/controls/settings_toggle_button.js';
+import {StatusAction, SyncStatus} from '/shared/settings/people_page/sync_browser_proxy.js';
+import {MetricsReporting, PrivacyPageBrowserProxy, PrivacyPageBrowserProxyImpl} from '/shared/settings/privacy_page/privacy_page_browser_proxy.js';
+import {HelpBubbleMixin} from 'chrome://resources/cr_components/help_bubble/help_bubble_mixin.js';
+import {PrefsMixin} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 
-import {SettingsToggleButtonElement} from '../controls/settings_toggle_button.js';
+import {FocusConfig} from '../focus_config.js';
 import {loadTimeData} from '../i18n_setup.js';
 import {PrivacyPageVisibility} from '../page_visibility.js';
 import {SettingsSignoutDialogElement} from '../people_page/signout_dialog.js';
-import {StatusAction, SyncStatus} from '../people_page/sync_browser_proxy.js';
-import {PrefsMixin} from '../prefs/prefs_mixin.js';
 import {RelaunchMixin, RestartType} from '../relaunch_mixin.js';
+import {Router} from '../router.js';
 
-import {AutofillAssistantBrowserProxyImpl} from './autofill_assistant_browser_proxy.js';
 import {getTemplate} from './personalization_options.html.js';
-import {MetricsReporting, PrivacyPageBrowserProxy, PrivacyPageBrowserProxyImpl} from './privacy_page_browser_proxy.js';
-
 
 export interface SettingsPersonalizationOptionsElement {
   $: {
     toast: CrToastElement,
     signinAllowedToggle: SettingsToggleButtonElement,
     metricsReportingControl: SettingsToggleButtonElement,
+    metricsReportingLink: CrLinkRowElement,
+    urlCollectionToggle: SettingsToggleButtonElement,
   };
 }
 
-const SettingsPersonalizationOptionsElementBase =
-    RelaunchMixin(WebUiListenerMixin(PrefsMixin(PolymerElement)));
+const SettingsPersonalizationOptionsElementBase = HelpBubbleMixin(
+    RelaunchMixin(WebUiListenerMixin(I18nMixin(PrefsMixin(PolymerElement)))));
+
+// browser_element_identifiers constants
+const ANONYMIZED_URL_COLLECTION_ID =
+    'kAnonymizedUrlCollectionPersonalizationSettingId';
 
 export class SettingsPersonalizationOptionsElement extends
     SettingsPersonalizationOptionsElementBase {
@@ -67,11 +77,11 @@ export class SettingsPersonalizationOptionsElement extends
         notify: true,
       },
 
-      /**
-       * TODO(dpapad): Restore actual type !PrivacyPageVisibility after this
-       * file is no longer reused by chrome://os-settings. Dictionary defining
-       * page visibility.
-       */
+      focusConfig: {
+        type: Object,
+        observer: 'onFocusConfigChange_',
+      },
+
       pageVisibility: Object,
 
       syncStatus: Object,
@@ -106,16 +116,17 @@ export class SettingsPersonalizationOptionsElement extends
       },
       // </if>
 
-      shouldShowAutofillAssistant_: {
+      enablePageContentSetting_: {
         type: Boolean,
-        value: false,
-        computed: 'computeShouldShowAutofillAssistant_(syncStatus.signedIn)',
+        value() {
+          return loadTimeData.getBoolean('enablePageContentSetting');
+        },
       },
-
     };
   }
 
   pageVisibility: PrivacyPageVisibility;
+  focusConfig: FocusConfig;
   syncStatus: SyncStatus;
 
   // <if expr="_google_chrome and not chromeos_ash">
@@ -130,39 +141,31 @@ export class SettingsPersonalizationOptionsElement extends
   private signinAvailable_: boolean;
   // </if>
 
-  private shouldShowAutofillAssistant_: boolean;
-  private autofillAssistantProxy_ =
-      AutofillAssistantBrowserProxyImpl.getInstance();
+  private enablePageContentSetting_: boolean;
 
   private browserProxy_: PrivacyPageBrowserProxy =
       PrivacyPageBrowserProxyImpl.getInstance();
+
+  private onFocusConfigChange_() {
+    if (!this.enablePageContentSetting_) {
+      // TODO(crbug.com/1476887): Remove once crbug.com/1476887 launched.
+      return;
+    }
+
+    this.focusConfig.set(
+        Router.getInstance().getRoutes().PAGE_CONTENT.path, () => {
+          const toFocus =
+              this.shadowRoot!.querySelector<HTMLElement>('#pageContentRow');
+          assert(toFocus);
+          focusWithoutInk(toFocus);
+        });
+  }
 
   private computeSyncFirstSetupInProgress_(): boolean {
     return !!this.syncStatus && !!this.syncStatus.firstSetupInProgress;
   }
 
-  private computeShouldShowAutofillAssistant_(): boolean {
-    // <if expr="chromeos_ash">
-    if (loadTimeData.getBoolean('isOSSettings')) {
-      return false;
-    }
-    // </if>
-
-    // Currently, only automated password change uses Autofill Assistant. Only
-    // show the toggle if at least one entry point is enabled.
-    // Additional, the user must be signed in since the consent dialog uses the
-    // sync bridge for consent recording.
-    return loadTimeData.getBoolean('isAutomatedPasswordChangeEnabled') &&
-        !!this.syncStatus && !!this.syncStatus.signedIn;
-  }
-
   private showPriceEmailNotificationsToggle_(): boolean {
-    // <if expr="chromeos_ash">
-    if (loadTimeData.getBoolean('isOSSettings')) {
-      // Should be hidden in OS settings.
-      return false;
-    }
-    // </if>
     // Only show the toggle when the user signed in.
     return loadTimeData.getBoolean('changePriceEmailNotificationsEnabled') &&
         !!this.syncStatus && !!this.syncStatus.signedIn;
@@ -179,9 +182,13 @@ export class SettingsPersonalizationOptionsElement extends
     // <if expr="_google_chrome and not chromeos_ash">
     const setMetricsReportingPref = (metricsReporting: MetricsReporting) =>
         this.setMetricsReportingPref_(metricsReporting);
-    this.addWebUIListener('metrics-reporting-change', setMetricsReportingPref);
+    this.addWebUiListener('metrics-reporting-change', setMetricsReportingPref);
     this.browserProxy_.getMetricsReporting().then(setMetricsReportingPref);
     // </if>
+
+    this.registerHelpBubble(
+        ANONYMIZED_URL_COLLECTION_ID,
+        this.$.urlCollectionToggle.getBubbleAnchor(), {anchorPaddingTop: 10});
   }
 
   // <if expr="chromeos_ash">
@@ -242,12 +249,6 @@ export class SettingsPersonalizationOptionsElement extends
   // </if>
 
   private showSearchSuggestToggle_(): boolean {
-    // <if expr="chromeos_ash">
-    if (loadTimeData.getBoolean('isOSSettings')) {
-      // Should be hidden in OS settings.
-      return false;
-    }
-    // </if>
     if (this.pageVisibility === undefined) {
       // pageVisibility isn't defined in non-Guest profiles (crbug.com/1288911).
       return true;
@@ -255,25 +256,19 @@ export class SettingsPersonalizationOptionsElement extends
     return this.pageVisibility.searchPrediction;
   }
 
-  // <if expr="chromeos_ash">
-  private showMetricsReportingAsLink_(): boolean {
-    return !loadTimeData.getBoolean('isOSSettings');
+  private navigateTo_(url: string): void {
+    window.location.href = url;
   }
 
+  // <if expr="chromeos_ash">
   private onMetricsReportingLinkClick_() {
-    window.location.href = loadTimeData.getString('osSyncSetupSettingsUrl');
+    if (loadTimeData.getBoolean('osDeprecateSyncMetricsToggle')) {
+      this.navigateTo_(loadTimeData.getString('osPrivacySettingsUrl'));
+    } else {
+      this.navigateTo_(loadTimeData.getString('osSyncSetupSettingsUrl'));
+    }
   }
   // </if>
-
-  private showUrlCollectionToggle_(): boolean {
-    // <if expr="chromeos_ash">
-    // Should be hidden in OS settings.
-    if (loadTimeData.getBoolean('isOSSettings')) {
-      return false;
-    }
-    // </if>
-    return true;
-  }
 
   // <if expr="_google_chrome">
   private onUseSpellingServiceToggle_(event: Event) {
@@ -284,44 +279,41 @@ export class SettingsPersonalizationOptionsElement extends
     }
   }
 
+  // <if expr="not chromeos_ash">
   private showSpellCheckControlToggle_(): boolean {
-    // <if expr="chromeos_ash">
-    if (!loadTimeData.getBoolean('isOSSettings')) {
-      // The toggle should be hidden in Ash Browser settings page
-      // (it shows a link to the OS Settings page instead).
-      return false;
-    }
-    // </if>
     return (
         !!(this.prefs as {spellcheck?: any}).spellcheck &&
-        (this.getPref('spellcheck.dictionaries').value as string[]).length > 0);
+        this.getPref<string[]>('spellcheck.dictionaries').value.length > 0);
   }
+  // </if><!-- not chromeos -->
 
   // <if expr="chromeos_ash">
   private showSpellCheckControlLink_(): boolean {
-    if (loadTimeData.getBoolean('isOSSettings')) {
-      return false;  // Should be hidden in OS settings.
-    }
     return (
         !!(this.prefs as {spellcheck?: any}).spellcheck &&
-        (this.getPref('spellcheck.dictionaries').value as string[]).length > 0);
+        this.getPref<string[]>('spellcheck.dictionaries').value.length > 0);
   }
 
   private onUseSpellingServiceLinkClick_() {
-    window.location.href = loadTimeData.getString('osSyncSetupSettingsUrl');
+    this.navigateTo_(loadTimeData.getString('osSyncSetupSettingsUrl'));
   }
   // </if><!-- chromeos -->
   // </if><!-- _google_chrome -->
 
   private shouldShowDriveSuggest_(): boolean {
-    // <if expr="chromeos_ash">
-    if (loadTimeData.getBoolean('isOSSettings')) {
-      // Should be hidden in OS settings.
+    if (loadTimeData.getBoolean('driveSuggestNoSetting')) {
       return false;
     }
-    // </if>
-    return loadTimeData.getBoolean('driveSuggestAvailable') &&
-        !!this.syncStatus && !!this.syncStatus.signedIn &&
+
+    if (!loadTimeData.getBoolean('driveSuggestAvailable')) {
+      return false;
+    }
+
+    if (loadTimeData.getBoolean('driveSuggestNoSyncRequirement')) {
+      return true;
+    }
+
+    return !!this.syncStatus && !!this.syncStatus.signedIn &&
         this.syncStatus.statusAction !== StatusAction.REAUTHENTICATE;
   }
 
@@ -347,29 +339,20 @@ export class SettingsPersonalizationOptionsElement extends
     this.showSignoutDialog_ = false;
   }
 
-  private onRestartTap_(e: Event) {
+  private onRestartClick_(e: Event) {
     e.stopPropagation();
     this.performRestart(RestartType.RESTART);
   }
 
-  private async onEnableAutofillAssistantChange_() {
-    const toggle = this.shadowRoot!.querySelector<SettingsToggleButtonElement>(
-        '#enableAutofillAssistantToggle');
-    assert(!!toggle);
-    if (toggle.checked) {
-      // Temporarily set the toggle to off again until the user has actually
-      // accepted the consent dialog.
-      toggle.checked = false;
-      const success = await this.autofillAssistantProxy_.promptForConsent();
-      if (success) {
-        toggle.checked = true;
-        toggle.sendPrefChange();
-      }
-    } else {
-      this.autofillAssistantProxy_.revokeConsent(
-          [toggle.label, toggle.subLabel]);
-      toggle.sendPrefChange();
-    }
+  private onPageContentRowClick_() {
+    const router = Router.getInstance();
+    router.navigateTo(router.getRoutes().PAGE_CONTENT);
+  }
+
+  private computePageContentRowSublabel_() {
+    return this.getPref('page_content_collection.enabled').value ?
+        this.i18n('pageContentLinkRowSublabelOn') :
+        this.i18n('pageContentLinkRowSublabelOff');
   }
 }
 

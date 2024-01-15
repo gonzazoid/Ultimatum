@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "base/memory/ref_counted.h"
 #include "build/build_config.h"
 #include "components/language/core/browser/accept_languages_service.h"
 #include "components/translate/core/browser/translate_prefs.h"
@@ -73,10 +72,6 @@ class TranslateClient {
 
   // Returns true if the URL can be translated.
   virtual bool IsTranslatableURL(const GURL& url) = 0;
-
-  // Returns if AutofillAssistant is running. Translation should be disabled
-  // while AutofillAssistant is running.
-  virtual bool IsAutofillAssistantRunning() const = 0;
 };
 
 }  // namespace translate

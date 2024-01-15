@@ -8,8 +8,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/test/bind.h"
 #include "base/test/test_simple_task_runner.h"
@@ -100,8 +100,8 @@ class BluetoothLowEnergyAdvertisementManagerMacTest : public testing::Test {
  protected:
   scoped_refptr<base::TestSimpleTaskRunner> ui_task_runner_;
   BluetoothLowEnergyAdvertisementManagerMac advertisement_manager_;
-  CBPeripheralManager* peripheral_manager_;
-  id peripheral_manager_mock_;
+  CBPeripheralManager* __strong peripheral_manager_;
+  id __strong peripheral_manager_mock_;
   CBManagerState peripheral_manager_state_;
 
   scoped_refptr<BluetoothAdvertisement> advertisement_;

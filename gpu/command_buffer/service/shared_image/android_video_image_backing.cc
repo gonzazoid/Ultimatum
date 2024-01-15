@@ -7,9 +7,9 @@
 #include "base/android/scoped_hardware_buffer_fence_sync.h"
 #include "components/viz/common/gpu/vulkan_context_provider.h"
 #include "components/viz/common/resources/resource_sizes.h"
+#include "components/viz/common/resources/shared_image_format.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
-#include "gpu/command_buffer/service/abstract_texture.h"
-#include "gpu/command_buffer/service/abstract_texture_impl.h"
+#include "gpu/command_buffer/service/abstract_texture_android.h"
 #include "gpu/command_buffer/service/ref_counted_lock.h"
 #include "gpu/command_buffer/service/shared_context_state.h"
 #include "gpu/command_buffer/service/shared_image/video_image_reader_image_backing.h"
@@ -18,6 +18,7 @@
 #include "gpu/config/gpu_finch_features.h"
 #include "gpu/vulkan/vulkan_device_queue.h"
 #include "gpu/vulkan/vulkan_implementation.h"
+#include "ui/gfx/gpu_fence.h"
 
 namespace gpu {
 
@@ -30,14 +31,16 @@ AndroidVideoImageBacking::AndroidVideoImageBacking(
     bool is_thread_safe)
     : AndroidImageBacking(
           mailbox,
-          viz::SharedImageFormat::SinglePlane(viz::RGBA_8888),
+          viz::SinglePlaneFormat::kRGBA_8888,
           size,
           color_space,
           surface_origin,
           alpha_type,
-          (SHARED_IMAGE_USAGE_DISPLAY_READ | SHARED_IMAGE_USAGE_GLES2),
-          viz::ResourceSizes::UncheckedSizeInBytes<size_t>(size,
-                                                           viz::RGBA_8888),
+          // This SI will be used to back a VideoFrame. As such, it
+          // will potentially be sent to the display compositor and read by the
+          // GL interface for WebGL.
+          SHARED_IMAGE_USAGE_DISPLAY_READ | SHARED_IMAGE_USAGE_GLES2_READ,
+          viz::SinglePlaneFormat::kRGBA_8888.EstimatedSizeInBytes(size),
           is_thread_safe,
           base::ScopedFD()) {}
 
@@ -67,16 +70,16 @@ std::unique_ptr<AndroidVideoImageBacking> AndroidVideoImageBacking::Create(
 }
 
 // Static.
-absl::optional<VulkanYCbCrInfo> AndroidVideoImageBacking::GetYcbcrInfo(
+std::optional<VulkanYCbCrInfo> AndroidVideoImageBacking::GetYcbcrInfo(
     TextureOwner* texture_owner,
     viz::VulkanContextProvider* vulkan_context_provider) {
   if (!vulkan_context_provider)
-    return absl::nullopt;
+    return std::nullopt;
 
   // Get AHardwareBuffer from the latest frame.
   auto scoped_hardware_buffer = texture_owner->GetAHardwareBuffer();
   if (!scoped_hardware_buffer)
-    return absl::nullopt;
+    return std::nullopt;
 
   DCHECK(scoped_hardware_buffer->buffer());
   VulkanImplementation* vk_implementation =
@@ -88,24 +91,18 @@ absl::optional<VulkanYCbCrInfo> AndroidVideoImageBacking::GetYcbcrInfo(
   if (!vk_implementation->GetSamplerYcbcrConversionInfo(
           vk_device, scoped_hardware_buffer->TakeBuffer(), &ycbcr_info)) {
     LOG(ERROR) << "Failed to get the ycbcr info.";
-    return absl::nullopt;
+    return std::nullopt;
   }
-  return absl::optional<VulkanYCbCrInfo>(ycbcr_info);
+  return std::optional<VulkanYCbCrInfo>(ycbcr_info);
 }
 
-std::unique_ptr<gles2::AbstractTexture>
+std::unique_ptr<AbstractTextureAndroid>
 AndroidVideoImageBacking::GenAbstractTexture(const bool passthrough) {
-  std::unique_ptr<gles2::AbstractTexture> texture;
   if (passthrough) {
-    texture = std::make_unique<gles2::AbstractTextureImplPassthrough>(
-        GL_TEXTURE_EXTERNAL_OES, GL_RGBA, size().width(), size().height(), 1, 0,
-        GL_RGBA, GL_UNSIGNED_BYTE);
+    return AbstractTextureAndroid::CreateForPassthrough(size());
   } else {
-    texture = std::make_unique<gles2::AbstractTextureImpl>(
-        GL_TEXTURE_EXTERNAL_OES, GL_RGBA, size().width(), size().height(), 1, 0,
-        GL_RGBA, GL_UNSIGNED_BYTE);
+    return AbstractTextureAndroid::CreateForValidating(size());
   }
-  return texture;
 }
 
 SharedImageBackingType AndroidVideoImageBacking::GetType() const {

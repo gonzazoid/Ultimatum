@@ -7,7 +7,6 @@
 #include <ostream>
 
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace updater {
 
@@ -16,10 +15,6 @@ enum class MyEnum {
   kVal2 = 0,
   kVal3 = 1,
 };
-
-std::ostream& operator<<(std::ostream& os, const MyEnum& e) {
-  return os << "MyEnum: " << static_cast<int>(e);
-}
 
 template <>
 struct EnumTraits<MyEnum> {
@@ -31,8 +26,8 @@ TEST(Util, CheckedIntegralToEnum) {
   EXPECT_EQ(MyEnum::kVal1, *CheckedCastToEnum<MyEnum>(-1));
   EXPECT_EQ(MyEnum::kVal2, *CheckedCastToEnum<MyEnum>(0));
   EXPECT_EQ(MyEnum::kVal3, *CheckedCastToEnum<MyEnum>(1));
-  EXPECT_EQ(CheckedCastToEnum<MyEnum>(-2), absl::nullopt);
-  EXPECT_EQ(CheckedCastToEnum<MyEnum>(2), absl::nullopt);
+  EXPECT_EQ(CheckedCastToEnum<MyEnum>(-2), std::nullopt);
+  EXPECT_EQ(CheckedCastToEnum<MyEnum>(2), std::nullopt);
 }
 
 }  // namespace updater

@@ -34,18 +34,11 @@ class BrowserContextKeyedAPI : public KeyedService {
   static const bool kServiceRedirectedInIncognito = false;
   static const bool kServiceHasOwnInstanceInIncognito = false;
 
-  // The next two flags allows to force the selection for the System and Guest
-  // Profiles despite the experiments being activated. Values can be overridden
-  // in subclasses by redefining the variables and setting a different value.
-  //
-  // Part of experiment to remove System Profile selection by default with
-  // `kSystemProfileSelectionDefaultNone`. By default do not force the value (do
-  // not create extension services) for the System Profile.
-  static const bool kForceSelectionForSystemProfile = false;
-  // Part of experiment to remove Guest Profile selection by default with
-  // `kGuestProfileSelectionDefaultNone`. By default force the value (create
-  // extension services) for the Guest Profile.
-  static const bool kForceSelectionForGuestProfile = true;
+  // This value forces the Guest profile to set its `ProfileSelection` with the
+  // same value set for the Regular Profile.
+  // If the value is false, then `ProfileSelection::kNone` will be used, and the
+  // service will not be created for Guest profiles.
+  static const bool kServiceIsCreatedInGuestMode = true;
 
   // If set to false, don't start the service at BrowserContext creation time.
   // (The default differs from the BrowserContextKeyedServiceFactory default,
@@ -158,20 +151,17 @@ class BrowserContextKeyedAPIFactory : public BrowserContextKeyedServiceFactory {
   content::BrowserContext* GetBrowserContextToUse(
       content::BrowserContext* context) const override {
     if (T::kServiceRedirectedInIncognito) {
-      return ExtensionsBrowserClient::Get()->GetRedirectedContextInIncognito(
-          context, T::kForceSelectionForGuestProfile,
-          T::kForceSelectionForSystemProfile);
+      return ExtensionsBrowserClient::Get()->GetContextRedirectedToOriginal(
+          context, T::kServiceIsCreatedInGuestMode);
     }
 
     if (T::kServiceHasOwnInstanceInIncognito) {
-      return ExtensionsBrowserClient::Get()->GetContextForRegularAndIncognito(
-          context, T::kForceSelectionForGuestProfile,
-          T::kForceSelectionForSystemProfile);
+      return ExtensionsBrowserClient::Get()->GetContextOwnInstance(
+          context, T::kServiceIsCreatedInGuestMode);
     }
 
-    return ExtensionsBrowserClient::Get()->GetRegularProfile(
-        context, T::kForceSelectionForGuestProfile,
-        T::kForceSelectionForSystemProfile);
+    return ExtensionsBrowserClient::Get()->GetContextForOriginalOnly(
+        context, T::kServiceIsCreatedInGuestMode);
   }
 
   bool ServiceIsCreatedWithBrowserContext() const override {

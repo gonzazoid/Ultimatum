@@ -7,34 +7,39 @@ import SwiftUI
 /// A view that displays a list of actions in the overflow menu.
 @available(iOS 15, *)
 struct OverflowMenuActionList: View {
-
-  enum Constants {
-    // The minimum row height for any row in the list.
-    static let minimumRowHeight: CGFloat = 48
-  }
-
   /// The list of action groups for this view.
   var actionGroups: [OverflowMenuActionGroup]
 
   /// The metrics handler to alert when the user takes metrics actions.
   weak var metricsHandler: PopupMenuMetricsHandler?
 
+  /// The namespace for the animation of this view appearing or disappearing.
+  let namespace: Namespace.ID
+
   var body: some View {
     List {
-      ForEach(actionGroups) { actionGroup in
-        OverflowMenuActionSection(actionGroup: actionGroup, metricsHandler: metricsHandler)
+      let nonEmpty = actionGroups.filter({ !$0.actions.isEmpty })
+      ForEach(nonEmpty) { actionGroup in
+        let isLast = actionGroup == nonEmpty.last
+        OverflowMenuActionSection(
+          actionGroup: actionGroup, metricsHandler: metricsHandler,
+          footerBackground: {
+            if isLast {
+              Color.clear.onAppear {
+                metricsHandler?.popupMenuUserScrolledToEndOfActions()
+              }
+            }
+          })
       }
     }
+    .matchedGeometryEffect(id: MenuCustomizationAnimationID.actions, in: namespace)
     .simultaneousGesture(
       DragGesture().onChanged({ _ in
         metricsHandler?.popupMenuScrolledVertically()
       })
     )
     .accessibilityIdentifier(kPopupMenuToolsMenuActionListId)
-    .listStyle(InsetGroupedListStyle())
-    // Allow sections to have very small headers controlling section spacing.
-    .environment(\.defaultMinListHeaderHeight, 0)
-    .environment(\.defaultMinListRowHeight, Constants.minimumRowHeight)
+    .overflowMenuListStyle()
   }
 }
 

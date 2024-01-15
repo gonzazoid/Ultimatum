@@ -5,6 +5,8 @@
 #ifndef ASH_SYSTEM_TIME_CALENDAR_UNITTEST_UTILS_H_
 #define ASH_SYSTEM_TIME_CALENDAR_UNITTEST_UTILS_H_
 
+#include <list>
+#include <memory>
 #include <set>
 #include <string>
 
@@ -215,6 +217,25 @@ std::set<std::string> kLocalesWithUniqueNumerals{"bn", "fa", "mr", "pa-pk"};
 
 namespace calendar_test_utils {
 
+// Used for over-riding the locale that `base::Time` uses. Copied from
+// `time_unittest.cc`.
+class ScopedLibcTimeZone {
+ public:
+  explicit ScopedLibcTimeZone(const std::string& timezone);
+  ~ScopedLibcTimeZone();
+
+  ScopedLibcTimeZone(const ScopedLibcTimeZone& other) = delete;
+  ScopedLibcTimeZone& operator=(const ScopedLibcTimeZone& other) = delete;
+
+  bool is_success() const { return success_; }
+
+ private:
+  static constexpr char kTimeZoneEnvVarName[] = "TZ";
+
+  bool success_ = true;
+  std::optional<std::string> old_timezone_;
+};
+
 // A duration to let the animation finish and pass the cool down duration in
 // tests.
 constexpr base::TimeDelta kAnimationSettleDownDuration = base::Seconds(3);
@@ -236,7 +257,8 @@ std::unique_ptr<google_apis::calendar::CalendarEvent> CreateEvent(
     const google_apis::calendar::CalendarEvent::ResponseStatus
         self_response_status =
             google_apis::calendar::CalendarEvent::ResponseStatus::kAccepted,
-    const bool all_day_event = false);
+    bool all_day_event = false,
+    GURL video_conference_url = GURL());
 
 // Creates a `google_apis::calendar::CalendarEvent` for testing, that converts
 // start/end `base::Time` objects to `google_apis::calendar::DateTime`.
@@ -250,7 +272,11 @@ std::unique_ptr<google_apis::calendar::CalendarEvent> CreateEvent(
     const google_apis::calendar::CalendarEvent::ResponseStatus
         self_response_status =
             google_apis::calendar::CalendarEvent::ResponseStatus::kAccepted,
-    const bool all_day_event = false);
+    bool all_day_event = false,
+    GURL video_conference_url = GURL());
+
+std::unique_ptr<google_apis::calendar::EventList> CreateMockEventList(
+    std::list<std::unique_ptr<google_apis::calendar::CalendarEvent>> events);
 
 // Checks if the two exploded are in the same month.
 bool IsTheSameMonth(const base::Time& date_a, const base::Time& date_b);

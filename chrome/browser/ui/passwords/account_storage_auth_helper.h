@@ -5,11 +5,12 @@
 #ifndef CHROME_BROWSER_UI_PASSWORDS_ACCOUNT_STORAGE_AUTH_HELPER_H_
 #define CHROME_BROWSER_UI_PASSWORDS_ACCOUNT_STORAGE_AUTH_HELPER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "chrome/browser/ui/signin_view_controller.h"
+#include "chrome/browser/ui/signin/signin_view_controller.h"
 #include "components/password_manager/core/browser/password_manager_client.h"
+#include "components/signin/public/base/signin_buildflags.h"
 
 namespace password_manager {
 class PasswordFeatureManager;
@@ -25,6 +26,7 @@ enum class ReauthAccessPoint;
 }
 
 class SigninViewController;
+class Profile;
 
 // Responsible for triggering authentication flows related to the passwords
 // account storage. Used only by desktop.
@@ -36,6 +38,7 @@ class AccountStorageAuthHelper {
   // because the controller is per window, while this helper is per tab. It
   // may return null.
   AccountStorageAuthHelper(
+      Profile* profile,
       signin::IdentityManager* identity_manager,
       password_manager::PasswordFeatureManager* password_feature_manager,
       base::RepeatingCallback<SigninViewController*()>
@@ -55,8 +58,8 @@ class AccountStorageAuthHelper {
           void(password_manager::PasswordManagerClient::ReauthSucceeded)>
           reauth_callback);
 
-  // Redirects the user to a sign-in in a new tab. |access_point| is used for
-  // metrics recording and represents where the sign-in was triggered.
+  // Shows a sign-in prompt to the user. |access_point| is used for metrics
+  // recording and represents where the sign-in was triggered.
   void TriggerSignIn(signin_metrics::AccessPoint access_point);
 
  private:
@@ -65,6 +68,8 @@ class AccountStorageAuthHelper {
           void(password_manager::PasswordManagerClient::ReauthSucceeded)>
           reauth_callback,
       signin::ReauthResult result);
+
+  const raw_ptr<Profile> profile_;
 
   const raw_ptr<signin::IdentityManager> identity_manager_;
 

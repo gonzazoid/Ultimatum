@@ -5,26 +5,36 @@
 #ifndef CHROME_BROWSER_UI_WEB_APPLICATIONS_WEB_APP_METRICS_H_
 #define CHROME_BROWSER_UI_WEB_APPLICATIONS_WEB_APP_METRICS_H_
 
+#include <optional>
+
+#include "base/containers/flat_map.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/power_monitor/power_observer.h"
-#include "base/scoped_observation.h"
-#include "base/time/time.h"
+#include "chrome/browser/ui/browser_list_observer.h"
 #include "chrome/browser/ui/browser_tab_strip_tracker.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
 #include "chrome/browser/ui/web_applications/diagnostics/web_app_icon_health_checks.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/site_engagement/content/site_engagement_observer.h"
+#include "components/webapps/common/web_app_id.h"
 #include "url/gurl.h"
 
 class Profile;
 class Browser;
 class TabStripModel;
 
+namespace base {
+class Time;
+}  // namespace base
+
 namespace content {
 class WebContents;
 }  // namespace content
+
+namespace site_engagement {
+enum class EngagementType;
+}  // namespace site_engagement
 
 namespace web_app {
 
@@ -65,11 +75,12 @@ class WebAppMetrics : public KeyedService,
   // base::PowerSuspendObserver:
   void OnSuspend() override;
 
-  // Called when a web contents changes associated AppId (may be empty).
+  // Called when a web contents changes associated webapps::AppId (may be
+  // empty).
   void NotifyOnAssociatedAppChanged(
       content::WebContents* web_contents,
-      const absl::optional<AppId>& previous_app_id,
-      const absl::optional<AppId>& new_app_id);
+      const std::optional<webapps::AppId>& previous_app_id,
+      const std::optional<webapps::AppId>& new_app_id);
 
   // Notify WebAppMetrics that an installability check has been completed for
   // a WebContents (see AppBannerManager::OnInstallableWebAppStatusUpdated).
@@ -100,8 +111,10 @@ class WebAppMetrics : public KeyedService,
   static constexpr int kNumUserInstalledAppsNotCounted = -1;
   int num_user_installed_apps_ = kNumUserInstalledAppsNotCounted;
 
-  base::flat_map<web_app::AppId, base::Time> app_last_interacted_time_{};
-  raw_ptr<content::WebContents> foreground_web_contents_ = nullptr;
+  base::flat_map<webapps::AppId, base::Time> app_last_interacted_time_{};
+  // DanglingUntriaged because it is assigned a DanglingUntriaged pointer.
+  raw_ptr<content::WebContents, DanglingUntriaged> foreground_web_contents_ =
+      nullptr;
   GURL last_recorded_web_app_start_url_;
 
   const raw_ptr<Profile> profile_;

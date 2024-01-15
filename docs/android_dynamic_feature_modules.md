@@ -144,13 +144,12 @@ foo_module_desc = {
 ```
 
 Then, add the module descriptor to the appropriate descriptor list in
-//chrome/android/modules/chrome_feature_modules.gni, e.g. the Chrome Modern
-list:
+//chrome/android/modules/chrome_feature_modules.gni, e.g. the Chrome list:
 
 ```gn
 import("//chrome/android/modules/foo/foo_module.gni")
 ...
-chrome_modern_module_descs += [ foo_module_desc ]
+chrome_module_descs += [ foo_module_desc ]
 ```
 
 The next step is to add Foo to the list of feature modules for UMA recording.
@@ -189,7 +188,7 @@ UI. To do this, add a string to
 should go in the module, not here (in the base module).
 ***
 
-Congrats! You added the DFM Foo to Monochrome. That is a big step but not very
+Congrats! You added the DFM Foo to Chrome. That is a big step but not very
 useful so far. In the next sections you'll learn how to add code and resources
 to it.
 
@@ -421,18 +420,19 @@ base module's native code (DFM native code can call base module code directly).
 
 #### JNI
 
-Read the `jni_generator` [docs](../base/android/jni_generator/README.md) before
+Read the `jni_generator` [docs](../third_party/jni_zero/README.md) before
 reading this section.
 
 There are some subtleties to how JNI registration works with DFMs:
 
 * Generated wrapper `ClassNameJni` classes are packaged into the DFM's dex file
-* The class containing the actual native definitions, `GEN_JNI.java`, is always
-  stored in the base module
-* If the DFM is only included in bundles that use [implicit JNI
-  registration](android_native_libraries.md#JNI-Native-Methods-Resolution) (i.e.
-  Monochrome and newer), then no extra consideration is necessary
-* Otherwise, the DFM will need to provide a `generate_jni_registration` target
+* The class containing the actual native definitions,
+  `<module_name>_GEN_JNI.java`, is currently stored in the base module, but
+  could be moved out
+* The `Natives` interface you provide will need to be annotated with your module
+  name as an argument to `NativeMethods`, eg. `@NativeMethods("foo")`, resulting
+  in a uniquely named `foo_GEN_JNI.java`
+* The DFM will need to provide a `generate_jni_registration` target
   that will generate all of the native registration functions
 
 #### Calling DFM native code via JNI
@@ -453,18 +453,14 @@ First, build a module native interface. Supply a JNI method named
 on all Chrome build variants, including Monochrome (unlike base module JNI).
 
 ```c++
-#include "base/android/jni_generator/jni_generator_helper.h"
+#include "third_party/jni_zero/jni_zero_helper.h"
 #include "base/android/jni_utils.h"
 #include "chrome/android/modules/foo/internal/jni_registration.h"
 
 extern "C" {
 // This JNI registration method is found and called by module framework code.
-JNI_GENERATOR_EXPORT bool JNI_OnLoad_foo(JNIEnv* env) {
-  if (!base::android::IsSelectiveJniRegistrationEnabled(env) &&
-      !foo::RegisterNonMainDexNatives(env)) {
-    return false;
-  }
-  if (!foo::RegisterMainDexNatives(env)) {
+JNI_BOUNDARY_EXPORT bool JNI_OnLoad_foo(JNIEnv* env) {
+  if (!foo::RegisterNatives(env)) {
     return false;
   }
   return true;
@@ -507,9 +503,9 @@ component("foo") {
 # the base module).
 generate_jni_registration("jni_registration") {
   targets = [ "//chrome/browser/foo/internal:java" ]
-  header_output = "$target_gen_dir/jni_registration.h"
   namespace = "foo"
   no_transitive_deps = true
+  manual_jni_registration = true
 }
 
 # This group is a convenience alias representing the module's native code,
@@ -569,7 +565,7 @@ With a declaration of the native method on the Java side:
 public class FooImpl implements Foo {
     ...
 
-    @NativeMethods
+    @NativeMethods("foo")
     interface Natives {
         int execute();
     }
@@ -961,19 +957,13 @@ metrics:
 ### chrome_public_apk and Integration Tests
 
 To make the Foo feature available in the non-bundle `chrome_public_apk`
-target, add the `java` target to the `chrome_public_common_apk_or_module_tmpl`
-in `//chrome/android/chrome_public_apk_tmpl.gni` like so:
+target, add the `java` target to the template in
+`//chrome/android/chrome_public_apk_tmpl.gni` like so:
 
 ```gn
-template("chrome_public_common_apk_or_module_tmpl") {
-  ...
-  target(_target_type, target_name) {
-    ...
-    if (_target_type != "android_app_bundle_module") {
-      deps += [
-        "//chrome/browser/foo/internal:java",
-      ]
-    }
+  # Add to where "chrome_all_java" is added:
+  if (!_is_bundle) {
+    deps += [ "//chrome/browser/foo/internal:java" ]
   }
 }
 ```

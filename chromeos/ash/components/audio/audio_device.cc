@@ -5,7 +5,9 @@
 #include "chromeos/ash/components/audio/audio_device.h"
 
 #include <stdint.h>
+
 #include "ash/constants/ash_features.h"
+#include "base/containers/contains.h"
 #include "base/format_macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
@@ -94,44 +96,46 @@ std::string AudioDevice::GetTypeString(AudioDeviceType type) {
 
 // static
 AudioDeviceType AudioDevice::GetAudioType(const std::string& node_type) {
-  if (node_type.find("HEADPHONE") != std::string::npos)
+  if (base::Contains(node_type, "HEADPHONE")) {
     return AudioDeviceType::kHeadphone;
-  else if (node_type.find("INTERNAL_MIC") != std::string::npos)
+  } else if (base::Contains(node_type, "INTERNAL_MIC")) {
     return AudioDeviceType::kInternalMic;
-  else if (node_type.find("FRONT_MIC") != std::string::npos)
+  } else if (base::Contains(node_type, "FRONT_MIC")) {
     return AudioDeviceType::kFrontMic;
-  else if (node_type.find("REAR_MIC") != std::string::npos)
+  } else if (base::Contains(node_type, "REAR_MIC")) {
     return AudioDeviceType::kRearMic;
-  else if (node_type.find("KEYBOARD_MIC") != std::string::npos)
+  } else if (base::Contains(node_type, "KEYBOARD_MIC")) {
     return AudioDeviceType::kKeyboardMic;
-  else if (node_type.find("BLUETOOTH_NB_MIC") != std::string::npos)
+  } else if (base::Contains(node_type, "BLUETOOTH_NB_MIC")) {
     return AudioDeviceType::kBluetoothNbMic;
-  else if (node_type.find("MIC") != std::string::npos)
+  } else if (base::Contains(node_type, "MIC")) {
     return AudioDeviceType::kMic;
-  else if (node_type.find("USB") != std::string::npos)
+  } else if (base::Contains(node_type, "USB")) {
     return AudioDeviceType::kUsb;
-  else if (node_type.find("BLUETOOTH") != std::string::npos)
+  } else if (base::Contains(node_type, "BLUETOOTH")) {
     return AudioDeviceType::kBluetooth;
-  else if (node_type.find("HDMI") != std::string::npos)
+  } else if (base::Contains(node_type, "HDMI")) {
     return AudioDeviceType::kHdmi;
-  else if (node_type.find("INTERNAL_SPEAKER") != std::string::npos)
+  } else if (base::Contains(node_type, "INTERNAL_SPEAKER")) {
     return AudioDeviceType::kInternalSpeaker;
+  }
   // TODO(hychao): Remove the 'AOKR' matching line after CRAS switches
   // node type naming to 'HOTWORD'.
-  else if (node_type.find("AOKR") != std::string::npos)
+  else if (base::Contains(node_type, "AOKR")) {
     return AudioDeviceType::kHotword;
-  else if (node_type.find("HOTWORD") != std::string::npos)
+  } else if (base::Contains(node_type, "HOTWORD")) {
     return AudioDeviceType::kHotword;
-  else if (node_type.find("LINEOUT") != std::string::npos)
+  } else if (base::Contains(node_type, "LINEOUT")) {
     return AudioDeviceType::kLineout;
-  else if (node_type.find("POST_MIX_LOOPBACK") != std::string::npos)
+  } else if (base::Contains(node_type, "POST_MIX_LOOPBACK")) {
     return AudioDeviceType::kPostMixLoopback;
-  else if (node_type.find("POST_DSP_LOOPBACK") != std::string::npos)
+  } else if (base::Contains(node_type, "POST_DSP_LOOPBACK")) {
     return AudioDeviceType::kPostDspLoopback;
-  else if (node_type.find("ALSA_LOOPBACK") != std::string::npos)
+  } else if (base::Contains(node_type, "ALSA_LOOPBACK")) {
     return AudioDeviceType::kAlsaLoopback;
-  else
+  } else {
     return AudioDeviceType::kOther;
+  }
 }
 
 AudioDevice::AudioDevice() = default;
@@ -141,13 +145,15 @@ AudioDevice::AudioDevice(const AudioNode& node) {
   id = node.id;
   stable_device_id_version = node.StableDeviceIdVersion();
   stable_device_id = node.StableDeviceId();
-  if (stable_device_id_version == 2)
+  if (stable_device_id_version == 2) {
     deprecated_stable_device_id = node.stable_device_id_v1;
+  }
   type = GetAudioType(node.type);
-  if (!node.name.empty() && node.name != "(default)")
+  if (!node.name.empty() && node.name != "(default)") {
     display_name = node.name;
-  else
+  } else {
     display_name = node.device_name;
+  }
   device_name = node.device_name;
   priority = GetDevicePriority(type, node.is_input);
   active = node.active;
@@ -178,6 +184,8 @@ std::string AudioDevice::ToString() const {
   base::StringAppendF(&result, "display_name = %s ", display_name.c_str());
   base::StringAppendF(&result, "device_name = %s ", device_name.c_str());
   base::StringAppendF(&result, "type = %s ", GetTypeString(type).c_str());
+  base::StringAppendF(&result, "priority = %d ", priority);
+  base::StringAppendF(&result, "user_priority = %d ", user_priority);
   base::StringAppendF(&result, "active = %s ", active ? "true" : "false");
   base::StringAppendF(&result, "plugged_time = %s ",
                       base::NumberToString(plugged_time).c_str());
@@ -191,8 +199,9 @@ std::string AudioDevice::ToString() const {
 }
 
 bool AudioDevice::IsExternalDevice() const {
-  if (!is_for_simple_usage())
+  if (!is_for_simple_usage()) {
     return false;
+  }
 
   if (is_input) {
     return !IsInternalMic();
@@ -236,12 +245,7 @@ bool LessUserPriority(const AudioDevice& a, const AudioDevice& b) {
 
 bool AudioDeviceCompare::operator()(const AudioDevice& a,
                                     const AudioDevice& b) const {
-  if (base::FeatureList::IsEnabled(
-          chromeos::features::kRobustAudioDeviceSelectLogic)) {
-    return LessUserPriority(a, b);
-  } else {
-    return LessBuiltInPriority(a, b);
-  }
+  return LessUserPriority(a, b);
 }
 
 }  // namespace ash

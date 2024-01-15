@@ -7,6 +7,9 @@
 #include <algorithm>
 #include <numeric>
 
+#include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
+#include "ui/gfx/text_constants.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/layout/layout_manager.h"
 #include "ui/views/view.h"
@@ -92,30 +95,37 @@ class SystemUIComponentsGridView::GridLayout : public views::LayoutManager {
     std::vector<int> ori_x(col_num_, 0);
     // The y of grids origin in different rows.
     std::vector<int> ori_y(row_num_, 0);
-    const std::vector<views::View*>& children = host->children();
 
     ori_x[0] = border_insets_.left();
     ori_y[0] = border_insets_.top();
-    for (size_t i = 0; i < children.size(); i++) {
-      int row_i = i / col_num_;
-      int col_i = i % col_num_;
+    for (size_t i = 0; i < children_.size(); i++) {
+      int row_index = i / col_num_;
+      int col_index = i % col_num_;
       // Calculate the origin posisitons.
-      if (row_i == 0 && col_i > 0) {
-        int col_padding = (col_i % col_group_size_) ? 0 : col_group_spacing_;
-        ori_x[col_i] = ori_x[col_i - 1] + col_width_[col_i - 1] + col_padding;
+      if (row_index == 0 && col_index > 0) {
+        int col_padding =
+            (col_index % col_group_size_) ? 0 : col_group_spacing_;
+        ori_x[col_index] =
+            ori_x[col_index - 1] + col_width_[col_index - 1] + col_padding;
       }
-      if (row_i > 0 && col_i == 0) {
-        int row_padding = (row_i % row_group_size_) ? 0 : row_group_spacing_;
-        ori_y[row_i] = ori_y[row_i - 1] + row_height_[row_i - 1] + row_padding;
+      if (row_index > 0 && col_index == 0) {
+        int row_padding =
+            (row_index % row_group_size_) ? 0 : row_group_spacing_;
+        ori_y[row_index] =
+            ori_y[row_index - 1] + row_height_[row_index - 1] + row_padding;
       }
 
+      // Skip empty instances.
+      if (!children_[i])
+        continue;
+
       // Put the view in the center of the grid.
-      int view_width = children[i]->GetPreferredSize().width();
-      int view_height = children[i]->GetPreferredSize().height();
-      children[i]->SetBoundsRect(
-          gfx::Rect(ori_x[col_i] + inner_padding_,
-                    ori_y[row_i] + (row_height_[row_i] - view_height) / 2,
-                    view_width, view_height));
+      int view_width = children_[i]->GetPreferredSize().width();
+      int view_height = children_[i]->GetPreferredSize().height();
+      children_[i]->SetBoundsRect(gfx::Rect(
+          ori_x[col_index] + inner_padding_,
+          ori_y[row_index] + (row_height_[row_index] - view_height) / 2,
+          view_width, view_height));
     }
   }
 
@@ -134,10 +144,13 @@ class SystemUIComponentsGridView::GridLayout : public views::LayoutManager {
     return gfx::Size(width, height);
   }
 
-  void ViewAdded(views::View* host, views::View* view) override {
+  // Append a view (or nullptr) in `children_`.
+  void AppendView(views::View* host, views::View* view) {
     // Number of children cannot exceed the layout capacity.
-    DCHECK_LE(host->children().size(), row_num_ * col_num_);
-    ChildViewSizeChanged(host, view);
+    DCHECK_LT(children_.size(), row_num_ * col_num_);
+    children_.emplace_back(view);
+    if (view)
+      ChildViewSizeChanged(host, view);
   }
 
   void ChildPreferredSizeChanged(views::View* host, views::View* view) {
@@ -145,24 +158,47 @@ class SystemUIComponentsGridView::GridLayout : public views::LayoutManager {
   }
 
  private:
-  // Called when the size of a `view` in the `host` children changed.
+  // Called when the size of a `view` in `children_` changed.
   void ChildViewSizeChanged(views::View* host, views::View* view) {
-    // Get the index of `view` in `host` children.
-    const std::vector<views::View*>& children = host->children();
-    auto iter = std::find(children.begin(), children.end(), view);
-    DCHECK(iter != children.end());
-    const int index = std::distance(children.begin(), iter);
+    DCHECK(view);
+
+    // Get the index of `view` in `children_`.
+    auto iter = base::ranges::find(children_, view);
+    DCHECK(iter != children_.end());
+    const int view_index = std::distance(children_.begin(), iter);
 
     // When a view size is changed, updates the max width of the column and max
     // height of the row.
-    int row_i = index / col_num_;
-    int col_i = index % col_num_;
-    gfx::Size view_size = view->GetPreferredSize();
+    int row_index = view_index / col_num_;
+    int col_index = view_index % col_num_;
 
-    row_height_[row_i] =
-        std::max(row_height_[row_i], view_size.height() + 2 * inner_padding_);
-    col_width_[col_i] =
-        std::max(col_width_[col_i], view_size.width() + 2 * inner_padding_);
+    for (size_t i = 0; i < col_num_; i++) {
+      const size_t index = row_index * col_num_ + i;
+      if (index >= children_.size()) {
+        break;
+      }
+
+      const auto* child = children_[index].get();
+      if (child) {
+        row_height_[row_index] =
+            std::max(row_height_[row_index],
+                     child->GetPreferredSize().height() + 2 * inner_padding_);
+      }
+    }
+
+    for (size_t i = 0; i < row_num_; i++) {
+      const size_t index = i * col_num_ + col_index;
+      if (index >= children_.size()) {
+        break;
+      }
+
+      const auto* child = children_[index].get();
+      if (child) {
+        col_width_[col_index] =
+            std::max(col_width_[col_index],
+                     child->GetPreferredSize().width() + 2 * inner_padding_);
+      }
+    }
 
     // Re-layout the host view.
     Layout(host);
@@ -185,6 +221,8 @@ class SystemUIComponentsGridView::GridLayout : public views::LayoutManager {
   // Spacing between column groups.
   int col_group_spacing_;
   gfx::Insets border_insets_;
+
+  std::vector<raw_ptr<views::View, VectorExperimental>> children_;
 };
 
 // -----------------------------------------------------------------------------
@@ -211,13 +249,24 @@ SystemUIComponentsGridView::~SystemUIComponentsGridView() = default;
 void SystemUIComponentsGridView::ChildPreferredSizeChanged(views::View* child) {
   // Update the layout when a child size is changed.
   grid_layout_->ChildPreferredSizeChanged(this, child);
+  PreferredSizeChanged();
 }
 
 void SystemUIComponentsGridView::AddInstanceImpl(const std::u16string& name,
                                                  views::View* instance_view) {
-  // Add a label and an instance in the contents.
-  AddChildView(std::make_unique<views::Label>(name));
-  AddChildView(instance_view);
+  views::Label* label_ptr = nullptr;
+  if (instance_view) {
+    // Add a label and an instance in the contents.
+    auto label = std::make_unique<views::Label>(name);
+    label->SetMultiLine(true);
+    label->SetHorizontalAlignment(gfx::HorizontalAlignment::ALIGN_LEFT);
+    label_ptr = AddChildView(std::move(label));
+    AddChildView(instance_view);
+  }
+
+  grid_layout_->AppendView(this, label_ptr);
+  grid_layout_->AppendView(this, instance_view);
+  PreferredSizeChanged();
 }
 
 }  // namespace ash

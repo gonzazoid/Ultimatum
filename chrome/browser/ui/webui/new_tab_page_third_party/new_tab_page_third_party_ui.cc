@@ -7,6 +7,7 @@
 #include <memory>
 #include <utility>
 
+#include "chrome/browser/browser_features.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/themes/theme_properties.h"
 #include "chrome/browser/themes/theme_service.h"
@@ -36,19 +37,17 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/color_utils.h"
-#include "ui/resources/grit/webui_generated_resources.h"
+#include "ui/resources/grit/webui_resources.h"
 #include "url/url_util.h"
 
 using content::BrowserContext;
 using content::WebContents;
 
 namespace {
-
-content::WebUIDataSource* CreateNewTabPageThirdPartyUiHtmlSource(
-    Profile* profile,
-    WebContents* web_contents) {
-  content::WebUIDataSource* source = content::WebUIDataSource::Create(
-      chrome::kChromeUINewTabPageThirdPartyHost);
+void CreateAndAddNewTabPageThirdPartyUiHtmlSource(Profile* profile,
+                                                  WebContents* web_contents) {
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile, chrome::kChromeUINewTabPageThirdPartyHost);
   ui::Accelerator undo_accelerator(ui::VKEY_Z, ui::EF_PLATFORM_ACCELERATOR);
   source->AddString("undoDescription", l10n_util::GetStringFUTF16(
                                            IDS_UNDO_DESCRIPTION,
@@ -103,6 +102,13 @@ content::WebUIDataSource* CreateNewTabPageThirdPartyUiHtmlSource(
       base::FeatureList::IsEnabled(
           ntp_features::kNtpHandleMostVisitedNavigationExplicitly));
 
+  source->AddBoolean(
+      "prerenderEnabled",
+      base::FeatureList::IsEnabled(features::kNewTabPageTriggerForPrerender2));
+  source->AddInteger(
+      "prerenderStartTimeThreshold",
+      features::kNewTabPagePrerenderStartDelayOnMouseHoverByMiliSeconds.Get());
+
   // Needed by <cr-most-visited> but not used in
   // chrome://new-tab-page-third-party/.
   source->AddString("addLinkTitle", "");
@@ -114,7 +120,7 @@ content::WebUIDataSource* CreateNewTabPageThirdPartyUiHtmlSource(
   source->AddString("linkCantEdit", "");
   source->AddString("linkDone", "");
   source->AddString("linkEditedMsg", "");
-  source->AddString("moreActions", "");
+  source->AddString("shortcutMoreActions", "");
   source->AddString("nameField", "");
   source->AddString("restoreDefaultLinks", "");
   source->AddString("shortcutAlreadyExists", "");
@@ -125,8 +131,6 @@ content::WebUIDataSource* CreateNewTabPageThirdPartyUiHtmlSource(
       base::make_span(kNewTabPageThirdPartyResources,
                       kNewTabPageThirdPartyResourcesSize),
       IDR_NEW_TAB_PAGE_THIRD_PARTY_NEW_TAB_PAGE_THIRD_PARTY_HTML);
-
-  return source;
 }
 }  // namespace
 
@@ -137,9 +141,7 @@ NewTabPageThirdPartyUI::NewTabPageThirdPartyUI(content::WebUI* web_ui)
       profile_(Profile::FromWebUI(web_ui)),
       web_contents_(web_ui->GetWebContents()),
       navigation_start_time_(base::Time::Now()) {
-  auto* source =
-      CreateNewTabPageThirdPartyUiHtmlSource(profile_, web_contents_);
-  content::WebUIDataSource::Add(profile_, source);
+  CreateAndAddNewTabPageThirdPartyUiHtmlSource(profile_, web_contents_);
   content::URLDataSource::Add(
       profile_, std::make_unique<FaviconSource>(
                     profile_, chrome::FaviconUrlFormat::kFavicon2));

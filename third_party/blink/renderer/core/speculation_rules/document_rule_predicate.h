@@ -13,9 +13,13 @@
 
 namespace blink {
 
-class Element;
+class HTMLAnchorElement;
+class ExceptionState;
+class ExecutionContext;
 class JSONObject;
 class KURL;
+class StyleRule;
+class URLPattern;
 
 class CORE_EXPORT DocumentRulePredicate
     : public GarbageCollected<DocumentRulePredicate> {
@@ -23,19 +27,26 @@ class CORE_EXPORT DocumentRulePredicate
   DocumentRulePredicate() = default;
   virtual ~DocumentRulePredicate() = default;
 
-  static DocumentRulePredicate* Parse(JSONObject* input, const KURL& base_url);
+  static DocumentRulePredicate* Parse(JSONObject* input,
+                                      const KURL& ruleset_base_url,
+                                      ExecutionContext* context,
+                                      ExceptionState& exception_state,
+                                      String* out_error = nullptr);
   // Creates a predicate that matches with any link (i.e. Matches() below will
   // always returns true).
   static DocumentRulePredicate* MakeDefaultPredicate();
 
-  virtual bool Matches(const Element& link) const = 0;
+  virtual bool Matches(const HTMLAnchorElement& link) const = 0;
+  virtual HeapVector<Member<StyleRule>> GetStyleRules() const = 0;
 
   // Methods for testing.
-  enum class Type { kAnd, kOr, kNot };
+  enum class Type { kAnd, kOr, kNot, kURLPatterns, kCSSSelectors };
   virtual String ToString() const = 0;
   virtual Type GetTypeForTesting() const = 0;
   virtual HeapVector<Member<DocumentRulePredicate>> GetSubPredicatesForTesting()
       const;
+  virtual HeapVector<Member<URLPattern>> GetURLPatternsForTesting() const;
+  virtual HeapVector<Member<StyleRule>> GetStyleRulesForTesting() const;
 
   virtual void Trace(Visitor*) const;
 };

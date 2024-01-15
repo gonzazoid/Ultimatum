@@ -7,6 +7,7 @@
 
 #include "third_party/blink/public/platform/web_vector.h"
 #include "third_party/blink/renderer/bindings/core/v8/maplike.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_sync_iterator_rtc_stats_report.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_stats.h"
@@ -15,32 +16,31 @@
 
 namespace blink {
 
-// Returns the group ids for non-standardized members which should be exposed
-// based on what Origin Trials are running.
-Vector<webrtc::NonStandardGroupId> GetExposedGroupIds(
-    const ScriptState* script_state);
-
 // https://w3c.github.io/webrtc-pc/#rtcstatsreport-object
-class RTCStatsReport final
-    : public ScriptWrappable,
-      public Maplike<String, IDLString, v8::Local<v8::Object>, IDLObject> {
+class RTCStatsReport final : public ScriptWrappable,
+                             public Maplike<RTCStatsReport> {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
-  RTCStatsReport(std::unique_ptr<RTCStatsReportPlatform>);
+  explicit RTCStatsReport(std::unique_ptr<RTCStatsReportPlatform>);
 
   uint32_t size() const;
 
   // Maplike<String, v8::Local<v8::Value>>
-  PairIterable<String, IDLString, v8::Local<v8::Object>, IDLObject>::
-      IterationSource*
-      StartIteration(ScriptState*, ExceptionState&) override;
+  PairSyncIterable<RTCStatsReport>::IterationSource* CreateIterationSource(
+      ScriptState*,
+      ExceptionState&) override;
   bool GetMapEntry(ScriptState*,
                    const String& key,
-                   v8::Local<v8::Object>&,
+                   ScriptValue&,
                    ExceptionState&) override;
 
  private:
+  bool GetMapEntryIdl(ScriptState*,
+                      const String& key,
+                      ScriptValue&,
+                      ExceptionState&);
+
   std::unique_ptr<RTCStatsReportPlatform> report_;
 };
 

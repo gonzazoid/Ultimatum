@@ -14,8 +14,6 @@
 #include "mojo/public/cpp/base/file_path_mojom_traits.h"
 #include "mojo/public/cpp/base/time_mojom_traits.h"
 #include "mojo/public/cpp/base/unguessable_token_mojom_traits.h"
-#include "net/log/net_log_source.h"
-#include "net/log/net_log_source_type.h"
 #include "services/network/public/cpp/crash_keys.h"
 #include "services/network/public/cpp/http_request_headers_mojom_traits.h"
 #include "services/network/public/cpp/isolation_info_mojom_traits.h"
@@ -26,6 +24,7 @@
 #include "services/network/public/mojom/data_pipe_getter.mojom.h"
 #include "services/network/public/mojom/devtools_observer.mojom.h"
 #include "services/network/public/mojom/ip_address_space.mojom.h"
+#include "services/network/public/mojom/trust_token_access_observer.mojom.h"
 #include "services/network/public/mojom/trust_tokens.mojom.h"
 #include "services/network/public/mojom/url_loader.mojom-shared.h"
 #include "services/network/public/mojom/url_request.mojom.h"
@@ -45,6 +44,8 @@ EnumTraits<network::mojom::SourceType, net::SourceStream::SourceType>::ToMojom(
       return network::mojom::SourceType::kDeflate;
     case net::SourceStream::SourceType::TYPE_GZIP:
       return network::mojom::SourceType::kGzip;
+    case net::SourceStream::SourceType::TYPE_ZSTD:
+      return network::mojom::SourceType::kZstd;
     case net::SourceStream::SourceType::TYPE_NONE:
       return network::mojom::SourceType::kNone;
     case net::SourceStream::SourceType::TYPE_UNKNOWN:
@@ -67,6 +68,9 @@ bool EnumTraits<network::mojom::SourceType, net::SourceStream::SourceType>::
     case network::mojom::SourceType::kGzip:
       *out = net::SourceStream::SourceType::TYPE_GZIP;
       return true;
+    case network::mojom::SourceType::kZstd:
+      *out = net::SourceStream::SourceType::TYPE_ZSTD;
+      return true;
     case network::mojom::SourceType::kNone:
       *out = net::SourceStream::SourceType::TYPE_NONE;
       return true;
@@ -88,8 +92,11 @@ bool StructTraits<network::mojom::TrustedUrlRequestParamsDataView,
   }
   out->disable_secure_dns = data.disable_secure_dns();
   out->has_user_activation = data.has_user_activation();
+  out->allow_cookies_from_browser = data.allow_cookies_from_browser();
   out->cookie_observer = data.TakeCookieObserver<
       mojo::PendingRemote<network::mojom::CookieAccessObserver>>();
+  out->trust_token_observer = data.TakeTrustTokenObserver<
+      mojo::PendingRemote<network::mojom::TrustTokenAccessObserver>>();
   out->url_loader_network_observer = data.TakeUrlLoaderNetworkObserver<
       mojo::PendingRemote<network::mojom::URLLoaderNetworkServiceObserver>>();
   out->devtools_observer = data.TakeDevtoolsObserver<
@@ -99,6 +106,8 @@ bool StructTraits<network::mojom::TrustedUrlRequestParamsDataView,
   }
   out->accept_ch_frame_observer = data.TakeAcceptChFrameObserver<
       mojo::PendingRemote<network::mojom::AcceptCHFrameObserver>>();
+  out->shared_dictionary_observer = data.TakeSharedDictionaryObserver<
+      mojo::PendingRemote<network::mojom::SharedDictionaryAccessObserver>>();
   return true;
 }
 
@@ -115,22 +124,6 @@ bool StructTraits<network::mojom::WebBundleTokenParamsDataView,
   out->handle = data.TakeWebBundleHandle<
       mojo::PendingRemote<network::mojom::WebBundleHandle>>();
   out->render_process_id = data.render_process_id();
-  return true;
-}
-
-bool StructTraits<network::mojom::NetLogSourceDataView, net::NetLogSource>::
-    Read(network::mojom::NetLogSourceDataView data, net::NetLogSource* out) {
-  if (data.source_type() >=
-      static_cast<uint32_t>(net::NetLogSourceType::COUNT)) {
-    return false;
-  }
-  base::TimeTicks start_time;
-  if (!data.ReadStartTime(&start_time)) {
-    return false;
-  }
-  *out =
-      net::NetLogSource(static_cast<net::NetLogSourceType>(data.source_type()),
-                        data.source_id(), start_time);
   return true;
 }
 
@@ -181,7 +174,11 @@ bool StructTraits<
           &out->devtools_accepted_stream_types) ||
       !data.ReadNetLogCreateInfo(&out->net_log_create_info) ||
       !data.ReadNetLogReferenceInfo(&out->net_log_reference_info) ||
-      !data.ReadNavigationRedirectChain(&out->navigation_redirect_chain)) {
+      !data.ReadNavigationRedirectChain(&out->navigation_redirect_chain) ||
+      !data.ReadAttributionReportingRuntimeFeatures(
+          &out->attribution_reporting_runtime_features) ||
+      !data.ReadAttributionReportingSrcToken(
+          &out->attribution_reporting_src_token)) {
     // Note that data.ReadTrustTokenParams is temporarily handled below.
     return false;
   }
@@ -198,11 +195,16 @@ bool StructTraits<
       data.update_first_party_url_on_redirect();
   out->load_flags = data.load_flags();
   out->resource_type = data.resource_type();
+  out->priority_incremental = data.priority_incremental();
   out->originated_from_service_worker = data.originated_from_service_worker();
   out->skip_service_worker = data.skip_service_worker();
   out->corb_detachable = data.corb_detachable();
   out->destination = data.destination();
   out->keepalive = data.keepalive();
+  out->browsing_topics = data.browsing_topics();
+  out->ad_auction_headers = data.ad_auction_headers();
+  out->shared_storage_writable_eligible =
+      data.shared_storage_writable_eligible();
   out->has_user_gesture = data.has_user_gesture();
   out->enable_load_timing = data.enable_load_timing();
   out->enable_upload_progress = data.enable_upload_progress();
@@ -213,9 +215,23 @@ bool StructTraits<
   out->upgrade_if_insecure = data.upgrade_if_insecure();
   out->is_revalidating = data.is_revalidating();
   out->is_fetch_like_api = data.is_fetch_like_api();
+  out->is_fetch_later_api = data.is_fetch_later_api();
   out->is_favicon = data.is_favicon();
   out->original_destination = data.original_destination();
   out->target_ip_address_space = data.target_ip_address_space();
+  out->has_storage_access = data.has_storage_access();
+  out->attribution_reporting_support = data.attribution_reporting_support();
+  out->attribution_reporting_eligibility =
+      data.attribution_reporting_eligibility();
+  out->is_ad_tagged = data.is_ad_tagged();
+  out->shared_dictionary_writer_enabled =
+      data.shared_dictionary_writer_enabled();
+  out->required_ip_address_space = data.required_ip_address_space();
+#if BUILDFLAG(IS_ANDROID)
+  if (!data.ReadCreatedLocation(&out->created_location)) {
+    return false;
+  }
+#endif
   return true;
 }
 

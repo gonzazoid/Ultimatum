@@ -7,6 +7,7 @@
 
 #include "base/files/file_path.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/services/storage/public/mojom/cache_storage_control.mojom.h"
 #include "content/browser/cache_storage/cache_storage_context_impl.h"
 #include "storage/browser/quota/quota_manager_proxy.h"
@@ -60,7 +61,7 @@ class CacheStorageControlWrapper : public storage::mojom::CacheStorageControl {
  private:
   SEQUENCE_CHECKER(sequence_checker_);
 
-  absl::optional<storage::StoragePolicyObserver> storage_policy_observer_;
+  std::optional<storage::StoragePolicyObserver> storage_policy_observer_;
 
   base::SequenceBound<CacheStorageContextImpl> cache_storage_context_;
   mojo::Remote<storage::mojom::CacheStorageControl> cache_storage_control_;

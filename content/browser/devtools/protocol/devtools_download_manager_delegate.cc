@@ -4,8 +4,8 @@
 
 #include "content/browser/devtools/protocol/devtools_download_manager_delegate.h"
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/task/thread_pool.h"
 #include "content/public/browser/browser_context.h"
@@ -79,7 +79,7 @@ bool DevToolsDownloadManagerDelegate::DetermineDownloadTarget(
     std::move(*callback).Run(
         empty_path, download::DownloadItem::TARGET_DISPOSITION_OVERWRITE,
         download::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
-        download::DownloadItem::MixedContentStatus::UNKNOWN, empty_path,
+        download::DownloadItem::InsecureDownloadStatus::UNKNOWN, empty_path,
         empty_path, std::string() /*mime_type*/,
         download::DOWNLOAD_INTERRUPT_REASON_USER_CANCELED);
     return true;
@@ -160,7 +160,7 @@ void DevToolsDownloadManagerDelegate::OnDownloadPathGenerated(
   std::move(callback).Run(
       suggested_path, download::DownloadItem::TARGET_DISPOSITION_OVERWRITE,
       download::DOWNLOAD_DANGER_TYPE_MAYBE_DANGEROUS_CONTENT,
-      download::DownloadItem::MixedContentStatus::UNKNOWN,
+      download::DownloadItem::InsecureDownloadStatus::UNKNOWN,
       suggested_path.AddExtension(FILE_PATH_LITERAL(".crdownload")),
       suggested_path.BaseName(), std::string(),
       download::DOWNLOAD_INTERRUPT_REASON_NONE);

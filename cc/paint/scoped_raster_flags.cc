@@ -23,12 +23,12 @@ void ScopedRasterFlags::DecodeImageShader(const SkMatrix& ctm) {
   if (image.IsPaintWorklet()) {
     ImageProvider::ScopedResult result =
         decode_stashing_image_provider_->GetRasterContent(DrawImage(image));
-    if (result && result.paint_record()) {
+    if (result && result.has_paint_record()) {
       const PaintShader* shader = flags()->getShader();
       SkMatrix local_matrix = shader->GetLocalMatrix();
       auto decoded_shader = PaintShader::MakePaintRecord(
-          sk_ref_sp<PaintRecord>(result.paint_record()), shader->tile(),
-          shader->tx(), shader->tx(), &local_matrix);
+          result.ReleaseAsRecord(), shader->tile(), shader->tx(), shader->tx(),
+          &local_matrix);
       MutableFlags()->setShader(decoded_shader);
     } else {
       decode_failed_ = true;
@@ -119,8 +119,8 @@ void ScopedRasterFlags::AdjustStrokeIfNeeded(const SkMatrix& ctm) {
     // Use modulated hairline when possible, as it is faster and produces
     // results closer to the original intent.
     MutableFlags()->setStrokeWidth(0);
-    MutableFlags()->setAlpha(std::round(
-        flags()->getAlpha() * std::sqrt(stroke_vec.x() * stroke_vec.y())));
+    MutableFlags()->setAlphaf(flags()->getAlphaf() *
+                              std::sqrt(stroke_vec.x() * stroke_vec.y()));
     return;
   }
 

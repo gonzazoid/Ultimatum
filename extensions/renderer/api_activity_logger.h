@@ -7,8 +7,8 @@
 
 #include <memory>
 #include <string>
-#include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/values.h"
 #include "extensions/renderer/ipc_message_sender.h"
 #include "extensions/renderer/object_backed_native_handler.h"
@@ -39,7 +39,7 @@ class APIActivityLogger : public ObjectBackedNativeHandler {
   static void LogAPICall(IPCMessageSender* ipc_sender,
                          v8::Local<v8::Context> context,
                          const std::string& call_name,
-                         const std::vector<v8::Local<v8::Value>>& arguments);
+                         const v8::LocalVector<v8::Value>& arguments);
 
   // Notifies the browser that an API event has been dispatched, if and only if
   // activity logging is enabled.
@@ -60,20 +60,12 @@ class APIActivityLogger : public ObjectBackedNativeHandler {
   void LogForJS(const IPCMessageSender::ActivityLogCallType call_type,
                 const v8::FunctionCallbackInfo<v8::Value>& args);
 
-  // Common implementation method for sending a logging IPC.
-  static void LogInternal(IPCMessageSender* ipc_sender,
-                          const IPCMessageSender::ActivityLogCallType call_type,
-                          const std::string& extension_id,
-                          const std::string& call_name,
-                          base::Value::List arguments,
-                          const std::string& extra);
-
   // Not owned by |this|.
   // This is owned by NativeExtensionBindingsSystem.
   //
   // Valid to use so long as there's a valid ScriptContext associated with the
   // call-site.
-  IPCMessageSender* ipc_sender_ = nullptr;
+  raw_ptr<IPCMessageSender, ExperimentalRenderer> ipc_sender_ = nullptr;
 };
 
 }  // namespace extensions

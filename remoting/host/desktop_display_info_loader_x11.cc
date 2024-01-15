@@ -2,12 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "remoting/host/desktop_display_info_loader.h"
+#include "remoting/host/desktop_display_info_loader_x11.h"
 
 #include <algorithm>
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
+#include "remoting/base/constants.h"
 #include "remoting/base/logging.h"
 #include "remoting/host/x11_display_util.h"
 #include "ui/base/x/x11_display_util.h"
@@ -16,43 +17,18 @@
 #include "ui/gfx/x/event.h"
 #include "ui/gfx/x/future.h"
 #include "ui/gfx/x/randr.h"
-#include "ui/gfx/x/x11_window_event_manager.h"
+#include "ui/gfx/x/window_event_manager.h"
 
 namespace remoting {
 
 namespace {
 
 // Monitors were added in XRANDR 1.5.
-constexpr int kMinRandrVersion = 105;
+constexpr std::pair<uint32_t, uint32_t> kMinRandrVersion{1, 5};
 
-class DesktopDisplayInfoLoaderX11 : public DesktopDisplayInfoLoader,
-                                    public x11::EventObserver {
- public:
-  DesktopDisplayInfoLoaderX11() = default;
-  ~DesktopDisplayInfoLoaderX11() override;
+}  // namespace
 
-  // DesktopDisplayInfoLoader implementation.
-  void Init() override;
-  DesktopDisplayInfo GetCurrentDisplayInfo() override;
-
-  // x11::EventObserver implementation.
-  void OnEvent(const x11::Event& xevent) override;
-
- private:
-  // Queries the X server and updates |monitors_|.
-  void LoadMonitors();
-
-  // XRANDR version as MAJOR * 100 + MINOR, or 0 if XRANDR is not present.
-  int xrandr_version_ = 0;
-
-  raw_ptr<x11::Connection> connection_ = nullptr;
-  raw_ptr<x11::RandR> randr_ = nullptr;
-
-  // Selector for root window events.
-  std::unique_ptr<x11::XScopedEventSelector> root_window_events_;
-
-  std::vector<x11::RandR::MonitorInfo> monitors_;
-};
+DesktopDisplayInfoLoaderX11::DesktopDisplayInfoLoaderX11() = default;
 
 DesktopDisplayInfoLoaderX11::~DesktopDisplayInfoLoaderX11() {
   if (connection_) {
@@ -69,13 +45,14 @@ void DesktopDisplayInfoLoaderX11::Init() {
     return;
   }
 
-  xrandr_version_ = ui::GetXrandrVersion();
-  if (xrandr_version_ < kMinRandrVersion) {
-    HOST_LOG << "XRANDR version (" << xrandr_version_ << ") is too old.";
+  auto randr_version = connection_->randr_version();
+  if (randr_version < kMinRandrVersion) {
+    HOST_LOG << "XRANDR version (" << randr_version.first << ", "
+             << randr_version.second << ") is too old.";
     return;
   }
 
-  root_window_events_ = std::make_unique<x11::XScopedEventSelector>(
+  root_window_events_ = connection_->ScopedSelectEvent(
       ui::GetX11RootWindow(), x11::EventMask::StructureNotify);
   auto randr_event_mask =
       x11::RandR::NotifyMask::ScreenChange | x11::RandR::NotifyMask::CrtcChange;
@@ -89,7 +66,6 @@ DesktopDisplayInfo DesktopDisplayInfoLoaderX11::GetCurrentDisplayInfo() {
 
   for (const auto& monitor : monitors_) {
     DisplayGeometry info;
-
     // webrtc::ScreenCapturerX11 uses the |name| Atom as the monitor ID.
     info.id = static_cast<int32_t>(monitor.name);
     info.is_default = monitor.primary;
@@ -97,7 +73,15 @@ DesktopDisplayInfo DesktopDisplayInfoLoaderX11::GetCurrentDisplayInfo() {
     info.y = monitor.y;
     info.width = monitor.width;
     info.height = monitor.height;
-    info.dpi = GetMonitorDpi(monitor).x();
+
+    // Hard-code the default DPI instead of calculating it from the monitor's
+    // resolution and physical size. This avoids an issue where the website
+    // pre-multiplies the ClientResolution sizes by the host's pixels/DIPs
+    // ratio, sometimes leading to a feedback loop of ever-increasing resizes.
+    //
+    // TODO: b/309174172 - Change this back to GetMonitorDpi(monitor).x() when
+    // the website issue has been addressed.
+    info.dpi = kDefaultDpi;
     info.bpp = 24;
 
     result.AddDisplay(info);
@@ -124,8 +108,9 @@ void DesktopDisplayInfoLoaderX11::OnEvent(const x11::Event& xevent) {
 }
 
 void DesktopDisplayInfoLoaderX11::LoadMonitors() {
-  if (xrandr_version_ < kMinRandrVersion)
+  if (connection_->randr_version() < kMinRandrVersion) {
     return;
+  }
 
   auto reply = randr_->GetMonitors({ui::GetX11RootWindow()}).Sync();
   if (reply) {
@@ -133,13 +118,6 @@ void DesktopDisplayInfoLoaderX11::LoadMonitors() {
   } else {
     LOG(ERROR) << "RRGetMonitors request failed.";
   }
-}
-
-}  // namespace
-
-// static
-std::unique_ptr<DesktopDisplayInfoLoader> DesktopDisplayInfoLoader::Create() {
-  return std::make_unique<DesktopDisplayInfoLoaderX11>();
 }
 
 }  // namespace remoting

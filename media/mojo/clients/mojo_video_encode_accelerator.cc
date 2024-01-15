@@ -6,11 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/threading/thread_restrictions.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "gpu/ipc/client/gpu_channel_host.h"
@@ -53,11 +54,11 @@ class VideoEncodeAcceleratorClient
   void BitstreamBufferReady(
       int32_t bitstream_buffer_id,
       const media::BitstreamBufferMetadata& metadata) override;
-  void NotifyError(VideoEncodeAccelerator::Error error) override;
+  void NotifyErrorStatus(const EncoderStatus& status) override;
   void NotifyEncoderInfoChange(const VideoEncoderInfo& info) override;
 
  private:
-  raw_ptr<VideoEncodeAccelerator::Client> client_;
+  raw_ptr<VideoEncodeAccelerator::Client, DanglingUntriaged> client_;
   mojo::AssociatedReceiver<mojom::VideoEncodeAcceleratorClient> receiver_;
 };
 
@@ -89,10 +90,11 @@ void VideoEncodeAcceleratorClient::BitstreamBufferReady(
   client_->BitstreamBufferReady(bitstream_buffer_id, metadata);
 }
 
-void VideoEncodeAcceleratorClient::NotifyError(
-    VideoEncodeAccelerator::Error error) {
+void VideoEncodeAcceleratorClient::NotifyErrorStatus(
+    const EncoderStatus& status) {
   DVLOG(2) << __func__;
-  client_->NotifyError(error);
+  CHECK(!status.is_ok());
+  client_->NotifyErrorStatus(status);
 }
 
 void VideoEncodeAcceleratorClient::NotifyEncoderInfoChange(
@@ -149,6 +151,7 @@ bool MojoVideoEncodeAccelerator::Initialize(
       std::move(media_log_pending_receiver));
 
   bool result = false;
+  base::ScopedAllowBaseSyncPrimitives allow;
   vea_->Initialize(config, std::move(vea_client_remote),
                    std::move(media_log_pending_remote), &result);
   return result;
@@ -156,8 +159,16 @@ bool MojoVideoEncodeAccelerator::Initialize(
 
 void MojoVideoEncodeAccelerator::Encode(scoped_refptr<VideoFrame> frame,
                                         bool force_keyframe) {
+  media::VideoEncoder::EncodeOptions options;
+  options.key_frame = force_keyframe;
+  Encode(std::move(frame), options);
+}
+
+void MojoVideoEncodeAccelerator::Encode(
+    scoped_refptr<VideoFrame> frame,
+    const VideoEncoder::EncodeOptions& options) {
   TRACE_EVENT1("media", "MojoVideoEncodeAccelerator::Encode", "timestamp",
-               frame->timestamp());
+               frame->timestamp().InMicroseconds());
   DVLOG(2) << __func__ << " tstamp=" << frame->timestamp();
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK_EQ(VideoFrame::NumPlanes(frame->format()),
@@ -169,12 +180,16 @@ void MojoVideoEncodeAccelerator::Encode(scoped_refptr<VideoFrame> frame,
                             static_cast<int>(VideoFrame::STORAGE_MAX) + 1);
   if (frame->format() != PIXEL_FORMAT_I420 &&
       frame->format() != PIXEL_FORMAT_NV12) {
-    DLOG(ERROR) << "Unexpected pixel format: "
-                << VideoPixelFormatToString(frame->format());
+    if (vea_client_) {
+      vea_client_->NotifyErrorStatus(
+          {EncoderStatus::Codes::kUnsupportedFrameFormat,
+           "Unexpected pixel format: " +
+               VideoPixelFormatToString(frame->format())});
+    }
     return;
   }
 
-  vea_->Encode(frame, force_keyframe, base::DoNothingWithBoundArgs(frame));
+  vea_->Encode(frame, options, base::DoNothingWithBoundArgs(frame));
 }
 
 void MojoVideoEncodeAccelerator::UseOutputBitstreamBuffer(
@@ -190,22 +205,24 @@ void MojoVideoEncodeAccelerator::UseOutputBitstreamBuffer(
 
 void MojoVideoEncodeAccelerator::RequestEncodingParametersChange(
     const Bitrate& bitrate,
-    uint32_t framerate) {
+    uint32_t framerate,
+    const absl::optional<gfx::Size>& size) {
   DVLOG(2) << __func__;
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(vea_.is_bound());
 
-  vea_->RequestEncodingParametersChangeWithBitrate(bitrate, framerate);
+  vea_->RequestEncodingParametersChangeWithBitrate(bitrate, framerate, size);
 }
 
 void MojoVideoEncodeAccelerator::RequestEncodingParametersChange(
     const VideoBitrateAllocation& bitrate,
-    uint32_t framerate) {
+    uint32_t framerate,
+    const absl::optional<gfx::Size>& size) {
   DVLOG(2) << __func__;
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(vea_.is_bound());
 
-  vea_->RequestEncodingParametersChangeWithLayers(bitrate, framerate);
+  vea_->RequestEncodingParametersChangeWithLayers(bitrate, framerate, size);
 }
 
 bool MojoVideoEncodeAccelerator::IsFlushSupported() {
@@ -242,8 +259,9 @@ MojoVideoEncodeAccelerator::~MojoVideoEncodeAccelerator() {
 void MojoVideoEncodeAccelerator::MojoDisconnectionHandler() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (vea_client_) {
-    vea_client_->NotifyError(
-        VideoEncodeAccelerator::Error::kPlatformFailureError);
+    vea_client_->NotifyErrorStatus(
+        {EncoderStatus::Codes::kEncoderMojoConnectionError,
+         "Mojo is disconnected"});
   }
 }
 

@@ -7,14 +7,10 @@
 #import "base/metrics/user_metrics.h"
 #import "components/signin/public/identity_manager/identity_manager.h"
 #import "components/signin/public/identity_manager/primary_account_mutator.h"
-#import "components/sync/driver/sync_service.h"
+#import "components/sync/service/sync_service.h"
 #import "components/unified_consent/unified_consent_metrics.h"
-#import "ios/chrome/browser/signin/authentication_service.h"
+#import "ios/chrome/browser/signin/model/authentication_service.h"
 #import "ios/chrome/browser/ui/authentication/signin/advanced_settings_signin/advanced_settings_signin_navigation_controller.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using base::RecordAction;
 using base::UserMetricsAction;
@@ -61,14 +57,14 @@ using unified_consent::metrics::RecordSyncSetupDataTypesHistrogam;
     case SigninCoordinatorResultSuccess: {
       RecordAction(
           UserMetricsAction("Signin_Signin_ConfirmAdvancedSyncSettings"));
-      RecordSyncSetupDataTypesHistrogam(self.syncService->GetUserSettings(),
-                                        self.prefService);
+      RecordSyncSetupDataTypesHistrogam(self.syncService->GetUserSettings());
       break;
     }
     case SigninCoordinatorResultCanceledByUser:
       // Canceling from the advanced sync settings view is not possible.
       NOTREACHED();
       break;
+    case SigninCoordinatorResultDisabled:
     case SigninCoordinatorResultInterrupted:
       RecordAction(
           UserMetricsAction("Signin_Signin_AbortAdvancedSyncSettings"));
@@ -82,16 +78,14 @@ using unified_consent::metrics::RecordSyncSetupDataTypesHistrogam;
 - (void)revertToSigninState:(IdentitySigninState)originalState {
   switch (originalState) {
     case IdentitySigninStateSignedOut: {
-      self.authenticationService->SignOut(signin_metrics::ABORT_SIGNIN,
-                                          /*force_clear_browsing_data=*/false,
-                                          nil);
+      self.authenticationService->SignOut(
+          signin_metrics::ProfileSignout::kAbortSignin,
+          /*force_clear_browsing_data=*/false, nil);
       break;
     }
     case IdentitySigninStateSignedInWithSyncDisabled: {
       // Sync consent is not granted in Advanced Settings, therefore
       // there should be no syncing identity.
-      DCHECK(!self.authenticationService->GetPrimaryIdentity(
-          signin::ConsentLevel::kSync));
       break;
     }
     case IdentitySigninStateSignedInWithSyncEnabled: {

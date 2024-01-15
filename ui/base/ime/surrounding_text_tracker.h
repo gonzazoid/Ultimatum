@@ -9,7 +9,9 @@
 #include <string>
 
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_piece.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 #include "ui/base/ime/text_input_client.h"
 #include "ui/gfx/range/range.h"
 
@@ -25,12 +27,26 @@ struct CompositionText;
 // processed in a common manner.
 class COMPONENT_EXPORT(UI_BASE_IME) SurroundingTextTracker {
  public:
-  struct State {
+  struct COMPONENT_EXPORT(UI_BASE_IME) State {
+    // Returns the range of the surrounding text in UTF-16.
+    gfx::Range GetSurroundingTextRange() const;
+
+    // Returns the string piece of the composition range of the
+    // |surrounding_text|.
+    // If composition is out of the range, nullopt will be returned.
+    absl::optional<base::StringPiece16> GetCompositionText() const;
+
     // Whole surrounding text, specifically this may include composition text.
     std::u16string surrounding_text;
+
+    // Offset of the surrounding_text within the text input client.
+    // This does not affect to either selection nor composition.
+    size_t utf16_offset;
+
     // Selection range. If it is empty, it means the cursor. Must not be
     // InvalidRange. Must be fit in |surrounding_text| range.
     gfx::Range selection;
+
     // Composition range if it has. Maybe empty if there's no composition text.
     // Must not be InvalidRange. Must be fit in |surrounding_text| range.
     gfx::Range composition;
@@ -44,8 +60,15 @@ class COMPONENT_EXPORT(UI_BASE_IME) SurroundingTextTracker {
 
   const State& predicted_state() const { return predicted_state_; }
 
-  // Resets the internal state, including held histories.
+  // Resets the internal state, including composition state, surrounding text
+  // and held histories. Used when the entire state needs to be reset.
+  // TODO(b/267944900): Investigate if this is still needed once
+  // kWaylandCancelComposition flag is enabled by default.
   void Reset();
+
+  // Resets only the composition state and held histories.
+  // Used when only the composition state is cancelled by the input field.
+  void CancelComposition();
 
   enum class UpdateResult {
     // Expected update entry is found in |expected_updates_|.
@@ -61,6 +84,7 @@ class COMPONENT_EXPORT(UI_BASE_IME) SurroundingTextTracker {
   // arguments, then returns kHistoryIsReset.
   // Note intentiontally ignored composition text.
   UpdateResult Update(const base::StringPiece16 surrounding_text,
+                      size_t utf16_offset,
                       const gfx::Range& selection);
 
   // The following methods are used to guess new surrounding text state.
@@ -75,8 +99,29 @@ class COMPONENT_EXPORT(UI_BASE_IME) SurroundingTextTracker {
   void OnExtendSelectionAndDelete(size_t before, size_t after);
 
  private:
+  // History of events and their expected states.
+  struct Entry {
+    State state;
+    base::RepeatingClosure command;
+
+    Entry(State state, base::RepeatingClosure command);
+
+    // Copy/Move-able.
+    Entry(const Entry&);
+    Entry(Entry&& entry);
+    Entry& operator=(const Entry&);
+    Entry& operator=(Entry&&);
+
+    ~Entry();
+  };
+
+  void ResetInternal(base::StringPiece16 surrounding_text,
+                     size_t utf16_offset,
+                     const gfx::Range& selection);
+
+  // The latest known state.
   State predicted_state_;
-  std::deque<State> expected_updates_;
+  std::deque<Entry> expected_updates_;
 };
 
 }  // namespace ui

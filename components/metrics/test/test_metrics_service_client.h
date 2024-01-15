@@ -16,6 +16,10 @@
 #include "components/metrics/metrics_service_client.h"
 #include "components/metrics/test/test_metrics_log_uploader.h"
 
+namespace variations {
+class SyntheticTrialRegistry;
+}
+
 namespace metrics {
 
 // A simple concrete implementation of the MetricsServiceClient interface, for
@@ -62,7 +66,7 @@ class TestMetricsServiceClient : public MetricsServiceClient {
 
   const std::string& get_client_id() const { return client_id_; }
   // Returns a weak ref to the last created uploader.
-  TestMetricsLogUploader* uploader() { return uploader_; }
+  TestMetricsLogUploader* uploader() { return uploader_.get(); }
   void set_version_string(const std::string& str) { version_string_ = str; }
   void set_product(int32_t product) { product_ = product; }
   void set_reporting_is_managed(bool managed) {
@@ -77,18 +81,22 @@ class TestMetricsServiceClient : public MetricsServiceClient {
   void set_should_reset_client_ids_on_cloned_install(bool state) {
     should_reset_client_ids_on_cloned_install_ = state;
   }
-  void set_max_ongoing_log_size(size_t bytes) {
-    storage_limits_.max_ongoing_log_size = bytes;
+  void set_max_ongoing_log_size_bytes(size_t bytes) {
+    storage_limits_.ongoing_log_queue_limits.max_log_size_bytes = bytes;
   }
   void set_min_ongoing_log_queue_count(size_t log_count) {
-    storage_limits_.min_ongoing_log_queue_count = log_count;
+    storage_limits_.ongoing_log_queue_limits.min_log_count = log_count;
   }
-  void set_min_ongoing_log_queue_size(size_t bytes) {
-    storage_limits_.min_ongoing_log_queue_size = bytes;
+  void set_min_ongoing_log_queue_size_bytes(size_t bytes) {
+    storage_limits_.ongoing_log_queue_limits.min_queue_size_bytes = bytes;
+  }
+  void set_synthetic_trial_registry(
+      variations::SyntheticTrialRegistry* registry) {
+    synthetic_trial_registry_ = registry;
   }
 
  private:
-  std::string client_id_;
+  std::string client_id_{"0a94430b-18e5-43c8-a657-580f7e855ce1"};
   std::string version_string_{"5.0.322.0-64-devel"};
   int32_t product_ = ChromeUserMetricsExtension::CHROME;
   bool reporting_is_managed_ = false;
@@ -99,8 +107,11 @@ class TestMetricsServiceClient : public MetricsServiceClient {
       MetricsServiceClient::GetStorageLimits();
   std::set<uint64_t> allowed_user_ids_;
 
+  raw_ptr<variations::SyntheticTrialRegistry> synthetic_trial_registry_ =
+      nullptr;
+
   // A weak ref to the last created TestMetricsLogUploader.
-  raw_ptr<TestMetricsLogUploader> uploader_ = nullptr;
+  base::WeakPtr<TestMetricsLogUploader> uploader_ = nullptr;
 };
 
 }  // namespace metrics

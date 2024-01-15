@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -84,6 +84,22 @@ class CONTENT_EXPORT ServiceWorkerFetchDispatcher {
 
   bool FetchCallbackIsNull() { return fetch_callback_.is_null(); }
 
+  static scoped_refptr<network::SharedURLLoaderFactory>
+  CreateNetworkURLLoaderFactory(
+      scoped_refptr<ServiceWorkerContextWrapper> context_wrapper,
+      int frame_tree_node_id);
+
+  static void ForceDisableHighPriorityFetchResponseCallbackForTesting(
+      bool force_disable);
+
+  void set_race_network_request_token(base::UnguessableToken token) {
+    race_network_request_token_ = token;
+  }
+  void set_race_network_request_loader_factory(
+      mojo::PendingRemote<network::mojom::URLLoaderFactory> factory) {
+    race_network_request_loader_factory_ = std::move(factory);
+  }
+
  private:
   class ResponseCallback;
   class URLLoaderAssets;
@@ -135,6 +151,10 @@ class CONTENT_EXPORT ServiceWorkerFetchDispatcher {
   // event.
   mojo::PendingReceiver<network::mojom::URLLoaderClient>
       preload_url_loader_client_receiver_;
+
+  base::UnguessableToken race_network_request_token_;
+  mojo::PendingRemote<network::mojom::URLLoaderFactory>
+      race_network_request_loader_factory_;
 
   // Whether to dispatch an offline-capability-check fetch event.
   const bool is_offline_capability_check_ = false;

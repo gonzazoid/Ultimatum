@@ -7,21 +7,35 @@
 #include <list>
 #include <utility>
 
+#include "ash/app_list/app_list_util.h"
+#include "ash/public/cpp/arc_game_controls_flag.h"
 #include "ash/public/cpp/window_properties.h"
 #include "ash/utility/transformer_util.h"
-#include "base/bind.h"
+#include "base/check_op.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
+#include "chrome/browser/ash/arc/input_overlay/actions/action.h"
 #include "chrome/browser/ash/arc/input_overlay/actions/action_move.h"
 #include "chrome/browser/ash/arc/input_overlay/actions/action_tap.h"
+#include "chrome/browser/ash/arc/input_overlay/actions/input_element.h"
 #include "chrome/browser/ash/arc/input_overlay/arc_input_overlay_ukm.h"
 #include "chrome/browser/ash/arc/input_overlay/arc_input_overlay_uma.h"
+#include "chrome/browser/ash/arc/input_overlay/constants.h"
+#include "chrome/browser/ash/arc/input_overlay/display_overlay_controller.h"
 #include "chrome/browser/ash/arc/input_overlay/touch_id_manager.h"
+#include "chrome/browser/ash/arc/input_overlay/touch_injector_observer.h"
+#include "chrome/browser/ash/arc/input_overlay/ui/ui_utils.h"
+#include "chrome/browser/ash/arc/input_overlay/util.h"
 #include "ui/aura/window.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/event_constants.h"
+#include "ui/events/event_source.h"
+#include "ui/gfx/geometry/rect_f.h"
+#include "ui/gfx/geometry/vector2d_f.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/window/non_client_view.h"
@@ -30,8 +44,7 @@
 #undef ENABLED_VLOG_LEVEL
 #define ENABLED_VLOG_LEVEL 1
 
-namespace arc {
-namespace input_overlay {
+namespace arc::input_overlay {
 namespace {
 // Strings for parsing actions.
 constexpr char kTapAction[] = "tap";
@@ -49,7 +62,7 @@ void RemoveActionsWithSameID(std::vector<std::unique_ptr<Action>>& actions) {
   auto it = actions.begin();
   while (it != actions.end()) {
     int id = it->get()->id();
-    if (ids.find(id) == ids.end()) {
+    if (!ids.contains(id)) {
       ids.insert(id);
       it++;
     } else {
@@ -63,28 +76,40 @@ void RemoveActionsWithSameID(std::vector<std::unique_ptr<Action>>& actions) {
 // Parse Json to different types of actions.
 std::vector<std::unique_ptr<Action>> ParseJsonToActions(
     TouchInjector* touch_injector,
-    const base::Value& root) {
+    const base::Value::Dict& root) {
   std::vector<std::unique_ptr<Action>> actions;
 
   // Parse tap actions if they exist.
-  const auto* tap_act_list = root.FindListKey(kTapAction);
-  if (tap_act_list && tap_act_list->is_list()) {
-    for (const auto& val : tap_act_list->GetList()) {
+  if (const auto* tap_act_list = root.FindList(kTapAction)) {
+    for (const auto& val : *tap_act_list) {
+      auto* val_dict = val.GetIfDict();
+      if (!val_dict) {
+        LOG(ERROR) << "Value must be a dictionary.";
+        continue;
+      }
       auto action = std::make_unique<ActionTap>(touch_injector);
-      bool succeed = action->ParseFromJson(val);
-      if (succeed)
+      action->set_original_type(ActionType::TAP);
+      bool succeed = action->ParseFromJson(*val_dict);
+      if (succeed) {
         actions.emplace_back(std::move(action));
+      }
     }
   }
 
   // Parse move actions if they exist.
-  const base::Value* move_act_list = root.FindListKey(kMoveAction);
-  if (move_act_list && move_act_list->is_list()) {
-    for (const base::Value& val : move_act_list->GetList()) {
+  if (const auto* move_act_list = root.FindList(kMoveAction)) {
+    for (const auto& val : *move_act_list) {
+      auto* val_dict = val.GetIfDict();
+      if (!val_dict) {
+        LOG(ERROR) << "Value must be a dictionary.";
+        continue;
+      }
       auto action = std::make_unique<ActionMove>(touch_injector);
-      bool succeed = action->ParseFromJson(val);
-      if (succeed)
+      action->set_original_type(ActionType::MOVE);
+      bool succeed = action->ParseFromJson(*val_dict);
+      if (succeed) {
         actions.emplace_back(std::move(action));
+      }
     }
   }
 
@@ -95,19 +120,88 @@ std::vector<std::unique_ptr<Action>> ParseJsonToActions(
   return actions;
 }
 
-// Return an Action which is not |target_action| and has input overlapped with
-// |input_element| in |actions|.
+// Return an Action which is not `target_action` and has input overlapped with
+// `input_element` in `actions`.
 Action* FindActionWithOverlapInputElement(
     std::vector<std::unique_ptr<Action>>& actions,
     Action* target_action,
     const InputElement& input_element) {
   for (auto& action : actions) {
-    if (action.get() == target_action)
+    if (action.get() == target_action) {
       continue;
-    if (action->IsOverlapped(input_element))
+    }
+    if (action->IsOverlapped(input_element)) {
       return action.get();
+    }
   }
   return nullptr;
+}
+
+bool ProcessKeyEventOnFocusedMenuEntry(const ui::KeyEvent& event) {
+  const auto key_code = event.key_code();
+  // If it is allowed to move, the arrow key event moves the position
+  // instead of getting back to view mode.
+  if (ash::IsArrowKey(key_code) || key_code == ui::KeyboardCode::VKEY_SPACE ||
+      key_code == ui::KeyboardCode::VKEY_RETURN ||
+      event.type() != ui::ET_KEY_PRESSED) {
+    return true;
+  }
+  return false;
+}
+
+// Find the smallest integer larger than `kMaxDefaultActionID` and not in
+// `id_list` by binary search.
+//
+// `id_list` has below requirements:
+//  - All the integers in `id_list` are larger than `kMaxDefaultActionID`.
+//  - No repeated integer in `id_list`.
+//  - `id_list` is sorted.
+//
+// For example, if `kMaxDefaultActionID + 1` == 0, the `id_list` could be {0, 1,
+// 2, 3, ..., x}, each index is the value if there is no missing integer.
+//  - If there is `id_list[index] == index`, it means there is no integer
+//    missing before `index`, then check the values after `index`.
+//  - If there is `id_list[index] > index`, it means there is at least one
+//    missing integer before `index`.
+//  - Since there is no repeating integer, `id_list[index] < index` shouldn't
+//    happen.
+int FindNewCustomActionID(const std::vector<int>& id_list) {
+  // Index `end` is excluded.
+  int start = 0, end = id_list.size();
+  while (start < end) {
+    int mid = start + (end - start) / 2;
+    if (id_list[mid] == mid + kMaxDefaultActionID + 1) {
+      // There is no missing integer in the range of [start, mid], so check the
+      // values after `mid`.
+      start = mid + 1;
+    } else if (id_list[mid] > mid + kMaxDefaultActionID + 1) {
+      // There is at least one missing integer in the range of [start, mid), so
+      // check the values before `mid`.
+      end = mid;
+    } else {
+      // This is unlikely to happen because there is no repeated number in
+      // `id_list`.
+      NOTREACHED();
+    }
+  }
+
+  // In the end, `start` points at the position where the smallest missing
+  // integer should be and the value is `start + kMaxDefaultActionID + 1`.
+  return start + kMaxDefaultActionID + 1;
+}
+
+// Create Action by `action_type` without any input bindings.
+std::unique_ptr<Action> CreateRawAction(ActionType type,
+                                        TouchInjector* injector) {
+  switch (type) {
+    case ActionType::TAP:
+      return std::make_unique<ActionTap>(injector);
+    case ActionType::MOVE:
+      return std::make_unique<ActionMove>(injector);
+    default:
+      NOTREACHED();
+      return nullptr;
+  }
 }
 
 }  // namespace
@@ -120,7 +214,7 @@ gfx::RectF CalculateWindowContentBounds(aura::Window* window) {
   DCHECK(widget->non_client_view());
   auto* frame_view = widget->non_client_view()->frame_view();
   DCHECK(frame_view);
-  int height = frame_view->GetBoundsForClientView().y();
+  const int height = frame_view->GetBoundsForClientView().y();
   auto bounds = gfx::RectF(window->bounds());
   bounds.Inset(gfx::InsetsF::TLBR(height, 0, 0, 0));
   return bounds;
@@ -136,10 +230,11 @@ class TouchInjector::KeyCommand {
         callback_(std::move(callback)) {}
   ~KeyCommand() = default;
   bool Process(const ui::Event& event) {
-    if (!event.IsKeyEvent())
+    if (!event.IsKeyEvent()) {
       return false;
-    auto* key_event = event.AsKeyEvent();
-    if (key_ == key_event->code() &&
+    }
+    if (auto* key_event = event.AsKeyEvent();
+        key_ == key_event->code() &&
         modifiers_ == (key_event->flags() & kInterestingFlagsMask)) {
       if (key_event->type() == ui::ET_KEY_PRESSED) {
         callback_.Run();
@@ -156,209 +251,171 @@ class TouchInjector::KeyCommand {
 };
 
 TouchInjector::TouchInjector(aura::Window* top_level_window,
+                             const std::string& package_name,
                              OnSaveProtoFileCallback save_file_callback)
     : window_(top_level_window),
-      content_bounds_(CalculateWindowContentBounds(window_)),
+      package_name_(package_name),
+      content_bounds_f_(CalculateWindowContentBounds(window_)),
       save_file_callback_(save_file_callback) {}
 
 TouchInjector::~TouchInjector() {
   UnRegisterEventRewriter();
 }
 
-void TouchInjector::ParseActions(const base::Value& root) {
+void TouchInjector::ParseActions(const base::Value::Dict& root) {
   DCHECK(actions_.empty());
-  if (enable_mouse_lock_)
+  if (enable_mouse_lock_) {
     ParseMouseLock(root);
+  }
 
-  auto parsed_actions = ParseJsonToActions(this, root);
-  if (!parsed_actions.empty()) {
+  if (auto parsed_actions = ParseJsonToActions(this, root);
+      !parsed_actions.empty()) {
     std::move(parsed_actions.begin(), parsed_actions.end(),
               std::back_inserter(actions_));
   }
 }
 
+void TouchInjector::UpdateFlags(bool is_o4c) {
+  if (!IsBeta() && !IsGameDashboardFlagOn()) {
+    return;
+  }
+
+  ash::ArcGameControlsFlag flags = static_cast<ash::ArcGameControlsFlag>(
+      ash::ArcGameControlsFlag::kKnown | ash::ArcGameControlsFlag::kAvailable |
+      (GetActiveActionsSize() == 0u ? ash::ArcGameControlsFlag::kEmpty : 0) |
+      (is_o4c ? ash::ArcGameControlsFlag::kO4C : 0) |
+      (touch_injector_enable_ ? ash::ArcGameControlsFlag::kEnabled : 0) |
+      (touch_injector_enable_ && input_mapping_visible_
+           ? ash::ArcGameControlsFlag::kHint
+           : 0));
+  window_->SetProperty(ash::kArcGameControlsFlagsKey, flags);
+}
+
 void TouchInjector::NotifyTextInputState(bool active) {
-  if (text_input_active_ != active && active)
-    DispatchTouchCancelEvent();
+  if (text_input_active_ != active && active) {
+    DispatchTouchReleaseEvent();
+  }
   text_input_active_ = active;
 }
 
 void TouchInjector::RegisterEventRewriter() {
-  if (observation_.IsObserving())
+  if (observation_.IsObserving()) {
     return;
+  }
   observation_.Observe(window_->GetHost()->GetEventSource());
-  Update();
+  UpdatePositionsForRegister();
 }
 
 void TouchInjector::UnRegisterEventRewriter() {
-  if (!observation_.IsObserving())
+  if (!observation_.IsObserving()) {
     return;
-  DispatchTouchCancelEvent();
+  }
+  DispatchTouchReleaseEvent();
   observation_.Reset();
   // Need reset pending input bind if it is unregistered in edit mode.
-  for (auto& action : actions_)
+  for (auto& action : actions_) {
     action->ResetPendingBind();
-}
-
-void TouchInjector::Update() {
-  UpdateForDisplayMetricsChanged();
-  UpdateForWindowBoundsChanged();
+  }
+  OnSaveProtoFile();
 }
 
 void TouchInjector::OnInputBindingChange(
     Action* target_action,
     std::unique_ptr<InputElement> input_element) {
-  if (display_overlay_controller_)
+  if (display_overlay_controller_) {
     display_overlay_controller_->RemoveEditMessage();
+  }
   auto* overlapped_action = FindActionWithOverlapInputElement(
       actions_, target_action, *input_element);
 
-  // Check if there is conflict in pending list.
-  if (beta_ && !pending_add_user_actions_.empty() && !overlapped_action) {
-    overlapped_action = FindActionWithOverlapInputElement(
-        pending_add_user_actions_, target_action, *input_element);
+  // Partially unbind or completely unbind the `overlapped_action` if it
+  // conflicts with `input_element`.
+  if (overlapped_action) {
+    overlapped_action->UnbindInput(*input_element);
   }
 
-  // Partially unbind or completely unbind the |overlapped_action| if it
-  // conflicts with |input_element|.
-  if (overlapped_action)
-    overlapped_action->UnbindInput(*input_element);
-
   target_action->PrepareToBindInput(std::move(input_element));
+
+  // For Beta version, there is no "Cancel" & "Reset to default" feature, so
+  // apply the pending change right away if there is change.
+  if (IsBeta()) {
+    if (overlapped_action) {
+      overlapped_action->BindPending();
+      NotifyActionInputBindingUpdated(*overlapped_action);
+    }
+    target_action->BindPending();
+    NotifyActionInputBindingUpdated(*target_action);
+  }
 }
 
 void TouchInjector::OnApplyPendingBinding() {
-  if (beta_) {
-    if (!pending_add_user_actions_.empty()) {
-      std::move(pending_add_user_actions_.begin(),
-                pending_add_user_actions_.end(), std::back_inserter(actions_));
-      pending_add_user_actions_.clear();
-    }
-    pending_delete_user_actions_.clear();
-    pending_add_default_actions_.clear();
-    pending_delete_default_actions_.clear();
-  }
-  for (auto& action : actions_)
+  for (auto& action : actions_) {
     action->BindPending();
+  }
 }
 
 void TouchInjector::OnBindingSave() {
-  OnApplyPendingBinding();
-  if (display_overlay_controller_)
-    display_overlay_controller_->SetDisplayMode(DisplayMode::kView);
+  DCHECK(display_overlay_controller_);
+  // Pending is already applied for beta version.
+  if (!IsBeta()) {
+    OnApplyPendingBinding();
+    display_overlay_controller_->SetDisplayModeAlpha(DisplayMode::kView);
+  }
   OnSaveProtoFile();
 }
 
 void TouchInjector::OnBindingCancel() {
-  if (beta_) {
-    // Recover all the actions in |pending_delete_user_actions_|.
-    if (!pending_delete_user_actions_.empty()) {
-      auto it = pending_delete_user_actions_.begin();
-      while (it != pending_delete_user_actions_.end()) {
-        actions_.emplace_back(std::move(*it));
-        AddActionView(actions_.back().get());
-        pending_delete_user_actions_.erase(it);
-      }
-    }
-
-    // Remove all the actions in |pending_add_user_actions_|.
-    if (!pending_add_user_actions_.empty()) {
-      auto it = pending_add_user_actions_.begin();
-      while (it != pending_add_user_actions_.end()) {
-        RemoveActionView(it->get());
-        pending_add_user_actions_.erase(it);
-      }
-    }
-    next_action_id_ = kMaxDefaultActionID + 1;
-
-    // Recover all the actions in |pending_delete_default_actions_|.
-    AddDefaultActionsAndViews(pending_delete_default_actions_);
-    // Remove all the actions in |pending_add_default_actions_|, which means to
-    // cancel the restore operation.
-    RemoveDefaultActionsAndViews(pending_add_default_actions_);
-    DCHECK(pending_add_default_actions_.empty());
-  }
-
   for (auto& action : actions_) {
-    if (beta_ && next_action_id_ <= action->id())
-      next_action_id_ = action->id() + 1;
     action->CancelPendingBind();
   }
 
-  if (display_overlay_controller_)
-    display_overlay_controller_->SetDisplayMode(DisplayMode::kView);
+  if (display_overlay_controller_) {
+    display_overlay_controller_->SetDisplayModeAlpha(DisplayMode::kView);
+  }
 }
 
 void TouchInjector::OnBindingRestore() {
-  if (beta_) {
-    // Remove all user-added actions to |pending_delete_user_actions_| in case
-    // that users want to cancel the restore.
-    pending_delete_user_actions_.clear();
-    auto deleted_actions = RemoveUserActionsAndViews(actions_);
-    pending_delete_user_actions_ = std::move(deleted_actions);
-    RemoveUserActionsAndViews(pending_add_user_actions_);
-    DCHECK(pending_add_user_actions_.empty());
-
-    next_action_id_ = kMaxDefaultActionID + 1;
-
-    // Add default actions in |pending_delete_default_actions_|.
-    AddDefaultActionsAndViews(pending_delete_default_actions_);
-    DCHECK(pending_delete_default_actions_.empty());
-    // Save all default actions which are deleted before edting to
-    // |pending_add_default_actions_| in case that users want to cancel the
-    // restore.
-    AddDefaultActionsAndViews(actions_, pending_add_default_actions_);
-  }
-
-  for (auto& action : actions_)
+  for (auto& action : actions_) {
     action->RestoreToDefault();
-}
-
-const std::string* TouchInjector::GetPackageName() const {
-  return window_->GetProperty(ash::kArcPackageNameKey);
+  }
 }
 
 void TouchInjector::OnProtoDataAvailable(AppDataProto& proto) {
+  LoadSystemVersionFromProto(proto);
+  LoadMenuEntryFromProto(proto);
   LoadMenuStateFromProto(proto);
   for (const ActionProto& action_proto : proto.actions()) {
     if (action_proto.id() <= kMaxDefaultActionID) {
       auto* action = GetActionById(action_proto.id());
       DCHECK(action);
-      if (!action)
+      if (!action) {
         continue;
-
-      action->OverwriteFromProto(action_proto);
-    } else if (beta_) {
-      if (next_action_id_ <= action_proto.id())
-        next_action_id_ = action_proto.id() + 1;
-
-      auto action = CreateRawAction(action_proto.action_type());
-      if (!action)
-        continue;
-
-      action->ParseFromProto(action_proto);
-      actions_.emplace_back(std::move(action));
+      }
+      OverwriteDefaultAction(action_proto, action);
+    } else if (IsBeta()) {
+      AddUserAddedActionFromProto(action_proto);
+    } else {
+      // Disregard the user-added actions if they system is pre-beta version.
     }
   }
 }
 
 void TouchInjector::OnInputMenuViewRemoved() {
   OnSaveProtoFile();
-  const auto* package_name = GetPackageName();
-  // Record UMA stats upon |InputMenuView| close because it needs to ignore the
+  // Record UMA stats upon `InputMenuView` close because it needs to ignore the
   // unfinalized menu state change.
   if (touch_injector_enable_ != touch_injector_enable_uma_) {
     touch_injector_enable_uma_ = touch_injector_enable_;
     RecordInputOverlayFeatureState(touch_injector_enable_uma_);
     InputOverlayUkm::RecordInputOverlayFeatureStateUkm(
-        *package_name, touch_injector_enable_uma_);
+        package_name_, touch_injector_enable_uma_);
   }
 
   if (input_mapping_visible_ != input_mapping_visible_uma_) {
     input_mapping_visible_uma_ = input_mapping_visible_;
     RecordInputOverlayMappingHintState(input_mapping_visible_uma_);
     InputOverlayUkm::RecordInputOverlayMappingHintStateUkm(
-        *package_name, input_mapping_visible_uma_);
+        package_name_, input_mapping_visible_uma_);
   }
 }
 
@@ -367,74 +424,87 @@ void TouchInjector::NotifyFirstTimeLaunch() {
   show_nudge_ = true;
 }
 
-void TouchInjector::UpdateForDisplayMetricsChanged() {
-  if (rotation_transform_)
-    rotation_transform_.reset();
-
-  auto display = display::Screen::GetScreen()->GetDisplayNearestWindow(window_);
-  // No need to transform if there is no rotation.
-  if (display.panel_rotation() == display::Display::ROTATE_0)
-    return;
-
-  rotation_transform_ =
-      std::make_unique<gfx::Transform>(ash::CreateRotationTransform(
-          display::Display::ROTATE_0, display.panel_rotation(),
-          gfx::SizeF(display.GetSizeInPixel())));
-
-  UpdateForWindowBoundsChanged();
+void TouchInjector::SaveMenuEntryLocation(
+    gfx::Point menu_entry_location_point) {
+  const float width = content_bounds_f_.width();
+  const float height = content_bounds_f_.height();
+  DCHECK_GT(width, 1);
+  DCHECK_GT(height, 1);
+  menu_entry_location_ = std::make_optional<gfx::Vector2dF>(
+      menu_entry_location_point.x() / width,
+      menu_entry_location_point.y() / height);
 }
 
-void TouchInjector::UpdateForWindowBoundsChanged() {
-  content_bounds_ = CalculateWindowContentBounds(window_);
+void TouchInjector::MaybeBindDefaultInputElement(Action* action) {
+  // It only supports to assign default keys WASD for `ActionMove` if there is
+  // no overlapped input binding.
+  if (action->GetType() != ActionType::MOVE) {
+    return;
+  }
+
+  auto input_element = InputElement::CreateActionMoveKeyElement(
+      {ui::DomCode::US_W, ui::DomCode::US_A, ui::DomCode::US_S,
+       ui::DomCode::US_D});
+  if (auto* overlapped_action = FindActionWithOverlapInputElement(
+          actions_, /*target_action=*/action, *input_element);
+      !overlapped_action) {
+    action->PrepareToBindInput(std::move(input_element));
+    action->BindPending();
+    NotifyActionInputBindingUpdated(*action);
+  }
+}
+
+void TouchInjector::UpdatePositionsForRegister() {
+  if (rotation_transform_) {
+    rotation_transform_.reset();
+  }
+
+  // No need to transform if there is no rotation.
+  if (auto display =
+          display::Screen::GetScreen()->GetDisplayNearestWindow(window_);
+      display.panel_rotation() != display::Display::ROTATE_0) {
+    rotation_transform_ =
+        std::make_unique<gfx::Transform>(ash::CreateRotationTransform(
+            display::Display::ROTATE_0, display.panel_rotation(),
+            gfx::SizeF(display.GetSizeInPixel())));
+  }
+  UpdateForOverlayBoundsChanged(CalculateWindowContentBounds(window_));
+}
+
+void TouchInjector::UpdateForOverlayBoundsChanged(
+    const gfx::RectF& new_bounds) {
+  const bool should_update_view =
+      content_bounds_f_.width() != new_bounds.width() ||
+      content_bounds_f_.height() != new_bounds.height();
+
+  content_bounds_f_ = new_bounds;
   for (auto& action : actions_) {
     action->UpdateTouchDownPositions();
+  }
+
+  if (should_update_view) {
+    NotifyContentBoundsSizeChanged();
   }
 }
 
 void TouchInjector::CleanupTouchEvents() {
-  if (is_mouse_locked_)
+  if (!has_pending_touch_events_ && !is_mouse_locked_) {
+    return;
+  }
+
+  if (is_mouse_locked_) {
     FlipMouseLockFlag();
+  }
   DispatchTouchReleaseEvent();
-}
-
-void TouchInjector::DispatchTouchCancelEvent() {
-  for (auto& action : actions_) {
-    auto cancel = action->GetTouchCanceledEvent();
-    if (!cancel)
-      continue;
-    if (SendEventFinally(continuation_, &*cancel).dispatcher_destroyed) {
-      VLOG(0) << "Undispatched event due to destroyed dispatcher for canceling "
-                 "touch event.";
-    }
-  }
-
-  // Cancel active touch-to-touch events.
-  for (auto& touch_info : rewritten_touch_infos_) {
-    auto touch_point_info = touch_info.second;
-    auto managed_touch_id = touch_point_info.rewritten_touch_id;
-    auto root_location = touch_point_info.touch_root_location;
-
-    auto touch_to_release = std::make_unique<ui::TouchEvent>(ui::TouchEvent(
-        ui::EventType::ET_TOUCH_CANCELLED, root_location, root_location,
-        ui::EventTimeForNow(),
-        ui::PointerDetails(ui::EventPointerType::kTouch, managed_touch_id)));
-    if (SendEventFinally(continuation_, &*touch_to_release)
-            .dispatcher_destroyed) {
-      VLOG(0) << "Undispatched event due to destroyed dispatcher for canceling "
-                 "stored touch event.";
-    }
-    arc::TouchIdManager::GetInstance()->ReleaseTouchID(
-        touch_info.second.rewritten_touch_id);
-  }
-  rewritten_touch_infos_.clear();
 }
 
 void TouchInjector::DispatchTouchReleaseEventOnMouseUnLock() {
   for (auto& action : actions_) {
     if (action->require_mouse_locked()) {
       auto release = action->GetTouchReleasedEvent();
-      if (!release)
+      if (!release) {
         continue;
+      }
       if (SendEventFinally(continuation_, &*release).dispatcher_destroyed) {
         VLOG(0)
             << "Undispatched event due to destroyed dispatcher for releasing "
@@ -445,10 +515,15 @@ void TouchInjector::DispatchTouchReleaseEventOnMouseUnLock() {
 }
 
 void TouchInjector::DispatchTouchReleaseEvent() {
+  if (!has_pending_touch_events_) {
+    return;
+  }
+
   for (auto& action : actions_) {
     auto release = action->GetTouchReleasedEvent();
-    if (!release)
+    if (!release) {
       continue;
+    }
     if (SendEventFinally(continuation_, &*release).dispatcher_destroyed) {
       VLOG(0) << "Undispatched event due to destroyed dispatcher for releasing "
                  "touch event when unlocking mouse.";
@@ -457,9 +532,9 @@ void TouchInjector::DispatchTouchReleaseEvent() {
 
   // Release active touch-to-touch events.
   for (auto& touch_info : rewritten_touch_infos_) {
-    auto touch_point_info = touch_info.second;
-    auto managed_touch_id = touch_point_info.rewritten_touch_id;
-    auto root_location = touch_point_info.touch_root_location;
+    const auto touch_point_info = touch_info.second;
+    const auto managed_touch_id = touch_point_info.rewritten_touch_id;
+    const auto root_location = touch_point_info.touch_root_location;
 
     auto touch_to_release = std::make_unique<ui::TouchEvent>(ui::TouchEvent(
         ui::EventType::ET_TOUCH_RELEASED, root_location, root_location,
@@ -470,10 +545,11 @@ void TouchInjector::DispatchTouchReleaseEvent() {
       VLOG(0) << "Undispatched event due to destroyed dispatcher for releasing "
                  "stored touch event.";
     }
-    arc::TouchIdManager::GetInstance()->ReleaseTouchID(
+    TouchIdManager::GetInstance()->ReleaseTouchID(
         touch_info.second.rewritten_touch_id);
   }
   rewritten_touch_infos_.clear();
+  has_pending_touch_events_ = false;
 }
 
 void TouchInjector::SendExtraEvent(
@@ -485,8 +561,8 @@ void TouchInjector::SendExtraEvent(
   }
 }
 
-void TouchInjector::ParseMouseLock(const base::Value& value) {
-  auto* mouse_lock = value.FindKey(kMouseLock);
+void TouchInjector::ParseMouseLock(const base::Value::Dict& dict) {
+  auto* mouse_lock = dict.FindDict(kMouseLock);
   if (!mouse_lock) {
     mouse_lock_ = std::make_unique<KeyCommand>(
         kDefaultMouseLockCode, /*modifier=*/0,
@@ -495,8 +571,9 @@ void TouchInjector::ParseMouseLock(const base::Value& value) {
     return;
   }
   auto key = ParseKeyboardKey(*mouse_lock, kMouseLock);
-  if (!key)
+  if (!key) {
     return;
+  }
   // Customized mouse lock overrides the default mouse lock.
   mouse_lock_ = std::make_unique<KeyCommand>(
       key->first, key->second,
@@ -506,48 +583,46 @@ void TouchInjector::ParseMouseLock(const base::Value& value) {
 
 void TouchInjector::FlipMouseLockFlag() {
   is_mouse_locked_ = !is_mouse_locked_;
-  if (!is_mouse_locked_)
+  if (!is_mouse_locked_) {
     DispatchTouchReleaseEventOnMouseUnLock();
+  }
 }
 
 bool TouchInjector::LocatedEventOnMenuEntry(const ui::Event& event,
                                             const gfx::RectF& content_bounds,
                                             bool press_required) {
-  if (!event.IsLocatedEvent())
+  if (!event.IsLocatedEvent()) {
     return false;
+  }
 
-  auto menu_anchor_bounds =
+  const auto menu_anchor_bounds =
       display_overlay_controller_->GetOverlayMenuEntryBounds();
   if (!menu_anchor_bounds) {
-    DCHECK(display_mode_ != DisplayMode::kView &&
-           display_mode_ != DisplayMode::kPreMenu);
+    if (!IsBeta()) {
+      DCHECK(display_mode_ != DisplayMode::kView &&
+             display_mode_ != DisplayMode::kPreMenu);
+    }
     return false;
   }
 
   auto event_location = gfx::Point(event.AsLocatedEvent()->root_location());
   window_->GetHost()->ConvertPixelsToDIP(&event_location);
-  // Convert |event_location| from root window location to screen location.
+  // Convert `event_location` from root window location to screen location.
   auto origin = window_->GetRootWindow()->GetBoundsInScreen().origin();
   event_location.Offset(origin.x(), origin.y());
 
-  if (!press_required)
+  if (!press_required) {
     return menu_anchor_bounds->Contains(event_location);
+  }
 
-  if (!event.IsMouseEvent() && !event.IsTouchEvent())
-    return false;
-
-  if (event.IsMouseEvent()) {
-    auto* mouse = event.AsMouseEvent();
-    if (mouse->type() == ui::ET_MOUSE_PRESSED &&
-        menu_anchor_bounds->Contains(event_location)) {
-      return true;
-    }
-  } else {
-    auto* touch = event.AsTouchEvent();
-    if (touch->type() == ui::ET_TOUCH_PRESSED &&
-        menu_anchor_bounds->Contains(event_location)) {
-      return true;
-    }
+  if (event.IsMouseEvent() &&
+      event.AsMouseEvent()->type() == ui::ET_MOUSE_PRESSED &&
+      menu_anchor_bounds->Contains(event_location)) {
+    return true;
+  } else if (event.IsTouchEvent() &&
+             event.AsTouchEvent()->type() == ui::ET_TOUCH_PRESSED &&
+             menu_anchor_bounds->Contains(event_location)) {
+    return true;
   }
   return false;
 }
@@ -557,57 +632,64 @@ ui::EventDispatchDetails TouchInjector::RewriteEvent(
     const ui::EventRewriter::Continuation continuation) {
   continuation_ = continuation;
 
-  // This is for Tab key as Accessibility requirement.
-  // - For key event, Tab key is used to enter into the |kPreMenu| mode. And any
-  // keys, except Space and Enter keys, are used to exit the |kPreMenu| and
-  // enter into the |kView| mode, and continue events in |kView| mode.
-  // - For any located events in |kPreMenu| mode, if it doesn't happen on the
-  // menu entry button, then it enters into the |kView| mode and continues
-  // events in |kView| mode.
-  if (display_mode_ == DisplayMode::kView && event.IsKeyEvent() &&
-      views::FocusManager::IsTabTraversalKeyEvent(*(event.AsKeyEvent()))) {
-    if (event.AsKeyEvent()->type() == ui::ET_KEY_PRESSED) {
-      CleanupTouchEvents();
-      display_overlay_controller_->SetDisplayMode(DisplayMode::kPreMenu);
-    }
-    return SendEvent(continuation, &event);
-  } else if (display_mode_ == DisplayMode::kPreMenu) {
-    if (event.IsKeyEvent()) {
-      auto* key_event = event.AsKeyEvent();
-      if (key_event->key_code() != ui::KeyboardCode::VKEY_SPACE &&
-          key_event->key_code() != ui::KeyboardCode::VKEY_RETURN &&
-          key_event->type() == ui::ET_KEY_PRESSED) {
-        display_overlay_controller_->SetDisplayMode(DisplayMode::kView);
-      } else {
-        return SendEvent(continuation, &event);
-      }
-    } else if (LocatedEventOnMenuEntry(event, content_bounds_,
-                                       /*press_required=*/false)) {
+  if (IsBeta()) {
+    if (!can_rewrite_event_) {
       return SendEvent(continuation, &event);
-    } else {
-      display_overlay_controller_->SetDisplayMode(DisplayMode::kView);
+    }
+  } else {
+    // This is for Tab key as Accessibility requirement.
+    // - For key event, Tab key is used to enter into the `kPreMenu` mode. And
+    // any keys, except Space and Enter keys, are used to exit the `kPreMenu`
+    // and enter into the `kView` mode, and continue events in `kView` mode.
+    // - For any located events in `kPreMenu` mode, if it doesn't happen on the
+    // menu entry button, then it enters into the `kView` mode and continues
+    // events in `kView` mode.
+    if (display_mode_ == DisplayMode::kView && event.IsKeyEvent() &&
+        views::FocusManager::IsTabTraversalKeyEvent(*(event.AsKeyEvent()))) {
+      if (event.AsKeyEvent()->type() == ui::ET_KEY_PRESSED) {
+        CleanupTouchEvents();
+        display_overlay_controller_->SetDisplayModeAlpha(DisplayMode::kPreMenu);
+      }
+      return SendEvent(continuation, &event);
+    } else if (display_mode_ == DisplayMode::kPreMenu) {
+      if (event.IsKeyEvent()) {
+        if (ProcessKeyEventOnFocusedMenuEntry(*event.AsKeyEvent())) {
+          return SendEvent(continuation, &event);
+        }
+        display_overlay_controller_->SetDisplayModeAlpha(DisplayMode::kView);
+      } else if (LocatedEventOnMenuEntry(event, content_bounds_f_,
+                                         /*press_required=*/false)) {
+        return SendEvent(continuation, &event);
+      } else {
+        display_overlay_controller_->SetDisplayModeAlpha(DisplayMode::kView);
+      }
+    }
+
+    if (display_mode_ != DisplayMode::kView) {
+      return SendEvent(continuation, &event);
+    }
+
+    if (display_overlay_controller_ && display_mode_ == DisplayMode::kView) {
+      display_overlay_controller_->SetMenuEntryHoverState(
+          LocatedEventOnMenuEntry(event, content_bounds_f_,
+                                  /*press_required=*/false));
+    }
+
+    // `display_overlay_controller_` is null for unittest.
+    if (display_overlay_controller_ &&
+        LocatedEventOnMenuEntry(event, content_bounds_f_,
+                                /*press_required=*/true)) {
+      // Release all active touches when the display mode is changed from
+      // `kView` to `kMenu`.
+      CleanupTouchEvents();
+      display_overlay_controller_->SetDisplayModeAlpha(DisplayMode::kMenu);
+      return SendEvent(continuation, &event);
     }
   }
 
-  if (display_mode_ != DisplayMode::kView)
-    return SendEvent(continuation, &event);
-
-  // |display_overlay_controller_| is null for unittest.
-  if (display_overlay_controller_ &&
-      LocatedEventOnMenuEntry(event, content_bounds_,
-                              /*press_required=*/true)) {
-    // Release all active touches when the display mode is changed from |kView|
-    // to |kMenu|.
-    CleanupTouchEvents();
-    display_overlay_controller_->SetDisplayMode(DisplayMode::kMenu);
+  if (!touch_injector_enable_ || text_input_active_) {
     return SendEvent(continuation, &event);
   }
-
-  if (text_input_active_)
-    return SendEvent(continuation, &event);
-
-  if (!touch_injector_enable_)
-    return SendEvent(continuation, &event);
 
   if (event.IsTouchEvent()) {
     auto* touch_event = event.AsTouchEvent();
@@ -615,49 +697,63 @@ ui::EventDispatchDetails TouchInjector::RewriteEvent(
     window_->GetHost()->ConvertPixelsToDIP(&location);
     auto location_f = gfx::PointF(location);
     // Send touch event as it is if the event is outside of the content bounds.
-    if (!content_bounds_.Contains(location_f))
+    if (!content_bounds_f_.Contains(location_f)) {
       return SendEvent(continuation, &event);
+    }
 
     std::unique_ptr<ui::TouchEvent> new_touch_event =
         RewriteOriginalTouch(touch_event);
 
-    if (new_touch_event)
+    if (new_touch_event) {
+      has_pending_touch_events_ = true;
       return SendEventFinally(continuation, new_touch_event.get());
+    }
 
     // TODO(b/237037540): workaround for b/233785660. Theoretically it
     // should discard the event if original touch-move or touch-release with
     // same ID is not rewritten due to missing original touch-press. But
     // thinking of real world user cases, it's unlikely to trigger any issues
     // with sending original event. The logic is already complicated in
-    // |RewriteEvent()| so here it uses a workaround. The menu entry will be
+    // `RewriteEvent()` so here it uses a workaround. The menu entry will be
     // removed and simplify the logic in future version, then it will be
     // fundamentally improved.
     return SendEvent(continuation, &event);
   }
 
-  if (mouse_lock_ && mouse_lock_->Process(event))
+  if (mouse_lock_ && mouse_lock_->Process(event)) {
     return DiscardEvent(continuation);
+  }
 
   std::list<ui::TouchEvent> touch_events;
+  bool is_play_mode_active = false;
   for (auto& action : actions_) {
+    is_play_mode_active |= action->IsActive();
+
     bool keep_original_event = false;
     bool rewritten =
         action->RewriteEvent(event, is_mouse_locked_, rotation_transform_.get(),
                              touch_events, keep_original_event);
-    if (!rewritten)
+    if (!rewritten) {
       continue;
-    if (keep_original_event)
+    }
+
+    has_pending_touch_events_ = true;
+
+    if (keep_original_event) {
       SendExtraEvent(continuation, event);
-    if (touch_events.empty())
+    }
+    if (touch_events.empty()) {
       return DiscardEvent(continuation);
-    if (touch_events.size() == 1)
+    }
+    if (touch_events.size() == 1) {
       return SendEventFinally(continuation, &touch_events.front());
+    }
     if (touch_events.size() == 2) {
       if (touch_events.back().type() == ui::EventType::ET_TOUCH_MOVED) {
         // Some apps can't process correctly on the touch move event which
         // follows touch press event immediately, so send the touch move event
         // delayed here.
-        base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
             FROM_HERE,
             base::BindOnce(&TouchInjector::SendExtraEvent,
                            weak_ptr_factory_.GetWeakPtr(), continuation,
@@ -671,9 +767,11 @@ ui::EventDispatchDetails TouchInjector::RewriteEvent(
     }
   }
 
-  // Discard other mouse events if the mouse is locked.
-  if (is_mouse_locked_ && event.IsMouseEvent())
+  // Discard other mouse events if the mouse is locked or it is in active play
+  // mode.
+  if (event.IsMouseEvent() && (is_mouse_locked_ || is_play_mode_active)) {
     return DiscardEvent(continuation);
+  }
 
   return SendEvent(continuation, &event);
 }
@@ -685,14 +783,16 @@ std::unique_ptr<ui::TouchEvent> TouchInjector::RewriteOriginalTouch(
 
   if (it == rewritten_touch_infos_.end()) {
     // When touching on the window to regain the focus, the first
-    // |ui::ET_TOUCH_PRESSED| will not be received and then it may send
-    // |ui::ET_TOUCH_MOVED| event to the window. So no need to add DCHECK here.
-    if (touch_event->type() != ui::ET_TOUCH_PRESSED)
+    // `ui::ET_TOUCH_PRESSED` will not be received and then it may send
+    // `ui::ET_TOUCH_MOVED` event to the window. So no need to add DCHECK here.
+    if (touch_event->type() != ui::ET_TOUCH_PRESSED) {
       return nullptr;
+    }
   } else {
     DCHECK(touch_event->type() != ui::ET_TOUCH_PRESSED);
-    if (touch_event->type() == ui::ET_TOUCH_PRESSED)
+    if (touch_event->type() == ui::ET_TOUCH_PRESSED) {
       return nullptr;
+    }
   }
 
   // Confirmed the input is valid.
@@ -700,8 +800,8 @@ std::unique_ptr<ui::TouchEvent> TouchInjector::RewriteOriginalTouch(
 
   if (touch_event->type() == ui::ET_TOUCH_PRESSED) {
     // Generate new touch id that we can manage and add to map.
-    absl::optional<int> managed_touch_id =
-        arc::TouchIdManager::GetInstance()->ObtainTouchID();
+    std::optional<int> managed_touch_id =
+        TouchIdManager::GetInstance()->ObtainTouchID();
     DCHECK(managed_touch_id);
     TouchPointInfo touch_point = {
         .rewritten_touch_id = *managed_touch_id,
@@ -711,17 +811,17 @@ std::unique_ptr<ui::TouchEvent> TouchInjector::RewriteOriginalTouch(
     return CreateTouchEvent(touch_event, original_id, *managed_touch_id,
                             root_location_f);
   } else if (touch_event->type() == ui::ET_TOUCH_RELEASED) {
-    absl::optional<int> managed_touch_id = it->second.rewritten_touch_id;
+    std::optional<int> managed_touch_id = it->second.rewritten_touch_id;
     DCHECK(managed_touch_id);
     rewritten_touch_infos_.erase(original_id);
-    arc::TouchIdManager::GetInstance()->ReleaseTouchID(*managed_touch_id);
+    TouchIdManager::GetInstance()->ReleaseTouchID(*managed_touch_id);
     return CreateTouchEvent(touch_event, original_id, *managed_touch_id,
                             root_location_f);
   }
 
   // Update this id's stored location to this newest location.
   it->second.touch_root_location = root_location_f;
-  absl::optional<int> managed_touch_id = it->second.rewritten_touch_id;
+  std::optional<int> managed_touch_id = it->second.rewritten_touch_id;
   DCHECK(managed_touch_id);
   return CreateTouchEvent(touch_event, original_id, *managed_touch_id,
                           root_location_f);
@@ -740,8 +840,9 @@ std::unique_ptr<ui::TouchEvent> TouchInjector::CreateTouchEvent(
 
 Action* TouchInjector::GetActionById(int id) {
   for (auto& action : actions_) {
-    if (action->id() == id)
+    if (action->id() == id) {
       return action.get();
+    }
   }
   return nullptr;
 }
@@ -749,24 +850,35 @@ Action* TouchInjector::GetActionById(int id) {
 std::unique_ptr<AppDataProto> TouchInjector::ConvertToProto() {
   auto app_data_proto = std::make_unique<AppDataProto>();
   for (auto& action : actions_) {
-    auto customized_proto = action->ConvertToProtoIfCustomized();
-    if (customized_proto)
+    if (auto customized_proto = action->ConvertToProtoIfCustomized()) {
       *app_data_proto->add_actions() = *customized_proto;
-    customized_proto.reset();
+    }
   }
   AddMenuStateToProto(*app_data_proto);
+  AddMenuEntryToProtoIfCustomized(*app_data_proto);
+  AddSystemVersionToProto(*app_data_proto);
   return app_data_proto;
 }
 
 void TouchInjector::OnSaveProtoFile() {
   auto app_data_proto = ConvertToProto();
-  std::string package_name(*GetPackageName());
-  save_file_callback_.Run(std::move(app_data_proto), package_name);
+  save_file_callback_.Run(std::move(app_data_proto), package_name_);
 }
 
 void TouchInjector::AddMenuStateToProto(AppDataProto& proto) {
   proto.set_input_control(touch_injector_enable_);
   proto.set_input_mapping_hint(input_mapping_visible_);
+}
+
+void TouchInjector::AddMenuEntryToProtoIfCustomized(AppDataProto& proto) const {
+  if (!menu_entry_location_) {
+    return;
+  }
+  auto menu_entry_position_proto = std::make_unique<PositionProto>();
+  menu_entry_position_proto->add_anchor_to_target(menu_entry_location_->x());
+  menu_entry_position_proto->add_anchor_to_target(menu_entry_location_->y());
+
+  proto.set_allocated_menu_entry_position(menu_entry_position_proto.release());
 }
 
 void TouchInjector::LoadMenuStateFromProto(AppDataProto& proto) {
@@ -775,149 +887,218 @@ void TouchInjector::LoadMenuStateFromProto(AppDataProto& proto) {
   input_mapping_visible_ =
       proto.has_input_mapping_hint() ? proto.input_mapping_hint() : true;
 
-  if (display_overlay_controller_)
+  if (display_overlay_controller_) {
     display_overlay_controller_->OnApplyMenuState();
-}
-
-std::unique_ptr<Action> TouchInjector::CreateRawAction(ActionType action_type) {
-  std::unique_ptr<Action> action;
-  switch (action_type) {
-    case ActionType::TAP:
-      action = std::make_unique<ActionTap>(this);
-      break;
-    case ActionType::MOVE:
-      action = std::make_unique<ActionMove>(this);
-      break;
-    default:
-      NOTREACHED();
-      return nullptr;
   }
-  return action;
 }
 
-std::vector<std::unique_ptr<Action>> TouchInjector::RemoveUserActionsAndViews(
-    std::vector<std::unique_ptr<Action>>& actions) {
-  std::vector<std::unique_ptr<Action>> removed_actions;
-  auto it = actions.begin();
-  while (it != actions.end()) {
-    if (it->get()->id() > kMaxDefaultActionID) {
-      removed_actions.emplace_back(std::move(*it));
-      RemoveActionView(removed_actions.back().get());
-      actions.erase(it);
-    } else {
-      it++;
+void TouchInjector::LoadMenuEntryFromProto(AppDataProto& proto) {
+  if (!proto.has_menu_entry_position()) {
+    return;
+  }
+  auto menu_entry_position = proto.menu_entry_position().anchor_to_target();
+  DCHECK_EQ(menu_entry_position.size(), 2);
+  menu_entry_location_ = std::make_optional<gfx::Vector2dF>(
+      menu_entry_position[0], menu_entry_position[1]);
+}
+
+void TouchInjector::AddSystemVersionToProto(AppDataProto& proto) {
+  proto.set_system_version(GetCurrentSystemVersion());
+}
+
+void TouchInjector::LoadSystemVersionFromProto(AppDataProto& proto) {
+  if (!proto.has_system_version() ||
+      GetCurrentSystemVersion().compare(proto.system_version()) > 0) {
+    show_nudge_ = true;
+  }
+}
+
+void TouchInjector::AddObserver(TouchInjectorObserver* observer) {
+  observers_.AddObserver(observer);
+}
+
+void TouchInjector::RemoveObserver(TouchInjectorObserver* observer) {
+  observers_.RemoveObserver(observer);
+}
+
+int TouchInjector::GetNextNewActionID() {
+  if (actions_.empty()) {
+    return kMaxDefaultActionID + 1;
+  }
+
+  std::vector<int> ids;
+  for (const auto& action : actions_) {
+    const int id = action->id();
+    if (id > kMaxDefaultActionID) {
+      ids.emplace_back(id);
     }
   }
-  return removed_actions;
+  std::sort(ids.begin(), ids.end());
+
+  return FindNewCustomActionID(ids);
 }
 
-void TouchInjector::AddDefaultActionsAndViews(
-    std::vector<std::unique_ptr<Action>>& actions,
-    std::vector<Action*>& added_actions) {
-  if (actions.empty())
-    return;
-
-  auto it = actions.begin();
-  while (it != actions.end()) {
-    if (it->get()->IsDefaultAction() && it->get()->deleted()) {
-      it->get()->set_deleted(false);
-      added_actions.emplace_back(it->get());
-      AddActionView(it->get());
+size_t TouchInjector::GetActiveActionsSize() {
+  size_t active_size = 0;
+  for (auto& action : actions_) {
+    if (!action->IsDeleted()) {
+      active_size++;
     }
-    it++;
   }
+  return active_size;
 }
 
-void TouchInjector::AddDefaultActionsAndViews(
-    std::vector<Action*>& deleted_default_actions) {
-  if (deleted_default_actions.empty())
-    return;
+void TouchInjector::AddNewAction(ActionType action_type,
+                                 const gfx::Point& target_pos) {
+  DCHECK(IsBeta());
+  auto action = CreateRawAction(action_type, this);
 
-  for (auto* action : deleted_default_actions) {
-    DCHECK(action->deleted());
-    action->set_deleted(false);
-    AddActionView(action);
+  // Check whether the action size extends the maximum.
+  if (!action->InitByAddingNewAction(target_pos)) {
+    return;
   }
-  deleted_default_actions.clear();
-}
 
-void TouchInjector::RemoveDefaultActionsAndViews(
-    std::vector<Action*>& added_default_actions) {
-  if (added_default_actions.empty())
-    return;
+  auto* new_action_ptr = action.get();
+  // Apply the change right away for beta.
+  NotifyActionAdded(*actions_.emplace_back(std::move(action)));
+  MaybeBindDefaultInputElement(new_action_ptr);
 
-  for (auto* action : added_default_actions) {
-    DCHECK(!action->deleted());
-    action->set_deleted(true);
-    RemoveActionView(action);
-  }
-  added_default_actions.clear();
-}
-
-int TouchInjector::GetNextActionID() {
-  return next_action_id_++;
-}
-
-void TouchInjector::AddNewAction(ActionType action_type) {
-  auto action = CreateRawAction(action_type);
-  if (!action)
-    return;
-
-  action->InitFromEditor();
-  pending_add_user_actions_.emplace_back(std::move(action));
-  AddActionView(pending_add_user_actions_.back().get());
-}
-
-void TouchInjector::AddActionView(Action* action) {
-  if (display_overlay_controller_)
-    display_overlay_controller_->OnActionAdded(action);
+  // It may need to turn off the flag `kEmpty` after adding an action.
+  UpdateFlagAndProperty(window_, ash::ArcGameControlsFlag::kEmpty,
+                        /*enable_flag=*/false);
 }
 
 void TouchInjector::RemoveAction(Action* action) {
   auto it = std::find_if(
       actions_.begin(), actions_.end(),
       [&](const std::unique_ptr<Action>& p) { return action == p.get(); });
-  if (it != actions_.end()) {
-    if (it->get()->IsDefaultAction()) {
-      DCHECK(!it->get()->deleted());
-      it->get()->set_deleted(true);
-      pending_delete_default_actions_.emplace_back(it->get());
-      RemoveActionView(it->get());
-    } else {
-      pending_delete_user_actions_.emplace_back(std::move(*it));
-      RemoveActionView(pending_delete_user_actions_.back().get());
-      actions_.erase(it);
-    }
-  } else if (!pending_add_user_actions_.empty()) {
-    it = std::find_if(
-        pending_add_user_actions_.begin(), pending_add_user_actions_.end(),
-        [&](const std::unique_ptr<Action>& p) { return action == p.get(); });
-    DCHECK(it != pending_add_user_actions_.end());
-    if (it == pending_add_user_actions_.end())
-      return;
-
-    RemoveActionView(it->get());
-    pending_add_user_actions_.erase(it);
+  DCHECK(it != actions_.end());
+  if (it->get()->IsDefaultAction()) {
+    // Default action is from JSON. Since it reads mapping data from JSON first
+    // and then from proto, only deleting the default action from `action_`
+    // won't actually delete when launching app next time. So here it marks the
+    // default action deleted.
+    it->get()->RemoveDefaultAction();
   } else {
-    NOTREACHED();
+    actions_.erase(it);
+  }
+
+  NotifyActionRemoved(*action);
+
+  // It may need to turn on the flag `kEmpty` after removing an action.
+  DCHECK_EQ(false,
+            IsFlagSet(window_->GetProperty(ash::kArcGameControlsFlagsKey),
+                      ash::ArcGameControlsFlag::kEmpty));
+  if (GetActiveActionsSize() == 0u) {
+    UpdateFlagAndProperty(window_, ash::ArcGameControlsFlag::kEmpty,
+                          /*enable_flag=*/true);
   }
 }
 
-void TouchInjector::RemoveActionView(Action* action) {
-  if (display_overlay_controller_)
-    display_overlay_controller_->OnActionRemoved(action);
+void TouchInjector::ChangeActionType(Action* action, ActionType action_type) {
+  auto new_action = CreateRawAction(action_type, this);
+  new_action->InitByChangingActionType(action);
+  auto* new_action_ptr = new_action.get();
+  ReplaceActionInternal(action, std::move(new_action));
+  NotifyActionTypeChanged(action, new_action_ptr);
+  MaybeBindDefaultInputElement(new_action_ptr);
+}
+
+void TouchInjector::ChangeActionName(Action* action, int index) {
+  DCHECK(IsBeta());
+  action->set_name_label_index(index);
+  NotifyActionNameUpdated(*action);
+}
+
+void TouchInjector::RemoveActionNewState(Action* action) {
+  DCHECK(IsBeta());
+  DCHECK(action->is_new());
+  action->set_is_new(false);
+  NotifyActionNewStateRemoved(*action);
+}
+
+void TouchInjector::OverwriteDefaultAction(const ActionProto& proto,
+                                           Action* action) {
+  DCHECK(action);
+  DCHECK_LE(proto.id(), kMaxDefaultActionID);
+  DCHECK_EQ(proto.id(), action->id());
+  if (IsBeta() && action->GetType() != proto.action_type()) {
+    auto new_action = CreateRawAction(proto.action_type(), this);
+    new_action->InitByChangingActionType(action);
+    new_action->OverwriteDefaultActionFromProto(proto);
+    ReplaceActionInternal(action, std::move(new_action));
+  } else {
+    action->OverwriteDefaultActionFromProto(proto);
+  }
+}
+
+void TouchInjector::AddUserAddedActionFromProto(const ActionProto& proto) {
+  auto action = CreateRawAction(proto.action_type(), this);
+  action->ParseUserAddedActionFromProto(proto);
+  actions_.emplace_back(std::move(action));
+}
+
+void TouchInjector::ReplaceActionInternal(Action* action,
+                                          std::unique_ptr<Action> new_action) {
+  auto it = std::find_if(
+      actions_.begin(), actions_.end(),
+      [&](const std::unique_ptr<Action>& p) { return action == p.get(); });
+  DCHECK(it != actions_.end());
+  actions_[it - actions_.begin()] = std::move(new_action);
+}
+
+void TouchInjector::NotifyActionAdded(Action& action) {
+  for (auto& observer : observers_) {
+    observer.OnActionAdded(action);
+  }
+}
+
+void TouchInjector::NotifyActionRemoved(Action& action) {
+  for (auto& observer : observers_) {
+    observer.OnActionRemoved(action);
+  }
+}
+
+void TouchInjector::NotifyActionNewStateRemoved(Action& action) {
+  for (auto& observer : observers_) {
+    observer.OnActionNewStateRemoved(action);
+  }
+}
+
+void TouchInjector::NotifyActionTypeChanged(Action* action,
+                                            Action* new_action) {
+  for (auto& observer : observers_) {
+    observer.OnActionTypeChanged(action, new_action);
+  }
+}
+
+void TouchInjector::NotifyActionInputBindingUpdated(const Action& action) {
+  for (auto& observer : observers_) {
+    observer.OnActionInputBindingUpdated(action);
+  }
+}
+
+void TouchInjector::NotifyActionNameUpdated(const Action& action) {
+  for (auto& observer : observers_) {
+    observer.OnActionNameUpdated(action);
+  }
+}
+
+void TouchInjector::NotifyContentBoundsSizeChanged() {
+  for (auto& observer : observers_) {
+    observer.OnContentBoundsSizeChanged();
+  }
 }
 
 void TouchInjector::RecordMenuStateOnLaunch() {
   touch_injector_enable_uma_ = touch_injector_enable_;
   input_mapping_visible_uma_ = input_mapping_visible_;
-  const auto* package_name = GetPackageName();
   RecordInputOverlayFeatureState(touch_injector_enable_uma_);
   InputOverlayUkm::RecordInputOverlayFeatureStateUkm(
-      *package_name, touch_injector_enable_uma_);
+      package_name_, touch_injector_enable_uma_);
   RecordInputOverlayMappingHintState(input_mapping_visible_uma_);
   InputOverlayUkm::RecordInputOverlayMappingHintStateUkm(
-      *package_name, input_mapping_visible_uma_);
+      package_name_, input_mapping_visible_uma_);
 }
 
 int TouchInjector::GetRewrittenTouchIdForTesting(ui::PointerId original_id) {
@@ -943,5 +1124,4 @@ DisplayOverlayController* TouchInjector::GetControllerForTesting() {
   return display_overlay_controller_;
 }
 
-}  // namespace input_overlay
-}  // namespace arc
+}  // namespace arc::input_overlay

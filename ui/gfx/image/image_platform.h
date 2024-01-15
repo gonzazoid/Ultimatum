@@ -22,10 +22,10 @@
 #include "ui/gfx/image/image_skia.h"
 
 #if BUILDFLAG(IS_IOS)
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
 #include "ui/gfx/image/image_skia_util_ios.h"
 #elif BUILDFLAG(IS_MAC)
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
 #include "base/mac/mac_util.h"
 #include "ui/gfx/image/image_skia_util_mac.h"
 #endif
@@ -46,8 +46,14 @@ std::unique_ptr<ImageRep> MakeImageRepCocoaTouch(UIImage* image);
 #elif BUILDFLAG(IS_MAC)
 scoped_refptr<base::RefCountedMemory> Get1xPNGBytesFromNSImage(
     NSImage* nsimage);
-NSImage* NSImageFromPNG(const std::vector<ImagePNGRep>& image_png_reps,
-                        CGColorSpaceRef color_space);
+
+NSImage* NSImageFromPNG(const std::vector<ImagePNGRep>& image_png_reps);
+
+// TODO(https://crbug.com/1495334): Remove callers to this function.
+inline NSImage* NSImageFromPNG(const std::vector<ImagePNGRep>& image_png_reps,
+                               CGColorSpaceRef color_space) {
+  return NSImageFromPNG(image_png_reps);
+}
 
 NSImage* NSImageOfImageRepCocoa(const ImageRepCocoa* image_rep);
 std::unique_ptr<ImageRep> MakeImageRepCocoa(NSImage* image);

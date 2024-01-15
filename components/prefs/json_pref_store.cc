@@ -10,24 +10,24 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_file_value_serializer.h"
-#include "base/json/json_string_value_serializer.h"
+#include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/metrics/histogram.h"
+#include "base/notreached.h"
 #include "base/observer_list.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/default_clock.h"
 #include "base/values.h"
 #include "components/prefs/pref_filter.h"
@@ -98,24 +98,6 @@ PersistentPrefStore::PrefReadError HandleReadErrors(
   return PersistentPrefStore::PREF_READ_ERROR_NONE;
 }
 
-// Records a sample for |size| in the Settings.JsonDataReadSizeKilobytes
-// histogram suffixed with the base name of the JSON file under |path|.
-void RecordJsonDataSizeHistogram(const base::FilePath& path, size_t size) {
-  std::string spaceless_basename;
-  base::ReplaceChars(path.BaseName().MaybeAsASCII(), " ", "_",
-                     &spaceless_basename);
-
-  // The histogram below is an expansion of the UMA_HISTOGRAM_CUSTOM_COUNTS
-  // macro adapted to allow for a dynamically suffixed histogram name.
-  // Note: The factory creates and owns the histogram.
-  // This histogram is expired but the code was intentionally left behind so
-  // it can be re-enabled on Stable in a single config tweak if needed.
-  base::HistogramBase* histogram = base::Histogram::FactoryGet(
-      "Settings.JsonDataReadSizeKilobytes." + spaceless_basename, 1, 10000, 50,
-      base::HistogramBase::kUmaTargetedHistogramFlag);
-  histogram->Add(static_cast<int>(size) / 1024);
-}
-
 std::unique_ptr<JsonPrefStore::ReadResult> ReadPrefsFromDisk(
     const base::FilePath& path) {
   int error_code;
@@ -127,9 +109,6 @@ std::unique_ptr<JsonPrefStore::ReadResult> ReadPrefsFromDisk(
       HandleReadErrors(read_result->value.get(), path, error_code, error_msg);
   read_result->no_dir = !base::PathExists(path.DirName());
   read_result->num_bytes_read = deserializer.get_last_read_size();
-
-  if (read_result->error == PersistentPrefStore::PREF_READ_ERROR_NONE)
-    RecordJsonDataSizeHistogram(path, deserializer.get_last_read_size());
 
   return read_result;
 }
@@ -145,6 +124,20 @@ const char* GetHistogramSuffix(const base::FilePath& path) {
   return it != kAllowList.end() ? *it : "";
 }
 
+absl::optional<std::string> DoSerialize(base::ValueView value,
+                                        const base::FilePath& path) {
+  std::string output;
+  if (!base::JSONWriter::Write(value, &output)) {
+    // Failed to serialize prefs file. Backup the existing prefs file and
+    // crash.
+    BackupPrefsFile(path);
+    NOTREACHED_NORETURN() << "Failed to serialize preferences : " << path
+                          << "\nBacked up under "
+                          << path.ReplaceExtension(kBadExtension);
+  }
+  return output;
+}
+
 }  // namespace
 
 JsonPrefStore::JsonPrefStore(
@@ -154,7 +147,6 @@ JsonPrefStore::JsonPrefStore(
     bool read_only)
     : path_(pref_filename),
       file_task_runner_(std::move(file_task_runner)),
-      prefs_(new base::DictionaryValue()),
       read_only_(read_only),
       writer_(pref_filename,
               file_task_runner_,
@@ -172,7 +164,7 @@ bool JsonPrefStore::GetValue(base::StringPiece key,
                              const base::Value** result) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  base::Value* tmp = prefs_->FindPath(key);
+  const base::Value* tmp = prefs_.FindByDottedPath(key);
   if (!tmp)
     return false;
 
@@ -182,7 +174,7 @@ bool JsonPrefStore::GetValue(base::StringPiece key,
 }
 
 base::Value::Dict JsonPrefStore::GetValues() const {
-  return prefs_->GetDict().Clone();
+  return prefs_.Clone();
 }
 
 void JsonPrefStore::AddObserver(PrefStore::Observer* observer) {
@@ -212,7 +204,7 @@ bool JsonPrefStore::GetMutableValue(const std::string& key,
                                     base::Value** result) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  base::Value* tmp = prefs_->FindPath(key);
+  base::Value* tmp = prefs_.FindByDottedPath(key);
   if (!tmp)
     return false;
 
@@ -226,9 +218,9 @@ void JsonPrefStore::SetValue(const std::string& key,
                              uint32_t flags) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  base::Value* old_value = prefs_->FindPath(key);
+  base::Value* old_value = prefs_.FindByDottedPath(key);
   if (!old_value || value != *old_value) {
-    prefs_->SetPath(key, std::move(value));
+    prefs_.SetByDottedPath(key, std::move(value));
     ReportValueChanged(key, flags);
   }
 }
@@ -238,9 +230,9 @@ void JsonPrefStore::SetValueSilently(const std::string& key,
                                      uint32_t flags) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  base::Value* old_value = prefs_->FindPath(key);
+  base::Value* old_value = prefs_.FindByDottedPath(key);
   if (!old_value || value != *old_value) {
-    prefs_->SetPath(key, std::move(value));
+    prefs_.SetByDottedPath(key, std::move(value));
     ScheduleWrite(flags);
   }
 }
@@ -248,15 +240,16 @@ void JsonPrefStore::SetValueSilently(const std::string& key,
 void JsonPrefStore::RemoveValue(const std::string& key, uint32_t flags) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (prefs_->RemovePath(key))
+  if (prefs_.RemoveByDottedPath(key)) {
     ReportValueChanged(key, flags);
+  }
 }
 
 void JsonPrefStore::RemoveValueSilently(const std::string& key,
                                         uint32_t flags) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  prefs_->RemovePath(key);
+  prefs_.RemoveByDottedPath(key);
   ScheduleWrite(flags);
 }
 
@@ -292,10 +285,10 @@ void JsonPrefStore::ReadPrefsAsync(ReadErrorDelegate* error_delegate) {
   error_delegate_.reset(error_delegate);
 
   // Weakly binds the read task so that it doesn't kick in during shutdown.
-  base::PostTaskAndReplyWithResult(
-      file_task_runner_.get(), FROM_HERE,
-      base::BindOnce(&ReadPrefsFromDisk, path_),
-      base::BindOnce(&JsonPrefStore::OnFileRead, AsWeakPtr()));
+  file_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&ReadPrefsFromDisk, path_),
+      base::BindOnce(&JsonPrefStore::OnFileRead,
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
 void JsonPrefStore::CommitPendingWrite(
@@ -341,6 +334,16 @@ void JsonPrefStore::ReportValueChanged(const std::string& key, uint32_t flags) {
     observer.OnPrefValueChanged(key);
 
   ScheduleWrite(flags);
+}
+
+void JsonPrefStore::PerformPreserializationTasks() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  pending_lossy_write_ = false;
+  if (pref_filter_) {
+    OnWriteCallbackPair callbacks = pref_filter_->FilterSerializeData(prefs_);
+    if (!callbacks.first.is_null() || !callbacks.second.is_null())
+      RegisterOnNextWriteSynchronousCallbacks(std::move(callbacks));
+  }
 }
 
 void JsonPrefStore::RunOrScheduleNextSuccessfulWriteCallback(
@@ -392,8 +395,8 @@ void JsonPrefStore::RegisterOnNextSuccessfulWriteReply(
             &PostWriteCallback, base::OnceCallback<void(bool success)>(),
             base::BindOnce(
                 &JsonPrefStore::RunOrScheduleNextSuccessfulWriteCallback,
-                AsWeakPtr()),
-            base::SequencedTaskRunnerHandle::Get()));
+                weak_ptr_factory_.GetWeakPtr()),
+            base::SequencedTaskRunner::GetCurrentDefault()));
   }
 }
 
@@ -409,12 +412,8 @@ void JsonPrefStore::RegisterOnNextWriteSynchronousCallbacks(
           &PostWriteCallback, std::move(callbacks.second),
           base::BindOnce(
               &JsonPrefStore::RunOrScheduleNextSuccessfulWriteCallback,
-              AsWeakPtr()),
-          base::SequencedTaskRunnerHandle::Get()));
-}
-
-void JsonPrefStore::ClearMutableValues() {
-  NOTIMPLEMENTED();
+              weak_ptr_factory_.GetWeakPtr()),
+          base::SequencedTaskRunner::GetCurrentDefault()));
 }
 
 void JsonPrefStore::OnStoreDeletionFromDisk() {
@@ -427,7 +426,7 @@ void JsonPrefStore::OnFileRead(std::unique_ptr<ReadResult> read_result) {
 
   DCHECK(read_result);
 
-  auto unfiltered_prefs = std::make_unique<base::DictionaryValue>();
+  base::Value::Dict unfiltered_prefs;
 
   read_error_ = read_result->error;
 
@@ -444,9 +443,9 @@ void JsonPrefStore::OnFileRead(std::unique_ptr<ReadResult> read_result) {
         break;
       case PREF_READ_ERROR_NONE:
         DCHECK(read_result->value);
+        DCHECK(read_result->value->is_dict());
         writer_.set_previous_data_size(read_result->num_bytes_read);
-        unfiltered_prefs.reset(
-            static_cast<base::DictionaryValue*>(read_result->value.release()));
+        unfiltered_prefs = std::move(*read_result->value).TakeDict();
         break;
       case PREF_READ_ERROR_NO_FILE:
         // If the file just doesn't exist, maybe this is first run.  In any case
@@ -467,7 +466,8 @@ void JsonPrefStore::OnFileRead(std::unique_ptr<ReadResult> read_result) {
   if (pref_filter_) {
     filtering_in_progress_ = true;
     PrefFilter::PostFilterOnLoadCallback post_filter_on_load_callback(
-        base::BindOnce(&JsonPrefStore::FinalizeFileRead, AsWeakPtr(),
+        base::BindOnce(&JsonPrefStore::FinalizeFileRead,
+                       weak_ptr_factory_.GetWeakPtr(),
                        initialization_successful));
     pref_filter_->FilterOnLoad(std::move(post_filter_on_load_callback),
                                std::move(unfiltered_prefs));
@@ -482,39 +482,20 @@ JsonPrefStore::~JsonPrefStore() {
   CommitPendingWrite();
 }
 
-bool JsonPrefStore::SerializeData(std::string* output) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  pending_lossy_write_ = false;
-
-  if (pref_filter_) {
-    OnWriteCallbackPair callbacks =
-        pref_filter_->FilterSerializeData(prefs_.get());
-    if (!callbacks.first.is_null() || !callbacks.second.is_null())
-      RegisterOnNextWriteSynchronousCallbacks(std::move(callbacks));
-  }
-
-  JSONStringValueSerializer serializer(output);
-  // Not pretty-printing prefs shrinks pref file size by ~30%. To obtain
-  // readable prefs for debugging purposes, you can dump your prefs into any
-  // command-line or online JSON pretty printing tool.
-  serializer.set_pretty_print(false);
-  const bool success = serializer.Serialize(*prefs_);
-  if (!success) {
-    // Failed to serialize prefs file. Backup the existing prefs file and
-    // crash.
-    BackupPrefsFile(path_);
-    CHECK(false) << "Failed to serialize preferences : " << path_
-                 << "\nBacked up under "
-                 << path_.ReplaceExtension(kBadExtension);
-  }
-  return success;
+absl::optional<std::string> JsonPrefStore::SerializeData() {
+  PerformPreserializationTasks();
+  return DoSerialize(prefs_, path_);
 }
 
-void JsonPrefStore::FinalizeFileRead(
-    bool initialization_successful,
-    std::unique_ptr<base::DictionaryValue> prefs,
-    bool schedule_write) {
+base::ImportantFileWriter::BackgroundDataProducerCallback
+JsonPrefStore::GetSerializedDataProducerForBackgroundSequence() {
+  PerformPreserializationTasks();
+  return base::BindOnce(&DoSerialize, prefs_.Clone(), path_);
+}
+
+void JsonPrefStore::FinalizeFileRead(bool initialization_successful,
+                                     base::Value::Dict prefs,
+                                     bool schedule_write) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   filtering_in_progress_ = false;
@@ -545,8 +526,9 @@ void JsonPrefStore::ScheduleWrite(uint32_t flags) {
   if (read_only_)
     return;
 
-  if (flags & LOSSY_PREF_WRITE_FLAG)
+  if (flags & LOSSY_PREF_WRITE_FLAG) {
     pending_lossy_write_ = true;
-  else
-    writer_.ScheduleWrite(this);
+  } else {
+    writer_.ScheduleWriteWithBackgroundDataSerializer(this);
+  }
 }

@@ -7,7 +7,7 @@
 #include <array>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/ranges/algorithm.h"
@@ -128,8 +128,10 @@ void OnPrinterQueried(ash::PrinterInfoCallback callback,
   const ::printing::PrinterStatus& printer_status = query_result.printer_status;
   if (result != ::printing::PrinterQueryResult::kSuccess) {
     VLOG(1) << "Could not reach printer";
-    std::move(callback).Run(result, ::printing::PrinterStatus(), std::string(),
-                            {}, false, {});
+    std::move(callback).Run(result, ::printing::PrinterStatus(),
+                            /*make_and_model=*/std::string(),
+                            /*document_formats=*/{}, /*ipp_everywhere=*/false,
+                            chromeos::PrinterAuthenticationInfo{});
     return;
   }
 

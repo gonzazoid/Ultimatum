@@ -4,8 +4,8 @@
 
 #include <va/va.h>
 
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <string>
 
@@ -19,17 +19,19 @@
 #include "media/filters/ivf_parser.h"
 #include "media/gpu/vaapi/test/av1_decoder.h"
 #include "media/gpu/vaapi/test/h264_decoder.h"
-#if BUILDFLAG(ENABLE_PLATFORM_HEVC)
-#include "media/gpu/vaapi/test/h265_decoder.h"
-#endif
 #include "media/gpu/vaapi/test/shared_va_surface.h"
 #include "media/gpu/vaapi/test/vaapi_device.h"
 #include "media/gpu/vaapi/test/video_decoder.h"
 #include "media/gpu/vaapi/test/vp8_decoder.h"
 #include "media/gpu/vaapi/test/vp9_decoder.h"
 #include "media/gpu/vaapi/va_stubs.h"
+#include "media/media_buildflags.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/size.h"
+
+#if BUILDFLAG(ENABLE_PLATFORM_HEVC)
+#include "media/gpu/vaapi/test/h265_decoder.h"
+#endif
 
 using media::vaapi_test::Av1Decoder;
 using media::vaapi_test::H264Decoder;
@@ -60,7 +62,7 @@ constexpr char kUsageMsg[] =
     "           [--out-prefix=<path prefix of decoded frame PNGs>]\n"
     "           [--md5[=<checksum path>]]\n"
     "           [--visible]\n"
-    "           [--loop]\n"
+    "           [--loop[=<n>]]\n"
     "           [--v=<log verbosity>]\n"
     "           [--help]\n";
 
@@ -113,10 +115,11 @@ constexpr char kHelpMsg[] =
     "    --visible\n"
     "        Optional. If specified, applies post-decode processing (PNG\n"
     "        output, md5 hash) only to visible frames.\n"
-    "    --loop\n"
-    "        Optional. If specified, loops decoding until terminated\n"
-    "        externally or until an error occurs, at which point execution\n"
-    "        will immediately terminate.\n"
+    "    --loop[=<n>]\n"
+    "        Optional. If specified with a value, loops decoding specified\n"
+    "        times. If specified without, loops until terminated externally\n"
+    "        or until an error occurs, at which point execution will\n"
+    "        immediately terminate.\n"
     "        If specified with --frames, loops decoding that number of\n"
     "        leading frames. If specified with --out-prefix, loops decoding,\n"
     "        but only saves the first iteration of decoded frames.\n"
@@ -171,7 +174,7 @@ absl::optional<SharedVASurface::FetchPolicy> GetFetchPolicy(
   const std::string va_vendor_string = vaQueryVendorString(va_device.display());
   if (base::StartsWith(va_vendor_string, "Mesa Gallium driver",
                        base::CompareCase::SENSITIVE)) {
-    LOG(INFO) << "AMD driver detected, forcing vaGetImage";
+    LOG(WARNING) << "AMD driver detected, forcing vaGetImage";
     return SharedVASurface::FetchPolicy::kGetImage;
   }
 
@@ -262,6 +265,15 @@ int main(int argc, char** argv) {
 
   const VaapiDevice va_device;
   const bool loop_decode = cmd->HasSwitch("loop");
+  const std::string loops = cmd->GetSwitchValueASCII("loop");
+  int n_loops;
+  if (loops.empty()) {
+    n_loops = 0;
+  } else if (!base::StringToInt(loops, &n_loops) || n_loops <= 0) {
+    LOG(ERROR) << "Number of times to loop decode must be positive integer, "
+               << "got " << frames;
+    return EXIT_FAILURE;
+  }
   bool first_loop = true;
 
   const auto fetch_policy =
@@ -279,7 +291,6 @@ int main(int argc, char** argv) {
     }
 
     for (int i = 0; i < n_frames || n_frames == 0; i++) {
-      LOG(INFO) << "Frame " << i << "...";
       const VideoDecoder::Result res = dec->DecodeNextFrame();
 
       if (res == VideoDecoder::kEOStream) {
@@ -303,7 +314,8 @@ int main(int argc, char** argv) {
     }
 
     first_loop = false;
-  } while (loop_decode);
+    n_loops--;
+  } while (loop_decode && (loops.empty() || n_loops > 0));
 
   LOG(INFO) << "Done reading.";
 

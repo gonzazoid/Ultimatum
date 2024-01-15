@@ -67,7 +67,7 @@ proto_library(
     deps = [
         "//tensorflow_lite_support/cc/task/core/proto:base_options_proto",
         "//tensorflow_lite_support/cc/task/core/proto:external_file_proto",
-        "@org_tensorflow//tensorflow/lite/experimental/acceleration/configuration:configuration_proto",
+        "@org_tensorflow//tensorflow/lite/acceleration/configuration:configuration_proto",
     ],
 )
 
@@ -84,7 +84,7 @@ support_py_proto_library(
     api_version = 2,
     proto_deps = [":object_detector_options_proto"],
     py_proto_deps = [
-        "@org_tensorflow//tensorflow/lite/experimental/acceleration/configuration:configuration_proto_external_py",
+        "@org_tensorflow//tensorflow/lite/acceleration/configuration:configuration_proto_external_py",
         "//tensorflow_lite_support/cc/task/core/proto:base_options_py_pb2",
         "//tensorflow_lite_support/cc/task/core/proto:external_file_py_pb2",
     ],
@@ -145,7 +145,7 @@ proto_library(
     deps = [
         "//tensorflow_lite_support/cc/task/core/proto:base_options_proto",
         "//tensorflow_lite_support/cc/task/core/proto:external_file_proto",
-        "@org_tensorflow//tensorflow/lite/experimental/acceleration/configuration:configuration_proto",
+        "@org_tensorflow//tensorflow/lite/acceleration/configuration:configuration_proto",
     ],
 )
 
@@ -162,7 +162,7 @@ support_py_proto_library(
     api_version = 2,
     proto_deps = [":image_classifier_options_proto"],
     py_proto_deps = [
-        "@org_tensorflow//tensorflow/lite/experimental/acceleration/configuration:configuration_proto_external_py",
+        "@org_tensorflow//tensorflow/lite/acceleration/configuration:configuration_proto_external_py",
         "//tensorflow_lite_support/cc/task/core/proto:base_options_py_pb2",
         "//tensorflow_lite_support/cc/task/core/proto:external_file_py_pb2",
     ],
@@ -218,7 +218,7 @@ proto_library(
     deps = [
         "//tensorflow_lite_support/cc/task/core/proto:base_options_proto",
         "//tensorflow_lite_support/cc/task/core/proto:external_file_proto",
-        "@org_tensorflow//tensorflow/lite/experimental/acceleration/configuration:configuration_proto",
+        "@org_tensorflow//tensorflow/lite/acceleration/configuration:configuration_proto",
     ],
 )
 
@@ -271,7 +271,7 @@ proto_library(
     srcs = ["image_embedder_options.proto"],
     deps = [
         "//tensorflow_lite_support/cc/task/core/proto:external_file_proto",
-        "@org_tensorflow//tensorflow/lite/experimental/acceleration/configuration:configuration_proto",
+        "@org_tensorflow//tensorflow/lite/acceleration/configuration:configuration_proto",
     ],
 )
 
@@ -288,7 +288,7 @@ support_py_proto_library(
     api_version = 2,
     proto_deps = [":image_embedder_options_proto"],
     py_proto_deps = [
-        "@org_tensorflow//tensorflow/lite/experimental/acceleration/configuration:configuration_proto_external_py",
+        "@org_tensorflow//tensorflow/lite/acceleration/configuration:configuration_proto_external_py",
         "//tensorflow_lite_support/cc/task/core/proto:external_file_py_pb2",
     ],
 )

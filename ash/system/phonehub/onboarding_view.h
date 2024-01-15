@@ -8,6 +8,7 @@
 #include "ash/ash_export.h"
 #include "ash/system/phonehub/phone_hub_content_view.h"
 #include "ash/system/tray/tray_bubble_view.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/view.h"
@@ -30,6 +31,7 @@ class ASH_EXPORT OnboardingView : public PhoneHubContentView {
   class Delegate {
    public:
     virtual void HideStatusHeaderView() = 0;
+    virtual bool IsPhoneHubIconClickedWhenNudgeVisible() = 0;
   };
 
   // The different onboarding flows that are supported.
@@ -46,6 +48,9 @@ class ASH_EXPORT OnboardingView : public PhoneHubContentView {
   // Invoked when user clicks the "Dismiss" button on the main onboarding view.
   void ShowDismissPrompt();
 
+  // Determine if OnboardingView is created when nudge is visible.
+  bool IsOnboardingViewStartedFromNudge();
+
   // PhoneHubContentView:
   void OnBubbleClose() override;
   phone_hub_metrics::Screen GetScreenForMetrics() const override;
@@ -53,10 +58,10 @@ class ASH_EXPORT OnboardingView : public PhoneHubContentView {
  private:
   // The view responsible for displaying the onboarding UI contents.
   // Owned by view hierarchy.
-  PhoneHubInterstitialView* main_view_ = nullptr;
+  raw_ptr<PhoneHubInterstitialView, DanglingUntriaged> main_view_ = nullptr;
 
-  phonehub::OnboardingUiTracker* onboarding_ui_tracker_ = nullptr;
-  Delegate* delegate_ = nullptr;
+  raw_ptr<phonehub::OnboardingUiTracker> onboarding_ui_tracker_ = nullptr;
+  raw_ptr<Delegate, DanglingUntriaged> delegate_ = nullptr;
 };
 
 }  // namespace ash

@@ -9,6 +9,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "services/device/public/cpp/geolocation/location_provider.h"
+#include "services/device/public/mojom/geolocation_internals.mojom.h"
 #include "services/device/public/mojom/geoposition.mojom.h"
 
 namespace device {
@@ -20,20 +21,23 @@ class LocationProviderAndroid : public LocationProvider {
   ~LocationProviderAndroid() override;
 
   // Called by the LocationApiAdapterAndroid.
-  void NotifyNewGeoposition(const mojom::Geoposition& position);
+  void NotifyNewGeoposition(mojom::GeopositionResultPtr result);
 
   // LocationProvider implementation.
+  void FillDiagnostics(mojom::GeolocationDiagnostics& diagnostics) override;
   void SetUpdateCallback(
       const LocationProviderUpdateCallback& callback) override;
   void StartProvider(bool high_accuracy) override;
   void StopProvider() override;
-  const mojom::Geoposition& GetPosition() override;
+  const mojom::GeopositionResult* GetPosition() override;
   void OnPermissionGranted() override;
 
  private:
   base::ThreadChecker thread_checker_;
 
-  mojom::Geoposition last_position_;
+  mojom::GeolocationDiagnostics::ProviderState state_ =
+      mojom::GeolocationDiagnostics::ProviderState::kStopped;
+  mojom::GeopositionResultPtr last_result_;
   LocationProviderUpdateCallback callback_;
 
   base::WeakPtrFactory<LocationProviderAndroid> weak_ptr_factory_{this};

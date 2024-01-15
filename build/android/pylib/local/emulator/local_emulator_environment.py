@@ -5,7 +5,6 @@
 
 import logging
 
-from six.moves import range  # pylint: disable=redefined-builtin
 from devil import base_error
 from devil.android import device_errors
 from devil.utils import parallelizer
@@ -33,6 +32,8 @@ class LocalEmulatorEnvironment(local_device_environment.LocalDeviceEnvironment):
       logging.warning('--emulator-count capped at 16.')
     self._emulator_count = min(_MAX_ANDROID_EMULATORS, args.emulator_count)
     self._emulator_window = args.emulator_window
+    self._emulator_debug_tags = args.emulator_debug_tags
+    self._emulator_enable_network = args.emulator_enable_network
     self._writable_system = ((hasattr(args, 'use_webview_provider')
                               and args.use_webview_provider)
                              or (hasattr(args, 'replace_system_package')
@@ -48,35 +49,38 @@ class LocalEmulatorEnvironment(local_device_environment.LocalDeviceEnvironment):
     self._avd_config.Install()
 
     emulator_instances = [
-        self._avd_config.CreateInstance() for _ in range(self._emulator_count)
+        self._avd_config.CreateInstance(output_manager=self.output_manager)
+        for _ in range(self._emulator_count)
     ]
 
-    def start_emulator_instance(e):
-
-      def impl(e):
-        try:
-          e.Start(
-              window=self._emulator_window,
-              writable_system=self._writable_system)
-        except avd.AvdException:
-          logging.exception('Failed to start emulator instance.')
-          return None
-        except base_error.BaseError:
-          e.Stop()
-          raise
-        return e
-
-      def retry_on_timeout(exc):
+    def start_emulator_instance(inst):
+      def is_timeout_error(exc):
         return isinstance(
             exc,
             (device_errors.CommandTimeoutError, reraiser_thread.TimeoutError))
 
-      return timeout_retry.Run(
-          impl,
-          timeout=120 if self._writable_system else 30,
-          retries=2,
-          args=[e],
-          retry_if_func=retry_on_timeout)
+      def impl(inst):
+        try:
+          inst.Start(window=self._emulator_window,
+                     writable_system=self._writable_system,
+                     debug_tags=self._emulator_debug_tags,
+                     enable_network=self._emulator_enable_network,
+                     require_fast_start=True)
+        except avd.AvdException:
+          logging.exception('Failed to start emulator instance.')
+          return None
+        except base_error.BaseError as e:
+          # Timeout error usually indicates the emulator is not responding.
+          # In this case, we should stop it forcely.
+          inst.Stop(force=is_timeout_error(e))
+          raise
+        return inst
+
+      return timeout_retry.Run(impl,
+                               timeout=120 if self._writable_system else 60,
+                               retries=2,
+                               args=[inst],
+                               retry_if_func=is_timeout_error)
 
     parallel_emulators = parallelizer.SyncParallelizer(emulator_instances)
     self._emulator_instances = [

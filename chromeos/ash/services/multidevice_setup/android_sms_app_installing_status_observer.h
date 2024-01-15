@@ -7,10 +7,10 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/services/multidevice_setup/feature_state_manager.h"
 #include "chromeos/ash/services/multidevice_setup/host_status_provider.h"
 
-class PrefRegistrySimple;
 class PrefService;
 
 namespace ash {
@@ -53,8 +53,6 @@ class AndroidSmsAppInstallingStatusObserver
 
   ~AndroidSmsAppInstallingStatusObserver() override;
 
-  static void RegisterPrefs(PrefRegistrySimple* registry);
-
  private:
   AndroidSmsAppInstallingStatusObserver(
       HostStatusProvider* host_status_provider,
@@ -72,12 +70,11 @@ class AndroidSmsAppInstallingStatusObserver
 
   bool DoesFeatureStateAllowInstallation();
   void UpdatePwaInstallationState();
-  void ReenableIfAppropriate();
 
-  HostStatusProvider* host_status_provider_;
-  FeatureStateManager* feature_state_manager_;
-  AndroidSmsAppHelperDelegate* android_sms_app_helper_delegate_;
-  PrefService* pref_service_;
+  raw_ptr<HostStatusProvider> host_status_provider_;
+  raw_ptr<FeatureStateManager> feature_state_manager_;
+  raw_ptr<AndroidSmsAppHelperDelegate> android_sms_app_helper_delegate_;
+  raw_ptr<PrefService> pref_service_;
   base::WeakPtrFactory<AndroidSmsAppInstallingStatusObserver> weak_ptr_factory_{
       this};
 };

@@ -9,8 +9,8 @@
 
 #include "android_webview/browser/lifecycle/webview_app_state_observer.h"
 #include "base/android/jni_android.h"
-#include "base/callback.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
 
@@ -32,6 +32,7 @@ class AwContentsLifecycleNotifier {
   };
 
   static AwContentsLifecycleNotifier& GetInstance();
+  static void InitForTesting();
 
   // The |onLoseForegroundCallback| will be invoked after all observers when app
   // lose foreground.
@@ -106,6 +107,8 @@ class AwContentsLifecycleNotifier {
 
   WebViewAppStateObserver::State app_state_ =
       WebViewAppStateObserver::State::kDestroyed;
+
+  base::android::ScopedJavaGlobalRef<jobject> java_ref_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 };

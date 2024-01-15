@@ -32,6 +32,9 @@ export class TestService extends TestBrowserProxy implements ServiceInterface {
       'deleteActivitiesFromExtension',
       'deleteErrors',
       'deleteItem',
+      'deleteItems',
+      'dismissSafetyHubExtensionsMenuNotification',
+      'uninstallItem',
       'downloadActivities',
       'getExtensionActivityLog',
       'getExtensionsInfo',
@@ -61,6 +64,8 @@ export class TestService extends TestBrowserProxy implements ServiceInterface {
       'setItemCollectsErrors',
       'setItemEnabled',
       'setItemHostAccess',
+      'setItemPinnedToToolbar',
+      'setItemSafetyCheckWarningAcknowledged',
       'setProfileInDevMode',
       'setShortcutHandlingSuspended',
       'setShowAccessRequestsInToolbar',
@@ -70,6 +75,7 @@ export class TestService extends TestBrowserProxy implements ServiceInterface {
       'updateAllExtensions',
       'updateExtensionCommandKeybinding',
       'updateExtensionCommandScope',
+      'updateSiteAccess',
     ]);
   }
 
@@ -151,6 +157,11 @@ export class TestService extends TestBrowserProxy implements ServiceInterface {
     this.methodCalled('setItemAllowedOnFileUrls', [id, isAllowedOnFileUrls]);
   }
 
+
+  setItemSafetyCheckWarningAcknowledged(id: string) {
+    this.methodCalled('setItemSafetyCheckWarningAcknowledged', id);
+  }
+
   setItemEnabled(id: string, isEnabled: boolean) {
     this.methodCalled('setItemEnabled', [id, isEnabled]);
   }
@@ -161,6 +172,10 @@ export class TestService extends TestBrowserProxy implements ServiceInterface {
 
   setItemHostAccess(id: string, access: chrome.developerPrivate.HostAccess) {
     this.methodCalled('setItemHostAccess', [id, access]);
+  }
+
+  setItemPinnedToToolbar(id: string, pinnedToToolbar: boolean) {
+    this.methodCalled('setItemPinnedToToolbar', [id, pinnedToToolbar]);
   }
 
   setShortcutHandlingSuspended(enable: boolean) {
@@ -218,12 +233,15 @@ export class TestService extends TestBrowserProxy implements ServiceInterface {
     this.methodCalled('openUrl', url);
   }
 
-  packExtension(
-      rootPath: string, keyPath: string, flag?: number,
-      _callback?:
-          (response: chrome.developerPrivate.PackDirectoryResponse) => void):
-      void {
+  packExtension(rootPath: string, keyPath: string, flag?: number) {
     this.methodCalled('packExtension', [rootPath, keyPath, flag]);
+    return Promise.resolve({
+      message: '',
+      item_path: '',
+      pem_path: '',
+      override_flags: 0,
+      status: chrome.developerPrivate.PackStatus.ERROR,
+    });
   }
 
   repairItem(id: string): void {
@@ -301,6 +319,16 @@ export class TestService extends TestBrowserProxy implements ServiceInterface {
     this.methodCalled('deleteItem', id);
   }
 
+  deleteItems(ids: string[]) {
+    this.methodCalled('deleteItems', ids);
+    return Promise.resolve();
+  }
+
+  uninstallItem(id: string) {
+    this.methodCalled('uninstallItem', id);
+    return Promise.resolve();
+  }
+
   getOnExtensionActivity() {
     return this.extensionActivityTarget;
   }
@@ -355,5 +383,16 @@ export class TestService extends TestBrowserProxy implements ServiceInterface {
   getMatchingExtensionsForSite(site: string) {
     this.methodCalled('getMatchingExtensionsForSite', site);
     return Promise.resolve(this.matchingExtensionsInfo!);
+  }
+
+  updateSiteAccess(
+      site: string,
+      updates: chrome.developerPrivate.ExtensionSiteAccessUpdate[]) {
+    this.methodCalled('updateSiteAccess', site, updates);
+    return Promise.resolve();
+  }
+
+  dismissSafetyHubExtensionsMenuNotification() {
+    this.methodCalled('dismissSafetyHubExtensionsMenuNotification');
   }
 }

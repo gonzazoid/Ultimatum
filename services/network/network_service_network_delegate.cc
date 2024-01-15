@@ -6,8 +6,8 @@
 
 #include <string>
 
-#include "base/bind.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/types/optional_util.h"
@@ -17,7 +17,8 @@
 #include "net/base/isolation_info.h"
 #include "net/base/load_flags.h"
 #include "net/base/net_errors.h"
-#include "net/first_party_sets/same_party_context.h"
+#include "net/cookies/cookie_setting_override.h"
+#include "net/url_request/clear_site_data.h"
 #include "net/url_request/referrer_policy.h"
 #include "net/url_request/url_request.h"
 #include "services/network/cookie_manager.h"
@@ -28,17 +29,11 @@
 #include "services/network/url_loader.h"
 #include "url/gurl.h"
 
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(ENABLE_WEBSOCKETS)
 #include "services/network/websocket.h"
 #endif
 
 namespace network {
-
-namespace {
-
-const char kClearSiteDataHeader[] = "Clear-Site-Data";
-
-}  // anonymous namespace
 
 NetworkServiceNetworkDelegate::NetworkServiceNetworkDelegate(
     bool enable_referrers,
@@ -110,11 +105,11 @@ int NetworkServiceNetworkDelegate::OnBeforeStartTransaction(
   if (url_loader)
     return url_loader->OnBeforeStartTransaction(headers, std::move(callback));
 
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(ENABLE_WEBSOCKETS)
   WebSocket* web_socket = WebSocket::ForRequest(*request);
   if (web_socket)
     return web_socket->OnBeforeStartTransaction(headers, std::move(callback));
-#endif  // !BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(ENABLE_WEBSOCKETS)
 
   return net::OK;
 }
@@ -135,14 +130,14 @@ int NetworkServiceNetworkDelegate::OnHeadersReceived(
         preserve_fragment_on_redirect_url));
   }
 
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(ENABLE_WEBSOCKETS)
   WebSocket* web_socket = WebSocket::ForRequest(*request);
   if (web_socket) {
     chain->AddResult(web_socket->OnHeadersReceived(
         chain->CreateCallback(), original_response_headers,
         override_response_headers, preserve_fragment_on_redirect_url));
   }
-#endif  // !BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(ENABLE_WEBSOCKETS)
 
   chain->AddResult(HandleClearSiteDataHeader(request, chain->CreateCallback(),
                                              original_response_headers));
@@ -195,8 +190,8 @@ bool NetworkServiceNetworkDelegate::OnAnnotateAndMoveUserBlockedCookies(
            .AnnotateAndMoveUserBlockedCookies(
                request.url(), request.site_for_cookies(),
                base::OptionalToPtr(request.isolation_info().top_frame_origin()),
-               first_party_set_metadata, maybe_included_cookies,
-               excluded_cookies)) {
+               first_party_set_metadata, request.cookie_setting_overrides(),
+               maybe_included_cookies, excluded_cookies)) {
     // CookieSettings has already moved and annotated the cookies.
     return false;
   }
@@ -206,13 +201,13 @@ bool NetworkServiceNetworkDelegate::OnAnnotateAndMoveUserBlockedCookies(
   if (url_loader) {
     allowed =
         url_loader->AllowCookies(request.url(), request.site_for_cookies());
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(ENABLE_WEBSOCKETS)
   } else {
     WebSocket* web_socket = WebSocket::ForRequest(request);
     if (web_socket) {
       allowed = web_socket->AllowCookies(request.url());
     }
-#endif  // !BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(ENABLE_WEBSOCKETS)
   }
   if (!allowed)
     ExcludeAllCookies(net::CookieInclusionStatus::EXCLUDE_USER_PREFERENCES,
@@ -224,34 +219,37 @@ bool NetworkServiceNetworkDelegate::OnAnnotateAndMoveUserBlockedCookies(
 bool NetworkServiceNetworkDelegate::OnCanSetCookie(
     const net::URLRequest& request,
     const net::CanonicalCookie& cookie,
-    net::CookieOptions* options) {
+    net::CookieOptions* options,
+    const net::FirstPartySetMetadata& first_party_set_metadata,
+    net::CookieInclusionStatus* inclusion_status) {
   bool allowed =
       network_context_->cookie_manager()->cookie_settings().IsCookieAccessible(
           cookie, request.url(), request.site_for_cookies(),
-          request.isolation_info().top_frame_origin());
+          request.isolation_info().top_frame_origin(), first_party_set_metadata,
+          request.cookie_setting_overrides(), inclusion_status);
   if (!allowed)
     return false;
+  // The remaining checks do not consider setting overrides since they enforce
+  // explicit disablement via Android Webview APIs.
   URLLoader* url_loader = URLLoader::ForRequest(request);
   if (url_loader)
     return url_loader->AllowCookies(request.url(), request.site_for_cookies());
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(ENABLE_WEBSOCKETS)
   WebSocket* web_socket = WebSocket::ForRequest(request);
   if (web_socket)
     return web_socket->AllowCookies(request.url());
-#endif  // !BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(ENABLE_WEBSOCKETS)
   return true;
 }
 
 net::NetworkDelegate::PrivacySetting
 NetworkServiceNetworkDelegate::OnForcePrivacyMode(
-    const GURL& url,
-    const net::SiteForCookies& site_for_cookies,
-    const absl::optional<url::Origin>& top_frame_origin,
-    net::SamePartyContext::Type same_party_context_type) const {
+    const net::URLRequest& request) const {
   return network_context_->cookie_manager()
       ->cookie_settings()
-      .IsPrivacyModeEnabled(url, site_for_cookies, top_frame_origin,
-                            same_party_context_type);
+      .IsPrivacyModeEnabled(request.url(), request.site_for_cookies(),
+                            request.isolation_info().top_frame_origin(),
+                            request.cookie_setting_overrides());
 }
 
 bool NetworkServiceNetworkDelegate::
@@ -270,9 +268,11 @@ bool NetworkServiceNetworkDelegate::
   // Record information to help debug issues like http://crbug.com/422871.
   if (target_url.SchemeIsHTTPOrHTTPS()) {
     auto referrer_policy = request.referrer_policy();
-    base::debug::Alias(&referrer_policy);
-    DEBUG_ALIAS_FOR_GURL(target_buf, target_url);
-    DEBUG_ALIAS_FOR_GURL(referrer_buf, referrer_url);
+    SCOPED_CRASH_KEY_NUMBER("Bug1485060", "referrer_policy",
+                            static_cast<int>(referrer_policy));
+    SCOPED_CRASH_KEY_STRING256("Bug1485060", "target_url", target_url.spec());
+    SCOPED_CRASH_KEY_STRING256("Bug1485060", "referrer_url",
+                               referrer_url.spec());
     base::debug::DumpWithoutCrashing();
   }
   return true;
@@ -282,8 +282,9 @@ bool NetworkServiceNetworkDelegate::OnCanQueueReportingReport(
     const url::Origin& origin) const {
   return network_context_->cookie_manager()
       ->cookie_settings()
-      .IsFullCookieAccessAllowed(origin.GetURL(), origin.GetURL(),
-                                 QueryReason::kSiteStorage);
+      .IsFullCookieAccessAllowed(origin.GetURL(),
+                                 net::SiteForCookies::FromOrigin(origin),
+                                 origin, net::CookieSettingOverrides());
 }
 
 void NetworkServiceNetworkDelegate::OnCanSendReportingReports(
@@ -315,8 +316,9 @@ bool NetworkServiceNetworkDelegate::OnCanSetReportingClient(
     const GURL& endpoint) const {
   return network_context_->cookie_manager()
       ->cookie_settings()
-      .IsFullCookieAccessAllowed(origin.GetURL(), origin.GetURL(),
-                                 QueryReason::kSiteStorage);
+      .IsFullCookieAccessAllowed(origin.GetURL(),
+                                 net::SiteForCookies::FromOrigin(origin),
+                                 origin, net::CookieSettingOverrides());
 }
 
 bool NetworkServiceNetworkDelegate::OnCanUseReportingClient(
@@ -324,18 +326,9 @@ bool NetworkServiceNetworkDelegate::OnCanUseReportingClient(
     const GURL& endpoint) const {
   return network_context_->cookie_manager()
       ->cookie_settings()
-      .IsFullCookieAccessAllowed(origin.GetURL(), origin.GetURL(),
-                                 QueryReason::kSiteStorage);
-}
-
-absl::optional<net::FirstPartySetsCacheFilter::MatchInfo>
-NetworkServiceNetworkDelegate::
-    OnGetFirstPartySetsCacheFilterMatchInfoMaybeAsync(
-        const net::SchemefulSite& request_site,
-        base::OnceCallback<void(net::FirstPartySetsCacheFilter::MatchInfo)>
-            callback) const {
-  return network_context_->first_party_sets_access_delegate()
-      .GetCacheFilterMatchInfo(request_site, std::move(callback));
+      .IsFullCookieAccessAllowed(origin.GetURL(),
+                                 net::SiteForCookies::FromOrigin(origin),
+                                 origin, net::CookieSettingOverrides());
 }
 
 int NetworkServiceNetworkDelegate::HandleClearSiteDataHeader(
@@ -356,15 +349,26 @@ int NetworkServiceNetworkDelegate::HandleClearSiteDataHeader(
     return net::OK;
 
   std::string header_value;
-  if (!original_response_headers->GetNormalizedHeader(kClearSiteDataHeader,
+  if (!original_response_headers->GetNormalizedHeader(net::kClearSiteDataHeader,
                                                       &header_value)) {
     return net::OK;
   }
+
+  auto& cookie_settings = network_context_->cookie_manager()->cookie_settings();
+  net::NetworkDelegate::PrivacySetting privacy_settings =
+      cookie_settings.IsPrivacyModeEnabled(
+          request->url(), request->site_for_cookies(),
+          request->isolation_info().top_frame_origin(),
+          request->cookie_setting_overrides());
+  bool partitioned_state_allowed_only =
+      privacy_settings ==
+      net::NetworkDelegate::PrivacySetting::kPartitionedStateAllowedOnly;
 
   url_loader_network_observer->OnClearSiteData(
       request->url(), header_value, request->load_flags(),
       net::CookiePartitionKey::FromNetworkIsolationKey(
           request->isolation_info().network_isolation_key()),
+      partitioned_state_allowed_only,
       base::BindOnce(&NetworkServiceNetworkDelegate::FinishedClearSiteData,
                      weak_ptr_factory_.GetWeakPtr(), request->GetWeakPtr(),
                      std::move(callback)));

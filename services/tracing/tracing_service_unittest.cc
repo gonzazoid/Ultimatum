@@ -5,11 +5,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/test_simple_task_runner.h"
 #include "base/threading/thread.h"
@@ -64,7 +65,7 @@ class TracingServiceTest : public TracingUnitTest {
     s_service = service();
     auto factory = []() -> mojom::TracingService& { return *s_service; };
     PerfettoTracedProcess::Get()->SetConsumerConnectionFactory(
-        factory, base::SequencedTaskRunnerHandle::Get());
+        factory, base::SequencedTaskRunner::GetCurrentDefault());
   }
 
   void EnableClientApiProducer() {
@@ -273,7 +274,7 @@ TEST_F(TracingServiceTest, PerfettoClientConsumerLegacyJson) {
 
   absl::optional<base::Value> result = base::JSONReader::Read(json);
   ASSERT_TRUE(result.has_value());
-  EXPECT_TRUE(result->FindKey("traceEvents"));
+  EXPECT_TRUE(result->GetDict().contains("traceEvents"));
 }
 
 #if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)

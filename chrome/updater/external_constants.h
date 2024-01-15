@@ -5,10 +5,12 @@
 #ifndef CHROME_UPDATER_EXTERNAL_CONSTANTS_H_
 #define CHROME_UPDATER_EXTERNAL_CONSTANTS_H_
 
+#include <optional>
 #include <vector>
 
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/time/time.h"
 #include "base/values.h"
 
 class GURL;
@@ -34,15 +36,21 @@ class ExternalConstants : public base::RefCountedThreadSafe<ExternalConstants> {
   // The URL to send update checks to.
   virtual std::vector<GURL> UpdateURL() const = 0;
 
+  // The URL to send crash reports to.
+  virtual GURL CrashUploadURL() const = 0;
+
+  // The URL to fetch device management policies.
+  virtual GURL DeviceManagementURL() const = 0;
+
   // True if client update protocol signing of update checks is enabled.
   virtual bool UseCUP() const = 0;
 
-  // Number of seconds to delay the start of the automated background tasks
+  // Time to delay the start of the automated background tasks
   // such as update checks.
-  virtual double InitialDelay() const = 0;
+  virtual base::TimeDelta InitialDelay() const = 0;
 
-  // Minimum number of of seconds the server needs to stay alive.
-  virtual int ServerKeepAliveSeconds() const = 0;
+  // Minimum amount of time the server needs to stay alive.
+  virtual base::TimeDelta ServerKeepAliveTime() const = 0;
 
   // CRX format verification requirements.
   virtual crx_file::VerifierFormat CrxVerifierFormat() const = 0;
@@ -53,6 +61,15 @@ class ExternalConstants : public base::RefCountedThreadSafe<ExternalConstants> {
   // Overrides the overinstall timeout.
   virtual base::TimeDelta OverinstallTimeout() const = 0;
 
+  // Overrides the idleness check period.
+  virtual base::TimeDelta IdleCheckPeriod() const = 0;
+
+  // Overrides machine management state.
+  virtual std::optional<bool> IsMachineManaged() const = 0;
+
+  // True if the updater should request and apply diff updates.
+  virtual bool EnableDiffUpdates() const = 0;
+
  protected:
   friend class base::RefCountedThreadSafe<ExternalConstants>;
   scoped_refptr<ExternalConstants> next_provider_;
@@ -61,10 +78,6 @@ class ExternalConstants : public base::RefCountedThreadSafe<ExternalConstants> {
 
 // Sets up an external constants chain of responsibility. May block.
 scoped_refptr<ExternalConstants> CreateExternalConstants();
-
-// Sets up an external constants provider yielding only default values.
-// Intended only for testing of other constants providers.
-scoped_refptr<ExternalConstants> CreateDefaultExternalConstantsForTesting();
 
 }  // namespace updater
 

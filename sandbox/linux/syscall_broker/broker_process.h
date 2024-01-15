@@ -11,15 +11,10 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
-#include "base/files/scoped_file.h"
-#include "base/pickle.h"
-#include "base/process/process.h"
-#include "sandbox/linux/syscall_broker/broker_channel.h"
-#include "sandbox/linux/syscall_broker/broker_command.h"
+#include <optional>
+#include "base/functional/callback_forward.h"
 #include "sandbox/linux/syscall_broker/broker_sandbox_config.h"
 #include "sandbox/sandbox_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace sandbox {
 
@@ -59,7 +54,7 @@ class SANDBOX_EXPORT BrokerProcess {
   // pipeline to the broker process, and it is not multi-threaded.
   //
   // |quiet_failures_for_tests| is reserved for unit tests, don't use it.
-  BrokerProcess(absl::optional<BrokerSandboxConfig> policy,
+  BrokerProcess(std::optional<BrokerSandboxConfig> policy,
                 BrokerType broker_type,
                 bool fast_check_in_client = true,
                 bool quiet_failures_for_tests = false);
@@ -111,7 +106,7 @@ class SANDBOX_EXPORT BrokerProcess {
   bool ForkSignalBasedBroker(BrokerSideCallback broker_process_init_callback);
 
   // Variables initialized by the constructor.
-  absl::optional<BrokerSandboxConfig>
+  std::optional<BrokerSandboxConfig>
       policy_;  // Can also be created by SendPolicy().
   const BrokerType broker_type_;
   const bool fast_check_in_client_;

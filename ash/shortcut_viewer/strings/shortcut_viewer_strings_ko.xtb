@@ -60,10 +60,10 @@
 <translation id="2914313326123580426">Developer Tools 패널 표시 또는 숨기기</translation>
 <translation id="292495055542441795">전체화면 전환</translation>
 <translation id="3020183492814296499">바로가기</translation>
-<translation id="3084301071537457911">실행기의 다음 항목 강조표시</translation>
-<translation id="309173601632226815">실행기의 런처 버튼 강조표시</translation>
+<translation id="3084301071537457911">앱 표시줄의 다음 항목 강조표시</translation>
+<translation id="309173601632226815">앱 표시줄의 런처 버튼 강조표시</translation>
 <translation id="3140353188828248647">주소 표시줄로 이동</translation>
-<translation id="3256109297135787951">실행기에 있는 항목에서 강조표시를 삭제합니다.</translation>
+<translation id="3256109297135787951">앱 표시줄에 있는 항목에서 강조표시를 삭제합니다.</translation>
 <translation id="3288816184963444640">현재 창 닫기</translation>
 <translation id="3322797428033495633">PIP 모드 창에 포커스</translation>
 <translation id="3350805006883559974">활성 창을 맨 위에 표시</translation>
@@ -81,11 +81,11 @@
 <translation id="3720939646656082033">새 탭에서 링크를 열고 새 탭으로 전환</translation>
 <translation id="3725795051337497754">현재 탭 닫기</translation>
 <translation id="3751033133896282964">마지막 작업 실행취소</translation>
-<translation id="3792178297143798024">실행기에서 강조표시된 항목을 엽니다.</translation>
+<translation id="3792178297143798024">앱 표시줄에서 강조표시된 항목을 엽니다.</translation>
 <translation id="379295446891231126"><ph name="CTRL" /><ph name="SEPARATOR" /> 1부터 8</translation>
 <translation id="3837047332182291558">키보드 밝게(백라이트 키보드만 해당)</translation>
 <translation id="3949671998904569433">쉼표</translation>
-<translation id="3976863468609830880">실행기의 마지막 아이콘 클릭</translation>
+<translation id="3976863468609830880">앱 표시줄의 마지막 아이콘 클릭</translation>
 <translation id="3994783594793697310">확대/축소 레벨 재설정</translation>
 <translation id="4026837045671473537">색상 반전 모드를 사용 설정합니다.</translation>
 <translation id="4026843240379844265">디스플레이 간 활성 창 이동</translation>
@@ -98,6 +98,7 @@
 <translation id="4141203561740478845">검색주소창에서 행 강조표시</translation>
 <translation id="4148761611071495477"><ph name="CTRL" /><ph name="SEPARATOR" /><ph name="G" /> 또는 <ph name="ENTER" /></translation>
 <translation id="4240486403425279990">전체보기 모드</translation>
+<translation id="4275283744500212192">창 레이아웃 옵션 열기</translation>
 <translation id="4382340674111381977">이전 페이지로 돌아가기</translation>
 <translation id="4458670250301149821">앱 그리드의 폴더 안팎으로 앱 아이콘 이동</translation>
 <translation id="4472417192667361414">시스템 및 디스플레이 설정</translation>
@@ -130,7 +131,7 @@
 <translation id="5757474750054631686">키보드 어둡게(백라이트 키보드만 해당)</translation>
 <translation id="587531134027443617">이전 단어를 삭제</translation>
 <translation id="5899919361772749550">Developer Tools 콘솔 표시 또는 숨기기</translation>
-<translation id="5919628958418675842">개인정보 보호 화면을 사용 설정 또는 중지</translation>
+<translation id="5919628958418675842">개인 정보 보호 화면을 사용 설정 또는 중지</translation>
 <translation id="5921745308587794300">창 회전</translation>
 <translation id="5926306472221400972">전체 화면 스크린샷 촬영</translation>
 <translation id="6022924867608035986">검색창 텍스트 삭제</translation>
@@ -144,8 +145,8 @@
 <translation id="634687982629734605">상태 영역(계정 사진이 표시되는 곳), 런처, 주소 표시줄, 북마크바(표시된 경우), 열려 있는 웹페이지, 다운로드바(표시된 경우) 사이에 포커스를 전환합니다. 포커스 가능한 대화상자가 표시되면 그곳으로 포커스를 대신 이동합니다.</translation>
 <translation id="6359811074279051077"><ph name="MODIFIER" /><ph name="SEPARATOR" /><ph name="KEY" /></translation>
 <translation id="6395172954772765143">텍스트 행 끝부분까지 선택</translation>
-<translation id="6425378783626925378">실행기의 아이콘 1~8 클릭</translation>
-<translation id="6435207348963613811">실행기의 이전 항목 강조표시</translation>
+<translation id="6425378783626925378">앱 표시줄의 아이콘 1~8 클릭</translation>
+<translation id="6435207348963613811">앱 표시줄의 이전 항목 강조표시</translation>
 <translation id="6445033640292336367">탭을 원래 위치로 되돌림</translation>
 <translation id="6474744297082284761">축소(도킹한 상태이거나 전체 화면 돋보기 사용 중일 때)</translation>
 <translation id="649811797655257835">파일을 선택한 후 <ph name="SPACE" />를 누름</translation>
@@ -157,7 +158,7 @@
 <translation id="6681606577947445973"><ph name="REFRESH" /> 또는 <ph name="CTRL" /><ph name="SEPARATOR" /><ph name="R" /></translation>
 <translation id="6690765639083431875">왼쪽에 창 고정</translation>
 <translation id="6692847073476874842">파일 앱의 파일 미리보기</translation>
-<translation id="671928215901716392">화면 잠금</translation>
+<translation id="671928215901716392">잠금 화면</translation>
 <translation id="6727005317916125192">이전 창</translation>
 <translation id="6740781404993465795">다음 단어 또는 글자 선택</translation>
 <translation id="6755851152783057058">마지막으로 사용한 입력 방법으로 전환합니다.</translation>
@@ -193,6 +194,7 @@
 <translation id="8388247778047144397">링크를 탭 표시줄의 빈 영역으로 드래그</translation>
 <translation id="8389638407792712197">새 창 열기</translation>
 <translation id="8429696719963529183">F 키(F1~F12) 사용</translation>
+<translation id="8539396513118402548">바로가기 목록</translation>
 <translation id="85690795166292698">새 탭에서 링크 열기</translation>
 <translation id="8609384513243082612">새 탭 열기</translation>
 <translation id="8644639153978066712">파일 앱에 숨겨진 파일 표시하기</translation>

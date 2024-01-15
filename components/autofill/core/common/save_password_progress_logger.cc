@@ -13,6 +13,7 @@
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
+#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "components/autofill/core/common/signatures.h"
@@ -45,10 +46,15 @@ std::string FormSignatureToDebugString(FormSignature form_signature) {
 void SavePasswordProgressLogger::LogFormData(
     SavePasswordProgressLogger::StringID label,
     const FormData& form_data) {
+  CHECK(!form_data.url.is_empty());
   std::string message = GetStringFromID(label) + ": {\n";
   message += GetStringFromID(STRING_FORM_SIGNATURE) + ": " +
              FormSignatureToDebugString(CalculateFormSignature(form_data)) +
              "\n";
+  message +=
+      GetStringFromID(STRING_ALTERNATIVE_FORM_SIGNATURE) + ": " +
+      FormSignatureToDebugString(CalculateAlternativeFormSignature(form_data)) +
+      "\n";
   message +=
       GetStringFromID(STRING_ORIGIN) + ": " + ScrubURL(form_data.url) + "\n";
   message +=
@@ -70,19 +76,7 @@ void SavePasswordProgressLogger::LogFormData(
   // Log fields.
   message += GetStringFromID(STRING_FIELDS) + ": " + "\n";
   for (const auto& field : form_data.fields) {
-    std::string is_visible = field.is_focusable ? "visible" : "invisible";
-    std::string is_empty = field.value.empty() ? "empty" : "non-empty";
-    std::string autocomplete =
-        field.autocomplete_attribute.empty()
-            ? std::string()
-            : (", autocomplete=" +
-               ScrubElementID(field.autocomplete_attribute));
-    std::string field_info =
-        ScrubElementID(field.name) +
-        ": type=" + ScrubElementID(field.form_control_type) +
-        ", renderer_id = " + NumberToString(field.unique_renderer_id.value()) +
-        ", " + is_visible + ", " + is_empty + autocomplete + "\n";
-    message += field_info;
+    message += GetFormFieldDataLogString(field) + "\n";
   }
   message += "}";
   SendLog(message);
@@ -125,6 +119,26 @@ void SavePasswordProgressLogger::LogNumber(
 void SavePasswordProgressLogger::LogMessage(
     SavePasswordProgressLogger::StringID message) {
   LogValue(STRING_MESSAGE, Value(GetStringFromID(message)));
+}
+
+// static
+std::string SavePasswordProgressLogger::GetFormFieldDataLogString(
+    const FormFieldData& field) {
+  const char* const is_visible = field.is_focusable ? "visible" : "invisible";
+  const char* const is_empty = field.value.empty() ? "empty" : "non-empty";
+  std::string autocomplete =
+      field.autocomplete_attribute.empty()
+          ? std::string()
+          : (", autocomplete=" + ScrubElementID(field.autocomplete_attribute));
+  return base::StringPrintf(
+      "%s: signature=%s, type=%s, renderer_id=%s, %s, %s%s",
+      ScrubElementID(field.name).c_str(),
+      base::NumberToString(*CalculateFieldSignatureForField(field)).c_str(),
+      ScrubElementID(std::string(autofill::FormControlTypeToString(
+                         field.form_control_type)))
+          .c_str(),
+      NumberToString(*field.unique_renderer_id).c_str(), is_visible, is_empty,
+      autocomplete.c_str());
 }
 
 // static
@@ -214,8 +228,6 @@ std::string SavePasswordProgressLogger::GetStringFromID(
       return "Password generated";
     case SavePasswordProgressLogger::STRING_TIMES_USED:
       return "Times used";
-    case SavePasswordProgressLogger::STRING_PSL_MATCH:
-      return "PSL match";
     case SavePasswordProgressLogger::STRING_NAME_OR_ID:
       return "Form name or ID";
     case SavePasswordProgressLogger::STRING_MESSAGE:
@@ -264,6 +276,8 @@ std::string SavePasswordProgressLogger::GetStringFromID(
       return "PasswordManager::OnPasswordFormsRendered";
     case SavePasswordProgressLogger::STRING_ON_DYNAMIC_FORM_SUBMISSION:
       return "PasswordManager::OnDynamicFormSubmission";
+    case SavePasswordProgressLogger::STRING_ON_PASSWORD_FORM_CLEARED:
+      return "PasswordManager::OnPasswordFormCleared";
     case SavePasswordProgressLogger::STRING_ON_SUBFRAME_FORM_SUBMISSION:
       return "PasswordManager::OnSubframeFormSubmission";
     case SavePasswordProgressLogger::STRING_ON_ASK_USER_OR_SAVE_PASSWORD:
@@ -272,6 +286,8 @@ std::string SavePasswordProgressLogger::GetStringFromID(
       return "PasswordManager::IsAutomaticSavePromptAvailable";
     case SavePasswordProgressLogger::STRING_NO_PROVISIONAL_SAVE_MANAGER:
       return "No provisional save manager";
+    case SavePasswordProgressLogger::STRING_ANOTHER_MANAGER_WAS_SUBMITTED:
+      return "Another form manager was submitted";
     case SavePasswordProgressLogger::STRING_NUMBER_OF_VISIBLE_FORMS:
       return "Number of visible forms";
     case SavePasswordProgressLogger::STRING_PASSWORD_FORM_REAPPEARED:
@@ -317,6 +333,8 @@ std::string SavePasswordProgressLogger::GetStringFromID(
       return "The new state of the UI";
     case SavePasswordProgressLogger::STRING_FORM_SIGNATURE:
       return "Signature of form";
+    case SavePasswordProgressLogger::STRING_ALTERNATIVE_FORM_SIGNATURE:
+      return "Alternative signature of form";
     case SavePasswordProgressLogger::STRING_FORM_FETCHER_STATE:
       return "FormFetcherImpl::state_";
     case SavePasswordProgressLogger::STRING_UNOWNED_INPUTS_VISIBLE:
@@ -429,8 +447,6 @@ std::string SavePasswordProgressLogger::GetStringFromID(
       return "Possible username is used";
     case STRING_POSSIBLE_USERNAME_NOT_USED:
       return "Possible username is not used";
-    case STRING_LOCALLY_SAVED_PREDICTION:
-      return "Locally saved prediction";
     case SavePasswordProgressLogger::STRING_INVALID:
       return "INVALID";
       // Intentionally no default: clause here -- all IDs need to get covered.

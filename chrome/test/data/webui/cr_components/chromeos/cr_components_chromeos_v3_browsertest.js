@@ -5,7 +5,7 @@
 /** @fileoverview Tests for shared Polymer 3 cr_components. */
 
 // Polymer BrowserTest fixture.
-GEN_INCLUDE(['//chrome/test/data/webui/polymer_browser_test_base.js']);
+GEN_INCLUDE(['//chrome/test/data/webui/chromeos/polymer_browser_test_base.js']);
 
 GEN('#include "ash/constants/ash_features.h"');
 GEN('#include "content/public/test/browser_test.h"');
@@ -38,9 +38,11 @@ GEN('#include "content/public/test/browser_test.h"');
   ],
   ['PairingUi', 'bluetooth/bluetooth_pairing_ui_test.js'],
   ['SpinnerPage', 'bluetooth/bluetooth_spinner_page_test.js'],
- ].forEach(test => registerTest('Bluetooth', 'bluetooth-pairing', ...test));
+ ].forEach(test => registerWebUiTest('Bluetooth', 'bluetooth-pairing', ...test));
 
-[['CrPolicyNetworkBehaviorMojo', 'network/cr_policy_network_behavior_mojo_tests.js'],
+[['ApnList', 'network/apn_list_test.js'],
+ ['ApnListItem', 'network/apn_list_item_test.js'],
+ ['CrPolicyNetworkBehaviorMojo', 'network/cr_policy_network_behavior_mojo_tests.js'],
  ['CrPolicyNetworkIndicatorMojo', 'network/cr_policy_network_indicator_mojo_tests.js'],
  ['NetworkApnlist', 'network/network_apnlist_test.js'],
  ['NetworkChooseMobile', 'network/network_choose_mobile_test.js'],
@@ -49,6 +51,8 @@ GEN('#include "content/public/test/browser_test.h"');
  ['NetworkConfigInput', 'network/network_config_input_test.js'],
  ['NetworkConfigSelect', 'network/network_config_select_test.js'],
  ['NetworkConfigToggle', 'network/network_config_toggle_test.js'],
+ ['NetworkConfigVpnTest', 'network/network_config_vpn_test.js'],
+ ['NetworkConfigWifi', 'network/network_config_wifi_test.js'],
  ['NetworkIcon', 'network/network_icon_test.js'],
  ['NetworkIpConfig', 'network/network_ip_config_test.js'],
  ['NetworkList', 'network/network_list_test.js'],
@@ -62,37 +66,38 @@ GEN('#include "content/public/test/browser_test.h"');
  ['NetworkSelect', 'network/network_select_test.js'],
  ['NetworkSiminfo', 'network/network_siminfo_test.js'],
  ['SimLockDialogs', 'network/sim_lock_dialogs_test.js'],
-].forEach(test => registerTest('NetworkComponents', 'os-settings', ...test));
+].forEach(test => registerWebUiTest('NetworkComponents', 'os-settings', ...test));
 
 [['NetworkDiagnostics', 'network_health/network_diagnostics_test.js'],
  ['RoutineGroup', 'network_health/routine_group_test.js'],
-].forEach(test => registerTest('NetworkHealth', 'connectivity-diagnostics', ...test));
+].forEach(test => registerWebUiTest('NetworkHealth', 'connectivity-diagnostics', ...test));
 
 [['TrafficCounters', 'traffic_counters/traffic_counters_test.js'],
-].forEach(test => registerTest('TrafficCounters', 'network', ...test));
+].forEach(test => registerWebUiTest('TrafficCounters', 'network', ...test));
 
 [
  ['Integration', 'multidevice_setup/integration_test.js'],
  ['SetupSucceededPage', 'multidevice_setup/setup_succeeded_page_test.js'],
  ['StartSetupPage', 'multidevice_setup/start_setup_page_test.js'],
-].forEach(test => registerTest('MultiDeviceSetup', 'multidevice-setup', ...test));
+].forEach(test => registerWebUiTest('MultiDeviceSetup', 'multidevice-setup', ...test));
 
 [
  ['ActivationCodePage', 'cellular_setup/activation_code_page_test.js'],
  ['BasePage', 'cellular_setup/base_page_test.js'],
  ['ButtonBar', 'cellular_setup/button_bar_test.js'],
- ['CellularEidDialog', 'cellular_setup/cellular_eid_dialog_test.js'],
  ['CellularSetup', 'cellular_setup/cellular_setup_test.js'],
+ ['ConfirmationCodePageLegacy', 'cellular_setup/confirmation_code_page_legacy_test.js'],
  ['ConfirmationCodePage', 'cellular_setup/confirmation_code_page_test.js'],
+ ['EsimFlowUiLegacy', 'cellular_setup/esim_flow_ui_legacy_test.js'],
  ['EsimFlowUi', 'cellular_setup/esim_flow_ui_test.js'],
  ['FinalPage', 'cellular_setup/final_page_test.js'],
  ['ProvisioningPage', 'cellular_setup/provisioning_page_test.js'],
  ['PsimFlowUi', 'cellular_setup/psim_flow_ui_test.js'],
  ['SetupLoadingPage', 'cellular_setup/setup_loading_page_test.js'],
-].forEach(test => registerTest('CellularSetup', 'os-settings', ...test));
+].forEach(test => registerWebUiTest('CellularSetup', 'os-settings', ...test));
 // clang-format on
 
-function registerTest(componentName, webuiHost, testName, module, caseName) {
+function registerWebUiTest(componentName, webuiHost, testName, module) {
   const className = `${componentName}${testName}TestV3`;
   this[className] = class extends PolymerTest {
     /** @override */
@@ -101,16 +106,7 @@ function registerTest(componentName, webuiHost, testName, module, caseName) {
       // and use it here instead of os-settings.
       return `chrome://${
           webuiHost}/test_loader.html?module=cr_components/chromeos/${
-          module}&host=test`;
-    }
-
-    /** @override */
-    get featureList() {
-      return {
-        enabled: [
-          'chromeos::features::kSimLockPolicy',
-        ],
-      };
+          module}`;
     }
   };
 

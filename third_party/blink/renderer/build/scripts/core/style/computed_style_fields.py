@@ -51,6 +51,8 @@ class Group(object):
         # Recursively get all the fields in the subgroups as well
         self.all_fields = _flatten_list(subgroup.all_fields
                                         for subgroup in subgroups) + fields
+        self.all_subgroups = _flatten_list(
+            subgroup.all_subgroups for subgroup in subgroups) + subgroups
 
         # Ensure that all fields/subgroups on this group link to it
         for field in fields:
@@ -78,6 +80,7 @@ class Enum(object):
 
     def __init__(self, type_name, keywords, set_type):
         self.type_name = type_name
+        self.keywords = keywords
         self.values = [
             NameStyleConverter(keyword).to_enum_value() for keyword in keywords
         ]
@@ -136,22 +139,24 @@ class Field(object):
         default_value: Default value for this field when it is first initialized
     """
 
-    def __init__(self, field_role, name_for_methods, readonly, property_name,
-                 type_name, wrapper_pointer_name, field_template, size,
-                 default_value, custom_copy, custom_compare, mutable,
+    def __init__(self, field_role, name_for_methods, property_name, type_name,
+                 wrapper_pointer_name, field_template, size, default_value,
+                 derived_from, reset_on_new_style, custom_compare, mutable,
                  getter_method_name, setter_method_name, initial_method_name,
-                 computed_style_custom_functions, **kwargs):
+                 computed_style_custom_functions,
+                 computed_style_protected_functions, **kwargs):
         name_source = NameStyleConverter(name_for_methods)
         self.name = name_source.to_class_data_member()
-        self.readonly = readonly
         self.property_name = property_name
         self.type_name = type_name
         self.wrapper_pointer_name = wrapper_pointer_name
         self.alignment_type = self.wrapper_pointer_name or self.type_name
+        self.requires_tracing = wrapper_pointer_name == 'Member'
         self.field_template = field_template
         self.size = size
         self.default_value = default_value
-        self.custom_copy = custom_copy
+        self.derived_from = derived_from
+        self.reset_on_new_style = reset_on_new_style
         self.custom_compare = custom_compare
         self.mutable = mutable
         self.group = None
@@ -168,7 +173,14 @@ class Field(object):
         self.initial_method_name = initial_method_name
         self.resetter_method_name = name_source.to_function_name(
             prefix='reset')
+        self.internal_resetter_method_name = NameStyleConverter(
+            self.resetter_method_name).to_function_name(suffix='internal')
         self.computed_style_custom_functions = computed_style_custom_functions
+        self.computed_style_protected_functions = computed_style_protected_functions
+        self.getter_visibility = self.get_visibility('getter')
+        self.setter_visibility = self.get_visibility('setter')
+        self.resetter_visibility = self.get_visibility('resetter')
+
         # Only bitfields have sizes.
         self.is_bit_field = self.size is not None
 
@@ -193,3 +205,10 @@ class Field(object):
                 suffix=suffix)
         assert len(kwargs) == 0, \
             'Unexpected arguments provided to Field: ' + str(kwargs)
+
+    def get_visibility(self, function):
+        if function in self.computed_style_protected_functions:
+            return 'protected'
+        if function in self.computed_style_custom_functions:
+            return 'protected'
+        return 'public'

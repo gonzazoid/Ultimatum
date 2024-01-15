@@ -4,9 +4,9 @@
 
 #include "content/renderer/pepper/pepper_video_capture_host.h"
 
+#include <algorithm>
 #include <memory>
 
-#include "base/cxx17_backports.h"
 #include "content/public/renderer/render_frame.h"
 #include "content/renderer/pepper/host_globals.h"
 #include "content/renderer/pepper/pepper_media_device_manager.h"
@@ -147,7 +147,7 @@ void PepperVideoCaptureHost::OnFrameReady(
         // TODO(ihf): handle size mismatches gracefully here.
         return;
       }
-      uint8_t* dst = reinterpret_cast<uint8_t*>(buffers_[i].data);
+      uint8_t* dst = reinterpret_cast<uint8_t*>(buffers_[i].data.get());
       static_assert(media::VideoFrame::kYPlane == 0, "y plane should be 0");
       static_assert(media::VideoFrame::kUPlane == 1, "u plane should be 1");
       static_assert(media::VideoFrame::kVPlane == 2, "v plane should be 2");
@@ -158,6 +158,10 @@ void PepperVideoCaptureHost::OnFrameReady(
         DCHECK_EQ(frame->format(), media::PIXEL_FORMAT_NV12);
         scoped_refptr<media::VideoFrame> mapped_frame =
             media::ConvertToMemoryMappedFrame(frame);
+        if (!mapped_frame) {
+          DLOG(ERROR) << "VideoFrame failed to map";
+          return;
+        }
         scoped_refptr<media::VideoFrame> dst_frame =
             media::VideoFrame::WrapExternalData(
                 media::PIXEL_FORMAT_I420, frame->natural_size(),
@@ -363,11 +367,11 @@ void PepperVideoCaptureHost::SetRequestedInfo(
     const PP_VideoCaptureDeviceInfo_Dev& device_info,
     uint32_t buffer_count) {
   // Clamp the buffer count to between 1 and |kMaxBuffers|.
-  buffer_count_hint_ = base::clamp(buffer_count, 1U, kMaxBuffers);
+  buffer_count_hint_ = std::clamp(buffer_count, 1U, kMaxBuffers);
   // Clamp the frame rate to between 1 and |kMaxFramesPerSecond - 1|.
   int frames_per_second =
-      base::clamp(device_info.frames_per_second, 1U,
-                  uint32_t{media::limits::kMaxFramesPerSecond - 1});
+      std::clamp(device_info.frames_per_second, 1U,
+                 uint32_t{media::limits::kMaxFramesPerSecond - 1});
 
   video_capture_params_.requested_format = media::VideoCaptureFormat(
       gfx::Size(device_info.width, device_info.height), frames_per_second,

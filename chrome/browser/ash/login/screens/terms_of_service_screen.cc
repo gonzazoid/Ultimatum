@@ -7,11 +7,10 @@
 #include <string>
 #include <utility>
 
-#include "ash/constants/ash_features.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/files/file_util.h"
 #include "base/files/important_file_writer.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/no_destructor.h"
 #include "base/strings/escape.h"
@@ -26,7 +25,7 @@
 #include "chrome/browser/net/system_network_context_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/webui/chromeos/login/terms_of_service_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/terms_of_service_screen_handler.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/storage_partition.h"
@@ -58,12 +57,12 @@ void SaveTosToFile(const std::string& tos, const base::FilePath& tos_path) {
   }
 }
 
-absl::optional<std::string> ReadFileToOptionalString(
+std::optional<std::string> ReadFileToOptionalString(
     const base::FilePath& file_path) {
   std::string content;
   if (base::ReadFileToString(file_path, &content))
-    return absl::make_optional<std::string>(content);
-  return absl::nullopt;
+    return std::make_optional<std::string>(content);
+  return std::nullopt;
 }
 
 }  // namespace
@@ -130,12 +129,11 @@ bool TermsOfServiceScreen::MaybeSkip(WizardContext& context) {
     exit_callback_.Run(Result::NOT_APPLICABLE);
     return true;
   }
-  if (user_manager::UserManager::Get()->IsLoggedInAsPublicAccount())
+  if (user_manager::UserManager::Get()->IsLoggedInAsManagedGuestSession()) {
     return false;
+  }
 
-  if (!features::IsManagedTermsOfServiceEnabled())
-    exit_callback_.Run(Result::NOT_APPLICABLE);
-  return !features::IsManagedTermsOfServiceEnabled();
+  return false;
 }
 
 void TermsOfServiceScreen::ShowImpl() {
@@ -256,32 +254,25 @@ void TermsOfServiceScreen::OnDownloaded(
     // If the Terms of Service were downloaded successfully, sanitize and show
     // them to the user.
     view_->OnLoadSuccess(base::EscapeForHTML(*response_body));
-    if (features::IsManagedTermsOfServiceEnabled()) {
-      // Update locally saved terms.
-      SaveTos(base::EscapeForHTML(*response_body));
-    }
+    // Update locally saved terms.
+    SaveTos(base::EscapeForHTML(*response_body));
   }
 }
 
 void TermsOfServiceScreen::LoadFromFileOrShowError() {
   if (!view_)
     return;
-  if (features::IsManagedTermsOfServiceEnabled()) {
-    auto tos_path = GetTosFilePath();
-    base::ThreadPool::PostTaskAndReplyWithResult(
-        FROM_HERE,
-        {base::MayBlock(), base::TaskPriority::USER_VISIBLE,
-         base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
-        base::BindOnce(&ReadFileToOptionalString, tos_path),
-        base::BindOnce(&TermsOfServiceScreen::OnTosLoadedFromFile,
-                       weak_factory_.GetWeakPtr()));
-    return;
-  }
-  view_->OnLoadError();
+  auto tos_path = GetTosFilePath();
+  base::ThreadPool::PostTaskAndReplyWithResult(
+      FROM_HERE,
+      {base::MayBlock(), base::TaskPriority::USER_VISIBLE,
+       base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
+      base::BindOnce(&ReadFileToOptionalString, tos_path),
+      base::BindOnce(&TermsOfServiceScreen::OnTosLoadedFromFile,
+                     weak_factory_.GetWeakPtr()));
 }
 
-void TermsOfServiceScreen::OnTosLoadedFromFile(
-    absl::optional<std::string> tos) {
+void TermsOfServiceScreen::OnTosLoadedFromFile(std::optional<std::string> tos) {
   if (!view_)
     return;
   if (!tos.has_value()) {

@@ -7,27 +7,30 @@
  * Authenticate user screens.
  */
 
+import '//resources/cr_elements/chromeos/cros_color_overrides.css.js';
 import '//resources/cr_elements/cr_toggle/cr_toggle.js';
 import '//resources/cr_elements/icons.html.js';
 import '//resources/cr_elements/md_select.css.js';
 import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
-import '../../components/oobe_icons.m.js';
-import '../../components/buttons/oobe_back_button.m.js';
+import '../../components/oobe_icons.html.js';
+import '../../components/buttons/oobe_back_button.js';
 import '../../components/buttons/oobe_next_button.js';
-import '../../components/buttons/oobe_text_button.m.js';
-import '../../components/common_styles/common_styles.m.js';
-import '../../components/common_styles/oobe_dialog_host_styles.m.js';
-import '../../components/dialogs/oobe_adaptive_dialog.m.js';
+import '../../components/buttons/oobe_text_button.js';
+import '../../components/common_styles/oobe_common_styles.css.js';
+import '../../components/common_styles/oobe_dialog_host_styles.css.js';
 
 import {I18nBehavior} from '//resources/ash/common/i18n_behavior.js';
-import {loadTimeData} from '//resources/js/load_time_data.m.js';
+import {loadTimeData} from '//resources/ash/common/load_time_data.m.js';
 import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.m.js';
-import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.m.js';
-import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.m.js';
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+import {OobeAdaptiveDialog} from '../../components/dialogs/oobe_adaptive_dialog.js';
 import {OobeA11yOption} from '../../components/oobe_a11y_option.js';
-import {getSelectedTitle, getSelectedValue, SelectListType, setupSelect} from '../../components/oobe_select.m.js';
+import {getSelectedTitle, getSelectedValue, SelectListType, setupSelect} from '../../components/oobe_select.js';
+
+import {getTemplate} from './offline_ad_login.html.js';
 
 
 // The definitions below (JoinConfigType, ActiveDirectoryErrorState) are
@@ -38,7 +41,7 @@ import {getSelectedTitle, getSelectedValue, SelectListType, setupSelect} from '.
  *             computer_ou: ?string, encryption_types: ?string,
  *             computer_name_validation_regex: ?string}}
  */
-export var JoinConfigType;
+export let JoinConfigType;
 
 // Possible error states of the screen. Must be in the same order as
 // ActiveDirectoryErrorState enum values. Used in enterprise_enrollment
@@ -66,7 +69,7 @@ const DEFAULT_ENCRYPTION_TYPES = 'strong';
  * @typedef {Iterable<{value: string, title: string, selected: boolean,
  *                      subtitle: string}>}
  */
-var EncryptionSelectListType;
+let EncryptionSelectListType;
 
 /**
  * @constructor
@@ -76,11 +79,11 @@ var EncryptionSelectListType;
  * @implements {OobeI18nBehaviorInterface}
  */
 const OfflineAdLoginBase = mixinBehaviors(
-    [OobeI18nBehavior, MultiStepBehavior, LoginScreenBehavior], PolymerElement);
+    [OobeI18nBehavior, LoginScreenBehavior, MultiStepBehavior], PolymerElement);
 
 /**
  * @typedef {{
- *   marketingOptInOverviewDialog:  OobeAdaptiveDialogElement,
+ *   marketingOptInOverviewDialog:  OobeAdaptiveDialog,
  *   chromebookUpdatesOption:  CrToggleElement,
  *   a11yNavButtonToggle:  OobeA11yOption,
  * }}
@@ -96,7 +99,7 @@ class OfflineAdLogin extends OfflineAdLoginBase {
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -311,9 +314,9 @@ class OfflineAdLogin extends OfflineAdLoginBase {
   }
 
   setupEncList() {
-    var list = /** @type {!EncryptionSelectListType}>} */
+    let list = /** @type {!EncryptionSelectListType}>} */
         (loadTimeData.getValue('encryptionTypesList'));
-    for (var item of list) {
+    for (const item of list) {
       this.encryptionValueToSubtitleMap[item.value] = item.subtitle;
       delete item.subtitle;
     }
@@ -380,8 +383,8 @@ class OfflineAdLogin extends OfflineAdLoginBase {
       return;
     }
     this.joinConfigOptions_ = options;
-    var selectList = [];
-    for (var i = 0; i < options.length; ++i) {
+    const selectList = [];
+    for (let i = 0; i < options.length; ++i) {
       selectList.push({title: options[i].name, value: i});
     }
     setupSelect(
@@ -414,7 +417,7 @@ class OfflineAdLogin extends OfflineAdLoginBase {
       return;
     }
 
-    var user = /** @type {string} */ (this.$.userInput.value);
+    let user = /** @type {string} */ (this.$.userInput.value);
     const password = /** @type {string} / */ (this.$.passwordInput.value);
     if (!user.includes('@') && this.userRealm) {
       user += this.userRealm;
@@ -429,7 +432,7 @@ class OfflineAdLogin extends OfflineAdLoginBase {
         'encryption_types': this.storedEncryption_,
       };
       this.dispatchEvent(new CustomEvent(
-          'authCompleted', {bubbles: true, composed: true, detail: msg}));
+        'authCompletedAd', { bubbles: true, composed: true, detail: msg }));
     } else {
       this.loading = true;
       this.userActed(['completeAdAuthentication', user, password]);
@@ -475,7 +478,7 @@ class OfflineAdLogin extends OfflineAdLoginBase {
 
   /** @private */
   onUnlockPasswordEntered_() {
-    var msg = {
+    const msg = {
       'unlock_password': this.$.unlockPasswordInput.value,
     };
     this.dispatchEvent(new CustomEvent(
@@ -514,8 +517,8 @@ class OfflineAdLogin extends OfflineAdLoginBase {
     this.errorState = ActiveDirectoryErrorState.NONE;
     this.previousSelectedConfigOption_ = this.selectedConfigOption_;
     this.selectedConfigOption_ = this.joinConfigOptions_[value];
-    var option = this.selectedConfigOption_;
-    var encryptionTypes =
+    const option = this.selectedConfigOption_;
+    let encryptionTypes =
         option['encryption_types'] || DEFAULT_ENCRYPTION_TYPES;
     if (!(encryptionTypes in this.encryptionValueToSubtitleMap)) {
       encryptionTypes = DEFAULT_ENCRYPTION_TYPES;

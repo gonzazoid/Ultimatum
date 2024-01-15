@@ -10,7 +10,11 @@ specific_include_rules = {
   "dbus_appmenu\.*": [
     "+dbus",
   ],
-  "top_controls_slide_controller_chromeos_browsertest.cc": [
+  # Parts of this class use Ash, but only when run in classic Ash mode.
+  "picture_in_picture_browser_frame_view\.*": [
+    "+ash",
+  ],
+  "top_controls_slide_controller_chromeos_browsertest\.cc": [
     "+cc/base/math_util.h",
   ],
 }

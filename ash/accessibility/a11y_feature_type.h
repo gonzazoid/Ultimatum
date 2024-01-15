@@ -13,10 +13,12 @@ namespace ash {
 enum class A11yFeatureType {
   kAutoclick = 0,
   kCaretHighlight,
+  kColorCorrection,
   kCursorColor,
   kCursorHighlight,
   kDictation,
   kDockedMagnifier,
+  kFaceGaze,
   kFloatingMenu,
   kFocusHighlight,
   kFullscreenMagnifier,

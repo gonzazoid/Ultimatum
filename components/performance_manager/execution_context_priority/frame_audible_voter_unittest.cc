@@ -41,10 +41,10 @@ class GraphOwnedWrapper : public GraphOwned {
 
   // GraphOwned:
   void OnPassedToGraph(Graph* graph) override {
-    graph->AddFrameNodeObserver(&frame_audible_voter_);
+    graph->AddInitializingFrameNodeObserver(&frame_audible_voter_);
   }
   void OnTakenFromGraph(Graph* graph) override {
-    graph->RemoveFrameNodeObserver(&frame_audible_voter_);
+    graph->RemoveInitializingFrameNodeObserver(&frame_audible_voter_);
   }
 
   // Exposes the DummyVoteObserver to validate expectations.
@@ -92,7 +92,7 @@ TEST_F(FrameAudibleVoterTest, AudibleChanged) {
   // be false, resulting in a low priority.
   MockSinglePageInSingleProcessGraph mock_graph(graph());
   auto& frame_node = mock_graph.frame;
-  EXPECT_FALSE(frame_node->is_audible());
+  EXPECT_FALSE(frame_node->IsAudible());
   EXPECT_EQ(observer().GetVoteCount(), 1u);
   EXPECT_TRUE(observer().HasVote(
       voter_id(), GetExecutionContext(frame_node.get()),

@@ -4,18 +4,18 @@
 
 #include "chrome/browser/supervised_user/supervised_user_google_auth_navigation_throttle.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/notreached.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
-#include "chrome/browser/supervised_user/child_accounts/child_account_service.h"
 #include "chrome/browser/supervised_user/child_accounts/child_account_service_factory.h"
 #include "components/google/core/common/google_util.h"
 #include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
+#include "components/supervised_user/core/browser/child_account_service.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/web_contents.h"
 
@@ -122,12 +122,15 @@ void SupervisedUserGoogleAuthNavigationThrottle::OnGoogleAuthStateChanged() {
 
 content::NavigationThrottle::ThrottleCheckResult
 SupervisedUserGoogleAuthNavigationThrottle::ShouldProceed() {
-  ChildAccountService::AuthState authStatus =
+  supervised_user::ChildAccountService::AuthState authStatus =
       child_account_service_->GetGoogleAuthState();
-  if (authStatus == ChildAccountService::AuthState::AUTHENTICATED)
+  if (authStatus ==
+      supervised_user::ChildAccountService::AuthState::AUTHENTICATED) {
     return content::NavigationThrottle::PROCEED;
-  if (authStatus == ChildAccountService::AuthState::PENDING)
+  }
+  if (authStatus == supervised_user::ChildAccountService::AuthState::PENDING) {
     return content::NavigationThrottle::DEFER;
+  }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // A credentials re-mint is already underway when we reach here (Mirror
@@ -150,23 +153,34 @@ SupervisedUserGoogleAuthNavigationThrottle::ShouldProceed() {
       return content::NavigationThrottle::DEFER;
     }
 
-    ReauthenticateChildAccount(
-        web_contents, account_info.email,
-        base::BindRepeating(&SupervisedUserGoogleAuthNavigationThrottle::
-                                OnReauthenticationFailed,
-                            weak_ptr_factory_.GetWeakPtr()));
+    if (skip_jni_call_for_testing_) {
+      // Returns callback without JNI call for testing. Resets
+      // has_shown_reauth_.
+      base::BindRepeating(
+          &SupervisedUserGoogleAuthNavigationThrottle::OnReauthenticationFailed,
+          weak_ptr_factory_.GetWeakPtr())
+          .Run();
+    } else {
+      ReauthenticateChildAccount(
+          web_contents, account_info.email,
+          base::BindRepeating(&SupervisedUserGoogleAuthNavigationThrottle::
+                                  OnReauthenticationFailed,
+                              weak_ptr_factory_.GetWeakPtr()));
+    }
   }
   return content::NavigationThrottle::DEFER;
 #else
-  NOTREACHED();
-
-  // This should never happen but needs to be included to avoid compilation
-  // error on debug builds.
-  return content::NavigationThrottle::CANCEL_AND_IGNORE;
+  // On other platforms we do not currently provide the same guarantees that a
+  // user must be signed in for relevant domains.
+  // Allow the navigation to proceed even in an unauthenticated state.
+  //
+  // TODO(b/274402198): if we implement similar guarantees on Linux/Mac/Windows,
+  // trigger re-auth and defer navigation.
+  return content::NavigationThrottle::PROCEED;
 #endif
 }
 
 void SupervisedUserGoogleAuthNavigationThrottle::OnReauthenticationFailed() {
-  // Cancel the navifation if reauthentication failed.
+  // Cancel the navigation if reauthentication failed.
   CancelDeferredNavigation(content::NavigationThrottle::CANCEL_AND_IGNORE);
 }

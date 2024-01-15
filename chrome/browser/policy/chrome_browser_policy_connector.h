@@ -32,6 +32,7 @@ class PrefService;
 
 namespace policy {
 class ConfigurationPolicyProvider;
+class LocalTestPolicyProvider;
 class ProxyPolicyProvider;
 
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
@@ -63,6 +64,9 @@ class ChromeBrowserPolicyConnector : public BrowserPolicyConnector {
             scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory)
       override;
 
+  // Called to signal the browser has started.
+  virtual void OnBrowserStarted();
+
   bool IsDeviceEnterpriseManaged() const override;
 
   bool HasMachineLevelPolicies() override;
@@ -71,6 +75,16 @@ class ChromeBrowserPolicyConnector : public BrowserPolicyConnector {
 
   ConfigurationPolicyProvider* GetPlatformProvider();
 
+  ConfigurationPolicyProvider* local_test_policy_provider();
+  void SetLocalTestPolicyProviderForTesting(
+      ConfigurationPolicyProvider* provider);
+
+  // If the kLocalTestPoliciesForNextStartup pref is non-empty, read and apply
+  // the policies stored in it, and then clear the pref. This must be called
+  // right after the `local_state` is created to ensure policies are applied
+  // at the right time.
+  void MaybeApplyLocalTestPolicies(PrefService* local_state);
+
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
   ChromeBrowserCloudManagementController*
   chrome_browser_cloud_management_controller() {
@@ -78,8 +92,10 @@ class ChromeBrowserPolicyConnector : public BrowserPolicyConnector {
   }
   MachineLevelUserCloudPolicyManager*
   machine_level_user_cloud_policy_manager() {
-    return machine_level_user_cloud_policy_manager_.get();
+    return machine_level_user_cloud_policy_manager_;
   }
+  void SetMachineLevelUserCloudPolicyManagerForTesting(
+      MachineLevelUserCloudPolicyManager* manager);
 
   ProxyPolicyProvider* proxy_policy_provider() {
     return proxy_policy_provider_;
@@ -126,6 +142,10 @@ class ChromeBrowserPolicyConnector : public BrowserPolicyConnector {
   PolicyLoaderLacros* device_account_policy_loader() {
     return device_account_policy_loader_;
   }
+
+  ConfigurationPolicyProvider* ash_policy_provider() {
+    return ash_policy_provider_;
+  }
 #endif
 
  protected:
@@ -167,10 +187,10 @@ class ChromeBrowserPolicyConnector : public BrowserPolicyConnector {
 
   // The MachineLevelUserCloudPolicyManager is not directly included in the
   // vector of policy providers (defined in the base class). A proxy policy
-  // provider is used instead, so this class is responsible for holding
-  // ownership of this object.
-  std::unique_ptr<MachineLevelUserCloudPolicyManager>
-      machine_level_user_cloud_policy_manager_;
+  // provider allows this object to be initialized after the policy service
+  // is created. Owned by the proxy policy provider.
+  raw_ptr<MachineLevelUserCloudPolicyManager>
+      machine_level_user_cloud_policy_manager_ = nullptr;
 #endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_ANDROID)
@@ -183,10 +203,17 @@ class ChromeBrowserPolicyConnector : public BrowserPolicyConnector {
   // Owned by base class.
   raw_ptr<ConfigurationPolicyProvider> command_line_provider_ = nullptr;
 
+  raw_ptr<ConfigurationPolicyProvider> local_test_provider_for_testing_ =
+      nullptr;
+  std::unique_ptr<LocalTestPolicyProvider> local_test_provider_;
+
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   std::unique_ptr<DeviceSettingsLacros> device_settings_ = nullptr;
   // Owned by |platform_provider_|.
-  raw_ptr<PolicyLoaderLacros> device_account_policy_loader_ = nullptr;
+  raw_ptr<PolicyLoaderLacros, DanglingUntriaged> device_account_policy_loader_ =
+      nullptr;
+  // Provides the user policy fetched/cached by ash-chrome. Owned by base class.
+  raw_ptr<ConfigurationPolicyProvider> ash_policy_provider_ = nullptr;
 #endif
 
   // Weak pointers needed for tasks that need to wait until it can be decided

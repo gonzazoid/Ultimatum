@@ -42,14 +42,16 @@ source_set("app_shell_lib") {
     "//components/feedback",
     "//components/feedback/content:factory",
     "//components/guest_view/browser",
+    "//components/guest_view/common:mojom",
     "//components/guest_view/renderer",
     "//components/keep_alive_registry",
     "//components/keyed_service/content:content",
     "//components/nacl/common:buildflags",
     "//components/network_session_configurator/common",
+    "//components/origin_trials:browser",
+    "//components/origin_trials:common",
     "//components/pref_registry",
     "//components/prefs",
-    "//components/services/app_service/public/mojom",
     "//components/sessions",
     "//components/storage_monitor",
     "//components/update_client",
@@ -61,9 +63,6 @@ source_set("app_shell_lib") {
     "//extensions:extensions_resources",
     "//extensions:shell_and_test_pak",
     "//extensions/browser",
-    "//extensions/browser:core_api_provider",
-    "//extensions/browser/api",
-    "//extensions/browser/api/messaging",
     "//extensions/browser/kiosk",
     "//extensions/browser/updater",
     "//extensions/common",
@@ -238,8 +237,8 @@ source_set("app_shell_lib") {
       "//chromeos/ash/components/dbus/hermes",
       "//chromeos/ash/components/dbus/shill",
       "//chromeos/ash/components/disks",
+      "//chromeos/ash/components/login/login_state",
       "//chromeos/ash/components/network",
-      "//chromeos/login/login_state",
       "//ui/chromeos",
       "//ui/display/manager",
     ]
@@ -426,7 +425,10 @@ source_set("browser_tests") {
   ]
 
   if (is_chromeos_lacros) {
-    deps += [ "//chromeos/lacros" ]
+    deps += [
+      "//chromeos/lacros",
+      "//ui/gfx/linux:gbm",
+    ]
   }
 
   if (use_aura) {

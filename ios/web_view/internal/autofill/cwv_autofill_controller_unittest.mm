@@ -13,7 +13,7 @@
 #import "base/test/ios/wait_util.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/logging/stub_log_manager.h"
-#include "components/autofill/core/browser/payments/test_strike_database.h"
+#import "components/autofill/core/browser/strike_databases/payments/test_strike_database.h"
 #include "components/autofill/core/browser/test_personal_data_manager.h"
 #include "components/autofill/core/common/autofill_prefs.h"
 #import "components/autofill/ios/browser/autofill_java_script_feature.h"
@@ -50,10 +50,6 @@
 #import "third_party/ocmock/OCMock/OCMock.h"
 #include "third_party/ocmock/gtest_support.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using autofill::FormRendererId;
 using autofill::FieldRendererId;
 using base::test::ios::kWaitForActionTimeout;
@@ -85,15 +81,18 @@ class CWVAutofillControllerTest : public web::WebTest {
 
     UniqueIDDataTabHelper::CreateForWebState(&web_state_);
 
-    autofill_agent_ =
-        [[FakeAutofillAgent alloc] initWithPrefService:&pref_service_
-                                              webState:&web_state_];
-
     frame_id_ = base::SysUTF8ToNSString(web::kMainFakeFrameId);
 
     auto frames_manager = std::make_unique<web::FakeWebFramesManager>();
     web_frames_manager_ = frames_manager.get();
-    web_state_.SetWebFramesManager(std::move(frames_manager));
+    web::ContentWorld content_world =
+        autofill::AutofillJavaScriptFeature::GetInstance()
+            ->GetSupportedContentWorld();
+    web_state_.SetWebFramesManager(content_world, std::move(frames_manager));
+
+    autofill_agent_ =
+        [[FakeAutofillAgent alloc] initWithPrefService:&pref_service_
+                                              webState:&web_state_];
 
     auto password_manager_client =
         std::make_unique<WebViewPasswordManagerClient>(
@@ -101,8 +100,7 @@ class CWVAutofillControllerTest : public web::WebTest {
             /*identity_manager=*/nullptr, /*log_manager=*/nullptr,
             /*profile_store=*/nullptr, /*account_store=*/nullptr,
             /*reuse_manager=*/nullptr,
-            /*requirements_service=*/nullptr,
-            /*password_change_success_tracker=*/nullptr);
+            /*requirements_service=*/nullptr);
     auto password_manager = std::make_unique<password_manager::PasswordManager>(
         password_manager_client.get());
     password_controller_ = OCMClassMock([SharedPasswordController class]);
@@ -135,9 +133,7 @@ class CWVAutofillControllerTest : public web::WebTest {
   }
 
   void AddWebFrame(std::unique_ptr<web::WebFrame> frame) {
-    web::WebFrame* frame_ptr = frame.get();
     web_frames_manager_->AddWebFrame(std::move(frame));
-    web_state_.OnWebFrameDidBecomeAvailable(frame_ptr);
   }
 
   TestingPrefServiceSimple pref_service_;
@@ -158,12 +154,13 @@ class CWVAutofillControllerTest : public web::WebTest {
 
 // Tests CWVAutofillController fetch suggestions for profiles.
 TEST_F(CWVAutofillControllerTest, FetchProfileSuggestions) {
-  FormSuggestion* suggestion =
-      [FormSuggestion suggestionWithValue:kTestFieldValue
-                       displayDescription:kTestDisplayDescription
-                                     icon:nil
-                               identifier:0
-                           requiresReauth:NO];
+  FormSuggestion* suggestion = [FormSuggestion
+      suggestionWithValue:kTestFieldValue
+       displayDescription:kTestDisplayDescription
+                     icon:nil
+              popupItemId:autofill::PopupItemId::kAutocompleteEntry
+        backendIdentifier:nil
+           requiresReauth:NO];
   [autofill_agent_ addSuggestion:suggestion
                      forFormName:kTestFormName
                  fieldIdentifier:kTestFieldIdentifier
@@ -204,12 +201,13 @@ TEST_F(CWVAutofillControllerTest, FetchProfileSuggestions) {
 
 // Tests CWVAutofillController fetch suggestions for passwords.
 TEST_F(CWVAutofillControllerTest, FetchPasswordSuggestions) {
-  FormSuggestion* suggestion =
-      [FormSuggestion suggestionWithValue:kTestFieldValue
-                       displayDescription:nil
-                                     icon:nil
-                               identifier:0
-                           requiresReauth:NO];
+  FormSuggestion* suggestion = [FormSuggestion
+      suggestionWithValue:kTestFieldValue
+       displayDescription:nil
+                     icon:nil
+              popupItemId:autofill::PopupItemId::kAutocompleteEntry
+        backendIdentifier:nil
+           requiresReauth:NO];
   OCMExpect([password_controller_
       checkIfSuggestionsAvailableForForm:[OCMArg any]
                           hasUserGesture:YES
@@ -253,12 +251,13 @@ TEST_F(CWVAutofillControllerTest, FetchPasswordSuggestions) {
 
 // Tests CWVAutofillController accepts suggestion.
 TEST_F(CWVAutofillControllerTest, AcceptSuggestion) {
-  FormSuggestion* form_suggestion =
-      [FormSuggestion suggestionWithValue:kTestFieldValue
-                       displayDescription:nil
-                                     icon:nil
-                               identifier:0
-                           requiresReauth:NO];
+  FormSuggestion* form_suggestion = [FormSuggestion
+      suggestionWithValue:kTestFieldValue
+       displayDescription:nil
+                     icon:nil
+              popupItemId:autofill::PopupItemId::kAutocompleteEntry
+        backendIdentifier:nil
+           requiresReauth:NO];
   CWVAutofillSuggestion* suggestion =
       [[CWVAutofillSuggestion alloc] initWithFormSuggestion:form_suggestion
                                                    formName:kTestFormName
@@ -421,10 +420,9 @@ TEST_F(CWVAutofillControllerTest, NotifyUserOfLeak) {
 
   GURL leak_url("https://www.chromium.org");
   password_manager::CredentialLeakType leak_type =
-      password_manager::CreateLeakType(
-          password_manager::IsSaved(true), password_manager::IsReused(true),
-          password_manager::IsSyncing(true),
-          password_manager::HasChangeScript(false));
+      password_manager::CreateLeakType(password_manager::IsSaved(true),
+                                       password_manager::IsReused(true),
+                                       password_manager::IsSyncing(true));
   CWVPasswordLeakType expected_leak_type = CWVPasswordLeakTypeSaved |
                                            CWVPasswordLeakTypeUsedOnOtherSites |
                                            CWVPasswordLeakTypeSynced;
@@ -437,7 +435,8 @@ TEST_F(CWVAutofillControllerTest, NotifyUserOfLeak) {
                                 username:@"fake-username"]);
 
   password_manager_client_->NotifyUserCredentialsWereLeaked(
-      leak_type, leak_url, base::SysNSStringToUTF16(@"fake-username"));
+      leak_type, leak_url, base::SysNSStringToUTF16(@"fake-username"),
+      /* in_account_store = */ false);
 
   [delegate verify];
 }
@@ -473,11 +472,11 @@ TEST_F(CWVAutofillControllerTest, AutoSaveNewAutofillProfile) {
   __block BOOL decision_handler_called = NO;
   auto callback = base::BindOnce(
       ^(autofill::AutofillClient::SaveAddressProfileOfferUserDecision decision,
-        autofill::AutofillProfile profile) {
+        base::optional_ref<const autofill::AutofillProfile> profile) {
         EXPECT_EQ(autofill::AutofillClient::
                       SaveAddressProfileOfferUserDecision::kUserNotAsked,
                   decision);
-        EXPECT_EQ(new_profile, profile);
+        EXPECT_EQ(new_profile, profile.value());
         decision_handler_called = YES;
       });
   [autofill_controller_ confirmSaveAddressProfile:new_profile
@@ -510,11 +509,11 @@ TEST_F(CWVAutofillControllerTest, SaveNewAutofillProfile) {
   __block BOOL decision_handler_called = NO;
   auto callback = base::BindOnce(
       ^(autofill::AutofillClient::SaveAddressProfileOfferUserDecision decision,
-        autofill::AutofillProfile profile) {
+        base::optional_ref<const autofill::AutofillProfile> profile) {
         EXPECT_EQ(autofill::AutofillClient::
                       SaveAddressProfileOfferUserDecision::kAccepted,
                   decision);
-        EXPECT_EQ(new_profile, profile);
+        EXPECT_EQ(new_profile, profile.value());
         decision_handler_called = YES;
       });
   [autofill_controller_ confirmSaveAddressProfile:new_profile

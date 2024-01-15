@@ -9,7 +9,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
@@ -71,8 +71,7 @@ class WebRtcTextLogHandler {
 
   // Opens a log and starts logging if allowed by the LogUploader.
   // Returns false if logging could not be started.
-  bool StartLogging(WebRtcLogUploader* log_uploader,
-                    GenericDoneCallback callback);
+  bool StartLogging(GenericDoneCallback callback);
 
   // Stops logging. Log will remain open until UploadLog or DiscardLog is
   // called.

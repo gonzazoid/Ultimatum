@@ -70,56 +70,29 @@ chrome.runtime.onMessageExternal.addListener(function(
           requestInfo, origin, true);
       doSendResponse();
       return false;
-    } else if (method === 'logging.noUploadOnRenderClose') {
-      chrome.webrtcLoggingPrivate.setUploadOnRenderClose(
-          requestInfo, origin, false);
-      doSendResponse();
-      return false;
     } else if (method === 'logging.stop') {
       chrome.webrtcLoggingPrivate.stop(requestInfo, origin, doSendResponse);
-      return true;
-    } else if (method === 'logging.upload') {
-      chrome.webrtcLoggingPrivate.upload(requestInfo, origin, doSendResponse);
-      return true;
-    } else if (method === 'logging.uploadStored') {
-      const logId = message['logId'];
-      chrome.webrtcLoggingPrivate.uploadStored(
-          requestInfo, origin, logId, doSendResponse);
       return true;
     } else if (method === 'logging.stopAndUpload') {
       // Stop everything and upload. This is allowed to be called even if
       // logs have already been stopped or not started. Therefore, ignore
       // any errors along the way, but store them, so that if upload fails
       // they are all reported back.
-      // Stop incoming and outgoing RTP dumps separately, otherwise
-      // stopRtpDump will fail and not stop anything if either type has not
-      // been started.
       const errors = [];
-      chrome.webrtcLoggingPrivate.stopRtpDump(
-          requestInfo, origin, true /* incoming */, false /* outgoing */,
-          function() {
-            appendLastErrorMessage(errors);
-            chrome.webrtcLoggingPrivate.stopRtpDump(
-                requestInfo, origin, false /* incoming */, true /* outgoing */,
-                function() {
-                  appendLastErrorMessage(errors);
-                  chrome.webrtcLoggingPrivate.stop(
-                      requestInfo, origin, function() {
-                        appendLastErrorMessage(errors);
-                        chrome.webrtcLoggingPrivate.upload(
-                            requestInfo, origin, function(uploadValue) {
-                              let errorMessage = null;
-                              // If upload fails, report all previous errors.
-                              // Otherwise, throw them away.
-                              if (chrome.runtime.lastError !== undefined) {
-                                appendLastErrorMessage(errors);
-                                errorMessage = errors.join('; ');
-                              }
-                              doSendResponse(uploadValue, errorMessage);
-                            });
-                      });
-                });
-          });
+      chrome.webrtcLoggingPrivate.stop(requestInfo, origin, function() {
+        appendLastErrorMessage(errors);
+        chrome.webrtcLoggingPrivate.upload(
+            requestInfo, origin, function(uploadValue) {
+              let errorMessage = null;
+              // If upload fails, report all previous errors.
+              // Otherwise, throw them away.
+              if (chrome.runtime.lastError !== undefined) {
+                appendLastErrorMessage(errors);
+                errorMessage = errors.join('; ');
+              }
+              doSendResponse(uploadValue, errorMessage);
+            });
+      });
       return true;
     } else if (method === 'logging.store') {
       const logId = message['logId'];
@@ -128,49 +101,6 @@ chrome.runtime.onMessageExternal.addListener(function(
       return true;
     } else if (method === 'logging.discard') {
       chrome.webrtcLoggingPrivate.discard(requestInfo, origin, doSendResponse);
-      return true;
-    } else if (method === 'getSinks') {
-      chrome.webrtcAudioPrivate.getSinks(doSendResponse);
-      return true;
-    } else if (method === 'getAssociatedSink') {
-      const sourceId = message['sourceId'];
-      chrome.webrtcAudioPrivate.getAssociatedSink(
-          origin, sourceId, doSendResponse);
-      return true;
-    } else if (method === 'isExtensionEnabled') {
-      // This method is necessary because there may be more than one
-      // version of this extension, under different extension IDs. By
-      // first calling this method on the extension ID, the client can
-      // check if it's loaded; if it's not, the extension system will
-      // call the callback with no arguments and set
-      // chrome.runtime.lastError.
-      doSendResponse();
-      return false;
-    } else if (method === 'getNaclArchitecture') {
-      chrome.runtime.getPlatformInfo(function(obj) {
-        doSendResponse(obj.nacl_arch);
-      });
-      return true;
-    } else if (method === 'logging.startRtpDump') {
-      const incoming = message['incoming'] || false;
-      const outgoing = message['outgoing'] || false;
-      chrome.webrtcLoggingPrivate.startRtpDump(
-          requestInfo, origin, incoming, outgoing, doSendResponse);
-      return true;
-    } else if (method === 'logging.stopRtpDump') {
-      const incoming = message['incoming'] || false;
-      const outgoing = message['outgoing'] || false;
-      chrome.webrtcLoggingPrivate.stopRtpDump(
-          requestInfo, origin, incoming, outgoing, doSendResponse);
-      return true;
-    } else if (method === 'logging.startAudioDebugRecordings') {
-      const seconds = message['seconds'] || 0;
-      chrome.webrtcLoggingPrivate.startAudioDebugRecordings(
-          requestInfo, origin, seconds, doSendResponse);
-      return true;
-    } else if (method === 'logging.stopAudioDebugRecordings') {
-      chrome.webrtcLoggingPrivate.stopAudioDebugRecordings(
-          requestInfo, origin, doSendResponse);
       return true;
     } else if (method === 'logging.startEventLogging') {
       const sessionId = message['sessionId'] || '';
@@ -192,20 +122,6 @@ chrome.runtime.onMessageExternal.addListener(function(
     doSendResponse(null, e.name + ': ' + e.message);
   }
 });
-
-// If Hangouts connects with a port named 'onSinksChangedListener', we
-// will register a listener and send it a message {'eventName':
-// 'onSinksChanged'} whenever the event fires.
-function onSinksChangedPort(port) {
-  function clientListener() {
-    port.postMessage({'eventName': 'onSinksChanged'});
-  }
-  chrome.webrtcAudioPrivate.onSinksChanged.addListener(clientListener);
-
-  port.onDisconnect.addListener(function() {
-    chrome.webrtcAudioPrivate.onSinksChanged.removeListener(clientListener);
-  });
-}
 
 // This is a one-time-use port for calling chooseDesktopMedia.  The page
 // sends one message, identifying the requested source types, and the
@@ -304,8 +220,6 @@ function onProcessCpu(port) {
       'browserCpuUsage': browserProcessCpu || 0,
       'gpuCpuUsage': gpuProcessCpu || 0,
       'tabCpuUsage': tabProcess.cpu,
-      'tabNetworkUsage': tabProcess.network,
-      'tabPrivateMemory': tabProcess.privateMemory,
       'tabJsMemoryAllocated': tabProcess.jsMemoryAllocated,
       'tabJsMemoryUsed': tabProcess.jsMemoryUsed,
     });
@@ -324,9 +238,7 @@ function appendLastErrorMessage(errors) {
 }
 
 chrome.runtime.onConnectExternal.addListener(function(port) {
-  if (port.name === 'onSinksChangedListener') {
-    onSinksChangedPort(port);
-  } else if (port.name === 'chooseDesktopMedia') {
+  if (port.name === 'chooseDesktopMedia') {
     onChooseDesktopMediaPort(port);
   } else if (port.name === 'processCpu') {
     onProcessCpu(port);

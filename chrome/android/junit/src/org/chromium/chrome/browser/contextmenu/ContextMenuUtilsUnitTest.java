@@ -8,6 +8,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import android.app.Activity;
+import android.os.Build;
 
 import org.junit.After;
 import org.junit.Before;
@@ -20,13 +21,15 @@ import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Features;
+import org.chromium.base.test.util.Features.DisableFeatures;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 
 /** Unit tests for {@link ContextMenuUtils}. */
 @RunWith(BaseRobolectricTestRunner.class)
+@Config(sdk = Build.VERSION_CODES.O)
 public class ContextMenuUtilsUnitTest {
-    @Rule
-    public TestRule featureProcessor = new Features.JUnitProcessor();
+    @Rule public TestRule featureProcessor = new Features.JUnitProcessor();
 
     Activity mActivity;
 
@@ -41,44 +44,48 @@ public class ContextMenuUtilsUnitTest {
     }
 
     @Test
-    @Features.EnableFeatures({ChromeFeatureList.CONTEXT_MENU_POPUP_FOR_ALL_SCREEN_SIZES})
+    @EnableFeatures({ChromeFeatureList.CONTEXT_MENU_POPUP_FOR_ALL_SCREEN_SIZES})
     @Config(qualifiers = "sw320dp")
     public void usePopupAllScreen_Small() {
         doTestUsePopupWhenEnabledByFlag();
     }
 
     @Test
-    @Features.EnableFeatures({ChromeFeatureList.CONTEXT_MENU_POPUP_FOR_ALL_SCREEN_SIZES})
+    @EnableFeatures({ChromeFeatureList.CONTEXT_MENU_POPUP_FOR_ALL_SCREEN_SIZES})
     @Config(qualifiers = "sw600dp")
     public void usePopupAllScreen_Large() {
         doTestUsePopupWhenEnabledByFlag();
     }
 
     @Test
-    @Features.DisableFeatures({ChromeFeatureList.CONTEXT_MENU_POPUP_FOR_ALL_SCREEN_SIZES})
+    @DisableFeatures({ChromeFeatureList.CONTEXT_MENU_POPUP_FOR_ALL_SCREEN_SIZES})
     @Config(qualifiers = "sw320dp")
     public void doNotUsePopupForSmallScreen() {
-        assertFalse("Popup should not be used for small screen.",
+        assertFalse(
+                "Popup should not be used for small screen.",
                 ContextMenuUtils.usePopupContextMenuForContext(mActivity));
     }
 
     @Test
-    @Features.DisableFeatures({ChromeFeatureList.CONTEXT_MENU_POPUP_FOR_ALL_SCREEN_SIZES})
+    @DisableFeatures({ChromeFeatureList.CONTEXT_MENU_POPUP_FOR_ALL_SCREEN_SIZES})
     @Config(qualifiers = "sw600dp")
     public void usePopupForLargeScreen() {
-        assertTrue("Popup should not be used for small screen.",
+        assertTrue(
+                "Popup should not be used for small screen.",
                 ContextMenuUtils.usePopupContextMenuForContext(mActivity));
     }
 
     @Test
     @Config(qualifiers = "sw600dp")
     public void nullInputs() {
-        assertFalse("Always return false for null input.",
+        assertFalse(
+                "Always return false for null input.",
                 ContextMenuUtils.usePopupContextMenuForContext(null));
     }
 
     private void doTestUsePopupWhenEnabledByFlag() {
-        assertTrue("Popup should be used when CONTEXT_MENU_POPUP_FOR_ALL_SCREEN_SIZES enabled.",
+        assertTrue(
+                "Popup should be used when CONTEXT_MENU_POPUP_FOR_ALL_SCREEN_SIZES enabled.",
                 ContextMenuUtils.usePopupContextMenuForContext(mActivity));
     }
 }

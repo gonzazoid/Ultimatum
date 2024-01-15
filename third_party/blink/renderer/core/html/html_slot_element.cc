@@ -31,6 +31,7 @@
 #include "third_party/blink/renderer/core/html/html_slot_element.h"
 
 #include "base/containers/adapters.h"
+#include "base/containers/contains.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_assigned_nodes_options.h"
 #include "third_party/blink/renderer/core/css/style_change_reason.h"
 #include "third_party/blink/renderer/core/css/style_engine.h"
@@ -198,8 +199,9 @@ void HTMLSlotElement::Assign(const HeapVector<Member<Node>>& nodes) {
 
   HeapLinkedHashSet<WeakMember<Node>> removed_nodes;
   for (Node* node : manually_assigned_nodes_) {
-    if (added_nodes.find(node) == added_nodes.end())
+    if (!base::Contains(added_nodes, node)) {
       removed_nodes.insert(node);
+    }
   }
 
   updated |= added_nodes.size() != manually_assigned_nodes_.size();
@@ -224,6 +226,14 @@ void HTMLSlotElement::Assign(const HeapVector<Member<Node>>& nodes) {
       DidSlotChange(SlotChangeType::kSignalSlotChangeEvent);
     }
   }
+}
+
+void HTMLSlotElement::Assign(Node* node) {
+  VectorOf<Node> nodes;
+  if (node) {
+    nodes.push_back(node);
+  }
+  Assign(nodes);
 }
 
 void HTMLSlotElement::AppendAssignedNode(Node& host_child) {
@@ -316,29 +326,9 @@ AtomicString HTMLSlotElement::GetName() const {
   return NormalizeSlotName(FastGetAttribute(html_names::kNameAttr));
 }
 
-void HTMLSlotElement::AttachLayoutTree(AttachContext& context) {
-  HTMLElement::AttachLayoutTree(context);
-
-  if (ChildStyleRecalcBlockedByDisplayLock() || SkippedContainerStyleRecalc())
-    return;
-
-  if (SupportsAssignment()) {
-    LayoutObject* layout_object = GetLayoutObject();
-    AttachContext children_context(context);
-    const ComputedStyle* style = GetComputedStyle();
-    AdjustForceLegacyLayout(style, &children_context.force_legacy_layout);
-    if (layout_object || !style || style->IsEnsuredInDisplayNone()) {
-      children_context.previous_in_flow = nullptr;
-      children_context.parent = layout_object;
-      children_context.next_sibling = nullptr;
-      children_context.next_sibling_valid = true;
-    }
-    children_context.use_previous_in_flow = true;
-
-    for (auto& node : AssignedNodes())
-      node->AttachLayoutTree(children_context);
-    if (children_context.previous_in_flow)
-      context.previous_in_flow = children_context.previous_in_flow;
+void HTMLSlotElement::AttachLayoutTreeForSlotChildren(AttachContext& context) {
+  for (Node* child : flat_tree_children_) {
+    child->AttachLayoutTree(context);
   }
 }
 
@@ -388,9 +378,19 @@ void HTMLSlotElement::AttributeChanged(
   HTMLElement::AttributeChanged(params);
 }
 
+// When the result of `SupportsAssignment()` changes, the behavior of a
+// <slot> element for ancestors with dir=auto changes.
+void HTMLSlotElement::UpdateDirAutoAncestorsForSupportsAssignmentChange() {
+  if (RuntimeEnabledFeatures::CSSPseudoDirEnabled() &&
+      SelfOrAncestorHasDirAutoAttribute()) {
+    UpdateAncestorWithDirAuto(UpdateAncestorTraversal::ExcludeSelf);
+  }
+}
+
 Node::InsertionNotificationRequest HTMLSlotElement::InsertedInto(
     ContainerNode& insertion_point) {
   HTMLElement::InsertedInto(insertion_point);
+  UpdateDirAutoAncestorsForSupportsAssignmentChange();
   if (SupportsAssignment()) {
     ShadowRoot* root = ContainingShadowRoot();
     DCHECK(root);
@@ -463,6 +463,7 @@ void HTMLSlotElement::RemovedFrom(ContainerNode& insertion_point) {
     DCHECK(assigned_nodes_.empty());
   }
 
+  UpdateDirAutoAncestorsForSupportsAssignmentChange();
   HTMLElement::RemovedFrom(insertion_point);
 }
 

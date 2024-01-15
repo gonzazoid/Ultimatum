@@ -2,6 +2,20 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+// https://www.w3.org/TR/webxrlayers-1/#xrtexturetype
+enum XRTextureType {
+  "texture",
+  "texture-array"
+};
+
+// https://www.w3.org/TR/webxrlayers-1/#xrprojectionlayerinittype
+dictionary XRProjectionLayerInit {
+  XRTextureType textureType = "texture";
+  GLenum colorFormat = 0x1908; // RGBA
+  GLenum depthFormat = 0x1902; // DEPTH_COMPONENT
+  double scaleFactor = 1.0;
+};
+
 // https://immersive-web.github.io/layers/#XRWebGLBindingtype
 [
     SecureContext,
@@ -9,13 +23,23 @@
 ] interface XRWebGLBinding {
   [RaisesException] constructor(XRSession session, XRWebGLRenderingContext context);
 
-  // Lighting Estimation API
-  [RuntimeEnabled=WebXRLightEstimation, RaisesException, MeasureAs=XRWebGLBindingGetReflectionCubeMap]
+  [RuntimeEnabled=WebXRLayers]
+  readonly attribute double nativeProjectionScaleFactor;
+  [RuntimeEnabled=WebXRLayers]
+  readonly attribute boolean usesDepthValues;
+
+  [RuntimeEnabled=WebXRLayers, RaisesException]
+  XRProjectionLayer createProjectionLayer(optional XRProjectionLayerInit init = {});
+
+  [RuntimeEnabled=WebXRLayers, RaisesException]
+  XRWebGLSubImage getViewSubImage(XRProjectionLayer layer, XRView view);
+
+  [RuntimeEnabled=WebXR, RaisesException, MeasureAs=XRWebGLBindingGetReflectionCubeMap]
   WebGLTexture? getReflectionCubeMap(XRLightProbe lightProbe);
 
-  [RuntimeEnabled=WebXRCameraAccess, RaisesException, MeasureAs=XRWebGLBindingGetCameraImage]
+  [RuntimeEnabled=WebXR, RaisesException, MeasureAs=XRWebGLBindingGetCameraImage]
   WebGLTexture? getCameraImage(XRCamera camera);
 
-  [RuntimeEnabled=WebXRDepth, RaisesException, MeasureAs=XRWebGLBindingGetDepthInformation]
+  [RuntimeEnabled=WebXR, RaisesException, MeasureAs=XRWebGLBindingGetDepthInformation]
   XRWebGLDepthInformation? getDepthInformation(XRView view);
 };

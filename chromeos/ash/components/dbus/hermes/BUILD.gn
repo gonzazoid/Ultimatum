@@ -17,6 +17,7 @@ source_set("hermes_clients") {
   visibility = [ ":*" ]
   defines = [ "IS_HERMES_CLIENT_IMPL" ]
   deps = [
+    "//ash/constants",
     "//base",
     "//chromeos/dbus/common",
     "//components/device_event_log",
@@ -43,6 +44,7 @@ source_set("hermes_fakes") {
   visibility = [ ":*" ]
   deps = [
     ":hermes_clients",
+    "//ash/constants",
     "//base",
     "//chromeos/ash/components/dbus/shill",
     "//chromeos/dbus/constants",
@@ -65,6 +67,7 @@ source_set("test_support") {
   testonly = true
   public_deps = [ ":hermes" ]
   deps = [
+    "//ash/constants",
     "//base",
     "//base/test:test_support",
     "//chromeos/dbus/common",

@@ -7,13 +7,15 @@
 
 #include "ash/constants/quick_settings_catalogs.h"
 #include "ash/system/unified/unified_slider_view.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
 class UnifiedSystemTrayModel;
 
-// Controller of a read-only slider showing keyboard brightness.
-class UnifiedKeyboardBrightnessSliderController : public UnifiedSliderListener {
+// Controller of a slider showing keyboard brightness.
+class ASH_EXPORT UnifiedKeyboardBrightnessSliderController
+    : public UnifiedSliderListener {
  public:
   explicit UnifiedKeyboardBrightnessSliderController(
       UnifiedSystemTrayModel* model);
@@ -26,7 +28,7 @@ class UnifiedKeyboardBrightnessSliderController : public UnifiedSliderListener {
   ~UnifiedKeyboardBrightnessSliderController() override;
 
   // UnifiedSliderListener:
-  views::View* CreateView() override;
+  std::unique_ptr<UnifiedSliderView> CreateView() override;
   QsSliderCatalogName GetCatalogName() override;
   void SliderValueChanged(views::Slider* sender,
                           float value,
@@ -34,8 +36,8 @@ class UnifiedKeyboardBrightnessSliderController : public UnifiedSliderListener {
                           views::SliderChangeReason reason) override;
 
  private:
-  UnifiedSystemTrayModel* const model_;
-  UnifiedSliderView* slider_ = nullptr;
+  const raw_ptr<UnifiedSystemTrayModel> model_;
+  raw_ptr<UnifiedSliderView, DanglingUntriaged> slider_ = nullptr;
 };
 
 }  // namespace ash

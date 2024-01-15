@@ -72,7 +72,7 @@ class ExtensionWebContentsObserver
   // with the RenderFrameHost.
   static void BindLocalFrameHost(
       mojo::PendingAssociatedReceiver<mojom::LocalFrameHost> receiver,
-      content::RenderFrameHost* rfh);
+      content::RenderFrameHost* render_frame_host);
 
   // This must be called by clients directly after the EWCO has been created.
   void Initialize();
@@ -88,11 +88,16 @@ class ExtensionWebContentsObserver
       content::RenderFrameHost* render_frame_host,
       bool verify_url) const;
 
-  // Returns mojom::LocalFrame* corresponding |render_frame_host|. It emplaces
+  // Returns mojom::LocalFrame* corresponding `render_frame_host`. It emplaces
   // AssociatedRemote<mojom::LocalFrame> to |local_frame_map_| if the map
-  // doesn't have it. Note that it could return nullptr if |render_frame_host|
-  // is not live.
+  // doesn't have it. Note that it could return nullptr if `render_frame_host`
+  // is not live or `render_frame_host` does not immediately belong to the
+  // associated `WebContents`.
   mojom::LocalFrame* GetLocalFrame(content::RenderFrameHost* render_frame_host);
+
+  // Similar to `GetLocalFrame` but will not return nullptr, will crash.
+  mojom::LocalFrame& GetLocalFrameChecked(
+      content::RenderFrameHost* render_frame_host);
 
   // Tells the receiver to start listening to window ID changes from the
   // supplied SessionTabHelper. This method is public to allow the code that
@@ -143,7 +148,7 @@ class ExtensionWebContentsObserver
  private:
   using PassKey = base::PassKey<ExtensionWebContentsObserver>;
 
-  void OnWindowIdChanged(const SessionID& id);
+  void OnWindowIdChanged(SessionID id);
 
   // The BrowserContext associated with the WebContents being observed.
   raw_ptr<content::BrowserContext> browser_context_;

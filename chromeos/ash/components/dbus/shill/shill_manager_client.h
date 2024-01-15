@@ -9,6 +9,7 @@
 
 #include "base/component_export.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "chromeos/ash/components/dbus/shill/fake_shill_simulated_result.h"
 #include "chromeos/ash/components/dbus/shill/shill_client_helper.h"
 #include "chromeos/dbus/common/dbus_method_call_status.h"
@@ -65,7 +66,7 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillManagerClient {
     // which will be appended to the results returned from
     // GetNetworksForGeolocation().
     virtual void AddGeoNetwork(const std::string& technology,
-                               const base::Value& network) = 0;
+                               const base::Value::Dict& network) = 0;
 
     // Does not create an actual profile in the ProfileClient but update the
     // profiles list and sends a notification to observers. This should only be
@@ -87,7 +88,7 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillManagerClient {
     virtual void ClearManagerServices() = 0;
 
     // Returns all enabled services in the given property.
-    virtual base::Value GetEnabledServiceList() const = 0;
+    virtual base::Value::List GetEnabledServiceList() const = 0;
 
     // Called by ShillServiceClient when a service's State property changes,
     // before notifying observers. Sets the DefaultService property to empty
@@ -95,7 +96,7 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillManagerClient {
     virtual void ServiceStateChanged(const std::string& service_path,
                                      const std::string& state) = 0;
 
-    // Called by ShillServiceClient when a service's State or Visibile
+    // Called by ShillServiceClient when a service's State or Visible
     // property changes. If |notify| is true, notifies observers if a list
     // changed. Services are sorted first by active, inactive, or disabled
     // state, then by type.
@@ -142,8 +143,15 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillManagerClient {
     // Set (or unset) stub client state to return nullopt on GetProperties().
     virtual void SetShouldReturnNullProperties(bool value) = 0;
 
+    // Sets whether WiFi services should be visible by default when created
+    // using ConfigureService.
+    // TODO(b/274453184): Make "Visible": false the default for all WiFi
+    // services created using ConfigureService.
+    virtual void SetWifiServicesVisibleByDefault(
+        bool wifi_services_visible_by_default) = 0;
+
    protected:
-    virtual ~TestInterface() {}
+    virtual ~TestInterface() = default;
   };
 
   // Creates and initializes the global instance. |bus| must not be null.
@@ -173,13 +181,13 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillManagerClient {
   // |callback| receives a dictionary Value containing the Manager properties on
   // success or nullopt on failure.
   virtual void GetProperties(
-      chromeos::DBusMethodCallback<base::Value> callback) = 0;
+      chromeos::DBusMethodCallback<base::Value::Dict> callback) = 0;
 
   // Calls the GetNetworksForGeolocation DBus method and invokes |callback| when
   // complete. |callback| receives a dictionary Value containing an entry for
   // available network types. See Shill manager-api documentation for details.
   virtual void GetNetworksForGeolocation(
-      chromeos::DBusMethodCallback<base::Value> callback) = 0;
+      chromeos::DBusMethodCallback<base::Value::Dict> callback) = 0;
 
   // Calls SetProperty method.
   virtual void SetProperty(const std::string& name,
@@ -204,20 +212,20 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillManagerClient {
 
   // Calls Manager.ConfigureService with |properties| which must be a
   // dictionary value describing a Shill service.
-  virtual void ConfigureService(const base::Value& properties,
+  virtual void ConfigureService(const base::Value::Dict& properties,
                                 chromeos::ObjectPathCallback callback,
                                 ErrorCallback error_callback) = 0;
 
   // Calls Manager.ConfigureServiceForProfile for |profile_path| with
   // |properties| which must be a dictionary value describing a Shill service.
   virtual void ConfigureServiceForProfile(const dbus::ObjectPath& profile_path,
-                                          const base::Value& properties,
+                                          const base::Value::Dict& properties,
                                           chromeos::ObjectPathCallback callback,
                                           ErrorCallback error_callback) = 0;
 
   // Calls Manager.GetService with |properties| which must be a dictionary value
   // describing a Service.
-  virtual void GetService(const base::Value& properties,
+  virtual void GetService(const base::Value::Dict& properties,
                           chromeos::ObjectPathCallback callback,
                           ErrorCallback error_callback) = 0;
 
@@ -237,21 +245,21 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillManagerClient {
   // Creates a set of Passpoint credentials from |properties| in the profile
   // referenced by |profile_path|.
   virtual void AddPasspointCredentials(const dbus::ObjectPath& profile_path,
-                                       const base::Value& properties,
+                                       const base::Value::Dict& properties,
                                        base::OnceClosure callback,
                                        ErrorCallback error_callback) = 0;
 
   // Removes all Passpoint credentials that matches all property of |properties|
   // in the profile referenced by |profile_path|.
   virtual void RemovePasspointCredentials(const dbus::ObjectPath& profile_path,
-                                          const base::Value& properties,
+                                          const base::Value::Dict& properties,
                                           base::OnceClosure callback,
                                           ErrorCallback error_callback) = 0;
 
   // Enables or disables tethering hotspot. Only supports cellular as the
   // upstream technologies and WiFi as the downstream technology.
   virtual void SetTetheringEnabled(bool enabled,
-                                   base::OnceClosure callback,
+                                   StringCallback callback,
                                    ErrorCallback error_callback) = 0;
 
   // Checks whether the upstream technology is ready to tether. Returns a status
@@ -260,6 +268,11 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillManagerClient {
   // readiness check is completed but the upstream is not ready.
   virtual void CheckTetheringReadiness(StringCallback callback,
                                        ErrorCallback error_callback) = 0;
+
+  // Enables or disables local only hotspot.
+  virtual void SetLOHSEnabled(bool enabled,
+                              base::OnceClosure callback,
+                              ErrorCallback error_callback) = 0;
 
   // Returns an interface for testing (stub only), or returns null.
   virtual TestInterface* GetTestInterface() = 0;
@@ -273,10 +286,5 @@ class COMPONENT_EXPORT(SHILL_CLIENT) ShillManagerClient {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::ShillManagerClient;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_SHILL_SHILL_MANAGER_CLIENT_H_

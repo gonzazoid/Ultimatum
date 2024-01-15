@@ -8,15 +8,14 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 
 namespace base {
 class SingleThreadTaskRunner;
 }
 
-namespace remoting {
-namespace mac {
+namespace remoting::mac {
 
 // This class implements a wizard-style UI which guides the user to granting all
 // needed MacOS permissions for the host process.
@@ -73,7 +72,6 @@ class PermissionWizard final {
   scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner_;
 };
 
-}  // namespace mac
-}  // namespace remoting
+}  // namespace remoting::mac
 
 #endif  // REMOTING_HOST_MAC_PERMISSION_WIZARD_H_

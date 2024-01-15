@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_PRELOADING_PREFETCH_SEARCH_PREFETCH_FIELD_TRIAL_SETTINGS_H_
 
 #include "base/feature_list.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/time/time.h"
 
 BASE_DECLARE_FEATURE(kSearchPrefetchServicePrefetching);
@@ -13,6 +14,8 @@ BASE_DECLARE_FEATURE(kSearchPrefetchServicePrefetching);
 BASE_DECLARE_FEATURE(kSearchPrefetchBlockBeforeHeaders);
 
 BASE_DECLARE_FEATURE(kSearchPrefetchSkipsCancel);
+
+BASE_DECLARE_FEATURE(kSearchPrefetchOnlyAllowDefaultMatchPreloading);
 
 // Whether matching prefetches can block navigation until they are determined to
 // be serve-able or not based on headers.
@@ -42,6 +45,12 @@ base::TimeDelta SearchPrefetchBlockHeadStart();
 
 BASE_DECLARE_FEATURE(kSearchNavigationPrefetch);
 
+// Feature params for the "pf" query param for suggest prefetch and navigation
+// prefetch respectively. This param allows the search server to treat the
+// requests differently based on the source.
+extern const base::FeatureParam<std::string> kSuggestPrefetchParam;
+extern const base::FeatureParam<std::string> kNavigationPrefetchParam;
+
 // An experimental feature to measure if starting search prefetches during
 // navigation events provides benefit over the typical navigation flow.
 bool IsSearchNavigationPrefetchEnabled();
@@ -51,12 +60,17 @@ bool IsSearchNavigationPrefetchEnabled();
 bool SearchPrefetchSkipsCancel();
 
 // A flavor of navigation prefetch that triggers when the user changes the
-// selected index in omnibox to a search suggestion via arrow buttons.
+// selected index in omnibox to a search suggestion via arrow buttons. This is
+// for Desktop only.
 bool IsUpOrDownArrowPrefetchEnabled();
 
 // A flavor of navigation prefetch that triggers when the user pushes the mouse
-// down on a Search suggestion.
+// down on a Search suggestion. This is for Desktop only.
 bool IsSearchMouseDownPrefetchEnabled();
+
+// A flavor of navigation prefetch that triggers when the user touches down on a
+// Search suggestion. This is for Android only.
+bool IsTouchDownPrefetchEnabled();
 
 // Allows the top selection to be prefetched by navigation prefetch strategies.
 bool AllowTopNavigationPrefetch();
@@ -64,5 +78,9 @@ bool AllowTopNavigationPrefetch();
 // Allows search history suggestions to be prefetched by navigation prefetch
 // strategies.
 bool PrefetchSearchHistorySuggestions();
+
+// Whether Omnibox prefetch and prerender should be restricted to the suggestion
+// being the default match.
+bool OnlyAllowDefaultMatchPreloading();
 
 #endif  // CHROME_BROWSER_PRELOADING_PREFETCH_SEARCH_PREFETCH_FIELD_TRIAL_SETTINGS_H_

@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
-#include "chrome/browser/nearby_sharing/proto/rpc_resources.pb.h"
+#include "base/functional/callback.h"
+#include "third_party/nearby/sharing/proto/rpc_resources.pb.h"
 
 // Downloads the user's contact list from the server. NOTE: An instance should
 // only be used once. All necessary parameters are passed to the constructor,
@@ -17,7 +17,7 @@
 class NearbyShareContactDownloader {
  public:
   using SuccessCallback = base::OnceCallback<void(
-      std::vector<nearbyshare::proto::ContactRecord> contacts,
+      std::vector<nearby::sharing::proto::ContactRecord> contacts,
       uint32_t num_unreachable_contacts_filtered_out)>;
   using FailureCallback = base::OnceClosure;
 
@@ -41,7 +41,7 @@ class NearbyShareContactDownloader {
   virtual void OnRun() = 0;
 
   // Invokes the success callback with the input parameters.
-  void Succeed(std::vector<nearbyshare::proto::ContactRecord> contacts,
+  void Succeed(std::vector<nearby::sharing::proto::ContactRecord> contacts,
                uint32_t num_unreachable_contacts_filtered_out);
 
   // Invokes the failure callback.

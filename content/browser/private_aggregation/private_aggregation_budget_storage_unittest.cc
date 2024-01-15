@@ -7,18 +7,19 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "content/browser/private_aggregation/proto/private_aggregation_budgets.pb.h"
 #include "sql/database.h"
@@ -81,6 +82,31 @@ class PrivateAggregationBudgetStorageTest : public testing::Test {
     task_environment_.RunUntilIdle();
   }
 
+  void VerifyInitializationCountHistogram(size_t expected_count) {
+    histogram_tester_.ExpectTotalCount(
+        "PrivacySandbox.PrivateAggregation.BudgetStorage."
+        "BeginInitializationCount",
+        expected_count);
+  }
+
+  // Helper for the unique sample case.
+  void VerifyHistograms(PrivateAggregationBudgetStorage::InitStatus init_status,
+                        bool shutdown_before_finishing_initialization,
+                        int expected_bucket_count = 1) {
+    histogram_tester_.ExpectUniqueSample(
+        "PrivacySandbox.PrivateAggregation.BudgetStorage.InitStatus",
+        init_status, expected_bucket_count);
+    histogram_tester_.ExpectUniqueSample(
+        "PrivacySandbox.PrivateAggregation.BudgetStorage."
+        "ShutdownBeforeFinishingInitialization",
+        shutdown_before_finishing_initialization, expected_bucket_count);
+    histogram_tester_.ExpectUniqueTimeSample(
+        "PrivacySandbox.PrivateAggregation.BudgetStorage.InitTime",
+        base::TimeDelta(), expected_bucket_count);
+    VerifyInitializationCountHistogram(
+        /*expected_count=*/expected_bucket_count);
+  }
+
   base::FilePath storage_directory() const { return temp_directory_.GetPath(); }
 
   base::FilePath db_path() const {
@@ -103,21 +129,28 @@ class PrivateAggregationBudgetStorageTest : public testing::Test {
   std::unique_ptr<PrivateAggregationBudgetStorage> storage_;
   scoped_refptr<base::SequencedTaskRunner> db_task_runner_;
   base::test::TaskEnvironment task_environment_;
+  base::HistogramTester histogram_tester_;
 };
 
 TEST_F(PrivateAggregationBudgetStorageTest, DatabaseInitialization) {
   EXPECT_FALSE(base::PathExists(db_path()));
 
   base::RunLoop run_loop;
+  VerifyInitializationCountHistogram(/*expected_count=*/0);
   OpenDatabase(/*run_in_memory=*/false,
                /*on_done_initializing=*/base::BindLambdaForTesting(
                    [&run_loop]() { run_loop.Quit(); }));
+  // The count should be increased when the initialization begins.
+  VerifyInitializationCountHistogram(/*expected_count=*/1);
   EXPECT_FALSE(storage());
   run_loop.Run();
   EXPECT_TRUE(storage());
 
   // Even an unused instance should create the directory.
   EXPECT_TRUE(base::PathExists(db_path()));
+
+  VerifyHistograms(PrivateAggregationBudgetStorage::InitStatus::kSuccess,
+                   /*shutdown_before_finishing_initialization=*/false);
 }
 
 TEST_F(PrivateAggregationBudgetStorageTest,
@@ -131,6 +164,9 @@ TEST_F(PrivateAggregationBudgetStorageTest,
 
   run_loop.Run();
   EXPECT_TRUE(storage());
+
+  VerifyHistograms(PrivateAggregationBudgetStorage::InitStatus::kSuccess,
+                   /*shutdown_before_finishing_initialization=*/false);
 }
 
 TEST_F(PrivateAggregationBudgetStorageTest, DbPathCorrupt_FailsToInitialize) {
@@ -144,6 +180,10 @@ TEST_F(PrivateAggregationBudgetStorageTest, DbPathCorrupt_FailsToInitialize) {
 
   run_loop.Run();
   EXPECT_FALSE(storage());
+
+  VerifyHistograms(
+      PrivateAggregationBudgetStorage::InitStatus::kFailedToOpenDbFile,
+      /*shutdown_before_finishing_initialization=*/false);
 }
 
 TEST_F(PrivateAggregationBudgetStorageTest, InMemory_StillInitializes) {
@@ -154,6 +194,9 @@ TEST_F(PrivateAggregationBudgetStorageTest, InMemory_StillInitializes) {
 
   run_loop.Run();
   EXPECT_TRUE(storage());
+
+  VerifyHistograms(PrivateAggregationBudgetStorage::InitStatus::kSuccess,
+                   /*shutdown_before_finishing_initialization=*/false);
 }
 
 TEST_F(PrivateAggregationBudgetStorageTest, DatabaseReopened_DataPersisted) {
@@ -174,6 +217,10 @@ TEST_F(PrivateAggregationBudgetStorageTest, DatabaseReopened_DataPersisted) {
 
   EXPECT_TRUE(storage()->budgets_data()->TryGetData(kExampleSerializedOrigin,
                                                     /*data=*/nullptr));
+
+  VerifyHistograms(PrivateAggregationBudgetStorage::InitStatus::kSuccess,
+                   /*shutdown_before_finishing_initialization=*/false,
+                   /*expected_bucket_count=*/2);
 }
 
 TEST_F(PrivateAggregationBudgetStorageTest,
@@ -215,6 +262,10 @@ TEST_F(PrivateAggregationBudgetStorageTest,
 
   EXPECT_FALSE(storage()->budgets_data()->TryGetData(kExampleSerializedOrigin,
                                                      /*data=*/nullptr));
+
+  VerifyHistograms(PrivateAggregationBudgetStorage::InitStatus::kSuccess,
+                   /*shutdown_before_finishing_initialization=*/false,
+                   /*expected_bucket_count=*/2);
 }
 
 TEST_F(PrivateAggregationBudgetStorageTest,
@@ -244,14 +295,18 @@ TEST_F(PrivateAggregationBudgetStorageTest,
     // The values here are irrelevant, as the meta table already exists.
     ASSERT_TRUE(meta.Init(&raw_db, /*version=*/1, /*compatible_version=*/1));
 
-    meta.SetVersionNumber(meta.GetVersionNumber() + 1);
-    meta.SetCompatibleVersionNumber(meta.GetVersionNumber() + 1);
+    ASSERT_TRUE(meta.SetVersionNumber(meta.GetVersionNumber() + 1));
+    ASSERT_TRUE(meta.SetCompatibleVersionNumber(meta.GetVersionNumber() + 1));
   }
 
   OpenDatabaseAndWait();
 
   EXPECT_FALSE(storage()->budgets_data()->TryGetData(kExampleSerializedOrigin,
                                                      /*data=*/nullptr));
+
+  VerifyHistograms(PrivateAggregationBudgetStorage::InitStatus::kSuccess,
+                   /*shutdown_before_finishing_initialization=*/false,
+                   /*expected_bucket_count=*/2);
 }
 
 TEST_F(PrivateAggregationBudgetStorageTest,
@@ -264,6 +319,9 @@ TEST_F(PrivateAggregationBudgetStorageTest,
         run_loop.Quit();
       }));
   run_loop.Run();
+
+  VerifyHistograms(PrivateAggregationBudgetStorage::InitStatus::kSuccess,
+                   /*shutdown_before_finishing_initialization=*/false);
 }
 
 TEST_F(PrivateAggregationBudgetStorageTest,
@@ -277,6 +335,9 @@ TEST_F(PrivateAggregationBudgetStorageTest,
       }));
   std::move(shutdown).Run();
   run_loop.Run();
+
+  VerifyHistograms(PrivateAggregationBudgetStorage::InitStatus::kSuccess,
+                   /*shutdown_before_finishing_initialization=*/true);
 }
 
 TEST_F(PrivateAggregationBudgetStorageTest,
@@ -290,6 +351,9 @@ TEST_F(PrivateAggregationBudgetStorageTest,
         run_loop.Quit();
       }));
   run_loop.Run();
+
+  VerifyHistograms(PrivateAggregationBudgetStorage::InitStatus::kSuccess,
+                   /*shutdown_before_finishing_initialization=*/false);
 }
 
 }  // namespace content

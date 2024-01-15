@@ -8,7 +8,7 @@
 
 #include "chrome/browser/extensions/site_permissions_helper.h"
 #include "chrome/browser/ui/toolbar/toolbar_action_view_delegate.h"
-#include "ui/gfx/image/image.h"
+#include "ui/base/models/image_model.h"
 
 TestToolbarActionViewController::TestToolbarActionViewController(
     const std::string& id)
@@ -29,10 +29,10 @@ void TestToolbarActionViewController::SetDelegate(
   delegate_ = delegate;
 }
 
-gfx::Image TestToolbarActionViewController::GetIcon(
+ui::ImageModel TestToolbarActionViewController::GetIcon(
     content::WebContents* web_contents,
     const gfx::Size& size) {
-  return gfx::Image();
+  return ui::ImageModel();
 }
 
 std::u16string TestToolbarActionViewController::GetActionName() const {
@@ -69,7 +69,7 @@ bool TestToolbarActionViewController::IsShowingPopup() const {
   return popup_showing_;
 }
 
-bool TestToolbarActionViewController::IsRequestingSiteAccess(
+bool TestToolbarActionViewController::ShouldShowSiteAccessRequestInToolbar(
     content::WebContents* web_contents) const {
   return false;
 }

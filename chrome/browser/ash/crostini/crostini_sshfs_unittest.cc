@@ -3,13 +3,15 @@
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/crostini/crostini_sshfs.h"
+#include "build/build_config.h"
 
 #include <memory>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
@@ -22,7 +24,6 @@
 #include "chromeos/ash/components/dbus/chunneld/chunneld_client.h"
 #include "chromeos/ash/components/dbus/cicerone/cicerone_client.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
-#include "chromeos/ash/components/dbus/concierge/fake_concierge_client.h"
 #include "chromeos/ash/components/dbus/cros_disks/cros_disks_client.h"
 #include "chromeos/ash/components/dbus/seneschal/seneschal_client.h"
 #include "chromeos/ash/components/dbus/vm_applications/apps.pb.h"
@@ -81,13 +82,8 @@ class CrostiniSshfsHelperTest : public testing::Test {
 
     DiskMountManager::InitializeForTesting(disk_manager_);
 
-    std::string known_hosts;
-    base::Base64Encode("[hostname]:2222 pubkey", &known_hosts);
-    std::string identity;
-    base::Base64Encode("privkey", &identity);
-    default_mount_options_ = {"UserKnownHostsBase64=" + known_hosts,
-                              "IdentityBase64=" + identity, "Port=2222"};
-    fake_concierge_client_ = ash::FakeConciergeClient::Get();
+    std::string known_hosts = base::Base64Encode("[hostname]:2222 pubkey");
+    std::string identity = base::Base64Encode("privkey");
   }
 
   CrostiniSshfsHelperTest(const CrostiniSshfsHelperTest&) = delete;
@@ -127,16 +123,16 @@ class CrostiniSshfsHelperTest : public testing::Test {
       ash::disks::DiskMountManager::MountPathCallback callback) {
     auto event = DiskMountManager::MountEvent::MOUNTING;
     auto code = ash::MountError::kSuccess;
-    DiskMountManager::MountPoint info{
-        "sshfs://username@hostname:", "/media/fuse/" + kMountName,
-        ash::MountType::kNetworkStorage};
+    DiskMountManager::MountPoint info{"sftp://3:1234",
+                                      "/media/fuse/" + kMountName,
+                                      ash::MountType::kNetworkStorage};
     disk_manager_->NotifyMountEvent(event, code, info);
     std::move(callback).Run(code, info);
   }
 
   void ExpectMountCalls(int n) {
-    EXPECT_CALL(*disk_manager_, MountPath("sshfs://username@hostname:", "",
-                                          kMountName, default_mount_options_,
+    EXPECT_CALL(*disk_manager_, MountPath("sftp://3:1234", "", kMountName,
+                                          default_mount_options_,
                                           ash::MountType::kNetworkStorage,
                                           ash::MountAccessMode::kReadWrite, _))
         .Times(n)
@@ -147,25 +143,31 @@ class CrostiniSshfsHelperTest : public testing::Test {
   void SetContainerRunning(guest_os::GuestId container) {
     auto* manager = CrostiniManager::GetForProfile(profile());
     ContainerInfo info(container.container_name, "username", "homedir",
-                       "1.2.3.4");
-    manager->AddRunningVmForTesting(container.vm_name);
+                       "1.2.3.4", 1234);
+    manager->AddRunningVmForTesting(container.vm_name, 3);
     manager->AddRunningContainerForTesting(container.vm_name, info);
   }
 
   content::BrowserTaskEnvironment task_environment_;
-  ash::disks::MockDiskMountManager* disk_manager_;
+  raw_ptr<ash::disks::MockDiskMountManager, DanglingUntriaged> disk_manager_;
   std::unique_ptr<TestingProfile> profile_;
   std::unique_ptr<CrostiniTestHelper> crostini_test_helper_;
   const std::string kMountName = "crostini_test_termina_penguin";
   std::vector<std::string> default_mount_options_;
-  ash::FakeConciergeClient* fake_concierge_client_;
   std::unique_ptr<file_manager::VolumeManager> volume_manager_;
   std::unique_ptr<CrostiniSshfs> crostini_sshfs_;
-  CrostiniManager* crostini_manager_;
+  raw_ptr<CrostiniManager> crostini_manager_;
   base::HistogramTester histogram_tester{};
 };
 
-TEST_F(CrostiniSshfsHelperTest, MountDiskMountsDisk) {
+// TODO(https://crbug.com/1491372): UAF and other failures in MSAN, ASAN
+#if BUILDFLAG(IS_LINUX) && \
+    (defined(ADDRESS_SANITIZER) || defined(MEMORY_SANITIZER))
+#define MAYBE_MountDiskMountsDisk DISABLED_MountDiskMountsDisk
+#else
+#define MAYBE_MountDiskMountsDisk MountDiskMountsDisk
+#endif
+TEST_F(CrostiniSshfsHelperTest, MAYBE_MountDiskMountsDisk) {
   SetContainerRunning(DefaultContainerId());
   ExpectMountCalls(1);
   bool result = false;
@@ -197,14 +199,21 @@ TEST_F(CrostiniSshfsHelperTest, FailsIfContainerNotRunning) {
   task_environment_.RunUntilIdle();
 
   EXPECT_FALSE(result);
-  EXPECT_EQ(fake_concierge_client_->get_container_ssh_keys_call_count(), 0);
   histogram_tester.ExpectUniqueSample(
       kCrostiniMetricMountResultUserVisible,
       CrostiniSshfs::CrostiniSshfsResult::kContainerNotRunning, 1);
   histogram_tester.ExpectTotalCount(kCrostiniMetricMountTimeTaken, 1);
 }
 
-TEST_F(CrostiniSshfsHelperTest, OnlyDefaultContainerSupported) {
+// TODO(https://crbug.com/1491372): UAF and other failures in MSAN, ASAN
+#if BUILDFLAG(IS_LINUX) && \
+    (defined(ADDRESS_SANITIZER) || defined(MEMORY_SANITIZER))
+#define MAYBE_OnlyDefaultContainerSupported \
+  DISABLED_OnlyDefaultContainerSupported
+#else
+#define MAYBE_OnlyDefaultContainerSupported OnlyDefaultContainerSupported
+#endif
+TEST_F(CrostiniSshfsHelperTest, MAYBE_OnlyDefaultContainerSupported) {
   auto not_default =
       guest_os::GuestId(kCrostiniDefaultVmType, "vm_name", "container_name");
   SetContainerRunning(not_default);
@@ -216,7 +225,6 @@ TEST_F(CrostiniSshfsHelperTest, OnlyDefaultContainerSupported) {
       base::BindLambdaForTesting([&result](bool res) { result = res; }), false);
   task_environment_.RunUntilIdle();
   EXPECT_FALSE(result);
-  EXPECT_EQ(fake_concierge_client_->get_container_ssh_keys_call_count(), 0);
   histogram_tester.ExpectUniqueSample(
       kCrostiniMetricMountResultUserVisible,
       CrostiniSshfs::CrostiniSshfsResult::kNotDefaultContainer, 1);
@@ -233,14 +241,22 @@ TEST_F(CrostiniSshfsHelperTest, RecordBackgroundMetricIfBackground) {
   crostini_sshfs_->MountCrostiniFiles(not_default, base::DoNothing(), true);
   task_environment_.RunUntilIdle();
   EXPECT_FALSE(result);
-  EXPECT_EQ(fake_concierge_client_->get_container_ssh_keys_call_count(), 0);
   histogram_tester.ExpectUniqueSample(
       kCrostiniMetricMountResultBackground,
       CrostiniSshfs::CrostiniSshfsResult::kNotDefaultContainer, 1);
   histogram_tester.ExpectTotalCount(kCrostiniMetricMountResultUserVisible, 0);
 }
 
-TEST_F(CrostiniSshfsHelperTest, MultipleCallsAreQueuedAndOnlyMountOnce) {
+// TODO(https://crbug.com/1491372): UAF and other failures in MSAN, ASAN
+#if BUILDFLAG(IS_LINUX) && \
+    (defined(ADDRESS_SANITIZER) || defined(MEMORY_SANITIZER))
+#define MAYBE_MultipleCallsAreQueuedAndOnlyMountOnce \
+  DISABLED_MultipleCallsAreQueuedAndOnlyMountOnce
+#else
+#define MAYBE_MultipleCallsAreQueuedAndOnlyMountOnce \
+  MultipleCallsAreQueuedAndOnlyMountOnce
+#endif
+TEST_F(CrostiniSshfsHelperTest, MAYBE_MultipleCallsAreQueuedAndOnlyMountOnce) {
   SetContainerRunning(DefaultContainerId());
 
   ExpectMountCalls(1);
@@ -263,14 +279,20 @@ TEST_F(CrostiniSshfsHelperTest, MultipleCallsAreQueuedAndOnlyMountOnce) {
       storage::ExternalMountPoints::GetSystemInstance()->GetRegisteredPath(
           kMountName, &path));
   EXPECT_EQ(base::FilePath("/media/fuse/" + kMountName), path);
-  EXPECT_EQ(fake_concierge_client_->get_container_ssh_keys_call_count(), 1);
   histogram_tester.ExpectUniqueSample(
       kCrostiniMetricMountResultUserVisible,
       CrostiniSshfs::CrostiniSshfsResult::kSuccess, 2);
   histogram_tester.ExpectTotalCount(kCrostiniMetricMountTimeTaken, 2);
 }
 
-TEST_F(CrostiniSshfsHelperTest, CanRemountAfterUnmount) {
+// TODO(https://crbug.com/1491372): UAF and other failures in MSAN, ASAN
+#if BUILDFLAG(IS_LINUX) && \
+    (defined(ADDRESS_SANITIZER) || defined(MEMORY_SANITIZER))
+#define MAYBE_CanRemountAfterUnmount DISABLED_CanRemountAfterUnmount
+#else
+#define MAYBE_CanRemountAfterUnmount CanRemountAfterUnmount
+#endif
+TEST_F(CrostiniSshfsHelperTest, MAYBE_CanRemountAfterUnmount) {
   SetContainerRunning(DefaultContainerId());
   ExpectMountCalls(2);
   EXPECT_CALL(*disk_manager_, UnmountPath)
@@ -299,7 +321,6 @@ TEST_F(CrostiniSshfsHelperTest, CanRemountAfterUnmount) {
       storage::ExternalMountPoints::GetSystemInstance()->GetRegisteredPath(
           kMountName, &path));
   EXPECT_EQ(base::FilePath("/media/fuse/" + kMountName), path);
-  EXPECT_EQ(fake_concierge_client_->get_container_ssh_keys_call_count(), 2);
   histogram_tester.ExpectUniqueSample(
       kCrostiniMetricMountResultUserVisible,
       CrostiniSshfs::CrostiniSshfsResult::kSuccess, 2);
@@ -308,7 +329,16 @@ TEST_F(CrostiniSshfsHelperTest, CanRemountAfterUnmount) {
   histogram_tester.ExpectTotalCount(kCrostiniMetricUnmountTimeTaken, 1);
 }
 
-TEST_F(CrostiniSshfsHelperTest, ContainerShutdownClearsMountStatus) {
+// TODO(https://crbug.com/1491372): UAF and other failures in MSAN, ASAN
+#if BUILDFLAG(IS_LINUX) && \
+    (defined(ADDRESS_SANITIZER) || defined(MEMORY_SANITIZER))
+#define MAYBE_ContainerShutdownClearsMountStatus \
+  DISABLED_ContainerShutdownClearsMountStatus
+#else
+#define MAYBE_ContainerShutdownClearsMountStatus \
+  ContainerShutdownClearsMountStatus
+#endif
+TEST_F(CrostiniSshfsHelperTest, MAYBE_ContainerShutdownClearsMountStatus) {
   SetContainerRunning(DefaultContainerId());
   ExpectMountCalls(2);
   crostini_sshfs_->MountCrostiniFiles(
@@ -327,7 +357,6 @@ TEST_F(CrostiniSshfsHelperTest, ContainerShutdownClearsMountStatus) {
       storage::ExternalMountPoints::GetSystemInstance()->GetRegisteredPath(
           kMountName, &path));
   EXPECT_EQ(base::FilePath("/media/fuse/" + kMountName), path);
-  EXPECT_EQ(fake_concierge_client_->get_container_ssh_keys_call_count(), 2);
 }
 
 }  // namespace crostini

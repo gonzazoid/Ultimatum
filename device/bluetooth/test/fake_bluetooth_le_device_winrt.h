@@ -14,9 +14,10 @@
 #include <stdint.h>
 
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "device/bluetooth/bluetooth_device.h"
 #include "device/bluetooth/test/fake_device_information_winrt.h"
@@ -134,7 +135,7 @@ class FakeBluetoothLEDeviceWinrt
   void SimulateDevicePaired(bool is_paired);
   void SimulatePairingPinCode(std::string pin_code);
   void SimulateConfirmOnly();
-  void SimulateDisplayPin(base::StringPiece display_pin);
+  void SimulateDisplayPin(std::string_view display_pin);
   absl::optional<BluetoothUUID> GetTargetGattService() const;
   void SimulateGattConnection();
   void SimulateGattConnectionError(

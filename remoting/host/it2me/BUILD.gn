@@ -46,7 +46,11 @@ source_set("common") {
     "it2me_host.h",
     "it2me_native_messaging_host.cc",
     "it2me_native_messaging_host.h",
+    "reconnect_params.cc",
+    "reconnect_params.h",
   ]
+
+  deps = []
 
   if (is_linux) {
     sources += [ "it2me_confirmation_dialog_linux.cc" ]
@@ -74,12 +78,13 @@ source_set("common") {
     ":helpers",
   ]
 
-  deps = [
+  deps += [
     "//base:i18n",
     "//build:chromeos_buildflags",
     "//components/policy:policy_code_generate",
     "//components/webrtc:thread_wrapper",
     "//extensions/browser/api/messaging:native_messaging",
+    "//google_apis:google_apis",
     "//mojo/core/embedder",
     "//net",
     "//remoting/base",
@@ -87,6 +92,7 @@ source_set("common") {
     "//remoting/host:common",
     "//remoting/host/base",
     "//remoting/host/native_messaging:native_messaging",
+    "//remoting/proto/ftl/v1:ftl_messages",
     "//remoting/protocol",
     "//remoting/resources",
     "//remoting/signaling",
@@ -101,6 +107,7 @@ source_set("common") {
       # GTK pulls pangoft2, which requires HarfBuzz symbols. When linking
       # our own HarfBuzz avoid mixing symbols from system HarfBuzz and
       # our own through the indirect dependency to harfbuzz-ng here.
+      "//remoting/host/linux:wayland",
       "//third_party:freetype_harfbuzz",
     ]
   }
@@ -108,6 +115,7 @@ source_set("common") {
     deps += [
       "//chromeos/ui/vector_icons",
       "//remoting/host/chromeos",
+      "//remoting/host/chromeos:features",
       "//remoting/host/chromeos:host_event_reporter_impl",
       "//ui/message_center",
       "//ui/message_center/public/cpp",
@@ -143,6 +151,7 @@ if (is_chromeos) {
         "//chromeos/crosapi/mojom",
         "//chromeos/lacros",
         "//extensions/browser/api/messaging:native_messaging",
+        "//google_apis:google_apis",
         "//remoting/host/native_messaging",
         "//remoting/protocol:errors",
       ]
@@ -159,6 +168,7 @@ if (is_chromeos) {
         "//extensions/browser/api/messaging:native_messaging",
         "//remoting/base:base",
         "//remoting/host:common",
+        "//remoting/host/chromeos:browser_interop",
         "//remoting/host/chromeos:enterprise_support",
         "//remoting/host/chromeos:features",
         "//remoting/host/mojom:mojom",
@@ -205,15 +215,16 @@ if (!is_chromeos_ash && enable_remoting_host) {
       "//ui/gfx",
     ]
 
+    if (is_linux) {
+      deps += [ "//remoting/host/linux:wayland" ]
+    }
     if (is_linux && remoting_use_x11) {
       defines = [ "REMOTING_USE_X11" ]
       deps += [
         "//build/config/linux/gtk",
         "//ui/events/platform/x11",
+        "//ui/gtk:gtk_config",
       ]
-    } else if (remoting_use_wayland) {
-      defines = [ "REMOTING_USE_WAYLAND" ]
-      deps += [ "//ui/gtk:gtk_config" ]
     }
 
     if (is_mac) {
@@ -321,18 +332,13 @@ if (!is_chromeos_ash && enable_remoting_host) {
           "BUNDLE_ID=$remote_assistance_host_bundle_id",
           "VERSION_FULL=$remoting_version_full",
           "VERSION_SHORT=$remoting_version_short",
-          "MACOSX_DEPLOYMENT_TARGET=10.7",
-        ]
-        extra_configs = [
-          "//build/config/compiler:wexit_time_destructors",
-          "//remoting/build/config:version",
-        ]
-      } else {
-        configs += [
-          "//build/config/compiler:wexit_time_destructors",
-          "//remoting/build/config:version",
+          "MACOSX_DEPLOYMENT_TARGET=10.15",
         ]
       }
+      configs += [
+        "//build/config/compiler:wexit_time_destructors",
+        "//remoting/build/config:version",
+      ]
 
       sources = [ "it2me_native_messaging_host_entry_point.cc" ]
 

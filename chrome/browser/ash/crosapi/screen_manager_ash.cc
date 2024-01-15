@@ -11,17 +11,17 @@
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/shell.h"
 #include "ash/wm/desks/desks_util.h"
-#include "base/bind.h"
 #include "base/containers/adapters.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/crosapi/browser_util.h"
-#include "chrome/browser/ash/crosapi/video_capture_device_ash.h"
 #include "components/exo/shell_surface_util.h"
 #include "content/public/browser/desktop_capture.h"
 #include "content/public/browser/desktop_media_id.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
+#include "services/video_capture/ash/video_capture_device_ash.h"
 #include "ui/aura/window_observer.h"
 #include "ui/snapshot/snapshot.h"
 
@@ -135,6 +135,9 @@ class ScreenManagerAsh::ScreenCapturerImpl : public SnapshotCapturerBase {
       mojom::SnapshotSourcePtr source = mojom::SnapshotSource::New();
       source->id = window_list_.LookupOrAddId(root_window);
       source->title = base::UTF16ToUTF8(root_window->GetTitle());
+      source->display_id = display::Screen::GetScreen()
+                               ->GetDisplayNearestWindow(root_window)
+                               .id();
 
       if (root_window == ash::Shell::GetPrimaryRootWindow()) {
         sources.insert(sources.begin(), std::move(source));

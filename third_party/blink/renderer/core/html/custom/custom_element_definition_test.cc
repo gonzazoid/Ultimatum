@@ -31,7 +31,9 @@ class ConstructorFails : public TestCustomElementDefinition {
 }  // namespace
 
 TEST_F(CustomElementDefinitionTest, upgrade_clearsReactionQueueOnFailure) {
-  Element& element = *CreateElement("a-a").InDocument(&GetDocument());
+  CustomElementTestingScope testing_scope;
+  Element& element =
+      *CreateElement(AtomicString("a-a")).InDocument(&GetDocument());
   EXPECT_EQ(CustomElementState::kUndefined, element.GetCustomElementState())
       << "sanity check: this element should be ready to upgrade";
   {
@@ -39,9 +41,13 @@ TEST_F(CustomElementDefinitionTest, upgrade_clearsReactionQueueOnFailure) {
     HeapVector<Member<Command>> commands;
     commands.push_back(MakeGarbageCollected<Unreached>(
         "upgrade failure should clear the reaction queue"));
+    CustomElementReactionStack& stack =
+        CustomElementReactionStack::From(element.GetDocument().GetAgent());
     reactions.EnqueueToCurrentQueue(
-        element, *MakeGarbageCollected<TestReaction>(std::move(commands)));
-    ConstructorFails definition(CustomElementDescriptor("a-a", "a-a"));
+        stack, element,
+        *MakeGarbageCollected<TestReaction>(std::move(commands)));
+    ConstructorFails definition(
+        CustomElementDescriptor(AtomicString("a-a"), AtomicString("a-a")));
     definition.Upgrade(element);
   }
   EXPECT_EQ(CustomElementState::kFailed, element.GetCustomElementState())
@@ -50,16 +56,20 @@ TEST_F(CustomElementDefinitionTest, upgrade_clearsReactionQueueOnFailure) {
 
 TEST_F(CustomElementDefinitionTest,
        upgrade_clearsReactionQueueOnFailure_backupStack) {
-  Element& element = *CreateElement("a-a").InDocument(&GetDocument());
+  CustomElementTestingScope testing_scope;
+  Element& element =
+      *CreateElement(AtomicString("a-a")).InDocument(&GetDocument());
   EXPECT_EQ(CustomElementState::kUndefined, element.GetCustomElementState())
       << "sanity check: this element should be ready to upgrade";
-  ResetCustomElementReactionStackForTest reset_reaction_stack;
+  ResetCustomElementReactionStackForTest reset_reaction_stack(
+      GetDocument().GetAgent());
   HeapVector<Member<Command>> commands;
   commands.push_back(MakeGarbageCollected<Unreached>(
       "upgrade failure should clear the reaction queue"));
   reset_reaction_stack.Stack().EnqueueToBackupQueue(
       element, *MakeGarbageCollected<TestReaction>(std::move(commands)));
-  ConstructorFails definition(CustomElementDescriptor("a-a", "a-a"));
+  ConstructorFails definition(
+      CustomElementDescriptor(AtomicString("a-a"), AtomicString("a-a")));
   definition.Upgrade(element);
   EXPECT_EQ(CustomElementState::kFailed, element.GetCustomElementState())
       << "failing to construct should have set the 'failed' element state";

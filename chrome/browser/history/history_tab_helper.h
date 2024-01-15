@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_HISTORY_HISTORY_TAB_HELPER_H_
 #define CHROME_BROWSER_HISTORY_HISTORY_TAB_HELPER_H_
 
+#include "base/gtest_prod_util.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -17,7 +18,7 @@
 namespace history {
 struct HistoryAddPageArgs;
 class HistoryService;
-}
+}  // namespace history
 
 class HistoryTabHelper
     : public content::WebContentsObserver,
@@ -65,8 +66,6 @@ class HistoryTabHelper
   // content::WebContentsObserver implementation.
   void DidFinishNavigation(
       content::NavigationHandle* navigation_handle) override;
-  void DidActivatePortal(content::WebContents* predecessor_contents,
-                         base::TimeTicks activation_time) override;
   void DidFinishLoad(content::RenderFrameHost* render_frame_host,
                      const GURL& validated_url) override;
   void TitleWasSet(content::NavigationEntry* entry) override;
@@ -92,11 +91,8 @@ class HistoryTabHelper
 
   // Observes LanguageDetectionObserver, which notifies us when the language of
   // the contents of the current page has been determined.
-  base::ScopedObservation<
-      translate::TranslateDriver,
-      translate::TranslateDriver::LanguageDetectionObserver,
-      &translate::TranslateDriver::AddLanguageDetectionObserver,
-      &translate::TranslateDriver::RemoveLanguageDetectionObserver>
+  base::ScopedObservation<translate::TranslateDriver,
+                          translate::TranslateDriver::LanguageDetectionObserver>
       translate_observation_{this};
 
   // True after navigation to a page is complete and the page is currently

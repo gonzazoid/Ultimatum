@@ -26,6 +26,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_FORMS_HTML_FORM_CONTROL_ELEMENT_H_
 
 #include "third_party/blink/public/common/metrics/form_element_pii_type.h"
+#include "third_party/blink/public/mojom/forms/form_control_type.mojom-blink.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/web/web_autofill_state.h"
 #include "third_party/blink/renderer/core/core_export.h"
@@ -58,6 +59,9 @@ class CORE_EXPORT HTMLFormControlElement : public HTMLElement,
 
   void Reset();
 
+  void AttachLayoutTree(AttachContext& context) override;
+  void DetachLayoutTree(bool performing_reattach) override;
+
   HTMLFormElement* formOwner() const final;
 
   bool IsDisabledFormControl() const override;
@@ -68,9 +72,10 @@ class CORE_EXPORT HTMLFormControlElement : public HTMLElement,
 
   bool IsRequired() const;
 
-  const AtomicString& type() const { return FormControlType(); }
+  const AtomicString& type() const { return FormControlTypeAsString(); }
 
-  virtual const AtomicString& FormControlType() const = 0;
+  virtual mojom::blink::FormControlType FormControlType() const = 0;
+  virtual const AtomicString& FormControlTypeAsString() const = 0;
 
   virtual bool CanTriggerImplicitSubmission() const { return false; }
 
@@ -88,29 +93,38 @@ class CORE_EXPORT HTMLFormControlElement : public HTMLElement,
   virtual bool IsActivatedSubmit() const { return false; }
   virtual void SetActivatedSubmit(bool) {}
 
-  struct PopupTargetElement final {
+  struct PopoverTargetElement final {
    public:
     DISALLOW_NEW();
-    WeakMember<HTMLElement> element;
-    PopupTriggerAction action;
-    QualifiedName attribute_name;
-    void Trace(Visitor* visitor) const { visitor->Trace(element); }
+    WeakMember<HTMLElement> popover;
+    PopoverTriggerAction action;
+    void Trace(Visitor* visitor) const { visitor->Trace(popover); }
   };
 
-  enum class PopupTriggerSupport {
+  enum class PopoverTriggerSupport {
     kNone,
     kSupported,
   };
 
-  // Retrieves the element pointed to by 'popuptoggletarget', 'popupshowtarget',
-  // and/or 'popuphidetarget' content attributes, if any, and only if this form
-  // control element supports popup triggering.
-  PopupTargetElement popupTargetElement() const;
-  virtual PopupTriggerSupport SupportsPopupTriggering() const {
-    return PopupTriggerSupport::kNone;
+  // Retrieves the popover target element and triggering behavior.
+  PopoverTargetElement popoverTargetElement();
+  virtual PopoverTriggerSupport SupportsPopoverTriggering() const {
+    return PopoverTriggerSupport::kNone;
   }
 
+  // The IDL reflections:
+  AtomicString popoverTargetAction() const;
+  void setPopoverTargetAction(const AtomicString& value);
+
+  HTMLElement* invokeTargetElement();
+
+  AtomicString invokeAction() const;
+  void setInvokeAction(const AtomicString& value);
+
   void DefaultEventHandler(Event&) override;
+
+  void SetHovered(bool hovered) override;
+  void HandlePopoverInvokerHovered(bool hovered);
 
   // Getter and setter for the PII type of the element derived from the autofill
   // field semantic prediction.
@@ -129,11 +143,13 @@ class CORE_EXPORT HTMLFormControlElement : public HTMLElement,
 
   WebAutofillState GetAutofillState() const { return autofill_state_; }
   bool IsAutofilled() const {
-    return autofill_state_ != WebAutofillState::kNotFilled;
+    return autofill_state_ == WebAutofillState::kAutofilled;
+  }
+  bool IsPreviewed() const {
+    return autofill_state_ == WebAutofillState::kPreviewed;
   }
   bool HighlightAutofilled() const {
-    return autofill_state_ == WebAutofillState::kAutofilled &&
-           !PreventHighlightingOfAutofilledFields();
+    return IsAutofilled() && !PreventHighlightingOfAutofilledFields();
   }
   void SetAutofillState(WebAutofillState = WebAutofillState::kAutofilled);
   void SetPreventHighlightingOfAutofilledFields(bool prevent_highlighting);
@@ -155,7 +171,7 @@ class CORE_EXPORT HTMLFormControlElement : public HTMLElement,
   String NameForAutofill() const;
 
   void CloneNonAttributePropertiesFrom(const Element&,
-                                       CloneChildrenFlag) override;
+                                       NodeCloningData&) override;
 
   FormAssociated* ToFormAssociatedOrNull() override { return this; }
   void AssociateWith(HTMLFormElement*) override;
@@ -168,6 +184,8 @@ class CORE_EXPORT HTMLFormControlElement : public HTMLElement,
   }
 
   int32_t GetAxId() const;
+
+  bool MatchesValidityPseudoClasses() const override;
 
  protected:
   HTMLFormControlElement(const QualifiedName& tag_name, Document&);
@@ -182,8 +200,10 @@ class CORE_EXPORT HTMLFormControlElement : public HTMLElement,
   void DidChangeForm() override;
   void DidMoveToNewDocument(Document& old_document) override;
 
-  bool SupportsFocus() const override;
-  bool IsKeyboardFocusable() const override;
+  bool SupportsFocus(UpdateBehavior update_behavior =
+                         UpdateBehavior::kStyleAndLayout) const override;
+  bool IsKeyboardFocusable(UpdateBehavior update_behavior =
+                               UpdateBehavior::kStyleAndLayout) const override;
   bool ShouldHaveFocusAppearance() const override;
 
   virtual void ResetImpl() {}
@@ -193,7 +213,9 @@ class CORE_EXPORT HTMLFormControlElement : public HTMLElement,
   bool AlwaysCreateUserAgentShadowRoot() const override { return true; }
 
   bool IsValidElement() override;
-  bool MatchesValidityPseudoClasses() const override;
+
+  void HandlePopoverTriggering(HTMLElement* popover,
+                               PopoverTriggerAction action);
 
   uint64_t unique_renderer_form_control_id_;
 

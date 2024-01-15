@@ -328,14 +328,16 @@ class CHROME_DBUS_EXPORT ObjectManager final
   // |service_name_owner_|.
   void UpdateServiceNameOwner(const std::string& new_owner);
 
+  // Valid in between the constructor and `CleanUp()`.
+  // After Cleanup(), `this` lifetime might exceed Bus's one.
   raw_ptr<Bus> bus_;
   std::string service_name_;
   std::string service_name_owner_;
   std::string match_rule_;
   ObjectPath object_path_;
-  raw_ptr<ObjectProxy> object_proxy_;
-  bool setup_success_;
-  bool cleanup_called_;
+  raw_ptr<ObjectProxy, AcrossTasksDanglingUntriaged> object_proxy_;
+  bool setup_success_ = false;
+  bool cleanup_called_ = false;
 
   // Maps the name of an interface to the implementation class used for
   // instantiating PropertySet structures for that interface's properties.
@@ -349,7 +351,7 @@ class CHROME_DBUS_EXPORT ObjectManager final
     Object();
     ~Object();
 
-    raw_ptr<ObjectProxy> object_proxy;
+    raw_ptr<ObjectProxy, AcrossTasksDanglingUntriaged> object_proxy;
 
     // Maps the name of an interface to the specific PropertySet structure
     // of that interface's properties.

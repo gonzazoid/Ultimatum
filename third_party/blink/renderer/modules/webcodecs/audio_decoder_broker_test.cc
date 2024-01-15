@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "third_party/blink/renderer/modules/webcodecs/audio_decoder_broker.h"
+
 #include <memory>
 #include <vector>
 
@@ -23,15 +25,15 @@
 #include "media/mojo/services/interface_factory_impl.h"
 #include "media/mojo/services/mojo_audio_decoder_service.h"
 #include "media/mojo/services/mojo_cdm_service_context.h"
+#include "media/mojo/services/mojo_media_client.h"
 #include "mojo/public/cpp/bindings/unique_receiver_set.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
-
-#include "third_party/blink/renderer/modules/webcodecs/audio_decoder_broker.h"
 
 using ::testing::_;
 using ::testing::Return;
@@ -86,6 +88,19 @@ class FakeAudioDecoder : public media::MockAudioDecoder {
   OutputCB output_cb_;
 };
 
+class FakeMojoMediaClient : public media::MojoMediaClient {
+ public:
+  FakeMojoMediaClient() = default;
+  FakeMojoMediaClient(const FakeMojoMediaClient&) = delete;
+  FakeMojoMediaClient& operator=(const FakeMojoMediaClient&) = delete;
+
+  std::unique_ptr<media::AudioDecoder> CreateAudioDecoder(
+      scoped_refptr<base::SequencedTaskRunner> task_runner,
+      std::unique_ptr<media::MediaLog> media_log) override {
+    return std::make_unique<FakeAudioDecoder>();
+  }
+};
+
 // Other end of remote InterfaceFactory requested by AudioDecoderBroker. Used
 // to create our (fake) media::mojom::AudioDecoder.
 class FakeInterfaceFactory : public media::mojom::InterfaceFactory {
@@ -109,7 +124,8 @@ class FakeInterfaceFactory : public media::mojom::InterfaceFactory {
       mojo::PendingReceiver<media::mojom::AudioDecoder> receiver) override {
     audio_decoder_receivers_.Add(
         std::make_unique<media::MojoAudioDecoderService>(
-            &cdm_service_context_, std::make_unique<FakeAudioDecoder>()),
+            &mojo_media_client_, &cdm_service_context_,
+            base::SingleThreadTaskRunner::GetCurrentDefault()),
         std::move(receiver));
   }
   void CreateAudioEncoder(
@@ -157,6 +173,7 @@ class FakeInterfaceFactory : public media::mojom::InterfaceFactory {
 #endif  // BUILDFLAG(IS_WIN)
 
  private:
+  FakeMojoMediaClient mojo_media_client_;
   media::MojoCdmServiceContext cdm_service_context_;
   mojo::Receiver<media::mojom::InterfaceFactory> receiver_{this};
   mojo::UniqueReceiverSet<media::mojom::AudioDecoder> audio_decoder_receivers_;
@@ -255,6 +272,7 @@ class AudioDecoderBrokerTest : public testing::Test {
   bool SupportsDecryption() { return decoder_broker_->SupportsDecryption(); }
 
  protected:
+  test::TaskEnvironment task_environment_;
   media::NullMediaLog null_media_log_;
   std::unique_ptr<AudioDecoderBroker> decoder_broker_;
   std::vector<scoped_refptr<media::AudioBuffer>> output_buffers_;

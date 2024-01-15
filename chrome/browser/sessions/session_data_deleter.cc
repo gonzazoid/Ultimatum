@@ -7,15 +7,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "build/build_config.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/lifetime/browser_shutdown.h"
+#include "chrome/browser/media/webrtc/media_device_salt_service_factory.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
 #include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
@@ -24,6 +25,7 @@
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/keep_alive_registry/keep_alive_types.h"
 #include "components/keep_alive_registry/scoped_keep_alive.h"
+#include "components/media_device_salt/media_device_salt_service.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/storage_partition.h"
@@ -32,9 +34,11 @@
 #include "content/public/common/content_switches.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/cookies/cookie_util.h"
+#include "services/network/public/cpp/features.h"
 #include "services/network/public/mojom/cookie_manager.mojom.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "storage/browser/quota/special_storage_policy.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 
 namespace {
@@ -43,6 +47,11 @@ bool OriginMatcher(const blink::StorageKey& storage_key,
                    storage::SpecialStoragePolicy* policy) {
   return policy->IsStorageSessionOnly(storage_key.origin().GetURL()) &&
          !policy->IsStorageProtected(storage_key.origin().GetURL());
+}
+
+bool StorageKeyMatcher(scoped_refptr<storage::SpecialStoragePolicy> policy,
+                       const blink::StorageKey& storage_key) {
+  return OriginMatcher(storage_key, policy.get());
 }
 
 class SessionDataDeleterInternal
@@ -67,7 +76,9 @@ class SessionDataDeleterInternal
   // cookie and storage deletions are done. This way the keep alives ensure that
   // the profile does not shut down during the deletion.
   void OnCookieDeletionDone(uint32_t count) {}
+  void OnTrustTokenDeletionDone(bool any_data_deleted) {}
   void OnStorageDeletionDone() {}
+  void OnMediaDeviceSaltDeletionDone() {}
 
   std::unique_ptr<ScopedKeepAlive> keep_alive_;
   std::unique_ptr<ScopedProfileKeepAlive> profile_keep_alive_;
@@ -107,6 +118,18 @@ void SessionDataDeleterInternal::Run(
         /*perform_storage_cleanup=*/false, base::Time(), base::Time::Max(),
         base::BindOnce(&SessionDataDeleterInternal::OnStorageDeletionDone,
                        this));
+    // The const_cast here is safe, as the profile received in the constructor
+    // is not const. It is just that ScopedProfileKeepAlive wraps it as const.
+    if (auto* media_device_salt_service =
+            MediaDeviceSaltServiceFactory::GetInstance()->GetForBrowserContext(
+                const_cast<Profile*>(profile_keep_alive_->profile()))) {
+      media_device_salt_service->DeleteSalts(
+          base::Time(), base::Time::Max(),
+          base::BindRepeating(&StorageKeyMatcher, storage_policy_),
+          base::BindOnce(
+              &SessionDataDeleterInternal::OnMediaDeviceSaltDeletionDone,
+              this));
+    }
   }
 
   storage_partition->GetNetworkContext()->GetCookieManager(
@@ -122,10 +145,6 @@ void SessionDataDeleterInternal::Run(
         // Fire and forget. Session cookies will be cleaned up on start as well.
         // (SQLitePersistentCookieStore::Backend::DeleteSessionCookiesOnStartup)
         base::DoNothing());
-    host_content_settings_map->ClearSettingsForOneType(
-        ContentSettingsType::CLIENT_HINTS);
-    host_content_settings_map->ClearSettingsForOneType(
-        ContentSettingsType::REDUCED_ACCEPT_LANGUAGE);
   }
 
   if (!storage_policy_.get() || !storage_policy_->HasSessionOnlyOrigins())
@@ -133,6 +152,13 @@ void SessionDataDeleterInternal::Run(
 
   cookie_manager_->DeleteSessionOnlyCookies(
       base::BindOnce(&SessionDataDeleterInternal::OnCookieDeletionDone, this));
+
+  if (base::FeatureList::IsEnabled(network::features::kPrivateStateTokens)) {
+    storage_partition->GetNetworkContext()->ClearTrustTokenSessionOnlyData(
+        base::BindOnce(&SessionDataDeleterInternal::OnTrustTokenDeletionDone,
+                       this));
+  }
+
   // Note that from this point on |*this| is kept alive by scoped_refptr<>
   // references automatically taken by |Bind()|, so when the last callback
   // created by Bind() is released (after execution of that function), the

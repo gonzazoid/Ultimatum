@@ -2,17 +2,23 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <fuchsia/ui/policy/cpp/fidl.h>
+#include <fuchsia/element/cpp/fidl.h>
+#include <fuchsia/io/cpp/fidl.h>
 #include <fuchsia/web/cpp/fidl.h>
 #include <lib/sys/cpp/component_context.h>
-#include <lib/ui/scenic/cpp/view_token_pair.h>
+#include <lib/sys/cpp/service_directory.h>
 
+#include <optional>
+#include "base/base_paths.h"
+#include "base/check.h"
+#include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/fuchsia/file_utils.h"
 #include "base/fuchsia/fuchsia_logging.h"
 #include "base/fuchsia/mem_buffer_util.h"
 #include "base/fuchsia/process_context.h"
+#include "base/logging.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_executor.h"
@@ -21,11 +27,14 @@
 #include "components/cast/message_port/fuchsia/create_web_message.h"
 #include "components/cast/message_port/platform_message_port.h"
 #include "components/cast_streaming/test/cast_streaming_test_sender.h"
+#include "components/fuchsia_component_support/annotations_manager.h"
 #include "fuchsia_web/cast_streaming/cast_streaming.h"
 #include "fuchsia_web/common/init_logging.h"
 #include "fuchsia_web/common/test/fit_adapter.h"
 #include "fuchsia_web/common/test/frame_test_util.h"
+#include "fuchsia_web/shell/present_frame.h"
 #include "fuchsia_web/shell/remote_debugging_port.h"
+#include "fuchsia_web/shell/shell_relauncher.h"
 #include "fuchsia_web/webengine/switches.h"
 #include "fuchsia_web/webinstance_host/web_instance_host.h"
 #include "media/base/media_util.h"
@@ -60,14 +69,10 @@ media::VideoDecoderConfig GetDefaultVideoConfig() {
 
 // Set up content directory and context params.
 fuchsia::web::CreateContextParams GetCreateContextParams(
-    absl::optional<uint16_t> remote_debugging_port) {
+    uint16_t remote_debugging_port) {
   // Configure the fuchsia-dir://cast-streaming/ directory.
   fuchsia::web::CreateContextParams create_context_params;
   ApplyCastStreamingContextParams(&create_context_params);
-
-  // Share this process' service directory with the WebEngine Context
-  create_context_params.set_service_directory(
-      base::OpenDirectoryHandle(base::FilePath(base::kServiceDirectoryPath)));
 
   // Enable other WebEngine features.
   fuchsia::web::ContextFeatureFlags features =
@@ -77,40 +82,40 @@ fuchsia::web::CreateContextParams GetCreateContextParams(
       fuchsia::web::ContextFeatureFlags::VULKAN;
   create_context_params.set_features(features);
 
-  create_context_params.set_remote_debugging_port(*remote_debugging_port);
+  create_context_params.set_remote_debugging_port(remote_debugging_port);
 
   return create_context_params;
 }
 
 // Set autoplay, enable all logging, and present fullscreen view of `frame`.
-void ConfigureFrame(fuchsia::web::Frame* frame) {
+std::optional<fuchsia::element::GraphicalPresenterPtr> ConfigureFrame(
+    fuchsia::web::Frame* frame,
+    fidl::InterfaceHandle<fuchsia::element::AnnotationController>
+        annotation_controller) {
   fuchsia::web::ContentAreaSettings settings;
   settings.set_autoplay_policy(fuchsia::web::AutoplayPolicy::ALLOW);
   frame->SetContentAreaSettings(std::move(settings));
-
   frame->SetJavaScriptLogLevel(fuchsia::web::ConsoleLogLevel::DEBUG);
-
-  auto view_tokens = scenic::ViewTokenPair::New();
-  frame->CreateView(std::move(view_tokens.view_token));
-  auto presenter = base::ComponentContextForProcess()
-                       ->svc()
-                       ->Connect<fuchsia::ui::policy::Presenter>();
-  presenter->PresentOrReplaceView(std::move(view_tokens.view_holder_token),
-                                  nullptr);
+  return PresentFrame(frame, std::move(annotation_controller));
 }
 
 }  // namespace
 
 int main(int argc, char** argv) {
+  base::CommandLine::Init(argc, argv);
+
+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+  CHECK(InitLoggingFromCommandLine(*command_line));
+
   base::SingleThreadTaskExecutor executor(base::MessagePumpType::IO);
 
-  // Parse the command line arguments and set up logging.
-  CHECK(base::CommandLine::Init(argc, argv));
-  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+  if (auto optional_exit_code = RelaunchForWebInstanceHostIfParent(
+          "#meta/cast_streaming_shell_for_web_instance_host.cm", *command_line);
+      optional_exit_code.has_value()) {
+    return optional_exit_code.value();
+  }
 
-  CHECK(InitLoggingFromCommandLineDefaultingToStderrForTest(command_line));
-
-  absl::optional<uint16_t> remote_debugging_port =
+  std::optional<uint16_t> remote_debugging_port =
       GetRemoteDebuggingPort(*command_line);
   if (!remote_debugging_port) {
     PrintUsage();
@@ -118,19 +123,23 @@ int main(int argc, char** argv) {
   }
 
   // Instantiate Web Instance Host.
-  WebInstanceHost web_instance_host;
+  WebInstanceHostWithServicesFromThisComponent web_instance_host(
+      *base::ComponentContextForProcess()->outgoing(),
+      /*is_web_instance_component_in_same_package=*/false);
   fidl::InterfaceRequest<fuchsia::io::Directory> services_request;
   auto services = sys::ServiceDirectory::CreateWithRequest(&services_request);
   base::CommandLine child_command_line =
       base::CommandLine(command_line->GetArgs());
   child_command_line.AppendSwitch(switches::kEnableCastStreamingReceiver);
   zx_status_t result = web_instance_host.CreateInstanceForContextWithCopiedArgs(
-      GetCreateContextParams(remote_debugging_port),
+      GetCreateContextParams(remote_debugging_port.value()),
       std::move(services_request), child_command_line);
   if (result != ZX_OK) {
     ZX_LOG(ERROR, result) << "CreateInstanceForContextWithCopiedArgs failed";
     return 2;
   }
+
+  base::ComponentContextForProcess()->outgoing()->ServeFromStartupInfo();
 
   // Create the browser `context`.
   fuchsia::web::ContextPtr context;
@@ -156,7 +165,17 @@ int main(int argc, char** argv) {
         quit_run_loop.Run();
       });
 
-  ConfigureFrame(frame.get());
+  // The underlying PresentView call expects an AnnotationController and will
+  // return PresentViewError.INVALID_ARGS without one. The AnnotationController
+  // should serve WatchAnnotations, but it doesn't need to do anything.
+  // TODO(b/264899156): Remove this when AnnotationController becomes
+  // optional.
+  auto annotations_manager =
+      std::make_unique<fuchsia_component_support::AnnotationsManager>();
+  fuchsia::element::AnnotationControllerPtr annotation_controller;
+  annotations_manager->Connect(annotation_controller.NewRequest());
+  auto presenter =
+      ConfigureFrame(frame.get(), std::move(annotation_controller));
 
   // Register the MessagePort for the Cast Streaming Receiver.
   std::unique_ptr<cast_api_bindings::MessagePort> sender_message_port;
@@ -205,7 +224,7 @@ int main(int argc, char** argv) {
   // Send `sender_message_port` to a Sender and start it.
   cast_streaming::CastStreamingTestSender sender;
   sender.Start(std::move(sender_message_port), net::IPAddress::IPv6Localhost(),
-               absl::nullopt, GetDefaultVideoConfig());
+               std::nullopt, GetDefaultVideoConfig());
 
   // Navigate `frame` to `receiver.html`.
   fuchsia::web::LoadUrlParams load_params;
@@ -243,7 +262,7 @@ int main(int argc, char** argv) {
   // Load video.
   base::FilePath video_file(
       pkg_path.AppendASCII("media/test/data/bear-1280x720.ivf"));
-  absl::optional<std::vector<uint8_t>> video_stream =
+  std::optional<std::vector<uint8_t>> video_stream =
       base::ReadFileToBytes(video_file);
   CHECK(video_stream.has_value());
   media::test::EncodedDataHelper video_helper(video_stream.value(),

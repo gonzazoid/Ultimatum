@@ -8,61 +8,55 @@ source_set("configs") {
   sources = [
     "chrome_untrusted_web_ui_configs.cc",
     "chrome_untrusted_web_ui_configs.h",
-    "chrome_untrusted_web_ui_configs_common.cc",
-    "chrome_untrusted_web_ui_configs_common.h",
     "chrome_web_ui_configs.cc",
     "chrome_web_ui_configs.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
+    "//chrome/browser/ui:ui",
+    "//components/lens:buildflags",
     "//content/public/browser",
-    "//printing/buildflags:buildflags",
+    "//extensions/buildflags:buildflags",
+    "//printing/buildflags",
     "//skia",
     "//third_party/abseil-cpp:absl",
   ]
 
-  if (is_android) {
-    sources += [
-      "chrome_untrusted_web_ui_configs_android.cc",
-      "chrome_untrusted_web_ui_configs_android.h",
-    ]
-  }
-
-  if (is_mac || is_win || is_linux || is_chromeos || is_fuchsia) {
-    sources += [
-      "chrome_untrusted_web_ui_configs_desktop.cc",
-      "chrome_untrusted_web_ui_configs_desktop.h",
-    ]
-
-    deps += [
-      "//build:branding_buildflags",
-      "//chrome/browser/ui/webui/image_editor:image_editor_ui",
-    ]
-  }
-
   # Includes Ash Chrome and Lacros Chrome
   if (is_chromeos) {
-    sources += [
-      "chromeos/chrome_untrusted_web_ui_configs_chromeos.cc",
-      "chromeos/chrome_untrusted_web_ui_configs_chromeos.h",
-      "chromeos/chrome_web_ui_configs_chromeos.cc",
-      "chromeos/chrome_web_ui_configs_chromeos.h",
-    ]
-    deps += [ "//build:chromeos_buildflags" ]
+    deps += [ "//chromeos/constants" ]
   }
 
   if (is_chromeos_ash) {
+    sources += [
+      "ash/chrome_untrusted_web_ui_configs_chromeos.cc",
+      "ash/chrome_untrusted_web_ui_configs_chromeos.h",
+      "ash/chrome_web_ui_configs_chromeos.cc",
+      "ash/chrome_web_ui_configs_chromeos.h",
+    ]
+
     deps += [
       "//ash/constants",
+      "//ash/webui/color_internals",
       "//ash/webui/demo_mode_app_ui",
+      "//ash/webui/diagnostics_ui",
       "//ash/webui/eche_app_ui",
-      "//ash/webui/face_ml_app_ui",
       "//ash/webui/file_manager:file_manager_untrusted_ui",
+      "//ash/webui/firmware_update_ui",
       "//ash/webui/help_app_ui",
       "//ash/webui/os_feedback_ui",
+      "//ash/webui/print_management",
+      "//ash/webui/scanning",
+      "//ash/webui/shimless_rma",
       "//ash/webui/shortcut_customization_ui",
+      "//ash/webui/status_area_internals",
+      "//ash/webui/vc_background_ui",
       "//chrome/browser/ash",
+      "//components/cross_device/logging",
     ]
+
     if (!is_official_build) {
       deps += [ "//ash/webui/sample_system_web_app_ui" ]
     }

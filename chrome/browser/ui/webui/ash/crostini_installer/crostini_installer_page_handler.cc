@@ -5,11 +5,11 @@
 #include "chrome/browser/ui/webui/ash/crostini_installer/crostini_installer_page_handler.h"
 
 #include <algorithm>
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "ash/constants/ash_features.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
@@ -18,7 +18,6 @@
 #include "chrome/browser/ash/crostini/crostini_types.mojom.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
 #include "chromeos/ash/components/dbus/spaced/spaced_client.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/text/bytes_formatting.h"
 
 namespace ash {
@@ -28,7 +27,7 @@ namespace {
 void OnAmountOfFreeDiskSpace(
     crostini_installer::mojom::PageHandler::RequestAmountOfFreeDiskSpaceCallback
         callback,
-    absl::optional<int64_t> free_bytes) {
+    std::optional<int64_t> free_bytes) {
   if (!free_bytes.has_value()) {
     std::move(callback).Run({}, 0, false);
     return;
@@ -74,9 +73,7 @@ CrostiniInstallerPageHandler::~CrostiniInstallerPageHandler() = default;
 void CrostiniInstallerPageHandler::Install(int64_t disk_size_bytes,
                                            const std::string& username) {
   crostini::CrostiniManager::RestartOptions options{};
-  if (base::FeatureList::IsEnabled(features::kCrostiniDiskResizing)) {
-    options.disk_size_bytes = disk_size_bytes;
-  }
+  options.disk_size_bytes = disk_size_bytes;
   options.container_username = username;
   installer_ui_delegate_->Install(
       std::move(options),

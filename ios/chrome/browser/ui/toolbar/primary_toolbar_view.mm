@@ -6,26 +6,21 @@
 
 #import "base/check.h"
 #import "base/ios/ios_util.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/util/dynamic_type_util.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_collection_utils.h"
 #import "ios/chrome/browser/ui/omnibox/omnibox_ui_features.h"
-#import "ios/chrome/browser/ui/thumb_strip/thumb_strip_feature.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_button.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_button_factory.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_configuration.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_tab_grid_button.h"
-#import "ios/chrome/browser/ui/toolbar/buttons/toolbar_tools_menu_button.h"
 #import "ios/chrome/browser/ui/toolbar/public/toolbar_constants.h"
 #import "ios/chrome/browser/ui/toolbar/public/toolbar_utils.h"
 #import "ios/chrome/browser/ui/toolbar/toolbar_progress_bar.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
-#import "ios/chrome/browser/ui/util/dynamic_type_util.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
 #import "ui/gfx/ios/uikit_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface PrimaryToolbarView ()
 // Factory used to create the buttons.
@@ -33,11 +28,6 @@
 
 // ContentView of the vibrancy effect if there is one, self otherwise.
 @property(nonatomic, strong) UIView* contentView;
-
-// Container for the location bar, redefined as readwrite.
-@property(nonatomic, strong, readwrite) UIView* locationBarContainer;
-// The height of the container for the location bar, redefined as readwrite.
-@property(nonatomic, strong, readwrite) NSLayoutConstraint* locationBarHeight;
 
 // StackView containing the leading buttons (relative to the location bar). It
 // should only contain ToolbarButtons. Redefined as readwrite.
@@ -76,6 +66,15 @@
 
 // Button to cancel the edit of the location bar, redefined as readwrite.
 @property(nonatomic, strong, readwrite) UIButton* cancelButton;
+
+#pragma mark** Location bar. **
+// Location bar containing the omnibox.
+@property(nonatomic, strong) UIView* locationBarView;
+// Container for the location bar, redefined as readwrite.
+@property(nonatomic, strong, readwrite) UIView* locationBarContainer;
+// The height of the container for the location bar, redefined as readwrite.
+@property(nonatomic, strong, readwrite)
+    NSLayoutConstraint* locationBarContainerHeight;
 // Button taking the full size of the toolbar. Expands the toolbar when  tapped.
 // Redefined as readwrite.
 @property(nonatomic, strong, readwrite) UIButton* collapsedToolbarButton;
@@ -92,10 +91,9 @@
 
 @implementation PrimaryToolbarView
 
-@synthesize locationBarView = _locationBarView;
 @synthesize fakeOmniboxTarget = _fakeOmniboxTarget;
 @synthesize locationBarBottomConstraint = _locationBarBottomConstraint;
-@synthesize locationBarHeight = _locationBarHeight;
+@synthesize locationBarContainerHeight = _locationBarContainerHeight;
 @synthesize buttonFactory = _buttonFactory;
 @synthesize allButtons = _allButtons;
 @synthesize progressBar = _progressBar;
@@ -165,33 +163,26 @@
   self.fakeOmniboxTarget = nil;
 }
 
-- (void)setTopCornersRounded:(BOOL)rounded {
-  _topCornersRounded = rounded;
-  self.layer.cornerRadius = rounded ? kTopCornerRadius : 0;
+#pragma mark - Properties
+
+- (void)setMatchNTPHeight:(BOOL)matchNTPHeight {
+  if (_matchNTPHeight == matchNTPHeight) {
+    return;
+  }
+  _matchNTPHeight = matchNTPHeight;
+  [self invalidateIntrinsicContentSize];
+  [self.superview setNeedsLayout];
+  [self.superview layoutIfNeeded];
 }
 
 #pragma mark - UIView
 
 - (CGSize)intrinsicContentSize {
-  return CGSizeMake(
-      UIViewNoIntrinsicMetric,
-      ToolbarExpandedHeight(self.traitCollection.preferredContentSizeCategory));
-}
-
-- (void)willMoveToWindow:(UIWindow*)newWindow {
-  [super willMoveToWindow:newWindow];
-  [NamedGuide guideWithName:kPrimaryToolbarGuide view:self].constrainedView =
-      nil;
-  [NamedGuide guideWithName:kPrimaryToolbarLocationViewGuide view:self]
-      .constrainedView = nil;
-}
-
-- (void)didMoveToWindow {
-  [super didMoveToWindow];
-  [NamedGuide guideWithName:kPrimaryToolbarGuide view:self].constrainedView =
-      self;
-  [NamedGuide guideWithName:kPrimaryToolbarLocationViewGuide view:self]
-      .constrainedView = self.locationBarContainer;
+  CGFloat height = self.matchNTPHeight
+                       ? content_suggestions::FakeToolbarHeight()
+                       : ToolbarExpandedHeight(
+                             self.traitCollection.preferredContentSizeCategory);
+  return CGSizeMake(UIViewNoIntrinsicMetric, height);
 }
 
 #pragma mark - Setup
@@ -200,10 +191,6 @@
 - (void)setUpToolbarBackground {
   self.backgroundColor =
       self.buttonFactory.toolbarConfiguration.backgroundColor;
-  if (base::FeatureList::IsEnabled(kExpandedTabStrip)) {
-    self.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
-  }
-
   self.contentView = self;
 }
 
@@ -324,14 +311,14 @@
   ]];
 
   // LocationBar constraints. The constant value is set by the VC.
-  self.locationBarHeight =
+  self.locationBarContainerHeight =
       [self.locationBarContainer.heightAnchor constraintEqualToConstant:0];
   self.locationBarBottomConstraint = [self.locationBarContainer.bottomAnchor
       constraintEqualToAnchor:self.bottomAnchor];
 
   [NSLayoutConstraint activateConstraints:@[
     self.locationBarBottomConstraint,
-    self.locationBarHeight,
+    self.locationBarContainerHeight,
   ]];
   [self.contractedConstraints addObjectsFromArray:@[
     [self.locationBarContainer.trailingAnchor
@@ -342,15 +329,11 @@
                        constant:kContractedLocationBarHorizontalMargin],
   ]];
 
-  CGFloat leadingMargin = IsOmniboxActionsEnabled()
-                              ? kExpandedLocationBarLeadingMarginRefreshedPopup
-                              : kExpandedLocationBarHorizontalMargin;
-
   // Constraints for contractedNoMarginConstraints.
   [self.contractedNoMarginConstraints addObjectsFromArray:@[
     [self.locationBarContainer.leadingAnchor
         constraintEqualToAnchor:safeArea.leadingAnchor
-                       constant:leadingMargin],
+                       constant:kExpandedLocationBarHorizontalMargin],
     [self.locationBarContainer.trailingAnchor
         constraintEqualToAnchor:safeArea.trailingAnchor
                        constant:-kExpandedLocationBarHorizontalMargin]
@@ -361,7 +344,7 @@
         constraintEqualToAnchor:self.cancelButton.leadingAnchor],
     [self.locationBarContainer.leadingAnchor
         constraintEqualToAnchor:safeArea.leadingAnchor
-                       constant:leadingMargin]
+                       constant:kExpandedLocationBarHorizontalMargin]
   ]];
 
   // Trailing StackView constraints.
@@ -410,13 +393,16 @@
   AddSameConstraints(self, self.collapsedToolbarButton);
 }
 
-#pragma mark - Property accessors
+#pragma mark - AdaptiveToolbarView
 
 - (void)setLocationBarView:(UIView*)locationBarView {
   if (_locationBarView == locationBarView) {
     return;
   }
-  [_locationBarView removeFromSuperview];
+
+  if ([_locationBarView superview] == self.locationBarContainer) {
+    [_locationBarView removeFromSuperview];
+  }
 
   _locationBarView = locationBarView;
   locationBarView.translatesAutoresizingMaskIntoConstraints = NO;
@@ -440,8 +426,6 @@
   }
   return _allButtons;
 }
-
-#pragma mark - AdaptiveToolbarView
 
 - (ToolbarButton*)openNewTabButton {
   return nil;

@@ -10,7 +10,6 @@ import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Callback;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.night_mode.AutoDarkFeedbackSource;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.url.GURL;
@@ -22,8 +21,8 @@ import java.util.List;
  * Used for gathering a variety of feedback from various components in Chrome and bundling it into
  * a set of Key - Value pairs used to submit feedback requests.
  */
-public class ChromeFeedbackCollector
-        extends FeedbackCollector<ChromeFeedbackCollector.InitParams> implements Runnable {
+public class ChromeFeedbackCollector extends FeedbackCollector<ChromeFeedbackCollector.InitParams>
+        implements Runnable {
     /** Initialization Parameters of the Chrome overload of FeedbackCollector<T>. */
     public static class InitParams {
         public Profile profile;
@@ -37,9 +36,14 @@ public class ChromeFeedbackCollector
         }
     }
 
-    public ChromeFeedbackCollector(Activity activity, @Nullable String categoryTag,
-            @Nullable String description, @Nullable ScreenshotSource screenshotSource,
-            InitParams initParams, Callback<FeedbackCollector> callback, Profile profile) {
+    public ChromeFeedbackCollector(
+            Activity activity,
+            @Nullable String categoryTag,
+            @Nullable String description,
+            @Nullable ScreenshotSource screenshotSource,
+            InitParams initParams,
+            Callback<FeedbackCollector> callback,
+            Profile profile) {
         super(categoryTag, description, callback);
         init(activity, screenshotSource, initParams, profile);
     }
@@ -79,15 +83,13 @@ public class ChromeFeedbackCollector
 
         // FamilyInfoFeedbackSource relies on IdentityManager which is not available for the
         // incognito profile.
-        if (ChromeFeatureList.isEnabled(ChromeFeatureList.ENABLE_FAMILY_INFO_FEEDBACK)
-                && !initParams.profile.isOffTheRecord()) {
+        if (!initParams.profile.isOffTheRecord()) {
             sources.add(new FamilyInfoFeedbackSource(initParams.profile));
         }
 
         return sources;
     }
 
-    @VisibleForTesting
     List<AsyncFeedbackSource> getAsyncFeedbackSourcesForTesting() {
         return mAsynchronousSources;
     }

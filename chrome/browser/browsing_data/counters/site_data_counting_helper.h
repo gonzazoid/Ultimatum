@@ -10,12 +10,13 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "components/content_settings/core/common/content_settings_types.h"
 #include "net/cookies/canonical_cookie.h"
 #include "third_party/blink/public/mojom/quota/quota_types.mojom-forward.h"
+#include "url/origin.h"
 
 class Profile;
 class HostContentSettingsMap;
@@ -50,8 +51,9 @@ class SiteDataCountingHelper {
       const scoped_refptr<storage::SpecialStoragePolicy>&
           special_storage_policy,
       const std::vector<content::StorageUsageInfo>& infos);
-  void GetQuotaBucketsCallback(const std::set<storage::BucketLocator>& buckets,
-                               blink::mojom::StorageType type);
+  void GetQuotaBucketsCallback(const std::set<storage::BucketLocator>& buckets);
+  void GetSharedDictionaryOriginsCallback(
+      const std::vector<url::Origin>& origins);
 
   void Done(const std::vector<GURL>& origins);
 

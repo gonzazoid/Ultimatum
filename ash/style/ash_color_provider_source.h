@@ -7,6 +7,7 @@
 
 #include "ash/ash_export.h"
 #include "base/scoped_observation.h"
+#include "ui/color/color_provider_key.h"
 #include "ui/color/color_provider_source.h"
 #include "ui/native_theme/native_theme.h"
 #include "ui/native_theme/native_theme_observer.h"
@@ -27,12 +28,16 @@ class ASH_EXPORT AshColorProviderSource : public ui::ColorProviderSource,
   // ui::ColorProviderSource:
   const ui::ColorProvider* GetColorProvider() const override;
 
+  const ui::RendererColorMap GetRendererColorMap(
+      ui::ColorProviderKey::ColorMode color_mode,
+      ui::ColorProviderKey::ForcedColors forced_colors) const override;
+
   // ui::NativeThemeObserver:
   void OnNativeThemeUpdated(ui::NativeTheme* observed_theme) override;
 
  protected:
   // ui::ColorProviderSource:
-  ui::ColorProviderManager::Key GetColorProviderKey() const override;
+  ui::ColorProviderKey GetColorProviderKey() const override;
 
  private:
   base::ScopedObservation<ui::NativeTheme, ui::NativeThemeObserver>

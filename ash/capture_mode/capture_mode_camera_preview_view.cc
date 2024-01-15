@@ -8,13 +8,14 @@
 #include "ash/capture_mode/capture_mode_constants.h"
 #include "ash/capture_mode/capture_mode_controller.h"
 #include "ash/capture_mode/capture_mode_session.h"
+#include "ash/capture_mode/capture_mode_types.h"
 #include "ash/capture_mode/capture_mode_util.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_id.h"
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -39,10 +40,6 @@ constexpr base::TimeDelta kResizeButtonFadeInDuration = base::Milliseconds(150);
 // The duration for the reize button fading out process.
 constexpr base::TimeDelta kResizeButtonFadeOutDuration = base::Milliseconds(50);
 
-gfx::PointF GetEventScreenLocation(const ui::LocatedEvent& event) {
-  return event.target()->GetScreenLocationF(event);
-}
-
 const gfx::VectorIcon& GetIconOfResizeButton(
     const bool is_camera_preview_collapsed) {
   return is_camera_preview_collapsed ? kCaptureModeCameraPreviewExpandIcon
@@ -65,7 +62,7 @@ CameraPreviewResizeButton::CameraPreviewResizeButton(
     views::Button::PressedCallback callback,
     const gfx::VectorIcon& icon)
     : IconButton(std::move(callback),
-                 IconButton::Type::kSmallFloating,
+                 IconButton::Type::kMediumFloating,
                  &icon,
                  // the tooltip depends on the current expanded state of the
                  // button and will be updated by `CameraPreviewView`.
@@ -139,6 +136,17 @@ CameraPreviewView::~CameraPreviewView() {
   auto* controller = CaptureModeController::Get();
   if (controller->IsActive() && !controller->is_recording_in_progress())
     controller->capture_mode_session()->OnCameraPreviewDestroyed();
+  capture_mode_util::MaybeUpdateCaptureModePrivacyIndicators();
+  controller->MaybeUpdateVcPanel();
+}
+
+void CameraPreviewView::Initialize() {
+  CHECK(GetWidget()) << "The view should have been added to a widget first.";
+
+  camera_video_renderer_.Initialize();
+
+  capture_mode_util::MaybeUpdateCaptureModePrivacyIndicators();
+  CaptureModeController::Get()->MaybeUpdateVcPanel();
 }
 
 void CameraPreviewView::SetIsCollapsible(bool value) {
@@ -250,27 +258,29 @@ void CameraPreviewView::AddedToWidget() {
   // `Initialize()` will create a layer tree frame sink for the `host_window()`
   // and we're not allowed to change the event targeting policy after that.
   DisableEventHandlingInCameraVideoHostHierarchy();
-
-  camera_video_renderer_.Initialize();
 }
 
 bool CameraPreviewView::OnMousePressed(const ui::MouseEvent& event) {
-  camera_controller_->StartDraggingPreview(GetEventScreenLocation(event));
+  camera_controller_->StartDraggingPreview(
+      capture_mode_util::GetEventScreenLocation(event));
   return true;
 }
 
 bool CameraPreviewView::OnMouseDragged(const ui::MouseEvent& event) {
-  camera_controller_->ContinueDraggingPreview(GetEventScreenLocation(event));
+  camera_controller_->ContinueDraggingPreview(
+      capture_mode_util::GetEventScreenLocation(event));
   return true;
 }
 
 void CameraPreviewView::OnMouseReleased(const ui::MouseEvent& event) {
-  camera_controller_->EndDraggingPreview(GetEventScreenLocation(event),
-                                         /*is_touch=*/false);
+  camera_controller_->EndDraggingPreview(
+      capture_mode_util::GetEventScreenLocation(event),
+      /*is_touch=*/false);
 }
 
 void CameraPreviewView::OnGestureEvent(ui::GestureEvent* event) {
-  const gfx::PointF screen_location = GetEventScreenLocation(*event);
+  const gfx::PointF screen_location =
+      capture_mode_util::GetEventScreenLocation(*event);
 
   switch (event->type()) {
     case ui::ET_GESTURE_SCROLL_BEGIN:

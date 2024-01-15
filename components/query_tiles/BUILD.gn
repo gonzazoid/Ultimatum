@@ -5,6 +5,7 @@
 if (is_android) {
   import("//build/config/android/config.gni")
   import("//build/config/android/rules.gni")
+  import("//third_party/jni_zero/jni_zero.gni")
 }
 
 if (is_android) {
@@ -54,10 +55,7 @@ source_set("public") {
       "android/tile_provider_bridge.h",
     ]
 
-    deps += [
-      ":jni_headers",
-      "//url:gurl_android",
-    ]
+    deps += [ ":jni_headers" ]
   }
 }
 
@@ -90,6 +88,7 @@ if (is_android) {
   }
 
   android_library("public_java") {
+    srcjar_deps = [ ":jni_headers" ]
     sources = [
       "android/java/src/org/chromium/components/query_tiles/QueryTileConstants.java",
       "android/java/src/org/chromium/components/query_tiles/TileProvider.java",
@@ -101,15 +100,13 @@ if (is_android) {
     deps = [
       ":query_tile_java",
       "//base:base_java",
-      "//base:jni_java",
       "//build/android:build_java",
       "//components/browser_ui/widget/android:java",
       "//third_party/androidx:androidx_annotation_annotation_java",
+      "//third_party/jni_zero:jni_zero_java",
       "//ui/android:ui_java",
       "//url:gurl_java",
     ]
-
-    annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
   }
 
   generate_jni("jni_headers") {

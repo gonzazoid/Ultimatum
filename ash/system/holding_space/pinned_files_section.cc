@@ -18,17 +18,18 @@
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/style/ash_color_provider.h"
 #include "ash/style/style_util.h"
+#include "ash/style/typography.h"
 #include "ash/system/holding_space/holding_space_item_chip_view.h"
 #include "ash/system/holding_space/holding_space_ui.h"
 #include "ash/system/holding_space/holding_space_view_delegate.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "build/branding_buildflags.h"
 #include "components/prefs/pref_service.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/color_palette.h"
@@ -73,6 +74,15 @@ bool ShouldShowPlaceholder(PrefService* prefs) {
     return true;
   }
 
+  // If the model is empty and the holding space wallpaper nudge is enabled,
+  // then we need to show the placeholder so that there is something when the
+  // user clicks the force-shown tray.
+  if (features::IsHoldingSpaceWallpaperNudgeEnabled() &&
+      HoldingSpaceController::Get()->model() &&
+      HoldingSpaceController::Get()->model()->items().empty()) {
+    return true;
+  }
+
   // The placeholder should only be shown if:
   // * a holding space item has been added at some point in time,
   // * a holding space item has *never* been pinned, and
@@ -97,6 +107,8 @@ std::u16string GetPlaceholderText(bool drive_disabled) {
 // FilesAppChip ----------------------------------------------------------------
 
 class FilesAppChip : public views::Button {
+  METADATA_HEADER(FilesAppChip, views::Button)
+
  public:
   explicit FilesAppChip(views::Button::PressedCallback pressed_callback)
       : views::Button(std::move(pressed_callback)) {
@@ -120,17 +132,6 @@ class FilesAppChip : public views::Button {
 
   void OnThemeChanged() override {
     views::Button::OnThemeChanged();
-    AshColorProvider* const ash_color_provider = AshColorProvider::Get();
-
-    // Background.
-    SetBackground(views::CreateRoundedRectBackground(
-        ash_color_provider->GetControlsLayerColor(
-            AshColorProvider::ControlsLayerType::
-                kControlBackgroundColorInactive),
-        kFilesAppChipHeight / 2));
-
-    // Focus ring.
-    views::FocusRing::Get(this)->SetColorId(ui::kColorAshFocusRing);
 
     // Ink drop.
     StyleUtil::ConfigureInkDropAttributes(
@@ -146,7 +147,7 @@ class FilesAppChip : public views::Button {
     // Ink drop.
     views::InkDrop::Get(this)->SetMode(views::InkDropHost::InkDropMode::ON);
     views::InstallRoundRectHighlightPathGenerator(this, gfx::Insets(),
-                                                  kFilesAppChipHeight / 2);
+                                                  kFilesAppChipHeight / 2.f);
 
     // Layout.
     auto* layout = SetLayoutManager(std::make_unique<views::BoxLayout>(
@@ -161,13 +162,23 @@ class FilesAppChip : public views::Button {
                                          gfx::kPlaceholderColor));
 
     // Label.
-    auto* label = AddChildView(
-        bubble_utils::CreateLabel(bubble_utils::TypographyStyle::kBody2));
+    auto* label =
+        AddChildView(bubble_utils::CreateLabel(TypographyToken::kCrosBody2));
     label->SetText(l10n_util::GetStringUTF16(
         IDS_ASH_HOLDING_SPACE_PINNED_FILES_APP_CHIP_TEXT));
     layout->SetFlexForView(label, 1);
+
+    // Focus ring.
+    views::FocusRing::Get(this)->SetColorId(ui::kColorAshFocusRing);
+
+    // Background.
+    SetBackground(views::CreateThemedRoundedRectBackground(
+        kColorAshControlBackgroundColorInactive, kFilesAppChipHeight / 2.f));
   }
 };
+
+BEGIN_METADATA(FilesAppChip, views::Button)
+END_METADATA
 
 }  // namespace
 
@@ -180,10 +191,6 @@ PinnedFilesSection::PinnedFilesSection(HoldingSpaceViewDelegate* delegate)
 }
 
 PinnedFilesSection::~PinnedFilesSection() = default;
-
-const char* PinnedFilesSection::GetClassName() const {
-  return "PinnedFilesSection";
-}
 
 gfx::Size PinnedFilesSection::GetMinimumSize() const {
   // The pinned files section is scrollable so can be laid out smaller than its
@@ -291,5 +298,8 @@ void PinnedFilesSection::OnFilesAppChipPressed(const ui::Event& event) {
     delegate()->UpdateTrayVisibility();
   }
 }
+
+BEGIN_METADATA(PinnedFilesSection, HoldingSpaceItemViewsSection)
+END_METADATA
 
 }  // namespace ash

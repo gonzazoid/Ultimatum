@@ -1,11 +1,12 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/filters/passthrough_dts_audio_decoder.h"
 
+#include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/audio_buffer.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/formats/dts/dts_util.h"
 
 namespace media {
@@ -15,7 +16,7 @@ PassthroughDTSAudioDecoder::PassthroughDTSAudioDecoder(
     MediaLog* media_log)
     : task_runner_(task_runner),
       media_log_(media_log),
-      pool_(new AudioBufferMemoryPool()) {
+      pool_(base::MakeRefCounted<AudioBufferMemoryPool>()) {
   DETACH_FROM_SEQUENCE(sequence_checker_);
 }
 
@@ -34,7 +35,7 @@ void PassthroughDTSAudioDecoder::Initialize(const AudioDecoderConfig& config,
                                             const WaitingCB& /* waiting_cb */) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(config.IsValidConfig());
-  InitCB bound_init_cb = BindToCurrentLoop(std::move(init_cb));
+  InitCB bound_init_cb = base::BindPostTaskToCurrentDefault(std::move(init_cb));
   if (config.is_encrypted()) {
     std::move(bound_init_cb)
         .Run(DecoderStatus(DecoderStatus::Codes::kUnsupportedEncryptionMode,
@@ -53,7 +54,7 @@ void PassthroughDTSAudioDecoder::Initialize(const AudioDecoderConfig& config,
 
   // Success!
   config_ = config;
-  output_cb_ = BindToCurrentLoop(output_cb);
+  output_cb_ = base::BindPostTaskToCurrentDefault(output_cb);
   std::move(bound_init_cb).Run(OkStatus());
 }
 
@@ -61,7 +62,8 @@ void PassthroughDTSAudioDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
                                         DecodeCB decode_cb) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(decode_cb);
-  DecodeCB decode_cb_bound = BindToCurrentLoop(std::move(decode_cb));
+  DecodeCB decode_cb_bound =
+      base::BindPostTaskToCurrentDefault(std::move(decode_cb));
 
   if (buffer->end_of_stream()) {
     std::move(decode_cb_bound).Run(DecoderStatus::Codes::kOk);

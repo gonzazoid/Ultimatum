@@ -24,6 +24,7 @@
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/guest_view/extension_options/extension_options_constants.h"
 #include "extensions/browser/guest_view/extension_options/extension_options_guest_delegate.h"
+#include "extensions/browser/guest_view/guest_view_feature_util.h"
 #include "extensions/common/api/extension_options_internal.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
@@ -39,8 +40,9 @@ namespace extensions {
 // static
 const char ExtensionOptionsGuest::Type[] = "extensionoptions";
 
-ExtensionOptionsGuest::ExtensionOptionsGuest(WebContents* owner_web_contents)
-    : GuestView<ExtensionOptionsGuest>(owner_web_contents),
+ExtensionOptionsGuest::ExtensionOptionsGuest(
+    content::RenderFrameHost* owner_rfh)
+    : GuestView<ExtensionOptionsGuest>(owner_rfh),
       extension_options_guest_delegate_(
           extensions::ExtensionsAPIClient::Get()
               ->CreateExtensionOptionsGuestDelegate(this)) {}
@@ -49,8 +51,8 @@ ExtensionOptionsGuest::~ExtensionOptionsGuest() = default;
 
 // static
 std::unique_ptr<GuestViewBase> ExtensionOptionsGuest::Create(
-    WebContents* owner_web_contents) {
-  return base::WrapUnique(new ExtensionOptionsGuest(owner_web_contents));
+    content::RenderFrameHost* owner_rfh) {
+  return base::WrapUnique(new ExtensionOptionsGuest(owner_rfh));
 }
 
 void ExtensionOptionsGuest::CreateWebContents(
@@ -108,10 +110,18 @@ void ExtensionOptionsGuest::DidInitialize(
                           ui::PAGE_TRANSITION_LINK, std::string());
 }
 
+void ExtensionOptionsGuest::MaybeRecreateGuestContents(
+    content::RenderFrameHost* outer_contents_frame) {
+  if (AreWebviewMPArchBehaviorsEnabled(browser_context())) {
+    // This situation is not possible for ExtensionOptions.
+    NOTREACHED();
+  }
+}
+
 void ExtensionOptionsGuest::GuestViewDidStopLoading() {
-  std::unique_ptr<base::DictionaryValue> args(new base::DictionaryValue());
   DispatchEventToView(std::make_unique<GuestViewEvent>(
-      api::extension_options_internal::OnLoad::kEventName, std::move(args)));
+      api::extension_options_internal::OnLoad::kEventName,
+      base::Value::Dict()));
 }
 
 const char* ExtensionOptionsGuest::GetAPINamespace() const {
@@ -133,8 +143,7 @@ void ExtensionOptionsGuest::OnPreferredSizeChanged(const gfx::Size& pref_size) {
   options.height = PhysicalPixelsToLogicalPixels(pref_size.height());
   DispatchEventToView(std::make_unique<GuestViewEvent>(
       api::extension_options_internal::OnPreferredSizeChanged::kEventName,
-      base::DictionaryValue::From(
-          base::Value::ToUniquePtrValue(base::Value(options.ToValue())))));
+      options.ToValue()));
 }
 
 void ExtensionOptionsGuest::AddNewContents(
@@ -181,7 +190,7 @@ WebContents* ExtensionOptionsGuest::OpenURLFromTab(
 void ExtensionOptionsGuest::CloseContents(WebContents* source) {
   DispatchEventToView(std::make_unique<GuestViewEvent>(
       api::extension_options_internal::OnClose::kEventName,
-      base::WrapUnique(new base::DictionaryValue())));
+      base::Value::Dict()));
 }
 
 bool ExtensionOptionsGuest::HandleContextMenu(
@@ -192,6 +201,12 @@ bool ExtensionOptionsGuest::HandleContextMenu(
 
   return extension_options_guest_delegate_->HandleContextMenu(render_frame_host,
                                                               params);
+}
+
+bool ExtensionOptionsGuest::ShouldResumeRequestsForCreatedWindow() {
+  // Not reached due to the use of `CreateCustomWebContents`.
+  NOTREACHED();
+  return true;
 }
 
 bool ExtensionOptionsGuest::IsWebContentsCreationOverridden(

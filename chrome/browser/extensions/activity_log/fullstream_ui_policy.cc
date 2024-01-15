@@ -8,17 +8,16 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/stringprintf.h"
-#include "base/task/task_runner_util.h"
 #include "chrome/browser/extensions/activity_log/activity_action_constants.h"
 #include "chrome/browser/extensions/activity_log/activity_database.h"
 #include "chrome/browser/extensions/activity_log/activity_log_task_runner.h"
@@ -83,7 +82,7 @@ bool FullStreamUIPolicy::FlushDatabase(sql::Database* db) {
   for (const auto& action : queued_actions_) {
     statement.Reset(true);
     statement.BindString(0, action->extension_id());
-    statement.BindInt64(1, action->time().ToInternalValue());
+    statement.BindTime(1, action->time());
     statement.BindInt(2, static_cast<int>(action->action_type()));
     statement.BindString(3, action->api_name());
     if (action->args()) {
@@ -391,8 +390,8 @@ void FullStreamUIPolicy::ReadFilteredData(
     const std::string& arg_url,
     const int days_ago,
     base::OnceCallback<void(std::unique_ptr<Action::ActionVector>)> callback) {
-  base::PostTaskAndReplyWithResult(
-      GetActivityLogTaskRunner().get(), FROM_HERE,
+  GetActivityLogTaskRunner()->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&FullStreamUIPolicy::DoReadFilteredData,
                      base::Unretained(this), extension_id, type, api_name,
                      page_url, arg_url, days_ago),

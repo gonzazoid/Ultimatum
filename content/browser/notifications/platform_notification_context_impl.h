@@ -6,13 +6,15 @@
 #define CONTENT_BROWSER_NOTIFICATIONS_PLATFORM_NOTIFICATION_CONTEXT_IMPL_H_
 
 #include <stdint.h>
+
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
@@ -24,7 +26,6 @@
 #include "content/public/browser/platform_notification_context.h"
 #include "content/public/browser/render_process_host.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/notifications/notification_service.mojom.h"
 
 class GURL;
@@ -37,10 +38,6 @@ namespace blink {
 class StorageKey;
 }  // namespace blink
 
-namespace url {
-class Origin;
-}
-
 namespace content {
 
 class BlinkNotificationServiceImpl;
@@ -49,6 +46,7 @@ struct NotificationDatabaseData;
 class PlatformNotificationServiceProxy;
 class RenderProcessHost;
 class ServiceWorkerContextWrapper;
+class WeakDocumentPtr;
 
 // Implementation of the Web Notification storage context. The public methods
 // defined in this interface must only be called on the UI thread.
@@ -82,7 +80,7 @@ class CONTENT_EXPORT PlatformNotificationContextImpl
   // service is created by a dedicated worker, or is `nullptr` otherwise.
   void CreateService(
       RenderProcessHost* render_process_host,
-      const url::Origin& origin,
+      const blink::StorageKey& storage_key,
       const GURL& document_url,
       const WeakDocumentPtr& weak_document_ptr,
       const RenderProcessHost::NotificationServiceCreatorType creator_type,
@@ -117,7 +115,7 @@ class CONTENT_EXPORT PlatformNotificationContextImpl
                               DeleteResultCallback callback) override;
   void DeleteAllNotificationDataWithTag(
       const std::string& tag,
-      absl::optional<bool> is_shown_by_browser,
+      std::optional<bool> is_shown_by_browser,
       const GURL& origin,
       DeleteAllResultCallback callback) override;
   void DeleteAllNotificationDataForBlockedOrigins(
@@ -214,10 +212,11 @@ class CONTENT_EXPORT PlatformNotificationContextImpl
       std::set<std::string>* close_notification_ids,
       const NotificationDatabaseData& data);
 
-  // Tries to get a list of displayed notification ids if the platform supports
-  // synchronizing them. Calls |callback| with the result after initializing the
-  // database on the |task_runner_| thread.
-  void TryGetDisplayedNotifications(InitializeGetDisplayedCallback callback);
+  // Tries to get a list of displayed notification ids for `origin` if the
+  // platform supports synchronizing them. Calls `callback` with the result
+  // after initializing the database on the `task_runner_` thread.
+  void TryGetDisplayedNotifications(const GURL& origin,
+                                    InitializeGetDisplayedCallback callback);
 
   // Called after getting a list of |displayed_notifications| on the UI thread.
   // Calls |callback| after initializing the database on the |task_runner_|
@@ -296,7 +295,7 @@ class CONTENT_EXPORT PlatformNotificationContextImpl
   void DoDeleteAllNotificationDataForOrigins(
       std::set<GURL> origins,
       const std::string& tag,
-      absl::optional<bool> is_shown_by_browser,
+      std::optional<bool> is_shown_by_browser,
       DeleteAllResultCallback callback,
       bool initialized);
 
@@ -338,7 +337,7 @@ class CONTENT_EXPORT PlatformNotificationContextImpl
       const scoped_refptr<base::SequencedTaskRunner>& task_runner);
 
   base::FilePath path_;
-  raw_ptr<BrowserContext, DanglingUntriaged> browser_context_;
+  raw_ptr<BrowserContext, AcrossTasksDanglingUntriaged> browser_context_;
 
   scoped_refptr<ServiceWorkerContextWrapper> service_worker_context_;
 
@@ -348,7 +347,7 @@ class CONTENT_EXPORT PlatformNotificationContextImpl
   NotificationIdGenerator notification_id_generator_;
 
   // Keeps track of the next trigger timestamp.
-  absl::optional<base::Time> next_trigger_;
+  std::optional<base::Time> next_trigger_;
 
   // Calls through to PlatformNotificationService methods.
   std::unique_ptr<PlatformNotificationServiceProxy> service_proxy_;

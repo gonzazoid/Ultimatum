@@ -56,10 +56,12 @@ MATCHER_P(CustomDataIs, string, "") {
 struct TestLeakDetectionRequest : LeakDetectionRequestInterface {
   // LeakDetectionRequestInterface:
   void LookupSingleLeak(network::mojom::URLLoaderFactory* url_loader_factory,
-                        const absl::optional<std::string>& access_token,
-                        const absl::optional<std::string>& api_key,
+                        const std::optional<std::string>& access_token,
+                        const std::optional<std::string>& api_key,
                         LookupSingleLeakPayload payload,
                         LookupSingleLeakCallback callback) override {
+    EXPECT_EQ(payload.initiator,
+              LeakDetectionInitiator::kBulkSyncedPasswordsCheck);
     encrypted_payload = std::move(payload.encrypted_payload);
     lookup_callback = std::move(callback);
   }
@@ -108,15 +110,17 @@ class BulkLeakCheckTest : public testing::Test {
   base::test::TaskEnvironment task_env_;
   signin::IdentityTestEnvironment identity_test_env_;
   ::testing::StrictMock<MockBulkLeakCheckDelegateInterface> delegate_;
-  raw_ptr<MockLeakDetectionRequestFactory> request_factory_;
   BulkLeakCheckImpl bulk_check_;
+  raw_ptr<MockLeakDetectionRequestFactory> request_factory_ = nullptr;
 };
 
 PayloadAndCallback BulkLeakCheckTest::ImitateNetworkRequest(
     LeakCheckCredential credential) {
   std::vector<LeakCheckCredential> credentials;
   credentials.push_back(std::move(credential));
-  bulk_check().CheckCredentials(std::move(credentials));
+  bulk_check().CheckCredentials(
+      LeakDetectionInitiator::kBulkSyncedPasswordsCheck,
+      std::move(credentials));
 
   auto network_request = std::make_unique<TestLeakDetectionRequest>();
   TestLeakDetectionRequest* raw_request = network_request.get();
@@ -144,7 +148,9 @@ TEST_F(BulkLeakCheckTest, CheckCredentialsAndDestroyImmediately) {
   std::vector<LeakCheckCredential> credentials;
   credentials.push_back(TestCredential(u"user1"));
   credentials.push_back(TestCredential(u"user2"));
-  bulk_check().CheckCredentials(std::move(credentials));
+  bulk_check().CheckCredentials(
+      LeakDetectionInitiator::kBulkSyncedPasswordsCheck,
+      std::move(credentials));
 }
 
 TEST_F(BulkLeakCheckTest, CheckCredentialsAndDestroyAfterPayload) {
@@ -157,7 +163,9 @@ TEST_F(BulkLeakCheckTest, CheckCredentialsAndDestroyAfterPayload) {
 
   std::vector<LeakCheckCredential> credentials;
   credentials.push_back(TestCredential(u"user1"));
-  bulk_check().CheckCredentials(std::move(credentials));
+  bulk_check().CheckCredentials(
+      LeakDetectionInitiator::kBulkSyncedPasswordsCheck,
+      std::move(credentials));
   RunUntilIdle();
 }
 
@@ -170,7 +178,9 @@ TEST_F(BulkLeakCheckTest, CheckCredentialsAccessTokenAuthError) {
 
   std::vector<LeakCheckCredential> credentials;
   credentials.push_back(TestCredential(u"user1"));
-  bulk_check().CheckCredentials(std::move(credentials));
+  bulk_check().CheckCredentials(
+      LeakDetectionInitiator::kBulkSyncedPasswordsCheck,
+      std::move(credentials));
   identity_test_env().WaitForAccessTokenRequestIfNecessaryAndRespondWithError(
       GoogleServiceAuthError::FromServiceError("error"));
 }
@@ -184,7 +194,9 @@ TEST_F(BulkLeakCheckTest, CheckCredentialsAccessTokenNetError) {
 
   std::vector<LeakCheckCredential> credentials;
   credentials.push_back(TestCredential(u"user1"));
-  bulk_check().CheckCredentials(std::move(credentials));
+  bulk_check().CheckCredentials(
+      LeakDetectionInitiator::kBulkSyncedPasswordsCheck,
+      std::move(credentials));
   identity_test_env().WaitForAccessTokenRequestIfNecessaryAndRespondWithError(
       GoogleServiceAuthError::FromConnectionError(net::ERR_TIMED_OUT));
 }
@@ -198,7 +210,9 @@ TEST_F(BulkLeakCheckTest, CheckCredentialsAccessTokenSignedOut) {
 
   std::vector<LeakCheckCredential> credentials;
   credentials.push_back(TestCredential(u"user1"));
-  bulk_check().CheckCredentials(std::move(credentials));
+  bulk_check().CheckCredentials(
+      LeakDetectionInitiator::kBulkSyncedPasswordsCheck,
+      std::move(credentials));
   identity_test_env().WaitForAccessTokenRequestIfNecessaryAndRespondWithError(
       GoogleServiceAuthError::FromInvalidGaiaCredentialsReason(
           GoogleServiceAuthError::InvalidGaiaCredentialsReason::
@@ -212,12 +226,14 @@ TEST_F(BulkLeakCheckTest, CheckCredentialsAccessDoesNetworkRequest) {
 
   std::vector<LeakCheckCredential> credentials;
   credentials.push_back(TestCredential(u"USERNAME@gmail.com"));
-  bulk_check().CheckCredentials(std::move(credentials));
+  bulk_check().CheckCredentials(
+      LeakDetectionInitiator::kBulkSyncedPasswordsCheck,
+      std::move(credentials));
 
   auto network_request = std::make_unique<MockLeakDetectionRequest>();
   EXPECT_CALL(*network_request,
               LookupSingleLeak(
-                  _, Optional(Eq(kAccessToken)), /*api_key=*/Eq(absl::nullopt),
+                  _, Optional(Eq(kAccessToken)), /*api_key=*/Eq(std::nullopt),
                   AllOf(Field(&LookupSingleLeakPayload::username_hash_prefix,
                               ElementsAre(0xBD, 0x74, 0xA9, 0x00)),
                         Field(&LookupSingleLeakPayload::encrypted_payload,
@@ -238,7 +254,9 @@ TEST_F(BulkLeakCheckTest, CheckCredentialsMultipleNetworkRequests) {
   std::vector<LeakCheckCredential> credentials;
   credentials.push_back(TestCredential(u"user1"));
   credentials.push_back(TestCredential(u"user2"));
-  bulk_check().CheckCredentials(std::move(credentials));
+  bulk_check().CheckCredentials(
+      LeakDetectionInitiator::kBulkSyncedPasswordsCheck,
+      std::move(credentials));
   EXPECT_EQ(2u, bulk_check().GetPendingChecksCount());
   RunUntilIdle();
   EXPECT_EQ(2u, bulk_check().GetPendingChecksCount());
@@ -247,10 +265,10 @@ TEST_F(BulkLeakCheckTest, CheckCredentialsMultipleNetworkRequests) {
   auto network_request2 = std::make_unique<MockLeakDetectionRequest>();
   EXPECT_CALL(*network_request1,
               LookupSingleLeak(_, Optional(Eq(kAccessToken)),
-                               /*api_key=*/Eq(absl::nullopt), _, _));
+                               /*api_key=*/Eq(std::nullopt), _, _));
   EXPECT_CALL(*network_request2,
               LookupSingleLeak(_, Optional(Eq(kAccessToken)),
-                               /*api_key=*/Eq(absl::nullopt), _, _));
+                               /*api_key=*/Eq(std::nullopt), _, _));
   EXPECT_CALL(*request_factory(), CreateNetworkRequest)
       .WillOnce(Return(ByMove(std::move(network_request1))))
       .WillOnce(Return(ByMove(std::move(network_request2))));
@@ -281,7 +299,7 @@ TEST_F(BulkLeakCheckTest, CheckCredentialsDecryptionError) {
 
   EXPECT_CALL(delegate(), OnError(LeakDetectionError::kHashingFailure));
   std::move(payload_and_callback.callback)
-      .Run(std::move(response), absl::nullopt);
+      .Run(std::move(response), std::nullopt);
   RunUntilIdle();
   EXPECT_EQ(0u, bulk_check().GetPendingChecksCount());
 }
@@ -314,7 +332,7 @@ TEST_F(BulkLeakCheckTest, CheckCredentialsNotLeaked) {
                                     CustomDataIs("custom")),
                               IsLeaked(false)));
   std::move(payload_and_callback.callback)
-      .Run(std::move(response), absl::nullopt);
+      .Run(std::move(response), std::nullopt);
   RunUntilIdle();
   EXPECT_EQ(0u, bulk_check().GetPendingChecksCount());
 }
@@ -346,7 +364,7 @@ TEST_F(BulkLeakCheckTest, CheckCredentialsLeaked) {
                                     CustomDataIs("custom")),
                               IsLeaked(true)));
   std::move(payload_and_callback.callback)
-      .Run(std::move(response), absl::nullopt);
+      .Run(std::move(response), std::nullopt);
   RunUntilIdle();
   EXPECT_EQ(0u, bulk_check().GetPendingChecksCount());
 }

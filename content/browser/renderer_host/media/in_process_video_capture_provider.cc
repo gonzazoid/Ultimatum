@@ -6,7 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "content/browser/renderer_host/media/in_process_video_capture_device_launcher.h"
 
 namespace content {
@@ -57,8 +58,8 @@ void InProcessVideoCaptureProvider::GetDeviceInfosAsync(
     emit_log_message_cb_.Run(
         "InProcessVideoCaptureProvider::GetDeviceInfosAsync: No video capture "
         "system, returning empty results.");
-    std::vector<media::VideoCaptureDeviceInfo> empty_result;
-    std::move(result_callback).Run(empty_result);
+    std::move(result_callback)
+        .Run(media::mojom::DeviceEnumerationResult::kUnknownError, {});
     return;
   }
   emit_log_message_cb_.Run(
@@ -67,9 +68,12 @@ void InProcessVideoCaptureProvider::GetDeviceInfosAsync(
   // |video_capture_system_| and |result_callback| has ownership of
   // |this|.
   device_task_runner_->PostTask(
-      FROM_HERE, base::BindOnce(&media::VideoCaptureSystem::GetDeviceInfosAsync,
-                                base::Unretained(video_capture_system_.get()),
-                                std::move(result_callback)));
+      FROM_HERE,
+      base::BindOnce(
+          &media::VideoCaptureSystem::GetDeviceInfosAsync,
+          base::Unretained(video_capture_system_.get()),
+          base::BindOnce(std::move(result_callback),
+                         media::mojom::DeviceEnumerationResult::kSuccess)));
 }
 
 std::unique_ptr<VideoCaptureDeviceLauncher>

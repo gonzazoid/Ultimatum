@@ -6,6 +6,7 @@
 #define COMPONENTS_VIZ_TEST_FAKE_SKIA_OUTPUT_SURFACE_H_
 
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -23,6 +24,9 @@
 namespace viz {
 
 class FakeSkiaOutputSurface : public SkiaOutputSurface {
+  using SharedImagePurgeableCallback =
+      base::RepeatingCallback<void(const gpu::Mailbox&, bool)>;
+
  public:
   static std::unique_ptr<FakeSkiaOutputSurface> Create3d() {
     auto provider = TestContextProvider::Create();
@@ -67,8 +71,10 @@ class FakeSkiaOutputSurface : public SkiaOutputSurface {
   void SwapBuffersSkipped(const gfx::Rect root_pass_damage_rect) override {}
   SkCanvas* BeginPaintRenderPass(const AggregatedRenderPassId& id,
                                  const gfx::Size& surface_size,
-                                 ResourceFormat format,
-                                 bool mipmap,
+                                 SharedImageFormat format,
+                                 RenderPassAlphaType alpha_type,
+                                 skgpu::Mipmapped mipmap,
+                                 bool scanout_dcomp_surface,
                                  sk_sp<SkColorSpace> color_space,
                                  bool is_overlay,
                                  const gpu::Mailbox& mailbox) override;
@@ -76,12 +82,15 @@ class FakeSkiaOutputSurface : public SkiaOutputSurface {
   void EndPaint(
       base::OnceClosure on_finished,
       base::OnceCallback<void(gfx::GpuFenceHandle)> return_release_fence_cb,
+      const gfx::Rect& update_rect,
       bool is_overlay) override;
-  void MakePromiseSkImage(ImageContext* image_context) override;
+  void MakePromiseSkImage(ImageContext* image_context,
+                          const gfx::ColorSpace& yuv_color_space,
+                          bool force_rgbx) override;
   sk_sp<SkImage> MakePromiseSkImageFromRenderPass(
       const AggregatedRenderPassId& id,
       const gfx::Size& size,
-      ResourceFormat format,
+      SharedImageFormat format,
       bool mipmap,
       sk_sp<SkColorSpace> color_space,
       const gpu::Mailbox& mailbox) override;
@@ -101,15 +110,20 @@ class FakeSkiaOutputSurface : public SkiaOutputSurface {
   gpu::SyncToken Flush() override;
   bool EnsureMinNumberOfBuffers(int n) override;
   void PreserveChildSurfaceControls() override {}
-  gpu::Mailbox CreateSharedImage(ResourceFormat format,
+  gpu::Mailbox CreateSharedImage(SharedImageFormat format,
                                  const gfx::Size& size,
                                  const gfx::ColorSpace& color_space,
+                                 RenderPassAlphaType alpha_type,
                                  uint32_t usage,
+                                 base::StringPiece debug_label,
                                  gpu::SurfaceHandle surface_handle) override;
   gpu::Mailbox CreateSolidColorSharedImage(
       const SkColor4f& color,
       const gfx::ColorSpace& color_space) override;
   void DestroySharedImage(const gpu::Mailbox& mailbox) override {}
+  void SetSharedImagePurgeable(const gpu::Mailbox& mailbox,
+                               bool purgeable) override;
+  bool SupportsBGRA() const override;
 
   // ExternalUseClient implementation:
   gpu::SyncToken ReleaseImageContexts(
@@ -117,13 +131,17 @@ class FakeSkiaOutputSurface : public SkiaOutputSurface {
   std::unique_ptr<ImageContext> CreateImageContext(
       const gpu::MailboxHolder& holder,
       const gfx::Size& size,
-      ResourceFormat format,
+      SharedImageFormat format,
       bool concurrent_reads,
       const absl::optional<gpu::VulkanYCbCrInfo>& ycbcr_info,
       sk_sp<SkColorSpace> color_space,
       bool raw_draw_if_possible) override;
 
   gpu::SharedImageInterface* GetSharedImageInterface();
+
+  void SetSharedImagePurgeableCallback(SharedImagePurgeableCallback callback) {
+    set_purgeable_callback_ = std::move(callback);
+  }
 
   // If set true, callbacks triggering will be in a reverse order as SignalQuery
   // calls.
@@ -132,6 +150,7 @@ class FakeSkiaOutputSurface : public SkiaOutputSurface {
   void ScheduleGpuTaskForTesting(
       base::OnceClosure callback,
       std::vector<gpu::SyncToken> sync_tokens) override;
+  void CheckAsyncWorkCompletionForTesting() override;
 
   void UsePlatformDelegatedInkForTesting() {
     capabilities_.supports_delegated_ink = true;
@@ -164,9 +183,10 @@ class FakeSkiaOutputSurface : public SkiaOutputSurface {
   void SwapBuffersAck();
 
   // Provided as a release callback for CopyOutputRequest.
-  void DestroyCopyOutputTexture(const gpu::Mailbox& mailbox,
-                                const gpu::SyncToken& sync_token,
-                                bool is_lost);
+  void DestroyCopyOutputTexture(
+      scoped_refptr<gpu::ClientSharedImage> shared_image,
+      const gpu::SyncToken& sync_token,
+      bool is_lost);
 
   scoped_refptr<ContextProvider> context_provider_;
   raw_ptr<OutputSurfaceClient> client_ = nullptr;
@@ -189,6 +209,8 @@ class FakeSkiaOutputSurface : public SkiaOutputSurface {
   // here or not. Used in testing to confirm that the pending receiver is
   // correctly routed towards gpu main when the platform supports delegated ink.
   bool delegated_ink_renderer_receiver_arrived_ = false;
+
+  SharedImagePurgeableCallback set_purgeable_callback_;
 
   THREAD_CHECKER(thread_checker_);
 

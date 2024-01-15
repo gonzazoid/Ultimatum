@@ -6,16 +6,16 @@
 #include <utility>
 
 #include "ash/components/arc/test/fake_app_instance.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/apps/apk_web_app_installer.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/webapps/browser/install_result_code.h"
+#include "components/webapps/common/web_app_id.h"
 #include "services/data_decoder/public/cpp/test_support/in_process_data_decoder.h"
 #include "url/gurl.h"
 
@@ -61,14 +61,14 @@ class FakeApkWebAppInstaller : public ApkWebAppInstaller {
   using ApkWebAppInstaller::Start;
   using ApkWebAppInstaller::web_app_install_info;
 
-  const web_app::AppId& id() const { return id_; }
+  const webapps::AppId& id() const { return id_; }
   bool complete_installation_called() const {
     return complete_installation_called_;
   }
   bool do_install_called() const { return do_install_called_; }
 
  private:
-  void CompleteInstallation(const web_app::AppId& id,
+  void CompleteInstallation(const webapps::AppId& id,
                             webapps::InstallResultCode code) override {
     id_ = id;
     complete_installation_called_ = true;
@@ -80,7 +80,7 @@ class FakeApkWebAppInstaller : public ApkWebAppInstaller {
     std::move(quit_closure_).Run();
   }
 
-  web_app::AppId id_;
+  webapps::AppId id_;
   bool complete_installation_called_ = false;
   bool do_install_called_ = false;
   base::OnceClosure quit_closure_;
@@ -104,7 +104,7 @@ TEST_F(ApkWebAppInstallerTest, IconDecodeCallsWebAppInstallManager) {
   FakeApkWebAppInstaller apk_web_app_installer(
       profile(), weak_ptr_factory_.GetWeakPtr(), run_loop.QuitClosure());
 
-  apk_web_app_installer.Start(GetWebAppInfo(), GetIconBytes());
+  apk_web_app_installer.Start("package", GetWebAppInfo(), GetIconBytes());
   run_loop.Run();
 
   EXPECT_FALSE(apk_web_app_installer.complete_installation_called());
@@ -135,7 +135,7 @@ TEST_F(ApkWebAppInstallerTest,
       profile(), weak_ptr_factory_.GetWeakPtr(), run_loop.QuitClosure());
 
   weak_ptr_factory_.InvalidateWeakPtrs();
-  apk_web_app_installer.Start(GetWebAppInfo(), GetIconBytes());
+  apk_web_app_installer.Start("package", GetWebAppInfo(), GetIconBytes());
   run_loop.Run();
 
   EXPECT_EQ("", apk_web_app_installer.id());
@@ -151,7 +151,7 @@ TEST_F(ApkWebAppInstallerTest,
   FakeApkWebAppInstaller apk_web_app_installer(
       profile(), weak_ptr_factory_.GetWeakPtr(), run_loop.QuitClosure());
 
-  apk_web_app_installer.Start(GetWebAppInfo(), GetIconBytes());
+  apk_web_app_installer.Start("package", GetWebAppInfo(), GetIconBytes());
   weak_ptr_factory_.InvalidateWeakPtrs();
   run_loop.Run();
 
@@ -165,7 +165,8 @@ TEST_F(ApkWebAppInstallerTest, NullWebAppInfoCallsCompleteInstallation) {
   FakeApkWebAppInstaller apk_web_app_installer(
       profile(), weak_ptr_factory_.GetWeakPtr(), run_loop.QuitClosure());
 
-  apk_web_app_installer.Start(/*web_app_install_info=*/nullptr, GetIconBytes());
+  apk_web_app_installer.Start("package", /*web_app_install_info=*/nullptr,
+                              GetIconBytes());
   run_loop.Run();
 
   EXPECT_EQ("", apk_web_app_installer.id());
@@ -180,7 +181,7 @@ TEST_F(ApkWebAppInstallerTest, NullIconCallsCompleteInstallation) {
   FakeApkWebAppInstaller apk_web_app_installer(
       profile(), weak_ptr_factory_.GetWeakPtr(), run_loop.QuitClosure());
 
-  apk_web_app_installer.Start(GetWebAppInfo(), {});
+  apk_web_app_installer.Start("package", GetWebAppInfo(), {});
   run_loop.Run();
 
   EXPECT_EQ("", apk_web_app_installer.id());

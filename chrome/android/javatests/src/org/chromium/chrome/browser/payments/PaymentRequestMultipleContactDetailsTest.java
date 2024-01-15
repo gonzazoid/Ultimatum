@@ -7,22 +7,20 @@ package org.chromium.chrome.browser.payments;
 import androidx.test.filters.MediumTest;
 
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.test.util.CommandLineFlags;
-import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
-import org.chromium.chrome.R;
 import org.chromium.chrome.browser.autofill.AutofillTestHelper;
-import org.chromium.chrome.browser.autofill.PersonalDataManager.AutofillProfile;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.payments.PaymentRequestTestRule.AppPresence;
 import org.chromium.chrome.browser.payments.PaymentRequestTestRule.FactorySpeed;
-import org.chromium.chrome.browser.payments.PaymentRequestTestRule.MainActivityStartCallback;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
+import org.chromium.chrome.test.R;
+import org.chromium.components.autofill.AutofillProfile;
 
 import java.util.ArrayList;
 import java.util.concurrent.TimeoutException;
@@ -33,105 +31,183 @@ import java.util.concurrent.TimeoutException;
  */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
-public class PaymentRequestMultipleContactDetailsTest implements MainActivityStartCallback {
+public class PaymentRequestMultipleContactDetailsTest {
     @Rule
     public PaymentRequestTestRule mPaymentRequestTestRule =
-            new PaymentRequestTestRule("payment_request_contact_details_test.html", this);
+            new PaymentRequestTestRule("payment_request_contact_details_test.html");
 
-    private static final AutofillProfile[] AUTOFILL_PROFILES = {
-            // 0 - Incomplete (no phone) profile.
-            new AutofillProfile("" /* guid */, "https://www.example.com" /* origin */,
-                    "" /* honorific prefix */, "Bart Simpson", "Acme Inc.", "123 Main",
-                    "California", "Los Angeles", "", "90210", "", "US", "", "bart@simpson.com", ""),
+    private static final AutofillProfile INCOMPLETE_PROFILE_NO_PHONE =
+            AutofillProfile.builder()
+                    .setFullName("Bart Simpson")
+                    .setCompanyName("Acme Inc.")
+                    .setStreetAddress("123 Main")
+                    .setRegion("California")
+                    .setLocality("Los Angeles")
+                    .setPostalCode("90210")
+                    .setCountryCode("US")
+                    .setEmailAddress("bart@simpson.com")
+                    .build();
 
-            // 1 - Incomplete (no email) profile.
-            new AutofillProfile("" /* guid */, "https://www.example.com" /* origin */,
-                    "" /* honorific prefix */, "Homer Simpson", "Acme Inc.", "123 Main",
-                    "California", "Los Angeles", "", "90210", "", "US", "555 123-4567", "", ""),
+    private static final AutofillProfile INCOMPLETE_PROFILE_NO_EMAIL =
+            AutofillProfile.builder()
+                    .setFullName("Homer Simpson")
+                    .setCompanyName("Acme Inc.")
+                    .setStreetAddress("123 Main")
+                    .setRegion("California")
+                    .setLocality("Los Angeles")
+                    .setPostalCode("90210")
+                    .setCountryCode("US")
+                    .setPhoneNumber("555 123-4567")
+                    .build();
 
-            // 2 - Complete profile.
-            new AutofillProfile("" /* guid */, "https://www.example.com" /* origin */,
-                    "" /* honorific prefix */, "Lisa Simpson", "Acme Inc.", "123 Main",
-                    "California", "Los Angeles", "", "90210", "", "US", "555 123-4567",
-                    "lisa@simpson.com", ""),
+    private static final AutofillProfile COMPLETE_PROFILE_1 =
+            AutofillProfile.builder()
+                    .setFullName("Lisa Simpson")
+                    .setCompanyName("Acme Inc.")
+                    .setStreetAddress("123 Main")
+                    .setRegion("California")
+                    .setLocality("Los Angeles")
+                    .setPostalCode("90210")
+                    .setCountryCode("US")
+                    .setPhoneNumber("555 123-4567")
+                    .setEmailAddress("lisa@simpson.com")
+                    .build();
 
-            // 3 - Complete profile.
-            new AutofillProfile("" /* guid */, "https://www.example.com" /* origin */,
-                    "" /* honorific prefix */, "Maggie Simpson", "Acme Inc.", "123 Main",
-                    "California", "Los Angeles", "", "90210", "", "US", "555 123-4567",
-                    "maggie@simpson.com", ""),
+    private static final AutofillProfile COMPLETE_PROFILE_2 =
+            AutofillProfile.builder()
+                    .setFullName("Maggie Simpson")
+                    .setCompanyName("Acme Inc.")
+                    .setStreetAddress("123 Main")
+                    .setRegion("California")
+                    .setLocality("Los Angeles")
+                    .setPostalCode("90210")
+                    .setCountryCode("US")
+                    .setPhoneNumber("555 123-4567")
+                    .setEmailAddress("maggie@simpson.com")
+                    .build();
 
-            // 4 - Incomplete (no phone and email) profile.
-            new AutofillProfile("" /* guid */, "https://www.example.com" /* origin */,
-                    "" /* honorific prefix */, "Marge Simpson", "Acme Inc.", "123 Main",
-                    "California", "Los Angeles", "", "90210", "", "US", "", "", ""),
+    private static final AutofillProfile INCOMPLETE_PROFILE_NO_PHONE_OR_EMAIL =
+            AutofillProfile.builder()
+                    .setFullName("Marge Simpson")
+                    .setCompanyName("Acme Inc.")
+                    .setStreetAddress("123 Main")
+                    .setRegion("California")
+                    .setLocality("Los Angeles")
+                    .setPostalCode("90210")
+                    .setCountryCode("US")
+                    .build();
 
-            // 5 - Incomplete (no name) profile.
-            new AutofillProfile("" /* guid */, "https://www.example.com" /* origin */,
-                    "" /* honorific prefix */, "", "Acme Inc.", "123 Main", "California",
-                    "Los Angeles", "", "90210", "", "US", "555 123-4567", "marge@simpson.com", ""),
+    private static final AutofillProfile INCOMPLETE_PROFILE_NO_NAME =
+            AutofillProfile.builder()
+                    .setCompanyName("Acme Inc.")
+                    .setStreetAddress("123 Main")
+                    .setRegion("California")
+                    .setLocality("Los Angeles")
+                    .setPostalCode("90210")
+                    .setCountryCode("US")
+                    .setPhoneNumber("555 123-4567")
+                    .setEmailAddress("marge@simpson.com")
+                    .build();
 
-            // These profiles are used to test the dedupe of subset suggestions. They are based on
-            // The Lisa Simpson profile.
+    // These profiles are used to test the dedupe of subset suggestions. They are based on
+    // The Lisa Simpson profile.
 
-            // 6 - Same as original, but with no name.
-            new AutofillProfile("" /* guid */, "https://www.example.com" /* origin */,
-                    "" /* honorific prefix */, "" /* name */, "Acme Inc.", "123 Main", "California",
-                    "Los Angeles", "", "90210", "", "US", "555 123-4567", "lisa@simpson.com", ""),
+    private static final AutofillProfile DUPLICATE_PROFILE_WITH_NO_NAME =
+            AutofillProfile.builder()
+                    .setCompanyName("Acme Inc.")
+                    .setStreetAddress("123 Main")
+                    .setRegion("California")
+                    .setLocality("Los Angeles")
+                    .setPostalCode("90210")
+                    .setCountryCode("US")
+                    .setPhoneNumber("555 123-4567")
+                    .setEmailAddress("lisa@simpson.com")
+                    .build();
 
-            // 7 - Same as original, but with no phone.
-            new AutofillProfile("" /* guid */, "https://www.example.com" /* origin */,
-                    "" /* honorific prefix */, "Lisa Simpson", "Acme Inc.", "123 Main",
-                    "California", "Los Angeles", "", "90210", "", "US", "" /* phoneNumber */,
-                    "lisa@simpson.com", ""),
+    private static final AutofillProfile DUPLICATE_PROFILE_WITH_NO_PHONE =
+            AutofillProfile.builder()
+                    .setFullName("Lisa Simpson")
+                    .setCompanyName("Acme Inc.")
+                    .setStreetAddress("123 Main")
+                    .setRegion("California")
+                    .setLocality("Los Angeles")
+                    .setPostalCode("90210")
+                    .setCountryCode("US")
+                    .setEmailAddress("lisa@simpson.com")
+                    .build();
 
-            // 8 - Same as original, but with no email.
-            new AutofillProfile("" /* guid */, "https://www.example.com" /* origin */,
-                    "" /* honorific prefix */, "Lisa Simpson", "Acme Inc.", "123 Main",
-                    "California", "Los Angeles", "", "90210", "", "US", "555 123-4567",
-                    "" /* emailAddress */, ""),
+    private static final AutofillProfile DUPLICATE_PROFILE_WITH_NO_EMAIL =
+            AutofillProfile.builder()
+                    .setFullName("Lisa Simpson")
+                    .setCompanyName("Acme Inc.")
+                    .setStreetAddress("123 Main")
+                    .setRegion("California")
+                    .setLocality("Los Angeles")
+                    .setPostalCode("90210")
+                    .setCountryCode("US")
+                    .setPhoneNumber("555 123-4567")
+                    .build();
 
-            // 9 - Same as original, but with no phone and no email.
-            new AutofillProfile("" /* guid */, "https://www.example.com" /* origin */,
-                    "" /* honorific prefix */, "Lisa Simpson", "Acme Inc.", "123 Main",
-                    "California", "Los Angeles", "", "90210", "", "US", "" /* phoneNumber */,
-                    "" /* emailAddress */, ""),
+    private static final AutofillProfile DUPLICATE_PROFILE_WITH_NO_PHONE_OR_EMAIL =
+            AutofillProfile.builder()
+                    .setFullName("Lisa Simpson")
+                    .setCompanyName("Acme Inc.")
+                    .setStreetAddress("123 Main")
+                    .setRegion("California")
+                    .setLocality("Los Angeles")
+                    .setPostalCode("90210")
+                    .setCountryCode("US")
+                    .build();
 
-            // 10 - Has an email address that is a superset of the original profile's email.
-            new AutofillProfile("" /* guid */, "https://www.example.com" /* origin */,
-                    "" /* honorific prefix */, "Lisa Simpson", "Acme Inc.", "123 Main",
-                    "California", "Los Angeles", "", "90210", "", "US", "555 123-4567",
-                    "fakelisa@simpson.com", ""),
+    // This profile is a duplicate except that its email address is a superset of the original
+    // profile (that is, the original profile's email is a suffix of this one).
+    private static final AutofillProfile DUPLICATE_PROFILE_WITH_SUPERSET_EMAIL =
+            AutofillProfile.builder()
+                    .setFullName("Lisa Simpson")
+                    .setCompanyName("Acme Inc.")
+                    .setStreetAddress("123 Main")
+                    .setRegion("California")
+                    .setLocality("Los Angeles")
+                    .setPostalCode("90210")
+                    .setCountryCode("US")
+                    .setPhoneNumber("555 123-4567")
+                    .setEmailAddress("fakelisa@simpson.com")
+                    .build();
 
-            // 11 - Has the same name as the original but with no capitalization in the name.
-            new AutofillProfile("" /* guid */, "https://www.example.com" /* origin */,
-                    "" /* honorific prefix */, "lisa simpson", "Acme Inc.", "123 Main",
-                    "California", "Los Angeles", "", "90210", "", "US", "555 123-4567",
-                    "lisa@simpson.com", ""),
+    private static final AutofillProfile DUPLICATE_PROFILE_WITH_MISMATCHED_CAPITALIZATION =
+            AutofillProfile.builder()
+                    .setFullName("lisa simpson")
+                    .setCompanyName("Acme Inc.")
+                    .setStreetAddress("123 Main")
+                    .setRegion("California")
+                    .setLocality("Los Angeles")
+                    .setPostalCode("90210")
+                    .setCountryCode("US")
+                    .setPhoneNumber("555 123-4567")
+                    .setEmailAddress("lisa@simpson.com")
+                    .build();
 
-    };
+    @Before
+    public void setUp() {
+        mPaymentRequestTestRule.addPaymentAppFactory(
+                "https://bobpay.test", AppPresence.HAVE_APPS, FactorySpeed.FAST_FACTORY);
+    }
 
-    private AutofillProfile[] mProfilesToAdd;
-    private int[] mCountsToSet;
-    private int[] mDatesToSet;
-
-    @Override
-    public void onMainActivityStarted() throws TimeoutException {
+    private void setUpAutofillProfiles(
+            AutofillProfile[] profiles, int[] counts, int[] daysSinceLastUsed)
+            throws TimeoutException {
         AutofillTestHelper helper = new AutofillTestHelper();
 
         // Add the profiles.
         ArrayList<String> guids = new ArrayList<>();
-        for (int i = 0; i < mProfilesToAdd.length; i++) {
-            guids.add(helper.setProfile(mProfilesToAdd[i]));
+        for (int i = 0; i < profiles.length; i++) {
+            guids.add(helper.setProfile(profiles[i]));
         }
 
         // Set up the profile use stats.
         for (int i = 0; i < guids.size(); i++) {
-            helper.setProfileUseStatsForTesting(guids.get(i), mCountsToSet[i], mDatesToSet[i]);
+            helper.setProfileUseStatsForTesting(guids.get(i), counts[i], daysSinceLastUsed[i]);
         }
-
-        mPaymentRequestTestRule.addPaymentAppFactory(
-                AppPresence.HAVE_APPS, FactorySpeed.FAST_FACTORY);
     }
 
     /**
@@ -141,35 +217,43 @@ public class PaymentRequestMultipleContactDetailsTest implements MainActivitySta
      */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testContactDetailsSuggestionOrdering() throws TimeoutException {
-        // Set the use stats so that profile[0] has the highest frecency score, profile[1] the
-        // second highest, profile[2] the third lowest, profile[3] the second lowest and profile[4]
-        // the lowest.
-        mProfilesToAdd = new AutofillProfile[] {AUTOFILL_PROFILES[0], AUTOFILL_PROFILES[1],
-                AUTOFILL_PROFILES[2], AUTOFILL_PROFILES[3], AUTOFILL_PROFILES[4]};
-        mCountsToSet = new int[] {20, 15, 10, 5, 1};
-        mDatesToSet = new int[] {5000, 5000, 5000, 5000, 1};
+        // Set the use stats such that the profiles are in descending frecency score.
+        AutofillProfile[] profiles =
+                new AutofillProfile[] {
+                    INCOMPLETE_PROFILE_NO_PHONE,
+                    INCOMPLETE_PROFILE_NO_EMAIL,
+                    COMPLETE_PROFILE_1,
+                    COMPLETE_PROFILE_2,
+                    INCOMPLETE_PROFILE_NO_PHONE_OR_EMAIL
+                };
+        int[] counts = new int[] {20, 15, 10, 5, 1};
+        int[] daysSinceLastUsed = new int[] {5, 5, 5, 5, 5};
 
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyForInput());
+        setUpAutofillProfiles(profiles, counts, daysSinceLastUsed);
+
+        // The complete profiles should still come first, despite having a lower frecency score. The
+        // profile without either a phone or email should have been sorted to last, and is then not
+        // shown because we have more than PaymentUiService.SUGGESTIONS_LIMIT profiles.
+        mPaymentRequestTestRule.runJavaScriptAndWaitForUIEvent(
+                "buyWithMethods([{supportedMethods:'https://bobpay.test'}]);",
+                mPaymentRequestTestRule.getReadyForInput());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
                 R.id.payments_section, mPaymentRequestTestRule.getReadyForInput());
         Assert.assertEquals(4, mPaymentRequestTestRule.getNumberOfContactDetailSuggestions());
-        Assert.assertEquals("Lisa Simpson\n555 123-4567\nlisa@simpson.com",
+        Assert.assertEquals(
+                "Lisa Simpson\n555 123-4567\nlisa@simpson.com",
                 mPaymentRequestTestRule.getContactDetailsSuggestionLabel(0));
-        Assert.assertEquals("Maggie Simpson\n555 123-4567\nmaggie@simpson.com",
+        Assert.assertEquals(
+                "Maggie Simpson\n555 123-4567\nmaggie@simpson.com",
                 mPaymentRequestTestRule.getContactDetailsSuggestionLabel(1));
-        Assert.assertEquals("Bart Simpson\nbart@simpson.com\nPhone number required",
+        Assert.assertEquals(
+                "Bart Simpson\nbart@simpson.com\nPhone number required",
                 mPaymentRequestTestRule.getContactDetailsSuggestionLabel(2));
-        Assert.assertEquals("Homer Simpson\n555 123-4567\nEmail required",
+        Assert.assertEquals(
+                "Homer Simpson\n555 123-4567\nEmail required",
                 mPaymentRequestTestRule.getContactDetailsSuggestionLabel(3));
-
-        // Verify that no record is logged since there is at least one complete suggested contact
-        // details.
-        Assert.assertEquals(0,
-                RecordHistogram.getHistogramTotalCountForTesting(
-                        "PaymentRequest.MissingContactFields"));
     }
 
     /**
@@ -178,61 +262,71 @@ public class PaymentRequestMultipleContactDetailsTest implements MainActivitySta
      */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testContactDetailsEditRequiredMessage() throws TimeoutException {
-        mProfilesToAdd = new AutofillProfile[] {AUTOFILL_PROFILES[0], AUTOFILL_PROFILES[1],
-                AUTOFILL_PROFILES[4], AUTOFILL_PROFILES[5]};
-        mCountsToSet = new int[] {15, 10, 5, 1};
-        mDatesToSet = new int[] {5000, 5000, 5000, 5000};
+        AutofillProfile[] profiles =
+                new AutofillProfile[] {
+                    INCOMPLETE_PROFILE_NO_PHONE,
+                    INCOMPLETE_PROFILE_NO_EMAIL,
+                    INCOMPLETE_PROFILE_NO_PHONE_OR_EMAIL,
+                    INCOMPLETE_PROFILE_NO_NAME
+                };
+        int[] counts = new int[] {15, 10, 5, 1};
+        int[] daysSinceLastUsed = new int[] {5, 5, 5, 5};
 
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyForInput());
+        setUpAutofillProfiles(profiles, counts, daysSinceLastUsed);
+
+        mPaymentRequestTestRule.runJavaScriptAndWaitForUIEvent(
+                "buyWithMethods([{supportedMethods:'https://bobpay.test'}]);",
+                mPaymentRequestTestRule.getReadyForInput());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
                 R.id.payments_section, mPaymentRequestTestRule.getReadyForInput());
         Assert.assertEquals(4, mPaymentRequestTestRule.getNumberOfContactDetailSuggestions());
-        Assert.assertEquals("Bart Simpson\nbart@simpson.com\nPhone number required",
+        Assert.assertEquals(
+                "Bart Simpson\nbart@simpson.com\nPhone number required",
                 mPaymentRequestTestRule.getContactDetailsSuggestionLabel(0));
-        Assert.assertEquals("Homer Simpson\n555 123-4567\nEmail required",
+        Assert.assertEquals(
+                "Homer Simpson\n555 123-4567\nEmail required",
                 mPaymentRequestTestRule.getContactDetailsSuggestionLabel(1));
-        Assert.assertEquals("555 123-4567\nmarge@simpson.com\nName required",
+        Assert.assertEquals(
+                "555 123-4567\nmarge@simpson.com\nName required",
                 mPaymentRequestTestRule.getContactDetailsSuggestionLabel(2));
-        Assert.assertEquals("Marge Simpson\nMore information required",
+        Assert.assertEquals(
+                "Marge Simpson\nMore information required",
                 mPaymentRequestTestRule.getContactDetailsSuggestionLabel(3));
-
-        // Verify that the missing fields of the most complete suggestion has been recorded.
-        Assert.assertEquals(1,
-                RecordHistogram.getHistogramValueCountForTesting(
-                        "PaymentRequest.MissingContactFields", ContactEditor.INVALID_PHONE_NUMBER));
     }
 
-    /**
-     * Makes sure that suggestions that are subsets of other fields (empty values) are deduped.
-     */
+    /** Makes sure that suggestions that are subsets of other fields (empty values) are deduped. */
     @Test
     @MediumTest
     @Feature({"Payments"})
-    @DisabledTest(message = "https://crbug.com/1182590")
     public void testContactDetailsDedupe_EmptyFields() throws TimeoutException {
         // Add the original profile and a bunch of similar profiles with missing fields.
         // Make sure the original profile is suggested last, to test that the suggestions are
         // sorted by completeness.
-        mProfilesToAdd = new AutofillProfile[] {
-                AUTOFILL_PROFILES[2],
-                AUTOFILL_PROFILES[6],
-                AUTOFILL_PROFILES[7],
-                AUTOFILL_PROFILES[8],
-                AUTOFILL_PROFILES[9],
-        };
-        mCountsToSet = new int[] {1, 20, 15, 10, 5};
-        mDatesToSet = new int[] {1000, 4000, 3000, 2000, 1000};
+        AutofillProfile[] profiles =
+                new AutofillProfile[] {
+                    COMPLETE_PROFILE_1,
+                    DUPLICATE_PROFILE_WITH_NO_NAME,
+                    DUPLICATE_PROFILE_WITH_NO_PHONE,
+                    DUPLICATE_PROFILE_WITH_NO_EMAIL,
+                    DUPLICATE_PROFILE_WITH_NO_PHONE_OR_EMAIL,
+                };
+        int[] counts = new int[] {1, 20, 15, 10, 5};
+        int[] daysSinceLastUsed = new int[] {4, 1, 2, 3, 4};
 
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyForInput());
+        setUpAutofillProfiles(profiles, counts, daysSinceLastUsed);
+
+        mPaymentRequestTestRule.runJavaScriptAndWaitForUIEvent(
+                "buyWithMethods([{supportedMethods:'https://bobpay.test'}]);",
+                mPaymentRequestTestRule.getReadyForInput());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
                 R.id.payments_section, mPaymentRequestTestRule.getReadyForInput());
 
         // Only the original profile with all the fields should be suggested.
         Assert.assertEquals(1, mPaymentRequestTestRule.getNumberOfContactDetailSuggestions());
-        Assert.assertEquals("Lisa Simpson\n555 123-4567\nlisa@simpson.com",
+        Assert.assertEquals(
+                "Lisa Simpson\n555 123-4567\nlisa@simpson.com",
                 mPaymentRequestTestRule.getContactDetailsSuggestionLabel(0));
     }
 
@@ -242,20 +336,27 @@ public class PaymentRequestMultipleContactDetailsTest implements MainActivitySta
      */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testContactDetailsDedupe_Capitalization() throws TimeoutException {
         // Add the original profile and the one where the the name is not capitalized.
         // Make sure the original profile is suggested first (no particular reason).
-        mProfilesToAdd = new AutofillProfile[] {AUTOFILL_PROFILES[2], AUTOFILL_PROFILES[11]};
-        mCountsToSet = new int[] {15, 5};
-        mDatesToSet = new int[] {5000, 2000};
+        AutofillProfile[] profiles =
+                new AutofillProfile[] {
+                    COMPLETE_PROFILE_1, DUPLICATE_PROFILE_WITH_MISMATCHED_CAPITALIZATION,
+                };
+        int[] counts = new int[] {15, 5};
+        int[] daysSinceLastUsed = new int[] {2, 5};
 
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyForInput());
+        setUpAutofillProfiles(profiles, counts, daysSinceLastUsed);
+
+        mPaymentRequestTestRule.runJavaScriptAndWaitForUIEvent(
+                "buyWithMethods([{supportedMethods:'https://bobpay.test'}]);",
+                mPaymentRequestTestRule.getReadyForInput());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
                 R.id.payments_section, mPaymentRequestTestRule.getReadyForInput());
         Assert.assertEquals(1, mPaymentRequestTestRule.getNumberOfContactDetailSuggestions());
-        Assert.assertEquals("Lisa Simpson\n555 123-4567\nlisa@simpson.com",
+        Assert.assertEquals(
+                "Lisa Simpson\n555 123-4567\nlisa@simpson.com",
                 mPaymentRequestTestRule.getContactDetailsSuggestionLabel(0));
     }
 
@@ -265,47 +366,31 @@ public class PaymentRequestMultipleContactDetailsTest implements MainActivitySta
      */
     @Test
     @MediumTest
-    @DisabledTest(message = "crbug.com/1182234")
     @Feature({"Payments"})
     public void testContactDetailsDontDedupe_FieldSubset() throws TimeoutException {
         // Add the original profile and the one where the email is a superset of the original.
         // Make sure the one with the superset is suggested first, because to test the subset one
         // needs to be added after.
-        mProfilesToAdd = new AutofillProfile[] {AUTOFILL_PROFILES[2], AUTOFILL_PROFILES[10]};
-        mCountsToSet = new int[] {15, 25};
-        mDatesToSet = new int[] {5000, 7000};
+        AutofillProfile[] profiles =
+                new AutofillProfile[] {
+                    COMPLETE_PROFILE_1, DUPLICATE_PROFILE_WITH_SUPERSET_EMAIL,
+                };
+        int[] counts = new int[] {15, 25};
+        int[] daysSinceLastUsed = new int[] {7, 5};
 
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyForInput());
+        setUpAutofillProfiles(profiles, counts, daysSinceLastUsed);
+
+        mPaymentRequestTestRule.runJavaScriptAndWaitForUIEvent(
+                "buyWithMethods([{supportedMethods:'https://bobpay.test'}]);",
+                mPaymentRequestTestRule.getReadyForInput());
         mPaymentRequestTestRule.clickInContactInfoAndWait(
                 R.id.payments_section, mPaymentRequestTestRule.getReadyForInput());
         Assert.assertEquals(2, mPaymentRequestTestRule.getNumberOfContactDetailSuggestions());
-        Assert.assertEquals("Lisa Simpson\n555 123-4567\nfakelisa@simpson.com",
+        Assert.assertEquals(
+                "Lisa Simpson\n555 123-4567\nfakelisa@simpson.com",
                 mPaymentRequestTestRule.getContactDetailsSuggestionLabel(0));
-        Assert.assertEquals("Lisa Simpson\n555 123-4567\nlisa@simpson.com",
+        Assert.assertEquals(
+                "Lisa Simpson\n555 123-4567\nlisa@simpson.com",
                 mPaymentRequestTestRule.getContactDetailsSuggestionLabel(1));
-    }
-
-    /**
-     * Make sure all fields are recorded when no profile exists.
-     */
-    @Test
-    @MediumTest
-    @Feature({"Payments"})
-    @DisabledTest(message = "https://crbug.com/1182644")
-    public void testContactDetailsAllMissingFieldsRecorded() throws TimeoutException {
-        // Don't add any profiles.
-        mProfilesToAdd = new AutofillProfile[] {};
-        mCountsToSet = new int[] {};
-        mDatesToSet = new int[] {};
-
-        mPaymentRequestTestRule.triggerUIAndWait(mPaymentRequestTestRule.getReadyForInput());
-        Assert.assertEquals(0, mPaymentRequestTestRule.getNumberOfContactDetailSuggestions());
-
-        // Verify that all contact fields are recorded as missing when no suggestion exists.
-        Assert.assertEquals(1,
-                RecordHistogram.getHistogramValueCountForTesting(
-                        "PaymentRequest.MissingContactFields",
-                        ContactEditor.INVALID_NAME | ContactEditor.INVALID_PHONE_NUMBER
-                                | ContactEditor.INVALID_EMAIL));
     }
 }

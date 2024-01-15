@@ -7,7 +7,7 @@
 #include <stddef.h>
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/task/common/lazy_now.h"
 #include "base/task/sequence_manager/enqueue_order.h"
 #include "base/task/sequence_manager/fence.h"
@@ -97,7 +97,7 @@ class WorkQueueTest : public testing::Test {
                               task_order.delayed_run_time(),
                               subtle::DelayPolicy::kFlexibleNoSooner),
                    EnqueueOrder::FromIntForTesting(task_order.sequence_num()),
-                   task_order.enqueue_order());
+                   task_order.enqueue_order(), TimeTicks() + Milliseconds(1));
     return fake_task;
   }
 

@@ -52,7 +52,7 @@ void TestWindowDelegate::OnBoundsChanged(const gfx::Rect& old_bounds,
 }
 
 gfx::NativeCursor TestWindowDelegate::GetCursor(const gfx::Point& point) {
-  return gfx::kNullCursor;
+  return gfx::NativeCursor{};
 }
 
 int TestWindowDelegate::GetNonClientComponent(const gfx::Point& point) const {
@@ -88,6 +88,14 @@ void TestWindowDelegate::OnWindowDestroyed(Window* window) {
 }
 
 void TestWindowDelegate::OnWindowTargetVisibilityChanged(bool visible) {
+}
+
+void TestWindowDelegate::OnWindowOcclusionChanged(
+    Window::OcclusionState old_occlusion_state,
+    Window::OcclusionState new_occlusion_state) {
+  if (on_occlusion_changed_) {
+    on_occlusion_changed_.Run();
+  }
 }
 
 bool TestWindowDelegate::HasHitTestMask() const {

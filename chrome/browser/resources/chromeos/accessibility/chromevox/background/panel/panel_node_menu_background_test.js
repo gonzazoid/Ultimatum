@@ -4,7 +4,7 @@
 
 GEN_INCLUDE([
   '../../../common/testing/documents.js',
-  '../../testing/chromevox_next_e2e_test_base.js',
+  '../../testing/chromevox_e2e_test_base.js',
 ]);
 
 // Fake Msgs object.
@@ -19,20 +19,22 @@ const PanelBridge = {
 };
 
 /** Test fixture for PanelNodeMenuBackground. */
-ChromeVoxPanelNodeMenuBackgroundTest = class extends ChromeVoxNextE2ETest {
+ChromeVoxPanelNodeMenuBackgroundTest = class extends ChromeVoxE2ETest {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
 
-    // Alphabetical based on file path.
-    await importModule(
-        'PanelBackground', '/chromevox/background/panel/panel_background.js');
-    await importModule(
-        'PanelNodeMenuBackground',
-        '/chromevox/background/panel/panel_node_menu_background.js');
-    await importModule(
-        ['PanelNodeMenuId', 'ALL_PANEL_MENU_NODE_DATA'],
-        '/chromevox/common/panel_menu_data.js');
+    await Promise.all([
+      // Alphabetical based on file path.
+      importModule(
+          'PanelBackground', '/chromevox/background/panel/panel_background.js'),
+      importModule(
+          'PanelNodeMenuBackground',
+          '/chromevox/background/panel/panel_node_menu_background.js'),
+      importModule(
+          ['PanelNodeMenuId', 'ALL_PANEL_MENU_NODE_DATA'],
+          '/chromevox/common/panel_menu_data.js'),
+    ]);
   }
 
   assertMenuItemIndicatesNoNodesFound(item) {

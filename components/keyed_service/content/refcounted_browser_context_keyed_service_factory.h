@@ -5,8 +5,8 @@
 #ifndef COMPONENTS_KEYED_SERVICE_CONTENT_REFCOUNTED_BROWSER_CONTEXT_KEYED_SERVICE_FACTORY_H_
 #define COMPONENTS_KEYED_SERVICE_CONTENT_REFCOUNTED_BROWSER_CONTEXT_KEYED_SERVICE_FACTORY_H_
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "components/keyed_service/core/keyed_service_export.h"
 #include "components/keyed_service/core/refcounted_keyed_service_factory.h"
@@ -110,11 +110,6 @@ class KEYED_SERVICE_EXPORT RefcountedBrowserContextKeyedServiceFactory
   //
   // This should not return nullptr; instead, return nullptr from
   // `GetBrowserContextToUse()`.
-  // NOTE: There is a //chrome-specific exception to this rule for a
-  // ChromeOS-specific case until crbug.com/1284664 is resolved. See
-  // documentation on //chrome's //
-  // `RefcountedProfileKeyedServiceFactory::BuildServiceInstanceFor()` for
-  // details.
   virtual scoped_refptr<RefcountedKeyedService> BuildServiceInstanceFor(
       content::BrowserContext* context) const = 0;
 

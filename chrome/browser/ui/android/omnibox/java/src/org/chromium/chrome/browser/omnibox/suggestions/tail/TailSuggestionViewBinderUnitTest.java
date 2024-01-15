@@ -19,17 +19,15 @@ import org.junit.runner.RunWith;
 
 import org.chromium.base.ContextUtils;
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.chrome.R;
 import org.chromium.chrome.browser.omnibox.styles.OmniboxResourceProvider;
+import org.chromium.chrome.browser.omnibox.styles.SuggestionSpannable;
 import org.chromium.chrome.browser.omnibox.suggestions.SuggestionCommonProperties;
-import org.chromium.chrome.browser.omnibox.suggestions.base.SuggestionSpannable;
+import org.chromium.chrome.browser.omnibox.test.R;
 import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 
-/**
- * Tests for {@link TailSuggestionViewBinder}.
- */
+/** Tests for {@link TailSuggestionViewBinder}. */
 @RunWith(BaseRobolectricTestRunner.class)
 public class TailSuggestionViewBinderUnitTest {
     private PropertyModel mModel;
@@ -39,8 +37,9 @@ public class TailSuggestionViewBinderUnitTest {
 
     @Before
     public void setUp() {
-        mContext = new ContextThemeWrapper(
-                ContextUtils.getApplicationContext(), R.style.Theme_BrowserUI_DayNight);
+        mContext =
+                new ContextThemeWrapper(
+                        ContextUtils.getApplicationContext(), R.style.Theme_BrowserUI_DayNight);
 
         mTailSuggestionView = spy(new TailSuggestionView(mContext));
 

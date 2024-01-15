@@ -5,9 +5,10 @@
 #ifndef CHROME_BROWSER_ASH_SYSTEM_LOGS_SYSTEM_LOGS_WRITER_H_
 #define CHROME_BROWSER_ASH_SYSTEM_LOGS_SYSTEM_LOGS_WRITER_H_
 
-#include "base/callback.h"
+#include <optional>
+
 #include "base/files/file_path.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/functional/callback.h"
 
 // Helper function for writing system logs used in Feedback reports. Currently
 // used by chrome://net-internals#chromeos for manual uploading of system logs.
@@ -22,17 +23,9 @@ namespace system_logs_writer {
 void WriteSystemLogs(
     const base::FilePath& dest_dir,
     bool scrub_data,
-    base::OnceCallback<void(absl::optional<base::FilePath>)> callback);
+    base::OnceCallback<void(std::optional<base::FilePath>)> callback);
 
 }  // namespace system_logs_writer
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when Chrome OS code migration is
-// done.
-namespace chromeos {
-namespace system_logs_writer {
-using ::ash::system_logs_writer::WriteSystemLogs;
-}  // namespace system_logs_writer
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_SYSTEM_LOGS_SYSTEM_LOGS_WRITER_H_

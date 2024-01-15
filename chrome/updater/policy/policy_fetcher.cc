@@ -4,13 +4,13 @@
 
 #include "chrome/updater/policy/policy_fetcher.h"
 
-#include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
@@ -24,31 +24,27 @@
 #include "chrome/updater/device_management/dm_storage.h"
 #include "chrome/updater/policy/dm_policy_manager.h"
 #include "chrome/updater/policy/service.h"
+#include "chrome/updater/util/util.h"
+#include "url/gurl.h"
 
 namespace updater {
-namespace {
 
-scoped_refptr<base::SequencedTaskRunner> GetBlockingTaskRunner() {
-  constexpr base::TaskTraits KMayBlockTraits = {base::MayBlock()};
-#if BUILDFLAG(IS_WIN)
-  return base::ThreadPool::CreateCOMSTATaskRunner(KMayBlockTraits);
-#else
-  return base::ThreadPool::CreateSequencedTaskRunner(KMayBlockTraits);
-#endif
+PolicyFetcher::PolicyFetcher(
+    const GURL& server_url,
+    const std::optional<PolicyServiceProxyConfiguration>& proxy_configuration,
+    const std::optional<bool>& override_is_managed_device)
+    : server_url_(server_url),
+      policy_service_proxy_configuration_(proxy_configuration),
+      override_is_managed_device_(override_is_managed_device),
+      sequenced_task_runner_(
+          base::ThreadPool::CreateSequencedTaskRunner({base::MayBlock()})) {
+  VLOG(0) << "Policy server: " << server_url_.possibly_invalid_spec();
 }
-
-}  // namespace
-
-PolicyFetcher::PolicyFetcher(scoped_refptr<PolicyService> policy_service)
-    : policy_service_(policy_service),
-      policy_service_proxy_configuration_(
-          PolicyServiceProxyConfiguration::Get(policy_service)),
-      sequenced_task_runner_(GetBlockingTaskRunner()) {}
 
 PolicyFetcher::~PolicyFetcher() = default;
 
 void PolicyFetcher::FetchPolicies(
-    base::OnceCallback<void(int, std::unique_ptr<PolicyManagerInterface>)>
+    base::OnceCallback<void(int, scoped_refptr<PolicyManagerInterface>)>
         callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   VLOG(1) << __func__;
@@ -66,10 +62,18 @@ void PolicyFetcher::RegisterDevice(
     scoped_refptr<base::SequencedTaskRunner> main_task_runner,
     base::OnceCallback<void(bool, DMClient::RequestResult)> callback) {
   VLOG(1) << __func__;
-
   scoped_refptr<DMStorage> dm_storage = GetDefaultDMStorage();
+  if (!dm_storage) {
+    main_task_runner->PostTask(
+        FROM_HERE,
+        base::BindOnce(std::move(callback), false,
+                       DMClient::RequestResult::kNoDefaultDMStorage));
+    return;
+  }
+  VLOG(1) << "Enrollment token: " << dm_storage->GetEnrollmentToken();
   DMClient::RegisterDevice(
-      DMClient::CreateDefaultConfigurator(policy_service_proxy_configuration_),
+      DMClient::CreateDefaultConfigurator(server_url_,
+                                          policy_service_proxy_configuration_),
       dm_storage,
       base::BindPostTask(main_task_runner,
                          base::BindOnce(std::move(callback),
@@ -77,7 +81,7 @@ void PolicyFetcher::RegisterDevice(
 }
 
 void PolicyFetcher::OnRegisterDeviceRequestComplete(
-    base::OnceCallback<void(int, std::unique_ptr<PolicyManagerInterface>)>
+    base::OnceCallback<void(int, scoped_refptr<PolicyManagerInterface>)>
         callback,
     bool is_enrollment_mandatory,
     DMClient::RequestResult result) {
@@ -88,11 +92,11 @@ void PolicyFetcher::OnRegisterDeviceRequestComplete(
       result == DMClient::RequestResult::kAlreadyRegistered) {
     sequenced_task_runner_->PostTask(
         FROM_HERE,
-        base::BindOnce(
-            &PolicyFetcher::FetchPolicy, this,
-            base::BindPostTask(base::SequencedTaskRunner::GetCurrentDefault(),
-                               base::BindOnce(std::move(callback), kErrorOk))));
+        base::BindOnce(&PolicyFetcher::FetchPolicy, this,
+                       base::BindPostTaskToCurrentDefault(
+                           base::BindOnce(std::move(callback), kErrorOk))));
   } else {
+    VLOG(1) << "Device registration failed, skip fetching policies.";
     base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
@@ -103,25 +107,26 @@ void PolicyFetcher::OnRegisterDeviceRequestComplete(
 }
 
 void PolicyFetcher::FetchPolicy(
-    base::OnceCallback<void(std::unique_ptr<PolicyManagerInterface>)>
-        callback) {
+    base::OnceCallback<void(scoped_refptr<PolicyManagerInterface>)> callback) {
   VLOG(1) << __func__;
 
   DMClient::FetchPolicy(
-      DMClient::CreateDefaultConfigurator(policy_service_proxy_configuration_),
+      DMClient::CreateDefaultConfigurator(server_url_,
+                                          policy_service_proxy_configuration_),
       GetDefaultDMStorage(),
       base::BindOnce(&PolicyFetcher::OnFetchPolicyRequestComplete, this)
           .Then(std::move(callback)));
 }
 
-std::unique_ptr<PolicyManagerInterface>
+scoped_refptr<PolicyManagerInterface>
 PolicyFetcher::OnFetchPolicyRequestComplete(
     DMClient::RequestResult result,
     const std::vector<PolicyValidationResult>& validation_results) {
   VLOG(1) << __func__;
 
-  if (result == DMClient::RequestResult::kSuccess)
-    return CreateDMPolicyManager();
+  if (result == DMClient::RequestResult::kSuccess) {
+    return CreateDMPolicyManager(override_is_managed_device_);
+  }
 
   for (const auto& validation_result : validation_results) {
     base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
@@ -129,13 +134,14 @@ PolicyFetcher::OnFetchPolicyRequestComplete(
         base::BindOnce(
             &DMClient::ReportPolicyValidationErrors,
             DMClient::CreateDefaultConfigurator(
-                policy_service_proxy_configuration_),
+                server_url_, policy_service_proxy_configuration_),
             GetDefaultDMStorage(), validation_result,
             base::BindOnce([](DMClient::RequestResult result) {
-              if (result != DMClient::RequestResult::kSuccess)
+              if (result != DMClient::RequestResult::kSuccess) {
                 LOG(WARNING)
                     << "DMClient::ReportPolicyValidationErrors failed: "
-                    << static_cast<int>(result);
+                    << result;
+              }
             })));
   }
 

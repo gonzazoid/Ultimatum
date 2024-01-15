@@ -8,24 +8,20 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/apple/foundation_util.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/logging.h"
-#include "base/mac/foundation_util.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "ios/web/public/browser_state.h"
 #import "ios/web/public/js_messaging/web_frame.h"
-#import "ios/web/public/js_messaging/web_frame_util.h"
+#import "ios/web/public/js_messaging/web_frames_manager.h"
 #import "ios/web/public/navigation/navigation_manager.h"
 #import "ios/web/public/navigation/web_state_policy_decider.h"
 #import "ios/web/public/web_state.h"
 #include "ios/web/public/web_state_observer.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -73,18 +69,18 @@ base::Value ConvertedResultFromScriptResult(const base::Value* value,
     result = base::Value(value->GetBool());
     DCHECK_EQ(result.type(), base::Value::Type::BOOLEAN);
   } else if (value->is_dict()) {
-    base::Value dictionary(base::Value::Type::DICTIONARY);
-    for (const auto kv : value->DictItems()) {
+    base::Value::Dict dictionary;
+    for (const auto kv : value->GetDict()) {
       base::Value item_value =
           ConvertedResultFromScriptResult(&kv.second, max_depth - 1);
 
       if (item_value.type() == base::Value::Type::NONE) {
         return result;
       }
-      dictionary.SetPath(kv.first, std::move(item_value));
+      dictionary.SetByDottedPath(kv.first, std::move(item_value));
     }
-    result = std::move(dictionary);
-    DCHECK_EQ(result.type(), base::Value::Type::DICTIONARY);
+    result = base::Value(std::move(dictionary));
+    DCHECK_EQ(result.type(), base::Value::Type::DICT);
 
   } else if (value->is_list()) {
     base::Value::List list;
@@ -213,7 +209,8 @@ void DistillerPageIOS::OnLoadURLDone(
     return;
   }
 
-  web::WebFrame* main_frame = web::GetMainFrame(web_state_.get());
+  web::WebFrame* main_frame =
+      web_state_->GetPageWorldWebFramesManager()->GetMainWebFrame();
   if (!main_frame) {
     HandleJavaScriptResult(nil);
     return;

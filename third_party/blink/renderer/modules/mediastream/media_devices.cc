@@ -6,23 +6,32 @@
 
 #include <utility>
 
-#include "base/guid.h"
+#include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/ranges/algorithm.h"
+#include "base/uuid.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/common/mediastream/media_devices.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_metric_builder.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_study_settings.h"
 #include "third_party/blink/public/common/privacy_budget/identifiable_surface.h"
 #include "third_party/blink/public/mojom/media/capture_handle_config.mojom-blink.h"
+#include "third_party/blink/public/mojom/mediastream/media_devices.mojom-blink.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom-blink.h"
 #include "third_party/blink/public/platform/task_type.h"
+#include "third_party/blink/renderer/bindings/core/v8/dictionary.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver_with_tracker.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_capture_handle_config.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_display_media_stream_options.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_media_stream_constraints.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_media_track_constraints.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_media_track_supported_constraints.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_union_boolean_mediatrackconstraints.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_union_domexception_overconstrainederror.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_user_media_stream_constraints.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
@@ -32,14 +41,16 @@
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/navigator.h"
+#include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/modules/mediastream/crop_target.h"
 #include "third_party/blink/renderer/modules/mediastream/identifiability_metrics.h"
 #include "third_party/blink/renderer/modules/mediastream/input_device_info.h"
-#include "third_party/blink/renderer/modules/mediastream/media_error_state.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream.h"
 #include "third_party/blink/renderer/modules/mediastream/navigator_media_stream.h"
+#include "third_party/blink/renderer/modules/mediastream/restriction_target.h"
+#include "third_party/blink/renderer/modules/mediastream/sub_capture_target.h"
 #include "third_party/blink/renderer/modules/mediastream/user_media_client.h"
 #include "third_party/blink/renderer/platform/bindings/exception_messages.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
@@ -48,11 +59,21 @@
 #include "third_party/blink/renderer/platform/mediastream/webrtc_uma_histograms.h"
 #include "third_party/blink/renderer/platform/privacy_budget/identifiability_digest_helpers.h"
 #include "third_party/blink/renderer/platform/region_capture_crop_id.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/scheduler/public/event_loop.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
+
+BASE_FEATURE(kEnumerateDevicesRequestAudioCapabilities,
+             "EnumerateDevicesRequestAudioCapabilities",
+#if BUILDFLAG(IS_MAC)
+             base::FEATURE_DISABLED_BY_DEFAULT
+#else
+             base::FEATURE_ENABLED_BY_DEFAULT
+#endif
+);
 
 namespace {
 
@@ -64,10 +85,9 @@ class PromiseResolverCallbacks final : public UserMediaRequest::Callbacks {
  public:
   PromiseResolverCallbacks(
       UserMediaRequestType media_type,
-      ScriptPromiseResolver* resolver,
-      base::OnceCallback<void(const String&,
-                              MediaStreamTrack*,
-                              CaptureController*)> on_success_follow_up)
+      ScriptPromiseResolverWithTracker<UserMediaRequestResult>* resolver,
+      base::OnceCallback<void(const String&, CaptureController*)>
+          on_success_follow_up)
       : media_type_(media_type),
         resolver_(resolver),
         on_success_follow_up_(std::move(on_success_follow_up)) {}
@@ -75,26 +95,25 @@ class PromiseResolverCallbacks final : public UserMediaRequest::Callbacks {
 
   void OnSuccess(const MediaStreamVector& streams,
                  CaptureController* capture_controller) override {
-    if (media_type_ == UserMediaRequestType::kDisplayMediaSet) {
-      OnSuccessGetDisplayMediaSet(streams);
+    if (media_type_ == UserMediaRequestType::kAllScreensMedia) {
+      OnSuccessGetAllScreensMedia(streams);
       return;
     }
 
     DCHECK_EQ(streams.size(), 1u);
     MediaStream* stream = streams[0];
 
-    MediaStreamTrack* video_track = nullptr;
-
     if (on_success_follow_up_) {
       // Only getDisplayMedia() calls set |on_success_follow_up_|.
       // Successful invocations of getDisplayMedia() always have exactly
       // one video track.
-      DCHECK_EQ(UserMediaRequestType::kDisplayMedia, media_type_);
+      //
+      // Extension API calls that are followed by a getUserMedia() call with
+      // chromeMediaSourceId are treated liked getDisplayMedia() calls.
       MediaStreamTrackVector video_tracks = stream->getVideoTracks();
       DCHECK_EQ(video_tracks.size(), 1u);
-      video_track = video_tracks[0];
       if (capture_controller) {
-        capture_controller->SetVideoTrack(video_track, stream->id().Utf8());
+        capture_controller->SetVideoTrack(video_tracks[0], stream->id().Utf8());
       }
     }
 
@@ -102,15 +121,19 @@ class PromiseResolverCallbacks final : public UserMediaRequest::Callbacks {
     resolver_->Resolve(stream);
 
     // Enqueue the follow-up microtask, if any is intended.
-    if (on_success_follow_up_ && video_track) {
-      std::move(on_success_follow_up_)
-          .Run(stream->id(), video_track, capture_controller);
+    if (on_success_follow_up_) {
+      std::move(on_success_follow_up_).Run(stream->id(), capture_controller);
     }
   }
 
   void OnError(ScriptWrappable* callback_this_value,
-               const V8MediaStreamError* error) override {
-    resolver_->Reject(error);
+               const V8MediaStreamError* error,
+               CaptureController* capture_controller,
+               UserMediaRequestResult result) override {
+    if (capture_controller) {
+      capture_controller->FinalizeFocusDecision();
+    }
+    resolver_->Reject(error, result);
   }
 
   void Trace(Visitor* visitor) const override {
@@ -119,16 +142,16 @@ class PromiseResolverCallbacks final : public UserMediaRequest::Callbacks {
   }
 
  private:
-  void OnSuccessGetDisplayMediaSet(const MediaStreamVector& streams) {
+  void OnSuccessGetAllScreensMedia(const MediaStreamVector& streams) {
     DCHECK(!streams.empty());
-    DCHECK_EQ(UserMediaRequestType::kDisplayMediaSet, media_type_);
+    DCHECK_EQ(UserMediaRequestType::kAllScreensMedia, media_type_);
     resolver_->Resolve(streams);
   }
 
   const UserMediaRequestType media_type_;
 
-  Member<ScriptPromiseResolver> resolver_;
-  base::OnceCallback<void(const String&, MediaStreamTrack*, CaptureController*)>
+  Member<ScriptPromiseResolverWithTracker<UserMediaRequestResult>> resolver_;
+  base::OnceCallback<void(const String&, CaptureController*)>
       on_success_follow_up_;
 };
 
@@ -140,10 +163,10 @@ enum class DisplayCapturePolicyResult {
   kMaxValue = kAllowed
 };
 
-#if !BUILDFLAG(IS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
-enum class ProduceCropTargetFunctionResult {
+enum class ProduceTargetFunctionResult {
   kPromiseProduced = 0,
   kGenericError = 1,
   kInvalidContext = 2,
@@ -153,60 +176,201 @@ enum class ProduceCropTargetFunctionResult {
   kMaxValue = kElementAndMediaDevicesNotInSameExecutionContext
 };
 
-void RecordUma(ProduceCropTargetFunctionResult result) {
-  base::UmaHistogramEnumeration(
-      "Media.RegionCapture.ProduceCropTarget.Function.Result", result);
+void RecordUma(SubCaptureTarget::Type type,
+               ProduceTargetFunctionResult result) {
+  if (type == SubCaptureTarget::Type::kCropTarget) {
+    base::UmaHistogramEnumeration(
+        "Media.RegionCapture.ProduceCropTarget.Function.Result", result);
+  } else if (type == SubCaptureTarget::Type::kRestrictionTarget) {
+    base::UmaHistogramEnumeration(
+        "Media.ElementCapture.ProduceTarget.Function.Result", result);
+  } else {
+    NOTREACHED();
+  }
 }
 
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
-enum class ProduceCropTargetPromiseResult {
+enum class ProduceTargetPromiseResult {
   kPromiseResolved = 0,
   kPromiseRejected = 1,
   kMaxValue = kPromiseRejected
 };
 
-void RecordUma(ProduceCropTargetPromiseResult result) {
+void RecordUma(SubCaptureTarget::Type type, ProduceTargetPromiseResult result) {
+  if (type == SubCaptureTarget::Type::kCropTarget) {
+    base::UmaHistogramEnumeration(
+        "Media.RegionCapture.ProduceCropTarget.Promise.Result", result);
+  } else if (type == SubCaptureTarget::Type::kRestrictionTarget) {
+    base::UmaHistogramEnumeration(
+        "Media.ElementCapture.ProduceTarget.Promise.Result", result);
+  } else {
+    NOTREACHED();
+  }
+}
+
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+
+// When `blink::features::kGetDisplayMediaRequiresUserActivation` is enabled,
+// calls to `getDisplayMedia()` will require a transient user activation. This
+// can be bypassed with the `ScreenCaptureWithoutGestureAllowedForOrigins`
+// policy though.
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class GetDisplayMediaTransientActivation {
+  kPresent = 0,
+  kMissing = 1,
+  kMissingButFeatureDisabled = 2,
+  kMissingButPolicyOverrides = 3,
+  kMaxValue = kMissingButPolicyOverrides
+};
+
+void RecordUma(GetDisplayMediaTransientActivation activation) {
   base::UmaHistogramEnumeration(
-      "Media.RegionCapture.ProduceCropTarget.Promise.Result", result);
+      "Media.GetDisplayMedia.RequiresUserActivationResult", activation);
+}
+
+bool TransientActivationRequirementSatisfied(LocalDOMWindow* window) {
+  DCHECK(window);
+
+  LocalFrame* const frame = window->GetFrame();
+  if (!frame) {
+    return false;  // Err on the side of caution. Intentionally neglect UMA.
+  }
+
+  const Settings* const settings = frame->GetSettings();
+  if (!settings) {
+    return false;  // Err on the side of caution. Intentionally neglect UMA.
+  }
+
+  if (LocalFrame::HasTransientUserActivation(frame) ||
+      (RuntimeEnabledFeatures::
+           CapabilityDelegationDisplayCaptureRequestEnabled() &&
+       window->IsDisplayCaptureRequestTokenActive())) {
+    RecordUma(GetDisplayMediaTransientActivation::kPresent);
+    return true;
+  }
+
+  if (!RuntimeEnabledFeatures::GetDisplayMediaRequiresUserActivationEnabled()) {
+    RecordUma(GetDisplayMediaTransientActivation::kMissingButFeatureDisabled);
+    return true;
+  }
+
+  if (!settings->GetRequireTransientActivationForGetDisplayMedia()) {
+    RecordUma(GetDisplayMediaTransientActivation::kMissingButPolicyOverrides);
+    return true;
+  }
+
+  RecordUma(GetDisplayMediaTransientActivation::kMissing);
+  return false;
+}
+
+#if !BUILDFLAG(IS_ANDROID)
+bool IsExtensionScreenSharingFunctionCall(const MediaStreamConstraints* options,
+                                          ExceptionState& exception_state) {
+  DCHECK(!exception_state.HadException());
+
+  if (!options) {
+    return false;
+  }
+
+  const V8UnionBooleanOrMediaTrackConstraints* const video = options->video();
+  if (!video || video->GetContentType() !=
+                    V8UnionBooleanOrMediaTrackConstraints::ContentType::
+                        kMediaTrackConstraints) {
+    return false;
+  }
+
+  const MediaTrackConstraints* const constraints =
+      video->GetAsMediaTrackConstraints();
+  if (!constraints || !constraints->hasMandatory()) {
+    return false;
+  }
+
+  const HashMap<String, String> map =
+      blink::Dictionary(constraints->mandatory())
+          .GetOwnPropertiesAsStringHashMap(exception_state);
+
+  return !exception_state.HadException() && map.Contains("chromeMediaSourceId");
 }
 #endif
 
-void RecordEnumerateDevicesLatency(base::TimeTicks start_time) {
-  const base::TimeDelta elapsed = base::TimeTicks::Now() - start_time;
-  base::UmaHistogramTimes("WebRTC.EnumerateDevices.Latency", elapsed);
-}
-
 MediaStreamConstraints* ToMediaStreamConstraints(
-    const UserMediaStreamConstraints* source) {
-  MediaStreamConstraints* options = MediaStreamConstraints::Create();
-  if (source->hasAudio())
-    options->setAudio(source->audio());
-  if (source->hasVideo())
-    options->setVideo(source->video());
-  return options;
+    const UserMediaStreamConstraints* source,
+    ExceptionState& exception_state) {
+  DCHECK(source);
+  DCHECK(!exception_state.HadException());
+
+  MediaStreamConstraints* const constraints = MediaStreamConstraints::Create();
+
+  if (source->hasAudio()) {
+    constraints->setAudio(source->audio());
+  }
+
+  if (source->hasVideo()) {
+    constraints->setVideo(source->video());
+  }
+
+#if !BUILDFLAG(IS_ANDROID)
+  if (source->hasController()) {
+    const bool is_screen_sharing =
+        IsExtensionScreenSharingFunctionCall(constraints, exception_state);
+
+    if (exception_state.HadException()) {
+      return nullptr;
+    }
+
+    if (!is_screen_sharing) {
+      exception_state.ThrowDOMException(
+          DOMExceptionCode::kNotSupportedError,
+          "CaptureController supplied for a non-screen-capture call.");
+      return nullptr;
+    }
+
+    constraints->setController(source->controller());
+  }
+#endif
+
+  return constraints;
 }
 
 MediaStreamConstraints* ToMediaStreamConstraints(
     const DisplayMediaStreamOptions* source) {
-  MediaStreamConstraints* options = MediaStreamConstraints::Create();
-  if (source->hasAudio())
-    options->setAudio(source->audio());
-  if (source->hasVideo())
-    options->setVideo(source->video());
-  if (source->hasPreferCurrentTab())
-    options->setPreferCurrentTab(source->preferCurrentTab());
-  if (source->hasAutoSelectAllScreens())
-    options->setAutoSelectAllScreens(source->autoSelectAllScreens());
-  if (source->hasController())
-    options->setController(source->controller());
-  if (source->hasSelfBrowserSurface())
-    options->setSelfBrowserSurface(source->selfBrowserSurface());
-  if (source->hasSystemAudio())
-    options->setSystemAudio(source->systemAudio());
-  if (source->hasSurfaceSwitching())
-    options->setSurfaceSwitching(source->surfaceSwitching());
-  return options;
+  MediaStreamConstraints* const constraints = MediaStreamConstraints::Create();
+  if (source->hasAudio()) {
+    constraints->setAudio(source->audio());
+  }
+  if (source->hasVideo()) {
+    constraints->setVideo(source->video());
+  }
+  if (source->hasPreferCurrentTab()) {
+    constraints->setPreferCurrentTab(source->preferCurrentTab());
+  }
+  if (source->hasAutoSelectAllScreens()) {
+    constraints->setAutoSelectAllScreens(source->autoSelectAllScreens());
+  }
+  if (source->hasController()) {
+    constraints->setController(source->controller());
+  }
+  if (source->hasSelfBrowserSurface()) {
+    constraints->setSelfBrowserSurface(source->selfBrowserSurface());
+  }
+  if (source->hasSystemAudio()) {
+    constraints->setSystemAudio(source->systemAudio());
+  }
+  if (source->hasSurfaceSwitching()) {
+    constraints->setSurfaceSwitching(source->surfaceSwitching());
+  }
+  if (source->hasMonitorTypeSurfaces()) {
+    constraints->setMonitorTypeSurfaces(source->monitorTypeSurfaces());
+  }
+  return constraints;
+}
+
+bool EqualDeviceForDeviceChange(const WebMediaDeviceInfo& lhs,
+                                const WebMediaDeviceInfo& rhs) {
+  return lhs.device_id == rhs.device_id && lhs.label == rhs.label &&
+         lhs.group_id == rhs.group_id && lhs.IsAvailable() == rhs.IsAvailable();
 }
 
 }  // namespace
@@ -224,7 +388,8 @@ MediaDevices* MediaDevices::mediaDevices(Navigator& navigator) {
 }
 
 MediaDevices::MediaDevices(Navigator& navigator)
-    : Supplement<Navigator>(navigator),
+    : ActiveScriptWrappable<MediaDevices>({}),
+      Supplement<Navigator>(navigator),
       ExecutionContextLifecycleObserver(navigator.DomWindow()),
       stopped_(false),
       dispatcher_host_(navigator.GetExecutionContext()),
@@ -234,6 +399,7 @@ MediaDevices::~MediaDevices() = default;
 
 ScriptPromise MediaDevices::enumerateDevices(ScriptState* script_state,
                                              ExceptionState& exception_state) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   UpdateWebRTCMethodCount(RTCAPIName::kEnumerateDevices);
   if (!script_state->ContextIsValid()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
@@ -241,22 +407,27 @@ ScriptPromise MediaDevices::enumerateDevices(ScriptState* script_state,
     return ScriptPromise();
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
-  enumerate_device_requests_.Set(
-      resolver, RequestMetadata{.start_time = base::TimeTicks::Now()});
+  auto* result_tracker = MakeGarbageCollected<
+      ScriptPromiseResolverWithTracker<EnumerateDevicesResult>>(
+      script_state, "Media.MediaDevices.EnumerateDevices", base::Seconds(4));
+  const ScriptPromise promise = result_tracker->Promise();
+
+  enumerate_device_requests_.insert(result_tracker);
 
   LocalFrame* frame = LocalDOMWindow::From(script_state)->GetFrame();
   GetDispatcherHost(frame).EnumerateDevices(
-      true /* audio input */, true /* video input */, true /* audio output */,
-      true /* request_video_input_capabilities */,
-      true /* request_audio_input_capabilities */,
+      /*request_audio_input=*/true, /*request_video_input=*/true,
+      /*request_audio_output=*/true,
+      /*request_video_input_capabilities=*/true,
+      /*request_audio_input_capabilities=*/
+      base::FeatureList::IsEnabled(kEnumerateDevicesRequestAudioCapabilities),
       WTF::BindOnce(&MediaDevices::DevicesEnumerated, WrapPersistent(this),
-                    WrapPersistent(resolver)));
+                    WrapPersistent(result_tracker)));
   return promise;
 }
 
 MediaTrackSupportedConstraints* MediaDevices::getSupportedConstraints() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return MediaTrackSupportedConstraints::Create();
 }
 
@@ -264,34 +435,69 @@ ScriptPromise MediaDevices::getUserMedia(
     ScriptState* script_state,
     const UserMediaStreamConstraints* options,
     ExceptionState& exception_state) {
-  return SendUserMediaRequest(script_state, UserMediaRequestType::kUserMedia,
-                              ToMediaStreamConstraints(options),
-                              exception_state);
-}
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  // This timeout of base::Seconds(8) is an initial value and based on the data
+  // in Media.MediaDevices.GetUserMedia.Latency, it should be iterated upon.
+  auto* resolver = MakeGarbageCollected<
+      ScriptPromiseResolverWithTracker<UserMediaRequestResult>>(
+      script_state, "Media.MediaDevices.GetUserMedia", base::Seconds(8));
 
-ScriptPromise MediaDevices::SendUserMediaRequest(
-    ScriptState* script_state,
-    UserMediaRequestType media_type,
-    const MediaStreamConstraints* options,
-    ExceptionState& exception_state) {
-  if (!script_state->ContextIsValid()) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
-                                      "No media device client available; "
-                                      "is this a detached window?");
+  DCHECK(options);  // Guaranteed by the default value in the IDL.
+  DCHECK(!exception_state.HadException());
+
+  MediaStreamConstraints* const constraints =
+      ToMediaStreamConstraints(options, exception_state);
+  if (!constraints) {
+    DCHECK(exception_state.HadException());
+    resolver->RecordResultAndLatency(
+        UserMediaRequestResult::kInvalidConstraints);
     return ScriptPromise();
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  return SendUserMediaRequest(UserMediaRequestType::kUserMedia, resolver,
+                              constraints, exception_state);
+}
 
-  base::OnceCallback<void(const String&, MediaStreamTrack*, CaptureController*)>
+ScriptPromise MediaDevices::SendUserMediaRequest(
+    UserMediaRequestType media_type,
+    ScriptPromiseResolverWithTracker<UserMediaRequestResult>* resolver,
+    const MediaStreamConstraints* options,
+    ExceptionState& exception_state) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK(!exception_state.HadException());
+
+  ScriptState* script_state = resolver->GetScriptState();
+  if (!script_state->ContextIsValid()) {
+    resolver->RecordAndThrowDOMException(
+        exception_state, DOMExceptionCode::kNotSupportedError,
+        "No media device client available; "
+        "is this a detached window?",
+        UserMediaRequestResult::kContextDestroyed);
+    return ScriptPromise();
+  }
+
+  base::OnceCallback<void(const String&, CaptureController*)>
       on_success_follow_up;
-#if !BUILDFLAG(IS_ANDROID)
-  // TODO(crbug.com/1215480): Don't set on_success_follow_up if no
-  // capture_controller.
-  if (media_type == UserMediaRequestType::kDisplayMedia) {
-    on_success_follow_up = WTF::BindOnce(
-        &MediaDevices::EnqueueMicrotaskToCloseFocusWindowOfOpportunity,
-        WrapWeakPersistent(this));
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+  if (media_type == UserMediaRequestType::kDisplayMedia ||
+      IsExtensionScreenSharingFunctionCall(options, exception_state)) {
+    if (options->hasController()) {
+      on_success_follow_up = WTF::BindOnce(
+          &MediaDevices::EnqueueMicrotaskToCloseFocusWindowOfOpportunity,
+          WrapWeakPersistent(this));
+    } else {
+      // TODO(crbug.com/1381949): Don't wait until the IPC round-trip and have
+      // the browser process focus-switch upon starting the capture.
+      on_success_follow_up =
+          WTF::BindOnce(&MediaDevices::CloseFocusWindowOfOpportunity,
+                        WrapWeakPersistent(this));
+    }
+  }
+
+  if (exception_state.HadException()) {
+    resolver->RecordResultAndLatency(
+        UserMediaRequestResult::kInvalidConstraints);
+    return ScriptPromise();
   }
 #endif
 
@@ -307,69 +513,84 @@ ScriptPromise MediaDevices::SendUserMediaRequest(
     surface = IdentifiableSurface::FromTypeAndToken(
         surface_type, TokenFromConstraints(options));
   }
-  MediaErrorState error_state;
+  ScriptPromise promise = resolver->Promise();
   UserMediaRequest* request =
       UserMediaRequest::Create(window, user_media_client, media_type, options,
-                               callbacks, error_state, surface);
+                               callbacks, exception_state, surface);
   if (!request) {
-    DCHECK(error_state.HadException());
-    if (error_state.CanGenerateException()) {
-      error_state.RaiseException(exception_state);
-      return ScriptPromise();
-    }
-    ScriptPromise rejected_promise = resolver->Promise();
+    DCHECK(exception_state.HadException());
+    resolver->RecordResultAndLatency(
+        UserMediaRequestResult::kInvalidConstraints);
     RecordIdentifiabilityMetric(
         surface, GetExecutionContext(),
-        IdentifiabilityBenignStringToken(error_state.GetErrorMessage()));
-    resolver->Reject(error_state.CreateError());
-    return rejected_promise;
+        IdentifiabilityBenignStringToken(exception_state.Message()));
+    return ScriptPromise();
   }
 
   String error_message;
   if (!request->IsSecureContextUse(error_message)) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
-                                      error_message);
+    resolver->RecordAndThrowDOMException(
+        exception_state, DOMExceptionCode::kNotSupportedError, error_message,
+        UserMediaRequestResult::kInsecureContext);
     return ScriptPromise();
   }
-  auto promise = resolver->Promise();
+
+#if !BUILDFLAG(IS_ANDROID)
+  if (media_type == UserMediaRequestType::kDisplayMedia) {
+    window->ConsumeDisplayCaptureRequestToken();
+  }
+#endif
+
   request->Start();
   return promise;
 }
 
-ScriptPromise MediaDevices::getDisplayMediaSet(
+ScriptPromise MediaDevices::getAllScreensMedia(
     ScriptState* script_state,
-    const DisplayMediaStreamOptions* options,
     ExceptionState& exception_state) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  // This timeout of base::Seconds(6) is an initial value and based on the data
+  // in Media.MediaDevices.GetAllScreensMedia.Latency, it should be iterated
+  // upon.
+  auto* resolver = MakeGarbageCollected<
+      ScriptPromiseResolverWithTracker<UserMediaRequestResult>>(
+      script_state, "Media.MediaDevices.GetAllScreensMedia", base::Seconds(6));
+
   ExecutionContext* const context = GetExecutionContext();
   if (!context) {
-    exception_state.ThrowDOMException(
-        DOMExceptionCode::kInvalidStateError,
-        "No media device client available; is this a detached window?");
+    resolver->RecordAndThrowDOMException(
+        exception_state, DOMExceptionCode::kInvalidStateError,
+        "No media device client available; is this a detached window?",
+        UserMediaRequestResult::kContextDestroyed);
     return ScriptPromise();
   }
 
-  return SendUserMediaRequest(
-      script_state, UserMediaRequestType::kDisplayMediaSet,
-      ToMediaStreamConstraints(options), exception_state);
+  MediaStreamConstraints* constraints = MediaStreamConstraints::Create();
+  constraints->setVideo(
+      MakeGarbageCollected<V8UnionBooleanOrMediaTrackConstraints>(true));
+  constraints->setAutoSelectAllScreens(true);
+  return SendUserMediaRequest(UserMediaRequestType::kAllScreensMedia, resolver,
+                              constraints, exception_state);
 }
 
 ScriptPromise MediaDevices::getDisplayMedia(
     ScriptState* script_state,
     const DisplayMediaStreamOptions* options,
     ExceptionState& exception_state) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   LocalDOMWindow* const window = DomWindow();
-  if (!window) {
-    exception_state.ThrowDOMException(
-        DOMExceptionCode::kInvalidStateError,
-        "No local DOM window; is this a detached window?");
-    return ScriptPromise();
-  }
+  // This timeout of base::Seconds(6) is an initial value and based on the data
+  // in Media.MediaDevices.GetDisplayMedia.Latency, it should be iterated upon.
+  auto* resolver = MakeGarbageCollected<
+      ScriptPromiseResolverWithTracker<UserMediaRequestResult>>(
+      script_state, "Media.MediaDevices.GetDisplayMedia", base::Seconds(6));
 
-  // Measure calls without transient activation as required by spec in
-  // https://github.com/w3c/mediacapture-screen-share/pull/106
-  if (!LocalFrame::HasTransientUserActivation(window->GetFrame())) {
-    UseCounter::Count(window,
-                      WebFeature::kGetDisplayMediaWithoutUserActivation);
+  if (!window) {
+    resolver->RecordAndThrowDOMException(
+        exception_state, DOMExceptionCode::kInvalidStateError,
+        "No local DOM window; is this a detached window?",
+        UserMediaRequestResult::kContextDestroyed);
+    return ScriptPromise();
   }
 
   const bool capture_allowed_by_permissions_policy = window->IsFeatureEnabled(
@@ -383,38 +604,61 @@ ScriptPromise MediaDevices::getDisplayMedia(
           : DisplayCapturePolicyResult::kDisallowed);
 
   if (!capture_allowed_by_permissions_policy) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kNotAllowedError,
-                                      kFeaturePolicyBlocked);
+    resolver->RecordAndThrowDOMException(
+        exception_state, DOMExceptionCode::kNotAllowedError,
+        kFeaturePolicyBlocked, UserMediaRequestResult::kNotAllowedError);
+    return ScriptPromise();
+  }
+
+  if (!TransientActivationRequirementSatisfied(window)) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kInvalidStateError,
+        "getDisplayMedia() requires transient activation (user gesture).");
     return ScriptPromise();
   }
 
   if (options->hasAutoSelectAllScreens() && options->autoSelectAllScreens()) {
-    exception_state.ThrowTypeError(
+    resolver->RecordAndThrowTypeError(
+        exception_state,
         "The autoSelectAllScreens property is not allowed for usage with "
-        "getDisplayMedia.");
+        "getDisplayMedia.",
+        UserMediaRequestResult::kInvalidConstraints);
     return ScriptPromise();
   }
 
   if (CaptureController* const capture_controller =
           options->getControllerOr(nullptr)) {
     if (capture_controller->IsBound()) {
-      exception_state.ThrowDOMException(
-          DOMExceptionCode::kInvalidStateError,
-          "setFocusBehavior() can only be called before getDisplayMedia() or "
-          "immediately after.");
+      resolver->RecordAndThrowDOMException(
+          exception_state, DOMExceptionCode::kInvalidStateError,
+          "A CaptureController object may only be used with a single "
+          "getDisplayMedia() invocation.",
+          UserMediaRequestResult::kInvalidStateError);
+
       return ScriptPromise();
     }
     capture_controller->SetIsBound(true);
   }
 
-  return SendUserMediaRequest(script_state, UserMediaRequestType::kDisplayMedia,
-                              ToMediaStreamConstraints(options),
-                              exception_state);
+  MediaStreamConstraints* const constraints = ToMediaStreamConstraints(options);
+  if (!options->hasSelfBrowserSurface() &&
+      (!options->hasPreferCurrentTab() || !options->preferCurrentTab())) {
+    constraints->setSelfBrowserSurface("exclude");
+  }
+
+  if (options->hasPreferCurrentTab() && options->preferCurrentTab()) {
+    UseCounter::Count(window,
+                      WebFeature::kGetDisplayMediaWithPreferCurrentTabTrue);
+  }
+
+  return SendUserMediaRequest(UserMediaRequestType::kDisplayMedia, resolver,
+                              constraints, exception_state);
 }
 
 void MediaDevices::setCaptureHandleConfig(ScriptState* script_state,
                                           const CaptureHandleConfig* config,
                                           ExceptionState& exception_state) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(config->hasExposeOrigin());
   DCHECK(config->hasHandle());
 
@@ -473,12 +717,16 @@ void MediaDevices::setCaptureHandleConfig(ScriptState* script_state,
       .SetCaptureHandleConfig(std::move(config_ptr));
 }
 
-ScriptPromise MediaDevices::ProduceCropTarget(ScriptState* script_state,
-                                              Element* element,
-                                              ExceptionState& exception_state) {
-  DCHECK(IsMainThread());
+ScriptPromise MediaDevices::ProduceSubCaptureTarget(
+    ScriptState* script_state,
+    Element* element,
+    ExceptionState& exception_state,
+    SubCaptureTarget::Type type) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  CHECK(type == SubCaptureTarget::Type::kCropTarget ||
+        type == SubCaptureTarget::Type::kRestrictionTarget);
 
-#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
   exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
                                     "Unsupported.");
   return ScriptPromise();
@@ -486,69 +734,84 @@ ScriptPromise MediaDevices::ProduceCropTarget(ScriptState* script_state,
   if (!script_state->ContextIsValid()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
                                       "Current frame is detached.");
-    RecordUma(ProduceCropTargetFunctionResult::kInvalidContext);
+    RecordUma(type, ProduceTargetFunctionResult::kInvalidContext);
     return ScriptPromise();
   }
 
   LocalDOMWindow* const window = To<LocalDOMWindow>(GetExecutionContext());
   if (!window) {
-    RecordUma(ProduceCropTargetFunctionResult::kGenericError);
+    RecordUma(type, ProduceTargetFunctionResult::kGenericError);
     exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
                                       "Missing execution context.");
     return ScriptPromise();
   }
 
-  if (!element || !element->IsSupportedByRegionCapture()) {
-    exception_state.ThrowDOMException(
-        DOMExceptionCode::kNotSupportedError,
-        "Support for this subtype is not yet implemented.");
+  if (!element) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
+                                      "Invalid element.");
     return ScriptPromise();
   }
 
   if (GetExecutionContext() != element->GetExecutionContext()) {
-    RecordUma(ProduceCropTargetFunctionResult::
-                  kElementAndMediaDevicesNotInSameExecutionContext);
+    RecordUma(type, ProduceTargetFunctionResult::
+                        kElementAndMediaDevicesNotInSameExecutionContext);
     exception_state.ThrowDOMException(
         DOMExceptionCode::kNotSupportedError,
         "The Element and the MediaDevices object must be same-window.");
     return ScriptPromise();
   }
 
-  const RegionCaptureCropId* const old_crop_id =
-      element->GetRegionCaptureCropId();
-  if (old_crop_id) {
-    // The Element has a crop-ID which was previously produced.
-    DCHECK(!old_crop_id->value().is_zero());
-    auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  if ((type == SubCaptureTarget::Type::kCropTarget &&
+       element->GetRegionCaptureCropId()) ||
+      (type == SubCaptureTarget::Type::kRestrictionTarget &&
+       element->GetRestrictionTargetId())) {
+    // A token was produced earlier and associated with the Element.
+    const base::Token token = (type == SubCaptureTarget::Type::kCropTarget)
+                                  ? element->GetRegionCaptureCropId()->value()
+                                  : element->GetRestrictionTargetId()->value();
+    DCHECK(!token.is_zero());
+    auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+        script_state, exception_state.GetContext());
     const ScriptPromise promise = resolver->Promise();
-    resolver->Resolve(MakeGarbageCollected<CropTarget>(WTF::String(
-        blink::TokenToGUID(old_crop_id->value()).AsLowercaseString())));
+    const WTF::String token_str(blink::TokenToGUID(token).AsLowercaseString());
+    if (type == SubCaptureTarget::Type::kCropTarget) {
+      resolver->Resolve(MakeGarbageCollected<CropTarget>(token_str));
+    } else {  // kRestrictionTarget
+      resolver->Resolve(MakeGarbageCollected<RestrictionTarget>(token_str));
+    }
     RecordUma(
-        ProduceCropTargetFunctionResult::kDuplicateCallAfterPromiseResolution);
+        type,
+        ProduceTargetFunctionResult::kDuplicateCallAfterPromiseResolution);
     return promise;
   }
 
-  const auto it = crop_id_resolvers_.find(element);
-  if (it != crop_id_resolvers_.end()) {
-    // The Element does not yet have a crop-ID, but the production of one
-    // has already been kicked off, and a response will soon arrive from
-    // the browser process. The Promise we return here will be resolved along
-    // with the original one.
+  ElementToResolverMap& map = GetResolverMap(type);
+  const auto it = map.find(element);
+  if (it != map.end()) {
+    // The Element does not yet have the SubCaptureTarget attached,
+    // but the production of one has already been kicked off, and a response
+    // will soon arrive from the browser process.
+    // The Promise we return here will be resolved along with the original one.
     RecordUma(
-        ProduceCropTargetFunctionResult::kDuplicateCallBeforePromiseResolution);
+        type,
+        ProduceTargetFunctionResult::kDuplicateCallBeforePromiseResolution);
     return it->value->Promise();
   }
 
-  // Mints a new crop-ID on the browser process. Resolve when it's produced
-  // and ready to be used.
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  crop_id_resolvers_.insert(element, resolver);
+  // Mints a new ID on the browser process.
+  // Resolves after it has been produced and is ready to be used.
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
+  map.insert(element, resolver);
   const ScriptPromise promise = resolver->Promise();
+
+  base::OnceCallback callback =
+      WTF::BindOnce(&MediaDevices::ResolveSubCaptureTargetPromise,
+                    WrapPersistent(this), WrapPersistent(element), type);
   GetDispatcherHost(window->GetFrame())
-      .ProduceCropId(WTF::BindOnce(&MediaDevices::ResolveProduceCropIdPromise,
-                                   WrapPersistent(this),
-                                   WrapPersistent(element)));
-  RecordUma(ProduceCropTargetFunctionResult::kPromiseProduced);
+      .ProduceSubCaptureTargetId(type, std::move(callback));
+
+  RecordUma(type, ProduceTargetFunctionResult::kPromiseProduced);
   return promise;
 #endif
 }
@@ -558,11 +821,12 @@ const AtomicString& MediaDevices::InterfaceName() const {
 }
 
 ExecutionContext* MediaDevices::GetExecutionContext() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return ExecutionContextLifecycleObserver::GetExecutionContext();
 }
 
 void MediaDevices::RemoveAllEventListeners() {
-  EventTargetWithInlineData::RemoveAllEventListeners();
+  EventTarget::RemoveAllEventListeners();
   DCHECK(!HasEventListeners());
   StopObserving();
 }
@@ -570,28 +834,31 @@ void MediaDevices::RemoveAllEventListeners() {
 void MediaDevices::AddedEventListener(
     const AtomicString& event_type,
     RegisteredEventListener& registered_listener) {
-  EventTargetWithInlineData::AddedEventListener(event_type,
-                                                registered_listener);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  EventTarget::AddedEventListener(event_type, registered_listener);
   StartObserving();
 }
 
 void MediaDevices::RemovedEventListener(
     const AtomicString& event_type,
     const RegisteredEventListener& registered_listener) {
-  EventTargetWithInlineData::RemovedEventListener(event_type,
-                                                  registered_listener);
-  if (!HasEventListeners())
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  EventTarget::RemovedEventListener(event_type, registered_listener);
+  if (!HasEventListeners()) {
     StopObserving();
+  }
 }
 
 bool MediaDevices::HasPendingActivity() const {
-  DCHECK(stopped_ || receiver_.is_bound() == HasEventListeners());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return receiver_.is_bound();
 }
 
 void MediaDevices::ContextDestroyed() {
-  if (stopped_)
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (stopped_) {
     return;
+  }
 
   stopped_ = true;
   enumerate_device_requests_.clear();
@@ -600,19 +867,25 @@ void MediaDevices::ContextDestroyed() {
 void MediaDevices::OnDevicesChanged(
     mojom::blink::MediaDeviceType type,
     const Vector<WebMediaDeviceInfo>& device_infos) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(GetExecutionContext());
+  if (base::ranges::equal(current_device_infos_[static_cast<wtf_size_t>(type)],
+                          device_infos, EqualDeviceForDeviceChange)) {
+    return;
+  }
 
-  if (RuntimeEnabledFeatures::OnDeviceChangeEnabled())
+  current_device_infos_[static_cast<wtf_size_t>(type)] = device_infos;
+  if (RuntimeEnabledFeatures::OnDeviceChangeEnabled()) {
     ScheduleDispatchEvent(Event::Create(event_type_names::kDevicechange));
-
-  if (device_change_test_callback_)
-    std::move(device_change_test_callback_).Run();
+  }
 }
 
 void MediaDevices::ScheduleDispatchEvent(Event* event) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   scheduled_events_.push_back(event);
-  if (dispatch_scheduled_events_task_handle_.IsActive())
+  if (dispatch_scheduled_events_task_handle_.IsActive()) {
     return;
+  }
 
   auto* context = GetExecutionContext();
   DCHECK(context);
@@ -623,22 +896,58 @@ void MediaDevices::ScheduleDispatchEvent(Event* event) {
 }
 
 void MediaDevices::DispatchScheduledEvents() {
-  if (stopped_)
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (stopped_) {
     return;
+  }
   HeapVector<Member<Event>> events;
   events.swap(scheduled_events_);
 
-  for (const auto& event : events)
+  for (const auto& event : events) {
     DispatchEvent(*event);
+  }
 }
 
 void MediaDevices::StartObserving() {
-  if (receiver_.is_bound() || stopped_)
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (receiver_.is_bound() || stopped_ || starting_observation_) {
     return;
+  }
 
   LocalDOMWindow* window = To<LocalDOMWindow>(GetExecutionContext());
-  if (!window)
+  if (!window) {
     return;
+  }
+
+  starting_observation_ = true;
+  GetDispatcherHost(window->GetFrame())
+      .EnumerateDevices(/*request_audio_input=*/true,
+                        /*request_video_input=*/true,
+                        /*request_audio_output=*/true,
+                        /*request_video_input_capabilities=*/false,
+                        /*request_audio_input_capabilities=*/false,
+                        WTF::BindOnce(&MediaDevices::FinalizeStartObserving,
+                                      WrapPersistent(this)));
+}
+
+void MediaDevices::FinalizeStartObserving(
+    const Vector<Vector<WebMediaDeviceInfo>>& enumeration,
+    Vector<mojom::blink::VideoInputDeviceCapabilitiesPtr>
+        video_input_capabilities,
+    Vector<mojom::blink::AudioInputDeviceCapabilitiesPtr>
+        audio_input_capabilities) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  starting_observation_ = false;
+  if (receiver_.is_bound() || stopped_) {
+    return;
+  }
+
+  LocalDOMWindow* window = To<LocalDOMWindow>(GetExecutionContext());
+  if (!window) {
+    return;
+  }
+
+  current_device_infos_ = enumeration;
 
   GetDispatcherHost(window->GetFrame())
       .AddMediaDevicesListener(true /* audio input */, true /* video input */,
@@ -649,22 +958,23 @@ void MediaDevices::StartObserving() {
 }
 
 void MediaDevices::StopObserving() {
-  if (!receiver_.is_bound())
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!receiver_.is_bound()) {
     return;
+  }
   receiver_.reset();
 }
 
 namespace {
 
-void RecordEnumeratedDevices(ScriptPromiseResolver* resolver,
+void RecordEnumeratedDevices(ScriptState* script_state,
                              const MediaDeviceInfoVector& media_devices) {
   if (!IdentifiabilityStudySettings::Get()->ShouldSampleWebFeature(
           WebFeature::kIdentifiabilityMediaDevicesEnumerateDevices)) {
     return;
   }
-  Document* document = LocalDOMWindow::From(resolver->GetScriptState())
-                           ->GetFrame()
-                           ->GetDocument();
+  Document* document =
+      LocalDOMWindow::From(script_state)->GetFrame()->GetDocument();
   IdentifiableTokenBuilder builder;
   for (const auto& device_info : media_devices) {
     // Ignore device_id since that varies per-site.
@@ -681,37 +991,38 @@ void RecordEnumeratedDevices(ScriptPromiseResolver* resolver,
 }  // namespace
 
 void MediaDevices::DevicesEnumerated(
-    ScriptPromiseResolver* resolver,
+    ScriptPromiseResolverWithTracker<EnumerateDevicesResult>* result_tracker,
     const Vector<Vector<WebMediaDeviceInfo>>& enumeration,
     Vector<mojom::blink::VideoInputDeviceCapabilitiesPtr>
         video_input_capabilities,
     Vector<mojom::blink::AudioInputDeviceCapabilitiesPtr>
         audio_input_capabilities) {
-  if (!enumerate_device_requests_.Contains(resolver))
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!enumerate_device_requests_.Contains(result_tracker)) {
     return;
+  }
 
-  RequestMetadata request_metadata = enumerate_device_requests_.at(resolver);
+  enumerate_device_requests_.erase(result_tracker);
 
-  enumerate_device_requests_.erase(resolver);
-
-  if (!resolver->GetExecutionContext() ||
-      resolver->GetExecutionContext()->IsContextDestroyed()) {
+  ScriptState* script_state = result_tracker->GetScriptState();
+  if (!script_state || !ExecutionContext::From(script_state) ||
+      ExecutionContext::From(script_state)->IsContextDestroyed()) {
     return;
   }
 
   DCHECK_EQ(static_cast<wtf_size_t>(
-                mojom::blink::MediaDeviceType::NUM_MEDIA_DEVICE_TYPES),
+                mojom::blink::MediaDeviceType::kNumMediaDeviceTypes),
             enumeration.size());
 
   if (!video_input_capabilities.empty()) {
     DCHECK_EQ(enumeration[static_cast<wtf_size_t>(
-                              mojom::blink::MediaDeviceType::MEDIA_VIDEO_INPUT)]
+                              mojom::blink::MediaDeviceType::kMediaVideoInput)]
                   .size(),
               video_input_capabilities.size());
   }
   if (!audio_input_capabilities.empty()) {
     DCHECK_EQ(enumeration[static_cast<wtf_size_t>(
-                              mojom::blink::MediaDeviceType::MEDIA_AUDIO_INPUT)]
+                              mojom::blink::MediaDeviceType::kMediaAudioInput)]
                   .size(),
               audio_input_capabilities.size());
   }
@@ -719,28 +1030,25 @@ void MediaDevices::DevicesEnumerated(
   MediaDeviceInfoVector media_devices;
   for (wtf_size_t i = 0;
        i < static_cast<wtf_size_t>(
-               mojom::blink::MediaDeviceType::NUM_MEDIA_DEVICE_TYPES);
+               mojom::blink::MediaDeviceType::kNumMediaDeviceTypes);
        ++i) {
     for (wtf_size_t j = 0; j < enumeration[i].size(); ++j) {
       mojom::blink::MediaDeviceType device_type =
           static_cast<mojom::blink::MediaDeviceType>(i);
       WebMediaDeviceInfo device_info = enumeration[i][j];
       String device_label = String::FromUTF8(device_info.label);
-      if (device_label.Contains("AirPods")) {
-        device_label = "AirPods";
-      }
-      if (device_type == mojom::blink::MediaDeviceType::MEDIA_AUDIO_INPUT ||
-          device_type == mojom::blink::MediaDeviceType::MEDIA_VIDEO_INPUT) {
+      if (device_type == mojom::blink::MediaDeviceType::kMediaAudioInput ||
+          device_type == mojom::blink::MediaDeviceType::kMediaVideoInput) {
         InputDeviceInfo* input_device_info =
             MakeGarbageCollected<InputDeviceInfo>(
                 String::FromUTF8(device_info.device_id), device_label,
                 String::FromUTF8(device_info.group_id), device_type);
-        if (device_type == mojom::blink::MediaDeviceType::MEDIA_VIDEO_INPUT &&
+        if (device_type == mojom::blink::MediaDeviceType::kMediaVideoInput &&
             !video_input_capabilities.empty()) {
           input_device_info->SetVideoInputCapabilities(
               std::move(video_input_capabilities[j]));
         }
-        if (device_type == mojom::blink::MediaDeviceType::MEDIA_AUDIO_INPUT &&
+        if (device_type == mojom::blink::MediaDeviceType::kMediaAudioInput &&
             !audio_input_capabilities.empty()) {
           input_device_info->SetAudioInputCapabilities(
               std::move(audio_input_capabilities[j]));
@@ -754,33 +1062,26 @@ void MediaDevices::DevicesEnumerated(
     }
   }
 
-  RecordEnumeratedDevices(resolver, media_devices);
-  RecordEnumerateDevicesLatency(request_metadata.start_time);
-
-  if (enumerate_devices_test_callback_)
-    std::move(enumerate_devices_test_callback_).Run(media_devices);
-
-  resolver->Resolve(media_devices);
+  RecordEnumeratedDevices(result_tracker->GetScriptState(), media_devices);
+  result_tracker->Resolve(media_devices);
 }
 
 void MediaDevices::OnDispatcherHostConnectionError() {
-  for (auto& entry : enumerate_device_requests_) {
-    ScriptPromiseResolver* resolver = entry.key;
-    RequestMetadata& metadata = entry.value;
-
-    RecordEnumerateDevicesLatency(metadata.start_time);
-    resolver->Reject(MakeGarbageCollected<DOMException>(
-        DOMExceptionCode::kAbortError, "enumerateDevices() failed."));
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  for (ScriptPromiseResolverWithTracker<EnumerateDevicesResult>*
+           result_tracker : enumerate_device_requests_) {
+    result_tracker->Reject(
+        MakeGarbageCollected<DOMException>(DOMExceptionCode::kAbortError,
+                                           "enumerateDevices() failed."),
+        EnumerateDevicesResult::kErrorMediaDevicesDispatcherHostDisconnected);
   }
   enumerate_device_requests_.clear();
   dispatcher_host_.reset();
-
-  if (connection_error_test_callback_)
-    std::move(connection_error_test_callback_).Run();
 }
 
 mojom::blink::MediaDevicesDispatcherHost& MediaDevices::GetDispatcherHost(
     LocalFrame* frame) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   ExecutionContext* const execution_context = GetExecutionContext();
   DCHECK(execution_context);
 
@@ -802,6 +1103,7 @@ mojom::blink::MediaDevicesDispatcherHost& MediaDevices::GetDispatcherHost(
 void MediaDevices::SetDispatcherHostForTesting(
     mojo::PendingRemote<mojom::blink::MediaDevicesDispatcherHost>
         dispatcher_host) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   ExecutionContext* const execution_context = GetExecutionContext();
   DCHECK(execution_context);
 
@@ -819,35 +1121,44 @@ void MediaDevices::Trace(Visitor* visitor) const {
   visitor->Trace(scheduled_events_);
   visitor->Trace(enumerate_device_requests_);
 #if !BUILDFLAG(IS_ANDROID)
-  visitor->Trace(crop_id_resolvers_);
+  visitor->Trace(crop_target_resolvers_);
+  visitor->Trace(restriction_target_resolvers_);
 #endif
   Supplement<Navigator>::Trace(visitor);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
 }
 
-#if !BUILDFLAG(IS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+MediaDevices::ElementToResolverMap& MediaDevices::GetResolverMap(
+    SubCaptureTarget::Type type) {
+  switch (type) {
+    case SubCaptureTarget::Type::kCropTarget:
+      return crop_target_resolvers_;
+    case SubCaptureTarget::Type::kRestrictionTarget:
+      return restriction_target_resolvers_;
+  }
+  NOTREACHED_NORETURN();
+}
+
 void MediaDevices::EnqueueMicrotaskToCloseFocusWindowOfOpportunity(
     const String& id,
-    MediaStreamTrack* track,
     CaptureController* capture_controller) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   ExecutionContext* const context = GetExecutionContext();
-  if (!context)
+  if (!context) {
     return;
+  }
 
   context->GetAgent()->event_loop()->EnqueueMicrotask(WTF::BindOnce(
       &MediaDevices::CloseFocusWindowOfOpportunity, WrapWeakPersistent(this),
-      id, WrapWeakPersistent(track), WrapWeakPersistent(capture_controller)));
+      id, WrapWeakPersistent(capture_controller)));
 }
 
 void MediaDevices::CloseFocusWindowOfOpportunity(
     const String& id,
-    MediaStreamTrack* track,
     CaptureController* capture_controller) {
-  if (!track) {
-    return;
-  }
-
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   ExecutionContext* const context = GetExecutionContext();
   if (!context) {
     return;  // Note: We're still back by the browser-side timer.
@@ -858,42 +1169,47 @@ void MediaDevices::CloseFocusWindowOfOpportunity(
     return;
   }
 
-  DCHECK(!capture_controller ||
-         RuntimeEnabledFeatures::ConditionalFocusEnabled(context));
-  if (RuntimeEnabledFeatures::ConditionalFocusEnabled(context) &&
-      capture_controller) {
+  if (capture_controller) {
     capture_controller->FinalizeFocusDecision();
   }
-
-  // Inform the track that further calls to focus() should raise an exception.
-  track->CloseFocusWindowOfOpportunity();
 
   GetDispatcherHost(window->GetFrame()).CloseFocusWindowOfOpportunity(id);
 }
 
-// An empty |crop_id| signals failure; anything else has to be a valid GUID
+// An empty |id| signals failure; anything else has to be a valid GUID
 // and signals success.
-void MediaDevices::ResolveProduceCropIdPromise(Element* element,
-                                               const WTF::String& crop_id) {
-  DCHECK(IsMainThread());
-  DCHECK(element);  // Persistent.
+void MediaDevices::ResolveSubCaptureTargetPromise(Element* element,
+                                                  SubCaptureTarget::Type type,
+                                                  const WTF::String& id) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  CHECK(type == SubCaptureTarget::Type::kCropTarget ||
+        type == SubCaptureTarget::Type::kRestrictionTarget);
+  CHECK(element);  // Persistent.
 
-  const auto it = crop_id_resolvers_.find(element);
-  DCHECK_NE(it, crop_id_resolvers_.end());
+  ElementToResolverMap& map = GetResolverMap(type);
+  const auto it = map.find(element);
+  DCHECK_NE(it, map.end());
   ScriptPromiseResolver* const resolver = it->value;
-  crop_id_resolvers_.erase(it);
+  map.erase(it);
 
-  if (crop_id.empty()) {
+  if (id.empty()) {
     resolver->Reject();
-    RecordUma(ProduceCropTargetPromiseResult::kPromiseRejected);
-  } else {
-    const base::GUID guid = base::GUID::ParseLowercase(crop_id.Ascii());
-    DCHECK(guid.is_valid());
+    RecordUma(type, ProduceTargetPromiseResult::kPromiseRejected);
+    return;
+  }
+
+  const base::Uuid guid = base::Uuid::ParseLowercase(id.Ascii());
+  DCHECK(guid.is_valid());
+  if (type == SubCaptureTarget::Type::kCropTarget) {
     element->SetRegionCaptureCropId(
         std::make_unique<RegionCaptureCropId>(blink::GUIDToToken(guid)));
-    resolver->Resolve(MakeGarbageCollected<CropTarget>(crop_id));
-    RecordUma(ProduceCropTargetPromiseResult::kPromiseResolved);
+    resolver->Resolve(MakeGarbageCollected<CropTarget>(id));
+  } else {  // kRestrictionTarget as per earlier CHECK.
+    element->SetRestrictionTargetId(
+        std::make_unique<RestrictionTargetId>(blink::GUIDToToken(guid)));
+    resolver->Resolve(MakeGarbageCollected<RestrictionTarget>(id));
   }
+  RecordUma(type, ProduceTargetPromiseResult::kPromiseResolved);
 }
 #endif
 

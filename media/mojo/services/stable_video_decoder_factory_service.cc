@@ -4,7 +4,7 @@
 
 #include "media/mojo/services/stable_video_decoder_factory_service.h"
 
-#include "base/command_line.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "components/viz/common/switches.h"
 #include "gpu/config/gpu_driver_bug_workarounds.h"
@@ -14,7 +14,6 @@
 #include "media/gpu/buildflags.h"
 #include "media/gpu/chromeos/platform_video_frame_pool.h"
 #include "media/gpu/chromeos/video_decoder_pipeline.h"
-#include "media/gpu/chromeos/video_frame_converter.h"
 #include "media/gpu/gpu_video_accelerator_util.h"
 #include "media/gpu/gpu_video_decode_accelerator_factory.h"
 #include "media/gpu/gpu_video_decode_accelerator_helpers.h"
@@ -35,7 +34,11 @@ namespace {
 // like its |gpu_task_runner_| and |media_gpu_channel_manager_| members.
 class MojoMediaClientImpl : public MojoMediaClient {
  public:
-  MojoMediaClientImpl() = default;
+  MojoMediaClientImpl(const gpu::GpuFeatureInfo& gpu_feature_info,
+                      bool enable_direct_video_decoder)
+      : gpu_driver_bug_workarounds_(
+            gpu_feature_info.enabled_gpu_driver_bug_workarounds),
+        enable_direct_video_decoder_(enable_direct_video_decoder) {}
   MojoMediaClientImpl(const MojoMediaClientImpl&) = delete;
   MojoMediaClientImpl& operator=(const MojoMediaClientImpl&) = delete;
   ~MojoMediaClientImpl() override = default;
@@ -43,21 +46,23 @@ class MojoMediaClientImpl : public MojoMediaClient {
   // MojoMediaClient implementation.
   std::vector<SupportedVideoDecoderConfig> GetSupportedVideoDecoderConfigs()
       final {
-    // TODO(b/195769334): we should pass meaningful gpu::GpuPreferences and
-    // gpu::GpuDriverBugWorkarounds so that we can restrict the supported
-    // configurations using that facility.
     absl::optional<std::vector<SupportedVideoDecoderConfig>> configs;
     switch (GetDecoderImplementationType()) {
       case VideoDecoderType::kVaapi:
       case VideoDecoderType::kV4L2:
         configs = VideoDecoderPipeline::GetSupportedConfigs(
-            gpu::GpuDriverBugWorkarounds());
+            GetDecoderImplementationType(), gpu_driver_bug_workarounds_);
         break;
       case VideoDecoderType::kVda: {
+        // Note that we pass a default-constructed gpu::GpuPreferences.
+        // GpuVideoDecodeAcceleratorFactory::GetDecoderCapabilities() uses the
+        // preferences only to check if accelerated video decoding is disabled.
+        // However, if we're here, we know that accelerated video decoding is
+        // enabled since the browser process checks for this.
         VideoDecodeAccelerator::Capabilities capabilities =
             GpuVideoAcceleratorUtil::ConvertGpuToMediaDecodeCapabilities(
                 GpuVideoDecodeAcceleratorFactory::GetDecoderCapabilities(
-                    gpu::GpuPreferences(), gpu::GpuDriverBugWorkarounds()));
+                    gpu::GpuPreferences(), gpu_driver_bug_workarounds_));
         configs = ConvertFromSupportedProfiles(
             capabilities.supported_profiles,
             capabilities.flags & VideoDecodeAccelerator::Capabilities::
@@ -70,12 +75,9 @@ class MojoMediaClientImpl : public MojoMediaClient {
     return configs.value_or(std::vector<SupportedVideoDecoderConfig>{});
   }
   VideoDecoderType GetDecoderImplementationType() final {
-#if BUILDFLAG(IS_CHROMEOS)
-    if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-            ::switches::kPlatformDisallowsChromeOSDirectVideoDecoder)) {
+    if (!enable_direct_video_decoder_) {
       return VideoDecoderType::kVda;
     }
-#endif  // BUILDFLAG(IS_CHROMEOS)
 
     // TODO(b/195769334): how can we keep this in sync with
     // VideoDecoderPipeline::GetDecoderType()?
@@ -89,7 +91,7 @@ class MojoMediaClientImpl : public MojoMediaClient {
 #endif
   }
   std::unique_ptr<VideoDecoder> CreateVideoDecoder(
-      scoped_refptr<base::SingleThreadTaskRunner> task_runner,
+      scoped_refptr<base::SequencedTaskRunner> task_runner,
       MediaLog* media_log,
       mojom::CommandBufferIdPtr command_buffer_id,
       RequestOverlayInfoCB request_overlay_info_cb,
@@ -112,25 +114,27 @@ class MojoMediaClientImpl : public MojoMediaClient {
             {base::WithBaseSyncPrimitives(), base::MayBlock()},
             base::SingleThreadTaskRunnerThreadMode::DEDICATED);
       }
-      // TODO(b/195769334): we should pass meaningful gpu::Preferences and
-      // gpu::GpuDriverBugWorkarounds so that we can restrict the supported
-      // configurations using that facility.
+      // Note that we pass a default-constructed gpu::GpuPreferences.
+      // VdaVideoDecoder::Create() uses the preferences only to check if
+      // accelerated video decoding is disabled. However, if we're here, we know
+      // that accelerated video decoding is enabled since the browser process
+      // checks for this.
       return VdaVideoDecoder::Create(
           /*parent_task_runner=*/std::move(task_runner), gpu_task_runner_,
           std::move(log), target_color_space, gpu::GpuPreferences(),
-          gpu::GpuDriverBugWorkarounds(),
+          gpu_driver_bug_workarounds_,
           /*get_stub_cb=*/base::NullCallback(),
-          VideoDecodeAccelerator::Config::OutputMode::IMPORT);
+          VideoDecodeAccelerator::Config::OutputMode::kImport);
     } else {
       return VideoDecoderPipeline::Create(
-          // TODO(b/195769334): we should pass a meaningful
-          // gpu::GpuDriverBugWorkarounds so that we can restrict the supported
-          // configurations using that facility.
-          gpu::GpuDriverBugWorkarounds(),
+          gpu_driver_bug_workarounds_,
           /*client_task_runner=*/std::move(task_runner),
           std::make_unique<PlatformVideoFramePool>(),
-          std::make_unique<media::VideoFrameConverter>(), std::move(log),
-          /*oop_video_decoder=*/{});
+          /*frame_converter=*/nullptr,
+          VideoDecoderPipeline::DefaultPreferredRenderableFourccs(),
+          std::move(log),
+          /*oop_video_decoder=*/{},
+          /*in_video_decoder_process=*/true);
     }
   }
 
@@ -147,13 +151,19 @@ class MojoMediaClientImpl : public MojoMediaClient {
   // case the VdaVideoDecoder or any of the underlying components rely on a
   // separate GPU thread.
   scoped_refptr<base::SingleThreadTaskRunner> gpu_task_runner_;
+  const gpu::GpuDriverBugWorkarounds gpu_driver_bug_workarounds_;
+  const bool enable_direct_video_decoder_;
 };
 
 }  // namespace
 
-StableVideoDecoderFactoryService::StableVideoDecoderFactoryService()
+StableVideoDecoderFactoryService::StableVideoDecoderFactoryService(
+    const gpu::GpuFeatureInfo& gpu_feature_info,
+    bool enable_direct_video_decoder)
     : receiver_(this),
-      mojo_media_client_(std::make_unique<MojoMediaClientImpl>()) {
+      mojo_media_client_(
+          std::make_unique<MojoMediaClientImpl>(gpu_feature_info,
+                                                enable_direct_video_decoder)) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   mojo_media_client_->Initialize();
 }
@@ -163,16 +173,19 @@ StableVideoDecoderFactoryService::~StableVideoDecoderFactoryService() {
 }
 
 void StableVideoDecoderFactoryService::BindReceiver(
-    mojo::PendingReceiver<stable::mojom::StableVideoDecoderFactory> receiver) {
+    mojo::PendingReceiver<stable::mojom::StableVideoDecoderFactory> receiver,
+    base::OnceClosure disconnect_cb) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // The browser process should guarantee that BindReceiver() is only called
   // once.
   DCHECK(!receiver_.is_bound());
   receiver_.Bind(std::move(receiver));
+  receiver_.set_disconnect_handler(std::move(disconnect_cb));
 }
 
 void StableVideoDecoderFactoryService::CreateStableVideoDecoder(
-    mojo::PendingReceiver<stable::mojom::StableVideoDecoder> receiver) {
+    mojo::PendingReceiver<stable::mojom::StableVideoDecoder> receiver,
+    mojo::PendingRemote<stable::mojom::StableVideoDecoderTracker> tracker) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   std::unique_ptr<mojom::VideoDecoder> dst_video_decoder;
@@ -185,7 +198,8 @@ void StableVideoDecoderFactoryService::CreateStableVideoDecoder(
         mojo::PendingRemote<stable::mojom::StableVideoDecoder>());
   }
   video_decoders_.Add(std::make_unique<StableVideoDecoderService>(
-                          std::move(dst_video_decoder), &cdm_service_context_),
+                          std::move(tracker), std::move(dst_video_decoder),
+                          &cdm_service_context_),
                       std::move(receiver));
 }
 

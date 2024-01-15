@@ -9,8 +9,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/multidevice/logging/logging.h"
 #include "chromeos/ash/components/proximity_auth/metrics.h"
@@ -92,7 +92,7 @@ void ProximityMonitorImpl::UpdatePollingState() {
 
     // Polling can re-entrantly call back into this method, so make sure to
     // schedule the next polling iteration prior to executing the current one.
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(
             &ProximityMonitorImpl::PerformScheduledUpdatePollingState,
@@ -133,10 +133,10 @@ void ProximityMonitorImpl::OnGetConnectionMetadata(
   if (connection_metadata->bluetooth_connection_metadata)
     OnGetRssi(connection_metadata->bluetooth_connection_metadata->current_rssi);
   else
-    OnGetRssi(absl::nullopt);
+    OnGetRssi(std::nullopt);
 }
 
-void ProximityMonitorImpl::OnGetRssi(const absl::optional<int32_t>& rssi) {
+void ProximityMonitorImpl::OnGetRssi(const std::optional<int32_t>& rssi) {
   if (!is_active_) {
     PA_LOG(VERBOSE) << "Received RSSI after stopping.";
     return;

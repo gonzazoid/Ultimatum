@@ -7,11 +7,11 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/unique_ptr_adapters.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
@@ -24,6 +24,7 @@
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/renderer_host/render_process_host_impl.h"
 #include "content/browser/service_worker/embedded_worker_instance.h"
+#include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/browser/storage_partition_impl.h"
 #include "content/browser/url_loader_factory_getter.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -31,7 +32,6 @@
 #include "content/public/test/mock_render_process_host.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
-#include "net/cookies/parsed_cookie.h"
 #include "net/http/http_util.h"
 #include "net/test/embedded_test_server/request_handler_util.h"
 #include "services/network/public/cpp/features.h"
@@ -45,7 +45,7 @@ namespace {
 
 base::FilePath GetDataFilePath(const std::string& relative_path) {
   base::FilePath root_path;
-  CHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &root_path));
+  CHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &root_path));
   return root_path.AppendASCII(relative_path);
 }
 
@@ -188,7 +188,7 @@ class URLLoaderClientInterceptor : public network::mojom::URLLoaderClient {
   void OnReceiveResponse(
       network::mojom::URLResponseHeadPtr head,
       mojo::ScopedDataPipeConsumerHandle body,
-      absl::optional<mojo_base::BigBuffer> cached_metadata) override {
+      std::optional<mojo_base::BigBuffer> cached_metadata) override {
     original_client_->OnReceiveResponse(std::move(head), std::move(body),
                                         std::move(cached_metadata));
   }
@@ -455,6 +455,11 @@ URLLoaderInterceptor::URLLoaderInterceptor(
           &URLLoaderInterceptor::InterceptNavigationRequestCallback,
           base::Unretained(this)));
 
+  ServiceWorkerContextWrapper::SetURLLoaderFactoryInterceptorForTesting(
+      base::BindRepeating(
+          &URLLoaderInterceptor::InterceptNavigationRequestCallback,
+          base::Unretained(this)));
+
   if (BrowserThread::IsThreadInitialized(BrowserThread::IO)) {
     if (use_runloop_) {
       base::RunLoop run_loop;
@@ -496,6 +501,9 @@ URLLoaderInterceptor::~URLLoaderInterceptor() {
 
   NavigationURLLoaderImpl::SetURLLoaderFactoryInterceptorForTesting(
       NavigationURLLoaderImpl::URLLoaderFactoryInterceptor());
+
+  ServiceWorkerContextWrapper::SetURLLoaderFactoryInterceptorForTesting(
+      ServiceWorkerContextWrapper::URLLoaderFactoryInterceptor());
 
   MockRenderProcessHost::SetNetworkFactory(
       MockRenderProcessHost::CreateNetworkFactoryCallback());
@@ -564,7 +572,7 @@ URLLoaderInterceptor::ServeFilesFromDirectoryAtOrigin(
         callback.Run(params->url_request.url);
         content::URLLoaderInterceptor::WriteResponse(
             full_path, params->client.get(), /*headers=*/nullptr,
-            /*ssl_info=*/absl::nullopt, /*url=*/params->url_request.url);
+            /*ssl_info=*/std::nullopt, /*url=*/params->url_request.url);
         return true;
       }));
 }
@@ -573,8 +581,8 @@ void URLLoaderInterceptor::WriteResponse(
     base::StringPiece headers,
     base::StringPiece body,
     network::mojom::URLLoaderClient* client,
-    absl::optional<net::SSLInfo> ssl_info,
-    absl::optional<GURL> url) {
+    std::optional<net::SSLInfo> ssl_info,
+    std::optional<GURL> url) {
   net::HttpResponseInfo info;
   info.headers = base::MakeRefCounted<net::HttpResponseHeaders>(
       net::HttpUtil::AssembleRawHeaders(headers));
@@ -586,14 +594,6 @@ void URLLoaderInterceptor::WriteResponse(
         network::PopulateParsedHeaders(response->headers.get(), *url);
   }
   response->ssl_info = std::move(ssl_info);
-  size_t iter = 0;
-  std::string cookie_line;
-  while (info.headers->EnumerateHeader(&iter, "Set-Cookie", &cookie_line)) {
-    if (net::ParsedCookie(cookie_line).IsPartitioned()) {
-      response->has_partitioned_cookie = true;
-      break;
-    }
-  }
 
   mojo::ScopedDataPipeProducerHandle producer_handle;
   mojo::ScopedDataPipeConsumerHandle consumer_handle;
@@ -614,7 +614,7 @@ void URLLoaderInterceptor::WriteResponse(
   CHECK_EQ(result, MOJO_RESULT_OK);
 
   client->OnReceiveResponse(std::move(response), std::move(consumer_handle),
-                            absl::nullopt);
+                            std::nullopt);
 
   network::URLLoaderCompletionStatus status;
   status.decoded_body_length = body.size();
@@ -626,8 +626,8 @@ void URLLoaderInterceptor::WriteResponse(
     const std::string& relative_path,
     network::mojom::URLLoaderClient* client,
     const std::string* headers,
-    absl::optional<net::SSLInfo> ssl_info,
-    absl::optional<GURL> url) {
+    std::optional<net::SSLInfo> ssl_info,
+    std::optional<GURL> url) {
   return WriteResponse(GetDataFilePath(relative_path), client, headers,
                        std::move(ssl_info), std::move(url));
 }
@@ -636,8 +636,8 @@ void URLLoaderInterceptor::WriteResponse(
     const base::FilePath& file_path,
     network::mojom::URLLoaderClient* client,
     const std::string* headers,
-    absl::optional<net::SSLInfo> ssl_info,
-    absl::optional<GURL> url) {
+    std::optional<net::SSLInfo> ssl_info,
+    std::optional<GURL> url) {
   base::ScopedAllowBlockingForTesting allow_io;
   std::string headers_str;
   if (headers) {

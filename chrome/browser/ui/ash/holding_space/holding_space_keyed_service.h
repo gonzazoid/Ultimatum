@@ -14,6 +14,7 @@
 #include "ash/public/cpp/holding_space/holding_space_metrics.h"
 #include "ash/public/cpp/holding_space/holding_space_model.h"
 #include "ash/public/cpp/holding_space/holding_space_progress.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_manager_observer.h"
@@ -68,16 +69,20 @@ class HoldingSpaceKeyedService : public crosapi::mojom::HoldingSpaceService,
       mojo::PendingReceiver<crosapi::mojom::HoldingSpaceService> receiver);
 
   // crosapi::mojom::HoldingSpaceKeyedService:
+  // NOTE: No-op if the service has not been initialized.
+  // TODO(http://b/274477308): Remove one-off API.
   void AddPrintedPdf(const base::FilePath& printed_pdf_path,
                      bool from_incognito_profile) override;
 
   // Adds multiple pinned file items identified by the provided file system
-  // URLs.
+  // URLs. NOTE: No-op if the service has not been initialized.
   void AddPinnedFiles(
       const std::vector<storage::FileSystemURL>& file_system_urls);
 
   // Removes multiple pinned file items identified by the provided file system
-  // URLs. No-ops for files that are not present in the holding space.
+  // URLs. NOTE: No-ops if:
+  // 1. The specified files are not present in the holding space; OR
+  // 2. The service has not been initialized.
   void RemovePinnedFiles(
       const std::vector<storage::FileSystemURL>& file_system_urls);
 
@@ -89,65 +94,29 @@ class HoldingSpaceKeyedService : public crosapi::mojom::HoldingSpaceService,
   // files system URLs as GURLs.
   std::vector<GURL> GetPinnedFiles() const;
 
-  // Adds a diagnostics log item backed by the provided absolute file path.
-  void AddDiagnosticsLog(const base::FilePath& diagnostics_log_path);
-
-  // Adds a download item of the specified `type` backed by the provided
-  // absolute file path. Returns the id of the added holding space item or an
-  // empty string if the item was not added due to de-duplication checks.
-  // NOTE: `type` must refer to a download type.
-  const std::string& AddDownload(
-      HoldingSpaceItem::Type type,
-      const base::FilePath& download_path,
-      const HoldingSpaceProgress& progress = HoldingSpaceProgress(),
-      HoldingSpaceImage::PlaceholderImageSkiaResolver
-          placeholder_image_skia_resolver = base::NullCallback());
-
-  // Adds a nearby share item backed by the provided absolute file path.
-  void AddNearbyShare(const base::FilePath& nearby_share_path);
-
-  // Adds a photo or video downloaded from a connected Android phone via
-  // PhoneHub. Returns the id of the added holding space item or an empty string
-  // if the item was not added due to de-duplication checks.
-  const std::string& AddPhoneHubCameraRollItem(
-      const base::FilePath& item_path,
-      const HoldingSpaceProgress& progress);
-
-  // Adds a scanned item backed by the provided absolute file path.
-  void AddScan(const base::FilePath& file_path);
-
-  // Adds a screen recording item backed by the provided absolute file path.
-  void AddScreenRecording(const base::FilePath& screen_recording_path);
-
-  // Adds a screenshot item backed by the provided absolute file path.
-  void AddScreenshot(const base::FilePath& screenshot_path);
-
   // Replaces the existing suggestions with `suggestions`. The order among
   // `suggestions` is respected, which means that if a suggestion A is in front
   // of a suggestion B in the given array, after calling this function, the
   // suggestion view of A is in front of the view of B. `suggestions` can be
   // empty. In this case, all the existing suggestions are cleared.
+  // NOTE: No-op if the service has not been initialized.
   void SetSuggestions(
       const std::vector<std::pair<HoldingSpaceItem::Type, base::FilePath>>&
           suggestions);
 
   // Adds the specified `item` to the holding space model. Returns the id of the
-  // added holding space item or an empty string if the item was not added due
-  // to de-duplication checks.
+  // added holding space item. Returns an empty string if the item is not added
+  // for either of the following reasons:
+  // 1. The `item` is a duplicate.
+  // 2. The service has not been initialized.
   const std::string& AddItem(std::unique_ptr<HoldingSpaceItem> item);
-
-  // Adds multiple `items` to the holding space model. `allow_duplicates`
-  // indicates whether an item should be added to the model if it is duplicate
-  // to an existing item. Returns the ids of the added holding space items or
-  // empty strings where items were not added due to de-duplication checks.
-  std::vector<std::reference_wrapper<const std::string>> AddItems(
-      std::vector<std::unique_ptr<HoldingSpaceItem>> items,
-      bool allow_duplicates);
 
   // Adds an item of the specified `type` backed by the provided absolute
   // `file_path` to the holding space model. Returns the id of the added
-  // holding space item or an empty string if the item was not added due to
-  // de-duplication checks.
+  // holding space item. Returns an empty string if the item is not added
+  // for either of the following reasons:
+  // 1. The item to add is a duplicate.
+  // 2. The service has not been initialized.
   const std::string& AddItemOfType(
       HoldingSpaceItem::Type type,
       const base::FilePath& file_path,
@@ -156,20 +125,23 @@ class HoldingSpaceKeyedService : public crosapi::mojom::HoldingSpaceService,
           placeholder_image_skia_resolver = base::NullCallback());
 
   // Returns an object which, upon its destruction, performs an atomic update to
-  // the holding space item associated with the specified `id`.
+  // the holding space item associated with the specified `id`. Returns
+  // `nullptr` if the service has not been initialized.
   std::unique_ptr<HoldingSpaceModel::ScopedItemUpdate> UpdateItem(
       const std::string& id);
 
   // Removes all holding space items directly from the model.
+  // NOTE: No-op if the service has not been initialized.
   void RemoveAll();
 
   // Removes the holding space item with the specified `id` from the model.
+  // NOTE: No-op if the service has not been initialized.
   void RemoveItem(const std::string& id);
 
   // Attempts to mark the specified holding space `item` to open when complete.
-  // Returns `absl::nullopt` on success or the reason if the attempt was not
+  // Returns `std::nullopt` on success or the reason if the attempt was not
   // successful.
-  absl::optional<holding_space_metrics::ItemFailureToLaunchReason>
+  std::optional<holding_space_metrics::ItemLaunchFailureReason>
   OpenItemWhenComplete(const HoldingSpaceItem* item);
 
   // Returns the `profile_` associated with this service.
@@ -194,6 +166,15 @@ class HoldingSpaceKeyedService : public crosapi::mojom::HoldingSpaceService,
   void SuspendImminent(power_manager::SuspendImminent::Reason reason) override;
   void SuspendDone(base::TimeDelta sleep_duration) override;
 
+  // Adds multiple `items` to the holding space model. `allow_duplicates`
+  // indicates whether an item should be added to the model if it is duplicate
+  // to an existing item. Returns the ids of the added holding space items or
+  // empty strings where items were not added due to de-duplication checks.
+  // NOTE: This function can be called during service initialization.
+  std::vector<std::reference_wrapper<const std::string>> AddItems(
+      std::vector<std::unique_ptr<HoldingSpaceItem>> items,
+      bool allow_duplicates);
+
   // Invoked when the associated profile is ready.
   void OnProfileReady();
 
@@ -206,12 +187,20 @@ class HoldingSpaceKeyedService : public crosapi::mojom::HoldingSpaceService,
   // profile shutdown, or when device suspend starts.
   void ShutdownDelegates();
 
-  // Invoked when holding space persistence has been restored.
-  void OnPersistenceRestored();
+  // Invoked when holding space persistence has been restored. Adds
+  // `restored_items` to the holding space model and notifies delegates.
+  void OnPersistenceRestored(
+      std::vector<std::unique_ptr<HoldingSpaceItem>> restored_items);
 
   // Pin a drive file for offline access.
   void MakeDriveItemAvailableOffline(
       const storage::FileSystemURL& file_system_url);
+
+  // Returns whether the service has been initialized. The service is considered
+  // initialized if:
+  // 1. All delegates have been created.
+  // 2. Persistence restoration has been completed.
+  bool IsInitialized() const;
 
   // Creates an item of the specified `type` backed by the provided absolute
   // `file_path`. Returns an empty unique pointer if the file url cannot be
@@ -223,7 +212,7 @@ class HoldingSpaceKeyedService : public crosapi::mojom::HoldingSpaceService,
       HoldingSpaceImage::PlaceholderImageSkiaResolver
           placeholder_image_skia_resolver);
 
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
   const AccountId account_id_;
 
   HoldingSpaceClientImpl holding_space_client_;
@@ -237,7 +226,7 @@ class HoldingSpaceKeyedService : public crosapi::mojom::HoldingSpaceService,
   std::vector<std::unique_ptr<HoldingSpaceKeyedServiceDelegate>> delegates_;
 
   // The delegate, owned by `delegates_`, responsible for downloads.
-  HoldingSpaceDownloadsDelegate* downloads_delegate_ = nullptr;
+  raw_ptr<HoldingSpaceDownloadsDelegate> downloads_delegate_ = nullptr;
 
   // This class supports any number of connections. This allows the client to
   // have multiple, potentially thread-affine, remotes.

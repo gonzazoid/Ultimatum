@@ -4,6 +4,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ref.h"
 #include "base/test/task_environment.h"
 #include "chromeos/ash/services/libassistant/conversation_controller.h"
 #include "chromeos/ash/services/libassistant/libassistant_service.h"
@@ -13,7 +14,6 @@
 #include "chromeos/assistant/internal/action/cros_action_module.h"
 #include "chromeos/assistant/internal/libassistant/shared_headers.h"
 #include "chromeos/assistant/internal/test_support/fake_assistant_manager.h"
-#include "chromeos/assistant/internal/test_support/fake_assistant_manager_internal.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -66,10 +66,11 @@ class CrosActionModuleHelper {
  private:
   const std::vector<chromeos::assistant::action::AssistantActionObserver*>&
   action_observers() {
-    return action_module_.GetActionObserversForTesting();
+    return action_module_->GetActionObserversForTesting();
   }
 
-  const chromeos::assistant::action::CrosActionModule& action_module_;
+  const raw_ref<const chromeos::assistant::action::CrosActionModule>
+      action_module_;
 };
 
 class ConversationObserverMock : public mojom::ConversationObserver {
@@ -85,7 +86,7 @@ class ConversationObserverMock : public mojom::ConversationObserver {
               (const ::ash::assistant::AssistantInteractionMetadata& metadata));
   MOCK_METHOD(void,
               OnInteractionFinished,
-              (chromeos::assistant::AssistantInteractionResolution resolution));
+              (assistant::AssistantInteractionResolution resolution));
   MOCK_METHOD(void, OnTtsStarted, (bool due_to_error));
   MOCK_METHOD(void,
               OnHtmlResponse,
@@ -131,7 +132,7 @@ class AssistantConversationObserverTest : public ::testing::Test {
 
     action_module_helper_ = std::make_unique<CrosActionModuleHelper>(
         static_cast<chromeos::assistant::action::CrosActionModule*>(
-            service_tester_.assistant_manager_internal().action_module()));
+            controller().action_module()));
   }
 
   assistant_client::ConversationStateListener& conversation_state_listener() {
@@ -157,10 +158,9 @@ class AssistantConversationObserverTest : public ::testing::Test {
 
 TEST_F(AssistantConversationObserverTest,
        ShouldReceiveOnTurnFinishedEventWhenFinishedNormally) {
-  EXPECT_CALL(
-      observer_mock(),
-      OnInteractionFinished(
-          chromeos::assistant::AssistantInteractionResolution::kNormal));
+  EXPECT_CALL(observer_mock(),
+              OnInteractionFinished(
+                  assistant::AssistantInteractionResolution::kNormal));
 
   conversation_state_listener().OnConversationTurnFinished(
       assistant_client::ConversationStateListener::Resolution::NORMAL);
@@ -169,10 +169,9 @@ TEST_F(AssistantConversationObserverTest,
 
 TEST_F(AssistantConversationObserverTest,
        ShouldReceiveOnTurnFinishedEventWhenBeingInterrupted) {
-  EXPECT_CALL(
-      observer_mock(),
-      OnInteractionFinished(
-          chromeos::assistant::AssistantInteractionResolution::kInterruption));
+  EXPECT_CALL(observer_mock(),
+              OnInteractionFinished(
+                  assistant::AssistantInteractionResolution::kInterruption));
 
   conversation_state_listener().OnConversationTurnFinished(
       assistant_client::ConversationStateListener::Resolution::BARGE_IN);

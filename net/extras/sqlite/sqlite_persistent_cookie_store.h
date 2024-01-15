@@ -10,11 +10,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/task/task_traits.h"
 #include "net/cookies/cookie_monster.h"
+#include "net/extras/sqlite/cookie_crypto_delegate.h"
 #include "net/log/net_log_with_source.h"
 
 namespace base {
@@ -24,7 +25,6 @@ class SequencedTaskRunner;
 
 namespace net {
 class CanonicalCookie;
-class CookieCryptoDelegate;
 
 // Returns recommended task priority for |background_task_runner|.
 base::TaskPriority COMPONENT_EXPORT(NET_EXTRAS)
@@ -42,17 +42,20 @@ class COMPONENT_EXPORT(NET_EXTRAS) SQLitePersistentCookieStore
 
   // Port number to use for cookies whose source port is unknown at the time of
   // database migration to V13. The value -1 comes from url::PORT_UNSPECIFIED.
-  static const int kDefaultUnknownPort = -1;
+  static constexpr int kDefaultUnknownPort = -1;
 
   // All blocking database accesses will be performed on
   // |background_task_runner|, while |client_task_runner| is used to invoke
-  // callbacks.
+  // callbacks. If |enable_exclusive_access| is set to true then sqlite will
+  // be asked to open the database with flag `exclusive=1`. In practice, this is
+  // only respected on Windows.
   SQLitePersistentCookieStore(
       const base::FilePath& path,
       const scoped_refptr<base::SequencedTaskRunner>& client_task_runner,
       const scoped_refptr<base::SequencedTaskRunner>& background_task_runner,
       bool restore_old_session_cookies,
-      CookieCryptoDelegate* crypto_delegate);
+      std::unique_ptr<CookieCryptoDelegate> crypto_delegate,
+      bool enable_exclusive_access);
 
   SQLitePersistentCookieStore(const SQLitePersistentCookieStore&) = delete;
   SQLitePersistentCookieStore& operator=(const SQLitePersistentCookieStore&) =

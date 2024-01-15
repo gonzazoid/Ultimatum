@@ -35,7 +35,7 @@ class HttpAuthController;
 class HttpResponseInfo;
 class NetLogWithSource;
 struct NetworkTrafficAnnotationTag;
-class ProxyServer;
+class ProxyChain;
 struct SSLConfig;
 class StreamSocket;
 
@@ -162,15 +162,13 @@ class NET_EXPORT ClientSocketPool : public LowerLayeredPool {
   class NET_EXPORT_PRIVATE SocketParams
       : public base::RefCounted<SocketParams> {
    public:
-    // For non-SSL requests / non-HTTPS proxies, the corresponding SSLConfig
-    // argument may be nullptr.
-    SocketParams(std::unique_ptr<SSLConfig> ssl_config_for_origin,
-                 std::unique_ptr<SSLConfig> ssl_config_for_proxy);
+    // For non-SSL requests, `ssl_config_for_origin` argument may be nullptr.
+    explicit SocketParams(std::unique_ptr<SSLConfig> ssl_config_for_origin);
 
     SocketParams(const SocketParams&) = delete;
     SocketParams& operator=(const SocketParams&) = delete;
 
-    // Creates a  SocketParams object with none of the fields populated. This
+    // Creates a SocketParams object with none of the fields populated. This
     // works for the HTTP case only.
     static scoped_refptr<SocketParams> CreateForHttpForTesting();
 
@@ -178,16 +176,11 @@ class NET_EXPORT ClientSocketPool : public LowerLayeredPool {
       return ssl_config_for_origin_.get();
     }
 
-    const SSLConfig* ssl_config_for_proxy() const {
-      return ssl_config_for_proxy_.get();
-    }
-
    private:
     friend class base::RefCounted<SocketParams>;
     ~SocketParams();
 
     std::unique_ptr<SSLConfig> ssl_config_for_origin_;
-    std::unique_ptr<SSLConfig> ssl_config_for_proxy_;
   };
 
   ClientSocketPool(const ClientSocketPool&) = delete;
@@ -350,12 +343,12 @@ class NET_EXPORT ClientSocketPool : public LowerLayeredPool {
                                                 const GroupId& group_id);
 
   // Utility method to log a GroupId with a NetLog event.
-  static base::Value NetLogGroupIdParams(const GroupId& group_id);
+  static base::Value::Dict NetLogGroupIdParams(const GroupId& group_id);
 
   std::unique_ptr<ConnectJob> CreateConnectJob(
       GroupId group_id,
       scoped_refptr<SocketParams> socket_params,
-      const ProxyServer& proxy_server,
+      const ProxyChain& proxy_chain,
       const absl::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
       RequestPriority request_priority,
       SocketTag socket_tag,

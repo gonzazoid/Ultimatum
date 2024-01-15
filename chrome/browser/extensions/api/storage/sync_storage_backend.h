@@ -11,14 +11,12 @@
 #include <string>
 
 #include "base/memory/ref_counted.h"
+#include "base/memory/weak_ptr.h"
+#include "base/values.h"
 #include "components/sync/model/syncable_service.h"
 #include "components/value_store/value_store_factory.h"
 #include "extensions/browser/api/storage/settings_observer.h"
 #include "extensions/browser/api/storage/settings_storage_quota_enforcer.h"
-
-namespace syncer {
-class SyncErrorFactory;
-}
 
 namespace value_store {
 class ValueStoreFactory;
@@ -32,7 +30,7 @@ class SyncableSettingsStorage;
 // Manages ValueStore objects for extensions, including routing
 // changes from sync to them.
 // Lives entirely on the FILE thread.
-class SyncStorageBackend : public syncer::SyncableService {
+class SyncStorageBackend final : public syncer::SyncableService {
  public:
   // |storage_factory| is use to create leveldb storage areas.
   // |observers| is the list of observers to settings changes.
@@ -57,19 +55,19 @@ class SyncStorageBackend : public syncer::SyncableService {
   absl::optional<syncer::ModelError> MergeDataAndStartSyncing(
       syncer::ModelType type,
       const syncer::SyncDataList& initial_sync_data,
-      std::unique_ptr<syncer::SyncChangeProcessor> sync_processor,
-      std::unique_ptr<syncer::SyncErrorFactory> sync_error_factory) override;
+      std::unique_ptr<syncer::SyncChangeProcessor> sync_processor) override;
   absl::optional<syncer::ModelError> ProcessSyncChanges(
       const base::Location& from_here,
       const syncer::SyncChangeList& change_list) override;
   void StopSyncing(syncer::ModelType type) override;
+  base::WeakPtr<SyncableService> AsWeakPtr() override;
 
  private:
   // Gets a weak reference to the storage area for a given extension,
   // initializing sync with some initial data if sync enabled.
   SyncableSettingsStorage* GetOrCreateStorageWithSyncData(
       const std::string& extension_id,
-      std::unique_ptr<base::DictionaryValue> sync_data) const;
+      base::Value::Dict sync_data) const;
 
   // Creates a new SettingsSyncProcessor for an extension.
   std::unique_ptr<SettingsSyncProcessor> CreateSettingsSyncProcessor(
@@ -96,10 +94,9 @@ class SyncStorageBackend : public syncer::SyncableService {
   // Current sync processor, if any.
   std::unique_ptr<syncer::SyncChangeProcessor> sync_processor_;
 
-  // Current sync error handler if any.
-  std::unique_ptr<syncer::SyncErrorFactory> sync_error_factory_;
-
   syncer::SyncableService::StartSyncFlare flare_;
+
+  base::WeakPtrFactory<SyncStorageBackend> weak_ptr_factory_{this};
 };
 
 }  // namespace extensions

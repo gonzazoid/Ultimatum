@@ -9,11 +9,11 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
 #include "base/bit_cast.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
-#include "base/task/task_runner_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
 #include "chrome/browser/task_manager/sampling/shared_sampler_win_defines.h"
@@ -290,9 +290,8 @@ void SharedSampler::Refresh(base::ProcessId process_id, int64_t refresh_flags) {
   DCHECK(callbacks_map_.find(process_id) != callbacks_map_.end());
 
   if (refresh_flags_ == 0) {
-    base::PostTaskAndReplyWithResult(
-        blocking_pool_runner_.get(), FROM_HERE,
-        base::BindOnce(&SharedSampler::RefreshOnWorkerThread, this),
+    blocking_pool_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE, base::BindOnce(&SharedSampler::RefreshOnWorkerThread, this),
         base::BindOnce(&SharedSampler::OnRefreshDone, this));
   } else {
     // http://crbug.com/678471

@@ -17,7 +17,6 @@
 #include "base/path_service.h"
 #include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
-#include "base/test/metrics/histogram_tester.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -25,6 +24,7 @@
 #include "components/autofill/core/browser/test_event_waiter.h"
 #include "components/keyed_service/core/service_access_type.h"
 #include "components/payments/content/payment_manifest_web_data_service.h"
+#include "components/payments/core/error_strings.h"
 #include "components/payments/core/secure_payment_confirmation_credential.h"
 #include "components/webdata_services/web_data_service_wrapper_factory.h"
 #include "content/public/test/browser_test.h"
@@ -64,57 +64,114 @@ void SecurePaymentConfirmationTest::OnWebDataServiceRequestDone(
   database_write_responded_ = true;
 }
 
-namespace {
+void SecurePaymentConfirmationTest::ExpectEvent2Histogram(
+    std::set<JourneyLogger::Event2> events,
+    int count) {
+  std::vector<base::Bucket> buckets =
+      histogram_tester_.GetAllSamples("PaymentRequest.Events2");
+  ASSERT_EQ(1U, buckets.size());
 
-std::string GetIconDownloadErrorMessage() {
-  return "The payment method \"secure-payment-confirmation\" is not supported. "
-         "The \"instrument.icon\" either could not be downloaded or decoded.";
+  int64_t expected_events = 0;
+  for (const JourneyLogger::Event2& event : events) {
+    expected_events |= static_cast<int>(event);
+  }
+  EXPECT_EQ(buckets[0].min, expected_events);
+  EXPECT_EQ(count, buckets[0].count);
 }
 
-std::string GetWebAuthnErrorMessage() {
-  return "The operation either timed out or was not allowed. See: "
-         "https://www.w3.org/TR/webauthn-2/"
+// static
+std::string SecurePaymentConfirmationTest::GetWebAuthnErrorMessage() {
+  return "NotAllowedError: The operation either timed out or was not allowed. "
+         "See: https://www.w3.org/TR/webauthn-2/"
          "#sctn-privacy-considerations-client.";
 }
 
-IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationTest, NoAuthenticator) {
-  test_controller()->SetHasAuthenticator(false);
-  NavigateTo("a.com", "/secure_payment_confirmation.html");
-  close_dialog_on_error_ = true;
+namespace {
 
-  // EvalJs waits for JavaScript promise to resolve.
-  EXPECT_EQ(GetWebAuthnErrorMessage(),
-            content::EvalJs(GetActiveWebContents(),
-                            "getSecurePaymentConfirmationStatus()"));
+using Event2 = payments::JourneyLogger::Event2;
+
+std::string GetIconDownloadErrorMessage() {
+  return "NotSupportedError: The payment method "
+         "\"secure-payment-confirmation\" is not supported. "
+         "The \"instrument.icon\" either could not be downloaded or decoded.";
 }
 
-IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationTest, NoInstrumentInStorage) {
+// Tests that show() will display the Transaction UX, if there is a matching
+// credential.
+IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationTest, Show_TransactionUX) {
   test_controller()->SetHasAuthenticator(true);
   NavigateTo("a.com", "/secure_payment_confirmation.html");
-  close_dialog_on_error_ = true;
+  std::vector<uint8_t> credential_id = {'c', 'r', 'e', 'd'};
+  std::vector<uint8_t> user_id = {'u', 's', 'e', 'r'};
+  webdata_services::WebDataServiceWrapperFactory::
+      GetPaymentManifestWebDataServiceForBrowserContext(
+          GetActiveWebContents()->GetBrowserContext(),
+          ServiceAccessType::EXPLICIT_ACCESS)
+          ->AddSecurePaymentConfirmationCredential(
+              std::make_unique<SecurePaymentConfirmationCredential>(
+                  std::move(credential_id), "a.com", std::move(user_id)),
+              /*consumer=*/this);
 
-  // EvalJs waits for JavaScript promise to resolve.
-  EXPECT_EQ(GetWebAuthnErrorMessage(),
-            content::EvalJs(GetActiveWebContents(),
-                            "getSecurePaymentConfirmationStatus()"));
-}
+  ResetEventWaiterForSingleEvent(TestEvent::kUIDisplayed);
+  ExecuteScriptAsync(GetActiveWebContents(),
+                     "getSecurePaymentConfirmationStatus()");
+  WaitForObservedEvent();
 
-IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationTest,
-                       CheckInstrumentInStorageAfterCanMakePayment) {
-  test_controller()->SetHasAuthenticator(true);
-  NavigateTo("a.com", "/secure_payment_confirmation.html");
-  close_dialog_on_error_ = true;
+  EXPECT_TRUE(database_write_responded_);
+  ASSERT_FALSE(test_controller()->app_descriptions().empty());
+  EXPECT_EQ(1u, test_controller()->app_descriptions().size());
+  EXPECT_EQ("display_name_for_instrument",
+            test_controller()->app_descriptions().front().label);
 
-  // EvalJs waits for JavaScript promise to resolve.
+  // As these tests mock out the authenticator, we cannot continue on the
+  // Transaction UX and instead must cancel out. For tests that test the
+  // continue flow, see secure_payment_confirmation_authenticator_browsertest.cc
+  test_controller()->CloseDialog();
   EXPECT_EQ(
       GetWebAuthnErrorMessage(),
-      content::EvalJs(
-          GetActiveWebContents(),
-          base::StringPrintf(
-              "getSecurePaymentConfirmationStatusAfterCanMakePayment()")));
+      content::EvalJs(GetActiveWebContents(), "getOutstandingStatusPromise()"));
+  ExpectEvent2Histogram({Event2::kInitiated, Event2::kShown,
+                         Event2::kUserAborted, Event2::kHadInitialFormOfPayment,
+                         Event2::kRequestMethodSecurePaymentConfirmation});
 }
 
-IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationTest, WrongCredentialRpId) {
+// Tests that calling show() on a platform without an authenticator will trigger
+// the No Matching Credentials UX.
+IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationTest, Show_NoAuthenticator) {
+  test_controller()->SetHasAuthenticator(false);
+  NavigateTo("a.com", "/secure_payment_confirmation.html");
+
+  close_dialog_on_error_ = true;
+  EXPECT_EQ(GetWebAuthnErrorMessage(),
+            content::EvalJs(GetActiveWebContents(),
+                            "getSecurePaymentConfirmationStatus()"));
+
+  ExpectEvent2Histogram({Event2::kInitiated, Event2::kShown,
+                         Event2::kUserAborted, Event2::kNoMatchingCredentials,
+                         Event2::kRequestMethodSecurePaymentConfirmation});
+}
+
+// Tests that calling show() with no matching credentials will trigger the No
+// Matching Credentials UX.
+IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationTest,
+                       Show_NoMatchingCredential) {
+  test_controller()->SetHasAuthenticator(true);
+  NavigateTo("a.com", "/secure_payment_confirmation.html");
+
+  close_dialog_on_error_ = true;
+  EXPECT_EQ(GetWebAuthnErrorMessage(),
+            content::EvalJs(GetActiveWebContents(),
+                            "getSecurePaymentConfirmationStatus()"));
+
+  ExpectEvent2Histogram({Event2::kInitiated, Event2::kShown,
+                         Event2::kUserAborted, Event2::kNoMatchingCredentials,
+                         Event2::kRequestMethodSecurePaymentConfirmation});
+}
+
+// Tests that a credential with the correct credential ID but wrong RP ID will
+// not match.
+IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationTest,
+                       Show_WrongCredentialRpId) {
   test_controller()->SetHasAuthenticator(true);
   NavigateTo("a.com", "/secure_payment_confirmation.html");
   std::vector<uint8_t> credential_id = {'c', 'r', 'e', 'd'};
@@ -131,7 +188,7 @@ IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationTest, WrongCredentialRpId) {
 
   // getSecurePaymentConfirmationStatus creates a SPC credential with RP ID
   // a.com, which doesn't match the stored credential's relying-party.example,
-  // so an error dialog will be displayed.
+  // so the No Matching Credentials dialog will be displayed.
   ResetEventWaiterForSingleEvent(TestEvent::kErrorDisplayed);
   ExecuteScriptAsync(GetActiveWebContents(),
                      "getSecurePaymentConfirmationStatus()");
@@ -139,31 +196,12 @@ IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationTest, WrongCredentialRpId) {
   WaitForObservedEvent();
   EXPECT_TRUE(database_write_responded_);
   EXPECT_TRUE(test_controller()->app_descriptions().empty());
-}
 
-IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationTest, PaymentSheetShowsApp) {
-  test_controller()->SetHasAuthenticator(true);
-  NavigateTo("a.com", "/secure_payment_confirmation.html");
-  std::vector<uint8_t> credential_id = {'c', 'r', 'e', 'd'};
-  std::vector<uint8_t> user_id = {'u', 's', 'e', 'r'};
-  webdata_services::WebDataServiceWrapperFactory::
-      GetPaymentManifestWebDataServiceForBrowserContext(
-          GetActiveWebContents()->GetBrowserContext(),
-          ServiceAccessType::EXPLICIT_ACCESS)
-          ->AddSecurePaymentConfirmationCredential(
-              std::make_unique<SecurePaymentConfirmationCredential>(
-                  std::move(credential_id), "a.com", std::move(user_id)),
-              /*consumer=*/this);
-  ResetEventWaiterForSingleEvent(TestEvent::kUIDisplayed);
-  ExecuteScriptAsync(GetActiveWebContents(),
-                     "getSecurePaymentConfirmationStatus()");
+  test_controller()->CloseDialog();
 
-  WaitForObservedEvent();
-  EXPECT_TRUE(database_write_responded_);
-  ASSERT_FALSE(test_controller()->app_descriptions().empty());
-  EXPECT_EQ(1u, test_controller()->app_descriptions().size());
-  EXPECT_EQ("display_name_for_instrument",
-            test_controller()->app_descriptions().front().label);
+  ExpectEvent2Histogram({Event2::kInitiated, Event2::kShown,
+                         Event2::kUserAborted, Event2::kNoMatchingCredentials,
+                         Event2::kRequestMethodSecurePaymentConfirmation});
 }
 
 // Tests that a failed icon download immediately rejects the show() promise,
@@ -211,6 +249,11 @@ IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationTest, IconDownloadFailure) {
                           "getSecurePaymentConfirmationStatus($1, "
                           "window.location.origin + '/non-existant-icon.png')",
                           invalidCred)));
+
+  // Both scenarios should log the same histogram.
+  ExpectEvent2Histogram({Event2::kInitiated, Event2::kCouldNotShow,
+                         Event2::kRequestMethodSecurePaymentConfirmation},
+                        /*count=*/2);
 }
 
 class SecurePaymentConfirmationDisableDebugTest
@@ -218,8 +261,8 @@ class SecurePaymentConfirmationDisableDebugTest
  public:
   SecurePaymentConfirmationDisableDebugTest() {
     feature_list_.InitWithFeatures(
-        /*enabled_features=*/{features::kSecurePaymentConfirmation},
-        /*disabled_features=*/{features::kSecurePaymentConfirmationDebug});
+        /*enabled_features=*/{::features::kSecurePaymentConfirmation},
+        /*disabled_features=*/{::features::kSecurePaymentConfirmationDebug});
   }
 
  private:
@@ -260,6 +303,7 @@ IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationTest,
                         "securePaymentConfirmationHasEnrolledInstrument()"));
 }
 
+#if !BUILDFLAG(IS_ANDROID)
 // Intentionally do not enable the "SecurePaymentConfirmation" Blink runtime
 // feature or the browser-side Finch flag.
 class SecurePaymentConfirmationDisabledTest
@@ -268,7 +312,7 @@ class SecurePaymentConfirmationDisabledTest
   SecurePaymentConfirmationDisabledTest() {
     feature_list_.InitWithFeatures(
         /*enabled_features=*/{},
-        /*disabled_features=*/{features::kSecurePaymentConfirmation});
+        /*disabled_features=*/{::features::kSecurePaymentConfirmation});
   }
 
  private:
@@ -282,7 +326,8 @@ IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationDisabledTest,
 
   // EvalJs waits for JavaScript promise to resolve.
   EXPECT_EQ(
-      "The payment method \"secure-payment-confirmation\" is not supported.",
+      "NotSupportedError: The payment method \"secure-payment-confirmation\" "
+      "is not supported.",
       content::EvalJs(GetActiveWebContents(),
                       "getSecurePaymentConfirmationStatus()"));
 }
@@ -308,7 +353,7 @@ class SecurePaymentConfirmationDisabledByFinchTest
   SecurePaymentConfirmationDisabledByFinchTest() {
     // The feature should get disabled by the feature state despite
     // experimental web platform features being enabled.
-    feature_list_.InitAndDisableFeature(features::kSecurePaymentConfirmation);
+    feature_list_.InitAndDisableFeature(::features::kSecurePaymentConfirmation);
   }
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
@@ -328,7 +373,8 @@ IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationDisabledByFinchTest,
 
   // EvalJs waits for JavaScript promise to resolve.
   EXPECT_EQ(
-      "The payment method \"secure-payment-confirmation\" is not supported.",
+      "NotSupportedError: The payment method \"secure-payment-confirmation\" "
+      "is not supported.",
       content::EvalJs(GetActiveWebContents(),
                       "getSecurePaymentConfirmationStatus()"));
 }
@@ -344,6 +390,142 @@ IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationDisabledByFinchTest,
   EXPECT_EQ("false", content::EvalJs(
                          GetActiveWebContents(),
                          "securePaymentConfirmationHasEnrolledInstrument()"));
+}
+#endif  // !BUILDFLAG(IS_ANDROID)
+
+// Test that the SecurePaymentConfirmationAllowOneActivationlessShow feature
+// allows one call to show() without a user activation.
+class SecurePaymentConfirmationActivationlessShowTest
+    : public SecurePaymentConfirmationTest {
+ public:
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    PaymentRequestPlatformBrowserTestBase::SetUpCommandLine(command_line);
+    command_line->AppendSwitchASCII(
+        switches::kEnableBlinkFeatures,
+        "SecurePaymentConfirmationAllowOneActivationlessShow");
+  }
+
+  void ExpectEvent2(JourneyLogger::Event2 event, bool expected) {
+    std::vector<base::Bucket> buckets =
+        histogram_tester_.GetAllSamples("PaymentRequest.Events2");
+    EXPECT_EQ(expected, (buckets[0].min & static_cast<int>(event)) != 0);
+  }
+
+ private:
+  base::HistogramTester histogram_tester_;
+};
+
+IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationActivationlessShowTest,
+                       ActivationlessShow) {
+  test_controller()->SetHasAuthenticator(true);
+
+  NavigateTo("a.com", "/secure_payment_confirmation.html");
+  std::vector<uint8_t> credential_id = {'c', 'r', 'e', 'd'};
+  std::vector<uint8_t> user_id = {'u', 's', 'e', 'r'};
+  webdata_services::WebDataServiceWrapperFactory::
+      GetPaymentManifestWebDataServiceForBrowserContext(
+          GetActiveWebContents()->GetBrowserContext(),
+          ServiceAccessType::EXPLICIT_ACCESS)
+          ->AddSecurePaymentConfirmationCredential(
+              std::make_unique<SecurePaymentConfirmationCredential>(
+                  std::move(credential_id), "a.com", std::move(user_id)),
+              /*consumer=*/this);
+
+  // The first call to show() without a user gesture succeeds.
+  ResetEventWaiterForSingleEvent(TestEvent::kUIDisplayed);
+  ExecuteScriptAsyncWithoutUserGesture(GetActiveWebContents(),
+                                       "getSecurePaymentConfirmationStatus()");
+  WaitForObservedEvent();
+  test_controller()->CloseDialog();
+
+  // A second call to show() without a user gesture gives an error.
+  EXPECT_THAT(
+      content::EvalJs(GetActiveWebContents(),
+                      "getSecurePaymentConfirmationStatus()",
+                      content::EvalJsOptions::EXECUTE_SCRIPT_NO_USER_GESTURE)
+          .ExtractString(),
+      ::testing::HasSubstr(errors::kCannotShowWithoutUserActivation));
+  ExpectEvent2(Event2::kActivationlessShow, true);
+}
+
+// TODO(crbug.com/1440453): This test does not work on Android as it is
+// difficult to wait for the bottom sheet to finish showing.
+#if BUILDFLAG(IS_ANDROID)
+#define MAYBE_ShowAfterActivationlessShow DISABLED_ShowAfterActivationlessShow
+#else
+#define MAYBE_ShowAfterActivationlessShow ShowAfterActivationlessShow
+#endif  // BUILDFLAG(IS_ANDROID)
+IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationActivationlessShowTest,
+                       MAYBE_ShowAfterActivationlessShow) {
+  test_controller()->SetHasAuthenticator(true);
+
+  NavigateTo("a.com", "/secure_payment_confirmation.html");
+  std::vector<uint8_t> credential_id = {'c', 'r', 'e', 'd'};
+  std::vector<uint8_t> user_id = {'u', 's', 'e', 'r'};
+  webdata_services::WebDataServiceWrapperFactory::
+      GetPaymentManifestWebDataServiceForBrowserContext(
+          GetActiveWebContents()->GetBrowserContext(),
+          ServiceAccessType::EXPLICIT_ACCESS)
+          ->AddSecurePaymentConfirmationCredential(
+              std::make_unique<SecurePaymentConfirmationCredential>(
+                  std::move(credential_id), "a.com", std::move(user_id)),
+              /*consumer=*/this);
+
+  // The first call to show() without a user gesture succeeds.
+  ResetEventWaiterForSingleEvent(TestEvent::kUIDisplayed);
+  ExecuteScriptAsyncWithoutUserGesture(GetActiveWebContents(),
+                                       "getSecurePaymentConfirmationStatus()");
+  WaitForObservedEvent();
+  test_controller()->CloseDialog();
+
+  // A following call to show() with a user gesture succeeds.
+  ResetEventWaiterForSingleEvent(TestEvent::kUIDisplayed);
+  ExecuteScriptAsync(GetActiveWebContents(),
+                     "getSecurePaymentConfirmationStatus()");
+  WaitForObservedEvent();
+  test_controller()->CloseDialog();
+}
+
+// Test that activationless show() call is not allowed with the
+// SecurePaymentConfirmationAllowOneActivationlessShow feature disabled.
+class SecurePaymentConfirmationActivationlessShowDisabledTest
+    : public SecurePaymentConfirmationTest {
+ public:
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    PaymentRequestPlatformBrowserTestBase::SetUpCommandLine(command_line);
+    command_line->AppendSwitchASCII(
+        switches::kDisableBlinkFeatures,
+        "SecurePaymentConfirmationAllowOneActivationlessShow");
+  }
+};
+
+IN_PROC_BROWSER_TEST_F(SecurePaymentConfirmationActivationlessShowDisabledTest,
+                       ActivationlessShow) {
+  test_controller()->SetHasAuthenticator(true);
+
+  NavigateTo("a.com", "/secure_payment_confirmation.html");
+  std::vector<uint8_t> credential_id = {'c', 'r', 'e', 'd'};
+  std::vector<uint8_t> user_id = {'u', 's', 'e', 'r'};
+  webdata_services::WebDataServiceWrapperFactory::
+      GetPaymentManifestWebDataServiceForBrowserContext(
+          GetActiveWebContents()->GetBrowserContext(),
+          ServiceAccessType::EXPLICIT_ACCESS)
+          ->AddSecurePaymentConfirmationCredential(
+              std::make_unique<SecurePaymentConfirmationCredential>(
+                  std::move(credential_id), "a.com", std::move(user_id)),
+              /*consumer=*/this);
+
+  // The error message with activationless show enabled has changed, so the old
+  // error message is hard coded below and will be removed post launch.
+  EXPECT_THAT(
+      content::EvalJs(GetActiveWebContents(),
+                      "getSecurePaymentConfirmationStatus()",
+                      content::EvalJsOptions::EXECUTE_SCRIPT_NO_USER_GESTURE)
+          .ExtractString(),
+      ::testing::HasSubstr(
+          "Failed to execute 'show' on 'PaymentRequest': PaymentRequest.show() "
+          "requires either transient user activation or delegated payment "
+          "request capability"));
 }
 
 }  // namespace

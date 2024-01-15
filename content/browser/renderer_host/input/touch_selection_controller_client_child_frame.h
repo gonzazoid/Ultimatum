@@ -39,6 +39,9 @@ class TouchSelectionControllerClientChildFrame
   ~TouchSelectionControllerClientChildFrame() override;
 
   void DidStopFlinging();
+  void OnSwipeToMoveCursorBegin();
+  void OnSwipeToMoveCursorEnd();
+  void OnHitTestRegionUpdated();
   void UpdateSelectionBoundsIfNeeded(
       const viz::Selection<gfx::SelectionBound>& selection,
       float device_scale_factor);

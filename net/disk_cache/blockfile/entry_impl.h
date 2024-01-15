@@ -64,8 +64,7 @@ class NET_EXPORT_PRIVATE EntryImpl
                     IOBuffer* buf,
                     int buf_len,
                     CompletionOnceCallback callback,
-                    bool truncate,
-                    bool* optimistic);
+                    bool truncate);
   int ReadSparseDataImpl(int64_t offset,
                          IOBuffer* buf,
                          int buf_len,
@@ -156,9 +155,6 @@ class NET_EXPORT_PRIVATE EntryImpl
   // the upgrade tool.
   void SetTimes(base::Time last_used, base::Time last_modified);
 
-  // Generates a histogram for the time spent working on this operation.
-  void ReportIOTime(Operation op, const base::TimeTicks& start);
-
   // Logs a begin event and enables logging for the EntryImpl.  Will also cause
   // an end event to be logged on destruction.  The EntryImpl must have its key
   // initialized before this is called.  |created| is true if the Entry was
@@ -224,8 +220,7 @@ class NET_EXPORT_PRIVATE EntryImpl
                         IOBuffer* buf,
                         int buf_len,
                         CompletionOnceCallback callback,
-                        bool truncate,
-                        bool* optimistic);
+                        bool truncate);
 
   // Initializes the storage for an internal or external data block.
   bool CreateDataBlock(int index, int size);
@@ -312,7 +307,6 @@ class NET_EXPORT_PRIVATE EntryImpl
   bool read_only_;            // True if not yet writing.
   bool dirty_ = false;        // True if we detected that this is a dirty entry.
   std::unique_ptr<SparseControl> sparse_;  // Support for sparse entries.
-  int io_count_ = 0;
 };
 
 }  // namespace disk_cache

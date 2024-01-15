@@ -4,18 +4,14 @@
 
 #import "ios/chrome/browser/ui/overlays/overlay_request_ui_state.h"
 
-#import "base/bind.h"
-#import "base/callback.h"
-#import "base/callback_helpers.h"
-#import "ios/chrome/browser/overlays/public/overlay_request.h"
-#import "ios/chrome/browser/overlays/test/fake_overlay_user_data.h"
+#import "base/functional/bind.h"
+#import "base/functional/callback.h"
+#import "base/functional/callback_helpers.h"
+#import "ios/chrome/browser/overlays/model/public/overlay_request.h"
+#import "ios/chrome/browser/overlays/model/test/fake_overlay_user_data.h"
 #import "ios/chrome/browser/ui/overlays/test/fake_overlay_request_coordinator.h"
 #import "ios/chrome/browser/ui/overlays/test/fake_overlay_request_coordinator_delegate.h"
 #import "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 // Test fixture for OverlayRequestUIState.
 class OverlayRequestUIStateTest : public PlatformTest {

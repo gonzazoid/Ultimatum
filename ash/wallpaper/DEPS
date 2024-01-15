@@ -1,13 +1,11 @@
 include_rules = [
+  "+components/manta/proto",
   "+services/data_decoder/public",
 ]
 
 specific_include_rules = {
-  # TODO(crbug/1251346): Remove.
-  "wallpaper_controller_impl.cc": [
-    "+components/user_manager/user_manager.h",
-  ],
   "wallpaper_controller_unittest.cc": [
+    "+chromeos/ash/components/geolocation",
     "+components/user_manager",
   ],
 }

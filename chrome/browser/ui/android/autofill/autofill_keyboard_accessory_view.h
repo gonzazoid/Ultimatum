@@ -10,10 +10,10 @@
 #include <vector>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "chrome/browser/autofill/autofill_keyboard_accessory_adapter.h"
+#include "chrome/browser/ui/autofill/autofill_keyboard_accessory_adapter.h"
 #include "chrome/browser/ui/autofill/autofill_popup_view.h"
 
 namespace autofill {
@@ -39,9 +39,11 @@ class AutofillKeyboardAccessoryView
   bool Initialize() override;
   void Hide() override;
   void Show() override;
-  void ConfirmDeletion(const std::u16string& confirmation_title,
-                       const std::u16string& confirmation_body,
-                       base::OnceClosure confirm_deletion) override;
+  void AxAnnounce(const std::u16string& text) override;
+  void ConfirmDeletion(
+      const std::u16string& confirmation_title,
+      const std::u16string& confirmation_body,
+      base::OnceCallback<void(bool)> deletion_callback) override;
 
   // --------------------------------------------------------------------------
   // Methods called from Java via JNI
@@ -57,9 +59,10 @@ class AutofillKeyboardAccessoryView
                          const base::android::JavaParamRef<jobject>& obj,
                          jint list_index);
 
-  // Called when the deletion of an autofill item was confirmed.
-  void DeletionConfirmed(JNIEnv* env,
-                         const base::android::JavaParamRef<jobject>& obj);
+  // Called when the user closes the deletion dialog.
+  void OnDeletionDialogClosed(JNIEnv* env,
+                              const base::android::JavaParamRef<jobject>& obj,
+                              jboolean confirmed);
 
   // Called when this view was dismissed.
   void ViewDismissed(JNIEnv* env,
@@ -69,8 +72,8 @@ class AutofillKeyboardAccessoryView
   // Weak reference to owner of this class. Always outlives this view.
   base::WeakPtr<AutofillPopupController> controller_;
 
-  // Call to confirm a requested deletion.
-  base::OnceClosure confirm_deletion_;
+  // Invoked when the user confirms or declines the deletion process.
+  base::OnceCallback<void(bool)> deletion_callback_;
 
   // The corresponding java object.
   base::android::ScopedJavaGlobalRef<jobject> java_object_;

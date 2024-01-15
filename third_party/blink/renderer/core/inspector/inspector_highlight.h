@@ -27,7 +27,7 @@ struct CORE_EXPORT LineStyle {
  public:
   LineStyle();
 
-  bool IsTransparent() const { return color == Color::kTransparent; }
+  bool IsFullyTransparent() const { return color == Color::kTransparent; }
 
   Color color;
   String pattern;
@@ -39,7 +39,7 @@ struct CORE_EXPORT BoxStyle {
  public:
   BoxStyle();
 
-  bool IsTransparent() const {
+  bool IsFullyTransparent() const {
     return fill_color == Color::kTransparent &&
            hatch_color == Color::kTransparent;
   }
@@ -283,10 +283,6 @@ class CORE_EXPORT InspectorHighlight : public InspectorHighlightBase {
   ColorFormat color_format_;
 };
 
-std::unique_ptr<protocol::DictionaryValue> InspectorGridHighlight(
-    Node*,
-    const InspectorGridHighlightConfig& config);
-
 std::unique_ptr<protocol::DictionaryValue> InspectorFlexContainerHighlight(
     Node* node,
     const InspectorFlexContainerHighlightConfig& config);
@@ -305,6 +301,9 @@ std::unique_ptr<protocol::DictionaryValue> InspectorIsolatedElementHighlight(
 
 // CORE_EXPORT is required to make these functions available for unit tests.
 std::unique_ptr<protocol::DictionaryValue> CORE_EXPORT
+InspectorGridHighlight(Node*, const InspectorGridHighlightConfig& config);
+
+std::unique_ptr<protocol::DictionaryValue> CORE_EXPORT
 BuildSnapContainerInfo(Node* node);
 
 std::unique_ptr<protocol::DictionaryValue> CORE_EXPORT
@@ -319,6 +318,14 @@ BuildIsolatedElementInfo(Element& element,
                          const InspectorIsolationModeHighlightConfig& config,
                          float scale);
 
+void CORE_EXPORT
+AppendStyleInfo(Element* element,
+                protocol::DictionaryValue* element_info,
+                const InspectorHighlightContrastInfo& node_contrast,
+                const ContrastAlgorithm& contrast_algorithm);
+
+std::unique_ptr<protocol::DictionaryValue> CORE_EXPORT
+BuildElementInfo(Element* element);
 }  // namespace blink
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_CORE_INSPECTOR_INSPECTOR_HIGHLIGHT_H_

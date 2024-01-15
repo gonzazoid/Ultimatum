@@ -81,12 +81,17 @@ class FakeWebStateDelegate : public WebStateDelegate {
   JavaScriptDialogPresenter* GetJavaScriptDialogPresenter(WebState*) override;
   void ShowRepostFormWarningDialog(
       WebState* source,
+      web::FormWarningType warning_type,
       base::OnceCallback<void(bool)> callback) override;
   FakeJavaScriptDialogPresenter* GetFakeJavaScriptDialogPresenter();
   void OnAuthRequired(WebState* source,
                       NSURLProtectionSpace* protection_space,
                       NSURLCredential* proposed_credential,
                       AuthCallback callback) override;
+  void HandlePermissionsDecisionRequest(
+      WebState* source,
+      NSArray<NSNumber*>* permissions,
+      WebStatePermissionDecisionHandler handler) override;
 
   // Allows popups requested by a page with `opener_url`.
   void allow_popups(const GURL& opener_url) {
@@ -138,9 +143,31 @@ class FakeWebStateDelegate : public WebStateDelegate {
     last_authentication_request_.reset();
   }
 
+  // Returns the last requested permissions passed to
+  // `HandlePermissionsDecisionRequest`.
+  NSArray<NSNumber*>* last_requested_permissions() {
+    return last_requested_permissions_;
+  }
+
+  // Clears the last requested permissions passed to
+  // `HandlePermissionsDecisionRequest`.
+  void ClearLastRequestedPermissions() { last_requested_permissions_ = nil; }
+
+  // Sets that permission decision the for next time
+  // `HandlePermissionsDecisionRequest` is called.
+  void SetPermissionDecision(PermissionDecision permission_decision) {
+    permission_decision_ = permission_decision;
+  }
+
   // Sets the return value of `ShouldAllowAppLaunching`.
   void SetShouldAllowAppLaunching(bool should_allow_apps) {
     should_allow_app_launching_ = should_allow_apps;
+  }
+
+  // Sets whether the delegate should handle permission decision.
+  void SetShouldHandlePermissionDecision(
+      bool should_handle_permission_decision) {
+    should_handle_permission_decision_ = should_handle_permission_decision;
   }
 
  private:
@@ -158,7 +185,10 @@ class FakeWebStateDelegate : public WebStateDelegate {
   bool get_java_script_dialog_presenter_called_ = false;
   FakeJavaScriptDialogPresenter java_script_dialog_presenter_;
   std::unique_ptr<FakeAuthenticationRequest> last_authentication_request_;
+  NSArray<NSNumber*>* last_requested_permissions_;
   bool should_allow_app_launching_ = false;
+  PermissionDecision permission_decision_ = PermissionDecisionDeny;
+  bool should_handle_permission_decision_ = true;
 };
 
 }  // namespace web

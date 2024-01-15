@@ -10,11 +10,12 @@ import android.view.View;
 import android.widget.RadioGroup;
 
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 import androidx.core.content.ContextCompat;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceViewHolder;
 
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.chrome.browser.safe_browsing.SafeBrowsingBridge;
 import org.chromium.chrome.browser.safe_browsing.SafeBrowsingState;
 import org.chromium.chrome.browser.safe_browsing.metrics.SettingsAccessPoint;
 import org.chromium.components.browser_ui.settings.ManagedPreferenceDelegate;
@@ -38,10 +39,8 @@ import org.chromium.components.browser_ui.widget.RadioButtonWithDescriptionLayou
  */
 public class RadioButtonGroupSafeBrowsingPreference extends Preference
         implements RadioGroup.OnCheckedChangeListener,
-                   RadioButtonWithDescriptionAndAuxButton.OnAuxButtonClickedListener {
-    /**
-     * Interface that will subscribe to Safe Browsing mode details requested events.
-     */
+                RadioButtonWithDescriptionAndAuxButton.OnAuxButtonClickedListener {
+    /** Interface that will subscribe to Safe Browsing mode details requested events. */
     public interface OnSafeBrowsingModeDetailsRequested {
         /**
          * Notify that details of a Safe Browsing mode are requested.
@@ -91,18 +90,53 @@ public class RadioButtonGroupSafeBrowsingPreference extends Preference
     @Override
     public void onBindViewHolder(PreferenceViewHolder holder) {
         super.onBindViewHolder(holder);
-        mEnhancedProtection = (RadioButtonWithDescriptionAndAuxButton) holder.findViewById(
-                R.id.enhanced_protection);
+        mEnhancedProtection =
+                (RadioButtonWithDescriptionAndAuxButton)
+                        holder.findViewById(R.id.enhanced_protection);
         if (mAccessPoint == SettingsAccessPoint.SURFACE_EXPLORER_PROMO_SLINGER) {
             mEnhancedProtection.setBackgroundColor(
                     ContextCompat.getColor(getContext(), R.color.preference_highlighted_bg_color));
         }
         mEnhancedProtection.setVisibility(View.VISIBLE);
         mEnhancedProtection.setAuxButtonClickedListener(this);
-        mStandardProtection = (RadioButtonWithDescriptionAndAuxButton) holder.findViewById(
-                R.id.standard_protection);
+        // Update the description text with the friendlier settings string based on the value
+        // of the friendlier settings feature flag
+        if (ChromeFeatureList.isEnabled(
+                ChromeFeatureList.FRIENDLIER_SAFE_BROWSING_SETTINGS_ENHANCED_PROTECTION)) {
+            mEnhancedProtection.setDescriptionText(
+                    getContext()
+                            .getString(R.string.safe_browsing_enhanced_protection_summary_updated));
+        }
+        mStandardProtection =
+                (RadioButtonWithDescriptionAndAuxButton)
+                        holder.findViewById(R.id.standard_protection);
         mStandardProtection.setAuxButtonClickedListener(this);
+        // Update the description text with the friendlier settings string based on the value
+        // of the friendlier settings feature flag
+        if (ChromeFeatureList.isEnabled(
+                ChromeFeatureList.FRIENDLIER_SAFE_BROWSING_SETTINGS_STANDARD_PROTECTION)) {
+            if (SafeBrowsingBridge.isHashRealTimeLookupEligibleInSession()) {
+                mStandardProtection.setDescriptionText(
+                        getContext()
+                                .getString(
+                                        R.string
+                                                .safe_browsing_standard_protection_summary_updated_proxy));
+            } else {
+                mStandardProtection.setDescriptionText(
+                        getContext()
+                                .getString(
+                                        R.string
+                                                .safe_browsing_standard_protection_summary_updated));
+            }
+        }
         mNoProtection = (RadioButtonWithDescription) holder.findViewById(R.id.no_protection);
+        // Update the description text with the friendlier settings string based on the value
+        // of the friendlier settings feature flag
+        if (ChromeFeatureList.isEnabled(
+                ChromeFeatureList.FRIENDLIER_SAFE_BROWSING_SETTINGS_ENHANCED_PROTECTION)) {
+            mNoProtection.setDescriptionText(
+                    getContext().getString(R.string.safe_browsing_no_protection_summary_updated));
+        }
         RadioButtonWithDescriptionLayout groupLayout =
                 (RadioButtonWithDescriptionLayout) mNoProtection.getRootView();
         groupLayout.setOnCheckedChangeListener(this);
@@ -111,7 +145,7 @@ public class RadioButtonGroupSafeBrowsingPreference extends Preference
 
         // If Safe Browsing is managed, disable the radio button group, but keep the aux buttons
         // enabled to disclose information.
-        if (mManagedPrefDelegate.isPreferenceClickDisabledByPolicy(this)) {
+        if (mManagedPrefDelegate.isPreferenceClickDisabled(this)) {
             groupLayout.setEnabled(false);
             mEnhancedProtection.setAuxButtonEnabled(true);
             mStandardProtection.setAuxButtonEnabled(true);
@@ -120,8 +154,8 @@ public class RadioButtonGroupSafeBrowsingPreference extends Preference
 
     @Override
     public void onAuxButtonClicked(int clickedButtonId) {
-        assert mSafeBrowsingModeDetailsRequestedListener
-                != null : "The listener should be set if the aux button is clickable.";
+        assert mSafeBrowsingModeDetailsRequestedListener != null
+                : "The listener should be set if the aux button is clickable.";
         if (clickedButtonId == mEnhancedProtection.getId()) {
             mSafeBrowsingModeDetailsRequestedListener.onSafeBrowsingModeDetailsRequested(
                     SafeBrowsingState.ENHANCED_PROTECTION);
@@ -148,7 +182,13 @@ public class RadioButtonGroupSafeBrowsingPreference extends Preference
      */
     public void setManagedPreferenceDelegate(ManagedPreferenceDelegate delegate) {
         mManagedPrefDelegate = delegate;
-        ManagedPreferencesUtils.initPreference(mManagedPrefDelegate, this);
+        // The value of `allowManagedIcon` doesn't matter, because the corresponding layout doesn't
+        // define an icon view.
+        ManagedPreferencesUtils.initPreference(
+                mManagedPrefDelegate,
+                this,
+                /* allowManagedIcon= */ true,
+                /* hasCustomLayout= */ true);
     }
 
     /**
@@ -163,22 +203,18 @@ public class RadioButtonGroupSafeBrowsingPreference extends Preference
         mNoProtection.setChecked(checkedState == SafeBrowsingState.NO_SAFE_BROWSING);
     }
 
-    @VisibleForTesting
     public @SafeBrowsingState int getSafeBrowsingStateForTesting() {
         return mSafeBrowsingState;
     }
 
-    @VisibleForTesting
     public RadioButtonWithDescriptionAndAuxButton getEnhancedProtectionButtonForTesting() {
         return mEnhancedProtection;
     }
 
-    @VisibleForTesting
     public RadioButtonWithDescriptionAndAuxButton getStandardProtectionButtonForTesting() {
         return mStandardProtection;
     }
 
-    @VisibleForTesting
     public RadioButtonWithDescription getNoProtectionButtonForTesting() {
         return mNoProtection;
     }

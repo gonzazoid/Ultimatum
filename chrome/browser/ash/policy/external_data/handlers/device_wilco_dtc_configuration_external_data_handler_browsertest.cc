@@ -6,10 +6,12 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
-#include "base/run_loop.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/json/json_writer.h"
+#include "base/memory/raw_ptr.h"
+#include "base/test/repeating_test_future.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
@@ -47,8 +49,6 @@ class DeviceWilcoDtcConfigurationExternalPolicyHandlerTest
     ASSERT_TRUE(embedded_test_server()->Start());
     DevicePolicyCrosBrowserTest::SetUpOnMainThread();
 
-    policy_change_waiting_run_loop_ = std::make_unique<base::RunLoop>();
-
     BrowserPolicyConnectorAsh* policy_connector =
         g_browser_process->platform_part()->browser_policy_connector_ash();
     ASSERT_TRUE(policy_connector);
@@ -59,10 +59,7 @@ class DeviceWilcoDtcConfigurationExternalPolicyHandlerTest
         policy_service_, PolicyNamespace(POLICY_DOMAIN_CHROME, std::string()));
     policy_change_registrar_->Observe(
         key::kDeviceWilcoDtcConfiguration,
-        base::BindRepeating(
-            &DeviceWilcoDtcConfigurationExternalPolicyHandlerTest ::
-                PolicyChangedCallback,
-            base::Unretained(this)));
+        policy_changed_repeating_future_.GetCallback());
   }
 
   void TearDownOnMainThread() override {
@@ -72,13 +69,20 @@ class DeviceWilcoDtcConfigurationExternalPolicyHandlerTest
 
   bool IsWilcoDtcFeatureEnabled() { return GetParam(); }
 
-  void SetDeviceWilcoDtcConfigurationExternalData(const std::string& policy) {
+  void SetDeviceWilcoDtcConfigurationExternalData(
+      const base::Value::Dict& policy_dict) {
+    std::string policy;
+    EXPECT_TRUE(base::JSONWriter::Write(policy_dict, &policy));
     device_policy()
         ->payload()
         .mutable_device_wilco_dtc_configuration()
         ->set_device_wilco_dtc_configuration(policy);
     RefreshDevicePolicy();
-    WaitUntilPolicyChanged();
+
+    std::tuple<const base::Value*, const base::Value*> prev_curr_policy =
+        policy_changed_repeating_future_.Take();
+    ASSERT_TRUE(std::get<1>(prev_curr_policy));
+    EXPECT_EQ(policy_dict, *std::get<1>(prev_curr_policy));
   }
 
   void FetchExternalData() {
@@ -105,19 +109,11 @@ class DeviceWilcoDtcConfigurationExternalPolicyHandlerTest
   const std::string& external_data() { return external_data_; }
 
  private:
-  void PolicyChangedCallback(const base::Value* old_value,
-                             const base::Value* new_value) {
-    policy_change_waiting_run_loop_->Quit();
-  }
-
-  void WaitUntilPolicyChanged() {
-    policy_change_waiting_run_loop_->Run();
-    policy_change_waiting_run_loop_ = std::make_unique<base::RunLoop>();
-  }
-
   base::test::ScopedFeatureList feature_list_;
-  std::unique_ptr<base::RunLoop> policy_change_waiting_run_loop_;
-  PolicyService* policy_service_ = nullptr;  // owned by BrowserPolicyConnector.
+  base::test::RepeatingTestFuture<const base::Value*, const base::Value*>
+      policy_changed_repeating_future_;
+  raw_ptr<PolicyService, DanglingUntriaged> policy_service_ =
+      nullptr;  // owned by BrowserPolicyConnector.
   std::unique_ptr<PolicyChangeRegistrar> policy_change_registrar_;
   std::string external_data_;
 };

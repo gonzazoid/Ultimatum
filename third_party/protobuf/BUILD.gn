@@ -112,10 +112,10 @@ component("protobuf_lite") {
     configs += [ "//build/config/compiler:optimize_max" ]
   }
 
-  # Remove Sanitizers and coverage for a performance boost when fuzzing. This is
-  # OK because the only fuzzers that use protobuf are libprotobuf-mutator based
-  # fuzzers, and they don't actually target the protobuf code, they just use it.
-  configs -= not_fuzzed_remove_configs
+  # Remove coverage and Sanitizers other than ASan for a performance boost when
+  # fuzzing. ASan can't be removed here because of a bug preventing unsanitized
+  # code from using libc++, which protobuf_full uses.
+  configs -= not_fuzzed_remove_nonasan_configs
   configs += [ "//build/config/sanitizers:not_fuzzed" ]
 
   if (is_win) {
@@ -145,71 +145,80 @@ component("protobuf_lite") {
 # specify the LITE_RUNTIME option. The protocol compiler itself (protoc) falls
 # into that category. Do not use in Chrome code.
 static_library("protobuf_full") {
-  # Prevent people from depending on this outside our file.
-  visibility = [
-    ":*",
+  if (defined(build_with_chromium) && build_with_chromium) {
+    # Prevent people from depending on this outside our file.
+    visibility = [
+      ":*",
 
-    # requires descriptors & reflection; testonly.
-    "//third_party/libprotobuf-mutator:*",
+      # Used for testing protobuf generation.
+      "//base/test:proto_test_support",
 
-    # Chromecast requires descriptors and reflection.
-    "//chromecast/*",
+      # requires descriptors & reflection; testonly.
+      "//third_party/libprotobuf-mutator:*",
 
-    # libassistant requires descriptors and reflection for testing.
-    "//libassistant/*",
+      # Chromecast requires descriptors and reflection.
+      "//chromecast/*",
 
-    # Perfetto uses the full library for testing.
-    "//third_party/perfetto/gn:protobuf_full",
+      # libassistant requires descriptors and reflection for testing.
+      "//libassistant/*",
 
-    # Some tests inside ChromeOS need reflection to parse golden files.
-    # Not included in production code.
-    "//chrome/test:usage_time_limit_unittests",
+      # Perfetto uses the full library for testing.
+      "//third_party/perfetto/gn:protobuf_full",
 
-    # The protobuf-based SQLite and GPU fuzzers need protobuf_full and are not
-    # included in Chrome.
-    "//gpu:gl_lpm_fuzzer_proto",
-    "//gpu:gl_lpm_fuzzer_proto_gen",
-    "//gpu:gl_lpm_shader_to_string_unittest",
-    "//third_party/sqlite:sqlite3_lpm_corpus_gen",
+      # Some tests inside ChromeOS need reflection to parse golden files.
+      # Not included in production code.
+      "//chrome/test:usage_time_limit_unittests",
 
-    # The protobuf-based Mojo LPM fuzzer needs protobuf_full and is not included
-    # in Chrome.
-    "//mojo/public/tools/fuzzers:mojolpm",
+      # The protobuf-based SQLite and GPU fuzzers need protobuf_full and are not
+      # included in Chrome.
+      "//gpu:gl_lpm_fuzzer_proto",
+      "//gpu:gl_lpm_fuzzer_proto_gen",
+      "//gpu:gl_lpm_shader_to_string_unittest",
+      "//testing/libfuzzer/fuzzers:command_buffer_lpm_fuzzer_proto",
+      "//testing/libfuzzer/fuzzers:command_buffer_lpm_fuzzer_proto_gen",
+      "//third_party/sqlite:sqlite3_lpm_corpus_gen",
 
-    # The root store tool is not part of Chrome itself, and needs to parse
-    # human-readable protobufs. Protobuf is stored in //net/cert however as
-    # browser needs to be able to parse serialized protobuf (which is exposed
-    # as a separate lite BUILD rule).
-    "//net/cert:root_store_proto_full",
+      # The protobuf-based Mojo LPM fuzzer needs protobuf_full and is not included
+      # in Chrome.
+      "//mojo/public/tools/fuzzers:mojolpm",
 
-    # The spirv-fuzz fuzzer tool needs protobuf_full and is not included in
-    # Chrome.
-    "//third_party/vulkan-deps/spirv-tools/src:spirv-fuzz",
-    "//third_party/vulkan-deps/spirv-tools/src:spvtools_fuzz",
-    "//third_party/vulkan-deps/spirv-tools/src:spvtools_fuzz_proto",
+      # The root store tool is not part of Chrome itself, and needs to parse
+      # human-readable protobufs. Protobuf is stored in //net/cert however as
+      # browser needs to be able to parse serialized protobuf (which is exposed
+      # as a separate lite BUILD rule).
+      "//net/cert:root_store_proto_full",
 
-    # Some fuzzers for tint need protobuf_full and are not included in Chrome.
-    # TODO(dawn:1339): Remove the *third_party/tint* entries once Tint
-    #                  is merged into Dawn
-    "//third_party/dawn/src/tint/fuzzers/tint_ast_fuzzer:tint_ast_fuzzer",
-    "//third_party/dawn/src/tint/fuzzers/tint_ast_fuzzer:tint_ast_fuzzer_proto",
-    "//third_party/dawn/src/tint/fuzzers/tint_spirv_tools_fuzzer:tint_spirv_tools_fuzzer",
-    "//third_party/dawn/third_party/tint/src/tint/fuzzers/tint_ast_fuzzer:tint_ast_fuzzer",
-    "//third_party/dawn/third_party/tint/src/tint/fuzzers/tint_ast_fuzzer:tint_ast_fuzzer_proto",
-    "//third_party/dawn/third_party/tint/src/tint/fuzzers/tint_spirv_tools_fuzzer:tint_spirv_tools_fuzzer",
+      # The spirv-fuzz fuzzer tool needs protobuf_full and is not included in
+      # Chrome.
+      "//third_party/vulkan-deps/spirv-tools/src:spirv-fuzz",
+      "//third_party/vulkan-deps/spirv-tools/src:spvtools_fuzz",
+      "//third_party/vulkan-deps/spirv-tools/src:spvtools_fuzz_proto",
 
-    # The Cast Core gRPC generator tool.
-    "//third_party/cast_core/public/src/build/chromium:cast_core_grpc_generator",
+      # Some fuzzers for tint need protobuf_full and are not included in Chrome.
+      "//third_party/dawn/src/tint/*",
 
-    # Used for testing protobuf generation.
-    "//components/services/screen_ai:test_support",
-  ]
+      # Dawn LPM Fuzzers
+      "//third_party/dawn/src/dawn/fuzzers:dawn_lpm_proto",
+      "//third_party/dawn/src/dawn/fuzzers:dawn_lpm_proto_gen",
 
-  # TODO(crbug.com/1338164): This ends up linking two copies of
-  # protobuf_lite_sources in some targets, which is an ODR violation.
-  sources = protobuf_lite_sources + protobuf_sources + protobuf_headers
+      # The Cast Core gRPC generator tool.
+      "//third_party/cast_core/public/src/build/chromium:cast_core_grpc_generator",
+    ]
+  }
 
   deps = [ "//third_party/zlib" ]
+
+  # In component build, protobuf_full can't depend on protobuf_lite because
+  # it uses non-PROTOBUF_EXPORT symbols; in non-component build, protobuf_full
+  # must have protobuf_lite as a dependency instead of building
+  # protobuf_lite_sources to avoid ODR violations in targets that link both.
+  # See crbug.com/1338164.
+  if (is_component_build) {
+    sources = protobuf_lite_sources + protobuf_sources + protobuf_headers
+  } else {
+    sources = protobuf_sources + protobuf_headers
+    deps += [ ":protobuf_lite" ]
+  }
 
   if (is_android) {
     libs = [ "log" ]  # Used by src/google/protobuf/stubs/common.cc

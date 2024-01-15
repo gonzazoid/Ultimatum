@@ -6,30 +6,34 @@
 
 #include <windows.h>
 
+#include <shlobj.h>
 #include <stdint.h>
 
 #include <cstring>
 #include <iterator>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
+#include "base/strings/strcat.h"
 #include "base/test/bind.h"
+#include "base/test/gmock_expected_support.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "base/test/test_reg_util_win.h"
 #include "base/threading/simple_thread.h"
+#include "base/win/win_util.h"
 #include "base/win/windows_version.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace base {
-namespace win {
+namespace base::win {
 
 namespace {
 
@@ -42,8 +46,8 @@ class RegistryTest : public testing::Test {
   RegistryTest() : root_key_(std::wstring(L"Software\\") + kRootKey) {}
 
   void SetUp() override {
-    ASSERT_NO_FATAL_FAILURE(
-        registry_override_.OverrideRegistry(HKEY_CURRENT_USER));
+    ASSERT_NO_FATAL_FAILURE(registry_override_.OverrideRegistry(
+        HKEY_CURRENT_USER, &override_path_));
 
     // Create the test's root key.
     RegKey key(HKEY_CURRENT_USER, L"", KEY_CREATE_SUB_KEY);
@@ -57,10 +61,15 @@ class RegistryTest : public testing::Test {
   // use by a test.
   const std::wstring& root_key() const { return root_key_; }
 
+  const std::wstring& override_path() const { return override_path_; }
+
  private:
   registry_util::RegistryOverrideManager registry_override_;
   const std::wstring root_key_;
+  std::wstring override_path_;
 };
+
+}  // namespace
 
 TEST_F(RegistryTest, ValueTest) {
   RegKey key;
@@ -81,7 +90,7 @@ TEST_F(RegistryTest, ValueTest) {
   ASSERT_EQ(ERROR_SUCCESS, key.WriteValue(kDWORDValueName, kDWORDData));
   ASSERT_EQ(ERROR_SUCCESS, key.WriteValue(kInt64ValueName, &kInt64Data,
                                           sizeof(kInt64Data), REG_QWORD));
-  EXPECT_EQ(3U, key.GetValueCount());
+  EXPECT_THAT(key.GetValueCount(), base::test::ValueIs(3U));
   EXPECT_TRUE(key.HasValue(kStringValueName));
   EXPECT_TRUE(key.HasValue(kDWORDValueName));
   EXPECT_TRUE(key.HasValue(kInt64ValueName));
@@ -110,7 +119,7 @@ TEST_F(RegistryTest, ValueTest) {
   ASSERT_EQ(ERROR_SUCCESS, key.DeleteValue(kStringValueName));
   ASSERT_EQ(ERROR_SUCCESS, key.DeleteValue(kDWORDValueName));
   ASSERT_EQ(ERROR_SUCCESS, key.DeleteValue(kInt64ValueName));
-  EXPECT_EQ(0U, key.GetValueCount());
+  EXPECT_THAT(key.GetValueCount(), base::test::ValueIs(0U));
   EXPECT_FALSE(key.HasValue(kStringValueName));
   EXPECT_FALSE(key.HasValue(kDWORDValueName));
   EXPECT_FALSE(key.HasValue(kInt64ValueName));
@@ -154,7 +163,7 @@ TEST_F(RegistryTest, TruncatedCharTest) {
   ASSERT_TRUE(iterator.Valid());
   // Avoid having to use EXPECT_STREQ here by leveraging StringPiece's
   // operator== to perform a deep comparison.
-  EXPECT_EQ(WStringPiece(kName), WStringPiece(iterator.Name()));
+  EXPECT_EQ(std::wstring_view(kName), std::wstring_view(iterator.Name()));
   // ValueSize() is in bytes.
   ASSERT_EQ(std::size(kData), iterator.ValueSize());
   // Value() is NUL terminated.
@@ -175,19 +184,61 @@ TEST_F(RegistryTest, ValueIteratorEmptyKey) {
 
 // Tests that the default value is seen by a value iterator.
 TEST_F(RegistryTest, ValueIteratorDefaultValue) {
-  const WStringPiece kTestString(L"i miss you");
+  const std::wstring_view kTestString(L"i miss you");
   ASSERT_EQ(RegKey(HKEY_CURRENT_USER, root_key().c_str(), KEY_SET_VALUE)
                 .WriteValue(nullptr, kTestString.data()),
             ERROR_SUCCESS);
   RegistryValueIterator iterator(HKEY_CURRENT_USER, root_key().c_str());
   EXPECT_EQ(iterator.ValueCount(), 1U);
   ASSERT_TRUE(iterator.Valid());
-  EXPECT_EQ(WStringPiece(iterator.Name()), WStringPiece());
+  EXPECT_EQ(std::wstring_view(iterator.Name()), std::wstring_view());
   EXPECT_EQ(iterator.ValueSize(), (kTestString.size() + 1) * sizeof(wchar_t));
   EXPECT_EQ(iterator.Type(), REG_SZ);
-  EXPECT_EQ(WStringPiece(iterator.Value()), kTestString);
+  EXPECT_EQ(std::wstring_view(iterator.Value()), kTestString);
   ++iterator;
   EXPECT_FALSE(iterator.Valid());
+}
+
+TEST_F(RegistryTest, NonRecursiveDelete) {
+  RegKey key;
+  // Create root_key()
+  //                  \->Bar (TestValue)
+  //                     \->Foo (TestValue)
+  ASSERT_EQ(ERROR_SUCCESS, key.Open(HKEY_CURRENT_USER, root_key().c_str(),
+                                    KEY_CREATE_SUB_KEY));
+  ASSERT_EQ(ERROR_SUCCESS, key.CreateKey(L"Bar", KEY_WRITE));
+  ASSERT_EQ(ERROR_SUCCESS, key.WriteValue(L"TestValue", L"TestData"));
+  ASSERT_EQ(ERROR_SUCCESS, key.CreateKey(L"Foo", KEY_WRITE));
+  ASSERT_EQ(ERROR_SUCCESS, key.WriteValue(L"TestValue", L"TestData"));
+  key.Close();
+
+  const std::wstring bar_path = root_key() + L"\\Bar";
+  // Non-recursive delete of Bar from root_key() should fail.
+  ASSERT_EQ(ERROR_SUCCESS,
+            key.Open(HKEY_CURRENT_USER, root_key().c_str(), KEY_QUERY_VALUE));
+  ASSERT_NE(ERROR_SUCCESS,
+            key.DeleteKey(L"Bar", RegKey::RecursiveDelete(false)));
+  key.Close();
+  ASSERT_TRUE(
+      RegKey(HKEY_CURRENT_USER, bar_path.c_str(), KEY_QUERY_VALUE).Valid());
+
+  // Non-recursive delete of Bar from itself should fail.
+  ASSERT_EQ(ERROR_SUCCESS,
+            key.Open(HKEY_CURRENT_USER, bar_path.c_str(), KEY_QUERY_VALUE));
+  ASSERT_NE(ERROR_SUCCESS, key.DeleteKey(L"", RegKey::RecursiveDelete(false)));
+  key.Close();
+  ASSERT_TRUE(
+      RegKey(HKEY_CURRENT_USER, root_key().c_str(), KEY_QUERY_VALUE).Valid());
+
+  // Non-recursive delete of the subkey and then root_key() should succeed.
+  ASSERT_EQ(ERROR_SUCCESS,
+            key.Open(HKEY_CURRENT_USER, bar_path.c_str(), KEY_QUERY_VALUE));
+  ASSERT_EQ(ERROR_SUCCESS,
+            key.DeleteKey(L"Foo", RegKey::RecursiveDelete(false)));
+  ASSERT_EQ(ERROR_SUCCESS, key.DeleteKey(L"", RegKey::RecursiveDelete(false)));
+  key.Close();
+  ASSERT_FALSE(
+      RegKey(HKEY_CURRENT_USER, bar_path.c_str(), KEY_QUERY_VALUE).Valid());
 }
 
 TEST_F(RegistryTest, RecursiveDelete) {
@@ -220,13 +271,6 @@ TEST_F(RegistryTest, RecursiveDelete) {
   ASSERT_EQ(ERROR_SUCCESS, key.WriteValue(L"TestValue", L"TestData"));
   ASSERT_EQ(ERROR_SUCCESS,
             key.Open(HKEY_CURRENT_USER, key_path.c_str(), KEY_READ));
-
-  ASSERT_EQ(ERROR_SUCCESS,
-            key.Open(HKEY_CURRENT_USER, root_key().c_str(), KEY_WRITE));
-  ASSERT_NE(ERROR_SUCCESS, key.DeleteEmptyKey(L""));
-  ASSERT_NE(ERROR_SUCCESS, key.DeleteEmptyKey(L"Bar\\Foo"));
-  ASSERT_NE(ERROR_SUCCESS, key.DeleteEmptyKey(L"Bar"));
-  ASSERT_EQ(ERROR_SUCCESS, key.DeleteEmptyKey(L"Foo"));
 
   ASSERT_EQ(ERROR_SUCCESS,
             key.Open(HKEY_CURRENT_USER, key_path.c_str(), KEY_CREATE_SUB_KEY));
@@ -266,6 +310,24 @@ TEST_F(RegistryTest, OpenSubKey) {
   ASSERT_EQ(ERROR_SUCCESS, key.DeleteKey(L"foo"));
 }
 
+TEST_F(RegistryTest, InvalidRelativeKeyCreate) {
+  RegKey key(HKEY_CURRENT_USER,
+             base::StrCat({this->root_key(), L"_DoesNotExist"}).c_str(),
+             KEY_WOW64_32KEY | KEY_READ);
+  ASSERT_EQ(key.CreateKey(L"SomeSubKey", KEY_WOW64_32KEY | KEY_WRITE),
+            ERROR_INVALID_HANDLE);
+}
+
+TEST_F(RegistryTest, InvalidRelativeKeyOpen) {
+  RegKey key(HKEY_CURRENT_USER,
+             base::StrCat({this->root_key(), L"_DoesNotExist"}).c_str(),
+             KEY_WOW64_32KEY | KEY_READ);
+  ASSERT_EQ(key.OpenKey(L"SomeSubKey", KEY_WOW64_32KEY | KEY_READ),
+            ERROR_INVALID_HANDLE);
+}
+
+namespace {
+
 class TestChangeDelegate {
  public:
   TestChangeDelegate() = default;
@@ -285,6 +347,8 @@ class TestChangeDelegate {
  private:
   bool called_ = false;
 };
+
+}  // namespace
 
 TEST_F(RegistryTest, ChangeCallback) {
   RegKey key;
@@ -347,11 +411,6 @@ class RegistryWatcherThread : public SimpleThread {
 }  // namespace
 
 TEST_F(RegistryTest, WatcherNotSignaledOnInitiatingThreadExit) {
-  if (base::win::GetVersion() < base::win::Version::WIN8) {
-    // REG_NOTIFY_THREAD_AGNOSTIC is supported on Win8+.
-    return;
-  }
-
   RegKey key;
 
   ASSERT_EQ(key.Open(HKEY_CURRENT_USER, root_key().c_str(), KEY_READ),
@@ -390,44 +449,6 @@ TEST_F(RegistryTest, WatcherNotSignaledOnInitiatingThreadExit) {
             ERROR_SUCCESS);
   ASSERT_TRUE(key2.Valid());
   ASSERT_EQ(key2.WriteValue(L"name", L"data"), ERROR_SUCCESS);
-
-  // Wait for the watcher to be signaled.
-  run_loop.Run();
-}
-
-TEST_F(RegistryTest, WatcherSignaledOnInitiatingThreadExitOnWin7) {
-  if (base::win::GetVersion() >= base::win::Version::WIN8) {
-    // REG_NOTIFY_THREAD_AGNOSTIC is used on Win8+; this test
-    // validates the behavior on Win7 where that is not available.
-    return;
-  }
-
-  RegKey key;
-
-  ASSERT_EQ(key.Open(HKEY_CURRENT_USER, root_key().c_str(), KEY_READ),
-            ERROR_SUCCESS);
-
-  auto test_task_runner = base::MakeRefCounted<base::TestMockTimeTaskRunner>(
-      base::TestMockTimeTaskRunner::Type::kBoundToThread);
-  ::testing::StrictMock<base::MockCallback<base::win::RegKey::ChangeCallback>>
-      change_cb;
-
-  test_task_runner->PostTask(FROM_HERE,
-                             BindOnce(IgnoreResult(&RegKey::StartWatching),
-                                      Unretained(&key), change_cb.Get()));
-
-  // Expect that a notification is sent when the thread exits. Exit the run loop
-  // when this happens.
-  base::RunLoop run_loop;
-  EXPECT_CALL(change_cb, Run).WillOnce([&run_loop]() { run_loop.Quit(); });
-
-  {
-    // Start the watch on a thread that then goes away.
-    RegistryWatcherThread watcher_thread(test_task_runner);
-    watcher_thread.Start();
-    watcher_thread.Join();
-  }
-  test_task_runner->DetachFromThread();
 
   // Wait for the watcher to be signaled.
   run_loop.Run();
@@ -472,6 +493,94 @@ TEST_F(RegistryTest, TestMoveAssign) {
   EXPECT_EQ(foo, 1U);
 }
 
+// Verify that either the platform, or the API-integration, causes deletion
+// attempts via an invalid handle to fail with the expected error code.
+TEST_F(RegistryTest, DeleteWithInvalidRegKey) {
+  RegKey key;
+
+  static const wchar_t kFooName[] = L"foo";
+
+  EXPECT_EQ(key.DeleteKey(kFooName), ERROR_INVALID_HANDLE);
+  EXPECT_EQ(key.DeleteValue(kFooName), ERROR_INVALID_HANDLE);
+}
+
+// A test harness for tests of RegKey::DeleteKey; parameterized on whether to
+// perform non-recursive or recursive deletes.
+class DeleteKeyRegistryTest
+    : public RegistryTest,
+      public ::testing::WithParamInterface<RegKey::RecursiveDelete> {
+ protected:
+  DeleteKeyRegistryTest() = default;
+
+ private:
+};
+
+// Test that DeleteKey does not follow symbolic links.
+TEST_P(DeleteKeyRegistryTest, DoesNotFollowLinks) {
+  // Create a subkey that should not be deleted.
+  std::wstring target_path = root_key() + L"\\LinkTarget";
+  {
+    RegKey target;
+    ASSERT_EQ(target.Create(HKEY_CURRENT_USER, target_path.c_str(), KEY_WRITE),
+              ERROR_SUCCESS);
+    ASSERT_EQ(target.WriteValue(L"IsTarget", 1U), ERROR_SUCCESS);
+  }
+
+  // Create a link to the above key.
+  std::wstring source_path = root_key() + L"\\LinkSource";
+  {
+    HKEY link_handle = {};
+    ASSERT_EQ(RegCreateKeyEx(HKEY_CURRENT_USER, source_path.c_str(), 0, nullptr,
+                             REG_OPTION_CREATE_LINK | REG_OPTION_NON_VOLATILE,
+                             KEY_WRITE, nullptr, &link_handle, nullptr),
+              ERROR_SUCCESS);
+    RegKey link(std::exchange(link_handle, HKEY{}));
+    ASSERT_TRUE(link.Valid());
+
+    std::wstring user_sid;
+    ASSERT_TRUE(GetUserSidString(&user_sid));
+
+    std::wstring value =
+        base::StrCat({L"\\Registry\\User\\", user_sid, L"\\", override_path(),
+                      L"\\", root_key(), L"\\LinkTarget"});
+    ASSERT_EQ(link.WriteValue(L"SymbolicLinkValue", value.data(),
+                              value.size() * sizeof(wchar_t), REG_LINK),
+              ERROR_SUCCESS);
+  }
+
+  // Verify that the link works.
+  {
+    RegKey link;
+    ASSERT_EQ(link.Open(HKEY_CURRENT_USER, source_path.c_str(), KEY_READ),
+              ERROR_SUCCESS);
+    DWORD value = 0;
+    ASSERT_EQ(link.ReadValueDW(L"IsTarget", &value), ERROR_SUCCESS);
+    ASSERT_EQ(value, 1U);
+  }
+
+  // Now delete the link and ensure that it was deleted, but not the target.
+  ASSERT_EQ(RegKey(HKEY_CURRENT_USER, root_key().c_str(), KEY_READ)
+                .DeleteKey(L"LinkSource", GetParam()),
+            ERROR_SUCCESS);
+  {
+    RegKey source;
+    ASSERT_NE(source.Open(HKEY_CURRENT_USER, source_path.c_str(), KEY_READ),
+              ERROR_SUCCESS);
+  }
+  {
+    RegKey target;
+    ASSERT_EQ(target.Open(HKEY_CURRENT_USER, target_path.c_str(), KEY_READ),
+              ERROR_SUCCESS);
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(NonRecursive,
+                         DeleteKeyRegistryTest,
+                         ::testing::Values(RegKey::RecursiveDelete(false)));
+INSTANTIATE_TEST_SUITE_P(Recursive,
+                         DeleteKeyRegistryTest,
+                         ::testing::Values(RegKey::RecursiveDelete(true)));
+
 // A test harness for tests that use HKLM to test WoW redirection and such.
 // TODO(https://crbug.com/377917): The tests here that write to the registry are
 // disabled because they need work to handle parallel runs of different tests.
@@ -501,14 +610,31 @@ class RegistryTestHKLM : public ::testing::Test {
   const std::wstring foo_software_key_;
 };
 
+class RegistryTestHKLMAdmin : public RegistryTestHKLM {
+ protected:
+  void SetUp() override {
+    if (!IsRedirectorPresent()) {
+      GTEST_SKIP();
+    }
+    if (!::IsUserAnAdmin()) {
+      GTEST_SKIP();
+    }
+    // Clean up any stale registry keys.
+    for (const REGSAM mask :
+         {this->kNativeViewMask, this->kRedirectedViewMask}) {
+      RegKey key;
+      if (key.Open(HKEY_LOCAL_MACHINE, L"Software", KEY_SET_VALUE | mask) ==
+          ERROR_SUCCESS) {
+        key.DeleteKey(kRootKey);
+      }
+    }
+  }
+};
+
 // This test requires running as an Administrator as it tests redirected
 // registry writes to HKLM\Software
 // http://msdn.microsoft.com/en-us/library/windows/desktop/aa384253.aspx
-// TODO(wfh): flaky test on Vista.  See http://crbug.com/377917
-TEST_F(RegistryTestHKLM, DISABLED_Wow64RedirectedFromNative) {
-  if (!IsRedirectorPresent())
-    return;
-
+TEST_F(RegistryTestHKLMAdmin, Wow64RedirectedFromNative) {
   RegKey key;
 
   // Test redirected key access from non-redirected.
@@ -548,10 +674,7 @@ TEST_F(RegistryTestHKLM, SameWowFlags) {
   ASSERT_EQ(ERROR_SUCCESS, key.OpenKey(L"Windows", KEY_READ | KEY_WOW64_64KEY));
 }
 
-// TODO(wfh): flaky test on Vista.  See http://crbug.com/377917
-TEST_F(RegistryTestHKLM, DISABLED_Wow64NativeFromRedirected) {
-  if (!IsRedirectorPresent())
-    return;
+TEST_F(RegistryTestHKLMAdmin, Wow64NativeFromRedirected) {
   RegKey key;
 
   // Test non-redirected key access from redirected.
@@ -575,7 +698,4 @@ TEST_F(RegistryTestHKLM, DISABLED_Wow64NativeFromRedirected) {
   ASSERT_EQ(ERROR_SUCCESS, key.DeleteKey(kRootKey));
 }
 
-}  // namespace
-
-}  // namespace win
-}  // namespace base
+}  // namespace base::win

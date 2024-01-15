@@ -11,7 +11,6 @@
 #include "base/hash/hash.h"
 #include "base/memory/raw_ptr.h"
 #include "base/trace_event/memory_allocator_dump.h"
-#include "components/viz/common/resources/resource_format.h"
 #include "components/viz/common/viz_common_export.h"
 #include "gpu/command_buffer/common/mailbox.h"
 #include "ui/gfx/geometry/size.h"
@@ -28,7 +27,7 @@ struct SharedBitmapIdHash {
 // An object returned by the SharedBitmapGenerator that exposes the
 // pixels for a SharedBitmapId. They are exposed via a class so that
 // this object (or its subclass) can ensure the lifetime of the pixels
-// is not cut short. While this object is kept alive, the pixels should
+// is not cut short. While this object is kept alive, the pixels must
 // remain valid.
 class VIZ_COMMON_EXPORT SharedBitmap {
  public:
@@ -43,7 +42,7 @@ class VIZ_COMMON_EXPORT SharedBitmap {
 
   uint8_t* pixels() { return pixels_; }
 
- private:
+ protected:
   raw_ptr<uint8_t> pixels_;
 };
 

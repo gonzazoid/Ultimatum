@@ -5,7 +5,7 @@
 #ifndef COMPONENTS_SAFE_BROWSING_CORE_BROWSER_SAFE_BROWSING_SYNC_OBSERVER_H_
 #define COMPONENTS_SAFE_BROWSING_CORE_BROWSER_SAFE_BROWSING_SYNC_OBSERVER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 namespace safe_browsing {
 
@@ -16,9 +16,10 @@ class SafeBrowsingSyncObserver {
 
   virtual ~SafeBrowsingSyncObserver() = default;
 
-  // Starts to observe sync state changed events. `callback` will be invoked
-  // if sync state has changed. `callback` can be invoked multiple times.
-  virtual void ObserveSyncStateChanged(Callback callback) = 0;
+  // Starts to observe history sync state changed events. `callback` will be
+  // invoked if the history sync state has changed. `callback` can be invoked
+  // multiple times.
+  virtual void ObserveHistorySyncStateChanged(Callback callback) = 0;
 };
 
 }  // namespace safe_browsing

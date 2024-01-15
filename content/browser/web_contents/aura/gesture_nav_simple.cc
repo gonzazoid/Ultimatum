@@ -16,6 +16,7 @@
 #include "content/browser/web_contents/aura/types.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/overscroll_configuration.h"
+#include "content/public/browser/preloading.h"
 #include "third_party/skia/include/core/SkDrawLooper.h"
 #include "ui/aura/window.h"
 #include "ui/compositor/layer.h"
@@ -43,7 +44,7 @@ constexpr SkColor kArrowColorAfterActivation = SK_ColorWHITE;
 
 // Parameters defining the background circle of the affordance.
 constexpr int kBackgroundRadius = 20;
-constexpr SkColor kBackgroundColorBeforeActication = SK_ColorWHITE;
+constexpr SkColor kBackgroundColorBeforeActivation = SK_ColorWHITE;
 constexpr SkColor kBackgroundColorAfterActivation = gfx::kGoogleBlue600;
 constexpr int kBgShadowOffsetY = 2;
 constexpr int kBgShadowBlurRadius = 8;
@@ -97,12 +98,15 @@ bool ShouldReload(const NavigationController& controller, OverscrollMode mode) {
 }
 
 NavigationDirection GetDirectionFromMode(OverscrollMode mode) {
-  if (mode == (base::i18n::IsRTL() ? OVERSCROLL_WEST : OVERSCROLL_EAST))
+  if (mode == (base::i18n::IsRTL() ? OVERSCROLL_WEST : OVERSCROLL_EAST)) {
     return NavigationDirection::BACK;
-  if (mode == (base::i18n::IsRTL() ? OVERSCROLL_EAST : OVERSCROLL_WEST))
+  }
+  if (mode == (base::i18n::IsRTL() ? OVERSCROLL_EAST : OVERSCROLL_WEST)) {
     return NavigationDirection::FORWARD;
-  if (mode == OVERSCROLL_SOUTH)
+  }
+  if (mode == OVERSCROLL_SOUTH) {
     return NavigationDirection::RELOAD;
+  }
   return NavigationDirection::NONE;
 }
 
@@ -111,15 +115,13 @@ void RecordGestureOverscrollCancelled(NavigationDirection direction,
                                       OverscrollSource source) {
   DCHECK_NE(direction, NavigationDirection::NONE);
   DCHECK_NE(source, OverscrollSource::NONE);
-  UMA_HISTOGRAM_ENUMERATION("Overscroll.Cancelled3",
-                            GetUmaNavigationType(direction, source),
-                            NAVIGATION_TYPE_COUNT);
-  if (direction == NavigationDirection::BACK)
+  if (direction == NavigationDirection::BACK) {
     RecordAction(base::UserMetricsAction("Overscroll_Cancelled.Back"));
-  else if (direction == NavigationDirection::FORWARD)
+  } else if (direction == NavigationDirection::FORWARD) {
     RecordAction(base::UserMetricsAction("Overscroll_Cancelled.Forward"));
-  else
+  } else {
     RecordAction(base::UserMetricsAction("Overscroll_Cancelled.Reload"));
+  }
 }
 
 }  // namespace
@@ -222,12 +224,13 @@ Affordance::Affordance(GestureNavSimple* owner,
       painted_layer_(ui::LAYER_TEXTURED) {
   DCHECK(mode_ == OVERSCROLL_EAST || mode_ == OVERSCROLL_WEST ||
          mode_ == OVERSCROLL_SOUTH);
-  if (mode_ == OVERSCROLL_EAST)
+  if (mode_ == OVERSCROLL_EAST) {
     arrow_icon_ = &vector_icons::kBackArrowIcon;
-  else if (mode_ == OVERSCROLL_WEST)
+  } else if (mode_ == OVERSCROLL_WEST) {
     arrow_icon_ = &vector_icons::kForwardArrowIcon;
-  else if (mode_ == OVERSCROLL_SOUTH)
+  } else if (mode_ == OVERSCROLL_SOUTH) {
     arrow_icon_ = &vector_icons::kReloadIcon;
+  }
 
   DCHECK(arrow_icon_);
   root_layer_.SetBounds(content_bounds);
@@ -249,8 +252,9 @@ void Affordance::SetDragProgress(float progress) {
   DCHECK_EQ(State::DRAGGING, state_);
   DCHECK_LE(0.f, progress);
 
-  if (drag_progress_ == progress)
+  if (drag_progress_ == progress) {
     return;
+  }
   drag_progress_ = progress;
 
   UpdatePaintedLayer();
@@ -304,12 +308,13 @@ gfx::Point Affordance::GetPaintedLayerOrigin(
 void Affordance::UpdatePaintedLayer() {
   const float offset = GetAffordanceProgress() * kAffordanceActivationOffset;
   gfx::Transform transform;
-  if (mode_ == OVERSCROLL_EAST)
+  if (mode_ == OVERSCROLL_EAST) {
     transform.Translate(offset, 0);
-  else if (mode_ == OVERSCROLL_WEST)
+  } else if (mode_ == OVERSCROLL_WEST) {
     transform.Translate(-offset, 0);
-  else
+  } else {
     transform.Translate(0, offset);
+  }
   painted_layer_.SetTransform(transform);
 }
 
@@ -322,8 +327,9 @@ void Affordance::SetAbortProgress(float progress) {
   DCHECK_LE(0.f, progress);
   DCHECK_GE(1.f, progress);
 
-  if (abort_progress_ == progress)
+  if (abort_progress_ == progress) {
     return;
+  }
   abort_progress_ = progress;
 
   UpdatePaintedLayer();
@@ -335,8 +341,9 @@ void Affordance::SetCompleteProgress(float progress) {
   DCHECK_LE(0.f, progress);
   DCHECK_GE(1.f, progress);
 
-  if (complete_progress_ == progress)
+  if (complete_progress_ == progress) {
     return;
+  }
   complete_progress_ = progress;
 
   painted_layer_.SetOpacity(gfx::Tween::CalculateValue(kBurstAnimationTweenType,
@@ -397,7 +404,7 @@ void Affordance::OnPaintLayer(const ui::PaintContext& context) {
   bg_flags.setAntiAlias(true);
   bg_flags.setStyle(cc::PaintFlags::kFill_Style);
   bg_flags.setColor(progress >= 1.0f ? kBackgroundColorAfterActivation
-                                     : kBackgroundColorBeforeActication);
+                                     : kBackgroundColorBeforeActivation);
   gfx::ShadowValues shadow;
   shadow.emplace_back(gfx::Vector2d(0, kBgShadowOffsetY), kBgShadowBlurRadius,
                       kBgShadowColor);
@@ -455,8 +462,9 @@ gfx::Size GestureNavSimple::GetDisplaySize() const {
 }
 
 bool GestureNavSimple::OnOverscrollUpdate(float delta_x, float delta_y) {
-  if (!affordance_ || affordance_->IsFinishing())
+  if (!affordance_ || affordance_->IsFinishing()) {
     return false;
+  }
   float delta = std::abs(mode_ == OVERSCROLL_SOUTH ? delta_y : delta_x);
   DCHECK_LE(delta, max_delta_);
   affordance_->SetDragProgress(delta / completion_threshold_);
@@ -475,8 +483,9 @@ void GestureNavSimple::OnOverscrollComplete(OverscrollMode overscroll_mode) {
   mode_ = OVERSCROLL_NONE;
   OverscrollSource overscroll_source = source_;
   source_ = OverscrollSource::NONE;
-  if (!affordance_ || affordance_->IsFinishing())
+  if (!affordance_ || affordance_->IsFinishing()) {
     return;
+  }
 
   affordance_->Complete();
 
@@ -494,16 +503,13 @@ void GestureNavSimple::OnOverscrollComplete(OverscrollMode overscroll_mode) {
   }
 
   if (direction != NavigationDirection::NONE) {
-    UMA_HISTOGRAM_ENUMERATION(
-        "Overscroll.Navigated3",
-        GetUmaNavigationType(direction, overscroll_source),
-        UmaNavigationType::NAVIGATION_TYPE_COUNT);
-    if (direction == NavigationDirection::BACK)
+    if (direction == NavigationDirection::BACK) {
       RecordAction(base::UserMetricsAction("Overscroll_Navigated.Back"));
-    else if (direction == NavigationDirection::FORWARD)
+    } else if (direction == NavigationDirection::FORWARD) {
       RecordAction(base::UserMetricsAction("Overscroll_Navigated.Forward"));
-    else
+    } else {
       RecordAction(base::UserMetricsAction("Overscroll_Navigated.Reload"));
+    }
   } else {
     RecordGestureOverscrollCancelled(GetDirectionFromMode(overscroll_mode),
                                      overscroll_source);
@@ -538,8 +544,9 @@ void GestureNavSimple::OnOverscrollModeChange(OverscrollMode old_mode,
   }
 
   DCHECK_EQ(mode_, old_mode);
-  if (mode_ == new_mode)
+  if (mode_ == new_mode) {
     return;
+  }
   mode_ = new_mode;
 
   NavigationControllerImpl& controller = web_contents_->GetController();
@@ -558,10 +565,11 @@ void GestureNavSimple::OnOverscrollModeChange(OverscrollMode old_mode,
   DCHECK_NE(OverscrollSource::NONE, source);
   source_ = source;
 
-  UMA_HISTOGRAM_ENUMERATION(
-      "Overscroll.Started3",
-      GetUmaNavigationType(GetDirectionFromMode(mode_), source_),
-      UmaNavigationType::NAVIGATION_TYPE_COUNT);
+  if (ShouldNavigateBack(&controller, mode_)) {
+    web_contents_->BackNavigationLikely(
+        preloading_predictor::kBackGestureNavigation,
+        WindowOpenDisposition::CURRENT_TAB);
+  }
 
   const bool is_touchpad = source == OverscrollSource::TOUCHPAD;
   const float start_threshold =
@@ -595,10 +603,11 @@ void GestureNavSimple::OnOverscrollModeChange(OverscrollMode old_mode,
   parent->StackAtTop(affordance_->root_layer());
 }
 
-absl::optional<float> GestureNavSimple::GetMaxOverscrollDelta() const {
-  if (affordance_)
+std::optional<float> GestureNavSimple::GetMaxOverscrollDelta() const {
+  if (affordance_) {
     return max_delta_;
-  return absl::nullopt;
+  }
+  return std::nullopt;
 }
 
 }  // namespace content

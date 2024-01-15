@@ -7,13 +7,14 @@
 #include <utility>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/client_update_protocol/ecdsa.h"
 #include "components/update_client/configurator.h"
 #include "components/update_client/network.h"
@@ -25,10 +26,10 @@ namespace update_client {
 namespace {
 
 // This is an ECDSA prime256v1 named-curve key.
-constexpr int kKeyVersion = 12;
+constexpr int kKeyVersion = 13;
 constexpr char kKeyPubBytesBase64[] =
-    "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAETGhzuDJHRFx7//YqqdaNTY3dZ8X9"
-    "XhUC0o7fmZtOFe9cjPML9KVHPa2M5hxhJThIbRQMElksHy4llZoWg6KTZw==";
+    "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE82WKnMkb4neVRYgyGaXoEY5nDaiO"
+    "renjt0LMSK/WiPs4+fsjz9kQs+T1PjJR7Hv2upGrsJcSaF8E1nK4WrSucA==";
 
 // The content type for all protocol requests.
 constexpr char kContentType[] = "application/json";
@@ -50,9 +51,7 @@ const std::string& SelectCupServerProof(
 RequestSender::RequestSender(scoped_refptr<Configurator> config)
     : config_(config) {}
 
-RequestSender::~RequestSender() {
-  DCHECK(thread_checker_.CalledOnValidThread());
-}
+RequestSender::~RequestSender() = default;
 
 void RequestSender::Send(
     const std::vector<GURL>& urls,
@@ -60,7 +59,7 @@ void RequestSender::Send(
     const std::string& request_body,
     bool use_signing,
     RequestSenderCallback request_sender_callback) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   urls_ = urls;
   request_extra_headers_ = request_extra_headers;
@@ -76,23 +75,24 @@ void RequestSender::Send(
 
   if (use_signing_) {
     public_key_ = GetKey(kKeyPubBytesBase64);
-    if (public_key_.empty())
+    if (public_key_.empty()) {
       return HandleSendError(
           static_cast<int>(ProtocolError::MISSING_PUBLIC_KEY), 0);
+    }
   }
 
   SendInternal();
 }
 
 void RequestSender::SendInternal() {
-  DCHECK(cur_url_ != urls_.end());
-  DCHECK(cur_url_->is_valid());
-  DCHECK(thread_checker_.CalledOnValidThread());
+  CHECK(cur_url_ != urls_.end());
+  CHECK(cur_url_->is_valid());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   GURL url(*cur_url_);
 
   if (use_signing_) {
-    DCHECK(!public_key_.empty());
+    CHECK(!public_key_.empty());
     signer_ = client_update_protocol::Ecdsa::Create(kKeyVersion, public_key_);
     std::string request_query_string;
     signer_->SignRequest(request_body_, &request_query_string);
@@ -104,12 +104,13 @@ void RequestSender::SendInternal() {
 
   network_fetcher_ = config_->GetNetworkFetcherFactory()->Create();
   if (!network_fetcher_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&RequestSender::SendInternalComplete,
                        base::Unretained(this),
                        static_cast<int>(ProtocolError::URL_FETCHER_FAILED),
                        std::string(), std::string(), std::string(), 0));
+    return;
   }
   network_fetcher_->PostRequest(
       url, request_body_, kContentType, request_extra_headers_,
@@ -126,21 +127,22 @@ void RequestSender::SendInternalComplete(
     const std::string& response_cup_server_proof,
     int retry_after_sec) {
   VLOG(2) << "Omaha response received: " << response_body;
+  VLOG_IF(2, error) << "Omaha send error: " << error;
 
   if (!error) {
     if (!use_signing_) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(request_sender_callback_), 0,
                                     response_body, retry_after_sec));
       return;
     }
 
-    DCHECK(use_signing_);
-    DCHECK(signer_);
+    CHECK(use_signing_);
+    CHECK(signer_);
     if (signer_->ValidateResponse(
             response_body,
             SelectCupServerProof(response_cup_server_proof, response_etag))) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(request_sender_callback_), 0,
                                     response_body, retry_after_sec));
       return;
@@ -149,23 +151,22 @@ void RequestSender::SendInternalComplete(
     error = static_cast<int>(ProtocolError::RESPONSE_NOT_TRUSTED);
   }
 
-  DCHECK(error);
+  CHECK(error);
 
   // A positive |retry_after_sec| is a hint from the server that the client
   // should not send further request until the cooldown has expired.
   if (retry_after_sec <= 0 && ++cur_url_ != urls_.end() &&
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(&RequestSender::SendInternal,
                                     base::Unretained(this)))) {
     return;
   }
 
-  VLOG(2) << "Omaha send error: " << response_body;
   HandleSendError(error, retry_after_sec);
 }
 
 void RequestSender::OnResponseStarted(int response_code,
-                                      int64_t content_length) {
+                                      int64_t /*content_length*/) {
   response_code_ = response_code;
 }
 
@@ -176,23 +177,25 @@ void RequestSender::OnNetworkFetcherComplete(
     const std::string& header_etag,
     const std::string& xheader_cup_server_proof,
     int64_t xheader_retry_after_sec) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   VLOG(1) << "Request completed from url: " << original_url.spec();
 
   int error = -1;
-  if (!net_error && response_code_ == 200)
+  if (!net_error && response_code_ == 200) {
     error = 0;
-  else if (response_code_ != -1)
+  } else if (response_code_ != -1) {
     error = response_code_;
-  else
+  } else {
     error = net_error;
+  }
 
   int retry_after_sec = -1;
-  if (original_url.SchemeIsCryptographic() && error > 0)
+  if (original_url.SchemeIsCryptographic() && error > 0) {
     retry_after_sec = base::saturated_cast<int>(xheader_retry_after_sec);
+  }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&RequestSender::SendInternalComplete,
                      base::Unretained(this), error,
@@ -201,7 +204,7 @@ void RequestSender::OnNetworkFetcherComplete(
 }
 
 void RequestSender::HandleSendError(int error, int retry_after_sec) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(request_sender_callback_), error,
                                 std::string(), retry_after_sec));
 }

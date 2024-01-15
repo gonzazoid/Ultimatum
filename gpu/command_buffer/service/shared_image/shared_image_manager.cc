@@ -9,15 +9,15 @@
 #include <memory>
 #include <utility>
 
+#include "base/containers/contains.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/process_memory_dump.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
-#include "components/viz/common/resources/resource_format_utils.h"
 #include "gpu/command_buffer/common/shared_image_trace_utils.h"
 #include "gpu/command_buffer/service/shared_context_state.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_representation.h"
@@ -25,7 +25,16 @@
 
 #if BUILDFLAG(IS_WIN)
 #include "gpu/command_buffer/service/dxgi_shared_handle_manager.h"
+#include "ui/gfx/win/d3d_shared_fence.h"
 #include "ui/gl/gl_angle_util_win.h"
+#endif
+
+#if BUILDFLAG(IS_OZONE)
+#include "ui/ozone/public/ozone_platform.h"
+#endif
+
+#if BUILDFLAG(IS_ANDROID)
+#include "base/android/android_hardware_buffer_compat.h"
 #endif
 
 #if DCHECK_IS_ON()
@@ -73,24 +82,25 @@ class SCOPED_LOCKABLE SharedImageManager::AutoLock {
 
 SharedImageManager::SharedImageManager(bool thread_safe,
                                        bool display_context_on_another_thread)
-    : display_context_on_another_thread_(display_context_on_another_thread) {
-  DCHECK(!display_context_on_another_thread || thread_safe);
-  if (thread_safe)
-    lock_.emplace();
+    : display_context_on_another_thread_(display_context_on_another_thread)
 #if BUILDFLAG(IS_WIN)
-  auto d3d11_device = gl::QueryD3D11DeviceObjectFromANGLE();
-  if (d3d11_device) {
-    dxgi_shared_handle_manager_ =
-        base::MakeRefCounted<DXGISharedHandleManager>(std::move(d3d11_device));
-  }
+      ,
+      dxgi_shared_handle_manager_(
+          base::MakeRefCounted<DXGISharedHandleManager>())
 #endif
+{
+  DCHECK(!display_context_on_another_thread || thread_safe);
+  if (thread_safe) {
+    lock_.emplace();
+  }
   CALLED_ON_VALID_THREAD();
 
   // In tests there might not be a SingleThreadTaskRunner for this thread.
-  if (base::ThreadTaskRunnerHandle::IsSet()) {
+  if (base::SingleThreadTaskRunner::HasCurrentDefault()) {
     is_registered_as_memory_dump_provider_ = true;
     base::trace_event::MemoryDumpManager::GetInstance()->RegisterDumpProvider(
-        this, "SharedImageManager", base::ThreadTaskRunnerHandle::Get());
+        this, "SharedImageManager",
+        base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 }
 
@@ -114,33 +124,40 @@ SharedImageManager::Register(std::unique_ptr<SharedImageBacking> backing,
   DCHECK(backing->mailbox().IsSharedImage());
 
   AutoLock autolock(this);
-  if (images_.find(backing->mailbox()) != images_.end()) {
+  if (base::Contains(images_, backing->mailbox())) {
     LOG(ERROR) << "SharedImageManager::Register: Trying to register an "
                   "already registered mailbox.";
     return nullptr;
   }
 
+  UMA_HISTOGRAM_ENUMERATION("GPU.SharedImage.BackingType", backing->GetType());
+
   // TODO(jonross): Determine how the direct destruction of a
   // SharedImageRepresentationFactoryRef leads to ref-counting issues as
   // well as thread-checking failures in tests.
   auto factory_ref = std::make_unique<SharedImageRepresentationFactoryRef>(
-      this, backing.get(), tracker);
+      this, backing.get(), tracker, /*is_primary=*/true);
   images_.emplace(std::move(backing));
 
   return factory_ref;
 }
 
-void SharedImageManager::OnContextLost(const Mailbox& mailbox) {
+std::unique_ptr<SharedImageRepresentationFactoryRef>
+SharedImageManager::AddSecondaryReference(const Mailbox& mailbox,
+                                          MemoryTypeTracker* tracker) {
   CALLED_ON_VALID_THREAD();
+  DCHECK(mailbox.IsSharedImage());
 
   AutoLock autolock(this);
   auto found = images_.find(mailbox);
   if (found == images_.end()) {
-    LOG(ERROR) << "SharedImageManager::OnContextLost: Trying to mark constext "
-                  "lost on a non existent mailbox.";
-    return;
+    LOG(ERROR) << "SharedImageManager::AddSecondaryReference: Trying to add "
+                  "reference to non-existent mailbox.";
+    return nullptr;
   }
-  (*found)->OnContextLost();
+
+  return std::make_unique<SharedImageRepresentationFactoryRef>(
+      this, found->get(), tracker, /*is_primary=*/false);
 }
 
 std::unique_ptr<GLTextureImageRepresentation>
@@ -160,7 +177,8 @@ SharedImageManager::ProduceGLTexture(const Mailbox& mailbox,
   auto representation = (*found)->ProduceGLTexture(this, tracker);
   if (!representation) {
     LOG(ERROR) << "SharedImageManager::ProduceGLTexture: Trying to produce a "
-                  "representation from an incompatible mailbox.";
+                  "representation from an incompatible backing: "
+               << (*found)->GetName();
     return nullptr;
   }
 
@@ -183,7 +201,8 @@ SharedImageManager::ProduceGLTexturePassthrough(const Mailbox& mailbox,
   auto representation = (*found)->ProduceGLTexturePassthrough(this, tracker);
   if (!representation) {
     LOG(ERROR) << "SharedImageManager::ProduceGLTexturePassthrough: Trying to "
-                  "produce a representation from an incompatible mailbox.";
+                  "produce a representation from an incompatible backing: "
+               << (*found)->GetName();
     return nullptr;
   }
 
@@ -207,7 +226,8 @@ std::unique_ptr<SkiaImageRepresentation> SharedImageManager::ProduceSkia(
   auto representation = (*found)->ProduceSkia(this, tracker, context_state);
   if (!representation) {
     LOG(ERROR) << "SharedImageManager::ProduceSkia: Trying to produce a "
-                  "Skia representation from an incompatible mailbox.";
+                  "Skia representation from an incompatible backing: "
+               << (*found)->GetName();
     return nullptr;
   }
 
@@ -217,8 +237,9 @@ std::unique_ptr<SkiaImageRepresentation> SharedImageManager::ProduceSkia(
 std::unique_ptr<DawnImageRepresentation> SharedImageManager::ProduceDawn(
     const Mailbox& mailbox,
     MemoryTypeTracker* tracker,
-    WGPUDevice device,
-    WGPUBackendType backend_type) {
+    const wgpu::Device& device,
+    wgpu::BackendType backend_type,
+    std::vector<wgpu::TextureFormat> view_formats) {
   CALLED_ON_VALID_THREAD();
 
   AutoLock autolock(this);
@@ -229,11 +250,12 @@ std::unique_ptr<DawnImageRepresentation> SharedImageManager::ProduceDawn(
     return nullptr;
   }
 
-  auto representation =
-      (*found)->ProduceDawn(this, tracker, device, backend_type);
+  auto representation = (*found)->ProduceDawn(
+      this, tracker, device, backend_type, std::move(view_formats));
   if (!representation) {
     LOG(ERROR) << "SharedImageManager::ProduceDawn: Trying to produce a "
-                  "Dawn representation from an incompatible mailbox.";
+                  "Dawn representation from an incompatible backing: "
+               << (*found)->GetName();
     return nullptr;
   }
 
@@ -256,7 +278,8 @@ std::unique_ptr<OverlayImageRepresentation> SharedImageManager::ProduceOverlay(
   auto representation = (*found)->ProduceOverlay(this, tracker);
   if (!representation) {
     LOG(ERROR) << "SharedImageManager::ProduceOverlay: Trying to produce a "
-                  "Overlay representation from an incompatible mailbox.";
+                  "Overlay representation from an incompatible backing: "
+               << (*found)->GetName();
     return nullptr;
   }
 
@@ -281,7 +304,8 @@ std::unique_ptr<VaapiImageRepresentation> SharedImageManager::ProduceVASurface(
 
   if (!representation) {
     LOG(ERROR) << "SharedImageManager::ProduceVASurface: Trying to produce a "
-                  "VA-API representation from an incompatible mailbox.";
+                  "VA-API representation from an incompatible backing: "
+               << (*found)->GetName();
     return nullptr;
   }
   return representation;
@@ -323,6 +347,48 @@ std::unique_ptr<RasterImageRepresentation> SharedImageManager::ProduceRaster(
   return (*found)->ProduceRaster(this, tracker);
 }
 
+std::unique_ptr<VideoDecodeImageRepresentation>
+SharedImageManager::ProduceVideoDecode(VideoDecodeDevice device,
+                                       const Mailbox& mailbox,
+                                       MemoryTypeTracker* tracker) {
+  CALLED_ON_VALID_THREAD();
+
+  AutoLock autolock(this);
+  auto found = images_.find(mailbox);
+  if (found == images_.end()) {
+    LOG(ERROR)
+        << "SharedImageManager::ProduceVideoDecode: Trying to Produce a D3D"
+           "representation from a non-existent mailbox.";
+    return nullptr;
+  }
+
+  // This is expected to fail based on the SharedImageBacking type, so don't log
+  // error here. Caller is expected to handle nullptr.
+  return (*found)->ProduceVideoDecode(this, tracker, device);
+}
+
+#if BUILDFLAG(ENABLE_VULKAN)
+std::unique_ptr<VulkanImageRepresentation> SharedImageManager::ProduceVulkan(
+    const Mailbox& mailbox,
+    MemoryTypeTracker* tracker,
+    gpu::VulkanDeviceQueue* vulkan_device_queue,
+    gpu::VulkanImplementation& vulkan_impl) {
+  CALLED_ON_VALID_THREAD();
+
+  AutoLock autolock(this);
+  auto found = images_.find(mailbox);
+  if (found == images_.end()) {
+    LOG(ERROR)
+        << "SharedImageManager::ProduceVulkanImage: Trying to produce vulkan"
+           "representation from a non-existent mailbox.";
+    return nullptr;
+  }
+
+  return (*found)->ProduceVulkan(this, tracker, vulkan_device_queue,
+                                 vulkan_impl);
+}
+#endif
+
 #if BUILDFLAG(IS_ANDROID)
 std::unique_ptr<LegacyOverlayImageRepresentation>
 SharedImageManager::ProduceLegacyOverlay(const Mailbox& mailbox,
@@ -342,11 +408,30 @@ SharedImageManager::ProduceLegacyOverlay(const Mailbox& mailbox,
   if (!representation) {
     LOG(ERROR)
         << "SharedImageManager::ProduceLegacyOverlay: Trying to produce a "
-           "Legacy Overlay representation from an incompatible mailbox.";
+           "Legacy Overlay representation from an incompatible backing: "
+        << (*found)->GetName();
     return nullptr;
   }
 
   return representation;
+}
+#endif
+
+#if BUILDFLAG(IS_WIN)
+void SharedImageManager::UpdateExternalFence(
+    const Mailbox& mailbox,
+    scoped_refptr<gfx::D3DSharedFence> external_fence) {
+  CALLED_ON_VALID_THREAD();
+  AutoLock autolock(this);
+  auto found = images_.find(mailbox);
+  if (found == images_.end()) {
+    LOG(ERROR)
+        << "SharedImageManager::ProduceVideoDecode: Trying to Produce a D3D"
+           "representation from a non-existent mailbox.";
+    return;
+  }
+
+  (*found)->UpdateExternalFence(std::move(external_fence));
 }
 #endif
 
@@ -384,6 +469,16 @@ void SharedImageManager::OnRepresentationDestroyed(
   }
 }
 
+void SharedImageManager::SetPurgeable(const Mailbox& mailbox, bool purgeable) {
+  AutoLock autolock(this);
+  auto found = images_.find(mailbox);
+  if (found == images_.end()) {
+    LOG(ERROR) << "SharedImageManager::SetPurgeable: Non-existent mailbox.";
+    return;
+  }
+  (*found)->SetPurgeable(purgeable);
+}
+
 bool SharedImageManager::OnMemoryDump(
     const base::trace_event::MemoryDumpArgs& args,
     base::trace_event::ProcessMemoryDump* pmd) {
@@ -393,16 +488,23 @@ bool SharedImageManager::OnMemoryDump(
   const char* base_dump_name = "gpu/shared_images";
 
   if (args.level_of_detail ==
-      base::trace_event::MemoryDumpLevelOfDetail::BACKGROUND) {
+      base::trace_event::MemoryDumpLevelOfDetail::kBackground) {
     size_t total_size = 0;
-    for (auto& backing : images_)
-      total_size += backing->EstimatedSizeForMemTracking();
+    size_t total_purgeable_size = 0;
+    for (auto& backing : images_) {
+      size_t size = backing->GetEstimatedSizeForMemoryDump();
+      total_size += size;
+      total_purgeable_size += backing->IsPurgeable() ? size : 0;
+    }
 
     base::trace_event::MemoryAllocatorDump* dump =
         pmd->CreateAllocatorDump(base_dump_name);
     dump->AddScalar(base::trace_event::MemoryAllocatorDump::kNameSize,
                     base::trace_event::MemoryAllocatorDump::kUnitsBytes,
                     total_size);
+    dump->AddScalar("purgeable_size",
+                    base::trace_event::MemoryAllocatorDump::kUnitsBytes,
+                    total_purgeable_size);
 
     // Early out, no need for more detail in a BACKGROUND dump.
     return true;
@@ -439,6 +541,22 @@ scoped_refptr<gfx::NativePixmap> SharedImageManager::GetNativePixmap(
   if (found == images_.end())
     return nullptr;
   return (*found)->GetNativePixmap();
+}
+
+bool SharedImageManager::SupportsScanoutImages() {
+#if BUILDFLAG(IS_APPLE)
+  return true;
+#elif BUILDFLAG(IS_ANDROID)
+  return base::AndroidHardwareBufferCompat::IsSupportAvailable();
+#elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_FUCHSIA)
+  return ui::OzonePlatform::GetInstance()
+      ->GetPlatformRuntimeProperties()
+      .supports_native_pixmaps;
+#elif BUILDFLAG(IS_WIN)
+  return false;
+#else
+  return false;
+#endif
 }
 
 }  // namespace gpu

@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "base/run_loop.h"
+#include "base/test/test_future.h"
 #include "chrome/browser/lacros/browser_test_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
@@ -49,20 +50,12 @@ IN_PROC_BROWSER_TEST_F(TabScrubberBrowserTest, DISABLED_Smoke) {
   auto* lacros_service = chromeos::LacrosService::Get();
   ASSERT_TRUE(lacros_service->IsAvailable<crosapi::mojom::TestController>());
   // This test requires the tab scrubbing API.
-  if (lacros_service->GetInterfaceVersion(
-          crosapi::mojom::TestController::Uuid_) <
+  if (lacros_service->GetInterfaceVersion<crosapi::mojom::TestController>() <
       static_cast<int>(crosapi::mojom::TestController::MethodMinVersions::
                            kTriggerTabScrubbingMinVersion)) {
     return;
   }
-
-  // Wait for the window to be created.
-  aura::Window* window = browser()->window()->GetNativeWindow();
-  std::string window_id =
-      lacros_window_utility::GetRootWindowUniqueId(window->GetRootWindow());
-  browser_test_util::WaitForWindowCreation(window_id);
-
-  // Add further 5 blank tabs.
+  // Add further 5 blank tabs to the initial browser.
   for (int i = 0; i < 5; ++i)
     AddBlankTab(browser());
 
@@ -75,18 +68,17 @@ IN_PROC_BROWSER_TEST_F(TabScrubberBrowserTest, DISABLED_Smoke) {
   float x_offset = -200.f;
 
   // Attempt to perform a tab scrubbing through Ash, and it should bail out.
-  bool scrubbing = false;
-  crosapi::mojom::TestControllerAsyncWaiter waiter(
-      lacros_service->GetRemote<crosapi::mojom::TestController>().get());
-  waiter.TriggerTabScrubbing(x_offset, &scrubbing);
-  ASSERT_FALSE(scrubbing);
+  base::test::TestFuture<bool> scrubbing_future;
+  lacros_service->GetRemote<crosapi::mojom::TestController>()
+      ->TriggerTabScrubbing(x_offset, scrubbing_future.GetCallback());
+  ASSERT_FALSE(scrubbing_future.Take());
   ASSERT_EQ(browser()->tab_strip_model()->active_index(), 5);
 
   // Perform the tab scrubbing in lacros.
   //
   // NOTE: In case it is possible to make the BrowserManager to call this
   // out in Lacros, the code below can be simplified.
-  TabScrubberChromeOS::GetInstance()->SynthesizedScrollEvent(x_offset);
+  TabScrubberChromeOS::GetInstance()->SynthesizedScrollEvent(x_offset, false);
   ASSERT_TRUE(TabScrubberChromeOS::GetInstance()->IsActivationPending());
 
   // Wait 200ms, which is the default delay on tab_scribber_chromeos.cc.

@@ -23,10 +23,10 @@ import org.chromium.chrome.browser.omaha.XMLParser.Node;
  *       </urls>
  *       <manifest version="0.16.4130.199">
  *         <packages>
- *           <package hash="0" name="dummy.apk" required="true" size="0"/>
+ *           <package hash="0" name="placeholder.apk" required="true" size="0"/>
  *         </packages>
  *         <actions>
- *           <action event="install" run="dummy.apk"/>
+ *           <action event="install" run="placeholder.apk"/>
  *           <action event="postinstall"/>
  *         </actions>
  *       </manifest>
@@ -73,13 +73,20 @@ public class ResponseParser {
         this(appId, expectInstallEvent, !expectInstallEvent, !expectInstallEvent);
     }
 
-    public ResponseParser(String appId, boolean expectInstallEvent, boolean expectPing,
+    public ResponseParser(
+            String appId,
+            boolean expectInstallEvent,
+            boolean expectPing,
             boolean expectUpdatecheck) {
         this(false, appId, expectInstallEvent, expectPing, expectUpdatecheck);
     }
 
-    public ResponseParser(boolean strictParsing, String appId, boolean expectInstallEvent,
-            boolean expectPing, boolean expectUpdatecheck) {
+    public ResponseParser(
+            boolean strictParsing,
+            String appId,
+            boolean expectInstallEvent,
+            boolean expectPing,
+            boolean expectUpdatecheck) {
         mStrictParsingMode = strictParsing;
         mAppId = appId;
         mExpectInstallEvent = expectInstallEvent;

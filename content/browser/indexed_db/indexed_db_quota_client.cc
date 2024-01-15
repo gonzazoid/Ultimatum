@@ -9,11 +9,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/services/storage/public/cpp/buckets/bucket_locator.h"
 #include "content/browser/indexed_db/indexed_db_context_impl.h"
 #include "storage/browser/database/database_util.h"
@@ -44,13 +43,7 @@ void IndexedDBQuotaClient::GetBucketUsage(const storage::BucketLocator& bucket,
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK_EQ(bucket.type, StorageType::kTemporary);
 
-  // Skip non-default buckets until Storage Buckets are supported for IndexedDB.
-  if (!bucket.is_default) {
-    std::move(callback).Run(0);
-    return;
-  }
-
-  std::move(callback).Run(indexed_db_context_.GetBucketDiskUsage(bucket));
+  std::move(callback).Run(indexed_db_context_->GetBucketDiskUsage(bucket));
 }
 
 void IndexedDBQuotaClient::GetStorageKeysForType(
@@ -58,7 +51,7 @@ void IndexedDBQuotaClient::GetStorageKeysForType(
     GetStorageKeysForTypeCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK_EQ(type, StorageType::kTemporary);
-  const auto& bucket_locators = indexed_db_context_.GetAllBuckets();
+  const auto& bucket_locators = indexed_db_context_->GetAllBuckets();
   std::vector<StorageKey> storage_keys;
   for (const auto& bucket_locator : bucket_locators)
     storage_keys.push_back(bucket_locator.storage_key);
@@ -72,13 +65,7 @@ void IndexedDBQuotaClient::DeleteBucketData(
   DCHECK_EQ(bucket.type, StorageType::kTemporary);
   DCHECK(!callback.is_null());
 
-  // Skip non-default buckets until Storage Buckets are supported for IndexedDB.
-  if (!bucket.is_default) {
-    std::move(callback).Run(blink::mojom::QuotaStatusCode::kOk);
-    return;
-  }
-
-  indexed_db_context_.DeleteBucketData(
+  indexed_db_context_->DeleteBucketData(
       bucket,
       base::BindOnce(
           [](DeleteBucketDataCallback callback, bool success) {

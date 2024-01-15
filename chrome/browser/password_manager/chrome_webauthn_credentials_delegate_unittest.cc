@@ -5,11 +5,12 @@
 #include "chrome/browser/password_manager/chrome_webauthn_credentials_delegate.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/base64.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
@@ -17,15 +18,16 @@
 #include "chrome/browser/password_manager/chrome_webauthn_credentials_delegate_factory.h"
 #include "chrome/browser/webauthn/authenticator_request_dialog_model.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
-#include "components/password_manager/core/browser/password_ui_utils.h"
+#include "components/password_manager/core/browser/passkey_credential.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/test/web_contents_tester.h"
 #include "device/fido/discoverable_credential_metadata.h"
+#include "device/fido/fido_parsing_utils.h"
+#include "device/fido/public_key_credential_descriptor.h"
 #include "device/fido/public_key_credential_user_entity.h"
 #include "device/fido/test_callback_receiver.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "url/gurl.h"
 
@@ -35,45 +37,29 @@
 #endif  // !BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_ANDROID)
-#include "chrome/browser/webauthn/android/conditional_ui_delegate_android.h"
+#include "chrome/browser/webauthn/android/webauthn_request_delegate_android.h"
 #endif
+
+using password_manager::PasskeyCredential;
 
 namespace {
 
-constexpr uint8_t kUserId1[] = {'1', '2', '3', '4'};
-constexpr uint8_t kUserId2[] = {'5', '6', '7', '8'};
+constexpr uint8_t kUserId[] = {'1', '2', '3', '4'};
 constexpr char kUserName1[] = "John.Doe@example.com";
 constexpr char kUserName2[] = "Jane.Doe@example.com";
-constexpr char kDisplayName1[] = "John Doe";
-constexpr char kDisplayName2[] = "Jane Doe";
 constexpr uint8_t kCredId1[] = {'a', 'b', 'c', 'd'};
 constexpr uint8_t kCredId2[] = {'e', 'f', 'g', 'h'};
 constexpr char kRpId[] = "example.com";
 
-std::vector<uint8_t> UserId1() {
-  return std::vector<uint8_t>(std::begin(kUserId1), std::end(kUserId1));
-}
-std::vector<uint8_t> UserId2() {
-  return std::vector<uint8_t>(std::begin(kUserId2), std::end(kUserId2));
-}
-std::string UserName1() {
-  return std::string(kUserName1);
-}
-std::string UserName2() {
-  return std::string(kUserName2);
-}
-std::string DisplayName1() {
-  return std::string(kDisplayName1);
-}
-std::string DisplayName2() {
-  return std::string(kDisplayName2);
-}
-
-std::vector<uint8_t> CredId1() {
-  return std::vector<uint8_t>(std::begin(kCredId1), std::end(kCredId1));
-}
-std::vector<uint8_t> CredId2() {
-  return std::vector<uint8_t>(std::begin(kCredId2), std::end(kCredId2));
+PasskeyCredential CreatePasskey(std::vector<uint8_t> cred_id,
+                                std::string username) {
+  return PasskeyCredential(
+      PasskeyCredential::Source::kAndroidPhone,
+      PasskeyCredential::RpId(std::string(kRpId)),
+      PasskeyCredential::CredentialId(std::move(cred_id)),
+      PasskeyCredential::UserId(
+          device::fido_parsing_utils::Materialize(kUserId)),
+      PasskeyCredential::Username(std::move(username)));
 }
 
 }  // namespace
@@ -95,15 +81,11 @@ class ChromeWebAuthnCredentialsDelegateTest
     authenticator_request_delegate_->SetRelyingPartyId("rpId");
 #else
     delegate_ =
-        ConditionalUiDelegateAndroid::GetConditionalUiDelegate(web_contents());
+        WebAuthnRequestDelegateAndroid::GetRequestDelegate(web_contents());
 #endif
 
     content::WebContentsTester::For(web_contents())
         ->NavigateAndCommit(GURL("https://example.com"));
-
-    credentials_delegate_ =
-        ChromeWebAuthnCredentialsDelegateFactory::GetFactory(web_contents())
-            ->GetDelegateForFrame(web_contents()->GetPrimaryMainFrame());
   }
 
   void TearDown() override {
@@ -116,21 +98,22 @@ class ChromeWebAuthnCredentialsDelegateTest
 
   void SetCredList(std::vector<device::DiscoverableCredentialMetadata> creds) {
 #if !BUILDFLAG(IS_ANDROID)
-    dialog_model()->StartFlow(
-        AuthenticatorRequestDialogModel::TransportAvailabilityInfo(),
-        /*is_conditional_mediation=*/true, /*prefer_native_api=*/false);
-    dialog_model()->ReplaceCredListForTesting(std::move(creds));
+    AuthenticatorRequestDialogModel::TransportAvailabilityInfo tai;
+    tai.recognized_credentials = std::move(creds);
+    dialog_model()->StartFlow(std::move(tai),
+                              /*is_conditional_mediation=*/true);
 #else
     delegate_->OnWebAuthnRequestPending(
-        main_rfh(), creds,
-        base::BindOnce(
+        main_rfh(), creds, /*is_conditional_request=*/true,
+        base::BindRepeating(
             &ChromeWebAuthnCredentialsDelegateTest::OnAccountSelected,
-            base::Unretained(this)));
+            base::Unretained(this)),
+        /*hybrid_callback=*/base::RepeatingClosure());
 #endif
   }
 
 #if !BUILDFLAG(IS_ANDROID)
-  raw_ptr<AuthenticatorRequestDialogModel> dialog_model() {
+  AuthenticatorRequestDialogModel* dialog_model() {
     return authenticator_request_delegate_->GetDialogModelForTesting();
   }
 #endif
@@ -140,158 +123,143 @@ class ChromeWebAuthnCredentialsDelegateTest
     selected_id_ = std::move(id);
   }
 
-  absl::optional<std::vector<uint8_t>> GetSelectedId() {
+  std::optional<std::vector<uint8_t>> GetSelectedId() {
     return std::move(selected_id_);
   }
 #endif
 
  protected:
-  ChromeWebAuthnCredentialsDelegate* credentials_delegate_;
+  ChromeWebAuthnCredentialsDelegate* credentials_delegate() {
+    return ChromeWebAuthnCredentialsDelegateFactory::GetFactory(web_contents())
+        ->GetDelegateForFrame(web_contents()->GetPrimaryMainFrame());
+  }
 #if !BUILDFLAG(IS_ANDROID)
   std::unique_ptr<ChromeAuthenticatorRequestDelegate>
       authenticator_request_delegate_;
 #else
-  raw_ptr<ConditionalUiDelegateAndroid> delegate_;
-  absl::optional<std::vector<uint8_t>> selected_id_;
+  raw_ptr<WebAuthnRequestDelegateAndroid> delegate_;
+  std::optional<std::vector<uint8_t>> selected_id_;
 #endif
 };
 
-// Testing retrieving suggestions when there are 2 public key credentials
+// Testing retrieving passkeys when there are 2 public key credentials
 // present.
 TEST_F(ChromeWebAuthnCredentialsDelegateTest, RetrieveCredentials) {
-  const std::u16string kPlatformAuthenticatorLabel = l10n_util::GetStringUTF16(
-      password_manager::GetPlatformAuthenticatorLabel());
-  std::vector<device::DiscoverableCredentialMetadata> users;
-  users.emplace_back(kRpId, CredId1(),
-                     device::PublicKeyCredentialUserEntity(
-                         UserId1(), UserName1(), DisplayName1()));
-  users.emplace_back(kRpId, CredId2(),
-                     device::PublicKeyCredentialUserEntity(
-                         UserId2(), UserName2(), DisplayName2()));
+  std::vector<PasskeyCredential> credentials{
+      CreatePasskey(device::fido_parsing_utils::Materialize(kCredId1),
+                    kUserName1),
+      CreatePasskey(device::fido_parsing_utils::Materialize(kCredId2),
+                    kUserName2)};
+  credentials_delegate()->OnCredentialsReceived(
+      credentials, /*offer_passkey_from_another_device=*/true);
 
-  credentials_delegate_->OnCredentialsReceived(users);
+  auto passkeys = credentials_delegate()->GetPasskeys();
+  ASSERT_TRUE(passkeys.has_value());
+  EXPECT_EQ(*passkeys, credentials);
+  EXPECT_TRUE(credentials_delegate()->OfferPasskeysFromAnotherDeviceOption());
+}
 
-  auto suggestions = credentials_delegate_->GetWebAuthnSuggestions();
-  EXPECT_TRUE(suggestions.has_value());
-  EXPECT_EQ(suggestions->size(), 2u);
-  ASSERT_EQ((*suggestions)[0].labels.size(), 1u);
-  ASSERT_EQ((*suggestions)[1].labels.size(), 1u);
-  ASSERT_EQ((*suggestions)[0].labels[0].size(), 1u);
-  ASSERT_EQ((*suggestions)[1].labels[0].size(), 1u);
-  EXPECT_EQ((*suggestions)[0].main_text.value, base::UTF8ToUTF16(UserName1()));
-  EXPECT_EQ((*suggestions)[0].labels[0][0].value, kPlatformAuthenticatorLabel);
-  EXPECT_EQ((*suggestions)[1].main_text.value, base::UTF8ToUTF16(UserName2()));
-  EXPECT_EQ((*suggestions)[1].labels[0][0].value, kPlatformAuthenticatorLabel);
+TEST_F(ChromeWebAuthnCredentialsDelegateTest,
+       DontOfferPasskeysFromAnotherDevice) {
+  credentials_delegate()->OnCredentialsReceived(
+      {}, /*offer_passkey_from_another_device=*/false);
+
+  EXPECT_FALSE(credentials_delegate()->OfferPasskeysFromAnotherDeviceOption());
 }
 
 // Testing retrieving suggestions when the credentials are not received until
 // afterward.
 TEST_F(ChromeWebAuthnCredentialsDelegateTest, RetrieveCredentialsDelayed) {
-  const std::u16string kPlatformAuthenticatorLabel = l10n_util::GetStringUTF16(
-      password_manager::GetPlatformAuthenticatorLabel());
-  std::vector<device::DiscoverableCredentialMetadata> users;
-  users.emplace_back(kRpId, CredId1(),
-                     device::PublicKeyCredentialUserEntity(
-                         UserId1(), UserName1(), DisplayName1()));
-  users.emplace_back(kRpId, CredId2(),
-                     device::PublicKeyCredentialUserEntity(
-                         UserId2(), UserName2(), DisplayName2()));
+  std::vector<PasskeyCredential> credentials{
+      CreatePasskey(device::fido_parsing_utils::Materialize(kCredId1),
+                    kUserName1),
+      CreatePasskey(device::fido_parsing_utils::Materialize(kCredId2),
+                    kUserName2)};
+  credentials_delegate()->OnCredentialsReceived(
+      credentials,
+      /*offer_passkey_from_another_device=*/true);
 
-  credentials_delegate_->OnCredentialsReceived(users);
-
-  auto suggestions = credentials_delegate_->GetWebAuthnSuggestions();
-  EXPECT_TRUE(suggestions.has_value());
-  EXPECT_EQ(suggestions->size(), 2u);
-  ASSERT_EQ((*suggestions)[0].labels.size(), 1u);
-  ASSERT_EQ((*suggestions)[1].labels.size(), 1u);
-  ASSERT_EQ((*suggestions)[0].labels[0].size(), 1u);
-  ASSERT_EQ((*suggestions)[1].labels[0].size(), 1u);
-  EXPECT_EQ((*suggestions)[0].main_text.value, base::UTF8ToUTF16(UserName1()));
-  EXPECT_EQ((*suggestions)[0].labels[0][0].value, kPlatformAuthenticatorLabel);
-  EXPECT_EQ((*suggestions)[1].main_text.value, base::UTF8ToUTF16(UserName2()));
-  EXPECT_EQ((*suggestions)[1].labels[0][0].value, kPlatformAuthenticatorLabel);
+  auto passkeys = credentials_delegate()->GetPasskeys();
+  ASSERT_TRUE(passkeys.has_value());
+  EXPECT_EQ(*passkeys, credentials);
 }
 
 // Testing retrieving suggestions when there are no public key credentials
 // present.
 TEST_F(ChromeWebAuthnCredentialsDelegateTest,
        RetrieveCredentialsWithEmptyList) {
-  auto suggestions = credentials_delegate_->GetWebAuthnSuggestions();
+  auto suggestions = credentials_delegate()->GetPasskeys();
   EXPECT_FALSE(suggestions.has_value());
-}
-
-// Testing retrieving suggestions when there is a public key credential present
-// with missing user name.
-TEST_F(ChromeWebAuthnCredentialsDelegateTest,
-       RetrieveCredentialWithNoUserName) {
-  const std::u16string kErrorLabel =
-      l10n_util::GetStringUTF16(IDS_PASSWORD_MANAGER_EMPTY_LOGIN);
-  const std::u16string kPlatformAuthenticatorLabel = l10n_util::GetStringUTF16(
-      password_manager::GetPlatformAuthenticatorLabel());
-  std::vector<device::DiscoverableCredentialMetadata> users;
-  users.emplace_back(kRpId, CredId1(),
-                     device::PublicKeyCredentialUserEntity(
-                         UserId1(), absl::nullopt, DisplayName1()));
-
-  credentials_delegate_->OnCredentialsReceived(users);
-
-  auto suggestions = credentials_delegate_->GetWebAuthnSuggestions();
-  EXPECT_TRUE(suggestions.has_value());
-  EXPECT_EQ(suggestions->size(), 1u);
-  EXPECT_EQ((*suggestions)[0].main_text.value, kErrorLabel);
-  ASSERT_EQ((*suggestions)[0].labels.size(), 1u);
-  ASSERT_EQ((*suggestions)[0].labels[0].size(), 1u);
-  EXPECT_EQ((*suggestions)[0].labels[0][0].value, kPlatformAuthenticatorLabel);
 }
 
 // Testing selection of a credential.
 TEST_F(ChromeWebAuthnCredentialsDelegateTest, SelectCredential) {
   std::vector<device::DiscoverableCredentialMetadata> users;
-  users.emplace_back(kRpId, CredId1(),
+  users.emplace_back(device::AuthenticatorType::kOther, kRpId,
+                     device::fido_parsing_utils::Materialize(kCredId1),
                      device::PublicKeyCredentialUserEntity(
-                         UserId1(), UserName1(), DisplayName1()));
-  users.emplace_back(kRpId, CredId2(),
+                         device::fido_parsing_utils::Materialize(kUserId),
+                         kUserName1, /*display_name=*/std::nullopt));
+  users.emplace_back(device::AuthenticatorType::kOther, kRpId,
+                     device::fido_parsing_utils::Materialize(kCredId2),
                      device::PublicKeyCredentialUserEntity(
-                         UserId2(), UserName2(), DisplayName2()));
+                         device::fido_parsing_utils::Materialize(kUserId),
+                         kUserName2, /*display_name=*/std::nullopt));
 
   SetCredList(users);
-  credentials_delegate_->OnCredentialsReceived(users);
+
+  std::vector<PasskeyCredential> credentials{
+      CreatePasskey(device::fido_parsing_utils::Materialize(kCredId1),
+                    kUserName1),
+      CreatePasskey(device::fido_parsing_utils::Materialize(kCredId2),
+                    kUserName2)};
+  credentials_delegate()->OnCredentialsReceived(
+      credentials,
+      /*offer_passkey_from_another_device=*/true);
 
 #if !BUILDFLAG(IS_ANDROID)
   base::RunLoop run_loop;
-  dialog_model()->SetAccountPreselectedCallback(
-      base::BindLambdaForTesting([&](std::vector<uint8_t> credential_id) {
-        EXPECT_EQ(credential_id, CredId2());
+  dialog_model()->SetAccountPreselectedCallback(base::BindLambdaForTesting(
+      [&](device::PublicKeyCredentialDescriptor cred) {
+        EXPECT_THAT(cred.id, testing::ElementsAreArray(kCredId2));
         run_loop.Quit();
       }));
 #endif
 
-  credentials_delegate_->SelectWebAuthnCredential(
-      base::Base64Encode(CredId2()));
+  credentials_delegate()->SelectPasskey(base::Base64Encode(kCredId2));
 
 #if BUILDFLAG(IS_ANDROID)
   auto credential_id = GetSelectedId();
-  EXPECT_EQ(credential_id, CredId2());
+  EXPECT_THAT(*credential_id, testing::ElementsAreArray(kCredId2));
 #endif
 }
 
 // Test aborting a request.
 TEST_F(ChromeWebAuthnCredentialsDelegateTest, AbortRequest) {
-  std::vector<device::DiscoverableCredentialMetadata> users;
-  users.emplace_back(kRpId, CredId1(),
-                     device::PublicKeyCredentialUserEntity(
-                         UserId1(), UserName1(), DisplayName1()));
-  credentials_delegate_->OnCredentialsReceived(users);
-  credentials_delegate_->NotifyWebAuthnRequestAborted();
-  EXPECT_FALSE(credentials_delegate_->GetWebAuthnSuggestions());
+  std::vector<PasskeyCredential> credentials{CreatePasskey(
+      device::fido_parsing_utils::Materialize(kCredId1), kUserName1)};
+  credentials_delegate()->OnCredentialsReceived(
+      credentials,
+      /*offer_passkey_from_another_device=*/true);
+  credentials_delegate()->NotifyWebAuthnRequestAborted();
+  EXPECT_FALSE(credentials_delegate()->GetPasskeys());
 }
 
 // Test aborting a request when a retrieve suggestions callback is pending.
 TEST_F(ChromeWebAuthnCredentialsDelegateTest, AbortRequestPendingCallback) {
   device::test::TestCallbackReceiver<> callback;
-  credentials_delegate_->RetrieveWebAuthnSuggestions(callback.callback());
+  credentials_delegate()->RetrievePasskeys(callback.callback());
   EXPECT_FALSE(callback.was_called());
-  credentials_delegate_->NotifyWebAuthnRequestAborted();
+  credentials_delegate()->NotifyWebAuthnRequestAborted();
   EXPECT_TRUE(callback.was_called());
-  EXPECT_FALSE(credentials_delegate_->GetWebAuthnSuggestions());
+  EXPECT_FALSE(credentials_delegate()->GetPasskeys());
 }
+
+#if BUILDFLAG(IS_ANDROID)
+TEST_F(ChromeWebAuthnCredentialsDelegateTest, AndroidHybridAvailability) {
+  EXPECT_FALSE(credentials_delegate()->IsAndroidHybridAvailable());
+  credentials_delegate()->SetAndroidHybridAvailable(
+      ChromeWebAuthnCredentialsDelegate::AndroidHybridAvailable(true));
+  EXPECT_TRUE(credentials_delegate()->IsAndroidHybridAvailable());
+}
+#endif  // BUILDFLAG(IS_ANDROID)

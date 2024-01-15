@@ -11,7 +11,6 @@
 #include "ash/system/accessibility/switch_access/switch_access_menu_view.h"
 #include "ash/system/tray/tray_background_view.h"
 #include "ash/system/tray/tray_constants.h"
-#include "ash/system/unified/unified_system_tray_view.h"
 #include "ash/wm/collision_detection/collision_detection_utils.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/compositor/layer.h"
@@ -49,19 +48,14 @@ void SwitchAccessMenuBubbleController::ShowMenu(
     init_params.insets =
         gfx::Insets::VH(kBubbleMenuPadding, kBubbleMenuPadding);
     init_params.translucent = true;
+    init_params.type = TrayBubbleView::TrayBubbleType::kAccessibilityBubble;
+
     bubble_view_ = new TrayBubbleView(init_params);
     bubble_view_->SetArrow(views::BubbleBorder::Arrow::TOP_LEFT);
 
     menu_view_ = new SwitchAccessMenuView();
     menu_view_->SetBorder(views::CreateEmptyBorder(kBubbleMenuPadding));
-    bubble_view_->AddChildView(menu_view_);
-
-    // In dark light mode, we switch TrayBubbleView to use a textured layer
-    // instead of solid color layer, so no need to create an extra layer here.
-    if (!features::IsDarkLightModeEnabled()) {
-      menu_view_->SetPaintToLayer();
-      menu_view_->layer()->SetFillsBoundsOpaquely(false);
-    }
+    bubble_view_->AddChildView(menu_view_.get());
 
     widget_ = views::BubbleDialogDelegateView::CreateBubble(bubble_view_);
     TrayBackgroundView::InitializeBubbleAnimations(widget_);
@@ -126,6 +120,12 @@ void SwitchAccessMenuBubbleController::BubbleViewDestroyed() {
   bubble_view_ = nullptr;
   menu_view_ = nullptr;
   widget_ = nullptr;
+}
+
+void SwitchAccessMenuBubbleController::HideBubble(
+    const TrayBubbleView* bubble_view) {
+  // This function is currently not unused for bubbles of type
+  // `kAccessibilityBubble`, so can leave this empty.
 }
 
 }  // namespace ash

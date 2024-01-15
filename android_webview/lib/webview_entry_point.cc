@@ -7,11 +7,6 @@
 #include "base/android/jni_android.h"
 #include "base/android/library_loader/library_loader_hooks.h"
 
-#if defined(WEBVIEW_INCLUDES_WEBLAYER)
-#include "weblayer/app/jni_onload.h"
-#include "weblayer/browser/web_view_compatibility_helper_impl.h"
-#endif
-
 namespace {
 
 bool NativeInit(base::android::LibraryProcessType library_process_type) {
@@ -28,12 +23,6 @@ bool NativeInit(base::android::LibraryProcessType library_process_type) {
     case base::android::PROCESS_WEBVIEW_NONEMBEDDED:
       return base::android::OnJNIOnLoadInit();
 
-#if defined(WEBVIEW_INCLUDES_WEBLAYER)
-    case base::android::PROCESS_WEBLAYER:
-    case base::android::PROCESS_WEBLAYER_CHILD:
-      return weblayer::OnJNIOnLoadInit();
-#endif
-
     default:
       NOTREACHED();
       return false;
@@ -46,10 +35,6 @@ bool NativeInit(base::android::LibraryProcessType library_process_type) {
 // Most of the initialization is done in LibraryLoadedOnMainThread(), not here.
 JNI_EXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
   base::android::InitVM(vm);
-#if defined(WEBVIEW_INCLUDES_WEBLAYER)
-  if (!weblayer::MaybeRegisterNatives())
-    return -1;
-#endif
   base::android::SetNativeInitializationHook(&NativeInit);
   return JNI_VERSION_1_4;
 }

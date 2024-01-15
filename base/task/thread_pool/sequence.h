@@ -16,6 +16,7 @@
 #include "base/task/thread_pool/task.h"
 #include "base/task/thread_pool/task_source.h"
 #include "base/task/thread_pool/task_source_sort_key.h"
+#include "base/thread_annotations.h"
 #include "base/threading/sequence_local_storage_map.h"
 
 namespace base {
@@ -24,8 +25,6 @@ namespace internal {
 // A Sequence is intended to hold delayed tasks and immediate tasks.
 // Delayed tasks are held in a prority_queue until they are ripe and
 // immediate tasks in a simple fifo queue.
-// Sequence::PushTask is responsible for putting a task into the right
-// queue depending on its nature.
 // When Sequence::TakeTask is called, we select the next appropriate task
 // from both queues and return it.
 // Each queue holds slots each containing up to a single Task that must be
@@ -37,7 +36,7 @@ namespace internal {
 // architecture: Sequence -> Task -> TaskRunner -> Sequence -> ...
 // This is okay so long as the other owners of Sequence (PriorityQueue and
 // WorkerThread in alternation and
-// ThreadGroupImpl::WorkerThreadDelegateImpl::GetWork()
+// ThreadGroup::WorkerThreadDelegateImpl::GetWork()
 // temporarily) keep running it (and taking Tasks from it as a result). A
 // dangling reference cycle would only occur should they release their reference
 // to it while it's not empty. In other words, it is only correct for them to
@@ -58,26 +57,19 @@ class BASE_EXPORT Sequence : public TaskSource {
     Transaction& operator=(const Transaction&) = delete;
     ~Transaction();
 
-    // Returns true if the sequence would need to be queued in the
-    // immediate/delayed queue after receiving a new immediate/delayed Task.
-    // Thread-safe but the returned value may immediately be obsolete when
-    // pushing a delayed task since a sequence can become ready at any time;
-    // therefore it must be externally synchronized to prevent races against
-    // OnBecomeReady().
-    [[nodiscard]] bool ShouldBeQueued() const;
+    // Returns true if the sequence must be added to the immediate queue after
+    // receiving a new immediate Task in order to be scheduled. If the caller
+    // doesn't want the sequence to be scheduled, it may not add the sequence to
+    // the immediate queue even if this returns true.
+    bool WillPushImmediateTask();
 
-    // Returns true if the task to be posted will change the sequence
-    // delayed_queue top.
-    bool TopDelayedTaskWillChange(Task& delayed_task) const;
-
-    // Adds immediate |task| to the end of this sequence. This must only
-    // be called after invoking ShouldBeQueued().
+    // Adds immediate |task| to the end of this sequence.
     void PushImmediateTask(Task task);
 
-    // Adds a delayed |task| in this sequence to be prioritized based on it's
-    // delayed run time. This must only be called after invoking
-    // TopDelayedTaskWillChange()/ShouldBeQueued().
-    void PushDelayedTask(Task task);
+    // Adds a delayed |task| in this sequence, and returns true if the sequence
+    // needs to be re-enqueued in the delayed queue as a result of this
+    // sequence's delayed sort key changing.
+    bool PushDelayedTask(Task task);
 
     Sequence* sequence() const { return static_cast<Sequence*>(task_source()); }
 
@@ -87,26 +79,13 @@ class BASE_EXPORT Sequence : public TaskSource {
     explicit Transaction(Sequence* sequence);
   };
 
-  // This indicates where a sequence is stored, used by Sequence to keep track
-  // of its status.
-  enum class SequenceLocation {
-    // Sequence is not present in any queue.
-    kNone,
-    // Sequence is present in queue of immediate sequences.
-    kImmediateQueue,
-    // Sequence is present in queue of delayed sequences.
-    kDelayedQueue,
-    // Sequence is being run by a worker.
-    kInWorker,
-  };
-
   // |traits| is metadata that applies to all Tasks in the Sequence.
   // |task_runner| is a reference to the TaskRunner feeding this TaskSource.
   // |task_runner| can be nullptr only for tasks with no TaskRunner, in which
   // case |execution_mode| must be kParallel. Otherwise, |execution_mode| is the
   // execution mode of |task_runner|.
   Sequence(const TaskTraits& traits,
-           TaskRunner* task_runner,
+           SequencedTaskRunner* task_runner,
            TaskSourceExecutionMode execution_mode);
   Sequence(const Sequence&) = delete;
   Sequence& operator=(const Sequence&) = delete;
@@ -128,9 +107,19 @@ class BASE_EXPORT Sequence : public TaskSource {
     return &sequence_local_storage_;
   }
 
-  SequenceLocation GetCurrentLocationForTesting();
+  bool OnBecomeReady() override;
 
-  void OnBecomeReady() override;
+  bool has_worker_for_testing() const NO_THREAD_SAFETY_ANALYSIS {
+    return has_worker_;
+  }
+  bool is_immediate_for_testing() const { return is_immediate_; }
+  bool IsEmptyForTesting() const NO_THREAD_SAFETY_ANALYSIS { return IsEmpty(); }
+
+  // A reference to TaskRunner is only retained between
+  // PushImmediateTask()/PushDelayedTask() and when DidProcessTask() returns
+  // false, guaranteeing it is safe to dereference this pointer. Otherwise, the
+  // caller should guarantee such TaskRunner still exists before dereferencing.
+  SequencedTaskRunner* task_runner() const { return task_runner_; }
 
  private:
   ~Sequence() override;
@@ -142,54 +131,78 @@ class BASE_EXPORT Sequence : public TaskSource {
   // TaskSource:
   RunStatus WillRunTask() override;
   Task TakeTask(TaskSource::Transaction* transaction) override;
-  Task Clear(TaskSource::Transaction* transaction) override;
+  absl::optional<Task> Clear(TaskSource::Transaction* transaction) override;
   bool DidProcessTask(TaskSource::Transaction* transaction) override;
   bool WillReEnqueue(TimeTicks now,
                      TaskSource::Transaction* transaction) override;
+
+  // Returns true if the delayed task to be posted will cause the delayed sort
+  // key to change.
+  bool DelayedSortKeyWillChange(const Task& delayed_task) const
+      EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Selects the earliest task to run, either from immediate or
   // delayed queue and return it.
   // Expects this sequence to have at least one task that can run
   // immediately.
-  Task TakeEarliestTask();
+  Task TakeEarliestTask() EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Get and return next task from immediate queue
-  Task TakeNextImmediateTask();
+  Task TakeNextImmediateTask() EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
-  // Determine next ready time and set ready time to it
-  TimeTicks GetNextReadyTime();
+  // Update the next earliest/latest ready time.
+  void UpdateReadyTimes() EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Returns true if there are immediate tasks
-  bool HasImmediateTasks() const;
-
-  // Returns true if there are tasks ripe for execution in the delayed queue
-  bool HasRipeDelayedTasks(TimeTicks now) const;
+  bool HasImmediateTasks() const EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Returns true if tasks ready to be executed
-  bool HasReadyTasks(TimeTicks now) const;
+  bool HasReadyTasks(TimeTicks now) const override;
 
-  bool IsEmpty() const;
-
-  TimeTicks GetReadyTime() const;
+  bool IsEmpty() const EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
   // Releases reference to TaskRunner.
   void ReleaseTaskRunner();
 
   const SequenceToken token_ = SequenceToken::Create();
 
-  // Queues of tasks to execute.
-  base::queue<Task> queue_;
-  base::IntrusiveHeap<Task, DelayedTaskGreater> delayed_queue_;
+  // A pointer to the TaskRunner that posts to this TaskSource, if any. The
+  // derived class is responsible for calling AddRef() when a TaskSource from
+  // which no Task is executing becomes non-empty and Release() when
+  // it becomes empty again (e.g. when DidProcessTask() returns false).
+  //
+  // In practise, this pointer is going to become dangling. See task_runner()
+  // comment.
+  raw_ptr<SequencedTaskRunner, DisableDanglingPtrDetection> task_runner_;
 
-  std::atomic<TimeTicks> ready_time_{TimeTicks()};
+  // Queues of tasks to execute.
+  base::queue<Task> queue_ GUARDED_BY(lock_);
+  base::IntrusiveHeap<Task, DelayedTaskGreater> delayed_queue_
+      GUARDED_BY(lock_);
+
+  // Caches the latest/earliest ready time for atomic access. Writes are
+  // protected by |lock_|, but allows atomic reads outside of |lock_|. If this
+  // sequence is empty, these are in an unknown state and shouldn't be read.
+
+  // Minimum of latest_delayed_run_time() of next delayed task if any, and
+  // |queue_time| of next immediate task if any.
+  std::atomic<TimeTicks> latest_ready_time_ GUARDED_BY(lock_){TimeTicks()};
+  // is_null() if there is an immediate task, or earliest_delayed_run_time() of
+  // next delayed task otherwise.
+  std::atomic<TimeTicks> earliest_ready_time_ GUARDED_BY(lock_){TimeTicks()};
+
+  // True if a worker is currently associated with a Task from this Sequence.
+  bool has_worker_ = false;
+
+  // True if the sequence has ready tasks and requested to be queued as such
+  // through WillPushImmediateTask() or OnBecomeReady(). Reset to false once all
+  // ready tasks are done being processed and either DidProcessTask() or
+  // WillReEnqueue() returned false. Normally, |is_immediate_| is protected by
+  // |lock_|, except in OnBecomeReady() hence the use of atomics.
+  std::atomic_bool is_immediate_{false};
 
   // Holds data stored through the SequenceLocalStorageSlot API.
   SequenceLocalStorageMap sequence_local_storage_;
-
-  // This member will hold the current location of the sequence at any time.
-  // At instantiation, the sequence is not put in any queue yet so the
-  // sequence location is set to |kNone|.
-  std::atomic<SequenceLocation> current_location_{SequenceLocation::kNone};
 };
 
 }  // namespace internal

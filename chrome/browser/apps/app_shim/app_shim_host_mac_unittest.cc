@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
@@ -49,6 +49,7 @@ class TestingAppShim : public chrome::mojom::AppShim {
  private:
   void OnShimConnectedDone(
       chrome::mojom::AppShimLaunchResult result,
+      variations::VariationsCommandLine feature_state,
       mojo::PendingReceiver<chrome::mojom::AppShim> app_shim_receiver) {
     received_launch_done_result_ = true;
     launch_done_result_ = result;
@@ -67,6 +68,9 @@ class TestingAppShim : public chrome::mojom::AppShim {
   void UpdateApplicationDockMenu(
       std::vector<chrome::mojom::ApplicationDockMenuItemPtr> dock_menu_items)
       override {}
+  void BindNotificationProvider(
+      mojo::PendingReceiver<mac_notifications::mojom::MacNotificationProvider>
+          provider) override {}
 
   bool received_launch_done_result_ = false;
   chrome::mojom::AppShimLaunchResult launch_done_result_ =
@@ -118,7 +122,9 @@ class AppShimHostTest : public testing::Test,
                         public AppShimHostBootstrap::Client,
                         public AppShimHost::Client {
  public:
-  AppShimHostTest() { task_runner_ = base::ThreadTaskRunnerHandle::Get(); }
+  AppShimHostTest() {
+    task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
+  }
   AppShimHostTest(const AppShimHostTest&) = delete;
   AppShimHostTest& operator=(const AppShimHostTest&) = delete;
   ~AppShimHostTest() override {}
@@ -168,7 +174,8 @@ class AppShimHostTest : public testing::Test,
   // AppShimHost::Client:
   void OnShimLaunchRequested(
       AppShimHost* host,
-      bool recreate_shims,
+      web_app::LaunchShimUpdateBehavior update_behavior,
+      web_app::ShimLaunchMode launch_mode,
       apps::ShimLaunchedCallback launched_callback,
       apps::ShimTerminatedCallback terminated_callback) override {}
   void OnShimProcessDisconnected(AppShimHost* host) override {
@@ -182,10 +189,12 @@ class AppShimHostTest : public testing::Test,
                          const std::vector<base::FilePath>& files) override {}
   void OnShimSelectedProfile(AppShimHost* host,
                              const base::FilePath& profile_path) override {}
+  void OnShimOpenedAppSettings(AppShimHost* host) override {}
   void OnShimOpenedUrls(AppShimHost* host,
                         const std::vector<GURL>& urls) override {}
   void OnShimOpenAppWithOverrideUrl(AppShimHost* host,
                                     const GURL& override_url) override {}
+  void OnShimWillTerminate(AppShimHost* host) override {}
 
   chrome::mojom::AppShimLaunchResult launch_result_ =
       chrome::mojom::AppShimLaunchResult::kSuccess;

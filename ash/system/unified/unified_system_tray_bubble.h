@@ -6,6 +6,7 @@
 #define ASH_SYSTEM_UNIFIED_UNIFIED_SYSTEM_TRAY_BUBBLE_H_
 
 #include <memory>
+#include <optional>
 
 #include "ash/public/cpp/tablet_mode_observer.h"
 #include "ash/shelf/shelf_observer.h"
@@ -14,12 +15,11 @@
 #include "ash/system/tray/time_to_click_recorder.h"
 #include "ash/system/tray/tray_bubble_base.h"
 #include "ash/system/unified/quick_settings_view.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/views/widget/widget_observer.h"
-#include "ui/wm/public/activation_change_observer.h"
 
 namespace ui {
 class Event;
@@ -31,22 +31,20 @@ class Widget;
 
 namespace ash {
 
+class TrayEventFilter;
 class UnifiedSystemTray;
 class UnifiedSystemTrayController;
-class UnifiedSystemTrayView;
 class QuickSettingsView;
 
-// Manages the bubble that contains UnifiedSystemTrayView.
+// Manages the bubble that contains 'QuickSettingsView'.
 // Shows the bubble on the constructor, and closes the bubble on the destructor.
 // It is possible that the bubble widget is closed on deactivation. In such
 // case, this class calls UnifiedSystemTray::CloseBubble() to delete itself.
-class ASH_EXPORT UnifiedSystemTrayBubble
-    : public TrayBubbleBase,
-      public ScreenLayoutObserver,
-      public ShelfObserver,
-      public ::wm::ActivationChangeObserver,
-      public TimeToClickRecorder::Delegate,
-      public TabletModeObserver {
+class ASH_EXPORT UnifiedSystemTrayBubble : public TrayBubbleBase,
+                                           public ScreenLayoutObserver,
+                                           public ShelfObserver,
+                                           public TimeToClickRecorder::Delegate,
+                                           public TabletModeObserver {
  public:
   explicit UnifiedSystemTrayBubble(UnifiedSystemTray* tray);
 
@@ -66,56 +64,33 @@ class ASH_EXPORT UnifiedSystemTrayBubble
   // True if the bubble is active.
   bool IsBubbleActive() const;
 
-  // Collapse the message center bubble.
-  void CollapseMessageCenter();
-
-  // Expand the message center bubble.
-  void ExpandMessageCenter();
-
-  // Ensure the bubble is collapsed.
-  void EnsureCollapsed();
-
-  // Ensure the bubble is expanded.
-  void EnsureExpanded();
-
-  // Set the state to collapsed without animation.
-  void CollapseWithoutAnimating();
-
   // Show audio settings detailed view.
   void ShowAudioDetailedView();
+
+  // Show display settings detailed view.
+  void ShowDisplayDetailedView();
 
   // Show calendar view.
   void ShowCalendarView(calendar_metrics::CalendarViewShowSource show_source,
                         calendar_metrics::CalendarEventSource event_source);
 
   // Show network settings detailed view.
-  void ShowNetworkDetailedView(bool force);
+  void ShowNetworkDetailedView();
 
   // Update bubble bounds and focus if necessary.
   void UpdateBubble();
-
-  // Return the maximum height available for both the system tray and
-  // the message center.
-  int CalculateMaxHeight() const;
 
   // Return the current visible height of the tray, even when partially
   // collapsed / expanded.
   int GetCurrentTrayHeight() const;
 
-  // Relinquish focus and transfer it to the message center widget.
-  bool FocusOut(bool reverse);
-
-  // Inform UnifiedSystemTrayView of focus being acquired.
-  void FocusEntered(bool reverse);
-
-  // Called when the message center widget is activated.
-  void OnMessageCenterActivated();
-
   // Fire a notification that an accessibility event has occured on this object.
   void NotifyAccessibilityEvent(ax::mojom::Event event, bool send_native_event);
 
-  // Whether the bubble is currently showing audio details or calendar view.
+  // Whether the bubble is currently showing audio details or display details or
+  // calendar view.
   bool ShowingAudioDetailedView() const;
+  bool ShowingDisplayDetailedView() const;
   bool ShowingCalendarView() const;
 
   // TrayBubbleBase:
@@ -129,22 +104,18 @@ class ASH_EXPORT UnifiedSystemTrayBubble
   // views::WidgetObserver:
   void OnWidgetDestroying(views::Widget* widget) override;
 
-  // ::wm::ActivationChangeObserver:
-  void OnWindowActivated(ActivationReason reason,
-                         aura::Window* gained_active,
-                         aura::Window* lost_active) override;
-
   // TimeToClickRecorder::Delegate:
   void RecordTimeToClick() override;
 
   // TabletModeObserver:
-  void OnTabletModeStarted() override;
-  void OnTabletModeEnded() override;
+  void OnTabletPhysicalStateChanged() override;
 
   // ShelfObserver:
   void OnAutoHideStateChanged(ShelfAutoHideState new_state) override;
 
-  UnifiedSystemTrayView* unified_view() { return unified_view_; }
+  // Updates the bubble height based on if it's going to show the main page or
+  // the detailed page.
+  void UpdateBubbleHeight(bool is_showing_detiled_view);
 
   QuickSettingsView* quick_settings_view() { return quick_settings_view_; }
 
@@ -157,29 +128,34 @@ class ASH_EXPORT UnifiedSystemTrayBubble
 
   void UpdateBubbleBounds();
 
-  // Controller of UnifiedSystemTrayView. As the view is owned by views
-  // hierarchy, we have to own the controller here.
+  // Controller of `QuickSettingsView`. As the view is owned by views hierarchy,
+  // we have to own the controller here.
   std::unique_ptr<UnifiedSystemTrayController> controller_;
 
   // Owner of this class.
-  UnifiedSystemTray* tray_;
+  raw_ptr<UnifiedSystemTray> unified_system_tray_;
 
-  // Widget that contains UnifiedSystemTrayView. Unowned.
-  // When the widget is closed by deactivation, |bubble_widget_| pointer is
-  // invalidated and we have to delete UnifiedSystemTrayBubble by calling
-  // UnifiedSystemTray::CloseBubble().
-  // In order to do this, we observe OnWidgetDestroying().
-  views::Widget* bubble_widget_ = nullptr;
+  // Widget that contains `QuickSettingsView`. Unowned.
+  // When the widget is closed by deactivation, `bubble_widget_` pointer is
+  // invalidated and we have to delete `UnifiedSystemTrayBubble` by calling
+  // `UnifiedSystemTray::CloseBubble()`.
+  // In order to do this, we observe `OnWidgetDestroying()`.
+  raw_ptr<views::Widget> bubble_widget_ = nullptr;
 
-  // PreTargetHandler of |unified_view_| to record TimeToClick metrics. Owned.
+  // PreTargetHandler of `quick_settings_view_` to record TimeToClick metrics.
+  // Owned.
   std::unique_ptr<TimeToClickRecorder> time_to_click_recorder_;
 
   // The time the bubble is created.
-  absl::optional<base::TimeTicks> time_opened_;
+  std::optional<base::TimeTicks> time_opened_;
 
-  TrayBubbleView* bubble_view_ = nullptr;
-  UnifiedSystemTrayView* unified_view_ = nullptr;
-  QuickSettingsView* quick_settings_view_ = nullptr;
+  raw_ptr<TrayBubbleView> bubble_view_ = nullptr;
+
+  raw_ptr<QuickSettingsView, DanglingUntriaged> quick_settings_view_ = nullptr;
+
+  std::unique_ptr<TrayEventFilter> tray_event_filter_;
+
+  base::WeakPtrFactory<UnifiedSystemTrayBubble> weak_factory_{this};
 };
 
 }  // namespace ash

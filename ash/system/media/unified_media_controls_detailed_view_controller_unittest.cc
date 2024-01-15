@@ -6,6 +6,7 @@
 
 #include "ash/system/media/media_notification_provider.h"
 #include "ash/system/media/media_tray.h"
+#include "ash/system/media/mock_media_notification_provider.h"
 #include "ash/system/status_area_widget.h"
 #include "ash/system/status_area_widget_test_helper.h"
 #include "ash/system/tray/detailed_view_delegate.h"
@@ -13,48 +14,13 @@
 #include "ash/system/unified/unified_system_tray_bubble.h"
 #include "ash/system/unified/unified_system_tray_controller.h"
 #include "ash/test/ash_test_base.h"
+#include "base/memory/raw_ptr.h"
 #include "components/media_message_center/media_notification_view_impl.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 using ::testing::_;
 
 namespace ash {
-
-namespace {
-
-class MockMediaNotificationProvider : public MediaNotificationProvider {
- public:
-  MockMediaNotificationProvider()
-      : old_provider_(MediaNotificationProvider::Get()) {
-    MediaNotificationProvider::Set(this);
-
-    ON_CALL(*this, GetMediaNotificationListView(_)).WillByDefault([](auto) {
-      return std::make_unique<views::View>();
-    });
-  }
-
-  ~MockMediaNotificationProvider() override {
-    MediaNotificationProvider::Set(old_provider_);
-  }
-
-  // MediaNotificationProvider implementations.
-  MOCK_METHOD1(GetMediaNotificationListView, std::unique_ptr<views::View>(int));
-  MOCK_METHOD0(OnBubbleClosing, void());
-  std::unique_ptr<views::View> GetActiveMediaNotificationView() override {
-    return std::make_unique<views::View>();
-  }
-  void AddObserver(MediaNotificationProviderObserver* observer) override {}
-  void RemoveObserver(MediaNotificationProviderObserver* observer) override {}
-  bool HasActiveNotifications() override { return true; }
-  bool HasFrozenNotifications() override { return true; }
-  void SetColorTheme(
-      const media_message_center::NotificationTheme& color_theme) override {}
-
- private:
-  MediaNotificationProvider* const old_provider_;
-};
-
-}  // namespace
 
 class UnifiedMediaControlsDetailedViewControllerTest : public AshTestBase {
  public:
@@ -63,7 +29,6 @@ class UnifiedMediaControlsDetailedViewControllerTest : public AshTestBase {
 
   void SetUp() override {
     AshTestBase::SetUp();
-
     provider_ = std::make_unique<MockMediaNotificationProvider>();
 
     // Ensure media tray is not pinned to shelf so that media controls
@@ -109,7 +74,8 @@ TEST_F(UnifiedMediaControlsDetailedViewControllerTest,
 
   // We should get a MediaNotificationProvider::GetMediaNotificationListView
   // call when creating the detailed view.
-  EXPECT_CALL(*provider(), GetMediaNotificationListView);
+  EXPECT_CALL(*provider(), GetMediaNotificationListView(
+                               _, /*should_clip_height=*/false, _, _));
   system_tray_controller()->OnMediaControlsViewClicked();
   EXPECT_NE(system_tray_controller()->detailed_view_controller(), nullptr);
 

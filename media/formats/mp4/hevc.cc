@@ -224,15 +224,33 @@ bool HEVCDecoderConfigurationRecord::ParseInternal(BufferReader* reader,
   parser.SetStream(param_sets.data(), param_sets.size());
   while (true) {
     H265Parser::Result result = parser.AdvanceToNextNALU(&nalu);
-    if (result != H265Parser::kOk)
+    if (result != H265Parser::kOk) {
       break;
-
+    }
+    if (nalu.nuh_layer_id) {
+      continue;
+    }
     switch (nalu.nal_unit_type) {
+      case H265NALU::VPS_NUT: {
+        int vps_id = -1;
+        result = parser.ParseVPS(&vps_id);
+        if (result != H265Parser::kOk) {
+          DVLOG(1) << "Could not parse VPS";
+          break;
+        }
+
+        const H265VPS* vps = parser.GetVPS(vps_id);
+        DCHECK(vps);
+        alpha_mode = vps->aux_alpha_layer_id
+                         ? VideoDecoderConfig::AlphaMode::kHasAlpha
+                         : VideoDecoderConfig::AlphaMode::kIsOpaque;
+        break;
+      }
       case H265NALU::SPS_NUT: {
         int sps_id = -1;
         result = parser.ParseSPS(&sps_id);
         if (result != H265Parser::kOk) {
-          DVLOG(1) << "Could not parse SPS for fetching colorspace";
+          DVLOG(1) << "Could not parse SPS";
           break;
         }
 
@@ -242,57 +260,24 @@ bool HEVCDecoderConfigurationRecord::ParseInternal(BufferReader* reader,
         break;
       }
       case H265NALU::PREFIX_SEI_NUT: {
-        H265SEIMessage sei_msg;
-        result = parser.ParseSEI(&sei_msg);
+        H265SEI sei;
+        result = parser.ParseSEI(&sei);
         if (result != H265Parser::kOk) {
-          DVLOG(1) << "Could not parse SEI for fetching HDR metadata";
+          DVLOG(1) << "Could not parse SEI";
           break;
         }
-        switch (sei_msg.type) {
-          case H265SEIMessage::kSEIContentLightLevelInfo:
-            hdr_metadata.max_content_light_level =
-                sei_msg.content_light_level_info.max_content_light_level;
-            hdr_metadata.max_frame_average_light_level =
-                sei_msg.content_light_level_info
-                    .max_picture_average_light_level;
-            break;
-          case H265SEIMessage::kSEIMasteringDisplayInfo: {
-            constexpr auto kChromaDenominator = 50000.0f;
-            constexpr auto kLumaDenoninator = 10000.0f;
-            // display primaries are in G/B/R order in MDCV SEI.
-            hdr_metadata.color_volume_metadata.primary_r = gfx::PointF(
-                sei_msg.mastering_display_info.display_primaries[2][0] /
-                    kChromaDenominator,
-                sei_msg.mastering_display_info.display_primaries[2][1] /
-                    kChromaDenominator);
-            hdr_metadata.color_volume_metadata.primary_g = gfx::PointF(
-                sei_msg.mastering_display_info.display_primaries[0][0] /
-                    kChromaDenominator,
-                sei_msg.mastering_display_info.display_primaries[0][1] /
-                    kChromaDenominator);
-            hdr_metadata.color_volume_metadata.primary_b = gfx::PointF(
-                sei_msg.mastering_display_info.display_primaries[1][0] /
-                    kChromaDenominator,
-                sei_msg.mastering_display_info.display_primaries[1][1] /
-                    kChromaDenominator);
-            hdr_metadata.color_volume_metadata.white_point =
-                gfx::PointF(sei_msg.mastering_display_info.white_points[0] /
-                                kChromaDenominator,
-                            sei_msg.mastering_display_info.white_points[1] /
-                                kChromaDenominator);
-            hdr_metadata.color_volume_metadata.luminance_max =
-                sei_msg.mastering_display_info.max_luminance / kLumaDenoninator;
-            hdr_metadata.color_volume_metadata.luminance_min =
-                sei_msg.mastering_display_info.min_luminance / kLumaDenoninator;
-            break;
+        for (auto& sei_msg : sei.msgs) {
+          switch (sei_msg.type) {
+            case H265SEIMessage::kSEIContentLightLevelInfo:
+              hdr_metadata.cta_861_3 = sei_msg.content_light_level_info.ToGfx();
+              break;
+            case H265SEIMessage::kSEIMasteringDisplayInfo:
+              hdr_metadata.smpte_st_2086 =
+                  sei_msg.mastering_display_info.ToGfx();
+              break;
+            default:
+              break;
           }
-          case H265SEIMessage::kSEIAlphaChannelInfo:
-            if (sei_msg.alpha_channel_info.alpha_channel_cancel_flag == 0) {
-              alpha_mode = VideoDecoderConfig::AlphaMode::kHasAlpha;
-            }
-            break;
-          default:
-            break;
         }
         break;
       }

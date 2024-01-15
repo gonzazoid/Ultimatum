@@ -2,23 +2,28 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+
+import * as Common from 'devtools/core/common/common.js';
+import * as Workspace from 'devtools/models/workspace/workspace.js';
+
 (async function() {
   TestRunner.addResult(`Tests workspace mappings\n`);
 
 
   var projects = {};
-  var workspace = new Workspace.Workspace();
+  var workspace = new Workspace.Workspace.WorkspaceImpl();
 
   function createUISourceCode(projectId, relativePath) {
     var project = projects[projectId];
     if (!projects[projectId]) {
       var projectType =
-          projectId.startsWith('file') ? Workspace.projectTypes.FileSystem : Workspace.projectTypes.Network;
-      project = new Workspace.ProjectStore(workspace, projectId, projectType, '');
+          projectId.startsWith('file') ? Workspace.Workspace.projectTypes.FileSystem : Workspace.Workspace.projectTypes.Network;
+      project = new Workspace.Workspace.ProjectStore(workspace, projectId, projectType, '');
       workspace.addProject(project);
       projects[projectId] = project;
     }
-    var uiSourceCode = project.createUISourceCode(projectId + '/' + relativePath, Common.resourceTypes.Script);
+    var uiSourceCode = project.createUISourceCode(projectId + '/' + relativePath, Common.ResourceType.resourceTypes.Script);
     project.addUISourceCode(uiSourceCode);
   }
 

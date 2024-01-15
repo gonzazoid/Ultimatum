@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/platform/graphics/gpu/webgpu_mailbox_texture.h"
 
+#include "base/numerics/safe_conversions.h"
 #include "gpu/command_buffer/client/webgpu_interface.h"
 #include "media/base/video_frame.h"
 #include "media/base/wait_and_replace_sync_token_client.h"
@@ -22,9 +23,9 @@ scoped_refptr<WebGPUMailboxTexture> WebGPUMailboxTexture::FromStaticBitmapImage(
     WGPUDevice device,
     WGPUTextureUsage usage,
     scoped_refptr<StaticBitmapImage> image,
-    SkColorType color_type) {
-  DCHECK(image->IsTextureBacked());
-
+    const SkImageInfo& info,
+    const gfx::Rect& image_sub_rect,
+    bool is_dummy_mailbox_texture) {
   // TODO(crbugs.com/1217160) Mac uses IOSurface in SharedImageBackingGLImage
   // which can be shared to dawn directly aftter passthrough command buffer
   // supported on mac os.
@@ -37,32 +38,39 @@ scoped_refptr<WebGPUMailboxTexture> WebGPUMailboxTexture::FromStaticBitmapImage(
       context_provider_wrapper->ContextProvider()->IsContextLost())
     return nullptr;
 
+  // For noop webgpu mailbox construction, creating mailbox texture with minimum
+  // size.
+  const int mailbox_texture_width =
+      is_dummy_mailbox_texture && image_sub_rect.width() == 0
+          ? 1
+          : image_sub_rect.width();
+  const int mailbox_texture_height =
+      is_dummy_mailbox_texture && image_sub_rect.height() == 0
+          ? 1
+          : image_sub_rect.height();
+
+  // If source image cannot be wrapped into webgpu mailbox texture directly,
+  // applied cache with the sub rect size.
+  SkImageInfo recyclable_canvas_resource_info =
+      info.makeWH(mailbox_texture_width, mailbox_texture_height);
   // Get a recyclable resource for producing WebGPU-compatible shared images.
   std::unique_ptr<RecyclableCanvasResource> recyclable_canvas_resource =
       dawn_control_client->GetOrCreateCanvasResource(
-          image->PaintImageForCurrentFrame().GetSkImageInfo(),
-          image->IsOriginTopLeft());
+          recyclable_canvas_resource_info);
 
-  // Fallback to unstable intermediate resource copy path.
   if (!recyclable_canvas_resource) {
-    auto finished_access_callback = WTF::BindOnce(
-        &StaticBitmapImage::UpdateSyncToken, WTF::RetainedRef(image));
-
-    WGPUTextureDescriptor desc = {};
-    desc.usage = usage;
-    return base::AdoptRef(new WebGPUMailboxTexture(
-        std::move(dawn_control_client), device, desc,
-        image->GetMailboxHolder().mailbox, image->GetMailboxHolder().sync_token,
-        gpu::webgpu::WEBGPU_MAILBOX_NONE, std::move(finished_access_callback),
-        /*recyclable_canvas_resource=*/nullptr));
+    return nullptr;
   }
 
   CanvasResourceProvider* resource_provider =
       recyclable_canvas_resource->resource_provider();
   DCHECK(resource_provider);
 
-  if (!image->CopyToResourceProvider(resource_provider)) {
-    return nullptr;
+  // Skip copy if constructing dummy mailbox texture.
+  if (!is_dummy_mailbox_texture) {
+    if (!image->CopyToResourceProvider(resource_provider, image_sub_rect)) {
+      return nullptr;
+    }
   }
 
   return WebGPUMailboxTexture::FromCanvasResource(
@@ -77,7 +85,8 @@ scoped_refptr<WebGPUMailboxTexture> WebGPUMailboxTexture::FromCanvasResource(
     WGPUTextureUsage usage,
     std::unique_ptr<RecyclableCanvasResource> recyclable_canvas_resource) {
   scoped_refptr<CanvasResource> canvas_resource =
-      recyclable_canvas_resource->resource_provider()->ProduceCanvasResource();
+      recyclable_canvas_resource->resource_provider()->ProduceCanvasResource(
+          FlushReason::kWebGPUTexture);
   DCHECK(canvas_resource->IsValid());
   DCHECK(canvas_resource->IsAccelerated());
 
@@ -116,6 +125,12 @@ scoped_refptr<WebGPUMailboxTexture> WebGPUMailboxTexture::FromVideoFrame(
     WGPUDevice device,
     WGPUTextureUsage usage,
     scoped_refptr<media::VideoFrame> video_frame) {
+  auto context_provider = dawn_control_client->GetContextProviderWeakPtr();
+  if (!context_provider ||
+      context_provider->ContextProvider()->IsContextLost()) {
+    return nullptr;
+  }
+
   auto finished_access_callback = base::BindOnce(
       [](base::WeakPtr<WebGraphicsContext3DProviderWrapper> context_provider,
          media::VideoFrame* frame, const gpu::SyncToken& sync_token) {
@@ -126,8 +141,7 @@ scoped_refptr<WebGPUMailboxTexture> WebGPUMailboxTexture::FromVideoFrame(
           frame->UpdateReleaseSyncToken(&client);
         }
       },
-      dawn_control_client->GetContextProviderWeakPtr(),
-      base::RetainedRef(video_frame));
+      context_provider, base::RetainedRef(video_frame));
 
   WGPUTextureDescriptor desc = {};
   desc.usage = WGPUTextureUsage_TextureBinding;
@@ -177,10 +191,10 @@ WebGPUMailboxTexture::WebGPUMailboxTexture(
 
   // This may fail because gl_backing resource cannot produce dawn
   // representation.
-  webgpu->AssociateMailbox(wire_device_id_, wire_device_generation_,
-                           wire_texture_id_, wire_texture_generation_,
-                           desc.usage, mailbox_flags,
-                           reinterpret_cast<const GLbyte*>(&mailbox));
+  webgpu->AssociateMailbox(
+      wire_device_id_, wire_device_generation_, wire_texture_id_,
+      wire_texture_generation_, desc.usage, desc.viewFormats,
+      base::checked_cast<GLuint>(desc.viewFormatCount), mailbox_flags, mailbox);
 }
 
 void WebGPUMailboxTexture::SetAlphaClearer(

@@ -35,21 +35,20 @@ class HistoryClustersInternalsPageHandlerImpl
 
  private:
   // history_clusters::mojom::PageHandler:
-  void GetVisitsJson(GetVisitsJsonCallback callback) override;
+  void GetContextClustersJson(GetContextClustersJsonCallback callback) override;
   void PrintKeywordBagStateToLogMessages() override;
 
-  // Gets annotated visits from HistoryService.
-  void GetAnnotatedVisits(
+  // Gets most recent context clusters from HistoryService.
+  void GetContextClusters(
       history_clusters::QueryClustersContinuationParams continuation_params,
-      std::vector<history::AnnotatedVisit> previously_retrieved_visits,
-      GetVisitsJsonCallback callback);
+      std::vector<history::Cluster> previously_retrieved_clusters,
+      GetContextClustersJsonCallback callback);
 
-  // Callback invoked when HistoryService returns annotated visits.
-  void OnGotAnnotatedVisits(
-      std::vector<history::AnnotatedVisit> previously_retrieved_visits,
-      GetVisitsJsonCallback callback,
-      std::vector<int64_t> old_clusters,
-      std::vector<history::AnnotatedVisit> annotated_visits,
+  // Callback invoked when HistoryService returns context clusters.
+  void OnGotContextClusters(
+      std::vector<history::Cluster> previously_retrieved_clusters,
+      GetContextClustersJsonCallback callback,
+      std::vector<history::Cluster> new_clusters,
       history_clusters::QueryClustersContinuationParams continuation_params);
 
   // history_clusters::HistoryClustersService::Observer:
@@ -59,6 +58,10 @@ class HistoryClustersInternalsPageHandlerImpl
   mojo::Receiver<history_clusters_internals::mojom::PageHandler> page_handler_;
 
   base::CancelableTaskTracker task_tracker_;
+
+  // Used to hold the task while we query for the context clusters.
+  std::unique_ptr<history_clusters::HistoryClustersServiceTask>
+      query_context_clusters_task_;
 
   // Not owned. Guaranteed to outlive |this|, since the history clusters keyed
   // service has the lifetime of Profile, while |this| has the lifetime of

@@ -14,6 +14,11 @@
 #include "printing/print_settings.h"
 #include "ui/gfx/geometry/size.h"
 
+#if BUILDFLAG(ENABLE_OOP_PRINTING_NO_OOP_BASIC_PRINT_DIALOG)
+#include "base/values.h"
+#include "mojo/public/cpp/base/values_mojom_traits.h"
+#endif
+
 namespace mojo {
 
 template <>
@@ -124,6 +129,12 @@ struct StructTraits<printing::mojom::PrintSettingsDataView,
       const printing::PrintSettings& s) {
     return s.page_setup_device_units();
   }
+  static const std::string& media_type(const printing::PrintSettings& s) {
+    return s.media_type();
+  }
+  static bool borderless(const printing::PrintSettings& s) {
+    return s.borderless();
+  }
   static const gfx::Size& dpi(const printing::PrintSettings& s) {
     return s.dpi_size();
   }
@@ -135,9 +146,6 @@ struct StructTraits<printing::mojom::PrintSettingsDataView,
   }
   static bool landscape(const printing::PrintSettings& s) {
     return s.landscape();
-  }
-  static bool supports_alpha_blend(const printing::PrintSettings& s) {
-    return s.supports_alpha_blend();
   }
 
 #if BUILDFLAG(IS_WIN)
@@ -176,6 +184,13 @@ struct StructTraits<printing::mojom::PrintSettingsDataView,
     return s.pin_value();
   }
 #endif  // BUILDFLAG(IS_CHROMEOS)
+
+#if BUILDFLAG(ENABLE_OOP_PRINTING_NO_OOP_BASIC_PRINT_DIALOG)
+  static const base::Value::Dict& system_print_dialog_data(
+      const printing::PrintSettings& s) {
+    return s.system_print_dialog_data();
+  }
+#endif
 
   static bool Read(printing::mojom::PrintSettingsDataView data,
                    printing::PrintSettings* out);

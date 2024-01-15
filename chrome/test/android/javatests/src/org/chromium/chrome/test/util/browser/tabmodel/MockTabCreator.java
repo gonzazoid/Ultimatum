@@ -11,12 +11,9 @@ import org.chromium.chrome.browser.tab.MockTab;
 import org.chromium.chrome.browser.tab.MockTabAttributes;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabCreationState;
-import org.chromium.chrome.browser.tab.TabImpl;
 import org.chromium.chrome.browser.tab.TabLaunchType;
 import org.chromium.chrome.browser.tab.TabState;
 import org.chromium.chrome.browser.tab.TabTestUtils;
-import org.chromium.chrome.browser.tab.state.CriticalPersistedTabData;
-import org.chromium.chrome.browser.tab.state.SerializedCriticalPersistedTabData;
 import org.chromium.chrome.browser.tabmodel.TabCreator;
 import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
@@ -42,34 +39,37 @@ public class MockTabCreator extends TabCreator {
     }
 
     @Override
-    public boolean createsTabsAsynchronously() {
-        return false;
+    public Tab createNewTab(LoadUrlParams loadUrlParams, @TabLaunchType int type, Tab parent) {
+        return createNewTab(loadUrlParams, type, parent, TabModel.INVALID_TAB_INDEX);
     }
 
     @Override
-    public Tab createNewTab(LoadUrlParams loadUrlParams, @TabLaunchType int type, Tab parent) {
-        Tab tab = new MockTab(0, mIsIncognito, TabLaunchType.FROM_LINK);
+    public Tab createNewTab(
+            LoadUrlParams loadUrlParams, @TabLaunchType int type, Tab parent, int position) {
+        Tab tab =
+                new MockTab(
+                        0, mSelector.getModel(mIsIncognito).getProfile(), TabLaunchType.FROM_LINK);
         tab.getUserDataHost().setUserData(MockTabAttributes.class, new MockTabAttributes(false));
-        if (loadUrlParams != null) {
-            ((TabImpl) tab).initialize(null, null, loadUrlParams, null, null, false, null);
-        }
-        mSelector.getModel(mIsIncognito)
-                .addTab(tab, TabModel.INVALID_TAB_INDEX, type, TabCreationState.LIVE_IN_FOREGROUND);
+        TabTestUtils.initialize(tab, null, null, loadUrlParams, null, null, false, null, false);
+        mSelector
+                .getModel(mIsIncognito)
+                .addTab(tab, position, type, TabCreationState.LIVE_IN_FOREGROUND);
         storeTabInfo(null, tab.getId());
         return tab;
     }
 
     @Override
-    public Tab createFrozenTab(TabState state,
-            SerializedCriticalPersistedTabData serializedCriticalPersistedTabData, int id,
-            boolean isIncognito, int index) {
-        Tab tab = new MockTab(id, isIncognito, TabLaunchType.FROM_RESTORE);
+    public Tab createFrozenTab(TabState state, int id, int index) {
+        Tab tab =
+                new MockTab(
+                        id,
+                        mSelector.getModel(mIsIncognito).getProfile(),
+                        TabLaunchType.FROM_RESTORE);
         tab.getUserDataHost().setUserData(MockTabAttributes.class, new MockTabAttributes(true));
         if (state != null) TabTestUtils.restoreFieldsFromState(tab, state);
-        if (!CriticalPersistedTabData.isEmptySerialization(serializedCriticalPersistedTabData)) {
-            CriticalPersistedTabData.build(tab, serializedCriticalPersistedTabData);
-        }
-        mSelector.getModel(mIsIncognito)
+        TabTestUtils.initialize(tab, null, null, null, null, null, false, null, false);
+        mSelector
+                .getModel(mIsIncognito)
                 .addTab(tab, index, TabLaunchType.FROM_RESTORE, TabCreationState.FROZEN_ON_RESTORE);
         storeTabInfo(state, id);
         return tab;

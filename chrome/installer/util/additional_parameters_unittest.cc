@@ -4,7 +4,8 @@
 
 #include "chrome/installer/util/additional_parameters.h"
 
-#include "base/strings/string_piece.h"
+#include <string_view>
+
 #include "base/test/test_reg_util_win.h"
 #include "base/win/registry.h"
 #include "build/build_config.h"
@@ -232,7 +233,7 @@ TEST_F(AdditionalParametersTest, SetChannel) {
     static constexpr struct {
       version_info::Channel channel;
       bool is_extended_stable_channel;
-      base::WStringPiece prefix;
+      std::wstring_view prefix;
     } kChannels[] = {
         {version_info::Channel::DEV, /*is_extended_stable_channel=*/false,
          L"2.0-dev"},
@@ -270,7 +271,15 @@ TEST_F(AdditionalParametersTest, SetChannel) {
         EXPECT_THAT(ap.value(),
                     ::testing::StartsWith(std::wstring(channel.prefix)));
         if (expectation.has_arch)
-          EXPECT_THAT(ap.value(), ::testing::HasSubstr(L"-arch_x"));
+#if defined(ARCH_CPU_X86_64)
+          EXPECT_THAT(ap.value(), ::testing::HasSubstr(L"-arch_x64"));
+#elif defined(ARCH_CPU_X86)
+          EXPECT_THAT(ap.value(), ::testing::HasSubstr(L"-arch_x86"));
+#elif defined(ARCH_CPU_ARM64)
+          EXPECT_THAT(ap.value(), ::testing::HasSubstr(L"-arch_arm64"));
+#else
+#error unsupported processor architecture.
+#endif
       }
     }
   }

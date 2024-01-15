@@ -2,13 +2,15 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "components/policy/core/common/policy_merger.h"
+
 #include <array>
 #include <map>
 #include <set>
 
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "components/policy/core/common/policy_merger.h"
+#include "components/policy/core/common/features.h"
 #include "components/policy/core/common/policy_pref_names.h"
 #include "components/policy/policy_constants.h"
 #include "components/strings/grit/components_strings.h"
@@ -112,8 +114,10 @@ bool PolicyListMerger::CanMerge(const std::string& policy_name,
   if (policy.source == POLICY_SOURCE_MERGED)
     return false;
 
-  if (policies_to_merge_.find("*") != policies_to_merge_.end())
-    return policy.value(base::Value::Type::LIST) != nullptr;
+  if (policies_to_merge_.find("*") != policies_to_merge_.end()) {
+    return policy.HasConflicts() &&
+           policy.value(base::Value::Type::LIST) != nullptr;
+  }
 
   if (policies_to_merge_.find(policy_name) == policies_to_merge_.end())
     return false;
@@ -124,7 +128,7 @@ bool PolicyListMerger::CanMerge(const std::string& policy_name,
     return false;
   }
 
-  return true;
+  return policy.HasConflicts();
 }
 
 bool PolicyListMerger::AllowUserCloudPolicyMerging() const {
@@ -169,11 +173,11 @@ void PolicyListMerger::DoMerge(PolicyMap::Entry* policy) const {
 
   auto new_conflict = policy->DeepCopy();
   if (value_changed) {
-    base::Value new_value(base::Value::Type::LIST);
+    base::Value::List new_value;
     for (const base::Value* it : merged_values)
       new_value.Append(it->Clone());
 
-    policy->set_value(std::move(new_value));
+    policy->set_value(base::Value(std::move(new_value)));
   }
   policy->ClearConflicts();
   policy->AddConflictingPolicy(std::move(new_conflict));
@@ -217,8 +221,10 @@ bool PolicyDictionaryMerger::CanMerge(const std::string& policy_name,
   const bool allowed_to_merge =
       allowed_policies_.find(policy_name) != allowed_policies_.end();
 
-  if (policies_to_merge_.find("*") != policies_to_merge_.end())
-    return allowed_to_merge && policy.value(base::Value::Type::DICT);
+  if (policies_to_merge_.find("*") != policies_to_merge_.end()) {
+    return allowed_to_merge && policy.HasConflicts() &&
+           policy.value(base::Value::Type::DICT);
+  }
 
   if (policies_to_merge_.find(policy_name) == policies_to_merge_.end())
     return false;
@@ -236,7 +242,7 @@ bool PolicyDictionaryMerger::CanMerge(const std::string& policy_name,
     return false;
   }
 
-  return true;
+  return policy.HasConflicts();
 }
 
 bool PolicyDictionaryMerger::AllowUserCloudPolicyMerging() const {

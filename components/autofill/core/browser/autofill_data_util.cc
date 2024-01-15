@@ -9,9 +9,9 @@
 
 #include "base/containers/contains.h"
 #include "base/i18n/char_iterator.h"
+#include "base/no_destructor.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
-#include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/branding_buildflags.h"
 #include "components/autofill/core/browser/autofill_type.h"
@@ -20,14 +20,14 @@
 #include "components/autofill/core/browser/field_types.h"
 #include "components/autofill/core/browser/form_structure.h"
 #include "components/autofill/core/browser/geo/autofill_country.h"
-#include "components/autofill/core/browser/webdata/autofill_table.h"
+#include "components/autofill/core/browser/webdata/autofill_table_utils.h"
+#include "components/autofill/core/common/autofill_payments_features.h"
 #include "components/grit/components_scaled_resources.h"
 #include "components/strings/grit/components_strings.h"
 #include "third_party/icu/source/common/unicode/uscript.h"
 #include "third_party/re2/src/re2/re2.h"
 
-namespace autofill {
-namespace data_util {
+namespace autofill::data_util {
 
 using bit_field_type_groups::kAddress;
 using bit_field_type_groups::kEmail;
@@ -57,8 +57,35 @@ const PaymentRequestData kPaymentRequestData[]{
     {autofill::kVisaCard, "visa", IDR_AUTOFILL_CC_VISA, IDS_AUTOFILL_CC_VISA},
 };
 
+const PaymentRequestData kPaymentRequestDataForNewNetworkImages[]{
+    {autofill::kAmericanExpressCard, "amex", IDR_AUTOFILL_METADATA_CC_AMEX,
+     IDS_AUTOFILL_CC_AMEX},
+    {autofill::kDinersCard, "diners", IDR_AUTOFILL_METADATA_CC_DINERS,
+     IDS_AUTOFILL_CC_DINERS},
+    {autofill::kDiscoverCard, "discover", IDR_AUTOFILL_METADATA_CC_DISCOVER,
+     IDS_AUTOFILL_CC_DISCOVER},
+    {autofill::kEloCard, "elo", IDR_AUTOFILL_METADATA_CC_ELO,
+     IDS_AUTOFILL_CC_ELO},
+    {autofill::kJCBCard, "jcb", IDR_AUTOFILL_METADATA_CC_JCB,
+     IDS_AUTOFILL_CC_JCB},
+    {autofill::kMasterCard, "mastercard", IDR_AUTOFILL_METADATA_CC_MASTERCARD,
+     IDS_AUTOFILL_CC_MASTERCARD},
+    {autofill::kMirCard, "mir", IDR_AUTOFILL_METADATA_CC_MIR,
+     IDS_AUTOFILL_CC_MIR},
+    {autofill::kTroyCard, "troy", IDR_AUTOFILL_METADATA_CC_TROY,
+     IDS_AUTOFILL_CC_TROY},
+    {autofill::kUnionPay, "unionpay", IDR_AUTOFILL_METADATA_CC_UNIONPAY,
+     IDS_AUTOFILL_CC_UNION_PAY},
+    {autofill::kVisaCard, "visa", IDR_AUTOFILL_METADATA_CC_VISA,
+     IDS_AUTOFILL_CC_VISA},
+};
+
 const PaymentRequestData kGenericPaymentRequestData = {
     autofill::kGenericCard, "generic", IDR_AUTOFILL_CC_GENERIC,
+    IDS_AUTOFILL_CC_GENERIC};
+
+const PaymentRequestData kGenericPaymentRequestDataForNewNetworkImages = {
+    autofill::kGenericCard, "generic", IDR_AUTOFILL_METADATA_CC_GENERIC,
     IDS_AUTOFILL_CC_GENERIC};
 
 const char* const name_prefixes[] = {
@@ -151,7 +178,7 @@ size_t StartsWithAny(base::StringPiece16 name,
   for (size_t i = 0; i < prefix_count; i++) {
     buffer.clear();
     base::UTF8ToUTF16(prefixes[i], strlen(prefixes[i]), &buffer);
-    if (base::StartsWith(name, buffer, base::CompareCase::SENSITIVE)) {
+    if (name.starts_with(buffer)) {
       return buffer.size();
     }
   }
@@ -245,20 +272,19 @@ bool SplitCJKName(const std::vector<base::StringPiece16>& name_tokens,
   return false;
 }
 
-void AddGroupToBitmask(uint32_t* group_bitmask, ServerFieldType type) {
-  const FieldTypeGroup group =
-      AutofillType(AutofillType(type).GetStorableType()).group();
+void AddGroupToBitmask(uint32_t* group_bitmask, FieldType type) {
+  const FieldTypeGroup group = GroupTypeOfFieldType(type);
   switch (group) {
     case autofill::FieldTypeGroup::kName:
       *group_bitmask |= kName;
       break;
-    case autofill::FieldTypeGroup::kAddressHome:
+    case autofill::FieldTypeGroup::kAddress:
       *group_bitmask |= kAddress;
       break;
     case autofill::FieldTypeGroup::kEmail:
       *group_bitmask |= kEmail;
       break;
-    case autofill::FieldTypeGroup::kPhoneHome:
+    case autofill::FieldTypeGroup::kPhone:
       *group_bitmask |= kPhone;
       break;
     default:
@@ -287,15 +313,15 @@ bool ContainsPhone(uint32_t groups) {
 uint32_t DetermineGroups(const FormStructure& form) {
   uint32_t group_bitmask = 0;
   for (const auto& field : form) {
-    ServerFieldType type = field->Type().GetStorableType();
+    FieldType type = field->Type().GetStorableType();
     AddGroupToBitmask(&group_bitmask, type);
   }
   return group_bitmask;
 }
 
-uint32_t DetermineGroups(const std::vector<ServerFieldType>& types) {
+uint32_t DetermineGroups(const FieldTypeSet& types) {
   uint32_t group_bitmask = 0;
-  for (const auto& type : types) {
+  for (const FieldType type : types) {
     AddGroupToBitmask(&group_bitmask, type);
   }
   return group_bitmask;
@@ -335,12 +361,11 @@ std::string GetSuffixForProfileFormType(uint32_t bitmask) {
 
 std::string TruncateUTF8(const std::string& data) {
   std::string trimmed_value;
-  base::TruncateUTF8ToByteSize(data, AutofillTable::kMaxDataLength,
-                               &trimmed_value);
+  base::TruncateUTF8ToByteSize(data, kMaxDataLengthForDatabase, &trimmed_value);
   return trimmed_value;
 }
 
-bool IsCreditCardExpirationType(ServerFieldType type) {
+bool IsCreditCardExpirationType(FieldType type) {
   return type == CREDIT_CARD_EXP_MONTH ||
          type == CREDIT_CARD_EXP_2_DIGIT_YEAR ||
          type == CREDIT_CARD_EXP_4_DIGIT_YEAR ||
@@ -475,26 +500,44 @@ std::u16string JoinNameParts(base::StringPiece16 given,
 
 const PaymentRequestData& GetPaymentRequestData(
     const std::string& issuer_network) {
-  for (const PaymentRequestData& data : kPaymentRequestData) {
+  bool use_new_data = base::FeatureList::IsEnabled(
+      autofill::features::kAutofillEnableNewCardArtAndNetworkImages);
+
+  for (const PaymentRequestData& data :
+       use_new_data ? kPaymentRequestDataForNewNetworkImages
+                    : kPaymentRequestData) {
     if (issuer_network == data.issuer_network)
       return data;
   }
-  return kGenericPaymentRequestData;
+  return use_new_data ? kGenericPaymentRequestDataForNewNetworkImages
+                      : kGenericPaymentRequestData;
 }
 
 const char* GetIssuerNetworkForBasicCardIssuerNetwork(
     const std::string& basic_card_issuer_network) {
-  for (const PaymentRequestData& data : kPaymentRequestData) {
+  bool use_new_data = base::FeatureList::IsEnabled(
+      autofill::features::kAutofillEnableNewCardArtAndNetworkImages);
+
+  for (const PaymentRequestData& data :
+       use_new_data ? kPaymentRequestDataForNewNetworkImages
+                    : kPaymentRequestData) {
     if (basic_card_issuer_network == data.basic_card_issuer_network) {
       return data.issuer_network;
     }
   }
-  return kGenericPaymentRequestData.issuer_network;
+  return use_new_data
+             ? kGenericPaymentRequestDataForNewNetworkImages.issuer_network
+             : kGenericPaymentRequestData.issuer_network;
 }
 
 bool IsValidBasicCardIssuerNetwork(
     const std::string& basic_card_issuer_network) {
-  return base::Contains(kPaymentRequestData, basic_card_issuer_network,
+  bool use_new_data = base::FeatureList::IsEnabled(
+      autofill::features::kAutofillEnableNewCardArtAndNetworkImages);
+
+  return base::Contains(use_new_data ? kPaymentRequestDataForNewNetworkImages
+                                     : kPaymentRequestData,
+                        basic_card_issuer_network,
                         &PaymentRequestData::basic_card_issuer_network);
 }
 
@@ -502,7 +545,8 @@ bool IsValidCountryCode(const std::string& country_code) {
   if (country_code.size() != 2)
     return false;
 
-  return re2::RE2::FullMatch(country_code, "^[A-Z]{2}$");
+  static const base::NoDestructor<re2::RE2> country_code_regex("^[A-Z]{2}$");
+  return re2::RE2::FullMatch(country_code, *country_code_regex.get());
 }
 
 bool IsValidCountryCode(const std::u16string& country_code) {
@@ -518,5 +562,4 @@ std::string GetCountryCodeWithFallback(const autofill::AutofillProfile& profile,
   return country_code;
 }
 
-}  // namespace data_util
-}  // namespace autofill
+}  // namespace autofill::data_util

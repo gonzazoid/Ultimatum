@@ -8,8 +8,8 @@
 #include <set>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/containers/span.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
@@ -28,6 +28,7 @@
 #include "components/network_session_configurator/common/network_switches.h"
 #include "components/search/ntp_features.h"
 #include "content/public/browser/devtools_agent_host_client.h"
+#include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -67,21 +68,25 @@ class NewTabPageTest : public InProcessBrowserTest,
         base::JSONReader::Read(base::StringPiece(
             reinterpret_cast<const char*>(message.data()), message.size()));
     CHECK(maybe_parsed_message.has_value());
-    base::Value parsed_message = std::move(maybe_parsed_message.value());
-    auto* method = parsed_message.FindStringPath("method");
+    base::Value::Dict parsed_message =
+        std::move(maybe_parsed_message.value()).TakeDict();
+    auto* method = parsed_message.FindString("method");
     if (!method) {
       return;
     }
     if (*method == "Network.requestWillBeSent") {
       // We track all started network requests to match them to corresponding
       // load completions.
-      auto request_id = *parsed_message.FindStringPath("params.requestId");
-      auto url = GURL(*parsed_message.FindStringPath("params.request.url"));
+      auto request_id =
+          *parsed_message.FindStringByDottedPath("params.requestId");
+      auto url =
+          GURL(*parsed_message.FindStringByDottedPath("params.request.url"));
       loading_resources_[request_id] = url;
     } else if (*method == "Network.loadingFinished") {
       // Cross off network request from pending loads. Once all loads have
       // completed we potentially unblock the test from waiting.
-      auto request_id = *parsed_message.FindStringPath("params.requestId");
+      auto request_id =
+          *parsed_message.FindStringByDottedPath("params.requestId");
       auto url = loading_resources_[request_id];
       loading_resources_.erase(request_id);
       loaded_resources_.insert(url);
@@ -92,9 +97,9 @@ class NewTabPageTest : public InProcessBrowserTest,
       }
     } else if (*method == "DOM.attributeModified") {
       // Check if lazy load has completed and potentially unblock waiting test.
-      auto node_id = *parsed_message.FindIntPath("params.nodeId");
-      auto name = *parsed_message.FindStringPath("params.name");
-      auto value = *parsed_message.FindStringPath("params.value");
+      auto node_id = *parsed_message.FindIntByDottedPath("params.nodeId");
+      auto name = *parsed_message.FindStringByDottedPath("params.name");
+      auto value = *parsed_message.FindStringByDottedPath("params.value");
       if (node_id == 3 && name == "lazy-loaded" && value == "true") {
         lazy_loaded_ = true;
       }
@@ -185,23 +190,20 @@ class NewTabPageTest : public InProcessBrowserTest,
                 const std::string& screenshot_name) {
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || \
     (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS))
-    if (!base::CommandLine::ForCurrentProcess()->HasSwitch(
-            "browser-ui-tests-verify-pixels")) {
-      return true;
+    if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+            switches::kVerifyPixels)) {
+      views::ViewSkiaGoldPixelDiff pixel_diff(screenshot_prefix);
+      return pixel_diff.CompareViewScreenshot(
+          screenshot_name, browser_view_->contents_web_view());
     }
-    views::ViewSkiaGoldPixelDiff pixel_diff;
-    pixel_diff.Init(screenshot_prefix);
-    return pixel_diff.CompareViewScreenshot(screenshot_name,
-                                            browser_view_->contents_web_view());
-#else
-    return true;
 #endif
+    return true;
   }
 
  protected:
   base::test::ScopedFeatureList features_;
-  raw_ptr<content::WebContents> contents_;
-  raw_ptr<BrowserView> browser_view_;
+  raw_ptr<content::WebContents, DanglingUntriaged> contents_;
+  raw_ptr<BrowserView, DanglingUntriaged> browser_view_;
   scoped_refptr<content::DevToolsAgentHost> agent_host_;
   std::map<std::string, GURL> loading_resources_;
   std::set<GURL> loaded_resources_;
@@ -213,12 +215,11 @@ class NewTabPageTest : public InProcessBrowserTest,
 
 // TODO(crbug.com/1250156): NewTabPageTest.LandingPagePixelTest is flaky on
 // ubsan.
-#if defined(UNDEFINED_SANITIZER) && BUILDFLAG(IS_LINUX)
-#define MAYBE_LandingPagePixelTest DISABLED_LandingPagePixelTest
-#else
-#define MAYBE_LandingPagePixelTest LandingPagePixelTest
-#endif
-IN_PROC_BROWSER_TEST_F(NewTabPageTest, MAYBE_LandingPagePixelTest) {
+// TODO(crbug.com/1377330): NewTabPageTest.LandingPagePixelTest is failing on
+// Win11 Tests x64.
+// TODO(crbug.com/1416880): It's also found flaky on Linux Tests, Linux Tests
+// (Wayland), linux-lacros-tester-rel, Mac12 Tests. Disabling on all platforms.
+IN_PROC_BROWSER_TEST_F(NewTabPageTest, DISABLED_LandingPagePixelTest) {
   WaitForLazyLoad();
   // By default WaitForNetworkLoad waits for all resources that have started
   // loading at this point. However, sometimes not all required resources have

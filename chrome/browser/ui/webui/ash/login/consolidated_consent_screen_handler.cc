@@ -4,17 +4,19 @@
 
 #include "chrome/browser/ui/webui/ash/login/consolidated_consent_screen_handler.h"
 
+#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
 #include "base/values.h"
+#include "chrome/browser/ash/crosapi/browser_util.h"
 #include "chrome/browser/ash/login/oobe_screen.h"
 #include "chrome/browser/ash/login/screens/consolidated_consent_screen.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/login/localized_values_builder.h"
 #include "ui/chromeos/devicetype_utils.h"
 
-namespace chromeos {
+namespace ash {
 
 ConsolidatedConsentScreenHandler::ConsolidatedConsentScreenHandler()
     : BaseScreenHandler(kScreenId) {}
@@ -68,16 +70,33 @@ void ConsolidatedConsentScreenHandler::DeclareLocalizedValues(
   builder->Add("consolidatedConsentFooter", IDS_CONSOLIDATED_CONSENT_FOOTER);
   builder->Add("consolidatedConsentFooterChild",
                IDS_CONSOLIDATED_CONSENT_FOOTER_CHILD);
-  builder->Add("consolidatedConsentUsageOptInLearnMore",
-               IDS_CONSOLIDATED_CONSENT_USAGE_OPT_IN_LEARN_MORE_OWNER);
-  builder->Add("consolidatedConsentUsageOptInLearnMoreChild",
-               IDS_CONSOLIDATED_CONSENT_USAGE_OPT_IN_LEARN_MORE_CHILD_OWNER);
-  builder->Add(
-      "consolidatedConsentUsageOptInLearnMoreArcDisabled",
-      IDS_CONSOLIDATED_CONSENT_USAGE_OPT_IN_LEARN_MORE_ARC_DISABLED_OWNER);
-  builder->Add(
-      "consolidatedConsentUsageOptInLearnMoreArcDisabledChild",
-      IDS_CONSOLIDATED_CONSENT_USAGE_OPT_IN_LEARN_MORE_ARC_DISABLED_CHILD_OWNER);
+  if (crosapi::browser_util::IsLacrosEnabled() &&
+      features::IsOsSyncConsentRevampEnabled()) {
+    builder->Add("consolidatedConsentUsageOptInLearnMore",
+                 IDS_CONSOLIDATED_CONSENT_USAGE_OPT_IN_LEARN_MORE_OWNER_LACROS);
+    builder->Add(
+        "consolidatedConsentUsageOptInLearnMoreChild",
+        IDS_CONSOLIDATED_CONSENT_USAGE_OPT_IN_LEARN_MORE_CHILD_OWNER_LACROS);
+    builder->Add(
+        "consolidatedConsentUsageOptInLearnMoreArcDisabled",
+        IDS_CONSOLIDATED_CONSENT_USAGE_OPT_IN_LEARN_MORE_ARC_DISABLED_OWNER_LACROS);
+    builder->Add(
+        "consolidatedConsentUsageOptInLearnMoreArcDisabledChild",
+        IDS_CONSOLIDATED_CONSENT_USAGE_OPT_IN_LEARN_MORE_ARC_DISABLED_CHILD_OWNER_LACROS);
+
+  } else {
+    builder->Add("consolidatedConsentUsageOptInLearnMore",
+                 IDS_CONSOLIDATED_CONSENT_USAGE_OPT_IN_LEARN_MORE_OWNER);
+    builder->Add("consolidatedConsentUsageOptInLearnMoreChild",
+                 IDS_CONSOLIDATED_CONSENT_USAGE_OPT_IN_LEARN_MORE_CHILD_OWNER);
+    builder->Add(
+        "consolidatedConsentUsageOptInLearnMoreArcDisabled",
+        IDS_CONSOLIDATED_CONSENT_USAGE_OPT_IN_LEARN_MORE_ARC_DISABLED_OWNER);
+    builder->Add(
+        "consolidatedConsentUsageOptInLearnMoreArcDisabledChild",
+        IDS_CONSOLIDATED_CONSENT_USAGE_OPT_IN_LEARN_MORE_ARC_DISABLED_CHILD_OWNER);
+  }
+
   builder->Add("consolidatedConsentBackupOptInLearnMore",
                IDS_CONSOLIDATED_CONSENT_BACKUP_OPT_IN_LEARN_MORE);
   builder->Add("consolidatedConsentBackupOptInLearnMoreChild",
@@ -97,7 +116,13 @@ void ConsolidatedConsentScreenHandler::DeclareLocalizedValues(
                IDS_OOBE_GENERIC_FATAL_ERROR_TITLE);
   builder->Add("consolidatedConsentErrorMessage",
                IDS_CONSOLIDATED_CONSENT_TERMS_LOAD_ERROR);
-  builder->Add("consolidatedConsentRetry", IDS_CONSOLIDATED_CONSENT_RETRY);
+  builder->Add("consolidatedConsentPlayErrorTitle",
+               IDS_CONSOLIDATED_CONSENT_PLAY_LOAD_ERROR_TITLE);
+  builder->AddF("consolidatedConsentPlayErrorMessage",
+                IDS_CONSOLIDATED_CONSENT_PLAY_LOAD_ERROR_MESSAGE,
+                ui::GetChromeOSDeviceTypeResourceId());
+  builder->Add("consolidatedConsentDone", IDS_CONSOLIDATED_CONSENT_DONE);
+  builder->Add("consolidatedConsentRetry", IDS_CONSOLIDATED_CONSENT_TRY_AGAIN);
   builder->Add("consolidatedConsentOK", IDS_CONSOLIDATED_CONSENT_OK);
   builder->Add("consolidatedConsentGoogleEulaTitle",
                IDS_CONSOLIDATED_CONSENT_GOOGLE_EULA_TITLE);
@@ -107,13 +132,6 @@ void ConsolidatedConsentScreenHandler::DeclareLocalizedValues(
                IDS_CONSOLIDATED_CONSENT_ARC_TITLE);
   builder->Add("consolidatedConsentPrivacyTitle",
                IDS_CONSOLIDATED_CONSENT_PRIVACY_POLICY_TITLE);
-
-  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kArcTosHostForTests)) {
-    builder->Add("consolidatedConsentArcTosHostNameForTesting",
-                 base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
-                     switches::kArcTosHostForTests));
-  }
 }
 
 void ConsolidatedConsentScreenHandler::Show(base::Value::Dict data) {
@@ -138,4 +156,4 @@ void ConsolidatedConsentScreenHandler::SetLocationMode(bool enabled,
 void ConsolidatedConsentScreenHandler::SetUsageOptinHidden(bool hidden) {
   CallExternalAPI("setUsageOptinHidden", hidden);
 }
-}  // namespace chromeos
+}  // namespace ash

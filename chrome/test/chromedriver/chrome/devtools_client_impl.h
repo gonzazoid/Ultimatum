@@ -10,18 +10,15 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/values.h"
 #include "chrome/test/chromedriver/chrome/devtools_client.h"
-#include "chrome/test/chromedriver/net/sync_websocket_factory.h"
 #include "chrome/test/chromedriver/net/timeout.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
-
-namespace base {
-class DictionaryValue;
-}
 
 namespace internal {
 
@@ -34,7 +31,7 @@ struct InspectorEvent {
   InspectorEvent();
   ~InspectorEvent();
   std::string method;
-  std::unique_ptr<base::DictionaryValue> params;
+  absl::optional<base::Value::Dict> params;
 };
 
 struct InspectorCommandResponse {
@@ -42,7 +39,7 @@ struct InspectorCommandResponse {
   ~InspectorCommandResponse();
   int id;
   std::string error;
-  std::unique_ptr<base::DictionaryValue> result;
+  absl::optional<base::Value::Dict> result;
 };
 
 }  // namespace internal
@@ -57,15 +54,8 @@ class SyncWebSocket;
 class DevToolsClientImpl : public DevToolsClient {
  public:
   static const char kBrowserwideDevToolsClientId[];
-  static const char kInfraChannel[];
-  static const char kClientChannelSuffix[];
-
-  // Postcondition: !IsNull()
-  // Postcondition: !IsConnected()
-  DevToolsClientImpl(const std::string& id,
-                     const std::string& session_id,
-                     const std::string& url,
-                     const SyncWebSocketFactory& factory);
+  static const char kCdpTunnelChannel[];
+  static const char kBidiChannelSuffix[];
 
   typedef base::RepeatingCallback<Status()> FrontendCloserFunc;
 
@@ -87,18 +77,25 @@ class DevToolsClientImpl : public DevToolsClient {
   ~DevToolsClientImpl() override;
 
   void SetParserFuncForTesting(const ParserFunc& parser_func);
-  void SetFrontendCloserFunc(const FrontendCloserFunc& frontend_closer_func);
   // Make this DevToolsClient a child of 'parent'.
   // All the commands of the child are routed via the parent.
   // The parent demultiplexes the incoming events to the appropriate children.
-  // If the parent->IsConnected() this object changes its state to connected,
-  // it sets up the remote end and notifies the listeners about the connection.
   // Precondition: parent != nullptr
+  // Precondition: parent.IsConnected()
   // Precondition: IsNull()
   // The next precondition secures the class invariant about flat hierarchy
   // Precondition: parent->GetParentClient() == nullptr.
   // Postcondition: result.IsError() || !IsNull()
+  // Postcondition: result.IsError() || IsConnected()
   Status AttachTo(DevToolsClientImpl* parent);
+
+  // Set the socket for communication with the remote end.
+  // All listeners are notified about the connection.
+  // Precondition: socket != nullptr
+  // Precondition: socket.IsConnected()
+  // Precondition: IsNull()
+  // Postcondition: result.IsError() || IsConnected()
+  Status SetSocket(std::unique_ptr<SyncWebSocket> socket);
 
   // Overridden from DevToolsClient:
   const std::string& GetId() override;
@@ -114,22 +111,17 @@ class DevToolsClientImpl : public DevToolsClient {
   // Precondition: IsMainPage()
   // Precondition: IsConnected()
   // Precondition: BiDi tunnel for CDP traffic is not set.
-  Status StartBidiServer(std::string bidi_mapper_script) override;
   Status StartBidiServer(std::string bidi_mapper_script,
+                         const base::Value::Dict& mapper_options) override;
+  Status StartBidiServer(std::string bidi_mapper_script,
+                         const base::Value::Dict& mapper_options,
                          const Timeout& timeout);
   // If the object IsNull then it cannot be connected to the remote end.
   // Such an object needs to be attached to some !IsNull() parent first.
   // Postcondition: IsNull() == (socket == nullptr && parent == nullptr)
   bool IsNull() const override;
-  bool IsConnected() const;
+  bool IsConnected() const override;
   bool WasCrashed() override;
-  // Connect and configure the remote end.
-  // The children are also connected and their remote ends are configured.
-  // The listeners and the listeners of the children are notified appropriately.
-  // Does nothing if the connection is already established.
-  // Precondition: !IsNull()
-  // Postcondition: result.IsError() || IsConnected()
-  Status ConnectIfNecessary() override;
   Status PostBidiCommand(base::Value::Dict command) override;
   Status SendCommand(const std::string& method,
                      const base::Value::Dict& params) override;
@@ -143,11 +135,11 @@ class DevToolsClientImpl : public DevToolsClient {
                           const base::Value::Dict& params) override;
   Status SendCommandAndGetResult(const std::string& method,
                                  const base::Value::Dict& params,
-                                 base::Value* result) override;
+                                 base::Value::Dict* result) override;
   Status SendCommandAndGetResultWithTimeout(const std::string& method,
                                             const base::Value::Dict& params,
                                             const Timeout* timeout,
-                                            base::Value* result) override;
+                                            base::Value::Dict* result) override;
   Status SendCommandAndIgnoreResponse(const std::string& method,
                                       const base::Value::Dict& params) override;
 
@@ -156,6 +148,7 @@ class DevToolsClientImpl : public DevToolsClient {
   // Precondition: !IsConnected() || !listener.ListensToConnections()
   // Precondition: listener != nullptr
   void AddListener(DevToolsEventListener* listener) override;
+  void RemoveListener(DevToolsEventListener* listener) override;
   Status HandleEventsUntil(const ConditionalFunc& conditional_func,
                            const Timeout& timeout) override;
   Status HandleReceivedEvents() override;
@@ -201,7 +194,7 @@ class DevToolsClientImpl : public DevToolsClient {
   Status SendCommandInternal(const std::string& method,
                              const base::Value::Dict& params,
                              const std::string& session_id,
-                             base::Value* result,
+                             base::Value::Dict* result,
                              bool expect_response,
                              bool wait_for_response,
                              int client_command_id,
@@ -224,7 +217,6 @@ class DevToolsClientImpl : public DevToolsClient {
   Status SetUpDevTools();
 
   std::unique_ptr<SyncWebSocket> socket_;
-  GURL url_;
   // WebViewImpl that owns this instance; nullptr for browser-wide DevTools.
   raw_ptr<WebViewImpl> owner_ = nullptr;
   const std::string session_id_;
@@ -239,7 +231,6 @@ class DevToolsClientImpl : public DevToolsClient {
   // For the top-level session, this is the target id.
   // For child sessions, it's the session id.
   const std::string id_;
-  FrontendCloserFunc frontend_closer_func_;
   ParserFunc parser_func_;
   std::list<DevToolsEventListener*> listeners_;
   std::list<DevToolsEventListener*> unnotified_connect_listeners_;
@@ -249,10 +240,7 @@ class DevToolsClientImpl : public DevToolsClient {
   scoped_refptr<ResponseInfo> unnotified_cmd_response_info_;
   std::map<int, scoped_refptr<ResponseInfo>> response_info_map_;
   int next_id_ = 1;  // The id identifying a particular request.
-  int stack_count_ = 0;
-  bool is_remote_end_configured_ = false;
   bool is_main_page_ = false;
-  bool bidi_server_is_launched_ = false;
   // Event tunneling is temporarily disabled in production.
   // It is enabled only by the unit tests
   // TODO(chromedriver:4181): Enable CDP event tunneling

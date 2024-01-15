@@ -13,52 +13,50 @@ import android.text.format.DateUtils;
 
 import androidx.annotation.IntDef;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.ContextUtils;
-import org.chromium.base.ObserverList;
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.base.compat.ApiHelperForN;
 import org.chromium.base.metrics.RecordHistogram;
 
-/**
- * Utilities to support startup metrics - Android version.
- */
+/** Utilities to support startup metrics - Android version. */
 @JNINamespace("chrome::android")
 public class UmaUtils {
     /** Observer for this class. */
     public interface Observer {
         /**
-         * Called when hasComeToForeground() changes from false to true.
+         * Called when hasComeToForeground() changes from false to true for the first time after
+         * post-native initialization has started.
          */
-        void onHasComeToForeground();
+        void onHasComeToForegroundWithNative();
     }
 
-    private static ObserverList<Observer> sObservers;
+    private static Observer sObserver;
 
-    /** Adds an observer. */
-    public static boolean addObserver(Observer observer) {
+    /** Sets the observer. */
+    public static void setObserver(Observer observer) {
         ThreadUtils.assertOnUiThread();
-        if (sObservers == null) sObservers = new ObserverList<>();
-        return sObservers.addObserver(observer);
+        assert sObserver == null;
+        sObserver = observer;
     }
 
-    /** Removes an observer. */
-    public static boolean removeObserver(Observer observer) {
+    /** Removes the observer. */
+    public static void removeObserver() {
         ThreadUtils.assertOnUiThread();
-        if (sObservers == null) return false;
-        return sObservers.removeObserver(observer);
+        sObserver = null;
     }
 
     // All these values originate from SystemClock.uptimeMillis().
     private static long sApplicationStartTimeMs;
-    private static long sForegroundStartTimeMs;
-    private static long sBackgroundTimeMs;
+    private static long sForegroundStartWithNativeTimeMs;
+    private static long sBackgroundWithNativeTimeMs;
 
     private static boolean sSkipRecordingNextForegroundStartTimeForTesting;
 
-    // Will short-circuit out of the next recordForegroundStartTime() call.
+    // Will short-circuit out of the next recordForegroundStartTimeWithNative() call.
     public static void skipRecordingNextForegroundStartTimeForTesting() {
         sSkipRecordingNextForegroundStartTimeForTesting = true;
     }
@@ -69,9 +67,18 @@ public class UmaUtils {
      * These values are persisted to logs. Entries should not be renumbered and
      * numeric values should never be reused.
      */
-    @IntDef({StandbyBucketStatus.ACTIVE, StandbyBucketStatus.WORKING_SET,
-            StandbyBucketStatus.FREQUENT, StandbyBucketStatus.RARE, StandbyBucketStatus.RESTRICTED,
-            StandbyBucketStatus.UNSUPPORTED, StandbyBucketStatus.COUNT})
+    @IntDef({
+        StandbyBucketStatus.ACTIVE,
+        StandbyBucketStatus.WORKING_SET,
+        StandbyBucketStatus.FREQUENT,
+        StandbyBucketStatus.RARE,
+        StandbyBucketStatus.RESTRICTED,
+        StandbyBucketStatus.UNSUPPORTED,
+        StandbyBucketStatus.EXEMPTED,
+        StandbyBucketStatus.NEVER,
+        StandbyBucketStatus.OTHER,
+        StandbyBucketStatus.COUNT
+    })
     private @interface StandbyBucketStatus {
         int ACTIVE = 0;
         int WORKING_SET = 1;
@@ -79,7 +86,10 @@ public class UmaUtils {
         int RARE = 3;
         int RESTRICTED = 4;
         int UNSUPPORTED = 5;
-        int COUNT = 6;
+        int EXEMPTED = 6;
+        int NEVER = 7;
+        int OTHER = 8;
+        int COUNT = 9;
     }
 
     /**
@@ -95,9 +105,14 @@ public class UmaUtils {
     }
 
     /**
-     * Record the time at which Chrome was brought to foreground.
+     * Record the time at which Chrome was brought to foreground. Should be recorded only after
+     * post-native initialization has started.
+     *
+     * A notable exception is FRE. It records foreground time in OnResume(), which can happen before
+     * native. It was made in 2016 to allow native initialization in FRE without errors. See
+     * http://crrev.com/436530.
      */
-    public static void recordForegroundStartTime() {
+    public static void recordForegroundStartTimeWithNative() {
         if (sSkipRecordingNextForegroundStartTimeForTesting) {
             sSkipRecordingNextForegroundStartTimeForTesting = false;
             return;
@@ -106,36 +121,34 @@ public class UmaUtils {
         // Since this can be called from multiple places (e.g. ChromeActivitySessionTracker
         // and FirstRunActivity), only set the time if it hasn't been set previously or if
         // Chrome has been sent to background since the last foreground time.
-        if (sForegroundStartTimeMs == 0 || sForegroundStartTimeMs < sBackgroundTimeMs) {
-            if (sObservers != null && sForegroundStartTimeMs == 0) {
-                for (Observer observer : sObservers) {
-                    observer.onHasComeToForeground();
-                }
+        if (sForegroundStartWithNativeTimeMs == 0
+                || sForegroundStartWithNativeTimeMs < sBackgroundWithNativeTimeMs) {
+            if (sObserver != null && sForegroundStartWithNativeTimeMs == 0) {
+                sObserver.onHasComeToForegroundWithNative();
             }
-
-            sForegroundStartTimeMs = SystemClock.uptimeMillis();
+            sForegroundStartWithNativeTimeMs = SystemClock.uptimeMillis();
         }
     }
 
     /**
      * Record the time at which Chrome was sent to background.
+     *
+     * Should not be called before post-native initialization.
      */
-    public static void recordBackgroundTime() {
-        sBackgroundTimeMs = SystemClock.uptimeMillis();
+    public static void recordBackgroundTimeWithNative() {
+        sBackgroundWithNativeTimeMs = SystemClock.uptimeMillis();
     }
 
     /**
-     * Determines if Chrome was brought to foreground.
+     * Determines whether Chrome was brought to foreground after post-native initialization started.
      */
-    public static boolean hasComeToForeground() {
-        return sForegroundStartTimeMs != 0;
+    public static boolean hasComeToForegroundWithNative() {
+        return sForegroundStartWithNativeTimeMs != 0;
     }
 
-    /**
-     * Determines if Chrome was brought to background.
-     */
-    public static boolean hasComeToBackground() {
-        return sBackgroundTimeMs != 0;
+    /** Determines if Chrome was brought to background. */
+    public static boolean hasComeToBackgroundWithNative() {
+        return sBackgroundWithNativeTimeMs != 0;
     }
 
     /**
@@ -146,9 +159,7 @@ public class UmaUtils {
         return UmaUtilsJni.get().isClientInMetricsReportingSample();
     }
 
-    /**
-     * Records various levels of background restrictions imposed by android on chrome.
-     */
+    /** Records various levels of background restrictions imposed by android on chrome. */
     public static void recordBackgroundRestrictions() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return;
         Context context = ContextUtils.getApplicationContext();
@@ -159,56 +170,36 @@ public class UmaUtils {
                 "Android.BackgroundRestrictions.IsBackgroundRestricted", isBackgroundRestricted);
 
         int standbyBucketUma = getStandbyBucket(context);
-        RecordHistogram.recordEnumeratedHistogram("Android.BackgroundRestrictions.StandbyBucket",
-                standbyBucketUma, StandbyBucketStatus.COUNT);
-
-        String histogramNameSplitByUserRestriction = isBackgroundRestricted
-                ? "Android.BackgroundRestrictions.StandbyBucket.WithUserRestriction"
-                : "Android.BackgroundRestrictions.StandbyBucket.WithoutUserRestriction";
         RecordHistogram.recordEnumeratedHistogram(
-                histogramNameSplitByUserRestriction, standbyBucketUma, StandbyBucketStatus.COUNT);
+                "Android.BackgroundRestrictions.StandbyBucket",
+                standbyBucketUma,
+                StandbyBucketStatus.COUNT);
+
+        if (isBackgroundRestricted) {
+            RecordHistogram.recordEnumeratedHistogram(
+                    "Android.BackgroundRestrictions.StandbyBucket.WithUserRestriction",
+                    standbyBucketUma,
+                    StandbyBucketStatus.COUNT);
+        }
     }
 
     /** Record minidump uploading time split by background restriction status. */
     public static void recordMinidumpUploadingTime(long taskDurationMs) {
-        RecordHistogram.recordCustomTimesHistogram("Stability.Android.MinidumpUploadingTime",
-                taskDurationMs, 1, DateUtils.DAY_IN_MILLIS, 50);
-
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return;
         RecordHistogram.recordCustomTimesHistogram(
-                "Stability.Android.MinidumpUploadingTime." + getHistogramPatternForStandbyStatus(),
-                taskDurationMs, 1, DateUtils.DAY_IN_MILLIS, 50);
+                "Stability.Android.MinidumpUploadingTime",
+                taskDurationMs,
+                1,
+                DateUtils.DAY_IN_MILLIS,
+                50);
     }
 
-    private static String getHistogramPatternForStandbyStatus() {
-        int standbyBucket = getStandbyBucket(ContextUtils.getApplicationContext());
-        switch (standbyBucket) {
-            case StandbyBucketStatus.ACTIVE:
-                return "Active";
-            case StandbyBucketStatus.WORKING_SET:
-                return "WorkingSet";
-            case StandbyBucketStatus.FREQUENT:
-                return "Frequent";
-            case StandbyBucketStatus.RARE:
-                return "Rare";
-            case StandbyBucketStatus.RESTRICTED:
-                return "Restricted";
-            case StandbyBucketStatus.UNSUPPORTED:
-                return "Unsupported";
-            default:
-                assert false : "Unexpected standby bucket " + standbyBucket;
-                return "Unknown";
-        }
-    }
-
-    @StandbyBucketStatus
-    private static int getStandbyBucket(Context context) {
+    private static @StandbyBucketStatus int getStandbyBucket(Context context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return StandbyBucketStatus.UNSUPPORTED;
 
         UsageStatsManager usageStatsManager =
                 (UsageStatsManager) context.getSystemService(Context.USAGE_STATS_SERVICE);
         int standbyBucket = usageStatsManager.getAppStandbyBucket();
-        int standbyBucketUma = StandbyBucketStatus.UNSUPPORTED;
+        int standbyBucketUma;
         switch (standbyBucket) {
             case UsageStatsManager.STANDBY_BUCKET_ACTIVE:
                 standbyBucketUma = StandbyBucketStatus.ACTIVE;
@@ -225,8 +216,15 @@ public class UmaUtils {
             case UsageStatsManager.STANDBY_BUCKET_RESTRICTED:
                 standbyBucketUma = StandbyBucketStatus.RESTRICTED;
                 break;
+            case 5: // STANDBY_BUCKET_EXEMPTED
+                standbyBucketUma = StandbyBucketStatus.EXEMPTED;
+                break;
+            case 50: // STANDBY_BUCKET_NEVER
+                standbyBucketUma = StandbyBucketStatus.NEVER;
+                break;
             default:
-                assert false : "Unexpected standby bucket " + standbyBucket;
+                standbyBucketUma = StandbyBucketStatus.OTHER;
+                break;
         }
         return standbyBucketUma;
     }
@@ -247,15 +245,13 @@ public class UmaUtils {
 
     @CalledByNative
     public static long getProcessStartTime() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-            return 0;
-        }
         return ApiHelperForN.getStartUptimeMillis();
     }
 
     @NativeMethods
     interface Natives {
         boolean isClientInMetricsReportingSample();
+
         void recordMetricsReportingDefaultOptIn(boolean optIn);
     }
 }

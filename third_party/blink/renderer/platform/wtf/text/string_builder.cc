@@ -72,6 +72,17 @@ String StringBuilder::Substring(unsigned start, unsigned length) const {
   return String(Characters16() + start, length);
 }
 
+StringView StringBuilder::SubstringView(unsigned start, unsigned length) const {
+  if (start >= length_)
+    return StringView();
+  if (!string_.IsNull())
+    return StringView(string_, start, length);
+  length = std::min(length, length_ - start);
+  if (is_8bit_)
+    return StringView(Characters8() + start, length);
+  return StringView(Characters16() + start, length);
+}
+
 void StringBuilder::Swap(StringBuilder& builder) {
   absl::optional<Buffer8> buffer8;
   absl::optional<Buffer16> buffer16;
@@ -214,6 +225,18 @@ void StringBuilder::CreateBuffer16(unsigned added_size) {
   }
   Append(string_);
   string_ = String();
+}
+
+bool StringBuilder::DoesAppendCauseOverflow(unsigned length) const {
+  unsigned new_length = length_ + length;
+  if (new_length < Capacity()) {
+    return false;
+  }
+  // Expanding the underlying vector usually doubles its capacity.
+  if (is_8bit_) {
+    return buffer8_.capacity() * 2 >= buffer8_.MaxCapacity();
+  }
+  return buffer16_.capacity() * 2 >= buffer16_.MaxCapacity();
 }
 
 void StringBuilder::Append(const UChar* characters, unsigned length) {

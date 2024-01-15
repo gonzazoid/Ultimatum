@@ -12,7 +12,8 @@
 #include <vector>
 
 #include "base/compiler_specific.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "media/audio/cras/audio_manager_cras_base.h"
 #include "media/audio/cras/cras_util.h"
 
@@ -47,9 +48,8 @@ class MEDIA_EXPORT AudioManagerCras : public AudioManagerCrasBase {
   enum CRAS_CLIENT_TYPE GetClientType() override;
 
   // Produces AudioParameters for the system, including audio processing
-  // capabilities tailored for the system,
-  AudioParameters GetStreamParametersForSystem(
-      int user_buffer_size);
+  // capabilities tailored for the system.
+  AudioParameters GetStreamParametersForSystem(int user_buffer_size);
 
  protected:
   AudioParameters GetPreferredOutputStreamParameters(

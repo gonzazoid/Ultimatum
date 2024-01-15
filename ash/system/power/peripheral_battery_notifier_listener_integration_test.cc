@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "ash/system/power/peripheral_battery_listener.h"
+#include "base/memory/raw_ptr.h"
 
 #include <memory>
 #include <string>
@@ -150,7 +151,7 @@ class PeripheralBatteryNotifierListenerTest : public AshTestBase {
   scoped_refptr<NiceMock<device::MockBluetoothAdapter>> mock_adapter_;
   std::unique_ptr<device::MockBluetoothDevice> mock_device_1_;
   std::unique_ptr<device::MockBluetoothDevice> mock_device_2_;
-  message_center::MessageCenter* message_center_;
+  raw_ptr<message_center::MessageCenter, DanglingUntriaged> message_center_;
   std::unique_ptr<PeripheralBatteryNotifier> battery_notifier_;
   std::unique_ptr<PeripheralBatteryListener> battery_listener_;
 
@@ -187,7 +188,7 @@ TEST_F(PeripheralBatteryNotifierListenerTest, Basic) {
   const PeripheralBatteryNotifier::NotificationInfo& info =
       battery_notifier_->battery_notifications_[kTestBatteryId];
 
-  EXPECT_EQ(absl::nullopt, info.level);
+  EXPECT_EQ(std::nullopt, info.level);
   EXPECT_EQ(GetTestingClock(), info.last_notification_timestamp);
   EXPECT_FALSE(
       message_center_->FindVisibleNotificationById(kTestBatteryNotificationId));
@@ -212,7 +213,7 @@ TEST_F(PeripheralBatteryNotifierListenerTest, Basic) {
   // Level -1 at time 115, cancel previous notification
   ClockAdvance(base::Seconds(5));
   SendBatteryUpdate(kTestBatteryPath, kTestDeviceName, -1);
-  EXPECT_EQ(absl::nullopt, info.level);
+  EXPECT_EQ(std::nullopt, info.level);
   EXPECT_EQ(GetTestingClock() - base::Seconds(5),
             info.last_notification_timestamp);
   EXPECT_FALSE(
@@ -221,7 +222,7 @@ TEST_F(PeripheralBatteryNotifierListenerTest, Basic) {
   // Level 50 at time 120, no low-battery notification.
   ClockAdvance(base::Seconds(5));
   SendBatteryUpdate(kTestBatteryPath, kTestDeviceName, 50);
-  EXPECT_EQ(absl::nullopt, info.level);
+  EXPECT_EQ(std::nullopt, info.level);
   EXPECT_EQ(GetTestingClock() - base::Seconds(10),
             info.last_notification_timestamp);
   EXPECT_FALSE(

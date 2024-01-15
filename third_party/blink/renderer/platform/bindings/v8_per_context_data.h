@@ -33,6 +33,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "gin/public/context_holder.h"
 #include "gin/public/gin_embedders.h"
 #include "third_party/blink/renderer/platform/bindings/scoped_persistent.h"
@@ -74,10 +75,12 @@ class PLATFORM_EXPORT V8PerContextData final
   // object, and then simply Clone that object each time we need a new one.
   // This is faster than going through the full object creation process.
   v8::Local<v8::Object> CreateWrapperFromCache(const WrapperTypeInfo* type) {
-    auto it = wrapper_boilerplates_.find(type);
-    return it != wrapper_boilerplates_.end()
-               ? it->value->Clone()
-               : CreateWrapperFromCacheSlowCase(type);
+    if (auto it = wrapper_boilerplates_.find(type);
+        it != wrapper_boilerplates_.end()) {
+      v8::Local<v8::Object> obj = it->value.Get(isolate_);
+      return obj->Clone();
+    }
+    return CreateWrapperFromCacheSlowCase(type);
   }
 
   // Returns the interface object that is appropriately initialized (e.g.
@@ -99,20 +102,6 @@ class PLATFORM_EXPORT V8PerContextData final
       v8::Local<v8::Object>* prototype_object,
       v8::Local<v8::Function>* interface_object);
 
-  // Gets a Private to store custom element definition IDs on a
-  // constructor that has been registered as a custom element in this
-  // context. This private has to be per-context because the same
-  // constructor could be simultaneously registered as a custom
-  // element in many contexts and they each need to give it a unique
-  // identifier.
-  v8::Local<v8::Private> GetPrivateCustomElementDefinitionId() {
-    if (UNLIKELY(private_custom_element_definition_id_.IsEmpty())) {
-      private_custom_element_definition_id_.Set(isolate_,
-                                                v8::Private::New(isolate_));
-    }
-    return private_custom_element_definition_id_.NewLocal(isolate_);
-  }
-
   V8DOMActivityLogger* ActivityLogger() const { return activity_logger_; }
   void SetActivityLogger(V8DOMActivityLogger* activity_logger) {
     activity_logger_ = activity_logger;
@@ -131,7 +120,7 @@ class PLATFORM_EXPORT V8PerContextData final
   v8::Local<v8::Object> CreateWrapperFromCacheSlowCase(const WrapperTypeInfo*);
   v8::Local<v8::Function> ConstructorForTypeSlowCase(const WrapperTypeInfo*);
 
-  v8::Isolate* const isolate_;
+  const raw_ptr<v8::Isolate, ExperimentalRenderer> isolate_;
 
   // For each possible type of wrapper, we keep a boilerplate object.
   // The boilerplate is used to create additional wrappers of the same type.
@@ -145,10 +134,8 @@ class PLATFORM_EXPORT V8PerContextData final
 
   ScopedPersistent<v8::Context> context_;
 
-  ScopedPersistent<v8::Private> private_custom_element_definition_id_;
-
   // This is owned by a static hash map in V8DOMActivityLogger.
-  V8DOMActivityLogger* activity_logger_;
+  raw_ptr<V8DOMActivityLogger, DanglingUntriaged> activity_logger_;
 
   using DataMap = HeapHashMap<const char*, Member<Data>>;
   DataMap data_map_;

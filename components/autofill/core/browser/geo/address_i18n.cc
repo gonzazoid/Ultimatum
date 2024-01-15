@@ -4,13 +4,14 @@
 
 #include "components/autofill/core/browser/geo/address_i18n.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/notreached.h"
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/autofill/core/browser/autofill_type.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
+#include "components/autofill/core/browser/field_types.h"
 #include "third_party/libaddressinput/src/cpp/include/libaddressinput/address_data.h"
 #include "third_party/libaddressinput/src/cpp/include/libaddressinput/address_metadata.h"
 
@@ -38,8 +39,8 @@ std::unique_ptr<AddressData> CreateAddressData(
       base::UTF16ToUTF8(get_info.Run(AutofillType(NAME_FULL)));
   address_data->organization =
       base::UTF16ToUTF8(get_info.Run(AutofillType(COMPANY_NAME)));
-  address_data->region_code = base::UTF16ToUTF8(get_info.Run(
-      AutofillType(HtmlFieldType::kCountryCode, HtmlFieldMode::kNone)));
+  address_data->region_code = base::UTF16ToUTF8(
+      get_info.Run(AutofillType(HtmlFieldType::kCountryCode)));
   address_data->administrative_area =
       base::UTF16ToUTF8(get_info.Run(AutofillType(ADDRESS_HOME_STATE)));
   address_data->locality =
@@ -67,7 +68,7 @@ CreateAddressDataFromAutofillProfile(const AutofillProfile& profile,
   return address_data;
 }
 
-ServerFieldType TypeForField(AddressField address_field) {
+FieldType TypeForField(AddressField address_field) {
   switch (address_field) {
     case ::i18n::addressinput::COUNTRY:
       return ADDRESS_HOME_COUNTRY;
@@ -92,7 +93,7 @@ ServerFieldType TypeForField(AddressField address_field) {
   return UNKNOWN_TYPE;
 }
 
-bool FieldForType(ServerFieldType server_type, AddressField* field) {
+bool FieldForType(FieldType server_type, AddressField* field) {
   switch (server_type) {
     case ADDRESS_HOME_COUNTRY:
       if (field)
@@ -137,8 +138,7 @@ bool FieldForType(ServerFieldType server_type, AddressField* field) {
   }
 }
 
-bool IsFieldRequired(ServerFieldType server_type,
-                     const std::string& country_code) {
+bool IsFieldRequired(FieldType server_type, const std::string& country_code) {
   ::i18n::addressinput::AddressField field_enum;
   if (FieldForType(server_type, &field_enum)) {
     return ::i18n::addressinput::IsFieldRequired(field_enum, country_code);

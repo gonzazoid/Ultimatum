@@ -70,17 +70,31 @@ bool IsMorePermissive(ContentSetting a, ContentSetting b);
 // Returns whether or not the supplied constraint should be persistently stored.
 bool IsConstraintPersistent(const ContentSettingConstraints& constraints);
 
-// Returns the expiration time for a supplied |duration|.
-base::Time GetConstraintExpiration(const base::TimeDelta duration);
-
 // Returns whether the given type supports tracking last_visit timestamps.
 bool CanTrackLastVisit(ContentSettingsType type);
 
 // Get a timestamp with week-precision.
-base::Time GetCoarseTime(base::Time time);
+base::Time GetCoarseVisitedTime(base::Time time);
 
 // Returns a TimeDelta representing a week.
-base::TimeDelta GetCoarseTimePrecision();
+base::TimeDelta GetCoarseVisitedTimePrecision();
+
+// Returns whether ContentSettingsType is an eligible permission for
+// auto-revocation.
+bool CanBeAutoRevoked(ContentSettingsType type,
+                      ContentSetting setting,
+                      bool is_one_time = false);
+bool CanBeAutoRevoked(ContentSettingsType type,
+                      const base::Value& value,
+                      bool is_one_time = false);
+
+// Returns whether the chooser permission is allowlisted for auto-revoking.
+bool IsChooserPermissionEligibleForAutoRevocation(ContentSettingsType type);
+
+// Returns true if the type and metadata correspond
+// to a permission decision that was made by Related Website Sets.
+bool IsGrantedByRelatedWebsiteSets(ContentSettingsType type,
+                                   const RuleMetaData& metadata);
 
 }  // namespace content_settings
 

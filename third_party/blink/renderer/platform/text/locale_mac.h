@@ -33,7 +33,6 @@
 
 #include <memory>
 
-#include "base/mac/scoped_nsobject.h"
 #include "third_party/blink/renderer/platform/text/platform_locale.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -70,17 +69,17 @@ class PLATFORM_EXPORT LocaleMac : public Locale {
 
  private:
   explicit LocaleMac(NSLocale*);
-  base::scoped_nsobject<NSDateFormatter> ShortDateFormatter();
+  NSDateFormatter* ShortDateFormatter();
   void InitializeLocaleData() override;
 
-  base::scoped_nsobject<NSLocale> locale_;
-  base::scoped_nsobject<NSCalendar> gregorian_calendar_;
+  NSLocale* __strong locale_;
+  NSCalendar* __strong gregorian_calendar_;
   Vector<String> week_day_short_labels_;
   Vector<String> month_labels_;
-  base::scoped_nsobject<NSDateFormatter> TimeFormatter();
-  base::scoped_nsobject<NSDateFormatter> ShortTimeFormatter();
-  base::scoped_nsobject<NSDateFormatter> DateTimeFormatterWithSeconds();
-  base::scoped_nsobject<NSDateFormatter> DateTimeFormatterWithoutSeconds();
+  NSDateFormatter* TimeFormatter();
+  NSDateFormatter* ShortTimeFormatter();
+  NSDateFormatter* DateTimeFormatterWithSeconds();
+  NSDateFormatter* DateTimeFormatterWithoutSeconds();
 
   String date_format_;
   String month_format_;
@@ -97,4 +96,5 @@ class PLATFORM_EXPORT LocaleMac : public Locale {
 };
 
 }  // namespace blink
+
 #endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_TEXT_LOCALE_MAC_H_

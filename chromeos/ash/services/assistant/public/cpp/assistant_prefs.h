@@ -50,8 +50,6 @@ extern const char kAssistantConsentStatus[];
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
 extern const char kAssistantContextEnabled[];
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
-extern const char kAssistantDeprecateStylusToast[];
-COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
 extern const char kAssistantDisabledByPolicy[];
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
 extern const char kAssistantEnabled[];
@@ -67,6 +65,8 @@ COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
 extern const char kAssistantOnboardingMode[];
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
 extern const char kAssistantVoiceMatchEnabledDuringOobe[];
+COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
+extern const char kAssistantNumFailuresSinceLastServiceRun[];
 
 // Registers Assistant specific profile preferences for browser prefs.
 COMPONENT_EXPORT(ASSISTANT_SERVICE_PUBLIC)
@@ -80,7 +80,8 @@ std::string ToOnboardingModeString(AssistantOnboardingMode onboarding_mode);
 
 }  // namespace ash::assistant::prefs
 
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
+// TODO(b/258750971): remove when internal assistant codes are migrated to
+// namespace ash.
 namespace chromeos::assistant {
 namespace prefs = ::ash::assistant::prefs;
 }

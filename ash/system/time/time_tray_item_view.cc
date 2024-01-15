@@ -6,24 +6,27 @@
 
 #include <memory>
 
-#include "ash/session/session_controller_impl.h"
 #include "ash/shelf/shelf.h"
 #include "ash/shell.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/system/model/clock_model.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/time/time_view.h"
-#include "ash/system/tray/tray_utils.h"
-#include "ui/views/border.h"
+#include "chromeos/constants/chromeos_features.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 
 namespace ash {
 
 TimeTrayItemView::TimeTrayItemView(Shelf* shelf, TimeView::Type type)
-    : TrayItemView(shelf), session_observer_(this) {
+    : TrayItemView(shelf) {
   TimeView::ClockLayout clock_layout =
       shelf->IsHorizontalAlignment() ? TimeView::ClockLayout::HORIZONTAL_CLOCK
                                      : TimeView::ClockLayout::VERTICAL_CLOCK;
   time_view_ = AddChildView(std::make_unique<TimeView>(
       clock_layout, Shell::Get()->system_tray_model()->clock(), type));
+  time_view_->SetTextColorId(kColorAshIconColorPrimary);
+  UpdateLabelOrImageViewColor(/*active=*/false);
 }
 
 TimeTrayItemView::~TimeTrayItemView() = default;
@@ -39,19 +42,19 @@ void TimeTrayItemView::HandleLocaleChange() {
   time_view_->Refresh();
 }
 
-void TimeTrayItemView::OnSessionStateChanged(
-    session_manager::SessionState state) {
-  time_view_->SetTextColor(TrayIconColor(state));
+void TimeTrayItemView::UpdateLabelOrImageViewColor(bool active) {
+  if (!chromeos::features::IsJellyEnabled()) {
+    return;
+  }
+  TrayItemView::UpdateLabelOrImageViewColor(active);
+
+  const auto color_id = active ? cros_tokens::kCrosSysSystemOnPrimaryContainer
+                               : cros_tokens::kCrosSysOnSurface;
+  time_view_->SetTextColorId(color_id);
+  time_view_->SetDateViewColorId(color_id);
 }
 
-const char* TimeTrayItemView::GetClassName() const {
-  return "TimeTrayItemView";
-}
-
-void TimeTrayItemView::OnThemeChanged() {
-  TrayItemView::OnThemeChanged();
-  time_view_->SetTextColor(
-      TrayIconColor(Shell::Get()->session_controller()->GetSessionState()));
-}
+BEGIN_METADATA(TimeTrayItemView)
+END_METADATA
 
 }  // namespace ash

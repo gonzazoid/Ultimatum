@@ -3,11 +3,14 @@
 // found in the LICENSE file.
 
 #include <memory>
+#include <optional>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
@@ -45,7 +48,6 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash::secure_channel {
 
@@ -73,7 +75,9 @@ class FakeTimerFactoryFactory : public TimerFactoryImpl::Factory {
     return instance;
   }
 
-  FakeTimerFactory* instance_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION FakeTimerFactory* instance_ = nullptr;
 };
 
 class TestRemoteDeviceCacheFactory
@@ -102,7 +106,9 @@ class TestRemoteDeviceCacheFactory
     return instance;
   }
 
-  multidevice::RemoteDeviceCache* instance_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION multidevice::RemoteDeviceCache* instance_ = nullptr;
 };
 
 class FakeBluetoothHelperFactory : public BluetoothHelperImpl::Factory {
@@ -132,9 +138,9 @@ class FakeBluetoothHelperFactory : public BluetoothHelperImpl::Factory {
     return instance;
   }
 
-  TestRemoteDeviceCacheFactory* test_remote_device_cache_factory_;
+  raw_ptr<TestRemoteDeviceCacheFactory> test_remote_device_cache_factory_;
 
-  FakeBluetoothHelper* instance_ = nullptr;
+  raw_ptr<FakeBluetoothHelper, DanglingUntriaged> instance_ = nullptr;
 };
 
 class FakeBleSynchronizerFactory : public BleSynchronizer::Factory {
@@ -160,7 +166,9 @@ class FakeBleSynchronizerFactory : public BleSynchronizer::Factory {
     return instance;
   }
 
-  FakeBleSynchronizer* instance_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION FakeBleSynchronizer* instance_ = nullptr;
 };
 
 class FakeBleScannerFactory : public BleScannerImpl::Factory {
@@ -194,10 +202,10 @@ class FakeBleScannerFactory : public BleScannerImpl::Factory {
     return instance;
   }
 
-  FakeBleScanner* instance_ = nullptr;
+  raw_ptr<FakeBleScanner, DanglingUntriaged> instance_ = nullptr;
 
-  FakeBluetoothHelperFactory* fake_bluetooth_helper_factory_;
-  FakeBleSynchronizerFactory* fake_ble_synchronizer_factory_;
+  raw_ptr<FakeBluetoothHelperFactory> fake_bluetooth_helper_factory_;
+  raw_ptr<FakeBleSynchronizerFactory> fake_ble_synchronizer_factory_;
 };
 
 class FakeSecureChannelDisconnectorFactory
@@ -222,7 +230,9 @@ class FakeSecureChannelDisconnectorFactory
     return instance;
   }
 
-  FakeSecureChannelDisconnector* instance_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION FakeSecureChannelDisconnector* instance_ = nullptr;
 };
 
 class FakeBleConnectionManagerFactory
@@ -277,15 +287,15 @@ class FakeBleConnectionManagerFactory
     return instance;
   }
 
-  device::BluetoothAdapter* expected_bluetooth_adapter_;
-  FakeBluetoothHelperFactory* fake_bluetooth_helper_factory_;
-  FakeBleSynchronizerFactory* fake_ble_synchronizer_factory_;
-  FakeBleScannerFactory* fake_ble_scanner_factory_;
-  FakeSecureChannelDisconnectorFactory*
+  raw_ptr<device::BluetoothAdapter> expected_bluetooth_adapter_;
+  raw_ptr<FakeBluetoothHelperFactory> fake_bluetooth_helper_factory_;
+  raw_ptr<FakeBleSynchronizerFactory> fake_ble_synchronizer_factory_;
+  raw_ptr<FakeBleScannerFactory> fake_ble_scanner_factory_;
+  raw_ptr<FakeSecureChannelDisconnectorFactory>
       fake_secure_channel_disconnector_factory_;
-  FakeTimerFactoryFactory* fake_timer_factory_factory_;
+  raw_ptr<FakeTimerFactoryFactory> fake_timer_factory_factory_;
 
-  FakeBleConnectionManager* instance_ = nullptr;
+  raw_ptr<FakeBleConnectionManager, DanglingUntriaged> instance_ = nullptr;
 };
 
 class FakeNearbyConnectionManagerFactory
@@ -323,11 +333,11 @@ class FakeNearbyConnectionManagerFactory
     return instance;
   }
 
-  FakeBleScannerFactory* fake_ble_scanner_factory_;
-  FakeSecureChannelDisconnectorFactory*
+  raw_ptr<FakeBleScannerFactory> fake_ble_scanner_factory_;
+  raw_ptr<FakeSecureChannelDisconnectorFactory>
       fake_secure_channel_disconnector_factory_;
 
-  FakeNearbyConnectionManager* instance_ = nullptr;
+  raw_ptr<FakeNearbyConnectionManager, DanglingUntriaged> instance_ = nullptr;
 };
 
 class FakePendingConnectionManagerFactory
@@ -369,10 +379,11 @@ class FakePendingConnectionManagerFactory
     return instance;
   }
 
-  FakeBleConnectionManagerFactory* fake_ble_connection_manager_factory_;
-  FakeNearbyConnectionManagerFactory* fake_nearby_connection_manager_factory_;
+  raw_ptr<FakeBleConnectionManagerFactory> fake_ble_connection_manager_factory_;
+  raw_ptr<FakeNearbyConnectionManagerFactory>
+      fake_nearby_connection_manager_factory_;
 
-  FakePendingConnectionManager* instance_ = nullptr;
+  raw_ptr<FakePendingConnectionManager, DanglingUntriaged> instance_ = nullptr;
 };
 
 class FakeActiveConnectionManagerFactory
@@ -399,7 +410,9 @@ class FakeActiveConnectionManagerFactory
     return instance;
   }
 
-  FakeActiveConnectionManager* instance_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION FakeActiveConnectionManager* instance_ = nullptr;
 };
 
 class TestSecureChannelInitializerFactory
@@ -433,7 +446,7 @@ class TestSecureChannelInitializerFactory
 
   scoped_refptr<base::TestSimpleTaskRunner> test_task_runner_;
 
-  SecureChannelBase* instance_ = nullptr;
+  raw_ptr<SecureChannelBase, DanglingUntriaged> instance_ = nullptr;
 };
 
 class FakeClientConnectionParametersFactory
@@ -459,10 +472,9 @@ class FakeClientConnectionParametersFactory
     return id_to_active_client_parameters_map_;
   }
 
-  const std::unordered_map<
-      base::UnguessableToken,
-      absl::optional<mojom::ConnectionAttemptFailureReason>,
-      base::UnguessableTokenHash>&
+  const std::unordered_map<base::UnguessableToken,
+                           std::optional<mojom::ConnectionAttemptFailureReason>,
+                           base::UnguessableTokenHash>&
   id_to_failure_reason_when_deleted_map() {
     return id_to_failure_reason_when_deleted_map_;
   }
@@ -499,7 +511,7 @@ class FakeClientConnectionParametersFactory
       id_to_active_client_parameters_map_;
 
   std::unordered_map<base::UnguessableToken,
-                     absl::optional<mojom::ConnectionAttemptFailureReason>,
+                     std::optional<mojom::ConnectionAttemptFailureReason>,
                      base::UnguessableTokenHash>
       id_to_failure_reason_when_deleted_map_;
 };
@@ -975,7 +987,7 @@ class SecureChannelServiceTest : public testing::Test {
     EXPECT_EQ(expected_failure_reason, GetFailureReasonForRequest(id));
   }
 
-  const absl::optional<mojom::ConnectionAttemptFailureReason>&
+  const std::optional<mojom::ConnectionAttemptFailureReason>&
   GetFailureReasonForRequest(const base::UnguessableToken& id) {
     return fake_client_connection_parameters_factory_
         ->id_to_failure_reason_when_deleted_map()

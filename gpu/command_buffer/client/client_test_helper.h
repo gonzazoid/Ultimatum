@@ -69,6 +69,7 @@ class MockClientCommandBuffer : public CommandBuffer,
   scoped_refptr<gpu::Buffer> CreateTransferBuffer(
       uint32_t size,
       int32_t* id,
+      uint32_t alignment = 0,
       TransferBufferAllocationOption option =
           TransferBufferAllocationOption::kLoseContextOnOOM) override;
 
@@ -115,6 +116,7 @@ class MockClientGpuControl : public GpuControl {
 
   MOCK_METHOD1(SetGpuControlClient, void(GpuControlClient*));
   MOCK_CONST_METHOD0(GetCapabilities, const Capabilities&());
+  MOCK_CONST_METHOD0(GetGLCapabilities, const GLCapabilities&());
   MOCK_METHOD3(CreateImage,
                int32_t(ClientBuffer buffer, size_t width, size_t height));
   MOCK_METHOD1(DestroyImage, void(int32_t id));
@@ -125,6 +127,7 @@ class MockClientGpuControl : public GpuControl {
   void SignalQuery(uint32_t query, base::OnceClosure callback) override {
     DoSignalQuery(query, &callback);
   }
+  MOCK_METHOD0(CancelAllQueries, void());
 
   MOCK_METHOD1(CreateStreamTexture, uint32_t(uint32_t));
   MOCK_METHOD1(SetLock, void(base::Lock*));

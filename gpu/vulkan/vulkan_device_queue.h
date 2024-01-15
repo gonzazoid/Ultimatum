@@ -9,10 +9,13 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/check_op.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/trace_event/memory_dump_provider.h"
+#include "base/trace_event/memory_dump_request_args.h"
+#include "base/trace_event/process_memory_dump.h"
 #include "build/build_config.h"
 #include "gpu/vulkan/vma_wrapper.h"
 #include "gpu/vulkan/vulkan_instance.h"
@@ -24,7 +27,8 @@ class VulkanCommandPool;
 class VulkanFenceHelper;
 struct GPUInfo;
 
-class COMPONENT_EXPORT(VULKAN) VulkanDeviceQueue {
+class COMPONENT_EXPORT(VULKAN) VulkanDeviceQueue
+    : public base::trace_event::MemoryDumpProvider {
  public:
   enum DeviceQueueOption {
     GRAPHICS_QUEUE_FLAG = 0x01,
@@ -37,7 +41,7 @@ class COMPONENT_EXPORT(VULKAN) VulkanDeviceQueue {
   VulkanDeviceQueue(const VulkanDeviceQueue&) = delete;
   VulkanDeviceQueue& operator=(const VulkanDeviceQueue&) = delete;
 
-  ~VulkanDeviceQueue();
+  ~VulkanDeviceQueue() override;
 
   using GetPresentationSupportCallback =
       base::RepeatingCallback<bool(VkPhysicalDevice,
@@ -96,6 +100,8 @@ class COMPONENT_EXPORT(VULKAN) VulkanDeviceQueue {
     return vk_physical_device_driver_properties_;
   }
 
+  uint64_t drm_device_id() const { return drm_device_id_; }
+
   VkDevice GetVulkanDevice() const {
     DCHECK_NE(static_cast<VkDevice>(VK_NULL_HANDLE), vk_device_);
     return vk_device_;
@@ -130,6 +136,9 @@ class COMPONENT_EXPORT(VULKAN) VulkanDeviceQueue {
 
   bool allow_protected_memory() const { return allow_protected_memory_; }
 
+  bool OnMemoryDump(const base::trace_event::MemoryDumpArgs& args,
+                    base::trace_event::ProcessMemoryDump* pmd) override;
+
  private:
   // Common Init method to be used by both webview and compositor gpu thread.
   bool InitCommon(VkPhysicalDevice vk_physical_device,
@@ -142,6 +151,7 @@ class COMPONENT_EXPORT(VULKAN) VulkanDeviceQueue {
   VkPhysicalDevice vk_physical_device_ = VK_NULL_HANDLE;
   VkPhysicalDeviceProperties vk_physical_device_properties_;
   VkPhysicalDeviceDriverProperties vk_physical_device_driver_properties_;
+  uint64_t drm_device_id_ = 0;
   VkDevice owned_vk_device_ = VK_NULL_HANDLE;
   VkDevice vk_device_ = VK_NULL_HANDLE;
   VkQueue vk_queue_ = VK_NULL_HANDLE;
@@ -158,11 +168,13 @@ class COMPONENT_EXPORT(VULKAN) VulkanDeviceQueue {
 
   bool allow_protected_memory_ = false;
 
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_LINUX)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_LINUX) || \
+    BUILDFLAG(IS_CHROMEOS)
   VkPhysicalDeviceSamplerYcbcrConversionFeatures
       sampler_ycbcr_conversion_features_{
           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES};
 #endif  // BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_LINUX)
+        // || BUILDFLAG(IS_CHROMEOS)
 
   VkPhysicalDeviceProtectedMemoryFeatures protected_memory_features_{
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES};

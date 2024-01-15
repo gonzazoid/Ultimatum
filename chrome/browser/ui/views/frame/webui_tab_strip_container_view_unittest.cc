@@ -5,7 +5,7 @@
 #include "chrome/browser/ui/views/frame/webui_tab_strip_container_view.h"
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/extensions/extension_tab_util.h"
 #include "chrome/browser/feature_engagement/tracker_factory.h"
@@ -63,10 +63,11 @@ TEST_F(WebUITabStripContainerViewTest, TouchModeTransition) {
 }
 
 TEST_F(WebUITabStripContainerViewTest, ButtonsPresentInToolbar) {
-  ASSERT_NE(nullptr,
-            browser_view()->webui_tab_strip()->new_tab_button_for_testing());
+  ASSERT_NE(nullptr, browser_view()->toolbar()->new_tab_button_for_testing());
   EXPECT_TRUE(browser_view()->toolbar()->Contains(
-      browser_view()->webui_tab_strip()->new_tab_button_for_testing()));
+      browser_view()->toolbar()->new_tab_button_for_testing()));
+  EXPECT_TRUE(
+      browser_view()->toolbar()->new_tab_button_for_testing()->GetVisible());
   ASSERT_NE(nullptr, browser_view()->webui_tab_strip()->tab_counter());
   EXPECT_TRUE(browser_view()->toolbar()->Contains(
       browser_view()->webui_tab_strip()->tab_counter()));

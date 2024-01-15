@@ -5,11 +5,11 @@
 #ifndef SANDBOX_WIN_SRC_APP_CONTAINER_H_
 #define SANDBOX_WIN_SRC_APP_CONTAINER_H_
 
-#include "base/files/file_path.h"
-#include "base/win/scoped_handle.h"
+#include <vector>
+
+#include "base/win/security_descriptor.h"
 #include "base/win/sid.h"
 #include "base/win/windows_types.h"
-#include "sandbox/win/src/acl.h"
 #include "sandbox/win/src/security_capabilities.h"
 
 namespace sandbox {
@@ -28,17 +28,6 @@ class [[clang::lto_visibility_public]] AppContainer {
   // release no other method should be called.
   virtual void Release() = 0;
 
-  // Get a handle to a registry key for this package.
-  virtual bool GetRegistryLocation(REGSAM desired_access,
-                                   base::win::ScopedHandle* key) = 0;
-
-  // Get a folder path to a location for this package.
-  virtual bool GetFolderPath(base::FilePath* file_path) = 0;
-
-  // Get a pipe name usable by this AC.
-  virtual bool GetPipePath(const wchar_t* pipe_name,
-                           base::FilePath* pipe_path) = 0;
-
   // Do an access check based on this profile for a named object. If method
   // returns true then access_status reflects whether access was granted and
   // granted_access gives the final access rights. The object_type can be one of
@@ -46,22 +35,22 @@ class [[clang::lto_visibility_public]] AppContainer {
   // See ::GetNamedSecurityInfo for more information about how the enumeration
   // is used and what format object_name needs to be.
   virtual bool AccessCheck(const wchar_t* object_name,
-                           SecurityObjectType object_type,
+                           base::win::SecurityObjectType object_type,
                            DWORD desired_access,
                            DWORD* granted_access,
                            BOOL* access_status) = 0;
 
   // Adds a capability by name to this profile.
-  virtual bool AddCapability(const wchar_t* capability_name) = 0;
+  virtual void AddCapability(const wchar_t* capability_name) = 0;
   // Adds a capability from a known list.
-  virtual bool AddCapability(base::win::WellKnownCapability capability) = 0;
+  virtual void AddCapability(base::win::WellKnownCapability capability) = 0;
   // Adds a capability from a SID
   virtual bool AddCapabilitySddl(const wchar_t* sddl_sid) = 0;
 
   // Adds an impersonation capability by name to this profile.
-  virtual bool AddImpersonationCapability(const wchar_t* capability_name) = 0;
+  virtual void AddImpersonationCapability(const wchar_t* capability_name) = 0;
   // Adds an impersonation capability from a known list.
-  virtual bool AddImpersonationCapability(
+  virtual void AddImpersonationCapability(
       base::win::WellKnownCapability capability) = 0;
   // Adds an impersonation capability from a SID
   virtual bool AddImpersonationCapabilitySddl(const wchar_t* sddl_sid) = 0;

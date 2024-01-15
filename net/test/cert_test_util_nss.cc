@@ -4,7 +4,9 @@
 
 #include "net/test/cert_test_util.h"
 
+#include <certdb.h>
 #include <pk11pub.h>
+#include <secmod.h>
 #include <secmodt.h>
 #include <string.h>
 
@@ -13,19 +15,92 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
-#include "crypto/ec_private_key.h"
 #include "crypto/nss_key_util.h"
-#include "crypto/nss_util.h"
+#include "crypto/nss_util_internal.h"
 #include "crypto/scoped_nss_types.h"
 #include "net/cert/cert_type.h"
 #include "net/cert/x509_util_nss.h"
-#include "third_party/boringssl/src/include/openssl/bytestring.h"
-#include "third_party/boringssl/src/include/openssl/ec.h"
-#include "third_party/boringssl/src/include/openssl/ec_key.h"
-#include "third_party/boringssl/src/include/openssl/evp.h"
-#include "third_party/boringssl/src/include/openssl/mem.h"
 
 namespace net {
+
+namespace {
+
+// IsKnownRoot returns true if the given certificate is one that we believe
+// is a standard (as opposed to user-installed) root.
+bool IsKnownRoot(CERTCertificate* root) {
+  if (!root || !root->slot) {
+    return false;
+  }
+
+  // Historically, the set of root certs was determined based on whether or
+  // not it was part of nssckbi.[so,dll], the read-only PKCS#11 module that
+  // exported the certs with trust settings. However, some distributions,
+  // notably those in the Red Hat family, replace nssckbi with a redirect to
+  // their own store, such as from p11-kit, which can support more robust
+  // trust settings, like per-system trust, admin-defined, and user-defined
+  // trust.
+  //
+  // As a given certificate may exist in multiple modules and slots, scan
+  // through all of the available modules, all of the (connected) slots on
+  // those modules, and check to see if it has the CKA_NSS_MOZILLA_CA_POLICY
+  // attribute set. This attribute indicates it's from the upstream Mozilla
+  // trust store, and these distributions preserve the attribute as a flag.
+  crypto::AutoSECMODListReadLock lock_id;
+  for (const SECMODModuleList* item = SECMOD_GetDefaultModuleList();
+       item != nullptr; item = item->next) {
+    for (int i = 0; i < item->module->slotCount; ++i) {
+      PK11SlotInfo* slot = item->module->slots[i];
+      if (PK11_IsPresent(slot) && PK11_HasRootCerts(slot)) {
+        CK_OBJECT_HANDLE handle = PK11_FindCertInSlot(slot, root, nullptr);
+        if (handle != CK_INVALID_HANDLE &&
+            PK11_HasAttributeSet(slot, handle, CKA_NSS_MOZILLA_CA_POLICY,
+                                 PR_FALSE) == CK_TRUE) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+// Returns true if the provided slot looks like it contains built-in root.
+bool IsNssBuiltInRootSlot(PK11SlotInfo* slot) {
+  if (!PK11_IsPresent(slot) || !PK11_HasRootCerts(slot)) {
+    return false;
+  }
+  crypto::ScopedCERTCertList cert_list(PK11_ListCertsInSlot(slot));
+  if (!cert_list) {
+    return false;
+  }
+  bool built_in_cert_found = false;
+  for (CERTCertListNode* node = CERT_LIST_HEAD(cert_list);
+       !CERT_LIST_END(node, cert_list); node = CERT_LIST_NEXT(node)) {
+    if (IsKnownRoot(node->cert)) {
+      built_in_cert_found = true;
+      break;
+    }
+  }
+  return built_in_cert_found;
+}
+
+// Returns the slot which holds the built-in root certificates.
+crypto::ScopedPK11Slot GetNssBuiltInRootCertsSlot() {
+  crypto::AutoSECMODListReadLock auto_lock;
+  SECMODModuleList* head = SECMOD_GetDefaultModuleList();
+  for (SECMODModuleList* item = head; item != nullptr; item = item->next) {
+    int slot_count = item->module->loaded ? item->module->slotCount : 0;
+    for (int i = 0; i < slot_count; i++) {
+      PK11SlotInfo* slot = item->module->slots[i];
+      if (IsNssBuiltInRootSlot(slot)) {
+        return crypto::ScopedPK11Slot(PK11_ReferenceSlot(slot));
+      }
+    }
+  }
+  return crypto::ScopedPK11Slot();
+}
+
+}  // namespace
 
 bool ImportSensitiveKeyFromFile(const base::FilePath& dir,
                                 base::StringPiece key_filename,
@@ -38,80 +113,12 @@ bool ImportSensitiveKeyFromFile(const base::FilePath& dir,
     return false;
   }
 
-  std::vector<uint8_t> key_vector(key_pkcs8.begin(), key_pkcs8.end());
-
-  // Prior to NSS 3.30, NSS cannot import unencrypted ECDSA private keys. Detect
-  // such keys and encrypt with an empty password before importing. Once our
-  // minimum version is raised to NSS 3.30, this logic can be removed. See
-  // https://bugzilla.mozilla.org/show_bug.cgi?id=1295121
-  CBS cbs;
-  CBS_init(&cbs, key_vector.data(), key_vector.size());
-  bssl::UniquePtr<EVP_PKEY> evp_pkey(EVP_parse_private_key(&cbs));
-  if (!evp_pkey) {
-    LOG(ERROR) << "Could not parse private key from file " << key_path.value();
-    return false;
-  }
-  if (EVP_PKEY_id(evp_pkey.get()) == EVP_PKEY_EC) {
-    std::unique_ptr<crypto::ECPrivateKey> ec_private_key =
-        crypto::ECPrivateKey::CreateFromPrivateKeyInfo(key_vector);
-    std::vector<uint8_t> encrypted;
-    if (!ec_private_key ||
-        !ec_private_key->ExportEncryptedPrivateKey(&encrypted)) {
-      LOG(ERROR) << "Error importing private key from file "
-                 << key_path.value();
-      return false;
-    }
-
-    SECItem encrypted_item = {siBuffer, encrypted.data(),
-                              static_cast<unsigned>(encrypted.size())};
-    SECKEYEncryptedPrivateKeyInfo epki;
-    memset(&epki, 0, sizeof(epki));
-    crypto::ScopedPLArenaPool arena(PORT_NewArena(DER_DEFAULT_CHUNKSIZE));
-    if (SEC_QuickDERDecodeItem(
-            arena.get(), &epki,
-            SEC_ASN1_GET(SECKEY_EncryptedPrivateKeyInfoTemplate),
-            &encrypted_item) != SECSuccess) {
-      LOG(ERROR) << "Error importing private key from file "
-                 << key_path.value();
-      return false;
-    }
-
-    // NSS uses the serialized public key in X9.62 form as the "public value"
-    // for key ID purposes.
-    EC_KEY* ec_key = EVP_PKEY_get0_EC_KEY(ec_private_key->key());
-    bssl::ScopedCBB cbb;
-    uint8_t* public_value;
-    size_t public_value_len;
-    if (!CBB_init(cbb.get(), 0) ||
-        !EC_POINT_point2cbb(cbb.get(), EC_KEY_get0_group(ec_key),
-                            EC_KEY_get0_public_key(ec_key),
-                            POINT_CONVERSION_UNCOMPRESSED, nullptr) ||
-        !CBB_finish(cbb.get(), &public_value, &public_value_len)) {
-      LOG(ERROR) << "Error importing private key from file "
-                 << key_path.value();
-      return false;
-    }
-    bssl::UniquePtr<uint8_t> scoped_public_value(public_value);
-    SECItem public_item = {siBuffer, public_value,
-                           static_cast<unsigned>(public_value_len)};
-
-    SECItem password_item = {siBuffer, nullptr, 0};
-    if (PK11_ImportEncryptedPrivateKeyInfo(
-            slot, &epki, &password_item, nullptr /* nickname */, &public_item,
-            PR_TRUE /* permanent */, PR_TRUE /* private */, ecKey,
-            KU_DIGITAL_SIGNATURE, nullptr /* wincx */) != SECSuccess) {
-      LOG(ERROR) << "Error importing private key from file "
-                 << key_path.value();
-      return false;
-    }
-    return true;
-  }
-
   crypto::ScopedSECKEYPrivateKey private_key(
-      crypto::ImportNSSKeyFromPrivateKeyInfo(slot, key_vector,
-                                             true /* permanent */));
-  LOG_IF(ERROR, !private_key) << "Could not create key from file "
-                              << key_path.value();
+      crypto::ImportNSSKeyFromPrivateKeyInfo(slot,
+                                             base::as_byte_span(key_pkcs8),
+                                             /*permanent=*/true));
+  LOG_IF(ERROR, !private_key)
+      << "Could not create key from file " << key_path.value();
   return !!private_key;
 }
 
@@ -204,6 +211,34 @@ ScopedCERTCertificateList CreateCERTCertificateListFromFile(
     nss_certs.push_back(std::move(nss_cert));
   }
   return nss_certs;
+}
+
+ScopedCERTCertificate GetAnNssBuiltinSslTrustedRoot() {
+  crypto::ScopedPK11Slot root_certs_slot = GetNssBuiltInRootCertsSlot();
+  if (!root_certs_slot) {
+    return nullptr;
+  }
+
+  scoped_refptr<X509Certificate> ssl_trusted_root;
+
+  crypto::ScopedCERTCertList cert_list(
+      PK11_ListCertsInSlot(root_certs_slot.get()));
+  if (!cert_list) {
+    return nullptr;
+  }
+  for (CERTCertListNode* node = CERT_LIST_HEAD(cert_list);
+       !CERT_LIST_END(node, cert_list); node = CERT_LIST_NEXT(node)) {
+    CERTCertTrust trust;
+    if (CERT_GetCertTrust(node->cert, &trust) != SECSuccess) {
+      continue;
+    }
+    int trust_flags = SEC_GET_TRUST_FLAGS(&trust, trustSSL);
+    if ((trust_flags & CERTDB_TRUSTED_CA) == CERTDB_TRUSTED_CA) {
+      return x509_util::DupCERTCertificate(node->cert);
+    }
+  }
+
+  return nullptr;
 }
 
 }  // namespace net

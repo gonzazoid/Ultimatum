@@ -6,32 +6,40 @@
 
 #import <memory>
 
+#import "base/apple/foundation_util.h"
+#import "base/command_line.h"
 #import "base/files/scoped_temp_dir.h"
-#import "base/mac/foundation_util.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/strings/utf_string_conversions.h"
 #import "base/test/ios/wait_util.h"
 #import "base/test/metrics/histogram_tester.h"
+#import "components/country_codes/country_codes.h"
 #import "components/password_manager/core/common/password_manager_features.h"
+#import "components/policy/core/common/mock_policy_service.h"
+#import "components/policy/core/common/policy_namespace.h"
+#import "components/policy/core/common/schema_registry.h"
+#import "components/policy/policy_constants.h"
+#import "components/prefs/pref_registry_simple.h"
+#import "components/search_engines/search_engines_pref_names.h"
+#import "components/search_engines/search_engines_switches.h"
 #import "components/search_engines/template_url_data_util.h"
 #import "components/search_engines/template_url_prepopulate_data.h"
 #import "components/search_engines/template_url_service.h"
+#import "components/strings/grit/components_strings.h"
 #import "components/sync_preferences/testing_pref_service_syncable.h"
-#import "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
 #import "ios/chrome/browser/favicon/favicon_service_factory.h"
 #import "ios/chrome/browser/favicon/ios_chrome_favicon_loader_factory.h"
 #import "ios/chrome/browser/favicon/ios_chrome_large_icon_service_factory.h"
-#import "ios/chrome/browser/history/history_service_factory.h"
-#import "ios/chrome/browser/search_engines/template_url_service_factory.h"
-#import "ios/chrome/browser/ui/settings/cells/search_engine_item.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_controller_test.h"
+#import "ios/chrome/browser/history/model/history_service_factory.h"
+#import "ios/chrome/browser/policy/model/browser_state_policy_connector_mock.h"
+#import "ios/chrome/browser/search_engines/model/template_url_service_factory.h"
+#import "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_controller_test.h"
+#import "ios/chrome/browser/ui/settings/cells/legacy_settings_search_engine_item.h"
 #import "ios/web/public/test/web_task_environment.h"
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/l10n/l10n_util_mac.h"
 
 using TemplateURLPrepopulateData::GetAllPrepopulatedEngines;
 using TemplateURLPrepopulateData::PrepopulatedEngine;
@@ -41,11 +49,15 @@ namespace {
 const char kUmaSelectDefaultSearchEngine[] =
     "Search.iOS.SelectDefaultSearchEngine";
 
+// Unit tests for SearchEngineTableViewController when the choice screen feature
+// is disabled (using `kDisableSearchEngineChoiceScreen`).
 class SearchEngineTableViewControllerTest
-    : public ChromeTableViewControllerTest {
+    : public LegacyChromeTableViewControllerTest {
  protected:
   void SetUp() override {
-    ChromeTableViewControllerTest::SetUp();
+    LegacyChromeTableViewControllerTest::SetUp();
+    base::CommandLine::ForCurrentProcess()->AppendSwitch(
+        switches::kDisableSearchEngineChoiceScreen);
     TestChromeBrowserState::Builder test_cbs_builder;
 
     test_cbs_builder.AddTestingFactory(
@@ -72,10 +84,20 @@ class SearchEngineTableViewControllerTest
 
   void TearDown() override {
     DefaultSearchManager::SetFallbackSearchEnginesDisabledForTesting(false);
-    ChromeTableViewControllerTest::TearDown();
+    [base::apple::ObjCCastStrict<SearchEngineTableViewController>(controller())
+        settingsWillBeDismissed];
+    LegacyChromeTableViewControllerTest::TearDown();
   }
 
-  ChromeTableViewController* InstantiateController() override {
+  void SetupForChoiceScreenDisplay() {
+    pref_service_ = chrome_browser_state_->GetTestingPrefService();
+
+    // Override the country checks to simulate being in Belgium.
+    base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
+        switches::kSearchEngineChoiceCountry, "BE");
+  }
+
+  LegacyChromeTableViewController* InstantiateController() override {
     return [[SearchEngineTableViewController alloc]
         initWithBrowserState:chrome_browser_state_.get()];
   }
@@ -128,8 +150,9 @@ class SearchEngineTableViewControllerTest
                  int section,
                  int row,
                  bool enabled) {
-    SearchEngineItem* item = base::mac::ObjCCastStrict<SearchEngineItem>(
-        GetTableViewItem(section, row));
+    LegacySettingsSearchEngineItem* item =
+        base::apple::ObjCCastStrict<LegacySettingsSearchEngineItem>(
+            GetTableViewItem(section, row));
     EXPECT_NSEQ(expected_text, item.text);
     EXPECT_NSEQ(expected_detail_text, item.detailText);
     EXPECT_EQ(expected_url, item.URL);
@@ -139,11 +162,12 @@ class SearchEngineTableViewControllerTest
     EXPECT_EQ(enabled, item.enabled);
   }
 
-  // Checks a SearchEngineItem with data from a fabricated TemplateURL. The
-  // SearchEngineItem in the `row` of `section` should contain a title and a
-  // subtitle that are equal to `expected_text` and an URL which can be
-  // generated by filling empty query word into `expected_searchable_url`. If
-  // `expected_checked` is true, the SearchEngineItem should have a
+  // Checks a LegacySettingsSearchEngineItem with data from a fabricated
+  // TemplateURL. The LegacySettingsSearchEngineItem in the `row` of `section`
+  // should contain a title and a subtitle that are equal to `expected_text` and
+  // an URL which can be generated by filling empty query word into
+  // `expected_searchable_url`. If `expected_checked` is true, the
+  // LegacySettingsSearchEngineItem should have a
   // UITableViewCellAccessoryCheckmark.
   void CheckPrepopulatedItem(const std::string& expected_text,
                              const GURL& expected_searchable_url,
@@ -162,12 +186,13 @@ class SearchEngineTableViewControllerTest
               expected_checked, section, row, enabled);
   }
 
-  // Checks a SearchEngineItem with data from a fabricated TemplateURL. The
-  // SearchEngineItem in the `row` of `section` should contain a title and a
-  // subtitle that are equal to `expected_text` and an URL
-  // which can be generated from `expected_searchable_url` by
+  // Checks a LegacySettingsSearchEngineItem with data from a fabricated
+  // TemplateURL. The LegacySettingsSearchEngineItem in the `row` of `section`
+  // should contain a title and a subtitle that are equal to `expected_text` and
+  // an URL which can be generated from `expected_searchable_url` by
   // TemplateURL::GenerateFaviconURL. If `expected_checked` is true, the
-  // SearchEngineItem should have a UITableViewCellAccessoryCheckmark.
+  // LegacySettingsSearchEngineItem should have a
+  // UITableViewCellAccessoryCheckmark.
   void CheckCustomItem(const std::string& expected_text,
                        const GURL& expected_searchable_url,
                        bool expected_checked,
@@ -180,12 +205,12 @@ class SearchEngineTableViewControllerTest
               expected_checked, section, row, enabled);
   }
 
-  // Checks a SearchEngineItem with data from a real prepopulated
-  // TemplateURL. The SearchEngineItem in the `row` of `section` should
-  // contain a title equal to `expected_text`, a subtitle equal to
+  // Checks a LegacySettingsSearchEngineItem with data from a real prepopulated
+  // TemplateURL. The LegacySettingsSearchEngineItem in the `row` of `section`
+  // should contain a title equal to `expected_text`, a subtitle equal to
   // `expected_detail_text`, and an URL equal to `expected_favicon_url`. If
-  // `expected_checked` is true, the SearchEngineItem should have a
-  // UITableViewCellAccessoryCheckmark.
+  // `expected_checked` is true, the LegacySettingsSearchEngineItem should have
+  // a UITableViewCellAccessoryCheckmark.
   void CheckRealItem(const TemplateURL* turl,
                      bool expected_checked,
                      int section,
@@ -213,6 +238,7 @@ class SearchEngineTableViewControllerTest
   std::unique_ptr<TestChromeBrowserState> chrome_browser_state_;
   base::HistogramTester histogram_tester_;
   TemplateURLService* template_url_service_;  // weak
+  sync_preferences::TestingPrefServiceSyncable* pref_service_;
 };
 
 // Tests that no items are shown if TemplateURLService is empty.

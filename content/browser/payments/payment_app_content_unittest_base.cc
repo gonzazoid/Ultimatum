@@ -10,9 +10,9 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "content/browser/payments/payment_app_context_impl.h"
 #include "content/browser/service_worker/embedded_worker_test_helper.h"
@@ -201,7 +201,8 @@ PaymentManager* PaymentAppContentUnitTestBase::CreatePaymentManager(
   int64_t registration_id;
   blink::mojom::ServiceWorkerRegistrationOptions registration_opt;
   registration_opt.scope = scope_url;
-  blink::StorageKey key(url::Origin::Create(scope_url));
+  const blink::StorageKey key =
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(scope_url));
   worker_helper_->context()->RegisterServiceWorker(
       sw_script_url, key, registration_opt,
       blink::mojom::FetchClientSettingsObject::New(),

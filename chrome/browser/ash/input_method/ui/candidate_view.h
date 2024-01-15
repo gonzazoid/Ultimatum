@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_ASH_INPUT_METHOD_UI_CANDIDATE_VIEW_H_
 
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/ime/candidate_window.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/chromeos/ui_chromeos_export.h"
@@ -52,7 +53,6 @@ class UI_CHROMEOS_EXPORT CandidateView : public views::Button {
   void Layout() override;
   gfx::Size CalculatePreferredSize() const override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
-  void OnThemeChanged() override;
 
   // The orientation of the candidate view.
   ui::CandidateWindow::Orientation orientation_;
@@ -61,21 +61,21 @@ class UI_CHROMEOS_EXPORT CandidateView : public views::Button {
   // child views will be deleted when |this| is deleted.
 
   // The shortcut label renders shortcut numbers like 1, 2, and 3.
-  views::Label* shortcut_label_ = nullptr;
+  raw_ptr<views::Label> shortcut_label_ = nullptr;
   // The candidate label renders candidates.
-  views::Label* candidate_label_ = nullptr;
+  raw_ptr<views::Label> candidate_label_ = nullptr;
   // The annotation label renders annotations.
-  views::Label* annotation_label_ = nullptr;
+  raw_ptr<views::Label> annotation_label_ = nullptr;
   // The infolist icon.
-  views::View* infolist_icon_ = nullptr;
+  raw_ptr<views::View> infolist_icon_ = nullptr;
 
   int shortcut_width_ = 0;
   int candidate_width_ = 0;
   bool highlighted_ = false;
 
   // 0-based index of this candidate e.g. [0, total_candidates_ -1].
-  int candidate_index_;
-  int total_candidates_;
+  int candidate_index_ = 0;
+  int total_candidates_ = 0;
 };
 
 BEGIN_VIEW_BUILDER(UI_CHROMEOS_EXPORT, CandidateView, views::Button)

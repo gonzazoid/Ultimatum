@@ -42,20 +42,11 @@
     </style>
     <settings-section page-title="$i18n{aboutPageTitle}" section="about">
       <div class="cr-row two-line first">
-<if expr="not chromeos_lacros or not _google_chrome">
-        <img id="product-logo" on-click="onProductLogoTap_"
+        <img id="product-logo" on-click="onProductLogoClick_"
             srcset="chrome://theme/current-channel-logo@1x 1x,
                     chrome://theme/current-channel-logo@2x 2x"
             alt="$i18n{aboutProductLogoAlt}"
             role="presentation">
-</if>
-<if expr="_google_chrome and chromeos_lacros">
-        <img id="product-logo" on-click="onProductLogoTap_"
-            srcset="chrome://theme/IDR_PRODUCT_LOGO_32_CANARY@1x 1x,
-                    chrome://theme/IDR_PRODUCT_LOGO_32_CANARY@2x 2x"
-            alt="$i18n{aboutProductLogoAlt}"
-            role="presentation">
-</if>
         <div class="product-title">$i18n{aboutProductTitle}</div>
       </div>
       <div class="cr-row two-line">
@@ -75,7 +66,7 @@
         <div class="flex cr-padded-text">
 <if expr="not chromeos_ash">
           <div id="updateStatusMessage" hidden="[[!showUpdateStatus_]]">
-            <div
+            <div role="alert" aria-live="polite"
                 inner-h-t-m-l="[[getUpdateStatusMessage_(
                     currentUpdateStatusEvent_)]]">
             </div>
@@ -101,7 +92,7 @@
         <div class="separator" hidden="[[!showButtonContainer_]]"></div>
         <span id="buttonContainer" hidden="[[!showButtonContainer_]]">
           <cr-button id="relaunch" hidden="[[!showRelaunch_]]"
-              on-click="onRelaunchTap_">
+              on-click="onRelaunchClick_">
             $i18n{aboutRelaunch}
           </cr-button>
         </span>
@@ -112,12 +103,12 @@
         <div id="promoteUpdater"
             class$="cr-row [[getPromoteUpdaterClass_(promoteUpdaterStatus_.disabled)]]"
             actionable$="[[promoteUpdaterStatus_.actionable]]"
-            on-click="onPromoteUpdaterTap_">
+            on-click="onPromoteUpdaterClick_">
           <div class="flex">
             [[promoteUpdaterStatus_.text]]
             <a href="https://support.google.com/chrome/answer/95414"
                 target="_blank" id="updaterLearnMore"
-                on-click="onLearnMoreTap_"
+                on-click="onLearnMoreClick_"
                 aria-label="$i18nPolymer{aboutLearnMoreUpdating}">
               $i18n{learnMore}
             </a>
@@ -129,15 +120,25 @@
         </div>
       </template>
 </if>
-      <cr-link-row class="hr" id="help" on-click="onHelpTap_"
-          label="$i18n{aboutGetHelpUsingChrome}" external></cr-link-row>
+      <cr-link-row class="hr" id="help" on-click="onHelpClick_"
+          label="$i18n{aboutGetHelpUsingChrome}"
+          external></cr-link-row>
 <if expr="_google_chrome">
-      <cr-link-row class="hr" id="reportIssue" on-click="onReportIssueTap_"
+      <cr-link-row class="hr" id="reportIssue" on-click="onReportIssueClick_"
           hidden="[[!prefs.feedback_allowed.value]]"
           label="$i18n{aboutReportAnIssue}" external></cr-link-row>
+      <cr-link-row class="hr" id="privacyPolicy"
+        on-click="onPrivacyPolicyClick_" label="$i18n{aboutPrivacyPolicy}"
+        external></cr-link-row>
+      <cr-link-row class="hr" id="getTheMostOutOfChrome"
+          on-click="onGetTheMostOutOfChromeClick_"
+          label="$i18n{getTheMostOutOfChrome}"
+          sub-label="$i18n{getTheMostOutOfChromeDescription}"
+          role-description="$i18n{subpageArrowRoleDescription}"
+          hidden$="[[!showGetTheMostOutOfChromeSection_]]"></cr-link-row>
 </if>
-      <cr-link-row class="hr" on-click="onManagementPageTap_"
-          start-icon="cr:domain" label="$i18n{managementPage}"
+      <cr-link-row class="hr" on-click="onManagementPageClick_"
+          start-icon="[[managedByIcon_]]" label="$i18n{managementPage}"
           role-description="$i18n{subpageArrowRoleDescription}"
           hidden$="[[!isManaged_]]"></cr-link-row>
     </settings-section>
@@ -152,9 +153,9 @@
         <div class="info-section">
           <div class="secondary">$i18nRaw{aboutProductLicense}</div>
         </div>
-<if expr="_google_chrome">
+<if expr="_google_chrome or _is_chrome_for_testing_branded">
         <div class="secondary">
-          <a href="$i18n{aboutTermsURL}">$i18n{aboutProductTos}</a>
+          <a id="tos" href="$i18n{aboutTermsURL}">$i18n{aboutProductTos}</a>
         </div>
 </if>
 <if expr="not chromeos_ash">

@@ -5,6 +5,7 @@
 #include "ui/ozone/platform/wayland/host/wayland_keyboard.h"
 
 #include <keyboard-extension-unstable-v1-client-protocol.h>
+#include <keyboard-shortcuts-inhibit-unstable-v1-client-protocol.h>
 #include <sys/mman.h>
 
 #include <cstddef>
@@ -28,8 +29,10 @@
 #include "ui/events/types/event_type.h"
 #include "ui/ozone/platform/wayland/common/wayland_util.h"
 #include "ui/ozone/platform/wayland/host/wayland_connection.h"
+#include "ui/ozone/platform/wayland/host/wayland_seat.h"
 #include "ui/ozone/platform/wayland/host/wayland_serial_tracker.h"
 #include "ui/ozone/platform/wayland/host/wayland_window.h"
+#include "ui/ozone/public/platform_keyboard_hook.h"
 
 #if BUILDFLAG(USE_XKBCOMMON)
 #include "ui/events/ozone/layout/xkb/xkb_keyboard_layout_engine.h"
@@ -37,16 +40,73 @@
 
 namespace ui {
 
+namespace {
+
+bool IsModifierKey(int key) {
+  auto dom_code = KeycodeConverter::EvdevCodeToDomCode(key);
+  switch (dom_code) {
+    // Based on ui::NonPrintableCodeEntry map.
+    case DomCode::ALT_LEFT:
+    case DomCode::ALT_RIGHT:
+    case DomCode::SHIFT_LEFT:
+    case DomCode::SHIFT_RIGHT:
+    case DomCode::CONTROL_LEFT:
+    case DomCode::CONTROL_RIGHT:
+    case DomCode::FN:
+    case DomCode::FN_LOCK:
+    case DomCode::HYPER:
+    case DomCode::META_LEFT:
+    case DomCode::META_RIGHT:
+    case DomCode::CAPS_LOCK:
+    case DomCode::NUM_LOCK:
+    case DomCode::SCROLL_LOCK:
+    case DomCode::SUPER:
+      return true;
+    default:
+      return false;
+  }
+}
+
+class WaylandKeyboardHook final : public PlatformKeyboardHook {
+ public:
+  explicit WaylandKeyboardHook(
+      wl::Object<zwp_keyboard_shortcuts_inhibitor_v1> inhibitor)
+      : inhibitor_(std::move(inhibitor)) {}
+  WaylandKeyboardHook(const WaylandKeyboardHook&) = delete;
+  WaylandKeyboardHook& operator=(const WaylandKeyboardHook&) = delete;
+  ~WaylandKeyboardHook() final = default;
+
+  // In Linux Desktop, the keyboard-lock implementation relies solely on
+  // keyboard-shortcuts-inhibit-unstable-v1 protocol, which currently does
+  // not support to specify a set of key codes to be captured nor a way
+  // of reporting back to the compositor which keys were consumed or not (which
+  // is done through zcr-keyboard-extension in Lacros), so it's not possible to
+  // implement this until the protocol supports it.
+  //
+  // TODO(crbug.com/1408927): Update once it is supported in the protocol.
+  bool IsKeyLocked(DomCode dom_code) const final {
+    NOTIMPLEMENTED_LOG_ONCE();
+    return true;
+  }
+
+ private:
+  const wl::Object<zwp_keyboard_shortcuts_inhibitor_v1> inhibitor_;
+};
+
+}  // namespace
+
 class WaylandKeyboard::ZCRExtendedKeyboard {
  public:
   // Takes the ownership of |extended_keyboard|.
   ZCRExtendedKeyboard(WaylandKeyboard* keyboard,
                       zcr_extended_keyboard_v1* extended_keyboard)
       : keyboard_(keyboard), obj_(extended_keyboard) {
-    static constexpr zcr_extended_keyboard_v1_listener kListener = {
-        &PeekKey,
-    };
-    zcr_extended_keyboard_v1_add_listener(obj_.get(), &kListener, this);
+    static constexpr zcr_extended_keyboard_v1_listener
+        kExtendedKeyboardListener = {
+            .peek_key = &OnPeekKey,
+        };
+    zcr_extended_keyboard_v1_add_listener(obj_.get(),
+                                          &kExtendedKeyboardListener, this);
   }
   ZCRExtendedKeyboard(const ZCRExtendedKeyboard&) = delete;
   ZCRExtendedKeyboard& operator=(const ZCRExtendedKeyboard&) = delete;
@@ -64,25 +124,20 @@ class WaylandKeyboard::ZCRExtendedKeyboard {
   }
 
  private:
-  static void PeekKey(void* data,
-                      zcr_extended_keyboard_v1* obj,
-                      uint32_t serial,
-                      uint32_t time,
-                      uint32_t key,
-                      uint32_t state) {
-    auto* extended_keyboard = static_cast<ZCRExtendedKeyboard*>(data);
-    DCHECK(data);
-    extended_keyboard->keyboard_->OnKey(
-        serial, time, key, state, WaylandKeyboard::KeyEventKind::kPeekKey);
+  static void OnPeekKey(void* data,
+                        zcr_extended_keyboard_v1* extended_keyboard,
+                        uint32_t serial,
+                        uint32_t time,
+                        uint32_t key,
+                        uint32_t state) {
+    auto* self = static_cast<ZCRExtendedKeyboard*>(data);
+    DCHECK(self);
+    self->keyboard_->ProcessKey(serial, time, key, state,
+                                WaylandKeyboard::KeyEventKind::kPeekKey);
   }
 
   const raw_ptr<WaylandKeyboard> keyboard_;
   wl::Object<zcr_extended_keyboard_v1> obj_;
-};
-
-// static
-const wl_callback_listener WaylandKeyboard::callback_listener_ = {
-    WaylandKeyboard::SyncCallback,
 };
 
 WaylandKeyboard::WaylandKeyboard(
@@ -96,12 +151,15 @@ WaylandKeyboard::WaylandKeyboard(
       delegate_(delegate),
       auto_repeat_handler_(this),
       layout_engine_(static_cast<LayoutEngine*>(layout_engine)) {
-  static constexpr wl_keyboard_listener listener = {
-      &Keymap, &Enter, &Leave, &Key, &Modifiers, &RepeatInfo,
+  static constexpr wl_keyboard_listener kKeyboardListener = {
+      .keymap = &OnKeymap,
+      .enter = &OnEnter,
+      .leave = &OnLeave,
+      .key = &OnKey,
+      .modifiers = &OnModifiers,
+      .repeat_info = &OnRepeatInfo,
   };
-
-  wl_keyboard_add_listener(obj_.get(), &listener, this);
-  // TODO(tonikitoo): Default auto-repeat to ON here?
+  wl_keyboard_add_listener(obj_.get(), &kKeyboardListener, this);
 
   if (keyboard_extension_v1) {
     extended_keyboard_ = std::make_unique<ZCRExtendedKeyboard>(
@@ -134,36 +192,86 @@ void WaylandKeyboard::OnUnhandledKeyEvent(const KeyEvent& key_event) {
   extended_keyboard_->AckKey(serial, false);
 }
 
-void WaylandKeyboard::Keymap(void* data,
-                             wl_keyboard* obj,
-                             uint32_t format,
-                             int32_t fd,
-                             uint32_t size) {
-  WaylandKeyboard* keyboard = static_cast<WaylandKeyboard*>(data);
-  DCHECK(keyboard);
+// Two different behaviors are currently implemented for KeyboardLock support
+// on Wayland:
+//
+// 1. On Lacros, shortcuts are kept inhibited since the window initialization.
+// Such approach relies on the Exo-specific zcr-keyboard-extension protocol
+// extension, which allows Lacros (ozone/wayland based) to report back to the
+// Wayland compositor that a given key was not processed by the client, giving
+// it a chance of processing global shortcuts (even with a shortcuts inhibitor
+// in place), which is not currently possible with standard Wayland protocol
+// and extensions. That is also required to keep Lacros behaving just like Ash
+// Chrome's classic browser.
+//
+// 2. Otherwise, keyboard shortcuts will be inhibited only when in fullscreen
+// and when a WaylandKeyboardHook is in place for a given widget. See
+// KeyboardLock spec for more details: https://wicg.github.io/keyboard-lock
+//
+// TODO(https://crbug.com/1338554): Revisit once this scenario changes.
+std::unique_ptr<PlatformKeyboardHook> WaylandKeyboard::CreateKeyboardHook(
+    WaylandWindow* window,
+    absl::optional<base::flat_set<DomCode>> dom_codes,
+    PlatformKeyboardHook::KeyEventCallback callback) {
+  DCHECK(window);
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  return std::make_unique<BaseKeyboardHook>(std::move(dom_codes),
+                                            std::move(callback));
+#else
+  return std::make_unique<WaylandKeyboardHook>(
+      CreateShortcutsInhibitor(window));
+#endif
+}
+
+wl::Object<zwp_keyboard_shortcuts_inhibitor_v1>
+WaylandKeyboard::CreateShortcutsInhibitor(WaylandWindow* window) {
+  DCHECK(window);
+  DCHECK(window->root_surface());
+  if (auto* manager = connection_->keyboard_shortcuts_inhibit_manager_v1()) {
+    return wl::Object<zwp_keyboard_shortcuts_inhibitor_v1>(
+        zwp_keyboard_shortcuts_inhibit_manager_v1_inhibit_shortcuts(
+            manager, window->root_surface()->surface(),
+            connection_->seat()->wl_object()));
+  }
+  return {};
+}
+
+// static
+void WaylandKeyboard::OnKeymap(void* data,
+                               wl_keyboard* keyboard,
+                               uint32_t format,
+                               int32_t fd,
+                               uint32_t size) {
+  auto* self = static_cast<WaylandKeyboard*>(data);
+  DCHECK(self);
 
   if (!data || format != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1)
     return;
 
-  void* keymap = mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, 0);
+  // From the Wayland specification: "From version 7 onwards, the fd must be
+  // mapped with MAP_PRIVATE by the recipient, as MAP_SHARED may fail."
+  int map_flags =
+      wl_keyboard_get_version(keyboard) >= 7 ? MAP_PRIVATE : MAP_SHARED;
+  void* keymap = mmap(nullptr, size, PROT_READ, map_flags, fd, 0);
   if (keymap == MAP_FAILED) {
     DPLOG(ERROR) << "Failed to map XKB keymap.";
     return;
   }
 
   const char* keymap_string = static_cast<const char*>(keymap);
-  if (!keyboard->layout_engine_->SetCurrentLayoutFromBuffer(
+  if (!self->layout_engine_->SetCurrentLayoutFromBuffer(
           keymap_string, strnlen(keymap_string, size))) {
     DLOG(ERROR) << "Failed to set XKB keymap.";
   }
   munmap(keymap, size);
 }
 
-void WaylandKeyboard::Enter(void* data,
-                            wl_keyboard* obj,
-                            uint32_t serial,
-                            wl_surface* surface,
-                            wl_array* keys) {
+// static
+void WaylandKeyboard::OnEnter(void* data,
+                              wl_keyboard* keyboard,
+                              uint32_t serial,
+                              wl_surface* surface,
+                              wl_array* keys) {
   // wl_surface might have been destroyed by this time.
   if (auto* window = wl::RootWindowFromWlSurface(surface)) {
     auto* self = static_cast<WaylandKeyboard*>(data);
@@ -171,10 +279,11 @@ void WaylandKeyboard::Enter(void* data,
   }
 }
 
-void WaylandKeyboard::Leave(void* data,
-                            wl_keyboard* obj,
-                            uint32_t serial,
-                            wl_surface* surface) {
+// static
+void WaylandKeyboard::OnLeave(void* data,
+                              wl_keyboard* keyboard,
+                              uint32_t serial,
+                              wl_surface* surface) {
   // wl_surface might have been destroyed by this time.
   auto* self = static_cast<WaylandKeyboard*>(data);
   if (auto* window = wl::RootWindowFromWlSurface(surface))
@@ -184,38 +293,40 @@ void WaylandKeyboard::Leave(void* data,
   self->auto_repeat_handler_.StopKeyRepeat();
 }
 
-void WaylandKeyboard::Key(void* data,
-                          wl_keyboard* obj,
-                          uint32_t serial,
-                          uint32_t time,
-                          uint32_t key,
-                          uint32_t state) {
-  WaylandKeyboard* keyboard = static_cast<WaylandKeyboard*>(data);
-  DCHECK(keyboard);
-  keyboard->OnKey(serial, time, key, state, KeyEventKind::kKey);
+void WaylandKeyboard::OnKey(void* data,
+                            wl_keyboard* keyboard,
+                            uint32_t serial,
+                            uint32_t time,
+                            uint32_t key,
+                            uint32_t state) {
+  auto* self = static_cast<WaylandKeyboard*>(data);
+  DCHECK(self);
+  self->ProcessKey(serial, time, key, state, KeyEventKind::kKey);
 }
 
-void WaylandKeyboard::Modifiers(void* data,
-                                wl_keyboard* obj,
-                                uint32_t serial,
-                                uint32_t depressed,
-                                uint32_t latched,
-                                uint32_t locked,
-                                uint32_t group) {
+// static
+void WaylandKeyboard::OnModifiers(void* data,
+                                  wl_keyboard* keyboard,
+                                  uint32_t serial,
+                                  uint32_t depressed,
+                                  uint32_t latched,
+                                  uint32_t locked,
+                                  uint32_t group) {
 #if BUILDFLAG(USE_XKBCOMMON)
-  WaylandKeyboard* keyboard = static_cast<WaylandKeyboard*>(data);
-  DCHECK(keyboard);
+  auto* self = static_cast<WaylandKeyboard*>(data);
+  DCHECK(self);
 
-  int modifiers = keyboard->layout_engine_->UpdateModifiers(depressed, latched,
-                                                            locked, group);
-  keyboard->delegate_->OnKeyboardModifiersChanged(modifiers);
+  int modifiers =
+      self->layout_engine_->UpdateModifiers(depressed, latched, locked, group);
+  self->delegate_->OnKeyboardModifiersChanged(modifiers);
 #endif
 }
 
-void WaylandKeyboard::RepeatInfo(void* data,
-                                 wl_keyboard* obj,
-                                 int32_t rate,
-                                 int32_t delay) {
+// static
+void WaylandKeyboard::OnRepeatInfo(void* data,
+                                   wl_keyboard* keyboard,
+                                   int32_t rate,
+                                   int32_t delay) {
   // Negative values for either rate or delay are illegal.
   if (rate < 0 || delay < 0) {
     VLOG(1) << "Ignoring wl_keyboard.repeat_info event with illegal "
@@ -223,9 +334,9 @@ void WaylandKeyboard::RepeatInfo(void* data,
     return;
   }
 
-  DCHECK(data);
-  EventAutoRepeatHandler& handler =
-      static_cast<WaylandKeyboard*>(data)->auto_repeat_handler_;
+  auto* self = static_cast<WaylandKeyboard*>(data);
+  DCHECK(self);
+  EventAutoRepeatHandler& handler = self->auto_repeat_handler_;
 
   // A rate of zero will disable any repeating.
   handler.SetAutoRepeatEnabled(rate != 0);
@@ -234,6 +345,17 @@ void WaylandKeyboard::RepeatInfo(void* data,
     handler.SetAutoRepeatRate(base::Milliseconds(delay),
                               base::Seconds(1.0 / rate));
   }
+}
+
+// static
+void WaylandKeyboard::OnSyncDone(void* data,
+                                 struct wl_callback* callback,
+                                 uint32_t time) {
+  auto* self = static_cast<WaylandKeyboard*>(data);
+  DCHECK(self);
+  DCHECK(self->auto_repeat_closure_);
+  std::move(self->auto_repeat_closure_).Run();
+  self->sync_callback_.reset();
 }
 
 void WaylandKeyboard::FlushInput(base::OnceClosure closure) {
@@ -246,7 +368,11 @@ void WaylandKeyboard::FlushInput(base::OnceClosure closure) {
   // With a well behaved wayland compositor this should ensure we never
   // get spurious repeats.
   sync_callback_.reset(wl_display_sync(connection_->display_wrapper()));
-  wl_callback_add_listener(sync_callback_.get(), &callback_listener_, this);
+
+  static constexpr wl_callback_listener kSyncCallbackListener = {
+      .done = &OnSyncDone,
+  };
+  wl_callback_add_listener(sync_callback_.get(), &kSyncCallbackListener, this);
   connection_->Flush();
 }
 
@@ -257,27 +383,28 @@ void WaylandKeyboard::DispatchKey(unsigned int key,
                                   base::TimeTicks timestamp,
                                   int device_id,
                                   int flags) {
-  // Key repeat is only triggered by wl_keyboard::key event,
-  // but not by extended_keyboard::peek_key.
+  // Key repeat is only triggered by wl_keyboard::key event, but not by
+  // extended_keyboard::peek_key.
   DispatchKey(key, scan_code, down, repeat, absl::nullopt, timestamp, device_id,
               flags, KeyEventKind::kKey);
 }
 
-void WaylandKeyboard::OnKey(uint32_t serial,
-                            uint32_t time,
-                            uint32_t key,
-                            uint32_t state,
-                            KeyEventKind kind) {
+void WaylandKeyboard::ProcessKey(uint32_t serial,
+                                 uint32_t time,
+                                 uint32_t key,
+                                 uint32_t state,
+                                 KeyEventKind kind) {
   bool down = state == WL_KEYBOARD_KEY_STATE_PRESSED;
   if (down) {
     connection_->serial_tracker().UpdateSerial(wl::SerialType::kKeyPress,
                                                serial);
   }
 
-  if (kind == KeyEventKind::kKey) {
-    auto_repeat_handler_.UpdateKeyRepeat(key, 0 /*scan_code*/, down,
-                                         false /*suppress_auto_repeat*/,
-                                         device_id());
+  if (kind == KeyEventKind::kKey && !IsModifierKey(key)) {
+    auto_repeat_handler_.UpdateKeyRepeat(
+        key, 0 /*scan_code*/, down,
+        /*suppress_auto_repeat=*/false, device_id(),
+        wl::EventMillisecondsToTimeTicks(time));
   }
 
   // Block to dispatch RELEASE wl_keyboard::key event, if
@@ -289,9 +416,9 @@ void WaylandKeyboard::OnKey(uint32_t serial,
     return;
   }
 
-  DispatchKey(key, 0 /*scan_code*/, down, false /*repeat*/,
-              absl::make_optional(serial), EventTimeForNow(), device_id(),
-              EF_NONE, kind);
+  DispatchKey(
+      key, 0 /*scan_code*/, down, false /*repeat*/, absl::make_optional(serial),
+      wl::EventMillisecondsToTimeTicks(time), device_id(), EF_NONE, kind);
 }
 
 void WaylandKeyboard::DispatchKey(unsigned int key,
@@ -321,16 +448,6 @@ void WaylandKeyboard::DispatchKey(unsigned int key,
     // compositor, there's no way to cancel it.
     extended_keyboard_->AckKey(serial.value(), false);
   }
-}
-
-void WaylandKeyboard::SyncCallback(void* data,
-                                   struct wl_callback* cb,
-                                   uint32_t time) {
-  WaylandKeyboard* keyboard = static_cast<WaylandKeyboard*>(data);
-  DCHECK(keyboard);
-  DCHECK(keyboard->auto_repeat_closure_);
-  std::move(keyboard->auto_repeat_closure_).Run();
-  keyboard->sync_callback_.reset();
 }
 
 }  // namespace ui

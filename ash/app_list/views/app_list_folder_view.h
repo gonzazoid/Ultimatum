@@ -17,6 +17,7 @@
 #include "ash/app_list/views/apps_grid_view_folder_delegate.h"
 #include "ash/app_list/views/folder_header_view.h"
 #include "ash/app_list/views/folder_header_view_delegate.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -55,7 +56,8 @@ class ASH_EXPORT AppListFolderView : public views::View,
   AppListFolderView(AppListFolderController* folder_controller,
                     AppsGridView* root_apps_grid_view,
                     AppListA11yAnnouncer* a11y_announcer,
-                    AppListViewDelegate* view_delegate);
+                    AppListViewDelegate* view_delegate,
+                    bool tablet_mode);
   AppListFolderView(const AppListFolderView&) = delete;
   AppListFolderView& operator=(const AppListFolderView&) = delete;
   ~AppListFolderView() override;
@@ -105,6 +107,7 @@ class ASH_EXPORT AppListFolderView : public views::View,
   void FocusFirstItem(bool silently);
 
   // views::View
+  void AddedToWidget() override;
   void Layout() override;
   void ChildPreferredSizeChanged(View* child) override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
@@ -139,10 +142,6 @@ class ASH_EXPORT AppListFolderView : public views::View,
   // to be in the parent view's coordinate system.
   void SetBoundingBox(const gfx::Rect& bounding_box);
 
-  // Updates the highlight border of the folder view according to the folder
-  // animation.
-  void UpdateHighlightBorder(bool show);
-
   // Sets the callback that runs when the folder animation ends.
   void SetAnimationDoneTestCallback(base::OnceClosure animation_done_callback);
 
@@ -150,7 +149,7 @@ class ASH_EXPORT AppListFolderView : public views::View,
 
   FolderHeaderView* folder_header_view() { return folder_header_view_; }
 
-  views::View* background_view() { return background_view_; }
+  views::View* animating_background() { return animating_background_; }
 
   views::View* contents_container() { return contents_container_; }
 
@@ -168,9 +167,6 @@ class ASH_EXPORT AppListFolderView : public views::View,
   // BackgroundAnimation, FolderItemTitleAnimation, TopIconAnimation, and
   // ContentsContainerAnimation.
   void RecordAnimationSmoothness();
-
-  // Called when tablet mode starts and ends.
-  void OnTabletModeChanged(bool started);
 
   // views::View:
   void OnScrollEvent(ui::ScrollEvent* event) override;
@@ -190,6 +186,7 @@ class ASH_EXPORT AppListFolderView : public views::View,
       bool events_forwarded_to_drag_drop_host,
       bool cancel_drag,
       std::unique_ptr<AppDragIconProxy> drag_icon_proxy) override;
+  void Close() override;
   bool IsDragPointOutsideOfFolder(const gfx::Point& drag_point) override;
   bool IsOEMFolder() const override;
   void HandleKeyboardReparent(AppListItemView* reparented_view,
@@ -202,7 +199,7 @@ class ASH_EXPORT AppListFolderView : public views::View,
 
  private:
   // Creates a vertically scrollable apps grid view.
-  void CreateScrollableAppsGrid();
+  void CreateScrollableAppsGrid(bool tablet_mode);
 
   // Returns the compositor associated to the widget containing this view.
   // Returns nullptr if there isn't one associated with this widget.
@@ -229,33 +226,34 @@ class ASH_EXPORT AppListFolderView : public views::View,
   void OnHideAnimationDone(bool hide_for_reparent);
 
   // Controller interface implemented by the container for this view.
-  AppListFolderController* const folder_controller_;
+  const raw_ptr<AppListFolderController> folder_controller_;
 
   // The root (non-folder) apps grid view.
-  AppsGridView* const root_apps_grid_view_;
+  const raw_ptr<AppsGridView> root_apps_grid_view_;
 
   // Used to send accessibility alerts. Owned by the parent apps container.
-  AppListA11yAnnouncer* const a11y_announcer_;
+  const raw_ptr<AppListA11yAnnouncer> a11y_announcer_;
 
   // The view is used to draw a background with corner radius.
-  views::View* background_view_;  // Owned by views hierarchy.
+  raw_ptr<views::View> background_view_;
+  raw_ptr<views::View> animating_background_;
 
   // The view is used as a container for all following views.
-  views::View* contents_container_;  // Owned by views hierarchy.
+  raw_ptr<views::View> contents_container_;  // Owned by views hierarchy.
 
-  FolderHeaderView* folder_header_view_;  // Owned by views hierarchy.
-  AppsGridView* items_grid_view_;         // Owned by views hierarchy.
+  raw_ptr<FolderHeaderView> folder_header_view_;  // Owned by views hierarchy.
+  raw_ptr<AppsGridView> items_grid_view_;         // Owned by views hierarchy.
 
   // Owned by views hierarchy.
-  views::ScrollView* scroll_view_ = nullptr;
+  raw_ptr<views::ScrollView> scroll_view_ = nullptr;
 
   std::unique_ptr<SystemShadow> shadow_;
 
   // Adds fade in/out gradients to `scroll_view_`.
   std::unique_ptr<ScrollViewGradientHelper> gradient_helper_;
 
-  AppListViewDelegate* const view_delegate_;
-  AppListFolderItem* folder_item_ = nullptr;  // Not owned.
+  const raw_ptr<AppListViewDelegate> view_delegate_;
+  raw_ptr<AppListFolderItem> folder_item_ = nullptr;  // Not owned.
 
   // Whether the folder view is currently shown, or showing.
   bool shown_ = false;
@@ -265,7 +263,7 @@ class ASH_EXPORT AppListFolderView : public views::View,
   base::OnceClosure hide_callback_;
 
   // The folder item in the root apps grid associated with this folder.
-  AppListItemView* folder_item_view_ = nullptr;
+  raw_ptr<AppListItemView> folder_item_view_ = nullptr;
 
   // The bounds of the activated folder item icon relative to this view.
   gfx::Rect folder_item_icon_bounds_;
@@ -280,7 +278,7 @@ class ASH_EXPORT AppListFolderView : public views::View,
   std::vector<std::unique_ptr<Animation>> folder_visibility_animations_;
 
   // Records smoothness of the folder show/hide animation.
-  absl::optional<ui::ThroughputTracker> show_hide_metrics_tracker_;
+  std::optional<ui::ThroughputTracker> show_hide_metrics_tracker_;
 
   base::ScopedObservation<AppListModel, AppListModelObserver>
       model_observation_{this};

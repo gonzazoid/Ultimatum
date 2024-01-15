@@ -6,17 +6,18 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/escape.h"
+#include "base/task/bind_post_task.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/safe_browsing/download_protection/download_protection_service.h"
 #include "chrome/browser/safe_browsing/download_protection/download_protection_util.h"
 #include "components/safe_browsing/content/common/file_type_policies.h"
 #include "components/safe_browsing/core/browser/db/database_manager.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/utils.h"
 #include "components/sessions/content/session_tab_helper.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -124,13 +125,18 @@ void PPAPIDownloadRequest::Start() {
       FROM_HERE,
       base::BindOnce(&PPAPIDownloadRequest::OnRequestTimedOut,
                      weakptr_factory_.GetWeakPtr()),
-      base::Milliseconds(service_->download_request_timeout_ms()));
+      service_->GetDownloadRequestTimeout());
 
-  content::GetIOThreadTaskRunner({})->PostTask(
-      FROM_HERE,
-      base::BindOnce(&PPAPIDownloadRequest::CheckAllowlistsOnIOThread,
-                     requestor_url_, database_manager_,
-                     weakptr_factory_.GetWeakPtr()));
+  if (base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)) {
+    CheckAllowlistsOnSBThread(requestor_url_, database_manager_,
+                              weakptr_factory_.GetWeakPtr());
+  } else {
+    content::GetIOThreadTaskRunner({})->PostTask(
+        FROM_HERE,
+        base::BindOnce(&PPAPIDownloadRequest::CheckAllowlistsOnSBThread,
+                       requestor_url_, database_manager_,
+                       weakptr_factory_.GetWeakPtr()));
+  }
 }
 
 // static
@@ -147,20 +153,28 @@ void PPAPIDownloadRequest::WebContentsDestroyed() {
   Finish(RequestOutcome::REQUEST_DESTROYED, DownloadCheckResult::UNKNOWN);
 }
 
-// Allowlist checking needs to the done on the IO thread.
-void PPAPIDownloadRequest::CheckAllowlistsOnIOThread(
+// Allowlist checking needs to the done on the SB thread.
+void PPAPIDownloadRequest::CheckAllowlistsOnSBThread(
     const GURL& requestor_url,
     scoped_refptr<SafeBrowsingDatabaseManager> database_manager,
     base::WeakPtr<PPAPIDownloadRequest> download_request) {
-  DCHECK_CURRENTLY_ON(BrowserThread::IO);
+  DCHECK_CURRENTLY_ON(
+      base::FeatureList::IsEnabled(safe_browsing::kSafeBrowsingOnUIThread)
+          ? content::BrowserThread::UI
+          : content::BrowserThread::IO);
   DVLOG(2) << " checking allowlists for requestor URL:" << requestor_url;
 
-  bool url_was_allowlisted =
-      requestor_url.is_valid() && database_manager &&
-      database_manager->MatchDownloadAllowlistUrl(requestor_url);
-  content::GetUIThreadTaskRunner({})->PostTask(
-      FROM_HERE, base::BindOnce(&PPAPIDownloadRequest::AllowlistCheckComplete,
-                                download_request, url_was_allowlisted));
+  auto callback = base::BindPostTask(
+      content::GetUIThreadTaskRunner({}),
+      base::BindOnce(&PPAPIDownloadRequest::AllowlistCheckComplete,
+                     download_request));
+  if (!requestor_url.is_valid() || !database_manager) {
+    std::move(callback).Run(false);
+    return;
+  }
+
+  database_manager->MatchDownloadAllowlistUrl(requestor_url,
+                                              std::move(callback));
 }
 
 void PPAPIDownloadRequest::AllowlistCheckComplete(bool was_on_allowlist) {
@@ -194,8 +208,8 @@ void PPAPIDownloadRequest::SendRequest() {
   request.set_download_type(ClientDownloadRequest::PPAPI_SAVE_REQUEST);
   ClientDownloadRequest::Resource* resource = request.add_resources();
   resource->set_type(ClientDownloadRequest::PPAPI_DOCUMENT);
-  resource->set_url(requestor_url_.spec());
-  request.set_url(requestor_url_.spec());
+  resource->set_url(ShortURLForReporting(requestor_url_));
+  request.set_url(ShortURLForReporting(requestor_url_));
   request.set_file_basename(supported_path_.BaseName().AsUTF8Unsafe());
   request.set_length(0);
   request.mutable_digests()->set_md5(std::string());
@@ -259,11 +273,18 @@ void PPAPIDownloadRequest::SendRequest() {
           "from dangerous sites' under Privacy. This feature is enabled by "
           "default."
         chrome_policy {
+          SafeBrowsingProtectionLevel {
+            policy_options {mode: MANDATORY}
+            SafeBrowsingProtectionLevel: 0
+          }
+        }
+        chrome_policy {
           SafeBrowsingEnabled {
             policy_options {mode: MANDATORY}
             SafeBrowsingEnabled: false
           }
         }
+        deprecated_policies: "SafeBrowsingEnabled"
       })");
   auto resource_request = std::make_unique<network::ResourceRequest>();
   resource_request->url = GetDownloadRequestUrl();
@@ -273,8 +294,16 @@ void PPAPIDownloadRequest::SendRequest() {
                                              traffic_annotation);
   loader_->AttachStringForUpload(client_download_request_data_,
                                  "application/octet-stream");
+
+  network::mojom::URLLoaderFactory* url_loader_factory =
+      service_->GetURLLoaderFactory(profile_).get();
+  if (!url_loader_factory) {
+    Finish(RequestOutcome::FETCH_FAILED, DownloadCheckResult::UNKNOWN);
+    return;
+  }
+
   loader_->DownloadToStringOfUnboundedSizeUntilCrashAndDie(
-      service_->GetURLLoaderFactory(profile_).get(),
+      url_loader_factory,
       base::BindOnce(&PPAPIDownloadRequest::OnURLLoaderComplete,
                      base::Unretained(this)));
 }

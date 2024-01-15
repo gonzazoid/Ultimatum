@@ -6,11 +6,13 @@
 #define EXTENSIONS_BROWSER_API_ALARMS_ALARM_MANAGER_H_
 
 #include <map>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -22,6 +24,7 @@
 #include "extensions/browser/extension_registry_observer.h"
 #include "extensions/common/api/alarms.h"
 #include "extensions/common/extension_id.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class Clock;
@@ -41,12 +44,15 @@ struct Alarm {
         base::TimeDelta min_granularity,
         base::Time now);
 
+  Alarm(Alarm&&) noexcept;
+  Alarm& operator=(Alarm&&) noexcept;
+
   Alarm(const Alarm&) = delete;
   Alarm& operator=(const Alarm&) = delete;
 
   ~Alarm();
 
-  std::unique_ptr<api::alarms::Alarm> js_alarm;
+  std::optional<api::alarms::Alarm> js_alarm;
   // The granularity isn't exposed to the extension's javascript, but we poll at
   // least as often as the shortest alarm's granularity.  It's initialized as
   // the relative delay requested in creation, even if creation uses an absolute
@@ -61,10 +67,12 @@ struct Alarm {
 // Manages the currently pending alarms for every extension in a profile.
 // There is one manager per virtual Profile.
 class AlarmManager : public BrowserContextKeyedAPI,
-                     public ExtensionRegistryObserver,
-                     public base::SupportsWeakPtr<AlarmManager> {
+                     public ExtensionRegistryObserver {
  public:
-  using AlarmList = std::vector<std::unique_ptr<Alarm>>;
+  using AlarmList = std::vector<Alarm>;
+
+  // An extension can have at most this many active alarms.
+  static constexpr int kMaxAlarmsPerExtension = 500;
 
   class Delegate {
    public:
@@ -82,13 +90,18 @@ class AlarmManager : public BrowserContextKeyedAPI,
   ~AlarmManager() override;
 
   // Override the default delegate. Callee assumes onwership. Used for testing.
-  void set_delegate(Delegate* delegate) { delegate_.reset(delegate); }
+  void set_delegate(std::unique_ptr<Delegate> delegate) {
+    delegate_ = std::move(delegate);
+  }
+
+  // Returns the number of alarms currently associated with the extension.
+  int GetCountForExtension(const ExtensionId& extension_id) const;
 
   using AddAlarmCallback = base::OnceClosure;
   // Adds |alarm| for the given extension, and starts the timer. Invokes
   // |callback| when done.
   void AddAlarm(const std::string& extension_id,
-                std::unique_ptr<Alarm> alarm,
+                Alarm alarm,
                 AddAlarmCallback callback);
 
   using GetAlarmCallback = base::OnceCallback<void(Alarm*)>;
@@ -153,7 +166,7 @@ class AlarmManager : public BrowserContextKeyedAPI,
   typedef std::pair<AlarmMap::iterator, AlarmList::iterator> AlarmIterator;
 
   // Part of AddAlarm that is executed after alarms are loaded.
-  void AddAlarmWhenReady(std::unique_ptr<Alarm> alarm,
+  void AddAlarmWhenReady(Alarm alarm,
                          AddAlarmCallback callback,
                          const std::string& extension_id);
 
@@ -189,14 +202,13 @@ class AlarmManager : public BrowserContextKeyedAPI,
   void OnAlarm(AlarmIterator iter);
 
   // Internal helper to add an alarm and start the timer with the given delay.
-  void AddAlarmImpl(const std::string& extension_id,
-                    std::unique_ptr<Alarm> alarm);
+  void AddAlarmImpl(const std::string& extension_id, Alarm alarm);
 
   // Syncs our alarm data for the given extension to/from the state storage.
   void WriteToStorage(const std::string& extension_id);
   void ReadFromStorage(const std::string& extension_id,
-                       bool is_unpacked,
-                       absl::optional<base::Value> value);
+                       base::TimeDelta min_delay,
+                       std::optional<base::Value> value);
 
   // Set the timer to go off at the specified |time|, and set |next_poll_time|
   // appropriately.
@@ -249,6 +261,8 @@ class AlarmManager : public BrowserContextKeyedAPI,
 
   // Next poll's time.
   base::Time next_poll_time_;
+
+  base::WeakPtrFactory<AlarmManager> weak_ptr_factory_{this};
 };
 
 }  //  namespace extensions

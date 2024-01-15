@@ -34,10 +34,16 @@ several frames and accelerated VideoDecoder needs to successfully decode them.
       };
       if (arg.codec.startsWith('avc1')) {
         encoder_config.avc = { format: 'annexb' };
+      } else if (arg.codec.startsWith('hvc1')) {
+        encoder_config.hevc = { format: 'annexb' };
       }
 
-      let support = await VideoEncoder.isConfigSupported(encoder_config);
-      if (!support.supported) {
+      TEST.log('Starting test with arguments: ' + JSON.stringify(arg));
+      let supported = false;
+      try {
+        supported = (await VideoEncoder.isConfigSupported(encoder_config)).supported;
+      } catch (e) {}
+      if (!supported) {
         TEST.skip('Unsupported codec: ' + arg.codec);
         return;
       }
@@ -117,7 +123,18 @@ several frames and accelerated VideoDecoder needs to successfully decode them.
         'frames_decoded mismatch: ' + frames_decoded);
       TEST.assert(
         errors == 0, 'Decoding or encoding errors occurred during the test');
+      TEST.log('Test completed');
     }
+    addManualTestButton([{
+      'source_type': 'offscreen',
+      'codec': 'avc1.42001E',
+      'acceleration':'prefer-software'
+    },
+    {
+      'source_type': 'offscreen',
+      'codec': 'avc1.42001E',
+      'acceleration':'prefer-hardware'
+    }]);
   </script>
 </head>
 

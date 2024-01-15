@@ -12,7 +12,6 @@
 #include "base/memory/ptr_util.h"
 #include "cc/metrics/compositor_frame_reporting_controller.h"
 #include "cc/metrics/frame_sequence_tracker.h"
-#include "cc/metrics/throughput_ukm_reporter.h"
 
 namespace cc {
 
@@ -53,8 +52,7 @@ FrameSequenceTracker* FrameSequenceTrackerCollection::StartSequenceInternal(
   if (frame_trackers_.contains(key))
     return frame_trackers_[key].get();
 
-  auto tracker = base::WrapUnique(
-      new FrameSequenceTracker(type, throughput_ukm_reporter_.get()));
+  auto tracker = base::WrapUnique(new FrameSequenceTracker(type));
   frame_trackers_[key] = std::move(tracker);
 
   if (compositor_frame_reporting_controller_)
@@ -112,7 +110,6 @@ void FrameSequenceTrackerCollection::CleanUp() {
     tracker->CleanUp();
   for (auto& metric : accumulated_metrics_)
     metric.second->ReportLeftoverData();
-  throughput_ukm_reporter_ = nullptr;
 }
 
 void FrameSequenceTrackerCollection::StopSequence(
@@ -389,14 +386,6 @@ FrameSequenceTrackerCollection::GetRemovalTrackerForTesting(
   return nullptr;
 }
 
-void FrameSequenceTrackerCollection::SetUkmManager(UkmManager* manager) {
-  DCHECK(frame_trackers_.empty());
-  if (manager)
-    throughput_ukm_reporter_ = std::make_unique<ThroughputUkmReporter>(manager);
-  else
-    throughput_ukm_reporter_ = nullptr;
-}
-
 void FrameSequenceTrackerCollection::AddCustomTrackerResult(
     int custom_sequence_id,
     const FrameSequenceMetrics::CustomReportData& data) {
@@ -414,6 +403,15 @@ void FrameSequenceTrackerCollection::AddSortedFrame(
     tracker.second->AddSortedFrame(args, frame_info);
   for (auto& tracker : custom_frame_trackers_)
     tracker.second->AddSortedFrame(args, frame_info);
+
+  // Sorted frames could arrive after tracker are scheduled for termination.
+  // Removal trackers continue to report metrics for frames which they started
+  // observing.
+  for (auto& tracker : removal_trackers_) {
+    tracker->AddSortedFrame(args, frame_info);
+  }
+
+  DestroyTrackers();
 }
 
 }  // namespace cc

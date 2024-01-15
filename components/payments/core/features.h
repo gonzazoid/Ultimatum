@@ -15,19 +15,6 @@ namespace features {
 // release.
 BASE_DECLARE_FEATURE(kWebPaymentsExperimentalFeatures);
 
-#if BUILDFLAG(IS_IOS)
-// Used to control the support for iOS third party apps as payment methods.
-BASE_DECLARE_FEATURE(kWebPaymentsNativeApps);
-#endif
-
-// Used to control payment method section order on payment request UI. Payment
-// method section should be put on top of the address section when this feature
-// is enabled instead of under it.
-BASE_DECLARE_FEATURE(kWebPaymentsMethodSectionOrderV2);
-
-// Used to control the support for Payment Details modifiers.
-BASE_DECLARE_FEATURE(kWebPaymentsModifiers);
-
 // Used to control whether the Payment Sheet can be skipped for Payment Requests
 // with a single URL based payment app and no other info requested.
 BASE_DECLARE_FEATURE(kWebPaymentsSingleAppUiSkip);
@@ -43,14 +30,6 @@ BASE_DECLARE_FEATURE(kAppStoreBillingDebug);
 // Used to control whether allow crawling just-in-time installable payment app.
 BASE_DECLARE_FEATURE(kWebPaymentsJustInTimePaymentApp);
 
-// Used to control whether the shipping address returned for the
-// ShippingAddressChangeEvent is redacted of fine-grained details.
-BASE_DECLARE_FEATURE(kWebPaymentsRedactShippingAddress);
-
-// Desktop only, if enabled payment handler window size matches the pop up
-// window size.
-BASE_DECLARE_FEATURE(kPaymentHandlerPopUpSizeWindow);
-
 // Used to test icon refetch for JIT installed apps with missing icons.
 BASE_DECLARE_FEATURE(kAllowJITInstallationWhenAppIconIsMissing);
 
@@ -64,6 +43,25 @@ BASE_DECLARE_FEATURE(kGPayAppDynamicUpdate);
 // Used to control whether SecurePaymentConfirmation is able to rely on OS-level
 // credential store APIs, or if it can only rely on the user-profile database.
 BASE_DECLARE_FEATURE(kSecurePaymentConfirmationUseCredentialStoreAPIs);
+
+#if !BUILDFLAG(IS_ANDROID)
+// Desktop only, if enabled PaymentHandler will use the new minimal header UX.
+// See https://crbug.com/1385136.
+BASE_DECLARE_FEATURE(kPaymentHandlerMinimalHeaderUX);
+
+// Desktop only, if enabled the Task Manager will show the PaymentHandler
+// window.
+BASE_DECLARE_FEATURE(kPaymentHandlerWindowInTaskManager);
+#endif
+
+// If enabled, the web-app manifest for already-installed service-worker apps
+// will always be refetched for every Payment Request, in order to potentially
+// refresh the icon for the app.
+BASE_DECLARE_FEATURE(kPaymentHandlerAlwaysRefreshIcon);
+
+// If enabled, the payment method manifest fetch for Payment Handler must go via
+// a Link header with rel="payment-method-manifest".
+BASE_DECLARE_FEATURE(kPaymentHandlerRequireLinkHeader);
 
 }  // namespace features
 }  // namespace payments

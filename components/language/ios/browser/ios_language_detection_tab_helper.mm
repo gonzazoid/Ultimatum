@@ -4,13 +4,14 @@
 
 #include "components/language/ios/browser/ios_language_detection_tab_helper.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/timer/elapsed_timer.h"
 #include "components/language/core/browser/url_language_histogram.h"
+#include "components/language/ios/browser/language_detection_java_script_feature.h"
 #include "components/language/ios/browser/string_clipping_util.h"
 #include "components/prefs/pref_member.h"
 #include "components/translate/core/browser/translate_pref_names.h"
@@ -21,7 +22,6 @@
 #include "components/translate/core/language_detection/language_detection_util.h"
 #import "ios/web/common/url_scheme_util.h"
 #include "ios/web/public/js_messaging/web_frame.h"
-#include "ios/web/public/js_messaging/web_frame_util.h"
 #import "ios/web/public/navigation/navigation_context.h"
 #include "net/http/http_response_headers.h"
 
@@ -31,14 +31,9 @@ namespace language {
 const size_t kMaxIndexChars = 65535;
 
 namespace {
-// Name for the UMA metric used to track text extraction time.
-const char kTranslateCaptureText[] = "Translate.CaptureText";
 // Name for the UMA metric used to track language detection evaluation duration.
 const char kTranslateLanguageDetectionTFLiteModelEvaluationDuration[] =
     "Translate.LanguageDetection.TFLiteModelEvaluationDuration";
-// Prefix for the language detection javascript commands. Must be kept in sync
-// with language_detection.js.
-const char kCommandPrefix[] = "languageDetection";
 
 // The old CLD model version.
 const char kCLDModelVersion[] = "CLD3";
@@ -113,10 +108,10 @@ IOSLanguageDetectionTabHelper::IOSLanguageDetectionTabHelper(
   // WebStateObserver::PageLoaded.
   StartLanguageDetection();
   web_state_->AddObserver(this);
-  subscription_ = web_state_->AddScriptCommandCallback(
-      base::BindRepeating(&IOSLanguageDetectionTabHelper::OnTextCaptured,
-                          base::Unretained(this)),
-      kCommandPrefix);
+  web::WebFramesManager* web_frames_manager =
+      LanguageDetectionJavaScriptFeature::GetInstance()->GetWebFramesManager(
+          web_state);
+  web_frames_manager->AddObserver(this);
 }
 
 IOSLanguageDetectionTabHelper::~IOSLanguageDetectionTabHelper() {
@@ -149,6 +144,17 @@ void IOSLanguageDetectionTabHelper::OnLanguageDetermined(
   }
 }
 
+// web::WebFramesManager::Observer
+
+void IOSLanguageDetectionTabHelper::WebFrameBecameAvailable(
+    web::WebFramesManager* web_frames_manager,
+    web::WebFrame* web_frame) {
+  if (web_frame->IsMainFrame() && waiting_for_main_frame_) {
+    waiting_for_main_frame_ = false;
+    StartLanguageDetection();
+  }
+}
+
 // web::WebStateObserver implementation:
 
 void IOSLanguageDetectionTabHelper::PageLoaded(
@@ -157,6 +163,12 @@ void IOSLanguageDetectionTabHelper::PageLoaded(
   DCHECK_EQ(web_state_, web_state);
   if (load_completion_status == web::PageLoadCompletionStatus::SUCCESS)
     StartLanguageDetection();
+}
+
+void IOSLanguageDetectionTabHelper::DidStartNavigation(
+    web::WebState* web_state,
+    web::NavigationContext* navigation_context) {
+  waiting_for_main_frame_ = false;
 }
 
 void IOSLanguageDetectionTabHelper::DidFinishNavigation(
@@ -178,59 +190,27 @@ void IOSLanguageDetectionTabHelper::WebStateDestroyed(
 }
 
 void IOSLanguageDetectionTabHelper::StartLanguageDetection() {
-  if (!translate_enabled_.GetValue())
-    return;  // Translate disabled in preferences.
+  // Translate setting should not cancel language detection, except if it is
+  // disabled by policy.
+  if (!translate_enabled_.GetValue() && translate_enabled_.IsManaged()) {
+    return;
+  }
   DCHECK(web_state_);
   const GURL& url = web_state_->GetVisibleURL();
   if (!web::UrlHasWebScheme(url) || !web_state_->ContentIsHTML())
     return;
 
-  web::WebFrame* web_frame = web::GetMainFrame(web_state_);
+  web::WebFramesManager* web_frames_manager =
+      LanguageDetectionJavaScriptFeature::GetInstance()->GetWebFramesManager(
+          web_state_);
+  web::WebFrame* web_frame = web_frames_manager->GetMainWebFrame();
   if (!web_frame) {
+    waiting_for_main_frame_ = true;
     return;
   }
 
-  web_frame->CallJavaScriptFunction("languageDetection.detectLanguage", {});
-}
-
-void IOSLanguageDetectionTabHelper::OnTextCaptured(
-    const base::Value& command,
-    const GURL& url,
-    bool user_is_interacting,
-    web::WebFrame* sender_frame) {
-  if (!sender_frame->IsMainFrame()) {
-    // Translate is only supported on main frame.
-    return;
-  }
-  const std::string* text_captured_command = command.FindStringKey("command");
-  if (!text_captured_command ||
-      *text_captured_command != "languageDetection.textCaptured") {
-    return;
-  }
-  absl::optional<bool> has_notranslate = command.FindBoolKey("hasNoTranslate");
-  absl::optional<double> capture_text_time =
-      command.FindDoubleKey("captureTextTime");
-  const std::string* html_lang = command.FindStringKey("htmlLang");
-  const std::string* http_content_language =
-      command.FindStringKey("httpContentLanguage");
-  if (!has_notranslate.has_value() || !capture_text_time.has_value() ||
-      !html_lang || !http_content_language) {
-    return;
-  }
-
-  UMA_HISTOGRAM_TIMES(kTranslateCaptureText,
-                      base::Milliseconds(*capture_text_time));
-
-  // If there is no language defined in httpEquiv, use the HTTP header.
-  if (http_content_language->empty())
-    http_content_language = &content_language_header_;
-
-  sender_frame->CallJavaScriptFunction(
-      "languageDetection.retrieveBufferedTextContent", {},
-      base::BindRepeating(&IOSLanguageDetectionTabHelper::OnTextRetrieved,
-                          weak_method_factory_.GetWeakPtr(), *has_notranslate,
-                          *http_content_language, *html_lang, url),
-      base::Milliseconds(web::kJavaScriptFunctionCallDefaultTimeout));
+  LanguageDetectionJavaScriptFeature::GetInstance()->StartLanguageDetection(
+      web_frame);
 }
 
 // Select the correct DeterminePageLanguage to call based on the feature flags.
@@ -288,10 +268,15 @@ std::string IOSLanguageDetectionTabHelper::DeterminePageLanguage(
 
 void IOSLanguageDetectionTabHelper::OnTextRetrieved(
     const bool has_notranslate,
-    const std::string& http_content_language,
+    const std::string& js_http_content_language,
     const std::string& html_lang,
     const GURL& url,
     const base::Value* text_content) {
+  // If there is no language defined in httpEquiv, use the HTTP header.
+  const std::string http_content_language = js_http_content_language.empty()
+                                                ? content_language_header_
+                                                : js_http_content_language;
+
   std::string model_detected_language;
   bool is_model_reliable;
   float model_reliability_score = 0.0;
@@ -325,6 +310,11 @@ void IOSLanguageDetectionTabHelper::OnTextRetrieved(
   details.detection_model_version = detection_model_version;
 
   OnLanguageDetermined(details);
+}
+
+base::WeakPtr<IOSLanguageDetectionTabHelper>
+IOSLanguageDetectionTabHelper::GetWeakPtr() {
+  return weak_method_factory_.GetWeakPtr();
 }
 
 void IOSLanguageDetectionTabHelper::ExtractContentLanguageHeader(

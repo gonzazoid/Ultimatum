@@ -18,7 +18,6 @@ import org.chromium.base.Callback;
 import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.base.test.util.CriteriaHelper;
-import org.chromium.base.test.util.DisableIf;
 import org.chromium.base.test.util.Feature;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.content_shell_apk.ContentShellActivity;
@@ -29,9 +28,7 @@ import java.io.FileInputStream;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Test suite for TracingControllerAndroidImpl.
- */
+/** Test suite for TracingControllerAndroidImpl. */
 @RunWith(BaseJUnit4ClassRunner.class)
 public class TracingControllerAndroidImplTest {
     @Rule
@@ -42,7 +39,6 @@ public class TracingControllerAndroidImplTest {
     @Test
     @MediumTest
     @Feature({"GPU"})
-    @DisableIf.Build(sdk_is_less_than = 21, message = "crbug.com/899894")
     public void testTraceFileCreation() {
         ContentShellActivity activity = mActivityTestRule.launchContentShellWithUrl("about:blank");
         mActivityTestRule.waitForActiveShellToBeDoneLoading();
@@ -52,9 +48,11 @@ public class TracingControllerAndroidImplTest {
         Assert.assertFalse(tracingController.isTracing());
         Assert.assertNull(tracingController.getOutputPath());
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            Assert.assertTrue(tracingController.startTracing(true, "*", "record-until-full"));
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    Assert.assertTrue(
+                            tracingController.startTracing(true, "*", "record-until-full"));
+                });
 
         Assert.assertTrue(tracingController.isTracing());
         File file = new File(tracingController.getOutputPath());
@@ -64,8 +62,11 @@ public class TracingControllerAndroidImplTest {
 
         // The tracer stops asynchronously, because it needs to wait for native code to flush and
         // close the output file. Give it a little time.
-        CriteriaHelper.pollInstrumentationThread(() -> !tracingController.isTracing(),
-                "Timed out waiting for tracing to stop.", TIMEOUT_MILLIS, 100);
+        CriteriaHelper.pollInstrumentationThread(
+                () -> !tracingController.isTracing(),
+                "Timed out waiting for tracing to stop.",
+                TIMEOUT_MILLIS,
+                100);
 
         // It says it stopped, so it should have written the output file.
         Assert.assertTrue(file.exists());
@@ -96,7 +97,9 @@ public class TracingControllerAndroidImplTest {
 
         TestCallback<String[]> callback = new TestCallback<>();
         TestThreadUtils.runOnUiThreadBlocking(
-                () -> { Assert.assertTrue(tracingController.getKnownCategories(callback)); });
+                () -> {
+                    Assert.assertTrue(tracingController.getKnownCategories(callback));
+                });
 
         callback.waitForFirst(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
         Assert.assertThat(Arrays.asList(callback.mResult), CoreMatchers.hasItem("toplevel"));
@@ -117,7 +120,9 @@ public class TracingControllerAndroidImplTest {
         // This should obtain an empty buffer usage, since we aren't tracing.
         TestCallback<Pair<Float, Long>> callback = new TestCallback<>();
         TestThreadUtils.runOnUiThreadBlocking(
-                () -> { Assert.assertTrue(tracingController.getTraceBufferUsage(callback)); });
+                () -> {
+                    Assert.assertTrue(tracingController.getTraceBufferUsage(callback));
+                });
 
         callback.waitForFirst(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
         Assert.assertEquals(0f, (double) callback.mResult.first, 0.5f);
@@ -128,7 +133,6 @@ public class TracingControllerAndroidImplTest {
     @Test
     @MediumTest
     @Feature({"GPU"})
-    @DisableIf.Build(sdk_is_less_than = 21, message = "crbug.com/899894")
     public void testStopCallbackAndCompression() throws Exception {
         ContentShellActivity activity = mActivityTestRule.launchContentShellWithUrl("about:blank");
         mActivityTestRule.waitForActiveShellToBeDoneLoading();
@@ -138,10 +142,17 @@ public class TracingControllerAndroidImplTest {
         Assert.assertFalse(tracingController.isTracing());
         Assert.assertNull(tracingController.getOutputPath());
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            Assert.assertTrue(tracingController.startTracing(null, true, "*", "record-until-full",
-                    /*compressFile=*/true, /*useProtobuf=*/false));
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    Assert.assertTrue(
+                            tracingController.startTracing(
+                                    null,
+                                    true,
+                                    "*",
+                                    "record-until-full",
+                                    /* compressFile= */ true,
+                                    /* useProtobuf= */ false));
+                });
 
         Assert.assertTrue(tracingController.isTracing());
         File file = new File(tracingController.getOutputPath());
@@ -166,7 +177,6 @@ public class TracingControllerAndroidImplTest {
     @Test
     @MediumTest
     @Feature({"GPU"})
-    @DisableIf.Build(sdk_is_less_than = 21, message = "crbug.com/899894")
     public void testProtobufTracing() throws Exception {
         ContentShellActivity activity = mActivityTestRule.launchContentShellWithUrl("about:blank");
         mActivityTestRule.waitForActiveShellToBeDoneLoading();
@@ -176,10 +186,17 @@ public class TracingControllerAndroidImplTest {
         Assert.assertFalse(tracingController.isTracing());
         Assert.assertNull(tracingController.getOutputPath());
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            Assert.assertTrue(tracingController.startTracing(null, true, "*", "record-until-full",
-                    /*compressFile=*/false, /*useProtobuf=*/true));
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    Assert.assertTrue(
+                            tracingController.startTracing(
+                                    null,
+                                    true,
+                                    "*",
+                                    "record-until-full",
+                                    /* compressFile= */ false,
+                                    /* useProtobuf= */ true));
+                });
 
         Assert.assertTrue(tracingController.isTracing());
         File file = new File(tracingController.getOutputPath());

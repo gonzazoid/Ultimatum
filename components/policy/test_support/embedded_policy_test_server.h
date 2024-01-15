@@ -10,7 +10,6 @@
 #include <set>
 #include <string>
 
-#include "base/memory/raw_ptr.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/embedded_test_server/http_response.h"
@@ -27,6 +26,7 @@ namespace policy {
 
 class ClientStorage;
 class PolicyStorage;
+class RemoteCommandsState;
 
 extern const char kFakeDeviceToken[];
 extern const char kInvalidEnrollmentToken[];
@@ -58,6 +58,10 @@ class EmbeddedPolicyTestServer {
     }
     PolicyStorage* policy_storage() { return parent_->policy_storage(); }
 
+    RemoteCommandsState* remote_commands_state() {
+      return parent_->remote_commands_state();
+    }
+
    private:
     const raw_ptr<EmbeddedPolicyTestServer> parent_;
   };
@@ -70,9 +74,11 @@ class EmbeddedPolicyTestServer {
   // Initializes and waits until the server is ready to accept requests.
   virtual bool Start();
 
-  ClientStorage* client_storage() const { return client_storage_.get(); }
+  ClientStorage* client_storage();
 
-  PolicyStorage* policy_storage() const { return policy_storage_.get(); }
+  PolicyStorage* policy_storage();
+
+  RemoteCommandsState* remote_commands_state();
 
   // Returns the service URL.
   GURL GetServiceURL() const;
@@ -86,9 +92,8 @@ class EmbeddedPolicyTestServer {
   void ConfigureRequestError(const std::string& request_type,
                              net::HttpStatusCode error_code);
 
-  // Resets the policy/client storage to its original state.
-  void ResetPolicyStorage();
-  void ResetClientStorage();
+  // Resets the server state.
+  void ResetServerState();
 
 #if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
   // Updates policy selected by |type| and optional |entity_id|. The
@@ -112,8 +117,14 @@ class EmbeddedPolicyTestServer {
 
   net::test_server::EmbeddedTestServer http_server_;
   std::map<std::string, std::unique_ptr<RequestHandler>> request_handlers_;
-  std::unique_ptr<ClientStorage> client_storage_;
-  std::unique_ptr<PolicyStorage> policy_storage_;
+
+  // ServerState contains all the fields that represent the server state.
+  struct ServerState;
+  std::unique_ptr<ServerState> server_state_;
+
+  // TODO(b/275564884): Combine the remote commands state with the server state.
+  // Separate because fake_dm_server clears server_state_ on each handler call.
+  std::unique_ptr<RemoteCommandsState> remote_commands_state_;
 };
 
 }  // namespace policy

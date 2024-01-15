@@ -6,6 +6,7 @@
 
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "ui/aura/env.h"
 #include "ui/aura/window_occlusion_tracker.h"
@@ -40,13 +41,15 @@ class BeginMainFrameWaiter : public ui::CompositorObserver {
   void OnDidBeginMainFrame(ui::Compositor* compositor) override {
     DCHECK_EQ(compositor_, compositor);
     done_ = true;
-    if (run_loop_)
+    if (run_loop_) {
       run_loop_->Quit();
+    }
   }
 
   void Wait() {
-    if (done_)
+    if (done_) {
       return;
+    }
 
     run_loop_ = std::make_unique<base::RunLoop>(
         base::RunLoop::Type::kNestableTasksAllowed);
@@ -55,7 +58,7 @@ class BeginMainFrameWaiter : public ui::CompositorObserver {
   }
 
  private:
-  ui::Compositor* compositor_;
+  raw_ptr<ui::Compositor> compositor_;
   bool done_ = false;
   std::unique_ptr<base::RunLoop> run_loop_;
 };
@@ -168,6 +171,36 @@ TEST_F(OcclusionTrackerPauserTest, MultiDisplay) {
   // Wait for BeginFrame since compositor animation notifications happen
   // on BeginFrame.
   BeginMainFrameWaiter(compositor1).Wait();
+  EXPECT_FALSE(tracker->IsPaused());
+}
+
+TEST_F(OcclusionTrackerPauserTest, MultiDisplaySingleAnimatingCompositor) {
+  aura::WindowOcclusionTracker* tracker =
+      aura::Env::GetInstance()->GetWindowOcclusionTracker();
+  UpdateDisplay("800x1000, 800x1000");
+
+  auto* compositor1 = Shell::GetAllRootWindows()[0]->GetHost()->compositor();
+  TestObserver observer1;
+
+  Shell::Get()->occlusion_tracker_pauser()->PauseUntilAnimationsEnd(
+      base::TimeDelta());
+  EXPECT_TRUE(tracker->IsPaused());
+  compositor1->AddAnimationObserver(&observer1);
+  EXPECT_TRUE(tracker->IsPaused());
+
+  // Wait for BeginFrame since compositor animation notifications happen
+  // on BeginFrame.
+  BeginMainFrameWaiter(compositor1).Wait();
+  EXPECT_TRUE(tracker->IsPaused());
+
+  compositor1->RemoveAnimationObserver(&observer1);
+  EXPECT_TRUE(tracker->IsPaused());
+
+  // Wait for BeginFrame since compositor animation notifications happen
+  // on BeginFrame.
+  BeginMainFrameWaiter(compositor1).Wait();
+
+  // There are no more animations, so expect the tracker to be unpaused.
   EXPECT_FALSE(tracker->IsPaused());
 }
 

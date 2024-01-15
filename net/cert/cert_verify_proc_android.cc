@@ -21,12 +21,15 @@
 #include "net/cert/asn1_util.h"
 #include "net/cert/cert_net_fetcher.h"
 #include "net/cert/cert_status_flags.h"
+#include "net/cert/cert_verify_proc.h"
 #include "net/cert/cert_verify_result.h"
+#include "net/cert/crl_set.h"
 #include "net/cert/known_roots.h"
-#include "net/cert/pki/cert_errors.h"
-#include "net/cert/pki/parsed_certificate.h"
+#include "net/cert/test_root_certs.h"
 #include "net/cert/x509_certificate.h"
 #include "net/cert/x509_util.h"
+#include "third_party/boringssl/src/pki/cert_errors.h"
+#include "third_party/boringssl/src/pki/parsed_certificate.h"
 #include "url/gurl.h"
 
 namespace net {
@@ -55,15 +58,15 @@ const unsigned int kMaxAIAFetches = 5;
 // TODO(estark): when searching for an issuer, this always uses the first
 // encountered issuer in |certs|, and does not handle the situation where
 // |certs| contains more than one issuer for a given certificate.
-scoped_refptr<ParsedCertificate> FindLastCertWithUnknownIssuer(
-    const ParsedCertificateList& certs,
-    const scoped_refptr<ParsedCertificate>& start) {
+std::shared_ptr<const bssl::ParsedCertificate> FindLastCertWithUnknownIssuer(
+    const bssl::ParsedCertificateList& certs,
+    const std::shared_ptr<const bssl::ParsedCertificate>& start) {
   DCHECK_GE(certs.size(), 1u);
-  std::set<scoped_refptr<ParsedCertificate>> used_in_path;
-  scoped_refptr<ParsedCertificate> last = start;
+  std::set<std::shared_ptr<const bssl::ParsedCertificate>> used_in_path;
+  std::shared_ptr<const bssl::ParsedCertificate> last = start;
   while (true) {
     used_in_path.insert(last);
-    scoped_refptr<ParsedCertificate> last_issuer;
+    std::shared_ptr<const bssl::ParsedCertificate> last_issuer;
     // Find an issuer for |last| (which might be |last| itself if self-signed).
     for (const auto& cert : certs) {
       if (cert->normalized_subject() == last->normalized_issuer()) {
@@ -96,10 +99,11 @@ scoped_refptr<ParsedCertificate> FindLastCertWithUnknownIssuer(
 // certificate is parsed and added to |cert_list|. Returns true if the fetch was
 // successful and the result could be parsed as a certificate, and false
 // otherwise.
-bool PerformAIAFetchAndAddResultToVector(scoped_refptr<CertNetFetcher> fetcher,
-                                         std::string_view uri,
-                                         ParsedCertificateList* cert_list) {
-  GURL url(base::StringPiece(uri.data(), uri.size()));
+bool PerformAIAFetchAndAddResultToVector(
+    scoped_refptr<CertNetFetcher> fetcher,
+    std::string_view uri,
+    bssl::ParsedCertificateList* cert_list) {
+  GURL url(uri);
   if (!url.is_valid())
     return false;
   std::unique_ptr<CertNetFetcher::Request> request(fetcher->FetchCaIssuers(
@@ -109,8 +113,8 @@ bool PerformAIAFetchAndAddResultToVector(scoped_refptr<CertNetFetcher> fetcher,
   request->WaitForResult(&error, &aia_fetch_bytes);
   if (error != OK)
     return false;
-  CertErrors errors;
-  return ParsedCertificate::CreateAndAddToVector(
+  bssl::CertErrors errors;
+  return bssl::ParsedCertificate::CreateAndAddToVector(
       x509_util::CreateCryptoBuffer(aia_fetch_bytes),
       x509_util::DefaultParseCertificateOptions(), cert_list, &errors);
 }
@@ -120,7 +124,7 @@ bool PerformAIAFetchAndAddResultToVector(scoped_refptr<CertNetFetcher> fetcher,
 // successful, this function populates |verify_result| and |verified_chain|;
 // otherwise it leaves them untouched.
 android::CertVerifyStatusAndroid AttemptVerificationAfterAIAFetch(
-    const ParsedCertificateList& certs,
+    const bssl::ParsedCertificateList& certs,
     const std::string& hostname,
     CertVerifyResult* verify_result,
     std::vector<std::string>* verified_chain) {
@@ -169,10 +173,10 @@ android::CertVerifyStatusAndroid TryVerifyWithAIAFetching(
 
   // Convert the certificates into ParsedCertificates for ease of pulling out
   // AIA URLs.
-  CertErrors errors;
-  ParsedCertificateList certs;
+  bssl::CertErrors errors;
+  bssl::ParsedCertificateList certs;
   for (const auto& cert : cert_bytes) {
-    if (!ParsedCertificate::CreateAndAddToVector(
+    if (!bssl::ParsedCertificate::CreateAndAddToVector(
             x509_util::CreateCryptoBuffer(cert),
             x509_util::DefaultParseCertificateOptions(), &certs, &errors)) {
       return android::CERT_VERIFY_STATUS_ANDROID_NO_TRUSTED_ROOT;
@@ -181,8 +185,8 @@ android::CertVerifyStatusAndroid TryVerifyWithAIAFetching(
 
   // Build a chain as far as possible from the target certificate at index 0,
   // using the initially provided certificates.
-  scoped_refptr<ParsedCertificate> last_cert_with_unknown_issuer =
-      FindLastCertWithUnknownIssuer(certs, certs[0].get());
+  std::shared_ptr<const bssl::ParsedCertificate> last_cert_with_unknown_issuer =
+      FindLastCertWithUnknownIssuer(certs, certs[0]);
   if (!last_cert_with_unknown_issuer) {
     // |certs| either contains a loop, or contains a full chain to a self-signed
     // certificate. Do not attempt AIA fetches for such a chain.
@@ -218,8 +222,9 @@ android::CertVerifyStatusAndroid TryVerifyWithAIAFetching(
 
     // If verification still failed but the path expanded, continue to attempt
     // AIA fetches.
-    scoped_refptr<ParsedCertificate> new_last_cert_with_unknown_issuer =
-        FindLastCertWithUnknownIssuer(certs, last_cert_with_unknown_issuer);
+    std::shared_ptr<const bssl::ParsedCertificate>
+        new_last_cert_with_unknown_issuer =
+            FindLastCertWithUnknownIssuer(certs, last_cert_with_unknown_issuer);
     if (!new_last_cert_with_unknown_issuer ||
         new_last_cert_with_unknown_issuer == last_cert_with_unknown_issuer) {
       // The last round of AIA fetches (if there were any) didn't expand the
@@ -242,6 +247,7 @@ android::CertVerifyStatusAndroid TryVerifyWithAIAFetching(
 bool VerifyFromAndroidTrustManager(
     const std::vector<std::string>& cert_bytes,
     const std::string& hostname,
+    int flags,
     scoped_refptr<CertNetFetcher> cert_net_fetcher,
     CertVerifyResult* verify_result) {
   android::CertVerifyStatusAndroid status;
@@ -253,7 +259,8 @@ bool VerifyFromAndroidTrustManager(
 
   // If verification resulted in a NO_TRUSTED_ROOT error, then fetch
   // intermediates and retry.
-  if (status == android::CERT_VERIFY_STATUS_ANDROID_NO_TRUSTED_ROOT) {
+  if (status == android::CERT_VERIFY_STATUS_ANDROID_NO_TRUSTED_ROOT &&
+      !(flags & CertVerifyProc::VERIFY_DISABLE_NETWORK_FETCHES)) {
     status = TryVerifyWithAIAFetching(cert_bytes, hostname,
                                       std::move(cert_net_fetcher),
                                       verify_result, &verified_chain);
@@ -338,14 +345,12 @@ void GetChainDEREncodedBytes(X509Certificate* cert,
 }  // namespace
 
 CertVerifyProcAndroid::CertVerifyProcAndroid(
-    scoped_refptr<CertNetFetcher> cert_net_fetcher)
-    : cert_net_fetcher_(std::move(cert_net_fetcher)) {}
+    scoped_refptr<CertNetFetcher> cert_net_fetcher,
+    scoped_refptr<CRLSet> crl_set)
+    : CertVerifyProc(std::move(crl_set)),
+      cert_net_fetcher_(std::move(cert_net_fetcher)) {}
 
 CertVerifyProcAndroid::~CertVerifyProcAndroid() = default;
-
-bool CertVerifyProcAndroid::SupportsAdditionalTrustAnchors() const {
-  return false;
-}
 
 int CertVerifyProcAndroid::VerifyInternal(
     X509Certificate* cert,
@@ -353,20 +358,24 @@ int CertVerifyProcAndroid::VerifyInternal(
     const std::string& ocsp_response,
     const std::string& sct_list,
     int flags,
-    CRLSet* crl_set,
-    const CertificateList& additional_trust_anchors,
     CertVerifyResult* verify_result,
     const NetLogWithSource& net_log) {
   std::vector<std::string> cert_bytes;
   GetChainDEREncodedBytes(cert, &cert_bytes);
-  if (!VerifyFromAndroidTrustManager(cert_bytes, hostname, cert_net_fetcher_,
-                                     verify_result)) {
-    NOTREACHED();
+  if (!VerifyFromAndroidTrustManager(cert_bytes, hostname, flags,
+                                     cert_net_fetcher_, verify_result)) {
     return ERR_FAILED;
   }
 
   if (IsCertStatusError(verify_result->cert_status))
     return MapCertStatusToNetError(verify_result->cert_status);
+
+  if (TestRootCerts::HasInstance() &&
+      !verify_result->verified_cert->intermediate_buffers().empty() &&
+      TestRootCerts::GetInstance()->IsKnownRoot(x509_util::CryptoBufferAsSpan(
+          verify_result->verified_cert->intermediate_buffers().back().get()))) {
+    verify_result->is_issued_by_known_root = true;
+  }
 
   LogNameNormalizationMetrics(".Android", verify_result->verified_cert.get(),
                               verify_result->is_issued_by_known_root);

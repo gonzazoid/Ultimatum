@@ -10,14 +10,14 @@
 #include <string>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "build/build_config.h"
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/scoped_nsautorelease_pool.h"
+#include "base/apple/scoped_nsautorelease_pool.h"
 #endif
 #include "base/path_service.h"
 #include "base/process/launch.h"
@@ -39,7 +39,7 @@ int RunHelper(base::TestSuite* test_suite) {
 bool RunGLES2ConformTest(const char* path) {
   // Load test expectations, and return early if a test is marked as FAIL.
   base::FilePath src_path;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &src_path);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &src_path);
   base::FilePath test_expectations_path =
       src_path.Append(FILE_PATH_LITERAL("gpu")).
       Append(FILE_PATH_LITERAL("gles2_conform_support")).
@@ -129,7 +129,7 @@ bool RunGLES2ConformTest(const char* path) {
 int main(int argc, char** argv) {
   base::CommandLine::Init(argc, argv);
 #if BUILDFLAG(IS_MAC)
-  base::mac::ScopedNSAutoreleasePool pool;
+  base::apple::ScopedNSAutoreleasePool pool;
 #endif
   ::testing::InitGoogleTest(&argc, argv);
   base::TestSuite test_suite(argc, argv);

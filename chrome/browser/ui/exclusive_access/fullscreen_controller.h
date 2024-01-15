@@ -5,12 +5,14 @@
 #ifndef CHROME_BROWSER_UI_EXCLUSIVE_ACCESS_FULLSCREEN_CONTROLLER_H_
 #define CHROME_BROWSER_UI_EXCLUSIVE_ACCESS_FULLSCREEN_CONTROLLER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_controller_base.h"
 #include "chrome/browser/ui/exclusive_access/fullscreen_observer.h"
 #include "components/content_settings/core/common/content_settings.h"
+#include "content/public/browser/fullscreen_types.h"
 #include "ui/display/types/display_constants.h"
 
 class GURL;
@@ -94,14 +96,9 @@ class FullscreenController : public ExclusiveAccessControllerBase {
   // Returns true if the site has entered fullscreen.
   bool IsTabFullscreen() const;
 
-  // Returns true if the tab is/will be in fullscreen mode. Note: This does NOT
-  // indicate whether the browser window is/will be fullscreened as well. See
-  // 'FullscreenWithinTab Note'.
-  // Writes the display ID that tab is tab-fullscreen on or transitioning to to
-  // `display_id`. Only writes when the function returns true and display_id is
-  // non-null.
-  bool IsFullscreenForTabOrPending(const content::WebContents* web_contents,
-                                   int64_t* display_id = nullptr) const;
+  // Returns fullscreen state information about the given `web_contents`.
+  content::FullscreenState GetFullscreenState(
+      const content::WebContents* web_contents) const;
 
   // Returns true if |web_contents| is in fullscreen mode as a screen-captured
   // tab. See 'FullscreenWithinTab Note'.
@@ -159,7 +156,7 @@ class FullscreenController : public ExclusiveAccessControllerBase {
 
   // Called by BrowserView::FullscreenStateChanged. This is called after
   // fullscreen mode is toggled and after the transition animation completes.
-  void FullscreenTransititionCompleted();
+  void FullscreenTransitionCompleted();
 
   // Runs the given closure unless a fullscreen transition is currently in
   // progress. If a transition is in progress, the execution of the closure is
@@ -185,8 +182,6 @@ class FullscreenController : public ExclusiveAccessControllerBase {
   // Notifies the tab that it has been forced out of fullscreen mode if
   // necessary.
   void NotifyTabExclusiveAccessLost() override;
-
-  void RecordBubbleReshowsHistogram(int bubble_reshow_count) override;
 
   void ToggleFullscreenModeInternal(FullscreenInternalOption option,
                                     content::RenderFrameHost* requesting_frame,
@@ -241,7 +236,9 @@ class FullscreenController : public ExclusiveAccessControllerBase {
 
   // Set in OnTabDeactivated(). Used to see if we're in the middle of
   // deactivation of a tab.
-  content::WebContents* deactivated_contents_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION content::WebContents* deactivated_contents_ = nullptr;
 
   // Used in testing to set the state to tab fullscreen.
   bool is_tab_fullscreen_for_testing_ = false;

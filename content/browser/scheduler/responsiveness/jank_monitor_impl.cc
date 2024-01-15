@@ -4,8 +4,8 @@
 
 #include "content/browser/scheduler/responsiveness/jank_monitor_impl.h"
 
-#include "base/callback_helpers.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback_helpers.h"
 #include "base/observer_list.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
@@ -259,7 +259,8 @@ void JankMonitorImpl::OnJankStarted(const void* opaque_identifier) {
     observer.OnJankStarted();
 }
 
-void JankMonitorImpl::OnJankStopped(const void* opaque_identifier) {
+void JankMonitorImpl::OnJankStopped(
+    MayBeDangling<const void> opaque_identifier) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(monitor_sequence_checker_);
   DCHECK_NE(opaque_identifier, nullptr);
   if (janky_task_id_ != opaque_identifier)
@@ -279,8 +280,13 @@ void JankMonitorImpl::NotifyJankStopIfNecessary(const void* opaque_identifier) {
   }
 
   monitor_task_runner_->PostTask(
-      FROM_HERE, base::BindOnce(&JankMonitorImpl::OnJankStopped,
-                                base::RetainedRef(this), opaque_identifier));
+      FROM_HERE,
+      base::BindOnce(&JankMonitorImpl::OnJankStopped, base::RetainedRef(this),
+                     // It is relatively safe to have `UnsafeDangling` here
+                     // because the ptr is only used as an identifier, and since
+                     // the events should be coming in order, it is unlikely
+                     // that we encounter issue with memory being reused.
+                     base::UnsafeDangling(opaque_identifier)));
 }
 
 JankMonitorImpl::ThreadExecutionState::TaskMetadata::~TaskMetadata() = default;
@@ -294,7 +300,7 @@ JankMonitorImpl::ThreadExecutionState::ThreadExecutionState() {
 
 JankMonitorImpl::ThreadExecutionState::~ThreadExecutionState() = default;
 
-absl::optional<const void*>
+std::optional<const void*>
 JankMonitorImpl::ThreadExecutionState::CheckJankiness() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(monitor_sequence_checker_);
 
@@ -306,7 +312,7 @@ JankMonitorImpl::ThreadExecutionState::CheckJankiness() {
              (now - task_execution_metadata_.back().execution_start_time) <
                  jank_threshold)) {
     // Most tasks are unlikely to be janky.
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // Mark that the target thread is janky and notify the monitor thread.
@@ -334,7 +340,8 @@ void JankMonitorImpl::ThreadExecutionState::DidRunTaskOrEvent(
     // in context menus, among others). Simply ignore the mismatches for now.
     // See https://crbug.com/929813 for the details of why the mismatch
     // happens.
-#if (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)) && defined(USE_OZONE)
+#if (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)) && \
+    BUILDFLAG(IS_OZONE)
     task_execution_metadata_.clear();
 #endif
     return;

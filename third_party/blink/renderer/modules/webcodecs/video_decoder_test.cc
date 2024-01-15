@@ -5,19 +5,22 @@
 #include "third_party/blink/renderer/modules/webcodecs/video_decoder.h"
 
 #include "base/run_loop.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "build/build_config.h"
 #include "media/base/mock_filters.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
+#include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_function.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_tester.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_video_decoder_config.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_video_decoder_init.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_video_decoder_support.h"
 #include "third_party/blink/renderer/core/testing/mock_function_scope.h"
 #include "third_party/blink/renderer/modules/webcodecs/codec_pressure_manager.h"
 #include "third_party/blink/renderer/modules/webcodecs/codec_pressure_manager_provider.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 
 // For FakeVideoDecoder.
@@ -64,18 +67,18 @@ class FakeVideoDecoder : public VideoDecoder {
 
     EXPECT_CALL(*mock_decoder_, Decode_(_, _))
         .WillOnce([](Unused, media::VideoDecoder::DecodeCB& decode_cb) {
-          base::SequencedTaskRunnerHandle::Get()->PostTask(
+          scheduler::GetSequencedTaskRunnerForTesting()->PostTask(
               FROM_HERE,
-              base::BindOnce(std::move(decode_cb), media::OkStatus()));
+              WTF::BindOnce(std::move(decode_cb), media::OkStatus()));
         });
 
     EXPECT_CALL(*mock_decoder_, Initialize_(_, _, _, _, _, _))
         .WillOnce([quit_closure](Unused, Unused, Unused,
                                  media::VideoDecoder::InitCB& init_cb, Unused,
                                  Unused) {
-          base::SequencedTaskRunnerHandle::Get()->PostTask(
-              FROM_HERE, base::BindOnce(std::move(init_cb), media::OkStatus()));
-          base::SequencedTaskRunnerHandle::Get()->PostTask(
+          scheduler::GetSequencedTaskRunnerForTesting()->PostTask(
+              FROM_HERE, WTF::BindOnce(std::move(init_cb), media::OkStatus()));
+          scheduler::GetSequencedTaskRunnerForTesting()->PostTask(
               FROM_HERE, std::move(quit_closure));
         });
   }
@@ -111,6 +114,13 @@ class VideoDecoderTest : public testing::Test {
     config->setCodec("vp09.00.10.08");
     return config;
   }
+
+  VideoDecoderSupport* ToVideoDecoderSupport(V8TestingScope* v8_scope,
+                                             ScriptValue value) {
+    return NativeValueTraits<VideoDecoderSupport>::NativeValue(
+        v8_scope->GetIsolate(), value.V8Value(), v8_scope->GetExceptionState());
+  }
+  test::TaskEnvironment task_environment_;
 };
 
 TEST_F(VideoDecoderTest, HardwareDecodersApplyPressure) {
@@ -216,9 +226,15 @@ TEST_F(VideoDecoderTest, isConfigureSupportedWithInvalidSWConfig) {
   auto* config = MakeGarbageCollected<VideoDecoderConfig>();
   config->setCodec("invalid video codec");
   config->setHardwareAcceleration(V8HardwarePreference::Enum::kPreferSoftware);
-  VideoDecoder::isConfigSupported(v8_scope.GetScriptState(), config,
-                                  v8_scope.GetExceptionState());
-  ASSERT_TRUE(v8_scope.GetExceptionState().HadException());
+  auto promise = VideoDecoder::isConfigSupported(
+      v8_scope.GetScriptState(), config, v8_scope.GetExceptionState());
+  ASSERT_FALSE(v8_scope.GetExceptionState().HadException());
+
+  ScriptPromiseTester tester(v8_scope.GetScriptState(), promise);
+  tester.WaitUntilSettled();
+  ASSERT_TRUE(tester.IsFulfilled());
+  auto* result = ToVideoDecoderSupport(&v8_scope, tester.Value());
+  EXPECT_FALSE(result->supported());
 }
 
 TEST_F(VideoDecoderTest, isConfigureSupportedWithInvalidHWConfig) {
@@ -227,9 +243,15 @@ TEST_F(VideoDecoderTest, isConfigureSupportedWithInvalidHWConfig) {
   auto* config = MakeGarbageCollected<VideoDecoderConfig>();
   config->setCodec("invalid video codec");
   config->setHardwareAcceleration(V8HardwarePreference::Enum::kPreferHardware);
-  VideoDecoder::isConfigSupported(v8_scope.GetScriptState(), config,
-                                  v8_scope.GetExceptionState());
-  ASSERT_TRUE(v8_scope.GetExceptionState().HadException());
+  auto promise = VideoDecoder::isConfigSupported(
+      v8_scope.GetScriptState(), config, v8_scope.GetExceptionState());
+  ASSERT_FALSE(v8_scope.GetExceptionState().HadException());
+
+  ScriptPromiseTester tester(v8_scope.GetScriptState(), promise);
+  tester.WaitUntilSettled();
+  ASSERT_TRUE(tester.IsFulfilled());
+  auto* result = ToVideoDecoderSupport(&v8_scope, tester.Value());
+  EXPECT_FALSE(result->supported());
 }
 
 }  // namespace

@@ -51,7 +51,8 @@ ScriptPromise BatteryManager::getBattery(ScriptState* script_state,
 BatteryManager::~BatteryManager() = default;
 
 BatteryManager::BatteryManager(Navigator& navigator)
-    : Supplement<Navigator>(navigator),
+    : ActiveScriptWrappable<BatteryManager>({}),
+      Supplement<Navigator>(navigator),
       ExecutionContextLifecycleStateObserver(navigator.DomWindow()),
       PlatformEventController(*navigator.DomWindow()),
       battery_dispatcher_(
@@ -161,7 +162,7 @@ void BatteryManager::Trace(Visitor* visitor) const {
   visitor->Trace(battery_dispatcher_);
   Supplement<Navigator>::Trace(visitor);
   PlatformEventController::Trace(visitor);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContextLifecycleStateObserver::Trace(visitor);
 }
 

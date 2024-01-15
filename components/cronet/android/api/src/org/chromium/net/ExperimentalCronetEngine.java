@@ -29,9 +29,7 @@ import java.util.concurrent.Executor;
  */
 @Deprecated
 public abstract class ExperimentalCronetEngine extends CronetEngine {
-    /**
-     * The value of a connection metric is unknown.
-     */
+    /** The value of a connection metric is unknown. */
     public static final int CONNECTION_METRIC_UNKNOWN = CronetEngine.CONNECTION_METRIC_UNKNOWN;
 
     /**
@@ -82,10 +80,8 @@ public abstract class ExperimentalCronetEngine extends CronetEngine {
     public static final int EFFECTIVE_CONNECTION_TYPE_4G =
             CronetEngine.EFFECTIVE_CONNECTION_TYPE_4G;
 
-    /**
-     * The value to be used to undo any previous network binding.
-     */
-    public static final long UNBIND_NETWORK_HANDLE = -1;
+    /** The value to be used to undo any previous network binding. */
+    public static final long UNBIND_NETWORK_HANDLE = CronetEngine.UNBIND_NETWORK_HANDLE;
 
     /**
      * A version of {@link CronetEngine.Builder} that exposes experimental features. Instances of
@@ -98,8 +94,8 @@ public abstract class ExperimentalCronetEngine extends CronetEngine {
          * default configuration enables HTTP/2 and disables QUIC, SDCH and the HTTP cache.
          *
          * @param context Android {@link Context}, which is used by the Builder to retrieve the
-         * application context. A reference to only the application context will be kept, so as to
-         * avoid extending the lifetime of {@code context} unnecessarily.
+         *     application context. A reference to only the application context will be kept, so as
+         * to avoid extending the lifetime of {@code context} unnecessarily.
          */
         public Builder(Context context) {
             super(context);
@@ -111,7 +107,7 @@ public abstract class ExperimentalCronetEngine extends CronetEngine {
          * implementation.
          *
          * @param builderDelegate delegate that provides the actual implementation.
-         * <p>{@hide}
+         *     <p>{@hide}
          */
         public Builder(ICronetEngineBuilder builderDelegate) {
             super(builderDelegate);
@@ -172,6 +168,27 @@ public abstract class ExperimentalCronetEngine extends CronetEngine {
         }
 
         @Override
+        @QuicOptions.Experimental
+        public Builder setQuicOptions(QuicOptions options) {
+            super.setQuicOptions(options);
+            return this;
+        }
+
+        @Override
+        @DnsOptions.Experimental
+        public Builder setDnsOptions(DnsOptions options) {
+            super.setDnsOptions(options);
+            return this;
+        }
+
+        @Override
+        @ConnectionMigrationOptions.Experimental
+        public Builder setConnectionMigrationOptions(ConnectionMigrationOptions options) {
+            super.setConnectionMigrationOptions(options);
+            return this;
+        }
+
+        @Override
         public Builder enableSdch(boolean value) {
             return this;
         }
@@ -189,8 +206,11 @@ public abstract class ExperimentalCronetEngine extends CronetEngine {
         }
 
         @Override
-        public Builder addPublicKeyPins(String hostName, Set<byte[]> pinsSha256,
-                boolean includeSubdomains, Date expirationDate) {
+        public Builder addPublicKeyPins(
+                String hostName,
+                Set<byte[]> pinsSha256,
+                boolean includeSubdomains,
+                Date expirationDate) {
             super.addPublicKeyPins(hostName, pinsSha256, includeSubdomains, expirationDate);
             return this;
         }
@@ -215,7 +235,7 @@ public abstract class ExperimentalCronetEngine extends CronetEngine {
 
         @Override
         public ExperimentalCronetEngine build() {
-            return mBuilderDelegate.build();
+            return buildExperimental();
         }
     }
 
@@ -226,18 +246,6 @@ public abstract class ExperimentalCronetEngine extends CronetEngine {
     @Override
     public abstract ExperimentalUrlRequest.Builder newUrlRequestBuilder(
             String url, UrlRequest.Callback callback, Executor executor);
-
-    /**
-     * Binds the engine to the specified network handle. All requests created through this engine
-     * will use the network associated to this handle. If this network disconnects all requests will
-     * fail, the exact error will depend on the stage of request processing when the network
-     * disconnects. Network handles can be obtained through {@code Network#getNetworkHandle}. Only
-     * available starting from Android Marshmallow.
-     *
-     * @param networkHandle the network handle to bind the engine to. Specify {@link
-     * #UNBIND_NETWORK_HANDLE} to unbind.
-     */
-    public void bindToNetwork(long networkHandle) {}
 
     /**
      * Establishes a new connection to the resource specified by the {@link URL} {@code url} using

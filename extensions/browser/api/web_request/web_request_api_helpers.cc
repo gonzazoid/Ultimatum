@@ -8,21 +8,22 @@
 #include <stdint.h>
 
 #include <cmath>
+#include <string_view>
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/adapters.h"
 #include "base/containers/contains.h"
 #include "base/containers/fixed_flat_map.h"
 #include "base/containers/fixed_flat_set.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/ranges/algorithm.h"
 #include "base/stl_util.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/time/time.h"
 #include "base/values.h"
@@ -124,12 +125,12 @@ void RecordDNRRequestHeaderChanged(RequestHeaderType type) {
       "Extensions.DeclarativeNetRequest.RequestHeaderChanged", type);
 }
 
-bool IsStringLowerCaseASCII(base::StringPiece s) {
+bool IsStringLowerCaseASCII(std::string_view s) {
   return base::ranges::none_of(s, base::IsAsciiUpper<char>);
 }
 
 constexpr auto kRequestHeaderEntries =
-    base::MakeFixedFlatMap<base::StringPiece, RequestHeaderType>(
+    base::MakeFixedFlatMap<std::string_view, RequestHeaderType>(
         {{"accept", RequestHeaderType::kAccept},
          {"accept-charset", RequestHeaderType::kAcceptCharset},
          {"accept-encoding", RequestHeaderType::kAcceptEncoding},
@@ -178,7 +179,7 @@ constexpr auto kRequestHeaderEntries =
          {"x-forwarded-host", RequestHeaderType::kXForwardedHost},
          {"x-forwarded-proto", RequestHeaderType::kXForwardedProto}});
 
-constexpr bool IsValidHeaderName(base::StringPiece str) {
+constexpr bool IsValidHeaderName(std::string_view str) {
   for (char ch : str) {
     if ((ch < 'a' || ch > 'z') && ch != '-')
       return false;
@@ -247,7 +248,7 @@ void RecordDNRResponseHeaderRemoved(ResponseHeaderType type) {
 }
 
 constexpr auto kResponseHeaderEntries =
-    base::MakeFixedFlatMap<base::StringPiece, ResponseHeaderType>({
+    base::MakeFixedFlatMap<std::string_view, ResponseHeaderType>({
         {"accept-patch", ResponseHeaderType::kAcceptPatch},
         {"accept-ranges", ResponseHeaderType::kAcceptRanges},
         {"access-control-allow-credentials",
@@ -317,7 +318,7 @@ constexpr auto kResponseHeaderEntries =
         {"x-xss-protection", ResponseHeaderType::kXXSSProtection},
     });
 
-void RecordResponseHeader(base::StringPiece header,
+void RecordResponseHeader(std::string_view header,
                           void (*record_func)(ResponseHeaderType)) {
   DCHECK(IsStringLowerCaseASCII(header));
   const auto* it = kResponseHeaderEntries.find(header);
@@ -346,7 +347,7 @@ std::string GetDNRNewRequestHeaderValue(net::HttpRequestHeaders* headers,
   std::string existing_value;
   bool has_header = headers->GetHeader(header_name, &existing_value);
 
-  if (has_header && operation == dnr_api::HEADER_OPERATION_APPEND) {
+  if (has_header && operation == dnr_api::HeaderOperation::kAppend) {
     const auto* it = dnr::kDNRRequestHeaderAppendAllowList.find(header_name);
     DCHECK(it != dnr::kDNRRequestHeaderAppendAllowList.end());
     return base::StrCat({existing_value, it->second, header_value});
@@ -367,24 +368,24 @@ struct DNRHeaderAction {
     DCHECK_EQ(header_info->header, next_action.header_info->header);
 
     switch (header_info->operation) {
-      case dnr_api::HEADER_OPERATION_APPEND:
+      case dnr_api::HeaderOperation::kAppend:
         return next_action.header_info->operation !=
-               dnr_api::HEADER_OPERATION_APPEND;
-      case dnr_api::HEADER_OPERATION_SET:
+               dnr_api::HeaderOperation::kAppend;
+      case dnr_api::HeaderOperation::kSet:
         return *extension_id != *next_action.extension_id ||
                next_action.header_info->operation !=
-                   dnr_api::HEADER_OPERATION_APPEND;
-      case dnr_api::HEADER_OPERATION_REMOVE:
+                   dnr_api::HeaderOperation::kAppend;
+      case dnr_api::HeaderOperation::kRemove:
         return true;
-      case dnr_api::HEADER_OPERATION_NONE:
+      case dnr_api::HeaderOperation::kNone:
         NOTREACHED();
         return true;
     }
   }
 
   // Non-owning pointers to HeaderInfo and ExtensionId.
-  const DNRRequestAction::HeaderInfo* header_info;
-  const extensions::ExtensionId* extension_id;
+  raw_ptr<const DNRRequestAction::HeaderInfo> header_info;
+  raw_ptr<const extensions::ExtensionId, DanglingUntriaged> extension_id;
 };
 
 // Helper to modify request headers from
@@ -397,7 +398,7 @@ bool ModifyRequestHeadersForAction(
     const DNRRequestAction& request_action,
     std::set<std::string>* removed_headers,
     std::set<std::string>* set_headers,
-    std::map<base::StringPiece, std::vector<DNRHeaderAction>>* header_actions) {
+    std::map<std::string_view, std::vector<DNRHeaderAction>>* header_actions) {
   bool request_headers_modified = false;
   for (const DNRRequestAction::HeaderInfo& header_info :
        request_action.request_headers_to_modify) {
@@ -423,8 +424,8 @@ bool ModifyRequestHeadersForAction(
     actions_for_header.push_back(header_action);
 
     switch (header_info.operation) {
-      case dnr_api::HEADER_OPERATION_APPEND:
-      case dnr_api::HEADER_OPERATION_SET: {
+      case dnr_api::HeaderOperation::kAppend:
+      case dnr_api::HeaderOperation::kSet: {
         DCHECK(header_info.value.has_value());
         bool has_header = headers->HasHeader(header);
         headers->SetHeader(header, GetDNRNewRequestHeaderValue(
@@ -446,7 +447,7 @@ bool ModifyRequestHeadersForAction(
         }
         break;
       }
-      case dnr_api::HEADER_OPERATION_REMOVE: {
+      case dnr_api::HeaderOperation::kRemove: {
         while (headers->HasHeader(header)) {
           header_modified = true;
           headers->RemoveHeader(header);
@@ -458,7 +459,7 @@ bool ModifyRequestHeadersForAction(
         }
         break;
       }
-      case dnr_api::HEADER_OPERATION_NONE:
+      case dnr_api::HeaderOperation::kNone:
         NOTREACHED();
     }
 
@@ -476,7 +477,7 @@ bool ModifyResponseHeadersForAction(
     const net::HttpResponseHeaders* original_response_headers,
     scoped_refptr<net::HttpResponseHeaders>* override_response_headers,
     const DNRRequestAction& request_action,
-    std::map<base::StringPiece, std::vector<DNRHeaderAction>>* header_actions) {
+    std::map<std::string_view, std::vector<DNRHeaderAction>>* header_actions) {
   bool response_headers_modified = false;
 
   // Check for |header| in |override_response_headers| if headers have been
@@ -524,7 +525,7 @@ bool ModifyResponseHeadersForAction(
     actions_for_header.push_back(header_action);
 
     switch (header_info.operation) {
-      case dnr_api::HEADER_OPERATION_REMOVE: {
+      case dnr_api::HeaderOperation::kRemove: {
         if (has_header(header)) {
           header_modified = true;
           create_override_headers_if_needed(override_response_headers);
@@ -534,7 +535,7 @@ bool ModifyResponseHeadersForAction(
 
         break;
       }
-      case dnr_api::HEADER_OPERATION_APPEND: {
+      case dnr_api::HeaderOperation::kAppend: {
         header_modified = true;
         create_override_headers_if_needed(override_response_headers);
         override_response_headers->get()->AddHeader(header, *header_info.value);
@@ -547,7 +548,7 @@ bool ModifyResponseHeadersForAction(
 
         break;
       }
-      case dnr_api::HEADER_OPERATION_SET: {
+      case dnr_api::HeaderOperation::kSet: {
         header_modified = true;
         create_override_headers_if_needed(override_response_headers);
         override_response_headers->get()->RemoveHeader(header);
@@ -555,7 +556,7 @@ bool ModifyResponseHeadersForAction(
         RecordResponseHeader(header, &RecordDNRResponseHeaderChanged);
         break;
       }
-      case dnr_api::HEADER_OPERATION_NONE:
+      case dnr_api::HeaderOperation::kNone:
         NOTREACHED();
     }
 
@@ -743,11 +744,10 @@ bool InDecreasingExtensionInstallationTimeOrder(const EventResponseDelta& a,
   return a.extension_install_time > b.extension_install_time;
 }
 
-base::Value StringToCharList(const std::string& s) {
-  base::Value result(base::Value::Type::LIST);
-  for (size_t i = 0, n = s.size(); i < n; ++i) {
-    result.Append(*reinterpret_cast<const unsigned char*>(&s[i]));
-  }
+base::Value::List StringToCharList(const std::string& s) {
+  base::Value::List result;
+  for (const auto& c : s)
+    result.Append(*reinterpret_cast<const unsigned char*>(&c));
   return result;
 }
 
@@ -896,7 +896,7 @@ EventResponseDelta CalculateOnAuthRequiredDelta(
     const std::string& extension_id,
     const base::Time& extension_install_time,
     bool cancel,
-    absl::optional<net::AuthCredentials> auth_credentials) {
+    std::optional<net::AuthCredentials> auth_credentials) {
   EventResponseDelta result(extension_id, extension_install_time);
   result.cancel = cancel;
   result.auth_credentials = std::move(auth_credentials);
@@ -905,8 +905,8 @@ EventResponseDelta CalculateOnAuthRequiredDelta(
 
 void MergeCancelOfResponses(
     const EventResponseDeltas& deltas,
-    absl::optional<extensions::ExtensionId>* canceled_by_extension) {
-  *canceled_by_extension = absl::nullopt;
+    std::optional<extensions::ExtensionId>* canceled_by_extension) {
+  *canceled_by_extension = std::nullopt;
   for (const auto& delta : deltas) {
     if (delta.cancel) {
       *canceled_by_extension = delta.extension_id;
@@ -935,8 +935,9 @@ static bool MergeRedirectUrlOfResponsesHelper(
   bool redirected = false;
 
   for (const auto& delta : deltas) {
-    if (delta.new_url.is_empty())
+    if (!delta.new_url.is_valid()) {
       continue;
+    }
     if (consider_only_cancel_scheme_urls &&
         !delta.new_url.SchemeIs(url::kDataScheme) &&
         delta.new_url.spec() != "about:blank") {
@@ -948,7 +949,7 @@ static bool MergeRedirectUrlOfResponsesHelper(
       redirected = true;
     } else {
       ignored_actions->emplace_back(delta.extension_id,
-                                    web_request::IGNORED_ACTION_TYPE_REDIRECT);
+                                    web_request::IgnoredActionType::kRedirect);
     }
   }
   return redirected;
@@ -981,7 +982,7 @@ void MergeOnBeforeRequestResponses(const GURL& url,
 
 static bool DoesRequestCookieMatchFilter(
     const ParsedRequestCookie& cookie,
-    const absl::optional<RequestCookie>& filter) {
+    const std::optional<RequestCookie>& filter) {
   if (!filter.has_value())
     return true;
   if (filter->name.has_value() && cookie.first != *filter->name)
@@ -1054,7 +1055,7 @@ static bool MergeEditRequestCookieModifications(
         continue;
 
       const std::string& new_value = *mod->modification->value;
-      const absl::optional<RequestCookie>& filter = mod->filter;
+      const std::optional<RequestCookie>& filter = mod->filter;
       for (auto cookie = cookies->begin(); cookie != cookies->end(); ++cookie) {
         if (!DoesRequestCookieMatchFilter(*cookie, filter))
           continue;
@@ -1086,7 +1087,7 @@ static bool MergeRemoveRequestCookieModifications(
       if (mod->type != REMOVE)
         continue;
 
-      const absl::optional<RequestCookie>& filter = mod->filter;
+      const std::optional<RequestCookie>& filter = mod->filter;
       auto i = cookies->begin();
       while (i != cookies->end()) {
         if (DoesRequestCookieMatchFilter(*i, filter)) {
@@ -1150,7 +1151,7 @@ void MergeOnBeforeSendHeadersResponses(
   DCHECK(matched_dnr_actions);
   *request_headers_modified = false;
 
-  std::map<base::StringPiece, std::vector<DNRHeaderAction>> dnr_header_actions;
+  std::map<std::string_view, std::vector<DNRHeaderAction>> dnr_header_actions;
   for (const auto& action : *request.dnr_actions) {
     bool headers_modified_for_action =
         ModifyRequestHeadersForAction(request_headers, action, removed_headers,
@@ -1163,7 +1164,7 @@ void MergeOnBeforeSendHeadersResponses(
 
   // A strict subset of |removed_headers| consisting of headers removed by the
   // web request API. Used for metrics.
-  // TODO(crbug.com/1098945): Use base::StringPiece to avoid copying header
+  // TODO(crbug.com/1098945): Use std::string_view to avoid copying header
   // names.
   std::set<std::string> web_request_removed_headers;
 
@@ -1199,7 +1200,7 @@ void MergeOnBeforeSendHeadersResponses(
         auto iter = dnr_header_actions.find(key);
         if (iter != dnr_header_actions.end() &&
             iter->second[0].header_info->operation ==
-                dnr_api::HEADER_OPERATION_REMOVE) {
+                dnr_api::HeaderOperation::kRemove) {
           extension_conflicts = true;
           break;
         }
@@ -1268,7 +1269,7 @@ void MergeOnBeforeSendHeadersResponses(
       *request_headers_modified = true;
     } else {
       ignored_actions->emplace_back(
-          delta.extension_id, web_request::IGNORED_ACTION_TYPE_REQUEST_HEADERS);
+          delta.extension_id, web_request::IgnoredActionType::kRequestHeaders);
     }
   }
 
@@ -1360,7 +1361,7 @@ static bool ApplyResponseCookieModification(const ResponseCookie& modification,
 
 static bool DoesResponseCookieMatchFilter(
     const net::ParsedCookie& cookie,
-    const absl::optional<FilterResponseCookie>& filter) {
+    const std::optional<FilterResponseCookie>& filter) {
   if (!cookie.IsValid())
     return false;
   if (!filter.has_value())
@@ -1545,7 +1546,7 @@ void MergeOnHeadersReceivedResponses(
   DCHECK(request.dnr_actions);
   DCHECK(matched_dnr_actions);
 
-  std::map<base::StringPiece, std::vector<DNRHeaderAction>> dnr_header_actions;
+  std::map<std::string_view, std::vector<DNRHeaderAction>> dnr_header_actions;
   for (const auto& action : *request.dnr_actions) {
     bool headers_modified_for_action = ModifyResponseHeadersForAction(
         original_response_headers, override_response_headers, action,
@@ -1605,7 +1606,7 @@ void MergeOnHeadersReceivedResponses(
 
         // Multiple appends are allowed.
         if (it->second[0].header_info->operation !=
-            dnr_api::HEADER_OPERATION_APPEND) {
+            dnr_api::HeaderOperation::kAppend) {
           extension_conflicts = true;
           break;
         }
@@ -1636,8 +1637,7 @@ void MergeOnHeadersReceivedResponses(
       *response_headers_modified = true;
     } else {
       ignored_actions->emplace_back(
-          delta.extension_id,
-          web_request::IGNORED_ACTION_TYPE_RESPONSE_HEADERS);
+          delta.extension_id, web_request::IgnoredActionType::kResponseHeaders);
     }
   }
 
@@ -1663,21 +1663,21 @@ void MergeOnHeadersReceivedResponses(
 
   // Record metrics.
   {
-    auto record_response_headers =
-        [](const std::set<base::StringPiece>& headers,
-           void (*record_func)(ResponseHeaderType)) {
-          if (headers.empty()) {
-            record_func(ResponseHeaderType::kNone);
-            return;
-          }
+    auto record_response_headers = [](const std::set<std::string_view>& headers,
+                                      void (*record_func)(ResponseHeaderType)) {
+      if (headers.empty()) {
+        record_func(ResponseHeaderType::kNone);
+        return;
+      }
 
-          for (const auto& header : headers)
-            RecordResponseHeader(header, record_func);
-        };
+      for (const auto& header : headers) {
+        RecordResponseHeader(header, record_func);
+      }
+    };
 
-    std::set<base::StringPiece> modified_header_names;
-    std::set<base::StringPiece> added_header_names;
-    std::set<base::StringPiece> removed_header_names;
+    std::set<std::string_view> modified_header_names;
+    std::set<std::string_view> added_header_names;
+    std::set<std::string_view> removed_header_names;
 
     for (const ResponseHeader& header : added_headers) {
       // Skip logging this header if this was subsequently removed by an
@@ -1723,8 +1723,7 @@ bool MergeOnAuthRequiredResponses(const EventResponseDeltas& deltas,
         auth_credentials->password() != delta.auth_credentials->password();
     if (credentials_set && different) {
       ignored_actions->emplace_back(
-          delta.extension_id,
-          web_request::IGNORED_ACTION_TYPE_AUTH_CREDENTIALS);
+          delta.extension_id, web_request::IgnoredActionType::kAuthCredentials);
     } else {
       *auth_credentials = *delta.auth_credentials;
       credentials_set = true;
@@ -1760,9 +1759,9 @@ bool ShouldHideRequestHeader(content::BrowserContext* browser_context,
                              int extra_info_spec,
                              const std::string& name) {
   static constexpr auto kRequestHeaders =
-      base::MakeFixedFlatSet<base::StringPiece>({"accept-encoding",
-                                                 "accept-language", "cookie",
-                                                 "origin", "referer"});
+      base::MakeFixedFlatSet<std::string_view>({"accept-encoding",
+                                                "accept-language", "cookie",
+                                                "origin", "referer"});
   return !(extra_info_spec & ExtraInfoSpec::EXTRA_HEADERS) &&
          base::Contains(kRequestHeaders, base::ToLowerASCII(name));
 }

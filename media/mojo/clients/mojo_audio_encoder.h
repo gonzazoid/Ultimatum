@@ -8,12 +8,11 @@
 #include <list>
 #include <memory>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
 #include "media/base/audio_encoder.h"
 #include "media/mojo/mojom/audio_encoder.mojom.h"
-#include "media/mojo/mojom/media_types.mojom.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -26,6 +25,8 @@ class MojoAudioEncoder final : public AudioEncoder,
  public:
   explicit MojoAudioEncoder(
       mojo::PendingRemote<mojom::AudioEncoder> remote_encoder);
+
+  static bool IsSupported(AudioCodec codec);
 
   MojoAudioEncoder(const MojoAudioEncoder&) = delete;
   MojoAudioEncoder& operator=(const MojoAudioEncoder&) = delete;

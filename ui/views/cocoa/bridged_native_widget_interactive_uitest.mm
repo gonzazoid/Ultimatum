@@ -18,8 +18,7 @@
 #include "ui/views/widget/native_widget_mac.h"
 #include "ui/views/window/native_frame_view.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 class BridgedNativeWidgetUITest : public WidgetTest {
  public:
@@ -34,12 +33,13 @@ class BridgedNativeWidgetUITest : public WidgetTest {
     SetUpForInteractiveTests();
     WidgetTest::SetUp();
 
+    widget_delegate_ = std::make_unique<WidgetDelegate>();
+
     Widget::InitParams init_params =
         CreateParams(Widget::InitParams::TYPE_WINDOW);
     init_params.ownership = Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
     init_params.bounds = gfx::Rect(100, 100, 300, 200);
-    init_params.delegate = new views::WidgetDelegate;
-    init_params.delegate->SetOwnedByWidget(true);
+    init_params.delegate = widget_delegate_.get();
 
     // Provide a resizable Widget by default, as macOS doesn't correctly restore
     // the window size when coming out of fullscreen if the window is not
@@ -62,6 +62,7 @@ class BridgedNativeWidgetUITest : public WidgetTest {
   }
 
  protected:
+  std::unique_ptr<WidgetDelegate> widget_delegate_;
   std::unique_ptr<Widget> widget_;
 };
 
@@ -176,5 +177,4 @@ TEST_F(BridgedNativeWidgetUITest, FullscreenRestore) {
   EXPECT_EQ(restored_bounds, widget_->GetRestoredBounds());
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

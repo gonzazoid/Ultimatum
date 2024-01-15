@@ -36,16 +36,22 @@ FileSystemAccessPermissionContextFactory::
     FileSystemAccessPermissionContextFactory()
     : ProfileKeyedServiceFactory(
           "FileSystemAccessPermissionContext",
-          ProfileSelections::BuildForRegularAndIncognito()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
   DependsOn(HostContentSettingsMapFactory::GetInstance());
 }
 
 FileSystemAccessPermissionContextFactory::
     ~FileSystemAccessPermissionContextFactory() = default;
 
-KeyedService* FileSystemAccessPermissionContextFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+FileSystemAccessPermissionContextFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* profile) const {
-  return new ChromeFileSystemAccessPermissionContext(profile);
+  return std::make_unique<ChromeFileSystemAccessPermissionContext>(profile);
 }
 
 void FileSystemAccessPermissionContextFactory::BrowserContextShutdown(

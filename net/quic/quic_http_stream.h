@@ -26,7 +26,6 @@
 #include "net/quic/quic_chromium_client_session.h"
 #include "net/quic/quic_chromium_client_stream.h"
 #include "net/spdy/multiplexed_http_stream.h"
-#include "net/third_party/quiche/src/quiche/quic/core/http/quic_client_push_promise_index.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_packets.h"
 
 namespace net {
@@ -76,8 +75,11 @@ class NET_EXPORT_PRIVATE QuicHttpStream : public MultiplexedHttpStream {
   void SetRequestIdempotency(Idempotency idempotency) override;
   const std::set<std::string>& GetDnsAliases() const override;
   base::StringPiece GetAcceptChViaAlps() const override;
+  absl::optional<quic::QuicErrorCode> GetQuicErrorCode() const override;
+  absl::optional<quic::QuicRstStreamErrorCode> GetQuicRstStreamErrorCode()
+      const override;
 
-  static HttpResponseInfo::ConnectionInfo ConnectionInfoFromQuicVersion(
+  static HttpConnectionInfo ConnectionInfoFromQuicVersion(
       quic::ParsedQuicVersion quic_version);
 
  private:
@@ -85,8 +87,6 @@ class NET_EXPORT_PRIVATE QuicHttpStream : public MultiplexedHttpStream {
 
   enum State {
     STATE_NONE,
-    STATE_HANDLE_PROMISE,
-    STATE_HANDLE_PROMISE_COMPLETE,
     STATE_REQUEST_STREAM,
     STATE_REQUEST_STREAM_COMPLETE,
     STATE_SET_REQUEST_PRIORITY,
@@ -103,8 +103,6 @@ class NET_EXPORT_PRIVATE QuicHttpStream : public MultiplexedHttpStream {
   void DoCallback(int rv);
 
   int DoLoop(int rv);
-  int DoHandlePromise();
-  int DoHandlePromiseComplete(int rv);
   int DoRequestStream();
   int DoRequestStreamComplete(int rv);
   int DoSetRequestPriority();
@@ -166,7 +164,9 @@ class NET_EXPORT_PRIVATE QuicHttpStream : public MultiplexedHttpStream {
   bool can_send_early_ = false;
 
   // The request body to send, if any, owned by the caller.
-  raw_ptr<UploadDataStream> request_body_stream_ = nullptr;
+  // DanglingUntriaged because it is assigned a DanglingUntriaged pointer.
+  raw_ptr<UploadDataStream, AcrossTasksDanglingUntriaged> request_body_stream_ =
+      nullptr;
   // Time the request was issued.
   base::Time request_time_;
   // The priority of the request.
@@ -204,6 +204,9 @@ class NET_EXPORT_PRIVATE QuicHttpStream : public MultiplexedHttpStream {
   // the default value of false.
   bool closed_is_first_stream_ = false;
 
+  absl::optional<quic::QuicErrorCode> connection_error_;
+  absl::optional<quic::QuicRstStreamErrorCode> stream_error_;
+
   // The caller's callback to be used for asynchronous operations.
   CompletionOnceCallback callback_;
 
@@ -220,8 +223,6 @@ class NET_EXPORT_PRIVATE QuicHttpStream : public MultiplexedHttpStream {
 
   int session_error_ =
       ERR_UNEXPECTED;  // Error code from the connection shutdown.
-
-  bool found_promise_ = false;
 
   // Set to true when DoLoop() is being executed, false otherwise.
   bool in_loop_ = false;

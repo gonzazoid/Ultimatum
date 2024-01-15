@@ -8,7 +8,7 @@
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "components/payments/content/android/byte_buffer_helper.h"
-#include "components/payments/content/android/jni_headers/PaymentHandlerHost_jni.h"
+#include "components/payments/content/android/minimal_jni/PaymentHandlerHost_jni.h"
 #include "content/public/browser/web_contents.h"
 #include "third_party/blink/public/mojom/payments/payment_handler_host.mojom.h"
 
@@ -58,8 +58,7 @@ void PaymentHandlerHost::UpdateWith(
     const base::android::JavaParamRef<jobject>& response_buffer) {
   mojom::PaymentRequestDetailsUpdatePtr response;
   bool success = mojom::PaymentRequestDetailsUpdate::Deserialize(
-      std::move(JavaByteBufferToNativeByteVector(env, response_buffer)),
-      &response);
+      JavaByteBufferToNativeByteVector(env, response_buffer), &response);
   DCHECK(success);
   payment_handler_host_.UpdateWith(std::move(response));
 }

@@ -8,14 +8,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 #include "chromeos/ash/components/dbus/userdataauth/cryptohome_misc_client.h"
 
@@ -80,7 +79,7 @@ bool CachedPolicyKeyLoader::LoadPolicyKeyImmediately() {
   request.set_username(
       cryptohome::CreateAccountIdentifierFromAccountId(account_id_)
           .account_id());
-  absl::optional<user_data_auth::GetSanitizedUsernameReply> reply =
+  std::optional<user_data_auth::GetSanitizedUsernameReply> reply =
       cryptohome_misc_client_->BlockingGetSanitizedUsername(request);
   if (!reply.has_value() || reply->sanitized_username().empty()) {
     return false;
@@ -152,8 +151,8 @@ std::string CachedPolicyKeyLoader::LoadPolicyKey(const base::FilePath& path) {
 void CachedPolicyKeyLoader::TriggerLoadPolicyKey() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&CachedPolicyKeyLoader::LoadPolicyKey,
                      cached_policy_key_path_),
       base::BindOnce(&CachedPolicyKeyLoader::OnPolicyKeyLoaded,
@@ -171,7 +170,7 @@ void CachedPolicyKeyLoader::OnPolicyKeyLoaded(const std::string& key) {
 }
 
 void CachedPolicyKeyLoader::OnGetSanitizedUsername(
-    absl::optional<user_data_auth::GetSanitizedUsernameReply> reply) {
+    std::optional<user_data_auth::GetSanitizedUsernameReply> reply) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (!reply.has_value() || reply->sanitized_username().empty()) {
     // Don't bother trying to load a key if we don't know where it is - just

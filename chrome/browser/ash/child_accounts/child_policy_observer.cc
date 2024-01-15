@@ -4,18 +4,19 @@
 
 #include "chrome/browser/ash/child_accounts/child_policy_observer.h"
 
+#include <optional>
+
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/policy/core/user_cloud_policy_manager_ash.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/policy/core/common/cloud/cloud_policy_core.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
 ChildPolicyObserver::ChildPolicyObserver(Profile* profile) : profile_(profile) {
   policy::CloudPolicyService* cloud_policy_service =
       GetUserCloudPolicyManager()->core()->service();
-  absl::optional<bool> initial_policy_refresh_result =
+  std::optional<bool> initial_policy_refresh_result =
       cloud_policy_service->initial_policy_refresh_result();
   if (initial_policy_refresh_result) {
     OnPolicyReady(*initial_policy_refresh_result
@@ -35,7 +36,7 @@ void ChildPolicyObserver::NotifyWhenPolicyReady(
   DCHECK(!on_policy_ready_);
 
   if (IsChildPolicyReady()) {
-    std::move(on_policy_ready).Run(profile_, refresh_result_);
+    std::move(on_policy_ready).Run(profile_.get(), refresh_result_);
     return;
   }
 
@@ -69,7 +70,7 @@ void ChildPolicyObserver::OnPolicyReady(
     refresh_result_ = refresh_result;
 
   if (on_policy_ready_)
-    std::move(on_policy_ready_).Run(profile_, refresh_result_);
+    std::move(on_policy_ready_).Run(profile_.get(), refresh_result_);
 }
 
 policy::UserCloudPolicyManagerAsh*

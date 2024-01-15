@@ -7,15 +7,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <optional>
+
 #include "base/files/scoped_temp_dir.h"
-#include "base/guid.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
+#include "base/uuid.h"
 #include "content/public/browser/notification_database_data.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/notifications/notification_resources.h"
 #include "third_party/blink/public/common/notifications/platform_notification_data.h"
 #include "third_party/blink/public/mojom/notifications/notification.mojom.h"
@@ -116,7 +117,9 @@ class NotificationDatabaseTest : public ::testing::Test {
   }
 
   // Generates a random notification ID. The format of the ID is opaque.
-  std::string GenerateNotificationId() { return base::GenerateGUID(); }
+  std::string GenerateNotificationId() {
+    return base::Uuid::GenerateRandomV4().AsLowercaseString();
+  }
 
   NotificationDatabase::UkmCallback callback() { return callback_; }
 
@@ -709,7 +712,7 @@ TEST_F(NotificationDatabaseTest,
   ASSERT_EQ(NotificationDatabase::STATUS_OK,
             database->ReadAllNotificationDataForServiceWorkerRegistration(
                 origin, kExampleServiceWorkerRegistrationId,
-                absl::nullopt /* is_shown_by_browser */, &notifications));
+                std::nullopt /* is_shown_by_browser */, &notifications));
 
   EXPECT_EQ(2u, notifications.size());
 }
@@ -760,7 +763,7 @@ TEST_F(NotificationDatabaseTest,
     ASSERT_EQ(NotificationDatabase::STATUS_OK,
               database->ReadAllNotificationDataForServiceWorkerRegistration(
                   origin, kExampleServiceWorkerRegistrationId,
-                  absl::nullopt /* is_shown_by_browser */, &notifications));
+                  std::nullopt /* is_shown_by_browser */, &notifications));
     ASSERT_EQ(2u, notifications.size());
   }
 }
@@ -777,7 +780,7 @@ TEST_F(NotificationDatabaseTest, DeleteAllNotificationDataForOrigin) {
   std::set<std::string> deleted_notification_ids;
   ASSERT_EQ(NotificationDatabase::STATUS_OK,
             database->DeleteAllNotificationDataForOrigin(
-                origin, "" /* tag */, absl::nullopt /* is_shown_by_browser */,
+                origin, "" /* tag */, std::nullopt /* is_shown_by_browser */,
                 &deleted_notification_ids));
 
   EXPECT_EQ(4u, deleted_notification_ids.size());
@@ -818,11 +821,10 @@ TEST_F(NotificationDatabaseTest, DeleteAllNotificationDataForOriginWithTag) {
   ASSERT_GT(notifications_without_tag, 0u);
 
   std::set<std::string> deleted_notification_ids;
-  ASSERT_EQ(
-      NotificationDatabase::STATUS_OK,
-      database->DeleteAllNotificationDataForOrigin(
-          origin, "foo" /* tag */, absl::nullopt /* is_shown_by_browser */,
-          &deleted_notification_ids));
+  ASSERT_EQ(NotificationDatabase::STATUS_OK,
+            database->DeleteAllNotificationDataForOrigin(
+                origin, "foo" /* tag */, std::nullopt /* is_shown_by_browser */,
+                &deleted_notification_ids));
 
   EXPECT_EQ(notifications_with_tag, deleted_notification_ids.size());
 
@@ -857,7 +859,7 @@ TEST_F(NotificationDatabaseTest, DeleteAllNotificationDataForOriginEmpty) {
   std::set<std::string> deleted_notification_ids;
   ASSERT_EQ(NotificationDatabase::STATUS_OK,
             database->DeleteAllNotificationDataForOrigin(
-                origin, "" /* tag */, absl::nullopt /* is_shown_by_browser */,
+                origin, "" /* tag */, std::nullopt /* is_shown_by_browser */,
                 &deleted_notification_ids));
 
   EXPECT_EQ(0u, deleted_notification_ids.size());
@@ -925,7 +927,7 @@ TEST_F(NotificationDatabaseTest,
     std::set<std::string> deleted_notification_ids;
     ASSERT_EQ(NotificationDatabase::STATUS_OK,
               database->DeleteAllNotificationDataForOrigin(
-                  origin, kTag, absl::nullopt /* is_shown_by_browser */,
+                  origin, kTag, std::nullopt /* is_shown_by_browser */,
                   &deleted_notification_ids));
     EXPECT_EQ(2u, deleted_notification_ids.size());
     EXPECT_EQ(1u, deleted_notification_ids.count(browser_notification_id));
@@ -960,7 +962,7 @@ TEST_F(NotificationDatabaseTest,
   ASSERT_EQ(NotificationDatabase::STATUS_OK,
             database->ReadAllNotificationDataForServiceWorkerRegistration(
                 origin, kExampleServiceWorkerRegistrationId,
-                absl::nullopt /* is_shown_by_browser */, &notifications));
+                std::nullopt /* is_shown_by_browser */, &notifications));
 
   EXPECT_EQ(0u, notifications.size());
 }

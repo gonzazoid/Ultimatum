@@ -15,19 +15,16 @@ namespace {
 // Creates a serialized dictionary string of the geoposition.
 std::string CreateResponseBody(const Geoposition& position) {
   base::Value::Dict value;
-  if (position.accuracy)
-    value.Set("accuracy", position.accuracy);
+  value.Set("accuracy", position.accuracy);
 
-  if (position.latitude && position.longitude) {
-    base::Value location(base::Value::Type::DICTIONARY);
-    location.SetDoubleKey("lat", position.latitude);
-    location.SetDoubleKey("lng", position.longitude);
-    value.Set("location", std::move(location));
-  }
+  base::Value::Dict location;
+  location.Set("lat", position.latitude);
+  location.Set("lng", position.longitude);
+  value.Set("location", std::move(location));
 
   if (position.error_code) {
-    base::Value error(base::Value::Type::DICTIONARY);
-    error.SetIntKey("error_code", position.error_code);
+    base::Value::Dict error;
+    error.Set("error_code", position.error_code);
     value.Set("error", std::move(error));
   }
 
@@ -48,11 +45,13 @@ void TestGeolocationUrlLoaderFactory::CreateLoaderAndStart(
     const network::ResourceRequest& url_request,
     mojo::PendingRemote<network::mojom::URLLoaderClient> client,
     const net::MutableNetworkTrafficAnnotationTag& traffic_annotation) {
+  // Response must be added before `CreateLoaderAndStart()` to ensure the latest
+  // `position_` is reflected in the incoming request.
+  test_url_loader_factory_.AddResponse(url_request.url.spec(),
+                                       CreateResponseBody(position_));
   test_url_loader_factory_.CreateLoaderAndStart(
       std::move(receiver), request_id, options, url_request, std::move(client),
       traffic_annotation);
-  test_url_loader_factory_.AddResponse(url_request.url.spec(),
-                                       CreateResponseBody(position_));
 }
 
 void TestGeolocationUrlLoaderFactory::Clone(
@@ -64,6 +63,18 @@ std::unique_ptr<network::PendingSharedURLLoaderFactory>
 TestGeolocationUrlLoaderFactory::Clone() {
   NOTREACHED();
   return nullptr;
+}
+
+void TestGeolocationUrlLoaderFactory::SetValidPosition(double latitude,
+                                                       double longitude,
+                                                       base::Time timestamp) {
+  position_ = Geoposition();
+  position_.latitude = latitude;
+  position_.longitude = longitude;
+  position_.status = Geoposition::STATUS_OK;
+  position_.accuracy = 10;
+  position_.timestamp = timestamp;
+  CHECK(position_.Valid());
 }
 
 void TestGeolocationUrlLoaderFactory::ClearResponses() {

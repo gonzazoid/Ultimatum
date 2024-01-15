@@ -13,6 +13,7 @@
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/startup_data.h"
 #include "chrome/common/chrome_content_client.h"
+#include "components/memory_system/memory_system.h"
 #include "content/public/app/content_main_delegate.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -22,10 +23,6 @@ class CommandLine;
 
 namespace chromeos {
 class LacrosService;
-}
-
-namespace heap_profiling {
-class HeapProfilerController;
 }
 
 namespace tracing {
@@ -81,7 +78,11 @@ class ChromeMainDelegate : public content::ContentMainDelegate {
   content::ContentUtilityClient* CreateContentUtilityClient() override;
 
   // Initialization that happens in all process types.
-  void CommonEarlyInitialization();
+  void CommonEarlyInitialization(InvokedIn invoked_in);
+
+  // Initializes |tracing_sampler_profiler_|. Deletes any existing
+  // |tracing_sampler_profiler_| as well.
+  void SetupTracing();
 
 #if BUILDFLAG(IS_MAC)
   void InitMacCrashReporter(const base::CommandLine& command_line,
@@ -89,17 +90,15 @@ class ChromeMainDelegate : public content::ContentMainDelegate {
   void SetUpInstallerPreferences(const base::CommandLine& command_line);
 #endif  // BUILDFLAG(IS_MAC)
 
-  ChromeContentClient chrome_content_client_;
+  void InitializeMemorySystem();
 
   std::unique_ptr<ChromeContentBrowserClient> chrome_content_browser_client_;
   std::unique_ptr<ChromeContentUtilityClient> chrome_content_utility_client_;
-
   std::unique_ptr<tracing::TracingSamplerProfiler> tracing_sampler_profiler_;
 
-  // The controller schedules UMA heap profiles collections and forwarding down
-  // the reporting pipeline.
-  std::unique_ptr<heap_profiling::HeapProfilerController>
-      heap_profiler_controller_;
+  ChromeContentClient chrome_content_client_;
+
+  memory_system::MemorySystem memory_system_;
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   std::unique_ptr<chromeos::LacrosService> lacros_service_;

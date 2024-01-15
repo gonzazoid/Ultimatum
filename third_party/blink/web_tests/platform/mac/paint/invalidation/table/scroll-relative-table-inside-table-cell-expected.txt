@@ -8,7 +8,7 @@
       "transform": 1
     },
     {
-      "name": "LayoutNGTableCell (relative positioned) TD id='cellToScroll' class='relative'",
+      "name": "LayoutTableCell (relative positioned) TD id='cellToScroll' class='relative'",
       "position": [2, 2],
       "bounds": [435, 450],
       "drawsContent": false,
@@ -25,7 +25,6 @@
       "name": "VerticalScrollbar",
       "position": [437, 2],
       "bounds": [15, 465],
-      "contentsOpaqueForText": true,
       "transform": 2
     },
     {
@@ -59,8 +58,7 @@
     {
       "name": "Scroll corner of LayoutView #document",
       "position": [785, 585],
-      "bounds": [15, 15],
-      "contentsOpaqueForText": true
+      "bounds": [15, 15]
     }
   ],
   "transforms": [

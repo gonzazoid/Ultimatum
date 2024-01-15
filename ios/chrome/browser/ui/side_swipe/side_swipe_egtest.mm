@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
@@ -10,15 +12,16 @@
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #import "net/test/embedded_test_server/default_handlers.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 // Integration tests for side swipe.
 @interface SideSwipeTestCase : ChromeTestCase
 @end
 
 @implementation SideSwipeTestCase
+
+- (void)setUp {
+  [super setUp];
+  [ChromeEarlGrey setBoolValue:NO forUserPref:prefs::kBottomOmnibox];
+}
 
 #pragma mark - Tests
 
@@ -29,6 +32,7 @@
         @"This tests should only be tested if the secondary toolbar is "
         @"present");
   }
+
   [self checkSideSwipeOnToolbarClassName:@"SecondaryToolbarView"];
 }
 
@@ -39,7 +43,7 @@
 
 #pragma mark - Helpers
 
-// Checks that side swipe on an element of class `klass` is working to change
+// Checks that side swipe on an element of `className` is working to change
 // tab.
 - (void)checkSideSwipeOnToolbarClassName:(NSString*)className {
   // Setup the server.
@@ -63,6 +67,31 @@
 
   // Check that we swiped back to our web page.
   [ChromeEarlGrey waitForWebStateContainingText:"Echo"];
+}
+
+@end
+
+#pragma mark - Bottom omnibox enabled tests
+
+// SideSwipeTestCase with a bottom default omnibox position.
+@interface SideSwipeBottomOmniboxTestCase : SideSwipeTestCase
+@end
+
+@implementation SideSwipeBottomOmniboxTestCase
+
+- (AppLaunchConfiguration)appConfigurationForTestCase {
+  AppLaunchConfiguration config;
+  config.features_enabled.push_back(kBottomOmniboxSteadyState);
+  return config;
+}
+
+- (void)setUp {
+  [super setUp];
+  [ChromeEarlGrey setBoolValue:YES forUserPref:prefs::kBottomOmnibox];
+}
+
+// This is currently needed to prevent this test case from being ignored.
+- (void)testEmpty {
 }
 
 @end

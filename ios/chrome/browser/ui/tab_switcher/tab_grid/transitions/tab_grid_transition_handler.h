@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors
+// Copyright 2023 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,39 +7,43 @@
 
 #import <UIKit/UIKit.h>
 
-#import "ios/chrome/browser/ui/tab_switcher/tab_grid/tab_grid_paging.h"
+#import "base/ios/block_types.h"
+#import "ios/chrome/browser/ui/main/bvc_container_view_controller.h"
+#import "ios/chrome/browser/ui/tab_switcher/tab_grid/transitions/tab_grid_transition_direction.h"
 
-@protocol GridTransitionAnimationLayoutProviding;
+@protocol TabGridTransitionLayoutProviding;
+
+namespace {
+
+// Transition types available.
+enum class TabGridTransitionType {
+  kNormal,
+  kReducedMotion,
+  kAnimationDisabled,
+};
+
+}  // namespace
+
+@class TabGridTransitionHandler;
 
 // Handler for the transitions between the TabGrid and the Browser.
 @interface TabGridTransitionHandler : NSObject
 
-- (instancetype)initWithLayoutProvider:
-    (id<GridTransitionAnimationLayoutProviding>)layoutProvider
+// Creates the transition object based on the provided `transitionType`,
+// `direction`, `tabGridViewController` and `bvcContainerViewController`.
+- (instancetype)initWithTransitionType:(TabGridTransitionType)transitionType
+                             direction:(TabGridTransitionDirection)direction
+                 tabGridViewController:
+                     (UIViewController<TabGridTransitionLayoutProviding>*)
+                         tabGridViewController
+            bvcContainerViewController:
+                (BVCContainerViewController*)bvcContainerViewController
     NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)init NS_UNAVAILABLE;
 
-// Whether the animations should be disabled.
-@property(nonatomic, assign) BOOL animationDisabled;
-
-// Starts the transition from the `browser` to the `tabGrid`. Assumes that the
-// `browser` is currently a child ViewController of the `tabGrid`. The active
-// page of the `tabGrid` for the transition is `activePage`. Calls `completion`
-// when the transition finishes.
-- (void)transitionFromBrowser:(UIViewController*)browser
-                    toTabGrid:(UIViewController*)tabGrid
-                   activePage:(TabGridPage)activePage
-               withCompletion:(void (^)(void))completion;
-
-// Starts the transition from `tabGrid` to `browser`. Adds `browser` as a child
-// ViewController of `tabGrid`, covering it. The active page of the `tabGrid`
-// for the transition is `activePage`. Calls `completion` when the transition
-// finishes.
-- (void)transitionFromTabGrid:(UIViewController*)tabGrid
-                    toBrowser:(UIViewController*)browser
-                   activePage:(TabGridPage)activePage
-               withCompletion:(void (^)(void))completion;
+// Performs the transition with a `completion` handler.
+- (void)performTransitionWithCompletion:(ProceduralBlock)completion;
 
 @end
 

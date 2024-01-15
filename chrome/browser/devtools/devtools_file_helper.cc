@@ -7,15 +7,15 @@
 #include <set>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/hash/md5.h"
 #include "base/json/values_util.h"
 #include "base/lazy_instance.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/devtools/devtools_file_watcher.h"
 #include "chrome/browser/download/download_prefs.h"
@@ -41,6 +41,7 @@
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
+#include "ui/shell_dialogs/selected_file_info.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -73,6 +74,7 @@ class SelectFileDialog : public ui::SelectFileDialog::Listener {
                    WebContents* web_contents,
                    ui::SelectFileDialog::Type type,
                    const base::FilePath& default_path) {
+    // `dialog` is self-deleting.
     auto* dialog = new SelectFileDialog();
     dialog->ShowDialog(std::move(selected_callback),
                        std::move(canceled_callback), web_contents, type,
@@ -80,28 +82,23 @@ class SelectFileDialog : public ui::SelectFileDialog::Listener {
   }
 
   // ui::SelectFileDialog::Listener implementation.
-  void FileSelected(const base::FilePath& path,
+  void FileSelected(const ui::SelectedFileInfo& file,
                     int index,
                     void* params) override {
-    std::move(selected_callback_).Run(path);
+    std::move(selected_callback_).Run(file.path());
     delete this;
-  }
-
-  void MultiFilesSelected(const std::vector<base::FilePath>& files,
-                          void* params) override {
-    delete this;
-    NOTREACHED() << "Should not be able to select multiple files";
   }
 
   void FileSelectionCanceled(void* params) override {
-    if (!canceled_callback_.is_null())
+    if (canceled_callback_) {
       std::move(canceled_callback_).Run();
+    }
     delete this;
   }
 
  private:
   SelectFileDialog() = default;
-  ~SelectFileDialog() override = default;
+  ~SelectFileDialog() override { select_file_dialog_->ListenerDestroyed(); }
 
   void ShowDialog(SelectedCallback selected_callback,
                   CanceledCallback canceled_callback,
@@ -133,7 +130,7 @@ class SelectFileDialog : public ui::SelectFileDialog::Listener {
 void WriteToFile(const base::FilePath& path, const std::string& content) {
   DCHECK(!path.empty());
 
-  base::WriteFile(path, content.c_str(), content.length());
+  base::WriteFile(path, content);
 }
 
 void AppendToFile(const base::FilePath& path, const std::string& content) {
@@ -263,14 +260,13 @@ void DevToolsFileHelper::Save(const std::string& url,
     if (gurl.is_valid()) {
       url::RawCanonOutputW<1024> unescaped_content;
       std::string escaped_content = gurl.ExtractFileName();
-      url::DecodeURLEscapeSequences(
-          escaped_content.c_str(), escaped_content.length(),
-          url::DecodeURLMode::kUTF8OrIsomorphic, &unescaped_content);
+      url::DecodeURLEscapeSequences(escaped_content,
+                                    url::DecodeURLMode::kUTF8OrIsomorphic,
+                                    &unescaped_content);
       // TODO(crbug.com/1324254): Due to filename encoding on Windows we can't
       // expect to always be able to convert to UTF8 and back
       std::string unescaped_content_string =
-          base::UTF16ToUTF8(base::StringPiece16(unescaped_content.data(),
-                                                unescaped_content.length()));
+          base::UTF16ToUTF8(unescaped_content.view());
       suggested_file_name = unescaped_content_string;
     } else {
       suggested_file_name = url;
@@ -341,7 +337,7 @@ void DevToolsFileHelper::UpgradeDraggedFileSystemPermissions(
     const ShowInfoBarCallback& show_info_bar_callback) {
   const GURL gurl(file_system_url);
   storage::FileSystemURL root_url = isolated_context()->CrackURL(
-      gurl, blink::StorageKey(url::Origin::Create(gurl)));
+      gurl, blink::StorageKey::CreateFirstParty(url::Origin::Create(gurl)));
   if (!root_url.is_valid() || !root_url.path().empty())
     return;
 
@@ -410,7 +406,7 @@ DevToolsFileHelper::GetFileSystems() {
     file_watcher_.reset(new DevToolsFileWatcher(
         base::BindRepeating(&DevToolsFileHelper::FilePathsChanged,
                             weak_factory_.GetWeakPtr()),
-        base::SequencedTaskRunnerHandle::Get()));
+        base::SequencedTaskRunner::GetCurrentDefault()));
     auto change_handler_on_ui = base::BindRepeating(
         &DevToolsFileHelper::FileSystemPathsSettingChangedOnUI,
         weak_factory_.GetWeakPtr());

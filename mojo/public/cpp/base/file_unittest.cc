@@ -2,9 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <string_view>
+
 #include "base/files/scoped_temp_dir.h"
 #include "base/sync_socket.h"
 #include "build/build_config.h"
+#include "mojo/buildflags.h"
 #include "mojo/public/cpp/base/file_mojom_traits.h"
 #include "mojo/public/cpp/base/read_only_file_mojom_traits.h"
 #include "mojo/public/cpp/test_support/test_utils.h"
@@ -22,7 +25,7 @@ TEST(FileTest, File) {
   base::File file(
       temp_dir.GetPath().AppendASCII("test_file.txt"),
       base::File::FLAG_CREATE | base::File::FLAG_WRITE | base::File::FLAG_READ);
-  const base::StringPiece test_content =
+  const std::string_view test_content =
       "A test string to be stored in a test file";
   file.WriteAtCurrentPos(test_content.data(),
                          base::checked_cast<int>(test_content.size()));
@@ -36,7 +39,7 @@ TEST(FileTest, File) {
             file_out.Read(0, content.data(),
                           base::checked_cast<int>(test_content.size())));
   EXPECT_EQ(test_content,
-            base::StringPiece(content.data(), test_content.size()));
+            std::string_view(content.data(), test_content.size()));
 }
 
 TEST(FileTest, AsyncFile) {
@@ -45,7 +48,7 @@ TEST(FileTest, AsyncFile) {
   base::FilePath path = temp_dir.GetPath().AppendASCII("async_test_file.txt");
 
   base::File write_file(path, base::File::FLAG_CREATE | base::File::FLAG_WRITE);
-  const base::StringPiece test_content = "test string";
+  const std::string_view test_content = "test string";
   write_file.WriteAtCurrentPos(test_content.data(),
                                base::checked_cast<int>(test_content.size()));
   write_file.Close();
@@ -77,7 +80,7 @@ TEST(FileTest, ReadOnlyFile) {
   base::File file(
       temp_dir.GetPath().AppendASCII("test_file.txt"),
       base::File::FLAG_CREATE | base::File::FLAG_WRITE | base::File::FLAG_READ);
-  const base::StringPiece test_content =
+  const std::string_view test_content =
       "A test string to be stored in a test file";
   file.WriteAtCurrentPos(test_content.data(),
                          base::checked_cast<int>(test_content.size()));
@@ -96,7 +99,7 @@ TEST(FileTest, ReadOnlyFile) {
             file_out.Read(0, content.data(),
                           base::checked_cast<int>(test_content.size())));
   EXPECT_EQ(test_content,
-            base::StringPiece(content.data(), test_content.size()));
+            std::string_view(content.data(), test_content.size()));
 }
 
 // This dies only if we can interrogate the underlying platform handle.
@@ -115,7 +118,7 @@ TEST(FileTest, ReadOnlyFileDeath) {
   base::File file(
       temp_dir.GetPath().AppendASCII("test_file.txt"),
       base::File::FLAG_CREATE | base::File::FLAG_WRITE | base::File::FLAG_READ);
-  const base::StringPiece test_content =
+  const std::string_view test_content =
       "A test string to be stored in a test file";
   file.WriteAtCurrentPos(test_content.data(),
                          base::checked_cast<int>(test_content.size()));
@@ -135,8 +138,9 @@ TEST(FileTest, ReadOnlyFileDeath) {
 #endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
 
 // This should work on all platforms. This check might be relaxed in which case
-// this test can be removed.
-#if DCHECK_IS_ON()
+// this test can be removed. iOS without blink does not build SyncSocket, so do
+// not build this when blink isn't used.
+#if DCHECK_IS_ON() && (!BUILDFLAG(IS_IOS) || BUILDFLAG(MOJO_USE_APPLE_CHANNEL))
 TEST(FileTest, NonPhysicalFileDeath) {
 #if defined(OFFICIAL_BUILD)
   const char kPhysicalFileCheckFailedRegex[] = "";

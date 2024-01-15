@@ -4,13 +4,9 @@
 
 #include "media/audio/mac/scoped_audio_unit.h"
 
-#include "base/mac/mac_logging.h"
+#include "base/apple/osstatus_logging.h"
 
 namespace media {
-
-constexpr AudioComponentDescription desc = {kAudioUnitType_Output,
-                                            kAudioUnitSubType_HALOutput,
-                                            kAudioUnitManufacturer_Apple, 0, 0};
 
 static void DestroyAudioUnit(AudioUnit audio_unit) {
   OSStatus result = AudioUnitUninitialize(audio_unit);
@@ -22,6 +18,18 @@ static void DestroyAudioUnit(AudioUnit audio_unit) {
 }
 
 ScopedAudioUnit::ScopedAudioUnit(AudioDeviceID device, AUElement element) {
+  constexpr AudioComponentDescription desc = {
+    kAudioUnitType_Output,
+#if BUILDFLAG(IS_MAC)
+    kAudioUnitSubType_HALOutput,
+#else
+    kAudioUnitSubType_RemoteIO,  // for iOS
+#endif
+    kAudioUnitManufacturer_Apple,
+    0,
+    0
+  };
+
   AudioComponent comp = AudioComponentFindNext(0, &desc);
   if (!comp)
     return;
@@ -55,6 +63,7 @@ ScopedAudioUnit::ScopedAudioUnit(AudioDeviceID device, AUElement element) {
     return;
   }
 
+#if BUILDFLAG(IS_MAC)
   result = AudioUnitSetProperty(
       audio_unit, kAudioOutputUnitProperty_CurrentDevice,
       kAudioUnitScope_Global, 0, &device, sizeof(AudioDeviceID));
@@ -64,6 +73,7 @@ ScopedAudioUnit::ScopedAudioUnit(AudioDeviceID device, AUElement element) {
     DestroyAudioUnit(audio_unit);
     return;
   }
+#endif
 
   audio_unit_ = audio_unit;
 }

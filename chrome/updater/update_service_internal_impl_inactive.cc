@@ -4,7 +4,7 @@
 
 #include "chrome/updater/update_service_internal_impl_inactive.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/sequenced_task_runner.h"
@@ -25,13 +25,11 @@ class UpdateServiceInternalImplInactive : public UpdateServiceInternal {
         FROM_HERE, std::move(callback));
   }
 
-  void InitializeUpdateService(base::OnceClosure callback) override {
+  void Hello(base::OnceClosure callback) override {
     VLOG(1) << __func__ << " (Inactive)";
     base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, std::move(callback));
   }
-
-  void Uninitialize() override {}
 
  private:
   ~UpdateServiceInternalImplInactive() override = default;

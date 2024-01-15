@@ -4,14 +4,13 @@
 
 #include "chromeos/ash/components/network/network_connection_handler.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/dbus/shill/shill_manager_client.h"
 #include "chromeos/ash/components/dbus/shill/shill_service_client.h"
@@ -69,7 +68,9 @@ const char NetworkConnectionHandler::kErrorCellularOutOfCredits[] =
     "cellular-out-of-credits";
 const char NetworkConnectionHandler::kErrorESimProfileIssue[] =
     "esim-profile-issue";
-const char NetworkConnectionHandler::kErrorSimLocked[] = "sim-locked";
+const char NetworkConnectionHandler::kErrorSimPinPukLocked[] = "sim-locked";
+const char NetworkConnectionHandler::kErrorSimCarrierLocked[] =
+    "sim-carrier-locked";
 const char NetworkConnectionHandler::kErrorCellularDeviceBusy[] =
     "cellular-device-busy";
 const char NetworkConnectionHandler::kErrorConnectTimeout[] = "connect-timeout";

@@ -20,7 +20,7 @@ class PrintDialogLinuxInterface;
 // PrintingContext with optional native UI for print dialog and pdf_paper_size.
 class COMPONENT_EXPORT(PRINTING) PrintingContextLinux : public PrintingContext {
  public:
-  explicit PrintingContextLinux(Delegate* delegate);
+  PrintingContextLinux(Delegate* delegate, ProcessBehavior process_behavior);
   PrintingContextLinux(const PrintingContextLinux&) = delete;
   PrintingContextLinux& operator=(const PrintingContextLinux&) = delete;
   ~PrintingContextLinux() override;
@@ -48,7 +48,7 @@ class COMPONENT_EXPORT(PRINTING) PrintingContextLinux : public PrintingContext {
 
  private:
   std::u16string document_name_;
-  raw_ptr<PrintDialogLinuxInterface, DanglingUntriaged> print_dialog_;
+  raw_ptr<PrintDialogLinuxInterface> print_dialog_;
 };
 
 }  // namespace printing

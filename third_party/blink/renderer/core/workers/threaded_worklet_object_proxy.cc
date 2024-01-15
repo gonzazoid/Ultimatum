@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/memory/ptr_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/core/workers/threaded_worklet_messaging_proxy.h"
 #include "third_party/blink/renderer/core/workers/worker_thread.h"
 #include "third_party/blink/renderer/core/workers/worklet_global_scope.h"
@@ -17,10 +18,13 @@ namespace blink {
 
 std::unique_ptr<ThreadedWorkletObjectProxy> ThreadedWorkletObjectProxy::Create(
     ThreadedWorkletMessagingProxy* messaging_proxy_weak_ptr,
-    ParentExecutionContextTaskRunners* parent_execution_context_task_runners) {
+    ParentExecutionContextTaskRunners* parent_execution_context_task_runners,
+    scoped_refptr<base::SingleThreadTaskRunner>
+        parent_agent_group_task_runner) {
   DCHECK(messaging_proxy_weak_ptr);
   return base::WrapUnique(new ThreadedWorkletObjectProxy(
-      messaging_proxy_weak_ptr, parent_execution_context_task_runners));
+      messaging_proxy_weak_ptr, parent_execution_context_task_runners,
+      std::move(parent_agent_group_task_runner)));
 }
 
 ThreadedWorkletObjectProxy::~ThreadedWorkletObjectProxy() = default;
@@ -46,8 +50,10 @@ void ThreadedWorkletObjectProxy::FetchAndInvokeScript(
 
 ThreadedWorkletObjectProxy::ThreadedWorkletObjectProxy(
     ThreadedWorkletMessagingProxy* messaging_proxy_weak_ptr,
-    ParentExecutionContextTaskRunners* parent_execution_context_task_runners)
-    : ThreadedObjectProxyBase(parent_execution_context_task_runners),
+    ParentExecutionContextTaskRunners* parent_execution_context_task_runners,
+    scoped_refptr<base::SingleThreadTaskRunner> parent_agent_group_task_runner)
+    : ThreadedObjectProxyBase(parent_execution_context_task_runners,
+                              std::move(parent_agent_group_task_runner)),
       messaging_proxy_weak_ptr_(messaging_proxy_weak_ptr) {}
 
 CrossThreadWeakPersistent<ThreadedMessagingProxyBase>

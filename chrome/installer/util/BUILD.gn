@@ -128,14 +128,6 @@ static_library("with_no_strings") {
       "beacons.h",
       "delete_old_versions.cc",
       "delete_old_versions.h",
-      "experiment.cc",
-      "experiment.h",
-      "experiment_labels.cc",
-      "experiment_labels.h",
-      "experiment_metrics.cc",
-      "experiment_metrics.h",
-      "experiment_storage.cc",
-      "experiment_storage.h",
       "firewall_manager_win.cc",
       "firewall_manager_win.h",
       "google_update_settings.cc",
@@ -160,8 +152,6 @@ static_library("with_no_strings") {
       "registry_entry.h",
       "scoped_token_privilege.cc",
       "scoped_token_privilege.h",
-      "scoped_user_protocol_entry.cc",
-      "scoped_user_protocol_entry.h",
       "shell_util.cc",
       "shell_util.h",
       "taskbar_util.cc",
@@ -183,10 +173,11 @@ static_library("with_no_strings") {
     deps += [
       "//base:i18n",
       "//base/third_party/dynamic_annotations",
+      "//base/win:pe_image",
       "//build:branding_buildflags",
       "//chrome/install_static:install_static_util",
       "//components/base32",
-      "//components/metrics",
+      "//components/metrics:client_info",
       "//components/version_info:channel",
       "//courgette:courgette_lib",
       "//crypto",
@@ -226,11 +217,7 @@ generate_embedded_i18n("generate_strings") {
       "//chrome/installer/util/prebuild/create_installer_string_rc.py"
 
   grdfile_folder = "//chrome/app/"
-  if (is_chrome_branded) {
-    grdfile_name = "google_chrome_strings"
-  } else {
-    grdfile_name = "chromium_strings"
-  }
+  grdfile_name = "${branding_path_product}_strings"
   xtb_relative_path = "resources"
   grd_files_info = [ [
         grdfile_folder,
@@ -325,9 +312,6 @@ if (is_win) {
       "delete_reg_value_work_item_unittest.cc",
       "delete_tree_work_item_unittest.cc",
       "duplicate_tree_detector_unittest.cc",
-      "experiment_labels_unittest.cc",
-      "experiment_storage_unittest.cc",
-      "experiment_unittest.cc",
       "google_update_settings_unittest.cc",
       "helper_unittest.cc",
       "initial_preferences_unittest.cc",
@@ -344,7 +328,6 @@ if (is_win) {
       "registry_util_unittest.cc",
       "run_all_unittests.cc",
       "scoped_token_privilege_unittest.cc",
-      "scoped_user_protocol_entry_unittest.cc",
       "self_cleaning_temp_dir_unittest.cc",
       "set_reg_value_work_item_unittest.cc",
       "shell_util_unittest.cc",
@@ -364,7 +347,6 @@ if (is_win) {
       "//chrome/common:constants",
       "//chrome/install_static:install_static_util",
       "//chrome/install_static/test:test_support",
-      "//chrome/installer/setup:lib",
       "//chrome/installer/test:alternate_version_generator_lib",
       "//components/variations",
       "//components/version_info:channel",
@@ -376,17 +358,6 @@ if (is_win) {
     data = [
       "//chrome/test/data/extensions/",
       "//chrome/test/data/installer/",
-    ]
-  }
-
-  source_set("interactive_ui_tests") {
-    testonly = true
-    sources = [ "shell_util_interactive_uitest.cc" ]
-    deps = [
-      ":with_no_strings",
-      "//base",
-      "//base/test:test_support",
-      "//testing/gtest",
     ]
   }
 }  # is_win

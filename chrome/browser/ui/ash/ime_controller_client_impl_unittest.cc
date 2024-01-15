@@ -5,12 +5,13 @@
 #include "chrome/browser/ui/ash/ime_controller_client_impl.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "ash/public/cpp/ime_info.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -49,10 +50,12 @@ class TestInputMethodManager : public MockInputMethodManager {
       std::vector<std::string> languages({"en-US"});
       InputMethodDescriptor ime1("id1", "name1", "indicator1", layout,
                                  languages, true /* is_login_keyboard */,
-                                 GURL(), GURL());
+                                 GURL(), GURL(),
+                                 /*handwriting_language=*/std::nullopt);
       InputMethodDescriptor ime2("id2", "name2", "indicator2", layout,
                                  languages, false /* is_login_keyboard */,
-                                 GURL(), GURL());
+                                 GURL(), GURL(),
+                                 /*handwriting_language=*/std::nullopt);
       current_ime_id_ = ime1.id();
       input_methods_ = {ime1, ime2};
     }
@@ -67,10 +70,9 @@ class TestInputMethodManager : public MockInputMethodManager {
       current_ime_id_ = input_method_id;
       last_show_message_ = show_message;
     }
-    std::unique_ptr<std::vector<InputMethodDescriptor>>
+    std::vector<InputMethodDescriptor>
     GetEnabledInputMethodsSortedByLocalizedDisplayNames() const override {
-      return std::make_unique<std::vector<InputMethodDescriptor>>(
-          input_methods_);
+      return input_methods_;
     }
     const InputMethodDescriptor* GetInputMethodFromId(
         const std::string& input_method_id) const override {
@@ -246,7 +248,7 @@ TEST_F(ImeControllerClientImplTest, ShowImeMenuOnShelf) {
 TEST_F(ImeControllerClientImplTest, InputMethodChanged) {
   auto mock_candidate_window =
       std::make_unique<ash::MockIMECandidateWindowHandler>();
-  ui::IMEBridge::Get()->SetCandidateWindowHandler(mock_candidate_window.get());
+  ash::IMEBridge::Get()->SetCandidateWindowHandler(mock_candidate_window.get());
 
   ImeControllerClientImpl client(&input_method_manager_);
   client.Init();

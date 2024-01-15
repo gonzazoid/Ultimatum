@@ -3,8 +3,9 @@
 # found in the LICENSE file.
 
 source_set("favicon") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
+    "favicon_browser_agent.h",
+    "favicon_browser_agent.mm",
     "favicon_client_impl.h",
     "favicon_client_impl.mm",
     "favicon_loader.h",
@@ -23,13 +24,19 @@ source_set("favicon") {
   deps = [
     "//components/favicon/core",
     "//components/favicon/core:history_implementation",
+    "//components/favicon/ios",
     "//components/image_fetcher/core",
     "//components/image_fetcher/ios",
     "//components/resources",
-    "//ios/chrome/browser/browser_state",
-    "//ios/chrome/browser/history",
-    "//ios/chrome/browser/ui/util",
-    "//ios/chrome/browser/url:constants",
+    "//ios/chrome/browser/history/model",
+    "//ios/chrome/browser/sessions:restoration_observer",
+    "//ios/chrome/browser/sessions:session_restoration_service",
+    "//ios/chrome/browser/sessions:session_restoration_service_factory",
+    "//ios/chrome/browser/shared/model/browser",
+    "//ios/chrome/browser/shared/model/browser_state",
+    "//ios/chrome/browser/shared/model/url:constants",
+    "//ios/chrome/browser/shared/model/web_state_list",
+    "//ios/chrome/browser/shared/ui/util",
     "//ios/chrome/common/ui/favicon",
     "//ios/components/webui:url_constants",
     "//ios/web",
@@ -47,7 +54,6 @@ source_set("favicon") {
 
 source_set("unit_tests") {
   testonly = true
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "favicon_loader_unittest.mm",
     "large_icon_cache_unittest.cc",
@@ -60,6 +66,7 @@ source_set("unit_tests") {
     "//ios/chrome/common/ui/favicon",
     "//skia",
     "//testing/gtest",
+    "//ui/gfx:test_support",
     "//ui/gfx/codec",
     "//url",
   ]

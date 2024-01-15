@@ -4,12 +4,11 @@
 
 // https://wicg.github.io/navigation-api/
 [
-  Exposed=Window,
-  RuntimeEnabled=NavigationApi
+  Exposed=Window
 ] interface NavigateEvent : Event {
   [CallWith=ExecutionContext] constructor(DOMString type, NavigateEventInit eventInit);
 
-  readonly attribute NavigationNavigationType navigationType;
+  readonly attribute NavigationType navigationType;
   readonly attribute NavigationDestination destination;
   [ImplementedAs=canIntercept] readonly attribute boolean canTransition;
   readonly attribute boolean canIntercept;
@@ -19,7 +18,10 @@
   readonly attribute FormData? formData;
   readonly attribute DOMString? downloadRequest;
   readonly attribute any info;
+  [RuntimeEnabled=HasUAVisualTransition] readonly attribute boolean hasUAVisualTransition;
+  [RuntimeEnabled=NavigateEventSourceElement] readonly attribute Element? sourceElement;
 
   [RaisesException] void intercept(optional NavigationInterceptOptions options = {});
+  [RaisesException, RuntimeEnabled=NavigateEventCommitBehavior] void commit();
   [RaisesException] void scroll();
 };

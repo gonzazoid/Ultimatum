@@ -2,25 +2,29 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <optional>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/task_environment.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "chrome/browser/ash/net/traffic_counters_handler.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/network/managed_network_configuration_handler.h"
 #include "chromeos/ash/components/network/network_configuration_handler.h"
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "chromeos/ash/components/network/network_metadata_store.h"
-#include "chromeos/login/login_state/login_state.h"
-#include "chromeos/services/network_config/cros_network_config.h"
-#include "chromeos/services/network_config/in_process_instance.h"
-#include "chromeos/services/network_config/public/cpp/cros_network_config_test_helper.h"
+#include "chromeos/ash/components/network/network_profile_handler.h"
+#include "chromeos/ash/services/network_config/cros_network_config.h"
+#include "chromeos/ash/services/network_config/in_process_instance.h"
+#include "chromeos/ash/services/network_config/public/cpp/cros_network_config_test_helper.h"
 #include "components/proxy_config/pref_proxy_config_tracker_impl.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
+#include "components/user_manager/fake_user_manager.h"
+#include "components/user_manager/scoped_user_manager.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
 namespace ash {
@@ -28,14 +32,16 @@ namespace traffic_counters {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove when network_config is moved to ash.
-namespace network_config = ::chromeos::network_config;
-
 class TrafficCountersHandlerTest : public ::testing::Test {
  public:
   TrafficCountersHandlerTest()
       : task_environment_(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {
+    // TODO(b/278643115) Remove LoginState dependency.
     LoginState::Initialize();
+
+    scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
+        std::make_unique<user_manager::FakeUserManager>());
+
     helper_ = std::make_unique<NetworkHandlerTestHelper>();
     helper_->AddDefaultProfiles();
     helper_->ResetDevicesAndServices();
@@ -48,8 +54,8 @@ class TrafficCountersHandlerTest : public ::testing::Test {
     NetworkHandler::Get()->managed_network_configuration_handler()->SetPolicy(
         ::onc::ONC_SOURCE_DEVICE_POLICY,
         /*userhash=*/std::string(),
-        /*network_configs_onc=*/base::ListValue(),
-        /*global_network_config=*/base::DictionaryValue());
+        /*network_configs_onc=*/base::Value::List(),
+        /*global_network_config=*/base::Value::Dict());
 
     cros_network_config_ =
         std::make_unique<network_config::CrosNetworkConfig>();
@@ -77,6 +83,7 @@ class TrafficCountersHandlerTest : public ::testing::Test {
     traffic_counters_handler_.reset();
     cros_network_config_.reset();
     helper_.reset();
+    scoped_user_manager_.reset();
     LoginState::Shutdown();
   }
 
@@ -178,6 +185,7 @@ class TrafficCountersHandlerTest : public ::testing::Test {
   // are dependent on them.
   base::test::TaskEnvironment task_environment_;
   base::RunLoop run_loop_;
+  std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
   std::unique_ptr<NetworkHandlerTestHelper> helper_;
   std::unique_ptr<network_config::CrosNetworkConfig> cros_network_config_;
   sync_preferences::TestingPrefServiceSyncable user_prefs_;

@@ -6,6 +6,7 @@
 
 #include <string>
 
+#include "base/debug/crash_logging.h"
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_error_type.mojom.h"
@@ -26,7 +27,8 @@ void GetServiceWorkerErrorTypeForRegistration(
     *out_message = blink::ServiceWorkerStatusToString(status);
   switch (status) {
     case blink::ServiceWorkerStatusCode::kOk:
-      NOTREACHED() << "Calling this when status == OK is not allowed";
+      DUMP_WILL_BE_NOTREACHED_NORETURN()
+          << "Calling this when status == OK is not allowed";
       return;
 
     case blink::ServiceWorkerStatusCode::kErrorInstallWorkerFailed:
@@ -76,12 +78,18 @@ void GetServiceWorkerErrorTypeForRegistration(
     case blink::ServiceWorkerStatusCode::kErrorState:
     case blink::ServiceWorkerStatusCode::kErrorInvalidArguments:
     case blink::ServiceWorkerStatusCode::kErrorStorageDisconnected:
+    case blink::ServiceWorkerStatusCode::kErrorStorageDataCorrupted:
       // Unexpected, or should have bailed out before calling this, or we don't
       // have a corresponding blink error code yet.
       break;  // Fall through to NOTREACHED().
   }
-  NOTREACHED() << "Got unexpected error code: " << static_cast<uint32_t>(status)
-               << " " << blink::ServiceWorkerStatusToString(status);
+  SCOPED_CRASH_KEY_NUMBER("GetSWErrTypeForReg", "status",
+                          static_cast<uint32_t>(status));
+  SCOPED_CRASH_KEY_STRING256("GetSWErrTypeForReg", "status_str",
+                             blink::ServiceWorkerStatusToString(status));
+  DUMP_WILL_BE_NOTREACHED_NORETURN()
+      << "Got unexpected error code: " << static_cast<uint32_t>(status) << " "
+      << blink::ServiceWorkerStatusToString(status);
 }
 
 }  // namespace content

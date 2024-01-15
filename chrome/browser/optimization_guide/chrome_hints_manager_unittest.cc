@@ -12,8 +12,8 @@
 #include "chrome/browser/optimization_guide/optimization_guide_tab_url_provider.h"
 #include "chrome/browser/optimization_guide/optimization_guide_web_contents_observer.h"
 #include "chrome/test/base/testing_profile.h"
-#include "components/optimization_guide/content/browser/optimization_guide_decider.h"
 #include "components/optimization_guide/core/hints_fetcher.h"
+#include "components/optimization_guide/core/optimization_guide_decider.h"
 #include "components/optimization_guide/core/optimization_guide_features.h"
 #include "components/optimization_guide/core/optimization_guide_logger.h"
 #include "components/optimization_guide/core/optimization_guide_prefs.h"
@@ -58,7 +58,8 @@ class ChromeHintsManagerFetchingTest
     scoped_feature_list_.InitWithFeaturesAndParameters(
         {{
              optimization_guide::features::kRemoteOptimizationGuideFetching,
-             {{"max_concurrent_page_navigation_fetches", "2"}},
+             {{"max_concurrent_page_navigation_fetches", "2"},
+              {"max_urls_for_optimization_guide_service_hints_fetch", "30"}},
          },
          {optimization_guide::features::kOptimizationHints,
           {{"max_host_keyed_hint_cache_size", "1"}}}},
@@ -108,7 +109,7 @@ class ChromeHintsManagerFetchingTest
         url_loader_factory_,
         OptimizationGuideKeyedService::MaybeCreatePushNotificationManager(
             &testing_profile_),
-        &optimization_guide_logger_);
+        /*identity_manager=*/nullptr, &optimization_guide_logger_);
     hints_manager_->SetClockForTesting(task_environment_.GetMockClock());
 
     // Run until hint cache is initialized and the ChromeHintsManager is ready
@@ -133,6 +134,19 @@ class ChromeHintsManagerFetchingTest
     content::WebContents* web_contents =
         web_contents_factory_->CreateWebContents(&testing_profile_);
     OptimizationGuideWebContentsObserver::CreateForWebContents(web_contents);
+    std::unique_ptr<content::MockNavigationHandle> navigation_handle =
+        std::make_unique<::testing::NiceMock<content::MockNavigationHandle>>(
+            web_contents);
+    navigation_handle->set_url(url);
+    return navigation_handle;
+  }
+
+  // Creates a navigation handle WITHOUT the
+  // OptimizationGuideWebContentsObserver attached.
+  std::unique_ptr<content::MockNavigationHandle> CreateMockNavigationHandle(
+      const GURL& url) {
+    content::WebContents* web_contents =
+        web_contents_factory_->CreateWebContents(&testing_profile_);
     std::unique_ptr<content::MockNavigationHandle> navigation_handle =
         std::make_unique<::testing::NiceMock<content::MockNavigationHandle>>(
             web_contents);
@@ -370,4 +384,27 @@ TEST_F(ChromeHintsManagerPushDisabledTest, PushManagerSet) {
   EXPECT_FALSE(hints_manager()->push_notification_manager());
 }
 
+TEST_F(ChromeHintsManagerFetchingTest, NoOptimizationGuideWebContentsObserver) {
+  base::CommandLine::ForCurrentProcess()->AppendSwitch(
+      optimization_guide::switches::kDisableCheckingUserPermissionsForTesting);
+  hints_manager()->RegisterOptimizationTypes(
+      {optimization_guide::proto::DEFER_ALL_SCRIPT});
+
+  std::vector<GURL> sorted_predicted_urls;
+  sorted_predicted_urls.emplace_back("https://foo.com/page1.html");
+
+  GURL url("https://www.google.com/search?q=a");
+  auto navigation_handle = CreateMockNavigationHandle(url);
+  content::WebContents* web_contents = navigation_handle->GetWebContents();
+
+  NavigationPredictorKeyedService::Prediction prediction(
+      web_contents, url,
+      NavigationPredictorKeyedService::PredictionSource::
+          kAnchorElementsParsedFromWebPage,
+      sorted_predicted_urls);
+
+  // Calling `OnPredictionUpdated` without having a valid
+  // `OptimizationGuideWebContentsObserver` should not cause a crash.
+  hints_manager()->OnPredictionUpdated(prediction);
+}
 }  // namespace optimization_guide

@@ -100,7 +100,7 @@ class TabLifecycleUnitSource::TabLifecycleUnit
                   DecisionDetails* decision_details) const override;
   LifecycleUnitDiscardReason GetDiscardReason() const override;
   bool Discard(LifecycleUnitDiscardReason discard_reason,
-               uint64_t resident_set_size_estimate) override;
+               uint64_t memory_footprint_estimate) override;
   ukm::SourceId GetUkmSourceId() const override;
 
   // Implementations of some functions from TabLifecycleUnitExternal. These are
@@ -147,7 +147,7 @@ class TabLifecycleUnitSource::TabLifecycleUnit
   raw_ptr<base::ObserverList<TabLifecycleObserver>::Unchecked> observers_;
 
   // TabStripModel to which this tab belongs.
-  raw_ptr<TabStripModel> tab_strip_model_;
+  raw_ptr<TabStripModel, DanglingUntriaged> tab_strip_model_;
 
   // Last time at which this tab was focused, or TimeTicks::Max() if it is
   // currently focused. For tabs that aren't currently focused this is

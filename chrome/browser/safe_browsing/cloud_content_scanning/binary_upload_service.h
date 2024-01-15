@@ -5,7 +5,11 @@
 #ifndef CHROME_BROWSER_SAFE_BROWSING_CLOUD_CONTENT_SCANNING_BINARY_UPLOAD_SERVICE_H_
 #define CHROME_BROWSER_SAFE_BROWSING_CLOUD_CONTENT_SCANNING_BINARY_UPLOAD_SERVICE_H_
 
+#include "base/functional/bind.h"
 #include "base/memory/read_only_shared_memory_region.h"
+#include "base/memory/weak_ptr.h"
+#include "base/types/id_type.h"
+#include "base/types/optional_ref.h"
 #include "chrome/browser/enterprise/connectors/analysis/analysis_settings.h"
 #include "components/enterprise/common/proto/connectors.pb.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -50,8 +54,9 @@ class BinaryUploadService : public KeyedService {
     // Some or all parts of the file are encrypted.
     FILE_ENCRYPTED = 7,
 
-    // The file's type is not supported and the file was not uploaded.
-    DLP_SCAN_UNSUPPORTED_FILE_TYPE = 8,
+    // Deprecated: The file's type is not supported and the file was not
+    // uploaded.
+    // DLP_SCAN_UNSUPPORTED_FILE_TYPE = 8,
 
     // The server returned a 429 HTTP status indicating too many requests are
     // being sent.
@@ -63,7 +68,7 @@ class BinaryUploadService : public KeyedService {
   static std::string ResultToString(Result result);
 
   // Callbacks used to pass along the results of scanning. The response protos
-  // will only be populated if the result is SUCCESS.
+  // will only be populated if the result is SUCCESS. Will run on UI thread.
   using ContentAnalysisCallback =
       base::OnceCallback<void(Result,
                               enterprise_connectors::ContentAnalysisResponse)>;
@@ -74,8 +79,21 @@ class BinaryUploadService : public KeyedService {
   // page or string).
   class Request {
    public:
+    // RequestStartCallback: Optional callback, called on the UI thread before
+    // authentication attempts or upload. Useful for tracking individual
+    // uploads.
+    using RequestStartCallback = base::OnceCallback<void(const Request&)>;
+
+    // Type alias for safe IDs
+    using Id = base::IdTypeU32<class RequestClass>;
+
     Request(ContentAnalysisCallback,
             enterprise_connectors::CloudOrLocalAnalysisSettings settings);
+    // Optional constructor which accepts RequestStartCallback. Will be called
+    // before request attempts upload.
+    Request(ContentAnalysisCallback,
+            enterprise_connectors::CloudOrLocalAnalysisSettings settings,
+            RequestStartCallback);
     virtual ~Request();
     Request(const Request&) = delete;
     Request& operator=(const Request&) = delete;
@@ -85,10 +103,10 @@ class BinaryUploadService : public KeyedService {
     // Structure of data returned in the callback to GetRequestData().
     struct Data {
       Data();
+      Data(const Data&);
       Data(Data&&);
+      Data& operator=(const Data&);
       Data& operator=(Data&&);
-      Data(const Data&) = delete;
-      Data& operator=(const Data&) = delete;
       ~Data();
 
       // The data content. Only populated for string requests.
@@ -132,8 +150,8 @@ class BinaryUploadService : public KeyedService {
       return cloud_or_local_settings_;
     }
 
-    void set_tab_url(const GURL& tab_url);
-    const GURL& tab_url() const;
+    void set_id(Id id);
+    Id id() const;
 
     void set_per_profile_request(bool per_profile_request);
     bool per_profile_request() const;
@@ -157,6 +175,14 @@ class BinaryUploadService : public KeyedService {
     void set_tab_title(const std::string& tab_title);
     void set_user_action_id(const std::string& user_action_id);
     void set_user_action_requests_count(uint64_t user_action_requests_count);
+    void set_tab_url(const GURL& tab_url);
+    void set_printer_name(const std::string& printer_name);
+    void set_printer_type(
+        enterprise_connectors::ContentMetaData::PrintMetadata::PrinterType
+            printer_type);
+    void set_password(const std::string& password);
+    void set_reason(
+        enterprise_connectors::ContentAnalysisRequest::Reason reason);
 
     std::string SetRandomRequestToken();
 
@@ -169,7 +195,15 @@ class BinaryUploadService : public KeyedService {
     const std::string& digest() const;
     const std::string& content_type() const;
     const std::string& user_action_id() const;
+    const std::string& tab_title() const;
+    const std::string& printer_name() const;
     uint64_t user_action_requests_count() const;
+    GURL tab_url() const;
+    base::optional_ref<const std::string> password() const;
+    enterprise_connectors::ContentAnalysisRequest::Reason reason() const;
+
+    // Called when beginning to try upload.
+    void StartRequest();
 
     // Finish the request, with the given `result` and `response` from the
     // server.
@@ -187,16 +221,15 @@ class BinaryUploadService : public KeyedService {
     void set_access_token(const std::string& access_token);
 
    private:
+    Id id_;
     enterprise_connectors::ContentAnalysisRequest content_analysis_request_;
     ContentAnalysisCallback content_analysis_callback_;
+    RequestStartCallback request_start_callback_;
 
     // Settings used to determine how the request is used in the cloud or
     // locally.
     enterprise_connectors::CloudOrLocalAnalysisSettings
         cloud_or_local_settings_;
-
-    // The URL of the page that initially triggered the scan.
-    GURL tab_url_;
 
     // Indicates if the request was triggered by a profile-level policy or not.
     bool per_profile_request_ = false;
@@ -287,6 +320,9 @@ class BinaryUploadService : public KeyedService {
   // approach only, since it is possible that requests have been started in a
   // way that they are no longer cancelable.
   virtual void MaybeCancelRequests(std::unique_ptr<CancelRequests> cancel) = 0;
+
+  // Get a WeakPtr to the instance.
+  virtual base::WeakPtr<BinaryUploadService> AsWeakPtr() = 0;
 };
 
 }  // namespace safe_browsing

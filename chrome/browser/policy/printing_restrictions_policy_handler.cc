@@ -180,16 +180,16 @@ PrintingBackgroundGraphicsDefaultPolicyHandler::
 
 PrintingPaperSizeDefaultPolicyHandler::PrintingPaperSizeDefaultPolicyHandler()
     : TypeCheckingPolicyHandler(key::kPrintingPaperSizeDefault,
-                                base::Value::Type::DICTIONARY) {}
+                                base::Value::Type::DICT) {}
 
 PrintingPaperSizeDefaultPolicyHandler::
     ~PrintingPaperSizeDefaultPolicyHandler() = default;
 
 bool PrintingPaperSizeDefaultPolicyHandler::CheckIntSubkey(
-    const base::Value* dict,
+    const base::Value::Dict& dict,
     const std::string& key,
     PolicyErrorMap* errors) {
-  const base::Value* value = dict->FindKey(key);
+  const base::Value* value = dict.Find(key);
   if (!value) {
     if (errors) {
       errors->AddError(policy_name(), IDS_POLICY_NOT_SPECIFIED_ERROR,
@@ -224,7 +224,7 @@ bool PrintingPaperSizeDefaultPolicyHandler::GetValue(
   if (!value)
     return true;
 
-  const base::Value* name = value->FindKey(printing::kPaperSizeName);
+  const base::Value* name = value->GetDict().Find(printing::kPaperSizeName);
   if (!name) {
     if (errors)
       errors->AddError(policy_name(), IDS_POLICY_INVALID_SELECTION_ERROR,
@@ -244,19 +244,20 @@ bool PrintingPaperSizeDefaultPolicyHandler::GetValue(
 
   bool custom_size_property_found = false;
   const base::Value* custom_size =
-      value->FindKey(printing::kPaperSizeCustomSize);
+      value->GetDict().Find(printing::kPaperSizeCustomSize);
   if (custom_size) {
     if (!custom_size->is_dict()) {
       if (errors) {
-        errors->AddError(
-            policy_name(), IDS_POLICY_TYPE_ERROR,
-            base::Value::GetTypeName(base::Value::Type::DICTIONARY),
-            PolicyErrorPath{printing::kPaperSizeCustomSize});
+        errors->AddError(policy_name(), IDS_POLICY_TYPE_ERROR,
+                         base::Value::GetTypeName(base::Value::Type::DICT),
+                         PolicyErrorPath{printing::kPaperSizeCustomSize});
       }
       return false;
     }
-    if (!CheckIntSubkey(custom_size, printing::kPaperSizeWidth, errors) ||
-        !CheckIntSubkey(custom_size, printing::kPaperSizeHeight, errors)) {
+    if (!CheckIntSubkey(custom_size->GetDict(), printing::kPaperSizeWidth,
+                        errors) ||
+        !CheckIntSubkey(custom_size->GetDict(), printing::kPaperSizeHeight,
+                        errors)) {
       return false;
     }
     custom_size_property_found = true;

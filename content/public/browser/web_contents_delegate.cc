@@ -8,8 +8,10 @@
 #include <utility>
 
 #include "base/compiler_specific.h"
+#include "base/containers/contains.h"
 #include "base/logging.h"
 #include "base/memory/singleton.h"
+#include "base/notreached.h"
 #include "build/build_config.h"
 #include "content/public/browser/audio_stream_broker.h"
 #include "content/public/browser/color_chooser.h"
@@ -21,6 +23,7 @@
 #include "content/public/common/url_constants.h"
 #include "third_party/blink/public/common/security/protocol_handler_security_level.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom.h"
+#include "ui/base/ui_base_types.h"
 #include "ui/gfx/geometry/rect.h"
 
 namespace content {
@@ -68,7 +71,7 @@ bool WebContentsDelegate::ShouldFocusLocationBarByDefault(WebContents* source) {
   return false;
 }
 
-bool WebContentsDelegate::ShouldFocusPageAfterCrash() {
+bool WebContentsDelegate::ShouldFocusPageAfterCrash(WebContents* source) {
   return true;
 }
 
@@ -122,7 +125,7 @@ bool WebContentsDelegate::OnGoToEntryOffset(int offset) {
 
 bool WebContentsDelegate::IsWebContentsCreationOverridden(
     SiteInstance* source_site_instance,
-    content::mojom::WindowContainerType window_container_type,
+    mojom::WindowContainerType window_container_type,
     const GURL& opener_url,
     const std::string& frame_name,
     const GURL& target_url) {
@@ -153,15 +156,33 @@ void WebContentsDelegate::CreateSmsPrompt(
     base::OnceCallback<void()> on_confirm,
     base::OnceCallback<void()> on_cancel) {}
 
-bool WebContentsDelegate::IsFullscreenForTabOrPending(
-    const WebContents* web_contents) {
-  return IsFullscreenForTabOrPending(web_contents, /*display_id=*/nullptr);
+bool WebContentsDelegate::CanUseWindowingControls(
+    RenderFrameHost* requesting_frame) {
+  return false;
+}
+
+bool WebContentsDelegate::GetCanResize() {
+  return false;
+}
+
+ui::WindowShowState WebContentsDelegate::GetWindowShowState() const {
+  return ui::SHOW_STATE_DEFAULT;
 }
 
 bool WebContentsDelegate::IsFullscreenForTabOrPending(
-    const WebContents* web_contents,
-    int64_t* display_id) {
+    const WebContents* web_contents) {
   return false;
+}
+
+FullscreenState WebContentsDelegate::GetFullscreenState(
+    const WebContents* web_contents) const {
+  FullscreenState state;
+  state.target_mode =
+      const_cast<WebContentsDelegate*>(this)->IsFullscreenForTabOrPending(
+          web_contents)
+          ? FullscreenMode::kContent
+          : FullscreenMode::kWindowed;
+  return state;
 }
 
 bool WebContentsDelegate::CanEnterFullscreenModeForTab(
@@ -192,14 +213,14 @@ void WebContentsDelegate::RequestKeyboardLock(WebContents* web_contents,
   web_contents->GotResponseToKeyboardLockRequest(false);
 }
 
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_APPLE)
 std::unique_ptr<ColorChooser> WebContentsDelegate::OpenColorChooser(
     WebContents* web_contents,
     SkColor color,
     const std::vector<blink::mojom::ColorSuggestionPtr>& suggestions) {
   return nullptr;
 }
-#endif  // BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_MAC)
+#endif
 
 std::unique_ptr<EyeDropper> WebContentsDelegate::OpenEyeDropper(
     RenderFrameHost* frame,
@@ -224,27 +245,21 @@ void WebContentsDelegate::EnumerateDirectory(
 void WebContentsDelegate::RequestMediaAccessPermission(
     WebContents* web_contents,
     const MediaStreamRequest& request,
-    content::MediaResponseCallback callback) {
+    MediaResponseCallback callback) {
   LOG(ERROR) << "WebContentsDelegate::RequestMediaAccessPermission: "
              << "Not supported.";
   std::move(callback).Run(blink::mojom::StreamDevicesSet(),
                           blink::mojom::MediaStreamRequestResult::NOT_SUPPORTED,
-                          std::unique_ptr<content::MediaStreamUI>());
+                          std::unique_ptr<MediaStreamUI>());
 }
 
 bool WebContentsDelegate::CheckMediaAccessPermission(
     RenderFrameHost* render_frame_host,
-    const GURL& security_origin,
+    const url::Origin& security_origin,
     blink::mojom::MediaStreamType type) {
   LOG(ERROR) << "WebContentsDelegate::CheckMediaAccessPermission: "
              << "Not supported.";
   return false;
-}
-
-std::string WebContentsDelegate::GetDefaultMediaDeviceID(
-    WebContents* web_contents,
-    blink::mojom::MediaStreamType type) {
-  return std::string();
 }
 
 std::string WebContentsDelegate::GetTitleForMediaControls(
@@ -272,12 +287,12 @@ WebContentsDelegate::~WebContentsDelegate() {
 }
 
 void WebContentsDelegate::Attach(WebContents* web_contents) {
-  DCHECK(attached_contents_.find(web_contents) == attached_contents_.end());
+  DCHECK(!base::Contains(attached_contents_, web_contents));
   attached_contents_.insert(web_contents);
 }
 
 void WebContentsDelegate::Detach(WebContents* web_contents) {
-  DCHECK(attached_contents_.find(web_contents) != attached_contents_.end());
+  DCHECK(base::Contains(attached_contents_, web_contents));
   attached_contents_.erase(web_contents);
 }
 
@@ -296,7 +311,7 @@ bool WebContentsDelegate::GuestSaveFrame(WebContents* guest_web_contents) {
 
 bool WebContentsDelegate::SaveFrame(const GURL& url,
                                     const Referrer& referrer,
-                                    content::RenderFrameHost* rfh) {
+                                    RenderFrameHost* rfh) {
   return false;
 }
 
@@ -333,6 +348,10 @@ bool WebContentsDelegate::DoBrowserControlsShrinkRendererSize(
   return false;
 }
 
+int WebContentsDelegate::GetVirtualKeyboardHeight(WebContents* web_contents) {
+  return 0;
+}
+
 bool WebContentsDelegate::OnlyExpandTopControlsAtPageTop() {
   return false;
 }
@@ -350,14 +369,9 @@ bool WebContentsDelegate::IsBackForwardCacheSupported() {
   return false;
 }
 
-bool WebContentsDelegate::IsPrerender2Supported(WebContents& web_contents) {
-  return false;
-}
-
-std::unique_ptr<WebContents> WebContentsDelegate::ActivatePortalWebContents(
-    WebContents* predecessor_contents,
-    std::unique_ptr<WebContents> portal_contents) {
-  return portal_contents;
+PreloadingEligibility WebContentsDelegate::IsPrerender2Supported(
+    WebContents& web_contents) {
+  return PreloadingEligibility::kPreloadingUnsupportedByWebContents;
 }
 
 void WebContentsDelegate::UpdateInspectedWebContentsIfNecessary(
@@ -372,11 +386,6 @@ bool WebContentsDelegate::ShouldShowStaleContentOnEviction(
   return false;
 }
 
-WebContents* WebContentsDelegate::GetResponsibleWebContents(
-    WebContents* web_contents) {
-  return web_contents;
-}
-
 device::mojom::GeolocationContext*
 WebContentsDelegate::GetInstalledWebappGeolocationContext() {
   return nullptr;
@@ -389,5 +398,15 @@ base::WeakPtr<WebContentsDelegate> WebContentsDelegate::GetDelegateWeakPtr() {
 bool WebContentsDelegate::IsPrivileged() {
   return false;
 }
+
+bool WebContentsDelegate::IsInPreviewMode() const {
+  return false;
+}
+
+#if !BUILDFLAG(IS_ANDROID)
+bool WebContentsDelegate::ShouldUseInstancedSystemMediaControls() const {
+  return false;
+}
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 }  // namespace content

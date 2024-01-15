@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "base/android/jni_android.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/ranges/algorithm.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/android/jni_headers/ProfileManagerUtils_jni.h"
@@ -22,10 +22,6 @@ using base::android::ScopedJavaLocalRef;
 
 namespace {
 
-void FlushStoragePartition(content::StoragePartition* partition) {
-  partition->Flush();
-}
-
 void CommitPendingWritesForProfile(Profile* profile) {
   // These calls are asynchronous. They may not finish (and may not even
   // start!) before the Android OS kills our process. But we can't wait for them
@@ -35,7 +31,7 @@ void CommitPendingWritesForProfile(Profile* profile) {
       ->GetCookieManagerForBrowserProcess()
       ->FlushCookieStore(
           network::mojom::CookieManager::FlushCookieStoreCallback());
-  profile->ForEachStoragePartition(base::BindRepeating(FlushStoragePartition));
+  profile->ForEachLoadedStoragePartition(&content::StoragePartition::Flush);
 }
 
 void RemoveSessionCookiesForProfile(Profile* profile) {

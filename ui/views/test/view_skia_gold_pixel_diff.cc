@@ -6,11 +6,13 @@
 
 #include "base/logging.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkImage.h"
 #include "ui/base/test/skia_gold_matching_algorithm.h"
+#include "ui/base/test/skia_gold_pixel_diff.h"
 #include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/image/image.h"
 #include "ui/snapshot/snapshot.h"
@@ -28,24 +30,28 @@ void SnapshotCallback(base::RunLoop* run_loop,
                       gfx::Image* ret_image,
                       gfx::Image image) {
   *ret_image = image;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                run_loop->QuitClosure());
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, run_loop->QuitClosure());
 }
 }  // namespace
 
-ViewSkiaGoldPixelDiff::ViewSkiaGoldPixelDiff() = default;
+ViewSkiaGoldPixelDiff::ViewSkiaGoldPixelDiff(
+    const std::string& screenshot_prefix,
+    const absl::optional<std::string>& corpus)
+    : screenshot_prefix_(screenshot_prefix),
+      pixel_diff_(ui::test::SkiaGoldPixelDiff::GetSession(corpus)) {
+  CHECK(pixel_diff_);
+}
 
 ViewSkiaGoldPixelDiff::~ViewSkiaGoldPixelDiff() = default;
 
 bool ViewSkiaGoldPixelDiff::CompareViewScreenshot(
     const std::string& screenshot_name,
-    views::View* view,
+    const views::View* view,
     const ui::test::SkiaGoldMatchingAlgorithm* algorithm) const {
-  DCHECK(Initialized()) << "Initialize the class before using this method.";
-
   // Calculate the snapshot bounds in the widget's coordinates.
   gfx::Rect rc = view->GetBoundsInScreen();
-  views::Widget* widget = view->GetWidget();
+  const views::Widget* widget = view->GetWidget();
   gfx::Rect bounds_in_screen = widget->GetRootView()->GetBoundsInScreen();
   gfx::Rect bounds = widget->GetRootView()->bounds();
   rc.Offset(bounds.x() - bounds_in_screen.x(),
@@ -60,15 +66,17 @@ bool ViewSkiaGoldPixelDiff::CompareNativeWindowScreenshot(
     gfx::NativeWindow window,
     const gfx::Rect& snapshot_bounds,
     const ui::test::SkiaGoldMatchingAlgorithm* algorithm) const {
-  DCHECK(Initialized()) << "Initialize the class before using this method.";
-
   gfx::Image image;
   bool ret = GrabWindowSnapshotInternal(window, snapshot_bounds, &image);
-  if (!ret)
+  if (!ret) {
     return false;
+  }
 
-  return SkiaGoldPixelDiff::CompareScreenshot(screenshot_name,
-                                              *image.ToSkBitmap(), algorithm);
+  return pixel_diff_->CompareScreenshot(
+      ui::test::SkiaGoldPixelDiff::GetGoldenImageName(
+          screenshot_prefix_, screenshot_name,
+          ui::test::SkiaGoldPixelDiff::GetPlatform()),
+      *image.ToSkBitmap(), algorithm);
 }
 
 bool ViewSkiaGoldPixelDiff::CompareNativeWindowScreenshotInRects(
@@ -77,20 +85,23 @@ bool ViewSkiaGoldPixelDiff::CompareNativeWindowScreenshotInRects(
     const gfx::Rect& snapshot_bounds,
     const ui::test::SkiaGoldMatchingAlgorithm* algorithm,
     const std::vector<gfx::Rect>& regions_of_interest) const {
-  DCHECK(Initialized()) << "Initialize the class before using this method.";
   CHECK(!algorithm || algorithm->GetCommandLineSwitchName() != "sobel");
 
   gfx::Image image;
   bool ret = GrabWindowSnapshotInternal(window, snapshot_bounds, &image);
-  if (!ret)
+  if (!ret) {
     return false;
+  }
 
   // Only keep the pixels within `regions_of_interest` so that the differences
   // outside of `regions_of_interest` are ignored.
   KeepPixelsInRects(regions_of_interest, &image);
 
-  return SkiaGoldPixelDiff::CompareScreenshot(screenshot_name,
-                                              *image.ToSkBitmap(), algorithm);
+  return pixel_diff_->CompareScreenshot(
+      ui::test::SkiaGoldPixelDiff::GetGoldenImageName(
+          screenshot_prefix_, screenshot_name,
+          ui::test::SkiaGoldPixelDiff::GetPlatform()),
+      *image.ToSkBitmap(), algorithm);
 }
 
 bool ViewSkiaGoldPixelDiff::GrabWindowSnapshotInternal(
@@ -108,8 +119,9 @@ bool ViewSkiaGoldPixelDiff::GrabWindowSnapshotInternal(
   run_loop.Run();
 
   const bool success = !image->IsEmpty();
-  if (!success)
+  if (!success) {
     LOG(ERROR) << "Grab screenshot failed.";
+  }
   return success;
 }
 

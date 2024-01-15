@@ -2,85 +2,59 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// clang-format off
-import {assert} from 'chrome://resources/js/assert.js';
-import {$} from 'chrome://resources/js/util.js';
-import {Oobe} from './cr_ui.m.js';
-import * as OobeDebugger from './debug/debug.m.js';
-import {invokePolymerMethod} from './display_manager.m.js';
-import {loadTimeData} from './i18n_setup.js';
-import 'chrome://oobe/components/test_util.m.js';
-import 'chrome://oobe/test_api/test_api.m.js';
-import {commonScreensList, loginScreensList, oobeScreensList} from 'chrome://oobe/screens.js';
-import {MultiTapDetector} from './multi_tap_detector.m.js';
-import './components/common_styles/oobe_flex_layout_styles.m.js';
+
+
+import './components/common_styles/oobe_flex_layout_styles.css.js';
+import './components/api_keys_notice.js';
 // clang-format on
 
-/**
- * Add screens from the given list into the main screen container.
- * Screens are added with the following properties:
- *    - Classes: "step hidden" + any extra classes the screen may have
- *    - Attribute: "hidden"
- *
- * If a screen should be added only under some certain conditions, it must have
- * the `condition` property associated with a boolean flag. If the condition
- * yields true it will be added, otherwise it is skipped.
- * @param {Array<{tag: string, id: string}>}
- */
- function addScreensToMainContainer(screenList) {
-  const screenContainer = $('inner-container');
-  for (const screen of screenList) {
-    if (screen.condition) {
-      if (!loadTimeData.getBoolean(screen.condition)) {
-        continue;
-      }
-    }
 
-    const screenElement = document.createElement(screen.tag);
-    screenElement.id = screen.id;
-    screenElement.classList.add('step', 'hidden');
-    screenElement.setAttribute('hidden', '');
-    if (screen.extra_classes) {
-      screenElement.classList.add(...screen.extra_classes);
-    }
-    screenContainer.appendChild(screenElement);
-    assert(!!$(screen.id).shadowRoot,
-           `Error! No shadow root in <${screen.tag}>`);
-  }
-}
+
+import {assert} from '//resources/ash/common/assert.js';
+import {$} from '//resources/ash/common/util.js';
+import {ColorChangeUpdater} from '//resources/cr_components/color_change_listener/colors_css_updater.js';
+import {getTrustedScriptURL} from '//resources/js/static_types.js';
+
+import {Oobe} from './cr_ui.js';
+import * as OobeDebugger from './debug/debug.js';
+import * as QuickStartDebugger from './debug/quick_start_debugger.js';
+import {loadTimeData} from './i18n_setup.js';
+import {addScreensToMainContainer} from './login_ui_tools.js';
+import {MultiTapDetector} from './multi_tap_detector.js';
+import {TraceEvent, traceExecution} from './oobe_trace.js';
+import {priorityCommonScreenList} from './priority_screens_common_flow.js';
+import {priorityOobeScreenList} from './priority_screens_oobe_flow.js';
+import * as OobeTestApi from './test_api/test_api.js';
+
+// Everything has been imported at this point.
+traceExecution(TraceEvent.FIRST_LINE_AFTER_IMPORTS);
 
 // Create the global values attached to `window` that are used
 // for accessing OOBE controls from the browser side.
-function prepareGlobalValues(globalValue) {
+function prepareGlobalValues() {
   // '$(id)' is an alias for 'document.getElementById(id)'. It is defined
-  // in chrome://resources/js/util.js. If this function is not exposed
+  // in //resources/ash/common/util.js. If this function is not exposed
   // via the global object, it would not be available to tests that inject
   // JavaScript directly into the renderer.
   window.$ = $;
 
+  // Expose MultiTapDetector class on window for tests to set static methods.
   window.MultiTapDetector = MultiTapDetector;
 
-  // Install a global error handler so stack traces are included in logs.
-  window.onerror = function(message, file, line, column, error) {
-    if (error && error.stack) {
-      console.error(error.stack);
-    }
-  };
-
   // TODO(crbug.com/1229130) - Remove the necessity for these global objects.
-  if (globalValue.cr == undefined) {
-    globalValue.cr = {};
+  if (window.cr == undefined) {
+    window.cr = {};
   }
-  if (globalValue.cr.ui == undefined) {
-    globalValue.cr.ui = {};
+  if (window.cr.ui == undefined) {
+    window.cr.ui = {};
   }
-  if (globalValue.cr.ui.login == undefined) {
-    globalValue.cr.ui.login = {};
+  if (window.cr.ui.login == undefined) {
+    window.cr.ui.login = {};
   }
 
   // Expose some values in the global object that are needed by OOBE.
-  globalValue.cr.ui.Oobe = Oobe;
-  globalValue.Oobe = Oobe;
+  window.cr.ui.Oobe = Oobe;
+  window.Oobe = Oobe;
 }
 
 function initializeOobe() {
@@ -88,54 +62,136 @@ function initializeOobe() {
     return;
   }
   document.removeEventListener('DOMContentLoaded', initializeOobe);
+  traceExecution(TraceEvent.DOM_CONTENT_LOADED);
 
   // Initialize the on-screen debugger if present.
   if (OobeDebugger.DebuggerUI) {
     OobeDebugger.DebuggerUI.getInstance().register(document.body);
   }
-
-  try {
-    Oobe.initialize();
-  } finally {
-    // TODO(crbug.com/712078): Do not set readyForTesting in case of that
-    // initialize() is failed. Currently, in some situation, initialize()
-    // raises an exception unexpectedly. It means testing APIs should not
-    // be called then. However, checking it here now causes bots failures
-    // unfortunately. So, as a short term workaround, here set
-    // readyForTesting even on failures, just to make test bots happy.
-    Oobe.readyForTesting = true;
+  // Add the QuickStart debugger if present.
+  if (QuickStartDebugger.addDebugger) {
+    QuickStartDebugger.addDebugger();
   }
 
-  // Mark initialization complete and wake any callers that might be waiting
-  // for OOBE to load.
-  cr.ui.Oobe.initializationComplete = true;
-  cr.ui.Oobe.initCallbacks.forEach(resolvePromise => resolvePromise());
+  // Add the OOBE Test API
+  if (OobeTestApi.OobeApiProvider) {
+    window.OobeAPI = new OobeTestApi.OobeApiProvider();
+  }
+
+  Oobe.initialize();
+  Oobe.readyForTesting = true;
+  traceExecution(TraceEvent.OOBE_INITIALIZED);
 }
 
-(function (root) {
-    // Update localized strings at the document level.
-    Oobe.updateDocumentLocalizedStrings();
+function initAfterDomLoaded() {
+  document.removeEventListener('oobe-screens-loaded', initAfterDomLoaded);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeOobe);
+  } else {
+    initializeOobe();
+  }
+}
 
-    prepareGlobalValues(window);
+/**
+ * Adds a separate script to the page that imports most of the screens used
+ * during OOBE. Once this script finishes, it fires the 'oobe-screens-loaded'
+ * event, which is then handled by |initAfterDomLoaded| function. This function
+ * fires the |priorityScreensLoaded| signal which is used to notify the browser
+ * that critical screens (Welcome) have been added to the document.
+ */
+function lazyLoadOobe() {
+  chrome.send('priorityScreensLoaded');
+  document.addEventListener('oobe-screens-loaded', initAfterDomLoaded);
+  const script = document.createElement('script');
+  script.type = 'module';
+  script.src = getTrustedScriptURL`./lazy_load_screens.js`;
+  document.body.appendChild(script);
+}
 
-    // Add screens to the document.
-    addScreensToMainContainer(commonScreensList);
-    const isOobeFlow = loadTimeData.getBoolean('isOobeFlow');
-    addScreensToMainContainer(isOobeFlow ? oobeScreensList : loginScreensList);
+/**
+ * ----------- OOBE Execution Begins -----------
+ * |startOobe| is the main entry point for OOBE and it is invoked at the bottom
+ * of this file. Depending on the flow (OOBE vs. LOGIN) the following steps are
+ * performed:
+ *
+ * OOBE:
+ * 1. Add priority screens (Only 'Welcome' at this time) to the HTML document.
+ * 2. Jump to |lazyLoadOobe| which will add the remaining screens using a
+ *    separate script and trigger the 'oobe-screens-loaded' event.
+ * 3. The 'oobe-screens-loaded' event is then handled by |initAfterDomLoaded|,
+ *    which calls |initializeOobe|.
+ *
+ * LOGIN:
+ * For the 'login' flow, the steps are almost the same, with the only exception
+ * that there are no priority screens to be added, so it jumps immediately to
+ * step (2) and skips step (1).
+ */
+function startOobe() {
+  // Ensure that there is a global error listener when OOBE starts.
+  // This error listener is added in the main HTML document.
+  assert(window.OobeErrorStore, 'OobeErrorStore not present on global object!');
 
-    // The default is to have the class 'oobe-display' in <body> for the OOBE
-    // flow. For the 'Add Person' flow, we remove it.
-    if (!isOobeFlow) {
-      document.body.classList.remove('oobe-display');
-    } else {
-      assert(
-          document.body.classList.contains('oobe-display'),
-          'The body of the document must contain oobe-display as a class for the OOBE flow!');
-    }
+  chrome.send('initializeCoreHandler');
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializeOobe);
-      } else {
-        initializeOobe();
-    }
-})(window);
+  // Update localized strings at the document level.
+  Oobe.updateDocumentLocalizedStrings();
+
+  prepareGlobalValues();
+
+  const isOobeJellyEnabled = loadTimeData.getBoolean('isOobeJellyEnabled');
+  if (isOobeJellyEnabled) {
+    // Required on body to apply cros_color_overrides
+    document.body.classList.add('jelly-enabled');
+
+    // Start listening for color changes in 'chrome://theme/colors.css'. Force
+    // reload it once to account for any missed color change events between
+    // loading oobe.html and here.
+    const updater = ColorChangeUpdater.forDocument();
+    updater.start();
+    updater.refreshColorsCss();
+
+    // TODO(b/268463435): Move include directly to the oobe.html after Jelly
+    // flag will be enabled by default.
+    const fontLink = document.createElement('link');
+    fontLink.rel = 'stylesheet';
+    fontLink.href = 'chrome://theme/typography.css';
+    document.head.appendChild(fontLink);
+  } else {
+    // Add refresh color if D/L mode updated for the dynamic illustrations
+    const lightDarkMQL = window.matchMedia('(prefers-color-scheme: light)');
+    lightDarkMQL.addEventListener('change', async () => {
+      const updater = ColorChangeUpdater.forDocument();
+      updater.refreshColorsCss();
+    });
+  }
+
+  // Add OOBE or LOGIN screens to the document.
+  const isOobeFlow = loadTimeData.getBoolean('isOobeFlow');
+
+  // The default is to have the class 'oobe-display' in <body> for the OOBE
+  // flow. For the 'Add Person' flow, we remove it.
+  if (!isOobeFlow) {
+    document.body.classList.remove('oobe-display');
+    document.documentElement.style.setProperty('--shelf-area-height', '0px');
+  } else {
+    assert(
+        document.body.classList.contains('oobe-display'),
+        'The body of the document must contain oobe-display as a class for the OOBE flow!');
+  }
+
+  // For the OOBE flow, we prioritize the loading of the Welcome screen.
+  if (isOobeFlow) {
+    addScreensToMainContainer(priorityOobeScreenList);
+  }
+
+  addScreensToMainContainer(priorityCommonScreenList);
+  traceExecution(TraceEvent.PRIORITY_SCREENS_ADDED);
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', lazyLoadOobe);
+  } else {
+    lazyLoadOobe();
+  }
+}
+
+startOobe();

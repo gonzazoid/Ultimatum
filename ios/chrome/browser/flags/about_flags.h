@@ -26,9 +26,6 @@ class FlagsStorage;
 // Adds all switches from experimental flags to `command_line`.
 void AppendSwitchesFromExperimentalSettings(base::CommandLine* command_line);
 
-// Monitors certain experimental flags for changes.
-void MonitorExperimentalSettingsChanges();
-
 // Reads the state from `flags_storage` and adds the command line flags
 // belonging to the active feature entries to `command_line` in addition
 // to the flags from experimental settings.
@@ -60,6 +57,10 @@ void SetFeatureEntryEnabled(flags_ui::FlagsStorage* flags_storage,
 
 // Reset all flags to the default state by clearing all flags.
 void ResetAllFlags(flags_ui::FlagsStorage* flags_storage);
+
+// Returns true if a browser restart is needed for uncommitted changes to take
+// effect.
+bool IsRestartNeededToCommitChanges();
 
 namespace testing {
 

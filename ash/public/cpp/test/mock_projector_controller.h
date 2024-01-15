@@ -19,16 +19,15 @@ class MockProjectorController : public ash::ProjectorController {
   ~MockProjectorController() override;
 
   // ProjectorController:
-  MOCK_METHOD1(StartProjectorSession, void(const std::string& storageDir));
+  MOCK_METHOD1(StartProjectorSession,
+               void(const base::SafeBaseName& storageDir));
   MOCK_METHOD1(SetClient, void(ash::ProjectorClient* client));
-  MOCK_METHOD1(OnSpeechRecognitionAvailabilityChanged,
-               void(SpeechRecognitionAvailability availability));
+  MOCK_METHOD0(OnSpeechRecognitionAvailabilityChanged, void());
   MOCK_METHOD1(OnTranscription,
                void(const media::SpeechRecognitionResult& result));
   MOCK_METHOD0(OnTranscriptionError, void());
-  MOCK_METHOD0(OnSpeechRecognitionStopped, void());
+  MOCK_METHOD1(OnSpeechRecognitionStopped, void(bool forced));
   MOCK_METHOD1(SetProjectorToolsVisible, void(bool is_visible));
-  MOCK_CONST_METHOD0(IsEligible, bool());
   MOCK_CONST_METHOD0(GetNewScreencastPrecondition, NewScreencastPrecondition());
   MOCK_METHOD2(OnUndoRedoAvailabilityChanged,
                void(bool undo_available, bool redo_available));

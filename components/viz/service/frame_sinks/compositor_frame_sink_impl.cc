@@ -8,13 +8,15 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ref.h"
 #include "base/threading/platform_thread.h"
 #include "build/build_config.h"
 #include "components/viz/service/frame_sinks/frame_sink_bundle_impl.h"
 #include "components/viz/service/frame_sinks/frame_sink_manager_impl.h"
+#include "services/viz/public/mojom/compositing/layer_context.mojom.h"
 #include "ui/gfx/overlay_transform.h"
 
 namespace viz {
@@ -48,10 +50,13 @@ class BundleClientProxy : public mojom::CompositorFrameSinkClient {
   }
 
   void OnBeginFrame(const BeginFrameArgs& args,
-                    const FrameTimingDetailsMap& timing_details) override {
+                    const FrameTimingDetailsMap& timing_details,
+                    bool frame_ack,
+                    std::vector<ReturnedResource> resources) override {
     if (auto* bundle = GetBundle()) {
       bundle->EnqueueOnBeginFrame(frame_sink_id_.sink_id(), args,
-                                  timing_details);
+                                  timing_details, frame_ack,
+                                  std::move(resources));
     }
   }
 
@@ -76,12 +81,14 @@ class BundleClientProxy : public mojom::CompositorFrameSinkClient {
     }
   }
 
+  void OnSurfaceEvicted(const LocalSurfaceId& local_surface_id) override {}
+
  private:
   FrameSinkBundleImpl* GetBundle() {
-    return manager_.GetFrameSinkBundle(bundle_id_);
+    return manager_->GetFrameSinkBundle(bundle_id_);
   }
 
-  FrameSinkManagerImpl& manager_;
+  const raw_ref<FrameSinkManagerImpl> manager_;
   const FrameSinkId frame_sink_id_;
   const FrameSinkBundleId bundle_id_;
 };
@@ -124,6 +131,14 @@ void CompositorFrameSinkImpl::SetNeedsBeginFrame(bool needs_begin_frame) {
 
 void CompositorFrameSinkImpl::SetWantsAnimateOnlyBeginFrames() {
   support_->SetWantsAnimateOnlyBeginFrames();
+}
+
+void CompositorFrameSinkImpl::SetWantsBeginFrameAcks() {
+  support_->SetWantsBeginFrameAcks();
+}
+
+void CompositorFrameSinkImpl::SetAutoNeedsBeginFrame() {
+  support_->SetAutoNeedsBeginFrame();
 }
 
 void CompositorFrameSinkImpl::SubmitCompositorFrame(
@@ -193,6 +208,11 @@ void CompositorFrameSinkImpl::DidDeleteSharedBitmap(const SharedBitmapId& id) {
 void CompositorFrameSinkImpl::InitializeCompositorFrameSinkType(
     mojom::CompositorFrameSinkType type) {
   support_->InitializeCompositorFrameSinkType(type);
+}
+
+void CompositorFrameSinkImpl::BindLayerContext(
+    mojom::PendingLayerContextPtr context) {
+  support_->BindLayerContext(*context);
 }
 
 #if BUILDFLAG(IS_ANDROID)

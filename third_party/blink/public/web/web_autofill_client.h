@@ -31,6 +31,10 @@
 #ifndef THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_AUTOFILL_CLIENT_H_
 #define THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_AUTOFILL_CLIENT_H_
 
+#include "third_party/blink/public/web/web_element.h"
+#include "third_party/blink/public/web/web_form_related_change_type.h"
+#include "third_party/blink/public/web/web_local_frame.h"
+
 namespace blink {
 
 class WebFormControlElement;
@@ -39,29 +43,52 @@ class WebInputElement;
 class WebKeyboardEvent;
 class WebNode;
 class WebString;
+class WebElement;
 
 class WebAutofillClient {
  public:
+  struct FormIssue {
+    FormIssue(blink::mojom::GenericIssueErrorType type,
+              int node,
+              blink::WebString attribute)
+        : issue_type(type),
+          violating_node(node),
+          violating_node_attribute(attribute) {}
+    FormIssue(blink::mojom::GenericIssueErrorType type, int node)
+        : issue_type(type), violating_node(node) {}
+
+    blink::mojom::GenericIssueErrorType issue_type;
+    int violating_node;
+    blink::WebString violating_node_attribute;
+  };
   // These methods are called when the users edits a text-field.
   virtual void TextFieldDidEndEditing(const WebInputElement&) {}
   virtual void TextFieldDidChange(const WebFormControlElement&) {}
   virtual void TextFieldDidReceiveKeyDown(const WebInputElement&,
                                           const WebKeyboardEvent&) {}
+  // This is called once per-character when a user edits a contenteditable
+  // element by typing.
+  virtual void ContentEditableDidChange(const WebElement&) {}
   // This is called when a datalist indicator is clicked.
   virtual void OpenTextDataListChooser(const WebInputElement&) {}
   // This is called when the datalist for an input has changed.
   virtual void DataListOptionsChanged(const WebInputElement&) {}
 
-  // Called when selected option of select control change.
+  // Called when the selected option of a <select> control is changed as a
+  // result of user activation - see
+  // https://html.spec.whatwg.org/multipage/interaction.html#tracking-user-activation
   virtual void SelectControlDidChange(const WebFormControlElement&) {}
 
   // Called when the options of a select control change.
-  virtual void SelectFieldOptionsChanged(const WebFormControlElement&) {}
+  virtual void SelectOrSelectListFieldOptionsChanged(
+      const WebFormControlElement&) {}
 
   // Called when the user interacts with the page after a load.
   virtual void UserGestureObserved() {}
 
-  virtual void DidAssociateFormControlsDynamically() {}
+  virtual void DidChangeFormRelatedElementDynamically(
+      const WebElement&,
+      WebFormRelatedChangeType) {}
   virtual void AjaxSucceeded() {}
   // Called when |element| is in autofilled state and the value has been changed
   // by JavaScript. |old_value| contains the value before being changed.
@@ -69,7 +96,10 @@ class WebAutofillClient {
       const WebFormControlElement& element,
       const WebString& old_value) {}
 
+  // Called when the focused node has changed. This is not called if the focus
+  // moves outside the frame.
   virtual void DidCompleteFocusChangeInFrame() {}
+
   virtual void DidReceiveLeftMouseDownOrGestureTapInNode(const WebNode&) {}
 
   // Asks the client whether to suppess the keyboard for the given control
@@ -80,6 +110,11 @@ class WebAutofillClient {
 
   // Called when the given form element is reset.
   virtual void FormElementReset(const WebFormElement&) {}
+
+  // Processes the current forms and returns an array of issues found.
+  virtual std::vector<FormIssue> ProccessFormsAndReturnIssues() {
+    return std::vector<FormIssue>();
+  }
 
   // Called when the empty value is set for the given input element, which is
   // or has been a password field.

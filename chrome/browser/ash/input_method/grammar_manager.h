@@ -9,12 +9,14 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/input_method/grammar_service_client.h"
 #include "chrome/browser/ash/input_method/suggestion_handler_interface.h"
 #include "chrome/browser/ash/input_method/text_utils.h"
 #include "chrome/browser/ash/input_method/ui/assistive_delegate.h"
 #include "chrome/browser/profiles/profile.h"
+#include "ui/base/ime/ash/text_input_method.h"
 #include "ui/events/event.h"
 
 namespace ash {
@@ -47,9 +49,8 @@ class GrammarManager {
   bool IsOnDeviceGrammarEnabled();
 
   // Indicates a new text field is focused, used to save context ID.
-  // |text_input_flags| are the flags for web input fields. Please refer to
-  // WebTextInputType.
-  void OnFocus(int context_id, int text_input_flags = 0);
+  void OnFocus(int context_id,
+               SpellcheckMode spellcheck_mode = SpellcheckMode::kUnspecified);
 
   // This class intercepts keystrokes when the grammar suggestion pop up is
   // displayed. Returns whether the keypress has been handled.
@@ -58,8 +59,7 @@ class GrammarManager {
   // Sends grammar check request to ml service or display existing grammar
   // suggestion based on the surrounding text changes and cursor changes.
   void OnSurroundingTextChanged(const std::u16string& text,
-                                int cursor_pos,
-                                int anchor_pos);
+                                gfx::Range selection_range);
 
   // Dismisses the suggestion window and replaces the incorrect grammar fragment
   // with the suggestion.
@@ -72,8 +72,7 @@ class GrammarManager {
   // suggestion based on the surrounding text changes and cursor changes.
   // Returns true is grammar suggestion window should show.
   bool HandleSurroundingTextChange(const std::u16string& text,
-                                   int cursor_pos,
-                                   int anchor_pos);
+                                   gfx::Range selection_range);
 
   void Check(const Sentence& sentence);
 
@@ -86,9 +85,9 @@ class GrammarManager {
   void SetButtonHighlighted(const ui::ime::AssistiveWindowButton& button,
                             bool highlighted);
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
   std::unique_ptr<GrammarServiceClient> grammar_client_;
-  SuggestionHandlerInterface* suggestion_handler_;
+  raw_ptr<SuggestionHandlerInterface> suggestion_handler_;
   int context_id_ = 0;
   bool new_to_context_ = true;
   std::u16string current_text_;
@@ -100,7 +99,7 @@ class GrammarManager {
   ui::ime::ButtonId highlighted_button_ = ui::ime::ButtonId::kNone;
   Sentence current_sentence_;
   Sentence last_sentence_;
-  int text_input_flags_ = 0;
+  SpellcheckMode spellcheck_mode_ = SpellcheckMode::kUnspecified;
   std::unordered_map<std::u16string, std::unordered_set<uint64_t>>
       ignored_marker_hashes_;
   std::unordered_set<uint64_t> recorded_marker_hashes_;

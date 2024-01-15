@@ -7,11 +7,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "media/base/audio_buffer.h"
 #include "media/base/audio_bus.h"
@@ -165,8 +166,8 @@ void FakeMediaSource::SetSourceFile(const base::FilePath& video_file,
         continue;
       }
       ChannelLayout layout = ChannelLayoutToChromeChannelLayout(
-          av_codec_context->channel_layout,
-          av_codec_context->channels);
+          av_codec_context->ch_layout.u.mask,
+          av_codec_context->ch_layout.nb_channels);
       if (layout == CHANNEL_LAYOUT_UNSUPPORTED) {
         LOG(ERROR) << "Unsupported audio channels layout.";
         continue;
@@ -178,7 +179,8 @@ void FakeMediaSource::SetSourceFile(const base::FilePath& video_file,
       av_audio_context_ = std::move(av_codec_context);
       source_audio_params_.Reset(
           AudioParameters::AUDIO_PCM_LINEAR,
-          {layout, av_audio_context_->channels}, av_audio_context_->sample_rate,
+          {layout, av_audio_context_->ch_layout.nb_channels},
+          av_audio_context_->sample_rate,
           av_audio_context_->sample_rate / kAudioPacketsPerSecond);
       CHECK(source_audio_params_.IsValid());
       LOG(INFO) << "Source file has audio.";
@@ -504,10 +506,11 @@ bool FakeMediaSource::OnNewAudioFrame(AVFrame* frame) {
   scoped_refptr<AudioBuffer> buffer = AudioBuffer::CopyFrom(
       AVSampleFormatToSampleFormat(av_audio_context_->sample_fmt,
                                    av_audio_context_->codec_id),
-      ChannelLayoutToChromeChannelLayout(av_audio_context_->channel_layout,
-                                         av_audio_context_->channels),
-      av_audio_context_->channels, av_audio_context_->sample_rate, frames_read,
-      &frame->data[0],
+      ChannelLayoutToChromeChannelLayout(
+          av_audio_context_->ch_layout.u.mask,
+          av_audio_context_->ch_layout.nb_channels),
+      av_audio_context_->ch_layout.nb_channels, av_audio_context_->sample_rate,
+      frames_read, &frame->data[0],
       PtsToTimeDelta(frame->pts, av_audio_stream()->time_base));
   audio_algo_.EnqueueBuffer(buffer);
   return true;
@@ -578,8 +581,10 @@ void FakeMediaSource::Decode(bool decode_audio) {
   }
 }
 
-double FakeMediaSource::ProvideInput(media::AudioBus* output_bus,
-                                     uint32_t frames_delayed) {
+double FakeMediaSource::ProvideInput(
+    media::AudioBus* output_bus,
+    uint32_t frames_delayed,
+    const media::AudioGlitchInfo& glitch_info) {
   if (audio_fifo_->frames() >= output_bus->frames()) {
     audio_fifo_->Consume(output_bus, 0, output_bus->frames());
     return 1.0;

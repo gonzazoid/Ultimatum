@@ -8,6 +8,7 @@
 #include <limits>
 
 #include "base/metrics/histogram_macros.h"
+#include "build/build_config.h"
 #include "components/viz/common/features.h"
 #include "components/viz/common/quads/aggregated_render_pass_draw_quad.h"
 #include "components/viz/common/quads/draw_quad.h"
@@ -17,7 +18,6 @@
 #include "components/viz/common/quads/yuv_video_draw_quad.h"
 #include "components/viz/service/display/display_resource_provider.h"
 #include "gpu/GLES2/gl2extchromium.h"
-#include "third_party/skia/include/core/SkDeferredDisplayList.h"
 #include "ui/base/cocoa/remote_layer_api.h"
 #include "ui/gfx/buffer_types.h"
 
@@ -29,10 +29,21 @@ namespace {
 // quads are promoted to CALayers. At extremes, corruption can occur.
 // https://crbug.com/1022116
 
-constexpr size_t kTooManyQuads = 128;
-// |kTooManyQuadsWithVideos| can be re-assigned by kMacCAOverlayQuadMaxNum when
-// feature kMacCAOverlayQuad is enabled.
-constexpr size_t kTooManyQuadsWithVideos = 300;
+// The default CALayer number allowed for CoreAnimation when kCALayerNewLimit is
+// disabled.
+constexpr size_t kLayerLimitDefault = 128;
+
+// The new limit if kCALayerNewLimit is enabled. It can be overridden by the
+// "default" feature parameters.
+constexpr size_t kLayerNewLimitDefault = 1024;
+
+// The default CALayer number allowed for CoreAnimation with many videos (video
+// count >= kMaxNumVideos) when kCALayerNewLimit is disabled.
+constexpr size_t kLayerLimitWithManyVideos = 300;
+
+// The new limit with many videos if kCALayerNewLimit is enabled. It can be
+// overridden by the "many-video" feature parameters.
+constexpr size_t kLayerNewLimitWithManyVideos = 1024;
 
 // If there are too many RenderPassDrawQuads, we shouldn't use Core
 // Animation to present them as individual layers, since that potentially
@@ -74,7 +85,7 @@ gfx::CALayerResult FromRenderPassQuad(
         render_pass_filters,
     const base::flat_map<AggregatedRenderPassId, cc::FilterOperations*>&
         render_pass_backdrop_filters,
-    CALayerOverlay* ca_layer_overlay) {
+    OverlayCandidate* ca_layer_overlay) {
   if (render_pass_backdrop_filters.count(quad->render_pass_id)) {
     return gfx::kCALayerFailedRenderPassBackdropFilters;
   }
@@ -105,7 +116,8 @@ gfx::CALayerResult FromRenderPassQuad(
   }
 
   ca_layer_overlay->rpdq = quad;
-  ca_layer_overlay->contents_rect = gfx::RectF(0, 0, 1, 1);
+  ca_layer_overlay->is_render_pass_draw_quad = true;
+  ca_layer_overlay->uv_rect = gfx::RectF(0, 0, 1, 1);
 
   // For RenderPassDrawQuad, the opacity is applied when its ddl is recorded, so
   // the content already is with opacity applied.
@@ -115,42 +127,44 @@ gfx::CALayerResult FromRenderPassQuad(
 }
 
 gfx::CALayerResult FromSolidColorDrawQuad(const SolidColorDrawQuad* quad,
-                                          CALayerOverlay* ca_layer_overlay,
+                                          OverlayCandidate* ca_layer_overlay,
                                           bool* skip) {
   // Do not generate quads that are completely transparent.
   if (quad->color.fA == 0.0f) {
     *skip = true;
     return gfx::kCALayerSuccess;
   }
-  ca_layer_overlay->background_color = quad->color;
+  ca_layer_overlay->color = quad->color;
+  ca_layer_overlay->is_solid_color = true;
   return gfx::kCALayerSuccess;
 }
 
 gfx::CALayerResult FromTextureQuad(DisplayResourceProvider* resource_provider,
                                    const TextureDrawQuad* quad,
-                                   CALayerOverlay* ca_layer_overlay) {
+                                   OverlayCandidate* ca_layer_overlay) {
   ResourceId resource_id = quad->resource_id();
   if (!resource_provider->IsOverlayCandidate(resource_id))
     return gfx::kCALayerFailedTextureNotCandidate;
   if (quad->y_flipped) {
+    auto transform = absl::get<gfx::Transform>(ca_layer_overlay->transform);
     // The anchor point is at the bottom-left corner of the CALayer. The
     // transformation that flips the contents of the layer without changing its
     // frame is the composition of a vertical flip about the anchor point, and a
     // translation by the height of the layer.
-    ca_layer_overlay->shared_state->transform.Translate(
-        0, ca_layer_overlay->bounds_rect.height());
-    ca_layer_overlay->shared_state->transform.Scale(1, -1);
+    transform.Translate(0, ca_layer_overlay->display_rect.height());
+    transform.Scale(1, -1);
+    ca_layer_overlay->transform = transform;
   }
-  ca_layer_overlay->contents_resource_id = resource_id;
-  ca_layer_overlay->contents_rect =
+  ca_layer_overlay->resource_id = resource_id;
+  ca_layer_overlay->uv_rect =
       BoundingRect(quad->uv_top_left, quad->uv_bottom_right);
-  ca_layer_overlay->background_color = quad->background_color;
+  ca_layer_overlay->color = quad->background_color;
   for (int i = 1; i < 4; ++i) {
     if (quad->vertex_opacity[i] != quad->vertex_opacity[0])
       return gfx::kCALayerFailedDifferentVertexOpacities;
   }
   ca_layer_overlay->opacity *= quad->vertex_opacity[0];
-  ca_layer_overlay->filter = quad->nearest_neighbor ? GL_NEAREST : GL_LINEAR;
+  ca_layer_overlay->nearest_neighbor_filter = quad->nearest_neighbor;
   ca_layer_overlay->hdr_metadata = quad->hdr_metadata;
   if (quad->is_video_frame)
     ca_layer_overlay->protected_video_type = quad->protected_video_type;
@@ -159,7 +173,7 @@ gfx::CALayerResult FromTextureQuad(DisplayResourceProvider* resource_provider,
 
 gfx::CALayerResult FromYUVVideoQuad(DisplayResourceProvider* resource_provider,
                                     const YUVVideoDrawQuad* quad,
-                                    CALayerOverlay* ca_layer_overlay,
+                                    OverlayCandidate* ca_layer_overlay,
                                     bool& video_with_odd_width_out,
                                     bool& video_with_odd_height_out,
                                     bool& video_with_odd_x_out,
@@ -213,24 +227,25 @@ gfx::CALayerResult FromYUVVideoQuad(DisplayResourceProvider* resource_provider,
   if (std::modf(quad->ya_tex_coord_rect().y() / 2.f, &integer) != 0)
     video_with_odd_y_out = true;
 
-  ca_layer_overlay->contents_resource_id = y_resource_id;
-  ca_layer_overlay->contents_rect = ya_contents_rect;
-  ca_layer_overlay->hdr_metadata = quad->hdr_metadata;
+  ca_layer_overlay->resource_id = y_resource_id;
+  ca_layer_overlay->uv_rect = ya_contents_rect;
+  ca_layer_overlay->hdr_metadata =
+      quad->hdr_metadata.value_or(gfx::HDRMetadata());
   ca_layer_overlay->protected_video_type = quad->protected_video_type;
   return gfx::kCALayerSuccess;
 }
 
 gfx::CALayerResult FromTileQuad(DisplayResourceProvider* resource_provider,
                                 const TileDrawQuad* quad,
-                                CALayerOverlay* ca_layer_overlay) {
+                                OverlayCandidate* ca_layer_overlay) {
   ResourceId resource_id = quad->resource_id();
   if (!resource_provider->IsOverlayCandidate(resource_id))
     return gfx::kCALayerFailedTileNotCandidate;
-  ca_layer_overlay->contents_resource_id = resource_id;
-  ca_layer_overlay->contents_rect = quad->tex_coord_rect;
-  ca_layer_overlay->contents_rect.InvScale(quad->texture_size.width(),
-                                           quad->texture_size.height());
-  ca_layer_overlay->filter = quad->nearest_neighbor ? GL_NEAREST : GL_LINEAR;
+  ca_layer_overlay->resource_id = resource_id;
+  ca_layer_overlay->uv_rect = quad->tex_coord_rect;
+  ca_layer_overlay->uv_rect.InvScale(quad->texture_size.width(),
+                                     quad->texture_size.height());
+  ca_layer_overlay->nearest_neighbor_filter = quad->nearest_neighbor;
   return gfx::kCALayerSuccess;
 }
 
@@ -244,7 +259,7 @@ class CALayerOverlayProcessorInternal {
           render_pass_filters,
       const base::flat_map<AggregatedRenderPassId, cc::FilterOperations*>&
           render_pass_backdrop_filters,
-      CALayerOverlay* ca_layer_overlay,
+      OverlayCandidate* ca_layer_overlay,
       bool* skip,
       bool* render_pass_draw_quad,
       int& yuv_draw_quad_count) {
@@ -281,25 +296,15 @@ class CALayerOverlayProcessorInternal {
     if (quad->IsTopEdge())
       ca_layer_overlay->edge_aa_mask |= ui::CALayerEdge::kLayerEdgeTop;
 
-    if (most_recent_shared_quad_state_ != quad->shared_quad_state) {
-      most_recent_shared_quad_state_ = quad->shared_quad_state;
-      most_recent_overlay_shared_state_ = new CALayerOverlaySharedState;
-      // Set rect clipping and sorting context ID.
-      most_recent_overlay_shared_state_->sorting_context_id =
-          quad->shared_quad_state->sorting_context_id;
-      most_recent_overlay_shared_state_->is_clipped =
-          quad->shared_quad_state->clip_rect.has_value();
-      most_recent_overlay_shared_state_->clip_rect =
-          gfx::RectF(quad->shared_quad_state->clip_rect.value_or(gfx::Rect()));
-      most_recent_overlay_shared_state_->rounded_corner_bounds =
-          quad->shared_quad_state->mask_filter_info.rounded_corner_bounds();
+    ca_layer_overlay->sorting_context_id =
+        quad->shared_quad_state->sorting_context_id;
+    ca_layer_overlay->clip_rect = quad->shared_quad_state->clip_rect;
+    ca_layer_overlay->rounded_corners =
+        quad->shared_quad_state->mask_filter_info.rounded_corner_bounds();
+    ca_layer_overlay->transform =
+        quad->shared_quad_state->quad_to_target_transform;
 
-      most_recent_overlay_shared_state_->transform =
-          quad->shared_quad_state->quad_to_target_transform;
-    }
-    ca_layer_overlay->shared_state = most_recent_overlay_shared_state_;
-
-    ca_layer_overlay->bounds_rect = gfx::RectF(quad->rect);
+    ca_layer_overlay->display_rect = gfx::RectF(quad->rect);
     ca_layer_overlay->opacity = quad->shared_quad_state->opacity;
 
     *render_pass_draw_quad =
@@ -308,9 +313,11 @@ class CALayerOverlayProcessorInternal {
       case DrawQuad::Material::kTextureContent: {
         const TextureDrawQuad* texture_draw_quad =
             TextureDrawQuad::MaterialCast(quad);
-        // Stream video counts as a yuv draw quad.
-        if (texture_draw_quad->is_stream_video)
+        // Stream video and video frame counts as a yuv draw quad.
+        if (texture_draw_quad->is_stream_video ||
+            texture_draw_quad->is_video_frame) {
           yuv_draw_quad_count += 1;
+        }
         return FromTextureQuad(resource_provider, texture_draw_quad,
                                ca_layer_overlay);
       }
@@ -350,8 +357,6 @@ class CALayerOverlayProcessorInternal {
   bool video_with_odd_y() { return video_with_odd_y_; }
 
  private:
-  const SharedQuadState* most_recent_shared_quad_state_ = nullptr;
-  scoped_refptr<CALayerOverlaySharedState> most_recent_overlay_shared_state_;
   bool video_with_odd_width_ = false;
   bool video_with_odd_height_ = false;
   bool video_with_odd_x_ = false;
@@ -372,45 +377,40 @@ BASE_FEATURE(kHDRUnderlays,
 
 }  // namespace
 
-CALayerOverlay::CALayerOverlay() : filter(GL_LINEAR) {}
-
-CALayerOverlay::CALayerOverlay(const CALayerOverlay& other) = default;
-
-CALayerOverlay::~CALayerOverlay() = default;
-
-CALayerOverlay& CALayerOverlay::operator=(const CALayerOverlay& other) =
-    default;
-
 CALayerOverlayProcessor::CALayerOverlayProcessor()
     : overlays_allowed_(ui::RemoteLayerAPISupported()),
       enable_ca_renderer_(base::FeatureList::IsEnabled(kCARenderer)),
       enable_hdr_underlays_(base::FeatureList::IsEnabled(kHDRUnderlays)) {
-  if (base::FeatureList::IsEnabled(features::kMacCAOverlayQuad)) {
-    max_quad_list_size_for_videos_ = kTooManyQuadsWithVideos;
-    const int max_num = features::kMacCAOverlayQuadMaxNum.Get();
-    if (max_num > 0)
-      max_quad_list_size_for_videos_ = max_num;
-  } else {
-    max_quad_list_size_for_videos_ = kTooManyQuads;
-  }
+  layer_limit_default_ = kLayerLimitDefault;
+  layer_limit_with_many_videos_ = kLayerLimitWithManyVideos;
+  if (base::FeatureList::IsEnabled(features::kCALayerNewLimit)) {
+    layer_limit_default_ = kLayerNewLimitDefault;
+    const int layer_limit_default_field_trial =
+        features::kCALayerNewLimitDefault.Get();
+    if (layer_limit_default_field_trial > 0) {
+      layer_limit_default_ = layer_limit_default_field_trial;
+    }
 
-  DCHECK_GE(max_quad_list_size_for_videos_, kTooManyQuads);
+    const int layer_limit_with_many_videos_field_trial =
+        features::kCALayerNewLimitManyVideos.Get();
+    layer_limit_with_many_videos_ = kLayerNewLimitWithManyVideos;
+    if (layer_limit_with_many_videos_field_trial > 0) {
+      layer_limit_with_many_videos_ = layer_limit_with_many_videos_field_trial;
+    }
+  }
 }
 
 bool CALayerOverlayProcessor::AreClipSettingsValid(
-    const CALayerOverlay& ca_layer_overlay,
-    CALayerOverlayList* ca_layer_overlay_list) const {
+    const OverlayCandidate& ca_layer_overlay,
+    OverlayCandidateList* ca_layer_overlay_list) const {
   // It is not possible to correctly represent two different clipping
   // settings within one sorting context.
   if (!ca_layer_overlay_list->empty()) {
-    const CALayerOverlay& previous_ca_layer = ca_layer_overlay_list->back();
-    if (ca_layer_overlay.shared_state->sorting_context_id &&
-        previous_ca_layer.shared_state->sorting_context_id ==
-            ca_layer_overlay.shared_state->sorting_context_id) {
-      if (previous_ca_layer.shared_state->is_clipped !=
-              ca_layer_overlay.shared_state->is_clipped ||
-          previous_ca_layer.shared_state->clip_rect !=
-              ca_layer_overlay.shared_state->clip_rect) {
+    const OverlayCandidate& previous_ca_layer = ca_layer_overlay_list->back();
+    if (ca_layer_overlay.sorting_context_id &&
+        previous_ca_layer.sorting_context_id ==
+            ca_layer_overlay.sorting_context_id) {
+      if (previous_ca_layer.clip_rect != ca_layer_overlay.clip_rect) {
         return false;
       }
     }
@@ -428,7 +428,7 @@ void CALayerOverlayProcessor::PutForcedOverlayContentIntoUnderlays(
         render_pass_filters,
     const base::flat_map<AggregatedRenderPassId, cc::FilterOperations*>&
         render_pass_backdrop_filters,
-    CALayerOverlayList* ca_layer_overlays) const {
+    OverlayCandidateList* ca_layer_overlays) const {
   bool failed = false;
 
   for (auto it = quad_list->begin(); it != quad_list->end(); ++it) {
@@ -458,9 +458,10 @@ void CALayerOverlayProcessor::PutForcedOverlayContentIntoUnderlays(
 
       // Put HDR videos into an underlay.
       if (enable_hdr_underlays_) {
-        if (resource_provider->GetOverlayColorSpace(texture_quad->resource_id())
-                .IsHDR())
+        if (resource_provider->GetColorSpace(texture_quad->resource_id())
+                .IsHDR()) {
           force_quad_to_overlay = true;
+        }
       }
     }
 
@@ -486,7 +487,7 @@ bool CALayerOverlayProcessor::ProcessForCALayerOverlays(
         render_pass_filters,
     const base::flat_map<AggregatedRenderPassId, cc::FilterOperations*>&
         render_pass_backdrop_filters,
-    CALayerOverlayList* ca_layer_overlays) {
+    OverlayCandidateList* ca_layer_overlays) {
   const QuadList& quad_list = render_pass->quad_list;
   gfx::CALayerResult result = gfx::kCALayerSuccess;
   size_t num_visible_quads = quad_list.size();
@@ -494,12 +495,12 @@ bool CALayerOverlayProcessor::ProcessForCALayerOverlays(
   // Skip overlay processing
   if (!overlays_allowed_ || !enable_ca_renderer_) {
     result = gfx::kCALayerFailedOverlayDisabled;
-  } else if (video_capture_enabled_) {
+  } else if (render_pass->video_capture_enabled) {
+    // The CARenderer is disabled when video capture is enabled.
+    // https://crbug.com/836351, https://crbug.com/1290384
     result = gfx::kCALayerFailedVideoCaptureEnabled;
   } else if (!render_pass->copy_requests.empty()) {
     result = gfx::kCALayerFailedCopyRequests;
-  } else if (num_visible_quads > max_quad_list_size_for_videos_) {
-    result = gfx::kCALayerFailedTooManyQuads;
   }
 
   if (result != gfx::kCALayerSuccess) {
@@ -518,7 +519,7 @@ bool CALayerOverlayProcessor::ProcessForCALayerOverlays(
        result == gfx::kCALayerSuccess && it != quad_list.BackToFrontEnd();
        ++it) {
     const DrawQuad* quad = *it;
-    CALayerOverlay ca_layer;
+    OverlayCandidate ca_layer;
     bool skip = false;
     bool render_pass_draw_quad = false;
     result = processor.FromDrawQuad(
@@ -547,12 +548,11 @@ bool CALayerOverlayProcessor::ProcessForCALayerOverlays(
     ca_layer_overlays->push_back(ca_layer);
   }
 
-  // Apply Feature kMacCAOverlayQuad to non-video-conferencing mode only.
-  // In the case of |max_quad_list_size_for_videos_| > |num_visible_quads| >
-  // kTooManyQuads, accept CALayerOverlay only if it's in a video conferencing
-  // mode. (video count >= kMaxNumVideos(5)) Otherwise, fail CALayerOverlay.
-  if (num_visible_quads > kTooManyQuads &&
-      yuv_draw_quad_count < kMaxNumVideos) {
+  // Fails if there are more draw quads than allowed for CoreAnimation.
+  size_t max_number = (yuv_draw_quad_count < kMaxNumVideos)
+                          ? layer_limit_default_
+                          : layer_limit_with_many_videos_;
+  if (num_visible_quads > max_number) {
     result = gfx::kCALayerFailedTooManyQuads;
   }
 
@@ -577,9 +577,9 @@ bool CALayerOverlayProcessor::PutQuadInSeparateOverlay(
     const base::flat_map<AggregatedRenderPassId, cc::FilterOperations*>&
         render_pass_backdrop_filters,
     gfx::ProtectedVideoType protected_video_type,
-    CALayerOverlayList* ca_layer_overlays) const {
+    OverlayCandidateList* ca_layer_overlays) const {
   CALayerOverlayProcessorInternal processor;
-  CALayerOverlay ca_layer;
+  OverlayCandidate ca_layer;
   bool skip = false;
   bool render_pass_draw_quad = false;
   int yuv_draw_quad_count = 0;

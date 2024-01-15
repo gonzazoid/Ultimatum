@@ -4,10 +4,10 @@
 
 #include "content/browser/android/background_sync_network_observer_android.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/trace_event/trace_event.h"
 #include "content/public/android/content_jni_headers/BackgroundSyncNetworkObserver_jni.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/service_worker_context.h"
 
 using base::android::JavaParamRef;

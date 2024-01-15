@@ -6,16 +6,17 @@
 #define ASH_PUBLIC_CPP_OVERVIEW_TEST_API_H_
 
 #include <cstdint>
+#include <optional>
 
 #include "ash/ash_export.h"
-#include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/gfx/geometry/rect.h"
 
 namespace aura {
 class Window;
-}
+}  // namespace aura
 
 namespace ash {
 
@@ -26,7 +27,7 @@ enum class OverviewAnimationState : int32_t {
 
 struct OverviewItemInfo {
   // A window represented by an overview item.
-  aura::Window* window = nullptr;
+  raw_ptr<aura::Window> window = nullptr;
 
   // Screen bounds of an overview item.
   gfx::Rect bounds_in_screen;
@@ -64,8 +65,8 @@ class ASH_EXPORT OverviewTestApi {
                             DoneCallback callback);
 
   // Returns overview info for the current overview items if overview is
-  // started. Otherwise, returns absl::nullopt;
-  absl::optional<OverviewInfo> GetOverviewInfo() const;
+  // started. Otherwise, returns std::nullopt;
+  std::optional<OverviewInfo> GetOverviewInfo() const;
 };
 
 }  // namespace ash

@@ -88,16 +88,25 @@ export class SupportToolElement extends SupportToolElementBase {
 
   override connectedCallback() {
     super.connectedCallback();
-    this.addWebUIListener(
+    this.addWebUiListener(
+        'screenshot-received', this.onScreenshotReceived_.bind(this));
+    this.addWebUiListener(
         'data-collection-completed',
         this.onDataCollectionCompleted_.bind(this));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'data-collection-cancelled',
         this.onDataCollectionCancelled_.bind(this));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'support-data-export-started', this.onDataExportStarted_.bind(this));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'data-export-completed', this.onDataExportCompleted_.bind(this));
+  }
+
+  private onScreenshotReceived_(screenshotBase64: string) {
+    if (screenshotBase64 !== 'CANCELED') {
+      // Only continues if the user didn't cancel the screenshot.
+      this.$.dataCollectors.setScreenshotData(screenshotBase64);
+    }
   }
 
   private onDataExportStarted_() {
@@ -105,7 +114,7 @@ export class SupportToolElement extends SupportToolElementBase {
   }
 
   private onDataCollectionCompleted_(piiItems: PiiDataItem[]) {
-    this.$.piiSelection.updateDetectedPIIItems(piiItems);
+    this.$.piiSelection.updateDetectedPiiItems(piiItems);
     this.selectedPage_ = SupportToolPageIndex.PII_SELECTION;
   }
 
@@ -153,7 +162,8 @@ export class SupportToolElement extends SupportToolElementBase {
       this.browserProxy_
           .startDataCollection(
               this.$.issueDetails.getIssueDetails(),
-              this.$.dataCollectors.getDataCollectors())
+              this.$.dataCollectors.getDataCollectors(),
+              this.$.dataCollectors.getEditedScreenshotBase64())
           .then(this.onDataCollectionStart_.bind(this));
     } else {
       this.selectedPage_ = this.selectedPage_ + 1;

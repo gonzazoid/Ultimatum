@@ -10,9 +10,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/threading/thread_checker.h"
 #include "base/values.h"
 #include "extensions/browser/browser_context_keyed_api_factory.h"
@@ -64,11 +63,6 @@ class HidDeviceManager : public BrowserContextKeyedAPI,
   void GetApiDevices(const Extension* extension,
                      const std::vector<device::HidDeviceFilter>& filters,
                      GetApiDevicesCallback callback);
-
-  // Converts a list of device::mojom::HidDeviceInfo objects into a value that
-  // can be returned through the API.
-  base::Value::List GetApiDevicesFromList(
-      std::vector<device::mojom::HidDeviceInfoPtr> devices);
 
   const device::mojom::HidDeviceInfo* GetDeviceInfo(int resource_id);
 

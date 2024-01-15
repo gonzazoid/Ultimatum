@@ -6,10 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/no_destructor.h"
 #include "base/sequence_checker.h"
@@ -90,7 +92,9 @@ class CrOSSystemTracingSession {
   }
 
   bool is_tracing_ = false;
-  ash::DebugDaemonClient* debug_daemon_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION ash::DebugDaemonClient* debug_daemon_ = nullptr;
 };
 
 namespace {
@@ -132,7 +136,7 @@ class CrOSDataSource : public tracing::PerfettoTracedProcess::DataSourceBase {
   friend class base::NoDestructor<CrOSDataSource>;
 #if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
   using DataSourceProxy =
-      tracing::PerfettoTracedProcess::DataSourceProxy<CastDataSource>;
+      tracing::PerfettoTracedProcess::DataSourceProxy<CrOSDataSource>;
   using SystemTraceWriter =
       tracing::SystemTraceWriter<scoped_refptr<base::RefCountedString>,
                                  DataSourceProxy>;
@@ -147,7 +151,7 @@ class CrOSDataSource : public tracing::PerfettoTracedProcess::DataSourceBase {
     tracing::PerfettoTracedProcess::Get()->AddDataSource(this);
 #if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
     perfetto::DataSourceDescriptor dsd;
-    dsd.set_name(mojom::kSystemTraceDataSourceName);
+    dsd.set_name(tracing::mojom::kSystemTraceDataSourceName);
     DataSourceProxy::Register(dsd, this);
 #endif
   }
@@ -231,7 +235,7 @@ class CrOSDataSource : public tracing::PerfettoTracedProcess::DataSourceBase {
   }
 
   SEQUENCE_CHECKER(ui_sequence_checker_);
-  tracing::PerfettoProducer* producer_ = nullptr;
+  raw_ptr<tracing::PerfettoProducer> producer_ = nullptr;
   std::unique_ptr<CrOSSystemTracingSession> session_;
   bool session_started_ = false;
   base::OnceClosure on_session_started_callback_;

@@ -4,11 +4,20 @@
 
 import("//build/config/chromeos/ui_mode.gni")
 import("//mojo/public/tools/bindings/mojom.gni")
+import("//third_party/protobuf/proto_library.gni")
 
 assert(is_chromeos_ash)
 
 mojom("mojo_bindings") {
   sources = [ "search.mojom" ]
+  webui_module_path = "/"
+
+  # Help app is still using JS + Closure Compiler.
+  generate_webui_js_bindings = true
 
   public_deps = [ "//mojo/public/mojom/base" ]
+}
+
+proto_library("proto") {
+  sources = [ "search_concept.proto" ]
 }

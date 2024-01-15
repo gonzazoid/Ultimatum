@@ -6,6 +6,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/memory/raw_ref.h"
 #include "ui/base/models/image_model.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
@@ -28,22 +29,30 @@ class ColorTrackingVectorImageButton : public ImageButton {
  public:
   ColorTrackingVectorImageButton(PressedCallback callback,
                                  const gfx::VectorIcon& icon,
-                                 int dip_size)
-      : ImageButton(std::move(callback)), icon_(icon), dip_size_(dip_size) {}
+                                 int dip_size,
+                                 ui::ColorId icon_color,
+                                 ui::ColorId icon_disabled_color)
+      : ImageButton(std::move(callback)),
+        icon_(icon),
+        dip_size_(dip_size),
+        icon_color_(icon_color),
+        icon_disabled_color_(icon_disabled_color) {}
 
   // ImageButton:
   void OnThemeChanged() override {
     ImageButton::OnThemeChanged();
     const ui::ColorProvider* cp = GetColorProvider();
-    const SkColor color = cp->GetColor(ui::kColorIcon);
-    const SkColor disabled_color = cp->GetColor(ui::kColorIconDisabled);
-    SetImageFromVectorIconWithColor(this, icon_, dip_size_, color,
+    const SkColor color = cp->GetColor(icon_color_);
+    const SkColor disabled_color = cp->GetColor(icon_disabled_color_);
+    SetImageFromVectorIconWithColor(this, *icon_, dip_size_, color,
                                     disabled_color);
   }
 
  private:
-  const gfx::VectorIcon& icon_;
+  const raw_ref<const gfx::VectorIcon> icon_;
   int dip_size_;
+  ui::ColorId icon_color_;
+  ui::ColorId icon_disabled_color_;
 };
 
 }  // namespace
@@ -51,7 +60,9 @@ class ColorTrackingVectorImageButton : public ImageButton {
 std::unique_ptr<ImageButton> CreateVectorImageButtonWithNativeTheme(
     Button::PressedCallback callback,
     const gfx::VectorIcon& icon,
-    absl::optional<int> dip_size) {
+    absl::optional<int> dip_size,
+    SkColor icon_color,
+    SkColor icon_disabled_color) {
   // We can't use `value_or` as that ALWAYS evaluates the false case, which is
   // undefined for some valid and commonly used Chrome vector icons.
   const int dip_size_value = dip_size.has_value()
@@ -59,7 +70,8 @@ std::unique_ptr<ImageButton> CreateVectorImageButtonWithNativeTheme(
                                  : GetDefaultSizeOfVectorIcon(icon);
 
   auto button = std::make_unique<ColorTrackingVectorImageButton>(
-      std::move(callback), icon, dip_size_value);
+      std::move(callback), icon, dip_size_value, icon_color,
+      icon_disabled_color);
   ConfigureVectorImageButton(button.get());
   return button;
 }
@@ -120,6 +132,39 @@ void SetToggledImageFromVectorIconWithColor(ToggleImageButton* button,
       ui::ImageModel::FromVectorIcon(icon, icon_color, dip_size);
   const ui::ImageModel& disabled_image =
       ui::ImageModel::FromVectorIcon(icon, disabled_color, dip_size);
+
+  button->SetToggledImageModel(Button::STATE_NORMAL, normal_image);
+  button->SetToggledImageModel(Button::STATE_DISABLED, disabled_image);
+}
+
+void SetImageFromVectorIconWithColorId(
+    ImageButton* button,
+    const gfx::VectorIcon& icon,
+    ui::ColorId icon_color_id,
+    ui::ColorId icon_disabled_color_id,
+    absl::optional<int> icon_size /*=nullopt*/) {
+  int dip_size = icon_size.has_value() ? icon_size.value()
+                                       : GetDefaultSizeOfVectorIcon(icon);
+  const ui::ImageModel& normal_image =
+      ui::ImageModel::FromVectorIcon(icon, icon_color_id, dip_size);
+  const ui::ImageModel& disabled_image =
+      ui::ImageModel::FromVectorIcon(icon, icon_disabled_color_id, dip_size);
+
+  button->SetImageModel(Button::STATE_NORMAL, normal_image);
+  button->SetImageModel(Button::STATE_DISABLED, disabled_image);
+  InkDrop::Get(button)->SetBaseColorId(icon_color_id);
+}
+
+void SetToggledImageFromVectorIconWithColorId(
+    ToggleImageButton* button,
+    const gfx::VectorIcon& icon,
+    ui::ColorId icon_color_id,
+    ui::ColorId icon_disabled_color_id) {
+  int dip_size = GetDefaultSizeOfVectorIcon(icon);
+  const ui::ImageModel& normal_image =
+      ui::ImageModel::FromVectorIcon(icon, icon_color_id, dip_size);
+  const ui::ImageModel& disabled_image =
+      ui::ImageModel::FromVectorIcon(icon, icon_disabled_color_id, dip_size);
 
   button->SetToggledImageModel(Button::STATE_NORMAL, normal_image);
   button->SetToggledImageModel(Button::STATE_DISABLED, disabled_image);

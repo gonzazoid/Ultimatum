@@ -8,7 +8,6 @@
 #include <utility>
 
 #include "base/command_line.h"
-#include "base/cxx17_backports.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
@@ -47,7 +46,7 @@ class BackgroundTaskCoordinatorHelper {
     BackgroundTaskCoordinator::Notifications unthrottled_notifications;
     BackgroundTaskCoordinator::Notifications throttled_notifications;
     for (auto& pair : notifications) {
-      for (auto* notification : pair.second) {
+      for (const notifications::NotificationEntry* notification : pair.second) {
         auto type = pair.first;
         if (notification->schedule_params.priority ==
             ScheduleParams::Priority::kNoThrottle) {
@@ -67,7 +66,7 @@ class BackgroundTaskCoordinatorHelper {
   void ProcessUnthrottledNotifications(
       BackgroundTaskCoordinator::Notifications notifications) {
     for (const auto& pair : notifications) {
-      for (const auto* entry : pair.second) {
+      for (const notifications::NotificationEntry* entry : pair.second) {
         DCHECK_EQ(entry->schedule_params.priority,
                   ScheduleParams::Priority::kNoThrottle);
         if (!entry->schedule_params.deliver_time_start.has_value()) {
@@ -106,7 +105,7 @@ class BackgroundTaskCoordinatorHelper {
           shown_total >= config_->max_daily_shown_all_type;
 
       // Find the eariliest notification to launch the background task.
-      for (const auto* entry : pair.second) {
+      for (const notifications::NotificationEntry* entry : pair.second) {
         DCHECK_NE(entry->schedule_params.priority,
                   ScheduleParams::Priority::kNoThrottle);
         // Currently only support deliver time window.
@@ -153,7 +152,7 @@ class BackgroundTaskCoordinatorHelper {
 
     base::TimeDelta window_start_time =
         background_task_time_.value() - clock_->Now();
-    window_start_time = base::clamp(window_start_time, base::TimeDelta(),
+    window_start_time = std::clamp(window_start_time, base::TimeDelta(),
                                     base::TimeDelta::Max());
 
     // TODO(xingliu): Remove SchedulerTaskTime.

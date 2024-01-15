@@ -28,6 +28,7 @@
 #include <stdio.h>
 
 #include "base/auto_reset.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/scroll/scroll_into_view_params.mojom-blink.h"
 #include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 #include "third_party/blink/renderer/core/accessibility/blink_ax_event_intent.h"
@@ -137,13 +138,15 @@ VisibleSelectionInFlatTree FrameSelection::ComputeVisibleSelectionInFlatTree()
   return selection_editor_->ComputeVisibleSelectionInFlatTree();
 }
 
-SelectionInDOMTree FrameSelection::GetSelectionInDOMTree() const {
+const SelectionInDOMTree& FrameSelection::GetSelectionInDOMTree() const {
   return selection_editor_->GetSelectionInDOMTree();
 }
 
 Element* FrameSelection::RootEditableElementOrDocumentElement() const {
   Element* selection_root =
       ComputeVisibleSelectionInDOMTreeDeprecated().RootEditableElement();
+  // Note that RootEditableElementOrDocumentElement can return null if the
+  // documentElement is null.
   return selection_root ? selection_root : GetDocument().documentElement();
 }
 
@@ -153,7 +156,9 @@ wtf_size_t FrameSelection::CharacterIndexForPoint(
   if (range.IsNull())
     return kNotFound;
   Element* const editable = RootEditableElementOrDocumentElement();
-  DCHECK(editable);
+  if (!editable) {
+    return kNotFound;
+  }
   PlainTextRange plain_text_range = PlainTextRange::Create(*editable, range);
   if (plain_text_range.IsNull())
     return kNotFound;
@@ -257,29 +262,18 @@ bool FrameSelection::SetSelectionDeprecated(
   if (!is_changed && is_handle_visible_ == should_show_handle &&
       is_directional_ == options.IsDirectional())
     return false;
+  Document& current_document = GetDocument();
   if (is_changed) {
     AssertUserSelection(new_selection, options);
     selection_editor_->SetSelectionAndEndTyping(new_selection);
-
-    // The old selection might not be valid, and thus not iteratable. If that's
-    // the case, notify that all selection was removed and use an empty range as
-    // the old selection.
-    EphemeralRangeInFlatTree old_range;
-    if (old_selection_in_dom_tree.IsValidFor(GetDocument())) {
-      old_range =
-          ToEphemeralRangeInFlatTree(old_selection_in_dom_tree.ComputeRange());
-    } else {
-      DisplayLockUtilities::SelectionRemovedFromDocument(GetDocument());
-    }
-    DisplayLockUtilities::SelectionChanged(
-        old_range, ToEphemeralRangeInFlatTree(new_selection.ComputeRange()));
+    NotifyDisplayLockForSelectionChange(
+        current_document, old_selection_in_dom_tree, new_selection);
   }
   is_directional_ = options.IsDirectional();
   should_shrink_next_tap_ = options.ShouldShrinkNextTap();
   is_handle_visible_ = should_show_handle;
-  ScheduleVisualUpdateForPaintInvalidationIfNeeded();
+  ScheduleVisualUpdateForVisualOverflowIfNeeded();
 
-  const Document& current_document = GetDocument();
   frame_->GetEditor().RespondToChangedSelection();
   DCHECK_EQ(current_document, GetDocument());
   return true;
@@ -297,15 +291,17 @@ void FrameSelection::DidSetSelectionDeprecated(
   // If the selection is currently being modified via the "Modify" method, we
   // should already have more detailed information on the stack than can be
   // deduced in this method.
-  ScopedBlinkAXEventIntent scoped_blink_ax_event_intent(
-      is_being_modified_
-          ? BlinkAXEventIntent()
-          : new_selection.IsNone()
-                ? BlinkAXEventIntent::FromClearedSelection(set_selection_by)
-                : BlinkAXEventIntent::FromNewSelection(
-                      options.Granularity(), new_selection.IsBaseFirst(),
-                      set_selection_by),
-      &current_document);
+  absl::optional<ScopedBlinkAXEventIntent> scoped_blink_ax_event_intent;
+  if (current_document.ExistingAXObjectCache()) {
+    scoped_blink_ax_event_intent.emplace(
+        is_being_modified_ ? BlinkAXEventIntent()
+        : new_selection.IsNone()
+            ? BlinkAXEventIntent::FromClearedSelection(set_selection_by)
+            : BlinkAXEventIntent::FromNewSelection(options.Granularity(),
+                                                   new_selection.IsBaseFirst(),
+                                                   set_selection_by),
+        &current_document);
+  }
 
   if (!new_selection.IsNone() && !options.DoNotSetFocus()) {
     SetFocusedNodeIfNeeded();
@@ -452,11 +448,15 @@ bool FrameSelection::Modify(SelectionModifyAlteration alter,
       frame_->GetEditor().Behavior().ShouldSkipSpaceWhenMovingRight()
           ? PlatformWordBehavior::kWordSkipSpaces
           : PlatformWordBehavior::kWordDontSkipSpaces;
-  ScopedBlinkAXEventIntent scoped_blink_ax_event_intent(
-      BlinkAXEventIntent::FromModifiedSelection(
-          alter, direction, granularity, set_selection_by,
-          selection_modifier.DirectionOfSelection(), platform_word_behavior),
-      &GetDocument());
+  Document& document = GetDocument();
+  absl::optional<ScopedBlinkAXEventIntent> scoped_blink_ax_event_intent;
+  if (document.ExistingAXObjectCache()) {
+    scoped_blink_ax_event_intent.emplace(
+        BlinkAXEventIntent::FromModifiedSelection(
+            alter, direction, granularity, set_selection_by,
+            selection_modifier.DirectionOfSelection(), platform_word_behavior),
+        &document);
+  }
 
   // For MacOS only selection is directionless at the beginning.
   // Selection gets direction on extent.
@@ -480,7 +480,7 @@ bool FrameSelection::Modify(SelectionModifyAlteration alter,
   if (set_selection_by == SetSelectionBy::kUser)
     granularity_ = TextGranularity::kCharacter;
 
-  ScheduleVisualUpdateForPaintInvalidationIfNeeded();
+  ScheduleVisualUpdateForVisualOverflowIfNeeded();
 
   return true;
 }
@@ -585,6 +585,10 @@ void FrameSelection::InvalidatePaint(const LayoutBlock& block,
   frame_caret_->InvalidatePaint(block, context);
 }
 
+void FrameSelection::EnsureInvalidationOfPreviousLayoutBlock() {
+  frame_caret_->EnsureInvalidationOfPreviousLayoutBlock();
+}
+
 bool FrameSelection::ShouldPaintCaret(const LayoutBlock& block) const {
   DCHECK_GE(GetDocument().Lifecycle().GetState(),
             DocumentLifecycle::kLayoutClean);
@@ -597,7 +601,7 @@ bool FrameSelection::ShouldPaintCaret(const LayoutBlock& block) const {
 }
 
 bool FrameSelection::ShouldPaintCaret(
-    const NGPhysicalBoxFragment& box_fragment) const {
+    const PhysicalBoxFragment& box_fragment) const {
   DCHECK_GE(GetDocument().Lifecycle().GetState(),
             DocumentLifecycle::kLayoutClean);
   bool result = frame_caret_->ShouldPaintCaret(box_fragment);
@@ -855,8 +859,7 @@ void FrameSelection::NotifyAccessibilityForSelectionChange() {
   AXObjectCache* cache = GetDocument().ExistingAXObjectCache();
   if (!cache)
     return;
-  const Position& extent = GetSelectionInDOMTree().Extent();
-  Node* anchor = extent.ComputeContainerNode();
+  Node* anchor = GetSelectionInDOMTree().Extent().ComputeContainerNode();
   if (anchor) {
     cache->SelectionChanged(anchor);
   } else {
@@ -875,27 +878,49 @@ void FrameSelection::NotifyEventHandlerForSelectionChange() {
   frame_->GetEventHandler().GetSelectionController().NotifySelectionChanged();
 }
 
+void FrameSelection::NotifyDisplayLockForSelectionChange(
+    Document& document,
+    const SelectionInDOMTree& old_selection,
+    const SelectionInDOMTree& new_selection) {
+  if (DisplayLockUtilities::NeedsSelectionChangedUpdate(document) ||
+      (!old_selection.IsNone() && old_selection.GetDocument() != document &&
+       DisplayLockUtilities::NeedsSelectionChangedUpdate(
+           *old_selection.GetDocument()))) {
+    // The old selection might not be valid, and thus not iterable. If
+    // that's the case, notify that all selection was removed and use an empty
+    // range as the old selection.
+    EphemeralRangeInFlatTree old_range;
+    if (old_selection.IsValidFor(document)) {
+      old_range = ToEphemeralRangeInFlatTree(old_selection.ComputeRange());
+    } else {
+      DisplayLockUtilities::SelectionRemovedFromDocument(document);
+    }
+    DisplayLockUtilities::SelectionChanged(
+        old_range, ToEphemeralRangeInFlatTree(new_selection.ComputeRange()));
+  }
+}
+
 void FrameSelection::FocusedOrActiveStateChanged() {
   bool active_and_focused = FrameIsFocusedAndActive();
 
   // Trigger style invalidation from the focused element. Even though
   // the focused element hasn't changed, the evaluation of focus pseudo
   // selectors are dependent on whether the frame is focused and active.
-  if (Element* element = GetDocument().FocusedElement())
+  if (Element* element = GetDocument().FocusedElement()) {
     element->FocusStateChanged();
+  }
 
+  // Selection style may depend on the active state of the document, so style
+  // and paint must be invalidated when active status changes.
+  if (GetDocument().GetLayoutView()) {
+    layout_selection_->InvalidateStyleAndPaintForSelection();
+  }
   GetDocument().UpdateStyleAndLayoutTree();
 
-  // Because LayoutObject::selectionBackgroundColor() and
-  // LayoutObject::selectionForegroundColor() check if the frame is active,
-  // we have to update places those colors were painted.
-  auto* view = GetDocument().GetLayoutView();
-  if (view)
-    layout_selection_->InvalidatePaintForSelection();
-
   // Caret appears in the active frame.
-  if (active_and_focused)
+  if (active_and_focused) {
     SetSelectionFromNone();
+  }
   frame_caret_->SetCaretEnabled(active_and_focused);
 
   // Update for caps lock state
@@ -954,8 +979,9 @@ static bool IsFrameElement(const Node* n) {
 
 void FrameSelection::SetFocusedNodeIfNeeded() {
   if (ComputeVisibleSelectionInDOMTreeDeprecated().IsNone() ||
-      !FrameIsFocused())
+      !FrameIsFocused()) {
     return;
+  }
 
   if (Element* target =
           ComputeVisibleSelectionInDOMTreeDeprecated().RootEditableElement()) {
@@ -966,7 +992,7 @@ void FrameSelection::SetFocusedNodeIfNeeded() {
       // frame, so add the !isFrameElement check here. There's probably a better
       // way to make this work in the long term, but this is the safest fix at
       // this time.
-      if (target->IsMouseFocusable() && !IsFrameElement(target)) {
+      if (target->IsFocusable() && !IsFrameElement(target)) {
         frame_->GetPage()->GetFocusController().SetFocusedElement(target,
                                                                   frame_);
         return;
@@ -1082,15 +1108,18 @@ void FrameSelection::RevealSelection(
     document_loader->GetInitialScrollState().was_scrolled_by_user = true;
   const Position& start = selection.Start();
   DCHECK(start.AnchorNode());
-  DCHECK(start.AnchorNode()->GetLayoutObject());
+  if (!start.AnchorNode()->GetLayoutObject()) {
+    return;
+  }
+
   // This function is needed to make sure that ComputeRectToScroll below has the
   // sticky offset info available before the computation.
   GetDocument().EnsurePaintLocationDataValidForNode(
       start.AnchorNode(), DocumentUpdateReason::kSelection);
   PhysicalRect selection_rect(ComputeRectToScroll(reveal_extent_option));
-  if (selection_rect == PhysicalRect() ||
-      !start.AnchorNode()->GetLayoutObject()->EnclosingBox())
+  if (selection_rect == PhysicalRect()) {
     return;
+  }
 
   scroll_into_view_util::ScrollRectToVisible(
       *start.AnchorNode()->GetLayoutObject(), selection_rect,
@@ -1139,9 +1168,9 @@ void FrameSelection::ScheduleVisualUpdate() const {
     page->Animator().ScheduleVisualUpdate(&frame_->LocalFrameRoot());
 }
 
-void FrameSelection::ScheduleVisualUpdateForPaintInvalidationIfNeeded() const {
+void FrameSelection::ScheduleVisualUpdateForVisualOverflowIfNeeded() const {
   if (LocalFrameView* frame_view = frame_->View())
-    frame_view->ScheduleVisualUpdateForPaintInvalidationIfNeeded();
+    frame_view->ScheduleVisualUpdateForVisualOverflowIfNeeded();
 }
 
 bool FrameSelection::SelectWordAroundCaret() {
@@ -1304,18 +1333,13 @@ void FrameSelection::ClearDocumentCachedRange() {
 }
 
 LayoutSelectionStatus FrameSelection::ComputeLayoutSelectionStatus(
-    const NGInlineCursor& cursor) const {
+    const InlineCursor& cursor) const {
   return layout_selection_->ComputeSelectionStatus(cursor);
 }
 
 SelectionState FrameSelection::ComputePaintingSelectionStateForCursor(
-    const NGInlineCursorPosition& position) const {
+    const InlineCursorPosition& position) const {
   return layout_selection_->ComputePaintingSelectionStateForCursor(position);
-}
-
-SelectionState FrameSelection::ComputeLayoutSelectionStateForInlineTextBox(
-    const InlineTextBox& text_box) const {
-  return layout_selection_->ComputeSelectionStateForInlineTextBox(text_box);
 }
 
 bool FrameSelection::IsDirectional() const {
@@ -1338,45 +1362,65 @@ EphemeralRange FrameSelection::GetSelectionRangeAroundCaret(
   if (!selection.IsCaret()) {
     return EphemeralRange();
   }
-  const Position position = selection.Start();
-  static const WordSide kWordSideList[2] = {kNextWordIfOnBoundary,
-                                            kPreviousWordIfOnBoundary};
-  for (WordSide word_side : kWordSideList) {
-    Position start;
-    Position end;
-    // Use word granularity by default unless sentence granularity is explicitly
-    // requested.
-    if (text_granularity == TextGranularity::kSentence) {
-      start = StartOfSentencePosition(position);
-      end = EndOfSentence(position, SentenceTrailingSpaceBehavior::kOmitSpace)
-                .GetPosition();
-    } else {
-      start = StartOfWordPosition(position, word_side);
-      end = EndOfWordPosition(position, word_side);
-    }
 
-    // TODO(editing-dev): |StartOfWord()| and |EndOfWord()| should not make null
-    // for non-null parameter.
-    // See http://crbug.com/872443
-    if (start.IsNull() || end.IsNull()) {
-      continue;
-    }
-
-    if (start > end) {
-      // Since word boundaries are computed on flat tree, they can be reversed
-      // when mapped back to DOM.
-      std::swap(start, end);
-    }
-
-    String text = PlainText(EphemeralRange(start, end));
-    if (text.empty() || IsSeparator(text.CharacterStartingAt(0))) {
-      continue;
-    }
-
-    return EphemeralRange(start, end);
+  // Determine the selection range at each side of the caret, then prefer to set
+  // a range that does not start with a separator character.
+  const EphemeralRange next_range = GetSelectionRangeAroundPosition(
+      text_granularity, selection.Start(), kNextWordIfOnBoundary);
+  const String next_text = PlainText(next_range);
+  if (!next_text.empty() && !IsSeparator(next_text.CharacterStartingAt(0))) {
+    return next_range;
   }
 
+  const EphemeralRange previous_range = GetSelectionRangeAroundPosition(
+      text_granularity, selection.Start(), kPreviousWordIfOnBoundary);
+  const String previous_text = PlainText(previous_range);
+  if (!previous_text.empty() &&
+      !IsSeparator(previous_text.CharacterStartingAt(0))) {
+    return previous_range;
+  }
+
+  // Otherwise, select a range if it contains a non-separator character.
+  if (!ContainsOnlySeparatorsOrEmpty(next_text)) {
+    return next_range;
+  } else if (!ContainsOnlySeparatorsOrEmpty(previous_text)) {
+    return previous_range;
+  }
+
+  // Otherwise, don't select anything.
   return EphemeralRange();
+}
+
+EphemeralRange FrameSelection::GetSelectionRangeAroundPosition(
+    TextGranularity text_granularity,
+    Position position,
+    WordSide word_side) const {
+  Position start;
+  Position end;
+  // Use word granularity by default unless sentence granularity is explicitly
+  // requested.
+  if (text_granularity == TextGranularity::kSentence) {
+    start = StartOfSentencePosition(position);
+    end = EndOfSentence(position, SentenceTrailingSpaceBehavior::kOmitSpace)
+              .GetPosition();
+  } else {
+    start = StartOfWordPosition(position, word_side);
+    end = EndOfWordPosition(position, word_side);
+  }
+
+  // TODO(editing-dev): |StartOfWord()| and |EndOfWord()| should not make null
+  // for non-null parameter. See http://crbug.com/872443.
+  if (start.IsNull() || end.IsNull()) {
+    return EphemeralRange();
+  }
+
+  if (start > end) {
+    // Since word boundaries are computed on flat tree, they can be reversed
+    // when mapped back to DOM.
+    std::swap(start, end);
+  }
+
+  return EphemeralRange(start, end);
 }
 
 }  // namespace blink

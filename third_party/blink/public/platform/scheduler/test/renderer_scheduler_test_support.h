@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 
 namespace base {
 class SequencedTaskRunner;
@@ -21,20 +21,17 @@ namespace scheduler {
 class WebThreadScheduler;
 class WebMockThreadScheduler;
 
-// Creates simple scheduling infrastructure for unit tests.
-// It allows creation of FrameSchedulers and PageSchedulers, but doesn't provide
-// any task running infrastructure, relying on the presence of
-// ThreadTaskRunnerHandle::Get() instead, meaning that the users also have to
-// create base::debug::TaskEnvironment.
+// Creates simple scheduling infrastructure for unit tests.  It allows creation
+// of FrameSchedulers and PageSchedulers, but doesn't provide any task running
+// infrastructure, relying on the presence of
+// SingleThreadTaskRunner::GetCurrentDefault() instead, meaning that the users
+// also have to create base::debug::TaskEnvironment.
 std::unique_ptr<WebThreadScheduler> CreateWebMainThreadSchedulerForTests();
 
 // Simple scheduling infrastructure for unit tests, with the addition of mocked
 // methods.
 std::unique_ptr<WebMockThreadScheduler>
 CreateMockWebMainThreadSchedulerForTests();
-
-void RunIdleTasksForTesting(WebThreadScheduler* scheduler,
-                            base::OnceClosure callback);
 
 // Returns a SequencedTaskRunner. This implementation is same as
 // base::SequencedTaskRunner::GetCurrentDefault(), but this is intended to be

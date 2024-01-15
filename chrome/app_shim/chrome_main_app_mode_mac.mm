@@ -7,25 +7,28 @@
 // those app bundles.
 
 #import <Cocoa/Cocoa.h>
+
 #include <utility>
 #include <vector>
 
-#include "base/allocator/early_zone_registration_mac.h"
+#include "base/allocator/early_zone_registration_apple.h"
+#include "base/apple/bundle_locations.h"
+#include "base/apple/osstatus_logging.h"
 #include "base/at_exit.h"
 #include "base/base_switches.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/mac/bundle_locations.h"
-#include "base/mac/mac_logging.h"
+#include "base/functional/bind.h"
 #include "base/message_loop/message_pump_type.h"
+#include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_executor.h"
+#include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/threading/thread.h"
 #include "chrome/app/chrome_crash_reporter_client.h"
 #include "chrome/app_shim/app_shim_controller.h"
@@ -80,9 +83,9 @@ int APP_SHIM_ENTRY_POINT_NAME(const app_mode::ChromeAppModeInfo* info) {
     chrome::RegisterPathProvider();
 
     // Set bundle paths. This loads the bundles.
-    base::mac::SetOverrideOuterBundlePath(
+    base::apple::SetOverrideOuterBundlePath(
         base::FilePath(info->chrome_outer_bundle_path));
-    base::mac::SetOverrideFrameworkBundlePath(
+    base::apple::SetOverrideFrameworkBundlePath(
         base::FilePath(info->chrome_framework_path));
 
     // Note that `info->user_data_dir` for shims contains the app data path,
@@ -94,16 +97,26 @@ int APP_SHIM_ENTRY_POINT_NAME(const app_mode::ChromeAppModeInfo* info) {
     ChromeCrashReporterClient::Create();
     crash_reporter::InitializeCrashpad(true, "app_shim");
 
+    base::PathService::OverrideAndCreateIfNeeded(
+        chrome::DIR_USER_DATA, user_data_dir, /*is_absolute=*/false,
+        /*create=*/false);
+
+    // Initialize features and field trials, either from command line or from
+    // file in user data dir.
+    AppShimController::PreInitFeatureState(
+        *base::CommandLine::ForCurrentProcess());
+
     // Calculate the preferred locale used by Chrome. We can't use
     // l10n_util::OverrideLocaleWithCocoaLocale() because it calls
-    // [base::mac::OuterBundle() preferredLocalizations] which gets
+    // [base::apple::OuterBundle() preferredLocalizations] which gets
     // localizations from the bundle of the running app (i.e. it is equivalent
     // to [[NSBundle mainBundle] preferredLocalizations]) instead of the target
     // bundle.
-    NSArray* preferred_languages = [NSLocale preferredLanguages];
-    NSArray* supported_languages = [base::mac::OuterBundle() localizations];
+    NSArray<NSString*>* preferred_languages = NSLocale.preferredLanguages;
+    NSArray<NSString*>* supported_languages =
+        base::apple::OuterBundle().localizations;
     std::string preferred_localization;
-    for (NSString* language in preferred_languages) {
+    for (NSString* __strong language in preferred_languages) {
       // We must convert the "-" separator to "_" to be compatible with
       // NSBundle::localizations() e.g. "en-GB" becomes "en_GB".
       // See https://crbug.com/913345.
@@ -125,7 +138,7 @@ int APP_SHIM_ENTRY_POINT_NAME(const app_mode::ChromeAppModeInfo* info) {
 
     // Load localized strings and mouse cursor images.
     ui::ResourceBundle::InitSharedInstanceWithLocale(
-        locale, NULL, ui::ResourceBundle::LOAD_COMMON_RESOURCES);
+        locale, nullptr, ui::ResourceBundle::LOAD_COMMON_RESOURCES);
 
     ChromeContentClient chrome_content_client;
     content::SetContentClient(&chrome_content_client);
@@ -136,26 +149,13 @@ int APP_SHIM_ENTRY_POINT_NAME(const app_mode::ChromeAppModeInfo* info) {
     base::Thread* io_thread = new base::Thread("CrAppShimIO");
     io_thread->StartWithOptions(std::move(io_thread_options));
 
-    // It's necessary to initialize a FeatureList and call Mojo's InitFeatures()
-    // to ensure we're using the same IPC implementation as the browser.
-    auto feature_list = std::make_unique<base::FeatureList>();
-    if (info->mojo_ipcz_config ==
-        app_mode::MojoIpczConfig::kUseCommandLineFeatures) {
-      const auto& command_line = *base::CommandLine::ForCurrentProcess();
-      feature_list->InitializeFromCommandLine(
-          command_line.GetSwitchValueASCII(switches::kEnableFeatures),
-          command_line.GetSwitchValueASCII(switches::kDisableFeatures));
-
-    } else {
-      const bool mojo_ipcz_enabled =
-          info->mojo_ipcz_config == app_mode::MojoIpczConfig::kEnabled;
-      feature_list->RegisterExtraFeatureOverrides(
-          {{mojo::core::kMojoIpcz,
-            mojo_ipcz_enabled ? base::FeatureList::OVERRIDE_ENABLE_FEATURE
-                              : base::FeatureList::OVERRIDE_DISABLE_FEATURE}});
-    }
-    base::FeatureList::SetInstance(std::move(feature_list));
+    // It's necessary to call Mojo's InitFeatures() to ensure we're using the
+    // same IPC implementation as the browser.
     mojo::core::InitFeatures();
+
+    // Create a ThreadPool, but don't start it yet until we have fully
+    // initialized base::Feature and field trial support.
+    base::ThreadPoolInstance::Create("AppShim");
 
     // We're using an isolated Mojo connection between the browser and this
     // process, so this process must act as a broker.
@@ -188,6 +188,7 @@ int APP_SHIM_ENTRY_POINT_NAME(const app_mode::ChromeAppModeInfo* info) {
     controller_params.app_id = info->app_mode_id;
     controller_params.app_name = base::UTF8ToUTF16(info->app_mode_name);
     controller_params.app_url = GURL(info->app_mode_url);
+    controller_params.io_thread_runner = io_thread->task_runner();
 
     AppShimController controller(controller_params);
     base::RunLoop().Run();

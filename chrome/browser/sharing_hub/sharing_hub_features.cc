@@ -16,17 +16,15 @@ namespace sharing_hub {
 
 namespace {
 
-#if !BUILDFLAG(IS_CHROMEOS)
 // Whether the sharing hub feature should be disabled by policy.
 bool SharingHubDisabledByPolicy(content::BrowserContext* context) {
-#if !BUILDFLAG(IS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS)
   const PrefService* prefs = Profile::FromBrowserContext(context)->GetPrefs();
   return !prefs->GetBoolean(prefs::kDesktopSharingHubEnabled);
 #else
   return false;
 #endif
 }
-#endif  // !BUILDFLAG(IS_CHROMEOS)
 
 // Whether screenshots-related features should be disabled by policy.
 // Currently used by desktop.
@@ -51,9 +49,14 @@ bool SharingHubOmniboxEnabled(content::BrowserContext* context) {
 }
 
 bool DesktopScreenshotsFeatureEnabled(content::BrowserContext* context) {
-  return (base::FeatureList::IsEnabled(kDesktopScreenshots) ||
-          share::AreUpcomingSharingFeaturesEnabled()) &&
+  return base::FeatureList::IsEnabled(kDesktopScreenshots) &&
          !ScreenshotsDisabledByPolicy(context);
+}
+
+bool SharingIsDisabledByPolicy(content::BrowserContext* context) {
+  // TODO(ellyjones): should we separate out sharing hub from generic sharing?
+  // Or should we rename the policy to be more general?
+  return SharingHubDisabledByPolicy(context);
 }
 
 bool HasPageAction(content::BrowserContext* context, bool is_popup_mode) {

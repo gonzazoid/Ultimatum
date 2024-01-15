@@ -5,54 +5,34 @@
 #ifndef CHROME_BROWSER_APPS_APP_DEDUPLICATION_SERVICE_ENTRY_TYPES_H_
 #define CHROME_BROWSER_APPS_APP_DEDUPLICATION_SERVICE_ENTRY_TYPES_H_
 
+#include <optional>
 #include <string>
 
 #include "components/services/app_service/public/cpp/app_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+
+class GURL;
 
 namespace apps::deduplication {
 
-enum class EntryType {
-  kApp,
-  kWebPage,
-  kPhoneHubApp,
+enum class EntryStatus {
+  // This entry is not an app entry (could be website, etc.).
+  kNonApp = 0,
+  kInstalledApp = 1,
+  kNotInstalledApp = 2
 };
 
-struct EntryId {
-  EntryId() = default;
-  // Constructor for apps.
-  EntryId(std::string app_id, AppType app_type);
-
-  // Constructor for web pages.
-  explicit EntryId(const GURL& url);
-
-  // Constructor for phone hub app.
-  explicit EntryId(std::string phone_hub_app_package_name);
-
-  EntryId(const EntryId&) = default;
-  EntryId& operator=(const EntryId&) = default;
-  EntryId(EntryId&&) = default;
-  EntryId& operator=(EntryId&&) = default;
-
-  bool operator==(const EntryId& other) const;
-  bool operator<(const EntryId& other) const;
-
-  EntryType entry_type;
-
-  // The identifier id. If it is website, the id is the url.spec().
-  std::string id;
-
-  // The app type for EntryType::kApp.
-  absl::optional<AppType> app_type;
-};
-
-// For logging and debugging purposes.
-std::ostream& operator<<(std::ostream& out, const EntryId& entry_id);
+enum class EntryType { kApp, kWebPage };
 
 // Deduplication entry, each entry represents an app or a web page that could be
 // identified as duplicates with each other.
 struct Entry {
-  explicit Entry(EntryId entry_id);
+  Entry() = default;
+
+  // Constructor for apps.
+  Entry(std::string app_id, AppType app_type);
+
+  // Constructor for web pages.
+  explicit Entry(const GURL& url);
 
   Entry(const Entry&) = default;
   Entry& operator=(const Entry&) = default;
@@ -62,9 +42,19 @@ struct Entry {
   bool operator==(const Entry& other) const;
   bool operator<(const Entry& other) const;
 
-  // Unique identifier for deduplication entry.
-  EntryId entry_id;
+  EntryStatus entry_status;
+
+  EntryType entry_type;
+
+  // The identifier id. If it is website, the id is the url.spec().
+  std::string id;
+
+  // The app type for EntryType::kApp.
+  std::optional<AppType> app_type;
 };
+
+// For logging and debugging purposes.
+std::ostream& operator<<(std::ostream& out, const Entry& entry);
 
 }  // namespace apps::deduplication
 

@@ -9,8 +9,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "chrome/updater/activity_impl.h"
@@ -32,8 +32,9 @@ void ActivityDataService::GetActiveBits(
           [](UpdaterScope scope, const std::vector<std::string>& ids) {
             std::set<std::string> result;
             for (const auto& id : ids) {
-              if (GetActiveBit(scope, id))
+              if (GetActiveBit(scope, id)) {
                 result.insert(id);
+              }
             }
             return result;
           },
@@ -50,8 +51,9 @@ void ActivityDataService::GetAndClearActiveBits(
           [](UpdaterScope scope, const std::vector<std::string>& ids) {
             std::set<std::string> result;
             for (const auto& id : ids) {
-              if (GetActiveBit(scope, id))
+              if (GetActiveBit(scope, id)) {
                 result.insert(id);
+              }
               ClearActiveBit(scope, id);
             }
             return result;

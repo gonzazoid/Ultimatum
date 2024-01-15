@@ -7,8 +7,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
@@ -58,11 +58,13 @@ class ReportingGarbageCollectorImpl : public ReportingGarbageCollector,
     base::flat_set<base::UnguessableToken> sources_to_remove =
         context_->cache()->GetExpiredSources();
 
-    std::vector<const ReportingReport*> all_reports;
+    std::vector<raw_ptr<const ReportingReport, VectorExperimental>> all_reports;
     context_->cache()->GetReports(&all_reports);
 
-    std::vector<const ReportingReport*> failed_reports;
-    std::vector<const ReportingReport*> expired_reports;
+    std::vector<raw_ptr<const ReportingReport, VectorExperimental>>
+        failed_reports;
+    std::vector<raw_ptr<const ReportingReport, VectorExperimental>>
+        expired_reports;
     for (const ReportingReport* report : all_reports) {
       if (report->attempts >= policy.max_report_attempts)
         failed_reports.push_back(report);

@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ash/arc/session/arc_disk_space_monitor.h"
 
+#include "ash/components/arc/arc_util.h"
 #include "ash/public/cpp/notification_utils.h"
 #include "base/logging.h"
 #include "chrome/app/vector_icons/vector_icons.h"
@@ -22,6 +23,19 @@
 
 namespace arc {
 
+namespace {
+
+// Returns whether ArcDiskSpaceMonitor should be activated.
+bool ShouldActivate() {
+  DCHECK(ArcSessionManager::Get());
+  DCHECK(ArcSessionManager::Get()->profile());
+  // Activate if and only if virtio-blk is used for /data.
+  return ShouldUseVirtioBlkData(
+      ArcSessionManager::Get()->profile()->GetPrefs());
+}
+
+}  // namespace
+
 ArcDiskSpaceMonitor::ArcDiskSpaceMonitor() {
   ArcSessionManager::Get()->AddObserver(this);
 }
@@ -31,6 +45,12 @@ ArcDiskSpaceMonitor::~ArcDiskSpaceMonitor() {
 }
 
 void ArcDiskSpaceMonitor::OnArcStarted() {
+  if (!ShouldActivate()) {
+    VLOG(1) << "Skipping Activation of ArcDiskSpaceMonitor because virtio-blk "
+               "is not used for /data";
+    return;
+  }
+
   VLOG(1) << "ARC started. Activating ArcDiskSpaceMonitor.";
 
   // Calling ScheduleCheckDiskSpace(Seconds(0)) instead of CheckDiskSpace()
@@ -40,6 +60,9 @@ void ArcDiskSpaceMonitor::OnArcStarted() {
 }
 
 void ArcDiskSpaceMonitor::OnArcSessionStopped(ArcStopReason stop_reason) {
+  if (!ShouldActivate()) {
+    return;
+  }
   VLOG(1) << "ARC stopped. Deactivating ArcDiskSpaceMonitor.";
   timer_.Stop();
 }
@@ -57,7 +80,7 @@ void ArcDiskSpaceMonitor::CheckDiskSpace() {
                      weak_ptr_factory_.GetWeakPtr()));
 }
 
-void ArcDiskSpaceMonitor::OnGetFreeDiskSpace(absl::optional<int64_t> reply) {
+void ArcDiskSpaceMonitor::OnGetFreeDiskSpace(std::optional<int64_t> reply) {
   if (!reply.has_value() || reply.value() < 0) {
     LOG(ERROR) << "spaced::GetFreeDiskSpace failed. "
                << "Deactivating ArcDiskSpaceMonitor.";
@@ -125,25 +148,23 @@ void ArcDiskSpaceMonitor::MaybeShowNotification(bool is_pre_stop) {
       is_pre_stop ? IDS_ARC_LOW_DISK_SPACE_PRE_STOP_NOTIFICATION_MESSAGE
                   : IDS_ARC_LOW_DISK_SPACE_POST_STOP_NOTIFICATION_MESSAGE;
 
-  std::unique_ptr<message_center::Notification> notification =
-      ash::CreateSystemNotification(
-          message_center::NOTIFICATION_TYPE_SIMPLE, notification_id,
-          l10n_util::GetStringUTF16(title_id),
-          l10n_util::GetStringUTF16(message_id),
-          l10n_util::GetStringUTF16(IDS_ARC_NOTIFICATION_DISPLAY_SOURCE),
-          /*origin_url=*/GURL(),
-          message_center::NotifierId(
-              message_center::NotifierType::SYSTEM_COMPONENT,
-              kDiskSpaceMonitorNotifierId, catalog_name),
-          /*optional_fields=*/message_center::RichNotificationData(),
-          base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
-              base::BindRepeating([](absl::optional<int> button_index) {})),
-          kNotificationStorageFullIcon,
-          message_center::SystemNotificationWarningLevel::CRITICAL_WARNING);
+  message_center::Notification notification = ash::CreateSystemNotification(
+      message_center::NOTIFICATION_TYPE_SIMPLE, notification_id,
+      l10n_util::GetStringUTF16(title_id),
+      l10n_util::GetStringUTF16(message_id),
+      l10n_util::GetStringUTF16(IDS_ARC_NOTIFICATION_DISPLAY_SOURCE),
+      /*origin_url=*/GURL(),
+      message_center::NotifierId(message_center::NotifierType::SYSTEM_COMPONENT,
+                                 kDiskSpaceMonitorNotifierId, catalog_name),
+      /*optional_fields=*/message_center::RichNotificationData(),
+      base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
+          base::BindRepeating([](std::optional<int> button_index) {})),
+      kNotificationStorageFullIcon,
+      message_center::SystemNotificationWarningLevel::CRITICAL_WARNING);
 
   Profile* profile = arc::ArcSessionManager::Get()->profile();
   NotificationDisplayService::GetForProfile(profile)->Display(
-      NotificationHandler::Type::TRANSIENT, *notification,
+      NotificationHandler::Type::TRANSIENT, notification,
       /*metadata=*/nullptr);
 }
 

@@ -3,11 +3,11 @@
 // found in the LICENSE file.
 package org.chromium.android_webview.devui;
 
+import android.Manifest.permission;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.SharedPreferences.Editor;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.drawable.Drawable;
@@ -33,7 +33,9 @@ import androidx.fragment.app.FragmentTransaction;
 import org.chromium.android_webview.devui.util.SafeIntentUtils;
 import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.base.BuildInfo;
+import org.chromium.base.ContextUtils;
 import org.chromium.base.IntentUtils;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.metrics.RecordHistogram;
 
 import java.util.HashMap;
@@ -51,20 +53,29 @@ public class MainActivity extends FragmentActivity {
     final Map<Integer, Integer> mFragmentIdMap = new HashMap<>();
 
     // Store in a variable to allow for replacement during test
-    private boolean mIsAtLeastTBuild = BuildInfo.isAtLeastT();
+    private boolean mIsAtLeastTBuild = Build.VERSION.SDK_INT >= 33;
 
     // Keep in sync with DeveloperUiService.java
     public static final String FRAGMENT_ID_INTENT_EXTRA = "fragment-id";
+    public static final String RESET_FLAGS_INTENT_EXTRA = "reset-flags";
     public static final int FRAGMENT_ID_HOME = 0;
     public static final int FRAGMENT_ID_CRASHES = 1;
     public static final int FRAGMENT_ID_FLAGS = 2;
     public static final int FRAGMENT_ID_COMPONENTS = 3;
+    public static final int FRAGMENT_ID_SAFEMODE = 4;
 
     // These values are persisted to logs. Entries should not be renumbered and
     // numeric values should never be reused.
-    @IntDef({MenuChoice.SWITCH_PROVIDER, MenuChoice.REPORT_BUG, MenuChoice.CHECK_UPDATES,
-            MenuChoice.CRASHES_REFRESH, MenuChoice.ABOUT_DEVTOOLS, MenuChoice.COMPONENTS_UI,
-            MenuChoice.COMPONENTS_UPDATE})
+    @IntDef({
+        MenuChoice.SWITCH_PROVIDER,
+        MenuChoice.REPORT_BUG,
+        MenuChoice.CHECK_UPDATES,
+        MenuChoice.CRASHES_REFRESH,
+        MenuChoice.ABOUT_DEVTOOLS,
+        MenuChoice.COMPONENTS_UI,
+        MenuChoice.COMPONENTS_UPDATE,
+        MenuChoice.SAFEMODE_UI
+    })
     public @interface MenuChoice {
         int SWITCH_PROVIDER = 0;
         int REPORT_BUG = 1;
@@ -73,7 +84,8 @@ public class MainActivity extends FragmentActivity {
         int ABOUT_DEVTOOLS = 4;
         int COMPONENTS_UI = 5;
         int COMPONENTS_UPDATE = 6;
-        int COUNT = 7;
+        int SAFEMODE_UI = 7;
+        int COUNT = 8;
     }
 
     public static void logMenuSelection(@MenuChoice int selectedMenuItem) {
@@ -83,26 +95,32 @@ public class MainActivity extends FragmentActivity {
 
     // These values are persisted to logs. Entries should not be renumbered and
     // numeric values should never be reused.
-    @IntDef({FragmentNavigation.HOME_FRAGMENT, FragmentNavigation.CRASHES_LIST_FRAGMENT,
-            FragmentNavigation.FLAGS_FRAGMENT, FragmentNavigation.COMPONENTS_LIST_FRAGMENT})
+    @IntDef({
+        FragmentNavigation.HOME_FRAGMENT,
+        FragmentNavigation.CRASHES_LIST_FRAGMENT,
+        FragmentNavigation.FLAGS_FRAGMENT,
+        FragmentNavigation.COMPONENTS_LIST_FRAGMENT,
+        FragmentNavigation.SAFEMODE_FRAGMENT
+    })
     private @interface FragmentNavigation {
         int HOME_FRAGMENT = 0;
         int CRASHES_LIST_FRAGMENT = 1;
         int FLAGS_FRAGMENT = 2;
         int COMPONENTS_LIST_FRAGMENT = 3;
-        int COUNT = 4;
+        int SAFEMODE_FRAGMENT = 4;
+        int COUNT = 5;
     }
 
-    // TODO: Replace with Manifest.permission.POST_NOTIFICATIONS once Android T is released
-    private static final String POST_NOTIFICATIONS = "android.permission.POST_NOTIFICATIONS";
     private static final int NOTIFICATION_PERMISSION_REQUEST_CODE = 0;
+
     @VisibleForTesting
     public static final String POST_NOTIFICATIONS_PERMISSION_REQUESTED_KEY =
             "POST_NOTIFICATIONS_PERMISSION_REQUESTED";
+
     @VisibleForTesting
     public static final String NOTIFICATION_PERMISSION_REQUEST_MESSAGE =
             "WebView DevTools requires permission to show notifications "
-            + "in order to manage flags.";
+                    + "in order to manage flags.";
 
     /**
      * Logs a navigation to a fragment. Requires a suffix from histograms.xml ("AnyMethod",
@@ -114,11 +132,8 @@ public class MainActivity extends FragmentActivity {
     private static void logFragmentNavigation(String histogramSuffix, int selectedFragmentId) {
         // Map FRAGMENT_ID_* to FragmentNavigation value (so FRAGMENT_ID_* values are permitted to
         // change in the future without messing up logs).
-        @FragmentNavigation
-        int sample;
+        @FragmentNavigation int sample;
         switch (selectedFragmentId) {
-            default:
-                // Fall through.
             case FRAGMENT_ID_HOME:
                 sample = FragmentNavigation.HOME_FRAGMENT;
                 break;
@@ -131,9 +146,16 @@ public class MainActivity extends FragmentActivity {
             case FRAGMENT_ID_COMPONENTS:
                 sample = FragmentNavigation.COMPONENTS_LIST_FRAGMENT;
                 break;
+            case FRAGMENT_ID_SAFEMODE:
+                sample = FragmentNavigation.SAFEMODE_FRAGMENT;
+                break;
+            default:
+                sample = FragmentNavigation.HOME_FRAGMENT;
+                break;
         }
         RecordHistogram.recordEnumeratedHistogram(
-                "Android.WebView.DevUi.FragmentNavigation." + histogramSuffix, sample,
+                "Android.WebView.DevUi.FragmentNavigation." + histogramSuffix,
+                sample,
                 FragmentNavigation.COUNT);
     }
 
@@ -154,12 +176,14 @@ public class MainActivity extends FragmentActivity {
         mFragmentIdMap.put(R.id.navigation_crash_ui, FRAGMENT_ID_CRASHES);
         mFragmentIdMap.put(R.id.navigation_flags_ui, FRAGMENT_ID_FLAGS);
         LinearLayout bottomNavBar = findViewById(R.id.nav_view);
-        View.OnClickListener listener = (View view) -> {
-            assert mFragmentIdMap.containsKey(view.getId()) : "Unexpected view ID: " + view.getId();
-            int fragmentId = mFragmentIdMap.get(view.getId());
-            switchFragment(fragmentId);
-            logFragmentNavigation("NavBar", fragmentId);
-        };
+        View.OnClickListener listener =
+                (View view) -> {
+                    assert mFragmentIdMap.containsKey(view.getId())
+                            : "Unexpected view ID: " + view.getId();
+                    int fragmentId = mFragmentIdMap.get(view.getId());
+                    switchFragment(fragmentId, false);
+                    logFragmentNavigation("NavBar", fragmentId);
+                };
         final int childCount = bottomNavBar.getChildCount();
         for (int i = 0; i < childCount; ++i) {
             View v = bottomNavBar.getChildAt(i);
@@ -178,18 +202,15 @@ public class MainActivity extends FragmentActivity {
                         }
                     }
                 },
-                /* recursive */ false);
+                /* recursive= */ false);
 
         // The boolean value doesn't matter, we only care about the total count.
         RecordHistogram.recordBooleanHistogram("Android.WebView.DevUi.AppLaunch", true);
     }
 
-    private void switchFragment(int chosenFragmentId) {
+    private void switchFragment(int chosenFragmentId, boolean onResume) {
         DevUiBaseFragment fragment = null;
         switch (chosenFragmentId) {
-            default:
-                chosenFragmentId = FRAGMENT_ID_HOME;
-                // Fall through.
             case FRAGMENT_ID_HOME:
                 fragment = new HomeFragment();
                 break;
@@ -202,11 +223,27 @@ public class MainActivity extends FragmentActivity {
                     // Spawn the request permission check on top of the new fragment
                     requestPostNotificationPermission();
                 }
+
+                boolean shouldResetFlags = false;
+                // The flag reset is checked on resume so that
+                // it can only be triggered by a new intent.
+                if (onResume) {
+                    shouldResetFlags =
+                            IntentUtils.safeGetBooleanExtra(
+                                    getIntent(), RESET_FLAGS_INTENT_EXTRA, false);
+                }
                 // Enable the UI if we don't need a permission check
-                fragment = new FlagsFragment(!needPermissionCheck);
+                fragment = new FlagsFragment(!needPermissionCheck, shouldResetFlags);
                 break;
             case FRAGMENT_ID_COMPONENTS:
                 fragment = new ComponentsListFragment();
+                break;
+            case FRAGMENT_ID_SAFEMODE:
+                fragment = new SafeModeFragment();
+                break;
+            default:
+                chosenFragmentId = FRAGMENT_ID_HOME;
+                fragment = new HomeFragment();
                 break;
         }
         assert fragment != null;
@@ -229,11 +266,15 @@ public class MainActivity extends FragmentActivity {
             TextView textView = (TextView) view;
 
             boolean isSelectedFragment = chosenFragmentId == fragmentId;
-            ApiCompatibilityUtils.setTextAppearance(textView,
-                    isSelectedFragment ? R.style.SelectedNavigationButton
-                                       : R.style.UnselectedNavigationButton);
-            int color = isSelectedFragment ? getResources().getColor(R.color.navigation_selected)
-                                           : getResources().getColor(R.color.navigation_unselected);
+            ApiCompatibilityUtils.setTextAppearance(
+                    textView,
+                    isSelectedFragment
+                            ? R.style.SelectedNavigationButton
+                            : R.style.UnselectedNavigationButton);
+            int color =
+                    isSelectedFragment
+                            ? getColor(R.color.navigation_selected)
+                            : getColor(R.color.navigation_unselected);
             for (Drawable drawable : textView.getCompoundDrawables()) {
                 if (drawable != null) {
                     drawable.mutate();
@@ -275,7 +316,7 @@ public class MainActivity extends FragmentActivity {
         // moment, it's specified only by DeveloperUiService (so make sure these constants stay in
         // sync).
         fragmentId = IntentUtils.safeGetIntExtra(getIntent(), FRAGMENT_ID_INTENT_EXTRA, fragmentId);
-        switchFragment(fragmentId);
+        switchFragment(fragmentId, true);
         logFragmentNavigation("FromIntent", fragmentId);
     }
 
@@ -291,58 +332,70 @@ public class MainActivity extends FragmentActivity {
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == R.id.options_menu_switch_provider
-                && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        if (item.getItemId() == R.id.options_menu_switch_provider) {
             logMenuSelection(MenuChoice.SWITCH_PROVIDER);
-            SafeIntentUtils.startActivityOrShowError(this,
+            SafeIntentUtils.startActivityOrShowError(
+                    this,
                     new Intent(Settings.ACTION_WEBVIEW_SETTINGS),
                     SafeIntentUtils.WEBVIEW_SETTINGS_ERROR);
             return true;
         } else if (item.getItemId() == R.id.options_menu_report_bug) {
             logMenuSelection(MenuChoice.REPORT_BUG);
-            Uri reportUri = new Uri.Builder()
-                                    .scheme("https")
-                                    .authority("bugs.chromium.org")
-                                    .path("/p/chromium/issues/entry")
-                                    .appendQueryParameter("template", "Webview+Bugs")
-                                    .appendQueryParameter("labels",
-                                            "Via-WebView-DevTools,Pri-3,Type-Bug,OS-Android")
-                                    .build();
-            SafeIntentUtils.startActivityOrShowError(this,
+            Uri reportUri =
+                    new Uri.Builder()
+                            .scheme("https")
+                            .authority("bugs.chromium.org")
+                            .path("/p/chromium/issues/entry")
+                            .appendQueryParameter("template", "Webview+Bugs")
+                            .appendQueryParameter(
+                                    "labels", "Via-WebView-DevTools,Pri-3,Type-Bug,OS-Android")
+                            .build();
+            SafeIntentUtils.startActivityOrShowError(
+                    this,
                     new Intent(Intent.ACTION_VIEW, reportUri),
                     SafeIntentUtils.NO_BROWSER_FOUND_ERROR);
             return true;
         } else if (item.getItemId() == R.id.options_menu_check_updates) {
             logMenuSelection(MenuChoice.CHECK_UPDATES);
             try {
-                Uri marketUri = new Uri.Builder()
-                                        .scheme("market")
-                                        .authority("details")
-                                        .appendQueryParameter("id", this.getPackageName())
-                                        .build();
+                Uri marketUri =
+                        new Uri.Builder()
+                                .scheme("market")
+                                .authority("details")
+                                .appendQueryParameter("id", this.getPackageName())
+                                .build();
                 startActivity(new Intent(Intent.ACTION_VIEW, marketUri));
             } catch (Exception e) {
-                Uri marketUri = new Uri.Builder()
-                                        .scheme("https")
-                                        .authority("play.google.com")
-                                        .path("/store/apps/details")
-                                        .appendQueryParameter("id", this.getPackageName())
-                                        .build();
-                SafeIntentUtils.startActivityOrShowError(this,
+                Uri marketUri =
+                        new Uri.Builder()
+                                .scheme("https")
+                                .authority("play.google.com")
+                                .path("/store/apps/details")
+                                .appendQueryParameter("id", this.getPackageName())
+                                .build();
+                SafeIntentUtils.startActivityOrShowError(
+                        this,
                         new Intent(Intent.ACTION_VIEW, marketUri),
                         SafeIntentUtils.NO_BROWSER_FOUND_ERROR);
             }
             return true;
         } else if (item.getItemId() == R.id.options_menu_about_devui) {
             logMenuSelection(MenuChoice.ABOUT_DEVTOOLS);
-            Uri uri = Uri.parse(
-                    "https://chromium.googlesource.com/chromium/src/+/HEAD/android_webview/docs/developer-ui.md");
-            SafeIntentUtils.startActivityOrShowError(this, new Intent(Intent.ACTION_VIEW, uri),
+            Uri uri =
+                    Uri.parse(
+                            "https://chromium.googlesource.com/chromium/src/+/HEAD/android_webview/docs/developer-ui.md");
+            SafeIntentUtils.startActivityOrShowError(
+                    this,
+                    new Intent(Intent.ACTION_VIEW, uri),
                     SafeIntentUtils.NO_BROWSER_FOUND_ERROR);
             return true;
         } else if (item.getItemId() == R.id.options_menu_components) {
             logMenuSelection(MenuChoice.COMPONENTS_UI);
-            switchFragment(FRAGMENT_ID_COMPONENTS);
+            switchFragment(FRAGMENT_ID_COMPONENTS, false);
+            return true;
+        } else if (item.getItemId() == R.id.options_menu_safe_mode) {
+            logMenuSelection(MenuChoice.SAFEMODE_UI);
+            switchFragment(FRAGMENT_ID_SAFEMODE, false);
             return true;
         }
         return super.onOptionsItemSelected(item);
@@ -350,24 +403,30 @@ public class MainActivity extends FragmentActivity {
 
     @VisibleForTesting
     public boolean needToRequestPostNotificationPermission() {
-        if (mIsAtLeastTBuild) {
-            // Check if we already requested the permission. If we did, we don't need to request
-            // it again, even if no permission was given.
-            SharedPreferences preferences = getPreferences(Context.MODE_PRIVATE);
-            boolean alreadyRequestedPermission =
-                    preferences.getBoolean(POST_NOTIFICATIONS_PERMISSION_REQUESTED_KEY, false);
-            return !alreadyRequestedPermission;
+        if (!mIsAtLeastTBuild) {
+            return false;
         }
-        return false;
+        // Check if we already requested the permission. If we did, we don't need to request
+        // it again, even if no permission was given.
+        return !getAlreadyRequestedNotificationPermissionPreference();
+    }
+
+    private boolean getAlreadyRequestedNotificationPermissionPreference() {
+        return getSharedPreferences()
+                .getBoolean(POST_NOTIFICATIONS_PERMISSION_REQUESTED_KEY, false);
     }
 
     private void requestPostNotificationPermission() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setMessage(NOTIFICATION_PERMISSION_REQUEST_MESSAGE);
-        builder.setPositiveButton("Ok", (dialogInterface, i) -> {
-            ActivityCompat.requestPermissions(
-                    this, new String[] {POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_REQUEST_CODE);
-        });
+        builder.setPositiveButton(
+                "Ok",
+                (dialogInterface, i) -> {
+                    ActivityCompat.requestPermissions(
+                            this,
+                            new String[] {permission.POST_NOTIFICATIONS},
+                            NOTIFICATION_PERMISSION_REQUEST_CODE);
+                });
         builder.setNegativeButton("Cancel", (dialogInterface, i) -> {});
         builder.create().show();
     }
@@ -380,13 +439,30 @@ public class MainActivity extends FragmentActivity {
             // We don't actually care about the result, just that we got a result.
             // The service will still work.
             // Save the fact that we have received the permission callback.
-            SharedPreferences preferences = getPreferences(Context.MODE_PRIVATE);
-            Editor editor = preferences.edit();
-            editor.putBoolean(POST_NOTIFICATIONS_PERMISSION_REQUESTED_KEY, true);
-            editor.apply();
+            registerPostNotificationRequested();
             // Reset the UI to enable input fields.
-            switchFragment(FRAGMENT_ID_FLAGS);
+            switchFragment(FRAGMENT_ID_FLAGS, false);
         }
+    }
+
+    private void registerPostNotificationRequested() {
+        getSharedPreferences()
+                .edit()
+                .putBoolean(POST_NOTIFICATIONS_PERMISSION_REQUESTED_KEY, true)
+                .apply();
+    }
+
+    /**
+     * Get the SharedPreferences for this activity.
+     *
+     * Uses {@link ContextUtils#getApplicationContext()} to facilitate mocking out the preferences
+     * by tests, but otherwise accesses the same file as the {@link #getPreferences(int)} method
+     * when passing {@link Context#MODE_PRIVATE}.
+     * @return Private preferences for this activity
+     */
+    private static SharedPreferences getSharedPreferences() {
+        return ContextUtils.getApplicationContext()
+                .getSharedPreferences(MainActivity.class.getCanonicalName(), Context.MODE_PRIVATE);
     }
 
     /**
@@ -395,8 +471,26 @@ public class MainActivity extends FragmentActivity {
      * This method has been introduced to avoid mocking out {@link BuildInfo#isAtLeastT()}.
      * @param isAtLeastT Whether the running Android version is at least T.
      */
-    @VisibleForTesting
     public void setIsAtLeastTBuildForTesting(boolean isAtLeastT) {
+        var oldValue = mIsAtLeastTBuild;
         mIsAtLeastTBuild = isAtLeastT;
+        ResettersForTesting.register(() -> mIsAtLeastTBuild = oldValue);
+    }
+
+    /**
+     * Update the preferences for {@link MainActivity} to indicate that the app has already
+     * requested permission to show popups.
+     */
+    public static void markPopupPermissionRequestedInPrefsForTesting() {
+        getSharedPreferences()
+                .edit()
+                .putBoolean(POST_NOTIFICATIONS_PERMISSION_REQUESTED_KEY, true)
+                .apply();
+        ResettersForTesting.register(MainActivity::clearSharedPrefsForTesting);
+    }
+
+    /** Clear preferences for {@link MainActivity} for testing purposes. */
+    public static void clearSharedPrefsForTesting() {
+        getSharedPreferences().edit().clear().apply();
     }
 }

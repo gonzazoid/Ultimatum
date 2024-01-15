@@ -9,13 +9,14 @@ import {SACache} from '../cache.js';
 import {FocusRingManager} from '../focus_ring_manager.js';
 import {Navigator} from '../navigator.js';
 import {SwitchAccess} from '../switch_access.js';
-import {SAConstants, SwitchAccessMenuAction} from '../switch_access_constants.js';
+import {ActionResponse, ErrorType} from '../switch_access_constants.js';
 import {SwitchAccessPredicate} from '../switch_access_predicate.js';
 
 import {BackButtonNode} from './back_button_node.js';
 import {SAChildNode, SARootNode} from './switch_access_node.js';
 
 const AutomationNode = chrome.automation.AutomationNode;
+const MenuAction = chrome.accessibilityPrivate.SwitchAccessMenuAction;
 
 /**
  * This class handles interactions with an onscreen element based on a single
@@ -44,26 +45,26 @@ export class BasicNode extends SAChildNode {
   /** @override */
   get actions() {
     const actions = [];
-    actions.push(SwitchAccessMenuAction.SELECT);
+    actions.push(MenuAction.SELECT);
 
     const ancestor = this.getScrollableAncestor_();
     if (ancestor.scrollable) {
       if (ancestor.scrollX > ancestor.scrollXMin) {
-        actions.push(SwitchAccessMenuAction.SCROLL_LEFT);
+        actions.push(MenuAction.SCROLL_LEFT);
       }
       if (ancestor.scrollX < ancestor.scrollXMax) {
-        actions.push(SwitchAccessMenuAction.SCROLL_RIGHT);
+        actions.push(MenuAction.SCROLL_RIGHT);
       }
       if (ancestor.scrollY > ancestor.scrollYMin) {
-        actions.push(SwitchAccessMenuAction.SCROLL_UP);
+        actions.push(MenuAction.SCROLL_UP);
       }
       if (ancestor.scrollY < ancestor.scrollYMax) {
-        actions.push(SwitchAccessMenuAction.SCROLL_DOWN);
+        actions.push(MenuAction.SCROLL_DOWN);
       }
     }
-    const standardActions = /** @type {!Array<!SwitchAccessMenuAction>} */ (
+    const standardActions = /** @type {!Array<!MenuAction>} */ (
         this.baseNode_.standardActions.filter(
-            action => Object.values(SwitchAccessMenuAction).includes(action)));
+            action => Object.values(MenuAction).includes(action)));
 
     return actions.concat(standardActions);
   }
@@ -156,43 +157,43 @@ export class BasicNode extends SAChildNode {
   performAction(action) {
     let ancestor;
     switch (action) {
-      case SwitchAccessMenuAction.SELECT:
+      case MenuAction.SELECT:
         if (this.isGroup()) {
           Navigator.byItem.enterGroup();
         } else {
           this.baseNode_.doDefault();
         }
-        return SAConstants.ActionResponse.CLOSE_MENU;
-      case SwitchAccessMenuAction.SCROLL_DOWN:
+        return ActionResponse.CLOSE_MENU;
+      case MenuAction.SCROLL_DOWN:
         ancestor = this.getScrollableAncestor_();
         if (ancestor.scrollable) {
           ancestor.scrollDown();
         }
-        return SAConstants.ActionResponse.RELOAD_MENU;
-      case SwitchAccessMenuAction.SCROLL_UP:
+        return ActionResponse.RELOAD_MENU;
+      case MenuAction.SCROLL_UP:
         ancestor = this.getScrollableAncestor_();
         if (ancestor.scrollable) {
           ancestor.scrollUp();
         }
-        return SAConstants.ActionResponse.RELOAD_MENU;
-      case SwitchAccessMenuAction.SCROLL_RIGHT:
+        return ActionResponse.RELOAD_MENU;
+      case MenuAction.SCROLL_RIGHT:
         ancestor = this.getScrollableAncestor_();
         if (ancestor.scrollable) {
           ancestor.scrollRight();
         }
-        return SAConstants.ActionResponse.RELOAD_MENU;
-      case SwitchAccessMenuAction.SCROLL_LEFT:
+        return ActionResponse.RELOAD_MENU;
+      case MenuAction.SCROLL_LEFT:
         ancestor = this.getScrollableAncestor_();
         if (ancestor.scrollable) {
           ancestor.scrollLeft();
         }
-        return SAConstants.ActionResponse.RELOAD_MENU;
+        return ActionResponse.RELOAD_MENU;
       default:
         if (Object.values(chrome.automation.ActionType).includes(action)) {
           this.baseNode_.performStandardAction(
               /** @type {chrome.automation.ActionType} */ (action));
         }
-        return SAConstants.ActionResponse.CLOSE_MENU;
+        return ActionResponse.CLOSE_MENU;
     }
   }
 
@@ -395,7 +396,7 @@ export class BasicRootNode extends SARootNode {
 
     if (children.length < 1) {
       throw SwitchAccess.error(
-          SAConstants.ErrorType.NO_CHILDREN,
+          ErrorType.NO_CHILDREN,
           'Root node must have at least 1 interesting child.',
           true /* shouldRecover */);
     }

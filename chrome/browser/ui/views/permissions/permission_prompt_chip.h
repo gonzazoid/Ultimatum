@@ -38,6 +38,7 @@ class PermissionPromptChip : public PermissionPromptDesktop {
   bool UpdateAnchor() override;
   permissions::PermissionPromptDisposition GetPromptDisposition()
       const override;
+  std::optional<gfx::Rect> GetViewBoundsInScreen() const override;
 
   // PermissionPromptDesktop:
   views::Widget* GetPromptBubbleWidgetForTesting() override;
@@ -48,8 +49,10 @@ class PermissionPromptChip : public PermissionPromptDesktop {
   }
 
  private:
+  void PreemptivelyResolvePermissionRequest(content::WebContents* web_contents,
+                                            Delegate* delegate);
   // The controller handling the chip view
-  ChipController* chip_controller_;
+  raw_ptr<ChipController> chip_controller_;
 
   // Delegate representing a permission request
   raw_ptr<permissions::PermissionPrompt::Delegate> delegate_;

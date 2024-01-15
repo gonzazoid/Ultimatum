@@ -2,25 +2,27 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ui/webui/webui_allowlist_provider.h"
-#include "components/content_settings/core/browser/content_settings_observer.h"
-#include "ui/webui/webui_allowlist.h"
-
 #include <map>
 #include <memory>
 
 #include "base/test/gtest_util.h"
 #include "chrome/browser/content_settings/cookie_settings_factory.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
+#include "chrome/browser/content_settings/mock_settings_observer.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile_manager.h"
+#include "components/content_settings/core/browser/content_settings_observer.h"
 #include "components/content_settings/core/browser/cookie_settings.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/content_settings/core/common/pref_names.h"
+#include "net/cookies/site_for_cookies.h"
+#include "testing/gmock/include/gmock/gmock.h"
+#include "ui/webui/webui_allowlist.h"
+#include "ui/webui/webui_allowlist_provider.h"
 
-using QueryReason = content_settings::CookieSettings::QueryReason;
+using ::testing::_;
 
 class WebUIAllowlistProviderTest : public ChromeRenderViewHostTestHarness {
  public:
@@ -269,30 +271,31 @@ TEST_F(WebUIAllowlistProviderTest,
   // cookies.
   EXPECT_TRUE(cookies_settings->IsFullCookieAccessAllowed(
       third_party_url, net::SiteForCookies::FromUrl(top_level_url),
-      url::Origin::Create(top_level_url), QueryReason::kCookies));
+      url::Origin::Create(top_level_url), net::CookieSettingOverrides()));
 
   // Allowlisted origin on its own can't use cookies.
   EXPECT_FALSE(cookies_settings->IsFullCookieAccessAllowed(
       third_party_url, net::SiteForCookies::FromUrl(third_party_url),
-      url::Origin::Create(third_party_url), QueryReason::kCookies));
+      url::Origin::Create(third_party_url), net::CookieSettingOverrides()));
 
   // Allowlisted origin embedded in Web top-level origin can't use cookies.
   EXPECT_FALSE(cookies_settings->IsFullCookieAccessAllowed(
       GURL("https://example2.com"),
       net::SiteForCookies::FromUrl(third_party_url),
-      url::Origin::Create(third_party_url), QueryReason::kCookies));
+      url::Origin::Create(third_party_url), net::CookieSettingOverrides()));
 
   // Allowlisted origin making subresource request (e.g. image) can't use
   // cookies.
   EXPECT_FALSE(cookies_settings->IsFullCookieAccessAllowed(
-      third_party_url, net::SiteForCookies(), absl::nullopt,
-      QueryReason::kCookies));
+      third_party_url, net::SiteForCookies(), std::nullopt,
+      net::CookieSettingOverrides()));
 
   // Allowlisted origin embedded in the wrong WebUI origin can't use cookies.
   const GURL url_no_permission_webui = GURL("chrome-untrusted://no-perm");
   EXPECT_FALSE(cookies_settings->IsFullCookieAccessAllowed(
       third_party_url, net::SiteForCookies::FromUrl(url_no_permission_webui),
-      url::Origin::Create(url_no_permission_webui), QueryReason::kCookies));
+      url::Origin::Create(url_no_permission_webui),
+      net::CookieSettingOverrides()));
 
   // Other permissions aren't affected.
   EXPECT_EQ(CONTENT_SETTING_BLOCK,
@@ -320,33 +323,79 @@ TEST_F(WebUIAllowlistProviderTest,
 
   EXPECT_TRUE(cookies_settings->IsFullCookieAccessAllowed(
       third_party_url, net::SiteForCookies::FromUrl(top_level_url),
-      url::Origin::Create(top_level_url), QueryReason::kCookies));
+      url::Origin::Create(top_level_url), net::CookieSettingOverrides()));
   // Allowlisted origin on its own can use cookies, because only third-party
   // cookies are blocked.
   EXPECT_TRUE(cookies_settings->IsFullCookieAccessAllowed(
       third_party_url, net::SiteForCookies::FromUrl(third_party_url),
-      url::Origin::Create(third_party_url), QueryReason::kCookies));
+      url::Origin::Create(third_party_url), net::CookieSettingOverrides()));
 
   // Allowlisted origin embedded in Web top-level origin can't use cookies.
   EXPECT_FALSE(cookies_settings->IsFullCookieAccessAllowed(
       GURL("https://example2.com"),
       net::SiteForCookies::FromUrl(third_party_url),
-      url::Origin::Create(third_party_url), QueryReason::kCookies));
+      url::Origin::Create(third_party_url), net::CookieSettingOverrides()));
 
   // Allowlisted origin embedded in the wrong WebUI origin can't use cookies.
   const GURL url_no_permission_webui = GURL("chrome-untrusted://no-perm");
   EXPECT_FALSE(cookies_settings->IsFullCookieAccessAllowed(
       third_party_url, net::SiteForCookies::FromUrl(url_no_permission_webui),
-      url::Origin::Create(url_no_permission_webui), QueryReason::kCookies));
+      url::Origin::Create(url_no_permission_webui),
+      net::CookieSettingOverrides()));
 
   // Allowlisted origin making subresource request (e.g. image) can't use
   // cookies.
   EXPECT_FALSE(cookies_settings->IsFullCookieAccessAllowed(
-      third_party_url, net::SiteForCookies(), absl::nullopt,
-      QueryReason::kCookies));
+      third_party_url, net::SiteForCookies(), std::nullopt,
+      net::CookieSettingOverrides()));
 
   // Other permissions aren't affected.
   EXPECT_EQ(CONTENT_SETTING_BLOCK,
             map->GetContentSetting(third_party_url, top_level_url,
                                    ContentSettingsType::NOTIFICATIONS));
+}
+
+TEST_F(WebUIAllowlistProviderTest, RegisterThirdPartyCookiesNotifiesOnlyOnce) {
+  auto* map = GetHostContentSettingsMap(profile());
+  MockSettingsObserver observer(map);
+
+  const GURL top_level_url = GURL("chrome-untrusted://test/");
+  const GURL third_party_url1 = GURL("https://example1.com/");
+  const GURL third_party_url2 = GURL("https://example2.com/");
+  const GURL third_party_url3 = GURL("https://example3.com/");
+
+  auto* allowlist = WebUIAllowlist::GetOrCreate(profile());
+
+  // The initial call notifies observers.
+  EXPECT_CALL(observer,
+              OnContentSettingsChanged(map, ContentSettingsType::COOKIES, false,
+                                       _, _, false))
+      .Times(2);
+  allowlist->RegisterAutoGrantedThirdPartyCookies(
+      url::Origin::Create(top_level_url),
+      {ContentSettingsPattern::FromURL(third_party_url1),
+       ContentSettingsPattern::FromURL(third_party_url2)});
+  testing::Mock::VerifyAndClearExpectations(&observer);
+
+  // A repeated call does not notify observers.
+  EXPECT_CALL(observer,
+              OnContentSettingsChanged(map, ContentSettingsType::COOKIES, false,
+                                       _, _, false))
+      .Times(0);
+  allowlist->RegisterAutoGrantedThirdPartyCookies(
+      url::Origin::Create(top_level_url),
+      {ContentSettingsPattern::FromURL(third_party_url1),
+       ContentSettingsPattern::FromURL(third_party_url2)});
+  testing::Mock::VerifyAndClearExpectations(&observer);
+
+  // A new URL notifies observers only for this URL.
+  EXPECT_CALL(observer,
+              OnContentSettingsChanged(map, ContentSettingsType::COOKIES, false,
+                                       _, _, false))
+      .Times(1);
+  allowlist->RegisterAutoGrantedThirdPartyCookies(
+      url::Origin::Create(top_level_url),
+      {ContentSettingsPattern::FromURL(third_party_url1),
+       ContentSettingsPattern::FromURL(third_party_url3)});
+  testing::Mock::VerifyAndClearExpectations(&observer);
 }

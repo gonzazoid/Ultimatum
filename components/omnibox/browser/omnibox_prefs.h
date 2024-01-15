@@ -12,6 +12,27 @@ class PrefService;
 
 namespace omnibox {
 
+// Reflects the omnibox::GroupId enum values for the Polaris zero-prefix
+// suggestions in //third_party/omnibox_proto/groups.proto for reporting in UMA.
+//
+// This enum is tied directly to the `GroupId` UMA enum in
+// //tools/metrics/histograms/enums.xml and should always reflect it (do not
+// change one without changing the other).
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class UMAGroupId {
+  kUnknown = 0,
+  kInvalid,
+  kPreviousSearchRelated,
+  kPreviousSearchRelatedEntityChips,
+  kTrends,
+  kTrendsEntityChips,
+  kRelatedQueries,
+  kVisitedDocRelated,
+
+  kMaxValue = kVisitedDocRelated
+};
+
 // These values are persisted to prefs. They cannot be freely changed.
 enum SuggestionGroupVisibility {
   // When DEFAULT is returned, the group's visibility should be controlled by
@@ -28,8 +49,8 @@ enum SuggestionGroupVisibility {
 };
 
 // Histograms being recorded when visibility of suggestion group IDs change.
-extern const char kToggleSuggestionGroupIdOffHistogram[];
-extern const char kToggleSuggestionGroupIdOnHistogram[];
+extern const char kGroupIdToggledOffHistogram[];
+extern const char kGroupIdToggledOnHistogram[];
 
 // Alphabetical list of preference names specific to the omnibox component.
 // Keep alphabetized, and document each in the .cc file.
@@ -40,6 +61,7 @@ extern const char kSuggestionGroupVisibility[];
 extern const char kPreventUrlElisionsInOmnibox[];
 extern const char kZeroSuggestCachedResults[];
 extern const char kZeroSuggestCachedResultsWithURL[];
+extern const char kOmniboxInstantKeywordUsed[];
 
 void RegisterProfilePrefs(PrefRegistrySimple* registry);
 
@@ -47,7 +69,7 @@ void RegisterProfilePrefs(PrefRegistrySimple* registry);
 // If |suggestion_group_id| has never been manually hidden or shown by the user,
 // this method returns SuggestionGroupVisibility::DEFAULT.
 //
-// Warning: UI code should use AutocompleteResult::IsSuggestionGroupHidden()
+// Warning: UI code should use OmniboxController::IsSuggestionGroupHidden()
 // instead, which passes the server-provided group ID to this method and takes
 // the server-provided hint on default visibility of the group into account.
 SuggestionGroupVisibility GetUserPreferenceForSuggestionGroupVisibility(
@@ -57,7 +79,7 @@ SuggestionGroupVisibility GetUserPreferenceForSuggestionGroupVisibility(
 // Sets the stored visibility preference for |suggestion_group_id| to
 // |visibility|.
 //
-// Warning: UI code should use AutocompleteResult::SetSuggestionGroupHidden()
+// Warning: UI code should use OmniboxController::SetSuggestionGroupHidden()
 // instead, which passes the server-provided group ID to this method.
 void SetUserPreferenceForSuggestionGroupVisibility(
     PrefService* prefs,

@@ -9,9 +9,10 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
 #include "base/files/file_path_watcher.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/profiles/profile.h"
@@ -83,7 +84,8 @@ class FileWatcher {
                         base::FilePathWatcher* file_path_watcher);
 
   scoped_refptr<base::SequencedTaskRunner> sequenced_task_runner_;
-  base::FilePathWatcher* local_file_watcher_ = nullptr;
+  raw_ptr<base::FilePathWatcher, DanglingUntriaged> local_file_watcher_ =
+      nullptr;
   std::unique_ptr<guest_os::GuestOsFileWatcher> crostini_file_watcher_;
   base::FilePath virtual_path_;
   // Map of origin to counter. See the comment at AddListener() for

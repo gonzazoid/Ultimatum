@@ -28,16 +28,24 @@ ExternalLogoutRequestEventHandlerFactory::GetInstance() {
 
 ExternalLogoutRequestEventHandlerFactory::
     ExternalLogoutRequestEventHandlerFactory()
-    : ProfileKeyedServiceFactory("ExternalLogoutRequestEventHandler") {
+    : ProfileKeyedServiceFactory(
+          "ExternalLogoutRequestEventHandler",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(EventRouterFactory::GetInstance());
 }
 
 ExternalLogoutRequestEventHandlerFactory::
     ~ExternalLogoutRequestEventHandlerFactory() = default;
 
-KeyedService* ExternalLogoutRequestEventHandlerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ExternalLogoutRequestEventHandlerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* browser_context) const {
-  return new ExternalLogoutRequestEventHandler(browser_context);
+  return std::make_unique<ExternalLogoutRequestEventHandler>(browser_context);
 }
 
 bool ExternalLogoutRequestEventHandlerFactory::ServiceIsNULLWhileTesting()

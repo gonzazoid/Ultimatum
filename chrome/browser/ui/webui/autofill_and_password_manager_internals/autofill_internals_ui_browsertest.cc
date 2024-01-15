@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ui/webui/autofill_and_password_manager_internals/internals_ui_handler.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -33,7 +34,7 @@ class AutofillInternalsWebUIBrowserTest : public InProcessBrowserTest {
 
   void SpinRunLoop() {
     base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, run_loop.QuitClosure(), base::Milliseconds(20));
     run_loop.Run();
   }

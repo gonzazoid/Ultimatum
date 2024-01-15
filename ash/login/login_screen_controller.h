@@ -5,6 +5,7 @@
 #ifndef ASH_LOGIN_LOGIN_SCREEN_CONTROLLER_H_
 #define ASH_LOGIN_LOGIN_SCREEN_CONTROLLER_H_
 
+#include <optional>
 #include <vector>
 
 #include "ash/ash_export.h"
@@ -13,9 +14,9 @@
 #include "ash/public/cpp/kiosk_app_menu.h"
 #include "ash/public/cpp/login_accelerators.h"
 #include "ash/public/cpp/login_screen.h"
-#include "ash/public/cpp/system_tray_observer.h"
+#include "ash/system/tray/system_tray_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/native_widget_types.h"
 
 class PrefRegistrySimple;
@@ -35,19 +36,13 @@ class ASH_EXPORT LoginScreenController : public LoginScreen,
                                          public KioskAppMenu,
                                          public SystemTrayObserver {
  public:
-  // The current authentication stage. Used to get more verbose logging.
-  enum class AuthenticationStage {
-    kIdle,
-    kDoAuthenticate,
-    kUserCallback,
-  };
 
   using OnShownCallback = base::OnceCallback<void(bool did_show)>;
   // Callback for authentication checks. |success| is nullopt if an
   // authentication check did not run, otherwise it is true/false if auth
   // succeeded/failed.
   using OnAuthenticateCallback =
-      base::OnceCallback<void(absl::optional<bool> success)>;
+      base::OnceCallback<void(std::optional<bool> success)>;
 
   explicit LoginScreenController(SystemTrayNotifier* system_tray_notifier);
 
@@ -60,6 +55,9 @@ class ASH_EXPORT LoginScreenController : public LoginScreen,
 
   // Check to see if an authentication attempt is in-progress.
   bool IsAuthenticating() const;
+
+  // Check to see if an authentication callback is executing.
+  bool IsAuthenticationCallbackExecuting() const;
 
   // Hash the password and send AuthenticateUser request to LoginScreenClient.
   // LoginScreenClient (in the chrome process) will do the authentication and
@@ -77,17 +75,13 @@ class ASH_EXPORT LoginScreenController : public LoginScreen,
       base::Time validation_time,
       const std::string& code);
   bool GetSecurityTokenPinRequestCanceled() const;
-  void HardlockPod(const AccountId& account_id);
   void OnFocusPod(const AccountId& account_id);
-  void OnNoPodFocused();
-  void LoadWallpaper(const AccountId& account_id);
-  void SignOutUser();
   void CancelAddUser();
-  void LoginAsGuest();
   void ShowGuestTosScreen();
   void OnMaxIncorrectPasswordAttempted(const AccountId& account_id);
   void FocusLockScreenApps(bool reverse);
   void ShowGaiaSignin(const AccountId& prefilled_account);
+  void StartUserRecovery(const AccountId& account_to_recover);
   void ShowOsInstallScreen();
   void OnRemoveUserWarningShown();
   void RemoveUser(const AccountId& account_id);
@@ -101,7 +95,6 @@ class ASH_EXPORT LoginScreenController : public LoginScreen,
   void ShowParentAccessHelpApp();
   void ShowLockScreenNotificationSettings();
   void FocusOobeDialog();
-  void NotifyUserActivity();
 
   // Enable or disable authentication for the debug overlay.
   enum class ForceFailAuth { kOff, kImmediate, kDelayed };
@@ -140,6 +133,9 @@ class ASH_EXPORT LoginScreenController : public LoginScreen,
     return authentication_stage_;
   }
 
+  // Set authentication stage. Also notifies the observers.
+  void SetAuthenticationStage(AuthenticationStage authentication_stage);
+
   // Called when Login or Lock screen is destroyed.
   void OnLockScreenDestroyed();
 
@@ -159,11 +155,11 @@ class ASH_EXPORT LoginScreenController : public LoginScreen,
 
   LoginDataDispatcher login_data_dispatcher_;
 
-  LoginScreenClient* client_ = nullptr;
+  raw_ptr<LoginScreenClient, DanglingUntriaged> client_ = nullptr;
 
   AuthenticationStage authentication_stage_ = AuthenticationStage::kIdle;
 
-  SystemTrayNotifier* system_tray_notifier_;
+  raw_ptr<SystemTrayNotifier> system_tray_notifier_;
 
   SecurityTokenRequestController security_token_request_controller_;
 

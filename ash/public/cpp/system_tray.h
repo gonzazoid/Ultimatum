@@ -7,7 +7,9 @@
 
 #include <string>
 
-#include "ash/public/cpp/ash_public_export.h"
+#include "ash/ash_export.h"
+
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -15,7 +17,6 @@ class SystemTrayClient;
 enum class DeferredUpdateState;
 enum class NotificationStyle;
 enum class UpdateSeverity;
-enum class UpdateType;
 struct DeviceEnterpriseInfo;
 struct LocaleInfo;
 struct RelaunchNotificationState;
@@ -25,7 +26,7 @@ class PhoneHubManager;
 }
 
 // Public interface to control the system tray bubble in ash.
-class ASH_PUBLIC_EXPORT SystemTray {
+class ASH_EXPORT SystemTray {
  public:
   static SystemTray* Get();
 
@@ -79,8 +80,7 @@ class ASH_PUBLIC_EXPORT SystemTray {
   // tooltip or the notification.
   virtual void ShowUpdateIcon(UpdateSeverity severity,
                               bool factory_reset_required,
-                              bool rollback,
-                              UpdateType update_type) = 0;
+                              bool rollback) = 0;
 
   // Changes the update notification in the unified system menu,
   // according to different policies, when there is an update available
@@ -106,6 +106,9 @@ class ASH_PUBLIC_EXPORT SystemTray {
   // granted.
   virtual void SetUpdateOverCellularAvailableIconVisible(bool visible) = 0;
 
+  // Sets whether end of life notice should be shown in quick settings.
+  virtual void SetShowEolNotice(bool show) = 0;
+
   // Shows the volume slider bubble shown at the right bottom of screen.
   virtual void ShowVolumeSliderBubble() = 0;
 
@@ -118,8 +121,8 @@ class ASH_PUBLIC_EXPORT SystemTray {
       phonehub::PhoneHubManager* phone_hub_manager) = 0;
 
  protected:
-  SystemTray();
-  virtual ~SystemTray();
+  SystemTray() = default;
+  virtual ~SystemTray() = default;
 };
 
 }  // namespace ash

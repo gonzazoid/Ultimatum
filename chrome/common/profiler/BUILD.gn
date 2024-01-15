@@ -23,6 +23,8 @@ source_set("profiler") {
     "unwind_util.cc",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
     "//base",
     "//build:branding_buildflags",
@@ -38,7 +40,12 @@ source_set("profiler") {
   ]
 
   if (is_android) {
-    deps += [ "//chrome/android/modules/stack_unwinder/public:module" ]
+    deps += [
+      "//chrome/android/features/stack_unwinder/public:native",
+      "//chrome/android/modules/stack_unwinder/public:module",
+    ]
+    public += [ "native_unwinder_android_map_delegate_impl.h" ]
+    sources += [ "native_unwinder_android_map_delegate_impl.cc" ]
   }
 
   if (enable_extensions) {

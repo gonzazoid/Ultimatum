@@ -5,6 +5,8 @@
 #include "third_party/blink/renderer/platform/graphics/paint/geometry_mapper_transform_cache.h"
 
 #include <utility>
+
+#include "base/types/optional_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/platform/graphics/paint/transform_paint_property_node.h"
 #include "third_party/blink/renderer/platform/testing/paint_property_test_helpers.h"
@@ -27,9 +29,9 @@ class GeometryMapperTransformCacheTest : public testing::Test {
     return node.GetTransformCache().screen_transform_updated_;
   }
 
-  static GeometryMapperTransformCache::ScreenTransform* GetScreenTransform(
-      const TransformPaintPropertyNode& node) {
-    return GetTransformCache(node).screen_transform_.get();
+  static const GeometryMapperTransformCache::ScreenTransform*
+  GetScreenTransform(const TransformPaintPropertyNode& node) {
+    return base::OptionalToPtr(GetTransformCache(node).screen_transform_);
   }
 
   static void Check2dTranslationToRoot(const TransformPaintPropertyNode& node,
@@ -43,10 +45,10 @@ class GeometryMapperTransformCacheTest : public testing::Test {
     EXPECT_FALSE(GetScreenTransform(node));
 
     EXPECT_EQ(&t0(), cache.plane_root());
-    TransformationMatrix actual_to_plane_root;
+    gfx::Transform actual_to_plane_root;
     cache.ApplyToPlaneRoot(actual_to_plane_root);
     EXPECT_EQ(MakeTranslationMatrix(x, y), actual_to_plane_root);
-    TransformationMatrix actual_from_plane_root;
+    gfx::Transform actual_from_plane_root;
     cache.ApplyFromPlaneRoot(actual_from_plane_root);
     EXPECT_EQ(MakeTranslationMatrix(-x, -y), actual_from_plane_root);
   }
@@ -54,7 +56,7 @@ class GeometryMapperTransformCacheTest : public testing::Test {
   static void CheckRootAsPlaneRoot(
       const TransformPaintPropertyNode& node,
       const TransformPaintPropertyNode& root_of_2d_translation,
-      const TransformationMatrix& to_plane_root,
+      const gfx::Transform& to_plane_root,
       double translate_x,
       double translate_y) {
     const auto& cache = GetTransformCache(node);
@@ -67,19 +69,19 @@ class GeometryMapperTransformCacheTest : public testing::Test {
 
     EXPECT_EQ(&t0(), cache.plane_root());
     EXPECT_EQ(to_plane_root, cache.to_plane_root());
-    EXPECT_EQ(to_plane_root.Inverse(), cache.from_plane_root());
+    EXPECT_EQ(to_plane_root.InverseOrIdentity(), cache.from_plane_root());
 
-    TransformationMatrix actual_to_screen;
+    gfx::Transform actual_to_screen;
     cache.ApplyToScreen(actual_to_screen);
     EXPECT_EQ(to_plane_root, actual_to_screen);
-    TransformationMatrix actual_projection_from_screen;
+    gfx::Transform actual_projection_from_screen;
     cache.ApplyProjectionFromScreen(actual_projection_from_screen);
-    EXPECT_EQ(to_plane_root.Inverse(), actual_projection_from_screen);
+    EXPECT_EQ(to_plane_root.InverseOrIdentity(), actual_projection_from_screen);
   }
 
   static void CheckPlaneRootSameAs2dTranslationRoot(
       const TransformPaintPropertyNode& node,
-      const TransformationMatrix& to_screen,
+      const gfx::Transform& to_screen,
       const TransformPaintPropertyNode& plane_root,
       double translate_x,
       double translate_y) {
@@ -96,16 +98,16 @@ class GeometryMapperTransformCacheTest : public testing::Test {
     EXPECT_EQ(&plane_root, cache.plane_root());
     EXPECT_EQ(to_screen, cache.to_screen());
     auto projection_from_screen = to_screen;
-    projection_from_screen.FlattenTo2d();
-    projection_from_screen = projection_from_screen.Inverse();
+    projection_from_screen.Flatten();
+    projection_from_screen = projection_from_screen.InverseOrIdentity();
     EXPECT_EQ(projection_from_screen, cache.projection_from_screen());
   }
 
   static void CheckPlaneRootDifferent2dTranslationRoot(
       const TransformPaintPropertyNode& node,
-      const TransformationMatrix& to_screen,
+      const gfx::Transform& to_screen,
       const TransformPaintPropertyNode& plane_root,
-      const TransformationMatrix& to_plane_root,
+      const gfx::Transform& to_plane_root,
       const TransformPaintPropertyNode& root_of_2d_translation,
       double translate_x,
       double translate_y) {
@@ -121,11 +123,11 @@ class GeometryMapperTransformCacheTest : public testing::Test {
 
     EXPECT_EQ(&plane_root, cache.plane_root());
     EXPECT_EQ(to_plane_root, cache.to_plane_root());
-    EXPECT_EQ(to_plane_root.Inverse(), cache.from_plane_root());
+    EXPECT_EQ(to_plane_root.InverseOrIdentity(), cache.from_plane_root());
     EXPECT_EQ(to_screen, cache.to_screen());
     auto projection_from_screen = to_screen;
-    projection_from_screen.FlattenTo2d();
-    projection_from_screen = projection_from_screen.Inverse();
+    projection_from_screen.Flatten();
+    projection_from_screen = projection_from_screen.InverseOrIdentity();
     EXPECT_EQ(projection_from_screen, cache.projection_from_screen());
   }
 
@@ -215,7 +217,7 @@ TEST_F(GeometryMapperTransformCacheTest, TransformUpdate) {
 
   // Change t2 to a scale.
   GeometryMapperTransformCache::ClearCache();
-  t2->Update(*t1, TransformPaintPropertyNode::State{MakeScaleMatrix(3)});
+  t2->Update(*t1, TransformPaintPropertyNode::State{{MakeScaleMatrix(3)}});
   Check2dTranslationToRoot(t0(), 0, 0);
   Check2dTranslationToRoot(*t1, 1, 2);
   auto to_plane_root = MakeTranslationMatrix(1, 2);
@@ -227,7 +229,7 @@ TEST_F(GeometryMapperTransformCacheTest, TransformUpdate) {
   // Change t2 to a 3d transform so that it becomes a plane root.
   GeometryMapperTransformCache::ClearCache();
   t2->Update(*t1,
-             TransformPaintPropertyNode::State{MakeRotationMatrix(0, 45, 0)});
+             TransformPaintPropertyNode::State{{MakeRotationMatrix(0, 45, 0)}});
   Check2dTranslationToRoot(t0(), 0, 0);
   Check2dTranslationToRoot(*t1, 1, 2);
 
@@ -253,7 +255,8 @@ TEST_F(GeometryMapperTransformCacheTest, TransformUpdate) {
 
   // Invalidating cache should invalidate screen_transform_ but not free it.
   GeometryMapperTransformCache::ClearCache();
-  t3->Update(*t2, TransformPaintPropertyNode::State{gfx::Vector2dF(28, 27)});
+  t3->Update(
+      *t2, TransformPaintPropertyNode::State{{MakeTranslationMatrix(28, 27)}});
   EXPECT_FALSE(ScreenTransformUpdated(*t2));
   EXPECT_FALSE(ScreenTransformUpdated(*t3));
   EXPECT_EQ(t2_screen_transform, GetScreenTransform(*t2));
@@ -271,7 +274,8 @@ TEST_F(GeometryMapperTransformCacheTest, TransformUpdate) {
 
   // Change t2 back to a 2d translation.
   GeometryMapperTransformCache::ClearCache();
-  t2->Update(*t1, TransformPaintPropertyNode::State{gfx::Vector2dF(11, 12)});
+  t2->Update(
+      *t1, TransformPaintPropertyNode::State{{MakeTranslationMatrix(11, 12)}});
   Check2dTranslationToRoot(t0(), 0, 0);
   Check2dTranslationToRoot(*t1, 1, 2);
   Check2dTranslationToRoot(*t2, 1 + 11, 2 + 12);

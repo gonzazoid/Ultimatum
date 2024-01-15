@@ -13,13 +13,13 @@
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/scoped_mock_clock_override.h"
 #include "base/test/test_timeouts.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time_override.h"
 #include "build/build_config.h"
 #include "content/browser/blob_storage/chrome_blob_storage_context.h"
@@ -32,6 +32,7 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/browsing_data_remover.h"
 #include "content/public/browser/navigation_handle.h"
+#include "content/public/browser/network_service_util.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_features.h"
@@ -50,7 +51,6 @@
 #include "net/dns/mock_host_resolver.h"
 #include "net/http/http_cache.h"
 #include "net/test/embedded_test_server/controllable_http_response.h"
-#include "services/network/public/cpp/corb/corb_impl.h"
 #include "services/network/public/cpp/features.h"
 #include "storage/browser/blob/blob_storage_context.h"
 #include "third_party/blink/public/common/switches.h"
@@ -187,12 +187,12 @@ class NavigationHandleSXGAttributeObserver : public WebContentsObserver {
         navigation_handle->HasPrefetchedAlternativeSubresourceSignedExchange();
   }
 
-  const absl::optional<bool>& had_prefetched_alt_sxg() const {
+  const std::optional<bool>& had_prefetched_alt_sxg() const {
     return had_prefetched_alt_sxg_;
   }
 
  private:
-  absl::optional<bool> had_prefetched_alt_sxg_;
+  std::optional<bool> had_prefetched_alt_sxg_;
 };
 
 }  // namespace
@@ -213,13 +213,10 @@ class SignedExchangePrefetchBrowserTest : public PrefetchBrowserTestBase {
   ~SignedExchangePrefetchBrowserTest() override = default;
 
   void SetUp() override {
-    std::vector<base::test::FeatureRef> enable_features;
-    std::vector<base::test::FeatureRef> disabled_features;
-    enable_features.push_back(features::kSignedHTTPExchange);
+    feature_list_.InitAndEnableFeature(features::kSignedHTTPExchange);
     // Need to run the network service in process for testing cache expirity
     // (PrefetchMainResourceSXG_ExceedPrefetchReuseMins) using MockClock.
-    enable_features.push_back(features::kNetworkServiceInProcess);
-    feature_list_.InitWithFeatures(enable_features, disabled_features);
+    ForceInProcessNetworkService();
     PrefetchBrowserTestBase::SetUp();
   }
 
@@ -753,21 +750,20 @@ class SignedExchangeSubresourcePrefetchBrowserTest
     std::vector<base::test::FeatureRef> enable_features;
     std::vector<base::test::FeatureRef> disabled_features;
     enable_features.push_back(features::kSignedHTTPExchange);
-    // Need to run the network service in process for testing cache expirity
-    // (PrefetchMainResourceSXG_ExceedPrefetchReuseMins) using MockClock.
-    enable_features.push_back(features::kNetworkServiceInProcess);
-
     // Needed for reporting test. Doesn't significantly impact other tests.
     enable_features.push_back(
         net::features::kPartitionNelAndReportingByNetworkIsolationKey);
-    // These last two are not strictly necessary, but make this test more robust
-    // against enabling NetworkIsolationKeys everywhere.
     enable_features.push_back(
         net::features::kPartitionConnectionsByNetworkIsolationKey);
     enable_features.push_back(
         net::features::kPartitionSSLSessionsByNetworkIsolationKey);
 
     feature_list_.InitWithFeatures(enable_features, disabled_features);
+
+    // Need to run the network service in process for testing cache expirity
+    // (PrefetchMainResourceSXG_ExceedPrefetchReuseMins) using MockClock.
+    ForceInProcessNetworkService();
+
     PrefetchBrowserTestBase::SetUp();
   }
 
@@ -926,23 +922,23 @@ class SignedExchangeSubresourcePrefetchBrowserTest
   // |mime_type| is the MIME tyepe of the inner response of the SXG subresource.
   // When |has_nosniff| is set, the inner response header of the SXG subresource
   // has "x-content-type-options: nosniff" header.
-  // |expected_title| is the expected title after loading the SXG page. If the
-  // content load should not be blocked, this should be the title which is set
-  // by executing |content|, otherwise this should be "original title".
-  // |expected_action| is the expected CrossOriginReadBlocking::Action which is
-  // recorded in the histogram.
-  void RunCrossOriginReadBlockingTest(
-      bool cross_origin,
-      const std::string& content,
-      const std::string& mime_type,
-      bool has_nosniff,
-      const std::string& expected_title,
-      network::corb::CrossOriginReadBlocking::Action expected_action) {
+  // |corb_allowed| is whether we expect CORB/ORB to allow this resource. We
+  // will check this based on the document title.
+  void RunCrossOriginReadBlockingTest(bool cross_origin,
+                                      const std::string& content,
+                                      const std::string& mime_type,
+                                      bool has_nosniff,
+                                      bool corb_allowed) {
     const char* prefetch_path = "/prefetch.html";
     const char* target_sxg_path = "/target.sxg";
     const char* target_path = "/target.html";
     const char* script_sxg_path = "/script_js.sxg";
     const char* script_path = "/script.js";
+
+    // If CORB/ORB blocks the resource, it will retain its original title,
+    // "original title". If the resource is allowed, it will modify the title
+    // to "done".
+    const char* expected_title = corb_allowed ? "done" : "original title";
 
     auto script_sxg_request_counter = RequestCounter::CreateAndMonitor(
         embedded_test_server(), script_sxg_path);
@@ -1013,15 +1009,7 @@ class SignedExchangeSubresourcePrefetchBrowserTest
 
     EXPECT_EQ(2u, GetCachedExchanges(shell()).size());
 
-    {
-      base::HistogramTester histograms;
-      NavigateToURLAndWaitTitle(target_sxg_url, expected_title);
-      histograms.ExpectBucketCount(
-          "SiteIsolation.XSD.Browser.Action",
-          network::corb::CrossOriginReadBlocking::Action::kResponseStarted, 1);
-      histograms.ExpectBucketCount("SiteIsolation.XSD.Browser.Action",
-                                   expected_action, 1);
-    }
+    NavigateToURLAndWaitTitle(target_sxg_url, expected_title);
 
     EXPECT_EQ(1, script_sxg_request_counter->GetRequestCount());
     EXPECT_EQ(0, script_request_counter->GetRequestCount());
@@ -1115,8 +1103,17 @@ IN_PROC_BROWSER_TEST_F(SignedExchangeSubresourcePrefetchBrowserTest,
       1 /* expected_script_fetch_count */);
 }
 
-IN_PROC_BROWSER_TEST_F(SignedExchangeSubresourcePrefetchBrowserTest,
-                       MainResourceSXGAndScriptSXG_CrossOrigin_AsDocument) {
+// Flaky. See https://crbug.com/1415204 and https://crbug.com/1494880.
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_ANDROID)
+#define MAYBE_MainResourceSXGAndScriptSXG_CrossOrigin_AsDocument \
+  DISABLED_MainResourceSXGAndScriptSXG_CrossOrigin_AsDocument
+#else
+#define MAYBE_MainResourceSXGAndScriptSXG_CrossOrigin_AsDocument \
+  MainResourceSXGAndScriptSXG_CrossOrigin_AsDocument
+#endif
+IN_PROC_BROWSER_TEST_F(
+    SignedExchangeSubresourcePrefetchBrowserTest,
+    MAYBE_MainResourceSXGAndScriptSXG_CrossOrigin_AsDocument) {
   // This test is almost same as MainResourceSXGAndScriptSXG_CrossOrigin. The
   // only difference is that the <link rel=prefetch> element has "as=document"
   // attribute which was introduced to support cross origin prefetch with
@@ -1816,7 +1813,9 @@ IN_PROC_BROWSER_TEST_F(SignedExchangeSubresourcePrefetchBrowserTest,
   EXPECT_EQ(1, script2_request_counter->GetRequestCount());
 }
 
-IN_PROC_BROWSER_TEST_F(SignedExchangeSubresourcePrefetchBrowserTest, CORS) {
+// TODO(crbug.com/1350046): Flaky.
+IN_PROC_BROWSER_TEST_F(SignedExchangeSubresourcePrefetchBrowserTest,
+                       DISABLED_CORS) {
   std::unique_ptr<net::EmbeddedTestServer> data_server =
       std::make_unique<net::EmbeddedTestServer>(
           net::EmbeddedTestServer::TYPE_HTTPS);
@@ -2036,7 +2035,7 @@ IN_PROC_BROWSER_TEST_F(SignedExchangeSubresourcePrefetchBrowserTest, CORS) {
   // Wait until all (main- and sub-resource) SXGs are prefetched.
   while (GetCachedExchanges(shell()).size() < std::size(kTestCases) + 1) {
     base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, run_loop.QuitClosure(), TestTimeouts::tiny_timeout());
     run_loop.Run();
   }
@@ -2055,32 +2054,28 @@ IN_PROC_BROWSER_TEST_F(SignedExchangeSubresourcePrefetchBrowserTest,
                        CrossOriginReadBlocking_AllowedAfterSniffing) {
   RunCrossOriginReadBlockingTest(
       true /* cross_origin */, "document.title=\"done\"", "text/javascript",
-      false /* has_nosniff */, "done",
-      network::corb::CrossOriginReadBlocking::Action::kAllowedAfterSniffing);
+      false /* has_nosniff */, true /* corb_allowed */);
 }
 
 IN_PROC_BROWSER_TEST_F(SignedExchangeSubresourcePrefetchBrowserTest,
                        CrossOriginReadBlocking_BlockedAfterSniffing) {
   RunCrossOriginReadBlockingTest(
       true /* cross_origin */, "<!DOCTYPE html>hello;", "text/html",
-      false /* has_nosniff */, "original title",
-      network::corb::CrossOriginReadBlocking::Action::kBlockedAfterSniffing);
+      false /* has_nosniff */, false /* corb_allowed */);
 }
 
 IN_PROC_BROWSER_TEST_F(SignedExchangeSubresourcePrefetchBrowserTest,
                        CrossOriginReadBlocking_AllowedWithoutSniffing) {
   RunCrossOriginReadBlockingTest(
       false /* cross_origin */, "document.title=\"done\"", "text/javascript",
-      true /* has_nosniff */, "done",
-      network::corb::CrossOriginReadBlocking::Action::kAllowedWithoutSniffing);
+      true /* has_nosniff */, true /* corb_allowed */);
 }
 
 IN_PROC_BROWSER_TEST_F(SignedExchangeSubresourcePrefetchBrowserTest,
                        CrossOriginReadBlocking_BlockedWithoutSniffing) {
   RunCrossOriginReadBlockingTest(
       true /* cross_origin */, "<!DOCTYPE html>hello;", "text/html",
-      true /* has_nosniff */, "original title",
-      network::corb::CrossOriginReadBlocking::Action::kBlockedWithoutSniffing);
+      true /* has_nosniff */, false /* corb_allowed */);
 }
 
 IN_PROC_BROWSER_TEST_F(SignedExchangeSubresourcePrefetchBrowserTest,

@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
@@ -45,7 +45,9 @@ class SafeBrowsingRequest {
   void OnResultReceived(bool is_url_safe);
 
   // The client interfacing with Safe Browsing. Created on |this| thread, but
-  // used on the IO thread for the rest of its life and destroyed there.
+  // used on the IO thread for the rest of its life and destroyed there. If
+  // kSafeBrowsingOnUIThread is enabled it's used and destroyed on the UI
+  // thread.
   std::unique_ptr<SafeBrowsingClient> client_;
 
   base::OnceCallback<void(bool)> callback_;

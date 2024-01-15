@@ -5,13 +5,14 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_DBUS_USERDATAAUTH_CRYPTOHOME_MISC_CLIENT_H_
 #define CHROMEOS_ASH_COMPONENTS_DBUS_USERDATAAUTH_CRYPTOHOME_MISC_CLIENT_H_
 
-#include "base/callback.h"
+#include <optional>
+
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/observer_list_types.h"
 #include "chromeos/ash/components/dbus/cryptohome/UserDataAuth.pb.h"
 #include "chromeos/ash/components/dbus/cryptohome/rpc.pb.h"
 #include "chromeos/dbus/common/dbus_method_call_status.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace dbus {
 class Bus;
@@ -35,8 +36,6 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) CryptohomeMiscClient {
       ::user_data_auth::LockToSingleUserMountUntilRebootReply>;
   using GetRsuDeviceIdCallback =
       chromeos::DBusMethodCallback<::user_data_auth::GetRsuDeviceIdReply>;
-  using CheckHealthCallback =
-      chromeos::DBusMethodCallback<::user_data_auth::CheckHealthReply>;
 
   // Not copyable or movable.
   CryptohomeMiscClient(const CryptohomeMiscClient&) = delete;
@@ -85,12 +84,8 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) CryptohomeMiscClient {
       const ::user_data_auth::GetRsuDeviceIdRequest& request,
       GetRsuDeviceIdCallback callback) = 0;
 
-  // Returns the "health" state of the system. i.e. If powerwash is needed.
-  virtual void CheckHealth(const ::user_data_auth::CheckHealthRequest& request,
-                           CheckHealthCallback callback) = 0;
-
   // Blocking version of GetSanitizedUsername().
-  virtual absl::optional<::user_data_auth::GetSanitizedUsernameReply>
+  virtual std::optional<::user_data_auth::GetSanitizedUsernameReply>
   BlockingGetSanitizedUsername(
       const ::user_data_auth::GetSanitizedUsernameRequest& request) = 0;
 

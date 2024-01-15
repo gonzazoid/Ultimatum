@@ -6,8 +6,9 @@
 
 #import <Cocoa/Cocoa.h>
 
+#include <memory>
+
 #include "base/metrics/histogram_macros.h"
-#include "base/no_destructor.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/browser_thread.h"
 #include "ui/gfx/animation/animation.h"
@@ -25,7 +26,7 @@ void SetupAccessibilityDisplayOptionsNotifier() {
   //
   // BrowserAccessibilityStateImpl is a deliberately leaked singleton, so we
   // don't need to record the notification token for later cleanup.
-  [[[NSWorkspace sharedWorkspace] notificationCenter]
+  [NSWorkspace.sharedWorkspace.notificationCenter
       addObserverForName:
           NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification
                   object:nil
@@ -76,15 +77,10 @@ void BrowserAccessibilityStateImplMac::UpdateUniqueUserHistograms() {
                         mode.has_mode(ui::AXMode::kScreenReader));
 }
 
-//
-// BrowserAccessibilityStateImpl::GetInstance implementation that constructs
-// this class instead of the base class.
-//
-
 // static
-BrowserAccessibilityStateImpl* BrowserAccessibilityStateImpl::GetInstance() {
-  static base::NoDestructor<BrowserAccessibilityStateImplMac> instance;
-  return &*instance;
+std::unique_ptr<BrowserAccessibilityStateImpl>
+BrowserAccessibilityStateImpl::Create() {
+  return std::make_unique<BrowserAccessibilityStateImplMac>();
 }
 
 }  // namespace content

@@ -16,13 +16,15 @@
 #include <vector>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/gtest_prod_util.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/memory/unsafe_shared_memory_region.h"
@@ -32,8 +34,10 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/test/task_environment.h"
+#include "base/test/test_timeouts.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/timer/elapsed_timer.h"
 #include "base/values.h"
@@ -247,7 +251,7 @@ class MjpegDecodeAcceleratorTestEnvironment : public ::testing::Environment {
   const base::FilePath::CharType* user_jpeg_filenames_;
   const base::FilePath::CharType* test_data_path_;
   const base::FilePath::CharType* perf_output_path_;
-  base::Value metrics_;
+  base::Value::Dict metrics_;
 
   std::unique_ptr<media::LocalGpuMemoryBufferManager>
       gpu_memory_buffer_manager_;
@@ -280,8 +284,6 @@ void MjpegDecodeAcceleratorTestEnvironment::SetUp() {
 
   gpu_memory_buffer_manager_ =
       std::make_unique<media::LocalGpuMemoryBufferManager>();
-
-  metrics_ = base::Value(base::Value::Type::DICTIONARY);
 }
 
 void MjpegDecodeAcceleratorTestEnvironment::TearDown() {
@@ -362,8 +364,10 @@ MjpegDecodeAcceleratorTestEnvironment::CreateDmaBufVideoFrame(
     dmabuf_fds.push_back(std::move(plane.fd));
   }
   const absl::optional<media::VideoFrameLayout> layout =
-      media::VideoFrameLayout::CreateWithPlanes(format, coded_size,
-                                                std::move(planes));
+      media::VideoFrameLayout::CreateWithPlanes(
+          format, coded_size, std::move(planes),
+          media::VideoFrameLayout::kBufferAddressAlignment,
+          gmb_handle.native_pixmap_handle.modifier);
   if (!layout) {
     LOG(ERROR) << "Failed to create VideoFrameLayout";
     return nullptr;
@@ -468,7 +472,7 @@ MjpegDecodeAcceleratorTestEnvironment::GetSupportedDmaBufFormats() {
 void MjpegDecodeAcceleratorTestEnvironment::AddMetric(
     const std::string& name,
     const base::TimeDelta& time) {
-  metrics_.SetDoubleKey(name, time.InMillisecondsF());
+  metrics_.Set(name, time.InMillisecondsF());
 }
 
 enum ClientState {
@@ -479,7 +483,7 @@ enum ClientState {
 };
 
 struct DecodeTask {
-  const ParsedJpegImage* image;
+  raw_ptr<const ParsedJpegImage> image;
   gfx::Size target_size;
 
   DecodeTask(const ParsedJpegImage* im)
@@ -540,7 +544,7 @@ class JpegClient : public MjpegDecodeAccelerator::Client {
   double GetMeanAbsoluteDifference();
 
   // JpegClient doesn't own |tasks_|.
-  const std::vector<DecodeTask>& tasks_;
+  const raw_ref<const std::vector<DecodeTask>> tasks_;
 
   ClientState state_;
 
@@ -606,8 +610,8 @@ void JpegClient::CreateJpegDecoder() {
   }
 
   for (auto& create_jda_func : jda_factories) {
-    decoder_ =
-        std::move(create_jda_func).Run(base::ThreadTaskRunnerHandle::Get());
+    decoder_ = std::move(create_jda_func)
+                   .Run(base::SingleThreadTaskRunner::GetCurrentDefault());
     if (decoder_)
       break;
   }
@@ -687,7 +691,7 @@ void JpegClient::NotifyError(int32_t task_id,
 }
 
 void JpegClient::PrepareMemory(int32_t task_id) {
-  const DecodeTask& task = tasks_[task_id];
+  const DecodeTask& task = (*tasks_)[task_id];
 
   if (use_dmabuf_) {
     in_dmabuf_fd_ = g_env->CreateDmaBufFd(task.image->data_str.data(),
@@ -740,7 +744,7 @@ void JpegClient::SaveToFile(int32_t task_id,
                             scoped_refptr<media::VideoFrame> in_frame,
                             const std::string& suffix) {
   LOG_ASSERT(in_frame);
-  const DecodeTask& task = tasks_[task_id];
+  const DecodeTask& task = (*tasks_)[task_id];
 
   // First convert to ARGB format. Note that in our case, the coded size and the
   // visible size will be the same.
@@ -778,10 +782,8 @@ void JpegClient::SaveToFile(int32_t task_id,
   const base::FilePath in_filename(task.image->filename());
   const base::FilePath out_filename =
       in_filename.ReplaceExtension(".png").InsertBeforeExtension(suffix);
-  const int size = base::checked_cast<int>(png_output.size());
-  const int file_written_bytes = base::WriteFile(
-      out_filename, reinterpret_cast<char*>(png_output.data()), size);
-  LOG_ASSERT(file_written_bytes == size);
+  const bool success = base::WriteFile(out_filename, png_output);
+  LOG_ASSERT(success);
 }
 
 double JpegClient::GetMeanAbsoluteDifference() {
@@ -815,8 +817,8 @@ double JpegClient::GetMeanAbsoluteDifference() {
 }
 
 void JpegClient::StartDecode(int32_t task_id, bool do_prepare_memory) {
-  ASSERT_LT(base::checked_cast<size_t>(task_id), tasks_.size());
-  const DecodeTask& task = tasks_[task_id];
+  ASSERT_LT(base::checked_cast<size_t>(task_id), tasks_->size());
+  const DecodeTask& task = (*tasks_)[task_id];
 
   if (do_prepare_memory)
     PrepareMemory(task_id);
@@ -837,7 +839,7 @@ void JpegClient::StartDecode(int32_t task_id, bool do_prepare_memory) {
 }
 
 bool JpegClient::GetSoftwareDecodeResult(int32_t task_id) {
-  const DecodeTask& task = tasks_[task_id];
+  const DecodeTask& task = (*tasks_)[task_id];
   const bool do_crop_scale = task.target_size != task.image->visible_size;
   DCHECK(sw_out_frame_->IsMappable());
   DCHECK_EQ(sw_out_frame_->format(), media::PIXEL_FORMAT_I420);
@@ -953,6 +955,9 @@ class MjpegDecodeAcceleratorTest : public ::testing::TestWithParam<bool> {
                   size_t num_concurrent_decoders = 1);
   void PerfDecodeByJDA(int decode_times, const std::vector<DecodeTask>& tasks);
   void PerfDecodeBySW(int decode_times, const std::vector<DecodeTask>& tasks);
+
+  // This is needed to use base::ThreadPool in MjpegDecodeAccelerator.
+  base::test::TaskEnvironment task_environment_;
 };
 
 void MjpegDecodeAcceleratorTest::TestDecode(
@@ -1303,6 +1308,7 @@ int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   base::CommandLine::Init(argc, argv);
   mojo::core::Init();
+  TestTimeouts::Initialize();
   base::ShadowingAtExitManager at_exit_manager;
 
   // Needed to enable DVLOG through --vmodule.

@@ -21,23 +21,19 @@ class ComputedStyleInitialValuesWriter(json5_generator.Writer):
         self._forward_declarations = set()
 
         for property_ in self._properties:
-            # TODO(meade): CursorList and AppliedTextDecorationList are
-            # typedefs, not classes, so they can't be forward declared. Find a
-            # better way to specify this.
+            # TODO(meade): CursorList is a typedef, not a class, so it can't be
+            # forward declared. Find a better way to specify this.
             # Omitting template classes because they can't be forward-declared
             # when they're instantiated. TODO: parse/treat them correctly so
             # they can be forward-declared.
             # TODO: check that the class that is being forward-declared is not
             # among self._includes as this could make the compiler throw errors.
-            if property_['default_value'] == 'nullptr' \
-                    and not property_['unwrapped_type_name'] == 'CursorList' \
-                    and not property_['unwrapped_type_name'] == \
-                    'AppliedTextDecorationList' and \
-                    self.is_not_template_class(property_['unwrapped_type_name']):
-                self._forward_declarations.add(
-                    property_['unwrapped_type_name'])
+            if property_.default_value == 'nullptr' \
+                    and not property_.unwrapped_type_name == 'CursorList' and \
+                    self.is_not_template_class(property_.unwrapped_type_name):
+                self._forward_declarations.add(property_.unwrapped_type_name)
             else:
-                self._includes.update(property_['include_paths'])
+                self._includes.update(property_.include_paths)
 
         self._outputs = {
             'computed_style_initial_values.h': self.generate_header,

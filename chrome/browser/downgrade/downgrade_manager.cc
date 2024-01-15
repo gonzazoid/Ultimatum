@@ -7,13 +7,13 @@
 #include <iterator>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/enterprise_util.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/ranges/algorithm.h"
@@ -195,7 +195,6 @@ bool DowngradeManager::PrepareUserDataDirectoryForCurrentVersion(
 
     type_ = GetDowngradeType(user_data_dir, current_version, *last_version);
     DCHECK(type_ == Type::kAdministrativeWipe || type_ == Type::kUnsupported);
-    base::UmaHistogramEnumeration("Downgrade.Type", type_);
     return type_ == Type::kAdministrativeWipe;
   }
 
@@ -205,8 +204,6 @@ bool DowngradeManager::PrepareUserDataDirectoryForCurrentVersion(
   if (current_version < *last_version) {
     type_ = GetDowngradeTypeWithSnapshot(user_data_dir, current_version,
                                          *last_version);
-    if (type_ != Type::kNone)
-      base::UmaHistogramEnumeration("Downgrade.Type", type_);
 
     return type_ == Type::kAdministrativeWipe ||
            type_ == Type::kSnapshotRestore;
@@ -235,8 +232,7 @@ void DowngradeManager::UpdateLastVersion(const base::FilePath& user_data_dir) {
   DCHECK(!user_data_dir.empty());
   DCHECK_NE(type_, Type::kAdministrativeWipe);
   const base::StringPiece version(PRODUCT_VERSION);
-  base::WriteFile(GetLastVersionFile(user_data_dir), version.data(),
-                  version.size());
+  base::WriteFile(GetLastVersionFile(user_data_dir), version);
 }
 
 void DowngradeManager::DeleteMovedUserDataSoon(

@@ -5,8 +5,9 @@
 #include "extensions/renderer/bindings/declarative_event.h"
 
 #include <memory>
+#include <string_view>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
 #include "extensions/common/extension_api.h"
@@ -187,7 +188,7 @@ class DeclarativeEventWithSchemaTest : public APIBindingsSystemTest {
   std::vector<FakeSpec> GetAPIs() override {
     // events.removeRules and events.getRules are specified in the events.json
     // schema, so we need to load that.
-    base::StringPiece events_schema =
+    std::string_view events_schema =
         ExtensionAPI::GetSharedInstance()->GetSchemaStringPiece("events");
     return {{kDeclarativeAPIName, kDeclarativeAPISpec},
             {"events", events_schema.data()}};

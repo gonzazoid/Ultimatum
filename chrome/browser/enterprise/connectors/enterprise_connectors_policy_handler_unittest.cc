@@ -8,9 +8,7 @@
 #include <tuple>
 
 #include "base/json/json_reader.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/values.h"
-#include "chrome/browser/enterprise/connectors/analysis/content_analysis_features.h"
 #include "chrome/browser/enterprise/connectors/connectors_prefs.h"
 #include "components/policy/core/browser/policy_error_map.h"
 #include "components/policy/core/common/policy_map.h"
@@ -188,40 +186,19 @@ INSTANTIATE_TEST_SUITE_P(
 
 class EnterpriseConnectorsPolicyHandlerLocalTest
     : public EnterpriseConnectorsPolicyHandlerTestBase,
-      public testing::TestWithParam<
-          std::tuple<const char*, const char*, bool>> {
+      public testing::TestWithParam<std::tuple<const char*, const char*>> {
  public:
-  EnterpriseConnectorsPolicyHandlerLocalTest() {
-    if (enable_feature())
-      scoped_feature_list_.InitAndEnableFeature(kLocalContentAnalysisEnabled);
-  }
+  EnterpriseConnectorsPolicyHandlerLocalTest() = default;
 
   const char* policy() const override { return std::get<0>(GetParam()); }
   const char* policy_pref() const { return std::get<1>(GetParam()); }
-  bool enable_feature() const { return std::get<2>(GetParam()); }
 
   bool policy_is_valid() const {
     if (policy() == kEmptyPolicy)
       return true;
 
-    if (!enable_feature())
-      return false;
-
-    if (policy_pref() != kOnFileAttachedPref ||
-        policy_pref() != kOnFileDownloadedPref ||
-        policy_pref() != kOnBulkDataEntryPref ||
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-        policy_pref() != kOnFileTransferPref ||
-#endif
-        policy_pref() != kOnPrintPref) {
-      return false;
-    }
-
-    return policy() == kValidLocalContentAnalysisPolicy;
+    return false;
   }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 TEST_P(EnterpriseConnectorsPolicyHandlerLocalTest, Test) {
@@ -248,7 +225,9 @@ TEST_P(EnterpriseConnectorsPolicyHandlerLocalTest, Test) {
 INSTANTIATE_TEST_SUITE_P(
     EnterpriseConnectorsPolicyHandlerLocalTest,
     EnterpriseConnectorsPolicyHandlerLocalTest,
-    testing::Combine(testing::Values(kValidLocalContentAnalysisPolicy,
+    testing::Combine(testing::Values(kValidPolicy,
+                                     kInvalidPolicy,
+                                     kValidLocalContentAnalysisPolicy,
                                      kInvalidProviderLocalContentAnalysisPolicy,
                                      kFakeProviderLocalContentAnalysisPolicy,
                                      kEmptyPolicy),
@@ -256,11 +235,87 @@ INSTANTIATE_TEST_SUITE_P(
                                      kOnFileDownloadedPref,
                                      kOnBulkDataEntryPref,
                                      kOnPrintPref,
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
                                      kOnFileTransferPref,
 #endif
-                                     kOnSecurityEventPref,
-                                     kSendDownloadToCloudPref),
-                     testing::Bool()));
+                                     kOnSecurityEventPref)));
+
+class EnterpriseConnectorsPolicyHandlerMergeTest
+    : public EnterpriseConnectorsPolicyHandlerTestBase,
+      public testing::Test {
+ public:
+  const char* policy() const override { return kValidPolicy; }
+
+  policy::Schema schema() {
+    std::string error;
+    policy::Schema validation_schema = policy::Schema::Parse(kSchema, &error);
+    EXPECT_TRUE(error.empty());
+    return validation_schema;
+  }
+
+  policy::PolicyMap CreatePolicyMap(policy::PolicySource policy_source) {
+    policy::PolicyMap policy_map;
+
+    policy_map.Set(kPolicyName, policy::PolicyLevel::POLICY_LEVEL_MANDATORY,
+                   policy::PolicyScope::POLICY_SCOPE_MACHINE, policy_source,
+                   policy_value(), nullptr);
+
+    return policy_map;
+  }
+};
+
+TEST_F(EnterpriseConnectorsPolicyHandlerMergeTest, AllowMergedCloudSources) {
+  policy::PolicyMap map_merged =
+      CreatePolicyMap(policy::PolicySource::POLICY_SOURCE_MERGED);
+  policy::PolicyMap map_cloud =
+      CreatePolicyMap(policy::PolicySource::POLICY_SOURCE_CLOUD);
+  map_merged.MergeFrom(map_cloud);
+  // The MERGED source is higher precedence than CLOUD, so its value is set in
+  // the combined map. The remaining sources are applied as conflicts.
+  EXPECT_EQ(policy::PolicySource::POLICY_SOURCE_MERGED,
+            map_merged.Get(kPolicyName)->source);
+  EXPECT_EQ(1u, map_merged.Get(kPolicyName)->conflicts.size());
+
+  auto handler = std::make_unique<EnterpriseConnectorsPolicyHandler>(
+      kPolicyName, kTestPref, kTestScopePref, schema());
+  policy::PolicyErrorMap errors;
+  ASSERT_TRUE(handler->CheckPolicySettings(map_merged, &errors));
+  ASSERT_TRUE(errors.empty());
+
+  PrefValueMap prefs;
+  base::Value* value_set_in_pref;
+  handler->ApplyPolicySettings(map_merged, &prefs);
+  ASSERT_TRUE(prefs.GetValue(kTestPref, &value_set_in_pref));
+
+  auto* value_set_in_map = map_merged.GetValueUnsafe(kPolicyName);
+  ASSERT_TRUE(value_set_in_map);
+  ASSERT_EQ(*value_set_in_map, *value_set_in_pref);
+}
+
+TEST_F(EnterpriseConnectorsPolicyHandlerMergeTest, BlockMergedNonCloudSources) {
+  policy::PolicyMap map_merged =
+      CreatePolicyMap(policy::PolicySource::POLICY_SOURCE_MERGED);
+  policy::PolicyMap map_cloud =
+      CreatePolicyMap(policy::PolicySource::POLICY_SOURCE_CLOUD);
+  policy::PolicyMap map_platform =
+      CreatePolicyMap(policy::PolicySource::POLICY_SOURCE_PLATFORM);
+  map_merged.MergeFrom(map_cloud);
+  map_merged.MergeFrom(map_platform);
+  // The MERGED source is higher precedence than CLOUD, so its value is set in
+  // the combined map. The remaining sources are applied as conflicts.
+  EXPECT_EQ(policy::PolicySource::POLICY_SOURCE_MERGED,
+            map_merged.Get(kPolicyName)->source);
+  EXPECT_EQ(2u, map_merged.Get(kPolicyName)->conflicts.size());
+
+  auto handler = std::make_unique<EnterpriseConnectorsPolicyHandler>(
+      kPolicyName, kTestPref, kTestScopePref, schema());
+  policy::PolicyErrorMap errors;
+  ASSERT_FALSE(handler->CheckPolicySettings(map_merged, &errors));
+  ASSERT_FALSE(errors.empty());
+  ASSERT_TRUE(errors.HasError(kPolicyName));
+  std::u16string messages = errors.GetErrorMessages(kPolicyName);
+  ASSERT_EQ(messages,
+            u"Ignored because the policy is not set by a cloud source.");
+}
 
 }  // namespace enterprise_connectors

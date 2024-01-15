@@ -10,13 +10,13 @@
 #include "base/strings/string_util.h"
 #include "base/test/bind.h"
 #include "net/cert/asn1_util.h"
+#include "net/cert/time_conversions.h"
 #include "net/cert/x509_util.h"
-#include "net/der/encode_values.h"
-#include "net/der/input.h"
 #include "net/test/cert_builder.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/boringssl/src/include/openssl/bytestring.h"
 #include "third_party/boringssl/src/include/openssl/mem.h"
+#include "third_party/boringssl/src/pki/input.h"
 
 namespace net {
 
@@ -46,15 +46,17 @@ bool CBBAddBytes(CBB* cbb, const uint8_t (&data)[N]) {
 // Adds a GeneralizedTime value to the given CBB.
 // The argument ordering follows the boringssl CBB_* api style.
 bool CBBAddGeneralizedTime(CBB* cbb, const base::Time& time) {
-  der::GeneralizedTime generalized_time;
-  if (!der::EncodeTimeAsGeneralizedTime(time, &generalized_time))
+  bssl::der::GeneralizedTime generalized_time;
+  if (!EncodeTimeAsGeneralizedTime(time, &generalized_time)) {
     return false;
+  }
   CBB time_cbb;
-  uint8_t out[der::kGeneralizedTimeLength];
-  if (!der::EncodeGeneralizedTime(generalized_time, out) ||
+  uint8_t out[bssl::der::kGeneralizedTimeLength];
+  if (!bssl::der::EncodeGeneralizedTime(generalized_time, out) ||
       !CBB_add_asn1(cbb, &time_cbb, CBS_ASN1_GENERALIZEDTIME) ||
-      !CBBAddBytes(&time_cbb, out) || !CBB_flush(cbb))
+      !CBBAddBytes(&time_cbb, out) || !CBB_flush(cbb)) {
     return false;
+  }
   return true;
 }
 
@@ -89,7 +91,7 @@ std::string PKeyToSPK(const EVP_PKEY* pkey) {
   // ExtractSubjectPublicKeyFromSPKI() includes the unused bit count. For this
   // application, the unused bit count must be zero, and is not included in the
   // result.
-  if (!base::StartsWith(spk, "\0")) {
+  if (spk.empty() || spk[0] != '\0') {
     ADD_FAILURE();
     return std::string();
   }
@@ -98,14 +100,15 @@ std::string PKeyToSPK(const EVP_PKEY* pkey) {
   return std::string(spk);
 }
 
-// Returns a DER-encoded OCSPResponse with the given |response_status|.
+// Returns a DER-encoded bssl::OCSPResponse with the given |response_status|.
 // |response_type| and |response| are optional and may be empty.
-std::string EncodeOCSPResponse(OCSPResponse::ResponseStatus response_status,
-                               der::Input response_type,
-                               std::string response) {
+std::string EncodeOCSPResponse(
+    bssl::OCSPResponse::ResponseStatus response_status,
+    bssl::der::Input response_type,
+    std::string response) {
   // RFC 6960 section 4.2.1:
   //
-  //    OCSPResponse ::= SEQUENCE {
+  //    bssl::OCSPResponse ::= SEQUENCE {
   //       responseStatus         OCSPResponseStatus,
   //       responseBytes          [0] EXPLICIT ResponseBytes OPTIONAL }
   //
@@ -147,7 +150,7 @@ std::string EncodeOCSPResponse(OCSPResponse::ResponseStatus response_status,
                       CBS_ASN1_SEQUENCE) ||
         !CBB_add_asn1(&ocsp_response_bytes_sequence, &ocsp_response_type,
                       CBS_ASN1_OBJECT) ||
-        !CBBAddBytes(&ocsp_response_type, response_type.AsStringPiece()) ||
+        !CBBAddBytes(&ocsp_response_type, response_type.AsStringView()) ||
         !CBB_add_asn1(&ocsp_response_bytes_sequence,
                       &ocsp_response_octet_string, CBS_ASN1_OCTETSTRING) ||
         !CBBAddBytes(&ocsp_response_octet_string, response)) {
@@ -223,14 +226,14 @@ bool AddOCSPSingleResponse(CBB* responses_cbb,
 
   unsigned int cert_status_tag_number;
   switch (response.cert_status) {
-    case OCSPRevocationStatus::GOOD:
+    case bssl::OCSPRevocationStatus::GOOD:
       cert_status_tag_number = CBS_ASN1_CONTEXT_SPECIFIC | 0;
       break;
-    case OCSPRevocationStatus::REVOKED:
+    case bssl::OCSPRevocationStatus::REVOKED:
       cert_status_tag_number =
           CBS_ASN1_CONTEXT_SPECIFIC | CBS_ASN1_CONSTRUCTED | 1;
       break;
-    case OCSPRevocationStatus::UNKNOWN:
+    case bssl::OCSPRevocationStatus::UNKNOWN:
       cert_status_tag_number = CBS_ASN1_CONTEXT_SPECIFIC | 2;
       break;
   }
@@ -241,7 +244,7 @@ bool AddOCSPSingleResponse(CBB* responses_cbb,
     ADD_FAILURE();
     return false;
   }
-  if (response.cert_status == OCSPRevocationStatus::REVOKED &&
+  if (response.cert_status == bssl::OCSPRevocationStatus::REVOKED &&
       !CBBAddGeneralizedTime(&cert_status_cbb, response.revocation_time)) {
     ADD_FAILURE();
     return false;
@@ -262,9 +265,9 @@ bool AddOCSPSingleResponse(CBB* responses_cbb,
 }  // namespace
 
 std::string BuildOCSPResponseError(
-    OCSPResponse::ResponseStatus response_status) {
-  DCHECK_NE(response_status, OCSPResponse::ResponseStatus::SUCCESSFUL);
-  return EncodeOCSPResponse(response_status, der::Input(), std::string());
+    bssl::OCSPResponse::ResponseStatus response_status) {
+  DCHECK_NE(response_status, bssl::OCSPResponse::ResponseStatus::SUCCESSFUL);
+  return EncodeOCSPResponse(response_status, bssl::der::Input(), std::string());
 }
 
 std::string BuildOCSPResponse(
@@ -323,7 +326,7 @@ std::string BuildOCSPResponse(
 std::string BuildOCSPResponseWithResponseData(
     EVP_PKEY* responder_key,
     const std::string& tbs_response_data,
-    absl::optional<SignatureAlgorithm> signature_algorithm) {
+    absl::optional<bssl::SignatureAlgorithm> signature_algorithm) {
   //    For a basic OCSP responder, responseType will be id-pkix-ocsp-basic.
   //
   //    id-pkix-ocsp           OBJECT IDENTIFIER ::= { id-ad-ocsp }
@@ -375,8 +378,8 @@ std::string BuildOCSPResponseWithResponseData(
 
   // certs field not currently supported.
 
-  return EncodeOCSPResponse(OCSPResponse::ResponseStatus::SUCCESSFUL,
-                            der::Input(kBasicOCSPResponseOid),
+  return EncodeOCSPResponse(bssl::OCSPResponse::ResponseStatus::SUCCESSFUL,
+                            bssl::der::Input(bssl::kBasicOCSPResponseOid),
                             FinishCBB(basic_ocsp_response_cbb.get()));
 }
 
@@ -461,10 +464,11 @@ std::string BuildCrlWithSigner(
   return FinishCBB(crl_cbb.get());
 }
 
-std::string BuildCrl(const std::string& crl_issuer_subject,
-                     EVP_PKEY* crl_issuer_key,
-                     const std::vector<uint64_t>& revoked_serials,
-                     absl::optional<SignatureAlgorithm> signature_algorithm) {
+std::string BuildCrl(
+    const std::string& crl_issuer_subject,
+    EVP_PKEY* crl_issuer_key,
+    const std::vector<uint64_t>& revoked_serials,
+    absl::optional<bssl::SignatureAlgorithm> signature_algorithm) {
   if (!signature_algorithm) {
     signature_algorithm =
         CertBuilder::DefaultSignatureAlgorithmForKey(crl_issuer_key);

@@ -95,6 +95,25 @@ class CONTENT_EXPORT WebRTCInternals : public PeerConnectionTrackerHostObserver,
                              const std::string& error,
                              const std::string& error_message) override;
 
+  void OnGetDisplayMedia(GlobalRenderFrameHostId frame_id,
+                         base::ProcessId pid,
+                         int request_id,
+                         bool audio,
+                         bool video,
+                         const std::string& audio_constraints,
+                         const std::string& video_constraints) override;
+  void OnGetDisplayMediaSuccess(GlobalRenderFrameHostId frame_id,
+                                base::ProcessId pid,
+                                int request_id,
+                                const std::string& stream_id,
+                                const std::string& audio_track_info,
+                                const std::string& video_track_info) override;
+  void OnGetDisplayMediaFailure(GlobalRenderFrameHostId frame_id,
+                                base::ProcessId pid,
+                                int request_id,
+                                const std::string& error,
+                                const std::string& error_message) override;
+
   // Methods for adding or removing WebRTCInternalsUIObserver.
   void AddObserver(WebRTCInternalsUIObserver* observer);
   void RemoveObserver(WebRTCInternalsUIObserver* observer);
@@ -154,7 +173,7 @@ class CONTENT_EXPORT WebRTCInternals : public PeerConnectionTrackerHostObserver,
                            const ChildProcessTerminationInfo& info) override;
 
   // ui::SelectFileDialog::Listener implementation.
-  void FileSelected(const base::FilePath& path,
+  void FileSelected(const ui::SelectedFileInfo& file,
                     int index,
                     void* unused_params) override;
   void FileSelectionCanceled(void* params) override;
@@ -295,6 +314,29 @@ class CONTENT_EXPORT WebRTCInternals : public PeerConnectionTrackerHostObserver,
 
   // Weak factory for this object that we use for bulking up updates.
   base::WeakPtrFactory<WebRTCInternals> weak_factory_{this};
+
+  // Helper functions for getUserMedia/getDisplayMedia.
+  void OnGetMedia(const std::string& request_type,
+                  GlobalRenderFrameHostId frame_id,
+                  base::ProcessId pid,
+                  int request_id,
+                  bool audio,
+                  bool video,
+                  const std::string& audio_constraints,
+                  const std::string& video_constraints);
+  void OnGetMediaSuccess(const std::string& request_type,
+                         GlobalRenderFrameHostId frame_id,
+                         base::ProcessId pid,
+                         int request_id,
+                         const std::string& stream_id,
+                         const std::string& audio_track_info,
+                         const std::string& video_track_info);
+  void OnGetMediaFailure(const std::string& request_type,
+                         GlobalRenderFrameHostId frame_id,
+                         base::ProcessId pid,
+                         int request_id,
+                         const std::string& error,
+                         const std::string& error_message);
 };
 
 }  // namespace content

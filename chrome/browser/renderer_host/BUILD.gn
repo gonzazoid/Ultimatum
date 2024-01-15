@@ -13,6 +13,8 @@ source_set("history_swiper") {
     "chrome_render_widget_host_view_mac_history_swiper.mm",
   ]
 
+  frameworks = [ "Cocoa.framework" ]
+
   deps = [
     "//chrome/browser/ui",
     "//third_party/blink/public/common:headers",

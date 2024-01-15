@@ -22,6 +22,8 @@
 
 namespace ui {
 
+struct KeyboardDevice;
+struct TouchpadDevice;
 enum class StylusState;
 
 struct COMPONENT_EXPORT(EVDEV) KeyEventParams {
@@ -193,20 +195,24 @@ class COMPONENT_EXPORT(EVDEV) DeviceEventDispatcherEvdev {
   virtual void DispatchTouchEvent(const TouchEventParams& params) = 0;
   virtual void DispatchGamepadEvent(const GamepadEvent& event) = 0;
   virtual void DispatchMicrophoneMuteSwitchValueChanged(bool muted) = 0;
+  virtual void DispatchAnyKeysPressedUpdated(bool any) = 0;
 
   // Device lifecycle events.
   virtual void DispatchKeyboardDevicesUpdated(
-      const std::vector<InputDevice>& devices,
+      const std::vector<KeyboardDevice>& devices,
       base::flat_map<int, std::vector<uint64_t>> key_bits_mapping) = 0;
   virtual void DispatchTouchscreenDevicesUpdated(
       const std::vector<TouchscreenDevice>& devices) = 0;
   virtual void DispatchMouseDevicesUpdated(
       const std::vector<InputDevice>& devices,
-      bool has_mouse,
-      bool has_pointing_stick) = 0;
+      bool has_mouse) = 0;
+  virtual void DispatchPointingStickDevicesUpdated(
+      const std::vector<InputDevice>& devices) = 0;
   virtual void DispatchTouchpadDevicesUpdated(
-      const std::vector<InputDevice>& devices,
+      const std::vector<TouchpadDevice>& devices,
       bool has_haptic_touchpad) = 0;
+  virtual void DispatchGraphicsTabletDevicesUpdated(
+      const std::vector<InputDevice>& devices) = 0;
   virtual void DispatchDeviceListsComplete() = 0;
   virtual void DispatchStylusStateChanged(StylusState stylus_state) = 0;
   virtual void DispatchGamepadDevicesUpdated(

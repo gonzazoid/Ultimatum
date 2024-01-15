@@ -9,9 +9,9 @@
 
 #include <limits>
 
-#include "base/bind.h"
 #include "base/containers/span.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/hash/sha1.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/path_service.h"
@@ -25,6 +25,8 @@
 #include "printing/emf_win.h"
 #include "printing/metafile.h"
 #include "printing/pdf_render_settings.h"
+#include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #ifndef NTDDI_WIN10_VB  // Windows 10.0.19041
 #error "Older Windows SDK unsupported"
@@ -40,6 +42,8 @@ constexpr gfx::Size k200DpiSize = gfx::Size(200, 200);
 constexpr size_t kHeaderSize = sizeof(ENHMETAHEADER);
 
 constexpr uint32_t kInvalidPageCount = std::numeric_limits<uint32_t>::max();
+
+const absl::optional<bool> kUseSkiaOptions[]{absl::nullopt, true, false};
 
 void StartCallbackImpl(base::OnceClosure quit_closure,
                        uint32_t* page_count_out,
@@ -105,7 +109,9 @@ std::string HashData(const char* data, size_t len) {
   return base::HexEncode(base::SHA1HashSpan(span));
 }
 
-class PdfToEmfConverterBrowserTest : public InProcessBrowserTest {
+class PdfToEmfConverterBrowserTest
+    : public InProcessBrowserTest,
+      public ::testing::WithParamInterface<absl::optional<bool>> {
  public:
   PdfToEmfConverterBrowserTest(const PdfToEmfConverterBrowserTest&) = delete;
   PdfToEmfConverterBrowserTest& operator=(const PdfToEmfConverterBrowserTest&) =
@@ -142,7 +148,8 @@ class PdfToEmfConverterBrowserTest : public InProcessBrowserTest {
     if (pdf_data_str.empty())
       return false;
 
-    test_input_ = base::RefCountedString::TakeString(&pdf_data_str);
+    test_input_ =
+        base::MakeRefCounted<base::RefCountedString>(std::move(pdf_data_str));
     return true;
   }
 
@@ -151,7 +158,7 @@ class PdfToEmfConverterBrowserTest : public InProcessBrowserTest {
     base::RunLoop run_loop;
     uint32_t page_count = kInvalidPageCount;
     pdf_converter_ = PdfConverter::StartPdfConverter(
-        test_input_, pdf_settings,
+        test_input_, pdf_settings, /*use_skia=*/GetParam(), GURL(),
         base::BindOnce(&StartCallbackImpl, run_loop.QuitClosure(),
                        &page_count));
     run_loop.Run();
@@ -235,32 +242,33 @@ class PdfToEmfConverterBrowserTest : public InProcessBrowserTest {
 
 }  // namespace
 
-IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, FailureNoTempFile) {
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest, FailureNoTempFile) {
   ScopedSimulateFailureCreatingTempFileForTests fail_creating_temp_file;
 
   base::RunLoop run_loop;
   uint32_t page_count = kInvalidPageCount;
   std::unique_ptr<PdfConverter> pdf_converter = PdfConverter::StartPdfConverter(
       base::MakeRefCounted<base::RefCountedStaticMemory>(), PdfRenderSettings(),
+      /*use_skia=*/GetParam(), GURL(),
       base::BindOnce(&StartCallbackImpl, run_loop.QuitClosure(), &page_count));
   run_loop.Run();
   EXPECT_EQ(0u, page_count);
 }
 
-IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, FailureBadPdf) {
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest, FailureBadPdf) {
   scoped_refptr<base::RefCountedStaticMemory> bad_pdf_data =
       base::MakeRefCounted<base::RefCountedStaticMemory>("0123456789", 10);
 
   base::RunLoop run_loop;
   uint32_t page_count = kInvalidPageCount;
   std::unique_ptr<PdfConverter> pdf_converter = PdfConverter::StartPdfConverter(
-      bad_pdf_data, PdfRenderSettings(),
+      bad_pdf_data, PdfRenderSettings(), /*use_skia=*/GetParam(), GURL(),
       base::BindOnce(&StartCallbackImpl, run_loop.QuitClosure(), &page_count));
   run_loop.Run();
   EXPECT_EQ(0u, page_count);
 }
 
-IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, EmfBasic) {
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest, EmfBasic) {
   const PdfRenderSettings pdf_settings(
       kLetter200DpiRect, gfx::Point(0, 0), k200DpiSize,
       /*autorotate=*/false,
@@ -278,7 +286,7 @@ IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, EmfBasic) {
   }
 }
 
-IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest,
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest,
                        EmfWithReducedRasterizationBasic) {
   const PdfRenderSettings pdf_settings(
       kLetter200DpiRect, gfx::Point(0, 0), k200DpiSize,
@@ -298,7 +306,7 @@ IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest,
   }
 }
 
-IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, PostScriptLevel2Basic) {
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest, PostScriptLevel2Basic) {
   const PdfRenderSettings pdf_settings(
       kLetter200DpiRect, gfx::Point(0, 0), k200DpiSize,
       /*autorotate=*/false, /*use_color=*/true,
@@ -317,7 +325,7 @@ IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, PostScriptLevel2Basic) {
   }
 }
 
-IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, PostScriptLevel3Basic) {
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest, PostScriptLevel3Basic) {
   const PdfRenderSettings pdf_settings(
       kLetter200DpiRect, gfx::Point(0, 0), k200DpiSize,
       /*autorotate=*/false, /*use_color=*/true,
@@ -336,7 +344,7 @@ IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, PostScriptLevel3Basic) {
   }
 }
 
-IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest,
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest,
                        PostScriptLevel3WithType42FontsBasic) {
   const PdfRenderSettings pdf_settings(
       kLetter200DpiRect, gfx::Point(0, 0), k200DpiSize,
@@ -356,7 +364,7 @@ IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest,
   }
 }
 
-IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, PostScriptLevel2Mono) {
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest, PostScriptLevel2Mono) {
   const PdfRenderSettings pdf_settings(
       kLetter200DpiRect, gfx::Point(0, 0), k200DpiSize,
       /*autorotate=*/false, /*use_color=*/false,
@@ -365,7 +373,7 @@ IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, PostScriptLevel2Mono) {
                                             "bug_767343_mono.emf");
 }
 
-IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, PostScriptLevel3Mono) {
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest, PostScriptLevel3Mono) {
   const PdfRenderSettings pdf_settings(
       kLetter200DpiRect, gfx::Point(0, 0), k200DpiSize,
       /*autorotate=*/false, /*use_color=*/false,
@@ -374,7 +382,7 @@ IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, PostScriptLevel3Mono) {
                                             "bug_767343_mono.emf");
 }
 
-IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest,
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest,
                        PostScriptLevel2WithZeroSizedText) {
   const PdfRenderSettings pdf_settings(
       kLetter200DpiRect, gfx::Point(0, 0), k200DpiSize,
@@ -384,7 +392,7 @@ IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest,
                                             "bug_767343.emf");
 }
 
-IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest,
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest,
                        PostScriptLevel3WithZeroSizedText) {
   const PdfRenderSettings pdf_settings(
       kLetter200DpiRect, gfx::Point(0, 0), k200DpiSize,
@@ -394,7 +402,7 @@ IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest,
                                             "bug_767343.emf");
 }
 
-IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest,
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest,
                        PostScriptLevel2WithNegativeSizedText) {
   const PdfRenderSettings pdf_settings(
       kLetter200DpiRect, gfx::Point(0, 0), k200DpiSize,
@@ -404,7 +412,7 @@ IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest,
                                             "bug_806746.emf");
 }
 
-IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest,
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest,
                        PostScriptLevel3WithNegativeSizedText) {
   const PdfRenderSettings pdf_settings(
       kLetter200DpiRect, gfx::Point(0, 0), k200DpiSize,
@@ -414,7 +422,7 @@ IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest,
                                             "bug_806746.emf");
 }
 
-IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest,
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest,
                        PostScriptLevel2WithLineCapLineJoin) {
   const PdfRenderSettings pdf_settings(
       kLetter200DpiRect, gfx::Point(0, 0), k200DpiSize,
@@ -424,7 +432,7 @@ IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest,
                                             "bug_1030689.emf");
 }
 
-IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest,
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest,
                        PostScriptLevel3WithLineCapLineJoin) {
   const PdfRenderSettings pdf_settings(
       kLetter200DpiRect, gfx::Point(0, 0), k200DpiSize,
@@ -434,7 +442,7 @@ IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest,
                                             "bug_1030689.emf");
 }
 
-IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, PostScriptLevel2Bezier) {
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest, PostScriptLevel2Bezier) {
   const PdfRenderSettings pdf_settings(
       kLetter200DpiRect, gfx::Point(0, 0), k200DpiSize,
       /*autorotate=*/false, /*use_color=*/true,
@@ -443,7 +451,7 @@ IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, PostScriptLevel2Bezier) {
                                             "bezier.emf");
 }
 
-IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, PostScriptLevel3Bezier) {
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest, PostScriptLevel3Bezier) {
   const PdfRenderSettings pdf_settings(
       kLetter200DpiRect, gfx::Point(0, 0), k200DpiSize,
       /*autorotate=*/false, /*use_color=*/true,
@@ -452,7 +460,7 @@ IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, PostScriptLevel3Bezier) {
                                             "bezier.emf");
 }
 
-IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, PostScriptLevel2Image) {
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest, PostScriptLevel2Image) {
   const PdfRenderSettings pdf_settings(
       kLetter200DpiRect, gfx::Point(0, 0), k200DpiSize,
       /*autorotate=*/false, /*use_color=*/true,
@@ -461,7 +469,7 @@ IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, PostScriptLevel2Image) {
                                             "embedded_images_ps_level2.emf");
 }
 
-IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, PostScriptLevel3Image) {
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest, PostScriptLevel3Image) {
   const PdfRenderSettings pdf_settings(
       kLetter200DpiRect, gfx::Point(0, 0), k200DpiSize,
       /*autorotate=*/false, /*use_color=*/true,
@@ -469,5 +477,31 @@ IN_PROC_BROWSER_TEST_F(PdfToEmfConverterBrowserTest, PostScriptLevel3Image) {
   RunSinglePagePdfToPostScriptConverterTest(pdf_settings, "embedded_images.pdf",
                                             "embedded_images_ps_level3.emf");
 }
+
+// Regression test for crbug.com/1399155.
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest,
+                       PostScriptLevel2FaxCompress) {
+  const PdfRenderSettings pdf_settings(
+      kLetter200DpiRect, gfx::Point(0, 0), k200DpiSize,
+      /*autorotate=*/false, /*use_color=*/true,
+      PdfRenderSettings::Mode::POSTSCRIPT_LEVEL2);
+  RunSinglePagePdfToPostScriptConverterTest(pdf_settings, "bug_1399155.pdf",
+                                            "bug_1399155.emf");
+}
+
+// Regression test for crbug.com/1399155.
+IN_PROC_BROWSER_TEST_P(PdfToEmfConverterBrowserTest,
+                       PostScriptLevel3FaxCompress) {
+  const PdfRenderSettings pdf_settings(
+      kLetter200DpiRect, gfx::Point(0, 0), k200DpiSize,
+      /*autorotate=*/false, /*use_color=*/true,
+      PdfRenderSettings::Mode::POSTSCRIPT_LEVEL3);
+  RunSinglePagePdfToPostScriptConverterTest(pdf_settings, "bug_1399155.pdf",
+                                            "bug_1399155.emf");
+}
+
+INSTANTIATE_TEST_SUITE_P(All,
+                         PdfToEmfConverterBrowserTest,
+                         testing::ValuesIn(kUseSkiaOptions));
 
 }  // namespace printing

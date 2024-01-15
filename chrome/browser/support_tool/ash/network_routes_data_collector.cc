@@ -9,11 +9,11 @@
 #include <utility>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
@@ -21,27 +21,20 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/support_tool/data_collector.h"
+#include "chrome/browser/support_tool/data_collector_utils.h"
 #include "chromeos/ash/components/dbus/debug_daemon/debug_daemon_client.h"
-#include "components/feedback/pii_types.h"
-#include "components/feedback/redaction_tool.h"
+#include "components/feedback/redaction_tool/pii_types.h"
+#include "components/feedback/redaction_tool/redaction_tool.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
-
-// Adds the contents of `map_to_merge` into `target_map`.
-void MergePIIMaps(PIIMap& target_map, PIIMap& map_to_merge) {
-  for (auto& pii_data : map_to_merge) {
-    target_map[pii_data.first].insert(pii_data.second.begin(),
-                                      pii_data.second.end());
-  }
-}
 
 // Detects PII sensitive data that `network_routes` contains and returns
 // the detected PII map.
 PIIMap DetectPII(
     std::vector<std::string> network_routes,
-    scoped_refptr<feedback::RedactionToolContainer> redaction_tool_container) {
-  feedback::RedactionTool* redaction_tool = redaction_tool_container->Get();
+    scoped_refptr<redaction::RedactionToolContainer> redaction_tool_container) {
+  redaction::RedactionTool* redaction_tool = redaction_tool_container->Get();
   PIIMap detected_pii;
   // Detect PII in all entries in `network_routes` and add the detected
   // PII to `detected_pii`.
@@ -56,13 +49,13 @@ PIIMap DetectPII(
 // `pii_types_to_keep` and replaces the values in `network_routes` with
 // redacted versions. Returns the modified version of `network_routes`.
 std::vector<std::string> RedactAndKeepSelectedPII(
-    const std::set<feedback::PIIType>& pii_types_to_keep,
+    const std::set<redaction::PIIType>& pii_types_to_keep,
     std::vector<std::string> network_routes,
-    scoped_refptr<feedback::RedactionToolContainer> redaction_tool_container) {
-  feedback::RedactionTool* redaction_tool = redaction_tool_container->Get();
-  for (size_t i = 0; i < network_routes.size(); i++) {
-    network_routes[i] = redaction_tool->RedactAndKeepSelected(
-        network_routes[i], pii_types_to_keep);
+    scoped_refptr<redaction::RedactionToolContainer> redaction_tool_container) {
+  redaction::RedactionTool* redaction_tool = redaction_tool_container->Get();
+  for (auto & network_route : network_routes) {
+    network_route = redaction_tool->RedactAndKeepSelected(
+        network_route, pii_types_to_keep);
   }
   return network_routes;
 }
@@ -94,7 +87,7 @@ const PIIMap& NetworkRoutesDataCollector::GetDetectedPII() {
 void NetworkRoutesDataCollector::CollectDataAndDetectPII(
     DataCollectorDoneCallback on_data_collected_callback,
     scoped_refptr<base::SequencedTaskRunner> task_runner_for_redaction_tool,
-    scoped_refptr<feedback::RedactionToolContainer> redaction_tool_container) {
+    scoped_refptr<redaction::RedactionToolContainer> redaction_tool_container) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   ash::DebugDaemonClient* debugd_client = ash::DebugDaemonClient::Get();
   // We will call DebugDaemonClient::GetRoutes twice to get IPv4 and IPv6 routes
@@ -134,7 +127,7 @@ void NetworkRoutesDataCollector::OnGetRoutes(
 void NetworkRoutesDataCollector::OnAllGetRoutesDone(
     DataCollectorDoneCallback on_data_collected_callback,
     scoped_refptr<base::SequencedTaskRunner> task_runner_for_redaction_tool,
-    scoped_refptr<feedback::RedactionToolContainer> redaction_tool_container) {
+    scoped_refptr<redaction::RedactionToolContainer> redaction_tool_container) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   task_runner_for_redaction_tool->PostTaskAndReplyWithResult(
       FROM_HERE,
@@ -152,10 +145,10 @@ void NetworkRoutesDataCollector::OnPIIDetected(
 }
 
 void NetworkRoutesDataCollector::ExportCollectedDataWithPII(
-    std::set<feedback::PIIType> pii_types_to_keep,
+    std::set<redaction::PIIType> pii_types_to_keep,
     base::FilePath target_directory,
     scoped_refptr<base::SequencedTaskRunner> task_runner_for_redaction_tool,
-    scoped_refptr<feedback::RedactionToolContainer> redaction_tool_container,
+    scoped_refptr<redaction::RedactionToolContainer> redaction_tool_container,
     DataCollectorDoneCallback on_exported_callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   task_runner_for_redaction_tool->PostTaskAndReplyWithResult(

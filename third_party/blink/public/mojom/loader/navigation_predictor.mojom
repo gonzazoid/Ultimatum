@@ -4,8 +4,10 @@
 
 module blink.mojom;
 
+import "mojo/public/mojom/base/time.mojom";
 import "url/mojom/url.mojom";
 import "ui/gfx/geometry/mojom/geometry.mojom";
+import "third_party/blink/public/mojom/preloading/anchor_element_interaction_host.mojom";
 
 // This mojom file is for user navigation prediction experiment, using anchor
 // element metrics gathered from the renderer process. See crbug.com/850624.
@@ -82,23 +84,96 @@ struct AnchorElementClick {
 
   // The URL of the anchor when it was clicked.
   url.mojom.Url target_url;
+
+  // The time between navigation start of the anchor element's root document and
+  // the time the user clicked on the link.
+  mojo_base.mojom.TimeDelta navigation_start_to_click;
+};
+
+struct AnchorElementPointerDataOnHoverTimerFired {
+  // The ID of the anchor that was clicked.
+  uint32 anchor_id;
+
+  // The pointer data including mouse velocity and acceleration.
+  blink.mojom.AnchorElementPointerData pointer_data;
 };
 
 struct AnchorElementEnteredViewport {
   // The ID of the anchor that entered the viewport.
   uint32 anchor_id;
 
-  // The time between navigation start and the time the anchor element entered
-  // the viewport in milliseconds.
-  uint64 navigation_start_to_entered_viewport_ms;
+  // The time between navigation start of the anchor element's root document and
+  // the time the anchor element entered the viewport.
+  mojo_base.mojom.TimeDelta navigation_start_to_entered_viewport;
 };
+
+struct AnchorElementLeftViewport {
+  // The ID of the anchor that exited the viewport.
+  uint32 anchor_id;
+
+  // The time between the moment the anchor element entered the viewport and the
+  // moment it left the viewport.
+  mojo_base.mojom.TimeDelta time_in_viewport;
+};
+
+struct AnchorElementPointerOver {
+  // The ID of the anchor that pointer started hovering over it.
+  uint32 anchor_id;
+
+  // The time between navigation start of the anchor element's root document and
+  // the time the pointer started hovering over the anchor element event.
+  mojo_base.mojom.TimeDelta navigation_start_to_pointer_over;
+};
+
+struct AnchorElementPointerOut {
+  // The ID of the anchor that pointer hovered over it.
+  uint32 anchor_id;
+
+  // The time interval pointer was hovering over the anchor element.
+  mojo_base.mojom.TimeDelta hover_dwell_time;
+};
+
+// Represents different user interaction types used for computing preloading ML
+// model inputs..
+enum AnchorElementUserInteractionEventForMLModelType {
+  kPointerOver,
+  kPointerOut,
+  kEnteredViewport,
+  kLeftViewport,
+  kUnknown,
+};
+
+struct AnchorElementPointerEventForMLModel {
+  // The ID of the anchor that pointer hovered over it.
+  uint32 anchor_id;
+
+  // Whether the point event triggered by mouse or not.
+  bool is_mouse;
+
+  // User interaction event type.
+  AnchorElementUserInteractionEventForMLModelType user_interaction_event_type;
+};
+
+struct AnchorElementPointerDown {
+  // The ID of the anchor that pointer down event happened over it.
+  uint32 anchor_id;
+
+  // The time between navigation start of the anchor element's root document and
+  // the time the pointer down event happened over the anchor element event.
+  mojo_base.mojom.TimeDelta navigation_start_to_pointer_down;
+};
+
+// TODO(isaboori): It's better to move the methods that are called for all
+// anchor elements and not just the down-sampled ones to a new
+// `AnchorElementInteractionHost` interface.
 
 // An interface to pass descriptive information about anchor elements from
 // the renderer process to the implementation of this interface living in the
 // browser process.
 interface AnchorElementMetricsHost {
-  // This is called when an anchor element is clicked. The renderer extracts and sends
-  // |metrics| of the clicked anchor element.
+  // This is called when an anchor element is clicked. The renderer extracts and
+  // sends |metrics| of the clicked anchor element.
+  // This is called for all anchor elements.
   ReportAnchorElementClick(AnchorElementClick clicked);
 
   // At each layout, HTMLAnchorElements that have been newly created (since the
@@ -108,6 +183,7 @@ interface AnchorElementMetricsHost {
   // element. New HTMLAnchorElements that are not visible after the first layout
   // since their creation will never be reported. This is not ideal, but allows
   // us to avoid keeping references to elements that may never become visible.
+  // This is called for all anchor elements.
   ReportNewAnchorElements(array<AnchorElementMetrics> metrics);
 
   // This is called regularly to report anchors that entered the viewport. This
@@ -117,5 +193,42 @@ interface AnchorElementMetricsHost {
   // previously been reported by ReportNewAnchorElements (e.g. because they were
   // not visible following the first layout after the HTMLAnchorElement was
   // created).
-  ReportAnchorElementsEnteredViewport(array<AnchorElementEnteredViewport> elements);
+  // This is called only for randomly selected anchor elements that we track.
+  ReportAnchorElementsEnteredViewport(
+    array<AnchorElementEnteredViewport> elements);
+
+  // This is called regularly to report anchors that left the viewport. This
+  // just reports the ID of each element leaving the viewport. These records
+  // can be joined with the metrics reported by
+  // |ReportAnchorElementsEnteredViewport|.
+  // This is called only for randomly selected anchor elements that we track.
+  ReportAnchorElementsLeftViewport(array<AnchorElementLeftViewport> elements);
+
+  // This is called whenever the pointer starts hovering over anchor element.
+  // This is called only for randomly selected anchor elements that we track.
+  ReportAnchorElementPointerOver(AnchorElementPointerOver pointer_over_event);
+
+  // This is called whenever pointer stops hovering over the anchor element.
+  // This is called only for randomly selected anchor elements that we track.
+  ReportAnchorElementPointerOut(AnchorElementPointerOut hover_event);
+
+  // This is called whenever pointer down event happens over the anchor element.
+  // This is called only for randomly selected anchor elements that we track.
+  ReportAnchorElementPointerDown(AnchorElementPointerDown pointer_down_event);
+
+  // This is called whenever the on-hover timer for the anchor element is fired.
+  // This is called for all anchor elements.
+  ReportAnchorElementPointerDataOnHoverTimerFired(
+    AnchorElementPointerDataOnHoverTimerFired pointer_data);
+
+  // This is called whenever a pointer event is triggered and intended to be
+  // used by the preloading heuristics ML model.
+  // This is called for all anchor elements.
+  ProcessPointerEventUsingMLModel(
+    AnchorElementPointerEventForMLModel pointer_event);
+
+  // Asks the browser whether to send subsequent updates immediately
+  // instead of rate limiting.
+  // Skipping the delays is only expected to be done for testing.
+  ShouldSkipUpdateDelays() => (bool should_skip_for_testing);
 };

@@ -8,13 +8,12 @@
 
 #include <memory>
 
+#include "base/apple/foundation_util.h"
+#include "base/apple/scoped_objc_class_swizzler.h"
 #include "base/check.h"
-#include "base/mac/foundation_util.h"
-#include "base/mac/scoped_nsobject.h"
-#include "base/mac/scoped_objc_class_swizzler.h"
 #include "base/strings/sys_string_conversions.h"
 
-static id g_swizzled_main_bundle = nil;
+static id __strong g_swizzled_main_bundle = nil;
 
 // A donor class that provides a +[NSBundle mainBundle] method that can be
 // swapped with NSBundle.
@@ -24,7 +23,8 @@ static id g_swizzled_main_bundle = nil;
 @end
 
 @implementation TestBundle {
-  base::scoped_nsobject<NSBundle> _mainBundle;
+  NSBundle* __strong _mainBundle;
+  NSString* __strong _bundleID;
 }
 
 + (NSBundle*)mainBundle {
@@ -32,16 +32,17 @@ static id g_swizzled_main_bundle = nil;
 }
 
 - (instancetype)initWithRealBundle:(NSBundle*)bundle {
-  _mainBundle.reset([bundle retain]);
+  _mainBundle = bundle;
+  _bundleID = base::SysUTF8ToNSString(base::apple::BaseBundleID());
   return self;
 }
 
 - (NSString*)bundleIdentifier {
-  return base::SysUTF8ToNSString(base::mac::BaseBundleID());
+  return _bundleID;
 }
 
 - (void)forwardInvocation:(NSInvocation*)invocation {
-  invocation.target = _mainBundle.get();
+  invocation.target = _mainBundle;
   [invocation invoke];
 }
 
@@ -54,15 +55,14 @@ static id g_swizzled_main_bundle = nil;
 ScopedBundleSwizzlerMac::ScopedBundleSwizzlerMac() {
   CHECK(!g_swizzled_main_bundle);
 
-  NSBundle* original_main_bundle = [NSBundle mainBundle];
+  NSBundle* original_main_bundle = NSBundle.mainBundle;
   g_swizzled_main_bundle =
       [[TestBundle alloc] initWithRealBundle:original_main_bundle];
 
-  class_swizzler_ = std::make_unique<base::mac::ScopedObjCClassSwizzler>(
+  class_swizzler_ = std::make_unique<base::apple::ScopedObjCClassSwizzler>(
       [NSBundle class], [TestBundle class], @selector(mainBundle));
 }
 
 ScopedBundleSwizzlerMac::~ScopedBundleSwizzlerMac() {
-  [g_swizzled_main_bundle release];
   g_swizzled_main_bundle = nil;
 }

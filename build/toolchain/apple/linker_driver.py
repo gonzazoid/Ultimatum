@@ -6,13 +6,20 @@
 
 import os
 import os.path
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 
+# The path to `whole_archive`.
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+
+import whole_archive
+
 # Prefix for all custom linker driver arguments.
 LINKER_DRIVER_ARG_PREFIX = '-Wcrl,'
+LINKER_DRIVER_COMPILER_ARG_PREFIX = '-Wcrl,driver,'
 # Linker action to create a directory and pass it to the linker as
 # `-object_path_lto`. Special-cased since it has to run before the link.
 OBJECT_PATH_LTO = 'object_path_lto'
@@ -20,16 +27,21 @@ OBJECT_PATH_LTO = 'object_path_lto'
 # The linker_driver.py is responsible for forwarding a linker invocation to
 # the compiler driver, while processing special arguments itself.
 #
-# Usage: linker_driver.py clang++ main.o -L. -llib -o prog -Wcrl,dsym,out
+# Usage: linker_driver.py -Wcrl,driver,clang++ main.o -L. -llib -o prog \
+#            -Wcrl,dsym,out
 #
 # On Mac, the logical step of linking is handled by three discrete tools to
 # perform the image link, debug info link, and strip. The linker_driver.py
 # combines these three steps into a single tool.
 #
-# The command passed to the linker_driver.py should be the compiler driver
-# invocation for the linker. It is first invoked unaltered (except for the
-# removal of the special driver arguments, described below). Then the driver
-# performs additional actions, based on these arguments:
+# The compiler driver invocation for the linker is specified by the following
+# required argument.
+#
+# -Wcrl,driver,<path_to_compiler_driver>
+#    Specifies the path to the compiler driver.
+#
+# After running the compiler driver, the script performs additional actions,
+# based on these arguments:
 #
 # -Wcrl,installnametoolpath,<install_name_tool_path>
 #    Sets the path to the `install_name_tool` to run with
@@ -63,19 +75,8 @@ OBJECT_PATH_LTO = 'object_path_lto'
 # -Wcrl,strippath,<strip_path>
 #    Sets the path to the strip to run with -Wcrl,strip, in which case
 #    `xcrun` is not used to invoke it.
-# TODO(crbug.com/1337780): Remove 'persist' when iOS no longer builds universal
-# binaries.
-# -Wcrl,object_path_lto,<persist>(optional)
-#    Creates temporary directory for LTO object files. If `persist` is passed
-#    the directory is named after the linker output and it's expected that a
-#    later invocation will pass `-Wcrl,clean_objects,<output_name>` to clean it
-#    up. Otherwise, the temp directory is deleted at the end of this run.
-# TODO(crbug.com/1337780): Remove this action when iOS no longer builds
-# universal binaries.
-# -Wcrl,clean_objects,<arguments,...>
-#    Cleans up LTO object file directories for the targets in arguments.
-#    For each argument, looks for and deletes a directory at
-#    "{argument}.lto_objects"
+# -Wcrl,object_path_lto
+#    Creates temporary directory for LTO object files.
 
 
 class LinkerDriver(object):
@@ -85,8 +86,6 @@ class LinkerDriver(object):
         Args:
             args: list of string, Arguments to the script.
         """
-        if len(args) < 2:
-            raise RuntimeError("Usage: linker_driver.py [linker-invocation]")
         self._args = args
 
         # List of linker driver actions. **The sort order of this list affects
@@ -101,10 +100,10 @@ class LinkerDriver(object):
             ('unstripped,', self.run_save_unstripped),
             ('strippath,', self.set_strip_path),
             ('strip,', self.run_strip),
-            ('clean_objects', self.run_clean_objects),
         ]
 
         # Linker driver actions can modify the these values.
+        self._driver_path = None  # Must be specified on the command line.
         self._install_name_tool_cmd = ['xcrun', 'install_name_tool']
         self._dsymutil_cmd = ['xcrun', 'dsymutil']
         self._strip_cmd = ['xcrun', 'strip']
@@ -113,10 +112,6 @@ class LinkerDriver(object):
         self._linker_output = None
         # The temporary directory for intermediate LTO object files. If it
         # exists, it will clean itself up on script exit.
-        self._object_path_lto_temp = None
-        # The path for intermediate LTO object files. This is either the name
-        # of `self._object_path_lto_temp` or a named directory that will be
-        # cleaned up in a future invocation.
         self._object_path_lto = None
 
     def run(self):
@@ -130,20 +125,41 @@ class LinkerDriver(object):
         linker_driver_actions = {}
         compiler_driver_args = []
         for index, arg in enumerate(self._args[1:]):
-            if arg.startswith(LINKER_DRIVER_ARG_PREFIX):
+            if arg.startswith(LINKER_DRIVER_COMPILER_ARG_PREFIX):
+                assert not self._driver_path
+                self._driver_path = arg[len(LINKER_DRIVER_COMPILER_ARG_PREFIX
+                                            ):]
+            elif arg.startswith(LINKER_DRIVER_ARG_PREFIX):
                 # Convert driver actions into a map of name => lambda to invoke.
                 driver_action = self._process_driver_arg(arg)
                 assert driver_action[0] not in linker_driver_actions
                 linker_driver_actions[driver_action[0]] = driver_action[1]
             else:
-                compiler_driver_args.append(arg)
+                # TODO(crbug.com/1446796): On Apple, the linker command line
+                # produced by rustc for LTO includes these arguments, but the
+                # Apple linker doesn't accept them.
+                # Upstream bug: https://github.com/rust-lang/rust/issues/60059
+                BAD_RUSTC_ARGS = '-Wl,-plugin-opt=O[0-9],-plugin-opt=mcpu=.*'
+                if not re.match(BAD_RUSTC_ARGS, arg):
+                    compiler_driver_args.append(arg)
+
+        if not self._driver_path:
+            raise RuntimeError(
+                "Usage: linker_driver.py -Wcrl,driver,<compiler-driver> "
+                "[linker-args]...")
 
         if self._object_path_lto is not None:
             compiler_driver_args.append('-Wl,-object_path_lto,{}'.format(
-                self._object_path_lto))
+                os.path.relpath(self._object_path_lto.name)))
         if self._get_linker_output() is None:
             raise ValueError(
                 'Could not find path to linker output (-o or --output)')
+
+        # We want to link rlibs as --whole-archive if they are part of a unit
+        # test target. This is determined by switch
+        # `-LinkWrapper,add-whole-archive`.
+        compiler_driver_args = whole_archive.wrap_with_whole_archive(
+            compiler_driver_args, is_apple=True)
 
         linker_driver_outputs = [self._get_linker_output()]
 
@@ -153,7 +169,8 @@ class LinkerDriver(object):
             env = os.environ.copy()
             env['ZERO_AR_DATE'] = '1'
             # Run the linker by invoking the compiler driver.
-            subprocess.check_call(compiler_driver_args, env=env)
+            subprocess.check_call([self._driver_path] + compiler_driver_args,
+                                  env=env)
 
             # Run the linker driver actions, in the order specified by the
             # actions list.
@@ -199,16 +216,8 @@ class LinkerDriver(object):
         # TODO(lgrey): Remove if/when we start running `dsymutil`
         # through the clang driver. See https://crbug.com/1324104
         if sub_arg == OBJECT_PATH_LTO:
-            self._object_path_lto_temp = tempfile.TemporaryDirectory(
+            self._object_path_lto = tempfile.TemporaryDirectory(
                 dir=os.getcwd())
-            self._object_path_lto = self._object_path_lto_temp.name
-            return (OBJECT_PATH_LTO, lambda: [])
-        elif sub_arg.startswith(OBJECT_PATH_LTO):
-            assert sub_arg[len(OBJECT_PATH_LTO):] == ',persist'
-            output = self._get_linker_output()
-            assert output
-            self._object_path_lto = output + '.lto_objects'
-            os.mkdir(self._object_path_lto)
             return (OBJECT_PATH_LTO, lambda: [])
 
         for driver_action in self._actions:
@@ -351,25 +360,6 @@ class LinkerDriver(object):
             No output - this step is run purely for its side-effect.
         """
         self._strip_cmd = [strip_path]
-        return []
-
-    def run_clean_objects(self, args_string):
-        """Linker driver action for -Wcrl,clean_objects,<arguments>.
-
-        For each argument, looks for a directory called "${argument}.lto_objects
-        and deletes it.
-
-        Args:
-            arguments: string, Comma-separated prefixes of LTO object
-            directories to clean up
-
-        Returns:
-            No output
-        """
-        for output in args_string.lstrip(',').split(','):
-            name = output + '.lto_objects'
-            assert os.path.isdir(name)
-            shutil.rmtree(name)
         return []
 
 

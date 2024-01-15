@@ -7,11 +7,13 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_capture_handle.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_captured_wheel_action.h"
 #include "third_party/blink/renderer/modules/event_target_modules.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
@@ -36,6 +38,7 @@ class MediaConstraints;
 class MediaTrackCapabilities;
 class MediaTrackConstraints;
 class MediaStream;
+class MediaStreamTrackVideoStats;
 class MediaTrackSettings;
 class ScriptState;
 
@@ -45,7 +48,7 @@ String ContentHintToString(
 String ReadyStateToString(const MediaStreamSource::ReadyState& ready_state);
 
 class MODULES_EXPORT MediaStreamTrack
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public ActiveScriptWrappable<MediaStreamTrack> {
   DEFINE_WRAPPERTYPEINFO();
 
@@ -58,7 +61,7 @@ class MODULES_EXPORT MediaStreamTrack
 
   // For carrying data to the FromTransferredState method.
   struct TransferredValues {
-    const WrapperTypeInfo* track_impl_subtype;
+    raw_ptr<const WrapperTypeInfo, ExperimentalRenderer> track_impl_subtype;
     base::UnguessableToken session_id;
     base::UnguessableToken transfer_id;
     String kind;
@@ -70,7 +73,7 @@ class MODULES_EXPORT MediaStreamTrack
     MediaStreamSource::ReadyState ready_state;
     // Set only if
     // track_impl_subtype->IsSubclass(BrowserCaptureMediaStreamTrack::GetStaticWrapperTypeInfo())
-    absl::optional<uint32_t> crop_version;
+    absl::optional<uint32_t> sub_capture_target_version;
   };
 
   // See SetFromTransferredStateImplForTesting in ./test/transfer_test_utils.h.
@@ -83,6 +86,8 @@ class MODULES_EXPORT MediaStreamTrack
   // TODO(https://crbug.com/1288839): Implement to recreate MST after transfer
   static MediaStreamTrack* FromTransferredState(ScriptState* script_state,
                                                 const TransferredValues& data);
+
+  MediaStreamTrack();
 
   // MediaStreamTrack.idl
   virtual String kind() const = 0;
@@ -99,18 +104,21 @@ class MODULES_EXPORT MediaStreamTrack
   virtual MediaTrackCapabilities* getCapabilities() const = 0;
   virtual MediaTrackConstraints* getConstraints() const = 0;
   virtual MediaTrackSettings* getSettings() const = 0;
+  virtual MediaStreamTrackVideoStats* stats() = 0;
   virtual CaptureHandle* getCaptureHandle() const = 0;
   virtual ScriptPromise applyConstraints(ScriptState*,
                                          const MediaTrackConstraints*) = 0;
 
   virtual void applyConstraints(ScriptPromiseResolver*,
                                 const MediaTrackConstraints*) = 0;
-  virtual void SetConstraints(const MediaConstraints&) = 0;
+  virtual void SetInitialConstraints(const MediaConstraints& constraints) = 0;
+  virtual void SetConstraints(const MediaConstraints& constraints) = 0;
 
   DEFINE_ATTRIBUTE_EVENT_LISTENER(mute, kMute)
   DEFINE_ATTRIBUTE_EVENT_LISTENER(unmute, kUnmute)
   DEFINE_ATTRIBUTE_EVENT_LISTENER(ended, kEnded)
   DEFINE_ATTRIBUTE_EVENT_LISTENER(capturehandlechange, kCapturehandlechange)
+  DEFINE_ATTRIBUTE_EVENT_LISTENER(configurationchange, kConfigurationchange)
 
   virtual MediaStreamSource::ReadyState GetReadyState() = 0;
 
@@ -129,6 +137,39 @@ class MODULES_EXPORT MediaStreamTrack
   // ScriptWrappable
   bool HasPendingActivity() const override = 0;
 
+#if !BUILDFLAG(IS_ANDROID)
+  // When called on a "live" video track associated with tab-capture,
+  // asks to deliver a wheel event on the captured tab's viewport.
+  // This is subject to a permission policy on the capturing origin.
+  //
+  // If successful, |callback| is invoked with `true` and an empty string.
+  // If unsuccessful, it is invoked with `false` and an error message.
+  virtual void SendWheel(
+      CapturedWheelAction* action,
+      base::OnceCallback<void(bool, const String&)> callback) = 0;
+
+  // When called on a "live" video track associated with tab-capture,
+  // returns the zoom level of the capture tab's viewport.
+  // This is subject to a permission policy on the capturing origin.
+  //
+  // If successful, |callback| is invoked with the zoom level in percentage
+  // points and an empty string.
+  // If unsuccessful, it is invoked with `absl::nullopt` and an error message.
+  virtual void GetZoomLevel(
+      base::OnceCallback<void(absl::optional<int>, const String&)>
+          callback) = 0;
+
+  // When called on a "live" video track associated with tab-capture, asks to
+  // set the zoom level on the captured tab's viewport.  This is subject to a
+  // permission policy on the capturing origin.
+  //
+  // If successful, |callback| is invoked with `true` and an empty string.
+  // If unsuccessful, it is invoked with `false` and an error message.
+  virtual void SetZoomLevel(
+      int zoom_level,
+      base::OnceCallback<void(bool, const String&)> callback) = 0;
+#endif
+
   virtual std::unique_ptr<AudioSourceProvider> CreateWebAudioSource(
       int context_sample_rate) = 0;
 
@@ -139,21 +180,14 @@ class MODULES_EXPORT MediaStreamTrack
   // Prepares the track for a potentially cross-renderer transfer. After this
   // is called, the track will be in an ended state and no longer usable.
   virtual void BeingTransferred(const base::UnguessableToken& transfer_id) = 0;
-
-#if !BUILDFLAG(IS_ANDROID)
-  // Only relevant for focusable streams (FocusableMediaStreamTrack).
-  // When called on one of these, it signals that Conditional Focus
-  // no longer applies - the browser will now decide whether
-  // the captured display surface should be captured. Later calls to
-  // FocusableMediaStreamTrack.focus() will now raise an exception.
-  virtual void CloseFocusWindowOfOpportunity() = 0;
-#endif
+  // Returns true if this track is allowed to be transferred. If a transfer is
+  //  not allowed, message will contain an explanatory text that can be
+  //  surfaced to the caller.
+  virtual bool TransferAllowed(String& message) const = 0;
 
   virtual void AddObserver(Observer*) = 0;
 
-  void Trace(Visitor* visitor) const override {
-    EventTargetWithInlineData::Trace(visitor);
-  }
+  void Trace(Visitor* visitor) const override { EventTarget::Trace(visitor); }
 
  private:
   // Friend in order to allow setting a new impl for FromTransferredState.

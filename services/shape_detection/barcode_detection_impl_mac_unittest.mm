@@ -2,22 +2,20 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "services/shape_detection/barcode_detection_impl_mac.h"
+#include "services/shape_detection/barcode_detection_impl_mac_vision.h"
 
 #import <Vision/Vision.h>
 
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/mac/mac_util.h"
-#include "base/mac/scoped_cftyperef.h"
-#include "base/mac/scoped_nsobject.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
-#include "services/shape_detection/barcode_detection_impl_mac_vision.h"
 #include "services/shape_detection/public/mojom/barcodedetection.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -31,17 +29,9 @@ namespace shape_detection {
 
 namespace {
 
-std::unique_ptr<mojom::BarcodeDetection> CreateBarcodeDetectorImplMacCoreImage(
-    mojom::BarcodeDetectorOptionsPtr options) {
-  return std::make_unique<BarcodeDetectionImplMac>();
-}
-
 std::unique_ptr<mojom::BarcodeDetection> CreateBarcodeDetectorImplMacVision(
     mojom::BarcodeDetectorOptionsPtr options) {
-  if (!BarcodeDetectionImplMacVision::IsBlockedMacOSVersion()) {
-    return std::make_unique<BarcodeDetectionImplMacVision>(std::move(options));
-  }
-  return nullptr;
+  return std::make_unique<BarcodeDetectionImplMacVision>(std::move(options));
 }
 
 using BarcodeDetectorFactory =
@@ -54,12 +44,8 @@ struct TestParams {
   bool allow_duplicates;
   mojom::BarcodeFormat symbology;
   BarcodeDetectorFactory factory;
-  NSString* test_code_generator;
+  NSString* __strong test_code_generator;
 } kTestParams[] = {
-    // CoreImage only supports QR Codes.
-    {false, mojom::BarcodeFormat::QR_CODE,
-     base::BindRepeating(&CreateBarcodeDetectorImplMacCoreImage),
-     @"CIQRCodeGenerator"},
     // Vision only supports a number of 1D/2D codes. Not all of them are
     // available for generation, though, only a few.
     {false, mojom::BarcodeFormat::PDF417,
@@ -113,18 +99,19 @@ TEST_P(BarcodeDetectionImplMacTest, ScanOneBarcode) {
 
   CIImage* qr_code_image = qr_code_generator.outputImage;
 
-  const gfx::Size size([qr_code_image extent].size.width,
-                       [qr_code_image extent].size.height);
+  const gfx::Size size(qr_code_image.extent.size.width,
+                       qr_code_image.extent.size.height);
 
-  base::scoped_nsobject<CIContext> context([[CIContext alloc] init]);
+  CIContext* context = [[CIContext alloc] init];
 
-  base::ScopedCFTypeRef<CGImageRef> cg_image(
-      [context createCGImage:qr_code_image fromRect:[qr_code_image extent]]);
-  EXPECT_EQ(static_cast<size_t>(size.width()), CGImageGetWidth(cg_image));
-  EXPECT_EQ(static_cast<size_t>(size.height()), CGImageGetHeight(cg_image));
+  base::apple::ScopedCFTypeRef<CGImageRef> cg_image(
+      [context createCGImage:qr_code_image fromRect:qr_code_image.extent]);
+  EXPECT_EQ(static_cast<size_t>(size.width()), CGImageGetWidth(cg_image.get()));
+  EXPECT_EQ(static_cast<size_t>(size.height()),
+            CGImageGetHeight(cg_image.get()));
 
   SkBitmap bitmap;
-  ASSERT_TRUE(SkCreateBitmapFromCGImage(&bitmap, cg_image));
+  ASSERT_TRUE(SkCreateBitmapFromCGImage(&bitmap, cg_image.get()));
 
   base::test::TestFuture<std::vector<mojom::BarcodeDetectionResultPtr>> future;
   impl->Detect(bitmap, future.GetCallback());
@@ -146,7 +133,7 @@ INSTANTIATE_TEST_SUITE_P(, BarcodeDetectionImplMacTest, ValuesIn(kTestParams));
 TEST_F(BarcodeDetectionImplMacTest, HintFormats) {
   auto vision_impl = std::make_unique<BarcodeDetectionImplMacVision>(
       mojom::BarcodeDetectorOptions::New());
-  EXPECT_EQ([vision_impl->GetSymbologyHintsForTesting() count], 0u);
+  EXPECT_EQ(vision_impl->GetSymbologyHintsForTesting().count, 0u);
 
   mojom::BarcodeDetectorOptionsPtr options =
       mojom::BarcodeDetectorOptions::New();

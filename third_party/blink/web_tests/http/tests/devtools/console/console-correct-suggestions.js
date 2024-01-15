@@ -2,10 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ConsoleTestRunner} from 'console_test_runner';
+
+import * as TextUtils from 'devtools/models/text_utils/text_utils.js';
+
 (async function() {
   TestRunner.addResult(`Tests that console correctly finds suggestions in complicated cases.\n`);
 
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('console_test_runner');
   await TestRunner.showPanel('console');
 
   await TestRunner.evaluateInPagePromise(`
@@ -58,7 +62,7 @@
       cursorPosition = Infinity;
 
     consoleEditor.setText(text.replace('|', ''));
-    consoleEditor.setSelection(TextUtils.TextRange.createFromLocation(0, cursorPosition));
+    consoleEditor.setSelection(TextUtils.TextRange.TextRange.createFromLocation(0, cursorPosition));
     consoleEditor.autocompleteController.autocomplete(force);
     var message =
         'Checking \'' + text.replace('\n', '\\n').replace('\r', '\\r') + '\'';

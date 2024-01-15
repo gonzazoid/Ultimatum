@@ -11,6 +11,7 @@
 #include "ash/test/ash_test_base.h"
 #include "ash/window_user_data.h"
 #include "ash/wm/window_dimmer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/ranges/algorithm.h"
 #include "ui/aura/test/test_windows.h"
 #include "ui/compositor/layer.h"
@@ -28,7 +29,7 @@ class ScreenDimmerTest : public AshTestBase {
 
   void SetUp() override {
     AshTestBase::SetUp();
-    dimmer_ = std::make_unique<ScreenDimmer>(ScreenDimmer::Container::ROOT);
+    dimmer_ = std::make_unique<ScreenDimmer>();
   }
 
   void TearDown() override {
@@ -93,14 +94,14 @@ TEST_F(ScreenDimmerTest, DimAtBottom) {
   std::unique_ptr<aura::Window> window(
       aura::test::CreateTestWindowWithId(1, root_window));
   dimmer_->SetDimming(true);
-  std::vector<aura::Window*>::const_iterator dim_iter =
-      base::ranges::find(root_window->children(), GetDimWindow());
+  std::vector<raw_ptr<aura::Window, VectorExperimental>>::const_iterator
+      dim_iter = base::ranges::find(root_window->children(), GetDimWindow());
   ASSERT_TRUE(dim_iter != root_window->children().end());
   // Dim layer is at top.
   EXPECT_EQ(*dim_iter, *root_window->children().rbegin());
 
   dimmer_->SetDimming(false);
-  dimmer_->set_at_bottom(true);
+  dimmer_->set_at_bottom_for_testing(true);
   dimmer_->SetDimming(true);
 
   dim_iter = base::ranges::find(root_window->children(), GetDimWindow());
@@ -122,7 +123,7 @@ class ScreenDimmerShellDestructionTest : public AshTestBase {
   ~ScreenDimmerShellDestructionTest() override = default;
 
   void TearDown() override {
-    ScreenDimmer screen_dimmer(ScreenDimmer::Container::ROOT);
+    ScreenDimmer screen_dimmer;
     AshTestBase::TearDown();
     // ScreenDimmer is destroyed *after* the shell.
   }

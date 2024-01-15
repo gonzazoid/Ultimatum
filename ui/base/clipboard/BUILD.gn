@@ -4,7 +4,9 @@
 
 import("///build/config/ozone.gni")
 import("//build/config/chromeos/ui_mode.gni")
+import("//build/config/features.gni")
 import("//build/config/ui.gni")
+import("//testing/libfuzzer/fuzzer_test.gni")
 
 component("clipboard_types") {
   output_name = "ui_base_clipboard_types"
@@ -14,8 +16,12 @@ component("clipboard_types") {
     "clipboard_constants.h",
   ]
 
-  if (!is_ios) {
+  if (use_blink) {
     sources += [ "clipboard_format_type.h" ]
+
+    if (is_ios) {
+      sources += [ "clipboard_format_type_ios.mm" ]
+    }
   }
 
   if (is_android) {
@@ -48,6 +54,9 @@ component("clipboard_types") {
   }
   if (is_mac) {
     frameworks += [ "AppKit.framework" ]
+    weak_frameworks = [
+      "UniformTypeIdentifiers.framework",  # macOS 11
+    ]
   }
 }
 
@@ -64,12 +73,24 @@ component("file_info") {
   deps = [ "//base" ]
 }
 
+# This is a source set because it needs to be included only on the Mac for the
+# final executable, but needs to be included on any platform for the fuzzer.
+source_set("url_file_parser") {
+  sources = [
+    "url_file_parser.cc",
+    "url_file_parser.h",
+  ]
+
+  deps = [ "//base" ]
+}
+
 component("clipboard") {
   output_name = "ui_base_clipboard"
 
   sources = [
     "clipboard.cc",
     "clipboard.h",
+    "clipboard_content_type.h",
     "clipboard_metrics.cc",
     "clipboard_metrics.h",
     "clipboard_monitor.cc",
@@ -77,6 +98,8 @@ component("clipboard") {
     "clipboard_observer.cc",
     "clipboard_observer.h",
     "clipboard_sequence_number_token.h",
+    "clipboard_util.cc",
+    "clipboard_util.h",
     "custom_data_helper.cc",
     "custom_data_helper.h",
     "scoped_clipboard_writer.cc",
@@ -88,6 +111,13 @@ component("clipboard") {
       "clipboard_android.cc",
       "clipboard_android.h",
     ]
+  } else {
+    sources += [
+      "clipboard_data.cc",
+      "clipboard_data.h",
+      "clipboard_non_backed.cc",
+      "clipboard_non_backed.h",
+    ]
   }
 
   if (is_mac) {
@@ -96,6 +126,13 @@ component("clipboard") {
       "clipboard_mac.mm",
       "clipboard_util_mac.h",
       "clipboard_util_mac.mm",
+    ]
+  }
+
+  if (is_ios) {
+    sources += [
+      "clipboard_ios.h",
+      "clipboard_ios.mm",
     ]
   }
 
@@ -115,7 +152,6 @@ component("clipboard") {
     "//build:chromeos_buildflags",
     "//mojo/public/cpp/base",
     "//net",
-    "//skia",
     "//ui/base:features",
     "//ui/gfx",
     "//ui/gfx/geometry",
@@ -124,17 +160,14 @@ component("clipboard") {
   public_deps = [
     ":clipboard_types",
     ":file_info",
+    "//skia",
     "//ui/base/data_transfer_policy",
   ]
 
   if (use_aura) {
     if (use_ozone) {
       sources += [
-        "clipboard_data.cc",
-        "clipboard_data.h",
         "clipboard_factory_ozone.cc",
-        "clipboard_non_backed.cc",
-        "clipboard_non_backed.h",
         "clipboard_ozone.cc",
         "clipboard_ozone.h",
       ]
@@ -150,10 +183,13 @@ component("clipboard") {
   }
 
   if (is_mac) {
-    deps += [ "//third_party/mozilla" ]
+    deps += [ ":url_file_parser" ]
     frameworks = [
       "AppKit.framework",
       "CoreFoundation.framework",
+    ]
+    weak_frameworks = [
+      "UniformTypeIdentifiers.framework",  # macOS 11
     ]
   }
 }
@@ -161,7 +197,7 @@ component("clipboard") {
 source_set("clipboard_test_support") {
   testonly = true
 
-  if (!is_ios) {
+  if (use_blink) {
     sources = [
       "test/clipboard_test_util.cc",
       "test/clipboard_test_util.h",
@@ -199,7 +235,17 @@ source_set("clipboard_test") {
   sources = []
   output_name = "ui_base_clipboard_test"
 
-  if (!is_ios) {
+  if (is_ios) {
+    if (use_blink) {
+      # On other OSs, clipboard platform unit tests are run as part of
+      # interactive_ui_tests. However, since interactive_ui_tests is not yet
+      # ready for Blink iOS, we run them here for now.
+      sources += [
+        "clipboard_test_template.h",
+        "clipboard_unittest.cc",
+      ]
+    }
+  } else {
     sources += [
       "custom_data_helper_unittest.cc",
       "test/test_clipboard_unittest.cc",
@@ -210,14 +256,13 @@ source_set("clipboard_test") {
     sources += [
       "clipboard_mac_unittest.mm",
       "clipboard_util_mac_unittest.mm",
+      "url_file_parser_unittest.cc",
     ]
+    frameworks = [ "PDFKit.framework" ]
   }
 
-  if (use_aura && !is_chromeos_lacros && !is_linux && !is_win) {
-    sources += [
-      "clipboard_data_unittest.cc",
-      "clipboard_non_backed_unittest.cc",
-    ]
+  if (is_win) {
+    sources += [ "clipboard_util_win_unittest.cc" ]
   }
 
   deps = [
@@ -232,6 +277,29 @@ source_set("clipboard_test") {
   ]
 
   if (is_mac) {
-    deps += [ "//third_party/mozilla" ]
+    deps += [ ":url_file_parser" ]
   }
+
+  if ((use_aura && !is_chromeos_lacros) || is_mac) {
+    sources += [
+      "clipboard_data_unittest.cc",
+      "clipboard_non_backed_unittest.cc",
+    ]
+
+    if (use_ozone) {
+      deps += [
+        "//ui/ozone:ozone_switches",
+        "//ui/ozone:platform",
+      ]
+    }
+  }
+}
+
+fuzzer_test("url_file_parser_fuzzer") {
+  sources = [ "url_file_parser_fuzzer.cc" ]
+  deps = [
+    ":url_file_parser",
+    "//base",
+  ]
+  seed_corpus = "test/url_file_parser_fuzzer_testcases"
 }

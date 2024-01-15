@@ -5,12 +5,14 @@
 #ifndef UI_BASE_CLIPBOARD_CLIPBOARD_DATA_H_
 #define UI_BASE_CLIPBOARD_CLIPBOARD_DATA_H_
 
+#include <map>
 #include <string>
 #include <vector>
 
 #include "base/component_export.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkBitmap.h"
+#include "ui/base/clipboard/clipboard_format_type.h"
 #include "ui/base/clipboard/clipboard_sequence_number_token.h"
 #include "ui/base/clipboard/file_info.h"
 #include "ui/base/data_transfer_policy/data_transfer_endpoint.h"
@@ -40,10 +42,6 @@ enum class ClipboardInternalFormat {
 // It mostly just provides APIs to cleanly access and manipulate this data.
 class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) ClipboardData {
  public:
-  // Encode a bitmap to a PNG. Callers encoding a PNG on a background thread
-  // should use this method.
-  static std::vector<uint8_t> EncodeBitmapData(const SkBitmap& bitmap);
-
   ClipboardData();
   ClipboardData(const ClipboardData&);
   ClipboardData(ClipboardData&&);
@@ -61,50 +59,53 @@ class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) ClipboardData {
   // Bitmask of ClipboardInternalFormat types.
   int format() const { return format_; }
 
-  // Returns the size of the data in clipboard of `format`, total size of the
-  // clipboard data if `format` is empty, and absl::nullopt if it can't be
-  // determined.
-  absl::optional<size_t> size(
-      const absl::optional<ClipboardInternalFormat>& format) const;
+  // Returns the size of the data in clipboard of `format`, or total size of the
+  // clipboard data if `format` is empty. When `format` is kCustom,
+  // `custom_data_format` identifies which custom data item to calculate the
+  // size of. Returns absl::nullopt if size can't be determined, such as when
+  // `format` is kFilenames.
+  absl::optional<size_t> CalculateSize(
+      const absl::optional<ClipboardInternalFormat>& format,
+      const absl::optional<ClipboardFormatType>& custom_data_format) const;
 
   const std::string& text() const { return text_; }
-  void set_text(const std::string& text) {
+  void set_text(base::StringPiece text) {
     text_ = text;
     format_ |= static_cast<int>(ClipboardInternalFormat::kText);
   }
 
   const std::string& markup_data() const { return markup_data_; }
-  void set_markup_data(const std::string& markup_data) {
+  void set_markup_data(base::StringPiece markup_data) {
     markup_data_ = markup_data;
     format_ |= static_cast<int>(ClipboardInternalFormat::kHtml);
   }
 
   const std::string& svg_data() const { return svg_data_; }
-  void set_svg_data(const std::string& svg_data) {
+  void set_svg_data(base::StringPiece svg_data) {
     svg_data_ = svg_data;
     format_ |= static_cast<int>(ClipboardInternalFormat::kSvg);
   }
 
   const std::string& rtf_data() const { return rtf_data_; }
-  void SetRTFData(const std::string& rtf_data) {
+  void SetRTFData(base::StringPiece rtf_data) {
     rtf_data_ = rtf_data;
     format_ |= static_cast<int>(ClipboardInternalFormat::kRtf);
   }
 
   const std::string& url() const { return url_; }
-  void set_url(const std::string& url) {
+  void set_url(base::StringPiece url) {
     url_ = url;
     format_ |= static_cast<int>(ClipboardInternalFormat::kHtml);
   }
 
   const std::string& bookmark_title() const { return bookmark_title_; }
-  void set_bookmark_title(const std::string& bookmark_title) {
+  void set_bookmark_title(base::StringPiece bookmark_title) {
     bookmark_title_ = bookmark_title;
     format_ |= static_cast<int>(ClipboardInternalFormat::kBookmark);
   }
 
   const std::string& bookmark_url() const { return bookmark_url_; }
-  void set_bookmark_url(const std::string& bookmark_url) {
+  void set_bookmark_url(base::StringPiece bookmark_url) {
     bookmark_url_ = bookmark_url;
     format_ |= static_cast<int>(ClipboardInternalFormat::kBookmark);
   }
@@ -135,14 +136,18 @@ class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) ClipboardData {
   void SetBitmapData(const SkBitmap& bitmap);
   // Use this method to obtain the bitmap to be encoded to a PNG. It is only
   // recommended to call this method after checking that `maybe_png()` returns
-  // no value. If this returns a value, use `EncodeBitmapData()` to encode the
+  // no value. If this returns a value, use `EncodeBitmapToPng()` to encode the
   // bitmap to a PNG on a background thread.
   absl::optional<SkBitmap> GetBitmapIfPngNotEncoded() const;
 
-  const std::string& custom_data_format() const { return custom_data_format_; }
-  const std::string& custom_data_data() const { return custom_data_data_; }
-  void SetCustomData(const std::string& data_format,
-                     const std::string& data_data);
+  // Returns true if `format` such as ClipboardFormatType::WebCustomDataType(),
+  // or `application/web;type="custom/format0"` exists.
+  bool HasCustomDataFormat(const ClipboardFormatType& format) const;
+  std::string GetCustomData(const ClipboardFormatType& data_format) const;
+  // Returns the ClipboardFormatType::WebCustomDataType() pickle.
+  std::string GetWebCustomData() const;
+  void SetCustomData(const ClipboardFormatType& format,
+                     const std::string& data);
 
   bool web_smart_paste() const { return web_smart_paste_; }
   void set_web_smart_paste(bool web_smart_paste) {
@@ -157,9 +162,9 @@ class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) ClipboardData {
       format_ |= static_cast<int>(ClipboardInternalFormat::kFilenames);
   }
 
-  DataTransferEndpoint* source() const { return src_.get(); }
+  const absl::optional<DataTransferEndpoint>& source() const { return src_; }
 
-  void set_source(std::unique_ptr<DataTransferEndpoint> src) {
+  void set_source(absl::optional<DataTransferEndpoint> src) {
     src_ = std::move(src);
   }
 
@@ -202,9 +207,8 @@ class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) ClipboardData {
   //    this member is the decoded version of `maybe_png_`.
   absl::optional<SkBitmap> maybe_bitmap_ = absl::nullopt;
 
-  // Data with custom format.
-  std::string custom_data_format_;
-  std::string custom_data_data_;
+  // Custom Data keyed by format.
+  std::map<ClipboardFormatType, std::string> custom_data_;
 
   // WebKit smart paste data.
   bool web_smart_paste_ = false;
@@ -218,7 +222,7 @@ class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) ClipboardData {
   int format_ = 0;
 
   // The source of the data.
-  std::unique_ptr<DataTransferEndpoint> src_;
+  absl::optional<DataTransferEndpoint> src_;
 
 #if BUILDFLAG(IS_CHROMEOS)
   // If present, the time at which this data was committed to the clipboard.

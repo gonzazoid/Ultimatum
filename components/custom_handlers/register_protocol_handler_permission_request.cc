@@ -4,7 +4,7 @@
 
 #include "components/custom_handlers/register_protocol_handler_permission_request.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/custom_handlers/protocol_handler_registry.h"
@@ -25,7 +25,7 @@ RegisterProtocolHandlerPermissionRequest::
           url.DeprecatedGetOriginAsURL(),
           permissions::RequestType::kRegisterProtocolHandler,
           /*has_gesture=*/false,
-          base::BindOnce(
+          base::BindRepeating(
               &RegisterProtocolHandlerPermissionRequest::PermissionDecided,
               base::Unretained(this)),
           base::BindOnce(
@@ -64,8 +64,10 @@ RegisterProtocolHandlerPermissionRequest::GetMessageTextFragment() const {
 
 void RegisterProtocolHandlerPermissionRequest::PermissionDecided(
     ContentSetting result,
-    bool is_one_time) {
+    bool is_one_time,
+    bool is_final_decision) {
   DCHECK(!is_one_time);
+  DCHECK(is_final_decision);
   if (result == ContentSetting::CONTENT_SETTING_ALLOW) {
     base::RecordAction(
         base::UserMetricsAction("RegisterProtocolHandler.Infobar_Accept"));

@@ -237,7 +237,9 @@ base::Value::Dict StatsEventSubscriber::GetStats() const {
     stats.Set(CastStatToString(it->first), it->second->GetHistogram());
   }
 
-  ret.Set(event_media_type_ == AUDIO_EVENT ? "audio" : "video",
+  ret.Set(event_media_type_ == AUDIO_EVENT
+              ? StatsEventSubscriber::kAudioStatsDictKey
+              : StatsEventSubscriber::kVideoStatsDictKey,
           std::move(stats));
 
   return ret;
@@ -310,9 +312,11 @@ const char* StatsEventSubscriber::CastStatToString(CastStat stat) {
     STAT_ENUM_TO_STRING(FRAME_LATENCY_MS_HISTO);
     STAT_ENUM_TO_STRING(E2E_LATENCY_MS_HISTO);
     STAT_ENUM_TO_STRING(LATE_FRAME_MS_HISTO);
+    STAT_ENUM_TO_STRING(ENQUEUE_FPS);
+    STAT_ENUM_TO_STRING(UNKNOWN_OPEN_SCREEN_STAT);
+    STAT_ENUM_TO_STRING(UNKNOWN_OPEN_SCREEN_HISTO);
   }
-  NOTREACHED();
-  return "";
+  NOTREACHED_NORETURN();
 }
 
 const int kDefaultMaxLatencyBucketMs = 800;

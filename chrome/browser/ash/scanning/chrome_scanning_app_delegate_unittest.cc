@@ -7,10 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
@@ -90,7 +91,7 @@ class ChromeScanningAppDelegateTest : public testing::Test {
   }
 
  protected:
-  TestingProfile* profile_;
+  raw_ptr<TestingProfile, DanglingUntriaged> profile_;
   std::unique_ptr<ChromeScanningAppDelegate> chrome_scanning_app_delegate_;
   std::unique_ptr<content::TestWebUI> web_ui_;
   base::ScopedTempDir temp_dir_;

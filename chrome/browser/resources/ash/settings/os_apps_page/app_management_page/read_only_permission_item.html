@@ -1,0 +1,35 @@
+<style include="app-management-shared-style">
+  :host {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  :host(:not([available_])) {
+    display: none;
+  }
+
+  #icon {
+    padding-inline-end: var(--row-item-icon-padding);
+  }
+</style>
+
+<template is="dom-if" if="[[available_]]">
+  <div class="horizontal-align">
+    <iron-icon id="icon" icon="[[icon]]"></iron-icon>
+    <div class="vertical-align">
+      <!--
+        permission-name and permission-state classes are used by tast tests to
+        find permission elements.
+      -->
+      <div id="label" class="permission-name">[[permissionLabel]]</div>
+      <div id="description" class="permission-state secondary-text">
+        [[getPermissionDescriptionString_(app, permissionType)]]
+      </div>
+    </div>
+  </div>
+  <template is="dom-if" if="[[isManaged_(app, permissionType)]]">
+    <cr-policy-indicator indicator-type="devicePolicy">
+    </cr-policy-indicator>
+  </template>
+</template>

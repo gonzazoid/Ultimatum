@@ -8,8 +8,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "chrome/browser/extensions/extension_service.h"
@@ -100,9 +100,9 @@ void ExtensionStatusesHandler::GetExtensionStatusesAsDictionary(
     return;
   }
 
-  sync_service->GetExtensionStatusMap(
-      base::BindOnce(&ConvertExtensionStatusToDictionary,
-                     extension_service->AsWeakPtr(), std::move(callback)));
+  sync_service->GetExtensionStatusMap(base::BindOnce(
+      &ConvertExtensionStatusToDictionary,
+      extension_service->AsExtensionServiceWeakPtr(), std::move(callback)));
 }
 
 void ExtensionStatusesHandler::HandleGetExtensionStatuses(

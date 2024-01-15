@@ -8,10 +8,11 @@
 #include <CoreFoundation/CFDate.h>
 #include <dispatch/dispatch.h>
 
-#include "base/mac/scoped_cftyperef.h"
-#include "base/mac/scoped_dispatch_object.h"
-#include "base/message_loop/message_pump_mac.h"
+#include "base/apple/scoped_cftyperef.h"
+#include "base/apple/scoped_dispatch_object.h"
+#include "base/message_loop/message_pump_apple.h"
 #include "base/sequence_checker.h"
+#include "base/timer/timer.h"
 #include "components/memory_pressure/memory_pressure_voter.h"
 #include "components/memory_pressure/system_memory_pressure_evaluator.h"
 
@@ -50,7 +51,11 @@ class SystemMemoryPressureEvaluator
   void OnMemoryPressureChanged();
 
   // The dispatch source that generates memory pressure change notifications.
-  base::ScopedDispatchObject<dispatch_source_t> memory_level_event_source_;
+  base::apple::ScopedDispatchObject<dispatch_source_t>
+      memory_level_event_source_;
+
+  // Timer that will re-notify with the current vote at regular interval.
+  base::RepeatingTimer renotify_current_vote_timer_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 

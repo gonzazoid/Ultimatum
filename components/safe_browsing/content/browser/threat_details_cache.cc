@@ -8,7 +8,7 @@
 
 #include <stdint.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/hash/md5.h"
 #include "base/lazy_instance.h"
 #include "base/strings/string_util.h"
@@ -18,6 +18,7 @@
 #include "net/base/ip_endpoint.h"
 #include "net/base/load_flags.h"
 #include "net/base/net_errors.h"
+#include "net/base/proxy_chain.h"
 #include "net/http/http_response_headers.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/resource_request.h"
@@ -89,7 +90,8 @@ void ThreatDetailsCacheCollector::OpenEntry() {
             "This request fetches different items from safe browsing cache "
             "and DOES NOT make an actual network request."
           trigger:
-            "When safe browsing extended report is collecting data."
+            "When safe browsing extended report is collecting data. Triggered "
+            "also when HaTS surveys are enabled."
           data:
             "None"
           destination: OTHER
@@ -101,7 +103,8 @@ void ThreatDetailsCacheCollector::OpenEntry() {
             "security incident reports to Google via disabling 'Automatically "
             "report details of possible security incidents to Google.' in "
             "Chrome's settings under Advanced Settings, Privacy. The feature "
-            "is disabled by default."
+            "is disabled by default. Note: if a user takes a survey related "
+            "to security or safety, this feature may be enabled."
           chrome_policy {
             SafeBrowsingExtendedReportingEnabled {
               policy_options {mode: MANDATORY}
@@ -200,8 +203,8 @@ void ThreatDetailsCacheCollector::ReadResponse(
   }
 
   bool was_fetched_via_proxy =
-      current_load_->ResponseInfo()->proxy_server.is_valid() &&
-      !current_load_->ResponseInfo()->proxy_server.is_direct();
+      current_load_->ResponseInfo()->proxy_chain.IsValid() &&
+      !current_load_->ResponseInfo()->proxy_chain.is_direct();
   if (!was_fetched_via_proxy) {
     pb_response->set_remote_ip(
         current_load_->ResponseInfo()->remote_endpoint.ToString());

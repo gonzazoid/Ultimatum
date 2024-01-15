@@ -8,7 +8,6 @@
 
 #include "base/logging.h"
 #include "base/ranges/algorithm.h"
-#include "base/values.h"
 #include "chrome/test/chromedriver/chrome/devtools_client.h"
 #include "chrome/test/chromedriver/chrome/status.h"
 #include "chrome/test/chromedriver/chrome/web_view_impl.h"
@@ -21,15 +20,15 @@ PageTracker::PageTracker(DevToolsClient* client,
 
 PageTracker::~PageTracker() = default;
 
-Status PageTracker::OnConnected(DevToolsClient* client) {
-  return Status(kOk);
+bool PageTracker::ListensToConnections() const {
+  return false;
 }
 
 Status PageTracker::OnEvent(DevToolsClient* client,
                             const std::string& method,
-                            const base::DictionaryValue& params) {
+                            const base::Value::Dict& params) {
   if (method == "Target.detachedFromTarget") {
-    const std::string* target_id = params.GetDict().FindString("targetId");
+    const std::string* target_id = params.FindString("targetId");
     if (!target_id)
       // Some types of Target.detachedFromTarget events do not have targetId.
       // We are not interested in those types of targets.

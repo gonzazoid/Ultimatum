@@ -4,17 +4,26 @@
 #include <libxml/xmlerror.h>
 #include <libxml/xmlversion.h>
 
-void
+struct _xmlNode;
+
+XML_HIDDEN int
+xmlVRaiseError(xmlStructuredErrorFunc schannel,
+               xmlGenericErrorFunc channel, void *data, void *ctx,
+               void *nod, int domain, int code, xmlErrorLevel level,
+               const char *file, int line, const char *str1,
+               const char *str2, const char *str3, int int1, int col,
+               const char *msg, va_list ap);
+XML_HIDDEN int
 __xmlRaiseError(xmlStructuredErrorFunc schannel,
                 xmlGenericErrorFunc channel, void *data, void *ctx,
                 void *nod, int domain, int code, xmlErrorLevel level,
                 const char *file, int line, const char *str1,
                 const char *str2, const char *str3, int int1, int col,
 	        const char *msg, ...) LIBXML_ATTR_FORMAT(16,17);
-void
-__xmlSimpleError(int domain, int code, xmlNodePtr node,
+XML_HIDDEN void
+__xmlSimpleError(int domain, int code, struct _xmlNode *node,
                  const char *msg, const char *extra) LIBXML_ATTR_FORMAT(4,0);
-void
+XML_HIDDEN void
 xmlGenericErrorDefaultFunc(void *ctx, const char *msg,
                            ...) LIBXML_ATTR_FORMAT(2,3);
 

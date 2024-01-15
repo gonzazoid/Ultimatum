@@ -10,17 +10,18 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_piece.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/certificate_provider/certificate_provider.h"
+#include "extensions/common/extension_id.h"
 #include "net/base/net_errors.h"
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -35,14 +36,14 @@ namespace {
 void PostSignResult(net::SSLPrivateKey::SignCallback callback,
                     net::Error error,
                     const std::vector<uint8_t>& signature) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), error, signature));
 }
 
 void PostIdentities(
     base::OnceCallback<void(net::ClientCertIdentityList)> callback,
     net::ClientCertIdentityList certs) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(certs)));
 }
 
@@ -91,7 +92,7 @@ class CertificateProviderService::SSLPrivateKey : public net::SSLPrivateKey {
  private:
   ~SSLPrivateKey() override;
 
-  const std::string extension_id_;
+  const extensions::ExtensionId extension_id_;
   const CertificateInfo cert_info_;
   const base::WeakPtr<CertificateProviderService> service_;
   SEQUENCE_CHECKER(sequence_checker_);
@@ -245,7 +246,7 @@ void CertificateProviderService::SetCertificatesProvidedByExtension(
   // Synchronize with Ash-Chrome
   chromeos::LacrosService* service = chromeos::LacrosService::Get();
   if (service && service->IsAvailable<crosapi::mojom::CertDatabase>() &&
-      service->GetInterfaceVersion(crosapi::mojom::CertDatabase::Uuid_) >=
+      service->GetInterfaceVersion<crosapi::mojom::CertDatabase>() >=
           static_cast<int>(crosapi::mojom::CertDatabase::MethodMinVersions::
                                kSetCertsProvidedByExtensionMinVersion)) {
     service->GetRemote<crosapi::mojom::CertDatabase>()

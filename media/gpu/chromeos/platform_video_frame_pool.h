@@ -10,9 +10,9 @@
 #include <map>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/circular_deque.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequenced_task_runner.h"
@@ -47,7 +47,6 @@ class MEDIA_GPU_EXPORT PlatformVideoFramePool : public DmabufVideoFramePool {
 
   // DmabufVideoFramePool implementation.
   PlatformVideoFramePool* AsPlatformVideoFramePool() override;
-
   CroStatus::Or<GpuBufferLayout> Initialize(const Fourcc& fourcc,
                                             const gfx::Size& coded_size,
                                             const gfx::Rect& visible_rect,
@@ -59,6 +58,7 @@ class MEDIA_GPU_EXPORT PlatformVideoFramePool : public DmabufVideoFramePool {
   bool IsExhausted() override;
   void NotifyWhenFrameAvailable(base::OnceClosure cb) override;
   void ReleaseAllFrames() override;
+  absl::optional<GpuBufferLayout> GetGpuBufferLayout() override;
 
   // Returns the original frame of a wrapped frame. We need this method to
   // determine whether the frame returned by GetFrame() is the same one after
@@ -75,7 +75,7 @@ class MEDIA_GPU_EXPORT PlatformVideoFramePool : public DmabufVideoFramePool {
   void SetCustomFrameAllocator(DmabufVideoFramePool::CreateFrameCB allocator);
 
  private:
-  friend class PlatformVideoFramePoolTest;
+  friend class PlatformVideoFramePoolTestBase;
 
   // Thunk to post OnFrameReleased() to |task_runner|.
   // Because this thunk may be called in any thread, We don't want to

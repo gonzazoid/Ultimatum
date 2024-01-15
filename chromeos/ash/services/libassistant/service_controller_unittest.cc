@@ -19,7 +19,6 @@
 #include "chromeos/ash/services/libassistant/test_support/fake_libassistant_factory.h"
 #include "chromeos/assistant/internal/libassistant/shared_headers.h"
 #include "chromeos/assistant/internal/test_support/fake_assistant_manager.h"
-#include "chromeos/assistant/internal/test_support/fake_assistant_manager_internal.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
@@ -35,17 +34,17 @@ using ::testing::StrictMock;
 
 #define EXPECT_NO_CALLS(args...) EXPECT_CALL(args).Times(0)
 
-// Tests if the JSON string contains the given path with the given value
-#define EXPECT_HAS_PATH_WITH_VALUE(config_string, path, expected_value)    \
-  ({                                                                       \
-    absl::optional<base::Value> config =                                   \
-        base::JSONReader::Read(config_string);                             \
-    ASSERT_TRUE(config.has_value());                                       \
-    const base::Value* actual = config->FindPath(path);                    \
-    base::Value expected = base::Value(expected_value);                    \
-    ASSERT_NE(actual, nullptr)                                             \
-        << "Path '" << path << "' not found in config: " << config_string; \
-    EXPECT_EQ(*actual, expected);                                          \
+// Tests if the JSON string contains the given path with the given value.
+#define EXPECT_HAS_PATH_WITH_VALUE(config_string, path, expected_value)        \
+  ({                                                                           \
+    std::optional<base::Value> config = base::JSONReader::Read(config_string); \
+    ASSERT_TRUE(config.has_value());                                           \
+    ASSERT_TRUE(config->is_dict());                                            \
+    const base::Value* actual = config->GetDict().FindByDottedPath(path);      \
+    base::Value expected = base::Value(expected_value);                        \
+    ASSERT_NE(actual, nullptr)                                                 \
+        << "Path '" << path << "' not found in config: " << config_string;     \
+    EXPECT_EQ(*actual, expected);                                              \
   })
 
 std::vector<mojom::AuthenticationTokenPtr> ToVector(
@@ -186,14 +185,17 @@ class AssistantServiceControllerTest : public testing::Test {
   void Start() {
     service_controller().Start();
     libassistant_factory_.assistant_manager().SetMediaManager(&media_manager_);
+
+    // Similuate gRPC heartbeat calls.
+    service_controller().OnServicesStatusChanged(
+        ServicesStatus::ONLINE_BOOTING_UP);
     RunUntilIdle();
   }
 
   void SendOnStartFinished() {
-    auto* device_state_listener =
-        libassistant_factory_.assistant_manager().device_state_listener();
-    ASSERT_NE(device_state_listener, nullptr);
-    device_state_listener->OnStartFinished();
+    // Similuate gRPC heartbeat calls.
+    service_controller().OnServicesStatusChanged(
+        ServicesStatus::ONLINE_ALL_SERVICES_AVAILABLE);
     RunUntilIdle();
   }
 
@@ -245,6 +247,9 @@ void PrintTo(const ServiceState state, std::ostream* stream) {
       return;
     case ServiceState::kStopped:
       *stream << "kStopped";
+      return;
+    case ServiceState::kDisconnected:
+      *stream << "kDisconnected";
       return;
   }
   *stream << "INVALID ServiceState (" << static_cast<int>(state) << ")";
@@ -338,19 +343,6 @@ TEST_F(AssistantServiceControllerTest,
             service_controller().assistant_client()->assistant_manager());
 }
 
-TEST_F(AssistantServiceControllerTest, ShouldBeNoopWhenCallingStartTwice) {
-  // Note: This is the preferred behavior for services exposed through mojom.
-  Initialize();
-  Start();
-
-  StateObserverMock observer;
-  AddStateObserver(&observer);
-
-  EXPECT_NO_CALLS(observer, OnStateChanged);
-
-  Start();
-}
-
 TEST_F(AssistantServiceControllerTest, CallingStopTwiceShouldBeANoop) {
   Initialize();
   Stop();
@@ -411,41 +403,6 @@ TEST_F(AssistantServiceControllerTest,
 
   DestroyServiceController();
   RunUntilIdle();
-}
-
-TEST_F(AssistantServiceControllerTest,
-       ShouldCreateButNotPublishAssistantManagerInternalWhenCallingInitialize) {
-  EXPECT_EQ(nullptr, service_controller().assistant_client());
-
-  Initialize();
-
-  EXPECT_NE(
-      nullptr,
-      service_controller().assistant_client()->assistant_manager_internal());
-}
-
-TEST_F(AssistantServiceControllerTest,
-       ShouldPublishAssistantManagerInternalWhenCallingStart) {
-  Initialize();
-  Start();
-
-  EXPECT_NE(
-      nullptr,
-      service_controller().assistant_client()->assistant_manager_internal());
-}
-
-TEST_F(AssistantServiceControllerTest,
-       ShouldDestroyAssistantManagerInternalWhenCallingStop) {
-  Initialize();
-
-  EXPECT_NE(
-      nullptr,
-      service_controller().assistant_client()->assistant_manager_internal());
-
-  Start();
-  Stop();
-
-  EXPECT_EQ(nullptr, service_controller().assistant_client());
 }
 
 TEST_F(AssistantServiceControllerTest,

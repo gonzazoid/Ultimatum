@@ -12,7 +12,7 @@
 #include "components/autofill/core/browser/webdata/autofill_webdata_service.h"
 #include "components/browser_sync/browser_sync_client.h"
 #include "components/browser_sync/sync_api_component_factory_impl.h"
-#include "components/password_manager/core/browser/password_store_interface.h"
+#include "components/password_manager/core/browser/password_store/password_store_interface.h"
 #include "ios/web_view/internal/web_view_browser_state.h"
 
 namespace ios_web_view {
@@ -31,7 +31,6 @@ class WebViewSyncClient : public browser_sync::BrowserSyncClient {
       signin::IdentityManager* identity_manager,
       syncer::ModelTypeStoreService* model_type_store_service,
       syncer::DeviceInfoSyncService* device_info_sync_service,
-      invalidation::InvalidationService* invalidation_service,
       syncer::SyncInvalidationsService* sync_invalidations_service);
 
   WebViewSyncClient(const WebViewSyncClient&) = delete;
@@ -47,20 +46,23 @@ class WebViewSyncClient : public browser_sync::BrowserSyncClient {
   syncer::DeviceInfoSyncService* GetDeviceInfoSyncService() override;
   favicon::FaviconService* GetFaviconService() override;
   history::HistoryService* GetHistoryService() override;
+  ReadingListModel* GetReadingListModel() override;
   send_tab_to_self::SendTabToSelfSyncService* GetSendTabToSelfSyncService()
       override;
   sync_preferences::PrefServiceSyncable* GetPrefServiceSyncable() override;
   sync_sessions::SessionSyncService* GetSessionSyncService() override;
+  password_manager::PasswordReceiverService* GetPasswordReceiverService()
+      override;
+  password_manager::PasswordSenderService* GetPasswordSenderService() override;
   syncer::DataTypeController::TypeVector CreateDataTypeControllers(
       syncer::SyncService* sync_service) override;
-  invalidation::InvalidationService* GetInvalidationService() override;
   syncer::SyncInvalidationsService* GetSyncInvalidationsService() override;
-  syncer::TrustedVaultClient* GetTrustedVaultClient() override;
+  trusted_vault::TrustedVaultClient* GetTrustedVaultClient() override;
   scoped_refptr<syncer::ExtensionsActivity> GetExtensionsActivity() override;
   base::WeakPtr<syncer::ModelTypeControllerDelegate>
   GetControllerDelegateForModelType(syncer::ModelType type) override;
   syncer::SyncApiComponentFactory* GetSyncApiComponentFactory() override;
-  syncer::SyncTypePreferenceProvider* GetPreferenceProvider() override;
+  bool IsCustomPassphraseAllowed() override;
   void OnLocalSyncTransportDataCleared() override;
 
  private:
@@ -72,11 +74,10 @@ class WebViewSyncClient : public browser_sync::BrowserSyncClient {
   signin::IdentityManager* identity_manager_;
   syncer::ModelTypeStoreService* model_type_store_service_;
   syncer::DeviceInfoSyncService* device_info_sync_service_;
-  invalidation::InvalidationService* invalidation_service_;
   syncer::SyncInvalidationsService* sync_invalidations_service_;
 
   std::unique_ptr<browser_sync::SyncApiComponentFactoryImpl> component_factory_;
-  std::unique_ptr<syncer::TrustedVaultClient> trusted_vault_client_;
+  std::unique_ptr<trusted_vault::TrustedVaultClient> trusted_vault_client_;
 };
 
 }  // namespace ios_web_view

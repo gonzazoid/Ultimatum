@@ -5,16 +5,31 @@
 #include "chrome/browser/apps/app_preload_service/app_preload_service.h"
 
 #include <memory>
+#include <vector>
 
-#include "base/bind.h"
+#include "base/auto_reset.h"
+#include "base/check_is_test.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/metrics/histogram_functions.h"
+#include "base/ranges/algorithm.h"
+#include "base/strings/strcat.h"
+#include "base/time/time.h"
+#include "chrome/browser/apps/almanac_api_client/device_info_manager.h"
 #include "chrome/browser/apps/app_preload_service/app_preload_service_factory.h"
-#include "chrome/browser/apps/app_preload_service/device_info_manager.h"
 #include "chrome/browser/apps/app_preload_service/preload_app_definition.h"
+#include "chrome/browser/apps/app_service/app_install/web_app_installer.h"
+#include "chrome/browser/apps/app_service/app_service_proxy.h"
+#include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
+#include "components/services/app_service/public/cpp/app_types.h"
+#include "components/services/app_service/public/cpp/types_util.h"
+#include "components/user_manager/user_manager.h"
 
 namespace {
 
@@ -22,13 +37,26 @@ namespace {
 // {
 //  ...
 //  "apps.app_preload_service.state_manager": {
-//    first_run_completed: <bool>,
+//    "first_login_flow_started": <bool>,
+//    "first_login_flow_completed": <bool>
 //  },
 //  ...
 // }
 
+static constexpr char kFirstLoginFlowStartedKey[] = "first_login_flow_started";
 static constexpr char kFirstLoginFlowCompletedKey[] =
     "first_login_flow_completed";
+
+static constexpr char kFirstLoginFlowHistogramSuccessName[] =
+    "AppPreloadService.FirstLoginFlowTime.Success";
+static constexpr char kFirstLoginFlowHistogramFailureName[] =
+    "AppPreloadService.FirstLoginFlowTime.Failure";
+
+bool AreTestAppsEnabled() {
+  return base::FeatureList::IsEnabled(apps::kAppPreloadServiceEnableTestApps);
+}
+
+bool g_disable_preloads_on_startup_for_testing_ = false;
 
 }  // namespace
 
@@ -39,19 +67,24 @@ static constexpr char kApsStateManager[] =
     "apps.app_preload_service.state_manager";
 }  // namespace prefs
 
+BASE_FEATURE(kAppPreloadServiceForceRun,
+             "AppPreloadServiceForceRun",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kAppPreloadServiceEnableTestApps,
+             "AppPreloadServiceEnableTestApps",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
 AppPreloadService::AppPreloadService(Profile* profile)
     : profile_(profile),
       server_connector_(std::make_unique<AppPreloadServerConnector>()),
-      device_info_manager_(std::make_unique<DeviceInfoManager>(profile)) {
-  // Check to see if the service has been run before.
-  auto is_first_run = GetStateManager().FindBool(kFirstLoginFlowCompletedKey);
-  if (is_first_run == absl::nullopt) {
-    // the first run completed key has not been set, kick off the initial app
-    // installation flow.
-    device_info_manager_->GetDeviceInfo(
-        base::BindOnce(&AppPreloadService::StartAppInstallationForFirstLogin,
-                       weak_ptr_factory_.GetWeakPtr()));
+      device_info_manager_(std::make_unique<DeviceInfoManager>(profile)),
+      web_app_installer_(std::make_unique<WebAppInstaller>(profile)) {
+  if (g_disable_preloads_on_startup_for_testing_) {
+    return;
   }
+
+  StartFirstLoginFlow();
 }
 
 AppPreloadService::~AppPreloadService() = default;
@@ -67,22 +100,135 @@ void AppPreloadService::RegisterProfilePrefs(
   registry->RegisterDictionaryPref(prefs::kApsStateManager);
 }
 
+void AppPreloadService::StartFirstLoginFlowForTesting(
+    PreloadStatusCallback callback) {
+  installation_complete_callback_ = std::move(callback);
+  StartFirstLoginFlow();
+}
+
+// static
+base::AutoReset<bool> AppPreloadService::DisablePreloadsOnStartupForTesting() {
+  return base::AutoReset<bool>(&g_disable_preloads_on_startup_for_testing_,
+                               true);
+}
+
+void AppPreloadService::StartFirstLoginFlow() {
+  auto start_time = base::TimeTicks::Now();
+
+  // Preloads currently run for new users only. The "completed" pref is only set
+  // when preloads finish successfully, so preloads will be retried if they have
+  // been "started" but never "completed".
+  if (user_manager::UserManager::Get()->IsCurrentUserNew()) {
+    ScopedDictPrefUpdate(profile_->GetPrefs(), prefs::kApsStateManager)
+        ->Set(kFirstLoginFlowStartedKey, true);
+  }
+
+  bool first_run_started =
+      GetStateManager().FindBool(kFirstLoginFlowStartedKey).value_or(false);
+  bool first_run_complete =
+      GetStateManager().FindBool(kFirstLoginFlowCompletedKey).value_or(false);
+
+  if ((first_run_started && !first_run_complete) ||
+      base::FeatureList::IsEnabled(kAppPreloadServiceForceRun)) {
+    device_info_manager_->GetDeviceInfo(
+        base::BindOnce(&AppPreloadService::StartAppInstallationForFirstLogin,
+                       weak_ptr_factory_.GetWeakPtr(), start_time));
+  }
+}
+
 void AppPreloadService::StartAppInstallationForFirstLogin(
+    base::TimeTicks start_time,
     DeviceInfo device_info) {
+  scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory =
+      profile_->GetURLLoaderFactory();
+  if (!url_loader_factory.get()) {
+    // `url_loader_factory` should only be null if we are in a non-preload
+    // related test. Tests that use profile builder to create their profile
+    // won't have `url_loader_factory` set up by default, so we bypass preloads
+    // code being called for those tests.
+    CHECK_IS_TEST();
+    return;
+  }
   server_connector_->GetAppsForFirstLogin(
-      device_info, profile_->GetURLLoaderFactory(),
+      device_info, url_loader_factory,
       base::BindOnce(&AppPreloadService::OnGetAppsForFirstLoginCompleted,
-                     weak_ptr_factory_.GetWeakPtr()));
+                     weak_ptr_factory_.GetWeakPtr(), start_time));
 }
 
 void AppPreloadService::OnGetAppsForFirstLoginCompleted(
-    std::vector<PreloadAppDefinition> apps) {
-  ScopedDictPrefUpdate(profile_->GetPrefs(), prefs::kApsStateManager)
-      ->Set(kFirstLoginFlowCompletedKey, true);
-
-  if (check_first_pref_set_callback_) {
-    std::move(check_first_pref_set_callback_).Run();
+    base::TimeTicks start_time,
+    std::optional<std::vector<PreloadAppDefinition>> apps) {
+  if (!apps.has_value()) {
+    OnFirstLoginFlowComplete(start_time, /*success=*/false);
+    return;
   }
+
+  std::vector<WebAppInstaller::InstallRequest> requests;
+  for (const PreloadAppDefinition& app : apps.value()) {
+    if (ShouldInstallApp(app)) {
+      requests.push_back({
+          .surface = app.GetInstallSurface(),
+          .data = app.ToAppInstallData(),
+      });
+    }
+  }
+
+  web_app_installer_->InstallAllApps(
+      std::move(requests),
+      base::BindOnce(&AppPreloadService::OnFirstLoginFlowComplete,
+                     weak_ptr_factory_.GetWeakPtr(), start_time));
+}
+
+void AppPreloadService::OnFirstLoginFlowComplete(base::TimeTicks start_time,
+                                                 bool success) {
+  if (success) {
+    ScopedDictPrefUpdate(profile_->GetPrefs(), prefs::kApsStateManager)
+        ->Set(kFirstLoginFlowCompletedKey, true);
+  }
+
+  base::UmaHistogramMediumTimes(success ? kFirstLoginFlowHistogramSuccessName
+                                        : kFirstLoginFlowHistogramFailureName,
+                                base::TimeTicks::Now() - start_time);
+
+  if (installation_complete_callback_) {
+    std::move(installation_complete_callback_).Run(success);
+  }
+}
+
+bool AppPreloadService::ShouldInstallApp(const PreloadAppDefinition& app) {
+  // We currently only preload web apps.
+  if (app.GetPlatform() != AppType::kWeb) {
+    return false;
+  }
+
+  // We currently install apps which were requested by the device OEM or
+  // installed by default (i.e. by Google). If the testing feature is enabled,
+  // also install test apps.
+  bool install_reason_allowed = app.IsOemApp() || app.IsDefaultApp() ||
+                                (app.IsTestApp() && AreTestAppsEnabled());
+  if (!install_reason_allowed) {
+    return false;
+  }
+
+  // If the app is already installed with the relevant install reason, we do not
+  // need to reinstall it. This avoids extra work in the case where we are
+  // retrying the flow after an install error for a different app.
+  InstallReason expected_reason =
+      app.IsDefaultApp() ? InstallReason::kDefault : InstallReason::kOem;
+  AppServiceProxy* proxy = AppServiceProxyFactory::GetForProfile(profile_);
+  bool installed = false;
+
+  proxy->AppRegistryCache().ForOneApp(
+      app.GetWebAppId(), [&installed, expected_reason](const AppUpdate& app) {
+        // It's possible that if APS requests the same app to be installed for
+        // multiple reasons, this check could incorrectly return false, as App
+        // Service only reports the highest priority install reason. This is
+        // acceptable since the check is just an optimization.
+        installed = apps_util::IsInstalled(app.Readiness()) &&
+                    app.InstallReason() == expected_reason;
+      });
+
+  return !installed;
 }
 
 const base::Value::Dict& AppPreloadService::GetStateManager() const {

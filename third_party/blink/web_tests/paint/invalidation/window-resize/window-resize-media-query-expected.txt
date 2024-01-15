@@ -24,10 +24,7 @@
       "name": "Scrolling background of LayoutView #document",
       "bounds": [400, 600],
       "contentsOpaque": true,
-      "backgroundColor": "#0000FF",
-      "invalidations": [
-        [0, 250, 400, 350]
-      ]
+      "backgroundColor": "#0000FF"
     }
   ]
 }
@@ -37,10 +34,7 @@
       "name": "Scrolling background of LayoutView #document",
       "bounds": [800, 600],
       "contentsOpaque": true,
-      "backgroundColor": "#0000FF",
-      "invalidations": [
-        [400, 0, 400, 600]
-      ]
+      "backgroundColor": "#0000FF"
     }
   ]
 }

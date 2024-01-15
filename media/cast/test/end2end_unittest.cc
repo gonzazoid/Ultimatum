@@ -13,13 +13,14 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/sys_byteorder.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "base/test/task_environment.h"
 #include "base/time/tick_clock.h"
@@ -27,6 +28,7 @@
 #include "build/build_config.h"
 #include "media/base/audio_bus.h"
 #include "media/base/fake_single_thread_task_runner.h"
+#include "media/base/mock_filters.h"
 #include "media/base/video_frame.h"
 #include "media/cast/cast_config.h"
 #include "media/cast/cast_environment.h"
@@ -424,7 +426,7 @@ class End2EndTest : public ::testing::Test {
     audio_sender_config_.receiver_ssrc = 2;
     audio_sender_config_.max_playout_delay = kTargetPlayoutDelay;
     audio_sender_config_.rtp_payload_type = RtpPayloadType::AUDIO_OPUS;
-    audio_sender_config_.use_external_encoder = false;
+    audio_sender_config_.use_hardware_encoder = false;
     audio_sender_config_.rtp_timebase = kDefaultAudioSamplingRate;
     audio_sender_config_.channels = kAudioChannels;
     audio_sender_config_.max_bitrate = kDefaultAudioEncoderBitrate;
@@ -450,14 +452,15 @@ class End2EndTest : public ::testing::Test {
     test_receiver_audio_callback_->SetExpectedSamplingFrequency(
         audio_receiver_config_.rtp_timebase);
 
-    if (video_codec == CODEC_VIDEO_FAKE)
+    if (video_codec == Codec::kVideoFake) {
       video_sender_config_.enable_fake_codec_for_tests = true;
+    }
 
     video_sender_config_.sender_ssrc = 3;
     video_sender_config_.receiver_ssrc = 4;
     video_sender_config_.max_playout_delay = kTargetPlayoutDelay;
     video_sender_config_.rtp_payload_type = RtpPayloadType::VIDEO_VP8;
-    video_sender_config_.use_external_encoder = false;
+    video_sender_config_.use_hardware_encoder = false;
     video_sender_config_.rtp_timebase = kVideoFrequency;
     video_sender_config_.max_bitrate = 50000;
     video_sender_config_.min_bitrate = 10000;
@@ -550,10 +553,11 @@ class End2EndTest : public ::testing::Test {
   }
 
   gfx::Size GetTestVideoFrameSize() const {
-    if (video_sender_config_.codec == CODEC_VIDEO_FAKE)
+    if (video_sender_config_.codec == Codec::kVideoFake) {
       return gfx::Size(2, 2);
-    else
+    } else {
       return gfx::Size(kVideoWidth, kVideoHeight);
+    }
   }
 
   void SendVideoFrame(int frame_number, base::TimeTicks reference_time) {
@@ -561,7 +565,7 @@ class End2EndTest : public ::testing::Test {
       start_time_ = reference_time;
     const base::TimeDelta time_diff = reference_time - start_time_;
     scoped_refptr<media::VideoFrame> video_frame;
-    if (video_sender_config_.codec == CODEC_VIDEO_FAKE) {
+    if (video_sender_config_.codec == Codec::kVideoFake) {
       video_frame =
           media::VideoFrame::CreateBlackFrame(GetTestVideoFrameSize());
     } else {
@@ -591,7 +595,7 @@ class End2EndTest : public ::testing::Test {
       // examine the first audio frame's data receiver-side.
       const bool verify_audio_data =
           audio_frames_sent > 0 ||
-          audio_sender_config_.codec == CODEC_AUDIO_PCM16;
+          audio_sender_config_.codec == Codec::kAudioPcm16;
       FeedAudioFrames(1, verify_audio_data);
       ++audio_frames_sent;
 
@@ -614,7 +618,7 @@ class End2EndTest : public ::testing::Test {
         cast_receiver_->RequestDecodedVideoFrame(base::BindRepeating(
             &TestReceiverVideoCallback::CheckVideoFrame,
             test_receiver_video_callback_,
-            video_sender_config_.codec != CODEC_VIDEO_FAKE));
+            video_sender_config_.codec != Codec::kVideoFake));
       }
     }
 
@@ -833,11 +837,11 @@ class End2EndTest : public ::testing::Test {
   scoped_refptr<CastEnvironment> cast_environment_sender_;
   scoped_refptr<CastEnvironment> cast_environment_receiver_;
 
-  raw_ptr<LoopBackTransport> receiver_to_sender_;  // Owned by CastTransport.
-  raw_ptr<LoopBackTransport> sender_to_receiver_;  // Owned by CastTransport.
-
   std::unique_ptr<CastTransportImpl> transport_sender_;
   std::unique_ptr<CastTransportImpl> transport_receiver_;
+
+  raw_ptr<LoopBackTransport> receiver_to_sender_;  // Owned by CastTransport.
+  raw_ptr<LoopBackTransport> sender_to_receiver_;  // Owned by CastTransport.
 
   std::unique_ptr<CastReceiver> cast_receiver_;
   std::unique_ptr<CastSender> cast_sender_;
@@ -915,6 +919,7 @@ void End2EndTest::Create() {
       audio_sender_config_, base::BindOnce(&ExpectSuccessOperationalStatus));
   cast_sender_->InitializeVideo(
       video_sender_config_,
+      std::make_unique<media::MockVideoEncoderMetricsProvider>(),
       base::BindRepeating(&ExpectSuccessOperationalStatus), base::DoNothing());
   task_runner_->RunTasks();
 
@@ -934,7 +939,7 @@ void End2EndTest::Create() {
 }
 
 TEST_F(End2EndTest, LoopWithLosslessEncoding) {
-  Configure(CODEC_VIDEO_FAKE, CODEC_AUDIO_PCM16);
+  Configure(Codec::kVideoFake, Codec::kAudioPcm16);
   Create();
 
   const auto frames_sent = RunAudioVideoLoop(base::Seconds(3));
@@ -946,7 +951,7 @@ TEST_F(End2EndTest, LoopWithLosslessEncoding) {
 }
 
 TEST_F(End2EndTest, LoopWithLossyEncoding) {
-  Configure(CODEC_VIDEO_VP8, CODEC_AUDIO_OPUS);
+  Configure(Codec::kVideoVp8, Codec::kAudioOpus);
   Create();
 
   const auto frames_sent = RunAudioVideoLoop(base::Seconds(1));
@@ -967,7 +972,7 @@ TEST_F(End2EndTest, LoopWithLossyEncoding) {
 // in audio_receiver.cc for likely cause(s) of this bug.
 // http://crbug.com/573126 (history: http://crbug.com/314233)
 TEST_F(End2EndTest, DISABLED_StartSenderBeforeReceiver) {
-  Configure(CODEC_VIDEO_FAKE, CODEC_AUDIO_PCM16);
+  Configure(Codec::kVideoFake, Codec::kAudioPcm16);
   Create();
 
   int frame_number = 0;
@@ -1035,7 +1040,7 @@ TEST_F(End2EndTest, DISABLED_StartSenderBeforeReceiver) {
     cast_receiver_->RequestDecodedVideoFrame(
         base::BindRepeating(&TestReceiverVideoCallback::CheckVideoFrame,
                             test_receiver_video_callback_,
-                            video_sender_config_.codec != CODEC_VIDEO_FAKE));
+                            video_sender_config_.codec != Codec::kVideoFake));
 
     RunTasks(kFrameTimerInterval - kAudioFrameDuration);
     audio_diff += kFrameTimerInterval.InMilliseconds();
@@ -1048,7 +1053,7 @@ TEST_F(End2EndTest, DISABLED_StartSenderBeforeReceiver) {
 }
 
 TEST_F(End2EndTest, BasicFakeSoftwareVideo) {
-  Configure(CODEC_VIDEO_FAKE, CODEC_AUDIO_PCM16);
+  Configure(Codec::kVideoFake, Codec::kAudioPcm16);
   Create();
   StartBasicPlayer();
   SetReceiverSkew(1.0, base::Milliseconds(1));
@@ -1083,7 +1088,7 @@ const int kLongTestIterations = 1000;
 #endif
 
 TEST_F(End2EndTest, ReceiverClockFast) {
-  Configure(CODEC_VIDEO_FAKE, CODEC_AUDIO_PCM16);
+  Configure(Codec::kVideoFake, Codec::kAudioPcm16);
   Create();
   StartBasicPlayer();
   SetReceiverSkew(2.0, base::Microseconds(1234567));
@@ -1099,7 +1104,7 @@ TEST_F(End2EndTest, ReceiverClockFast) {
 }
 
 TEST_F(End2EndTest, ReceiverClockSlow) {
-  Configure(CODEC_VIDEO_FAKE, CODEC_AUDIO_PCM16);
+  Configure(Codec::kVideoFake, Codec::kAudioPcm16);
   Create();
   StartBasicPlayer();
   SetReceiverSkew(0.5, base::Microseconds(-765432));
@@ -1115,7 +1120,7 @@ TEST_F(End2EndTest, ReceiverClockSlow) {
 }
 
 TEST_F(End2EndTest, SmoothPlayoutWithFivePercentClockRateSkew) {
-  Configure(CODEC_VIDEO_FAKE, CODEC_AUDIO_PCM16);
+  Configure(Codec::kVideoFake, Codec::kAudioPcm16);
   Create();
   StartBasicPlayer();
   SetReceiverSkew(1.05, base::Milliseconds(-42));
@@ -1136,7 +1141,7 @@ TEST_F(End2EndTest, SmoothPlayoutWithFivePercentClockRateSkew) {
 }
 
 TEST_F(End2EndTest, EvilNetwork) {
-  Configure(CODEC_VIDEO_FAKE, CODEC_AUDIO_PCM16);
+  Configure(Codec::kVideoFake, Codec::kAudioPcm16);
   receiver_to_sender_->SetPacketPipe(test::EvilNetwork());
   sender_to_receiver_->SetPacketPipe(test::EvilNetwork());
   Create();
@@ -1159,7 +1164,7 @@ TEST_F(End2EndTest, EvilNetwork) {
 // Tests that a system configured for 30 FPS drops frames when input is provided
 // at a much higher frame rate.
 TEST_F(End2EndTest, ShoveHighFrameRateDownYerThroat) {
-  Configure(CODEC_VIDEO_FAKE, CODEC_AUDIO_PCM16);
+  Configure(Codec::kVideoFake, Codec::kAudioPcm16);
   receiver_to_sender_->SetPacketPipe(test::EvilNetwork());
   sender_to_receiver_->SetPacketPipe(test::EvilNetwork());
   Create();
@@ -1192,7 +1197,7 @@ TEST_F(End2EndTest, ShoveHighFrameRateDownYerThroat) {
 }
 
 TEST_F(End2EndTest, OldPacketNetwork) {
-  Configure(CODEC_VIDEO_FAKE, CODEC_AUDIO_PCM16);
+  Configure(Codec::kVideoFake, Codec::kAudioPcm16);
   sender_to_receiver_->SetPacketPipe(test::NewRandomDrop(0.01));
   std::unique_ptr<test::PacketPipe> echo_chamber(
       test::NewDuplicateAndDelay(1, 10 * kFrameTimerInterval.InMilliseconds()));
@@ -1225,7 +1230,7 @@ TEST_F(End2EndTest, OldPacketNetwork) {
 }
 
 TEST_F(End2EndTest, TestSetPlayoutDelay) {
-  Configure(CODEC_VIDEO_FAKE, CODEC_AUDIO_PCM16);
+  Configure(Codec::kVideoFake, Codec::kAudioPcm16);
   video_sender_config_.min_playout_delay =
       video_sender_config_.max_playout_delay;
   audio_sender_config_.min_playout_delay =

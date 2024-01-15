@@ -10,7 +10,6 @@
 #include "build/build_config.h"
 #include "components/infobars/core/infobar_delegate.h"
 #include "components/infobars/core/infobar_manager.h"
-#include "ui/base/models/image_model.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/text_constants.h"
 
@@ -18,14 +17,19 @@ namespace infobars {
 class InfoBar;
 }
 
+namespace ui {
+class ImageModel;
+}
+
 // An interface derived from InfoBarDelegate implemented by objects wishing to
 // control a ConfirmInfoBar.
 class ConfirmInfoBarDelegate : public infobars::InfoBarDelegate {
  public:
   enum InfoBarButton {
-    BUTTON_NONE   = 0,
-    BUTTON_OK     = 1 << 0,
+    BUTTON_NONE = 0,
+    BUTTON_OK = 1 << 0,
     BUTTON_CANCEL = 1 << 1,
+    BUTTON_EXTRA = 1 << 2,
   };
 
   ConfirmInfoBarDelegate(const ConfirmInfoBarDelegate&) = delete;
@@ -69,10 +73,6 @@ class ConfirmInfoBarDelegate : public infobars::InfoBarDelegate {
   // returns an empty tooltip.
   virtual std::u16string GetButtonTooltip(InfoBarButton button) const;
 
-  // Returns whether or not the OK button will trigger a UAC elevation prompt on
-  // Windows.
-  virtual bool OKButtonTriggersUACPrompt() const;
-
 #if BUILDFLAG(IS_IOS)
   // Returns whether or not a tint should be applied to the icon background.
   // Defaults to true.
@@ -88,6 +88,11 @@ class ConfirmInfoBarDelegate : public infobars::InfoBarDelegate {
   // the infobar is then immediately closed. Subclasses MUST NOT return true if
   // in handling this call something triggers the infobar to begin closing.
   virtual bool Cancel();
+
+  // Called when the Extra button is pressed. If this function returns true,
+  // the infobar is then immediately closed. Subclasses MUST NOT return true if
+  // in handling this call something triggers the infobar to begin closing.
+  virtual bool ExtraButtonPressed();
 
  protected:
   ConfirmInfoBarDelegate();

@@ -6,13 +6,16 @@ package org.chromium.chrome.browser.signin;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.view.View;
 
 import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
 
+import org.chromium.base.BuildInfo;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.chrome.browser.settings.SettingsLauncherImpl;
 import org.chromium.chrome.browser.sync.settings.ManageSyncSettings;
+import org.chromium.chrome.browser.ui.signin.SyncConsentDelegate;
 import org.chromium.chrome.browser.ui.signin.SyncConsentFragmentBase;
 import org.chromium.components.browser_ui.settings.SettingsLauncher;
 import org.chromium.components.signin.metrics.SigninAccessPoint;
@@ -25,8 +28,12 @@ public class SyncConsentFragment extends SyncConsentFragmentBase {
     private static final String ARGUMENT_PERSONALIZED_PROMO_ACTION =
             "SyncConsentFragment.PersonalizedPromoAction";
 
-    @IntDef({PromoAction.NONE, PromoAction.WITH_DEFAULT, PromoAction.NOT_DEFAULT,
-            PromoAction.NEW_ACCOUNT})
+    @IntDef({
+        PromoAction.NONE,
+        PromoAction.WITH_DEFAULT,
+        PromoAction.NOT_DEFAULT,
+        PromoAction.NEW_ACCOUNT
+    })
     @Retention(RetentionPolicy.SOURCE)
     public @interface PromoAction {
         int NONE = 0;
@@ -57,8 +64,9 @@ public class SyncConsentFragment extends SyncConsentFragmentBase {
      */
     public static Bundle createArgumentsForPromoChooseAccountFlow(
             @SigninAccessPoint int accessPoint, String accountName) {
-        Bundle result = SyncConsentFragmentBase.createArgumentsForChooseAccountFlow(
-                accessPoint, accountName);
+        Bundle result =
+                SyncConsentFragmentBase.createArgumentsForChooseAccountFlow(
+                        accessPoint, accountName);
         result.putInt(ARGUMENT_PERSONALIZED_PROMO_ACTION, PromoAction.NOT_DEFAULT);
         return result;
     }
@@ -95,7 +103,9 @@ public class SyncConsentFragment extends SyncConsentFragmentBase {
     protected void closeAndMaybeOpenSyncSettings(boolean settingsClicked) {
         if (settingsClicked) {
             SettingsLauncher settingsLauncher = new SettingsLauncherImpl();
-            settingsLauncher.launchSettingsActivity(getActivity(), ManageSyncSettings.class,
+            settingsLauncher.launchSettingsActivity(
+                    getActivity(),
+                    ManageSyncSettings.class,
                     ManageSyncSettings.createArguments(true));
         }
 
@@ -155,5 +165,28 @@ public class SyncConsentFragment extends SyncConsentFragmentBase {
 
         RecordHistogram.recordEnumeratedHistogram(
                 histogram, mSigninAccessPoint, SigninAccessPoint.MAX);
+    }
+
+    @Override
+    protected void onAcceptButtonClicked(View button) {
+        if (BuildInfo.getInstance().isAutomotive) {
+            super.displayDeviceLockPage(() -> super.onAcceptButtonClicked(button));
+            return;
+        }
+        super.onAcceptButtonClicked(button);
+    }
+
+    @Override
+    protected void onSettingsLinkClicked(View button) {
+        if (BuildInfo.getInstance().isAutomotive) {
+            super.displayDeviceLockPage(() -> super.onSettingsLinkClicked(button));
+            return;
+        }
+        super.onSettingsLinkClicked(button);
+    }
+
+    @Override
+    protected SyncConsentDelegate getDelegate() {
+        return (SyncConsentDelegate) getActivity();
     }
 }

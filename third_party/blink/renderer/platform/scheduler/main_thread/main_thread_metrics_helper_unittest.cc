@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_metrics_helper.h"
 
 #include <memory>
+#include "base/memory/raw_ptr.h"
 #include "base/task/sequence_manager/test/fake_task.h"
 #include "base/task/sequence_manager/test/sequence_manager_for_test.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -14,6 +15,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/page/launching_process_state.h"
+#include "third_party/blink/renderer/platform/scheduler/common/task_priority.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/public/frame_scheduler.h"
 #include "third_party/blink/renderer/platform/scheduler/test/fake_frame_scheduler.h"
@@ -45,15 +47,14 @@ class MainThreadMetricsHelperTest : public testing::Test {
   ~MainThreadMetricsHelperTest() override = default;
 
   void SetUp() override {
-    scoped_feature_list_.InitWithFeatures(
-        {} /* enabled_features */,
-        {features::
-             kPurgeRendererMemoryWhenBackgrounded} /* disabled_features */);
     histogram_tester_ = std::make_unique<base::HistogramTester>();
+    auto settings = base::sequence_manager::SequenceManager::Settings::Builder()
+                        .SetPrioritySettings(CreatePrioritySettings())
+                        .Build();
     scheduler_ = std::make_unique<MainThreadSchedulerImpl>(
         base::sequence_manager::SequenceManagerForTest::Create(
             nullptr, task_environment_.GetMainThreadTaskRunner(),
-            task_environment_.GetMockTickClock()));
+            task_environment_.GetMockTickClock(), std::move(settings)));
     metrics_helper_ = &scheduler_->main_thread_only().metrics_helper;
   }
 
@@ -72,45 +73,23 @@ class MainThreadMetricsHelperTest : public testing::Test {
   }
 
   void RunTask(MainThreadTaskQueue::QueueType queue_type,
-               base::TimeTicks start,
-               base::TimeDelta duration) {
-    DCHECK_LE(Now(), start);
-    FastForwardTo(start + duration);
-    scoped_refptr<MainThreadTaskQueueForTest> queue;
+               base::TimeTicks queue_time,
+               base::TimeDelta queue_duration,
+               base::TimeDelta task_duration) {
+    base::TimeTicks start_time = queue_time + queue_duration;
+    base::TimeTicks end_time = start_time + task_duration;
+    FastForwardTo(end_time);
+    scoped_refptr<MainThreadTaskQueue> queue;
     if (queue_type != MainThreadTaskQueue::QueueType::kDetached) {
-      queue = scoped_refptr<MainThreadTaskQueueForTest>(
-          new MainThreadTaskQueueForTest(queue_type));
+      queue = scheduler_->GetHelper().NewTaskQueue(
+          MainThreadTaskQueue::QueueCreationParams(queue_type));
     }
 
-    metrics_helper_->RecordTaskMetrics(queue.get(), FakeTask(),
-                                       FakeTaskTiming(start, start + duration));
+    FakeTask task;
+    task.queue_time = queue_time;
+    metrics_helper_->RecordTaskMetrics(queue.get(), task,
+                                       FakeTaskTiming(start_time, end_time));
   }
-
-  void RunTask(FrameSchedulerImpl* scheduler,
-               base::TimeTicks start,
-               base::TimeDelta duration) {
-    DCHECK_LE(Now(), start);
-    FastForwardTo(start + duration);
-    scoped_refptr<MainThreadTaskQueueForTest> queue(
-        new MainThreadTaskQueueForTest(QueueType::kDefault));
-    queue->SetFrameSchedulerForTest(scheduler);
-    metrics_helper_->RecordTaskMetrics(queue.get(), FakeTask(),
-                                       FakeTaskTiming(start, start + duration));
-  }
-
-  void RunTask(UseCase use_case,
-               base::TimeTicks start,
-               base::TimeDelta duration) {
-    DCHECK_LE(Now(), start);
-    FastForwardTo(start + duration);
-    scoped_refptr<MainThreadTaskQueueForTest> queue(
-        new MainThreadTaskQueueForTest(QueueType::kDefault));
-    scheduler_->SetCurrentUseCaseForTest(use_case);
-    metrics_helper_->RecordTaskMetrics(queue.get(), FakeTask(),
-                                       FakeTaskTiming(start, start + duration));
-  }
-
-  void ForceUpdatePolicy() { scheduler_->ForceUpdatePolicy(); }
 
   std::unique_ptr<FakeFrameScheduler> CreateFakeFrameSchedulerWithType(
       FrameStatus frame_status) {
@@ -220,10 +199,10 @@ class MainThreadMetricsHelperTest : public testing::Test {
     return builder.Build();
   }
 
-  base::test::ScopedFeatureList scoped_feature_list_;
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<MainThreadSchedulerImpl> scheduler_;
-  MainThreadMetricsHelper* metrics_helper_;  // NOT OWNED
+  raw_ptr<MainThreadMetricsHelper, DanglingUntriaged>
+      metrics_helper_;  // NOT OWNED
   std::unique_ptr<base::HistogramTester> histogram_tester_;
   std::unique_ptr<FakePageScheduler> playing_view_ =
       FakePageScheduler::Builder().SetIsAudioPlaying(true).Build();
@@ -248,6 +227,17 @@ TEST_F(MainThreadMetricsHelperTest, GetFrameStatusTest) {
         CreateFakeFrameSchedulerWithType(frame_status);
     EXPECT_EQ(GetFrameStatus(frame.get()), frame_status);
   }
+}
+
+TEST_F(MainThreadMetricsHelperTest, TaskQueueingDelay) {
+  base::TimeTicks queue_time = Now();
+  base::TimeDelta queue_duration = base::Microseconds(11);
+  base::TimeDelta task_duration = base::Microseconds(97);
+  RunTask(MainThreadTaskQueue::QueueType::kDefault, queue_time, queue_duration,
+          task_duration);
+  histogram_tester_->ExpectUniqueSample(
+      "RendererScheduler.QueueingDuration.NormalPriority",
+      queue_duration.InMicroseconds(), 1);
 }
 
 }  // namespace scheduler

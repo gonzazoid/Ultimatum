@@ -5,15 +5,15 @@
 #ifndef CHROME_BROWSER_UI_ASH_SYSTEM_WEB_APPS_SYSTEM_WEB_APP_UI_UTILS_H_
 #define CHROME_BROWSER_UI_ASH_SYSTEM_WEB_APPS_SYSTEM_WEB_APP_UI_UTILS_H_
 
+#include <optional>
 #include <vector>
 
+#include "ash/webui/system_apps/public/system_web_app_type.h"
 #include "base/files/file_path.h"
 #include "chrome/browser/apps/app_service/app_launch_params.h"
-#include "chrome/browser/ash/system_web_apps/types/system_web_app_type.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/webapps/common/web_app_id.h"
 #include "url/gurl.h"
 
 class Profile;
@@ -21,16 +21,16 @@ class Profile;
 namespace ash {
 
 // Returns the system app type for the given App ID.
-absl::optional<SystemWebAppType> GetSystemWebAppTypeForAppId(
+std::optional<SystemWebAppType> GetSystemWebAppTypeForAppId(
     Profile* profile,
-    const web_app::AppId& app_id);
+    const webapps::AppId& app_id);
 
 // Returns the PWA system App ID for the given system app type.
-absl::optional<web_app::AppId> GetAppIdForSystemWebApp(
+std::optional<webapps::AppId> GetAppIdForSystemWebApp(
     Profile* profile,
     SystemWebAppType app_type);
 
-absl::optional<apps::AppLaunchParams> CreateSystemWebAppLaunchParams(
+std::optional<apps::AppLaunchParams> CreateSystemWebAppLaunchParams(
     Profile* profile,
     SystemWebAppType app_type,
     int64_t display_id);
@@ -38,19 +38,22 @@ absl::optional<apps::AppLaunchParams> CreateSystemWebAppLaunchParams(
 // Additional parameters to control LaunchSystemAppAsync behaviors.
 struct SystemAppLaunchParams {
   SystemAppLaunchParams();
+  SystemAppLaunchParams(const SystemAppLaunchParams& params);
   ~SystemAppLaunchParams();
 
   // If provided launches System Apps into |url|, instead of its start_url (as
-  // specified its WebAppInstallInfo). Mutually exclusive with non-empty
-  // |launch_paths|.
-  absl::optional<GURL> url;
+  // specified its WebAppInstallInfo).
+  //
+  // This is mutually exclusive with non-empty |launch_paths|.
+  std::optional<GURL> url;
 
   // Where the app is launched from.
   apps::LaunchSource launch_source = apps::LaunchSource::kFromChromeInternal;
 
-  // If non-empty, specifies files passed to Web File Handling. Apps need to
-  // have "FileHandling" origin trial in its SystemAppInfo, and file handlers
-  // in its WebAppInstallInfo. Mutually exclusive with |url|.
+  // If non-empty, specifies files passed to Web File Handling. The app needs to
+  // specify file handlers in its WebAppInstallInfo.
+  //
+  // This is mutually exclusive with |url|.
   std::vector<base::FilePath> launch_paths;
 };
 
@@ -68,8 +71,12 @@ struct SystemAppLaunchParams {
 //   - Other unsuitable profiles (e.g. Sign-in profile): Don't launch, and send
 //     a crash report
 //
-// In tests, remember to use content::TestNavigationObserver to wait the
+// In tests, remember to use content::TestNavigationObserver to wait for the
 // navigation.
+//
+// NOTE: LaunchSystemWebAppAsync waits for the initial registration of system
+// web apps to complete (the ash::SystemWebAppManager::on_apps_synchronized
+// event).
 void LaunchSystemWebAppAsync(
     Profile* profile,
     SystemWebAppType type,
@@ -116,8 +123,8 @@ bool IsSystemWebApp(Browser* browser);
 bool IsBrowserForSystemWebApp(Browser* browser, SystemWebAppType type);
 
 // Returns the SystemWebAppType that should capture the |url|.
-absl::optional<SystemWebAppType> GetCapturingSystemAppForURL(Profile* profile,
-                                                             const GURL& url);
+std::optional<SystemWebAppType> GetCapturingSystemAppForURL(Profile* profile,
+                                                            const GURL& url);
 
 // Returns the minimum window size for a system web app, or an empty size if
 // the app does not specify a minimum size.

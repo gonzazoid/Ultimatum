@@ -23,7 +23,7 @@ PerformanceElementTiming* PerformanceElementTiming::Create(
     int naturalHeight,
     const AtomicString& id,
     Element* element,
-    uint32_t navigation_id) {
+    DOMWindow* source) {
   // It is possible to 'paint' images which have naturalWidth or naturalHeight
   // equal to 0.
   DCHECK_GE(naturalWidth, 0);
@@ -32,7 +32,7 @@ PerformanceElementTiming* PerformanceElementTiming::Create(
   double start_time = render_time != 0.0 ? render_time : load_time;
   return MakeGarbageCollected<PerformanceElementTiming>(
       name, start_time, url, intersection_rect, render_time, load_time,
-      identifier, naturalWidth, naturalHeight, id, element, navigation_id);
+      identifier, naturalWidth, naturalHeight, id, element, source);
 }
 
 PerformanceElementTiming::PerformanceElementTiming(
@@ -47,8 +47,8 @@ PerformanceElementTiming::PerformanceElementTiming(
     int naturalHeight,
     const AtomicString& id,
     Element* element,
-    uint32_t navigation_id)
-    : PerformanceEntry(name, start_time, start_time, navigation_id),
+    DOMWindow* source)
+    : PerformanceEntry(name, start_time, start_time, source),
       element_(element),
       intersection_rect_(DOMRectReadOnly::FromRectF(intersection_rect)),
       render_time_(render_time),
@@ -61,7 +61,7 @@ PerformanceElementTiming::PerformanceElementTiming(
 
 PerformanceElementTiming::~PerformanceElementTiming() = default;
 
-AtomicString PerformanceElementTiming::entryType() const {
+const AtomicString& PerformanceElementTiming::entryType() const {
   return performance_entry_names::kElement;
 }
 
@@ -92,14 +92,14 @@ std::unique_ptr<TracedValue> PerformanceElementTiming::ToTracedValue() const {
 
 void PerformanceElementTiming::BuildJSONValue(V8ObjectBuilder& builder) const {
   PerformanceEntry::BuildJSONValue(builder);
-  builder.Add("renderTime", render_time_);
-  builder.Add("loadTime", load_time_);
-  builder.Add("intersectionRect", intersection_rect_);
-  builder.Add("identifier", identifier_);
-  builder.Add("naturalWidth", naturalWidth_);
-  builder.Add("naturalHeight", naturalHeight_);
-  builder.Add("id", id_);
-  builder.Add("url", url_);
+  builder.AddNumber("renderTime", render_time_);
+  builder.AddNumber("loadTime", load_time_);
+  builder.Add("intersectionRect", intersection_rect_.Get());
+  builder.AddString("identifier", identifier_);
+  builder.AddNumber("naturalWidth", naturalWidth_);
+  builder.AddNumber("naturalHeight", naturalHeight_);
+  builder.AddString("id", id_);
+  builder.AddString("url", url_);
 }
 
 void PerformanceElementTiming::Trace(Visitor* visitor) const {

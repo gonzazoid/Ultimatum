@@ -12,9 +12,11 @@ font-synthesis-small-caps: auto;
 font-synthesis-style: auto;
 font-synthesis-weight: auto;
 font-variant: normal;
+font-variant-alternates: normal;
 font-variant-caps: normal;
 font-variant-east-asian: normal;
 font-variant-ligatures: normal;
 font-variant-numeric: normal;
+font-variant-position: normal;
 font-weight: 400;
 

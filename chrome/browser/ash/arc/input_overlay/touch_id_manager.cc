@@ -10,9 +10,9 @@
 #include "base/logging.h"
 #include "base/no_destructor.h"
 
-namespace arc {
+namespace arc::input_overlay {
 namespace {
-// 32 should be enough for touch IDs as |kNumTouchEvdevSlots| is 20.
+// 32 should be enough for touch IDs as `kNumTouchEvdevSlots` is 20.
 constexpr int kMaxTouchIDs = 32;
 }  // namespace
 
@@ -37,4 +37,4 @@ void TouchIdManager::ReleaseTouchID(int touch_id) {
   touch_ids_ &= ~(1 << touch_id);
 }
 
-}  // namespace arc
+}  // namespace arc::input_overlay

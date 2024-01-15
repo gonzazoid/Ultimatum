@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {TimeDelta} from 'chrome://resources/mojo/mojo/public/mojom/base/time.mojom-webui.js';
+import {TimeDelta} from '//resources/mojo/mojo/public/mojom/base/time.mojom-webui.js';
 
-import {PageMetricsCallbackRouter, PageMetricsHost, PageMetricsHostRemote} from './metrics_reporter.mojom-webui.js';
+import {PageMetricsCallbackRouter, PageMetricsHost, PageMetricsHostRemote} from '../metrics_reporter.mojom-webui.js';
 
 export interface BrowserProxy {
   getMark(name: string): Promise<{markedTime: TimeDelta | null}>;

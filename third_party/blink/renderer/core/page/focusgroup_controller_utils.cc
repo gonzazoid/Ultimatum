@@ -8,8 +8,8 @@
 #include "third_party/blink/renderer/core/dom/flat_tree_traversal.h"
 #include "third_party/blink/renderer/core/dom/focusgroup_flags.h"
 #include "third_party/blink/renderer/core/events/keyboard_event.h"
-#include "third_party/blink/renderer/core/layout/ng/table/layout_ng_table.h"
-#include "third_party/blink/renderer/core/layout/ng/table/layout_ng_table_cell.h"
+#include "third_party/blink/renderer/core/layout/table/layout_table.h"
+#include "third_party/blink/renderer/core/layout/table/layout_table_cell.h"
 #include "third_party/blink/renderer/core/page/grid_focusgroup_structure_info.h"
 
 namespace blink {
@@ -104,7 +104,7 @@ Element* FocusgroupControllerUtils::FindNearestFocusgroupAncestor(
           // TODO(bebeaudr): Support grid focusgroups that aren't based on the
           // table layout objects.
           if (ancestor_flags & FocusgroupFlags::kGrid &&
-              IsA<LayoutNGTable>(ancestor->GetLayoutObject())) {
+              IsA<LayoutTable>(ancestor->GetLayoutObject())) {
             return ancestor;
           }
           break;
@@ -270,13 +270,13 @@ bool FocusgroupControllerUtils::IsGridFocusgroupItem(const Element* element) {
 
   // TODO(bebeaudr): Add support for manual grids, where the grid focusgroup
   // items aren't necessarily on an table cell layout object.
-  return IsA<LayoutNGTableCell>(element->GetLayoutObject());
+  return IsA<LayoutTableCell>(element->GetLayoutObject());
 }
 
 GridFocusgroupStructureInfo*
 FocusgroupControllerUtils::CreateGridFocusgroupStructureInfoForGridRoot(
     Element* root) {
-  if (IsA<LayoutNGTable>(root->GetLayoutObject()) &&
+  if (IsA<LayoutTable>(root->GetLayoutObject()) &&
       root->GetFocusgroupFlags() & FocusgroupFlags::kGrid) {
     return MakeGarbageCollected<AutomaticGridFocusgroupStructureInfo>(
         root->GetLayoutObject());

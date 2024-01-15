@@ -4,22 +4,18 @@
 
 package org.chromium.net.urlconnection;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static com.google.common.truth.Truth.assertThat;
 
-import android.support.test.runner.AndroidJUnit4;
+import static org.junit.Assert.assertThrows;
 
+import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SmallTest;
 
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import org.chromium.base.test.util.Feature;
-import org.chromium.net.CronetTestRule;
+import org.chromium.base.test.util.Batch;
 
-import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.SocketTimeoutException;
 import java.util.concurrent.ExecutorService;
@@ -27,17 +23,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
 
-/**
- * Tests the MessageLoop implementation.
- */
+/** Tests the MessageLoop implementation. */
+@Batch(Batch.UNIT_TESTS)
 @RunWith(AndroidJUnit4.class)
 public class MessageLoopTest {
-    @Rule
-    public final CronetTestRule mTestRule = new CronetTestRule();
-
     private Thread mTestThread;
     private final ExecutorService mExecutorService =
             Executors.newSingleThreadExecutor(new ExecutorThreadFactory());
+
     private class ExecutorThreadFactory implements ThreadFactory {
         @Override
         public Thread newThread(Runnable r) {
@@ -45,112 +38,88 @@ public class MessageLoopTest {
             return mTestThread;
         }
     }
+
     private boolean mFailed;
 
     @Test
     @SmallTest
-    @Feature({"Cronet"})
     public void testInterrupt() throws Exception {
         final MessageLoop loop = new MessageLoop();
-        assertFalse(loop.isRunning());
-        Future future = mExecutorService.submit(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    loop.loop();
-                    mFailed = true;
-                } catch (IOException e) {
-                    // Expected interrupt.
-                }
-            }
-        });
+        assertThat(loop.isRunning()).isFalse();
+        Future future =
+                mExecutorService.submit(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                assertThrows(InterruptedIOException.class, loop::loop);
+                            }
+                        });
         Thread.sleep(1000);
-        assertTrue(loop.isRunning());
-        assertFalse(loop.hasLoopFailed());
+        assertThat(loop.isRunning()).isTrue();
+        assertThat(loop.hasLoopFailed()).isFalse();
         mTestThread.interrupt();
         future.get();
-        assertFalse(loop.isRunning());
-        assertTrue(loop.hasLoopFailed());
-        assertFalse(mFailed);
+        assertThat(loop.isRunning()).isFalse();
+        assertThat(loop.hasLoopFailed()).isTrue();
         // Re-spinning the message loop is not allowed after interrupt.
-        mExecutorService.submit(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    loop.loop();
-                    fail();
-                } catch (Exception e) {
-                    if (!(e instanceof InterruptedIOException)) {
-                        fail();
-                    }
-                }
-            }
-        }).get();
+        mExecutorService
+                .submit(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                assertThrows(InterruptedIOException.class, loop::loop);
+                            }
+                        })
+                .get();
     }
 
     @Test
     @SmallTest
-    @Feature({"Cronet"})
     public void testTaskFailed() throws Exception {
         final MessageLoop loop = new MessageLoop();
-        assertFalse(loop.isRunning());
-        Future future = mExecutorService.submit(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    loop.loop();
-                    mFailed = true;
-                } catch (Exception e) {
-                    if (!(e instanceof NullPointerException)) {
-                        mFailed = true;
+        assertThat(loop.isRunning()).isFalse();
+        Future future =
+                mExecutorService.submit(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                assertThrows(NullPointerException.class, loop::loop);
+                            }
+                        });
+        Runnable failedTask =
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        throw new NullPointerException();
                     }
-                }
-            }
-        });
-        Runnable failedTask = new Runnable() {
-            @Override
-            public void run() {
-                throw new NullPointerException();
-            }
-        };
+                };
         Thread.sleep(1000);
-        assertTrue(loop.isRunning());
-        assertFalse(loop.hasLoopFailed());
+        assertThat(loop.isRunning()).isTrue();
+        assertThat(loop.hasLoopFailed()).isFalse();
         loop.execute(failedTask);
         future.get();
-        assertFalse(loop.isRunning());
-        assertTrue(loop.hasLoopFailed());
-        assertFalse(mFailed);
+        assertThat(loop.isRunning()).isFalse();
+        assertThat(loop.hasLoopFailed()).isTrue();
         // Re-spinning the message loop is not allowed after exception.
-        mExecutorService.submit(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    loop.loop();
-                    fail();
-                } catch (Exception e) {
-                    if (!(e instanceof NullPointerException)) {
-                        fail();
-                    }
-                }
-            }
-        }).get();
+        mExecutorService
+                .submit(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                assertThrows(NullPointerException.class, loop::loop);
+                            }
+                        })
+                .get();
     }
 
     @Test
     @SmallTest
-    @Feature({"Cronet"})
     public void testLoopWithTimeout() throws Exception {
         final MessageLoop loop = new MessageLoop();
-        assertFalse(loop.isRunning());
+        assertThat(loop.isRunning()).isFalse();
         // The MessageLoop queue is empty. Use a timeout of 100ms to check that
         // it doesn't block forever.
-        try {
-            loop.loop(100);
-            fail();
-        } catch (SocketTimeoutException e) {
-            // Expected.
-        }
-        assertFalse(loop.isRunning());
+        assertThrows(SocketTimeoutException.class, () -> loop.loop(100));
+        assertThat(loop.isRunning()).isFalse();
     }
 }

@@ -3,13 +3,14 @@
 // found in the LICENSE file.
 
 #include <algorithm>
-#include <cctype>
 
+#include <ntstatus.h>
 #include <windows.h>
 #include <winioctl.h>
+#include <winternl.h>
 
+#include "base/strings/string_util_win.h"
 #include "base/win/scoped_handle.h"
-#include "base/win/windows_version.h"
 #include "sandbox/win/src/filesystem_policy.h"
 #include "sandbox/win/src/nt_internals.h"
 #include "sandbox/win/src/sandbox.h"
@@ -43,9 +44,10 @@ SBOX_TESTS_COMMAND int File_Create(int argc, wchar_t** argv) {
     base::win::ScopedHandle file2(CreateFile(
         argv[1], FILE_EXECUTE, kSharing, nullptr, OPEN_EXISTING, 0, nullptr));
 
-    if (file1.IsValid() == file2.IsValid())
-      return file1.IsValid() ? SBOX_TEST_SUCCEEDED : SBOX_TEST_DENIED;
-    return file1.IsValid() ? SBOX_TEST_FIRST_ERROR : SBOX_TEST_SECOND_ERROR;
+    if (file1.is_valid() == file2.is_valid()) {
+      return file1.is_valid() ? SBOX_TEST_SUCCEEDED : SBOX_TEST_DENIED;
+    }
+    return file1.is_valid() ? SBOX_TEST_FIRST_ERROR : SBOX_TEST_SECOND_ERROR;
 
   } else if (operation == L"Write") {
     base::win::ScopedHandle file1(
@@ -55,9 +57,10 @@ SBOX_TESTS_COMMAND int File_Create(int argc, wchar_t** argv) {
         CreateFile(argv[1], GENERIC_READ | FILE_WRITE_DATA, kSharing, nullptr,
                    OPEN_EXISTING, 0, nullptr));
 
-    if (file1.IsValid() == file2.IsValid())
-      return file1.IsValid() ? SBOX_TEST_SUCCEEDED : SBOX_TEST_DENIED;
-    return file1.IsValid() ? SBOX_TEST_FIRST_ERROR : SBOX_TEST_SECOND_ERROR;
+    if (file1.is_valid() == file2.is_valid()) {
+      return file1.is_valid() ? SBOX_TEST_SUCCEEDED : SBOX_TEST_DENIED;
+    }
+    return file1.is_valid() ? SBOX_TEST_FIRST_ERROR : SBOX_TEST_SECOND_ERROR;
 
   } else if (operation == L"ReadCreate") {
     base::win::ScopedHandle file2(CreateFile(argv[1], GENERIC_READ, kSharing,
@@ -65,9 +68,10 @@ SBOX_TESTS_COMMAND int File_Create(int argc, wchar_t** argv) {
     base::win::ScopedHandle file1(CreateFile(
         argv[1], GENERIC_READ, kSharing, nullptr, CREATE_ALWAYS, 0, nullptr));
 
-    if (file1.IsValid() == file2.IsValid())
-      return file1.IsValid() ? SBOX_TEST_SUCCEEDED : SBOX_TEST_DENIED;
-    return file1.IsValid() ? SBOX_TEST_FIRST_ERROR : SBOX_TEST_SECOND_ERROR;
+    if (file1.is_valid() == file2.is_valid()) {
+      return file1.is_valid() ? SBOX_TEST_SUCCEEDED : SBOX_TEST_DENIED;
+    }
+    return file1.is_valid() ? SBOX_TEST_FIRST_ERROR : SBOX_TEST_SECOND_ERROR;
   }
 
   return SBOX_TEST_INVALID_PARAMETER;
@@ -101,9 +105,9 @@ SBOX_TESTS_COMMAND int File_Win32Create(int argc, wchar_t** argv) {
 // call succeeded or not.
 SBOX_TESTS_COMMAND int File_CreateSys32(int argc, wchar_t** argv) {
   BINDNTDLL(NtCreateFile);
-  BINDNTDLL(RtlInitUnicodeString);
-  if (!NtCreateFile || !RtlInitUnicodeString)
+  if (!NtCreateFile) {
     return SBOX_TEST_FAILED_TO_EXECUTE_COMMAND;
+  }
 
   if (argc != 1)
     return SBOX_TEST_FAILED_TO_EXECUTE_COMMAND;
@@ -113,7 +117,7 @@ SBOX_TESTS_COMMAND int File_CreateSys32(int argc, wchar_t** argv) {
     file = MakePathToSys(argv[0], true);
 
   UNICODE_STRING object_name;
-  RtlInitUnicodeString(&object_name, file.c_str());
+  ::RtlInitUnicodeString(&object_name, file.c_str());
 
   OBJECT_ATTRIBUTES obj_attributes = {};
   InitializeObjectAttributes(&obj_attributes, &object_name,
@@ -139,16 +143,16 @@ SBOX_TESTS_COMMAND int File_CreateSys32(int argc, wchar_t** argv) {
 // call succeeded or not.
 SBOX_TESTS_COMMAND int File_OpenSys32(int argc, wchar_t** argv) {
   BINDNTDLL(NtOpenFile);
-  BINDNTDLL(RtlInitUnicodeString);
-  if (!NtOpenFile || !RtlInitUnicodeString)
+  if (!NtOpenFile) {
     return SBOX_TEST_FAILED_TO_EXECUTE_COMMAND;
+  }
 
   if (argc != 1)
     return SBOX_TEST_FAILED_TO_EXECUTE_COMMAND;
 
   std::wstring file = MakePathToSys(argv[0], true);
   UNICODE_STRING object_name;
-  RtlInitUnicodeString(&object_name, file.c_str());
+  ::RtlInitUnicodeString(&object_name, file.c_str());
 
   OBJECT_ATTRIBUTES obj_attributes = {};
   InitializeObjectAttributes(&obj_attributes, &object_name,
@@ -215,10 +219,9 @@ SBOX_TESTS_COMMAND int File_Rename(int argc, wchar_t** argv) {
 SBOX_TESTS_COMMAND int File_QueryAttributes(int argc, wchar_t** argv) {
   BINDNTDLL(NtQueryAttributesFile);
   BINDNTDLL(NtQueryFullAttributesFile);
-  BINDNTDLL(RtlInitUnicodeString);
-  if (!NtQueryAttributesFile || !NtQueryFullAttributesFile ||
-      !RtlInitUnicodeString)
+  if (!NtQueryAttributesFile || !NtQueryFullAttributesFile) {
     return SBOX_TEST_FAILED_TO_EXECUTE_COMMAND;
+  }
 
   if (argc != 2)
     return SBOX_TEST_FAILED_TO_EXECUTE_COMMAND;
@@ -227,7 +230,7 @@ SBOX_TESTS_COMMAND int File_QueryAttributes(int argc, wchar_t** argv) {
 
   UNICODE_STRING object_name;
   std::wstring file = MakePathToSys(argv[0], true);
-  RtlInitUnicodeString(&object_name, file.c_str());
+  ::RtlInitUnicodeString(&object_name, file.c_str());
 
   OBJECT_ATTRIBUTES obj_attributes = {};
   InitializeObjectAttributes(&obj_attributes, &object_name,
@@ -274,12 +277,12 @@ SBOX_TESTS_COMMAND int File_CopyFile(int argc, wchar_t** argv) {
 
 TEST(FilePolicyTest, DenyNtCreateCalc) {
   TestRunner runner;
-  EXPECT_TRUE(runner.AddRuleSys32(Semantics::kFilesAllowAny, L"calc.txt"));
+  EXPECT_TRUE(runner.AddRuleSys32(FileSemantics::kAllowAny, L"calc.txt"));
   EXPECT_EQ(SBOX_TEST_DENIED, runner.RunTest(L"File_CreateSys32 calc.exe"));
 
   TestRunner before_revert;
   EXPECT_TRUE(
-      before_revert.AddRuleSys32(Semantics::kFilesAllowAny, L"calc.txt"));
+      before_revert.AddRuleSys32(FileSemantics::kAllowAny, L"calc.txt"));
   before_revert.SetTestState(BEFORE_REVERT);
   EXPECT_EQ(SBOX_TEST_SUCCEEDED,
             before_revert.RunTest(L"File_CreateSys32 calc.exe"));
@@ -287,12 +290,12 @@ TEST(FilePolicyTest, DenyNtCreateCalc) {
 
 TEST(FilePolicyTest, AllowNtCreateCalc) {
   TestRunner runner;
-  EXPECT_TRUE(runner.AddRuleSys32(Semantics::kFilesAllowAny, L"calc.exe"));
+  EXPECT_TRUE(runner.AddRuleSys32(FileSemantics::kAllowAny, L"calc.exe"));
   EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner.RunTest(L"File_CreateSys32 calc.exe"));
 
   TestRunner before_revert;
   EXPECT_TRUE(
-      before_revert.AddRuleSys32(Semantics::kFilesAllowAny, L"calc.exe"));
+      before_revert.AddRuleSys32(FileSemantics::kAllowAny, L"calc.exe"));
   before_revert.SetTestState(BEFORE_REVERT);
   EXPECT_EQ(SBOX_TEST_SUCCEEDED,
             before_revert.RunTest(L"File_CreateSys32 calc.exe"));
@@ -300,19 +303,19 @@ TEST(FilePolicyTest, AllowNtCreateCalc) {
 
 TEST(FilePolicyTest, AllowNtCreateWithNativePath) {
   std::wstring calc = MakePathToSys(L"calc.exe", false);
-  std::wstring nt_path;
-  ASSERT_TRUE(GetNtPathFromWin32Path(calc, &nt_path));
+  auto opt_nt_path = GetNtPathFromWin32Path(calc);
+  ASSERT_TRUE(opt_nt_path);
+  std::wstring nt_path = opt_nt_path.value();
 
   TestRunner runner;
-  runner.AddFsRule(Semantics::kFilesAllowReadonly, nt_path.c_str());
+  runner.AllowFileAccess(FileSemantics::kAllowReadonly, nt_path.c_str());
   wchar_t buff[MAX_PATH];
   ::wsprintfW(buff, L"File_CreateSys32 %s", nt_path.c_str());
   EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner.RunTest(buff));
 
   TestRunner runner2;
-  runner2.AddFsRule(Semantics::kFilesAllowReadonly, nt_path.c_str());
-  for (wchar_t& c : nt_path)
-    c = std::tolower(c);
+  runner2.AllowFileAccess(FileSemantics::kAllowReadonly, nt_path.c_str());
+  nt_path = base::ToLowerASCII(nt_path);
   ::wsprintfW(buff, L"File_CreateSys32 %s", nt_path.c_str());
   EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner2.RunTest(buff));
 }
@@ -320,7 +323,7 @@ TEST(FilePolicyTest, AllowNtCreateWithNativePath) {
 std::unique_ptr<TestRunner> AllowReadOnlyRunner(wchar_t* temp_file_name) {
   auto runner = std::make_unique<TestRunner>();
   EXPECT_TRUE(
-      runner->AddFsRule(Semantics::kFilesAllowReadonly, temp_file_name));
+      runner->AllowFileAccess(FileSemantics::kAllowReadonly, temp_file_name));
   return runner;
 }
 
@@ -368,8 +371,9 @@ TEST(FilePolicyTest, AllowImplicitDeviceName) {
 
   std::wstring path(temp_file_name);
   EXPECT_TRUE(ConvertToLongPath(&path));
-  EXPECT_TRUE(GetNtPathFromWin32Path(path, &path));
-  path = path.substr(sandbox::kNTDevicePrefixLen);
+  auto opt_nt_path = GetNtPathFromWin32Path(path);
+  EXPECT_TRUE(opt_nt_path);
+  path = opt_nt_path->substr(sandbox::kNTDevicePrefixLen);
 
   wchar_t command[MAX_PATH + 20] = {};
   wsprintf(command, L"File_Create Read \"\\\\.\\%ls\"", path.c_str());
@@ -380,7 +384,7 @@ TEST(FilePolicyTest, AllowImplicitDeviceName) {
 
   TestRunner runner_with_rule;
   EXPECT_TRUE(
-      runner_with_rule.AddFsRule(Semantics::kFilesAllowAny, path.c_str()));
+      runner_with_rule.AllowFileAccess(FileSemantics::kAllowAny, path.c_str()));
   EXPECT_EQ(SBOX_TEST_SUCCEEDED, runner_with_rule.RunTest(command));
 
   DeleteFile(temp_file_name);
@@ -396,7 +400,7 @@ TEST(FilePolicyTest, AllowWildcard) {
   ASSERT_NE(::GetTempFileName(temp_directory, L"test", 0, temp_file_name), 0u);
 
   wcscat_s(temp_directory, MAX_PATH, L"*");
-  EXPECT_TRUE(runner.AddFsRule(Semantics::kFilesAllowAny, temp_directory));
+  EXPECT_TRUE(runner.AllowFileAccess(FileSemantics::kAllowAny, temp_directory));
 
   wchar_t command_write[MAX_PATH + 20] = {};
   wsprintf(command_write, L"File_Create Write \"%ls\"", temp_file_name);
@@ -409,7 +413,7 @@ TEST(FilePolicyTest, AllowWildcard) {
 
 std::unique_ptr<TestRunner> AllowNtCreatePatternRunner() {
   auto runner = std::make_unique<TestRunner>();
-  EXPECT_TRUE(runner->AddRuleSys32(Semantics::kFilesAllowAny, L"App*.dll"));
+  EXPECT_TRUE(runner->AddRuleSys32(FileSemantics::kAllowAny, L"App*.dll"));
   return runner;
 }
 
@@ -433,7 +437,7 @@ TEST(FilePolicyTest, AllowNtCreatePatternRule) {
 
 TEST(FilePolicyTest, CheckNotFound) {
   TestRunner runner;
-  EXPECT_TRUE(runner.AddRuleSys32(Semantics::kFilesAllowAny, L"n*.dll"));
+  EXPECT_TRUE(runner.AddRuleSys32(FileSemantics::kAllowAny, L"n*.dll"));
 
   EXPECT_EQ(SBOX_TEST_NOT_FOUND,
             runner.RunTest(L"File_OpenSys32 notfound.dll"));
@@ -446,11 +450,11 @@ TEST(FilePolicyTest, CheckNoLeak) {
 
 std::unique_ptr<TestRunner> QueryAttributesFileRunner() {
   auto runner = std::make_unique<TestRunner>();
-  EXPECT_TRUE(runner->AddRuleSys32(Semantics::kFilesAllowAny, L"apphelp.dll"));
-  EXPECT_TRUE(runner->AddRuleSys32(Semantics::kFilesAllowAny, L"notfound.exe"));
-  EXPECT_TRUE(runner->AddRuleSys32(Semantics::kFilesAllowAny, L"drivers"));
+  EXPECT_TRUE(runner->AddRuleSys32(FileSemantics::kAllowAny, L"apphelp.dll"));
+  EXPECT_TRUE(runner->AddRuleSys32(FileSemantics::kAllowAny, L"notfound.exe"));
+  EXPECT_TRUE(runner->AddRuleSys32(FileSemantics::kAllowAny, L"drivers"));
   EXPECT_TRUE(
-      runner->AddRuleSys32(Semantics::kFilesAllowQuery, L"ipconfig.exe"));
+      runner->AddRuleSys32(FileSemantics::kAllowReadonly, L"ipconfig.exe"));
   return runner;
 }
 
@@ -493,19 +497,19 @@ std::unique_ptr<TestRunner> RenameRunner(
     std::vector<std::wstring>& temp_files) {
   auto runner = std::make_unique<TestRunner>();
   // Add rules to make file0->file1 succeed.
-  runner->AddFsRule(Semantics::kFilesAllowAny, temp_files[0].c_str());
-  runner->AddFsRule(Semantics::kFilesAllowAny, temp_files[1].c_str());
+  runner->AllowFileAccess(FileSemantics::kAllowAny, temp_files[0].c_str());
+  runner->AllowFileAccess(FileSemantics::kAllowAny, temp_files[1].c_str());
 
   // Add rules to make file2->file3 fail.
-  runner->AddFsRule(Semantics::kFilesAllowAny, temp_files[2].c_str());
-  runner->AddFsRule(Semantics::kFilesAllowReadonly, temp_files[3].c_str());
+  runner->AllowFileAccess(FileSemantics::kAllowAny, temp_files[2].c_str());
+  runner->AllowFileAccess(FileSemantics::kAllowReadonly, temp_files[3].c_str());
 
   // Add rules to make file4->file5 fail.
-  runner->AddFsRule(Semantics::kFilesAllowReadonly, temp_files[4].c_str());
-  runner->AddFsRule(Semantics::kFilesAllowAny, temp_files[5].c_str());
+  runner->AllowFileAccess(FileSemantics::kAllowReadonly, temp_files[4].c_str());
+  runner->AllowFileAccess(FileSemantics::kAllowAny, temp_files[5].c_str());
 
   // Add rules to make file6->no_pol_file fail.
-  runner->AddFsRule(Semantics::kFilesAllowAny, temp_files[6].c_str());
+  runner->AllowFileAccess(FileSemantics::kAllowAny, temp_files[6].c_str());
   return runner;
 }
 
@@ -556,7 +560,7 @@ TEST(FilePolicyTest, TestRename) {
 
 std::unique_ptr<TestRunner> AllowNotepadRunner() {
   auto runner = std::make_unique<TestRunner>();
-  runner->AddRuleSys32(Semantics::kFilesAllowAny, L"notepad.exe");
+  runner->AddRuleSys32(FileSemantics::kAllowAny, L"notepad.exe");
   return runner;
 }
 
@@ -580,7 +584,7 @@ TEST(FilePolicyTest, OpenSys32FilesAllowNotepad) {
 
 std::unique_ptr<TestRunner> FileGetDiskSpaceRunner() {
   auto runner = std::make_unique<TestRunner>();
-  runner->AddRuleSys32(Semantics::kFilesAllowReadonly, L"");
+  runner->AddRuleSys32(FileSemantics::kAllowReadonly, L"");
   return runner;
 }
 
@@ -611,7 +615,7 @@ TEST(FilePolicyTest, FileGetDiskSpace) {
 std::unique_ptr<TestRunner> ReparsePointRunner(
     std::wstring& temp_dir_wildcard) {
   auto runner = std::make_unique<TestRunner>();
-  runner->AddFsRule(Semantics::kFilesAllowAny, temp_dir_wildcard.c_str());
+  runner->AllowFileAccess(FileSemantics::kAllowAny, temp_dir_wildcard.c_str());
   return runner;
 }
 
@@ -715,16 +719,11 @@ TEST(FilePolicyTest, CheckMissingNTPrefixEscape) {
 }
 
 TEST(FilePolicyTest, TestCopyFile) {
-  // Check if the test is running Win8 or newer since
-  // MITIGATION_STRICT_HANDLE_CHECKS is not supported on older systems.
-  if (base::win::GetVersion() < base::win::Version::WIN8)
-    return;
-
   TestRunner runner;
   runner.SetTimeout(2000);
 
   // Allow read access to calc.exe, this should be on all Windows versions.
-  ASSERT_TRUE(runner.AddRuleSys32(Semantics::kFilesAllowReadonly, L"calc.exe"));
+  ASSERT_TRUE(runner.AddRuleSys32(FileSemantics::kAllowReadonly, L"calc.exe"));
 
   sandbox::TargetPolicy* policy = runner.GetPolicy();
 

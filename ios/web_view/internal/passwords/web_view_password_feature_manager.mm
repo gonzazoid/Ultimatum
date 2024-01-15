@@ -2,31 +2,19 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/web_view/internal/passwords/web_view_password_feature_manager.h"
+#import "ios/web_view/internal/passwords/web_view_password_feature_manager.h"
 
-#include "base/notreached.h"
-#include "components/password_manager/core/browser/password_manager_features_util.h"
-#include "components/prefs/pref_service.h"
-#include "components/sync/driver/sync_service.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/notreached.h"
+#import "components/password_manager/core/browser/features/password_manager_features_util.h"
+#import "components/sync/service/sync_service.h"
 
 namespace ios_web_view {
 WebViewPasswordFeatureManager::WebViewPasswordFeatureManager(
-    PrefService* pref_service,
     const syncer::SyncService* sync_service)
-    : pref_service_(pref_service), sync_service_(sync_service) {}
+    : sync_service_(sync_service) {}
 
 bool WebViewPasswordFeatureManager::IsGenerationEnabled() const {
   return true;
-}
-
-bool WebViewPasswordFeatureManager::
-    AreRequirementsForAutomatedPasswordChangeFulfilled() const {
-  // This is only a stub while APC is not implemented on iOS.
-  return false;
 }
 
 bool WebViewPasswordFeatureManager::IsOptedInForAccountStorage() const {
@@ -34,29 +22,16 @@ bool WebViewPasswordFeatureManager::IsOptedInForAccountStorage() const {
   // still be controlled on a per user basis to ensure that the logged out user
   // remains opted out.
   return password_manager::features_util::IsOptedInForAccountStorage(
-      pref_service_, sync_service_);
+      sync_service_);
 }
 
 bool WebViewPasswordFeatureManager::ShouldShowAccountStorageOptIn() const {
   return false;
 }
 
-bool WebViewPasswordFeatureManager::
-    ShouldOfferOptInAndMoveToAccountStoreAfterSavingLocally() const {
-  return false;
-}
-
 bool WebViewPasswordFeatureManager::ShouldShowAccountStorageReSignin(
     const GURL& current_page_url) const {
   return false;
-}
-
-void WebViewPasswordFeatureManager::OptInToAccountStorage() {
-  NOTREACHED();
-}
-
-void WebViewPasswordFeatureManager::OptOutOfAccountStorageAndClearSettings() {
-  NOTREACHED();
 }
 
 bool WebViewPasswordFeatureManager::ShouldShowAccountStorageBubbleUi() const {
@@ -69,30 +44,16 @@ WebViewPasswordFeatureManager::GetDefaultPasswordStore() const {
   return password_manager::PasswordForm::Store::kAccountStore;
 }
 
-void WebViewPasswordFeatureManager::SetDefaultPasswordStore(
-    const password_manager::PasswordForm::Store& store) {
-  NOTREACHED();
-}
-
 bool WebViewPasswordFeatureManager::IsDefaultPasswordStoreSet() const {
   return false;
 }
 
-password_manager::metrics_util::PasswordAccountStorageUsageLevel
+password_manager::features_util::PasswordAccountStorageUsageLevel
 WebViewPasswordFeatureManager::ComputePasswordAccountStorageUsageLevel() const {
   // ios/web_view doesn't support either the profile password store or sync, so
   // the account-scoped storage is the only option.
-  return password_manager::metrics_util::PasswordAccountStorageUsageLevel::
+  return password_manager::features_util::PasswordAccountStorageUsageLevel::
       kUsingAccountStorage;
-}
-
-void WebViewPasswordFeatureManager::RecordMoveOfferedToNonOptedInUser() {
-  NOTREACHED();
-}
-
-int WebViewPasswordFeatureManager::GetMoveOfferedToNonOptedInUserCount() const {
-  NOTREACHED();
-  return 0;
 }
 
 bool WebViewPasswordFeatureManager::

@@ -8,18 +8,21 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
+#include <utility>
 
 #include "ash/app_list/app_list_util.h"
 #include "ash/app_list/views/search_result_actions_view_delegate.h"
 #include "ash/app_list/views/search_result_view.h"
 #include "ash/constants/ash_features.h"
-#include "ash/public/cpp/app_list/app_list_color_provider.h"
 #include "ash/public/cpp/app_list/app_list_config.h"
 #include "ash/public/cpp/app_list/vector_icons/vector_icons.h"
-#include "ash/public/cpp/style/scoped_light_mode_as_default.h"
 #include "ash/style/icon_button.h"
-#include "base/bind.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ash/style/style_util.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/insets.h"
@@ -32,6 +35,7 @@
 #include "ui/views/controls/button/md_text_button.h"
 #include "ui/views/controls/highlight_path_generator.h"
 #include "ui/views/layout/box_layout.h"
+#include "ui/views/view_utils.h"
 
 namespace ash {
 
@@ -44,6 +48,8 @@ constexpr int kActionButtonBetweenSpacing = 8;
 // SearchResultActionButton renders the button defined by SearchResult::Action.
 class SearchResultActionButton : public IconButton {
  public:
+  METADATA_HEADER(SearchResultActionButton);
+
   SearchResultActionButton(SearchResultActionsView* parent,
                            const SearchResult::Action& action,
                            PressedCallback callback,
@@ -58,21 +64,15 @@ class SearchResultActionButton : public IconButton {
 
   // IconButton:
   void OnGestureEvent(ui::GestureEvent* event) override;
-  void OnThemeChanged() override;
 
   // Updates the button visibility upon state change of the button or the
   // search result view associated with it.
   void UpdateOnStateChanged();
 
  private:
-  // views::ImageButton:
-  void OnPaintBackground(gfx::Canvas* canvas) override;
-
   int GetButtonRadius() const;
-  const char* GetClassName() const override;
 
-  SearchResultActionsView* parent_;
-  const bool visible_on_hover_;
+  raw_ptr<SearchResultActionsView> parent_;
   bool to_be_activate_by_long_press_ = false;
 };
 
@@ -83,16 +83,23 @@ SearchResultActionButton::SearchResultActionButton(
     Type type,
     const gfx::VectorIcon* icon,
     const std::u16string& accessible_name)
-    : IconButton(callback,
+    : IconButton(std::move(callback),
                  type,
                  icon,
                  action.tooltip_text,
                  /*is_togglable=*/false,
                  /*has_border=*/false),
-      parent_(parent),
-      visible_on_hover_(action.visible_on_hover) {
+      parent_(parent) {
   SetFocusBehavior(FocusBehavior::ALWAYS);
-  SetVisible(!visible_on_hover_);
+  SetVisible(false);
+
+  StyleUtil::SetUpFocusRingForView(this);
+  views::FocusRing::Get(this)->SetHasFocusPredicate(
+      base::BindRepeating([](const View* view) {
+        const auto* v = views::AsViewClass<SearchResultActionButton>(view);
+        CHECK(v);
+        return v->HasFocus() || v->parent_->GetSelectedAction() == v->tag();
+      }));
 }
 
 void SearchResultActionButton::OnGestureEvent(ui::GestureEvent* event) {
@@ -116,36 +123,19 @@ void SearchResultActionButton::OnGestureEvent(ui::GestureEvent* event) {
     Button::OnGestureEvent(event);
 }
 
-void SearchResultActionButton::OnThemeChanged() {
-  absl::optional<ScopedLightModeAsDefault> default_light_mode;
-  // Non-productivity launcher search UI has light background.
-  if (!features::IsProductivityLauncherEnabled())
-    default_light_mode.emplace();
-
-  IconButton::OnThemeChanged();
-}
-
 void SearchResultActionButton::UpdateOnStateChanged() {
   // Show button if the associated result row is hovered or selected, or one
   // of the action buttons is selected.
-  if (visible_on_hover_)
-    SetVisible(parent_->IsSearchResultHoveredOrSelected());
-}
-
-void SearchResultActionButton::OnPaintBackground(gfx::Canvas* canvas) {
-  if (HasFocus() || parent_->GetSelectedAction() == tag()) {
-    PaintFocusRing(canvas, GetLocalBounds().CenterPoint(), GetButtonRadius(),
-                   GetWidget());
-  }
+  SetVisible(parent_->IsSearchResultHoveredOrSelected());
+  views::FocusRing::Get(this)->SchedulePaint();
 }
 
 int SearchResultActionButton::GetButtonRadius() const {
   return width() / 2;
 }
 
-const char* SearchResultActionButton::GetClassName() const {
-  return "SearchResultActionButton";
-}
+BEGIN_METADATA(SearchResultActionButton, IconButton)
+END_METADATA
 
 SearchResultActionsView::SearchResultActionsView(
     SearchResultActionsViewDelegate* delegate)
@@ -185,10 +175,6 @@ void SearchResultActionsView::HideActions() {
 void SearchResultActionsView::UpdateButtonsOnStateChanged() {
   for (views::View* child : children())
     static_cast<SearchResultActionButton*>(child)->UpdateOnStateChanged();
-}
-
-const char* SearchResultActionsView::GetClassName() const {
-  return "SearchResultActionsView";
 }
 
 bool SearchResultActionsView::SelectInitialAction(bool reverse_tab_order) {
@@ -262,11 +248,6 @@ void SearchResultActionsView::CreateImageButton(
     case SearchResultActionType::kRemove:
       icon = &ash::kSearchResultRemoveIcon;
       break;
-    case ash::SearchResultActionType::kAppend:
-      icon = &ash::kSearchResultAppendIcon;
-      break;
-    case ash::SearchResultActionType::kSearchResultActionTypeMax:
-      NOTREACHED();
   }
 
   DCHECK(icon);
@@ -276,10 +257,7 @@ void SearchResultActionsView::CreateImageButton(
       base::BindRepeating(
           &SearchResultActionsViewDelegate::OnSearchResultActionActivated,
           base::Unretained(delegate_), action_index),
-      features::IsProductivityLauncherEnabled()
-          ? IconButton::Type::kSmallFloating
-          : IconButton::Type::kMediumFloating,
-      icon, action.tooltip_text));
+      IconButton::Type::kMediumFloating, icon, action.tooltip_text));
   button->set_tag(action_index);
   subscriptions_.push_back(button->AddStateChangedCallback(
       base::BindRepeating(&SearchResultActionsView::UpdateButtonsOnStateChanged,
@@ -293,5 +271,8 @@ size_t SearchResultActionsView::GetActionCount() const {
 void SearchResultActionsView::ChildVisibilityChanged(views::View* child) {
   PreferredSizeChanged();
 }
+
+BEGIN_METADATA(SearchResultActionsView, views::View)
+END_METADATA
 
 }  // namespace ash

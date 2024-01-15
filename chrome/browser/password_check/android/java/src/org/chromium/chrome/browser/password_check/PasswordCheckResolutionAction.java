@@ -13,30 +13,27 @@ import java.lang.annotation.RetentionPolicy;
  * numeric values should never be reused. To be kept in sync with PasswordCheckReferrerAndroid in
  * enums.xml.
  */
-@IntDef({PasswordCheckResolutionAction.OPENED_SITE, PasswordCheckResolutionAction.STARTED_SCRIPT,
-        PasswordCheckResolutionAction.DELETED_PASSWORD,
-        PasswordCheckResolutionAction.EDITED_PASSWORD, PasswordCheckResolutionAction.DID_NOTHING})
+@IntDef({
+    PasswordCheckResolutionAction.OPENED_SITE,
+    PasswordCheckResolutionAction.DELETED_PASSWORD,
+    PasswordCheckResolutionAction.EDITED_PASSWORD,
+    PasswordCheckResolutionAction.DID_NOTHING
+})
 @Retention(RetentionPolicy.SOURCE)
 public @interface PasswordCheckResolutionAction {
-    /**
-     * A user opened a site to change a password manually.
-     */
+    /** A user opened a site to change a password manually. */
     int OPENED_SITE = 0;
-    /**
-     * A user started an automated password change flow.
-     */
-    int STARTED_SCRIPT = 1;
-    /**
-     * A user deleted a password.
-     */
+
+    /** Deprecated as a part of APC removal (crbug.com/1386065). int STARTED_SCRIPT = 1; */
+
+    /** A user deleted a password. */
     int DELETED_PASSWORD = 2;
-    /**
-     * A user edited a password.
-     */
+
+    /** A user edited a password. */
     int EDITED_PASSWORD = 3;
-    /**
-     * A user did nothing.
-     */
+
+    /** A user did nothing. */
     int DID_NOTHING = 4;
+
     int COUNT = 5;
 }

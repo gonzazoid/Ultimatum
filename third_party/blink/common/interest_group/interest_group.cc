@@ -4,16 +4,22 @@
 
 #include "third_party/blink/public/common/interest_group/interest_group.h"
 
+#include <stdint.h>
+
 #include <cmath>
 #include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
 
+#include "base/containers/contains.h"
+#include "base/strings/strcat.h"
 #include "base/time/time.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/common_export.h"
+#include "third_party/blink/public/common/interest_group/ad_display_size_utils.h"
 #include "third_party/blink/public/mojom/interest_group/interest_group_types.mojom.h"
+#include "third_party/boringssl/src/include/openssl/curve25519.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 #include "url/url_constants.h"
@@ -22,12 +28,15 @@ namespace blink {
 
 namespace {
 
+const size_t kMaxAdRenderIdSize = 12;
+
 // Check if `url` can be used as an interest group's ad render URL. Ad URLs can
 // be cross origin, unlike other interest group URLs, but are still restricted
 // to HTTPS with no embedded credentials.
 bool IsUrlAllowedForRenderUrls(const GURL& url) {
-  if (!url.is_valid() || !url.SchemeIs(url::kHttpsScheme))
+  if (!url.is_valid() || !url.SchemeIs(url::kHttpsScheme)) {
     return false;
+  }
 
   return !url.has_username() && !url.has_password();
 }
@@ -37,8 +46,9 @@ bool IsUrlAllowedForRenderUrls(const GURL& url) {
 // checked with IsUrlAllowedForRenderUrls(), which doesn't have the same-origin
 // check, and allows references.
 bool IsUrlAllowed(const GURL& url, const InterestGroup& group) {
-  if (url::Origin::Create(url) != group.owner)
+  if (url::Origin::Create(url) != group.owner) {
     return false;
+  }
 
   return IsUrlAllowedForRenderUrls(url) && !url.has_ref();
 }
@@ -56,113 +66,231 @@ size_t EstimateFlatMapSize(
 
 InterestGroup::Ad::Ad() = default;
 
-InterestGroup::Ad::Ad(GURL render_url, absl::optional<std::string> metadata)
-    : render_url(std::move(render_url)), metadata(std::move(metadata)) {}
+InterestGroup::Ad::Ad(base::PassKey<content::InterestGroupStorage>,
+                      std::string render_url)
+    : render_url_(render_url) {}
+InterestGroup::Ad::Ad(
+    GURL render_gurl,
+    absl::optional<std::string> metadata,
+    absl::optional<std::string> size_group,
+    absl::optional<std::string> buyer_reporting_id,
+    absl::optional<std::string> buyer_and_seller_reporting_id,
+    absl::optional<std::string> ad_render_id,
+    absl::optional<std::vector<url::Origin>> allowed_reporting_origins)
+    : size_group(std::move(size_group)),
+      metadata(std::move(metadata)),
+      buyer_reporting_id(std::move(buyer_reporting_id)),
+      buyer_and_seller_reporting_id(std::move(buyer_and_seller_reporting_id)),
+      ad_render_id(std::move(ad_render_id)),
+      allowed_reporting_origins(std::move(allowed_reporting_origins)) {
+  if (render_gurl.is_valid()) {
+    render_url_ = render_gurl.spec();
+  }
+}
 
 InterestGroup::Ad::~Ad() = default;
 
 size_t InterestGroup::Ad::EstimateSize() const {
   size_t size = 0u;
-  size += render_url.spec().length();
-  if (metadata)
+  size += render_url_.length();
+  if (size_group) {
+    size += size_group->size();
+  }
+  if (metadata) {
     size += metadata->size();
+  }
+  if (buyer_reporting_id) {
+    size += buyer_reporting_id->size();
+  }
+  if (buyer_and_seller_reporting_id) {
+    size += buyer_and_seller_reporting_id->size();
+  }
+  if (ad_render_id) {
+    size += ad_render_id->size();
+  }
+  if (allowed_reporting_origins) {
+    for (const url::Origin& origin : *allowed_reporting_origins) {
+      size += origin.Serialize().size();
+    }
+  }
   return size;
 }
 
 bool InterestGroup::Ad::operator==(const Ad& other) const {
-  return render_url == other.render_url && metadata == other.metadata;
+  return std::tie(render_url_, size_group, metadata, buyer_reporting_id,
+                  buyer_and_seller_reporting_id, ad_render_id,
+                  allowed_reporting_origins) ==
+         std::tie(other.render_url_, other.size_group, other.metadata,
+                  other.buyer_reporting_id, other.buyer_and_seller_reporting_id,
+                  other.ad_render_id, other.allowed_reporting_origins);
 }
 
 InterestGroup::InterestGroup() = default;
-
-InterestGroup::InterestGroup(
-    base::Time expiry,
-    url::Origin owner,
-    std::string name,
-    double priority,
-    bool enable_bidding_signals_prioritization,
-    absl::optional<base::flat_map<std::string, double>> priority_vector,
-    absl::optional<base::flat_map<std::string, double>>
-        priority_signals_overrides,
-    blink::mojom::InterestGroup::ExecutionMode execution_mode,
-    absl::optional<GURL> bidding_url,
-    absl::optional<GURL> bidding_wasm_helper_url,
-    absl::optional<GURL> daily_update_url,
-    absl::optional<GURL> trusted_bidding_signals_url,
-    absl::optional<std::vector<std::string>> trusted_bidding_signals_keys,
-    absl::optional<std::string> user_bidding_signals,
-    absl::optional<std::vector<InterestGroup::Ad>> ads,
-    absl::optional<std::vector<InterestGroup::Ad>> ad_components)
-    : expiry(expiry),
-      owner(std::move(owner)),
-      name(std::move(name)),
-      priority(priority),
-      enable_bidding_signals_prioritization(
-          enable_bidding_signals_prioritization),
-      priority_vector(std::move(priority_vector)),
-      priority_signals_overrides(std::move(priority_signals_overrides)),
-      execution_mode(execution_mode),
-      bidding_url(std::move(bidding_url)),
-      bidding_wasm_helper_url(std::move(bidding_wasm_helper_url)),
-      daily_update_url(std::move(daily_update_url)),
-      trusted_bidding_signals_url(std::move(trusted_bidding_signals_url)),
-      trusted_bidding_signals_keys(std::move(trusted_bidding_signals_keys)),
-      user_bidding_signals(std::move(user_bidding_signals)),
-      ads(std::move(ads)),
-      ad_components(std::move(ad_components)) {}
-
 InterestGroup::~InterestGroup() = default;
 
 // The logic in this method must be kept in sync with ValidateBlinkInterestGroup
 // in blink/renderer/modules/ad_auction/. The tests for this logic are also
 // there, so they can be compared against each other.
 bool InterestGroup::IsValid() const {
-  if (owner.scheme() != url::kHttpsScheme)
+  if (owner.scheme() != url::kHttpsScheme) {
     return false;
+  }
 
-  if (!std::isfinite(priority))
+  if (!std::isfinite(priority)) {
     return false;
+  }
+
+  if (seller_capabilities) {
+    for (const auto& [seller_origin, flags] : *seller_capabilities) {
+      if (seller_origin.scheme() != url::kHttpsScheme) {
+        return false;
+      }
+    }
+  }
 
   if (execution_mode !=
           blink::mojom::InterestGroup::ExecutionMode::kCompatibilityMode &&
       execution_mode !=
-          blink::mojom::InterestGroup::ExecutionMode::kGroupedByOriginMode) {
+          blink::mojom::InterestGroup::ExecutionMode::kGroupedByOriginMode &&
+      execution_mode !=
+          blink::mojom::InterestGroup::ExecutionMode::kFrozenContext) {
     return false;
   }
 
-  if (bidding_url && !IsUrlAllowed(*bidding_url, *this))
+  if (bidding_url && !IsUrlAllowed(*bidding_url, *this)) {
     return false;
+  }
 
   if (bidding_wasm_helper_url &&
       !IsUrlAllowed(*bidding_wasm_helper_url, *this)) {
     return false;
   }
 
-  if (daily_update_url && !IsUrlAllowed(*daily_update_url, *this))
+  if (update_url && !IsUrlAllowed(*update_url, *this)) {
     return false;
+  }
 
   if (trusted_bidding_signals_url) {
-    if (!IsUrlAllowed(*trusted_bidding_signals_url, *this))
+    if (!IsUrlAllowed(*trusted_bidding_signals_url, *this)) {
       return false;
+    }
 
     // `trusted_bidding_signals_url` must not have a query string, since the
     // query parameter needs to be set as part of running an auction.
-    if (trusted_bidding_signals_url->has_query())
+    if (trusted_bidding_signals_url->has_query()) {
       return false;
+    }
+  }
+
+  if (trusted_bidding_signals_slot_size_mode !=
+          blink::mojom::InterestGroup::TrustedBiddingSignalsSlotSizeMode::
+              kNone &&
+      trusted_bidding_signals_slot_size_mode !=
+          blink::mojom::InterestGroup::TrustedBiddingSignalsSlotSizeMode::
+              kSlotSize &&
+      trusted_bidding_signals_slot_size_mode !=
+          blink::mojom::InterestGroup::TrustedBiddingSignalsSlotSizeMode::
+              kAllSlotsRequestedSizes) {
+    return false;
   }
 
   if (ads) {
     for (const auto& ad : ads.value()) {
-      if (!IsUrlAllowedForRenderUrls(ad.render_url))
+      if (!IsUrlAllowedForRenderUrls(GURL(ad.render_url()))) {
         return false;
+      }
+      if (ad.size_group) {
+        if (ad.size_group->empty() || !size_groups ||
+            !size_groups->contains(ad.size_group.value())) {
+          return false;
+        }
+      }
+      if (ad.ad_render_id) {
+        if (ad.ad_render_id->size() > kMaxAdRenderIdSize) {
+          return false;
+        }
+      }
+      if (ad.allowed_reporting_origins) {
+        if (ad.allowed_reporting_origins->size() >
+            blink::mojom::kMaxAllowedReportingOrigins) {
+          return false;
+        }
+        for (const auto& origin : ad.allowed_reporting_origins.value()) {
+          if (origin.scheme() != url::kHttpsScheme) {
+            return false;
+          }
+        }
+      }
     }
   }
 
   if (ad_components) {
     for (const auto& ad : ad_components.value()) {
-      if (!IsUrlAllowedForRenderUrls(ad.render_url))
+      if (!IsUrlAllowedForRenderUrls(GURL(ad.render_url()))) {
         return false;
+      }
+      if (ad.size_group) {
+        if (ad.size_group->empty() || !size_groups ||
+            !size_groups->contains(ad.size_group.value())) {
+          return false;
+        }
+      }
+      if (ad.ad_render_id) {
+        if (ad.ad_render_id->size() > kMaxAdRenderIdSize) {
+          return false;
+        }
+      }
+      // These shouldn't be in components array.
+      if (ad.buyer_reporting_id || ad.buyer_and_seller_reporting_id ||
+          ad.allowed_reporting_origins) {
+        return false;
+      }
     }
+  }
+
+  if (ad_sizes) {
+    for (auto const& [size_name, size_obj] : ad_sizes.value()) {
+      if (size_name == "") {
+        return false;
+      }
+      if (!IsValidAdSize(size_obj)) {
+        return false;
+      }
+    }
+  }
+
+  if (size_groups) {
+    // Sizes in a size group must also be in the ad_sizes map.
+    if (!ad_sizes) {
+      return false;
+    }
+    for (auto const& [group_name, size_list] : size_groups.value()) {
+      if (group_name == "") {
+        return false;
+      }
+      for (auto const& size_name : size_list) {
+        if (size_name == "" || !ad_sizes->contains(size_name)) {
+          return false;
+        }
+      }
+    }
+  }
+
+  if (additional_bid_key) {
+    if (additional_bid_key->size() != ED25519_PUBLIC_KEY_LEN) {
+      return false;
+    }
+  }
+
+  // InterestGroups used for negative targeting may not also have ads.
+  // They are also not updatable.
+  if (additional_bid_key && (ads || update_url)) {
+    return false;
+  }
+
+  if (aggregation_coordinator_origin &&
+      aggregation_coordinator_origin->scheme() != url::kHttpsScheme) {
+    return false;
   }
 
   return EstimateSize() < blink::mojom::kMaxInterestGroupSize;
@@ -177,31 +305,73 @@ size_t InterestGroup::EstimateSize() const {
   size += sizeof(execution_mode);
   size += sizeof(enable_bidding_signals_prioritization);
 
-  if (priority_vector)
+  if (priority_vector) {
     size += EstimateFlatMapSize(*priority_vector);
-  if (priority_signals_overrides)
-    size += EstimateFlatMapSize(*priority_signals_overrides);
-  if (bidding_url)
-    size += bidding_url->spec().length();
-  if (bidding_wasm_helper_url)
-    size += bidding_wasm_helper_url->spec().length();
-  if (daily_update_url)
-    size += daily_update_url->spec().length();
-  if (trusted_bidding_signals_url)
-    size += trusted_bidding_signals_url->spec().length();
-  if (trusted_bidding_signals_keys) {
-    for (const std::string& key : *trusted_bidding_signals_keys)
-      size += key.size();
   }
-  if (user_bidding_signals)
+  if (priority_signals_overrides) {
+    size += EstimateFlatMapSize(*priority_signals_overrides);
+  }
+  if (seller_capabilities) {
+    for (const auto& [seller_origin, flags] : *seller_capabilities) {
+      size +=
+          seller_origin.Serialize().size() + sizeof(decltype(flags)::EnumType);
+    }
+  }
+  size += sizeof(decltype(all_sellers_capabilities)::EnumType);
+  if (bidding_url) {
+    size += bidding_url->spec().length();
+  }
+  if (bidding_wasm_helper_url) {
+    size += bidding_wasm_helper_url->spec().length();
+  }
+  if (update_url) {
+    size += update_url->spec().length();
+  }
+  if (trusted_bidding_signals_url) {
+    size += trusted_bidding_signals_url->spec().length();
+  }
+  if (trusted_bidding_signals_keys) {
+    for (const std::string& key : *trusted_bidding_signals_keys) {
+      size += key.size();
+    }
+  }
+  size += sizeof(trusted_bidding_signals_slot_size_mode);
+  if (user_bidding_signals) {
     size += user_bidding_signals->size();
+  }
   if (ads) {
-    for (const Ad& ad : *ads)
+    for (const Ad& ad : *ads) {
       size += ad.EstimateSize();
+    }
   }
   if (ad_components) {
-    for (const Ad& ad : *ad_components)
+    for (const Ad& ad : *ad_components) {
       size += ad.EstimateSize();
+    }
+  }
+  if (ad_sizes) {
+    for (const auto& [size_name, size_obj] : *ad_sizes) {
+      size += size_name.length();
+      size += sizeof(size_obj.width);
+      size += sizeof(size_obj.height);
+      size += sizeof(size_obj.width_units);
+      size += sizeof(size_obj.height_units);
+    }
+  }
+  if (size_groups) {
+    for (const auto& size_group : size_groups.value()) {
+      size += size_group.first.length();
+      for (const auto& size_name : size_group.second) {
+        size += size_name.length();
+      }
+    }
+  }
+  size += sizeof(decltype(auction_server_request_flags)::EnumType);
+  if (additional_bid_key) {
+    size += ED25519_PUBLIC_KEY_LEN;
+  }
+  if (aggregation_coordinator_origin) {
+    size += aggregation_coordinator_origin->Serialize().size();
   }
   return size;
 }
@@ -209,18 +379,117 @@ size_t InterestGroup::EstimateSize() const {
 bool InterestGroup::IsEqualForTesting(const InterestGroup& other) const {
   return std::tie(expiry, owner, name, priority,
                   enable_bidding_signals_prioritization, priority_vector,
-                  priority_signals_overrides, execution_mode, bidding_url,
-                  bidding_wasm_helper_url, daily_update_url,
+                  priority_signals_overrides, seller_capabilities,
+                  all_sellers_capabilities, execution_mode, bidding_url,
+                  bidding_wasm_helper_url, update_url,
                   trusted_bidding_signals_url, trusted_bidding_signals_keys,
-                  user_bidding_signals, ads, ad_components) ==
+                  trusted_bidding_signals_slot_size_mode, user_bidding_signals,
+                  ads, ad_components, ad_sizes, size_groups,
+                  auction_server_request_flags, additional_bid_key,
+                  aggregation_coordinator_origin) ==
          std::tie(other.expiry, other.owner, other.name, other.priority,
                   other.enable_bidding_signals_prioritization,
                   other.priority_vector, other.priority_signals_overrides,
+                  other.seller_capabilities, other.all_sellers_capabilities,
                   other.execution_mode, other.bidding_url,
-                  other.bidding_wasm_helper_url, other.daily_update_url,
+                  other.bidding_wasm_helper_url, other.update_url,
                   other.trusted_bidding_signals_url,
                   other.trusted_bidding_signals_keys,
-                  other.user_bidding_signals, other.ads, other.ad_components);
+                  other.trusted_bidding_signals_slot_size_mode,
+                  other.user_bidding_signals, other.ads, other.ad_components,
+                  other.ad_sizes, other.size_groups,
+                  other.auction_server_request_flags, other.additional_bid_key,
+                  other.aggregation_coordinator_origin);
+}
+
+std::string_view InterestGroup::TrustedBiddingSignalsSlotSizeModeToString(
+    TrustedBiddingSignalsSlotSizeMode slot_size_mode) {
+  switch (slot_size_mode) {
+    case TrustedBiddingSignalsSlotSizeMode::kNone:
+      return "none";
+    case TrustedBiddingSignalsSlotSizeMode::kSlotSize:
+      return "slot-size";
+    case TrustedBiddingSignalsSlotSizeMode::kAllSlotsRequestedSizes:
+      return "all-slots-requested-sizes";
+  }
+}
+
+std::string KAnonKeyForAdBid(const InterestGroup& group, const GURL& ad_url) {
+  return KAnonKeyForAdBid(group, blink::AdDescriptor(ad_url));
+}
+
+std::string KAnonKeyForAdBid(const InterestGroup& group,
+                             const std::string& ad_url_from_gurl_spec) {
+  return KAnonKeyForAdBid(group.owner, group.bidding_url.value_or(GURL()),
+                          ad_url_from_gurl_spec);
+}
+
+std::string KAnonKeyForAdBid(const blink::InterestGroup& group,
+                             const blink::AdDescriptor& ad_descriptor) {
+  DCHECK(group.ads);
+  DCHECK(base::Contains(
+      *group.ads, ad_descriptor.url,
+      [](const blink::InterestGroup::Ad& ad) { return ad.render_url(); }))
+      << "No such ad: " << ad_descriptor.url;
+  DCHECK(group.bidding_url);
+  return KAnonKeyForAdBid(group.owner, group.bidding_url.value_or(GURL()),
+                          ad_descriptor);
+}
+
+std::string KAnonKeyForAdBid(const url::Origin& owner,
+                             const GURL& bidding_url,
+                             const GURL& ad_url) {
+  return KAnonKeyForAdBid(owner, bidding_url, ad_url.spec());
+}
+
+std::string KAnonKeyForAdBid(const url::Origin& owner,
+                             const GURL& bidding_url,
+                             const blink::AdDescriptor& ad_descriptor) {
+  // TODO(crbug.com/1442242): Add size back to this check.
+  return KAnonKeyForAdBid(owner, bidding_url, ad_descriptor.url.spec());
+}
+
+std::string KAnonKeyForAdBid(const url::Origin& owner,
+                             const GURL& bidding_url,
+                             const std::string& ad_url_from_gurl_spec) {
+  return base::StrCat({kKAnonKeyForAdBidPrefix, owner.GetURL().spec(), "\n",
+                       bidding_url.spec(), "\n", ad_url_from_gurl_spec});
+}
+
+std::string KAnonKeyForAdComponentBid(const GURL& ad_url) {
+  return KAnonKeyForAdComponentBid(ad_url.spec());
+}
+
+std::string KAnonKeyForAdComponentBid(
+    const blink::AdDescriptor& ad_descriptor) {
+  // TODO(crbug.com/1442242): Add size back to this check.
+  return KAnonKeyForAdComponentBid(ad_descriptor.url.spec());
+}
+
+std::string KAnonKeyForAdComponentBid(
+    const std::string& ad_url_from_gurl_spec) {
+  return base::StrCat(
+      {kKAnonKeyForAdComponentBidPrefix, ad_url_from_gurl_spec});
+}
+
+std::string KAnonKeyForAdNameReporting(const blink::InterestGroup& group,
+                                       const blink::InterestGroup::Ad& ad) {
+  DCHECK(group.ads);
+  DCHECK(base::Contains(*group.ads, ad)) << "No such ad: " << ad.render_url();
+  DCHECK(group.bidding_url);
+  std::string middle = base::StrCat({group.owner.GetURL().spec(), "\n",
+                                     group.bidding_url.value_or(GURL()).spec(),
+                                     "\n", ad.render_url(), "\n"});
+  if (ad.buyer_and_seller_reporting_id.has_value()) {
+    return base::StrCat({kKAnonKeyForAdNameReportingBuyerAndSellerIdPrefix,
+                         middle, *ad.buyer_and_seller_reporting_id});
+  }
+  if (ad.buyer_reporting_id.has_value()) {
+    return base::StrCat({kKAnonKeyForAdNameReportingBuyerReportIdPrefix, middle,
+                         *ad.buyer_reporting_id});
+  }
+  return base::StrCat(
+      {kKAnonKeyForAdNameReportingNamePrefix, middle, group.name});
 }
 
 }  // namespace blink

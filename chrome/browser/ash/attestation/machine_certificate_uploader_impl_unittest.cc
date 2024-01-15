@@ -4,14 +4,14 @@
 
 #include <stdint.h>
 
+#include <optional>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/attestation/attestation_key_payload.pb.h"
 #include "chrome/browser/ash/attestation/machine_certificate_uploader_impl.h"
@@ -43,21 +43,30 @@ constexpr char kFakeCertificate[] = "fake_cert";
 
 void CertCallbackUnspecifiedFailure(
     AttestationFlow::CertificateCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), ATTESTATION_UNSPECIFIED_FAILURE, ""));
 }
 
 void CertCallbackBadRequestFailure(
     AttestationFlow::CertificateCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback),
                                 ATTESTATION_SERVER_BAD_REQUEST_FAILURE, ""));
 }
 
-void StatusCallbackSuccess(policy::CloudPolicyClient::StatusCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), true));
+void CertCallbackNotAvailableFailure(
+    AttestationFlow::CertificateCallback callback) {
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(std::move(callback), ATTESTATION_NOT_AVAILABLE, ""));
+}
+
+void ResultCallbackSuccess(policy::CloudPolicyClient::ResultCallback callback) {
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(std::move(callback), policy::CloudPolicyClient::Result(
+                                              policy::DM_STATUS_SUCCESS)));
 }
 
 class CallbackObserver {
@@ -72,7 +81,7 @@ class CallbackObserver {
 class MockableFakeAttestationFlow : public MockAttestationFlow {
  public:
   MockableFakeAttestationFlow() {
-    ON_CALL(*this, GetCertificate(_, _, _, _, _, _, _))
+    ON_CALL(*this, GetCertificate(_, _, _, _, _, _, _, _))
         .WillByDefault(
             Invoke(this, &MockableFakeAttestationFlow::GetCertificateInternal));
   }
@@ -80,13 +89,16 @@ class MockableFakeAttestationFlow : public MockAttestationFlow {
   void set_status(AttestationStatus status) { status_ = status; }
 
  private:
-  void GetCertificateInternal(AttestationCertificateProfile certificate_profile,
-                              const AccountId& account_id,
-                              const std::string& request_origin,
-                              bool force_new_key,
-                              ::attestation::KeyType key_crypto_type,
-                              const std::string& key_name,
-                              CertificateCallback callback) {
+  void GetCertificateInternal(
+      AttestationCertificateProfile certificate_profile,
+      const AccountId& account_id,
+      const std::string& request_origin,
+      bool force_new_key,
+      ::attestation::KeyType key_crypto_type,
+      const std::string& key_name,
+      const std::optional<AttestationFlow::CertProfileSpecificData>&
+          profile_specific_data,
+      CertificateCallback callback) {
     std::string certificate;
     if (status_ == ATTESTATION_SUCCESS) {
       certificate = certificate_;
@@ -157,14 +169,14 @@ class MachineCertificateUploaderTestBase : public ::testing::Test {
       EXPECT_CALL(policy_client_,
                   UploadEnterpriseMachineCertificate(
                       new_key ? kFakeCertificate : certificate, _))
-          .WillOnce(WithArgs<1>(Invoke(StatusCallbackSuccess)));
+          .WillOnce(WithArgs<1>(Invoke(ResultCallbackSuccess)));
     }
 
     // Setup expected key generations.  Again use WillOnce().  Key generation is
     // another costly operation and if it gets triggered more than once during
     // a single pass this indicates a logical problem in the observer.
     if (new_key) {
-      EXPECT_CALL(attestation_flow_, GetCertificate(_, _, _, _, _, _, _));
+      EXPECT_CALL(attestation_flow_, GetCertificate(_, _, _, _, _, _, _, _));
     }
   }
 
@@ -208,14 +220,20 @@ TEST_P(MachineCertificateUploaderTest, UnregisteredPolicyClient) {
 }
 
 TEST_P(MachineCertificateUploaderTest, GetCertificateUnspecifiedFailure) {
-  EXPECT_CALL(attestation_flow_, GetCertificate(_, _, _, _, _, _, _))
-      .WillRepeatedly(WithArgs<6>(Invoke(CertCallbackUnspecifiedFailure)));
+  EXPECT_CALL(attestation_flow_, GetCertificate(_, _, _, _, _, _, _, _))
+      .WillRepeatedly(WithArgs<7>(Invoke(CertCallbackUnspecifiedFailure)));
   RunUploader();
 }
 
 TEST_P(MachineCertificateUploaderTest, GetCertificateBadRequestFailure) {
-  EXPECT_CALL(attestation_flow_, GetCertificate(_, _, _, _, _, _, _))
-      .WillOnce(WithArgs<6>(Invoke(CertCallbackBadRequestFailure)));
+  EXPECT_CALL(attestation_flow_, GetCertificate(_, _, _, _, _, _, _, _))
+      .WillOnce(WithArgs<7>(Invoke(CertCallbackBadRequestFailure)));
+  RunUploader();
+}
+
+TEST_P(MachineCertificateUploaderTest, GetCertificateNotAvailableFailure) {
+  EXPECT_CALL(attestation_flow_, GetCertificate(_, _, _, _, _, _, _, _))
+      .WillOnce(WithArgs<7>(Invoke(CertCallbackNotAvailableFailure)));
   RunUploader();
 }
 
@@ -262,8 +280,8 @@ TEST_P(MachineCertificateUploaderTest, WaitForUploadComplete) {
 }
 
 TEST_P(MachineCertificateUploaderTest, WaitForUploadFail) {
-  EXPECT_CALL(attestation_flow_, GetCertificate(_, _, _, _, _, _, _))
-      .WillOnce(WithArgs<6>(Invoke(CertCallbackBadRequestFailure)));
+  EXPECT_CALL(attestation_flow_, GetCertificate(_, _, _, _, _, _, _, _))
+      .WillOnce(WithArgs<7>(Invoke(CertCallbackBadRequestFailure)));
 
   StrictMock<CallbackObserver> waiting_callback_observer;
   MachineCertificateUploaderImpl uploader(&policy_client_, &attestation_flow_);

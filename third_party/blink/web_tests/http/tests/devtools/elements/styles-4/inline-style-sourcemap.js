@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Verify that inline style sourceMappingURL is resolved properly.\n`);
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
     <body id="inspect">
@@ -22,7 +26,7 @@
       }
   `);
 
-  SDK.targetManager.addModelListener(SDK.CSSModel, SDK.CSSModel.Events.StyleSheetAdded, function() {});
+  SDK.TargetManager.TargetManager.instance().addModelListener(SDK.CSSModel.CSSModel, SDK.CSSModel.Events.StyleSheetAdded, function() {});
   TestRunner.evaluateInPage('embedInlineStyleSheet()', onEvaluated);
 
   function onEvaluated() {

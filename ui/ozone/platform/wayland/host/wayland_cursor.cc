@@ -48,7 +48,7 @@ void WaylandCursor::UpdateBitmap(const std::vector<SkBitmap>& cursor_image,
     return HideCursor();
 
   gfx::Size image_size = gfx::SkISizeToSize(image.dimensions());
-  WaylandShmBuffer buffer(connection_->wayland_buffer_factory(), image_size);
+  WaylandShmBuffer buffer(connection_->buffer_factory(), image_size);
 
   if (!buffer.IsValid()) {
     LOG(ERROR) << "Failed to create SHM buffer for Cursor Bitmap.";
@@ -56,8 +56,7 @@ void WaylandCursor::UpdateBitmap(const std::vector<SkBitmap>& cursor_image,
   }
 
   buffer_scale_ = buffer_scale;
-  if (!connection_->surface_submission_in_pixel_coordinates())
-    wl_surface_set_buffer_scale(pointer_surface_.get(), buffer_scale_);
+  wl_surface_set_buffer_scale(pointer_surface_.get(), buffer_scale_);
 
   static constexpr wl_buffer_listener wl_buffer_listener{
       &WaylandCursor::OnBufferRelease};
@@ -85,8 +84,7 @@ void WaylandCursor::SetPlatformShape(wl_cursor* cursor_data, int buffer_scale) {
   buffer_scale_ = buffer_scale;
   current_image_index_ = 0;
 
-  if (!connection_->surface_submission_in_pixel_coordinates())
-    wl_surface_set_buffer_scale(pointer_surface_.get(), buffer_scale_);
+  wl_surface_set_buffer_scale(pointer_surface_.get(), buffer_scale_);
 
   SetPlatformShapeInternal();
 
@@ -117,6 +115,12 @@ void WaylandCursor::HideCursor() {
 
 void WaylandCursor::SetPlatformShapeInternal() {
   DCHECK_GT(cursor_data_->image_count, 0U);
+
+  // Under some conditions, either `images` is nullptr, or `image_count` is 0.
+  // See https://crbug.com/1341202
+  if (!cursor_data_->images || cursor_data_->image_count == 0U) {
+    return;
+  }
 
   // The image index is incremented every time the animation frame is committed.
   // Here we reset the counter if the final frame in the series has been sent,
@@ -153,12 +157,14 @@ void WaylandCursor::AttachAndCommit(wl_buffer* buffer,
   }
 
   DCHECK(pointer_);
-  wl_pointer_set_cursor(pointer_->wl_object(), pointer_enter_serial->value,
-                        pointer_surface_.get(), hotspot_x_dip, hotspot_y_dip);
 
   wl_surface_damage(pointer_surface_.get(), 0, 0, buffer_width, buffer_height);
+  // Note: should the offset be non-zero, use wl_surface_offset() to set it.
   wl_surface_attach(pointer_surface_.get(), buffer, 0, 0);
   wl_surface_commit(pointer_surface_.get());
+
+  wl_pointer_set_cursor(pointer_->wl_object(), pointer_enter_serial->value,
+                        pointer_surface_.get(), hotspot_x_dip, hotspot_y_dip);
 
   connection_->Flush();
 }

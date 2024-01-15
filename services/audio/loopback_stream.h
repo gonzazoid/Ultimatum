@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
@@ -179,7 +179,8 @@ class LoopbackStream final : public media::mojom::AudioInputStream,
     base::Lock lock_;
 
     // The input nodes.
-    std::vector<SnooperNode*> inputs_;  // Guarded by |lock_|.
+    std::vector<raw_ptr<SnooperNode, VectorExperimental>>
+        inputs_;  // Guarded by |lock_|.
 
     // Current stream volume. The audio output from this FlowNetwork is scaled
     // by this amount during mixing.

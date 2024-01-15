@@ -8,26 +8,27 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.VisibleForTesting;
+
+import org.chromium.base.ResettersForTesting;
 
 import java.util.List;
 
-/**
- * Class for controlling the page info ad personalization section.
- */
+/** Class for controlling the page info ad personalization section. */
 public class PageInfoAdPersonalizationController extends PageInfoPreferenceSubpageController {
     public static final int ROW_ID = View.generateViewId();
     private static List<String> sTopicsForTesting;
 
     private final PageInfoMainController mMainController;
     private final PageInfoRowView mRowView;
-    private PageInfoAdPersonalizationPreference mSubPage;
+    private PageInfoAdPersonalizationSettings mSubPage;
 
     private boolean mHasJoinedUserToInterestGroup;
     private List<String> mTopics;
 
-    public PageInfoAdPersonalizationController(PageInfoMainController mainController,
-            PageInfoRowView rowView, PageInfoControllerDelegate delegate) {
+    public PageInfoAdPersonalizationController(
+            PageInfoMainController mainController,
+            PageInfoRowView rowView,
+            PageInfoControllerDelegate delegate) {
         super(delegate);
         mMainController = mainController;
         mRowView = rowView;
@@ -57,23 +58,23 @@ public class PageInfoAdPersonalizationController extends PageInfoPreferenceSubpa
     @NonNull
     @Override
     public String getSubpageTitle() {
-        return mRowView.getContext().getResources().getString(
-                R.string.page_info_ad_personalization_title);
+        return mRowView.getContext().getResources().getString(R.string.page_info_ad_privacy_header);
     }
 
     @Override
     public View createViewForSubpage(ViewGroup parent) {
         assert mSubPage == null;
-        mSubPage = new PageInfoAdPersonalizationPreference();
-        PageInfoAdPersonalizationPreference.Params params =
-                new PageInfoAdPersonalizationPreference.Params();
+        mSubPage = new PageInfoAdPersonalizationSettings();
+        PageInfoAdPersonalizationSettings.Params params =
+                new PageInfoAdPersonalizationSettings.Params();
         params.hasJoinedUserToInterestGroup = mHasJoinedUserToInterestGroup;
         params.topicInfo = mTopics;
-        params.onManageInterestsButtonClicked = () -> {
-            mMainController.recordAction(
-                    PageInfoAction.PAGE_INFO_AD_PERSONALIZATION_SETTINGS_OPENED);
-            getDelegate().showAdPersonalizationSettings();
-        };
+        params.onManageInterestsButtonClicked =
+                () -> {
+                    mMainController.recordAction(
+                            PageInfoAction.PAGE_INFO_AD_PERSONALIZATION_SETTINGS_OPENED);
+                    getDelegate().showAdPersonalizationSettings();
+                };
         mSubPage.setParams(params);
         return addSubpageFragment(mSubPage);
     }
@@ -85,16 +86,13 @@ public class PageInfoAdPersonalizationController extends PageInfoPreferenceSubpa
     public void updateRowIfNeeded() {}
 
     @Override
-    public void onNativeInitialized() {}
-
-    @Override
     public void onSubpageRemoved() {
         removeSubpageFragment();
         mSubPage = null;
     }
 
-    @VisibleForTesting
     public static void setTopicsForTesting(List<String> topics) {
         sTopicsForTesting = topics;
+        ResettersForTesting.register(() -> sTopicsForTesting = null);
     }
 }

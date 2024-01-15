@@ -15,6 +15,7 @@
 #include "components/soda/constants.h"
 #include "components/soda/pref_names.h"
 #include "media/base/media_switches.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/constants/ash_features.h"
@@ -140,6 +141,10 @@ bool SodaInstaller::IsSodaInstalled(LanguageCode language_code) const {
   return (soda_binary_installed_ && IsLanguageInstalled(language_code));
 }
 
+const std::set<LanguageCode> SodaInstaller::InstalledLanguages() const {
+  return installed_languages_;
+}
+
 bool SodaInstaller::IsLanguageInstalled(LanguageCode language_code) const {
   return base::Contains(installed_languages_, language_code);
 }
@@ -232,12 +237,14 @@ void SodaInstaller::RegisterRegisteredLanguagePackPref(
 }
 
 void SodaInstaller::NotifyOnSodaInstalled(LanguageCode language_code) {
+  error_codes_.erase(language_code);
   for (Observer& observer : observers_)
     observer.OnSodaInstalled(language_code);
 }
 
 void SodaInstaller::NotifyOnSodaInstallError(LanguageCode language_code,
                                              ErrorCode error_code) {
+  error_codes_[language_code] = error_code;
   for (Observer& observer : observers_)
     observer.OnSodaInstallError(language_code, error_code);
 }
@@ -257,6 +264,15 @@ void SodaInstaller::RegisterLanguage(const std::string& language,
   }
 }
 
+void SodaInstaller::UnregisterLanguage(const std::string& language,
+                                       PrefService* global_prefs) {
+  ScopedListPrefUpdate update(global_prefs,
+                              prefs::kSodaRegisteredLanguagePacks);
+  if (base::Contains(*update, base::Value(language))) {
+    update->EraseValue(base::Value(language));
+  }
+}
+
 void SodaInstaller::UnregisterLanguages(PrefService* global_prefs) {
   ScopedListPrefUpdate update(global_prefs,
                               prefs::kSodaRegisteredLanguagePacks);
@@ -266,6 +282,17 @@ void SodaInstaller::UnregisterLanguages(PrefService* global_prefs) {
 bool SodaInstaller::IsSodaDownloading(LanguageCode language_code) const {
   return is_soda_downloading_ ||
          base::Contains(language_pack_progress_, language_code);
+}
+
+absl::optional<SodaInstaller::ErrorCode> SodaInstaller::GetSodaInstallErrorCode(
+    LanguageCode language_code) const {
+  if (IsSodaDownloading(language_code))
+    return absl::nullopt;
+
+  const auto error_code = error_codes_.find(language_code);
+  if (error_code != error_codes_.end())
+    return error_code->second;
+  return absl::nullopt;
 }
 
 bool SodaInstaller::IsAnyFeatureUsingSodaEnabled(PrefService* prefs) {

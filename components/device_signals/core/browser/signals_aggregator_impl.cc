@@ -6,9 +6,9 @@
 
 #include <functional>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
 #include "components/device_signals/core/browser/metrics_utils.h"
@@ -34,6 +34,8 @@ SignalCollectionError PermissionToError(const UserPermission permission) {
       return SignalCollectionError::kInvalidUser;
     case UserPermission::kGranted:
       NOTREACHED();
+      ABSL_FALLTHROUGH_INTENDED;
+    case UserPermission::kUnsupported:
       return SignalCollectionError::kUnsupported;
   }
 }
@@ -63,6 +65,26 @@ SignalsAggregatorImpl::SignalsAggregatorImpl(
 
 SignalsAggregatorImpl::~SignalsAggregatorImpl() = default;
 
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+void SignalsAggregatorImpl::GetSignalsForUser(
+    const UserContext& user_context,
+    const SignalsAggregationRequest& request,
+    GetSignalsCallback callback) {
+  // Request for collection of multiple signals is not yet supported. Only the
+  // first signal will be returned.
+  if (request.signal_names.size() != 1) {
+    RespondWithError(SignalCollectionError::kUnsupported, std::move(callback));
+    return;
+  }
+
+  LogSignalCollectionRequested(*request.signal_names.begin());
+
+  const auto permission =
+      permission_service_->CanUserCollectSignals(user_context);
+  GetSignalsWithPermission(permission, std::move(request), std::move(callback));
+}
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+
 void SignalsAggregatorImpl::GetSignals(const SignalsAggregationRequest& request,
                                        GetSignalsCallback callback) {
   // Request for collection of multiple signals is not yet supported. Only the
@@ -74,21 +96,14 @@ void SignalsAggregatorImpl::GetSignals(const SignalsAggregationRequest& request,
 
   LogSignalCollectionRequested(*request.signal_names.begin());
 
-  // Capture a reference to `user_context` before calling the function to
-  // prevent a "use after move" warning on `request`, since we cannot guarantee
-  // the order of execution when evaluation function parameters.
-  const auto& user_context = request.user_context;
-  permission_service_->CanCollectSignals(
-      user_context,
-      base::BindOnce(&SignalsAggregatorImpl::OnUserPermissionChecked,
-                     weak_factory_.GetWeakPtr(), std::move(request),
-                     std::move(callback)));
+  const auto permission = permission_service_->CanCollectSignals();
+  GetSignalsWithPermission(permission, std::move(request), std::move(callback));
 }
 
-void SignalsAggregatorImpl::OnUserPermissionChecked(
+void SignalsAggregatorImpl::GetSignalsWithPermission(
+    const UserPermission user_permission,
     const SignalsAggregationRequest& request,
-    GetSignalsCallback callback,
-    const UserPermission user_permission) {
+    GetSignalsCallback callback) {
   LogUserPermissionChecked(user_permission);
   if (user_permission != UserPermission::kGranted) {
     RespondWithError(PermissionToError(user_permission), std::move(callback));

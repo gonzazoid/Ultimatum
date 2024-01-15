@@ -9,7 +9,7 @@
 
 #include "base/memory/ptr_util.h"
 #include "chrome/browser/android/android_theme_resources.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "components/infobars/android/confirm_infobar.h"
 #include "components/infobars/content/content_infobar_manager.h"
 #include "components/infobars/core/infobar.h"
@@ -25,25 +25,18 @@
 infobars::InfoBar* PermissionUpdateInfoBarDelegate::Create(
     content::WebContents* web_contents,
     const std::vector<ContentSettingsType>& content_settings_types,
+    const std::vector<ContentSettingsType>& filtered_content_settings_types,
+    const std::vector<std::string>& required_permissions,
+    const std::vector<std::string>& optional_permissions,
     PermissionUpdatedCallback callback) {
   DCHECK_EQ(permissions::ShouldRepromptUserForPermissions(
                 web_contents, content_settings_types),
             permissions::PermissionRepromptState::kShow)
-      << "Caller should check ShouldShowPermissionInfobar before creating the "
-      << "infobar.";
+      << "Caller should check ShouldRepromptUserForPermissions before creating "
+         "the infobar.";
 
-  auto* window_android = web_contents->GetNativeView()->GetWindowAndroid();
-
-  std::vector<std::string> required_permissions;
-  std::vector<std::string> optional_permissions;
-  const std::vector<ContentSettingsType> filtered_types =
-      GetContentSettingsWithMissingRequiredAndroidPermissions(
-          content_settings_types, window_android);
-  AppendRequiredAndOptionalAndroidPermissionsForContentSettings(
-      filtered_types, required_permissions, optional_permissions);
-  int message_id = GetPermissionUpdateUiTitleId(
-      filtered_types, required_permissions, optional_permissions);
-
+  const int message_id =
+      GetPermissionUpdateUiTitleId(filtered_content_settings_types);
   return PermissionUpdateInfoBarDelegate::Create(
       web_contents, required_permissions, optional_permissions,
       content_settings_types, message_id, std::move(callback));
@@ -98,9 +91,7 @@ infobars::InfoBar* PermissionUpdateInfoBarDelegate::Create(
 
 // static
 int PermissionUpdateInfoBarDelegate::GetPermissionUpdateUiTitleId(
-    const std::vector<ContentSettingsType>& content_settings_types,
-    std::vector<std::string>& required_permissions,
-    std::vector<std::string>& optional_permissions) {
+    const std::vector<ContentSettingsType>& content_settings_types) {
   // Decided which title to return.
   int message_id = -1;
   for (ContentSettingsType content_settings_type : content_settings_types) {

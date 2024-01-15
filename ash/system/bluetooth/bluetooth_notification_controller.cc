@@ -18,8 +18,9 @@
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/toast/toast_manager_impl.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -62,8 +63,8 @@ class BluetoothPairingNotificationDelegate
 
   // message_center::NotificationDelegate overrides.
   void Close(bool by_user) override;
-  void Click(const absl::optional<int>& button_index,
-             const absl::optional<std::u16string>& reply) override;
+  void Click(const std::optional<int>& button_index,
+             const std::optional<std::u16string>& reply) override;
 
  private:
   // Buttons that appear in notifications.
@@ -101,8 +102,8 @@ void BluetoothPairingNotificationDelegate::Close(bool by_user) {
 }
 
 void BluetoothPairingNotificationDelegate::Click(
-    const absl::optional<int>& button_index,
-    const absl::optional<std::u16string>& reply) {
+    const std::optional<int>& button_index,
+    const std::optional<std::u16string>& reply) {
   if (!button_index)
     return;
 
@@ -167,30 +168,32 @@ void BluetoothNotificationController::AdapterDiscoverableChanged(
 
 void BluetoothNotificationController::DeviceAdded(BluetoothAdapter* adapter,
                                                   BluetoothDevice* device) {
-  // Add the new device to the list of currently paired devices; it doesn't
+  // Add the new device to the list of currently bonded devices; it doesn't
   // receive a notification since it's assumed it was previously notified.
-  if (device->IsPaired())
-    paired_devices_.insert(device->GetAddress());
+  if (device->IsBonded()) {
+    bonded_devices_.insert(device->GetAddress());
+  }
 }
 
 void BluetoothNotificationController::DeviceChanged(BluetoothAdapter* adapter,
                                                     BluetoothDevice* device) {
-  // If the device is already in the list of paired devices, then don't
+  // If the device is already in the list of bonded devices, then don't
   // notify.
-  if (paired_devices_.find(device->GetAddress()) != paired_devices_.end())
+  if (base::Contains(bonded_devices_, device->GetAddress())) {
     return;
+  }
 
-  // Otherwise if it's marked as paired then it must be newly paired, so
+  // Otherwise if it's marked as bonded then it must be newly bonded, so
   // notify the user about that.
-  if (device->IsPaired()) {
-    paired_devices_.insert(device->GetAddress());
-    NotifyPairedDevice(device);
+  if (device->IsBonded()) {
+    bonded_devices_.insert(device->GetAddress());
+    NotifyBondedDevice(device);
   }
 }
 
 void BluetoothNotificationController::DeviceRemoved(BluetoothAdapter* adapter,
                                                     BluetoothDevice* device) {
-  paired_devices_.erase(device->GetAddress());
+  bonded_devices_.erase(device->GetAddress());
 }
 
 void BluetoothNotificationController::RequestPinCode(BluetoothDevice* device) {
@@ -263,21 +266,25 @@ void BluetoothNotificationController::OnGetAdapter(
   if (adapter_->IsDiscoverable())
     NotifyAdapterDiscoverable();
 
-  // Build a list of the currently paired devices; these don't receive
+  // Build a list of the currently bonded devices; these don't receive
   // notifications since it's assumed they were previously notified.
   BluetoothAdapter::DeviceList devices = adapter_->GetDevices();
   for (BluetoothAdapter::DeviceList::const_iterator iter = devices.begin();
        iter != devices.end(); ++iter) {
     const BluetoothDevice* device = *iter;
-    if (device->IsPaired())
-      paired_devices_.insert(device->GetAddress());
+    if (device->IsBonded()) {
+      bonded_devices_.insert(device->GetAddress());
+    }
   }
 }
 
 void BluetoothNotificationController::NotifyAdapterDiscoverable() {
-  // Do not show toast in kiosk app mode.
-  if (Shell::Get()->session_controller()->IsRunningInAppMode())
+  // Do not show toast in kiosk app mode or if user is not logged in. This
+  // prevents toast from being queued before the session starts.
+  if (Shell::Get()->session_controller()->IsRunningInAppMode() ||
+      !Shell::Get()->session_controller()->IsActiveUserSessionStarted()) {
     return;
+  }
 
   // If Nearby Share has made the local device discoverable, do not
   // unnecessarily display this toast.
@@ -309,7 +316,7 @@ void BluetoothNotificationController::NotifyPairing(
         l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_BLUETOOTH_REJECT)));
   }
 
-  std::unique_ptr<Notification> notification = CreateSystemNotification(
+  std::unique_ptr<Notification> notification = CreateSystemNotificationPtr(
       message_center::NOTIFICATION_TYPE_SIMPLE,
       kBluetoothDevicePairingNotificationId, std::u16string() /* title */,
       message, std::u16string() /* display source */, GURL(),
@@ -325,11 +332,11 @@ void BluetoothNotificationController::NotifyPairing(
   message_center_->AddNotification(std::move(notification));
 }
 
-void BluetoothNotificationController::NotifyPairedDevice(
+void BluetoothNotificationController::NotifyBondedDevice(
     BluetoothDevice* device) {
   // Remove the currently presented pairing notification; since only one
   // pairing request is queued at a time, this is guaranteed to be the device
-  // that just became paired. The notification will be handled by
+  // that just became bonded. The notification will be handled by
   // BluetoothDeviceStatusUiHandler.
   if (message_center_->FindVisibleNotificationById(
           kBluetoothDevicePairingNotificationId)) {

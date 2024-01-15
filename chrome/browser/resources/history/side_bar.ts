@@ -3,24 +3,24 @@
 // found in the LICENSE file.
 
 import 'chrome://resources/cr_components/managed_footnote/managed_footnote.js';
+import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
 import 'chrome://resources/cr_elements/cr_icons.css.js';
 import 'chrome://resources/cr_elements/cr_menu_selector/cr_menu_selector.js';
 import 'chrome://resources/cr_elements/cr_nav_menu_item_style.css.js';
 import 'chrome://resources/cr_elements/icons.html.js';
 import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
-import 'chrome://resources/polymer/v3_0/iron-selector/iron-selector.js';
 import 'chrome://resources/polymer/v3_0/paper-ripple/paper-ripple.js';
 import 'chrome://resources/polymer/v3_0/paper-styles/color.js';
 import './shared_icons.html.js';
-import './shared_style.css.js';
+import './shared_vars.css.js';
 import './strings.m.js';
 
 import {BrowserProxyImpl} from 'chrome://resources/cr_components/history_clusters/browser_proxy.js';
 import {MetricsProxyImpl} from 'chrome://resources/cr_components/history_clusters/metrics_proxy.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {IronSelectorElement} from 'chrome://resources/polymer/v3_0/iron-selector/iron-selector.js';
-import {PaperRippleElement} from 'chrome://resources/polymer/v3_0/paper-ripple/paper-ripple.js';
+import type {CrMenuSelector} from 'chrome://resources/cr_elements/cr_menu_selector/cr_menu_selector.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import type {PaperRippleElement} from 'chrome://resources/polymer/v3_0/paper-ripple/paper-ripple.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {BrowserServiceImpl} from './browser_service.js';
@@ -36,7 +36,7 @@ export interface HistorySideBarElement {
   $: {
     'cbd-ripple': PaperRippleElement,
     'history': HTMLAnchorElement,
-    'menu': IronSelectorElement,
+    'menu': CrMenuSelector,
     'thc-ripple': PaperRippleElement,
     'toggle-history-clusters': HTMLElement,
     'syncedTabs': HTMLElement,
@@ -85,6 +85,11 @@ export class HistorySideBarElement extends PolymerElement {
         },
       },
 
+      renameJourneys_: {
+        type: Boolean,
+        value: () => loadTimeData.getBoolean('renameJourneys'),
+      },
+
       /**
        * Used to display notices for profile sign-in status and managed status.
        */
@@ -103,7 +108,8 @@ export class HistorySideBarElement extends PolymerElement {
       showToggleHistoryClusters_: {
         type: Boolean,
         computed: 'computeShowToggleHistoryClusters_(' +
-            'historyClustersEnabled, historyClustersVisibleManagedByPolicy_)',
+            'historyClustersEnabled, historyClustersVisibleManagedByPolicy_, ' +
+            'renameJourneys_)',
       },
     };
   }
@@ -111,10 +117,11 @@ export class HistorySideBarElement extends PolymerElement {
   footerInfo: FooterInfo;
   historyClustersEnabled: boolean;
   historyClustersVisible: boolean;
-  selectedPage: Page;
+  selectedPage: string;
   selectedTab: number;
   private guestSession_ = loadTimeData.getBoolean('isGuestSession');
   private historyClustersVisibleManagedByPolicy_: boolean;
+  private renameJourneys_: boolean;
   private showFooter_: boolean;
   private showHistoryClusters_: boolean;
 
@@ -137,7 +144,7 @@ export class HistorySideBarElement extends PolymerElement {
   /**
    * Relocates the user to the clear browsing data section of the settings page.
    */
-  private onClearBrowsingDataTap_(e: Event) {
+  private onClearBrowsingDataClick_(e: Event) {
     const browserService = BrowserServiceImpl.getInstance();
     browserService.recordAction('InitClearBrowsingData');
     browserService.openClearBrowsingData();
@@ -227,7 +234,7 @@ export class HistorySideBarElement extends PolymerElement {
 
   private computeShowToggleHistoryClusters_(): boolean {
     return this.historyClustersEnabled &&
-        !this.historyClustersVisibleManagedByPolicy_;
+        !this.historyClustersVisibleManagedByPolicy_ && !this.renameJourneys_;
   }
 }
 

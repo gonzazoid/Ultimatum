@@ -5,9 +5,10 @@
 // clang-format off
 import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
 
+import {getTrustedHTML} from 'chrome://resources/js/static_types.js';
 import {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
 import {keyDownOn, keyUpOn, pressAndReleaseKeyOn} from 'chrome://resources/polymer/v3_0/iron-test-helpers/mock-interactions.js';
-import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {assertEquals, assertFalse, assertTrue, assertLT, assertGT} from 'chrome://webui-test/chai_assert.js';
 import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
 // clang-format on
@@ -17,7 +18,7 @@ suite('cr-checkbox', function() {
   let innerCheckbox: HTMLElement;
 
   setup(function() {
-    document.body.innerHTML = `
+    document.body.innerHTML = getTrustedHTML`
       <cr-checkbox>
         <div>label
           <a>link</a>
@@ -26,8 +27,10 @@ suite('cr-checkbox', function() {
     `;
 
     checkbox = document.querySelector('cr-checkbox')!;
-    innerCheckbox =
-        checkbox.shadowRoot!.querySelector('#checkbox')! as HTMLElement;
+    const innerBox =
+        checkbox.shadowRoot!.querySelector<HTMLElement>('#checkbox');
+    assertTrue(!!innerBox);
+    innerCheckbox = innerBox;
     assertNotChecked();
   });
 
@@ -134,14 +137,32 @@ suite('cr-checkbox', function() {
     setTimeout(done);
   });
 
-  test('LabelDisplay', function() {
-    const labelContainer = checkbox.shadowRoot!.querySelector<HTMLElement>(
-                               '#label-container') as HTMLElement;
+  test('LabelDisplay_NoLabel', function() {
+    const labelContainer =
+        checkbox.shadowRoot!.querySelector<HTMLElement>('#label-container');
+    assertTrue(!!labelContainer);
+
     // Test that there's actually a label that's more than just the padding.
-    assertTrue(labelContainer.offsetWidth > 20);
+    assertGT(labelContainer.offsetWidth, 20);
 
     checkbox.classList.add('no-label');
     assertEquals('none', getComputedStyle(labelContainer).display);
+  });
+
+  test('LabelDisplay_LabelFirst', () => {
+    let checkboxRect = checkbox.$.checkbox.getBoundingClientRect();
+
+    const labelContainer =
+        checkbox.shadowRoot!.querySelector<HTMLElement>('#label-container');
+    assertTrue(!!labelContainer);
+    let labelContainerRect = labelContainer.getBoundingClientRect();
+
+    assertLT(checkboxRect.left, labelContainerRect.left);
+
+    checkbox.classList.add('label-first');
+    checkboxRect = checkbox.$.checkbox.getBoundingClientRect();
+    labelContainerRect = labelContainer.getBoundingClientRect();
+    assertGT(checkboxRect.left, labelContainerRect.left);
   });
 
   test('ClickedOnLinkDoesNotToggleCheckbox', function(done) {
@@ -174,7 +195,7 @@ suite('cr-checkbox', function() {
   });
 
   test('InitializingWithTabindex', function() {
-    document.body.innerHTML = `
+    document.body.innerHTML = getTrustedHTML`
       <cr-checkbox id="checkbox" tab-index="-1"></cr-checkbox>
     `;
 
@@ -189,7 +210,7 @@ suite('cr-checkbox', function() {
   });
 
   test('InitializingWithDisabled', function() {
-    document.body.innerHTML = `
+    document.body.innerHTML = getTrustedHTML`
       <cr-checkbox id="checkbox" disabled></cr-checkbox>
     `;
 
@@ -204,7 +225,7 @@ suite('cr-checkbox', function() {
   });
 
   test('tabindex attribute is controlled by tabIndex', () => {
-    document.body.innerHTML = `
+    document.body.innerHTML = getTrustedHTML`
       <cr-checkbox id="checkbox" tabindex="-1"></cr-checkbox>
     `;
     checkbox = document.querySelector('cr-checkbox')!;

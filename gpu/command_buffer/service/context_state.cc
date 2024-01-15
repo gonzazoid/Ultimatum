@@ -9,14 +9,13 @@
 #include <algorithm>
 #include <cmath>
 
-#include "base/cxx17_backports.h"
+#include <optional>
 #include "gpu/command_buffer/common/gles2_cmd_utils.h"
 #include "gpu/command_buffer/service/buffer_manager.h"
 #include "gpu/command_buffer/service/framebuffer_manager.h"
 #include "gpu/command_buffer/service/program_manager.h"
 #include "gpu/command_buffer/service/renderbuffer_manager.h"
 #include "gpu/command_buffer/service/transform_feedback_manager.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gl/gl_bindings.h"
 #include "ui/gl/gl_implementation.h"
 #include "ui/gl/gl_version_info.h"
@@ -340,7 +339,7 @@ void ContextState::RestoreSamplerBinding(GLuint unit,
   if (const auto& cur_sampler = sampler_units[unit])
     cur_id = cur_sampler->service_id();
 
-  absl::optional<GLuint> prev_id;
+  std::optional<GLuint> prev_id;
   if (prev_state) {
     const auto& prev_sampler = prev_state->sampler_units[unit];
     prev_id.emplace(prev_sampler ? prev_sampler->service_id() : 0);
@@ -374,7 +373,7 @@ void ContextState::RestoreUnpackState() const {
 }
 
 void ContextState::DoLineWidth(GLfloat width) const {
-  api()->glLineWidthFn(base::clamp(width, line_width_min_, line_width_max_));
+  api()->glLineWidthFn(std::clamp(width, line_width_min_, line_width_max_));
 }
 
 void ContextState::RestoreBufferBindings() const {

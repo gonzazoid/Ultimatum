@@ -4,24 +4,27 @@
 
 #include "net/http/http_proxy_connect_job.h"
 
+#include <algorithm>
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/field_trial.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "http_proxy_client_socket.h"
+#include "net/base/features.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/http_user_agent_settings.h"
 #include "net/base/net_errors.h"
+#include "net/base/proxy_chain.h"
+#include "net/dns/public/secure_dns_policy.h"
 #include "net/log/net_log_source_type.h"
 #include "net/log/net_log_with_source.h"
 #include "net/nqe/network_quality_estimator.h"
@@ -126,33 +129,43 @@ HttpProxyTimeoutExperiments* GetProxyTimeoutExperiments() {
 HttpProxySocketParams::HttpProxySocketParams(
     scoped_refptr<TransportSocketParams> transport_params,
     scoped_refptr<SSLSocketParams> ssl_params,
-    bool is_quic,
     const HostPortPair& endpoint,
+    const ProxyChain& proxy_chain,
+    size_t proxy_chain_index,
     bool tunnel,
     const NetworkTrafficAnnotationTag traffic_annotation,
-    const NetworkAnonymizationKey& network_anonymization_key)
+    const NetworkAnonymizationKey& network_anonymization_key,
+    SecureDnsPolicy secure_dns_policy)
     : transport_params_(std::move(transport_params)),
       ssl_params_(std::move(ssl_params)),
-      is_quic_(is_quic),
       endpoint_(endpoint),
+      proxy_chain_(proxy_chain),
+      proxy_chain_index_(proxy_chain_index),
       tunnel_(tunnel),
       network_anonymization_key_(network_anonymization_key),
-      traffic_annotation_(traffic_annotation) {
+      traffic_annotation_(traffic_annotation),
+      secure_dns_policy_(secure_dns_policy) {
   // This is either a connection to an HTTP proxy or an SSL/QUIC proxy.
   DCHECK(transport_params_ || ssl_params_);
   DCHECK(!transport_params_ || !ssl_params_);
+  DCHECK(!proxy_chain_.is_direct());
+  DCHECK(proxy_chain_.IsValid());
+
+  CHECK(proxy_chain_index_ < proxy_chain_.length());
 
   // If connecting to a QUIC proxy, and |ssl_params_| must be valid. This also
   // implies |transport_params_| is null, per the above DCHECKs.
-  if (is_quic_)
+  if (proxy_server().is_quic()) {
     DCHECK(ssl_params_);
+  }
 
   // Only supports proxy endpoints without scheme for now.
   // TODO(crbug.com/1206799): Handle scheme.
   if (transport_params_) {
     DCHECK(absl::holds_alternative<HostPortPair>(
         transport_params_->destination()));
-  } else {
+  } else if (ssl_params_->GetConnectionType() ==
+             SSLSocketParams::ConnectionType::DIRECT) {
     DCHECK(absl::holds_alternative<HostPortPair>(
         ssl_params_->GetDirectConnectionParams()->destination()));
   }
@@ -193,7 +206,7 @@ HttpProxyConnectJob::HttpProxyConnectJob(
               ? base::MakeRefCounted<HttpAuthController>(
                     HttpAuth::AUTH_PROXY,
                     GURL((params_->ssl_params() ? "https://" : "http://") +
-                         GetDestination().ToString()),
+                         params_->proxy_server().host_port_pair().ToString()),
                     params_->network_anonymization_key(),
                     common_connect_job_params->http_auth_cache,
                     common_connect_job_params->http_auth_handler_factory,
@@ -285,10 +298,7 @@ base::TimeDelta HttpProxyConnectJob::AlternateNestedConnectionTimeout(
   default_alternate_timeout = kHttpProxyConnectJobTunnelTimeout;
 #endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 
-  bool is_https = params.ssl_params() != nullptr;
-  // HTTP proxy connections can't be on top of proxy connections.
-  DCHECK(!is_https ||
-         params.ssl_params()->GetConnectionType() == SSLSocketParams::DIRECT);
+  bool is_https = params.proxy_server().is_https();
 
   if (!network_quality_estimator)
     return default_alternate_timeout;
@@ -304,7 +314,7 @@ base::TimeDelta HttpProxyConnectJob::AlternateNestedConnectionTimeout(
   base::TimeDelta timeout = multiplier * http_rtt_estimate.value();
   // Ensure that connection timeout is between
   // |min_proxy_connection_timeout_| and |max_proxy_connection_timeout_|.
-  return base::clamp(
+  return std::clamp(
       timeout, GetProxyTimeoutExperiments()->min_proxy_connection_timeout(),
       GetProxyTimeoutExperiments()->max_proxy_connection_timeout());
 }
@@ -324,13 +334,7 @@ int HttpProxyConnectJob::ConnectInternal() {
 }
 
 ProxyServer::Scheme HttpProxyConnectJob::GetProxyServerScheme() const {
-  if (params_->is_quic())
-    return ProxyServer::SCHEME_QUIC;
-
-  if (params_->transport_params())
-    return ProxyServer::SCHEME_HTTP;
-
-  return ProxyServer::SCHEME_HTTPS;
+  return params_->proxy_server().scheme();
 }
 
 void HttpProxyConnectJob::OnIOComplete(int result) {
@@ -347,7 +351,7 @@ void HttpProxyConnectJob::RestartWithAuthCredentials() {
 
   // Always do this asynchronously, to avoid re-entrancy.
   next_state_ = STATE_RESTART_WITH_AUTH;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&HttpProxyConnectJob::OnIOComplete,
                                 weak_ptr_factory_.GetWeakPtr(), net::OK));
 }
@@ -482,8 +486,37 @@ int HttpProxyConnectJob::DoTransportConnectComplete(int result) {
     if (result == ERR_SSL_CLIENT_AUTH_CERT_NEEDED) {
       DCHECK_EQ(ProxyServer::SCHEME_HTTPS, scheme);
       ssl_cert_request_info_ = nested_connect_job_->GetCertRequestInfo();
+      if (params_->proxy_chain().is_multi_proxy() && !ssl_cert_request_info_) {
+        // When multi-proxy chains are in use, it's possible that a client auth
+        // cert is requested by the first proxy after the transport connection
+        // to it has been established. When this occurs,
+        // ERR_SSL_CLIENT_AUTH_CERT_NEEDED will get passed back to the parent
+        // SSLConnectJob and then to the parent HttpProxyConnectJob, but the SSL
+        // cert request info won't have been set up for the parent
+        // HttpProxyConnectJob to use it in this method. Fail gracefully when
+        // this case is encountered.
+        // TODO(https://crbug.com/1491092): Investigate whether changes are
+        // needed to support making the SSL cert request info available here in
+        // the case described above. Just returning `result` here makes the
+        // behavior for multi-proxy chains match that of single-proxy chains
+        // (where the proxied request fails with ERR_SSL_CLIENT_AUTH_CERT_NEEDED
+        // and no `SSLCertRequestInfo` is available from the corresponding
+        // `ResponseInfo`), though, so it could be that no further action is
+        // needed here.
+        return result;
+      }
       DCHECK(ssl_cert_request_info_);
       ssl_cert_request_info_->is_proxy = true;
+      return result;
+    }
+
+    // If this transport connection was attempting to be made through other
+    // proxies, prefer to propagate errors from attempting to establish the
+    // previous proxy connection(s) instead of returning
+    // `ERR_PROXY_CONNECTION_FAILED`. For instance, if the attempt to connect to
+    // the first proxy resulted in `ERR_PROXY_HTTP_1_1_REQUIRED`, return that so
+    // that the whole job will be restarted using HTTP/1.1.
+    if (params_->proxy_chain_index() != 0) {
       return result;
     }
 
@@ -531,7 +564,7 @@ int HttpProxyConnectJob::DoHttpProxyConnect() {
   // Add a HttpProxy connection on top of the tcp socket.
   transport_socket_ = std::make_unique<HttpProxyClientSocket>(
       nested_connect_job_->PassSocket(), GetUserAgent(), params_->endpoint(),
-      ProxyServer(GetProxyServerScheme(), GetDestination()),
+      params_->proxy_chain(), params_->proxy_chain_index(),
       http_auth_controller_, common_connect_job_params()->proxy_delegate,
       params_->traffic_annotation());
   nested_connect_job_.reset();
@@ -542,7 +575,7 @@ int HttpProxyConnectJob::DoHttpProxyConnect() {
 int HttpProxyConnectJob::DoHttpProxyConnectComplete(int result) {
   // Always inform caller of auth requests asynchronously.
   if (result == ERR_PROXY_AUTH_REQUESTED) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&HttpProxyConnectJob::OnAuthChallenge,
                                   weak_ptr_factory_.GetWeakPtr()));
     return ERR_IO_PENDING;
@@ -623,7 +656,7 @@ int HttpProxyConnectJob::DoSpdyProxyCreateStreamComplete(int result) {
   DCHECK(stream.get());
   // |transport_socket_| will set itself as |stream|'s delegate.
   transport_socket_ = std::make_unique<SpdyProxyClientSocket>(
-      stream, ProxyServer(GetProxyServerScheme(), GetDestination()),
+      stream, params_->proxy_chain(), params_->proxy_chain_index(),
       GetUserAgent(), params_->endpoint(), net_log(), http_auth_controller_,
       common_connect_job_params()->proxy_delegate);
   return transport_socket_->Connect(base::BindOnce(
@@ -642,7 +675,7 @@ int HttpProxyConnectJob::DoQuicProxyCreateSession() {
   ResetTimer(kHttpProxyConnectJobTunnelTimeout);
 
   next_state_ = STATE_QUIC_PROXY_CREATE_STREAM;
-  const HostPortPair& proxy_server = GetDestination();
+  const HostPortPair& proxy_server = params_->proxy_server().host_port_pair();
   quic_stream_request_ = std::make_unique<QuicStreamRequest>(
       common_connect_job_params()->quic_stream_factory);
 
@@ -656,7 +689,7 @@ int HttpProxyConnectJob::DoQuicProxyCreateSession() {
                           proxy_server.port()),
       quic_version, ssl_params->privacy_mode(), kH2QuicTunnelPriority,
       socket_tag(), params_->network_anonymization_key(),
-      ssl_params->GetDirectConnectionParams()->secure_dns_policy(),
+      params_->secure_dns_policy(),
       /*use_dns_aliases=*/false, /*require_dns_https_alpn=*/false,
       ssl_params->ssl_config().GetCertVerifyFlags(),
       GURL("https://" + proxy_server.ToString()), net_log(),
@@ -691,15 +724,14 @@ int HttpProxyConnectJob::DoQuicProxyCreateStreamComplete(int result) {
   std::unique_ptr<QuicChromiumClientStream::Handle> quic_stream =
       quic_session_->ReleaseStream();
 
-  spdy::SpdyPriority spdy_priority =
-      ConvertRequestPriorityToQuicPriority(kH2QuicTunnelPriority);
-  spdy::SpdyStreamPrecedence precedence(spdy_priority);
-  quic_stream->SetPriority(precedence);
+  uint8_t urgency = ConvertRequestPriorityToQuicPriority(kH2QuicTunnelPriority);
+  quic_stream->SetPriority(quic::QuicStreamPriority(
+      quic::HttpStreamPriority{urgency, kDefaultPriorityIncremental}));
 
   transport_socket_ = std::make_unique<QuicProxyClientSocket>(
-      std::move(quic_stream), std::move(quic_session_),
-      ProxyServer(GetProxyServerScheme(), GetDestination()), GetUserAgent(),
-      params_->endpoint(), net_log(), http_auth_controller_,
+      std::move(quic_stream), std::move(quic_session_), params_->proxy_chain(),
+      params_->proxy_chain_index(), GetUserAgent(), params_->endpoint(),
+      net_log(), http_auth_controller_,
       common_connect_job_params()->proxy_delegate);
   return transport_socket_->Connect(base::BindOnce(
       &HttpProxyConnectJob::OnIOComplete, base::Unretained(this)));
@@ -790,20 +822,6 @@ void HttpProxyConnectJob::OnAuthChallenge() {
                      weak_ptr_factory_.GetWeakPtr()));
 }
 
-const HostPortPair& HttpProxyConnectJob::GetDestination() const {
-  const TransportSocketParams* transport_params;
-  if (params_->transport_params()) {
-    transport_params = params_->transport_params().get();
-  } else {
-    transport_params = params_->ssl_params()->GetDirectConnectionParams().get();
-  }
-
-  // TODO(crbug.com/1206799): Handle proxy destination with scheme.
-  DCHECK(
-      absl::holds_alternative<HostPortPair>(transport_params->destination()));
-  return absl::get<HostPortPair>(transport_params->destination());
-}
-
 std::string HttpProxyConnectJob::GetUserAgent() const {
   if (!http_user_agent_settings())
     return std::string();
@@ -811,11 +829,25 @@ std::string HttpProxyConnectJob::GetUserAgent() const {
 }
 
 SpdySessionKey HttpProxyConnectJob::CreateSpdySessionKey() const {
-  return SpdySessionKey(
-      GetDestination(), ProxyServer::Direct(), PRIVACY_MODE_DISABLED,
-      SpdySessionKey::IsProxySession::kTrue, socket_tag(),
-      params_->network_anonymization_key(),
-      params_->ssl_params()->GetDirectConnectionParams()->secure_dns_policy());
+  // Construct the SpdySessionKey using a ProxyChain that corresponds to what we
+  // are sending the CONNECT to. For the first proxy server use
+  // `ProxyChain::Direct()`, and for the others use a proxy chain containing all
+  // proxy servers that we have already connected through.
+  std::vector<ProxyServer> intermediate_proxy_servers;
+  for (size_t proxy_index = 0; proxy_index < params_->proxy_chain_index();
+       ++proxy_index) {
+    intermediate_proxy_servers.push_back(
+        params_->proxy_chain().GetProxyServer(proxy_index));
+  }
+  ProxyChain session_key_proxy_chain(std::move(intermediate_proxy_servers));
+  if (params_->proxy_chain_index() == 0) {
+    DCHECK(session_key_proxy_chain.is_direct());
+  }
+  return SpdySessionKey(params_->proxy_server().host_port_pair(),
+                        session_key_proxy_chain, PRIVACY_MODE_DISABLED,
+                        SpdySessionKey::IsProxySession::kTrue, socket_tag(),
+                        params_->network_anonymization_key(),
+                        params_->secure_dns_policy());
 }
 
 }  // namespace net

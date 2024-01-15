@@ -5,10 +5,11 @@
 #ifndef CHROME_BROWSER_PAGE_LOAD_METRICS_INTEGRATION_TESTS_METRIC_INTEGRATION_TEST_H_
 #define CHROME_BROWSER_PAGE_LOAD_METRICS_INTEGRATION_TESTS_METRIC_INTEGRATION_TEST_H_
 
-#include "base/strings/string_piece_forward.h"
+#include "base/strings/string_piece.h"
 #include "chrome/test/base/in_process_browser_test.h"
 
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "components/ukm/test_ukm_recorder.h"
 
 namespace base {
@@ -89,14 +90,43 @@ class MetricIntegrationTest : public InProcessBrowserTest {
   ukm::TestAutoSetUkmRecorder& ukm_recorder() { return *ukm_recorder_; }
   base::HistogramTester& histogram_tester() { return *histogram_tester_; }
 
+  std::vector<double> GetPageLoadMetricsAsList(base::StringPiece metric_name);
+
   // Checks for a single UKM entry under the PageLoad event with the specified
   // metric name and value.
   void ExpectUKMPageLoadMetric(base::StringPiece metric_name,
                                int64_t expected_value);
 
+  void ExpectUKMPageLoadMetricNonExistence(base::StringPiece metric_name);
+
+  void ExpectUkmEventNotRecorded(base::StringPiece event_name);
+
+  void ExpectUKMPageLoadMetricNonExistenceWithExpectedPageLoadMetricsNum(
+      unsigned long expected_num_page_load_metrics,
+      base::StringPiece metric_name);
+
+  void ExpectUKMPageLoadMetricGreaterThan(base::StringPiece metric_name,
+                                          int64_t expected_value);
+  void ExpectUKMPageLoadMetricLowerThan(base::StringPiece metric_name,
+                                        int64_t expected_value);
+
+  void ExpectUKMPageLoadMetricsInAscendingOrder(base::StringPiece metric_name1,
+                                                base::StringPiece metric_name2);
+
+  int64_t GetUKMPageLoadMetricFlagSet(base::StringPiece metric_name);
+
+  // The expected being true means ALL the bits present in the expected
+  // flag_set should also be present in the flag_set retrieved from the ukm
+  // metrics.
+  // The expected being false means NONE of the bits present in the expected
+  // flag_set should be present in the flag_set retrieved from the ukm
+  // metrics.
   void ExpectUKMPageLoadMetricFlagSet(base::StringPiece metric_name,
                                       uint32_t flag_set,
                                       bool expected);
+
+  void ExpectUKMPageLoadMetricFlagSetExactMatch(base::StringPiece metric_name,
+                                                uint32_t flag_set);
 
   void ExpectUKMPageLoadMetricNear(base::StringPiece metric_name,
                                    double expected_value,
@@ -113,6 +143,11 @@ class MetricIntegrationTest : public InProcessBrowserTest {
                                   double expected_value,
                                   double below,
                                   double above);
+
+  // Checks that the UMA bucket count precisely matches the provided value.
+  void ExpectUniqueUMABucketCount(base::StringPiece metric_name,
+                                  base::Histogram::Sample sample,
+                                  base::Histogram::Count count);
 
   // Checks that we have a single UMA entry.
   void ExpectUniqueUMA(base::StringPiece metric_name);
@@ -133,6 +168,9 @@ class MetricIntegrationTest : public InProcessBrowserTest {
       base::TimeDelta delay,
       const net::test_server::HttpRequest& request);
 
+  const ukm::mojom::UkmEntryPtr GetEntry();
+
+  base::test::ScopedFeatureList feature_list_;
   absl::optional<ukm::TestAutoSetUkmRecorder> ukm_recorder_;
   absl::optional<base::HistogramTester> histogram_tester_;
 };

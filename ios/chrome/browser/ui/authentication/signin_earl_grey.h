@@ -7,7 +7,6 @@
 
 #import <Foundation/Foundation.h>
 
-#include "base/compiler_specific.h"
 #import "ios/testing/earl_grey/base_eg_test_helper_impl.h"
 
 @protocol GREYMatcher;
@@ -27,9 +26,21 @@ enum class ConsentLevel;
 // Adds `fakeIdentity` to the fake identity service.
 - (void)addFakeIdentity:(FakeSystemIdentity*)fakeIdentity;
 
-// Maps `capabilities` to the `fakeIdentity`. Check fails if the
+// Adds `fakeIdentity` to the fake system identity interaction manager. This
+// is used to simulate adding the `fakeIdentity` through the fake SSO Auth flow
+// done by `FakeSystemIdentityInteractionManager`. See
+// `kFakeAuthAddAccountButtonIdentifier` to trigger the add account flow.
+- (void)addFakeIdentityForSSOAuthAddAccountFlow:
+    (FakeSystemIdentity*)fakeIdentity;
+
+// Maps capability to the `fakeIdentity`. Check fails if the
 // `fakeIdentity` has not been added to the fake identity service.
-- (void)setCapabilities:(NSDictionary*)capabilities forIdentity:fakeIdentity;
+- (void)setIsSubjectToParentalControls:(BOOL)value
+                           forIdentity:(FakeSystemIdentity*)fakeIdentity;
+- (void)setCanHaveEmailAddressDisplayed:(BOOL)value
+                            forIdentity:(FakeSystemIdentity*)fakeIdentity;
+- (void)setCanOfferExtendedChromeSyncPromos:(BOOL)value
+                                forIdentity:(FakeSystemIdentity*)fakeIdentity;
 
 // Removes `fakeIdentity` from the fake identity service asynchronously to
 // simulate identity removal from the device.

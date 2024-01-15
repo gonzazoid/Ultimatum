@@ -9,6 +9,9 @@
 #include "ui/display/screen.h"
 
 namespace views {
+
+const char kWidgetIdentifierKey[] = "kWidgetIdentifierKey";
+
 namespace internal {
 
 // static
@@ -22,6 +25,8 @@ gfx::Rect NativeWidgetPrivate::ConstrainBoundsToDisplayWorkArea(
   return new_bounds;
 }
 
+void NativeWidgetPrivate::PaintAsActiveChanged() {}
+
 void NativeWidgetPrivate::ShowEmojiPanel() {
   ui::ShowEmojiPanel();
 }
@@ -31,4 +36,5 @@ bool NativeWidgetPrivate::IsMoveLoopSupported() const {
 }
 
 }  // namespace internal
+
 }  // namespace views

@@ -13,24 +13,15 @@
 #include "chrome/updater/app/server/win/updater_idl.h"
 #include "chrome/updater/app/server/win/updater_internal_idl.h"
 #include "chrome/updater/update_service.h"
-
-// Definitions for native COM updater classes.
+#include "chrome/updater/util/win_util.h"
 
 namespace updater {
 
-// TODO(crbug.com/1065712): these classes do not have to be visible in the
-// updater namespace. Additionally, there is some code duplication for the
-// registration and unregistration code in both server and service_main
-// compilation units.
-//
 // This class implements the IUpdateState interface and exposes it as a COM
 // object. The purpose of this class is to remote the state of the
 // |UpdateService|. Instances of this class are typically passed as arguments
 // to RPC method calls which model COM events.
-class UpdateStateImpl
-    : public Microsoft::WRL::RuntimeClass<
-          Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>,
-          IUpdateState> {
+class UpdateStateImpl : public DYNAMICIIDSIMPL(IUpdateState) {
  public:
   explicit UpdateStateImpl(const UpdateService::UpdateState& update_state)
       : update_state_(update_state) {}
@@ -58,10 +49,7 @@ class UpdateStateImpl
 
 // This class implements the ICompleteStatus interface and exposes it as a COM
 // object.
-class CompleteStatusImpl
-    : public Microsoft::WRL::RuntimeClass<
-          Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>,
-          ICompleteStatus> {
+class CompleteStatusImpl : public DYNAMICIIDSIMPL(ICompleteStatus) {
  public:
   CompleteStatusImpl(int code, const std::wstring& message)
       : code_(code), message_(message) {}
@@ -80,10 +68,7 @@ class CompleteStatusImpl
 };
 
 // This class implements the IUpdater interface and exposes it as a COM object.
-class UpdaterImpl
-    : public Microsoft::WRL::RuntimeClass<
-          Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>,
-          IUpdater> {
+class UpdaterImpl : public DYNAMICIIDSIMPL(IUpdater) {
  public:
   UpdaterImpl() = default;
   UpdaterImpl(const UpdaterImpl&) = delete;
@@ -96,7 +81,6 @@ class UpdaterImpl
   // Overrides for IUpdater.
   IFACEMETHODIMP GetVersion(BSTR* version) override;
   IFACEMETHODIMP FetchPolicies(IUpdaterCallback* callback) override;
-  IFACEMETHODIMP CheckForUpdate(const wchar_t* app_id) override;
   IFACEMETHODIMP RegisterApp(const wchar_t* app_id,
                              const wchar_t* brand_code,
                              const wchar_t* brand_path,
@@ -105,6 +89,10 @@ class UpdaterImpl
                              const wchar_t* existence_checker_path,
                              IUpdaterCallback* callback) override;
   IFACEMETHODIMP RunPeriodicTasks(IUpdaterCallback* callback) override;
+  IFACEMETHODIMP CheckForUpdate(const wchar_t* app_id,
+                                LONG priority,
+                                BOOL same_version_update_allowed,
+                                IUpdaterObserver* observer) override;
   IFACEMETHODIMP Update(const wchar_t* app_id,
                         const wchar_t* install_data_index,
                         LONG priority,
@@ -128,6 +116,7 @@ class UpdaterImpl
                               const wchar_t* install_data,
                               const wchar_t* install_settings,
                               IUpdaterObserver* observer) override;
+  IFACEMETHODIMP GetAppStates(IUpdaterAppStatesCallback* callback) override;
 
  private:
   ~UpdaterImpl() override = default;
@@ -135,10 +124,7 @@ class UpdaterImpl
 
 // This class implements the IUpdaterInternal interface and exposes it as a COM
 // object.
-class UpdaterInternalImpl
-    : public Microsoft::WRL::RuntimeClass<
-          Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>,
-          IUpdaterInternal> {
+class UpdaterInternalImpl : public DYNAMICIIDSIMPL(IUpdaterInternal) {
  public:
   UpdaterInternalImpl() = default;
   UpdaterInternalImpl(const UpdaterInternalImpl&) = delete;
@@ -150,8 +136,7 @@ class UpdaterInternalImpl
 
   // Overrides for IUpdaterInternal.
   IFACEMETHODIMP Run(IUpdaterInternalCallback* callback) override;
-  IFACEMETHODIMP InitializeUpdateService(
-      IUpdaterInternalCallback* callback) override;
+  IFACEMETHODIMP Hello(IUpdaterInternalCallback* callback) override;
 
  private:
   ~UpdaterInternalImpl() override = default;

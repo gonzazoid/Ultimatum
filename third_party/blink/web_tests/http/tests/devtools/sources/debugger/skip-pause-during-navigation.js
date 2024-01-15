@@ -2,14 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {SourcesTestRunner} from 'sources_test_runner';
+import {ConsoleTestRunner} from 'console_test_runner';
+
 (async function() {
   TestRunner.addResult(
       `Tests that we skip all pauses during navigation`);
-  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('console_test_runner');
   await TestRunner.showPanel('sources');
   await SourcesTestRunner.startDebuggerTestPromise();
-  await TestRunner.navigatePromise('resources/page-with-unload.html');
+  await TestRunner.navigatePromise('resources/page-with-pagehide.html');
   TestRunner.addResult('Navigate page..');
   TestRunner.evaluateInPagePromise('window.location.href = window.location.href');
   TestRunner.addResult('Wait for ready message..');

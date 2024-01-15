@@ -5,30 +5,31 @@
 package org.chromium.chrome.browser.metrics;
 
 import org.chromium.base.metrics.RecordHistogram;
+import org.chromium.base.shared_preferences.SharedPreferencesManager;
 import org.chromium.chrome.browser.browserservices.intents.WebappIntentUtils;
 import org.chromium.chrome.browser.browserservices.metrics.WebApkUkmRecorder;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.chrome.browser.webapps.WebappDataStorage;
 import org.chromium.chrome.browser.webapps.WebappRegistry;
 import org.chromium.components.webapps.WebApkDistributor;
+import org.chromium.components.webapps.WebappsUtils;
 
 import java.util.HashSet;
 import java.util.Set;
 
-/**
- * Record WebAPKs uninstall UMA.
- */
+/** Record WebAPKs uninstall UMA. */
 public class WebApkUninstallUmaTracker {
     /** Makes recordings that were deferred in order to not load native. */
     public static void recordDeferredUma() {
-        SharedPreferencesManager preferencesManager = SharedPreferencesManager.getInstance();
+        SharedPreferencesManager preferencesManager = ChromeSharedPreferences.getInstance();
         Set<String> uninstalledPackages =
                 preferencesManager.readStringSet(ChromePreferenceKeys.WEBAPK_UNINSTALLED_PACKAGES);
         if (uninstalledPackages.isEmpty()) return;
 
         long fallbackUninstallTimestamp = System.currentTimeMillis();
         WebappRegistry.warmUpSharedPrefs();
+        WebappsUtils.prepareIsRequestPinShortcutSupported();
         for (String uninstalledPackage : uninstalledPackages) {
             RecordHistogram.recordBooleanHistogram("WebApk.Uninstall.Browser", true);
 
@@ -40,8 +41,10 @@ public class WebApkUninstallUmaTracker {
                 if (uninstallTimestamp == 0) {
                     uninstallTimestamp = fallbackUninstallTimestamp;
                 }
-                WebApkUkmRecorder.recordWebApkUninstall(webappDataStorage.getWebApkManifestUrl(),
-                        WebApkDistributor.BROWSER, webappDataStorage.getWebApkVersionCode(),
+                WebApkUkmRecorder.recordWebApkUninstall(
+                        webappDataStorage.getWebApkManifestUrl(),
+                        WebApkDistributor.BROWSER,
+                        webappDataStorage.getWebApkVersionCode(),
                         webappDataStorage.getLaunchCount(),
                         uninstallTimestamp - webappDataStorage.getWebApkInstallTimestamp());
             }
@@ -54,8 +57,8 @@ public class WebApkUninstallUmaTracker {
 
     /** Sets WebAPK uninstall to be recorded next time that native is loaded. */
     public static void deferRecordWebApkUninstalled(String packageName) {
-        SharedPreferencesManager.getInstance().addToStringSet(
-                ChromePreferenceKeys.WEBAPK_UNINSTALLED_PACKAGES, packageName);
+        ChromeSharedPreferences.getInstance()
+                .addToStringSet(ChromePreferenceKeys.WEBAPK_UNINSTALLED_PACKAGES, packageName);
         String webApkId = WebappIntentUtils.getIdForWebApkPackage(packageName);
         WebappRegistry.warmUpSharedPrefsForId(webApkId);
         WebappDataStorage webappDataStorage =

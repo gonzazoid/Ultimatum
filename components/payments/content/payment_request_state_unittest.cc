@@ -7,17 +7,17 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/uuid.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
+#include "components/autofill/core/browser/country_type.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/test_personal_data_manager.h"
 #include "components/payments/content/payment_app_factory.h"
 #include "components/payments/content/payment_app_service.h"
-#include "components/payments/content/payment_app_service_factory.h"
 #include "components/payments/content/payment_request_spec.h"
 #include "components/payments/content/test_content_payment_request_delegate.h"
 #include "components/payments/content/test_payment_app.h"
@@ -104,11 +104,10 @@ class PaymentRequestStateTest : public testing::Test,
     spec_ = std::make_unique<PaymentRequestSpec>(
         std::move(options), std::move(details), std::move(method_data),
         /*observer=*/nullptr, "en-US");
-    PaymentAppServiceFactory::SetForTesting(std::move(app_service));
     state_ = std::make_unique<PaymentRequestState>(
-        web_contents_->GetPrimaryMainFrame(), GURL("https://example.com"),
-        GURL("https://example.com/pay"),
-        url::Origin::Create(GURL("https://example.com")), spec_->AsWeakPtr(),
+        std::move(app_service), web_contents_->GetPrimaryMainFrame(),
+        GURL("https://example.test"), GURL("https://example.test/pay"),
+        url::Origin::Create(GURL("https://example.test")), spec_->AsWeakPtr(),
         weak_ptr_factory_.GetWeakPtr(), "en-US", &test_personal_data_manager_,
         test_payment_request_delegate_.GetContentWeakPtr(),
         journey_logger_.GetWeakPtr(), const_csp_checker_.GetWeakPtr());
@@ -475,8 +474,7 @@ TEST_F(PaymentRequestStateTest, JaLatnShippingAddress) {
 
   // Select an address, nothing should happen until the normalization is
   // completed and the merchant has validated the address.
-  autofill::AutofillProfile profile(base::GenerateGUID(),
-                                    "https://example.com");
+  autofill::AutofillProfile profile(AddressCountryCode("JP"));
   autofill::test::SetProfileInfo(&profile, "Jon", "V.", "Doe",
                                  "jon.doe@exampl.com", "Example Inc",
                                  "Roppongi", "6 Chrome-10-1", "Tokyo", "",

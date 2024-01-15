@@ -51,6 +51,7 @@ DECLARE_ACCESSIBILITY_PREDICATE(AccessibilityListItemPredicate);
 DECLARE_ACCESSIBILITY_PREDICATE(AccessibilityLiveRegionPredicate);
 DECLARE_ACCESSIBILITY_PREDICATE(AccessibilityMainPredicate);
 DECLARE_ACCESSIBILITY_PREDICATE(AccessibilityMediaPredicate);
+DECLARE_ACCESSIBILITY_PREDICATE(AccessibilityParagraphPredicate);
 DECLARE_ACCESSIBILITY_PREDICATE(AccessibilityRadioButtonPredicate);
 DECLARE_ACCESSIBILITY_PREDICATE(AccessibilityRadioGroupPredicate);
 DECLARE_ACCESSIBILITY_PREDICATE(AccessibilitySectionPredicate);
@@ -154,7 +155,7 @@ class CONTENT_EXPORT OneShotAccessibilityTreeSearch {
   std::string search_text_;
 
   std::vector<AccessibilityMatchPredicate> predicates_;
-  std::vector<BrowserAccessibility*> matches_;
+  std::vector<raw_ptr<BrowserAccessibility, VectorExperimental>> matches_;
 
   bool did_search_;
 };

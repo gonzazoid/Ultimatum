@@ -14,6 +14,7 @@ namespace {
 const char kModelTypeMemoryHistogramPrefix[] = "Sync.ModelTypeMemoryKB.";
 const char kModelTypeCountHistogramPrefix[] = "Sync.ModelTypeCount4.";
 const char kModelTypeUpdateDropHistogramPrefix[] = "Sync.ModelTypeUpdateDrop.";
+const char kSyncEntitySizeHistogramPrefix[] = "Sync.EntitySizeOnCommit.";
 
 std::string GetHistogramSuffixForUpdateDropReason(UpdateDropReason reason) {
   switch (reason) {
@@ -31,6 +32,8 @@ std::string GetHistogramSuffixForUpdateDropReason(UpdateDropReason reason) {
       return "DecryptionPendingForTooLong";
     case UpdateDropReason::kFailedToDecrypt:
       return "FailedToDecrypt";
+    case UpdateDropReason::kDroppedByBridge:
+      return "DroppedByBridge";
   }
 }
 
@@ -57,6 +60,24 @@ void SyncRecordModelTypeCountHistogram(ModelType model_type, size_t count) {
   std::string full_histogram_name =
       kModelTypeCountHistogramPrefix + type_string;
   base::UmaHistogramCounts1M(full_histogram_name, count);
+}
+
+void SyncRecordModelTypeEntitySizeHistogram(ModelType model_type,
+                                            size_t bytes) {
+  std::string type_string = ModelTypeToHistogramSuffix(model_type);
+  std::string full_histogram_name =
+      kSyncEntitySizeHistogramPrefix + type_string;
+  base::UmaHistogramCounts100000(full_histogram_name, bytes);
+}
+
+void SyncRecordModelClearedOnceHistogram(ModelType model_type) {
+  base::UmaHistogramEnumeration("Sync.ModelTypeClearedOnce",
+                                ModelTypeHistogramValue(model_type));
+}
+
+void RecordSyncToSigninMigrationReadingListStep(ReadingListMigrationStep step) {
+  base::UmaHistogramEnumeration(
+      "Sync.SyncToSigninMigration.ReadingListMigrationStep", step);
 }
 
 }  // namespace syncer

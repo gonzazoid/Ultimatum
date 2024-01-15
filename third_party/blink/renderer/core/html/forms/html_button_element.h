@@ -29,6 +29,8 @@
 
 namespace blink {
 
+class HTMLSelectListElement;
+
 class CORE_EXPORT HTMLButtonElement final : public HTMLFormControlElement {
   DEFINE_WRAPPERTYPEINFO();
 
@@ -45,12 +47,27 @@ class CORE_EXPORT HTMLButtonElement final : public HTMLFormControlElement {
                          mojom::blink::FocusType,
                          InputDeviceCapabilities*) override;
 
+  // This return a <selectlist> if this button has type=selectlist and is a
+  // descendant of a <selectlist>.
+  HTMLSelectListElement* OwnerSelectList() const;
+
  private:
-  enum Type { kSubmit, kReset, kButton };
+  // The type attribute of HTMLButtonElement is an enumerated attribute:
+  // https://html.spec.whatwg.org/multipage/form-elements.html#attr-button-type
+  // These values are a subset of the `FormControlType` enum. They have the same
+  // binary representation so that FormControlType() reduces to a type cast.
+  enum Type : std::underlying_type_t<mojom::blink::FormControlType> {
+    kSubmit = base::to_underlying(mojom::blink::FormControlType::kButtonSubmit),
+    kReset = base::to_underlying(mojom::blink::FormControlType::kButtonReset),
+    kButton = base::to_underlying(mojom::blink::FormControlType::kButtonButton),
+    kSelectlist =
+        base::to_underlying(mojom::blink::FormControlType::kButtonSelectList)
+  };
 
-  const AtomicString& FormControlType() const override;
+  mojom::blink::FormControlType FormControlType() const override;
+  const AtomicString& FormControlTypeAsString() const override;
 
-  LayoutObject* CreateLayoutObject(const ComputedStyle&, LegacyLayout) override;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) override;
 
   // HTMLFormControlElement always creates one, but buttons don't need it.
   bool AlwaysCreateUserAgentShadowRoot() const override { return false; }
@@ -61,9 +78,9 @@ class CORE_EXPORT HTMLButtonElement final : public HTMLFormControlElement {
   void DefaultEventHandler(Event&) override;
   bool HasActivationBehavior() const override;
 
-  // Buttons can trigger popups.
-  PopupTriggerSupport SupportsPopupTriggering() const override {
-    return PopupTriggerSupport::kSupported;
+  // Buttons can trigger popovers.
+  PopoverTriggerSupport SupportsPopoverTriggering() const override {
+    return PopoverTriggerSupport::kSupported;
   }
 
   void AppendToFormData(FormData&) override;

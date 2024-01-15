@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "chrome/browser/ui/web_applications/web_app_controller_browsertest.h"
 #include "chrome/browser/web_applications/preinstalled_web_apps/preinstalled_web_apps.h"
 
 #include "base/test/bind.h"
@@ -20,16 +21,22 @@
 #include "chrome/test/base/in_process_browser_test.h"
 #include "content/public/test/browser_test.h"
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/ui/browser_commands.h"
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
 using web_app::test::CrosapiParam;
 using web_app::test::WithCrosapiParam;
 
 namespace web_app {
 
-class PreinstalledWebAppsBrowserTest : public InProcessBrowserTest,
+class PreinstalledWebAppsBrowserTest : public WebAppControllerBrowserTest,
                                        public WithCrosapiParam {
  public:
-  PreinstalledWebAppsBrowserTest() {
-    PreinstalledWebAppManager::SkipStartupForTesting();
+  PreinstalledWebAppsBrowserTest()
+      : skip_preinstalled_web_app_startup_(
+            PreinstalledWebAppManager::SkipStartupForTesting()) {
     // Ignore any default app configs on disk.
     SetPreinstalledWebAppConfigDirForTesting(&empty_path_);
     WebAppProvider::SetOsIntegrationManagerFactoryForTesting(
@@ -44,14 +51,29 @@ class PreinstalledWebAppsBrowserTest : public InProcessBrowserTest,
   }
 
   void SetUpDefaultCommandLine(base::CommandLine* command_line) override {
-    InProcessBrowserTest::SetUpDefaultCommandLine(command_line);
+    WebAppControllerBrowserTest::SetUpDefaultCommandLine(command_line);
 
     // This was added by PrepareBrowserCommandLineForTests(), re-enable default
     // apps as we wish to test that they get installed.
     command_line->RemoveSwitch(switches::kDisableDefaultApps);
   }
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  void SetUpOnMainThread() override {
+    if (browser() == nullptr) {
+      // Create a new Ash browser window so test code using browser() can work
+      // even when Lacros is the only browser.
+      // TODO(crbug.com/1450158): Remove uses of browser() from such tests.
+      chrome::NewEmptyWindow(ProfileManager::GetActiveUserProfile());
+      SelectFirstBrowser();
+    }
+    WebAppControllerBrowserTest::SetUpOnMainThread();
+    VerifyLacrosStatus();
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
   base::FilePath empty_path_;
+  base::AutoReset<bool> skip_preinstalled_web_app_startup_;
 };
 
 IN_PROC_BROWSER_TEST_P(PreinstalledWebAppsBrowserTest, CheckInstalledFields) {
@@ -159,10 +181,10 @@ IN_PROC_BROWSER_TEST_P(PreinstalledWebAppsBrowserTest, CheckInstalledFields) {
 
   for (const auto& expectation : kOfflineOnlyExpectations) {
     if (GetParam() == test::CrosapiParam::kDisabled) {
-      EXPECT_EQ(provider.registrar().GetAppLaunchUrl(expectation.app_id),
+      EXPECT_EQ(provider.registrar_unsafe().GetAppLaunchUrl(expectation.app_id),
                 GURL(expectation.launch_url));
     } else {
-      EXPECT_FALSE(provider.registrar().GetAppById(expectation.app_id));
+      EXPECT_FALSE(provider.registrar_unsafe().GetAppById(expectation.app_id));
     }
   }
 

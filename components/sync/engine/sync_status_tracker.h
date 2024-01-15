@@ -8,8 +8,8 @@
 #include <map>
 #include <string>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/sequence_checker.h"
 #include "components/sync/base/model_type.h"
 #include "components/sync/engine/sync_engine_event_listener.h"
@@ -41,7 +41,7 @@ class SyncStatusTracker : public SyncEngineEventListener {
 
   // SyncEngineEventListener implementation.
   void OnSyncCycleEvent(const SyncCycleEvent& event) override;
-  void OnActionableError(const SyncProtocolError& error) override;
+  void OnActionableProtocolError(const SyncProtocolError& error) override;
   void OnRetryTimeChanged(base::Time retry_time) override;
   void OnThrottledTypesChanged(ModelTypeSet throttled_types) override;
   void OnBackedOffTypesChanged(ModelTypeSet backed_off_types) override;
@@ -63,7 +63,8 @@ class SyncStatusTracker : public SyncEngineEventListener {
           trusted_vault_debug_info);
 
   void SetCacheGuid(const std::string& cache_guid);
-  void SetInvalidatorClientId(const std::string& invalidator_client_id);
+  void SetHasPendingInvalidations(ModelType type,
+                                  bool has_pending_invalidations);
 
   void SetLocalBackendFolder(const std::string& folder);
 

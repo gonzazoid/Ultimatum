@@ -19,7 +19,7 @@ struct Config {
   // ActionUpload.
   int max_feed_query_requests_per_day = 20;
   int max_next_page_requests_per_day = 20;
-  int max_action_upload_requests_per_day = 20;
+  int max_action_upload_requests_per_day = 50;
   int max_list_recommended_web_feeds_requests_per_day = 20;
   int max_list_web_feeds_requests_per_day = 20;
   // We'll always attempt to refresh content older than this.
@@ -45,9 +45,9 @@ struct Config {
   // If no surfaces are attached, the stream model is unloaded after this
   // timeout.
   base::TimeDelta model_unload_timeout = base::Seconds(1);
-  // If no surfaces are attached, the channel stream stream model is cleared
+  // If no surfaces are attached, the singleWebFeed stream model is cleared
   // after this timeout.
-  base::TimeDelta channel_stream_clear_timeout = base::Seconds(60);
+  base::TimeDelta single_web_feed_stream_clear_timeout = base::Seconds(60);
   // How far ahead in number of items from last visible item to final item
   // before attempting to load more content.
   int load_more_trigger_lookahead = 5;
@@ -63,6 +63,11 @@ struct Config {
   base::TimeDelta session_id_max_age = base::Days(30);
   // Maximum number of images prefetched per refresh.
   int max_prefetch_image_requests_per_refresh = 50;
+  // Maximum size of most recent viewed content hash list.
+  int max_most_recent_viewed_content_hashes = 100;
+  // Maximum number of docviews to send in a request for signed-out view
+  // demotion.
+  size_t max_docviews_to_send = 500;
 
   // Configuration for Web Feeds.
 

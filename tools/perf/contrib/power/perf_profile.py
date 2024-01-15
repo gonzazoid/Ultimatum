@@ -3,14 +3,14 @@
 # found in the LICENSE file.
 
 import contrib.power.stories as stories
-from contrib.power.power_perf_benchmark_base import _PowerPerfBenchmarkBase
+from contrib.power.power_perf_benchmark_base import PowerPerfBenchmarkBase
 from core import platforms
 from telemetry import benchmark
 from telemetry import story
 
 
 @benchmark.Info(emails=['chrometto-team@google.com'])
-class ContribPowerPerfProfile(_PowerPerfBenchmarkBase):
+class ContribPowerPerfProfile(PowerPerfBenchmarkBase):
 
   SUPPORTED_PLATFORMS = [story.expectations.ALL_ANDROID]
   SUPPORTED_PLATFORM_TAGS = [platforms.ANDROID]
@@ -58,7 +58,10 @@ class ContribPowerPerfProfile(_PowerPerfBenchmarkBase):
           config {{
               name: "org.chromium.trace_metadata"
               chrome_config {{
-                  trace_config: "{{\\"record_mode\\":\\"record-until-full\\", \\"excluded_categories\\":[\\"*\\"]}}"
+                  trace_config: "{{
+                    \\"record_mode\\": \\"record-until-full\\",
+                    \\"excluded_categories\\": [ \\"*\\" ]
+                  }}"
                   client_priority: USER_INITIATED
               }}
           }}
@@ -67,7 +70,10 @@ class ContribPowerPerfProfile(_PowerPerfBenchmarkBase):
           config {{
               name: "org.chromium.trace_event"
               chrome_config {{
-                  trace_config: "{{\\"record_mode\\":\\"record-until-full\\", \\"excluded_categories\\":[\\"*\\"]}}"
+                  trace_config: "{{
+                    \\"record_mode\\": \\"record-until-full\\",
+                    \\"excluded_categories\\": [ \\"*\\" ]
+                  }}"
                   client_priority: USER_INITIATED
               }}
           }}

@@ -5,7 +5,7 @@
 #ifndef COMPONENTS_WEBDATA_COMMON_WEB_DATA_SERVICE_BASE_H_
 #define COMPONENTS_WEBDATA_COMMON_WEB_DATA_SERVICE_BASE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/ref_counted_delete_on_sequence.h"
 #include "components/webdata/common/webdata_export.h"
@@ -15,7 +15,7 @@ class WebDatabase;
 class WebDatabaseService;
 
 namespace base {
-class SingleThreadTaskRunner;
+class SequencedTaskRunner;
 }
 
 // Base for WebDataService class hierarchy.
@@ -45,7 +45,7 @@ class WEBDATA_EXPORT WebDataServiceBase
   // WebDataServiceBase is destroyed on the UI sequence.
   WebDataServiceBase(
       scoped_refptr<WebDatabaseService> wdbs,
-      const scoped_refptr<base::SingleThreadTaskRunner>& ui_task_runner);
+      const scoped_refptr<base::SequencedTaskRunner>& ui_task_runner);
 
   WebDataServiceBase(const WebDataServiceBase&) = delete;
   WebDataServiceBase& operator=(const WebDataServiceBase&) = delete;

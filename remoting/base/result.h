@@ -8,8 +8,8 @@
 #include <type_traits>
 #include <utility>
 
+#include <optional>
 #include "base/check.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 
 // Result<SuccessType, ErrorType> represents the success or failure of an
@@ -132,7 +132,7 @@ class SuccessTag {};
 class ErrorTag {};
 // absl::monostate can be used for SuccessType or ErrorType to indicate that
 // there is no data for that state. Thus, Result<SomeType, monostate> is
-// somewhat analogous to absl::optional<SomeType>, and Result<monostate,
+// somewhat analogous to std::optional<SomeType>, and Result<monostate,
 // monostate> is effectively a (2-byte) boolean. Result<monostate, ErrorType>
 // can be useful for cases where an operation can fail, but there is no return
 // value in the success case.
@@ -586,10 +586,10 @@ class Result : public internal::DefaultConstructible<
   // state of the result, passing the value of the corresponding state.
   template <
       typename Visitor,
-      typename SuccessReturn = decltype(
-          std::declval<Visitor>().success(std::declval<const SuccessType&>())),
-      typename ErrorReturn = decltype(
-          std::declval<Visitor>().error(std::declval<const ErrorType&>())),
+      typename SuccessReturn = decltype(std::declval<Visitor>().success(
+          std::declval<const SuccessType&>())),
+      typename ErrorReturn = decltype(std::declval<Visitor>().error(
+          std::declval<const ErrorType&>())),
       typename std::enable_if<std::is_same<SuccessReturn, ErrorReturn>::value,
                               int>::type = 0>
   SuccessReturn Visit(Visitor&& visitor) const& {
@@ -602,8 +602,8 @@ class Result : public internal::DefaultConstructible<
 
   template <
       typename Visitor,
-      typename SuccessReturn = decltype(
-          std::declval<Visitor>().success(std::declval<SuccessType&>())),
+      typename SuccessReturn = decltype(std::declval<Visitor>().success(
+          std::declval<SuccessType&>())),
       typename ErrorReturn =
           decltype(std::declval<Visitor>().error(std::declval<ErrorType&>())),
       typename std::enable_if<std::is_same<SuccessReturn, ErrorReturn>::value,
@@ -618,8 +618,8 @@ class Result : public internal::DefaultConstructible<
 
   template <
       typename Visitor,
-      typename SuccessReturn = decltype(
-          std::declval<Visitor>().success(std::declval<SuccessType&&>())),
+      typename SuccessReturn = decltype(std::declval<Visitor>().success(
+          std::declval<SuccessType&&>())),
       typename ErrorReturn =
           decltype(std::declval<Visitor>().error(std::declval<ErrorType&&>())),
       typename std::enable_if<std::is_same<SuccessReturn, ErrorReturn>::value,

@@ -72,7 +72,8 @@ class LayerTreeHostBlendingPixelTest
   LayerTreeHostBlendingPixelTest()
       : LayerTreeHostPixelResourceTest(resource_type()),
         force_antialiasing_(false) {
-    pixel_comparator_ = std::make_unique<FuzzyPixelOffByOneComparator>(true);
+    pixel_comparator_ =
+        std::make_unique<AlphaDiscardingFuzzyPixelOffByOneComparator>();
   }
 
   RasterTestConfig resource_type() const {
@@ -86,7 +87,7 @@ class LayerTreeHostBlendingPixelTest
   std::unique_ptr<TestLayerTreeFrameSink> CreateLayerTreeFrameSink(
       const viz::RendererSettings& renderer_settings,
       double refresh_rate,
-      scoped_refptr<viz::ContextProvider> compositor_context_provider,
+      scoped_refptr<viz::RasterContextProvider> compositor_context_provider,
       scoped_refptr<viz::RasterContextProvider> worker_context_provider)
       override {
     viz::RendererSettings modified_renderer_settings = renderer_settings;
@@ -101,7 +102,7 @@ class LayerTreeHostBlendingPixelTest
     const int kLaneWidth = width;
     const int kLaneHeight = height / kCSSTestColorsCount;
     sk_sp<SkSurface> backing_store =
-        SkSurface::MakeRasterN32Premul(width, height);
+        SkSurfaces::Raster(SkImageInfo::MakeN32Premul(width, height));
     SkCanvas* canvas = backing_store->getCanvas();
     canvas->clear(SK_ColorTRANSPARENT);
     for (int i = 0; i < kCSSTestColorsCount; ++i) {
@@ -129,8 +130,8 @@ class LayerTreeHostBlendingPixelTest
   void SetupMaskLayer(scoped_refptr<Layer> layer) {
     gfx::Size bounds = layer->bounds();
 
-    sk_sp<SkSurface> surface =
-        SkSurface::MakeRasterN32Premul(bounds.width(), bounds.height());
+    sk_sp<SkSurface> surface = SkSurfaces::Raster(
+        SkImageInfo::MakeN32Premul(bounds.width(), bounds.height()));
     SkCanvas* canvas = surface->getCanvas();
     SkPaint paint;
     paint.setColor(SK_ColorWHITE);
@@ -224,17 +225,10 @@ class LayerTreeHostBlendingPixelTest
 
     if (renderer_type_ == viz::RendererType::kSkiaVk) {
       // Blending results might differ with one pixel.
-      float percentage_pixels_error = 35.f;
-      float percentage_pixels_small_error = 0.f;
-      float average_error_allowed_in_bad_pixels = 1.f;
-      int large_error_allowed = 1;
-      int small_error_allowed = 0;
-
       pixel_comparator_ = std::make_unique<FuzzyPixelComparator>(
-          false,  // discard_alpha
-          percentage_pixels_error, percentage_pixels_small_error,
-          average_error_allowed_in_bad_pixels, large_error_allowed,
-          small_error_allowed);
+          FuzzyPixelComparator()
+              .SetErrorPixelsPercentageLimit(35.f)
+              .SetAbsErrorLimit(1));
     }
 
     RunPixelResourceTest(root, CreateBlendingWithRenderPassExpected(
@@ -255,9 +249,12 @@ std::vector<RasterTestConfig> const kTestCases = {
 #if BUILDFLAG(ENABLE_VULKAN_BACKEND_TESTS)
     {viz::RendererType::kSkiaVk, TestRasterType::kGpu},
 #endif  // BUILDFLAG(ENABLE_VULKAN_BACKEND_TESTS)
-#if BUILDFLAG(ENABLE_DAWN_BACKEND_TESTS)
-    {viz::RendererType::kSkiaDawn, TestRasterType::kGpu},
-#endif  // BUILDFLAG(ENABLE_DAWN_BACKEND_TESTS)
+#if BUILDFLAG(ENABLE_SKIA_GRAPHITE_TESTS)
+    {viz::RendererType::kSkiaGraphiteDawn, TestRasterType::kGpu},
+#if BUILDFLAG(IS_IOS)
+    {viz::RendererType::kSkiaGraphiteMetal, TestRasterType::kGpu},
+#endif  // BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(ENABLE_SKIA_GRAPHITE_TESTS)
 };
 
 INSTANTIATE_TEST_SUITE_P(
@@ -328,8 +325,8 @@ TEST_P(LayerTreeHostBlendingPixelTest, BlendingWithBackdropFilter) {
   PaintFlags grayscale;
   grayscale.setColor(kCSSOrange);
 
-  sk_sp<PaintFilter> paint_filter = RenderSurfaceFilters::BuildImageFilter(
-      filters, gfx::SizeF(kRootWidth, kRootHeight));
+  sk_sp<PaintFilter> paint_filter =
+      RenderSurfaceFilters::BuildImageFilter(filters);
   grayscale.setImageFilter(paint_filter);
   paint_canvas.drawRect(SkRect::MakeWH(kRootWidth, kRootHeight), grayscale);
 

@@ -21,9 +21,9 @@
 #include <ios>
 #include <iterator>
 
+#include "base/apple/mach_logging.h"
+#include "base/apple/scoped_mach_port.h"
 #include "base/logging.h"
-#include "base/mac/mach_logging.h"
-#include "base/mac/scoped_mach_port.h"
 #include "client/ios_handler/exception_processor.h"
 #include "client/ios_handler/in_process_handler.h"
 #include "util/ios/raw_logging.h"
@@ -148,9 +148,9 @@ class CrashHandler : public Thread,
         context, kMachExceptionSimulated, path);
   }
 
-  void StartProcessingPendingReports() {
+  void StartProcessingPendingReports(UploadBehavior upload_behavior) {
     INITIALIZATION_STATE_DCHECK_VALID(initialized_);
-    in_process_handler_.StartProcessingPendingReports();
+    in_process_handler_.StartProcessingPendingReports(upload_behavior);
   }
 
   void SetMachExceptionCallbackForTesting(void (*callback)()) {
@@ -393,7 +393,7 @@ class CrashHandler : public Thread,
     Signals::RestoreHandlerAndReraiseSignalOnReturn(siginfo, old_action);
   }
 
-  base::mac::ScopedMachReceiveRight exception_port_;
+  base::apple::ScopedMachReceiveRight exception_port_;
   ExceptionPorts::ExceptionHandlerVector original_handlers_;
   struct sigaction old_action_ = {};
   internal::InProcessHandler in_process_handler_;
@@ -439,10 +439,11 @@ void CrashpadClient::ProcessIntermediateDump(
 }
 
 // static
-void CrashpadClient::StartProcessingPendingReports() {
+void CrashpadClient::StartProcessingPendingReports(
+    UploadBehavior upload_behavior) {
   CrashHandler* crash_handler = CrashHandler::Get();
   DCHECK(crash_handler);
-  crash_handler->StartProcessingPendingReports();
+  crash_handler->StartProcessingPendingReports(upload_behavior);
 }
 
 // static

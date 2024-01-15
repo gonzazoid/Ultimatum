@@ -7,9 +7,9 @@
 
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "media/base/media_resource.h"
@@ -23,7 +23,7 @@ class DecryptingDemuxerStream;
 
 // DecryptingMediaResource is a wrapper for a MediaResource implementation that
 // provides decryption. It should only be created when:
-// - The |media_resource| has type MediaResource::STREAM, and
+// - The |media_resource| has type MediaResource::Type::kStream, and
 // - The |cdm_context| has a Decryptor that always supports decrypt-only.
 // Internally DecryptingDemuxerStreams will be created for all streams in
 // |media_resource| and decrypt them into clear streams. These clear streams are
@@ -45,7 +45,8 @@ class MEDIA_EXPORT DecryptingMediaResource : public MediaResource {
 
   // MediaResource implementation:
   MediaResource::Type GetType() const override;
-  std::vector<DemuxerStream*> GetAllStreams() override;
+  std::vector<raw_ptr<DemuxerStream, VectorExperimental>> GetAllStreams()
+      override;
 
   void Initialize(InitCB init_cb, WaitingCB waiting_cb_);
 
@@ -67,7 +68,7 @@ class MEDIA_EXPORT DecryptingMediaResource : public MediaResource {
   // will be returned when GetAllStreams() is invoked. |owned_streams_| is the
   // set of DecryptingDemuxerStreams that we have created and own (i.e.
   // responsible for destructing).
-  std::vector<DemuxerStream*> streams_;
+  std::vector<raw_ptr<DemuxerStream, VectorExperimental>> streams_;
   std::vector<std::unique_ptr<DecryptingDemuxerStream>> owned_streams_;
 
   // Called when the final DecryptingDemuxerStream has been initialized *or*

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,14 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/strings/string_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "net/base/address_list.h"
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_errors.h"
@@ -29,13 +29,11 @@ HostResolverNat64Task::HostResolverNat64Task(
     NetworkAnonymizationKey network_anonymization_key,
     NetLogWithSource net_log,
     ResolveContext* resolve_context,
-    HostCache* host_cache,
     base::WeakPtr<HostResolverManager> resolver)
     : hostname_(hostname),
       network_anonymization_key_(std::move(network_anonymization_key)),
       net_log_(std::move(net_log)),
       resolve_context_(resolve_context),
-      host_cache_(host_cache),
       resolver_(std::move(resolver)) {}
 
 HostResolverNat64Task::~HostResolverNat64Task() {
@@ -51,7 +49,7 @@ void HostResolverNat64Task::Start(base::OnceClosure completion_closure) {
   next_state_ = State::kResolve;
   int rv = DoLoop(OK);
   if (rv != ERR_IO_PENDING) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, std::move(completion_closure_));
   }
 }
@@ -100,7 +98,7 @@ int HostResolverNat64Task::DoResolve() {
 
   request_ipv4onlyarpa_ = resolver_->CreateRequest(
       HostPortPair("ipv4only.arpa", 80), network_anonymization_key_, net_log_,
-      parameters, resolve_context_, host_cache_);
+      parameters, resolve_context_);
 
   return request_ipv4onlyarpa_->Start(base::BindOnce(
       &HostResolverNat64Task::OnIOComplete, weak_ptr_factory_.GetWeakPtr()));
@@ -144,8 +142,7 @@ int HostResolverNat64Task::DoSynthesizeToIpv6() {
           ipv4_address, ipv4onlyarpa_AAAA_address, pref64_length);
 
       IPEndPoint converted_ip_endpoint(converted_address, 0);
-      if (std::find(converted_addresses.begin(), converted_addresses.end(),
-                    converted_ip_endpoint) == converted_addresses.end()) {
+      if (!base::Contains(converted_addresses, converted_ip_endpoint)) {
         converted_addresses.push_back(std::move(converted_ip_endpoint));
       }
     }

@@ -9,13 +9,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/sequence_checker.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "build/branding_buildflags.h"
 #include "build/buildflag.h"
@@ -91,12 +91,13 @@ base::TimeDelta GetNextRequestDelay(base::TimeDelta last_delay) {
   return std::min(last_delay * 2, kMaxRequestDelay);
 }
 
-void NotifyCertsChangedInAshOnUIThread() {
+void NotifyCertsChangedInAshOnUIThread(
+    crosapi::mojom::CertDatabaseChangeType change_type) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   crosapi::CrosapiManager::Get()
       ->crosapi_ash()
       ->cert_database_ash()
-      ->NotifyCertsChangedInAsh();
+      ->NotifyCertsChangedInAsh(change_type);
 }
 
 }  // namespace
@@ -165,7 +166,7 @@ void SystemTokenCertDBInitializer::CheckTpm() {
 }
 
 void SystemTokenCertDBInitializer::RetryCheckTpmLater() {
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&SystemTokenCertDBInitializer::CheckTpm,
                      weak_ptr_factory_.GetWeakPtr()),
@@ -259,9 +260,18 @@ void SystemTokenCertDBInitializer::InitializeDatabase(
   system_token_cert_db_storage->SetDatabase(system_token_cert_database_.get());
 }
 
-void SystemTokenCertDBInitializer::OnCertDBChanged() {
+void SystemTokenCertDBInitializer::OnTrustStoreChanged() {
   content::GetUIThreadTaskRunner({})->PostTask(
-      FROM_HERE, base::BindOnce(&NotifyCertsChangedInAshOnUIThread));
+      FROM_HERE,
+      base::BindOnce(&NotifyCertsChangedInAshOnUIThread,
+                     crosapi::mojom::CertDatabaseChangeType::kTrustStore));
+}
+
+void SystemTokenCertDBInitializer::OnClientCertStoreChanged() {
+  content::GetUIThreadTaskRunner({})->PostTask(
+      FROM_HERE,
+      base::BindOnce(&NotifyCertsChangedInAshOnUIThread,
+                     crosapi::mojom::CertDatabaseChangeType::kClientCertStore));
 }
 
 }  // namespace ash

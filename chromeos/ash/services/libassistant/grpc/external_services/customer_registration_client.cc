@@ -4,12 +4,11 @@
 
 #include "chromeos/ash/services/libassistant/grpc/external_services/customer_registration_client.h"
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/bind_post_task.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chromeos/ash/services/libassistant/grpc/grpc_libassistant_client.h"
 #include "chromeos/ash/services/libassistant/grpc/grpc_state.h"

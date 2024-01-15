@@ -11,14 +11,15 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 
 namespace content {
 
 WebTestStorageAccessManager::WebTestStorageAccessManager(
     BrowserContext* browser_context)
-    : browser_context_(browser_context) {}
+    : browser_context_(
+          base::raw_ref<content::BrowserContext>::from_ptr(browser_context)) {}
 
 WebTestStorageAccessManager::~WebTestStorageAccessManager() = default;
 
@@ -28,54 +29,32 @@ void WebTestStorageAccessManager::SetStorageAccess(
     const bool blocked,
     blink::test::mojom::StorageAccessAutomation::SetStorageAccessCallback
         callback) {
-  const ContentSetting setting =
-      blocked ? CONTENT_SETTING_BLOCK : CONTENT_SETTING_ALLOW;
-
-  auto primary_pattern = ContentSettingsPattern::FromString(origin);
-  if (!primary_pattern.IsValid()) {
+  CHECK(callback);
+  if (!ContentSettingsPattern::FromString(origin).IsValid() ||
+      !ContentSettingsPattern::FromString(embedding_origin).IsValid()) {
     std::move(callback).Run(false);
     return;
   }
 
-  auto secondary_pattern = ContentSettingsPattern::FromString(embedding_origin);
-  if (!secondary_pattern.IsValid()) {
-    std::move(callback).Run(false);
-    return;
-  }
+  // Note: we're intentionally ignoring the `origin` and `embedding_origin`
+  // patterns here, aside from checking that they are valid patterns. Chromium's
+  // Storage Access API implementation intentionally does not override
+  // site-specific cookie settings exceptions, so it is incorrect (or at best,
+  // unhelpful) to use the patterns to set a site-specific setting.
+  //
+  // We've proposed an update to the spec based on this limitation:
+  // https://github.com/privacycg/storage-access/issues/162.
 
-  content_settings_for_automation_.push_back(
-      ContentSettingPatternSource(primary_pattern, secondary_pattern,
-                                  base::Value(setting), std::string(), false));
-
-  // TODO(https://crbug.com/1106098) - Storage Access API should support all
-  // storage types in content shell
-
-  // Storage access API (SAA) settings for cookies are implemented in the
-  // network::CookieSettings class. Settings for other storage types such as
-  // local storage and indexeddb are implemented in
-  // content_settings::CookieSettings. Content Shell does not
-  // use the content_settings::CookieSettings class so SAA affects only
-  // cookie access here. Other storage types are always allowed in
-  // Content Shell.
-
-  // Since cookies are the only storage type governed by SAA in Content Shell,
-  // this class handles cookie rules only. If Content Shell or SAA are
-  // updated in the future so that more storage types are governed by SAA in
-  // Content Shell, then we should update this class to handle those other
-  // types are well.
-
-  auto* storage_partition = browser_context_->GetDefaultStoragePartition();
-  auto* cookie_manager = storage_partition->GetCookieManagerForBrowserProcess();
-
-  // Enable third-party cookies blocking if we have not done so yet. This will
-  // cause the content settings to take effect.
-  if (!third_party_cookies_blocked_) {
-    cookie_manager->BlockThirdPartyCookies(true);
-    third_party_cookies_blocked_ = true;
-  }
-
-  // Update the cookie manager's copy of the content settings.
-  cookie_manager->SetContentSettings(content_settings_for_automation_);
+  // Enable third-party cookies blocking if needed, otherwise disable. This will
+  // cause Storage Access API grants to become relevant.
+  StoragePartition* storage_partition =
+      browser_context_->GetDefaultStoragePartition();
+  CHECK(storage_partition);
+  network::mojom::CookieManager* cookie_manager =
+      storage_partition->GetCookieManagerForBrowserProcess();
+  CHECK(cookie_manager);
+  cookie_manager->BlockThirdPartyCookies(blocked);
+  storage_partition->FlushNetworkInterfaceForTesting();
   std::move(callback).Run(true);
 }
 

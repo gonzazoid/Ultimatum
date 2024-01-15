@@ -4,9 +4,12 @@
 
 package org.chromium.chrome.browser.feedback;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
+import androidx.annotation.Nullable;
+
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.chrome.browser.profiles.Profile;
 
 import java.util.HashMap;
@@ -16,6 +19,7 @@ import java.util.Map;
 @JNINamespace("chrome::android")
 public class FamilyInfoFeedbackSource implements AsyncFeedbackSource {
     private static final String FAMILY_MEMBER_ROLE = "Family_Member_Role";
+    private static final String PARENTAL_CONTROL_SITES_CHILD = "Parental_Control_Sites_Child";
 
     private final Profile mProfile;
     private Map<String, String> mFeedbackMap = new HashMap<>();
@@ -33,12 +37,29 @@ public class FamilyInfoFeedbackSource implements AsyncFeedbackSource {
         FamilyInfoFeedbackSourceJni.get().start(this, mProfile);
     }
 
-    @CalledByNative
     private void processFamilyMemberRole(String familyRole) {
         // Adds a family role only if the user is enrolled in a Family group.
         if (!familyRole.isEmpty()) {
             mFeedbackMap.put(FAMILY_MEMBER_ROLE, familyRole);
         }
+    }
+
+    private void processParentalControlSitesChild(String webFilterType) {
+        // Adds the parental control sites web filter for child users.
+        assert mProfile.isChild();
+        assert !webFilterType.isEmpty();
+        mFeedbackMap.put(PARENTAL_CONTROL_SITES_CHILD, webFilterType);
+    }
+
+    @CalledByNative
+    private void processPrimaryAccountFamilyInfo(
+            String familyRole, @Nullable String webFilterType) {
+        processFamilyMemberRole(familyRole);
+
+        if (webFilterType != null) {
+            processParentalControlSitesChild(webFilterType);
+        }
+
         mIsReady = true;
         if (mCallback != null) {
             mCallback.run();

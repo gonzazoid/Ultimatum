@@ -105,6 +105,7 @@ class ApacheHTTP(server_base.ServerBase):
             # TODO(509038): To be removed after bluetooth tests are ported to WPT.
             '-c', 'Alias /resources/chromium "%s/external/wpt/resources/chromium"' % test_dir,
             '-c', 'Alias /resources/testharness.js "%s/resources/testharness.js"' % test_dir,
+            '-c', 'Alias /resources/testharness-helpers.js "%s/resources/testharness-helpers.js"' % test_dir,
             '-c', 'Alias /resources/testharnessreport.js "%s/resources/testharnessreport.js"' % test_dir,
             '-c', 'Alias /resources/testdriver.js "%s/resources/testdriver.js"' % test_dir,
             '-c', 'Alias /resources/testdriver-vendor.js "%s/resources/testdriver-vendor.js"' % test_dir,
@@ -131,7 +132,7 @@ class ApacheHTTP(server_base.ServerBase):
         if self._is_win:
             start_cmd += [
                 '-c',
-                'ThreadsPerChild %d' % (self._number_of_servers * 8)
+                'ThreadsPerChild %d' % (self._number_of_servers * 16)
             ]
         else:
             start_cmd += [
@@ -233,7 +234,7 @@ class ApacheHTTP(server_base.ServerBase):
         retval = proc.returncode
         if retval or (err and len(err)):
             raise server_base.ServerError(
-                'Failed to stop %s: %s %s' % (self._name, err))
+                'Failed to stop %s: %s' % (self._name, err))
 
         # For some reason apache isn't guaranteed to have actually stopped after
         # the stop command returns, so we wait a little while longer for the

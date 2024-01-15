@@ -6,9 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/webrtc/thread_wrapper.h"
 #include "net/base/io_buffer.h"
 #include "remoting/codec/video_encoder.h"
@@ -170,8 +171,9 @@ void WebrtcConnectionToClient::OnSessionStateChange(Session::State state) {
 
       // OnConnectionAuthenticated() call above may result in the connection
       // being torn down.
-      if (self)
+      if (self) {
         event_handler_->CreateMediaStreams();
+      }
       break;
     }
 
@@ -206,7 +208,7 @@ void WebrtcConnectionToClient::OnWebrtcTransportConnected() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   auto sctp_transport = transport_->peer_connection()->GetSctpTransport();
   if (sctp_transport) {
-    absl::optional<double> max_message_size =
+    std::optional<double> max_message_size =
         sctp_transport->Information().MaxMessageSize();
     if (max_message_size && *max_message_size > 0) {
       control_dispatcher_->set_max_message_size(*max_message_size);

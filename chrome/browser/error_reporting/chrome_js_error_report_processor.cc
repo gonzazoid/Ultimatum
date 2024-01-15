@@ -4,11 +4,14 @@
 
 #include "chrome/browser/error_reporting/chrome_js_error_report_processor.h"
 
+#include <stddef.h>
+
+#include <string_view>
 #include <tuple>
 #include <utility>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/escape.h"
@@ -24,8 +27,8 @@
 #include "components/crash/content/browser/error_reporting/javascript_error_report.h"
 #include "components/crash/core/app/client_upload_info.h"
 #include "components/crash/core/app/crashpad.h"
-#include "components/feedback/redaction_tool.h"
-#include "components/startup_metric_utils/browser/startup_metric_utils.h"
+#include "components/feedback/redaction_tool/redaction_tool.h"
+#include "components/startup_metric_utils/common/startup_metric_utils.h"
 #include "components/variations/variations_crash_keys.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -72,8 +75,38 @@ void RemoveErrorMessageFromStackTrace(const std::string& error_message,
 }
 
 std::string RedactErrorMessage(const std::string& message) {
-  return feedback::RedactionTool(/*first_party_extension_ids=*/nullptr)
+  return redaction::RedactionTool(/*first_party_extension_ids=*/nullptr)
       .Redact(message);
+}
+
+// Truncate the error message to no more than 1000 characters. Long messages
+// are not useful and can cause problems in internal systems (such as
+// excessively long URLs used to point to error reports). Note that the
+// truncation is calculated pre-character-escaping ("  " is 3 characters, not
+// the 9 of "%20%20%20") so that we don't break an escape sequence.
+//
+// Return the original message if it's already less than 1000 characters, or
+// a truncated version if it's over 1000 characters
+std::string TruncateErrorMessage(const std::string& message) {
+  constexpr int kMaxCharacters = 1000;
+
+  if (message.length() <= kMaxCharacters) {
+    return message;
+  }
+
+  constexpr std::string_view kTruncationMessage = "--[TRUNCATED]--";
+  constexpr int kTruncationMessageLength = kTruncationMessage.size();
+
+  // Truncate the middle of the message. The useful information is likely to be
+  // at the beginning ('Invalid regex: "....."') or the end ('"...." is not
+  // a valid email address').
+  constexpr int kStartLength =
+      (kMaxCharacters - kTruncationMessageLength + 1) / 2;
+  constexpr int kEndLength = (kMaxCharacters - kTruncationMessageLength) / 2;
+  std::string::size_type begin_end_fragment = message.length() - kEndLength;
+
+  return base::StrCat({message.substr(0, kStartLength), kTruncationMessage,
+                       message.substr(begin_end_fragment)});
 }
 
 std::string MapWindowTypeToString(WindowType window_type) {
@@ -183,7 +216,7 @@ void ChromeJsErrorReportProcessor::OnConsentCheckCompleted(
   params["prod"] = base::EscapeQueryParamValue(product, /*use_plus=*/false);
   params["ver"] = base::EscapeQueryParamValue(version, /*use_plus=*/false);
   params["type"] = "JavascriptError";
-  params["error_message"] = error_report->message;
+  params["error_message"] = TruncateErrorMessage(error_report->message);
   params["browser"] = "Chrome";
   params["browser_version"] = platform.version;
   params["channel"] = platform.channel;
@@ -209,6 +242,9 @@ void ChromeJsErrorReportProcessor::OnConsentCheckCompleted(
       break;
     case JavaScriptErrorReport::SourceSystem::kWebUIObserver:
       params[kSourceSystemParamName] = "webui_observer";
+      break;
+    case JavaScriptErrorReport::SourceSystem::kDevToolsObserver:
+      params[kSourceSystemParamName] = "devtools_observer";
       break;
   }
   params["full_url"] = source.spec();
@@ -353,7 +389,8 @@ void ChromeJsErrorReportProcessor::SendErrorReport(
 
   // Get browser uptime before swapping threads to reduce lag time between the
   // error report occurring and sending it off.
-  base::TimeTicks startup_time = startup_metric_utils::MainEntryPointTicks();
+  base::TimeTicks startup_time =
+      startup_metric_utils::GetCommon().MainEntryPointTicks();
   base::TimeDelta browser_process_uptime =
       (base::TimeTicks::Now() - startup_time);
 

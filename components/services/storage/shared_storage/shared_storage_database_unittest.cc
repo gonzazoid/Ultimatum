@@ -20,6 +20,7 @@
 #include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_clock.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_timeouts.h"
 #include "base/time/time.h"
 #include "components/services/storage/public/mojom/storage_usage_info.mojom.h"
 #include "components/services/storage/shared_storage/shared_storage_options.h"
@@ -38,6 +39,7 @@ namespace storage {
 namespace {
 
 using ::testing::ElementsAre;
+using ::testing::Pair;
 using StorageKeyPolicyMatcherFunction =
     SharedStorageDatabase::StorageKeyPolicyMatcherFunction;
 using InitStatus = SharedStorageDatabase::InitStatus;
@@ -45,9 +47,10 @@ using SetBehavior = SharedStorageDatabase::SetBehavior;
 using OperationResult = SharedStorageDatabase::OperationResult;
 using GetResult = SharedStorageDatabase::GetResult;
 using TimeResult = SharedStorageDatabase::TimeResult;
+using EntriesResult = SharedStorageDatabase::EntriesResult;
 
 const int kBudgetIntervalHours = 24;
-const int kOriginStalenessThresholdDays = 1;
+const int kStalenessThresholdDays = 1;
 const int kBitBudget = 8;
 const int kMaxEntriesPerOrigin = 5;
 const int kMaxEntriesPerOriginForIteratorTest = 1000;
@@ -100,7 +103,7 @@ class SharedStorageDatabaseTest : public testing::Test {
   // Initialize a shared storage database instance from the SQL file at
   // `relative_file_path` in the "storage/" subdirectory of test data.
   std::unique_ptr<SharedStorageDatabase> LoadFromFile(
-      const char* relative_file_path) {
+      std::string relative_file_path) {
     if (!CreateDatabaseFromSQL(file_name_, relative_file_path)) {
       ADD_FAILURE() << "Failed loading " << relative_file_path;
       return nullptr;
@@ -133,9 +136,9 @@ class SharedStorageDatabaseTest : public testing::Test {
   base::HistogramTester histogram_tester_;
 };
 
-// Test loading version 1 database.
-TEST_F(SharedStorageDatabaseTest, Version1_LoadFromFile) {
-  db_ = LoadFromFile("shared_storage.v1.sql");
+// Test loading current version database.
+TEST_F(SharedStorageDatabaseTest, CurrentVersion_LoadFromFile) {
+  db_ = LoadFromFile(GetTestFileNameForCurrentVersion());
   ASSERT_TRUE(db_);
   ASSERT_TRUE(db_->is_filebacked());
 
@@ -147,7 +150,15 @@ TEST_F(SharedStorageDatabaseTest, Version1_LoadFromFile) {
 
   url::Origin google_com = url::Origin::Create(GURL("http://google.com/"));
   EXPECT_EQ(db_->Get(google_com, u"key1").data, u"value1");
+  EXPECT_EQ(db_->Get(google_com, u"key1")
+                .last_used_time.ToDeltaSinceWindowsEpoch()
+                .InMicroseconds(),
+            13312097333991364);
   EXPECT_EQ(db_->Get(google_com, u"key2").data, u"value2");
+  EXPECT_EQ(db_->Get(google_com, u"key2")
+                .last_used_time.ToDeltaSinceWindowsEpoch()
+                .InMicroseconds(),
+            13313037427966159);
 
   // Because the SQL database is lazy-initialized, wait to verify tables and
   // columns until after the first call to `Get()`.
@@ -159,6 +170,10 @@ TEST_F(SharedStorageDatabaseTest, Version1_LoadFromFile) {
 
   url::Origin chromium_org = url::Origin::Create(GURL("http://chromium.org/"));
   EXPECT_EQ(db_->Get(chromium_org, u"a").data, u"");
+  EXPECT_EQ(db_->Get(chromium_org, u"a")
+                .last_used_time.ToDeltaSinceWindowsEpoch()
+                .InMicroseconds(),
+            13313037416916308);
 
   TestSharedStorageEntriesListener listener(
       task_environment_.GetMainThreadTaskRunner());
@@ -225,17 +240,29 @@ TEST_F(SharedStorageDatabaseTest, Version1_LoadFromFile) {
                                    google_org, grow_with_google_com, gv_com,
                                    waymo_com, withgoogle_com, youtube_com));
 
-  EXPECT_DOUBLE_EQ(kBitBudget - 5.3, db_->GetRemainingBudget(abc_xyz).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(chromium_org).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(google_com).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget - 4.0, db_->GetRemainingBudget(google_org).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget - 1.2,
-                   db_->GetRemainingBudget(grow_with_google_com).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(gv_com).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget - 4.2, db_->GetRemainingBudget(waymo_com).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget - 1.0,
-                   db_->GetRemainingBudget(withgoogle_com).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(youtube_com).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget - 5.3,
+                   db_->GetRemainingBudget(net::SchemefulSite(abc_xyz)).bits);
+  EXPECT_DOUBLE_EQ(
+      kBitBudget,
+      db_->GetRemainingBudget(net::SchemefulSite(chromium_org)).bits);
+  EXPECT_DOUBLE_EQ(
+      kBitBudget, db_->GetRemainingBudget(net::SchemefulSite(google_com)).bits);
+  EXPECT_DOUBLE_EQ(
+      kBitBudget - 4.0,
+      db_->GetRemainingBudget(net::SchemefulSite(google_org)).bits);
+  EXPECT_DOUBLE_EQ(
+      kBitBudget - 1.2,
+      db_->GetRemainingBudget(net::SchemefulSite(grow_with_google_com)).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget,
+                   db_->GetRemainingBudget(net::SchemefulSite(gv_com)).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget - 4.2,
+                   db_->GetRemainingBudget(net::SchemefulSite(waymo_com)).bits);
+  EXPECT_DOUBLE_EQ(
+      kBitBudget - 1.0,
+      db_->GetRemainingBudget(net::SchemefulSite(withgoogle_com)).bits);
+  EXPECT_DOUBLE_EQ(
+      kBitBudget,
+      db_->GetRemainingBudget(net::SchemefulSite(youtube_com)).bits);
 
   EXPECT_EQ(13266954476192362, db_->GetCreationTime(google_com)
                                    .time.ToDeltaSinceWindowsEpoch()
@@ -252,7 +279,8 @@ TEST_F(SharedStorageDatabaseTest, Version1_LoadFromFile) {
   EXPECT_EQ(base::Time(), result.time);
 
   histogram_tester_.ExpectUniqueSample(kIsFileBackedHistogram, true, 1);
-  histogram_tester_.ExpectUniqueSample(kFileSizeKBHistogram, 40, 1);
+  histogram_tester_.ExpectTotalCount(kFileSizeKBHistogram, 1);
+  EXPECT_GT(histogram_tester_.GetTotalSum(kFileSizeKBHistogram), 0);
   histogram_tester_.ExpectUniqueSample(kNumOriginsHistogram, 9, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesTotalHistogram, 18, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesMinHistogram, 1, 1);
@@ -350,19 +378,32 @@ TEST_F(SharedStorageDatabaseTest, Version1_LoadFromFileNoBudgetTables) {
                                    google_org, grow_with_google_com, gv_com,
                                    waymo_com, withgoogle_com, youtube_com));
 
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(abc_xyz).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(chromium_org).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(google_com).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(google_org).bits);
   EXPECT_DOUBLE_EQ(kBitBudget,
-                   db_->GetRemainingBudget(grow_with_google_com).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(gv_com).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(waymo_com).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(withgoogle_com).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(youtube_com).bits);
+                   db_->GetRemainingBudget(net::SchemefulSite(abc_xyz)).bits);
+  EXPECT_DOUBLE_EQ(
+      kBitBudget,
+      db_->GetRemainingBudget(net::SchemefulSite(chromium_org)).bits);
+  EXPECT_DOUBLE_EQ(
+      kBitBudget, db_->GetRemainingBudget(net::SchemefulSite(google_com)).bits);
+  EXPECT_DOUBLE_EQ(
+      kBitBudget, db_->GetRemainingBudget(net::SchemefulSite(google_org)).bits);
+  EXPECT_DOUBLE_EQ(
+      kBitBudget,
+      db_->GetRemainingBudget(net::SchemefulSite(grow_with_google_com)).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget,
+                   db_->GetRemainingBudget(net::SchemefulSite(gv_com)).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget,
+                   db_->GetRemainingBudget(net::SchemefulSite(waymo_com)).bits);
+  EXPECT_DOUBLE_EQ(
+      kBitBudget,
+      db_->GetRemainingBudget(net::SchemefulSite(withgoogle_com)).bits);
+  EXPECT_DOUBLE_EQ(
+      kBitBudget,
+      db_->GetRemainingBudget(net::SchemefulSite(youtube_com)).bits);
 
   histogram_tester_.ExpectUniqueSample(kIsFileBackedHistogram, true, 1);
-  histogram_tester_.ExpectUniqueSample(kFileSizeKBHistogram, 40, 1);
+  histogram_tester_.ExpectTotalCount(kFileSizeKBHistogram, 1);
+  EXPECT_GT(histogram_tester_.GetTotalSum(kFileSizeKBHistogram), 0);
   histogram_tester_.ExpectUniqueSample(kNumOriginsHistogram, 9, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesTotalHistogram, 18, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesMinHistogram, 1, 1);
@@ -374,10 +415,10 @@ TEST_F(SharedStorageDatabaseTest, Version1_LoadFromFileNoBudgetTables) {
   EXPECT_TRUE(db_->Destroy());
 }
 
-TEST_F(SharedStorageDatabaseTest, Version1_DestroyTooNew) {
+TEST_F(SharedStorageDatabaseTest, DestroyTooNew) {
   // Initialization should fail, since the last compatible version number
   // is too high.
-  db_ = LoadFromFile("shared_storage.v1.init_too_new.sql");
+  db_ = LoadFromFile("shared_storage.init_too_new.sql");
   ASSERT_TRUE(db_);
   ASSERT_TRUE(db_->is_filebacked());
   ASSERT_TRUE(SqlDB());
@@ -400,9 +441,12 @@ TEST_F(SharedStorageDatabaseTest, Version1_DestroyTooNew) {
             db_->PurgeMatchingOrigins(StorageKeyPolicyMatcherFunction(),
                                       base::Time::Min(), base::Time::Max(),
                                       /*perform_storage_cleanup=*/false));
-  EXPECT_EQ(OperationResult::kInitFailure, db_->PurgeStaleOrigins());
+  EXPECT_EQ(OperationResult::kInitFailure, db_->PurgeStale());
   EXPECT_EQ(OperationResult::kInitFailure,
             db_->GetEntriesForDevTools(kOrigin).result);
+
+  EXPECT_EQ(OperationResult::kInitFailure,
+            db_->ResetBudgetForDevTools(kOrigin));
 
   auto metadata = db_->GetMetadata(kOrigin);
   EXPECT_EQ(OperationResult::kInitFailure, metadata.time_result);
@@ -412,10 +456,10 @@ TEST_F(SharedStorageDatabaseTest, Version1_DestroyTooNew) {
   EXPECT_TRUE(db_->Destroy());
 }
 
-TEST_F(SharedStorageDatabaseTest, Version0_DestroyTooOld) {
+TEST_F(SharedStorageDatabaseTest, DestroyTooOld) {
   // Initialization should fail, since the current version number
   // is too low and we're forcing there not to be a retry attempt.
-  db_ = LoadFromFile("shared_storage.v0.init_too_old.sql");
+  db_ = LoadFromFile(GetTestFileNameForLatestDeprecatedVersion());
   ASSERT_TRUE(db_);
   ASSERT_TRUE(db_->is_filebacked());
   ASSERT_TRUE(SqlDB());
@@ -444,6 +488,7 @@ class SharedStorageDatabaseParamTest
     db_ = std::make_unique<SharedStorageDatabase>(
         db_path, special_storage_policy_, std::move(options));
     db_->OverrideClockForTesting(&clock_);
+    clock_.SetNow(base::Time::Now());
 
     ASSERT_EQ(GetParam().in_memory_only, !db_->is_filebacked());
   }
@@ -463,15 +508,16 @@ class SharedStorageDatabaseParamTest
          {"SharedStorageBitBudget", base::NumberToString(kBitBudget)},
          {"SharedStorageBudgetInterval",
           TimeDeltaToString(base::Hours(kBudgetIntervalHours))},
-         {"SharedStorageOriginStalenessThreshold",
-          TimeDeltaToString(base::Days(kOriginStalenessThresholdDays))}});
+         {"SharedStorageStalenessThreshold",
+          TimeDeltaToString(base::Days(kStalenessThresholdDays))}});
   }
 
   void CheckInitHistograms() {
     histogram_tester_.ExpectUniqueSample(kIsFileBackedHistogram,
                                          db_->is_filebacked(), 1);
     if (db_->is_filebacked()) {
-      histogram_tester_.ExpectUniqueSample(kFileSizeKBHistogram, 29, 1);
+      histogram_tester_.ExpectTotalCount(kFileSizeKBHistogram, 1);
+      EXPECT_GT(histogram_tester_.GetTotalSum(kFileSizeKBHistogram), 0);
       histogram_tester_.ExpectUniqueSample(kNumOriginsHistogram, 0, 1);
       histogram_tester_.ExpectUniqueSample(kNumEntriesTotalHistogram, 0, 1);
     }
@@ -487,10 +533,26 @@ TEST_P(SharedStorageDatabaseParamTest, BasicOperations) {
   const url::Origin kOrigin1 =
       url::Origin::Create(GURL("http://www.example1.test"));
   EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key1", u"value1"));
+  base::Time now = clock_.Now();
   EXPECT_EQ(db_->Get(kOrigin1, u"key1").data, u"value1");
 
+  // Verify that `last_used_time1` is set to `now` (within a tolerance).
+  base::Time last_used_time1 = db_->Get(kOrigin1, u"key1").last_used_time;
+  ASSERT_LE(last_used_time1, now);
+  ASSERT_GE(last_used_time1, now - TestTimeouts::action_max_timeout());
+
+  // Advance the clock to put distance between the last used times.
+  clock_.Advance(base::Hours(12));
+
   EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key1", u"value2"));
+  now = clock_.Now();
   EXPECT_EQ(db_->Get(kOrigin1, u"key1").data, u"value2");
+
+  // Verify that `last_used_time2` is set to `now` (within a tolerance).
+  base::Time last_used_time2 = db_->Get(kOrigin1, u"key1").last_used_time;
+  ASSERT_GT(last_used_time2, last_used_time1);
+  ASSERT_LE(last_used_time2, now);
+  ASSERT_GE(last_used_time2, now - TestTimeouts::action_max_timeout());
 
   EXPECT_EQ(OperationResult::kSuccess, db_->Delete(kOrigin1, u"key1"));
   EXPECT_EQ(OperationResult::kNotFound, db_->Get(kOrigin1, u"key1").result);
@@ -505,30 +567,69 @@ TEST_P(SharedStorageDatabaseParamTest, BasicOperations) {
   // Check that trying to delete the empty key doesn't give an error, even
   // though the input is invalid and no value is found to delete.
   EXPECT_EQ(OperationResult::kSuccess, db_->Delete(kOrigin1, u""));
+
+  // Check that trying to store and retrieve an empty value doesn't cause an
+  // error.
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key2", u""));
+  GetResult result2 = db_->Get(kOrigin1, u"key2");
+  EXPECT_EQ(OperationResult::kSuccess, result2.result);
+  EXPECT_TRUE(result2.data.empty());
 }
 
 TEST_P(SharedStorageDatabaseParamTest, IgnoreIfPresent) {
   const url::Origin kOrigin1 =
       url::Origin::Create(GURL("http://www.example1.test"));
   EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key1", u"value1"));
+  base::Time now = clock_.Now();
   EXPECT_EQ(db_->Get(kOrigin1, u"key1").data, u"value1");
+
+  // Verify that `last_used_time1` is set to `now` (within a tolerance).
+  base::Time last_used_time1 = db_->Get(kOrigin1, u"key1").last_used_time;
+  ASSERT_LE(last_used_time1, now);
+  ASSERT_GE(last_used_time1, now - TestTimeouts::action_max_timeout());
+
+  // Advance the clock to put distance between the last used times.
+  clock_.Advance(base::Hours(12));
 
   // The database does not set a new value for "key1", but retains the
   // previously set value "value1" because `behavior` is `kIgnoreIfPresent`.
   EXPECT_EQ(OperationResult::kIgnored,
             db_->Set(kOrigin1, u"key1", u"value2",
                      /*behavior=*/SetBehavior::kIgnoreIfPresent));
+  now = clock_.Now();
   EXPECT_EQ(db_->Get(kOrigin1, u"key1").data, u"value1");
 
+  // Verify that `last_used_time2` is set to `now` (within a tolerance).
+  base::Time last_used_time2 = db_->Get(kOrigin1, u"key1").last_used_time;
+  ASSERT_GT(last_used_time2, last_used_time1);
+  ASSERT_LE(last_used_time2, now);
+  ASSERT_GE(last_used_time2, now - TestTimeouts::action_max_timeout());
+
   EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key2", u"value1"));
+  now = clock_.Now();
   EXPECT_EQ(db_->Get(kOrigin1, u"key2").data, u"value1");
+
+  // Verify that `last_used_time1` is set to `now` (within a tolerance).
+  last_used_time1 = db_->Get(kOrigin1, u"key2").last_used_time;
+  ASSERT_LE(last_used_time1, now);
+  ASSERT_GE(last_used_time1, now - TestTimeouts::action_max_timeout());
+
+  // Advance the clock to put distance between the last used times.
+  clock_.Advance(base::Hours(12));
 
   // Having `behavior` set to `kDefault` makes `Set()` override any previous
   // value.
   EXPECT_EQ(OperationResult::kSet,
             db_->Set(kOrigin1, u"key2", u"value2",
                      /*behavior=*/SetBehavior::kDefault));
+  now = clock_.Now();
   EXPECT_EQ(db_->Get(kOrigin1, u"key2").data, u"value2");
+
+  // Verify that `last_used_time2` is set to `now` (within a tolerance).
+  last_used_time2 = db_->Get(kOrigin1, u"key2").last_used_time;
+  ASSERT_GT(last_used_time2, last_used_time1);
+  ASSERT_LE(last_used_time2, now);
+  ASSERT_GE(last_used_time2, now - TestTimeouts::action_max_timeout());
 
   const url::Origin kOrigin2 =
       url::Origin::Create(GURL("http://www.example2.test"));
@@ -538,25 +639,163 @@ TEST_P(SharedStorageDatabaseParamTest, IgnoreIfPresent) {
   EXPECT_EQ(OperationResult::kSet,
             db_->Set(kOrigin2, u"key1", u"value1",
                      /*behavior=*/SetBehavior::kIgnoreIfPresent));
+  now = clock_.Now();
   EXPECT_EQ(db_->Get(kOrigin2, u"key1").data, u"value1");
+
+  // Verify that `last_used_time1` is set to `now` (within a tolerance).
+  last_used_time1 = db_->Get(kOrigin2, u"key1").last_used_time;
+  ASSERT_LE(last_used_time1, now);
+  ASSERT_GE(last_used_time1, now - TestTimeouts::action_max_timeout());
 
   EXPECT_EQ(OperationResult::kSet,
             db_->Set(kOrigin2, u"key2", u"value2",
                      /*behavior=*/SetBehavior::kDefault));
+  now = clock_.Now();
   EXPECT_EQ(db_->Get(kOrigin2, u"key2").data, u"value2");
+
+  // Verify that `last_used_time1` is set to `now` (within a tolerance).
+  last_used_time1 = db_->Get(kOrigin2, u"key2").last_used_time;
+  ASSERT_LE(last_used_time1, now);
+  ASSERT_GE(last_used_time1, now - TestTimeouts::action_max_timeout());
+
+  // Advance the clock so that the key expires.
+  clock_.Advance(base::Days(kStalenessThresholdDays) + base::Seconds(1));
+
+  // The expired entry will be replaced instead of ignored.
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin2, u"key2", u"replaced",
+                                            SetBehavior::kIgnoreIfPresent));
+  EXPECT_EQ(db_->Get(kOrigin2, u"key2").data, u"replaced");
+
+  // Verify that there are also no errors when setting a previously expired (but
+  // unexpunged) key with the default behavior.
+  EXPECT_EQ(OperationResult::kSet,
+            db_->Set(kOrigin1, u"key2", u"replaced", SetBehavior::kDefault));
+  EXPECT_EQ(db_->Get(kOrigin1, u"key2").data, u"replaced");
 }
 
 TEST_P(SharedStorageDatabaseParamTest, Append) {
   const url::Origin kOrigin1 =
       url::Origin::Create(GURL("http://www.example1.test"));
   EXPECT_EQ(OperationResult::kSet, db_->Append(kOrigin1, u"key1", u"value1"));
+  base::Time now = clock_.Now();
   EXPECT_EQ(db_->Get(kOrigin1, u"key1").data, u"value1");
 
-  EXPECT_EQ(OperationResult::kSet, db_->Append(kOrigin1, u"key1", u"value1"));
-  EXPECT_EQ(db_->Get(kOrigin1, u"key1").data, u"value1value1");
+  // Verify that `last_used_time1` is set to `now` (within a tolerance).
+  base::Time last_used_time1 = db_->Get(kOrigin1, u"key1").last_used_time;
+  ASSERT_LE(last_used_time1, now);
+  ASSERT_GE(last_used_time1, now - TestTimeouts::action_max_timeout());
+
+  // Advance the clock to put distance between the last used times.
+  clock_.Advance(base::Days(kStalenessThresholdDays / 2.0));
 
   EXPECT_EQ(OperationResult::kSet, db_->Append(kOrigin1, u"key1", u"value1"));
+  now = clock_.Now();
+  EXPECT_EQ(db_->Get(kOrigin1, u"key1").data, u"value1value1");
+
+  // Verify that `last_used_time2` is set to `now` (within a tolerance).
+  base::Time last_used_time2 = db_->Get(kOrigin1, u"key1").last_used_time;
+  ASSERT_GT(last_used_time2, last_used_time1);
+  ASSERT_LE(last_used_time2, now);
+  ASSERT_GE(last_used_time2, now - TestTimeouts::action_max_timeout());
+
+  // Advance the clock to put distance between the last used times.
+  clock_.Advance(base::Days(kStalenessThresholdDays / 2.0));
+
+  EXPECT_EQ(OperationResult::kSet, db_->Append(kOrigin1, u"key1", u"value1"));
+  now = clock_.Now();
   EXPECT_EQ(db_->Get(kOrigin1, u"key1").data, u"value1value1value1");
+
+  // Verify that `last_used_time3` is set to `now` (within a tolerance).
+  base::Time last_used_time3 = db_->Get(kOrigin1, u"key1").last_used_time;
+  ASSERT_GT(last_used_time3, last_used_time2);
+  ASSERT_LE(last_used_time3, now);
+  ASSERT_GE(last_used_time3, now - TestTimeouts::action_max_timeout());
+
+  // Advance the clock so that the key expires.
+  clock_.Advance(base::Days(kStalenessThresholdDays) + base::Seconds(1));
+
+  // The expired entry will be replaced instead of appended to.
+  EXPECT_EQ(OperationResult::kSet, db_->Append(kOrigin1, u"key1", u"replaced"));
+  EXPECT_EQ(db_->Get(kOrigin1, u"key1").data, u"replaced");
+}
+
+TEST_P(SharedStorageDatabaseParamTest, Get_NonUpdatedKeyExpires) {
+  const url::Origin kOrigin1 =
+      url::Origin::Create(GURL("http://www.example1.test"));
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key1", u"value1"));
+  base::Time set_time = clock_.Now();
+  GetResult result1 = db_->Get(kOrigin1, u"key1");
+  EXPECT_EQ(result1.data, u"value1");
+  EXPECT_EQ(result1.result, OperationResult::kSuccess);
+
+  // Verify that `result1.last_used_time` is set to `set_time` (within a
+  // tolerance).
+  ASSERT_LE(result1.last_used_time, set_time);
+  ASSERT_GE(result1.last_used_time,
+            set_time - TestTimeouts::action_max_timeout());
+
+  // Advance the clock halfway towards expiration of the key.
+  clock_.Advance(base::Days(kStalenessThresholdDays / 2.0));
+  EXPECT_GT(clock_.Now(), set_time);
+
+  // The information obtained is still the same.
+  GetResult result2 = db_->Get(kOrigin1, u"key1");
+  EXPECT_EQ(result2.data, u"value1");
+  EXPECT_EQ(result2.result, OperationResult::kSuccess);
+  ASSERT_LE(result2.last_used_time, set_time);
+  ASSERT_GE(result2.last_used_time,
+            set_time - TestTimeouts::action_max_timeout());
+
+  // Advance the clock to key expiration time.
+  clock_.Advance(base::Days(kStalenessThresholdDays / 2.0) + base::Seconds(1));
+
+  // The key has expired but not been cleared yet.
+  GetResult result3 = db_->Get(kOrigin1, u"key1");
+  EXPECT_EQ(result3.data, u"value1");
+  EXPECT_EQ(result3.result, OperationResult::kExpired);
+}
+
+TEST_P(SharedStorageDatabaseParamTest, Get_UpdatedKeyRemains) {
+  const url::Origin kOrigin1 =
+      url::Origin::Create(GURL("http://www.example1.test"));
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key1", u"value1"));
+  base::Time set_time1 = clock_.Now();
+  GetResult result1 = db_->Get(kOrigin1, u"key1");
+  EXPECT_EQ(result1.data, u"value1");
+  EXPECT_EQ(result1.result, OperationResult::kSuccess);
+
+  // Verify that `result1.last_used_time` is set to `set_time` (within a
+  // tolerance).
+  ASSERT_LE(result1.last_used_time, set_time1);
+  ASSERT_GE(result1.last_used_time,
+            set_time1 - TestTimeouts::action_max_timeout());
+
+  // Advance the clock halfway towards expiration of the key.
+  clock_.Advance(base::Days(kStalenessThresholdDays / 2.0));
+
+  // Modify the key.
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key1", u"value2"));
+  base::Time set_time2 = clock_.Now();
+  EXPECT_GT(set_time2, set_time1);
+
+  // The information obtained will be updated, including the `last_used_time`.
+  GetResult result2 = db_->Get(kOrigin1, u"key1");
+  EXPECT_EQ(result2.data, u"value2");
+  EXPECT_EQ(result2.result, OperationResult::kSuccess);
+  ASSERT_LE(result2.last_used_time, set_time2);
+  ASSERT_GE(result2.last_used_time,
+            set_time2 - TestTimeouts::action_max_timeout());
+
+  // Advance the clock to original key expiration time.
+  clock_.Advance(base::Days(kStalenessThresholdDays / 2.0) + base::Seconds(1));
+
+  // The key is not cleared because it has an updated expiration time.
+  GetResult result3 = db_->Get(kOrigin1, u"key1");
+  EXPECT_EQ(result3.data, u"value2");
+  EXPECT_EQ(result3.result, OperationResult::kSuccess);
+  ASSERT_LE(result3.last_used_time, set_time2);
+  ASSERT_GE(result3.last_used_time,
+            set_time2 - TestTimeouts::action_max_timeout());
 }
 
 TEST_P(SharedStorageDatabaseParamTest, Length) {
@@ -588,6 +827,20 @@ TEST_P(SharedStorageDatabaseParamTest, Length) {
   EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key3", u"value3"));
   EXPECT_EQ(3L, db_->Length(kOrigin1));
   EXPECT_EQ(0L, db_->Length(kOrigin2));
+
+  // Advance the clock halfway towards expiration of the keys.
+  clock_.Advance(base::Days(kStalenessThresholdDays / 2.0));
+
+  // Update one entry.
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key1", u"value0"));
+  EXPECT_EQ(3L, db_->Length(kOrigin1));
+
+  // Advance the clock to original key expiration time.
+  clock_.Advance(base::Days(kStalenessThresholdDays / 2.0) + base::Seconds(1));
+
+  // 2 keys for `kOrigin1` have now expired, so `Length()` will not count them
+  // even though they have not been purged yet.
+  EXPECT_EQ(1L, db_->Length(kOrigin1));
 }
 
 TEST_P(SharedStorageDatabaseParamTest, Keys) {
@@ -648,6 +901,26 @@ TEST_P(SharedStorageDatabaseParamTest, Keys) {
   EXPECT_THAT(utility.TakeKeysForId(id5), ElementsAre(u"key1", u"key3"));
   EXPECT_EQ(1U, utility.BatchCountForId(id5));
   utility.VerifyNoErrorForId(id5);
+
+  // Advance the clock halfway towards expiration of the keys.
+  clock_.Advance(base::Days(kStalenessThresholdDays / 2.0));
+
+  // Update one entry.
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin2, u"key1", u"value0"));
+  EXPECT_EQ(2L, db_->Length(kOrigin1));
+
+  // Advance the clock to original key expiration time.
+  clock_.Advance(base::Days(kStalenessThresholdDays / 2.0) + base::Seconds(1));
+
+  size_t id6 = utility.RegisterListener();
+  EXPECT_EQ(OperationResult::kSuccess,
+            db_->Keys(kOrigin2, utility.BindNewPipeAndPassRemoteForId(id6)));
+  utility.FlushForId(id6);
+
+  // u"key3" is now expired.
+  EXPECT_THAT(utility.TakeKeysForId(id6), ElementsAre(u"key1"));
+  EXPECT_EQ(1U, utility.BatchCountForId(id6));
+  utility.VerifyNoErrorForId(id6);
 }
 
 TEST_P(SharedStorageDatabaseParamTest, Entries) {
@@ -672,8 +945,7 @@ TEST_P(SharedStorageDatabaseParamTest, Entries) {
             db_->Entries(kOrigin1, utility.BindNewPipeAndPassRemoteForId(id2)));
   utility.FlushForId(id2);
   EXPECT_THAT(utility.TakeEntriesForId(id2),
-              ElementsAre(std::make_pair(u"key1", u"value1"),
-                          std::make_pair(u"key2", u"value2")));
+              ElementsAre(Pair(u"key1", u"value1"), Pair(u"key2", u"value2")));
   EXPECT_EQ(1U, utility.BatchCountForId(id2));
   utility.VerifyNoErrorForId(id2);
 
@@ -695,9 +967,8 @@ TEST_P(SharedStorageDatabaseParamTest, Entries) {
             db_->Entries(kOrigin2, utility.BindNewPipeAndPassRemoteForId(id4)));
   utility.FlushForId(id4);
   EXPECT_THAT(utility.TakeEntriesForId(id4),
-              ElementsAre(std::make_pair(u"key1", u"value1"),
-                          std::make_pair(u"key2", u"value2"),
-                          std::make_pair(u"key3", u"value3")));
+              ElementsAre(Pair(u"key1", u"value1"), Pair(u"key2", u"value2"),
+                          Pair(u"key3", u"value3")));
   EXPECT_EQ(1U, utility.BatchCountForId(id4));
   utility.VerifyNoErrorForId(id4);
 
@@ -708,10 +979,30 @@ TEST_P(SharedStorageDatabaseParamTest, Entries) {
             db_->Entries(kOrigin2, utility.BindNewPipeAndPassRemoteForId(id5)));
   utility.FlushForId(id5);
   EXPECT_THAT(utility.TakeEntriesForId(id5),
-              ElementsAre(std::make_pair(u"key1", u"value1"),
-                          std::make_pair(u"key3", u"value3")));
+              ElementsAre(Pair(u"key1", u"value1"), Pair(u"key3", u"value3")));
   EXPECT_EQ(1U, utility.BatchCountForId(id5));
   utility.VerifyNoErrorForId(id5);
+
+  // Advance the clock halfway towards expiration of the keys.
+  clock_.Advance(base::Days(kStalenessThresholdDays / 2.0));
+
+  // Update one entry.
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin2, u"key1", u"value0"));
+  EXPECT_EQ(2L, db_->Length(kOrigin1));
+
+  // Advance the clock to original key expiration time.
+  clock_.Advance(base::Days(kStalenessThresholdDays / 2.0) + base::Seconds(1));
+
+  size_t id6 = utility.RegisterListener();
+  EXPECT_EQ(OperationResult::kSuccess,
+            db_->Entries(kOrigin2, utility.BindNewPipeAndPassRemoteForId(id6)));
+  utility.FlushForId(id6);
+
+  // u"key3" is now expired.
+  EXPECT_THAT(utility.TakeEntriesForId(id6),
+              ElementsAre(Pair(u"key1", u"value0")));
+  EXPECT_EQ(1U, utility.BatchCountForId(id6));
+  utility.VerifyNoErrorForId(id6);
 }
 
 TEST_P(SharedStorageDatabaseParamTest, Clear) {
@@ -777,55 +1068,42 @@ TEST_P(SharedStorageDatabaseParamTest, FetchOrigins) {
   for (const auto& info : db_->FetchOrigins())
     origins.push_back(info->storage_key.origin());
   EXPECT_THAT(origins, ElementsAre(kOrigin3, kOrigin4));
-
-  origins.clear();
-  EXPECT_TRUE(origins.empty());
-  for (const auto& info : db_->FetchOrigins(/*exclude_empty_origins=*/false))
-    origins.push_back(info->storage_key.origin());
-  EXPECT_THAT(origins, ElementsAre(kOrigin1, kOrigin2, kOrigin3, kOrigin4));
 }
 
 TEST_P(SharedStorageDatabaseParamTest, MakeBudgetWithdrawal) {
-  clock_.SetNow(base::Time::Now());
-
   // There should be no entries in the budget table.
   EXPECT_EQ(0L, db_->GetTotalNumBudgetEntriesForTesting());
 
   // SQL database hasn't yet been lazy-initialized. Nevertheless, remaining
   // budgets should be returned as the max possible.
-  const url::Origin kOrigin1 =
-      url::Origin::Create(GURL("http://www.example1.test"));
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kOrigin1).bits);
-  const url::Origin kOrigin2 =
-      url::Origin::Create(GURL("http://www.example2.test"));
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kOrigin2).bits);
+  const net::SchemefulSite kSite1(GURL("http://www.example1.test"));
+  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kSite1).bits);
+  const net::SchemefulSite kSite2(GURL("http://www.example2.test"));
+  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kSite2).bits);
 
-  // A withdrawal for `kOrigin1` doesn't affect `kOrigin2`.
-  EXPECT_EQ(OperationResult::kSuccess,
-            db_->MakeBudgetWithdrawal(kOrigin1, 1.75));
-  EXPECT_DOUBLE_EQ(kBitBudget - 1.75, db_->GetRemainingBudget(kOrigin1).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kOrigin2).bits);
-  EXPECT_EQ(1L, db_->GetNumBudgetEntriesForTesting(kOrigin1));
+  // A withdrawal for `kSite1` doesn't affect `kSite2`.
+  EXPECT_EQ(OperationResult::kSuccess, db_->MakeBudgetWithdrawal(kSite1, 1.75));
+  EXPECT_DOUBLE_EQ(kBitBudget - 1.75, db_->GetRemainingBudget(kSite1).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kSite2).bits);
+  EXPECT_EQ(1L, db_->GetNumBudgetEntriesForTesting(kSite1));
   EXPECT_EQ(1L, db_->GetTotalNumBudgetEntriesForTesting());
 
-  // An additional withdrawal for `kOrigin1` at or near the same time as the
+  // An additional withdrawal for `kSite1` at or near the same time as the
   // previous one is debited appropriately.
-  EXPECT_EQ(OperationResult::kSuccess,
-            db_->MakeBudgetWithdrawal(kOrigin1, 2.5));
+  EXPECT_EQ(OperationResult::kSuccess, db_->MakeBudgetWithdrawal(kSite1, 2.5));
   EXPECT_DOUBLE_EQ(kBitBudget - 1.75 - 2.5,
-                   db_->GetRemainingBudget(kOrigin1).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kOrigin2).bits);
-  EXPECT_EQ(2L, db_->GetNumBudgetEntriesForTesting(kOrigin1));
+                   db_->GetRemainingBudget(kSite1).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kSite2).bits);
+  EXPECT_EQ(2L, db_->GetNumBudgetEntriesForTesting(kSite1));
   EXPECT_EQ(2L, db_->GetTotalNumBudgetEntriesForTesting());
 
-  // A withdrawal for `kOrigin2` doesn't affect `kOrigin1`.
-  EXPECT_EQ(OperationResult::kSuccess,
-            db_->MakeBudgetWithdrawal(kOrigin2, 3.4));
-  EXPECT_DOUBLE_EQ(kBitBudget - 3.4, db_->GetRemainingBudget(kOrigin2).bits);
+  // A withdrawal for `kSite2` doesn't affect `kSite1`.
+  EXPECT_EQ(OperationResult::kSuccess, db_->MakeBudgetWithdrawal(kSite2, 3.4));
+  EXPECT_DOUBLE_EQ(kBitBudget - 3.4, db_->GetRemainingBudget(kSite2).bits);
   EXPECT_DOUBLE_EQ(kBitBudget - 1.75 - 2.5,
-                   db_->GetRemainingBudget(kOrigin1).bits);
-  EXPECT_EQ(2L, db_->GetNumBudgetEntriesForTesting(kOrigin1));
-  EXPECT_EQ(1L, db_->GetNumBudgetEntriesForTesting(kOrigin2));
+                   db_->GetRemainingBudget(kSite1).bits);
+  EXPECT_EQ(2L, db_->GetNumBudgetEntriesForTesting(kSite1));
+  EXPECT_EQ(1L, db_->GetNumBudgetEntriesForTesting(kSite2));
   EXPECT_EQ(3L, db_->GetTotalNumBudgetEntriesForTesting());
 
   // Advance halfway through the lookback window.
@@ -833,19 +1111,18 @@ TEST_P(SharedStorageDatabaseParamTest, MakeBudgetWithdrawal) {
 
   // Remaining budgets continue to take into account the withdrawals above, as
   // they are still within the lookback window.
-  EXPECT_DOUBLE_EQ(kBitBudget - 3.4, db_->GetRemainingBudget(kOrigin2).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget - 3.4, db_->GetRemainingBudget(kSite2).bits);
   EXPECT_DOUBLE_EQ(kBitBudget - 1.75 - 2.5,
-                   db_->GetRemainingBudget(kOrigin1).bits);
+                   db_->GetRemainingBudget(kSite1).bits);
 
-  // An additional withdrawal for `kOrigin1` at a later time from previous ones
+  // An additional withdrawal for `kSite1` at a later time from previous ones
   // is debited appropriately.
-  EXPECT_EQ(OperationResult::kSuccess,
-            db_->MakeBudgetWithdrawal(kOrigin1, 1.0));
+  EXPECT_EQ(OperationResult::kSuccess, db_->MakeBudgetWithdrawal(kSite1, 1.0));
   EXPECT_DOUBLE_EQ(kBitBudget - 1.75 - 2.5 - 1.0,
-                   db_->GetRemainingBudget(kOrigin1).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget - 3.4, db_->GetRemainingBudget(kOrigin2).bits);
-  EXPECT_EQ(3L, db_->GetNumBudgetEntriesForTesting(kOrigin1));
-  EXPECT_EQ(1L, db_->GetNumBudgetEntriesForTesting(kOrigin2));
+                   db_->GetRemainingBudget(kSite1).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget - 3.4, db_->GetRemainingBudget(kSite2).bits);
+  EXPECT_EQ(3L, db_->GetNumBudgetEntriesForTesting(kSite1));
+  EXPECT_EQ(1L, db_->GetNumBudgetEntriesForTesting(kSite2));
   EXPECT_EQ(4L, db_->GetTotalNumBudgetEntriesForTesting());
 
   // Advance to the end of the initial lookback window, plus an additional
@@ -854,20 +1131,20 @@ TEST_P(SharedStorageDatabaseParamTest, MakeBudgetWithdrawal) {
 
   // Now only the single debit made within the current lookback window is
   // counted, although the entries are still in the table because we haven't
-  // called `PurgeStaleWithdrawals()`.
-  EXPECT_DOUBLE_EQ(kBitBudget - 1.0, db_->GetRemainingBudget(kOrigin1).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kOrigin2).bits);
-  EXPECT_EQ(3L, db_->GetNumBudgetEntriesForTesting(kOrigin1));
-  EXPECT_EQ(1L, db_->GetNumBudgetEntriesForTesting(kOrigin2));
+  // called `PurgeStale()`.
+  EXPECT_DOUBLE_EQ(kBitBudget - 1.0, db_->GetRemainingBudget(kSite1).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kSite2).bits);
+  EXPECT_EQ(3L, db_->GetNumBudgetEntriesForTesting(kSite1));
+  EXPECT_EQ(1L, db_->GetNumBudgetEntriesForTesting(kSite2));
   EXPECT_EQ(4L, db_->GetTotalNumBudgetEntriesForTesting());
 
-  // After `PurgeStaleOrigins()` runs, there will only be the most recent
+  // After `PurgeStale()` runs, there will only be the most recent
   // debit left in the budget table.
-  EXPECT_EQ(OperationResult::kSuccess, db_->PurgeStaleOrigins());
-  EXPECT_DOUBLE_EQ(kBitBudget - 1.0, db_->GetRemainingBudget(kOrigin1).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kOrigin2).bits);
-  EXPECT_EQ(1L, db_->GetNumBudgetEntriesForTesting(kOrigin1));
-  EXPECT_EQ(0L, db_->GetNumBudgetEntriesForTesting(kOrigin2));
+  EXPECT_EQ(OperationResult::kSuccess, db_->PurgeStale());
+  EXPECT_DOUBLE_EQ(kBitBudget - 1.0, db_->GetRemainingBudget(kSite1).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kSite2).bits);
+  EXPECT_EQ(1L, db_->GetNumBudgetEntriesForTesting(kSite1));
+  EXPECT_EQ(0L, db_->GetNumBudgetEntriesForTesting(kSite2));
   EXPECT_EQ(1L, db_->GetTotalNumBudgetEntriesForTesting());
 
   // Advance to where the last debit should no longer be in the lookback window.
@@ -875,57 +1152,126 @@ TEST_P(SharedStorageDatabaseParamTest, MakeBudgetWithdrawal) {
 
   // Remaining budgets should be back at the max, although there is still an
   // entry in the table.
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kOrigin1).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kOrigin2).bits);
-  EXPECT_EQ(1L, db_->GetNumBudgetEntriesForTesting(kOrigin1));
+  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kSite1).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kSite2).bits);
+  EXPECT_EQ(1L, db_->GetNumBudgetEntriesForTesting(kSite1));
   EXPECT_EQ(1L, db_->GetTotalNumBudgetEntriesForTesting());
 
-  // After `PurgeStaleOrigins()` runs, the budget table will be empty.
-  EXPECT_EQ(OperationResult::kSuccess, db_->PurgeStaleOrigins());
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kOrigin1).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kOrigin2).bits);
+  // After `PurgeStale()` runs, the budget table will be empty.
+  EXPECT_EQ(OperationResult::kSuccess, db_->PurgeStale());
+  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kSite1).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kSite2).bits);
   EXPECT_EQ(0L, db_->GetTotalNumBudgetEntriesForTesting());
 }
 
+TEST_P(SharedStorageDatabaseParamTest, ResetBudgetForDevTools) {
+  // There should be no entries in the budget table.
+  EXPECT_EQ(0L, db_->GetTotalNumBudgetEntriesForTesting());
+
+  // SQL database hasn't yet been lazy-initialized. Nevertheless, remaining
+  // budgets should be returned as the max possible.
+  const url::Origin kOrigin1 =
+      url::Origin::Create(GURL("http://www.example1.test"));
+  const net::SchemefulSite kSite1(kOrigin1);
+  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kSite1).bits);
+  const url::Origin kOrigin2 =
+      url::Origin::Create(GURL("http://www.example2.test"));
+  const net::SchemefulSite kSite2(kOrigin2);
+  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kSite2).bits);
+
+  // `kSite1` and `kSite2` are distinct.
+  ASSERT_NE(kSite1, kSite2);
+
+  // Resetting a budget in an empty uninitialized database causes no error.
+  EXPECT_EQ(OperationResult::kSuccess, db_->ResetBudgetForDevTools(kOrigin1));
+
+  // Making withdrawals will initialize the database.
+  EXPECT_EQ(OperationResult::kSuccess, db_->MakeBudgetWithdrawal(kSite1, 1.75));
+  EXPECT_EQ(OperationResult::kSuccess, db_->MakeBudgetWithdrawal(kSite1, 2.5));
+
+  // Advance halfway through the lookback window to separate withdrawal times.
+  clock_.Advance(base::Hours(kBudgetIntervalHours) / 2);
+
+  EXPECT_EQ(OperationResult::kSuccess, db_->MakeBudgetWithdrawal(kSite1, 1.0));
+  EXPECT_EQ(OperationResult::kSuccess, db_->MakeBudgetWithdrawal(kSite2, 3.4));
+
+  EXPECT_DOUBLE_EQ(kBitBudget - 1.75 - 2.5 - 1.0,
+                   db_->GetRemainingBudget(kSite1).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget - 3.4, db_->GetRemainingBudget(kSite2).bits);
+  EXPECT_EQ(3L, db_->GetNumBudgetEntriesForTesting(kSite1));
+  EXPECT_EQ(1L, db_->GetNumBudgetEntriesForTesting(kSite2));
+  EXPECT_EQ(4L, db_->GetTotalNumBudgetEntriesForTesting());
+
+  // Resetting `kOrigin1`'s budget doesn't affect `kOrigin2`'s budget because
+  // they correspond to distinct sites `kSite1` and `kSite2`, respetively.
+  EXPECT_EQ(OperationResult::kSuccess, db_->ResetBudgetForDevTools(kOrigin1));
+  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kSite1).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget - 3.4, db_->GetRemainingBudget(kSite2).bits);
+  EXPECT_EQ(0L, db_->GetNumBudgetEntriesForTesting(kSite1));
+  EXPECT_EQ(1L, db_->GetNumBudgetEntriesForTesting(kSite2));
+  EXPECT_EQ(1L, db_->GetTotalNumBudgetEntriesForTesting());
+
+  // Resetting an already reset budget causes no error.
+  EXPECT_EQ(OperationResult::kSuccess, db_->ResetBudgetForDevTools(kOrigin1));
+  EXPECT_DOUBLE_EQ(kBitBudget, db_->GetRemainingBudget(kSite1).bits);
+  EXPECT_EQ(0L, db_->GetNumBudgetEntriesForTesting(kSite1));
+
+  // Resetting budget for a nonexistent origin causes no error.
+  EXPECT_EQ(OperationResult::kSuccess,
+            db_->ResetBudgetForDevTools(
+                url::Origin::Create(GURL("http://www.example3.test"))));
+}
+
 TEST_P(SharedStorageDatabaseParamTest,
-       DeleteAllEntriesBeforeExpiration_CreationTimeUnchanged) {
+       InsertEntryBeforeExpiration_CreationTimeUnchanged) {
   const url::Origin kOrigin1 =
       url::Origin::Create(GURL("http://www.example1.test"));
   EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key1", u"value1"));
   EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key2", u"value2"));
   EXPECT_EQ(2L, db_->Length(kOrigin1));
-  base::Time creation_time1 = db_->GetCreationTime(kOrigin1).time;
+  base::Time creation_time = db_->GetCreationTime(kOrigin1).time;
 
-  const url::Origin kOrigin2 =
-      url::Origin::Create(GURL("http://www.example2.test"));
-  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin2, u"key3", u"value3"));
-  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin2, u"key2", u"value2"));
-  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin2, u"key1", u"value1"));
-  EXPECT_EQ(3L, db_->Length(kOrigin2));
-  base::Time creation_time2 = db_->GetCreationTime(kOrigin2).time;
-
-  // Creation time does not change when all of `kOrigin1`'s entries are deleted
-  // via `Delete()` before expiration.
-  EXPECT_EQ(OperationResult::kSuccess, db_->Delete(kOrigin1, u"key1"));
-  EXPECT_EQ(OperationResult::kSuccess, db_->Delete(kOrigin1, u"key2"));
-  EXPECT_EQ(0L, db_->Length(kOrigin1));
-  EXPECT_EQ(creation_time1, db_->GetCreationTime(kOrigin1).time);
-
-  // Creation time does not change when all of `kOrigin2`'s entries are deleted
-  // via `Clear()` before expiration.
-  EXPECT_EQ(OperationResult::kSuccess, db_->Clear(kOrigin2));
-  EXPECT_EQ(0L, db_->Length(kOrigin2));
-  EXPECT_EQ(creation_time2, db_->GetCreationTime(kOrigin2).time);
+  // Advance halfway to expiration time.
+  clock_.Advance(base::Days(kStalenessThresholdDays / 2.0));
 
   // Creation time does not change when `kOrigin1` inserts a new entry before
   // expiration.
   EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key1", u"value1"));
-  EXPECT_EQ(1L, db_->Length(kOrigin1));
-  EXPECT_EQ(creation_time1, db_->GetCreationTime(kOrigin1).time);
+  EXPECT_EQ(2L, db_->Length(kOrigin1));
+  EXPECT_EQ(creation_time, db_->GetCreationTime(kOrigin1).time);
 }
 
 TEST_P(SharedStorageDatabaseParamTest,
-       DeleteAllEntriesAfterExpiration_CreationTimeUnchanged) {
+       DeleteAllEntriesBeforeExpiration_CreationTimeNotFound) {
+  const url::Origin kOrigin1 =
+      url::Origin::Create(GURL("http://www.example1.test"));
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key1", u"value1"));
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key2", u"value2"));
+  EXPECT_EQ(2L, db_->Length(kOrigin1));
+
+  const url::Origin kOrigin2 =
+      url::Origin::Create(GURL("http://www.example2.test"));
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin2, u"key3", u"value3"));
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin2, u"key2", u"value2"));
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin2, u"key1", u"value1"));
+  EXPECT_EQ(3L, db_->Length(kOrigin2));
+
+  // Creation time will not be found when all of `kOrigin1`'s entries are
+  // deleted via `Delete()` before expiration.
+  EXPECT_EQ(OperationResult::kSuccess, db_->Delete(kOrigin1, u"key1"));
+  EXPECT_EQ(OperationResult::kSuccess, db_->Delete(kOrigin1, u"key2"));
+  EXPECT_EQ(0L, db_->Length(kOrigin1));
+  EXPECT_EQ(OperationResult::kNotFound, db_->GetCreationTime(kOrigin1).result);
+
+  // Creation time will not be found when all of `kOrigin2`'s entries are
+  // deleted via `Clear()` before expiration.
+  EXPECT_EQ(OperationResult::kSuccess, db_->Clear(kOrigin2));
+  EXPECT_EQ(0L, db_->Length(kOrigin2));
+  EXPECT_EQ(OperationResult::kNotFound, db_->GetCreationTime(kOrigin2).result);
+}
+
+TEST_P(SharedStorageDatabaseParamTest,
+       DeleteAllEntriesAfterExpiration_CreationTimeNotFound) {
   const url::Origin kOrigin1 =
       url::Origin::Create(GURL("http://www.example1.test"));
   EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key1", u"value1"));
@@ -941,27 +1287,26 @@ TEST_P(SharedStorageDatabaseParamTest,
   EXPECT_EQ(3L, db_->Length(kOrigin2));
   base::Time creation_time2 = db_->GetCreationTime(kOrigin2).time;
 
-  clock_.Advance(base::Days(kOriginStalenessThresholdDays) +
-                 base::Microseconds(1));
+  clock_.Advance(base::Days(kStalenessThresholdDays) + base::Microseconds(1));
 
-  // Creation time will remain the same when all of `kOrigin1`'s entries are
-  // deleted via `Delete()` after expiration but `PurgeStaleOrigins()` has not
+  // Creation time will not be found when all of `kOrigin1`'s entries are
+  // deleted via `Delete()` after expiration but `PurgeStale()` has not
   // yet been called.
   EXPECT_EQ(OperationResult::kSuccess, db_->Delete(kOrigin1, u"key1"));
   EXPECT_EQ(OperationResult::kSuccess, db_->Delete(kOrigin1, u"key2"));
   EXPECT_EQ(0L, db_->Length(kOrigin1));
-  EXPECT_EQ(creation_time1, db_->GetCreationTime(kOrigin1).time);
+  EXPECT_EQ(OperationResult::kNotFound, db_->GetCreationTime(kOrigin1).result);
 
-  // Creation time will remain the same when all of `kOrigin2`'s entries are
-  // deleted via `Clear()` after expiration but `PurgeStaleOrigins()` has not
+  // Creation time will not be found when all of `kOrigin2`'s entries are
+  // deleted via `Clear()` after expiration but `PurgeStale()` has not
   // yet been called.
   EXPECT_EQ(OperationResult::kSuccess, db_->Clear(kOrigin2));
   EXPECT_EQ(0L, db_->Length(kOrigin2));
-  EXPECT_EQ(creation_time2, db_->GetCreationTime(kOrigin2).time);
+  EXPECT_EQ(OperationResult::kNotFound, db_->GetCreationTime(kOrigin2).result);
 
-  EXPECT_EQ(OperationResult::kSuccess, db_->PurgeStaleOrigins());
+  EXPECT_EQ(OperationResult::kSuccess, db_->PurgeStale());
 
-  // Creation times should not be found after a purge of stale origins.
+  // Creation times should still not be found after a purge of stale origins.
   EXPECT_EQ(OperationResult::kNotFound, db_->GetCreationTime(kOrigin1).result);
   EXPECT_EQ(OperationResult::kNotFound, db_->GetCreationTime(kOrigin2).result);
 
@@ -994,6 +1339,41 @@ TEST_P(SharedStorageDatabaseParamTest,
   EXPECT_EQ(OperationResult::kNotFound, db_->GetCreationTime(kOrigin2).result);
 }
 
+TEST_P(SharedStorageDatabaseParamTest, GetEntriesForDevTools) {
+  const url::Origin kOrigin1 =
+      url::Origin::Create(GURL("http://www.example1.test"));
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key1", u"value1"));
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key2", u"value2"));
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key3", u"value3"));
+
+  const url::Origin kOrigin2 =
+      url::Origin::Create(GURL("http://www.example2.test"));
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin2, u"key1", u"value1"));
+
+  // Only `kOrigin1`'s entries are retrieved.
+  EntriesResult entries_result1 = db_->GetEntriesForDevTools(kOrigin1);
+  EXPECT_EQ(OperationResult::kSuccess, entries_result1.result);
+  EXPECT_THAT(entries_result1.entries,
+              ElementsAre(Pair("key1", "value1"), Pair("key2", "value2"),
+                          Pair("key3", "value3")));
+
+  // Advance the clock halfway towards expiration of the keys.
+  clock_.Advance(base::Days(kStalenessThresholdDays / 2.0));
+
+  // Update one key.
+  EXPECT_EQ(OperationResult::kSet, db_->Append(kOrigin1, u"key2", u"append"));
+
+  // Advance the clock to the expiration time for when the keys were initially
+  // set.
+  clock_.Advance(base::Days(kStalenessThresholdDays / 2.0) + base::Seconds(1));
+
+  // Only `kOrigin1`'s unexpired entries are retrieved.
+  EntriesResult entries_result2 = db_->GetEntriesForDevTools(kOrigin1);
+  EXPECT_EQ(OperationResult::kSuccess, entries_result2.result);
+  EXPECT_THAT(entries_result2.entries,
+              ElementsAre(Pair("key2", "value2append")));
+}
+
 class SharedStorageDatabasePurgeMatchingOriginsParamTest
     : public SharedStorageDatabaseTest,
       public testing::WithParamInterface<PurgeMatchingOriginsParams> {
@@ -1007,6 +1387,7 @@ class SharedStorageDatabasePurgeMatchingOriginsParamTest
     db_ = std::make_unique<SharedStorageDatabase>(
         db_path, special_storage_policy_, std::move(options));
     db_->OverrideClockForTesting(&clock_);
+    clock_.SetNow(base::Time::Now());
   }
 
   void InitSharedStorageFeature() override {
@@ -1094,101 +1475,108 @@ TEST_P(SharedStorageDatabasePurgeMatchingOriginsParamTest, AllTime) {
 TEST_P(SharedStorageDatabasePurgeMatchingOriginsParamTest, SinceThreshold) {
   EXPECT_TRUE(db_->FetchOrigins().empty());
 
-  const url::Origin kOrigin1 =
+  // Origin0 is created at time 0, and key0 is written at time 0, key1 at 1
+  // Origin1 is created at time 1, and key1 is written at time 1, key2 at 2
+  // Origin2 is created at time 2, and key2 is written at time 2, key3 at 3
+  // Origin00 is created at time 0, and key0 is written at time 0, key3 is
+  // written at time 3
+  const url::Origin kOrigin0 =
       url::Origin::Create(GURL("http://www.example1.test"));
-  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key1", u"value1"));
-  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key2", u"value2"));
-  EXPECT_EQ(2L, db_->Length(kOrigin1));
-
-  clock_.SetNow(base::Time::Now());
-  clock_.Advance(base::Milliseconds(50));
-
-  // Time threshold that will be used as a starting point for deletion.
-  base::Time threshold1 = clock_.Now();
-
-  const url::Origin kOrigin2 =
+  const url::Origin kOrigin1 =
       url::Origin::Create(GURL("http://www.example2.test"));
-  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin2, u"key1", u"value1"));
-  EXPECT_EQ(1L, db_->Length(kOrigin2));
-
-  const url::Origin kOrigin3 =
+  const url::Origin kOrigin2 =
       url::Origin::Create(GURL("http://www.example3.test"));
-  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin3, u"key1", u"value1"));
-  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin3, u"key2", u"value2"));
-  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin3, u"key3", u"value3"));
-  EXPECT_EQ(3L, db_->Length(kOrigin3));
-
-  const url::Origin kOrigin4 =
+  const url::Origin kOrigin00 =
       url::Origin::Create(GURL("http://www.example4.test"));
 
-  clock_.SetNow(base::Time::Now());
-  clock_.Advance(base::Milliseconds(50));
+  // Time = 0.
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin0, u"key0", u"value1"));
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin00, u"key0", u"value1"));
 
-  // Time threshold that will be used as a starting point for deletion.
-  base::Time threshold2 = clock_.Now();
+  clock_.Advance(base::Milliseconds(1));
 
-  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin4, u"key1", u"value1"));
-  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin4, u"key2", u"value2"));
-  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin4, u"key3", u"value3"));
-  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin4, u"key4", u"value4"));
-  EXPECT_EQ(4L, db_->Length(kOrigin4));
+  // Time = 1.
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin0, u"key1", u"value1"));
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key1", u"value1"));
+  clock_.Advance(base::Milliseconds(1));
+
+  // Time = 2.
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key2", u"value1"));
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin2, u"key2", u"value1"));
+  clock_.Advance(base::Milliseconds(1));
+
+  // Time = 3.
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin2, u"key3", u"value1"));
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin00, u"key3", u"value1"));
+
+  // Read a key from origin0 at this time. That should not cause it to get
+  // purged when we purge at time 3 since only sets should cause the
+  // `last_used_time` to update.
+  EXPECT_EQ(db_->Get(kOrigin0, u"key0").data, u"value1");
 
   std::vector<url::Origin> origins;
-  for (const auto& info : db_->FetchOrigins())
+  for (const auto& info : db_->FetchOrigins()) {
     origins.push_back(info->storage_key.origin());
-  EXPECT_THAT(origins, ElementsAre(kOrigin1, kOrigin2, kOrigin3, kOrigin4));
+  }
+  EXPECT_THAT(origins, ElementsAre(kOrigin0, kOrigin1, kOrigin2, kOrigin00));
 
-  // Read from `kOrigin1`.
-  EXPECT_EQ(db_->Get(kOrigin1, u"key1").data, u"value1");
+  // Nothing should be deleted if the start time is in the future.
+  EXPECT_EQ(OperationResult::kSuccess,
+            db_->PurgeMatchingOrigins(
+                StorageKeyPolicyMatcherFunctionUtility::MakeMatcherFunction(
+                    {kOrigin0, kOrigin00, kOrigin1, kOrigin2}),
+                clock_.Now() + base::Milliseconds(1), base::Time::Max(),
+                GetParam().perform_storage_cleanup));
+  EXPECT_EQ(2L, db_->Length(kOrigin0));
+  EXPECT_EQ(2L, db_->Length(kOrigin00));
+  EXPECT_EQ(2L, db_->Length(kOrigin1));
+  EXPECT_EQ(2L, db_->Length(kOrigin2));
 
+  // Origin00 and Origin2 should be deleted if we start at the current time
+  // since they both created a key then. Origin0 read a key then, but reads
+  // don't update the `last_used_time`.
   EXPECT_EQ(
       OperationResult::kSuccess,
       db_->PurgeMatchingOrigins(
           StorageKeyPolicyMatcherFunctionUtility::MakeMatcherFunction(
-              {kOrigin2, kOrigin4}),
-          threshold2, base::Time::Max(), GetParam().perform_storage_cleanup));
-
-  // `kOrigin4` is cleared. The other origins are not.
+              {kOrigin0, kOrigin00, kOrigin1, kOrigin2}),
+          clock_.Now(), base::Time::Max(), GetParam().perform_storage_cleanup));
+  EXPECT_EQ(2L, db_->Length(kOrigin0));
+  EXPECT_EQ(0L, db_->Length(kOrigin00));
   EXPECT_EQ(2L, db_->Length(kOrigin1));
-  EXPECT_EQ(1L, db_->Length(kOrigin2));
-  EXPECT_EQ(3L, db_->Length(kOrigin3));
-  EXPECT_EQ(0L, db_->Length(kOrigin4));
+  EXPECT_EQ(0L, db_->Length(kOrigin2));
 
   origins.clear();
-  for (const auto& info : db_->FetchOrigins())
+  for (const auto& info : db_->FetchOrigins()) {
     origins.push_back(info->storage_key.origin());
-  EXPECT_THAT(origins, ElementsAre(kOrigin1, kOrigin2, kOrigin3));
+  }
+  EXPECT_THAT(origins, ElementsAre(kOrigin0, kOrigin1));
 
-  EXPECT_EQ(
-      OperationResult::kSuccess,
-      db_->PurgeMatchingOrigins(
-          StorageKeyPolicyMatcherFunctionUtility::MakeMatcherFunction(
-              {kOrigin1, kOrigin3, kOrigin4}),
-          threshold1, base::Time::Max(), GetParam().perform_storage_cleanup));
-
-  // `kOrigin3` is cleared. The others weren't modified within the given time
-  // period.
-  EXPECT_EQ(2L, db_->Length(kOrigin1));
-  EXPECT_EQ(1L, db_->Length(kOrigin2));
-  EXPECT_EQ(0L, db_->Length(kOrigin3));
-  EXPECT_EQ(0L, db_->Length(kOrigin4));
-
-  origins.clear();
-  for (const auto& info : db_->FetchOrigins())
-    origins.push_back(info->storage_key.origin());
-  EXPECT_THAT(origins, ElementsAre(kOrigin1, kOrigin2));
-
-  // There is no error from trying to clear an origin that isn't in the
-  // database.
+  // Nothing should be deleted if the origins don't match.
   EXPECT_EQ(
       OperationResult::kSuccess,
       db_->PurgeMatchingOrigins(
           StorageKeyPolicyMatcherFunctionUtility::MakeMatcherFunction(
               {"http://www.example5.test"}),
-          threshold2, base::Time::Max(), GetParam().perform_storage_cleanup));
+          base::Time(), base::Time::Max(), GetParam().perform_storage_cleanup));
+  EXPECT_EQ(2L, db_->Length(kOrigin0));
+  EXPECT_EQ(2L, db_->Length(kOrigin1));
+
+  // Delete from before any keys were written, and everything should be gone.
+  EXPECT_EQ(
+      OperationResult::kSuccess,
+      db_->PurgeMatchingOrigins(
+          StorageKeyPolicyMatcherFunctionUtility::MakeMatcherFunction(
+              {kOrigin0, kOrigin00, kOrigin1, kOrigin2}),
+          base::Time(), base::Time::Max(), GetParam().perform_storage_cleanup));
+  origins.clear();
+  for (const auto& info : db_->FetchOrigins()) {
+    origins.push_back(info->storage_key.origin());
+  }
+  EXPECT_THAT(origins, ElementsAre());
 }
 
-TEST_P(SharedStorageDatabaseParamTest, PurgeStaleOrigins) {
+TEST_P(SharedStorageDatabaseParamTest, PurgeStale) {
   EXPECT_TRUE(db_->FetchOrigins().empty());
 
   const url::Origin kOrigin1 =
@@ -1205,9 +1593,21 @@ TEST_P(SharedStorageDatabaseParamTest, PurgeStaleOrigins) {
   EXPECT_EQ(1L, db_->Length(kOrigin2));
   EXPECT_EQ(db_->Get(kOrigin2, u"key1").data, u"value1");
 
-  clock_.SetNow(base::Time::Now());
-  clock_.Advance(base::Days(kOriginStalenessThresholdDays));
+  clock_.Advance(base::Days(kStalenessThresholdDays));
   clock_.Advance(base::Microseconds(1));
+
+  // `Length()` does not count the expired keys.
+  EXPECT_EQ(0L, db_->Length(kOrigin1));
+  EXPECT_EQ(0L, db_->Length(kOrigin2));
+
+  // Update a key and set additional keys.
+  EXPECT_EQ(OperationResult::kSet, db_->Append(kOrigin1, u"key2", u"value2"));
+  EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key3", u"value2"));
+  EXPECT_EQ(2L, db_->Length(kOrigin1));
+
+  EXPECT_EQ(OperationResult::kSet,
+            db_->Set(kOrigin2, u"key1", u"value0", SetBehavior::kDefault));
+  EXPECT_EQ(1L, db_->Length(kOrigin2));
 
   const url::Origin kOrigin3 =
       url::Origin::Create(GURL("http://www.example3.test"));
@@ -1234,36 +1634,52 @@ TEST_P(SharedStorageDatabaseParamTest, PurgeStaleOrigins) {
   EXPECT_LT(db_->GetCreationTime(kOrigin2).time,
             db_->GetCreationTime(kOrigin4).time);
 
-  EXPECT_EQ(OperationResult::kSuccess, db_->PurgeStaleOrigins());
+  EXPECT_EQ(OperationResult::kSuccess, db_->PurgeStale());
 
-  // `kOrigin1` expired.
-  EXPECT_EQ(0L, db_->Length(kOrigin1));
+  // `kOrigin1` had 1 key expire.
+  EXPECT_EQ(2L, db_->Length(kOrigin1));
 
-  // `kOrigin2` expired.
-  EXPECT_EQ(0L, db_->Length(kOrigin2));
+  // `kOrigin2` had no keys expire.
+  EXPECT_EQ(1L, db_->Length(kOrigin2));
 
-  // `kOrigin3` is active.
+  // `kOrigin3` had no keys expire.
   EXPECT_EQ(3L, db_->Length(kOrigin3));
 
-  // `kOrigin4` is active.
+  // `kOrigin4` had no keys expire.
   EXPECT_EQ(4L, db_->Length(kOrigin4));
 
   origins.clear();
   for (const auto& info : db_->FetchOrigins())
     origins.push_back(info->storage_key.origin());
-  EXPECT_THAT(origins, ElementsAre(kOrigin3, kOrigin4));
+  EXPECT_THAT(origins, ElementsAre(kOrigin1, kOrigin2, kOrigin3, kOrigin4));
 
-  clock_.Advance(base::Days(kOriginStalenessThresholdDays));
+  clock_.Advance(base::Days(kStalenessThresholdDays / 2.0));
+
+  // Will not set the new value but will update the write time.
+  EXPECT_EQ(OperationResult::kIgnored, db_->Set(kOrigin4, u"key1", u"value0",
+                                                SetBehavior::kIgnoreIfPresent));
+
+  clock_.Advance(base::Days(kStalenessThresholdDays / 2.0));
   clock_.Advance(base::Microseconds(1));
-  EXPECT_EQ(OperationResult::kSuccess, db_->PurgeStaleOrigins());
 
-  // `kOrigin3` expired.
+  EXPECT_EQ(OperationResult::kSuccess, db_->PurgeStale());
+
+  // `kOrigin1` had all keys expire.
+  EXPECT_EQ(0L, db_->Length(kOrigin1));
+
+  // `kOrigin2` had all keys expire
+  EXPECT_EQ(0L, db_->Length(kOrigin2));
+
+  // `kOrigin3` had all keys expire
   EXPECT_EQ(0L, db_->Length(kOrigin3));
 
-  // `kOrigin4` expired.
-  EXPECT_EQ(0L, db_->Length(kOrigin4));
+  // `kOrigin4` had all but one key expire.
+  EXPECT_EQ(1L, db_->Length(kOrigin4));
 
-  EXPECT_TRUE(db_->FetchOrigins().empty());
+  origins.clear();
+  for (const auto& info : db_->FetchOrigins())
+    origins.push_back(info->storage_key.origin());
+  EXPECT_THAT(origins, ElementsAre(kOrigin4));
 }
 
 TEST_P(SharedStorageDatabaseParamTest, TrimMemory) {
@@ -1324,7 +1740,7 @@ TEST_P(SharedStorageDatabaseParamTest, TrimMemory) {
   EXPECT_EQ(db_->Get(kOrigin4, u"key2").data, u"value2");
 }
 
-TEST_P(SharedStorageDatabaseParamTest, MaxEntriesPerOrigin) {
+TEST_P(SharedStorageDatabaseParamTest, Set_MaxEntriesPerOrigin) {
   const url::Origin kOrigin1 =
       url::Origin::Create(GURL("http://www.example1.test"));
   EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key1", u"value1"));
@@ -1348,6 +1764,33 @@ TEST_P(SharedStorageDatabaseParamTest, MaxEntriesPerOrigin) {
 
   // There should now be capacity and the value will be set.
   EXPECT_EQ(OperationResult::kSet, db_->Set(kOrigin1, u"key6", u"value6"));
+  EXPECT_EQ(5L, db_->Length(kOrigin1));
+}
+
+TEST_P(SharedStorageDatabaseParamTest, Append_MaxEntriesPerOrigin) {
+  const url::Origin kOrigin1 =
+      url::Origin::Create(GURL("http://www.example1.test"));
+  EXPECT_EQ(OperationResult::kSet, db_->Append(kOrigin1, u"key1", u"value1"));
+  EXPECT_EQ(1L, db_->Length(kOrigin1));
+  EXPECT_EQ(OperationResult::kSet, db_->Append(kOrigin1, u"key2", u"value2"));
+  EXPECT_EQ(2L, db_->Length(kOrigin1));
+  EXPECT_EQ(OperationResult::kSet, db_->Append(kOrigin1, u"key3", u"value3"));
+  EXPECT_EQ(3L, db_->Length(kOrigin1));
+  EXPECT_EQ(OperationResult::kSet, db_->Append(kOrigin1, u"key4", u"value4"));
+  EXPECT_EQ(4L, db_->Length(kOrigin1));
+  EXPECT_EQ(OperationResult::kSet, db_->Append(kOrigin1, u"key5", u"value5"));
+  EXPECT_EQ(5L, db_->Length(kOrigin1));
+
+  // `kOrigin1` should have hit capacity, and hence this value will not be set.
+  EXPECT_EQ(OperationResult::kNoCapacity,
+            db_->Append(kOrigin1, u"key6", u"value6"));
+
+  EXPECT_EQ(5L, db_->Length(kOrigin1));
+  EXPECT_EQ(OperationResult::kSuccess, db_->Delete(kOrigin1, u"key5"));
+  EXPECT_EQ(4L, db_->Length(kOrigin1));
+
+  // There should now be capacity and the value will be set.
+  EXPECT_EQ(OperationResult::kSet, db_->Append(kOrigin1, u"key6", u"value6"));
   EXPECT_EQ(5L, db_->Length(kOrigin1));
 }
 
@@ -1395,9 +1838,15 @@ class SharedStorageDatabaseIteratorTest : public SharedStorageDatabaseTest {
 };
 
 TEST_F(SharedStorageDatabaseIteratorTest, Keys) {
-  db_ = LoadFromFile("shared_storage.v1.iterator.sql");
+  db_ = LoadFromFile("shared_storage.v3.iterator.sql");
   ASSERT_TRUE(db_);
   ASSERT_TRUE(db_->is_filebacked());
+
+  // Override the clock and set to the last time in the file that is used to set
+  // a `last_used_time` for a value.
+  db_->OverrideClockForTesting(&clock_);
+  clock_.SetNow(base::Time::FromDeltaSinceWindowsEpoch(
+      base::Microseconds(13268941676192362)));
 
   url::Origin google_com = url::Origin::Create(GURL("http://google.com/"));
   TestSharedStorageEntriesListenerUtility utility(
@@ -1425,7 +1874,8 @@ TEST_F(SharedStorageDatabaseIteratorTest, Keys) {
   utility.VerifyNoErrorForId(id2);
 
   histogram_tester_.ExpectUniqueSample(kIsFileBackedHistogram, true, 1);
-  histogram_tester_.ExpectUniqueSample(kFileSizeKBHistogram, 40, 1);
+  histogram_tester_.ExpectTotalCount(kFileSizeKBHistogram, 1);
+  EXPECT_GT(histogram_tester_.GetTotalSum(kFileSizeKBHistogram), 0);
   histogram_tester_.ExpectUniqueSample(kNumOriginsHistogram, 2, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesTotalHistogram, 227, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesMinHistogram, 26, 1);
@@ -1436,9 +1886,15 @@ TEST_F(SharedStorageDatabaseIteratorTest, Keys) {
 }
 
 TEST_F(SharedStorageDatabaseIteratorTest, Entries) {
-  db_ = LoadFromFile("shared_storage.v1.iterator.sql");
+  db_ = LoadFromFile("shared_storage.v3.iterator.sql");
   ASSERT_TRUE(db_);
   ASSERT_TRUE(db_->is_filebacked());
+
+  // Override the clock and set to the last time in the file that is used to set
+  // a `last_used_time` for a value.
+  db_->OverrideClockForTesting(&clock_);
+  clock_.SetNow(base::Time::FromDeltaSinceWindowsEpoch(
+      base::Microseconds(13268941676192362)));
 
   url::Origin google_com = url::Origin::Create(GURL("http://google.com/"));
   TestSharedStorageEntriesListenerUtility utility(
@@ -1467,7 +1923,8 @@ TEST_F(SharedStorageDatabaseIteratorTest, Entries) {
   utility.VerifyNoErrorForId(id2);
 
   histogram_tester_.ExpectUniqueSample(kIsFileBackedHistogram, true, 1);
-  histogram_tester_.ExpectUniqueSample(kFileSizeKBHistogram, 40, 1);
+  histogram_tester_.ExpectTotalCount(kFileSizeKBHistogram, 1);
+  EXPECT_GT(histogram_tester_.GetTotalSum(kFileSizeKBHistogram), 0);
   histogram_tester_.ExpectUniqueSample(kNumOriginsHistogram, 2, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesTotalHistogram, 227, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesMinHistogram, 26, 1);
@@ -1480,7 +1937,7 @@ TEST_F(SharedStorageDatabaseIteratorTest, Entries) {
 // Tests correct calculation of five-number summary when there is only one
 // origin.
 TEST_F(SharedStorageDatabaseTest, SingleOrigin) {
-  db_ = LoadFromFile("shared_storage.v1.single_origin.sql");
+  db_ = LoadFromFile("shared_storage.v3.single_origin.sql");
   ASSERT_TRUE(db_);
   ASSERT_TRUE(db_->is_filebacked());
 
@@ -1492,7 +1949,8 @@ TEST_F(SharedStorageDatabaseTest, SingleOrigin) {
   EXPECT_THAT(origins, ElementsAre(google_com));
 
   histogram_tester_.ExpectUniqueSample(kIsFileBackedHistogram, true, 1);
-  histogram_tester_.ExpectUniqueSample(kFileSizeKBHistogram, 29, 1);
+  histogram_tester_.ExpectTotalCount(kFileSizeKBHistogram, 1);
+  EXPECT_GT(histogram_tester_.GetTotalSum(kFileSizeKBHistogram), 0);
   histogram_tester_.ExpectUniqueSample(kNumOriginsHistogram, 1, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesTotalHistogram, 10, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesMinHistogram, 10, 1);
@@ -1505,7 +1963,7 @@ TEST_F(SharedStorageDatabaseTest, SingleOrigin) {
 // Tests correct calculation of five-number summary when number of origins is
 // greater than one and has remainder 1 modulo 4.
 TEST_F(SharedStorageDatabaseTest, FiveOrigins) {
-  db_ = LoadFromFile("shared_storage.v1.empty_values_mapping.5origins.sql");
+  db_ = LoadFromFile("shared_storage.v3.empty_values_mapping.5origins.sql");
   ASSERT_TRUE(db_);
   ASSERT_TRUE(db_->is_filebacked());
 
@@ -1522,7 +1980,8 @@ TEST_F(SharedStorageDatabaseTest, FiveOrigins) {
                                    google_org, gv_com));
 
   histogram_tester_.ExpectUniqueSample(kIsFileBackedHistogram, true, 1);
-  histogram_tester_.ExpectUniqueSample(kFileSizeKBHistogram, 29, 1);
+  histogram_tester_.ExpectTotalCount(kFileSizeKBHistogram, 1);
+  EXPECT_GT(histogram_tester_.GetTotalSum(kFileSizeKBHistogram), 0);
   histogram_tester_.ExpectUniqueSample(kNumOriginsHistogram, 5, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesTotalHistogram, 0, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesMinHistogram, 10, 1);
@@ -1535,7 +1994,7 @@ TEST_F(SharedStorageDatabaseTest, FiveOrigins) {
 // Tests correct calculation of five-number summary when number of origins has
 // remainder 2 modulo 4.
 TEST_F(SharedStorageDatabaseTest, SixOrigins) {
-  db_ = LoadFromFile("shared_storage.v1.empty_values_mapping.6origins.sql");
+  db_ = LoadFromFile("shared_storage.v3.empty_values_mapping.6origins.sql");
   ASSERT_TRUE(db_);
   ASSERT_TRUE(db_->is_filebacked());
 
@@ -1553,7 +2012,8 @@ TEST_F(SharedStorageDatabaseTest, SixOrigins) {
                                    google_org, gv_com, waymo_com));
 
   histogram_tester_.ExpectUniqueSample(kIsFileBackedHistogram, true, 1);
-  histogram_tester_.ExpectUniqueSample(kFileSizeKBHistogram, 29, 1);
+  histogram_tester_.ExpectTotalCount(kFileSizeKBHistogram, 1);
+  EXPECT_GT(histogram_tester_.GetTotalSum(kFileSizeKBHistogram), 0);
   histogram_tester_.ExpectUniqueSample(kNumOriginsHistogram, 6, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesTotalHistogram, 0, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesMinHistogram, 10, 1);
@@ -1566,7 +2026,7 @@ TEST_F(SharedStorageDatabaseTest, SixOrigins) {
 // Tests correct calculation of five-number summary when number of origins has
 // remainder 3 modulo 4.
 TEST_F(SharedStorageDatabaseTest, SevenOrigins) {
-  db_ = LoadFromFile("shared_storage.v1.empty_values_mapping.7origins.sql");
+  db_ = LoadFromFile("shared_storage.v3.empty_values_mapping.7origins.sql");
   ASSERT_TRUE(db_);
   ASSERT_TRUE(db_->is_filebacked());
 
@@ -1587,7 +2047,8 @@ TEST_F(SharedStorageDatabaseTest, SevenOrigins) {
                           waymo_com, with_google_com));
 
   histogram_tester_.ExpectUniqueSample(kIsFileBackedHistogram, true, 1);
-  histogram_tester_.ExpectUniqueSample(kFileSizeKBHistogram, 29, 1);
+  histogram_tester_.ExpectTotalCount(kFileSizeKBHistogram, 1);
+  EXPECT_GT(histogram_tester_.GetTotalSum(kFileSizeKBHistogram), 0);
   histogram_tester_.ExpectUniqueSample(kNumOriginsHistogram, 7, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesTotalHistogram, 0, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesMinHistogram, 10, 1);
@@ -1600,7 +2061,7 @@ TEST_F(SharedStorageDatabaseTest, SevenOrigins) {
 // Tests correct calculation of five-number summary when number of origins has
 // remainder 0 modulo 4.
 TEST_F(SharedStorageDatabaseTest, EightOrigins) {
-  db_ = LoadFromFile("shared_storage.v1.empty_values_mapping.8origins.sql");
+  db_ = LoadFromFile("shared_storage.v3.empty_values_mapping.8origins.sql");
   ASSERT_TRUE(db_);
   ASSERT_TRUE(db_->is_filebacked());
 
@@ -1622,7 +2083,8 @@ TEST_F(SharedStorageDatabaseTest, EightOrigins) {
                           waymo_com, with_google_com, youtube_com));
 
   histogram_tester_.ExpectUniqueSample(kIsFileBackedHistogram, true, 1);
-  histogram_tester_.ExpectUniqueSample(kFileSizeKBHistogram, 29, 1);
+  histogram_tester_.ExpectTotalCount(kFileSizeKBHistogram, 1);
+  EXPECT_GT(histogram_tester_.GetTotalSum(kFileSizeKBHistogram), 0);
   histogram_tester_.ExpectUniqueSample(kNumOriginsHistogram, 8, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesTotalHistogram, 0, 1);
   histogram_tester_.ExpectUniqueSample(kNumEntriesMinHistogram, 10, 1);

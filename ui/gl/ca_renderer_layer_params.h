@@ -5,8 +5,6 @@
 #ifndef UI_GL_CA_RENDERER_LAYER_PARAMS_H_
 #define UI_GL_CA_RENDERER_LAYER_PARAMS_H_
 
-#include <vector>
-
 #include "base/memory/raw_ptr.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
@@ -41,12 +39,13 @@ struct GL_EXPORT CARendererLayerParams {
                         const gfx::ColorSpace& io_surface_color_space,
                         const gfx::RectF& contents_rect,
                         const gfx::Rect& rect,
-                        unsigned background_color,
+                        SkColor4f background_color,
                         unsigned edge_aa_mask,
                         float opacity,
-                        unsigned filter,
-                        absl::optional<gfx::HDRMetadata> hdr_metadata,
-                        gfx::ProtectedVideoType protected_video_type);
+                        bool nearest_neighbor_filter,
+                        const gfx::HDRMetadata& hdr_metadata,
+                        gfx::ProtectedVideoType protected_video_type,
+                        bool is_render_pass_draw_quad);
   CARendererLayerParams(const CARendererLayerParams& other);
   ~CARendererLayerParams();
 
@@ -59,37 +58,13 @@ struct GL_EXPORT CARendererLayerParams {
   gfx::ColorSpace io_surface_color_space;
   const gfx::RectF contents_rect;
   const gfx::Rect rect;
-  unsigned background_color;
+  SkColor4f background_color;
   unsigned edge_aa_mask;
   float opacity;
-  unsigned filter;
-  absl::optional<gfx::HDRMetadata> hdr_metadata;
+  bool nearest_neighbor_filter;
+  gfx::HDRMetadata hdr_metadata;
   gfx::ProtectedVideoType protected_video_type;
-
-  // This is a subset of cc::FilterOperation::FilterType.
-  enum class FilterEffectType : uint32_t {
-    GRAYSCALE,
-    SEPIA,
-    SATURATE,
-    HUE_ROTATE,
-    INVERT,
-    BRIGHTNESS,
-    CONTRAST,
-    OPACITY,
-    BLUR,
-    DROP_SHADOW,
-  };
-  struct GL_EXPORT FilterEffect {
-    FilterEffectType type = FilterEffectType::GRAYSCALE;
-
-    // For every filter other than DROP_SHADOW, only |amount| is populated.
-    float amount = 0;
-    gfx::Point drop_shadow_offset;
-    SkColor drop_shadow_color = 0;
-  };
-  using FilterEffects = std::vector<FilterEffect>;
-
-  FilterEffects filter_effects;
+  bool is_render_pass_draw_quad;
 };
 
 }  // namespace ui

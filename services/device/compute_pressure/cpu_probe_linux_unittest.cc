@@ -8,18 +8,18 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/test/task_environment.h"
 #include "services/device/compute_pressure/cpu_probe.h"
+#include "services/device/compute_pressure/pressure_test_support.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace device {
 
 class CpuProbeLinuxTest : public testing::Test {
  public:
-  // Frequency value passed to WriteFakeCpufreqCore() meaning "delete the file".
-  static constexpr int64_t kDeleteFakeFile = -1;
-
   CpuProbeLinuxTest() = default;
 
   ~CpuProbeLinuxTest() override = default;
@@ -33,7 +33,8 @@ class CpuProbeLinuxTest : public testing::Test {
     stat_file_ = base::File(fake_stat_path_, base::File::FLAG_CREATE_ALWAYS |
                                                  base::File::FLAG_WRITE);
 
-    probe_ = CpuProbeLinux::CreateForTesting(fake_stat_path_);
+    probe_ = std::make_unique<FakePlatformCpuProbe<CpuProbeLinux>>(
+        base::Milliseconds(10), base::DoNothing(), fake_stat_path_);
   }
 
   [[nodiscard]] bool WriteFakeStat(const std::string& contents) {
@@ -47,23 +48,26 @@ class CpuProbeLinuxTest : public testing::Test {
   }
 
  protected:
+  base::test::TaskEnvironment task_environment_;
   base::ScopedTempDir temp_dir_;
   base::FilePath fake_stat_path_;
   base::File stat_file_;
-  std::unique_ptr<CpuProbeLinux> probe_;
+  std::unique_ptr<FakePlatformCpuProbe<CpuProbeLinux>> probe_;
 };
 
-TEST_F(CpuProbeLinuxTest, ProductionData_NoCrash) {
+TEST_F(CpuProbeLinuxTest, ProductionDataNoCrash) {
   probe_->Update();
-  EXPECT_EQ(probe_->LastSample().cpu_utilization, 0.0)
+  EXPECT_EQ(probe_->WaitForSample().cpu_utilization,
+            CpuProbe::kUnsupportedValue.cpu_utilization)
       << "No baseline on first Update()";
 
   probe_->Update();
-  EXPECT_GE(probe_->LastSample().cpu_utilization, 0.0);
-  EXPECT_LE(probe_->LastSample().cpu_utilization, 1.0);
+  PressureSample sample = probe_->WaitForSample();
+  EXPECT_GE(sample.cpu_utilization, 0.0);
+  EXPECT_LE(sample.cpu_utilization, 1.0);
 }
 
-TEST_F(CpuProbeLinuxTest, OneCore_FullInfo) {
+TEST_F(CpuProbeLinuxTest, OneCoreFullInfo) {
   ASSERT_TRUE(WriteFakeStat(R"(
 cpu 0 0 0 0 0 0 0 0 0 0
 cpu0 0 0 0 0 0 0 0 0 0 0
@@ -76,6 +80,9 @@ procs_blocked 600
 softirq 900 901 902 903 904 905 906 907 908 909 910
 )"));
   probe_->Update();
+  EXPECT_EQ(probe_->WaitForSample().cpu_utilization,
+            CpuProbe::kUnsupportedValue.cpu_utilization)
+      << "No baseline on first Update()";
 
   ASSERT_TRUE(WriteFakeStat(R"(
 cpu 0 0 0 0 0 0 0 0 0 0
@@ -90,10 +97,10 @@ softirq 900 901 902 903 904 905 906 907 908 909 910
 )"));
   probe_->Update();
 
-  EXPECT_EQ(probe_->LastSample().cpu_utilization, 0.25);
+  EXPECT_EQ(probe_->WaitForSample().cpu_utilization, 0.25);
 }
 
-TEST_F(CpuProbeLinuxTest, TwoCores_FullInfo) {
+TEST_F(CpuProbeLinuxTest, TwoCoresFullInfo) {
   ASSERT_TRUE(WriteFakeStat(R"(
 cpu 0 0 0 0 0 0 0 0 0 0
 cpu0 0 0 0 0 0 0 0 0 0 0
@@ -107,6 +114,9 @@ procs_blocked 600
 softirq 900 901 902 903 904 905 906 907 908 909 910
 )"));
   probe_->Update();
+  EXPECT_EQ(probe_->WaitForSample().cpu_utilization,
+            CpuProbe::kUnsupportedValue.cpu_utilization)
+      << "No baseline on first Update()";
 
   ASSERT_TRUE(WriteFakeStat(R"(
 cpu 0 0 0 0 0 0 0 0 0 0
@@ -122,10 +132,10 @@ softirq 900 901 902 903 904 905 906 907 908 909 910
 )"));
   probe_->Update();
 
-  EXPECT_EQ(probe_->LastSample().cpu_utilization, 0.375);
+  EXPECT_EQ(probe_->WaitForSample().cpu_utilization, 0.375);
 }
 
-TEST_F(CpuProbeLinuxTest, TwoCores_SecondCoreMissingStat) {
+TEST_F(CpuProbeLinuxTest, TwoCoresSecondCoreMissingStat) {
   ASSERT_TRUE(WriteFakeStat(R"(
 cpu 0 0 0 0 0 0 0 0 0 0
 cpu0 0 0 0 0 0 0 0 0 0 0
@@ -139,6 +149,9 @@ procs_blocked 600
 softirq 900 901 902 903 904 905 906 907 908 909 910
 )"));
   probe_->Update();
+  EXPECT_EQ(probe_->WaitForSample().cpu_utilization,
+            CpuProbe::kUnsupportedValue.cpu_utilization)
+      << "No baseline on first Update()";
 
   ASSERT_TRUE(WriteFakeStat(R"(
 cpu 0 0 0 0 0 0 0 0 0 0
@@ -153,7 +166,7 @@ softirq 900 901 902 903 904 905 906 907 908 909 910
 )"));
   probe_->Update();
 
-  EXPECT_EQ(probe_->LastSample().cpu_utilization, 0.25);
+  EXPECT_EQ(probe_->WaitForSample().cpu_utilization, 0.25);
 }
 
 }  // namespace device

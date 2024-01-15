@@ -5,8 +5,8 @@
 #ifndef UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_BUFFER_BACKING_H_
 #define UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_BUFFER_BACKING_H_
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "drm_fourcc.h"
 #include "ui/gfx/geometry/size.h"
@@ -31,6 +31,7 @@ class WaylandBufferBacking {
     kShm = 0,
     kDmabuf = 1,
     kSolidColor = 2,
+    kSinglePixel = 3,
   };
 
   WaylandBufferBacking() = delete;

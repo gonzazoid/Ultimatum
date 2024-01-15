@@ -10,10 +10,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "base/containers/contains.h"
 #include "base/logging.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/types/expected.h"
 #include "device/bluetooth/floss/floss_dbus_client.h"
 
@@ -92,7 +92,12 @@ FakeFlossSocketManager::~FakeFlossSocketManager() = default;
 
 void FakeFlossSocketManager::Init(dbus::Bus* bus,
                                   const std::string& service_name,
-                                  const int adapter_index) {}
+                                  const int adapter_index,
+                                  base::Version version,
+                                  base::OnceClosure on_ready) {
+  version_ = version;
+  std::move(on_ready).Run();
+}
 
 void FakeFlossSocketManager::ListenUsingL2cap(
     const Security security_level,
@@ -101,6 +106,15 @@ void FakeFlossSocketManager::ListenUsingL2cap(
     ConnectionAccepted new_connection_cb) {
   std::move(callback).Run(
       base::unexpected(Error(kNotImplemented, "ListenUsingL2Cap")));
+}
+
+void FakeFlossSocketManager::ListenUsingL2capLe(
+    const Security security_level,
+    ResponseCallback<BtifStatus> callback,
+    ConnectionStateChanged ready_cb,
+    ConnectionAccepted new_connection_cb) {
+  std::move(callback).Run(
+      base::unexpected(Error(kNotImplemented, "ListenUsingL2CapLe")));
 }
 
 void FakeFlossSocketManager::ListenUsingRfcomm(
@@ -126,6 +140,14 @@ void FakeFlossSocketManager::ListenUsingRfcomm(
 }
 
 void FakeFlossSocketManager::ConnectUsingL2cap(
+    const FlossDeviceId& remote_device,
+    const int psm,
+    const Security security_level,
+    ConnectionCompleted callback) {
+  std::move(callback).Run(BtifStatus::kFail, /*socket=*/absl::nullopt);
+}
+
+void FakeFlossSocketManager::ConnectUsingL2capLe(
     const FlossDeviceId& remote_device,
     const int psm,
     const Security security_level,
@@ -180,9 +202,9 @@ void FakeFlossSocketManager::Close(const SocketId id,
     FlossListeningSocket socket;
     socket.id = id;
 
+    std::move(callback).Run(BtifStatus::kSuccess);
     state_changed.Run(ServerSocketState::kClosed, std::move(socket),
                       BtifStatus::kSuccess);
-    std::move(callback).Run(BtifStatus::kSuccess);
 
     listening_sockets_to_callbacks_.erase(found);
   } else {
@@ -193,23 +215,20 @@ void FakeFlossSocketManager::Close(const SocketId id,
 void FakeFlossSocketManager::SendSocketReady(const SocketId id,
                                              const device::BluetoothUUID& uuid,
                                              const BtifStatus status) {
-  if (listening_sockets_to_callbacks_.find(id) !=
-      listening_sockets_to_callbacks_.end()) {
+  if (base::Contains(listening_sockets_to_callbacks_, id)) {
     FlossListeningSocket socket;
     socket.id = id;
     socket.type = SocketType::kRfcomm;
     socket.uuid = uuid;
 
     auto& [state_changed, accepted] = listening_sockets_to_callbacks_[id];
-    state_changed.Run(ServerSocketState::kReady, std::move(socket),
-                      BtifStatus::kSuccess);
+    state_changed.Run(ServerSocketState::kReady, std::move(socket), status);
   }
 }
 
 void FakeFlossSocketManager::SendSocketClosed(const SocketId id,
                                               const BtifStatus status) {
-  if (listening_sockets_to_callbacks_.find(id) !=
-      listening_sockets_to_callbacks_.end()) {
+  if (base::Contains(listening_sockets_to_callbacks_, id)) {
     FlossListeningSocket socket;
     socket.id = id;
     socket.type = SocketType::kRfcomm;
@@ -224,8 +243,7 @@ void FakeFlossSocketManager::SendIncomingConnection(
     const SocketId listener_id,
     const FlossDeviceId& remote_device,
     const device::BluetoothUUID& uuid) {
-  if (listening_sockets_to_callbacks_.find(listener_id) !=
-      listening_sockets_to_callbacks_.end()) {
+  if (base::Contains(listening_sockets_to_callbacks_, listener_id)) {
     // Create a fake socket and send a new connection callback.
     FlossSocket socket;
     socket.id = listener_id;

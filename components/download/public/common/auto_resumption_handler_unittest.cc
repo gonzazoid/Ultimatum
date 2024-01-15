@@ -6,15 +6,15 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/simple_test_clock.h"
 #include "base/test/test_mock_time_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
+#include "base/uuid.h"
 #include "components/download/network/network_status_listener_impl.h"
 #include "components/download/public/common/mock_download_item.h"
 #include "components/download/public/task/mock_task_manager.h"
@@ -47,7 +47,8 @@ base::Time GetNow() {
 class AutoResumptionHandlerTest : public testing::Test {
  public:
   AutoResumptionHandlerTest()
-      : task_runner_(new base::TestMockTimeTaskRunner), handle_(task_runner_) {}
+      : task_runner_(new base::TestMockTimeTaskRunner),
+        current_default_handle_(task_runner_) {}
 
   AutoResumptionHandlerTest(const AutoResumptionHandlerTest&) = delete;
   AutoResumptionHandlerTest& operator=(const AutoResumptionHandlerTest&) =
@@ -70,7 +71,7 @@ class AutoResumptionHandlerTest : public testing::Test {
         std::move(network_listener), std::move(task_manager), std::move(config),
         &clock_);
 
-    std::vector<DownloadItem*> empty_list;
+    std::vector<raw_ptr<DownloadItem, VectorExperimental>> empty_list;
     auto_resumption_handler_->SetResumableDownloads(empty_list);
     task_runner_->FastForwardUntilNoTasksRemain();
   }
@@ -83,7 +84,8 @@ class AutoResumptionHandlerTest : public testing::Test {
                         bool allow_metered,
                         bool has_target_file_path = true) {
     ON_CALL(*download, GetGuid())
-        .WillByDefault(ReturnRefOfCopy(base::GenerateGUID()));
+        .WillByDefault(ReturnRefOfCopy(
+            base::Uuid::GenerateRandomV4().AsLowercaseString()));
     ON_CALL(*download, GetURL())
         .WillByDefault(ReturnRefOfCopy(GURL("http://example.com/foo")));
     ON_CALL(*download, GetState()).WillByDefault(Return(state));
@@ -110,8 +112,8 @@ class AutoResumptionHandlerTest : public testing::Test {
   }
 
   scoped_refptr<base::TestMockTimeTaskRunner> task_runner_;
-  base::ThreadTaskRunnerHandle handle_;
-  raw_ptr<download::test::MockTaskManager> task_manager_;
+  base::SingleThreadTaskRunner::CurrentDefaultHandle current_default_handle_;
+  raw_ptr<download::test::MockTaskManager, DanglingUntriaged> task_manager_;
   std::unique_ptr<AutoResumptionHandler> auto_resumption_handler_;
   base::SimpleTestClock clock_;
 };

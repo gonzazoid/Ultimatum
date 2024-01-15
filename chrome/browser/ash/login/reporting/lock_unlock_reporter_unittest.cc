@@ -1,9 +1,13 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/reporting/lock_unlock_reporter.h"
 
+#include <string_view>
+
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/simple_test_clock.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/policy/core/device_local_account.h"
@@ -16,6 +20,7 @@
 #include "chromeos/ash/components/login/session/session_termination_manager.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "components/reporting/client/mock_report_queue.h"
+#include "components/session_manager/core/session_manager.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "components/user_manager/user_names.h"
 #include "content/public/test/browser_task_environment.h"
@@ -46,11 +51,8 @@ class LockUnlockTestHelper {
 
   void Init() {
     chromeos::PowerManagerClient::InitializeFake();
-    ::ash::SessionManagerClient::InitializeFake();
-    auto user_manager = std::make_unique<FakeChromeUserManager>();
-    user_manager_ = user_manager.get();
-    user_manager_enabler_ = std::make_unique<user_manager::ScopedUserManager>(
-        std::move(user_manager));
+    SessionManagerClient::InitializeFake();
+    fake_user_manager_.Reset(std::make_unique<ash::FakeChromeUserManager>());
   }
 
   void Shutdown() { chromeos::PowerManagerClient::Shutdown(); }
@@ -61,14 +63,13 @@ class LockUnlockTestHelper {
 
   std::unique_ptr<TestingProfile> CreateRegularUserProfile() {
     AccountId account_id = AccountId::FromUserEmail(kFakeEmail);
-    auto* const user = user_manager_->AddUser(account_id);
+    auto* const user = fake_user_manager_->AddUser(account_id);
     TestingProfile::Builder profile_builder;
     profile_builder.SetProfileName(user->GetAccountId().GetUserEmail());
     auto profile = profile_builder.Build();
-    ProfileHelper::Get()->SetProfileToUserMappingForTesting(user);
     ProfileHelper::Get()->SetUserToProfileMappingForTesting(user,
                                                             profile.get());
-    user_manager_->LoginUser(user->GetAccountId(), true);
+    fake_user_manager_->LoginUser(user->GetAccountId(), true);
     return profile;
   }
 
@@ -81,11 +82,12 @@ class LockUnlockTestHelper {
     auto mock_queue = std::unique_ptr<::reporting::MockReportQueue,
                                       base::OnTaskRunnerDeleter>(
         new ::reporting::MockReportQueue(),
-        base::OnTaskRunnerDeleter(base::SequencedTaskRunnerHandle::Get()));
+        base::OnTaskRunnerDeleter(
+            base::SequencedTaskRunner::GetCurrentDefault()));
 
     ON_CALL(*mock_queue, AddRecord(_, ::reporting::Priority::SECURITY, _))
         .WillByDefault(
-            [this, status](base::StringPiece record_string,
+            [this, status](std::string_view record_string,
                            ::reporting::Priority event_priority,
                            ::reporting::ReportQueue::EnqueueCallback cb) {
               ++report_count_;
@@ -106,8 +108,8 @@ class LockUnlockTestHelper {
   int GetReportCount() { return report_count_; }
 
  private:
-  FakeChromeUserManager* user_manager_;
-  std::unique_ptr<user_manager::ScopedUserManager> user_manager_enabler_;
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_;
   content::BrowserTaskEnvironment task_environment_;
 
   LockUnlockRecord record_;

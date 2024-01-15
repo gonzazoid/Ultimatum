@@ -10,5 +10,7 @@ assert(is_chromeos_ash)
 mojom("mojom") {
   sources = [ "cert_store.mojom" ]
 
-  public_deps = [ "//mojo/public/mojom/base" ]
+  public_deps = [
+    "//chrome/services/keymanagement/public/mojom",
+  ]
 }

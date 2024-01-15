@@ -58,7 +58,7 @@ class EVENTS_EXPORT MotionEventAndroid : public MotionEvent {
                      jfloat ticks_x,
                      jfloat ticks_y,
                      jfloat tick_multiplier,
-                     jlong time_ms,
+                     base::TimeTicks time,
                      jint android_action,
                      jint pointer_count,
                      jint history_size,
@@ -112,6 +112,7 @@ class EVENTS_EXPORT MotionEventAndroid : public MotionEvent {
                        size_t historical_index) const override;
   float GetHistoricalY(size_t pointer_index,
                        size_t historical_index) const override;
+  int GetSourceDeviceId(size_t pointer_index) const override;
   ToolType GetToolType(size_t pointer_index) const override;
   int GetButtonState() const override;
   int GetFlags() const override;

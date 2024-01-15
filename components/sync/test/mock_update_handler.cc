@@ -40,14 +40,16 @@ void MockUpdateHandler::ProcessGetUpdatesResponse(
   progress_marker_.CopyFrom(progress_marker);
 }
 
-void MockUpdateHandler::ApplyUpdates(StatusController* status) {
+void MockUpdateHandler::ApplyUpdates(StatusController* status,
+                                     bool cycle_done) {
   apply_updates_count_++;
 }
 
 void MockUpdateHandler::RecordRemoteInvalidation(
     std::unique_ptr<SyncInvalidation> incoming) {}
 
-void MockUpdateHandler::PrepareGetUpdates(sync_pb::GetUpdateTriggers* msg) {
+void MockUpdateHandler::CollectPendingInvalidations(
+    sync_pb::GetUpdateTriggers* msg) {
   prepare_get_updates_count_++;
 }
 

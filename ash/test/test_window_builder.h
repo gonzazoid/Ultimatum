@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/window.h"
 #include "ui/base/class_property.h"
@@ -35,6 +36,11 @@ class ASH_EXPORT TestWindowBuilder {
   TestWindowBuilder& SetWindowType(aura::client::WindowType type);
   TestWindowBuilder& SetWindowId(int id);
   TestWindowBuilder& SetBounds(const gfx::Rect& bounds);
+
+  // Having a non-empty title helps avoid accessibility paint check failures
+  // in tests. For instance, `WindowMiniView` gets its accessible name from
+  // the window title.
+  TestWindowBuilder& SetWindowTitle(const std::u16string& title);
 
   // Set a WindowDelegate used by a test window.
   TestWindowBuilder& SetDelegate(aura::WindowDelegate* delegate);
@@ -66,14 +72,15 @@ class ASH_EXPORT TestWindowBuilder {
   [[nodiscard]] std::unique_ptr<aura::Window> Build();
 
  private:
-  aura::Window* parent_ = nullptr;
-  aura::Window* context_ = nullptr;
-  aura::WindowDelegate* delegate_ = nullptr;
+  raw_ptr<aura::Window> parent_ = nullptr;
+  raw_ptr<aura::Window> context_ = nullptr;
+  raw_ptr<aura::WindowDelegate, DanglingUntriaged> delegate_ = nullptr;
   aura::client::WindowType window_type_ = aura::client::WINDOW_TYPE_NORMAL;
   ui::LayerType layer_type_ = ui::LAYER_TEXTURED;
   gfx::Rect bounds_;
   ui::PropertyHandler init_properties_;
   int window_id_ = aura::Window::kInitialId;
+  std::u16string window_title_ = std::u16string();
   bool show_ = true;
   bool built_ = false;
 };

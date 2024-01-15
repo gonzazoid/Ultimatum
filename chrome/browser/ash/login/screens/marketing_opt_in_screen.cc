@@ -12,9 +12,9 @@
 #include "ash/constants/ash_pref_names.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/login_screen.h"
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_functions.h"
@@ -31,7 +31,7 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/webui/ash/login/gesture_navigation_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/marketing_opt_in_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/marketing_opt_in_screen_handler.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
@@ -41,6 +41,7 @@
 #include "ui/base/l10n/l10n_util.h"
 
 namespace ash {
+
 namespace {
 
 constexpr char kUserActionGetStarted[] = "get-started";
@@ -114,7 +115,7 @@ bool MarketingOptInScreen::MaybeSkip(WizardContext& context) {
   }
   Initialize();
 
-  if (chrome_user_manager_util::IsPublicSessionOrEphemeralLogin() ||
+  if (chrome_user_manager_util::IsManagedGuestSessionOrEphemeralLogin() ||
       IsCurrentUserManaged() || !context.is_branded_build) {
     exit_callback_.Run(Result::NOT_APPLICABLE);
     return true;
@@ -280,8 +281,7 @@ void MarketingOptInScreen::SetCountryFromTimezoneIfAvailable(
 
 void MarketingOptInScreen::SetA11yNavigationButtonsEnabled(bool enabled) {
   ProfileManager::GetActiveUserProfile()->GetPrefs()->SetBoolean(
-      ash::prefs::kAccessibilityTabletModeShelfNavigationButtonsEnabled,
-      enabled);
+      prefs::kAccessibilityTabletModeShelfNavigationButtonsEnabled, enabled);
   a11y_nav_buttons_toggle_metrics_reporter_timer_.Start(
       FROM_HERE, base::Seconds(10),
       base::BindOnce(&RecordShowShelfNavigationButtonsValueChange, enabled));

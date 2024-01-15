@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/logging.h"
 #include "base/strings/string_split.h"
@@ -20,7 +20,6 @@
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_downloader_delegate.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "components/signin/public/base/avatar_icon_util.h"
 #include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/access_token_fetcher.h"
@@ -180,23 +179,34 @@ void ProfileDownloader::FetchImageData() {
   net::NetworkTrafficAnnotationTag traffic_annotation =
       net::DefineNetworkTrafficAnnotation("signed_in_profile_avatar", R"(
         semantics {
-          sender: "Profile G+ Image Downloader"
+          sender: "Profile Google Image Downloader"
           description:
-            "Signed in users use their G+ profile image as their Chrome "
+            "Signed in users use their Google account image as their Chrome "
             "profile image, unless they explicitly select otherwise. This "
             "fetcher uses the sign-in token and the image URL provided by GAIA "
             "to fetch the image."
           trigger: "User signs into a Profile."
           data: "Filename of the png to download and Google OAuth bearer token."
           destination: GOOGLE_OWNED_SERVICE
+          internal {
+            contacts {
+              owners: "//chrome/browser/profiles/OWNERS"
+            }
+          }
+          user_data {
+            type: ACCESS_TOKEN
+            type: FILE_DATA
+          }
+          last_reviewed: "2023-07-31"
         }
         policy {
           cookies_allowed: NO
           setting: "This feature cannot be disabled by settings."
-          policy_exception_justification:
-            "Not implemented, considered not useful as no content is being "
-            "uploaded or saved; this request merely downloads the user's G+ "
-            "profile image."
+          chrome_policy {
+            UserAvatarCustomizationSelectorsEnabled {
+              UserAvatarCustomizationSelectorsEnabled: false
+            }
+          }
         })");
 
   VLOG(1) << "Loading profile image from " << image_url_to_fetch;

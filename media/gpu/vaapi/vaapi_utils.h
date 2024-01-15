@@ -7,9 +7,10 @@
 
 #include <va/va.h>
 
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/thread_annotations.h"
 #include "ui/gfx/geometry/size.h"
 
@@ -59,7 +60,9 @@ class ScopedVABufferMapping {
 
   base::SequenceCheckerImpl sequence_checker_;
 
-  void* va_buffer_data_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION void* va_buffer_data_ = nullptr;
 };
 
 // This class tracks the VABuffer life cycle from vaCreateBuffer() to

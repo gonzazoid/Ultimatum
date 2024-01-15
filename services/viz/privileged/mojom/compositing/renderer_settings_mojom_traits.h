@@ -12,7 +12,7 @@
 #include "services/viz/privileged/mojom/compositing/renderer_settings.mojom-shared.h"
 #include "ui/gfx/geometry/mojom/geometry_mojom_traits.h"
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "components/viz/common/display/overlay_strategy.h"
 #endif
 
@@ -49,11 +49,6 @@ struct StructTraits<viz::mojom::DebugRendererSettingsDataView,
 template <>
 struct StructTraits<viz::mojom::RendererSettingsDataView,
                     viz::RendererSettings> {
-  static bool apply_simple_frame_rate_throttling(
-      const viz::RendererSettings& input) {
-    return input.apply_simple_frame_rate_throttling;
-  }
-
   static bool allow_antialiasing(const viz::RendererSettings& input) {
     return input.allow_antialiasing;
   }
@@ -107,10 +102,16 @@ struct StructTraits<viz::mojom::RendererSettingsDataView,
   }
 #endif
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   static std::vector<viz::OverlayStrategy> overlay_strategies(
       const viz::RendererSettings& input) {
     return input.overlay_strategies;
+  }
+#endif
+
+#if BUILDFLAG(IS_MAC)
+  static int64_t display_id(const viz::RendererSettings& input) {
+    return input.display_id;
   }
 #endif
 

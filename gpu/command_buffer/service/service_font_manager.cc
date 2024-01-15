@@ -6,6 +6,7 @@
 
 #include <inttypes.h>
 
+#include <bit>
 #include <type_traits>
 
 #include "base/bits.h"
@@ -62,7 +63,7 @@ class Deserializer {
  private:
   bool AlignMemory(uint32_t size, size_t alignment) {
     // Due to the math below, alignment must be a power of two.
-    DCHECK(base::bits::IsPowerOfTwo(alignment));
+    DCHECK(std::has_single_bit(alignment));
 
     size_t memory = reinterpret_cast<size_t>(memory_);
     size_t padding = base::bits::AlignUp(memory, alignment) - memory;
@@ -103,11 +104,6 @@ class ServiceFontManager::SkiaDiscardableManager
     return font_manager_->DeleteHandle(handle_id);
   }
 
-  void assertHandleValid(SkDiscardableHandleId handle_id) override {
-    CHECK(font_manager_);
-    font_manager_->AssertHandle(handle_id);
-  }
-
   void notifyCacheMiss(SkStrikeClient::CacheMissType type,
                        int fontSize) override {
     UMA_HISTOGRAM_ENUMERATION("GPU.OopRaster.GlyphCacheMiss", type,
@@ -115,17 +111,21 @@ class ServiceFontManager::SkiaDiscardableManager
     // In general, Skia analysis of glyphs should find all cases.
     // If this is not happening, please file a bug with a repro so
     // it can be fixed.
+    static crash_reporter::CrashKeyString<64> crash_key("oop_cache_miss");
+    static constexpr char kFormatString[] = "type: %" PRIu32 ", fontSize: %d";
+#if DCHECK_IS_ON()
+    crash_reporter::ScopedCrashKeyString auto_clear(
+        &crash_key, base::StringPrintf(kFormatString, type, fontSize));
     NOTREACHED();
-
+#else
     if (dump_count_ < kMaxDumps && base::RandInt(1, 100) == 1 &&
         !font_manager_->disable_oopr_debug_crash_dump()) {
-      static crash_reporter::CrashKeyString<64> crash_key("oop_cache_miss");
       crash_reporter::ScopedCrashKeyString auto_clear(
-          &crash_key, base::StringPrintf("type: %" PRIu32 ", fontSize: %d",
-                                         type, fontSize));
+          &crash_key, base::StringPrintf(kFormatString, type, fontSize));
       base::debug::DumpWithoutCrashing();
       ++dump_count_;
     }
+#endif
   }
 
   void notifyReadFailure(
@@ -241,7 +241,6 @@ bool ServiceFontManager::Deserialize(
 
 bool ServiceFontManager::AddHandle(SkDiscardableHandleId handle_id,
                                    ServiceDiscardableHandle handle) {
-  lock_.AssertAcquired();
   bool inserted;
   std::tie(std::ignore, inserted) =
       discardable_handle_map_.try_emplace(handle_id, std::move(handle));
@@ -258,26 +257,6 @@ bool ServiceFontManager::Unlock(
     it->second.Unlock();
   }
   return true;
-}
-
-void ServiceFontManager::AssertHandle(SkDiscardableHandleId handle_id) {
-  base::AutoLock hold(lock_);
-  auto it = discardable_handle_map_.find(handle_id);
-  CHECK(it != discardable_handle_map_.end());
-
-  static crash_reporter::CrashKeyString<2> crash_key_destroyed(
-      "font_manager::destroyed");
-  crash_reporter::ScopedCrashKeyString auto_clear_destroyed(
-      &crash_key_destroyed, destroyed_ ? "1" : "0");
-  static crash_reporter::CrashKeyString<8> crash_key_ref_count(
-      "font_manager::Handle::ref_count");
-  crash_reporter::ScopedCrashKeyString auto_clear_ref_count(
-      &crash_key_ref_count, base::StringPrintf("%d", it->second.ref_count()));
-  if (destroyed_) {
-    CHECK(it->second.ref_count() > 0);
-  } else {
-    CHECK(it->second.IsLocked());
-  }
 }
 
 bool ServiceFontManager::DeleteHandle(SkDiscardableHandleId handle_id) {

@@ -16,23 +16,27 @@ import './strings.m.js';
 import './command_manager.js';
 import './toolbar.js';
 
-import {CrSplitterElement} from 'chrome://resources/cr_elements/cr_splitter/cr_splitter.js';
-import {FindShortcutMixin, FindShortcutMixinInterface} from 'chrome://resources/cr_elements/find_shortcut_mixin.js';
+import type {CrSplitterElement} from 'chrome://resources/cr_elements/cr_splitter/cr_splitter.js';
+import type {FindShortcutMixinInterface} from 'chrome://resources/cr_elements/find_shortcut_mixin.js';
+import {FindShortcutMixin} from 'chrome://resources/cr_elements/find_shortcut_mixin.js';
 import {EventTracker} from 'chrome://resources/js/event_tracker.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {IronScrollTargetBehavior} from 'chrome://resources/polymer/v3_0/iron-scroll-target-behavior/iron-scroll-target-behavior.js';
 import {mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {setSearchResults} from './actions.js';
 import {destroy as destroyApiListener, init as initApiListener} from './api_listener.js';
 import {getTemplate} from './app.html.js';
+import {BookmarksApiProxyImpl} from './bookmarks_api_proxy.js';
 import {LOCAL_STORAGE_FOLDER_STATE_KEY, LOCAL_STORAGE_TREE_WIDTH_KEY, ROOT_NODE_ID} from './constants.js';
 import {DndManager} from './dnd_manager.js';
-import {MouseFocusMixin, MouseFocusMixinInterface} from './mouse_focus_behavior.js';
+import type {MouseFocusMixinInterface} from './mouse_focus_behavior.js';
+import {MouseFocusMixin} from './mouse_focus_behavior.js';
 import {Store} from './store.js';
-import {StoreClientMixin, StoreClientMixinInterface} from './store_client_mixin.js';
-import {BookmarksToolbarElement} from './toolbar.js';
-import {BookmarksPageState, FolderOpenState} from './types.js';
+import type {StoreClientMixinInterface} from './store_client_mixin.js';
+import {StoreClientMixin} from './store_client_mixin.js';
+import type {BookmarksToolbarElement} from './toolbar.js';
+import type {BookmarksPageState, FolderOpenState} from './types.js';
 import {createEmptyState, normalizeNodes} from './util.js';
 
 const BookmarksAppElementBase =
@@ -114,7 +118,7 @@ export class BookmarksAppElement extends BookmarksAppElementBase {
       return state.folderOpenState;
     });
 
-    chrome.bookmarks.getTree((results) => {
+    BookmarksApiProxyImpl.getInstance().getTree().then((results) => {
       const nodeMap = normalizeNodes(results[0]!);
       const initialState = createEmptyState();
       initialState.nodes = nodeMap;
@@ -190,21 +194,21 @@ export class BookmarksAppElement extends BookmarksAppElementBase {
       return;
     }
 
-    chrome.bookmarks.search(this.searchTerm_, (results) => {
-      const ids = results.map(function(node) {
-        return node.id;
-      });
-      this.dispatch(setSearchResults(ids));
-      this.dispatchEvent(new CustomEvent('iron-announce', {
-        bubbles: true,
-        composed: true,
-        detail: {
-          text: ids.length > 0 ?
-              loadTimeData.getStringF('searchResults', this.searchTerm_) :
-              loadTimeData.getString('noSearchResults'),
-        },
-      }));
-    });
+    BookmarksApiProxyImpl.getInstance()
+        .search(this.searchTerm_)
+        .then(results => {
+          const ids = results.map(node => node.id);
+          this.dispatch(setSearchResults(ids));
+          this.dispatchEvent(new CustomEvent('iron-announce', {
+            bubbles: true,
+            composed: true,
+            detail: {
+              text: ids.length > 0 ?
+                  loadTimeData.getStringF('searchResults', this.searchTerm_) :
+                  loadTimeData.getString('noSearchResults'),
+            },
+          }));
+        });
   }
 
   private folderOpenStateChanged_(): void {
@@ -237,6 +241,10 @@ export class BookmarksAppElement extends BookmarksAppElementBase {
   /* eslint-disable-next-line @typescript-eslint/naming-convention */
   override _scrollHandler() {
     this.toolbarShadow_ = this.scrollTarget!.scrollTop !== 0;
+  }
+
+  getDndManagerForTesting(): DndManager|null {
+    return this.dndManager_;
   }
 }
 

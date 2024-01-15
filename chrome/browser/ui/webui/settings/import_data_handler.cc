@@ -9,8 +9,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -27,6 +27,7 @@
 #include "chrome/common/pref_names.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_ui.h"
+#include "ui/shell_dialogs/selected_file_info.h"
 
 using content::BrowserThread;
 
@@ -124,17 +125,23 @@ void ImportDataHandler::HandleImportData(const base::Value::List& args) {
     return;
   }
 
+  const base::Value::Dict& type_dict = types.GetDict();
   uint16_t selected_items = importer::NONE;
-  if (*types.FindBoolKey(prefs::kImportDialogAutofillFormData))
+  if (*type_dict.FindBool(prefs::kImportDialogAutofillFormData)) {
     selected_items |= importer::AUTOFILL_FORM_DATA;
-  if (*types.FindBoolKey(prefs::kImportDialogBookmarks))
+  }
+  if (*type_dict.FindBool(prefs::kImportDialogBookmarks)) {
     selected_items |= importer::FAVORITES;
-  if (*types.FindBoolKey(prefs::kImportDialogHistory))
+  }
+  if (*type_dict.FindBool(prefs::kImportDialogHistory)) {
     selected_items |= importer::HISTORY;
-  if (*types.FindBoolKey(prefs::kImportDialogSavedPasswords))
+  }
+  if (*type_dict.FindBool(prefs::kImportDialogSavedPasswords)) {
     selected_items |= importer::PASSWORDS;
-  if (*types.FindBoolKey(prefs::kImportDialogSearchEngine))
+  }
+  if (*type_dict.FindBool(prefs::kImportDialogSearchEngine)) {
     selected_items |= importer::SEARCH_ENGINES;
+  }
 
   const importer::SourceProfile& source_profile =
       importer_list_->GetSourceProfileAt(browser_index);
@@ -180,8 +187,7 @@ void ImportDataHandler::HandleImportFromBookmarksFile(
   file_type_info.extensions.resize(1);
   file_type_info.extensions[0].push_back(FILE_PATH_LITERAL("html"));
 
-  Browser* browser =
-      chrome::FindBrowserWithWebContents(web_ui()->GetWebContents());
+  Browser* browser = chrome::FindBrowserWithTab(web_ui()->GetWebContents());
 
   select_file_dialog_->SelectFile(
       ui::SelectFileDialog::SELECT_OPEN_FILE, std::u16string(),
@@ -247,7 +253,7 @@ void ImportDataHandler::ImportEnded() {
                                                     : kImportStatusFailed));
 }
 
-void ImportDataHandler::FileSelected(const base::FilePath& path,
+void ImportDataHandler::FileSelected(const ui::SelectedFileInfo& file,
                                      int /*index*/,
                                      void* /*params*/) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -256,7 +262,7 @@ void ImportDataHandler::FileSelected(const base::FilePath& path,
 
   importer::SourceProfile source_profile;
   source_profile.importer_type = importer::TYPE_BOOKMARKS_FILE;
-  source_profile.source_path = path;
+  source_profile.source_path = file.path();
 
   StartImport(source_profile, importer::FAVORITES);
 }

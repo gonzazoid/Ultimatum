@@ -6,8 +6,6 @@ are included in the launcher filter file."""
 
 from typing import Dict, List
 
-USE_PYTHON3 = True
-
 TOOL_PATH = 'tools/testing/launcher_filter_file.py'
 
 
@@ -60,7 +58,7 @@ def _CommonChecks(input_api, output_api):
     if filter_file_data['expected'] == filter_file_data['actual']:
         return output
 
-    output.extend(
+    output.append(
         output_api.PresubmitPromptWarning(
             'The test launcher filter file does not match the ' +
             f'available tests.\n\nPlease run:\n{tool_help_path}', []))

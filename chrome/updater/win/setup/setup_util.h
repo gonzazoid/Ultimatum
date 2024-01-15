@@ -11,23 +11,14 @@
 
 #include <ios>
 #include <string>
+#include <utility>
 #include <vector>
 
-#include "base/callback_helpers.h"
-#include "base/check.h"
-#include "base/check_op.h"
-#include "base/strings/string_util.h"
-#include "base/strings/utf_string_conversions.h"
-#include "base/synchronization/waitable_event.h"
-#include "base/task/thread_pool.h"
-#include "base/threading/thread_restrictions.h"
-#include "base/win/win_util.h"
+#include "base/command_line.h"
 #include "base/win/windows_types.h"
-
-class WorkItemList;
+#include "chrome/installer/util/work_item_list.h"
 
 namespace base {
-class CommandLine;
 class FilePath;
 }  // namespace base
 
@@ -35,9 +26,11 @@ namespace updater {
 
 enum class UpdaterScope;
 
-bool RegisterWakeTask(const base::CommandLine& run_command, UpdaterScope scope);
+std::wstring GetTaskName(UpdaterScope scope);
 void UnregisterWakeTask(UpdaterScope scope);
 
+std::wstring GetProgIdForClsid(REFCLSID clsid);
+std::wstring GetComProgIdRegistryPath(const std::wstring& progid);
 std::wstring GetComServerClsidRegistryPath(REFCLSID clsid);
 std::wstring GetComServerAppidRegistryPath(REFGUID appid);
 std::wstring GetComIidRegistryPath(REFIID iid);
@@ -55,16 +48,19 @@ std::wstring GetComTypeLibResourceIndex(REFIID iid);
 
 // Returns the interfaces ids of all interfaces declared in IDL of the updater
 // that can be installed side-by-side with other instances of the updater.
-std::vector<IID> GetSideBySideInterfaces();
+std::vector<std::pair<IID, std::wstring>> GetSideBySideInterfaces(
+    UpdaterScope scope);
 
 // Returns the interfaces ids of all interfaces declared in IDL of the updater
 // that can only be installed for the active instance of the updater.
-std::vector<IID> GetActiveInterfaces();
+std::vector<std::pair<IID, std::wstring>> GetActiveInterfaces(
+    UpdaterScope scope);
 
 // Returns the interfaces ids of all interfaces declared in IDL of the updater
 // that can be installed side-by-side (if `is_internal` is `true`) or for the
 // active instance (if `is_internal` is `false`) .
-std::vector<IID> GetInterfaces(bool is_internal);
+std::vector<std::pair<IID, std::wstring>> GetInterfaces(bool is_internal,
+                                                        UpdaterScope scope);
 
 // Returns the CLSIDs of servers that can be installed side-by-side with other
 // instances of the updater.
@@ -88,18 +84,22 @@ std::vector<T> JoinVectors(const std::vector<T>& vector1,
   return joined_vector;
 }
 
+// Installs the COM interfaces and corresponding typelibs in the registry for
+// the updater at the given `scope` and `is_internal`. Returns `true` on
+// success.
+bool InstallComInterfaces(UpdaterScope scope, bool is_internal);
+
+// Checks the COM interfaces and corresponding typelibs in the registry for
+// the updater at the given `scope` and `is_internal`. Returns `true` if the
+// interfaces are present, `false` otherwise.
+bool AreComInterfacesPresent(UpdaterScope scope, bool is_internal);
+
 // Adds work items to `list` to install the interface `iid`.
 void AddInstallComInterfaceWorkItems(HKEY root,
                                      const base::FilePath& typelib_path,
                                      GUID iid,
+                                     const std::wstring& interface_name,
                                      WorkItemList* list);
-
-// Adds work items to `list` to install the server `iid`.
-void AddInstallServerWorkItems(HKEY root,
-                               CLSID iid,
-                               const base::FilePath& executable_path,
-                               bool internal_service,
-                               WorkItemList* list);
 
 // Adds work items to register the per-user COM server.
 void AddComServerWorkItems(const base::FilePath& com_server_path,
@@ -121,85 +121,30 @@ void RegisterUserRunAtStartup(const std::wstring& run_value_name,
 // `run_value_name`.
 bool UnregisterUserRunAtStartup(const std::wstring& run_value_name);
 
-// Loads the typelib and typeinfo for all interfaces from updater.exe. Logs on
-// failure.
-// If the typelib loads successfully, logs the registry entries for the typelib.
-// TODO(crbug.com/1341471) - revert the CL that introduced the check after the
-// bug is resolved.
-void CheckComInterfaceTypeLib(UpdaterScope scope, bool is_internal);
+// Deletes any per-user legacy entries that may have been installed/registered
+// by a previous version of the updater. Returns `true` on success or if no
+// cleanup is necessary. Returns `false` if any operation fails.
+bool DeleteLegacyEntriesPerUser();
 
-// Marshals interface T implemented by an instance of V and unmarshals it into
-// another thread. The test also checks for successful creation of proxy/stubs
-// for the interface.
-// TODO(crbug.com/1341471) - revert the CL that introduced the check after the
-// bug is resolved.
-template <typename T, typename V>
-void MarshalInterface() {
-  static constexpr REFIID iid = __uuidof(T);
+class RegisterWakeTaskWorkItem : public WorkItem {
+ public:
+  RegisterWakeTaskWorkItem(const base::CommandLine& run_command,
+                           UpdaterScope scope);
 
-  // Create proxy/stubs for the interface.
-  // Look up the ProxyStubClsid32.
-  CLSID psclsid = {};
-  HRESULT hr = ::CoGetPSClsid(iid, &psclsid);
+  RegisterWakeTaskWorkItem(const RegisterWakeTaskWorkItem&) = delete;
+  RegisterWakeTaskWorkItem& operator=(const RegisterWakeTaskWorkItem&) = delete;
 
-  CHECK(SUCCEEDED(hr)) << std::hex << hr;
-  CHECK_EQ(base::ToUpperASCII(
-               base::WideToASCII(base::win::WStringFromGUID(psclsid))),
-           "{00020424-0000-0000-C000-000000000046}");
+  ~RegisterWakeTaskWorkItem() override;
 
-  // Get the proxy/stub factory buffer.
-  Microsoft::WRL::ComPtr<IPSFactoryBuffer> psfb;
-  hr = ::CoGetClassObject(psclsid, CLSCTX_INPROC, 0, IID_PPV_ARGS(&psfb));
+ private:
+  // Overrides of WorkItem.
+  bool DoImpl() override;
+  void RollbackImpl() override;
 
-  CHECK(SUCCEEDED(hr)) << std::hex << hr;
-
-  // Create the interface proxy.
-  Microsoft::WRL::ComPtr<IRpcProxyBuffer> proxy_buffer;
-  Microsoft::WRL::ComPtr<T> object;
-  hr = psfb->CreateProxy(nullptr, iid, &proxy_buffer,
-                         IID_PPV_ARGS_Helper(&object));
-  LOG_IF(ERROR, FAILED(hr))
-      << __func__ << ": CreateProxy failed: " << std::hex << hr;
-
-  // Create the interface stub.
-  Microsoft::WRL::ComPtr<IRpcStubBuffer> stub_buffer;
-  hr = psfb->CreateStub(iid, nullptr, &stub_buffer);
-  LOG_IF(ERROR, FAILED(hr))
-      << __func__ << ": CreateStub failed: " << std::hex << hr;
-
-  // Marshal and unmarshal a T interface implemented by V.
-  object.Reset();
-  hr = Microsoft::WRL::MakeAndInitialize<V>(&object);
-  CHECK(SUCCEEDED(hr)) << std::hex << hr;
-
-  Microsoft::WRL::ComPtr<IStream> stream;
-  hr = ::CoMarshalInterThreadInterfaceInStream(iid, object.Get(), &stream);
-  CHECK(SUCCEEDED(hr)) << std::hex << hr;
-
-  base::ScopedAllowBaseSyncPrimitivesForTesting blocking_allowed_here;
-  base::WaitableEvent unmarshal_complete_event;
-
-  base::ThreadPool::CreateCOMSTATaskRunner({base::MayBlock()})
-      ->PostTask(
-          FROM_HERE,
-          base::BindOnce(
-              [](Microsoft::WRL::ComPtr<IStream> stream,
-                 base::WaitableEvent& event) {
-                const base::ScopedClosureRunner signal_event(base::BindOnce(
-                    [](base::WaitableEvent& event) { event.Signal(); },
-                    std::ref(event)));
-
-                Microsoft::WRL::ComPtr<T> object;
-                HRESULT hr =
-                    ::CoUnmarshalInterface(stream.Get(), IID_PPV_ARGS(&object));
-                CHECK(SUCCEEDED(hr)) << std::hex << hr;
-              },
-              stream, std::ref(unmarshal_complete_event)));
-
-  if (!unmarshal_complete_event.TimedWait(base::Seconds(60))) {
-    NOTREACHED();
-  }
-}
+  const base::CommandLine run_command_;
+  const UpdaterScope scope_;
+  std::wstring task_name_;
+};
 
 }  // namespace updater
 

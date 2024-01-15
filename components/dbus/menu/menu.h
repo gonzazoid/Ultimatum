@@ -11,8 +11,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/dbus/menu/menu_property_list.h"
@@ -96,7 +96,7 @@ class COMPONENT_EXPORT(DBUS) DbusMenu {
     dbus::MessageReader& reader() { return reader_; }
 
    private:
-    raw_ptr<dbus::MethodCall, DanglingUntriaged> method_call_;
+    raw_ptr<dbus::MethodCall, AcrossTasksDanglingUntriaged> method_call_;
     dbus::ExportedObject::ResponseSender response_sender_;
 
     // |reader_| is always needed for all methods on this interface, so it's not
@@ -154,7 +154,7 @@ class COMPONENT_EXPORT(DBUS) DbusMenu {
 
   void SendLayoutChangedSignal(int32_t id);
 
-  raw_ptr<dbus::ExportedObject> menu_ = nullptr;
+  raw_ptr<dbus::ExportedObject, DanglingUntriaged> menu_ = nullptr;
 
   base::RepeatingCallback<void(bool)> barrier_;
 

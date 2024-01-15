@@ -35,13 +35,8 @@ Document* AXVirtualObject::GetDocument() const {
   return GetAccessibleNode() ? GetAccessibleNode()->GetDocument() : nullptr;
 }
 
-bool AXVirtualObject::ComputeAccessibilityIsIgnored(
-    IgnoredReasons* ignoredReasons) const {
-  return AccessibilityIsIgnoredByDefault(ignoredReasons);
-}
-
 void AXVirtualObject::AddChildren() {
-#if DCHECK_IS_ON()
+#if defined(AX_FAIL_FAST_BUILD)
   DCHECK(!IsDetached());
   DCHECK(!is_adding_children_) << " Reentering method on " << GetNode();
   base::AutoReset<bool> reentrancy_protector(&is_adding_children_, true);
@@ -53,23 +48,28 @@ void AXVirtualObject::AddChildren() {
   if (!accessible_node_)
     return;
 
-  DCHECK(children_dirty_);
-  children_dirty_ = false;
+  CHECK(NeedsToUpdateChildren());
 
   for (const auto& child : accessible_node_->GetChildren()) {
     AXObject* ax_child = AXObjectCache().GetOrCreate(child, this);
     if (!ax_child)
       continue;
+    if (ChildrenNeedToUpdateCachedValues()) {
+      ax_child->InvalidateCachedValues();
+    }
+    // Update cached values preemptively, where we can control the
+    // notify_parent_of_ignored_changes parameter, so that we do not try to
+    // notify a parent of children changes (which would be redundant as we are
+    // processing children changed on the parent).
+    ax_child->UpdateCachedAttributeValuesIfNeeded(
+        /*notify_parent_of_ignored_changes*/ false);
     DCHECK(!ax_child->IsDetached());
     DCHECK(ax_child->AccessibilityIsIncludedInTree());
 
     children_.push_back(ax_child);
   }
-}
 
-void AXVirtualObject::ChildrenChangedWithCleanLayout() {
-  ClearChildren();
-  AXObjectCache().PostNotification(this, ax::mojom::Event::kChildrenChanged);
+  SetNeedsToUpdateChildren(false);
 }
 
 const AtomicString& AXVirtualObject::GetAOMPropertyOrARIAAttribute(
@@ -91,7 +91,7 @@ bool AXVirtualObject::HasAOMPropertyOrARIAAttribute(AOMBooleanProperty property,
 }
 
 AccessibleNode* AXVirtualObject::GetAccessibleNode() const {
-  return accessible_node_;
+  return accessible_node_.Get();
 }
 
 String AXVirtualObject::TextAlternative(

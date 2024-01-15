@@ -102,16 +102,16 @@ void PageLoadTrackerDecorator::OnTakenFromGraph(Graph* graph) {
   UnregisterObservers(graph);
 }
 
-base::Value PageLoadTrackerDecorator::DescribePageNodeData(
+base::Value::Dict PageLoadTrackerDecorator::DescribePageNodeData(
     const PageNode* page_node) const {
   auto* data = DataImpl::Get(PageNodeImpl::FromNode(page_node));
   if (data == nullptr)
-    return base::Value();
+    return base::Value::Dict();
 
-  base::Value ret(base::Value::Type::DICTIONARY);
-  ret.SetStringKey("load_idle_state", ToString(data->load_idle_state()));
-  ret.SetBoolKey("is_loading", data->is_loading_);
-  ret.SetBoolKey("did_commit", data->did_commit_);
+  base::Value::Dict ret;
+  ret.Set("load_idle_state", ToString(data->load_idle_state()));
+  ret.Set("is_loading", data->is_loading_);
+  ret.Set("did_commit", data->did_commit_);
 
   return ret;
 }
@@ -357,7 +357,7 @@ void PageLoadTrackerDecorator::TransitionToLoadedAndIdle(
 // static
 bool PageLoadTrackerDecorator::IsIdling(const PageNodeImpl* page_node) {
   // Get the frame node for the main frame associated with this page.
-  const FrameNodeImpl* main_frame_node = page_node->GetMainFrameNodeImpl();
+  const FrameNodeImpl* main_frame_node = page_node->main_frame_node();
   if (!main_frame_node)
     return false;
 
@@ -372,8 +372,8 @@ bool PageLoadTrackerDecorator::IsIdling(const PageNodeImpl* page_node) {
   // associated with this page's main frame actually being low. In the case
   // of session restore this is mitigated by having a timeout while waiting for
   // this signal.
-  return main_frame_node->network_almost_idle() &&
-         process_node->main_thread_task_load_is_low();
+  return main_frame_node->GetNetworkAlmostIdle() &&
+         process_node->GetMainThreadTaskLoadIsLow();
 }
 
 // static

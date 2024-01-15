@@ -3,7 +3,6 @@
 # found in the LICENSE file.
 
 source_set("modals") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "infobar_modal_delegate.h",
     "infobar_modal_view_controller.h",
@@ -12,11 +11,8 @@ source_set("modals") {
     "infobar_password_modal_delegate.h",
     "infobar_password_table_view_controller.h",
     "infobar_password_table_view_controller.mm",
-    "infobar_reading_list_modal_consumer.h",
-    "infobar_reading_list_modal_delegate.h",
-    "infobar_reading_list_table_view_controller.h",
-    "infobar_reading_list_table_view_controller.mm",
     "infobar_save_card_modal_consumer.h",
+    "infobar_save_card_modal_consumer.mm",
     "infobar_save_card_modal_delegate.h",
     "infobar_save_card_table_view_controller.h",
     "infobar_save_card_table_view_controller.mm",
@@ -31,20 +27,23 @@ source_set("modals") {
     ":public",
     "//base",
     "//components/autofill/core/common:features",
+    "//components/prefs",
+    "//components/prefs/ios",
     "//components/strings",
     "//components/translate/core/browser",
+    "//components/translate/core/common",
     "//ios/chrome/app/strings",
-    "//ios/chrome/browser/infobars:public",
-    "//ios/chrome/browser/net:crurl",
-    "//ios/chrome/browser/passwords:public",
-    "//ios/chrome/browser/ui/autofill:autofill_message",
+    "//ios/chrome/browser/autofill/model/message",
+    "//ios/chrome/browser/infobars/model:public",
+    "//ios/chrome/browser/net/model:crurl",
+    "//ios/chrome/browser/passwords/model:public",
+    "//ios/chrome/browser/shared/ui/symbols",
+    "//ios/chrome/browser/shared/ui/table_view",
+    "//ios/chrome/browser/shared/ui/table_view:styler",
+    "//ios/chrome/browser/shared/ui/util",
     "//ios/chrome/browser/ui/autofill:autofill_metrics",
     "//ios/chrome/browser/ui/autofill/cells",
-    "//ios/chrome/browser/ui/icons:symbols",
     "//ios/chrome/browser/ui/infobars/coordinators:translate_public",
-    "//ios/chrome/browser/ui/table_view",
-    "//ios/chrome/browser/ui/table_view:styler",
-    "//ios/chrome/browser/ui/util",
     "//ios/chrome/common/ui/table_view:cells_constants",
     "//ui/base",
     "//url",
@@ -52,8 +51,9 @@ source_set("modals") {
 }
 
 source_set("public") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
+    "infobar_address_profile_modal_constants.h",
+    "infobar_address_profile_modal_constants.mm",
     "infobar_modal_constants.h",
     "infobar_modal_constants.mm",
     "infobar_translate_modal_constants.h",

@@ -10,8 +10,8 @@
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/toolbar/toolbar_actions_model.h"
+#include "chrome/browser/ui/views/controls/hover_button.h"
 #include "chrome/browser/ui/views/extensions/extension_context_menu_controller.h"
-#include "chrome/browser/ui/views/hover_button.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_action_view_delegate_views.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
@@ -25,8 +25,9 @@ class Button;
 // the extension action.
 class ExtensionsMenuButton : public HoverButton,
                              public ToolbarActionViewDelegateViews {
+  METADATA_HEADER(ExtensionsMenuButton, HoverButton)
+
  public:
-  METADATA_HEADER(ExtensionsMenuButton);
   ExtensionsMenuButton(Browser* browser,
                        ToolbarActionViewController* controller);
   ExtensionsMenuButton(const ExtensionsMenuButton&) = delete;
@@ -35,7 +36,6 @@ class ExtensionsMenuButton : public HoverButton,
 
   // HoverButton:
   void AddedToWidget() override;
-  void OnThemeChanged() override;
 
   const std::u16string& label_text_for_testing() const {
     return label()->GetText();
@@ -43,7 +43,6 @@ class ExtensionsMenuButton : public HoverButton,
 
  private:
   // ToolbarActionViewDelegateViews:
-  views::View* GetAsView() override;
   views::FocusManager* GetFocusManagerForAccelerator() override;
   views::Button* GetReferenceButtonForPopup() override;
   content::WebContents* GetCurrentWebContents() const override;

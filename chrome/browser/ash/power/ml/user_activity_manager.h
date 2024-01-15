@@ -5,7 +5,10 @@
 #ifndef CHROME_BROWSER_ASH_POWER_ML_USER_ACTIVITY_MANAGER_H_
 #define CHROME_BROWSER_ASH_POWER_ML_USER_ACTIVITY_MANAGER_H_
 
+#include <optional>
+
 #include "base/cancelable_callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
@@ -16,7 +19,6 @@
 #include "chrome/browser/ash/power/ml/smart_dim/ml_agent.h"
 #include "chrome/browser/ash/power/ml/user_activity_event.pb.h"
 #include "chrome/browser/ash/power/ml/user_activity_ukm_logger.h"
-#include "chrome/browser/resource_coordinator/tab_metrics_event.pb.h"
 #include "chromeos/crosapi/mojom/web_page_info.mojom.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "chromeos/dbus/power_manager/idle.pb.h"
@@ -29,7 +31,6 @@
 #include "mojo/public/cpp/bindings/remote_set.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "services/viz/public/mojom/compositing/video_detector_observer.mojom-forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/window.h"
 #include "ui/base/user_activity/user_activity_detector.h"
 #include "ui/base/user_activity/user_activity_observer.h"
@@ -158,10 +159,10 @@ class UserActivityManager : public ui::UserActivityObserver,
 
   // Updates lid state and tablet mode from received switch states.
   void OnReceiveSwitchStates(
-      absl::optional<chromeos::PowerManagerClient::SwitchStates> switch_states);
+      std::optional<chromeos::PowerManagerClient::SwitchStates> switch_states);
 
   void OnReceiveInactivityDelays(
-      absl::optional<power_manager::PowerManagementPolicy::Delays> delays);
+      std::optional<power_manager::PowerManagementPolicy::Delays> delays);
 
   // Gets properties of active tab from visible focused/topmost browser.
   TabProperty UpdateOpenTabURL();
@@ -193,7 +194,7 @@ class UserActivityManager : public ui::UserActivityObserver,
 
   // Time when an idle event is received and we start logging. Null if an idle
   // event hasn't been observed.
-  absl::optional<base::TimeDelta> idle_event_start_since_boot_;
+  std::optional<base::TimeDelta> idle_event_start_since_boot_;
 
   chromeos::PowerManagerClient::LidState lid_state_ =
       chromeos::PowerManagerClient::LidState::NOT_PRESENT;
@@ -204,11 +205,11 @@ class UserActivityManager : public ui::UserActivityObserver,
   UserActivityEvent::Features::DeviceType device_type_ =
       UserActivityEvent::Features::UNKNOWN_DEVICE;
 
-  absl::optional<power_manager::PowerSupplyProperties::ExternalPower>
+  std::optional<power_manager::PowerSupplyProperties::ExternalPower>
       external_power_;
 
   // Battery percent. This is in the range [0.0, 100.0].
-  absl::optional<float> battery_percent_;
+  std::optional<float> battery_percent_;
 
   // Indicates whether the screen is locked.
   bool screen_is_locked_ = false;
@@ -218,7 +219,7 @@ class UserActivityManager : public ui::UserActivityObserver,
 
   BootClock boot_clock_;
 
-  UserActivityUkmLogger* const ukm_logger_;
+  const raw_ptr<UserActivityUkmLogger> ukm_logger_;
 
   base::ScopedObservation<ui::UserActivityDetector, ui::UserActivityObserver>
       user_activity_observation_{this};
@@ -229,13 +230,13 @@ class UserActivityManager : public ui::UserActivityObserver,
                           session_manager::SessionManagerObserver>
       session_manager_observation_{this};
 
-  session_manager::SessionManager* const session_manager_;
+  const raw_ptr<session_manager::SessionManager> session_manager_;
 
   mojo::Receiver<viz::mojom::VideoDetectorObserver> receiver_;
 
-  const ChromeUserManager* const user_manager_;
+  const raw_ptr<const ChromeUserManager> user_manager_;
 
-  chromeos::PowerManagerClient* const power_manager_client_;
+  const raw_ptr<chromeos::PowerManagerClient> power_manager_client_;
 
   // Delays to dim and turn off the screen. Zero means disabled.
   base::TimeDelta screen_dim_delay_;
@@ -277,7 +278,7 @@ class UserActivityManager : public ui::UserActivityObserver,
 
   // Model prediction for the current ScreenDimImminent event. Unset if
   // model prediction is disabled by an experiment.
-  absl::optional<UserActivityEvent::ModelPrediction> model_prediction_;
+  std::optional<UserActivityEvent::ModelPrediction> model_prediction_;
 
   std::unique_ptr<PreviousIdleEventData> previous_idle_event_data_;
 
@@ -288,7 +289,7 @@ class UserActivityManager : public ui::UserActivityObserver,
   // window in mru window list first, with the assumption there's only one
   // lacros instance at most. Although multiple lacros instances are possible
   // for developers' convenience, we don't expect it to reach the end users.
-  absl::optional<mojo::RemoteSetElementId> lacros_remote_id_ = absl::nullopt;
+  std::optional<mojo::RemoteSetElementId> lacros_remote_id_ = std::nullopt;
 
   SEQUENCE_CHECKER(sequence_checker_);
 

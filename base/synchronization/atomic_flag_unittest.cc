@@ -4,8 +4,8 @@
 
 #include "base/synchronization/atomic_flag.h"
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/gtest_util.h"
@@ -123,7 +123,7 @@ TEST(AtomicFlagTest, SetOnDifferentSequenceDeathTest) {
   // ExpectSetFlagDeath.
   AtomicFlag flag;
 
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
   Thread t("AtomicFlagTest.SetOnDifferentThreadDeathTest");
   ASSERT_TRUE(t.Start());
   EXPECT_TRUE(t.WaitUntilThreadStarted());

@@ -7,7 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "ash/webui/settings/public/constants/routes.mojom.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_pref_names.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_util.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
@@ -17,8 +18,7 @@
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
-#include "chrome/browser/ui/webui/settings/ash/app_management/app_management_uma.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
+#include "chrome/browser/ui/webui/ash/settings/app_management/app_management_uma.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chromeos/ash/components/dbus/plugin_vm_service/plugin_vm_service.pb.h"
 #include "components/prefs/pref_service.h"

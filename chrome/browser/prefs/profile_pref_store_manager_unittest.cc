@@ -10,15 +10,16 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
 #include "base/containers/contains.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
@@ -36,6 +37,10 @@
 #include "services/preferences/public/cpp/tracked/pref_names.h"
 #include "services/preferences/public/mojom/preferences.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
+
+#if BUILDFLAG(IS_WIN)
+#include "base/test/test_reg_util_win.h"
+#endif  // BUILDFLAG(IS_WIN)
 
 namespace {
 
@@ -130,6 +135,9 @@ class ProfilePrefStoreManagerTest : public testing::Test,
         reset_recorded_(false) {}
 
   void SetUp() override {
+#if BUILDFLAG(IS_WIN)
+    registry_override_.OverrideRegistry(HKEY_CURRENT_USER);
+#endif  // BUILDFLAG(IS_WIN)
     mock_validation_delegate_record_ = new MockValidationDelegateRecord;
     mock_validation_delegate_ = std::make_unique<MockValidationDelegate>(
         mock_validation_delegate_record_);
@@ -214,8 +222,8 @@ class ProfilePrefStoreManagerTest : public testing::Test,
     scoped_refptr<PersistentPrefStore> pref_store =
         manager_->CreateProfilePrefStore(
             prefs::CloneTrackedConfiguration(configuration_), kReportingIdCount,
-            base::ThreadTaskRunnerHandle::Get(), std::move(observer),
-            std::move(validation_delegate));
+            base::SingleThreadTaskRunner::GetCurrentDefault(),
+            std::move(observer), std::move(validation_delegate));
     InitializePrefStore(pref_store.get());
     pref_store = nullptr;
   }
@@ -266,7 +274,7 @@ class ProfilePrefStoreManagerTest : public testing::Test,
         validation_delegate.InitWithNewPipeAndPassReceiver());
     pref_store_ = manager_->CreateProfilePrefStore(
         prefs::CloneTrackedConfiguration(configuration_), kReportingIdCount,
-        base::ThreadTaskRunnerHandle::Get(), std::move(observer),
+        base::SingleThreadTaskRunner::GetCurrentDefault(), std::move(observer),
         std::move(validation_delegate));
     pref_store_->AddObserver(&registry_verifier_);
     PrefStoreReadObserver read_observer(pref_store_);
@@ -284,8 +292,7 @@ class ProfilePrefStoreManagerTest : public testing::Test,
       std::string contents;
       EXPECT_TRUE(base::ReadFileToString(path, &contents));
       base::ReplaceSubstringsAfterOffset(&contents, 0u, find, replace);
-      EXPECT_EQ(static_cast<int>(contents.length()),
-                base::WriteFile(path, contents.c_str(), contents.length()));
+      EXPECT_TRUE(base::WriteFile(path, contents));
     }
   }
 
@@ -310,6 +317,12 @@ class ProfilePrefStoreManagerTest : public testing::Test,
   }
 
   base::test::SingleThreadTaskEnvironment task_environment_;
+#if BUILDFLAG(IS_WIN)
+  // This is used to ensure that the registry starts in a well known state, and
+  // any registry changes by this test don't affect other parts of the registry
+  // on the machine running the test, and are cleaned up.
+  registry_util::RegistryOverrideManager registry_override_;
+#endif  // BUILDFLAG(IS_WIN)
   std::vector<prefs::mojom::TrackedPreferenceMetadataPtr> configuration_;
   base::ScopedTempDir profile_dir_;
   scoped_refptr<user_prefs::PrefRegistrySyncable> profile_pref_registry_;
@@ -374,10 +387,9 @@ TEST_F(ProfilePrefStoreManagerTest, ProtectValues) {
 }
 
 TEST_F(ProfilePrefStoreManagerTest, InitializePrefsFromMasterPrefs) {
-  auto master_prefs = std::make_unique<base::DictionaryValue>();
-  master_prefs->Set(kTrackedAtomic, std::make_unique<base::Value>(kFoobar));
-  master_prefs->Set(kProtectedAtomic,
-                    std::make_unique<base::Value>(kHelloWorld));
+  base::Value::Dict master_prefs;
+  master_prefs.Set(kTrackedAtomic, kFoobar);
+  master_prefs.Set(kProtectedAtomic, kHelloWorld);
   EXPECT_TRUE(manager_->InitializePrefsFromMasterPrefs(
       prefs::CloneTrackedConfiguration(configuration_), kReportingIdCount,
       std::move(master_prefs)));

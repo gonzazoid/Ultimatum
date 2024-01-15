@@ -5,7 +5,7 @@
 #include "chrome/browser/sync/session_sync_service_factory.h"
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "build/build_config.h"
 #include "chrome/browser/favicon/favicon_service_factory.h"
 #include "chrome/browser/history/history_service_factory.h"
@@ -35,11 +35,6 @@
 namespace {
 
 bool ShouldSyncURLImpl(const GURL& url) {
-  if (url == chrome::kChromeUIHistoryURL) {
-    // Allow the chrome history page, home for "Tabs from other devices", so
-    // it can trigger starting up the sync engine.
-    return true;
-  }
   return url.is_valid() && !content::HasWebUIScheme(url) &&
          !url.SchemeIs(chrome::kChromeNativeScheme) && !url.SchemeIsFile() &&
          !url.SchemeIs(dom_distiller::kDomDistillerScheme);
@@ -133,16 +128,26 @@ sync_sessions::SessionSyncService* SessionSyncServiceFactory::GetForProfile(
 
 // static
 SessionSyncServiceFactory* SessionSyncServiceFactory::GetInstance() {
-  return base::Singleton<SessionSyncServiceFactory>::get();
+  static base::NoDestructor<SessionSyncServiceFactory> instance;
+  return instance.get();
 }
 
-// static
-bool SessionSyncServiceFactory::ShouldSyncURLForTesting(const GURL& url) {
+// static - exposed for testing and metrics.
+bool SessionSyncServiceFactory::ShouldSyncURLForTestingAndMetrics(
+    const GURL& url) {
   return ShouldSyncURLImpl(url);
 }
 
 SessionSyncServiceFactory::SessionSyncServiceFactory()
-    : ProfileKeyedServiceFactory("SessionSyncService") {
+    : ProfileKeyedServiceFactory(
+          "SessionSyncService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
+  DependsOn(DeviceInfoSyncServiceFactory::GetInstance());
   DependsOn(FaviconServiceFactory::GetInstance());
   DependsOn(HistoryServiceFactory::GetInstance());
   DependsOn(ModelTypeStoreServiceFactory::GetInstance());

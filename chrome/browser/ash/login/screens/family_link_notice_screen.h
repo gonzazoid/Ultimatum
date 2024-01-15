@@ -7,18 +7,18 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
-// TODO(https://crbug.com/1164001): move to forward declaration
-#include "chrome/browser/ui/webui/ash/login/family_link_notice_screen_handler.h"
 
 namespace ash {
+
+class FamilyLinkNoticeView;
 
 // Controller for the family link notice screen.
 class FamilyLinkNoticeScreen : public BaseScreen {
  public:
-  enum class Result { DONE, SKIPPED };
+  enum class Result { kDone, kSkipped };
 
   static std::string GetResultString(Result result);
 
@@ -53,11 +53,5 @@ class FamilyLinkNoticeScreen : public BaseScreen {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::FamilyLinkNoticeScreen;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_FAMILY_LINK_NOTICE_SCREEN_H_

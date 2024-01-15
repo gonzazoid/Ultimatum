@@ -9,10 +9,12 @@ import collections
 import copy
 import fnmatch
 import logging
-from typing import (Any, Dict, Generator, Iterable, List, Optional, Set, Tuple,
-                    Type, Union)
+from typing import (Any, Dict, FrozenSet, Generator, Iterable, List, Optional,
+                    Set, Tuple, Type, Union)
 
 import six
+
+from typ import expectations_parser
 
 FULL_PASS = 1
 NEVER_PASS = 2
@@ -82,7 +84,7 @@ class BaseExpectation():
     # We're going to be making a lot of comparisons, and fnmatch is *much*
     # slower (~40x from rough testing) than a straight comparison, so only use
     # it if necessary.
-    if '*' in test:
+    if self._IsWildcard():
       self._comp = self._CompareWildcard
     else:
       self._comp = self._CompareNonWildcard
@@ -98,6 +100,10 @@ class BaseExpectation():
 
   def __hash__(self) -> int:
     return hash((self.test, self.tags, self.expected_results, self.bug))
+
+  def _IsWildcard(self) -> bool:
+    # This logic is the same as typ's expectation parser.
+    return not self.test.endswith('\\*') and self.test.endswith('*')
 
   def _CompareWildcard(self, result_test_name: str) -> bool:
     return fnmatch.fnmatch(result_test_name, self.test)
@@ -131,6 +137,38 @@ class BaseExpectation():
       True if |self| could apply to a test named |test_name|, otherwise False.
     """
     return self._comp(test_name)
+
+  def AsExpectationFileString(self) -> str:
+    """Gets a string representation of the expectation usable in files.
+
+    Returns:
+      A string containing all of the information in the expectation in a format
+      that is compatible with expectation files.
+    """
+    typ_expectation = expectations_parser.Expectation(
+        reason=self.bug,
+        test=self.test,
+        raw_tags=self._ProcessTagsForFileUse(),
+        raw_results=list(self.expected_results),
+        # This logic is normally handled by typ when parsing a file, but since
+        # we're manually creating an expectation, we have to specify the
+        # glob-ness manually.
+        is_glob=self._IsWildcard())
+    return typ_expectation.to_string()
+
+  def _ProcessTagsForFileUse(self) -> List[str]:
+    """Process tags to be suitable for use in expectation files.
+
+    The tags we store should always be valid, but may not adhere to the style
+    actually used by the expectation files. For example, tags are stored
+    internally in lower case, but the expectation files may use capitalized
+    tags.
+
+    Returns:
+      A list of strings containing the contents of |self.tags|, but potentially
+      formatted a certain way.
+    """
+    return list(self.tags)
 
 
 class BaseResult():
@@ -177,7 +215,8 @@ class BaseBuildStats():
   def __init__(self):
     self.passed_builds = 0
     self.total_builds = 0
-    self.failure_links = frozenset()
+    self.failure_links = set()
+    self.tag_sets = set()
 
   @property
   def failed_builds(self) -> int:
@@ -191,14 +230,15 @@ class BaseBuildStats():
   def did_never_pass(self) -> bool:
     return self.failed_builds == self.total_builds
 
-  def AddPassedBuild(self) -> None:
+  def AddPassedBuild(self, tags: FrozenSet[str]) -> None:
     self.passed_builds += 1
     self.total_builds += 1
+    self.tag_sets.add(tags)
 
-  def AddFailedBuild(self, build_id: str) -> None:
+  def AddFailedBuild(self, build_id: str, tags: FrozenSet[str]) -> None:
     self.total_builds += 1
-    build_link = BuildLinkFromBuildId(build_id)
-    self.failure_links = frozenset([build_link]) | self.failure_links
+    self.failure_links.add(BuildLinkFromBuildId(build_id))
+    self.tag_sets.add(tags)
 
   def GetStatsAsString(self) -> str:
     return '(%d/%d passed)' % (self.passed_builds, self.total_builds)
@@ -235,7 +275,8 @@ class BaseBuildStats():
     return (isinstance(other, BuildStats)
             and self.passed_builds == other.passed_builds
             and self.total_builds == other.total_builds
-            and self.failure_links == other.failure_links)
+            and self.failure_links == other.failure_links
+            and self.tag_sets == other.tag_sets)
 
   def __ne__(self, other: Any) -> bool:
     return not self.__eq__(other)
@@ -474,9 +515,9 @@ class BaseTestExpectationMap(BaseTypedMap):
       stats: A data_types.BuildStats object to add the result to.
     """
     if result.actual_result == 'Pass':
-      stats.AddPassedBuild()
+      stats.AddPassedBuild(result.tags)
     else:
-      stats.AddFailedBuild(result.build_id)
+      stats.AddFailedBuild(result.build_id, result.tags)
 
   def SplitByStaleness(
       self) -> Tuple['BaseTestExpectationMap', 'BaseTestExpectationMap',

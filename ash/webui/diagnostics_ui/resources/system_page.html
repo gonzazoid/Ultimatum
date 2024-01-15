@@ -1,21 +1,6 @@
 <style include="cr-shared-style diagnostics-shared">
-  #banner {
-   align-items: center;
-   background-color: var(--google-blue-50);
-   display: flex;
-   height: 56px;
-   position: sticky;
-   top: 0;
-   width: 100vw;
-   z-index: 1;
- }
-
- #bannerIcon {
-   --iron-icon-height: 20px;
-   --iron-icon-width: 20px;
-   fill: var(--cros-icon-color-prominent);
-   padding-inline-end: 16px;
-   padding-inline-start: 40px;
+ :host-context(body.jelly-enabled) #header {
+   font: var(--cros-title-1-font);
  }
 
  #diagnosticsContainer {
@@ -32,10 +17,6 @@
    --iron-icon-height: 20px;
    --iron-icon-width: 20px;
    right: 4px;
- }
-
- .elevation-2 {
-   box-shadow: var(--diagnostics-box-shadow-elevation-2);
  }
 
  #header {
@@ -63,19 +44,12 @@
    left: 0;
  }
 </style>
-<div id="diagnosticsContainer" hidden="[[!systemInfoReceived_]]">
-  <div id="header" hidden$="[[isNetworkingEnabled]]">
-    [[i18n('diagnosticsTitle')]]
-  </div>
-  <div id="banner" hidden="[[!bannerMessage]]" class$="[[scrollingClass_]]">
-    <iron-icon icon="diagnostics:info" id="bannerIcon"></iron-icon>
-    <span id="bannerMsg" class="diagnostics-caution-banner-font">[[bannerMessage]]</span>
-  </div>
+<div id="diagnosticsContainer" hidden="[[!systemInfoReceived]]">
   <div class="overview-container">
     <overview-card id="overviewCard"></overview-card>
   </div>
-  <div class$="[[getCardContainerClass_(isNetworkingEnabled)]]">
-    <template is="dom-if" if="[[showBatteryStatusCard_]]" restamp>
+  <div class$="diagnostics-cards-container-nav">
+    <template is="dom-if" if="[[showBatteryStatusCard]]" restamp>
       <div class="card-width">
         <battery-status-card id="batteryStatusCard"
             test-suite-status="{{testSuiteStatus}}"
@@ -96,16 +70,7 @@
       </memory-card>
     </div>
   </div>
-  <template is="dom-if" if="[[!isNetworkingEnabled]]">
-    <div class="session-log-container">
-      <cr-button on-click="onSessionLogClick_" class="session-log-button"
-          disabled="[[!saveSessionLogEnabled_]]" hidden="[[!isLoggedIn_]]">
-        <iron-icon icon="diagnostics:download" id="download-icon"></iron-icon>
-        <span>[[i18n('sessionLog')]]</span>
-      </cr-button>
-    </div>
-  </template>
   <cr-toast id="toast" duration="2500">
-    <span>[[toastText_]]</span>
+    <span>[[toastText]]</span>
   </cr-toast>
 </div>

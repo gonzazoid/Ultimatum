@@ -24,6 +24,7 @@
 #include "chrome/browser/ash/settings/device_settings_service.h"
 #include "chrome/browser/policy/configuration_policy_handler_list_factory.h"
 #include "chrome/common/chrome_paths.h"
+#include "chromeos/ash/components/attestation/attestation_features.h"
 #include "chromeos/ash/components/install_attributes/install_attributes.h"
 #include "components/policy/core/browser/configuration_policy_handler_list.h"
 #include "components/policy/core/browser/policy_conversions_client.h"
@@ -44,7 +45,7 @@ namespace policy {
 
 namespace {
 
-constexpr logging::LogSeverity kLogSeverity = logging::LOG_FATAL;
+constexpr logging::LogSeverity kLogSeverity = logging::LOGGING_FATAL;
 
 // A log handler that discards messages whose severity is lower than the
 // threshold. It's needed in order to suppress unneeded syslog logging (which by
@@ -100,6 +101,7 @@ struct PerInputEnvironment {
     ash::ShutdownDBus();
     ash::InstallAttributes::Shutdown();
     ash::DeviceSettingsService::Shutdown();
+    ash::attestation::AttestationFeatures::Shutdown();
   }
 
   base::test::TaskEnvironment task_environment;

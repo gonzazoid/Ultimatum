@@ -7,6 +7,7 @@
 
 #include "ash/ash_export.h"
 #include "ash/controls/contextual_nudge.h"
+#include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
 
 namespace views {
@@ -48,7 +49,7 @@ class ASH_EXPORT KeyboardBacklightColorNudgeController {
 
   base::OneShotTimer autoclose_;
 
-  ContextualNudge* education_nudge_ = nullptr;
+  raw_ptr<ContextualNudge, DanglingUntriaged> education_nudge_ = nullptr;
 
   base::WeakPtrFactory<KeyboardBacklightColorNudgeController> weak_factory_{
       this};

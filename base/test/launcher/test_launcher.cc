@@ -9,12 +9,12 @@
 #include <algorithm>
 #include <map>
 #include <random>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
 #include "base/clang_profiling_buildflags.h"
 #include "base/command_line.h"
 #include "base/containers/adapters.h"
@@ -24,13 +24,16 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/files/scoped_temp_dir.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/hash/hash.h"
 #include "base/lazy_instance.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/process/kill.h"
 #include "base/process/launch.h"
@@ -46,6 +49,7 @@
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
+#include "base/task/post_job.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
@@ -54,15 +58,15 @@
 #include "base/test/launcher/test_launcher_tracer.h"
 #include "base/test/launcher/test_results_tracker.h"
 #include "base/test/scoped_logging_settings.h"
+#include "base/test/test_file_util.h"
 #include "base/test/test_switches.h"
 #include "base/test/test_timeouts.h"
+#include "base/threading/platform_thread.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/libxml/chromium/libxml_utils.h"
 
 #if BUILDFLAG(IS_POSIX)
 #include <fcntl.h>
@@ -71,12 +75,11 @@
 #endif
 
 #if BUILDFLAG(IS_APPLE)
-#include "base/mac/scoped_nsautorelease_pool.h"
+#include "base/apple/scoped_nsautorelease_pool.h"
 #endif
 
 #if BUILDFLAG(IS_WIN)
 #include "base/strings/string_util_win.h"
-#include "base/win/windows_version.h"
 
 #include <windows.h>
 
@@ -94,9 +97,14 @@
 #include "base/fuchsia/fuchsia_logging.h"
 #endif
 
+#if BUILDFLAG(IS_IOS)
+#include "base/path_service.h"
+#endif
+
 namespace base {
 
-// See https://groups.google.com/a/chromium.org/d/msg/chromium-dev/nkdTP7sstSc/uT3FaE_sgkAJ .
+// See
+// https://groups.google.com/a/chromium.org/d/msg/chromium-dev/nkdTP7sstSc/uT3FaE_sgkAJ
 using ::operator<<;
 
 // The environment variable name for the total number of test shards.
@@ -184,7 +192,7 @@ class ProcessResultWatcher : public ResultWatcher {
   bool WaitWithTimeout(TimeDelta timeout) override;
 
  private:
-  Process& process_;
+  const raw_ref<Process> process_;
   int exit_code_ = -1;
 };
 
@@ -193,7 +201,7 @@ int ProcessResultWatcher::GetExitCode() {
 }
 
 bool ProcessResultWatcher::WaitWithTimeout(TimeDelta timeout) {
-  return process_.WaitForExitWithTimeout(timeout, &exit_code_);
+  return process_->WaitForExitWithTimeout(timeout, &exit_code_);
 }
 
 namespace {
@@ -361,6 +369,12 @@ CommandLine PrepareCommandLineForGTest(const CommandLine& command_line,
   // Don't try to write the final XML report in child processes.
   switches.erase(kGTestOutputFlag);
 
+#if BUILDFLAG(IS_IOS)
+  // We only need the xctest flag for the parent process. Passing it to
+  // child processes will cause the tests not to run, so remove it.
+  switches.erase(switches::kEnableRunIOSUnittestsWithXCTest);
+#endif
+
   if (switches.find(switches::kTestLauncherRetriesLeft) == switches.end()) {
     switches[switches::kTestLauncherRetriesLeft] =
 #if BUILDFLAG(IS_WIN)
@@ -419,13 +433,6 @@ int LaunchChildTestProcessWithOptions(const CommandLine& command_line,
     }
 
     DWORD job_flags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-
-    // Allow break-away from job since sandbox and few other places rely on it
-    // on Windows versions prior to Windows 8 (which supports nested jobs).
-    if (win::GetVersion() < win::Version::WIN8 &&
-        flags & TestLauncher::ALLOW_BREAKAWAY_FROM_JOB) {
-      job_flags |= JOB_OBJECT_LIMIT_BREAKAWAY_OK;
-    }
 
     if (!SetJobObjectLimitFlags(job_handle.get(), job_flags)) {
       LOG(ERROR) << "Could not SetJobObjectLimitFlags.";
@@ -772,131 +779,160 @@ std::vector<std::string> ExtractTestsFromFilter(const std::string& filter,
 class TestRunner {
  public:
   explicit TestRunner(TestLauncher* launcher,
-                      size_t runner_count = 1u,
+                      size_t max_workers = 1u,
                       size_t batch_size = 1u)
       : launcher_(launcher),
-        runner_count_(runner_count),
+        max_workers_(max_workers),
         batch_size_(batch_size) {}
 
   // Sets |test_names| to be run, with |batch_size| tests per process.
-  // Posts LaunchNextTask |runner_count| number of times, each with a separate
-  // task runner.
+  // Posts a job to run LaunchChildGTestProcess on |max_workers| workers.
   void Run(const std::vector<std::string>& test_names);
 
  private:
   // Called to check if the next batch has to run on the same
   // sequence task runner and using the same temporary directory.
-  static bool ShouldReuseStateFromLastBatch(
-      const std::vector<std::string>& test_names) {
+  static bool IsPreTestBatch(const std::vector<std::string>& test_names) {
     return test_names.size() == 1u &&
            test_names.front().find(kPreTestPrefix) != std::string::npos;
   }
 
-  // Launches the next child process on |task_runner| and clears
-  // |last_task_temp_dir| from the previous task.
-  void LaunchNextTask(scoped_refptr<TaskRunner> task_runner,
-                      const FilePath& last_task_temp_dir);
+  bool IsSingleThreaded() const { return batch_size_ == 0; }
 
-  // Forwards |last_task_temp_dir| and launches the next task on main thread.
-  // The method is called on |task_runner|.
-  void ClearAndLaunchNext(scoped_refptr<TaskRunner> main_thread_runner,
-                          scoped_refptr<TaskRunner> task_runner,
-                          const FilePath& last_task_temp_dir) {
-    main_thread_runner->PostTask(
-        FROM_HERE,
-        BindOnce(&TestRunner::LaunchNextTask, weak_ptr_factory_.GetWeakPtr(),
-                 task_runner, last_task_temp_dir));
+  void WorkerTask(scoped_refptr<TaskRunner> main_task_runner,
+                  base::JobDelegate* delegate);
+
+  size_t GetMaxConcurrency(size_t worker_count) {
+    AutoLock auto_lock(lock_);
+    if (IsSingleThreaded()) {
+      return tests_to_run_.empty() ? 0 : 1;
+    }
+
+    // Round up the division to ensure enough workers for all tests.
+    return std::min((tests_to_run_.size() + batch_size_ - 1) / batch_size_,
+                    max_workers_);
   }
 
-  // No-op error function that replaces libxml's default, which writes to
-  // stderr.
-  static void NullXmlErrorFunc(void* context, const char* message, ...) {}
+  std::vector<std::string> GetNextBatch() EXCLUSIVE_LOCKS_REQUIRED(lock_) {
+    size_t batch_size;
+    // Single threaded case runs all tests in one batch.
+    if (IsSingleThreaded()) {
+      batch_size = tests_to_run_.size();
+    }
+    // Run remaining tests up to |batch_size_|.
+    else {
+      batch_size = std::min(batch_size_, tests_to_run_.size());
+    }
+    std::vector<std::string> batch(tests_to_run_.rbegin(),
+                                   tests_to_run_.rbegin() + batch_size);
+    tests_to_run_.erase(tests_to_run_.end() - batch_size, tests_to_run_.end());
+    return batch;
+  }
+
+  // Cleans up |task_temp_dir| from a previous task and quits |run_loop| if
+  // |done|.
+  void CleanupTask(base::ScopedTempDir task_temp_dir, bool done);
 
   ThreadChecker thread_checker_;
 
-  std::vector<std::string> tests_to_run_;
   const raw_ptr<TestLauncher> launcher_;
-  std::vector<scoped_refptr<TaskRunner>> task_runners_;
-  // Number of sequenced task runners to use.
-  const size_t runner_count_;
-  // Number of TaskRunners that have finished.
-  size_t runners_done_ = 0;
+  JobHandle job_handle_;
+  // Max number of workers to use.
+  const size_t max_workers_;
   // Number of tests per process, 0 is special case for all tests.
   const size_t batch_size_;
   RunLoop run_loop_;
-  // Set the global libxml error context and function pointer for the lifetime
-  // of this test runner.
-  ScopedXmlErrorFunc xml_error_func_{nullptr, &NullXmlErrorFunc};
+  // Protects member used concurrently by worker tasks.
+  base::Lock lock_;
+  std::vector<std::string> tests_to_run_ GUARDED_BY(lock_);
 
   base::WeakPtrFactory<TestRunner> weak_ptr_factory_{this};
 };
 
 void TestRunner::Run(const std::vector<std::string>& test_names) {
   DCHECK(thread_checker_.CalledOnValidThread());
-  // No sequence runners, fail immediately.
-  CHECK_GT(runner_count_, 0u);
-  tests_to_run_ = test_names;
-  // Reverse test order to avoid coping the whole vector when removing tests.
-  ranges::reverse(tests_to_run_);
-  runners_done_ = 0;
-  task_runners_.clear();
-  for (size_t i = 0; i < runner_count_; i++) {
-    task_runners_.push_back(ThreadPool::CreateSequencedTaskRunner(
-        {MayBlock(), TaskShutdownBehavior::BLOCK_SHUTDOWN}));
-    ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE,
-        BindOnce(&TestRunner::LaunchNextTask, weak_ptr_factory_.GetWeakPtr(),
-                 task_runners_.back(), FilePath()));
-  }
-  run_loop_.Run();
-}
-
-void TestRunner::LaunchNextTask(scoped_refptr<TaskRunner> task_runner,
-                                const FilePath& last_task_temp_dir) {
-  DCHECK(thread_checker_.CalledOnValidThread());
-  // delete previous temporary directory
-  if (!last_task_temp_dir.empty() &&
-      !DeletePathRecursively(last_task_temp_dir)) {
-    // This needs to be non-fatal at least for Windows.
-    LOG(WARNING) << "Failed to delete " << last_task_temp_dir.AsUTF8Unsafe();
-  }
-
-  // No more tests to run, finish sequence.
-  if (tests_to_run_.empty()) {
-    runners_done_++;
-    // All sequence runners are done, quit the loop.
-    if (runners_done_ == runner_count_)
-      run_loop_.QuitWhenIdle();
+  // No workers, fail immediately.
+  CHECK_GT(max_workers_, 0u);
+  if (test_names.empty()) {
     return;
   }
 
-  // Create a temporary directory for this task. This directory will hold the
-  // flags and results files for the child processes as well as their User Data
-  // dir, where appropriate. For platforms that support per-child temp dirs,
-  // this directory will also contain one subdirectory per child for that
-  // child's process-wide temp dir.
-  base::FilePath task_temp_dir;
-  CHECK(CreateNewTempDirectory(FilePath::StringType(), &task_temp_dir));
-  bool post_to_current_runner = true;
-  size_t batch_size = (batch_size_ == 0) ? tests_to_run_.size() : batch_size_;
-
-  int child_index = 0;
-  while (post_to_current_runner && !tests_to_run_.empty()) {
-    batch_size = std::min(batch_size, tests_to_run_.size());
-    std::vector<std::string> batch(tests_to_run_.rbegin(),
-                                   tests_to_run_.rbegin() + batch_size);
-    tests_to_run_.erase(tests_to_run_.end() - batch_size, tests_to_run_.end());
-    task_runner->PostTask(
-        FROM_HERE,
-        BindOnce(&TestLauncher::LaunchChildGTestProcess, Unretained(launcher_),
-                 ThreadTaskRunnerHandle::Get(), batch, task_temp_dir,
-                 CreateChildTempDirIfSupported(task_temp_dir, child_index++)));
-    post_to_current_runner = ShouldReuseStateFromLastBatch(batch);
+  {
+    AutoLock auto_lock(lock_);
+    tests_to_run_ = test_names;
+    // Reverse test order to avoid copying the whole vector when removing tests.
+    std::reverse(tests_to_run_.begin(), tests_to_run_.end());
   }
-  task_runner->PostTask(
-      FROM_HERE,
-      BindOnce(&TestRunner::ClearAndLaunchNext, Unretained(this),
-               ThreadTaskRunnerHandle::Get(), task_runner, task_temp_dir));
+
+  job_handle_ = base::PostJob(
+      FROM_HERE, {TaskPriority::USER_BLOCKING, MayBlock()},
+      BindRepeating(&TestRunner::WorkerTask, Unretained(this),
+                    SingleThreadTaskRunner::GetCurrentDefault()),
+      BindRepeating(&TestRunner::GetMaxConcurrency, Unretained(this)));
+
+  run_loop_.Run();
+}
+
+void TestRunner::WorkerTask(scoped_refptr<TaskRunner> main_task_runner,
+                            base::JobDelegate* delegate) {
+  bool done = false;
+  while (!done && !delegate->ShouldYield()) {
+    // Create a temporary directory for this task. This directory will hold the
+    // flags and results files for the child processes as well as their User
+    // Data dir, where appropriate. For platforms that support per-child temp
+    // dirs, this directory will also contain one subdirectory per child for
+    // that child's process-wide temp dir.
+    base::ScopedTempDir task_temp_dir;
+    CHECK(task_temp_dir.CreateUniqueTempDirUnderPath(GetTempDirForTesting()));
+    int child_index = 0;
+
+    std::vector<std::vector<std::string>> batches;
+    {
+      AutoLock auto_lock(lock_);
+      if (!tests_to_run_.empty()) {
+        batches.push_back(GetNextBatch());
+        while (IsPreTestBatch(batches.back())) {
+          DCHECK(!tests_to_run_.empty());
+          batches.push_back(GetNextBatch());
+        }
+      }
+      done = tests_to_run_.empty();
+    }
+    for (const auto& batch : batches) {
+      launcher_->LaunchChildGTestProcess(
+          main_task_runner, batch, task_temp_dir.GetPath(),
+          CreateChildTempDirIfSupported(task_temp_dir.GetPath(),
+                                        child_index++));
+    }
+
+    // Cleaning up test results is scheduled to |main_task_runner| because it
+    // must happen after all post processing step that was scheduled in
+    // LaunchChildGTestProcess to |main_task_runner|.
+    main_task_runner->PostTask(
+        FROM_HERE,
+        BindOnce(&TestRunner::CleanupTask, weak_ptr_factory_.GetWeakPtr(),
+                 std::move(task_temp_dir), done));
+  }
+}
+
+void TestRunner::CleanupTask(base::ScopedTempDir task_temp_dir, bool done) {
+  DCHECK(thread_checker_.CalledOnValidThread());
+
+  // delete previous temporary directory
+  if (!task_temp_dir.Delete()) {
+    // This needs to be non-fatal at least for Windows.
+    LOG(WARNING) << "Failed to delete "
+                 << task_temp_dir.GetPath().AsUTF8Unsafe();
+  }
+
+  if (!done) {
+    return;
+  }
+
+  if (job_handle_) {
+    job_handle_.Cancel();
+    run_loop_.QuitWhenIdle();
+  }
 }
 
 // Returns the number of files and directories in |dir|, or 0 if |dir| is empty.
@@ -1069,6 +1105,8 @@ TestLauncher::~TestLauncher() {
 }
 
 bool TestLauncher::Run(CommandLine* command_line) {
+  base::PlatformThread::SetName("TestLauncherMain");
+
   if (!Init((command_line == nullptr) ? CommandLine::ForCurrentProcess()
                                       : command_line))
     return false;
@@ -1149,6 +1187,10 @@ void TestLauncher::LaunchChildGTestProcess(
       cmd_line, launcher_delegate_->GetWrapper(), retries_left_));
   LaunchOptions options;
   options.flags = launcher_delegate_->GetLaunchOptions();
+
+  if (BotModeEnabled(CommandLine::ForCurrentProcess())) {
+    LOG(INFO) << "Starting [" << base::JoinString(test_names, ", ") << "]";
+  }
 
   ChildProcessResults process_results = DoLaunchChildTestProcess(
       new_command_line, child_temp_dir, result_file,
@@ -1444,6 +1486,25 @@ bool LoadFilterFile(const FilePath& file_path,
   return true;
 }
 
+bool TestLauncher::IsOnlyExactPositiveFilterFromFile(
+    const CommandLine* command_line) const {
+  if (command_line->HasSwitch(kGTestFilterFlag)) {
+    LOG(ERROR) << "Found " << switches::kTestLauncherFilterFile;
+    return false;
+  }
+  if (!negative_test_filter_.empty()) {
+    LOG(ERROR) << "Found negative filters in the filter file.";
+    return false;
+  }
+  for (const auto& filter : positive_test_filter_) {
+    if (Contains(filter, '*')) {
+      LOG(ERROR) << "Found wildcard positive filters in the filter file.";
+      return false;
+    }
+  }
+  return true;
+}
+
 bool TestLauncher::Init(CommandLine* command_line) {
   // Initialize sharding. Command line takes precedence over legacy environment
   // variables.
@@ -1574,8 +1635,16 @@ bool TestLauncher::Init(CommandLine* command_line) {
     for (auto filter_file :
          SplitStringPiece(filter, FILE_PATH_LITERAL(";"), base::TRIM_WHITESPACE,
                           base::SPLIT_WANT_ALL)) {
+#if BUILDFLAG(IS_IOS)
+      // On iOS, the filter files are bundled with the test application.
+      base::FilePath data_dir;
+      PathService::Get(DIR_SRC_TEST_DATA_ROOT, &data_dir);
+      base::FilePath filter_file_path = data_dir.Append(FilePath(filter_file));
+#else
       base::FilePath filter_file_path =
           base::MakeAbsoluteFilePath(FilePath(filter_file));
+#endif  // BUILDFLAG(IS_IOS)
+
       if (!LoadFilterFile(filter_file_path, &positive_file_filter,
                           &negative_test_filter_))
         return false;
@@ -1586,6 +1655,18 @@ bool TestLauncher::Init(CommandLine* command_line) {
   // tests in testing/buildbot/filters.
   if (command_line->HasSwitch(kGTestRunDisabledTestsFlag)) {
     negative_test_filter_.clear();
+  }
+
+  // If `kEnforceExactPositiveFilter` is set, only accept exact positive
+  // filters from the filter file.
+  enforce_exact_postive_filter_ =
+      command_line->HasSwitch(switches::kEnforceExactPositiveFilter);
+  if (enforce_exact_postive_filter_ &&
+      !IsOnlyExactPositiveFilterFromFile(command_line)) {
+    LOG(ERROR) << "With " << switches::kEnforceExactPositiveFilter
+               << ", only accept exact positive filters via "
+               << switches::kTestLauncherFilterFile;
+    return false;
   }
 
   // Split --gtest_filter at '-', if there is one, to separate into
@@ -1747,6 +1828,23 @@ bool TestLauncher::InitTests() {
     LOG(ERROR) << "Failed to get list of tests.";
     return false;
   }
+
+  // Check for duplicate test names. These can cause difficult-to-diagnose
+  // crashes in the test runner as well as confusion about exactly what test is
+  // failing. See https://crbug.com/1463355 for details.
+  std::unordered_set<std::string> full_test_names;
+  bool dups_found = false;
+  for (auto& test : tests) {
+    const std::string full_test_name =
+        test.test_case_name + "." + test.test_name;
+    auto [it, inserted] = full_test_names.insert(full_test_name);
+    if (!inserted) {
+      LOG(WARNING) << "Duplicate test name found: " << full_test_name;
+      dups_found = true;
+    }
+  }
+  CHECK(!dups_found);
+
   std::vector<std::string> uninstantiated_tests;
   for (const TestIdentifier& test_id : tests) {
     TestInfo test_info(test_id);
@@ -1899,14 +1997,23 @@ void TestLauncher::CombinePositiveTestFilters(
   }
 }
 
+bool TestLauncher::ShouldRunInCurrentShard(
+    std::string_view prefix_stripped_name) const {
+  CHECK(!StartsWith(prefix_stripped_name, kPreTestPrefix));
+  CHECK(!StartsWith(prefix_stripped_name, kDisabledTestPrefix));
+  return PersistentHash(prefix_stripped_name) % total_shards_ ==
+         static_cast<uint32_t>(shard_index_);
+}
+
 std::vector<std::string> TestLauncher::CollectTests() {
   std::vector<std::string> test_names;
   // To support RTS(regression test selection), which may have 100,000 or
   // more exact gtest filter, we first split filter into exact filter
   // and wildcards filter, then exact filter can match faster.
   std::vector<StringPiece> positive_wildcards_filter;
-  std::unordered_set<StringPiece, StringPieceHash> positive_exact_filter;
+  std::unordered_set<StringPiece> positive_exact_filter;
   positive_exact_filter.reserve(positive_test_filter_.size());
+  std::unordered_set<std::string> enforced_positive_tests;
   for (const std::string& filter : positive_test_filter_) {
     if (filter.find('*') != std::string::npos) {
       positive_wildcards_filter.push_back(filter);
@@ -1916,7 +2023,7 @@ std::vector<std::string> TestLauncher::CollectTests() {
   }
 
   std::vector<StringPiece> negative_wildcards_filter;
-  std::unordered_set<StringPiece, StringPieceHash> negative_exact_filter;
+  std::unordered_set<StringPiece> negative_exact_filter;
   negative_exact_filter.reserve(negative_test_filter_.size());
   for (const std::string& filter : negative_test_filter_) {
     if (filter.find('*') != std::string::npos) {
@@ -1937,6 +2044,9 @@ std::vector<std::string> TestLauncher::CollectTests() {
                        positive_exact_filter.end() ||
                    positive_exact_filter.find(prefix_stripped_name) !=
                        positive_exact_filter.end();
+      if (found && enforce_exact_postive_filter_) {
+        enforced_positive_tests.insert(prefix_stripped_name);
+      }
       if (!found) {
         for (const StringPiece& filter : positive_wildcards_filter) {
           if (MatchPattern(test_name, filter) ||
@@ -1970,8 +2080,7 @@ std::vector<std::string> TestLauncher::CollectTests() {
 
     // Tests with the name XYZ will cause tests with the name PRE_XYZ to run. We
     // should bucket all of these tests together.
-    if (PersistentHash(prefix_stripped_name) % total_shards_ !=
-        static_cast<uint32_t>(shard_index_)) {
+    if (!ShouldRunInCurrentShard(prefix_stripped_name)) {
       continue;
     }
 
@@ -1989,6 +2098,26 @@ std::vector<std::string> TestLauncher::CollectTests() {
     }
 
     test_names.push_back(test_name);
+  }
+
+  // If `kEnforceExactPositiveFilter` is set, all test cases listed in the
+  // exact positive filter for the current shard should exist in the
+  // `enforced_positive_tests`. Otherwise, print the missing cases and fail
+  // loudly.
+  if (enforce_exact_postive_filter_) {
+    bool found_exact_positive_filter_not_enforced = false;
+    for (const auto& filter : positive_exact_filter) {
+      if (!ShouldRunInCurrentShard(filter) ||
+          Contains(enforced_positive_tests, std::string(filter))) {
+        continue;
+      }
+      if (!found_exact_positive_filter_not_enforced) {
+        LOG(ERROR) << "Found exact positive filter not enforced:";
+        found_exact_positive_filter_not_enforced = true;
+      }
+      LOG(ERROR) << filter;
+    }
+    CHECK(!found_exact_positive_filter_not_enforced);
   }
 
   return test_names;
@@ -2186,6 +2315,19 @@ size_t NumParallelJobs(unsigned int cores_per_job) {
       ::GetActiveProcessorCount(ALL_PROCESSOR_GROUPS));
 #else
   size_t cores = base::checked_cast<size_t>(SysInfo::NumberOfProcessors());
+#if BUILDFLAG(IS_MAC)
+  // This is necessary to allow tests to call SetCpuSecurityMitigationsEnabled()
+  // despite NumberOfProcessors() having already been called in the process.
+  SysInfo::ResetCpuSecurityMitigationsEnabledForTesting();
+#endif  // BUILDFLAG(IS_MAC)
+#endif  // BUILDFLAG(IS_WIN)
+
+#if BUILDFLAG(IS_IOS) && TARGET_OS_SIMULATOR
+  // If we are targeting the simulator increase the number of jobs we use by 2x
+  // the number of cores. This is necessary because the startup of each
+  // process is slow, so using 2x empirically approaches the total machine
+  // utilization.
+  cores *= 2;
 #endif
   return std::max(size_t(1), cores / cores_per_job);
 }

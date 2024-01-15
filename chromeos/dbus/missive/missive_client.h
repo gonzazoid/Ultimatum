@@ -7,8 +7,8 @@
 
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list_types.h"
 #include "base/sequence_checker.h"
@@ -74,12 +74,21 @@ class COMPONENT_EXPORT(MISSIVE) MissiveClient {
   virtual void Flush(
       const reporting::Priority priority,
       base::OnceCallback<void(reporting::Status)> completion_callback) = 0;
+  virtual void UpdateConfigInMissive(
+      const reporting::ListOfBlockedDestinations& destinations) = 0;
   virtual void UpdateEncryptionKey(
       const reporting::SignedEncryptionInfo& encryption_info) = 0;
   virtual void ReportSuccess(
       const reporting::SequenceInformation& sequence_information,
       bool force_confirm) = 0;
   virtual base::WeakPtr<MissiveClient> GetWeakPtr() = 0;
+
+  // Returns `true` is Chromium has a valid API KEY to communicate to the
+  // reporting server.
+  bool has_valid_api_key() const;
+
+  // Returns `false` initially, and `true` after `Init()` has been called.
+  bool is_initialized() const;
 
   // Returns sequenced task runner.
   scoped_refptr<base::SequencedTaskRunner> origin_task_runner() const;
@@ -89,9 +98,17 @@ class COMPONENT_EXPORT(MISSIVE) MissiveClient {
   MissiveClient();
   virtual ~MissiveClient();
 
-  // Sequenced task runner - must be first member of the class.
+  // Sequenced task runner - must be the first member of the class.
   scoped_refptr<base::SequencedTaskRunner> origin_task_runner_;
   SEQUENCE_CHECKER(origin_checker_);
+
+  // Flag indicating that Chromium has a valid API key. Assumed to be `true`
+  // initially, can be reset to `false` once, by `Init()`.
+  bool has_valid_api_key_ = true;
+
+  // Flag indicating that the client has been successfully initialized.
+  // Assumed to be `false` initially, set to `true` by `Init()`.
+  bool is_initialized_ = false;
 };
 
 }  // namespace chromeos

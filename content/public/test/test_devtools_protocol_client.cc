@@ -65,6 +65,11 @@ void TestDevToolsProtocolClient::AttachToWebContents(WebContents* wc) {
   agent_host_->AttachClient(this);
 }
 
+void TestDevToolsProtocolClient::AttachToTabTarget(WebContents* wc) {
+  agent_host_ = DevToolsAgentHost::GetOrCreateForTab(wc);
+  agent_host_->AttachClient(this);
+}
+
 void TestDevToolsProtocolClient::AttachToBrowserTarget() {
   // Tethering domain is not used in tests.
   agent_host_ = DevToolsAgentHost::CreateForBrowser(
@@ -74,9 +79,18 @@ void TestDevToolsProtocolClient::AttachToBrowserTarget() {
 
 bool TestDevToolsProtocolClient::HasExistingNotification(
     const std::string& search) const {
+  return HasExistingNotificationMatching(
+      [&search](const base::Value::Dict& notification) {
+        return *notification.FindString(kMethodParam) == search;
+      });
+}
+
+bool TestDevToolsProtocolClient::HasExistingNotificationMatching(
+    base::FunctionRef<bool(const base::Value::Dict&)> pred) const {
   for (const auto& notification : notifications_) {
-    if (*notification.FindString(kMethodParam) == search)
+    if (pred(notification)) {
       return true;
+    }
   }
   return false;
 }
@@ -141,7 +155,7 @@ void TestDevToolsProtocolClient::DispatchProtocolMessage(
   base::StringPiece message_str(reinterpret_cast<const char*>(message.data()),
                                 message.size());
   base::Value parsed = *base::JSONReader::Read(message_str);
-  if (absl::optional<int> id = parsed.GetDict().FindInt("id")) {
+  if (std::optional<int> id = parsed.GetDict().FindInt("id")) {
     received_responses_count_++;
     response_ = std::move(parsed).TakeDict();
     in_dispatch_ = false;
@@ -183,7 +197,11 @@ bool TestDevToolsProtocolClient::MayReadLocalFiles() {
   return may_read_local_files_;
 }
 
-absl::optional<url::Origin>
+bool TestDevToolsProtocolClient::MayWriteLocalFiles() {
+  return may_write_local_files_;
+}
+
+std::optional<url::Origin>
 TestDevToolsProtocolClient::GetNavigationInitiatorOrigin() {
   return navigation_initiator_origin_;
 }

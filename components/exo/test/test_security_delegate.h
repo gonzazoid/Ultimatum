@@ -5,8 +5,6 @@
 #ifndef COMPONENTS_EXO_TEST_TEST_SECURITY_DELEGATE_H_
 #define COMPONENTS_EXO_TEST_TEST_SECURITY_DELEGATE_H_
 
-#include <string>
-
 #include "components/exo/security_delegate.h"
 
 namespace aura {
@@ -17,8 +15,14 @@ namespace exo::test {
 
 class TestSecurityDelegate : public SecurityDelegate {
  public:
-  std::string GetSecurityContext() const override;
   bool CanLockPointer(aura::Window* toplevel) const override;
+  SetBoundsPolicy CanSetBounds(aura::Window* window) const override;
+
+  // Choose the return value of |CanSetBounds()|.
+  void SetCanSetBounds(SetBoundsPolicy policy);
+
+ protected:
+  SetBoundsPolicy policy_ = SetBoundsPolicy::IGNORE;
 };
 
 }  // namespace exo::test

@@ -2,18 +2,19 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import '//resources/cr_elements/chromeos/cros_color_overrides.css.js';
 import '//resources/cr_elements/md_select.css.js';
 
 import {html, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {setupSelect} from './oobe_select.m.js';
+import {setupSelect} from './oobe_select.js';
 
 
 /**
  * Languages/keyboard descriptor to display
  * @typedef {!OobeTypes.LanguageDsc|!OobeTypes.IMEDsc|!OobeTypes.DemoCountryDsc}
  */
-var I18nMenuItem;
+let I18nMenuItem;
 
 /**
  * Polymer class definition for 'oobe-i18n-dropdown'.
@@ -81,8 +82,8 @@ class OobeI18nDropdown extends PolymerElement {
     const selectionCallback =
         !this.idToItem_ ? this.onSelected_.bind(this) : null;
     this.idToItem_ = new Map();
-    for (var i = 0; i < items.length; ++i) {
-      var item = items[i];
+    for (let i = 0; i < items.length; ++i) {
+      const item = items[i];
       this.idToItem_.set(item.value, item);
     }
     setupSelect(this.$.select, items, selectionCallback);

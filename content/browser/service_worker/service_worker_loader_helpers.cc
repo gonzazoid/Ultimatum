@@ -5,14 +5,18 @@
 #include "content/browser/service_worker/service_worker_loader_helpers.h"
 
 #include "base/command_line.h"
+#include "base/no_destructor.h"
+#include "base/strings/string_split.h"
 #include "base/strings/stringprintf.h"
 #include "base/time/time.h"
 #include "components/network_session_configurator/common/network_switches.h"
 #include "content/browser/loader/browser_initiated_resource_request.h"
 #include "content/browser/service_worker/service_worker_consts.h"
+#include "content/common/features.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/common/content_client.h"
+#include "content/public/common/content_features.h"
 #include "content/public/common/referrer.h"
 #include "services/network/public/cpp/constants.h"
 #include "third_party/blink/public/common/features.h"
@@ -195,7 +199,7 @@ void CheckVersionStatusBeforeWorkerScriptLoad(
 
 network::ResourceRequest CreateRequestForServiceWorkerScript(
     const GURL& script_url,
-    const url::Origin& origin,
+    const blink::StorageKey& storage_key,
     bool is_main_script,
     blink::mojom::ScriptType worker_script_type,
     const blink::mojom::FetchClientSettingsObject& fetch_client_settings_object,
@@ -205,7 +209,7 @@ network::ResourceRequest CreateRequestForServiceWorkerScript(
   network::ResourceRequest request;
   request.url = script_url;
 
-  request.site_for_cookies = net::SiteForCookies::FromOrigin(origin);
+  request.site_for_cookies = storage_key.ToNetSiteForCookies();
   request.do_not_prompt_for_login = true;
 
   blink::RendererPreferences renderer_preferences;
@@ -232,6 +236,8 @@ network::ResourceRequest CreateRequestForServiceWorkerScript(
       fetch_client_settings_object.insecure_requests_policy ==
       blink::mojom::InsecureRequestsPolicy::kUpgrade;
 
+  const url::Origin& origin = storage_key.origin();
+
   // ResourceRequest::request_initiator is the request's origin in the spec.
   // https://fetch.spec.whatwg.org/#concept-request-origin
   // It's needed to be set to the origin where the service worker is registered.
@@ -242,8 +248,7 @@ network::ResourceRequest CreateRequestForServiceWorkerScript(
   // shared network resources like the http cache.
   request.trusted_params = network::ResourceRequest::TrustedParams();
   request.trusted_params->isolation_info =
-      net::IsolationInfo::Create(net::IsolationInfo::RequestType::kOther,
-                                 origin, origin, request.site_for_cookies);
+      storage_key.ToPartialNetIsolationInfo();
 
   if (worker_script_type == blink::mojom::ScriptType::kClassic) {
     if (is_main_script) {
@@ -321,6 +326,15 @@ bool IsPathRestrictionSatisfiedWithoutHeader(const GURL& scope,
                                              std::string* error_message) {
   return IsPathRestrictionSatisfiedInternal(scope, script_url, false, nullptr,
                                             error_message);
+}
+
+const base::flat_set<std::string> FetchHandlerBypassedHashStrings() {
+  const static base::NoDestructor<base::flat_set<std::string>> result(
+      base::SplitString(
+          features::kServiceWorkerBypassFetchHandlerBypassedHashStrings.Get(),
+          ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY));
+
+  return *result;
 }
 
 }  // namespace service_worker_loader_helpers

@@ -12,7 +12,7 @@
 #include "ash/constants/ash_pref_names.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
 #include "components/services/app_service/public/cpp/app_registry_cache_wrapper.h"
@@ -67,7 +67,11 @@ void AppListBadgeController::OnActiveUserPrefServiceChanged(
   AccountId account_id =
       Shell::Get()->session_controller()->GetActiveAccountId();
   cache_ = apps::AppRegistryCacheWrapper::Get().GetAppRegistryCache(account_id);
-  Observe(cache_);  // From apps::AppRegistryCache::Observer.
+
+  app_registry_cache_observer_.Reset();
+  if (cache_) {
+    app_registry_cache_observer_.Observe(cache_);
+  }
 
   // Resetting the recorded pref forces the next call to
   // UpdateAppNotificationBadging() to update notification badging for every
@@ -86,7 +90,7 @@ void AppListBadgeController::OnAppUpdate(const apps::AppUpdate& update) {
 
 void AppListBadgeController::OnAppRegistryCacheWillBeDestroyed(
     apps::AppRegistryCache* cache) {
-  Observe(nullptr);  // From apps::AppRegistryCache::Observer.
+  app_registry_cache_observer_.Reset();
 }
 
 void AppListBadgeController::UpdateItemNotificationBadge(
@@ -127,7 +131,7 @@ void AppListBadgeController::SetActiveModel(AppListModel* model) {
   model_observation_.Reset();
 
   if (model_)
-    model_observation_.Observe(model_);
+    model_observation_.Observe(model_.get());
 }
 
 }  // namespace ash

@@ -5,15 +5,18 @@
 #include "chrome/browser/ui/views/payments/payment_handler_web_flow_view_controller.h"
 
 #include <memory>
+#include <utility>
 
 #include "base/check_op.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/task_manager/web_contents_tags.h"
 #include "chrome/browser/themes/theme_service.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
+#include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/views/payments/payment_request_dialog_view.h"
 #include "chrome/browser/ui/views/payments/payment_request_views_util.h"
 #include "chrome/grit/generated_resources.h"
@@ -26,6 +29,7 @@
 #include "components/payments/core/payments_experimental_features.h"
 #include "components/payments/core/url_util.h"
 #include "components/security_state/core/security_state.h"
+#include "components/strings/grit/components_strings.h"
 #include "components/url_formatter/elide_url.h"
 #include "components/vector_icons/vector_icons.h"
 #include "components/web_modal/web_contents_modal_dialog_manager.h"
@@ -41,8 +45,12 @@
 #include "ui/gfx/color_utils.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/paint_vector_icon.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/background.h"
 #include "ui/views/border.h"
+#include "ui/views/controls/button/image_button.h"
+#include "ui/views/controls/button/image_button_factory.h"
+#include "ui/views/controls/highlight_path_generator.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/progress_bar.h"
@@ -50,6 +58,7 @@
 #include "ui/views/controls/webview/webview.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/layout/fill_layout.h"
+#include "ui/views/layout/table_layout.h"
 #include "ui/views/view_class_properties.h"
 #include "url/origin.h"
 #include "url/url_constants.h"
@@ -62,6 +71,9 @@ std::u16string GetPaymentHandlerDialogTitle(
   if (!web_contents)
     return std::u16string();
 
+  // If a page has no explicit <title> set or if it is still loading, the title
+  // may be the URL of the page. We don't wish to show that to a user as the
+  // origin is also shown.
   const std::u16string title = web_contents->GetTitle();
   const std::u16string https_prefix =
       base::StrCat({url::kHttpsScheme16, url::kStandardSchemeSeparator16});
@@ -70,8 +82,32 @@ std::u16string GetPaymentHandlerDialogTitle(
              : title;
 }
 
+// Returns a Google color closest to light_mode_color or dark_mode_color based
+// on whether background_color is considered dark mode, with a minimum
+// contrast_ratio between the returned color and the background_color.
+SkColor GetContrastingGoogleColor(SkColor light_mode_color,
+                                  SkColor dark_mode_color,
+                                  SkColor background_color,
+                                  float contrast_ratio) {
+  const SkColor preferred_color = color_utils::IsDark(background_color)
+                                      ? dark_mode_color
+                                      : light_mode_color;
+  return color_utils::PickGoogleColor(preferred_color, background_color,
+                                      contrast_ratio);
+}
+
 }  // namespace
 
+// The header view for the current PaymentHandler UX (see also
+// |PopulateSheetHeaderView| below for how the future UX is drawn). Displays a
+// header consisting of:
+//
+//   - The payment app title (taken from the WebContents)
+//   - The payment app origin
+//   - The payment app icon (if present)
+//
+// Note that the back button on the header is drawn instead by the parent
+// PaymentRequestSheetController class in the current UX.
 class ReadOnlyOriginView : public views::View {
  public:
   METADATA_HEADER(ReadOnlyOriginView);
@@ -110,7 +146,7 @@ class ReadOnlyOriginView : public views::View {
       origin_label->SetID(static_cast<int>(DialogViewID::SHEET_TITLE));
 
       // Pad to keep header as the same height as when the page title is valid.
-      constexpr int kVerticalPadding = 10;
+      constexpr int kVerticalPadding = 13;
       origin_label->SetBorder(views::CreateEmptyBorder(
           gfx::Insets::TLBR(kVerticalPadding, 0, kVerticalPadding, 0)));
     }
@@ -125,7 +161,8 @@ class ReadOnlyOriginView : public views::View {
     views::BoxLayout* top_level_layout =
         SetLayoutManager(std::make_unique<views::BoxLayout>());
     const bool has_icon = icon_bitmap && !icon_bitmap->drawsNothing();
-    float adjusted_width = base::checked_cast<float>(has_icon ? icon_bitmap->width() : 0);
+    float adjusted_width =
+        base::checked_cast<float>(has_icon ? icon_bitmap->width() : 0);
     if (has_icon) {
       adjusted_width =
           adjusted_width *
@@ -140,6 +177,8 @@ class ReadOnlyOriginView : public views::View {
       views::ImageView* app_icon_view =
           AddChildView(CreateAppIconView(/*icon_resource_id=*/0, icon_bitmap,
                                          /*tooltip_text=*/page_title));
+      app_icon_view->SetID(
+          static_cast<int>(DialogViewID::PAYMENT_APP_HEADER_ICON));
       // We should set image size in density independent pixels here, since
       // views::ImageView objects are rastered at the device scale factor.
       app_icon_view->SetImageSize(gfx::Size(
@@ -155,6 +194,34 @@ class ReadOnlyOriginView : public views::View {
 };
 
 BEGIN_METADATA(ReadOnlyOriginView, views::View)
+END_METADATA
+
+// The close ('X') button used in the minimal PaymentHandler header UX. See
+// |PopulateSheetHeaderView|.
+class PaymentHandlerCloseButton : public views::ImageButton {
+ public:
+  METADATA_HEADER(PaymentHandlerCloseButton);
+  explicit PaymentHandlerCloseButton(
+      views::Button::PressedCallback pressed_callback,
+      const SkColor enabled_color,
+      const SkColor disabled_color)
+      : views::ImageButton(std::move(pressed_callback)) {
+    ConfigureVectorImageButton(this);
+    views::InstallCircleHighlightPathGenerator(this);
+    constexpr int kCloseButtonSize = 16;
+    SetSize(gfx::Size(kCloseButtonSize, kCloseButtonSize));
+    SetFocusBehavior(views::View::FocusBehavior::ALWAYS);
+    SetID(static_cast<int>(DialogViewID::CANCEL_BUTTON));
+    SetAccessibleName(l10n_util::GetStringUTF16(IDS_PAYMENTS_CLOSE));
+
+    // This view does not set its color using the browser theme color, as this
+    // may differ from the header color, which is based on the web view theme.
+    views::SetImageFromVectorIconWithColor(this, vector_icons::kCloseIcon,
+                                           enabled_color, disabled_color);
+  }
+};
+
+BEGIN_METADATA(PaymentHandlerCloseButton, views::ImageButton)
 END_METADATA
 
 PaymentHandlerWebFlowViewController::PaymentHandlerWebFlowViewController(
@@ -195,14 +262,19 @@ void PaymentHandlerWebFlowViewController::FillContentView(
   // LoadProgressChanged(), and it can't be done in the constructor since the
   // container doesn't exist yet.
   if (!progress_bar_) {
-    // Add both progress bar and separator to the container, and set the
-    // separator as the initially-visible one.
+    // Add the progress bar to the separator container. The progress bar
+    // colors will be set in PopulateSheetHeaderView.
     progress_bar_ = header_content_separator_container()->AddChildView(
-        std::make_unique<views::ProgressBar>(/*preferred_height=*/2));
-    progress_bar_->SetBackgroundColor(SK_ColorTRANSPARENT);
-    progress_bar_->SetVisible(false);
-    separator_ = header_content_separator_container()->AddChildView(
-        std::make_unique<views::Separator>());
+        std::make_unique<views::ProgressBar>());
+    progress_bar_->SetPreferredHeight(2);
+    if (!spec()->IsPaymentHandlerMinimalHeaderUXEnabled()) {
+      // Prior to minimal UX, the separator container used a Separator view,
+      // which uses the Chrome theme color which may not match the header color.
+      progress_bar_->SetBackgroundColor(SK_ColorTRANSPARENT);
+      progress_bar_->SetVisible(false);
+      separator_ = header_content_separator_container()->AddChildView(
+          std::make_unique<views::Separator>());
+    }
   }
 
   content_view->SetLayoutManager(std::make_unique<views::FillLayout>());
@@ -219,6 +291,12 @@ void PaymentHandlerWebFlowViewController::FillContentView(
           /*payment_handler_web_contents=*/web_contents());
   web_view->LoadInitialURL(target_);
 
+  if (base::FeatureList::IsEnabled(
+          features::kPaymentHandlerWindowInTaskManager)) {
+    // Make the web view show up in the task manager.
+    task_manager::WebContentsTags::CreateForTabContents(web_contents());
+  }
+
   // Enable modal dialogs for web-based payment handlers.
   dialog_manager_delegate_.SetWebContents(web_contents());
   web_modal::WebContentsModalDialogManager::CreateForWebContents(
@@ -228,11 +306,11 @@ void PaymentHandlerWebFlowViewController::FillContentView(
 
   // The webview must get an explicitly set height otherwise the layout doesn't
   // make it fill its container. This is likely because it has no content at the
-  // time of first layout (nothing has loaded yet). Because of this, set it to.
+  // time of first layout (nothing has loaded yet). Because of this, set it to
   // total_dialog_height - header_height. On the other hand, the width will be
   // properly set so it can be 0 here.
-  web_view->SetPreferredSize(
-      gfx::Size(0, dialog()->GetActualPaymentHandlerDialogHeight() - 75));
+  web_view->SetPreferredSize(gfx::Size(
+      0, dialog()->GetActualPaymentHandlerDialogHeight() - GetHeaderHeight()));
 }
 
 bool PaymentHandlerWebFlowViewController::ShouldShowPrimaryButton() {
@@ -241,6 +319,144 @@ bool PaymentHandlerWebFlowViewController::ShouldShowPrimaryButton() {
 
 bool PaymentHandlerWebFlowViewController::ShouldShowSecondaryButton() {
   return false;
+}
+
+void PaymentHandlerWebFlowViewController::PopulateSheetHeaderView(
+    views::View* container) {
+  if (!spec()->IsPaymentHandlerMinimalHeaderUXEnabled()) {
+    PaymentRequestSheetController::PopulateSheetHeaderView(container);
+    return;
+  }
+
+  // The PaymentHandler header consists of the payment app icon (if available),
+  // the current web contents origin, and a close button. The origin is centered
+  // on the dialog, whilst the icon and close are aligned with the LHS and RHS
+  // respectively.
+  //
+  // +-----------------------------------------+
+  // | ICON |          origin          | CLOSE |
+  // +-----------------------------------------+
+
+  container->SetID(static_cast<int>(DialogViewID::PAYMENT_APP_HEADER));
+  container->SetBackground(GetHeaderBackground(container));
+  constexpr int kVerticalInset = 8;
+  constexpr int kHeaderHorizontalInset = 16;
+  container->SetBorder(views::CreateEmptyBorder(
+      gfx::Insets::TLBR(kVerticalInset, kHeaderHorizontalInset, kVerticalInset,
+                        kHeaderHorizontalInset)));
+
+  views::TableLayout* layout =
+      container->SetLayoutManager(std::make_unique<views::TableLayout>());
+
+  // Icon column.
+  const SkBitmap* icon_bitmap = state()->selected_app()->icon_bitmap();
+  const bool has_icon = icon_bitmap && !icon_bitmap->drawsNothing();
+  constexpr int kHeaderIconWidth = 32;
+  if (has_icon) {
+    layout->AddColumn(views::LayoutAlignment::kStart,
+                      views::LayoutAlignment::kCenter,
+                      views::TableLayout::kFixedSize,
+                      views::TableLayout::ColumnSize::kFixed, kHeaderIconWidth,
+                      /*min_width=*/0);
+  } else {
+    layout->AddPaddingColumn(views::TableLayout::kFixedSize, kHeaderIconWidth);
+  }
+
+  // Origin column.
+  layout->AddColumn(
+      views::LayoutAlignment::kStretch, views::LayoutAlignment::kStretch,
+      /*horizontal_resize=*/1.0, views::TableLayout::ColumnSize::kUsePreferred,
+      /*fixed_width=*/0,
+      /*min_width=*/0);
+
+  // Close button column.
+  layout->AddColumn(
+      views::LayoutAlignment::kEnd, views::LayoutAlignment::kCenter,
+      views::TableLayout::kFixedSize, views::TableLayout::ColumnSize::kFixed,
+      /*fixed_width=*/32,
+      /*min_width=*/0);
+
+  layout->AddRows(1, views::TableLayout::kFixedSize);
+
+  // Add the icon to the header. As we support non-square icons, resize it to
+  // fit the target header height.
+  //
+  // We should set image size in density independent pixels here, since
+  // views::ImageView objects are rastered at the device scale factor.
+  if (has_icon) {
+    views::ImageView* app_icon_view = container->AddChildView(CreateAppIconView(
+        /*icon_resource_id=*/0, icon_bitmap,
+        /*tooltip_text=*/l10n_util::GetStringUTF16(IDS_PAYMENT_HANDLER_ICON)));
+    app_icon_view->SetID(
+        static_cast<int>(DialogViewID::PAYMENT_APP_HEADER_ICON));
+    // TODO(crbug.com/1422991): If the downloaded app icon was a vector image,
+    // see if we can store and rasterize it here instead of at download time.
+    float adjusted_width =
+        icon_bitmap->width() *
+        (IconSizeCalculator::kPaymentAppDeviceIndependentIdealIconHeight /
+         base::checked_cast<float>(icon_bitmap->height()));
+    app_icon_view->SetImageSize(gfx::Size(
+        adjusted_width,
+        IconSizeCalculator::kPaymentAppDeviceIndependentIdealIconHeight));
+  }
+
+  // Add the origin label.
+  const url::Origin origin =
+      web_contents()
+          ? web_contents()->GetPrimaryMainFrame()->GetLastCommittedOrigin()
+          : url::Origin::Create(target_);
+  auto* origin_label = container->AddChildView(std::make_unique<views::Label>(
+      url_formatter::FormatOriginForSecurityDisplay(
+          origin, url_formatter::SchemeDisplay::OMIT_CRYPTOGRAPHIC)));
+  origin_label->SetElideBehavior(gfx::ELIDE_HEAD);
+  origin_label->SetID(static_cast<int>(DialogViewID::SHEET_TITLE));
+  origin_label->SetFocusBehavior(views::View::FocusBehavior::ACCESSIBLE_ONLY);
+  // Turn off autoreadability because the computed foreground color takes
+  // contrast into account.
+  SkColor background_color = container->background()->get_color();
+  // Get the closest label color to kColorPrimaryForeground, with a minimum
+  // readable contrast ratio.
+  SkColor foreground = GetContrastingGoogleColor(
+      gfx::kGoogleGrey900, gfx::kGoogleGrey200, background_color,
+      color_utils::kMinimumReadableContrastRatio);
+  origin_label->SetAutoColorReadabilityEnabled(false);
+  origin_label->SetEnabledColor(foreground);
+  origin_label->SetBackgroundColor(background_color);
+
+  if (progress_bar_) {
+    // Set the progress bar colors based on the header background color. The
+    // progress bar's background color serves as a separator between the header
+    // and content.
+
+    // Get the closest progress bar color to kColorProgressBar, with a minimum
+    // contrast ratio used for glyphs.
+    const SkColor progress_bar_color = GetContrastingGoogleColor(
+        gfx::kGoogleBlue600, gfx::kGoogleBlue300, background_color,
+        color_utils::kMinimumVisibleContrastRatio);
+
+    // Get the closest separator color to kColorSeparator, with a minimum
+    // contrast ratio of the default light separator contrast on white, which is
+    // less than color_utils::kMinimumVisibleContrastRatio.
+    const SkColor separator_color = GetContrastingGoogleColor(
+        gfx::kGoogleGrey300, gfx::kGoogleGrey800, background_color,
+        color_utils::GetContrastRatio(gfx::kGoogleGrey300, SK_ColorWHITE));
+
+    progress_bar_->SetForegroundColor(progress_bar_color);
+    progress_bar_->SetBackgroundColor(separator_color);
+  }
+
+  // Finally, add the close button.
+  // Get the closest icon color to kColorIcon, with a minimum contrast ratio
+  // used for glyphs.
+  const SkColor close_icon_color = GetContrastingGoogleColor(
+      gfx::kGoogleGrey500, gfx::kGoogleGrey700, background_color,
+      color_utils::kMinimumVisibleContrastRatio);
+  const SkColor close_icon_disabled_color = color_utils::AlphaBlend(
+      close_icon_color, background_color, gfx::kDisabledControlAlpha);
+  container->AddChildView(std::make_unique<PaymentHandlerCloseButton>(
+      base::BindRepeating(&PaymentRequestSheetController::CloseButtonPressed,
+                          GetWeakPtr()),
+      close_icon_color, close_icon_disabled_color));
 }
 
 std::unique_ptr<views::View>
@@ -282,6 +498,17 @@ bool PaymentHandlerWebFlowViewController::GetSheetId(DialogViewID* sheet_id) {
 bool PaymentHandlerWebFlowViewController::
     DisplayDynamicBorderForHiddenContents() {
   return false;
+}
+
+bool PaymentHandlerWebFlowViewController::CanContentViewBeScrollable() {
+  // The web contents is set to a constant size and will render its own
+  // scrollbar if necessary.
+  return false;
+}
+
+base::WeakPtr<PaymentRequestSheetController>
+PaymentHandlerWebFlowViewController::GetWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 void PaymentHandlerWebFlowViewController::VisibleSecurityStateChanged(
@@ -354,15 +581,30 @@ void PaymentHandlerWebFlowViewController::DidFinishNavigation(
 }
 
 void PaymentHandlerWebFlowViewController::LoadProgressChanged(double progress) {
-  progress_bar_->SetValue(progress);
-  const bool show_progress = progress < 1.0;
-  progress_bar_->SetVisible(show_progress);
-  separator_->SetVisible(!show_progress);
+  if (spec()->IsPaymentHandlerMinimalHeaderUXEnabled()) {
+    // The progress bar reflects the load progress until it reaches 1.0, at
+    // which point it's reset to 0 to just show the separator color.
+    progress_bar_->SetValue(progress < 1.0 ? progress : 0);
+
+    // The progress bar is accessibility-visible while loading, and then ignored
+    // once it just serves as a separator.
+    progress_bar_->GetViewAccessibility().OverrideIsIgnored(progress == 1.0);
+    progress_bar_->GetViewAccessibility().OverrideIsLeaf(progress == 1.0);
+  } else {
+    progress_bar_->SetValue(progress);
+    const bool show_progress = progress < 1.0;
+    progress_bar_->SetVisible(show_progress);
+    separator_->SetVisible(!show_progress);
+  }
 }
 
 void PaymentHandlerWebFlowViewController::TitleWasSet(
     content::NavigationEntry* entry) {
   UpdateHeaderView();
+
+  std::u16string title = GetPaymentHandlerDialogTitle(web_contents());
+  if (!title.empty())
+    dialog()->OnPaymentHandlerTitleSet();
 }
 
 void PaymentHandlerWebFlowViewController::AbortPayment() {

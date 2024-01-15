@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/trace_event/trace_event.h"
 #include "content/browser/background_fetch/background_fetch.pb.h"
 #include "content/browser/background_fetch/background_fetch_data_manager.h"
@@ -149,13 +149,8 @@ void DeleteRegistrationTask::FinishWithError(
     blink::mojom::BackgroundFetchError error) {
   if (HasStorageError())
     error = blink::mojom::BackgroundFetchError::STORAGE_ERROR;
-  ReportStorageError();
   std::move(callback_).Run(error);
   Finished();  // Destroys |this|.
-}
-
-std::string DeleteRegistrationTask::HistogramName() const {
-  return "DeleteRegistrationTask";
 }
 
 }  // namespace background_fetch

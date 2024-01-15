@@ -7,12 +7,15 @@
 
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/callback.h"
+#include "base/time/time.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rect_f.h"
+#include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/overlay_transform.h"
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
 #include "ui/platform_window/platform_window_init_properties.h"
@@ -21,13 +24,12 @@ class SkBitmap;
 class SkPath;
 
 namespace ui {
-class WaylandConnection;
 class WaylandShmBuffer;
 class WaylandWindow;
 }  // namespace ui
 
 namespace gfx {
-enum class BufferFormat;
+enum class BufferFormat : uint8_t;
 class Size;
 }  // namespace gfx
 
@@ -50,8 +52,7 @@ enum class EventDispatchPolicy {
 
 // Identifies the direction of the "hittest" for Wayland. |connection|
 // is used to identify whether values from shell v5 or v6 must be used.
-uint32_t IdentifyDirection(const ui::WaylandConnection& connection,
-                           int hittest);
+uint32_t IdentifyDirection(int hittest);
 
 // Draws |bitmap| into |out_buffer|. Returns if no errors occur, and false
 // otherwise. It assumes the bitmap fits into the buffer and buffer is
@@ -113,6 +114,14 @@ void SkColorToWlArray(const SkColor& color, wl_array& array);
 
 // Converts SkColor4f into wl_array.
 void SkColorToWlArray(const SkColor4f& color, wl_array& array);
+
+// Converts Transform into wl_array.
+void TransformToWlArray(
+    const absl::variant<gfx::OverlayTransform, gfx::Transform>& transform,
+    wl_array& array);
+
+// Converts `milliseconds`, which is server dependent, to base::TimeTicks.
+base::TimeTicks EventMillisecondsToTimeTicks(uint32_t milliseconds);
 
 }  // namespace wl
 

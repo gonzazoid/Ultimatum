@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/feature_list.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "chrome/browser/enterprise/connectors/connectors_manager.h"
@@ -30,10 +31,6 @@ class FileSystemURL;
 namespace enterprise_connectors {
 
 // Controls whether the Enterprise Connectors policies should be read by
-// ConnectorsManager.
-BASE_DECLARE_FEATURE(kEnterpriseConnectorsEnabled);
-
-// Controls whether the Enterprise Connectors policies should be read by
 // ConnectorsManager in Managed Guest Sessions.
 BASE_DECLARE_FEATURE(kEnterpriseConnectorsEnabledOnMGS);
 
@@ -44,8 +41,7 @@ class ConnectorsService : public KeyedService {
                     std::unique_ptr<ConnectorsManager> manager);
   ~ConnectorsService() override;
 
-  // Accessors that check kEnterpriseConnectorsEnabled is enabled, and then call
-  // the corresponding method in ConnectorsManager.
+  // Accessors that call the corresponding method in ConnectorsManager.
   absl::optional<ReportingSettings> GetReportingSettings(
       ReportingConnector connector);
   absl::optional<AnalysisSettings> GetAnalysisSettings(
@@ -57,15 +53,9 @@ class ConnectorsService : public KeyedService {
       const storage::FileSystemURL& destination_url,
       AnalysisConnector connector);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-  absl::optional<FileSystemSettings> GetFileSystemGlobalSettings(
-      FileSystemConnector connector);
-  absl::optional<FileSystemSettings> GetFileSystemSettings(
-      const GURL& url,
-      FileSystemConnector connector);
 
   bool IsConnectorEnabled(AnalysisConnector connector) const;
   bool IsConnectorEnabled(ReportingConnector connector) const;
-  bool IsConnectorEnabled(FileSystemConnector connector) const;
 
   bool DelayUntilVerdict(AnalysisConnector connector);
 
@@ -113,6 +103,8 @@ class ConnectorsService : public KeyedService {
   ConnectorsManager* ConnectorsManagerForTesting();
 
  private:
+  FRIEND_TEST_ALL_PREFIXES(ConnectorsServiceProfileTypeBrowserTest, IsEnabled);
+
   struct DmToken {
     DmToken(const std::string& value, policy::PolicyScope scope);
     DmToken(DmToken&&);
@@ -138,18 +130,13 @@ class ConnectorsService : public KeyedService {
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
   absl::optional<DmToken> GetProfileDmToken() const;
 
-  // Returns true if the browser isn't managed by CBCM, otherwise this checks if
-  // the affiliations IDs from the profile and browser policy fetching responses
-  // indicate that the same customer manages both.
-  bool CanUseProfileDmToken() const;
 #endif
 
   // Returns the policy::PolicyScope stored in the given |scope_pref|.
   policy::PolicyScope GetPolicyScope(const char* scope_pref) const;
 
-  // Returns whether Connectors are enabled at all. This can be false if:
-  // - The kEnterpriseConnectorsEnabled feature is disabled
-  // - The profile is incognito
+  // Returns whether Connectors are enabled at all. This can be false if the
+  // profile is incognito
   bool ConnectorsEnabled() const;
 
   // Obtain a ClientMetadata instance corresponding to the current

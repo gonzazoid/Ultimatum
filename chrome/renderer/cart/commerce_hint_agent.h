@@ -41,6 +41,10 @@ class CommerceHintAgent
   // crop the string to under length limit when matching.
   static bool IsAddToCart(base::StringPiece str,
                           bool skip_length_limit = false);
+  // Whether the string from XHR form contents matches the add-to-cart
+  // heuristics. This should only be used when DOM-based AddToCart heuristics
+  // are enabled.
+  static bool IsAddToCartForDomBasedHeuristics(base::StringPiece str);
   // Whether the main frame URL is a shopping cart.
   static bool IsVisitCart(const GURL& main_frame_url);
   // Whether the main frame URL is a checkout page.
@@ -57,6 +61,8 @@ class CommerceHintAgent
                                          const GURL& request_url);
   static const std::vector<std::string> ExtractButtonTexts(
       const blink::WebFormElement& form);
+  // Whether the |element| is (or is within) an AddToCart button.
+  static bool IsAddToCartButton(blink::WebElement& element);
 
  private:
   void MaybeExtractProducts();
@@ -68,6 +74,7 @@ class CommerceHintAgent
       const std::string& cart_extraction_script);
   void OnProductsExtracted(absl::optional<base::Value> results,
                            base::TimeTicks start_time);
+  bool ShouldUseDOMBasedHeuristics();
 
   GURL starting_url_;
   bool has_finished_loading_{false};
@@ -75,8 +82,10 @@ class CommerceHintAgent
   bool is_extraction_pending_{false};
   bool is_extraction_running_{false};
   absl::optional<bool> should_skip_;
-  bool extraction_script_initialized_{false};
+  absl::optional<bool> should_use_dom_heuristics_;
   std::unique_ptr<ukm::MojoUkmRecorder> ukm_recorder_;
+  base::Time add_to_cart_focus_time_;
+  base::Time add_to_cart_heuristics_execution_time_;
   base::WeakPtrFactory<CommerceHintAgent> weak_factory_{this};
 
   // content::RenderFrameObserver overrides
@@ -90,6 +99,7 @@ class CommerceHintAgent
   void WillSubmitForm(const blink::WebFormElement& form) override;
   void DidObserveLayoutShift(double score, bool after_input_or_scroll) override;
   void OnMainFrameIntersectionChanged(const gfx::Rect& intersect_rect) override;
+  void FocusedElementChanged(const blink::WebElement& focused_element) override;
 
   // Callbacks with business logics for handling navigation-related observer
   // calls. These callbacks are triggered when navigation-related signals are

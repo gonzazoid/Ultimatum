@@ -6,12 +6,12 @@
 
 #include "base/types/strong_alias.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/renderer/bindings/core/v8/iterable.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_function.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_iterator_result_value.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_readable_stream_default_reader.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_writable_stream_default_writer.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
@@ -27,6 +27,7 @@
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "v8/include/v8.h"
 
@@ -55,7 +56,7 @@ class TestUnderlyingSource final : public UnderlyingSourceBase {
                              ScriptPromise::CastUndefined(script_state)) {}
   ~TestUnderlyingSource() override = default;
 
-  ScriptPromise Start(ScriptState* script_state) override {
+  ScriptPromise Start(ScriptState* script_state, ExceptionState&) override {
     started_ = true;
     if (type_ == SourceType::kPush) {
       for (int element : sequence_) {
@@ -66,7 +67,7 @@ class TestUnderlyingSource final : public UnderlyingSourceBase {
     }
     return start_promise_;
   }
-  ScriptPromise pull(ScriptState* script_state) override {
+  ScriptPromise Pull(ScriptState* script_state, ExceptionState&) override {
     if (type_ == SourceType::kPush) {
       return ScriptPromise::CastUndefined(script_state);
     }
@@ -78,7 +79,9 @@ class TestUnderlyingSource final : public UnderlyingSourceBase {
     ++index_;
     return ScriptPromise::CastUndefined(script_state);
   }
-  ScriptPromise Cancel(ScriptState* script_state, ScriptValue reason) override {
+  ScriptPromise Cancel(ScriptState* script_state,
+                       ScriptValue reason,
+                       ExceptionState&) override {
     cancelled_ = true;
     cancel_reason_ = reason;
     return ScriptPromise::CastUndefined(script_state);
@@ -125,8 +128,8 @@ void ExpectValue(int line,
   }
   v8::Local<v8::Value> value;
   bool done = false;
-  if (!V8UnpackIteratorResult(script_state, result.As<v8::Object>(), &done)
-           .ToLocal(&value)) {
+  if (!V8UnpackIterationResult(script_state, result.As<v8::Object>(), &value,
+                               &done)) {
     ADD_FAILURE() << "Failed to unpack the iterator result.";
     return;
   }
@@ -144,8 +147,8 @@ void ExpectDone(int line,
   SCOPED_TRACE(testing::Message() << "__LINE__ = " << line);
   v8::Local<v8::Value> value;
   bool done = false;
-  if (!V8UnpackIteratorResult(script_state, result.As<v8::Object>(), &done)
-           .ToLocal(&value)) {
+  if (!V8UnpackIterationResult(script_state, result.As<v8::Object>(), &value,
+                               &done)) {
     ADD_FAILURE() << "Failed to unpack the iterator result.";
     return;
   }
@@ -155,6 +158,7 @@ void ExpectDone(int line,
 // We only do minimal testing here. The functionality of transferable streams is
 // tested in the layout tests.
 TEST(TransferableStreamsTest, SmokeTest) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
 
   auto* channel =
@@ -187,19 +191,17 @@ TEST(TransferableStreamsTest, SmokeTest) {
         ADD_FAILURE() << "iterator must be an object";
         return ScriptValue();
       }
-      bool done = false;
-      auto chunk_maybe =
-          V8UnpackIteratorResult(script_state,
-                                 value.V8Value()
-                                     ->ToObject(script_state->GetContext())
-                                     .ToLocalChecked(),
-                                 &done);
-      EXPECT_FALSE(done);
       v8::Local<v8::Value> chunk;
-      if (!chunk_maybe.ToLocal(&chunk)) {
-        ADD_FAILURE() << "V8UnpackIteratorResult failed";
+      bool done = false;
+      if (!V8UnpackIterationResult(script_state,
+                                   value.V8Value()
+                                       ->ToObject(script_state->GetContext())
+                                       .ToLocalChecked(),
+                                   &chunk, &done)) {
+        ADD_FAILURE() << "V8UnpackIterationResult failed";
         return ScriptValue();
       }
+      EXPECT_FALSE(done);
       EXPECT_TRUE(chunk->IsNull());
       return ScriptValue();
     }
@@ -239,6 +241,7 @@ TEST(TransferableStreamsTest, SmokeTest) {
 }
 
 TEST(ConcatenatedReadableStreamTest, Empty) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   auto* script_state = scope.GetScriptState();
 
@@ -269,6 +272,7 @@ TEST(ConcatenatedReadableStreamTest, Empty) {
 }
 
 TEST(ConcatenatedReadableStreamTest, SuccessfulRead) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   auto* script_state = scope.GetScriptState();
 
@@ -321,6 +325,7 @@ TEST(ConcatenatedReadableStreamTest, SuccessfulRead) {
 }
 
 TEST(ConcatenatedReadableStreamTest, SuccessfulReadForPushSources) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   auto* script_state = scope.GetScriptState();
 
@@ -373,6 +378,7 @@ TEST(ConcatenatedReadableStreamTest, SuccessfulReadForPushSources) {
 }
 
 TEST(ConcatenatedReadableStreamTest, ErrorInSource1) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   auto* script_state = scope.GetScriptState();
 
@@ -409,6 +415,7 @@ TEST(ConcatenatedReadableStreamTest, ErrorInSource1) {
 }
 
 TEST(ConcatenatedReadableStreamTest, ErrorInSource2) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   auto* script_state = scope.GetScriptState();
 
@@ -445,6 +452,7 @@ TEST(ConcatenatedReadableStreamTest, ErrorInSource2) {
 }
 
 TEST(ConcatenatedReadableStreamTest, Cancel1) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   auto* script_state = scope.GetScriptState();
 
@@ -453,7 +461,8 @@ TEST(ConcatenatedReadableStreamTest, Cancel1) {
   TestUnderlyingSource* source2 = MakeGarbageCollected<TestUnderlyingSource>(
       SourceType::kPull, script_state, Vector<int>({5, 6}));
 
-  ScriptValue reason = ScriptValue::From(script_state, "hello");
+  ScriptValue reason(script_state->GetIsolate(),
+                     V8String(script_state->GetIsolate(), "hello"));
 
   ReadableStream* stream =
       CreateConcatenatedReadableStream(script_state, source1, source2);
@@ -487,6 +496,7 @@ TEST(ConcatenatedReadableStreamTest, Cancel1) {
 }
 
 TEST(ConcatenatedReadableStreamTest, Cancel2) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   auto* script_state = scope.GetScriptState();
 
@@ -495,7 +505,8 @@ TEST(ConcatenatedReadableStreamTest, Cancel2) {
   TestUnderlyingSource* source2 = MakeGarbageCollected<TestUnderlyingSource>(
       SourceType::kPull, script_state, Vector<int>({5}));
 
-  ScriptValue reason = ScriptValue::From(script_state, "hello");
+  ScriptValue reason(script_state->GetIsolate(),
+                     V8String(script_state->GetIsolate(), "hello"));
 
   ReadableStream* stream =
       CreateConcatenatedReadableStream(script_state, source1, source2);
@@ -524,6 +535,7 @@ TEST(ConcatenatedReadableStreamTest, Cancel2) {
 }
 
 TEST(ConcatenatedReadableStreamTest, PendingStart1) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   auto* script_state = scope.GetScriptState();
 
@@ -558,6 +570,7 @@ TEST(ConcatenatedReadableStreamTest, PendingStart1) {
 }
 
 TEST(ConcatenatedReadableStreamTest, PendingStart2) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   auto* script_state = scope.GetScriptState();
 

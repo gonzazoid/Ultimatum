@@ -31,6 +31,10 @@
 #include "gpu/vulkan/vulkan_implementation.h"
 #endif
 
+#if BUILDFLAG(SKIA_USE_DAWN)
+#include "gpu/command_buffer/service/dawn_context_provider.h"
+#endif
+
 namespace viz {
 
 // static
@@ -128,12 +132,9 @@ CompositorGpuThread::GetSharedContextState() {
   const bool use_passthrough_decoder =
       gpu::gles2::PassthroughCommandDecoderSupported() &&
       gpu_preferences.use_passthrough_cmd_decoder;
-  gpu::ContextCreationAttribs attribs_helper;
-  attribs_helper.context_type = features::UseGles2ForOopR()
-                                    ? gpu::CONTEXT_TYPE_OPENGLES2
-                                    : gpu::CONTEXT_TYPE_OPENGLES3;
-  gl::GLContextAttribs attribs = gpu::gles2::GenerateGLContextAttribs(
-      attribs_helper, use_passthrough_decoder);
+  gl::GLContextAttribs attribs =
+      gpu::gles2::GenerateGLContextAttribsForCompositor(
+          use_passthrough_decoder);
   attribs.angle_context_virtualization_group_number =
       gl::AngleContextVirtualizationGroup::kDrDc;
 
@@ -177,6 +178,18 @@ CompositorGpuThread::GetSharedContextState() {
     return nullptr;
   }
 
+  const auto& workarounds = gpu_channel_manager_->gpu_driver_bug_workarounds();
+
+#if BUILDFLAG(SKIA_USE_DAWN)
+  // TODO(1504543): Determine if we need to set up a DawnCachingInterfaceFactory
+  // and/or a cache blob callback.
+  dawn_context_provider_ =
+      gpu::DawnContextProvider::Create(gpu_preferences, workarounds);
+  if (!dawn_context_provider_) {
+    DLOG(ERROR) << "Failed to create Dawn context provider for Graphite.";
+  }
+#endif
+
   // Create a SharedContextState.
   auto shared_context_state = base::MakeRefCounted<gpu::SharedContextState>(
       std::move(share_group), std::move(surface), std::move(context),
@@ -189,26 +202,30 @@ CompositorGpuThread::GetSharedContextState() {
       /*vulkan_context_provider=*/nullptr,
 #endif
       /*metal_context_provider=*/nullptr,
+#if BUILDFLAG(SKIA_USE_DAWN)
+      dawn_context_provider_.get(),
+#else
       /*dawn_context_provider=*/nullptr,
+#endif
       /*peak_memory_monitor=*/weak_ptr_factory_.GetWeakPtr(),
       /*created_on_compositor_gpu_thread=*/true);
 
-  const auto& workarounds = gpu_channel_manager_->gpu_driver_bug_workarounds();
   auto gles2_feature_info = base::MakeRefCounted<gpu::gles2::FeatureInfo>(
       workarounds, gpu_feature_info);
 
   // Initialize GL.
   if (!shared_context_state->InitializeGL(gpu_preferences,
                                           std::move(gles2_feature_info))) {
-    LOG(ERROR) << "Failed to initialize GL for SharedContextState";
+    LOG(ERROR) << "Failed to initialize GL for DrDC SharedContextState";
     return nullptr;
   }
 
-  // Initialize GrContext.
-  if (!shared_context_state->InitializeGrContext(
+  // Initialize Skia.
+  if (!shared_context_state->InitializeSkia(
           gpu_preferences, workarounds, gpu_channel_manager_->gr_shader_cache(),
-          /*activity_flags=*/nullptr, /*progress_reporter=*/nullptr)) {
-    LOG(ERROR) << "Failed to Initialize GrContext for SharedContextState";
+          gpu_channel_manager_->use_shader_cache_shm_count(),
+          /*progress_reporter=*/nullptr)) {
+    LOG(ERROR) << "Failed to Initialize Skia for DrDC SharedContextState";
   }
   shared_context_state_ = std::move(shared_context_state);
   return shared_context_state_;
@@ -221,9 +238,9 @@ bool CompositorGpuThread::Initialize() {
   StartWithOptions(std::move(thread_options));
 
   // Wait until thread is started and Init() is executed in order to return
-  // updated |init_succeded_|.
+  // updated |init_succeeded_|.
   WaitUntilThreadStarted();
-  return init_succeded_;
+  return init_succeeded_;
 }
 
 void CompositorGpuThread::HandleMemoryPressure(
@@ -239,12 +256,10 @@ void CompositorGpuThread::HandleMemoryPressure(
 
 void CompositorGpuThread::Init() {
   const auto& gpu_preferences = gpu_channel_manager_->gpu_preferences();
-  if (enable_watchdog_) {
+  if (enable_watchdog_ && gpu_channel_manager_->watchdog()) {
     watchdog_thread_ = gpu::GpuWatchdogThread::Create(
-        gpu_preferences.watchdog_starts_backgrounded, "GpuWatchdog_Compositor");
-
-    if (!watchdog_thread_)
-      return;
+        gpu_preferences.watchdog_starts_backgrounded,
+        gpu_channel_manager_->watchdog(), "GpuWatchdog_Compositor");
     watchdog_thread_->OnInitComplete();
   }
 
@@ -254,7 +269,7 @@ void CompositorGpuThread::Init() {
   memory_pressure_listener_ = std::make_unique<base::MemoryPressureListener>(
       FROM_HERE, base::BindRepeating(&CompositorGpuThread::HandleMemoryPressure,
                                      base::Unretained(this))),
-  init_succeded_ = true;
+  init_succeeded_ = true;
 }
 
 void CompositorGpuThread::CleanUp() {

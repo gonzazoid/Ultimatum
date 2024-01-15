@@ -6,8 +6,9 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "chromeos/ash/components/dbus/hammerd/fake_hammerd_client.h"
@@ -152,7 +153,7 @@ class HammerdClientImpl : public HammerdClient {
       observer.InvalidBaseConnected();
   }
 
-  dbus::ObjectProxy* bus_proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy> bus_proxy_ = nullptr;
   base::ObserverList<Observer>::Unchecked observers_;
 
   base::WeakPtrFactory<HammerdClientImpl> weak_ptr_factory_{this};

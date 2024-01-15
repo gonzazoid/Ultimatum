@@ -4,17 +4,17 @@
 
 #include "ash/shelf/kiosk_app_instruction_bubble.h"
 
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
+#include "ash/style/typography.h"
 #include "ash/system/tray/tray_popup_utils.h"
 #include "ash/system/tray/tray_utils.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "components/strings/grit/components_strings.h"
-#include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/layout/fill_layout.h"
 #include "ui/views/layout/layout_provider.h"
@@ -38,8 +38,8 @@ views::BubbleBorder::Arrow GetArrow(ShelfAlignment alignment) {
   return views::BubbleBorder::Arrow::NONE;
 }
 
-gfx::Insets GetBubbleInsets() {
-  gfx::Insets insets = GetTrayBubbleInsets();
+gfx::Insets GetBubbleInsets(aura::Window* window) {
+  gfx::Insets insets = GetTrayBubbleInsets(window);
   insets.set_bottom(views::LayoutProvider::Get()->GetDistanceMetric(
       views::DISTANCE_RELATED_LABEL_HORIZONTAL));
   return insets;
@@ -61,8 +61,8 @@ KioskAppInstructionBubble::KioskAppInstructionBubble(views::View* anchor,
 
   // Set up the title view.
   title_ = AddChildView(std::make_unique<views::Label>());
-  TrayPopupUtils::SetLabelFontList(title_,
-                                   TrayPopupUtils::FontStyle::kSmallTitle);
+  title_->SetAutoColorReadabilityEnabled(false);
+  TypographyProvider::Get()->StyleLabel(TypographyToken::kCrosBody2, *title_);
   title_->SetText(l10n_util::GetStringUTF16(IDS_SHELF_KIOSK_APP_INSTRUCTION));
   title_->SetMultiLine(true);
   title_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
@@ -75,12 +75,17 @@ KioskAppInstructionBubble::KioskAppInstructionBubble(views::View* anchor,
 
   auto bubble_border =
       std::make_unique<views::BubbleBorder>(arrow(), GetShadow());
-  bubble_border->set_insets(GetBubbleInsets());
+  bubble_border->set_insets(
+      GetBubbleInsets(anchor_widget()->GetNativeWindow()->GetRootWindow()));
   bubble_border->SetCornerRadius(
       views::LayoutProvider::Get()->GetCornerRadiusMetric(
           views::Emphasis::kHigh));
   GetBubbleFrameView()->SetBubbleBorder(std::move(bubble_border));
   GetBubbleFrameView()->SetBackgroundColor(GetBackgroundColor());
+
+  SetAccessibilityProperties(
+      ax::mojom::Role::kStaticText,
+      l10n_util::GetStringUTF16(IDS_SHELF_KIOSK_APP_INSTRUCTION));
 }
 
 KioskAppInstructionBubble::~KioskAppInstructionBubble() = default;
@@ -93,17 +98,14 @@ void KioskAppInstructionBubble::OnThemeChanged() {
   title_->SetEnabledColor(label_color);
 }
 
-void KioskAppInstructionBubble::GetAccessibleNodeData(
-    ui::AXNodeData* node_data) {
-  node_data->role = ax::mojom::Role::kStaticText;
-  node_data->SetName(l10n_util::GetStringUTF8(IDS_SHELF_KIOSK_APP_INSTRUCTION));
-}
-
 gfx::Size KioskAppInstructionBubble::CalculatePreferredSize() const {
   const int bubble_margin = views::LayoutProvider::Get()->GetDistanceMetric(
       views::DISTANCE_DIALOG_CONTENT_MARGIN_TOP_CONTROL);
   const int width = kBubblePreferredInternalWidth + 2 * bubble_margin;
   return gfx::Size(width, GetHeightForWidth(width));
 }
+
+BEGIN_METADATA(KioskAppInstructionBubble, views::BubbleDialogDelegateView)
+END_METADATA
 
 }  // namespace ash

@@ -9,19 +9,19 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/device_event_log/device_event_log.h"
@@ -60,7 +60,7 @@ bool ShouldReadDescriptors(const UsbDeviceLinux& device) {
   return true;
 }
 
-void OnReadDescriptors(base::OnceCallback<void(bool)> callback,
+void OnReadDescriptors(base::OnceClosure callback,
                        scoped_refptr<UsbDeviceHandle> device_handle,
                        const GURL& landing_page) {
   UsbDeviceLinux* device =
@@ -70,18 +70,18 @@ void OnReadDescriptors(base::OnceCallback<void(bool)> callback,
     device->set_webusb_landing_page(landing_page);
 
   device_handle->Close();
-  std::move(callback).Run(true /* success */);
+  std::move(callback).Run();
 }
 
 void OnDeviceOpenedToReadDescriptors(
-    base::OnceCallback<void(bool)> callback,
+    base::OnceClosure callback,
     scoped_refptr<UsbDeviceHandle> device_handle) {
   if (device_handle) {
     ReadWebUsbDescriptors(
         device_handle,
         base::BindOnce(&OnReadDescriptors, std::move(callback), device_handle));
   } else {
-    std::move(callback).Run(false /* failure */);
+    std::move(callback).Run();
   }
 }
 
@@ -227,7 +227,7 @@ void UsbServiceLinux::BlockingTaskRunnerHelper::OnDeviceChanged(
 UsbServiceLinux::UsbServiceLinux() {
   helper_ = base::SequenceBound<BlockingTaskRunnerHelper>(
       CreateBlockingTaskRunner(), weak_factory_.GetWeakPtr(),
-      base::SequencedTaskRunnerHandle::Get());
+      base::SequencedTaskRunner::GetCurrentDefault());
 }
 
 UsbServiceLinux::~UsbServiceLinux() {
@@ -269,12 +269,11 @@ void UsbServiceLinux::OnDeviceAdded(
                        base::BindOnce(&UsbServiceLinux::DeviceReady,
                                       weak_factory_.GetWeakPtr(), device)));
   } else {
-    DeviceReady(device, /*success=*/true);
+    DeviceReady(device);
   }
 }
 
-void UsbServiceLinux::DeviceReady(scoped_refptr<UsbDeviceLinux> device,
-                                  bool success) {
+void UsbServiceLinux::DeviceReady(scoped_refptr<UsbDeviceLinux> device) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   bool enumeration_became_ready = false;
@@ -287,10 +286,8 @@ void UsbServiceLinux::DeviceReady(scoped_refptr<UsbDeviceLinux> device,
 
   // If |device| was disconnected while descriptors were being read then it
   // will have been removed from |devices_by_path_|.
-  auto it = devices_by_path_.find(device->device_path());
-  if (it == devices_by_path_.end()) {
-    success = false;
-  } else if (success) {
+  bool device_added = base::Contains(devices_by_path_, device->device_path());
+  if (device_added) {
     DCHECK(!base::Contains(devices(), device->guid()));
     devices()[device->guid()] = device;
 
@@ -300,8 +297,6 @@ void UsbServiceLinux::DeviceReady(scoped_refptr<UsbDeviceLinux> device,
                   << "\", product=" << device->product_id() << " \""
                   << device->product_string() << "\", serial=\""
                   << device->serial_number() << "\", guid=" << device->guid();
-  } else {
-    devices_by_path_.erase(it);
   }
 
   if (enumeration_became_ready) {
@@ -312,7 +307,7 @@ void UsbServiceLinux::DeviceReady(scoped_refptr<UsbDeviceLinux> device,
     for (auto& callback : enumeration_callbacks_)
       std::move(callback).Run(result);
     enumeration_callbacks_.clear();
-  } else if (success && enumeration_ready()) {
+  } else if (device_added && enumeration_ready()) {
     NotifyDeviceAdded(device);
   }
 }

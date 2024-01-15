@@ -10,13 +10,14 @@
 #include <vector>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
 #include "base/files/important_file_writer.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/task_traits.h"
@@ -32,6 +33,7 @@
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
 #include "chrome/browser/web_applications/web_app.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
+#include "chrome/browser/web_applications/web_app_registrar.h"
 #include "components/keep_alive_registry/keep_alive_types.h"
 #include "components/keep_alive_registry/scoped_keep_alive.h"
 
@@ -80,7 +82,7 @@ class GetWebApps {
   const base::FilePath output_file_;
   const base::FilePath profile_base_name_;
   std::unique_ptr<ScopedKeepAlive> keep_alive_;
-  std::vector<Profile*> profiles_;
+  std::vector<raw_ptr<Profile, VectorExperimental>> profiles_;
   std::vector<std::unique_ptr<ScopedProfileKeepAlive>> profiles_keep_alive_;
 };
 
@@ -133,28 +135,28 @@ void GetWebApps::SerializeAndScheduleWrite(const base::Value& output_info) {
 }
 
 base::Value GetWebApps::GetInstalledWebApps() {
-  base::Value installed_apps_list(base::Value::Type::LIST);
-  for (auto* item : profiles_) {
+  base::Value::List installed_apps_list;
+  for (Profile* item : profiles_) {
     web_app::WebAppProvider* web_app_provider =
         web_app::WebAppProvider::GetForWebApps(item);
-    base::Value item_info(base::Value::Type::DICTIONARY);
-    item_info.SetStringKey("profile_id", item->GetBaseName().AsUTF8Unsafe());
-    base::Value& installed_apps_per_profile =
-        *item_info.SetKey("web_apps", base::Value(base::Value::Type::LIST));
+    base::Value::Dict item_info;
+    item_info.Set("profile_id", item->GetBaseName().AsUTF8Unsafe());
+    base::Value::List installed_apps_per_profile;
     for (const web_app::WebApp& web_app :
-         web_app_provider->registrar().GetApps()) {
-      base::Value web_app_info(base::Value::Type::DICTIONARY);
-      web_app_info.SetStringKey("name", web_app.untranslated_name());
-      web_app_info.SetStringKey("id", web_app.app_id());
+         web_app_provider->registrar_unsafe().GetApps()) {
+      base::Value::Dict web_app_info;
+      web_app_info.Set("name", web_app.untranslated_name());
+      web_app_info.Set("id", web_app.app_id());
       installed_apps_per_profile.Append(std::move(web_app_info));
     }
+    item_info.Set("web_apps", std::move(installed_apps_per_profile));
     installed_apps_list.Append(std::move(item_info));
   }
-  return installed_apps_list;
+  return base::Value(std::move(installed_apps_list));
 }
 
 base::Value GetWebApps::GetOpenWebApps() {
-  base::flat_map<std::string, base::Value> open_apps;
+  base::flat_map<std::string, base::Value::List> open_apps;
   for (Browser* browser : *BrowserList::GetInstance()) {
     if (browser->type() != Browser::Type::TYPE_APP)
       continue;
@@ -164,23 +166,22 @@ base::Value GetWebApps::GetOpenWebApps() {
         profile_base_name_.AsUTF8Unsafe() != app_profile_base_name) {
       continue;
     }
-    base::Value web_app_info(base::Value::Type::DICTIONARY);
-    web_app_info.SetStringKey("id", browser->app_controller()->app_id());
-    web_app_info.SetStringKey(
-        "name",
-        base::UTF16ToUTF8(browser->app_controller()->GetAppShortName()));
-    auto iter_and_inserted = open_apps.emplace(
-        app_profile_base_name, base::Value(base::Value::Type::LIST));
+    base::Value::Dict web_app_info;
+    web_app_info.Set("id", browser->app_controller()->app_id());
+    web_app_info.Set("name", base::UTF16ToUTF8(
+                                 browser->app_controller()->GetAppShortName()));
+    auto iter_and_inserted =
+        open_apps.emplace(app_profile_base_name, base::Value::List());
     iter_and_inserted.first->second.Append(std::move(web_app_info));
   }
-  base::Value open_apps_list(base::Value::Type::LIST);
+  base::Value::List open_apps_list;
   for (auto& item : open_apps) {
-    base::Value item_info(base::Value::Type::DICTIONARY);
-    item_info.SetStringKey("profile_id", item.first);
-    item_info.SetKey("web_apps", std::move(item.second));
+    base::Value::Dict item_info;
+    item_info.Set("profile_id", item.first);
+    item_info.Set("web_apps", std::move(item.second));
     open_apps_list.Append(std::move(item_info));
   }
-  return open_apps_list;
+  return base::Value(std::move(open_apps_list));
 }
 
 void GetWebApps::OnProfileLoaded(base::RepeatingClosure callback,
@@ -198,10 +199,10 @@ void GetWebApps::OnProfileLoaded(base::RepeatingClosure callback,
 }
 
 void GetWebApps::FetchWebAppsAndWriteToDisk() {
-  base::Value apps_dict(base::Value::Type::DICTIONARY);
-  apps_dict.SetKey("installed_web_apps", GetInstalledWebApps());
-  apps_dict.SetKey("open_web_apps", GetOpenWebApps());
-  SerializeAndScheduleWrite(apps_dict);
+  base::Value::Dict apps_dict;
+  apps_dict.Set("installed_web_apps", GetInstalledWebApps());
+  apps_dict.Set("open_web_apps", GetOpenWebApps());
+  SerializeAndScheduleWrite(base::Value(std::move(apps_dict)));
   // `this` is owned by the callback that calls this function, so it will be
   // destroyed automatically after being run.
 }

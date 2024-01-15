@@ -34,20 +34,17 @@ extern const ui::ClassProperty<bool>* const kAutoMaximizeXdgShellEnabled;
 COMPONENT_EXPORT(CHROMEOS_UI_BASE)
 extern const ui::ClassProperty<bool>* const kBlockedForAssistantSnapshotKey;
 
-// If true, the window can attach into another window.
-COMPONENT_EXPORT(CHROMEOS_UI_BASE)
-extern const ui::ClassProperty<bool>* const kCanAttachToAnotherWindowKey;
-
-// If true, the window is the target window for the tab-dragged window. The key
-// is used by overview to show a highlight indication to indicate which overview
-// window the dragged tabs will merge into when the user releases the pointer.
-COMPONENT_EXPORT(CHROMEOS_UI_BASE)
-extern const ui::ClassProperty<bool>* const
-    kIsDeferredTabDraggingTargetWindowKey;
-
 // Whether holding esc should exit fullscreen. Used by Plugin VM.
 COMPONENT_EXPORT(CHROMEOS_UI_BASE)
 extern const ui::ClassProperty<bool>* const kEscHoldToExitFullscreen;
+
+// Do not exit fullscreen on a screen lock. Note that this property becomes
+// active only if `kUseOverviewToExitFullscreen` is true. Borealis apps set this
+// to avoid exiting fullscreen on a screen lock.
+// Do NOT use this property without consulting the security team for other use
+// cases.
+COMPONENT_EXPORT(CHROMEOS_UI_BASE)
+extern const ui::ClassProperty<bool>* const kNoExitFullscreenOnLock;
 
 // Whether to promote users to use Overview to exit fullscreen.
 // Borealis apps set this since they do not handle window size changes.
@@ -104,6 +101,10 @@ COMPONENT_EXPORT(CHROMEOS_UI_BASE)
 extern const ui::ClassProperty<gfx::Rect*>* const
     kImmersiveTopContainerBoundsInScreen;
 
+// A property key to indicate if the window is a game.
+COMPONENT_EXPORT(CHROMEOS_UI_BASE)
+extern const ui::ClassProperty<bool>* const kIsGameKey;
+
 // If true, the window is currently showing in overview mode.
 COMPONENT_EXPORT(CHROMEOS_UI_BASE)
 extern const ui::ClassProperty<bool>* const kIsShowingInOverviewKey;
@@ -111,6 +112,13 @@ extern const ui::ClassProperty<bool>* const kIsShowingInOverviewKey;
 // A property to indicate if a window should have a highlight border overlay.
 COMPONENT_EXPORT(CHROMEOS_UI_BASE)
 extern const ui::ClassProperty<bool>* const kShouldHaveHighlightBorderOverlay;
+
+// A property key to indicate if the window supports
+// `WindowStateType::kFloated`. Even if true, it doesn't always mean we _can_
+// float the window. See `chromeos::wm::CanFloatWindow` for details. True by
+// default.
+COMPONENT_EXPORT(CHROMEOS_UI_BASE)
+extern const ui::ClassProperty<bool>* const kSupportsFloatedStateKey;
 
 // A property key to tell if the window's opacity should be managed by WM.
 COMPONENT_EXPORT(CHROMEOS_UI_BASE)

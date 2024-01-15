@@ -10,8 +10,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "device/fido/ctap_get_assertion_request.h"
 #include "device/fido/ctap_make_credential_request.h"
@@ -89,13 +89,14 @@ class COMPONENT_EXPORT(DEVICE_FIDO) GetAssertionTask : public FidoTask {
       CtapDeviceResponseCode response_code,
       absl::optional<AuthenticatorMakeCredentialResponse> response_data);
 
-  void MaybeSetPRFParameters(
-      CtapGetAssertionRequest* request,
-      const CtapGetAssertionOptions::PRFInput* maybe_inputs);
+  void MaybeSetPRFParameters(CtapGetAssertionRequest* request,
+                             const PRFInput* maybe_inputs);
 
   void MaybeRevertU2fFallbackAndInvokeCallback(
       CtapDeviceResponseCode status,
       absl::optional<AuthenticatorGetAssertionResponse> response);
+
+  void LogAndFail(const char* error);
 
   CtapGetAssertionRequest request_;
   CtapGetAssertionOptions options_;

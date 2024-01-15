@@ -1,22 +1,21 @@
 // Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
 #include "chromecast/crash/linux/dump_info.h"
 
 #include <errno.h>
 #include <stddef.h>
 #include <stdlib.h>
 
+#include "base/i18n/time_formatting.h"
 #include "base/logging.h"
-#include "base/strings/stringprintf.h"
+#include "base/time/time.h"
 #include "base/values.h"
 
 namespace chromecast {
 
 namespace {
-
-// "%Y-%m-%d %H:%M:%S";
-const char kDumpTimeFormat[] = "%04d-%02d-%02d %02d:%02d:%02d";
 
 const int kNumRequiredParams = 4;
 
@@ -38,6 +37,19 @@ const char kCrashProductNameKey[] = "crash_product_name";
 const char kExecNameKey[] = "exec_name";
 const char kSignatureKey[] = "signature";
 const char kExtraInfoKey[] = "extra_info";
+
+// Convenience wrapper around Value::Dict::FindString(), for easier use in if
+// statements. If `key` is a string in `dict`, writes it to `out` and returns
+// true. Leaves `out` alone and returns false otherwise.
+bool FindString(const base::Value::Dict& dict,
+                base::StringPiece key,
+                std::string& out) {
+  const std::string* value = dict.FindString(key);
+  if (!value)
+    return false;
+  out = *value;
+  return true;
+}
 
 }  // namespace
 
@@ -63,12 +75,8 @@ DumpInfo::~DumpInfo() {}
 base::Value DumpInfo::GetAsValue() const {
   base::Value::Dict result;
 
-  base::Time::Exploded ex;
-  dump_time_.LocalExplode(&ex);
-  std::string dump_time =
-      base::StringPrintf(kDumpTimeFormat, ex.year, ex.month, ex.day_of_month,
-                         ex.hour, ex.minute, ex.second);
-  result.Set(kDumpTimeKey, dump_time);
+  result.Set(kDumpTimeKey, base::UnlocalizedTimeFormatWithPattern(
+                               dump_time_, "yyyy-MM-dd HH:mm:ss"));
 
   result.Set(kDumpKey, crashed_process_dump_);
   std::string uptime = std::to_string(params_.process_uptime);
@@ -102,71 +110,71 @@ bool DumpInfo::ParseEntry(const base::Value* entry) {
   if (!entry)
     return false;
 
-  const base::DictionaryValue* dict;
-  if (!entry->GetAsDictionary(&dict))
+  const base::Value::Dict* dict = entry->GetIfDict();
+  if (!dict)
     return false;
 
   // Extract required fields.
   std::string dump_time;
-  if (!dict->GetString(kDumpTimeKey, &dump_time))
+  if (!FindString(*dict, kDumpTimeKey, dump_time))
     return false;
   if (!SetDumpTimeFromString(dump_time))
     return false;
 
-  if (!dict->GetString(kDumpKey, &crashed_process_dump_))
+  if (!FindString(*dict, kDumpKey, crashed_process_dump_))
     return false;
 
   std::string uptime;
-  if (!dict->GetString(kUptimeKey, &uptime))
+  if (!FindString(*dict, kUptimeKey, uptime))
     return false;
   errno = 0;
   params_.process_uptime = strtoull(uptime.c_str(), nullptr, 0);
   if (errno != 0)
     return false;
 
-  if (!dict->GetString(kLogfileKey, &logfile_))
+  if (!FindString(*dict, kLogfileKey, logfile_))
     return false;
   size_t num_params = kNumRequiredParams;
 
   // Extract all other optional fields.
-  const base::ListValue* attachments_list;
-  if (dict->GetList(kAttachmentsKey, &attachments_list)) {
+  const base::Value::List* attachments_list = dict->FindList(kAttachmentsKey);
+  if (attachments_list) {
     ++num_params;
-    for (const auto& attachment : attachments_list->GetList()) {
+    for (const auto& attachment : *attachments_list) {
       attachments_.push_back(attachment.GetString());
     }
   }
 
   std::string unused_process_name;
-  if (dict->GetString(kNameKey, &unused_process_name))
+  if (FindString(*dict, kNameKey, unused_process_name))
     ++num_params;
-  if (dict->GetString(kSuffixKey, &params_.suffix))
+  if (FindString(*dict, kSuffixKey, params_.suffix))
     ++num_params;
-  if (dict->GetString(kPrevAppNameKey, &params_.previous_app_name))
+  if (FindString(*dict, kPrevAppNameKey, params_.previous_app_name))
     ++num_params;
-  if (dict->GetString(kCurAppNameKey, &params_.current_app_name))
+  if (FindString(*dict, kCurAppNameKey, params_.current_app_name))
     ++num_params;
-  if (dict->GetString(kLastAppNameKey, &params_.last_app_name))
+  if (FindString(*dict, kLastAppNameKey, params_.last_app_name))
     ++num_params;
-  if (dict->GetString(kReleaseVersionKey, &params_.cast_release_version))
+  if (FindString(*dict, kReleaseVersionKey, params_.cast_release_version))
     ++num_params;
-  if (dict->GetString(kBuildNumberKey, &params_.cast_build_number))
+  if (FindString(*dict, kBuildNumberKey, params_.cast_build_number))
     ++num_params;
-  if (dict->GetString(kReasonKey, &params_.reason))
+  if (FindString(*dict, kReasonKey, params_.reason))
     ++num_params;
-  if (dict->GetString(kStadiaSessionIdKey, &params_.stadia_session_id))
+  if (FindString(*dict, kStadiaSessionIdKey, params_.stadia_session_id))
     ++num_params;
-  if (dict->GetString(kExecNameKey, &params_.exec_name))
+  if (FindString(*dict, kExecNameKey, params_.exec_name))
     ++num_params;
-  if (dict->GetString(kSignatureKey, &params_.signature))
+  if (FindString(*dict, kSignatureKey, params_.signature))
     ++num_params;
-  if (dict->GetString(kExtraInfoKey, &params_.extra_info))
+  if (FindString(*dict, kExtraInfoKey, params_.extra_info))
     ++num_params;
-  if (dict->GetString(kCrashProductNameKey, &params_.crash_product_name))
+  if (FindString(*dict, kCrashProductNameKey, params_.crash_product_name))
     ++num_params;
 
   // Disallow extraneous params
-  if (dict->DictSize() != num_params)
+  if (dict->size() != num_params)
     return false;
 
   valid_ = true;
@@ -174,14 +182,12 @@ bool DumpInfo::ParseEntry(const base::Value* entry) {
 }
 
 bool DumpInfo::SetDumpTimeFromString(const std::string& timestr) {
-  base::Time::Exploded ex = {0};
-  if (sscanf(timestr.c_str(), kDumpTimeFormat, &ex.year, &ex.month,
-             &ex.day_of_month, &ex.hour, &ex.minute, &ex.second) < 6) {
-    LOG(INFO) << "Failed to convert dump time invalid";
-    return false;
+  if (base::Time::FromString(timestr.c_str(), &dump_time_)) {
+    return true;
   }
 
-  return base::Time::FromLocalExploded(ex, &dump_time_);
+  LOG(INFO) << "Failed to convert dump time invalid";
+  return false;
 }
 
 }  // namespace chromecast

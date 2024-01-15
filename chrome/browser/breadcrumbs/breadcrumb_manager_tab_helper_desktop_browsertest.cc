@@ -1,10 +1,9 @@
 // Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
+#include "base/containers/circular_deque.h"
+#include "build/build_config.h"
 #include "chrome/browser/breadcrumbs/breadcrumb_manager_tab_helper.h"
-
-#include "chrome/browser/breadcrumbs/breadcrumb_manager_keyed_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ssl/cert_verifier_browser_test.h"
 #include "chrome/browser/ui/browser.h"
@@ -13,8 +12,8 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/breadcrumbs/core/breadcrumb_manager.h"
 #include "components/breadcrumbs/core/breadcrumb_manager_tab_helper.h"
+#include "components/breadcrumbs/core/breadcrumbs_status.h"
 #include "content/public/test/browser_test.h"
-#include "content/public/test/download_test_observer.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 
 namespace {
@@ -39,7 +38,7 @@ class SecurityStyleTestObserver : public content::WebContentsObserver {
   base::RunLoop run_loop_;
 };
 
-std::list<std::string> GetEvents() {
+const base::circular_deque<std::string>& GetEvents() {
   return breadcrumbs::BreadcrumbManager::GetInstance().GetEvents();
 }
 
@@ -52,10 +51,15 @@ class BreadcrumbManagerTabHelperBrowserTest : public InProcessBrowserTest {
     BreadcrumbManagerTabHelper::CreateForWebContents(
         browser()->tab_strip_model()->GetActiveWebContents());
   }
+
+ private:
+  breadcrumbs::ScopedEnableBreadcrumbsForTesting enable_breadcrumbs_;
 };
 
 // Tests download navigation.
-IN_PROC_BROWSER_TEST_F(BreadcrumbManagerTabHelperBrowserTest, Download) {
+// TODO(crbug.com/1516817): Re-enable this test
+IN_PROC_BROWSER_TEST_F(BreadcrumbManagerTabHelperBrowserTest,
+                       DISABLED_Download) {
   const size_t num_startup_breadcrumbs = GetEvents().size();
 
   const GURL url =
@@ -63,7 +67,7 @@ IN_PROC_BROWSER_TEST_F(BreadcrumbManagerTabHelperBrowserTest, Download) {
                                 base::FilePath().AppendASCII("a_zip_file.zip"));
   ui_test_utils::DownloadURL(browser(), url);
 
-  const auto events = GetEvents();
+  const auto& events = GetEvents();
   // Breadcrumbs should have been logged for starting and finishing the
   // navigation, and the navigation should be labeled as a download.
   ASSERT_EQ(2u, events.size() - num_startup_breadcrumbs);
@@ -91,8 +95,6 @@ class BreadcrumbManagerTabHelperSecurityStateBrowserTest
   void SetUpOnMainThread() override {
     BreadcrumbManagerTabHelper::CreateForWebContents(
         browser()->tab_strip_model()->GetActiveWebContents());
-    BreadcrumbManagerKeyedServiceFactory::GetForBrowserContext(
-        browser()->profile());
     ASSERT_TRUE(https_server_.Start());
   }
 
@@ -108,11 +110,20 @@ class BreadcrumbManagerTabHelperSecurityStateBrowserTest
   }
 
   net::EmbeddedTestServer https_server_{net::EmbeddedTestServer::TYPE_HTTPS};
+
+ private:
+  breadcrumbs::ScopedEnableBreadcrumbsForTesting enable_breadcrumbs_;
 };
 
 // Broken authentication.
+// Fails on Linux and Windows. http://crbug.com/1516817
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
+#define MAYBE_BrokenAuthentication DISABLED_BrokenAuthentication
+#else
+#define MAYBE_BrokenAuthentication BrokenAuthentication
+#endif
 IN_PROC_BROWSER_TEST_F(BreadcrumbManagerTabHelperSecurityStateBrowserTest,
-                       BrokenAuthentication) {
+                       MAYBE_BrokenAuthentication) {
   SetUpMockCertVerifierForHttpsServer(net::CERT_STATUS_DATE_INVALID,
                                       net::ERR_CERT_DATE_INVALID);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(

@@ -9,6 +9,7 @@
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/mojom/frame/back_forward_cache_controller.mojom-blink.h"
 #include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/core/execution_context/agent.h"
@@ -21,6 +22,8 @@
 #include "third_party/blink/renderer/core/testing/fake_local_frame_host.h"
 #include "third_party/blink/renderer/platform/scheduler/public/event_loop.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
 
@@ -31,7 +34,7 @@ class TestLocalFrameBackForwardCacheClient
       blink::AssociatedInterfaceProvider* provider) {
     provider->OverrideBinderForTesting(
         mojom::blink::BackForwardCacheControllerHost::Name_,
-        base::BindRepeating(
+        WTF::BindRepeating(
             [](TestLocalFrameBackForwardCacheClient* parent,
                mojo::ScopedInterfaceEndpointHandle handle) {
               parent->receiver_.Bind(
@@ -45,12 +48,13 @@ class TestLocalFrameBackForwardCacheClient
 
   ~TestLocalFrameBackForwardCacheClient() override = default;
 
-  void EvictFromBackForwardCache(mojom::RendererEvictionReason) override {
+  void EvictFromBackForwardCache(
+      mojom::blink::RendererEvictionReason) override {
     quit_closure_.Run();
   }
 
   void DidChangeBackForwardCacheDisablingFeatures(
-      uint64_t features_mask) override {}
+      Vector<mojom::blink::BlockingDetailsPtr> details) override {}
 
   void WaitUntilEvictedFromBackForwardCache() {
     base::RunLoop run_loop;
@@ -74,6 +78,9 @@ class LocalFrameBackForwardCacheTest : public testing::Test,
                                        private ScopedBackForwardCacheForTest {
  public:
   LocalFrameBackForwardCacheTest() : ScopedBackForwardCacheForTest(true) {}
+
+ private:
+  test::TaskEnvironment task_environment_;
 };
 
 // Tests a frame in the back-forward cache (a.k.a. bfcache) is evicted on
@@ -83,7 +90,7 @@ class LocalFrameBackForwardCacheTest : public testing::Test,
 TEST_F(LocalFrameBackForwardCacheTest, EvictionOnV8ExecutionAtMicrotask) {
   base::test::ScopedFeatureList feature_list;
   feature_list.InitAndDisableFeature(
-      features::kBackForwardCacheNotReachedOnJavaScriptExecution);
+      features::kBackForwardCacheDWCOnJavaScriptExecution);
   frame_test_helpers::TestWebFrameClient web_frame_client;
   TestLocalFrameBackForwardCacheClient frame_host(
       web_frame_client.GetRemoteNavigationAssociatedInterfaces());
@@ -109,12 +116,12 @@ TEST_F(LocalFrameBackForwardCacheTest, EvictionOnV8ExecutionAtMicrotask) {
   //   2) C++ closure
   // The case 1) should never happen when the frame is in bfcache. On the other
   // hand, the case 2) can happen. See https://crbug.com/994169
-  frame->DomWindow()->GetAgent()->event_loop()->EnqueueMicrotask(base::BindOnce(
+  frame->DomWindow()->GetAgent()->event_loop()->EnqueueMicrotask(WTF::BindOnce(
       [](LocalFrame* frame) {
         ClassicScript::CreateUnspecifiedScript("console.log('hi');")
             ->RunScript(frame->DomWindow());
       },
-      frame));
+      WrapWeakPersistent(frame)));
   frame_host.WaitUntilEvictedFromBackForwardCache();
 }
 

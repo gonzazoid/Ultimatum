@@ -9,7 +9,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "content/common/content_export.h"
 #include "media/mojo/mojom/audio_output_stream.mojom.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -69,13 +69,6 @@ class CONTENT_EXPORT AudioStreamBroker {
   virtual ~AudioStreamBroker();
 
   virtual void CreateStream(media::mojom::AudioStreamFactory* factory) = 0;
-
-  // Thread-safe utility that notifies the process host identified by
-  // |render_process_id| of a started stream to ensure that the renderer is not
-  // backgrounded. Must be paired with a later call to
-  // NotifyRenderProcessOfStoppedStream()
-  static void NotifyProcessHostOfStartedStream(int render_process_id);
-  static void NotifyProcessHostOfStoppedStream(int render_process_id);
 
   int render_process_id() const { return render_process_id_; }
   int render_frame_id() const { return render_frame_id_; }

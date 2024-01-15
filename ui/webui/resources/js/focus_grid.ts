@@ -4,7 +4,6 @@
 
 // clang-format off
 import {assert} from './assert.js';
-
 import {FocusRow, FocusRowDelegate} from './focus_row.js';
 // clang-format on
 

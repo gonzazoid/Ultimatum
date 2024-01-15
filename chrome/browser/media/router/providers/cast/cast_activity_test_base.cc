@@ -11,8 +11,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/mock_callback.h"
@@ -55,7 +55,7 @@ MockCastActivityManager::~MockCastActivityManager() = default;
 
 const char* const CastActivityTestBase::kAppId = "theAppId";
 const char* const CastActivityTestBase::kRouteId = "theRouteId";
-const char* const CastActivityTestBase::kSinkId = "cast:<id42>";
+const char* const CastActivityTestBase::kSinkId = "cast:id42";
 const char* const CastActivityTestBase::kHashToken = "dummyHashToken";
 
 CastActivityTestBase::CastActivityTestBase() = default;

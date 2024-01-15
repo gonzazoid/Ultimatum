@@ -7,16 +7,17 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
 #include "base/time/time.h"
+#include "components/attribution_reporting/suitable_origin.h"
 #include "content/browser/attribution_reporting/attribution_debug_report.h"
 #include "content/browser/attribution_reporting/attribution_report.h"
-#include "content/browser/attribution_reporting/attribution_source_type.h"
 #include "content/browser/attribution_reporting/attribution_test_utils.h"
 #include "content/browser/attribution_reporting/send_result.h"
+#include "content/browser/attribution_reporting/store_source_result.h"
 #include "content/browser/attribution_reporting/stored_source.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/test/browser_task_environment.h"
@@ -40,6 +41,9 @@ namespace content {
 
 namespace {
 
+using ::attribution_reporting::SuitableOrigin;
+
+using ::testing::_;
 using ::testing::Field;
 using ::testing::InSequence;
 using ::testing::Mock;
@@ -60,18 +64,18 @@ const char kDebugAggregatableReportUrl[] =
     "https://report.test/.well-known/attribution-reporting/debug/"
     "report-aggregate-attribution";
 
+const char kVerboseDebugReportMetricName[] =
+    "Conversions.VerboseDebugReport.HttpResponseOrNetErrorCode";
+
 AttributionReport DefaultEventLevelReport() {
-  return ReportBuilder(
-             AttributionInfoBuilder(SourceBuilder(base::Time()).BuildStored())
-                 .Build())
+  return ReportBuilder(AttributionInfoBuilder().Build(),
+                       SourceBuilder(base::Time()).BuildStored())
       .Build();
 }
 
 AttributionReport DefaultAggregatableReport() {
-  return ReportBuilder(
-             AttributionInfoBuilder(
-                 SourceBuilder(SourceBuilder(base::Time())).BuildStored())
-                 .Build())
+  return ReportBuilder(AttributionInfoBuilder().Build(),
+                       SourceBuilder(SourceBuilder(base::Time())).BuildStored())
       .BuildAggregatableAttribution();
 }
 
@@ -91,7 +95,8 @@ class AttributionReportNetworkSenderTest : public testing::Test {
 
   network::TestURLLoaderFactory test_url_loader_factory_;
 
-  base::MockCallback<base::OnceCallback<void(AttributionReport, SendResult)>>
+  base::MockCallback<
+      base::OnceCallback<void(const AttributionReport&, SendResult)>>
       callback_;
 
   // Unique ptr so it can be reset during testing.
@@ -116,6 +121,17 @@ TEST_F(AttributionReportNetworkSenderTest, LoadFlags) {
       test_url_loader_factory_.GetPendingRequest(0)->request.load_flags;
   EXPECT_TRUE(load_flags & net::LOAD_BYPASS_CACHE);
   EXPECT_TRUE(load_flags & net::LOAD_DISABLE_CACHE);
+}
+
+TEST_F(AttributionReportNetworkSenderTest, SameSite) {
+  auto report = DefaultEventLevelReport();
+  network_sender_->SendReport(report, /*is_debug_report=*/false,
+                              base::DoNothing());
+  EXPECT_EQ(test_url_loader_factory_.GetPendingRequest(0)->request.mode,
+            network::mojom::RequestMode::kSameOrigin);
+  EXPECT_EQ(
+      test_url_loader_factory_.GetPendingRequest(0)->request.request_initiator,
+      report.GetReportingOrigin());
 }
 
 TEST_F(AttributionReportNetworkSenderTest, Isolation) {
@@ -144,169 +160,57 @@ TEST_F(AttributionReportNetworkSenderTest, Isolation) {
             request2.trusted_params->isolation_info.network_isolation_key());
 }
 
-TEST_F(AttributionReportNetworkSenderTest, ReportSent_ReportBodySetCorrectly) {
-  const struct {
-    AttributionSourceType source_type;
-    const char* expected_report;
-  } kTestCases[] = {
-      {AttributionSourceType::kNavigation,
-       R"({"attribution_destination":"https://conversion.test",)"
-       R"("randomized_trigger_rate":0.2,)"
-       R"("report_id":"21abd97f-73e8-4b88-9389-a9fee6abda5e",)"
-       R"("source_event_id":"100",)"
-       R"("source_type":"navigation",)"
-       R"("trigger_data":"5"})"},
-      {AttributionSourceType::kEvent,
-       R"({"attribution_destination":"https://conversion.test",)"
-       R"("randomized_trigger_rate":0.2,)"
-       R"("report_id":"21abd97f-73e8-4b88-9389-a9fee6abda5e",)"
-       R"("source_event_id":"100",)"
-       R"("source_type":"event",)"
-       R"("trigger_data":"5"})"},
-  };
-
-  for (const auto& test_case : kTestCases) {
-    auto impression = SourceBuilder(base::Time())
-                          .SetSourceEventId(100)
-                          .SetSourceType(test_case.source_type)
-                          .BuildStored();
-    AttributionReport report =
-        ReportBuilder(AttributionInfoBuilder(impression).Build())
-            .SetTriggerData(5)
-            .SetRandomizedTriggerRate(0.2)
-            .Build();
-    network_sender_->SendReport(report, /*is_debug_report=*/false,
-                                base::DoNothing());
-
-    const network::ResourceRequest* pending_request;
-    EXPECT_TRUE(test_url_loader_factory_.IsPending(kEventLevelReportUrl,
-                                                   &pending_request));
-    EXPECT_EQ(test_case.expected_report,
-              network::GetUploadData(*pending_request));
-    EXPECT_TRUE(test_url_loader_factory_.SimulateResponseForPendingRequest(
-        kEventLevelReportUrl, ""));
-  }
-}
-
 TEST_F(AttributionReportNetworkSenderTest,
-       DebugReportSent_ReportUrlAndBodySetCorrectly) {
+       ReportSent_ReportBodyAndURLSetCorrectly) {
   static constexpr char kExpectedReportBody[] =
       R"({"attribution_destination":"https://conversion.test",)"
       R"("randomized_trigger_rate":0.2,)"
       R"("report_id":"21abd97f-73e8-4b88-9389-a9fee6abda5e",)"
+      R"("scheduled_report_time":"3600",)"
       R"("source_event_id":"100",)"
       R"("source_type":"navigation",)"
       R"("trigger_data":"5"})";
 
-  auto source = SourceBuilder().SetSourceEventId(100).BuildStored();
-  const AttributionReport report =
-      ReportBuilder(AttributionInfoBuilder(source).Build())
-          .SetTriggerData(5)
-          .SetRandomizedTriggerRate(0.2)
-          .Build();
-
-  network_sender_->SendReport(report, /*is_debug_report=*/true,
-                              base::DoNothing());
-
-  const network::ResourceRequest* pending_request;
-  EXPECT_TRUE(test_url_loader_factory_.IsPending(kDebugEventLevelReportUrl,
-                                                 &pending_request));
-  EXPECT_EQ(kExpectedReportBody, network::GetUploadData(*pending_request));
-  EXPECT_TRUE(test_url_loader_factory_.SimulateResponseForPendingRequest(
-      kDebugEventLevelReportUrl, ""));
-
-  // Verify that debug and non-debug reports have the same body.
-  network_sender_->SendReport(report, /*is_debug_report=*/false,
-                              base::DoNothing());
-  EXPECT_TRUE(test_url_loader_factory_.IsPending(kEventLevelReportUrl,
-                                                 &pending_request));
-  EXPECT_EQ(kExpectedReportBody, network::GetUploadData(*pending_request));
-  EXPECT_TRUE(test_url_loader_factory_.SimulateResponseForPendingRequest(
-      kEventLevelReportUrl, ""));
-}
-
-TEST_F(AttributionReportNetworkSenderTest,
-       ReportSentWithDebugKeys_ReportBodySetCorrectly) {
   const struct {
-    absl::optional<uint64_t> source_debug_key;
-    absl::optional<uint64_t> trigger_debug_key;
-    const char* expected_report;
+    bool is_debug_report;
+    const char* expected_url;
   } kTestCases[] = {
-      {absl::nullopt, absl::nullopt,
-       R"({"attribution_destination":"https://conversion.test",)"
-       R"("randomized_trigger_rate":0.2,)"
-       R"("report_id":"21abd97f-73e8-4b88-9389-a9fee6abda5e",)"
-       R"("source_event_id":"100",)"
-       R"("source_type":"navigation",)"
-       R"("trigger_data":"5"})"},
-      {7, absl::nullopt,
-       R"({"attribution_destination":"https://conversion.test",)"
-       R"("randomized_trigger_rate":0.2,)"
-       R"("report_id":"21abd97f-73e8-4b88-9389-a9fee6abda5e",)"
-       R"("source_debug_key":"7",)"
-       R"("source_event_id":"100",)"
-       R"("source_type":"navigation",)"
-       R"("trigger_data":"5"})"},
-      {absl::nullopt, 7,
-       R"({"attribution_destination":"https://conversion.test",)"
-       R"("randomized_trigger_rate":0.2,)"
-       R"("report_id":"21abd97f-73e8-4b88-9389-a9fee6abda5e",)"
-       R"("source_event_id":"100",)"
-       R"("source_type":"navigation",)"
-       R"("trigger_data":"5",)"
-       R"("trigger_debug_key":"7"})"},
-      {7, 8,
-       R"({"attribution_destination":"https://conversion.test",)"
-       R"("randomized_trigger_rate":0.2,)"
-       R"("report_id":"21abd97f-73e8-4b88-9389-a9fee6abda5e",)"
-       R"("source_debug_key":"7",)"
-       R"("source_event_id":"100",)"
-       R"("source_type":"navigation",)"
-       R"("trigger_data":"5",)"
-       R"("trigger_debug_key":"8"})"},
+      {false, kEventLevelReportUrl},
+      {true, kDebugEventLevelReportUrl},
   };
 
+  const AttributionReport report =
+      ReportBuilder(AttributionInfoBuilder()
+                        .SetTime(base::Time::UnixEpoch() + base::Seconds(1))
+                        .Build(),
+                    SourceBuilder(base::Time::UnixEpoch())
+                        .SetSourceEventId(100)
+                        .SetRandomizedResponseRate(0.2)
+                        .BuildStored())
+          .SetTriggerData(5)
+          .SetReportTime(base::Time::UnixEpoch() + base::Hours(1))
+          .Build();
+
   for (const auto& test_case : kTestCases) {
-    auto impression = SourceBuilder(base::Time())
-                          .SetSourceEventId(100)
-                          .SetDebugKey(test_case.source_debug_key)
-                          .BuildStored();
-    AttributionReport report =
-        ReportBuilder(AttributionInfoBuilder(impression)
-                          .SetDebugKey(test_case.trigger_debug_key)
-                          .Build())
-            .SetTriggerData(5)
-            .SetRandomizedTriggerRate(0.2)
-            .Build();
-    network_sender_->SendReport(report, /*is_debug_report=*/false,
+    network_sender_->SendReport(report, test_case.is_debug_report,
                                 base::DoNothing());
 
     const network::ResourceRequest* pending_request;
-    EXPECT_TRUE(test_url_loader_factory_.IsPending(kEventLevelReportUrl,
+    EXPECT_TRUE(test_url_loader_factory_.IsPending(test_case.expected_url,
                                                    &pending_request));
-    EXPECT_EQ(test_case.expected_report,
-              network::GetUploadData(*pending_request));
+    EXPECT_EQ(kExpectedReportBody, network::GetUploadData(*pending_request));
     EXPECT_TRUE(test_url_loader_factory_.SimulateResponseForPendingRequest(
-        kEventLevelReportUrl, ""));
+        test_case.expected_url, ""));
   }
 }
 
 TEST_F(AttributionReportNetworkSenderTest, ReportSent_RequestAttributesSet) {
-  auto impression =
-      SourceBuilder(base::Time())
-          .SetReportingOrigin(url::Origin::Create(GURL("https://a.com")))
-          .SetDestinationOrigin(url::Origin::Create(GURL("https://sub.b.com")))
-          .BuildStored();
-  AttributionReport report =
-      ReportBuilder(AttributionInfoBuilder(impression).Build()).Build();
-  network_sender_->SendReport(report, /*is_debug_report=*/false,
-                              base::DoNothing());
+  network_sender_->SendReport(DefaultEventLevelReport(),
+                              /*is_debug_report=*/false, base::DoNothing());
 
   const network::ResourceRequest* pending_request;
-  EXPECT_TRUE(test_url_loader_factory_.IsPending(
-      "https://a.com/.well-known/attribution-reporting/"
-      "report-event-attribution",
-      &pending_request));
+  EXPECT_TRUE(test_url_loader_factory_.IsPending(kEventLevelReportUrl,
+                                                 &pending_request));
 
   // Ensure that the request is sent with no credentials.
   EXPECT_EQ(network::mojom::CredentialsMode::kOmit,
@@ -556,17 +460,10 @@ TEST_F(AttributionReportNetworkSenderTest, ManyReports_AllSentSuccessfully) {
   EXPECT_EQ(0, test_url_loader_factory_.NumPending());
 }
 
-TEST_F(AttributionReportNetworkSenderTest,
-       AggregatableReportSent_ReportBodySetCorrectly) {
-  static constexpr char kExpectedReportBody[] =
-      R"({"aggregation_service_payloads":"not generated prior to send",)"
-      R"("shared_info":"not generated prior to send"})";
-
+TEST_F(AttributionReportNetworkSenderTest, HeadersPopulated) {
   AttributionReport report =
-      ReportBuilder(AttributionInfoBuilder(
-                        SourceBuilder(base::Time::FromJavaTime(1234483200000))
-                            .BuildStored())
-                        .Build())
+      ReportBuilder(AttributionInfoBuilder().Build(),
+                    SourceBuilder().BuildStored())
           .SetAggregatableHistogramContributions(
               {AggregatableHistogramContribution(/*key=*/1, /*value=*/2)})
           .BuildAggregatableAttribution();
@@ -577,44 +474,40 @@ TEST_F(AttributionReportNetworkSenderTest,
   const network::ResourceRequest* pending_request;
   EXPECT_TRUE(test_url_loader_factory_.IsPending(kAggregatableReportUrl,
                                                  &pending_request));
-  EXPECT_EQ(kExpectedReportBody, network::GetUploadData(*pending_request));
+  EXPECT_FALSE(pending_request->headers.HasHeader(
+      "Sec-Attribution-Reporting-Private-State-Token"));
   EXPECT_TRUE(test_url_loader_factory_.SimulateResponseForPendingRequest(
       kAggregatableReportUrl, ""));
 }
 
-TEST_F(AttributionReportNetworkSenderTest,
-       DebugAggregatableReportSent_ReportUrlAndBodySetCorrectly) {
-  static constexpr char kExpectedReportBody[] =
-      R"({"aggregation_service_payloads":"not generated prior to send",)"
-      R"("shared_info":"not generated prior to send"})";
+TEST_F(AttributionReportNetworkSenderTest, ReportRedirects) {
+  auto report = DefaultEventLevelReport();
+  EXPECT_CALL(callback_, Run(report, SendResult(SendResult::Status::kSent,
+                                                net::OK, net::HTTP_OK)));
 
-  AttributionReport report =
-      ReportBuilder(AttributionInfoBuilder(
-                        SourceBuilder(base::Time::FromJavaTime(1234483200000))
-                            .BuildStored())
-                        .Build())
-          .SetAggregatableHistogramContributions(
-              {AggregatableHistogramContribution(/*key=*/1, /*value=*/2)})
-          .BuildAggregatableAttribution();
+  const GURL kNewUrl(
+      "https://report2.test/.well-known/attribution-reporting/"
+      "report-event-attribution");
 
-  network_sender_->SendReport(report, /*is_debug_report=*/true,
-                              base::DoNothing());
+  net::RedirectInfo redirect_info;
+  redirect_info.status_code = net::HTTP_MOVED_PERMANENTLY;
+  redirect_info.new_url = kNewUrl;
+  redirect_info.new_method = "POST";
+  network::TestURLLoaderFactory::Redirects redirects;
+  redirects.emplace_back(redirect_info, network::mojom::URLResponseHead::New());
+  network::URLLoaderCompletionStatus status;
+  auto head = network::mojom::URLResponseHead::New();
+  head->headers = base::MakeRefCounted<net::HttpResponseHeaders>("");
 
-  const network::ResourceRequest* pending_request;
-  EXPECT_TRUE(test_url_loader_factory_.IsPending(kDebugAggregatableReportUrl,
-                                                 &pending_request));
-  EXPECT_EQ(kExpectedReportBody, network::GetUploadData(*pending_request));
-  EXPECT_TRUE(test_url_loader_factory_.SimulateResponseForPendingRequest(
-      kDebugAggregatableReportUrl, ""));
+  test_url_loader_factory_.AddResponse(
+      GURL(kEventLevelReportUrl), std::move(head), "", status,
+      std::move(redirects),
+      network::TestURLLoaderFactory::ResponseProduceFlags::
+          kSendHeadersOnNetworkError);
 
-  // Verify that debug and non-debug reports have the same body.
   network_sender_->SendReport(report, /*is_debug_report=*/false,
-                              base::DoNothing());
-  EXPECT_TRUE(test_url_loader_factory_.IsPending(kAggregatableReportUrl,
-                                                 &pending_request));
-  EXPECT_EQ(kExpectedReportBody, network::GetUploadData(*pending_request));
-  EXPECT_TRUE(test_url_loader_factory_.SimulateResponseForPendingRequest(
-      kAggregatableReportUrl, ""));
+                              callback_.Get());
+  EXPECT_EQ(0, test_url_loader_factory_.NumPending());
 }
 
 TEST_F(AttributionReportNetworkSenderTest,
@@ -890,11 +783,13 @@ TEST_F(AttributionReportNetworkSenderTest,
 
 TEST_F(AttributionReportNetworkSenderTest,
        ErrorReportSent_ReportBodySetCorrectly) {
+  base::HistogramTester histograms;
+
   static constexpr char kExpectedReportBody[] =
       R"([{)"
       R"("body":{)"
       R"("attribution_destination":"https://conversion.test",)"
-      R"("limit":3,)"
+      R"("limit":"3",)"
       R"("source_event_id":"123",)"
       R"("source_site":"https://impression.test"},)"
       R"("type":"source-destination-limit")"
@@ -903,16 +798,16 @@ TEST_F(AttributionReportNetworkSenderTest,
   static constexpr char kErrorReportUrl[] =
       "https://report.test/.well-known/attribution-reporting/debug/verbose";
 
-  absl::optional<AttributionDebugReport> report =
-      AttributionDebugReport::Create(
-          SourceBuilder().Build(),
-          AttributionStorage::StoreSourceResult(
-              StorableSource::Result::kInsufficientUniqueDestinationCapacity,
-              /*min_fake_report_time=*/absl::nullopt,
-              /*max_destinations_per_source_site_reporting_origin=*/3));
+  std::optional<AttributionDebugReport> report = AttributionDebugReport::Create(
+      SourceBuilder().SetDebugReporting(true).Build(),
+      /*is_debug_cookie_set=*/false,
+      StoreSourceResult::InsufficientUniqueDestinationCapacity(3));
   ASSERT_TRUE(report);
 
-  network_sender_->SendReport(std::move(*report));
+  base::MockCallback<AttributionReportSender::DebugReportSentCallback> callback;
+  EXPECT_CALL(callback, Run(_, 200));
+
+  network_sender_->SendReport(std::move(*report), callback.Get());
 
   const network::ResourceRequest* pending_request;
   EXPECT_TRUE(
@@ -920,6 +815,40 @@ TEST_F(AttributionReportNetworkSenderTest,
   EXPECT_EQ(kExpectedReportBody, network::GetUploadData(*pending_request));
   EXPECT_TRUE(test_url_loader_factory_.SimulateResponseForPendingRequest(
       kErrorReportUrl, ""));
+
+  histograms.ExpectUniqueSample(kVerboseDebugReportMetricName,
+                                net::HttpStatusCode::HTTP_OK, 1);
+}
+
+TEST_F(AttributionReportNetworkSenderTest,
+       ErrorReportSent_CallbackInvokedWithNetworkError) {
+  base::HistogramTester histograms;
+
+  static constexpr char kErrorReportUrl[] =
+      "https://report.test/.well-known/attribution-reporting/debug/verbose";
+
+  std::optional<AttributionDebugReport> report = AttributionDebugReport::Create(
+      SourceBuilder().SetDebugReporting(true).Build(),
+      /*is_debug_cookie_set=*/false,
+      StoreSourceResult::InsufficientUniqueDestinationCapacity(3));
+  ASSERT_TRUE(report);
+
+  base::MockCallback<AttributionReportSender::DebugReportSentCallback> callback;
+  EXPECT_CALL(callback, Run(_, net::ERR_CONNECTION_ABORTED));
+
+  network_sender_->SendReport(std::move(*report), callback.Get());
+
+  const network::ResourceRequest* pending_request;
+  EXPECT_TRUE(
+      test_url_loader_factory_.IsPending(kErrorReportUrl, &pending_request));
+
+  test_url_loader_factory_.SimulateResponseForPendingRequest(
+      GURL(kErrorReportUrl),
+      network::URLLoaderCompletionStatus(net::ERR_CONNECTION_ABORTED),
+      network::mojom::URLResponseHead::New(), "");
+
+  histograms.ExpectUniqueSample(kVerboseDebugReportMetricName,
+                                net::ERR_CONNECTION_ABORTED, 1);
 }
 
 }  // namespace content

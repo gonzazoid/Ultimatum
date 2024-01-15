@@ -130,6 +130,7 @@ public class CallbackHelper {
 
     private final Object mLock = new Object();
     private int mCallCount;
+    private int mLastWaitedForCount;
     private String mFailureString;
     private boolean mSingleShotMode;
 
@@ -154,25 +155,29 @@ public class CallbackHelper {
     }
 
     /**
-     * Blocks until the callback is called the specified number of
-     * times or throws an exception if we exceeded the specified time frame.
+     * Blocks until the callback is called the specified number of times or throws an exception if
+     * we exceeded the specified time frame.
      *
-     * This will wait for a callback to be called a specified number of times after
-     * the point in time at which the call count was obtained.  The method will return
-     * immediately if a call occurred the specified number of times after the
-     * call count was obtained but before the method was called, otherwise the method will
-     * block until the specified call count is reached.
+     * <p>This will wait for a callback to be called a specified number of times after the point in
+     * time at which the call count was obtained. The method will return immediately if a call
+     * occurred the specified number of times after the call count was obtained but before the
+     * method was called, otherwise the method will block until the specified call count is reached.
      *
      * @param msg The error message to use if the callback times out.
      * @param currentCallCount Wait until |notifyCalled| has been called this many times in total.
-     * @param numberOfCallsToWaitFor number of calls (counting since
-     *                               currentCallCount was obtained) that we will wait for.
+     * @param numberOfCallsToWaitFor number of calls (counting since currentCallCount was obtained)
+     *     that we will wait for.
      * @param timeout timeout value for all callbacks to occur.
      * @param unit timeout unit.
      * @throws TimeoutException Thrown if the method times out before onPageFinished is called.
      */
-    public void waitForCallback(String msg, int currentCallCount, int numberOfCallsToWaitFor,
-            long timeout, TimeUnit unit) throws TimeoutException {
+    public void waitForCallback(
+            String msg,
+            int currentCallCount,
+            int numberOfCallsToWaitFor,
+            long timeout,
+            TimeUnit unit)
+            throws TimeoutException {
         assert mCallCount >= currentCallCount;
         assert numberOfCallsToWaitFor > 0;
         TimeoutTimer timer = new TimeoutTimer(unit.toMillis(timeout));
@@ -193,14 +198,16 @@ public class CallbackHelper {
             if (timer.isTimedOut()) {
                 throw new TimeoutException(msg == null ? "waitForCallback timed out!" : msg);
             }
+            mLastWaitedForCount = callCountWhenDoneWaiting;
         }
     }
 
     /**
      * @see #waitForCallback(String, int, int, long, TimeUnit)
      */
-    public void waitForCallback(int currentCallCount, int numberOfCallsToWaitFor, long timeout,
-            TimeUnit unit) throws TimeoutException {
+    public void waitForCallback(
+            int currentCallCount, int numberOfCallsToWaitFor, long timeout, TimeUnit unit)
+            throws TimeoutException {
         waitForCallback(null, currentCallCount, numberOfCallsToWaitFor, timeout, unit);
     }
 
@@ -209,8 +216,12 @@ public class CallbackHelper {
      */
     public void waitForCallback(int currentCallCount, int numberOfCallsToWaitFor)
             throws TimeoutException {
-        waitForCallback(null, currentCallCount, numberOfCallsToWaitFor,
-                WAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        waitForCallback(
+                null,
+                currentCallCount,
+                numberOfCallsToWaitFor,
+                WAIT_TIMEOUT_SECONDS,
+                TimeUnit.SECONDS);
     }
 
     /**
@@ -233,7 +244,7 @@ public class CallbackHelper {
      * @throws TimeoutException
      */
     public void waitForNext(String msg) throws TimeoutException {
-        waitForCallback(msg, mCallCount, 1, WAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        waitForCallback(msg, mLastWaitedForCount, 1, WAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
     /** @see #waitForNext(String) */
@@ -248,45 +259,36 @@ public class CallbackHelper {
      * @throws TimeoutException
      */
     public void waitForNext(long timeout, TimeUnit unit) throws TimeoutException {
-        waitForCallback(null, mCallCount, 1, timeout, unit);
+        waitForCallback(null, mLastWaitedForCount, 1, timeout, unit);
     }
 
-    /**
-     * Wait until the callback has been called once.
-     */
+    /** Wait until the callback has been called once. */
     public void waitForFirst(String msg, long timeout, TimeUnit unit) throws TimeoutException {
         MatcherAssert.assertThat(
-                "Use waitForCallback(currentCallCount) for callbacks that are called multiple "
-                        + "times.",
-                mCallCount, Matchers.lessThanOrEqualTo(1));
+                "Use waitForCallback(currentCallCount) or waitForNext() for callbacks that are "
+                        + "called multiple times.",
+                mCallCount,
+                Matchers.lessThanOrEqualTo(1));
         mSingleShotMode = true;
         waitForCallback(msg, 0, 1, timeout, unit);
     }
 
-    /**
-     * Wait until the callback has been called once.
-     */
+    /** Wait until the callback has been called once. */
     public void waitForFirst(long timeout, TimeUnit unit) throws TimeoutException {
         waitForFirst(null, timeout, unit);
     }
 
-    /**
-     * Wait until the callback has been called once.
-     */
+    /** Wait until the callback has been called once. */
     public void waitForFirst(String msg) throws TimeoutException {
         waitForFirst(msg, WAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
-    /**
-     * Wait until the callback has been called at least once.
-     */
+    /** Wait until the callback has been called at least once. */
     public void waitForFirst() throws TimeoutException {
         waitForFirst(null);
     }
 
-    /**
-     * Should be called when the callback associated with this helper object is called.
-     */
+    /** Should be called when the callback associated with this helper object is called. */
     public void notifyCalled() {
         notifyInternal(null);
     }

@@ -57,6 +57,7 @@ class GrpcServicesInitializer : public ServicesInitializerBase {
   bool Start();
 
   void StartGrpcHttpConnectionClient(assistant_client::HttpConnectionFactory*);
+  void StopGrpcHttpConnectionClient();
 
   // Add observer for each handler driver.
   void AddAlarmTimerEventObserver(
@@ -123,12 +124,6 @@ class GrpcServicesInitializer : public ServicesInitializerBase {
   std::unique_ptr<ash::libassistant::GrpcLibassistantClient>
       libassistant_client_;
 
-  ServicesStatusProvider services_status_provider_;
-  base::ScopedObservation<
-      HeartbeatEventHandlerDriver,
-      GrpcServicesObserver<::assistant::api::OnHeartbeatEventRequest>>
-      heartbeat_event_observation_{&services_status_provider_};
-
   std::unique_ptr<CustomerRegistrationClient> customer_registration_client_;
 
   std::unique_ptr<HeartbeatEventHandlerDriver> heartbeat_driver_;
@@ -160,6 +155,14 @@ class GrpcServicesInitializer : public ServicesInitializerBase {
       speaker_id_enrollment_event_handler_driver_;
 
   std::unique_ptr<GrpcHttpConnectionClient> http_connection_client_;
+
+  // `heartbeat_event_observation_` observes `heartbeat_driver_`, and needs to
+  // be destroyed before `heartbeat_driver_`.
+  ServicesStatusProvider services_status_provider_;
+  base::ScopedObservation<
+      HeartbeatEventHandlerDriver,
+      GrpcServicesObserver<::assistant::api::OnHeartbeatEventRequest>>
+      heartbeat_event_observation_{&services_status_provider_};
 };
 
 }  // namespace ash::libassistant

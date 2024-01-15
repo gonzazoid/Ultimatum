@@ -10,30 +10,39 @@
 
 #include <string>
 
+#include "base/apple/bundle_locations.h"
+#include "base/apple/foundation_util.h"
+#include "base/apple/osstatus_logging.h"
 #include "base/logging.h"
-#include "base/mac/bundle_locations.h"
-#include "base/mac/foundation_util.h"
-#include "base/mac/mac_logging.h"
 #include "base/mac/scoped_authorizationref.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
+#include "base/strings/sys_string_conversions.h"
 #include "base/threading/hang_watcher.h"
 
 namespace base::mac {
 
-AuthorizationRef GetAuthorizationRightsWithPrompt(
-    AuthorizationRights* rights,
-    CFStringRef prompt,
-    AuthorizationFlags extraFlags) {
-  // Create an empty AuthorizationRef.
+ScopedAuthorizationRef CreateAuthorization() {
   ScopedAuthorizationRef authorization;
-  OSStatus status = AuthorizationCreate(NULL, kAuthorizationEmptyEnvironment,
-                                        kAuthorizationFlagDefaults,
-                                        authorization.get_pointer());
+  OSStatus status = AuthorizationCreate(
+      /*rights=*/nullptr, kAuthorizationEmptyEnvironment,
+      kAuthorizationFlagDefaults, authorization.InitializeInto());
   if (status != errAuthorizationSuccess) {
     OSSTATUS_LOG(ERROR, status) << "AuthorizationCreate";
-    return NULL;
+    return ScopedAuthorizationRef();
+  }
+
+  return authorization;
+}
+
+ScopedAuthorizationRef GetAuthorizationRightsWithPrompt(
+    AuthorizationRights* rights,
+    CFStringRef prompt,
+    AuthorizationFlags extra_flags) {
+  ScopedAuthorizationRef authorization = CreateAuthorization();
+  if (!authorization) {
+    return authorization;
   }
 
   // Never consider the current WatchHangsInScope as hung. There was most likely
@@ -47,22 +56,26 @@ AuthorizationRef GetAuthorizationRightsWithPrompt(
   AuthorizationFlags flags = kAuthorizationFlagDefaults |
                              kAuthorizationFlagInteractionAllowed |
                              kAuthorizationFlagExtendRights |
-                             kAuthorizationFlagPreAuthorize |
-                             extraFlags;
+                             kAuthorizationFlagPreAuthorize | extra_flags;
 
   // product_logo_32.png is used instead of app.icns because Authorization
   // Services can't deal with .icns files.
   NSString* icon_path =
-      [base::mac::FrameworkBundle() pathForResource:@"product_logo_32"
-                                             ofType:@"png"];
+      [base::apple::FrameworkBundle() pathForResource:@"product_logo_32"
+                                               ofType:@"png"];
   const char* icon_path_c = [icon_path fileSystemRepresentation];
   size_t icon_path_length = icon_path_c ? strlen(icon_path_c) : 0;
 
-  // The OS will dispay |prompt| along with a sentence asking the user to type
+  // The OS will display |prompt| along with a sentence asking the user to type
   // the "password to allow this."
-  NSString* prompt_ns = base::mac::CFToNSCast(prompt);
-  const char* prompt_c = [prompt_ns UTF8String];
-  size_t prompt_length = prompt_c ? strlen(prompt_c) : 0;
+  std::string prompt_string;
+  const char* prompt_c = nullptr;
+  size_t prompt_length = 0;
+  if (prompt) {
+    prompt_string = SysCFStringRefToUTF8(prompt);
+    prompt_c = prompt_string.c_str();
+    prompt_length = prompt_string.length();
+  }
 
   AuthorizationItem environment_items[] = {
     {kAuthorizationEnvironmentIcon, icon_path_length, (void*)icon_path_c, 0},
@@ -72,31 +85,27 @@ AuthorizationRef GetAuthorizationRightsWithPrompt(
   AuthorizationEnvironment environment = {std::size(environment_items),
                                           environment_items};
 
-  status = AuthorizationCopyRights(authorization,
-                                   rights,
-                                   &environment,
-                                   flags,
-                                   NULL);
+  OSStatus status = AuthorizationCopyRights(authorization, rights, &environment,
+                                            flags, nullptr);
 
   if (status != errAuthorizationSuccess) {
     if (status != errAuthorizationCanceled) {
       OSSTATUS_LOG(ERROR, status) << "AuthorizationCopyRights";
     }
-    return NULL;
+    return ScopedAuthorizationRef();
   }
 
-  return authorization.release();
+  return authorization;
 }
 
-AuthorizationRef AuthorizationCreateToRunAsRoot(CFStringRef prompt) {
+ScopedAuthorizationRef AuthorizationCreateToRunAsRoot(CFStringRef prompt) {
   // Specify the "system.privilege.admin" right, which allows
   // AuthorizationExecuteWithPrivileges to run commands as root.
   AuthorizationItem right_items[] = {
-    {kAuthorizationRightExecute, 0, NULL, 0}
-  };
+      {kAuthorizationRightExecute, 0, nullptr, 0}};
   AuthorizationRights rights = {std::size(right_items), right_items};
 
-  return GetAuthorizationRightsWithPrompt(&rights, prompt, 0);
+  return GetAuthorizationRightsWithPrompt(&rights, prompt, /*extra_flags=*/0);
 }
 
 OSStatus ExecuteWithPrivilegesAndGetPID(AuthorizationRef authorization,

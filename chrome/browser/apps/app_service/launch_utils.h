@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_APPS_APP_SERVICE_LAUNCH_UTILS_H_
 #define CHROME_BROWSER_APPS_APP_SERVICE_LAUNCH_UTILS_H_
 
+#include <stdint.h>
 #include <string>
 #include <vector>
 
@@ -12,8 +13,8 @@
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/apps/app_service/app_launch_params.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
+#include "components/services/app_service/public/cpp/app_types.h"
 #include "components/services/app_service/public/cpp/intent.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "extensions/common/constants.h"
 #include "ui/base/window_open_disposition.h"
 
@@ -23,7 +24,7 @@
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/components/arc/mojom/app.mojom.h"
+#include "ash/components/arc/mojom/app.mojom-forward.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 class Browser;
@@ -39,6 +40,8 @@ class WebContents;
 }  // namespace content
 
 namespace apps {
+
+LaunchContainer ConvertWindowModeToAppLaunchContainer(WindowMode window_mode);
 
 bool IsInstalledApp(Profile* profile, const std::string& app_id);
 
@@ -82,18 +85,9 @@ int GetEventFlags(WindowOpenDisposition disposition, bool prefer_container);
 int GetSessionIdForRestoreFromWebContents(
     const content::WebContents* web_contents);
 
-// Helper to create apps::mojom::WindowInfoPtr using |display_id|, which is the
-// id of the display from which the app is launched.
-// TODO(crbug.com/1253250): Remove. Prefer the non mojom WindowInfo.
-apps::mojom::WindowInfoPtr MakeWindowInfo(int64_t display_id);
-
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 // Helper to convert apps::mojom::WindowInfoPtr to arc::mojom::WindowInfoPtr.
 arc::mojom::WindowInfoPtr MakeArcWindowInfo(WindowInfoPtr window_info);
-
-// TODO(crbug.com/1253250): Remove. Prefer the non mojom MakeArcWindowInfo.
-arc::mojom::WindowInfoPtr MakeArcWindowInfo(
-    apps::mojom::WindowInfoPtr window_info);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -117,6 +111,31 @@ crosapi::mojom::LaunchParamsPtr CreateCrosapiLaunchParamsWithEventFlags(
     int event_flags,
     LaunchSource launch_source,
     int64_t display_id);
+
+// Container for holding possible app IDs that can launch a PWA for a given URL.
+struct AppIdsToLaunchForUrl {
+  AppIdsToLaunchForUrl();
+  AppIdsToLaunchForUrl(AppIdsToLaunchForUrl&&);
+  ~AppIdsToLaunchForUrl();
+
+  // Apps that can handle a given URL.
+  std::vector<std::string> candidates;
+  // The users preference for an app to handle a given URL.
+  std::optional<std::string> preferred;
+};
+
+// Takes a `url` and returns a vector of app IDs and the users preferred choice
+// of app that can launch a PWA for the given `url`.
+AppIdsToLaunchForUrl FindAppIdsToLaunchForUrl(AppServiceProxy* proxy,
+                                              const GURL& url);
+
+// Checks to see if any apps handle `url` and is selected as the users
+// preference. If so, launches the preferred app, otherwise opens `url` in a
+// browser tab.
+void MaybeLaunchPreferredAppForUrl(Profile* profile,
+                                   const GURL& url,
+                                   LaunchSource launch_source);
+
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace apps

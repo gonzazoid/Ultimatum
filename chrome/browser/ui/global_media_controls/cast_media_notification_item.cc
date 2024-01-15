@@ -12,6 +12,8 @@
 #include "chrome/browser/feature_engagement/tracker_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/global_media_controls/cast_media_session_controller.h"
+#include "chrome/browser/ui/global_media_controls/media_item_ui_metrics.h"
+#include "chrome/browser/ui/media_router/media_cast_mode.h"
 #include "components/feature_engagement/public/tracker.h"
 #include "components/global_media_controls/public/media_item_manager.h"
 #include "components/media_message_center/media_notification_view.h"
@@ -32,11 +34,6 @@
 using Metadata = media_message_center::MediaNotificationViewImpl::Metadata;
 
 namespace {
-
-constexpr char kArtworkHistogramName[] =
-    "Media.Notification.Cast.ArtworkPresent";
-constexpr char kMetadataHistogramName[] =
-    "Media.Notification.Cast.MetadataPresent";
 
 net::NetworkTrafficAnnotationTag GetTrafficAnnotationTag() {
   return net::DefineNetworkTrafficAnnotation(
@@ -163,9 +160,6 @@ CastMediaNotificationItem::CastMediaNotificationItem(
                               base::Unretained(this))),
       session_info_(CreateSessionInfo()) {
   metadata_.source_title = GetSourceTitle(route);
-  base::UmaHistogramEnumeration(
-      kSourceHistogramName, route.is_local() ? Source::kLocalCastSession
-                                             : Source::kNonLocalCastSession);
 }
 
 CastMediaNotificationItem::~CastMediaNotificationItem() {
@@ -176,23 +170,9 @@ void CastMediaNotificationItem::SetView(
     media_message_center::MediaNotificationView* view) {
   view_ = view;
   if (view_)
-    view_->UpdateWithVectorIcon(vector_icons::kMediaRouterIdleIcon);
+    view_->UpdateWithVectorIcon(&vector_icons::kMediaRouterIdleIcon);
 
   UpdateView();
-  if (view_ && !recorded_metadata_metrics_) {
-    recorded_metadata_metrics_ = true;
-    // We record the metadata shown after a delay because if the view is shown
-    // as soon as the Cast session is launched, it'd take some time for Chrome
-    // to receive status info and fetch the artwork. We need to use a fixed
-    // delay rather than waiting for OnMediaStatusUpdated(), because it could
-    // get called multiple times with increasing amounts of info, or not get
-    // called at all.
-    content::GetUIThreadTaskRunner({})->PostDelayedTask(
-        FROM_HERE,
-        base::BindOnce(&CastMediaNotificationItem::RecordMetadataMetrics,
-                       weak_ptr_factory_.GetWeakPtr()),
-        base::Seconds(3));
-  }
 }
 
 void CastMediaNotificationItem::OnMediaSessionActionButtonPressed(
@@ -211,16 +191,30 @@ void CastMediaNotificationItem::Dismiss() {
   is_active_ = false;
 }
 
+void CastMediaNotificationItem::SetVolume(float volume) {
+  session_controller_->SetVolume(volume);
+}
 void CastMediaNotificationItem::SetMute(bool mute) {
   session_controller_->SetMute(mute);
 }
 
-void CastMediaNotificationItem::SetVolume(float volume) {
-  session_controller_->SetVolume(volume);
+bool CastMediaNotificationItem::RequestMediaRemoting() {
+  return false;
 }
 
-media_message_center::SourceType CastMediaNotificationItem::SourceType() {
+media_message_center::Source CastMediaNotificationItem::GetSource() const {
+  return route_is_local_ ? media_message_center::Source::kLocalCastSession
+                         : media_message_center::Source::kNonLocalCastSession;
+}
+
+media_message_center::SourceType CastMediaNotificationItem::GetSourceType()
+    const {
   return media_message_center::SourceType::kCast;
+}
+
+std::optional<base::UnguessableToken> CastMediaNotificationItem::GetSourceId()
+    const {
+  return std::nullopt;
 }
 
 void CastMediaNotificationItem::OnMediaStatusUpdated(
@@ -273,8 +267,7 @@ void CastMediaNotificationItem::OnRouteUpdated(
     view_->UpdateWithMediaMetadata(metadata_);
 }
 
-void CastMediaNotificationItem::StopCasting(
-    global_media_controls::GlobalMediaControlsEntryPoint entry_point) {
+void CastMediaNotificationItem::StopCasting() {
   media_router::MediaRouterFactory::GetApiForBrowserContext(profile_)
       ->TerminateRoute(media_route_id_);
 
@@ -283,24 +276,8 @@ void CastMediaNotificationItem::StopCasting(
   feature_engagement::TrackerFactory::GetForBrowserContext(profile_)
       ->NotifyEvent("media_route_stopped_from_gmc");
 
-  global_media_controls::GlobalMediaControlsCastActionAndEntryPoint action;
-  switch (entry_point) {
-    case global_media_controls::GlobalMediaControlsEntryPoint::kToolbarIcon:
-      action = global_media_controls::
-          GlobalMediaControlsCastActionAndEntryPoint::kStopViaToolbarIcon;
-      break;
-    case global_media_controls::GlobalMediaControlsEntryPoint::kPresentation:
-      action = global_media_controls::
-          GlobalMediaControlsCastActionAndEntryPoint::kStopViaPresentation;
-      break;
-    case global_media_controls::GlobalMediaControlsEntryPoint::kSystemTray:
-      action = global_media_controls::
-          GlobalMediaControlsCastActionAndEntryPoint::kStopViaSystemTray;
-      break;
-  }
-  base::UmaHistogramEnumeration(
-      media_message_center::MediaNotificationItem::kCastStartStopHistogramName,
-      action);
+  MediaItemUIMetrics::RecordStopCastingMetrics(
+      media_router::MediaCastMode::PRESENTATION);
 }
 
 mojo::PendingRemote<media_router::mojom::MediaStatusObserver>
@@ -364,19 +341,4 @@ void CastMediaNotificationItem::UpdateView() {
 void CastMediaNotificationItem::ImageChanged(const SkBitmap& bitmap) {
   if (view_)
     view_->UpdateWithMediaArtwork(gfx::ImageSkia::CreateFrom1xBitmap(bitmap));
-}
-
-void CastMediaNotificationItem::RecordMetadataMetrics() const {
-  base::UmaHistogramBoolean(kArtworkHistogramName,
-                            !image_downloader_.bitmap().empty());
-
-  base::UmaHistogramEnumeration(kMetadataHistogramName, Metadata::kCount);
-  if (!metadata_.title.empty())
-    base::UmaHistogramEnumeration(kMetadataHistogramName, Metadata::kTitle);
-  if (!metadata_.artist.empty())
-    base::UmaHistogramEnumeration(kMetadataHistogramName, Metadata::kArtist);
-  if (!metadata_.album.empty())
-    base::UmaHistogramEnumeration(kMetadataHistogramName, Metadata::kAlbum);
-  if (!metadata_.source_title.empty())
-    base::UmaHistogramEnumeration(kMetadataHistogramName, Metadata::kSource);
 }

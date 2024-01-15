@@ -8,7 +8,8 @@
 #include <iterator>
 #include <memory>
 
-#include "content/public/common/child_process_host.h"
+#include "base/metrics/histogram_functions.h"
+#include "content/public/browser/child_process_host.h"
 #include "extensions/browser/service_worker/worker_id.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration.mojom.h"
 
@@ -21,6 +22,9 @@ constexpr int64_t kSmallestVersionId =
 constexpr int kSmallestThreadId = -1;
 constexpr int kSmallestRenderProcessId =
     content::ChildProcessHost::kInvalidUniqueID;
+constexpr int kMaxWorkerCountToReport = 50;
+
+bool g_allow_multiple_workers_per_extension = false;
 
 static_assert(kSmallestVersionId < 0,
               "Sentinel version_id must be smaller than any valid version id.");
@@ -37,10 +41,24 @@ WorkerIdSet::~WorkerIdSet() = default;
 
 void WorkerIdSet::Add(const WorkerId& worker_id) {
   workers_.insert(worker_id);
+  size_t new_size = GetAllForExtension(worker_id.extension_id).size();
+  base::UmaHistogramExactLinear(
+      "Extensions.ServiceWorkerBackground.WorkerCountAfterAdd", new_size,
+      kMaxWorkerCountToReport);
+
+  if (!g_allow_multiple_workers_per_extension) {
+    DCHECK_LE(new_size, 1u) << "Extension with worker id " << worker_id
+                            << " added additional worker";
+  }
 }
 
 bool WorkerIdSet::Remove(const WorkerId& worker_id) {
-  return workers_.erase(worker_id) > 0;
+  bool erased = workers_.erase(worker_id);
+  base::UmaHistogramExactLinear(
+      "Extensions.ServiceWorkerBackground.WorkerCountAfterRemove",
+      GetAllForExtension(worker_id.extension_id).size(),
+      kMaxWorkerCountToReport);
+  return erased;
 }
 
 std::vector<WorkerId> WorkerIdSet::GetAllForExtension(
@@ -93,6 +111,12 @@ std::vector<WorkerId> WorkerIdSet::GetAllForExtension(
 
 std::vector<WorkerId> WorkerIdSet::GetAllForTesting() const {
   return std::vector<WorkerId>(workers_.begin(), workers_.end());
+}
+
+// static
+base::AutoReset<bool>
+WorkerIdSet::AllowMultipleWorkersPerExtensionForTesting() {
+  return base::AutoReset<bool>(&g_allow_multiple_workers_per_extension, true);
 }
 
 }  // namespace extensions

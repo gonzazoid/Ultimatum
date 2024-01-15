@@ -6,23 +6,24 @@
 
 #include <utility>
 
+#include "ash/curtain/security_curtain_controller.h"
 #include "ash/shell.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/style/ash_color_provider.h"
-#include "ash/style/default_color_constants.h"
-#include "ash/style/default_colors.h"
+#include "ash/system/power/power_button_menu_curtain_view.h"
 #include "ash/system/power/power_button_menu_metrics_type.h"
 #include "ash/system/power/power_button_menu_view.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
+#include "ash/system/power/power_button_menu_view_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_observer.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
+#include "ui/views/view.h"
 #include "ui/views/widget/widget.h"
 
 namespace ash {
-
-constexpr int PowerButtonMenuView::kMenuViewTransformDistanceDp;
 
 namespace {
 
@@ -46,11 +47,13 @@ gfx::Size GetPrimaryDisplayLandscapeSize() {
 int AdjustMenuEdgeForDisplaySize(int actual_position,
                                  int display_edge,
                                  int menu_size) {
-  return std::min(display_edge -
-                      PowerButtonMenuView::kMenuViewTransformDistanceDp -
-                      menu_size,
-                  std::max(PowerButtonMenuView::kMenuViewTransformDistanceDp,
-                           actual_position));
+  return std::min(
+      display_edge - kPowerButtonMenuTransformDistanceDp - menu_size,
+      std::max(kPowerButtonMenuTransformDistanceDp, actual_position));
+}
+
+bool IsCurtainModeEnabled() {
+  return ash::Shell::Get()->security_curtain_controller().IsEnabled();
 }
 
 }  // namespace
@@ -61,8 +64,11 @@ using TransformDirection = PowerButtonMenuView::TransformDirection;
 class PowerButtonMenuScreenView::PowerButtonMenuBackgroundView
     : public views::View,
       public ui::ImplicitAnimationObserver {
+  METADATA_HEADER(PowerButtonMenuBackgroundView, views::View)
+
  public:
-  PowerButtonMenuBackgroundView(base::RepeatingClosure show_animation_done)
+  explicit PowerButtonMenuBackgroundView(
+      base::RepeatingClosure show_animation_done)
       : show_animation_done_(show_animation_done) {
     SetPaintToLayer(ui::LAYER_SOLID_COLOR);
     layer()->SetOpacity(0.f);
@@ -80,8 +86,9 @@ class PowerButtonMenuScreenView::PowerButtonMenuBackgroundView
       power_button_controller->DismissMenu();
     }
 
-    if (layer()->opacity() == kPowerButtonMenuOpacity)
+    if (layer()->opacity() == kPowerButtonMenuOpacity) {
       show_animation_done_.Run();
+    }
   }
 
   void ScheduleShowHideAnimation(bool show) {
@@ -92,8 +99,7 @@ class PowerButtonMenuScreenView::PowerButtonMenuBackgroundView
     animation.AddObserver(this);
     animation.SetTweenType(show ? gfx::Tween::EASE_IN_2
                                 : gfx::Tween::FAST_OUT_LINEAR_IN);
-    animation.SetTransitionDuration(
-        PowerButtonMenuView::kMenuAnimationDuration);
+    animation.SetTransitionDuration(kPowerButtonMenuAnimationDuration);
     animation.SetPreemptionStrategy(
         ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET);
     layer()->SetOpacity(show ? kPowerButtonMenuOpacity : 0.f);
@@ -109,13 +115,17 @@ class PowerButtonMenuScreenView::PowerButtonMenuBackgroundView
   void OnThemeChanged() override {
     views::View::OnThemeChanged();
     layer()->SetColor(
-        DeprecatedGetBaseLayerColor(AshColorProvider::BaseLayerType::kOpaque,
-                                    kPowerButtonMenuFullscreenShieldColor));
+        GetColorProvider()->GetColor(kColorAshShieldAndBaseOpaque));
   }
 
   // A callback for when the animation that shows the power menu has finished.
   base::RepeatingClosure show_animation_done_;
 };
+
+BEGIN_METADATA(PowerButtonMenuScreenView,
+               PowerButtonMenuBackgroundView,
+               views::View)
+END_METADATA
 
 PowerButtonMenuScreenView::PowerButtonMenuScreenView(
     ShutdownReason shutdown_reason,
@@ -126,10 +136,10 @@ PowerButtonMenuScreenView::PowerButtonMenuScreenView(
       power_button_offset_percentage_(power_button_offset_percentage) {
   power_button_screen_background_shield_ =
       new PowerButtonMenuBackgroundView(show_animation_done);
-  AddChildView(power_button_screen_background_shield_);
+  AddChildView(power_button_screen_background_shield_.get());
   power_button_menu_view_ =
       new PowerButtonMenuView(shutdown_reason, power_button_position_);
-  AddChildView(power_button_menu_view_);
+  AddChildView(power_button_menu_view_.get());
 
   AddAccelerator(ui::Accelerator(ui::VKEY_ESCAPE, ui::EF_NONE));
 }
@@ -138,14 +148,26 @@ PowerButtonMenuScreenView::~PowerButtonMenuScreenView() = default;
 
 void PowerButtonMenuScreenView::ScheduleShowHideAnimation(bool show) {
   power_button_screen_background_shield_->ScheduleShowHideAnimation(show);
-  power_button_menu_view_->ScheduleShowHideAnimation(show);
+  if (IsCurtainModeEnabled()) {
+    GetOrCreateCurtainView()->ScheduleShowHideAnimation(show);
+  } else {
+    power_button_menu_view_->ScheduleShowHideAnimation(show);
+  }
 }
 
 void PowerButtonMenuScreenView::ResetOpacity() {
-  for (ui::Layer* layer : {power_button_screen_background_shield_->layer(),
-                           power_button_menu_view_->layer()}) {
-    DCHECK(layer);
-    layer->SetOpacity(0.f);
+  if (IsCurtainModeEnabled()) {
+    for (ui::Layer* layer : {power_button_screen_background_shield_->layer(),
+                             GetOrCreateCurtainView()->layer()}) {
+      DCHECK(layer);
+      layer->SetOpacity(0.f);
+    }
+  } else {
+    for (ui::Layer* layer : {power_button_screen_background_shield_->layer(),
+                             power_button_menu_view_->layer()}) {
+      DCHECK(layer);
+      layer->SetOpacity(0.f);
+    }
   }
 }
 
@@ -158,10 +180,22 @@ void PowerButtonMenuScreenView::OnWidgetShown(
   // UpdateMenuBoundsOrigins(), since the latter relies on the
   // power_button_menu_view_'s preferred size, which depends on the items added
   // to the view.
-  power_button_menu_view_->RecreateItems();
-  if (power_button_position_ != PowerButtonPosition::NONE)
+  if (!IsCurtainModeEnabled()) {
+    power_button_menu_view_->RecreateItems();
+  }
+  if (power_button_position_ != PowerButtonPosition::NONE) {
     UpdateMenuBoundsOrigins();
+  }
   Layout();
+}
+
+PowerButtonMenuCurtainView*
+PowerButtonMenuScreenView::GetOrCreateCurtainView() {
+  if (!power_button_menu_curtain_view_) {
+    power_button_menu_curtain_view_ =
+        AddChildView(std::make_unique<PowerButtonMenuCurtainView>());
+  }
+  return power_button_menu_curtain_view_;
 }
 
 const char* PowerButtonMenuScreenView::GetClassName() const {
@@ -170,16 +204,30 @@ const char* PowerButtonMenuScreenView::GetClassName() const {
 
 void PowerButtonMenuScreenView::Layout() {
   power_button_screen_background_shield_->SetBoundsRect(GetContentsBounds());
+  if (IsCurtainModeEnabled()) {
+    LayoutMenuCurtainView();
+  } else {
+    LayoutMenuView();
+  }
+}
 
+void PowerButtonMenuScreenView::LayoutMenuView() {
   gfx::Rect menu_bounds = GetMenuBounds();
   PowerButtonMenuView::TransformDisplacement transform_displacement =
       power_button_menu_view_->GetTransformDisplacement();
-  if (transform_displacement.direction == TransformDirection::X)
+  if (transform_displacement.direction == TransformDirection::X) {
     menu_bounds.set_x(menu_bounds.x() - transform_displacement.distance);
-  else if (transform_displacement.direction == TransformDirection::Y)
+  } else if (transform_displacement.direction == TransformDirection::Y) {
     menu_bounds.set_y(menu_bounds.y() - transform_displacement.distance);
+  }
 
   power_button_menu_view_->SetBoundsRect(menu_bounds);
+}
+
+void PowerButtonMenuScreenView::LayoutMenuCurtainView() {
+  gfx::Rect menu_bounds = GetMenuBounds();
+  menu_bounds.set_y(menu_bounds.y() - kPowerButtonMenuTransformDistanceDp);
+  GetOrCreateCurtainView()->SetBoundsRect(menu_bounds);
 }
 
 bool PowerButtonMenuScreenView::OnMousePressed(const ui::MouseEvent& event) {
@@ -200,8 +248,9 @@ bool PowerButtonMenuScreenView::AcceleratorPressed(
 }
 
 void PowerButtonMenuScreenView::OnGestureEvent(ui::GestureEvent* event) {
-  if (event->type() != ui::ET_GESTURE_TAP_DOWN)
+  if (event->type() != ui::ET_GESTURE_TAP_DOWN) {
     return;
+  }
 
   // Dismisses the menu if tap anywhere on the background shield.
   ScheduleShowHideAnimation(false);
@@ -219,8 +268,12 @@ void PowerButtonMenuScreenView::OnDisplayMetricsChanged(
 
 void PowerButtonMenuScreenView::LayoutWithoutTransform() {
   power_button_screen_background_shield_->SetBoundsRect(GetContentsBounds());
-  power_button_menu_view_->layer()->SetTransform(gfx::Transform());
-  power_button_menu_view_->SetBoundsRect(GetMenuBounds());
+  if (IsCurtainModeEnabled()) {
+    GetOrCreateCurtainView()->SetBoundsRect(GetMenuBounds());
+  } else {
+    power_button_menu_view_->SetTransform(gfx::Transform());
+    power_button_menu_view_->SetBoundsRect(GetMenuBounds());
+  }
 }
 
 void PowerButtonMenuScreenView::UpdateMenuBoundsOrigins() {
@@ -298,20 +351,19 @@ void PowerButtonMenuScreenView::UpdateMenuBoundsOrigins() {
   }
 
   menu_bounds_origins_.clear();
-  const gfx::Size menu_size = power_button_menu_view_->GetPreferredSize();
+  const gfx::Size menu_size = GetMenuViewPreferredSize();
   // Power button position offset from the left when the button is at the left
   // is always zero.
   menu_bounds_origins_.insert(std::make_pair(
       left_screen_orientation,
-      gfx::Point(PowerButtonMenuView::kMenuViewTransformDistanceDp,
+      gfx::Point(kPowerButtonMenuTransformDistanceDp,
                  AdjustMenuEdgeForDisplaySize(
                      left_power_button_y - menu_size.height() / 2,
                      display_edge_for_adjust, menu_size.height()))));
 
   menu_bounds_origins_.insert(std::make_pair(
       right_screen_orientation,
-      gfx::Point(display_width -
-                     PowerButtonMenuView::kMenuViewTransformDistanceDp -
+      gfx::Point(display_width - kPowerButtonMenuTransformDistanceDp -
                      menu_size.width(),
                  AdjustMenuEdgeForDisplaySize(
                      right_power_button_y - menu_size.height() / 2,
@@ -319,20 +371,19 @@ void PowerButtonMenuScreenView::UpdateMenuBoundsOrigins() {
 
   // Power button position offset from the top when the button is at the top
   // is always zero.
-  menu_bounds_origins_.insert(std::make_pair(
-      top_screen_orientation,
-      gfx::Point(AdjustMenuEdgeForDisplaySize(
-                     top_power_button_x - menu_size.width() / 2,
-                     display_edge_for_adjust, menu_size.width()),
-                 PowerButtonMenuView::kMenuViewTransformDistanceDp)));
+  menu_bounds_origins_.insert(
+      std::make_pair(top_screen_orientation,
+                     gfx::Point(AdjustMenuEdgeForDisplaySize(
+                                    top_power_button_x - menu_size.width() / 2,
+                                    display_edge_for_adjust, menu_size.width()),
+                                kPowerButtonMenuTransformDistanceDp)));
 
   menu_bounds_origins_.insert(std::make_pair(
       bottom_screen_orientation,
       gfx::Point(AdjustMenuEdgeForDisplaySize(
                      bottom_power_button_x - menu_size.width() / 2,
                      display_edge_for_adjust, menu_size.width()),
-                 display_width -
-                     PowerButtonMenuView::kMenuViewTransformDistanceDp -
+                 display_width - kPowerButtonMenuTransformDistanceDp -
                      menu_size.height())));
 }
 
@@ -340,18 +391,28 @@ gfx::Rect PowerButtonMenuScreenView::GetMenuBounds() {
   gfx::Rect menu_bounds;
 
   if (power_button_position_ == PowerButtonPosition::NONE ||
-      !Shell::Get()->tablet_mode_controller()->InTabletMode()) {
+      !display::Screen::GetScreen()->InTabletMode()) {
     menu_bounds = GetContentsBounds();
-    menu_bounds.ClampToCenteredSize(
-        power_button_menu_view_->GetPreferredSize());
+    menu_bounds.ClampToCenteredSize(GetMenuViewPreferredSize());
   } else {
     menu_bounds.set_origin(
         menu_bounds_origins_[Shell::Get()
                                  ->screen_orientation_controller()
                                  ->GetCurrentOrientation()]);
-    menu_bounds.set_size(power_button_menu_view_->GetPreferredSize());
+    menu_bounds.set_size(GetMenuViewPreferredSize());
   }
   return menu_bounds;
 }
+
+gfx::Size PowerButtonMenuScreenView::GetMenuViewPreferredSize() {
+  if (IsCurtainModeEnabled()) {
+    return GetOrCreateCurtainView()->GetPreferredSize();
+  } else {
+    return power_button_menu_view_->GetPreferredSize();
+  }
+}
+
+BEGIN_METADATA(PowerButtonMenuScreenView)
+END_METADATA
 
 }  // namespace ash

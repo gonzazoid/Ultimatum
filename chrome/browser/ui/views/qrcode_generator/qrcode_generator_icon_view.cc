@@ -31,6 +31,9 @@ QRCodeGeneratorIconView::QRCodeGeneratorIconView(
       bubble_requested_(false) {
   SetVisible(false);
   SetLabel(l10n_util::GetStringUTF16(IDS_OMNIBOX_QRCODE_GENERATOR_ICON_LABEL));
+  SetAccessibilityProperties(
+      /*role*/ std::nullopt,
+      l10n_util::GetStringUTF16(IDS_OMNIBOX_QRCODE_GENERATOR_ICON_TOOLTIP));
 }
 
 QRCodeGeneratorIconView::~QRCodeGeneratorIconView() = default;
@@ -95,19 +98,16 @@ void QRCodeGeneratorIconView::OnExecuting(
 }
 
 const gfx::VectorIcon& QRCodeGeneratorIconView::GetVectorIcon() const {
-  return kQrcodeGeneratorIcon;
-}
-
-std::u16string QRCodeGeneratorIconView::GetTextForTooltipAndAccessibleName()
-    const {
-  return l10n_util::GetStringUTF16(IDS_OMNIBOX_QRCODE_GENERATOR_ICON_TOOLTIP);
+  return OmniboxFieldTrial::IsChromeRefreshIconsEnabled()
+             ? kQrCodeChromeRefreshIcon
+             : kQrcodeGeneratorIcon;
 }
 
 bool QRCodeGeneratorIconView::ShouldShowLabel() const {
   return false;
 }
 
-BEGIN_METADATA(QRCodeGeneratorIconView, PageActionIconView)
+BEGIN_METADATA(QRCodeGeneratorIconView)
 END_METADATA
 
 }  // namespace qrcode_generator

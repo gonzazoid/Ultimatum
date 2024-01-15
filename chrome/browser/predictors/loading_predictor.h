@@ -31,6 +31,7 @@ namespace predictors {
 
 class ResourcePrefetchPredictor;
 class LoadingStatsCollector;
+class PrewarmHttpDiskCacheManager;
 
 // Entry point for the Loading predictor.
 // From a high-level request (GURL and motivation) and a database of historical
@@ -122,6 +123,8 @@ class LoadingPredictor : public KeyedService,
       bool allow_credentials,
       const net::NetworkAnonymizationKey& network_anonymization_key);
 
+  void MaybePrewarmResources(const GURL& top_frame_main_resource_url);
+
  private:
   // Stores the information necessary to keep track of the active navigations.
   struct NavigationInfo {
@@ -137,19 +140,21 @@ class LoadingPredictor : public KeyedService,
   void CleanupAbandonedHintsAndNavigations(NavigationId navigation_id);
 
   // May start preconnect and preresolve jobs according to |prediction| for
-  // |url| with a given hint |origin|.
+  // |url|.
   //
   // When LoadingPredictorPrefetch is enabled, starts prefetch
   // jobs if |prediction| has prefetch requests.
-  void MaybeAddPreconnect(const GURL& url,
-                          PreconnectPrediction prediction,
-                          HintOrigin origin);
+  void MaybeAddPreconnect(const GURL& url, PreconnectPrediction prediction);
   // If a preconnect or prefetch exists for |url|, stop it.
   void MaybeRemovePreconnect(const GURL& url);
 
   // May start a preconnect or a preresolve for |url|. |preconnectable|
   // indicates if preconnect is possible.
   void HandleOmniboxHint(const GURL& url, bool preconnectable);
+
+  // May start a preconnect or a preresolve for |url|. |preconnectable|
+  // indicates if preconnect is possible.
+  void HandleBookmarkBarHint(const GURL& url, bool preconnectable);
 
   // For testing.
   void set_mock_resource_prefetch_predictor(
@@ -170,12 +175,13 @@ class LoadingPredictor : public KeyedService,
   }
 
   LoadingPredictorConfig config_;
-  raw_ptr<Profile> profile_;
+  raw_ptr<Profile, DanglingUntriaged> profile_;
   std::unique_ptr<ResourcePrefetchPredictor> resource_prefetch_predictor_;
   std::unique_ptr<LoadingStatsCollector> stats_collector_;
   std::unique_ptr<LoadingDataCollector> loading_data_collector_;
   std::unique_ptr<PreconnectManager> preconnect_manager_;
   std::unique_ptr<PrefetchManager> prefetch_manager_;
+  std::unique_ptr<PrewarmHttpDiskCacheManager> prewarm_http_disk_cache_manager_;
   std::map<GURL, base::TimeTicks> active_hints_;
   std::map<NavigationId, NavigationInfo> active_navigations_;
   std::map<GURL, std::set<NavigationId>> active_urls_to_navigations_;
@@ -185,6 +191,10 @@ class LoadingPredictor : public KeyedService,
   url::Origin last_omnibox_origin_;
   base::TimeTicks last_omnibox_preconnect_time_;
   base::TimeTicks last_omnibox_preresolve_time_;
+
+  url::Origin last_bookmark_bar_origin_;
+  base::TimeTicks last_bookmark_bar_preconnect_time_;
+  base::TimeTicks last_bookmark_bar_preresolve_time_;
 
   friend class LoadingPredictorTest;
   friend class LoadingPredictorPreconnectTest;

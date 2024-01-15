@@ -9,10 +9,10 @@
 
 #include <vector>
 
+#include <optional>
 #include "build/build_config.h"
 #include "printing/backend/mojom/print_backend.mojom-forward.h"
 #include "printing/backend/print_backend.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace printing {
@@ -34,22 +34,44 @@ struct OptionalSampleCapabilities {
   AdvancedCapabilities advanced_capabilities;
 #endif  // BUILDFLAG(IS_CHROMEOS)
 #if BUILDFLAG(IS_WIN)
-  absl::optional<PageOutputQuality> page_output_quality;
+  std::optional<PageOutputQuality> page_output_quality;
 #endif  // BUILDFLAG(IS_WIN)
 };
 
 inline const PrinterSemanticCapsAndDefaults::Paper kPaperA3{
     /*display_name=*/"A3", /*vendor_id=*/"67",
-    /*size_um=*/gfx::Size(7016, 9921)};
+    /*size_um=*/gfx::Size(7016, 9921),
+    /*printable_area_um=*/gfx::Rect(0, 0, 7016, 9921)};
 inline const PrinterSemanticCapsAndDefaults::Paper kPaperA4{
-    /*display_name=*/"A4", /*vendor_id=*/"12",
-    /*size_um=*/gfx::Size(4961, 7016)};
+    /*display_name=*/"A4",
+    /*vendor_id=*/"12",
+    /*size_um=*/gfx::Size(4961, 7016),
+    /*printable_area_um=*/gfx::Rect(100, 200, 500, 800),
+    /*max_height_um=*/0,
+    /*has_borderless_variant=*/true};
 inline const PrinterSemanticCapsAndDefaults::Paper kPaperLetter{
     /*display_name=*/"Letter", /*vendor_id=*/"45",
-    /*size_um=*/gfx::Size(5100, 6600)};
+    /*size_um=*/gfx::Size(5100, 6600),
+    /*printable_area_um=*/gfx::Rect(0, 0, 5100, 6600)};
 inline const PrinterSemanticCapsAndDefaults::Paper kPaperLedger{
     /*display_name=*/"Ledger", /*vendor_id=*/"89",
-    /*size_um=*/gfx::Size(6600, 10200)};
+    /*size_um=*/gfx::Size(6600, 10200),
+    /*printable_area_um=*/gfx::Rect(0, 0, 6600, 10200)};
+inline const PrinterSemanticCapsAndDefaults::Paper kPaperCustom{
+    /*display_name=*/"Custom",
+    /*vendor_id=*/"",
+    /*size_um=*/gfx::Size(2540, 5080),
+    /*printable_area_um=*/gfx::Rect(0, 0, 2540, 5080),
+    /*max_height_um=*/20000};
+
+inline const PrinterSemanticCapsAndDefaults::MediaType kMediaTypePlain{
+    /*display_name=*/"Plain Paper",
+    /*vendor_id=*/"stationery",
+};
+inline const PrinterSemanticCapsAndDefaults::MediaType kMediaTypePhoto{
+    /*display_name=*/"Photo Paper",
+    /*vendor_id=*/"photographic",
+};
 
 #if BUILDFLAG(IS_CHROMEOS)
 inline const AdvancedCapability kAdvancedCapability1(
@@ -94,7 +116,7 @@ inline const PageOutputQualityAttributes kPageOutputQualityAttributes{
     kPageOutputQualityAttribute3};
 inline const PageOutputQuality kPageOutputQuality(
     kPageOutputQualityAttributes,
-    /*default_quality=*/absl::nullopt);
+    /*default_quality=*/std::nullopt);
 inline constexpr char kDefaultQuality[] = "ns000:Draft";
 #endif  // BUILDFLAG(IS_WIN)
 
@@ -112,13 +134,17 @@ inline constexpr mojom::ColorModel kBwModel = mojom::ColorModel::kGrayscale;
 inline const PrinterSemanticCapsAndDefaults::Papers kPapers{kPaperA4,
                                                             kPaperLetter};
 inline const PrinterSemanticCapsAndDefaults::Papers kUserDefinedPapers{
-    kPaperA3, kPaperLedger};
+    kPaperA3, kPaperLedger, kPaperCustom};
 inline const PrinterSemanticCapsAndDefaults::Paper kDefaultPaper = kPaperLetter;
 inline constexpr gfx::Size kDpi600(600, 600);
 inline constexpr gfx::Size kDpi1200(1200, 1200);
 inline constexpr gfx::Size kDpi1200x600(1200, 600);
 inline const std::vector<gfx::Size> kDpis{kDpi600, kDpi1200, kDpi1200x600};
 inline constexpr gfx::Size kDefaultDpi = kDpi600;
+inline const PrinterSemanticCapsAndDefaults::MediaTypes kMediaTypes{
+    kMediaTypePlain, kMediaTypePhoto};
+inline const PrinterSemanticCapsAndDefaults::MediaType kDefaultMediaType =
+    kMediaTypePlain;
 #if BUILDFLAG(IS_CHROMEOS)
 inline constexpr bool kPinSupported = true;
 #endif

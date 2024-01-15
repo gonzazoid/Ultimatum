@@ -5,8 +5,8 @@
 #include <memory>
 #include <set>
 
-#include "base/bind.h"
 #include "base/enterprise_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
@@ -51,6 +51,7 @@
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/url_request/url_request_failed_job.h"
 #include "services/network/public/cpp/features.h"
+#include "services/network/public/mojom/clear_data_filter.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -181,13 +182,14 @@ class DnsProbeBrowserTest : public InProcessBrowserTest {
 
   std::unique_ptr<FakeHostResolverNetworkContext> network_context_;
   std::unique_ptr<FakeDnsConfigChangeManager> dns_config_change_manager_;
-  raw_ptr<DelayingDnsProbeService, DanglingUntriaged>
+  raw_ptr<DelayingDnsProbeService, AcrossTasksDanglingUntriaged>
       delaying_dns_probe_service_;
 
   // Browser that methods apply to.
-  raw_ptr<Browser, DanglingUntriaged> active_browser_;
+  raw_ptr<Browser, AcrossTasksDanglingUntriaged> active_browser_;
   // Helper that current has its DnsProbeStatus messages monitored.
-  raw_ptr<NetErrorTabHelper, DanglingUntriaged> monitored_tab_helper_;
+  raw_ptr<NetErrorTabHelper, AcrossTasksDanglingUntriaged>
+      monitored_tab_helper_;
 
   std::unique_ptr<base::RunLoop> awaiting_dns_probe_status_run_loop_;
   // Queue of statuses received but not yet consumed by WaitForSentStatus().

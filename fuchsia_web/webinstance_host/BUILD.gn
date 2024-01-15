@@ -4,6 +4,8 @@
 
 assert(is_fuchsia)
 
+import("//third_party/widevine/cdm/widevine.gni")
+
 visibility = [ ":*" ]
 
 source_set("webinstance_host") {
@@ -24,10 +26,14 @@ source_set("webinstance_host") {
     "fuchsia_web_debug_proxy.cc",
     "fuchsia_web_debug_proxy.h",
     "web_instance_host.cc",
+    "web_instance_host_internal.cc",
+    "web_instance_host_internal.h",
   ]
-  public = [ "web_instance_host.h" ]
+  public = [
+    "web_instance_host.h",
+    "web_instance_host_constants.h",
+  ]
   deps = [
-    "//base",
     "//base:base_static",
     "//build:chromecast_buildflags",
     "//components/fuchsia_component_support",
@@ -36,32 +42,22 @@ source_set("webinstance_host") {
     "//gpu/command_buffer/service",
     "//gpu/config",
     "//services/network/public/cpp",
-    "//third_party/fuchsia-sdk/sdk/pkg/async",
-    "//third_party/fuchsia-sdk/sdk/pkg/fdio",
+    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.component.decl:fuchsia.component.decl_hlcpp",
+    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.io:fuchsia.io_hlcpp",
+    "//third_party/fuchsia-sdk/sdk/pkg/fit",
     "//third_party/fuchsia-sdk/sdk/pkg/sys_cpp",
-    "//third_party/fuchsia-sdk/sdk/pkg/zx",
-    "//third_party/widevine/cdm:headers",
+    "//third_party/fuchsia-sdk/sdk/pkg/vfs_cpp",
+    "//third_party/widevine/cdm:buildflags",
     "//ui/ozone",
   ]
-  public_deps = [
-    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.io",
-    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.sys",
-    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.web",
-    "//third_party/fuchsia-sdk/sdk/pkg/fidl",
-  ]
-}
+  if (enable_widevine) {
+    deps += [ "//third_party/widevine/cdm:headers" ]
+  }
 
-source_set("webinstance_host_integration_test") {
-  testonly = true
-  visibility += [ "//fuchsia_web/webengine/*" ]
-  sources = [ "web_instance_host_integration_test.cc" ]
-  deps = [
-    ":webinstance_host",
+  public_deps = [
     "//base",
-    "//fuchsia_web/common/test:test_support",
-    "//fuchsia_web/webengine:browsertest_core",
-    "//net:test_support",
-    "//testing/gtest",
-    "//third_party/fuchsia-sdk/sdk/pkg/sys_cpp",
+    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.component:fuchsia.component_hlcpp",
+    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.web:fuchsia.web_hlcpp",
+    "//third_party/fuchsia-sdk/sdk/pkg/fidl_cpp",
   ]
 }

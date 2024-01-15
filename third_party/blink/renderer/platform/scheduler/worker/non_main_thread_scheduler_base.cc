@@ -6,7 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/platform/platform.h"
 
 namespace blink::scheduler {
@@ -21,12 +22,12 @@ NonMainThreadSchedulerBase::~NonMainThreadSchedulerBase() = default;
 scoped_refptr<NonMainThreadTaskQueue>
 NonMainThreadSchedulerBase::CreateTaskQueue(
     base::sequence_manager::QueueName name,
-    bool can_be_throttled) {
+    NonMainThreadTaskQueue::QueueCreationParams params) {
   helper_.CheckOnValidThread();
   return helper_.NewTaskQueue(
       base::sequence_manager::TaskQueue::Spec(name).SetShouldMonitorQuiescence(
           true),
-      can_be_throttled);
+      params);
 }
 
 base::TimeTicks

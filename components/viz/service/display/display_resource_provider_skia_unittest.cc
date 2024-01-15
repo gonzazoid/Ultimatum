@@ -13,9 +13,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "build/build_config.h"
@@ -67,7 +67,7 @@ class MockExternalUseClient : public ExternalUseClient {
       CreateImageContext,
       std::unique_ptr<ImageContext>(const gpu::MailboxHolder&,
                                     const gfx::Size&,
-                                    ResourceFormat,
+                                    SharedImageFormat,
                                     bool,
                                     const absl::optional<gpu::VulkanYCbCrInfo>&,
                                     sk_sp<SkColorSpace>,
@@ -101,15 +101,15 @@ class DisplayResourceProviderSkiaTest : public testing::Test {
     return base::BindRepeating(&CollectResources, array);
   }
 
-  TransferableResource CreateResource(ResourceFormat format) {
+  TransferableResource CreateResource() {
     constexpr gfx::Size size(64, 64);
     gpu::Mailbox gpu_mailbox = gpu::Mailbox::GenerateForSharedImage();
     gpu::SyncToken sync_token = GenSyncToken();
     EXPECT_TRUE(sync_token.HasData());
 
     TransferableResource gl_resource = TransferableResource::MakeGpu(
-        gpu_mailbox, GL_LINEAR, GL_TEXTURE_2D, sync_token, size, format,
-        false /* is_overlay_candidate */);
+        gpu_mailbox, GL_TEXTURE_2D, sync_token, size,
+        SinglePlaneFormat::kRGBA_8888, false /* is_overlay_candidate */);
     return gl_resource;
   }
 
@@ -134,10 +134,10 @@ TEST_F(DisplayResourceProviderSkiaTest, LockForExternalUse) {
   gpu::SyncToken sync_token1(gpu::CommandBufferNamespace::GPU_IO,
                              gpu::CommandBufferId::FromUnsafeValue(0x123),
                              0x42);
-  auto mailbox = gpu::Mailbox::Generate();
+  auto mailbox = gpu::Mailbox::GenerateForSharedImage();
   constexpr gfx::Size size(64, 64);
   TransferableResource gl_resource = TransferableResource::MakeGpu(
-      mailbox, GL_LINEAR, GL_TEXTURE_2D, sync_token1, size, RGBA_8888,
+      mailbox, GL_TEXTURE_2D, sync_token1, size, SinglePlaneFormat::kRGBA_8888,
       false /* is_overlay_candidate */);
   ResourceId id1 =
       child_resource_provider_->ImportResource(gl_resource, base::DoNothing());
@@ -161,8 +161,9 @@ TEST_F(DisplayResourceProviderSkiaTest, LockForExternalUse) {
 
   ResourceId parent_id = resource_map[list.front().id];
 
+  auto format = SinglePlaneFormat::kRGBA_8888;
   auto owned_image_context = std::make_unique<ExternalUseClient::ImageContext>(
-      gpu::MailboxHolder(mailbox, sync_token1, GL_TEXTURE_2D), size, RGBA_8888,
+      gpu::MailboxHolder(mailbox, sync_token1, GL_TEXTURE_2D), size, format,
       /*ycbcr_info=*/absl::nullopt, /*color_space=*/nullptr);
   auto* image_context = owned_image_context.get();
 
@@ -214,10 +215,10 @@ TEST_F(DisplayResourceProviderSkiaTest, LockForExternalUseWebView) {
   gpu::SyncToken sync_token1(gpu::CommandBufferNamespace::GPU_IO,
                              gpu::CommandBufferId::FromUnsafeValue(0x123),
                              0x42);
-  auto mailbox = gpu::Mailbox::Generate();
+  auto mailbox = gpu::Mailbox::GenerateForSharedImage();
   constexpr gfx::Size size(64, 64);
   TransferableResource gl_resource = TransferableResource::MakeGpu(
-      mailbox, GL_LINEAR, GL_TEXTURE_2D, sync_token1, size, RGBA_8888,
+      mailbox, GL_TEXTURE_2D, sync_token1, size, SinglePlaneFormat::kRGBA_8888,
       false /* is_overlay_candidate */);
   ResourceId id1 =
       child_resource_provider_->ImportResource(gl_resource, base::DoNothing());
@@ -241,8 +242,9 @@ TEST_F(DisplayResourceProviderSkiaTest, LockForExternalUseWebView) {
 
   ResourceId parent_id = resource_map[list.front().id];
 
+  auto format = SinglePlaneFormat::kRGBA_8888;
   auto owned_image_context = std::make_unique<ExternalUseClient::ImageContext>(
-      gpu::MailboxHolder(mailbox, sync_token1, GL_TEXTURE_2D), size, RGBA_8888,
+      gpu::MailboxHolder(mailbox, sync_token1, GL_TEXTURE_2D), size, format,
       /*ycbcr_info=*/absl::nullopt, /*color_space=*/nullptr);
   auto* image_context = owned_image_context.get();
 
@@ -360,13 +362,13 @@ TEST_F(DisplayResourceProviderSkiaTest,
   for (auto sync_type : kSynchronizationTypes) {
     MockReleaseCallback release;
 
-    TransferableResource tran1 = CreateResource(RGBA_8888);
+    TransferableResource tran1 = CreateResource();
     tran1.synchronization_type = sync_type;
     ResourceId id1 = child_resource_provider_->ImportResource(
         tran1, base::BindOnce(&MockReleaseCallback::Released,
                               base::Unretained(&release)));
 
-    TransferableResource tran2 = CreateResource(RGBA_8888);
+    TransferableResource tran2 = CreateResource();
     ASSERT_EQ(tran2.synchronization_type,
               TransferableResource::SynchronizationType::kSyncToken);
     ResourceId id2 = child_resource_provider_->ImportResource(
@@ -434,7 +436,7 @@ TEST_F(DisplayResourceProviderSkiaTest,
       gfx::GpuFenceHandle fake_handle;
 #if BUILDFLAG(IS_POSIX)
       const int32_t kFenceFd = dup(1);
-      fake_handle.owned_fd.reset(kFenceFd);
+      fake_handle.Adopt(base::ScopedFD(kFenceFd));
 #endif
       release_fence->SetReleaseFence(std::move(fake_handle));
     }
@@ -466,13 +468,13 @@ TEST_F(DisplayResourceProviderSkiaTest, ResourceFenceDestroyChild) {
   for (auto sync_type : kSynchronizationTypes) {
     MockReleaseCallback release;
 
-    TransferableResource tran1 = CreateResource(RGBA_8888);
+    TransferableResource tran1 = CreateResource();
     tran1.synchronization_type = sync_type;
     ResourceId id1 = child_resource_provider_->ImportResource(
         tran1, base::BindOnce(&MockReleaseCallback::Released,
                               base::Unretained(&release)));
 
-    TransferableResource tran2 = CreateResource(RGBA_8888);
+    TransferableResource tran2 = CreateResource();
     ASSERT_EQ(tran2.synchronization_type,
               TransferableResource::SynchronizationType::kSyncToken);
     ResourceId id2 = child_resource_provider_->ImportResource(
@@ -543,7 +545,7 @@ TEST_F(DisplayResourceProviderSkiaTest, ResourceFenceDestroyChild) {
       gfx::GpuFenceHandle fake_handle;
 #if BUILDFLAG(IS_POSIX)
       const int32_t kFenceFd = dup(1);
-      fake_handle.owned_fd.reset(kFenceFd);
+      fake_handle.Adopt(base::ScopedFD(kFenceFd));
 #endif
       release_fence->SetReleaseFence(std::move(fake_handle));
     }
@@ -562,14 +564,14 @@ TEST_F(DisplayResourceProviderSkiaTest, ResourceFenceDestroyChild) {
 TEST_F(DisplayResourceProviderSkiaTest, ResourceFenceOutlivesResourceProvider) {
   MockReleaseCallback release;
 
-  TransferableResource tran1 = CreateResource(RGBA_8888);
+  TransferableResource tran1 = CreateResource();
   tran1.synchronization_type =
       TransferableResource::SynchronizationType::kGpuCommandsCompleted;
   ResourceId id1 = child_resource_provider_->ImportResource(
       tran1, base::BindOnce(&MockReleaseCallback::Released,
                             base::Unretained(&release)));
 
-  TransferableResource tran2 = CreateResource(RGBA_8888);
+  TransferableResource tran2 = CreateResource();
   tran2.synchronization_type =
       TransferableResource::SynchronizationType::kReleaseFence;
   ResourceId id2 = child_resource_provider_->ImportResource(
@@ -631,7 +633,7 @@ TEST_F(DisplayResourceProviderSkiaTest, ResourceFenceOutlivesResourceProvider) {
     gfx::GpuFenceHandle fake_handle;
 #if BUILDFLAG(IS_POSIX)
     const int32_t kFenceFd = dup(1);
-    fake_handle.owned_fd.reset(kFenceFd);
+    fake_handle.Adopt(base::ScopedFD(kFenceFd));
 #endif
     release_fence->SetReleaseFence(std::move(fake_handle));
   }
@@ -658,7 +660,7 @@ TEST_F(DisplayResourceProviderSkiaTest,
   constexpr size_t kUsedResources = 4;
   ResourceId ids[kTotalResources];
   for (auto& id : ids) {
-    TransferableResource tran = CreateResource(RGBA_8888);
+    TransferableResource tran = CreateResource();
     id = child_resource_provider_->ImportResource(
         tran, base::BindOnce(&MockReleaseCallback::Released,
                              base::Unretained(&release)));

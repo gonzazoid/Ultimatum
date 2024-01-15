@@ -10,7 +10,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
 #include "components/spellcheck/browser/platform_spell_checker.h"
 #include "components/spellcheck/browser/spellcheck_host_metrics.h"
@@ -60,12 +60,10 @@ class WindowsSpellChecker : public PlatformSpellChecker {
 
   void IgnoreWordForAllLanguages(const std::u16string& word);
 
-  void RecordChromeLocalesStats(const std::vector<std::string> chrome_locales,
-                                SpellCheckHostMetrics* metrics);
+  void RecordChromeLocalesStats(const std::vector<std::string> chrome_locales);
 
   void RecordSpellcheckLocalesStats(
-      const std::vector<std::string> spellcheck_locales,
-      SpellCheckHostMetrics* metrics);
+      const std::vector<std::string> spellcheck_locales);
 
   void IsLanguageSupported(const std::string& lang_tag,
                            base::OnceCallback<void(bool)> callback);

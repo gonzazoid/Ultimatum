@@ -6,8 +6,9 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/ref_counted_memory.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
@@ -84,8 +85,9 @@ void AppIconSource::StartDataRequest(
   // Check whether data is of correct type, load default image if not.
   std::string size_param = base::ToLowerASCII(path_parts[1]);
   size_t query_position = size_param.find("?");
-  if (query_position != std::string::npos)
+  if (query_position != std::string::npos) {
     size_param = size_param.substr(0, query_position);
+  }
   int size_in_dip = 0;
   if (!base::StringToInt(size_param, &size_in_dip) || size_in_dip < 1) {
     LoadDefaultImage(std::move(callback));
@@ -96,8 +98,7 @@ void AppIconSource::StartDataRequest(
       apps::AppServiceProxyFactory::GetForProfile(profile_);
   const std::string app_id = path_parts[0];
   app_service_proxy->LoadIcon(
-      app_service_proxy->AppRegistryCache().GetAppType(app_id), app_id,
-      IconType::kCompressed, size_in_dip,
+      app_id, IconType::kCompressed, size_in_dip,
       /*allow_placeholder_icon=*/false,
       base::BindOnce(&RunCallback, std::move(callback)));
 }

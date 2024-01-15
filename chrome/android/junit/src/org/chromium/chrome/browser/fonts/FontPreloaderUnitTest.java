@@ -38,29 +38,34 @@ import org.chromium.chrome.browser.fonts.FontPreloaderUnitTest.ShadowResourcesCo
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Unit tests for {@link FontPreloader}.
- */
+/** Unit tests for {@link FontPreloader}. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE, shadows = {ShadowSystemClock.class, ShadowResourcesCompat.class})
+@Config(
+        manifest = Config.NONE,
+        shadows = {ShadowSystemClock.class, ShadowResourcesCompat.class})
 @LooperMode(Mode.PAUSED)
 public class FontPreloaderUnitTest {
-    private static final Integer[] FONTS = {org.chromium.chrome.R.font.chrome_google_sans,
-            org.chromium.chrome.R.font.chrome_google_sans_medium,
-            org.chromium.chrome.R.font.chrome_google_sans_bold};
+    private static final Integer[] FONTS = {
+        org.chromium.chrome.R.font.chrome_google_sans,
+        org.chromium.chrome.R.font.chrome_google_sans_medium,
+        org.chromium.chrome.R.font.chrome_google_sans_bold
+    };
     private static final String AFTER_ON_CREATE =
             "Android.Fonts.TimeToRetrieveDownloadableFontsAfterOnCreate";
     private static final String AFTER_INFLATION =
             "Android.Fonts.TimeDownloadableFontsRetrievedAfterPostInflationStartup";
     private static final String BEFORE_INFLATION =
             "Android.Fonts.TimeDownloadableFontsRetrievedBeforePostInflationStartup";
+    private static final String BEFORE_FIRST_DRAW =
+            "Android.Fonts.TimeDownloadableFontsRetrievedBeforeFirstDraw";
+    private static final String AFTER_FIRST_DRAW =
+            "Android.Fonts.TimeDownloadableFontsRetrievedAfterFirstDraw";
     private static final String FRE = ".FirstRunActivity";
     private static final String TABBED = ".ChromeTabbedActivity";
     private static final String CUSTOM_TAB = ".CustomTabActivity";
     private static final int INITIAL_TIME = 1000;
 
-    @Mock
-    private Context mContext;
+    @Mock private Context mContext;
 
     private FontPreloader mFontPreloader;
 
@@ -211,6 +216,14 @@ public class FontPreloaderUnitTest {
         assertHistogramNotRecorded(AFTER_INFLATION + FRE);
         assertHistogramNotRecorded(BEFORE_INFLATION + CUSTOM_TAB);
         assertHistogramNotRecorded(AFTER_INFLATION + CUSTOM_TAB);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + TABBED);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + TABBED);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + FRE);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + FRE);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + CUSTOM_TAB);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + CUSTOM_TAB);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW);
 
         SystemClock.setCurrentTimeMillis(INITIAL_TIME + 500);
         ShadowResourcesCompat.loadFont();
@@ -219,7 +232,7 @@ public class FontPreloaderUnitTest {
     }
 
     @Test
-    public void testHistogramRecordedForOnlyOneActivity_BeforeFREInflation() {
+    public void testHistogramRecordedForOnlyFirstActivity_BeforeFREInflation() {
         SystemClock.setCurrentTimeMillis(INITIAL_TIME + 10);
         fakeLoadAllFonts();
         SystemClock.setCurrentTimeMillis(INITIAL_TIME + 20);
@@ -232,7 +245,7 @@ public class FontPreloaderUnitTest {
     }
 
     @Test
-    public void testHistogramRecordedForOnlyOneActivity_AfterFREInflation() {
+    public void testHistogramRecordedForOnlyFirstActivity_AfterFREInflation() {
         SystemClock.setCurrentTimeMillis(INITIAL_TIME + 64);
         mFontPreloader.onPostInflationStartupFre();
         SystemClock.setCurrentTimeMillis(INITIAL_TIME + 96);
@@ -245,7 +258,7 @@ public class FontPreloaderUnitTest {
     }
 
     @Test
-    public void testHistogramRecordedForOnlyOneActivity_BeforeCCTInflation() {
+    public void testHistogramRecordedForOnlyFirstActivity_BeforeCCTInflation() {
         SystemClock.setCurrentTimeMillis(INITIAL_TIME + 1);
         fakeLoadAllFonts();
         SystemClock.setCurrentTimeMillis(INITIAL_TIME + 11);
@@ -258,7 +271,7 @@ public class FontPreloaderUnitTest {
     }
 
     @Test
-    public void testHistogramRecordedForOnlyOneActivity_AfterCCTInflation() {
+    public void testHistogramRecordedForOnlyFirstActivity_AfterCCTInflation() {
         SystemClock.setCurrentTimeMillis(INITIAL_TIME + 32);
         mFontPreloader.onPostInflationStartupCustomTabActivity();
         SystemClock.setCurrentTimeMillis(INITIAL_TIME + 64);
@@ -286,6 +299,154 @@ public class FontPreloaderUnitTest {
         assertHistogramRecorded(AFTER_INFLATION + TABBED, 10);
     }
 
+    @Test
+    public void testAllFontsRetrievedAfterFirstDraw_FRE() {
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 100);
+        mFontPreloader.onFirstDrawFre();
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 228);
+        fakeLoadAllFonts();
+
+        assertHistogramRecorded(AFTER_FIRST_DRAW, 128);
+        assertHistogramRecorded(AFTER_FIRST_DRAW + FRE, 128);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + FRE);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + TABBED);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + TABBED);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + CUSTOM_TAB);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + CUSTOM_TAB);
+    }
+
+    @Test
+    public void testAllFontsRetrievedAfterFirstDraw_Tabbed() {
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 100);
+        mFontPreloader.onFirstDrawTabbedActivity();
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 113);
+        fakeLoadAllFonts();
+
+        assertHistogramRecorded(AFTER_FIRST_DRAW, 13);
+        assertHistogramRecorded(AFTER_FIRST_DRAW + TABBED, 13);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + TABBED);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + FRE);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + FRE);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + CUSTOM_TAB);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + CUSTOM_TAB);
+    }
+
+    @Test
+    public void testAllFontsRetrievedAfterFirstDraw_CustomTab() {
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 50);
+        mFontPreloader.onFirstDrawCustomTabActivity();
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 100);
+        fakeLoadAllFonts();
+
+        assertHistogramRecorded(AFTER_FIRST_DRAW, 50);
+        assertHistogramRecorded(AFTER_FIRST_DRAW + CUSTOM_TAB, 50);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + CUSTOM_TAB);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + FRE);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + FRE);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + TABBED);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + TABBED);
+    }
+
+    @Test
+    public void testAllFontsRetrievedBeforeFirstDraw_FRE() {
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 90);
+        fakeLoadAllFonts();
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 100);
+        mFontPreloader.onFirstDrawFre();
+
+        assertHistogramRecorded(BEFORE_FIRST_DRAW, 10);
+        assertHistogramRecorded(BEFORE_FIRST_DRAW + FRE, 10);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + FRE);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + TABBED);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + TABBED);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + CUSTOM_TAB);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + CUSTOM_TAB);
+    }
+
+    @Test
+    public void testAllFontsRetrievedBeforeFirstDraw_Tabbed() {
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 123);
+        fakeLoadAllFonts();
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 246);
+        mFontPreloader.onFirstDrawTabbedActivity();
+
+        assertHistogramRecorded(BEFORE_FIRST_DRAW, 123);
+        assertHistogramRecorded(BEFORE_FIRST_DRAW + TABBED, 123);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + TABBED);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + FRE);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + FRE);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + CUSTOM_TAB);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + CUSTOM_TAB);
+    }
+
+    @Test
+    public void testAllFontsRetrievedBeforeFirstDraw_CustomTab() {
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 100);
+        fakeLoadAllFonts();
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 119);
+        mFontPreloader.onFirstDrawCustomTabActivity();
+
+        assertHistogramRecorded(BEFORE_FIRST_DRAW, 19);
+        assertHistogramRecorded(BEFORE_FIRST_DRAW + CUSTOM_TAB, 19);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + CUSTOM_TAB);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + FRE);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + FRE);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + TABBED);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + TABBED);
+    }
+
+    @Test
+    public void testHistogramRecordedForOnlyFirstActivity_BeforeFREDraw() {
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 10);
+        fakeLoadAllFonts();
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 20);
+        mFontPreloader.onFirstDrawFre();
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 30);
+        mFontPreloader.onFirstDrawTabbedActivity();
+
+        assertHistogramRecorded(BEFORE_FIRST_DRAW + FRE, 10);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + TABBED);
+    }
+
+    @Test
+    public void testHistogramRecordedForOnlyFirstActivity_AfterFREDraw() {
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 10);
+        mFontPreloader.onFirstDrawFre();
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 20);
+        fakeLoadAllFonts();
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 30);
+        mFontPreloader.onFirstDrawTabbedActivity();
+
+        assertHistogramRecorded(AFTER_FIRST_DRAW + FRE, 10);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + TABBED);
+    }
+
+    @Test
+    public void testHistogramRecordedForOnlyFirstActivity_BeforeCCTDraw() {
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 100);
+        fakeLoadAllFonts();
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 200);
+        mFontPreloader.onFirstDrawCustomTabActivity();
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 300);
+        mFontPreloader.onFirstDrawTabbedActivity();
+
+        assertHistogramRecorded(BEFORE_FIRST_DRAW + CUSTOM_TAB, 100);
+        assertHistogramNotRecorded(BEFORE_FIRST_DRAW + TABBED);
+    }
+
+    @Test
+    public void testHistogramRecordedForOnlyFirstActivity_AfterCCTDraw() {
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 111);
+        mFontPreloader.onFirstDrawCustomTabActivity();
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 222);
+        fakeLoadAllFonts();
+        SystemClock.setCurrentTimeMillis(INITIAL_TIME + 300);
+        mFontPreloader.onFirstDrawTabbedActivity();
+
+        assertHistogramRecorded(AFTER_FIRST_DRAW + CUSTOM_TAB, 111);
+        assertHistogramNotRecorded(AFTER_FIRST_DRAW + TABBED);
+    }
+
     private void fakeLoadAllFonts() {
         for (int i = 0; i < 3; i++) {
             ShadowResourcesCompat.loadFont();
@@ -297,15 +458,17 @@ public class FontPreloaderUnitTest {
      * @param expectedValue The expected value to be recorded.
      */
     private void assertHistogramRecorded(String histogram, int expectedValue) {
-        assertEquals(histogram + " isn't recorded correctly.", 1,
+        assertEquals(
+                histogram + " isn't recorded correctly.",
+                1,
                 RecordHistogram.getHistogramValueCountForTesting(histogram, expectedValue));
     }
 
-    /**
-     * @param histogram Histogram name to assert.
-     */
+    /** @param histogram Histogram name to assert. */
     private void assertHistogramNotRecorded(String histogram) {
-        assertEquals(histogram + " shouldn't be recorded.", 0,
+        assertEquals(
+                histogram + " shouldn't be recorded.",
+                0,
                 RecordHistogram.getHistogramTotalCountForTesting(histogram));
     }
 }

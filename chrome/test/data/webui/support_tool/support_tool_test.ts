@@ -12,15 +12,27 @@ import 'chrome://support-tool/url_generator.js';
 
 import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
 import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
-import {webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {track} from 'chrome://resources/polymer/v3_0/iron-test-helpers/mock-interactions.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {BrowserProxy, BrowserProxyImpl, DataCollectorItem, IssueDetails, PiiDataItem, UrlGenerationResult} from 'chrome://support-tool/browser_proxy.js';
+import {BrowserProxy, BrowserProxyImpl, DataCollectorItem, IssueDetails, PiiDataItem, SupportTokenGenerationResult} from 'chrome://support-tool/browser_proxy.js';
+import {ScreenshotElement} from 'chrome://support-tool/screenshot.js';
 import {DataExportResult, SupportToolElement, SupportToolPageIndex} from 'chrome://support-tool/support_tool.js';
 import {UrlGeneratorElement} from 'chrome://support-tool/url_generator.js';
-import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {assertEquals, assertFalse, assertNotEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
+
+const SCREENSHOT_BASE64: string =
+    'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgMCAgMDAwME' +
+    'AwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT' +
+    '/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB' +
+    'QUFBQUFBQUFBQUFBQUFBT/wAARCABkAGQDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAA' +
+    'AAAAAj/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFgEBAQEAAAAAAAAAAAAAAAAAAAcJ/8QA' +
+    'FBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AnQBDGqYAAAAAAAAAAAAAAAAAAAA' +
+    'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' +
+    'AAAAD/2Q==';
 
 const EMAIL_ADDRESSES: string[] =
     ['testemail1@test.com', 'testemail2@test.com'];
@@ -74,11 +86,15 @@ const PII_ITEMS: PiiDataItem[] = [
  */
 class TestSupportToolBrowserProxy extends TestBrowserProxy implements
     BrowserProxy {
-  private urlGenerationResult_:
-      UrlGenerationResult = {success: false, url: '', errorMessage: ''};
+  private supportTokenGenerationResult_: SupportTokenGenerationResult = {
+    success: false,
+    token: '',
+    errorMessage: '',
+  };
 
   constructor() {
     super([
+      'takeScreenshot',
       'getEmailAddresses',
       'getDataCollectors',
       'startDataCollection',
@@ -86,8 +102,13 @@ class TestSupportToolBrowserProxy extends TestBrowserProxy implements
       'startDataExport',
       'showExportedDataInFolder',
       'getAllDataCollectors',
-      'generateCustomizedURL',
+      'generateCustomizedUrl',
+      'generateSupportToken',
     ]);
+  }
+
+  takeScreenshot() {
+    this.methodCalled('takeScreenshot');
   }
 
   getEmailAddresses() {
@@ -109,9 +130,11 @@ class TestSupportToolBrowserProxy extends TestBrowserProxy implements
   }
 
   startDataCollection(
-      issueDetails: IssueDetails, selectedDataCollectors: DataCollectorItem[]) {
+      issueDetails: IssueDetails, selectedDataCollectors: DataCollectorItem[],
+      screenshot: string) {
     this.methodCalled(
-        'startDataCollection', issueDetails, selectedDataCollectors);
+        'startDataCollection', issueDetails, selectedDataCollectors,
+        screenshot);
     // Return result with success for testing.
     const result = {success: true, errorMessage: ''};
     return Promise.resolve(result);
@@ -129,15 +152,22 @@ class TestSupportToolBrowserProxy extends TestBrowserProxy implements
     this.methodCalled('showExportedDataInFolder');
   }
 
-  setUrlGenerationResult(result: UrlGenerationResult) {
-    this.urlGenerationResult_ = result;
+  setSupportTokenGenerationResult(result: SupportTokenGenerationResult) {
+    this.supportTokenGenerationResult_ = result;
   }
 
-  // Returns this.urlGenerationResult as response. Please call
-  // this.setUrlGenerationResult() before using this function in tests.
-  generateCustomizedURL(caseId: string, dataCollectors: DataCollectorItem[]) {
-    this.methodCalled('generateCustomizedURL', caseId, dataCollectors);
-    return Promise.resolve(this.urlGenerationResult_);
+  // Returns this.supportTokenGenerationResult_ as response. Please call
+  // this.setSupportTokenGenerationResult() before using this function in tests.
+  generateCustomizedUrl(caseId: string, dataCollectors: DataCollectorItem[]) {
+    this.methodCalled('generateCustomizedUrl', caseId, dataCollectors);
+    return Promise.resolve(this.supportTokenGenerationResult_);
+  }
+
+  // Returns this.supportTokenGenerationResult_ as response. Please call
+  // this.setSupportTokenGenerationResult() before using this function in tests.
+  generateSupportToken(dataCollectors: DataCollectorItem[]) {
+    this.methodCalled('generateSupportToken', dataCollectors);
+    return Promise.resolve(this.supportTokenGenerationResult_);
   }
 }
 
@@ -208,6 +238,90 @@ suite('SupportToolTest', function() {
       assertEquals(listItem.isIncluded, DATA_COLLECTORS[i]!.isIncluded);
       assertEquals(listItem.protoEnum, DATA_COLLECTORS[i]!.protoEnum);
     }
+
+    // Verify that the select all functionality works.
+    supportTool.$.dataCollectors.shadowRoot!.getElementById(
+                                                'selectAllButton')!.click();
+    for (let i = 0; i < ironListItems.length; i++) {
+      assertTrue(ironListItems[i].isIncluded);
+    }
+
+    // Verify that the unselect all functionality works.
+    supportTool.$.dataCollectors.shadowRoot!.getElementById(
+                                                'selectAllButton')!.click();
+    for (let i = 0; i < ironListItems.length; i++) {
+      assertFalse(ironListItems[i].isIncluded);
+    }
+  });
+
+  test('take and remove screenshot', async () => {
+    // Go to the data collector selection page.
+    supportTool.shadowRoot!.getElementById('continueButton')!.click();
+    assertEquals(
+        supportTool.shadowRoot!.querySelector('iron-pages')!.selected,
+        SupportToolPageIndex.DATA_COLLECTOR_SELECTION);
+    // Take screenshot.
+    const screenshot = supportTool.$.dataCollectors.shadowRoot!
+                           .querySelector<ScreenshotElement>('#screenshot')!;
+    const takeScreenshotButton =
+        screenshot.shadowRoot!.getElementById('takeScreenshot')!;
+    const removeButton =
+        screenshot.shadowRoot!.getElementById('removeScreenshot')!;
+    const hideInfoButton = screenshot.shadowRoot!.getElementById('hideInfo')!;
+    takeScreenshotButton.click();
+    await browserProxy.whenCalled('takeScreenshot');
+    webUIListenerCallback('screenshot-received', SCREENSHOT_BASE64);
+    assertFalse(removeButton.hidden);
+    assertFalse(hideInfoButton.hidden);
+    assertTrue(takeScreenshotButton.hidden);
+    assertNotEquals('', screenshot.getEditedScreenshotBase64());
+    // Remove screenshot.
+    screenshot.shadowRoot!.getElementById('removeScreenshot')!.click();
+    assertTrue(removeButton.hidden);
+    assertTrue(hideInfoButton.hidden);
+    assertFalse(takeScreenshotButton.hidden);
+    assertEquals('', screenshot.getEditedScreenshotBase64());
+  });
+
+  test('take and edit screenshot', async () => {
+    // Go to the data collector selection page.
+    supportTool.shadowRoot!.getElementById('continueButton')!.click();
+    assertEquals(
+        supportTool.shadowRoot!.querySelector('iron-pages')!.selected,
+        SupportToolPageIndex.DATA_COLLECTOR_SELECTION);
+    // Take a screenshot.
+    const screenshot = supportTool.$.dataCollectors.shadowRoot!
+                           .querySelector<ScreenshotElement>('#screenshot')!;
+    const takeScreenshotButton =
+        screenshot.shadowRoot!.getElementById('takeScreenshot')!;
+    const removeButton =
+        screenshot.shadowRoot!.getElementById('removeScreenshot')!;
+    const hideInfoButton = screenshot.shadowRoot!.getElementById('hideInfo')!;
+    takeScreenshotButton.click();
+    await browserProxy.whenCalled('takeScreenshot');
+    webUIListenerCallback('screenshot-received', SCREENSHOT_BASE64);
+    assertFalse(
+        screenshot.shadowRoot!.getElementById('screenshotPreview')!.hidden);
+    assertFalse(removeButton.hidden);
+    assertFalse(hideInfoButton.hidden);
+    assertTrue(takeScreenshotButton.hidden);
+    assertNotEquals('', screenshot.getEditedScreenshotBase64());
+    const originalScreenshot = screenshot.getOriginalScreenshotBase64();
+
+    // Edit the screenshot.
+    hideInfoButton.click();
+    await waitAfterNextRender(screenshot);
+    const canvas = screenshot.shadowRoot!.querySelector<HTMLCanvasElement>(
+        '#screenshotCanvas')!;
+    const confirmButton = screenshot.shadowRoot!.getElementById('confirmEdit')!;
+
+    // After clicking the confirm button, the image is changed.
+    hideInfoButton.click();
+    await waitAfterNextRender(screenshot);
+    track(canvas, canvas.width / 4, canvas.height / 4, 1);
+    confirmButton.click();
+    await waitAfterNextRender(screenshot);
+    assertNotEquals(originalScreenshot, screenshot.getEditedScreenshotBase64());
   });
 
   test('spinner page', () => {
@@ -292,30 +406,30 @@ suite('UrlGeneratorTest', function() {
     dataCollectors[0]!.click();
     // Ensure the button is enabled after we select at least one data collector.
     assertFalse(copyLinkButton.disabled);
-    const expectedLink = 'chrome://support-tool/?case_id=test123&module=jekhh';
+    const expectedToken = 'chrome://support-tool/?case_id=test123&module=jekhh';
     // Set the expected result of URL generation to successful.
-    const expectedResult: UrlGenerationResult = {
+    const expectedResult: SupportTokenGenerationResult = {
       success: true,
-      url: expectedLink,
+      token: expectedToken,
       errorMessage: '',
     };
-    browserProxy.setUrlGenerationResult(expectedResult);
+    browserProxy.setSupportTokenGenerationResult(expectedResult);
     // Click the button to generate URL and copy to clipboard.
     copyLinkButton.click();
-    await browserProxy.whenCalled('generateCustomizedURL');
+    await browserProxy.whenCalled('generateCustomizedUrl');
     // Check the URL value copied to clipboard if it's as expected.
-    const copiedLink = await navigator.clipboard.readText();
-    assertEquals(copiedLink, expectedLink);
+    const copiedToken = await navigator.clipboard.readText();
+    assertEquals(copiedToken, expectedToken);
   });
 
   test('url generation fail', async () => {
     // Set the expected result of URL generation to error.
-    const expectedResult: UrlGenerationResult = {
+    const expectedResult: SupportTokenGenerationResult = {
       success: false,
-      url: '',
+      token: '',
       errorMessage: 'Test error message',
     };
-    browserProxy.setUrlGenerationResult(expectedResult);
+    browserProxy.setSupportTokenGenerationResult(expectedResult);
     const copyLinkButton = urlGenerator.shadowRoot!.getElementById(
                                'copyURLButton')! as CrButtonElement;
     // Enable the button for testing. The input fields are not important as
@@ -323,8 +437,35 @@ suite('UrlGeneratorTest', function() {
     copyLinkButton.disabled = false;
     // Click the button to generate URL.
     copyLinkButton!.click();
-    await browserProxy.whenCalled('generateCustomizedURL');
+    await browserProxy.whenCalled('generateCustomizedUrl');
     // Check that there's an error message shown to user.
     assertTrue(urlGenerator.$.errorMessageToast.open);
+  });
+
+  test('token generation success', async () => {
+    // Ensure the button is disabled when we open the page.
+    const copyTokenButton = urlGenerator.shadowRoot!.getElementById(
+                                'copyTokenButton')! as CrButtonElement;
+    assertTrue(copyTokenButton.disabled);
+    const dataCollectors =
+        urlGenerator.shadowRoot!.querySelectorAll('cr-checkbox');
+    // Select one of data collectors to enable the button.
+    dataCollectors[1]!.click();
+    // Ensure the button is enabled after we select at least one data collector.
+    assertFalse(copyTokenButton.disabled);
+    const expectedToken = 'jekhh';
+    // Set the expected result of token generation to successful.
+    const expectedResult: SupportTokenGenerationResult = {
+      success: true,
+      token: expectedToken,
+      errorMessage: '',
+    };
+    browserProxy.setSupportTokenGenerationResult(expectedResult);
+    // Click the button to generate URL and copy to clipboard.
+    copyTokenButton.click();
+    await browserProxy.whenCalled('generateSupportToken');
+    // Check the token value copied to clipboard if it's as expected.
+    const copiedToken = await navigator.clipboard.readText();
+    assertEquals(copiedToken, expectedToken);
   });
 });

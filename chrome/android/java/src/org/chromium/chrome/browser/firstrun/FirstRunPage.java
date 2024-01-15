@@ -6,7 +6,7 @@ package org.chromium.chrome.browser.firstrun;
 
 import androidx.fragment.app.Fragment;
 
-import org.chromium.base.supplier.BooleanSupplier;
+import java.util.function.BooleanSupplier;
 
 /**
  * Represents first run page shown during the First Run. Actual page implementation is created
@@ -45,9 +45,7 @@ public class FirstRunPage<T extends Fragment & FirstRunFragment> {
         return mShouldShow.getAsBoolean();
     }
 
-    /**
-     * Creates fragment that implements this FRE page.
-     */
+    /** Creates fragment that implements this FRE page. */
     public T instantiateFragment() {
         try {
             return mClazz.newInstance();

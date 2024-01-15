@@ -22,16 +22,25 @@ extern const char kGaiaCookieChangedTime[];
 extern const char kGaiaCookiePeriodicReportTime[];
 extern const char kGoogleServicesAccountId[];
 extern const char kGoogleServicesConsentedToSync[];
-extern const char kGoogleServicesLastAccountIdDeprecated[];
-extern const char kGoogleServicesLastGaiaId[];
-extern const char kGoogleServicesLastUsername[];
+extern const char kGoogleServicesLastSyncingAccountIdDeprecated[];
+extern const char kGoogleServicesLastSyncingGaiaId[];
+extern const char kGoogleServicesLastSyncingUsername[];
 extern const char kGoogleServicesSigninScopedDeviceId[];
+extern const char kGoogleServicesSyncingGaiaIdMigratedToSignedIn[];
+extern const char kGoogleServicesSyncingUsernameMigratedToSignedIn[];
 extern const char kGoogleServicesUsernamePattern[];
 extern const char kRestrictAccountsToPatterns[];
 extern const char kReverseAutologinRejectedEmailList[];
 extern const char kSignedInWithCredentialProvider[];
 extern const char kSigninAllowed[];
 extern const char kGaiaCookieLastListAccountsData[];
+extern const char kSigninAllowedOnNextStartup[];
+extern const char kSigninInterceptionIDPCookiesUrl[];
+extern const char kProfileSeparationSettings[];
+extern const char kProfileSeparationDataMigrationSettings[];
+extern const char kProfileSeparationDomainExceptionList[];
+extern const char kUserCloudSigninPolicyResponseFromPolicyTestPage[];
+extern const char kExplicitBrowserSignin[];
 
 }  // namespace prefs
 

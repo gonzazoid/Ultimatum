@@ -4,8 +4,9 @@
 
 #include "chrome/browser/ash/multidevice_setup/multidevice_setup_client_factory.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/ash/device_sync/device_sync_client_factory.h"
 #include "chrome/browser/ash/multidevice_setup/multidevice_setup_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
@@ -43,7 +44,7 @@ class MultiDeviceSetupClientHolder : public KeyedService {
     // depend on MultiDeviceSetupServiceFactory at construction time. This is
     // due to a circular dependency among the AndroidSmsServiceFactory,
     // MultiDeviceSetupServiceFactory, and MultiDeviceSetupClientFactory
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&MultiDeviceSetupClientHolder::BindService,
                        weak_factory_.GetWeakPtr(), std::move(receiver)));
@@ -69,7 +70,7 @@ class MultiDeviceSetupClientHolder : public KeyedService {
     weak_factory_.InvalidateWeakPtrs();
   }
 
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
   std::unique_ptr<MultiDeviceSetupClient> multidevice_setup_client_;
   base::WeakPtrFactory<MultiDeviceSetupClientHolder> weak_factory_{this};
 };
@@ -77,8 +78,17 @@ class MultiDeviceSetupClientHolder : public KeyedService {
 }  // namespace
 
 MultiDeviceSetupClientFactory::MultiDeviceSetupClientFactory()
-    : ProfileKeyedServiceFactory("MultiDeviceSetupClient") {
+    : ProfileKeyedServiceFactory(
+          "MultiDeviceSetupClient",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(device_sync::DeviceSyncClientFactory::GetInstance());
+  // The MultiDeviceSetupServiceFactory dependency is omitted here, see the
+  // comment in the MultiDeviceSetupClientHolder constructor.
 }
 
 MultiDeviceSetupClientFactory::~MultiDeviceSetupClientFactory() = default;
@@ -108,15 +118,17 @@ MultiDeviceSetupClient* MultiDeviceSetupClientFactory::GetForProfile(
 
 // static
 MultiDeviceSetupClientFactory* MultiDeviceSetupClientFactory::GetInstance() {
-  return base::Singleton<MultiDeviceSetupClientFactory>::get();
+  static base::NoDestructor<MultiDeviceSetupClientFactory> instance;
+  return instance.get();
 }
 
-KeyedService* MultiDeviceSetupClientFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+MultiDeviceSetupClientFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   if (IsAllowedByPolicy(context)) {
     PA_LOG(INFO)
         << "Allowed by policy. Returning new MultiDeviceSetupClientHolder";
-    return new MultiDeviceSetupClientHolder(context);
+    return std::make_unique<MultiDeviceSetupClientHolder>(context);
   }
 
   PA_LOG(INFO) << "NOT allowed by policy. Unable to return "

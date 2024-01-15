@@ -23,8 +23,6 @@
 #include "net/base/net_errors.h"
 #include "net/base/net_info_source_list.h"
 #include "net/cert/cert_verifier.h"
-#include "net/cert/pki/simple_path_builder_delegate.h"
-#include "net/cert/pki/trust_store.h"
 #include "net/disk_cache/disk_cache.h"
 #include "net/dns/host_cache.h"
 #include "net/dns/host_resolver.h"
@@ -48,6 +46,8 @@
 #include "net/third_party/quiche/src/quiche/quic/core/quic_packets.h"
 #include "net/url_request/url_request.h"
 #include "net/url_request/url_request_context.h"
+#include "third_party/boringssl/src/pki/simple_path_builder_delegate.h"
+#include "third_party/boringssl/src/pki/trust_store.h"
 
 #if BUILDFLAG(ENABLE_REPORTING)
 #include "net/network_error_logging/network_error_logging_service.h"
@@ -157,53 +157,47 @@ base::Value::Dict GetNetConstants() {
   // Add a dictionary with information about the relationship between
   // CertVerifier::VerifyFlags and their symbolic names.
   {
-    base::Value::Dict dict;
-
-    dict.Set("VERIFY_DISABLE_NETWORK_FETCHES",
-             CertVerifier::VERIFY_DISABLE_NETWORK_FETCHES);
-
     static_assert(CertVerifier::VERIFY_FLAGS_LAST == (1 << 0),
                   "Update with new flags");
-
-    constants_dict.Set("certVerifierFlags", std::move(dict));
+    constants_dict.Set(
+        "certVerifierFlags",
+        base::Value::Dict().Set("VERIFY_DISABLE_NETWORK_FETCHES",
+                                CertVerifier::VERIFY_DISABLE_NETWORK_FETCHES));
   }
 
   {
-    base::Value::Dict dict;
-
-    dict.Set("kStrong", static_cast<int>(
-                            SimplePathBuilderDelegate::DigestPolicy::kStrong));
-    dict.Set("kWeakAllowSha1",
-             static_cast<int>(
-                 SimplePathBuilderDelegate::DigestPolicy::kWeakAllowSha1));
-
-    static_assert(SimplePathBuilderDelegate::DigestPolicy::kMaxValue ==
-                      SimplePathBuilderDelegate::DigestPolicy::kWeakAllowSha1,
+    static_assert(CertVerifyProc::VERIFY_FLAGS_LAST == (1 << 4),
                   "Update with new flags");
-
-    constants_dict.Set("certPathBuilderDigestPolicy", std::move(dict));
+    constants_dict.Set(
+        "certVerifyFlags",
+        base::Value::Dict()
+            .Set("VERIFY_REV_CHECKING_ENABLED",
+                 CertVerifyProc::VERIFY_REV_CHECKING_ENABLED)
+            .Set("VERIFY_REV_CHECKING_REQUIRED_LOCAL_ANCHORS",
+                 CertVerifyProc::VERIFY_REV_CHECKING_REQUIRED_LOCAL_ANCHORS)
+            .Set("VERIFY_ENABLE_SHA1_LOCAL_ANCHORS",
+                 CertVerifyProc::VERIFY_ENABLE_SHA1_LOCAL_ANCHORS)
+            .Set("VERIFY_DISABLE_SYMANTEC_ENFORCEMENT",
+                 CertVerifyProc::VERIFY_DISABLE_SYMANTEC_ENFORCEMENT)
+            .Set("VERIFY_DISABLE_NETWORK_FETCHES",
+                 CertVerifyProc::VERIFY_DISABLE_NETWORK_FETCHES));
   }
 
   {
-    base::Value::Dict dict;
+    static_assert(
+        bssl::SimplePathBuilderDelegate::DigestPolicy::kMaxValue ==
+            bssl::SimplePathBuilderDelegate::DigestPolicy::kWeakAllowSha1,
+        "Update with new flags");
 
-    dict.Set("DISTRUSTED", static_cast<int>(CertificateTrustType::DISTRUSTED));
-    dict.Set("UNSPECIFIED",
-             static_cast<int>(CertificateTrustType::UNSPECIFIED));
-    dict.Set("TRUSTED_ANCHOR",
-             static_cast<int>(CertificateTrustType::TRUSTED_ANCHOR));
-    dict.Set(
-        "TRUSTED_ANCHOR_WITH_EXPIRATION",
-        static_cast<int>(CertificateTrustType::TRUSTED_ANCHOR_WITH_EXPIRATION));
-    dict.Set("TRUSTED_ANCHOR_WITH_CONSTRAINTS",
-             static_cast<int>(
-                 CertificateTrustType::TRUSTED_ANCHOR_WITH_CONSTRAINTS));
-
-    static_assert(CertificateTrustType::LAST ==
-                      CertificateTrustType::TRUSTED_ANCHOR_WITH_CONSTRAINTS,
-                  "Update with new flags");
-
-    constants_dict.Set("certificateTrustType", std::move(dict));
+    constants_dict.Set(
+        "certPathBuilderDigestPolicy",
+        base::Value::Dict()
+            .Set("kStrong",
+                 static_cast<int>(
+                     bssl::SimplePathBuilderDelegate::DigestPolicy::kStrong))
+            .Set("kWeakAllowSha1",
+                 static_cast<int>(bssl::SimplePathBuilderDelegate::
+                                      DigestPolicy::kWeakAllowSha1)));
   }
 
   // Add a dictionary with information about the relationship between load flag
@@ -270,13 +264,12 @@ base::Value::Dict GetNetConstants() {
   // Information about the relationship between event phase enums and their
   // symbolic names.
   {
-    base::Value::Dict dict;
-
-    dict.Set("PHASE_BEGIN", static_cast<int>(NetLogEventPhase::BEGIN));
-    dict.Set("PHASE_END", static_cast<int>(NetLogEventPhase::END));
-    dict.Set("PHASE_NONE", static_cast<int>(NetLogEventPhase::NONE));
-
-    constants_dict.Set("logEventPhase", std::move(dict));
+    constants_dict.Set(
+        "logEventPhase",
+        base::Value::Dict()
+            .Set("PHASE_BEGIN", static_cast<int>(NetLogEventPhase::BEGIN))
+            .Set("PHASE_END", static_cast<int>(NetLogEventPhase::END))
+            .Set("PHASE_NONE", static_cast<int>(NetLogEventPhase::NONE)));
   }
 
   // Information about the relationship between source type enums and
@@ -286,13 +279,12 @@ base::Value::Dict GetNetConstants() {
   // Information about the relationship between address family enums and
   // their symbolic names.
   {
-    base::Value::Dict dict;
-
-    dict.Set("ADDRESS_FAMILY_UNSPECIFIED", ADDRESS_FAMILY_UNSPECIFIED);
-    dict.Set("ADDRESS_FAMILY_IPV4", ADDRESS_FAMILY_IPV4);
-    dict.Set("ADDRESS_FAMILY_IPV6", ADDRESS_FAMILY_IPV6);
-
-    constants_dict.Set("addressFamily", std::move(dict));
+    constants_dict.Set(
+        "addressFamily",
+        base::Value::Dict()
+            .Set("ADDRESS_FAMILY_UNSPECIFIED", ADDRESS_FAMILY_UNSPECIFIED)
+            .Set("ADDRESS_FAMILY_IPV4", ADDRESS_FAMILY_IPV4)
+            .Set("ADDRESS_FAMILY_IPV6", ADDRESS_FAMILY_IPV6));
   }
 
   // Information about the relationship between DnsQueryType enums and their
@@ -361,22 +353,19 @@ NET_EXPORT base::Value::Dict GetNetInfo(URLRequestContext* context) {
     DCHECK(host_resolver);
     HostCache* cache = host_resolver->GetHostCache();
     if (cache) {
-      base::Value::Dict dict;
-      base::Value dns_config = host_resolver->GetDnsConfigAsValue();
-      dict.Set("dns_config", std::move(dns_config));
-
-      base::Value::Dict cache_info_dict;
       base::Value::List cache_contents_list;
-
-      cache_info_dict.Set("capacity", static_cast<int>(cache->max_entries()));
-      cache_info_dict.Set("network_changes", cache->network_changes());
-
       cache->GetList(cache_contents_list, true /* include_staleness */,
                      HostCache::SerializationType::kDebug);
-      cache_info_dict.Set("entries", std::move(cache_contents_list));
 
-      dict.Set("cache", std::move(cache_info_dict));
-      net_info_dict.Set(kNetInfoHostResolver, std::move(dict));
+      net_info_dict.Set(
+          kNetInfoHostResolver,
+          base::Value::Dict()
+              .Set("dns_config", host_resolver->GetDnsConfigAsValue())
+              .Set("cache",
+                   base::Value::Dict()
+                       .Set("capacity", static_cast<int>(cache->max_entries()))
+                       .Set("network_changes", cache->network_changes())
+                       .Set("entries", std::move(cache_contents_list))));
     }
 
     // Construct a list containing the names of the disabled DoH providers.
@@ -488,15 +477,13 @@ NET_EXPORT base::Value::Dict GetNetInfo(URLRequestContext* context) {
       }
       net_info_dict.Set(kNetInfoReporting, std::move(reporting_value));
     } else {
-      base::Value::Dict reporting_dict;
-      reporting_dict.Set("reportingEnabled", false);
-      net_info_dict.Set(kNetInfoReporting, std::move(reporting_dict));
+      net_info_dict.Set(kNetInfoReporting,
+                        base::Value::Dict().Set("reportingEnabled", false));
     }
 
 #else   // BUILDFLAG(ENABLE_REPORTING)
-    base::Value::Dict reporting_dict;
-    reporting_dict.Set("reportingEnabled", false);
-    net_info_dict.Set(kNetInfoReporting, std::move(reporting_dict));
+    net_info_dict.Set(kNetInfoReporting,
+                      base::Value::Dict().Set("reportingEnabled", false));
 #endif  // BUILDFLAG(ENABLE_REPORTING)
   }
 

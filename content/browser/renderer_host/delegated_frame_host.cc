@@ -8,12 +8,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/observer_list.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -22,6 +23,8 @@
 #include "components/viz/common/frame_sinks/copy_output_request.h"
 #include "components/viz/common/quads/compositor_frame.h"
 #include "components/viz/common/resources/release_callback.h"
+#include "components/viz/common/resources/shared_image_format.h"
+#include "components/viz/common/surfaces/parent_local_surface_id_allocator.h"
 #include "content/browser/compositor/surface_utils.h"
 #include "content/browser/gpu/compositor_util.h"
 #include "content/public/common/content_switches.h"
@@ -52,10 +55,6 @@ DelegatedFrameHost::DelegatedFrameHost(const viz::FrameSinkId& frame_sink_id,
       host_frame_sink_manager_(GetHostFrameSinkManager()),
       frame_evictor_(std::make_unique<viz::FrameEvictor>(this)) {
   DCHECK(host_frame_sink_manager_);
-  host_frame_sink_manager_->RegisterFrameSinkId(
-      frame_sink_id_, this, viz::ReportFirstSurfaceActivation::kNo);
-  host_frame_sink_manager_->SetFrameSinkDebugLabel(frame_sink_id_,
-                                                   "DelegatedFrameHost");
   frame_evictor_->SetVisible(client_->DelegatedFrameHostIsVisible());
 
   stale_content_layer_ =
@@ -68,7 +67,9 @@ DelegatedFrameHost::~DelegatedFrameHost() {
   DCHECK(!compositor_);
 
   DCHECK(host_frame_sink_manager_);
-  host_frame_sink_manager_->InvalidateFrameSinkId(frame_sink_id_);
+  if (owns_frame_sink_id_) {
+    host_frame_sink_manager_->InvalidateFrameSinkId(frame_sink_id_, this);
+  }
 }
 
 void DelegatedFrameHost::AddObserverForTesting(Observer* observer) {
@@ -89,7 +90,7 @@ void DelegatedFrameHost::WasShown(
 
   frame_evictor_->SetVisible(true);
   if (record_tab_switch_time_request && compositor_) {
-    compositor_->RequestPresentationTimeForNextFrame(
+    compositor_->RequestSuccessfulPresentationTimeForNextFrame(
         tab_switch_time_recorder_.TabWasShown(
             true /* has_saved_frames */,
             std::move(record_tab_switch_time_request)));
@@ -107,19 +108,19 @@ void DelegatedFrameHost::WasShown(
   }
 }
 
-void DelegatedFrameHost::RequestPresentationTimeForNextFrame(
+void DelegatedFrameHost::RequestSuccessfulPresentationTimeForNextFrame(
     blink::mojom::RecordContentToVisibleTimeRequestPtr visible_time_request) {
   DCHECK(visible_time_request);
   if (!compositor_)
     return;
   // Tab was shown while widget was already painting, eg. due to being
   // captured.
-  compositor_->RequestPresentationTimeForNextFrame(
+  compositor_->RequestSuccessfulPresentationTimeForNextFrame(
       tab_switch_time_recorder_.TabWasShown(true /* has_saved_frames */,
                                             std::move(visible_time_request)));
 }
 
-void DelegatedFrameHost::CancelPresentationTimeRequest() {
+void DelegatedFrameHost::CancelSuccessfulPresentationTimeRequest() {
   // Tab was hidden while widget keeps painting, eg. due to being captured.
   tab_switch_time_recorder_.TabWasHidden();
 }
@@ -204,6 +205,12 @@ void DelegatedFrameHost::CopyFromCompositingSurfaceInternal(
         gfx::Vector2d(area.width(), area.height()),
         gfx::Vector2d(output_size.width(), output_size.height()));
   }
+
+  // Run result callback on the current thread in case `callback` needs to run
+  // on the current thread. See http://crbug.com/1431363.
+  request->set_result_task_runner(
+      base::SingleThreadTaskRunner::GetCurrentDefault());
+
   DCHECK(host_frame_sink_manager_);
   host_frame_sink_manager_->RequestCopyOfOutput(
       viz::SurfaceId(frame_sink_id_, local_surface_id_), std::move(request));
@@ -235,6 +242,12 @@ bool DelegatedFrameHost::HasFallbackSurface() const {
   return fallback_surface_id && fallback_surface_id->is_valid();
 }
 
+viz::SurfaceId DelegatedFrameHost::GetFallbackSurfaceIdForTesting() const {
+  const viz::SurfaceId* fallback_surface_id =
+      client_->DelegatedFrameHostGetLayer()->GetOldestAcceptableFallback();
+  return fallback_surface_id ? *fallback_surface_id : viz::SurfaceId();
+}
+
 void DelegatedFrameHost::EmbedSurface(
     const viz::LocalSurfaceId& new_local_surface_id,
     const gfx::Size& new_dip_size,
@@ -253,7 +266,7 @@ void DelegatedFrameHost::EmbedSurface(
   pre_navigation_local_surface_id_ = viz::LocalSurfaceId();
 
   // Navigations performed while hidden delay embedding until transitioning to
-  // becoming visible. So we may not have a valid surace when DidNavigate is
+  // becoming visible. So we may not have a valid surface when DidNavigate is
   // called. Cache the first surface here so we have the correct oldest surface
   // to fallback to.
   if (!first_local_surface_id_after_navigation_.is_valid())
@@ -275,6 +288,11 @@ void DelegatedFrameHost::EmbedSurface(
         surface_dip_size_ != current_frame_size_in_dip_) {
       client_->DelegatedFrameHostGetLayer()->SetOldestAcceptableFallback(
           new_primary_surface_id);
+
+      // Invalidates `bfcache_fallback_` as resize-while-hidden has given us the
+      // latest `local_surface_id_`.
+      bfcache_fallback_ =
+          viz::ParentLocalSurfaceIdAllocator::InvalidLocalSurfaceId();
     }
     // Don't update the SurfaceLayer when invisible to avoid blocking on
     // renderers that do not submit CompositorFrames. Next time the renderer
@@ -286,6 +304,16 @@ void DelegatedFrameHost::EmbedSurface(
   // which shouldn't count against the saved frames.
   if (!new_dip_size.IsEmpty())
     frame_evictor_->OnNewSurfaceEmbedded();
+
+  if (bfcache_fallback_.is_valid()) {
+    // Inform Viz to show the primary surface with new ID asap; if the new
+    // surface isn't ready, use the fallback.
+    deadline_policy = cc::DeadlinePolicy::UseSpecifiedDeadline(0u);
+    client_->DelegatedFrameHostGetLayer()->SetOldestAcceptableFallback(
+        viz::SurfaceId(frame_sink_id_, bfcache_fallback_));
+    bfcache_fallback_ =
+        viz::ParentLocalSurfaceIdAllocator::InvalidLocalSurfaceId();
+  }
 
   if (!primary_surface_id ||
       primary_surface_id->local_surface_id() != local_surface_id_) {
@@ -338,7 +366,7 @@ void DelegatedFrameHost::ClearFallbackSurfaceForCommitPending() {
 
   // CommitPending failed, and Navigation never completed. Evict our surfaces.
   if (fallback_surface_id && fallback_surface_id->is_valid()) {
-    EvictDelegatedFrame();
+    EvictDelegatedFrame(frame_evictor_->CollectSurfaceIdsForEviction());
     client_->DelegatedFrameHostGetLayer()->SetOldestAcceptableFallback(
         viz::SurfaceId());
   }
@@ -357,10 +385,13 @@ void DelegatedFrameHost::ResetFallbackToFirstNavigationSurface() {
     return;
   }
 
-  // We never completed navigation, evict our surfaces.
+  // If we have a surface from before a navigation, evict it as well.
   if (pre_navigation_local_surface_id_.is_valid() &&
       !first_local_surface_id_after_navigation_.is_valid()) {
-    EvictDelegatedFrame();
+    // If we have a valid `pre_navigation_local_surface_id_`, we must not be in
+    // BFCache.
+    CHECK(!bfcache_fallback_.is_valid());
+    EvictDelegatedFrame(frame_evictor_->CollectSurfaceIdsForEviction());
   }
 
   client_->DelegatedFrameHostGetLayer()->SetOldestAcceptableFallback(
@@ -370,7 +401,8 @@ void DelegatedFrameHost::ResetFallbackToFirstNavigationSurface() {
           : viz::SurfaceId());
 }
 
-void DelegatedFrameHost::EvictDelegatedFrame() {
+void DelegatedFrameHost::EvictDelegatedFrame(
+    const std::vector<viz::SurfaceId>& surface_ids) {
   // There is already an eviction request pending.
   if (frame_eviction_state_ == FrameEvictionState::kPendingEvictionRequests) {
     frame_evictor_->OnSurfaceDiscarded();
@@ -378,7 +410,7 @@ void DelegatedFrameHost::EvictDelegatedFrame() {
   }
 
   if (!HasSavedFrame()) {
-    ContinueDelegatedFrameEviction();
+    ContinueDelegatedFrameEviction(surface_ids);
     return;
   }
 
@@ -401,9 +433,22 @@ void DelegatedFrameHost::EvictDelegatedFrame() {
         gfx::ScaleToRoundedSize(surface_dip_size_, kFrameContentCaptureQuality),
         std::move(callback));
   } else {
-    ContinueDelegatedFrameEviction();
+    ContinueDelegatedFrameEviction(surface_ids);
   }
   frame_evictor_->OnSurfaceDiscarded();
+}
+
+std::vector<viz::SurfaceId> DelegatedFrameHost::CollectSurfaceIdsForEviction()
+    const {
+  return client_->CollectSurfaceIdsForEviction();
+}
+
+viz::SurfaceId DelegatedFrameHost::GetCurrentSurfaceId() const {
+  return viz::SurfaceId(frame_sink_id_, local_surface_id_);
+}
+
+viz::SurfaceId DelegatedFrameHost::GetPreNavigationSurfaceId() const {
+  return viz::SurfaceId(frame_sink_id_, pre_navigation_local_surface_id_);
 }
 
 void DelegatedFrameHost::DidCopyStaleContent(
@@ -423,12 +468,14 @@ void DelegatedFrameHost::DidCopyStaleContent(
   DCHECK_NE(frame_eviction_state_, FrameEvictionState::kNotStarted);
 #endif
   SetFrameEvictionStateAndNotifyObservers(FrameEvictionState::kNotStarted);
-  ContinueDelegatedFrameEviction();
+  ContinueDelegatedFrameEviction(
+      frame_evictor_->CollectSurfaceIdsForEviction());
 
   auto transfer_resource = viz::TransferableResource::MakeGpu(
-      result->GetTextureResult()->planes[0].mailbox, GL_LINEAR, GL_TEXTURE_2D,
-      result->GetTextureResult()->planes[0].sync_token, result->size(),
-      viz::RGBA_8888, false /* is_overlay_candidate */);
+      result->GetTextureResult()->mailbox_holders[0].mailbox, GL_TEXTURE_2D,
+      result->GetTextureResult()->mailbox_holders[0].sync_token, result->size(),
+      viz::SinglePlaneFormat::kRGBA_8888, false /* is_overlay_candidate */,
+      viz::TransferableResource::ResourceSource::kStaleContent);
   viz::CopyOutputResult::ReleaseCallbacks release_callbacks =
       result->TakeTextureOwnership();
   DCHECK_EQ(1u, release_callbacks.size());
@@ -446,7 +493,8 @@ void DelegatedFrameHost::DidCopyStaleContent(
       transfer_resource, std::move(release_callbacks[0]), surface_dip_size_);
 }
 
-void DelegatedFrameHost::ContinueDelegatedFrameEviction() {
+void DelegatedFrameHost::ContinueDelegatedFrameEviction(
+    const std::vector<viz::SurfaceId>& surface_ids) {
   // Reset primary surface.
   if (HasPrimarySurface()) {
     client_->DelegatedFrameHostGetLayer()->SetShowSurface(
@@ -457,20 +505,11 @@ void DelegatedFrameHost::ContinueDelegatedFrameEviction() {
   if (!HasSavedFrame())
     return;
 
-  std::vector<viz::SurfaceId> surface_ids = {
-      client_->CollectSurfaceIdsForEviction()};
-
-  // If we have a surface from before a navigation, evict it as well.
-  if (pre_navigation_local_surface_id_.is_valid()) {
-    viz::SurfaceId id(frame_sink_id_, pre_navigation_local_surface_id_);
-    surface_ids.push_back(id);
-  }
-
-  // This list could be empty if this frame is not in the frame tree (can happen
-  // during navigation, construction, destruction, or in unit tests).
+  // Ensure the list is not empty, otherwise we are silently disconnecting our
+  // FrameTree. This prevents the eviction of viz::Surfaces, leading to GPU
+  // memory staying allocated.
+  DCHECK(!surface_ids.empty());
   if (!surface_ids.empty()) {
-    DCHECK(!GetCurrentSurfaceId().is_valid() ||
-           base::Contains(surface_ids, GetCurrentSurfaceId()));
     DCHECK(host_frame_sink_manager_);
     host_frame_sink_manager_->EvictSurfaces(surface_ids);
   }
@@ -513,16 +552,40 @@ void DelegatedFrameHost::DidNavigate() {
   first_local_surface_id_after_navigation_ = local_surface_id_;
 }
 
-void DelegatedFrameHost::OnNavigateToNewPage() {
+void DelegatedFrameHost::DidNavigateMainFramePreCommit() {
   // We are navigating to a different page, so the current |local_surface_id_|
   // and the fallback option of |first_local_surface_id_after_navigation_| are
   // no longer valid, as they represent older content from a different source.
   //
   // Cache the current |local_surface_id_| so that if navigation fails we can
   // evict it when transitioning to becoming visible.
+  //
+  // If the current page enters BFCache, `pre_navigation_local_surface_id_` will
+  // be restored as the primary `LocalSurfaceId` for this `DelegatedFrameHost`.
   pre_navigation_local_surface_id_ = local_surface_id_;
   first_local_surface_id_after_navigation_ = viz::LocalSurfaceId();
   local_surface_id_ = viz::LocalSurfaceId();
+}
+
+void DelegatedFrameHost::DidEnterBackForwardCache() {
+  if (local_surface_id_.is_valid()) {
+    // `EmbedSurface` can be called after `DidNavigateMainFramePreCommit` and
+    // before `DidEnterBackForwardCache`. This can happen on Mac where the
+    // `DelegatedFrameHost` receives an `EmbedSurface` call directly from
+    // NSView; this can also happen if there is an on-going Hi-DPI capture on
+    // the old frame (see `WebContentsFrameTracker::RenderFrameHostChanged()`).
+    //
+    // The `EmbedSurface` will invalidate `pre_navigation_local_surface_id_`. In
+    // this case we shouldn't restore the `local_surface_id_` nor
+    // `bfcache_fallback_`because the surface should embed the latest
+    // `local_surface_id_`.
+    CHECK(!pre_navigation_local_surface_id_.is_valid());
+    CHECK(!bfcache_fallback_.is_valid());
+  } else {
+    local_surface_id_ = pre_navigation_local_surface_id_;
+    bfcache_fallback_ = pre_navigation_local_surface_id_;
+    pre_navigation_local_surface_id_ = viz::LocalSurfaceId();
+  }
 }
 
 void DelegatedFrameHost::WindowTitleChanged(const std::string& title) {
@@ -562,6 +625,13 @@ void DelegatedFrameHost::TakeFallbackContentFrom(DelegatedFrameHost* other) {
     desired_fallback = *other_fallback;
   }
 
+  // If we explicitly tell a BFCached View and its `DelegatedFrameHost` to use
+  // a specific fallback, discard the preserved fallback for BFCache. During the
+  // BFCache activation (`EmbedSurface`) we will be using the
+  // `desired_fallback` instead of `bfcache_fallback_`.
+  bfcache_fallback_ =
+      viz::ParentLocalSurfaceIdAllocator::InvalidLocalSurfaceId();
+
   if (!HasPrimarySurface()) {
     client_->DelegatedFrameHostGetLayer()->SetShowSurface(
         desired_fallback, other->client_->DelegatedFrameHostGetLayer()->size(),
@@ -572,6 +642,26 @@ void DelegatedFrameHost::TakeFallbackContentFrom(DelegatedFrameHost* other) {
 
   client_->DelegatedFrameHostGetLayer()->SetOldestAcceptableFallback(
       desired_fallback);
+}
+
+viz::SurfaceId DelegatedFrameHost::GetFirstSurfaceIdAfterNavigationForTesting()
+    const {
+  return viz::SurfaceId(frame_sink_id_,
+                        first_local_surface_id_after_navigation_);
+}
+
+void DelegatedFrameHost::SetIsFrameSinkIdOwner(bool is_owner) {
+  if (is_owner == owns_frame_sink_id_) {
+    return;
+  }
+
+  owns_frame_sink_id_ = is_owner;
+  if (owns_frame_sink_id_) {
+    host_frame_sink_manager_->RegisterFrameSinkId(
+        frame_sink_id_, this, viz::ReportFirstSurfaceActivation::kNo);
+    host_frame_sink_manager_->SetFrameSinkDebugLabel(frame_sink_id_,
+                                                     "DelegatedFrameHost");
+  }
 }
 
 }  // namespace content

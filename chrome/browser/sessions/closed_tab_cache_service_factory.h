@@ -5,10 +5,11 @@
 #ifndef CHROME_BROWSER_SESSIONS_CLOSED_TAB_CACHE_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_SESSIONS_CLOSED_TAB_CACHE_SERVICE_FACTORY_H_
 
-#include "base/memory/singleton.h"
-#include "chrome/browser/profiles/profile.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
 #include "chrome/browser/sessions/closed_tab_cache_service.h"
+
+class Profile;
 
 class ClosedTabCacheServiceFactory : public ProfileKeyedServiceFactory {
  public:
@@ -18,13 +19,13 @@ class ClosedTabCacheServiceFactory : public ProfileKeyedServiceFactory {
   static ClosedTabCacheServiceFactory* GetInstance();
 
  private:
-  friend struct base::DefaultSingletonTraits<ClosedTabCacheServiceFactory>;
+  friend base::NoDestructor<ClosedTabCacheServiceFactory>;
 
   ClosedTabCacheServiceFactory();
   ~ClosedTabCacheServiceFactory() override = default;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
 };

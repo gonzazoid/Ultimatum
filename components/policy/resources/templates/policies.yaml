@@ -820,7 +820,7 @@ policies:
   819: SSLErrorOverrideAllowedForOrigins
   820: WebXRImmersiveArEnabled
   821: GaiaOfflineSigninTimeLimitDays
-  822: SendDownloadToCloudEnterpriseConnector
+  822: ''
   823: DeviceSystemWideTracingEnabled
   824: WebAppSettings
   825: DevicePciPeripheralDataAccessEnabled
@@ -992,13 +992,13 @@ policies:
   991: OnFileTransferEnterpriseConnector
   992: ChromeRootStoreEnabled
   993: WebSQLNonSecureContextEnabled
-  994: IdleProfileCloseTimeout
+  994: IdleTimeout
   995: NewWindowsInKioskAllowed
   996: EncryptedClientHelloEnabled
   997: DeviceAutofillSAMLUsername
   998: EnterpriseProfileCreationKeepBrowsingData
   999: KerberosDomainAutocomplete
-  1000: KerberosDefaultConfiguration
+  1000: KerberosCustomPrefilledConfig
   1001: UnmanagedDeviceSignalsConsentFlowEnabled
   1002: PersistentQuotaEnabled
   1003: DeviceLoginScreenContextAwareAccessSignalsAllowlist
@@ -1027,6 +1027,171 @@ policies:
   1026: DeviceKeyboardBacklightColor
   1027: LensDesktopNTPSearchEnabled
   1028: AccessControlAllowMethodsInCORSPreflightSpecConformant
+  1029: AllowWebAuthnWithBrokenTlsCerts
+  1030: ExtensionManifestV2Availability
+  1031: OffsetParentNewSpecBehaviorEnabled
+  1032: SendMouseEventsDisabledFormControlsEnabled
+  1033: BruschettaVMConfiguration
+  1034: DnsOverHttpsSalt
+  1035: DnsOverHttpsTemplatesWithIdentifiers
+  1036: IdleTimeoutActions
+  1037: ThrottleNonVisibleCrossOriginIframesAllowed
+  1038: PdfLocalFileAccessAllowedForDomains
+  1039: FloatingWorkspaceV2Enabled
+  1040: ''
+  1041: NewBaseUrlInheritanceBehaviorAllowed
+  1042: ShowCastSessionsStartedByOtherDevices
+  1043: CloudAPAuthEnabled
+  1044: UsbDetectorNotificationEnabled
+  1045: LacrosSelection
+  1046: UseMojoVideoDecoderForPepperAllowed
+  1047: PPAPISharedImagesSwapChainAllowed
+  1048: PrivacySandboxPromptEnabled
+  1049: PrivacySandboxAdTopicsEnabled
+  1050: PrivacySandboxSiteEnabledAdsEnabled
+  1051: PrivacySandboxAdMeasurementEnabled
+  1052: AppStoreRatingEnabled
+  1053: KerberosUseCustomPrefilledConfig
+  1054: DeviceHindiInscriptLayoutEnabled
+  1055: DeviceLoginScreenExtensionManifestV2Availability
+  1056: KioskTroubleshootingToolsEnabled
+  1057: ForceEnablePepperVideoDecoderDevAPI
+  1058: DomainReliabilityAllowed
+  1059: ScreensaverLockScreenEnabled
+  1060: ScreensaverLockScreenIdleTimeoutSeconds
+  1061: ScreensaverLockScreenImageDisplayIntervalSeconds
+  1062: ScreensaverLockScreenImages
+  1063: DeviceScreensaverLoginScreenEnabled
+  1064: DeviceScreensaverLoginScreenIdleTimeoutSeconds
+  1065: DeviceScreensaverLoginScreenImageDisplayIntervalSeconds
+  1066: DeviceScreensaverLoginScreenImages
+  1067: DefaultWindowManagementSetting
+  1068: WindowManagementAllowedForUrls
+  1069: WindowManagementBlockedForUrls
+  1070: OutOfProcessSystemDnsResolutionEnabled
+  1071: ExtensionUnpublishedAvailability
+  1072: MixedContentAutoupgradeEnabled
+  1073: ChromeAppsWebViewPermissiveBehaviorAllowed
+  1074: ExtensionExtendedBackgroundLifetimeForPortConnectionsToUrls
+  1075: DeviceActivityHeartbeatEnabled
+  1076: DeviceActivityHeartbeatCollectionRateMs
+  1077: WallpaperGooglePhotosIntegrationEnabled
+  1078: WebRtcTextLogCollectionAllowed
+  1079: EnforceLocalAnchorConstraintsEnabled
+  1080: ShowTouchpadScrollScreenEnabled
+  1081: DeviceSystemAecEnabled
+  1082: HttpAllowlist
+  1083: HttpsUpgradesEnabled
+  1084: ''
+  1085: MandatoryExtensionsForIncognitoNavigation
+  1086: CredentialProviderPromoEnabled
+  1087: RemoteAccessHostAllowEnterpriseRemoteSupportConnections
+  1088: ''
+  1089: UserAvatarCustomizationSelectorsEnabled
+  1090: DefaultThirdPartyStoragePartitioningSetting
+  1091: ThirdPartyStoragePartitioningBlockedForOrigins
+  1092: ScreenCaptureWithoutGestureAllowedForOrigins
+  1093: FileOrDirectoryPickerWithoutGestureAllowedForOrigins
+  1094: AppLaunchAutomation
+  1095: InsecureHashesInTLSHandshakesEnabled
+  1096: DeviceLoginScreenGeolocationAccessLevel
+  1097: DeviceReportNetworkEvents
+  1098: ''
+  1099: ShowDisplaySizeScreenEnabled
+  1100: EssentialSearchEnabled
+  1101: LegacyTechReportAllowlist
+  1102: ReportAppInventory
+  1103: ReportAppUsage
+  1104: ReportAppUsageCollectionRateMs
+  1105: BrowserContextAwareAccessSignalsAllowlist
+  1106: UserContextAwareAccessSignalsAllowlist
+  1107: GoogleSearchSidePanelEnabled
+  1108: PdfUseSkiaRendererEnabled
+  1109: DataUrlInSvgUseEnabled
+  1110: RSAKeyUsageForLocalAnchorsEnabled
+  1111: BeforeunloadEventCancelByPreventDefaultEnabled
+  1112: PolicyTestPageEnabled
+  1113: UrlKeyedMetricsAllowed
+  1114: AllowBackForwardCacheForCacheControlNoStorePageEnabled
+  1115: DeviceLoginScreenWebHidAllowDevicesForUrls
+  1116: SafeBrowsingProxiedRealTimeChecksAllowed
+  1117: PostQuantumKeyAgreementEnabled
+  1118: PhysicalKeyboardAutocorrect
+  1119: PhysicalKeyboardPredictiveWriting
+  1120: ColorCorrectionEnabled
+  1121: NativeClientForceAllowed
+  1122: EmojiPickerGifSupportEnabled
+  1123: DeviceChargingSoundsEnabled
+  1124: DeviceLowBatterySoundEnabled
+  1125: ArcVmDataMigrationStrategy
+  1126: AccessibilityPerformanceFilteringAllowed
+  1127: RemoteAccessHostAllowEnterpriseFileTransfer
+  1128: DefaultMidiSetting
+  1129: MidiAllowedForUrls
+  1130: MidiBlockedForUrls
+  1131: GlanceablesEnabled
+  1132: DeviceAuthenticationURLBlocklist
+  1133: DeviceAuthenticationURLAllowlist
+  1134: DeviceReportRuntimeCounters
+  1135: DeviceReportRuntimeCountersCheckingRateMs
+  1136: BruschettaInstallerConfiguration
+  1137: ForcePermissionPolicyUnloadDefaultEnabled
+  1138: ReportWebsiteActivityAllowlist
+  1139: ReportWebsiteTelemetryAllowlist
+  1140: ReportWebsiteTelemetryCollectionRateMs
+  1141: SafeBrowsingSurveysEnabled
+  1142: BlockTruncatedCookies
+  1143: ReportWebsiteTelemetry
+  1144: CompressionDictionaryTransportEnabled
+  1145: MicrosoftOfficeCloudUpload
+  1146: GoogleWorkspaceCloudUpload
+  1147: ShortcutCustomizationAllowed
+  1148: MicrosoftOneDriveMount
+  1149: ExtensionOAuthRedirectUrls
+  1150: CreatePasskeysInICloudKeychain
+  1151: QuickOfficeForceFileDownloadEnabled
+  1152: ProfileSeparationSettings
+  1153: ProfileSeparationDataMigrationSettings
+  1154: ProfileSeparationDomainExceptionList
+  1155: FullRestoreMode
+  1156: ''
+  1157: SafeBrowsingDeepScanningEnabled
+  1158: DriveFileSyncAvailable
+  1159: DeviceSwitchFunctionKeysBehaviorEnabled
+  1160: DeviceDlcPredownloadList
+  1161: DataControlsRules
+  1162: DeviceEphemeralNetworkPoliciesEnabled
+  1163: PPAPISharedImagesForVideoDecoderAllowed
+  1164: ProfileReauthPrompt
+  1165: RelatedWebsiteSetsEnabled
+  1166: DeviceExtendedFkeysModifier
+  1167: UnaffiliatedDeviceArcAllowed
+  1168: RelatedWebsiteSetsOverrides
+  1169: ShowHumanPresenceSensorScreenEnabled
+  1170: PasswordSharingEnabled
+  1171: ZstdContentEncodingEnabled
+  1172: IPv6ReachabilityOverrideEnabled
+  1173: UserFeedbackWithLowLevelDebugDataAllowed
+  1174: MicrosoftOneDriveAccountRestrictions
+  1175: DeviceFlexHwDataForProductImprovementEnabled
+  1176: SiteSearchSettings
+  1177: PrivateNetworkAccessRestrictionsEnabled
+  1178: ContextMenuPhotoSharingSettings
+  1179: ExtensionInstallTypeBlocklist
+  1180: ParcelTrackingEnabled
+  1181: NativeHostsExecutablesLaunchDirectly
+  1182: FeedbackSurveysEnabled
+  1183: DeskAPIDeskSaveAndShareEnabled
+  1184: OopPrintDriversAllowed
+  1185: DeviceHardwareVideoDecodingEnabled
+  1186: TabOrganizerSettings
+  1187: HelpMeWriteSettings
+  1188: CreateThemesSettings
+  1189: ListenToThisPageEnabled
+  1190: AlwaysOnVpnPreConnectUrlAllowlist
+  1191: CACertificates
+  1192: CADistrustedCertificates
+  1193: CAHintCertificates
 atomic_groups:
   1: Homepage
   2: RemoteAccess
@@ -1069,5 +1234,11 @@ atomic_groups:
   39: SensorsSettings
   40: PrivateNetworkRequestSettings
   41: ScreenCaptureSettings
-  42: WindowPlacementSettings
+  42: WindowManagementSettings
   43: LocalFontsSettings
+  44: BrowserIdle
+  45: PrivacySandbox
+  46: KerberosPrefilledConfig
+  47: ThirdPartyStoragePartitioningSettings
+  48: MidiSettings
+  49: ProfileSeparation

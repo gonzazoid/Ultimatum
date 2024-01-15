@@ -6,16 +6,17 @@
 
 #include <memory>
 
-#include "ash/services/device_sync/fake_remote_device_provider.h"
-#include "ash/services/device_sync/public/cpp/fake_device_sync_client.h"
-#include "ash/services/device_sync/remote_device_provider_impl.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "chromeos/ash/components/multidevice/remote_device_test_util.h"
 #include "chromeos/ash/components/tether/fake_disconnect_tethering_request_sender.h"
 #include "chromeos/ash/components/tether/fake_tether_host_fetcher.h"
 #include "chromeos/ash/components/tether/tether_component_impl.h"
+#include "chromeos/ash/services/device_sync/fake_remote_device_provider.h"
+#include "chromeos/ash/services/device_sync/public/cpp/fake_device_sync_client.h"
+#include "chromeos/ash/services/device_sync/remote_device_provider_impl.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/fake_secure_channel_client.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -93,7 +94,7 @@ class AsynchronousShutdownObjectContainerImplTest : public testing::Test {
         new FakeDisconnectTetheringRequestSender();
 
     container_->SetTestDoubles(
-        base::WrapUnique(fake_disconnect_tethering_request_sender_));
+        base::WrapUnique(fake_disconnect_tethering_request_sender_.get()));
   }
 
   void CallShutdown() {
@@ -115,7 +116,7 @@ class AsynchronousShutdownObjectContainerImplTest : public testing::Test {
       test_pref_service_;
   std::unique_ptr<FakeRemoteDeviceProviderFactory>
       fake_remote_device_provider_factory_;
-  FakeDisconnectTetheringRequestSender*
+  raw_ptr<FakeDisconnectTetheringRequestSender, DanglingUntriaged>
       fake_disconnect_tethering_request_sender_;
 
   bool was_shutdown_callback_invoked_;

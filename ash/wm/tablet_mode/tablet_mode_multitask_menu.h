@@ -6,12 +6,12 @@
 #define ASH_WM_TABLET_MODE_TABLET_MODE_MULTITASK_MENU_H_
 
 #include "ash/ash_export.h"
-#include "ash/wm/tablet_mode/tablet_mode_multitask_menu_event_handler.h"
-#include "base/scoped_observation.h"
+#include "ash/wm/tablet_mode/tablet_mode_multitask_menu_controller.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window.h"
 #include "ui/display/display_observer.h"
+#include "ui/views/focus/widget_focus_manager.h"
 #include "ui/views/widget/unique_widget_ptr.h"
-#include "ui/views/widget/widget_observer.h"
 
 namespace chromeos {
 class MultitaskMenuView;
@@ -19,43 +19,45 @@ class MultitaskMenuView;
 
 namespace ash {
 
-class TabletModeMultitaskMenuEventHandler;
+class TabletModeMultitaskMenuController;
+class TabletModeMultitaskMenuView;
 
-// The container of the multitask menu. Creates and owns the multitask menu
-// widget.
-class ASH_EXPORT TabletModeMultitaskMenu : aura::WindowObserver,
-                                           public views::WidgetObserver,
-                                           public display::DisplayObserver {
+// Creates and maintains the multitask menu. Responsible for showing,
+// hiding, and animating the menu.
+class ASH_EXPORT TabletModeMultitaskMenu
+    : public views::WidgetFocusChangeListener,
+      public display::DisplayObserver {
  public:
-  TabletModeMultitaskMenu(TabletModeMultitaskMenuEventHandler* event_handler,
-                          aura::Window* window,
-                          base::RepeatingClosure hide_menu);
+  TabletModeMultitaskMenu(TabletModeMultitaskMenuController* controller,
+                          aura::Window* window);
 
   TabletModeMultitaskMenu(const TabletModeMultitaskMenu&) = delete;
   TabletModeMultitaskMenu& operator=(const TabletModeMultitaskMenu&) = delete;
 
   ~TabletModeMultitaskMenu() override;
 
-  aura::Window* window() { return window_; }
+  views::Widget* widget() { return widget_.get(); }
 
-  views::Widget* multitask_menu_widget() {
-    return multitask_menu_widget_.get();
-  }
+  // Performs a slide down animation on the menu (and cue if visible) if `show`
+  // is true, otherwise a slide up animation.
+  void Animate(bool show);
 
-  // Show the menu using a slide down animation.
-  void AnimateShow();
+  // Performs a fade out animation and closes the menu.
+  void AnimateFadeOut();
 
-  // Close the menu using a slide up animation.
-  void AnimateClose();
+  // Actions called by the event handler, where `initial_y` and `current_y` are
+  // in `window_`'s coordinates. If `down` is true, we are dragging down to show
+  // the menu, else we are dragging up to hide the menu. Also makes the cue
+  // follow the menu's movement if it is showing.
+  void BeginDrag(float initial_y, bool down);
+  void UpdateDrag(float current_y, bool down);
+  void EndDrag();
 
   // Calls the event handler to destroy `this`.
   void Reset();
 
-  // aura::WindowObserver:
-  void OnWindowDestroying(aura::Window* window) override;
-
-  // views::WidgetObserver:
-  void OnWidgetActivationChanged(views::Widget* widget, bool active) override;
+  // views::WidgetFocusChangeListener:
+  void OnNativeFocusChanged(gfx::NativeView focused_now) override;
 
   // display::DisplayObserver:
   void OnDisplayMetricsChanged(const display::Display& display,
@@ -66,22 +68,18 @@ class ASH_EXPORT TabletModeMultitaskMenu : aura::WindowObserver,
  private:
   // The event handler that created this multitask menu. Guaranteed to outlive
   // `this`.
-  TabletModeMultitaskMenuEventHandler* event_handler_;
+  raw_ptr<TabletModeMultitaskMenuController> controller_;
 
-  // The window associated with this multitask menu.
-  aura::Window* window_ = nullptr;
+  // Widget implementation that is created and maintained by `this`.
+  views::UniqueWidgetPtr widget_ = std::make_unique<views::Widget>();
 
-  // Window observer for `window_`.
-  base::ScopedObservation<aura::Window, aura::WindowObserver> observed_window_{
-      this};
+  // The contents view of the above widget.
+  raw_ptr<TabletModeMultitaskMenuView> menu_view_ = nullptr;
 
-  base::ScopedObservation<views::Widget, views::WidgetObserver>
-      widget_observation_{this};
+  // Initial y location in `window_` coordinates. Only relevant for drags.
+  float initial_y_;
 
   display::ScopedOptionalDisplayObserver display_observer_{this};
-
-  views::UniqueWidgetPtr multitask_menu_widget_ =
-      std::make_unique<views::Widget>();
 
   base::WeakPtrFactory<TabletModeMultitaskMenu> weak_factory_{this};
 };

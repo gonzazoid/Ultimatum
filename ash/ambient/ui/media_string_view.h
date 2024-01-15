@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -39,9 +40,17 @@ class MediaStringView : public views::View,
     int text_shadow_elevation;
   };
 
+  class Delegate {
+   public:
+    virtual ~Delegate() = default;
+
+    // Returns the settings for |MediaStringView|.
+    virtual Settings GetSettings() = 0;
+  };
+
   METADATA_HEADER(MediaStringView);
 
-  explicit MediaStringView(Settings settings);
+  explicit MediaStringView(MediaStringView::Delegate* delegate);
   MediaStringView(const MediaStringView&) = delete;
   MediaStringView& operator=(const MediaStringView&) = delete;
   ~MediaStringView() override;
@@ -56,14 +65,14 @@ class MediaStringView : public views::View,
   void MediaSessionInfoChanged(
       media_session::mojom::MediaSessionInfoPtr session_info) override;
   void MediaSessionMetadataChanged(
-      const absl::optional<media_session::MediaMetadata>& metadata) override;
+      const std::optional<media_session::MediaMetadata>& metadata) override;
   void MediaSessionActionsChanged(
       const std::vector<media_session::mojom::MediaSessionAction>& actions)
       override {}
   void MediaSessionChanged(
-      const absl::optional<base::UnguessableToken>& request_id) override {}
+      const std::optional<base::UnguessableToken>& request_id) override {}
   void MediaSessionPositionChanged(
-      const absl::optional<media_session::MediaPosition>& position) override {}
+      const std::optional<media_session::MediaPosition>& position) override {}
 
   // ui::ImplicitAnimationObserver:
   void OnImplicitAnimationsCompleted() override;
@@ -90,16 +99,17 @@ class MediaStringView : public views::View,
 
   views::Label* media_text_label_for_testing() { return media_text_; }
 
-  const Settings settings_;
+  // Unowned. Must out live |MediaStringView|.
+  raw_ptr<MediaStringView::Delegate> delegate_ = nullptr;
 
   // Music eighth note.
-  views::ImageView* icon_ = nullptr;
+  raw_ptr<views::ImageView> icon_ = nullptr;
 
   // Container of media info text.
-  views::View* media_text_container_ = nullptr;
+  raw_ptr<views::View> media_text_container_ = nullptr;
 
   // With an extra copy of media info text for scrolling animation.
-  views::Label* media_text_ = nullptr;
+  raw_ptr<views::Label> media_text_ = nullptr;
 
   // Used to receive updates to the active media controller.
   mojo::Remote<media_session::mojom::MediaController> media_controller_remote_;

@@ -12,8 +12,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.ContextUtils;
-import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.task.AsyncTask;
+import org.chromium.base.version_info.VersionInfo;
 import org.chromium.chrome.browser.layouts.FilterLayoutStateObserver;
 import org.chromium.chrome.browser.layouts.LayoutStateProvider;
 import org.chromium.chrome.browser.layouts.LayoutStateProvider.LayoutStateObserver;
@@ -28,36 +28,21 @@ import org.chromium.chrome.browser.tabmodel.TabModelObserver;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.tabmodel.TabModelSelectorTabModelObserver;
 import org.chromium.chrome.browser.tabmodel.TabModelSelectorTabObserver;
-import org.chromium.components.version_info.VersionInfo;
 import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.content_public.browser.NavigationHandle;
 import org.chromium.ui.base.PageTransition;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
-/**
- * Manages Journey related signals, specifically those related to tab engagement.
- */
+/** Manages Journey related signals, specifically those related to tab engagement. */
 public class JourneyManager implements DestroyObserver {
-    @VisibleForTesting
-    static final String PREFS_FILE = "last_engagement_for_tab_id_pref";
-
-    @VisibleForTesting
-    static final String TAB_REVISIT_METRIC = "Tabs.TimeSinceLastView.OnTabView";
-
-    @VisibleForTesting
-    static final String TAB_CLOSE_METRIC = "Tabs.TimeSinceLastView.OnTabClose";
-
-    @VisibleForTesting
-    static final String TAB_CLOBBER_METRIC = "Tabs.TimeSinceLastView.OnTabClobber";
+    @VisibleForTesting static final String PREFS_FILE = "last_engagement_for_tab_id_pref";
 
     private static final long INVALID_TIME = -1;
 
     // We track this in seconds because UMA can only handle 32-bit signed integers, which 45 days
     // will overflow.
-    private static final int MAX_ENGAGEMENT_TIME_S = (int) TimeUnit.DAYS.toSeconds(45);
 
     private final TabModelSelectorTabObserver mTabModelSelectorTabObserver;
     private final TabModelSelectorTabModelObserver mTabModelSelectorTabModelObserver;
@@ -71,11 +56,13 @@ public class JourneyManager implements DestroyObserver {
     private final Handler mHandler = new Handler();
     private Tab mCurrentTab;
 
-    public JourneyManager(TabModelSelector selector,
+    public JourneyManager(
+            TabModelSelector selector,
             @NonNull ActivityLifecycleDispatcher dispatcher,
             @NonNull LayoutStateProvider layoutStateProvider,
             EngagementTimeUtil engagementTimeUtil) {
-        if (!VersionInfo.isLocalBuild() && !VersionInfo.isCanaryBuild()
+        if (!VersionInfo.isLocalBuild()
+                && !VersionInfo.isCanaryBuild()
                 && !VersionInfo.isDevBuild()) {
             // We do not want this in beta/stable until it's no longer backed by SharedPreferences.
             mTabModelSelectorTabObserver = null;
@@ -87,90 +74,93 @@ public class JourneyManager implements DestroyObserver {
             return;
         }
 
-        mTabModelSelectorTabObserver = new TabModelSelectorTabObserver(selector) {
-            @Override
-            public void onShown(Tab tab, @TabSelectionType int type) {
-                if (type != TabSelectionType.FROM_USER) return;
+        mTabModelSelectorTabObserver =
+                new TabModelSelectorTabObserver(selector) {
+                    @Override
+                    public void onShown(Tab tab, @TabSelectionType int type) {
+                        if (type != TabSelectionType.FROM_USER) return;
 
-                mCurrentTab = tab;
+                        mCurrentTab = tab;
 
-                recordDeferredEngagementMetric(tab);
-            }
+                        recordDeferredEngagementMetric(tab);
+                    }
 
-            @Override
-            public void onHidden(Tab tab, @TabHidingType int reason) {
-                handleTabEngagementStopped(tab);
-            }
+                    @Override
+                    public void onHidden(Tab tab, @TabHidingType int reason) {
+                        handleTabEngagementStopped(tab);
+                    }
 
-            @Override
-            public void onClosingStateChanged(Tab tab, boolean closing) {
-                if (!closing) return;
+                    @Override
+                    public void onClosingStateChanged(Tab tab, boolean closing) {
+                        if (!closing) return;
 
-                mCurrentTab = null;
+                        mCurrentTab = null;
+                    }
 
-                recordTabCloseMetric(tab);
-            }
+                    @Override
+                    public void onDidStartNavigationInPrimaryMainFrame(
+                            Tab tab, NavigationHandle navigationHandle) {
+                        if (navigationHandle.isSameDocument()) {
+                            return;
+                        }
 
-            @Override
-            public void onDidStartNavigationInPrimaryMainFrame(
-                    Tab tab, NavigationHandle navigationHandle) {
-                if (navigationHandle.isSameDocument()) {
-                    return;
-                }
+                        mDidFirstPaintPerTab.put(tab.getId(), false);
+                    }
 
-                mDidFirstPaintPerTab.put(tab.getId(), false);
-            }
+                    @Override
+                    public void didFirstVisuallyNonEmptyPaint(Tab tab) {
+                        if (!mDidFirstPaintPerTab.containsKey(tab.getId())) {
+                            // If this is the first paint of this Tab in the current app lifetime,
+                            // record.
+                            // e.g. First load of the tab after cold start.
+                            recordDeferredEngagementMetric(tab);
+                        }
 
-            @Override
-            public void didFirstVisuallyNonEmptyPaint(Tab tab) {
-                if (!mDidFirstPaintPerTab.containsKey(tab.getId())) {
-                    // If this is the first paint of this Tab in the current app lifetime, record.
-                    // e.g. First load of the tab after cold start.
-                    recordDeferredEngagementMetric(tab);
-                }
+                        mCurrentTab = tab;
 
-                mCurrentTab = tab;
+                        mDidFirstPaintPerTab.put(tab.getId(), true);
 
-                mDidFirstPaintPerTab.put(tab.getId(), true);
+                        handleTabEngagementStarted(tab);
+                    }
 
-                handleTabEngagementStarted(tab);
-            }
+                    @Override
+                    public void onLoadUrl(Tab tab, LoadUrlParams params, int loadType) {
+                        // The transition source (e.g. FROM_ADDRESS_BAR = 0x02000000) is bitwise
+                        // OR'ed with the transition method (e.g. TYPED = 0x01) and we are only
+                        // interested in whether a navigation happened from the address bar.
+                        if ((params.getTransitionType() & PageTransition.FROM_ADDRESS_BAR) == 0) {
+                            return;
+                        }
 
-            @Override
-            public void onLoadUrl(Tab tab, LoadUrlParams params, int loadType) {
-                // The transition source (e.g. FROM_ADDRESS_BAR = 0x02000000) is bitwise OR'ed with
-                // the transition method (e.g. TYPED = 0x01) and we are only interested in whether
-                // a navigation happened from the address bar.
-                if ((params.getTransitionType() & PageTransition.FROM_ADDRESS_BAR) == 0) return;
+                        int tabId = tab.getId();
 
-                int tabId = tab.getId();
+                        if (!mPendingRevisits.containsKey(tabId)) {
+                            return;
+                        }
 
-                if (!mPendingRevisits.containsKey(tabId)) {
-                    return;
-                }
+                        mHandler.removeCallbacks(mPendingRevisits.get(tabId));
+                        mPendingRevisits.remove(tabId);
+                    }
+                };
 
-                mHandler.removeCallbacks(mPendingRevisits.get(tabId));
-                mPendingRevisits.remove(tabId);
-
-                recordTabClobberMetric(tab, params.getInputStartTimestamp());
-            }
-        };
-
-        mTabModelSelectorTabModelObserver = new TabModelSelectorTabModelObserver(selector) {
-            @Override
-            public void tabClosureCommitted(Tab tab) {
-                getPrefs().edit().remove(String.valueOf(tab.getId())).apply();
-            }
-        };
+        mTabModelSelectorTabModelObserver =
+                new TabModelSelectorTabModelObserver(selector) {
+                    @Override
+                    public void tabClosureCommitted(Tab tab) {
+                        getPrefs().edit().remove(String.valueOf(tab.getId())).apply();
+                    }
+                };
 
         mLayoutStateProvider = layoutStateProvider;
         mLayoutStateObserver =
-                new FilterLayoutStateObserver(LayoutType.TAB_SWITCHER, new LayoutStateObserver() {
-                    @Override
-                    public void onStartedShowing(int layoutType, boolean showToolbar) {
-                        handleTabEngagementStopped(mCurrentTab);
-                    }
-                });
+                new FilterLayoutStateObserver(
+                        LayoutType.TAB_SWITCHER,
+                        new LayoutStateObserver() {
+                            @Override
+                            public void onStartedShowing(int layoutType) {
+                                handleTabEngagementStopped(mCurrentTab);
+                            }
+                        });
         mLayoutStateProvider.addObserver(mLayoutStateObserver);
 
         mLifecycleDispatcher = dispatcher;
@@ -230,8 +220,8 @@ public class JourneyManager implements DestroyObserver {
     private SharedPreferences getPrefs() {
         // TODO(mattsimmons): Add a native counterpart to this class and don't write directly to
         //  shared prefs.
-        return ContextUtils.getApplicationContext().getSharedPreferences(
-                PREFS_FILE, Context.MODE_PRIVATE);
+        return ContextUtils.getApplicationContext()
+                .getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE);
     }
 
     private long getLastEngagementTimestamp(Tab tab) {
@@ -255,41 +245,7 @@ public class JourneyManager implements DestroyObserver {
 
         if (lastEngagement == INVALID_TIME) return;
 
-        long elapsedMs = mEngagementTimeUtil.timeSinceLastEngagement(lastEngagement, viewTimeMs);
-
-        recordEngagementMetric(TAB_REVISIT_METRIC, elapsedMs);
-
         handleTabEngagementStarted(tab);
-    }
-
-    private void recordTabCloseMetric(Tab tab) {
-        long lastEngagement = getLastEngagementTimestamp(tab);
-
-        if (lastEngagement == INVALID_TIME) return;
-
-        long elapsedMs = mEngagementTimeUtil.timeSinceLastEngagement(lastEngagement);
-
-        recordEngagementMetric(TAB_CLOSE_METRIC, elapsedMs);
-    }
-
-    private void recordTabClobberMetric(Tab tab, long inputStartTimeTicksMs) {
-        long lastEngagement = getLastEngagementTimestamp(tab);
-
-        if (lastEngagement == INVALID_TIME) return;
-
-        long elapsedMs = mEngagementTimeUtil.timeSinceLastEngagementFromTimeTicksMs(
-                lastEngagement, inputStartTimeTicksMs);
-
-        recordEngagementMetric(TAB_CLOBBER_METRIC, elapsedMs);
-    }
-
-    private void recordEngagementMetric(String name, long elapsedMs) {
-        if (elapsedMs == INVALID_TIME) return;
-
-        int elapsedSeconds = (int) TimeUnit.MILLISECONDS.toSeconds(elapsedMs);
-
-        RecordHistogram.recordCustomCountHistogram(
-                name, elapsedSeconds, 1, MAX_ENGAGEMENT_TIME_S, 50);
     }
 
     @VisibleForTesting

@@ -175,7 +175,8 @@
         "properties": {
           "text": {
             "type": "string",
-            "description": "Any number of characters can be passed, but only about four can fit in the space."
+            "optional": true,
+            "description": "Any number of characters can be passed, but only about four can fit in the space. If an empty string (<code>''</code>) is passed, the badge text is cleared.  If <code>tabId</code> is specified and <code>text</code> is null, the text for the specified tab is cleared and defaults to the global badge text."
           },
           "tabId": {
             "type": "integer",
@@ -193,7 +194,7 @@
     }, {
       "name": "getBadgeText",
       "type": "function",
-      "description": "Gets the badge text of the action. If no tab is specified, the non-tab-specific badge text is returned. If <a href='declarativeNetRequest#setExtensionActionOptions'>displayActionCountAsBadgeText</a> is enabled, a placeholder text will be returned unless the <a href='declare_permissions#declarativeNetRequestFeedback'>declarativeNetRequestFeedback</a> permission is present or tab-specific badge text was provided.",
+      "description": "Gets the badge text of the action. If no tab is specified, the non-tab-specific badge text is returned. If <a href='declarativeNetRequest#setExtensionActionOptions'>displayActionCountAsBadgeText</a> is enabled, a placeholder text will be returned unless the <a href='/docs/extensions/develop/concepts/declare-permissions#declarativeNetRequestFeedback'>declarativeNetRequestFeedback</a> permission is present or tab-specific badge text was provided.",
       "parameters": [{
         "name": "details",
         "$ref": "TabDetails"
@@ -250,8 +251,6 @@
       }
     }, {
       "name": "setBadgeTextColor",
-      // TODO(https://crbug.com/1337783): Remove once on stable channel.
-      "nodoc": "true",
       "type": "function",
       "description": "Sets the text color for the badge.",
       "parameters": [
@@ -286,8 +285,6 @@
       }
     }, {
       "name": "getBadgeTextColor",
-      // TODO(https://crbug.com/1337783): Remove once on stable channel.
-      "nodoc": "true",
       "type": "function",
       "description": "Gets the text color of the action.",
       "parameters": [
@@ -340,7 +337,7 @@
     }, {
       "name": "isEnabled",
       "type": "function",
-      "description": "Retrieves the state of whether the extension action is enabled for a tab (or globally if no tab is provided).",
+      "description": "Indicates whether the extension action is enabled for a tab (or globally if no <code>tabId</code> is provided). Actions enabled using only $(ref:declarativeContent) always return false.",
       "parameters": [
         {
           "type": "integer",

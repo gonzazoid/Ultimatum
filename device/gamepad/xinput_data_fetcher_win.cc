@@ -7,13 +7,16 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/strings/stringprintf.h"
-#include "base/strings/utf_string_conversions.h"
+#include <string_view>
+#include <utility>
+
+#include "base/containers/fixed_flat_map.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/strings/strcat.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
-#include "base/win/windows_version.h"
 
 namespace device {
 
@@ -41,46 +44,11 @@ static const LPCSTR kXInputGetStateExOrdinal = (LPCSTR)100;
 // Bitmask for the Guide button in XInputGamepadEx.wButtons.
 static const int kXInputGamepadGuide = 0x0400;
 
+constexpr base::FilePath::CharType kXInputDllFileName[] =
+    FILE_PATH_LITERAL("xinput1_4.dll");
+
 float NormalizeXInputAxis(SHORT value) {
   return ((value + 32768.f) / 32767.5f) - 1.f;
-}
-
-const wchar_t* GamepadSubTypeName(BYTE sub_type) {
-  switch (sub_type) {
-    case kDeviceSubTypeGamepad:
-      return L"GAMEPAD";
-    case kDeviceSubTypeWheel:
-      return L"WHEEL";
-    case kDeviceSubTypeArcadeStick:
-      return L"ARCADE_STICK";
-    case kDeviceSubTypeFlightStick:
-      return L"FLIGHT_STICK";
-    case kDeviceSubTypeDancePad:
-      return L"DANCE_PAD";
-    case kDeviceSubTypeGuitar:
-      return L"GUITAR";
-    case kDeviceSubTypeGuitarAlternate:
-      return L"GUITAR_ALTERNATE";
-    case kDeviceSubTypeDrumKit:
-      return L"DRUM_KIT";
-    case kDeviceSubTypeGuitarBass:
-      return L"GUITAR_BASS";
-    case kDeviceSubTypeArcadePad:
-      return L"ARCADE_PAD";
-    default:
-      return L"<UNKNOWN>";
-  }
-}
-
-const base::FilePath::CharType* XInputDllFileName() {
-  // Xinput.h defines filename (XINPUT_DLL) on different Windows versions, but
-  // Xinput.h specifies it in build time. Approach here uses the same values
-  // and it is resolving dll filename based on Windows version it is running on.
-  if (base::win::GetVersion() >= base::win::Version::WIN8) {
-    // For Windows 8+, XINPUT_DLL is xinput1_4.dll.
-    return FILE_PATH_LITERAL("xinput1_4.dll");
-  }
-  return FILE_PATH_LITERAL("xinput9_1_0.dll");
 }
 
 }  // namespace
@@ -99,7 +67,7 @@ GamepadSource XInputDataFetcherWin::source() {
 }
 
 void XInputDataFetcherWin::OnAddedToProvider() {
-  xinput_dll_ = base::ScopedNativeLibrary(base::FilePath(XInputDllFileName()));
+  xinput_dll_ = base::ScopedNativeLibrary(base::FilePath(kXInputDllFileName));
   xinput_available_ = GetXInputDllFunctions();
 }
 
@@ -139,9 +107,25 @@ void XInputDataFetcherWin::EnumerateDevices() {
         pad.vibration_actuator.type = GamepadHapticActuatorType::kDualRumble;
         pad.vibration_actuator.not_null = true;
 
-        pad.SetID(base::WideToUTF16(
-            base::StringPrintf(L"Xbox 360 Controller (XInput STANDARD %ls)",
-                               GamepadSubTypeName(caps.SubType))));
+        const auto name = [](BYTE sub_type) -> std::u16string_view {
+          static constexpr auto kNames =
+              base::MakeFixedFlatMap<BYTE, std::u16string_view>({
+                  {kDeviceSubTypeGamepad, u"GAMEPAD"},
+                  {kDeviceSubTypeWheel, u"WHEEL"},
+                  {kDeviceSubTypeArcadeStick, u"ARCADE_STICK"},
+                  {kDeviceSubTypeFlightStick, u"FLIGHT_STICK"},
+                  {kDeviceSubTypeDancePad, u"DANCE_PAD"},
+                  {kDeviceSubTypeGuitar, u"GUITAR"},
+                  {kDeviceSubTypeGuitarAlternate, u"GUITAR_ALTERNATE"},
+                  {kDeviceSubTypeDrumKit, u"DRUM_KIT"},
+                  {kDeviceSubTypeGuitarBass, u"GUITAR_BASS"},
+                  {kDeviceSubTypeArcadePad, u"ARCADE_PAD"},
+              });
+          const auto* const it = kNames.find(sub_type);
+          return (it == kNames.end()) ? u"<UNKNOWN>" : it->second;
+        }(caps.SubType);
+        pad.SetID(base::StrCat(
+            {u"Xbox 360 Controller (XInput STANDARD ", name, u")"}));
         pad.mapping = GamepadMapping::kStandard;
       }
     }
@@ -297,8 +281,6 @@ bool XInputDataFetcherWin::GetXInputDllFunctions() {
   xinput_get_state_ = nullptr;
   xinput_get_state_ex_ = nullptr;
   xinput_set_state_ = nullptr;
-  XInputEnableFunc xinput_enable = reinterpret_cast<XInputEnableFunc>(
-      xinput_dll_.GetFunctionPointer("XInputEnable"));
   xinput_get_capabilities_ = reinterpret_cast<XInputGetCapabilitiesFunc>(
       xinput_dll_.GetFunctionPointer("XInputGetCapabilities"));
   if (!xinput_get_capabilities_)
@@ -318,13 +300,7 @@ bool XInputDataFetcherWin::GetXInputDllFunctions() {
   xinput_set_state_ =
       reinterpret_cast<XInputHapticGamepadWin::XInputSetStateFunc>(
           xinput_dll_.GetFunctionPointer("XInputSetState"));
-  if (!xinput_set_state_)
-    return false;
-  if (xinput_enable) {
-    // XInputEnable is unavailable before Win8 and deprecated in Win10.
-    xinput_enable(true);
-  }
-  return true;
+  return !!xinput_set_state_;
 }
 
 // static
@@ -357,20 +333,6 @@ XInputDataFetcherWin::GetXInputGetStateExFunctionCallback() {
   return *instance;
 }
 
-// static
-void XInputDataFetcherWin::OverrideXInputEnableFuncForTesting(
-    XInputDataFetcherWin::XInputEnableFunctionCallback callback) {
-  GetXInputEnableCallback() = callback;
-}
-
-// static
-XInputDataFetcherWin::XInputEnableFunctionCallback&
-XInputDataFetcherWin::GetXInputEnableCallback() {
-  static base::NoDestructor<XInputDataFetcherWin::XInputEnableFunctionCallback>
-      instance;
-  return *instance;
-}
-
 bool XInputDataFetcherWin::GetXInputDllFunctionsForWgiDataFetcher() {
   xinput_get_capabilities_ = nullptr;
   if (GetXInputGetCapabilitiesFunctionCallback()) {
@@ -391,25 +353,11 @@ bool XInputDataFetcherWin::GetXInputDllFunctionsForWgiDataFetcher() {
     xinput_get_state_ex_ = reinterpret_cast<XInputGetStateExFunc>(
         ::GetProcAddress(xinput_dll_.get(), kXInputGetStateExOrdinal));
   }
-  if (!xinput_get_state_ex_)
-    return false;
-
-  XInputEnableFunc xinput_enable = nullptr;
-  if (GetXInputEnableCallback()) {
-    xinput_enable = GetXInputEnableCallback().Run();
-  } else {
-    xinput_enable = reinterpret_cast<XInputEnableFunc>(
-        xinput_dll_.GetFunctionPointer("XInputEnable"));
-  }
-  if (xinput_enable) {
-    // XInputEnable is unavailable before Win8 and deprecated in Win10.
-    xinput_enable(true);
-  }
-  return true;
+  return !!xinput_get_state_ex_;
 }
 
 void XInputDataFetcherWin::InitializeForWgiDataFetcher() {
-  xinput_dll_ = base::ScopedNativeLibrary(base::FilePath(XInputDllFileName()));
+  xinput_dll_ = base::ScopedNativeLibrary(base::FilePath(kXInputDllFileName));
   xinput_available_ = GetXInputDllFunctionsForWgiDataFetcher();
 }
 

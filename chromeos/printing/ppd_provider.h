@@ -8,20 +8,19 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_piece.h"
 #include "base/version.h"
 #include "chromeos/printing/printer_configuration.h"
 #include "chromeos/printing/usb_printer_id.h"
 
-namespace network {
-namespace mojom {
+namespace network::mojom {
 class URLLoaderFactory;
-}
 }
 
 namespace chromeos {
@@ -29,6 +28,7 @@ namespace chromeos {
 class PpdCache;
 class PrinterConfigCache;
 class PpdMetadataManager;
+class RemotePpdFetcher;
 
 // Everything we might know about a printer when looking for a
 // driver for it.  All of the default values for fields in this struct
@@ -98,21 +98,6 @@ class COMPONENT_EXPORT(CHROMEOS_PRINTING) PpdProvider
     PPD_TOO_LARGE,
   };
 
-  // Construction-time options.  Everything in this structure should have
-  // a sane default.
-  struct Options {
-    Options() {}
-
-    // Any results from PpdCache older than this are treated as
-    // non-authoritative -- PpdProvider will attempt to re-resolve from the
-    // network anyways and only use the cache results if the network is
-    // unavailable.
-    base::TimeDelta cache_staleness_age = base::Days(14);
-
-    // Root of the ppd serving hierarchy.
-    std::string ppd_server_root = "https://www.gstatic.com/chromeos_printing";
-  };
-
   // Defines the limitations on when we show a particular PPD
   // Not to be confused with the new Restrictions struct used in the
   // v3 PpdProvider, defined in ppd_metadata_parser.h
@@ -120,7 +105,7 @@ class COMPONENT_EXPORT(CHROMEOS_PRINTING) PpdProvider
     // Minimum milestone for ChromeOS build
     base::Version min_milestone = base::Version("0.0");
 
-    // Maximum milestone for ChomeOS build
+    // Maximum milestone for ChromeOS build
     base::Version max_milestone = base::Version("0.0");
   };
 
@@ -195,7 +180,11 @@ class COMPONENT_EXPORT(CHROMEOS_PRINTING) PpdProvider
       const base::Version& current_version,
       scoped_refptr<PpdCache> cache,
       std::unique_ptr<PpdMetadataManager> metadata_manager,
-      std::unique_ptr<PrinterConfigCache> config_cache);
+      std::unique_ptr<PrinterConfigCache> config_cache,
+      std::unique_ptr<RemotePpdFetcher> remote_ppd_fetcher);
+
+  // Return a printable name for |code|.
+  static std::string_view CallbackResultCodeName(CallbackResultCode code);
 
   // Get all manufacturers for which we have drivers.  Keys of the map will be
   // localized in the default browser locale or the closest available fallback.

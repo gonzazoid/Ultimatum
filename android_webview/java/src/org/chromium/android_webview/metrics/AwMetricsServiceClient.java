@@ -4,12 +4,11 @@
 
 package org.chromium.android_webview.metrics;
 
-import androidx.annotation.VisibleForTesting;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
 
 import org.chromium.android_webview.ManifestMetadataUtil;
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 
 /**
  * Determines user consent and app opt-out for metrics. See aw_metrics_service_client.h for more
@@ -25,41 +24,32 @@ public class AwMetricsServiceClient {
      */
     public static void setConsentSetting(boolean userConsent) {
         ThreadUtils.assertOnUiThread();
-        AwMetricsServiceClientJni.get().setHaveMetricsConsent(
-                userConsent, !ManifestMetadataUtil.isAppOptedOutFromMetricsCollection());
+        AwMetricsServiceClientJni.get()
+                .setHaveMetricsConsent(
+                        userConsent, !ManifestMetadataUtil.isAppOptedOutFromMetricsCollection());
     }
 
-    @VisibleForTesting
     public static void setFastStartupForTesting(boolean fastStartupForTesting) {
         AwMetricsServiceClientJni.get().setFastStartupForTesting(fastStartupForTesting);
     }
 
-    @VisibleForTesting
     public static void setUploadIntervalForTesting(long uploadIntervalMs) {
         AwMetricsServiceClientJni.get().setUploadIntervalForTesting(uploadIntervalMs);
     }
 
-    /**
-     * Sets a callback to run each time after final metrics have been collected.
-     */
-    @VisibleForTesting
+    /** Sets a callback to run each time after final metrics have been collected. */
     public static void setOnFinalMetricsCollectedListenerForTesting(Runnable listener) {
         AwMetricsServiceClientJni.get().setOnFinalMetricsCollectedListenerForTesting(listener);
-    }
-
-    @VisibleForTesting
-    public static void setAppPackageNameLoggingRuleForTesting(String version, long expiryDateMs) {
-        ThreadUtils.assertOnUiThread();
-        AwMetricsServiceClientJni.get().setAppPackageNameLoggingRuleForTesting(
-                version, expiryDateMs);
     }
 
     @NativeMethods
     interface Natives {
         void setHaveMetricsConsent(boolean userConsent, boolean appConsent);
+
         void setFastStartupForTesting(boolean fastStartupForTesting);
+
         void setUploadIntervalForTesting(long uploadIntervalMs);
+
         void setOnFinalMetricsCollectedListenerForTesting(Runnable listener);
-        void setAppPackageNameLoggingRuleForTesting(String version, long expiryDateMs);
     }
 }

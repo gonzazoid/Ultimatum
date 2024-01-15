@@ -8,10 +8,6 @@
 
 #import "ios/web_view/shell/shell_risk_data_loader.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 @interface ShellAutofillDelegate ()
 
 // Autofill controller.
@@ -387,11 +383,17 @@
 #pragma mark - Private
 
 - (UIWindow*)anyKeyWindow {
-  NSArray<UIWindow*>* windows = [UIApplication sharedApplication].windows;
-  for (UIWindow* window in windows) {
-    if (window.isKeyWindow)
-      return window;
+  for (UIWindowScene* windowScene in UIApplication.sharedApplication
+           .connectedScenes) {
+    NSAssert([windowScene isKindOfClass:[UIWindowScene class]],
+             @"UIScene is not a UIWindowScene: %@", windowScene);
+    for (UIWindow* window in windowScene.windows) {
+      if (window.isKeyWindow) {
+        return window;
+      }
+    }
   }
+
   return nil;
 }
 

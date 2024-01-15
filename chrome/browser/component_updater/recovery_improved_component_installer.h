@@ -14,11 +14,13 @@
 #include "base/files/file_path.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/types/expected.h"
+#include "base/values.h"
 #include "components/component_updater/component_installer.h"
 #include "components/crx_file/crx_verifier.h"
-#include "components/update_client/component_unpacker.h"
+#include "components/update_client/unpacker.h"
 #include "components/update_client/update_client.h"
 
 namespace base {
@@ -58,6 +60,11 @@ namespace component_updater {
 class RecoveryComponentActionHandler : public update_client::ActionHandler {
  public:
   static scoped_refptr<update_client::ActionHandler> MakeActionHandler();
+
+  RecoveryComponentActionHandler(const RecoveryComponentActionHandler&) =
+      delete;
+  RecoveryComponentActionHandler& operator=(
+      const RecoveryComponentActionHandler&) = delete;
 
   // Overrides for update_client::RecoveryComponentActionHandler. |action| is an
   // absolute file path to a CRX to be unpacked. |session_id| contains the
@@ -104,18 +111,23 @@ class RecoveryComponentActionHandler : public update_client::ActionHandler {
 
   virtual base::CommandLine MakeCommandLine(
       const base::FilePath& unpack_path) const = 0;
+  virtual void PrepareFiles(const base::FilePath& unpack_path) const = 0;
   virtual void Elevate(Callback callback) = 0;
 
   void Unpack();
-  void UnpackComplete(const update_client::ComponentUnpacker::Result& result);
+  void UnpackComplete(const update_client::Unpacker::Result& result);
   void RunCommand(const base::CommandLine& cmdline);
-  void WaitForCommand(base::Process process);
+
+  // `process` contains the process object, if the process was successfully
+  // created or an error value otherwise (if the error is available on that
+  // platform).
+  void WaitForCommand(base::expected<base::Process, int> process_or_error);
 
   SEQUENCE_CHECKER(sequence_checker_);
 
   // Executes tasks in the context of the sequence which created this object.
   scoped_refptr<base::SequencedTaskRunner> main_task_runner_ =
-      base::SequencedTaskRunnerHandle::Get();
+      base::SequencedTaskRunner::GetCurrentDefault();
 
   // The key hash and its proof for the inner CRX to be unpacked and run.
   const std::vector<uint8_t> key_hash_;
@@ -132,11 +144,6 @@ class RecoveryComponentActionHandler : public update_client::ActionHandler {
 
   // Contains the path where the action CRX is unpacked in the per-user case.
   base::FilePath unpack_path_;
-
-  RecoveryComponentActionHandler(const RecoveryComponentActionHandler&) =
-      delete;
-  RecoveryComponentActionHandler& operator=(
-      const RecoveryComponentActionHandler&) = delete;
 };
 
 class ComponentUpdateService;
@@ -146,6 +153,10 @@ class RecoveryImprovedInstallerPolicy : public ComponentInstallerPolicy {
   explicit RecoveryImprovedInstallerPolicy(PrefService* prefs)
       : prefs_(prefs) {}
   ~RecoveryImprovedInstallerPolicy() override = default;
+  RecoveryImprovedInstallerPolicy(const RecoveryImprovedInstallerPolicy&) =
+      delete;
+  RecoveryImprovedInstallerPolicy& operator=(
+      const RecoveryImprovedInstallerPolicy&) = delete;
 
  private:
   friend class RecoveryImprovedInstallerTest;
@@ -154,25 +165,20 @@ class RecoveryImprovedInstallerPolicy : public ComponentInstallerPolicy {
   bool SupportsGroupPolicyEnabledComponentUpdates() const override;
   bool RequiresNetworkEncryption() const override;
   update_client::CrxInstaller::Result OnCustomInstall(
-      const base::Value& manifest,
+      const base::Value::Dict& manifest,
       const base::FilePath& install_dir) override;
   void OnCustomUninstall() override;
-  bool VerifyInstallation(const base::Value& manifest,
+  bool VerifyInstallation(const base::Value::Dict& manifest,
                           const base::FilePath& install_dir) const override;
   void ComponentReady(const base::Version& version,
                       const base::FilePath& install_dir,
-                      base::Value manifest) override;
+                      base::Value::Dict manifest) override;
   base::FilePath GetRelativeInstallDir() const override;
   void GetHash(std::vector<uint8_t>* hash) const override;
   std::string GetName() const override;
   update_client::InstallerAttributes GetInstallerAttributes() const override;
 
   raw_ptr<PrefService> prefs_;
-
-  RecoveryImprovedInstallerPolicy(const RecoveryImprovedInstallerPolicy&) =
-      delete;
-  RecoveryImprovedInstallerPolicy& operator=(
-      const RecoveryImprovedInstallerPolicy&) = delete;
 };
 
 void RegisterRecoveryImprovedComponent(ComponentUpdateService* cus,

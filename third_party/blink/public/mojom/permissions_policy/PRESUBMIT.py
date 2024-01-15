@@ -10,9 +10,6 @@ for more details about the presubmit API built into gcl.
 import os
 
 
-USE_PYTHON3 = True
-
-
 def _dynamic_import(module_dir, module_name):
     import sys
 
@@ -56,7 +53,7 @@ def _json5_load(lines):
 
 
 def _json5_load_from_file(file_path):
-    with open(file_path, 'r') as f:
+    with open(file_path, 'r', encoding='utf-8') as f:
         return _json5_load(f.read())
 
 
@@ -86,6 +83,7 @@ def uma_histogram_checks_factory(mojom_file,
         end_marker = '^};'
         presubmit_error = _import_update_histogram_enum(
             input_api).CheckPresubmitErrors(
+                'tools/metrics/histograms/enums.xml',
                 histogram_enum_name=histogram_enum_name,
                 update_script_name=update_script_file,
                 source_enum_path=source_path,

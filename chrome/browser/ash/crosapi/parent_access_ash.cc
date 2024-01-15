@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,15 +29,19 @@ crosapi::mojom::ParentAccessResultPtr DialogResultToParentAccessResult(
           crosapi::mojom::ParentAccessDeclinedResult::New());
       break;
 
-    case ash::ParentAccessDialog::Result::Status::kCancelled:
-      parent_access_result = mojom::ParentAccessResult::NewCancelled(
-          crosapi::mojom::ParentAccessCancelledResult::New());
+    case ash::ParentAccessDialog::Result::Status::kCanceled:
+      parent_access_result = mojom::ParentAccessResult::NewCanceled(
+          crosapi::mojom::ParentAccessCanceledResult::New());
       break;
 
     case ash::ParentAccessDialog::Result::Status::kError:
       parent_access_result = mojom::ParentAccessResult::NewError(
           crosapi::mojom::ParentAccessErrorResult::New(
               crosapi::mojom::ParentAccessErrorResult::Type::kUnknown));
+      break;
+    case ash::ParentAccessDialog::Result::Status::kDisabled:
+      parent_access_result = mojom::ParentAccessResult::NewDisabled(
+          crosapi::mojom::ParentAccessDisabledResult::New());
       break;
   }
 
@@ -95,13 +99,54 @@ void ParentAccessAsh::GetWebsiteParentApproval(
           parent_access_ui::mojom::ParentAccessParams::FlowType::kWebsiteAccess,
           parent_access_ui::mojom::FlowTypeParams::NewWebApprovalsParams(
               parent_access_ui::mojom::WebApprovalsParams::New(
-                  url, child_display_name, favicon_bitmap)));
+                  url, child_display_name, favicon_bitmap)),
+          /* is_disabled= */ false);
+  ShowParentAccessDialog(std::move(params), std::move(callback));
+}
+
+void ParentAccessAsh::GetExtensionParentApproval(
+    const std::u16string& extension_name,
+    const std::u16string& child_display_name,
+    const gfx::ImageSkia& icon,
+    const std::vector<crosapi::mojom::ExtensionPermissionPtr> permissions,
+    bool requests_disabled,
+    GetExtensionParentApprovalCallback callback) {
+  using parent_access_ui::mojom::ExtensionApprovalsParams;
+  using parent_access_ui::mojom::ExtensionApprovalsParamsPtr;
+  using parent_access_ui::mojom::ExtensionPermission;
+  using parent_access_ui::mojom::ExtensionPermissionPtr;
+  using parent_access_ui::mojom::FlowTypeParams;
+  using parent_access_ui::mojom::ParentAccessParams;
+  using parent_access_ui::mojom::ParentAccessParamsPtr;
+
+  std::vector<parent_access_ui::mojom::ExtensionPermissionPtr>
+      extension_permissions;
+  extension_permissions.reserve(permissions.size());
+  for (size_t i = 0; i < permissions.size(); ++i) {
+    ExtensionPermissionPtr permission = ExtensionPermission::New(
+        permissions[i]->permission, permissions[i]->details);
+    extension_permissions.push_back(std::move(permission));
+  }
+
+  // Convert icon to a bitmap representation.
+  std::vector<uint8_t> icon_bitmap;
+  gfx::PNGCodec::FastEncodeBGRASkBitmap(*icon.bitmap(), false, &icon_bitmap);
+  ExtensionApprovalsParamsPtr extension_params = ExtensionApprovalsParams::New(
+      extension_name, icon_bitmap, child_display_name,
+      std::move(extension_permissions));
+
+  // Assemble the parameters for a extension approval request.
+  ParentAccessParamsPtr params = ParentAccessParams::New(
+      ParentAccessParams::FlowType::kExtensionAccess,
+      FlowTypeParams::NewExtensionApprovalsParams(std::move(extension_params)),
+      requests_disabled);
   ShowParentAccessDialog(std::move(params), std::move(callback));
 }
 
 ash::ParentAccessDialogProvider* ParentAccessAsh::GetDialogProvider() {
-  if (!dialog_provider_)
+  if (!dialog_provider_) {
     dialog_provider_ = std::make_unique<ash::ParentAccessDialogProvider>();
+  }
 
   return dialog_provider_.get();
 }

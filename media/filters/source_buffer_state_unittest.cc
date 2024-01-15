@@ -6,7 +6,7 @@
 
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
@@ -84,20 +84,17 @@ class SourceBufferStateTest : public ::testing::Test {
     // Instead of using SaveArg<> to update |new_config_cb_| when mocked Init is
     // called, we use a lambda because SaveArg<> doesn't work if any of the
     // mocked method's arguments are move-only type.
-    EXPECT_CALL(*mock_stream_parser_, Init(_, _, _, _, _, _, _, _))
+    EXPECT_CALL(*mock_stream_parser_, Init(_, _, _, _, _, _, _))
         .WillOnce([&](auto init_cb, auto config_cb, auto new_buffers_cb,
-                      auto ignore_text_track, auto encrypted_media_init_data_cb,
-                      auto new_segment_cb, auto end_of_segment_cb,
+                      auto encrypted_media_init_data_cb, auto new_segment_cb,
+                      auto end_of_segment_cb,
                       auto media_log) { new_config_cb_ = config_cb; });
-    sbs->Init(
-        base::BindOnce(&SourceBufferStateTest::SourceInitDone,
-                       base::Unretained(this)),
-        expected_codecs,
-        base::BindRepeating(
-            &SourceBufferStateTest::StreamParserEncryptedInitData,
-            base::Unretained(this)),
-        base::BindRepeating(&SourceBufferStateTest::StreamParserNewTextTrack,
-                            base::Unretained(this)));
+    sbs->Init(base::BindOnce(&SourceBufferStateTest::SourceInitDone,
+                             base::Unretained(this)),
+              expected_codecs,
+              base::BindRepeating(
+                  &SourceBufferStateTest::StreamParserEncryptedInitData,
+                  base::Unretained(this)));
 
     sbs->SetTracksWatcher(base::BindRepeating(
         &SourceBufferStateTest::OnMediaTracksUpdated, base::Unretained(this)));
@@ -118,7 +115,6 @@ class SourceBufferStateTest : public ::testing::Test {
     const uint8_t stream_data[] = "stream_data";
     const int data_size = sizeof(stream_data);
     base::TimeDelta t;
-    StreamParser::TextTrackConfigMap text_track_config_map;
 
     // Ensure `stream_data` fits within one StreamParser::Parse() call.
     CHECK_GT(StreamParser::kMaxPendingBytesPerParse, data_size);
@@ -130,13 +126,12 @@ class SourceBufferStateTest : public ::testing::Test {
         .WillOnce(Return(true));
     EXPECT_CALL(*mock_stream_parser_,
                 Parse(StreamParser::kMaxPendingBytesPerParse))
-        .WillOnce(DoAll(
-            InvokeWithoutArgs([&] {
-              new_configs_result =
-                  new_config_cb_.Run(std::move(tracks), text_track_config_map);
-            }),
-            /* Indicate successful parse with no uninspected data. */
-            Return(StreamParser::ParseStatus::kSuccess)));
+        .WillOnce(
+            DoAll(InvokeWithoutArgs([&] {
+                    new_configs_result = new_config_cb_.Run(std::move(tracks));
+                  }),
+                  /* Indicate successful parse with no uninspected data. */
+                  Return(StreamParser::ParseStatus::kSuccess)));
 
     EXPECT_TRUE(sbs->AppendToParseBuffer(stream_data, data_size));
     EXPECT_EQ(StreamParser::ParseStatus::kSuccess,
@@ -151,8 +146,6 @@ class SourceBufferStateTest : public ::testing::Test {
   MOCK_METHOD1(SourceInitDone, void(const StreamParser::InitParameters&));
   MOCK_METHOD2(StreamParserEncryptedInitData,
                void(EmeInitDataType, const std::vector<uint8_t>&));
-  MOCK_METHOD2(StreamParserNewTextTrack,
-               void(ChunkDemuxerStream*, const TextTrackConfig&));
 
   MOCK_METHOD1(MediaTracksUpdatedMock, void(std::unique_ptr<MediaTracks>&));
   void OnMediaTracksUpdated(std::unique_ptr<MediaTracks> tracks) {
@@ -168,7 +161,7 @@ class SourceBufferStateTest : public ::testing::Test {
 
   testing::StrictMock<MockMediaLog> media_log_;
   std::vector<std::unique_ptr<ChunkDemuxerStream>> demuxer_streams_;
-  raw_ptr<MockStreamParser> mock_stream_parser_;
+  raw_ptr<MockStreamParser, DanglingUntriaged> mock_stream_parser_;
   StreamParser::NewConfigCB new_config_cb_;
 };
 

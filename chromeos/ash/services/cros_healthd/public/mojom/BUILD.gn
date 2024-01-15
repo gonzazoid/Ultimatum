@@ -8,22 +8,23 @@ import("//mojo/public/tools/bindings/mojom.gni")
 assert(is_chromeos_ash)
 
 mojom("mojom") {
-  deps = [ "//chromeos/services/network_health/public/mojom" ]
   sources = [
     "cros_healthd.mojom",
     "cros_healthd_diagnostics.mojom",
     "cros_healthd_events.mojom",
+    "cros_healthd_exception.mojom",
     "cros_healthd_probe.mojom",
+    "cros_healthd_routines.mojom",
     "nullable_primitives.mojom",
     "wilco_ec.mojom",
   ]
-
   public_deps = [
+    "//ash/system/diagnostics/mojom",
     "//chromeos/ash/services/cros_healthd/private/mojom",
     "//chromeos/services/network_health/public/mojom",
+    "//chromeos/services/network_health/public/mojom:types",
     "//mojo/public/mojom/base",
   ]
-
   cpp_typemaps = [
     {
       types = [
@@ -37,4 +38,9 @@ mojom("mojom") {
       traits_public_deps = [ "//components/policy/proto" ]
     },
   ]
+}
+
+mojom("event_reporter") {
+  sources = [ "cros_healthd_event_reporters.mojom" ]
+  public_deps = [ "//ash/system/diagnostics/mojom" ]
 }

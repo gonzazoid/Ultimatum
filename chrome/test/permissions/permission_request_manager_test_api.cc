@@ -5,10 +5,10 @@
 #include "chrome/test/permissions/permission_request_manager_test_api.h"
 
 #include <memory>
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/browser/ui/views/permissions/permission_prompt_bubble_view.h"
+#include "chrome/browser/ui/views/permissions/permission_prompt_bubble_base_view.h"
 #include "chrome/browser/ui/views/permissions/permission_prompt_desktop.h"
 #include "components/permissions/permission_request.h"
 #include "ui/views/widget/widget.h"
@@ -23,10 +23,10 @@ class TestPermissionRequestOwner {
  public:
   explicit TestPermissionRequestOwner(permissions::RequestType type) {
     const bool user_gesture = true;
-    auto decided = [](ContentSetting, bool) {};
+    auto decided = [](ContentSetting, bool, bool) {};
     request_ = std::make_unique<permissions::PermissionRequest>(
         GURL("https://example.com"), type, user_gesture,
-        base::BindOnce(decided),
+        base::BindRepeating(decided),
         base::BindOnce(&TestPermissionRequestOwner::DeleteThis,
                        base::Unretained(this)));
   }

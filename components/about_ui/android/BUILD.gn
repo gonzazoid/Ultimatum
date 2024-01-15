@@ -2,16 +2,17 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 import("//build/config/android/rules.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 generate_jni("about_ui_jni_headers") {
   sources = [ "java/src/org/chromium/components/aboutui/CreditUtils.java" ]
 }
 
 android_library("aboutui_java") {
+  srcjar_deps = [ ":about_ui_jni_headers" ]
   sources = [ "java/src/org/chromium/components/aboutui/CreditUtils.java" ]
   deps = [
-    "//base:jni_java",
     "//build/android:build_java",
+    "//third_party/jni_zero:jni_zero_java",
   ]
-  annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
 }

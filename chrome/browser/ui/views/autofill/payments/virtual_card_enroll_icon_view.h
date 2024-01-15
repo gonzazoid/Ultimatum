@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_UI_VIEWS_AUTOFILL_PAYMENTS_VIRTUAL_CARD_ENROLL_ICON_VIEW_H_
 
 #include "chrome/browser/ui/views/page_action/page_action_icon_view.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 
 class CommandUpdater;
 
@@ -16,6 +17,8 @@ class VirtualCardEnrollBubbleController;
 // The location bar icon to show the Virtual Card Enroll bubble where the user
 // can choose to enroll in a virtual card.
 class VirtualCardEnrollIconView : public PageActionIconView {
+  METADATA_HEADER(VirtualCardEnrollIconView, PageActionIconView)
+
  public:
   VirtualCardEnrollIconView(
       CommandUpdater* command_updater,
@@ -31,13 +34,11 @@ class VirtualCardEnrollIconView : public PageActionIconView {
   // PageActionIconView:
   views::BubbleDialogDelegate* GetBubble() const override;
   void UpdateImpl() override;
-  std::u16string GetTextForTooltipAndAccessibleName() const override;
 
  protected:
   // PageActionIconView:
   void OnExecuting(PageActionIconView::ExecuteSource execute_source) override;
   const gfx::VectorIcon& GetVectorIcon() const override;
-  const char* GetClassName() const override;
 
  private:
   VirtualCardEnrollBubbleController* GetController() const;

@@ -4,12 +4,9 @@
 
 #include "components/exo/wayland/wl_compositor.h"
 
-#include <wayland-server-protocol-core.h>
-
 #include <memory>
 
-#include "base/bind.h"
-#include "build/chromeos_buildflags.h"
+#include "base/functional/bind.h"
 #include "components/exo/buffer.h"
 #include "components/exo/display.h"
 #include "components/exo/surface.h"
@@ -243,6 +240,11 @@ void compositor_create_surface(wl_client* client,
 
   // Set the surface resource property for type-checking downcast support.
   SetSurfaceResource(surface.get(), surface_resource);
+
+  // Notify after the surface is initialized.
+  if (display->seat()) {
+    display->seat()->NotifySurfaceCreated(surface.get());
+  }
 
   SetImplementation(surface_resource, &surface_implementation,
                     std::move(surface));

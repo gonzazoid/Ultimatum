@@ -9,9 +9,9 @@
 #include <set>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -19,8 +19,8 @@
 #include "base/time/time.h"
 #include "chrome/browser/support_tool/data_collector.h"
 #include "chrome/browser/support_tool/support_packet_metadata.h"
-#include "components/feedback/pii_types.h"
-#include "components/feedback/redaction_tool.h"
+#include "components/feedback/redaction_tool/pii_types.h"
+#include "components/feedback/redaction_tool/redaction_tool.h"
 #include "components/feedback/system_logs/system_logs_source.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -102,9 +102,13 @@ class SupportToolHandler {
   // export couldn't happen due to an error. This function should be called only
   // once on an instance of SupportToolHandler.
   void ExportCollectedData(
-      std::set<feedback::PIIType> pii_types_to_keep,
+      std::set<redaction::PIIType> pii_types_to_keep,
       base::FilePath target_path,
       SupportToolDataExportedCallback on_data_exported_callback);
+
+  // Returns reference to `data_collectors_` for testing.
+  const std::vector<std::unique_ptr<DataCollector>>&
+  GetDataCollectorsForTesting();
 
  private:
   // OnDataCollected is called when a single DataCollector finished collecting
@@ -127,7 +131,7 @@ class SupportToolHandler {
   // DataCollector with their name. The DataCollectors will export their output
   // to that path then the contents of the `tmp_path` will be put inside a zip
   // archive on `target_path`.
-  void ExportIntoTempDir(std::set<feedback::PIIType> pii_types_to_keep,
+  void ExportIntoTempDir(std::set<redaction::PIIType> pii_types_to_keep,
                          base::FilePath target_path,
                          base::FilePath tmp_path);
 
@@ -143,7 +147,7 @@ class SupportToolHandler {
   void OnAllDataCollectorsDoneExporting(
       base::FilePath tmp_path,
       base::FilePath target_path,
-      std::set<feedback::PIIType> pii_types_to_keep);
+      std::set<redaction::PIIType> pii_types_to_keep);
 
   // OnMetadataFileWritten is called when metadata file is written. Archives
   // the data exported by DataCollectors inside a .zip archive and calls
@@ -177,10 +181,10 @@ class SupportToolHandler {
   // it hasn't been removed before.
   base::FilePath temp_dir_;
   // SequencedTaskRunner and RedactionToolContainer for the data collectors that
-  // will need to use feedback::RedactionTool for masking PII from the collected
-  // logs.
+  // will need to use redaction::RedactionTool for masking PII from the
+  // collected logs.
   scoped_refptr<base::SequencedTaskRunner> task_runner_for_redaction_tool_;
-  scoped_refptr<feedback::RedactionToolContainer> redaction_tool_container_;
+  scoped_refptr<redaction::RedactionToolContainer> redaction_tool_container_;
   base::WeakPtrFactory<SupportToolHandler> weak_ptr_factory_{this};
 };
 

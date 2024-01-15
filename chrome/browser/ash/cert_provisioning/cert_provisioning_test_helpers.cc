@@ -4,19 +4,25 @@
 
 #include "chrome/browser/ash/cert_provisioning/cert_provisioning_test_helpers.h"
 
+#include <optional>
+
 #include "base/test/gmock_callback_support.h"
 #include "base/time/time.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "net/test/cert_builder.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using base::test::RunOnceCallback;
 using testing::_;
 using testing::Invoke;
 
-namespace ash {
-namespace cert_provisioning {
+namespace ash::cert_provisioning {
+
+namespace {
+std::vector<uint8_t> StrToBytes(const std::string& val) {
+  return std::vector<uint8_t>(val.begin(), val.end());
+}
+}  // namespace
 
 //================ CertificateHelperForTesting =================================
 
@@ -65,7 +71,7 @@ void CertificateHelperForTesting::GetCertificates(
 
 scoped_refptr<net::X509Certificate> CertificateHelperForTesting::AddCert(
     CertScope cert_scope,
-    const absl::optional<CertProfileId>& cert_profile_id,
+    const std::optional<CertProfileId>& cert_profile_id,
     chromeos::platform_keys::Status status,
     base::Time not_valid_before,
     base::Time not_valid_after) {
@@ -74,14 +80,20 @@ scoped_refptr<net::X509Certificate> CertificateHelperForTesting::AddCert(
   cert_builder.SetValidity(not_valid_before, not_valid_after);
   auto cert = cert_builder.GetX509Certificate();
 
+  std::optional<std::vector<uint8_t>> attribute;
+  if (cert_profile_id.has_value()) {
+    attribute = StrToBytes(cert_profile_id.value());
+  }
+
   EXPECT_CALL(
       *platform_keys_service_,
       GetAttributeForKey(
           GetPlatformKeysTokenId(cert_scope),
-          chromeos::platform_keys::GetSubjectPublicKeyInfo(cert),
+          chromeos::platform_keys::GetSubjectPublicKeyInfoBlob(cert),
           chromeos::platform_keys::KeyAttributeType::kCertificateProvisioningId,
           _))
-      .WillRepeatedly(RunOnceCallback<3>(cert_profile_id, status));
+      .WillRepeatedly(
+          base::test::RunOnceCallbackRepeatedly<3>(attribute, status));
 
   cert_list_.push_back(cert);
   return cert;
@@ -89,7 +101,7 @@ scoped_refptr<net::X509Certificate> CertificateHelperForTesting::AddCert(
 
 scoped_refptr<net::X509Certificate> CertificateHelperForTesting::AddCert(
     CertScope cert_scope,
-    const absl::optional<CertProfileId>& cert_profile_id) {
+    const std::optional<CertProfileId>& cert_profile_id) {
   base::Time not_valid_before = base::Time::Now() - base::Days(1);
   base::Time not_valid_after = base::Time::Now() + base::Days(365);
   return AddCert(cert_scope, cert_profile_id,
@@ -99,7 +111,7 @@ scoped_refptr<net::X509Certificate> CertificateHelperForTesting::AddCert(
 
 scoped_refptr<net::X509Certificate> CertificateHelperForTesting::AddCert(
     CertScope cert_scope,
-    const absl::optional<CertProfileId>& cert_profile_id,
+    const std::optional<CertProfileId>& cert_profile_id,
     chromeos::platform_keys::Status status) {
   base::Time not_valid_before = base::Time::Now() - base::Days(1);
   base::Time not_valid_after = base::Time::Now() + base::Days(365);
@@ -141,8 +153,8 @@ void ProfileHelperForTesting::Init(bool user_is_affiliated) {
 
   auto test_account =
       AccountId::FromUserEmailGaiaId(kTestUserEmail, kTestUserGaiaId);
-  user_ = fake_user_manager_.AddUserWithAffiliation(test_account,
-                                                    user_is_affiliated);
+  user_ = fake_user_manager_->AddUserWithAffiliation(test_account,
+                                                     user_is_affiliated);
 }
 
 Profile* ProfileHelperForTesting::GetProfile() const {
@@ -153,5 +165,4 @@ user_manager::User* ProfileHelperForTesting::GetUser() const {
   return user_;
 }
 
-}  // namespace cert_provisioning
-}  // namespace ash
+}  // namespace ash::cert_provisioning

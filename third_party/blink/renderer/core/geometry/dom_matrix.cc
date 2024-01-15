@@ -7,18 +7,17 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_dom_matrix_init.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_string_unrestricteddoublesequence.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
-#include "third_party/blink/renderer/platform/transforms/affine_transform.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
 
 namespace blink {
 
 DOMMatrix* DOMMatrix::Create() {
-  return MakeGarbageCollected<DOMMatrix>(TransformationMatrix());
+  return MakeGarbageCollected<DOMMatrix>(gfx::Transform());
 }
 
 DOMMatrix* DOMMatrix::Create(ExecutionContext* execution_context,
                              ExceptionState& exception_state) {
-  return MakeGarbageCollected<DOMMatrix>(TransformationMatrix());
+  return MakeGarbageCollected<DOMMatrix>(gfx::Transform());
 }
 
 DOMMatrix* DOMMatrix::Create(
@@ -35,8 +34,7 @@ DOMMatrix* DOMMatrix::Create(
         return nullptr;
       }
 
-      DOMMatrix* matrix =
-          MakeGarbageCollected<DOMMatrix>(TransformationMatrix());
+      DOMMatrix* matrix = MakeGarbageCollected<DOMMatrix>(gfx::Transform());
       matrix->SetMatrixValueFromString(execution_context, init->GetAsString(),
                                        exception_state);
       return matrix;
@@ -96,7 +94,7 @@ template <typename T>
 DOMMatrix::DOMMatrix(T sequence, int size)
     : DOMMatrixReadOnly(sequence, size) {}
 
-DOMMatrix::DOMMatrix(const TransformationMatrix& matrix, bool is2d)
+DOMMatrix::DOMMatrix(const gfx::Transform& matrix, bool is2d)
     : DOMMatrixReadOnly(matrix, is2d) {}
 
 DOMMatrix* DOMMatrix::fromMatrix(DOMMatrixInit* other,
@@ -107,13 +105,13 @@ DOMMatrix* DOMMatrix::fromMatrix(DOMMatrixInit* other,
   }
   if (other->is2D()) {
     return MakeGarbageCollected<DOMMatrix>(
-        TransformationMatrix::Affine(other->m11(), other->m12(), other->m21(),
-                                     other->m22(), other->m41(), other->m42()),
+        gfx::Transform::Affine(other->m11(), other->m12(), other->m21(),
+                               other->m22(), other->m41(), other->m42()),
         other->is2D());
   }
 
   return MakeGarbageCollected<DOMMatrix>(
-      TransformationMatrix::ColMajor(
+      gfx::Transform::ColMajor(
           other->m11(), other->m12(), other->m13(), other->m14(), other->m21(),
           other->m22(), other->m23(), other->m24(), other->m31(), other->m32(),
           other->m33(), other->m34(), other->m41(), other->m42(), other->m43(),
@@ -127,8 +125,7 @@ void DOMMatrix::SetIs2D(bool value) {
 }
 
 void DOMMatrix::SetNAN() {
-  matrix_ =
-      TransformationMatrix::ColMajor(NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN,
+  matrix_ = gfx::Transform::ColMajor(NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN,
                                      NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN);
 }
 
@@ -161,7 +158,7 @@ DOMMatrix* DOMMatrix::preMultiplySelf(DOMMatrixInit* other,
   if (!other_matrix->is2D())
     is2d_ = false;
 
-  TransformationMatrix& matrix = matrix_;
+  gfx::Transform& matrix = matrix_;
   matrix_ = other_matrix->Matrix() * matrix;
 
   return this;
@@ -279,8 +276,12 @@ DOMMatrix* DOMMatrix::perspectiveSelf(double p) {
 }
 
 DOMMatrix* DOMMatrix::invertSelf() {
-  if (matrix_.GetInverse(&matrix_))
+  if (matrix_.GetInverse(&matrix_)) {
+    // We rely on gfx::Transform::GetInverse() to produce a 2d inverse for any
+    // 2d matrix.
+    DCHECK(!is2d_ || matrix_.Is2dTransform());
     return this;
+  }
 
   SetNAN();
   SetIs2D(false);

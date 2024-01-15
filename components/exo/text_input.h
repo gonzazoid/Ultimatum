@@ -8,10 +8,13 @@
 #include <string>
 
 #include "base/i18n/rtl.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/strings/string_piece.h"
 #include "components/exo/seat_observer.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/ime/ash/input_method_manager.h"
+#include "ui/base/ime/autocorrect_info.h"
 #include "ui/base/ime/composition_text.h"
 #include "ui/base/ime/surrounding_text_tracker.h"
 #include "ui/base/ime/text_input_client.h"
@@ -36,6 +39,7 @@ class Seat;
 // called but the associated window is not focused.
 class TextInput : public ui::TextInputClient,
                   public ui::VirtualKeyboardControllerObserver,
+                  public ash::input_method::InputMethodManager::Observer,
                   public SeatObserver {
  public:
   class Delegate {
@@ -119,6 +123,22 @@ class TextInput : public ui::TextInputClient,
     // |surrounding_text|. All offsets are in UTF16, and must be valid.
     virtual void SetAutocorrectRange(base::StringPiece16 surrounding_text,
                                      const gfx::Range& range) = 0;
+
+    // Commits the current composition text.
+    // If `keep_selection` is true, keep the selection range unchanged.
+    // Otherwise, set the selection range to be after the committed text.
+    // Returns whether the operation is supported by the client.
+    virtual bool ConfirmComposition(bool keep_selection) = 0;
+
+    // Does the current delegate support the new ConfirmComposition wayland
+    // method name confirm_preedit?
+    virtual bool SupportsConfirmPreedit() = 0;
+
+    // Checks if InsertImage() is supported via wayland.
+    virtual bool HasImageInsertSupport() = 0;
+
+    // Inserts image.
+    virtual void InsertImage(const GURL& src) = 0;
   };
 
   explicit TextInput(std::unique_ptr<Delegate> delegate);
@@ -129,7 +149,9 @@ class TextInput : public ui::TextInputClient,
   // Request to activate the text input context on the surface. Activation will
   // occur immediately if the associated window is already focused, or
   // otherwise when the window gains focus.
-  void Activate(Seat* seat, Surface* surface);
+  void Activate(Seat* seat,
+                Surface* surface,
+                ui::TextInputClient::FocusReason reason);
 
   // Deactivates the text input context.
   void Deactivate();
@@ -148,28 +170,30 @@ class TextInput : public ui::TextInputClient,
   void Reset();
 
   // Sets the surrounding text in the app.
-  // |cursor_pos| is the range of |text|.
-  void SetSurroundingText(const std::u16string& text,
-                          const gfx::Range& cursor_pos);
+  // Ranges of |cursor_pos|, |grammar_fragment| and |autocorrect_info| are
+  // relative to |text|.
+  // |grammar_fragment| is the grammar fragment at the cursor position,
+  // if given.
+  // |autocorrect_info->bounds| is the bounding rect around the autocorrected
+  // text and is relative to the window origin.
+  void SetSurroundingText(
+      base::StringPiece16 text,
+      uint32_t offset,
+      const gfx::Range& cursor_pos,
+      const absl::optional<ui::GrammarFragment>& grammar_fragment,
+      const absl::optional<ui::AutocorrectInfo>& autocorrect_info);
 
-  // Sets the text input type, mode, flags, and |should_do_learning|.
+  // Sets the text input type, mode, flags, |should_do_learning|,
+  // |can_compose_inline| and |surrounding_text_supported|.
   void SetTypeModeFlags(ui::TextInputType type,
                         ui::TextInputMode mode,
                         int flags,
-                        bool should_do_learning);
+                        bool should_do_learning,
+                        bool can_compose_inline,
+                        bool surrounding_text_supported);
 
   // Sets the bounds of the text caret, relative to the window origin.
   void SetCaretBounds(const gfx::Rect& bounds);
-
-  // Sets grammar fragment at the cursor position.
-  void SetGrammarFragmentAtCursor(
-      const absl::optional<ui::GrammarFragment>& fragment);
-
-  // Sets the autocorrect range and bounds. `autocorrect_bounds` is the
-  // bounding rect around the autocorreced text, and are relative to
-  // to the window origin.
-  void SetAutocorrectInfo(const gfx::Range& autocorrect_range,
-                          const gfx::Rect& autocorrect_bounds);
 
   // Finalizes pending virtual keyboard requested changes.
   void FinalizeVirtualKeyboardChanges();
@@ -183,6 +207,8 @@ class TextInput : public ui::TextInputClient,
   void InsertText(const std::u16string& text,
                   InsertTextCursorBehavior cursor_behavior) override;
   void InsertChar(const ui::KeyEvent& event) override;
+  bool CanInsertImage() override;
+  void InsertImage(const GURL& src) override;
   ui::TextInputType GetTextInputType() const override;
   ui::TextInputMode GetTextInputMode() const override;
   base::i18n::TextDirection GetTextDirection() const override;
@@ -204,6 +230,9 @@ class TextInput : public ui::TextInputClient,
   bool ChangeTextDirectionAndLayoutAlignment(
       base::i18n::TextDirection direction) override;
   void ExtendSelectionAndDelete(size_t before, size_t after) override;
+  void ExtendSelectionAndReplace(size_t before,
+                                 size_t after,
+                                 base::StringPiece16 replacement_text) override;
   void EnsureCaretNotInRect(const gfx::Rect& rect) override;
   bool IsTextEditCommandEnabled(ui::TextEditCommand command) const override;
   void SetTextEditCommandForNextKeyEvent(ui::TextEditCommand command) override;
@@ -220,6 +249,7 @@ class TextInput : public ui::TextInputClient,
   bool ClearGrammarFragments(const gfx::Range& range) override;
   bool AddGrammarFragments(
       const std::vector<ui::GrammarFragment>& fragments) override;
+  bool SupportsAlwaysConfirmComposition() override;
   void GetActiveTextInputControlLayoutBounds(
       absl::optional<gfx::Rect>* control_bounds,
       absl::optional<gfx::Rect>* selection_bounds) override {}
@@ -227,6 +257,11 @@ class TextInput : public ui::TextInputClient,
   // ui::VirtualKeyboardControllerObserver:
   void OnKeyboardVisible(const gfx::Rect& keyboard_rect) override;
   void OnKeyboardHidden() override;
+
+  // ash::input_method::InputMethodManager::Observer:
+  void InputMethodChanged(ash::input_method::InputMethodManager* manager,
+                          Profile* profile,
+                          bool show_message) override;
 
   // SeatObserver:
   void OnSurfaceFocused(Surface* gained_focus,
@@ -253,14 +288,18 @@ class TextInput : public ui::TextInputClient,
   // |surface_| and |seat_| are non-null if and only if the TextInput is in a
   // pending or active state, in which case the TextInput will be observing the
   // Seat.
-  Surface* surface_ = nullptr;
-  Seat* seat_ = nullptr;
+  raw_ptr<Surface, DanglingUntriaged> surface_ = nullptr;
+  raw_ptr<Seat, DanglingUntriaged> seat_ = nullptr;
 
   // If the TextInput is active (associated window has focus) and the
   // InputMethod is available, this is set and the TextInput will be its
   // focused client. Otherwise, it is null and the TextInput is not attached
   // to any InputMethod, so the TextInputClient overrides will not be called.
-  ui::InputMethod* input_method_ = nullptr;
+  raw_ptr<ui::InputMethod, DanglingUntriaged> input_method_ = nullptr;
+
+  base::ScopedObservation<ash::input_method::InputMethodManager,
+                          ash::input_method::InputMethodManager::Observer>
+      input_method_manager_observation_{this};
 
   base::ScopedObservation<ui::VirtualKeyboardController,
                           ui::VirtualKeyboardControllerObserver>
@@ -274,6 +313,15 @@ class TextInput : public ui::TextInputClient,
   ui::TextInputMode input_mode_ = ui::TEXT_INPUT_MODE_DEFAULT;
   int flags_ = ui::TEXT_INPUT_FLAG_NONE;
   bool should_do_learning_ = true;
+  bool can_compose_inline_ = true;
+  ui::TextInputClient::FocusReason focus_reason_ =
+      ui::TextInputClient::FOCUS_REASON_NONE;
+
+  // Whether the client supports surrounding text.
+  bool surrounding_text_supported_ = true;
+  // If surrounding text is not supported and the active IME needs it, we force
+  // using TEXT_INPUT_TYPE_NULL.
+  bool use_null_input_type_ = false;
 
   // Tracks the surrounding text.
   ui::SurroundingTextTracker surrounding_text_tracker_;
@@ -282,31 +330,11 @@ class TextInput : public ui::TextInputClient,
   base::i18n::TextDirection direction_ = base::i18n::UNKNOWN_DIRECTION;
 
   // Cache of the grammar fragment at cursor position, send from Lacros side.
-  // Wayland API sends the fragment range in utf8 and what IME needs is utf16.
-  // To correctly convert the utf8 range to utf16, we need the updated
-  // surrounding text, which is not available when we receive the grammar
-  // fragment. It is guaranteed that on Lacros side, it always updates grammar
-  // fragment before updating surrounding text. So we store the utf8 fragment in
-  // |grammar_fragment_at_cursor_utf8_| when we receive it and when we receive
-  // the surrounding text update next time, we convert the utf8 fragment to
-  // utf16 fragment and store it in |grammar_fragment_at_cursor_utf16_|. When
-  // IME requests current grammar fragment, we always return the utf16 version.
-  absl::optional<ui::GrammarFragment> grammar_fragment_at_cursor_utf8_;
-  absl::optional<ui::GrammarFragment> grammar_fragment_at_cursor_utf16_;
-
-  struct AutocorrectInfo {
-    gfx::Range range;
-    gfx::Rect bounds;
-  };
+  absl::optional<ui::GrammarFragment> grammar_fragment_at_cursor_;
 
   // Latest autocorrect information that was sent from the Wayland client.
   // along with the last surrounding text change.
-  AutocorrectInfo autocorrect_info_;
-
-  // Latest autocorrect information that was received without a receiving a
-  // corresponding surrounding text. Once this class receives a surrounding text
-  // update, `autocorrect_info_` will take on this pending value, if it exists.
-  absl::optional<AutocorrectInfo> pending_autocorrect_info_;
+  ui::AutocorrectInfo autocorrect_info_;
 
   // True when client has made virtual keyboard related requests but haven't
   // sent the virtual keyboard finalize request.

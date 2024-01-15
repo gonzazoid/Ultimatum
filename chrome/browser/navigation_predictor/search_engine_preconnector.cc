@@ -4,7 +4,7 @@
 
 #include "chrome/browser/navigation_predictor/search_engine_preconnector.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/time/time.h"
@@ -105,8 +105,8 @@ void SearchEnginePreconnector::PreconnectDSE() {
                                                kDefaultSkipInBackground) ||
       is_browser_app_likely_in_foreground) {
     net::SchemefulSite schemeful_site(preconnect_url);
-    net::NetworkAnonymizationKey network_anonymziation_key(schemeful_site,
-                                                           schemeful_site);
+    auto network_anonymziation_key =
+        net::NetworkAnonymizationKey::CreateSameSite(schemeful_site);
     loading_predictor->PreconnectURLIfAllowed(
         preconnect_url, /*allow_credentials=*/true, network_anonymziation_key);
   }

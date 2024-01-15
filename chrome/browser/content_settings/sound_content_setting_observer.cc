@@ -4,7 +4,7 @@
 
 #include "chrome/browser/content_settings/sound_content_setting_observer.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/profiles/profile.h"
@@ -60,11 +60,10 @@ void SoundContentSettingObserver::ReadyToCommitNavigation(
                        ->GetLastCommittedURL();
 
   content_settings::SettingInfo setting_info;
-  const base::Value setting = host_content_settings_map_->GetWebsiteSetting(
+  ContentSetting setting = host_content_settings_map_->GetContentSetting(
       url, url, ContentSettingsType::SOUND, &setting_info);
 
-  if (content_settings::ValueToContentSetting(setting) !=
-      CONTENT_SETTING_ALLOW) {
+  if (setting != CONTENT_SETTING_ALLOW) {
     return;
   }
 

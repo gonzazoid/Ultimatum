@@ -9,6 +9,7 @@
 #include <sstream>
 
 #include "base/notreached.h"
+#include "base/numerics/checked_math.h"
 
 namespace media {
 
@@ -155,7 +156,10 @@ VideoFrameLayout::VideoFrameLayout(VideoPixelFormat format,
       planes_(std::move(planes)),
       is_multi_planar_(is_multi_planar),
       buffer_addr_align_(buffer_addr_align),
-      modifier_(modifier) {}
+      modifier_(modifier) {
+  // Trigger NOTREACHED() if `format` is not valid.
+  NumPlanes(format);
+}
 
 VideoFrameLayout::~VideoFrameLayout() = default;
 VideoFrameLayout::VideoFrameLayout(const VideoFrameLayout&) = default;
@@ -172,6 +176,34 @@ bool VideoFrameLayout::operator==(const VideoFrameLayout& rhs) const {
 
 bool VideoFrameLayout::operator!=(const VideoFrameLayout& rhs) const {
   return !(*this == rhs);
+}
+
+bool VideoFrameLayout::FitsInContiguousBufferOfSize(size_t data_size) const {
+  if (is_multi_planar_) {
+    return false;
+  }
+
+  base::CheckedNumeric<size_t> required_size = 0;
+  for (const auto& plane : planes_) {
+    if (plane.offset > data_size || plane.size > data_size) {
+      return false;
+    }
+
+    // No individual plane should have a size + offset > data_size.
+    base::CheckedNumeric<size_t> plane_end = plane.size;
+    plane_end += plane.offset;
+    if (!plane_end.IsValid() || plane_end.ValueOrDie() > data_size) {
+      return false;
+    }
+
+    required_size += plane.size;
+  }
+
+  if (!required_size.IsValid() || required_size.ValueOrDie() > data_size) {
+    return false;
+  }
+
+  return true;
 }
 
 std::ostream& operator<<(std::ostream& ostream,

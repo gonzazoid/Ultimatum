@@ -7,6 +7,7 @@
 
 #include "components/content_settings/core/common/content_settings_types.h"
 #include "components/permissions/object_permission_context_base.h"
+#include "components/webid/federated_identity_data_model.h"
 
 #include <string>
 
@@ -33,13 +34,17 @@ class FederatedIdentityAccountKeyedPermissionContext
   FederatedIdentityAccountKeyedPermissionContext& operator=(
       const FederatedIdentityAccountKeyedPermissionContext&) = delete;
 
+  // Returns whether the given relying party has any FedCM permission.
+  bool HasPermission(const url::Origin& relying_party_requester);
+
   // Returns whether there is an existing permission for the
   // (relying_party_requester, relying_party_embedder, identity_provider,
-  // account_id) tuple.
+  // account_id) tuple. `account_id` can be omitted to represent "sharing
+  // permission for any account".
   bool HasPermission(const url::Origin& relying_party_requester,
                      const url::Origin& relying_party_embedder,
                      const url::Origin& identity_provider,
-                     const std::string& account_id);
+                     const absl::optional<std::string>& account_id);
 
   // Grants permission for the (relying_party_requester, relying_party_embedder,
   // identity_provider, account_id) tuple.
@@ -48,20 +53,30 @@ class FederatedIdentityAccountKeyedPermissionContext
                        const url::Origin& identity_provider,
                        const std::string& account_id);
 
-  // Revokes previously-granted permission for the (relying_party_requester,
-  // relying_party_embedder, identity_provider, account_id) tuple.
+  // Revokes previously-granted permission for the (`relying_party_requester`,
+  // `relying_party_embedder`, `identity_provider`, `account_id`) tuple. If the
+  // `account_id` is not found, we revoke all accounts associated with the
+  // triple (`relying_party_requester`, `relying_party_embedder`,
+  // `identity_provider`).
   void RevokePermission(const url::Origin& relying_party_requester,
                         const url::Origin& relying_party_embedder,
                         const url::Origin& identity_provider,
                         const std::string& account_id);
 
   // permissions::ObjectPermissionContextBase:
-  std::string GetKeyForObject(const base::Value& object) override;
+  std::string GetKeyForObject(const base::Value::Dict& object) override;
+
+  void GetAllDataKeys(
+      base::OnceCallback<void(
+          std::vector<webid::FederatedIdentityDataModel::DataKey>)> callback);
+  void RemoveFederatedIdentityDataByDataKey(
+      const webid::FederatedIdentityDataModel::DataKey& data_key,
+      base::OnceClosure callback);
 
  private:
   // permissions::ObjectPermissionContextBase:
-  bool IsValidObject(const base::Value& object) override;
-  std::u16string GetObjectDisplayName(const base::Value& object) override;
+  bool IsValidObject(const base::Value::Dict& object) override;
+  std::u16string GetObjectDisplayName(const base::Value::Dict& object) override;
 
   const std::string idp_origin_key_;
 };

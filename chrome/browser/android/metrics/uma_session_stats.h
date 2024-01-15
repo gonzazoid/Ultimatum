@@ -46,6 +46,11 @@ class UmaSessionStats {
 
   static bool IsBackgroundSessionStartForTesting();
 
+  // Reads counters Chrome.UMA.OnPostCreateCounter2 and
+  // Chrome.UMA.OnResumeCounter2 that are written to in ChromeActivity.java. The
+  // counters are encoded in an enum histogram, emitted and reset to 0.
+  static void EmitAndResetCounters();
+
  private:
   friend class base::NoDestructor<UmaSessionStats>;
   UmaSessionStats() = default;

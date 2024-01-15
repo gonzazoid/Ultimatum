@@ -391,12 +391,6 @@ gfx::Vector2d GetMouseWheelOffsetFromMSG(const CHROME_MSG& native_event) {
   return gfx::Vector2d(GET_WHEEL_DELTA_WPARAM(native_event.wParam), 0);
 }
 
-CHROME_MSG CopyMSGEvent(const CHROME_MSG& event) {
-  return event;
-}
-
-void ReleaseCopiedMSGEvent(const CHROME_MSG& event) {}
-
 void ClearTouchIdIfReleasedFromMSG(const CHROME_MSG& xev) {
   NOTIMPLEMENTED();
 }
@@ -502,7 +496,8 @@ KeyEvent KeyEventFromMSG(const CHROME_MSG& msg) {
 
   if (IsCharFromMSG(msg)) {
     flags = PlatformKeyMap::ReplaceControlAndAltWithAltGraph(flags);
-    return KeyEvent(msg.wParam, key_code, code, flags, time_stamp);
+    return KeyEvent::FromCharacter(msg.wParam, key_code, code, flags,
+                                   time_stamp);
   } else {
     key = PlatformKeyMap::DomKeyFromKeyboardCode(key_code, &flags);
     return KeyEvent(type, key_code, code, flags, key, time_stamp);

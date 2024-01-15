@@ -6,8 +6,10 @@
 #define ASH_SYSTEM_PHONEHUB_TASK_CONTINUATION_VIEW_H_
 
 #include "ash/ash_export.h"
-#include "ash/components/phonehub/phone_model.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ash/components/phonehub/phone_model.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 #include "ui/views/view_model.h"
 
@@ -21,6 +23,8 @@ class UserActionRecorder;
 // off from their phone, currently only support web browsing.
 class ASH_EXPORT TaskContinuationView : public views::View,
                                         public phonehub::PhoneModel::Observer {
+  METADATA_HEADER(TaskContinuationView, views::View)
+
  public:
   TaskContinuationView(phonehub::PhoneModel* phone_model,
                        phonehub::UserActionRecorder* user_action_recorder);
@@ -31,13 +35,12 @@ class ASH_EXPORT TaskContinuationView : public views::View,
   // phonehub::PhoneHubModel::Observer:
   void OnModelChanged() override;
 
-  // views::View:
-  const char* GetClassName() const override;
-
  private:
   FRIEND_TEST_ALL_PREFIXES(TaskContinuationViewTest, TaskChipsView);
 
   class TaskChipsView : public views::View {
+    METADATA_HEADER(TaskChipsView, views::View)
+
    public:
     TaskChipsView();
     ~TaskChipsView() override;
@@ -64,9 +67,9 @@ class ASH_EXPORT TaskContinuationView : public views::View,
   // Update the chips to display current phone status.
   void Update();
 
-  phonehub::PhoneModel* phone_model_ = nullptr;
-  phonehub::UserActionRecorder* user_action_recorder_ = nullptr;
-  TaskChipsView* chips_view_ = nullptr;
+  raw_ptr<phonehub::PhoneModel> phone_model_ = nullptr;
+  raw_ptr<phonehub::UserActionRecorder> user_action_recorder_ = nullptr;
+  raw_ptr<TaskChipsView> chips_view_ = nullptr;
 };
 
 }  // namespace ash

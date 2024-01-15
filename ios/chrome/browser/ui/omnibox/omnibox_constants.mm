@@ -4,8 +4,24 @@
 
 #import "ios/chrome/browser/ui/omnibox/omnibox_constants.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 const CGFloat kOmniboxPlaceholderAlpha = 0.3;
+
+NSString* const kOmniboxLeadingImageDefaultAccessibilityIdentifier =
+    @"OmniboxLeadingImageDefaultAccessibilityIdentifier";
+
+NSString* const kOmniboxLeadingImageEmptyTextAccessibilityIdentifier =
+    @"OmniboxLeadingImageEmptyTextAccessibilityIdentifier";
+
+NSString* const kOmniboxLeadingImageSuggestionImageAccessibilityIdentifier =
+    @"OmniboxLeadingImageSuggestionImageAccessibilityIdentifier";
+
+NSString* const kOmniboxAutocompleteLabelAccessibilityIdentifier =
+    @"OmniboxAutocompleteLabelAccessibilityIdentifier";
+
+constexpr CGFloat kOmniboxLeadingImageSize = 30;
+constexpr CGFloat kOmniboxLeadingImageViewEdgeOffset = 7;
+constexpr CGFloat kOmniboxTextFieldLeadingOffsetNoImage = 16;
+constexpr CGFloat kOmniboxTextFieldLeadingOffsetImage = 14;
+constexpr CGFloat kOmniboxEditOffset = kOmniboxLeadingImageViewEdgeOffset +
+                                       kOmniboxLeadingImageSize +
+                                       kOmniboxTextFieldLeadingOffsetImage;

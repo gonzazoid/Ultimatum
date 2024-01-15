@@ -6,13 +6,14 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_PEERCONNECTION_RTC_ENCODED_AUDIO_UNDERLYING_SOURCE_H_
 
 #include "base/gtest_prod_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "third_party/blink/renderer/core/streams/underlying_source_base.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace webrtc {
-class TransformableFrameInterface;
+class TransformableAudioFrameInterface;
 }  // namespace webrtc
 
 namespace blink {
@@ -22,14 +23,16 @@ class MODULES_EXPORT RTCEncodedAudioUnderlyingSource
  public:
   explicit RTCEncodedAudioUnderlyingSource(
       ScriptState*,
-      WTF::CrossThreadOnceClosure disconnect_callback,
-      bool is_receiver);
+      WTF::CrossThreadOnceClosure disconnect_callback);
 
   // UnderlyingSourceBase
-  ScriptPromise pull(ScriptState*) override;
-  ScriptPromise Cancel(ScriptState*, ScriptValue reason) override;
+  ScriptPromise Pull(ScriptState*, ExceptionState&) override;
+  ScriptPromise Cancel(ScriptState*,
+                       ScriptValue reason,
+                       ExceptionState&) override;
 
-  void OnFrameFromSource(std::unique_ptr<webrtc::TransformableFrameInterface>);
+  void OnFrameFromSource(
+      std::unique_ptr<webrtc::TransformableAudioFrameInterface>);
   void Close();
 
   // Called on any thread to indicate the source is being transferred to an
@@ -49,9 +52,6 @@ class MODULES_EXPORT RTCEncodedAudioUnderlyingSource
 
   const Member<ScriptState> script_state_;
   WTF::CrossThreadOnceClosure disconnect_callback_;
-  // Indicates if this source is for a receiver. Receiver sources
-  // expose CSRCs.
-  const bool is_receiver_;
   // Count of frames dropped due to the queue being full, for logging.
   int dropped_frames_ = 0;
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;

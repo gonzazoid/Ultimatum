@@ -7,7 +7,6 @@
 #include <algorithm>
 
 #include "ash/public/cpp/pagination/pagination_model_observer.h"
-#include "base/cxx17_backports.h"
 #include "ui/gfx/animation/slide_animation.h"
 
 namespace ash {
@@ -32,12 +31,15 @@ void PaginationModel::SetTotalPages(int total_pages) {
 
   int previous_pages = total_pages_;
   total_pages_ = total_pages;
+  for (auto& observer : observers_) {
+    observer.TotalPagesChanged(previous_pages, total_pages);
+  }
+
+  // The selected page may need to change due to total pages changing.
   if (selected_page_ < 0)
     SelectPage(0, false /* animate */);
   if (selected_page_ >= total_pages_)
     SelectPage(std::max(total_pages_ - 1, 0), false /* animate */);
-  for (auto& observer : observers_)
-    observer.TotalPagesChanged(previous_pages, total_pages);
 }
 
 void PaginationModel::SelectPage(int page, bool animate) {
@@ -246,7 +248,7 @@ int PaginationModel::CalculateTargetPage(int delta) const {
   else if (target_page > end_page && selected_page_ == end_page)
     end_page = total_pages_;
 
-  return base::clamp(target_page, start_page, end_page);
+  return std::clamp(target_page, start_page, end_page);
 }
 
 base::TimeDelta PaginationModel::GetTransitionAnimationSlideDuration() const {

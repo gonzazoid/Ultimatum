@@ -32,21 +32,13 @@ android_library("runtime_library_for_assets_java") {
   sources =
       [ "src/org/chromium/webapk/lib/runtime_library/WebApkServiceImpl.java" ]
   srcjar_deps = [ ":webapk_service_aidl" ]
-  deps = [
-    "//third_party/androidx:androidx_annotation_annotation_java",
-    "//third_party/androidx:androidx_core_core_java",
-  ]
 }
 
 # The subset of runtime_library_from_assets_java needed for tests.
 android_library("runtime_library_for_tests_java") {
   sources =
       [ "src/org/chromium/webapk/lib/runtime_library/WebApkServiceImpl.java" ]
-  deps = [
-    ":webapk_service_aidl_java",
-    "//third_party/androidx:androidx_annotation_annotation_java",
-    "//third_party/androidx:androidx_core_core_java",
-  ]
+  deps = [ ":webapk_service_aidl_java" ]
 }
 
 dist_dex("webapk_runtime_library") {
@@ -54,6 +46,8 @@ dist_dex("webapk_runtime_library") {
   proguard_enabled = true
   proguard_configs = [ "runtime_library.proguard.flags" ]
   output = "$target_out_dir/$runtime_library_dex_asset_name"
+  package_name = "webapk_runtime_library"
+  version_code = runtime_library_version
 }
 
 android_assets("runtime_library_assets") {
@@ -76,7 +70,8 @@ android_library("runtime_library_javatests") {
     "//base:base_java_test_support",
     "//chrome/test/android:chrome_java_integration_test_support",
     "//content/public/test/android:content_java_test_support",
-    "//third_party/android_support_test_runner:runner_java",
+    "//third_party/androidx:androidx_test_core_java",
+    "//third_party/androidx:androidx_test_monitor_java",
     "//third_party/androidx:androidx_test_runner_java",
     "//third_party/junit",
   ]

@@ -5,9 +5,10 @@
 #ifndef CHROME_UPDATER_MAC_PRIVILEGED_HELPER_SERVER_H_
 #define CHROME_UPDATER_MAC_PRIVILEGED_HELPER_SERVER_H_
 
-#include "base/mac/scoped_nsobject.h"
+#include "base/memory/ref_counted.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "chrome/updater/app/app.h"
 #include "chrome/updater/mac/privileged_helper/service.h"
@@ -20,14 +21,13 @@ class PrivilegedHelperServer : public App {
   void TaskStarted();
   void TaskCompleted();
 
- protected:
+ private:
   ~PrivilegedHelperServer() override;
 
- private:
   SEQUENCE_CHECKER(sequence_checker_);
 
   // Overrides for App.
-  void Initialize() override;
+  [[nodiscard]] int Initialize() override;
   void FirstTaskRun() override;
   void Uninitialize() override;
 
@@ -36,10 +36,12 @@ class PrivilegedHelperServer : public App {
   void AcknowledgeTaskCompletion();
   base::TimeDelta ServerKeepAlive();
 
-  scoped_refptr<base::SequencedTaskRunner> main_task_runner_;
-  scoped_refptr<PrivilegedHelperService> service_;
-  base::scoped_nsobject<NSXPCListener> service_listener_;
-  base::scoped_nsobject<PrivilegedHelperServiceXPCDelegate> service_delegate_;
+  scoped_refptr<base::SequencedTaskRunner> main_task_runner_ =
+      base::SequencedTaskRunner::GetCurrentDefault();
+  scoped_refptr<PrivilegedHelperService> service_ =
+      base::MakeRefCounted<PrivilegedHelperService>();
+  NSXPCListener* __strong service_listener_ = nullptr;
+  PrivilegedHelperServiceXPCDelegate* __strong service_delegate_ = nullptr;
   int tasks_running_ = 0;
 };
 

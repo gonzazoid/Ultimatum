@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/syslog_logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
 #include "chrome/browser/ash/policy/core/device_cloud_policy_manager_ash.h"
 #include "chrome/browser/ash/policy/uploading/status_uploader.h"
@@ -24,13 +24,12 @@ DeviceCommandFetchStatusJob::DeviceCommandFetchStatusJob() {}
 
 DeviceCommandFetchStatusJob::~DeviceCommandFetchStatusJob() {}
 
-enterprise_management::RemoteCommand_Type
-DeviceCommandFetchStatusJob::GetType() const {
+enterprise_management::RemoteCommand_Type DeviceCommandFetchStatusJob::GetType()
+    const {
   return enterprise_management::RemoteCommand_Type_DEVICE_FETCH_STATUS;
 }
 
-void DeviceCommandFetchStatusJob::RunImpl(CallbackWithResult succeeded_callback,
-                                          CallbackWithResult failed_callback) {
+void DeviceCommandFetchStatusJob::RunImpl(CallbackWithResult result_callback) {
   SYSLOG(INFO) << "Fetching device status";
   BrowserPolicyConnectorAsh* connector =
       g_browser_process->platform_part()->browser_policy_connector_ash();
@@ -44,14 +43,17 @@ void DeviceCommandFetchStatusJob::RunImpl(CallbackWithResult succeeded_callback,
   if (manager && manager->GetStatusUploader() &&
       manager->GetSystemLogUploader()) {
     manager->GetStatusUploader()->ScheduleNextStatusUploadImmediately();
-    manager->GetSystemLogUploader()->ScheduleNextSystemLogUploadImmediately();
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE, base::BindOnce(std::move(succeeded_callback), nullptr));
+    manager->GetSystemLogUploader()->ScheduleNextSystemLogUploadImmediately(
+        unique_id());
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(std::move(result_callback),
+                                  ResultType::kSuccess, std::nullopt));
     return;
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(failed_callback), nullptr));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(result_callback),
+                                ResultType::kFailure, std::nullopt));
 }
 
 }  // namespace policy

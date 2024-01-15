@@ -4,6 +4,8 @@
 
 #include "chrome/browser/safe_browsing/chrome_client_side_detection_host_delegate.h"
 
+#include <memory>
+
 #include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
@@ -39,16 +41,14 @@ class ChromeClientSideDetectionHostDelegateTest
     navigation_observer_manager_ =
         SafeBrowsingNavigationObserverManagerFactory::GetForBrowserContext(
             profile);
-    navigation_observer_ = new SafeBrowsingNavigationObserver(
+    navigation_observer_ = std::make_unique<SafeBrowsingNavigationObserver>(
         browser()->tab_strip_model()->GetWebContentsAt(0),
         HostContentSettingsMapFactory::GetForProfile(profile),
         navigation_observer_manager_);
-    scoped_feature_list_.InitAndEnableFeature(
-        kClientSideDetectionReferrerChain);
   }
 
   void TearDown() override {
-    delete navigation_observer_;
+    navigation_observer_.reset();
     BrowserWithTestWindowTest::TearDown();
   }
 
@@ -57,20 +57,20 @@ class ChromeClientSideDetectionHostDelegateTest
   }
 
  protected:
-  raw_ptr<SafeBrowsingNavigationObserverManager> navigation_observer_manager_;
-  raw_ptr<SafeBrowsingNavigationObserver> navigation_observer_;
-  base::test::ScopedFeatureList scoped_feature_list_;
+  raw_ptr<SafeBrowsingNavigationObserverManager, DanglingUntriaged>
+      navigation_observer_manager_;
+  std::unique_ptr<SafeBrowsingNavigationObserver> navigation_observer_;
 };
 
 TEST_F(ChromeClientSideDetectionHostDelegateTest, GetReferrerChain) {
   base::Time now = base::Time::Now();
-  base::Time one_hour_ago =
-      base::Time::FromDoubleT(now.ToDoubleT() - 60.0 * 60.0);
+  base::Time one_second_ago = base::Time::FromSecondsSinceUnixEpoch(
+      now.InSecondsFSinceUnixEpoch() - 1.0);
 
   std::unique_ptr<NavigationEvent> first_navigation =
       std::make_unique<NavigationEvent>();
   first_navigation->original_request_url = GURL("http://a.com/");
-  first_navigation->last_updated = one_hour_ago;
+  first_navigation->last_updated = one_second_ago;
   first_navigation->navigation_initiation =
       ReferrerChainEntry::BROWSER_INITIATED;
   navigation_event_list()->RecordNavigationEvent(std::move(first_navigation));
@@ -102,13 +102,13 @@ TEST_F(ChromeClientSideDetectionHostDelegateTest, GetReferrerChain) {
 
 TEST_F(ChromeClientSideDetectionHostDelegateTest, NoNavigationObserverManager) {
   base::Time now = base::Time::Now();
-  base::Time one_hour_ago =
-      base::Time::FromDoubleT(now.ToDoubleT() - 60.0 * 60.0);
+  base::Time one_second_ago = base::Time::FromSecondsSinceUnixEpoch(
+      now.InSecondsFSinceUnixEpoch() - 1.0);
 
   std::unique_ptr<NavigationEvent> first_navigation =
       std::make_unique<NavigationEvent>();
   first_navigation->original_request_url = GURL("http://a.com/");
-  first_navigation->last_updated = one_hour_ago;
+  first_navigation->last_updated = one_second_ago;
   first_navigation->navigation_initiation =
       ReferrerChainEntry::BROWSER_INITIATED;
   navigation_event_list()->RecordNavigationEvent(std::move(first_navigation));

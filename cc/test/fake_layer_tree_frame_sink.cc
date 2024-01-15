@@ -4,11 +4,11 @@
 
 #include "cc/test/fake_layer_tree_frame_sink.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "cc/tiles/image_decode_cache_utils.h"
 #include "cc/trees/layer_tree_frame_sink_client.h"
 #include "cc/trees/raster_context_provider_wrapper.h"
@@ -16,12 +16,13 @@
 #include "components/viz/common/frame_sinks/delay_based_time_source.h"
 #include "components/viz/common/resources/returned_resource.h"
 #include "components/viz/test/begin_frame_args_test.h"
+#include "gpu/ipc/client/client_shared_image_interface.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace cc {
 
 FakeLayerTreeFrameSink::Builder::Builder()
-    : compositor_context_provider_(viz::TestContextProvider::Create()),
+    : compositor_context_provider_(viz::TestContextProvider::CreateRaster()),
       worker_context_provider_(viz::TestContextProvider::CreateWorker()) {}
 
 FakeLayerTreeFrameSink::Builder::~Builder() = default;
@@ -36,7 +37,7 @@ FakeLayerTreeFrameSink::Builder::Build() {
 }
 
 FakeLayerTreeFrameSink::FakeLayerTreeFrameSink(
-    scoped_refptr<viz::ContextProvider> context_provider,
+    scoped_refptr<viz::RasterContextProvider> context_provider,
     scoped_refptr<viz::RasterContextProvider> worker_context_provider)
     : LayerTreeFrameSink(
           std::move(context_provider),
@@ -47,8 +48,9 @@ FakeLayerTreeFrameSink::FakeLayerTreeFrameSink(
                     ImageDecodeCacheUtils::GetWorkingSetBytesForImageDecode(
                         /*for_renderer=*/false))
               : nullptr,
-          base::ThreadTaskRunnerHandle::Get(),
-          nullptr) {
+          base::SingleThreadTaskRunner::GetCurrentDefault(),
+          nullptr,
+          /*shared_image_interface=*/nullptr) {
   gpu_memory_buffer_manager_ =
       context_provider_ ? &test_gpu_memory_buffer_manager_ : nullptr;
 }
@@ -60,7 +62,7 @@ bool FakeLayerTreeFrameSink::BindToClient(LayerTreeFrameSinkClient* client) {
     return false;
   begin_frame_source_ = std::make_unique<viz::BackToBackBeginFrameSource>(
       std::make_unique<viz::DelayBasedTimeSource>(
-          base::ThreadTaskRunnerHandle::Get().get()));
+          base::SingleThreadTaskRunner::GetCurrentDefault().get()));
   client_->SetBeginFrameSource(begin_frame_source_.get());
   return true;
 }
@@ -83,7 +85,7 @@ void FakeLayerTreeFrameSink::SubmitCompositorFrame(viz::CompositorFrame frame,
                                    last_sent_frame_->resource_list.begin(),
                                    last_sent_frame_->resource_list.end());
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeLayerTreeFrameSink::DidReceiveCompositorFrameAck,
                      weak_ptr_factory_.GetWeakPtr()));

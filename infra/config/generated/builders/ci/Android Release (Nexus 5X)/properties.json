@@ -1,6 +1,9 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/ci/Android Release (Nexus 5X)/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
@@ -18,7 +21,7 @@
               },
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "download_vr_test_apks",
+                  "download_xr_test_apks",
                   "mb"
                 ],
                 "build_config": "Release",
@@ -45,6 +48,10 @@
       ],
       "mirroring_builder_group_and_names": [
         {
+          "builder": "android-arm64-rel",
+          "group": "tryserver.chromium.android"
+        },
+        {
           "builder": "gpu-try-android-m-nexus-5x-64",
           "group": "tryserver.chromium.android"
         }
@@ -54,7 +61,8 @@
   "$build/reclient": {
     "instance": "rbe-chromium-trusted",
     "jobs": 250,
-    "metrics_project": "chromium-reclient-metrics"
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],
@@ -64,5 +72,8 @@
     ]
   },
   "builder_group": "chromium.gpu",
-  "recipe": "chromium"
+  "recipe": "chromium",
+  "sheriff_rotations": [
+    "chromium.gpu"
+  ]
 }

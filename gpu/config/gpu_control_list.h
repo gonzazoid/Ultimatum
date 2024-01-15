@@ -12,13 +12,13 @@
 #include <unordered_map>
 #include <vector>
 
-#include "base/memory/raw_ptr.h"
+#include "base/containers/span.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/values.h"
 #include "gpu/config/gpu_info.h"
 #include "gpu/gpu_export.h"
 
 namespace gpu {
-struct GpuControlListData;
 struct GPUInfo;
 
 class GPU_EXPORT GpuControlList {
@@ -32,6 +32,7 @@ class GPU_EXPORT GpuControlList {
     kOsChromeOS,
     kOsAndroid,
     kOsFuchsia,
+    kOsIOS,
     kOsAny
   };
 
@@ -153,7 +154,9 @@ class GPU_EXPORT GpuControlList {
 
   struct GPU_EXPORT MachineModelInfo {
     size_t machine_model_name_size;
-    const char* const* machine_model_names;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #global-scope
+    RAW_PTR_EXCLUSION const char* const* machine_model_names;
     Version machine_model_version;
 
     bool Contains(const GPUInfo& gpu_info) const;
@@ -196,16 +199,28 @@ class GPU_EXPORT GpuControlList {
     Version os_version;
     uint32_t vendor_id;
     size_t device_size;
-    const Device* devices;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #global-scope
+    RAW_PTR_EXCLUSION const Device* devices;
     MultiGpuCategory multi_gpu_category;
     MultiGpuStyle multi_gpu_style;
-    const DriverInfo* driver_info;
-    const GLStrings* gl_strings;
-    const MachineModelInfo* machine_model_info;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #global-scope
+    RAW_PTR_EXCLUSION const DriverInfo* driver_info;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #global-scope
+    RAW_PTR_EXCLUSION const GLStrings* gl_strings;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #global-scope
+    RAW_PTR_EXCLUSION const MachineModelInfo* machine_model_info;
     size_t intel_gpu_series_list_size;
-    const IntelGpuSeriesType* intel_gpu_series_list;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #global-scope
+    RAW_PTR_EXCLUSION const IntelGpuSeriesType* intel_gpu_series_list;
     Version intel_gpu_generation;
-    const More* more;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #global-scope
+    RAW_PTR_EXCLUSION const More* more;
 
     bool Contains(OsType os_type,
                   const std::string& os_version,
@@ -220,16 +235,26 @@ class GPU_EXPORT GpuControlList {
     uint32_t id;
     const char* description;
     size_t feature_size;
-    const int* features;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #reinterpret-cast-trivial-type, #global-scope
+    RAW_PTR_EXCLUSION const int* features;
     size_t disabled_extension_size;
-    const char* const* disabled_extensions;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #reinterpret-cast-trivial-type, #global-scope
+    RAW_PTR_EXCLUSION const char* const* disabled_extensions;
     size_t disabled_webgl_extension_size;
-    const char* const* disabled_webgl_extensions;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #reinterpret-cast-trivial-type, #global-scope
+    RAW_PTR_EXCLUSION const char* const* disabled_webgl_extensions;
     size_t cr_bug_size;
-    const uint32_t* cr_bugs;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #reinterpret-cast-trivial-type, #global-scope
+    RAW_PTR_EXCLUSION const uint32_t* cr_bugs;
     Conditions conditions;
     size_t exception_size;
-    const Conditions* exceptions;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #reinterpret-cast-trivial-type, #global-scope
+    RAW_PTR_EXCLUSION const Conditions* exceptions;
 
     bool Contains(OsType os_type,
                   const std::string& os_version,
@@ -249,7 +274,7 @@ class GPU_EXPORT GpuControlList {
         const std::string& control_list_logging_name) const;
   };
 
-  explicit GpuControlList(const GpuControlListData& data);
+  explicit GpuControlList(base::span<const GpuControlList::Entry> data);
   virtual ~GpuControlList();
 
   // Collects system information and combines them with gpu_info and control
@@ -323,33 +348,24 @@ class GPU_EXPORT GpuControlList {
   // Gets the current OS type.
   static OsType GetOsType();
 
-  size_t entry_count_;
-  raw_ptr<const Entry> entries_;
-  // This records all the entries that are appliable to the current user
+  // These always point to built-in arrays of constants, so raw_ptr doesn't
+  // add any protection but costs some overhead.
+  base::span<const Entry> entries_;
+
+  // This records all the entries that are applicable to the current user
   // machine.  It is updated everytime MakeDecision() is called and is used
   // later by GetDecisionEntries().
   std::vector<uint32_t> active_entries_;
 
-  uint32_t max_entry_id_;
+  uint32_t max_entry_id_ = 0;
 
-  bool needs_more_info_;
+  bool needs_more_info_ = false;
 
   // The features a GpuControlList recognizes and handles.
   FeatureMap feature_map_;
 
-  bool control_list_logging_enabled_;
+  bool control_list_logging_enabled_ = false;
   std::string control_list_logging_name_;
-};
-
-struct GPU_EXPORT GpuControlListData {
-  size_t entry_count;
-  raw_ptr<const GpuControlList::Entry> entries;
-
-  GpuControlListData() : entry_count(0u), entries(nullptr) {}
-
-  GpuControlListData(size_t a_entry_count,
-                     const GpuControlList::Entry* a_entries)
-      : entry_count(a_entry_count), entries(a_entries) {}
 };
 
 }  // namespace gpu

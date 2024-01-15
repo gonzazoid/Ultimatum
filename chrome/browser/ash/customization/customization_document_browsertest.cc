@@ -6,8 +6,8 @@
 
 #include <stddef.h>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/threading/thread_restrictions.h"
@@ -15,19 +15,19 @@
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/webui/ash/login/l10n_util.h"
 #include "chrome/test/base/in_process_browser_test.h"
-#include "chromeos/system/fake_statistics_provider.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
 
-using ash::locale_util::LanguageSwitchResult;
-using ash::locale_util::SwitchLanguageCallback;
-
 namespace ash {
 
 namespace {
+
+using locale_util::LanguageSwitchResult;
+using locale_util::SwitchLanguageCallback;
 
 class LanguageSwitchedWaiter {
  public:
@@ -209,10 +209,9 @@ class CustomizationVPDTest : public InProcessBrowserTest,
                              public testing::WithParamInterface<const char*> {
  public:
   CustomizationVPDTest()
-      : statistics_provider_(new chromeos::system::FakeStatisticsProvider()) {
+      : statistics_provider_(new system::FakeStatisticsProvider()) {
     // Set the instance returned by GetInstance() for testing.
-    chromeos::system::StatisticsProvider::SetTestProvider(
-        statistics_provider_.get());
+    system::StatisticsProvider::SetTestProvider(statistics_provider_.get());
     statistics_provider_->SetMachineStatistic("initial_locale", GetParam());
     statistics_provider_->SetMachineStatistic("keyboard_layout", "");
     statistics_provider_->SetVpdStatus(
@@ -220,8 +219,7 @@ class CustomizationVPDTest : public InProcessBrowserTest,
   }
 
  private:
-  std::unique_ptr<chromeos::system::FakeStatisticsProvider>
-      statistics_provider_;
+  std::unique_ptr<system::FakeStatisticsProvider> statistics_provider_;
 };
 
 IN_PROC_BROWSER_TEST_P(CustomizationVPDTest, GetUILanguageList) {

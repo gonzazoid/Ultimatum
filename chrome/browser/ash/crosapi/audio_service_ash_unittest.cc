@@ -4,9 +4,9 @@
 
 #include "chrome/browser/ash/crosapi/audio_service_ash.h"
 
+#include "base/test/test_future.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/audio/cras_audio_handler.h"
-#include "chromeos/ash/components/dbus/audio/fake_cras_audio_client.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -21,7 +21,7 @@ class MockCallbacks {
  public:
   MOCK_METHOD2(GetMuteResponse, void(bool, bool));
   MOCK_METHOD1(GetDevicesResponse,
-               void(absl::optional<std::vector<mojom::AudioDeviceInfoPtr>>));
+               void(std::optional<std::vector<mojom::AudioDeviceInfoPtr>>));
   MOCK_METHOD1(SetMuteResponse, void(bool));
   MOCK_METHOD1(SetActiveDeviceListsResponse, void(bool));
   MOCK_METHOD1(SetPropertiesResponse, void(bool));
@@ -33,17 +33,14 @@ class MockAudioChangeObserver : public mojom::AudioChangeObserver {
   void OnDeviceListChanged(
       std::vector<mojom::AudioDeviceInfoPtr> devices) override {
     OnDeviceListChangedMock(devices);
-    run_loop_.Quit();
   }
 
   void OnLevelChanged(const std::string& id, int32_t level) override {
     OnLevelChangedMock(id, level);
-    run_loop_.Quit();
   }
 
   void OnMuteChanged(bool is_input, bool is_muted) override {
     OnMuteChangedMock(is_input, is_muted);
-    run_loop_.Quit();
   }
 
   // mock methods to check a correct call
@@ -53,13 +50,15 @@ class MockAudioChangeObserver : public mojom::AudioChangeObserver {
   MOCK_METHOD(void, OnLevelChangedMock, (const std::string& id, int32_t level));
   MOCK_METHOD(void, OnMuteChangedMock, (bool is_input, bool is_muted));
 
-  void Wait() { run_loop_.Run(); }
+  void Wait() { EXPECT_TRUE(waiter.Wait()); }
 
   auto GetRemote() { return receiver_.BindNewPipeAndPassRemote(); }
 
+  void Quit() { waiter.SetValue(); }
+
  private:
   mojo::Receiver<crosapi::mojom::AudioChangeObserver> receiver_{this};
-  base::RunLoop run_loop_;
+  base::test::TestFuture<void> waiter;
 };
 
 class AudioServiceAshTest : public ::testing::Test {
@@ -134,7 +133,9 @@ TEST_F(AudioServiceAshTest, SetActiveDeviceListsSpeaker) {
                      base::Unretained(&mock_callbacks_));
 
   EXPECT_CALL(mock_callbacks_, SetActiveDeviceListsResponse(true));
-  EXPECT_CALL(mock_observer_, OnLevelChangedMock(kSpeakerId, _));
+  EXPECT_CALL(mock_observer_, OnLevelChangedMock(kSpeakerId, _)).WillOnce([&] {
+    mock_observer_.Quit();
+  });
 
   audio_service_ash_.SetActiveDeviceLists(std::move(dev_lists), std::move(cb));
   mock_observer_.Wait();
@@ -173,7 +174,8 @@ TEST_F(AudioServiceAshTest, SetPropertiesHeadphone) {
                      base::Unretained(&mock_callbacks_));
 
   EXPECT_CALL(mock_callbacks_, SetPropertiesResponse(true));
-  EXPECT_CALL(mock_observer_, OnLevelChangedMock(kId, kNewVolume));
+  EXPECT_CALL(mock_observer_, OnLevelChangedMock(kId, kNewVolume))
+      .WillOnce([&] { mock_observer_.Quit(); });
 
   audio_service_ash_.SetProperties(kId, std::move(props), std::move(cb));
   mock_observer_.Wait();
@@ -185,7 +187,8 @@ TEST_F(AudioServiceAshTest, SetMuteOut) {
       &MockCallbacks::SetMuteResponse, base::Unretained(&mock_callbacks_));
 
   EXPECT_CALL(mock_callbacks_, SetMuteResponse(true));
-  EXPECT_CALL(mock_observer_, OnMuteChangedMock(false, kNewMuteValue));
+  EXPECT_CALL(mock_observer_, OnMuteChangedMock(false, kNewMuteValue))
+      .WillOnce([&] { mock_observer_.Quit(); });
 
   audio_service_ash_.SetMute(crosapi::mojom::StreamType::kOutput, kNewMuteValue,
                              std::move(cb));
@@ -198,7 +201,8 @@ TEST_F(AudioServiceAshTest, SetMuteIn) {
       &MockCallbacks::SetMuteResponse, base::Unretained(&mock_callbacks_));
 
   EXPECT_CALL(mock_callbacks_, SetMuteResponse(true));
-  EXPECT_CALL(mock_observer_, OnMuteChangedMock(true, kNewMuteValue));
+  EXPECT_CALL(mock_observer_, OnMuteChangedMock(true, kNewMuteValue))
+      .WillOnce([&] { mock_observer_.Quit(); });
 
   audio_service_ash_.SetMute(crosapi::mojom::StreamType::kInput, kNewMuteValue,
                              std::move(cb));
@@ -208,7 +212,8 @@ TEST_F(AudioServiceAshTest, SetMuteIn) {
 TEST_F(AudioServiceAshTest, OnMuteChangedOut) {
   const bool kNewMuteValue = true;
 
-  EXPECT_CALL(mock_observer_, OnMuteChangedMock(false, kNewMuteValue));
+  EXPECT_CALL(mock_observer_, OnMuteChangedMock(false, kNewMuteValue))
+      .WillOnce([&] { mock_observer_.Quit(); });
 
   cras_audio_handler_.Get().SetOutputMute(kNewMuteValue);
   mock_observer_.Wait();
@@ -217,22 +222,37 @@ TEST_F(AudioServiceAshTest, OnMuteChangedOut) {
 TEST_F(AudioServiceAshTest, OnMuteChangedIn) {
   const bool kNewMuteValue = true;
 
-  EXPECT_CALL(mock_observer_, OnMuteChangedMock(true, kNewMuteValue));
+  EXPECT_CALL(mock_observer_, OnMuteChangedMock(true, kNewMuteValue))
+      .WillOnce([&] { mock_observer_.Quit(); });
 
   cras_audio_handler_.Get().SetInputMute(
       kNewMuteValue, ash::CrasAudioHandler::InputMuteChangeMethod::kOther);
   mock_observer_.Wait();
 }
 
-TEST_F(AudioServiceAshTest, OnLevelChanged) {
+TEST_F(AudioServiceAshTest, OnLevelChangedOut) {
   const uint64_t kId = 0x200000001;  // taken from FakeCrasAudioClient
   const int kNewVolume = 36;
 
   EXPECT_CALL(mock_observer_,
-              OnLevelChangedMock(base::NumberToString(kId), kNewVolume));
+              OnLevelChangedMock(base::NumberToString(kId), kNewVolume))
+      .WillOnce([&] { mock_observer_.Quit(); });
 
   ash::FakeCrasAudioClient::Get()->NotifyOutputNodeVolumeChangedForTesting(
       kId, kNewVolume);
+  mock_observer_.Wait();
+}
+
+TEST_F(AudioServiceAshTest, OnLevelChangedIn) {
+  const uint64_t kId = 0x200000002;  // taken from FakeCrasAudioClient
+  const int kNewGain = 36;
+
+  EXPECT_CALL(mock_observer_,
+              OnLevelChangedMock(base::NumberToString(kId), kNewGain))
+      .WillOnce([&] { mock_observer_.Quit(); });
+
+  ash::FakeCrasAudioClient::Get()->NotifyInputNodeGainChangedForTesting(
+      kId, kNewGain);
   mock_observer_.Wait();
 }
 
@@ -240,18 +260,31 @@ TEST_F(AudioServiceAshTest, OnDeviceListChangedAdd) {
   ash::AudioNode new_device;
   new_device.id = 5;
 
-  EXPECT_CALL(mock_observer_, OnDeviceListChangedMock(_));
+  EXPECT_CALL(mock_observer_, OnDeviceListChangedMock(_)).WillOnce([&] {
+    mock_observer_.Quit();
+  });
 
   ash::FakeCrasAudioClient::Get()->InsertAudioNodeToList(new_device);
   mock_observer_.Wait();
 }
 
 TEST_F(AudioServiceAshTest, OnDeviceListChangedRemove) {
-  const uint64_t kId = 0x200000002;  // taken from FakeCrasAudioClient
+  const uint64_t id = cras_audio_handler_.Get().GetPrimaryActiveInputNode();
+  ash::FakeCrasAudioClient::Get()->RemoveAudioNodeFromList(id);
 
-  EXPECT_CALL(mock_observer_, OnDeviceListChangedMock(_));
+  // Active input device changes and level is set to preference when devices are
+  // changed.
+  const int kPreferredGain = 50;
+  uint64_t input_id = cras_audio_handler_.Get().GetPrimaryActiveInputNode();
+  EXPECT_EQ(kPreferredGain, cras_audio_handler_.Get().GetInputGainPercent());
+  EXPECT_CALL(mock_observer_, OnLevelChangedMock(base::NumberToString(input_id),
+                                                 kPreferredGain));
 
-  ash::FakeCrasAudioClient::Get()->RemoveAudioNodeFromList(kId);
+  // Device list change happens after input level change.
+  EXPECT_CALL(mock_observer_, OnDeviceListChangedMock(_)).WillOnce([&] {
+    mock_observer_.Quit();
+  });
+
   mock_observer_.Wait();
 }
 

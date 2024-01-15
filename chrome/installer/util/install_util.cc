@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <string_view>
 
 #include "base/check.h"
 #include "base/check_op.h"
@@ -242,10 +243,10 @@ base::Version InstallUtil::GetCriticalUpdateVersion() {
 }
 
 bool InstallUtil::IsOSSupported() {
-  // We do not support anything prior to Windows 7.
+  // We do not support anything prior to Windows 10.
   VLOG(1) << base::SysInfo::OperatingSystemName() << ' '
           << base::SysInfo::OperatingSystemVersion();
-  return base::win::GetVersion() >= base::win::Version::WIN7;
+  return base::win::GetVersion() >= base::win::Version::WIN10;
 }
 
 void InstallUtil::AddInstallerResultItems(bool system_install,
@@ -460,8 +461,8 @@ InstallUtil::GetCloudManagementDmTokenLocation(
 
   base::win::RegKey key;
   if (read_only) {
-    key.Open(HKEY_LOCAL_MACHINE, key_path.c_str(),
-             KEY_QUERY_VALUE | wow_access);
+    (void)key.Open(HKEY_LOCAL_MACHINE, key_path.c_str(),
+                   KEY_QUERY_VALUE | wow_access);
   } else {
     auto result = key.Create(HKEY_LOCAL_MACHINE, key_path.c_str(),
                              KEY_SET_VALUE | wow_access);
@@ -486,8 +487,8 @@ InstallUtil::GetDeviceTrustSigningKeyLocation(ReadOnly read_only) {
       .append(L"\\DeviceTrust");
   base::win::RegKey key;
   if (read_only) {
-    key.Open(HKEY_LOCAL_MACHINE, key_path.c_str(),
-             KEY_QUERY_VALUE | KEY_WOW64_64KEY);
+    (void)key.Open(HKEY_LOCAL_MACHINE, key_path.c_str(),
+                   KEY_QUERY_VALUE | KEY_WOW64_64KEY);
   } else {
     auto result = key.Create(HKEY_LOCAL_MACHINE, key_path.c_str(),
                              KEY_SET_VALUE | KEY_WOW64_64KEY);
@@ -579,7 +580,7 @@ std::wstring InstallUtil::GetLongAppDescription() {
 }
 
 // static
-std::wstring InstallUtil::GuidToSquid(base::WStringPiece guid) {
+std::wstring InstallUtil::GuidToSquid(std::wstring_view guid) {
   std::wstring squid;
   squid.reserve(32);
   auto* input = guid.begin();

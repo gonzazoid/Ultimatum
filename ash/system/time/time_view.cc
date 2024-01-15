@@ -17,6 +17,7 @@
 #include "ash/system/model/clock_model.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/time/calendar_utils.h"
+#include "ash/system/time/time_view_utils.h"
 #include "ash/system/tray/tray_constants.h"
 #include "ash/system/tray/tray_popup_utils.h"
 #include "ash/system/tray/tray_utils.h"
@@ -26,6 +27,7 @@
 #include "base/i18n/time_formatting.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "third_party/icu/source/i18n/unicode/datefmt.h"
 #include "third_party/icu/source/i18n/unicode/dtptngen.h"
 #include "third_party/icu/source/i18n/unicode/smpdtfmt.h"
@@ -33,6 +35,8 @@
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
+#include "ui/color/color_id.h"
 #include "ui/events/event.h"
 #include "ui/events/types/event_type.h"
 #include "ui/gfx/geometry/insets.h"
@@ -49,10 +53,6 @@
 
 namespace ash {
 namespace {
-
-// Amount of slop to add into the timer to make sure we're into the next minute
-// when the timer goes off.
-const int kTimerSlopSeconds = 1;
 
 // Padding between the left edge of the shelf and the left edge of the vertical
 // clock.
@@ -76,7 +76,7 @@ const int kVerticalClockMinutesTopOffset = -2;
 std::u16string FormatDate(const base::Time& time) {
   // Use 'short' month format (e.g., "Oct") followed by non-padded day of
   // month (e.g., "2", "10").
-  return base::TimeFormatWithPattern(time, "LLLd");
+  return base::LocalizedTimeFormatWithPattern(time, "LLLd");
 }
 
 // Returns the time to show by the time view.
@@ -107,12 +107,20 @@ VerticalDateView::VerticalDateView()
   UpdateText();
   text_label_->SetBorder(views::CreateEmptyBorder(
       gfx::Insets::TLBR(kVerticalDateVerticalPadding, 0, 0, 0)));
+  UpdateIconAndLabelColorId(cros_tokens::kCrosSysOnSurface);
 }
 
 VerticalDateView::~VerticalDateView() = default;
 
 void VerticalDateView::OnThemeChanged() {
   views::View::OnThemeChanged();
+
+  // For Jelly: color ids are already set and theme change will be handled
+  // automatically.
+  if (chromeos::features::IsJellyEnabled()) {
+    return;
+  }
+
   text_label_->SetEnabledColor(AshColorProvider::Get()->GetContentLayerColor(
       AshColorProvider::ContentLayerType::kTextColorPrimary));
   icon_->SetImage(gfx::CreateVectorIcon(
@@ -129,16 +137,28 @@ void VerticalDateView::UpdateText() {
     return;
   text_label_->SetText(new_text);
   text_label_->SetTooltipText(base::TimeFormatFriendlyDate(time_to_show));
-  text_label_->NotifyAccessibilityEvent(ax::mojom::Event::kTextChanged, true);
 }
 
+void VerticalDateView::UpdateIconAndLabelColorId(ui::ColorId color_id) {
+  if (!chromeos::features::IsJellyEnabled()) {
+    return;
+  }
+
+  text_label_->SetEnabledColorId(color_id);
+  icon_->SetImage(
+      ui::ImageModel::FromVectorIcon(kCalendarBackgroundIcon, color_id));
+}
+
+BEGIN_METADATA(VerticalDateView)
+END_METADATA
+
 TimeView::TimeView(ClockLayout clock_layout, ClockModel* model, Type type)
-    : ActionableView(TrayPopupInkDropStyle::INSET_BOUNDS),
-      model_(model),
-      type_(type) {
+    : model_(model), type_(type) {
   SetTimer(GetTimeToShow());
   SetFocusBehavior(FocusBehavior::NEVER);
   model_->AddObserver(this);
+
+  SetLayoutManager(std::make_unique<views::FillLayout>());
   switch (type_) {
     case kTime:
       SetupSubviews(clock_layout);
@@ -156,42 +176,56 @@ TimeView::~TimeView() {
 }
 
 void TimeView::UpdateClockLayout(ClockLayout clock_layout) {
+  const bool horizontal_views_visible =
+      clock_layout == ClockLayout::HORIZONTAL_CLOCK;
   switch (type_) {
     case kDate: {
       // Do nothing if the layout hasn't changed.
       if (clock_layout == ClockLayout::HORIZONTAL_CLOCK
-              ? vertical_date_view_
-              : horizontal_date_view_) {
+              ? horizontal_date_label_container_->GetVisible()
+              : vertical_date_view_container_->GetVisible()) {
         return;
       }
-
-      if (clock_layout == ClockLayout::HORIZONTAL_CLOCK) {
-        vertical_date_view_ = RemoveChildViewT(children()[0]);
-        AddChildView(std::move(horizontal_date_view_));
-      } else {
-        horizontal_date_view_ = RemoveChildViewT(children()[0]);
-        AddChildView(std::move(vertical_date_view_));
-      }
+      vertical_date_view_container_->SetVisible(!horizontal_views_visible);
+      vertical_date_view_->SetVisible(!horizontal_views_visible);
+      horizontal_date_label_container_->SetVisible(horizontal_views_visible);
+      horizontal_date_label_->SetVisible(horizontal_views_visible);
       break;
     }
     case kTime: {
       // Do nothing if the layout hasn't changed.
-      if (clock_layout == ClockLayout::HORIZONTAL_CLOCK ? vertical_view_
-                                                        : horizontal_view_) {
+      if (clock_layout == ClockLayout::HORIZONTAL_CLOCK
+              ? horizontal_time_label_container_->GetVisible()
+              : vertical_time_label_container_->GetVisible()) {
         return;
       }
-
-      if (clock_layout == ClockLayout::HORIZONTAL_CLOCK) {
-        vertical_view_ = RemoveChildViewT(children()[0]);
-        AddChildView(std::move(horizontal_view_));
-      } else {
-        horizontal_view_ = RemoveChildViewT(children()[0]);
-        AddChildView(std::move(vertical_view_));
-      }
+      vertical_time_label_container_->SetVisible(!horizontal_views_visible);
+      vertical_label_hours_->SetVisible(!horizontal_views_visible);
+      vertical_label_minutes_->SetVisible(!horizontal_views_visible);
+      horizontal_time_label_container_->SetVisible(horizontal_views_visible);
+      horizontal_time_label_->SetVisible(horizontal_views_visible);
       break;
     }
   }
   Layout();
+}
+
+void TimeView::SetTextColorId(ui::ColorId color_id,
+                              bool auto_color_readability_enabled) {
+  auto set_color_id = [&](views::Label* label) {
+    label->SetEnabledColorId(color_id);
+    label->SetAutoColorReadabilityEnabled(auto_color_readability_enabled);
+  };
+
+  switch (type_) {
+    case kTime:
+      set_color_id(horizontal_time_label_);
+      set_color_id(vertical_label_hours_);
+      set_color_id(vertical_label_minutes_);
+      return;
+    case kDate:
+      set_color_id(horizontal_date_label_);
+  }
 }
 
 void TimeView::SetTextColor(SkColor color,
@@ -203,36 +237,42 @@ void TimeView::SetTextColor(SkColor color,
 
   switch (type_) {
     case kTime:
-      set_color(horizontal_label_);
+      set_color(horizontal_time_label_);
       set_color(vertical_label_hours_);
       set_color(vertical_label_minutes_);
       return;
     case kDate:
-      set_color(horizontal_label_date_);
+      set_color(horizontal_date_label_);
   }
 }
 
 void TimeView::SetTextFont(const gfx::FontList& font_list) {
   switch (type_) {
     case kTime:
-      horizontal_label_->SetFontList(font_list);
+      horizontal_time_label_->SetFontList(font_list);
       vertical_label_hours_->SetFontList(font_list);
       vertical_label_minutes_->SetFontList(font_list);
       return;
     case kDate:
-      horizontal_label_date_->SetFontList(font_list);
+      horizontal_date_label_->SetFontList(font_list);
   }
 }
 
 void TimeView::SetTextShadowValues(const gfx::ShadowValues& shadows) {
   switch (type_) {
     case kTime:
-      horizontal_label_->SetShadows(shadows);
+      horizontal_time_label_->SetShadows(shadows);
       vertical_label_hours_->SetShadows(shadows);
       vertical_label_minutes_->SetShadows(shadows);
       return;
     case kDate:
-      horizontal_label_date_->SetShadows(shadows);
+      horizontal_date_label_->SetShadows(shadows);
+  }
+}
+
+void TimeView::SetDateViewColorId(ui::ColorId color_id) {
+  if (chromeos::features::IsJellyEnabled() && vertical_date_view_) {
+    vertical_date_view_->UpdateIconAndLabelColorId(color_id);
   }
 }
 
@@ -254,12 +294,8 @@ base::HourClockType TimeView::GetHourTypeForTesting() const {
   return model_->hour_clock_type();
 }
 
-bool TimeView::PerformAction(const ui::Event& event) {
-  return false;
-}
-
 void TimeView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  ActionableView::GetAccessibleNodeData(node_data);
+  views::View::GetAccessibleNodeData(node_data);
   node_data->role = ax::mojom::Role::kTime;
 }
 
@@ -301,8 +337,6 @@ void TimeView::UpdateTextInternal(const base::Time& now) {
                         now, model_->hour_clock_type(), base::kKeepAmPm) +
                     u", " + friendly_format_date);
 
-  NotifyAccessibilityEvent(ax::mojom::Event::kTextChanged, true);
-
   switch (type_) {
     case kTime: {
       // Calculate horizontal clock layout label.
@@ -311,11 +345,9 @@ void TimeView::UpdateTextInternal(const base::Time& now) {
               now, model_->hour_clock_type(), base::kDropAmPm);
 
       const bool label_length_changed =
-          horizontal_label_->GetText().length() != current_time.length();
-      horizontal_label_->SetText(current_time);
-      horizontal_label_->SetTooltipText(friendly_format_date);
-      horizontal_label_->NotifyAccessibilityEvent(
-          ax::mojom::Event::kTextChanged, true);
+          horizontal_time_label_->GetText().length() != current_time.length();
+      horizontal_time_label_->SetText(current_time);
+      horizontal_time_label_->SetTooltipText(friendly_format_date);
 
       // Calculate vertical clock layout labels.
       std::u16string current_hours =
@@ -326,10 +358,6 @@ void TimeView::UpdateTextInternal(const base::Time& now) {
 
       vertical_label_hours_->SetText(current_hours);
       vertical_label_minutes_->SetText(current_minutes);
-      vertical_label_hours_->NotifyAccessibilityEvent(
-          ax::mojom::Event::kTextChanged, true);
-      vertical_label_minutes_->NotifyAccessibilityEvent(
-          ax::mojom::Event::kTextChanged, true);
 
       Layout();
 
@@ -342,74 +370,93 @@ void TimeView::UpdateTextInternal(const base::Time& now) {
     }
     case kDate: {
       const std::u16string current_date = FormatDate(now);
-      horizontal_label_date_->SetText(current_date);
-      horizontal_label_date_->SetTooltipText(friendly_format_date);
-      horizontal_label_date_->NotifyAccessibilityEvent(
-          ax::mojom::Event::kTextChanged, true);
-      date_view_->UpdateText();
+      horizontal_date_label_->SetText(current_date);
+      horizontal_date_label_->SetTooltipText(friendly_format_date);
+      vertical_date_view_->UpdateText();
     }
   }
 }
 
 void TimeView::SetupDateviews(ClockLayout clock_layout) {
   DCHECK_EQ(type_, kDate);
-  SetLayoutManager(std::make_unique<views::FillLayout>());
-  horizontal_date_view_ = std::make_unique<View>();
-  horizontal_date_view_->SetLayoutManager(
-      std::make_unique<views::FillLayout>());
-  horizontal_date_view_->SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(
-      kUnifiedTrayTextTopPadding, kUnifiedTrayTimeLeftPadding, 0, 0)));
-  horizontal_label_date_ =
-      horizontal_date_view_->AddChildView(std::make_unique<views::Label>());
-  SetupLabel(horizontal_label_date_);
 
-  vertical_date_view_ = std::make_unique<View>();
-  vertical_date_view_->SetLayoutManager(std::make_unique<views::FillLayout>());
-  date_view_ =
-      vertical_date_view_->AddChildView(std::make_unique<VerticalDateView>());
-  date_view_->SetBorder(
+  auto horizontal_date_label_container = std::make_unique<View>();
+  horizontal_date_label_container->SetLayoutManager(
+      std::make_unique<views::FillLayout>());
+  horizontal_date_label_container->SetBorder(
+      views::CreateEmptyBorder(gfx::Insets::TLBR(
+          kUnifiedTrayTextTopPadding, kUnifiedTrayTimeLeftPadding, 0, 0)));
+
+  horizontal_date_label_ = horizontal_date_label_container->AddChildView(
+      std::make_unique<views::Label>());
+  SetupLabel(horizontal_date_label_);
+
+  const bool horizontal_visible = clock_layout == ClockLayout::HORIZONTAL_CLOCK;
+  horizontal_date_label_container->SetVisible(horizontal_visible);
+  horizontal_date_label_->SetVisible(horizontal_visible);
+  horizontal_date_label_container_ =
+      AddChildView(std::move(horizontal_date_label_container));
+
+  auto vertical_date_view_container = std::make_unique<View>();
+  vertical_date_view_container->SetLayoutManager(
+      std::make_unique<views::FillLayout>());
+  vertical_date_view_ = vertical_date_view_container->AddChildView(
+      std::make_unique<VerticalDateView>());
+  vertical_date_view_->SetBorder(
       views::CreateEmptyBorder(gfx::Insets::TLBR(0, 0, 0, 0)));
-  AddChildView(clock_layout == ClockLayout::HORIZONTAL_CLOCK
-                   ? std::move(horizontal_date_view_)
-                   : std::move(vertical_date_view_));
+
+  vertical_date_view_container->SetVisible(!horizontal_visible);
+  vertical_date_view_->SetVisible(!horizontal_visible);
+  vertical_date_view_container_ =
+      AddChildView(std::move(vertical_date_view_container));
 }
 
 void TimeView::SetupSubviews(ClockLayout clock_layout) {
   DCHECK_EQ(type_, kTime);
-  horizontal_view_ = std::make_unique<View>();
-  horizontal_view_->SetLayoutManager(std::make_unique<views::FillLayout>());
-  horizontal_view_->SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(
-      kUnifiedTrayTextTopPadding, kUnifiedTrayTimeLeftPadding, 0, 0)));
-  horizontal_label_ =
-      horizontal_view_->AddChildView(std::make_unique<views::Label>());
-  SetupLabel(horizontal_label_);
 
-  vertical_view_ = std::make_unique<View>();
-  vertical_view_->SetLayoutManager(std::make_unique<views::FlexLayout>())
+  auto horizontal_time_label_container = std::make_unique<View>();
+  horizontal_time_label_container->SetLayoutManager(
+      std::make_unique<views::FillLayout>());
+  horizontal_time_label_container->SetBorder(
+      views::CreateEmptyBorder(gfx::Insets::TLBR(
+          kUnifiedTrayTextTopPadding, kUnifiedTrayTimeLeftPadding, 0, 0)));
+  horizontal_time_label_ = horizontal_time_label_container->AddChildView(
+      std::make_unique<views::Label>());
+  SetupLabel(horizontal_time_label_);
+
+  const bool horizontal_visible = clock_layout == ClockLayout::HORIZONTAL_CLOCK;
+  horizontal_time_label_container->SetVisible(horizontal_visible);
+  horizontal_time_label_->SetVisible(horizontal_visible);
+  horizontal_time_label_container_ =
+      AddChildView(std::move(horizontal_time_label_container));
+
+  auto vertical_time_label_container = std::make_unique<View>();
+  vertical_time_label_container
+      ->SetLayoutManager(std::make_unique<views::FlexLayout>())
       ->SetOrientation(views::LayoutOrientation::kVertical)
       .SetMainAxisAlignment(views::LayoutAlignment::kCenter)
       .SetCrossAxisAlignment(views::LayoutAlignment::kEnd)
       .SetInteriorMargin(gfx::Insets::TLBR(0, kVerticalClockLeftPadding,
                                            kVerticalClockMinutesTopOffset, 0));
 
-  vertical_label_hours_ =
-      vertical_view_->AddChildView(std::make_unique<views::Label>());
+  vertical_label_hours_ = vertical_time_label_container->AddChildView(
+      std::make_unique<views::Label>());
   SetupLabel(vertical_label_hours_);
   vertical_label_hours_->SetBorder(views::CreateEmptyBorder(
       gfx::Insets::VH(0, kVerticalDateClockHorizontalPadding)));
 
-  vertical_label_minutes_ =
-      vertical_view_->AddChildView(std::make_unique<views::Label>());
+  vertical_label_minutes_ = vertical_time_label_container->AddChildView(
+      std::make_unique<views::Label>());
   SetupLabel(vertical_label_minutes_);
   // Pull the minutes up closer to the hours by using a negative top border.
   vertical_label_minutes_->SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(
       kVerticalClockMinutesTopOffset, kVerticalDateClockHorizontalPadding, 0,
       kVerticalDateClockHorizontalPadding)));
-
-  SetLayoutManager(std::make_unique<views::FillLayout>());
-  AddChildView(clock_layout == ClockLayout::HORIZONTAL_CLOCK
-                   ? std::move(horizontal_view_)
-                   : std::move(vertical_view_));
+  vertical_time_label_container->SetVisible(!horizontal_visible);
+  vertical_label_hours_->SetVisible(!horizontal_visible);
+  vertical_label_minutes_->SetVisible(!horizontal_visible);
+  vertical_time_label_container_ =
+      AddChildView(std::move(vertical_time_label_container));
 }
 
 void TimeView::SetupLabel(views::Label* label) {
@@ -418,28 +465,12 @@ void TimeView::SetupLabel(views::Label* label) {
 }
 
 void TimeView::SetTimer(const base::Time& now) {
-  // Try to set the timer to go off at the next change of the minute. We don't
-  // want to have the timer go off more than necessary since that will cause
-  // the CPU to wake up and consume power.
-  base::Time::Exploded exploded;
-  now.LocalExplode(&exploded);
-
-  // Often this will be called at minute boundaries, and we'll actually want
-  // 60 seconds from now.
-  int seconds_left = 60 - exploded.second;
-  if (seconds_left == 0)
-    seconds_left = 60;
-
-  // Make sure that the timer fires on the next minute. Without this, if it is
-  // called just a teeny bit early, then it will skip the next minute.
-  seconds_left += kTimerSlopSeconds;
-
   timer_.Stop();
-  timer_.Start(FROM_HERE, base::Seconds(seconds_left), this,
-               &TimeView::UpdateText);
+  timer_.Start(FROM_HERE, time_view_utils::GetTimeRemainingToNextMinute(now),
+               this, &TimeView::UpdateText);
 }
 
-BEGIN_METADATA(TimeView, ActionableView)
+BEGIN_METADATA(TimeView, views::View)
 END_METADATA
 
 }  // namespace ash

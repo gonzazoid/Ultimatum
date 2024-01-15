@@ -8,15 +8,15 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -215,8 +215,8 @@ class StaleHostResolverTest : public testing::Test {
   void DestroyResolver() {
     DCHECK(stale_resolver_);
 
-    stale_resolver_ = nullptr;
     resolver_ = nullptr;
+    stale_resolver_.reset();
   }
 
   void SetResolver(StaleHostResolver* stale_resolver,
@@ -226,6 +226,8 @@ class StaleHostResolverTest : public testing::Test {
         CreateMockInnerResolverWithDnsClient(nullptr /* dns_client */, context);
     resolver_ = stale_resolver;
   }
+
+  void DropResolver() { resolver_ = nullptr; }
 
   // Creates a cache entry for |kHostname| that is |age_sec| seconds old.
   void CreateCacheEntry(int age_sec, int error) {
@@ -295,7 +297,7 @@ class StaleHostResolverTest : public testing::Test {
 
     // Run until resolve completes or timeout.
     resolve_closure_ = run_loop.QuitWhenIdleClosure();
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, resolve_closure_, base::Seconds(kWaitTimeoutSec));
     run_loop.Run();
   }
@@ -303,7 +305,7 @@ class StaleHostResolverTest : public testing::Test {
   void WaitForIdle() {
     base::RunLoop run_loop;
 
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, run_loop.QuitWhenIdleClosure());
     run_loop.Run();
   }
@@ -359,9 +361,12 @@ class StaleHostResolverTest : public testing::Test {
 
   scoped_refptr<MockHostResolverProc> mock_proc_;
 
-  raw_ptr<net::HostResolver> resolver_;
   StaleHostResolver::StaleOptions options_;
+
+  // Must outlive `resolver_`.
   std::unique_ptr<StaleHostResolver> stale_resolver_;
+
+  raw_ptr<net::HostResolver> resolver_;
 
   base::TimeTicks now_;
   std::unique_ptr<net::HostResolver::ResolveHostRequest> request_;
@@ -668,8 +673,6 @@ TEST_F(StaleHostResolverTest, CreatedByContext) {
       URLRequestContextConfig::CreateURLRequestContextConfig(
           // Enable QUIC.
           true,
-          // QUIC User Agent ID.
-          "Default QUIC User Agent ID",
           // Enable SPDY.
           true,
           // Enable Brotli.
@@ -725,6 +728,10 @@ TEST_F(StaleHostResolverTest, CreatedByContext) {
   EXPECT_EQ(1u, resolve_addresses().size());
   EXPECT_EQ(kCacheAddress, resolve_addresses()[0].ToStringWithoutPort());
   WaitForNetworkResolveComplete();
+
+  // Drop reference to resolver owned by local `context` above before
+  // it goes out-of-scope.
+  DropResolver();
 }
 
 }  // namespace

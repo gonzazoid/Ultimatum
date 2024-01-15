@@ -12,7 +12,6 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/language/url_language_histogram_factory.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/language/content/browser/geo_language_model.h"
 #include "components/language/content/browser/geo_language_provider.h"
@@ -22,7 +21,7 @@
 #include "components/language/core/browser/pref_names.h"
 #include "components/language/core/browser/ulp_metrics_logger.h"
 #include "components/language/core/browser/url_language_histogram.h"
-#include "components/language/core/common/language_experiments.h"
+#include "components/language/core/common/language_util.h"
 #include "components/language/core/language_model/fluent_language_model.h"
 #include "components/language/core/language_model/ulp_language_model.h"
 #include "components/pref_registry/pref_registry_syncable.h"
@@ -140,8 +139,8 @@ void PrepareLanguageModels(Profile* const profile,
     manager->SetPrimaryModel(language::LanguageModelManager::ModelType::FLUENT);
   }
 
-    // On Android, additionally create a ULPLanguageModel and populate it with
-    // ULP data.
+  // On Android, additionally create a ULPLanguageModel and populate it with
+  // ULP data.
 #if BUILDFLAG(IS_ANDROID)
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::MayBlock()},
@@ -155,7 +154,8 @@ void PrepareLanguageModels(Profile* const profile,
 
 // static
 LanguageModelManagerFactory* LanguageModelManagerFactory::GetInstance() {
-  return base::Singleton<LanguageModelManagerFactory>::get();
+  static base::NoDestructor<LanguageModelManagerFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -170,9 +170,14 @@ LanguageModelManagerFactory::LanguageModelManagerFactory()
     : ProfileKeyedServiceFactory(
           "LanguageModelManager",
           // Use the original profile's language model even in Incognito mode.
-          ProfileSelections::BuildRedirectedInIncognito()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {}
 
-LanguageModelManagerFactory::~LanguageModelManagerFactory() {}
+LanguageModelManagerFactory::~LanguageModelManagerFactory() = default;
 
 KeyedService* LanguageModelManagerFactory::BuildServiceInstanceFor(
     content::BrowserContext* const browser_context) const {

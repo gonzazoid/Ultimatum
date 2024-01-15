@@ -12,23 +12,20 @@ import android.content.pm.PackageManager.NameNotFoundException;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
-
-import org.chromium.testing.local.LocalRobolectricTestRunner;
 
 import java.io.IOException;
 import java.io.InputStream;
 
-/**
- * Checks that Robolectric tests can use android assets.
- */
-@RunWith(LocalRobolectricTestRunner.class)
+/** Checks that Robolectric tests can use android assets. */
+@RunWith(RobolectricTestRunner.class)
 public class AndroidAssetsTest {
     private static final String TEST_ASSET_NAME = "AndroidAssetsTest.java";
 
     public String readTestAsset() throws IOException {
         try (InputStream stream =
-                        RuntimeEnvironment.getApplication().getAssets().open(TEST_ASSET_NAME)) {
+                RuntimeEnvironment.getApplication().getAssets().open(TEST_ASSET_NAME)) {
             byte[] buffer = new byte[stream.available()];
             stream.read(buffer);
             return new String(buffer);
@@ -38,7 +35,8 @@ public class AndroidAssetsTest {
     @Test
     public void testAssetsExist() throws IOException {
         String myselfAsAssetData = readTestAsset();
-        Assert.assertTrue("asset not correct. It had length=" + myselfAsAssetData.length(),
+        Assert.assertTrue(
+                "asset not correct. It had length=" + myselfAsAssetData.length(),
                 myselfAsAssetData.contains("String myselfAsAssetData = "));
     }
 
@@ -51,8 +49,9 @@ public class AndroidAssetsTest {
     @Test
     public void testManifestMerged() throws NameNotFoundException {
         Context context = RuntimeEnvironment.getApplication();
-        ApplicationInfo info = context.getPackageManager().getApplicationInfo(
-                context.getPackageName(), PackageManager.GET_META_DATA);
+        ApplicationInfo info =
+                context.getPackageManager()
+                        .getApplicationInfo(context.getPackageName(), PackageManager.GET_META_DATA);
         String actual = info.metaData.getString("test-metadata");
         Assert.assertEquals("Hello World", actual);
     }

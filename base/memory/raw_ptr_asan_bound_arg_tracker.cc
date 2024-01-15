@@ -1,8 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/memory/raw_ptr_asan_bound_arg_tracker.h"
+
+#include "base/allocator/partition_allocator/src/partition_alloc/partition_alloc_buildflags.h"
 
 #if BUILDFLAG(USE_ASAN_BACKUP_REF_PTR)
 
@@ -10,12 +12,21 @@
 #include <sanitizer/asan_interface.h>
 
 #include "base/memory/raw_ptr_asan_service.h"
-#include "base/no_destructor.h"
+#include "third_party/abseil-cpp/absl/base/attributes.h"
 
 namespace base {
+
+namespace {
+
+// We use thread-local storage instead of sequence-local storage for consistency
+// with PendingReport in RawPtrAsanService.
+ABSL_CONST_INIT thread_local RawPtrAsanBoundArgTracker::ProtectedArgsVector*
+    protected_args = nullptr;
+
+}  // namespace
+
 // static
 uintptr_t RawPtrAsanBoundArgTracker::GetProtectedArgPtr(uintptr_t ptr) {
-  ProtectedArgsVector* protected_args = CurrentProtectedArgs().Get();
   if (!protected_args) {
     return 0;
   }
@@ -37,33 +48,23 @@ uintptr_t RawPtrAsanBoundArgTracker::GetProtectedArgPtr(uintptr_t ptr) {
 RawPtrAsanBoundArgTracker::RawPtrAsanBoundArgTracker()
     : enabled_(RawPtrAsanService::GetInstance().IsEnabled()) {
   if (enabled_) {
-    prev_protected_args_ = CurrentProtectedArgs().Get();
-    CurrentProtectedArgs().Set(&protected_args_);
+    prev_protected_args_ = protected_args;
+    protected_args = &protected_args_;
   }
 }
 
 RawPtrAsanBoundArgTracker::~RawPtrAsanBoundArgTracker() {
   if (enabled_) {
-    CurrentProtectedArgs().Set(prev_protected_args_);
+    protected_args = prev_protected_args_;
   }
 }
 
 void RawPtrAsanBoundArgTracker::Add(uintptr_t ptr) {
   if (ptr) {
-    protected_args_->push_back(ptr);
+    protected_args_.push_back(ptr);
   }
 }
 
-// static
-ThreadLocalPointer<RawPtrAsanBoundArgTracker::ProtectedArgsVector>&
-RawPtrAsanBoundArgTracker::CurrentProtectedArgs() {
-  // We use thread-local storage instead of sequence-local storage for
-  // consistency with PendingReport in RawPtrAsanService.
-  static NoDestructor<
-      ThreadLocalPointer<RawPtrAsanBoundArgTracker::ProtectedArgsVector>>
-      protected_args;
-  return *protected_args;
-}
 }  // namespace base
 
 #endif  // BUILDFLAG(USE_ASAN_BACKUP_REF_PTR)

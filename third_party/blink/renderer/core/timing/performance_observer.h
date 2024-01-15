@@ -44,13 +44,16 @@ class CORE_EXPORT PerformanceObserver final
                       Performance*,
                       V8PerformanceObserverCallback*);
 
-  void observe(const PerformanceObserverInit*, ExceptionState&);
+  void observe(ScriptState*, const PerformanceObserverInit*, ExceptionState&);
   void disconnect();
   PerformanceEntryVector takeRecords();
   void EnqueuePerformanceEntry(PerformanceEntry&);
   PerformanceEntryTypeMask FilterOptions() const { return filter_options_; }
   bool CanObserve(const PerformanceEntry&) const;
   bool RequiresDroppedEntries() const { return requires_dropped_entries_; }
+  bool IncludeSoftNavigationObservations() const {
+    return include_soft_navigation_observations_;
+  }
 
   // ScriptWrappable
   bool HasPendingActivity() const final;
@@ -77,6 +80,8 @@ class CORE_EXPORT PerformanceObserver final
   // entries to be passed to the callback.
   void Deliver(absl::optional<int> dropped_entries_count);
 
+  static PerformanceEntryType supportedEntryTypeMask(ScriptState*);
+
   Member<V8PerformanceObserverCallback> callback_;
   WeakMember<Performance> performance_;
   PerformanceEntryVector performance_entries_;
@@ -84,6 +89,7 @@ class CORE_EXPORT PerformanceObserver final
   PerformanceObserverType type_;
   bool is_registered_;
   bool requires_dropped_entries_ = false;
+  bool include_soft_navigation_observations_ = false;
   // PerformanceEventTiming entries with a duration that is as long as this
   // threshold are regarded as long-latency events by the Event Timing API.
   // Shorter-latency events are ignored. Default value can be overriden via a

@@ -2,10 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ConsoleTestRunner} from 'console_test_runner';
+
+import * as Console from 'devtools/panels/console/console.js';
+
 (async function() {
   TestRunner.addResult(`Tests that console sidebar behaves properly.\n`);
 
-  await TestRunner.loadLegacyModule('console'); await TestRunner.loadTestModule('console_test_runner');
   await TestRunner.showPanel('console');
   await TestRunner.addScriptTag('resources/log-source.js');
   await TestRunner.evaluateInPagePromise(`
@@ -20,9 +24,9 @@
     }
   `);
 
-  var consoleView = Console.ConsoleView.instance();
+  var consoleView = Console.ConsoleView.ConsoleView.instance();
   var sidebar = consoleView.sidebar;
-  var messages = Console.ConsoleView.instance().visibleViewMessages;
+  var messages = Console.ConsoleView.ConsoleView.instance().visibleViewMessages;
   consoleView.setImmediatelyFilterMessagesForTest();
   if (!consoleView.isSidebarOpen)
     consoleView.splitWidget.showHideSidebarButton.element.click();
@@ -75,7 +79,7 @@
       next();
     },
     async function clearConsole(next) {
-      Console.ConsoleView.clearConsole();
+      Console.ConsoleView.ConsoleView.clearConsole();
       dumpSidebar();
       next();
     }

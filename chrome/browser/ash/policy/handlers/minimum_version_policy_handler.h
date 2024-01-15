@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
@@ -16,12 +17,12 @@
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/upgrade_detector/build_state_observer.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
-#include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
 
 class PrefRegistrySimple;
 
 namespace ash {
+class NetworkStateHandler;
 class UpdateRequiredNotification;
 }  // namespace ash
 
@@ -173,7 +174,7 @@ class MinimumVersionPolicyHandler : public BuildStateObserver,
 
   // Returns the number of days to deadline if update is required and deadline
   // has not been reached. Returns null if update is not required.
-  absl::optional<int> GetTimeRemainingInDays();
+  std::optional<int> GetTimeRemainingInDays();
 
   // Callback used in tests and invoked after end-of-life status has been
   // fetched from the update_engine.
@@ -265,7 +266,7 @@ class MinimumVersionPolicyHandler : public BuildStateObserver,
   // This delegate instance is owned by the owner of
   // MinimumVersionPolicyHandler. The owner is responsible to make sure that the
   // delegate lives throughout the life of the policy handler.
-  Delegate* delegate_;
+  raw_ptr<Delegate> delegate_;
 
   // This represents the current minimum version requirement.
   // It is chosen as one of the configurations specified in the policy. It is
@@ -300,9 +301,9 @@ class MinimumVersionPolicyHandler : public BuildStateObserver,
 
   // Non-owning reference to CrosSettings. This class have shorter lifetime than
   // CrosSettings.
-  ash::CrosSettings* cros_settings_;
+  raw_ptr<ash::CrosSettings> cros_settings_;
 
-  base::Clock* const clock_;
+  const raw_ptr<base::Clock> clock_;
 
   base::OnceClosure fetch_eol_callback_;
 

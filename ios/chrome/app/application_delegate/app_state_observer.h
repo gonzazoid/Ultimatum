@@ -5,7 +5,6 @@
 #define IOS_CHROME_APP_APPLICATION_DELEGATE_APP_STATE_OBSERVER_H_
 
 @class AppState;
-@class UIWindow;
 @class SceneState;
 
 // App initialization stages. The app will go sequentially in-order through each
@@ -71,19 +70,21 @@ typedef NS_ENUM(NSUInteger, InitStage) {
 - (void)appState:(AppState*)appState
     firstSceneHasInitializedUI:(SceneState*)sceneState;
 
-// Called when `AppState.lastTappedWindow` changes.
-- (void)appState:(AppState*)appState lastTappedWindowChanged:(UIWindow*)window;
-
 // Called when the app is about to transition to `nextInitStage`. The init stage
 // of the app at that moment is still `nextInitStage` - 1.
 - (void)appState:(AppState*)appState
     willTransitionToInitStage:(InitStage)nextInitStage;
 
 // Called right after the app is transitioned out of to the
-// `previousInitStage`. he init stage of the app at that
+// `previousInitStage`. The init stage of the app at that
 // moment is `previousInitStage` + 1.
 - (void)appState:(AppState*)appState
     didTransitionFromInitStage:(InitStage)previousInitStage;
+
+// Called when Scene with activation level SceneActivationLevelForegroundActive
+// is available.
+- (void)appState:(AppState*)appState
+    sceneDidBecomeActive:(SceneState*)sceneState;
 
 @end
 

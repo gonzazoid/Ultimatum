@@ -14,23 +14,6 @@ namespace blink {
 
 class VisiblePositionTest : public EditingTestBase {};
 
-// Helper class to run the same test code with and without LayoutNG
-class ParameterizedVisiblePositionTest
-    : public testing::WithParamInterface<bool>,
-      private ScopedLayoutNGForTest,
-      public VisiblePositionTest {
- protected:
-  ParameterizedVisiblePositionTest() : ScopedLayoutNGForTest(GetParam()) {}
-
-  bool LayoutNGEnabled() const {
-    return RuntimeEnabledFeatures::LayoutNGEnabled();
-  }
-};
-
-INSTANTIATE_TEST_SUITE_P(All,
-                         ParameterizedVisiblePositionTest,
-                         testing::Bool());
-
 TEST_F(VisiblePositionTest, EmptyEditable) {
   SetBodyContent("<div id=target contenteditable></div>");
   const Element& target = *GetElementById("target");
@@ -166,7 +149,7 @@ TEST_F(VisiblePositionTest, NullIsValid) {
 TEST_F(VisiblePositionTest, NonNullIsValidBeforeMutation) {
   SetBodyContent("<p>one</p>");
 
-  Element* paragraph = GetDocument().QuerySelector("p");
+  Element* paragraph = GetDocument().QuerySelector(AtomicString("p"));
   Position position(paragraph->firstChild(), 1);
   EXPECT_TRUE(CreateVisiblePosition(position).IsValid());
 }
@@ -174,7 +157,7 @@ TEST_F(VisiblePositionTest, NonNullIsValidBeforeMutation) {
 TEST_F(VisiblePositionTest, NonNullInvalidatedAfterDOMChange) {
   SetBodyContent("<p>one</p>");
 
-  Element* paragraph = GetDocument().QuerySelector("p");
+  Element* paragraph = GetDocument().QuerySelector(AtomicString("p"));
   Position position(paragraph->firstChild(), 1);
   VisiblePosition null_visible_position;
   VisiblePosition non_null_visible_position = CreateVisiblePosition(position);
@@ -194,8 +177,8 @@ TEST_F(VisiblePositionTest, NonNullInvalidatedAfterDOMChange) {
 TEST_F(VisiblePositionTest, NonNullInvalidatedAfterStyleChange) {
   SetBodyContent("<div>one</div><p>two</p>");
 
-  Element* paragraph = GetDocument().QuerySelector("p");
-  Element* div = GetDocument().QuerySelector("div");
+  Element* paragraph = GetDocument().QuerySelector(AtomicString("p"));
+  Element* div = GetDocument().QuerySelector(AtomicString("div"));
   Position position(paragraph->firstChild(), 1);
 
   VisiblePosition visible_position1 = CreateVisiblePosition(position);
@@ -234,7 +217,8 @@ TEST_F(VisiblePositionTest, NormalizationAroundLineBreak) {
       "<div>line1<span></span>line2</div>"
       "<div>line1<span></span><span></span>line2</div>");
 
-  StaticElementList* tests = GetDocument().QuerySelectorAll("div");
+  StaticElementList* tests =
+      GetDocument().QuerySelectorAll(AtomicString("div"));
   for (unsigned i = 0; i < tests->length(); ++i) {
     Element* test = tests->item(i);
     Node* node1 = test->firstChild();
@@ -254,7 +238,7 @@ TEST_F(VisiblePositionTest, NormalizationAroundLineBreak) {
   }
 }
 
-TEST_P(ParameterizedVisiblePositionTest, SpacesAroundLineBreak) {
+TEST_F(VisiblePositionTest, SpacesAroundLineBreak) {
   // Narrow <body> forces "a" and "b" to be in different lines.
   InsertStyleElement("body { width: 1px }");
   {
@@ -277,7 +261,7 @@ TEST_P(ParameterizedVisiblePositionTest, SpacesAroundLineBreak) {
               CreateVisiblePosition(Position(a, 1)).DeepEquivalent());
     EXPECT_EQ(Position(a, 1),
               CreateVisiblePosition(Position(b, 0)).DeepEquivalent());
-    EXPECT_EQ(Position(LayoutNGEnabled() ? b : a, 1),
+    EXPECT_EQ(Position(b, 1),
               CreateVisiblePosition(Position(b, 1)).DeepEquivalent());
     EXPECT_EQ(Position(b, 2),
               CreateVisiblePosition(Position(b, 2)).DeepEquivalent());
@@ -292,7 +276,7 @@ TEST_P(ParameterizedVisiblePositionTest, SpacesAroundLineBreak) {
               CreateVisiblePosition(Position(a, 1)).DeepEquivalent());
     EXPECT_EQ(Position(a, 1),
               CreateVisiblePosition(Position(b, 0)).DeepEquivalent());
-    EXPECT_EQ(Position(LayoutNGEnabled() ? b : a, 1),
+    EXPECT_EQ(Position(b, 1),
               CreateVisiblePosition(Position(b, 1)).DeepEquivalent());
     EXPECT_EQ(Position(b, 2),
               CreateVisiblePosition(Position(b, 2)).DeepEquivalent());
@@ -305,9 +289,9 @@ TEST_P(ParameterizedVisiblePositionTest, SpacesAroundLineBreak) {
               CreateVisiblePosition(Position(a, 0)).DeepEquivalent());
     EXPECT_EQ(Position(a, 1),
               CreateVisiblePosition(Position(a, 1)).DeepEquivalent());
-    EXPECT_EQ(Position(a, LayoutNGEnabled() ? 2 : 1),
+    EXPECT_EQ(Position(a, 2),
               CreateVisiblePosition(Position(a, 2)).DeepEquivalent());
-    EXPECT_EQ(Position(a, LayoutNGEnabled() ? 2 : 1),
+    EXPECT_EQ(Position(a, 2),
               CreateVisiblePosition(Position(b, 0)).DeepEquivalent());
     EXPECT_EQ(Position(b, 1),
               CreateVisiblePosition(Position(b, 1)).DeepEquivalent());
@@ -320,17 +304,16 @@ TEST_P(ParameterizedVisiblePositionTest, SpacesAroundLineBreak) {
               CreateVisiblePosition(Position(a, 0)).DeepEquivalent());
     EXPECT_EQ(Position(a, 1),
               CreateVisiblePosition(Position(a, 1)).DeepEquivalent());
-    EXPECT_EQ(Position(a, LayoutNGEnabled() ? 2 : 1),
+    EXPECT_EQ(Position(a, 2),
               CreateVisiblePosition(Position(a, 2)).DeepEquivalent());
-    EXPECT_EQ(Position(a, LayoutNGEnabled() ? 2 : 1),
+    EXPECT_EQ(Position(a, 2),
               CreateVisiblePosition(Position(b, 0)).DeepEquivalent());
     EXPECT_EQ(Position(b, 1),
               CreateVisiblePosition(Position(b, 1)).DeepEquivalent());
   }
 }
 
-TEST_P(ParameterizedVisiblePositionTest, TextCombine) {
-  ScopedLayoutNGForTest enable_layout_ng(GetParam());
+TEST_F(VisiblePositionTest, TextCombine) {
   InsertStyleElement(
       "div {"
       "  font: 100px/110px Ahem;"
@@ -348,7 +331,7 @@ TEST_P(ParameterizedVisiblePositionTest, TextCombine) {
   EXPECT_EQ(Position(text_a, 1),
             CreateVisiblePosition(Position(text_a, 1)).DeepEquivalent());
 
-  if (text_01234.GetLayoutObject()->Parent()->IsLayoutNGTextCombine()) {
+  if (text_01234.GetLayoutObject()->Parent()->IsLayoutTextCombine()) {
     EXPECT_EQ(Position(text_01234, 0),
               CreateVisiblePosition(Position(text_01234, 0)).DeepEquivalent());
   } else {
@@ -366,7 +349,7 @@ TEST_P(ParameterizedVisiblePositionTest, TextCombine) {
   EXPECT_EQ(Position(text_01234, 5),
             CreateVisiblePosition(Position(text_01234, 5)).DeepEquivalent());
 
-  if (text_01234.GetLayoutObject()->Parent()->IsLayoutNGTextCombine()) {
+  if (text_01234.GetLayoutObject()->Parent()->IsLayoutTextCombine()) {
     EXPECT_EQ(Position(text_b, 0),
               CreateVisiblePosition(Position(text_b, 0)).DeepEquivalent());
   } else {

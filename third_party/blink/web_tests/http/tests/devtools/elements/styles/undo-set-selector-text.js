@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Tests that setting selector text can be undone.\n`);
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
       <style>
@@ -31,7 +35,7 @@
   async function step2() {
     TestRunner.addResult('=== After selector modification ===');
     await ElementsTestRunner.dumpSelectedElementStyles(true);
-    SDK.domModelUndoStack.undo();
+    SDK.DOMModel.DOMModelUndoStack.instance().undo();
     ElementsTestRunner.selectNodeAndWaitForStyles('inspected', step3);
   }
 
@@ -39,7 +43,7 @@
     TestRunner.addResult('=== After undo ===');
     await ElementsTestRunner.dumpSelectedElementStyles(true);
 
-    SDK.domModelUndoStack.redo();
+    SDK.DOMModel.DOMModelUndoStack.instance().redo();
     ElementsTestRunner.selectNodeAndWaitForStyles('other', step4);
   }
 

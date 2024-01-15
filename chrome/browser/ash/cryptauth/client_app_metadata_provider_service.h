@@ -7,12 +7,13 @@
 
 #include <list>
 
-#include "ash/services/device_sync/proto/cryptauth_client_app_metadata.pb.h"
-#include "ash/services/device_sync/public/cpp/client_app_metadata_provider.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/system/sys_info.h"
+#include "chromeos/ash/services/device_sync/proto/cryptauth_client_app_metadata.pb.h"
+#include "chromeos/ash/services/device_sync/public/cpp/client_app_metadata_provider.h"
 #include "components/gcm_driver/instance_id/instance_id.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -98,9 +99,9 @@ class ClientAppMetadataProviderService
   int64_t SoftwareVersionCodeAsInt64();
   void InvokePendingCallbacks();
 
-  PrefService* pref_service_;
-  NetworkStateHandler* network_state_handler_;
-  instance_id::InstanceIDProfileService* instance_id_profile_service_;
+  raw_ptr<PrefService> pref_service_;
+  raw_ptr<NetworkStateHandler> network_state_handler_;
+  raw_ptr<instance_id::InstanceIDProfileService> instance_id_profile_service_;
 
   bool instance_id_recreated_ = false;
   absl::optional<std::string> pending_gcm_registration_id_;

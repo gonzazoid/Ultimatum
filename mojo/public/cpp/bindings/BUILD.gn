@@ -5,6 +5,7 @@
 import("//base/trace_event/tracing.gni")
 import("//build/buildflag_header.gni")
 import("//build/config/compiler/compiler.gni")
+import("//build/config/features.gni")
 import("//build/config/nacl/config.gni")
 import("//tools/ipc_fuzzer/ipc_fuzzer.gni")
 
@@ -40,7 +41,7 @@ component("bindings_base") {
     "clone_traits.h",
     "connection_group.cc",
     "connection_group.h",
-    "default_construct_traits.h",
+    "default_construct_tag.h",
     "deprecated_interface_types_forward.h",
     "disconnect_reason.h",
     "enum_traits.h",
@@ -58,6 +59,7 @@ component("bindings_base") {
     "lib/bindings_internal.h",
     "lib/buffer.cc",
     "lib/buffer.h",
+    "lib/default_construct_tag_internal.h",
     "lib/handle_serialization.cc",
     "lib/handle_serialization.h",
     "lib/hash_util.h",
@@ -113,6 +115,8 @@ component("bindings_base") {
     "tracing_helpers.h",
     "type_converter.h",
     "union_traits.h",
+    "urgent_message_scope.cc",
+    "urgent_message_scope.h",
   ]
 
   defines = [ "IS_MOJO_CPP_BINDINGS_BASE_IMPL" ]
@@ -122,6 +126,8 @@ component("bindings_base") {
     "//base",
     "//mojo/public/cpp/system",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   if (enable_ipc_fuzzer) {
     all_dependent_configs = [ "//tools/ipc_fuzzer:ipc_fuzzer_config" ]
@@ -145,6 +151,8 @@ component("bindings") {
     "callback_helpers.h",
     "connection_error_callback.h",
     "connector.h",
+    "direct_receiver.cc",
+    "direct_receiver.h",
     "generic_pending_associated_receiver.cc",
     "generic_pending_associated_receiver.h",
     "generic_pending_receiver.cc",
@@ -169,8 +177,6 @@ component("bindings") {
     "lib/interface_ptr_state.h",
     "lib/interface_serialization.h",
     "lib/message_dispatcher.cc",
-    "lib/message_quota_checker.cc",
-    "lib/message_quota_checker.h",
     "lib/multiplex_router.cc",
     "lib/multiplex_router.h",
     "lib/native_enum_data.h",
@@ -184,6 +190,7 @@ component("bindings") {
     "lib/sync_event_watcher.cc",
     "lib/sync_handle_registry.cc",
     "lib/sync_handle_watcher.cc",
+    "lib/sync_method_traits.h",
     "lib/task_runner_helper.cc",
     "lib/task_runner_helper.h",
     "lib/thread_safe_forwarder_base.cc",
@@ -205,6 +212,7 @@ component("bindings") {
     "receiver_set.h",
     "remote.h",
     "remote_set.h",
+    "runtime_features.h",
     "self_owned_associated_receiver.h",
     "self_owned_receiver.h",
     "sequence_local_sync_event_watcher.h",
@@ -246,7 +254,12 @@ component("bindings") {
     "//mojo/public/interfaces/bindings",
   ]
 
-  deps = [ "//ipc:native_handle_type_converters" ]
+  deps = [
+    "//ipc:native_handle_type_converters",
+    "//mojo/core/embedder",
+  ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   defines = [ "IS_MOJO_CPP_BINDINGS_IMPL" ]
 }
@@ -260,6 +273,11 @@ source_set("struct_traits") {
     "string_traits.h",
     "struct_traits.h",
     "union_traits.h",
+  ]
+
+  deps = [
+    ":bindings_base",
+    "//base",
   ]
 }
 
@@ -276,11 +294,9 @@ source_set("protobuf_support") {
   ]
 }
 
-if (!is_ios) {
+if (use_blink) {
   component("wtf_support") {
     sources = [
-      "array_traits_web_vector.h",
-      "array_traits_wtf_vector.h",
       "lib/string_traits_wtf.cc",
       "lib/wtf_clone_equals_util.h",
       "lib/wtf_hash_util.h",
@@ -288,6 +304,8 @@ if (!is_ios) {
       "map_traits_wtf_hash_map.h",
       "string_traits_wtf.h",
     ]
+
+    configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
     defines = [ "IS_MOJO_CPP_BINDINGS_BASE_IMPL" ]
 

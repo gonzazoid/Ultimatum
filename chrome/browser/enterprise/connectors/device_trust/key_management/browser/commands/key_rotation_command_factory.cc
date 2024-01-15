@@ -4,11 +4,10 @@
 
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/browser/commands/key_rotation_command_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "build/build_config.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/browser/commands/key_rotation_command.h"
-#include "components/prefs/pref_service.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -39,19 +38,18 @@ KeyRotationCommandFactory* KeyRotationCommandFactory::GetInstance() {
   if (test_instance.has_value() && test_instance.value()) {
     return test_instance.value();
   }
-  return base::Singleton<KeyRotationCommandFactory>::get();
+  static base::NoDestructor<KeyRotationCommandFactory> instance;
+  return instance.get();
 }
 
 std::unique_ptr<KeyRotationCommand> KeyRotationCommandFactory::CreateCommand(
-    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-    PrefService* local_prefs) {
+    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory) {
 #if BUILDFLAG(IS_WIN)
   return std::make_unique<WinKeyRotationCommand>();
 #elif BUILDFLAG(IS_LINUX)
   return std::make_unique<LinuxKeyRotationCommand>(url_loader_factory);
 #elif BUILDFLAG(IS_MAC)
-  return std::make_unique<MacKeyRotationCommand>(url_loader_factory,
-                                                 local_prefs);
+  return std::make_unique<MacKeyRotationCommand>(url_loader_factory);
 #else
   return nullptr;
 #endif  // BUILDFLAG(IS_WIN)

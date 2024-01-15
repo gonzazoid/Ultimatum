@@ -15,42 +15,31 @@ import 'chrome://resources/polymer/v3_0/iron-pages/iron-pages.js';
 import 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
 import './history_deletion_dialog.js';
 import './passwords_deletion_dialog.js';
-import './installed_app_checkbox.js';
 import '../controls/settings_checkbox.js';
 import '../icons.html.js';
 import '../settings_shared.css.js';
 
+import {PrefControlMixinInterface} from '/shared/settings/controls/pref_control_mixin.js';
+import {DropdownMenuOptionList} from '/shared/settings/controls/settings_dropdown_menu.js';
+import {StatusAction, SyncBrowserProxy, SyncBrowserProxyImpl, SyncStatus} from '/shared/settings/people_page/sync_browser_proxy.js';
+import {PrefsMixin} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
 import {getInstance as getAnnouncerInstance} from 'chrome://resources/cr_elements/cr_a11y_announcer/cr_a11y_announcer.js';
 import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
-import {I18nMixin, I18nMixinInterface} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {WebUiListenerMixin, WebUiListenerMixinInterface} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {FocusOutlineManager} from 'chrome://resources/js/focus_outline_manager.js';
 import {sanitizeInnerHtml} from 'chrome://resources/js/parse_html_subset.js';
 import {IronPagesElement} from 'chrome://resources/polymer/v3_0/iron-pages/iron-pages.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {PrefControlMixinInterface} from '../controls/pref_control_mixin.js';
 import {SettingsCheckboxElement} from '../controls/settings_checkbox.js';
-import {DropdownMenuOptionList, SettingsDropdownMenuElement} from '../controls/settings_dropdown_menu.js';
 import {loadTimeData} from '../i18n_setup.js';
-import {StatusAction, SyncBrowserProxy, SyncBrowserProxyImpl, SyncStatus} from '../people_page/sync_browser_proxy.js';
 import {routes} from '../route.js';
-import {Route, RouteObserverMixin, RouteObserverMixinInterface, Router} from '../router.js';
+import {Route, RouteObserverMixin, Router} from '../router.js';
 
-import {ClearBrowsingDataBrowserProxy, ClearBrowsingDataBrowserProxyImpl, InstalledApp, UpdateSyncStateEvent} from './clear_browsing_data_browser_proxy.js';
+import {ClearBrowsingDataBrowserProxy, ClearBrowsingDataBrowserProxyImpl, UpdateSyncStateEvent} from './clear_browsing_data_browser_proxy.js';
 import {getTemplate} from './clear_browsing_data_dialog.html.js';
-
-/**
- * InstalledAppsDialogActions enum.
- * These values are persisted to logs and should not be renumbered or
- * re-used.
- * See tools/metrics/histograms/enums.xml.
- */
-enum InstalledAppsDialogActions {
-  CLOSE = 0,
-  CANCEL_BUTTON = 1,
-  CLEAR_BUTTON = 2,
-}
 
 /**
  * @param dialog the dialog to close
@@ -67,33 +56,39 @@ function closeDialog(dialog: CrDialogElement, isLast: boolean) {
   dialog.close();
 }
 
-/**
- * @param oldDialog the dialog to close
- * @param newDialog the dialog to open
- */
-function replaceDialog(oldDialog: CrDialogElement, newDialog: CrDialogElement) {
-  closeDialog(oldDialog, false);
-  if (!newDialog.open) {
-    newDialog.showModal();
-  }
-}
-
 export interface SettingsClearBrowsingDataDialogElement {
   $: {
-    installedAppsConfirm: HTMLElement,
     clearBrowsingDataConfirm: HTMLElement,
     cookiesCheckboxBasic: SettingsCheckboxElement,
     clearBrowsingDataDialog: CrDialogElement,
-    installedAppsDialog: CrDialogElement,
     tabs: IronPagesElement,
   };
 }
 
-const SettingsClearBrowsingDataDialogElementBase =
-    RouteObserverMixin(WebUiListenerMixin(I18nMixin(PolymerElement))) as {
-      new (): PolymerElement & WebUiListenerMixinInterface &
-          I18nMixinInterface & RouteObserverMixinInterface,
-    };
+export enum TimePeriod {
+  LAST_HOUR = 0,
+  LAST_DAY = 1,
+  LAST_WEEK = 2,
+  FOUR_WEEKS = 3,
+  ALL_TIME = 4,
+  TIME_PERIOD_LAST = ALL_TIME
+}
+
+// TODO(crbug.com/1487530): Remove this after CbdTimeframeRequired finishes.
+export enum TimePeriodExperiment {
+  NOT_SELECTED = -1,
+  LAST_HOUR = 0,
+  LAST_DAY = 1,
+  LAST_WEEK = 2,
+  FOUR_WEEKS = 3,
+  ALL_TIME = 4,
+  OLDER_THAN_30_DAYS = 5,
+  LAST_15_MINUTES = 6,
+  TIME_PERIOD_LAST = LAST_15_MINUTES
+}
+
+const SettingsClearBrowsingDataDialogElementBase = RouteObserverMixin(
+    WebUiListenerMixin(PrefsMixin(I18nMixin(PolymerElement))));
 
 export class SettingsClearBrowsingDataDialogElement extends
     SettingsClearBrowsingDataDialogElementBase {
@@ -140,11 +135,91 @@ export class SettingsClearBrowsingDataDialogElement extends
         readOnly: true,
         type: Array,
         value: [
-          {value: 0, name: loadTimeData.getString('clearPeriodHour')},
-          {value: 1, name: loadTimeData.getString('clearPeriod24Hours')},
-          {value: 2, name: loadTimeData.getString('clearPeriod7Days')},
-          {value: 3, name: loadTimeData.getString('clearPeriod4Weeks')},
-          {value: 4, name: loadTimeData.getString('clearPeriodEverything')},
+          {
+            value: TimePeriod.LAST_HOUR,
+            name: loadTimeData.getString('clearPeriodHour'),
+          },
+          {
+            value: TimePeriod.LAST_DAY,
+            name: loadTimeData.getString('clearPeriod24Hours'),
+          },
+          {
+            value: TimePeriod.LAST_WEEK,
+            name: loadTimeData.getString('clearPeriod7Days'),
+          },
+          {
+            value: TimePeriod.FOUR_WEEKS,
+            name: loadTimeData.getString('clearPeriod4Weeks'),
+          },
+          {
+            value: TimePeriod.ALL_TIME,
+            name: loadTimeData.getString('clearPeriodEverything'),
+          },
+        ],
+      },
+
+      enableCbdTimeframeRequired_: {
+        type: Boolean,
+        value() {
+          return loadTimeData.getBoolean('enableCbdTimeframeRequired');
+        },
+      },
+
+      unoDesktopEnabled_: {
+        type: Boolean,
+        value() {
+          return loadTimeData.getBoolean('unoDesktopEnabled');
+        },
+      },
+
+      /**
+       * When CBDTimeframeRequired feature/flag is on, this will be the list
+       * of options for the dropdown menu. V2 additionally contains the "Last 15
+       * minutes" and the "Select a time range" options with "Select a time
+       * range" being always hidden in the menuOptions list in which users can
+       * chose the time range.
+       */
+      clearFromOptionsV2_: {
+        readOnly: true,
+        type: Array,
+        value: [
+          // The pref is initialized to TimePeriodExperiment.NOT_SELECTED, which
+          // is shown in the dropdown as the selected option until the user
+          // selects a different value. The menuList of options should not
+          // contain the option for TimePeriodExperiment.NOT_SELECTED, as it
+          // doesn't make sense for users to choose it.
+          {
+            value: TimePeriodExperiment.NOT_SELECTED,
+            name: loadTimeData.getString('clearPeriodNotSelected'),
+            hidden: true,
+          },
+          // The value of 15min is 6 to match the value written in the backend,
+          // Also, it comes first in the list to keep the list in ascending
+          // order.
+          {
+            value: TimePeriodExperiment.LAST_15_MINUTES,
+            name: loadTimeData.getString('clearPeriod15Minutes'),
+          },
+          {
+            value: TimePeriodExperiment.LAST_HOUR,
+            name: loadTimeData.getString('clearPeriodHour'),
+          },
+          {
+            value: TimePeriodExperiment.LAST_DAY,
+            name: loadTimeData.getString('clearPeriod24Hours'),
+          },
+          {
+            value: TimePeriodExperiment.LAST_WEEK,
+            name: loadTimeData.getString('clearPeriod7Days'),
+          },
+          {
+            value: TimePeriodExperiment.FOUR_WEEKS,
+            name: loadTimeData.getString('clearPeriod4Weeks'),
+          },
+          {
+            value: TimePeriodExperiment.ALL_TIME,
+            name: loadTimeData.getString('clearPeriodEverything'),
+          },
         ],
       },
 
@@ -161,13 +236,6 @@ export class SettingsClearBrowsingDataDialogElement extends
       clearButtonDisabled_: {
         type: Boolean,
         value: false,
-      },
-
-      isChildAccount_: {
-        type: Boolean,
-        value() {
-          return loadTimeData.getBoolean('isChildAccount');
-        },
       },
 
       showHistoryDeletionDialog_: {
@@ -232,20 +300,6 @@ export class SettingsClearBrowsingDataDialogElement extends
     ],
       },
 
-      /**
-       * Installed apps that might be cleared if the user clears browsing data
-       * for the selected time period.
-       */
-      installedApps_: {
-        type: Array,
-        value: () => [],
-      },
-
-      installedAppsFlagEnabled_: {
-        type: Boolean,
-        value: () => loadTimeData.getBoolean('installedAppsInCbd'),
-      },
-
       googleSearchHistoryString_: {
         type: String,
         computed: 'computeGoogleSearchHistoryString_(isNonGoogleDse_)',
@@ -260,14 +314,25 @@ export class SettingsClearBrowsingDataDialogElement extends
     };
   }
 
+  static get observers() {
+    return [
+      `onTimePeriodAdvancedPrefUpdated_(
+          prefs.browser.clear_data.time_period.value)`,
+      `onTimePeriodBasicPrefUpdated_(
+          prefs.browser.clear_data.time_period_basic.value)`,
+    ];
+  }
+
   // TODO(dpapad): make |syncStatus| private.
   syncStatus: SyncStatus|undefined;
   private counters_: {[k: string]: string};
   private clearFromOptions_: DropdownMenuOptionList;
+  private clearFromOptionsV2_: DropdownMenuOptionList;
+  private enableCbdTimeframeRequired_: boolean;
+  private unoDesktopEnabled_: boolean;
   private clearingInProgress_: boolean;
   private clearingDataAlertString_: string;
   private clearButtonDisabled_: boolean;
-  private isChildAccount_: boolean;
   private showHistoryDeletionDialog_: boolean;
   private showPasswordsDeletionDialogLater_: boolean;
   private showPasswordsDeletionDialog_: boolean;
@@ -279,11 +344,10 @@ export class SettingsClearBrowsingDataDialogElement extends
   private hasPassphraseError_: boolean;
   private hasOtherSyncError_: boolean;
   private tabsNames_: string[];
-  private installedApps_: InstalledApp[];
-  private installedAppsFlagEnabled_: boolean;
   private googleSearchHistoryString_: TrustedHTML;
   private isNonGoogleDse_: boolean;
   private nonGoogleSearchHistoryString_: TrustedHTML;
+  private focusOutlineManager_: FocusOutlineManager;
 
   private browserProxy_: ClearBrowsingDataBrowserProxy =
       ClearBrowsingDataBrowserProxyImpl.getInstance();
@@ -295,12 +359,12 @@ export class SettingsClearBrowsingDataDialogElement extends
 
     this.syncBrowserProxy_.getSyncStatus().then(
         this.handleSyncStatus_.bind(this));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'sync-status-changed', this.handleSyncStatus_.bind(this));
 
-    this.addWebUIListener(
+    this.addWebUiListener(
         'update-sync-state', this.updateSyncState_.bind(this));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'update-counter-text', this.updateCounterText_.bind(this));
 
     this.addEventListener(
@@ -312,6 +376,17 @@ export class SettingsClearBrowsingDataDialogElement extends
 
     this.browserProxy_.initialize().then(() => {
       this.$.clearBrowsingDataDialog.showModal();
+
+      // AutoFocus is not visible in mouse navigation by default. But in this
+      // dialog the default focus is on cancel which is not a default button. To
+      // make this clear to the user we make it visible to the user and remove
+      // the focus after the next mouse event.
+      this.focusOutlineManager_ = FocusOutlineManager.forDocument(document);
+
+      this.focusOutlineManager_.visible = true;
+      document.addEventListener('mousedown', () => {
+        this.focusOutlineManager_.visible = false;
+      }, {once: true});
     });
   }
 
@@ -377,12 +452,41 @@ export class SettingsClearBrowsingDataDialogElement extends
     return isSyncingHistory ? historySummarySignedInNoLink : historySummary;
   }
 
-  /** Choose a label for the cookie checkbox. */
+  /**
+   * Choose a label for the cookie checkbox
+   * @param isSignedIn boolean whether the user is signed in or not.
+   * @param shouldShowCookieException boolean whether the exception about not
+   * being signed out of your Google account should be shown when user is
+   * sync.
+   * @param cookiesSummary string explaining that deleting cookies and site data
+   * will sign the user out of most websites.
+   * @param clearCookiesSummarySignedIn string explaining that deleting cookies
+   * and site data will sign the user out of most websites but Google sign in
+   * will stay.
+   * @param clearCookiesSummarySyncing string explaining that deleting cookies
+   * and site data will sign the user out of most websites but Google sign in
+   * will stay when user is syncing.
+   * @param clearCookiesSummarySignedInSupervisedProfile string used for a
+   * supervised user. Gives information about family link controls and that they
+   * will not be signed out on clearing cookies
+   */
   private cookiesCheckboxLabel_(
-      shouldShowCookieException: boolean, cookiesSummary: string,
-      cookiesSummarySignedIn: string): string {
+      isSignedIn: boolean, shouldShowCookieException: boolean,
+      cookiesSummary: string, clearCookiesSummarySignedIn: string,
+      clearCookiesSummarySyncing: string,
+      clearCookiesSummarySignedInSupervisedProfile: string): string {
+    if (loadTimeData.getBoolean('isChildAccount') &&
+        loadTimeData.getBoolean(
+            'clearingCookiesKeepsSupervisedUsersSignedIn')) {
+      return clearCookiesSummarySignedInSupervisedProfile;
+    }
+
+    if (this.unoDesktopEnabled_ && isSignedIn) {
+      return clearCookiesSummarySignedIn;
+    }
+
     if (shouldShowCookieException) {
-      return cookiesSummarySignedIn;
+      return clearCookiesSummarySyncing;
     }
     // <if expr="chromeos_lacros">
     if (!loadTimeData.getBoolean('isSecondaryUser')) {
@@ -420,48 +524,6 @@ export class SettingsClearBrowsingDataDialogElement extends
     return dataTypes;
   }
 
-  /**
-   * Gets a list of top 5 installed apps that have been launched
-   * within the time period selected. This is used to warn the user
-   * that data for these apps will be cleared as well, and offers
-   * them the option to exclude deletion of this data.
-   */
-  private async getInstalledApps_() {
-    const tab = this.$.tabs.selectedItem as HTMLElement;
-    const timePeriod = tab.querySelector<SettingsDropdownMenuElement>(
-                              '.time-range-select')!.pref!.value;
-    this.installedApps_ = await this.browserProxy_.getInstalledApps(timePeriod);
-  }
-
-  private shouldShowInstalledApps_(): boolean {
-    if (!this.installedAppsFlagEnabled_) {
-      return false;
-    }
-    const haveInstalledApps = this.installedApps_.length > 0;
-    chrome.send('metricsHandler:recordBooleanHistogram', [
-      'History.ClearBrowsingData.InstalledAppsDialogShown',
-      haveInstalledApps,
-    ]);
-    return haveInstalledApps;
-  }
-
-  /** Logs interactions with the installed app dialog to UMA. */
-  private recordInstalledAppsInteractions_() {
-    if (this.installedApps_.length === 0) {
-      return;
-    }
-
-    const uncheckedAppCount =
-        this.installedApps_.filter(app => !app.isChecked).length;
-    chrome.metricsPrivate.recordBoolean(
-        'History.ClearBrowsingData.InstalledAppExcluded', !!uncheckedAppCount);
-    chrome.metricsPrivate.recordCount(
-        'History.ClearBrowsingData.InstalledDeselectedNum', uncheckedAppCount);
-    chrome.metricsPrivate.recordPercentage(
-        'History.ClearBrowsingData.InstalledDeselectedPercent',
-        Math.round(100 * uncheckedAppCount / this.installedApps_.length));
-  }
-
   /** Clears browsing data and maybe shows a history notice. */
   private async clearBrowsingData_() {
     this.clearingInProgress_ = true;
@@ -484,8 +546,7 @@ export class SettingsClearBrowsingDataDialogElement extends
         .forEach(checkbox => checkbox.sendPrefChange());
 
     const {showHistoryNotice, showPasswordsNotice} =
-        await this.browserProxy_.clearBrowsingData(
-            dataTypes, timePeriod, this.installedApps_);
+        await this.browserProxy_.clearBrowsingData(dataTypes, timePeriod);
     this.clearingInProgress_ = false;
     getAnnouncerInstance().announce(loadTimeData.getString('clearedData'));
     this.showHistoryDeletionDialog_ = showHistoryNotice;
@@ -497,17 +558,14 @@ export class SettingsClearBrowsingDataDialogElement extends
     this.showPasswordsDeletionDialogLater_ =
         showPasswordsNotice && showHistoryNotice;
 
-    // Close the clear browsing data or installed apps dialog if they are open.
+    // Close the clear browsing data if it is open.
     const isLastDialog = !showHistoryNotice && !showPasswordsNotice;
     if (this.$.clearBrowsingDataDialog.open) {
       closeDialog(this.$.clearBrowsingDataDialog, isLastDialog);
     }
-    if (this.$.installedAppsDialog.open) {
-      closeDialog(this.$.installedAppsDialog, isLastDialog);
-    }
   }
 
-  private onCancelTap_() {
+  private onCancelClick_() {
     this.$.clearBrowsingDataDialog.cancel();
   }
 
@@ -550,7 +608,10 @@ export class SettingsClearBrowsingDataDialogElement extends
   private onSyncDescriptionLinkClicked_(e: Event) {
     if ((e.target as HTMLElement).tagName === 'A') {
       e.preventDefault();
-      if (!this.syncStatus!.hasError) {
+      if (this.showSigninInfo_()) {
+        chrome.metricsPrivate.recordUserAction('ClearBrowsingData_SignOut');
+        this.syncBrowserProxy_.signOut(/*delete_profile=*/ false);
+      } else if (this.showSyncInfo_()) {
         chrome.metricsPrivate.recordUserAction('ClearBrowsingData_Sync_Pause');
         this.syncBrowserProxy_.pauseSync();
       } else if (this.isSyncPaused_) {
@@ -597,44 +658,50 @@ export class SettingsClearBrowsingDataDialogElement extends
   private shouldShowFooter_(): boolean {
     let showFooter = false;
     // <if expr="not is_chromeos">
-    showFooter = !!this.syncStatus && !!this.syncStatus!.signedIn;
+    if (this.unoDesktopEnabled_) {
+      showFooter = this.isSignedIn_;
+    } else {
+      showFooter = !!this.syncStatus && !!this.syncStatus!.signedIn;
+    }
     // </if>
     return showFooter;
   }
 
-  private async onClearBrowsingDataClick_() {
-    await this.getInstalledApps_();
-    if (this.shouldShowInstalledApps_()) {
-      replaceDialog(this.$.clearBrowsingDataDialog, this.$.installedAppsDialog);
-    } else {
-      await this.clearBrowsingData_();
+  /**
+   * @return Whether the signed info description should be shown in the footer.
+   */
+  private showSigninInfo_(): boolean {
+    return this.unoDesktopEnabled_ && this.isSignedIn_ &&
+        (!this.syncStatus || !this.syncStatus.signedIn);
+  }
+
+  /**
+   * @return Whether the synced info description should be shown in the footer.
+   */
+  private showSyncInfo_(): boolean {
+    return !this.showSigninInfo_() && !!this.syncStatus &&
+        !this.syncStatus.hasError;
+  }
+
+  private onTimePeriodAdvancedPrefUpdated_() {
+    this.onTimePeriodPrefUpdated_(false);
+  }
+
+  private onTimePeriodBasicPrefUpdated_() {
+    this.onTimePeriodPrefUpdated_(true);
+  }
+
+
+  private onTimePeriodPrefUpdated_(basic: boolean) {
+    const timePeriodPref = basic ? 'browser.clear_data.time_period_basic' :
+                                   'browser.clear_data.time_period';
+
+    const timePeriodValue = this.getPref(timePeriodPref).value;
+
+    if (!(timePeriodValue in TimePeriod)) {
+      // If the synced time period is not supported, default to "Last hour".
+      this.setPrefValue(timePeriodPref, TimePeriod.LAST_HOUR);
     }
-  }
-
-  private hideInstalledApps_() {
-    chrome.metricsPrivate.recordEnumerationValue(
-        'History.ClearBrowsingData.InstalledAppsDialogAction',
-        InstalledAppsDialogActions.CLOSE,
-        Object.keys(InstalledAppsDialogActions).length);
-    replaceDialog(this.$.installedAppsDialog, this.$.clearBrowsingDataDialog);
-  }
-
-  private onCancelInstalledApps_() {
-    chrome.metricsPrivate.recordEnumerationValue(
-        'History.ClearBrowsingData.InstalledAppsDialogAction',
-        InstalledAppsDialogActions.CANCEL_BUTTON,
-        Object.keys(InstalledAppsDialogActions).length);
-    replaceDialog(this.$.installedAppsDialog, this.$.clearBrowsingDataDialog);
-  }
-
-  /** Handles the tap confirm button in installed apps. */
-  private async onInstalledAppsConfirmClick_() {
-    chrome.metricsPrivate.recordEnumerationValue(
-        'History.ClearBrowsingData.InstalledAppsDialogAction',
-        InstalledAppsDialogActions.CLEAR_BUTTON,
-        Object.keys(InstalledAppsDialogActions).length);
-    this.recordInstalledAppsInteractions_();
-    await this.clearBrowsingData_();
   }
 }
 

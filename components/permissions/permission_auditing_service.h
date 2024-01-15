@@ -5,7 +5,7 @@
 #ifndef COMPONENTS_PERMISSIONS_PERMISSION_AUDITING_SERVICE_H_
 #define COMPONENTS_PERMISSIONS_PERMISSION_AUDITING_SERVICE_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
@@ -32,9 +32,7 @@ struct PermissionUsageSession;
 // For each combination of permission type and origin, the history is
 // stored on disk as a series of PermissionUsageSessions. Sessions expire
 // at the latest after 3 months, or when browsing data or history is cleared.
-class PermissionAuditingService
-    : public KeyedService,
-      public base::SupportsWeakPtr<PermissionAuditingService> {
+class PermissionAuditingService final : public KeyedService {
  public:
   typedef base::OnceCallback<void(std::vector<PermissionUsageSession>)>
       PermissionUsageHistoryCallback;
@@ -96,6 +94,10 @@ class PermissionAuditingService
   // Returns the time delta between two consequent expiration iterations.
   static base::TimeDelta GetUsageSessionCullingInterval();
 
+  base::WeakPtr<PermissionAuditingService> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
  private:
   void ExpireOldSessions();
 
@@ -104,9 +106,12 @@ class PermissionAuditingService
   // Lives on the |backend_task_runner_|, and must only be accessed on that
   // sequence. It is safe to assume the database is alive as long as |db_| is
   // non-null.
-  raw_ptr<PermissionAuditingDatabase> db_ = nullptr;
+  raw_ptr<PermissionAuditingDatabase, AcrossTasksDanglingUntriaged> db_ =
+      nullptr;
 
   base::RepeatingTimer timer_;
+
+  base::WeakPtrFactory<PermissionAuditingService> weak_ptr_factory_{this};
 };
 
 }  // namespace permissions

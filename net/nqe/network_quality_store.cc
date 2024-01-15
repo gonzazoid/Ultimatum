@@ -4,10 +4,10 @@
 
 #include "net/nqe/network_quality_store.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/observer_list.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "net/base/network_change_notifier.h"
 
 namespace net::nqe::internal {
@@ -139,8 +139,7 @@ bool NetworkQualityStore::GetById(
     // Determine if the signal strength of |network_id| is closer to the
     // signal strength of the network at |it| then that of the network at
     // |matching_it|.
-    int diff_signal_strength =
-        std::abs(network_id.signal_strength - it->first.signal_strength);
+    int diff_signal_strength;
     if (it->first.signal_strength == INT32_MIN) {
       // Current network has signal strength available. However, the persisted
       // network does not. Set the |diff_signal_strength| to INT32_MAX. This
@@ -148,6 +147,9 @@ bool NetworkQualityStore::GetById(
       // during iteration, then that entry will be used. If no entry with valid
       // signal strength is found, then this entry will be used.
       diff_signal_strength = INT32_MAX;
+    } else {
+      diff_signal_strength =
+          std::abs(network_id.signal_strength - it->first.signal_strength);
     }
 
     if (matching_it == cached_network_qualities_.end() ||
@@ -171,10 +173,11 @@ void NetworkQualityStore::AddNetworkQualitiesCacheObserver(
 
   // Notify the |observer| on the next message pump since |observer| may not
   // be completely set up for receiving the callbacks.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&NetworkQualityStore::NotifyCacheObserverIfPresent,
-                     weak_ptr_factory_.GetWeakPtr(), observer));
+                     weak_ptr_factory_.GetWeakPtr(),
+                     base::UnsafeDangling(observer)));
 }
 
 void NetworkQualityStore::RemoveNetworkQualitiesCacheObserver(
@@ -184,7 +187,7 @@ void NetworkQualityStore::RemoveNetworkQualitiesCacheObserver(
 }
 
 void NetworkQualityStore::NotifyCacheObserverIfPresent(
-    NetworkQualitiesCacheObserver* observer) const {
+    MayBeDangling<NetworkQualitiesCacheObserver> observer) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (!network_qualities_cache_observer_list_.HasObserver(observer))

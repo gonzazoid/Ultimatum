@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/synchronization/waitable_event.h"
 #include "cc/cc_export.h"
@@ -39,10 +39,10 @@ class CC_EXPORT SurfaceLayerImpl : public LayerImpl {
   SurfaceLayerImpl& operator=(const SurfaceLayerImpl&) = delete;
 
   void SetRange(const viz::SurfaceRange& surface_range,
-                absl::optional<uint32_t> deadline_in_frames);
+                std::optional<uint32_t> deadline_in_frames);
   const viz::SurfaceRange& range() const { return surface_range_; }
 
-  absl::optional<uint32_t> deadline_in_frames() const {
+  std::optional<uint32_t> deadline_in_frames() const {
     return deadline_in_frames_;
   }
 
@@ -59,6 +59,8 @@ class CC_EXPORT SurfaceLayerImpl : public LayerImpl {
 
   void SetIsReflection(bool is_reflection);
   bool is_reflection() const { return is_reflection_; }
+
+  void ResetStateForUpdateSubmissionStateCallback();
 
   // LayerImpl overrides.
   std::unique_ptr<LayerImpl> CreateLayerImpl(
@@ -82,13 +84,17 @@ class CC_EXPORT SurfaceLayerImpl : public LayerImpl {
 
   UpdateSubmissionStateCB update_submission_state_callback_;
   viz::SurfaceRange surface_range_;
-  absl::optional<uint32_t> deadline_in_frames_;
+  std::optional<uint32_t> deadline_in_frames_;
 
   bool stretch_content_to_fill_bounds_ = false;
   bool surface_hit_testable_ = false;
   bool has_pointer_events_none_ = false;
   bool is_reflection_ = false;
   bool will_draw_ = false;
+  // This value tracks if a visibility reset took place in the associated
+  // SurfaceLayer, so that it can be propagated to the active SurfaceLayerImpl
+  // and used to update `will_draw_` on that layer accordingly.
+  bool will_draw_needs_reset_ = false;
 };
 
 }  // namespace cc

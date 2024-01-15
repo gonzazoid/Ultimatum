@@ -5,10 +5,13 @@
 #ifndef ASH_APP_LIST_VIEWS_SEARCH_RESULT_BASE_VIEW_H_
 #define ASH_APP_LIST_VIEWS_SEARCH_RESULT_BASE_VIEW_H_
 
+#include <optional>
+
 #include "ash/app_list/model/search/search_result_observer.h"
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/button.h"
 
 namespace ash {
@@ -20,6 +23,7 @@ class SearchResultActionsView;
 class ASH_EXPORT SearchResultBaseView : public views::Button,
                                         public SearchResultObserver {
  public:
+  METADATA_HEADER(SearchResultBaseView);
   SearchResultBaseView();
 
   SearchResultBaseView(const SearchResultBaseView&) = delete;
@@ -32,7 +36,7 @@ class ASH_EXPORT SearchResultBaseView : public views::Button,
   // |reverse_tab_order| - Indicates whether the selection was set as part of
   //     reverse tab traversal. Should be set when selection was changed while
   //     handling TAB keyboard key. Ignored if |selected| is false.
-  void SetSelected(bool selected, absl::optional<bool> reverse_tab_order);
+  void SetSelected(bool selected, std::optional<bool> reverse_tab_order);
 
   // Selects the initial action that should be associated with the result view,
   // notifying a11y hierarchy of the selection. If the result view does not
@@ -56,9 +60,6 @@ class ASH_EXPORT SearchResultBaseView : public views::Button,
 
   SearchResult* result() const { return result_; }
   void SetResult(SearchResult* result);
-
-  // Invoked before changing |result_| to |new_result|.
-  virtual void OnResultChanging(SearchResult* new_result) {}
 
   // Invoked after |result_| is updated.
   virtual void OnResultChanged() {}
@@ -96,7 +97,7 @@ class ASH_EXPORT SearchResultBaseView : public views::Button,
   bool SkipDefaultKeyEventProcessing(const ui::KeyEvent& event) override;
 
   // views::View:
-  const char* GetClassName() const override;
+  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
 
   SearchResultActionsView* actions_view() { return actions_view_; }
 
@@ -120,10 +121,10 @@ class ASH_EXPORT SearchResultBaseView : public views::Button,
   // Expected to be set by result view implementations that supports
   // extra result actions. It points to the view containing result actions
   // buttons. Owned by the views hierarchy.
-  SearchResultActionsView* actions_view_ = nullptr;
+  raw_ptr<SearchResultActionsView, DanglingUntriaged> actions_view_ = nullptr;
 
   // The index of this view within a |SearchResultContainerView| that holds it.
-  absl::optional<int> index_in_container_;
+  std::optional<int> index_in_container_;
 
   // The starting time when |result_| is being displayed.
   base::TimeTicks result_display_start_time_;
@@ -131,7 +132,8 @@ class ASH_EXPORT SearchResultBaseView : public views::Button,
   // True if |result_| is selected as the default result which can be
   // activated by user by pressing ENTER key.
   bool is_default_result_ = false;
-  SearchResult* result_ = nullptr;  // Owned by SearchModel::SearchResults.
+  raw_ptr<SearchResult> result_ =
+      nullptr;  // Owned by SearchModel::SearchResults.
 };
 
 }  // namespace ash

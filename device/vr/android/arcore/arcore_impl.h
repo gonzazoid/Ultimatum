@@ -6,6 +6,7 @@
 #define DEVICE_VR_ANDROID_ARCORE_ARCORE_IMPL_H_
 
 #include "base/component_export.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/types/id_type.h"
 #include "device/vr/android/arcore/arcore.h"
@@ -13,7 +14,9 @@
 #include "device/vr/android/arcore/arcore_plane_manager.h"
 #include "device/vr/android/arcore/arcore_sdk.h"
 #include "device/vr/android/arcore/scoped_arcore_objects.h"
+#include "device/vr/create_anchor_request.h"
 #include "device/vr/public/mojom/vr_service.mojom.h"
+#include "device/vr/public/mojom/xr_session.mojom.h"
 #include "device/vr/util/hit_test_subscription_data.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -23,53 +26,30 @@ class ArCorePlaneManager;
 
 using AnchorId = base::IdTypeU64<class AnchorTag>;
 
-class CreateAnchorRequest {
- public:
-  mojom::XRNativeOriginInformation GetNativeOriginInformation() const;
-  gfx::Transform GetNativeOriginFromAnchor() const;
-  base::TimeTicks GetRequestStartTime() const;
-
-  ArCore::CreateAnchorCallback TakeCallback();
-
-  CreateAnchorRequest(
-      const mojom::XRNativeOriginInformation& native_origin_information,
-      const gfx::Transform& native_origin_from_anchor,
-      ArCore::CreateAnchorCallback callback);
-  CreateAnchorRequest(CreateAnchorRequest&& other);
-  ~CreateAnchorRequest();
-
- private:
-  const mojom::XRNativeOriginInformation native_origin_information_;
-  const gfx::Transform native_origin_from_anchor_;
-  const base::TimeTicks request_start_time_;
-
-  ArCore::CreateAnchorCallback callback_;
-};
-
 class CreatePlaneAttachedAnchorRequest {
  public:
   uint64_t GetPlaneId() const;
-  mojom::XRNativeOriginInformation GetNativeOriginInformation() const;
+  const mojom::XRNativeOriginInformation& GetNativeOriginInformation() const;
   gfx::Transform GetNativeOriginFromAnchor() const;
   base::TimeTicks GetRequestStartTime() const;
 
-  ArCore::CreateAnchorCallback TakeCallback();
+  CreateAnchorCallback TakeCallback();
 
   CreatePlaneAttachedAnchorRequest(
       const mojom::XRNativeOriginInformation& native_origin_information,
       const gfx::Transform& native_origin_from_anchor,
       uint64_t plane_id,
-      ArCore::CreateAnchorCallback callback);
+      CreateAnchorCallback callback);
   CreatePlaneAttachedAnchorRequest(CreatePlaneAttachedAnchorRequest&& other);
   ~CreatePlaneAttachedAnchorRequest();
 
  private:
-  const mojom::XRNativeOriginInformation native_origin_information_;
+  mojom::XRNativeOriginInformationPtr native_origin_information_;
   const gfx::Transform native_origin_from_anchor_;
   const uint64_t plane_id_;
   const base::TimeTicks request_start_time_;
 
-  ArCore::CreateAnchorCallback callback_;
+  CreateAnchorCallback callback_;
 };
 
 // This class should be created and accessed entirely on a Gl thread.
@@ -297,15 +277,24 @@ class ArCoreImpl : public ArCore {
 
   // Helper, attempts to configure ArSession's camera for use. Note that this is
   // happening during initialization, before arcore_session_ is set.
-  // Returns true if configuration succeeded, false otherwise.
-  bool ConfigureCamera(ArSession* ar_session);
+  // Returns `true` if configuration succeeded, false otherwise.
+  // It can modify `enabled_features` if the camera was configured such that
+  // some features have been disabled.
+  bool ConfigureCamera(
+      ArSession* ar_session,
+      const std::unordered_set<device::mojom::XRSessionFeature>&
+          required_features,
+      const std::unordered_set<device::mojom::XRSessionFeature>&
+          optional_features,
+      std::unordered_set<device::mojom::XRSessionFeature>& enabled_features);
 
   // Helper, attempts to configure ArSession's features based on required and
   // optional features. Note that this is happening during initialization,
-  // before arcore_session_ is set. Returns a collection of features that were
-  // successfully enabled on a session or a nullopt on failure.
-  absl::optional<std::unordered_set<device::mojom::XRSessionFeature>>
-  ConfigureFeatures(
+  // before arcore_session_ is set. Returns `true` if feature configuration
+  // succeeded (i.e. all required features have been configured), `false`
+  // otherwise. It can modify `enabled_features` if some optional features could
+  // not have been configured.
+  bool ConfigureFeatures(
       ArSession* ar_session,
       const std::unordered_set<device::mojom::XRSessionFeature>&
           required_features,
@@ -313,7 +302,8 @@ class ArCoreImpl : public ArCore {
           optional_features,
       const std::vector<device::mojom::XRTrackedImagePtr>& tracked_images,
       const absl::optional<ArCore::DepthSensingConfiguration>&
-          depth_sensing_config);
+          depth_sensing_config,
+      std::unordered_set<device::mojom::XRSessionFeature>& enabled_features);
 
   // Configures depth sensing API - selects depth sensing usage and mode that is
   // compatible with the device. Returns false if it was unable to pick a

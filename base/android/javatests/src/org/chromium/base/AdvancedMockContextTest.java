@@ -9,8 +9,8 @@ import android.content.ComponentCallbacks;
 import android.content.ComponentCallbacks2;
 import android.content.Context;
 import android.content.res.Configuration;
-import android.support.test.InstrumentationRegistry;
 
+import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.SmallTest;
 
 import org.junit.Assert;
@@ -20,9 +20,7 @@ import org.junit.runner.RunWith;
 import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.base.test.util.AdvancedMockContext;
 
-/**
- * Tests for {@link org.chromium.base.test.util.AdvancedMockContext}.
- */
+/** Tests for {@link org.chromium.base.test.util.AdvancedMockContext}. */
 @RunWith(BaseJUnit4ClassRunner.class)
 public class AdvancedMockContextTest {
     private static class Callback1 implements ComponentCallbacks {
@@ -66,13 +64,19 @@ public class AdvancedMockContextTest {
 
         Configuration configuration = new Configuration();
         targetApplication.onConfigurationChanged(configuration);
-        Assert.assertEquals("onConfigurationChanged should have been called.", configuration,
+        Assert.assertEquals(
+                "onConfigurationChanged should have been called.",
+                configuration,
                 callback1.mConfiguration);
-        Assert.assertEquals("onConfigurationChanged should have been called.", configuration,
+        Assert.assertEquals(
+                "onConfigurationChanged should have been called.",
+                configuration,
                 callback2.mConfiguration);
 
         targetApplication.onTrimMemory(ComponentCallbacks2.TRIM_MEMORY_MODERATE);
-        Assert.assertEquals("onTrimMemory should have been called.",
-                ComponentCallbacks2.TRIM_MEMORY_MODERATE, callback2.mLevel);
+        Assert.assertEquals(
+                "onTrimMemory should have been called.",
+                ComponentCallbacks2.TRIM_MEMORY_MODERATE,
+                callback2.mLevel);
     }
 }

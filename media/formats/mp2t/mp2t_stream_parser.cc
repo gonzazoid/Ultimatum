@@ -7,14 +7,15 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/numerics/checked_math.h"
+#include "media/base/byte_queue.h"
 #include "media/base/media_tracks.h"
 #include "media/base/stream_parser.h"
 #include "media/base/stream_parser_buffer.h"
-#include "media/base/text_track_config.h"
 #include "media/base/timestamp_constants.h"
+#include "media/base/video_codec_string_parsers.h"
 #include "media/formats/mp2t/descriptors.h"
 #include "media/formats/mp2t/es_parser.h"
 #include "media/formats/mp2t/es_parser_adts.h"
@@ -23,29 +24,24 @@
 #include "media/formats/mp2t/mp2t_common.h"
 #include "media/formats/mp2t/ts_packet.h"
 #include "media/formats/mp2t/ts_section.h"
+#include "media/formats/mp2t/ts_section_cat.h"
+#include "media/formats/mp2t/ts_section_cets_ecm.h"
+#include "media/formats/mp2t/ts_section_cets_pssh.h"
 #include "media/formats/mp2t/ts_section_pat.h"
 #include "media/formats/mp2t/ts_section_pes.h"
 #include "media/formats/mp2t/ts_section_pmt.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
-
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
-#include "media/formats/mp2t/ts_section_cat.h"
-#include "media/formats/mp2t/ts_section_cets_ecm.h"
-#include "media/formats/mp2t/ts_section_cets_pssh.h"
-#endif
 
 namespace media {
 namespace mp2t {
 
 namespace {
 
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
-const int64_t kSampleAESPrivateDataIndicatorAVC = 0x7a617663;
-const int64_t kSampleAESPrivateDataIndicatorAAC = 0x61616364;
+constexpr int64_t kSampleAESPrivateDataIndicatorAVC = 0x7a617663;
+constexpr int64_t kSampleAESPrivateDataIndicatorAAC = 0x61616364;
 // TODO(dougsteed). Consider adding support for the following:
 // const int64_t kSampleAESPrivateDataIndicatorAC3 = 0x61633364;
 // const int64_t kSampleAESPrivateDataIndicatorEAC3 = 0x65633364;
-#endif
 
 }  // namespace
 
@@ -56,13 +52,11 @@ enum StreamType {
   kStreamTypeMpeg2Audio = 0x4,
   kStreamTypeAAC = 0xf,
   kStreamTypeAVC = 0x1b,
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
   kStreamTypeAACWithSampleAES = 0xcf,
   kStreamTypeAVCWithSampleAES = 0xdb,
-// TODO(dougsteed). Consider adding support for the following:
-//  kStreamTypeAC3WithSampleAES = 0xc1,
-//  kStreamTypeEAC3WithSampleAES = 0xc2,
-#endif
+  // TODO(dougsteed). Consider adding support for the following:
+  //  kStreamTypeAC3WithSampleAES = 0xc1,
+  //  kStreamTypeEAC3WithSampleAES = 0xc2,
 };
 
 class PidState {
@@ -72,11 +66,9 @@ class PidState {
     kPidPmt,
     kPidAudioPes,
     kPidVideoPes,
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
     kPidCat,
     kPidCetsEcm,
     kPidCetsPssh,
-#endif
   };
 
   PidState(int pid,
@@ -205,9 +197,7 @@ Mp2tStreamParser::Mp2tStreamParser(base::span<const std::string> allowed_codecs,
     switch (StringToVideoCodec(codec_name)) {
       case VideoCodec::kH264:
         allowed_stream_types_.insert(kStreamTypeAVC);
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
         allowed_stream_types_.insert(kStreamTypeAVCWithSampleAES);
-#endif
         continue;
       case VideoCodec::kUnknown:
         // Probably audio.
@@ -220,9 +210,7 @@ Mp2tStreamParser::Mp2tStreamParser(base::span<const std::string> allowed_codecs,
     switch (StringToAudioCodec(codec_name)) {
       case AudioCodec::kAAC:
         allowed_stream_types_.insert(kStreamTypeAAC);
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
         allowed_stream_types_.insert(kStreamTypeAACWithSampleAES);
-#endif
         continue;
       case AudioCodec::kMP3:
         allowed_stream_types_.insert(kStreamTypeMpeg1Audio);
@@ -247,7 +235,6 @@ void Mp2tStreamParser::Init(
     InitCB init_cb,
     NewConfigCB config_cb,
     NewBuffersCB new_buffers_cb,
-    bool /* ignore_text_tracks */,
     EncryptedMediaInitDataCB encrypted_media_init_data_cb,
     NewMediaSegmentCB new_segment_cb,
     EndMediaSegmentCB end_of_segment_cb,
@@ -334,7 +321,10 @@ bool Mp2tStreamParser::AppendToParseBuffer(const uint8_t* buf, size_t size) {
 
   // Add the data to the parser state.
   uninspected_pending_bytes_ = base::checked_cast<int>(size);
-  ts_byte_queue_.Push(buf, uninspected_pending_bytes_);
+  if (!ts_byte_queue_.Push(buf, uninspected_pending_bytes_)) {
+    DVLOG(2) << "AppendToParseBuffer(): Failed to push buf of size " << size;
+    return false;
+  }
 
   return true;
 }
@@ -414,16 +404,14 @@ StreamParser::ParseStatus Mp2tStreamParser::Parse(
                .insert(
                    std::make_pair(ts_packet->pid(), std::move(pat_pid_state)))
                .first;
-    }
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
-    // We allow a CAT to appear as the first packet in the TS. This allows us to
-    // specify encryption metadata for HLS by injecting it as an extra TS packet
-    // at the front of the stream.
-    else if (it == pids_.end() && ts_packet->pid() == TsSection::kPidCat) {
+    } else if (it == pids_.end() && ts_packet->pid() == TsSection::kPidCat) {
+      // We allow a CAT to appear as the first packet in the TS. This allows us
+      // to specify encryption metadata for HLS by injecting it as an extra TS
+      // packet at the front of the stream.
+
       it = pids_.insert(std::make_pair(TsSection::kPidCat, MakeCatPidState()))
                .first;
     }
-#endif
 
     if (it != pids_.end()) {
       if (!it->second->PushTsPacket(*ts_packet))
@@ -483,7 +471,6 @@ void Mp2tStreamParser::RegisterPmt(int program_number, int pmt_pid) {
   pmt_pid_state->Enable();
   pids_.insert(std::make_pair(pmt_pid, std::move(pmt_pid_state)));
 
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
   // Take the opportunity to clean up any PIDs that were involved in importing
   // encryption metadata for HLS with SampleAES. This prevents the possibility
   // of interference with actual PIDs that might be declared in the PMT.
@@ -491,7 +478,6 @@ void Mp2tStreamParser::RegisterPmt(int program_number, int pmt_pid) {
   // source stream, this will not be necessary.
   UnregisterCat();
   UnregisterCencPids();
-#endif
 }
 
 std::unique_ptr<EsParser> Mp2tStreamParser::CreateH264Parser(int pes_pid) {
@@ -524,7 +510,6 @@ std::unique_ptr<EsParser> Mp2tStreamParser::CreateMpeg1AudioParser(
       on_audio_config_changed, std::move(on_emit_audio_buffer), media_log_);
 }
 
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
 bool Mp2tStreamParser::ShouldForceEncryptedParser() {
   // If we expect to handle encrypted data later in the stream, then force the
   // use of the encrypted parser variant so that the initial configuration
@@ -567,7 +552,6 @@ std::unique_ptr<EsParser> Mp2tStreamParser::CreateEncryptedAacParser(
       std::move(get_decrypt_config), initial_encryption_scheme_,
       sbr_in_mimetype_);
 }
-#endif
 
 void Mp2tStreamParser::RegisterPes(int pes_pid,
                                    int stream_type,
@@ -596,24 +580,20 @@ void Mp2tStreamParser::RegisterPes(int pes_pid,
   switch (stream_type) {
     case kStreamTypeAVC:
       is_audio = false;
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
       if (ShouldForceEncryptedParser()) {
         es_parser =
             CreateEncryptedH264Parser(pes_pid, true /* emit_clear_buffers */);
         break;
       }
-#endif
       es_parser = CreateH264Parser(pes_pid);
       break;
 
     case kStreamTypeAAC:
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
       if (ShouldForceEncryptedParser()) {
         es_parser =
             CreateEncryptedAacParser(pes_pid, true /* emit_clear_buffers */);
         break;
       }
-#endif
       es_parser = CreateAacParser(pes_pid);
       break;
 
@@ -622,7 +602,6 @@ void Mp2tStreamParser::RegisterPes(int pes_pid,
       es_parser = CreateMpeg1AudioParser(pes_pid);
       break;
 
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
     case kStreamTypeAVCWithSampleAES:
       if (descriptors.HasPrivateDataIndicator(
               kSampleAESPrivateDataIndicatorAVC)) {
@@ -645,7 +624,6 @@ void Mp2tStreamParser::RegisterPes(int pes_pid,
                 << "corresponding private data indicator is not present.";
       }
       break;
-#endif
 
     default:
       // Unknown stream_type, so can't create a parser. Logged below.
@@ -815,15 +793,14 @@ bool Mp2tStreamParser::FinishInitializationIfNeeded() {
   // Pass the config before invoking the initialization callback.
   std::unique_ptr<MediaTracks> media_tracks = GenerateMediaTrackInfo(
       queue_with_config.audio_config, queue_with_config.video_config);
-  RCHECK(config_cb_.Run(std::move(media_tracks), TextTrackConfigMap()));
+  RCHECK(config_cb_.Run(std::move(media_tracks)));
   queue_with_config.is_config_sent = true;
 
   // For Mpeg2 TS, the duration is not known.
   DVLOG(1) << "Mpeg2TS stream parser initialization done";
 
   // TODO(wolenetz): If possible, detect and report track counts by type more
-  // accurately here. Currently, capped at max 1 each for audio and video, with
-  // assumption of 0 text tracks.
+  // accurately here. Currently, capped at max 1 each for audio and video.
   InitParameters params(kInfiniteDuration);
   params.detected_audio_track_count =
       queue_with_config.audio_config.IsValidConfig() ? 1 : 0;
@@ -923,8 +900,9 @@ bool Mp2tStreamParser::EmitRemainingBuffers() {
     if (!queue_with_config.is_config_sent) {
       std::unique_ptr<MediaTracks> media_tracks = GenerateMediaTrackInfo(
           queue_with_config.audio_config, queue_with_config.video_config);
-      if (!config_cb_.Run(std::move(media_tracks), TextTrackConfigMap()))
+      if (!config_cb_.Run(std::move(media_tracks))) {
         return false;
+      }
       queue_with_config.is_config_sent = true;
     }
 
@@ -952,7 +930,6 @@ bool Mp2tStreamParser::EmitRemainingBuffers() {
   return true;
 }
 
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
 std::unique_ptr<PidState> Mp2tStreamParser::MakeCatPidState() {
   auto cat_section_parser = std::make_unique<TsSectionCat>(
       base::BindRepeating(&Mp2tStreamParser::RegisterCencPids,
@@ -1038,8 +1015,6 @@ void Mp2tStreamParser::RegisterPsshBoxes(
     const std::vector<uint8_t>& init_data) {
   encrypted_media_init_data_cb_.Run(EmeInitDataType::CENC, init_data);
 }
-
-#endif
 
 }  // namespace mp2t
 }  // namespace media

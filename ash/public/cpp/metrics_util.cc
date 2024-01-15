@@ -4,37 +4,47 @@
 
 #include "ash/public/cpp/metrics_util.h"
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/logging.h"
 #include "base/no_destructor.h"
+#include "base/time/time.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
 
-namespace ash {
-namespace metrics_util {
+#undef ENABLED_VLOG_LEVEL
+#define ENABLED_VLOG_LEVEL 1
+
+namespace ash::metrics_util {
 
 namespace {
 
 bool g_data_collection_enabled = false;
 
-std::vector<cc::FrameSequenceMetrics::CustomReportData>& GetDataCollector() {
-  static base::NoDestructor<
-      std::vector<cc::FrameSequenceMetrics::CustomReportData>>
-      data;
+std::vector<AnimationData>& GetDataCollector() {
+  static base::NoDestructor<std::vector<AnimationData>> data;
   return *data;
 }
 
 void CollectDataAndForwardReport(
+    base::TimeTicks start_tick,
     ReportCallback callback,
     const cc::FrameSequenceMetrics::CustomReportData& data) {
   // An arbitrary cap on the maximum number of animations being collected.
   DCHECK_LT(GetDataCollector().size(), 1000u);
 
-  GetDataCollector().push_back(data);
+  AnimationData animation_data = {
+      .start_tick = start_tick,
+      .stop_tick = base::TimeTicks::Now(),
+      .smoothness_data = data,
+  };
+
+  GetDataCollector().emplace_back(std::move(animation_data));
   std::move(callback).Run(data);
 }
 
 // Calculates smoothness from |throughput| and sends to |callback|.
-void ForwardSmoothness(SmoothnessCallback callback,
+void ForwardSmoothness(base::TimeTicks start_tick,
+                       SmoothnessCallback callback,
                        const cc::FrameSequenceMetrics::CustomReportData& data) {
   bool animation_in_test =
       ui::ScopedAnimationDurationScaleMode::duration_multiplier() !=
@@ -46,24 +56,41 @@ void ForwardSmoothness(SmoothnessCallback callback,
   // *   frame_expected == 1 && frames_produced == 0
   //        when there is one BeginFrame but no frame generated between
   //        start and stop; should not included this case in tests.
-  if (!data.frames_expected ||
-      (!animation_in_test && data.frames_expected == 1 &&
-       data.frames_produced == 0)) {
+  if (!data.frames_expected_v3 ||
+      (!animation_in_test && data.frames_expected_v3 == 1 &&
+       data.frames_expected_v3 == data.frames_dropped_v3)) {
     return;
   }
-  callback.Run(CalculateSmoothness(data));
+
+  // Threshold to trigger logs for feedback analyzer.
+  constexpr base::TimeDelta kLongAnimation = base::Seconds(1);
+  constexpr int kLowSmoothness = 20;
+
+  const base::TimeDelta duration = base::TimeTicks::Now() - start_tick;
+  const int smoothness = CalculateSmoothnessV3(data);
+
+  if (duration > kLongAnimation) {
+    VLOG(1) << "Ash system animation takes longer than usual, duration= "
+            << duration.InMilliseconds() << " ms";
+  } else if (smoothness < kLowSmoothness) {
+    VLOG(1) << "Ash system animation drops too many frames, smoothness= "
+            << smoothness;
+  }
+
+  callback.Run(smoothness);
 }
 
 }  // namespace
 
-ReportCallback ForSmoothness(SmoothnessCallback callback,
-                             bool exclude_from_data_collection) {
+ReportCallback ForSmoothnessV3(SmoothnessCallback callback,
+                               bool exclude_from_data_collection) {
+  const base::TimeTicks now = base::TimeTicks::Now();
   auto forward_smoothness =
-      base::BindRepeating(&ForwardSmoothness, std::move(callback));
+      base::BindRepeating(&ForwardSmoothness, now, std::move(callback));
   if (!g_data_collection_enabled || exclude_from_data_collection)
     return forward_smoothness;
 
-  return base::BindRepeating(&CollectDataAndForwardReport,
+  return base::BindRepeating(&CollectDataAndForwardReport, now,
                              std::move(forward_smoothness));
 }
 
@@ -72,29 +99,29 @@ void StartDataCollection() {
   g_data_collection_enabled = true;
 }
 
-std::vector<cc::FrameSequenceMetrics::CustomReportData> StopDataCollection() {
-  DCHECK(g_data_collection_enabled);
+std::vector<AnimationData> StopDataCollection() {
   g_data_collection_enabled = false;
 
   return GetCollectedData();
 }
 
-std::vector<cc::FrameSequenceMetrics::CustomReportData> GetCollectedData() {
-  std::vector<cc::FrameSequenceMetrics::CustomReportData> data;
+std::vector<AnimationData> GetCollectedData() {
+  std::vector<AnimationData> data;
   data.swap(GetDataCollector());
   return data;
 }
 
-int CalculateSmoothness(
+int CalculateSmoothnessV3(
     const cc::FrameSequenceMetrics::CustomReportData& data) {
-  DCHECK(data.frames_expected);
-  return std::floor(100.0f * data.frames_produced / data.frames_expected);
+  DCHECK(data.frames_expected_v3);
+  return std::floor(100.0f *
+                    (data.frames_expected_v3 - data.frames_dropped_v3) /
+                    data.frames_expected_v3);
 }
 
-int CalculateJank(const cc::FrameSequenceMetrics::CustomReportData& data) {
-  DCHECK(data.frames_expected);
-  return std::floor(100.0f * data.jank_count / data.frames_expected);
+int CalculateJankV3(const cc::FrameSequenceMetrics::CustomReportData& data) {
+  DCHECK(data.frames_expected_v3);
+  return std::floor(100.0f * data.jank_count_v3 / data.frames_expected_v3);
 }
 
-}  // namespace metrics_util
-}  // namespace ash
+}  // namespace ash::metrics_util

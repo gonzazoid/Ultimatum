@@ -40,6 +40,11 @@ def parse_arguments(arguments):
         help='The typescript gn build target which builds the source code '
              'files',
         required=True)
+    parser.add_argument(
+        '--custom_def_files',
+        help='Comma separate file list which will be added to "files" section '
+             'in tsconfig as additional type definitions',
+        required=False)
     return parser.parse_args(arguments)
 
 
@@ -53,7 +58,8 @@ def main(args):
     arguments = parse_arguments(args)
     # execute the ts build target to generate the tsconfig.json file.
     subprocess.check_call(
-        ['autoninja', '-C', arguments.root_out_dir, arguments.gn_target])
+        ['autoninja', '-C', arguments.root_out_dir, arguments.gn_target],
+        stdout=subprocess.DEVNULL)
 
     gn_target_src_dir, gn_target_suffix = arguments.gn_target.split(':')
 
@@ -72,30 +78,45 @@ def main(args):
     with open(out_json_path, 'r') as f:
         out_json = json.load(f)
 
-    curdir = os.path.curdir
     out_json_dir = os.path.dirname(out_json_path)
+    definitions = ['.d.ts']
+    if arguments.custom_def_files:
+        definitions.extend(arguments.custom_def_files.split(','))
     local_json = {
         'extends': normalize_path(out_json_dir, out_json['extends']),
         'compilerOptions': {
             'baseUrl': '.',
+            'allowJs': out_json['compilerOptions'].get('allowJs', False),
             'rootDirs': [
                 '.',
                 normalize_path(out_json_dir,
                                out_json['compilerOptions']['rootDir']),
             ],
-            'outDir': '/tmp',
+            'noEmit': True,
             'paths': {
                 key: [normalize_path(out_json_dir, path) for path in value]
                 for key, value in out_json['compilerOptions']['paths'].items()
             },
         },
+        'files': [
+            # Add the .d.ts files.
+            normalize_path(out_json_dir, path)
+            for path in out_json['files'] if path.endswith(tuple(definitions))
+        ],
+        'include': [
+            # Include every source file underneath the generated tsconfig.json.
+            '**/*'
+        ],
         'references': [{
             'path': normalize_path(out_json_dir, path['path'])
         } for path in out_json['references']],
     }
 
-    with open(os.path.join(gn_target_src_dir, 'tsconfig.json'), 'w') as f:
+    output_path = os.path.join(gn_target_src_dir, 'tsconfig.json')
+    with open(output_path, 'w') as f:
         json.dump(local_json, f, indent=2)
+
+    print(os.path.basename(__file__), 'wrote file', output_path)
 
 
 if __name__ == '__main__':

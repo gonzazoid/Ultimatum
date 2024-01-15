@@ -6,12 +6,12 @@
 
 #include <fuzzer/FuzzedDataProvider.h>
 
-#include "base/cxx17_backports.h"
+#include <algorithm>
+
 #include "base/no_destructor.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "net/base/network_anonymization_key.h"
 #include "net/base/test_completion_callback.h"
-#include "net/cert/ct_policy_enforcer.h"
 #include "net/cert/do_nothing_ct_verifier.h"
 #include "net/cert/mock_cert_verifier.h"
 #include "net/cert/x509_certificate.h"
@@ -23,6 +23,7 @@
 #include "net/http/transport_security_state.h"
 #include "net/quic/mock_crypto_client_stream_factory.h"
 #include "net/quic/mock_quic_context.h"
+#include "net/quic/quic_context.h"
 #include "net/quic/quic_http_stream.h"
 #include "net/quic/test_task_runner.h"
 #include "net/socket/fuzzed_datagram_client_socket.h"
@@ -62,7 +63,7 @@ struct FuzzerEnvironment {
   FuzzerEnvironment()
       : scheme_host_port(url::kHttpsScheme, kServerHostName, kServerPort) {
     net::SetSystemDnsResolutionTaskRunnerForTesting(  // IN-TEST
-        base::SequencedTaskRunnerHandle::Get());
+        base::SequencedTaskRunner::GetCurrentDefault());
 
     quic_context.AdvanceTime(quic::QuicTime::Delta::FromSeconds(1));
     ssl_config_service = std::make_unique<SSLConfigServiceDefaults>();
@@ -84,7 +85,6 @@ struct FuzzerEnvironment {
   TransportSecurityState transport_security_state;
   quic::QuicTagVector connection_options;
   quic::QuicTagVector client_connection_options;
-  DefaultCTPolicyEnforcer ct_policy_enforcer;
   MockQuicContext quic_context;
 };
 
@@ -113,9 +113,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   params.close_sessions_on_ip_change = data_provider.ConsumeBool();
   params.allow_server_migration = data_provider.ConsumeBool();
   params.estimate_initial_rtt = data_provider.ConsumeBool();
-  params.headers_include_h2_stream_dependency = data_provider.ConsumeBool();
   params.enable_socket_recv_optimization = data_provider.ConsumeBool();
-  params.race_stale_dns_on_connection = data_provider.ConsumeBool();
 
   env->crypto_client_stream_factory.AddProofVerifyDetails(&env->verify_details);
 
@@ -144,13 +142,13 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
           env->net_log.net_log(), host_resolver.get(),
           env->ssl_config_service.get(), &socket_factory,
           &http_server_properties, env->cert_verifier.get(),
-          &env->ct_policy_enforcer, &env->transport_security_state, nullptr,
-          nullptr, &env->crypto_client_stream_factory, &env->quic_context);
+          &env->transport_security_state, nullptr, nullptr,
+          &env->crypto_client_stream_factory, &env->quic_context);
 
   QuicStreamRequest request(factory.get());
   TestCompletionCallback callback;
   NetErrorDetails net_error_details;
-  quic::ParsedQuicVersionVector versions = quic::AllSupportedVersions();
+  quic::ParsedQuicVersionVector versions = AllSupportedQuicVersions();
   quic::ParsedQuicVersion version =
       versions[data_provider.ConsumeIntegralInRange<size_t>(
           0, versions.size() - 1)];
@@ -196,8 +194,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   }
   callback.WaitForResult();
 
-  scoped_refptr<net::IOBuffer> buffer =
-      base::MakeRefCounted<net::IOBuffer>(kBufferSize);
+  auto buffer = base::MakeRefCounted<net::IOBufferWithSize>(kBufferSize);
   rv = stream->ReadResponseBody(buffer.get(), kBufferSize, callback.callback());
   if (rv == ERR_IO_PENDING)
     callback.WaitForResult();

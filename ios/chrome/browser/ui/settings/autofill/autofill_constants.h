@@ -16,8 +16,16 @@ extern NSString* const kAutofillAddressManagedViewId;
 extern NSString* const kAutofillCreditCardTableViewId;
 extern NSString* const kAutofillCreditCardSwitchViewId;
 extern NSString* const kAutofillCreditCardManagedViewId;
+extern NSString* const kAutofillMandatoryReauthSwitchViewId;
 
 // Accessibility identifier for the edit card table view.
 extern NSString* const kAutofillCreditCardEditTableViewId;
+
+// Accessibility identifier for the country selection view.
+extern NSString* const kAutofillCountrySelectionTableViewId;
+extern NSString* const kAutofillCountrySelectionSearchScrimId;
+
+// Accessibility identifier for the migrate to account button.
+extern NSString* const kAutofillAddressMigrateToAccountButtonId;
 
 #endif  // IOS_CHROME_BROWSER_UI_SETTINGS_AUTOFILL_AUTOFILL_CONSTANTS_H_

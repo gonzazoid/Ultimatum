@@ -4,13 +4,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/weak_ptr.h"
 #include "base/rand_util.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/devtools/device/android_device_manager.h"
 #include "content/public/browser/browser_thread.h"
 #include "net/base/io_buffer.h"
@@ -75,9 +74,7 @@ class AndroidDeviceManager::AndroidWebSocket::WebSocketImpl {
     DCHECK(thread_checker_.CalledOnValidThread());
     DCHECK(socket_);
 
-    scoped_refptr<net::IOBuffer> buffer =
-        base::MakeRefCounted<net::IOBuffer>(kBufferSize);
-
+    auto buffer = base::MakeRefCounted<net::IOBufferWithSize>(kBufferSize);
     if (!response_buffer_.empty())
       ProcessResponseBuffer(buffer);
     else
@@ -226,9 +223,9 @@ void AndroidDeviceManager::AndroidWebSocket::Connected(
     OnSocketClosed();
     return;
   }
-  socket_impl_.reset(new WebSocketImpl(base::ThreadTaskRunnerHandle::Get(),
-                                       weak_factory_.GetWeakPtr(), extensions,
-                                       body_head, std::move(socket)));
+  socket_impl_.reset(new WebSocketImpl(
+      base::SingleThreadTaskRunner::GetCurrentDefault(),
+      weak_factory_.GetWeakPtr(), extensions, body_head, std::move(socket)));
   device_->task_runner_->PostTask(FROM_HERE,
                                   base::BindOnce(&WebSocketImpl::StartListening,
                                                  socket_impl_->GetWeakPtr()));

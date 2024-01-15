@@ -52,6 +52,11 @@ class CONTENT_EXPORT FileSystemAccessSafeMoveHelper {
     ComputeHashForSourceFile(std::move(callback));
   }
 
+  bool RequireAfterWriteChecksForTesting() const {
+    return RequireAfterWriteChecks();
+  }
+  bool RequireQuarantineForTesting() const { return RequireQuarantine(); }
+
  private:
   SEQUENCE_CHECKER(sequence_checker_);
 
@@ -72,12 +77,13 @@ class CONTENT_EXPORT FileSystemAccessSafeMoveHelper {
 
   void ComputeHashForSourceFile(HashCallback callback);
 
-  // After write and quarantine checks should apply to paths on all filesystems
-  // except temporary file systems.
-  // TOOD(crbug.com/1103076): Extend this check to non-native paths.
-  bool RequireSecurityChecks() const {
-    return dest_url().type() != storage::kFileSystemTypeTemporary;
-  }
+  // Safe browsing should apply to paths on all filesystems
+  // except temporary file systems, or for same-file-system moves in which the
+  // extension does not change.
+  bool RequireAfterWriteChecks() const;
+  // Quarantine checks should apply to paths on all filesystems except temporary
+  // file systems.
+  bool RequireQuarantine() const;
 
   base::WeakPtr<FileSystemAccessManagerImpl> manager_
       GUARDED_BY_CONTEXT(sequence_checker_);

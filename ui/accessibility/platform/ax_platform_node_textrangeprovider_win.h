@@ -11,15 +11,17 @@
 #include <tuple>
 #include <vector>
 
+#include "base/component_export.h"
 #include "ui/accessibility/ax_node_position.h"
 #include "ui/accessibility/ax_position.h"
 #include "ui/accessibility/ax_range.h"
 #include "ui/accessibility/platform/ax_platform_node_win.h"
+#include "ui/accessibility/platform/sequence_affine_com_object_root_win.h"
 
 namespace ui {
-class AX_EXPORT __declspec(uuid("3071e40d-a10d-45ff-a59f-6e8e1138e2c1"))
-    AXPlatformNodeTextRangeProviderWin
-    : public CComObjectRootEx<CComMultiThreadModel>,
+class COMPONENT_EXPORT(AX_PLATFORM) __declspec(uuid(
+    "3071e40d-a10d-45ff-a59f-6e8e1138e2c1")) AXPlatformNodeTextRangeProviderWin
+    : public SequenceAffineComObjectRoot,
       public ITextRangeProvider {
  public:
   BEGIN_COM_MAP(AXPlatformNodeTextRangeProviderWin)
@@ -31,16 +33,17 @@ class AX_EXPORT __declspec(uuid("3071e40d-a10d-45ff-a59f-6e8e1138e2c1"))
   ~AXPlatformNodeTextRangeProviderWin();
 
   // Creates an instance of the class.
-  static ITextRangeProvider* CreateTextRangeProvider(
-      AXNodePosition::AXPositionInstance start,
-      AXNodePosition::AXPositionInstance end);
+  static void CreateTextRangeProvider(AXNodePosition::AXPositionInstance start,
+                                      AXNodePosition::AXPositionInstance end,
+                                      ITextRangeProvider** text_range_provider);
 
   // Creates an instance of the class for unit tests, where AXPlatformNodes
   // cannot be queried automatically from endpoints.
-  static ITextRangeProvider* CreateTextRangeProviderForTesting(
+  static void CreateTextRangeProviderForTesting(
       AXPlatformNodeWin* owner,
       AXNodePosition::AXPositionInstance start,
-      AXNodePosition::AXPositionInstance end);
+      AXNodePosition::AXPositionInstance end,
+      ITextRangeProvider** text_range_provider_out);
 
   //
   // ITextRangeProvider methods.
@@ -118,8 +121,14 @@ class AX_EXPORT __declspec(uuid("3071e40d-a10d-45ff-a59f-6e8e1138e2c1"))
 
   IFACEMETHODIMP ExpandToEnclosingUnitImpl(TextUnit unit);
 
-  std::u16string GetString(int max_count,
-                           size_t* appended_newlines_count = nullptr);
+  std::u16string GetString(
+      int max_count,
+      std::vector<size_t>* appended_newlines_indices = nullptr);
+
+  static size_t GetAppendedNewLinesCountInRange(
+      size_t find_start,
+      size_t find_length,
+      const std::vector<size_t>& appended_newlines_indices);
   const AXPositionInstance& start() const { return endpoints_.GetStart(); }
   const AXPositionInstance& end() const { return endpoints_.GetEnd(); }
   AXPlatformNodeDelegate* GetDelegate(
@@ -194,6 +203,8 @@ class AX_EXPORT __declspec(uuid("3071e40d-a10d-45ff-a59f-6e8e1138e2c1"))
   void SetStart(AXPositionInstance start);
   void SetEnd(AXPositionInstance end);
 
+  void SnapStartAndEndToMaxTextOffsetIfBeyond();
+
   static bool TextAttributeIsArrayType(TEXTATTRIBUTEID attribute_id);
   static bool TextAttributeIsUiaReservedValue(
       const base::win::VariantVector& vector);
@@ -252,30 +263,67 @@ class AX_EXPORT __declspec(uuid("3071e40d-a10d-45ff-a59f-6e8e1138e2c1"))
   // before the TextRangeEndpoints does, so when the destructor of the
   // ScopedObserver calls ScopedObserver::RemoveAll on an already deleted
   // AXTreeManager, it crashes.
-  class TextRangeEndpoints : public AXTreeObserver {
+  class COMPONENT_EXPORT(AX_PLATFORM) TextRangeEndpoints
+      : public AXTreeObserver {
    public:
     TextRangeEndpoints();
     ~TextRangeEndpoints() override;
-    const AXPositionInstance& GetStart() const { return start_; }
-    const AXPositionInstance& GetEnd() const { return end_; }
+    const AXPositionInstance& GetStart();
+    const AXPositionInstance& GetEnd();
     void SetStart(AXPositionInstance new_start);
     void SetEnd(AXPositionInstance new_end);
 
     void AddObserver(const AXTreeID tree_id);
     void RemoveObserver(const AXTreeID tree_id);
+    void OnStringAttributeChanged(AXTree* tree,
+                                  AXNode* node,
+                                  ax::mojom::StringAttribute attr,
+                                  const std::string& old_value,
+                                  const std::string& new_value) override;
     void OnSubtreeWillBeDeleted(AXTree* tree, AXNode* node) override;
     void OnNodeDeleted(AXTree* tree, AXNodeID node_id) override;
     void OnTreeManagerWillBeRemoved(AXTreeID previous_tree_id) override;
+
+    // This function is in charge of modifying the text offset when it changes
+    // by deletion of text. The renderer fires an even notifying that the text
+    // offset changed via a deletion, we listen to that here and adjust
+    // accordingly. This is needed so that the text offset that the renderer has
+    // and the text offset that we have here is synched in case a deletion
+    // happens. Otherwise, there are scenarios where an AT may perform an
+    // operation, such as a selection, on a range that is no longer in sync with
+    // what the renderer has which can lead to wrong behavior.
+    void OnTextDeletionOrInsertion(const AXNode& node,
+                                   const AXNodeData& new_data) override;
 
    private:
     struct DeletionOfInterest {
       AXTreeID tree_id;
       AXNodeID node_id;
+      // Needed to defer validation from OnNodeDeleted to
+      // ValidateEndpointsAfterNodeDeletionIfNeeded.
+      bool validation_needed;
     };
 
     void AdjustEndpointForSubtreeDeletion(AXTree* tree,
                                           const AXNode* const node,
                                           bool is_start_endpoint);
+    // TODO(accessibility): Re-evaluate if we want to continue deferring
+    // validation after the BrowserAccessibilityManager-specific nodes have been
+    // moved to a single unified tree. At this point, deferring will no longer
+    // be necessary as there would be no danger in accessing the tree during
+    // OnNodeDeleted. However, it may still be preferable to defer the
+    // validation to keep work out of unserialize.
+    void ValidateEndpointsAfterNodeDeletionIfNeeded();
+
+    void AdjustEndpointForTextFieldEdit(
+        const AXNode& text_field_node,
+        const AXPositionInstance& current_position,
+        AXNode* edit_start_anchor,
+        AXNode* edit_end_anchor,
+        int edit_start,
+        int edit_end,
+        bool is_start,
+        ax::mojom::Command op);
 
     AXPositionInstance start_;
     AXPositionInstance end_;
@@ -283,7 +331,9 @@ class AX_EXPORT __declspec(uuid("3071e40d-a10d-45ff-a59f-6e8e1138e2c1"))
     absl::optional<DeletionOfInterest> validation_necessary_for_start_;
     absl::optional<DeletionOfInterest> validation_necessary_for_end_;
   };
-  TextRangeEndpoints endpoints_;
+  // This is marked as mutable since endpoints will lazily validate their
+  // positions after a deletion of interest was actually deleted.
+  mutable TextRangeEndpoints endpoints_;
 };
 
 }  // namespace ui

@@ -11,21 +11,22 @@
 #include <string>
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/no_destructor.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "components/custom_handlers/protocol_handler.h"
 #include "components/custom_handlers/protocol_handler_registry.h"
 #include "components/custom_handlers/simple_protocol_handler_registry_factory.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/color_chooser.h"
 #include "content/public/browser/devtools_agent_host.h"
+#include "content/public/browser/file_select_listener.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/picture_in_picture_window_controller.h"
@@ -44,6 +45,7 @@
 #include "media/media_buildflags.h"
 #include "third_party/blink/public/common/peerconnection/webrtc_ip_handling_policy.h"
 #include "third_party/blink/public/common/renderer_preferences/renderer_preferences.h"
+#include "third_party/blink/public/mojom/choosers/file_chooser.mojom-forward.h"
 #include "third_party/blink/public/mojom/window_features/window_features.mojom.h"
 
 namespace content {
@@ -217,8 +219,7 @@ Shell* Shell::CreateNewWindow(BrowserContext* browser_context,
   WebContents::CreateParams create_params(browser_context, site_instance);
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kForcePresentationReceiverForTesting)) {
-    create_params.starting_sandbox_flags =
-        content::kPresentationReceiverSandboxFlags;
+    create_params.starting_sandbox_flags = kPresentationReceiverSandboxFlags;
   }
   std::unique_ptr<WebContents> web_contents =
       WebContents::Create(create_params);
@@ -359,7 +360,7 @@ void Shell::ResizeWebContentForTests(const gfx::Size& content_size) {
 
 gfx::NativeView Shell::GetContentView() {
   if (!web_contents_)
-    return nullptr;
+    return gfx::NativeView();
   return web_contents_->GetNativeView();
 }
 
@@ -471,7 +472,7 @@ void Shell::ExitFullscreenModeForTab(WebContents* web_contents) {
 
 void Shell::ToggleFullscreenModeForTab(WebContents* web_contents,
                                        bool enter_fullscreen) {
-#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
   g_platform->ToggleFullscreenModeForTab(this, web_contents, enter_fullscreen);
 #endif
   if (is_fullscreen_ != enter_fullscreen) {
@@ -484,7 +485,7 @@ void Shell::ToggleFullscreenModeForTab(WebContents* web_contents,
 }
 
 bool Shell::IsFullscreenForTabOrPending(const WebContents* web_contents) {
-#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
   return g_platform->IsFullscreenForTabOrPending(this, web_contents);
 #else
   return is_fullscreen_;
@@ -506,7 +507,7 @@ void Shell::RegisterProtocolHandler(RenderFrameHost* requesting_frame,
                                     const std::string& protocol,
                                     const GURL& url,
                                     bool user_gesture) {
-  content::BrowserContext* context = requesting_frame->GetBrowserContext();
+  BrowserContext* context = requesting_frame->GetBrowserContext();
   if (context->IsOffTheRecord())
     return;
 
@@ -544,7 +545,10 @@ void Shell::RegisterProtocolHandler(RenderFrameHost* requesting_frame,
 
   // TODO(jfernandez): Are we interested at all on using the
   // PermissionRequestManager in the ContentShell ?
-  registry->OnAcceptRegisterProtocolHandler(handler);
+  if (registry->registration_mode() ==
+      custom_handlers::RphRegistrationMode::kAutoAccept) {
+    registry->OnAcceptRegisterProtocolHandler(handler);
+  }
 }
 #endif
 
@@ -595,8 +599,9 @@ JavaScriptDialogManager* Shell::GetJavaScriptDialogManager(
 }
 
 #if BUILDFLAG(IS_MAC)
-void Shell::DidNavigatePrimaryMainFramePostCommit(WebContents* contents) {
-  g_platform->DidNavigatePrimaryMainFramePostCommit(this, contents);
+void Shell::PrimaryPageChanged(Page& page) {
+  g_platform->DidNavigatePrimaryMainFramePostCommit(
+      this, WebContents::FromRenderFrameHost(&page.GetMainDocument()));
 }
 
 bool Shell::HandleKeyboardEvent(WebContents* source,
@@ -611,10 +616,6 @@ bool Shell::DidAddMessageToConsole(WebContents* source,
                                    int32_t line_no,
                                    const std::u16string& source_id) {
   return switches::IsRunWebTestsSwitchPresent();
-}
-
-void Shell::PortalWebContentsCreated(WebContents* portal_web_contents) {
-  g_platform->DidCreateOrAttachWebContents(this, portal_web_contents);
 }
 
 void Shell::RendererUnresponsive(
@@ -637,25 +638,43 @@ void Shell::ActivateContents(WebContents* contents) {
 #endif
 }
 
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_APPLE)
+std::unique_ptr<ColorChooser> Shell::OpenColorChooser(
+    WebContents* web_contents,
+    SkColor color,
+    const std::vector<blink::mojom::ColorSuggestionPtr>& suggestions) {
+  return g_platform->OpenColorChooser(web_contents, color, suggestions);
+}
+#endif
+
+void Shell::RunFileChooser(RenderFrameHost* render_frame_host,
+                           scoped_refptr<FileSelectListener> listener,
+                           const blink::mojom::FileChooserParams& params) {
+  run_file_chooser_count_++;
+  if (hold_file_chooser_) {
+    held_file_chooser_listener_ = std::move(listener);
+  } else {
+    g_platform->RunFileChooser(render_frame_host, std::move(listener), params);
+  }
+}
+
+void Shell::EnumerateDirectory(WebContents* web_contents,
+                               scoped_refptr<FileSelectListener> listener,
+                               const base::FilePath& path) {
+  run_file_chooser_count_++;
+  if (hold_file_chooser_) {
+    held_file_chooser_listener_ = std::move(listener);
+  } else {
+    listener->FileSelectionCanceled();
+  }
+}
+
 bool Shell::IsBackForwardCacheSupported() {
   return true;
 }
 
-bool Shell::IsPrerender2Supported(WebContents& web_contents) {
-  return true;
-}
-
-std::unique_ptr<WebContents> Shell::ActivatePortalWebContents(
-    WebContents* predecessor_contents,
-    std::unique_ptr<WebContents> portal_contents) {
-  DCHECK_EQ(predecessor_contents, web_contents_.get());
-  portal_contents->SetDelegate(this);
-  web_contents_->SetDelegate(nullptr);
-  std::swap(web_contents_, portal_contents);
-  g_platform->SetContents(this);
-  g_platform->SetAddressBarURL(this, web_contents_->GetVisibleURL());
-  LoadingStateChanged(web_contents_.get(), true);
-  return portal_contents;
+PreloadingEligibility Shell::IsPrerender2Supported(WebContents& web_contents) {
+  return PreloadingEligibility::kEligible;
 }
 
 namespace {
@@ -672,8 +691,8 @@ class PendingCallback : public base::RefCounted<PendingCallback> {
 }  // namespace
 
 void Shell::UpdateInspectedWebContentsIfNecessary(
-    content::WebContents* old_contents,
-    content::WebContents* new_contents,
+    WebContents* old_contents,
+    WebContents* new_contents,
     base::OnceCallback<void()> callback) {
   scoped_refptr<PendingCallback> pending_callback =
       base::MakeRefCounted<PendingCallback>(std::move(callback));

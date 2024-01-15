@@ -10,13 +10,14 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/media_galleries/media_galleries_preferences.h"
 #include "components/download/public/common/quarantine_connection.h"
+#include "components/file_access/scoped_file_access_delegate.h"
 #include "storage/browser/file_system/file_system_backend.h"
 #include "storage/browser/file_system/file_system_request_info.h"
 #include "storage/browser/file_system/task_runner_bound_observer_list.h"
@@ -74,6 +75,7 @@ class MediaFileSystemBackend : public storage::FileSystemBackend {
       storage::FileSystemType type,
       base::File::Error* error_code) override;
   std::unique_ptr<storage::FileSystemOperation> CreateFileSystemOperation(
+      storage::OperationType type,
       const storage::FileSystemURL& url,
       storage::FileSystemContext* context,
       base::File::Error* error_code) const override;
@@ -85,7 +87,9 @@ class MediaFileSystemBackend : public storage::FileSystemBackend {
       int64_t offset,
       int64_t max_bytes_to_read,
       const base::Time& expected_modification_time,
-      storage::FileSystemContext* context) const override;
+      storage::FileSystemContext* context,
+      file_access::ScopedFileAccessDelegate::RequestFilesAccessIOCallback
+          file_access) const override;
   std::unique_ptr<storage::FileStreamWriter> CreateFileStreamWriter(
       const storage::FileSystemURL& url,
       int64_t offset,

@@ -6,23 +6,19 @@
 
 #import <UIKit/UIKit.h>
 
-#import "base/bind.h"
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
+#import "base/functional/bind.h"
 #import "base/strings/sys_string_conversions.h"
 #import "components/favicon/core/fallback_url_util.h"
 #import "components/favicon/core/large_icon_service.h"
 #import "components/favicon_base/fallback_icon_style.h"
 #import "components/favicon_base/favicon_callback.h"
 #import "components/favicon_base/favicon_types.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/favicon/favicon_attributes.h"
 #import "net/traffic_annotation/network_traffic_annotation.h"
 #import "skia/ext/skia_utils_ios.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 const CGFloat kFallbackIconDefaultTextColor = 0xAAAAAA;

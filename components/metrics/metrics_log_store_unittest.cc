@@ -24,9 +24,10 @@ class TestUnsentLogStore : public UnsentLogStore {
                        service,
                        kTestPrefName,
                        nullptr,
-                       /*min_log_count=*/3,
-                       /*min_log_bytes=*/1,
-                       /*max_log_size=*/0,
+                       // Set to 3 so logs are not dropped in the test.
+                       UnsentLogStore::UnsentLogStoreLimits{
+                           .min_log_count = 3,
+                       },
                        /*signing_key=*/std::string(),
                        /*logs_event_manager=*/nullptr) {}
   ~TestUnsentLogStore() override = default;
@@ -52,7 +53,8 @@ class MetricsLogStoreTest : public testing::Test {
   ~MetricsLogStoreTest() override {}
 
   MetricsLog* CreateLog(MetricsLog::LogType log_type) {
-    return new MetricsLog("id", 0, log_type, &client_);
+    return new MetricsLog("0a94430b-18e5-43c8-a657-580f7e855ce1", 0, log_type,
+                          &client_);
   }
 
   // Returns the stored number of logs of the given type.
@@ -79,7 +81,8 @@ TEST_F(MetricsLogStoreTest, StandardFlow) {
   EXPECT_FALSE(log_store.has_staged_log());
   EXPECT_FALSE(log_store.has_unsent_logs());
 
-  log_store.StoreLog("a", MetricsLog::ONGOING_LOG, LogMetadata());
+  log_store.StoreLog("a", MetricsLog::ONGOING_LOG, LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
   EXPECT_TRUE(log_store.has_unsent_logs());
   EXPECT_FALSE(log_store.has_staged_log());
 
@@ -101,7 +104,8 @@ TEST_F(MetricsLogStoreTest, StoreAndLoad) {
                               /*logs_event_manager=*/nullptr);
     log_store.LoadPersistedUnsentLogs();
     EXPECT_FALSE(log_store.has_unsent_logs());
-    log_store.StoreLog("a", MetricsLog::ONGOING_LOG, LogMetadata());
+    log_store.StoreLog("a", MetricsLog::ONGOING_LOG, LogMetadata(),
+                       MetricsLogsEventManager::CreateReason::kUnknown);
     log_store.TrimAndPersistUnsentLogs(/*overwrite_in_memory_store=*/true);
     EXPECT_EQ(0U, TypeCount(MetricsLog::INITIAL_STABILITY_LOG));
     EXPECT_EQ(1U, TypeCount(MetricsLog::ONGOING_LOG));
@@ -116,9 +120,11 @@ TEST_F(MetricsLogStoreTest, StoreAndLoad) {
     EXPECT_TRUE(log_store.has_unsent_logs());
     EXPECT_EQ(0U, TypeCount(MetricsLog::INITIAL_STABILITY_LOG));
     EXPECT_EQ(1U, TypeCount(MetricsLog::ONGOING_LOG));
-    log_store.StoreLog("x", MetricsLog::INITIAL_STABILITY_LOG, LogMetadata());
+    log_store.StoreLog("x", MetricsLog::INITIAL_STABILITY_LOG, LogMetadata(),
+                       MetricsLogsEventManager::CreateReason::kUnknown);
     log_store.StageNextLog();
-    log_store.StoreLog("b", MetricsLog::ONGOING_LOG, LogMetadata());
+    log_store.StoreLog("b", MetricsLog::ONGOING_LOG, LogMetadata(),
+                       MetricsLogsEventManager::CreateReason::kUnknown);
 
     EXPECT_TRUE(log_store.has_unsent_logs());
     EXPECT_TRUE(log_store.has_staged_log());
@@ -172,7 +178,8 @@ TEST_F(MetricsLogStoreTest, StoreStagedOngoingLog) {
                             /*signing_key=*/std::string(),
                             /*logs_event_manager=*/nullptr);
   log_store.LoadPersistedUnsentLogs();
-  log_store.StoreLog("a", MetricsLog::ONGOING_LOG, LogMetadata());
+  log_store.StoreLog("a", MetricsLog::ONGOING_LOG, LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
   log_store.StageNextLog();
   log_store.TrimAndPersistUnsentLogs(/*overwrite_in_memory_store=*/true);
 
@@ -186,7 +193,8 @@ TEST_F(MetricsLogStoreTest, StoreStagedInitialLog) {
                             /*signing_key=*/std::string(),
                             /*logs_event_manager=*/nullptr);
   log_store.LoadPersistedUnsentLogs();
-  log_store.StoreLog("b", MetricsLog::INITIAL_STABILITY_LOG, LogMetadata());
+  log_store.StoreLog("b", MetricsLog::INITIAL_STABILITY_LOG, LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
   log_store.StageNextLog();
   log_store.TrimAndPersistUnsentLogs(/*overwrite_in_memory_store=*/true);
 
@@ -196,15 +204,17 @@ TEST_F(MetricsLogStoreTest, StoreStagedInitialLog) {
 
 TEST_F(MetricsLogStoreTest, LargeLogDiscarding) {
   // Set the size threshold very low, to verify that it's honored.
-  client_.set_max_ongoing_log_size(1);
+  client_.set_max_ongoing_log_size_bytes(1);
   MetricsLogStore log_store(&pref_service_, client_.GetStorageLimits(),
                             /*signing_key=*/std::string(),
                             /*logs_event_manager=*/nullptr);
   log_store.LoadPersistedUnsentLogs();
 
   log_store.StoreLog("persisted", MetricsLog::INITIAL_STABILITY_LOG,
-                     LogMetadata());
-  log_store.StoreLog("not_persisted", MetricsLog::ONGOING_LOG, LogMetadata());
+                     LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
+  log_store.StoreLog("not_persisted", MetricsLog::ONGOING_LOG, LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
 
   // Only the stability log should be written out, due to the threshold.
   log_store.TrimAndPersistUnsentLogs(/*overwrite_in_memory_store=*/true);
@@ -220,10 +230,13 @@ TEST_F(MetricsLogStoreTest, DiscardOrder) {
                             /*logs_event_manager=*/nullptr);
   log_store.LoadPersistedUnsentLogs();
 
-  log_store.StoreLog("a", MetricsLog::ONGOING_LOG, LogMetadata());
-  log_store.StoreLog("b", MetricsLog::ONGOING_LOG, LogMetadata());
+  log_store.StoreLog("a", MetricsLog::ONGOING_LOG, LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
+  log_store.StoreLog("b", MetricsLog::ONGOING_LOG, LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
   log_store.StageNextLog();
-  log_store.StoreLog("c", MetricsLog::INITIAL_STABILITY_LOG, LogMetadata());
+  log_store.StoreLog("c", MetricsLog::INITIAL_STABILITY_LOG, LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
   EXPECT_EQ(2U, log_store.ongoing_log_count());
   EXPECT_EQ(1U, log_store.initial_log_count());
   // Should discard the ongoing log staged earlier.
@@ -251,10 +264,13 @@ TEST_F(MetricsLogStoreTest, WritesToAlternateOngoingLogStore) {
   // the native initial and ongoing unsent logs have already been loaded.
   log_store.LoadPersistedUnsentLogs();
 
-  log_store.StoreLog("a", MetricsLog::ONGOING_LOG, LogMetadata());
+  log_store.StoreLog("a", MetricsLog::ONGOING_LOG, LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
   log_store.SetAlternateOngoingLogStore(std::move(alternate_ongoing_log_store));
-  log_store.StoreLog("b", MetricsLog::ONGOING_LOG, LogMetadata());
-  log_store.StoreLog("c", MetricsLog::ONGOING_LOG, LogMetadata());
+  log_store.StoreLog("b", MetricsLog::ONGOING_LOG, LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
+  log_store.StoreLog("c", MetricsLog::ONGOING_LOG, LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
 
   EXPECT_EQ(1U, log_store.ongoing_log_count());
   EXPECT_EQ(2U, alternate_ongoing_log_store_ptr->size());
@@ -303,10 +319,13 @@ TEST_F(MetricsLogStoreTest, StagesInitialOverBothOngoing) {
   // the native initial and ongoing unsent logs have already been loaded.
   log_store.LoadPersistedUnsentLogs();
 
-  log_store.StoreLog("a", MetricsLog::INITIAL_STABILITY_LOG, LogMetadata());
-  log_store.StoreLog("b", MetricsLog::ONGOING_LOG, LogMetadata());
+  log_store.StoreLog("a", MetricsLog::INITIAL_STABILITY_LOG, LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
+  log_store.StoreLog("b", MetricsLog::ONGOING_LOG, LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
   log_store.SetAlternateOngoingLogStore(std::move(alternate_ongoing_log_store));
-  log_store.StoreLog("c", MetricsLog::ONGOING_LOG, LogMetadata());
+  log_store.StoreLog("c", MetricsLog::ONGOING_LOG, LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
   log_store.StageNextLog();
   log_store.DiscardStagedLog();
 
@@ -330,9 +349,11 @@ TEST_F(MetricsLogStoreTest, StagesAlternateOverOngoing) {
   // the native initial and ongoing unsent logs have already been loaded.
   log_store.LoadPersistedUnsentLogs();
 
-  log_store.StoreLog("a", MetricsLog::ONGOING_LOG, LogMetadata());
+  log_store.StoreLog("a", MetricsLog::ONGOING_LOG, LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
   log_store.SetAlternateOngoingLogStore(std::move(alternate_ongoing_log_store));
-  log_store.StoreLog("b", MetricsLog::ONGOING_LOG, LogMetadata());
+  log_store.StoreLog("b", MetricsLog::ONGOING_LOG, LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
   log_store.StageNextLog();
   log_store.DiscardStagedLog();
 
@@ -356,13 +377,16 @@ TEST_F(MetricsLogStoreTest,
 
   log_store.SetAlternateOngoingLogStore(std::move(alternate_ongoing_log_store));
   // Should be written to alternate ongoing log store.
-  log_store.StoreLog("a", MetricsLog::ONGOING_LOG, LogMetadata());
+  log_store.StoreLog("a", MetricsLog::ONGOING_LOG, LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
 
   log_store.UnsetAlternateOngoingLogStore();
 
   // Should be in native ongoing log store.
-  log_store.StoreLog("b", MetricsLog::ONGOING_LOG, LogMetadata());
-  log_store.StoreLog("c", MetricsLog::ONGOING_LOG, LogMetadata());
+  log_store.StoreLog("b", MetricsLog::ONGOING_LOG, LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
+  log_store.StoreLog("c", MetricsLog::ONGOING_LOG, LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
 
   EXPECT_EQ(2U, log_store.ongoing_log_count());
 }
@@ -381,7 +405,8 @@ TEST_F(MetricsLogStoreTest,
   log_store.LoadPersistedUnsentLogs();
 
   // Should be written to ongoing log store.
-  log_store.StoreLog("a", MetricsLog::ONGOING_LOG, LogMetadata());
+  log_store.StoreLog("a", MetricsLog::ONGOING_LOG, LogMetadata(),
+                     MetricsLogsEventManager::CreateReason::kUnknown);
 
   // Ensure that the log was stored in ongoing log.
   EXPECT_EQ(1U, log_store.ongoing_log_count());

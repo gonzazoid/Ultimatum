@@ -8,12 +8,12 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "chrome/browser/ui/views/frame/opaque_browser_frame_view.h"
 #include "ui/views/layout/layout_manager.h"
 #include "ui/views/window/frame_buttons.h"
 
 class CaptionButtonPlaceholderContainer;
-class WebAppFrameToolbarView;
 class OpaqueBrowserFrameViewLayoutDelegate;
 
 namespace views {
@@ -30,9 +30,14 @@ class OpaqueBrowserFrameViewLayout : public views::LayoutManager {
   // Constants used by OpaqueBrowserFrameView as well.
   static const int kContentEdgeShadowThickness;
 
+  // The frame border is only visible in restored mode and is hardcoded to 4 px
+  // on each side regardless of the system window border size.  This is
+  // overridable by subclasses, so RestoredFrameBorderInsets() should be used
+  // instead of using this constant directly.
+  static constexpr int kFrameBorderThickness = 4;
+
   // Constants public for testing only.
   static constexpr int kNonClientExtraTopThickness = 1;
-  static const int kFrameBorderThickness;
   static const int kTopFrameEdgeThickness;
   static const int kSideFrameEdgeThickness;
   static const int kIconLeftSpacing;
@@ -59,6 +64,10 @@ class OpaqueBrowserFrameViewLayout : public views::LayoutManager {
 
   gfx::Rect GetBoundsForTabStripRegion(const gfx::Size& tabstrip_minimum_size,
                                        int total_width) const;
+  gfx::Rect GetBoundsForWebAppFrameToolbar(
+      const gfx::Size& toolbar_preferred_size) const;
+  void LayoutWebAppWindowTitle(const gfx::Rect& available_space,
+                               views::Label& window_title_label) const;
 
   // Returns the bounds of the window required to display the content area at
   // the specified bounds.
@@ -169,16 +178,16 @@ class OpaqueBrowserFrameViewLayout : public views::LayoutManager {
   // when the window is restored.
   virtual int NonClientExtraTopThickness() const;
 
-  raw_ptr<OpaqueBrowserFrameViewLayoutDelegate> delegate_;
+  raw_ptr<OpaqueBrowserFrameViewLayoutDelegate> delegate_ = nullptr;
 
   // The leading and trailing x positions of the empty space available for
   // laying out titlebar elements.
-  int available_space_leading_x_;
-  int available_space_trailing_x_;
+  int available_space_leading_x_ = 0;
+  int available_space_trailing_x_ = 0;
 
   // The size of the window buttons. This does not count labels or other
   // elements that should be counted in a minimal frame.
-  int minimum_size_for_buttons_;
+  int minimum_size_for_buttons_ = 0;
 
  private:
   // Layout various sub-components of this view.
@@ -222,34 +231,35 @@ class OpaqueBrowserFrameViewLayout : public views::LayoutManager {
 
   // Whether any of the window control buttons were packed on the leading or
   // trailing sides.  This state is only valid while Layout() is being run.
-  bool placed_leading_button_;
-  bool placed_trailing_button_;
+  bool placed_leading_button_ = false;
+  bool placed_trailing_button_ = false;
 
   // Extra offset between the individual window caption buttons.  Set only in
   // testing, otherwise, its value will be -1.
-  int forced_window_caption_spacing_;
+  int forced_window_caption_spacing_ = -1;
 
   // Window controls.
-  views::Button* minimize_button_;
-  views::Button* maximize_button_;
-  views::Button* restore_button_;
-  views::Button* close_button_;
+  // These fields are not raw_ptr<> because they are assigned to |auto*| in
+  // ranged loop on an array initializer literal comprising of those pointers.
+  RAW_PTR_EXCLUSION views::Button* minimize_button_ = nullptr;
+  RAW_PTR_EXCLUSION views::Button* maximize_button_ = nullptr;
+  RAW_PTR_EXCLUSION views::Button* restore_button_ = nullptr;
+  RAW_PTR_EXCLUSION views::Button* close_button_ = nullptr;
 
-  raw_ptr<views::View> window_icon_;
-  raw_ptr<views::Label, DanglingUntriaged> window_title_;
-
-  raw_ptr<WebAppFrameToolbarView, DanglingUntriaged> web_app_frame_toolbar_ =
-      nullptr;
+  raw_ptr<views::View> window_icon_ = nullptr;
+  raw_ptr<views::Label, DanglingUntriaged> window_title_ = nullptr;
 
   std::vector<views::FrameButton> leading_buttons_;
-  std::vector<views::FrameButton> trailing_buttons_;
+  std::vector<views::FrameButton> trailing_buttons_{
+      views::FrameButton::kMinimize, views::FrameButton::kMaximize,
+      views::FrameButton::kClose};
 
   raw_ptr<views::ClientView> client_view_ = nullptr;
 
   bool is_window_controls_overlay_enabled_ = false;
   bool is_borderless_mode_enabled_ = false;
   raw_ptr<CaptionButtonPlaceholderContainer, DanglingUntriaged>
-      caption_button_placeholder_container_;
+      caption_button_placeholder_container_ = nullptr;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_FRAME_OPAQUE_BROWSER_FRAME_VIEW_LAYOUT_H_

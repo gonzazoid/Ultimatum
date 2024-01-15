@@ -10,8 +10,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
@@ -22,6 +22,8 @@
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/accessibility/ax_tree.h"
 #include "ui/accessibility/ax_tree_data.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/accessibility/view_accessibility.h"
@@ -32,18 +34,22 @@
 #include "ui/views/widget/unique_widget_ptr.h"
 #include "ui/views/widget/widget.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 namespace {
 
 class TestButton : public Button {
+  METADATA_HEADER(TestButton, Button)
+
  public:
   TestButton() : Button(Button::PressedCallback()) {}
   TestButton(const TestButton&) = delete;
   TestButton& operator=(const TestButton&) = delete;
   ~TestButton() override = default;
 };
+
+BEGIN_METADATA(TestButton)
+END_METADATA
 
 class ViewsAXTreeManagerTest : public ViewsTestBase,
                                public ::testing::WithParamInterface<bool> {
@@ -138,6 +144,9 @@ void ViewsAXTreeManagerTest::TearDown() {
 }
 
 void ViewsAXTreeManagerTest::CloseWidget() {
+  button_ = nullptr;
+  label_ = nullptr;
+
   if (!widget_->IsClosed())
     widget_->CloseNow();
 
@@ -250,5 +259,4 @@ TEST_P(ViewsAXTreeManagerTest, MultipleTopLevelWidgets) {
   second_widget->Show();
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

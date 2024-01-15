@@ -9,7 +9,8 @@
 
 #include "ash/ash_export.h"
 #include "ash/lock_screen_action/lock_screen_action_background_state.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 
@@ -84,7 +85,7 @@ class ASH_EXPORT LockScreenActionBackgroundController {
   // state and notify observers of background state changes.
   void UpdateState(LockScreenActionBackgroundState state);
 
-  aura::Window* parent_window_ = nullptr;
+  raw_ptr<aura::Window, DanglingUntriaged> parent_window_ = nullptr;
 
  private:
   LockScreenActionBackgroundState state_ =

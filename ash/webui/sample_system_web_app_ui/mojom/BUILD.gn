@@ -20,6 +20,9 @@ mojom("trusted") {
     "//mojo/public/mojom/base",
   ]
   webui_module_path = "/$cur_dir"
+
+  # Generate WebUI bindings in JavaScript instead of TypeScript.
+  generate_webui_js_bindings = true
 }
 
 mojom("shared") {
@@ -27,6 +30,9 @@ mojom("shared") {
 
   public_deps = [ "//mojo/public/mojom/base" ]
   webui_module_path = "/$cur_dir"
+
+  # Generate WebUI bindings in JavaScript instead of TypeScript.
+  generate_webui_js_bindings = true
 }
 
 mojom("untrusted") {
@@ -37,6 +43,9 @@ mojom("untrusted") {
     "//mojo/public/mojom/base",
   ]
   webui_module_path = "/" + rebase_path(".", "//")
+
+  # Generate WebUI bindings in JavaScript instead of TypeScript.
+  generate_webui_js_bindings = true
 }
 
 # Builds a TS library for generated Mojo files that can be depended on by
@@ -48,21 +57,20 @@ ts_library("mojom_ts") {
   mojom_gen_dir = "$root_gen_dir/mojom-webui/$cur_dir"
   root_dir = mojom_gen_dir
   out_dir = "$mojom_gen_dir/tsc"
-  tsconfig_base = "../tsconfig_base.json"
   in_files = [
     "sample_system_web_app_untrusted_ui.mojom-webui.js",
     "sample_system_web_app_ui.mojom-webui.js",
     "sample_system_web_app_shared_ui.mojom-webui.js",
   ]
 
+  # Required for Mojo's bindings.js resolution.
+  deps = [ "//ui/webui/resources/mojo:build_ts" ]
+
   # Targets that generate the above .mojom-webui.js files.
   extra_deps = [
     ":shared_webui_js",
     ":trusted_webui_js",
     ":untrusted_webui_js",
-
-    # Required for Mojo's bindings.js resolution.
-    "//ui/webui/resources:generate_definitions",
   ]
 
   # Generates d.ts files which allows this library to be depended upon.

@@ -11,19 +11,21 @@
 #include <vector>
 
 #include "android_webview/browser/aw_browser_context.h"
+#include "android_webview/browser/aw_browser_context_store.h"
 #include "android_webview/browser/aw_browser_process.h"
 #include "android_webview/browser/aw_feature_entries.h"
 #include "android_webview/browser/aw_metrics_service_client_delegate.h"
+#include "android_webview/browser/metrics/android_metrics_provider.h"
 #include "android_webview/browser/metrics/aw_metrics_service_client.h"
 #include "android_webview/browser/tracing/aw_tracing_delegate.h"
 #include "android_webview/browser/variations/variations_seed_loader.h"
 #include "android_webview/common/aw_switches.h"
 #include "android_webview/proto/aw_variations_seed.pb.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/field_trial.h"
 #include "base/path_service.h"
 #include "base/strings/string_split.h"
@@ -33,6 +35,7 @@
 #include "components/embedder_support/android/metrics/android_metrics_service_client.h"
 #include "components/embedder_support/origin_trials/origin_trial_prefs.h"
 #include "components/embedder_support/origin_trials/pref_names.h"
+#include "components/metrics/android_metrics_helper.h"
 #include "components/metrics/metrics_pref_names.h"
 #include "components/metrics/persistent_histograms.h"
 #include "components/policy/core/browser/configuration_policy_pref_store.h"
@@ -49,6 +52,7 @@
 #include "components/variations/pref_names.h"
 #include "components/variations/service/safe_seed_manager.h"
 #include "components/variations/service/variations_service.h"
+#include "components/variations/variations_safe_seed_store_local_state.h"
 #include "components/variations/variations_switches.h"
 #include "content/public/common/content_switch_dependent_feature_overrides.h"
 #include "net/base/features.h"
@@ -99,16 +103,16 @@ const char* const kPersistentPrefsAllowlist[] = {
     variations::prefs::kVariationsLastFetchTime,
     variations::prefs::kVariationsSeedDate,
 
-    // A dictionary that caches 'AppPackageNameLoggingRule' object which decides
-    // whether the app package name should be recorded in UMA or not.
-    prefs::kMetricsAppPackageNameLoggingRule,
-
-    // The last time the apps package name allowlist was queried from the
-    // component update service, regardless if it was successful or not.
-    prefs::kAppPackageNameLoggingRuleLastUpdateTime,
-
     // The state of the previous background tracing session.
     tracing::kBackgroundTracingSessionState,
+
+    // System-level info.
+    metrics::prefs::kVersionCodePref,
+    prefs::kPrimaryCpuAbiBitnessPref,
+
+    // Records about profiles/contexts and their stored data
+    prefs::kProfileListPref,
+    prefs::kProfileCounterPref,
 };
 
 void HandleReadError(PersistentPrefStore::PrefReadError error) {}
@@ -167,6 +171,7 @@ std::unique_ptr<PrefService> AwFeatureListCreator::CreatePrefService() {
   AwBrowserProcess::RegisterEnterpriseAuthenticationAppLinkPolicyPref(
       pref_registry.get());
   AwTracingDelegate::RegisterPrefs(pref_registry.get());
+  AwBrowserContextStore::RegisterPrefs(pref_registry.get());
 
   PrefServiceFactory pref_service_factory;
 
@@ -210,24 +215,26 @@ void AwFeatureListCreator::SetUpFieldTrials() {
   std::unique_ptr<variations::SeedResponse> seed;
   base::Time seed_date;  // Initializes to null time.
   if (seed_proto) {
-    seed = std::make_unique<variations::SeedResponse>();
-    seed->data = seed_proto->seed_data();
-    seed->signature = seed_proto->signature();
-    seed->country = seed_proto->country();
-    seed->date = seed_proto->date();
-    seed->is_gzip_compressed = seed_proto->is_gzip_compressed();
-
     // We set the seed fetch time to when the service downloaded the seed rather
     // than base::Time::Now() because we want to compute seed freshness based on
     // the initial download time, which happened in the service at some earlier
     // point.
-    seed_date = base::Time::FromJavaTime(seed->date);
+    seed_date = base::Time::FromMillisecondsSinceUnixEpoch(seed_proto->date());
+
+    seed = std::make_unique<variations::SeedResponse>();
+    seed->data = seed_proto->seed_data();
+    seed->signature = seed_proto->signature();
+    seed->country = seed_proto->country();
+    seed->date = seed_date;
+    seed->is_gzip_compressed = seed_proto->is_gzip_compressed();
   }
 
   client_ = std::make_unique<AwVariationsServiceClient>();
   auto seed_store = std::make_unique<variations::VariationsSeedStore>(
       local_state_.get(), /*initial_seed=*/std::move(seed),
       /*signature_verification_enabled=*/g_signature_verification_enabled,
+      std::make_unique<variations::VariationsSafeSeedStoreLocalState>(
+          local_state_.get()),
       /*use_first_run_prefs=*/false);
 
   if (!seed_date.is_null())
@@ -236,7 +243,9 @@ void AwFeatureListCreator::SetUpFieldTrials() {
   variations::UIStringOverrider ui_string_overrider;
   variations_field_trial_creator_ =
       std::make_unique<variations::VariationsFieldTrialCreator>(
-          client_.get(), std::move(seed_store), ui_string_overrider);
+          client_.get(), std::move(seed_store), ui_string_overrider,
+          // Limited entropy field trials are not supported on WebView.
+          /*limited_entropy_synthetic_trial=*/nullptr);
   variations_field_trial_creator_->OverrideVariationsPlatform(
       variations::Study::PLATFORM_ANDROID_WEBVIEW);
 
@@ -249,6 +258,11 @@ void AwFeatureListCreator::SetUpFieldTrials() {
   // able to break seed downloads. See https://crbug.com/801771 for more info.
   variations::SafeSeedManager ignored_safe_seed_manager(local_state_.get());
 
+  base::Time fetchTime =
+      variations_field_trial_creator_->CalculateSeedFreshness();
+  long seedFreshnessMinutes = (base::Time::Now() - fetchTime).InMinutes();
+  CacheSeedFreshness(seedFreshnessMinutes);
+
   auto feature_list = std::make_unique<base::FeatureList>();
   std::vector<std::string> variation_ids =
       aw_feature_entries::RegisterEnabledFeatureEntries(feature_list.get());
@@ -260,8 +274,8 @@ void AwFeatureListCreator::SetUpFieldTrials() {
   // Populate FieldTrialList.
   // If you update this, consider whether "WebViewEnvironment" in
   // components/variations/variations_seed_processor_unittest.cc needs updates.
-  // Passing null low_entropy_source_value to suppress adding the VariationsId
-  // for it. TODO(b/183955043): Re-evaluate if this is necessary.
+  // TODO(b/263797385): Re-evaluate if we can add entropy source id to
+  // variations ids for WebView or not.
   variations_field_trial_creator_->SetUpFieldTrials(
       variation_ids,
       command_line->GetSwitchValueASCII(
@@ -269,7 +283,7 @@ void AwFeatureListCreator::SetUpFieldTrials() {
       GetSwitchDependentFeatureOverrides(*command_line),
       std::move(feature_list), metrics_client->metrics_state_manager(),
       aw_field_trials_.get(), &ignored_safe_seed_manager,
-      /*low_entropy_source_value=*/absl::nullopt);
+      /*add_entropy_source_to_variations_ids=*/false);
 }
 
 }  // namespace android_webview

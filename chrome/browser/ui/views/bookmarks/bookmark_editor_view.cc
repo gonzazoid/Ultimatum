@@ -7,12 +7,13 @@
 #include <set>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/bookmarks/bookmark_expanded_state_tracker_factory.h"
 #include "chrome/browser/bookmarks/bookmark_model_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/bookmarks/bookmark_utils.h"
@@ -22,6 +23,7 @@
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/locale_settings.h"
 #include "components/bookmarks/browser/bookmark_model.h"
+#include "components/bookmarks/browser/bookmark_node.h"
 #include "components/bookmarks/browser/bookmark_utils.h"
 #include "components/bookmarks/common/bookmark_metrics.h"
 #include "components/constrained_window/constrained_window_views.h"
@@ -46,7 +48,10 @@
 #include "ui/views/widget/widget.h"
 #include "url/gurl.h"
 
-using bookmarks::BookmarkExpandedStateTracker;
+#if !BUILDFLAG(IS_MAC)
+#include "ui/aura/window.h"
+#endif  // !BUILDFLAG(IS_MAC)
+
 using bookmarks::BookmarkModel;
 using bookmarks::BookmarkNode;
 
@@ -60,11 +65,14 @@ BookmarkEditorView::BookmarkEditorView(
       parent_(parent),
       details_(details),
       bb_model_(BookmarkModelFactory::GetForBrowserContext(profile)),
+      expanded_state_tracker_(
+          BookmarkExpandedStateTrackerFactory::GetForProfile(profile)),
       show_tree_(configuration == SHOW_TREE),
       on_save_callback_(std::move(on_save_callback)) {
   DCHECK(profile);
   DCHECK(bb_model_);
-  DCHECK(bb_model_->client()->CanBeEditedByUser(parent));
+  DCHECK(expanded_state_tracker_);
+  DCHECK(!bb_model_->client()->IsNodeManaged(parent));
   SetCanResize(true);
   SetModalType(ui::MODAL_TYPE_WINDOW);
   SetShowCloseButton(false);
@@ -159,8 +167,7 @@ bool BookmarkEditorView::IsCommandIdEnabled(int command_id) const {
     case kContextMenuItemNewFolder:
       return true;
     default:
-      NOTREACHED();
-      return false;
+      NOTREACHED_NORETURN();
   }
 }
 
@@ -397,10 +404,10 @@ BookmarkEditorView::EditorNode* BookmarkEditorView::AddNewFolder(
 
 void BookmarkEditorView::ExpandAndSelect() {
   BookmarkExpandedStateTracker::Nodes expanded_nodes =
-      bb_model_->expanded_state_tracker()->GetExpandedNodes();
-  for (auto i(expanded_nodes.begin()); i != expanded_nodes.end(); ++i) {
+      expanded_state_tracker_->GetExpandedNodes();
+  for (const BookmarkNode* node : expanded_nodes) {
     EditorNode* editor_node =
-        FindNodeWithID(tree_model_->GetRoot(), (*i)->id());
+        FindNodeWithID(tree_model_->GetRoot(), node->id());
     if (editor_node)
       tree_view_->Expand(editor_node);
   }
@@ -436,7 +443,7 @@ void BookmarkEditorView::CreateNodes(const BookmarkNode* bb_node,
                                      BookmarkEditorView::EditorNode* b_node) {
   for (const auto& child_bb_node : bb_node->children()) {
     if (child_bb_node->IsVisible() && child_bb_node->is_folder() &&
-        bb_model_->client()->CanBeEditedByUser(child_bb_node.get())) {
+        !bb_model_->client()->IsNodeManaged(child_bb_node.get())) {
       EditorNode* new_b_node = b_node->Add(std::make_unique<EditorNode>(
           child_bb_node->GetTitle(), child_bb_node->id()));
       new_b_node->SetPlaceholderAccessibleTitle(
@@ -494,7 +501,7 @@ void BookmarkEditorView::ApplyEdits(EditorNode* parent) {
 
     BookmarkExpandedStateTracker::Nodes expanded_nodes;
     UpdateExpandedNodes(tree_model_->GetRoot(), &expanded_nodes);
-    bb_model_->expanded_state_tracker()->SetExpandedNodes(expanded_nodes);
+    expanded_state_tracker_->SetExpandedNodes(expanded_nodes);
 
     // Remove the folders that were removed. This has to be done after all the
     // other changes have been committed.
@@ -603,6 +610,6 @@ void BookmarkEditorView::EditorTreeModel::SetTitle(
     ui::TreeNodeModel<EditorNode>::SetTitle(node, title);
 }
 
-BEGIN_METADATA(BookmarkEditorView, views::DialogDelegateView)
+BEGIN_METADATA(BookmarkEditorView)
 ADD_READONLY_PROPERTY_METADATA(GURL, InputURL)
 END_METADATA

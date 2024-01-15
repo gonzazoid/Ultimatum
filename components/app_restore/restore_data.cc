@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "base/i18n/number_formatting.h"
+#include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/values.h"
 #include "components/app_constants/constants.h"
@@ -24,36 +25,72 @@ namespace {
 // a valid RWID should not use.
 int32_t g_desk_template_window_restore_id = -1;
 
+// Key used to record `removing_desk_guid_` when `RestoreData` is converted to
+// JSON.
+constexpr char kRemovingDeskGuidKey[] = "removing_desk_guid";
+
 }  // namespace
 
 RestoreData::RestoreData() = default;
 
-RestoreData::RestoreData(std::unique_ptr<base::Value> restore_data_value) {
-  if (!restore_data_value || !restore_data_value->is_dict()) {
+RestoreData::RestoreData(base::Value restore_data_value) {
+  base::Value::Dict* dict = restore_data_value.GetIfDict();
+  if (!dict) {
     DVLOG(0) << "Fail to parse full restore data. "
              << "Cannot find the full restore data dict.";
     return;
   }
 
-  for (auto iter : restore_data_value->DictItems()) {
-    const std::string& app_id = iter.first;
-    base::Value* value = restore_data_value->FindDictKey(app_id);
-    if (!value || !value->is_dict()) {
+  if (auto* removing_desk_guid_string =
+          dict->FindString(kRemovingDeskGuidKey)) {
+    removing_desk_guid_ =
+        base::Uuid::ParseLowercase(*removing_desk_guid_string);
+  }
+
+  for (auto iter : *dict) {
+    // `key` can be an app ID or `kRemovingDeskGuidKey`.
+    const std::string& key = iter.first;
+    base::Value::Dict* value = iter.second.GetIfDict();
+
+    // Skip the removing desk GUID because we already covered this before the
+    // loop.
+    if (key == kRemovingDeskGuidKey) {
+      continue;
+    }
+
+    if (!value) {
       DVLOG(0) << "Fail to parse full restore data. "
                << "Cannot find the app restore data dict.";
       continue;
     }
 
-    for (auto data_iter : value->DictItems()) {
+    for (auto data_iter : *value) {
+      const std::string& window_id_string = data_iter.first;
+
       int window_id = 0;
-      if (!base::StringToInt(data_iter.first, &window_id)) {
+      if (!base::StringToInt(window_id_string, &window_id)) {
         DVLOG(0) << "Fail to parse full restore data. "
                  << "Cannot find the valid id.";
         continue;
       }
-      app_id_to_launch_list_[app_id][window_id] =
-          std::make_unique<AppRestoreData>(
-              std::move(*value->FindDictKey(data_iter.first)));
+
+      base::Value::Dict* app_restore_data_dict = data_iter.second.GetIfDict();
+      if (!app_restore_data_dict) {
+        DVLOG(0) << "Fail to parse app restore data. "
+                 << "Cannot find the app restore data dict.";
+        continue;
+      }
+
+      // If the data is for an app that was on a removing desk, then we can skip
+      // adding the data.
+      auto app_restore_data =
+          std::make_unique<AppRestoreData>(std::move(*app_restore_data_dict));
+      if (removing_desk_guid_.is_valid() &&
+          app_restore_data->desk_guid == removing_desk_guid_) {
+        continue;
+      }
+
+      app_id_to_launch_list_[key][window_id] = std::move(app_restore_data);
     }
   }
 }
@@ -68,24 +105,34 @@ std::unique_ptr<RestoreData> RestoreData::Clone() const {
           data_it.second->Clone();
     }
   }
+  if (removing_desk_guid_.is_valid()) {
+    restore_data->removing_desk_guid_ = removing_desk_guid_;
+  }
   return restore_data;
 }
 
 base::Value RestoreData::ConvertToValue() const {
-  base::Value restore_data_dict(base::Value::Type::DICTIONARY);
-  for (const auto& it : app_id_to_launch_list_) {
-    if (it.second.empty())
+  base::Value::Dict restore_data_dict;
+  for (const auto& [app_id, launch_list] : app_id_to_launch_list_) {
+    if (launch_list.empty()) {
       continue;
-
-    base::Value info_dict(base::Value::Type::DICTIONARY);
-    for (const auto& data : it.second) {
-      info_dict.SetKey(base::NumberToString(data.first),
-                       data.second->ConvertToValue());
     }
 
-    restore_data_dict.SetKey(it.first, std::move(info_dict));
+    base::Value::Dict info_dict;
+    for (const auto& [window_id, app_restore_data] : launch_list) {
+      info_dict.Set(base::NumberToString(window_id),
+                    app_restore_data->ConvertToValue());
+    }
+
+    restore_data_dict.Set(app_id, std::move(info_dict));
   }
-  return restore_data_dict;
+
+  if (removing_desk_guid_.is_valid()) {
+    restore_data_dict.Set(kRemovingDeskGuidKey,
+                          removing_desk_guid_.AsLowercaseString());
+  }
+
+  return base::Value(std::move(restore_data_dict));
 }
 
 bool RestoreData::HasAppTypeBrowser() const {
@@ -256,31 +303,53 @@ const AppRestoreData* RestoreData::GetAppRestoreData(const std::string& app_id,
   return data_it->second.get();
 }
 
-void RestoreData::SetDeskIndex(int desk_index) {
+void RestoreData::SetDeskUuid(const base::Uuid& desk_uuid) {
   for (auto& [app_id, launch_list] : app_id_to_launch_list_) {
     for (auto& [window_id, app_restore_data] : launch_list) {
-      app_restore_data->desk_id = desk_index;
+      app_restore_data->desk_guid = desk_uuid;
     }
   }
 }
 
-void RestoreData::MakeWindowIdsUniqueForDeskTemplate() {
+base::flat_map<int32_t, int32_t>
+RestoreData::MakeWindowIdsUniqueForDeskTemplate() {
+  if (has_unique_window_ids_for_desk_template_) {
+    return {};
+  }
+
+  base::flat_map<int32_t, int32_t> mapping;
   for (auto& [app_id, launch_list] : app_id_to_launch_list_) {
     // We don't want to do in-place updates of the launch list since it
     // complicates traversal. We'll therefore build a new LaunchList and pilfer
     // the old one for AppRestoreData.
     LaunchList new_launch_list;
     for (auto& [window_id, app_restore_data] : launch_list) {
-      new_launch_list[--g_desk_template_window_restore_id] =
-          std::move(app_restore_data);
+      int32_t new_rwid = --g_desk_template_window_restore_id;
+      new_launch_list[new_rwid] = std::move(app_restore_data);
+      mapping[new_rwid] = window_id;
     }
     launch_list = std::move(new_launch_list);
   }
+
+  has_unique_window_ids_for_desk_template_ = true;
+  return mapping;
+}
+
+void RestoreData::UpdateBrowserAppIdToLacros() {
+  auto app_launch_list_iter =
+      app_id_to_launch_list_.find(app_constants::kChromeAppId);
+  if (app_launch_list_iter == app_id_to_launch_list_.end()) {
+    return;
+  }
+  app_id_to_launch_list_[app_constants::kLacrosAppId] =
+      std::move(app_launch_list_iter->second);
+  RemoveApp(app_constants::kChromeAppId);
 }
 
 std::string RestoreData::ToString() const {
-  if (app_id_to_launch_list_.empty())
+  if (app_id_to_launch_list_.empty() && !removing_desk_guid_.is_valid()) {
     return "empty";
+  }
 
   std::string result = "( ";
   for (const auto& entry : app_id_to_launch_list_) {
@@ -295,7 +364,16 @@ std::string RestoreData::ToString() const {
           windows.second->GetWindowInfo()->ToString();
     }
   }
-  return result + " )";
+
+  result += " )";
+
+  if (removing_desk_guid_.is_valid()) {
+    result +=
+        base::StringPrintf(" (Removing Desk GUID: %s)",
+                           removing_desk_guid_.AsLowercaseString().c_str());
+  }
+
+  return result;
 }
 
 AppRestoreData* RestoreData::GetAppRestoreDataMutable(const std::string& app_id,

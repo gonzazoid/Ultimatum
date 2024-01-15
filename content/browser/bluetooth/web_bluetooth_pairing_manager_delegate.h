@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "content/public/browser/bluetooth_delegate.h"
 #include "device/bluetooth/bluetooth_device.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
@@ -114,7 +114,7 @@ class WebBluetoothPairingManagerDelegate {
       const std::u16string& device_identifier,
       BluetoothDelegate::PairPromptCallback callback,
       BluetoothDelegate::PairingKind pairing_kind,
-      const absl::optional<std::u16string>& pin) = 0;
+      const std::optional<std::u16string>& pin) = 0;
 };
 
 }  // namespace content

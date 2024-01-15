@@ -6,7 +6,7 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/app/vector_icons/vector_icons.h"
@@ -51,7 +51,7 @@ class BackgroundBorderAdderImageSource : public gfx::CanvasImageSource {
  public:
   BackgroundBorderAdderImageSource(const gfx::ImageSkia& image,
                                    bool add_background,
-                                   absl::optional<SkColor> background_color,
+                                   std::optional<SkColor> background_color,
                                    SkColor border_color,
                                    int radius)
       : gfx::CanvasImageSource(gfx::Size(radius, radius)),
@@ -66,7 +66,7 @@ class BackgroundBorderAdderImageSource : public gfx::CanvasImageSource {
  private:
   const gfx::ImageSkia image_;
   const bool add_background_;
-  const absl::optional<SkColor> background_color_;
+  const std::optional<SkColor> background_color_;
   const SkColor border_color_;
 };
 
@@ -100,8 +100,9 @@ void BackgroundBorderAdderImageSource::Draw(gfx::Canvas* canvas) {
 // A class represting an image with a badge. By default, the image is the globe
 // icon. However, badge could be updated via the UpdateBadge() method.
 class ImageWithBadge : public views::ImageView {
+  METADATA_HEADER(ImageWithBadge, views::ImageView)
+
  public:
-  METADATA_HEADER(ImageWithBadge);
   // Constructs a View hierarchy with the a badge positioned in the bottom-right
   // corner of |main_image|. In RTL mode the badge is positioned in the
   // bottom-left corner.
@@ -120,8 +121,8 @@ class ImageWithBadge : public views::ImageView {
   void Render();
 
   raw_ptr<const gfx::VectorIcon> main_vector_icon_ = nullptr;
-  absl::optional<gfx::ImageSkia> main_image_skia_;
-  absl::optional<gfx::ImageSkia> badge_image_skia_;
+  std::optional<gfx::ImageSkia> main_image_skia_;
+  std::optional<gfx::ImageSkia> badge_image_skia_;
 };
 
 ImageWithBadge::ImageWithBadge(const gfx::ImageSkia& main_image)
@@ -176,14 +177,14 @@ void ImageWithBadge::Render() {
   gfx::ImageSkia main_image_with_border =
       gfx::CanvasImageSource::MakeImageSkia<BackgroundBorderAdderImageSource>(
           GetMainImage(), /*add_background=*/false,
-          /*background_color=*/absl::nullopt, kBorderColor, kImageSize);
+          /*background_color=*/std::nullopt, kBorderColor, kImageSize);
 
   gfx::ImageSkia badged_image = gfx::ImageSkiaOperations::CreateIconWithBadge(
       main_image_with_border, rounded_badge_with_background_and_border);
-  SetImage(badged_image);
+  SetImage(ui::ImageModel::FromImageSkia(badged_image));
 }
 
-BEGIN_METADATA(ImageWithBadge, views::ImageView)
+BEGIN_METADATA(ImageWithBadge)
 END_METADATA
 
 std::unique_ptr<views::Label> CreateDescription() {
@@ -200,8 +201,9 @@ std::unique_ptr<views::Label> CreateDescription() {
 // A view that holds two badged images with an arrow between them to illustrate
 // that a password is being moved from the device to the account.
 class MoveToAccountStoreBubbleView::MovingBannerView : public views::View {
+  METADATA_HEADER(MovingBannerView, views::View)
+
  public:
-  METADATA_HEADER(MovingBannerView);
   MovingBannerView(std::unique_ptr<ImageWithBadge> from_image,
                    std::unique_ptr<ImageWithBadge> to_image);
   ~MovingBannerView() override = default;
@@ -330,3 +332,6 @@ void MoveToAccountStoreBubbleView::OnFaviconReady(const gfx::Image& favicon) {
     moving_banner_->UpdateFavicon(*favicon.ToImageSkia());
   }
 }
+
+BEGIN_METADATA(MoveToAccountStoreBubbleView)
+END_METADATA

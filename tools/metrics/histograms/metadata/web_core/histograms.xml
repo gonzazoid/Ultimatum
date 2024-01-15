@@ -22,16 +22,14 @@ chromium-metrics-reviews@google.com.
 
 <histograms>
 
-<variants name="FindInPageRequestEndState">
-  <variant name=".Aborted"
-      summary="The request got aborted before it went through every text in
-               the document."/>
-  <variant name=".Finished"
-      summary="The request finished going through every text in the document."/>
+<variants name="IdbTransactionTypes">
+  <variant name="ReadOnly"/>
+  <variant name="ReadWrite"/>
+  <variant name="VersionChange"/>
 </variants>
 
 <histogram name="WebCore.DistillabilityUs" units="microseconds"
-    expires_after="2023-02-26">
+    expires_after="2024-05-19">
   <owner>wychen@chromium.org</owner>
   <owner>gilmanmh@google.com</owner>
   <summary>
@@ -48,9 +46,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.Document.execCommand" enum="MappedEditingCommands"
-    expires_after="2023-01-31">
-  <owner>yosin@chromium.org</owner>
+    expires_after="2024-04-28">
   <owner>kojii@chromium.org</owner>
+  <owner>tkent@chromium.org</owner>
   <summary>
     Counts the number of times each document.execCommand is executed. This
     doesn't count commands not supported by Blink.
@@ -58,9 +56,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.Editing.Commands" enum="MappedEditingCommands"
-    expires_after="2023-01-31">
-  <owner>yosin@chromium.org</owner>
+    expires_after="2024-06-04">
   <owner>kojii@chromium.org</owner>
+  <owner>tkent@chromium.org</owner>
   <summary>
     Counts the number of times each Editor::Command::execute is called. This
     doesn't count commands not supported by Blink.
@@ -68,7 +66,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.FindInPage.DurationBetweenKeystrokes" units="ms"
-    expires_after="2023-03-05">
+    expires_after="2024-05-19">
   <owner>jarhar@chromium.org</owner>
   <owner>vmpstr@chromium.org</owner>
   <summary>
@@ -80,55 +78,14 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram
-    name="WebCore.FindInPage.NumberOfTasksPerRequest{FindInPageRequestEndState}"
-    units="tasks" expires_after="2021-04-04">
-  <owner>rakina@chromium.org</owner>
-  <owner>altimin@chromium.org</owner>
-  <summary>
-    Records the number of find-in-page tasks executed for a find-in-page
-    request. Emitted when a find-in-page request is finished (it went through
-    the whole document) or when it got aborted. {FindInPageRequestEndState}
-  </summary>
-  <token key="FindInPageRequestEndState" variants="FindInPageRequestEndState"/>
-</histogram>
-
-<histogram name="WebCore.FindInPage.RequestDuration{FindInPageRequestEndState}"
-    units="ms" expires_after="2021-04-04">
-  <owner>rakina@chromium.org</owner>
-  <owner>altimin@chromium.org</owner>
-  <summary>
-    Records how long one find-in-page request (consisting multiple tasks) took
-    from the request start until the last find-in-page task for the request
-    finished. Emitted when a find-in-page request is finished (it went through
-    the whole document) or when it got aborted. {FindInPageRequestEndState}
-  </summary>
-  <token key="FindInPageRequestEndState" variants="FindInPageRequestEndState"/>
-</histogram>
-
 <histogram name="WebCore.FindInPage.TaskDuration" units="ms"
-    expires_after="2023-03-05">
+    expires_after="2023-05-07">
   <owner>rakina@chromium.org</owner>
   <owner>altimin@chromium.org</owner>
   <summary>
     Records how long one find-in-page task took from invocation start to end.
     Emitted when a find-in-page task finished running.
   </summary>
-</histogram>
-
-<histogram
-    name="WebCore.FindInPage.TotalTaskDuration{FindInPageRequestEndState}"
-    units="ms" expires_after="2021-04-04">
-  <owner>rakina@chromium.org</owner>
-  <owner>altimin@chromium.org</owner>
-  <summary>
-    Records the total task duration of all of the find-in-page tasks for one
-    find-in-page request. Nothe that this does not include the time spent in
-    between tasks. Emitted when a find-in-page request is finished (it went
-    through the whole document) or when it got aborted.
-    {FindInPageRequestEndState}
-  </summary>
-  <token key="FindInPageRequestEndState" variants="FindInPageRequestEndState"/>
 </histogram>
 
 <histogram name="WebCore.Framebust.ClickThroughPosition"
@@ -152,6 +109,30 @@ chromium-metrics-reviews@google.com.
     The (android only) outcome of a particular framebust infobar. Recorded when
     the user either closes the infobar or declines the intervention by clicking
     the link.
+  </summary>
+</histogram>
+
+<histogram name="WebCore.Fullscreen.LockStateAtEntryViaApi"
+    enum="FullscreenLockState" expires_after="2024-06-07">
+  <owner>takumif@chromium.org</owner>
+  <owner>openscreen-eng@google.com</owner>
+  <summary>
+    This metric records whether keyboard/pointer locks are engaged each time a
+    web page enters fullscreen via the Fullscreen API.
+  </summary>
+</histogram>
+
+<histogram name="WebCore.Fullscreen.LockStateAtEntryViaBrowserUi"
+    enum="FullscreenLockState" expires_after="2024-06-07">
+  <owner>takumif@chromium.org</owner>
+  <owner>openscreen-eng@google.com</owner>
+  <summary>
+    This metric records whether keyboard/pointer locks are engaged each time the
+    user enters fullscreen via the browser UI.
+
+    Note that even when keyboard lock has been requested, it doesn't get
+    activated when entering fullscreen through the browser UI. The Fullscreen
+    API must (also) be called.
   </summary>
 </histogram>
 
@@ -183,7 +164,7 @@ chromium-metrics-reviews@google.com.
     expires_after="never">
 <!-- expires-never: indexeddb heartbeat metric; used for chirp alerts (go/chrome-indexeddb-heartbeat) -->
 
-  <owner>ayui@chromium.org</owner>
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Records actions that take place in IndexedDB. These stats are used for
@@ -192,8 +173,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.BackingStore.ConsistencyError"
-    enum="IDBLevelDBBackingStoreInternalErrorType" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    enum="IDBLevelDBBackingStoreInternalErrorType" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Methods that encountered consistency errors. Such errors probably point to a
@@ -205,7 +186,7 @@ chromium-metrics-reviews@google.com.
     enum="LevelDBStatus" expires_after="never">
 <!-- expires-never: indexeddb heartbeat metric; used for chirp alerts (go/chrome-indexeddb-heartbeat) -->
 
-  <owner>ayui@chromium.org</owner>
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Records the result of trying to delete an IndexedDB database, per the user
@@ -213,11 +194,20 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="WebCore.IndexedDB.BackingStore.OpenFailureTime" units="ms"
+    expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
+  <owner>chrome-owp-storage@google.com</owner>
+  <summary>
+    Records the time that it takes to fail to open IndexedDB's backing store.
+  </summary>
+</histogram>
+
 <histogram name="WebCore.IndexedDB.BackingStore.OpenFirstTryResult"
     enum="LevelDBStatus" expires_after="never">
 <!-- expires-never: indexeddb heartbeat metric; used for chirp alerts (go/chrome-indexeddb-heartbeat) -->
 
-  <owner>ayui@chromium.org</owner>
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Records the result of the FIRST attempt at opening the backing store for
@@ -229,8 +219,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.BackingStore.OpenFirstTrySuccessTime"
-    units="ms" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    units="ms" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Records the time that it takes to open IndexedDB's backing store. This is
@@ -245,7 +235,7 @@ chromium-metrics-reviews@google.com.
 
 <!-- expires-never: indexeddb heartbeat metric; used for chirp alerts (go/chrome-indexeddb-heartbeat) -->
 
-  <owner>ayui@chromium.org</owner>
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Count of the different success and failure modes when opening an IndexedDB
@@ -258,7 +248,7 @@ chromium-metrics-reviews@google.com.
     enum="IDBLevelDBBackingStoreOpenResult" expires_after="never">
 <!-- expires-never: core storage metric; consumed in separate dashboard (go/chrome-storage-dashboard) -->
 
-  <owner>ayui@chromium.org</owner>
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Count of the different success and failure modes when opening an IndexedDB
@@ -267,9 +257,20 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="WebCore.IndexedDB.BackingStore.OpenSuccessTime" units="ms"
+    expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
+  <owner>chrome-owp-storage@google.com</owner>
+  <summary>
+    Records the time that it takes to succesfully open IndexedDB's backing
+    store. Unlike OpenFirstTrySuccessTime, this is recorded regardless of
+    whether the success was on the first try.
+  </summary>
+</histogram>
+
 <histogram name="WebCore.IndexedDB.BackingStore.OverlyLargeOriginLength"
-    units="characters" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    units="characters" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Length of leveldb directories that cause paths to not fit in the filesystem,
@@ -279,8 +280,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.BackingStore.ReadError"
-    enum="IDBLevelDBBackingStoreInternalErrorType" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    enum="IDBLevelDBBackingStoreInternalErrorType" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Methods that encountered leveldb errors while trying to read from disk.
@@ -288,8 +289,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.BackingStore.WriteError"
-    enum="IDBLevelDBBackingStoreInternalErrorType" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    enum="IDBLevelDBBackingStoreInternalErrorType" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Methods that encountered leveldb errors while trying to write to disk.
@@ -297,28 +298,15 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.Context.ForceCloseReason"
-    enum="IDBContextForcedCloseReason" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    enum="IDBContextForcedCloseReason" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>The reason that a forced-close of a backing store occurred.</summary>
 </histogram>
 
-<histogram name="WebCore.IndexedDB.ErrorDuringForceCloseAborts"
-    enum="LevelDBStatus" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
-  <owner>chrome-owp-storage@google.com</owner>
-  <summary>
-    Recorded when there is an error during the force close of IndexedDB for an
-    origin. A force close can be triggered either from DevTools, or when there
-    is a disk error. Errors during force close are ignored, as the system is
-    already being torn down. This metric is the only record of these errors
-    happening.
-  </summary>
-</histogram>
-
 <histogram name="WebCore.IndexedDB.FoundBlobFileForValue" enum="Boolean"
-    expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Recorded when a blob is attempted to be read from an IndexedDB value. This
@@ -330,8 +318,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.LevelDB.CloseTime" units="ms"
-    expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     The time that it takes to close IndexedDB's LevelDB backing store.
@@ -339,8 +327,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.LevelDB.OpenTime" units="ms"
-    expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     The time that it takes to open IndexedDB's LevelDB backing store.
@@ -348,8 +336,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.LevelDB.WriteTime" units="ms"
-    expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     The time that it takes to write data to an IndexedDB's LevelDB backing
@@ -358,8 +346,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.LevelDBOpenErrors" enum="LevelDBErrorTypes"
-    expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Error classes returned by LevelDB when it failed to open a database.
@@ -367,8 +355,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.LevelDBOpenErrors.BFE"
-    enum="PlatformFileError" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    enum="PlatformFileError" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Errors (base::File::Error) encountered by a single LevelDBEnv method when
@@ -377,8 +365,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.LevelDBOpenErrors.Corruption"
-    enum="LevelDBCorruptionTypes" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    enum="LevelDBCorruptionTypes" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Types of corruption that LevelDB encounters when opening a database.
@@ -386,8 +374,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.LevelDBOpenErrors.EnvMethod"
-    enum="LevelDBIOErrorMethods" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    enum="LevelDBIOErrorMethods" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     LevelDBEnv methods that generated IO errors when opening a database.
@@ -395,8 +383,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.LevelDBReadErrors" enum="LevelDBErrorTypes"
-    expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Error classes returned by LevelDB when it failed to read a database.
@@ -404,8 +392,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.LevelDBReadErrors.BFE"
-    enum="PlatformFileError" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    enum="PlatformFileError" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Errors (base::File::Error) encountered by a single LevelDBEnv method when
@@ -414,8 +402,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.LevelDBReadErrors.Corruption"
-    enum="LevelDBCorruptionTypes" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    enum="LevelDBCorruptionTypes" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Types of corruption that LevelDB encounters when reading a database.
@@ -423,8 +411,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.LevelDBReadErrors.EnvMethod"
-    enum="LevelDBIOErrorMethods" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    enum="LevelDBIOErrorMethods" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     LevelDBEnv methods that generated IO errors when reading a database.
@@ -432,8 +420,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.LevelDBWriteErrors" enum="LevelDBErrorTypes"
-    expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Error classes returned by LevelDB when it failed to write to a database.
@@ -441,8 +429,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.LevelDBWriteErrors.BFE"
-    enum="PlatformFileError" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    enum="PlatformFileError" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Errors (base::File::Error) encountered by a single LevelDBEnv method when
@@ -451,8 +439,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.LevelDBWriteErrors.Corruption"
-    enum="LevelDBCorruptionTypes" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    enum="LevelDBCorruptionTypes" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Types of corruption returned by LevelDB when it failed to write to a
@@ -461,8 +449,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.LevelDBWriteErrors.EnvMethod"
-    enum="LevelDBIOErrorMethods" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    enum="LevelDBIOErrorMethods" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     LevelDBEnv methods that generated IO errors when writing to a database.
@@ -470,8 +458,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.OpenTime.Cold" units="ms"
-    expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Records the full time it takes to open a database that isn't open yet (so
@@ -485,8 +473,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.OpenTime.Warm" units="ms"
-    expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Records the full time it takes to open an already-open database. The
@@ -499,8 +487,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.PutBlobsCount" units="blobs"
-    expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     The number of blobs being saved in an IndexedDB object store 'put'
@@ -509,8 +497,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.PutBlobsTotalSize" units="KB"
-    expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     The total size of the blobs being saved in an IndexedDB object store 'put'
@@ -520,8 +508,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.PutKeySize" units="KB"
-    expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     The size of the IndexedDB key used in an IndexedDB object store 'put'
@@ -530,8 +518,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.PutValueSize2" units="KB"
-    expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     The size of the IndexedDB value used in an IndexedDB object store 'put'
@@ -539,9 +527,22 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="WebCore.IndexedDB.RequestDuration.{IDBRequestType}" units="ms"
+    expires_after="2024-08-01">
+  <owner>estade@chromium.org</owner>
+  <owner>chrome-owp-storage@google.com</owner>
+  <summary>Records end to end duration of an IndexedDB operation.</summary>
+  <token key="IDBRequestType">
+    <variant name="ObjectStoreAdd"/>
+    <variant name="ObjectStoreGet"/>
+    <variant name="ObjectStorePut"/>
+    <variant name="Open"/>
+  </token>
+</histogram>
+
 <histogram name="WebCore.IndexedDB.TombstoneSweeper.DeletedTombstonesSize"
-    units="bytes" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    units="bytes" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Records the total size of tombstones deleted by the IndexedDB Tombstone
@@ -553,8 +554,8 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="WebCore.IndexedDB.TombstoneSweeper.DeletionCommitTime.Complete"
-    units="ms" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    units="ms" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Records the time it takes for the IndexedDB Tombstone Sweeper to commit
@@ -565,8 +566,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.TombstoneSweeper.DeletionTotalTime.Complete"
-    units="ms" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    units="ms" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Records the time it takes for the IndexedDB Tombstone Sweeper to fully sweep
@@ -577,8 +578,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.TombstoneSweeper.DeletionWriteError"
-    enum="LevelDBStatus" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    enum="LevelDBStatus" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Records when an error occurs during deletion of index tombstones by the
@@ -589,8 +590,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.TombstoneSweeper.IndexScanPercent"
-    units="%/5" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    units="%/5" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Recorded on the browser side (back end) when the IndexedDB Tombstone Sweeper
@@ -601,8 +602,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.TombstoneSweeper.NumDeletedTombstones"
-    units="Index Tombstones" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    units="Index Tombstones" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Records the number of tombstones deleted by the IndexedDB Tombstone Sweeper.
@@ -612,8 +613,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.IndexedDB.TombstoneSweeper.SweepError"
-    enum="LevelDBStatus" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    enum="LevelDBStatus" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Recorded on the browser side (back end) when the IndexedDB Tombstone Sweeper
@@ -621,77 +622,60 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="WebCore.IndexedDB.Transaction.ReadOnly.SizeOnCommit2"
-    units="KB" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+<histogram name="WebCore.IndexedDB.Transaction.{TransactionType}.SizeOnCommit2"
+    units="KB" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
-    The total temporary size of an IndexedDB ReadOnly Transaction. Since this is
-    a readonly transaction, the size should only be &gt;0 when the transaction
-    is removing tombstone index keys. Recorded on transaction commit.
+    The total temporary size of an IndexedDB transaction. This is the memory
+    that is temporarily stored before writing to disk. Recorded on transaction
+    commit.
   </summary>
+  <token key="TransactionType" variants="IdbTransactionTypes"/>
 </histogram>
 
-<histogram name="WebCore.IndexedDB.Transaction.ReadOnly.TimeActive" units="ms"
-    expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+<histogram name="WebCore.IndexedDB.Transaction.{TransactionType}.TimeActive"
+    units="ms" expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
-    The time it takes for an IndexedDB ReadOnly Transaction to commit, starting
-    from when it starts executing tasks (when it is scheduled). Recorded on
-    transaction commit.
+    [deprecated - this measures only through the end of commit phase 1 and
+    misses commit phase 2, which includes the backing store commit] The time it
+    takes for an IndexedDB transaction to commit, starting from when it starts
+    executing tasks (when it reaches the front of the scheduling queue).
+    Recorded on transaction commit.
   </summary>
+  <token key="TransactionType" variants="IdbTransactionTypes"/>
 </histogram>
 
-<histogram name="WebCore.IndexedDB.Transaction.ReadWrite.SizeOnCommit2"
-    units="KB" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+<histogram name="WebCore.IndexedDB.Transaction.{TransactionType}.TimeActive2"
+    units="ms" expires_after="2024-10-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
-    The total temporary size of an IndexedDB ReadWrite Transaction. This is the
-    memory that is temporarily stored before writing to disk. Recorded on
-    transaction commit.
+    The time it takes for an IndexedDB transaction to commit, starting from when
+    it starts executing tasks (when it reaches the front of the scheduling
+    queue). Recorded after transaction commit fully completes.
   </summary>
+  <token key="TransactionType" variants="IdbTransactionTypes"/>
 </histogram>
 
-<histogram name="WebCore.IndexedDB.Transaction.ReadWrite.TimeActive" units="ms"
-    expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+<histogram name="WebCore.IndexedDB.Transaction.{TransactionType}.TimeQueued"
+    units="ms" expires_after="2024-10-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
-    The time it takes for an IndexedDB ReadWrite Transaction to commit, starting
-    from when it starts executing tasks (when it is scheduled). Recorded on
-    transaction commit.
+    The time it takes for an IndexedDB transaction to start after it's created.
+    This is measured from the browser process. It represents the amount of time
+    spent queued behind other tranactions (i.e. waiting for locks) and any other
+    delays before the transaction can begin operations.
   </summary>
-</histogram>
-
-<histogram name="WebCore.IndexedDB.Transaction.VersionChange.SizeOnCommit2"
-    units="KB" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
-  <owner>chrome-owp-storage@google.com</owner>
-  <summary>
-    The total temporary size of an IndexedDB VersionChange Transaction. This is
-    the memory that is temporarily stored before writing to disk. Version change
-    transactions happen when creating a database or updating a current database
-    schema. Recorded on transaction commit.
-  </summary>
-</histogram>
-
-<histogram name="WebCore.IndexedDB.Transaction.VersionChange.TimeActive"
-    units="ms" expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
-  <owner>chrome-owp-storage@google.com</owner>
-  <summary>
-    The time it takes for an IndexedDB VersionChange Transaction to commit,
-    starting from when it starts executing tasks (when it is scheduled). Version
-    change transactions happen when creating a database or updating a current
-    database schema. Recorded on transaction commit.
-  </summary>
+  <token key="TransactionType" variants="IdbTransactionTypes"/>
 </histogram>
 
 <histogram name="WebCore.IndexedDB.TransactionAbortReason" enum="IDBException"
-    expires_after="2023-06-24">
-  <owner>ayui@chromium.org</owner>
+    expires_after="2024-05-24">
+  <owner>estade@chromium.org</owner>
   <owner>chrome-owp-storage@google.com</owner>
   <summary>
     Recorded on the browser side (back end) when an IndexedDB transaction is
@@ -720,21 +704,21 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.Scripts.Async.NotStreamingReason"
-    enum="NotStreamingReason" expires_after="2023-06-01">
+    enum="NotStreamingReason" expires_after="2023-12-10">
   <owner>leszeks@chromium.org</owner>
   <owner>v8-runtime@google.com</owner>
   <summary>Reason for not streaming an async script.</summary>
 </histogram>
 
 <histogram name="WebCore.Scripts.Async.StartedStreaming" enum="BooleanStreamed"
-    expires_after="2023-06-01">
+    expires_after="2023-08-08">
   <owner>leszeks@chromium.org</owner>
   <owner>v8-runtime@google.com</owner>
   <summary>Whether an async script was streamed or not.</summary>
 </histogram>
 
 <histogram name="WebCore.Scripts.Deferred.NotStreamingReason"
-    enum="NotStreamingReason" expires_after="2023-06-01">
+    enum="NotStreamingReason" expires_after="2023-12-10">
   <owner>leszeks@chromium.org</owner>
   <owner>v8-runtime@google.com</owner>
   <summary>Reason for not streaming a deferred script.</summary>
@@ -748,7 +732,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.Scripts.InlineStreamerTimedOut" enum="BooleanTimedOut"
-    expires_after="2023-06-08">
+    expires_after="2023-11-12">
   <owner>cduvall@chromium.org</owner>
   <owner>leszeks@chromium.org</owner>
   <summary>
@@ -759,7 +743,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.Scripts.InlineStreamerWaitTime" units="microseconds"
-    expires_after="2023-05-31">
+    expires_after="2023-12-04">
   <owner>cduvall@chromium.org</owner>
   <owner>leszeks@chromium.org</owner>
   <summary>
@@ -772,7 +756,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.Scripts.Other.NotStreamingReason"
-    enum="NotStreamingReason" expires_after="2023-06-01">
+    enum="NotStreamingReason" expires_after="2023-12-10">
   <owner>leszeks@chromium.org</owner>
   <owner>v8-runtime@google.com</owner>
   <summary>
@@ -792,7 +776,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="WebCore.Scripts.ParsingBlocking.NotStreamingReason"
-    enum="NotStreamingReason" expires_after="2023-06-01">
+    enum="NotStreamingReason" expires_after="2023-10-08">
   <owner>leszeks@chromium.org</owner>
   <owner>v8-runtime@google.com</owner>
   <summary>Reason for not streaming a parsing blocking script.</summary>
@@ -805,13 +789,25 @@ chromium-metrics-reviews@google.com.
   <summary>Whether a parsing blocking script was streamed or not.</summary>
 </histogram>
 
-<histogram name="WebCore.WebSocket.SendType" enum="WebSocketSendType"
-    expires_after="2021-10-17">
-  <owner>yhirano@chromium.org</owner>
-  <owner>ricea@chromium.org</owner>
+<histogram name="WebCore.Scripts.V8CompileHintsStatus"
+    enum="V8CompileHintsStatus" expires_after="2024-03-12">
+  <owner>marja@chromium.org</owner>
+  <owner>v8-loading@google.com</owner>
+  <owner>chrome-intelligence-core@google.com</owner>
   <summary>
-    Count the number of send() method calls on WebSockets for each argument
-    type.
+    Whether we produced / consumed compile hints (either local or crowdsourced)
+    for a script. Recorded when a script is compiled (either via streaming or
+    otherwise).
+  </summary>
+</histogram>
+
+<histogram name="WebCore.Scripts.V8CrowdsourcedCompileHints.ModelQuality"
+    enum="V8CompileHintsModelQuality" expires_after="2024-09-11">
+  <owner>marja@chromium.org</owner>
+  <owner>v8-loading@google.com</owner>
+  <owner>chrome-intelligence-core@google.com</owner>
+  <summary>
+    Whether we got a V8CompileHints model and whether it was good quality.
   </summary>
 </histogram>
 

@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
 #include "base/json/json_writer.h"
 #include "base/memory/scoped_refptr.h"
@@ -43,35 +43,26 @@ constexpr int chromeOmniboxClientId = 6;
 //            searchApplicationId: "searchapplications/chrome",
 //            clientId: 6,
 //            languageCode: "|locale|",
-//            debugOptions: {
-//              optsParams: "enable_aso_search:|ASO enabled|"
-//            }
 //       }
 //     }
-std::string BuildDocumentSuggestionRequest(const std::u16string& query,
-                                           bool enable_aso_search) {
-  base::Value root(base::Value::Type::DICTIONARY);
-  root.SetKey("query", base::Value(query));
+std::string BuildDocumentSuggestionRequest(const std::u16string& query) {
+  base::Value::Dict root;
+  root.Set("query", base::Value(query));
   // The API supports pagination. We're always concerned with the first N
   // results on the first page.
-  root.SetKey("start", base::Value(0));
-  root.SetKey("pageSize", base::Value(10));
+  root.Set("start", base::Value(0));
+  root.Set("pageSize", base::Value(10));
 
-  base::Value request_options(base::Value::Type::DICTIONARY);
-  request_options.SetKey("searchApplicationId",
-                         base::Value("searchapplications/chrome"));
+  base::Value::Dict request_options;
+  request_options.Set("searchApplicationId",
+                      base::Value("searchapplications/chrome"));
   // While the searchApplicationId is a specific config being used by a client
   // and can be shared among multiple clients in some instances, clientId
   // identifies a client uniquely.
-  request_options.SetKey("clientId", base::Value(chromeOmniboxClientId));
-  request_options.SetKey("languageCode",
-                         base::Value(base::i18n::GetConfiguredLocale()));
-  base::Value debug_options(base::Value::Type::DICTIONARY);
-  debug_options.SetStringKey(
-      "optsParams", base::StringPrintf("enable_aso_search:%s",
-                                       enable_aso_search ? "true" : "false"));
-  request_options.SetKey("debugOptions", std::move(debug_options));
-  root.SetKey("requestOptions", std::move(request_options));
+  request_options.Set("clientId", base::Value(chromeOmniboxClientId));
+  request_options.Set("languageCode",
+                      base::Value(base::i18n::GetConfiguredLocale()));
+  root.Set("requestOptions", std::move(request_options));
 
   std::string result;
   base::JSONWriter::Write(root, &result);
@@ -94,6 +85,7 @@ DocumentSuggestionsService::~DocumentSuggestionsService() {}
 void DocumentSuggestionsService::CreateDocumentSuggestionsRequest(
     const std::u16string& query,
     bool is_incognito,
+    CreationCallback creation_callback,
     StartCallback start_callback,
     CompletionCallback completion_callback) {
   std::string endpoint = base::GetFieldTrialParamValueByFeature(
@@ -130,8 +122,7 @@ void DocumentSuggestionsService::CreateDocumentSuggestionsRequest(
   auto request = std::make_unique<network::ResourceRequest>();
   request->url = suggest_url;
   request->method = "POST";
-  std::string request_body = BuildDocumentSuggestionRequest(
-      query, base::FeatureList::IsEnabled(omnibox::kDocumentProviderAso));
+  std::string request_body = BuildDocumentSuggestionRequest(query);
   request->load_flags = net::LOAD_DO_NOT_SAVE_COOKIES;
   // It is expected that the user is signed in here. But we only care about
   // experiment IDs from the variations server, which do not require the
@@ -141,6 +132,8 @@ void DocumentSuggestionsService::CreateDocumentSuggestionsRequest(
       is_incognito ? variations::InIncognito::kYes
                    : variations::InIncognito::kNo,
       request.get());
+
+  std::move(creation_callback).Run(request.get());
 
   // Create and fetch an OAuth2 token.
   std::string scope = "https://www.googleapis.com/auth/cloud_search.query";
@@ -152,7 +145,8 @@ void DocumentSuggestionsService::CreateDocumentSuggestionsRequest(
                      base::Unretained(this), std::move(request),
                      std::move(request_body), traffic_annotation,
                      std::move(start_callback), std::move(completion_callback)),
-      signin::PrimaryAccountAccessTokenFetcher::Mode::kWaitUntilAvailable);
+      signin::PrimaryAccountAccessTokenFetcher::Mode::kWaitUntilAvailable,
+      signin::ConsentLevel::kSync);
 }
 
 void DocumentSuggestionsService::StopCreatingDocumentSuggestionsRequest() {
@@ -200,5 +194,5 @@ void DocumentSuggestionsService::StartDownloadAndTransferLoader(
       url_loader_factory_.get(),
       base::BindOnce(std::move(completion_callback), loader.get()));
 
-  std::move(start_callback).Run(std::move(loader));
+  std::move(start_callback).Run(std::move(loader), request_body);
 }

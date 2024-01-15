@@ -10,22 +10,28 @@
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/window_properties.h"
 #include "ash/shell.h"
+#include "ash/style/system_shadow.h"
+#include "ash/wm/float/float_controller.h"
 #include "ash/wm/overview/delayed_animation_observer_impl.h"
 #include "ash/wm/overview/overview_constants.h"
 #include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/overview/overview_grid.h"
 #include "ash/wm/overview/overview_item.h"
+#include "ash/wm/overview/overview_item_view.h"
 #include "ash/wm/overview/overview_utils.h"
 #include "ash/wm/overview/scoped_overview_animation_settings.h"
+#include "ash/wm/snap_group/snap_group.h"
+#include "ash/wm/snap_group/snap_group_controller.h"
 #include "ash/wm/splitview/split_view_controller.h"
 #include "ash/wm/splitview/split_view_utils.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "ash/wm/window_state.h"
 #include "ash/wm/window_transient_descendant_iterator.h"
 #include "ash/wm/window_util.h"
-#include "base/bind.h"
+#include "ash/wm/wm_constants.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chromeos/ui/base/window_properties.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/client/transient_window_client.h"
@@ -37,9 +43,9 @@
 #include "ui/compositor/layer_observer.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/rect_conversions.h"
+#include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/gfx/geometry/transform_util.h"
 #include "ui/gfx/geometry/vector2d_f.h"
-#include "ui/views/layout/layout_provider.h"
 #include "ui/views/widget/widget.h"
 #include "ui/wm/core/coordinate_conversion.h"
 #include "ui/wm/core/shadow_controller.h"
@@ -56,25 +62,21 @@ bool immediate_close_for_tests = false;
 // Delay closing window to allow it to shrink and fade out.
 constexpr int kCloseWindowDelayInMilliseconds = 150;
 
-// Layer animation observer that is attached to a clip animation. Removes the
-// clip and then self destructs after the animation is finished.
-class RemoveClipObserver : public ui::ImplicitAnimationObserver,
-                           public aura::WindowObserver {
+// Layer animation observer that is attached to a clip and/or rounded corners
+// animation. We need this for the exit animation, where we want to animate
+// properties but the overview session has been destroyed. We want to use this
+// observer for animations that require an intermediate step. For example, when
+// removing a clip, we want to first animate to the size of the window, and then
+// set the clip rect to be empty after the animation has completed.
+class UndoPropertyObserver : public ui::ImplicitAnimationObserver,
+                             public aura::WindowObserver {
  public:
-  explicit RemoveClipObserver(aura::Window* window) : window_(window) {
-    auto* animator = window_->layer()->GetAnimator();
-    DCHECK(window_->layer()->GetAnimator()->is_animating());
-
-    const auto original_transition_duration = animator->GetTransitionDuration();
-    // Don't let |settings| overwrite the existing animation's duration.
-    ui::ScopedLayerAnimationSettings settings{animator};
-    settings.SetTransitionDuration(original_transition_duration);
-    settings.AddObserver(this);
+  explicit UndoPropertyObserver(aura::Window* window) : window_(window) {
     window_->AddObserver(this);
   }
-  RemoveClipObserver(const RemoveClipObserver&) = delete;
-  RemoveClipObserver& operator=(const RemoveClipObserver&) = delete;
-  ~RemoveClipObserver() override {
+  UndoPropertyObserver(const UndoPropertyObserver&) = delete;
+  UndoPropertyObserver& operator=(const UndoPropertyObserver&) = delete;
+  ~UndoPropertyObserver() override {
     StopObservingImplicitAnimations();
     window_->RemoveObserver(this);
     window_ = nullptr;
@@ -89,38 +91,41 @@ class RemoveClipObserver : public ui::ImplicitAnimationObserver,
 
   // aura::WindowObserver:
   void OnWindowDestroying(aura::Window* window) override {
-    DCHECK_EQ(window_, window);
+    CHECK_EQ(window_, window);
     delete this;
   }
 
-  // Guaranteed to be not null for the duration of |this|.
-  aura::Window* window_;
+  // Guaranteed to be not null for the duration of `this`.
+  raw_ptr<aura::Window> window_;
 };
 
-// Clips |window| to |clip_rect|. If |clip_rect| is empty and there is an
-// animation, animate first to a clip the size of |window|, then remove the
-// clip. Otherwise the clip animation will clip away all the contents while it
-// animates towards an empty clip rect (but not yet empty) before reshowing it
-// once the clip rect is really empty. An empty clip rect means a request to
-// clip nothing.
-void ClipWindow(aura::Window* window, const gfx::Rect& clip_rect) {
-  DCHECK(window);
-
-  ui::LayerAnimator* animator = window->layer()->GetAnimator();
-  const gfx::Rect target_clip_rect = animator->GetTargetClipRect();
-  if (target_clip_rect == clip_rect)
-    return;
-
-  gfx::Rect new_clip_rect = clip_rect;
-  if (new_clip_rect.IsEmpty() && animator->is_animating() &&
-      !animator->GetTransitionDuration().is_zero()) {
-    // Animate to a clip the size of `window`. Create a self deleting object
-    // which removes the clip when the animation is finished.
-    new_clip_rect = gfx::Rect(window->bounds().size());
-    new RemoveClipObserver(window);
+// Returns the rounded corners to be applied on the transformed window based on
+// whether the given `window` belongs to a group or not.
+gfx::RoundedCornersF GetRoundedCornersForTransformWindow(aura::Window* window,
+                                                         float scale) {
+  if (SnapGroupController* snap_group_controller = SnapGroupController::Get()) {
+    if (SnapGroup* snap_group =
+            snap_group_controller->GetSnapGroupForGivenWindow(window)) {
+      return window == snap_group->window1()
+                 ? gfx::RoundedCornersF(
+                       /*upper_left=*/0,
+                       /*upper_right=*/0, /*lower_right=*/0,
+                       /*lower_left=*/
+                       kWindowMiniViewCornerRadius / scale)
+                 : gfx::RoundedCornersF(
+                       /*upper_left=*/0,
+                       /*upper_right=*/0,
+                       /*lower_right=*/
+                       kWindowMiniViewCornerRadius / scale,
+                       /*lower_left=*/0);
+    }
   }
 
-  window->layer()->SetClipRect(new_clip_rect);
+  return gfx::RoundedCornersF(
+      /*upper_left=*/0,
+      /*upper_right=*/0,
+      /*lower_right=*/kWindowMiniViewCornerRadius / scale,
+      /*lower_left=*/kWindowMiniViewCornerRadius / scale);
 }
 
 }  // namespace
@@ -154,7 +159,7 @@ class ScopedOverviewTransformWindow::LayerCachingAndFilteringObserver
   }
 
  private:
-  ui::Layer* layer_;
+  raw_ptr<ui::Layer> layer_;
 };
 
 ScopedOverviewTransformWindow::ScopedOverviewTransformWindow(
@@ -164,9 +169,14 @@ ScopedOverviewTransformWindow::ScopedOverviewTransformWindow(
       window_(window),
       original_opacity_(window->layer()->GetTargetOpacity()),
       original_clip_rect_(window_->layer()->GetTargetClipRect()) {
+  raster_scale_observer_lock_.emplace(
+      (new RasterScaleLayerObserver(window_, window_->layer(), window_))
+          ->Lock());
+
   type_ = GetWindowDimensionsType(window->bounds().size());
 
-  std::vector<aura::Window*> transient_children_to_hide;
+  std::vector<raw_ptr<aura::Window, VectorExperimental>>
+      transient_children_to_hide;
   for (auto* transient : GetTransientTreeIterator(window)) {
     event_targeting_blocker_map_[transient] =
         std::make_unique<aura::ScopedWindowEventTargetingBlocker>(transient);
@@ -195,9 +205,9 @@ ScopedOverviewTransformWindow::ScopedOverviewTransformWindow(
   // activated.
   // TODO(sammiequon): This does not handle the case if either the snapped
   // window or this window is an always on top window.
-  auto* split_view_controller =
-      SplitViewController::Get(Shell::GetPrimaryRootWindow());
-  if (ShouldUseTabletModeGridLayout() &&
+  if (auto* split_view_controller =
+          SplitViewController::Get(Shell::GetPrimaryRootWindow());
+      ShouldUseTabletModeGridLayout() &&
       split_view_controller->InSplitViewMode()) {
     aura::Window* snapped_window =
         split_view_controller->GetDefaultSnappedWindow();
@@ -223,8 +233,9 @@ ScopedOverviewTransformWindow::~ScopedOverviewTransformWindow() {
   // `this` is dragged to another display. Without this check, `SetClipping`
   // would override the one we called in `RestoreWindow()` which would result in
   // the same final clip but may remove the animation. See crbug.com/1140639.
-  if (reset_clip_on_shutdown_)
-    SetClipping({ClippingType::kExit, gfx::SizeF()});
+  if (reset_clip_on_shutdown_) {
+    SetClipping(gfx::Rect(original_clip_rect_.size()));
+  }
 
   for (auto* transient : GetTransientTreeIterator(window_)) {
     transient->ClearProperty(chromeos::kIsShowingInOverviewKey);
@@ -239,12 +250,12 @@ ScopedOverviewTransformWindow::~ScopedOverviewTransformWindow() {
 }
 
 // static
-float ScopedOverviewTransformWindow::GetItemScale(const gfx::SizeF& source,
-                                                  const gfx::SizeF& target,
+float ScopedOverviewTransformWindow::GetItemScale(int source_height,
+                                                  int target_height,
                                                   int top_view_inset,
                                                   int title_height) {
-  return std::min(2.0f, (target.height() - title_height) /
-                            (source.height() - top_view_inset));
+  return std::min(2.0f, static_cast<float>(target_height - title_height) /
+                            (source_height - top_view_inset));
 }
 
 // static
@@ -259,9 +270,8 @@ ScopedOverviewTransformWindow::GetWindowDimensionsType(const gfx::Size& size) {
   return OverviewGridWindowFillMode::kNormal;
 }
 
-void ScopedOverviewTransformWindow::RestoreWindow(
-    bool reset_transform,
-    bool was_desk_templates_grid_showing) {
+void ScopedOverviewTransformWindow::RestoreWindow(bool reset_transform,
+                                                  bool animate) {
   // Shadow controller may be null on shutdown.
   if (Shell::Get()->shadow_controller())
     Shell::Get()->shadow_controller()->UpdateShadowForWindow(window_);
@@ -269,13 +279,13 @@ void ScopedOverviewTransformWindow::RestoreWindow(
   // We will handle clipping here, no need to do anything in the destructor.
   reset_clip_on_shutdown_ = false;
 
-  if (IsMinimized() || was_desk_templates_grid_showing) {
+  if (!animate || IsMinimizedOrTucked()) {
     // Minimized windows may have had their transforms altered by swiping up
     // from the shelf.
     ScopedOverviewAnimationSettings animation_settings(OVERVIEW_ANIMATION_NONE,
                                                        window_);
-    SetTransform(window_, gfx::Transform());
-    SetClipping({ClippingType::kExit, gfx::SizeF()});
+    window_util::SetTransform(window_, gfx::Transform());
+    SetClipping(gfx::Rect(original_clip_rect_.size()));
     return;
   }
 
@@ -288,13 +298,14 @@ void ScopedOverviewTransformWindow::RestoreWindow(
       settings->AddObserver(exit_observer.get());
       if (window_->layer()->GetAnimator() == settings->GetAnimator())
         settings->AddObserver(new WindowTransformAnimationObserver(window_));
-      Shell::Get()->overview_controller()->AddExitAnimationObserver(
+      OverviewController::Get()->AddExitAnimationObserver(
           std::move(exit_observer));
     }
 
     // Use identity transform directly to reset window's transform when exiting
     // overview.
-    SetTransform(window_, gfx::Transform());
+    window_util::SetTransform(window_, gfx::Transform());
+
     // Add requests to cache render surface and perform trilinear filtering for
     // the exit animation of overview mode. The requests will be removed when
     // the exit animation finishes.
@@ -309,7 +320,12 @@ void ScopedOverviewTransformWindow::RestoreWindow(
   ScopedOverviewAnimationSettings animation_settings(
       overview_item_->GetExitOverviewAnimationType(), window_);
   SetOpacity(original_opacity_);
-  SetClipping({ClippingType::kExit, gfx::SizeF()});
+  if (original_clip_rect_.IsEmpty()) {
+    animation_settings.AddObserver(new UndoPropertyObserver(window_));
+    SetClipping(gfx::Rect(window_->bounds().size()));
+  } else {
+    SetClipping(gfx::Rect(original_clip_rect_.size()));
+  }
 }
 
 void ScopedOverviewTransformWindow::BeginScopedAnimation(
@@ -321,14 +337,19 @@ void ScopedOverviewTransformWindow::BeginScopedAnimation(
   for (auto* window : window_util::GetVisibleTransientTreeIterator(window_)) {
     auto settings = std::make_unique<ScopedOverviewAnimationSettings>(
         animation_type, window);
-    settings->DeferPaint();
+    // With rounded windows, we cannot defer painting since we want control over
+    // rounded corners in overview, so we want to remove the rounded windows
+    // rounding immediately.
+    if (!features::IsOverviewUpdatesEnabled()) {
+      settings->DeferPaint();
+    }
 
     // Create an EnterAnimationObserver if this is an enter overview layout
     // animation.
     if (animation_type == OVERVIEW_ANIMATION_LAYOUT_OVERVIEW_ITEMS_ON_ENTER) {
       auto enter_observer = std::make_unique<EnterAnimationObserver>();
       settings->AddObserver(enter_observer.get());
-      Shell::Get()->overview_controller()->AddEnterAnimationObserver(
+      OverviewController::Get()->AddEnterAnimationObserver(
           std::move(enter_observer));
     }
 
@@ -342,8 +363,9 @@ bool ScopedOverviewTransformWindow::Contains(const aura::Window* target) const {
       return true;
   }
 
-  if (!IsMinimized())
+  if (!IsMinimizedOrTucked()) {
     return false;
+  }
 
   // A minimized window's item_widget_ may have already been destroyed.
   const auto* item_widget = overview_item_->item_widget();
@@ -359,8 +381,9 @@ gfx::RectF ScopedOverviewTransformWindow::GetTransformedBounds() const {
 
 int ScopedOverviewTransformWindow::GetTopInset() const {
   // Mirror window doesn't have insets.
-  if (IsMinimized())
+  if (IsMinimizedOrTucked()) {
     return 0;
+  }
   for (auto* window : window_util::GetVisibleTransientTreeIterator(window_)) {
     // If there are regular windows in the transient ancestor tree, all those
     // windows are shown in the same overview item and the header is not masked.
@@ -378,57 +401,31 @@ void ScopedOverviewTransformWindow::SetOpacity(float opacity) {
     window->layer()->SetOpacity(opacity);
 }
 
-void ScopedOverviewTransformWindow::SetClipping(
-    const ClippingData& clipping_data) {
+void ScopedOverviewTransformWindow::SetClipping(const gfx::Rect& clip_rect) {
   // No need to clip `window_` if it is about to be destroyed.
-  if (window_->is_destroying())
+  if (window_->is_destroying()) {
     return;
-
-  gfx::SizeF size;
-  switch (clipping_data.first) {
-    case ClippingType::kEnter:
-      size = gfx::SizeF(window_->bounds().size());
-      break;
-    case ClippingType::kExit:
-      ClipWindow(window_, original_clip_rect_);
-      return;
-    case ClippingType::kCustom:
-      size = clipping_data.second;
-      if (size.IsEmpty()) {
-        // Given size is empty so we fallback to the overview clipping, which is
-        // the size of the window. The header will be accounted for below.
-        size = gfx::SizeF(window_->bounds().size());
-      } else {
-        // Transform affects the clip rect, so take that into account.
-        const gfx::Vector2dF scale =
-            window_->layer()->GetTargetTransform().To2dScale();
-        size.Scale(1 / scale.x(), 1 / scale.y());
-      }
-      break;
   }
 
-  if (size.IsEmpty())
+  ui::Layer* layer = window_->layer();
+  // TODO(sammiequon): Investigate why we cannot use
+  // `ui::Layer::GetTargetClipRect()` here.
+  if (layer->GetAnimator()->GetTargetClipRect() == clip_rect) {
     return;
+  }
 
-  gfx::Rect clip_rect(gfx::ToRoundedSize(size));
-  // We add 1 to the top_inset, because in some cases, the header is not
-  // clipped fully due to what seems to be a rounding error.
-  // TODO(afakhry|sammiequon): Investigate a proper fix for this.
-  const int top_inset = GetTopInset();
-  if (top_inset > 0)
-    clip_rect.Inset(gfx::Insets::TLBR(top_inset + 1, 0, 0, 0));
-  ClipWindow(window_, clip_rect);
+  layer->SetClipRect(clip_rect);
 }
 
 gfx::RectF ScopedOverviewTransformWindow::ShrinkRectToFitPreservingAspectRatio(
     const gfx::RectF& rect,
     const gfx::RectF& bounds,
     int top_view_inset,
-    int title_height) {
+    int title_height) const {
   DCHECK(!rect.IsEmpty());
   DCHECK_LE(top_view_inset, rect.height());
-  const float scale =
-      GetItemScale(rect.size(), bounds.size(), top_view_inset, title_height);
+  const float scale = GetItemScale(rect.height(), bounds.height(),
+                                   top_view_inset, title_height);
   const float horizontal_offset = 0.5 * (bounds.width() - scale * rect.width());
   const float width = bounds.width() - 2.f * horizontal_offset;
   const float vertical_offset = title_height - scale * top_view_inset;
@@ -452,18 +449,24 @@ gfx::RectF ScopedOverviewTransformWindow::ShrinkRectToFitPreservingAspectRatio(
         const float new_width = height * window_ratio;
         new_bounds.set_width(new_width);
       } else {
-        const float new_height = bounds.width() / window_ratio;
+        // For some use cases, the `new_height` is larger than the maximum
+        // height should be applied to the window within the `bounds` even it's
+        // letter box window type. In this case we should use maximum height
+        // directly.
+        float new_height = std::min(height, bounds.width() / window_ratio);
+
         new_bounds = bounds;
         new_bounds.Inset(gfx::InsetsF::TLBR(title_height, 0, 0, 0));
         if (top_view_inset) {
           new_bounds.set_height(new_height);
-          // Calculate `scaled_top_view_inset` without considering `title_height`
-          // because we have already inset the top of `new_bounds` by that value.
-          // We also do not consider `top_view_inset` in our calculation of
-          // `new_scale` because we want to find out the height of the inset when
-          // the whole window, including the inset, is scaled down to `new_bounds`.
+          // Calculate `scaled_top_view_inset` without considering
+          // `title_height` because we have already inset the top of
+          // `new_bounds` by that value. We also do not consider
+          // `top_view_inset` in our calculation of `new_scale` because we want
+          // to find out the height of the inset when the whole window,
+          // including the inset, is scaled down to `new_bounds`.
           const float new_scale =
-              GetItemScale(rect.size(), new_bounds.size(), 0, 0);
+              GetItemScale(rect.height(), new_bounds.height(), 0, 0);
           const float scaled_top_view_inset = top_view_inset * new_scale;
           // Offset `new_bounds` to be at a point in the overview item frame
           // where it will be centered when we clip the `top_view_inset`.
@@ -471,7 +474,8 @@ gfx::RectF ScopedOverviewTransformWindow::ShrinkRectToFitPreservingAspectRatio(
                                    (new_height - scaled_top_view_inset) / 2 -
                                    scaled_top_view_inset);
         } else {
-          new_bounds.ClampToCenteredSize(gfx::SizeF(bounds.width(), new_height));
+          new_bounds.ClampToCenteredSize(
+              gfx::SizeF(bounds.width(), new_height));
         }
       }
       break;
@@ -487,9 +491,10 @@ gfx::RectF ScopedOverviewTransformWindow::ShrinkRectToFitPreservingAspectRatio(
   return gfx::RectF(gfx::ToRoundedRect(new_bounds));
 }
 
-aura::Window* ScopedOverviewTransformWindow::GetOverviewWindow() const {
-  if (IsMinimized())
+aura::Window* ScopedOverviewTransformWindow::GetOverviewWindow() {
+  if (IsMinimizedOrTucked()) {
     return overview_item_->item_widget()->GetNativeWindow();
+  }
   return window_;
 }
 
@@ -499,15 +504,15 @@ void ScopedOverviewTransformWindow::Close() {
     return;
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&ScopedOverviewTransformWindow::CloseWidget,
                      weak_ptr_factory_.GetWeakPtr()),
       base::Milliseconds(kCloseWindowDelayInMilliseconds));
 }
 
-bool ScopedOverviewTransformWindow::IsMinimized() const {
-  return WindowState::Get(window_)->IsMinimized();
+bool ScopedOverviewTransformWindow::IsMinimizedOrTucked() const {
+  return window_util::IsMinimizedOrTucked(window_);
 }
 
 void ScopedOverviewTransformWindow::PrepareForOverview() {
@@ -535,18 +540,31 @@ void ScopedOverviewTransformWindow::UpdateWindowDimensionsType() {
 }
 
 void ScopedOverviewTransformWindow::UpdateRoundedCorners(bool show) {
+  // TODO(b/274470528): Keep track of the corner radius animations.
+
   // Hide the corners if minimized, OverviewItemView will handle showing the
   // rounded corners on the UI.
-  if (IsMinimized())
+  if (IsMinimizedOrTucked()) {
     DCHECK(!show);
+  }
 
   ui::Layer* layer = window_->layer();
-  const float scale = layer->transform().To2dScale().x();
-  const int radius = views::LayoutProvider::Get()->GetCornerRadiusMetric(
-      views::Emphasis::kLow);
-  const gfx::RoundedCornersF radii(show ? (radius / scale) : 0.0f);
-  layer->SetRoundedCornerRadius(radii);
   layer->SetIsFastRoundedCorner(true);
+
+  if (!show) {
+    layer->SetRoundedCornerRadius(gfx::RoundedCornersF());
+    return;
+  }
+
+  // Depending on the size of `backdrop_view`, we might not want to round the
+  // window associated with `layer`.
+  const bool has_rounding = window_util::ShouldRoundThumbnailWindow(
+      overview_item_->GetBackDropView(), GetTransformedBounds());
+
+  const float scale = layer->transform().To2dScale().x();
+  layer->SetRoundedCornerRadius(
+      has_rounding ? GetRoundedCornersForTransformWindow(window_, scale)
+                   : gfx::RoundedCornersF(0));
 }
 
 void ScopedOverviewTransformWindow::OnTransientChildWindowAdded(
@@ -564,8 +582,9 @@ void ScopedOverviewTransformWindow::OnTransientChildWindowAdded(
   // Hide transient children which have been specified to be hidden in
   // overview mode.
   if (transient_child != window_ &&
-      transient_child->GetProperty(kHideInOverviewKey))
+      transient_child->GetProperty(kHideInOverviewKey)) {
     AddHiddenTransientWindows({transient_child});
+  }
 
   // Add this as |aura::WindowObserver| for observing |kHideInOverviewKey|
   // property changes.
@@ -600,7 +619,7 @@ void ScopedOverviewTransformWindow::OnWindowPropertyChanged(
   if (current_value) {
     AddHiddenTransientWindows({window});
   } else {
-    hidden_transient_children_->RemoveWindow(window);
+    hidden_transient_children_->RemoveWindow(window, /*show_window=*/true);
   }
 }
 
@@ -635,18 +654,21 @@ void ScopedOverviewTransformWindow::SetImmediateCloseForTests(bool immediate) {
 
 void ScopedOverviewTransformWindow::CloseWidget() {
   aura::Window* parent_window = wm::GetTransientRoot(window_);
-  if (parent_window)
+  if (parent_window) {
     window_util::CloseWidgetForWindow(parent_window);
+  }
 }
 
 void ScopedOverviewTransformWindow::AddHiddenTransientWindows(
-    const std::vector<aura::Window*>& transient_windows) {
+    const std::vector<raw_ptr<aura::Window, VectorExperimental>>&
+        transient_windows) {
   if (!hidden_transient_children_) {
     hidden_transient_children_ = std::make_unique<ScopedOverviewHideWindows>(
         std::move(transient_windows), /*forced_hidden=*/true);
   } else {
-    for (auto* window : transient_windows)
+    for (aura::Window* window : transient_windows) {
       hidden_transient_children_->AddWindow(window);
+    }
   }
 }
 

@@ -6,14 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/path_service.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "components/prefs/pref_registry_simple.h"
@@ -135,8 +134,8 @@ void QuirksManager::RequestIccProfilePath(
   }
 
   std::string name = IdToFileName(product_id);
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&CheckForIccFile,
                      delegate_->GetDisplayProfileDirectory().Append(name)),
       base::BindOnce(&QuirksManager::OnIccFilePathRequestCompleted,
@@ -172,7 +171,7 @@ void QuirksManager::OnIccFilePathRequestCompleted(
                           .value_or(0.0);
 
   const base::TimeDelta time_since =
-      base::Time::Now() - base::Time::FromDoubleT(last_check);
+      base::Time::Now() - base::Time::FromSecondsSinceUnixEpoch(last_check);
 
   // Don't need server check if we've checked within last 30 days.
   if (time_since < base::Days(kDaysBetweenServerChecks)) {
@@ -204,8 +203,8 @@ bool QuirksManager::QuirksEnabled() {
 void QuirksManager::SetLastServerCheck(int64_t product_id,
                                        const base::Time& last_check) {
   DCHECK(thread_checker_.CalledOnValidThread());
-  DictionaryPrefUpdate dict(local_state_, prefs::kQuirksClientLastServerCheck);
-  dict->SetDoubleKey(IdToHexString(product_id), last_check.ToDoubleT());
+  ScopedDictPrefUpdate dict(local_state_, prefs::kQuirksClientLastServerCheck);
+  dict->Set(IdToHexString(product_id), last_check.InSecondsFSinceUnixEpoch());
 }
 
 }  // namespace quirks

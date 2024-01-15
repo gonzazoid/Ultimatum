@@ -4,10 +4,10 @@
 
 #include "third_party/blink/renderer/platform/scheduler/worker/non_main_thread_impl.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/synchronization/waitable_event.h"
-#include "base/task/task_executor.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
@@ -49,7 +49,7 @@ class TestObserver : public Thread::TaskObserver {
   }
 
  private:
-  StringBuilder* calls_;  // NOT OWNED
+  raw_ptr<StringBuilder, ExperimentalRenderer> calls_;  // NOT OWNED
 };
 
 void RunTestTask(StringBuilder* calls) {

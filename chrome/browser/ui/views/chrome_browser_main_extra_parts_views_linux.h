@@ -13,6 +13,9 @@
 
 namespace ui {
 class LinuxUiGetter;
+#if defined(USE_DBUS)
+class DarkModeManagerLinux;
+#endif
 }
 
 // Extra parts, which are used by both Ozone/X11/Wayland and inherited by the
@@ -38,9 +41,12 @@ class ChromeBrowserMainExtraPartsViewsLinux
   // display::DisplayObserver:
   void OnCurrentWorkspaceChanged(const std::string& new_workspace) override;
 
-  absl::optional<display::ScopedDisplayObserver> display_observer_;
+  std::optional<display::ScopedDisplayObserver> display_observer_;
 
   std::unique_ptr<ui::LinuxUiGetter> linux_ui_getter_;
+#if defined(USE_DBUS)
+  std::unique_ptr<ui::DarkModeManagerLinux> dark_mode_manager_;
+#endif
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_CHROME_BROWSER_MAIN_EXTRA_PARTS_VIEWS_LINUX_H_

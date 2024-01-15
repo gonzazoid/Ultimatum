@@ -12,9 +12,9 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
@@ -27,7 +27,6 @@
 #include "ipc/ipc_sender.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/generic_pending_associated_receiver.h"
-#include "mojo/public/cpp/bindings/lib/message_quota_checker.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "mojo/public/cpp/bindings/scoped_interface_endpoint_handle.h"
@@ -42,6 +41,7 @@ namespace IPC {
 class ChannelFactory;
 class MessageFilter;
 class MessageFilterRouter;
+class UrgentMessageObserver;
 
 //-----------------------------------------------------------------------------
 // IPC::ChannelProxy
@@ -168,6 +168,10 @@ class COMPONENT_EXPORT(IPC) ChannelProxy : public Sender {
   // the IO thread.
   void AddFilter(MessageFilter* filter);
   void RemoveFilter(MessageFilter* filter);
+
+  // Set the `UrgentMessageObserver` for the channel. Must be called on the
+  // proxy thread before initialization.
+  void SetUrgentMessageObserver(UrgentMessageObserver* observer);
 
   using GenericAssociatedInterfaceFactory =
       base::RepeatingCallback<void(mojo::ScopedInterfaceEndpointHandle)>;
@@ -337,6 +341,7 @@ class COMPONENT_EXPORT(IPC) ChannelProxy : public Sender {
     void OnDispatchAssociatedInterfaceRequest(
         const std::string& interface_name,
         mojo::ScopedInterfaceEndpointHandle handle);
+    void SetUrgentMessageObserver(UrgentMessageObserver* observer);
 
     void ClearChannel();
 
@@ -368,9 +373,6 @@ class COMPONENT_EXPORT(IPC) ChannelProxy : public Sender {
     std::unique_ptr<Channel> channel_;
     bool channel_connected_called_;
 
-    // The quota checker associated with this channel, if any.
-    scoped_refptr<mojo::internal::MessageQuotaChecker> quota_checker_;
-
     // Lock for |channel_| value. This is only relevant in the context of
     // thread-safe send.
     base::Lock channel_lifetime_lock_;
@@ -401,6 +403,7 @@ class COMPONENT_EXPORT(IPC) ChannelProxy : public Sender {
     base::Lock pending_io_thread_interfaces_lock_;
     std::vector<std::pair<std::string, GenericAssociatedInterfaceFactory>>
         pending_io_thread_interfaces_;
+    raw_ptr<UrgentMessageObserver> urgent_message_observer_ = nullptr;
   };
 
   Context* context() { return context_.get(); }
@@ -435,10 +438,10 @@ class COMPONENT_EXPORT(IPC) ChannelProxy : public Sender {
   scoped_refptr<Context> context_;
 
   // Whether the channel has been initialized.
-  bool did_init_;
+  bool did_init_ = false;
 
 #if defined(ENABLE_IPC_FUZZER)
-  OutgoingMessageFilter* outgoing_message_filter_;
+  raw_ptr<OutgoingMessageFilter> outgoing_message_filter_ = nullptr;
 #endif
 
   SEQUENCE_CHECKER(sequence_checker_);

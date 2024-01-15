@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 GEN_INCLUDE([
-  '../../testing/chromevox_next_e2e_test_base.js',
+  '../../testing/chromevox_e2e_test_base.js',
   '../../../common/testing/assert_additions.js',
 ]);
 
@@ -13,20 +13,23 @@ GEN_INCLUDE([
  * out classes not under test but it runs under a full extension test
  * environment to get things like extension api literals.
  */
-ChromeVoxIntentHandlerTest = class extends ChromeVoxNextE2ETest {
+ChromeVoxIntentHandlerTest = class extends ChromeVoxE2ETest {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
 
-    // Alphabetical based on file path.
-    await importModule(
-        'IntentHandler', '/chromevox/background/editing/intent_handler.js');
-    await importModule('Output', '/chromevox/background/output/output.js');
-    await importModule(
-        'OutputEventType', '/chromevox/background/output/output_types.js');
+    await Promise.all([
+      // Alphabetical based on file path.
+      importModule(
+          'IntentHandler', '/chromevox/background/editing/intent_handler.js'),
+      importModule('Output', '/chromevox/background/output/output.js'),
+      importModule(
+          'OutputCustomEvent', '/chromevox/background/output/output_types.js'),
+    ]);
 
-    window.Dir = constants.Dir;
-    window.IntentTextBoundaryType = chrome.automation.IntentTextBoundaryType;
+    globalThis.Dir = constants.Dir;
+    globalThis.IntentTextBoundaryType =
+        chrome.automation.IntentTextBoundaryType;
   }
 };
 
@@ -67,7 +70,7 @@ AX_TEST_F('ChromeVoxIntentHandlerTest', 'MoveByCharacter', function() {
   assertEquals(3, calls.length);
   assertArraysEquals(['createCharRange'], calls[0]);
   assertArraysEquals(
-      ['withRichSpeechAndBraille', {}, null, OutputEventType.NAVIGATE],
+      ['withRichSpeechAndBraille', {}, null, OutputCustomEvent.NAVIGATE],
       calls[1]);
   assertArraysEquals(['go'], calls[2]);
 
@@ -77,7 +80,8 @@ AX_TEST_F('ChromeVoxIntentHandlerTest', 'MoveByCharacter', function() {
   assertArraysEquals(['createCharRange'], calls[0]);
   assertArraysEquals(['createCharRange'], calls[1]);
   assertArraysEquals(
-      ['withRichSpeechAndBraille', {}, {}, OutputEventType.NAVIGATE], calls[2]);
+      ['withRichSpeechAndBraille', {}, {}, OutputCustomEvent.NAVIGATE],
+      calls[2]);
   assertArraysEquals(['go'], calls[3]);
 });
 
@@ -104,7 +108,7 @@ AX_TEST_F('ChromeVoxIntentHandlerTest', 'MoveByWord', function() {
   assertEquals(3, calls.length);
   assertArraysEquals(['createWordRange', true], calls[0]);
   assertArraysEquals(
-      ['withSpeech', {}, null, OutputEventType.NAVIGATE], calls[1]);
+      ['withSpeech', {}, null, OutputCustomEvent.NAVIGATE], calls[1]);
   assertArraysEquals(['go'], calls[2]);
 
   calls = [];
@@ -113,7 +117,7 @@ AX_TEST_F('ChromeVoxIntentHandlerTest', 'MoveByWord', function() {
   assertEquals(3, calls.length);
   assertArraysEquals(['createWordRange', false], calls[0]);
   assertArraysEquals(
-      ['withSpeech', {}, null, OutputEventType.NAVIGATE], calls[1]);
+      ['withSpeech', {}, null, OutputCustomEvent.NAVIGATE], calls[1]);
   assertArraysEquals(['go'], calls[2]);
 
   calls = [];

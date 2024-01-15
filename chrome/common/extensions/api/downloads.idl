@@ -122,7 +122,28 @@ namespace downloads {
   //     <dd>The user has accepted the dangerous download.</dd>
   // </dl>
   enum DangerType {
-    file, url, content, uncommon, host, unwanted, safe, accepted
+    file,
+    url,
+    content,
+    uncommon,
+    host,
+    unwanted,
+    safe,
+    accepted,
+    allowlistedByPolicy,
+    asyncScanning,
+    asyncLocalPasswordScanning,
+    passwordProtected,
+    blockedTooLarge,
+    sensitiveContentWarning,
+    sensitiveContentBlock,
+    unsupportedFileType,
+    deepScannedFailed,
+    deepScannedSafe,
+    deepScannedOpenedDangerous,
+    promptForScanning,
+    promptForLocalPasswordScanning,
+    accountCompromise
   };
 
   // <dl><dt>in_progress</dt>
@@ -493,11 +514,12 @@ namespace downloads {
         optional GetFileIconOptions options,
         GetFileIconCallback callback);
 
-    // Open the downloaded file now if the $(ref:DownloadItem) is complete;
-    // otherwise returns an error through $(ref:runtime.lastError). Requires the
-    // <code>"downloads.open"</code> permission in addition to the
-    // <code>"downloads"</code> permission. An $(ref:onChanged) event will fire
-    // when the item is opened for the first time.
+    // Opens the downloaded file now if the $(ref:DownloadItem) is complete;
+    // otherwise returns an error through $(ref:runtime.lastError). This method
+    // requires the <code>"downloads.open"</code> permission in addition to the
+    // <code>"downloads"</code> permission. An $(ref:onChanged) event fires
+    // when the item is opened for the first time. This method can only be called
+    // in response to a user gesture.
     // |downloadId|: The identifier for the downloaded file.
     static void open(long downloadId);
 
@@ -539,6 +561,7 @@ namespace downloads {
     // one other extension has disabled it will return an error through
     // $(ref:runtime.lastError). Requires the <code>"downloads.shelf"</code>
     // permission in addition to the <code>"downloads"</code> permission.
+    [deprecated="Use $(ref:setUiOptions) instead."]
     static void setShelfEnabled(boolean enabled);
 
     // Change the download UI of every window associated with the current

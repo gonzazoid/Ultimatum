@@ -2,19 +2,19 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "chromeos/ash/services/assistant/platform/audio_input_host_impl.h"
+#include <optional>
 
 #include "base/run_loop.h"
 #include "base/test/mock_callback.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "chromeos/ash/components/audio/cras_audio_handler.h"
+#include "chromeos/ash/services/assistant/platform/audio_input_host_impl.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "chromeos/ash/services/libassistant/public/mojom/audio_input_controller.mojom.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash::assistant {
 
@@ -40,27 +40,15 @@ class AudioInputControllerMock : public MojomAudioInputController {
 
   MOCK_METHOD(void, SetMicOpen, (bool mic_open));
   MOCK_METHOD(void, SetHotwordEnabled, (bool enable));
-  MOCK_METHOD(void,
-              SetDeviceId,
-              (const absl::optional<std::string>& device_id));
+  MOCK_METHOD(void, SetDeviceId, (const std::optional<std::string>& device_id));
   MOCK_METHOD(void,
               SetHotwordDeviceId,
-              (const absl::optional<std::string>& device_id));
+              (const std::optional<std::string>& device_id));
   MOCK_METHOD(void, SetLidState, (MojomLidState new_state));
   MOCK_METHOD(void, OnConversationTurnStarted, ());
 
  private:
   mojo::Receiver<MojomAudioInputController> receiver_{this};
-};
-
-class ScopedCrasAudioHandler {
- public:
-  ScopedCrasAudioHandler() { CrasAudioHandler::InitializeForTesting(); }
-  ScopedCrasAudioHandler(const ScopedCrasAudioHandler&) = delete;
-  ScopedCrasAudioHandler& operator=(const ScopedCrasAudioHandler&) = delete;
-  ~ScopedCrasAudioHandler() { CrasAudioHandler::Shutdown(); }
-
-  CrasAudioHandler* Get() { return CrasAudioHandler::Get(); }
 };
 
 class AssistantAudioInputHostTest : public testing::Test {
@@ -98,7 +86,7 @@ class AssistantAudioInputHostTest : public testing::Test {
   void CreateNewAudioInputHost() {
     audio_input_host_ = std::make_unique<AudioInputHostImpl>(
         audio_input_controller_.BindNewPipeAndPassRemote(),
-        cras_audio_handler_.Get(), chromeos::FakePowerManagerClient::Get(),
+        &cras_audio_handler_.Get(), chromeos::FakePowerManagerClient::Get(),
         "default-locale");
 
     FlushPendingMojomCalls();
@@ -114,12 +102,12 @@ class AssistantAudioInputHostTest : public testing::Test {
 
   void SetLidState(LidState state) { ReportLidEvent(state); }
 
-  void SetDeviceId(const absl::optional<std::string>& device_id) {
+  void SetDeviceId(const std::optional<std::string>& device_id) {
     audio_input_host().SetDeviceId(device_id);
     FlushPendingMojomCalls();
   }
 
-  void SetHotwordDeviceId(const absl::optional<std::string>& device_id) {
+  void SetHotwordDeviceId(const std::optional<std::string>& device_id) {
     audio_input_host().SetHotwordDeviceId(device_id);
     FlushPendingMojomCalls();
   }
@@ -144,7 +132,7 @@ class AssistantAudioInputHostTest : public testing::Test {
  private:
   base::test::TaskEnvironment task_environment_;
   base::test::ScopedFeatureList scoped_feature_list_;
-  ScopedCrasAudioHandler cras_audio_handler_;
+  ScopedCrasAudioHandlerForTesting cras_audio_handler_;
   NiceMock<AudioInputControllerMock> audio_input_controller_;
   std::unique_ptr<AudioInputHostImpl> audio_input_host_;
 };
@@ -187,33 +175,33 @@ TEST_F(AssistantAudioInputHostTest, ShouldReadCurrentLidStateWhenLaunching) {
 
 TEST_F(AssistantAudioInputHostTest, ShouldSendDeviceIdToMojom) {
   EXPECT_CALL(mojom_audio_input_controller(),
-              SetDeviceId(absl::optional<std::string>("device-id")));
+              SetDeviceId(std::optional<std::string>("device-id")));
   SetDeviceId("device-id");
 }
 
 TEST_F(AssistantAudioInputHostTest, ShouldUnsetDeviceIdWhenItsEmpty) {
-  // Note this variable is required as directly passing absl::nullopt into the
+  // Note this variable is required as directly passing std::nullopt into the
   // EXPECT_CALL doesn't compile.
-  const absl::optional<std::string> expected = absl::nullopt;
+  const std::optional<std::string> expected = std::nullopt;
   EXPECT_CALL(mojom_audio_input_controller(), SetDeviceId(expected));
 
-  SetDeviceId(absl::nullopt);
+  SetDeviceId(std::nullopt);
 }
 
 TEST_F(AssistantAudioInputHostTest, ShouldSendHotwordDeviceIdToMojom) {
   EXPECT_CALL(
       mojom_audio_input_controller(),
-      SetHotwordDeviceId(absl::optional<std::string>("hotword-device-id")));
+      SetHotwordDeviceId(std::optional<std::string>("hotword-device-id")));
   SetHotwordDeviceId("hotword-device-id");
 }
 
 TEST_F(AssistantAudioInputHostTest, ShouldUnsetHotwordDeviceIdWhenItsEmpty) {
-  // Note this variable is required as directly passing absl::nullopt into the
+  // Note this variable is required as directly passing std::nullopt into the
   // EXPECT_CALL doesn't compile.
-  const absl::optional<std::string> expected = absl::nullopt;
+  const std::optional<std::string> expected = std::nullopt;
   EXPECT_CALL(mojom_audio_input_controller(), SetHotwordDeviceId(expected));
 
-  SetHotwordDeviceId(absl::nullopt);
+  SetHotwordDeviceId(std::nullopt);
 }
 TEST_F(AssistantAudioInputHostTest, ShouldSendHotwordEnabledToMojom) {
   EXPECT_CALL(mojom_audio_input_controller(), SetHotwordEnabled(true));

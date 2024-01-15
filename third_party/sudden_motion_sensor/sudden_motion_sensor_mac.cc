@@ -56,8 +56,8 @@
 #include <iterator>
 #include <memory>
 
+#include "base/apple/scoped_cftyperef.h"
 #include "base/logging.h"
-#include "base/mac/scoped_cftyperef.h"
 
 struct SuddenMotionSensor::GenericMacbookSensor {
   // Name of device to be read.
@@ -338,7 +338,7 @@ bool SuddenMotionSensor::Init() {
   const SensorDescriptor* sensor_candidate = nullptr;
 
   // Look for the current model in the supported sensor list.
-  base::ScopedCFTypeRef<CFDataRef> board_id_data;
+  base::apple::ScopedCFTypeRef<CFDataRef> board_id_data;
   const int kNumSensors = std::size(kSupportedSensors);
 
   for (int i = 0; i < kNumSensors; ++i) {
@@ -374,7 +374,7 @@ bool SuddenMotionSensor::Init() {
       }
 
       if (strcmp(kSupportedSensors[i].board_id,
-                 (const char*)CFDataGetBytePtr(board_id_data)) != 0) {
+                 (const char*)CFDataGetBytePtr(board_id_data.get())) != 0) {
         continue;
       }
     }

@@ -26,6 +26,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "third_party/blink/renderer/modules/webaudio/periodic_wave.h"
+
 #include <algorithm>
 #include <memory>
 
@@ -33,7 +35,6 @@
 #include "third_party/blink/renderer/bindings/modules/v8/v8_periodic_wave_options.h"
 #include "third_party/blink/renderer/modules/webaudio/base_audio_context.h"
 #include "third_party/blink/renderer/modules/webaudio/oscillator_node.h"
-#include "third_party/blink/renderer/modules/webaudio/periodic_wave.h"
 #include "third_party/blink/renderer/platform/audio/fft_frame.h"
 #include "third_party/blink/renderer/platform/audio/vector_math.h"
 #include "third_party/blink/renderer/platform/bindings/exception_messages.h"
@@ -406,8 +407,7 @@ void PeriodicWaveImpl::CreateBandLimitedTables(const float* real_data,
                                                const float* imag_data,
                                                unsigned number_of_components,
                                                bool disable_normalization) {
-  // TODO(rtoy): Figure out why this needs to be 0.5 when normalization is
-  // disabled.
+  // The default scale factor for when normalization is disabled.
   float normalization_scale = 0.5;
 
   unsigned fft_size = PeriodicWaveSize();
@@ -432,9 +432,11 @@ void PeriodicWaveImpl::CreateBandLimitedTables(const float* real_data,
     // arrays.  Need to scale the data by fftSize to remove the scaling that the
     // inverse IFFT would do.
     float scale = fft_size;
-    vector_math::Vsmul(real_data, 1, &scale, real.Data(), 1, number_of_components);
+    vector_math::Vsmul(
+        real_data, 1, &scale, real.Data(), 1, number_of_components);
     scale = -scale;
-    vector_math::Vsmul(imag_data, 1, &scale, imag.Data(), 1, number_of_components);
+    vector_math::Vsmul(
+        imag_data, 1, &scale, imag.Data(), 1, number_of_components);
 
     // Find the starting bin where we should start culling.  We need to clear
     // out the highest frequencies to band-limit the waveform.

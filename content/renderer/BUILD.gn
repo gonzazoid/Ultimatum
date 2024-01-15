@@ -2,13 +2,14 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/config/chromecast_build.gni")
+import("//build/config/cast.gni")
 import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/features.gni")
 import("//build/config/ui.gni")
 import("//content/common/features.gni")
 import("//media/media_options.gni")
 import("//ppapi/buildflags/buildflags.gni")
+import("//sandbox/features.gni")
 import("//testing/libfuzzer/fuzzer_test.gni")
 import("//third_party/webrtc/webrtc.gni")
 import("//tools/ipc_fuzzer/ipc_fuzzer.gni")
@@ -29,6 +30,7 @@ target(link_target_type, "renderer") {
     "//content/public/renderer:renderer_sources",
     "//content/renderer:audio_decoder_fuzzer",
     "//content/renderer:content_security_policy_util_fuzzer",
+    "//media/mojo/clients:unit_tests",
   ]
 
   sources = [
@@ -40,8 +42,6 @@ target(link_target_type, "renderer") {
     "accessibility/ax_image_annotator.h",
     "accessibility/ax_image_stopwords.cc",
     "accessibility/ax_image_stopwords.h",
-    "accessibility/ax_tree_distiller.cc",
-    "accessibility/ax_tree_distiller.h",
     "accessibility/ax_tree_snapshotter_impl.cc",
     "accessibility/ax_tree_snapshotter_impl.h",
     "accessibility/blink_ax_action_target.cc",
@@ -52,6 +52,8 @@ target(link_target_type, "renderer") {
     "accessibility/render_accessibility_manager.h",
     "agent_scheduling_group.cc",
     "agent_scheduling_group.h",
+    "background_resource_fetch_assets.cc",
+    "background_resource_fetch_assets.h",
     "browser_exposed_renderer_interfaces.cc",
     "browser_exposed_renderer_interfaces.h",
     "content_security_policy_util.cc",
@@ -74,6 +76,10 @@ target(link_target_type, "renderer") {
     "media/audio_decoder.h",
     "media/batching_media_log.cc",
     "media/batching_media_log.h",
+    "media/codec_factory.cc",
+    "media/codec_factory.h",
+    "media/codec_factory_mojo.cc",
+    "media/codec_factory_mojo.h",
     "media/gpu/gpu_video_accelerator_factories_impl.cc",
     "media/gpu/gpu_video_accelerator_factories_impl.h",
     "media/inspector_media_event_handler.cc",
@@ -88,10 +94,10 @@ target(link_target_type, "renderer") {
     "media/render_media_client.h",
     "media/render_media_event_handler.cc",
     "media/render_media_event_handler.h",
+    "media/renderer_web_media_player_delegate.cc",
+    "media/renderer_web_media_player_delegate.h",
     "media/renderer_webaudiodevice_impl.cc",
     "media/renderer_webaudiodevice_impl.h",
-    "media/renderer_webmediaplayer_delegate.cc",
-    "media/renderer_webmediaplayer_delegate.h",
     "mhtml_handle_writer.cc",
     "mhtml_handle_writer.h",
     "mojo/blink_interface_registry_impl.cc",
@@ -202,6 +208,10 @@ target(link_target_type, "renderer") {
     ]
   }
 
+  if (is_ios) {
+    sources += [ "renderer_main_platform_delegate_ios.mm" ]
+  }
+
   if (is_win) {
     sources += [ "renderer_main_platform_delegate_win.cc" ]
   }
@@ -235,15 +245,13 @@ target(link_target_type, "renderer") {
     "//components/discardable_memory/client",
     "//components/metrics",
     "//components/metrics:single_sample_metrics",
-    "//components/services/screen_ai/buildflags",
-    "//components/services/screen_ai/public/mojom",
+    "//components/startup_metric_utils",
     "//components/url_formatter",
     "//components/variations:variations_mojom",
     "//components/variations/net",
     "//components/viz/client",
     "//components/viz/common",
     "//content:content_resources",
-    "//content:dev_ui_content_resources",
     "//content/child",
     "//content/common",
     "//content/common:buildflags",
@@ -251,7 +259,6 @@ target(link_target_type, "renderer") {
     "//content/gpu:gpu_sources",
     "//content/public/child:child_sources",
     "//content/services/auction_worklet:auction_worklet",
-    "//content/services/shared_storage_worklet",
     "//crypto",
     "//device/base/synchronization",
     "//device/gamepad/public/cpp:shared_with_blink",
@@ -265,7 +272,6 @@ target(link_target_type, "renderer") {
     "//media:media_buildflags",
     "//media/capture",
     "//media/gpu",
-    "//media/gpu/ipc/client",
     "//media/gpu/ipc/common",
     "//media/midi",
     "//media/midi:mojo",
@@ -325,14 +331,16 @@ target(link_target_type, "renderer") {
 
   if (is_android) {
     deps += [
-      "//components/power_scheduler",
-
       # Used by Android WebView only.
       "//components/viz/service",
-      "//third_party/android_ndk:cpu_features",
       "//third_party/ashmem",
+      "//third_party/cpu_features:ndk_compat",
       "//third_party/libphonenumber",
     ]
+
+    if (use_seccomp_bpf) {
+      deps += [ "//sandbox/policy" ]
+    }
   }
 
   if (is_linux || is_chromeos) {
@@ -340,10 +348,14 @@ target(link_target_type, "renderer") {
   }
 
   if (is_fuchsia) {
-    sources += [ "renderer_main_platform_delegate_fuchsia.cc" ]
+    sources += [
+      "media/codec_factory_fuchsia.cc",
+      "media/codec_factory_fuchsia.h",
+      "renderer_main_platform_delegate_fuchsia.cc",
+    ]
+    public_deps += [ "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.mediacodec:fuchsia.mediacodec_hlcpp" ]
 
     deps += [
-      "//media/fuchsia/cdm/client",
       "//media/fuchsia/video",
       "//third_party/fuchsia-sdk/sdk/pkg/sys_cpp",
     ]
@@ -351,9 +363,8 @@ target(link_target_type, "renderer") {
 
   if (enable_cast_receiver) {
     deps += [
-      "//components/cast_streaming/public",
+      "//components/cast_streaming/common",
       "//components/cast_streaming/renderer:resource_provider",
-      "//components/cast_streaming/renderer:wrapping_renderer_factory_selector",
     ]
   }
 
@@ -484,8 +495,6 @@ target(link_target_type, "renderer") {
       "pepper/ppb_proxy_impl.h",
       "pepper/ppb_var_deprecated_impl.cc",
       "pepper/ppb_var_deprecated_impl.h",
-      "pepper/ppb_video_decoder_impl.cc",
-      "pepper/ppb_video_decoder_impl.h",
       "pepper/renderer_ppapi_host_impl.cc",
       "pepper/renderer_ppapi_host_impl.h",
       "pepper/renderer_restrict_dispatch_group.h",

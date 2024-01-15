@@ -7,7 +7,7 @@
 
 #include <utility>
 
-#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/browser_list_observer.h"
@@ -15,6 +15,7 @@
 #include "ui/base/test/ui_controls.h"
 #include "ui/display/display.h"
 #include "ui/gfx/geometry/point.h"
+#include "ui/gfx/geometry/vector2d.h"
 
 namespace display {
 class Screen;
@@ -35,7 +36,7 @@ class BrowserActivationWaiter : public BrowserListObserver {
   explicit BrowserActivationWaiter(const Browser* browser);
   BrowserActivationWaiter(const BrowserActivationWaiter&) = delete;
   BrowserActivationWaiter& operator=(const BrowserActivationWaiter&) = delete;
-  ~BrowserActivationWaiter() override = default;
+  ~BrowserActivationWaiter() override;
 
   // Runs a message loop until the |browser_| supplied to the constructor is
   // activated, or returns immediately if |browser_| has already become active.
@@ -46,7 +47,7 @@ class BrowserActivationWaiter : public BrowserListObserver {
   // BrowserListObserver:
   void OnBrowserSetLastActive(Browser* browser) override;
 
-  const raw_ptr<const Browser> browser_;
+  const base::WeakPtr<const Browser> browser_;
   bool observed_ = false;
   base::RunLoop run_loop_;
 };
@@ -71,7 +72,7 @@ class BrowserDeactivationWaiter : public BrowserListObserver {
   // BrowserListObserver:
   void OnBrowserNoLongerActive(Browser* browser) override;
 
-  const raw_ptr<const Browser> browser_;
+  const base::WeakPtr<const Browser> browser_;
   bool observed_ = false;
   base::RunLoop run_loop_;
 };
@@ -100,32 +101,41 @@ void HideNativeWindow(gfx::NativeWindow window);
 // Show and focus a native window. Returns true on success.
 [[nodiscard]] bool ShowAndFocusNativeWindow(gfx::NativeWindow window);
 
-// Sends a key press, blocking until the key press is received or the test times
-// out. This uses ui_controls::SendKeyPress, see it for details. Returns true
-// if the event was successfully sent and received.
-[[nodiscard]] bool SendKeyPressSync(const Browser* browser,
-                                    ui::KeyboardCode key,
-                                    bool control,
-                                    bool shift,
-                                    bool alt,
-                                    bool command);
-
-// Sends a key press, blocking until the key press is received or the test times
-// out. This uses ui_controls::SendKeyPress, see it for details. Returns true
-// if the event was successfully sent and received.
-[[nodiscard]] bool SendKeyPressToWindowSync(const gfx::NativeWindow window,
-                                            ui::KeyboardCode key,
-                                            bool control,
-                                            bool shift,
-                                            bool alt,
-                                            bool command);
+// Sends key press and release events to a `browser` or `window`. Waits until at
+// least the key release (or key press, depending on `wait_for`) events have
+// been dispatched, or the test times out. It's useful to wait for key press
+// instead of key release when the target may be deleted in response to key
+// press. This may wait for key release even if `wait_for` is `kKeyPress` on
+// platforms where it's possible to confirm that key release has been dispatched
+// on a deleted target. This uses `ui_controls::SendKeyPress`, see it for
+// details. Returns true if the event was successfully dispatched.
+[[nodiscard]] bool SendKeyPressSync(
+    const Browser* browser,
+    ui::KeyboardCode key,
+    bool control,
+    bool shift,
+    bool alt,
+    bool command,
+    ui_controls::KeyEventType wait_for = ui_controls::kKeyRelease);
+[[nodiscard]] bool SendKeyPressToWindowSync(
+    const gfx::NativeWindow window,
+    ui::KeyboardCode key,
+    bool control,
+    bool shift,
+    bool alt,
+    bool command,
+    ui_controls::KeyEventType wait_for = ui_controls::kKeyRelease);
 
 // Sends a move event blocking until received. Returns true if the event was
 // successfully received. This uses ui_controls::SendMouse***NotifyWhenDone,
 // see it for details.
-[[nodiscard]] bool SendMouseMoveSync(const gfx::Point& location);
-[[nodiscard]] bool SendMouseEventsSync(ui_controls::MouseButton type,
-                                       int button_state);
+[[nodiscard]] bool SendMouseMoveSync(
+    const gfx::Point& location,
+    gfx::NativeWindow window_hint = ui_controls::kNoWindowHint);
+[[nodiscard]] bool SendMouseEventsSync(
+    ui_controls::MouseButton type,
+    int button_state,
+    gfx::NativeWindow window_hint = ui_controls::kNoWindowHint);
 
 // A combination of SendMouseMove to the middle of the view followed by
 // SendMouseEvents. Only exposed for toolkit-views.
@@ -133,6 +143,14 @@ void HideNativeWindow(gfx::NativeWindow window);
 #if defined(TOOLKIT_VIEWS)
 void MoveMouseToCenterAndPress(
     views::View* view,
+    ui_controls::MouseButton button,
+    int button_state,
+    base::OnceClosure task,
+    int accelerator_state = ui_controls::kNoAccelerator);
+
+void MoveMouseToCenterWithOffsetAndPress(
+    views::View* view,
+    const gfx::Vector2d& offset,
     ui_controls::MouseButton button,
     int button_state,
     base::OnceClosure task,
@@ -148,13 +166,6 @@ void WaitForViewFocus(Browser* browser, views::View* view, bool focused);
 #endif
 
 #if BUILDFLAG(IS_MAC)
-// Send press and release events for |key_code| with selected modifiers and wait
-// until the last event arrives to our NSApp. Events will be sent as CGEvents
-// through HID event tap. |key_code| must be a virtual key code (reference can
-// be found in HIToolbox/Events.h from macOS SDK). |modifier_flags| must be a
-// bitmask from ui::EventFlags.
-void SendGlobalKeyEventsAndWait(int key_code, int modifier_flags);
-
 // Clear pressed modifier keys and report true if any key modifiers were down.
 bool ClearKeyEventModifiers();
 #endif

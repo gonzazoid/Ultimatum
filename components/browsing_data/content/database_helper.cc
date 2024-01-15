@@ -8,14 +8,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/task_runner_util.h"
 #include "components/browsing_data/content/browsing_data_helper.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -26,17 +25,14 @@
 #include "net/base/net_errors.h"
 #include "storage/common/database/database_identifier.h"
 
-using content::BrowserContext;
 using content::BrowserThread;
 using content::StorageUsageInfo;
 using storage::DatabaseIdentifier;
 
 namespace browsing_data {
 
-DatabaseHelper::DatabaseHelper(content::BrowserContext* browser_context)
-    : tracker_(
-          browser_context->GetDefaultStoragePartition()->GetDatabaseTracker()) {
-}
+DatabaseHelper::DatabaseHelper(content::StoragePartition* storage_partition)
+    : tracker_(storage_partition->GetDatabaseTracker()) {}
 
 DatabaseHelper::~DatabaseHelper() {}
 
@@ -44,8 +40,8 @@ void DatabaseHelper::StartFetching(FetchCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(!callback.is_null());
 
-  base::PostTaskAndReplyWithResult(
-      tracker_->task_runner(), FROM_HERE,
+  tracker_->task_runner()->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(
           [](storage::DatabaseTracker* tracker) {
             std::list<StorageUsageInfo> result;
@@ -56,8 +52,8 @@ void DatabaseHelper::StartFetching(FetchCallback callback) {
                     info.GetOriginIdentifier());
                 if (!HasWebScheme(origin.GetURL()))
                   continue;
-                result.emplace_back(blink::StorageKey(origin), info.TotalSize(),
-                                    info.LastModified());
+                result.emplace_back(blink::StorageKey::CreateFirstParty(origin),
+                                    info.TotalSize(), info.LastModified());
               }
             }
             return result;
@@ -74,8 +70,8 @@ void DatabaseHelper::DeleteDatabase(const url::Origin& origin) {
 }
 
 CannedDatabaseHelper::CannedDatabaseHelper(
-    content::BrowserContext* browser_context)
-    : DatabaseHelper(browser_context) {}
+    content::StoragePartition* storage_partition)
+    : DatabaseHelper(storage_partition) {}
 
 void CannedDatabaseHelper::Add(const url::Origin& origin) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -109,11 +105,11 @@ void CannedDatabaseHelper::StartFetching(FetchCallback callback) {
 
   std::list<StorageUsageInfo> result;
   for (const auto& origin : pending_origins_) {
-    result.emplace_back(blink::StorageKey(origin), 0, base::Time());
+    result.emplace_back(blink::StorageKey::CreateFirstParty(origin), 0,
+                        base::Time());
   }
 
-  content::GetUIThreadTaskRunner({})->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), result));
+  std::move(callback).Run(result);
 }
 
 void CannedDatabaseHelper::DeleteDatabase(const url::Origin& origin) {

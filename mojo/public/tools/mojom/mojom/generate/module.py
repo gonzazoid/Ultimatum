@@ -13,30 +13,10 @@
 # method.AddParameter('baz', 0, mojom.INT32)
 
 import pickle
+from collections import OrderedDict
 from uuid import UUID
 
 # pylint: disable=raise-missing-from
-
-
-class BackwardCompatibilityChecker:
-  """Used for memoization while recursively checking two type definitions for
-  backward-compatibility."""
-
-  def __init__(self):
-    self._cache = {}
-
-  def IsBackwardCompatible(self, new_kind, old_kind):
-    key = (new_kind, old_kind)
-    result = self._cache.get(key)
-    if result is None:
-      # Assume they're compatible at first to effectively ignore recursive
-      # checks between these types, e.g. if both kinds are a struct or union
-      # that references itself in a field.
-      self._cache[key] = True
-      result = new_kind.IsBackwardCompatible(old_kind, self)
-      self._cache[key] = result
-    return result
-
 
 # We use our own version of __repr__ when displaying the AST, as the
 # AST currently doesn't capture which nodes are reference (e.g. to
@@ -107,16 +87,43 @@ class Kind:
     module: {Module} The defining module. Set to None for built-in types.
     parent_kind: The enclosing type. For example, an enum defined
         inside an interface has that interface as its parent. May be None.
+    is_nullable: True if the type is nullable.
   """
 
-  def __init__(self, spec=None, module=None):
+  def __init__(self, spec=None, is_nullable=False, module=None):
     self.spec = spec
     self.module = module
     self.parent_kind = None
+    self.is_nullable = is_nullable
+    self.shared_definition = {}
+
+  @classmethod
+  def AddSharedProperty(cls, name):
+    """Adds a property |name| to |cls|, which accesses the corresponding item in
+       |shared_definition|.
+
+       The reason of adding such indirection is to enable sharing definition
+       between a reference kind and its nullable variation. For example:
+         a = Struct('test_struct_1')
+         b = a.MakeNullableKind()
+         a.name = 'test_struct_2'
+         print(b.name)  # Outputs 'test_struct_2'.
+    """
+    def Get(self):
+      try:
+        return self.shared_definition[name]
+      except KeyError:  # Must raise AttributeError if property doesn't exist.
+        raise AttributeError
+
+    def Set(self, value):
+      self.shared_definition[name] = value
+
+    setattr(cls, name, property(Get, Set))
 
   def Repr(self, as_ref=True):
     # pylint: disable=unused-argument
-    return '<%s spec=%r>' % (self.__class__.__name__, self.spec)
+    return '<%s spec=%r is_nullable=%r>' % (self.__class__.__name__, self.spec,
+                                            self.is_nullable)
 
   def __repr__(self):
     # Gives us a decent __repr__ for all kinds.
@@ -125,7 +132,8 @@ class Kind:
   def __eq__(self, rhs):
     # pylint: disable=unidiomatic-typecheck
     return (type(self) == type(rhs)
-            and (self.spec, self.parent_kind) == (rhs.spec, rhs.parent_kind))
+            and (self.spec, self.parent_kind, self.is_nullable)
+            == (rhs.spec, rhs.parent_kind, rhs.is_nullable))
 
   def __hash__(self):
     # TODO(crbug.com/1060471): Remove this and other __hash__ methods on Kind
@@ -133,11 +141,97 @@ class Kind:
     # some primitive Kinds as dict keys. The default hash (object identity)
     # breaks these dicts when a pickled Module instance is unpickled and used
     # during a subsequent run of the parser.
-    return hash((self.spec, self.parent_kind))
+    return hash((self.spec, self.parent_kind, self.is_nullable))
 
-  # pylint: disable=unused-argument
-  def IsBackwardCompatible(self, rhs, checker):
-    return self == rhs
+
+class ValueKind(Kind):
+  """ValueKind represents values that aren't reference kinds.
+
+  The primary difference is the wire representation for nullable value kinds
+  still reserves space for the value type itself, even if that value itself
+  is logically null.
+  """
+  def __init__(self, spec=None, is_nullable=False, module=None):
+    assert spec is None or is_nullable == spec.startswith('?')
+    Kind.__init__(self, spec, is_nullable, module)
+
+  def MakeNullableKind(self):
+    assert not self.is_nullable
+
+    if self == BOOL:
+      return NULLABLE_BOOL
+    if self == INT8:
+      return NULLABLE_INT8
+    if self == INT16:
+      return NULLABLE_INT16
+    if self == INT32:
+      return NULLABLE_INT32
+    if self == INT64:
+      return NULLABLE_INT64
+    if self == UINT8:
+      return NULLABLE_UINT8
+    if self == UINT16:
+      return NULLABLE_UINT16
+    if self == UINT32:
+      return NULLABLE_UINT32
+    if self == UINT64:
+      return NULLABLE_UINT64
+    if self == FLOAT:
+      return NULLABLE_FLOAT
+    if self == DOUBLE:
+      return NULLABLE_DOUBLE
+
+    nullable_kind = type(self)()
+    nullable_kind.shared_definition = self.shared_definition
+    if self.spec is not None:
+      nullable_kind.spec = '?' + self.spec
+    nullable_kind.is_nullable = True
+    nullable_kind.parent_kind = self.parent_kind
+    nullable_kind.module = self.module
+
+    return nullable_kind
+
+  def MakeUnnullableKind(self):
+    assert self.is_nullable
+
+    if self == NULLABLE_BOOL:
+      return BOOL
+    if self == NULLABLE_INT8:
+      return INT8
+    if self == NULLABLE_INT16:
+      return INT16
+    if self == NULLABLE_INT32:
+      return INT32
+    if self == NULLABLE_INT64:
+      return INT64
+    if self == NULLABLE_UINT8:
+      return UINT8
+    if self == NULLABLE_UINT16:
+      return UINT16
+    if self == NULLABLE_UINT32:
+      return UINT32
+    if self == NULLABLE_UINT64:
+      return UINT64
+    if self == NULLABLE_FLOAT:
+      return FLOAT
+    if self == NULLABLE_DOUBLE:
+      return DOUBLE
+
+    nullable_kind = type(self)()
+    nullable_kind.shared_definition = self.shared_definition
+    if self.spec is not None:
+      nullable_kind.spec = self.spec[1:]
+    nullable_kind.is_nullable = False
+    nullable_kind.parent_kind = self.parent_kind
+    nullable_kind.module = self.module
+
+    return nullable_kind
+
+  def __eq__(self, rhs):
+    return (isinstance(rhs, ValueKind) and super().__eq__(rhs))
+
+  def __hash__(self):  # pylint: disable=useless-super-delegation
+    return super().__hash__()
 
 
 class ReferenceKind(Kind):
@@ -145,20 +239,11 @@ class ReferenceKind(Kind):
 
   A type is nullable if null (for pointer types) or invalid handle (for handle
   types) is a legal value for the type.
-
-  Attributes:
-    is_nullable: True if the type is nullable.
   """
 
   def __init__(self, spec=None, is_nullable=False, module=None):
     assert spec is None or is_nullable == spec.startswith('?')
-    Kind.__init__(self, spec, module)
-    self.is_nullable = is_nullable
-    self.shared_definition = {}
-
-  def Repr(self, as_ref=True):
-    return '<%s spec=%r is_nullable=%r>' % (self.__class__.__name__, self.spec,
-                                            self.is_nullable)
+    Kind.__init__(self, spec, is_nullable, module)
 
   def MakeNullableKind(self):
     assert not self.is_nullable
@@ -188,54 +273,65 @@ class ReferenceKind(Kind):
 
     return nullable_kind
 
-  @classmethod
-  def AddSharedProperty(cls, name):
-    """Adds a property |name| to |cls|, which accesses the corresponding item in
-       |shared_definition|.
+  def MakeUnnullableKind(self):
+    assert self.is_nullable
 
-       The reason of adding such indirection is to enable sharing definition
-       between a reference kind and its nullable variation. For example:
-         a = Struct('test_struct_1')
-         b = a.MakeNullableKind()
-         a.name = 'test_struct_2'
-         print(b.name)  # Outputs 'test_struct_2'.
-    """
+    if self == NULLABLE_STRING:
+      return STRING
+    if self == NULLABLE_HANDLE:
+      return HANDLE
+    if self == NULLABLE_DCPIPE:
+      return DCPIPE
+    if self == NULLABLE_DPPIPE:
+      return DPPIPE
+    if self == NULLABLE_MSGPIPE:
+      return MSGPIPE
+    if self == NULLABLE_SHAREDBUFFER:
+      return SHAREDBUFFER
+    if self == NULLABLE_PLATFORMHANDLE:
+      return PLATFORMHANDLE
 
-    def Get(self):
-      try:
-        return self.shared_definition[name]
-      except KeyError:  # Must raise AttributeError if property doesn't exist.
-        raise AttributeError
+    unnullable_kind = type(self)()
+    unnullable_kind.shared_definition = self.shared_definition
+    if self.spec is not None:
+      assert self.spec[0] == '?'
+      unnullable_kind.spec = self.spec[1:]
+    unnullable_kind.is_nullable = False
+    unnullable_kind.parent_kind = self.parent_kind
+    unnullable_kind.module = self.module
 
-    def Set(self, value):
-      self.shared_definition[name] = value
-
-    setattr(cls, name, property(Get, Set))
+    return unnullable_kind
 
   def __eq__(self, rhs):
-    return (isinstance(rhs, ReferenceKind) and super().__eq__(rhs)
-            and self.is_nullable == rhs.is_nullable)
+    return (isinstance(rhs, ReferenceKind) and super().__eq__(rhs))
 
-  def __hash__(self):
-    return hash((super().__hash__(), self.is_nullable))
-
-  def IsBackwardCompatible(self, rhs, checker):
-    return (super().IsBackwardCompatible(rhs, checker)
-            and self.is_nullable == rhs.is_nullable)
+  def __hash__(self):  # pylint: disable=useless-super-delegation
+    return super().__hash__()
 
 
 # Initialize the set of primitive types. These can be accessed by clients.
-BOOL = Kind('b')
-INT8 = Kind('i8')
-INT16 = Kind('i16')
-INT32 = Kind('i32')
-INT64 = Kind('i64')
-UINT8 = Kind('u8')
-UINT16 = Kind('u16')
-UINT32 = Kind('u32')
-UINT64 = Kind('u64')
-FLOAT = Kind('f')
-DOUBLE = Kind('d')
+BOOL = ValueKind('b')
+INT8 = ValueKind('i8')
+INT16 = ValueKind('i16')
+INT32 = ValueKind('i32')
+INT64 = ValueKind('i64')
+UINT8 = ValueKind('u8')
+UINT16 = ValueKind('u16')
+UINT32 = ValueKind('u32')
+UINT64 = ValueKind('u64')
+FLOAT = ValueKind('f')
+DOUBLE = ValueKind('d')
+NULLABLE_BOOL = ValueKind('?b', True)
+NULLABLE_INT8 = ValueKind('?i8', True)
+NULLABLE_INT16 = ValueKind('?i16', True)
+NULLABLE_INT32 = ValueKind('?i32', True)
+NULLABLE_INT64 = ValueKind('?i64', True)
+NULLABLE_UINT8 = ValueKind('?u8', True)
+NULLABLE_UINT16 = ValueKind('?u16', True)
+NULLABLE_UINT32 = ValueKind('?u32', True)
+NULLABLE_UINT64 = ValueKind('?u64', True)
+NULLABLE_FLOAT = ValueKind('?f', True)
+NULLABLE_DOUBLE = ValueKind('?d', True)
 STRING = ReferenceKind('s')
 HANDLE = ReferenceKind('h')
 DCPIPE = ReferenceKind('h:d:c')
@@ -264,6 +360,17 @@ PRIMITIVES = (
     UINT64,
     FLOAT,
     DOUBLE,
+    NULLABLE_BOOL,
+    NULLABLE_INT8,
+    NULLABLE_INT16,
+    NULLABLE_INT32,
+    NULLABLE_INT64,
+    NULLABLE_UINT8,
+    NULLABLE_UINT16,
+    NULLABLE_UINT32,
+    NULLABLE_UINT64,
+    NULLABLE_FLOAT,
+    NULLABLE_DOUBLE,
     STRING,
     HANDLE,
     DCPIPE,
@@ -285,12 +392,14 @@ ATTRIBUTE_DEFAULT = 'Default'
 ATTRIBUTE_EXTENSIBLE = 'Extensible'
 ATTRIBUTE_NO_INTERRUPT = 'NoInterrupt'
 ATTRIBUTE_STABLE = 'Stable'
+ATTRIBUTE_SUPPORTS_URGENT = 'SupportsUrgent'
 ATTRIBUTE_SYNC = 'Sync'
 ATTRIBUTE_UNLIMITED_SIZE = 'UnlimitedSize'
 ATTRIBUTE_UUID = 'Uuid'
 ATTRIBUTE_SERVICE_SANDBOX = 'ServiceSandbox'
 ATTRIBUTE_REQUIRE_CONTEXT = 'RequireContext'
 ATTRIBUTE_ALLOWED_CONTEXT = 'AllowedContext'
+ATTRIBUTE_RUNTIME_FEATURE = 'RuntimeFeature'
 
 
 class NamedValue:
@@ -425,11 +534,36 @@ class UnionField(Field):
         if self.attributes else False
 
 
-def _IsFieldBackwardCompatible(new_field, old_field, checker):
-  if (new_field.min_version or 0) != (old_field.min_version or 0):
-    return False
+class Feature(ReferenceKind):
+  """A runtime enabled feature defined from mojom.
 
-  return checker.IsBackwardCompatible(new_field.kind, old_field.kind)
+  Attributes:
+    mojom_name: {str} The name of the feature type as defined in mojom.
+    name: {str} The stylized name. (Note: not the "name" used by FeatureList.)
+    constants: {List[Constant]} The constants defined in the feature scope.
+    attributes: {dict} Additional information about the feature.
+  """
+
+  Kind.AddSharedProperty('mojom_name')
+  Kind.AddSharedProperty('name')
+  Kind.AddSharedProperty('constants')
+  Kind.AddSharedProperty('attributes')
+
+  def __init__(self, mojom_name=None, module=None, attributes=None):
+    if mojom_name is not None:
+      spec = 'x:' + mojom_name
+    else:
+      spec = None
+    ReferenceKind.__init__(self, spec, False, module)
+    self.mojom_name = mojom_name
+    self.name = None
+    self.constants = []
+    self.attributes = attributes
+
+  def Stylize(self, stylizer):
+    self.name = stylizer.StylizeFeature(self.mojom_name)
+    for constant in self.constants:
+      constant.Stylize(stylizer)
 
 
 class Struct(ReferenceKind):
@@ -449,14 +583,14 @@ class Struct(ReferenceKind):
         if it's a native struct.
   """
 
-  ReferenceKind.AddSharedProperty('mojom_name')
-  ReferenceKind.AddSharedProperty('name')
-  ReferenceKind.AddSharedProperty('native_only')
-  ReferenceKind.AddSharedProperty('custom_serializer')
-  ReferenceKind.AddSharedProperty('fields')
-  ReferenceKind.AddSharedProperty('enums')
-  ReferenceKind.AddSharedProperty('constants')
-  ReferenceKind.AddSharedProperty('attributes')
+  Kind.AddSharedProperty('mojom_name')
+  Kind.AddSharedProperty('name')
+  Kind.AddSharedProperty('native_only')
+  Kind.AddSharedProperty('custom_serializer')
+  Kind.AddSharedProperty('fields')
+  Kind.AddSharedProperty('enums')
+  Kind.AddSharedProperty('constants')
+  Kind.AddSharedProperty('attributes')
 
   def __init__(self, mojom_name=None, module=None, attributes=None):
     if mojom_name is not None:
@@ -503,71 +637,6 @@ class Struct(ReferenceKind):
     for constant in self.constants:
       constant.Stylize(stylizer)
 
-  def IsBackwardCompatible(self, rhs, checker):
-    """This struct is backward-compatible with rhs (older_struct) if and only if
-    all of the following conditions hold:
-      - Any newly added field is tagged with a [MinVersion] attribute specifying
-        a version number greater than all previously used [MinVersion]
-        attributes within the struct.
-      - All fields present in rhs remain present in the new struct,
-        with the same ordinal position, same optional or non-optional status,
-        same (or backward-compatible) type and where applicable, the same
-        [MinVersion] attribute value.
-      - All [MinVersion] attributes must be non-decreasing in ordinal order.
-      - All reference-typed (string, array, map, struct, or union) fields tagged
-        with a [MinVersion] greater than zero must be optional.
-    """
-
-    def buildOrdinalFieldMap(struct):
-      fields_by_ordinal = {}
-      for field in struct.fields:
-        if field.ordinal in fields_by_ordinal:
-          raise Exception('Multiple fields with ordinal %s in struct %s.' %
-                          (field.ordinal, struct.mojom_name))
-        fields_by_ordinal[field.ordinal] = field
-      return fields_by_ordinal
-
-    new_fields = buildOrdinalFieldMap(self)
-    old_fields = buildOrdinalFieldMap(rhs)
-    if len(new_fields) < len(old_fields):
-      # At least one field was removed, which is not OK.
-      return False
-
-    # If there are N fields, existing ordinal values must exactly cover the
-    # range from 0 to N-1.
-    num_old_ordinals = len(old_fields)
-    max_old_min_version = 0
-    for ordinal in range(num_old_ordinals):
-      new_field = new_fields[ordinal]
-      old_field = old_fields[ordinal]
-      if (old_field.min_version or 0) > max_old_min_version:
-        max_old_min_version = old_field.min_version
-      if not _IsFieldBackwardCompatible(new_field, old_field, checker):
-        # Type or min-version mismatch between old and new versions of the same
-        # ordinal field.
-        return False
-
-    # At this point we know all old fields are intact in the new struct
-    # definition. Now verify that all new fields have a high enough min version
-    # and are appropriately optional where required.
-    num_new_ordinals = len(new_fields)
-    last_min_version = max_old_min_version
-    for ordinal in range(num_old_ordinals, num_new_ordinals):
-      new_field = new_fields[ordinal]
-      min_version = new_field.min_version or 0
-      if min_version <= max_old_min_version:
-        # A new field is being added to an existing version, which is not OK.
-        return False
-      if min_version < last_min_version:
-        # The [MinVersion] of a field cannot be lower than the [MinVersion] of
-        # a field with lower ordinal value.
-        return False
-      if IsReferenceKind(new_field.kind) and not IsNullableKind(new_field.kind):
-        # New fields whose type can be nullable MUST be nullable.
-        return False
-
-    return True
-
   @property
   def stable(self):
     return self.attributes.get(ATTRIBUTE_STABLE, False) \
@@ -609,11 +678,11 @@ class Union(ReferenceKind):
         which Java class name to use to represent it in the generated
         bindings.
   """
-  ReferenceKind.AddSharedProperty('mojom_name')
-  ReferenceKind.AddSharedProperty('name')
-  ReferenceKind.AddSharedProperty('fields')
-  ReferenceKind.AddSharedProperty('attributes')
-  ReferenceKind.AddSharedProperty('default_field')
+  Kind.AddSharedProperty('mojom_name')
+  Kind.AddSharedProperty('name')
+  Kind.AddSharedProperty('fields')
+  Kind.AddSharedProperty('attributes')
+  Kind.AddSharedProperty('default_field')
 
   def __init__(self, mojom_name=None, module=None, attributes=None):
     if mojom_name is not None:
@@ -643,54 +712,6 @@ class Union(ReferenceKind):
     self.name = stylizer.StylizeUnion(self.mojom_name)
     for field in self.fields:
       field.Stylize(stylizer)
-
-  def IsBackwardCompatible(self, rhs, checker):
-    """This union is backward-compatible with rhs (older_union) if and only if
-    all of the following conditions hold:
-      - Any newly added field is tagged with a [MinVersion] attribute specifying
-        a version number greater than all previously used [MinVersion]
-        attributes within the union.
-      - All fields present in rhs remain present in the new union,
-        with the same ordinal value, same optional or non-optional status,
-        same (or backward-compatible) type, and where applicable, the same
-        [MinVersion] attribute value.
-    """
-
-    def buildOrdinalFieldMap(union):
-      fields_by_ordinal = {}
-      for field in union.fields:
-        if field.ordinal in fields_by_ordinal:
-          raise Exception('Multiple fields with ordinal %s in union %s.' %
-                          (field.ordinal, union.mojom_name))
-        fields_by_ordinal[field.ordinal] = field
-      return fields_by_ordinal
-
-    new_fields = buildOrdinalFieldMap(self)
-    old_fields = buildOrdinalFieldMap(rhs)
-    if len(new_fields) < len(old_fields):
-      # At least one field was removed, which is not OK.
-      return False
-
-    max_old_min_version = 0
-    for ordinal, old_field in old_fields.items():
-      new_field = new_fields.get(ordinal)
-      if not new_field:
-        # A field was removed, which is not OK.
-        return False
-      if not _IsFieldBackwardCompatible(new_field, old_field, checker):
-        # An field changed its type or MinVersion, which is not OK.
-        return False
-      old_min_version = old_field.min_version or 0
-      if old_min_version > max_old_min_version:
-        max_old_min_version = old_min_version
-
-    new_ordinals = set(new_fields.keys()) - set(old_fields.keys())
-    for ordinal in new_ordinals:
-      if (new_fields[ordinal].min_version or 0) <= max_old_min_version:
-        # New fields must use a MinVersion greater than any old fields.
-        return False
-
-    return True
 
   @property
   def extensible(self):
@@ -734,8 +755,8 @@ class Array(ReferenceKind):
     length: The number of elements. None if unknown.
   """
 
-  ReferenceKind.AddSharedProperty('kind')
-  ReferenceKind.AddSharedProperty('length')
+  Kind.AddSharedProperty('kind')
+  Kind.AddSharedProperty('length')
 
   def __init__(self, kind=None, length=None):
     if kind is not None:
@@ -768,10 +789,6 @@ class Array(ReferenceKind):
   def __hash__(self):
     return id(self)
 
-  def IsBackwardCompatible(self, rhs, checker):
-    return (isinstance(rhs, Array) and self.length == rhs.length
-            and checker.IsBackwardCompatible(self.kind, rhs.kind))
-
 
 class Map(ReferenceKind):
   """A map.
@@ -780,8 +797,8 @@ class Map(ReferenceKind):
     key_kind: {Kind} The type of the keys. May be None.
     value_kind: {Kind} The type of the elements. May be None.
   """
-  ReferenceKind.AddSharedProperty('key_kind')
-  ReferenceKind.AddSharedProperty('value_kind')
+  Kind.AddSharedProperty('key_kind')
+  Kind.AddSharedProperty('value_kind')
 
   def __init__(self, key_kind=None, value_kind=None):
     if (key_kind is not None and value_kind is not None):
@@ -815,14 +832,9 @@ class Map(ReferenceKind):
   def __hash__(self):
     return id(self)
 
-  def IsBackwardCompatible(self, rhs, checker):
-    return (isinstance(rhs, Map)
-            and checker.IsBackwardCompatible(self.key_kind, rhs.key_kind)
-            and checker.IsBackwardCompatible(self.value_kind, rhs.value_kind))
-
 
 class PendingRemote(ReferenceKind):
-  ReferenceKind.AddSharedProperty('kind')
+  Kind.AddSharedProperty('kind')
 
   def __init__(self, kind=None):
     if kind is not None:
@@ -841,13 +853,9 @@ class PendingRemote(ReferenceKind):
   def __hash__(self):
     return id(self)
 
-  def IsBackwardCompatible(self, rhs, checker):
-    return (isinstance(rhs, PendingRemote)
-            and checker.IsBackwardCompatible(self.kind, rhs.kind))
-
 
 class PendingReceiver(ReferenceKind):
-  ReferenceKind.AddSharedProperty('kind')
+  Kind.AddSharedProperty('kind')
 
   def __init__(self, kind=None):
     if kind is not None:
@@ -866,13 +874,9 @@ class PendingReceiver(ReferenceKind):
   def __hash__(self):
     return id(self)
 
-  def IsBackwardCompatible(self, rhs, checker):
-    return isinstance(rhs, PendingReceiver) and checker.IsBackwardCompatible(
-        self.kind, rhs.kind)
-
 
 class PendingAssociatedRemote(ReferenceKind):
-  ReferenceKind.AddSharedProperty('kind')
+  Kind.AddSharedProperty('kind')
 
   def __init__(self, kind=None):
     if kind is not None:
@@ -891,14 +895,9 @@ class PendingAssociatedRemote(ReferenceKind):
   def __hash__(self):
     return id(self)
 
-  def IsBackwardCompatible(self, rhs, checker):
-    return isinstance(rhs,
-                      PendingAssociatedRemote) and checker.IsBackwardCompatible(
-                          self.kind, rhs.kind)
-
 
 class PendingAssociatedReceiver(ReferenceKind):
-  ReferenceKind.AddSharedProperty('kind')
+  Kind.AddSharedProperty('kind')
 
   def __init__(self, kind=None):
     if kind is not None:
@@ -917,14 +916,9 @@ class PendingAssociatedReceiver(ReferenceKind):
   def __hash__(self):
     return id(self)
 
-  def IsBackwardCompatible(self, rhs, checker):
-    return isinstance(
-        rhs, PendingAssociatedReceiver) and checker.IsBackwardCompatible(
-            self.kind, rhs.kind)
-
 
 class InterfaceRequest(ReferenceKind):
-  ReferenceKind.AddSharedProperty('kind')
+  Kind.AddSharedProperty('kind')
 
   def __init__(self, kind=None):
     if kind is not None:
@@ -942,13 +936,9 @@ class InterfaceRequest(ReferenceKind):
   def __hash__(self):
     return id(self)
 
-  def IsBackwardCompatible(self, rhs, checker):
-    return isinstance(rhs, InterfaceRequest) and checker.IsBackwardCompatible(
-        self.kind, rhs.kind)
-
 
 class AssociatedInterfaceRequest(ReferenceKind):
-  ReferenceKind.AddSharedProperty('kind')
+  Kind.AddSharedProperty('kind')
 
   def __init__(self, kind=None):
     if kind is not None:
@@ -967,11 +957,6 @@ class AssociatedInterfaceRequest(ReferenceKind):
 
   def __hash__(self):
     return id(self)
-
-  def IsBackwardCompatible(self, rhs, checker):
-    return isinstance(
-        rhs, AssociatedInterfaceRequest) and checker.IsBackwardCompatible(
-            self.kind, rhs.kind)
 
 
 class Parameter:
@@ -1090,6 +1075,23 @@ class Method:
     return self.attributes.get(ATTRIBUTE_ALLOWED_CONTEXT) \
         if self.attributes else None
 
+  @property
+  def supports_urgent(self):
+    return self.attributes.get(ATTRIBUTE_SUPPORTS_URGENT) \
+        if self.attributes else None
+
+  @property
+  def runtime_feature(self):
+    if not self.attributes:
+      return None
+    runtime_feature = self.attributes.get(ATTRIBUTE_RUNTIME_FEATURE, None)
+    if runtime_feature is None:
+      return None
+    if not isinstance(runtime_feature, Feature):
+      raise Exception("RuntimeFeature attribute on %s must be a feature." %
+                      self.name)
+    return runtime_feature
+
   def _tuple(self):
     return (self.mojom_name, self.ordinal, self.parameters,
             self.response_parameters, self.attributes)
@@ -1105,12 +1107,12 @@ class Method:
 
 
 class Interface(ReferenceKind):
-  ReferenceKind.AddSharedProperty('mojom_name')
-  ReferenceKind.AddSharedProperty('name')
-  ReferenceKind.AddSharedProperty('methods')
-  ReferenceKind.AddSharedProperty('enums')
-  ReferenceKind.AddSharedProperty('constants')
-  ReferenceKind.AddSharedProperty('attributes')
+  Kind.AddSharedProperty('mojom_name')
+  Kind.AddSharedProperty('name')
+  Kind.AddSharedProperty('methods')
+  Kind.AddSharedProperty('enums')
+  Kind.AddSharedProperty('constants')
+  Kind.AddSharedProperty('attributes')
 
   def __init__(self, mojom_name=None, module=None, attributes=None):
     if mojom_name is not None:
@@ -1148,78 +1150,6 @@ class Interface(ReferenceKind):
     for constant in self.constants:
       constant.Stylize(stylizer)
 
-  def IsBackwardCompatible(self, rhs, checker):
-    """This interface is backward-compatible with rhs (older_interface) if and
-    only if all of the following conditions hold:
-      - All defined methods in rhs (when identified by ordinal) have
-        backward-compatible definitions in this interface. For each method this
-        means:
-          - The parameter list is backward-compatible, according to backward-
-            compatibility rules for structs, where each parameter is essentially
-            a struct field.
-          - If the old method definition does not specify a reply message, the
-            new method definition must not specify a reply message.
-          - If the old method definition specifies a reply message, the new
-            method definition must also specify a reply message with a parameter
-            list that is backward-compatible according to backward-compatibility
-            rules for structs.
-      - All newly introduced methods in this interface have a [MinVersion]
-        attribute specifying a version greater than any method in
-        rhs.
-    """
-
-    def buildOrdinalMethodMap(interface):
-      methods_by_ordinal = {}
-      for method in interface.methods:
-        if method.ordinal in methods_by_ordinal:
-          raise Exception('Multiple methods with ordinal %s in interface %s.' %
-                          (method.ordinal, interface.mojom_name))
-        methods_by_ordinal[method.ordinal] = method
-      return methods_by_ordinal
-
-    new_methods = buildOrdinalMethodMap(self)
-    old_methods = buildOrdinalMethodMap(rhs)
-    max_old_min_version = 0
-    for ordinal, old_method in old_methods.items():
-      new_method = new_methods.get(ordinal)
-      if not new_method:
-        # A method was removed, which is not OK.
-        return False
-
-      if not checker.IsBackwardCompatible(new_method.param_struct,
-                                          old_method.param_struct):
-        # The parameter list is not backward-compatible, which is not OK.
-        return False
-
-      if old_method.response_param_struct is None:
-        if new_method.response_param_struct is not None:
-          # A reply was added to a message which didn't have one before, and
-          # this is not OK.
-          return False
-      else:
-        if new_method.response_param_struct is None:
-          # A reply was removed from a message, which is not OK.
-          return False
-        if not checker.IsBackwardCompatible(new_method.response_param_struct,
-                                            old_method.response_param_struct):
-          # The new message's reply is not backward-compatible with the old
-          # message's reply, which is not OK.
-          return False
-
-      if (old_method.min_version or 0) > max_old_min_version:
-        max_old_min_version = old_method.min_version
-
-    # All the old methods are compatible with their new counterparts. Now verify
-    # that newly added methods are properly versioned.
-    new_ordinals = set(new_methods.keys()) - set(old_methods.keys())
-    for ordinal in new_ordinals:
-      new_method = new_methods[ordinal]
-      if (new_method.min_version or 0) <= max_old_min_version:
-        # A method was added to an existing version, which is not OK.
-        return False
-
-    return True
-
   @property
   def service_sandbox(self):
     if not self.attributes:
@@ -1234,6 +1164,18 @@ class Interface(ReferenceKind):
       raise Exception("ServiceSandbox attribute on %s must be an enum value." %
                       self.module.name)
     return service_sandbox
+
+  @property
+  def runtime_feature(self):
+    if not self.attributes:
+      return None
+    runtime_feature = self.attributes.get(ATTRIBUTE_RUNTIME_FEATURE, None)
+    if runtime_feature is None:
+      return None
+    if not isinstance(runtime_feature, Feature):
+      raise Exception("RuntimeFeature attribute on %s must be a feature." %
+                      self.name)
+    return runtime_feature
 
   @property
   def require_context(self):
@@ -1286,7 +1228,7 @@ class Interface(ReferenceKind):
 
 
 class AssociatedInterface(ReferenceKind):
-  ReferenceKind.AddSharedProperty('kind')
+  Kind.AddSharedProperty('kind')
 
   def __init__(self, kind=None):
     if kind is not None:
@@ -1304,11 +1246,6 @@ class AssociatedInterface(ReferenceKind):
 
   def __hash__(self):
     return id(self)
-
-  def IsBackwardCompatible(self, rhs, checker):
-    return isinstance(rhs,
-                      AssociatedInterface) and checker.IsBackwardCompatible(
-                          self.kind, rhs.kind)
 
 
 class EnumField:
@@ -1343,16 +1280,25 @@ class EnumField:
                                          rhs.attributes, rhs.numeric_value))
 
 
-class Enum(Kind):
+class Enum(ValueKind):
+  Kind.AddSharedProperty('mojom_name')
+  Kind.AddSharedProperty('name')
+  Kind.AddSharedProperty('native_only')
+  Kind.AddSharedProperty('fields')
+  Kind.AddSharedProperty('attributes')
+  Kind.AddSharedProperty('min_value')
+  Kind.AddSharedProperty('max_value')
+  Kind.AddSharedProperty('default_field')
+
   def __init__(self, mojom_name=None, module=None, attributes=None):
-    self.mojom_name = mojom_name
-    self.name = None
-    self.native_only = False
     if mojom_name is not None:
       spec = 'x:' + mojom_name
     else:
       spec = None
-    Kind.__init__(self, spec, module)
+    ValueKind.__init__(self, spec, False, module)
+    self.mojom_name = mojom_name
+    self.name = None
+    self.native_only = False
     self.fields = []
     self.attributes = attributes
     self.min_value = None
@@ -1387,38 +1333,6 @@ class Enum(Kind):
       prefix = self.module.GetNamespacePrefix()
     return '%s%s' % (prefix, self.mojom_name)
 
-  # pylint: disable=unused-argument
-  def IsBackwardCompatible(self, rhs, checker):
-    """This enum is backward-compatible with rhs (older_enum) if and only if one
-    of the following conditions holds:
-        - Neither enum is [Extensible] and both have the exact same set of valid
-          numeric values. Field names and aliases for the same numeric value do
-          not affect compatibility.
-        - rhs is [Extensible], and for every version defined by
-          rhs, this enum has the exact same set of valid numeric values.
-    """
-
-    def buildVersionFieldMap(enum):
-      fields_by_min_version = {}
-      for field in enum.fields:
-        if field.min_version not in fields_by_min_version:
-          fields_by_min_version[field.min_version] = set()
-        fields_by_min_version[field.min_version].add(field.numeric_value)
-      return fields_by_min_version
-
-    old_fields = buildVersionFieldMap(rhs)
-    new_fields = buildVersionFieldMap(self)
-
-    if new_fields.keys() != old_fields.keys() and not rhs.extensible:
-      return False
-
-    for min_version, valid_values in old_fields.items():
-      if (min_version not in new_fields
-          or new_fields[min_version] != valid_values):
-        return False
-
-    return True
-
   def _tuple(self):
     return (self.mojom_name, self.native_only, self.fields, self.attributes,
             self.min_value, self.max_value, self.default_field)
@@ -1445,24 +1359,26 @@ class Module:
     self.unions = []
     self.interfaces = []
     self.enums = []
+    self.features = []
     self.constants = []
-    self.kinds = {}
+    self.kinds = OrderedDict()
     self.attributes = attributes
     self.imports = []
-    self.imported_kinds = {}
-    self.metadata = {}
+    self.imported_kinds = OrderedDict()
+    self.metadata = OrderedDict()
 
   def __repr__(self):
     # Gives us a decent __repr__ for modules.
     return self.Repr()
 
   def __eq__(self, rhs):
-    return (isinstance(rhs, Module) and
-            (self.path, self.attributes, self.mojom_namespace, self.imports,
-             self.constants, self.enums, self.structs, self.unions,
-             self.interfaces) == (rhs.path, rhs.attributes, rhs.mojom_namespace,
-                                  rhs.imports, rhs.constants, rhs.enums,
-                                  rhs.structs, rhs.unions, rhs.interfaces))
+    return (isinstance(rhs, Module)
+            and (self.path, self.attributes, self.mojom_namespace, self.imports,
+                 self.constants, self.enums, self.structs, self.unions,
+                 self.interfaces, self.features)
+            == (rhs.path, rhs.attributes, rhs.mojom_namespace, rhs.imports,
+                rhs.constants, rhs.enums, rhs.structs, rhs.unions,
+                rhs.interfaces, rhs.features))
 
   def __hash__(self):
     return id(self)
@@ -1478,7 +1394,8 @@ class Module:
             'attributes': False,
             'structs': False,
             'interfaces': False,
-            'unions': False
+            'unions': False,
+            'features': False,
         })
 
   def GetNamespacePrefix(self):
@@ -1499,6 +1416,11 @@ class Module:
     self.unions.append(union)
     return union
 
+  def AddFeature(self, mojom_name, attributes=None):
+    feature = Feature(mojom_name, self, attributes)
+    self.features.append(feature)
+    return feature
+
   def Stylize(self, stylizer):
     self.namespace = stylizer.StylizeModule(self.mojom_namespace)
     for struct in self.structs:
@@ -1511,6 +1433,8 @@ class Module:
       enum.Stylize(stylizer)
     for constant in self.constants:
       constant.Stylize(stylizer)
+    for feature in self.features:
+      feature.Stylize(stylizer)
 
     for imported_module in self.imports:
       imported_module.Stylize(stylizer)
@@ -1526,15 +1450,15 @@ class Module:
 
 
 def IsBoolKind(kind):
-  return kind.spec == BOOL.spec
+  return kind.spec == BOOL.spec or kind.spec == NULLABLE_BOOL.spec
 
 
 def IsFloatKind(kind):
-  return kind.spec == FLOAT.spec
+  return kind.spec == FLOAT.spec or kind.spec == NULLABLE_FLOAT.spec
 
 
 def IsDoubleKind(kind):
-  return kind.spec == DOUBLE.spec
+  return kind.spec == DOUBLE.spec or kind.spec == NULLABLE_DOUBLE.spec
 
 
 def IsIntegralKind(kind):
@@ -1542,7 +1466,14 @@ def IsIntegralKind(kind):
           or kind.spec == INT16.spec or kind.spec == INT32.spec
           or kind.spec == INT64.spec or kind.spec == UINT8.spec
           or kind.spec == UINT16.spec or kind.spec == UINT32.spec
-          or kind.spec == UINT64.spec)
+          or kind.spec == UINT64.spec or kind.spec == NULLABLE_BOOL.spec
+          or kind.spec == NULLABLE_INT8.spec or kind.spec == NULLABLE_INT16.spec
+          or kind.spec == NULLABLE_INT32.spec
+          or kind.spec == NULLABLE_INT64.spec
+          or kind.spec == NULLABLE_UINT8.spec
+          or kind.spec == NULLABLE_UINT16.spec
+          or kind.spec == NULLABLE_UINT32.spec
+          or kind.spec == NULLABLE_UINT64.spec)
 
 
 def IsStringKind(kind):
@@ -1587,6 +1518,10 @@ def IsArrayKind(kind):
   return isinstance(kind, Array)
 
 
+def IsFeatureKind(kind):
+  return isinstance(kind, Feature)
+
+
 def IsInterfaceKind(kind):
   return isinstance(kind, Interface)
 
@@ -1623,12 +1558,16 @@ def IsEnumKind(kind):
   return isinstance(kind, Enum)
 
 
+def IsValueKind(kind):
+  return isinstance(kind, ValueKind)
+
+
 def IsReferenceKind(kind):
   return isinstance(kind, ReferenceKind)
 
 
 def IsNullableKind(kind):
-  return IsReferenceKind(kind) and kind.is_nullable
+  return kind.is_nullable
 
 
 def IsMapKind(kind):
@@ -1729,11 +1668,8 @@ def MethodPassesInterfaces(method):
   return _AnyMethodParameterRecursive(method, IsInterfaceKind)
 
 
-def HasSyncMethods(interface):
-  for method in interface.methods:
-    if method.sync:
-      return True
-  return False
+def GetSyncMethodOrdinals(interface):
+  return [method.ordinal for method in interface.methods if method.sync]
 
 
 def HasUninterruptableMethods(interface):

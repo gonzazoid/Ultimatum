@@ -6,6 +6,7 @@
 #define UI_BASE_IME_ASH_IME_BRIDGE_H_
 
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "ui/base/ime/ash/ime_assistive_window_handler_interface.h"
 #include "ui/base/ime/ash/ime_bridge_observer.h"
@@ -16,7 +17,7 @@
 class IMECandidateWindowHandlerInterface;
 class IMEAssistiveWindowHandlerInterface;
 
-namespace ui {
+namespace ash {
 
 // IMEBridge provides access of each IME related handler. This class
 // is used for IME implementation.
@@ -60,36 +61,36 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) IMEBridge {
   const TextInputMethod::InputContext& GetCurrentInputContext() const;
 
   // Add or remove observers of events such as switching engines, etc.
-  void AddObserver(ui::IMEBridgeObserver* observer);
-  void RemoveObserver(ui::IMEBridgeObserver* observer);
+  void AddObserver(IMEBridgeObserver* observer);
+  void RemoveObserver(IMEBridgeObserver* observer);
 
   // Returns current CandidateWindowHandler. This function returns nullptr if
   // current candidate window is not ready to use.
-  ash::IMECandidateWindowHandlerInterface* GetCandidateWindowHandler() const;
+  IMECandidateWindowHandlerInterface* GetCandidateWindowHandler() const;
 
   // Updates current CandidatWindowHandler. If there is no active candidate
   // window service, pass nullptr for |handler|. Caller must release |handler|.
-  void SetCandidateWindowHandler(
-      ash::IMECandidateWindowHandlerInterface* handler);
+  void SetCandidateWindowHandler(IMECandidateWindowHandlerInterface* handler);
 
-  ash::IMEAssistiveWindowHandlerInterface* GetAssistiveWindowHandler() const;
-  void SetAssistiveWindowHandler(
-      ash::IMEAssistiveWindowHandlerInterface* handler);
+  IMEAssistiveWindowHandlerInterface* GetAssistiveWindowHandler() const;
+  void SetAssistiveWindowHandler(IMEAssistiveWindowHandlerInterface* handler);
 
  private:
   IMEBridge();
 
   // TODO(b/245020074): Rename this member.
-  TextInputTarget* input_context_handler_ = nullptr;
+  raw_ptr<TextInputTarget, DanglingUntriaged> input_context_handler_ = nullptr;
   // TODO(b/245020074): Rename this member.
-  TextInputMethod* engine_handler_ = nullptr;
+  raw_ptr<TextInputMethod, DanglingUntriaged> engine_handler_ = nullptr;
   base::ObserverList<IMEBridgeObserver> observers_;
   TextInputMethod::InputContext current_input_context_;
 
-  ash::IMECandidateWindowHandlerInterface* candidate_window_handler_ = nullptr;
-  ash::IMEAssistiveWindowHandlerInterface* assistive_window_handler_ = nullptr;
+  raw_ptr<IMECandidateWindowHandlerInterface, LeakedDanglingUntriaged>
+      candidate_window_handler_ = nullptr;
+  raw_ptr<IMEAssistiveWindowHandlerInterface, DanglingUntriaged>
+      assistive_window_handler_ = nullptr;
 };
 
-}  // namespace ui
+}  // namespace ash
 
 #endif  // UI_BASE_IME_ASH_IME_BRIDGE_H_

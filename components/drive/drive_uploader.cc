@@ -8,12 +8,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/task/task_runner_util.h"
 #include "components/drive/service/drive_service_interface.h"
 #include "google_apis/drive/drive_api_parser.h"
 #include "services/device/public/mojom/wake_lock.mojom.h"
@@ -265,8 +264,8 @@ CancelCallbackOnce DriveUploader::StartUploadFile(
   DVLOG(1) << "Uploading file: " << upload_file_info->DebugString();
 
   UploadFileInfo* info_ptr = upload_file_info.get();
-  base::PostTaskAndReplyWithResult(
-      blocking_task_runner_.get(), FROM_HERE,
+  blocking_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&base::GetFileSize, info_ptr->file_path,
                      &info_ptr->content_length),
       base::BindOnce(&DriveUploader::StartUploadFileAfterGetFileSize,

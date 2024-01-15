@@ -6,10 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "net/http/bidirectional_stream_request_info.h"
@@ -53,7 +53,7 @@ void BidirectionalStreamSpdyImpl::Start(
   timer_ = std::move(timer);
 
   if (!spdy_session_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&BidirectionalStreamSpdyImpl::NotifyError,
                        weak_factory_.GetWeakPtr(), ERR_CONNECTION_CLOSED));
@@ -109,7 +109,7 @@ void BidirectionalStreamSpdyImpl::SendvData(
 
   if (written_end_of_stream_) {
     LOG(ERROR) << "Writing after end of stream is written.";
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&BidirectionalStreamSpdyImpl::NotifyError,
                                   weak_factory_.GetWeakPtr(), ERR_UNEXPECTED));
     return;
@@ -129,7 +129,8 @@ void BidirectionalStreamSpdyImpl::SendvData(
   if (buffers.size() == 1) {
     pending_combined_buffer_ = buffers[0];
   } else {
-    pending_combined_buffer_ = base::MakeRefCounted<net::IOBuffer>(total_len);
+    pending_combined_buffer_ =
+        base::MakeRefCounted<net::IOBufferWithSize>(total_len);
     int len = 0;
     // TODO(xunjieli): Get rid of extra copy. Coalesce headers and data frames.
     for (size_t i = 0; i < buffers.size(); ++i) {
@@ -201,8 +202,7 @@ void BidirectionalStreamSpdyImpl::OnEarlyHintsReceived(
 }
 
 void BidirectionalStreamSpdyImpl::OnHeadersReceived(
-    const spdy::Http2HeaderBlock& response_headers,
-    const spdy::Http2HeaderBlock* pushed_request_headers) {
+    const spdy::Http2HeaderBlock& response_headers) {
   DCHECK(stream_);
 
   if (delegate_)
@@ -291,7 +291,7 @@ int BidirectionalStreamSpdyImpl::SendRequestHeadersHelper() {
   http_request_info.method = request_info_->method;
   http_request_info.extra_headers = request_info_->extra_headers;
 
-  CreateSpdyHeadersFromHttpRequest(http_request_info,
+  CreateSpdyHeadersFromHttpRequest(http_request_info, absl::nullopt,
                                    http_request_info.extra_headers, &headers);
   written_end_of_stream_ = request_info_->end_stream_on_headers;
   return stream_->SendRequestHeaders(std::move(headers),
@@ -394,13 +394,13 @@ bool BidirectionalStreamSpdyImpl::MaybeHandleStreamClosedInSendData() {
   // If |stream_| is closed without an error before client half closes,
   // blackhole any pending write data. crbug.com/650438.
   if (stream_closed_ && closed_stream_status_ == OK) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&BidirectionalStreamSpdyImpl::OnDataSent,
                                   weak_factory_.GetWeakPtr()));
     return true;
   }
   LOG(ERROR) << "Trying to send data after stream has been destroyed.";
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&BidirectionalStreamSpdyImpl::NotifyError,
                                 weak_factory_.GetWeakPtr(), ERR_UNEXPECTED));
   return true;

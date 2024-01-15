@@ -8,11 +8,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/test/mock_callback.h"
@@ -26,8 +26,8 @@
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile_manager.h"
 #include "components/account_manager_core/account.h"
-#include "components/account_manager_core/account_addition_result.h"
 #include "components/account_manager_core/account_manager_facade.h"
+#include "components/account_manager_core/account_upsertion_result.h"
 #include "components/account_manager_core/mock_account_manager_facade.h"
 #include "components/prefs/testing_pref_service.h"
 #include "content/public/test/browser_task_environment.h"
@@ -37,9 +37,9 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 using account_manager::Account;
-using account_manager::AccountAdditionResult;
 using account_manager::AccountKey;
 using account_manager::AccountManagerFacade;
+using account_manager::AccountUpsertionResult;
 using testing::Field;
 
 namespace {
@@ -386,16 +386,16 @@ class AccountProfileMapperTest : public testing::Test {
       AccountManagerFacade::AccountAdditionSource source,
       const absl::optional<Account>& new_account) {
     EXPECT_CALL(mock_facade_, ShowAddAccountDialog(source, testing::_))
-        .WillOnce(
-            [new_account](AccountManagerFacade::AccountAdditionSource,
-                          base::OnceCallback<void(const AccountAdditionResult&)>
-                              callback) {
-              std::move(callback).Run(
-                  new_account.has_value()
-                      ? AccountAdditionResult::FromAccount(new_account.value())
-                      : AccountAdditionResult::FromStatus(
-                            AccountAdditionResult::Status::kCancelledByUser));
-            });
+        .WillOnce([new_account](
+                      AccountManagerFacade::AccountAdditionSource,
+                      base::OnceCallback<void(const AccountUpsertionResult&)>
+                          callback) {
+          std::move(callback).Run(
+              new_account.has_value()
+                  ? AccountUpsertionResult::FromAccount(new_account.value())
+                  : AccountUpsertionResult::FromStatus(
+                        AccountUpsertionResult::Status::kCancelledByUser));
+        });
   }
 
   void CompleteFacadeGetAccountsGaia(const std::vector<std::string>& gaia_ids) {
@@ -449,10 +449,10 @@ class AccountProfileMapperTest : public testing::Test {
 
   void SetLacrosAccountsInLocalState(
       const base::flat_set<std::string>& account_ids) {
-    base::Value list(base::Value::Type::LIST);
+    base::Value::List list;
     for (const auto& gaia_id : account_ids)
       list.Append(gaia_id);
-    local_state()->Set(kLacrosAccountIdsPref, list);
+    local_state()->SetList(kLacrosAccountIdsPref, std::move(list));
   }
 
   base::flat_set<std::string> GetLacrosAccountsFromLocalState() {
@@ -1423,7 +1423,7 @@ TEST_F(AccountProfileMapperTest,
       AccountProfileMapper::AddAccountResult{other_path, account_c};
   AccountManagerFacade::AccountAdditionSource source =
       AccountManagerFacade::AccountAdditionSource::kOgbAddAccount;
-  base::OnceCallback<void(const AccountAdditionResult&)>
+  base::OnceCallback<void(const AccountUpsertionResult&)>
       show_add_account_dialog_facade_callback;
 
   // No events fire before the account manager invokes the account added
@@ -1432,12 +1432,12 @@ TEST_F(AccountProfileMapperTest,
   EXPECT_CALL(mock_observer, OnAccountUpserted(testing::_, testing::_))
       .Times(0);
   EXPECT_CALL(*mock_facade(), ShowAddAccountDialog(source, testing::_))
-      .WillOnce(
-          [&show_add_account_dialog_facade_callback](
-              AccountManagerFacade::AccountAdditionSource,
-              base::OnceCallback<void(const AccountAdditionResult&)> callback) {
-            show_add_account_dialog_facade_callback = std::move(callback);
-          });
+      .WillOnce([&show_add_account_dialog_facade_callback](
+                    AccountManagerFacade::AccountAdditionSource,
+                    base::OnceCallback<void(const AccountUpsertionResult&)>
+                        callback) {
+        show_add_account_dialog_facade_callback = std::move(callback);
+      });
   ExpectFacadeGetAccountsCalled();
   mapper->ShowAddAccountDialog(other_path, source,
                                account_added_callback.Get());
@@ -1456,7 +1456,7 @@ TEST_F(AccountProfileMapperTest,
               OnAccountUpserted(other_path, AccountEqual(account_c)));
   ExpectFacadeGetAccountsCalled();
   std::move(show_add_account_dialog_facade_callback)
-      .Run(AccountAdditionResult::FromAccount(account_c));
+      .Run(AccountUpsertionResult::FromAccount(account_c));
   // `mapper` updates the account list after it adds an account.
   CompleteFacadeGetAccountsGaia({"A", "B", "C"});
   VerifyAccountsInPrefs({{main_path(), {"A"}}, {other_path, {"B", "C"}}});

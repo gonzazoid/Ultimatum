@@ -1,2 +1,0 @@
-\bcolombia\b	co
-\bcolumbia\b	co

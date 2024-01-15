@@ -36,7 +36,7 @@ class ResourceError;
 class ResourceFetcher;
 class ResourceResponse;
 class UseCounter;
-enum RespectImageOrientationEnum;
+enum RespectImageOrientationEnum : uint8_t;
 struct ResourcePriority;
 
 // ImageResourceContent is a container that holds fetch result of
@@ -120,6 +120,8 @@ class CORE_EXPORT ImageResourceContent final
   bool IsLoading() const;
   bool ErrorOccurred() const;
   bool LoadFailedOrCanceled() const;
+  void SetIsBroken();
+  bool IsBroken() const override;
   bool IsAnimatedImage() const override;
   bool IsPaintedFirstFrame() const override;
   bool TimingAllowPassed() const override;
@@ -135,7 +137,12 @@ class CORE_EXPORT ImageResourceContent final
 
   // Redirecting methods to Resource.
   const KURL& Url() const override;
+  bool IsDataUrl() const override;
   base::TimeTicks LoadResponseEnd() const;
+  base::TimeTicks DiscoveryTime() const override;
+  base::TimeTicks LoadStart() const override;
+  base::TimeTicks LoadEnd() const override;
+  AtomicString MediaType() const override;
   bool IsAccessAllowed() const;
   const ResourceResponse& GetResponse() const;
   absl::optional<ResourceError> GetResourceError() const;
@@ -230,6 +237,22 @@ class CORE_EXPORT ImageResourceContent final
   // BitmapImage. |use_counter| may be a null pointer.
   void RecordDecodedImageType(UseCounter* use_counter);
 
+  void SetIsLoadedFromMemoryCache(bool is_loaded_from_memory_cache) {
+    is_loaded_from_memory_cache_ = is_loaded_from_memory_cache;
+  }
+
+  void SetIsPreloadedWithEarlyHints(bool is_preloaded_with_early_hints) {
+    is_preloaded_with_early_hints_ = is_preloaded_with_early_hints;
+  }
+
+  bool IsLoadedFromMemoryCache() const override {
+    return is_loaded_from_memory_cache_;
+  }
+
+  bool IsPreloadedWithEarlyHints() const override {
+    return is_preloaded_with_early_hints_;
+  }
+
  private:
   using CanDeferInvalidation = ImageResourceObserver::CanDeferInvalidation;
 
@@ -271,6 +294,14 @@ class CORE_EXPORT ImageResourceContent final
   bool has_device_pixel_ratio_header_value_;
 
   scoped_refptr<blink::Image> image_;
+
+  bool is_broken_;
+
+  base::TimeTicks discovery_time_;
+
+  bool is_loaded_from_memory_cache_;
+
+  bool is_preloaded_with_early_hints_;
 
   HeapHashCountedSet<WeakMember<ImageResourceObserver>> observers_;
   HeapHashCountedSet<WeakMember<ImageResourceObserver>> finished_observers_;

@@ -7,17 +7,18 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/rand_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/download/chrome_download_manager_delegate.h"
+#include "chrome/browser/download/download_confirmation_reason.h"
 #include "chrome/browser/download/download_crx_util.h"
 #include "chrome/browser/download/download_prefs.h"
 #include "chrome/browser/download/download_stats.h"
@@ -62,6 +63,14 @@
 
 #if BUILDFLAG(IS_WIN)
 #include "chrome/browser/ui/pdf/adobe_reader_info_win.h"
+#include "ui/shell_dialogs/select_file_utils_win.h"
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chrome/browser/ash/policy/dlp/dlp_files_controller_ash.h"
+#include "chrome/browser/chromeos/policy/dlp/dlp_file_destination.h"
+#include "chrome/browser/chromeos/policy/dlp/dlp_rules_manager.h"
+#include "chrome/browser/chromeos/policy/dlp/dlp_rules_manager_factory.h"
 #endif
 
 using content::BrowserThread;
@@ -90,10 +99,24 @@ void VisitCountsToVisitedBefore(base::OnceCallback<void(bool)> callback,
 bool g_is_adobe_reader_up_to_date_ = false;
 #endif
 
+// For the `new_path`, generates a new safe file name if needed. Keep its
+// extension if it is empty or matches that of the `old_extension`. Otherwise,
+// suggest a new safe extension.
+void GenerateSafeFileName(base::FilePath* new_path,
+                          const base::FilePath::StringType& old_extension,
+                          const std::string& mime_type) {
+  DCHECK(new_path);
+  if (new_path->Extension().empty() || new_path->Extension() == old_extension) {
+    net::GenerateSafeFileName(std::string() /*mime_type*/,
+                              false /*ignore_extension*/, new_path);
+  } else {
+    net::GenerateSafeFileName(mime_type, true /*ignore_extension*/, new_path);
+  }
+}
+
 }  // namespace
 
-DownloadTargetDeterminerDelegate::~DownloadTargetDeterminerDelegate() {
-}
+DownloadTargetDeterminerDelegate::~DownloadTargetDeterminerDelegate() = default;
 
 DownloadTargetDeterminer::DownloadTargetDeterminer(
     DownloadItem* download,
@@ -146,8 +169,8 @@ void DownloadTargetDeterminer::DoLoop() {
       case STATE_GENERATE_TARGET_PATH:
         result = DoGenerateTargetPath();
         break;
-      case STATE_SET_MIXED_CONTENT_STATUS:
-        result = DoSetMixedContentStatus();
+      case STATE_SET_INSECURE_DOWNLOAD_STATUS:
+        result = DoSetInsecureDownloadStatus();
         break;
       case STATE_NOTIFY_EXTENSIONS:
         result = DoNotifyExtensions();
@@ -200,7 +223,7 @@ DownloadTargetDeterminer::Result
   DCHECK(!should_notify_extensions_);
   bool is_forced_path = !download_->GetForcedFilePath().empty();
 
-  next_state_ = STATE_SET_MIXED_CONTENT_STATUS;
+  next_state_ = STATE_SET_INSECURE_DOWNLOAD_STATUS;
 
   // Transient download should use the existing path.
   if (download_->IsTransient()) {
@@ -250,7 +273,8 @@ DownloadTargetDeterminer::Result
     confirmation_reason_ = NeedsConfirmation(generated_filename);
     base::FilePath target_directory;
     if (confirmation_reason_ != DownloadConfirmationReason::NONE) {
-      DCHECK(!download_prefs_->IsDownloadPathManaged());
+      if (download_prefs_->IsDownloadPathManaged())
+        DCHECK(confirmation_reason_ == DownloadConfirmationReason::DLP_BLOCKED);
       // If the user is going to be prompted and the user has been prompted
       // before, then always prefer the last directory that the user selected.
       target_directory = download_prefs_->SaveFilePath();
@@ -261,8 +285,8 @@ DownloadTargetDeterminer::Result
       RecordDownloadPathGeneration(
           DownloadPathGenerationEvent::USE_DEFAULTL_DOWNLOAD_DIRECTORY, false);
     }
-    virtual_path_ = target_directory.Append(generated_filename);
     should_notify_extensions_ = true;
+    virtual_path_ = target_directory.Append(generated_filename);
     DCHECK(virtual_path_.IsAbsolute());
   } else {
     conflict_action_ = DownloadPathReservationTracker::OVERWRITE;
@@ -334,30 +358,30 @@ base::FilePath DownloadTargetDeterminer::GenerateFileName() const {
 }
 
 DownloadTargetDeterminer::Result
-DownloadTargetDeterminer::DoSetMixedContentStatus() {
+DownloadTargetDeterminer::DoSetInsecureDownloadStatus() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(!virtual_path_.empty());
 
   next_state_ = STATE_NOTIFY_EXTENSIONS;
 
-  delegate_->GetMixedContentStatus(
+  delegate_->GetInsecureDownloadStatus(
       download_, virtual_path_,
-      base::BindOnce(&DownloadTargetDeterminer::GetMixedContentStatusDone,
+      base::BindOnce(&DownloadTargetDeterminer::GetInsecureDownloadStatusDone,
                      weak_ptr_factory_.GetWeakPtr()));
   return QUIT_DOLOOP;
 }
 
-void DownloadTargetDeterminer::GetMixedContentStatusDone(
-    download::DownloadItem::MixedContentStatus status) {
+void DownloadTargetDeterminer::GetInsecureDownloadStatusDone(
+    download::DownloadItem::InsecureDownloadStatus status) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   // Delegate should not call back here more than once.
   DCHECK_EQ(STATE_NOTIFY_EXTENSIONS, next_state_);
 
-  mixed_content_status_ = status;
+  insecure_download_status_ = status;
 
-  if (status == download::DownloadItem::MixedContentStatus::SILENT_BLOCK) {
-    RecordDownloadCancelReason(DownloadCancelReason::kMixedContent);
+  if (status == download::DownloadItem::InsecureDownloadStatus::SILENT_BLOCK) {
+    RecordDownloadCancelReason(DownloadCancelReason::kInsecureDownload);
     ScheduleCallbackAndDeleteSelf(
         download::DOWNLOAD_INTERRUPT_REASON_FILE_BLOCKED);
     return;
@@ -393,6 +417,12 @@ void DownloadTargetDeterminer::NotifyExtensionsDone(
   // Extensions should not call back here more than once.
   DCHECK_EQ(STATE_RESERVE_VIRTUAL_PATH, next_state_);
 
+  // Ignore path suggestion for file URLs.
+  if (download_->GetURL().SchemeIsFile()) {
+    DoLoop();
+    return;
+  }
+
   if (!suggested_path.empty()) {
     // If an extension overrides the filename, then the target directory will be
     // forced to download_prefs_->DownloadPath() since extensions cannot place
@@ -404,27 +434,14 @@ void DownloadTargetDeterminer::NotifyExtensionsDone(
     base::FilePath new_path(download_prefs_->DownloadPath().Append(
         suggested_path).NormalizePathSeparators());
 
-    // If this is a local file, don't allow extensions to override its
-    // extension.
-    if (download_->GetURL().SchemeIsFile()) {
-      base::FilePath file_path;
-      net::FileURLToFilePath(download_->GetURL(), &file_path);
-      new_path = new_path.ReplaceExtension(file_path.Extension());
-    } else {
-      // If the (Chrome) extension does not suggest an file extension, or if the
-      // suggested extension matches that of the |virtual_path_|, do not
-      // pass a mime type to GenerateSafeFileName so that it does not force the
-      // filename to have an extension or generate a different one. Otherwise,
-      // correct the file extension in case it is wrongly given.
-      if (new_path.Extension().empty() ||
-          new_path.Extension() == virtual_path_.Extension()) {
-        net::GenerateSafeFileName(std::string() /*mime_type*/,
-                                  false /*ignore_extension*/, &new_path);
-      } else {
-        net::GenerateSafeFileName(download_->GetMimeType(),
-                                  true /*ignore_extension*/, &new_path);
-      }
-    }
+    // If the (Chrome) extension does not suggest an file extension, or if the
+    // suggested extension matches that of the |virtual_path_|, do not
+    // pass a mime type to GenerateSafeFileName so that it does not force the
+    // filename to have an extension or generate a different one. Otherwise,
+    // correct the file extension in case it is wrongly given.
+    GenerateSafeFileName(&new_path, virtual_path_.Extension(),
+                         download_->GetMimeType());
+
     virtual_path_ = new_path;
     create_target_directory_ = true;
   }
@@ -475,6 +492,7 @@ void DownloadTargetDeterminer::ReserveVirtualPathDone(
             download::DOWNLOAD_INTERRUPT_REASON_USER_CANCELED);
         return;
       case download::PathValidationResult::SUCCESS:
+      case download::PathValidationResult::SUCCESS_RESOLVED_CONFLICT:
       case download::PathValidationResult::SAME_AS_SOURCE:
         DCHECK_EQ(virtual_path_, path) << "Transient download path should not"
                                           "be changed.";
@@ -488,6 +506,11 @@ void DownloadTargetDeterminer::ReserveVirtualPathDone(
     switch (result) {
       case download::PathValidationResult::SUCCESS:
       case download::PathValidationResult::SAME_AS_SOURCE:
+        break;
+
+      // TODO(crbug.com/1361503): This should trigger a duplicate download
+      // prompt.
+      case download::PathValidationResult::SUCCESS_RESOLVED_CONFLICT:
         break;
 
       case download::PathValidationResult::PATH_NOT_WRITABLE:
@@ -550,8 +573,24 @@ DownloadTargetDeterminer::DoRequestConfirmation() {
 
     // If there is a non-neutral confirmation reason, prompt the user.
     if (confirmation_reason_ != DownloadConfirmationReason::NONE) {
+      base::FilePath sanitized_path = virtual_path_;
+#if BUILDFLAG(IS_WIN)
+      // Windows prompt dialog will resolve all env variables in the file name,
+      // which may generate unexpected results. Remove env variables from the
+      // file name first.
+      std::wstring sanitized_name = ui::RemoveEnvVarFromFileName<wchar_t>(
+          virtual_path_.BaseName().value(), L"%");
+      if (sanitized_name.empty()) {
+        sanitized_name = base::UTF8ToWide(
+            l10n_util::GetStringUTF8(IDS_DEFAULT_DOWNLOAD_FILENAME));
+      }
+      sanitized_path =
+          virtual_path_.DirName().Append(base::FilePath(sanitized_name));
+      GenerateSafeFileName(&sanitized_path, virtual_path_.Extension(),
+                           download_->GetMimeType());
+#endif  // BUILDFLAG(IS_WIN)
       delegate_->RequestConfirmation(
-          download_, virtual_path_, confirmation_reason_,
+          download_, sanitized_path, confirmation_reason_,
           base::BindRepeating(
               &DownloadTargetDeterminer::RequestConfirmationDone,
               weak_ptr_factory_.GetWeakPtr()));
@@ -855,12 +894,12 @@ DownloadTargetDeterminer::Result
 
   // IsAdobeReaderUpToDate() needs to be run with COM as it makes COM calls via
   // AssocQueryString() in IsAdobeReaderDefaultPDFViewer().
-  base::PostTaskAndReplyWithResult(
-      base::ThreadPool::CreateCOMSTATaskRunner({base::MayBlock()}).get(),
-      FROM_HERE, base::BindOnce(&::IsAdobeReaderUpToDate),
-      base::BindOnce(
-          &DownloadTargetDeterminer::DetermineIfAdobeReaderUpToDateDone,
-          weak_ptr_factory_.GetWeakPtr()));
+  base::ThreadPool::CreateCOMSTATaskRunner({base::MayBlock()})
+      ->PostTaskAndReplyWithResult(
+          FROM_HERE, base::BindOnce(&::IsAdobeReaderUpToDate),
+          base::BindOnce(
+              &DownloadTargetDeterminer::DetermineIfAdobeReaderUpToDateDone,
+              weak_ptr_factory_.GetWeakPtr()));
   return QUIT_DOLOOP;
 #else
   return CONTINUE;
@@ -1046,15 +1085,13 @@ DownloadTargetDeterminer::Result
 
   // Dangerous downloads receive a random intermediate name that looks like:
   // 'Unconfirmed <random>.crdownload'.
-  const char kUnconfirmedFormatSuffix[] = " %d.crdownload";
+  static constexpr char kUnconfirmedFormatSuffix[] = " %d.crdownload";
   // Range of the <random> uniquifier.
-  const int kUnconfirmedUniquifierRange = 1000000;
-  std::string unconfirmed_format =
-      l10n_util::GetStringUTF8(IDS_DOWNLOAD_UNCONFIRMED_PREFIX);
-  unconfirmed_format.append(kUnconfirmedFormatSuffix);
+  constexpr int kUnconfirmedUniquifierRange = 1000000;
 
   std::string file_name =
-      base::StringPrintf(unconfirmed_format.c_str(),
+      l10n_util::GetStringUTF8(IDS_DOWNLOAD_UNCONFIRMED_PREFIX) +
+      base::StringPrintf(kUnconfirmedFormatSuffix,
                          base::RandInt(0, kUnconfirmedUniquifierRange));
   intermediate_path_ =
       local_path_.DirName().Append(base::FilePath::FromUTF8Unsafe(file_name));
@@ -1085,7 +1122,7 @@ void DownloadTargetDeterminer::ScheduleCallbackAndDeleteSelf(
   target_info->intermediate_path = intermediate_path_;
   target_info->mime_type = mime_type_;
   target_info->is_filetype_handled_safely = is_filetype_handled_safely_;
-  target_info->mixed_content_status = mixed_content_status_;
+  target_info->insecure_download_status = insecure_download_status_;
 #if BUILDFLAG(IS_ANDROID)
   // If |virtual_path_| is content URI, there is no need to prompt the user.
   if (local_path_.IsContentUri() && !virtual_path_.IsContentUri()) {
@@ -1093,7 +1130,7 @@ void DownloadTargetDeterminer::ScheduleCallbackAndDeleteSelf(
   }
 #endif
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(completion_callback_), std::move(target_info)));
   delete this;
@@ -1138,10 +1175,15 @@ DownloadConfirmationReason DownloadTargetDeterminer::NeedsConfirmation(
     return DownloadConfirmationReason::NONE;
   }
 
+  // If the download path is blocked by DLP, the user should be prompted even if
+  // the path is managed or PromptForDownload is false.
+  bool isDefaultPathDlpBlocked =
+      IsDownloadDlpBlocked(download_prefs_->DownloadPath());
+
   // Don't ask where to save if the download path is managed. Even if the user
   // wanted to be prompted for "all" downloads, or if this was a 'Save As'
-  // download.
-  if (download_prefs_->IsDownloadPathManaged())
+  // download. Ask if the default path is blocked by DLP.
+  if (download_prefs_->IsDownloadPathManaged() && !isDefaultPathDlpBlocked)
     return DownloadConfirmationReason::NONE;
 
   // Prompt if this is a 'Save As' download.
@@ -1163,10 +1205,42 @@ DownloadConfirmationReason DownloadTargetDeterminer::NeedsConfirmation(
   // For everything else, prompting is controlled by the PromptForDownload pref.
   // The user may still be prompted even if this pref is disabled due to, for
   // example, there being an unresolvable filename conflict or the target path
-  // is not writeable.
-  return download_prefs_->PromptForDownload()
-             ? DownloadConfirmationReason::PREFERENCE
-             : DownloadConfirmationReason::NONE;
+  // is not writeable, or if the path is blocked by DLP.
+  if (download_prefs_->PromptForDownload()) {
+    return DownloadConfirmationReason::PREFERENCE;
+  } else {
+    return isDefaultPathDlpBlocked ? DownloadConfirmationReason::DLP_BLOCKED
+                                   : DownloadConfirmationReason::NONE;
+  }
+}
+
+bool DownloadTargetDeterminer::IsDownloadDlpBlocked(
+    const base::FilePath& download_path) const {
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  auto* web_contents =
+      download_ ? content::DownloadItemUtils::GetWebContents(download_)
+                : nullptr;
+  if (!web_contents)
+    return false;
+  policy::DlpRulesManager* rules_manager =
+      policy::DlpRulesManagerFactory::GetForPrimaryProfile();
+  if (!rules_manager)
+    return false;
+  policy::DlpFilesControllerAsh* files_controller =
+      static_cast<policy::DlpFilesControllerAsh*>(
+          rules_manager->GetDlpFilesController());
+  if (!files_controller)
+    return false;
+  const GURL authority_url = download::BaseFile::GetEffectiveAuthorityURL(
+      download_->GetURL(), download_->GetReferrerUrl());
+  if (!authority_url.is_valid()) {
+    return true;
+  }
+  return files_controller->ShouldPromptBeforeDownload(
+      policy::DlpFileDestination(authority_url), download_path);
+#else
+  return false;
+#endif
 }
 
 bool DownloadTargetDeterminer::HasPromptedForPath() const {
@@ -1181,10 +1255,16 @@ DownloadFileType::DangerLevel DownloadTargetDeterminer::GetDangerLevel(
   // If the user has has been prompted or will be, assume that the user has
   // approved the download. A programmatic download is considered safe unless it
   // contains malware.
+  bool user_approved_path =
+      !download_->GetForcedFilePath().empty() &&
+      // Drag and drop download paths are not approved by the user. See
+      // https://crbug.com/1513639
+      download_->GetDownloadSource() != download::DownloadSource::DRAG_AND_DROP;
   if (HasPromptedForPath() ||
       confirmation_reason_ != DownloadConfirmationReason::NONE ||
-      !download_->GetForcedFilePath().empty())
+      user_approved_path) {
     return DownloadFileType::NOT_DANGEROUS;
+  }
 
   // User-initiated extension downloads from pref-whitelisted sources are not
   // considered dangerous.

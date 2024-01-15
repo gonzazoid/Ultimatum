@@ -213,12 +213,14 @@ std::unique_ptr<LogoMetadata> LogoCache::LogoMetadataFromString(
     const std::string& str,
     int* logo_num_bytes,
     int* dark_logo_num_bytes) {
-  std::unique_ptr<base::Value> value = base::JSONReader::ReadDeprecated(str);
-  if (!value)
+  absl::optional<base::Value> value = base::JSONReader::Read(str);
+  if (!value) {
     return nullptr;
+  }
   const base::Value::Dict* dict = value->GetIfDict();
-  if (!dict)
+  if (!dict) {
     return nullptr;
+  }
 
   // These helpers replace the deprecated analogous methods on
   // base::DictionaryValue, so as to maintain the early exit behavior in the if
@@ -402,7 +404,7 @@ void LogoCache::WriteMetadata() {
 
   std::string str;
   LogoMetadataToString(*metadata_, logo_num_bytes_, dark_logo_num_bytes_, &str);
-  base::WriteFile(GetMetadataPath(), str.data(), static_cast<int>(str.size()));
+  base::WriteFile(GetMetadataPath(), str);
 }
 
 void LogoCache::WriteLogo(
@@ -426,15 +428,12 @@ void LogoCache::WriteLogo(
   if (!base::DeleteFile(metadata_path))
     return;
 
-  if (encoded_image &&
-      base::WriteFile(logo_path, encoded_image->front_as<char>(),
-                      static_cast<int>(encoded_image->size())) == -1) {
+  if (encoded_image && !base::WriteFile(logo_path, *encoded_image)) {
     base::DeleteFile(logo_path);
     return;
   }
   if (dark_encoded_image &&
-      base::WriteFile(dark_logo_path, dark_encoded_image->front_as<char>(),
-                      static_cast<int>(dark_encoded_image->size())) == -1) {
+      !base::WriteFile(dark_logo_path, *dark_encoded_image)) {
     base::DeleteFile(logo_path);
     base::DeleteFile(dark_logo_path);
     return;

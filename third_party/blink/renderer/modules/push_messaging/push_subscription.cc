@@ -57,7 +57,7 @@ String ToBase64URLWithoutPadding(DOMArrayBuffer* buffer) {
 absl::optional<blink::DOMTimeStamp> ToDOMTimeStamp(
     const absl::optional<base::Time>& time) {
   if (time)
-    return ConvertSecondsToDOMTimeStamp(time->ToDoubleT());
+    return ConvertSecondsToDOMTimeStamp(time->InSecondsFSinceUnixEpoch());
 
   return absl::nullopt;
 }
@@ -106,9 +106,9 @@ absl::optional<DOMTimeStamp> PushSubscription::expirationTime() const {
 
 DOMArrayBuffer* PushSubscription::getKey(const AtomicString& name) const {
   if (name == "p256dh")
-    return p256dh_;
+    return p256dh_.Get();
   if (name == "auth")
-    return auth_;
+    return auth_.Get();
 
   return nullptr;
 }
@@ -138,8 +138,8 @@ ScriptValue PushSubscription::toJSONForBinding(ScriptState* script_state) {
   }
 
   V8ObjectBuilder keys(script_state);
-  keys.Add("p256dh", ToBase64URLWithoutPadding(p256dh_));
-  keys.Add("auth", ToBase64URLWithoutPadding(auth_));
+  keys.AddString("p256dh", ToBase64URLWithoutPadding(p256dh_));
+  keys.AddString("auth", ToBase64URLWithoutPadding(auth_));
 
   result.Add("keys", keys);
 

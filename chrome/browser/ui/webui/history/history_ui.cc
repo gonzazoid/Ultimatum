@@ -9,14 +9,18 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted_memory.h"
+#include "base/memory/weak_ptr.h"
+#include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "build/build_config.h"
+#include "chrome/browser/image_service/image_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
+#include "chrome/browser/signin/signin_ui_util.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/webui/cr_components/history_clusters/history_clusters_util.h"
 #include "chrome/browser/ui/webui/favicon_source.h"
@@ -27,8 +31,8 @@
 #include "chrome/browser/ui/webui/history_clusters/history_clusters_handler.h"
 #include "chrome/browser/ui/webui/managed_ui_handler.h"
 #include "chrome/browser/ui/webui/metrics_handler.h"
+#include "chrome/browser/ui/webui/page_not_available_for_guest/page_not_available_for_guest_ui.h"
 #include "chrome/browser/ui/webui/webui_util.h"
-#include "chrome/common/pref_names.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/history_resources.h"
@@ -36,11 +40,15 @@
 #include "chrome/grit/locale_settings.h"
 #include "components/favicon_base/favicon_url_parser.h"
 #include "components/grit/components_scaled_resources.h"
+#include "components/history/core/common/pref_names.h"
 #include "components/history_clusters/core/config.h"
 #include "components/history_clusters/core/features.h"
 #include "components/history_clusters/core/history_clusters_prefs.h"
+#include "components/page_image_service/image_service.h"
+#include "components/page_image_service/image_service_handler.h"
 #include "components/prefs/pref_service.h"
 #include "components/signin/public/base/signin_pref_names.h"
+#include "components/signin/public/base/signin_switches.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/web_ui.h"
@@ -60,9 +68,10 @@ bool IsUserSignedIn(Profile* profile) {
          identity_manager->HasPrimaryAccount(signin::ConsentLevel::kSync);
 }
 
-content::WebUIDataSource* CreateHistoryUIHTMLSource(Profile* profile) {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUIHistoryHost);
+content::WebUIDataSource* CreateAndAddHistoryUIHTMLSource(Profile* profile) {
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile, chrome::kChromeUIHistoryHost);
+  webui::SetupChromeRefresh2023(source);
 
   static constexpr webui::LocalizedString kStrings[] = {
       // Localized strings (alphabetical order).
@@ -99,7 +108,6 @@ content::WebUIDataSource* CreateHistoryUIHTMLSource(Profile* profile) {
       {"searchPrompt", IDS_HISTORY_SEARCH_PROMPT},
       {"searchResult", IDS_HISTORY_SEARCH_RESULT},
       {"searchResults", IDS_HISTORY_SEARCH_RESULTS},
-      {"turnOnSyncButton", IDS_HISTORY_TURN_ON_SYNC_BUTTON},
       {"turnOnSyncPromo", IDS_HISTORY_TURN_ON_SYNC_PROMO},
       {"turnOnSyncPromoDesc", IDS_HISTORY_TURN_ON_SYNC_PROMO_DESC},
       {"title", IDS_HISTORY_TITLE},
@@ -113,6 +121,30 @@ content::WebUIDataSource* CreateHistoryUIHTMLSource(Profile* profile) {
           l10n_util::GetStringUTF16(
               IDS_SETTINGS_CLEAR_DATA_MYACTIVITY_URL_IN_HISTORY)));
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  source->AddLocalizedString("turnOnSyncButton",
+                             IDS_HISTORY_TURN_ON_SYNC_BUTTON);
+#else
+  signin::IdentityManager* identity_manager =
+      IdentityManagerFactory::GetForProfile(profile);
+  bool has_primary_account =
+      identity_manager->HasPrimaryAccount(signin::ConsentLevel::kSignin);
+  AccountInfo account_info =
+      signin_ui_util::GetSingleAccountForPromos(identity_manager);
+  if (base::FeatureList::IsEnabled(switches::kUnoDesktop) &&
+      !has_primary_account && !account_info.IsEmpty()) {
+    source->AddString("turnOnSyncButton",
+                      l10n_util::GetStringFUTF16(
+                          IDS_PROFILES_DICE_WEB_ONLY_SIGNIN_BUTTON,
+                          base::UTF8ToUTF16(!account_info.given_name.empty()
+                                                ? account_info.given_name
+                                                : account_info.email)));
+  } else {
+    source->AddLocalizedString("turnOnSyncButton",
+                               IDS_HISTORY_TURN_ON_SYNC_BUTTON);
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
   PrefService* prefs = profile->GetPrefs();
   bool allow_deleting_history =
       prefs->GetBoolean(prefs::kAllowDeletingBrowserHistory);
@@ -124,13 +156,16 @@ content::WebUIDataSource* CreateHistoryUIHTMLSource(Profile* profile) {
 
   source->AddBoolean(kIsUserSignedInKey, IsUserSignedIn(profile));
 
+  source->AddInteger(
+      "lastSelectedTab",
+      prefs->GetInteger(history_clusters::prefs::kLastSelectedTab));
+
   // History clusters
   HistoryClustersUtil::PopulateSource(source, profile, /*in_side_panel=*/false);
 
   webui::SetupWebUIDataSource(
       source, base::make_span(kHistoryResources, kHistoryResourcesSize),
       IDR_HISTORY_HISTORY_HTML);
-  webui::EnableTrustedTypesCSP(source);
 
   content::URLDataSource::Add(
       profile, std::make_unique<FaviconSource>(
@@ -141,12 +176,28 @@ content::WebUIDataSource* CreateHistoryUIHTMLSource(Profile* profile) {
 
 }  // namespace
 
+HistoryUIConfig::HistoryUIConfig()
+    : WebUIConfig(content::kChromeUIScheme, chrome::kChromeUIHistoryHost) {}
+
+HistoryUIConfig::~HistoryUIConfig() = default;
+
+std::unique_ptr<content::WebUIController>
+HistoryUIConfig::CreateWebUIController(content::WebUI* web_ui,
+                                       const GURL& url) {
+  Profile* profile = Profile::FromWebUI(web_ui);
+  if (profile->IsGuestSession()) {
+    return std::make_unique<PageNotAvailableForGuestUI>(
+        web_ui, chrome::kChromeUIHistoryHost);
+  }
+  return std::make_unique<HistoryUI>(web_ui);
+}
+
 HistoryUI::HistoryUI(content::WebUI* web_ui)
     : ui::MojoWebUIController(web_ui, /*enable_chrome_send=*/true) {
   Profile* profile = Profile::FromWebUI(web_ui);
-  content::WebUIDataSource* data_source = CreateHistoryUIHTMLSource(profile);
+  content::WebUIDataSource* data_source =
+      CreateAndAddHistoryUIHTMLSource(profile);
   ManagedUIHandler::Initialize(web_ui, data_source);
-  content::WebUIDataSource::Add(profile, data_source);
 
   pref_change_registrar_.Init(profile->GetPrefs());
   pref_change_registrar_.Add(history_clusters::prefs::kVisible,
@@ -193,6 +244,20 @@ void HistoryUI::BindInterface(
           web_ui()->GetWebContents());
 }
 
+void HistoryUI::BindInterface(
+    mojo::PendingReceiver<page_image_service::mojom::PageImageServiceHandler>
+        pending_page_handler) {
+  base::WeakPtr<page_image_service::ImageService> image_service_weak;
+  if (auto* image_service =
+          page_image_service::ImageServiceFactory::GetForBrowserContext(
+              Profile::FromWebUI(web_ui()))) {
+    image_service_weak = image_service->GetWeakPtr();
+  }
+  image_service_handler_ =
+      std::make_unique<page_image_service::ImageServiceHandler>(
+          std::move(pending_page_handler), std::move(image_service_weak));
+}
+
 void HistoryUI::UpdateDataSource() {
   CHECK(web_ui());
 
@@ -200,12 +265,18 @@ void HistoryUI::UpdateDataSource() {
 
   base::Value::Dict update;
   update.Set(kIsUserSignedInKey, IsUserSignedIn(profile));
+
+  const bool rename_journeys =
+      base::FeatureList::IsEnabled(history_clusters::kRenameJourneys);
+  const bool is_managed = profile->GetPrefs()->IsManagedPreference(
+      history_clusters::prefs::kVisible);
+  // When history_clusters::kRenameJourneys is enabled, history clusters are
+  // always visible unless the visibility prefs is set to false by policy.
   update.Set(
       kIsHistoryClustersVisibleKey,
-      profile->GetPrefs()->GetBoolean(history_clusters::prefs::kVisible));
-  update.Set(kIsHistoryClustersVisibleManagedByPolicyKey,
-             profile->GetPrefs()->IsManagedPreference(
-                 history_clusters::prefs::kVisible));
+      profile->GetPrefs()->GetBoolean(history_clusters::prefs::kVisible) ||
+          (rename_journeys && !is_managed));
+  update.Set(kIsHistoryClustersVisibleManagedByPolicyKey, is_managed);
 
   content::WebUIDataSource::Update(profile, chrome::kChromeUIHistoryHost,
                                    std::move(update));

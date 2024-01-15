@@ -9,20 +9,22 @@
 import '//resources/js/action_link.js';
 import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
 import '//resources/polymer/v3_0/iron-iconset-svg/iron-iconset-svg.js';
-import '../../components/buttons/oobe_back_button.m.js';
-import '../../components/buttons/oobe_text_button.m.js';
-import '../../components/common_styles/common_styles.m.js';
-import '../../components/dialogs/oobe_adaptive_dialog.m.js';
+import '../../components/buttons/oobe_back_button.js';
+import '../../components/buttons/oobe_text_button.js';
+import '../../components/common_styles/oobe_common_styles.css.js';
+import '../../components/dialogs/oobe_adaptive_dialog.js';
 import '../../components/network_select_login.js';
 
 import {SanitizeInnerHtmlOpts} from '//resources/ash/common/parse_html_subset.js';
 import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.m.js';
-import {OobeDialogHostBehavior} from '../../components/behaviors/oobe_dialog_host_behavior.m.js';
-import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.m.js';
-import {OOBE_UI_STATE} from '../../components/display_manager_types.m.js';
-import {Oobe} from '../../cr_ui.m.js';
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {OobeDialogHostBehavior} from '../../components/behaviors/oobe_dialog_host_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+import {OOBE_UI_STATE} from '../../components/display_manager_types.js';
+import {Oobe} from '../../cr_ui.js';
+
+import {getTemplate} from './error_message.html.js';
 
 
 const USER_ACTION_LAUNCH_OOBE_GUEST = 'launch-oobe-guest';
@@ -89,6 +91,14 @@ const ErrorMessageScreenBase = mixinBehaviors(
     PolymerElement);
 
 /**
+ * Data that is passed to the screen during onBeforeShow.
+ * @typedef {{
+ *   isCloseable: boolean,
+ * }}
+ */
+let ErrorScreenData;
+
+/**
  * @polymer
  */
 class ErrorMessageScreen extends ErrorMessageScreenBase {
@@ -97,7 +107,7 @@ class ErrorMessageScreen extends ErrorMessageScreenBase {
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   /** @override */
@@ -109,7 +119,6 @@ class ErrorMessageScreen extends ErrorMessageScreenBase {
       'setErrorState',
       'showConnectingIndicator',
       'setErrorStateNetwork',
-      'setIsPersistentError',
     ];
   }
 
@@ -136,12 +145,12 @@ class ErrorMessageScreen extends ErrorMessageScreenBase {
       },
 
       /**
-       * True if it is forbidden to close the error message.
+       * True if it is possible to close the error message.
        * @private
        */
-      is_persistent_error_: {
+      isCloseable_: {
         type: Boolean,
-        value: false,
+        value: true,
       },
 
       /**
@@ -188,14 +197,6 @@ class ErrorMessageScreen extends ErrorMessageScreenBase {
         type: Boolean,
         value: false,
       },
-
-      /**
-       * @private
-       */
-      hasUserPods_: {
-        type: Boolean,
-        value: false,
-      },
     };
   }
 
@@ -215,17 +216,6 @@ class ErrorMessageScreen extends ErrorMessageScreenBase {
     } else {
       return '';
     }
-  }
-
-  /**
-   * Whether the screen can be closed.
-   * |is_persistent_error_| prevents error screen to be closable even
-   * if there are some user pods.
-   * (E.g. out of OOBE process on the sign-in screen).
-   * @type {boolean}
-   */
-  get closable() {
-    return this.hasUserPods_ && !this.is_persistent_error_;
   }
 
   /**
@@ -279,7 +269,7 @@ class ErrorMessageScreen extends ErrorMessageScreenBase {
    * @param {string} element_id
    * @param {string} string_id
    * @param {SanitizeInnerHtmlOpts=} opts
-   * @param  {Array<string>|string} anchor_ids
+   * @param  {...string} anchor_ids
    */
   updateElementWithStringAndAnchorTag_(
       element_id, string_id, opts, ...anchor_ids) {
@@ -384,13 +374,12 @@ class ErrorMessageScreen extends ErrorMessageScreenBase {
 
   /**
    * Event handler that is invoked just before the screen is shown.
-   * @param {Object} data Screen init payload.
+   * @param {ErrorScreenData} data Screen init payload.
    */
   onBeforeShow(data) {
     this.enableWifiScans_ = true;
-    this.hasUserPods_ = data && ('hasUserPods' in data) && data.hasUserPods;
-    // `closable` is dependent on `hasUserPods_`
-    this.$.backButton.disabled = !this.closable;
+    this.isCloseable_ = data && ('isCloseable' in data) && data.isCloseable;
+    this.$.backButton.hidden = !this.isCloseable_;
   }
 
   /**
@@ -399,8 +388,7 @@ class ErrorMessageScreen extends ErrorMessageScreenBase {
   onBeforeHide() {
     this.enableWifiScans_ = false;
     Oobe.getInstance().setOobeUIState(OOBE_UI_STATE.HIDDEN);
-    // Reset property to the default state.
-    this.setIsPersistentError(false);
+    this.isCloseable_ = true;
   }
 
   /**
@@ -465,16 +453,9 @@ class ErrorMessageScreen extends ErrorMessageScreenBase {
    * Cancels error screen and drops to user pods.
    */
   cancel() {
-    if (this.closable) {
+    if (this.isCloseable_) {
       this.userActed('cancel');
     }
-  }
-
-  /**
-   * Makes error message non-closable.
-   */
-  setIsPersistentError(is_persistent) {
-    this.is_persistent_error_ = is_persistent;
   }
 }
 

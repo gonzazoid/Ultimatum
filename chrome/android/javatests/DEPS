@@ -24,6 +24,7 @@ include_rules = [
   "+components/background_task_scheduler/android/java",
   "+components/bookmarks/common/android/java/src/org/chromium/components/bookmarks",
   "+components/browser_ui/accessibility/android",
+  "+components/browser_ui/device_lock/android",
   "+components/browser_ui/notifications/android",
   "+components/browser_ui/settings/android",
   "+components/browser_ui/sms/android",
@@ -45,6 +46,7 @@ include_rules = [
   "+components/paint_preview/browser/android",
   "+components/paint_preview/player/android",
   "+components/payments/content/android/java/src/org/chromium/components/payments",
+  "+components/payments/content/android/junit/src/org/chromium/components/payments/test_support",
   "+components/permissions/android/java/src/org/chromium/components/permissions",
   "+components/safe_browsing/android/java/src/org/chromium/components/safe_browsing",
   "+components/search_engines",
@@ -52,6 +54,7 @@ include_rules = [
   "+components/sync/android/java/src/org/chromium/components/sync",
   "+components/sync/test",
   "+components/webauthn/android/java",
+  "+components/webxr/android",
 
   "-content/public/android/java",
   "+content/public/android/java/src/org/chromium/content_public",
@@ -75,7 +78,7 @@ specific_include_rules = {
   "AuthenticatorTest\.java": [
     "+content/public/android/java/src/org/chromium/content_public/common/ContentSwitches.java",
   ],
-  "Fido2ApiTestHelper.java": [
+  "Fido2CredentialRequestTest.java": [
     "+content/public/android/java/src/org/chromium/content/browser/ClientDataJsonImpl.java",
   ],
   "PageInfoPopupTest\.java": [

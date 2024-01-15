@@ -10,6 +10,7 @@
 #include "ash/public/cpp/shelf_item_delegate.h"
 #include "ash/public/cpp/shelf_model_observer.h"
 #include "ash/public/cpp/shelf_types.h"
+#include "base/strings/string_util.h"
 
 namespace ash {
 
@@ -59,15 +60,13 @@ void ShelfModel::AddAndPinAppWithFactoryConstructedDelegate(
     const std::string& app_id) {
   DCHECK_LT(ItemIndexByAppID(app_id), 0);
 
-  ShelfItem item;
-  std::unique_ptr<ShelfItemDelegate> delegate;
-  bool result =
-      shelf_item_factory_->CreateShelfItemForAppId(app_id, &item, &delegate);
-  if (!result)
-    return;
+  std::unique_ptr<ShelfItemDelegate> delegate =
+      shelf_item_factory_->CreateShelfItemDelegateForAppId(app_id);
+  std::unique_ptr<ShelfItem> item = shelf_item_factory_->CreateShelfItemForApp(
+      ash::ShelfID(app_id), STATUS_CLOSED, TYPE_PINNED_APP,
+      /*title=*/base::EmptyString16());
 
-  item.type = TYPE_PINNED_APP;
-  Add(item, std::move(delegate));
+  Add(*item, std::move(delegate));
 }
 
 void ShelfModel::PinExistingItemWithID(const std::string& app_id) {
@@ -79,7 +78,7 @@ void ShelfModel::PinExistingItemWithID(const std::string& app_id) {
 
   ShelfItem item = items_[index];
   DCHECK_EQ(item.type, TYPE_APP);
-  DCHECK(!item.pinned_by_policy);
+  DCHECK(!item.IsPinStateForced());
   item.type = TYPE_PINNED_APP;
   Set(index, item);
 }
@@ -288,12 +287,6 @@ void ShelfModel::OnItemRippedOff() {
 void ShelfModel::OnItemReturnedFromRipOff(int index) {
   for (auto& observer : observers_)
     observer.ShelfItemReturnedFromRipOff(index);
-}
-
-void ShelfModel::ToggleShelfParty() {
-  in_shelf_party_ = !in_shelf_party_;
-  for (auto& observer : observers_)
-    observer.ShelfPartyToggled(in_shelf_party_);
 }
 
 int ShelfModel::ItemIndexByID(const ShelfID& shelf_id) const {

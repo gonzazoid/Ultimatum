@@ -7,9 +7,13 @@
 
 #include <memory>
 
+#include "base/profiler/native_unwinder_android_memory_regions_map.h"
 #include "base/profiler/unwinder.h"
 #include "chrome/android/features/stack_unwinder/public/function_types.h"
-#include "chrome/android/features/stack_unwinder/public/memory_regions_map.h"
+
+namespace base {
+class NativeUnwinderAndroidMapDelegate;
+}  // namespace base
 
 namespace stack_unwinder {
 
@@ -31,12 +35,14 @@ class Module {
 
   // Returns a map representing the current memory regions (modules, stacks,
   // etc.).
-  std::unique_ptr<MemoryRegionsMap> CreateMemoryRegionsMap();
+  std::unique_ptr<base::NativeUnwinderAndroidMemoryRegionsMap>
+  CreateMemoryRegionsMap();
 
   // Creates a new native stack unwinder.
   std::unique_ptr<base::Unwinder> CreateNativeUnwinder(
-      MemoryRegionsMap* memory_regions_map,
-      uintptr_t exclude_module_with_base_address);
+      base::NativeUnwinderAndroidMapDelegate* map_delegate,
+      uintptr_t exclude_module_with_base_address,
+      bool is_java_name_hashing_enabled);
 
   // Creates an unwinder that will use libunwindstack::Unwinder exclusively, it
   // does not do partial unwinds instead either succeeding or failing the whole

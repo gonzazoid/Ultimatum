@@ -10,7 +10,6 @@
 
 #include "base/android/jni_android.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/observer_list_threadsafe.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/thread_checker.h"
@@ -216,9 +215,6 @@ class NET_EXPORT_PRIVATE NetworkChangeNotifierDelegateAndroid {
   // network-specific callbacks will not be issued.
   const bool register_network_callback_failed_;
   base::android::ScopedJavaGlobalRef<jobject> java_network_active_notifier_;
-  // True if DefaultNetworkActive type of info are not supported, indicating
-  // that we shouldn't try to enable its callback or query its status.
-  const bool is_default_network_active_api_supported_;
 
   mutable base::Lock connection_lock_;  // Protects the state below.
   ConnectionType connection_type_;

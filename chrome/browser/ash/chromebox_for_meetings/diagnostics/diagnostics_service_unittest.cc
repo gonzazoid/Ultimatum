@@ -5,16 +5,18 @@
 #include "chrome/browser/ash/chromebox_for_meetings/diagnostics/diagnostics_service.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/bind.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
 #include "chromeos/ash/components/dbus/chromebox_for_meetings/fake_cfm_hotline_client.h"
+#include "chromeos/ash/components/mojo_service_manager/fake_mojo_service_manager.h"
 #include "chromeos/ash/services/chromebox_for_meetings/public/cpp/fake_service_connection.h"
 #include "chromeos/ash/services/chromebox_for_meetings/public/cpp/fake_service_context.h"
 #include "chromeos/ash/services/chromebox_for_meetings/public/cpp/service_connection.h"
@@ -28,7 +30,6 @@
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash::cfm {
 namespace {
@@ -109,6 +110,7 @@ class CfmDiagnosticsServiceTest : public ::testing::Test {
   mojo::Remote<mojom::CfmServiceAdaptor> adaptor_remote_;
   FakeServiceConnectionImpl fake_service_connection_;
   base::test::SingleThreadTaskEnvironment task_environment_;
+  ::ash::mojo_service_manager::FakeMojoServiceManager fake_service_manager_;
 };
 
 // This test ensures that the DiagnosticsInfoService is discoverable by its

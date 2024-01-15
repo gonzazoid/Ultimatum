@@ -3,21 +3,31 @@
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/page_info/permission_toggle_row_view.h"
+#include <string>
+#include <string_view>
 
 #include "base/observer_list.h"
+#include "base/strings/string_util.h"
+#include "base/strings/utf_string_conversions.h"
 #include "chrome/app/vector_icons/vector_icons.h"
+#include "chrome/browser/file_system_access/file_system_access_features.h"
 #include "chrome/browser/ui/layout_constants.h"
 #include "chrome/browser/ui/page_info/chrome_page_info_ui_delegate.h"
 #include "chrome/browser/ui/views/accessibility/non_accessible_image_view.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/page_info/page_info_navigation_handler.h"
-#include "chrome/browser/ui/views/page_info/page_info_row_view.h"
 #include "chrome/browser/ui/views/page_info/page_info_view_factory.h"
+#include "components/content_settings/core/common/content_settings_types.h"
+#include "components/page_info/page_info.h"
 #include "components/permissions/features.h"
 #include "components/permissions/permission_util.h"
 #include "components/strings/grit/components_strings.h"
+#include "components/url_formatter/elide_url.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/ui_base_features.h"
+#include "ui/strings/grit/ui_strings.h"
 #include "ui/views/controls/button/image_button.h"
 #include "ui/views/controls/button/image_button_factory.h"
 #include "ui/views/controls/button/toggle_button.h"
@@ -34,14 +44,37 @@ PermissionToggleRowView::PermissionToggleRowView(
     : permission_(permission),
       delegate_(delegate),
       navigation_handler_(navigation_handler) {
+  // TODO(crbug.com/1446230): Directly subclass `RichControlsContainerView`
+  // instead of adding it as the only child.
   SetUseDefaultFillLayout(true);
-  row_view_ = AddChildView(std::make_unique<PageInfoRowView>());
-  row_view_->SetTitle(PageInfoUI::PermissionTypeToUIString(permission.type));
+  row_view_ = AddChildView(std::make_unique<RichControlsContainerView>());
+
+  std::u16string toggle_accessible_name =
+      PageInfoUI::PermissionTypeToUIString(permission.type);
+  row_view_->SetTitle(toggle_accessible_name);
 
   // Add extra details as sublabel.
   std::u16string detail = delegate->GetPermissionDetail(permission.type);
   if (!detail.empty())
     row_view_->AddSecondaryLabel(detail);
+
+  if (permission.requesting_origin.has_value()) {
+    std::u16string requesting_origin_string;
+    switch (permission.type) {
+      case ContentSettingsType::STORAGE_ACCESS:
+        requesting_origin_string =
+            url_formatter::FormatOriginForSecurityDisplay(
+                *permission.requesting_origin,
+                url_formatter::SchemeDisplay::OMIT_CRYPTOGRAPHIC);
+        break;
+      default:
+        NOTREACHED();
+    }
+    row_view_->AddSecondaryLabel(requesting_origin_string);
+    toggle_accessible_name = l10n_util::GetStringFUTF16(
+        IDS_CONCAT_TWO_STRINGS_WITH_COMMA, toggle_accessible_name,
+        requesting_origin_string);
+  }
 
   if (permission.source == content_settings::SETTING_SOURCE_USER) {
     // If permission is not allowed because of security reasons, show a label
@@ -53,16 +86,17 @@ PermissionToggleRowView::PermissionToggleRowView(
           delegate->GetAutomaticallyBlockedReason(permission_.type),
           views::style::CONTEXT_LABEL, views::style::STYLE_SECONDARY));
     } else {
-      InitForUserSource(should_show_spacer_view);
+      InitForUserSource(should_show_spacer_view, toggle_accessible_name);
     }
   } else {
     InitForManagedSource(delegate);
   }
-  // Set flex rule, defined in `PageInfoRowView`, to wrap the subtitle text but
-  // size the parent view to match the content.
-  SetProperty(views::kFlexBehaviorKey,
-              views::FlexSpecification(base::BindRepeating(
-                  &PageInfoRowView::FlexRule, base::Unretained(row_view_))));
+  // Set flex rule, defined in `RichControlsContainerView`, to wrap the subtitle
+  // text but size the parent view to match the content.
+  SetProperty(
+      views::kFlexBehaviorKey,
+      views::FlexSpecification(base::BindRepeating(
+          &RichControlsContainerView::FlexRule, base::Unretained(row_view_))));
   UpdateUiOnPermissionChanged();
 }
 
@@ -86,7 +120,9 @@ void PermissionToggleRowView::OnToggleButtonPressed() {
   PermissionChanged();
 }
 
-void PermissionToggleRowView::InitForUserSource(bool should_show_spacer_view) {
+void PermissionToggleRowView::InitForUserSource(
+    bool should_show_spacer_view,
+    const std::u16string& toggle_accessible_name) {
   const int icon_label_spacing = ChromeLayoutProvider::Get()->GetDistanceMetric(
       views::DISTANCE_RELATED_LABEL_HORIZONTAL);
 
@@ -100,13 +136,34 @@ void PermissionToggleRowView::InitForUserSource(bool should_show_spacer_view) {
                 row_view_->GetFirstLineHeight()));
   toggle_button->SetProperty(views::kMarginsKey,
                              gfx::Insets::VH(0, icon_label_spacing));
-  toggle_button->SetAccessibleName(l10n_util::GetStringFUTF16(
-      IDS_PAGE_INFO_SELECTOR_TOOLTIP,
-      PageInfoUI::PermissionTypeToUIString(permission_.type)));
+  toggle_button->SetTooltipText(PageInfoUI::PermissionTooltipUiString(
+      permission_.type, permission_.requesting_origin));
+  toggle_button->SetAccessibleName(toggle_accessible_name);
 
   toggle_button_ = row_view_->AddControl(std::move(toggle_button));
 
   const int icon_size = GetLayoutConstant(PAGE_INFO_ICON_SIZE);
+  // TODO(crbug.com/1011533): Remove separate handling of
+  // `FILE_SYSTEM_WRITE_GUARD` when implementing the final version of the
+  // FSA Persistent Permissions Page Info UI, which utilizes the existing
+  // pattern below for One Time Permissions.
+  if (base::FeatureList::IsEnabled(
+          features::kFileSystemAccessPersistentPermissions) &&
+      permission_.type == ContentSettingsType::FILE_SYSTEM_WRITE_GUARD) {
+    auto subpage_button = views::CreateVectorImageButtonWithNativeTheme(
+        base::BindRepeating(
+            [](PermissionToggleRowView* row) {
+              row->delegate_->OpenSiteSettingsFileSystem();
+            },
+            base::Unretained(this)),
+        vector_icons::kLaunchIcon);
+    subpage_button->SetTooltipText(l10n_util::GetStringUTF16(
+        IDS_PAGE_INFO_PERMISSIONS_SUBPAGE_BUTTON_TOOLTIP));
+    views::InstallCircleHighlightPathGenerator(subpage_button.get());
+    subpage_button->SetMinimumImageSize({icon_size, icon_size});
+    subpage_button->SetFlipCanvasOnPaintForRTLUI(false);
+    row_view_->AddControl(std::move(subpage_button));
+  }
   if (permissions::PermissionUtil::CanPermissionBeAllowedOnce(
           permission_.type)) {
     auto subpage_button = views::CreateVectorImageButtonWithNativeTheme(
@@ -144,6 +201,10 @@ void PermissionToggleRowView::InitForManagedSource(
   auto state_label = std::make_unique<views::Label>(
       PageInfoUI::PermissionStateToUIString(delegate, permission_),
       views::style::CONTEXT_LABEL, views::style::STYLE_SECONDARY);
+  if (features::IsChromeRefresh2023()) {
+    state_label->SetTextStyle(views::style::STYLE_BODY_5);
+    state_label->SetEnabledColorId(ui::kColorLabelForegroundSecondary);
+  }
   state_label->SetProperty(views::kMarginsKey,
                            gfx::Insets::VH(0, icon_label_spacing));
   row_view_->AddControl(std::move(state_label));
@@ -163,7 +224,7 @@ void PermissionToggleRowView::UpdateUiOnPermissionChanged() {
 
   // Update toggle state if it is used.
   if (toggle_button_) {
-    toggle_button_->SetIsOn(PageInfoUI::IsToggleOn(permission_));
+    toggle_button_->AnimateIsOn(PageInfoUI::IsToggleOn(permission_));
   }
 
   // Reset |state_label_|, readd it after if needed.
@@ -191,3 +252,10 @@ void PermissionToggleRowView::ResetPermission() {
   permission_.is_one_time = false;
   PermissionChanged();
 }
+
+bool PermissionToggleRowView::GetToggleButtonStateForTesting() const {
+  return toggle_button_->GetIsOn();
+}
+
+BEGIN_METADATA(PermissionToggleRowView)
+END_METADATA

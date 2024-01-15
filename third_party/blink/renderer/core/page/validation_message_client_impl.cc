@@ -57,7 +57,7 @@ LocalFrameView* ValidationMessageClientImpl::CurrentView() {
 }
 
 void ValidationMessageClientImpl::ShowValidationMessage(
-    const Element& anchor,
+    Element& anchor,
     const String& original_message,
     TextDirection message_dir,
     const String& sub_message,
@@ -83,12 +83,6 @@ void ValidationMessageClientImpl::ShowValidationMessage(
   current_anchor_ = &anchor;
   message_ = message;
   page_->GetChromeClient().RegisterPopupOpeningObserver(this);
-  constexpr auto kMinimumTimeToShowValidationMessage = base::Seconds(5);
-  constexpr auto kTimePerCharacter = base::Milliseconds(50);
-  finish_time_ =
-      base::TimeTicks::Now() +
-      std::max(kMinimumTimeToShowValidationMessage,
-               (message.length() + sub_message.length()) * kTimePerCharacter);
 
   auto* target_frame = DynamicTo<LocalFrame>(page_->MainFrame());
   if (!target_frame)
@@ -143,7 +137,7 @@ void ValidationMessageClientImpl::HideValidationMessageImmediately(
 }
 
 void ValidationMessageClientImpl::Reset(TimerBase*) {
-  const Element& anchor = *current_anchor_;
+  Element& anchor = *current_anchor_;
 
   // Clearing out the pointer does not stop the timer.
   if (timer_)
@@ -151,7 +145,6 @@ void ValidationMessageClientImpl::Reset(TimerBase*) {
   timer_ = nullptr;
   current_anchor_ = nullptr;
   message_ = String();
-  finish_time_ = base::TimeTicks();
   if (overlay_)
     overlay_.Release()->Destroy();
   overlay_delegate_ = nullptr;
@@ -160,7 +153,7 @@ void ValidationMessageClientImpl::Reset(TimerBase*) {
 }
 
 void ValidationMessageClientImpl::ValidationMessageVisibilityChanged(
-    const Element& element) {
+    Element& element) {
   Document& document = element.GetDocument();
   if (AXObjectCache* cache = document.ExistingAXObjectCache())
     cache->HandleValidationMessageVisibilityChanged(&element);
@@ -183,9 +176,7 @@ void ValidationMessageClientImpl::DidChangeFocusTo(const Element* new_element) {
 
 void ValidationMessageClientImpl::CheckAnchorStatus(TimerBase*) {
   DCHECK(current_anchor_);
-  if ((!WebTestSupport::IsRunningWebTest() &&
-       base::TimeTicks::Now() >= finish_time_) ||
-      !CurrentView()) {
+  if (!CurrentView()) {
     HideValidationMessage(*current_anchor_);
     return;
   }

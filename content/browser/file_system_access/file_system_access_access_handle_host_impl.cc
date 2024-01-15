@@ -4,17 +4,19 @@
 
 #include "content/browser/file_system_access/file_system_access_access_handle_host_impl.h"
 
-#include "base/callback_helpers.h"
+#include "base/feature_list.h"
+#include "base/functional/callback_helpers.h"
 #include "content/browser/file_system_access/file_system_access_capacity_allocation_host_impl.h"
 #include "content/browser/file_system_access/file_system_access_file_delegate_host_impl.h"
 #include "storage/browser/file_system/file_system_context.h"
+#include "third_party/blink/public/common/features_generated.h"
 
 namespace content {
 
 FileSystemAccessAccessHandleHostImpl::FileSystemAccessAccessHandleHostImpl(
     FileSystemAccessManagerImpl* manager,
     const storage::FileSystemURL& url,
-    scoped_refptr<FileSystemAccessWriteLockManager::WriteLock> lock,
+    scoped_refptr<FileSystemAccessLockManager::LockHandle> lock,
     base::PassKey<FileSystemAccessManagerImpl> /*pass_key*/,
     mojo::PendingReceiver<blink::mojom::FileSystemAccessAccessHandleHost>
         receiver,
@@ -25,13 +27,14 @@ FileSystemAccessAccessHandleHostImpl::FileSystemAccessAccessHandleHostImpl(
     int64_t file_size,
     base::ScopedClosureRunner on_close_callback)
     : manager_(manager),
-      lock_(std::move(lock)),
       receiver_(this, std::move(receiver)),
       url_(url),
-      on_close_callback_(std::move(on_close_callback)) {
+      on_close_callback_(std::move(on_close_callback)),
+      lock_(std::move(lock)) {
   DCHECK(manager_);
-  DCHECK_EQ(lock_->type(),
-            FileSystemAccessWriteLockManager::WriteLockType::kExclusive);
+  CHECK(lock_->IsExclusive() ||
+        base::FeatureList::IsEnabled(
+            blink::features::kFileSystemAccessLockingScheme));
 
   DCHECK(manager_->context()->is_incognito() ==
          file_delegate_receiver.is_valid());
@@ -64,7 +67,10 @@ FileSystemAccessAccessHandleHostImpl::~FileSystemAccessAccessHandleHostImpl() =
 
 void FileSystemAccessAccessHandleHostImpl::Close(CloseCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(!close_callback_);
+  if (close_callback_) {
+    receiver_.ReportBadMessage("Close already called on SyncAccessHandle.");
+    return;
+  }
 
   // Run `callback` when this instance is destroyed, after capacity allocation
   // has been released.
@@ -76,6 +82,12 @@ void FileSystemAccessAccessHandleHostImpl::Close(CloseCallback callback) {
 
 void FileSystemAccessAccessHandleHostImpl::OnDisconnect() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (close_callback_) {
+    // A call has already been made to
+    // `FileSystemAccessManagerImpl::RemoveAccessHandleHost`.
+    return;
+  }
 
   // No need to reset `receiver_` after it disconnected.
   // Removes `this`.

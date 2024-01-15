@@ -7,18 +7,16 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/file_system_provider/fake_provided_file_system.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_info.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 namespace {
 
 class TestingProvidedFileSystem : public FakeProvidedFileSystem {
@@ -26,7 +24,7 @@ class TestingProvidedFileSystem : public FakeProvidedFileSystem {
   TestingProvidedFileSystem()
       : FakeProvidedFileSystem(ProvidedFileSystemInfo()) {}
 
-  ~TestingProvidedFileSystem() override {}
+  ~TestingProvidedFileSystem() override = default;
 
   AbortCallback OpenFile(const base::FilePath& file_path,
                          OpenFileMode mode,
@@ -131,5 +129,4 @@ TEST(ScopedFileOpenerTest, CloseAfterAborting) {
   EXPECT_EQ(0u, file_system.close_requests().size());
 }
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider

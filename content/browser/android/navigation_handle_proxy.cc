@@ -41,7 +41,7 @@ void NavigationHandleProxy::DidStart() {
       cpp_navigation_handle_->IsSameDocument(),
       cpp_navigation_handle_->IsRendererInitiated(),
       cpp_navigation_handle_->GetInitiatorOrigin()
-          ? cpp_navigation_handle_->GetInitiatorOrigin()->CreateJavaObject()
+          ? cpp_navigation_handle_->GetInitiatorOrigin()->ToJavaObject()
           : nullptr,
       cpp_navigation_handle_->GetPageTransition(),
       cpp_navigation_handle_->IsPost(),
@@ -76,12 +76,9 @@ void NavigationHandleProxy::DidFinish() {
   if (is_primary_main_frame_fragment_navigation &&
       cpp_navigation_handle_->HasCommitted()) {
     // See http://crbug.com/251330 for why it's determined this way.
-    GURL::Replacements replacements;
-    replacements.ClearRef();
     bool urls_same_ignoring_fragment =
-        cpp_navigation_handle_->GetURL().ReplaceComponents(replacements) ==
-        cpp_navigation_handle_->GetPreviousPrimaryMainFrameURL()
-            .ReplaceComponents(replacements);
+        cpp_navigation_handle_->GetURL().EqualsIgnoringRef(
+            cpp_navigation_handle_->GetPreviousPrimaryMainFrameURL());
     is_primary_main_frame_fragment_navigation = urls_same_ignoring_fragment;
   }
 

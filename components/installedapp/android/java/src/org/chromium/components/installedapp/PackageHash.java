@@ -8,16 +8,16 @@ import android.util.SparseArray;
 
 import androidx.annotation.VisibleForTesting;
 
+import org.jni_zero.CalledByNative;
+
 import org.chromium.base.ApiCompatibilityUtils;
-import org.chromium.base.ByteArrayGenerator;
-import org.chromium.base.annotations.CalledByNative;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.content_public.browser.BrowserContextHandle;
 
-import java.io.IOException;
-import java.security.GeneralSecurityException;
 import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -44,38 +44,31 @@ class PackageHash {
     // This map stores salts that have been calculated for different browser sessions (i.e. Browser
     // Contexts). A SparseArray is used instead of a HashMap to avoid holding a reference to the key
     // object.
-    private static SparseArray<byte[]> sSaltMap;
+    private static final SparseArray<byte[]> sSaltMap = new SparseArray<byte[]>();
 
     private static byte[] sGlobalSaltForTesting;
 
     @VisibleForTesting
     static byte[] getSaltBytes(BrowserContextHandle browserContext) {
         if (sGlobalSaltForTesting != null) return sGlobalSaltForTesting;
+        SparseArray<byte[]> saltMap = sSaltMap;
+        synchronized (saltMap) {
+            byte[] salt = saltMap.get(browserContext.hashCode());
+            if (salt != null) return salt;
 
-        if (sSaltMap == null) {
-            sSaltMap = new SparseArray<byte[]>();
+            salt = new byte[20];
+            new SecureRandom().nextBytes(salt);
+            saltMap.put(browserContext.hashCode(), salt);
+            return salt;
         }
-
-        byte[] salt = sSaltMap.get(browserContext.hashCode());
-        if (salt != null) return salt;
-
-        try {
-            salt = new ByteArrayGenerator().getBytes(20);
-        } catch (IOException | GeneralSecurityException e) {
-            // If this happens, the crypto source is messed up and we want the browser to crash.
-            throw new RuntimeException(e);
-        }
-        sSaltMap.put(browserContext.hashCode(), salt);
-        return salt;
     }
 
     static void setGlobalSaltForTesting(byte[] salt) {
         sGlobalSaltForTesting = salt;
+        ResettersForTesting.register(() -> sGlobalSaltForTesting = null);
     }
 
-    /**
-     * Returns a SHA-256 hash of the package name, truncated to a 16-bit integer.
-     */
+    /** Returns a SHA-256 hash of the package name, truncated to a 16-bit integer. */
     static short hashForPackage(String packageName, BrowserContextHandle browserContext) {
         byte[] salt = getSaltBytes(browserContext);
         Mac hasher;
@@ -103,8 +96,9 @@ class PackageHash {
 
     @CalledByNative
     public static void onCookiesDeleted(BrowserContextHandle browserContext) {
-        if (sSaltMap != null) {
-            sSaltMap.delete(browserContext.hashCode());
+        SparseArray<byte[]> saltMap = sSaltMap;
+        synchronized (saltMap) {
+            saltMap.delete(browserContext.hashCode());
         }
     }
 }

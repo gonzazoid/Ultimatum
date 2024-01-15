@@ -11,8 +11,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
@@ -25,12 +25,9 @@
 #include "media/cast/common/sender_encoded_frame.h"
 #include "media/cast/constants.h"
 #include "third_party/openscreen/src/cast/streaming/encoded_frame.h"
-
-#if !BUILDFLAG(IS_IOS)
 #include "third_party/opus/src/include/opus.h"
-#endif
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
 #include <AudioToolbox/AudioToolbox.h>
 #endif
 
@@ -147,13 +144,18 @@ class AudioEncoder::ImplBase
       if (buffer_fill_end_ < samples_per_frame_)
         break;
 
-      std::unique_ptr<SenderEncodedFrame> audio_frame(new SenderEncodedFrame());
+      auto audio_frame = std::make_unique<SenderEncodedFrame>();
       audio_frame->dependency =
           openscreen::cast::EncodedFrame::Dependency::kKeyFrame;
       audio_frame->frame_id = frame_id_;
       audio_frame->referenced_frame_id = frame_id_;
       audio_frame->rtp_timestamp = frame_rtp_timestamp_;
       audio_frame->reference_time = frame_capture_time_;
+
+      // TODO(https://crbug.com/1478375): get accurate timestamps for both
+      // capture begin and capture end.
+      audio_frame->capture_begin_time = frame_capture_time_;
+      audio_frame->capture_end_time = frame_capture_time_;
 
       TRACE_EVENT_NESTABLE_ASYNC_BEGIN2(
           "cast.stream", "Audio Encode", TRACE_ID_LOCAL(audio_frame.get()),
@@ -237,7 +239,6 @@ class AudioEncoder::ImplBase
   int samples_dropped_from_buffer_;
 };
 
-#if !BUILDFLAG(IS_IOS)
 class AudioEncoder::OpusImpl final : public AudioEncoder::ImplBase {
  public:
   OpusImpl(const scoped_refptr<CastEnvironment>& cast_environment,
@@ -246,7 +247,7 @@ class AudioEncoder::OpusImpl final : public AudioEncoder::ImplBase {
            int bitrate,
            FrameEncodedCallback callback)
       : ImplBase(cast_environment,
-                 CODEC_AUDIO_OPUS,
+                 Codec::kAudioOpus,
                  num_channels,
                  sampling_rate,
                  sampling_rate / kDefaultFramesPerSecond, /* 10 ms frames */
@@ -341,9 +342,8 @@ class AudioEncoder::OpusImpl final : public AudioEncoder::ImplBase {
   // perfectly capable of transporting larger than MTU-sized audio frames.
   static const int kOpusMaxPayloadSize = 4000;
 };
-#endif
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
 class AudioEncoder::AppleAacImpl final : public AudioEncoder::ImplBase {
   // AAC-LC has two access unit sizes (960 and 1024). The Apple encoder only
   // supports the latter.
@@ -360,7 +360,7 @@ class AudioEncoder::AppleAacImpl final : public AudioEncoder::ImplBase {
                int bitrate,
                FrameEncodedCallback callback)
       : ImplBase(cast_environment,
-                 CODEC_AUDIO_AAC,
+                 Codec::kAudioAac,
                  num_channels,
                  sampling_rate,
                  kAccessUnitSamples,
@@ -625,8 +625,7 @@ class AudioEncoder::AppleAacImpl final : public AudioEncoder::ImplBase {
                                    void* in_buffer,
                                    UInt32* out_size) {
     // This class only does writing.
-    NOTREACHED();
-    return kAudioFileNotOpenError;
+    NOTREACHED_NORETURN();
   }
 
   // The AudioFile write callback function. Appends the data to the encoder's
@@ -652,8 +651,7 @@ class AudioEncoder::AppleAacImpl final : public AudioEncoder::ImplBase {
   // The AudioFile getsize callback function.
   static SInt64 FileGetSizeCallback(void* in_encoder) {
     // This class only does writing.
-    NOTREACHED();
-    return 0;
+    NOTREACHED_NORETURN();
   }
 
   // The AudioFile setsize callback function.
@@ -697,7 +695,7 @@ class AudioEncoder::AppleAacImpl final : public AudioEncoder::ImplBase {
   // The number of access units emitted so far by the encoder.
   uint64_t num_access_units_;
 };
-#endif  // BUILDFLAG(IS_MAC)
+#endif  // BUILDFLAG(IS_APPLE)
 
 class AudioEncoder::Pcm16Impl final : public AudioEncoder::ImplBase {
  public:
@@ -706,7 +704,7 @@ class AudioEncoder::Pcm16Impl final : public AudioEncoder::ImplBase {
             int sampling_rate,
             FrameEncodedCallback callback)
       : ImplBase(cast_environment,
-                 CODEC_AUDIO_PCM16,
+                 Codec::kAudioPcm16,
                  num_channels,
                  sampling_rate,
                  sampling_rate / kDefaultFramesPerSecond, /* 10 ms frames */
@@ -761,19 +759,17 @@ AudioEncoder::AudioEncoder(
   // as all calls to InsertAudio() are by the same thread.
   DETACH_FROM_THREAD(insert_thread_checker_);
   switch (codec) {
-#if !BUILDFLAG(IS_IOS)
-    case CODEC_AUDIO_OPUS:
+    case Codec::kAudioOpus:
       impl_ = new OpusImpl(cast_environment, num_channels, sampling_rate,
                            bitrate, std::move(frame_encoded_callback));
       break;
-#endif
-#if BUILDFLAG(IS_MAC)
-    case CODEC_AUDIO_AAC:
+#if BUILDFLAG(IS_APPLE)
+    case Codec::kAudioAac:
       impl_ = new AppleAacImpl(cast_environment, num_channels, sampling_rate,
                                bitrate, std::move(frame_encoded_callback));
       break;
 #endif  // BUILDFLAG(IS_MAC)
-    case CODEC_AUDIO_PCM16:
+    case Codec::kAudioPcm16:
       impl_ = new Pcm16Impl(cast_environment, num_channels, sampling_rate,
                             std::move(frame_encoded_callback));
       break;
@@ -795,19 +791,13 @@ OperationalStatus AudioEncoder::InitializationResult() const {
 
 int AudioEncoder::GetSamplesPerFrame() const {
   DCHECK_CALLED_ON_VALID_THREAD(insert_thread_checker_);
-  if (InitializationResult() != STATUS_INITIALIZED) {
-    NOTREACHED();
-    return std::numeric_limits<int>::max();
-  }
+  CHECK_EQ(InitializationResult(), STATUS_INITIALIZED);
   return impl_->samples_per_frame();
 }
 
 base::TimeDelta AudioEncoder::GetFrameDuration() const {
   DCHECK_CALLED_ON_VALID_THREAD(insert_thread_checker_);
-  if (InitializationResult() != STATUS_INITIALIZED) {
-    NOTREACHED();
-    return base::TimeDelta();
-  }
+  CHECK_EQ(InitializationResult(), STATUS_INITIALIZED);
   return impl_->frame_duration();
 }
 
@@ -823,10 +813,7 @@ void AudioEncoder::InsertAudio(std::unique_ptr<AudioBus> audio_bus,
                                const base::TimeTicks recorded_time) {
   DCHECK_CALLED_ON_VALID_THREAD(insert_thread_checker_);
   DCHECK(audio_bus.get());
-  if (InitializationResult() != STATUS_INITIALIZED) {
-    NOTREACHED();
-    return;
-  }
+  CHECK_EQ(InitializationResult(), STATUS_INITIALIZED);
   cast_environment_->PostTask(
       CastEnvironment::AUDIO, FROM_HERE,
       base::BindOnce(&AudioEncoder::ImplBase::EncodeAudio, impl_,

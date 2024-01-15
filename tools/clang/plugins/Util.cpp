@@ -4,6 +4,8 @@
 
 #include "Util.h"
 
+#include <algorithm>
+
 #include "clang/AST/Decl.h"
 #include "clang/Basic/SourceManager.h"
 #include "llvm/Support/Casting.h"
@@ -37,9 +39,8 @@ std::string GetNamespace(const clang::Decl* record) {
   return GetNamespaceImpl(record->getDeclContext(), std::string());
 }
 
-std::string GetFilename(clang::CompilerInstance& instance,
+std::string GetFilename(const clang::SourceManager& source_manager,
                         clang::SourceLocation location) {
-  const clang::SourceManager& source_manager = instance.getSourceManager();
   clang::SourceLocation spelling_location =
       source_manager.getSpellingLoc(location);
   clang::PresumedLoc ploc = source_manager.getPresumedLoc(spelling_location);
@@ -49,5 +50,10 @@ std::string GetFilename(clang::CompilerInstance& instance,
     return "";
   }
 
-  return ploc.getFilename();
+  std::string name = ploc.getFilename();
+
+  // File paths can have separators which differ from ones at this platform.
+  // Make them consistent.
+  std::replace(name.begin(), name.end(), '\\', '/');
+  return name;
 }

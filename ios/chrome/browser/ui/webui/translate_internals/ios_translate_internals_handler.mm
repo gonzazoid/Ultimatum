@@ -5,20 +5,16 @@
 #import "ios/chrome/browser/ui/webui/translate_internals/ios_translate_internals_handler.h"
 
 #import "components/translate/core/common/language_detection_details.h"
-#import "ios/chrome/browser/application_context/application_context.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/main/all_web_state_list_observation_registrar.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/main/browser_list.h"
-#import "ios/chrome/browser/main/browser_list_factory.h"
-#import "ios/chrome/browser/translate/chrome_ios_translate_client.h"
-#import "ios/chrome/browser/translate/translate_service_ios.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser/all_web_state_list_observation_registrar.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser/browser_list.h"
+#import "ios/chrome/browser/shared/model/browser/browser_list_factory.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/translate/model/chrome_ios_translate_client.h"
+#import "ios/chrome/browser/translate/model/translate_service_ios.h"
 #import "ios/web/public/webui/web_ui_ios.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 IOSTranslateInternalsHandler::IOSTranslateInternalsHandler() = default;
 IOSTranslateInternalsHandler::~IOSTranslateInternalsHandler() = default;
@@ -68,7 +64,7 @@ void IOSTranslateInternalsHandler::RegisterMessages() {
           ? AllWebStateListObservationRegistrar::Mode::INCOGNITO
           : AllWebStateListObservationRegistrar::Mode::REGULAR;
   registrar_ = std::make_unique<AllWebStateListObservationRegistrar>(
-      chrome_browser_state, std::make_unique<Observer>(this), mode);
+      browser_list, std::make_unique<Observer>(this), mode);
 
   RegisterMessageCallbacks();
 }
@@ -110,26 +106,41 @@ IOSTranslateInternalsHandler::Observer::Observer(
     : handler_(handler) {}
 IOSTranslateInternalsHandler::Observer::~Observer() {}
 
-void IOSTranslateInternalsHandler::Observer::WebStateInsertedAt(
-    WebStateList* web_state_list,
-    web::WebState* web_state,
-    int index,
-    bool activating) {
-  handler_->AddLanguageDetectionObserverForWebState(web_state);
-}
+#pragma mark - WebStateListObserver
 
-void IOSTranslateInternalsHandler::Observer::WebStateReplacedAt(
+void IOSTranslateInternalsHandler::Observer::WebStateListDidChange(
     WebStateList* web_state_list,
-    web::WebState* old_web_state,
-    web::WebState* new_web_state,
-    int index) {
-  handler_->RemoveLanguageDetectionObserverForWebState(old_web_state);
-  handler_->AddLanguageDetectionObserverForWebState(new_web_state);
-}
-
-void IOSTranslateInternalsHandler::Observer::WebStateDetachedAt(
-    WebStateList* web_state_list,
-    web::WebState* web_state,
-    int index) {
-  handler_->RemoveLanguageDetectionObserverForWebState(web_state);
+    const WebStateListChange& change,
+    const WebStateListStatus& status) {
+  switch (change.type()) {
+    case WebStateListChange::Type::kStatusOnly:
+      // Do nothing when a WebState is selected and its status is updated.
+      break;
+    case WebStateListChange::Type::kDetach: {
+      const WebStateListChangeDetach& detach_change =
+          change.As<WebStateListChangeDetach>();
+      handler_->RemoveLanguageDetectionObserverForWebState(
+          detach_change.detached_web_state());
+      break;
+    }
+    case WebStateListChange::Type::kMove:
+      // Do nothing when a WebState is moved.
+      break;
+    case WebStateListChange::Type::kReplace: {
+      const WebStateListChangeReplace& replace_change =
+          change.As<WebStateListChangeReplace>();
+      handler_->RemoveLanguageDetectionObserverForWebState(
+          replace_change.replaced_web_state());
+      handler_->AddLanguageDetectionObserverForWebState(
+          replace_change.inserted_web_state());
+      break;
+    }
+    case WebStateListChange::Type::kInsert: {
+      const WebStateListChangeInsert& insert_change =
+          change.As<WebStateListChangeInsert>();
+      handler_->AddLanguageDetectionObserverForWebState(
+          insert_change.inserted_web_state());
+      break;
+    }
+  }
 }

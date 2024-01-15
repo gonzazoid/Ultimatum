@@ -5,8 +5,6 @@
 #ifndef ASH_PUBLIC_CPP_APP_LIST_APP_LIST_FEATURES_H_
 #define ASH_PUBLIC_CPP_APP_LIST_APP_LIST_FEATURES_H_
 
-#include <string>
-
 #include "ash/public/cpp/ash_public_export.h"
 #include "base/feature_list.h"
 #include "base/time/time.h"
@@ -15,18 +13,6 @@ namespace app_list_features {
 
 // Please keep these features sorted.
 // TODO(newcomer|weidongg): Sort these features.
-
-// Enable app ranking models.
-ASH_PUBLIC_EXPORT BASE_DECLARE_FEATURE(kEnableAppRanker);
-
-// Enable a model that ranks zero-state apps search result.
-// TODO(crbug.com/989350): This flag can be removed once the
-// AppSearchResultRanker is removed. Same with the
-// AppSearchResultRankerPredictorName.
-ASH_PUBLIC_EXPORT BASE_DECLARE_FEATURE(kEnableZeroStateAppsRanker);
-
-// Enable a model that ranks zero-state files and recent queries.
-ASH_PUBLIC_EXPORT BASE_DECLARE_FEATURE(kEnableZeroStateMixedTypesRanker);
 
 // Enables the feature to include a single reinstallation candidate in
 // zero-state.
@@ -42,46 +28,31 @@ ASH_PUBLIC_EXPORT BASE_DECLARE_FEATURE(kEnableExactMatchForNonLatinLocale);
 // suggestions.
 ASH_PUBLIC_EXPORT BASE_DECLARE_FEATURE(kForceShowContinueSection);
 
-// Enables iconified text and inline icons in launcher search.
-ASH_PUBLIC_EXPORT BASE_DECLARE_FEATURE(kSearchResultInlineIcon);
-
-// Enables a fling gesture or mouse scroll from the shelf to show the bubble
-// launcher.
-ASH_PUBLIC_EXPORT BASE_DECLARE_FEATURE(kQuickActionShowBubbleLauncher);
-
 // Enable shortened search result update animations when in progress animations
 // are interrupted by search model updates.
 ASH_PUBLIC_EXPORT BASE_DECLARE_FEATURE(kDynamicSearchUpdateAnimation);
 
-// Controls the bubble launcher (productivity launcher in clamshell) width. When
-// enabled, the bubble UI will be narrower.
-ASH_PUBLIC_EXPORT BASE_DECLARE_FEATURE(kCompactBubbleLauncher);
-
 // Enables Play Store search in the launcher.
 ASH_PUBLIC_EXPORT BASE_DECLARE_FEATURE(kLauncherPlayStoreSearch);
 
-// Enables new tablet <-> clamshell mode transition animation (scale + opacity
-// instead of slide up/down).
-ASH_PUBLIC_EXPORT BASE_DECLARE_FEATURE(kAnimateScaleOnTabletModeTransition);
+// Enables app list drag and drop refactor to use views drag and drop APIs.
+ASH_PUBLIC_EXPORT BASE_DECLARE_FEATURE(kDragAndDropRefactor);
 
-ASH_PUBLIC_EXPORT bool IsAppRankerEnabled();
-ASH_PUBLIC_EXPORT bool IsZeroStateAppsRankerEnabled();
-ASH_PUBLIC_EXPORT bool IsZeroStateMixedTypesRankerEnabled();
+// When enabled, launcher continue section will suggest drive files based on
+// recency, instead of fetching them using drive's ItemSuggest API.
+ASH_PUBLIC_EXPORT BASE_DECLARE_FEATURE(kContinueSectionWithRecents);
+
 ASH_PUBLIC_EXPORT bool IsAppReinstallZeroStateEnabled();
 ASH_PUBLIC_EXPORT bool IsAppListLaunchRecordingEnabled();
 ASH_PUBLIC_EXPORT bool IsExactMatchForNonLatinLocaleEnabled();
 ASH_PUBLIC_EXPORT bool IsForceShowContinueSectionEnabled();
 ASH_PUBLIC_EXPORT bool IsAggregatedMlSearchRankingEnabled();
 ASH_PUBLIC_EXPORT bool IsLauncherSearchNormalizationEnabled();
-ASH_PUBLIC_EXPORT bool IsSearchResultInlineIconEnabled();
-ASH_PUBLIC_EXPORT bool IsQuickActionShowBubbleLauncherEnabled();
 ASH_PUBLIC_EXPORT bool IsDynamicSearchUpdateAnimationEnabled();
 ASH_PUBLIC_EXPORT base::TimeDelta DynamicSearchUpdateAnimationDuration();
-ASH_PUBLIC_EXPORT bool IsCompactBubbleLauncherEnabled();
 ASH_PUBLIC_EXPORT bool IsLauncherPlayStoreSearchEnabled();
-ASH_PUBLIC_EXPORT bool IsAnimateScaleOnTabletModeTransitionEnabled();
-
-ASH_PUBLIC_EXPORT std::string AppSearchResultRankerPredictorName();
+ASH_PUBLIC_EXPORT bool IsDragAndDropRefactorEnabled();
+ASH_PUBLIC_EXPORT bool IsContinueSectionWithRecentsEnabled();
 
 }  // namespace app_list_features
 

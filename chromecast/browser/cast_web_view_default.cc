@@ -11,7 +11,6 @@
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chromecast/base/cast_features.h"
 #include "chromecast/base/chromecast_switches.h"
 #include "chromecast/base/metrics/cast_metrics_helper.h"
@@ -189,7 +188,7 @@ void CastWebViewDefault::ActivateContents(content::WebContents* contents) {
 
 bool CastWebViewDefault::CheckMediaAccessPermission(
     content::RenderFrameHost* render_frame_host,
-    const GURL& security_origin,
+    const url::Origin& security_origin,
     blink::mojom::MediaStreamType type) {
   if (!chromecast::IsFeatureEnabled(kAllowUserMediaAccess) &&
       !params_->allow_media_access) {
@@ -210,7 +209,7 @@ bool CastWebViewDefault::DidAddMessageToConsole(
   std::u16string single_line_message;
   // Mult-line message is not friendly to dumpstate redact.
   base::ReplaceChars(message, u"\n", u"\\n ", &single_line_message);
-  logging::LogMessage("CONSOLE", line_no, ::logging::LOG_INFO).stream()
+  logging::LogMessage("CONSOLE", line_no, ::logging::LOGGING_INFO).stream()
       << params_->log_prefix << ": \"" << single_line_message
       << "\", source: " << source_id << " (" << line_no << ")";
   return true;

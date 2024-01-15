@@ -58,36 +58,23 @@ import org.chromium.url.GURL;
 public final class ShareButtonControllerUnitTest {
     private static final int WIDTH_DELTA = 50;
 
-    @Rule
-    public TestRule mProcessor = new Features.JUnitProcessor();
+    @Rule public TestRule mProcessor = new Features.JUnitProcessor();
 
-    @Rule
-    public JniMocker mJniMocker = new JniMocker();
+    @Rule public JniMocker mJniMocker = new JniMocker();
 
     private Context mContext;
 
-    @Mock
-    private UkmRecorder.Natives mUkmRecorderJniMock;
-    @Mock
-    private Resources mResources;
-    @Mock
-    private Tab mTab;
-    @Mock
-    private Drawable mDrawable;
-    @Mock
-    private ActivityTabProvider mTabProvider;
-    @Mock
-    private ObservableSupplier<ShareDelegate> mShareDelegateSupplier;
-    @Mock
-    private ShareDelegate mShareDelegate;
-    @Mock
-    private GURL mMockGurl;
-    @Mock
-    private ActivityLifecycleDispatcher mActivityLifecycleDispatcher;
-    @Mock
-    private ModalDialogManager mModalDialogManager;
-    @Mock
-    private Tracker mTracker;
+    @Mock private UkmRecorder.Natives mUkmRecorderJniMock;
+    @Mock private Resources mResources;
+    @Mock private Tab mTab;
+    @Mock private Drawable mDrawable;
+    @Mock private ActivityTabProvider mTabProvider;
+    @Mock private ObservableSupplier<ShareDelegate> mShareDelegateSupplier;
+    @Mock private ShareDelegate mShareDelegate;
+    @Mock private GURL mMockGurl;
+    @Mock private ActivityLifecycleDispatcher mActivityLifecycleDispatcher;
+    @Mock private ModalDialogManager mModalDialogManager;
+    @Mock private Tracker mTracker;
 
     private Configuration mConfiguration = new Configuration();
     private ShareButtonController mShareButtonController;
@@ -112,16 +99,25 @@ public final class ShareButtonControllerUnitTest {
 
         AdaptiveToolbarFeatures.clearParsedParamsForTesting();
 
-        mShareButtonController = new ShareButtonController(mDrawable, mTabProvider,
-                mShareDelegateSupplier, () -> mTracker, mShareUtils, mModalDialogManager, () -> {});
+        mShareButtonController =
+                new ShareButtonController(
+                        mContext,
+                        mDrawable,
+                        mTabProvider,
+                        mShareDelegateSupplier,
+                        () -> mTracker,
+                        mShareUtils,
+                        mModalDialogManager,
+                        () -> {});
 
         TrackerFactory.setTrackerForTests(mTracker);
     }
 
-    @EnableFeatures({ChromeFeatureList.ADAPTIVE_BUTTON_IN_TOP_TOOLBAR_CUSTOMIZATION_V2})
+    @EnableFeatures(ChromeFeatureList.ADAPTIVE_BUTTON_IN_TOP_TOOLBAR_CUSTOMIZATION_V2)
     @Test
     public void testIPHCommandHelper() {
-        assertNull(mShareButtonController.get(/*tab*/ null).getButtonSpec().getIPHCommandBuilder());
+        assertNull(
+                mShareButtonController.get(/* tab= */ null).getButtonSpec().getIPHCommandBuilder());
 
         // Verify that IPHCommandBuilder is set just once;
         IPHCommandBuilder builder =
@@ -135,10 +131,13 @@ public final class ShareButtonControllerUnitTest {
     }
 
     @Test
-    @EnableFeatures({ChromeFeatureList.ADAPTIVE_BUTTON_IN_TOP_TOOLBAR_CUSTOMIZATION_V2})
+    @EnableFeatures(ChromeFeatureList.ADAPTIVE_BUTTON_IN_TOP_TOOLBAR_CUSTOMIZATION_V2)
     public void testIPHEvent() {
-        doReturn(true).when(mTracker).shouldTriggerHelpUI(
-                FeatureConstants.ADAPTIVE_BUTTON_IN_TOP_TOOLBAR_CUSTOMIZATION_SHARE_FEATURE);
+        doReturn(true)
+                .when(mTracker)
+                .shouldTriggerHelpUI(
+                        FeatureConstants
+                                .ADAPTIVE_BUTTON_IN_TOP_TOOLBAR_CUSTOMIZATION_SHARE_FEATURE);
 
         View view = mock(View.class);
         mShareButtonController.get(mTab).getButtonSpec().getOnClickListener().onClick(view);
@@ -148,7 +147,7 @@ public final class ShareButtonControllerUnitTest {
     }
 
     @Test
-    @EnableFeatures({ChromeFeatureList.ADAPTIVE_BUTTON_IN_TOP_TOOLBAR_CUSTOMIZATION_V2})
+    @EnableFeatures(ChromeFeatureList.ADAPTIVE_BUTTON_IN_TOP_TOOLBAR_CUSTOMIZATION_V2)
     public void testDoNotShowOnDataUrl() {
         doReturn("data").when(mMockGurl).getScheme();
         doReturn(mMockGurl).when(mTab).getUrl();

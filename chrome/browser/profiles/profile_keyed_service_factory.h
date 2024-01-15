@@ -9,37 +9,40 @@
 
 #include "chrome/browser/profiles/profile_selections.h"
 
-// Purpose of this API:
-// Provide a Profile type specific implementation logic for
-// `KeyedServiceFactory` under chrome/.
-// When a KeyedServiceFactory is building a service for a "Profile A", it can
-// actually return a service that is attached to a "Profile B". Common
-// cases is that an Off-The-Record profile uses it's parent service (redirecting
-// to Original) or not use any service at all (no service for OTR).
+namespace profiles::testing {
+class ScopedProfileSelectionsForFactoryTesting;
+}
 
-// `ProfileKeyedServiceFactory' is an intermediate interface to create
-// KeyedServiceFactory under chrome/ that provides a more restricted default
-// creation of services for non regular profiles. Main purpose of this class is
-// to provide an easy and efficient way to provide the redirection logic for
-// each main profile types using `ProfileSelections` instance. Those profile
-// choices are overridable by setting the proper combination of
-// `ProfileSelection` and Profile type in the `ProfileSelections` passed in the
-// constructor.
+// Detailed doc: "./profile_keyed_service_factory.md"
 //
-// - Example usage, for a factory redirecting in incognito.
+// ProfileKeyedServiceFactory provides a `Profile`-specific interface for
+// `KeyedServiceFactory` under chrome/.
+//
+// When a KeyedServiceFactory builds a service for a "Profile A", it can
+// actually return a service attached to a "Profile B". A common case is when a
+// service of the original profile is reused by the Off-The-Record (OTR) profile
+// (ProfileSelection::kRedirectedToOriginal()). Furthermore, a service can also
+// be created for either only the original profile, or only the OTR profile.
+//
+// `ProfileKeyedServiceFactory' provides control over how services are created
+// by default for non-regular profiles and how services are redirected across
+// profiles. The defaults can be overridden with the `ProfileSelections`
+// constructor parameter.
+//
+// - Example of a factory redirecting in incognito:
 //
 // class MyRedirectingKeyedServiceFactory: public ProfileKeyedServiceFactory {
 //  private:
 //   MyRedirectingKeyedServiceFactory()
 //       : ProfileKeyedServiceFactory(
 //             "MyRedirectingKeyedService",
-//             ProfileSelections::BuildRedirectedInIncognitoNonExperimental())
+//             ProfileSelections::BuildRedirectedInIncognito())
 //             {}
 //   }
 // };
 //
 //
-// - Example service that does not exist in OTR (default behavior):
+// - Example of a service that does not exist in OTR (default behavior):
 //
 // class MyDefaultKeyedServiceFactory: public ProfileKeyedServiceFactory {
 //  private:
@@ -47,6 +50,7 @@
 //       : ProfileKeyedServiceFactory("MyDefaultKeyedService") {}
 //   }
 // };
+//
 // Any change to this class should also be reflected on
 // `RefcountedProfileKeyedServiceFactory`.
 class ProfileKeyedServiceFactory : public BrowserContextKeyedServiceFactory {
@@ -73,18 +77,10 @@ class ProfileKeyedServiceFactory : public BrowserContextKeyedServiceFactory {
   content::BrowserContext* GetBrowserContextToUse(
       content::BrowserContext* context) const final;
 
-  // Since `ProfileKeyedServiceFactory` API uses `ProfileSelections`, there is
-  // still no way to prevent the creation of services for ChromeOS irregular
-  // profiles, with `ProfileSelections`. In order not to create services with
-  // these specific conditions, returning nullptr in `BuildServiceInstanceFor()`
-  // is accepted despite the recommendataion in
-  // `BrowserContextKeyedServiceFactory::BuildServiceInstanceFor()` until the
-  // API is adapted (crbug/1284664).
-  KeyedService* BuildServiceInstanceFor(
-      content::BrowserContext* context) const override = 0;
-
  private:
-  const ProfileSelections profile_selections_;
+  friend class profiles::testing::ScopedProfileSelectionsForFactoryTesting;
+
+  ProfileSelections profile_selections_;
 };
 
-#endif  // !CHROME_BROWSER_PROFILES_PROFILE_KEYED_SERVICE_FACTORY_H_
+#endif  // CHROME_BROWSER_PROFILES_PROFILE_KEYED_SERVICE_FACTORY_H_

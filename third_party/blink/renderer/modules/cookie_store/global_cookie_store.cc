@@ -15,6 +15,7 @@
 #include "third_party/blink/renderer/modules/cookie_store/cookie_store.h"
 #include "third_party/blink/renderer/modules/service_worker/service_worker_global_scope.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 
 namespace blink {
@@ -49,14 +50,15 @@ class GlobalCookieStoreImpl final
         return nullptr;
       }
 
-      mojo::Remote<network::mojom::blink::RestrictedCookieManager> backend;
+      HeapMojoRemote<network::mojom::blink::RestrictedCookieManager> backend(
+          execution_context);
       execution_context->GetBrowserInterfaceBroker().GetInterface(
           backend.BindNewPipeAndPassReceiver(
               execution_context->GetTaskRunner(TaskType::kDOMManipulation)));
       cookie_store_ = MakeGarbageCollected<CookieStore>(execution_context,
                                                         std::move(backend));
     }
-    return cookie_store_;
+    return cookie_store_.Get();
   }
 
   void Trace(Visitor* visitor) const override {

@@ -5,8 +5,6 @@
 #ifndef CHROME_BROWSER_BADGING_BADGE_MANAGER_DELEGATE_MAC_H_
 #define CHROME_BROWSER_BADGING_BADGE_MANAGER_DELEGATE_MAC_H_
 
-#include <string>
-
 #include "chrome/browser/badging/badge_manager_delegate.h"
 
 class Profile;
@@ -21,11 +19,7 @@ class BadgeManagerDelegateMac : public BadgeManagerDelegate {
   explicit BadgeManagerDelegateMac(Profile* profile,
                                    BadgeManager* badge_manager);
 
-  void OnAppBadgeUpdated(const web_app::AppId& app_id) override;
-
- private:
-  void SetAppBadgeLabel(const std::string& app_id,
-                        const std::string& badge_label);
+  void OnAppBadgeUpdated(const webapps::AppId& app_id) override;
 };
 
 }  // namespace badging

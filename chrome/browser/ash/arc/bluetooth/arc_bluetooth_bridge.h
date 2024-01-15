@@ -9,6 +9,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -18,10 +19,11 @@
 #include "ash/components/arc/mojom/bluetooth.mojom.h"
 #include "ash/components/arc/mojom/intent_helper.mojom-forward.h"
 #include "ash/components/arc/session/connection_observer.h"
-#include "base/callback_forward.h"
 #include "base/containers/unique_ptr_adapters.h"
 #include "base/files/file.h"
 #include "base/files/file_descriptor_watcher_posix.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/arc/bluetooth/arc_bluetooth_task_queue.h"
@@ -38,7 +40,6 @@
 #include "device/bluetooth/bluetooth_remote_gatt_service.h"
 #include "device/bluetooth/bluez/bluetooth_adapter_bluez.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 class BrowserContext;
@@ -58,6 +59,7 @@ class ArcBluetoothBridge
       public device::BluetoothAdapter::Observer,
       public device::BluetoothAdapterFactory::AdapterCallback,
       public device::BluetoothLocalGattService::Delegate,
+      public device::BluetoothLowEnergyScanSession::Delegate,
       public ConnectionObserver<mojom::AppInstance>,
       public ConnectionObserver<mojom::IntentHelperInstance>,
       public mojom::BluetoothHost {
@@ -66,6 +68,21 @@ class ArcBluetoothBridge
       base::OnceCallback<void(mojom::BluetoothGattStatus)>;
   using AdapterStateCallback =
       base::OnceCallback<void(mojom::BluetoothAdapterState)>;
+  using GattReadCallback =
+      base::OnceCallback<void(arc::mojom::BluetoothGattValuePtr)>;
+  using CreateSdpRecordCallback =
+      base::OnceCallback<void(arc::mojom::BluetoothCreateSdpRecordResultPtr)>;
+  using RemoveSdpRecordCallback =
+      base::OnceCallback<void(arc::mojom::BluetoothStatus)>;
+
+  static constexpr int kAutoSockPort = 0;
+  static constexpr int kMinRfcommChannel = 1;
+  static constexpr int kMaxRfcommChannel = 30;
+
+  // Copied from the values of L2CAP_PSM_LE_DYN_START and L2CAP_PSM_LE_DYN_END
+  // in /include/net/bluetooth/l2cap.h
+  static constexpr int kMinL2capLePsm = 0x0080;
+  static constexpr int kMaxL2capLePsm = 0x00FF;
 
   // Returns singleton instance for the given BrowserContext,
   // or nullptr if the browser |context| is not allowed to use ARC.
@@ -130,6 +147,8 @@ class ArcBluetoothBridge
   void GattDiscoveryCompleteForService(
       device::BluetoothAdapter* adapter,
       device::BluetoothRemoteGattService* service) override;
+
+  void GattNeedsDiscovery(device::BluetoothDevice* device) override;
 
   void GattServiceChanged(device::BluetoothAdapter* adapter,
                           device::BluetoothRemoteGattService* service) override;
@@ -206,6 +225,21 @@ class ArcBluetoothBridge
   void OnNotificationsStop(
       const device::BluetoothDevice* device,
       const device::BluetoothLocalGattCharacteristic* characteristic) override;
+
+  // device::BluetoothLowEnergyScanSession::Delegate:
+  void OnDeviceFound(device::BluetoothLowEnergyScanSession* scan_session,
+                     device::BluetoothDevice* device) override;
+
+  void OnDeviceLost(device::BluetoothLowEnergyScanSession* scan_session,
+                    device::BluetoothDevice* device) override;
+
+  void OnSessionStarted(
+      device::BluetoothLowEnergyScanSession* scan_session,
+      std::optional<device::BluetoothLowEnergyScanSession::ErrorCode>
+          error_code) override;
+
+  void OnSessionInvalidated(
+      device::BluetoothLowEnergyScanSession* scan_session) override;
 
   // Bluetooth Mojo host interface
   void EnableAdapter(EnableAdapterCallback callback) override;
@@ -308,14 +342,6 @@ class ArcBluetoothBridge
                       const std::vector<uint8_t>& value,
                       SendIndicationCallback callback) override;
 
-  // Bluetooth Mojo host interface - Bluetooth SDP functions
-  void GetSdpRecords(mojom::BluetoothAddressPtr remote_addr,
-                     const device::BluetoothUUID& target_uuid) override;
-  void CreateSdpRecord(mojom::BluetoothSdpRecordPtr record_mojo,
-                       CreateSdpRecordCallback callback) override;
-  void RemoveSdpRecord(uint32_t service_handle,
-                       RemoveSdpRecordCallback callback) override;
-
   // Bluetooth Mojo host interface - Bluetooth socket functions
   void BluetoothSocketListen(mojom::BluetoothSocketType sock_type,
                              mojom::BluetoothSocketFlagsPtr sock_flags,
@@ -340,7 +366,13 @@ class ArcBluetoothBridge
       int32_t adv_handle,
       ReleaseAdvertisementHandleCallback callback) override;
 
- private:
+  static void EnsureFactoryBuilt();
+
+ protected:
+  friend class ArcBluetoothBridgeTest;
+
+  virtual void HandlePoweredOn() = 0;
+
   void ReserveAdvertisementHandleImpl(
       ReserveAdvertisementHandleCallback callback);
   void EnableAdvertisementImpl(
@@ -357,8 +389,12 @@ class ArcBluetoothBridge
   // StartLEScan() is only for LE devices.
   void StartDiscoveryImpl();
   void CancelDiscoveryImpl();
-  void StartLEScanImpl();
+  virtual void StartLEScanImpl();
   void StopLEScanImpl();
+
+  virtual void ResetLEScanSession();
+  virtual bool IsDiscoveringOrScanning();
+  void StartLEScanOffTimer();
 
   // The callback function triggered by le_scan_off_timer_.
   void StopLEScanByTimer();
@@ -367,8 +403,8 @@ class ArcBluetoothBridge
   enum class AdapterPowerState { TURN_OFF, TURN_ON };
 
   // Chrome observer callbacks
-  void OnPoweredOn(AdapterStateCallback callback, bool save_user_pref) const;
-  void OnPoweredOff(AdapterStateCallback callback, bool save_user_pref) const;
+  void OnPoweredOn(AdapterStateCallback callback, bool save_user_pref);
+  void OnPoweredOff(AdapterStateCallback callback, bool save_user_pref);
   void OnPoweredError(AdapterStateCallback callback) const;
   void OnDiscoveryStarted(
       std::unique_ptr<device::BluetoothDiscoverySession> session);
@@ -384,12 +420,21 @@ class ArcBluetoothBridge
   void OnForgetDone(mojom::BluetoothAddressPtr addr);
   void OnForgetError(mojom::BluetoothAddressPtr addr) const;
 
+  void OnGetServiceRecordsFinished(
+      mojom::BluetoothAddressPtr remote_addr,
+      const device::BluetoothUUID& target_uuid,
+      const std::vector<bluez::BluetoothServiceRecordBlueZ>& records_bluez);
+  void OnGetServiceRecordsError(
+      mojom::BluetoothAddressPtr remote_addr,
+      const device::BluetoothUUID& target_uuid,
+      bluez::BluetoothServiceRecordBlueZ::ErrorCode error_code);
+
   void OnGattConnectStateChanged(mojom::BluetoothAddressPtr addr,
                                  bool connected) const;
   void OnGattConnect(
       mojom::BluetoothAddressPtr addr,
       std::unique_ptr<device::BluetoothGattConnection> connection,
-      absl::optional<device::BluetoothDevice::ConnectErrorCode> error_code);
+      std::optional<device::BluetoothDevice::ConnectErrorCode> error_code);
   void OnGattDisconnected(mojom::BluetoothAddressPtr addr);
 
   void OnGattNotifyStartDone(
@@ -420,7 +465,7 @@ class ArcBluetoothBridge
   // is got by BluetoothAdapter::GetDevices(), which includes all devices have
   // been discovered (not necessarily paired or connected) but not yet expired.
   // This function should be called when Bluetooth service in Android is ready.
-  void SendCachedDevices() const;
+  virtual void SendCachedDevices() const;
 
   std::vector<mojom::BluetoothPropertyPtr> GetDeviceProperties(
       mojom::BluetoothPropertyType type,
@@ -476,15 +521,6 @@ class ArcBluetoothBridge
 
   void OnSetDiscoverable(bool discoverable, bool success, uint32_t timeout);
   void SetDiscoverable(bool discoverable, uint32_t timeout);
-
-  void OnGetServiceRecordsDone(
-      mojom::BluetoothAddressPtr remote_addr,
-      const device::BluetoothUUID& target_uuid,
-      const std::vector<bluez::BluetoothServiceRecordBlueZ>& records_bluez);
-  void OnGetServiceRecordsError(
-      mojom::BluetoothAddressPtr remote_addr,
-      const device::BluetoothUUID& target_uuid,
-      bluez::BluetoothServiceRecordBlueZ::ErrorCode error_code);
 
   void OnSetAdapterProperty(mojom::BluetoothStatus success,
                             mojom::BluetoothPropertyPtr property);
@@ -553,10 +589,6 @@ class ArcBluetoothBridge
   // Chrome.
   struct BluetoothListeningSocket {
     mojom::BluetoothSocketType sock_type;
-    // TODO(b/163099156): Remove the following two fields when
-    // RfcommListenDeprecated()/RfcommConnectDeprecated() are removed.
-    bool created_by_deprecated_method = false;
-    mojo::Remote<mojom::RfcommListeningSocketClient> deprecated_remote;
     mojo::Remote<mojom::BluetoothListenSocketClient> remote;
     base::ScopedFD file;
     std::unique_ptr<base::FileDescriptorWatcher::Controller> controller;
@@ -565,10 +597,6 @@ class ArcBluetoothBridge
   };
   struct BluetoothConnectingSocket {
     mojom::BluetoothSocketType sock_type;
-    // TODO(b/163099156): Remove the following two fields when
-    // RfcommListenDeprecated()/RfcommConnectDeprecated() are removed.
-    bool created_by_deprecated_method = false;
-    mojo::Remote<mojom::RfcommConnectingSocketClient> deprecated_remote;
     mojo::Remote<mojom::BluetoothConnectSocketClient> remote;
     base::ScopedFD file;
     std::unique_ptr<base::FileDescriptorWatcher::Controller> controller;
@@ -576,26 +604,24 @@ class ArcBluetoothBridge
     ~BluetoothConnectingSocket();
   };
 
-  // Creates a Bluetooth socket with socket option |optval|, and then bind() and
-  // listen() with requested |port| number. The actual port number will be
-  // filled in |port| as the return value. Returns a BluetoothListeningSocket
-  // that holds the socket.
-  std::unique_ptr<BluetoothListeningSocket> CreateBluetoothListenSocket(
+  // Creates a Bluetooth socket with options in |flags| and starts listening to
+  // it with the requested |port| number. The actual port number must be filled
+  // in and sent to the callback in this function implementation. Returns a
+  // BluetoothListeningSocket that holds the socket.
+  virtual void CreateBluetoothListenSocket(
       mojom::BluetoothSocketType type,
-      int32_t optval,
-      uint16_t* port);
+      mojom::BluetoothSocketFlagsPtr flags,
+      int port,
+      BluetoothSocketListenCallback callback) = 0;
   // Creates a Bluetooth socket with socket option |optval|, and then calls
   // connect() to (|addr|, |port|). This connect() call is non-blocking.
   // Returns a BluetoothConnectingSocket that holds the socket.
-  std::unique_ptr<BluetoothConnectingSocket> CreateBluetoothConnectSocket(
+  virtual void CreateBluetoothConnectSocket(
       mojom::BluetoothSocketType type,
-      int32_t optval,
+      mojom::BluetoothSocketFlagsPtr flags,
       mojom::BluetoothAddressPtr addr,
-      uint16_t port);
-
-  // Closes Bluetooth sockets. Releases the corresponding resources.
-  void CloseBluetoothListeningSocket(BluetoothListeningSocket* socket);
-  void CloseBluetoothConnectingSocket(BluetoothConnectingSocket* socket);
+      int port,
+      BluetoothSocketConnectCallback callback) = 0;
 
   // Called when the listening socket is ready to accept().
   void OnBluetoothListeningSocketReady(
@@ -604,21 +630,20 @@ class ArcBluetoothBridge
   void OnBluetoothConnectingSocketReady(
       ArcBluetoothBridge::BluetoothConnectingSocket* socket);
 
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 
-  scoped_refptr<bluez::BluetoothAdapterBlueZ> bluetooth_adapter_;
+  scoped_refptr<device::BluetoothAdapter> bluetooth_adapter_;
   scoped_refptr<device::BluetoothAdvertisement> advertisment_;
   // Discovery session created by StartDiscovery().
   std::unique_ptr<device::BluetoothDiscoverySession> discovery_session_;
   // Discovery session created by StartLEScan().
   std::unique_ptr<device::BluetoothDiscoverySession> le_scan_session_;
   // Discovered devices in the current discovery session started by
-  // StartDiscovery(). We don't need to keep track of this for StartLEScan()
-  // since Android don't have a callback for new found devices in LE scan. When
-  // a new advertisement of an LE device comes, DeviceAdertismentReceived() will
-  // be called and we pass the result to Android via OnLEDeviceFound(), and then
-  // it will notify the LE scanner in Android.
+  // StartDiscovery().
   std::set<std::string> discovered_devices_;
+  // Scanned devices in the current scan session started by StartLEScan().
+  std::set<std::string> scanned_devices_;
   std::unordered_map<std::string,
                      std::unique_ptr<device::BluetoothGattNotifySession>>
       notification_session_;
@@ -683,7 +708,7 @@ class ArcBluetoothBridge
   // Timer to turn adapter discoverable off.
   base::OneShotTimer discoverable_off_timer_;
   // Adapter discoverable timeout value.
-  uint32_t discoverable_off_timeout_ = 0;
+  std::optional<uint32_t> discoverable_off_timeout_ = std::nullopt;
 
   // Queue to track the powered state changes initiated by Android.
   base::queue<AdapterPowerState> remote_power_changes_;
@@ -713,13 +738,6 @@ class ArcBluetoothBridge
   // Start/StopLEScan().
   ArcBluetoothTaskQueue discovery_queue_;
 
-  // Bluetooth sockets that live in Chrome.
-  std::set<std::unique_ptr<BluetoothListeningSocket>, base::UniquePtrComparator>
-      listening_sockets_;
-  std::set<std::unique_ptr<BluetoothConnectingSocket>,
-           base::UniquePtrComparator>
-      connecting_sockets_;
-
   // Observes the ARC connection to Bluetooth service in Android. We need to do
   // some cleanup when it is down.
   class BluetoothArcConnectionObserver
@@ -736,7 +754,7 @@ class ArcBluetoothBridge
     void OnConnectionClosed() override;
 
    private:
-    ArcBluetoothBridge* arc_bluetooth_bridge_;
+    raw_ptr<ArcBluetoothBridge> arc_bluetooth_bridge_;
   };
   BluetoothArcConnectionObserver bluetooth_arc_connection_observer_;
 

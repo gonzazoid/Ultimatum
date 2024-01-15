@@ -9,6 +9,7 @@
 
 #include "ash/components/arc/mojom/intent_helper.mojom-forward.h"
 #include "ash/components/arc/session/connection_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager_observer.h"
 #include "components/keyed_service/core/keyed_service.h"
 
@@ -47,12 +48,15 @@ class ArcSettingsService
   void OnArcPlayStoreEnabledChanged(bool enabled) override;
   void OnArcInitialStart() override;
 
+  static void EnsureFactoryBuilt();
+
  private:
   void SetInitialSettingsPending(bool pending);
   bool IsInitialSettingsPending() const;
 
-  Profile* const profile_;
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<Profile> profile_;
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
   std::unique_ptr<ArcSettingsServiceImpl> impl_;
 };
 

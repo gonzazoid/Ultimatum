@@ -8,11 +8,13 @@
 #include <gbm.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <sys/mman.h>
 #include <xf86drm.h>
 
 #include <vector>
 
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/trace_event/memory_allocator_dump_guid.h"
 #include "base/trace_event/process_memory_dump.h"
@@ -138,7 +140,7 @@ class GpuMemoryBufferImplGbm : public gfx::GpuMemoryBuffer {
           gbm_bo_map2(buffer_object_, 0, 0, gbm_bo_get_width(buffer_object_),
                       gbm_bo_get_height(buffer_object_),
                       GBM_BO_TRANSFER_READ_WRITE, &stride, &mapped_data, i);
-      if (!addr) {
+      if (addr == MAP_FAILED) {
         LOG(ERROR) << "Failed to map GpuMemoryBufferImplGbm plane " << i;
         Unmap();
         return false;
@@ -185,8 +187,6 @@ class GpuMemoryBufferImplGbm : public gfx::GpuMemoryBuffer {
     return gbm_bo_get_stride_for_plane(buffer_object_, plane);
   }
 
-  void SetColorSpace(const gfx::ColorSpace& color_space) override {}
-
   gfx::GpuMemoryBufferId GetId() const override { return handle_.id; }
 
   gfx::GpuMemoryBufferType GetType() const override {
@@ -216,12 +216,12 @@ class GpuMemoryBufferImplGbm : public gfx::GpuMemoryBuffer {
 
  private:
   struct MappedPlane {
-    void* addr;
-    void* mapped_data;
+    raw_ptr<void> addr;
+    raw_ptr<void> mapped_data;
   };
 
   gfx::BufferFormat format_;
-  gbm_bo* buffer_object_;
+  raw_ptr<gbm_bo> buffer_object_;
   gfx::GpuMemoryBufferHandle handle_;
   bool mapped_;
   std::vector<MappedPlane> mapped_planes_;
@@ -277,10 +277,6 @@ LocalGpuMemoryBufferManager::CreateGpuMemoryBuffer(
 
   return std::make_unique<GpuMemoryBufferImplGbm>(format, buffer_object);
 }
-
-void LocalGpuMemoryBufferManager::SetDestructionSyncToken(
-    gfx::GpuMemoryBuffer* buffer,
-    const gpu::SyncToken& sync_token) {}
 
 void LocalGpuMemoryBufferManager::CopyGpuMemoryBufferAsync(
     gfx::GpuMemoryBufferHandle buffer_handle,

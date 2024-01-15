@@ -59,8 +59,10 @@ enum {
                                         // maintained for the signin profile.
   DIR_PREINSTALLED_COMPONENTS,          // Directory that contains pre-installed
                                         // components.
-  DIR_DEVICE_POLICY_EXTERNAL_DATA,  // Directory where device policy external
-                                    // data resources are cached.
+  DIR_DEVICE_POLICY_EXTERNAL_DATA,     // Directory where device policy external
+                                       // data resources are cached.
+  DIR_DEVICE_POLICY_SCREENSAVER_DATA,  // Directory where the device policy
+                                       // managed screensaver images are cached.
   PATH_END
 };
 
@@ -74,15 +76,5 @@ COMPONENT_EXPORT(ASH_CONSTANTS)
 void RegisterStubPathOverrides(const base::FilePath& stubs_dir);
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::DIR_DEVICE_DISPLAY_PROFILES;
-using ::ash::DIR_SIGNIN_PROFILE_EXTENSIONS;
-using ::ash::FILE_DEFAULT_APP_ORDER;
-using ::ash::FILE_MACHINE_INFO;
-using ::ash::FILE_VPD;
-using ::ash::FILE_VPD_STATUS;
-}  // namespace chromeos
 
 #endif  // ASH_CONSTANTS_ASH_PATHS_H_

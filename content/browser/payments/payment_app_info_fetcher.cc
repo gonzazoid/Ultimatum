@@ -5,11 +5,13 @@
 #include "content/browser/payments/payment_app_info_fetcher.h"
 
 #include <limits>
+#include <optional>
 #include <utility>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/payments/content/icon/icon_size.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
@@ -19,7 +21,6 @@
 #include "content/public/browser/global_routing_id.h"
 #include "content/public/browser/manifest_icon_downloader.h"
 #include "content/public/browser/page.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/manifest/manifest_icon_selector.h"
 #include "third_party/blink/public/common/manifest/manifest_util.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -42,7 +43,8 @@ void PaymentAppInfoFetcher::Start(
 
   std::unique_ptr<std::vector<GlobalRenderFrameHostId>> frame_routing_ids =
       service_worker_context->GetWindowClientFrameRoutingIds(
-          blink::StorageKey(url::Origin::Create(context_url)));
+          blink::StorageKey::CreateFirstParty(
+              url::Origin::Create(context_url)));
 
   SelfDeleteFetcher* fetcher = new SelfDeleteFetcher(std::move(callback));
   fetcher->Start(context_url, std::move(frame_routing_ids));
@@ -146,7 +148,7 @@ void PaymentAppInfoFetcher::SelfDeleteFetcher::Start(
 void PaymentAppInfoFetcher::SelfDeleteFetcher::RunCallbackAndDestroy() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback_),
                                 std::move(fetched_payment_app_info_)));
   delete this;

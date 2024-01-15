@@ -16,6 +16,7 @@
 #include "third_party/blink/renderer/core/html/html_div_element.h"
 #include "third_party/blink/renderer/core/html/html_span_element.h"
 #include "third_party/blink/renderer/core/html/media/html_media_element.h"
+#include "third_party/blink/renderer/core/keywords.h"
 #include "third_party/blink/renderer/modules/media_controls/elements/media_control_elements_helper.h"
 #include "third_party/blink/renderer/modules/media_controls/media_controls_impl.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -69,7 +70,8 @@ HTMLElement* MediaControlInputElement::CreateOverflowElement(
       MakeGarbageCollected<HTMLLabelElement>(GetDocument());
   overflow_label_element_->SetShadowPseudoId(
       AtomicString("-internal-media-controls-overflow-menu-list-item"));
-  overflow_label_element_->setAttribute(html_names::kRoleAttr, "menuitem");
+  overflow_label_element_->setAttribute(html_names::kRoleAttr,
+                                        AtomicString("menuitem"));
   // Appending a button to a label element ensures that clicks on the label
   // are passed down to the button, performing the action we'd expect.
   overflow_label_element_->ParserAppendChild(button);
@@ -81,16 +83,19 @@ HTMLElement* MediaControlInputElement::CreateOverflowElement(
   overflow_menu_container_ =
       MakeGarbageCollected<HTMLDivElement>(GetDocument());
   overflow_menu_container_->ParserAppendChild(overflow_menu_text_);
-  overflow_menu_container_->setAttribute(html_names::kAriaHiddenAttr, "true");
-  aria_label_ = button->FastGetAttribute(html_names::kAriaLabelAttr) + " " +
-                button->GetOverflowMenuString();
+  overflow_menu_container_->setAttribute(html_names::kAriaHiddenAttr,
+                                         keywords::kTrue);
+  aria_label_ = button->FastGetAttribute(html_names::kAriaLabelAttr);
+  if (aria_label_.empty()) {
+    aria_label_ = button->GetOverflowMenuString();
+  }
 
   // The button label along with the overflow menu string will be part of
   // the aria-label for the overflow label element, so all information is
   // already available to the screen reader. Additionally, invoking the
   // overflow label element (it's a menuitem) will invoke the button so
   // the button should be hidden from screenreaders.
-  button->setAttribute(html_names::kAriaHiddenAttr, "true");
+  button->setAttribute(html_names::kAriaHiddenAttr, keywords::kTrue);
 
   UpdateOverflowSubtitleElement(button->GetOverflowMenuSubtitleString());
   overflow_label_element_->ParserAppendChild(overflow_menu_container_);
@@ -106,7 +111,7 @@ HTMLElement* MediaControlInputElement::CreateOverflowElement(
                                                   CSSValueID::kNone);
   SetOverflowElementIsWanted(false);
 
-  return overflow_label_element_;
+  return overflow_label_element_.Get();
 }
 
 void MediaControlInputElement::UpdateOverflowSubtitleElement(String text) {
@@ -128,11 +133,12 @@ void MediaControlInputElement::UpdateOverflowSubtitleElement(String text) {
         MakeGarbageCollected<HTMLSpanElement>(GetDocument());
     overflow_menu_subtitle_->setInnerText(text);
     overflow_menu_subtitle_->setAttribute(
-        "class", AtomicString(kOverflowSubtitleCSSClass));
+        html_names::kClassAttr, AtomicString(kOverflowSubtitleCSSClass));
 
     overflow_menu_container_->ParserAppendChild(overflow_menu_subtitle_);
     overflow_menu_container_->setAttribute(
-        "class", AtomicString(kOverflowContainerWithSubtitleCSSClass));
+        html_names::kClassAttr,
+        AtomicString(kOverflowContainerWithSubtitleCSSClass));
   }
   UpdateOverflowLabelAriaLabel(text);
 }
@@ -142,7 +148,7 @@ void MediaControlInputElement::RemoveOverflowSubtitleElement() {
     return;
 
   overflow_menu_container_->RemoveChild(overflow_menu_subtitle_);
-  overflow_menu_container_->removeAttribute("class");
+  overflow_menu_container_->removeAttribute(html_names::kClassAttr);
   overflow_menu_subtitle_ = nullptr;
 }
 
@@ -157,7 +163,11 @@ void MediaControlInputElement::SetOverflowElementIsWanted(bool wanted) {
 }
 
 void MediaControlInputElement::UpdateOverflowLabelAriaLabel(String subtitle) {
-  String full_aria_label = aria_label_ + " " + subtitle;
+  String full_aria_label = aria_label_;
+  if (!subtitle.empty()) {
+    full_aria_label = full_aria_label + " " + subtitle;
+  }
+
   overflow_label_element_->setAttribute(html_names::kAriaLabelAttr,
                                         WTF::AtomicString(full_aria_label));
 }
@@ -248,10 +258,6 @@ bool MediaControlInputElement::IsOverflowElement() const {
   return is_overflow_element_;
 }
 
-bool MediaControlInputElement::IsMouseFocusable() const {
-  return false;
-}
-
 bool MediaControlInputElement::IsMediaControlElement() const {
   return true;
 }
@@ -269,17 +275,21 @@ void MediaControlInputElement::RecordCTREvent(CTREvent event) {
       base::StrCat({"Media.Controls.CTR.", GetNameForHistograms()}), event);
 }
 
-void MediaControlInputElement::SetClass(const AtomicString& class_name,
+void MediaControlInputElement::SetClass(const String& class_name,
                                         bool should_have_class) {
   if (should_have_class)
-    classList().Add(class_name);
+    classList().Add(AtomicString(class_name));
   else
-    classList().Remove(class_name);
+    classList().Remove(AtomicString(class_name));
 }
 
 void MediaControlInputElement::UpdateDisplayType() {
   if (overflow_element_)
     overflow_element_->UpdateDisplayType();
+}
+
+void MediaControlInputElement::UpdateAriaLabel(const String& new_aria_label) {
+  aria_label_ = new_aria_label;
 }
 
 gfx::Size MediaControlInputElement::GetSizeOrDefault() const {

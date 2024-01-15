@@ -6,6 +6,7 @@
 
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/test/test_browser_dialog.h"
 #include "chrome/browser/ui/views/webid/fake_delegate.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -28,12 +29,17 @@ class FedCmAccountSelectionViewBrowserTest : public DialogBrowserTest {
 
   void ShowUi(const std::string& name) override {
     std::vector<content::IdentityRequestAccount> accounts = {
-        {"id", "email", "name", "given_name", GURL::EmptyGURL()}};
+        {"id", "email", "name", "given_name", GURL::EmptyGURL(),
+         /*login_hints=*/std::vector<std::string>(),
+         /*domain_hints=*/std::vector<std::string>()}};
     account_selection_view()->Show(
-        "rp-example.com", absl::nullopt,
+        "top-frame-example.com",
+        std::make_optional<std::string>("iframe-example.com"),
         {{"idp-example.com", accounts, content::IdentityProviderMetadata(),
-          content::ClientIdData(GURL::EmptyGURL(), GURL::EmptyGURL())}},
-        Account::SignInMode::kExplicit);
+          content::ClientMetadata(GURL::EmptyGURL(), GURL::EmptyGURL()),
+          blink::mojom::RpContext::kSignIn, /*request_permission=*/true,
+          /*has_login_status_mismatch=*/false}},
+        Account::SignInMode::kExplicit, /*show_auto_reauthn_checkbox=*/false);
   }
 
   void Show() {
@@ -101,6 +107,18 @@ IN_PROC_BROWSER_TEST_F(FedCmAccountSelectionViewBrowserTest, ReShow) {
   EXPECT_TRUE(GetBubble()->widget_delegate()->CanActivate());
 }
 
+IN_PROC_BROWSER_TEST_F(FedCmAccountSelectionViewBrowserTest, ShowWhileHidden) {
+  browser()->tab_strip_model()->GetActiveWebContents()->WasHidden();
+  Show();
+  // Since Show() was called while hidden, the bubble should have been created,
+  // but should not be visible.
+  ASSERT_TRUE(GetBubble());
+  EXPECT_FALSE(GetBubble()->IsVisible());
+  browser()->tab_strip_model()->GetActiveWebContents()->WasShown();
+  ASSERT_TRUE(GetBubble());
+  EXPECT_TRUE(GetBubble()->IsVisible());
+}
+
 IN_PROC_BROWSER_TEST_F(FedCmAccountSelectionViewBrowserTest, DetachAndDelete) {
   Show();
   browser()->tab_strip_model()->DetachAndDeleteWebContentsAt(0);
@@ -113,5 +131,16 @@ IN_PROC_BROWSER_TEST_F(FedCmAccountSelectionViewBrowserTest,
   browser()->tab_strip_model()->DetachWebContentsAtForInsertion(0);
   // TODO(npm): it would be better if the bubble actually moves with the
   // corresponding tab, instead of being altogether deleted.
+  EXPECT_FALSE(GetBubble());
+}
+
+// Tests crash scenario from crbug.com/1473691.
+IN_PROC_BROWSER_TEST_F(FedCmAccountSelectionViewBrowserTest, ClosedBrowser) {
+  PreShow();
+  browser()->window()->Close();
+  ui_test_utils::WaitForBrowserToClose(browser());
+
+  // Invoking this after browser is closed should not cause a crash.
+  ShowUi("");
   EXPECT_FALSE(GetBubble());
 }

@@ -11,19 +11,19 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/task/current_thread.h"
-#include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "net/base/io_buffer.h"
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_errors.h"
 #include "net/base/sockaddr_storage.h"
 #include "net/base/trace_constants.h"
+#include "net/base/tracing.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 
 #if BUILDFLAG(IS_FUCHSIA)
@@ -325,12 +325,12 @@ int SocketPosix::Write(
     CompletionOnceCallback callback,
     const NetworkTrafficAnnotationTag& /* traffic_annotation */) {
   DCHECK(thread_checker_.CalledOnValidThread());
-  DCHECK_NE(kInvalidSocket, socket_fd_);
-  DCHECK(!waiting_connect_);
+  CHECK_NE(kInvalidSocket, socket_fd_);
+  CHECK(!waiting_connect_);
   CHECK(write_callback_.is_null());
   // Synchronous operation not supported
-  DCHECK(!callback.is_null());
-  DCHECK_LT(0, buf_len);
+  CHECK(!callback.is_null());
+  CHECK_LT(0, buf_len);
 
   int rv = DoWrite(buf, buf_len);
   if (rv == ERR_IO_PENDING)
@@ -525,6 +525,9 @@ int SocketPosix::DoWrite(IOBuffer* buf, int buf_len) {
 #else
   int rv = HANDLE_EINTR(write(socket_fd_, buf->data(), buf_len));
 #endif
+  if (rv >= 0) {
+    CHECK_LE(rv, buf_len);
+  }
   return rv >= 0 ? rv : MapSystemError(errno);
 }
 

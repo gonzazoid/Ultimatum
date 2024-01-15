@@ -36,6 +36,7 @@
 #include "base/containers/span.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/text/character_property.h"
+#include "third_party/blink/renderer/platform/text/han_kerning_char_type.h"
 #include "third_party/blink/renderer/platform/text/text_direction.h"
 #include "third_party/blink/renderer/platform/text/text_run.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
@@ -54,6 +55,22 @@ class PLATFORM_EXPORT Character {
                                UChar32 upper_bound) {
     return character >= lower_bound && character <= upper_bound;
   }
+
+  // Commonly used Unicode Blocks in CSS specs.
+  // https://www.unicode.org/Public/UNIDATA/Blocks.txt
+  static bool IsBlockCjkSymbolsAndPunctuation(UChar32 ch) {
+    return IsInRange(ch, 0x3000, 0x303F);
+  }
+  static bool IsBlockHalfwidthAndFullwidthForms(UChar32 ch) {
+    return IsInRange(ch, 0xFF00, 0xFFEF);
+  }
+
+  // East Asian Width: https://unicode.org/reports/tr11/
+  static UEastAsianWidth EastAsianWidth(UChar32 ch) {
+    return static_cast<UEastAsianWidth>(
+        u_getIntPropertyValue(ch, UCHAR_EAST_ASIAN_WIDTH));
+  }
+  static bool IsEastAsianWidthFullwidth(UChar32 ch);
 
   static inline bool IsUnicodeVariationSelector(UChar32 character) {
     // http://www.unicode.org/Public/UCD/latest/ucd/StandardizedVariants.html
@@ -107,12 +124,15 @@ class PLATFORM_EXPORT Character {
   // http://unicode.org/reports/tr9/#Directional_Formatting_Characters
   static bool IsBidiControl(UChar32 character);
 
+  static HanKerningCharType GetHanKerningCharType(UChar32 character);
+
   // Collapsible white space characters defined in CSS:
   // https://drafts.csswg.org/css-text-3/#collapsible-white-space
   static bool IsCollapsibleSpace(UChar c) {
     return c == kSpaceCharacter || c == kNewlineCharacter ||
            c == kTabulationCharacter || c == kCarriageReturnCharacter;
   }
+  static bool IsLineFeed(UChar c) { return c == kNewlineCharacter; }
   static bool IsOtherSpaceSeparator(UChar c) {
     return c == kIdeographicSpaceCharacter;
   }
@@ -218,6 +238,15 @@ class PLATFORM_EXPORT Character {
   static bool IsCJKIdeographOrSymbolSlow(UChar32);
   static bool IsHangulSlow(UChar32);
 };
+
+inline bool Character::IsEastAsianWidthFullwidth(UChar32 ch) {
+  // All EAW=F characters are in the "Halfwidth and Fullwidth forms" block,
+  // except U+3000 IDEOGRAPHIC SPACE.
+  // https://util.unicode.org/UnicodeJsps/list-unicodeset.jsp?a=[:ea=F:]
+  return ch == kIdeographicSpaceCharacter ||
+         (IsBlockHalfwidthAndFullwidthForms(ch) &&
+          EastAsianWidth(ch) == UEastAsianWidth::U_EA_FULLWIDTH);
+}
 
 }  // namespace blink
 

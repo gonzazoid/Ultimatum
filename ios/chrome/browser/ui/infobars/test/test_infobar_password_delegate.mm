@@ -10,14 +10,11 @@
 #import "components/password_manager/core/browser/fake_form_fetcher.h"
 #import "components/password_manager/core/browser/password_form.h"
 #import "components/password_manager/core/browser/password_form_manager_for_ui.h"
+#import "components/password_manager/core/browser/password_manager_metrics_util.h"
 #import "components/password_manager/core/browser/stub_form_saver.h"
 #import "components/password_manager/core/browser/stub_password_manager_client.h"
-#import "ios/chrome/browser/infobars/infobar_utils.h"
+#import "ios/chrome/browser/infobars/model/infobar_utils.h"
 #import "testing/gmock/include/gmock/gmock.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using password_manager::PasswordForm;
 using base::ASCIIToUTF16;
@@ -40,14 +37,18 @@ class MockFormSaver : public password_manager::StubFormSaver {
   ~MockFormSaver() override = default;
 
   // FormSaver:
-  MOCK_METHOD3(Save,
-               void(PasswordForm pending,
-                    const std::vector<const PasswordForm*>& matches,
-                    const std::u16string& old_password));
-  MOCK_METHOD3(Update,
-               void(PasswordForm pending,
-                    const std::vector<const PasswordForm*>& matches,
-                    const std::u16string& old_password));
+  MOCK_METHOD3(
+      Save,
+      void(PasswordForm pending,
+           const std::vector<raw_ptr<const PasswordForm, VectorExperimental>>&
+               matches,
+           const std::u16string& old_password));
+  MOCK_METHOD3(
+      Update,
+      void(PasswordForm pending,
+           const std::vector<raw_ptr<const PasswordForm, VectorExperimental>>&
+               matches,
+           const std::u16string& old_password));
 
   // Convenience downcasting method.
   static MockFormSaver& Get(
@@ -83,10 +84,13 @@ CreateFormManager() {
 
 TestInfobarPasswordDelegate::TestInfobarPasswordDelegate(
     NSString* infobar_message)
-    : IOSChromeSavePasswordInfoBarDelegate(@"foobar@gmail.com",
-                                           false,
-                                           false,
-                                           CreateFormManager()),
+    : IOSChromeSavePasswordInfoBarDelegate(
+          "foobar@gmail.com",
+          false,
+          password_manager::features_util::PasswordAccountStorageUserState::
+              kSyncUser,
+          CreateFormManager(),
+          nullptr),
       infobar_message_(infobar_message) {}
 
 bool TestInfobarPasswordDelegate::Create(

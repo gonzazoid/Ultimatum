@@ -5,17 +5,13 @@
 #import "ios/chrome/browser/ui/find_bar/find_bar_view.h"
 
 #import "components/strings/grit/components_strings.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/find_bar/find_bar_constants.h"
-#import "ios/chrome/browser/ui/toolbar/public/toolbar_constants.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
+#import "ios/chrome/common/ui/util/dynamic_type_util.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 // Horizontal padding betwee all elements (except the previous/next buttons).
@@ -67,6 +63,11 @@ const CGFloat kButtonLength = 44;
   [self setupConstraints];
 }
 
+- (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
+  [super traitCollectionDidChange:previousTraitCollection];
+  [self updateFonts];
+}
+
 #pragma mark - Private
 
 // Creates, adds and configures the subviews.
@@ -78,6 +79,7 @@ const CGFloat kButtonLength = 44;
   [self addSubview:self.closeButton];
 
   [self setupColors];
+  [self updateFonts];
 }
 
 // Sets the constraints for the subviews up.
@@ -95,10 +97,13 @@ const CGFloat kButtonLength = 44;
   const CGFloat closeButtonTrailingPadding =
       ShouldShowCompactToolbar(self) ? kPadding : kIPadButtonEdgeSpacing;
 
+  NSLayoutConstraint* inputFieldHeightConstraint = [self.inputField.heightAnchor
+      constraintEqualToConstant:kInputFieldHeight];
+
   [NSLayoutConstraint activateConstraints:@[
     // Input Field.
     [self.inputField.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-    [self.inputField.heightAnchor constraintEqualToConstant:kInputFieldHeight],
+    inputFieldHeightConstraint,
     [self.inputField.leadingAnchor
         constraintEqualToAnchor:safeArea.leadingAnchor
                        constant:kPadding],
@@ -166,6 +171,19 @@ const CGFloat kButtonLength = 44;
 
 #pragma mark - Configuration
 
+// Update fonts to account for new preferred content size category.
+- (void)updateFonts {
+  _inputField.font = PreferredFontForTextStyleWithMaxCategory(
+      UIFontTextStyleBody, self.traitCollection.preferredContentSizeCategory,
+      UIContentSizeCategoryAccessibilityLarge);
+  _resultsCountLabel.font = PreferredFontForTextStyleWithMaxCategory(
+      UIFontTextStyleBody, self.traitCollection.preferredContentSizeCategory,
+      UIContentSizeCategoryAccessibilityMedium);
+  _closeButton.titleLabel.font = PreferredFontForTextStyleWithMaxCategory(
+      UIFontTextStyleBody, self.traitCollection.preferredContentSizeCategory,
+      UIContentSizeCategoryAccessibilityMedium);
+}
+
 // Adds `rightLabel` as right view of the `textField`.
 - (void)addLabel:(UILabel*)rightLabel
     asRightViewOfTextField:(UITextField*)textField {
@@ -177,7 +195,7 @@ const CGFloat kButtonLength = 44;
       rightLabel, rightView,
       LayoutSides::kTop | LayoutSides::kBottom | LayoutSides::kLeading |
           LayoutSides::kTrailing,
-      ChromeDirectionalEdgeInsetsMake(0, kPadding, 0, kPadding));
+      NSDirectionalEdgeInsetsMake(0, kPadding, 0, kPadding));
   textField.rightView = rightView;
   textField.rightViewMode = UITextFieldViewModeAlways;
 }
@@ -210,6 +228,8 @@ const CGFloat kButtonLength = 44;
     _resultsCountLabel = [[UILabel alloc] init];
     _resultsCountLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _resultsCountLabel.font = [UIFont systemFontOfSize:kFontSize];
+    _resultsCountLabel.accessibilityElementsHidden = YES;
+    _resultsCountLabel.accessibilityIdentifier = kFindInPageResultsCountLabelId;
   }
 
   return _resultsCountLabel;

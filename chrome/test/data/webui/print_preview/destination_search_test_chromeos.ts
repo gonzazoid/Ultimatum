@@ -3,9 +3,7 @@
 // found in the LICENSE file.
 
 import {Destination, DestinationOrigin, DestinationStore, DestinationStoreEventType, NativeLayerCrosImpl, NativeLayerImpl, PrintPreviewDestinationDialogCrosElement} from 'chrome://print/print_preview.js';
-import {assert} from 'chrome://resources/js/assert.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
 import {assertEquals, assertNotEquals} from 'chrome://webui-test/chai_assert.js';
 import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
@@ -13,21 +11,7 @@ import {NativeLayerCrosStub} from './native_layer_cros_stub.js';
 import {NativeLayerStub} from './native_layer_stub.js';
 import {createDestinationStore, getCddTemplate, setupTestListenerElement} from './print_preview_test_utils.js';
 
-const destination_search_test_chromeos = {
-  suiteName: 'DestinationSearchTest',
-  TestNames: {
-    ReceiveSuccessfulSetup: 'receive successful setup',
-    ResolutionFails: 'resolution fails',
-    ReceiveSuccessfulSetupWithPolicies:
-        'receive successful setup with policies',
-  },
-};
-
-Object.assign(
-    window,
-    {destination_search_test_chromeos: destination_search_test_chromeos});
-
-suite(destination_search_test_chromeos.suiteName, function() {
+suite('DestinationSearchTest', function() {
   let dialog: PrintPreviewDestinationDialogCrosElement;
 
   let destinationStore: DestinationStore;
@@ -50,7 +34,7 @@ suite(destination_search_test_chromeos.suiteName, function() {
     nativeLayer.setLocalDestinationCapabilities(
         getCddTemplate('FooDevice', 'FooName'));
     destinationStore.init(
-        false /* pdfPrinterDisabled */, true /* isDriveMounted */,
+        false /* pdfPrinterDisabled */, false /* saveToDriveDisabled */,
         'FooDevice' /* printerName */,
         '' /* serializedDefaultDestinationSelectionRulesStr */,
         [] /* recentDestinations */);
@@ -93,10 +77,9 @@ suite(destination_search_test_chromeos.suiteName, function() {
   }
 
   // Tests that a destination is selected if the user clicks on it and setup
-  // (for CrOS) or capabilities fetch (for non-Cros) succeeds.
+  // succeeds.
   test(
-      assert(destination_search_test_chromeos.TestNames.ReceiveSuccessfulSetup),
-      function() {
+      'ReceiveSuccessfulSetup', async function() {
         const destId = '00112233DEADBEEF';
         const response = {
           printerId: destId,
@@ -107,34 +90,27 @@ suite(destination_search_test_chromeos.suiteName, function() {
         const waiter = eventToPromise(
             DestinationStoreEventType.DESTINATION_SELECT, destinationStore);
         requestSetup(destId);
-        return Promise.all([nativeLayerCros.whenCalled('setupPrinter'), waiter])
-            .then(function(results) {
-              const actualId = results[0];
-              assertEquals(destId, actualId);
-              // After setup or capabilities fetch succeeds, the destination
-              // should be selected.
-              assertNotEquals(null, destinationStore.selectedDestination);
-              assertEquals(destId, destinationStore.selectedDestination!.id);
-            });
+        const results = await Promise.all(
+            [nativeLayerCros.whenCalled('setupPrinter'), waiter]);
+        const actualId = results[0];
+        assertEquals(destId, actualId);
+        // After setup or capabilities fetch succeeds, the destination
+        // should be selected.
+        assertNotEquals(null, destinationStore.selectedDestination);
+        assertEquals(destId, destinationStore.selectedDestination!.id);
       });
 
   // Test what happens when the setupPrinter request is rejected.
-  test(
-      assert(destination_search_test_chromeos.TestNames.ResolutionFails),
-      function() {
-        const destId = '001122DEADBEEF';
-        const originalDestination = destinationStore.selectedDestination;
-        nativeLayerCros.setSetupPrinterResponse(
-            {printerId: destId, capabilities: {printer: {}, version: '1'}},
-            true);
-        requestSetup(destId);
-        return nativeLayerCros.whenCalled('setupPrinter')
-            .then(function(actualId) {
-              assertEquals(destId, actualId);
-              // The selected printer should not have changed, since a printer
-              // cannot be selected until setup succeeds.
-              assertEquals(
-                  originalDestination, destinationStore.selectedDestination);
-            });
-      });
+  test('ResolutionFails', async function() {
+    const destId = '001122DEADBEEF';
+    const originalDestination = destinationStore.selectedDestination;
+    nativeLayerCros.setSetupPrinterResponse(
+        {printerId: destId, capabilities: {printer: {}, version: '1'}}, true);
+    requestSetup(destId);
+    const actualId = await nativeLayerCros.whenCalled('setupPrinter');
+    assertEquals(destId, actualId);
+    // The selected printer should not have changed, since a printer
+    // cannot be selected until setup succeeds.
+    assertEquals(originalDestination, destinationStore.selectedDestination);
+  });
 });

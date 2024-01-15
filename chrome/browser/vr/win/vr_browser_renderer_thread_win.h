@@ -9,6 +9,7 @@
 
 #include "base/cancelable_callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
 #include "chrome/browser/vr/browser_renderer.h"
 #include "chrome/browser/vr/model/capturing_state_model.h"
@@ -21,10 +22,8 @@
 
 namespace vr {
 
-class InputDelegateWin;
+class BrowserUiInterface;
 class GraphicsDelegateWin;
-class SchedulerDelegateWin;
-class VRUiBrowserInterface;
 class SchedulerUiInterface;
 
 class VR_EXPORT VRBrowserRendererThreadWin {
@@ -34,7 +33,6 @@ class VR_EXPORT VRBrowserRendererThreadWin {
   ~VRBrowserRendererThreadWin();
 
   void SetDefaultXrViews(const std::vector<device::mojom::XRViewPtr>& views);
-  void SetLocationInfo(GURL gurl);
   void SetWebXrPresenting(bool presenting);
   void SetFramesThrottled(bool throttled);
 
@@ -86,25 +84,16 @@ class VR_EXPORT VRBrowserRendererThreadWin {
 
   void UpdateOverlayState();
 
-  // We need to do some initialization of GraphicsDelegateWin before
-  // browser_renderer_, so we first store it in a unique_ptr, then transition
-  // ownership to browser_renderer_.
-  std::unique_ptr<GraphicsDelegateWin> initializing_graphics_;
-  std::unique_ptr<VRUiBrowserInterface> ui_browser_interface_;
   std::unique_ptr<BrowserRenderer> browser_renderer_;
-  std::unique_ptr<SchedulerDelegateWin> scheduler_delegate_win_;
 
   // Raw pointers to objects owned by browser_renderer_:
-  raw_ptr<InputDelegateWin, DanglingUntriaged> input_ = nullptr;
   raw_ptr<GraphicsDelegateWin, DanglingUntriaged> graphics_ = nullptr;
-  raw_ptr<SchedulerDelegateWin, DanglingUntriaged> scheduler_ = nullptr;
   raw_ptr<BrowserUiInterface, DanglingUntriaged> ui_ = nullptr;
   raw_ptr<SchedulerUiInterface, DanglingUntriaged> scheduler_ui_ = nullptr;
 
   // Owned by vr_ui_host:
   raw_ptr<device::mojom::XRCompositorHost> compositor_;
 
-  GURL gurl_;
   DrawState draw_state_;
   bool started_ = false;
   bool webxr_presenting_ = false;

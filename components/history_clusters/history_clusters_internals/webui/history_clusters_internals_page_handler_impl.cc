@@ -9,6 +9,9 @@
 #include "components/history_clusters/core/features.h"
 #include "components/history_clusters/core/history_clusters_db_tasks.h"
 #include "components/history_clusters/core/history_clusters_debug_jsons.h"
+#include "components/history_clusters/core/history_clusters_service_task.h"
+#include "components/history_clusters/core/history_clusters_service_task_get_most_recent_clusters.h"
+#include "components/history_clusters/core/history_clusters_util.h"
 
 HistoryClustersInternalsPageHandlerImpl::
     HistoryClustersInternalsPageHandlerImpl(
@@ -40,14 +43,55 @@ HistoryClustersInternalsPageHandlerImpl::
     history_clusters_service_->RemoveObserver(this);
 }
 
-void HistoryClustersInternalsPageHandlerImpl::GetVisitsJson(
-    GetVisitsJsonCallback callback) {
-  if (!history_service_) {
+void HistoryClustersInternalsPageHandlerImpl::GetContextClustersJson(
+    GetContextClustersJsonCallback callback) {
+  if (history_clusters_service_ &&
+      history_clusters::ShouldUseNavigationContextClustersFromPersistence()) {
+    GetContextClusters(
+        history_clusters::QueryClustersContinuationParams{
+            /*continuation_time=*/base::Time::Now(), /*is_continuation=*/true,
+            /*is_partial_day=*/false, /*exhausted_unclustered_visits=*/true,
+            /*exhausted_all_visits=*/false},
+        /*previously_retrieved_clusters=*/{}, std::move(callback));
+  } else {
     std::move(callback).Run("");
     return;
   }
-  GetAnnotatedVisits(history_clusters::QueryClustersContinuationParams(),
-                     /*previously_retrieved_visits=*/{}, std::move(callback));
+}
+
+void HistoryClustersInternalsPageHandlerImpl::GetContextClusters(
+    history_clusters::QueryClustersContinuationParams continuation_params,
+    std::vector<history::Cluster> previously_retrieved_clusters,
+    GetContextClustersJsonCallback callback) {
+  // Querying context clusters for a non-UI source, as internals page would be
+  // used sparingly using any non-UI source should be fine.
+  query_context_clusters_task_ = history_clusters_service_->QueryClusters(
+      history_clusters::ClusteringRequestSource::kAllKeywordCacheRefresh,
+      history_clusters::QueryClustersFilterParams(),
+      /*begin_time=*/base::Time(), continuation_params, /*recluster=*/false,
+      base::BindOnce(
+          &HistoryClustersInternalsPageHandlerImpl::OnGotContextClusters,
+          weak_ptr_factory_.GetWeakPtr(),
+          std::move(previously_retrieved_clusters), std::move(callback)));
+}
+
+void HistoryClustersInternalsPageHandlerImpl::OnGotContextClusters(
+    std::vector<history::Cluster> previously_retrieved_clusters,
+    GetContextClustersJsonCallback callback,
+    std::vector<history::Cluster> new_clusters,
+    history_clusters::QueryClustersContinuationParams continuation_params) {
+  previously_retrieved_clusters.insert(previously_retrieved_clusters.end(),
+                                       new_clusters.begin(),
+                                       new_clusters.end());
+  if (continuation_params.exhausted_all_visits) {
+    std::move(callback).Run(history_clusters::GetDebugJSONForClusters(
+        previously_retrieved_clusters));
+    return;
+  }
+  GetContextClusters(continuation_params,
+                     /*previously_retrieved_clusters=*/
+                     std::move(previously_retrieved_clusters),
+                     /*callback=*/std::move(callback));
 }
 
 void HistoryClustersInternalsPageHandlerImpl::
@@ -57,46 +101,6 @@ void HistoryClustersInternalsPageHandlerImpl::
   } else {
     OnDebugMessage("Service is nullptr.");
   }
-}
-
-void HistoryClustersInternalsPageHandlerImpl::GetAnnotatedVisits(
-    history_clusters::QueryClustersContinuationParams continuation_params,
-    std::vector<history::AnnotatedVisit> previously_retrieved_visits,
-    GetVisitsJsonCallback callback) {
-  // There are two forms of cancellation here because `ScheduleDBTask` does
-  // not take in a callback.
-  history_service_->ScheduleDBTask(
-      FROM_HERE,
-      std::make_unique<history_clusters::GetAnnotatedVisitsToCluster>(
-          history_clusters::IncompleteVisitMap(), /*begin_time=*/base::Time(),
-          continuation_params,
-          /*recent_first=*/true,
-          /*days_of_clustered_visits=*/0, /*recluster=*/true,
-          base::BindOnce(
-              &HistoryClustersInternalsPageHandlerImpl::OnGotAnnotatedVisits,
-              weak_ptr_factory_.GetWeakPtr(),
-              std::move(previously_retrieved_visits), std::move(callback))),
-      &task_tracker_);
-}
-
-void HistoryClustersInternalsPageHandlerImpl::OnGotAnnotatedVisits(
-    std::vector<history::AnnotatedVisit> previously_retrieved_visits,
-    GetVisitsJsonCallback callback,
-    std::vector<int64_t> old_clusters,
-    std::vector<history::AnnotatedVisit> annotated_visits,
-    history_clusters::QueryClustersContinuationParams continuation_params) {
-  previously_retrieved_visits.insert(previously_retrieved_visits.end(),
-                                     annotated_visits.begin(),
-                                     annotated_visits.end());
-  if (continuation_params.exhausted_all_visits) {
-    std::move(callback).Run(
-        history_clusters::GetDebugJSONForVisits(previously_retrieved_visits));
-    return;
-  }
-
-  GetAnnotatedVisits(continuation_params,
-                     std::move(previously_retrieved_visits),
-                     std::move(callback));
 }
 
 void HistoryClustersInternalsPageHandlerImpl::OnDebugMessage(

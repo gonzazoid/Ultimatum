@@ -4,21 +4,21 @@
 
 #include "content/browser/download/mhtml_generation_manager.h"
 
+#include <tuple>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/queue.h"
 #include "base/files/file.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/stl_util.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
-#include "base/task/task_runner_util.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
 #include "base/types/optional_util.h"
+#include "base/uuid.h"
 #include "components/download/public/common/download_task_runner.h"
 #include "content/browser/bad_message.h"
 #include "content/browser/download/mhtml_extra_parts_impl.h"
@@ -40,6 +40,13 @@
 #include "net/base/mime_util.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 
+#if BUILDFLAG(IS_WIN)
+#include <windows.h>
+
+#include "base/win/security_util.h"
+#include "base/win/sid.h"
+#endif  // BUILDFLAG(IS_WIN)
+
 namespace {
 
 // Callback to notify the UI thread that writing to the MHTML file is complete.
@@ -49,6 +56,19 @@ using MHTMLWriteCompleteCallback =
 const char kContentLocation[] = "Content-Location: ";
 const char kContentType[] = "Content-Type: ";
 int kInvalidFileSize = -1;
+
+#if BUILDFLAG(IS_WIN)
+// Attempts to deny execute access to the file at `path`.
+bool DenyExecuteAccessToMHTMLFile(const base::FilePath& path) {
+  static constexpr wchar_t kEveryoneSid[] = L"WD";
+  auto sids = base::win::Sid::FromSddlStringVector({kEveryoneSid});
+  if (!sids) {
+    return false;
+  }
+  return base::win::DenyAccessToPath(path, *sids, FILE_EXECUTE,
+                                     /*NO_INHERITANCE=*/0, /*recursive=*/false);
+}
+#endif  // BUILDFLAG(IS_WIN)
 
 // CloseFileResult holds the result of closing the generated file using the
 // status of the operation, a file size and a pointer to a file digest. It
@@ -60,12 +80,12 @@ struct CloseFileResult {
                   std::string* digest)
       : save_status(status), file_size(size) {
     if (digest)
-      file_digest = absl::optional<std::string>(*digest);
+      file_digest = std::optional<std::string>(*digest);
   }
 
   content::mojom::MhtmlSaveStatus save_status;
   int64_t file_size;
-  absl::optional<std::string> file_digest;
+  std::optional<std::string> file_digest;
 
   content::MHTMLGenerationResult toMHTMLGenerationResult() const {
     return content::MHTMLGenerationResult(file_size,
@@ -89,6 +109,31 @@ base::File CreateMHTMLFile(const base::FilePath& file_path) {
     DLOG(ERROR) << "Failed to create file to save MHTML at: "
                 << file_path.value();
   }
+#if BUILDFLAG(IS_WIN)
+  // SECURITY NOTE: On Windows, it is not safe to pass a writeable file handle
+  // to a renderer that could be re-opened executable. Attempting to do so will
+  // cause a DCHECK in mojo.
+  //
+  // Normally it would be best to use base::PreventExecuteMapping or the
+  // base::File::Flags::FLAG_WIN_NO_EXECUTE flag, but both of these will
+  // DCHECK if the File is outside of a set of safe directories, and the MHTML
+  // files are usually located in a user-controlled directory e.g.
+  // the Downloads directory.
+  //
+  // In this case, however, the file is an MHTML file, which we can mark
+  // no-execute with no side-effects as it will never be mapped into memory
+  // executable and it is not a real 'executable' file.
+  //
+  // It's important to note that this does not prevent the file being
+  // double-clicked on or opened in any application, since that is done via
+  // ShellExecute which does not need the FILE_EXECUTE permission on the file.
+  //
+  // If this fails, then it's likely other filesystem operations will also fail,
+  // so there isn't much that can be done. In this case, mojo will also deny the
+  // transit of the file handle to the renderer, and the MHTML file creation
+  // will fail.
+  std::ignore = DenyExecuteAccessToMHTMLFile(file_path);
+#endif
   return browser_file;
 }
 
@@ -196,8 +241,7 @@ class MHTMLGenerationManager::Job {
   // renderer that the MHTML generation for previous frame has finished).
   void SerializeAsMHTMLResponse(
       mojom::MhtmlSaveStatus save_status,
-      const std::vector<std::string>& digests_of_uris_of_serialized_resources,
-      base::TimeDelta renderer_main_thread_time);
+      const std::vector<std::string>& digests_of_uris_of_serialized_resources);
 
   // Records newly serialized resource digests into
   // |digests_of_already_serialized_uris_|.
@@ -235,18 +279,9 @@ class MHTMLGenerationManager::Job {
   // Renderer. This prevents the race/crash from https://crbug.com/612098.
   void MarkAsFinished();
 
-  void ReportRendererMainThreadTime(base::TimeDelta renderer_main_thread_time);
-
   // Close the MHTML file if it looks good, setting the size param.  Returns
   // false for failure.
   static bool CloseFileIfValid(base::File& file, int64_t* file_size);
-
-  // Time tracking for performance metrics reporting.
-  const base::TimeTicks creation_time_;
-  base::TimeTicks wait_on_renderer_start_time_;
-  base::TimeDelta all_renderers_wait_time_;
-  base::TimeDelta all_renderers_main_thread_time_;
-  base::TimeDelta longest_renderer_main_thread_time_;
 
   // User-configurable parameters. Includes the file location, binary encoding
   // choices.
@@ -307,11 +342,10 @@ MHTMLGenerationManager::Job::Job(
     WebContents* web_contents,
     const MHTMLGenerationParams& params,
     MHTMLGenerationResult::GenerateMHTMLCallback callback)
-    : creation_time_(base::TimeTicks::Now()),
-      params_(params),
+    : params_(params),
       frame_tree_node_id_of_busy_frame_(FrameTreeNode::kFrameTreeNodeInvalidId),
       mhtml_boundary_marker_(net::GenerateMimeMultipartBoundary()),
-      salt_(base::GenerateGUID()),
+      salt_(base::Uuid::GenerateRandomV4().AsLowercaseString()),
       callback_(std::move(callback)),
       is_finished_(false),
       waiting_on_data_streaming_(false) {
@@ -355,9 +389,8 @@ void MHTMLGenerationManager::Job::initializeJob(WebContents* web_contents) {
   if (extra_parts)
     extra_data_parts_ = extra_parts->parts();
 
-  base::PostTaskAndReplyWithResult(
-      download::GetDownloadTaskRunner().get(), FROM_HERE,
-      base::BindOnce(&CreateMHTMLFile, params_.file_path),
+  download::GetDownloadTaskRunner()->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&CreateMHTMLFile, params_.file_path),
       base::BindOnce(&Job::OnFileAvailable, weak_factory_.GetWeakPtr()));
 }
 
@@ -368,7 +401,6 @@ MHTMLGenerationManager::Job::CreateMojoParams() {
   mojo_params->mhtml_boundary_marker = mhtml_boundary_marker_;
   mojo_params->mhtml_binary_encoding = params_.use_binary_encoding;
   mojo_params->mhtml_popup_overlay_removal = params_.remove_popup_overlay;
-  mojo_params->mhtml_problem_detection = params_.use_page_problem_detectors;
 
   // Tell the renderer to skip (= deduplicate) already covered MHTML parts.
   mojo_params->salt = salt_;
@@ -424,8 +456,6 @@ mojom::MhtmlSaveStatus MHTMLGenerationManager::Job::SendToNextRenderFrame() {
   TRACE_EVENT_NESTABLE_ASYNC_BEGIN1("page-serialization", "WaitingOnRenderer",
                                     this, "frame tree node id",
                                     frame_tree_node_id_of_busy_frame_);
-  DCHECK(wait_on_renderer_start_time_.is_null());
-  wait_on_renderer_start_time_ = base::TimeTicks::Now();
   return mojom::MhtmlSaveStatus::kSuccess;
 }
 
@@ -544,10 +574,6 @@ void MHTMLGenerationManager::Job::OnFinished(
   TRACE_EVENT_NESTABLE_ASYNC_END2("page-serialization", "SavingMhtmlJob", this,
                                   "job save status", save_status, "file size",
                                   file_size);
-  UMA_HISTOGRAM_TIMES("PageSerialization.MhtmlGeneration.FullPageSavingTime",
-                      base::TimeTicks::Now() - creation_time_);
-  UMA_HISTOGRAM_ENUMERATION("PageSerialization.MhtmlGeneration.FinalSaveStatus",
-                            save_status);
 
   std::move(callback_).Run(close_file_result.toMHTMLGenerationResult());
 
@@ -572,42 +598,6 @@ void MHTMLGenerationManager::Job::MarkAsFinished() {
 
   TRACE_EVENT_NESTABLE_ASYNC_INSTANT0("page-serialization", "JobFinished",
                                       this);
-
-  // End of job timing reports.
-  if (!wait_on_renderer_start_time_.is_null()) {
-    base::TimeDelta renderer_wait_time =
-        base::TimeTicks::Now() - wait_on_renderer_start_time_;
-    UMA_HISTOGRAM_TIMES(
-        "PageSerialization.MhtmlGeneration.BrowserWaitForRendererTime."
-        "SingleFrame",
-        renderer_wait_time);
-    all_renderers_wait_time_ += renderer_wait_time;
-  }
-  if (!all_renderers_wait_time_.is_zero()) {
-    UMA_HISTOGRAM_TIMES(
-        "PageSerialization.MhtmlGeneration.BrowserWaitForRendererTime."
-        "FrameTree",
-        all_renderers_wait_time_);
-  }
-  if (!all_renderers_main_thread_time_.is_zero()) {
-    UMA_HISTOGRAM_TIMES(
-        "PageSerialization.MhtmlGeneration.RendererMainThreadTime.FrameTree",
-        all_renderers_main_thread_time_);
-  }
-  if (!longest_renderer_main_thread_time_.is_zero()) {
-    UMA_HISTOGRAM_TIMES(
-        "PageSerialization.MhtmlGeneration.RendererMainThreadTime.SlowestFrame",
-        longest_renderer_main_thread_time_);
-  }
-}
-
-void MHTMLGenerationManager::Job::ReportRendererMainThreadTime(
-    base::TimeDelta renderer_main_thread_time) {
-  DCHECK(renderer_main_thread_time.is_positive());
-  if (renderer_main_thread_time.is_positive())
-    all_renderers_main_thread_time_ += renderer_main_thread_time;
-  if (renderer_main_thread_time > longest_renderer_main_thread_time_)
-    longest_renderer_main_thread_time_ = renderer_main_thread_time;
 }
 
 void MHTMLGenerationManager::Job::CloseFile(
@@ -621,8 +611,8 @@ void MHTMLGenerationManager::Job::CloseFile(
     save_status = mojom::MhtmlSaveStatus::kFileWritingError;
 
   // If no previous error occurred the boundary should be sent.
-  base::PostTaskAndReplyWithResult(
-      download::GetDownloadTaskRunner().get(), FROM_HERE,
+  download::GetDownloadTaskRunner()->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&MHTMLGenerationManager::Job::FinalizeOnFileThread,
                      save_status, mhtml_boundary_marker_,
                      std::move(browser_file_), std::move(extra_data_parts_),
@@ -632,13 +622,11 @@ void MHTMLGenerationManager::Job::CloseFile(
 
 void MHTMLGenerationManager::Job::SerializeAsMHTMLResponse(
     mojom::MhtmlSaveStatus save_status,
-    const std::vector<std::string>& digests_of_uris_of_serialized_resources,
-    base::TimeDelta renderer_main_thread_time) {
+    const std::vector<std::string>& digests_of_uris_of_serialized_resources) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   TRACE_EVENT_NESTABLE_ASYNC_END0("page-serialization", "WaitingOnRenderer",
                                   this);
-  ReportRendererMainThreadTime(renderer_main_thread_time);
 
   frame_tree_node_id_of_busy_frame_ = FrameTreeNode::kFrameTreeNodeInvalidId;
 
@@ -651,16 +639,6 @@ void MHTMLGenerationManager::Job::SerializeAsMHTMLResponse(
 
 void MHTMLGenerationManager::Job::RecordDigests(
     const std::vector<std::string>& digests_of_uris_of_serialized_resources) {
-  DCHECK(!wait_on_renderer_start_time_.is_null());
-  base::TimeDelta renderer_wait_time =
-      base::TimeTicks::Now() - wait_on_renderer_start_time_;
-  UMA_HISTOGRAM_TIMES(
-      "PageSerialization.MhtmlGeneration.BrowserWaitForRendererTime."
-      "SingleFrame",
-      renderer_wait_time);
-  all_renderers_wait_time_ += renderer_wait_time;
-  wait_on_renderer_start_time_ = base::TimeTicks();
-
   // Renderer should be deduping resources with the same uris.
   DCHECK_EQ(0u, base::STLSetIntersection<std::set<std::string>>(
                     digests_of_already_serialized_uris_,

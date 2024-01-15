@@ -7,13 +7,36 @@
 #include <string>
 
 #include "ash/ash_export.h"
+#include "base/environment.h"
 #include "base/i18n/time_formatting.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "google_apis/calendar/calendar_api_response_types.h"
 
 namespace ash {
 
 namespace calendar_test_utils {
+
+ScopedLibcTimeZone::ScopedLibcTimeZone(const std::string& timezone) {
+  auto env = base::Environment::Create();
+  std::string old_timezone_value;
+  if (env->GetVar(kTimeZoneEnvVarName, &old_timezone_value)) {
+    old_timezone_ = old_timezone_value;
+  }
+  if (!env->SetVar(kTimeZoneEnvVarName, timezone)) {
+    success_ = false;
+  }
+  tzset();
+}
+
+ScopedLibcTimeZone::~ScopedLibcTimeZone() {
+  auto env = base::Environment::Create();
+  if (old_timezone_.has_value()) {
+    CHECK(env->SetVar(kTimeZoneEnvVarName, old_timezone_.value()));
+  } else {
+    CHECK(env->UnSetVar(kTimeZoneEnvVarName));
+  }
+}
 
 std::unique_ptr<google_apis::calendar::CalendarEvent> CreateEvent(
     const char* id,
@@ -23,15 +46,23 @@ std::unique_ptr<google_apis::calendar::CalendarEvent> CreateEvent(
     const google_apis::calendar::CalendarEvent::EventStatus event_status,
     const google_apis::calendar::CalendarEvent::ResponseStatus
         self_response_status,
-    const bool all_day_event) {
+    bool all_day_event,
+    GURL video_conference_url) {
   auto event = std::make_unique<google_apis::calendar::CalendarEvent>();
   base::Time start_time_base, end_time_base;
   google_apis::calendar::DateTime start_time_date, end_time_date;
   event->set_id(id);
   event->set_summary(summary);
-  bool result = base::Time::FromString(start_time, &start_time_base);
+  bool result;
+  if (all_day_event)
+    result = base::Time::FromUTCString(start_time, &start_time_base);
+  else
+    result = base::Time::FromString(start_time, &start_time_base);
   DCHECK(result);
-  result = base::Time::FromString(end_time, &end_time_base);
+  if (all_day_event)
+    result = base::Time::FromUTCString(end_time, &end_time_base);
+  else
+    result = base::Time::FromString(end_time, &end_time_base);
   DCHECK(result);
   start_time_date.set_date_time(start_time_base);
   end_time_date.set_date_time(end_time_base);
@@ -40,6 +71,7 @@ std::unique_ptr<google_apis::calendar::CalendarEvent> CreateEvent(
   event->set_status(event_status);
   event->set_self_response_status(self_response_status);
   event->set_all_day_event(all_day_event);
+  event->set_conference_data_uri(video_conference_url);
   return event;
 }
 
@@ -51,7 +83,8 @@ std::unique_ptr<google_apis::calendar::CalendarEvent> CreateEvent(
     const google_apis::calendar::CalendarEvent::EventStatus event_status,
     const google_apis::calendar::CalendarEvent::ResponseStatus
         self_response_status,
-    const bool all_day_event) {
+    bool all_day_event,
+    GURL video_conference_url) {
   auto event = std::make_unique<google_apis::calendar::CalendarEvent>();
   google_apis::calendar::DateTime start_time_date, end_time_date;
   event->set_id(id);
@@ -63,13 +96,25 @@ std::unique_ptr<google_apis::calendar::CalendarEvent> CreateEvent(
   event->set_status(event_status);
   event->set_self_response_status(self_response_status);
   event->set_all_day_event(all_day_event);
+  event->set_conference_data_uri(video_conference_url);
   return event;
+}
+
+std::unique_ptr<google_apis::calendar::EventList> CreateMockEventList(
+    std::list<std::unique_ptr<google_apis::calendar::CalendarEvent>> events) {
+  auto event_list = std::make_unique<google_apis::calendar::EventList>();
+  event_list->set_time_zone("Greenwich Mean Time");
+
+  for (auto& event : events)
+    event_list->InjectItemForTesting(std::move(event));
+
+  return event_list;
 }
 
 ASH_EXPORT bool IsTheSameMonth(const base::Time& date_a,
                                const base::Time& date_b) {
-  return base::TimeFormatWithPattern(date_a, "MM YYYY") ==
-         base::TimeFormatWithPattern(date_b, "MM YYYY");
+  return base::UnlocalizedTimeFormatWithPattern(date_a, "MM YYYY") ==
+         base::UnlocalizedTimeFormatWithPattern(date_b, "MM YYYY");
 }
 
 base::Time GetTimeFromString(const char* start_time) {
@@ -91,7 +136,7 @@ base::OnceClosure CalendarClientTestImpl::GetEventList(
   // little longer than the settle down duration, so in the test after the
   // animation settled down it can still be with `kFetching` status until
   // somemethod like `WaitUntilFetched` is called.
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), error_, std::move(events_)),
       task_delay_);

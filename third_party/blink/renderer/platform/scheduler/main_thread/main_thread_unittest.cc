@@ -8,8 +8,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/message_loop/message_pump.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
@@ -17,10 +18,10 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/platform.h"
+#include "third_party/blink/renderer/platform/scheduler/common/task_priority.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/testing/scoped_scheduler_overrider.h"
 
@@ -57,6 +58,7 @@ class MainThreadTest : public testing::Test {
             base::MessagePump::Create(base::MessagePumpType::DEFAULT),
             base::sequence_manager::SequenceManager::Settings::Builder()
                 .SetTickClock(&clock_)
+                .SetPrioritySettings(CreatePrioritySettings())
                 .Build()));
     scheduler_overrider_ = std::make_unique<ScopedSchedulerOverrider>(
         scheduler_.get(), scheduler_->DefaultTaskRunner());
@@ -76,7 +78,7 @@ class MainThreadTest : public testing::Test {
   base::SimpleTestTickClock clock_;
   std::unique_ptr<MainThreadSchedulerImpl> scheduler_;
   std::unique_ptr<ScopedSchedulerOverrider> scheduler_overrider_;
-  Thread* thread_;
+  raw_ptr<Thread, ExperimentalRenderer> thread_;
 };
 
 TEST_F(MainThreadTest, TestTaskObserver) {

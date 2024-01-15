@@ -38,11 +38,11 @@
 
 namespace blink {
 
-class ExceptionState;
 class FilePropertyBag;
 class FileMetadata;
 class FormControlState;
 class KURL;
+class ExecutionContext;
 
 class CORE_EXPORT File final : public Blob {
   DEFINE_WRAPPERTYPEINFO();
@@ -92,12 +92,14 @@ class CORE_EXPORT File final : public Blob {
 
   // For session restore feature.
   // See also AppendToControlState().
-  static File* CreateFromControlState(const FormControlState& state,
+  static File* CreateFromControlState(ExecutionContext* context,
+                                      const FormControlState& state,
                                       wtf_size_t& index);
   static String PathFromControlState(const FormControlState& state,
                                      wtf_size_t& index);
 
-  static File* CreateWithRelativePath(const String& path,
+  static File* CreateWithRelativePath(ExecutionContext* context,
+                                      const String& path,
                                       const String& relative_path);
 
   // If filesystem files live in the remote filesystem, the port might pass the
@@ -106,10 +108,11 @@ class CORE_EXPORT File final : public Blob {
   //
   // Otherwise calling size(), lastModifiedTime() and slice() will synchronously
   // query the file metadata.
-  static File* CreateForFileSystemFile(const String& name,
+  static File* CreateForFileSystemFile(ExecutionContext* context,
+                                       const String& name,
                                        const FileMetadata& metadata,
                                        UserVisibility user_visibility) {
-    return MakeGarbageCollected<File>(name, metadata, user_visibility);
+    return MakeGarbageCollected<File>(context, name, metadata, user_visibility);
   }
 
   // KURL has a String() operator, so if this signature is called and not
@@ -135,10 +138,12 @@ class CORE_EXPORT File final : public Blob {
                                        const FileMetadata& metadata,
                                        UserVisibility user_visibility);
 
-  explicit File(const String& path,
-                ContentTypeLookupPolicy = kWellKnownContentTypes,
-                UserVisibility = File::kIsUserVisible);
-  File(const String& path,
+  File(ExecutionContext* context,
+       const String& path,
+       ContentTypeLookupPolicy = kWellKnownContentTypes,
+       UserVisibility = File::kIsUserVisible);
+  File(ExecutionContext* context,
+       const String& path,
        const String& name,
        ContentTypeLookupPolicy,
        UserVisibility);
@@ -153,7 +158,10 @@ class CORE_EXPORT File final : public Blob {
   File(const String& name,
        const absl::optional<base::Time>& modification_time,
        scoped_refptr<BlobDataHandle>);
-  File(const String& name, const FileMetadata&, UserVisibility);
+  File(ExecutionContext* context,
+       const String& name,
+       const FileMetadata& metadata,
+       UserVisibility user_visibility);
   File(const KURL& file_system_url,
        const FileMetadata& metadata,
        UserVisibility user_visibility,
@@ -170,38 +178,38 @@ class CORE_EXPORT File final : public Blob {
 
   // Create a file with a name exposed to the author (via File.name and
   // associated DOM properties) that differs from the one provided in the path.
-  static File* CreateForUserProvidedFile(const String& path,
+  static File* CreateForUserProvidedFile(ExecutionContext* context,
+                                         const String& path,
                                          const String& display_name) {
     if (display_name.empty()) {
-      return MakeGarbageCollected<File>(path, File::kAllContentTypes,
+      return MakeGarbageCollected<File>(context, path, File::kAllContentTypes,
                                         File::kIsUserVisible);
     }
-    return MakeGarbageCollected<File>(
-        path, display_name, File::kAllContentTypes, File::kIsUserVisible);
+    return MakeGarbageCollected<File>(context, path, display_name,
+                                      File::kAllContentTypes,
+                                      File::kIsUserVisible);
   }
 
   static File* CreateForFileSystemFile(
       const String& path,
       const String& name,
       ContentTypeLookupPolicy policy = kWellKnownContentTypes) {
-    if (name.empty())
-      return MakeGarbageCollected<File>(path, policy, File::kIsNotUserVisible);
-    return MakeGarbageCollected<File>(path, name, policy,
+    if (name.empty()) {
+      return MakeGarbageCollected<File>(/*context=*/nullptr, path, policy,
+                                        File::kIsNotUserVisible);
+    }
+    return MakeGarbageCollected<File>(/*context=*/nullptr, path, name, policy,
                                       File::kIsNotUserVisible);
   }
 
   File* Clone(const String& name = String()) const;
 
+  // This method calls CaptureSnapshotIfNeeded, and thus can involve synchronous
+  // IPC and file operations.
   uint64_t size() const override;
-  Blob* slice(int64_t start,
-              int64_t end,
-              const String& content_type,
-              ExceptionState&) const override;
 
   bool IsFile() const override { return true; }
   bool HasBackingFile() const override { return has_backing_file_; }
-
-  void AppendTo(BlobData&) const override;
 
   const String& GetPath() const {
 #if DCHECK_IS_ON()
@@ -213,14 +221,20 @@ class CORE_EXPORT File final : public Blob {
 
   // Getter for the lastModified IDL attribute,
   // http://dev.w3.org/2006/webapi/FileAPI/#file-attrs
+  // This method calls CaptureSnapshotIfNeeded, and thus can involve synchronous
+  // IPC and file operations.
   int64_t lastModified() const;
 
   // Getter for the lastModifiedDate IDL attribute,
   // http://www.w3.org/TR/FileAPI/#dfn-lastModifiedDate
+  // This method calls CaptureSnapshotIfNeeded, and thus can involve synchronous
+  // IPC and file operations.
   ScriptValue lastModifiedDate(ScriptState* script_state) const;
 
   // Returns File's last modified time.
   // If the modification time isn't known, the current time is returned.
+  // This method calls CaptureSnapshotIfNeeded, and thus can involve synchronous
+  // IPC and file operations.
   base::Time LastModifiedTime() const;
 
   // Similar to |LastModifiedTime()|, except this returns absl::nullopt rather

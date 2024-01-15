@@ -10,20 +10,17 @@
 #include "base/command_line.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
-#include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/viz/common/constants.h"
 
 namespace switches {
-
-// Screen width is useful for debugging. Shipping implementations should detect
-// this.
-const char kDeJellyScreenWidth[] = "de-jelly-screen-width";
 
 // The default number of the BeginFrames to wait to activate a surface with
 // dependencies.
 const char kDeadlineToSynchronizeSurfaces[] =
     "deadline-to-synchronize-surfaces";
+
+// Disables reporting of frame timing via ADPF, even if supported on the device.
+const char kDisableAdpf[] = "disable-adpf";
 
 // Disables begin frame limiting in both cc scheduler and display scheduler.
 // Also implies --disable-gpu-vsync (see //ui/gl/gl_switches.h).
@@ -32,22 +29,11 @@ const char kDisableFrameRateLimit[] = "disable-frame-rate-limit";
 // Sets the number of max pending frames in the GL buffer queue to 1.
 const char kDoubleBufferCompositing[] = "double-buffer-compositing";
 
-// Experimental de-jelly support.
-const char kEnableDeJelly[] = "enable-de-jelly";
-
 // Enable compositing individual elements via hardware overlays when
 // permitted by device.
 // Setting the flag to "single-fullscreen" will try to promote a single
 // fullscreen overlay and use it as main framebuffer where possible.
 const char kEnableHardwareOverlays[] = "enable-hardware-overlays";
-
-#if BUILDFLAG(IS_CHROMEOS)
-// ChromeOS uses one of two VideoDecoder implementations based on SoC/board
-// specific configurations that are signalled via this command line flag.
-// TODO(b/159825227): remove when the "old" video decoder is fully launched.
-const char kPlatformDisallowsChromeOSDirectVideoDecoder[] =
-    "platform-disallows-chromeos-direct-video-decoder";
-#endif
 
 // Effectively disables pipelining of compositor frame production stages by
 // waiting for each stage to finish before completing a frame.

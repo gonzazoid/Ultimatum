@@ -5,6 +5,7 @@
 #ifndef CHROMEOS_ASH_SERVICES_ASSISTANT_MEDIA_SESSION_ASSISTANT_MEDIA_SESSION_H_
 #define CHROMEOS_ASH_SERVICES_ASSISTANT_MEDIA_SESSION_ASSISTANT_MEDIA_SESSION_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/timer/timer.h"
@@ -45,6 +46,8 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantMediaSession
   void PreviousTrack() override {}
   void NextTrack() override {}
   void SkipAd() override {}
+  void PreviousSlide() override {}
+  void NextSlide() override {}
   void Seek(base::TimeDelta seek_time) override {}
   void Stop(SuspendType suspend_type) override {}
   void GetMediaImageBitmap(const media_session::MediaImage& image,
@@ -55,12 +58,14 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantMediaSession
   void ScrubTo(base::TimeDelta seek_time) override {}
   void EnterPictureInPicture() override {}
   void ExitPictureInPicture() override {}
-  void SetAudioSinkId(const absl::optional<std::string>& sink_id) override {}
+  void SetAudioSinkId(const std::optional<std::string>& sink_id) override {}
   void ToggleMicrophone() override {}
   void ToggleCamera() override {}
   void HangUp() override {}
   void Raise() override {}
   void SetMute(bool mute) override {}
+  void RequestMediaRemoting() override {}
+  void EnterAutoPictureInPicture() override {}
 
   // Requests/abandons audio focus to the AudioFocusManager.
   void RequestAudioFocus(media_session::mojom::AudioFocusType audio_focus_type);
@@ -108,7 +113,7 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantMediaSession
   // The current metadata associated with the current media session.
   media_session::MediaMetadata metadata_;
 
-  MediaHost* const host_;
+  const raw_ptr<MediaHost> host_;
 
   scoped_refptr<base::SequencedTaskRunner> main_task_runner_;
   // Binding for Mojo pointer to |this| held by AudioFocusManager.

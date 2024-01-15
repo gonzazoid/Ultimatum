@@ -32,6 +32,8 @@
 #include "third_party/blink/renderer/core/html/forms/text_field_input_type.h"
 
 #include "third_party/blink/renderer/core/dom/events/event_dispatch_forbidden_scope.h"
+#include "third_party/blink/renderer/core/dom/focus_params.h"
+#include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
 #include "third_party/blink/renderer/core/editing/frame_selection.h"
 #include "third_party/blink/renderer/core/events/before_text_inserted_event.h"
@@ -40,12 +42,12 @@
 #include "third_party/blink/renderer/core/events/mouse_event.h"
 #include "third_party/blink/renderer/core/events/text_event.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
-#include "third_party/blink/renderer/core/html/forms/form_data.h"
 #include "third_party/blink/renderer/core/html/forms/html_input_element.h"
 #include "third_party/blink/renderer/core/html/forms/text_control_inner_elements.h"
 #include "third_party/blink/renderer/core/html/shadow/shadow_element_names.h"
 #include "third_party/blink/renderer/core/html_names.h"
-#include "third_party/blink/renderer/core/layout/layout_object_factory.h"
+#include "third_party/blink/renderer/core/keywords.h"
+#include "third_party/blink/renderer/core/layout/forms/layout_text_control_single_line.h"
 #include "third_party/blink/renderer/core/page/chrome_client.h"
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
@@ -96,15 +98,15 @@ class DataListIndicatorElement final : public HTMLDivElement {
   void InitializeInShadowTree() {
     DCHECK(ContainingShadowRoot());
     DCHECK(ContainingShadowRoot()->IsUserAgent());
-    SetShadowPseudoId(AtomicString("-webkit-calendar-picker-indicator"));
+    SetShadowPseudoId(shadow_element_names::kPseudoCalendarPickerIndicator);
     setAttribute(html_names::kIdAttr, shadow_element_names::kIdPickerIndicator);
-    setAttribute(html_names::kStyleAttr,
-                 "display:list-item; "
-                 "list-style:disclosure-open inside; "
-                 "counter-increment: list-item 0;"
-                 "block-size:1em;");
+    SetInlineStyleProperty(CSSPropertyID::kDisplay, CSSValueID::kListItem);
+    SetInlineStyleProperty(CSSPropertyID::kListStyle, "disclosure-open inside");
+    SetInlineStyleProperty(CSSPropertyID::kCounterIncrement, "list-item 0");
+    SetInlineStyleProperty(CSSPropertyID::kBlockSize, 1.0,
+                           CSSPrimitiveValue::UnitType::kEms);
     // Do not expose list-item role.
-    setAttribute(html_names::kAriaHiddenAttr, "true");
+    setAttribute(html_names::kAriaHiddenAttr, keywords::kTrue);
   }
 };
 
@@ -127,6 +129,9 @@ InputType::ValueMode TextFieldInputType::GetValueMode() const {
 }
 
 SpinButtonElement* TextFieldInputType::GetSpinButtonElement() const {
+  if (!HasCreatedShadowSubtree()) {
+    return nullptr;
+  }
   auto* element = GetElement().UserAgentShadowRoot()->getElementById(
       shadow_element_names::kIdSpinButton);
   CHECK(!element || IsA<SpinButtonElement>(element));
@@ -226,12 +231,21 @@ void TextFieldInputType::HandleKeydownEventForSpinButton(KeyboardEvent& event) {
   if (GetElement().IsDisabledOrReadOnly())
     return;
   const String& key = event.key();
-  if (key == "ArrowUp")
+  bool is_horizontal =
+      GetElement().GetComputedStyle()
+          ? GetElement().GetComputedStyle()->IsHorizontalWritingMode()
+          : true;
+
+  if ((is_horizontal && key == "ArrowUp") ||
+      (!is_horizontal && key == "ArrowRight")) {
     SpinButtonStepUp();
-  else if (key == "ArrowDown" && !event.altKey())
+  } else if (((is_horizontal && key == "ArrowDown") ||
+              (!is_horizontal && key == "ArrowLeft")) &&
+             !event.altKey()) {
     SpinButtonStepDown();
-  else
+  } else {
     return;
+  }
   GetElement().DispatchFormControlChangeEvent();
   event.SetDefaultHandled();
 }
@@ -289,17 +303,15 @@ bool TextFieldInputType::ShouldSubmitImplicitly(const Event& event) {
   return InputTypeView::ShouldSubmitImplicitly(event);
 }
 
-void TextFieldInputType::CustomStyleForLayoutObject(ComputedStyle& style) {
+void TextFieldInputType::AdjustStyle(ComputedStyleBuilder& builder) {
   // The flag is necessary in order that a text field <input> with non-'visible'
   // overflow property doesn't change its baseline.
-  style.SetShouldIgnoreOverflowPropertyForInlineBlockBaseline();
+  builder.SetShouldIgnoreOverflowPropertyForInlineBlockBaseline();
 }
 
 LayoutObject* TextFieldInputType::CreateLayoutObject(
-    const ComputedStyle& style,
-    LegacyLayout legacy) const {
-  return LayoutObjectFactory::CreateTextControlSingleLine(GetElement(), style,
-                                                          legacy);
+    const ComputedStyle&) const {
+  return MakeGarbageCollected<LayoutTextControlSingleLine>(&GetElement());
 }
 
 ControlPart TextFieldInputType::AutoAppearance() const {
@@ -353,7 +365,7 @@ void TextFieldInputType::CreateShadowSubtree() {
 }
 
 Element* TextFieldInputType::ContainerElement() const {
-  return GetElement().UserAgentShadowRoot()->getElementById(
+  return GetElement().EnsureShadowSubtree()->getElementById(
       shadow_element_names::kIdTextFieldContainer);
 }
 
@@ -364,6 +376,9 @@ void TextFieldInputType::DestroyShadowSubtree() {
 }
 
 void TextFieldInputType::ListAttributeTargetChanged() {
+  if (!HasCreatedShadowSubtree()) {
+    return;
+  }
   if (ChromeClient* chrome_client = GetChromeClient())
     chrome_client->TextFieldDataListChanged(GetElement());
   Element* picker = GetElement().UserAgentShadowRoot()->getElementById(
@@ -417,10 +432,16 @@ void TextFieldInputType::DisabledOrReadonlyAttributeChanged() {
 }
 
 void TextFieldInputType::DisabledAttributeChanged() {
+  if (!HasCreatedShadowSubtree()) {
+    return;
+  }
   DisabledOrReadonlyAttributeChanged();
 }
 
 void TextFieldInputType::ReadonlyAttributeChanged() {
+  if (!HasCreatedShadowSubtree()) {
+    return;
+  }
   DisabledOrReadonlyAttributeChanged();
 }
 
@@ -430,6 +451,13 @@ bool TextFieldInputType::SupportsReadOnly() const {
 
 static bool IsASCIILineBreak(UChar c) {
   return c == '\r' || c == '\n';
+}
+
+// Returns true if `c` may contain a line break. This is an inexact comparison.
+// This is used as the common case is the text does not contain a newline.
+static bool MayBeASCIILineBreak(UChar c) {
+  static_assert('\n' < '\r');
+  return c <= '\r';
 }
 
 static String LimitLength(const String& string, unsigned max_length) {
@@ -442,6 +470,13 @@ static String LimitLength(const String& string, unsigned max_length) {
 }
 
 String TextFieldInputType::SanitizeValue(const String& proposed_value) const {
+  // Typical case is the string doesn't contain a break and fits. The Find()
+  // is not exact (meaning it'll match many other characters), but is a good
+  // approximation for a fast path.
+  if (proposed_value.Find(MayBeASCIILineBreak) == kNotFound &&
+      proposed_value.length() < std::numeric_limits<int>::max()) {
+    return proposed_value;
+  }
   return LimitLength(proposed_value.RemoveCharacters(IsASCIILineBreak),
                      std::numeric_limits<int>::max());
 }
@@ -508,13 +543,14 @@ void TextFieldInputType::UpdatePlaceholderText(bool is_suggested_value) {
   if (!SupportsPlaceholder())
     return;
   HTMLElement* placeholder = GetElement().PlaceholderElement();
-  String placeholder_text = GetElement().GetPlaceholderValue();
-  if (placeholder_text.empty()) {
+  if (!is_suggested_value &&
+      !GetElement().FastHasAttribute(html_names::kPlaceholderAttr)) {
     if (placeholder)
       placeholder->remove(ASSERT_NO_EXCEPTION);
     return;
   }
   if (!placeholder) {
+    GetElement().EnsureShadowSubtree();
     auto* new_element =
         MakeGarbageCollected<HTMLDivElement>(GetElement().GetDocument());
     placeholder = new_element;
@@ -538,17 +574,7 @@ void TextFieldInputType::UpdatePlaceholderText(bool is_suggested_value) {
   } else {
     placeholder->RemoveInlineStyleProperty(CSSPropertyID::kUserSelect);
   }
-  placeholder->setTextContent(placeholder_text);
-}
-
-void TextFieldInputType::AppendToFormData(FormData& form_data) const {
-  InputType::AppendToFormData(form_data);
-  const AtomicString& dirname_attr_value =
-      GetElement().FastGetAttribute(html_names::kDirnameAttr);
-  if (!dirname_attr_value.IsNull()) {
-    form_data.AppendFromElement(dirname_attr_value,
-                                GetElement().DirectionForFormData());
-  }
+  placeholder->setTextContent(GetElement().GetPlaceholderValue());
 }
 
 String TextFieldInputType::ConvertFromVisibleValue(
@@ -562,6 +588,8 @@ void TextFieldInputType::SubtreeHasChanged() {
   GetElement().UpdatePlaceholderVisibility();
   GetElement().PseudoStateChanged(CSSSelector::kPseudoValid);
   GetElement().PseudoStateChanged(CSSSelector::kPseudoInvalid);
+  GetElement().PseudoStateChanged(CSSSelector::kPseudoUserValid);
+  GetElement().PseudoStateChanged(CSSSelector::kPseudoUserInvalid);
   GetElement().PseudoStateChanged(CSSSelector::kPseudoInRange);
   GetElement().PseudoStateChanged(CSSSelector::kPseudoOutOfRange);
 
@@ -605,7 +633,7 @@ void TextFieldInputType::UpdateView() {
 }
 
 void TextFieldInputType::FocusAndSelectSpinButtonOwner() {
-  GetElement().Focus();
+  GetElement().Focus(FocusParams(FocusTrigger::kUserGesture));
   GetElement().SetSelectionRange(0, std::numeric_limits<int>::max());
 }
 

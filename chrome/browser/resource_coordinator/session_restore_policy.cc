@@ -9,14 +9,14 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/no_destructor.h"
 #include "base/sequence_checker.h"
 #include "base/system/sys_info.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/resource_coordinator/tab_manager_features.h"
@@ -150,9 +150,8 @@ void TabDataAccess::SetUsedInBgFromSiteDataDB(
           return;
         }
         auto* reader =
-            performance_manager::SiteDataRecorder::Data::FromPageNode(
-                page_node.get())
-                ->reader();
+            performance_manager::SiteDataRecorder::Data::GetReaderForPageNode(
+                page_node.get());
         // The tab won't have a reader if it doesn't have an URL tracked in the
         // site data database.
         if (!reader) {
@@ -182,7 +181,7 @@ void TabDataAccess::SetUsedInBgFromSiteDataDB(
       performance_manager::PerformanceManager::GetPrimaryPageNodeForWebContents(
           contents),
       tab_data->used_in_bg_setter_cancel_callback.callback(),
-      base::SequencedTaskRunnerHandle::Get());
+      base::SequencedTaskRunner::GetCurrentDefault());
 
   performance_manager::PerformanceManager::CallOnGraph(
       FROM_HERE, std::move(call_on_graph_cb));
@@ -233,10 +232,6 @@ void TabDataAccess::OnSiteDataAvailable(
     policy->notify_tab_score_changed_callback_.Run(contents, tab_data->score);
 
   ++policy->tabs_scored_;
-  DCHECK(tab_data->used_in_bg.has_value());
-  if (tab_data->used_in_bg)
-    ++policy->tabs_used_in_bg_;
-
   policy->DispatchNotifyAllTabsScoredIfNeeded();
 }
 #endif
@@ -246,15 +241,7 @@ SessionRestorePolicy::SessionRestorePolicy()
       delegate_(SysInfoDelegate::Get()),
       simultaneous_tab_loads_(CalculateSimultaneousTabLoads()) {}
 
-SessionRestorePolicy::~SessionRestorePolicy() {
-  // Record the number of tabs involved in the session restore that use
-  // background communications mechanisms.
-  DCHECK_GE(tabs_used_in_bg_, tabs_used_in_bg_restored_);
-  UMA_HISTOGRAM_COUNTS_100("SessionRestore.BackgroundUseCaseTabCount.Total",
-                           tabs_used_in_bg_);
-  UMA_HISTOGRAM_COUNTS_100("SessionRestore.BackgroundUseCaseTabCount.Restored",
-                           tabs_used_in_bg_restored_);
-}
+SessionRestorePolicy::~SessionRestorePolicy() = default;
 
 float SessionRestorePolicy::AddTabForScoring(content::WebContents* contents) {
   DCHECK(!base::Contains(tab_data_, contents));
@@ -323,10 +310,6 @@ void SessionRestorePolicy::RemoveTabForScoring(content::WebContents* contents) {
 
   if (HasFinalScore(tab_data)) {
     --tabs_scored_;
-
-    // Tabs are removed from the policy engine when they start loading.
-    if (tab_data->UsedInBg())
-      ++tabs_used_in_bg_restored_;
   }
 
   tab_data_.erase(it);
@@ -445,7 +428,7 @@ void SessionRestorePolicy::DispatchNotifyAllTabsScoredIfNeeded() {
 
   // This is done asynchronously so that this notification doesn't arrive before
   // a tab score is delivered.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&SessionRestorePolicy::NotifyAllTabsScored,
                                 weak_factory_.GetWeakPtr()));
   notification_state_ = NotificationState::kEnRoute;

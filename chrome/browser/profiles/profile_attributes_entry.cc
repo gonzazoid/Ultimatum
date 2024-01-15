@@ -19,7 +19,7 @@
 #include "chrome/browser/profiles/profile_avatar_icon_util.h"
 #include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/signin/signin_util.h"
-#include "chrome/browser/ui/signin/profile_colors_util.h"
+#include "chrome/browser/ui/profiles/profile_colors_util.h"
 #include "chrome/common/pref_names.h"
 #include "components/policy/core/browser/browser_policy_connector.h"
 #include "components/prefs/pref_registry_simple.h"
@@ -28,6 +28,7 @@
 #include "components/profile_metrics/state.h"
 #include "components/signin/public/base/signin_pref_names.h"
 #include "components/signin/public/identity_manager/account_info.h"
+#include "components/supervised_user/core/common/buildflags.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/gfx/canvas.h"
@@ -37,7 +38,7 @@
 #include "ui/native_theme/native_theme.h"
 
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-#include "chrome/browser/supervised_user/supervised_user_constants.h"
+#include "components/supervised_user/core/common/supervised_user_constants.h"
 #endif
 
 #if !BUILDFLAG(IS_ANDROID)
@@ -53,6 +54,9 @@ const char kActiveTimeKey[] = "active_time";
 const char kMetricsBucketIndex[] = "metrics_bucket_index";
 const char kForceSigninProfileLockedKey[] = "force_signin_profile_locked";
 const char kHostedDomain[] = "hosted_domain";
+const char kProfileManagementEnrollmentToken[] =
+    "profile_management_enrollment_token";
+const char kProfileManagementId[] = "profile_management_id";
 const char kUserAcceptedAccountManagement[] =
     "user_accepted_account_management";
 
@@ -79,31 +83,14 @@ const char kDefaultAvatarStrokeColorKey[] = "default_avatar_stroke_color";
 // Low-entropy accounts info, for metrics only.
 const char kFirstAccountNameHash[] = "first_account_name_hash";
 const char kHasMultipleAccountNames[] = "has_multiple_account_names";
-const char kAccountCategories[] = "account_categories";
 
 // Local state pref to keep track of the next available profile bucket.
 const char kNextMetricsBucketIndex[] = "profile.metrics.next_bucket_index";
 
-// Deprecated 2/2021.
-const char kIsOmittedFromProfileListKey[] = "is_omitted_from_profile_list";
-
-// Deprecated 3/2021.
-const char kAuthCredentialsKey[] = "local_auth_credentials";
-const char kPasswordTokenKey[] = "gaia_password_token";
-
-// Deprecated 6/2021.
-const char kSigninRequiredKey[] = "signin_required";
-const char kIsAuthErrorKey[] = "is_auth_error";
-
-// Deprecated 7/2021.
-const char kProfileIsGuest[] = "is_guest";
+// Deprecated 3/2023.
+const char kAccountCategories[] = "account_categories";
 
 constexpr int kIntegerNotSet = -1;
-
-// Persisted in prefs.
-constexpr int kAccountCategoriesConsumerOnly = 0;
-constexpr int kAccountCategoriesEnterpriseOnly = 1;
-constexpr int kAccountCategoriesBoth = 2;
 
 // Number of distinct low-entropy hash values. Changing this value invalidates
 // existing persisted hashes.
@@ -323,7 +310,7 @@ base::FilePath ProfileAttributesEntry::GetPath() const {
 
 base::Time ProfileAttributesEntry::GetActiveTime() const {
   if (IsDouble(kActiveTimeKey)) {
-    return base::Time::FromDoubleT(GetDouble(kActiveTimeKey));
+    return base::Time::FromSecondsSinceUnixEpoch(GetDouble(kActiveTimeKey));
   } else {
     return base::Time();
   }
@@ -429,7 +416,7 @@ bool ProfileAttributesEntry::IsSupervised() const {
 
 bool ProfileAttributesEntry::IsChild() const {
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-  return GetSupervisedUserId() == supervised_users::kChildAccountSUID;
+  return GetSupervisedUserId() == supervised_user::kChildAccountSUID;
 #else
   return false;
 #endif
@@ -552,6 +539,15 @@ std::string ProfileAttributesEntry::GetHostedDomain() const {
   return GetString(kHostedDomain);
 }
 
+std::string ProfileAttributesEntry::GetProfileManagementEnrollmentToken()
+    const {
+  return GetString(kProfileManagementEnrollmentToken);
+}
+
+std::string ProfileAttributesEntry::GetProfileManagementId() const {
+  return GetString(kProfileManagementId);
+}
+
 std::string ProfileAttributesEntry::GetAccountIdKey() const {
   return GetString(kAccountIdKey);
 }
@@ -562,19 +558,18 @@ base::flat_set<std::string> ProfileAttributesEntry::GetGaiaIds() const {
     return base::flat_set<std::string>();
 
   return base::MakeFlatSet<std::string>(
-      accounts->DictItems(), {}, [](const auto& it) { return it.first; });
+      accounts->GetDict(), {}, [](const auto& it) { return it.first; });
 }
 
 void ProfileAttributesEntry::SetGaiaIds(
     const base::flat_set<std::string>& gaia_ids) {
-  base::Value accounts(base::Value::Type::DICTIONARY);
+  base::Value::Dict accounts;
   for (const auto& gaia_id : gaia_ids) {
-    base::Value dict(base::Value::Type::DICTIONARY);
     // The dictionary is empty for now, but can hold account-specific info in
     // the future.
-    accounts.SetKey(gaia_id, std::move(dict));
+    accounts.Set(gaia_id, base::Value::Dict());
   }
-  SetValue(kAllAccountsKey, std::move(accounts));
+  SetValue(kAllAccountsKey, base::Value(std::move(accounts)));
 }
 
 void ProfileAttributesEntry::SetLocalProfileName(const std::u16string& name,
@@ -594,7 +589,7 @@ void ProfileAttributesEntry::SetActiveTimeToNow() {
       base::Time::Now() - GetActiveTime() < base::Hours(1)) {
     return;
   }
-  SetDouble(kActiveTimeKey, base::Time::Now().ToDoubleT());
+  SetDouble(kActiveTimeKey, base::Time::Now().InSecondsFSinceUnixEpoch());
 }
 
 void ProfileAttributesEntry::SetIsOmitted(bool is_omitted) {
@@ -676,11 +671,6 @@ void ProfileAttributesEntry::LockForceSigninProfile(bool is_lock) {
   }
 }
 
-void ProfileAttributesEntry::RecordAccountMetrics() const {
-  RecordAccountCategoriesMetric();
-  RecordAccountNamesMetric();
-}
-
 void ProfileAttributesEntry::SetIsEphemeral(bool value) {
   if (!value) {
     DCHECK(!IsOmitted()) << "An omitted account should not be made "
@@ -751,6 +741,20 @@ void ProfileAttributesEntry::SetHostedDomain(std::string hosted_domain) {
     profile_attributes_storage_->NotifyProfileHostedDomainChanged(GetPath());
 }
 
+void ProfileAttributesEntry::SetProfileManagementEnrollmentToken(
+    const std::string& enrollment_token) {
+  if (SetString(kProfileManagementEnrollmentToken, enrollment_token)) {
+    profile_attributes_storage_->NotifyProfileManagementEnrollmentTokenChanged(
+        GetPath());
+  }
+}
+
+void ProfileAttributesEntry::SetProfileManagementId(const std::string& id) {
+  if (SetString(kProfileManagementId, id)) {
+    profile_attributes_storage_->NotifyProfileManagementIdChanged(GetPath());
+  }
+}
+
 void ProfileAttributesEntry::SetAuthInfo(const std::string& gaia_id,
                                          const std::u16string& user_name,
                                          bool is_consented_primary_account) {
@@ -788,28 +792,9 @@ void ProfileAttributesEntry::AddAccountName(const std::string& name) {
   }
 }
 
-void ProfileAttributesEntry::AddAccountCategory(AccountCategory category) {
-  int current_categories = GetInteger(kAccountCategories);
-  if (current_categories == kAccountCategoriesBoth)
-    return;
-
-  int new_category = category == AccountCategory::kConsumer
-                         ? kAccountCategoriesConsumerOnly
-                         : kAccountCategoriesEnterpriseOnly;
-  if (current_categories == kIntegerNotSet) {
-    SetInteger(kAccountCategories, new_category);
-  } else if (current_categories != new_category) {
-    SetInteger(kAccountCategories, kAccountCategoriesBoth);
-  }
-}
-
 void ProfileAttributesEntry::ClearAccountNames() {
   ClearValue(kFirstAccountNameHash);
   ClearValue(kHasMultipleAccountNames);
-}
-
-void ProfileAttributesEntry::ClearAccountCategories() {
-  ClearValue(kAccountCategories);
 }
 
 const gfx::Image* ProfileAttributesEntry::GetHighResAvatar() const {
@@ -840,32 +825,6 @@ gfx::Image ProfileAttributesEntry::GetPlaceholderAvatarIcon(int size) const {
 bool ProfileAttributesEntry::HasMultipleAccountNames() const {
   // If the value is not set, GetBool() returns false.
   return GetBool(kHasMultipleAccountNames);
-}
-
-bool ProfileAttributesEntry::HasBothAccountCategories() const {
-  // If the value is not set, GetInteger returns kIntegerNotSet which does not
-  // equal kAccountTypeBoth.
-  return GetInteger(kAccountCategories) == kAccountCategoriesBoth;
-}
-
-void ProfileAttributesEntry::RecordAccountCategoriesMetric() const {
-  if (HasBothAccountCategories()) {
-    if (IsAuthenticated()) {
-      bool consumer_syncing = GetHostedDomain() == kNoHostedDomainFound;
-      profile_metrics::LogProfileAllAccountsCategories(
-          consumer_syncing ? profile_metrics::AllAccountsCategories::
-                                 kBothConsumerAndEnterpriseSyncingConsumer
-                           : profile_metrics::AllAccountsCategories::
-                                 kBothConsumerAndEnterpriseSyncingEnterprise);
-    } else {
-      profile_metrics::LogProfileAllAccountsCategories(
-          profile_metrics::AllAccountsCategories::
-              kBothConsumerAndEnterpriseNoSync);
-    }
-  } else {
-    profile_metrics::LogProfileAllAccountsCategories(
-        profile_metrics::AllAccountsCategories::kSingleCategory);
-  }
 }
 
 void ProfileAttributesEntry::RecordAccountNamesMetric() const {
@@ -996,19 +955,8 @@ bool ProfileAttributesEntry::ClearValue(const char* key) {
 
 // This method should be periodically pruned of year+ old migrations.
 void ProfileAttributesEntry::MigrateObsoleteProfileAttributes() {
-  // Added 2/2021.
-  ClearValue(kIsOmittedFromProfileListKey);
-
-  // Added 3/2021.
-  ClearValue(kAuthCredentialsKey);
-  ClearValue(kPasswordTokenKey);
-
-  // Added 6/2021.
-  ClearValue(kSigninRequiredKey);
-  ClearValue(kIsAuthErrorKey);
-
-  // Added 7/2021.
-  ClearValue(kProfileIsGuest);
+  // Added 3/2023.
+  ClearValue(kAccountCategories);
 }
 
 void ProfileAttributesEntry::SetIsOmittedInternal(bool is_omitted) {

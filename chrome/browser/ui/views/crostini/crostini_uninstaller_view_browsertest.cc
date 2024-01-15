@@ -5,15 +5,17 @@
 #include "chrome/browser/ui/views/crostini/crostini_uninstaller_view.h"
 
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_base.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "chrome/browser/ash/app_list/app_list_client_impl.h"
+#include "chrome/browser/ash/app_list/test/chrome_app_list_test_support.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
 #include "chrome/browser/ash/crostini/crostini_pref_names.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/app_list_client_impl.h"
-#include "chrome/browser/ui/app_list/test/chrome_app_list_test_support.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/views/crostini/crostini_dialogue_browser_test_util.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -37,8 +39,8 @@ class CrostiniUninstallerViewBrowserTest : public CrostiniDialogBrowserTest {
             callback) override {
       ash::FakeConciergeClient::StopVm(request, std::move(callback));
       if (closure_) {
-        base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                      std::move(closure_));
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+            FROM_HERE, std::move(closure_));
       }
     }
 
@@ -90,7 +92,8 @@ class CrostiniUninstallerViewBrowserTest : public CrostiniDialogBrowserTest {
   }
 
  protected:
-  WaitingFakeConciergeClient* waiting_fake_concierge_client_;
+  raw_ptr<WaitingFakeConciergeClient, DanglingUntriaged>
+      waiting_fake_concierge_client_;
 };
 
 class CrostiniUninstalledUninstallerViewBrowserTest

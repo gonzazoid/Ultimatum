@@ -13,6 +13,7 @@
 #include "chrome/browser/page_info/chrome_about_this_site_service_client.h"
 #include "chrome/browser/page_info/page_info_features.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "components/page_info/core/about_this_site_service.h"
 #include "components/page_info/core/features.h"
 
@@ -29,25 +30,35 @@ AboutThisSiteServiceFactory* AboutThisSiteServiceFactory::GetInstance() {
 }
 
 AboutThisSiteServiceFactory::AboutThisSiteServiceFactory()
-    : ProfileKeyedServiceFactory("AboutThisSiteServiceFactory") {
+    : ProfileKeyedServiceFactory(
+          "AboutThisSiteServiceFactory",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(OptimizationGuideKeyedServiceFactory::GetInstance());
+  DependsOn(TemplateURLServiceFactory::GetInstance());
 }
 
 AboutThisSiteServiceFactory::~AboutThisSiteServiceFactory() = default;
 
 // BrowserContextKeyedServiceFactory:
-KeyedService* AboutThisSiteServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AboutThisSiteServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* browser_context) const {
   if (!page_info::IsAboutThisSiteFeatureEnabled(
           g_browser_process->GetApplicationLocale()))
     return nullptr;
 
   Profile* profile = Profile::FromBrowserContext(browser_context);
-  return new page_info::AboutThisSiteService(
+
+  return std::make_unique<page_info::AboutThisSiteService>(
       std::make_unique<ChromeAboutThisSiteServiceClient>(
           OptimizationGuideKeyedServiceFactory::GetForProfile(profile),
           profile->IsOffTheRecord(), profile->GetPrefs()),
-      page_info::IsDescriptionPlaceholderFeatureEnabled());
+      TemplateURLServiceFactory::GetForProfile(profile));
 }
 
 bool AboutThisSiteServiceFactory::ServiceIsCreatedWithBrowserContext() const {

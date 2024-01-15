@@ -7,10 +7,9 @@
 #include <sstream>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "components/webrtc/thread_wrapper.h"
 #include "net/url_request/url_request_context_getter.h"

@@ -6,8 +6,7 @@
 
 #include <utility>
 
-#include "base/feature_list.h"
-#include "storage/browser/quota/quota_features.h"
+#include "base/task/sequenced_task_runner.h"
 #include "url/origin.h"
 
 namespace storage {
@@ -60,7 +59,7 @@ StoragePolicyObserver::StoragePolicyObserver(
     return;
 
   storage_policy_observer_ = base::SequenceBound<StoragePolicyObserverIOThread>(
-      std::move(io_task_runner), base::SequencedTaskRunnerHandle::Get(),
+      std::move(io_task_runner), base::SequencedTaskRunner::GetCurrentDefault(),
       storage_policy_, weak_factory_.GetWeakPtr());
 }
 
@@ -81,12 +80,16 @@ void StoragePolicyObserver::StartTrackingOrigins(
   for (const auto& origin : origins) {
     // If the origin exists, emplace fails, and its state is unchanged.
     GURL origin_url = GURL(origin.Serialize());
-    auto& entry =
-        *origin_state_.emplace(std::move(origin_url), OriginState()).first;
-    updates.push_back(&entry);
+    auto [entry, success] =
+        origin_state_.emplace(std::move(origin_url), OriginState());
+    if (success) {
+      updates.push_back(&*entry);
+    }
   }
 
-  OnPolicyChangedForOrigins(updates);
+  if (!updates.empty()) {
+    OnPolicyChangedForOrigins(updates);
+  }
 }
 
 void StoragePolicyObserver::StopTrackingOrigin(const url::Origin& origin) {
@@ -125,12 +128,6 @@ bool StoragePolicyObserver::ShouldPurgeOnShutdown(const GURL& origin) {
 
 void StoragePolicyObserver::OnPolicyChangedForOrigins(
     const std::vector<std::pair<const GURL, OriginState>*>& updated_origins) {
-  if (!base::FeatureList::IsEnabled(
-          features::kOnlySendStoragePolicyUpdatesForModifiedOrigins)) {
-    OnPolicyChanged();
-    return;
-  }
-
   std::vector<storage::mojom::StoragePolicyUpdatePtr> policy_updates;
   for (auto* entry : updated_origins)
     AddPolicyUpdate(entry, &policy_updates);

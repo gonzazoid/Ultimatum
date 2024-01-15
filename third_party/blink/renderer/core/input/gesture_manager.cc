@@ -4,13 +4,11 @@
 
 #include "third_party/blink/renderer/core/input/gesture_manager.h"
 
-#include "mojo/public/cpp/bindings/remote.h"
 #include "third_party/blink/public/common/input/web_input_event.h"
 #include "third_party/blink/public/common/input/web_pointer_event.h"
 #include "third_party/blink/public/mojom/frame/user_activation_notification_type.mojom-blink.h"
 #include "third_party/blink/public/public_buildflags.h"
 #include "third_party/blink/renderer/core/dom/document.h"
-#include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/editing/selection_controller.h"
 #include "third_party/blink/renderer/core/event_type_names.h"
 #include "third_party/blink/renderer/core/events/gesture_event.h"
@@ -28,8 +26,6 @@
 #include "third_party/blink/renderer/core/page/chrome_client.h"
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
-#include "third_party/blink/renderer/core/scroll/scroll_animator_base.h"
-#include "third_party/blink/renderer/platform/wtf/deque.h"
 #include "ui/gfx/geometry/point_conversions.h"
 
 #if BUILDFLAG(ENABLE_UNHANDLED_TAP)
@@ -73,6 +69,7 @@ GestureManager::GestureManager(LocalFrame& frame,
 
 void GestureManager::Clear() {
   suppress_mouse_events_from_gestures_ = false;
+  suppress_selection_on_repeated_tap_down_ = false;
   ResetLongTapContextMenuStates();
 }
 
@@ -120,21 +117,17 @@ HitTestRequest::HitTestRequestType GestureManager::GetHitTypeForGestureType(
 
 WebInputEventResult GestureManager::HandleGestureEventInFrame(
     const GestureEventWithHitTestResults& targeted_event) {
-  DCHECK(!targeted_event.Event().IsScrollEvent());
-
-  frame_->LocalFrameRoot()
-      .GetEventHandler()
-      .GetGestureManager()
-      .ClearOldPointerDownIds(
-          targeted_event.Event().primary_unique_touch_event_id);
-
-  Node* event_target = targeted_event.GetHitTestResult().InnerNode();
+  const HitTestResult& hit_test_result = targeted_event.GetHitTestResult();
   const WebGestureEvent& gesture_event = targeted_event.Event();
+  DCHECK(!gesture_event.IsScrollEvent());
 
-  if (scroll_manager_->CanHandleGestureEvent(targeted_event))
-    return WebInputEventResult::kHandledSuppressed;
+  if (Scrollbar* scrollbar = hit_test_result.GetScrollbar()) {
+    if (scrollbar->HandleGestureTapOrPress(gesture_event)) {
+      return WebInputEventResult::kHandledSuppressed;
+    }
+  }
 
-  if (event_target) {
+  if (Node* event_target = hit_test_result.InnerNode()) {
     GestureEvent* gesture_dom_event = GestureEvent::Create(
         event_target->GetDocument().domWindow(), gesture_event);
     if (gesture_dom_event) {
@@ -174,25 +167,38 @@ WebInputEventResult GestureManager::HandleGestureEventInFrame(
   return WebInputEventResult::kNotHandled;
 }
 
-void GestureManager::ClearOldPointerDownIds(
-    uint32_t primary_unique_touch_event_id) {
-  DCHECK(frame_->IsLocalRoot());
-  while (!recent_pointerdown_pointer_ids_.empty() &&
-         recent_pointerdown_pointer_ids_.front().first <
-             primary_unique_touch_event_id) {
-    recent_pointerdown_pointer_ids_.pop_front();
-  }
-}
-
 bool GestureManager::GestureContextMenuDeferred() const {
   return gesture_context_menu_deferred_;
 }
 
 WebInputEventResult GestureManager::HandleGestureTapDown(
     const GestureEventWithHitTestResults& targeted_event) {
+  const WebGestureEvent& gesture_event = targeted_event.Event();
   suppress_mouse_events_from_gestures_ =
       pointer_event_manager_->PrimaryPointerdownCanceled(
-          targeted_event.Event().unique_touch_event_id);
+          gesture_event.unique_touch_event_id);
+
+  if (!RuntimeEnabledFeatures::TouchTextEditingRedesignEnabled() ||
+      suppress_mouse_events_from_gestures_ ||
+      suppress_selection_on_repeated_tap_down_ ||
+      gesture_event.TapDownCount() <= 1) {
+    return WebInputEventResult::kNotHandled;
+  }
+
+  const WebMouseEvent fake_mouse_down(
+      WebInputEvent::Type::kMouseDown, gesture_event,
+      WebPointerProperties::Button::kLeft, gesture_event.TapDownCount(),
+      static_cast<WebInputEvent::Modifiers>(
+          gesture_event.GetModifiers() |
+          WebInputEvent::Modifiers::kLeftButtonDown |
+          WebInputEvent::Modifiers::kIsCompatibilityEventForTouch),
+      gesture_event.TimeStamp());
+  const HitTestResult& current_hit_test = targeted_event.GetHitTestResult();
+  const HitTestLocation& current_hit_test_location =
+      targeted_event.GetHitTestLocation();
+  selection_controller_->HandleMousePressEvent(MouseEventWithHitTestResults(
+      fake_mouse_down, current_hit_test_location, current_hit_test));
+
   return WebInputEventResult::kNotHandled;
 }
 
@@ -273,6 +279,7 @@ WebInputEventResult GestureManager::HandleGestureTap(
   // mean for for TEs?  What's the right balance here? crbug.com/617255
   WebInputEventResult mouse_down_event_result =
       WebInputEventResult::kHandledSuppressed;
+  suppress_selection_on_repeated_tap_down_ = true;
   if (!suppress_mouse_events_from_gestures_) {
     mouse_event_manager_->SetClickCount(gesture_event.TapCount());
 
@@ -288,6 +295,7 @@ WebInputEventResult GestureManager::HandleGestureTap(
               true));
     }
     if (mouse_down_event_result == WebInputEventResult::kNotHandled) {
+      suppress_selection_on_repeated_tap_down_ = false;
       mouse_down_event_result = mouse_event_manager_->HandleMousePressEvent(
           MouseEventWithHitTestResults(
               fake_mouse_down, current_hit_test_location, current_hit_test));
@@ -297,7 +305,7 @@ WebInputEventResult GestureManager::HandleGestureTap(
   if (current_hit_test.InnerNode()) {
     DCHECK(gesture_event.GetType() == WebInputEvent::Type::kGestureTap);
     HitTestResult result = current_hit_test;
-    result.SetToShadowHostIfInRestrictedShadowRoot();
+    result.SetToShadowHostIfInUAShadowRoot();
     frame_->GetChromeClient().OnMouseDown(*result.InnerNode());
   }
 
@@ -336,6 +344,10 @@ WebInputEventResult GestureManager::HandleGestureTap(
       click_event_result =
           mouse_event_manager_->SetMousePositionAndDispatchMouseEvent(
               click_target_element, event_type_names::kClick, fake_mouse_up);
+
+      // Dispatching a JS event could have detached the frame.
+      if (frame_->View())
+        frame_->View()->RegisterTapEvent(tapped_element);
     }
     mouse_event_manager_->SetClickElement(nullptr);
   }
@@ -585,40 +597,6 @@ void GestureManager::ShowUnhandledTapUIIfNeeded(
 #endif  // BUILDFLAG(ENABLE_UNHANDLED_TAP)
 }
 
-void GestureManager::NotifyPointerEventHandled(
-    const WebPointerEvent& web_pointer_event) {
-  DCHECK(frame_->IsLocalRoot() || (web_pointer_event.pointer_type !=
-                                   WebPointerProperties::PointerType::kTouch));
-  // TODO(https://crbug.com/449649): Fix the DCHECK after moving all event
-  // handling state to local-frame-root.
-  //
-  // We need to assert that this method is called for top frame only.  But for
-  // mouse-like pointer events (which comes from mice or hoverable pens), this
-  // method gets called AFTER the events are routed to a subframe (e.g. from
-  // |EventHandler|'s |HandleMouseMoveOrLeaveEvent()| to
-  // |PassMouseMoveEventToSubframe()| to |HandlePointerEvent()| to this method).
-  // Because such events don't affect gestures, we are ignoring the unexpected
-  // calls to this method for the time being until the bigger problem is fixed.
-
-  if (web_pointer_event.GetType() != WebInputEvent::Type::kPointerDown)
-    return;
-  PointerId pointer_id =
-      pointer_event_manager_->GetPointerEventId(web_pointer_event);
-  if (web_pointer_event.unique_touch_event_id == 0 ||
-      pointer_id == PointerEventFactory::kInvalidId)
-    return;
-
-  if (!recent_pointerdown_pointer_ids_.empty()) {
-    // Pointerdown events should occur in order of their unique_touch_event_ids.
-    DCHECK_LT(recent_pointerdown_pointer_ids_.back().first,
-              web_pointer_event.unique_touch_event_id);
-  }
-  // Associate unique_touch_event_id for pointerdown with pointer_id of the
-  // pointerdown event.
-  recent_pointerdown_pointer_ids_.push_back<TouchIdPointerId>(
-      {web_pointer_event.unique_touch_event_id, pointer_id});
-}
-
 PointerId GestureManager::GetPointerIdFromWebGestureEvent(
     const WebGestureEvent& gesture_event) const {
   if (!frame_->IsLocalRoot()) {
@@ -633,21 +611,9 @@ PointerId GestureManager::GetPointerIdFromWebGestureEvent(
   // populated.
   if (gesture_event.primary_unique_touch_event_id == 0)
     return PointerEventFactory::kInvalidId;
-  // TODO(crbug.com/1244085): Look into why pointerdown event is not sent
-  // in some tests even though pointerup event is sent.
-  // Return kInvalidId if we saw no pointerdown for the gesture sequence.
-  if (recent_pointerdown_pointer_ids_.empty())
-    return PointerEventFactory::kInvalidId;
-  // If everything works correctly, the first touch id, pointer id pair
-  // in the deque is the one we are interested in.
-  if (gesture_event.primary_unique_touch_event_id ==
-      recent_pointerdown_pointer_ids_.front().first)
-    return recent_pointerdown_pointer_ids_.front().second;
-  // Getting here means either we saw no pointerdown for the gesture,
-  // or that the gestures were not generated in order resulting in
-  // prematurely clearing pointerdown id in HandleGestureEventInFrame.
-  NOTREACHED();
-  return PointerEventFactory::kInvalidId;
+
+  return pointer_event_manager_->GetPointerIdForTouchGesture(
+      gesture_event.primary_unique_touch_event_id);
 }
 
 }  // namespace blink

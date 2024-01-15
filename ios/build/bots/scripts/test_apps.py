@@ -14,8 +14,11 @@ import test_runner
 import test_runner_errors
 import xcode_util
 
-
-OUTPUT_DISABLED_TESTS_TEST_ARG = '--write-compiled-tests-json-to-writable-path'
+# Including this test arg will have the gTest launcher generate
+# an info file containing all the compiled tests for this test run
+# This should be on by default
+GENERATE_COMPILED_GTESTS_FILE_TEST_ARG = (
+    '--write-compiled-tests-json-to-writable-path')
 
 
 def get_gtest_filter(included, excluded):
@@ -131,6 +134,10 @@ class GTestsApp(object):
     self.host_app_path = kwargs.get('host_app_path')
     self.inserted_libs = kwargs.get('inserted_libs') or []
 
+  def _additional_inserted_libs(self):
+    """Returns additional libraries to add to inserted_libs."""
+    return []
+
   def remove_gtest_sharding_env_vars(self):
     """Removes sharding related env vars from self.env_vars."""
     for env_var_key in ['GTEST_SHARD_INDEX', 'GTEST_TOTAL_SHARDS']:
@@ -200,9 +207,11 @@ class GTestsApp(object):
         }
     }
 
-    if self.inserted_libs:
+    inserted_libs = self.inserted_libs.copy()
+    inserted_libs.extend(self._additional_inserted_libs())
+    if inserted_libs:
       module_data['TestingEnvironmentVariables'][
-          'DYLD_INSERT_LIBRARIES'] = ':'.join(self.inserted_libs)
+          'DYLD_INSERT_LIBRARIES'] = ':'.join(inserted_libs)
 
     xctestrun_data = {module: module_data}
     gtest_filter = []
@@ -219,6 +228,8 @@ class GTestsApp(object):
 
     if self.env_vars:
       xctestrun_data[module].update({'EnvironmentVariables': self.env_vars})
+
+    self.test_args.append(GENERATE_COMPILED_GTESTS_FILE_TEST_ARG)
     if self.test_args:
       xctestrun_data[module].update({'CommandLineArguments': self.test_args})
 
@@ -236,7 +247,7 @@ class GTestsApp(object):
       })
     return xctestrun_data
 
-  def command(self, out_dir, destination, shards):
+  def command(self, out_dir, destination, clones):
     """Returns the command that launches tests using xcodebuild.
 
     Format of command:
@@ -247,7 +258,7 @@ class GTestsApp(object):
     Args:
       out_dir: (str) An output directory.
       destination: (str) A destination of running simulator.
-      shards: (int) A number of shards.
+      clones: (int) A number of simulator clones to run tests against.
 
     Returns:
       A list of strings forming the command to launch the test.
@@ -260,10 +271,10 @@ class GTestsApp(object):
         self.fill_xctest_run(out_dir), '-destination', destination,
         '-resultBundlePath', out_dir
     ])
-    if shards > 1:
+    if clones > 1:
       cmd.extend([
           '-parallel-testing-enabled', 'YES', '-parallel-testing-worker-count',
-          str(shards)
+          str(clones)
       ])
     return cmd
 
@@ -279,8 +290,6 @@ class GTestsApp(object):
     # TODO(crbug.com/1123681): Move all_tests to class var. Set all_tests,
     # disabled_tests values in initialization to avoid multiple calls to otool.
     all_tests = []
-    # Only store the tests when there is the test arg.
-    store_disabled_tests = OUTPUT_DISABLED_TESTS_TEST_ARG in self.test_args
     self.disabled_tests = []
     for test_class, test_method in shard_util.fetch_test_names(
         self.test_app_path,
@@ -299,7 +308,7 @@ class GTestsApp(object):
       if not included or test_name in included or test_class in included:
         if test_method.startswith('test'):
           all_tests.append(test_name)
-        elif store_disabled_tests:
+        else:
           self.disabled_tests.append(test_name)
     return all_tests
 
@@ -333,15 +342,16 @@ class EgtestsApp(GTestsApp):
       host_app_path: (str) full path to host app.
       inserted_libs: List of libraries to insert when running the test.
       repeat_count: (int) Number of times to run each test case.
+      record_video_option: (enum) If the arg is not none, then video
+        recording on tests will be enabled. Currently the enum only supports
+        recording on failed tests, but can be extended to support more
+        cases in the future if needed.
 
     Raises:
       AppNotFoundError: If the given app does not exist
     """
-    inserted_libs = list(kwargs.get('inserted_libs') or [])
-    inserted_libs.append('__PLATFORMS__/iPhoneSimulator.platform/Developer/'
-                         'usr/lib/libXCTestBundleInject.dylib')
-    kwargs['inserted_libs'] = inserted_libs
     super(EgtestsApp, self).__init__(egtests_app, **kwargs)
+    self.record_video_option = kwargs.get('record_video_option')
 
   def _xctest_path(self):
     """Gets xctest-file from egtests/PlugIns folder.
@@ -365,13 +375,24 @@ class EgtestsApp(GTestsApp):
       raise test_runner.XCTestPlugInNotFoundError(plugin_xctest)
     return plugin_xctest.replace(self.test_app_path, '')
 
-  def command(self, out_dir, destination, shards):
+  def _additional_inserted_libs(self):
+    """Returns additional libraries to add to inserted_libs."""
+    libs = [
+        '__PLATFORMS__/iPhoneSimulator.platform/Developer/'
+        'usr/lib/libXCTestBundleInject.dylib'
+    ]
+    for child in os.listdir(self.test_app_path):
+      if child.startswith('libclang_rt.asan'):
+        libs.append(os.path.join('@executable_path', child))
+    return libs
+
+  def command(self, out_dir, destination, clones):
     """Returns the command that launches tests for EG Tests.
 
     See details in parent class method docstring. This method appends the
     command line switch if test repeat is required.
     """
-    cmd = super(EgtestsApp, self).command(out_dir, destination, shards)
+    cmd = super(EgtestsApp, self).command(out_dir, destination, clones)
     if self.repeat_count > 1:
       if xcode_util.using_xcode_13_or_higher():
         cmd += ['-test-iterations', str(self.repeat_count)]
@@ -396,6 +417,14 @@ class EgtestsApp(GTestsApp):
       # Module data specific to EG2 tests
       module_data['IsUITestBundle'] = True
       module_data['IsXCTRunnerHostedTestBundle'] = True
+      module_data['SystemAttachmentLifetime'] = 'keepAlways'
+      if self.record_video_option is not None:
+        # Currently the enum only supports recording on failed tests,
+        # but can be extended to support more cases if needed,
+        # such as recording on successful tests.
+        module_data['PreferredScreenCaptureFormat'] = 'video'
+      else:
+        module_data['PreferredScreenCaptureFormat'] = 'screenshots'
       module_data['UITargetAppPath'] = '%s' % self.host_app_path
       module_data['UITargetAppBundleIdentifier'] = get_bundle_id(
           self.host_app_path)
@@ -517,6 +546,7 @@ class DeviceXCTestUnitTestsApp(GTestsApp):
       self.test_args.append('--gtest_repeat=%s' % self.repeat_count)
 
     self.test_args.append('--gmock_verbose=error')
+    self.test_args.append(GENERATE_COMPILED_GTESTS_FILE_TEST_ARG)
 
     xctestrun_data['TestTargetName'].update(
         {'CommandLineArguments': self.test_args})
@@ -628,6 +658,7 @@ class SimulatorXCTestUnitTestsApp(GTestsApp):
       self.test_args.append('--gtest_repeat=%s' % self.repeat_count)
 
     self.test_args.append('--gmock_verbose=error')
+    self.test_args.append(GENERATE_COMPILED_GTESTS_FILE_TEST_ARG)
 
     xctestrun_data['TestTargetName'].update(
         {'CommandLineArguments': self.test_args})

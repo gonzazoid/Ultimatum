@@ -9,32 +9,26 @@
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 
 namespace network_hints {
-namespace {
-
-void ForwardToHandler(mojo::Remote<mojom::NetworkHintsHandler>* handler,
-                      const std::vector<std::string>& names) {
-  handler->get()->PrefetchDNS(names);
-}
-
-}  // namespace
 
 WebPrescientNetworkingImpl::WebPrescientNetworkingImpl(
-    content::RenderFrame* render_frame)
-    : dns_prefetch_(
-          base::BindRepeating(&ForwardToHandler, base::Unretained(&handler_))) {
+    content::RenderFrame* render_frame) {
   render_frame->GetBrowserInterfaceBroker()->GetInterface(
       handler_.BindNewPipeAndPassReceiver());
 }
 
 WebPrescientNetworkingImpl::~WebPrescientNetworkingImpl() {}
 
-void WebPrescientNetworkingImpl::PrefetchDNS(const blink::WebString& hostname) {
-  DVLOG(2) << "Prefetch DNS: " << hostname.Utf8();
-  if (hostname.IsEmpty())
+void WebPrescientNetworkingImpl::PrefetchDNS(const blink::WebURL& url) {
+  DVLOG(2) << "Prefetch DNS: " << url.GetString().Utf8();
+  GURL gurl(url);
+  if (!gurl.is_valid() || !gurl.has_host()) {
     return;
+  }
+  url::SchemeHostPort scheme_host_pair(gurl);
 
-  std::string hostname_utf8 = hostname.Utf8();
-  dns_prefetch_.Resolve(hostname_utf8.data(), hostname_utf8.length());
+  std::vector<url::SchemeHostPort> urls;
+  urls.push_back(std::move(scheme_host_pair));
+  handler_->PrefetchDNS(urls);
 }
 
 void WebPrescientNetworkingImpl::Preconnect(
@@ -44,7 +38,9 @@ void WebPrescientNetworkingImpl::Preconnect(
   if (!url.IsValid())
     return;
 
-  handler_->Preconnect(url, allow_credentials);
+  GURL gurl(url);
+  url::SchemeHostPort scheme_host_pair(gurl);
+  handler_->Preconnect(scheme_host_pair, allow_credentials);
 }
 
 }  // namespace network_hints

@@ -41,8 +41,12 @@ namespace {
 bool TargetCanHaveMotionTransform(const SVGElement& target) {
   // We don't have a special attribute name to verify the animation type. Check
   // the element name instead.
-  if (!IsA<SVGGraphicsElement>(target))
+  if (IsA<SVGClipPathElement>(target)) {
+    return true;
+  }
+  if (!IsA<SVGGraphicsElement>(target)) {
     return false;
+  }
   // Spec: SVG 1.1 section 19.2.15
   // FIXME: svgTag is missing. Needs to be checked, if transforming <svg> could
   // cause problems.
@@ -52,11 +56,11 @@ bool TargetCanHaveMotionTransform(const SVGElement& target) {
          IsA<SVGRectElement>(target) || IsA<SVGCircleElement>(target) ||
          IsA<SVGEllipseElement>(target) || IsA<SVGLineElement>(target) ||
          IsA<SVGPolylineElement>(target) || IsA<SVGPolygonElement>(target) ||
-         IsA<SVGTextElement>(target) || IsA<SVGClipPathElement>(target) ||
-         IsA<SVGMaskElement>(target) || IsA<SVGAElement>(target) ||
+         IsA<SVGTextElement>(target) || IsA<SVGAElement>(target) ||
          IsA<SVGForeignObjectElement>(target);
 }
-}
+
+}  // namespace
 
 SVGAnimateMotionElement::SVGAnimateMotionElement(Document& document)
     : SVGAnimationElement(svg_names::kAnimateMotionTag, document) {
@@ -199,45 +203,59 @@ void SVGAnimateMotionElement::CalculateAnimationValue(
     float percentage,
     unsigned repeat_count) const {
   SMILAnimationEffectParameters parameters = ComputeEffectParameters();
-  AffineTransform* transform = &animation_value.motion_transform;
+
+  PointAndTangent position;
+  if (GetAnimationMode() != kPathAnimation) {
+    position.point =
+        gfx::PointF(ComputeAnimatedNumber(parameters, percentage, repeat_count,
+                                          from_point_.x(), to_point_.x(),
+                                          to_point_at_end_of_duration_.x()),
+                    ComputeAnimatedNumber(parameters, percentage, repeat_count,
+                                          from_point_.y(), to_point_.y(),
+                                          to_point_at_end_of_duration_.y()));
+    position.tangent_in_degrees =
+        Rad2deg((to_point_ - from_point_).SlopeAngleRadians());
+  } else {
+    DCHECK(!animation_path_.IsEmpty());
+
+    const float path_length = animation_path_.length();
+    const float position_on_path = path_length * percentage;
+    position = animation_path_.PointAndNormalAtLength(position_on_path);
+
+    // Handle accumulate="sum".
+    if (repeat_count && parameters.is_cumulative) {
+      const gfx::PointF position_at_end_of_duration =
+          animation_path_.PointAtLength(path_length);
+      position.point +=
+          gfx::ScalePoint(position_at_end_of_duration, repeat_count)
+              .OffsetFromOrigin();
+    }
+  }
+
+  AffineTransform& transform = animation_value.motion_transform;
 
   // If additive, we accumulate into the underlying (transform) value.
-  if (!parameters.is_additive)
-    transform->MakeIdentity();
-
-  if (GetAnimationMode() != kPathAnimation) {
-    float animated_x = ComputeAnimatedNumber(
-        parameters, percentage, repeat_count, from_point_.x(), to_point_.x(),
-        to_point_at_end_of_duration_.x());
-    float animated_y = ComputeAnimatedNumber(
-        parameters, percentage, repeat_count, from_point_.y(), to_point_.y(),
-        to_point_at_end_of_duration_.y());
-    transform->Translate(animated_x, animated_y);
-    return;
+  if (!parameters.is_additive) {
+    transform.MakeIdentity();
   }
 
-  DCHECK(!animation_path_.IsEmpty());
+  // Apply position.
+  transform.Translate(position.point.x(), position.point.y());
 
-  const float path_length = animation_path_.length();
-  float position_on_path = path_length * percentage;
-  PointAndTangent position =
-      animation_path_.PointAndNormalAtLength(position_on_path);
-
-  // Handle accumulate="sum".
-  if (repeat_count && parameters.is_cumulative) {
-    gfx::PointF position_at_end_of_duration =
-        animation_path_.PointAtLength(path_length);
-    position.point += gfx::ScalePoint(position_at_end_of_duration, repeat_count)
-                          .OffsetFromOrigin();
+  // Apply rotation.
+  switch (GetRotateMode()) {
+    case kRotateAuto:
+      // Already computed above.
+      break;
+    case kRotateAutoReverse:
+      position.tangent_in_degrees += 180;
+      break;
+    case kRotateAngle:
+      // If rotate=<number> was supported, it would be applied here.
+      position.tangent_in_degrees = 0;
+      break;
   }
-
-  transform->Translate(position.point.x(), position.point.y());
-  RotateMode rotate_mode = GetRotateMode();
-  if (rotate_mode != kRotateAuto && rotate_mode != kRotateAutoReverse)
-    return;
-  if (rotate_mode == kRotateAutoReverse)
-    position.tangent_in_degrees += 180;
-  transform->Rotate(position.tangent_in_degrees);
+  transform.Rotate(position.tangent_in_degrees);
 }
 
 void SVGAnimateMotionElement::ApplyResultsToTarget(

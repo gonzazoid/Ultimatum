@@ -34,9 +34,7 @@ namespace {
 display::ManagedDisplayInfo CreateDisplayInfo(int64_t id,
                                               const gfx::Rect& bounds,
                                               float scale = 1.f) {
-  display::ManagedDisplayInfo info(
-      id, base::StringPrintf("x-%d", static_cast<int>(id)), false);
-  info.SetBounds(bounds);
+  display::ManagedDisplayInfo info = display::CreateDisplayInfo(id, bounds);
   info.set_device_scale_factor(scale);
   return info;
 }
@@ -84,7 +82,7 @@ TEST_F(MirrorWindowControllerTest, DockMode) {
           .SetFirstDisplayAsInternalDisplay();
   EXPECT_EQ(internal_id, internal_display_id);
 
-  display_manager()->SetMirrorMode(display::MirrorMode::kNormal, absl::nullopt);
+  display_manager()->SetMirrorMode(display::MirrorMode::kNormal, std::nullopt);
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(1U, display_manager()->GetNumDisplays());
   EXPECT_TRUE(display_manager()->IsInSoftwareMirrorMode());
@@ -147,7 +145,7 @@ TEST_P(MirrorWindowControllerRotationAndPanelOrientationTest, MirrorSize) {
     // Start software mirroring.
     display_manager()->OnNativeDisplaysChanged(display_info_list);
     display_manager()->SetMirrorMode(display::MirrorMode::kNormal,
-                                     absl::nullopt);
+                                     std::nullopt);
     base::RunLoop().RunUntilIdle();
     EXPECT_EQ(1U, display_manager()->GetNumDisplays());
     EXPECT_TRUE(display_manager()->IsInSoftwareMirrorMode());

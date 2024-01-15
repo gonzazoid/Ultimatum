@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
@@ -16,12 +17,6 @@
 #include "media/capture/video/video_capture_device.h"
 #include "media/capture/video/video_capture_device_descriptor.h"
 #include "media/capture/video_capture_types.h"
-
-namespace display {
-
-class Display;
-
-}  // namespace display
 
 namespace media {
 
@@ -68,14 +63,14 @@ class CAPTURE_EXPORT VideoCaptureDeviceChromeOSDelegate final
   void CloseDevice(base::UnguessableToken unblock_suspend_token);
 
   // DisplayRotationDelegate implementation.
-  void SetDisplayRotation(const display::Display& display) final;
+  void SetInternalDisplayRotation(int rotation) final;
   void SetRotation(int rotation);
 
   const VideoCaptureDeviceDescriptor device_descriptor_;
 
   // A reference to the CameraHalDelegate instance in the VCD factory.  This is
   // used by AllocateAndStart to query camera info and create the camera device.
-  CameraHalDelegate* camera_hal_delegate_;
+  raw_ptr<CameraHalDelegate> camera_hal_delegate_;
 
   // A reference to the thread that all the VideoCaptureDevice interface methods
   // are expected to be called on.

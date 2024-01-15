@@ -14,29 +14,23 @@ import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
 import {CrActionMenuElement} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
 import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
 import {CrToastElement} from 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {assert} from 'chrome://resources/js/assert.js';
 import {skColorToRgba} from 'chrome://resources/js/color_utils.js';
-import {isMac} from 'chrome://resources/js/cr.m.js';
-import {FocusOutlineManager} from 'chrome://resources/js/focus_outline_manager.js';
 import {EventTracker} from 'chrome://resources/js/event_tracker.js';
-import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {FocusOutlineManager} from 'chrome://resources/js/focus_outline_manager.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {isMac} from 'chrome://resources/js/platform.js';
 import {hasKeyModifiers} from 'chrome://resources/js/util.js';
 import {TextDirection} from 'chrome://resources/mojo/mojo/public/mojom/base/text_direction.mojom-webui.js';
 import {SkColor} from 'chrome://resources/mojo/skia/public/mojom/skcolor.mojom-webui.js';
 import {Url} from 'chrome://resources/mojo/url/mojom/url.mojom-webui.js';
-import {DomRepeat, DomRepeatEvent, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {afterNextRender, DomRepeat, DomRepeatEvent, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {MostVisitedBrowserProxy} from './browser_proxy.js';
 import {getTemplate} from './most_visited.html.js';
 import {MostVisitedInfo, MostVisitedPageCallbackRouter, MostVisitedPageHandlerRemote, MostVisitedTheme, MostVisitedTile} from './most_visited.mojom-webui.js';
 import {MostVisitedWindowProxy} from './window_proxy.js';
-
-enum ScreenWidth {
-  NARROW = 0,
-  MEDIUM = 1,
-  WIDE = 2,
-}
 
 function resetTilePosition(tile: HTMLElement) {
   tile.style.position = '';
@@ -98,6 +92,22 @@ export class MostVisitedElement extends MostVisitedElementBase {
       theme: Object,
 
       /**
+       * If true, renders MV tiles in a single row up to 10 columns wide.
+       * If false, renders MV tiles in up to 2 rows up to 5 columns wide.
+       */
+      singleRow: {
+        type: Boolean,
+        value: false,
+        observer: 'onSingleRowChange_',
+      },
+
+      /** If true, reflows tiles that are overflowing. */
+      reflowOnOverflow: {
+        type: Boolean,
+        value: false,
+      },
+
+      /**
        * When the tile icon background is dark, the icon color is white for
        * contrast. This can be used to determine the color of the tile hover as
        * well.
@@ -108,23 +118,15 @@ export class MostVisitedElement extends MostVisitedElementBase {
         computed: `computeUseWhiteTileIcon_(theme)`,
       },
 
-      /**
-       * If true wraps the tile titles in white pills.
-       */
-      useTitlePill_: {
-        type: Boolean,
-        reflectToAttribute: true,
-        computed: `computeUseTitlePill_(theme)`,
-      },
-
       columnCount_: {
         type: Number,
-        computed: `computeColumnCount_(tiles_, screenWidth_, maxTiles_)`,
+        computed:
+            `computeColumnCount_(singleRow, tiles_, maxVisibleColumnCount_, maxTiles_)`,
       },
 
       rowCount_: {
         type: Number,
-        computed: 'computeRowCount_(columnCount_, tiles_)',
+        computed: 'computeRowCount_(singleRow, columnCount_, tiles_, showAdd_)',
       },
 
       customLinksEnabled_: {
@@ -198,7 +200,7 @@ export class MostVisitedElement extends MostVisitedElementBase {
 
       showToastButtons_: Boolean,
 
-      screenWidth_: Number,
+      maxVisibleColumnCount_: Number,
 
       tiles_: Array,
 
@@ -211,9 +213,10 @@ export class MostVisitedElement extends MostVisitedElementBase {
     };
   }
 
-  private theme: MostVisitedTheme|null;
+  theme: MostVisitedTheme|null;
+  reflowOnOverflow: boolean;
+  singleRow: boolean;
   private useWhiteTileIcon_: boolean;
-  private useTitlePill_: boolean;
   private columnCount_: number;
   private rowCount_: number;
   private customLinksEnabled_: boolean;
@@ -230,11 +233,10 @@ export class MostVisitedElement extends MostVisitedElementBase {
   private maxVisibleTiles_: number;
   private showAdd_: boolean;
   private showToastButtons_: boolean;
-  private screenWidth_: ScreenWidth;
+  private maxVisibleColumnCount_: number;
   private tiles_: MostVisitedTile[];
   private toastContent_: string;
   private visible_: boolean;
-
   private adding_: boolean = false;
   private callbackRouter_: MostVisitedPageCallbackRouter;
   private pageHandler_: MostVisitedPageHandlerRemote;
@@ -244,11 +246,10 @@ export class MostVisitedElement extends MostVisitedElementBase {
   private dragOffset_: {x: number, y: number}|null;
   private tileRects_: DOMRect[] = [];
   private isRtl_: boolean;
+  private mediaEventTracker_: EventTracker;
   private eventTracker_: EventTracker;
-  private boundOnWidthChange_: () => void;
-  private mediaListenerWideWidth_: MediaQueryList;
-  private mediaListenerMediumWidth_: MediaQueryList;
   private boundOnDocumentKeyDown_: (e: KeyboardEvent) => void;
+  private preloadingTimer_: undefined|ReturnType<typeof setTimeout>;
 
   private get tileElements_() {
     return Array.from(
@@ -273,13 +274,17 @@ export class MostVisitedElement extends MostVisitedElementBase {
      * of the tile being dragged.
      */
     this.dragOffset_ = null;
+
+    this.mediaEventTracker_ = new EventTracker();
+    this.eventTracker_ = new EventTracker();
   }
 
   override connectedCallback() {
     super.connectedCallback();
 
     this.isRtl_ = window.getComputedStyle(this)['direction'] === 'rtl';
-    this.eventTracker_ = new EventTracker();
+
+    this.onSingleRowChange_();
 
     this.setMostVisitedInfoListenerId_ =
         this.callbackRouter_.setMostVisitedInfo.addListener(
@@ -288,7 +293,8 @@ export class MostVisitedElement extends MostVisitedElementBase {
                   'most-visited-mojo', 'most-visited-mojo-start');
               this.visible_ = info.visible;
               this.customLinksEnabled_ = info.customLinksEnabled;
-              this.tiles_ = info.tiles.slice(0, assert(this.maxTiles_));
+              assert(this.maxTiles_);
+              this.tiles_ = info.tiles.slice(0, this.maxTiles_);
             });
     performance.mark('most-visited-mojo-start');
     this.eventTracker_.add(document, 'visibilitychange', () => {
@@ -304,26 +310,15 @@ export class MostVisitedElement extends MostVisitedElementBase {
 
   override disconnectedCallback() {
     super.disconnectedCallback();
-    this.mediaListenerWideWidth_.removeListener(
-        assert(this.boundOnWidthChange_));
-    this.mediaListenerMediumWidth_.removeListener(
-        assert(this.boundOnWidthChange_));
+    this.mediaEventTracker_.removeAll();
+    this.eventTracker_.removeAll();
     this.ownerDocument.removeEventListener(
         'keydown', this.boundOnDocumentKeyDown_);
-    this.eventTracker_.removeAll();
   }
 
   override ready() {
     super.ready();
 
-    this.boundOnWidthChange_ = this.updateScreenWidth_.bind(this);
-    this.mediaListenerWideWidth_ =
-        this.windowProxy_.matchMedia('(min-width: 672px)');
-    this.mediaListenerWideWidth_.addListener(this.boundOnWidthChange_);
-    this.mediaListenerMediumWidth_ =
-        this.windowProxy_.matchMedia('(min-width: 560px)');
-    this.mediaListenerMediumWidth_.addListener(this.boundOnWidthChange_);
-    this.updateScreenWidth_();
     this.boundOnDocumentKeyDown_ = e => this.onDocumentKeyDown_(e);
     this.ownerDocument.addEventListener(
         'keydown', this.boundOnDocumentKeyDown_);
@@ -335,6 +330,11 @@ export class MostVisitedElement extends MostVisitedElementBase {
     return skColor ? skColorToRgba(skColor) : 'inherit';
   }
 
+  // Adds "force-hover" class to the tile element positioned at `index`.
+  private enableForceHover_(index: number) {
+    this.tileElements_[index].classList.add('force-hover');
+  }
+
   private clearForceHover_() {
     const forceHover = this.shadowRoot!.querySelector('.force-hover');
     if (forceHover) {
@@ -343,26 +343,30 @@ export class MostVisitedElement extends MostVisitedElementBase {
   }
 
   private computeColumnCount_(): number {
-    let maxColumns = 3;
-    if (this.screenWidth_ === ScreenWidth.WIDE) {
-      maxColumns = 5;
-    } else if (this.screenWidth_ === ScreenWidth.MEDIUM) {
-      maxColumns = 4;
-    }
-
     const shortcutCount = this.tiles_ ? this.tiles_.length : 0;
     const canShowAdd = this.maxTiles_ > shortcutCount;
     const tileCount =
         Math.min(this.maxTiles_, shortcutCount + (canShowAdd ? 1 : 0));
-    const columnCount = tileCount <= maxColumns ?
+    const columnCount = tileCount <= this.maxVisibleColumnCount_ ?
         tileCount :
-        Math.min(maxColumns, Math.ceil(tileCount / 2));
+        Math.min(
+            this.maxVisibleColumnCount_,
+            Math.ceil(tileCount / (this.singleRow ? 1 : 2)));
     return columnCount || 3;
   }
 
   private computeRowCount_(): number {
     if (this.columnCount_ === 0) {
       return 0;
+    }
+
+    if (this.reflowOnOverflow && this.tiles_) {
+      return Math.ceil(
+          (this.tiles_.length + (this.showAdd_ ? 1 : 0)) / this.columnCount_);
+    }
+
+    if (this.singleRow) {
+      return 1;
     }
 
     const shortcutCount = this.tiles_ ? this.tiles_.length : 0;
@@ -374,6 +378,10 @@ export class MostVisitedElement extends MostVisitedElementBase {
   }
 
   private computeMaxVisibleTiles_(): number {
+    if (this.reflowOnOverflow) {
+      return this.computeMaxTiles_();
+    }
+
     return this.columnCount_ * this.rowCount_;
   }
 
@@ -416,40 +424,73 @@ export class MostVisitedElement extends MostVisitedElementBase {
     return this.theme ? this.theme.useWhiteTileIcon : false;
   }
 
-  private computeUseTitlePill_(): boolean {
-    return this.theme ? this.theme.useTitlePill : false;
-  }
-
   /**
-   * If a pointer is over a tile rect that is different from the one being
-   * dragged, the dragging tile is moved to the new position. The reordering
-   * is done in the DOM and the by the |reorderMostVisitedTile()| call. This is
-   * done to prevent flicking between the time when the tiles are moved back to
-   * their original positions (by removing position absolute) and when the
-   * tiles are updated via a |setMostVisitedTiles()| call.
+   * This method is always called when the drag and drop was finished.
+   * If the tiles were reordered successfully, there should be a tile with the
+   * "dropped" class.
    *
    * |reordering_| is not set to false when the tiles are reordered. The callers
    * will need to set it to false. This is necessary to handle a mouse drag
    * issue.
    */
-  private dragEnd_(x: number, y: number) {
+  private dragEnd_() {
     if (!this.customLinksEnabled_) {
       this.reordering_ = false;
       return;
     }
+
     this.dragOffset_ = null;
+
     const dragElement =
         this.shadowRoot!.querySelector<HTMLElement>('.tile.dragging');
-    if (!dragElement) {
+    const droppedElement =
+        this.shadowRoot!.querySelector<HTMLElement>('.tile.dropped');
+
+    if (!dragElement && !droppedElement) {
       this.reordering_ = false;
       return;
     }
+
+    if (dragElement) {
+      dragElement.classList.remove('dragging');
+
+      this.tileElements_.forEach(el => resetTilePosition(el));
+      resetTilePosition(this.$.addShortcut);
+    } else if (droppedElement) {
+      droppedElement.classList.remove('dropped');
+
+      // Note that resetTilePosition has already been called on drop_.
+    }
+  }
+
+  /**
+   * This method is called on "drop" events (i.e. when the user drops the tile
+   * on a valid region.)
+   *
+   * If a pointer is over a tile rect that is different from the one being
+   * dragged, the dragging tile is moved to the new position. The reordering is
+   * done in the DOM and by the |reorderMostVisitedTile()| call. This is done to
+   * prevent flicking between the time when the tiles are moved back to their
+   * original positions (by removing position absolute) and when the tiles are
+   * updated via the |setMostVisitedInfo| handler.
+   *
+   * We remove the "dragging" class in this method, and add "dropped" to
+   * indicate that the dragged tile was successfully dropped.
+   */
+  private drop_(x: number, y: number) {
+    if (!this.customLinksEnabled_) {
+      return;
+    }
+
+    const dragElement =
+        this.shadowRoot!.querySelector<HTMLElement>('.tile.dragging');
+    if (!dragElement) {
+      return;
+    }
+
     const dragIndex = (this.$.tiles.modelForElement(dragElement) as unknown as {
                         index: number,
                       }).index;
-    dragElement.classList.remove('dragging');
-    this.tileElements_.forEach(el => resetTilePosition(el));
-    resetTilePosition(this.$.addShortcut);
     const dropIndex = getHitIndex(this.tileRects_, x, y);
     if (dragIndex !== dropIndex && dropIndex > -1) {
       const [draggingTile] = this.tiles_.splice(dragIndex, 1);
@@ -471,6 +512,16 @@ export class MostVisitedElement extends MostVisitedElementBase {
         },
       ]);
       this.pageHandler_.reorderMostVisitedTile(draggingTile.url, dropIndex);
+
+      // Remove the "dragging" class here to prevent flickering.
+      dragElement.classList.remove('dragging');
+
+      // Add "dropped" class so that we can skip disabling `reordering_` in
+      // `dragEnd_`.
+      dragElement.classList.add('dropped');
+
+      this.tileElements_.forEach(el => resetTilePosition(el));
+      resetTilePosition(this.$.addShortcut);
     }
   }
 
@@ -566,7 +617,32 @@ export class MostVisitedElement extends MostVisitedElementBase {
   }
 
   private isHidden_(index: number): boolean {
+    if (this.reflowOnOverflow) {
+      return false;
+    }
+
     return index >= this.maxVisibleTiles_;
+  }
+
+  private onSingleRowChange_() {
+    if (!this.isConnected) {
+      return;
+    }
+    this.mediaEventTracker_.removeAll();
+    const queryLists: MediaQueryList[] = [];
+    const updateCount = () => {
+      const index = queryLists.findIndex(listener => listener.matches);
+      this.maxVisibleColumnCount_ =
+          3 + (index > -1 ? queryLists.length - index : 0);
+    };
+    const maxColumnCount = this.singleRow ? 10 : 5;
+    for (let i = maxColumnCount; i >= 4; i--) {
+      const query = `(min-width: ${112 * (i + 1)}px)`;
+      const queryList = this.windowProxy_.matchMedia(query);
+      this.mediaEventTracker_.add(queryList, 'change', updateCount);
+      queryLists.push(queryList);
+    }
+    updateCount();
   }
 
   private onAdd_() {
@@ -640,19 +716,21 @@ export class MostVisitedElement extends MostVisitedElementBase {
     }
 
     this.dragStart_(e.target as HTMLElement, e.x, e.y);
+
     const dragOver = (e: DragEvent) => {
       e.preventDefault();
       e.dataTransfer!.dropEffect = 'move';
       this.dragOver_(e.x, e.y);
     };
-    this.ownerDocument.addEventListener('dragover', dragOver);
-    this.ownerDocument.addEventListener('dragend', e => {
-      this.ownerDocument.removeEventListener('dragover', dragOver);
-      this.dragEnd_(e.x, e.y);
+
+    const drop = (e: DragEvent) => {
+      this.drop_(e.x, e.y);
+
       const dropIndex = getHitIndex(this.tileRects_, e.x, e.y);
       if (dropIndex !== -1) {
-        this.tileElements_[dropIndex].classList.add('force-hover');
+        this.enableForceHover_(dropIndex);
       }
+
       this.addEventListener('pointermove', () => {
         this.clearForceHover_();
         // When |reordering_| is true, the normal hover style is not shown.
@@ -660,6 +738,14 @@ export class MostVisitedElement extends MostVisitedElementBase {
         // after the mouse moves.
         this.reordering_ = false;
       }, {once: true});
+    };
+
+    this.ownerDocument.addEventListener('dragover', dragOver);
+    this.ownerDocument.addEventListener('drop', drop);
+    this.ownerDocument.addEventListener('dragend', _ => {
+      this.ownerDocument.removeEventListener('dragover', dragOver);
+      this.ownerDocument.removeEventListener('drop', drop);
+      this.dragEnd_();
     }, {once: true});
   }
 
@@ -722,7 +808,7 @@ export class MostVisitedElement extends MostVisitedElementBase {
 
   private onTileClick_(e: DomRepeatEvent<MostVisitedTile, MouseEvent>) {
     if (e.defaultPrevented) {
-      // Ignore previousely handled events.
+      // Ignore previously handled events.
       return;
     }
 
@@ -756,6 +842,44 @@ export class MostVisitedElement extends MostVisitedElementBase {
     this.tileFocus_(Math.max(0, index + delta));
   }
 
+  private onTileHover_(e: DomRepeatEvent<MostVisitedTile, MouseEvent>) {
+    if (e.defaultPrevented) {
+      // Ignore previously handled events.
+      return;
+    }
+
+    if (loadTimeData.getBoolean('prerenderEnabled') &&
+        loadTimeData.getInteger('prerenderStartTimeThreshold') >= 0) {
+      this.preloadingTimer_ = setTimeout(() => {
+        this.pageHandler_.prerenderMostVisitedTile(e.model.item, true);
+      }, loadTimeData.getInteger('prerenderStartTimeThreshold'));
+    }
+  }
+
+  private onTileMouseDown_(e: DomRepeatEvent<MostVisitedTile, MouseEvent>) {
+    if (e.defaultPrevented) {
+      // Ignore previously handled events.
+      return;
+    }
+
+    if (loadTimeData.getBoolean('prerenderEnabled')) {
+      this.pageHandler_.prerenderMostVisitedTile(e.model.item, false);
+    }
+  }
+
+  private onTileExit_(e: DomRepeatEvent<MostVisitedTile, MouseEvent>) {
+    if (e.defaultPrevented) {
+      // Ignore previously handled events.
+      return;
+    }
+
+    if (this.preloadingTimer_) {
+      clearTimeout(this.preloadingTimer_);
+    }
+
+    this.pageHandler_.cancelPrerender();
+  }
+
   private onUndoClick_() {
     if (!this.$.toast.open || !this.showToastButtons_) {
       return;
@@ -785,7 +909,8 @@ export class MostVisitedElement extends MostVisitedElementBase {
       tileElement.removeEventListener('touchend', touchEnd);
       tileElement.removeEventListener('touchcancel', touchEnd);
       const {clientX, clientY} = e.changedTouches[0];
-      this.dragEnd_(clientX, clientY);
+      this.drop_(clientX, clientY);
+      this.dragEnd_();
       this.reordering_ = false;
     };
     this.ownerDocument.addEventListener('touchmove', touchMove);
@@ -799,7 +924,7 @@ export class MostVisitedElement extends MostVisitedElementBase {
     }
     const tileElements = this.tileElements_;
     if (index < tileElements.length) {
-      tileElements[index].focus();
+      (tileElements[index] as HTMLElement).querySelector('a')!.focus();
     } else if (this.showAdd_ && index === tileElements.length) {
       this.$.addShortcut.focus();
     }
@@ -819,24 +944,24 @@ export class MostVisitedElement extends MostVisitedElementBase {
     this.toast_(
         'linkRemovedMsg',
         /* showButtons= */ this.customLinksEnabled_ || !isQueryTile);
-    this.tileFocus_(index);
-  }
 
-  private updateScreenWidth_() {
-    if (this.mediaListenerWideWidth_.matches) {
-      this.screenWidth_ = ScreenWidth.WIDE;
-    } else if (this.mediaListenerMediumWidth_.matches) {
-      this.screenWidth_ = ScreenWidth.MEDIUM;
-    } else {
-      this.screenWidth_ = ScreenWidth.NARROW;
-    }
+    // Move focus after the next render so that tileElements_ is updated.
+    afterNextRender(this, () => this.tileFocus_(index));
   }
 
   private onTilesRendered_() {
     performance.measure('most-visited-rendered');
+    assert(this.maxVisibleTiles_);
     this.pageHandler_.onMostVisitedTilesRendered(
-        this.tiles_.slice(0, assert(this.maxVisibleTiles_)),
-        this.windowProxy_.now());
+        this.tiles_.slice(0, this.maxVisibleTiles_), this.windowProxy_.now());
+  }
+
+  private getMoreActionText_(title: string) {
+    // Check that 'shortcutMoreActions' is set to more than an empty string,
+    // since we do not use this text for third party NTP.
+    return loadTimeData.getString('shortcutMoreActions') ?
+        loadTimeData.getStringF('shortcutMoreActions', title) :
+        '';
   }
 }
 

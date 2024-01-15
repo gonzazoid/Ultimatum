@@ -13,6 +13,7 @@
 #include "chrome/browser/sync/test/integration/sync_service_impl_harness.h"
 #include "chrome/browser/sync/test/integration/sync_test.h"
 #include "components/consent_auditor/consent_auditor.h"
+#include "components/signin/public/identity_manager/identity_test_utils.h"
 #include "components/sync/protocol/user_consent_specifics.pb.h"
 #include "content/public/test/browser_test.h"
 
@@ -25,7 +26,8 @@ using SyncConsent = sync_pb::UserConsentTypes::SyncConsent;
 namespace {
 
 CoreAccountId GetAccountId() {
-  return CoreAccountId("gaia_id_for_user_gmail.com");
+  return CoreAccountId::FromGaiaId(
+      signin::GetTestGaiaIdForEmail(SyncTest::kDefaultUserEmail));
 }
 
 class UserConsentEqualityChecker : public SingleClientStatusChangeChecker {
@@ -76,7 +78,7 @@ class UserConsentEqualityChecker : public SingleClientStatusChangeChecker {
   }
 
  private:
-  raw_ptr<FakeServer> fake_server_;
+  const raw_ptr<FakeServer> fake_server_;
   // TODO(markusheintz): User a string with the serialized proto instead of an
   // int. The requires creating better expectations with a proper creation
   // time.
@@ -115,9 +117,11 @@ IN_PROC_BROWSER_TEST_F(SingleClientUserConsentsSyncTest, ShouldSubmit) {
   EXPECT_TRUE(ExpectUserConsents({specifics}));
 }
 
+// ChromeOS does not support signing out of a primary account.
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
 IN_PROC_BROWSER_TEST_F(
     SingleClientUserConsentsSyncTest,
-    ShouldPreserveConsentsOnDisableSyncAndResubmitWhenReenabled) {
+    ShouldPreserveConsentsOnSignoutAndResubmitWhenReenabled) {
   UserConsentSpecifics specifics;
   specifics.mutable_sync_consent()->set_confirmation_grd_id(1);
   // Account id may be compared to the synced account, thus, we need them to
@@ -133,11 +137,12 @@ IN_PROC_BROWSER_TEST_F(
   sync_consent.set_status(UserConsentTypes::GIVEN);
   consent_service->RecordSyncConsent(GetAccountId(), sync_consent);
 
-  GetClient(0)->StopSyncServiceAndClearData();
-  ASSERT_TRUE(GetClient(0)->StartSyncService());
+  GetClient(0)->SignOutPrimaryAccount();
+  ASSERT_TRUE(GetClient(0)->SetupSync());
 
   EXPECT_TRUE(ExpectUserConsents({specifics}));
 }
+#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
 IN_PROC_BROWSER_TEST_F(SingleClientUserConsentsSyncTest,
                        ShouldPreserveConsentsLoggedBeforeSyncSetup) {

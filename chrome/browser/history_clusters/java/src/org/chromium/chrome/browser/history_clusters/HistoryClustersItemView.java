@@ -11,16 +11,16 @@ import android.view.View;
 import android.widget.ImageView;
 
 import androidx.appcompat.content.res.AppCompatResources;
+import androidx.core.widget.ImageViewCompat;
 
-import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.components.browser_ui.widget.selectable_list.SelectableItemView;
 import org.chromium.components.browser_ui.widget.selectable_list.SelectableListUtils;
+import org.chromium.ui.base.ViewUtils;
 
 class HistoryClustersItemView extends SelectableItemView<ClusterVisit> {
     private DividerView mDividerView;
-    /**
-     * Constructor for inflating from XML.
-     */
+
+    /** Constructor for inflating from XML. */
     public HistoryClustersItemView(Context context, AttributeSet attrs) {
         super(context, attrs);
     }
@@ -33,33 +33,46 @@ class HistoryClustersItemView extends SelectableItemView<ClusterVisit> {
         mEndButtonView.setVisibility(VISIBLE);
         mEndButtonView.setImageResource(R.drawable.btn_delete_24dp);
         mEndButtonView.setContentDescription(getContext().getString((R.string.remove)));
-        ApiCompatibilityUtils.setImageTintList(mEndButtonView,
+        ImageViewCompat.setImageTintList(
+                mEndButtonView,
                 AppCompatResources.getColorStateList(
                         getContext(), R.color.default_icon_color_secondary_tint_list));
         mEndButtonView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        mEndButtonView.setPaddingRelative(getResources().getDimensionPixelSize(
-                                                  R.dimen.visit_item_remove_button_lateral_padding),
+        mEndButtonView.setPaddingRelative(
+                getResources()
+                        .getDimensionPixelSize(R.dimen.visit_item_remove_button_lateral_padding),
                 getPaddingTop(),
-                getResources().getDimensionPixelSize(
-                        R.dimen.visit_item_remove_button_lateral_padding),
+                getResources()
+                        .getDimensionPixelSize(R.dimen.visit_item_remove_button_lateral_padding),
                 getPaddingBottom());
     }
 
     @Override
     protected void onClick() {}
 
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        Drawable iconViewBackground = getIconView().getBackground();
+        int level = iconViewBackground.getLevel();
+        // Work around a race condition that puts the icon view background gets into a bad state.
+        // Changing the level and changing it back guarantees a call to
+        // initializeDrawableForDisplay(), which resets it into a good state.
+        iconViewBackground.setLevel(level + 1);
+        iconViewBackground.setLevel(level);
+    }
+
     void setTitleText(CharSequence text) {
         mTitleView.setText(text);
-        SelectableListUtils.setContentDescriptionContext(getContext(), mEndButtonView,
-                text.toString(), SelectableListUtils.ContentDescriptionSource.REMOVE_BUTTON);
+        SelectableListUtils.setContentDescriptionContext(
+                getContext(),
+                mEndButtonView,
+                text.toString(),
+                SelectableListUtils.ContentDescriptionSource.REMOVE_BUTTON);
     }
 
     void setHostText(CharSequence text) {
         mDescriptionView.setText(text);
-    }
-
-    void setIconDrawable(Drawable drawable) {
-        super.setStartIconDrawable(drawable);
     }
 
     void setEndButtonClickHandler(OnClickListener onClickListener) {
@@ -80,7 +93,7 @@ class HistoryClustersItemView extends SelectableItemView<ClusterVisit> {
             layoutParams.bottomMargin = 0;
         }
 
-        requestLayout();
+        ViewUtils.requestLayout(this, "HistoryClustersItemView.setHasThickDivider");
     }
 
     void setEndButtonVisibility(boolean visible) {

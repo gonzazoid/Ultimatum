@@ -7,7 +7,8 @@
 
 #include "ash/ash_export.h"
 #include "ash/public/cpp/desk_template.h"
-#include "ash/wm/overview/overview_highlightable_view.h"
+#include "ash/wm/overview/overview_focusable_view.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "ui/accessibility/ax_node_data.h"
@@ -24,10 +25,11 @@ class Textfield;
 
 namespace ash {
 
-class CloseButton;
+class IconButton;
 class PillButton;
 class SavedDeskIconContainer;
 class SavedDeskNameView;
+class SystemShadow;
 
 // A view that represents each individual saved desk item in the saved desk
 // grid. The view has different shown contents depending on whether the mouse is
@@ -62,13 +64,13 @@ class SavedDeskNameView;
 // The whole view is also a button which does the same thing as `launch_button_`
 // when clicked.
 class ASH_EXPORT SavedDeskItemView : public views::Button,
-                                     public OverviewHighlightableView,
+                                     public OverviewFocusableView,
                                      public views::ViewTargeterDelegate,
                                      public views::TextfieldController {
  public:
   METADATA_HEADER(SavedDeskItemView);
 
-  explicit SavedDeskItemView(std::unique_ptr<DeskTemplate> desk_template);
+  explicit SavedDeskItemView(std::unique_ptr<DeskTemplate> saved_desk);
   SavedDeskItemView(const SavedDeskItemView&) = delete;
   SavedDeskItemView& operator=(const SavedDeskItemView&) = delete;
   ~SavedDeskItemView() override;
@@ -76,9 +78,9 @@ class ASH_EXPORT SavedDeskItemView : public views::Button,
   // The preferred size of the whole SavedDeskItemView.
   static constexpr gfx::Size kPreferredSize = {220, 120};
 
-  const DeskTemplate& desk_template() const { return *desk_template_; }
+  const DeskTemplate& saved_desk() const { return *saved_desk_; }
   SavedDeskNameView* name_view() const { return name_view_; }
-  const base::GUID& uuid() const { return desk_template_->uuid(); }
+  const base::Uuid& uuid() const { return saved_desk_->uuid(); }
 
   // Updates the visibility state of the delete and launch buttons depending on
   // the current mouse or touch event location, or if switch access is enabled.
@@ -89,29 +91,30 @@ class ASH_EXPORT SavedDeskItemView : public views::Button,
   // `SavedDeskNameView` has the focus).
   bool IsNameBeingModified() const;
 
-  // To prevent duplications when saving a desk multiple times, check if there's
-  // an existing saved desk that shares the same name as the `saved_desk_name`.
-  // If so, remove auto added number.
-  void MaybeRemoveNameNumber(const std::u16string& saved_desk_name);
+  // Sets the name displayed in this item to `saved_desk_name`. This is for
+  // display purposes only and the actual saved desk is not modified. This is
+  // used to provide a better starting point (name of the desk, without any
+  // numbered suffixes) just before the name view is focused.
+  void SetDisplayName(const std::u16string& saved_desk_name);
+
   // Show replace dialog when found a name duplication.
   void MaybeShowReplaceDialog(ash::DeskTemplateType type,
-                              const base::GUID& uuid);
+                              const base::Uuid& uuid);
   // Rename current saved desk with new name, delete old saved desk with same
   // name by uuid. Used for callback functions for Replace Dialog.
-  void ReplaceTemplate(const base::GUID& uuid);
-  void RevertTemplateName();
+  void ReplaceSavedDesk(const base::Uuid& uuid);
+  void RevertSavedDeskName();
 
-  // This allows us to update an existing template view. Currently, this
+  // This allows us to update an existing saved desk view. Currently, this
   // function will only update the name. We will need to update this once we
-  // allow the user to make more changes to a template. If the text field is
+  // allow the user to make more changes to a saved desk. If the text field is
   // blurred when there is an update, we intentionally leave it blurred in order
   // to align this behavior with other similar cases.
-  void UpdateTemplate(const DeskTemplate& updated_template);
+  void UpdateSavedDesk(const DeskTemplate& updated_saved_desk);
 
   // views::Button:
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   void Layout() override;
-  void OnThemeChanged() override;
   void OnViewFocused(views::View* observed_view) override;
   void OnViewBlurred(views::View* observed_view) override;
   void OnFocus() override;
@@ -132,46 +135,47 @@ class ASH_EXPORT SavedDeskItemView : public views::Button,
  private:
   friend class SavedDeskItemViewTestApi;
 
-  void OnHoverAnimationEnded();
   void AnimateHover(ui::Layer* layer_to_show, ui::Layer* layer_to_hide);
 
-  void OnDeleteTemplate();
+  void OnDeleteSavedDesk();
   void OnDeleteButtonPressed();
 
   void OnGridItemPressed(const ui::Event& event);
 
-  // Launches the apps associated with the template unless editing the desk
-  // template name is underway.
-  void MaybeLaunchTemplate();
+  // Launches the apps associated with the saved desk unless editing the saved
+  // desk name is underway.
+  void MaybeLaunchSavedDesk();
 
-  // Called when we want to update `name_view_` when the template's name
+  // Called when we want to update `name_view_` when the saved desk's name
   // changes.
-  void OnTemplateNameChanged(const std::u16string& new_name);
+  void OnSavedDeskNameChanged(const std::u16string& new_name);
 
-  // Update template name based on `name_view_` string.
-  void UpdateTemplateName();
+  // Update saved desk name based on `name_view_` string.
+  void UpdateSavedDeskName();
 
-  // OverviewHighlightableView:
+  // OverviewFocusableView:
   views::View* GetView() override;
-  void MaybeActivateHighlightedView() override;
-  void MaybeCloseHighlightedView(bool primary_action) override;
-  void MaybeSwapHighlightedView(bool right) override;
-  void OnViewHighlighted() override;
-  void OnViewUnhighlighted() override;
+  void MaybeActivateFocusedView() override;
+  void MaybeCloseFocusedView(bool primary_action) override;
+  void MaybeSwapFocusedView(bool right) override;
+  void OnFocusableViewFocused() override;
+  void OnFocusableViewBlurred() override;
 
   // A copy of the associated saved desk.
-  std::unique_ptr<DeskTemplate> desk_template_;
+  std::unique_ptr<DeskTemplate> saved_desk_;
 
   // Owned by the views hierarchy.
-  SavedDeskNameView* name_view_ = nullptr;
+  raw_ptr<SavedDeskNameView> name_view_ = nullptr;
   // When template is managed by admin, `time_view_` will display management
   // description instead.
-  views::Label* time_view_ = nullptr;
-  SavedDeskIconContainer* icon_container_view_ = nullptr;
-  CloseButton* delete_button_ = nullptr;
-  PillButton* launch_button_ = nullptr;
+  raw_ptr<views::Label> time_view_ = nullptr;
+  raw_ptr<SavedDeskIconContainer> icon_container_view_ = nullptr;
+  raw_ptr<IconButton> delete_button_ = nullptr;
+  raw_ptr<PillButton> launch_button_ = nullptr;
   // Container used for holding all the views that appear on hover.
-  views::View* hover_container_ = nullptr;
+  raw_ptr<views::View> hover_container_ = nullptr;
+
+  std::unique_ptr<SystemShadow> shadow_;
 
   // When the `name_view_` is focused, we select all its text. However, if it is
   // focused via a mouse press event, on mouse release will clear the selection.
@@ -179,10 +183,10 @@ class ASH_EXPORT SavedDeskItemView : public views::Button,
   bool defer_select_all_ = false;
 
   // This is set when `name_view_` is focused or blurred to indicate whether
-  // this template's name is being modified or not. This is used instead of
+  // this saved desk's name is being modified or not. This is used instead of
   // `HasFocus()` to defer text selection, since the first mouse press event is
   // triggered before the `name_view_` is actually focused.
-  bool is_template_name_being_modified_ = false;
+  bool is_saved_desk_name_being_modified_ = false;
 
   // This is initialized to true and tells the `OnViewBlurred` function if the
   // user wants to set a new template name. We set this to false if the

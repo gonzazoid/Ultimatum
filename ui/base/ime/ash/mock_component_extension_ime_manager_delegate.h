@@ -18,13 +18,12 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) MockComponentExtensionIMEManagerDelegate
     : public ComponentExtensionIMEManagerDelegate {
  public:
   MockComponentExtensionIMEManagerDelegate();
+  ~MockComponentExtensionIMEManagerDelegate() override;
 
   MockComponentExtensionIMEManagerDelegate(
       const MockComponentExtensionIMEManagerDelegate&) = delete;
   MockComponentExtensionIMEManagerDelegate& operator=(
       const MockComponentExtensionIMEManagerDelegate&) = delete;
-
-  ~MockComponentExtensionIMEManagerDelegate() override;
 
   std::vector<ComponentExtensionIME> ListIME() override;
   void Load(Profile*,
@@ -39,20 +38,19 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) MockComponentExtensionIMEManagerDelegate
   void set_login_layout_set(const std::set<std::string>& login_layout_set) {
     login_layout_set_ = login_layout_set;
   }
+  int load_call_count() const { return load_call_count_; }
+  const std::string& last_loaded_extension_id() const {
+    return last_loaded_extension_id_;
+  }
 
  private:
   std::set<std::string> login_layout_set_;
   std::vector<ComponentExtensionIME> ime_list_;
+  std::string last_loaded_extension_id_;
+  int load_call_count_{0};
 };
 
 }  // namespace input_method
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-namespace input_method {
-using ::ash::input_method::MockComponentExtensionIMEManagerDelegate;
-}
-}  // namespace chromeos
 
 #endif  // UI_BASE_IME_ASH_MOCK_COMPONENT_EXTENSION_IME_MANAGER_DELEGATE_H_

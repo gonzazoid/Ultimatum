@@ -5,8 +5,8 @@
 #ifndef COMPONENTS_DBUS_PROPERTIES_DBUS_PROPERTIES_H_
 #define COMPONENTS_DBUS_PROPERTIES_DBUS_PROPERTIES_H_
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/dbus/properties/types.h"
@@ -72,7 +72,8 @@ class COMPONENT_EXPORT(DBUS) DbusProperties {
 
   bool initialized_ = false;
 
-  raw_ptr<dbus::ExportedObject, DanglingUntriaged> exported_object_ = nullptr;
+  raw_ptr<dbus::ExportedObject, AcrossTasksDanglingUntriaged> exported_object_ =
+      nullptr;
 
   base::RepeatingCallback<void(bool)> barrier_;
 

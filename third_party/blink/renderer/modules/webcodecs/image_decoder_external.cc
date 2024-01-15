@@ -25,6 +25,8 @@
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/graphics/bitmap_image_metrics.h"
+#include "third_party/blink/renderer/platform/heap/cross_thread_handle.h"
+#include "third_party/blink/renderer/platform/heap/cross_thread_persistent.h"
 #include "third_party/blink/renderer/platform/image-decoders/segment_reader.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
@@ -70,6 +72,29 @@ DOMException* CreateUnsupportedImageTypeException(String type) {
       String::Format("The provided image type (%s) is not supported",
                      type.Ascii().c_str()));
 }
+
+// Helper class for ensuring memory safe usage of ArrayBufferContents by the
+// ImageDecoderCore on the decoding thread.
+class ArrayBufferContentsSegmentReader : public SegmentReader {
+ public:
+  explicit ArrayBufferContentsSegmentReader(ArrayBufferContents contents)
+      : contents_(std::move(contents)),
+        segment_reader_(SegmentReader::CreateFromSkData(
+            SkData::MakeWithoutCopy(contents_.Data(),
+                                    contents_.DataLength()))) {}
+
+  size_t size() const override { return segment_reader_->size(); }
+  size_t GetSomeData(const char*& data, size_t position) const override {
+    return segment_reader_->GetSomeData(data, position);
+  }
+  sk_sp<SkData> GetAsSkData() const override {
+    return segment_reader_->GetAsSkData();
+  }
+
+ private:
+  ArrayBufferContents contents_;  // Must outlive `segment_reader_`.
+  scoped_refptr<SegmentReader> segment_reader_;
+};
 
 }  // namespace
 
@@ -119,13 +144,13 @@ ScriptPromise ImageDecoderExternal::isTypeSupported(ScriptState* script_state,
 ImageDecoderExternal::ImageDecoderExternal(ScriptState* script_state,
                                            const ImageDecoderInit* init,
                                            ExceptionState& exception_state)
-    : ExecutionContextLifecycleObserver(ExecutionContext::From(script_state)),
+    : ActiveScriptWrappable<ImageDecoderExternal>({}),
+      ExecutionContextLifecycleObserver(ExecutionContext::From(script_state)),
       script_state_(script_state),
       tracks_(MakeGarbageCollected<ImageTrackList>(this)),
       completed_property_(
           MakeGarbageCollected<CompletedProperty>(GetExecutionContext())) {
-  // If the context is already destroyed we will never get an OnContextDestroyed
-  // callback, which is critical to invalidating any pending WeakPtr operations.
+  // ImageDecoder requires an active context to operate correctly.
   if (GetExecutionContext()->IsContextDestroyed()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kOperationError,
                                       "Invalid context.");
@@ -139,9 +164,9 @@ ImageDecoderExternal::ImageDecoderExternal(ScriptState* script_state,
   DCHECK(init->data());
 
   constexpr char kNoneOption[] = "none";
-  auto color_behavior = ColorBehavior::Tag();
+  auto color_behavior = ColorBehavior::kTag;
   if (init->colorSpaceConversion() == kNoneOption)
-    color_behavior = ColorBehavior::Ignore();
+    color_behavior = ColorBehavior::kIgnore;
 
   auto desired_size = SkISize::MakeEmpty();
   if (init->hasDesiredWidth() && init->hasDesiredHeight())
@@ -188,12 +213,12 @@ ImageDecoderExternal::ImageDecoderExternal(ScriptState* script_state,
     return;
   }
 
-  base::span<const uint8_t> buffer;
+  base::span<const uint8_t> array_span;
   switch (init->data()->GetContentType()) {
     case V8ImageBufferSource::ContentType::kArrayBufferAllowShared:
       if (auto* data_ptr = init->data()->GetAsArrayBufferAllowShared()) {
         if (!data_ptr->IsDetached()) {
-          buffer = base::span<const uint8_t>(
+          array_span = base::span<const uint8_t>(
               reinterpret_cast<const uint8_t*>(data_ptr->DataMaybeShared()),
               data_ptr->ByteLength());
         }
@@ -203,7 +228,7 @@ ImageDecoderExternal::ImageDecoderExternal(ScriptState* script_state,
       if (auto* data_ptr =
               init->data()->GetAsArrayBufferViewAllowShared().Get()) {
         if (!data_ptr->IsDetached()) {
-          buffer =
+          array_span =
               base::span<const uint8_t>(reinterpret_cast<const uint8_t*>(
                                             data_ptr->BaseAddressMaybeShared()),
                                         data_ptr->byteLength());
@@ -215,18 +240,27 @@ ImageDecoderExternal::ImageDecoderExternal(ScriptState* script_state,
       break;
   }
 
-  if (!buffer.data()) {
-    exception_state.ThrowTypeError("Provided image data was detached");
+  auto buffer_contents =
+      TransferArrayBufferForSpan(init->transfer(), array_span, exception_state,
+                                 script_state_->GetIsolate());
+  if (exception_state.HadException()) {
     return;
   }
 
-  if (!buffer.size()) {
+  if (array_span.empty()) {
     exception_state.ThrowTypeError("No image data provided");
     return;
   }
 
-  auto segment_reader = SegmentReader::CreateFromSkData(
-      SkData::MakeWithCopy(buffer.data(), buffer.size()));
+  scoped_refptr<SegmentReader> segment_reader;
+  if (buffer_contents.IsValid()) {
+    segment_reader = base::MakeRefCounted<ArrayBufferContentsSegmentReader>(
+        std::move(buffer_contents));
+  } else {
+    segment_reader = SegmentReader::CreateFromSkData(
+        SkData::MakeWithCopy(array_span.data(), array_span.size()));
+  }
+
   if (!segment_reader) {
     exception_state.ThrowDOMException(DOMExceptionCode::kOperationError,
                                       "Failed to read image data");
@@ -249,10 +283,7 @@ ImageDecoderExternal::~ImageDecoderExternal() {
   if (construction_succeeded_)
     base::UmaHistogramBoolean("Blink.WebCodecs.ImageDecoder.Success", !failed_);
 
-  // See OnContextDestroyed(); WeakPtrs must be invalidated ahead of GC.
   DCHECK_EQ(pending_metadata_requests_, 0);
-  DCHECK(!weak_factory_.HasWeakPtrs());
-  DCHECK(!decode_weak_factory_.HasWeakPtrs());
 }
 
 ScriptPromise ImageDecoderExternal::decode(const ImageDecodeOptions* options) {
@@ -293,7 +324,7 @@ void ImageDecoderExternal::UpdateSelectedTrack() {
 
   // Track changes recreate a new decoder under the hood, so don't let stale
   // metadata updates come in for the newly selected (or no selected) track.
-  weak_factory_.InvalidateWeakPtrs();
+  weak_factory_.Invalidate();
 
   // TODO(crbug.com/1073995): We eventually need a formal track selection
   // mechanism. For now we can only select between the still and animated images
@@ -303,8 +334,8 @@ void ImageDecoderExternal::UpdateSelectedTrack() {
     return;
   }
 
-  animation_option_ = AnimationOptionFromIsAnimated(
-      tracks_->selectedTrack().value()->animated());
+  animation_option_ =
+      AnimationOptionFromIsAnimated(tracks_->selectedTrack()->animated());
 
   decoder_->AsyncCall(&ImageDecoderCore::Reinitialize)
       .WithArgs(animation_option_);
@@ -336,7 +367,7 @@ void ImageDecoderExternal::reset(DOMException* exception) {
   }
 
   num_submitted_decodes_ = 0u;
-  decode_weak_factory_.InvalidateWeakPtrs();
+  decode_weak_factory_.Invalidate();
 
   // Move all state to local variables since promise resolution is re-entrant.
   HeapVector<Member<DecodeRequest>> local_pending_decodes;
@@ -374,8 +405,7 @@ void ImageDecoderExternal::CloseInternal(DOMException* exception) {
   reset(exception);
   if (consumer_)
     consumer_->Cancel();
-
-  weak_factory_.InvalidateWeakPtrs();
+  weak_factory_.Invalidate();
   pending_metadata_requests_ = 0;
   consumer_ = nullptr;
   decoder_.reset();
@@ -434,37 +464,21 @@ void ImageDecoderExternal::Trace(Visitor* visitor) const {
   visitor->Trace(tracks_);
   visitor->Trace(pending_decodes_);
   visitor->Trace(completed_property_);
+  visitor->Trace(decode_weak_factory_);
+  visitor->Trace(weak_factory_);
   ScriptWrappable::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
 }
 
 void ImageDecoderExternal::ContextDestroyed() {
-  // WeakPtrs need special consideration when used with a garbage collected
-  // type; they must be invalidated ahead of finalization.
-  //
-  // We also need to ensure that no further WeakPtrs are created, so close the
-  // decoder at this point to prevent further operation.
   auto* exception = MakeGarbageCollected<DOMException>(
       DOMExceptionCode::kAbortError, "Aborted by close.");
   CloseInternal(exception);
-
-  DCHECK(!weak_factory_.HasWeakPtrs());
-  DCHECK(!decode_weak_factory_.HasWeakPtrs());
 }
 
 bool ImageDecoderExternal::HasPendingActivity() const {
-  // WARNING: All pending WeakPtr bindings must be tracked here. I.e., all
-  // WTF::SequenceBound.Then() usage must be accounted for. Failure to do so
-  // will cause issues where WeakPtrs are valid between GC finalization and
-  // destruction.
   const bool has_pending_activity =
       !pending_decodes_.empty() || pending_metadata_requests_ > 0;
-
-  if (!has_pending_activity) {
-    DCHECK(!weak_factory_.HasWeakPtrs());
-    DCHECK(!decode_weak_factory_.HasWeakPtrs());
-  }
-
   return has_pending_activity;
 }
 
@@ -507,7 +521,8 @@ void ImageDecoderExternal::MaybeSatisfyPendingDecodes() {
         .WithArgs(request->frame_index, request->complete_frames_only,
                   WTF::CrossThreadUnretained(request->abort_flag.get()))
         .Then(CrossThreadBindOnce(&ImageDecoderExternal::OnDecodeReady,
-                                  decode_weak_factory_.GetWeakPtr()));
+                                  MakeUnwrappingCrossThreadHandle(
+                                      decode_weak_factory_.GetWeakCell())));
   }
 
   auto* new_end = std::stable_partition(
@@ -558,7 +573,7 @@ void ImageDecoderExternal::OnDecodeReady(
 
   request->pending = false;
 
-  // Abort always invalidates WeakPtrs, so OnDecodeReady() should never receive
+  // Abort always invalidates WeakCells, so OnDecodeReady() should never receive
   // the kAborted status.
   DCHECK_NE(result->status, ImageDecoderCore::Status::kAborted);
 
@@ -567,7 +582,7 @@ void ImageDecoderExternal::OnDecodeReady(
         ExceptionMessages::IndexOutsideRange<uint32_t>(
             "frame index", request->frame_index, 0,
             ExceptionMessages::kInclusiveBound,
-            tracks_->selectedTrack().value()->frameCount(),
+            tracks_->selectedTrack()->frameCount(),
             ExceptionMessages::kExclusiveBound);
     MaybeSatisfyPendingDecodes();
     return;
@@ -605,8 +620,9 @@ void ImageDecoderExternal::DecodeMetadata() {
   DCHECK_GE(pending_metadata_requests_, 1);
 
   decoder_->AsyncCall(&ImageDecoderCore::DecodeMetadata)
-      .Then(CrossThreadBindOnce(&ImageDecoderExternal::OnMetadata,
-                                weak_factory_.GetWeakPtr()));
+      .Then(CrossThreadBindOnce(
+          &ImageDecoderExternal::OnMetadata,
+          MakeUnwrappingCrossThreadHandle(weak_factory_.GetWeakCell())));
 }
 
 void ImageDecoderExternal::OnMetadata(
@@ -638,8 +654,8 @@ void ImageDecoderExternal::OnMetadata(
   }
 
   if (!tracks_->IsEmpty()) {
-    tracks_->selectedTrack().value()->UpdateTrack(metadata.frame_count,
-                                                  metadata.repetition_count);
+    tracks_->selectedTrack()->UpdateTrack(metadata.frame_count,
+                                          metadata.repetition_count);
     if (did_complete)
       MaybeSatisfyPendingDecodes();
     return;
@@ -685,7 +701,7 @@ void ImageDecoderExternal::SetFailed() {
   }
 
   failed_ = true;
-  decode_weak_factory_.InvalidateWeakPtrs();
+  decode_weak_factory_.Invalidate();
   if (tracks_->IsEmpty()) {
     tracks_->OnTracksReady(MakeGarbageCollected<DOMException>(
         DOMExceptionCode::kInvalidStateError,

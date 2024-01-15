@@ -9,30 +9,32 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
+#include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
 #include "base/memory/raw_ptr.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/memory/raw_ref.h"
 #include "base/time/time.h"
 #include "components/autofill/core/browser/autofill_client.h"
-#include "components/autofill/core/browser/autofill_profile_import_process.h"
 #include "components/autofill/core/browser/autofill_progress_dialog_type.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
+#include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill/core/browser/field_types.h"
 #include "components/autofill/core/browser/form_types.h"
 #include "components/autofill/core/browser/metrics/form_events/form_events.h"
-#include "components/autofill/core/browser/sync_utils.h"
+#include "components/autofill/core/browser/metrics/log_event.h"
 #include "components/autofill/core/browser/ui/popup_types.h"
 #include "components/autofill/core/common/dense_set.h"
 #include "components/autofill/core/common/mojom/autofill_types.mojom-forward.h"
 #include "components/autofill/core/common/signatures.h"
 #include "components/autofill/core/common/unique_ids.h"
-#include "components/autofill_assistant/core/public/autofill_assistant_intent.h"
 #include "components/security_state/core/security_state.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 
 class GURL;
 
@@ -44,7 +46,10 @@ namespace autofill {
 
 class AutofillField;
 class CreditCard;
+
+namespace autofill_metrics {
 class FormEventLoggerBase;
+}  // namespace autofill_metrics
 
 // A given maximum is enforced to minimize the number of buckets generated.
 extern const int kMaxBucketsCount;
@@ -104,7 +109,24 @@ class AutofillMetrics {
     // An Autocomplete suggestion was selected.
     AUTOCOMPLETE_SUGGESTION_SELECTED,
 
+    // An Autocomplete suggestion was deleted. Added in M113.
+    AUTOCOMPLETE_SUGGESTION_DELETED,
+
     NUM_AUTOCOMPLETE_EVENTS
+  };
+
+  // The user action that triggered the deletion of a suggestion entry.
+  // These values are used in enums.xml; do not reorder or renumber entries!
+  enum class SingleEntryRemovalMethod {
+    // The user pressed shift delete while an Autofill popup menu entry was
+    // selected.
+    kKeyboardShiftDeletePressed = 0,
+    // The user clicked the delete button in the Autofill popup menu.
+    kDeleteButtonClicked = 1,
+    // The user confirmed the entry deletion via the dialog shown by the
+    // keyboard accessory.
+    kKeyboardAccessory = 2,
+    kMaxValue = kKeyboardAccessory
   };
 
   // Represents card submitted state.
@@ -118,25 +140,6 @@ class AutofillMetrics {
     // number.
     HAS_EXPIRATION_DATE_ONLY,
     NUM_SUBMITTED_CARD_STATE_METRICS,
-  };
-
-  // These values are persisted to UMA logs. Entries should not be renumbered
-  // and numeric values should never be reused. This is the subset of field
-  // types that can be changed in a profile change/store dialog or are affected
-  // in a profile merge operation.
-  enum class SettingsVisibleFieldTypeForMetrics {
-    kUndefined = 0,
-    kName = 1,
-    kEmailAddress = 2,
-    kPhoneNumber = 3,
-    kCity = 4,
-    kCountry = 5,
-    kZip = 6,
-    kState = 7,
-    kStreetAddress = 8,
-    kDependentLocality = 9,
-    kHonorificPrefix = 10,
-    kMaxValue = kHonorificPrefix
   };
 
   // Metric to measure if a submitted card's expiration date matches the same
@@ -159,8 +162,8 @@ class AutofillMetrics {
     NUM_SUBMITTED_SERVER_CARD_EXPIRATION_STATUS_METRICS,
   };
 
-  // Metric to distinguish between local credit card saves and upload credit
-  // card saves.
+  // Metric to distinguish between local and server saves for credit cards or
+  // IBANs.
   enum class SaveTypeMetric {
     LOCAL = 0,
     SERVER = 1,
@@ -209,18 +212,13 @@ class AutofillMetrics {
     // requested the issuer to send an OTP, and we can not move on to the next
     // step in this flow.
     kDismissedByServerRequestFailure = 4,
-    kMaxValue = kDismissedByServerRequestFailure,
-  };
-
-  enum CreditCardUploadFeedbackMetric {
-    // The loading indicator animation which indicates uploading is in progress
-    // is successfully shown.
-    CREDIT_CARD_UPLOAD_FEEDBACK_LOADING_ANIMATION_SHOWN,
-    // The credit card icon with the saving failure badge is shown.
-    CREDIT_CARD_UPLOAD_FEEDBACK_FAILURE_ICON_SHOWN,
-    // The failure icon is clicked and the save card failure bubble is shown.
-    CREDIT_CARD_UPLOAD_FEEDBACK_FAILURE_BUBBLE_SHOWN,
-    NUM_CREDIT_CARD_UPLOAD_FEEDBACK_METRICS,
+    // User accepted a challenge option in the
+    // CardUnmaskAuthenticationSelectionDialog that does not require a server
+    // call to get to the next step in this flow. For instance, in the CVC case,
+    // we can go directly to the CVC input dialog after the user selects the
+    // challenge option.
+    kDismissedByUserAcceptanceNoServerRequestNeeded = 5,
+    kMaxValue = kDismissedByUserAcceptanceNoServerRequestNeeded,
   };
 
   // Metrics measuring how well we predict field types.  These metric values are
@@ -471,113 +469,24 @@ class AutofillMetrics {
     // UNMASK_PROMPT_SAVED_CARD_LOCALLY = 6,
     // User chose to opt in (checked the checkbox when it was empty).
     // Only logged if there was an attempt to unmask.
-    UNMASK_PROMPT_LOCAL_SAVE_DID_OPT_IN = 7,
+    // Deprecated.
+    // UNMASK_PROMPT_LOCAL_SAVE_DID_OPT_IN = 7,
     // User did not opt in when they had the chance (left the checkbox
     // unchecked).  Only logged if there was an attempt to unmask.
-    UNMASK_PROMPT_LOCAL_SAVE_DID_NOT_OPT_IN = 8,
+    // Deprecated.
+    // UNMASK_PROMPT_LOCAL_SAVE_DID_NOT_OPT_IN = 8,
     // User chose to opt out (unchecked the checkbox when it was check).
     // Only logged if there was an attempt to unmask.
-    UNMASK_PROMPT_LOCAL_SAVE_DID_OPT_OUT = 9,
+    // Deprecated.
+    // UNMASK_PROMPT_LOCAL_SAVE_DID_OPT_OUT = 9,
     // User did not opt out when they had a chance (left the checkbox checked).
     // Only logged if there was an attempt to unmask.
-    UNMASK_PROMPT_LOCAL_SAVE_DID_NOT_OPT_OUT = 10,
+    // Deprecated.
+    // UNMASK_PROMPT_LOCAL_SAVE_DID_NOT_OPT_OUT = 10,
     // The prompt was closed while chrome was unmasking the card (user pressed
     // verify and we were waiting for the server response).
     UNMASK_PROMPT_CLOSED_ABANDON_UNMASKING = 11,
     NUM_UNMASK_PROMPT_EVENTS,
-  };
-
-  // Events related to user-perceived latency due to GetDetailsForGetRealPan
-  // call.
-  enum class PreflightCallEvent {
-    // Returned before card chosen.
-    kPreflightCallReturnedBeforeCardChosen = 0,
-    // Did not return before card was chosen. When opted-in, this means
-    // the UI had to wait for the call to return. When opted-out, this means we
-    // did not offer to opt-in.
-    kCardChosenBeforePreflightCallReturned = 1,
-    // Preflight call was irrelevant; skipped waiting.
-    kDidNotChooseMaskedCard = 2,
-    kMaxValue = kDidNotChooseMaskedCard,
-  };
-
-  // Metric for tracking which authentication method was used for a user with
-  // FIDO authentication enabled.
-  enum class CardUnmaskTypeDecisionMetric {
-    // Only WebAuthn prompt was shown.
-    kFidoOnly = 0,
-    // CVC authentication was required in addition to WebAuthn.
-    kCvcThenFido = 1,
-    kMaxValue = kCvcThenFido,
-  };
-
-  // TODO(crbug.com/1263302): Right now this is only used for virtual cards.
-  // Extend it for masked server cards in the future too. Tracks the flow type
-  // used in a virtual card unmasking.
-  enum class VirtualCardUnmaskFlowType {
-    // These values are persisted to logs. Entries should not be renumbered and
-    // numeric values should never be reused.
-
-    // Flow type was not specified because of no option was provided, or was
-    // unknown at time of logging.
-    kUnspecified = 0,
-    // Only FIDO auth was offered.
-    kFidoOnly = 1,
-    // Only OTP auth was offered.
-    kOtpOnly = 2,
-    // FIDO auth was offered first but was cancelled or failed. OTP auth was
-    // offered as a fallback.
-    kOtpFallbackFromFido = 3,
-    kMaxValue = kOtpFallbackFromFido,
-  };
-
-  // Possible scenarios where a WebAuthn prompt may show.
-  enum class WebauthnFlowEvent {
-    // WebAuthn is immediately prompted for unmasking.
-    kImmediateAuthentication = 0,
-    // WebAuthn is prompted after a CVC check.
-    kAuthenticationAfterCvc = 1,
-    // WebAuthn is prompted after being offered to opt-in from a checkout flow.
-    kCheckoutOptIn = 2,
-    // WebAuthn is prompted after being offered to opt-in from the settings
-    // page.
-    kSettingsPageOptIn = 3,
-    kMaxValue = kSettingsPageOptIn,
-  };
-
-  // The result of a WebAuthn user-verification prompt.
-  enum class WebauthnResultMetric {
-    // User-verification succeeded.
-    kSuccess = 0,
-    // Other checks failed (e.g. invalid domain, algorithm unsupported, etc.)
-    kOtherError = 1,
-    // User either failed verification or cancelled.
-    kNotAllowedError = 2,
-    kMaxValue = kNotAllowedError,
-  };
-
-  // The user decision for the WebAuthn opt-in promo.
-  enum class WebauthnOptInPromoUserDecisionMetric {
-    // User accepted promo.
-    kAccepted = 0,
-    // User immediately declined promo.
-    kDeclinedImmediately = 1,
-    // Once user accepts the dialog, a round-trip call to Payments is sent,
-    // which is required for user authentication. The user has the option to
-    // cancel the dialog before the round-trip call is returned.
-    kDeclinedAfterAccepting = 2,
-    kMaxValue = kDeclinedAfterAccepting,
-  };
-
-  // The parameters with which opt change was called.
-  enum class WebauthnOptInParameters {
-    // Call made to fetch a challenge.
-    kFetchingChallenge = 0,
-    // Call made with signature of creation challenge.
-    kWithCreationChallenge = 1,
-    // Call made with signature of request challenge.
-    kWithRequestChallenge = 2,
-    kMaxValue = kWithRequestChallenge,
   };
 
   // Possible results of Payments RPCs.
@@ -614,12 +523,12 @@ class AutofillMetrics {
   enum WalletErrorMetric {
     // Baseline metric: Issued a request to the Wallet server.
     WALLET_ERROR_BASELINE_ISSUED_REQUEST = 0,
-    // A fatal error occured while communicating with the Wallet server. This
+    // A fatal error occurred while communicating with the Wallet server. This
     // value has been deprecated.
     WALLET_FATAL_ERROR_DEPRECATED,
     // Received a malformed response from the Wallet server.
     WALLET_MALFORMED_RESPONSE,
-    // A network error occured while communicating with the Wallet server.
+    // A network error occurred while communicating with the Wallet server.
     WALLET_NETWORK_ERROR,
     // The request was malformed.
     WALLET_BAD_REQUEST,
@@ -671,88 +580,8 @@ class AutofillMetrics {
     NUM_WALLET_REQUIRED_ACTIONS
   };
 
-  // For measuring how wallet addresses are converted to local profiles.
-  enum WalletAddressConversionType : int {
-    // The converted wallet address was merged into an existing local profile.
-    CONVERTED_ADDRESS_MERGED,
-    // The converted wallet address was added as a new local profile.
-    CONVERTED_ADDRESS_ADDED,
-    NUM_CONVERTED_ADDRESS_CONVERSION_TYPES
-  };
-
   // To record whether the upload event was sent.
   enum class UploadEventStatus { kNotSent, kSent, kMaxValue = kSent };
-
-  // Enumerates the status of the  different requirements to successfully import
-  // an address profile from a form submission.
-  enum class AddressProfileImportRequirementMetric {
-    // The form must contain either no or only a single unique email address.
-    EMAIL_ADDRESS_UNIQUE_REQUIREMENT_FULFILLED = 0,
-    EMAIL_ADDRESS_UNIQUE_REQUIREMENT_VIOLATED = 1,
-    // The form is not allowed to contain invalid field types.
-    NO_INVALID_FIELD_TYPES_REQUIREMENT_FULFILLED = 2,
-    NO_INVALID_FIELD_TYPES_REQUIREMENT_VIOLATED = 3,
-    // If required by |CountryData|, the form must contain a city entry.
-    CITY_REQUIREMENT_FULFILLED = 4,
-    CITY_REQUIREMENT_VIOLATED = 5,
-    // If required by |CountryData|, the form must contain a state entry.
-    STATE_REQUIREMENT_FULFILLED = 6,
-    STATE_REQUIREMENT_VIOLATED = 7,
-    // If required by |CountryData|, the form must contain a ZIP entry.
-    ZIP_REQUIREMENT_FULFILLED = 8,
-    ZIP_REQUIREMENT_VIOLATED = 9,
-    // If present, the email address must be valid.
-    EMAIL_VALID_REQUIREMENT_FULFILLED = 10,
-    EMAIL_VALID_REQUIREMENT_VIOLATED = 11,
-    // If present, the country must be valid.
-    COUNTRY_VALID_REQUIREMENT_FULFILLED = 12,
-    COUNTRY_VALID_REQUIREMENT_VIOLATED = 13,
-    // If present, the state must be valid (if verifiable).
-    STATE_VALID_REQUIREMENT_FULFILLED = 14,
-    STATE_VALID_REQUIREMENT_VIOLATED = 15,
-    // If present, the ZIP must be valid (if verifiable).
-    ZIP_VALID_REQUIREMENT_FULFILLED = 16,
-    ZIP_VALID_REQUIREMENT_VIOLATED = 17,
-    // 18 and 19 are deprecated, as phone numbers are not a requirement anymore.
-    // Indicates the overall status of the import requirements check.
-    OVERALL_REQUIREMENT_FULFILLED = 20,
-    OVERALL_REQUIREMENT_VIOLATED = 21,
-    // If required by |CountryData|, the form must contain a line1 entry.
-    LINE1_REQUIREMENT_FULFILLED = 22,
-    LINE1_REQUIREMENT_VIOLATED = 23,
-    // If required by |CountryData|, the form must contain a either a zip or a
-    // state entry.
-    ZIP_OR_STATE_REQUIREMENT_FULFILLED = 24,
-    ZIP_OR_STATE_REQUIREMENT_VIOLATED = 25,
-    // If required by |CountryData|, the form must contain a either an address
-    // line 1 or a house number.
-    LINE1_OR_HOUSE_NUMBER_REQUIREMENT_FULFILLED = 26,
-    LINE1_OR_HOUSE_NUMBER_REQUIREMENT_VIOLATED = 27,
-    // Must be set to the last entry.
-    kMaxValue = LINE1_OR_HOUSE_NUMBER_REQUIREMENT_VIOLATED,
-  };
-
-  // Represents the status of the field type requirements that are specific to
-  // countries.
-  enum class AddressProfileImportCountrySpecificFieldRequirementsMetric {
-    ALL_GOOD = 0,
-    ZIP_REQUIREMENT_VIOLATED = 1,
-    STATE_REQUIREMENT_VIOLATED = 2,
-    ZIP_STATE_REQUIREMENT_VIOLATED = 3,
-    CITY_REQUIREMENT_VIOLATED = 4,
-    ZIP_CITY_REQUIREMENT_VIOLATED = 5,
-    STATE_CITY_REQUIREMENT_VIOLATED = 6,
-    ZIP_STATE_CITY_REQUIREMENT_VIOLATED = 7,
-    LINE1_REQUIREMENT_VIOLATED = 8,
-    LINE1_ZIP_REQUIREMENT_VIOLATED = 9,
-    LINE1_STATE_REQUIREMENT_VIOLATED = 10,
-    LINE1_ZIP_STATE_REQUIREMENT_VIOLATED = 11,
-    LINE1_CITY_REQUIREMENT_VIOLATED = 12,
-    LINE1_ZIP_CITY_REQUIREMENT_VIOLATED = 13,
-    LINE1_STATE_CITY_REQUIREMENT_VIOLATED = 14,
-    LINE1_ZIP_STATE_CITY_REQUIREMENT_VIOLATED = 15,
-    kMaxValue = LINE1_ZIP_STATE_CITY_REQUIREMENT_VIOLATED,
-  };
 
   // To record if the value in an autofilled field was edited by the user.
   enum class AutofilledFieldUserEditingStatusMetric {
@@ -761,116 +590,79 @@ class AutofillMetrics {
     kMaxValue = AUTOFILLED_FIELD_WAS_NOT_EDITED,
   };
 
-  // Represent the overall status of a profile import.
-  enum class AddressProfileImportStatusMetric {
-    NO_IMPORT = 0,
-    REGULAR_IMPORT = 1,
-    SECTION_UNION_IMPORT = 2,
-    kMaxValue = SECTION_UNION_IMPORT,
-  };
-
-  // To record the source of the autofilled state field.
+  // The filling status of an autofilled field.
   // These values are persisted to logs. Entries should not be renumbered and
   // numeric values should never be reused.
-  enum class AutofilledSourceMetricForStateSelectionField {
-    // Indicates that the filling was done by state value stored in the profile.
-    AUTOFILL_BY_VALUE = 0,
-    // Indicates that the filling was done by the |AlternativeStateNameMap|.
-    AUTOFILL_BY_ALTERNATIVE_STATE_NAME_MAP = 1,
-    kMaxValue = AUTOFILL_BY_ALTERNATIVE_STATE_NAME_MAP,
+  enum class FieldFillingStatus {
+    // The field was filled and accepted.
+    kAccepted = 0,
+    // The field was filled and corrected to a value of the same type.
+    kCorrectedToSameType = 1,
+    // The field was filled and corrected to a value of a different type.
+    kCorrectedToDifferentType = 2,
+    // The field was filled and corrected to a value of an unknown type.
+    kCorrectedToUnknownType = 3,
+    // The field was filled and the value was cleared afterwards.
+    kCorrectedToEmpty = 4,
+    // The field was manually filled to a value of the same type as the
+    // field was predicted to.
+    kManuallyFilledToSameType = 5,
+    // The field was manually filled to a value of a different type as the field
+    // was predicted to.
+    kManuallyFilledToDifferentType = 6,
+    // The field was manually filled to a value of an unknown type.
+    kManuallyFilledToUnknownType = 7,
+    // The field was left empty.
+    kLeftEmpty = 8,
+    kMaxValue = kLeftEmpty
   };
 
-  // OTP authentication-related events.
-  enum class OtpAuthEvent {
-    // Unknown results. Should not happen.
-    kUnknown = 0,
-    // The OTP auth succeeded.
-    kSuccess = 1,
-    // The OTP auth failed because the flow was cancelled.
-    kFlowCancelled = 2,
-    // The OTP auth failed because the SelectedChallengeOption request failed
-    // due to generic errors.
-    kSelectedChallengeOptionGenericError = 3,
-    // The OTP auth failed because the SelectedChallengeOption request failed
-    // due to virtual card retrieval errors.
-    kSelectedChallengeOptionVirtualCardRetrievalError = 4,
-    // The OTP auth failed because the UnmaskCard request failed due to
-    // authentication errors.
-    kUnmaskCardAuthError = 5,
-    // The OTP auth failed because the UnmaskCard request failed due to virtual
-    // card retrieval errors.
-    kUnmaskCardVirtualCardRetrievalError = 6,
-    // The OTP auth failed temporarily because the OTP was expired.
-    kOtpExpired = 7,
-    // The OTP auth failed temporarily because the OTP didn't match the expected
-    // value.
-    kOtpMismatch = 8,
-    kMaxValue = kOtpMismatch
+  enum class AutocompleteState {
+    kNone = 0,
+    kValid = 1,
+    kGarbage = 2,
+    kOff = 3,
+    kPassword = 4,
+    kMaxValue = kPassword
   };
 
-  // All possible results of the card unmask flow.
-  enum class ServerCardUnmaskResult {
-    // These values are persisted to logs. Entries should not be renumbered and
-    // numeric values should never be reused.
-
-    // Default value, should never be used in logging.
-    kUnknown = 0,
-    // Card unmask completed successfully because the data had already been
-    // cached locally.
-    kLocalCacheHit = 1,
-    // Card unmask completed successfully without further authentication steps.
-    kRiskBasedUnmasked = 2,
-    // Card unmask completed successfully via explicit authentication method,
-    // such as FIDO, OTP, etc.
-    kAuthenticationUnmasked = 3,
-    // Card unmask failed due to some generic authentication errors.
-    kAuthenticationError = 4,
-    // Card unmask failed due to specific virtual card retrieval errors. Only
-    // applies for virtual cards.
-    kVirtualCardRetrievalError = 5,
-    // Card unmask was aborted due to user cancellation.
-    kFlowCancelled = 6,
-    // Card unmask failed because only FIDO authentication was provided as an
-    // option but the user has not opted in.
-    kOnlyFidoAvailableButNotOptedIn = 7,
-    // Card unmask failed due to unexpected errors.
-    kUnexpectedError = 8,
-    kMaxValue = kUnexpectedError,
+  // The autofill statuses of a field that are recorded into UKM to help us
+  // understand the autofill performance and user behaviors.
+  enum class AutofillStatus {
+    kIsFocusable = 0,
+    kWasFocused = 1,
+    kWasAutofillTriggered = 2,
+    // Note that this is set before checking the iframe security policy.
+    // This value is true even when the filling was prevented because of the
+    // cross iframe autofill security policy.
+    kWasAutofilledBeforeSecurityPolicy = 3,
+    kWasRefill = 4,
+    // The below suggestion statuses are set only when kWasFocused is set.
+    kSuggestionWasAvailable = 5,
+    kSuggestionWasShown = 6,
+    kSuggestionWasAccepted = 7,
+    kUserTypedIntoField = 8,
+    kFilledValueWasModified = 9,
+    kHadValueBeforeFilling = 10,
+    kHadTypedOrFilledValueAtSubmission = 11,
+    kIsInSubFrame = 12,
+    kFillingPreventedByIframeSecurityPolicy = 13,
+    // The field was sent to the renderer for autofilling. Note that this is
+    // still true if the user later edited the autofilled value.
+    kWasAutofilledAfterSecurityPolicy = 14,
+    kMaxValue = kWasAutofilledAfterSecurityPolicy
   };
 
-  // The result of how the OTP input dialog was closed. This dialog is used for
-  // users to type in the received OTP value for card verification.
-  // These values are persisted to logs. Entries should not be renumbered and
-  // numeric values should never be reused.
-  enum class OtpInputDialogResult {
-    // Unknown event, should not happen.
-    kUnknown = 0,
-    // The dialog was closed before the user entered any OTP and clicked the OK
-    // button. This includes closing the dialog in an error state after a failed
-    // unmask attempt.
-    kDialogCancelledByUserBeforeConfirmation = 1,
-    // The dialog was closed after the user entered a valid OTP and clicked the
-    // OK button, and when the dialog was in a pending state.
-    kDialogCancelledByUserAfterConfirmation = 2,
-    // The dialog closed automatically after the OTP verification succeeded.
-    kDialogClosedAfterVerificationSucceeded = 3,
-    // The dialog closed automatically after a server failure response.
-    kDialogClosedAfterVerificationFailed = 4,
-    kMaxValue = kDialogClosedAfterVerificationFailed,
+  struct FormEventSetTraits {
+    static constexpr autofill_metrics::FormEvent kMinValue =
+        autofill_metrics::FormEvent(0);
+    static constexpr autofill_metrics::FormEvent kMaxValue =
+        autofill_metrics::NUM_FORM_EVENTS;
+    static constexpr bool kPacked = false;
   };
 
-  // The type of error message shown in the card unmask OTP input dialog.
-  // These values are persisted to logs. Entries should not be renumbered and
-  // numeric values should never be reused.
-  enum class OtpInputDialogError {
-    // Unknown type, should not be used.
-    kUnknown = 0,
-    // The error indicating that the OTP is expired.
-    kOtpExpiredError = 1,
-    // The error indicating that the OTP is incorrect.
-    kOtpMismatchError = 2,
-    kMaxValue = kOtpMismatchError,
-  };
+  using FormEventSet =
+      DenseSet<autofill_metrics::FormEvent, FormEventSetTraits>;
 
   // Utility class for determining the seamlessness of a credit card fill.
   class CreditCardSeamlessness {
@@ -890,7 +682,7 @@ class AutofillMetrics {
       kMaxValue = kPartialFill,
     };
 
-    explicit CreditCardSeamlessness(const ServerFieldTypeSet& filled_types);
+    explicit CreditCardSeamlessness(const FieldTypeSet& filled_types);
 
     explicit operator bool() const { return is_valid(); }
     bool is_valid() const { return name_ || number_ || exp_ || cvc_; }
@@ -903,8 +695,8 @@ class AutofillMetrics {
 
     // TODO(crbug.com/1275953): Remove once the new UKM metric has gained
     // traction.
-    FormEvent QualitativeFillableFormEvent() const;
-    FormEvent QualitativeFillFormEvent() const;
+    autofill_metrics::FormEvent QualitativeFillableFormEvent() const;
+    autofill_metrics::FormEvent QualitativeFillFormEvent() const;
 
     // Returns a four-bit bitmask.
     uint8_t BitmaskMetric() const;
@@ -921,13 +713,13 @@ class AutofillMetrics {
   // Utility to log URL keyed form interaction events.
   class FormInteractionsUkmLogger {
    public:
-    FormInteractionsUkmLogger(ukm::UkmRecorder* ukm_recorder,
-                              const ukm::SourceId source_id);
+    FormInteractionsUkmLogger(AutofillClient* autofill_client,
+                              ukm::UkmRecorder* ukm_recorder);
 
     bool has_pinned_timestamp() const { return !pinned_timestamp_.is_null(); }
     void set_pinned_timestamp(base::TimeTicks t) { pinned_timestamp_ = t; }
 
-    ukm::builders::Autofill_CreditCardFill CreateCreditCardFillBuilder() const;
+    ukm::builders::Autofill_CreditCardFill CreateCreditCardFillBuilder();
     void Record(ukm::builders::Autofill_CreditCardFill&& builder);
 
     // Initializes this logger with a source_id. Unless forms is parsed no
@@ -948,10 +740,11 @@ class AutofillMetrics {
                              const AutofillField& field,
                              const base::TimeTicks& form_parsed_timestamp,
                              bool off_the_record);
-    void LogDidFillSuggestion(int record_type,
-                              bool is_for_credit_card,
-                              const FormStructure& form,
-                              const AutofillField& field);
+    // For address suggestions, the `record_type` is irrelevant.
+    void LogDidFillSuggestion(
+        const FormStructure& form,
+        const AutofillField& field,
+        std::optional<CreditCard::RecordType> record_type = std::nullopt);
     void LogTextFieldDidChange(const FormStructure& form,
                                const AutofillField& field);
     void LogEditedAutofilledFieldAtSubmission(const FormStructure& form,
@@ -964,25 +757,33 @@ class AutofillMetrics {
                       FieldSignature field_signature,
                       QualityMetricPredictionSource prediction_source,
                       QualityMetricType metric_type,
-                      ServerFieldType predicted_type,
-                      ServerFieldType actual_type);
+                      FieldType predicted_type,
+                      FieldType actual_type);
+    void LogAutofillFieldInfoAtFormRemove(
+        const FormStructure& form,
+        const AutofillField& field,
+        AutofillMetrics::AutocompleteState autocomplete_state);
+    void LogAutofillFormSummaryAtFormRemove(
+        const FormStructure& form_structure,
+        FormEventSet form_events,
+        const base::TimeTicks& initial_interaction_timestamp,
+        const base::TimeTicks& form_submitted_timestamp);
     void LogFormSubmitted(bool is_for_credit_card,
                           bool has_upi_vpa_field,
                           const DenseSet<FormType>& form_types,
                           AutofillFormSubmittedState state,
                           const base::TimeTicks& form_parsed_timestamp,
                           FormSignature form_signature,
-                          const FormInteractionCounts& form_interaction_counts,
-                          autofill_assistant::AutofillAssistantIntent intent);
+                          const FormInteractionCounts& form_interaction_counts);
     void LogKeyMetrics(const DenseSet<FormType>& form_types,
                        bool data_to_fill_available,
                        bool suggestions_shown,
                        bool edited_autofilled_field,
                        bool suggestion_filled,
-                       autofill_assistant::AutofillAssistantIntent intent,
                        const FormInteractionCounts& form_interaction_counts,
-                       const FormInteractionsFlowId& flow_id);
-    void LogFormEvent(FormEvent form_event,
+                       const FormInteractionsFlowId& flow_id,
+                       std::optional<int64_t> fast_checkout_run_id);
+    void LogFormEvent(autofill_metrics::FormEvent form_event,
                       const DenseSet<FormType>& form_types,
                       const base::TimeTicks& form_parsed_timestamp);
 
@@ -997,15 +798,28 @@ class AutofillMetrics {
     void LogRepeatedServerTypePredictionRationalized(
         const FormSignature form_signature,
         const AutofillField& field,
-        ServerFieldType old_type);
+        FieldType old_type);
+
+    // Logs a hash of the `sectioning_signature` for a specific
+    // `form_signature`. This is useful for detecting sites where different
+    // sectioning algorithms yield different results. Emitted every time
+    // sectioning is performed and only when
+    // `AutofillUseParameterizedSectioning` is enabled.
+    void LogSectioningHash(FormSignature form_signature,
+                           uint32_t sectioning_signature);
 
    private:
     bool CanLog() const;
     int64_t MillisecondsSinceFormParsed(
         const base::TimeTicks& form_parsed_timestamp) const;
 
-    raw_ptr<ukm::UkmRecorder> ukm_recorder_;  // Weak reference.
-    ukm::SourceId source_id_;
+    ukm::SourceId GetSourceId();
+
+    // These objects outlive.
+    raw_ptr<AutofillClient> autofill_client_;
+    raw_ptr<ukm::UkmRecorder> ukm_recorder_;
+
+    std::optional<ukm::SourceId> source_id_;
     base::TimeTicks pinned_timestamp_;
   };
 
@@ -1035,22 +849,29 @@ class AutofillMetrics {
     kMaxValue = kBoth
   };
 
-  enum class AutocompleteState {
-    kNone = 0,
-    kValid = 1,
-    kGarbage = 2,
-    kIgnored = 3,
-    kMaxValue = kIgnored
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
+  enum class PaymentsSigninState {
+    // The user is not signed in to Chromium.
+    kSignedOut = 0,
+    // The user is signed in to Chromium.
+    kSignedIn = 1,
+    // The user is signed in to Chromium and sync transport is active for Wallet
+    // data.
+    kSignedInAndWalletSyncTransportEnabled = 2,
+    // The user is signed in, has enabled the sync feature and has not disabled
+    // Wallet sync.
+    kSignedInAndSyncFeatureEnabled = 3,
+    // The user has enabled the sync feature, but has then signed out, so sync
+    // is paused.
+    kSyncPaused = 4,
+    kUnknown = 5,
+    kMaxValue = kUnknown
   };
 
   AutofillMetrics() = delete;
   AutofillMetrics(const AutofillMetrics&) = delete;
   AutofillMetrics& operator=(const AutofillMetrics&) = delete;
-
-  // When the autofill-use-improved-label-disambiguation experiment is enabled
-  // and suggestions are available, records if a LabelFormatter successfully
-  // created the suggestions.
-  static void LogProfileSuggestionsMadeWithFormatter(bool made_with_formatter);
 
   static void LogSubmittedCardStateMetric(SubmittedCardStateMetric metric);
 
@@ -1075,22 +896,26 @@ class AutofillMetrics {
   static void LogCardUnmaskAuthenticationSelectionDialogResultMetric(
       CardUnmaskAuthenticationSelectionDialogResultMetric metric);
 
-  // Logs true every time the Card Unmask Authentication Selection Dialog is
-  // shown.
-  static void LogCardUnmaskAuthenticationSelectionDialogShown();
+  // Logs the number of challenge options shown every time the Card Unmask
+  // Authentication Selection Dialog is shown.
+  static void LogCardUnmaskAuthenticationSelectionDialogShown(
+      size_t number_of_challenge_options);
 
   static void LogCreditCardInfoBarMetric(
       InfoBarMetric metric,
       bool is_uploading,
       AutofillClient::SaveCreditCardOptions options);
   static void LogCreditCardFillingInfoBarMetric(InfoBarMetric metric);
-  static void LogCreditCardUploadFeedbackMetric(
-      CreditCardUploadFeedbackMetric metric);
   static void LogScanCreditCardPromptMetric(ScanCreditCardPromptMetric metric);
   static void LogProgressDialogResultMetric(
       bool is_canceled_by_user,
       AutofillProgressDialogType autofill_progress_dialog_type);
   static void LogProgressDialogShown(
+      AutofillProgressDialogType autofill_progress_dialog_type);
+
+  // Returns a string representation of the given AutofillProgressDialogType for
+  // constructing subhistogram paths.
+  static std::string_view GetDialogTypeStringForLogging(
       AutofillProgressDialogType autofill_progress_dialog_type);
 
   // Should be called when credit card scan is finished. |duration| should be
@@ -1140,80 +965,10 @@ class AutofillMetrics {
   static void LogUserHappinessByProfileFormType(UserHappinessMetric metric,
                                                 uint32_t profile_form_bitmask);
 
-  // Logs the card fetch latency |duration| after a WebAuthn prompt. |result|
-  // indicates whether the unmasking request was successful or not. |card_type|
-  // indicates the type of the credit card that the request fetched.
-  static void LogCardUnmaskDurationAfterWebauthn(
-      const base::TimeDelta& duration,
-      AutofillClient::PaymentsRpcResult result,
-      AutofillClient::PaymentsRpcCardType card_type);
-
-  // Logs the count of calls to PaymentsClient::GetUnmaskDetails() (aka
-  // GetDetailsForGetRealPan).
-  static void LogCardUnmaskPreflightCalled();
-
-  // Logs the duration of the PaymentsClient::GetUnmaskDetails() call (aka
-  // GetDetailsForGetRealPan).
-  static void LogCardUnmaskPreflightDuration(const base::TimeDelta& duration);
-
-  // TODO(crbug.com/1263302): These functions are used for only virtual cards
-  // now. Consider integrating with other masked server cards logging below.
-  static void LogServerCardUnmaskAttempt(
-      AutofillClient::PaymentsRpcCardType card_type);
-  static void LogServerCardUnmaskResult(
-      ServerCardUnmaskResult unmask_result,
-      AutofillClient::PaymentsRpcCardType card_type,
-      VirtualCardUnmaskFlowType flow_type);
-  static void LogServerCardUnmaskFormSubmission(
-      AutofillClient::PaymentsRpcCardType card_type);
-
-  // Logs the count of calls to PaymentsClient::OptChange() (aka
-  // UpdateAutofillUserPreference).
-  static void LogWebauthnOptChangeCalled(bool request_to_opt_in,
-                                         bool is_checkout_flow,
-                                         WebauthnOptInParameters metric);
-
-  // Logs the number of times the opt-in promo for enabling FIDO authentication
-  // for card unmasking has been shown.
-  static void LogWebauthnOptInPromoShown(bool is_checkout_flow);
-
-  // Logs the user response to the opt-in promo for enabling FIDO authentication
-  // for card unmasking.
-  static void LogWebauthnOptInPromoUserDecision(
-      bool is_checkout_flow,
-      WebauthnOptInPromoUserDecisionMetric metric);
-
-  // Logs which unmask type was used for a user with FIDO authentication
-  // enabled.
-  static void LogCardUnmaskTypeDecision(CardUnmaskTypeDecisionMetric metric);
-
-  // Logs the existence of any user-perceived latency between selecting a Google
-  // Payments server card and seeing a card unmask prompt.
-  static void LogUserPerceivedLatencyOnCardSelection(PreflightCallEvent event,
-                                                     bool fido_auth_enabled);
-
-  // Logs the duration of any user-perceived latency between selecting a Google
-  // Payments server card and seeing a card unmask prompt (CVC or FIDO).
-  static void LogUserPerceivedLatencyOnCardSelectionDuration(
-      const base::TimeDelta duration);
-
-  // Logs whether or not the verifying pending dialog timed out between
-  // selecting a Google Payments server card and seeing a card unmask prompt.
-  static void LogUserPerceivedLatencyOnCardSelectionTimedOut(bool did_time_out);
-
-  // Logs the duration of WebAuthn's
-  // IsUserVerifiablePlatformAuthenticatorAvailable() call. It is supposedly an
-  // extremely quick IPC.
-  static void LogUserVerifiabilityCheckDuration(
-      const base::TimeDelta& duration);
-
-  // Logs the result of a WebAuthn prompt.
-  static void LogWebauthnResult(WebauthnFlowEvent event,
-                                WebauthnResultMetric metric);
-
   // Logs |event| to the unmask prompt events histogram.
   static void LogUnmaskPromptEvent(UnmaskPromptEvent event,
-                                   bool has_valid_nickname);
+                                   bool has_valid_nickname,
+                                   CreditCard::RecordType card_type);
 
   // Logs |event| to cardholder name fix flow prompt events histogram.
   static void LogCardholderNameFixFlowPromptEvent(
@@ -1291,19 +1046,18 @@ class AutofillMetrics {
                                   const base::TimeDelta& duration);
 
   // This should be called each time a page containing forms is loaded.
-  static void LogIsAutofillEnabledAtPageLoad(
-      bool enabled,
-      AutofillSyncSigninState sync_state);
+  static void LogIsAutofillEnabledAtPageLoad(bool enabled,
+                                             PaymentsSigninState sync_state);
 
   // This should be called each time a page containing forms is loaded.
   static void LogIsAutofillProfileEnabledAtPageLoad(
       bool enabled,
-      AutofillSyncSigninState sync_state);
+      PaymentsSigninState sync_state);
 
   // This should be called each time a page containing forms is loaded.
   static void LogIsAutofillCreditCardEnabledAtPageLoad(
       bool enabled,
-      AutofillSyncSigninState sync_state);
+      PaymentsSigninState sync_state);
 
   // This should be called each time a new chrome profile is launched.
   static void LogIsAutofillEnabledAtStartup(bool enabled);
@@ -1313,16 +1067,6 @@ class AutofillMetrics {
 
   // This should be called each time a new chrome profile is launched.
   static void LogIsAutofillCreditCardEnabledAtStartup(bool enabled);
-
-  // Records statistics for the number of used, disused and country-less address
-  // profiles. This is called each time a new chrome profile is launched.
-  static void LogStoredProfileCountStatistics(size_t num_profiles,
-                                              size_t num_disused_profiles,
-                                              size_t num_countryless_profiles);
-
-  // Records the number of days since an address profile was last used. This is
-  // called once per address profile each time a new chrome profile is launched.
-  static void LogStoredProfileDaysSinceLastUse(size_t days);
 
   // Logs various metrics about the local and server cards associated with a
   // profile. This should be called each time a new chrome profile is launched.
@@ -1366,11 +1110,6 @@ class AutofillMetrics {
   // filling a form.
   static void LogAddressSuggestionsCount(size_t num_suggestions);
 
-  // Log the index of the selected Autofill suggestion in the popup.
-  static void LogAutofillSuggestionAcceptedIndex(int index,
-                                                 PopupType popup_type,
-                                                 bool off_the_record);
-
   // Log the reason for which the Autofill popup disappeared.
   static void LogAutofillPopupHidingReason(PopupHidingReason reason);
 
@@ -1386,9 +1125,10 @@ class AutofillMetrics {
   // Log the fact that an autocomplete popup was shown.
   static void OnAutocompleteSuggestionsShown();
 
-  // Log the number of autocomplete entries that were cleaned-up as a result
-  // of the Autocomplete Retention Policy.
-  static void LogNumberOfAutocompleteEntriesCleanedUp(int nb_entries);
+  // Log that an autocomplete suggestion was deleted directly from the popup
+  // menu.
+  static void OnAutocompleteSuggestionDeleted(
+      SingleEntryRemovalMethod removal_method);
 
   // Log how many autofilled fields in a given form were edited before the
   // submission or when the user unfocused the form (depending on
@@ -1396,6 +1136,10 @@ class AutofillMetrics {
   static void LogNumberOfEditedAutofilledFields(
       size_t num_edited_autofilled_fields,
       bool observed_submission);
+
+  // Logs the number of sections and the number of fields/section.
+  static void LogSectioningMetrics(
+      const base::flat_map<Section, size_t>& fields_per_section);
 
   // This should be called each time a server response is parsed for a form.
   static void LogServerResponseHasDataForForm(bool has_data);
@@ -1414,27 +1158,19 @@ class AutofillMetrics {
       const base::TimeTicks& form_parsed_timestamp,
       FormSignature form_signature,
       FormInteractionsUkmLogger* form_interactions_ukm_logger,
-      const FormInteractionCounts& form_interaction_counts,
-      const autofill_assistant::AutofillAssistantIntent intent);
+      const FormInteractionCounts& form_interaction_counts);
 
   // Logs if every non-empty field in a submitted form was filled by Autofill.
   // If |is_address| an address was filled, otherwise it was a credit card.
   static void LogAutofillPerfectFilling(bool is_address, bool perfect_filling);
 
-  // Log across how many frames the detected and/or autofilled [credit card]
-  // fields of a submitted form are distributed.
-  static void LogNumberOfFramesWithDetectedFields(size_t num_frames);
-  static void LogNumberOfFramesWithDetectedCreditCardFields(size_t num_frames);
-  static void LogNumberOfFramesWithAutofilledCreditCardFields(
-      size_t num_frames);
-
   struct LogCreditCardSeamlessnessParam {
-    const FormEventLoggerBase& event_logger;
-    const FormStructure& form;
-    const AutofillField& field;
-    const base::flat_set<FieldGlobalId>& newly_filled_fields;
-    const base::flat_set<FieldGlobalId>& safe_fields;
-    ukm::builders::Autofill_CreditCardFill& builder;
+    const raw_ref<autofill_metrics::FormEventLoggerBase> event_logger;
+    const raw_ref<const FormStructure> form;
+    const raw_ref<const AutofillField> field;
+    const raw_ref<const base::flat_set<FieldGlobalId>> newly_filled_fields;
+    const raw_ref<const base::flat_set<FieldGlobalId>> safe_fields;
+    const raw_ref<ukm::builders::Autofill_CreditCardFill> builder;
   };
 
   // Logs several metrics about seamlessness. These are qualitative and bitmask
@@ -1451,7 +1187,7 @@ class AutofillMetrics {
 
   // Logs Autofill.CreditCard.SeamlessFills.AtSubmissionTime.
   static void LogCreditCardSeamlessnessAtSubmissionTime(
-      const ServerFieldTypeSet& autofilled_types);
+      const FieldTypeSet& autofilled_types);
 
   // This should be called when parsing each form.
   static void LogParseFormTiming(const base::TimeDelta& duration);
@@ -1466,16 +1202,9 @@ class AutofillMetrics {
   // context.
   static void LogIsQueriedCreditCardFormSecure(bool is_secure);
 
-  // Log how the converted wallet address was added to the local autofill
-  // profiles.
-  static void LogWalletAddressConversionType(WalletAddressConversionType type);
-
   // This should be called when the user selects the Form-Not-Secure warning
   // suggestion to show an explanation of the warning.
   static void LogShowedHttpNotSecureExplanation();
-
-  // Logs if an autocomplete query was created for a field.
-  static void LogAutocompleteQuery(bool created);
 
   // Logs if there is any suggestions for an autocomplete query.
   static void LogAutocompleteSuggestions(bool has_suggestions);
@@ -1504,19 +1233,6 @@ class AutofillMetrics {
                                         int developer_engagement_metrics,
                                         FormSignature form_signature);
 
-  // Logs the address profile import UKM after the form submission.
-  // `user_decision` is the user's decision based on the storage prompt, if
-  // presented. `num_edited_fields` is the number of fields that were edited by
-  // the user before acceptance of the storage prompt. `profile_import_metadata`
-  // stores metadata related to the import of the address profiles.
-  static void LogAddressProfileImportUkm(
-      ukm::UkmRecorder* ukm_recorder,
-      ukm::SourceId source_id,
-      AutofillProfileImportType import_type,
-      AutofillClient::SaveAddressProfileOfferUserDecision user_decision,
-      const ProfileImportMetadata& profile_import_metadata,
-      size_t num_edited_fields);
-
   // Log the number of hidden or presentational 'select' fields that were
   // autofilled to support synthetic fields.
   static void LogHiddenOrPresentationalSelectFieldsFilled();
@@ -1526,19 +1242,7 @@ class AutofillMetrics {
 
   // Records the fact that the server card link was clicked with information
   // about the current sync state.
-  static void LogServerCardLinkClicked(AutofillSyncSigninState sync_state);
-
-  // Logs the status of an address import requirement defined by type.
-  static void LogAddressFormImportRequirementMetric(
-      AutofillMetrics::AddressProfileImportRequirementMetric metric);
-
-  // Logs the overall status of the country specific field requirements for
-  // importing an address profile from a submitted form.
-  static void LogAddressFormImportCountrySpecificFieldRequirementsMetric(
-      bool is_zip_missing,
-      bool is_state_missing,
-      bool is_city_missing,
-      bool is_line1_missing);
+  static void LogServerCardLinkClicked(PaymentsSigninState sync_state);
 
   // Records if an autofilled field of a specific type was edited by the user.
   // TODO(crbug.com/1368096): This metric is the successor of
@@ -1557,18 +1261,13 @@ class AutofillMetrics {
       const FormStructure& form,
       const AutofillField& field);
 
-  // Logs the overall status of an address import upon form submission.
-  static void LogAddressFormImportStatusMetric(
-      AddressProfileImportStatusMetric metric);
-
   // Records if the page was translated upon form submission.
   static void LogFieldParsingPageTranslationStatusMetric(bool metric);
 
   // Records the visible page language upon form submission.
-  static void LogFieldParsingTranslatedFormLanguageMetric(base::StringPiece);
+  static void LogFieldParsingTranslatedFormLanguageMetric(std::string_view);
 
-  static const char* GetMetricsSyncStateSuffix(
-      AutofillSyncSigninState sync_state);
+  static const char* GetMetricsSyncStateSuffix(PaymentsSigninState sync_state);
 
   // Records whether a document collected phone number, and/or used WebOTP,
   // and/or used OneTimeCode (OTC) during its lifecycle.
@@ -1588,103 +1287,6 @@ class AutofillMetrics {
   LogNumberOfAutofilledFieldsWithAutocompleteUnrecognizedAtSubmission(
       size_t number_of_accepted_fields,
       size_t number_of_corrected_fields);
-
-  // Logs the type of a profile import.
-  static void LogProfileImportType(AutofillProfileImportType import_type);
-
-  // Logs the type of a profile import that are used for the silent updates.
-  static void LogSilentUpdatesProfileImportType(
-      AutofillProfileImportType import_type);
-
-  // Logs the type of profile import used for a silent update, which was only
-  // possible after an invalid phone number was removed.
-  // TODO(crbug.com/1298424): Cleanup when launched.
-  static void LogSilentUpdatesWithRemovedPhoneNumberProfileImportType(
-      AutofillProfileImportType import_type);
-
-  // Logs the user decision for importing a new profile.
-  static void LogNewProfileImportDecision(
-      AutofillClient::SaveAddressProfileOfferUserDecision decision);
-
-  // Logs the user decision for importing a new profile with a complemented
-  // country.
-  static void LogNewProfileWithComplementedCountryImportDecision(
-      AutofillClient::SaveAddressProfileOfferUserDecision decision);
-
-  // Logs the user decision for importing a new profile, which could only
-  // be imported after an invalid country was ignored.
-  static void LogNewProfileWithIgnoredCountryImportDecision(
-      AutofillClient::SaveAddressProfileOfferUserDecision decision);
-
-  // Logs the user decision for importing a new profile, which was only possible
-  // after an invalid phone number was removed.
-  // TODO(crbug.com/1298424): Cleanup when launched.
-  static void LogNewProfileWithRemovedPhoneNumberImportDecision(
-      AutofillClient::SaveAddressProfileOfferUserDecision decision);
-
-  // Logs that a specific type was edited in a save prompt.
-  static void LogNewProfileEditedType(ServerFieldType edited_type);
-
-  // Logs that the auto complemented country was edited in a save prompt.
-  static void LogNewProfileEditedComplementedCountry();
-
-  // Logs the number of edited fields for an accepted profile save.
-  static void LogNewProfileNumberOfEditedFields(int number_of_edited_fields);
-
-  // Logs the user decision for updating an exiting profile.
-  static void LogProfileUpdateImportDecision(
-      AutofillClient::SaveAddressProfileOfferUserDecision decision);
-
-  // Logs the user decision for updating an exiting profile with a complemented
-  // country.
-  static void LogProfileUpdateWithComplementedCountryImportDecision(
-      AutofillClient::SaveAddressProfileOfferUserDecision decision);
-
-  // Logs the user decision for updating an exiting profile, which could only
-  // be imported after an invalid country was ignored.
-  static void LogProfileUpdateWithIgnoredCountryImportDecision(
-      AutofillClient::SaveAddressProfileOfferUserDecision decision);
-
-  // Logs the user decision for updating an existing profile, which was only
-  // possible after an invalid phone number was removed.
-  // TODO(crbug.com/1298424): Cleanup when launched.
-  static void LogProfileUpdateWithRemovedPhoneNumberImportDecision(
-      AutofillClient::SaveAddressProfileOfferUserDecision decision);
-
-  // Logs that a specific type changed in a profile update that received the
-  // user |decision|. Note that additional manual edits in the update prompt are
-  // not accounted for in this metric.
-  static void LogProfileUpdateAffectedType(
-      ServerFieldType affected_type,
-      AutofillClient::SaveAddressProfileOfferUserDecision decision);
-
-  // Logs that a specific type was edited in an update prompt.
-  static void LogProfileUpdateEditedType(ServerFieldType edited_type);
-
-  // Logs that the auto complemented country was edited in an update prompt.
-  static void LogProfileUpdateEditedComplementedCountry();
-
-  // Logs the number of edited fields for an accepted profile update.
-  static void LogUpdateProfileNumberOfEditedFields(int number_of_edited_fields);
-
-  // Logs the number of changed fields for a profile update that received the
-  // user |decision|. Note that additional manual edits in the update prompt are
-  // not accounted for in this metric.
-  static void LogUpdateProfileNumberOfAffectedFields(
-      int number_of_affected_fields,
-      AutofillClient::SaveAddressProfileOfferUserDecision decision);
-
-  // Logs if at least one setting-inaccessible field was removed on import.
-  static void LogRemovedSettingInaccessibleFields(bool did_remove);
-
-  // Logs that `field` was removed from a profile on import, because it is
-  // setting-inaccessible in the profile's country.
-  static void LogRemovedSettingInaccessibleField(ServerFieldType field);
-
-  // Logs whether a phone number was parsed successfully on profile import.
-  // Contrary to the profile import requirement metrics, the parsing result is
-  // only emitted when a number is present.
-  static void LogPhoneNumberImportParsingResult(bool parsed_successfully);
 
   // Logs that local heuristics matched phone number fields using `grammar_id`.
   // `suffix_matched` indicates if the special case handling for phone number
@@ -1713,57 +1315,17 @@ class AutofillMetrics {
   // Logs the roundtrip latency for fetching an image in AutofillImageFetcher.
   static void LogImageFetcherRequestLatency(const base::TimeDelta& latency);
 
-  // Records the source of the state selection field if autofilled, when the
-  // form is submitted.
-  static void LogAutofillingSourceForStateSelectionFieldAtSubmission(
-      AutofilledSourceMetricForStateSelectionField
-          autofilled_source_metric_for_state_selection_field);
-
-  /* Card unmasking OTP authentication-related metrics. */
-  // Logs when an OTP authentication starts.
-  static void LogOtpAuthAttempt();
-  // Logs the final reason the OTP authentication dialog is closed, even if
-  // there were prior failures like OTP mismatch, and is done once per Attempt.
-  static void LogOtpAuthResult(OtpAuthEvent event);
-  // Logged every time a retriable error occurs, which could potentially be
-  // several times in the same flow (mismatch then mismatch then cancel, etc.).
-  static void LogOtpAuthRetriableError(OtpAuthEvent event);
-  // Logs the roundtrip latency for UnmaskCardRequest sent by OTP
-  // authentication.
-  static void LogOtpAuthUnmaskCardRequestLatency(
-      const base::TimeDelta& latency);
-  // Logs the roundtrip latency for SelectChallengeOptionRequest sent by OTP
-  // authentication.
-  static void LogOtpAuthSelectChallengeOptionRequestLatency(
-      const base::TimeDelta& latency);
-
-  // Logs whenever the OTP input dialog is triggered and it is shown.
-  static void LogOtpInputDialogShown();
-  // Logs the result of how the dialog is dismissed.
-  static void LogOtpInputDialogResult(OtpInputDialogResult result,
-                                      bool temporary_error_shown);
-  // Logs when the temporary error shown in the dialog.
-  static void LogOtpInputDialogErrorMessageShown(OtpInputDialogError error);
-  // Logs when the "Get New Code" button in the dialog is clicked and user is
-  // requesting a new OTP.
-  static void LogOtpInputDialogNewOtpRequested();
-
-  // Logs whether the submitted field value is same as the non-empty value
-  // to be autofilled in the field, when the field had a different prefilled
-  // value.
-  static void LogIsValueNotAutofilledOverExistingValueSameAsSubmittedValue(
-      bool is_same);
-
   // Logs a field's (PredictionState, AutocompleteState) pair on form submit.
   static void LogAutocompletePredictionCollisionState(
       PredictionState prediction_state,
       AutocompleteState autocomplete_state);
 
-  // Logs a field's server and heuristic type on form submit. This is only used
-  // for fields with autocomplete=garbage.
+  // Logs a field's server and heuristic type on form submit into a histogram
+  // corresponding to the field's `autocomplete_state`.
   static void LogAutocompletePredictionCollisionTypes(
-      ServerFieldType server_type,
-      ServerFieldType heuristic_types);
+      AutocompleteState autocomplete_state,
+      FieldType server_type,
+      FieldType heuristic_types);
 
   // Logs whether a heuristic detection for an NUMERIC_QUANTITY collides with a
   // server prediction.
@@ -1775,10 +1337,47 @@ class AutofillMetrics {
   static void LogAcceptedFilledFieldWithNumericQuantityHeuristicPrediction(
       bool accepted);
 
+  // Returns the histogram string for the passed in
+  // `AutofillClient::PaymentsRpcCardType` or `CreditCard::RecordType`, starting
+  // with a period.
+  static std::string GetHistogramStringForCardType(
+      absl::variant<AutofillClient::PaymentsRpcCardType, CreditCard::RecordType>
+          card_type);
+
   // Logs the context menu impressions based on the autofill type as well as
   // based on the autocomplete type.
-  static void LogContextMenuImpressions(ServerFieldType field_type,
-                                        AutocompleteState autocomplete_state);
+  static void LogContextMenuImpressionsForField(
+      FieldType field_type,
+      AutocompleteState autocomplete_state);
+
+  // Logs the context menu impressions for a submitted form. Mainly logs the
+  // number of fields in the form where the context menu was shown.
+  static void LogContextMenuImpressionsForForm(
+      int num_of_fields_with_context_menu_shown);
+
+  // Returns 64-bit hash of the string of form global id, which consists of
+  // |frame_token| and |renderer_id|.
+  static uint64_t FormGlobalIdToHash64Bit(const FormGlobalId& form_global_id);
+  // Returns 64-bit hash of the string of field global id, which consists of
+  // |frame_token| and |renderer_id|.
+  static uint64_t FieldGlobalIdToHash64Bit(
+      const FieldGlobalId& field_global_id);
+
+  // Log the Autofill2_FieldInfoAfterSubmission UKM event after the form is
+  // submitted and uploaded for votes to the crowdsourcing server.
+  static void LogAutofillFieldInfoAfterSubmission(
+      ukm::UkmRecorder* ukm_recorder,
+      ukm::SourceId source_id,
+      const FormStructure& form,
+      const base::TimeTicks& form_submitted_timestamp);
+
+  // This metric is recorded when an address is deleted from a first-level popup
+  // using shift+delete.
+  static void LogDeleteAddressProfileFromPopup();
+
+  // This metric is recorded when an address is deleted from the keyboard
+  // accessory.
+  static void LogDeleteAddressProfileFromKeyboardAccessory();
 
  private:
   static void Log(AutocompleteEvent event);
@@ -1786,9 +1385,12 @@ class AutofillMetrics {
 
 #if defined(UNIT_TEST)
 int GetFieldTypeUserEditStatusMetric(
-    ServerFieldType server_type,
+    FieldType server_type,
     AutofillMetrics::AutofilledFieldUserEditingStatusMetric metric);
 #endif
+
+std::string GetCreditCardTypeSuffix(
+    AutofillClient::PaymentsRpcCardType card_type);
 
 const std::string PaymentsRpcResultToMetricsSuffix(
     AutofillClient::PaymentsRpcResult result);

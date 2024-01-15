@@ -8,8 +8,8 @@ described in Web IDL https://webidl.spec.whatwg.org/.
 Each rule class must inherit RuleBase.
 """
 
-from validator.framework import target
 from validator.framework import RuleBase
+from validator.framework import target
 
 
 class IncompatibleTypeWithConstantValue(RuleBase):
@@ -30,8 +30,39 @@ class IncompatibleTypeWithDefaultValue(RuleBase):
                 target_object.idl_type.type_name)
 
 
+class ForbiddenSequenceTypeForConstants(RuleBase):
+    def validate(self, assert_, constant):
+        assert_(not constant.idl_type.unwrap().is_sequence,
+                "Sequences must not be used as the type of a constant.")
+
+
+class ForbiddenRecordTypeForConstants(RuleBase):
+    def validate(self, assert_, constant):
+        assert_(not constant.idl_type.unwrap().is_record,
+                "Records must not be used as the type of a constant.")
+
+
+class ForbiddenDictionaryTypeForConstants(RuleBase):
+    def validate(self, assert_, constant):
+        assert_(not constant.idl_type.unwrap().is_dictionary,
+                "Dictionaries must not be used as the type of a constant.")
+
+
+class ForbiddenObservableArrayTypeForConstants(RuleBase):
+    def validate(self, assert_, constant):
+        assert_(
+            not constant.idl_type.unwrap().is_observable_array,
+            "Observable arrays must not be used as the type of a constant.")
+
+
 def register_rules(rule_store):
     rule_store.register(target.CONSTANTS, IncompatibleTypeWithConstantValue())
     rule_store.register(target.ARGUMENTS, IncompatibleTypeWithDefaultValue())
     rule_store.register(target.DICTIONARY_MEMBERS,
                         IncompatibleTypeWithDefaultValue())
+    rule_store.register(target.CONSTANTS, ForbiddenSequenceTypeForConstants())
+    rule_store.register(target.CONSTANTS, ForbiddenRecordTypeForConstants())
+    rule_store.register(target.CONSTANTS,
+                        ForbiddenDictionaryTypeForConstants())
+    rule_store.register(target.CONSTANTS,
+                        ForbiddenObservableArrayTypeForConstants())

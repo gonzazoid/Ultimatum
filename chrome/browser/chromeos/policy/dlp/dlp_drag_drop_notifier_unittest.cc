@@ -36,10 +36,11 @@ class MockDlpDragDropNotifier : public DlpDragDropNotifier {
   MOCK_METHOD1(ShowBlockBubble, void(const std::u16string& text));
   MOCK_METHOD3(ShowWarningBubble,
                void(const std::u16string& text,
-                    base::RepeatingCallback<void(views::Widget*)> proceed_cb,
-                    base::RepeatingCallback<void(views::Widget*)> cancel_cb));
+                    base::OnceCallback<void(views::Widget*)> proceed_cb,
+                    base::OnceCallback<void(views::Widget*)> cancel_cb));
   MOCK_METHOD2(CloseWidget,
-               void(views::Widget* widget, views::Widget::ClosedReason reason));
+               void(MayBeDangling<views::Widget> widget,
+                    views::Widget::ClosedReason reason));
 
   void SetPasteCallback(base::OnceCallback<void(bool)> paste_cb) override {
     paste_cb_ = std::move(paste_cb);

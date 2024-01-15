@@ -5,31 +5,39 @@
 #ifndef CONTENT_BROWSER_ATTRIBUTION_REPORTING_ATTRIBUTION_DEBUG_REPORT_H_
 #define CONTENT_BROWSER_ATTRIBUTION_REPORTING_ATTRIBUTION_DEBUG_REPORT_H_
 
-#include <vector>
+#include <optional>
 
+#include "base/time/time.h"
 #include "base/values.h"
-#include "content/browser/attribution_reporting/attribution_storage.h"
+#include "components/attribution_reporting/suitable_origin.h"
 #include "content/common/content_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "url/origin.h"
 
 class GURL;
 
 namespace content {
 
+class AttributionTrigger;
+class CreateReportResult;
 class StorableSource;
+class StoreSourceResult;
+
+struct OsRegistration;
 
 // Class that contains all the data needed to serialize and send an attribution
 // debug report.
 class CONTENT_EXPORT AttributionDebugReport {
  public:
-  enum class DataType {
-    kSourceDestinationLimit,
-  };
-
-  static absl::optional<AttributionDebugReport> Create(
+  static std::optional<AttributionDebugReport> Create(
       const StorableSource& source,
-      const AttributionStorage::StoreSourceResult& result);
+      bool is_debug_cookie_set,
+      const StoreSourceResult& result);
+
+  static std::optional<AttributionDebugReport> Create(
+      const AttributionTrigger& trigger,
+      bool is_debug_cookie_set,
+      const CreateReportResult& result);
+
+  static std::optional<AttributionDebugReport> Create(const OsRegistration&);
 
   ~AttributionDebugReport();
 
@@ -39,18 +47,31 @@ class CONTENT_EXPORT AttributionDebugReport {
   AttributionDebugReport(AttributionDebugReport&&);
   AttributionDebugReport& operator=(AttributionDebugReport&&);
 
-  base::Value::List ReportBody() const;
+  const base::Value::List& ReportBody() const { return report_body_; }
 
-  GURL ReportURL() const;
+  const attribution_reporting::SuitableOrigin& reporting_origin() const {
+    return reporting_origin_;
+  }
+
+  GURL ReportUrl() const;
+
+  // TODO(apaseltiner): This is a workaround to allow the simulator to adjust
+  // times while accounting for sub-second precision. Investigate removing it.
+  base::Time GetOriginalReportTimeForTesting() const {
+    return original_report_time_;
+  }
 
  private:
-  class ReportData;
+  AttributionDebugReport(base::Value::List report_body,
+                         attribution_reporting::SuitableOrigin reporting_origin,
+                         base::Time original_report_time);
 
-  AttributionDebugReport(std::vector<ReportData> report_data,
-                         url::Origin reporting_origin);
+  base::Value::List report_body_;
+  attribution_reporting::SuitableOrigin reporting_origin_;
 
-  std::vector<ReportData> report_data_;
-  url::Origin reporting_origin_;
+  // Only set for report bodies that would include an event-level
+  // scheduled_report_time field.
+  base::Time original_report_time_;
 };
 
 }  // namespace content

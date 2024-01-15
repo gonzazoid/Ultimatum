@@ -9,15 +9,20 @@
 
 #include "base/check_op.h"
 #include "base/no_destructor.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "ui/events/devices/device_data_manager.h"
-#include "ui/ozone/common/base_keyboard_hook.h"
 #include "ui/ozone/platform_object.h"
 #include "ui/ozone/platform_selection.h"
 #include "ui/ozone/public/platform_global_shortcut_listener.h"
+#include "ui/ozone/public/platform_keyboard_hook.h"
 #include "ui/ozone/public/platform_menu_utils.h"
 #include "ui/ozone/public/platform_screen.h"
 #include "ui/ozone/public/platform_user_input_monitor.h"
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ui/ozone/public/palm_detector.h"
+#endif
 
 namespace ui {
 
@@ -48,6 +53,8 @@ OzonePlatform::PlatformRuntimeProperties::SupportsSsdForTest
 
 OzonePlatform::PlatformProperties::PlatformProperties() = default;
 OzonePlatform::PlatformProperties::~PlatformProperties() = default;
+
+OzonePlatform::PlatformRuntimeProperties::PlatformRuntimeProperties() = default;
 
 OzonePlatform::OzonePlatform() {
   DCHECK(!g_instance) << "There should only be a single OzonePlatform.";
@@ -134,19 +141,17 @@ std::unique_ptr<PlatformKeyboardHook> OzonePlatform::CreateKeyboardHook(
     base::RepeatingCallback<void(KeyEvent* event)> callback,
     absl::optional<base::flat_set<DomCode>> dom_codes,
     gfx::AcceleratedWidget accelerated_widget) {
-  switch (type) {
-    case PlatformKeyboardHookTypes::kModifier:
-      return std::make_unique<BaseKeyboardHook>(std::move(dom_codes),
-                                                std::move(callback));
-    case PlatformKeyboardHookTypes::kMedia:
-      return nullptr;
-  }
+  return nullptr;
 }
 
 bool OzonePlatform::IsNativePixmapConfigSupported(
     gfx::BufferFormat format,
     gfx::BufferUsage usage) const {
   // Platform that support NativePixmap must override this method.
+  return false;
+}
+
+bool OzonePlatform::IsWindowCompositingSupported() const {
   return false;
 }
 
@@ -182,7 +187,8 @@ OzonePlatform::GetPlatformUserInputMonitor(
 }
 
 void OzonePlatform::PostCreateMainMessageLoop(
-    base::OnceCallback<void()> shutdown_cb) {}
+    base::OnceCallback<void()> shutdown_cb,
+    scoped_refptr<base::SingleThreadTaskRunner> input_event_task_runner) {}
 
 void OzonePlatform::PostMainMessageLoopRun() {}
 
@@ -197,5 +203,16 @@ void OzonePlatform::SetFailInitializeUIForTest(bool fail) {
 }
 
 void OzonePlatform::PreEarlyInitialize() {}
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+void OzonePlatform::SetPalmDetector(
+    std::unique_ptr<PalmDetector> palm_detector) {
+  palm_detector_ = std::move(palm_detector);
+}
+
+PalmDetector* OzonePlatform::GetPalmDetector() {
+  return palm_detector_.get();
+}
+#endif
 
 }  // namespace ui

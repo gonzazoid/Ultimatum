@@ -4,6 +4,7 @@
 
 #include "chromecast/media/cma/base/demuxer_stream_for_test.h"
 
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
 #include "media/base/media_util.h"
 
@@ -25,16 +26,16 @@ DemuxerStreamForTest::DemuxerStreamForTest(int total_frames,
 DemuxerStreamForTest::~DemuxerStreamForTest() {
 }
 
-void DemuxerStreamForTest::Read(ReadCB read_cb) {
+void DemuxerStreamForTest::Read(uint32_t count, ReadCB read_cb) {
+  DCHECK_EQ(count, 1u) << "DemuxerStreamForTest only reads a single buffer.";
   if (!config_idx_.empty() && config_idx_.front() == frame_count_) {
     config_idx_.pop_front();
-    std::move(read_cb).Run(kConfigChanged,
-                           scoped_refptr<::media::DecoderBuffer>());
+    std::move(read_cb).Run(kConfigChanged, {});
     return;
   }
 
   if ((frame_count_ % cycle_count_) < delayed_frame_count_) {
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&DemuxerStreamForTest::DoRead, base::Unretained(this),
                        std::move(read_cb)),
@@ -72,7 +73,7 @@ bool DemuxerStreamForTest::SupportsConfigChanges() {
 void DemuxerStreamForTest::DoRead(ReadCB read_cb) {
   if (total_frame_count_ != -1 && frame_count_ >= total_frame_count_) {
     // End of stream
-    std::move(read_cb).Run(kOk, ::media::DecoderBuffer::CreateEOSBuffer());
+    std::move(read_cb).Run(kOk, {::media::DecoderBuffer::CreateEOSBuffer()});
     return;
   }
 
@@ -80,7 +81,7 @@ void DemuxerStreamForTest::DoRead(ReadCB read_cb) {
   buffer->set_timestamp(frame_count_ *
                         base::Milliseconds(kDemuxerStreamForTestFrameDuration));
   frame_count_++;
-  std::move(read_cb).Run(kOk, buffer);
+  std::move(read_cb).Run(kOk, {std::move(buffer)});
 }
 
 }  // namespace media

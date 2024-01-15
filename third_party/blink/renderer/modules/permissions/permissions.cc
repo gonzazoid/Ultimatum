@@ -20,8 +20,10 @@
 #include "third_party/blink/renderer/core/frame/frame.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/modules/permissions/permission_status.h"
 #include "third_party/blink/renderer/modules/permissions/permission_utils.h"
+#include "third_party/blink/renderer/platform/bindings/exception_code.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/blink/renderer/platform/wtf/wtf_size_t.h"
@@ -54,12 +56,33 @@ Permissions::Permissions(NavigatorBase& navigator)
 ScriptPromise Permissions::query(ScriptState* script_state,
                                  const ScriptValue& raw_permission,
                                  ExceptionState& exception_state) {
+  // https://www.w3.org/TR/permissions/#query-method
+  // If this's relevant global object is a Window object, and if the current
+  // settings object's associated Document is not fully active, return a promise
+  // rejected with an "InvalidStateError" DOMException.
+  auto* context = ExecutionContext::From(script_state);
+  if (auto* window = DynamicTo<LocalDOMWindow>(context)) {
+    auto* document = window->document();
+    if (document && !document->IsActive()) {
+      // It's impossible for Permissions.query to occur while in BFCache.
+      if (document->GetPage()) {
+        DCHECK(!document->GetPage()
+                    ->GetPageLifecycleState()
+                    ->is_in_back_forward_cache);
+      }
+      exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
+                                        "The document is not active");
+      return ScriptPromise();
+    }
+  }
+
   PermissionDescriptorPtr descriptor =
       ParsePermissionDescriptor(script_state, raw_permission, exception_state);
   if (exception_state.HadException())
     return ScriptPromise();
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   // If the current origin is a file scheme, it will unlikely return a
@@ -67,11 +90,10 @@ ScriptPromise Permissions::query(ScriptState* script_state,
   // permission prompt will be shown even if the returned permission will most
   // likely be "prompt".
   PermissionDescriptorPtr descriptor_copy = descriptor->Clone();
-  GetService(ExecutionContext::From(script_state))
-      ->HasPermission(
-          std::move(descriptor),
-          WTF::BindOnce(&Permissions::TaskComplete, WrapPersistent(this),
-                        WrapPersistent(resolver), std::move(descriptor_copy)));
+  GetService(context)->HasPermission(
+      std::move(descriptor),
+      WTF::BindOnce(&Permissions::TaskComplete, WrapPersistent(this),
+                    WrapPersistent(resolver), std::move(descriptor_copy)));
   return promise;
 }
 
@@ -85,7 +107,8 @@ ScriptPromise Permissions::request(ScriptState* script_state,
 
   ExecutionContext* context = ExecutionContext::From(script_state);
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   PermissionDescriptorPtr descriptor_copy = descriptor->Clone();
@@ -108,7 +131,8 @@ ScriptPromise Permissions::revoke(ScriptState* script_state,
   if (exception_state.HadException())
     return ScriptPromise();
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   PermissionDescriptorPtr descriptor_copy = descriptor->Clone();
@@ -153,7 +177,8 @@ ScriptPromise Permissions::requestAll(
     caller_index_to_internal_index[i] = internal_index;
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(
+      script_state, exception_state.GetContext());
   ScriptPromise promise = resolver->Promise();
 
   Vector<PermissionDescriptorPtr> internal_permissions_copy;

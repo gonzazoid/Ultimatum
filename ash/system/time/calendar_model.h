@@ -116,6 +116,16 @@ class ASH_EXPORT CalendarModel : public SessionObserver {
   // likely to be pruned if we need to trim down to stay within storage limits.
   SingleDayEventList FindEvents(base::Time day) const;
 
+  // Uses the `FindEvents` method to get events for that day and then filters
+  // the result into two lists of multi-day and same day events.
+  std::tuple<SingleDayEventList, SingleDayEventList>
+  FindEventsSplitByMultiDayAndSameDay(base::Time day) const;
+
+  // Uses the `FindEvents` method to get events for that day and then filters
+  // the result into events that start or end in the next two hours.
+  std::list<google_apis::calendar::CalendarEvent> FindUpcomingEvents(
+      base::Time now_local) const;
+
   // Checks the `FetchingStatus` of a given start time.
   FetchingStatus FindFetchingStatus(base::Time start_time) const;
 
@@ -123,25 +133,24 @@ class ASH_EXPORT CalendarModel : public SessionObserver {
   // time difference. This method is only called when there's a timezone change.
   void RedistributeEvents();
 
-  // Dumps our internal state to logs.
-  void DebugDump();
-
  private:
   // For unit tests.
   friend class CalendarModelTest;
   friend class CalendarMonthViewFetchTest;
   friend class CalendarMonthViewTest;
+  friend class CalendarUpNextViewAnimationTest;
+  friend class CalendarUpNextViewPixelTest;
+  friend class CalendarUpNextViewTest;
+  friend class CalendarViewPixelTest;
   friend class CalendarViewAnimationTest;
+  friend class CalendarViewAnimationWithJellyEnabledTest;
   friend class CalendarViewEventListViewTest;
   friend class CalendarViewTest;
-  friend class GlanceablesTest;
+  friend class CalendarViewWithJellyEnabledTest;
 
   // Checks if the event has allowed statuses and is eligible for insertion.
   bool ShouldInsertEvent(
       const google_apis::calendar::CalendarEvent* event) const;
-
-  // Checks if the event spans more than one day.
-  bool IsMultiDayEvent(const google_apis::calendar::CalendarEvent* event) const;
 
   // Inserts a single `event` that spans more than one day in the EventCache.
   void InsertMultiDayEvent(const google_apis::calendar::CalendarEvent* event,
@@ -159,25 +168,6 @@ class ASH_EXPORT CalendarModel : public SessionObserver {
       const google_apis::calendar::CalendarEvent* event,
       const base::Time start_time_midnight);
 
-  // Returns the `start_time` of `event` adjusted by time difference, to ensure
-  // that each event is stored by its local time, e.g. an event that starts at
-  // 2022-05-31 22:00:00.000 PST (2022-06-01 05:00:00.000 UTC) is stored in the
-  // map for 05-2022.
-  base::Time GetStartTimeAdjusted(
-      const google_apis::calendar::CalendarEvent* event) const;
-
-  // Returns the `end_time` of `event` adjusted by time difference.
-  base::Time GetEndTimeAdjusted(
-      const google_apis::calendar::CalendarEvent* event) const;
-
-  // Returns midnight on the day of the start time of `event`.
-  base::Time GetStartTimeMidnightAdjusted(
-      const google_apis::calendar::CalendarEvent* event) const;
-
-  // Returns midnight on the day of the end time of `event`.
-  base::Time GetEndTimeMidnightAdjusted(
-      const google_apis::calendar::CalendarEvent* event) const;
-
   // Frees up months of events as needed to keep us within storage limits.
   void PruneEventCache();
 
@@ -194,20 +184,6 @@ class ASH_EXPORT CalendarModel : public SessionObserver {
   void OnEventFetchFailedInternalError(
       base::Time start_of_month,
       CalendarEventFetchInternalErrorCode error);
-
-  // Methods for dumping various event containers/representations to logs.
-  void DebugDumpOnEventFetched(const google_apis::calendar::EventList* events,
-                               base::Time start_of_month);
-  void DebugDumpEventSmall(std::ostringstream* out,
-                           const char* prefix,
-                           const google_apis::calendar::CalendarEvent* event);
-  void DebugDumpEventLarge(const char* prefix,
-                           const google_apis::calendar::CalendarEvent* event);
-
-  void DebugDumpEvents(std::ostringstream* out, const char* prefix);
-  void DebugDumpMruMonths(std::ostringstream* out, const char* prefix);
-  void DebugDumpNonPrunableMonths(std::ostringstream* out, const char* prefix);
-  void DebugDumpMonthsFetched(std::ostringstream* out, const char* prefix);
 
   // Internal storage for fetched events, with each fetched month having a
   // map of days to events.

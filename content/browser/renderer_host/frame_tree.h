@@ -12,9 +12,9 @@
 #include <string>
 #include <unordered_map>
 
-#include "base/callback.h"
 #include "base/containers/queue.h"
 #include "base/dcheck_is_on.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/safe_ref.h"
@@ -23,6 +23,7 @@
 #include "content/browser/renderer_host/navigator.h"
 #include "content/browser/renderer_host/navigator_delegate.h"
 #include "content/browser/renderer_host/render_frame_host_manager.h"
+#include "content/browser/renderer_host/render_view_host_enums.h"
 #include "content/common/content_export.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "services/service_manager/public/mojom/interface_provider.mojom.h"
@@ -30,6 +31,7 @@
 #include "third_party/blink/public/common/frame/frame_owner_element_type.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/mojom/frame/frame_owner_properties.mojom-forward.h"
+#include "url/origin.h"
 
 namespace blink {
 namespace mojom {
@@ -38,13 +40,13 @@ enum class TreeScopeType;
 }  // namespace mojom
 
 struct FramePolicy;
+class StorageKey;
 }  // namespace blink
 
 namespace content {
 
 class BrowserContext;
 class PageDelegate;
-class PageImpl;
 class RenderFrameHostDelegate;
 class RenderViewHostDelegate;
 class RenderViewHostImpl;
@@ -93,7 +95,8 @@ class CONTENT_EXPORT FrameTree {
     friend class FrameTreeTest;
     friend class NodeRange;
 
-    NodeIterator(const std::vector<FrameTreeNode*>& starting_nodes,
+    NodeIterator(const std::vector<raw_ptr<FrameTreeNode, VectorExperimental>>&
+                     starting_nodes,
                  const FrameTreeNode* root_of_subtree_to_skip,
                  bool should_descend_into_inner_trees,
                  bool include_delegate_nodes_for_inner_frame_trees);
@@ -122,12 +125,14 @@ class CONTENT_EXPORT FrameTree {
    private:
     friend class FrameTree;
 
-    NodeRange(const std::vector<FrameTreeNode*>& starting_nodes,
+    NodeRange(const std::vector<raw_ptr<FrameTreeNode, VectorExperimental>>&
+                  starting_nodes,
               const FrameTreeNode* root_of_subtree_to_skip,
               bool should_descend_into_inner_trees,
               bool include_delegate_nodes_for_inner_frame_trees);
 
-    const std::vector<FrameTreeNode*> starting_nodes_;
+    const std::vector<raw_ptr<FrameTreeNode, VectorExperimental>>
+        starting_nodes_;
     const raw_ptr<const FrameTreeNode> root_of_subtree_to_skip_;
     const bool should_descend_into_inner_trees_;
     const bool include_delegate_nodes_for_inner_frame_trees_;
@@ -135,18 +140,22 @@ class CONTENT_EXPORT FrameTree {
 
   class CONTENT_EXPORT Delegate {
    public:
-    // A RenderFrameHost in the specified |frame_tree_node| started loading a
-    // new document. This corresponds to browser UI starting to show a spinner
-    // or other visual indicator for loading. This method is only invoked if the
-    // FrameTree hadn't been previously loading. |should_show_loading_ui| will
-    // be true unless the load is a fragment navigation, or triggered by
-    // history.pushState/replaceState.
-    virtual void DidStartLoading(FrameTreeNode* frame_tree_node,
-                                 bool should_show_loading_ui) = 0;
+    // The FrameTree changed its LoadingState. This can be a transition between
+    // not-loading and loading (in which case it will be accompanied by either a
+    // DidStartLoading or DidStopLoading), or a transition between not showing
+    // loading UI and showing loading UI while a navigation is in progress (in
+    // which case it will be called without either DidStartLoading or
+    // DidStopLoading).
+    virtual void LoadingStateChanged(LoadingState new_state) = 0;
 
-    // This is called when all nodes in the FrameTree stopped loading. This
-    // corresponds to the browser UI stop showing a spinner or other visual
-    // indicator for loading.
+    // The FrameTree has started loading in `frame_tree_node`. Note that this
+    // is only called when the FrameTree as a whole goes from not-loading to
+    // loading. If a second FrameTreeNode begins loading, a new DidStartLoading
+    // message will not be sent.
+    virtual void DidStartLoading(FrameTreeNode* frame_tree_node) = 0;
+
+    // The FrameTree has stopped loading. Sent only when all FrameTreeNodes have
+    // stopped loading.
     virtual void DidStopLoading() = 0;
 
     // Returns the delegate's top loading tree, which should be used to infer
@@ -156,15 +165,11 @@ class CONTENT_EXPORT FrameTree {
     // directed.
     //
     // TODO(crbug.com/1261928): Remove this method and directly rely on
-    // GetOutermostMainFrame() once portals and guest views are migrated to
-    // MPArch.
+    // GetOutermostMainFrame() once guest views are migrated to MPArch.
     virtual FrameTree* LoadingTree() = 0;
 
     // Returns true when the active RenderWidgetHostView should be hidden.
     virtual bool IsHidden() = 0;
-
-    // Called when current Page of this frame tree changes to `page`.
-    virtual void NotifyPageChanged(PageImpl& page) = 0;
 
     // If the FrameTree using this delegate is an inner/nested FrameTree, then
     // there may be a FrameTreeNode in the outer FrameTree that is considered
@@ -174,8 +179,21 @@ class CONTENT_EXPORT FrameTree {
     // FrameTreeNode::kFrameTreeNodeInvalidId.
     virtual int GetOuterDelegateFrameTreeNodeId() = 0;
 
-    // Returns if this FrameTree represents a portal.
-    virtual bool IsPortal() = 0;
+    // If the FrameTree using this delegate is an inner/nested FrameTree that
+    // has not yet been attached to an outer FrameTreeNode, returns the parent
+    // RenderFrameHost of the intended outer FrameTreeNode to which the inner
+    // frame tree will be attached. This is usually the RenderFrameHost that is
+    // the outer document once attachment occurs, however in the case of some
+    // kinds of GuestView, the outer document may end up being a same-origin
+    // subframe of the RenderFrameHost returned by this method (see the
+    // `testNewWindowAttachInSubFrame` webview test for an example of this).
+    // Otherwise, returns null.
+    virtual RenderFrameHostImpl* GetProspectiveOuterDocument() = 0;
+
+    // Set the `node` frame as focused in its own FrameTree as well as possibly
+    // changing the focused frame tree in the case of inner/outer FrameTrees.
+    virtual void SetFocusedFrame(FrameTreeNode* node,
+                                 SiteInstanceGroup* source) = 0;
   };
 
   // Type of FrameTree instance.
@@ -205,8 +223,6 @@ class CONTENT_EXPORT FrameTree {
 
   // A set of delegates are remembered here so that we can create
   // RenderFrameHostManagers.
-  // `dev_tools_frame_token` is the devtools token for the root `FrameTreeNode`
-  // of this new `FrameTree`.
   FrameTree(BrowserContext* browser_context,
             Delegate* delegate,
             NavigationControllerDelegate* navigation_controller_delegate,
@@ -216,8 +232,7 @@ class CONTENT_EXPORT FrameTree {
             RenderWidgetHostDelegate* render_widget_delegate,
             RenderFrameHostManager::Delegate* manager_delegate,
             PageDelegate* page_delegate,
-            Type type,
-            const base::UnguessableToken& devtools_frame_token);
+            Type type);
 
   FrameTree(const FrameTree&) = delete;
   FrameTree& operator=(const FrameTree&) = delete;
@@ -226,31 +241,28 @@ class CONTENT_EXPORT FrameTree {
 
   // Initializes the main frame for this FrameTree. That is it creates the
   // initial RenderFrameHost in the root node's RenderFrameHostManager, and also
-  // creates an initial NavigationEntry (if the InitialNavigationEntry feature
-  // is enabled) that potentially inherits `opener_for_origin`'s origin in its
-  // NavigationController. This method will call back into the delegates so it
-  // should only be called once they have completed their initialization. Pass
-  // in frame_policy so that it can be set in the root node's replication_state.
+  // creates an initial NavigationEntry that potentially inherits
+  // `opener_for_origin`'s origin in its NavigationController. This method will
+  // call back into the delegates so it should only be called once they have
+  // completed their initialization. Pass in frame_policy so that it can be set
+  // in the root node's replication_state.
   // TODO(carlscab): It would be great if initialization could happened in the
   // constructor so we do not leave objects in a half initialized state.
-  void Init(SiteInstance* main_frame_site_instance,
+  void Init(SiteInstanceImpl* main_frame_site_instance,
             bool renderer_initiated_creation,
             const std::string& main_frame_name,
             RenderFrameHostImpl* opener_for_origin,
-            const blink::FramePolicy& frame_policy);
+            const blink::FramePolicy& frame_policy,
+            const base::UnguessableToken& devtools_frame_token);
 
   Type type() const { return type_; }
 
   FrameTreeNode* root() { return &root_; }
   const FrameTreeNode* root() const { return &root_; }
 
-  bool is_prerendering() const { return type_ == FrameTree::Type::kPrerender; }
-
-  // Returns true if this frame tree is a portal.
-  //
-  // TODO(crbug.com/1254770): Once portals are migrated to MPArch, portals will
-  // have their own FrameTree::Type.
-  bool IsPortal();
+  bool is_primary() const { return type_ == Type::kPrimary; }
+  bool is_prerendering() const { return type_ == Type::kPrerender; }
+  bool is_fenced_frame() const { return type_ == Type::kFencedFrame; }
 
   Delegate* delegate() { return delegate_; }
 
@@ -271,16 +283,26 @@ class CONTENT_EXPORT FrameTree {
   }
   PageDelegate* page_delegate() { return page_delegate_; }
 
-  using RenderViewHostMapId = base::IdType32<class RenderViewHostMap>;
+  // Iterate over all RenderViewHosts, including speculative RenderViewHosts.
+  // See `speculative_render_view_host_` for more details.
+  void ForEachRenderViewHost(
+      base::FunctionRef<void(RenderViewHostImpl*)> on_host);
 
-  // SiteInstanceGroup IDs are used to look up RenderViewHosts, since there is
-  // one RenderViewHost per SiteInstanceGroup in a given FrameTree.
-  using RenderViewHostMap = std::unordered_map<RenderViewHostMapId,
-                                               RenderViewHostImpl*,
-                                               RenderViewHostMapId::Hasher>;
-  const RenderViewHostMap& render_view_hosts() const {
-    return render_view_host_map_;
+  // Speculative RenderViewHost accessors.
+  RenderViewHostImpl* speculative_render_view_host() const {
+    return speculative_render_view_host_.get();
   }
+  void set_speculative_render_view_host(
+      base::WeakPtr<RenderViewHostImpl> render_view_host) {
+    speculative_render_view_host_ = render_view_host;
+  }
+
+  // Moves `speculative_render_view_host_` to `render_view_host_map_`. This
+  // should be called every time a main-frame same-SiteInstanceGroup speculative
+  // RenderFrameHost gets swapped in and becomes the active RenderFrameHost.
+  // This overwrites the previous RenderViewHost for the SiteInstanceGroup in
+  // `render_view_host_map_`, if one exists.
+  void MakeSpeculativeRVHCurrent();
 
   // Returns the FrameTreeNode with the given |frame_tree_node_id| if it is part
   // of this FrameTree.
@@ -330,7 +352,7 @@ class CONTENT_EXPORT FrameTree {
   // CreateChildFrame mojo call, which also delivers the
   // |policy_container_bind_params|. |is_dummy_frame_for_inner_tree| is true if
   // the added frame is only to serve as a placeholder for an inner frame tree
-  // (e.g. fenced frames, portals) and will not have a live RenderFrame of its
+  // (e.g. fenced frames) and will not have a live RenderFrame of its
   // own.
   FrameTreeNode* AddFrame(
       RenderFrameHostImpl* parent,
@@ -370,7 +392,7 @@ class CONTENT_EXPORT FrameTree {
   // from the BrowsingContextState in |source| during cross-origin cross-
   // browsing-instance navigations.
   void CreateProxiesForSiteInstance(FrameTreeNode* source,
-                                    SiteInstance* site_instance,
+                                    SiteInstanceImpl* site_instance,
                                     const scoped_refptr<BrowsingContextState>&
                                         source_new_browsing_context_state);
 
@@ -392,16 +414,28 @@ class CONTENT_EXPORT FrameTree {
   //
   // The RenderFrameHostImpls and the RenderFrameProxyHosts will share ownership
   // of this object.
+  // `create_case` indicates whether or not the RenderViewHost being created is
+  // speculative or not. It should only be registered with the FrameTree if it
+  // is not speculative.
+  // `frame_sink_id` is optionally set only if we're creating a speculative
+  // RenderViewHost. If set, it implies we're reusing the compositor from the
+  // previous RenderViewHost.
   scoped_refptr<RenderViewHostImpl> CreateRenderViewHost(
-      SiteInstance* site_instance,
+      SiteInstanceGroup* site_instance_group,
       int32_t main_frame_routing_id,
       bool renderer_initiated_creation,
-      scoped_refptr<BrowsingContextState> main_browsing_context_state);
+      scoped_refptr<BrowsingContextState> main_browsing_context_state,
+      CreateRenderViewHostCase create_case,
+      std::optional<viz::FrameSinkId> frame_sink_id);
 
   // Returns the existing RenderViewHost for a new RenderFrameHost.
   // There should always be such a RenderViewHost, because the main frame
   // RenderFrameHost for each SiteInstance should be created before subframes.
+  // Note that this will never return `speculative_render_view_host_`. If that
+  // is needed, call `speculative_render_view_host()` instead.
   scoped_refptr<RenderViewHostImpl> GetRenderViewHost(SiteInstanceGroup* group);
+
+  using RenderViewHostMapId = base::IdType32<class RenderViewHostMap>;
 
   // Returns the ID used for the RenderViewHost associated with
   // |site_instance_group|.
@@ -436,10 +470,8 @@ class CONTENT_EXPORT FrameTree {
   // the listener installed by SetFrameRemoveListener.
   void FrameRemoved(FrameTreeNode* frame);
 
-  void DidStartLoadingNode(FrameTreeNode& node,
-                           bool should_show_loading_ui,
-                           bool was_previously_loading);
-  void DidStopLoadingNode(FrameTreeNode& node);
+  void NodeLoadingStateChanged(FrameTreeNode& node,
+                               LoadingState previous_frame_tree_loading_state);
   void DidCancelLoading();
 
   // Returns this FrameTree's total load progress. If the `root_` FrameTreeNode
@@ -449,6 +481,10 @@ class CONTENT_EXPORT FrameTree {
   // Returns true if at least one of the nodes in this frame tree or nodes in
   // any inner frame tree of the same WebContents is loading.
   bool IsLoadingIncludingInnerFrameTrees() const;
+
+  // Returns the LoadingState for the FrameTree as a whole, indicating whether
+  // a load is in progress, as well as whether loading UI should be shown.
+  LoadingState GetLoadingState() const;
 
   // Set page-level focus in all SiteInstances involved in rendering
   // this FrameTree, not including the current main frame's
@@ -492,7 +528,7 @@ class CONTENT_EXPORT FrameTree {
   // loading related events. Please see FrameTree::Delegate::LoadingTree for
   // more comments.
   // - For prerender frame tree -> returns the frame tree itself.
-  // - For fenced frame and primary frame tree (including portal) -> returns
+  // - For fenced frame and primary frame tree -> returns
   // the delegate's primary frame tree.
   FrameTree* LoadingTree();
 
@@ -512,26 +548,30 @@ class CONTENT_EXPORT FrameTree {
   // each inner FrameTree is attached.
   void FocusOuterFrameTrees();
 
-  absl::optional<blink::features::FencedFramesImplementationType>
-  FencedFramesImplementationType() const {
-    return fenced_frames_impl_;
-  }
+  // This should only be called by NavigationRequest when it detects that an
+  // origin is participating in the deprecation trial.
+  //
+  // TODO(crbug.com/1407150): Remove this when deprecation trial is complete.
+  void RegisterOriginForUnpartitionedSessionStorageAccess(
+      const url::Origin& origin);
 
-  bool IsFencedFramesMPArchBased() const {
-    return fenced_frames_impl_.has_value() &&
-           fenced_frames_impl_.value() ==
-               blink::features::FencedFramesImplementationType::kMPArch;
-  }
-  bool IsFencedFramesShadowDOMBased() const {
-    return fenced_frames_impl_.has_value() &&
-           fenced_frames_impl_.value() ==
-               blink::features::FencedFramesImplementationType::kShadowDOM;
-  }
+  // This should only be called by NavigationRequest when it detects that an
+  // origin is not participating in the deprecation trial.
+  //
+  // TODO(crbug.com/1407150): Remove this when deprecation trial is complete.
+  void UnregisterOriginForUnpartitionedSessionStorageAccess(
+      const url::Origin& origin);
+
+  // This should be used for all session storage related bindings as it adjusts
+  // the storage key used depending on the deprecation trial.
+  //
+  // TODO(crbug.com/1407150): Remove this when deprecation trial is complete.
+  const blink::StorageKey GetSessionStorageKey(
+      const blink::StorageKey& storage_key);
 
  private:
   friend class FrameTreeTest;
   FRIEND_TEST_ALL_PREFIXES(RenderFrameHostImplBrowserTest, RemoveFocusedFrame);
-  FRIEND_TEST_ALL_PREFIXES(PortalBrowserTest, NodesForIsLoading);
   FRIEND_TEST_ALL_PREFIXES(FencedFrameMPArchBrowserTest, NodesForIsLoading);
   FRIEND_TEST_ALL_PREFIXES(RenderFrameHostManagerTest,
                            CreateRenderViewAfterProcessKillAndClosedProxy);
@@ -548,7 +588,7 @@ class CONTENT_EXPORT FrameTree {
   //
   // TODO(crbug.com/1261928, crbug.com/1261928): Remove this method and directly
   // rely on GetOutermostMainFrame() and NodesIncludingInnerTreeNodes() once
-  // portals and guest views are migrated to MPArch.
+  // guest views are migrated to MPArch.
   std::vector<FrameTreeNode*> CollectNodesForIsLoading();
 
   const raw_ptr<Delegate> delegate_;
@@ -566,11 +606,44 @@ class CONTENT_EXPORT FrameTree {
   // the frame.
   Navigator navigator_;
 
+  // A map to store RenderViewHosts, keyed by SiteInstanceGroup ID.
+  // This map does not cover all RenderViewHosts in a FrameTree. See
+  // `speculative_render_view_host_`.
+  using RenderViewHostMap = std::unordered_map<RenderViewHostMapId,
+                                               RenderViewHostImpl*,
+                                               RenderViewHostMapId::Hasher>;
   // Map of RenderViewHostMapId to RenderViewHost. This allows us to look up the
   // RenderViewHost for a given SiteInstance when creating RenderFrameHosts.
   // Each RenderViewHost maintains a refcount and is deleted when there are no
   // more RenderFrameHosts or RenderFrameProxyHosts using it.
   RenderViewHostMap render_view_host_map_;
+
+  // A speculative RenderViewHost is created for all speculative cross-page
+  // same-SiteInstanceGroup RenderFrameHosts. When the corresponding
+  // RenderFrameHost gets committed and becomes the current RenderFrameHost,
+  // `speculative_render_view_host_` will be moved to `render_view_host_map_`,
+  // overwriting the previous RenderViewHost of the same SiteInstanceGroup, if
+  // applicable. This field will also be reset at that time, or if the
+  // speculative RenderFrameHost gets deleted.
+  //
+  // For any given FrameTree, there will be at most one
+  // `speculative_render_view_host_`, because only main-frame speculative
+  // RenderFrameHosts have speculative RenderViewHosts, and there is at most one
+  // such RenderFrameHost per FrameTree at a time.
+  // This is a WeakPtr, since the RenderViewHost is owned by the
+  // RenderFrameHostImpl, not the FrameTree. This implies that if the owning
+  // RenderFrameHostImpl gets deleted, this will too.
+  //
+  // This supports but is independent of RenderDocument, which introduces cases
+  // where there may be more than one RenderViewHost per SiteInstanceGroup, such
+  // as cross-page same-SiteInstanceGroup navigations. The speculative
+  // RenderFrameHost has an associated RenderViewHost, but it cannot be put in
+  // `render_view_host_map_` when it is created, as the existing RenderViewHost
+  // will be incorrectly overwritten.
+  // TODO(yangsharon, crbug.com/1336305): Expand support to include
+  // cross-SiteInstanceGroup main-frame navigations, so all main-frame
+  // navigations use speculative RenderViewHost.
+  base::WeakPtr<RenderViewHostImpl> speculative_render_view_host_;
 
   // Indicates type of frame tree.
   const Type type_;
@@ -579,9 +652,6 @@ class CONTENT_EXPORT FrameTree {
 
   // Overall load progress.
   double load_progress_;
-
-  absl::optional<blink::features::FencedFramesImplementationType>
-      fenced_frames_impl_;
 
   // Whether the initial empty page has been accessed by another page, making it
   // unsafe to show the pending URL. Usually false unless another window tries
@@ -601,6 +671,13 @@ class CONTENT_EXPORT FrameTree {
   // `root()` method, even while `root_` is running its destructor.
   // For that reason, we want to destroy |root_| before any other fields.
   FrameTreeNode root_;
+
+  // Origins in this set have enabled a deprecation trial that prevents the
+  // partitioning of session storage when embedded as a third-party iframe.
+  // This list persists for the lifetime of the associated tab.
+  //
+  // TODO(crbug.com/1407150): Remove this when deprecation trial is complete.
+  std::set<url::Origin> unpartitioned_session_storage_origins_;
 
   base::WeakPtrFactory<FrameTree> weak_ptr_factory_{this};
 };

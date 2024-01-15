@@ -4,8 +4,8 @@
 
 #include "chromeos/ash/components/network/network_activation_handler_impl.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "chromeos/ash/components/dbus/shill/shill_service_client.h"
 #include "chromeos/ash/components/network/network_event_log.h"
 #include "chromeos/ash/components/network/network_handler.h"
@@ -31,7 +31,8 @@ void NetworkActivationHandlerImpl::CompleteActivation(
   ShillServiceClient::Get()->CompleteCellularActivation(
       dbus::ObjectPath(service_path),
       base::BindOnce(&NetworkActivationHandlerImpl::HandleShillSuccess,
-                     AsWeakPtr(), std::move(success_callback)),
+                     weak_ptr_factory_.GetWeakPtr(),
+                     std::move(success_callback)),
       base::BindOnce(&network_handler::ShillErrorCallbackFunction,
                      kErrorShillError, service_path,
                      std::move(error_callback)));

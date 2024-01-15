@@ -6,11 +6,12 @@
 #define CHROME_BROWSER_UI_VIEWS_BOREALIS_BOREALIS_INSTALLER_VIEW_H_
 
 #include "ash/public/cpp/style/color_mode_observer.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/ash/borealis/borealis_installer.h"
-#include "chrome/browser/ash/borealis/borealis_metrics.h"
+#include "chrome/browser/ash/borealis/borealis_types.mojom.h"
 #include "chrome/browser/ui/views/borealis/borealis_installer_error_dialog.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/window/dialog_delegate.h"
@@ -22,16 +23,21 @@ class Label;
 class ProgressBar;
 }  // namespace views
 
+class BorealisBetaBadge;
 class Profile;
+
+namespace borealis {
+void ShowBorealisInstallerView(Profile* profile);
+}  // namespace borealis
 
 // The front end for the Borealis installation process, works closely with
 // "chrome/browser/ash/borealis/borealis_installer.h".
 class BorealisInstallerView : public views::DialogDelegateView,
                               public borealis::BorealisInstaller::Observer,
                               public ash::ColorModeObserver {
- public:
-  METADATA_HEADER(BorealisInstallerView);
+  METADATA_HEADER(BorealisInstallerView, views::DialogDelegateView)
 
+ public:
   using InstallingState = borealis::BorealisInstaller::InstallingState;
 
   explicit BorealisInstallerView(Profile* profile);
@@ -47,20 +53,18 @@ class BorealisInstallerView : public views::DialogDelegateView,
   bool ShouldShowWindowTitle() const override;
   bool Accept() override;
   bool Cancel() override;
-  gfx::Size CalculatePreferredSize() const override;
 
   // borealis::BorealisInstaller::Observer implementation.
   void OnStateUpdated(
       borealis::BorealisInstaller::InstallingState new_state) override;
   void OnProgressUpdated(double fraction_complete) override;
-  void OnInstallationEnded(borealis::BorealisInstallResult result,
+  void OnInstallationEnded(borealis::mojom::InstallResult result,
                            const std::string& error_description) override;
   void OnCancelInitiated() override {}
 
   // Public for testing purposes.
   std::u16string GetPrimaryMessage() const;
   std::u16string GetSecondaryMessage() const;
-  std::u16string GetProgressMessage() const;
 
   void SetInstallingStateForTesting(InstallingState new_state);
 
@@ -100,18 +104,21 @@ class BorealisInstallerView : public views::DialogDelegateView,
 
   void StartInstallation();
 
-  std::u16string app_name_;
-  Profile* profile_ = nullptr;
-  views::Label* primary_message_label_ = nullptr;
-  views::Label* secondary_message_label_ = nullptr;
-  views::ProgressBar* progress_bar_ = nullptr;
-  views::Label* installation_progress_message_label_ = nullptr;
-  views::BoxLayout* lower_container_layout_ = nullptr;
-  views::ImageView* big_image_ = nullptr;
+  raw_ptr<Profile> profile_ = nullptr;
+  raw_ptr<views::Label> primary_message_label_ = nullptr;
+  raw_ptr<views::Label> secondary_message_label_ = nullptr;
+  raw_ptr<BorealisBetaBadge> beta_badge_ = nullptr;
+  raw_ptr<views::ProgressBar> progress_bar_ = nullptr;
+  raw_ptr<views::Label> installation_progress_percentage_label_ = nullptr;
+  raw_ptr<views::Label> installation_progress_separator_ = nullptr;
+  raw_ptr<views::Label> installation_progress_eta_label_ = nullptr;
+  raw_ptr<views::BoxLayout> right_container_layout_ = nullptr;
+  raw_ptr<views::ImageView> big_image_ = nullptr;
 
+  base::Time install_start_time_;
   State state_ = State::kConfirmInstall;
   InstallingState installing_state_ = InstallingState::kInactive;
-  absl::optional<borealis::BorealisInstallResult> result_;
+  std::optional<borealis::mojom::InstallResult> result_;
 
   base::ScopedObservation<borealis::BorealisInstaller,
                           borealis::BorealisInstaller::Observer>

@@ -5,18 +5,20 @@
 #ifndef CHROME_BROWSER_ASH_CERT_PROVISIONING_CERT_PROVISIONING_COMMON_H_
 #define CHROME_BROWSER_ASH_CERT_PROVISIONING_CERT_PROVISIONING_COMMON_H_
 
+#include <optional>
 #include <string>
 
-#include "base/callback.h"
-#include "base/callback_forward.h"
+#include "base/containers/enum_set.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/time/time.h"
 #include "base/values.h"
-#include "chrome/browser/platform_keys/platform_keys.h"
+#include "chrome/browser/chromeos/platform_keys/platform_keys.h"
+#include "chromeos/ash/components/dbus/attestation/attestation_ca.pb.h"
 #include "chromeos/ash/components/dbus/attestation/interface.pb.h"
 #include "chromeos/ash/components/dbus/constants/attestation_constants.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "net/cert/x509_certificate.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefRegistrySimple;
 class Profile;
@@ -51,17 +53,75 @@ enum class CertScope { kUser = 0, kDevice = 1, kMaxValue = kDevice };
 enum class CertProvisioningWorkerState {
   kInitState = 0,
   kKeypairGenerated = 1,
-  kStartCsrResponseReceived = 2,
+  kStartCsrResponseReceived = 2,  // Unused in "dynamic" flow.
   kVaChallengeFinished = 3,
   kKeyRegistered = 4,
   kKeypairMarked = 5,
   kSignCsrFinished = 6,
-  kFinishCsrResponseReceived = 7,
+  kFinishCsrResponseReceived = 7,  // Unused in "dynamic" flow.
   kSucceeded = 8,
   kInconsistentDataError = 9,
   kFailed = 10,
   kCanceled = 11,
-  kMaxValue = kCanceled,
+
+  // The following states are only used in the "dynamic" flow.
+  // The worker is ready for next server-provided operation.
+  kReadyForNextOperation = 12,
+  // The worker has received an "Authorize" instruction.
+  kAuthorizeInstructionReceived = 13,
+  // The worker has received a "Proof of Possession" instruction.
+  kProofOfPossessionInstructionReceived = 14,
+  // The worker has received an "Import Certificate" instruction.
+  kImportCertificateInstructionReceived = 15,
+
+  kMaxValue = kImportCertificateInstructionReceived,
+};
+
+// All states that are allowed in a "static" flow.
+inline constexpr base::EnumSet<CertProvisioningWorkerState,
+                               CertProvisioningWorkerState::kInitState,
+                               CertProvisioningWorkerState::kMaxValue>
+    kStaticWorkerStates = {
+        CertProvisioningWorkerState::kInitState,
+        CertProvisioningWorkerState::kKeypairGenerated,
+        CertProvisioningWorkerState::kStartCsrResponseReceived,
+        CertProvisioningWorkerState::kVaChallengeFinished,
+        CertProvisioningWorkerState::kKeyRegistered,
+        CertProvisioningWorkerState::kKeypairMarked,
+        CertProvisioningWorkerState::kSignCsrFinished,
+        CertProvisioningWorkerState::kFinishCsrResponseReceived,
+        CertProvisioningWorkerState::kSucceeded,
+        CertProvisioningWorkerState::kInconsistentDataError,
+        CertProvisioningWorkerState::kFailed,
+        CertProvisioningWorkerState::kCanceled};
+
+// All states that are allowed in a "dynamic" flow.
+inline constexpr base::EnumSet<CertProvisioningWorkerState,
+                               CertProvisioningWorkerState::kInitState,
+                               CertProvisioningWorkerState::kMaxValue>
+    kDynamicWorkerStates = {
+        CertProvisioningWorkerState::kInitState,
+        CertProvisioningWorkerState::kKeypairGenerated,
+        CertProvisioningWorkerState::kVaChallengeFinished,
+        CertProvisioningWorkerState::kKeyRegistered,
+        CertProvisioningWorkerState::kKeypairMarked,
+        CertProvisioningWorkerState::kSignCsrFinished,
+        CertProvisioningWorkerState::kSucceeded,
+        CertProvisioningWorkerState::kInconsistentDataError,
+        CertProvisioningWorkerState::kFailed,
+        CertProvisioningWorkerState::kCanceled,
+        CertProvisioningWorkerState::kReadyForNextOperation,
+        CertProvisioningWorkerState::kAuthorizeInstructionReceived,
+        CertProvisioningWorkerState::kProofOfPossessionInstructionReceived,
+        CertProvisioningWorkerState::kImportCertificateInstructionReceived};
+
+// Location where a generated key has been persisted by a "dynamic" flow worker.
+// These values are used in serialization and should be changed carefully.
+enum class KeyLocation {
+  kNone = 0,
+  kVaDatabase = 1,
+  kPkcs11Token = 2,
+  kMaxValue = kPkcs11Token
 };
 
 // Types of the requests sent from the certificate provisioning client to the
@@ -83,16 +143,31 @@ bool IsFinalState(CertProvisioningWorkerState state);
 using CertProfileId = std::string;
 
 // Names of CertProfile fields in a base::Value representation. Must be in sync
-// with definitions of RequiredClientCertificateForDevice and
-// RequiredClientCertificateForUser policies in policy_templates.json file.
+// with policy schema definitions in RequiredClientCertificateForDevice.yaml and
+// RequiredClientCertificateForUser.yaml.
 const char kCertProfileIdKey[] = "cert_profile_id";
 const char kCertProfileNameKey[] = "name";
 const char kCertProfileRenewalPeroidSec[] = "renewal_period_seconds";
 const char kCertProfilePolicyVersionKey[] = "policy_version";
+const char kCertProfileProtocolVersion[] = "protocol_version";
 const char kCertProfileIsVaEnabledKey[] = "enable_remote_attestation_check";
 
+// The version of the certificate provisioning protocol between ChromeOS client
+// and device management server.
+// The values must match the description in
+// RequiredClientCertificateForDevice.yaml and
+// RequiredClientCertificateForUser.yaml.
+// They are also used in serialization so they should not be renumbered.
+enum class ProtocolVersion {
+  // Original "static" protocol.
+  kStatic = 1,
+  // "Dynamic" protocol.
+  kDynamic = 2,
+};
+
 struct CertProfile {
-  static absl::optional<CertProfile> MakeFromValue(const base::Value& value);
+  static std::optional<CertProfile> MakeFromValue(
+      const base::Value::Dict& value);
 
   CertProfile();
   // For tests.
@@ -100,8 +175,12 @@ struct CertProfile {
               std::string name,
               std::string policy_version,
               bool is_va_enabled,
-              base::TimeDelta renewal_period);
+              base::TimeDelta renewal_period,
+              ProtocolVersion protocol_version);
   CertProfile(const CertProfile& other);
+  CertProfile& operator=(const CertProfile&);
+  CertProfile(CertProfile&& source);
+  CertProfile& operator=(CertProfile&&);
   ~CertProfile();
 
   CertProfileId profile_id;
@@ -112,11 +191,12 @@ struct CertProfile {
   // Default renewal period 0 means that a certificate will be renewed only
   // after the previous one has expired (0 seconds before it is expires).
   base::TimeDelta renewal_period = base::Seconds(0);
+  ProtocolVersion protocol_version = ProtocolVersion::kStatic;
 
   // IMPORTANT:
   // Increment this when you add/change any member in CertProfile (and update
   // all functions that fail to compile because of it).
-  static constexpr int kVersion = 5;
+  static constexpr int kVersion = 6;
 
   bool operator==(const CertProfile& other) const;
   bool operator!=(const CertProfile& other) const;
@@ -126,6 +206,10 @@ struct CertProfileComparator {
   bool operator()(const CertProfile& a, const CertProfile& b) const;
 };
 
+// Parses `protocol_version_value` as ProtocolVersion enum.
+std::optional<ProtocolVersion> ParseProtocolVersion(
+    std::optional<int> protocol_version_value);
+
 void RegisterProfilePrefs(PrefRegistrySimple* registry);
 void RegisterLocalStatePrefs(PrefRegistrySimple* registry);
 const char* GetPrefNameForCertProfiles(CertScope scope);
@@ -133,8 +217,8 @@ const char* GetPrefNameForSerialization(CertScope scope);
 
 // Returns the nickname (CKA_LABEL) for keys created for the |profile_id|.
 std::string GetKeyName(CertProfileId profile_id);
-// Returns the key type for VA API calls for |scope|.
-attestation::AttestationKeyType GetVaKeyType(CertScope scope);
+// Returns the flow type type for VA API calls for |scope|.
+::attestation::VerifiedAccessFlow GetVaFlowType(CertScope scope);
 chromeos::platform_keys::TokenId GetPlatformKeysTokenId(CertScope scope);
 
 // This functions should be used to delete keys that were created by

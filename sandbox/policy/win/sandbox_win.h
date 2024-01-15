@@ -8,11 +8,14 @@
 #include <stdint.h>
 
 #include <string>
+#include <string_view>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
+#include <optional>
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/process/launch.h"
 #include "base/process/process_handle.h"
+#include "build/build_config.h"
 #include "sandbox/policy/export.h"
 #include "sandbox/policy/sandbox_delegate.h"
 #include "sandbox/policy/sandbox_type.h"
@@ -117,13 +120,20 @@ class SANDBOX_POLICY_EXPORT SandboxWin {
 
   // Helper for sandbox delegates to generate a SandboxTag
   static std::string GetSandboxTagForDelegate(
-      base::StringPiece prefix,
+      std::string_view prefix,
+      sandbox::mojom::Sandbox sandbox_type);
+
+ private:
+  FRIEND_TEST_ALL_PREFIXES(SandboxWinTest, GetJobMemoryLimit);
+
+  static std::optional<size_t> GetJobMemoryLimit(
       sandbox::mojom::Sandbox sandbox_type);
 };
 
+// Add a block list DLL to a configuration |config| based on the name of the DLL
+// passed as |module_name|. The DLL must be loaded in the current process.
 SANDBOX_POLICY_EXPORT
 void BlocklistAddOneDllForTesting(const wchar_t* module_name,
-                                  bool check_in_browser,
                                   TargetConfig* config);
 
 }  // namespace policy

@@ -1,1 +1,0 @@
-This test passes if the renderer does not crash.

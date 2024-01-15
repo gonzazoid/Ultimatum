@@ -7,27 +7,32 @@
 #include <memory>
 #include <sstream>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
+#include "components/viz/common/features.h"
 #include "gpu/command_buffer/common/swap_buffers_complete_params.h"
 #include "gpu/ipc/service/gpu_channel_manager.h"
 #include "gpu/ipc/service/gpu_channel_manager_delegate.h"
 #include "gpu/ipc/service/image_transport_surface_delegate.h"
 #include "ui/accelerated_widget_mac/ca_layer_tree_coordinator.h"
-#include "ui/accelerated_widget_mac/io_surface_context.h"
 #include "ui/base/cocoa/remote_layer_api.h"
 #include "ui/base/ui_base_switches.h"
 #include "ui/gfx/geometry/rect_conversions.h"
+#include "ui/gfx/gpu_fence.h"
+#include "ui/gfx/overlay_plane_data.h"
 #include "ui/gfx/video_types.h"
 #include "ui/gl/ca_renderer_layer_params.h"
+#include "ui/gl/gl_features.h"
+
+#if BUILDFLAG(IS_MAC)
+#include "ui/accelerated_widget_mac/io_surface_context.h"
 #include "ui/gl/gl_context.h"
-#include "ui/gl/gpu_switching_manager.h"
-#include "ui/gl/scoped_cgl.h"
+#endif
 
 // From ANGLE's EGL/eglext_angle.h. This should be included instead of being
 // redefined here.
@@ -44,59 +49,59 @@ namespace {
 BASE_FEATURE(kAVFoundationOverlays,
              "avfoundation-overlays",
              base::FEATURE_ENABLED_BY_DEFAULT);
+
+#if BUILDFLAG(IS_MAC)
+// Whether the presentation should be delayed until the next CVDisplayLink
+// callback when kCVDisplayLinkBeginFrameSource is enabled. This flag has no
+// effect if kCVDisplayLinkBeginFrameSource is disabled.
+BASE_FEATURE(kDelayOnFramePresent,
+             "DelayOnFramePresent",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Whether the presentation for the first frame after VSync stops should be
+// delayed when kDelayOnFramePresent is enabled.
+BASE_FEATURE(kNoDelayOnFirstFramePresent,
+             "NoDelayOnFirstFramePresent",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// Use CVDisplayLink timing for PresentationFeedback timestamps.
+BASE_FEATURE(kNewPresentationFeedbackTimeStamps,
+             "NewPresentationFeedbackTimeStamps",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+#endif  // BUILDFLAG(IS_MAC)
 }  // namespace
 
-ImageTransportSurfaceOverlayMacEGL::ImageTransportSurfaceOverlayMacEGL(
-    gl::GLDisplayEGL* display,
-    base::WeakPtr<ImageTransportSurfaceDelegate> delegate)
-    : gl::GLSurfaceEGL(display),
-      delegate_(delegate),
-      use_remote_layer_api_(ui::RemoteLayerAPISupported()),
+ImageTransportSurfaceOverlayMacEGL::ImageTransportSurfaceOverlayMacEGL()
+    : use_remote_layer_api_(ui::RemoteLayerAPISupported()),
       scale_factor_(1),
-      gl_renderer_id_(0),
       weak_ptr_factory_(this) {
-  ui::GpuSwitchingManager::GetInstance()->AddObserver(this);
-
   static bool av_disabled_at_command_line =
       !base::FeatureList::IsEnabled(kAVFoundationOverlays);
 
-  bool allow_av_sample_buffer_display_layer =
-      !av_disabled_at_command_line &&
-      !delegate_->GetFeatureInfo()
-           ->workarounds()
-           .disable_av_sample_buffer_display_layer;
-
   ca_layer_tree_coordinator_ = std::make_unique<ui::CALayerTreeCoordinator>(
-      use_remote_layer_api_, allow_av_sample_buffer_display_layer);
+      use_remote_layer_api_, !av_disabled_at_command_line);
 
   // Create the CAContext to send this to the GPU process, and the layer for
   // the context.
   if (use_remote_layer_api_) {
+#if BUILDFLAG(IS_MAC)
     CGSConnectionID connection_id = CGSMainConnectionID();
-    ca_context_.reset([[CAContext contextWithCGSConnection:connection_id
-                                                   options:@{}] retain]);
-    [ca_context_ setLayer:ca_layer_tree_coordinator_->GetCALayerForDisplay()];
+    ca_context_ = [CAContext contextWithCGSConnection:connection_id
+                                              options:@{}];
+#else
+    // Use a very large display ID to ensure that the context is never put
+    // on-screen without being explicitly parented.
+    ca_context_ = [CAContext remoteContextWithOptions:@{
+      kCAContextIgnoresHitTest : @YES,
+      kCAContextDisplayId : @10000
+    }];
+#endif
+    ca_context_.layer = ca_layer_tree_coordinator_->GetCALayerForDisplay();
   }
 }
 
 ImageTransportSurfaceOverlayMacEGL::~ImageTransportSurfaceOverlayMacEGL() {
-  ui::GpuSwitchingManager::GetInstance()->RemoveObserver(this);
-  Destroy();
-}
-
-bool ImageTransportSurfaceOverlayMacEGL::Initialize(
-    gl::GLSurfaceFormat format) {
-  return true;
-}
-
-void ImageTransportSurfaceOverlayMacEGL::PrepareToDestroy(bool have_context) {}
-
-void ImageTransportSurfaceOverlayMacEGL::Destroy() {
   ca_layer_tree_coordinator_.reset();
-}
-
-bool ImageTransportSurfaceOverlayMacEGL::IsOffscreen() {
-  return false;
 }
 
 void ImageTransportSurfaceOverlayMacEGL::ApplyBackpressure() {
@@ -104,22 +109,33 @@ void ImageTransportSurfaceOverlayMacEGL::ApplyBackpressure() {
   // Create the fence for the current frame before waiting on the previous
   // frame's fence (to maximize CPU and GPU execution overlap).
   gl::GLContext* current_context = gl::GLContext::GetCurrent();
-  uint64_t this_frame_fence = current_context->BackpressureFenceCreate();
-  current_context->BackpressureFenceWait(previous_frame_fence_);
-  previous_frame_fence_ = this_frame_fence;
+  if (current_context) {
+    uint64_t this_frame_fence = current_context->BackpressureFenceCreate();
+    current_context->BackpressureFenceWait(previous_frame_fence_);
+    previous_frame_fence_ = this_frame_fence;
+  }
 }
 
 void ImageTransportSurfaceOverlayMacEGL::BufferPresented(
-    gl::GLSurface::PresentationCallback callback,
+    PresentationCallback callback,
     const gfx::PresentationFeedback& feedback) {
   DCHECK(!callback.is_null());
   std::move(callback).Run(feedback);
 }
 
-gfx::SwapResult ImageTransportSurfaceOverlayMacEGL::SwapBuffersInternal(
-    gl::GLSurface::SwapCompletionCallback completion_callback,
-    gl::GLSurface::PresentationCallback presentation_callback) {
-  TRACE_EVENT0("gpu", "ImageTransportSurfaceOverlayMac::SwapBuffersInternal");
+void ImageTransportSurfaceOverlayMacEGL::Present(
+    SwapCompletionCallback completion_callback,
+    PresentationCallback presentation_callback,
+    gfx::FrameData data) {
+  TRACE_EVENT0("gpu", "ImageTransportSurfaceOverlayMac::Present");
+
+  // Only one commited CALayer tree is permitted. Populate the previous frame if
+  // there is already a commited CALayer tree waiting to be populated. At the
+  // end of this function, another commited CALayer tree will be produced.
+  if (num_committed_ca_layer_trees_ >= 1) {
+    PopulateCALayerParameters();
+  }
+  DCHECK_EQ(num_committed_ca_layer_trees_, 0);
 
   constexpr base::TimeDelta kHistogramMinTime = base::Microseconds(5);
   constexpr base::TimeDelta kHistogramMaxTime = base::Milliseconds(16);
@@ -135,9 +151,10 @@ gfx::SwapResult ImageTransportSurfaceOverlayMacEGL::SwapBuffersInternal(
                                  &angle_device_attrib)) {
       EGLDeviceEXT angle_device =
           reinterpret_cast<EGLDeviceEXT>(angle_device_attrib);
-      EGLAttrib metal_device = 0;
+      EGLAttrib metal_device_attrib = 0;
       if (eglQueryDeviceAttribEXT(angle_device, EGL_METAL_DEVICE_ANGLE,
-                                  &metal_device)) {
+                                  &metal_device_attrib)) {
+        id<MTLDevice> metal_device = (__bridge id)(void*)metal_device_attrib;
         ca_layer_tree_coordinator_->GetPendingCARendererLayerTree()
             ->SetMetalDevice(metal_device);
       }
@@ -153,6 +170,10 @@ gfx::SwapResult ImageTransportSurfaceOverlayMacEGL::SwapBuffersInternal(
         "Gpu.Mac.BackpressureUs", base::TimeTicks::Now() - start_time,
         kHistogramMinTime, kHistogramMaxTime, kHistogramTimeBuckets);
   }
+#if BUILDFLAG(IS_MAC)
+  // The GPU has finished all the drawing commands.
+  ready_timestamp_ = base::TimeTicks::Now();
+#endif
 
   // Update the CALayer tree in the GPU process.
   base::TimeTicks before_transaction_time = base::TimeTicks::Now();
@@ -165,8 +186,49 @@ gfx::SwapResult ImageTransportSurfaceOverlayMacEGL::SwapBuffersInternal(
     UMA_HISTOGRAM_CUSTOM_MICROSECONDS_TIMES(
         "GPU.IOSurface.CATransactionTimeUs", transaction_time,
         kHistogramMinTime, kHistogramMaxTime, kHistogramTimeBuckets);
+
+#if BUILDFLAG(IS_MAC)
+    latch_timestamp_ = base::TimeTicks::Now();
+#endif
   }
 
+  // Delay PopulateCALayerParameters until the next Vsync on Mac. No delay if
+  // kCVDisplayLinkBeginFrameSource feature is off or DisplayLink fails.
+  completion_callback_ = std::move(completion_callback);
+  presentation_callback_ = std::move(presentation_callback);
+  num_committed_ca_layer_trees_++;
+
+#if BUILDFLAG(IS_MAC)
+  // With display_link_mac_, delay the presentation until next VSync if
+  // 1) It's not the first frame or
+  // 2) We allow delay on all frames including the first frame.
+  bool delay_presenetation_until_next_vsync =
+      !!vsync_callback_mac_ ||
+      !base::FeatureList::IsEnabled(kNoDelayOnFirstFramePresent);
+  if (display_link_mac_ && !vsync_callback_mac_) {
+    vsync_callback_mac_ = display_link_mac_->RegisterCallback(
+        base::BindRepeating(
+            &ImageTransportSurfaceOverlayMacEGL::OnVSyncPresentation,
+            weak_ptr_factory_.GetWeakPtr()),
+        /*do_callback_on_register_thread=*/true);
+  }
+
+  // To avoid FID (First Input Delay), delay PopulateCALayerParameters only if
+  // this is not the first frame after vsync stops.
+  if (vsync_callback_mac_) {
+    vsync_callback_mac_keep_alive_counter_ = kMaxKeepAliveCounter;
+    if (delay_presenetation_until_next_vsync &&
+        base::FeatureList::IsEnabled(kDelayOnFramePresent)) {
+      // PopulateCALayerParameters will be called in OnVSyncPresentation.
+      return;
+    }
+  }
+#endif
+
+  PopulateCALayerParameters();
+}
+
+void ImageTransportSurfaceOverlayMacEGL::PopulateCALayerParameters() {
   // Populate the CA layer parameters to send to the browser.
   gfx::CALayerParams params;
   {
@@ -188,113 +250,49 @@ gfx::SwapResult ImageTransportSurfaceOverlayMacEGL::SwapBuffersInternal(
   }
 
   // Send the swap parameters to the browser.
-  if (completion_callback) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+  if (completion_callback_) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
-        base::BindOnce(std::move(completion_callback),
+        base::BindOnce(std::move(completion_callback_),
                        gfx::SwapCompletionResult(
                            gfx::SwapResult::SWAP_ACK,
                            std::make_unique<gfx::CALayerParams>(params))));
   }
+
   gfx::PresentationFeedback feedback(base::TimeTicks::Now(), base::Hertz(60),
                                      /*flags=*/0);
   feedback.ca_layer_error_code = ca_layer_error_code_;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+#if BUILDFLAG(IS_MAC)
+  if (base::FeatureList::IsEnabled(kNewPresentationFeedbackTimeStamps)) {
+    feedback.ready_timestamp = ready_timestamp_;
+    feedback.latch_timestamp = latch_timestamp_;
+    feedback.interval = frame_interval_;
+    feedback.timestamp = GetDisplaytime(latch_timestamp_);
+
+    // `update_vsync_params_callback` is not available in
+    // SkiaOutputSurfaceImpl::BufferPresented(). Setting kVSync here will not
+    // update vsync params.
+    feedback.flags = gfx::PresentationFeedback::kHWCompletion |
+                     gfx::PresentationFeedback::kVSync;
+  }
+#endif
+
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&ImageTransportSurfaceOverlayMacEGL::BufferPresented,
                      weak_ptr_factory_.GetWeakPtr(),
-                     std::move(presentation_callback), feedback));
-  return gfx::SwapResult::SWAP_ACK;
-}
+                     std::move(presentation_callback_), feedback));
 
-gfx::SwapResult ImageTransportSurfaceOverlayMacEGL::SwapBuffers(
-    gl::GLSurface::PresentationCallback callback,
-    gl::FrameData data) {
-  return SwapBuffersInternal(base::DoNothing(), std::move(callback));
-}
-
-void ImageTransportSurfaceOverlayMacEGL::SwapBuffersAsync(
-    gl::GLSurface::SwapCompletionCallback completion_callback,
-    gl::GLSurface::PresentationCallback presentation_callback,
-    gl::FrameData data) {
-  SwapBuffersInternal(std::move(completion_callback),
-                      std::move(presentation_callback));
-}
-
-gfx::SwapResult ImageTransportSurfaceOverlayMacEGL::PostSubBuffer(
-    int x,
-    int y,
-    int width,
-    int height,
-    gl::GLSurface::PresentationCallback callback,
-    gl::FrameData data) {
-  return SwapBuffersInternal(base::DoNothing(), std::move(callback));
-}
-
-void ImageTransportSurfaceOverlayMacEGL::PostSubBufferAsync(
-    int x,
-    int y,
-    int width,
-    int height,
-    gl::GLSurface::SwapCompletionCallback completion_callback,
-    gl::GLSurface::PresentationCallback presentation_callback,
-    gl::FrameData data) {
-  SwapBuffersInternal(std::move(completion_callback),
-                      std::move(presentation_callback));
-}
-
-gfx::SwapResult ImageTransportSurfaceOverlayMacEGL::CommitOverlayPlanes(
-    gl::GLSurface::PresentationCallback callback,
-    gl::FrameData data) {
-  return SwapBuffersInternal(base::DoNothing(), std::move(callback));
-}
-
-void ImageTransportSurfaceOverlayMacEGL::CommitOverlayPlanesAsync(
-    gl::GLSurface::SwapCompletionCallback completion_callback,
-    gl::GLSurface::PresentationCallback presentation_callback,
-    gl::FrameData data) {
-  SwapBuffersInternal(std::move(completion_callback),
-                      std::move(presentation_callback));
-}
-
-bool ImageTransportSurfaceOverlayMacEGL::SupportsPostSubBuffer() {
-  return true;
-}
-
-bool ImageTransportSurfaceOverlayMacEGL::SupportsCommitOverlayPlanes() {
-  return true;
-}
-
-bool ImageTransportSurfaceOverlayMacEGL::SupportsAsyncSwap() {
-  return true;
-}
-
-gfx::Size ImageTransportSurfaceOverlayMacEGL::GetSize() {
-  return gfx::Size();
-}
-
-void* ImageTransportSurfaceOverlayMacEGL::GetHandle() {
-  return nullptr;
-}
-
-gl::GLSurfaceFormat ImageTransportSurfaceOverlayMacEGL::GetFormat() {
-  return gl::GLSurfaceFormat();
-}
-
-bool ImageTransportSurfaceOverlayMacEGL::OnMakeCurrent(gl::GLContext* context) {
-  // Ensure that the context is on the appropriate GL renderer. The GL renderer
-  // will generally only change when the GPU changes.
-  if (gl_renderer_id_ && context)
-    context->share_group()->SetRendererID(gl_renderer_id_);
-  return true;
+  num_committed_ca_layer_trees_--;
 }
 
 bool ImageTransportSurfaceOverlayMacEGL::ScheduleOverlayPlane(
     gl::OverlayImage image,
     std::unique_ptr<gfx::GpuFence> gpu_fence,
     const gfx::OverlayPlaneData& overlay_plane_data) {
-  if (overlay_plane_data.plane_transform != gfx::OVERLAY_TRANSFORM_NONE) {
+  if (absl::get<gfx::OverlayTransform>(overlay_plane_data.plane_transform) !=
+      gfx::OVERLAY_TRANSFORM_NONE) {
     DLOG(ERROR) << "Invalid overlay plane transform.";
     return false;
   }
@@ -306,19 +304,21 @@ bool ImageTransportSurfaceOverlayMacEGL::ScheduleOverlayPlane(
   // nearest rect as this eventually gets made into a CALayer. CALayers work in
   // floats.
   const ui::CARendererLayerParams overlay_as_calayer_params(
-      false,          // is_clipped
-      gfx::Rect(),    // clip_rect
-      gfx::RRectF(),  // rounded_corner_bounds
-      0,              // sorting_context_id
-      gfx::Transform(), image, overlay_plane_data.color_space,
-      overlay_plane_data.crop_rect,                           // contents_rect
-      gfx::ToNearestRect(overlay_plane_data.display_bounds),  // rect
-      SK_ColorTRANSPARENT,               // background_color
-      0,                                 // edge_aa_mask
-      1.f,                               // opacity
-      GL_LINEAR,                         // filter
-      absl::nullopt,                     // hdr_metadata
-      gfx::ProtectedVideoType::kClear);  // protected_video_type
+      /*is_clipped=*/false,
+      /*clip_rect=*/gfx::Rect(),
+      /*rounded_corner_bounds=*/gfx::RRectF(),
+      /*sorting_context_id=*/0, gfx::Transform(), image,
+      overlay_plane_data.color_space,
+      /*contents_rect=*/overlay_plane_data.crop_rect,
+      /*rect=*/gfx::ToNearestRect(overlay_plane_data.display_bounds),
+      /*background_color=*/SkColors::kTransparent,
+      /*edge_aa_mask=*/0,
+      /*opacity=*/1.f,
+      /*nearest_neighbor_filter=*/GL_LINEAR,
+      /*hdr_metadata=*/gfx::HDRMetadata(),
+      /*protected_video_type=*/gfx::ProtectedVideoType::kClear,
+      /*is_render_pass_draw_quad=*/false);
+
   return ca_layer_tree_coordinator_->GetPendingCARendererLayerTree()
       ->ScheduleCALayer(overlay_as_calayer_params);
 }
@@ -327,14 +327,6 @@ bool ImageTransportSurfaceOverlayMacEGL::ScheduleCALayer(
     const ui::CARendererLayerParams& params) {
   return ca_layer_tree_coordinator_->GetPendingCARendererLayerTree()
       ->ScheduleCALayer(params);
-}
-
-bool ImageTransportSurfaceOverlayMacEGL::IsSurfaceless() const {
-  return true;
-}
-
-gfx::SurfaceOrigin ImageTransportSurfaceOverlayMacEGL::GetOrigin() const {
-  return gfx::SurfaceOrigin::kTopLeft;
 }
 
 bool ImageTransportSurfaceOverlayMacEGL::Resize(
@@ -348,32 +340,84 @@ bool ImageTransportSurfaceOverlayMacEGL::Resize(
   return true;
 }
 
-void ImageTransportSurfaceOverlayMacEGL::OnGpuSwitched(
-    gl::GpuPreference active_gpu_heuristic) {
-  // Create a new context, and use the GL renderer ID that the new context gets.
-  scoped_refptr<ui::IOSurfaceContext> context_on_new_gpu =
-      ui::IOSurfaceContext::Get(ui::IOSurfaceContext::kCALayerContext);
-  if (!context_on_new_gpu)
-    return;
-  GLint context_renderer_id = -1;
-  if (CGLGetParameter(context_on_new_gpu->cgl_context(),
-                      kCGLCPCurrentRendererID,
-                      &context_renderer_id) != kCGLNoError) {
-    LOG(ERROR) << "Failed to create test context after GPU switch";
-    return;
-  }
-  gl_renderer_id_ = context_renderer_id & kCGLRendererIDMatchingMask;
-
-  // Delay releasing the reference to the new GL context. The reason for this
-  // is to avoid creating-then-destroying the context for every image transport
-  // surface that is observing the GPU switch.
-  base::ThreadTaskRunnerHandle::Get()->ReleaseSoon(
-      FROM_HERE, std::move(context_on_new_gpu));
-}
-
 void ImageTransportSurfaceOverlayMacEGL::SetCALayerErrorCode(
     gfx::CALayerResult ca_layer_error_code) {
   ca_layer_error_code_ = ca_layer_error_code;
 }
+
+#if BUILDFLAG(IS_MAC)
+void ImageTransportSurfaceOverlayMacEGL::SetVSyncDisplayID(int64_t display_id) {
+  if (!base::FeatureList::IsEnabled(features::kCVDisplayLinkBeginFrameSource)) {
+    return;
+  }
+
+  if ((!display_link_mac_ || display_id != display_id_) &&
+      display_id != display::kInvalidDisplayId) {
+    // Call PopulateCALayerParameters if there is a pending frame.
+    if (vsync_callback_mac_) {
+      // Set the keep_alive_counter to the last one so vsync_callback_mac_ will
+      // be destroyed.
+      vsync_callback_mac_keep_alive_counter_ =
+          num_committed_ca_layer_trees_ ? 0 : 1;
+      OnVSyncPresentation(ui::VSyncParamsMac());
+      DCHECK(!vsync_callback_mac_);
+    }
+
+    display_link_mac_ = ui::DisplayLinkMac::GetForDisplay(display_id);
+  }
+
+  display_id_ = display_id;
+}
+
+base::TimeTicks ImageTransportSurfaceOverlayMacEGL::GetDisplaytime(
+    base::TimeTicks latch_time) {
+  // From the CVDisplayLink params dump:
+  // |next_display_time_| ~= |current_display_time_| + |frame_interval|.
+  // params.display_time ~= params.callback_time + 1.5x |frame_interval|.
+
+  if (latch_time < current_display_time_) {
+    return current_display_time_;
+  }
+
+  // We missed the current display_time, the presentation will happen in
+  // |next_display_time_|.
+  if (latch_time < next_display_time_ && !current_display_time_.is_null()) {
+    return next_display_time_;
+  }
+
+  // For the situation of the first frame after BeginFrame, or when
+  // CVDisplayLink is heavily delayed, try to get an estimate.
+  if (!next_display_time_.is_null() && !frame_interval_.is_zero()) {
+    return latch_time.SnappedToNextTick(next_display_time_, frame_interval_);
+  }
+
+  // When there is no display_time info, just use the latch_time.
+  // This could be the very first frame after the browser starts,
+  return latch_time;
+}
+
+void ImageTransportSurfaceOverlayMacEGL::OnVSyncPresentation(
+    ui::VSyncParamsMac params) {
+  // Documentation for the CVDisplayLink display_time
+  // https://developer.apple.com/documentation/corevideo/cvdisplaylinkoutputcallback
+
+  current_display_time_ = next_display_time_;
+  if (params.display_times_valid) {
+    next_display_time_ = params.display_timebase;
+    frame_interval_ = params.display_interval;
+  }
+
+  if (num_committed_ca_layer_trees_) {
+    PopulateCALayerParameters();
+  } else {
+    DCHECK(vsync_callback_mac_keep_alive_counter_ > 0);
+    vsync_callback_mac_keep_alive_counter_ -= 1;
+  }
+
+  if (vsync_callback_mac_keep_alive_counter_ == 0) {
+    vsync_callback_mac_ = nullptr;
+  }
+}
+#endif
 
 }  // namespace gpu

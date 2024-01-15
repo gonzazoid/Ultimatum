@@ -59,6 +59,7 @@ class COMPONENT_EXPORT(MEDIA_SESSION_TEST_SUPPORT_CPP)
       const std::vector<mojom::MediaAudioVideoState>& wanted_states);
 
   void WaitForControllable(bool is_controllable);
+  void WaitForExpectedHideMetadata(bool hide_metadata);
 
   void WaitForEmptyMetadata();
   void WaitForExpectedMetadata(const MediaMetadata& metadata);
@@ -114,6 +115,7 @@ class COMPONENT_EXPORT(MEDIA_SESSION_TEST_SUPPORT_CPP)
   absl::optional<MediaMetadata> expected_metadata_;
   absl::optional<std::set<mojom::MediaSessionAction>> expected_actions_;
   absl::optional<bool> expected_controllable_;
+  absl::optional<bool> expected_hide_metadata_;
   absl::optional<
       std::pair<mojom::MediaSessionImageType, std::vector<MediaImage>>>
       expected_images_of_type_;
@@ -156,7 +158,9 @@ class COMPONENT_EXPORT(MEDIA_SESSION_TEST_SUPPORT_CPP) MockMediaSession
   void GetDebugInfo(GetDebugInfoCallback callback) override;
   void PreviousTrack() override;
   void NextTrack() override;
-  void SkipAd() override {}
+  void SkipAd() override;
+  void PreviousSlide() override {}
+  void NextSlide() override {}
   void Seek(base::TimeDelta seek_time) override;
   void Stop(SuspendType type) override;
   void GetMediaImageBitmap(const MediaImage& image,
@@ -173,6 +177,8 @@ class COMPONENT_EXPORT(MEDIA_SESSION_TEST_SUPPORT_CPP) MockMediaSession
   void HangUp() override {}
   void Raise() override {}
   void SetMute(bool mute) override {}
+  void RequestMediaRemoting() override {}
+  void EnterAutoPictureInPicture() override {}
 
   void SetIsControllable(bool value);
   void SetPreferStop(bool value) { prefer_stop_ = value; }
@@ -210,6 +216,7 @@ class COMPONENT_EXPORT(MEDIA_SESSION_TEST_SUPPORT_CPP) MockMediaSession
   int next_track_count() const { return next_track_count_; }
   int add_observer_count() const { return add_observer_count_; }
   int seek_count() const { return seek_count_; }
+  int skip_ad_count() const { return skip_ad_count_; }
   int seek_to_count() const { return seek_to_count_; }
 
   bool is_scrubbing() const { return is_scrubbing_; }
@@ -239,6 +246,7 @@ class COMPONENT_EXPORT(MEDIA_SESSION_TEST_SUPPORT_CPP) MockMediaSession
   int next_track_count_ = 0;
   int add_observer_count_ = 0;
   int seek_count_ = 0;
+  int skip_ad_count_ = 0;
   int seek_to_count_ = 0;
 
   std::set<mojom::MediaSessionAction> actions_;

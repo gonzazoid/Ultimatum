@@ -6,7 +6,7 @@
 # WHAT IS THIS FILE?
 # =============================================================================
 #
-# This is the master GN build configuration. This file is loaded after the
+# This is the main GN build configuration. This file is loaded after the
 # build args (args.gn) for the build directory and after the toplevel ".gn"
 # file (which points to this file as the build configuration).
 #
@@ -342,7 +342,6 @@ default_compiler_configs = [
   "//build/config/compiler:default_optimization",
   "//build/config/compiler:default_stack_frames",
   "//build/config/compiler:default_symbols",
-  "//build/config/compiler:export_dynamic",
   "//build/config/compiler:no_exceptions",
   "//build/config/compiler:no_rtti",
   "//build/config/compiler:no_unresolved_symbols",
@@ -363,6 +362,10 @@ if (is_win) {
     "//build/config/win:unicode",
     "//build/config/win:winver",
   ]
+}
+
+if (is_apple) {
+  default_compiler_configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 if (is_posix) {
@@ -405,9 +408,6 @@ set_defaults("source_set") {
 set_defaults("rust_library") {
   configs = default_compiler_configs
 }
-set_defaults("rust_proc_macro") {
-  configs = default_compiler_configs
-}
 
 # Compute the set of configs common to all linked targets (shared libraries,
 # loadable modules, executables) to avoid duplication below.
@@ -421,14 +421,15 @@ if (is_win) {
     # that shouldn't use the windows subsystem.
     "//build/config/win:console",
   ]
-} else if (is_mac) {
-  _linker_configs = [ "//build/config/mac:strip_all" ]
+} else if (is_apple) {
+  _linker_configs = [ "//build/config/apple:strip_all" ]
 } else {
   _linker_configs = []
 }
 
 # Executable defaults.
 default_executable_configs = default_compiler_configs + [
+                               "//build/config/compiler:export_dynamic",
                                "//build/config:default_libs",
                                "//build/config:executable_config",
                              ] + _linker_configs
@@ -437,6 +438,14 @@ if (is_win) {
   # Turn on linker CFI for executables, and position it so it can be removed
   # if needed.
   default_executable_configs += [ "//build/config/win:cfi_linker" ]
+}
+if (is_fuchsia) {
+  # Sometimes executables are linked by rustc passing a command line to
+  # clang++. It includes "-pie" which is pointless on Fuchsia. Suppress the
+  # resulting (fatal) warning. Unfortunately there's no way to do this only
+  # for binaries linked by rustc; gn does not make the distinction.
+  default_executable_configs +=
+      [ "//build/config/fuchsia:rustc_no_pie_warning" ]
 }
 
 set_defaults("executable") {
@@ -460,6 +469,14 @@ if (is_android) {
   default_shared_library_configs +=
       [ "//build/config/android:hide_all_but_jni_onload" ]
 }
+if (is_fuchsia) {
+  # Sometimes shared libraries are linked by rustc passing a command line to
+  # clang++. It includes "-pie" which is pointless on Fuchsia. Suppress the
+  # resulting (fatal) warning. Unfortunately there's no way to do this only
+  # for binaries linked by rustc; gn does not make the distinction.
+  default_shared_library_configs +=
+      [ "//build/config/fuchsia:rustc_no_pie_warning" ]
+}
 set_defaults("shared_library") {
   configs = default_shared_library_configs
 }
@@ -470,6 +487,22 @@ set_defaults("loadable_module") {
   if (is_android) {
     configs -= [ "//build/config/android:hide_all_but_jni_onload" ]
   }
+}
+
+default_rust_proc_macro_configs =
+    default_shared_library_configs + [ "//build/rust:proc_macro_extern" ] +
+    # Rust proc macros don't support (Thin)LTO, so always remove it.
+    [
+      "//build/config/compiler:thinlto_optimize_default",
+      "//build/config/compiler:thinlto_optimize_max",
+    ] -
+    [
+      "//build/config/compiler:thinlto_optimize_default",
+      "//build/config/compiler:thinlto_optimize_max",
+    ]
+
+set_defaults("rust_proc_macro") {
+  configs = default_rust_proc_macro_configs
 }
 
 # A helper for forwarding testonly and visibility.
@@ -572,6 +605,16 @@ foreach(_target_type,
 template("component") {
   if (is_component_build) {
     _component_mode = "shared_library"
+
+    # Generate a unique output_name for a shared library if not set by invoker.
+    if (!defined(invoker.output_name)) {
+      _output_name = get_label_info(":$target_name", "label_no_toolchain")
+      _output_name =
+          string_replace(_output_name, "$target_name:$target_name", target_name)
+      _output_name = string_replace(_output_name, "//", "")
+      _output_name = string_replace(_output_name, "/", "_")
+      _output_name = string_replace(_output_name, ":", "_")
+    }
   } else if (defined(invoker.static_component_type)) {
     assert(invoker.static_component_type == "static_library" ||
            invoker.static_component_type == "source_set")
@@ -584,6 +627,9 @@ template("component") {
     _component_mode = "static_library"
   }
   target(_component_mode, target_name) {
+    if (defined(_output_name)) {
+      output_name = _output_name
+    }
     forward_variables_from(invoker, TESTONLY_AND_VISIBILITY)
     forward_variables_from(invoker, "*", TESTONLY_AND_VISIBILITY)
   }
@@ -604,4 +650,116 @@ if (is_component_build) {
 
 set_defaults("component") {
   configs = default_component_configs
+}
+
+# =============================================================================
+# ACTION OVERRIDE
+# =============================================================================
+#
+# We override gn action() to support remote execution using rewrapper. The
+# invoker should set allow_remote to true if remote execution is desired.
+#
+# As remote execution requires inputs to be made more explicit than is normally
+# expected with gn, you may find that setting allow_remote to true will result
+# in many missing file errors. In most cases, this should be resolved by
+# explicitly declaring these inputs/sources.
+#
+# However, it may be impractical to determine these inputs in gn. For such
+# cases, the invoker can specify a custom input processor, which are currently
+# defined and implemented in //build/util/action_remote.py. The appropriate
+# value should be set using the custom_processor arg.
+
+# Variables needed by rbe.gni aren't available at the top of this file.
+import("//build/toolchain/rbe.gni")
+
+# TODO(b/253987456): Add action_foreach support.
+foreach(_target_type, [ "action" ]) {
+  template(_target_type) {
+    forward_variables_from(invoker, TESTONLY_AND_VISIBILITY)
+    forward_variables_from(invoker, [ "allow_remote" ])
+    action("${target_name}") {
+      forward_variables_from(invoker,
+                             [
+                               "args",
+                               "assert_no_deps",
+                               "check_includes",
+                               "configs",
+                               "data_deps",
+                               "data",
+                               "depfile",
+                               "deps",
+                               "metadata",
+                               "outputs",
+                               "pool",
+                               "script",
+                               "public_configs",
+                               "public_deps",
+                               "response_file_contents",
+                               "sources",
+                               "write_runtime_deps",
+                             ])
+      allow_remote = false
+      if (defined(invoker.allow_remote)) {
+        allow_remote = invoker.allow_remote
+      }
+
+      # If remote execution is desired, only run remotely when use_remoteexec
+      # is enabled, and the environment is not nacl.
+      # TODO(b/259381924): Investigate enabling in nacl config.
+      if (allow_remote && use_remoteexec && !is_nacl) {
+        pool = "//build/toolchain:remote_action_pool($default_toolchain)"
+        script = "//build/util/action_remote.py"
+        inputs = [ invoker.script ]
+
+        re_inputs = [ rebase_path(invoker.script, rbe_exec_root) ]
+        if (defined(invoker.inputs)) {
+          foreach(input, invoker.inputs) {
+            re_inputs += [ rebase_path(input, rbe_exec_root) ]
+            inputs += [ input ]
+          }
+        }
+        if (defined(invoker.sources)) {
+          foreach(source, invoker.sources) {
+            re_inputs += [ rebase_path(source, rbe_exec_root) ]
+          }
+        }
+
+        re_outputs = []
+        if (defined(invoker.outputs)) {
+          foreach(output, invoker.outputs) {
+            re_outputs += [ rebase_path(output, rbe_exec_root) ]
+          }
+        }
+
+        # Write input/output lists to files as these can grow extremely large.
+        re_inputs_file = "$target_gen_dir/${target_name}__remote_inputs.rsp"
+        write_file(re_inputs_file, re_inputs)
+        inputs += [ re_inputs_file ]
+        re_outputs_file = "$target_gen_dir/${target_name}__remote_outputs.rsp"
+        write_file(re_outputs_file, re_outputs)
+
+        args = []
+        args += [ "$rbe_bin_dir/rewrapper" ]
+        if (defined(invoker.custom_processor)) {
+          args += [ "--custom_processor=" + invoker.custom_processor ]
+        }
+
+        args += [
+          "--cfg=$rbe_py_cfg_file",
+          "--exec_root=$rbe_exec_root",
+          "--input_list_paths=" + rebase_path(re_inputs_file, root_build_dir),
+          "--output_list_paths=" + rebase_path(re_outputs_file, root_build_dir),
+          "python3",
+          rebase_path(invoker.script, root_build_dir),
+        ]
+
+        if (defined(invoker.args)) {
+          args += invoker.args
+        }
+      } else {
+        forward_variables_from(invoker, [ "inputs" ])
+        not_needed(invoker, [ "custom_processor" ])
+      }
+    }
+  }
 }

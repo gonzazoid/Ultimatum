@@ -4,21 +4,27 @@
 
 #include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 
+#include <vector>
+
+#include "base/test/metrics/histogram_tester.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_tester.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_document_transition_callback.h"
-#include "third_party/blink/renderer/core/document_transition/document_transition.h"
-#include "third_party/blink/renderer/core/document_transition/document_transition_supplement.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_view_transition_callback.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/pseudo_element.h"
 #include "third_party/blink/renderer/core/frame/frame_test_helpers.h"
 #include "third_party/blink/renderer/core/testing/mock_function_scope.h"
+#include "third_party/blink/renderer/core/view_transition/dom_view_transition.h"
+#include "third_party/blink/renderer/core/view_transition/view_transition.h"
+#include "third_party/blink/renderer/core/view_transition/view_transition_supplement.h"
+#include "third_party/blink/renderer/core/view_transition/view_transition_utils.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_object.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_object_cache_impl.h"
 #include "third_party/blink/renderer/modules/accessibility/testing/accessibility_test.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 
 namespace blink {
@@ -46,28 +52,89 @@ TEST_F(AccessibilityTest, IsARIAWidget) {
   SetBodyInnerHTML(test_content);
   Element* root(GetDocument().documentElement());
   EXPECT_FALSE(AXObjectCache::IsInsideFocusableElementOrARIAWidget(
-      *root->getElementById("plain")));
+      *root->getElementById(AtomicString("plain"))));
   EXPECT_TRUE(AXObjectCache::IsInsideFocusableElementOrARIAWidget(
-      *root->getElementById("button")));
+      *root->getElementById(AtomicString("button"))));
   EXPECT_TRUE(AXObjectCache::IsInsideFocusableElementOrARIAWidget(
-      *root->getElementById("button-parent")));
+      *root->getElementById(AtomicString("button-parent"))));
   EXPECT_TRUE(AXObjectCache::IsInsideFocusableElementOrARIAWidget(
-      *root->getElementById("button-caps")));
+      *root->getElementById(AtomicString("button-caps"))));
   EXPECT_TRUE(AXObjectCache::IsInsideFocusableElementOrARIAWidget(
-      *root->getElementById("button-second")));
+      *root->getElementById(AtomicString("button-second"))));
   EXPECT_FALSE(AXObjectCache::IsInsideFocusableElementOrARIAWidget(
-      *root->getElementById("aria-bogus")));
+      *root->getElementById(AtomicString("aria-bogus"))));
   EXPECT_TRUE(AXObjectCache::IsInsideFocusableElementOrARIAWidget(
-      *root->getElementById("aria-selected")));
+      *root->getElementById(AtomicString("aria-selected"))));
   EXPECT_TRUE(AXObjectCache::IsInsideFocusableElementOrARIAWidget(
-      *root->getElementById("haspopup")));
+      *root->getElementById(AtomicString("haspopup"))));
   EXPECT_TRUE(AXObjectCache::IsInsideFocusableElementOrARIAWidget(
-      *root->getElementById("focusable")));
+      *root->getElementById(AtomicString("focusable"))));
   EXPECT_TRUE(AXObjectCache::IsInsideFocusableElementOrARIAWidget(
-      *root->getElementById("focusable-parent")));
+      *root->getElementById(AtomicString("focusable-parent"))));
 }
 
-TEST_F(AccessibilityTest, RemoveAXID) {
+TEST_F(AccessibilityTest, HistogramTest) {
+  SetBodyInnerHTML("<body><button>Press Me</button></body>");
+
+  auto& cache = GetAXObjectCache();
+  cache.SetAXMode(ui::kAXModeBasic);
+
+  // No logs initially.
+  base::HistogramTester histogram_tester;
+  histogram_tester.ExpectTotalCount(
+      "Accessibility.Performance.AXObjectCacheImpl.Snapshot", 0);
+  histogram_tester.ExpectTotalCount(
+      "Accessibility.Performance.AXObjectCacheImpl.Incremental", 0);
+  histogram_tester.ExpectTotalCount(
+      "Accessibility.Performance.AXObjectCacheImpl.Incremental.Float", 0);
+  histogram_tester.ExpectTotalCount(
+      "Accessibility.Performance.AXObjectCacheImpl.Incremental.Int", 0);
+  histogram_tester.ExpectTotalCount(
+      "Accessibility.Performance.AXObjectCacheImpl.Incremental.HTML", 0);
+  histogram_tester.ExpectTotalCount(
+      "Accessibility.Performance.AXObjectCacheImpl.Incremental.String", 0);
+
+  ui::AXTreeUpdate response;
+  ScopedFreezeAXCache freeze(cache);
+  cache.SerializeEntireTree(/* max_node_count */ 1000,
+                            base::TimeDelta::FiniteMax(), &response);
+  histogram_tester.ExpectTotalCount(
+      "Accessibility.Performance.AXObjectCacheImpl.Snapshot", 1);
+  histogram_tester.ExpectTotalCount(
+      "Accessibility.Performance.AXObjectCacheImpl.Incremental", 0);
+  histogram_tester.ExpectTotalCount(
+      "Accessibility.Performance.AXObjectCacheImpl.Incremental.Float", 0);
+  histogram_tester.ExpectTotalCount(
+      "Accessibility.Performance.AXObjectCacheImpl.Incremental.Int", 0);
+  histogram_tester.ExpectTotalCount(
+      "Accessibility.Performance.AXObjectCacheImpl.Incremental.HTML", 0);
+  histogram_tester.ExpectTotalCount(
+      "Accessibility.Performance.AXObjectCacheImpl.Incremental.String", 0);
+
+  std::vector<ui::AXTreeUpdate> updates;
+  std::vector<ui::AXEvent> events;
+  bool has_plugin_tree_source = false;
+  bool had_end_of_test_event = true;
+  bool had_load_complete_messages = true;
+  bool need_to_send_location_changes = false;
+  cache.SerializeDirtyObjectsAndEvents(
+      has_plugin_tree_source, updates, events, had_end_of_test_event,
+      had_load_complete_messages, need_to_send_location_changes);
+  histogram_tester.ExpectTotalCount(
+      "Accessibility.Performance.AXObjectCacheImpl.Snapshot", 1);
+  histogram_tester.ExpectTotalCount(
+      "Accessibility.Performance.AXObjectCacheImpl.Incremental", 1);
+  histogram_tester.ExpectTotalCount(
+      "Accessibility.Performance.AXObjectCacheImpl.Incremental.Float", 1);
+  histogram_tester.ExpectTotalCount(
+      "Accessibility.Performance.AXObjectCacheImpl.Incremental.Int", 1);
+  histogram_tester.ExpectTotalCount(
+      "Accessibility.Performance.AXObjectCacheImpl.Incremental.HTML", 1);
+  histogram_tester.ExpectTotalCount(
+      "Accessibility.Performance.AXObjectCacheImpl.Incremental.String", 1);
+}
+
+TEST_F(AccessibilityTest, RemoveReferencesToAXID) {
   auto& cache = GetAXObjectCache();
   SetBodyInnerHTML(R"HTML(
       <div id="f" style="position:fixed">aaa</div>
@@ -77,9 +144,15 @@ TEST_F(AccessibilityTest, RemoveAXID) {
   fixed->GetBoundsInFrameCoordinates();
   EXPECT_EQ(1u, cache.fixed_or_sticky_node_ids_.size());
 
-  // RemoveAXID() should not clear fixed_or_sticky_node_ids_.
-  cache.RemoveAXID(GetAXObjectByElementId("h"));
+  // RemoveReferencesToAXID() on node that is not fixed or sticky should not
+  // affect fixed_or_sticky_node_ids_.
+  cache.RemoveReferencesToAXID(GetAXObjectByElementId("h")->AXObjectID());
   EXPECT_EQ(1u, cache.fixed_or_sticky_node_ids_.size());
+
+  // RemoveReferencesToAXID() on node that fixed should affect
+  // fixed_or_sticky_node_ids_.
+  cache.RemoveReferencesToAXID(GetAXObjectByElementId("f")->AXObjectID());
+  EXPECT_EQ(0u, cache.fixed_or_sticky_node_ids_.size());
 }
 
 class MockAXObject : public AXObject {
@@ -111,17 +184,38 @@ TEST_F(AccessibilityTest, PauseUpdatesAfterMaxNumberQueued) {
   ax_object_cache->AssociateAXID(ax_obj);
   for (unsigned i = 0; i < max_updates + 1; i++) {
     ax_object_cache->DeferTreeUpdate(
-        &AXObjectCacheImpl::ChildrenChangedWithCleanLayout, ax_obj);
+        AXObjectCacheImpl::TreeUpdateReason::kChildrenChanged, ax_obj);
   }
   ax_object_cache->ProcessCleanLayoutCallbacks(document);
 
   ASSERT_EQ(0u, MockAXObject::num_children_changed_calls_);
 }
 
-class AXDocumentTransitionTest : public testing::Test,
-                                 private ScopedDocumentTransitionForTest {
+TEST_F(AccessibilityTest, UpdateAXForAllDocumentsAfterPausedUpdates) {
+  auto& document = GetDocument();
+  auto* ax_object_cache =
+      To<AXObjectCacheImpl>(document.ExistingAXObjectCache());
+  DCHECK(ax_object_cache);
+
+  wtf_size_t max_updates = 1;
+  ax_object_cache->SetMaxPendingUpdatesForTesting(max_updates);
+
+  UpdateAllLifecyclePhasesForTest();
+  AXObject* root = ax_object_cache->Root();
+  // Queue one update too many.
+  ax_object_cache->DeferTreeUpdate(
+      AXObjectCacheImpl::TreeUpdateReason::kChildrenChanged, root);
+  ax_object_cache->DeferTreeUpdate(
+      AXObjectCacheImpl::TreeUpdateReason::kChildrenChanged, root);
+
+  ax_object_cache->UpdateAXForAllDocuments();
+  ScopedFreezeAXCache freeze(*ax_object_cache);
+  CHECK(!root->NeedsToUpdateCachedValues());
+}
+
+class AXViewTransitionTest : public testing::Test {
  public:
-  AXDocumentTransitionTest() : ScopedDocumentTransitionForTest(true) {}
+  AXViewTransitionTest() {}
 
   void SetUp() override {
     web_view_helper_ = std::make_unique<frame_test_helpers::WebViewHelper>();
@@ -141,7 +235,7 @@ class AXDocumentTransitionTest : public testing::Test,
   void UpdateAllLifecyclePhasesAndFinishDirectives() {
     UpdateAllLifecyclePhasesForTest();
     for (auto& callback :
-         LayerTreeHost()->TakeDocumentTransitionCallbacksForTesting()) {
+         LayerTreeHost()->TakeViewTransitionCallbacksForTesting()) {
       std::move(callback).Run();
     }
   }
@@ -162,23 +256,24 @@ class AXDocumentTransitionTest : public testing::Test,
         DocumentUpdateReason::kTest);
   }
 
-  using State = DocumentTransition::State;
+  using State = ViewTransition::State;
 
-  State GetState(DocumentTransition* transition) const {
-    return transition->state_;
+  State GetState(DOMViewTransition* transition) const {
+    return transition->GetViewTransitionForTest()->state_;
   }
 
  protected:
+  test::TaskEnvironment task_environment_;
   std::unique_ptr<frame_test_helpers::WebViewHelper> web_view_helper_;
 };
 
-TEST_F(AXDocumentTransitionTest, TransitionPseudoNotRelevant) {
+TEST_F(AXViewTransitionTest, TransitionPseudoNotRelevant) {
   SetHtmlInnerHTML(R"HTML(
     <style>
       .shared {
         width: 100px;
         height: 100px;
-        page-transition-tag: shared;
+        view-transition-name: shared;
         contain: layout;
         background: green;
       }
@@ -191,14 +286,14 @@ TEST_F(AXDocumentTransitionTest, TransitionPseudoNotRelevant) {
   ExceptionState& exception_state = v8_scope.GetExceptionState();
 
   MockFunctionScope funcs(script_state);
-  auto* document_transition_callback =
-      V8DocumentTransitionCallback::Create(funcs.ExpectCall());
+  auto* view_transition_callback =
+      V8ViewTransitionCallback::Create(funcs.ExpectCall());
 
-  auto* transition = DocumentTransitionSupplement::startViewTransition(
-      script_state, GetDocument(), document_transition_callback,
-      exception_state);
+  auto* transition = ViewTransitionSupplement::startViewTransition(
+      script_state, GetDocument(), view_transition_callback, exception_state);
 
-  ScriptPromiseTester finish_tester(script_state, transition->finished());
+  ScriptPromiseTester finish_tester(script_state,
+                                    transition->finished(script_state));
 
   UpdateAllLifecyclePhasesForTest();
   EXPECT_EQ(GetState(transition), State::kCapturing);
@@ -213,19 +308,19 @@ TEST_F(AXDocumentTransitionTest, TransitionPseudoNotRelevant) {
 
   // We should have a transition pseudo
   auto* transition_pseudo = GetDocument().documentElement()->GetPseudoElement(
-      kPseudoIdPageTransition);
+      kPseudoIdViewTransition);
   ASSERT_TRUE(transition_pseudo);
   auto* container_pseudo = transition_pseudo->GetPseudoElement(
-      kPseudoIdPageTransitionContainer, "shared");
+      kPseudoIdViewTransitionGroup, AtomicString("shared"));
   ASSERT_TRUE(container_pseudo);
   auto* image_wrapper_pseudo = container_pseudo->GetPseudoElement(
-      kPseudoIdPageTransitionImageWrapper, "shared");
+      kPseudoIdViewTransitionImagePair, AtomicString("shared"));
   ASSERT_TRUE(image_wrapper_pseudo);
   auto* incoming_image_pseudo = image_wrapper_pseudo->GetPseudoElement(
-      kPseudoIdPageTransitionIncomingImage, "shared");
+      kPseudoIdViewTransitionNew, AtomicString("shared"));
   ASSERT_TRUE(incoming_image_pseudo);
   auto* outgoing_image_pseudo = image_wrapper_pseudo->GetPseudoElement(
-      kPseudoIdPageTransitionOutgoingImage, "shared");
+      kPseudoIdViewTransitionOld, AtomicString("shared"));
   ASSERT_TRUE(outgoing_image_pseudo);
 
   ASSERT_TRUE(transition_pseudo->GetLayoutObject());

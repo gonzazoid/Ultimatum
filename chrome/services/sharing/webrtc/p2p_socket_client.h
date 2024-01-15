@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+#include "base/memory/raw_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -17,10 +18,6 @@
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/p2p_socket_type.h"
 #include "services/network/public/mojom/p2p.mojom.h"
-
-namespace base {
-class TimeTicks;
-}  // namespace base
 
 namespace sharing {
 
@@ -51,7 +48,7 @@ class P2PSocketClient : public network::mojom::P2PSocketClient {
   // Send the |data| to the |address| using Differentiated Services Code Point
   // |dscp|. Return value is the unique packet_id for this packet.
   uint64_t Send(const net::IPEndPoint& address,
-                const std::vector<int8_t>& data,
+                base::span<const uint8_t> data,
                 const rtc::PacketOptions& options);
 
   // Setting socket options.
@@ -77,7 +74,7 @@ class P2PSocketClient : public network::mojom::P2PSocketClient {
   // Helper function to be called by Send to handle different threading
   // condition.
   void SendWithPacketId(const net::IPEndPoint& address,
-                        const std::vector<int8_t>& data,
+                        base::span<const uint8_t> data,
                         const rtc::PacketOptions& options,
                         uint64_t packet_id);
 
@@ -85,16 +82,17 @@ class P2PSocketClient : public network::mojom::P2PSocketClient {
   void SocketCreated(const net::IPEndPoint& local_address,
                      const net::IPEndPoint& remote_address) override;
   void SendComplete(const network::P2PSendPacketMetrics& send_metrics) override;
-  void DataReceived(const net::IPEndPoint& socket_address,
-                    const std::vector<int8_t>& data,
-                    base::TimeTicks timestamp) override;
+  void SendBatchComplete(const std::vector<::network::P2PSendPacketMetrics>&
+                             send_metrics_batch) override;
+  void DataReceived(
+      std::vector<network::mojom::P2PReceivedPacketPtr> packets) override;
 
   void OnConnectionError();
 
   mojo::SharedRemote<network::mojom::P2PSocketManager> socket_manager_;
   THREAD_CHECKER(thread_checker_);
   int socket_id_;
-  P2PSocketClientDelegate* delegate_;
+  raw_ptr<P2PSocketClientDelegate> delegate_;
   State state_;
   const net::NetworkTrafficAnnotationTag traffic_annotation_;
 

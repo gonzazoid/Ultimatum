@@ -4,18 +4,18 @@
 
 #include "content/browser/webauth/virtual_authenticator.h"
 
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/guid.h"
-#include "crypto/ec_private_key.h"
+#include "base/functional/bind.h"
+#include "base/uuid.h"
+#include "device/fido/fido_constants.h"
 #include "device/fido/fido_parsing_utils.h"
 #include "device/fido/public_key_credential_rp_entity.h"
 #include "device/fido/public_key_credential_user_entity.h"
 #include "device/fido/virtual_ctap2_device.h"
 #include "device/fido/virtual_u2f_device.h"
 #include "mojo/public/cpp/base/big_buffer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 
@@ -29,16 +29,24 @@ VirtualAuthenticator::VirtualAuthenticator(
       has_large_blob_(options.has_large_blob),
       has_cred_blob_(options.has_cred_blob),
       has_min_pin_length_(options.has_min_pin_length),
-      unique_id_(base::GenerateGUID()),
+      has_prf_(options.has_prf),
+      unique_id_(base::Uuid::GenerateRandomV4().AsLowercaseString()),
       state_(base::MakeRefCounted<device::VirtualFidoDevice::State>()) {
   state_->transport = options.transport;
   // If the authenticator has user verification, simulate having set it up
   // already.
   state_->fingerprints_enrolled = has_user_verification_;
+  state_->default_backup_eligibility = options.default_backup_eligibility;
+  state_->default_backup_state = options.default_backup_state;
+  observation_.Observe(state_.get());
   SetUserPresence(true);
 }
 
-VirtualAuthenticator::~VirtualAuthenticator() = default;
+VirtualAuthenticator::~VirtualAuthenticator() {
+  for (Observer& observer : observers_) {
+    observer.OnAuthenticatorWillBeDestroyed(this);
+  }
+}
 
 void VirtualAuthenticator::AddReceiver(
     mojo::PendingReceiver<blink::test::mojom::VirtualAuthenticator> receiver) {
@@ -50,7 +58,7 @@ bool VirtualAuthenticator::AddRegistration(
     const std::string& rp_id,
     base::span<const uint8_t> private_key,
     int32_t counter) {
-  absl::optional<std::unique_ptr<device::VirtualFidoDevice::PrivateKey>>
+  std::optional<std::unique_ptr<device::VirtualFidoDevice::PrivateKey>>
       fido_private_key =
           device::VirtualFidoDevice::PrivateKey::FromPKCS8(private_key);
   if (!fido_private_key)
@@ -71,7 +79,7 @@ bool VirtualAuthenticator::AddResidentRegistration(
     base::span<const uint8_t> private_key,
     int32_t counter,
     std::vector<uint8_t> user_handle) {
-  absl::optional<std::unique_ptr<device::VirtualFidoDevice::PrivateKey>>
+  std::optional<std::unique_ptr<device::VirtualFidoDevice::PrivateKey>>
       fido_private_key =
           device::VirtualFidoDevice::PrivateKey::FromPKCS8(private_key);
   if (!fido_private_key)
@@ -123,15 +131,30 @@ VirtualAuthenticator::ConstructDevice() {
       config.large_blob_support = has_large_blob_;
       config.cred_protect_support = config.cred_blob_support = has_cred_blob_;
       config.min_pin_length_extension_support = has_min_pin_length_;
-      if (has_large_blob_ && has_user_verification_) {
-        // Writing a large blob requires obtaining a PinUvAuthToken with
-        // permissions if the authenticator is protected by user verification.
+      if (has_prf_) {
+        config.prf_support = true;
+        // This is required when `prf_support` is set.
+        config.internal_account_chooser = true;
+      }
+
+      if (
+          // Writing a large blob requires obtaining a PinUvAuthToken with
+          // permissions if the authenticator is protected by user verification.
+          (has_large_blob_ && has_user_verification_) ||
+          // PRF support always requires PIN support because the exchange is
+          // encrypted.
+          has_prf_) {
         config.pin_uv_auth_token_support = true;
       }
       config.internal_uv_support = has_user_verification_;
       config.is_platform_authenticator =
           attachment_ == device::AuthenticatorAttachment::kPlatform;
       config.user_verification_succeeds = is_user_verified_;
+      config.advertised_algorithms = {
+          device::CoseAlgorithmIdentifier::kEdDSA,
+          device::CoseAlgorithmIdentifier::kEs256,
+          device::CoseAlgorithmIdentifier::kRs256,
+      };
       return std::make_unique<device::VirtualCtap2Device>(state_, config);
     }
     default:
@@ -140,17 +163,29 @@ VirtualAuthenticator::ConstructDevice() {
   }
 }
 
+void VirtualAuthenticator::AddObserver(Observer* observer) {
+  observers_.AddObserver(observer);
+}
+
+void VirtualAuthenticator::RemoveObserver(Observer* observer) {
+  observers_.RemoveObserver(observer);
+}
+
+bool VirtualAuthenticator::HasObserversForTest() {
+  return !observers_.empty();
+}
+
 void VirtualAuthenticator::GetLargeBlob(const std::vector<uint8_t>& key_handle,
                                         GetLargeBlobCallback callback) {
   auto registration = state_->registrations.find(key_handle);
   if (registration == state_->registrations.end()) {
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
-  absl::optional<device::LargeBlob> blob =
+  std::optional<device::LargeBlob> blob =
       state_->GetLargeBlob(registration->second);
   if (!blob) {
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
   data_decoder_.Inflate(
@@ -213,10 +248,23 @@ void VirtualAuthenticator::SetUserVerified(bool verified,
   std::move(callback).Run();
 }
 
+void VirtualAuthenticator::OnCredentialCreated(
+    const device::VirtualFidoDevice::Credential& credential) {
+  for (Observer& observer : observers_) {
+    observer.OnCredentialCreated(this, credential);
+  }
+}
+void VirtualAuthenticator::OnAssertion(
+    const device::VirtualFidoDevice::Credential& credential) {
+  for (Observer& observer : observers_) {
+    observer.OnAssertion(this, credential);
+  }
+}
+
 void VirtualAuthenticator::OnLargeBlobUncompressed(
     GetLargeBlobCallback callback,
     base::expected<mojo_base::BigBuffer, std::string> result) {
-  absl::optional<mojo_base::BigBuffer> value;
+  std::optional<mojo_base::BigBuffer> value;
   if (result.has_value())
     value = std::move(*result);
 
@@ -233,15 +281,13 @@ void VirtualAuthenticator::OnLargeBlobCompressed(
     std::move(callback).Run(false);
     return;
   }
-  if (!result.has_value()) {
-    std::move(callback).Run(false);
-    return;
+  if (result.has_value()) {
+    state_->InjectLargeBlob(
+        &registration->second,
+        device::LargeBlob(device::fido_parsing_utils::Materialize(*result),
+                          original_size));
   }
-  state_->InjectLargeBlob(
-      &registration->second,
-      device::LargeBlob(device::fido_parsing_utils::Materialize(*result),
-                        original_size));
-  std::move(callback).Run(true);
+  std::move(callback).Run(result.has_value());
 }
 
 }  // namespace content

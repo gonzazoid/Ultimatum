@@ -5,10 +5,9 @@
 #include "chrome/browser/ui/ash/vpn_list_forwarder.h"
 
 #include "ash/public/cpp/network_config_service.h"
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/crosapi/crosapi_ash.h"
 #include "chrome/browser/ash/crosapi/crosapi_manager.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
@@ -33,7 +32,7 @@ struct TypeConverter<VpnProviderPtr,
   static VpnProviderPtr Convert(
       const app_list::ArcVpnProviderManager::ArcVpnProvider* input) {
     auto result = VpnProvider::New();
-    result->type = chromeos::network_config::mojom::VpnType::kArc;
+    result->type = VpnType::kArc;
     result->provider_id = input->package_name;
     result->provider_name = input->app_name;
     result->app_id = input->app_id;
@@ -46,7 +45,7 @@ template <>
 struct TypeConverter<VpnProviderPtr, const extensions::Extension*> {
   static VpnProviderPtr Convert(const extensions::Extension* input) {
     auto result = VpnProvider::New();
-    result->type = chromeos::network_config::mojom::VpnType::kExtension;
+    result->type = VpnType::kExtension;
     result->provider_id = input->id();
     result->provider_name = input->name();
     // For Extensions, the app id is the same as the provider id.

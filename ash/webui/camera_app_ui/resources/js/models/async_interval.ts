@@ -16,25 +16,33 @@ function sleep(delay: number): Promise<void> {
 }
 
 /**
- * A helper class for setAsyncInterval().
+ * AsyncIntervalRunner handles calling an async function repeatedly with a
+ * fixed delay between calls.
  */
-class AsyncIntervalRunner {
+export class AsyncIntervalRunner {
   private readonly stopped = new WaitableEvent();
 
-  private readonly runningPromise: Promise<void>;
-
+  /**
+   * Repeatedly calls the async function |handler| and waits until it's
+   * resolved, with a fixed delay between the next call and the previous
+   * completion time.
+   *
+   * @param handler Handler to be called, a |stopped| WaitableEvent is passed in
+   *     and the handler should act as it's cancelled after |stopped| is
+   *     signaled.
+   * @param delayMs Delay between calls to |handler| in milliseconds.
+   */
   constructor(
-      private readonly handler: () => Promise<void>,
-      private readonly delay: number) {
-    this.runningPromise = this.loop();
+      private readonly handler: (stopped: WaitableEvent) => Promise<void>,
+      private readonly delayMs: number) {
+    void this.loop();
   }
 
   /**
-   * Stops the loop and wait for the |handler| if it's running.
+   * Stops the loop.
    */
-  async stop(): Promise<void> {
+  stop(): void {
     this.stopped.signal();
-    await this.runningPromise;
   }
 
   /**
@@ -43,50 +51,11 @@ class AsyncIntervalRunner {
   private async loop(): Promise<void> {
     while (!this.stopped.isSignaled()) {
       // Wait until |delay| passed or the runner is stopped.
-      await Promise.race([sleep(this.delay), this.stopped.wait()]);
+      await Promise.race([sleep(this.delayMs), this.stopped.wait()]);
       if (this.stopped.isSignaled()) {
         break;
       }
-      await this.handler();
+      await this.handler(this.stopped);
     }
   }
-}
-
-
-/**
- * A counter of runner, which is used as the identifier in setAsyncInterval().
- */
-let runnerCount = 0;
-
-/**
- * A map from the async interval id to the corresponding runner.
- */
-const runnerMap = new Map<number, AsyncIntervalRunner>();
-
-/**
- * Repeatedly calls the async function |handler| and waits until it's resolved,
- * with a fixed delay between the next call and the previous completion time.
- *
- * @return A numeric, non-zero value which identifies the timer.
- */
-export function setAsyncInterval(
-    handler: () => Promise<void>, delay: number): number {
-  const runner = new AsyncIntervalRunner(handler, delay);
-  const id = ++runnerCount;
-  runnerMap.set(id, runner);
-  return id;
-}
-
-/**
- * Cancels a timed, repeating async action by |id|, which was returned by the
- * corresponding call of setAsyncInterval().
- *
- * @return Resolved when the last action is finished.
- */
-export async function clearAsyncInterval(id: number): Promise<void> {
-  const runner = runnerMap.get(id);
-  if (runner === undefined) {
-    return;
-  }
-  await runner.stop();
 }

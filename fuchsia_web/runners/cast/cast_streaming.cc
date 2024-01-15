@@ -6,8 +6,8 @@
 
 #include <string>
 
+#include <optional>
 #include "components/fuchsia_component_support/config_reader.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
@@ -26,7 +26,7 @@ bool IsAppConfigForCastStreaming(
 }
 
 std::string GetMessagePortOriginForAppId(const std::string& app_id) {
-  const absl::optional<base::Value>& config =
+  const std::optional<base::Value::Dict>& config =
       fuchsia_component_support::LoadPackageConfig();
   if (!config) {
     return kCastStreamingMessagePortOrigin;
@@ -34,13 +34,13 @@ std::string GetMessagePortOriginForAppId(const std::string& app_id) {
 
   constexpr char kEnableVideoOnlyReceiverSwitch[] =
       "enable-video-only-receiver-for-app-ids";
-  const base::Value* app_id_list =
-      config->FindListKey(kEnableVideoOnlyReceiverSwitch);
+  const base::Value::List* app_id_list =
+      config->FindList(kEnableVideoOnlyReceiverSwitch);
   if (!app_id_list) {
     return kCastStreamingMessagePortOrigin;
   }
 
-  for (const base::Value& app_id_value : app_id_list->GetListDeprecated()) {
+  for (const base::Value& app_id_value : *app_id_list) {
     if (!app_id_value.is_string()) {
       continue;
     }

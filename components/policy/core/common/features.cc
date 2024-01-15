@@ -10,29 +10,9 @@ namespace policy {
 
 namespace features {
 
-BASE_FEATURE(kDefaultChromeAppsMigration,
-             "EnableDefaultAppsMigration",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-BASE_FEATURE(kLoginEventReporting,
-             "LoginEventReporting",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-BASE_FEATURE(kPasswordBreachEventReporting,
-             "PasswordBreachEventReporting",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-BASE_FEATURE(kEnableUserCloudSigninRestrictionPolicyFetcher,
-             "UserCloudSigninRestrictionPolicyFetcher",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-BASE_FEATURE(kActivateMetricsReportingEnabledPolicyAndroid,
-             "ActivateMetricsReportingEnabledPolicyAndroid",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
-BASE_FEATURE(kDmTokenDeletion,
-             "DmTokenDeletion",
-             base::FEATURE_ENABLED_BY_DEFAULT);
+BASE_FEATURE(kEnablePolicyTestPage,
+             "EnablePolicyTestPage",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 }  // namespace features
 

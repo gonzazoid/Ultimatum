@@ -18,16 +18,19 @@
 
   .bottom {
     fill: none;
-    stroke: var(--cros-highlight-color);
+    stroke: var(--cros-sys-highlight_shape);
   }
   .top {
     fill: none;
-    stroke: var(--cros-icon-color-prominent);
+    stroke: var(--cros-sys-primary);
     stroke-linecap: round;
   }
   text {
-    fill: var(--cros-text-color-prominent);
-    font: bold 14px Roboto;
+    fill: var(--cros-sys-primary);
+    font: var(--cros-button-1-font);
+  }
+  .errormark {
+    fill: var(--cros-sys-error);
   }
 </style>
 <div class='progress'>
@@ -41,7 +44,6 @@
     <text class='label' x='18' y='18' text-anchor='middle'
       alignment-baseline='central'></text>
     <circle class='errormark' visibility='hidden'
-      cx='25.5' cy='10.5' r='4'
-      fill='#D93025' stroke='none'></circle>
+      cx='25.5' cy='10.5' r='4' stroke='none'></circle>
   </svg>
 </div>

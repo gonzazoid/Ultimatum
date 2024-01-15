@@ -6,20 +6,20 @@
 
 #import "base/test/metrics/histogram_tester.h"
 #import "base/test/scoped_feature_list.h"
+#import "components/sync/test/sync_user_settings_mock.h"
 #import "ios/chrome/browser/promos_manager/constants.h"
-#import "ios/chrome/browser/signin/signin_util.h"
-#import "ios/chrome/browser/ui/commands/promos_manager_commands.h"
-#import "ios/chrome/browser/ui/post_restore_signin/features.h"
+#import "ios/chrome/browser/promos_manager/promo_config.h"
+#import "ios/chrome/browser/shared/public/commands/promos_manager_commands.h"
+#import "ios/chrome/browser/signin/model/signin_util.h"
 #import "ios/chrome/browser/ui/post_restore_signin/metrics.h"
+#import "ios/chrome/grit/ios_branded_strings.h"
 #import "ios/chrome/test/ios_chrome_scoped_testing_local_state.h"
+#import "testing/gmock/include/gmock/gmock.h"
 #import "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 #import "third_party/ocmock/gtest_support.h"
 #import "ui/base/device_form_factor.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/l10n/l10n_util_mac.h"
 
 namespace {
 const char kFakePreRestoreAccountEmail[] = "person@example.org";
@@ -32,7 +32,8 @@ class PostRestoreSignInProviderTest : public PlatformTest {
  public:
   explicit PostRestoreSignInProviderTest() {
     SetFakePreRestoreAccountInfo();
-    provider_ = [[PostRestoreSignInProvider alloc] init];
+    provider_ = [[PostRestoreSignInProvider alloc]
+        initWithSyncUserSettings:&sync_user_settings_];
   }
 
   void SetFakePreRestoreAccountInfo() {
@@ -40,15 +41,18 @@ class PostRestoreSignInProviderTest : public PlatformTest {
     accountInfo.email = std::string(kFakePreRestoreAccountEmail);
     accountInfo.given_name = std::string(kFakePreRestoreAccountGivenName);
     accountInfo.full_name = std::string(kFakePreRestoreAccountFullName);
-    StorePreRestoreIdentity(local_state_.Get(), accountInfo);
+    StorePreRestoreIdentity(local_state_.Get(), accountInfo,
+                            /*history_sync_enabled=*/false);
   }
 
   void ClearUserName() {
     AccountInfo accountInfo;
     accountInfo.email = std::string(kFakePreRestoreAccountEmail);
-    StorePreRestoreIdentity(local_state_.Get(), accountInfo);
+    StorePreRestoreIdentity(local_state_.Get(), accountInfo,
+                            /*history_sync_enabled=*/false);
     // Reinstantiate a provider so that it picks up the changes.
-    provider_ = [[PostRestoreSignInProvider alloc] init];
+    provider_ = [[PostRestoreSignInProvider alloc]
+        initWithSyncUserSettings:&sync_user_settings_];
   }
 
   void SetupMockHandler() {
@@ -56,66 +60,53 @@ class PostRestoreSignInProviderTest : public PlatformTest {
     provider_.handler = mock_handler_;
   }
 
-  void EnableFeatureVariationFullscreen() {
-    scoped_feature_list_.InitAndEnableFeature(
-        post_restore_signin::features::kIOSNewPostRestoreExperience);
-  }
-
-  void EnableFeatureVariationAlert() {
-    scoped_feature_list_.InitWithFeaturesAndParameters(
-        {base::test::FeatureRefAndParams(
-            post_restore_signin::features::kIOSNewPostRestoreExperience,
-            {{post_restore_signin::features::kIOSNewPostRestoreExperienceParam,
-              "true"}})},
-        {});
-  }
-
   IOSChromeScopedTestingLocalState local_state_;
   base::test::ScopedFeatureList scoped_feature_list_;
   id mock_handler_;
   PostRestoreSignInProvider* provider_;
+
+ private:
+  testing::NiceMock<syncer::SyncUserSettingsMock> sync_user_settings_;
 };
 
-TEST_F(PostRestoreSignInProviderTest, hasIdentifierFullscreen) {
-  EnableFeatureVariationFullscreen();
-  EXPECT_EQ(provider_.identifier,
-            promos_manager::Promo::PostRestoreSignInFullscreen);
-}
-
+// Tests `hasIdentifierAlert` method.
 TEST_F(PostRestoreSignInProviderTest, hasIdentifierAlert) {
-  EnableFeatureVariationAlert();
-  EXPECT_EQ(provider_.identifier,
+  EXPECT_EQ(provider_.config.identifier,
             promos_manager::Promo::PostRestoreSignInAlert);
 }
 
+// Tests the default action.
 TEST_F(PostRestoreSignInProviderTest, standardPromoAlertDefaultAction) {
-  EnableFeatureVariationFullscreen();
   SetupMockHandler();
   OCMExpect([mock_handler_ showSignin:[OCMArg any]]);
   [provider_ standardPromoAlertDefaultAction];
   [mock_handler_ verify];
 }
 
+// Test the title text.
 TEST_F(PostRestoreSignInProviderTest, title) {
-  EnableFeatureVariationFullscreen();
-  EXPECT_TRUE([[provider_ title] isEqualToString:@"Chrome is Signed Out"]);
+  EXPECT_TRUE([[provider_ title]
+      isEqualToString:l10n_util::GetNSString(
+                          IDS_IOS_POST_RESTORE_SIGN_IN_ALERT_PROMO_TITLE)]);
 }
 
+// Tests the alert message.
 TEST_F(PostRestoreSignInProviderTest, message) {
-  EnableFeatureVariationFullscreen();
   NSString* expected;
   if (ui::GetDeviceFormFactor() == ui::DEVICE_FORM_FACTOR_TABLET) {
-    expected = @"You were signed out of your account person@example.org as "
-               @"part of your iPad reset. Tap continue below to sign in.";
+    expected = @"You were signed out of your account, person@example.org, as "
+               @"part of your iPad reset. To sign back in, tap \"Continue\" "
+               @"below.";
   } else {
-    expected = @"You were signed out of your account person@example.org as "
-               @"part of your iPhone reset. Tap continue below to sign in.";
+    expected = @"You were signed out of your account, person@example.org, as "
+               @"part of your iPhone reset. To sign back in, tap \"Continue\" "
+               @"below.";
   }
   EXPECT_TRUE([[provider_ message] isEqualToString:expected]);
 }
 
+// Tests the text for the default action button.
 TEST_F(PostRestoreSignInProviderTest, defaultActionButtonText) {
-  EnableFeatureVariationAlert();
   EXPECT_TRUE([[provider_ defaultActionButtonText]
       isEqualToString:@"Continue as Given"]);
 
@@ -124,30 +115,21 @@ TEST_F(PostRestoreSignInProviderTest, defaultActionButtonText) {
       [[provider_ defaultActionButtonText] isEqualToString:@"Continue"]);
 }
 
+// Tests the text for the cancel button.
 TEST_F(PostRestoreSignInProviderTest, cancelActionButtonText) {
-  EnableFeatureVariationAlert();
   EXPECT_TRUE([[provider_ cancelActionButtonText] isEqualToString:@"Ignore"]);
 }
 
-TEST_F(PostRestoreSignInProviderTest, viewController) {
-  EnableFeatureVariationFullscreen();
-  EXPECT_TRUE(provider_.viewController != nil);
-}
-
+// Tests that a histogram is recorded when the user chooses to dismiss.
 TEST_F(PostRestoreSignInProviderTest, recordsChoiceDismissed) {
   base::HistogramTester histogram_tester;
 
-  // Test the Alert version.
   [provider_ standardPromoAlertCancelAction];
   histogram_tester.ExpectBucketCount(kIOSPostRestoreSigninChoiceHistogram,
                                      IOSPostRestoreSigninChoice::Dismiss, 1);
-
-  // Test the Fullscreen version.
-  [provider_ standardPromoDismissAction];
-  histogram_tester.ExpectBucketCount(kIOSPostRestoreSigninChoiceHistogram,
-                                     IOSPostRestoreSigninChoice::Dismiss, 2);
 }
 
+// Tests that a histogram is recorded when the user chooses to continue.
 TEST_F(PostRestoreSignInProviderTest, recordsChoiceContinue) {
   base::HistogramTester histogram_tester;
   SetupMockHandler();
@@ -157,6 +139,7 @@ TEST_F(PostRestoreSignInProviderTest, recordsChoiceContinue) {
                                      IOSPostRestoreSigninChoice::Continue, 1);
 }
 
+// Tests that a histogram is recorded when the promo is displayed.
 TEST_F(PostRestoreSignInProviderTest, recordsDisplayed) {
   base::HistogramTester histogram_tester;
   [provider_ promoWasDisplayed];
@@ -164,17 +147,12 @@ TEST_F(PostRestoreSignInProviderTest, recordsDisplayed) {
                                      true, 1);
 }
 
+// Tests that the provider clears the pre-restore identity.
 TEST_F(PostRestoreSignInProviderTest, clearsPreRestoreIdentity) {
-  // Test the Alert cancel.
+  // Test cancel.
   SetFakePreRestoreAccountInfo();
   EXPECT_TRUE(GetPreRestoreIdentity(local_state_.Get()).has_value());
   [provider_ standardPromoAlertCancelAction];
-  EXPECT_FALSE(GetPreRestoreIdentity(local_state_.Get()).has_value());
-
-  // Test the Fullscreen cancel.
-  SetFakePreRestoreAccountInfo();
-  EXPECT_TRUE(GetPreRestoreIdentity(local_state_.Get()).has_value());
-  [provider_ standardPromoDismissAction];
   EXPECT_FALSE(GetPreRestoreIdentity(local_state_.Get()).has_value());
 
   // Test that it is cleared when the user chooses to sign in.

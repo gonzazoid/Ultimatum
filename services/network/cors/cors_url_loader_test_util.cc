@@ -4,12 +4,13 @@
 
 #include "services/network/cors/cors_url_loader_test_util.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "mojo/public/cpp/system/data_pipe.h"
+#include "net/base/scheme_host_port_matcher_rule.h"
 #include "net/http/http_response_headers.h"
 #include "net/log/net_log_entry.h"
 #include "net/log/net_log_event_type.h"
@@ -62,7 +63,8 @@ void TestURLLoaderFactory::NotifyClientOnReceiveEarlyHints(
 
 void TestURLLoaderFactory::NotifyClientOnReceiveResponse(
     int status_code,
-    const std::vector<std::pair<std::string, std::string>>& extra_headers) {
+    const std::vector<std::pair<std::string, std::string>>& extra_headers,
+    mojo::ScopedDataPipeConsumerHandle body) {
   DCHECK(client_remote_);
   auto response = mojom::URLResponseHead::New();
   response->headers = base::MakeRefCounted<net::HttpResponseHeaders>(
@@ -72,8 +74,8 @@ void TestURLLoaderFactory::NotifyClientOnReceiveResponse(
   for (const auto& header : extra_headers)
     response->headers->SetHeader(header.first, header.second);
 
-  client_remote_->OnReceiveResponse(
-      std::move(response), mojo::ScopedDataPipeConsumerHandle(), absl::nullopt);
+  client_remote_->OnReceiveResponse(std::move(response), std::move(body),
+                                    absl::nullopt);
 }
 
 void TestURLLoaderFactory::NotifyClientOnComplete(int error_code) {
@@ -97,6 +99,10 @@ void TestURLLoaderFactory::NotifyClientOnReceiveRedirect(
     response->headers->SetHeader(header.first, header.second);
 
   client_remote_->OnReceiveRedirect(redirect_info, std::move(response));
+}
+
+void TestURLLoaderFactory::ResetClientRemote() {
+  client_remote_.reset();
 }
 
 void TestURLLoaderFactory::CreateLoaderAndStart(
@@ -140,7 +146,7 @@ CorsURLLoaderTestBase::ResetFactoryParams::~ResetFactoryParams() = default;
 // CORS URL LOADER TEST BASE
 // =========================
 
-CorsURLLoaderTestBase::CorsURLLoaderTestBase()
+CorsURLLoaderTestBase::CorsURLLoaderTestBase(bool shared_dictionary_enabled)
     : task_environment_(base::test::TaskEnvironment::MainThreadType::IO) {
   net::URLRequestContextBuilder context_builder;
   context_builder.set_proxy_resolution_service(
@@ -162,6 +168,12 @@ CorsURLLoaderTestBase::CorsURLLoaderTestBase()
       net::ProxyConfigWithAnnotation::CreateDirect();
 
   context_params->cors_exempt_header_list.push_back(kTestCorsExemptHeader);
+
+  context_params->shared_dictionary_enabled = shared_dictionary_enabled;
+
+  // The AFP Block List experiment won't affect tests that don't also populate
+  // the block list, so this is safe to enable for all tests.
+  context_params->afp_block_list_experiment_enabled = true;
 
   network_context_ = std::make_unique<NetworkContext>(
       network_service_.get(),
@@ -283,19 +295,20 @@ void CorsURLLoaderTestBase::ResetFactory(absl::optional<url::Origin> initiator,
   factory_params->factory_override->skip_cors_enabled_scheme_check =
       params.skip_cors_enabled_scheme_check;
   factory_params->client_security_state = params.client_security_state.Clone();
+  factory_params->isolation_info = params.isolation_info;
+
   auto resource_scheduler_client =
       base::MakeRefCounted<ResourceSchedulerClient>(
-          last_issued_resource_scheduler_client_id_,
+          ResourceScheduler::ClientId::Create(),
           IsBrowserInitiated(process_id == mojom::kBrowserProcessId),
           &resource_scheduler_,
           url_request_context_->network_quality_estimator());
-  last_issued_resource_scheduler_client_id_.Increment();
   cors_url_loader_factory_remote_.reset();
   cors_url_loader_factory_ = std::make_unique<CorsURLLoaderFactory>(
       network_context_.get(), std::move(factory_params),
       resource_scheduler_client,
       cors_url_loader_factory_remote_.BindNewPipeAndPassReceiver(),
-      &origin_access_list_);
+      &origin_access_list_, /*resource_block_list=*/nullptr);
 }
 
 std::vector<net::NetLogEntry> CorsURLLoaderTestBase::GetEntries() const {
@@ -339,9 +352,9 @@ const net::NetLogEntry* CorsURLLoaderTestBase::FindEntryByType(
 
 net::RedirectInfo CorsURLLoaderTestBase::CreateRedirectInfo(
     int status_code,
-    base::StringPiece method,
+    std::string_view method,
     const GURL& url,
-    base::StringPiece referrer,
+    std::string_view referrer,
     net::ReferrerPolicy referrer_policy,
     net::SiteForCookies site_for_cookies) {
   net::RedirectInfo redirect_info;
@@ -352,6 +365,17 @@ net::RedirectInfo CorsURLLoaderTestBase::CreateRedirectInfo(
   redirect_info.new_referrer_policy = referrer_policy;
   redirect_info.new_site_for_cookies = site_for_cookies;
   return redirect_info;
+}
+
+void CorsURLLoaderTestBase::AddResourceBlockListRule(
+    const std::string& domain,
+    const std::string& top_frame_bypass) {
+  net::SchemeHostPortMatcher bypass_matcher;
+  bypass_matcher.AddAsFirstRule(
+      net::SchemeHostPortMatcherRule::FromUntrimmedRawString(top_frame_bypass));
+
+  network_service_->network_service_resource_block_list()
+      ->AddDomainWithBypassForTesting(domain, std::move(bypass_matcher));
 }
 
 }  // namespace network::cors

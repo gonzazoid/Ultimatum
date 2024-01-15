@@ -8,9 +8,9 @@
 #include "components/signin/public/identity_manager/account_info.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/sync/base/user_selectable_type.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_service_utils.h"
-#include "components/sync/driver/sync_user_settings.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_service_utils.h"
+#include "components/sync/service/sync_user_settings.h"
 
 namespace safe_browsing {
 
@@ -38,9 +38,8 @@ bool SyncUtils::AreSigninAndSyncSetUpForSafeBrowsingTokenFetches(
   // enabled when the user is syncing their browsing history without a custom
   // passphrase.
   // NOTE: |sync_service| can be null in Incognito, and can also be set to null
-  // by a cmdline param.
-  return sync_service &&
-         (syncer::GetUploadToGoogleState(
+  // by a cmdline param, but `GetUploadToGoogleState` handles that.
+  return (syncer::GetUploadToGoogleState(
               sync_service, syncer::ModelType::HISTORY_DELETE_DIRECTIVES) ==
           syncer::UploadState::ACTIVE) &&
          !sync_service->GetUserSettings()->IsUsingExplicitPassphrase();
@@ -49,8 +48,7 @@ bool SyncUtils::AreSigninAndSyncSetUpForSafeBrowsingTokenFetches(
 // TODO(bdea): Migrate other SB classes that define this method to call the one
 // here instead.
 bool SyncUtils::IsHistorySyncEnabled(syncer::SyncService* sync_service) {
-  return sync_service && sync_service->IsSyncFeatureActive() &&
-         !sync_service->IsLocalSyncEnabled() &&
+  return sync_service && !sync_service->IsLocalSyncEnabled() &&
          sync_service->GetActiveDataTypes().Has(
              syncer::HISTORY_DELETE_DIRECTIVES);
 }

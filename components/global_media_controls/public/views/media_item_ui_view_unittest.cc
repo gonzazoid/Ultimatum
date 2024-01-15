@@ -17,10 +17,12 @@
 #include "components/media_message_center/mock_media_notification_item.h"
 #include "services/media_session/public/mojom/media_session.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "ui/display/test/scoped_screen_override.h"
 #include "ui/display/test/test_screen.h"
 #include "ui/events/base_event_utils.h"
+#include "ui/events/gesture_event_details.h"
 #include "ui/events/test/event_generator.h"
+#include "ui/views/animation/slide_out_controller.h"
+#include "ui/views/controls/scroll_view.h"
 #include "ui/views/test/button_test_api.h"
 #include "ui/views/test/view_metadata_test_utils.h"
 #include "ui/views/test/views_test_base.h"
@@ -42,10 +44,12 @@ const char kOtherTestNotificationId[] = "othertestid";
 
 class MediaItemUIViewTest : public views::ViewsTestBase {
  public:
-  MediaItemUIViewTest() : screen_override_(&fake_screen_) {}
+  MediaItemUIViewTest() { display::Screen::SetScreenInstance(&fake_screen_); }
   MediaItemUIViewTest(const MediaItemUIViewTest&) = delete;
   MediaItemUIViewTest& operator=(const MediaItemUIViewTest&) = delete;
-  ~MediaItemUIViewTest() override = default;
+  ~MediaItemUIViewTest() override {
+    display::Screen::SetScreenInstance(nullptr);
+  }
 
   // views::ViewsTestBase:
   void SetUp() override {
@@ -195,6 +199,10 @@ class MediaItemUIViewTest : public views::ViewsTestBase {
   notification_item() {
     return item_->GetWeakPtr();
   }
+  test::MockMediaItemUIFooter* footer() { return footer_; }
+  test::MockMediaItemUIDeviceSelector* device_selector() {
+    return device_selector_;
+  }
 
  private:
   void SimulateSessionInfo(bool playing) {
@@ -230,9 +238,10 @@ class MediaItemUIViewTest : public views::ViewsTestBase {
   }
 
   std::unique_ptr<views::Widget> widget_;
-  raw_ptr<test::MockMediaItemUIFooter> footer_ = nullptr;
-  raw_ptr<test::MockMediaItemUIDeviceSelector> device_selector_ = nullptr;
-  raw_ptr<MediaItemUIView> item_ui_ = nullptr;
+  raw_ptr<test::MockMediaItemUIFooter, DanglingUntriaged> footer_ = nullptr;
+  raw_ptr<test::MockMediaItemUIDeviceSelector, DanglingUntriaged>
+      device_selector_ = nullptr;
+  raw_ptr<MediaItemUIView, DanglingUntriaged> item_ui_ = nullptr;
   std::unique_ptr<global_media_controls::test::MockMediaItemUIObserver>
       observer_;
   std::unique_ptr<media_message_center::test::MockMediaNotificationItem> item_;
@@ -241,7 +250,6 @@ class MediaItemUIViewTest : public views::ViewsTestBase {
   base::flat_set<MediaSessionAction> actions_;
 
   display::test::TestScreen fake_screen_;
-  display::test::ScopedScreenOverride screen_override_;
 };
 
 TEST_F(MediaItemUIViewTest, SwipeToDismiss) {
@@ -343,19 +351,65 @@ TEST_F(MediaItemUIViewTest, SendsDestroyedUpdates) {
 
 TEST_F(MediaItemUIViewTest, SendsClicks) {
   // When the container is clicked directly, it should notify its observers.
-  EXPECT_CALL(observer(), OnMediaItemUIClicked(kTestNotificationId));
+  EXPECT_CALL(observer(),
+              OnMediaItemUIClicked(kTestNotificationId,
+                                   /*activate_original_media=*/true));
   SimulateItemUIClicked();
   testing::Mock::VerifyAndClearExpectations(&observer());
 
   // It should also notify its observers when the header is clicked.
-  EXPECT_CALL(observer(), OnMediaItemUIClicked(kTestNotificationId));
+  EXPECT_CALL(observer(),
+              OnMediaItemUIClicked(kTestNotificationId,
+                                   /*activate_original_media=*/true));
   SimulateHeaderClicked();
+  testing::Mock::VerifyAndClearExpectations(&observer());
+}
+
+TEST_F(MediaItemUIViewTest, GestureScrollDisabledWhenSlidingOut) {
+  auto scroll_view = std::make_unique<views::ScrollView>();
+  item_ui()->SetScrollView(scroll_view.get());
+
+  // Vertical scroll bar should be enabled initially.
+  EXPECT_EQ(scroll_view->GetVerticalScrollBarMode(),
+            views::ScrollView::ScrollBarMode::kEnabled);
+
+  // Send a gesture scroll update event with some horizontal value.
+  gfx::Point point;
+  ui::GestureEvent gesture_scroll_update(
+      point.x(), point.y(), 0, ui::EventTimeForNow(),
+      ui::GestureEventDetails(ui::ET_GESTURE_SCROLL_UPDATE, /*delta_x=*/1.0,
+                              /*delta_y=*/0.0));
+  item_ui()->slide_out_controller_for_testing()->OnGestureEvent(
+      &gesture_scroll_update);
+
+  // Vertical scroll bar should be disabled because of the sliding.
+  EXPECT_EQ(scroll_view->GetVerticalScrollBarMode(),
+            views::ScrollView::ScrollBarMode::kDisabled);
+
+  // Slide ending should re-enabled the vertical scroll bar.
+  ui::GestureEvent gesture_scroll_end(
+      point.x(), point.y(), 0, ui::EventTimeForNow(),
+      ui::GestureEventDetails(ui::ET_GESTURE_SCROLL_END));
+  item_ui()->slide_out_controller_for_testing()->OnGestureEvent(
+      &gesture_scroll_end);
+  EXPECT_EQ(scroll_view->GetVerticalScrollBarMode(),
+            views::ScrollView::ScrollBarMode::kEnabled);
 }
 
 TEST_F(MediaItemUIViewTest, MetadataTest) {
   auto container_view = std::make_unique<MediaItemUIView>(
       kOtherTestNotificationId, notification_item(), nullptr, nullptr);
   views::test::TestViewMetadata(container_view.get());
+}
+
+TEST_F(MediaItemUIViewTest, UpdateView) {
+  EXPECT_CALL(*footer(), Die);
+  item_ui()->UpdateFooterView(
+      std::make_unique<NiceMock<test::MockMediaItemUIFooter>>());
+
+  EXPECT_CALL(*device_selector(), Die);
+  item_ui()->UpdateDeviceSelector(
+      std::make_unique<NiceMock<test::MockMediaItemUIDeviceSelector>>());
 }
 
 }  // namespace global_media_controls

@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "base/containers/flat_map.h"
-#include "base/containers/stack_container.h"
+#include "base/sequence_checker.h"
 #include "cc/base/rtree.h"
 #include "cc/paint/draw_image.h"
 #include "cc/paint/image_animation_count.h"
@@ -20,6 +20,7 @@
 #include "cc/paint/paint_image.h"
 #include "cc/paint/paint_shader.h"
 #include "cc/paint/paint_worklet_input.h"
+#include "third_party/abseil-cpp/absl/container/inlined_vector.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
 #include "ui/gfx/display_color_spaces.h"
@@ -35,7 +36,7 @@ class PaintOpBuffer;
 // rect and get back a list of DrawImages in that rect.
 class CC_PAINT_EXPORT DiscardableImageMap {
  public:
-  using Rects = base::StackVector<gfx::Rect, 1>;
+  using Rects = absl::InlinedVector<gfx::Rect, 1>;
 
   struct CC_PAINT_EXPORT AnimatedImageMetadata {
     AnimatedImageMetadata(
@@ -70,7 +71,7 @@ class CC_PAINT_EXPORT DiscardableImageMap {
   }
 
   void Reset();
-  void Generate(const PaintOpBuffer* paint_op_buffer, const gfx::Rect& bounds);
+  void Generate(const PaintOpBuffer& paint_op_buffer, const gfx::Rect& bounds);
 
   // This should only be called once from the compositor thread at commit time.
   base::flat_map<PaintImage::Id, PaintImage::DecodingMode>
@@ -95,11 +96,16 @@ class CC_PAINT_EXPORT DiscardableImageMap {
 
   base::flat_map<PaintImage::Id, Rects> image_id_to_rects_;
   std::vector<AnimatedImageMetadata> animated_images_metadata_;
+  std::vector<std::pair<DrawImage, gfx::Rect>> images_;
+  // This r-tree is built lazily and in practice is only constructed
+  // on the impl thread. The entries are DrawImage pointers in `images_`.
+  mutable std::unique_ptr<RTree<const DrawImage*>> images_rtree_
+      GUARDED_BY_CONTEXT(images_rtree_sequence_checker_);
   base::flat_map<PaintImage::Id, PaintImage::DecodingMode> decoding_mode_map_;
   gfx::ContentColorUsage content_color_usage_ = gfx::ContentColorUsage::kSRGB;
   bool contains_hbd_images_ = false;
 
-  RTree<DrawImage> images_rtree_;
+  SEQUENCE_CHECKER(images_rtree_sequence_checker_);
 
   std::vector<PaintWorkletInputWithImageId> paint_worklet_inputs_;
 };

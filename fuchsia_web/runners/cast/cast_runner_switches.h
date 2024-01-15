@@ -8,13 +8,6 @@
 // Disable Vulkan flag for the cast runner. Used for tests.
 extern const char kDisableVulkanForTestsSwitch[];
 
-// Run as a CFv2 component, processing StartComponent requests from the CFv1
-// shim.
-extern const char kEnableCfv2[];
-
-// Command line switch to enable the fuchsia.web.FrameHost provider component.
-extern const char kEnableFrameHostComponentForTestsSwitch[];
-
 // Force headless mode.
 extern const char kForceHeadlessForTestsSwitch[];
 

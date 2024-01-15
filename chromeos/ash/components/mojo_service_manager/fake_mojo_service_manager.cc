@@ -7,8 +7,13 @@
 #include <utility>
 
 #include "base/check.h"
+#include "chromeos/ash/components/mojo_service_manager/connection.h"
 
 namespace ash::mojo_service_manager {
+
+// The security context of ash-chrome. This should be the default security
+// context for the global connection.
+constexpr char kAshSecurityContext[] = "u:r:cros_browser:s0";
 
 namespace mojom = ::chromeos::mojo_service_manager::mojom;
 
@@ -16,9 +21,16 @@ FakeMojoServiceManager::ServiceState::ServiceState() = default;
 
 FakeMojoServiceManager::ServiceState::~ServiceState() = default;
 
-FakeMojoServiceManager::FakeMojoServiceManager() = default;
+FakeMojoServiceManager::FakeMojoServiceManager() {
+  SetServiceManagerRemoteForTesting(
+      AddNewPipeAndPassRemote(kAshSecurityContext));
+}
 
-FakeMojoServiceManager::~FakeMojoServiceManager() = default;
+FakeMojoServiceManager::~FakeMojoServiceManager() {
+  // Reset the connection before the fake service manager so the disconnect
+  // handler won't be triggered.
+  ResetServiceManagerConnection();
+}
 
 mojo::PendingRemote<mojom::ServiceManager>
 FakeMojoServiceManager::AddNewPipeAndPassRemote(
@@ -61,17 +73,17 @@ void FakeMojoServiceManager::Register(
     // If a receiver become invalid before being posted, don't send it because
     // the mojo will complain about sending invalid handles and reset the
     // connection of service provider.
-    if (!receiver.is_valid())
+    if (!receiver.is_valid()) {
       continue;
+    }
     service_state.service_provider->Request(std::move(requester),
                                             std::move(receiver));
   }
 }
 
-void FakeMojoServiceManager::Request(
-    const std::string& service_name,
-    absl::optional<base::TimeDelta> /*timeout*/,
-    mojo::ScopedMessagePipeHandle receiver) {
+void FakeMojoServiceManager::Request(const std::string& service_name,
+                                     std::optional<base::TimeDelta> /*timeout*/,
+                                     mojo::ScopedMessagePipeHandle receiver) {
   auto it = service_map_.find(service_name);
   if (it == service_map_.end()) {
     auto [it_new, success] = service_map_.try_emplace(service_name);

@@ -30,9 +30,8 @@ CupsPrinterStatus PrinterStatusToCupsPrinterStatus(
     cups_printer_status.AddStatusReason(
         PrinterReasonToCupsReason(reason.reason),
         PrinterSeverityToCupsSeverity(reason.severity));
-    cups_printer_status.SetAuthenticationInfo(auth_info);
   }
-
+  cups_printer_status.SetAuthenticationInfo(auth_info);
   return cups_printer_status;
 }
 
@@ -88,6 +87,8 @@ CupsReason PrinterReasonToCupsReason(const ReasonFromPrinter& reason) {
       return CupsReason::kTrayMissing;
     case ReasonFromPrinter::kUnknownReason:
       return CupsReason::kUnknownReason;
+    case ReasonFromPrinter::kCupsPkiExpired:
+      return CupsReason::kExpiredCertificate;
   }
 }
 

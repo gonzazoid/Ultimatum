@@ -8,10 +8,10 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/compiler_specific.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
@@ -19,7 +19,6 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "cc/paint/paint_recorder.h"
@@ -28,9 +27,11 @@
 #include "components/safe_browsing/buildflags.h"
 #include "components/safe_browsing/content/common/visual_utils.h"
 #include "components/safe_browsing/content/renderer/phishing_classifier/features.h"
+#include "components/safe_browsing/content/renderer/phishing_classifier/phishing_classifier_delegate.h"
 #include "components/safe_browsing/content/renderer/phishing_classifier/phishing_dom_feature_extractor.h"
 #include "components/safe_browsing/content/renderer/phishing_classifier/phishing_term_feature_extractor.h"
 #include "components/safe_browsing/content/renderer/phishing_classifier/phishing_url_feature_extractor.h"
+#include "components/safe_browsing/content/renderer/phishing_classifier/phishing_visual_feature_extractor.h"
 #include "components/safe_browsing/content/renderer/phishing_classifier/scorer.h"
 #include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/proto/csd.pb.h"
@@ -49,30 +50,7 @@
 
 namespace safe_browsing {
 
-namespace {
-
-std::unique_ptr<SkBitmap> PlaybackOnBackgroundThread(
-    sk_sp<cc::PaintRecord> paint_record,
-    gfx::Rect bounds) {
-  // Use the Rec. 2020 color space, in case the user input is wide-gamut.
-  std::unique_ptr<SkBitmap> bitmap = std::make_unique<SkBitmap>();
-  sk_sp<SkColorSpace> rec2020 = SkColorSpace::MakeRGB(
-      {2.22222f, 0.909672f, 0.0903276f, 0.222222f, 0.0812429f, 0, 0},
-      SkNamedGamut::kRec2020);
-  SkImageInfo bitmap_info = SkImageInfo::Make(
-      bounds.width(), bounds.height(), SkColorType::kN32_SkColorType,
-      SkAlphaType::kUnpremul_SkAlphaType, rec2020);
-  if (!bitmap->tryAllocPixels(bitmap_info))
-    return nullptr;
-
-  SkCanvas sk_canvas(*bitmap, skia::LegacyDisplayGlobals::GetSkSurfaceProps());
-  paint_record->Playback(&sk_canvas);
-  return bitmap;
-}
-
-}  // namespace
-
-const float PhishingClassifier::kInvalidScore = -1.0;
+const int PhishingClassifier::kClassifierFailed = -1;
 const float PhishingClassifier::kPhishyThreshold = 0.5;
 
 PhishingClassifier::PhishingClassifier(content::RenderFrame* render_frame)
@@ -112,6 +90,7 @@ void PhishingClassifier::BeginClassification(const std::u16string* page_text,
       scorer->find_page_term_callback(), scorer->find_page_word_callback(),
       scorer->max_words_per_term(), scorer->murmurhash3_seed(),
       scorer->max_shingles_per_page(), scorer->shingle_size());
+  visual_extractor_ = std::make_unique<PhishingVisualFeatureExtractor>();
   page_text_ = page_text;
   done_callback_ = std::move(done_callback);
 
@@ -119,7 +98,7 @@ void PhishingClassifier::BeginClassification(const std::u16string* page_text,
   // asynchronously, rather than directly from this method.  To ensure that
   // this is the case, post a task to begin feature extraction on the next
   // iteration of the message loop.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&PhishingClassifier::BeginFeatureExtraction,
                                 weak_factory_.GetWeakPtr()));
 }
@@ -131,19 +110,19 @@ void PhishingClassifier::BeginFeatureExtraction() {
   // Currently, we only classify http/https URLs that are GET requests.
   GURL url(frame->GetDocument().Url());
   if (!url.SchemeIsHTTPOrHTTPS()) {
-    RunFailureCallback();
+    RunFailureCallback(Result::kInvalidURLFormatRequest);
     return;
   }
 
   blink::WebDocumentLoader* document_loader = frame->GetDocumentLoader();
   if (!document_loader || document_loader->HttpMethod().Ascii() != "GET") {
-    RunFailureCallback();
+    RunFailureCallback(Result::kInvalidDocumentLoader);
     return;
   }
 
   features_ = std::make_unique<FeatureMap>();
   if (!url_extractor_->ExtractFeatures(url, features_.get())) {
-    RunFailureCallback();
+    RunFailureCallback(Result::kURLFeatureExtractionFailed);
     return;
   }
 
@@ -161,6 +140,7 @@ void PhishingClassifier::CancelPendingClassification() {
   DCHECK(is_ready());
   dom_extractor_.reset();
   term_extractor_.reset();
+  visual_extractor_.reset();
   weak_factory_.InvalidateWeakPtrs();
   Clear();
 }
@@ -175,60 +155,19 @@ void PhishingClassifier::DOMExtractionFinished(bool success) {
         base::BindOnce(&PhishingClassifier::TermExtractionFinished,
                        base::Unretained(this)));
   } else {
-    RunFailureCallback();
+    RunFailureCallback(Result::kDOMExtractionFailed);
   }
 }
 
 void PhishingClassifier::TermExtractionFinished(bool success) {
   if (success) {
-#if BUILDFLAG(FULL_SAFE_BROWSING)
-    ExtractVisualFeatures();
-#else
-    if (ScorerStorage::GetInstance()->GetScorer()->HasVisualTfLiteModel()) {
-      ExtractVisualFeatures();
-    } else {
-      VisualExtractionFinished(true);
-    }
-#endif
+    visual_extractor_->ExtractFeatures(
+        render_frame_->GetWebFrame(),
+        base::BindOnce(&PhishingClassifier::OnPlaybackDone,
+                       base::Unretained(this)));
   } else {
-    RunFailureCallback();
+    RunFailureCallback(Result::kTermExtractionFailed);
   }
-}
-
-void PhishingClassifier::ExtractVisualFeatures() {
-  DCHECK(content::RenderThread::IsMainThread());
-  base::TimeTicks start_time = base::TimeTicks::Now();
-  TRACE_EVENT0("safe_browsing", "ExtractVisualFeatures");
-
-  blink::WebLocalFrame* frame = render_frame_->GetWebFrame();
-  gfx::SizeF viewport_size = frame->View()->VisualViewportSize();
-  gfx::Rect bounds = ToEnclosingRect(gfx::RectF(viewport_size));
-
-  auto tracker = std::make_unique<paint_preview::PaintPreviewTracker>(
-      base::UnguessableToken::Create(), frame->GetEmbeddingToken(),
-      /*is_main_frame=*/true);
-  cc::PaintRecorder recorder;
-  cc::PaintCanvas* canvas =
-      recorder.beginRecording(bounds.width(), bounds.height());
-  canvas->SetPaintPreviewTracker(tracker.get());
-
-  if (!frame->CapturePaintPreview(bounds, canvas,
-                                  /*include_linked_destinations=*/false,
-                                  /*skip_accelerated_content=*/true)) {
-    VisualExtractionFinished(/*success=*/false);
-  }
-
-  sk_sp<cc::PaintRecord> paint_record = recorder.finishRecordingAsPicture();
-
-  base::UmaHistogramTimes("SBClientPhishing.VisualFeatureTime",
-                          base::TimeTicks::Now() - start_time);
-
-  base::ThreadPool::PostTaskAndReplyWithResult(
-      FROM_HERE, {base::WithBaseSyncPrimitives()},
-      base::BindOnce(&PlaybackOnBackgroundThread, std::move(paint_record),
-                     bounds),
-      base::BindOnce(&PhishingClassifier::OnPlaybackDone,
-                     weak_factory_.GetWeakPtr()));
 }
 
 void PhishingClassifier::OnPlaybackDone(std::unique_ptr<SkBitmap> bitmap) {
@@ -255,7 +194,7 @@ void PhishingClassifier::OnVisualFeaturesExtracted(
 void PhishingClassifier::VisualExtractionFinished(bool success) {
   DCHECK(content::RenderThread::IsMainThread());
   if (!success) {
-    RunFailureCallback();
+    RunFailureCallback(Result::kVisualExtractionFailed);
     return;
   }
 
@@ -305,41 +244,38 @@ void PhishingClassifier::OnVisualTfLiteModelDone(
   Scorer* scorer = ScorerStorage::GetInstance()->GetScorer();
   if (static_cast<int>(result.size()) > scorer->tflite_thresholds().size()) {
     // Model is misconfigured, so bail out.
-    RunFailureCallback();
+    RunFailureCallback(Result::kInvalidScore);
     return;
   }
 
   verdict->set_tflite_model_version(scorer->tflite_model_version());
+
   for (size_t i = 0; i < result.size(); i++) {
     ClientPhishingRequest::CategoryScore* category =
         verdict->add_tflite_model_scores();
     category->set_label(scorer->tflite_thresholds().at(i).label());
     category->set_value(result[i]);
-
-    if (result[i] >= scorer->tflite_thresholds().at(i).threshold()) {
-      verdict->set_is_phishing(true);
-      verdict->set_is_tflite_match(true);
-    }
   }
 
-  RunCallback(*verdict);
+  RunCallback(*verdict, Result::kSuccess);
 }
 
-void PhishingClassifier::RunCallback(const ClientPhishingRequest& verdict) {
+void PhishingClassifier::RunCallback(const ClientPhishingRequest& verdict,
+                                     Result phishing_classifier_result) {
   TRACE_EVENT_NESTABLE_ASYNC_END0("safe_browsing", "PhishingClassification",
                                   this);
-  std::move(done_callback_).Run(verdict);
+  std::move(done_callback_).Run(verdict, phishing_classifier_result);
   Clear();
 }
 
-void PhishingClassifier::RunFailureCallback() {
+void PhishingClassifier::RunFailureCallback(Result failure_event) {
   ClientPhishingRequest verdict;
   // In this case we're not guaranteed to have a valid URL.  Just set it
   // to the empty string to make sure we have a valid protocol buffer.
   verdict.set_url("");
-  verdict.set_client_score(kInvalidScore);
+  verdict.set_client_score(kClassifierFailed);
   verdict.set_is_phishing(false);
-  RunCallback(verdict);
+  RunCallback(verdict, failure_event);
 }
 
 void PhishingClassifier::Clear() {

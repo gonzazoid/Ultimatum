@@ -6,7 +6,6 @@
 
 #include "ash/constants/ash_features.h"
 #include "chrome/browser/ash/borealis/borealis_prefs.h"
-#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/test/base/testing_profile.h"
 
@@ -17,7 +16,7 @@ void AllowBorealis(Profile* profile,
                    ash::FakeChromeUserManager* user_manager,
                    bool also_enable) {
   features->InitWithFeatures(
-      {features::kBorealis, chromeos::features::kBorealisPermitted}, {});
+      {features::kBorealis, ash::features::kBorealisPermitted}, {});
   AccountId account_id =
       AccountId::FromUserEmail(profile->GetProfileUserName());
   user_manager->AddUserWithAffiliation(account_id, /*is_affiliated=*/false);
@@ -27,12 +26,9 @@ void AllowBorealis(Profile* profile,
 }
 
 ScopedAllowBorealis::ScopedAllowBorealis(Profile* profile, bool also_enable)
-    : profile_(profile),
-      user_manager_(std::make_unique<ash::FakeChromeUserManager>()) {
-  AllowBorealis(profile_, &features_,
-                static_cast<ash::FakeChromeUserManager*>(
-                    user_manager::UserManager::Get()),
-                also_enable);
+    : fake_user_manager_(std::make_unique<ash::FakeChromeUserManager>()),
+      profile_(profile) {
+  AllowBorealis(profile_, &features_, fake_user_manager_.Get(), also_enable);
 }
 
 ScopedAllowBorealis::~ScopedAllowBorealis() {

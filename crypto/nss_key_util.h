@@ -8,8 +8,6 @@
 #include <secoidt.h>
 #include <stdint.h>
 
-#include <vector>
-
 #include "base/containers/span.h"
 #include "build/build_config.h"
 #include "crypto/crypto_export.h"
@@ -18,6 +16,15 @@
 typedef struct PK11SlotInfoStr PK11SlotInfo;
 
 namespace crypto {
+
+// Returns a SECItem containing the CKA_ID of the `public_key` or nullptr on
+// error.
+CRYPTO_EXPORT crypto::ScopedSECItem MakeNssIdFromPublicKey(
+    SECKEYPublicKey* public_key);
+
+// Decodes |input| as a SubjectPublicKeyInfo and returns a SECItem containing
+// the CKA_ID of that public key or nullptr on error.
+CRYPTO_EXPORT ScopedSECItem MakeNssIdFromSpki(base::span<const uint8_t> input);
 
 // Generates a new RSA key pair of size |num_bits| in |slot|. Returns true on
 // success and false on failure. If |permanent| is true, the resulting key is
@@ -45,7 +52,7 @@ CRYPTO_EXPORT bool GenerateECKeyPairNSS(
 // plaintext form.
 CRYPTO_EXPORT ScopedSECKEYPrivateKey
 ImportNSSKeyFromPrivateKeyInfo(PK11SlotInfo* slot,
-                               const std::vector<uint8_t>& input,
+                               base::span<const uint8_t> input,
                                bool permanent);
 
 // Decodes |input| as a DER-encoded X.509 SubjectPublicKeyInfo and searches for

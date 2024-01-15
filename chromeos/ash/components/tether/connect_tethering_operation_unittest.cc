@@ -5,10 +5,11 @@
 #include "chromeos/ash/components/tether/connect_tethering_operation.h"
 
 #include <memory>
+#include <optional>
 #include <vector>
 
-#include "ash/services/device_sync/public/cpp/fake_device_sync_client.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/simple_test_clock.h"
 #include "base/test/task_environment.h"
@@ -20,12 +21,12 @@
 #include "chromeos/ash/components/tether/proto/tether.pb.h"
 #include "chromeos/ash/components/tether/proto_test_util.h"
 #include "chromeos/ash/components/tether/test_timer_factory.h"
+#include "chromeos/ash/services/device_sync/public/cpp/fake_device_sync_client.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/fake_client_channel.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/fake_connection_attempt.h"
 #include "chromeos/ash/services/secure_channel/public/cpp/client/fake_secure_channel_client.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using testing::_;
 using testing::StrictMock;
@@ -105,7 +106,8 @@ class ConnectTetheringOperationTest : public testing::Test {
         remote_device_, fake_device_sync_client_.get(),
         fake_secure_channel_client_.get(),
         mock_tether_host_response_recorder_.get(), false /* setup_required */));
-    operation->SetTimerFactoryForTest(base::WrapUnique(test_timer_factory_));
+    operation->SetTimerFactoryForTest(
+        base::WrapUnique(test_timer_factory_.get()));
     operation->AddObserver(&mock_observer_);
 
     test_clock_.SetNow(base::Time::UnixEpoch());
@@ -140,7 +142,7 @@ class ConnectTetheringOperationTest : public testing::Test {
   std::unique_ptr<StrictMock<MockTetherHostResponseRecorder>>
       mock_tether_host_response_recorder_;
   base::SimpleTestClock test_clock_;
-  TestTimerFactory* test_timer_factory_;
+  raw_ptr<TestTimerFactory, DanglingUntriaged> test_timer_factory_;
   MockOperationObserver mock_observer_;
   base::HistogramTester histogram_tester_;
   std::unique_ptr<ConnectTetheringOperation> operation_;
@@ -243,6 +245,72 @@ TEST_F(ConnectTetheringOperationTest, ProvisioningFailed) {
   response.set_response_code(
       ConnectTetheringResponse_ResponseCode::
           ConnectTetheringResponse_ResponseCode_PROVISIONING_FAILED);
+  std::unique_ptr<MessageWrapper> message(new MessageWrapper(response));
+
+  operation_->OnMessageReceived(std::move(message), remote_device_);
+}
+
+TEST_F(ConnectTetheringOperationTest, InvalidWifiApConfig) {
+  EXPECT_CALL(*mock_tether_host_response_recorder_,
+              RecordSuccessfulConnectTetheringResponse(_))
+      .Times(0);
+
+  // Verify that the observer is called with failure and the appropriate error
+  // code.
+  EXPECT_CALL(
+      mock_observer_,
+      OnConnectTetheringFailure(
+          remote_device_, ConnectTetheringOperation::HostResponseErrorCode::
+                              INVALID_WIFI_AP_CONFIG));
+
+  ConnectTetheringResponse response;
+  response.set_response_code(
+      ConnectTetheringResponse_ResponseCode::
+          ConnectTetheringResponse_ResponseCode_INVALID_WIFI_AP_CONFIG);
+  std::unique_ptr<MessageWrapper> message(new MessageWrapper(response));
+
+  operation_->OnMessageReceived(std::move(message), remote_device_);
+}
+
+TEST_F(ConnectTetheringOperationTest, InvalidActiveExistingSoftApConfig) {
+  EXPECT_CALL(*mock_tether_host_response_recorder_,
+              RecordSuccessfulConnectTetheringResponse(_))
+      .Times(0);
+
+  // Verify that the observer is called with failure and the appropriate error
+  // code.
+  EXPECT_CALL(
+      mock_observer_,
+      OnConnectTetheringFailure(
+          remote_device_, ConnectTetheringOperation::HostResponseErrorCode::
+                              INVALID_ACTIVE_EXISTING_SOFT_AP_CONFIG));
+
+  ConnectTetheringResponse response;
+  response.set_response_code(
+      ConnectTetheringResponse_ResponseCode::
+          ConnectTetheringResponse_ResponseCode_INVALID_ACTIVE_EXISTING_SOFT_AP_CONFIG);
+  std::unique_ptr<MessageWrapper> message(new MessageWrapper(response));
+
+  operation_->OnMessageReceived(std::move(message), remote_device_);
+}
+
+TEST_F(ConnectTetheringOperationTest, InvalidNewSoftApConfig) {
+  EXPECT_CALL(*mock_tether_host_response_recorder_,
+              RecordSuccessfulConnectTetheringResponse(_))
+      .Times(0);
+
+  // Verify that the observer is called with failure and the appropriate error
+  // code.
+  EXPECT_CALL(
+      mock_observer_,
+      OnConnectTetheringFailure(
+          remote_device_, ConnectTetheringOperation::HostResponseErrorCode::
+                              INVALID_NEW_SOFT_AP_CONFIG));
+
+  ConnectTetheringResponse response;
+  response.set_response_code(
+      ConnectTetheringResponse_ResponseCode::
+          ConnectTetheringResponse_ResponseCode_INVALID_NEW_SOFT_AP_CONFIG);
   std::unique_ptr<MessageWrapper> message(new MessageWrapper(response));
 
   operation_->OnMessageReceived(std::move(message), remote_device_);

@@ -9,10 +9,8 @@
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_metrics.h"
 #include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
@@ -23,7 +21,6 @@
 #include "components/signin/public/base/signin_pref_names.h"
 #include "components/signin/public/identity_manager/account_info.h"
 #include "components/signin/public/identity_manager/accounts_in_cookie_jar_info.h"
-#include "content/public/browser/notification_details.h"
 #include "content/public/browser/storage_partition.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/gfx/image/image.h"
@@ -91,20 +88,6 @@ void GAIAInfoUpdateService::UpdatePrimaryAccount(const AccountInfo& info) {
     entry->SetGAIAPicture(info.last_downloaded_image_url_with_size,
                           info.account_image);
   }
-
-// On Lacros, the main profile has a default local profile with a default name
-// preset to 'Person %n'. The goal here is to reset it to the Gaia name of the
-// signed in Profile.
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (profile_attributes_storage_->IsDefaultProfileName(
-          entry->GetLocalProfileName(),
-          /*include_check_for_legacy_profile_name=*/false) &&
-      entry->IsUsingDefaultName()) {
-    entry->SetLocalProfileName(
-        profiles::GetDefaultNameForNewSignedInProfile(info),
-        /*is_default_name=*/false);
-  }
-#endif
 }
 
 void GAIAInfoUpdateService::UpdateAnyAccount(const AccountInfo& info) {
@@ -117,12 +100,9 @@ void GAIAInfoUpdateService::UpdateAnyAccount(const AccountInfo& info) {
     return;
   }
 
-  // These are idempotent, i.e. the second and any further call for the same
+  // This is idempotent, i.e. the second and any further call for the same
   // account info has no further impact.
   entry->AddAccountName(info.full_name);
-  entry->AddAccountCategory(info.hosted_domain == kNoHostedDomainFound
-                                ? AccountCategory::kConsumer
-                                : AccountCategory::kEnterprise);
 }
 
 void GAIAInfoUpdateService::ClearProfileEntry() {
@@ -186,7 +166,6 @@ void GAIAInfoUpdateService::OnAccountsInCookieUpdated(
   // reset the info.
   if (accounts_in_cookie_jar_info.signed_out_accounts.empty()) {
     entry->ClearAccountNames();
-    entry->ClearAccountCategories();
 
     // Regenerate based on the info from signed-in accounts (if not available
     // now, it will be regenerated soon via OnExtendedAccountInfoUpdated() once

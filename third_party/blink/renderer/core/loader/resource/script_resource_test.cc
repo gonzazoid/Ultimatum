@@ -81,7 +81,7 @@ TEST(ScriptResourceTest, RedirectDuringRevalidation) {
   ResourceResponse revalidation_response(url);
   revalidation_response.SetHttpStatusCode(302);
   revalidation_response.SetHttpHeaderField(
-      "location", AtomicString(destination.GetString()));
+      http_names::kLocation, AtomicString(destination.GetString()));
   ResourceRequest redirect_request(destination);
   resource->WillFollowRedirect(redirect_request, revalidation_response);
 
@@ -90,6 +90,9 @@ TEST(ScriptResourceTest, RedirectDuringRevalidation) {
 }
 
 TEST(ScriptResourceTest, WebUICodeCacheEnabled) {
+#if DCHECK_IS_ON()
+  WTF::SetIsBeforeThreadCreatedForTest();  // Required for next operation:
+#endif
   SchemeRegistry::RegisterURLSchemeAsCodeCacheWithHashing(
       "codecachewithhashing");
 
@@ -108,6 +111,9 @@ TEST(ScriptResourceTest, WebUICodeCacheEnabled) {
   EXPECT_TRUE(handler->HashRequired());
   EXPECT_EQ(UTF8Encoding().GetName(), handler->Encoding());
 
+#if DCHECK_IS_ON()
+  WTF::SetIsBeforeThreadCreatedForTest();  // Required for next operation:
+#endif
   SchemeRegistry::RemoveURLSchemeAsCodeCacheWithHashing("codecachewithhashing");
 }
 
@@ -124,6 +130,24 @@ TEST(ScriptResourceTest, WebUICodeCacheDisabled) {
 
   auto* handler = resource->CacheHandler();
   EXPECT_FALSE(handler);
+}
+
+TEST(ScriptResourceTest, CodeCacheEnabledByResponseFlag) {
+  const KURL url("https://www.example.com/script.js");
+  ScriptResource* resource = ScriptResource::CreateForTest(url, UTF8Encoding());
+  ResourceResponse response(url);
+  response.SetHttpStatusCode(200);
+  response.SetShouldUseSourceHashForJSCodeCache(true);
+
+  resource->ResponseReceived(response);
+  constexpr char kData[5] = "abcd";
+  resource->AppendData(kData, strlen(kData));
+  resource->FinishForTest();
+
+  auto* handler = resource->CacheHandler();
+  EXPECT_TRUE(handler);
+  EXPECT_TRUE(handler->HashRequired());
+  EXPECT_EQ(UTF8Encoding().GetName(), handler->Encoding());
 }
 
 }  // namespace

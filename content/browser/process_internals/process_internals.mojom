@@ -6,9 +6,29 @@ module mojom;
 
 import "url/mojom/url.mojom";
 
+// Describes the current process counts and limit.
+struct ProcessCountInfo {
+  // Soft limit on renderer processes.
+  uint64 renderer_process_limit;
+
+  // Total number of renderer processes.
+  uint64 renderer_process_count_total;
+
+  // Total number of renderer processes that actually count towards the limit,
+  // possibly ignoring some of the total (e.g., to prevent extensions from using
+  // up the limit).
+  uint64 renderer_process_count_for_limit;
+};
+
 // Basic information describing a SiteInstance.
 struct SiteInstanceInfo {
   int32 id;
+
+  // ID of the SiteInstanceGroup this SiteInstance belongs to.
+  int32 site_instance_group_id;
+
+  // ID of the BrowsingInstance this SiteInstance belongs to.
+  int32 browsing_instance_id;
 
   // Boolean indicating whether the SiteInstance's process is locked to a
   // specific URL.
@@ -29,6 +49,9 @@ struct SiteInstanceInfo {
 
   // Specifies whether this SiteInstance is for a <webview> guest.
   bool is_guest;
+
+  // Specifies whether this SiteInstance is for a PDF.
+  bool is_pdf;
 
   // If this SiteInstance uses a non-default StoragePartition, this specifies a
   // string representation of that StoragePartition.
@@ -69,6 +92,10 @@ struct IsolatedOriginInfo {
 // Interface used by chrome://process-internals to query data from the
 // browser process.
 interface ProcessInternalsHandler {
+
+  // Returns information about the current process count and limit, across all
+  // profiles.
+  GetProcessCountInfo() => (ProcessCountInfo info);
 
   // Returns a string containing the currently active isolation modes.
   GetIsolationMode() => (string mode);

@@ -13,8 +13,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/task/single_thread_task_runner.h"
@@ -107,8 +107,11 @@ std::vector<dbus::ObjectPath> UPowerObject::EnumerateDevices() {
   std::vector<dbus::ObjectPath> paths;
   dbus::MethodCall method_call(kUPowerServiceName,
                                kUPowerMethodEnumerateDevices);
-  std::unique_ptr<dbus::Response> response(proxy_->CallMethodAndBlock(
-      &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT));
+  std::unique_ptr<dbus::Response> response(
+      proxy_
+          ->CallMethodAndBlock(&method_call,
+                               dbus::ObjectProxy::TIMEOUT_USE_DEFAULT)
+          .value_or(nullptr));
 
   if (response) {
     dbus::MessageReader reader(response.get());
@@ -124,8 +127,11 @@ dbus::ObjectPath UPowerObject::GetDisplayDevice() {
 
   dbus::MethodCall method_call(kUPowerServiceName,
                                kUPowerMethodGetDisplayDevice);
-  std::unique_ptr<dbus::Response> response(proxy_->CallMethodAndBlock(
-      &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT));
+  std::unique_ptr<dbus::Response> response(
+      proxy_
+          ->CallMethodAndBlock(&method_call,
+                               dbus::ObjectProxy::TIMEOUT_USE_DEFAULT)
+          .value_or(nullptr));
 
   if (response) {
     dbus::MessageReader reader(response.get());

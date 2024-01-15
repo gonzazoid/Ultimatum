@@ -19,7 +19,8 @@ import tempfile
 
 SUPPORTED_TARGETS = ('iphoneos', 'iphonesimulator', 'maccatalyst')
 SUPPORTED_CONFIGS = ('Debug', 'Release', 'Profile', 'Official')
-ADDITIONAL_FILE_ROOTS = ('//ios', '//ios_internal', '//docs')
+ADDITIONAL_FILE_ROOTS = ('//ios', '//ios_internal', '//docs', '//components')
+ADDITIONAL_FILES_PATTERNS = ('*.md', '*_google_chrome_*.grd', 'OWNERS', 'DEPS')
 
 # Pattern matching lines from ~/.lldbinit that must not be copied to the
 # generated .lldbinit file. They match what the user were told to add to
@@ -60,6 +61,12 @@ class ConfigParserWithStringInterpolation(configparser.ConfigParser):
     except configparser.NoOptionError:
       return fallback
     return self._UnquoteString(self._ExpandEnvVar(raw_value))
+
+  def getboolean(self, section, option, fallback=False):
+    try:
+      return super().getboolean(section, option)
+    except configparser.NoOptionError:
+      return fallback
 
   def _UnquoteString(self, string):
     if not string or string[0] != '"' or string[-1] != '"':
@@ -198,9 +205,13 @@ class GnGenerator(object):
       stream.write('  command = %s\n' % NinjaEscapeCommand(gn_command))
       stream.write('  description = Regenerating ninja files\n')
       stream.write('\n')
-      stream.write('build build.ninja: gn\n')
+      stream.write('build build.ninja.stamp: gn\n')
       stream.write('  generator = 1\n')
       stream.write('  depfile = build.ninja.d\n')
+      stream.write('\n')
+      stream.write('build build.ninja: phony build.ninja.stamp\n')
+      stream.write('  generator = 1\n')
+      stream.write('\n')
 
   def WriteBuildNinjaDeps(self, build_dir):
     with open(os.path.join(build_dir, 'build.ninja.d'), 'w') as stream:
@@ -213,13 +224,15 @@ class GnGenerator(object):
       gn_command.append('--ninja-executable=autoninja')
       gn_command.append('--xcode-build-system=new')
       gn_command.append('--xcode-project=%s' % xcode_project_name)
-      gn_command.append('--xcode-additional-files-patterns=*.md')
+      gn_command.append('--xcode-additional-files-patterns=' +
+                        ';'.join(ADDITIONAL_FILES_PATTERNS))
       gn_command.append(
           '--xcode-additional-files-roots=' + ';'.join(ADDITIONAL_FILE_ROOTS))
       gn_command.append('--xcode-configs=' + ';'.join(SUPPORTED_CONFIGS))
       gn_command.append('--xcode-config-build-dir='
                         '//out/${CONFIGURATION}${EFFECTIVE_PLATFORM_NAME}')
-      if self._settings.has_section('filters'):
+      use_blink = self._settings.getboolean('gn_args', 'use_blink')
+      if self._settings.has_section('filters') and not use_blink:
         target_filters = self._settings.values('filters')
         if target_filters:
           gn_command.append('--filters=%s' % ';'.join(target_filters))
@@ -351,6 +364,10 @@ def Main(args):
       '--config-path', default=os.path.expanduser('~/.setup-gn'),
       help='path to the user config file (default: %(default)s)')
   parser.add_argument(
+      '--project-config-path', default=os.path.join(default_root, os.pardir,
+          '.setup-gn'),
+      help='path to the project config file (default: %(default)s)')
+  parser.add_argument(
       '--system-config-path', default=os.path.splitext(__file__)[0] + '.config',
       help='path to the default config file (default: %(default)s)')
   parser.add_argument(
@@ -366,6 +383,7 @@ def Main(args):
   settings.read([
       args.system_config_path,
       args.config_path,
+      args.project_config_path,
   ])
 
   # Add private sections corresponding to --import argument.

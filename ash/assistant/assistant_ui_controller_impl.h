@@ -5,19 +5,20 @@
 #ifndef ASH_ASSISTANT_ASSISTANT_UI_CONTROLLER_IMPL_H_
 #define ASH_ASSISTANT_ASSISTANT_UI_CONTROLLER_IMPL_H_
 
+#include <optional>
+
 #include "ash/ash_export.h"
 #include "ash/assistant/model/assistant_interaction_model_observer.h"
 #include "ash/assistant/model/assistant_ui_model.h"
 #include "ash/assistant/model/assistant_ui_model_observer.h"
 #include "ash/assistant/ui/assistant_view_delegate.h"
-#include "ash/highlighter/highlighter_controller.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller_observer.h"
 #include "ash/public/cpp/assistant/controller/assistant_ui_controller.h"
 #include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/overview/overview_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefRegistrySimple;
 
@@ -39,7 +40,6 @@ class ASH_EXPORT AssistantUiControllerImpl
       public AssistantInteractionModelObserver,
       public AssistantUiModelObserver,
       public AssistantViewDelegateObserver,
-      public HighlighterController::Observer,
       public OverviewObserver {
  public:
   explicit AssistantUiControllerImpl(
@@ -62,9 +62,9 @@ class ASH_EXPORT AssistantUiControllerImpl
   bool HasShownOnboarding() const override;
   void SetKeyboardTraversalMode(bool keyboard_traversal_mode) override;
   void ShowUi(AssistantEntryPoint entry_point) override;
-  void ToggleUi(absl::optional<AssistantEntryPoint> entry_point,
-                absl::optional<AssistantExitPoint> exit_point) override;
-  absl::optional<base::ScopedClosureRunner> CloseUi(
+  void ToggleUi(std::optional<AssistantEntryPoint> entry_point,
+                std::optional<AssistantExitPoint> exit_point) override;
+  std::optional<base::ScopedClosureRunner> CloseUi(
       AssistantExitPoint exit_point) override;
   void SetAppListBubbleWidth(int width) override;
 
@@ -82,14 +82,11 @@ class ASH_EXPORT AssistantUiControllerImpl
   void OnUiVisibilityChanged(
       AssistantVisibility new_visibility,
       AssistantVisibility old_visibility,
-      absl::optional<AssistantEntryPoint> entry_point,
-      absl::optional<AssistantExitPoint> exit_point) override;
+      std::optional<AssistantEntryPoint> entry_point,
+      std::optional<AssistantExitPoint> exit_point) override;
 
   // AssistantViewDelegateObserver:
   void OnOnboardingShown() override;
-
-  // HighlighterController::Observer:
-  void OnHighlighterEnabledChanged(HighlighterEnabledState state) override;
 
   // OverviewObserver:
   void OnOverviewModeWillStart() override;
@@ -97,19 +94,16 @@ class ASH_EXPORT AssistantUiControllerImpl
   void ShowUnboundErrorToast();
 
  private:
-  AssistantControllerImpl* const assistant_controller_;  // Owned by Shell.
+  const raw_ptr<AssistantControllerImpl>
+      assistant_controller_;  // Owned by Shell.
   AssistantUiModel model_;
   bool has_shown_onboarding_ = false;
 
   // Owned by AssistantService.
-  assistant::Assistant* assistant_ = nullptr;
+  raw_ptr<assistant::Assistant> assistant_ = nullptr;
 
   base::ScopedObservation<AssistantController, AssistantControllerObserver>
       assistant_controller_observation_{this};
-
-  base::ScopedObservation<HighlighterController,
-                          HighlighterController::Observer>
-      highlighter_controller_observation_{this};
 
   base::ScopedObservation<OverviewController, OverviewObserver>
       overview_controller_observation_{this};

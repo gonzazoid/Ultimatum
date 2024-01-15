@@ -7,6 +7,7 @@
  * 'settings-main' displays the selected settings page.
  */
 import 'chrome://resources/cr_components/managed_footnote/managed_footnote.js';
+import 'chrome://resources/cr_components/settings_prefs/prefs.js';
 import 'chrome://resources/cr_elements/cr_shared_style.css.js';
 import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
 import 'chrome://resources/cr_elements/icons.html.js';
@@ -15,7 +16,6 @@ import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import '../about_page/about_page.js';
 import '../hashnet_page/hashnet_page.js';
 import '../basic_page/basic_page.js';
-import '../prefs/prefs.js';
 import '../search_settings.js';
 import '../settings_shared.css.js';
 import '../settings_vars.css.js';
@@ -26,7 +26,7 @@ import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bu
 import {loadTimeData} from '../i18n_setup.js';
 import {PageVisibility} from '../page_visibility.js';
 import {routes} from '../route.js';
-import {RouteObserverMixin, RouteObserverMixinInterface, Router} from '../router.js';
+import {RouteObserverMixin, Router} from '../router.js';
 
 import {getTemplate} from './settings_main.html.js';
 
@@ -42,8 +42,7 @@ export interface SettingsMainElement {
   };
 }
 
-const SettingsMainElementBase = RouteObserverMixin(PolymerElement) as
-    {new (): PolymerElement & RouteObserverMixinInterface};
+const SettingsMainElementBase = RouteObserverMixin(PolymerElement);
 
 export class SettingsMainElement extends SettingsMainElementBase {
   static get is() {
@@ -61,11 +60,6 @@ export class SettingsMainElement extends SettingsMainElementBase {
        */
       prefs: {
         type: Object,
-        notify: true,
-      },
-
-      advancedToggleExpanded: {
-        type: Boolean,
         notify: true,
       },
 
@@ -110,7 +104,6 @@ export class SettingsMainElement extends SettingsMainElementBase {
   }
 
   prefs: {[key: string]: any};
-  advancedToggleExpanded: boolean;
   private showPages_: MainPageVisibility;
   private inSearchMode_: boolean;
   private showNoResultsFound_: boolean;

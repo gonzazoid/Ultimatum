@@ -7,16 +7,16 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/i18n/case_conversion.h"
 #include "base/notreached.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/win/registry.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_event_dispatcher.h"
@@ -27,6 +27,7 @@
 #include "ui/shell_dialogs/execute_select_file_win.h"
 #include "ui/shell_dialogs/select_file_policy.h"
 #include "ui/shell_dialogs/select_file_utils_win.h"
+#include "ui/shell_dialogs/selected_file_info.h"
 #include "ui/strings/grit/ui_strings.h"
 #include "url/gurl.h"
 
@@ -262,7 +263,7 @@ void SelectFileDialogImpl::SelectFileImpl(
       base::BindOnce(&DoSelectFileOnDialogTaskRunner,
                      execute_select_file_callback_, type, title, default_path,
                      filter, file_type_index, default_extension, owner,
-                     base::ThreadTaskRunnerHandle::Get(),
+                     base::SingleThreadTaskRunner::GetCurrentDefault(),
                      base::BindOnce(&SelectFileDialogImpl::OnSelectFileExecuted,
                                     this, type, std::move(run_state), params)));
 }
@@ -302,10 +303,11 @@ void SelectFileDialogImpl::OnSelectFileExecuted(
         case SELECT_SAVEAS_FILE:
         case SELECT_OPEN_FILE:
           DCHECK_EQ(paths.size(), 1u);
-          listener_->FileSelected(paths[0], index, params);
+          listener_->FileSelected(SelectedFileInfo(paths[0]), index, params);
           break;
         case SELECT_OPEN_MULTI_FILE:
-          listener_->MultiFilesSelected(paths, params);
+          listener_->MultiFilesSelected(
+              FilePathListToSelectedFileInfoList(paths), params);
           break;
         case SELECT_NONE:
           NOTREACHED();

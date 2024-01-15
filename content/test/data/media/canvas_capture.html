@@ -64,7 +64,7 @@ function drawBitmapRenderer(canvas, drawCounter) {
   checkForRedraw(canvas, drawCounter, drawBitmapRenderer);
 };
 
-function testCanvasCapture(drawFunction) {
+async function testCanvasCapture(drawFunction) {
   var canvas = document.createElement('canvas');
   canvas.width = canvas.height = 64;
 
@@ -77,12 +77,14 @@ function testCanvasCapture(drawFunction) {
   const recorder = new MediaRecorder(stream);
   assertTrue(recorder, 'Error creating recorder out of the MediaStream');
 
-  recorder.ondataavailable = function(event) {
-    if (event.data.size > ON_DATA_AVAILABLE_THRESHOLD) {
-      if (++recorded_events == NUMBER_OF_EVENTS_TO_RECORD)
-        reportTestSuccess();
-    }
-  };
+  const completePromise = new Promise(resolve => {
+    recorder.ondataavailable = function(event) {
+      if (event.data.size > ON_DATA_AVAILABLE_THRESHOLD) {
+        if (++recorded_events == NUMBER_OF_EVENTS_TO_RECORD)
+          resolve();
+      }
+    };
+  });
 
   recorder.start(0);
   if (drawFunction.toString() == drawOffscreenCanvas.toString()) {
@@ -91,6 +93,9 @@ function testCanvasCapture(drawFunction) {
   } else {
     drawFunction(canvas, 0);
   }
+
+  return completePromise
+    .then(logSuccess);
 }
 
 </script>

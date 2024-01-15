@@ -4,10 +4,9 @@
 
 package org.chromium.chrome.test.pagecontroller.utils;
 
-import android.support.test.InstrumentationRegistry;
-
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.uiautomator.StaleObjectException;
 import androidx.test.uiautomator.UiDevice;
 import androidx.test.uiautomator.UiObject2;
@@ -26,28 +25,29 @@ import java.util.List;
  * This helper class provides these capabilities.
  */
 public class UiLocatorHelper {
-    private static final String TAG = "UiLocatorHelper";
     private static final long DEFAULT_TIMEOUT_MS = 3000L;
     // UI_CHECK_INTERVAL_MS is intentionally not modifiable so that longer timeouts
     // don't lead to slowness due to the checking interval being too coarse.
     static final long UI_CHECK_INTERVAL_MS = DEFAULT_TIMEOUT_MS / 4L;
-    private static final long DEFAULT_MAX_UI_SETTLE_TIME_MS = 200L;
 
-    private static final ElementConverter<String> CONVERTER_TEXT = object2 -> {
-        return object2.getText();
-    };
+    private static final ElementConverter<String> CONVERTER_TEXT =
+            object2 -> {
+                return object2.getText();
+            };
 
-    private static final ElementConverter<String> CONVERTER_DESC = object2 -> {
-        return object2.getContentDescription();
-    };
+    private static final ElementConverter<String> CONVERTER_DESC =
+            object2 -> {
+                return object2.getContentDescription();
+            };
 
-    private static final ElementConverter<Boolean> CONVERTER_CHECKED = object2 -> {
-        if (object2.isCheckable()) {
-            return object2.isChecked();
-        } else {
-            throw new UiLocationException("Item in " + object2 + " is not checkable.");
-        }
-    };
+    private static final ElementConverter<Boolean> CONVERTER_CHECKED =
+            object2 -> {
+                if (object2.isCheckable()) {
+                    return object2.isChecked();
+                } else {
+                    throw new UiLocationException("Item in " + object2 + " is not checkable.");
+                }
+            };
 
     private final UiDevice mDevice;
     private long mTimeout;
@@ -291,8 +291,12 @@ public class UiLocatorHelper {
             }
             Utils.sleep(UI_CHECK_INTERVAL_MS);
         }
-        throw new UiLocationException("Could not find any objects after " + mTimeout + "ms and "
-                        + attempts + " attempts.",
+        throw new UiLocationException(
+                "Could not find any objects after "
+                        + mTimeout
+                        + "ms and "
+                        + attempts
+                        + " attempts.",
                 locator);
     }
 
@@ -392,7 +396,9 @@ public class UiLocatorHelper {
      * Define a conversion method creates an object from info in a UiObject2 node.
      * @param <T> Type of the object.
      */
-    private static interface ElementConverter<T> { T convert(UiObject2 object2); }
+    private static interface ElementConverter<T> {
+        T convert(UiObject2 object2);
+    }
 
     private <T> T getOneElement(IUi2Locator locator, ElementConverter<T> converter) {
         List<T> all = getAllElements(locator, converter);

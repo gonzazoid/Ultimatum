@@ -1,17 +1,17 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/test/gtest_util.h"
 #include "chrome/browser/android/historical_tab_saver.h"
+
+#include "base/android/jni_android.h"
+#include "base/test/gtest_util.h"
 #include "chrome/browser/android/tab_android.h"
 #include "chrome/browser/tab/web_contents_state.h"
 #include "chrome/test/base/android/android_browser_test.h"
 #include "chrome/test/base/chrome_test_utils.h"
 #include "content/public/test/browser_test.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
-
-#include "base/memory/raw_ptr.h"
 
 namespace historical_tab_saver {
 
@@ -46,7 +46,7 @@ class HistoricalTabSaverBrowserTest : public AndroidBrowserTest {
 // Test WebContentsByteBuffer non-empty object creation.
 IN_PROC_BROWSER_TEST_F(HistoricalTabSaverBrowserTest,
                        NonEmptyWebContentsByteBuffer) {
-  raw_ptr<JNIEnv> env = base::android::AttachCurrentThread();
+  JNIEnv* env = base::android::AttachCurrentThread();
 
   Navigate();
   base::android::ScopedJavaLocalRef<jobject> result =
@@ -54,15 +54,14 @@ IN_PROC_BROWSER_TEST_F(HistoricalTabSaverBrowserTest,
                                                      GetActiveWebContents());
 
   WebContentsStateByteBuffer web_contents_state =
-      WebContentsStateByteBuffer(env->GetDirectBufferAddress(result.obj()),
-                                 env->GetDirectBufferCapacity(result.obj()), 2);
+      WebContentsStateByteBuffer(result, 2);
 
   EXPECT_NE(web_contents_state.byte_buffer_data, nullptr);
   EXPECT_GT(web_contents_state.byte_buffer_size, 0);
 
+  WebContentsStateByteBuffer* web_contents_state_ptr = &web_contents_state;
   auto native_contents = WebContentsState::RestoreContentsFromByteBuffer(
-      web_contents_state.byte_buffer_data, web_contents_state.byte_buffer_size,
-      web_contents_state.state_version, true, false);
+      web_contents_state_ptr, true, false);
 
   ASSERT_TRUE(native_contents);
 }
@@ -71,8 +70,19 @@ IN_PROC_BROWSER_TEST_F(HistoricalTabSaverBrowserTest,
 IN_PROC_BROWSER_TEST_F(HistoricalTabSaverBrowserTest,
                        NullDataWebContentsByteBufferCrashCheck) {
 #if DCHECK_IS_ON()
+  JNIEnv* env = base::android::AttachCurrentThread();
+
+  Navigate();
+  base::android::ScopedJavaLocalRef<jobject> result =
+      WebContentsState::GetContentsStateAsByteBuffer(env,
+                                                     GetActiveWebContents());
+
+  WebContentsStateByteBuffer web_contents_state =
+      WebContentsStateByteBuffer(result, 2);
+  WebContentsStateByteBuffer* web_contents_state_ptr = &web_contents_state;
+
   ASSERT_DCHECK_DEATH_WITH(WebContentsState::RestoreContentsFromByteBuffer(
-                               nullptr, 1, 2, true, false),
+                               web_contents_state_ptr, true, false),
                            "Check failed: data != nullptr (0x0 vs. nullptr)");
 #endif
 }
@@ -81,7 +91,7 @@ IN_PROC_BROWSER_TEST_F(HistoricalTabSaverBrowserTest,
 IN_PROC_BROWSER_TEST_F(HistoricalTabSaverBrowserTest,
                        EmptySizeWebContentsByteBufferCrashCheck) {
 #if DCHECK_IS_ON()
-  raw_ptr<JNIEnv> env = base::android::AttachCurrentThread();
+  JNIEnv* env = base::android::AttachCurrentThread();
 
   Navigate();
   base::android::ScopedJavaLocalRef<jobject> result =
@@ -89,13 +99,12 @@ IN_PROC_BROWSER_TEST_F(HistoricalTabSaverBrowserTest,
                                                      GetActiveWebContents());
 
   WebContentsStateByteBuffer web_contents_state =
-      WebContentsStateByteBuffer(env->GetDirectBufferAddress(result.obj()),
-                                 env->GetDirectBufferCapacity(result.obj()), 2);
+      WebContentsStateByteBuffer(result, 2);
+  WebContentsStateByteBuffer* web_contents_state_ptr = &web_contents_state;
 
-  ASSERT_DCHECK_DEATH_WITH(
-      WebContentsState::RestoreContentsFromByteBuffer(
-          web_contents_state.byte_buffer_data, 0, 2, true, false),
-      "Check failed: size > 0 (0 vs. 0)");
+  ASSERT_DCHECK_DEATH_WITH(WebContentsState::RestoreContentsFromByteBuffer(
+                               web_contents_state_ptr, true, false),
+                           "Check failed: size > 0 (0 vs. 0)");
 #endif
 }
 

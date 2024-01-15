@@ -7,23 +7,22 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/metadata/metadata_header_macros.h"
-#include "ui/gfx/color_palette.h"
+#include "ui/color/color_id.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/views_export.h"
 
-namespace views {
-
-namespace internal {
+namespace views::internal {
 
 // A Label subclass that can be disabled. This is only used internally for
 // views::LabelButton.
 class VIEWS_EXPORT LabelButtonLabel : public Label {
+  METADATA_HEADER(LabelButtonLabel, Label)
+
  public:
-  METADATA_HEADER(LabelButtonLabel);
   LabelButtonLabel(const std::u16string& text, int text_context);
   LabelButtonLabel(const LabelButtonLabel&) = delete;
   LabelButtonLabel& operator=(const LabelButtonLabel&) = delete;
@@ -33,8 +32,16 @@ class VIEWS_EXPORT LabelButtonLabel : public Label {
   // changes in the native theme for disabled colors.
   void SetDisabledColor(SkColor color);
 
+  // Sets/Gets the explicit disable color as above, but using color_id.
+  void SetDisabledColorId(absl::optional<ui::ColorId> color_id);
+  absl::optional<ui::ColorId> GetDisabledColorId() const;
+
   // Label:
   void SetEnabledColor(SkColor color) override;
+
+  // Sets/Gets the explicit enabled color with color_id.
+  void SetEnabledColorId(absl::optional<ui::ColorId> color_id);
+  absl::optional<ui::ColorId> GetEnabledColorId() const;
 
  protected:
   // Label:
@@ -44,16 +51,22 @@ class VIEWS_EXPORT LabelButtonLabel : public Label {
   void OnEnabledChanged();
   void SetColorForEnableState();
 
-  absl::optional<SkColor> requested_disabled_color_;
-  absl::optional<SkColor> requested_enabled_color_;
+  absl::variant<absl::monostate, SkColor, ui::ColorId> requested_enabled_color_;
+  absl::variant<absl::monostate, SkColor, ui::ColorId>
+      requested_disabled_color_;
   base::CallbackListSubscription enabled_changed_subscription_ =
       AddEnabledChangedCallback(
           base::BindRepeating(&LabelButtonLabel::OnEnabledChanged,
                               base::Unretained(this)));
 };
 
-}  // namespace internal
+BEGIN_VIEW_BUILDER(VIEWS_EXPORT, LabelButtonLabel, Label)
+VIEW_BUILDER_PROPERTY(absl::optional<ui::ColorId>, EnabledColorId)
+VIEW_BUILDER_PROPERTY(absl::optional<ui::ColorId>, DisabledColorId)
+END_VIEW_BUILDER
 
-}  // namespace views
+}  // namespace views::internal
+
+DEFINE_VIEW_BUILDER(VIEWS_EXPORT, internal::LabelButtonLabel)
 
 #endif  // UI_VIEWS_CONTROLS_BUTTON_LABEL_BUTTON_LABEL_H_

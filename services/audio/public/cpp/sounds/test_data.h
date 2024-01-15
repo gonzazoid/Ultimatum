@@ -9,10 +9,10 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "media/base/audio_renderer_sink.h"
 #include "services/audio/public/cpp/sounds/audio_stream_handler.h"
@@ -29,7 +29,7 @@ const size_t kTestAudioDataSize = std::size(kTestAudioData) - 1;
 
 class TestObserver : public AudioStreamHandler::TestObserver {
  public:
-  TestObserver(const base::RepeatingClosure& quit);
+  explicit TestObserver(const base::RepeatingClosure& quit);
 
   TestObserver(const TestObserver&) = delete;
   TestObserver& operator=(const TestObserver&) = delete;
@@ -40,12 +40,11 @@ class TestObserver : public AudioStreamHandler::TestObserver {
   void Initialize(media::AudioRendererSink::RenderCallback* callback,
                   media::AudioParameters params) override;
   void OnPlay() override;
-  void OnStop(size_t cursor) override;
+  void OnStop() override;
   void Render();
 
   int num_play_requests() const { return num_play_requests_; }
   int num_stop_requests() const { return num_stop_requests_; }
-  int cursor() const { return cursor_; }
 
  private:
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
@@ -53,7 +52,6 @@ class TestObserver : public AudioStreamHandler::TestObserver {
 
   int num_play_requests_;
   int num_stop_requests_;
-  int cursor_;
   int is_playing;
   raw_ptr<media::AudioRendererSink::RenderCallback> callback_;
   std::unique_ptr<media::AudioBus> bus_;

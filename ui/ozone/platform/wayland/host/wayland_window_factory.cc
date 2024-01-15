@@ -4,7 +4,6 @@
 
 #include <memory>
 
-#include "base/compiler_specific.h"
 #include "base/logging.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/ozone/platform/wayland/host/wayland_connection.h"
@@ -15,22 +14,11 @@
 
 namespace ui {
 
-namespace {
-
-WaylandWindow* GetParentWindow(WaylandConnection* connection,
-                               gfx::AcceleratedWidget widget) {
-  return connection->wayland_window_manager()->GetWindow(widget);
-}
-
-}  // namespace
-
 // static
 std::unique_ptr<WaylandWindow> WaylandWindow::Create(
     PlatformWindowDelegate* delegate,
     WaylandConnection* connection,
-    PlatformWindowInitProperties properties,
-    bool update_visual_size_immediately,
-    bool apply_pending_state_on_update_visual_size) {
+    PlatformWindowInitProperties properties) {
   std::unique_ptr<WaylandWindow> window;
   switch (properties.type) {
     case PlatformWindowType::kPopup:
@@ -39,29 +27,25 @@ std::unique_ptr<WaylandWindow> WaylandWindow::Create(
       // kPopup can be created by MessagePopupView without a parent window set.
       // It looks like it ought to be a global notification window. Thus, use a
       // toplevel window instead.
-      if (auto* parent =
-              GetParentWindow(connection, properties.parent_widget)) {
+      if (auto* parent = connection->window_manager()->GetWindow(
+              properties.parent_widget)) {
         window = std::make_unique<WaylandPopup>(delegate, connection, parent);
       } else {
-        DLOG(WARNING) << "Failed to determine for menu/popup window.";
+        DLOG(WARNING) << "Failed to determine parent for menu/popup window.";
         window = std::make_unique<WaylandToplevelWindow>(delegate, connection);
       }
       break;
     case PlatformWindowType::kWindow:
     case PlatformWindowType::kBubble:
     case PlatformWindowType::kDrag:
-      // TODO(msisov): Figure out what kind of surface we need to create for
-      // bubble and drag windows.
+      // TODO(crbug.com/1399419): Figure out what kind of surface we need to
+      // create for kBubble and kDrag windows.
       window = std::make_unique<WaylandToplevelWindow>(delegate, connection);
       break;
     default:
       NOTREACHED();
       break;
   }
-  window->set_update_visual_size_immediately_for_testing(
-      update_visual_size_immediately);
-  window->set_apply_pending_state_on_update_visual_size_for_testing(
-      apply_pending_state_on_update_visual_size);
   return window && window->Initialize(std::move(properties)) ? std::move(window)
                                                              : nullptr;
 }

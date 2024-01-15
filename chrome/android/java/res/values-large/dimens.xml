@@ -6,12 +6,14 @@ found in the LICENSE file.
 -->
 
 <resources>
-    <dimen name="fre_content_margin">60dp</dimen>
-
     <!-- Copy of corresponding abc_* values from AppCompat. Used by
          TabbedModeFirstRunActivity to simulate DialogWhenLarge layout. -->
     <item type="dimen" name="dialog_fixed_width_major">60%</item>
     <item type="dimen" name="dialog_fixed_width_minor">90%</item>
     <item type="dimen" name="dialog_fixed_height_major">60%</item>
     <item type="dimen" name="dialog_fixed_height_minor">90%</item>
+    <item type="dimen" name="dialog_fixed_width_major_automotive">60%</item>
+    <item type="dimen" name="dialog_fixed_width_minor_automotive">80%</item>
+    <item type="dimen" name="dialog_fixed_height_major_automotive">80%</item>
+    <item type="dimen" name="dialog_fixed_height_minor_automotive">90%</item>
 </resources>

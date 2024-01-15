@@ -4,13 +4,32 @@
 
 # This file contains common system config stuff for the Android build.
 
+# Some arguments that are needed across all builds that import this file, for
+# example by is_robolectric.
+declare_args() {
+  # Build incremental targets whenever possible.
+  # See //build/android/incremental_install/README.md for more details.
+  incremental_install = false
+}
+
+declare_args() {
+  # Java debug on Android. Having this on enables multidexing, and turning it
+  # off will enable proguard.
+  is_java_debug = is_debug || incremental_install
+}
+
+# Toolchain used to create native libraries for robolectric_binary() targets.
+robolectric_toolchain = "//build/toolchain/android:robolectric_$host_cpu"
+
 # NOTE: Because Chrome OS builds may depend on targets built with the Android
 # toolchain, this GNI file may be read and processed from within Chrome OS
 # toolchains. Checking |is_android| here would therefore be too restrictive.
 if (is_android || is_chromeos) {
   import("//build/config/android/channel.gni")
-  import("//build/config/chromecast_build.gni")
+  import("//build/config/cast.gni")
+  import("//build/config/clang/clang.gni")
   import("//build/config/dcheck_always_on.gni")
+  import("//build/toolchain/siso.gni")
   import("//build_overrides/build.gni")
   import("abi.gni")
 
@@ -41,9 +60,14 @@ if (is_android || is_chromeos) {
     enable_chrome_android_internal =
         build_with_chromium && checkout_src_internal && target_os == "android"
 
+    # Experimental new flag for the build system to automatically attempt to
+    # fix missing java deps. This should always be false on bots so they do not
+    # succeed when there are build errors. Devs can override this in args.gn.
+    auto_add_missing_java_deps = false
+
     # The default to use for android:minSdkVersion for targets that do
     # not explicitly set it.
-    default_min_sdk_version = 23
+    default_min_sdk_version = 26
 
     # Static analysis can be either "on" or "off" or "build_server". This
     # controls how android lint, error-prone, bytecode checks are run. This
@@ -63,6 +87,13 @@ if (is_android || is_chromeos) {
     }
   }
 
+  # Our build system no longer supports legacy multidex.
+  min_supported_sdk_version = 21
+
+  assert(
+      default_min_sdk_version >= min_supported_sdk_version,
+      "default_min_sdk_version ($default_min_sdk_version) must be >= min_supported_sdk_version ($min_supported_sdk_version)")
+
   # Avoid typos when setting android_static_analysis in args.gn.
   assert(android_static_analysis == "on" || android_static_analysis == "off" ||
          android_static_analysis == "build_server")
@@ -70,18 +101,6 @@ if (is_android || is_chromeos) {
   # This configuration has not bot coverage and has broken multiple times.
   # Warn against it.
   assert(!(enable_chrome_android_internal && skip_secondary_abi_for_cq))
-
-  declare_args() {
-    # Android API level for 32 bits platforms
-    android32_ndk_api_level = default_min_sdk_version
-
-    # Android API level for 64 bits platforms
-    if (default_min_sdk_version < 21) {
-      android64_ndk_api_level = 21
-    } else {
-      android64_ndk_api_level = default_min_sdk_version
-    }
-  }
 
   if (enable_chrome_android_internal) {
     import("//clank/config.gni")
@@ -94,22 +113,24 @@ if (is_android || is_chromeos) {
   }
 
   if (!defined(default_android_ndk_root)) {
-    default_android_ndk_root = "//third_party/android_ndk"
-    default_android_ndk_version = "r23"
-    default_android_ndk_major_version = 23
+    default_android_ndk_root = "//third_party/android_toolchain/ndk"
+    if (current_cpu == "riscv64") {
+      # Today (2023-08-30) only the canary Android NDK supports RISC-V64.
+      default_android_ndk_root = "//third_party/android_toolchain_canary/ndk"
+    }
+    default_android_ndk_version = "r26b"
   } else {
     assert(defined(default_android_ndk_version))
-    assert(defined(default_android_ndk_major_version))
   }
 
   public_android_sdk_root = "//third_party/android_sdk/public"
   public_android_sdk_build_tools =
-      "${public_android_sdk_root}/build-tools/33.0.0"
-  public_android_sdk_version = "33"
-  if (android_sdk_release == "t") {
+      "${public_android_sdk_root}/build-tools/34.0.0"
+  public_android_sdk_version = "34"
+  if (android_sdk_release == "u") {
     default_android_sdk_root = public_android_sdk_root
     default_android_sdk_version = public_android_sdk_version
-    default_android_sdk_build_tools_version = "33.0.0"
+    default_android_sdk_build_tools_version = "34.0.0"
     public_android_sdk = true
   }
 
@@ -122,7 +143,7 @@ if (is_android || is_chromeos) {
     # Purposefully repeated so that downstream can change
     # default_android_sdk_root without changing lint version.
     default_lint_android_sdk_root = public_android_sdk_root
-    default_lint_android_sdk_version = 33
+    default_lint_android_sdk_version = 34
   }
 
   if (!defined(default_extras_android_sdk_root)) {
@@ -144,30 +165,8 @@ if (is_android || is_chromeos) {
     google_play_services_package = "//third_party/android_deps"
   }
 
-  if (!defined(dagger_java_target)) {
-    dagger_java_target =
-        "//third_party/android_deps:com_google_dagger_dagger_java"
-  }
-
-  if (!defined(dagger_annotation_processor_target)) {
-    dagger_annotation_processor_target =
-        "//third_party/android_deps:com_google_dagger_dagger_compiler_java"
-  }
-
-  if (!defined(guava_android_target)) {
-    guava_android_target =
-        "//third_party/android_deps:com_google_guava_guava_android_java"
-  }
-
-  if (!defined(material_design_target)) {
-    material_design_target =
-        "//third_party/android_deps:com_google_android_material_material_java"
-  }
-
   if (!defined(android_protoc_bin)) {
     android_protoc_bin = "//third_party/android_protoc/protoc"
-    android_proto_runtime =
-        "//third_party/android_deps:com_google_protobuf_protobuf_javalite_java"
   }
 
   webview_public_framework_dep =
@@ -182,7 +181,21 @@ if (is_android || is_chromeos) {
   declare_args() {
     android_ndk_root = default_android_ndk_root
     android_ndk_version = default_android_ndk_version
-    android_ndk_major_version = default_android_ndk_major_version
+
+    # Android API level for 32 bits platforms
+    android32_ndk_api_level = default_min_sdk_version
+
+    # Android API level for 64 bits platforms
+    android64_ndk_api_level = default_min_sdk_version
+
+    if (default_min_sdk_version < 21) {
+      # Android did not support 64 bit before API 21.
+      android64_ndk_api_level = 21
+    }
+    if (current_cpu == "riscv64" && default_min_sdk_version < 35) {
+      # Android did not support RISC-V64 before API 35.
+      android64_ndk_api_level = 35
+    }
 
     android_sdk_root = default_android_sdk_root
     android_sdk_version = default_android_sdk_version
@@ -215,19 +228,11 @@ if (is_android || is_chromeos) {
     # The password for the keystore to use for signing builds.
     android_keystore_password = default_android_keystore_password
 
-    # Java debug on Android. Having this on enables multidexing, and turning it
-    # off will enable proguard.
-    is_java_debug = is_debug
-
     # Mark APKs as android:debuggable="true".
     debuggable_apks = !is_official_build
 
     # Set to false to disable the Errorprone compiler.
     use_errorprone_java_compiler = android_static_analysis != "off"
-
-    # Build incremental targets whenever possible.
-    # See //build/android/incremental_install/README.md for more details.
-    incremental_install = false
 
     # When true, updates all android_aar_prebuilt() .info files during gn gen.
     # Refer to android_aar_prebuilt() for more details.
@@ -254,9 +259,30 @@ if (is_android || is_chromeos) {
     # support mapping these names.
     enable_arsc_obfuscation = true
 
+    # Controls whether |strip_unused_resources| is respected. Useful when trying
+    # to analyze APKs using tools that do not support missing resources from
+    # resources.arsc.
+    enable_unused_resource_stripping = true
+
+    # Controls whether specifying |art_profile_path| automatically adds a binary
+    # baseline profile to the APK/AAB.
+    # Currently disabled while bundletool does not support baseline profiles in
+    # non-base splits.
+    enable_baseline_profiles = false
+
+    # Controls whether specifying |art_profile_path| automatically applies it as
+    # a startup profile to the APK/AAB.
+    # Currently disabled while R8 causes checkdiscard errors due to
+    # methods/classes not being inlined correctly.
+    enable_startup_profiles = false
+
     # The target to use as the system WebView implementation.
-    if (android_64bit_target_cpu && skip_secondary_abi_for_cq) {
-      system_webview_apk_target = "//android_webview:system_webview_64_apk"
+    if (android_64bit_target_cpu) {
+      if (skip_secondary_abi_for_cq) {
+        system_webview_apk_target = "//android_webview:system_webview_64_apk"
+      } else {
+        system_webview_apk_target = "//android_webview:system_webview_32_64_apk"
+      }
     } else {
       system_webview_apk_target = "//android_webview:system_webview_apk"
     }
@@ -280,16 +306,6 @@ if (is_android || is_chromeos) {
     # Reduce build time by using d8 incremental build.
     enable_incremental_d8 = true
 
-    # Use hashed symbol names to reduce JNI symbol overhead.
-    use_hashed_jni_names = !is_java_debug
-
-    # Enables JNI multiplexing to reduce JNI native methods overhead.
-    enable_jni_multiplexing = false
-
-    # Enables Java library desugaring.
-    # This will cause an extra classes.dex file to appear in every apk.
-    enable_jdk_library_desugaring = true
-
     # Enables trace event injection on Android views with bytecode rewriting.
     # This adds an additional step on android_app_bundle_module targets that
     # adds trace events to some methods in android.view.View subclasses.
@@ -297,8 +313,15 @@ if (is_android || is_chromeos) {
         !is_java_debug && android_channel != "stable"
   }
 
-  if (enable_jni_multiplexing) {
-    use_hashed_jni_names = false
+  assert(!incremental_install || is_java_debug,
+         "incremental_install=true && is_java_debug=false is not supported.")
+
+  # We overwrite system_webview_apk_target if it is an alias
+  if (android_64bit_target_cpu) {
+    system_webview_apk_target =
+        string_replace(system_webview_apk_target,
+                       "system_webview_google_apk",
+                       "system_webview_google_32_64_apk")
   }
 
   # Host stuff -----------------------------------------------------------------
@@ -352,20 +375,27 @@ if (is_android || is_chromeos) {
     android_prebuilt_arch = "android-arm64"
   } else if (current_cpu == "mips64el") {
     android_prebuilt_arch = "android-mips64"
+  } else if (current_cpu == "riscv64") {
+    # Place holder for riscv64 support, not tested.
+    android_prebuilt_arch = "android-riscv64"
   } else {
     assert(false, "Need android libgcc support for your target arch.")
   }
 
   android_toolchain_root = "$android_ndk_root/toolchains/llvm/prebuilt/${android_host_os}-${android_host_arch}"
   android_ndk_library_path = "$android_toolchain_root/lib64"
-  android_tool_prefix = "$android_toolchain_root/bin/llvm-"
+
+  # Point to Chromium's LLVM for tooling.
+  android_tool_prefix = "$clang_base_path/bin/llvm-"
   android_readelf = "${android_tool_prefix}readobj"
   android_objcopy = "${android_tool_prefix}objcopy"
-  android_gdbserver =
-      "$android_ndk_root/prebuilt/$android_prebuilt_arch/gdbserver/gdbserver"
 
   android_sdk_tools_bundle_aapt2 = "${android_sdk_tools_bundle_aapt2_dir}/aapt2"
 
-  # Toolchain used to create native libraries for robolectric_binary() targets.
-  robolectric_toolchain = "//build/toolchain/android:robolectric_$host_cpu"
+  # Actions that use java should add this as an input so that they are rebuilt
+  # when the JDK changes.
+  java_path_for_inputs = "//third_party/jdk/current/bin/java.chromium"
+
+  # TODO(crbug.com/1426605): Remove.
+  use_upstream_errorprone_annotations_threadsafe = true
 }

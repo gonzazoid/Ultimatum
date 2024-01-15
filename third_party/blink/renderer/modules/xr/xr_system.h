@@ -7,6 +7,7 @@
 
 #include "base/time/time.h"
 #include "device/vr/public/mojom/vr_service.mojom-blink.h"
+#include "device/vr/public/mojom/xr_session.mojom-blink.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "third_party/blink/public/mojom/devtools/console_message.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
@@ -66,7 +67,7 @@ class XRSessionInit;
 //
 // The XRSystem keeps weak references to XRSession objects after they were
 // returned through a successful requestSession promise, but does not own them.
-class XRSystem final : public EventTargetWithInlineData,
+class XRSystem final : public EventTarget,
                        public Supplement<Navigator>,
                        public ExecutionContextLifecycleObserver,
                        public device::mojom::blink::VRServiceClient,
@@ -232,7 +233,7 @@ class XRSystem final : public EventTargetWithInlineData,
     void SetDOMOverlayElement(Element* element) {
       dom_overlay_element_ = element;
     }
-    Element* DOMOverlayElement() { return dom_overlay_element_; }
+    Element* DOMOverlayElement() { return dom_overlay_element_.Get(); }
 
     void SetTrackedImages(
         const Vector<device::mojom::blink::XRTrackedImage>& images) {

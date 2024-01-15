@@ -4,8 +4,12 @@
 
 #include "chrome/browser/ui/webui/realbox/realbox_handler.h"
 
-#include "base/bind.h"
+#include "base/base64.h"
+#include "base/base64url.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/memory/weak_ptr.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
 #include "base/metrics/user_metrics_action.h"
@@ -14,12 +18,10 @@
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "chrome/browser/autocomplete/autocomplete_classifier_factory.h"
 #include "chrome/browser/autocomplete/chrome_autocomplete_provider_client.h"
 #include "chrome/browser/autocomplete/chrome_autocomplete_scheme_classifier.h"
-#include "chrome/browser/bitmap_fetcher/bitmap_fetcher_service_factory.h"
 #include "chrome/browser/bookmarks/bookmark_model_factory.h"
-#include "chrome/browser/favicon/favicon_service_factory.h"
-#include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/predictors/autocomplete_action_predictor.h"
 #include "chrome/browser/predictors/autocomplete_action_predictor_factory.h"
 #include "chrome/browser/preloading/prefetch/search_prefetch/search_prefetch_service.h"
@@ -27,24 +29,30 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/browser/ui/bookmarks/bookmark_stats.h"
+#include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/omnibox/omnibox_pedal_implementations.h"
 #include "chrome/browser/ui/search/omnibox_utils.h"
-#include "chrome/browser/ui/webui/realbox/realbox.mojom.h"
+#include "chrome/browser/ui/webui/metrics_reporter/metrics_reporter.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/new_tab_page_resources.h"
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/navigation_metrics/navigation_metrics.h"
 #include "components/omnibox/browser/autocomplete_classifier.h"
+#include "components/omnibox/browser/autocomplete_controller_emitter.h"
 #include "components/omnibox/browser/autocomplete_input.h"
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/autocomplete_match_type.h"
 #include "components/omnibox/browser/autocomplete_result.h"
-#include "components/omnibox/browser/omnibox_controller_emitter.h"
+#include "components/omnibox/browser/omnibox_client.h"
+#include "components/omnibox/browser/omnibox_controller.h"
+#include "components/omnibox/browser/omnibox_edit_model.h"
 #include "components/omnibox/browser/omnibox_event_global_tracker.h"
 #include "components/omnibox/browser/omnibox_log.h"
 #include "components/omnibox/browser/omnibox_prefs.h"
+#include "components/omnibox/browser/omnibox_view.h"
 #include "components/omnibox/browser/search_suggestion_parser.h"
+#include "components/omnibox/browser/suggestion_answer.h"
 #include "components/omnibox/browser/vector_icons.h"
 #include "components/omnibox/common/omnibox_features.h"
 #include "components/prefs/pref_service.h"
@@ -53,83 +61,173 @@
 #include "components/search_engines/template_url_service.h"
 #include "components/sessions/content/session_tab_helper.h"
 #include "components/strings/grit/components_strings.h"
+#include "components/variations/variations_client.h"
 #include "components/vector_icons/vector_icons.h"
 #include "content/public/browser/web_ui_data_source.h"
 #include "net/cookies/cookie_util.h"
+#include "realbox_handler.h"
 #include "third_party/metrics_proto/omnibox_focus_type.pb.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/webui/resource_path.h"
 #include "ui/base/webui/web_ui_util.h"
 #include "ui/base/window_open_disposition_utils.h"
-#include "ui/gfx/vector_icon_types.h"
-#include "ui/resources/grit/webui_generated_resources.h"
+#include "ui/resources/grit/webui_resources.h"
 
 namespace {
 
-constexpr char kSearchIconResourceName[] = "search.svg";
-
-constexpr char kAnswerCurrencyIconResourceName[] = "realbox/icons/currency.svg";
-constexpr char kAnswerDefaultIconResourceName[] = "realbox/icons/default.svg";
-constexpr char kAnswerDictionaryIconResourceName[] =
-    "realbox/icons/definition.svg";
-constexpr char kAnswerFinanceIconResourceName[] = "realbox/icons/finance.svg";
-constexpr char kAnswerSunriseIconResourceName[] = "realbox/icons/sunrise.svg";
-constexpr char kAnswerTranslationIconResourceName[] =
-    "realbox/icons/translation.svg";
-constexpr char kAnswerWhenIsIconResourceName[] = "realbox/icons/when_is.svg";
-constexpr char kBookmarkIconResourceName[] =
-    "chrome://resources/images/icon_bookmark.svg";
-constexpr char kCalculatorIconResourceName[] = "realbox/icons/calculator.svg";
-constexpr char kClockIconResourceName[] =
-    "chrome://resources/images/icon_clock.svg";
-constexpr char kDinoIconResourceName[] = "realbox/icons/dino.svg";
-constexpr char kDriveDocsIconResourceName[] = "realbox/icons/drive_docs.svg";
+// TODO(niharm): convert back to constexpr char[] once feature is cleaned up
+const char* kAnswerCurrencyIconResourceName =
+    "//resources/cr_components/omnibox/icons/currency.svg";
+constexpr char kAnswerDefaultIconResourceName[] =
+    "//resources/cr_components/omnibox/icons/default.svg";
+const char* kAnswerDictionaryIconResourceName =
+    "//resources/cr_components/omnibox/icons/definition.svg";
+const char* kAnswerFinanceIconResourceName =
+    "//resources/cr_components/omnibox/icons/finance.svg";
+const char* kAnswerSunriseIconResourceName =
+    "//resources/cr_components/omnibox/icons/sunrise.svg";
+const char* kAnswerTranslationIconResourceName =
+    "//resources/cr_components/omnibox/icons/translation.svg";
+const char* kAnswerWhenIsIconResourceName =
+    "//resources/cr_components/omnibox/icons/when_is.svg";
+const char* kBookmarkIconResourceName = "//resources/images/icon_bookmark.svg";
+const char* kCalculatorIconResourceName =
+    "//resources/cr_components/omnibox/icons/calculator.svg";
+const char* kChromeProductIconResourceName =
+    "//resources/cr_components/omnibox/icons/chrome_product.svg";
+const char* kClockIconResourceName = "//resources/images/icon_clock.svg";
+const char* kDinoIconResourceName =
+    "//resources/cr_components/omnibox/icons/dino.svg";
+constexpr char kDriveDocsIconResourceName[] =
+    "//resources/cr_components/omnibox/icons/drive_docs.svg";
 constexpr char kDriveFolderIconResourceName[] =
-    "realbox/icons/drive_folder.svg";
-constexpr char kDriveFormIconResourceName[] = "realbox/icons/drive_form.svg";
-constexpr char kDriveImageIconResourceName[] = "realbox/icons/drive_image.svg";
-constexpr char kDriveLogoIconResourceName[] = "icons/drive_logo.svg";
-constexpr char kDrivePdfIconResourceName[] = "realbox/icons/drive_pdf.svg";
+    "//resources/cr_components/omnibox/icons/drive_folder.svg";
+constexpr char kDriveFormIconResourceName[] =
+    "//resources/cr_components/omnibox/icons/drive_form.svg";
+constexpr char kDriveImageIconResourceName[] =
+    "//resources/cr_components/omnibox/icons/drive_image.svg";
+constexpr char kDriveLogoIconResourceName[] =
+    "//resources/cr_components/omnibox/icons/drive_logo.svg";
+constexpr char kDrivePdfIconResourceName[] =
+    "//resources/cr_components/omnibox/icons/drive_pdf.svg";
 constexpr char kDriveSheetsIconResourceName[] =
-    "realbox/icons/drive_sheets.svg";
+    "//resources/cr_components/omnibox/icons/drive_sheets.svg";
 constexpr char kDriveSlidesIconResourceName[] =
-    "realbox/icons/drive_slides.svg";
-constexpr char kDriveVideoIconResourceName[] = "realbox/icons/drive_video.svg";
+    "//resources/cr_components/omnibox/icons/drive_slides.svg";
+constexpr char kDriveVideoIconResourceName[] =
+    "//resources/cr_components/omnibox/icons/drive_video.svg";
 constexpr char kExtensionAppIconResourceName[] =
-    "realbox/icons/extension_app.svg";
-constexpr char kGoogleGIconResourceName[] = "realbox/icons/google_g.svg";
+    "//resources/cr_components/omnibox/icons/extension_app.svg";
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
-constexpr char kGoogleCalendarIconResourceName[] = "realbox/icons/calendar.svg";
-constexpr char kGoogleGTransparentIconResourceName[] =
-    "realbox/icons/google_g_transparent.svg";
-constexpr char kGoogleKeepNoteIconResourceName[] = "realbox/icons/note.svg";
-constexpr char kGoogleSitesIconResourceName[] = "realbox/icons/sites.svg";
+constexpr char kGoogleCalendarIconResourceName[] =
+    "//resources/cr_components/omnibox/icons/calendar.svg";
+const char* kGoogleGIconResourceName =
+    "//resources/cr_components/omnibox/icons/google_g.svg";
+constexpr char kGoogleKeepNoteIconResourceName[] =
+    "//resources/cr_components/omnibox/icons/note.svg";
+constexpr char kGoogleSitesIconResourceName[] =
+    "//resources/cr_components/omnibox/icons/sites.svg";
 #endif
-constexpr char kIncognitoIconResourceName[] = "realbox/icons/incognito.svg";
-constexpr char kJourneysIconResourceName[] = "realbox/icons/journeys.svg";
-constexpr char kPageIconResourceName[] = "realbox/icons/page.svg";
-constexpr char kPedalsIconResourceName[] =
-    "chrome://theme/current-channel-logo";
-constexpr char kTrendingUpIconResourceName[] = "realbox/icons/trending_up.svg";
+const char* kHistoryIconResourceName = "//resources/images/icon_history.svg";
+const char* kIncognitoIconResourceName =
+    "//resources/cr_components/omnibox/icons/incognito.svg";
+const char* kJourneysIconResourceName =
+    "//resources/cr_components/omnibox/icons/journeys.svg";
+const char* kPageIconResourceName =
+    "//resources/cr_components/omnibox/icons/page.svg";
+const char* kPedalsIconResourceName = "//theme/current-channel-logo";
+const char* kSearchIconResourceName = "//resources/images/icon_search.svg";
+const char* kTabIconResourceName =
+    "//resources/cr_components/omnibox/icons/tab.svg";
+const char* kTrendingUpIconResourceName =
+    "//resources/cr_components/omnibox/icons/trending_up.svg";
 
 #if BUILDFLAG(IS_MAC)
-constexpr char kMacShareIconResourceName[] = "realbox/icons/mac_share.svg";
+const char* kMacShareIconResourceName =
+    "//resources/cr_components/omnibox/icons/mac_share.svg";
 #elif BUILDFLAG(IS_WIN)
-constexpr char kWinShareIconResourceName[] = "realbox/icons/win_share.svg";
+const char* kWinShareIconResourceName =
+    "//resources/cr_components/omnibox/icons/win_share.svg";
+#elif BUILDFLAG(IS_LINUX)
+const char* kLinuxShareIconResourceName =
+    "//resources/cr_components/omnibox/icons/share.svg";
 #else
-constexpr char kShareIconResourceName[] = "realbox/icons/share.svg";
+const char* kShareIconResourceName =
+    "//resources/cr_components/omnibox/icons/share.svg";
 #endif
 
-base::flat_map<int32_t, realbox::mojom::SuggestionGroupPtr>
+static void DefineChromeRefreshRealboxIcons() {
+  kAnswerCurrencyIconResourceName =
+      "//resources/cr_components/omnibox/icons/currency_cr23.svg";
+  kAnswerDictionaryIconResourceName =
+      "//resources/cr_components/omnibox/icons/definition_cr23.svg";
+  kAnswerFinanceIconResourceName =
+      "//resources/cr_components/omnibox/icons/finance_cr23.svg";
+  kAnswerSunriseIconResourceName =
+      "//resources/cr_components/omnibox/icons/sunrise_cr23.svg";
+  kAnswerTranslationIconResourceName =
+      "//resources/cr_components/omnibox/icons/translation_cr23.svg";
+  kAnswerWhenIsIconResourceName =
+      "//resources/cr_components/omnibox/icons/when_is_cr23.svg";
+  kBookmarkIconResourceName =
+      "//resources/cr_components/omnibox/icons/bookmark_cr23.svg";
+  kCalculatorIconResourceName =
+      "//resources/cr_components/omnibox/icons/calculator_cr23.svg";
+  kChromeProductIconResourceName =
+      "//resources/cr_components/omnibox/icons/chrome_product_cr23.svg";
+  kClockIconResourceName =
+      "//resources/cr_components/omnibox/icons/clock_cr23.svg";
+  kDinoIconResourceName =
+      "//resources/cr_components/omnibox/icons/dino_cr23.svg";
+
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+  kGoogleGIconResourceName =
+      "//resources/cr_components/omnibox/icons/google_g_cr23.svg";
+#endif
+
+  kHistoryIconResourceName =
+      "//resources/cr_components/omnibox/icons/history_cr23.svg";
+  kIncognitoIconResourceName =
+      "//resources/cr_components/omnibox/icons/incognito_cr23.svg";
+  kJourneysIconResourceName =
+      "//resources/cr_components/omnibox/icons/journeys_cr23.svg";
+  kPageIconResourceName =
+      "//resources/cr_components/omnibox/icons/page_cr23.svg";
+  kPedalsIconResourceName =
+      "//resources/cr_components/omnibox/icons/chrome_product_cr23.svg";
+  kSearchIconResourceName =
+      "//resources/cr_components/omnibox/icons/search_cr23.svg";
+  kTabIconResourceName = "//resources/cr_components/omnibox/icons/tab_cr23.svg";
+  kTrendingUpIconResourceName =
+      "//resources/cr_components/omnibox/icons/trending_up_cr23.svg";
+
+#if BUILDFLAG(IS_MAC)
+  kMacShareIconResourceName =
+      "//resources/cr_components/omnibox/icons/mac_share_cr23.svg";
+#elif BUILDFLAG(IS_WIN)
+  kWinShareIconResourceName =
+      "//resources/cr_components/omnibox/icons/win_share_cr23.svg";
+#elif BUILDFLAG(IS_LINUX)
+  kLinuxShareIconResourceName =
+      "//resources/cr_components/omnibox/icons/share_cr23.svg";
+#else
+  kShareIconResourceName =
+      "//resources/cr_components/omnibox/icons/share_cr23.svg";
+#endif
+}
+
+base::flat_map<int32_t, omnibox::mojom::SuggestionGroupPtr>
 CreateSuggestionGroupsMap(
     const AutocompleteResult& result,
     PrefService* prefs,
     const omnibox::GroupConfigMap& suggestion_groups_map) {
-  base::flat_map<int32_t, realbox::mojom::SuggestionGroupPtr> result_map;
+  base::flat_map<int32_t, omnibox::mojom::SuggestionGroupPtr> result_map;
   for (const auto& pair : suggestion_groups_map) {
-    realbox::mojom::SuggestionGroupPtr suggestion_group =
-        realbox::mojom::SuggestionGroup::New();
+    omnibox::mojom::SuggestionGroupPtr suggestion_group =
+        omnibox::mojom::SuggestionGroup::New();
     suggestion_group->header = base::UTF8ToUTF16(pair.second.header_text());
+    suggestion_group->side_type =
+        static_cast<omnibox::mojom::SideType>(pair.second.side_type());
     suggestion_group->hidden =
         result.IsSuggestionGroupHidden(prefs, pair.first);
     suggestion_group->show_group_a11y_label = l10n_util::GetStringFUTF16(
@@ -143,14 +241,14 @@ CreateSuggestionGroupsMap(
   return result_map;
 }
 
-absl::optional<std::u16string> GetAdditionalText(
+std::optional<std::u16string> GetAdditionalText(
     const SuggestionAnswer::ImageLine& line) {
   if (line.additional_text()) {
     const auto additional_text = line.additional_text()->text();
     if (!additional_text.empty())
       return additional_text;
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 std::u16string ImageLineToString16(const SuggestionAnswer::ImageLine& line) {
@@ -168,12 +266,29 @@ std::u16string ImageLineToString16(const SuggestionAnswer::ImageLine& line) {
   return base::JoinString(text, u" ");
 }
 
+bool MatchHasSideTypeAndRenderType(
+    const AutocompleteMatch& match,
+    omnibox::GroupConfig_SideType side_type,
+    omnibox::GroupConfig_RenderType render_type,
+    const omnibox::GroupConfigMap& suggestion_groups_map) {
+  omnibox::GroupId group_id =
+      match.suggestion_group_id.value_or(omnibox::GROUP_INVALID);
+  return base::Contains(suggestion_groups_map, group_id) &&
+         suggestion_groups_map.at(group_id).side_type() == side_type &&
+         suggestion_groups_map.at(group_id).render_type() == render_type;
+}
+
 std::u16string GetAdditionalA11yMessage(const AutocompleteMatch& match,
                                         RealboxHandler::FocusState state) {
   switch (state) {
     case RealboxHandler::FocusState::kFocusedMatch: {
-      if (match.action) {
-        return match.action->GetLabelStrings().accessibility_suffix;
+      if (match.has_tab_match.value_or(false) &&
+          base::FeatureList::IsEnabled(omnibox::kNtpRealboxPedals)) {
+        return l10n_util::GetStringUTF16(IDS_ACC_TAB_SWITCH_SUFFIX);
+      }
+      const OmniboxAction* action = match.GetActionAt(0u);
+      if (action) {
+        return action->GetLabelStrings().accessibility_suffix;
       }
       if (match.SupportsDeletion()) {
         return l10n_util::GetStringUTF16(IDS_ACC_REMOVE_SUGGESTION_SUFFIX);
@@ -190,26 +305,50 @@ std::u16string GetAdditionalA11yMessage(const AutocompleteMatch& match,
   return std::u16string();
 }
 
-std::vector<realbox::mojom::AutocompleteMatchPtr> CreateAutocompleteMatches(
+std::vector<omnibox::mojom::AutocompleteMatchPtr> CreateAutocompleteMatches(
     const AutocompleteResult& result,
-    bookmarks::BookmarkModel* bookmark_model) {
-  std::vector<realbox::mojom::AutocompleteMatchPtr> matches;
+    bookmarks::BookmarkModel* bookmark_model,
+    const omnibox::GroupConfigMap& suggestion_groups_map) {
+  std::vector<omnibox::mojom::AutocompleteMatchPtr> matches;
   int line = 0;
   for (const AutocompleteMatch& match : result) {
-    realbox::mojom::AutocompleteMatchPtr mojom_match =
-        realbox::mojom::AutocompleteMatch::New();
+    // Skip the primary column horizontal matches. This check guards against
+    // this unexpected scenario as the UI expects the primary column matches to
+    // be vertical ones.
+    if (MatchHasSideTypeAndRenderType(
+            match, omnibox::GroupConfig_SideType_DEFAULT_PRIMARY,
+            omnibox::GroupConfig_RenderType_HORIZONTAL,
+            suggestion_groups_map)) {
+      continue;
+    }
+
+    // Skip the secondary column horizontal matches that are not entities or do
+    // not have images. This check guards against this unexpected scenario as
+    // the UI expects the secondary column horizontal matches to be entity
+    // suggestions with images.
+    if (MatchHasSideTypeAndRenderType(
+            match, omnibox::GroupConfig_SideType_SECONDARY,
+            omnibox::GroupConfig_RenderType_HORIZONTAL,
+            suggestion_groups_map) &&
+        (match.type != AutocompleteMatchType::SEARCH_SUGGEST_ENTITY ||
+         !match.image_url.is_valid())) {
+      continue;
+    }
+
+    omnibox::mojom::AutocompleteMatchPtr mojom_match =
+        omnibox::mojom::AutocompleteMatch::New();
     mojom_match->allowed_to_be_default_match =
         match.allowed_to_be_default_match;
     mojom_match->contents = match.contents;
     for (const auto& contents_class : match.contents_class) {
       mojom_match->contents_class.push_back(
-          realbox::mojom::ACMatchClassification::New(contents_class.offset,
+          omnibox::mojom::ACMatchClassification::New(contents_class.offset,
                                                      contents_class.style));
     }
     mojom_match->description = match.description;
     for (const auto& description_class : match.description_class) {
       mojom_match->description_class.push_back(
-          realbox::mojom::ACMatchClassification::New(description_class.offset,
+          omnibox::mojom::ACMatchClassification::New(description_class.offset,
                                                      description_class.style));
     }
     mojom_match->destination_url = match.destination_url;
@@ -232,26 +371,33 @@ std::vector<realbox::mojom::AutocompleteMatchPtr> CreateAutocompleteMatches(
     if (match.answer.has_value()) {
       const auto& additional_text =
           GetAdditionalText(match.answer->first_line());
-      mojom_match->answer = realbox::mojom::SuggestionAnswer::New(
+      mojom_match->answer = omnibox::mojom::SuggestionAnswer::New(
           additional_text ? base::JoinString(
                                 {match.contents, additional_text.value()}, u" ")
                           : match.contents,
           ImageLineToString16(match.answer->second_line()));
       mojom_match->image_url = match.ImageUrl().spec();
+      if (base::FeatureList::IsEnabled(
+              ntp_features::kRealboxCr23ExpandedStateIcons) ||
+          base::FeatureList::IsEnabled(ntp_features::kRealboxCr23All)) {
+        mojom_match->is_weather_answer_suggestion =
+            match.answer->type() == SuggestionAnswer::ANSWER_TYPE_WEATHER;
+      }
     }
     mojom_match->is_rich_suggestion =
         !mojom_match->image_url.empty() ||
         match.type == AutocompleteMatchType::CALCULATOR ||
         (match.answer.has_value());
-    const bool has_action = match.action && base::FeatureList::IsEnabled(
-                                                omnibox::kNtpRealboxPedals);
-    if (has_action) {
-      mojom_match->action = realbox::mojom::Action::New(
-          match.action->GetLabelStrings().accessibility_hint,
-          match.action->GetLabelStrings().hint,
-          match.action->GetLabelStrings().suggestion_contents,
-          RealboxHandler::PedalVectorIconToResourceName(
-              match.action->GetVectorIcon()));
+    if (base::FeatureList::IsEnabled(omnibox::kNtpRealboxPedals)) {
+      for (const auto& action : match.actions) {
+        const OmniboxAction::LabelStrings& label_strings =
+            action->GetLabelStrings();
+        mojom_match->actions.emplace_back(omnibox::mojom::Action::New(
+            label_strings.accessibility_hint, label_strings.hint,
+            label_strings.suggestion_contents,
+            RealboxHandler::PedalVectorIconToResourceName(
+                action->GetVectorIcon())));
+      }
     }
     mojom_match->a11y_label = AutocompleteMatchType::ToAccessibilityLabel(
         match, match.contents, line, 0,
@@ -273,15 +419,206 @@ std::vector<realbox::mojom::AutocompleteMatchPtr> CreateAutocompleteMatches(
   return matches;
 }
 
-realbox::mojom::AutocompleteResultPtr CreateAutocompleteResult(
+omnibox::mojom::AutocompleteResultPtr CreateAutocompleteResult(
     const std::u16string& input,
     const AutocompleteResult& result,
     bookmarks::BookmarkModel* bookmark_model,
     PrefService* prefs) {
-  return realbox::mojom::AutocompleteResult::New(
+  return omnibox::mojom::AutocompleteResult::New(
       input,
       CreateSuggestionGroupsMap(result, prefs, result.suggestion_groups_map()),
-      CreateAutocompleteMatches(result, bookmark_model));
+      CreateAutocompleteMatches(result, bookmark_model,
+                                result.suggestion_groups_map()));
+}
+
+std::string GetBase64UrlVariations(Profile* profile) {
+  variations::VariationsClient* provider = profile->GetVariationsClient();
+
+  variations::mojom::VariationsHeadersPtr headers =
+      provider->GetVariationsHeaders();
+  if (headers.is_null()) {
+    return std::string();
+  }
+  const std::string variations_base64 = headers->headers_map.at(
+      variations::mojom::GoogleWebVisibility::FIRST_PARTY);
+
+  // Variations headers are base64 encoded, however, we're attaching the value
+  // to a URL query parameter so they need to be base64url encoded.
+  std::string variations_decoded;
+  base::Base64Decode(variations_base64, &variations_decoded);
+
+  std::string variations_base64url;
+  base::Base64UrlEncode(variations_decoded,
+                        base::Base64UrlEncodePolicy::OMIT_PADDING,
+                        &variations_base64url);
+
+  return variations_base64url;
+}
+
+// TODO(crbug.com/1431513): Consider inheriting from `ChromeOmniboxClient`
+//  to avoid reimplementation of methods like `OnBookmarkLaunched`.
+class RealboxOmniboxClient final : public OmniboxClient {
+ public:
+  RealboxOmniboxClient(LocationBarModel* location_bar_model,
+                       Profile* profile,
+                       content::WebContents* web_contents);
+  ~RealboxOmniboxClient() override;
+
+  // OmniboxClient:
+  std::unique_ptr<AutocompleteProviderClient> CreateAutocompleteProviderClient()
+      override;
+  bool IsPasteAndGoEnabled() const override;
+  SessionID GetSessionID() const override;
+  PrefService* GetPrefs() override;
+  bookmarks::BookmarkModel* GetBookmarkModel() override;
+  AutocompleteControllerEmitter* GetAutocompleteControllerEmitter() override;
+  TemplateURLService* GetTemplateURLService() override;
+  const AutocompleteSchemeClassifier& GetSchemeClassifier() const override;
+  AutocompleteClassifier* GetAutocompleteClassifier() override;
+  bool ShouldDefaultTypedNavigationsToHttps() const override;
+  int GetHttpsPortForTesting() const override;
+  bool IsUsingFakeHttpsForHttpsUpgradeTesting() const override;
+  gfx::Image GetSizedIcon(const gfx::VectorIcon& vector_icon_type,
+                          SkColor vector_icon_color) const override;
+  gfx::Image GetFaviconForPageUrl(
+      const GURL& page_url,
+      FaviconFetchedCallback on_favicon_fetched) override;
+  void OnBookmarkLaunched() override;
+  void OnURLOpenedFromOmnibox(OmniboxLog* log) override;
+  void OnAutocompleteAccept(
+      const GURL& destination_url,
+      TemplateURLRef::PostContent* post_content,
+      WindowOpenDisposition disposition,
+      ui::PageTransition transition,
+      AutocompleteMatchType::Type match_type,
+      base::TimeTicks match_selection_timestamp,
+      bool destination_url_entered_without_scheme,
+      bool destination_url_entered_with_http_scheme,
+      const std::u16string& text,
+      const AutocompleteMatch& match,
+      const AutocompleteMatch& alternative_nav_match,
+      IDNA2008DeviationCharacter deviation_char_in_hostname) override;
+  LocationBarModel* GetLocationBarModel() override;
+  base::WeakPtr<OmniboxClient> AsWeakPtr() override;
+
+ private:
+  raw_ptr<LocationBarModel> location_bar_model_;
+  raw_ptr<Profile> profile_;
+  raw_ptr<content::WebContents> web_contents_;
+  ChromeAutocompleteSchemeClassifier scheme_classifier_;
+  base::WeakPtrFactory<RealboxOmniboxClient> weak_factory_{this};
+};
+
+RealboxOmniboxClient::RealboxOmniboxClient(LocationBarModel* location_bar_model,
+                                           Profile* profile,
+                                           content::WebContents* web_contents)
+    : location_bar_model_(location_bar_model),
+      profile_(profile),
+      web_contents_(web_contents),
+      scheme_classifier_(ChromeAutocompleteSchemeClassifier(profile)) {}
+
+RealboxOmniboxClient::~RealboxOmniboxClient() = default;
+
+std::unique_ptr<AutocompleteProviderClient>
+RealboxOmniboxClient::CreateAutocompleteProviderClient() {
+  return std::make_unique<ChromeAutocompleteProviderClient>(profile_);
+}
+
+bool RealboxOmniboxClient::IsPasteAndGoEnabled() const {
+  return false;
+}
+
+SessionID RealboxOmniboxClient::GetSessionID() const {
+  return sessions::SessionTabHelper::IdForTab(web_contents_);
+}
+
+PrefService* RealboxOmniboxClient::GetPrefs() {
+  return profile_->GetPrefs();
+}
+
+bookmarks::BookmarkModel* RealboxOmniboxClient::GetBookmarkModel() {
+  return BookmarkModelFactory::GetForBrowserContext(profile_);
+}
+
+AutocompleteControllerEmitter*
+RealboxOmniboxClient::GetAutocompleteControllerEmitter() {
+  return AutocompleteControllerEmitter::GetForBrowserContext(profile_);
+}
+
+TemplateURLService* RealboxOmniboxClient::GetTemplateURLService() {
+  return TemplateURLServiceFactory::GetForProfile(profile_);
+}
+
+const AutocompleteSchemeClassifier& RealboxOmniboxClient::GetSchemeClassifier()
+    const {
+  return scheme_classifier_;
+}
+
+AutocompleteClassifier* RealboxOmniboxClient::GetAutocompleteClassifier() {
+  return AutocompleteClassifierFactory::GetForProfile(profile_);
+}
+
+bool RealboxOmniboxClient::ShouldDefaultTypedNavigationsToHttps() const {
+  return false;
+}
+
+int RealboxOmniboxClient::GetHttpsPortForTesting() const {
+  return 0;
+}
+
+bool RealboxOmniboxClient::IsUsingFakeHttpsForHttpsUpgradeTesting() const {
+  return false;
+}
+
+gfx::Image RealboxOmniboxClient::GetSizedIcon(
+    const gfx::VectorIcon& vector_icon_type,
+    SkColor vector_icon_color) const {
+  return gfx::Image();
+}
+
+gfx::Image RealboxOmniboxClient::GetFaviconForPageUrl(
+    const GURL& page_url,
+    FaviconFetchedCallback on_favicon_fetched) {
+  return gfx::Image();
+}
+
+void RealboxOmniboxClient::OnBookmarkLaunched() {
+  RecordBookmarkLaunch(BookmarkLaunchLocation::kOmnibox,
+                       profile_metrics::GetBrowserProfileType(profile_));
+}
+
+void RealboxOmniboxClient::OnURLOpenedFromOmnibox(OmniboxLog* log) {
+  if (auto* search_prefetch_service =
+          SearchPrefetchServiceFactory::GetForProfile(profile_)) {
+    search_prefetch_service->OnURLOpenedFromOmnibox(log);
+  }
+  predictors::AutocompleteActionPredictorFactory::GetForProfile(profile_)
+      ->OnOmniboxOpenedUrl(*log);
+}
+
+void RealboxOmniboxClient::OnAutocompleteAccept(
+    const GURL& destination_url,
+    TemplateURLRef::PostContent* post_content,
+    WindowOpenDisposition disposition,
+    ui::PageTransition transition,
+    AutocompleteMatchType::Type match_type,
+    base::TimeTicks match_selection_timestamp,
+    bool destination_url_entered_without_scheme,
+    bool destination_url_entered_with_http_scheme,
+    const std::u16string& text,
+    const AutocompleteMatch& match,
+    const AutocompleteMatch& alternative_nav_match,
+    IDNA2008DeviationCharacter deviation_char_in_hostname) {
+  web_contents_->OpenURL(content::OpenURLParams(
+      destination_url, content::Referrer(), disposition, transition, false));
+}
+
+LocationBarModel* RealboxOmniboxClient::GetLocationBarModel() {
+  return location_bar_model_;
+}
+
+base::WeakPtr<OmniboxClient> RealboxOmniboxClient::AsWeakPtr() {
+  return weak_factory_.GetWeakPtr();
 }
 
 }  // namespace
@@ -289,10 +626,6 @@ realbox::mojom::AutocompleteResultPtr CreateAutocompleteResult(
 // static
 void RealboxHandler::SetupWebUIDataSource(content::WebUIDataSource* source,
                                           Profile* profile) {
-  static constexpr webui::ResourcePath kImages[] = {
-      {kSearchIconResourceName, IDR_WEBUI_IMAGES_ICON_SEARCH_SVG}};
-  source->AddResourcePaths(kImages);
-
   static constexpr webui::LocalizedString kStrings[] = {
       {"searchBoxHint", IDS_GOOGLE_SEARCH_BOX_EMPTY_HINT_MD},
       {"realboxSeparator", IDS_AUTOCOMPLETE_MATCH_DESCRIPTION_SEPARATOR},
@@ -302,59 +635,99 @@ void RealboxHandler::SetupWebUIDataSource(content::WebUIDataSource* source,
   source->AddLocalizedStrings(kStrings);
 
   source->AddBoolean(
-      "realboxMatchOmniboxTheme",
-      base::FeatureList::IsEnabled(ntp_features::kRealboxMatchOmniboxTheme));
+      "omniboxActionsUISimplification",
+      base::FeatureList::IsEnabled(omnibox::kOmniboxActionsUISimplification));
+  source->AddBoolean(
+      "realboxCr23ExpandedStateIcons",
+      base::FeatureList::IsEnabled(
+          ntp_features::kRealboxCr23ExpandedStateIcons) ||
+          base::FeatureList::IsEnabled(ntp_features::kRealboxCr23All));
 
   source->AddBoolean(
       "realboxMatchSearchboxTheme",
       base::FeatureList::IsEnabled(ntp_features::kRealboxMatchSearchboxTheme));
 
-  source->AddBoolean("roundCorners", base::FeatureList::IsEnabled(
-                                         ntp_features::kRealboxRoundedCorners));
-
+  source->AddString("realboxWidthBehavior",
+                    base::GetFieldTrialParamValueByFeature(
+                        ntp_features::kRealboxWidthBehavior,
+                        ntp_features::kNtpRealboxWidthBehaviorParam));
+  source->AddBoolean("realboxIsTall", base::FeatureList::IsEnabled(
+                                          ntp_features::kRealboxIsTall));
+  if ((base::FeatureList::IsEnabled(
+           ntp_features::kRealboxCr23ExpandedStateIcons) ||
+       base::FeatureList::IsEnabled(ntp_features::kRealboxCr23All))) {
+    DefineChromeRefreshRealboxIcons();
+  }
   source->AddString(
       "realboxDefaultIcon",
       base::FeatureList::IsEnabled(ntp_features::kRealboxUseGoogleGIcon)
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
           ? kGoogleGIconResourceName
+#else
+          ? kSearchIconResourceName
+#endif
           : kSearchIconResourceName);
-  source->AddString("realboxHint", l10n_util::GetStringUTF8(
-                                       IDS_GOOGLE_SEARCH_BOX_EMPTY_HINT_MD));
+
   source->AddBoolean(
       "realboxLensSearch",
-      base::FeatureList::IsEnabled(ntp_features::kNtpRealboxLensSearch) &&
-          profile->GetPrefs()->GetBoolean(prefs::kLensDesktopNTPSearchEnabled));
+      profile->GetPrefs()->GetBoolean(prefs::kLensDesktopNTPSearchEnabled));
+  source->AddString("realboxLensVariations", GetBase64UrlVariations(profile));
+  source->AddBoolean(
+      "realboxLensDirectUpload",
+      base::FeatureList::IsEnabled(ntp_features::kNtpLensDirectUpload));
+  source->AddBoolean(
+      "realboxCr23ExpandedStateLayout",
+      base::FeatureList::IsEnabled(
+          ntp_features::kRealboxCr23ExpandedStateLayout) ||
+          base::FeatureList::IsEnabled(ntp_features::kRealboxCr23All));
+  source->AddBoolean(
+      "realboxCr23ConsistentRowHeight",
+      base::FeatureList::IsEnabled(
+          ntp_features::kRealboxCr23ConsistentRowHeight) ||
+          base::FeatureList::IsEnabled(ntp_features::kRealboxCr23All));
+  source->AddBoolean(
+      "realboxCr23HoverFillShape",
+      base::FeatureList::IsEnabled(ntp_features::kRealboxCr23HoverFillShape) ||
+          base::FeatureList::IsEnabled(ntp_features::kRealboxCr23All));
+  source->AddBoolean(
+      "realboxCr23Theming",
+      base::FeatureList::IsEnabled(ntp_features::kRealboxCr23Theming) ||
+          base::FeatureList::IsEnabled(ntp_features::kRealboxCr23All));
+  source->AddBoolean("realboxCr23SteadyStateShadow",
+                     ntp_features::kNtpRealboxCr23SteadyStateShadow.Get());
 }
 
 // static
 std::string RealboxHandler::AutocompleteMatchVectorIconToResourceName(
     const gfx::VectorIcon& icon) {
-  std::string answerNames[] = {
-      omnibox::kAnswerCurrencyIcon.name,   omnibox::kAnswerDefaultIcon.name,
-      omnibox::kAnswerDictionaryIcon.name, omnibox::kAnswerFinanceIcon.name,
-      omnibox::kAnswerSunriseIcon.name,    omnibox::kAnswerTranslationIcon.name,
-      omnibox::kAnswerWhenIsIcon.name,     omnibox::kAnswerWhenIsIcon.name};
-
-  if (icon.name == omnibox::kAnswerCurrencyIcon.name) {
+  if (icon.name == omnibox::kAnswerCurrencyIcon.name ||
+      icon.name == omnibox::kAnswerCurrencyChromeRefreshIcon.name) {
     return kAnswerCurrencyIconResourceName;
   } else if (icon.name == omnibox::kAnswerDefaultIcon.name) {
     return kAnswerDefaultIconResourceName;
-  } else if (icon.name == omnibox::kAnswerDictionaryIcon.name) {
+  } else if (icon.name == omnibox::kAnswerDictionaryIcon.name ||
+             icon.name == omnibox::kAnswerDictionaryChromeRefreshIcon.name) {
     return kAnswerDictionaryIconResourceName;
-  } else if (icon.name == omnibox::kAnswerFinanceIcon.name) {
+  } else if (icon.name == omnibox::kAnswerFinanceIcon.name ||
+             icon.name == omnibox::kAnswerFinanceChromeRefreshIcon.name) {
     return kAnswerFinanceIconResourceName;
-  } else if (icon.name == omnibox::kAnswerSunriseIcon.name) {
+  } else if (icon.name == omnibox::kAnswerSunriseIcon.name ||
+             icon.name == omnibox::kAnswerSunriseChromeRefreshIcon.name) {
     return kAnswerSunriseIconResourceName;
-  } else if (icon.name == omnibox::kAnswerTranslationIcon.name) {
+  } else if (icon.name == omnibox::kAnswerTranslationIcon.name ||
+             icon.name == omnibox::kAnswerTranslationChromeRefreshIcon.name) {
     return kAnswerTranslationIconResourceName;
-  } else if (icon.name == omnibox::kAnswerWhenIsIcon.name) {
+  } else if (icon.name == omnibox::kAnswerWhenIsIcon.name ||
+             icon.name == omnibox::kAnswerWhenIsChromeRefreshIcon.name) {
     return kAnswerWhenIsIconResourceName;
-  } else if (icon.name == omnibox::kBlankIcon.name) {
-    return "";  // An empty resource name is effectively a blank icon.
-  } else if (icon.name == omnibox::kBookmarkIcon.name) {
+  } else if (icon.name == omnibox::kBookmarkIcon.name ||
+             icon.name == omnibox::kBookmarkChromeRefreshIcon.name) {
     return kBookmarkIconResourceName;
-  } else if (icon.name == omnibox::kCalculatorIcon.name) {
+  } else if (icon.name == omnibox::kCalculatorIcon.name ||
+             icon.name == omnibox::kCalculatorChromeRefreshIcon.name) {
     return kCalculatorIconResourceName;
-  } else if (icon.name == omnibox::kClockIcon.name) {
+  } else if (icon.name == omnibox::kClockIcon.name ||
+             icon.name == omnibox::kClockChromeRefreshIcon.name) {
     return kClockIconResourceName;
   } else if (icon.name == omnibox::kDriveDocsIcon.name) {
     return kDriveDocsIconResourceName;
@@ -376,28 +749,43 @@ std::string RealboxHandler::AutocompleteMatchVectorIconToResourceName(
     return kDriveVideoIconResourceName;
   } else if (icon.name == omnibox::kExtensionAppIcon.name) {
     return kExtensionAppIconResourceName;
-  } else if (icon.name == omnibox::kJourneysIcon.name) {
+  } else if (icon.name == vector_icons::kHistoryIcon.name ||
+             icon.name == vector_icons::kHistoryChromeRefreshIcon.name) {
+    return kHistoryIconResourceName;
+  } else if (icon.name == omnibox::kJourneysIcon.name ||
+             icon.name == omnibox::kJourneysChromeRefreshIcon.name) {
     return kJourneysIconResourceName;
-  } else if (icon.name == omnibox::kPageIcon.name) {
+  } else if (icon.name == omnibox::kPageIcon.name ||
+             icon.name == omnibox::kPageChromeRefreshIcon.name) {
     return kPageIconResourceName;
-  } else if (icon.name == omnibox::kPedalIcon.name) {
-    return kPedalsIconResourceName;
-  } else if (icon.name == vector_icons::kSearchIcon.name) {
+  } else if (icon.name == omnibox::kProductIcon.name ||
+             icon.name == omnibox::kProductChromeRefreshIcon.name) {
+    return kChromeProductIconResourceName;
+  } else if (icon.name == vector_icons::kSearchIcon.name ||
+             icon.name == vector_icons::kSearchChromeRefreshIcon.name) {
     return kSearchIconResourceName;
-  } else if (icon.name == omnibox::kTrendingUpIcon.name) {
+  } else if (icon.name == omnibox::kTrendingUpIcon.name ||
+             icon.name == omnibox::kTrendingUpChromeRefreshIcon.name) {
     return kTrendingUpIconResourceName;
+  } else if (icon.is_empty()) {
+    return "";  // An empty resource name is effectively a blank icon.
   } else {
-    NOTREACHED()
-        << "Every vector icon returned by AutocompleteMatch::GetVectorIcon "
-           "must have an equivalent SVG resource for the NTP Realbox.";
-    return "";
+    return PedalVectorIconToResourceName(icon);
   }
 }
 
 // static
+//
+// TODO(jdonnelly): Rename this to ActionVectorIconToResourceName, since this
+// logic is not limited to Pedals but also includes tab switch and Journeys.
 std::string RealboxHandler::PedalVectorIconToResourceName(
     const gfx::VectorIcon& icon) {
-  if (icon.name == omnibox::kDinoIcon.name) {
+  if (icon.name == omnibox::kSwitchIcon.name ||
+      icon.name == omnibox::kSwitchCr2023Icon.name) {
+    return kTabIconResourceName;
+  }
+  if (icon.name == omnibox::kDinoIcon.name ||
+      icon.name == omnibox::kDinoCr2023Icon.name) {
     return kDinoIconResourceName;
   }
   if (icon.name == omnibox::kDriveFormsIcon.name) {
@@ -422,89 +810,131 @@ std::string RealboxHandler::PedalVectorIconToResourceName(
   if (icon.name == vector_icons::kGoogleSitesIcon.name) {
     return kGoogleSitesIconResourceName;
   }
-  if (icon.name == vector_icons::kGoogleSuperGIcon.name) {
-    return kGoogleGTransparentIconResourceName;
+  if (icon.name == vector_icons::kGoogleSuperGIcon.name ||
+      icon.name == vector_icons::kGoogleGLogoMonochromeIcon.name) {
+    return kGoogleGIconResourceName;
   }
 #endif
-  if (icon.name == omnibox::kIncognitoIcon.name) {
+  if (icon.name == omnibox::kIncognitoIcon.name ||
+      icon.name == omnibox::kIncognitoCr2023Icon.name) {
     return kIncognitoIconResourceName;
   }
-  if (icon.name == omnibox::kJourneysIcon.name) {
+  if (icon.name == omnibox::kJourneysIcon.name ||
+      icon.name == omnibox::kJourneysChromeRefreshIcon.name) {
     return kJourneysIconResourceName;
   }
-  if (icon.name == omnibox::kPedalIcon.name) {
+  if (icon.name == omnibox::kPedalIcon.name ||
+      icon.name == omnibox::kProductChromeRefreshIcon.name) {
     return kPedalsIconResourceName;
   }
 #if BUILDFLAG(IS_MAC)
-  if (icon.name == omnibox::kShareMacIcon.name) {
+  if (icon.name == omnibox::kShareMacIcon.name ||
+      icon.name == omnibox::kShareMacChromeRefreshIcon.name) {
     return kMacShareIconResourceName;
   }
 #elif BUILDFLAG(IS_WIN)
-  if (icon.name == omnibox::kShareWinIcon.name) {
+  if (icon.name == omnibox::kShareWinIcon.name ||
+      icon.name == omnibox::kShareWinChromeRefreshIcon.name) {
     return kWinShareIconResourceName;
   }
+#elif BUILDFLAG(IS_LINUX)
+  if (icon.name == omnibox::kShareIcon.name ||
+      icon.name == omnibox::kShareLinuxChromeRefreshIcon.name) {
+    return kLinuxShareIconResourceName;
+  }
 #else
-  if (icon.name == omnibox::kShareIcon.name) {
+  if (icon.name == omnibox::kShareIcon.name ||
+      icon.name == omnibox::kShareChromeRefreshIcon.name) {
     return kShareIconResourceName;
   }
 #endif
   NOTREACHED() << "Every vector icon returned by OmniboxAction::GetVectorIcon "
-                  "must have an equivalent SVG resource for the NTP Realbox.";
+                  "must have an equivalent SVG resource for the NTP Realbox. "
+                  "icon.name: '"
+               << icon.name << "'";
   return "";
 }
 
 RealboxHandler::RealboxHandler(
-    mojo::PendingReceiver<realbox::mojom::PageHandler> pending_page_handler,
+    mojo::PendingReceiver<omnibox::mojom::PageHandler> pending_page_handler,
     Profile* profile,
-    content::WebContents* web_contents)
+    content::WebContents* web_contents,
+    MetricsReporter* metrics_reporter,
+    OmniboxController* omnibox_controller)
     : profile_(profile),
       web_contents_(web_contents),
-      bitmap_fetcher_service_(
-          BitmapFetcherServiceFactory::GetForBrowserContext(profile)),
-      favicon_cache_(FaviconServiceFactory::GetForProfile(
-                         profile,
-                         ServiceAccessType::EXPLICIT_ACCESS),
-                     HistoryServiceFactory::GetForProfile(
-                         profile,
-                         ServiceAccessType::EXPLICIT_ACCESS)),
-      page_handler_(this, std::move(pending_page_handler)) {}
+      metrics_reporter_(metrics_reporter),
+      page_set_(false),
+      page_handler_(this, std::move(pending_page_handler)) {
+  // Keep a reference to the OmniboxController instance owned by the OmniboxView
+  // when the handler is being used in the context of the omnibox popup.
+  // Otherwise, create own instance of OmniboxController. Either way, observe
+  // the AutocompleteController instance owned by the OmniboxController.
+  if (omnibox_controller) {
+    controller_ = omnibox_controller;
+  } else {
+    owned_controller_ = std::make_unique<OmniboxController>(
+        /*view=*/nullptr,
+        std::make_unique<RealboxOmniboxClient>(/*location_bar_model=*/this,
+                                               profile_, web_contents_));
+    controller_ = owned_controller_.get();
+  }
+
+  autocomplete_controller_observation_.Observe(autocomplete_controller());
+}
 
 RealboxHandler::~RealboxHandler() {
-  // Clear pending bitmap requests.
-  for (auto bitmap_request_id : bitmap_request_ids_) {
-    bitmap_fetcher_service_->CancelRequest(bitmap_request_id);
-  }
+  // Avoids dangling pointer warning when `controller_` is not owned.
+  controller_ = nullptr;
+}
+
+bool RealboxHandler::IsRemoteBound() const {
+  return page_set_;
+}
+
+void RealboxHandler::AddObserver(OmniboxWebUIPopupChangeObserver* observer) {
+  observers_.AddObserver(observer);
+  observer->OnPopupElementSizeChanged(webui_size_);
+}
+
+void RealboxHandler::RemoveObserver(OmniboxWebUIPopupChangeObserver* observer) {
+  observers_.RemoveObserver(observer);
+}
+
+bool RealboxHandler::HasObserver(
+    const OmniboxWebUIPopupChangeObserver* observer) const {
+  return observers_.HasObserver(observer);
 }
 
 void RealboxHandler::SetPage(
-    mojo::PendingRemote<realbox::mojom::Page> pending_page) {
+    mojo::PendingRemote<omnibox::mojom::Page> pending_page) {
   page_.Bind(std::move(pending_page));
+  page_set_ = page_.is_bound();
+}
+
+void RealboxHandler::OnFocusChanged(bool focused) {
+  if (focused) {
+    edit_model()->OnSetFocus(false);
+  } else {
+    edit_model()->OnWillKillFocus();
+    edit_model()->OnKillFocus();
+  }
 }
 
 void RealboxHandler::QueryAutocomplete(const std::u16string& input,
                                        bool prevent_inline_autocomplete) {
-  if (!autocomplete_controller_) {
-    autocomplete_controller_ = std::make_unique<AutocompleteController>(
-        std::make_unique<ChromeAutocompleteProviderClient>(profile_),
-        AutocompleteClassifier::DefaultOmniboxProviders());
-    autocomplete_controller_->AddObserver(this);
-
-    OmniboxControllerEmitter* emitter =
-        OmniboxControllerEmitter::GetForBrowserContext(profile_);
-    if (emitter)
-      autocomplete_controller_->AddObserver(emitter);
-  }
-
   // TODO(tommycli): We use the input being empty as a signal we are requesting
   // on-focus suggestions. It would be nice if we had a more explicit signal.
   bool is_on_focus = input.empty();
 
   // Early exit if a query is already in progress for on focus inputs.
-  if (!autocomplete_controller_->done() && is_on_focus)
+  if (!autocomplete_controller()->done() && is_on_focus) {
     return;
+  }
 
-  if (time_user_first_modified_realbox_.is_null() && !is_on_focus)
-    time_user_first_modified_realbox_ = base::TimeTicks::Now();
+  // This will SetInputInProgress and consequently mark the input timer so that
+  // Omnibox.TypingDuration will be logged correctly.
+  edit_model()->SetUserText(input);
 
   AutocompleteInput autocomplete_input(
       input, metrics::OmniboxEventProto::NTP_REALBOX,
@@ -520,282 +950,239 @@ void RealboxHandler::QueryAutocomplete(const std::u16string& input,
   autocomplete_input.set_prefer_keyword(false);
   autocomplete_input.set_allow_exact_keyword_match(false);
 
-  autocomplete_controller_->Start(autocomplete_input);
+  controller_->StartAutocomplete(autocomplete_input);
 }
 
 void RealboxHandler::StopAutocomplete(bool clear_result) {
-  if (!autocomplete_controller_)
-    return;
-
-  autocomplete_controller_->Stop(clear_result);
-
-  if (clear_result)
-    time_user_first_modified_realbox_ = base::TimeTicks();
+  controller_->StopAutocomplete(clear_result);
 }
 
-void RealboxHandler::OpenAutocompleteMatch(
-    uint8_t line,
-    const GURL& url,
-    bool are_matches_showing,
-    base::TimeDelta time_elapsed_since_last_focus,
-    uint8_t mouse_button,
-    bool alt_key,
-    bool ctrl_key,
-    bool meta_key,
-    bool shift_key) {
-  if (autocomplete_controller_->result().size() <= line) {
+void RealboxHandler::OpenAutocompleteMatch(uint8_t line,
+                                           const GURL& url,
+                                           bool are_matches_showing,
+                                           uint8_t mouse_button,
+                                           bool alt_key,
+                                           bool ctrl_key,
+                                           bool meta_key,
+                                           bool shift_key) {
+  const AutocompleteMatch* match = GetMatchWithUrl(line, url);
+  if (!match) {
+    // This can happen due to asynchronous updates changing the result while
+    // the web UI is referencing a stale match.
     return;
   }
-
-  AutocompleteMatch match(autocomplete_controller_->result().match_at(line));
-  if (match.destination_url != url) {
-    // TODO(https://crbug.com/1020025): this could be malice or staleness.
-    // Either way: don't navigate.
-    return;
-  }
-
-  // TODO(crbug.com/1041129): The following logic for recording Omnibox metrics
-  // is largely copied from SearchTabHelper::OpenAutocompleteMatch(). Make sure
-  // any changes here is reflected there until one code path is obsolete.
-
-  const auto now = base::TimeTicks::Now();
-  base::TimeDelta elapsed_time_since_first_autocomplete_query =
-      now - time_user_first_modified_realbox_;
-  autocomplete_controller_
-      ->UpdateMatchDestinationURLWithAdditionalAssistedQueryStats(
-          elapsed_time_since_first_autocomplete_query, &match);
-
-  LOCAL_HISTOGRAM_BOOLEAN("Omnibox.EventCount", true);
-
-  UMA_HISTOGRAM_MEDIUM_TIMES("Omnibox.FocusToOpenTimeAnyPopupState3",
-                             time_elapsed_since_last_focus);
-
-  if (ui::PageTransitionTypeIncludingQualifiersIs(match.transition,
-                                                  ui::PAGE_TRANSITION_TYPED)) {
-    navigation_metrics::RecordOmniboxURLNavigation(match.destination_url);
-  }
-  // The following histogram should be recorded for both TYPED and pasted
-  // URLs, but should still exclude reloads.
-  if (ui::PageTransitionTypeIncludingQualifiersIs(match.transition,
-                                                  ui::PAGE_TRANSITION_TYPED) ||
-      ui::PageTransitionTypeIncludingQualifiersIs(match.transition,
-                                                  ui::PAGE_TRANSITION_LINK)) {
-    net::cookie_util::RecordCookiePortOmniboxHistograms(match.destination_url);
-  }
-
-  SuggestionAnswer::LogAnswerUsed(match.answer);
-
-  TemplateURLService* template_url_service =
-      TemplateURLServiceFactory::GetForProfile(profile_);
-  if (template_url_service &&
-      template_url_service->IsSearchResultsPageFromDefaultSearchProvider(
-          match.destination_url)) {
-    // Note: will always be false for the realbox.
-    UMA_HISTOGRAM_BOOLEAN("Omnibox.Search.OffTheRecord",
-                          profile_->IsOffTheRecord());
-    base::RecordAction(
-        base::UserMetricsAction("OmniboxDestinationURLIsSearchOnDSP"));
-  }
-
-  AutocompleteMatch::LogSearchEngineUsed(match, template_url_service);
-
-  auto* bookmark_model = BookmarkModelFactory::GetForBrowserContext(profile_);
-  if (bookmark_model->IsBookmarked(match.destination_url)) {
-    RecordBookmarkLaunch(BookmarkLaunchLocation::kOmnibox,
-                         profile_metrics::GetBrowserProfileType(profile_));
-  }
-
-  const AutocompleteInput& input = autocomplete_controller_->input();
-  WindowOpenDisposition disposition = ui::DispositionFromClick(
+  const base::TimeTicks timestamp = base::TimeTicks::Now();
+  const WindowOpenDisposition disposition = ui::DispositionFromClick(
       /*middle_button=*/mouse_button == 1, alt_key, ctrl_key, meta_key,
       shift_key);
-
-  base::TimeDelta default_time_delta = base::Milliseconds(-1);
-
-  if (time_user_first_modified_realbox_.is_null())
-    elapsed_time_since_first_autocomplete_query = default_time_delta;
-
-  base::TimeDelta elapsed_time_since_last_change_to_default_match =
-      !autocomplete_controller_->last_time_default_match_changed().is_null()
-          ? now - autocomplete_controller_->last_time_default_match_changed()
-          : default_time_delta;
-
-  OmniboxLog log(
-      /*text=*/input.focus_type() !=
-              metrics::OmniboxFocusType::INTERACTION_DEFAULT
-          ? std::u16string()
-          : input.text(),
-      /*just_deleted_text=*/input.prevent_inline_autocomplete(),
-      /*input_type=*/input.type(),
-      /*in_keyword_mode=*/false,
-      /*entry_method=*/metrics::OmniboxEventProto::INVALID,
-      /*is_popup_open=*/are_matches_showing,
-      /*selected_index=*/line,
-      /*disposition=*/disposition,
-      /*is_paste_and_go=*/false,
-      /*tab_id=*/sessions::SessionTabHelper::IdForTab(web_contents_),
-      /*current_page_classification=*/metrics::OmniboxEventProto::NTP_REALBOX,
-      /*elapsed_time_since_user_first_modified_omnibox=*/
-      elapsed_time_since_first_autocomplete_query,
-      /*completed_length=*/match.allowed_to_be_default_match
-          ? match.inline_autocompletion.length()
-          : std::u16string::npos,
-      /*elapsed_time_since_last_change_to_default_match=*/
-      elapsed_time_since_last_change_to_default_match,
-      /*result=*/autocomplete_controller_->result(), match.destination_url);
-  autocomplete_controller_->AddProviderAndTriggeringLogs(&log);
-
-  OmniboxEventGlobalTracker::GetInstance()->OnURLOpened(&log);
-
-  if (auto* search_prefetch_service =
-          SearchPrefetchServiceFactory::GetForProfile(profile_)) {
-    search_prefetch_service->OnURLOpenedFromOmnibox(&log, web_contents_);
-  }
-  predictors::AutocompleteActionPredictorFactory::GetForProfile(profile_)
-      ->OnOmniboxOpenedUrl(log);
-
-  web_contents_->OpenURL(
-      content::OpenURLParams(match.destination_url, content::Referrer(),
-                             disposition, match.transition, false));
+  edit_model()->OpenSelection(OmniboxPopupSelection(line), timestamp,
+                              disposition);
 }
 
 void RealboxHandler::OnNavigationLikely(
     uint8_t line,
+    const GURL& url,
     omnibox::mojom::NavigationPredictor navigation_predictor) {
-  if (auto* search_prefetch_service =
-          SearchPrefetchServiceFactory::GetForProfile(profile_)) {
-    AutocompleteMatch match(autocomplete_controller_->result().match_at(line));
-    search_prefetch_service->OnNavigationLikely(
-        line, match, navigation_predictor, web_contents_);
-  }
-}
-
-void RealboxHandler::OpenURL(const GURL& destination_url,
-                             TemplateURLRef::PostContent* post_content,
-                             WindowOpenDisposition disposition,
-                             ui::PageTransition transition,
-                             AutocompleteMatchType::Type type,
-                             base::TimeTicks match_selection_timestamp,
-                             bool destination_url_entered_without_scheme,
-                             const std::u16string&,
-                             const AutocompleteMatch&,
-                             const AutocompleteMatch&,
-                             IDNA2008DeviationCharacter) {
-  web_contents_->OpenURL(content::OpenURLParams(
-      destination_url, content::Referrer(), disposition, transition, false));
-}
-
-void RealboxHandler::DeleteAutocompleteMatch(uint8_t line) {
-  if (autocomplete_controller_->result().size() <= line ||
-      !autocomplete_controller_->result().match_at(line).SupportsDeletion()) {
+  const AutocompleteMatch* match = GetMatchWithUrl(line, url);
+  if (!match) {
+    // This can happen due to asynchronous updates changing the result while
+    // the web UI is referencing a stale match.
     return;
   }
-
-  const auto& match = autocomplete_controller_->result().match_at(line);
-  if (match.SupportsDeletion()) {
-    autocomplete_controller_->Stop(false);
-    autocomplete_controller_->DeleteMatch(match);
+  if (auto* search_prefetch_service =
+          SearchPrefetchServiceFactory::GetForProfile(profile_)) {
+    search_prefetch_service->OnNavigationLikely(
+        line, *match, navigation_predictor, web_contents_);
   }
+}
+
+void RealboxHandler::PopupElementSizeChanged(const gfx::Size& size) {
+  webui_size_ = size;
+  for (OmniboxWebUIPopupChangeObserver& observer : observers_) {
+    observer.OnPopupElementSizeChanged(size);
+  }
+}
+
+void RealboxHandler::DeleteAutocompleteMatch(uint8_t line, const GURL& url) {
+  const AutocompleteMatch* match = GetMatchWithUrl(line, url);
+  if (!match || !match->SupportsDeletion()) {
+    // This can happen due to asynchronous updates changing the result while
+    // the web UI is referencing a stale match.
+    return;
+  }
+  controller_->StopAutocomplete(/*clear_result=*/false);
+  autocomplete_controller()->DeleteMatch(*match);
 }
 
 void RealboxHandler::ToggleSuggestionGroupIdVisibility(
     int32_t suggestion_group_id) {
-  if (!autocomplete_controller_) {
-    return;
-  }
-
   const auto& group_id = omnibox::GroupIdForNumber(suggestion_group_id);
   DCHECK_NE(omnibox::GROUP_INVALID, group_id);
   const bool current_visibility =
-      autocomplete_controller_->result().IsSuggestionGroupHidden(
-          profile_->GetPrefs(), group_id);
-  autocomplete_controller_->result().SetSuggestionGroupHidden(
-      profile_->GetPrefs(), group_id, !current_visibility);
-}
-
-void RealboxHandler::LogCharTypedToRepaintLatency(base::TimeDelta latency) {
-  UMA_HISTOGRAM_TIMES("NewTabPage.Realbox.CharTypedToRepaintLatency.ToPaint",
-                      latency);
+      controller_->IsSuggestionGroupHidden(group_id);
+  controller_->SetSuggestionGroupHidden(group_id, !current_visibility);
 }
 
 void RealboxHandler::ExecuteAction(uint8_t line,
+                                   uint8_t action_index,
+                                   const GURL& url,
                                    base::TimeTicks match_selection_timestamp,
                                    uint8_t mouse_button,
                                    bool alt_key,
                                    bool ctrl_key,
                                    bool meta_key,
                                    bool shift_key) {
-  if (!autocomplete_controller_ ||
-      autocomplete_controller_->result().size() <= line) {
+  const AutocompleteMatch* match = GetMatchWithUrl(line, url);
+  if (!match) {
+    // This can happen due to asynchronous updates changing the result while
+    // the web UI is referencing a stale match.
     return;
   }
-
-  const auto& match = autocomplete_controller_->result().match_at(line);
-  if (!match.action) {
+  if (action_index >= match->actions.size()) {
     return;
   }
-  WindowOpenDisposition disposition = ui::DispositionFromClick(
+  const WindowOpenDisposition disposition = ui::DispositionFromClick(
       /*middle_button=*/mouse_button == 1, alt_key, ctrl_key, meta_key,
       shift_key);
-
-  // TODO(tommycli): Add recording of action shown in the realbox when the user
-  //  uses the realbox to go somewhere OTHER than executing an action.
-  match.action->RecordActionShown(line, /*executed=*/true);
-  OmniboxAction::ExecutionContext context(
-      *(autocomplete_controller_->autocomplete_provider_client()),
-      base::BindOnce(&RealboxHandler::OpenURL, weak_ptr_factory_.GetWeakPtr()),
-      match_selection_timestamp, disposition);
-  match.action->Execute(context);
+  OmniboxPopupSelection selection(
+      line, OmniboxPopupSelection::LineState::FOCUSED_BUTTON_ACTION,
+      action_index);
+  edit_model()->OpenSelection(selection, match_selection_timestamp,
+                              disposition);
 }
 
 void RealboxHandler::OnResultChanged(AutocompleteController* controller,
                                      bool default_match_changed) {
-  DCHECK(controller == autocomplete_controller_.get());
-
-  // Prepend missing tail suggestion prefixes in results, if present.
-  autocomplete_controller_->SetTailSuggestCommonPrefixes();
+  if (metrics_reporter_ && !metrics_reporter_->HasLocalMark("ResultChanged")) {
+    metrics_reporter_->Mark("ResultChanged");
+  }
 
   page_->AutocompleteResultChanged(CreateAutocompleteResult(
-      autocomplete_controller_->input().text(),
-      autocomplete_controller_->result(),
+      autocomplete_controller()->input().text(),
+      autocomplete_controller()->result(),
       BookmarkModelFactory::GetForBrowserContext(profile_),
       profile_->GetPrefs()));
 
-  if (autocomplete_controller_->done()) {
-    if (SearchPrefetchService* search_prefetch_service =
-            SearchPrefetchServiceFactory::GetForProfile(profile_)) {
-      search_prefetch_service->OnResultChanged(
-          web_contents_, autocomplete_controller_->result());
-    }
-  }
-
-  // Clear pending bitmap requests before requesting new ones.
-  for (auto bitmap_request_id : bitmap_request_ids_) {
-    bitmap_fetcher_service_->CancelRequest(bitmap_request_id);
-  }
-  bitmap_request_ids_.clear();
-
-  int match_index = -1;
-  for (const auto& match : autocomplete_controller_->result()) {
-    match_index++;
-
-    // Request bitmaps for matche images.
-    if (!match.ImageUrl().is_empty()) {
-      bitmap_request_ids_.push_back(bitmap_fetcher_service_->RequestImage(
-          match.ImageUrl(),
-          base::BindOnce(&RealboxHandler::OnRealboxBitmapFetched,
-                         weak_ptr_factory_.GetWeakPtr(), match_index,
-                         match.ImageUrl())));
+  // The owned OmniboxController does not observe the AutocompleteController.
+  // Notify the prerender here to start preloading if the results are ready.
+  // TODO(crbug.com/1396174): Make the owned OmniboxController observe the
+  //  AutocompleteController and move this logic to the RealboxOmniboxClient.
+  if (owned_controller_) {
+    if (autocomplete_controller()->done()) {
+      if (SearchPrefetchService* search_prefetch_service =
+              SearchPrefetchServiceFactory::GetForProfile(profile_)) {
+        search_prefetch_service->OnResultChanged(
+            web_contents_, autocomplete_controller()->result());
+      }
     }
   }
 }
 
-void RealboxHandler::OnRealboxBitmapFetched(int match_index,
-                                            const GURL& image_url,
-                                            const SkBitmap& bitmap) {
-  auto data = gfx::Image::CreateFrom1xBitmap(bitmap).As1xPNGBytes();
-  std::string data_url =
-      webui::GetPngDataUrl(data->front_as<unsigned char>(), data->size());
+omnibox::mojom::SelectionLineState ConvertLineState(
+    OmniboxPopupSelection::LineState state) {
+  switch (state) {
+    case OmniboxPopupSelection::LineState::FOCUSED_BUTTON_HEADER:
+      return omnibox::mojom::SelectionLineState::kFocusedButtonHeader;
+    case OmniboxPopupSelection::LineState::NORMAL:
+      return omnibox::mojom::SelectionLineState::kNormal;
+    case OmniboxPopupSelection::LineState::KEYWORD_MODE:
+      return omnibox::mojom::SelectionLineState::kKeywordMode;
+    case OmniboxPopupSelection::LineState::FOCUSED_BUTTON_ACTION:
+      return omnibox::mojom::SelectionLineState::kFocusedButtonAction;
+    case OmniboxPopupSelection::LineState::FOCUSED_BUTTON_REMOVE_SUGGESTION:
+      return omnibox::mojom::SelectionLineState::kFocusedButtonRemoveSuggestion;
+    default:
+      NOTREACHED();
+      break;
+  }
+  return omnibox::mojom::SelectionLineState::kNormal;
+}
 
-  page_->AutocompleteMatchImageAvailable(match_index, image_url, data_url);
+void RealboxHandler::UpdateSelection(OmniboxPopupSelection selection) {
+  page_->UpdateSelection(omnibox::mojom::OmniboxPopupSelection::New(
+      selection.line, ConvertLineState(selection.state),
+      selection.action_index));
+}
+
+// LocationBarModel:
+// Note, the implementation here is mostly not needed but the `OmniboxEditModel`
+// currently needs a full working instance and some parts are used.
+std::u16string RealboxHandler::GetFormattedFullURL() const {
+  return u"";
+}
+
+std::u16string RealboxHandler::GetURLForDisplay() const {
+  return u"";
+}
+
+GURL RealboxHandler::GetURL() const {
+  return GURL();
+}
+
+security_state::SecurityLevel RealboxHandler::GetSecurityLevel() const {
+  return security_state::SecurityLevel::NONE;
+}
+
+net::CertStatus RealboxHandler::GetCertStatus() const {
+  return 0;
+}
+
+metrics::OmniboxEventProto::PageClassification
+RealboxHandler::GetPageClassification(OmniboxFocusSource focus_source,
+                                      bool is_prefetch) {
+  return metrics::OmniboxEventProto::NTP_REALBOX;
+}
+
+const gfx::VectorIcon& RealboxHandler::GetVectorIcon() const {
+  return vector_icon_;
+}
+
+std::u16string RealboxHandler::GetSecureDisplayText() const {
+  return u"";
+}
+
+std::u16string RealboxHandler::GetSecureAccessibilityText() const {
+  return u"";
+}
+
+bool RealboxHandler::ShouldDisplayURL() const {
+  return false;
+}
+
+bool RealboxHandler::IsOfflinePage() const {
+  return false;
+}
+
+bool RealboxHandler::ShouldPreventElision() const {
+  return false;
+}
+
+bool RealboxHandler::ShouldUseUpdatedConnectionSecurityIndicators() const {
+  return false;
+}
+
+OmniboxEditModel* RealboxHandler::edit_model() const {
+  return controller_->edit_model();
+}
+
+AutocompleteController* RealboxHandler::autocomplete_controller() const {
+  return controller_->autocomplete_controller();
+}
+
+const AutocompleteMatch* RealboxHandler::GetMatchWithUrl(size_t index,
+                                                         const GURL& url) {
+  const AutocompleteResult& result = autocomplete_controller()->result();
+  if (index >= result.size()) {
+    // This can happen due to asynchronous updates changing the result while
+    // the web UI is referencing a stale match.
+    return nullptr;
+  }
+  const AutocompleteMatch& match = result.match_at(index);
+  if (match.destination_url != url) {
+    // This can happen also, for the same reason. We could search the result
+    // for the match with this URL, but there would be no guarantee that it's
+    // the same match, so for this edge case we treat result mismatch as none.
+    return nullptr;
+  }
+  return &match;
 }

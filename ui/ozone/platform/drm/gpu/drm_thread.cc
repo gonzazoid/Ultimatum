@@ -9,17 +9,14 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/timer/elapsed_timer.h"
 #include "base/trace_event/trace_event.h"
-#include "ui/display/types/display_mode.h"
-#include "ui/display/types/display_snapshot.h"
 #include "ui/gfx/linux/drm_util_linux.h"
+// For standard Linux/system libgbm
 #include "ui/gfx/linux/gbm_defines.h"
 #include "ui/gfx/linux/gbm_device.h"
 #include "ui/gfx/linux/gbm_util.h"
@@ -29,15 +26,10 @@
 #include "ui/ozone/platform/drm/gpu/drm_device.h"
 #include "ui/ozone/platform/drm/gpu/drm_device_generator.h"
 #include "ui/ozone/platform/drm/gpu/drm_device_manager.h"
-#include "ui/ozone/platform/drm/gpu/drm_dumb_buffer.h"
 #include "ui/ozone/platform/drm/gpu/drm_gpu_display_manager.h"
 #include "ui/ozone/platform/drm/gpu/drm_window.h"
-#include "ui/ozone/platform/drm/gpu/drm_window_proxy.h"
 #include "ui/ozone/platform/drm/gpu/gbm_pixmap.h"
-#include "ui/ozone/platform/drm/gpu/gbm_surface_factory.h"
-#include "ui/ozone/platform/drm/gpu/proxy_helpers.h"
 #include "ui/ozone/platform/drm/gpu/screen_manager.h"
-#include "ui/ozone/public/ozone_switches.h"
 
 namespace ui {
 
@@ -144,8 +136,8 @@ void DrmThread::CreateBuffer(gfx::AcceleratedWidget widget,
   CHECK(drm) << "No devices available for buffer allocation.";
 
   DrmWindow* window = screen_manager_->GetWindow(widget);
-  uint32_t flags = ui::BufferUsageToGbmFlags(usage);
-  uint32_t fourcc_format = ui::GetFourCCFormatFromBufferFormat(format);
+  uint32_t flags = BufferUsageToGbmFlags(usage);
+  uint32_t fourcc_format = GetFourCCFormatFromBufferFormat(format);
 
   // Some modifiers are incompatible with some gbm_bo_flags.  If we give
   // modifiers to the GBM allocator, then GBM ignores the flags, and therefore
@@ -206,7 +198,7 @@ void DrmThread::CreateBufferFromHandle(
   DCHECK(drm);
 
   std::unique_ptr<GbmBuffer> buffer = drm->gbm_device()->CreateBufferFromHandle(
-      ui::GetFourCCFormatFromBufferFormat(format), size, std::move(handle));
+      GetFourCCFormatFromBufferFormat(format), size, std::move(handle));
   if (!buffer)
     return;
 
@@ -268,6 +260,11 @@ void DrmThread::IsDeviceAtomic(gfx::AcceleratedWidget widget, bool* is_atomic) {
   *is_atomic = drm_device && drm_device->is_atomic();
 }
 
+void DrmThread::SetDrmModifiersFilter(
+    std::unique_ptr<DrmModifiersFilter> filter) {
+  screen_manager_->SetDrmModifiersFilter(std::move(filter));
+}
+
 void DrmThread::CreateWindow(gfx::AcceleratedWidget widget,
                              const gfx::Rect& initial_bounds) {
   TRACE_EVENT0("drm", "DrmThread::CreateWindow");
@@ -298,7 +295,7 @@ void DrmThread::SetWindowBounds(gfx::AcceleratedWidget widget,
 
 void DrmThread::SetCursor(gfx::AcceleratedWidget widget,
                           const std::vector<SkBitmap>& bitmaps,
-                          const gfx::Point& location,
+                          const absl::optional<gfx::Point>& location,
                           base::TimeDelta frame_delay) {
   TRACE_EVENT0("drm", "DrmThread::SetCursor");
   screen_manager_->GetWindow(widget)->SetCursor(bitmaps, location, frame_delay);
@@ -347,7 +344,7 @@ void DrmThread::CheckOverlayCapabilitiesSync(
 
 void DrmThread::GetHardwareCapabilities(
     gfx::AcceleratedWidget widget,
-    ui::HardwareCapabilitiesCallback receive_callback) {
+    HardwareCapabilitiesCallback receive_callback) {
   TRACE_EVENT0("drm,hwoverlays", "DrmThread::GetHardwareCapabilities");
   DCHECK(screen_manager_->GetWindow(widget));
   DCHECK(device_manager_->GetDrmDevice(widget));
@@ -357,7 +354,7 @@ void DrmThread::GetHardwareCapabilities(
       device_manager_->GetDrmDevice(widget)->plane_manager();
 
   if (!hdc || !plane_manager) {
-    ui::HardwareCapabilities hardware_capabilities{.is_valid = false};
+    HardwareCapabilities hardware_capabilities{.is_valid = false};
     std::move(receive_callback).Run(hardware_capabilities);
     return;
   }
@@ -372,7 +369,7 @@ void DrmThread::GetHardwareCapabilities(
   } else {
     // If there are multiple CRTCs for this widget we shouldn't rely on overlays
     // working.
-    ui::HardwareCapabilities hardware_capabilities{.is_valid = false};
+    HardwareCapabilities hardware_capabilities{.is_valid = false};
     std::move(receive_callback).Run(hardware_capabilities);
   }
 }
@@ -421,9 +418,10 @@ void DrmThread::ShouldDisplayEventTriggerConfiguration(
   std::move(callback).Run(should_trigger);
 }
 
-void DrmThread::AddGraphicsDevice(const base::FilePath& path, base::File file) {
+void DrmThread::AddGraphicsDevice(const base::FilePath& path,
+                                  mojo::PlatformHandle fd_mojo_handle) {
   TRACE_EVENT0("drm", "DrmThread::AddGraphicsDevice");
-  device_manager_->AddDrmDevice(path, std::move(file));
+  device_manager_->AddDrmDevice(path, fd_mojo_handle.TakeFD());
 
   // There might be tasks that were blocked on a DrmDevice becoming available.
   ProcessPendingTasks();
@@ -432,6 +430,14 @@ void DrmThread::AddGraphicsDevice(const base::FilePath& path, base::File file) {
 void DrmThread::RemoveGraphicsDevice(const base::FilePath& path) {
   TRACE_EVENT0("drm", "DrmThread::RemoveGraphicsDevice");
   device_manager_->RemoveDrmDevice(path);
+}
+
+void DrmThread::SetHdcpKeyProp(int64_t display_id,
+                               const std::string& key,
+                               SetHdcpKeyPropCallback callback) {
+  TRACE_EVENT0("drm", "DrmThread::SetHdcpKeyProp");
+  bool is_prop_set = display_manager_->SetHdcpKeyProp(display_id, key);
+  std::move(callback).Run(display_id, is_prop_set);
 }
 
 void DrmThread::GetHDCPState(
@@ -459,18 +465,34 @@ void DrmThread::SetHDCPState(int64_t display_id,
       display_manager_->SetHDCPState(display_id, state, protection_method));
 }
 
+void DrmThread::SetColorTemperatureAdjustment(
+    int64_t display_id,
+    const display::ColorTemperatureAdjustment& cta) {
+  display_manager_->SetColorTemperatureAdjustment(display_id, cta);
+}
+
+void DrmThread::SetColorCalibration(
+    int64_t display_id,
+    const display::ColorCalibration& calibration) {
+  display_manager_->SetColorCalibration(display_id, calibration);
+}
+
+void DrmThread::SetGammaAdjustment(int64_t display_id,
+                                   const display::GammaAdjustment& adjustment) {
+  display_manager_->SetGammaAdjustment(display_id, adjustment);
+}
+
 void DrmThread::SetColorMatrix(int64_t display_id,
                                const std::vector<float>& color_matrix) {
   TRACE_EVENT0("drm", "DrmThread::SetColorMatrix");
   display_manager_->SetColorMatrix(display_id, color_matrix);
 }
 
-void DrmThread::SetGammaCorrection(
-    int64_t display_id,
-    const std::vector<display::GammaRampRGBEntry>& degamma_lut,
-    const std::vector<display::GammaRampRGBEntry>& gamma_lut) {
+void DrmThread::SetGammaCorrection(int64_t display_id,
+                                   const display::GammaCurve& degamma,
+                                   const display::GammaCurve& gamma) {
   TRACE_EVENT0("drm", "DrmThread::SetGammaCorrection");
-  display_manager_->SetGammaCorrection(display_id, degamma_lut, gamma_lut);
+  display_manager_->SetGammaCorrection(display_id, degamma, gamma);
 }
 
 void DrmThread::SetPrivacyScreen(int64_t display_id,

@@ -4,15 +4,12 @@
 
 #import "ios/chrome/common/app_group/app_group_constants.h"
 
+#import "base/apple/bundle_locations.h"
 #import "base/check.h"
 #import "base/strings/sys_string_conversions.h"
 #import "components/version_info/version_info.h"
 #import "ios/chrome/common/app_group/app_group_helper.h"
 #import "ios/chrome/common/ios_app_bundle_id_prefix_buildflags.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace app_group {
 
@@ -44,6 +41,7 @@ const char kChromeAppGroupFocusOmniboxCommand[] = "focusomnibox";
 const char kChromeAppGroupIncognitoSearchCommand[] = "incognitosearch";
 const char kChromeAppGroupQRScannerCommand[] = "qrscanner";
 const char kChromeAppGroupLensCommand[] = "lens";
+const char kChromeAppGroupSearchPasswordsCommand[] = "searchpasswords";
 
 const char kChromeAppGroupSupportsSearchByImage[] = "supportsSearchByImage";
 const char kChromeAppGroupIsGoogleDefaultSearchEngine[] =
@@ -70,15 +68,31 @@ NSString* const kOpenCommandSourceSearchExtension = @"ChromeSearchExtension";
 NSString* const kOpenCommandSourceShareExtension = @"ChromeShareExtension";
 NSString* const kOpenCommandSourceCredentialsExtension =
     @"ChromeCredentialsExtension";
+NSString* const kOpenCommandSourceOpenExtension = @"ChromeOpenExtension";
 
 NSString* const kSuggestedItems = @"SuggestedItems";
+
+NSString* const kSuggestedItemsLastModificationDate =
+    @"SuggestedItemsLastModificationDate";
+
+NSString* const kOpenExtensionOutcomes = @"ChromeOpenExtensionOutcomes";
+
+NSString* const kOpenExtensionOutcomeSuccess = @"OpenExtensionOutcomeSuccess";
+NSString* const kOpenExtensionOutcomeFailureInvalidURL =
+    @"OpenExtensionOutcomeFailureInvalidURL";
+NSString* const kOpenExtensionOutcomeFailureURLNotFound =
+    @"OpenExtensionOutcomeFailureURLNotFound";
+NSString* const kOpenExtensionOutcomeFailureOpenInNotFound =
+    @"OpenExtensionOutcomeFailureOpenInNotFound";
+NSString* const kOpenExtensionOutcomeFailureUnsupportedScheme =
+    @"OpenExtensionOutcomeFailureUnsupportedScheme";
 
 NSString* ApplicationGroup() {
   return [AppGroupHelper applicationGroup];
 }
 
 NSString* CommonApplicationGroup() {
-  NSBundle* bundle = [NSBundle mainBundle];
+  NSBundle* bundle = base::apple::FrameworkBundle();
   NSString* group =
       [bundle objectForInfoDictionaryKey:@"KSCommonApplicationGroup"];
   if (![group length]) {
@@ -138,14 +152,7 @@ NSURL* ExternalCommandsItemsFolder() {
 }
 
 NSURL* ContentWidgetFaviconsFolder() {
-  NSURL* groupURL = [[NSFileManager defaultManager]
-      containerURLForSecurityApplicationGroupIdentifier:ApplicationGroup()];
-  NSURL* chromeURL =
-      [groupURL URLByAppendingPathComponent:@"Chrome" isDirectory:YES];
-  NSURL* contentWidgetFaviconsURL =
-      [chromeURL URLByAppendingPathComponent:@"ContentWidgetFavicons"
-                                 isDirectory:YES];
-  return contentWidgetFaviconsURL;
+  return [AppGroupHelper widgetsFaviconsFolder];
 }
 
 NSURL* SharedFaviconAttributesFolder() {
@@ -167,6 +174,42 @@ NSURL* CrashpadFolder() {
   NSURL* crashpadURL = [chromeURL URLByAppendingPathComponent:@"Crashpad"
                                                   isDirectory:YES];
   return crashpadURL;
+}
+
+NSString* KeyForOpenExtensionOutcomeType(OpenExtensionOutcome type) {
+  switch (type) {
+    case OpenExtensionOutcome::kSuccess:
+      return kOpenExtensionOutcomeSuccess;
+    case OpenExtensionOutcome::kFailureInvalidURL:
+      return kOpenExtensionOutcomeFailureInvalidURL;
+    case OpenExtensionOutcome::kFailureURLNotFound:
+      return kOpenExtensionOutcomeFailureURLNotFound;
+    case OpenExtensionOutcome::kFailureOpenInNotFound:
+      return kOpenExtensionOutcomeFailureOpenInNotFound;
+    case OpenExtensionOutcome::kFailureUnsupportedScheme:
+      return kOpenExtensionOutcomeFailureUnsupportedScheme;
+    case OpenExtensionOutcome::kInvalid:
+      NOTREACHED_NORETURN();
+  }
+}
+
+OpenExtensionOutcome OutcomeTypeFromKey(NSString* key) {
+  if ([key isEqualToString:kOpenExtensionOutcomeSuccess]) {
+    return OpenExtensionOutcome::kSuccess;
+  }
+  if ([key isEqualToString:kOpenExtensionOutcomeFailureInvalidURL]) {
+    return OpenExtensionOutcome::kFailureInvalidURL;
+  }
+  if ([key isEqualToString:kOpenExtensionOutcomeFailureURLNotFound]) {
+    return OpenExtensionOutcome::kFailureURLNotFound;
+  }
+  if ([key isEqualToString:kOpenExtensionOutcomeFailureOpenInNotFound]) {
+    return OpenExtensionOutcome::kFailureOpenInNotFound;
+  }
+  if ([key isEqualToString:kOpenExtensionOutcomeFailureUnsupportedScheme]) {
+    return OpenExtensionOutcome::kFailureUnsupportedScheme;
+  }
+  return OpenExtensionOutcome::kInvalid;
 }
 
 }  // namespace app_group

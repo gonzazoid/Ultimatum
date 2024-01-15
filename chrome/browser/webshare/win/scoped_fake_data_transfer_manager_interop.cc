@@ -9,7 +9,6 @@
 
 #include "base/strings/string_piece.h"
 #include "base/win/com_init_util.h"
-#include "base/win/core_winrt_util.h"
 #include "base/win/win_util.h"
 #include "chrome/browser/webshare/win/fake_data_transfer_manager_interop.h"
 #include "chrome/browser/webshare/win/show_share_ui_for_window_operation.h"
@@ -38,11 +37,6 @@ static HRESULT FakeRoGetActivationFactory(HSTRING class_id,
 
 }  // namespace
 
-// static
-bool ScopedFakeDataTransferManagerInterop::IsSupportedEnvironment() {
-  return FakeDataTransferManagerInterop::IsSupportedEnvironment();
-}
-
 ScopedFakeDataTransferManagerInterop::ScopedFakeDataTransferManagerInterop() =
     default;
 
@@ -56,7 +50,6 @@ ScopedFakeDataTransferManagerInterop::~ScopedFakeDataTransferManagerInterop() {
 
 void ScopedFakeDataTransferManagerInterop::SetUp() {
   ASSERT_FALSE(set_up_);
-  ASSERT_TRUE(IsSupportedEnvironment());
   base::win::AssertComInitialized();
 
   instance_ = Microsoft::WRL::Make<FakeDataTransferManagerInterop>();

@@ -4,8 +4,9 @@
 
 #include "chromeos/ash/services/libassistant/grpc/grpc_http_connection_client.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chromeos/ash/services/libassistant/grpc/grpc_client_thread.h"
 #include "chromeos/ash/services/libassistant/grpc/grpc_http_connection_delegate.h"
 #include "chromeos/assistant/internal/grpc_transport/streaming/bidi_streaming_rpc_call.h"
@@ -65,7 +66,7 @@ GrpcHttpConnectionClient::GrpcHttpConnectionClient(
     const std::string& server_address)
     : http_connection_factory_(http_connection_factory),
       cq_thread_(std::make_unique<GrpcClientThread>("http_connection_cq")),
-      task_runner_(base::SequencedTaskRunnerHandle::Get()) {
+      task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {
   // Make sure to turn off compression.
   grpc::ChannelArguments channel_args;
   channel_args.SetInt(GRPC_ARG_INITIAL_RECONNECT_BACKOFF_MS, 200);
@@ -86,14 +87,17 @@ GrpcHttpConnectionClient::~GrpcHttpConnectionClient() {
 
   CleanUp();
 
-  if (write_queue_) {
-    // Request the server to prepare for shutdown.
-    StreamHttpConnectionRequest request;
-    request.set_command(StreamHttpConnectionRequest::UNREGISTER);
-    write_queue_->ScheduleWrite(std::move(request));
+  {
+    base::AutoLock lock(write_queue_lock_);
+    is_shutting_down_ = true;
   }
 
   if (call_) {
+    {
+      base::AutoLock lock(write_queue_lock_);
+      write_queue_.reset();
+    }
+
     call_->TryCancel();
     cq_thread_.reset();
   }
@@ -103,14 +107,20 @@ void GrpcHttpConnectionClient::Start() {
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
 
   if (call_) {
-    write_queue_.reset();
+    {
+      base::AutoLock lock(write_queue_lock_);
+      write_queue_.reset();
+    }
 
     call_->TryCancel();
     call_.reset();
   }
 
-  write_queue_ =
-      std::make_unique<StreamingWriteQueue<StreamHttpConnectionRequest>>();
+  {
+    base::AutoLock lock(write_queue_lock_);
+    write_queue_ =
+        std::make_unique<StreamingWriteQueue<StreamHttpConnectionRequest>>();
+  }
 
   // Create a bidi streaming call to relay http connection from Libassistant.
   BidiStreamingRpcCall<StreamHttpConnectionRequest,
@@ -143,8 +153,10 @@ void GrpcHttpConnectionClient::CleanUp() {
 
 void GrpcHttpConnectionClient::ScheduleRequest(
     StreamHttpConnectionRequest request) {
-  ENSURE_CALLING_SEQUENCE(&GrpcHttpConnectionClient::ScheduleRequest,
-                          std::move(request));
+  base::AutoLock lock(write_queue_lock_);
+  if (is_shutting_down_) {
+    return;
+  }
 
   if (write_queue_) {
     write_queue_->ScheduleWrite(std::move(request));
@@ -155,6 +167,13 @@ void GrpcHttpConnectionClient::ScheduleRequest(
 void GrpcHttpConnectionClient::OnRpcWriteAvailable(
     grpc::ClientContext* context,
     StreamingWriter<StreamHttpConnectionRequest>* writer) {
+  {
+    base::AutoLock lock(write_queue_lock_);
+    if (is_shutting_down_) {
+      return;
+    }
+  }
+
   if (!init_request_sent_) {
     DVLOG(1) << "Sending GrpcHttpConnectionClient registration request.";
     init_request_sent_ = true;
@@ -165,19 +184,13 @@ void GrpcHttpConnectionClient::OnRpcWriteAvailable(
     return;
   }
 
-  task_runner_->PostTask(
-      FROM_HERE, base::BindOnce(
-                     [](base::WeakPtr<GrpcHttpConnectionClient> weak_ptr,
-                        StreamingWriter<StreamHttpConnectionRequest>* writer) {
-                       if (!weak_ptr)
-                         return;
+  {
+    base::AutoLock lock(write_queue_lock_);
 
-                       if (!weak_ptr->write_queue_)
-                         return;
-
-                       weak_ptr->write_queue_->OnRpcWriteAvailable(writer);
-                     },
-                     weak_factory_.GetWeakPtr(), writer));
+    if (write_queue_) {
+      write_queue_->OnRpcWriteAvailable(writer);
+    }
+  }
 }
 
 void GrpcHttpConnectionClient::OnRpcReadAvailable(

@@ -10,7 +10,6 @@ import android.os.Parcelable;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 
 import org.chromium.blink_public.input.SelectionGranularity;
 import org.chromium.ui.OverscrollRefreshHandler;
@@ -58,9 +57,7 @@ public interface WebContents extends Parcelable {
          */
         void set(WebContentsInternals internals);
 
-        /**
-         * Returns {@link WebContentsInternals} object. Can be {@code null}.
-         */
+        /** Returns {@link WebContentsInternals} object. Can be {@code null}. */
         WebContentsInternals get();
     }
 
@@ -99,8 +96,11 @@ public interface WebContents extends Parcelable {
      * @param windowAndroid An instance of the WindowAndroid.
      * @param internalsHolder A holder of objects used internally by WebContents.
      */
-    void initialize(String productVersion, ViewAndroidDelegate viewDelegate,
-            ViewEventSink.InternalAccessDelegate accessDelegate, WindowAndroid windowAndroid,
+    void initialize(
+            String productVersion,
+            ViewAndroidDelegate viewDelegate,
+            ViewEventSink.InternalAccessDelegate accessDelegate,
+            WindowAndroid windowAndroid,
             @NonNull InternalsHolder internalsHolder);
 
     /**
@@ -114,7 +114,7 @@ public interface WebContents extends Parcelable {
     void clearJavaWebContentsObservers();
 
     /**
-     * @return The top level WindowAndroid associated with this WebContents.  This can be null.
+     * @return The top level WindowAndroid associated with this WebContents. This can be null.
      */
     @Nullable
     WindowAndroid getTopLevelNativeWindow();
@@ -134,9 +134,7 @@ public interface WebContents extends Parcelable {
     @Nullable
     ViewAndroidDelegate getViewAndroidDelegate();
 
-    /**
-     * Deletes the Web Contents object.
-     */
+    /** Deletes the Web Contents object. */
     void destroy();
 
     /**
@@ -169,6 +167,12 @@ public interface WebContents extends Parcelable {
     RenderFrameHost getFocusedFrame();
 
     /**
+     * @return Whether the focused frame element in this WebContents is editable. Will be false if
+     *         the WebContents does not have focus.
+     */
+    boolean isFocusedElementEditable();
+
+    /**
      * @return The frame associated with the id. Will be null if the ID does not correspond to a
      *         live RenderFrameHost.
      */
@@ -192,6 +196,12 @@ public interface WebContents extends Parcelable {
      */
     @Visibility
     int getVisibility();
+
+    /**
+     * Updates WebContents Visibility and notifies all the observers about Visibility change event.
+     * See native WebContents::UpdateWebContentsVisibility.
+     */
+    void updateWebContentsVisibility(@Visibility int visibility);
 
     /**
      * @return The title for the current visible page.
@@ -233,19 +243,13 @@ public interface WebContents extends Parcelable {
      */
     void dispatchBeforeUnload(boolean autoCancel);
 
-    /**
-     * Stop any pending navigation.
-     */
+    /** Stop any pending navigation. */
     void stop();
 
-    /**
-     * To be called when the ContentView is hidden.
-     */
+    /** To be called when the ContentView is hidden. */
     void onHide();
 
-    /**
-     * To be called when the ContentView is shown.
-     */
+    /** To be called when the ContentView is shown. */
     void onShow();
 
     /**
@@ -286,26 +290,32 @@ public interface WebContents extends Parcelable {
      */
     boolean isFullscreenForCurrentTab();
 
-    /**
-     * Inform WebKit that Fullscreen mode has been exited by the user.
-     */
+    /** Inform WebKit that Fullscreen mode has been exited by the user. */
     void exitFullscreen();
 
-    /**
-     * Brings the Editable to the visible area while IME is up to make easier for inputing text.
-     */
+    /** Brings the Editable to the visible area while IME is up to make easier for inputing text. */
     void scrollFocusedEditableNodeIntoView();
 
     /**
      * Selects at the specified granularity around the caret and potentially shows the selection
      * handles and context menu. The caller can check if selection actually occurred by listening to
      * OnSelectionChanged.
+     *
      * @param granularity The granularity at which the selection should happen.
      * @param shouldShowHandle Whether the selection handles should be shown after selection.
      * @param shouldShowContextMenu Whether the context menu should be shown after selection.
+     * @param startOffset The start offset of the selection.
+     * @param endOffset The end offset of the selection.
+     * @param surroundingTextLength The length of the text surrounding the selection (including the
+     *     selection).
      */
-    void selectAroundCaret(@SelectionGranularity int granularity, boolean shouldShowHandle,
-            boolean shouldShowContextMenu);
+    void selectAroundCaret(
+            @SelectionGranularity int granularity,
+            boolean shouldShowHandle,
+            boolean shouldShowContextMenu,
+            int startOffset,
+            int endOffset,
+            int surroundingTextLength);
 
     /**
      * Adjusts the selection starting and ending points by the given amount.
@@ -333,9 +343,7 @@ public interface WebContents extends Parcelable {
      */
     boolean isIncognito();
 
-    /**
-     * Resumes the requests for a newly created window.
-     */
+    /** Resumes the requests for a newly created window. */
     void resumeLoadingCreatedWebContents();
 
     /**
@@ -363,7 +371,6 @@ public interface WebContents extends Parcelable {
      *                 will be made on the main thread.
      *                 If no result is required, pass null.
      */
-    @VisibleForTesting
     void evaluateJavaScriptForTests(String script, @Nullable JavaScriptCallback callback);
 
     /**
@@ -381,8 +388,11 @@ public interface WebContents extends Parcelable {
      * @param ports The sent message ports, if any. Pass null if there is no
      *                  message ports to pass.
      */
-    void postMessageToMainFrame(MessagePayload messagePayload, String sourceOrigin,
-            String targetOrigin, @Nullable MessagePort[] ports);
+    void postMessageToMainFrame(
+            MessagePayload messagePayload,
+            String sourceOrigin,
+            String targetOrigin,
+            @Nullable MessagePort[] ports);
 
     /**
      * Creates a message channel for sending postMessage requests and returns the ports for
@@ -420,9 +430,7 @@ public interface WebContents extends Parcelable {
      */
     void requestSmartClipExtract(int x, int y, int width, int height);
 
-    /**
-     * Register a handler to handle smart clip data once extraction is done.
-     */
+    /** Register a handler to handle smart clip data once extraction is done. */
     void setSmartClipResultHandler(final Handler smartClipHandler);
 
     /**
@@ -431,6 +439,12 @@ public interface WebContents extends Parcelable {
      * @param stylusWritingHandler the object that implements StylusWritingHandler interface.
      */
     void setStylusWritingHandler(StylusWritingHandler stylusWritingHandler);
+
+    /**
+     * @return {@link StylusWritingImeCallback} which is used to implement the IME functionality for
+     *     the Stylus handwriting feature.
+     */
+    StylusWritingImeCallback getStylusWritingImeCallback();
 
     /**
      * Returns {@link EventForwarder} which is used to forward input/view events
@@ -482,7 +496,11 @@ public interface WebContents extends Parcelable {
      *                 renderer.
      * @return The unique id of the download request
      */
-    int downloadImage(GURL url, boolean isFavicon, int maxBitmapSize, boolean bypassCache,
+    int downloadImage(
+            GURL url,
+            boolean isFavicon,
+            int maxBitmapSize,
+            boolean bypassCache,
             ImageDownloadCallback callback);
 
     /**
@@ -544,9 +562,7 @@ public interface WebContents extends Parcelable {
      */
     void setDisplayCutoutSafeArea(Rect insets);
 
-    /**
-     * Notify that web preferences needs update for various properties.
-     */
+    /** Notify that web preferences needs update for various properties. */
     void notifyRendererPreferenceUpdate();
 
     /**
@@ -555,4 +571,18 @@ public interface WebContents extends Parcelable {
      * this. Min-height is the minimum visible height the controls can have.
      */
     void notifyBrowserControlsHeightChanged();
+
+    /**
+     * Called before the dialog overlay dismissing e.g. Activity.onUserLeaveHint. It's a signal to
+     * cleanup the tasks depending on the overlay surface, because the surface destroy may happen
+     * before SurfaceHolder.Callback2.surfaceDestroyed returns.
+     */
+    void tearDownDialogOverlays();
+
+    /**
+     * This function checks all frames in this WebContents (not just the main
+     * frame) and returns true if at least one frame has either a beforeunload or
+     * an unload/pagehide/visibilitychange handler.
+     */
+    boolean needToFireBeforeUnloadOrUnloadEvents();
 }

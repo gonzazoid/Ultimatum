@@ -4,15 +4,11 @@
 
 #import "ios/web/web_view/wk_web_view_util.h"
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/test/ios/wait_util.h"
 #import "testing/gtest/include/gtest/gtest.h"
 #import "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 class WKWebViewUtilTest : public PlatformTest {};
 

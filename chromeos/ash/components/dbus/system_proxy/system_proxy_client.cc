@@ -3,18 +3,19 @@
 // found in the LICENSE file.
 #include "chromeos/ash/components/dbus/system_proxy/system_proxy_client.h"
 
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/strcat.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromeos/ash/components/dbus/system_proxy/fake_system_proxy_client.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
 #include "dbus/object_proxy.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/system_proxy/dbus-constants.h"
 
 namespace ash {
@@ -137,7 +138,7 @@ class SystemProxyClientImpl : public SystemProxyClient {
       TResponse response;
       response.set_error_message(
           base::StrCat({"Failure to call d-bus method: ", method_name}));
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(std::move(callback), response));
       return;
     }
@@ -224,7 +225,7 @@ class SystemProxyClientImpl : public SystemProxyClient {
   AuthenticationRequiredCallback auth_required_callback_;
 
   // D-Bus proxy for the SystemProxy daemon, not owned.
-  dbus::ObjectProxy* proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy> proxy_ = nullptr;
 
   base::WeakPtrFactory<SystemProxyClientImpl> weak_factory_{this};
 };

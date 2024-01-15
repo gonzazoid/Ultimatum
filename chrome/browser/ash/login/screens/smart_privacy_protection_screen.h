@@ -7,11 +7,13 @@
 
 #include <string>
 
+#include "base/functional/callback.h"
+#include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ui/webui/chromeos/login/smart_privacy_protection_screen_handler.h"
 
 namespace ash {
+
+class SmartPrivacyProtectionView;
 
 // Class that controls OOBE screen showing smart privacy protection featrure
 // promotion.
@@ -20,9 +22,9 @@ class SmartPrivacyProtectionScreen : public BaseScreen {
   using TView = SmartPrivacyProtectionView;
 
   enum class Result {
-    PROCEED_WITH_FEATURE_ON,
-    PROCEED_WITH_FEATURE_OFF,
-    NOT_APPLICABLE,
+    kProceedWithFeatureOn,
+    kProceedWithFeatureOff,
+    kNotApplicable,
   };
 
   static std::string GetResultString(Result result);
@@ -36,6 +38,10 @@ class SmartPrivacyProtectionScreen : public BaseScreen {
       delete;
 
   ~SmartPrivacyProtectionScreen() override;
+
+  const ScreenExitCallback& get_exit_callback_for_testing() {
+    return exit_callback_;
+  }
 
   void set_exit_callback_for_testing(const ScreenExitCallback& callback) {
     exit_callback_ = callback;
@@ -54,11 +60,5 @@ class SmartPrivacyProtectionScreen : public BaseScreen {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::SmartPrivacyProtectionScreen;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_SMART_PRIVACY_PROTECTION_SCREEN_H_

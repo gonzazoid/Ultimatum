@@ -15,11 +15,13 @@
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
+#include "base/observer_list_types.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "components/media_router/common/providers/cast/channel/cast_auth_util.h"
 #include "components/media_router/common/providers/cast/channel/cast_channel_enum.h"
+#include "components/media_router/common/providers/cast/channel/cast_device_capability.h"
 #include "components/media_router/common/providers/cast/channel/cast_transport.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/system/data_pipe.h"
@@ -44,17 +46,6 @@ class Logger;
 class MojoDataPump;
 struct LastError;
 
-// Cast device capabilities.
-enum CastDeviceCapability : int {
-  NONE = 0,
-  VIDEO_OUT = 1 << 0,
-  VIDEO_IN = 1 << 1,
-  AUDIO_OUT = 1 << 2,
-  AUDIO_IN = 1 << 3,
-  DEV_MODE = 1 << 4,
-  MULTIZONE_GROUP = 1 << 5
-};
-
 // Public interface of the CastSocket class.
 class CastSocket {
  public:
@@ -63,9 +54,9 @@ class CastSocket {
   // valid in callback function. Do not pass |socket| around.
   using OnOpenCallback = base::OnceCallback<void(CastSocket* socket)>;
 
-  class Observer {
+  class Observer : public base::CheckedObserver {
    public:
-    virtual ~Observer() {}
+    ~Observer() override;
 
     // Invoked when an error occurs on |socket|.
     virtual void OnError(const CastSocket& socket,
@@ -75,7 +66,7 @@ class CastSocket {
     virtual void OnMessage(const CastSocket& socket,
                            const CastMessage& message) = 0;
 
-    virtual void OnReadyStateChanged(const CastSocket& socket);
+    virtual void OnReadyStateChanged(const CastSocket& socket) = 0;
   };
 
   virtual ~CastSocket() {}
@@ -114,6 +105,10 @@ class CastSocket {
   // Returns the last error that occurred on this channel, or
   // CHANNEL_ERROR_NONE if no error has occurred.
   virtual ChannelError error_state() const = 0;
+
+  // Returns a bitfield of flags that were set when the socket was connected.
+  // Flag values are defined by the CastChannelFlag enum.
+  virtual CastChannelFlags flags() const = 0;
 
   // True when keep-alive signaling is handled for this socket.
   virtual bool keep_alive() const = 0;
@@ -163,10 +158,8 @@ struct CastSocketOpenParams {
   // for |liveness_timeout|.
   base::TimeDelta ping_interval;
 
-  // A bit vector representing the capabilities of the sink. The values are
-  // defined in
-  // components/media_router/common/providers/cast/channel/cast_socket.h.
-  uint64_t device_capabilities;
+  // An EnumSet representing the capabilities of the sink.
+  CastDeviceCapabilitySet device_capabilities;
 
   CastSocketOpenParams(const net::IPEndPoint& ip_endpoint,
                        base::TimeDelta connect_timeout);
@@ -174,7 +167,7 @@ struct CastSocketOpenParams {
                        base::TimeDelta connect_timeout,
                        base::TimeDelta liveness_timeout,
                        base::TimeDelta ping_interval,
-                       uint64_t device_capabilities);
+                       CastDeviceCapabilitySet device_capabilities);
 };
 
 // This class implements a channel between Chrome and a Cast device using a TCP
@@ -211,6 +204,7 @@ class CastSocketImpl : public CastSocket {
   void set_id(int channel_id) override;
   ReadyState ready_state() const override;
   ChannelError error_state() const override;
+  CastChannelFlags flags() const override;
   bool keep_alive() const override;
   bool audio_only() const override;
   void AddObserver(Observer* observer) override;
@@ -408,6 +402,10 @@ class CastSocketImpl : public CastSocket {
   // The last error encountered by the channel.
   ChannelError error_state_;
 
+  // Bitfield of flags set when the socket was opened.
+  // Values are from CastChannelFlag.
+  CastChannelFlags flags_;
+
   // The current status of the channel.
   ReadyState ready_state_;
 
@@ -426,10 +424,12 @@ class CastSocketImpl : public CastSocket {
 
   // Raw pointer to the auth handshake delegate. Used to get detailed error
   // information.
-  raw_ptr<AuthTransportDelegate> auth_delegate_;
+  // This pointer might dangle when running the following test:
+  // PageSpecificSiteDataDialogPrivacySandboxInteractiveUiTest.FirstPartyAllowed
+  raw_ptr<AuthTransportDelegate, AcrossTasksDanglingUntriaged> auth_delegate_;
 
   // List of socket observers.
-  base::ObserverList<Observer>::Unchecked observers_;
+  base::ObserverList<Observer> observers_;
 
   base::WeakPtrFactory<CastSocketImpl> weak_factory_{this};
 };

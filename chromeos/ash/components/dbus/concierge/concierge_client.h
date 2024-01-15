@@ -8,7 +8,8 @@
 #include "base/component_export.h"
 #include "base/files/scoped_file.h"
 #include "base/observer_list.h"
-#include "chromeos/ash/components/dbus/concierge/concierge_service.pb.h"
+#include "base/scoped_observation_traits.h"
+#include "chromeos/ash/components/dbus/vm_concierge/concierge_service.pb.h"
 #include "chromeos/dbus/common/dbus_client.h"
 #include "chromeos/dbus/common/dbus_method_call_status.h"
 #include "dbus/object_proxy.h"
@@ -39,11 +40,19 @@ class COMPONENT_EXPORT(CONCIERGE) ConciergeClient
    public:
     // OnVmStarted is signaled by Concierge when a VM starts.
     virtual void OnVmStarted(
-        const vm_tools::concierge::VmStartedSignal& signal) = 0;
+        const vm_tools::concierge::VmStartedSignal& signal) {}
 
     // OnVmStopped is signaled by Concierge when a VM stops.
     virtual void OnVmStopped(
-        const vm_tools::concierge::VmStoppedSignal& signal) = 0;
+        const vm_tools::concierge::VmStoppedSignal& signal) {}
+
+    // OnVmStopping is signaled by Concierge when a VM is stopping.
+    virtual void OnVmStopping(
+        const vm_tools::concierge::VmStoppingSignal& signal) {}
+
+    // OnVmSwapping is signaled by Concierge when a VM is swapping.
+    virtual void OnVmSwapping(
+        const vm_tools::concierge::VmSwappingSignal& signal) {}
 
    protected:
     virtual ~VmObserver() = default;
@@ -81,10 +90,11 @@ class COMPONENT_EXPORT(CONCIERGE) ConciergeClient
   // Adds an observer for disk image operations.
   virtual void RemoveDiskImageObserver(DiskImageObserver* observer) = 0;
 
-  // IsVmSartedSignalConnected and IsVmStoppedSignalConnected must return true
+  // IsVmStartedSignalConnected and IsVmStoppedSignalConnected must return true
   // before RestartCrostini is called.
   virtual bool IsVmStartedSignalConnected() = 0;
   virtual bool IsVmStoppedSignalConnected() = 0;
+  virtual bool IsVmStoppingSignalConnected() = 0;
 
   // IsDiskImageProgressSignalConnected must return true before
   // ImportDiskImage is called.
@@ -227,14 +237,6 @@ class COMPONENT_EXPORT(CONCIERGE) ConciergeClient
   virtual void WaitForServiceToBeAvailable(
       dbus::ObjectProxy::WaitForServiceToBeAvailableCallback callback) = 0;
 
-  // Gets SSH server public key of container and trusted SSH client private key
-  // which can be used to connect to the container.
-  // |callback| is called after the method call finishes.
-  virtual void GetContainerSshKeys(
-      const vm_tools::concierge::ContainerSshKeysRequest& request,
-      chromeos::DBusMethodCallback<
-          vm_tools::concierge::ContainerSshKeysResponse> callback) = 0;
-
   // Attaches a USB device to a VM.
   // |callback| is called once the method call has finished.
   virtual void AttachUsbDevice(
@@ -284,6 +286,26 @@ class COMPONENT_EXPORT(CONCIERGE) ConciergeClient
       chromeos::DBusMethodCallback<
           vm_tools::concierge::GetVmLaunchAllowedResponse> callback) = 0;
 
+  // Swap out VMs.
+  // |callback| is called after the method call finishes.
+  virtual void SwapVm(
+      const vm_tools::concierge::SwapVmRequest& request,
+      chromeos::DBusMethodCallback<vm_tools::concierge::SwapVmResponse>
+          callback) = 0;
+
+  virtual void InstallPflash(
+      base::ScopedFD fd,
+      const vm_tools::concierge::InstallPflashRequest& request,
+      chromeos::DBusMethodCallback<vm_tools::concierge::InstallPflashResponse>
+          callback) = 0;
+
+  // Enables or disables aggressive balloon.
+  // |callback| is called after the method call finishes.
+  virtual void AggressiveBalloon(
+      const vm_tools::concierge::AggressiveBalloonRequest& request,
+      chromeos::DBusMethodCallback<
+          vm_tools::concierge::AggressiveBalloonResponse> callback) = 0;
+
   // Creates and initializes the global instance. |bus| must not be null.
   static void Initialize(dbus::Bus* bus);
 
@@ -313,9 +335,35 @@ class COMPONENT_EXPORT(CONCIERGE) ConciergeClient
 
 }  // namespace ash
 
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::ConciergeClient;
-}
+namespace base {
+
+template <>
+struct ScopedObservationTraits<ash::ConciergeClient,
+                               ash::ConciergeClient::VmObserver> {
+  static void AddObserver(ash::ConciergeClient* source,
+                          ash::ConciergeClient::VmObserver* observer) {
+    source->AddVmObserver(observer);
+  }
+  static void RemoveObserver(ash::ConciergeClient* source,
+                             ash::ConciergeClient::VmObserver* observer) {
+    source->RemoveVmObserver(observer);
+  }
+};
+
+template <>
+struct ScopedObservationTraits<ash::ConciergeClient,
+                               ash::ConciergeClient::DiskImageObserver> {
+  static void AddObserver(ash::ConciergeClient* source,
+                          ash::ConciergeClient::DiskImageObserver* observer) {
+    source->AddDiskImageObserver(observer);
+  }
+  static void RemoveObserver(
+      ash::ConciergeClient* source,
+      ash::ConciergeClient::DiskImageObserver* observer) {
+    source->RemoveDiskImageObserver(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_CONCIERGE_CONCIERGE_CLIENT_H_

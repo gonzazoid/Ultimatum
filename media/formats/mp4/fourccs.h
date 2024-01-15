@@ -7,16 +7,22 @@
 
 #include <string>
 
+#include "media/base/media_export.h"
 #include "media/media_buildflags.h"
 
-namespace media {
-namespace mp4 {
+namespace media::mp4 {
 
 enum FourCC {
   FOURCC_NULL = 0,
 #if BUILDFLAG(ENABLE_PLATFORM_AC3_EAC3_AUDIO)
   FOURCC_AC3 = 0x61632d33,   // "ac-3"
+  FOURCC_DAC3 = 0x64616333,  // "dac3"
   FOURCC_EAC3 = 0x65632d33,  // "ec-3"
+  FOURCC_DEC3 = 0x64656333,  // "dec3"
+#endif
+#if BUILDFLAG(ENABLE_PLATFORM_AC4_AUDIO)
+  FOURCC_AC4 = 0x61632d34,   // "ac-4"
+  FOURCC_DAC4 = 0x64616334,  // "dac4"
 #endif
 #if BUILDFLAG(ENABLE_AV1_DECODER)
   FOURCC_AV01 = 0x61763031,  // "av01"
@@ -26,6 +32,7 @@ enum FourCC {
   FOURCC_AVC3 = 0x61766333,
   FOURCC_AVCC = 0x61766343,
   FOURCC_BLOC = 0x626C6F63,
+  FOURCC_BTRT = 0x62747274,
   FOURCC_CBCS = 0x63626373,
   FOURCC_CENC = 0x63656e63,
   FOURCC_CLLI = 0x636c6c69,
@@ -36,7 +43,6 @@ enum FourCC {
   FOURCC_DFLA = 0x64664c61,  // "dfLa"
   FOURCC_DINF = 0x64696e66,
   FOURCC_DOPS = 0x644f7073,  // "dOps"
-#if BUILDFLAG(ENABLE_PLATFORM_DOLBY_VISION)
   FOURCC_DVA1 = 0x64766131,
   FOURCC_DVAV = 0x64766176,
   FOURCC_DVCC = 0x64766343,
@@ -45,7 +51,7 @@ enum FourCC {
   FOURCC_DVH1 = 0x64766831,
   FOURCC_DVHE = 0x64766865,
 #endif
-#endif
+  FOURCC_DREF = 0x64726566,
   FOURCC_EDTS = 0x65647473,
   FOURCC_EMSG = 0x656d7367,
   FOURCC_ELST = 0x656c7374,
@@ -65,6 +71,7 @@ enum FourCC {
 #endif
   FOURCC_ID32 = 0x49443332,
   FOURCC_IODS = 0x696f6473,
+  FOURCC_ISOM = 0x69736f6d,
   FOURCC_MDAT = 0x6d646174,
   FOURCC_MDCV = 0x6d646376,
   FOURCC_MDHD = 0x6d646864,
@@ -74,6 +81,7 @@ enum FourCC {
   FOURCC_META = 0x6d657461,
   FOURCC_MFHD = 0x6d666864,
   FOURCC_MFRA = 0x6d667261,
+  FOURCC_MFRO = 0x6d66726f,
 #if BUILDFLAG(ENABLE_PLATFORM_MPEG_H_AUDIO)
   FOURCC_MHM1 = 0x6d686d31,
   FOURCC_MHA1 = 0x6d686131,
@@ -81,6 +89,7 @@ enum FourCC {
   FOURCC_MINF = 0x6d696e66,
   FOURCC_MOOF = 0x6d6f6f66,
   FOURCC_MOOV = 0x6d6f6f76,
+  FOURCC_MP41 = 0x6d703431,
   FOURCC_MP4A = 0x6d703461,
   FOURCC_MP4V = 0x6d703476,
   FOURCC_MVEX = 0x6d766578,
@@ -120,6 +129,7 @@ enum FourCC {
   FOURCC_TENC = 0x74656e63,
   FOURCC_TEXT = 0x74657874,
   FOURCC_TFDT = 0x74666474,
+  FOURCC_TFRA = 0x74667261,
   FOURCC_TFHD = 0x74666864,
   FOURCC_TKHD = 0x746b6864,
   FOURCC_TRAF = 0x74726166,
@@ -127,6 +137,7 @@ enum FourCC {
   FOURCC_TREX = 0x74726578,
   FOURCC_TRUN = 0x7472756e,
   FOURCC_UDTA = 0x75647461,
+  FOURCC_URL = 0x75726c20,  // "url "
   FOURCC_UUID = 0x75756964,
   FOURCC_VIDE = 0x76696465,
   FOURCC_VMHD = 0x766d6864,
@@ -135,34 +146,15 @@ enum FourCC {
   FOURCC_WIDE = 0x77696465,
 #if BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
   FOURCC_DTSC = 0x64747363,  // "dtsc"
+  FOURCC_DTSE = 0x64747365,  // "dtse"
   FOURCC_DTSX = 0x64747378,  // "dtsx"
   FOURCC_DDTS = 0x64647473,  // "ddts"
   FOURCC_UDTS = 0x75647473,  // "udts"
 #endif                       // BUILDFLAG(ENABLE_PLATFORM_DTS_AUDIO)
 };
 
-const inline std::string FourCCToString(FourCC fourcc) {
-  char buf[5];
-  buf[0] = (fourcc >> 24) & 0xff;
-  buf[1] = (fourcc >> 16) & 0xff;
-  buf[2] = (fourcc >> 8) & 0xff;
-  buf[3] = (fourcc) & 0xff;
-  buf[4] = 0;
+MEDIA_EXPORT std::string FourCCToString(FourCC fourcc);
 
-  // Return hex itself if characters can not be printed. Any character within
-  // the "C" locale is considered printable.
-  for (int i = 0; i < 4; ++i) {
-    if (!(buf[i] > 0x1f && buf[i] < 0x7f)) {
-      std::stringstream hex_string;
-      hex_string << "0x" << std::hex << fourcc;
-      return hex_string.str();
-    }
-  }
-
-  return std::string(buf);
-}
-
-}  // namespace mp4
-}  // namespace media
+}  // namespace media::mp4
 
 #endif  // MEDIA_FORMATS_MP4_FOURCCS_H_

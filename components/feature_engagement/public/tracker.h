@@ -8,13 +8,15 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/supports_user_data.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
+#include "components/feature_engagement/public/configuration_provider.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
@@ -22,11 +24,18 @@
 #include "base/android/jni_android.h"
 #endif  // BUILDFLAG(IS_ANDROID)
 
+namespace base {
+class Clock;
+class CommandLine;
+}
+
 namespace leveldb_proto {
 class ProtoDatabaseProvider;
 }
 
 namespace feature_engagement {
+
+class Configuration;
 
 // A handle for the display lock. While this is unreleased, no in-product help
 // can be displayed.
@@ -42,6 +51,34 @@ class DisplayLockHandle {
 
  private:
   ReleaseCallback release_callback_;
+};
+
+// A class that can export events from another tracking system to the Tracker so
+// they can be migrated.
+class TrackerEventExporter {
+ public:
+  // Struct to hold data about one event to migrate. |day| should be the number
+  // of days since the UNIX epoch.
+  struct EventData {
+   public:
+    std::string event_name;
+    uint32_t day;
+
+    EventData(std::string event_name, uint32_t day)
+        : event_name(event_name), day(day) {}
+  };
+
+  virtual ~TrackerEventExporter() = default;
+
+  // The tracker will call this once its own initialization has mostly completed
+  // to ask for any new events to add.
+  using ExportEventsCallback =
+      base::OnceCallback<void(const std::vector<EventData> events)>;
+
+  // Asks the class to load any events to export and provide them back to the
+  // tracker via |callback|. |callback| must be called on the same thread that
+  // this method was invoked on.
+  virtual void ExportEvents(ExportEventsCallback callback) = 0;
 };
 
 // The Tracker provides a backend for displaying feature
@@ -108,17 +145,34 @@ class Tracker : public KeyedService, public base::SupportsUserData {
   using OnInitializedCallback = base::OnceCallback<void(bool success)>;
 
   // The |storage_dir| is the path to where all local storage will be.
-  // The |bakground_task_runner| will be used for all disk reads and writes.
+  // The |background_task_runner| will be used for all disk reads and writes.
+  // If `configuration_providers` is not specified, a default set of providers
+  // will be provided.
   static Tracker* Create(
       const base::FilePath& storage_dir,
       const scoped_refptr<base::SequencedTaskRunner>& background_task_runner,
-      leveldb_proto::ProtoDatabaseProvider* db_provider);
+      leveldb_proto::ProtoDatabaseProvider* db_provider,
+      base::WeakPtr<TrackerEventExporter> event_exporter,
+      const ConfigurationProviderList& configuration_providers =
+          GetDefaultConfigurationProviders());
+
+  // Possibly adds a command line argument for a child browser process to
+  // communicate what IPH are allowed in a testing environment. Has no effect if
+  // IPH behavior is not being modified for testing. If specific IPH features
+  // are explicitly allowed for the test, may add those to the --enable-features
+  // command line parameter as well (will add it if not present).
+  static void PropagateTestStateToChildProcess(base::CommandLine& command_line);
 
   Tracker(const Tracker&) = delete;
   Tracker& operator=(const Tracker&) = delete;
 
   // Must be called whenever an event happens.
   virtual void NotifyEvent(const std::string& event) = 0;
+
+#if !BUILDFLAG(IS_ANDROID)
+  // Notifies that the "used" event for `feature` has happened.
+  virtual void NotifyUsedEvent(const base::Feature& feature) = 0;
+#endif
 
   // This function must be called whenever the triggering condition for a
   // specific feature happens. Returns true iff the display of the in-product
@@ -227,6 +281,17 @@ class Tracker : public KeyedService, public base::SupportsUserData {
   // will still be invoked with the result. The callback is guaranteed to be
   // invoked exactly one time.
   virtual void AddOnInitializedCallback(OnInitializedCallback callback) = 0;
+
+  // Returns the configuration associated with the tracker for testing purposes.
+  virtual const Configuration* GetConfigurationForTesting() const = 0;
+
+  // Set a testing clock for the tracker. It's recommended to use a
+  // SimpleTestClock, so we can advacne the clock in test.
+  virtual void SetClockForTesting(const base::Clock& clock,
+                                  base::Time& initial_now) = 0;
+
+  // Returns the default set of configuration providers.
+  static ConfigurationProviderList GetDefaultConfigurationProviders();
 
  protected:
   Tracker() = default;

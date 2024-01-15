@@ -2,26 +2,29 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import '//resources/cr_elements/chromeos/cros_color_overrides.css.js';
 import '//resources/cr_elements/cr_shared_style.css.js';
 import '//resources/cr_elements/cr_button/cr_button.js';
 import '//resources/cr_elements/cr_input/cr_input.js';
 import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
-import '../../components/oobe_icons.m.js';
-import '../../components/common_styles/common_styles.m.js';
-import '../../components/common_styles/oobe_dialog_host_styles.m.js';
-import '../../components/dialogs/oobe_adaptive_dialog.m.js';
-import '../../components/dialogs/oobe_loading_dialog.m.js';
-import '../../components/dialogs/oobe_modal_dialog.m.js';
+import '../../components/oobe_icons.html.js';
+import '../../components/common_styles/oobe_common_styles.css.js';
+import '../../components/common_styles/oobe_dialog_host_styles.css.js';
+import '../../components/dialogs/oobe_adaptive_dialog.js';
+import '../../components/dialogs/oobe_loading_dialog.js';
 import '../../components/buttons/oobe_next_button.js';
-import '../../components/buttons/oobe_text_button.m.js';
+import '../../components/buttons/oobe_text_button.js';
 
 import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.m.js';
-import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.m.js';
-import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.m.js';
-import {OOBE_UI_STATE} from '../../components/display_manager_types.m.js';
-import {addSubmitListener} from '../../login_ui_tools.m.js';
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+import {OobeModalDialog} from '../../components/dialogs/oobe_modal_dialog.js';
+import {OOBE_UI_STATE} from '../../components/display_manager_types.js';
+import {addSubmitListener} from '../../login_ui_tools.js';
+
+import {getTemplate} from './saml_confirm_password.html.js';
 
 
 /**
@@ -47,10 +50,19 @@ const SamlConfirmPasswordBase = mixinBehaviors(
  * @typedef {{
  *   passwordInput:  CrInputElement,
  *   confirmPasswordInput: CrInputElement,
- *   cancelConfirmDlg: OobeModalDialogElement
+ *   cancelConfirmDlg: OobeModalDialog
  * }}
  */
 SamlConfirmPasswordBase.$;
+
+/**
+ * Data that is passed to the screen during onBeforeShow.
+ * @typedef {{
+ *   email: string,
+ *   manualPasswordInput: boolean,
+ * }}
+ */
+let SamlConfirmPasswordScreenData;
 
 /**
  * @polymer
@@ -61,7 +73,7 @@ class SamlConfirmPassword extends SamlConfirmPasswordBase {
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -109,7 +121,7 @@ class SamlConfirmPassword extends SamlConfirmPasswordBase {
 
   /**
    * Event handler that is invoked just before the screen is shown.
-   * @param {Object} data Screen init payload
+   * @param {SamlConfirmPasswordScreenData} data Screen init payload
    */
   onBeforeShow(data) {
     this.reset_();
@@ -161,7 +173,8 @@ class SamlConfirmPassword extends SamlConfirmPasswordBase {
     }
     if (this.isManualInput) {
       // When using manual password entry, both passwords must match.
-      var confirmPasswordInput = this.shadowRoot.querySelector('#confirmPasswordInput');
+      const confirmPasswordInput =
+          this.shadowRoot.querySelector('#confirmPasswordInput');
       if (!confirmPasswordInput.validate()) {
         return;
       }

@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_ASH_ARC_PRINT_SPOOLER_ARC_PRINT_SPOOLER_BRIDGE_H_
 
 #include "ash/components/arc/mojom/print_spooler.mojom.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -57,10 +58,13 @@ class ArcPrintSpoolerBridge : public KeyedService,
       StartPrintInCustomTabCallback callback,
       base::FilePath file_path);
 
- private:
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  static void EnsureFactoryBuilt();
 
-  Profile* const profile_;
+ private:
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
+
+  const raw_ptr<Profile> profile_;
 
   base::WeakPtrFactory<ArcPrintSpoolerBridge> weak_ptr_factory_{this};
 };

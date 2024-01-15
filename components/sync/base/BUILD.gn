@@ -10,9 +10,16 @@ declare_args() {
   sync_user_agent_product = "Chrome"
 }
 
+source_set("features") {
+  sources = [
+    "features.cc",
+    "features.h",
+  ]
+  deps = [ "//base" ]
+}
+
 static_library("base") {
   sources = [
-    "bind_to_task_runner.h",
     "client_tag_hash.cc",
     "client_tag_hash.h",
     "command_line_switches.cc",
@@ -21,14 +28,8 @@ static_library("base") {
     "data_type_histogram.h",
     "extensions_activity.cc",
     "extensions_activity.h",
-    "features.cc",
-    "features.h",
     "hash_util.cc",
     "hash_util.h",
-    "invalidation_adapter.cc",
-    "invalidation_adapter.h",
-    "invalidation_helper.cc",
-    "invalidation_helper.h",
     "legacy_directory_deletion.cc",
     "legacy_directory_deletion.h",
     "model_type.cc",
@@ -43,16 +44,15 @@ static_library("base") {
     "report_unrecoverable_error.cc",
     "report_unrecoverable_error.h",
     "stop_source.h",
+    "storage_type.h",
     "sync_invalidation.cc",
     "sync_invalidation.h",
+    "sync_invalidation_adapter.cc",
+    "sync_invalidation_adapter.h",
     "sync_mode.h",
-    "sync_prefs.cc",
-    "sync_prefs.h",
     "sync_stop_metadata_fate.h",
     "sync_util.cc",
     "sync_util.h",
-    "syncer_error.cc",
-    "syncer_error.h",
     "time.cc",
     "time.h",
     "unique_position.cc",
@@ -64,10 +64,10 @@ static_library("base") {
   ]
 
   public_deps = [
+    ":features",
     "//base",
-    "//components/invalidation/public",
     "//components/sync/protocol",
-    "//third_party/metrics_proto",
+    "//url",
   ]
   deps = [
     "//base",
@@ -75,6 +75,7 @@ static_library("base") {
     "//build:chromeos_buildflags",
     "//components/pref_registry",
     "//components/prefs",
+    "//components/signin/public/base",
     "//components/version_info",
     "//components/version_info:generate_version_info",
     "//crypto",
@@ -82,10 +83,6 @@ static_library("base") {
     "//third_party/zlib",
     "//ui/base",
   ]
-
-  if (is_chromeos_ash) {
-    deps += [ "//ash/constants" ]
-  }
 
   defines = [ "SYNC_USER_AGENT_PRODUCT=$sync_user_agent_product" ]
 }

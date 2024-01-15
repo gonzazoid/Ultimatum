@@ -18,21 +18,21 @@ const char kGetDetailsForEnrollmentRequestPath[] =
 // The billable service number for the request if the enrollment happens after
 // a local card upload.
 const int kUpstreamEnrollBillableServiceNumber =
-    kUploadCardBillableServiceNumber;
+    kUploadPaymentMethodBillableServiceNumber;
 
 // The billable service number for the request if the enrollment happens after a
 // server card retrieval or in the settings page.
 const int kDownstreamEnrollBillableServiceNumber =
-    kUnmaskCardBillableServiceNumber;
+    kUnmaskPaymentMethodBillableServiceNumber;
 
 }  // namespace
 
 GetDetailsForEnrollmentRequest::GetDetailsForEnrollmentRequest(
-    const PaymentsClient::GetDetailsForEnrollmentRequestDetails&
+    const PaymentsNetworkInterface::GetDetailsForEnrollmentRequestDetails&
         request_details,
-    base::OnceCallback<
-        void(AutofillClient::PaymentsRpcResult,
-             const PaymentsClient::GetDetailsForEnrollmentResponseDetails&)>
+    base::OnceCallback<void(AutofillClient::PaymentsRpcResult,
+                            const PaymentsNetworkInterface::
+                                GetDetailsForEnrollmentResponseDetails&)>
         callback)
     : request_details_(request_details), callback_(std::move(callback)) {}
 
@@ -100,24 +100,24 @@ std::string GetDetailsForEnrollmentRequest::GetRequestContent() {
 }
 
 void GetDetailsForEnrollmentRequest::ParseResponse(
-    const base::Value& response) {
-  const base::Value* google_legal_message = response.FindKeyOfType(
-      "google_legal_message", base::Value::Type::DICTIONARY);
+    const base::Value::Dict& response) {
+  const base::Value::Dict* google_legal_message =
+      response.FindDict("google_legal_message");
   if (google_legal_message) {
     LegalMessageLine::Parse(*google_legal_message,
                             &response_details_.google_legal_message,
                             /*escape_apostrophes=*/true);
   }
 
-  const base::Value* external_legal_message = response.FindKeyOfType(
-      "external_legal_message", base::Value::Type::DICTIONARY);
+  const base::Value::Dict* external_legal_message =
+      response.FindDict("external_legal_message");
   if (external_legal_message) {
     LegalMessageLine::Parse(*external_legal_message,
                             &response_details_.issuer_legal_message,
                             /*escape_apostrophes=*/true);
   }
 
-  const auto* context_token = response.FindStringKey("context_token");
+  const auto* context_token = response.FindString("context_token");
   response_details_.vcn_context_token =
       context_token ? *context_token : std::string();
 }

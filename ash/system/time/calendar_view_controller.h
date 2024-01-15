@@ -9,15 +9,17 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 
 #include "ash/ash_export.h"
 #include "ash/system/time/calendar_model.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
 #include "google_apis/calendar/calendar_api_response_types.h"
 #include "google_apis/common/api_error_codes.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/events/event.h"
 
 namespace ash {
 
@@ -46,6 +48,10 @@ class ASH_EXPORT CalendarViewController {
     // Invoked when the selected date is updated in the
     // `CalendarViewController`.
     virtual void OnSelectedDateUpdated() {}
+
+    // Invoked when the calendar UI has completed rendering (including business
+    // logic like scrolling to the current month).
+    virtual void OnCalendarLoaded() {}
   };
 
   void AddObserver(Observer* observer);
@@ -70,11 +76,30 @@ class ASH_EXPORT CalendarViewController {
   // Gets called when the `CalendarEventListView` is closed.
   void OnEventListClosed();
 
+  // Gets called when the `CalendarView` has completed loading its UI.
+  void CalendarLoaded();
+
+  // Records the event list item being pressed on and the type of event.
+  // Captures whether it was from the `CalendarEventListView` or implicitly the
+  // `CalendarUpNextView` (the only other place the `CalendarEventListItemView`
+  // is used currently).
+  void RecordEventListItemActivated(const ui::Event& event);
+
+  // Records a metric for the "Join" meeting button being pressed.
+  // Captures whether it was from the `CalendarEventListView` or implicitly the
+  // `CalendarUpNextView` (the only other place the `CalendarEventListItemView`
+  // is used currently).
+  void RecordJoinMeetingButtonPressed(const ui::Event& event);
+
   // Called when a calendar event is about to launch. Used to record metrics.
   void OnCalendarEventWillLaunch();
 
   // Called when the CalendarDateCellView representing today gets a fetch.
   void OnTodaysEventFetchComplete();
+
+  // Called when the on screen month has finished loading and has any events to
+  // display to the user. Logs a metric once per CalendarView lifetime.
+  void EventsDisplayedToUser();
 
   // If the selected date in the current month. This is used to inform the
   // `CalendarView` if the month should be updated when a date is selected.
@@ -110,6 +135,15 @@ class ASH_EXPORT CalendarViewController {
   // The calendar events of the selected date.
   SingleDayEventList SelectedDateEvents();
 
+  // Selected date events split into two lists, one of multi day events only,
+  // the other excluding multi day events i.e. same day events. These are
+  // displayed to the user in two separate list views.
+  std::tuple<SingleDayEventList, SingleDayEventList>
+  SelectedDateEventsSplitByMultiDayAndSameDay();
+
+  // Returns upcoming events for the "Up next" view.
+  SingleDayEventList UpcomingEvents();
+
   // The calendar events number of the `date`.
   int GetEventNumber(base::Time date);
 
@@ -122,7 +156,7 @@ class ASH_EXPORT CalendarViewController {
   base::Time currently_shown_date() { return currently_shown_date_; }
 
   // The currently selected date to show the event list.
-  absl::optional<base::Time> selected_date() { return selected_date_; }
+  std::optional<base::Time> selected_date() { return selected_date_; }
 
   // The midnight of the currently selected date adjusted to the local timezone.
   base::Time selected_date_midnight() { return selected_date_midnight_; }
@@ -161,6 +195,13 @@ class ASH_EXPORT CalendarViewController {
     todays_date_cell_view_ = todays_date_cell_view;
   }
 
+  bool is_date_cell_clickable() const { return is_date_cell_clickable_; }
+  void set_is_date_cell_clickable(bool is_clickable) {
+    is_date_cell_clickable_ = is_clickable;
+  }
+
+  bool is_event_list_showing() const { return is_event_list_showing_; }
+
   // Returns whether the events for `start_of_month` have been successfully
   // fetched. The `FetchingStatus` should be either `kSuccess` or `kRefetching`.
   bool IsSuccessfullyFetched(base::Time start_of_month);
@@ -171,6 +212,7 @@ class ASH_EXPORT CalendarViewController {
   friend class CalendarViewAnimationTest;
   friend class CalendarViewEventListViewTest;
   friend class CalendarViewTest;
+  friend class CalendarViewEventListItemViewTest;
 
   // Adds the time difference and returns the adjusted time.
   base::Time ApplyTimeDifference(base::Time date);
@@ -205,14 +247,22 @@ class ASH_EXPORT CalendarViewController {
   // events has been recorded.
   bool todays_date_cell_fetch_recorded_ = false;
 
+  // Record if any events are displayed (via the dots in the current month) on
+  // screen to the user.
+  bool events_shown_to_user_recorded_ = false;
+
+  // Whether date cells are clickable. When the event list animation is running,
+  // date cells should become unclickable until the animation completes.
+  bool is_date_cell_clickable_ = true;
+
   // The currently selected date.
-  absl::optional<base::Time> selected_date_;
+  std::optional<base::Time> selected_date_;
 
   // The currently selected CalendarDateCellView
-  CalendarDateCellView* selected_date_cell_view_ = nullptr;
+  raw_ptr<CalendarDateCellView> selected_date_cell_view_ = nullptr;
 
   // The CalendarDateCellView which represents today.
-  CalendarDateCellView* todays_date_cell_view_ = nullptr;
+  raw_ptr<CalendarDateCellView> todays_date_cell_view_ = nullptr;
 
   // The midnight of the currently selected date adjusted to the local timezone.
   base::Time selected_date_midnight_;

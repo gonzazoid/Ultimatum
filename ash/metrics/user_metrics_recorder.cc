@@ -14,6 +14,7 @@
 #include "ash/metrics/desktop_task_switch_metric_recorder.h"
 #include "ash/metrics/pointer_metrics_recorder.h"
 #include "ash/metrics/stylus_metrics_recorder.h"
+#include "ash/metrics/touch_usage_metrics_recorder.h"
 #include "ash/public/cpp/accessibility_controller_enums.h"
 #include "ash/public/cpp/shelf_item.h"
 #include "ash/public/cpp/shelf_model.h"
@@ -21,7 +22,6 @@
 #include "ash/shelf/shelf.h"
 #include "ash/shelf/shelf_view.h"
 #include "ash/shell.h"
-#include "ash/wm/window_state.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
 #include "components/prefs/pref_service.h"
@@ -30,62 +30,8 @@ namespace ash {
 
 namespace {
 
-using ::chromeos::WindowStateType;
-
 // Time between calls to "RecordPeriodicMetrics".
 constexpr base::TimeDelta kRecordPeriodicMetricsInterval = base::Minutes(30);
-
-enum ActiveWindowStateType {
-  ACTIVE_WINDOW_STATE_TYPE_NO_ACTIVE_WINDOW,
-  ACTIVE_WINDOW_STATE_TYPE_OTHER,
-  ACTIVE_WINDOW_STATE_TYPE_MAXIMIZED,
-  ACTIVE_WINDOW_STATE_TYPE_FULLSCREEN,
-  ACTIVE_WINDOW_STATE_TYPE_SNAPPED,
-  ACTIVE_WINDOW_STATE_TYPE_PINNED,
-  ACTIVE_WINDOW_STATE_TYPE_TRUSTED_PINNED,
-  ACTIVE_WINDOW_STATE_TYPE_PIP,
-  ACTIVE_WINDOW_STATE_TYPE_FLOATED,
-  ACTIVE_WINDOW_STATE_TYPE_COUNT,
-};
-
-ActiveWindowStateType GetActiveWindowState() {
-  ActiveWindowStateType active_window_state_type =
-      ACTIVE_WINDOW_STATE_TYPE_NO_ACTIVE_WINDOW;
-  WindowState* active_window_state = WindowState::ForActiveWindow();
-  if (active_window_state) {
-    switch (active_window_state->GetStateType()) {
-      case WindowStateType::kMaximized:
-        active_window_state_type = ACTIVE_WINDOW_STATE_TYPE_MAXIMIZED;
-        break;
-      case WindowStateType::kFullscreen:
-        active_window_state_type = ACTIVE_WINDOW_STATE_TYPE_FULLSCREEN;
-        break;
-      case WindowStateType::kPrimarySnapped:
-      case WindowStateType::kSecondarySnapped:
-        active_window_state_type = ACTIVE_WINDOW_STATE_TYPE_SNAPPED;
-        break;
-      case WindowStateType::kPinned:
-        active_window_state_type = ACTIVE_WINDOW_STATE_TYPE_PINNED;
-        break;
-      case WindowStateType::kTrustedPinned:
-        active_window_state_type = ACTIVE_WINDOW_STATE_TYPE_TRUSTED_PINNED;
-        break;
-      case WindowStateType::kPip:
-        active_window_state_type = ACTIVE_WINDOW_STATE_TYPE_PIP;
-        break;
-      case WindowStateType::kFloated:
-        active_window_state_type = ACTIVE_WINDOW_STATE_TYPE_FLOATED;
-        break;
-      case WindowStateType::kDefault:
-      case WindowStateType::kNormal:
-      case WindowStateType::kMinimized:
-      case WindowStateType::kInactive:
-        active_window_state_type = ACTIVE_WINDOW_STATE_TYPE_OTHER;
-        break;
-    }
-  }
-  return active_window_state_type;
-}
 
 // Returns true if kiosk mode is active.
 bool IsKioskModeActive() {
@@ -164,6 +110,7 @@ void UserMetricsRecorder::OnShellInitialized() {
         std::make_unique<DesktopTaskSwitchMetricRecorder>();
   }
   pointer_metrics_recorder_ = std::make_unique<PointerMetricsRecorder>();
+  touch_usage_metrics_recorder_ = std::make_unique<TouchUsageMetricsRecorder>();
   stylus_metrics_recorder_ = std::make_unique<StylusMetricsRecorder>();
 }
 
@@ -176,45 +123,20 @@ void UserMetricsRecorder::OnShellShuttingDown() {
   }
   desktop_task_switch_metric_recorder_.reset();
 
-  // To clean up pointer_metrics_recorder_ and stylus_metrics_recorder_
-  // properly, a valid shell instance is required, so explicitly delete them
-  // before the shell instance becomes invalid.
+  // To clean up `pointer_metrics_recorder_`, `touch_usage_metrics_recorder_`
+  // and `stylus_metrics_recorder_` properly, a valid shell instance is
+  // required, so explicitly delete them before the shell instance becomes
+  // invalid.
   pointer_metrics_recorder_.reset();
+  touch_usage_metrics_recorder_.reset();
   stylus_metrics_recorder_.reset();
 }
 
 void UserMetricsRecorder::RecordPeriodicMetrics() {
-  Shelf* shelf = Shelf::ForWindow(Shell::GetPrimaryRootWindow());
-  // TODO(bruthig): Investigating whether the check for |manager| is necessary
-  // and add tests if it is.
-  if (shelf) {
-    // TODO(bruthig): Consider tracking the time spent in each alignment.
-    UMA_HISTOGRAM_ENUMERATION("Ash.ShelfAlignmentOverTime",
-                              static_cast<ShelfAlignmentUmaEnumValue>(
-                                  shelf->SelectValueForShelfAlignment(
-                                      SHELF_ALIGNMENT_UMA_ENUM_VALUE_BOTTOM,
-                                      SHELF_ALIGNMENT_UMA_ENUM_VALUE_LEFT,
-                                      SHELF_ALIGNMENT_UMA_ENUM_VALUE_RIGHT)),
-                              SHELF_ALIGNMENT_UMA_ENUM_VALUE_COUNT);
-  }
-
   if (IsUserInActiveDesktopEnvironment()) {
     RecordShelfItemCounts();
     RecordPeriodicAppListMetrics();
-
-    base::UmaHistogramBoolean(
-        "Ash.AppNotificationBadgingPref",
-        Shell::Get()->session_controller()->GetActivePrefService()->GetBoolean(
-            prefs::kAppNotificationBadgingEnabled));
   }
-
-  // TODO(bruthig): Find out if this should only be logged when the user is
-  // active.
-  // TODO(bruthig): Consider tracking how long a particular type of window is
-  // active at a time.
-  UMA_HISTOGRAM_ENUMERATION("Ash.ActiveWindowShowTypeOverTime",
-                            GetActiveWindowState(),
-                            ACTIVE_WINDOW_STATE_TYPE_COUNT);
 }
 
 bool UserMetricsRecorder::IsUserInActiveDesktopEnvironment() const {

@@ -26,9 +26,9 @@ public class SplashLayout {
     }
 
     /**
-     * Selects the splash screen layout based on:
-     * - Whether the icon is appropriate to display on the splash screen.
-     * - The icon size.
+     * Selects the splash screen layout based on whether the icon is appropriate to display. For
+     * example, the icon must not be generated (nor missing) and has to have the length of both its
+     * edges above `R.dimen.webapp_splash_image_size_minimum` to be usable.
      */
     public static int selectLayout(Resources resources, Bitmap icon, boolean wasIconGenerated) {
         if (icon == null || wasIconGenerated) {
@@ -47,18 +47,18 @@ public class SplashLayout {
     /**
      * @see android.content.res.Resources#getColor(int id).
      */
-    @SuppressWarnings("deprecation")
     public static int getColorCompatibility(Resources res, int id) throws NotFoundException {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            return res.getColor(id, null);
-        } else {
-            return res.getColor(id);
-        }
+        return res.getColor(id, null);
     }
 
     /** Builds splash screen and attaches it to the parent view. */
-    public static void createLayout(Context appContext, ViewGroup parentView, Bitmap icon,
-            boolean isIconAdaptive, boolean isIconGenerated, String text,
+    public static void createLayout(
+            Context appContext,
+            ViewGroup parentView,
+            Bitmap icon,
+            boolean isIconAdaptive,
+            boolean isIconGenerated,
+            String text,
             boolean useLightTextColor) {
         int layoutId = selectLayout(appContext.getResources(), icon, isIconGenerated);
         ViewGroup layout =
@@ -67,8 +67,9 @@ public class SplashLayout {
         TextView appNameView = (TextView) layout.findViewById(R.id.webapp_splash_screen_name);
         appNameView.setText(text);
         if (useLightTextColor) {
-            appNameView.setTextColor(getColorCompatibility(
-                    appContext.getResources(), R.color.webapp_splash_title_light));
+            appNameView.setTextColor(
+                    getColorCompatibility(
+                            appContext.getResources(), R.color.webapp_splash_title_light));
         }
 
         ImageView splashIconView = (ImageView) layout.findViewById(R.id.webapp_splash_screen_icon);

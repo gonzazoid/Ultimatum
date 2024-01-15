@@ -13,10 +13,8 @@
 #include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/stringprintf.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/device_event_log/device_event_log.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -34,6 +32,7 @@ namespace floss {
 namespace {
 
 using testing::_;
+using testing::DoAll;
 
 const char kTestSender[] = ":0.1";
 const int kTestSerial = 1;
@@ -57,12 +56,25 @@ const uint8_t kTestFlags = 10;
 const uint16_t kTestManufacturerId = 11;
 const std::vector<uint8_t> kTestAdvData = {0, 1, 2};
 
+void FakeExportMethod(
+    const std::string& interface_name,
+    const std::string& method_name,
+    const dbus::ExportedObject::MethodCallCallback& method_call_callback,
+    dbus::ExportedObject::OnExportedCallback on_exported_callback) {
+  std::move(on_exported_callback)
+      .Run(interface_name, method_name, /*success=*/true);
+}
+
 }  // namespace
 
 class FlossLEScanClientTest : public testing::Test,
                               public ScannerClientObserver {
  public:
   FlossLEScanClientTest() = default;
+
+  base::Version GetCurrVersion() {
+    return floss::version::GetMaximalSupportedVersion();
+  }
 
   void SetUp() override {
     ::dbus::Bus::Options options;
@@ -139,7 +151,7 @@ class FlossLEScanClientTest : public testing::Test,
     method_call.SetSender(kTestSender);
     method_call.SetSerial(kTestSerial);
     dbus::MessageWriter writer(&method_call);
-    writer.AppendArrayOfBytes(kTestUuidByteArray, sizeof(kTestUuidByteArray));
+    writer.AppendArrayOfBytes(kTestUuidByteArray);
     writer.AppendByte(kTestScannerId);
     writer.AppendUint32(static_cast<uint32_t>(kTestStatus));
 
@@ -240,6 +252,14 @@ class FlossLEScanClientTest : public testing::Test,
   base::WeakPtrFactory<FlossLEScanClientTest> weak_ptr_factory_{this};
 };
 
+static bool ReadNullOptDBusParam(dbus::MessageReader* reader) {
+  absl::optional<int32_t> param;
+  if (!FlossDBusClient::ReadDBusParam(reader, &param)) {
+    return false;
+  }
+  return param == absl::nullopt;
+}
+
 TEST_F(FlossLEScanClientTest, TestInitExportRegisterScanner) {
   scoped_refptr<::dbus::MockExportedObject> exported_callback =
       base::MakeRefCounted<::dbus::MockExportedObject>(bus_.get(),
@@ -251,13 +271,32 @@ TEST_F(FlossLEScanClientTest, TestInitExportRegisterScanner) {
       *exported_callback.get(),
       ExportMethod(kScannerCallbackInterfaceName, adapter::kOnScannerRegistered,
                    testing::_, testing::_))
-      .WillOnce(testing::SaveArg<2>(&method_handler_on_scanner_registered));
+      .WillOnce(
+          DoAll(testing::SaveArg<2>(&method_handler_on_scanner_registered),
+                &FakeExportMethod));
 
   dbus::ExportedObject::MethodCallCallback method_handler_on_scan_result;
   EXPECT_CALL(*exported_callback.get(),
               ExportMethod(kScannerCallbackInterfaceName,
                            adapter::kOnScanResult, testing::_, testing::_))
-      .WillOnce(testing::SaveArg<2>(&method_handler_on_scan_result));
+      .WillOnce(DoAll(testing::SaveArg<2>(&method_handler_on_scan_result),
+                      &FakeExportMethod));
+
+  dbus::ExportedObject::MethodCallCallback method_handler_on_adv_found;
+  EXPECT_CALL(
+      *exported_callback.get(),
+      ExportMethod(kScannerCallbackInterfaceName,
+                   adapter::kOnAdvertisementFound, testing::_, testing::_))
+      .WillOnce(DoAll(testing::SaveArg<2>(&method_handler_on_adv_found),
+                      &FakeExportMethod));
+
+  dbus::ExportedObject::MethodCallCallback method_handler_on_adv_lost;
+  EXPECT_CALL(
+      *exported_callback.get(),
+      ExportMethod(kScannerCallbackInterfaceName, adapter::kOnAdvertisementLost,
+                   testing::_, testing::_))
+      .WillOnce(DoAll(testing::SaveArg<2>(&method_handler_on_adv_lost),
+                      &FakeExportMethod));
 
   EXPECT_CALL(*bus_.get(), GetExportedObject(callback_path_))
       .WillRepeatedly(testing::Return(exported_callback.get()));
@@ -281,11 +320,14 @@ TEST_F(FlossLEScanClientTest, TestInitExportRegisterScanner) {
         std::move(*cb).Run(response.get(), /*err=*/nullptr);
       });
 
-  client_->Init(bus_.get(), kAdapterInterface, adapter_index_);
+  client_->Init(bus_.get(), kAdapterInterface, adapter_index_, GetCurrVersion(),
+                base::DoNothing());
 
   // Test exported callbacks are correctly parsed
   ASSERT_TRUE(!!method_handler_on_scanner_registered);
   ASSERT_TRUE(!!method_handler_on_scan_result);
+  ASSERT_TRUE(!!method_handler_on_adv_found);
+  ASSERT_TRUE(!!method_handler_on_adv_lost);
 
   TestOnScannerRegistered(method_handler_on_scanner_registered);
   TestOnScanResult(method_handler_on_scan_result);
@@ -305,8 +347,7 @@ TEST_F(FlossLEScanClientTest, TestInitExportRegisterScanner) {
         // Create a fake response with UUID return value.
         auto response = ::dbus::Response::CreateEmpty();
         dbus::MessageWriter writer(response.get());
-        writer.AppendArrayOfBytes(kTestUuidByteArray,
-                                  sizeof(kTestUuidByteArray));
+        writer.AppendArrayOfBytes(kTestUuidByteArray);
         std::move(*cb).Run(response.get(), /*err=*/nullptr);
       });
   client_->RegisterScanner(
@@ -357,7 +398,8 @@ TEST_F(FlossLEScanClientTest, TestInitExportRegisterScanner) {
 }
 
 TEST_F(FlossLEScanClientTest, TestStartStopScan) {
-  client_->Init(bus_.get(), kAdapterInterface, adapter_index_);
+  client_->Init(bus_.get(), kAdapterInterface, adapter_index_, GetCurrVersion(),
+                base::DoNothing());
 
   // Method of 3 parameters with no return.
   EXPECT_CALL(*object_proxy_.get(), DoCallMethodWithErrorResponse(
@@ -365,12 +407,12 @@ TEST_F(FlossLEScanClientTest, TestStartStopScan) {
       .WillOnce([](::dbus::MethodCall* method_call, int timeout_ms,
                    ::dbus::ObjectProxy::ResponseOrErrorCallback* cb) {
         dbus::MessageReader msg(method_call);
-        // D-Bus method call should have 3 parameters.
-        // TODO(b/217274013): ScanSettings and ScanFilter currently being
-        // ignored
         uint8_t param1;
         ASSERT_TRUE(FlossDBusClient::ReadDBusParam(&msg, &param1));
         EXPECT_EQ(kTestScannerId, param1);
+        ASSERT_TRUE(ReadNullOptDBusParam(&msg));  // ScanSettings
+        ASSERT_TRUE(ReadNullOptDBusParam(&msg));  // ScanFilter
+
         // Create a fake response with BtifStatus return value.
         auto response = ::dbus::Response::CreateEmpty();
         dbus::MessageWriter writer(response.get());
@@ -386,7 +428,8 @@ TEST_F(FlossLEScanClientTest, TestStartStopScan) {
                            EXPECT_EQ(ret.value(),
                                      FlossDBusClient::BtifStatus::kSuccess);
                          }),
-                     kTestScannerId, ScanSettings{}, ScanFilter{});
+                     kTestScannerId, absl::nullopt /* ScanSettings */,
+                     absl::nullopt /* ScanFilter*/);
 
   // Method of 1 parameter with no return.
   EXPECT_CALL(*object_proxy_.get(), DoCallMethodWithErrorResponse(

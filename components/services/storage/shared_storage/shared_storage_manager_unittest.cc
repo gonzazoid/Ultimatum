@@ -7,10 +7,11 @@
 #include <queue>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/memory_pressure_listener.h"
+#include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
@@ -25,6 +26,7 @@
 #include "base/test/test_simple_task_runner.h"
 #include "base/threading/sequence_bound.h"
 #include "base/threading/thread.h"
+#include "base/time/time.h"
 #include "components/services/storage/public/mojom/storage_usage_info.mojom.h"
 #include "components/services/storage/shared_storage/async_shared_storage_database.h"
 #include "components/services/storage/shared_storage/shared_storage_database.h"
@@ -152,12 +154,12 @@ class MockResultQueue {
 class MockAsyncSharedStorageDatabase : public AsyncSharedStorageDatabase {
  public:
   static std::unique_ptr<AsyncSharedStorageDatabase> Create() {
-    return absl::WrapUnique(new MockAsyncSharedStorageDatabase());
+    return base::WrapUnique(new MockAsyncSharedStorageDatabase());
   }
 
   static std::unique_ptr<AsyncSharedStorageDatabase> Create(
       std::queue<OperationResult> result_queue) {
-    return absl::WrapUnique(
+    return base::WrapUnique(
         new MockAsyncSharedStorageDatabase(std::move(result_queue)));
   }
 
@@ -202,15 +204,13 @@ class MockAsyncSharedStorageDatabase : public AsyncSharedStorageDatabase {
     Run(std::move(callback));
   }
   void Keys(url::Origin context_origin,
-            mojo::PendingRemote<
-                shared_storage_worklet::mojom::SharedStorageEntriesListener>
+            mojo::PendingRemote<blink::mojom::SharedStorageEntriesListener>
                 pending_listener,
             base::OnceCallback<void(OperationResult)> callback) override {
     Run(std::move(callback));
   }
   void Entries(url::Origin context_origin,
-               mojo::PendingRemote<
-                   shared_storage_worklet::mojom::SharedStorageEntriesListener>
+               mojo::PendingRemote<blink::mojom::SharedStorageEntriesListener>
                    pending_listener,
                base::OnceCallback<void(OperationResult)> callback) override {
     Run(std::move(callback));
@@ -222,23 +222,22 @@ class MockAsyncSharedStorageDatabase : public AsyncSharedStorageDatabase {
                             bool perform_storage_cleanup = false) override {
     Run(std::move(callback));
   }
-  void PurgeStaleOrigins(
-      base::OnceCallback<void(OperationResult)> callback) override {
+  void PurgeStale(base::OnceCallback<void(OperationResult)> callback) override {
     Run(std::move(callback));
   }
-  void FetchOrigins(base::OnceCallback<
-                        void(std::vector<mojom::StorageUsageInfoPtr>)> callback,
-                    bool exclude_empty_origins = true) override {
+  void FetchOrigins(
+      base::OnceCallback<void(std::vector<mojom::StorageUsageInfoPtr>)>
+          callback) override {
     Run(std::move(callback));
   }
   void MakeBudgetWithdrawal(
-      url::Origin context_origin,
+      net::SchemefulSite context_site,
       double bits_debit,
       base::OnceCallback<void(OperationResult)> callback) override {
     Run(std::move(callback));
   }
   void GetRemainingBudget(
-      url::Origin context_origin,
+      net::SchemefulSite context_site,
       base::OnceCallback<void(BudgetResult)> callback) override {
     Run(std::move(callback));
   }
@@ -253,6 +252,11 @@ class MockAsyncSharedStorageDatabase : public AsyncSharedStorageDatabase {
   void GetEntriesForDevTools(
       url::Origin context_origin,
       base::OnceCallback<void(EntriesResult)> callback) override {
+    Run(std::move(callback));
+  }
+  void ResetBudgetForDevTools(
+      url::Origin context_origin,
+      base::OnceCallback<void(OperationResult)> callback) override {
     Run(std::move(callback));
   }
 
@@ -400,11 +404,11 @@ class SharedStorageManagerTest : public testing::Test {
         {blink::features::kSharedStorageAPI},
         // Set these intervals to be long enough not to interfere with the
         // basic tests.
-        {{"SharedStorageStaleOriginPurgeInitialInterval",
+        {{"SharedStorageStalePurgeInitialInterval",
           TimeDeltaToString(base::Hours(kInitialPurgeIntervalHours))},
-         {"SharedStorageStaleOriginPurgeRecurringInterval",
+         {"SharedStorageStalePurgeRecurringInterval",
           TimeDeltaToString(base::Hours(kRecurringPurgeIntervalHours))},
-         {"SharedStorageOriginStalenessThreshold",
+         {"SharedStorageStalenessThreshold",
           TimeDeltaToString(base::Hours(kThresholdHours))},
          {"SharedStorageBitBudget", base::NumberToString(kBitBudget)},
          {"SharedStorageBudgetInterval",
@@ -414,7 +418,7 @@ class SharedStorageManagerTest : public testing::Test {
   // Return the relative file path in the "storage/" subdirectory of test data
   // for the SQL file from which to initialize an async shared storage database
   // instance.
-  virtual const char* GetRelativeFilePath() { return nullptr; }
+  virtual std::string GetRelativeFilePath() { return nullptr; }
 
   virtual DBType GetType() { return DBType::kInMemory; }
 
@@ -622,8 +626,7 @@ class SharedStorageManagerTest : public testing::Test {
 
   OperationResult KeysSync(
       url::Origin context_origin,
-      mojo::PendingRemote<
-          shared_storage_worklet::mojom::SharedStorageEntriesListener>
+      mojo::PendingRemote<blink::mojom::SharedStorageEntriesListener>
           listener) {
     DCHECK(GetManager());
     base::test::TestFuture<OperationResult> future;
@@ -652,8 +655,7 @@ class SharedStorageManagerTest : public testing::Test {
 
   OperationResult EntriesSync(
       url::Origin context_origin,
-      mojo::PendingRemote<
-          shared_storage_worklet::mojom::SharedStorageEntriesListener>
+      mojo::PendingRemote<blink::mojom::SharedStorageEntriesListener>
           listener) {
     DCHECK(GetManager());
     base::test::TestFuture<OperationResult> future;
@@ -680,25 +682,20 @@ class SharedStorageManagerTest : public testing::Test {
     return future.Get();
   }
 
-  void FetchOrigins(std::vector<mojom::StorageUsageInfoPtr>* out_result,
-                    bool exclude_empty_origins = true) {
+  void FetchOrigins(std::vector<mojom::StorageUsageInfoPtr>* out_result) {
     DCHECK(out_result);
     DCHECK(GetManager());
     DCHECK(receiver_);
 
     auto callback = receiver_->MakeInfosCallback(
-        DBOperation(Type::DB_FETCH_ORIGINS,
-                    {TestDatabaseOperationReceiver::SerializeBool(
-                        exclude_empty_origins)}),
-        out_result);
-    GetManager()->FetchOrigins(std::move(callback), exclude_empty_origins);
+        DBOperation(Type::DB_FETCH_ORIGINS), out_result);
+    GetManager()->FetchOrigins(std::move(callback));
   }
 
-  std::vector<mojom::StorageUsageInfoPtr> FetchOriginsSync(
-      bool exclude_empty_origins = true) {
+  std::vector<mojom::StorageUsageInfoPtr> FetchOriginsSync() {
     DCHECK(GetManager());
     base::test::TestFuture<std::vector<mojom::StorageUsageInfoPtr>> future;
-    GetManager()->FetchOrigins(future.GetCallback(), exclude_empty_origins);
+    GetManager()->FetchOrigins(future.GetCallback());
     return future.Take();
   }
 
@@ -742,21 +739,22 @@ class SharedStorageManagerTest : public testing::Test {
     return future.Get();
   }
 
-  OperationResult MakeBudgetWithdrawalSync(const url::Origin& context_origin,
-                                           double bits_debit) {
+  OperationResult MakeBudgetWithdrawalSync(
+      const net::SchemefulSite& context_site,
+      double bits_debit) {
     DCHECK(GetManager());
 
     base::test::TestFuture<OperationResult> future;
-    GetManager()->MakeBudgetWithdrawal(std::move(context_origin), bits_debit,
+    GetManager()->MakeBudgetWithdrawal(std::move(context_site), bits_debit,
                                        future.GetCallback());
     return future.Get();
   }
 
-  BudgetResult GetRemainingBudgetSync(const url::Origin& context_origin) {
+  BudgetResult GetRemainingBudgetSync(const net::SchemefulSite& context_site) {
     DCHECK(GetManager());
 
     base::test::TestFuture<BudgetResult> future;
-    GetManager()->GetRemainingBudget(std::move(context_origin),
+    GetManager()->GetRemainingBudget(std::move(context_site),
                                      future.GetCallback());
     return future.Take();
   }
@@ -770,18 +768,18 @@ class SharedStorageManagerTest : public testing::Test {
 
     auto callback = receiver_->MakeBoolCallback(
         DBOperation(
-            Type::DB_OVERRIDE_TIME, context_origin,
+            Type::DB_OVERRIDE_TIME_ORIGIN, context_origin,
             {TestDatabaseOperationReceiver::SerializeTime(new_creation_time)}),
         out_success);
     GetManager()->OverrideCreationTimeForTesting(
         std::move(context_origin), new_creation_time, std::move(callback));
   }
 
-  int GetNumBudgetEntriesSync(url::Origin context_origin) {
+  int GetNumBudgetEntriesSync(net::SchemefulSite context_site) {
     DCHECK(GetManager());
 
     base::test::TestFuture<int> future;
-    GetManager()->GetNumBudgetEntriesForTesting(std::move(context_origin),
+    GetManager()->GetNumBudgetEntriesForTesting(std::move(context_site),
                                                 future.GetCallback());
     return future.Get();
   }
@@ -820,6 +818,16 @@ class SharedStorageManagerTest : public testing::Test {
     return future.Take();
   }
 
+  OperationResult ResetBudgetForDevToolsSync(
+      const url::Origin& context_origin) {
+    DCHECK(GetManager());
+
+    base::test::TestFuture<OperationResult> future;
+    GetManager()->ResetBudgetForDevTools(std::move(context_origin),
+                                         future.GetCallback());
+    return future.Get();
+  }
+
  protected:
   static constexpr int kBudgetIntervalHours_ =
       kInitialPurgeIntervalHours + 2 * kRecurringPurgeIntervalHours;
@@ -838,15 +846,17 @@ class SharedStorageManagerTest : public testing::Test {
   bool memory_trimmed_ = false;
 };
 
-class SharedStorageManagerFromFileV1Test : public SharedStorageManagerTest {
+class SharedStorageManagerFromFileTest : public SharedStorageManagerTest {
  public:
   DBType GetType() override { return DBType::kFileBackedFromExisting; }
 
-  const char* GetRelativeFilePath() override { return "shared_storage.v1.sql"; }
+  std::string GetRelativeFilePath() override {
+    return GetTestFileNameForCurrentVersion();
+  }
 };
 
-// Test loading version 1 database.
-TEST_F(SharedStorageManagerFromFileV1Test, Version1_LoadFromFile) {
+// Test loading current version database.
+TEST_F(SharedStorageManagerFromFileTest, CurrentVersion_LoadFromFile) {
   url::Origin google_com = url::Origin::Create(GURL("http://google.com/"));
   EXPECT_EQ(GetSync(google_com, u"key1").data, u"value1");
   EXPECT_EQ(GetSync(google_com, u"key2").data, u"value2");
@@ -974,9 +984,9 @@ TEST_F(SharedStorageManagerFromFileV1Test, Version1_LoadFromFile) {
 }
 
 class SharedStorageManagerFromFileV1NoBudgetTableTest
-    : public SharedStorageManagerFromFileV1Test {
+    : public SharedStorageManagerFromFileTest {
  public:
-  const char* GetRelativeFilePath() override {
+  std::string GetRelativeFilePath() override {
     return "shared_storage.v1.no_budget_table.sql";
   }
 };
@@ -1070,10 +1080,15 @@ TEST_F(SharedStorageManagerFromFileV1NoBudgetTableTest,
           url::Origin::Create(GURL("http://waymo.com")),
           url::Origin::Create(GURL("http://withgoogle.com")), youtube_com));
 
-  EXPECT_DOUBLE_EQ(kBitBudget, GetRemainingBudgetSync(chromium_org).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, GetRemainingBudgetSync(google_com).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, GetRemainingBudgetSync(google_org).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, GetRemainingBudgetSync(youtube_com).bits);
+  EXPECT_DOUBLE_EQ(
+      kBitBudget,
+      GetRemainingBudgetSync(net::SchemefulSite(chromium_org)).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget,
+                   GetRemainingBudgetSync(net::SchemefulSite(google_com)).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget,
+                   GetRemainingBudgetSync(net::SchemefulSite(google_org)).bits);
+  EXPECT_DOUBLE_EQ(
+      kBitBudget, GetRemainingBudgetSync(net::SchemefulSite(youtube_com)).bits);
 }
 
 class SharedStorageManagerParamTest
@@ -1401,20 +1416,23 @@ TEST_P(SharedStorageManagerParamTest, DevTools) {
   EXPECT_DOUBLE_EQ(kBitBudget, origin3_metadata.remaining_budget);
 }
 
-TEST_P(SharedStorageManagerParamTest, AdvanceTime_StaleOriginsPurged) {
+TEST_P(SharedStorageManagerParamTest, AdvanceTime_StalePurged) {
   url::Origin kOrigin1 = url::Origin::Create(GURL("http://www.example1.test"));
   EXPECT_EQ(OperationResult::kSet, SetSync(kOrigin1, u"key1", u"value1"));
   EXPECT_FALSE(FetchOriginsSync().empty());
 
-  // Initial interval for checking origin staleness is
-  // `kInitialPurgeIntervalHours` hours for this test.
+  // Initial interval for checking staleness is `kInitialPurgeIntervalHours`
+  // hours for this test.
   task_environment_.FastForwardBy(base::Hours(kInitialPurgeIntervalHours));
   EXPECT_FALSE(FetchOriginsSync().empty());
+  EXPECT_LE(GetSync(kOrigin1, u"key1").last_used_time,
+            base::Time::Now() - base::Hours(kInitialPurgeIntervalHours));
   EXPECT_LE(GetCreationTimeSync(kOrigin1).time,
             base::Time::Now() - base::Hours(kInitialPurgeIntervalHours));
 
   // Subsequent intervals are `kRecurringPurgeIntervalHours` hours each.
   task_environment_.FastForwardBy(base::Hours(kRecurringPurgeIntervalHours));
+  EXPECT_EQ(GetSync(kOrigin1, u"key1").data, u"value1");
   EXPECT_FALSE(FetchOriginsSync().empty());
 
   // We have set the staleness threshold to `kThresholdHours` hours for this
@@ -1430,76 +1448,97 @@ TEST_P(SharedStorageManagerParamTest, SyncMakeBudgetWithdrawal) {
 
   // SQL database hasn't yet been lazy-initialized. Nevertheless, remaining
   // budgets should be returned as the max possible.
-  const url::Origin kOrigin1 =
-      url::Origin::Create(GURL("http://www.example1.test"));
-  EXPECT_DOUBLE_EQ(kBitBudget, GetRemainingBudgetSync(kOrigin1).bits);
-  const url::Origin kOrigin2 =
-      url::Origin::Create(GURL("http://www.example2.test"));
-  EXPECT_DOUBLE_EQ(kBitBudget, GetRemainingBudgetSync(kOrigin2).bits);
+  const net::SchemefulSite kSite1(GURL("http://www.example1.test"));
+  EXPECT_DOUBLE_EQ(kBitBudget, GetRemainingBudgetSync(kSite1).bits);
+  const net::SchemefulSite kSite2(GURL("http://www.example2.test"));
+  EXPECT_DOUBLE_EQ(kBitBudget, GetRemainingBudgetSync(kSite2).bits);
 
-  // A withdrawal for `kOrigin1` doesn't affect `kOrigin2`.
-  EXPECT_EQ(OperationResult::kSuccess,
-            MakeBudgetWithdrawalSync(kOrigin1, 1.75));
-  EXPECT_DOUBLE_EQ(kBitBudget - 1.75, GetRemainingBudgetSync(kOrigin1).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, GetRemainingBudgetSync(kOrigin2).bits);
-  EXPECT_EQ(1, GetNumBudgetEntriesSync(kOrigin1));
+  // A withdrawal for `kSite1` doesn't affect `kSite2`.
+  EXPECT_EQ(OperationResult::kSuccess, MakeBudgetWithdrawalSync(kSite1, 1.75));
+  EXPECT_DOUBLE_EQ(kBitBudget - 1.75, GetRemainingBudgetSync(kSite1).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget, GetRemainingBudgetSync(kSite2).bits);
+  EXPECT_EQ(1, GetNumBudgetEntriesSync(kSite1));
   EXPECT_EQ(1, GetTotalNumBudgetEntriesSync());
 
-  // An additional withdrawal for `kOrigin1` at or near the same time as the
+  // An additional withdrawal for `kSite1` at or near the same time as the
   // previous one is debited appropriately.
-  EXPECT_EQ(OperationResult::kSuccess, MakeBudgetWithdrawalSync(kOrigin1, 2.5));
+  EXPECT_EQ(OperationResult::kSuccess, MakeBudgetWithdrawalSync(kSite1, 2.5));
   EXPECT_DOUBLE_EQ(kBitBudget - 1.75 - 2.5,
-                   GetRemainingBudgetSync(kOrigin1).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, GetRemainingBudgetSync(kOrigin2).bits);
-  EXPECT_EQ(2, GetNumBudgetEntriesSync(kOrigin1));
+                   GetRemainingBudgetSync(kSite1).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget, GetRemainingBudgetSync(kSite2).bits);
+  EXPECT_EQ(2, GetNumBudgetEntriesSync(kSite1));
   EXPECT_EQ(2, GetTotalNumBudgetEntriesSync());
 
-  // A withdrawal for `kOrigin2` doesn't affect `kOrigin1`.
-  EXPECT_EQ(OperationResult::kSuccess, MakeBudgetWithdrawalSync(kOrigin2, 3.4));
-  EXPECT_DOUBLE_EQ(kBitBudget - 3.4, GetRemainingBudgetSync(kOrigin2).bits);
+  // A withdrawal for `kSite2` doesn't affect `kSite1`.
+  EXPECT_EQ(OperationResult::kSuccess, MakeBudgetWithdrawalSync(kSite2, 3.4));
+  EXPECT_DOUBLE_EQ(kBitBudget - 3.4, GetRemainingBudgetSync(kSite2).bits);
   EXPECT_DOUBLE_EQ(kBitBudget - 1.75 - 2.5,
-                   GetRemainingBudgetSync(kOrigin1).bits);
-  EXPECT_EQ(2, GetNumBudgetEntriesSync(kOrigin1));
-  EXPECT_EQ(1, GetNumBudgetEntriesSync(kOrigin2));
+                   GetRemainingBudgetSync(kSite1).bits);
+  EXPECT_EQ(2, GetNumBudgetEntriesSync(kSite1));
+  EXPECT_EQ(1, GetNumBudgetEntriesSync(kSite2));
   EXPECT_EQ(3, GetTotalNumBudgetEntriesSync());
 
   // Advance partway through the lookback window, to the point where the first
-  // call to `PurgeStaleOrigins()` happens.
+  // call to `PurgeStale()` happens.
   task_environment_.FastForwardBy(base::Hours(kInitialPurgeIntervalHours));
 
   // Remaining budgets continue to take into account the withdrawals above, as
   // they are still within the lookback window.
-  EXPECT_DOUBLE_EQ(kBitBudget - 3.4, GetRemainingBudgetSync(kOrigin2).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget - 3.4, GetRemainingBudgetSync(kSite2).bits);
   EXPECT_DOUBLE_EQ(kBitBudget - 1.75 - 2.5,
-                   GetRemainingBudgetSync(kOrigin1).bits);
+                   GetRemainingBudgetSync(kSite1).bits);
 
-  // An additional withdrawal for `kOrigin1` at a later time from previous ones
+  // An additional withdrawal for `kSite1` at a later time from previous ones
   // is debited appropriately.
-  EXPECT_EQ(OperationResult::kSuccess, MakeBudgetWithdrawalSync(kOrigin1, 1.0));
+  EXPECT_EQ(OperationResult::kSuccess, MakeBudgetWithdrawalSync(kSite1, 1.0));
   EXPECT_DOUBLE_EQ(kBitBudget - 1.75 - 2.5 - 1.0,
-                   GetRemainingBudgetSync(kOrigin1).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget - 3.4, GetRemainingBudgetSync(kOrigin2).bits);
-  EXPECT_EQ(3, GetNumBudgetEntriesSync(kOrigin1));
-  EXPECT_EQ(1, GetNumBudgetEntriesSync(kOrigin2));
+                   GetRemainingBudgetSync(kSite1).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget - 3.4, GetRemainingBudgetSync(kSite2).bits);
+  EXPECT_EQ(3, GetNumBudgetEntriesSync(kSite1));
+  EXPECT_EQ(1, GetNumBudgetEntriesSync(kSite2));
   EXPECT_EQ(4, GetTotalNumBudgetEntriesSync());
 
   // Advance further through the lookback window, to the point where the second
-  // call to `PurgeStaleOrigins()` happens.
+  // call to `PurgeStale()` happens.
   task_environment_.FastForwardBy(base::Hours(kRecurringPurgeIntervalHours));
   // Advance further through the lookback window, to the point where the third
-  // call to `PurgeStaleOrigins()` happens.
+  // call to `PurgeStale()` happens.
   task_environment_.FastForwardBy(base::Hours(kRecurringPurgeIntervalHours));
   // Advance further through the lookback window, to the point where the fourth
-  // call to `PurgeStaleOrigins()` happens.
+  // call to `PurgeStale()` happens.
   task_environment_.FastForwardBy(base::Hours(kRecurringPurgeIntervalHours));
 
-  // After `PurgeStaleOrigins()` runs via the timer, there will only be the most
+  // After `PurgeStale()` runs via the timer, there will only be the most
   // recent debit left in the budget table.
-  EXPECT_DOUBLE_EQ(kBitBudget - 1.0, GetRemainingBudgetSync(kOrigin1).bits);
-  EXPECT_DOUBLE_EQ(kBitBudget, GetRemainingBudgetSync(kOrigin2).bits);
-  EXPECT_EQ(1, GetNumBudgetEntriesSync(kOrigin1));
-  EXPECT_EQ(0, GetNumBudgetEntriesSync(kOrigin2));
+  EXPECT_DOUBLE_EQ(kBitBudget - 1.0, GetRemainingBudgetSync(kSite1).bits);
+  EXPECT_DOUBLE_EQ(kBitBudget, GetRemainingBudgetSync(kSite2).bits);
+  EXPECT_EQ(1, GetNumBudgetEntriesSync(kSite1));
+  EXPECT_EQ(0, GetNumBudgetEntriesSync(kSite2));
   EXPECT_EQ(1, GetTotalNumBudgetEntriesSync());
+}
+
+TEST_P(SharedStorageManagerParamTest, ResetBudgetForDevTools) {
+  // There should be no entries in the budget table.
+  EXPECT_EQ(0, GetTotalNumBudgetEntriesSync());
+
+  // SQL database hasn't yet been lazy-initialized. Nevertheless, remaining
+  // budgets should be returned as the max possible.
+  const url::Origin kOrigin1 =
+      url::Origin::Create(GURL("http://www.example1.test"));
+  const net::SchemefulSite kSite1(kOrigin1);
+  EXPECT_DOUBLE_EQ(kBitBudget, GetRemainingBudgetSync(kSite1).bits);
+
+  // Make withdrawal.
+  EXPECT_EQ(OperationResult::kSuccess, MakeBudgetWithdrawalSync(kSite1, 1.75));
+  EXPECT_DOUBLE_EQ(kBitBudget - 1.75, GetRemainingBudgetSync(kSite1).bits);
+  EXPECT_EQ(1, GetNumBudgetEntriesSync(kSite1));
+  EXPECT_EQ(1, GetTotalNumBudgetEntriesSync());
+
+  // Reset budget.
+  EXPECT_EQ(OperationResult::kSuccess, ResetBudgetForDevToolsSync(kOrigin1));
+  EXPECT_DOUBLE_EQ(kBitBudget, GetRemainingBudgetSync(kSite1).bits);
+  EXPECT_EQ(0, GetNumBudgetEntriesSync(kSite1));
+  EXPECT_EQ(0, GetTotalNumBudgetEntriesSync());
 }
 
 class SharedStorageManagerErrorParamTest
@@ -1608,8 +1647,13 @@ TEST_P(SharedStorageManagerErrorParamTest,
 }
 
 // TODO(crbug.com/1312273): Test is flaky.
+#if BUILDFLAG(IS_ANDROID)
+#define MAYBE_InitFailure_DestroyAndRecreateDatabase DISABLED_InitFailure_DestroyAndRecreateDatabase
+#else
+#define MAYBE_InitFailure_DestroyAndRecreateDatabase InitFailure_DestroyAndRecreateDatabase
+#endif
 TEST_P(SharedStorageManagerErrorParamTest,
-       DISABLED_InitFailure_DestroyAndRecreateDatabase) {
+       MAYBE_InitFailure_DestroyAndRecreateDatabase) {
   ASSERT_TRUE(GetManager());
   ASSERT_TRUE(GetManager()->database());
   SetDestroyCallback();
@@ -1679,8 +1723,13 @@ TEST_P(SharedStorageManagerErrorParamTest,
 }
 
 // Disabled because it is flaky. crbug.com/1312044
+#if BUILDFLAG(IS_ANDROID)
+#define MAYBE_OtherOperationResults_NoErrorsAdded DISABLED_OtherOperationResults_NoErrorsAdded
+#else
+#define MAYBE_OtherOperationResults_NoErrorsAdded OtherOperationResults_NoErrorsAdded
+#endif
 TEST_P(SharedStorageManagerErrorParamTest,
-       DISABLED_OtherOperationResults_NoErrorsAdded) {
+       MAYBE_OtherOperationResults_NoErrorsAdded) {
   ASSERT_TRUE(GetManager());
   ASSERT_TRUE(GetManager()->database());
   SetDestroyCallback();
@@ -1894,366 +1943,108 @@ TEST_P(SharedStorageManagerPurgeMatchingOriginsParamTest, SinceThreshold) {
   url::Origin kOrigin1 = url::Origin::Create(GURL("http://www.example1.test"));
   url::Origin kOrigin2 = url::Origin::Create(GURL("http://www.example2.test"));
   url::Origin kOrigin3 = url::Origin::Create(GURL("http://www.example3.test"));
-  url::Origin kOrigin4 = url::Origin::Create(GURL("http://www.example4.test"));
-  url::Origin kOrigin5 = url::Origin::Create(GURL("http://www.example5.test"));
 
-  std::queue<DBOperation> operation_list;
-  operation_list.push(
-      DBOperation(Type::DB_FETCH_ORIGINS,
-                  {TestDatabaseOperationReceiver::SerializeBool(true)}));
+  // Add a key for origin1.
+  {
+    base::test::TestFuture<OperationResult> future;
+    GetManager()->Set(kOrigin1, u"key1", u"value1", future.GetCallback());
+    EXPECT_EQ(OperationResult::kSet, future.Get());
+  }
 
-  base::Time threshold1 = base::Time::Now();
-  StorageKeyPolicyMatcherFunctionUtility matcher_utility;
-  size_t matcher_id1 = matcher_utility.RegisterMatcherFunction({kOrigin1});
+  // Move forward 1ms and add a key for origin2.
+  task_environment_.FastForwardBy(base::Milliseconds(1));
+  base::Time time1 = base::Time::Now();
+  {
+    base::test::TestFuture<OperationResult> future;
+    GetManager()->Set(kOrigin2, u"key1", u"value1", future.GetCallback());
+    EXPECT_EQ(OperationResult::kSet, future.Get());
+  }
 
-  operation_list.push(DBOperation(
-      Type::DB_PURGE_MATCHING,
-      {base::NumberToString16(matcher_id1),
-       TestDatabaseOperationReceiver::SerializeTime(threshold1),
-       TestDatabaseOperationReceiver::SerializeTime(base::Time::Max()),
-       TestDatabaseOperationReceiver::SerializeBool(
-           GetParam().perform_storage_cleanup)}));
+  // Move forward 1ms and add a key for origin3.
+  task_environment_.FastForwardBy(base::Milliseconds(5));
+  base::Time time2 = base::Time::Now();
+  {
+    base::test::TestFuture<OperationResult> future;
+    GetManager()->Set(kOrigin3, u"key1", u"value1", future.GetCallback());
+    EXPECT_EQ(OperationResult::kSet, future.Get());
+  }
 
-  operation_list.push(
-      DBOperation(Type::DB_SET, kOrigin1,
-                  {u"key1", u"value1",
-                   TestDatabaseOperationReceiver::SerializeSetBehavior(
-                       SetBehavior::kDefault)}));
+  // All three origins have 1 key each.
+  {
+    base::test::TestFuture<int> future;
+    GetManager()->Length(kOrigin1, future.GetCallback());
+    EXPECT_EQ(1, future.Get());
+  }
+  {
+    base::test::TestFuture<int> future;
+    GetManager()->Length(kOrigin2, future.GetCallback());
+    EXPECT_EQ(1, future.Get());
+  }
+  {
+    base::test::TestFuture<int> future;
+    GetManager()->Length(kOrigin3, future.GetCallback());
+    EXPECT_EQ(1, future.Get());
+  }
 
-  operation_list.push(
-      DBOperation(Type::DB_SET, kOrigin1,
-                  {u"key2", u"value2",
-                   TestDatabaseOperationReceiver::SerializeSetBehavior(
-                       SetBehavior::kDefault)}));
-  operation_list.push(DBOperation(Type::DB_LENGTH, kOrigin1));
+  // Purge starting after time1 and ending at time2, origin3 should be deleted.
+  {
+    StorageKeyPolicyMatcherFunctionUtility matcher_utility;
 
-  operation_list.push(
-      DBOperation(Type::DB_SET, kOrigin2,
-                  {u"key1", u"value1",
-                   TestDatabaseOperationReceiver::SerializeSetBehavior(
-                       SetBehavior::kDefault)}));
-  operation_list.push(DBOperation(Type::DB_LENGTH, kOrigin2));
+    size_t matcher_id =
+        matcher_utility.RegisterMatcherFunction({kOrigin1, kOrigin2, kOrigin3});
 
-  operation_list.push(
-      DBOperation(Type::DB_SET, kOrigin3,
-                  {u"key1", u"value1",
-                   TestDatabaseOperationReceiver::SerializeSetBehavior(
-                       SetBehavior::kDefault)}));
-  operation_list.push(
-      DBOperation(Type::DB_SET, kOrigin3,
-                  {u"key2", u"value2",
-                   TestDatabaseOperationReceiver::SerializeSetBehavior(
-                       SetBehavior::kDefault)}));
-  operation_list.push(
-      DBOperation(Type::DB_SET, kOrigin3,
-                  {u"key3", u"value3",
-                   TestDatabaseOperationReceiver::SerializeSetBehavior(
-                       SetBehavior::kDefault)}));
-  operation_list.push(DBOperation(Type::DB_LENGTH, kOrigin3));
+    base::test::TestFuture<OperationResult> future;
+    GetManager()->PurgeMatchingOrigins(
+        matcher_utility.TakeMatcherFunctionForId(matcher_id),
+        time1 + base::Milliseconds(1), time2, future.GetCallback(),
+        GetParam().perform_storage_cleanup);
+    EXPECT_EQ(OperationResult::kSuccess, future.Get());
+  }
+  {
+    base::test::TestFuture<int> future;
+    GetManager()->Length(kOrigin1, future.GetCallback());
+    EXPECT_EQ(1, future.Get());
+  }
+  {
+    base::test::TestFuture<int> future;
+    GetManager()->Length(kOrigin2, future.GetCallback());
+    EXPECT_EQ(1, future.Get());
+  }
+  {
+    base::test::TestFuture<int> future;
+    GetManager()->Length(kOrigin3, future.GetCallback());
+    EXPECT_EQ(0, future.Get());
+  }
 
-  operation_list.push(
-      DBOperation(Type::DB_SET, kOrigin4,
-                  {u"key1", u"value1",
-                   TestDatabaseOperationReceiver::SerializeSetBehavior(
-                       SetBehavior::kDefault)}));
-  operation_list.push(
-      DBOperation(Type::DB_SET, kOrigin4,
-                  {u"key2", u"value2",
-                   TestDatabaseOperationReceiver::SerializeSetBehavior(
-                       SetBehavior::kDefault)}));
-  operation_list.push(
-      DBOperation(Type::DB_SET, kOrigin4,
-                  {u"key3", u"value3",
-                   TestDatabaseOperationReceiver::SerializeSetBehavior(
-                       SetBehavior::kDefault)}));
-  operation_list.push(
-      DBOperation(Type::DB_SET, kOrigin4,
-                  {u"key4", u"value4",
-                   TestDatabaseOperationReceiver::SerializeSetBehavior(
-                       SetBehavior::kDefault)}));
-  operation_list.push(DBOperation(Type::DB_LENGTH, kOrigin4));
+  // Purge starting at time1, origin2 should be deleted as well.
+  {
+    StorageKeyPolicyMatcherFunctionUtility matcher_utility;
 
-  operation_list.push(
-      DBOperation(Type::DB_SET, kOrigin5,
-                  {u"key1", u"value1",
-                   TestDatabaseOperationReceiver::SerializeSetBehavior(
-                       SetBehavior::kDefault)}));
-  operation_list.push(DBOperation(Type::DB_LENGTH, kOrigin5));
+    size_t matcher_id =
+        matcher_utility.RegisterMatcherFunction({kOrigin1, kOrigin2, kOrigin3});
 
-  operation_list.push(
-      DBOperation(Type::DB_FETCH_ORIGINS,
-                  {TestDatabaseOperationReceiver::SerializeBool(true)}));
-
-  base::Time threshold2 = base::Time::Now() + base::Days(1);
-  base::Time override_time1 = threshold2 + base::Milliseconds(5);
-  operation_list.push(DBOperation(
-      Type::DB_OVERRIDE_TIME, kOrigin1,
-      {TestDatabaseOperationReceiver::SerializeTime(override_time1)}));
-
-  size_t matcher_id2 =
-      matcher_utility.RegisterMatcherFunction({kOrigin1, kOrigin2, kOrigin5});
-  operation_list.push(DBOperation(
-      Type::DB_PURGE_MATCHING,
-      {base::NumberToString16(matcher_id2),
-       TestDatabaseOperationReceiver::SerializeTime(threshold2),
-       TestDatabaseOperationReceiver::SerializeTime(base::Time::Max()),
-       TestDatabaseOperationReceiver::SerializeBool(
-           GetParam().perform_storage_cleanup)}));
-
-  operation_list.push(DBOperation(Type::DB_LENGTH, kOrigin1));
-  operation_list.push(DBOperation(Type::DB_LENGTH, kOrigin2));
-  operation_list.push(DBOperation(Type::DB_LENGTH, kOrigin3));
-  operation_list.push(DBOperation(Type::DB_LENGTH, kOrigin4));
-  operation_list.push(DBOperation(Type::DB_LENGTH, kOrigin5));
-
-  operation_list.push(
-      DBOperation(Type::DB_FETCH_ORIGINS,
-                  {TestDatabaseOperationReceiver::SerializeBool(true)}));
-
-  base::Time threshold3 = threshold2 + base::Days(1);
-  operation_list.push(
-      DBOperation(Type::DB_OVERRIDE_TIME, kOrigin3,
-                  {TestDatabaseOperationReceiver::SerializeTime(threshold3)}));
-
-  base::Time threshold4 = threshold3 + base::Seconds(100);
-  operation_list.push(
-      DBOperation(Type::DB_OVERRIDE_TIME, kOrigin5,
-                  {TestDatabaseOperationReceiver::SerializeTime(threshold4)}));
-
-  size_t matcher_id3 = matcher_utility.RegisterMatcherFunction(
-      {kOrigin2, kOrigin3, kOrigin4, kOrigin5});
-  operation_list.push(
-      DBOperation(Type::DB_PURGE_MATCHING,
-                  {base::NumberToString16(matcher_id3),
-                   TestDatabaseOperationReceiver::SerializeTime(threshold3),
-                   TestDatabaseOperationReceiver::SerializeTime(threshold4),
-                   TestDatabaseOperationReceiver::SerializeBool(
-                       GetParam().perform_storage_cleanup)}));
-
-  operation_list.push(DBOperation(Type::DB_LENGTH, kOrigin1));
-  operation_list.push(DBOperation(Type::DB_LENGTH, kOrigin2));
-  operation_list.push(DBOperation(Type::DB_LENGTH, kOrigin3));
-  operation_list.push(DBOperation(Type::DB_LENGTH, kOrigin4));
-  operation_list.push(DBOperation(Type::DB_LENGTH, kOrigin5));
-
-  operation_list.push(
-      DBOperation(Type::DB_ON_MEMORY_PRESSURE,
-                  {TestDatabaseOperationReceiver::SerializeMemoryPressureLevel(
-                      MemoryPressureLevel::MEMORY_PRESSURE_LEVEL_CRITICAL)}));
-
-  operation_list.push(
-      DBOperation(Type::DB_FETCH_ORIGINS,
-                  {TestDatabaseOperationReceiver::SerializeBool(true)}));
-
-  operation_list.push(DBOperation(Type::DB_GET, kOrigin2, {u"key1"}));
-  operation_list.push(DBOperation(Type::DB_GET, kOrigin4, {u"key1"}));
-  operation_list.push(DBOperation(Type::DB_GET, kOrigin4, {u"key2"}));
-  operation_list.push(DBOperation(Type::DB_GET, kOrigin4, {u"key3"}));
-  operation_list.push(DBOperation(Type::DB_GET, kOrigin4, {u"key4"}));
-
-  SetExpectedOperationList(std::move(operation_list));
-
-  // Check that origin list is initially empty due to the database not being
-  // initialized.
-  std::vector<mojom::StorageUsageInfoPtr> infos1;
-  FetchOrigins(&infos1);
-
-  OperationResult result1 = OperationResult::kSqlError;
-  PurgeMatchingOrigins(&matcher_utility, matcher_id1, threshold1,
-                       base::Time::Max(), &result1,
-                       GetParam().perform_storage_cleanup);
-
-  OperationResult result2 = OperationResult::kSqlError;
-  Set(kOrigin1, u"key1", u"value1", &result2);
-
-  OperationResult result3 = OperationResult::kSqlError;
-  Set(kOrigin1, u"key2", u"value2", &result3);
-  int length1 = -1;
-  Length(kOrigin1, &length1);
-
-  OperationResult result4 = OperationResult::kSqlError;
-  Set(kOrigin2, u"key1", u"value1", &result4);
-  int length2 = -1;
-  Length(kOrigin2, &length2);
-
-  OperationResult result5 = OperationResult::kSqlError;
-  Set(kOrigin3, u"key1", u"value1", &result5);
-  OperationResult result6 = OperationResult::kSqlError;
-  Set(kOrigin3, u"key2", u"value2", &result6);
-  OperationResult result7 = OperationResult::kSqlError;
-  Set(kOrigin3, u"key3", u"value3", &result7);
-  int length3 = -1;
-  Length(kOrigin3, &length3);
-
-  OperationResult result8 = OperationResult::kSqlError;
-  Set(kOrigin4, u"key1", u"value1", &result8);
-  OperationResult result9 = OperationResult::kSqlError;
-  Set(kOrigin4, u"key2", u"value2", &result9);
-  OperationResult result10 = OperationResult::kSqlError;
-  Set(kOrigin4, u"key3", u"value3", &result10);
-  OperationResult result11 = OperationResult::kSqlError;
-  Set(kOrigin4, u"key4", u"value4", &result11);
-  int length4 = -1;
-  Length(kOrigin4, &length4);
-
-  OperationResult result12 = OperationResult::kSqlError;
-  Set(kOrigin5, u"key1", u"value1", &result12);
-  int length5 = -1;
-  Length(kOrigin5, &length5);
-
-  std::vector<mojom::StorageUsageInfoPtr> infos2;
-  FetchOrigins(&infos2);
-
-  bool success1 = false;
-  OverrideCreationTime(kOrigin1, override_time1, &success1);
-
-  // Verify that the only match we get is for `kOrigin1`, whose `last_used_time`
-  // is between the time parameters.
-  OperationResult result13 = OperationResult::kSqlError;
-  PurgeMatchingOrigins(&matcher_utility, matcher_id2, threshold2,
-                       base::Time::Max(), &result13,
-                       GetParam().perform_storage_cleanup);
-
-  int length6 = -1;
-  Length(kOrigin1, &length6);
-  int length7 = -1;
-  Length(kOrigin2, &length7);
-  int length8 = -1;
-  Length(kOrigin3, &length8);
-  int length9 = -1;
-  Length(kOrigin4, &length9);
-  int length10 = -1;
-  Length(kOrigin5, &length10);
-
-  std::vector<mojom::StorageUsageInfoPtr> infos3;
-  FetchOrigins(&infos3);
-
-  bool success2 = false;
-  OverrideCreationTime(kOrigin3, threshold3, &success2);
-  bool success3 = false;
-  OverrideCreationTime(kOrigin5, threshold4, &success3);
-
-  // Verify that we still get matches for `kOrigin3`, whose `last_used_time` is
-  // exactly at the `begin` time, as well as for `kOrigin5`, whose
-  // `last_used_time` is exactly at the `end` time.
-  OperationResult result14 = OperationResult::kSqlError;
-  PurgeMatchingOrigins(&matcher_utility, matcher_id3, threshold3, threshold4,
-                       &result14, GetParam().perform_storage_cleanup);
-
-  int length11 = -1;
-  Length(kOrigin1, &length11);
-  int length12 = -1;
-  Length(kOrigin2, &length12);
-  int length13 = -1;
-  Length(kOrigin3, &length13);
-  int length14 = -1;
-  Length(kOrigin4, &length14);
-  int length15 = -1;
-  Length(kOrigin5, &length15);
-
-  EXPECT_FALSE(memory_trimmed_);
-  OnMemoryPressure(MemoryPressureLevel::MEMORY_PRESSURE_LEVEL_CRITICAL);
-
-  std::vector<mojom::StorageUsageInfoPtr> infos4;
-  FetchOrigins(&infos4);
-
-  GetResult value1;
-  Get(kOrigin2, u"key1", &value1);
-  GetResult value2;
-  Get(kOrigin4, u"key1", &value2);
-  GetResult value3;
-  Get(kOrigin4, u"key2", &value3);
-  GetResult value4;
-  Get(kOrigin4, u"key3", &value4);
-  GetResult value5;
-  Get(kOrigin4, u"key4", &value5);
-
-  WaitForOperations();
-  EXPECT_TRUE(is_finished());
-
-  // No error from calling `PurgeMatchingOrigins()` on an uninitialized
-  // database.
-  EXPECT_EQ(OperationResult::kSuccess, result1);
-
-  // The call to `Set()` initializes the database.
-  EXPECT_EQ(OperationResult::kSet, result2);
-
-  EXPECT_EQ(OperationResult::kSet, result3);
-  EXPECT_EQ(2, length1);
-
-  EXPECT_EQ(OperationResult::kSet, result4);
-  EXPECT_EQ(1, length2);
-
-  EXPECT_EQ(OperationResult::kSet, result5);
-  EXPECT_EQ(OperationResult::kSet, result6);
-  EXPECT_EQ(OperationResult::kSet, result7);
-  EXPECT_EQ(3, length3);
-
-  EXPECT_EQ(OperationResult::kSet, result8);
-  EXPECT_EQ(OperationResult::kSet, result9);
-  EXPECT_EQ(OperationResult::kSet, result10);
-  EXPECT_EQ(OperationResult::kSet, result11);
-  EXPECT_EQ(4, length4);
-
-  EXPECT_EQ(OperationResult::kSet, result12);
-  EXPECT_EQ(1, length5);
-
-  std::vector<url::Origin> origins;
-  for (const auto& info : infos2)
-    origins.push_back(info->storage_key.origin());
-  EXPECT_THAT(origins,
-              ElementsAre(kOrigin1, kOrigin2, kOrigin3, kOrigin4, kOrigin5));
-
-  EXPECT_EQ(value1.data, u"value1");
-  EXPECT_EQ(OperationResult::kSuccess, value1.result);
-
-  EXPECT_TRUE(success1);
-  EXPECT_EQ(OperationResult::kSuccess, result13);
-
-  // `kOrigin1` is cleared. The other origins are not.
-  EXPECT_EQ(0, length6);
-  EXPECT_EQ(1, length7);
-  EXPECT_EQ(3, length8);
-  EXPECT_EQ(4, length9);
-  EXPECT_EQ(1, length10);
-
-  origins.clear();
-  for (const auto& info : infos3)
-    origins.push_back(info->storage_key.origin());
-  EXPECT_THAT(origins, ElementsAre(kOrigin2, kOrigin3, kOrigin4, kOrigin5));
-
-  EXPECT_TRUE(success2);
-  EXPECT_TRUE(success3);
-
-  EXPECT_EQ(OperationResult::kSuccess, result14);
-
-  // `kOrigin3` and `kOrigin5` are  cleared. The others weren't modified within
-  // the given time period.
-  EXPECT_EQ(0, length11);
-  EXPECT_EQ(1, length12);
-  EXPECT_EQ(0, length13);
-  EXPECT_EQ(4, length14);
-  EXPECT_EQ(0, length15);
-
-  EXPECT_TRUE(memory_trimmed_);
-
-  origins.clear();
-  for (const auto& info : infos4)
-    origins.push_back(info->storage_key.origin());
-  EXPECT_THAT(origins, ElementsAre(kOrigin2, kOrigin4));
-
-  // Database is still intact after trimming memory (and possibly performing
-  // storage cleanup).
-  EXPECT_EQ(value1.data, u"value1");
-  EXPECT_EQ(OperationResult::kSuccess, value1.result);
-  EXPECT_EQ(value2.data, u"value1");
-  EXPECT_EQ(OperationResult::kSuccess, value2.result);
-  EXPECT_EQ(value3.data, u"value2");
-  EXPECT_EQ(OperationResult::kSuccess, value3.result);
-  EXPECT_EQ(value4.data, u"value3");
-  EXPECT_EQ(OperationResult::kSuccess, value4.result);
-  EXPECT_EQ(value5.data, u"value4");
-  EXPECT_EQ(OperationResult::kSuccess, value5.result);
+    base::test::TestFuture<OperationResult> future;
+    GetManager()->PurgeMatchingOrigins(
+        matcher_utility.TakeMatcherFunctionForId(matcher_id), time1,
+        base::Time::Max(), future.GetCallback(),
+        GetParam().perform_storage_cleanup);
+    EXPECT_EQ(OperationResult::kSuccess, future.Get());
+  }
+  {
+    base::test::TestFuture<int> future;
+    GetManager()->Length(kOrigin1, future.GetCallback());
+    EXPECT_EQ(1, future.Get());
+  }
+  {
+    base::test::TestFuture<int> future;
+    GetManager()->Length(kOrigin2, future.GetCallback());
+    EXPECT_EQ(0, future.Get());
+  }
+  {
+    base::test::TestFuture<int> future;
+    GetManager()->Length(kOrigin3, future.GetCallback());
+    EXPECT_EQ(0, future.Get());
+  }
 }
 
 }  // namespace storage

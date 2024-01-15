@@ -12,6 +12,7 @@
 
 #include "base/check_op.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/unguessable_token.h"
 #include "media/audio/audio_device_description.h"
@@ -69,7 +70,7 @@ class BLINK_MODULES_EXPORT AudioRendererMixerManager final
       const blink::LocalFrameToken& source_frame_token,
       const base::UnguessableToken& session_id,
       const std::string& device_id,
-      media::AudioLatency::LatencyType latency);
+      media::AudioLatency::Type latency);
 
   // media::AudioRendererMixerPool implementation. The rest of the
   // implementation is kept private (see comment below).
@@ -80,7 +81,7 @@ class BLINK_MODULES_EXPORT AudioRendererMixerManager final
   media::AudioRendererMixer* GetMixer(
       const blink::LocalFrameToken& source_frame_token,
       const media::AudioParameters& input_params,
-      media::AudioLatency::LatencyType latency,
+      media::AudioLatency::Type latency,
       const media::OutputDeviceInfo& sink_info,
       scoped_refptr<media::AudioRendererSink> sink);
   scoped_refptr<media::AudioRendererSink> GetSink(
@@ -96,7 +97,7 @@ class BLINK_MODULES_EXPORT AudioRendererMixerManager final
   media::AudioRendererMixer* GetMixer(
       const base::UnguessableToken& source_frame_token,
       const media::AudioParameters& input_params,
-      media::AudioLatency::LatencyType latency,
+      media::AudioLatency::Type latency,
       const media::OutputDeviceInfo& sink_info,
       scoped_refptr<media::AudioRendererSink> sink) final;
   scoped_refptr<media::AudioRendererSink> GetSink(
@@ -108,13 +109,13 @@ class BLINK_MODULES_EXPORT AudioRendererMixerManager final
   struct MixerKey {
     MixerKey(const blink::LocalFrameToken& source_frame_token,
              const media::AudioParameters& params,
-             media::AudioLatency::LatencyType latency,
+             media::AudioLatency::Type latency,
              const std::string& device_id);
     MixerKey(const MixerKey& other);
     ~MixerKey();
     blink::LocalFrameToken source_frame_token;
     media::AudioParameters params;
-    media::AudioLatency::LatencyType latency;
+    media::AudioLatency::Type latency;
     std::string device_id;
   };
 
@@ -122,17 +123,15 @@ class BLINK_MODULES_EXPORT AudioRendererMixerManager final
   // mixers where only irrelevant keys mismatch.
   struct MixerKeyCompare {
     bool operator()(const MixerKey& a, const MixerKey& b) const {
-      if (a.source_frame_token != b.source_frame_token)
-        return a.source_frame_token < b.source_frame_token;
       if (a.params.channels() != b.params.channels())
         return a.params.channels() < b.params.channels();
 
       if (a.latency != b.latency)
         return a.latency < b.latency;
 
-      // TODO(olka) add buffer duration comparison for LATENCY_EXACT_MS when
+      // TODO(olka) add buffer duration comparison for kLatencyExactMS when
       // adding support for it.
-      DCHECK_NE(media::AudioLatency::LATENCY_EXACT_MS, a.latency);
+      DCHECK_NE(media::AudioLatency::Type::kExactMS, a.latency);
 
       // Ignore format(), and frames_per_buffer(), these parameters do not
       // affect mixer reuse.  All AudioRendererMixer units disable FIFO, so
@@ -142,11 +141,24 @@ class BLINK_MODULES_EXPORT AudioRendererMixerManager final
       if (a.params.effects() != b.params.effects())
         return a.params.effects() < b.params.effects();
 
+      // Don't check the `source_frame_token` when the default device is used
+      // since that will prevent sharing of the output device across render
+      // frames. A common scenario is a lot of YouTube embeds which would each
+      // end up with their own output device if we check the frame token here.
+      //
+      // Output sink behavior can't be directly observed by the page, so there's
+      // no harm in sharing the sink across origins for the default device.
       if (media::AudioDeviceDescription::IsDefaultDevice(a.device_id) &&
           media::AudioDeviceDescription::IsDefaultDevice(b.device_id)) {
         // Both device IDs represent the same default device => do not compare
         // them.
         return false;
+      }
+
+      // Since a non-default device is being used, we must check the frame
+      // token to ensure authorization has been completed for the frame.
+      if (a.source_frame_token != b.source_frame_token) {
+        return a.source_frame_token < b.source_frame_token;
       }
 
       return a.device_id < b.device_id;
@@ -159,7 +171,7 @@ class BLINK_MODULES_EXPORT AudioRendererMixerManager final
   // AudioRendererMixerManager to keep track explicitly (v.s. RefCounted which
   // is implicit) of the number of outstanding AudioRendererMixers.
   struct AudioRendererMixerReference {
-    media::AudioRendererMixer* mixer;
+    raw_ptr<media::AudioRendererMixer, DanglingUntriaged> mixer;
     size_t ref_count;
   };
 

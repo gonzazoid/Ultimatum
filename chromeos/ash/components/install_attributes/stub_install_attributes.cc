@@ -37,20 +37,9 @@ StubInstallAttributes::CreateCloudManaged(const std::string& domain,
 }
 
 // static
-std::unique_ptr<StubInstallAttributes>
-StubInstallAttributes::CreateActiveDirectoryManaged(
-    const std::string& realm,
-    const std::string& device_id) {
+std::unique_ptr<StubInstallAttributes> StubInstallAttributes::CreateDemoMode() {
   auto result = std::make_unique<StubInstallAttributes>();
-  result->SetActiveDirectoryManaged(realm, device_id);
-  return result;
-}
-
-// static
-std::unique_ptr<StubInstallAttributes> StubInstallAttributes::CreateDemoMode(
-    const std::string& device_id) {
-  auto result = std::make_unique<StubInstallAttributes>();
-  result->SetDemoMode(device_id);
+  result->SetDemoMode();
   return result;
 }
 
@@ -76,20 +65,11 @@ void StubInstallAttributes::SetCloudManaged(const std::string& domain,
   registration_device_id_ = device_id;
 }
 
-void StubInstallAttributes::SetActiveDirectoryManaged(
-    const std::string& realm,
-    const std::string& device_id) {
-  registration_mode_ = policy::DEVICE_MODE_ENTERPRISE_AD;
-  registration_realm_ = realm;
-  registration_domain_.clear();
-  registration_device_id_ = device_id;
-}
-
-void StubInstallAttributes::SetDemoMode(const std::string& device_id) {
+void StubInstallAttributes::SetDemoMode() {
   registration_mode_ = policy::DEVICE_MODE_DEMO;
   registration_domain_ = policy::kDemoModeDomain;
   registration_realm_.clear();
-  registration_device_id_ = device_id;
+  registration_device_id_ = "demo-device-id";
 }
 
 ScopedStubInstallAttributes::ScopedStubInstallAttributes()

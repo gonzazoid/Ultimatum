@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_ASH_PRINTING_HISTORY_PRINT_JOB_REPORTING_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_ASH_PRINTING_HISTORY_PRINT_JOB_REPORTING_SERVICE_FACTORY_H_
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace content {
@@ -27,7 +27,7 @@ class PrintJobReportingServiceFactory : public ProfileKeyedServiceFactory {
   static PrintJobReportingServiceFactory* GetInstance();
 
  private:
-  friend struct base::DefaultSingletonTraits<PrintJobReportingServiceFactory>;
+  friend base::NoDestructor<PrintJobReportingServiceFactory>;
 
   PrintJobReportingServiceFactory();
   PrintJobReportingServiceFactory(const PrintJobReportingServiceFactory&) =
@@ -37,7 +37,7 @@ class PrintJobReportingServiceFactory : public ProfileKeyedServiceFactory {
   ~PrintJobReportingServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsNULLWhileTesting() const override;
 };

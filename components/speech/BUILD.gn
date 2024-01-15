@@ -4,6 +4,10 @@
 
 source_set("speech") {
   sources = [
+    "audio_buffer.cc",
+    "audio_buffer.h",
+    "audio_encoder.cc",
+    "audio_encoder.h",
     "chunked_byte_buffer.cc",
     "chunked_byte_buffer.h",
     "downstream_loader.cc",
@@ -14,12 +18,14 @@ source_set("speech") {
     "upstream_loader_client.h",
   ]
 
+  public_deps = [ "//base" ]
   deps = [
     "//mojo/public/cpp/bindings",
     "//mojo/public/cpp/platform",
     "//mojo/public/cpp/system",
     "//services/network/public/cpp",
     "//services/network/public/mojom",
+    "//third_party/flac",
   ]
 }
 

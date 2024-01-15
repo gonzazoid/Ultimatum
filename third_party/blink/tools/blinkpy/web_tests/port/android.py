@@ -67,11 +67,10 @@ perf_control = None
 _sanitize_android_tag = lambda t: t.replace('_', '-')
 
 # product constants used by the wpt runner.
-ANDROID_WEBLAYER = 'android_weblayer'
 ANDROID_WEBVIEW = 'android_webview'
 CHROME_ANDROID = 'chrome_android'
 
-PRODUCTS = [ANDROID_WEBLAYER, ANDROID_WEBVIEW, CHROME_ANDROID]
+PRODUCTS = [ANDROID_WEBVIEW, CHROME_ANDROID]
 
 PRODUCTS_TO_STEPNAMES = {
     ANDROID_WEBVIEW: 'system_webview_wpt',
@@ -256,11 +255,18 @@ class AndroidDevices(object):
             return self._usable_devices
 
         devices = device_utils.DeviceUtils.HealthyDevices()
-        self._usable_devices = [
-            d for d in devices if
-            (battery_utils.BatteryUtils(d).GetBatteryInfo().get('level', 0) >=
-             AndroidDevices.MINIMUM_BATTERY_PERCENTAGE and d.IsScreenOn())
-        ]
+        usable_devices = []
+        for d in devices:
+            try:
+                battery_level = int(
+                    battery_utils.BatteryUtils(d).GetBatteryInfo().get(
+                        'level', '0'))
+            except ValueError:
+                battery_level = 0
+            if (battery_level >= AndroidDevices.MINIMUM_BATTERY_PERCENTAGE
+                    and d.IsScreenOn()):
+                usable_devices.append(d)
+        self._usable_devices = usable_devices
 
         return self._usable_devices
 
@@ -327,7 +333,7 @@ class AndroidPort(base.Port):
             self._wpt_product_arg = ''
 
             if not self.get_option('disable_breakpad'):
-                self._dump_reader = DumpReaderAndroid(host, self._build_path())
+                self._dump_reader = DumpReaderAndroid(host, self.build_path())
 
             # Initialize the AndroidDevices class which tracks available devices.
             default_devices = None
@@ -338,11 +344,10 @@ class AndroidPort(base.Port):
             self._devices = AndroidDevices(default_devices,
                                            self._debug_logging)
 
-            devil_chromium.Initialize(
-                output_directory=self._build_path(),
-                adb_path=self._path_from_chromium_base(
-                    'third_party', 'android_sdk', 'public', 'platform-tools',
-                    'adb'))
+            devil_chromium.Initialize(output_directory=self.build_path(),
+                                      adb_path=self._path_from_chromium_base(
+                                          'third_party', 'android_sdk',
+                                          'public', 'platform-tools', 'adb'))
 
             devil_env.config.InitializeLogging(
                 logging.DEBUG if self._debug_logging
@@ -352,7 +357,7 @@ class AndroidPort(base.Port):
                 self._devices.set_device_prepared(serial)
 
     def bot_expectations(self):
-        # TODO(rmhasan) Add bot expectations to WPT metadata.
+        # TODO(weizhong) Add bot expectations to WPT metadata.
         return {}
 
     def expected_test(self, _):
@@ -465,7 +470,7 @@ class AndroidPort(base.Port):
             device_path = lambda *p: posixpath.join(
                 self._driver_details.device_directory(), *p)
 
-            device.Install(self._path_to_driver())
+            device.Install(self.path_to_driver())
 
             # Build up a list of what we want to push, including:
             host_device_tuples = []
@@ -474,10 +479,10 @@ class AndroidPort(base.Port):
             # TODO(sergeyu): Rename these files, they can be used on platforms
             # other than Android.
             host_device_tuples.append(
-                (self._build_path('test_fonts/android_main_fonts.xml'),
+                (self.build_path('test_fonts/android_main_fonts.xml'),
                  device_path('android_main_fonts.xml')))
             host_device_tuples.append(
-                (self._build_path('test_fonts/android_fallback_fonts.xml'),
+                (self.build_path('test_fonts/android_fallback_fonts.xml'),
                  device_path('android_fallback_fonts.xml')))
             for font_file in self._get_font_files():
                 host_device_tuples.append((font_file,
@@ -593,11 +598,11 @@ class AndroidPort(base.Port):
 
     # Overridden protected methods.
 
-    def _build_path(self, *comps):
-        return self._local_port._build_path(*comps)
+    def build_path(self, *comps):
+        return self._local_port.build_path(*comps)
 
-    def _build_path_with_target(self, target, *comps):
-        return self._local_port._build_path_with_target(target, *comps)
+    def build_path(self, *comps, target=None):
+        return self._local_port.build_path(*comps, target=target)
 
     def path_to_apache(self):
         return self._local_port.path_to_apache()
@@ -605,9 +610,8 @@ class AndroidPort(base.Port):
     def path_to_apache_config_file(self):
         return self._local_port.path_to_apache_config_file()
 
-    def _path_to_driver(self, target=None):
-        return self._build_path_with_target(target,
-                                            self._driver_details.apk_name())
+    def path_to_driver(self, target=None):
+        return self.build_path(self._driver_details.apk_name(), target=target)
 
     def _path_to_image_diff(self):
         return self._local_port._path_to_image_diff()
@@ -806,7 +810,7 @@ class ChromiumAndroidDriver(driver.Driver):
             kallsyms_path = self._update_kallsyms_cache(symfs_path)
             # FIXME: We should pass this some sort of "Bridge" object abstraction around ADB instead of a path/device pair.
             self._profiler = AndroidPerf(self._port.host,
-                                         self._port._path_to_driver(),
+                                         self._port.path_to_driver(),
                                          self._port.artifacts_directory(),
                                          self._device, symfs_path,
                                          kallsyms_path)
@@ -857,7 +861,7 @@ class ChromiumAndroidDriver(driver.Driver):
             symfs_path,
             'data/app-lib/%s-1/%s' % (self._driver_details.package_name(),
                                       self._driver_details.library_name()))
-        built_library_path = self._port._build_path(
+        built_library_path = self._port.build_path(
             'lib', self._driver_details.library_name())
         assert fs.exists(built_library_path)
 

@@ -1,6 +1,9 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/try/win_chromium_compile_rel_ng/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
@@ -15,7 +18,6 @@
               "execution_mode": "TEST",
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "goma_enable_global_file_stat_cache",
                   "mb"
                 ],
                 "build_config": "Release",
@@ -44,7 +46,6 @@
               "execution_mode": "COMPILE_AND_TEST",
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "goma_enable_global_file_stat_cache",
                   "mb"
                 ],
                 "build_config": "Release",
@@ -53,64 +54,6 @@
               },
               "legacy_gclient_config": {
                 "config": "chromium"
-              }
-            }
-          },
-          {
-            "builder_id": {
-              "bucket": "ci",
-              "builder": "Win7 (32) Tests",
-              "project": "chromium"
-            },
-            "builder_spec": {
-              "build_gs_bucket": "chromium-win-archive",
-              "builder_group": "chromium.win",
-              "execution_mode": "TEST",
-              "legacy_chromium_config": {
-                "apply_configs": [
-                  "goma_enable_global_file_stat_cache",
-                  "mb"
-                ],
-                "build_config": "Release",
-                "config": "chromium",
-                "target_bits": 32
-              },
-              "legacy_gclient_config": {
-                "config": "chromium"
-              },
-              "parent": {
-                "bucket": "ci",
-                "builder": "Win Builder",
-                "project": "chromium"
-              }
-            }
-          },
-          {
-            "builder_id": {
-              "bucket": "ci",
-              "builder": "Win7 Tests (1)",
-              "project": "chromium"
-            },
-            "builder_spec": {
-              "build_gs_bucket": "chromium-win-archive",
-              "builder_group": "chromium.win",
-              "execution_mode": "TEST",
-              "legacy_chromium_config": {
-                "apply_configs": [
-                  "goma_enable_global_file_stat_cache",
-                  "mb"
-                ],
-                "build_config": "Release",
-                "config": "chromium",
-                "target_bits": 32
-              },
-              "legacy_gclient_config": {
-                "config": "chromium"
-              },
-              "parent": {
-                "bucket": "ci",
-                "builder": "Win Builder",
-                "project": "chromium"
               }
             }
           }
@@ -128,25 +71,16 @@
           "bucket": "ci",
           "builder": "WebKit Win10",
           "project": "chromium"
-        },
-        {
-          "bucket": "ci",
-          "builder": "Win7 (32) Tests",
-          "project": "chromium"
-        },
-        {
-          "bucket": "ci",
-          "builder": "Win7 Tests (1)",
-          "project": "chromium"
         }
       ],
       "is_compile_only": true
     }
   },
-  "$build/goma": {
-    "enable_ats": false,
-    "rpc_extra_params": "?prod",
-    "server_host": "goma.chromium.org"
+  "$build/reclient": {
+    "instance": "rbe-chromium-untrusted",
+    "jobs": 150,
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],

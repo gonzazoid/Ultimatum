@@ -8,7 +8,6 @@
 #include "base/files/file_util.h"
 #include "base/threading/thread_restrictions.h"
 #include "net/cert/ev_root_ca_metadata.h"
-#include "net/cert/pem.h"
 #include "net/cert/x509_certificate.h"
 #include "net/cert/x509_util.h"
 #include "net/test/test_data_directory.h"
@@ -25,7 +24,7 @@ CertificateList CreateCertificateListFromFile(const base::FilePath& certs_dir,
   if (!base::ReadFileToString(cert_path, &cert_data))
     return CertificateList();
   return X509Certificate::CreateCertificateListFromBytes(
-      base::as_bytes(base::make_span(cert_data)), format);
+      base::as_byte_span(cert_data), format);
 }
 
 ::testing::AssertionResult LoadCertificateFiles(
@@ -72,8 +71,7 @@ scoped_refptr<X509Certificate> ImportCertFromFile(
 
   CertificateList certs_in_file =
       X509Certificate::CreateCertificateListFromBytes(
-          base::as_bytes(base::make_span(cert_data)),
-          X509Certificate::FORMAT_AUTO);
+          base::as_byte_span(cert_data), X509Certificate::FORMAT_AUTO);
   if (certs_in_file.empty())
     return nullptr;
   return certs_in_file[0];
@@ -83,22 +81,6 @@ scoped_refptr<X509Certificate> ImportCertFromFile(
     const base::FilePath& certs_dir,
     base::StringPiece cert_file) {
   return ImportCertFromFile(certs_dir.AppendASCII(cert_file));
-}
-
-bssl::UniquePtr<EVP_PKEY> LoadPrivateKeyFromFile(
-    const base::FilePath& key_path) {
-  std::string key_string;
-  if (!base::ReadFileToString(key_path, &key_string))
-    return nullptr;
-  std::vector<std::string> headers;
-  headers.push_back("PRIVATE KEY");
-  PEMTokenizer pem_tokenizer(key_string, headers);
-  if (!pem_tokenizer.GetNext())
-    return nullptr;
-  CBS cbs;
-  CBS_init(&cbs, reinterpret_cast<const uint8_t*>(pem_tokenizer.data().data()),
-           pem_tokenizer.data().size());
-  return bssl::UniquePtr<EVP_PKEY>(EVP_parse_private_key(&cbs));
 }
 
 ScopedTestEVPolicy::ScopedTestEVPolicy(EVRootCAMetadata* ev_root_ca_metadata,

@@ -8,11 +8,12 @@
 
 #include <stdint.h>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/mock_callback.h"
@@ -306,7 +307,7 @@ class RTCVideoDecoderStreamAdapterTest
     input_image._frameType = is_keyframe
                                  ? webrtc::VideoFrameType::kVideoFrameKey
                                  : webrtc::VideoFrameType::kVideoFrameDelta;
-    input_image.SetTimestamp(timestamp);
+    input_image.SetRtpTimestamp(timestamp);
     return adapter_->Decode(input_image, missing_frames, 0);
   }
 
@@ -321,7 +322,7 @@ class RTCVideoDecoderStreamAdapterTest
   void FinishDecodeOnMediaThread(uint32_t timestamp) {
     DCHECK(media_thread_task_runner_->RunsTasksInCurrentSequence());
     gpu::MailboxHolder mailbox_holders[media::VideoFrame::kMaxPlanes];
-    mailbox_holders[0].mailbox = gpu::Mailbox::Generate();
+    mailbox_holders[0].mailbox = gpu::Mailbox::GenerateForSharedImage();
     scoped_refptr<media::VideoFrame> frame =
         media::VideoFrame::WrapNativeTextures(
             media::PIXEL_FORMAT_ARGB, mailbox_holders,
@@ -363,7 +364,7 @@ class RTCVideoDecoderStreamAdapterTest
     input_image.SetEncodedData(
         webrtc::EncodedImageBuffer::Create(data, sizeof(data)));
     input_image._frameType = webrtc::VideoFrameType::kVideoFrameKey;
-    input_image.SetTimestamp(timestamp);
+    input_image.SetRtpTimestamp(timestamp);
     webrtc::ColorSpace webrtc_color_space;
     webrtc_color_space.set_primaries_from_uint8(1);
     webrtc_color_space.set_transfer_from_uint8(1);
@@ -482,8 +483,8 @@ TEST_P(RTCVideoDecoderStreamAdapterTest, SlowDecodingCausesReset) {
   // All Decodes succeed immediately.  The backup will come from the fact that
   // we won't run the media thread while sending decode requests in.
   EXPECT_CALL(*decoder, Decode_(_, _))
-      .WillRepeatedly(
-          base::test::RunOnceCallback<1>(media::DecoderStatus::Codes::kOk));
+      .WillRepeatedly(base::test::RunOnceCallbackRepeatedly<1>(
+          media::DecoderStatus::Codes::kOk));
   // At some point, `adapter_` should trigger a reset.
   EXPECT_CALL(*decoder, Reset_(_)).WillOnce(base::test::RunOnceCallback<0>());
 
@@ -531,8 +532,8 @@ TEST_P(RTCVideoDecoderStreamAdapterTest, ReallySlowDecodingCausesFallback) {
   // All Decodes succeed immediately.  The backup will come from the fact that
   // we won't run the media thread while sending decode requests in.
   EXPECT_CALL(*decoder, Decode_(_, _))
-      .WillRepeatedly(
-          base::test::RunOnceCallback<1>(media::DecoderStatus::Codes::kOk));
+      .WillRepeatedly(base::test::RunOnceCallbackRepeatedly<1>(
+          media::DecoderStatus::Codes::kOk));
   // At some point, `adapter_` should trigger a reset, before it falls back.  It
   // should not do so more than once, since we won't complete the reset.
   EXPECT_CALL(*decoder, Reset_(_)).WillOnce(base::test::RunOnceCallback<0>());
@@ -651,11 +652,9 @@ TEST_P(RTCVideoDecoderStreamAdapterTest, UseD3D11ToDecodeVP9kSVCStream) {
   FinishDecode(0);
   EXPECT_TRUE(BasicTeardown());
 }
-#endif
-
+#elif !(defined(ARCH_CPU_X86_FAMILY) && BUILDFLAG(IS_CHROMEOS))
 // On ChromeOS, only based on x86(use VaapiDecoder) architecture has the ability
 // to decode VP9 kSVC Stream. Other cases should fallback to sw decoder.
-#if !(defined(ARCH_CPU_X86_FAMILY) && BUILDFLAG(IS_CHROMEOS))
 TEST_P(RTCVideoDecoderStreamAdapterTest,
        FallbackToSoftwareWhenDecodeVP9kSVCStream) {
   auto* decoder = decoder_factory_->decoder();
@@ -668,7 +667,7 @@ TEST_P(RTCVideoDecoderStreamAdapterTest,
   task_environment_.RunUntilIdle();
   EXPECT_TRUE(BasicTeardown());
 }
-#endif
+#endif  // BUILDFLAG(IS_WIN)
 
 INSTANTIATE_TEST_SUITE_P(
     UseHwDecoding,

@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+
+import * as Common from 'devtools/core/common/common.js';
+
 (async function() {
   TestRunner.addResult(`Tests removing event listeners in the Elements sidebar panel.\n`);
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
       <button id="node">Inspect Me</button>
@@ -26,7 +30,7 @@
       setupEventListeners();
   `);
 
-  Common.settingForTest('showEventListenersForAncestors').set(false);
+  Common.Settings.settingForTest('showEventListenersForAncestors').set(false);
 
 
   function step1() {

@@ -7,15 +7,18 @@
 #include <iterator>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/process/memory.h"
+#include "base/process/process_handle.h"
 #include "base/ranges/algorithm.h"
+#include "base/strings/stringprintf.h"
+#include "base/system/sys_info.h"
 #include "base/task/single_thread_task_executor.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/threading/platform_thread.h"
@@ -23,30 +26,32 @@
 #include "chrome/updater/app/app.h"
 #include "chrome/updater/app/app_install.h"
 #include "chrome/updater/app/app_recover.h"
+#include "chrome/updater/app/app_server.h"
 #include "chrome/updater/app/app_uninstall.h"
+#include "chrome/updater/app/app_uninstall_self.h"
 #include "chrome/updater/app/app_update.h"
 #include "chrome/updater/app/app_wake.h"
+#include "chrome/updater/app/app_wakeall.h"
 #include "chrome/updater/configurator.h"
 #include "chrome/updater/constants.h"
 #include "chrome/updater/crash_client.h"
 #include "chrome/updater/crash_reporter.h"
 #include "chrome/updater/updater_scope.h"
 #include "chrome/updater/updater_version.h"
-#include "chrome/updater/util.h"
+#include "chrome/updater/util/util.h"
 #include "components/crash/core/common/crash_key.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/crash/core/common/crash_keys.h"
+
+#if BUILDFLAG(IS_POSIX)
+#include "chrome/updater/ipc/ipc_support.h"
+#endif
 
 #if BUILDFLAG(IS_WIN)
 #include "base/win/process_startup_helper.h"
 #include "base/win/scoped_com_initializer.h"
-#include "chrome/updater/app/server/win/server.h"
+#include "base/win/windows_version.h"
 #include "chrome/updater/app/server/win/service_main.h"
-#include "chrome/updater/win/win_util.h"
-#elif BUILDFLAG(IS_MAC)
-#include "chrome/updater/app/server/mac/server.h"
-#elif BUILDFLAG(IS_LINUX)
-#include "chrome/updater/app/server/linux/server.h"
-#include "chrome/updater/linux/ipc_support.h"
+#include "chrome/updater/util/win_util.h"
 #endif
 
 // Instructions For Windows.
@@ -73,11 +78,15 @@ void ReinitializeLoggingAfterCrashHandler(UpdaterScope updater_scope) {
   InitLogging(updater_scope);
 }
 
-void InitializeCrashReporting(UpdaterScope updater_scope) {
+void InitializeCrashKeys(const base::CommandLine& command_line) {
   crash_reporter::InitializeCrashKeys();
   static crash_reporter::CrashKeyString<16> crash_key_process_type(
       "process_type");
   crash_key_process_type.Set("updater");
+  crash_keys::SetSwitchesFromCommandLine(command_line, nullptr);
+}
+
+void InitializeCrashReporting(UpdaterScope updater_scope) {
   if (!CrashClient::GetInstance()->InitializeCrashReporting(updater_scope)) {
     VLOG(1) << "Crash reporting is not available.";
     return;
@@ -88,8 +97,9 @@ void InitializeCrashReporting(UpdaterScope updater_scope) {
 int HandleUpdaterCommands(UpdaterScope updater_scope,
                           const base::CommandLine* command_line) {
   // Used for unit test purposes. There is no need to run with a crash handler.
-  if (command_line->HasSwitch(kTestSwitch))
+  if (command_line->HasSwitch(kTestSwitch)) {
     return kErrorOk;
+  }
 
   if (command_line->HasSwitch(kCrashHandlerSwitch)) {
     const int retval = CrashReporterMain();
@@ -109,73 +119,83 @@ int HandleUpdaterCommands(UpdaterScope updater_scope,
   base::EnableTerminationOnHeapCorruption();
   base::EnableTerminationOnOutOfMemory();
 
+  InitializeThreadPool("updater");
+  const base::ScopedClosureRunner shutdown_thread_pool(base::BindOnce([] {
+    // For the updater, it is important to join all threads before `UpdaterMain`
+    // exits, otherwise the behavior of the program is undefined. The threads
+    // in the pool can still run after shutdown to handle CONTINUE_ON_SHUTDOWN
+    // tasks, for example. In Chrome, the thread pool is leaked for this reason
+    // and there is no way to join its threads in production code. The updater
+    // has no such requirements (crbug.com/1484776).
+    base::ThreadPoolInstance* thread_pool = base::ThreadPoolInstance::Get();
+    thread_pool->Shutdown();
+    thread_pool->JoinForTesting();  // IN-TEST
+    base::ThreadPoolInstance::Set(nullptr);
+  }));
+
 #if BUILDFLAG(IS_WIN)
   base::win::ScopedCOMInitializer com_initializer(
       base::win::ScopedCOMInitializer::kMTA);
   if (!com_initializer.Succeeded()) {
     PLOG(ERROR) << "Failed to initialize COM";
-
-    // TODO(crbug.com/1294543) - is there a more specific error needed?
     return kErrorComInitializationFailed;
   }
-  if (FAILED(DisableCOMExceptionHandling())) {
-    // Failing to disable COM exception handling is a critical error.
-    CHECK(false) << "Failed to disable COM exception handling.";
-  }
+
+  // Failing to disable COM exception handling is a critical error.
+  CHECK(SUCCEEDED(DisableCOMExceptionHandling()))
+      << "Failed to disable COM exception handling.";
   base::win::RegisterInvalidParamHandler();
   VLOG(1) << GetUACState();
 #endif
 
-  InitializeThreadPool("updater");
-  const base::ScopedClosureRunner shutdown_thread_pool(
-      base::BindOnce([]() { base::ThreadPoolInstance::Get()->Shutdown(); }));
-  base::SingleThreadTaskExecutor main_task_executor(base::MessagePumpType::UI);
+  // Records a backtrace in the log, crashes the program, saves a crash dump,
+  // and reports the crash.
+  CHECK(!command_line->HasSwitch(kCrashMeSwitch)) << "--crash-me was used.";
 
-  if (command_line->HasSwitch(kCrashMeSwitch)) {
-    // Records a backtrace in the log, crashes the program, saves a crash dump,
-    // and reports the crash.
-    CHECK(false) << "--crash-me was used.";
-  }
-
-#if BUILDFLAG(IS_LINUX)
+#if BUILDFLAG(IS_POSIX)
   // As long as this object is alive, all Mojo API surface relevant to IPC
   // connections is usable, and message pipes which span a process boundary will
   // continue to function.
   ScopedIPCSupportWrapper ipc_support;
 #endif
-
-  if (command_line->HasSwitch(kServerSwitch)) {
-#if BUILDFLAG(IS_WIN)
-    // By design, Windows uses a leaky singleton server for its RPC server.
-    return AppServerSingletonInstance()->Run();
-#else
-    return MakeAppServer()->Run();
-#endif
+  // TODO(crbug.com/1476296) - eliminate the need to have a UI message type
+  // on the main sequence by refactoring the splash screen and the rest of UI.
+  const bool is_app_install_mode = command_line->HasSwitch(kInstallSwitch) ||
+                                   command_line->HasSwitch(kTagSwitch) ||
+                                   command_line->HasSwitch(kRuntimeSwitch) ||
+                                   command_line->HasSwitch(kHandoffSwitch);
+  base::SingleThreadTaskExecutor main_task_executor(
+      is_app_install_mode ? base::MessagePumpType::UI
+                          : base::MessagePumpType::DEFAULT);
+  if (is_app_install_mode) {
+    return MakeAppInstall(command_line->HasSwitch(kSilentSwitch))->Run();
   }
 
-  if (command_line->HasSwitch(kUpdateSwitch))
+  if (command_line->HasSwitch(kServerSwitch)) {
+    return MakeAppServer()->Run();
+  }
+
+  if (command_line->HasSwitch(kUpdateSwitch)) {
     return MakeAppUpdate()->Run();
+  }
 
 #if BUILDFLAG(IS_WIN)
-  if (command_line->HasSwitch(kWindowsServiceSwitch))
+  if (command_line->HasSwitch(kWindowsServiceSwitch)) {
     return ServiceMain::RunWindowsService(command_line);
+  }
 
   if (command_line->HasSwitch(kHealthCheckSwitch)) {
     return kErrorOk;
   }
 #endif  // BUILDFLAG(IS_WIN)
 
-  if (command_line->HasSwitch(kInstallSwitch) ||
-      command_line->HasSwitch(kTagSwitch) ||
-      command_line->HasSwitch(kRuntimeSwitch) ||
-      command_line->HasSwitch(kHandoffSwitch)) {
-    return MakeAppInstall(command_line->HasSwitch(kSilentSwitch))->Run();
-  }
-
   if (command_line->HasSwitch(kUninstallSwitch) ||
-      command_line->HasSwitch(kUninstallSelfSwitch) ||
       command_line->HasSwitch(kUninstallIfUnusedSwitch)) {
     return MakeAppUninstall()->Run();
+  }
+
+  if (command_line->HasSwitch(kUninstallSelfSwitch)) {
+    return MakeAppUninstallSelf()->Run();
   }
 
   if (command_line->HasSwitch(kRecoverSwitch) ||
@@ -185,6 +205,10 @@ int HandleUpdaterCommands(UpdaterScope updater_scope,
 
   if (command_line->HasSwitch(kWakeSwitch)) {
     return MakeAppWake()->Run();
+  }
+
+  if (command_line->HasSwitch(kWakeAllSwitch)) {
+    return MakeAppWakeAll()->Run();
   }
 
   VLOG(1) << "Unknown command line switch.";
@@ -203,8 +227,8 @@ const char* GetUpdaterCommand(const base::CommandLine* command_line) {
       kTestSwitch,           kUninstallIfUnusedSwitch,
       kUninstallSelfSwitch,  kUninstallSwitch,
       kUpdateSwitch,         kWakeSwitch,
-      kHealthCheckSwitch,    kHandoffSwitch,
-      kRuntimeSwitch,
+      kWakeAllSwitch,        kHealthCheckSwitch,
+      kHandoffSwitch,        kRuntimeSwitch,
   };
   const char** it = base::ranges::find_if(commands, [command_line](auto cmd) {
     return command_line->HasSwitch(cmd);
@@ -218,7 +242,7 @@ const char* GetUpdaterCommand(const base::CommandLine* command_line) {
 }
 
 constexpr const char* BuildFlavor() {
-#if defined(NBEDUG)
+#if defined(NDEBUG)
   return "opt";
 #else
   return "debug";
@@ -232,6 +256,16 @@ constexpr const char* BuildArch() {
   return "32 bits";
 #else
 #error CPU architecture is unknown.
+#endif
+}
+
+std::string OperatingSystemVersion() {
+#if BUILDFLAG(IS_WIN)
+  const base::win::OSInfo::VersionNumber v =
+      base::win::OSInfo::GetInstance()->version_number();
+  return base::StringPrintf("%u.%u.%u.%u", v.major, v.minor, v.build, v.patch);
+#else
+  return base::SysInfo().OperatingSystemVersion();
 #endif
 }
 
@@ -258,14 +292,19 @@ int UpdaterMain(int argc, const char* const* argv) {
   base::AtExitManager exit_manager;
 
   base::CommandLine::Init(argc, argv);
-  const base::CommandLine* command_line =
-      base::CommandLine::ForCurrentProcess();
-
+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+#if BUILDFLAG(IS_WIN)
+  *command_line = GetCommandLineLegacyCompatible();
+#endif
+  InitializeCrashKeys(*command_line);
   const UpdaterScope updater_scope = GetUpdaterScope();
   InitLogging(updater_scope);
-
-  VLOG(1) << "Version " << kUpdaterVersion << ", " << BuildFlavor() << ", "
+  VLOG(1) << "Version: " << kUpdaterVersion << ", " << BuildFlavor() << ", "
           << BuildArch() << ", command line: " << GetCommandLineString();
+  VLOG(1) << "OS version: " << OperatingSystemVersion()
+          << ", System uptime (seconds): "
+          << base::SysInfo::Uptime().InSeconds() << ", parent pid: "
+          << base::GetParentProcessId(base::GetCurrentProcessHandle());
   const int retval = HandleUpdaterCommands(updater_scope, command_line);
   VLOG(1) << __func__ << " (--" << GetUpdaterCommand(command_line) << ")"
           << " returned " << retval << ".";

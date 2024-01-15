@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -42,8 +43,7 @@ class FakeEndpointFinderFactory : public NearbyEndpointFinderImpl::Factory {
  private:
   // NearbyEndpointFinderImpl::Factory:
   std::unique_ptr<NearbyEndpointFinder> CreateInstance(
-      const mojo::SharedRemote<
-          location::nearby::connections::mojom::NearbyConnections>&
+      const mojo::SharedRemote<::nearby::connections::mojom::NearbyConnections>&
           nearby_connections) override {
     return std::make_unique<FakeNearbyEndpointFinder>();
   }
@@ -65,8 +65,7 @@ class FakeConnectionBrokerFactory : public NearbyConnectionBrokerImpl::Factory {
       mojo::PendingReceiver<mojom::NearbyFilePayloadHandler>
           file_payload_handler_receiver,
       mojo::PendingRemote<mojom::NearbyMessageReceiver> message_receiver_remote,
-      const mojo::SharedRemote<
-          location::nearby::connections::mojom::NearbyConnections>&
+      const mojo::SharedRemote<::nearby::connections::mojom::NearbyConnections>&
           nearby_connections,
       base::OnceClosure on_connected_callback,
       base::OnceClosure on_disconnected_callback,
@@ -80,7 +79,9 @@ class FakeConnectionBrokerFactory : public NearbyConnectionBrokerImpl::Factory {
     return instance;
   }
 
-  FakeNearbyConnectionBroker* last_created_ = nullptr;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter
+  // for: #constexpr-ctor-field-initializer
+  RAW_PTR_EXCLUSION FakeNearbyConnectionBroker* last_created_ = nullptr;
 };
 
 class FakeMessageReceiver : public mojom::NearbyMessageReceiver {

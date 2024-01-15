@@ -6,10 +6,14 @@
 
 #include "third_party/blink/renderer/core/dom/abstract_range.h"
 #include "third_party/blink/renderer/core/dom/static_range.h"
+#include "third_party/blink/renderer/core/dom/text.h"
 #include "third_party/blink/renderer/core/editing/ephemeral_range.h"
+#include "third_party/blink/renderer/core/editing/markers/custom_highlight_marker.h"
 #include "third_party/blink/renderer/core/editing/markers/document_marker_controller.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/core/highlight/highlight_style_utils.h"
+#include "third_party/blink/renderer/core/layout/layout_text.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 
 namespace blink {
@@ -60,7 +64,29 @@ void HighlightRegistry::ValidateHighlightMarkers() {
   style_version_for_validate_highlight_markers_ = document->StyleVersion();
   force_markers_validation_ = false;
 
-  document->Markers().RemoveMarkersOfTypes(
+  DocumentMarkerController& markers_controller = document->Markers();
+
+  // We invalidate ink overflow for nodes with highlights that have visual
+  // overflow, in case they no longer have markers and have smaller overflow.
+  // Ideally we would only invalidate nodes with markers that
+  // change their overflow status, but there is no easy way to identify those.
+  // That is, the highlights associated with a node are in the document marker
+  // controller, but they store the highlight name only. The actual highlight
+  // style is on the node's style, but we don't know if that has changed since
+  // we last computed overflow.
+  HeapHashSet<WeakMember<const Text>> nodes_with_overflow;
+  markers_controller.ApplyToMarkersOfType(
+      [&nodes_with_overflow](const Text& node, DocumentMarker* marker) {
+        auto& highlight_marker = To<CustomHighlightMarker>(*marker);
+        if (highlight_marker.HasVisualOverflow()) {
+          nodes_with_overflow.insert(&node);
+        }
+      },
+      DocumentMarker::kCustomHighlight);
+
+  // Remove all the markers, because determining which nodes have unchanged
+  // marker state would be unnecessarily complex.
+  markers_controller.RemoveMarkersOfTypes(
       DocumentMarker::MarkerTypes::CustomHighlight());
 
   for (const auto& highlight_registry_map_entry : highlights_) {
@@ -72,11 +98,41 @@ void HighlightRegistry::ValidateHighlightMarkers() {
         auto* static_range = DynamicTo<StaticRange>(*abstract_range);
         if (static_range && !static_range->IsValid())
           continue;
-
         EphemeralRange eph_range(abstract_range);
-        document->Markers().AddCustomHighlightMarker(eph_range, highlight_name,
-                                                     highlight);
+        markers_controller.AddCustomHighlightMarker(eph_range, highlight_name,
+                                                    highlight);
       }
+    }
+  }
+
+  // Process all of the nodes to remove overlapping custom highlights and
+  // update the markers to avoid overlaps.
+  markers_controller.MergeOverlappingMarkers(DocumentMarker::kCustomHighlight);
+
+  // We need to invalidate ink overflow for nodes with highlights that now have
+  // visual overflow. At the same time, record the overflow status on the marker
+  // so that we know that recalculation will be required when the marker is
+  // removed.
+  markers_controller.ApplyToMarkersOfType(
+      [&nodes_with_overflow](const Text& node, DocumentMarker* marker) {
+        auto& highlight_marker = To<CustomHighlightMarker>(*marker);
+        bool has_visual_overflow =
+            HighlightStyleUtils::CustomHighlightHasVisualOverflow(
+                node, highlight_marker.GetHighlightName());
+        highlight_marker.SetHasVisualOverflow(has_visual_overflow);
+        if (has_visual_overflow) {
+          nodes_with_overflow.insert(&node);
+        }
+      },
+      DocumentMarker::kCustomHighlight);
+
+  // Invalidate all the nodes that had overflow either before or after the
+  // update.
+  for (auto& node : nodes_with_overflow) {
+    // Explicitly cast to LayoutObject to get the correct version of
+    // InvalidateVisualOverflow.
+    if (LayoutObject* layout_object = node->GetLayoutObject()) {
+      layout_object->InvalidateVisualOverflow();
     }
   }
 }
@@ -84,7 +140,7 @@ void HighlightRegistry::ValidateHighlightMarkers() {
 void HighlightRegistry::ScheduleRepaint() {
   force_markers_validation_ = true;
   if (LocalFrameView* local_frame_view = frame_->View()) {
-    local_frame_view->ScheduleVisualUpdateForPaintInvalidationIfNeeded();
+    local_frame_view->ScheduleVisualUpdateForVisualOverflowIfNeeded();
   }
 }
 
@@ -102,6 +158,16 @@ void HighlightRegistry::SetForTesting(AtomicString highlight_name,
       highlight_name, highlight));
   highlight->RegisterIn(this);
   ScheduleRepaint();
+}
+
+void HighlightRegistry::RemoveForTesting(AtomicString highlight_name,
+                                         Highlight* highlight) {
+  auto highlights_iterator = GetMapIterator(highlight_name);
+  if (highlights_iterator != highlights_.end()) {
+    highlights_iterator->Get()->highlight->DeregisterFrom(this);
+    highlights_.erase(highlights_iterator);
+    ScheduleRepaint();
+  }
 }
 
 HighlightRegistry* HighlightRegistry::setForBinding(
@@ -179,10 +245,10 @@ HighlightRegistry::IterationSource::IterationSource(
   }
 }
 
-bool HighlightRegistry::IterationSource::Next(ScriptState*,
-                                              AtomicString& key,
-                                              Member<Highlight>& value,
-                                              ExceptionState&) {
+bool HighlightRegistry::IterationSource::FetchNextItem(ScriptState*,
+                                                       String& key,
+                                                       Highlight*& value,
+                                                       ExceptionState&) {
   if (index_ >= highlights_snapshot_.size())
     return false;
   key = highlights_snapshot_[index_]->highlight_name;
@@ -196,7 +262,7 @@ void HighlightRegistry::IterationSource::Trace(blink::Visitor* visitor) const {
 }
 
 HighlightRegistryMapIterable::IterationSource*
-HighlightRegistry::StartIteration(ScriptState*, ExceptionState&) {
+HighlightRegistry::CreateIterationSource(ScriptState*, ExceptionState&) {
   return MakeGarbageCollected<IterationSource>(*this);
 }
 

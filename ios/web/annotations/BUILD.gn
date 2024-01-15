@@ -13,6 +13,7 @@ source_set("annotations") {
     "//ios/web/common",
     "//ios/web/public",
     "//ios/web/public:web_state_observer",
+    "//ios/web/public/annotations",
     "//ios/web/public/js_messaging",
     "//ios/web/public/navigation",
     "//ui/base",
@@ -21,13 +22,14 @@ source_set("annotations") {
   sources = [
     "annotations_java_script_feature.h",
     "annotations_java_script_feature.mm",
-    "annotations_text_manager.h",
     "annotations_text_manager.mm",
-    "annotations_utils.h",
-    "annotations_utils.mm",
+    "annotations_text_manager_impl.h",
+    "annotations_text_manager_impl.mm",
   ]
+}
 
-  configs += [ "//build/config/compiler:enable_arc" ]
+compile_ts("compile_ts") {
+  sources = [ "resources/annotations_constants.ts" ]
 }
 
 optimize_ts("annotations_ts") {
@@ -36,7 +38,41 @@ optimize_ts("annotations_ts") {
   sources = [ "resources/annotations.ts" ]
 
   deps = [
+    ":compile_ts",
     "//ios/web/public/js_messaging:gcrweb",
     "//ios/web/public/js_messaging:util_scripts",
   ]
+}
+
+optimize_ts("annotations_test_ts") {
+  visibility = [ ":inttests" ]
+  testonly = true
+
+  sources = [ "resources/annotations_test.ts" ]
+
+  deps = [
+    ":compile_ts",
+    "//ios/web/public/js_messaging:gcrweb",
+  ]
+}
+
+source_set("inttests") {
+  testonly = true
+  deps = [
+    ":annotations",
+    ":annotations_test_ts",
+    "//base",
+    "//base/test:test_support",
+    "//ios/web/common",
+    "//ios/web/js_messaging",
+    "//ios/web/js_messaging:java_script_feature_manager_header",
+    "//ios/web/public",
+    "//ios/web/public:web_state_observer",
+    "//ios/web/public/annotations",
+    "//ios/web/public/js_messaging",
+    "//ios/web/public/test",
+    "//ios/web/public/test:test_fixture",
+    "//ios/web/web_state/ui:wk_web_view_configuration_provider_header",
+  ]
+  sources = [ "annotations_inttest.mm" ]
 }

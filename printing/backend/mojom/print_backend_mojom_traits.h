@@ -12,6 +12,7 @@
 #include "printing/backend/mojom/print_backend.mojom-shared.h"
 #include "printing/backend/print_backend.h"
 #include "printing/mojom/print.mojom.h"
+#include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace mojo {
@@ -49,19 +50,47 @@ struct StructTraits<printing::mojom::PaperDataView,
                     printing::PrinterSemanticCapsAndDefaults::Paper> {
   static const std::string& display_name(
       const printing::PrinterSemanticCapsAndDefaults::Paper& p) {
-    return p.display_name;
+    return p.display_name();
   }
   static const std::string& vendor_id(
       const printing::PrinterSemanticCapsAndDefaults::Paper& p) {
-    return p.vendor_id;
+    return p.vendor_id();
   }
   static const gfx::Size& size_um(
       const printing::PrinterSemanticCapsAndDefaults::Paper& p) {
-    return p.size_um;
+    return p.size_um();
+  }
+  static const gfx::Rect& printable_area_um(
+      const printing::PrinterSemanticCapsAndDefaults::Paper& p) {
+    return p.printable_area_um();
+  }
+  static int max_height_um(
+      const printing::PrinterSemanticCapsAndDefaults::Paper& p) {
+    return p.max_height_um();
+  }
+  static bool has_borderless_variant(
+      const printing::PrinterSemanticCapsAndDefaults::Paper& p) {
+    return p.has_borderless_variant();
   }
 
   static bool Read(printing::mojom::PaperDataView data,
                    printing::PrinterSemanticCapsAndDefaults::Paper* out);
+};
+
+template <>
+struct StructTraits<printing::mojom::MediaTypeDataView,
+                    printing::PrinterSemanticCapsAndDefaults::MediaType> {
+  static const std::string& display_name(
+      const printing::PrinterSemanticCapsAndDefaults::MediaType& p) {
+    return p.display_name;
+  }
+  static const std::string& vendor_id(
+      const printing::PrinterSemanticCapsAndDefaults::MediaType& p) {
+    return p.vendor_id;
+  }
+
+  static bool Read(printing::mojom::MediaTypeDataView data,
+                   printing::PrinterSemanticCapsAndDefaults::MediaType* out);
 };
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -143,7 +172,7 @@ struct StructTraits<printing::mojom::PageOutputQualityDataView,
     return p.qualities;
   }
 
-  static const absl::optional<std::string>& default_quality(
+  static const std::optional<std::string>& default_quality(
       const ::printing::PageOutputQuality& p) {
     return p.default_quality;
   }
@@ -202,6 +231,14 @@ struct StructTraits<printing::mojom::PrinterSemanticCapsAndDefaultsDataView,
       const printing::PrinterSemanticCapsAndDefaults& p) {
     return p.default_paper;
   }
+  static const std::vector<printing::PrinterSemanticCapsAndDefaults::MediaType>&
+  media_types(const printing::PrinterSemanticCapsAndDefaults& p) {
+    return p.media_types;
+  }
+  static const printing::PrinterSemanticCapsAndDefaults::MediaType&
+  default_media_type(const printing::PrinterSemanticCapsAndDefaults& p) {
+    return p.default_media_type;
+  }
   static const std::vector<gfx::Size>& dpis(
       const printing::PrinterSemanticCapsAndDefaults& p) {
     return p.dpis;
@@ -222,7 +259,7 @@ struct StructTraits<printing::mojom::PrinterSemanticCapsAndDefaultsDataView,
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
 #if BUILDFLAG(IS_WIN)
-  static const absl::optional<printing::PageOutputQuality>& page_output_quality(
+  static const std::optional<printing::PageOutputQuality>& page_output_quality(
       const printing::PrinterSemanticCapsAndDefaults& p) {
     return p.page_output_quality;
   }

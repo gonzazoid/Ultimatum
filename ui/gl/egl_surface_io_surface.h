@@ -7,7 +7,7 @@
 
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
-#include <IOSurface/IOSurface.h>
+#include <IOSurface/IOSurfaceRef.h>
 #include <memory>
 
 #include "ui/gfx/buffer_types.h"
@@ -34,6 +34,8 @@ class GL_EXPORT ScopedEGLSurfaceIOSurface {
   // texture currently bound to the target specified in Create.
   bool BindTexImage();
   void ReleaseTexImage();
+
+  EGLDisplay GetDisplay() { return display_; }
 
  private:
   explicit ScopedEGLSurfaceIOSurface(EGLDisplay display);

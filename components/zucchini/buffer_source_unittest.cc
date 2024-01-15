@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <algorithm>
 #include <iterator>
 #include <string>
 #include <tuple>
@@ -26,23 +27,57 @@ class BufferSourceTest : public testing::Test {
   BufferSource source_ = {bytes_.data(), bytes_.size()};
 };
 
+TEST_F(BufferSourceTest, CtorWithOffset) {
+  ConstBufferView view(bytes_.data(), bytes_.size());
+  for (size_t offset = 0; offset < bytes_.size() * 2; ++offset) {
+    BufferSource source(view, offset);
+    size_t expected_remaining = bytes_.size() - std::min(bytes_.size(), offset);
+    EXPECT_EQ(expected_remaining, source.Remaining());
+  }
+
+  BufferSource source1(view, 5);
+  EXPECT_TRUE(source1.CheckNextBytes({0xBA, 0xDC, 0xFE, 0x10}));
+  BufferSource source2(view, 0);
+  EXPECT_TRUE(source2.CheckNextBytes({0x10, 0x32, 0x54, 0x76}));
+  BufferSource source3(view, 9);
+  EXPECT_TRUE(source3.CheckNextBytes({0x00}));
+}
+
 TEST_F(BufferSourceTest, Skip) {
   EXPECT_EQ(bytes_.size(), source_.Remaining());
-  source_.Skip(2);
+  EXPECT_TRUE(source_.Skip(2));
   EXPECT_EQ(bytes_.size() - 2, source_.Remaining());
-  source_.Skip(10);  // Skipping past end just moves cursor to end.
+  EXPECT_TRUE(source_.Skip(bytes_.size() - 2));  // Skip to end.
+  EXPECT_EQ(size_t(0), source_.Remaining());
+  EXPECT_FALSE(source_.Skip(1));
+  EXPECT_EQ(size_t(0), source_.Remaining());
+  EXPECT_FALSE(source_.Skip(4));
+  EXPECT_EQ(size_t(0), source_.Remaining());
+}
+
+TEST_F(BufferSourceTest, SkipAcrossEnd) {
+  EXPECT_EQ(bytes_.size(), source_.Remaining());
+  EXPECT_TRUE(source_.Skip(2));
+  EXPECT_EQ(bytes_.size() - 2, source_.Remaining());
+  EXPECT_TRUE(source_.Skip(5));
+  EXPECT_EQ(bytes_.size() - 7, source_.Remaining());
+  EXPECT_FALSE(source_.Skip(10));  // Skip past end.
+  EXPECT_EQ(size_t(0), source_.Remaining());
+  EXPECT_FALSE(source_.Skip(1));
+  EXPECT_EQ(size_t(0), source_.Remaining());
+  EXPECT_FALSE(source_.Skip(4));
   EXPECT_EQ(size_t(0), source_.Remaining());
 }
 
 TEST_F(BufferSourceTest, CheckNextBytes) {
   EXPECT_TRUE(source_.CheckNextBytes({0x10, 0x32, 0x54, 0x76}));
-  source_.Skip(4);
+  EXPECT_TRUE(source_.Skip(4));
   EXPECT_TRUE(source_.CheckNextBytes({0x98, 0xBA, 0xDC, 0xFE}));
 
   // Cursor has not advanced, so check fails.
   EXPECT_FALSE(source_.CheckNextBytes({0x10, 0x00}));
 
-  source_.Skip(4);
+  EXPECT_TRUE(source_.Skip(4));
   EXPECT_EQ(size_t(2), source_.Remaining());
 
   // Goes beyond end by 2 bytes.
@@ -69,7 +104,7 @@ TEST_F(BufferSourceTest, CheckNextValue) {
   EXPECT_TRUE(source_.CheckNextValue(uint64_t(0xFEDCBA9876543210)));
   EXPECT_FALSE(source_.CheckNextValue(uint64_t(0x0)));
 
-  source_.Skip(8);
+  EXPECT_TRUE(source_.Skip(8));
   EXPECT_EQ(size_t(2), source_.Remaining());
 
   // Goes beyond end by 2 bytes.
@@ -77,8 +112,14 @@ TEST_F(BufferSourceTest, CheckNextValue) {
 }
 
 // Supported by MSVC, g++, and clang++.
-// Ensures no gaps in packing.
+// Ensures unaligned data access and no gaps in packing.
 #pragma pack(push, 1)
+
+// Trivial wrapper for uint32_t, to ensure data access is unaligned.
+struct UnalignedUint32T {
+  uint32_t value;
+};
+
 struct ValueType {
   uint32_t a;
   uint16_t b;
@@ -107,6 +148,18 @@ TEST_F(BufferSourceTest, GetValueAggregate) {
   EXPECT_EQ(size_t(4), source_.Remaining());
 }
 
+TEST_F(BufferSourceTest, GetValueUnaligned) {
+  uint8_t v8 = 0U;
+  EXPECT_TRUE(source_.GetValue(&v8));
+  EXPECT_EQ(0x10U, v8);
+  uint16_t v16 = 0U;
+  EXPECT_TRUE(source_.GetValue(&v16));
+  EXPECT_EQ(0x5432U, v16);
+  uint32_t v32 = 0U;
+  EXPECT_TRUE(source_.GetValue(&v32));
+  EXPECT_EQ(0xDCBA9876U, v32);
+}
+
 TEST_F(BufferSourceTest, GetRegion) {
   ConstBufferView region;
   EXPECT_TRUE(source_.GetRegion(0, &region));
@@ -126,18 +179,34 @@ TEST_F(BufferSourceTest, GetRegion) {
 }
 
 TEST_F(BufferSourceTest, GetPointerIntegral) {
-  const uint32_t* ptr = source_.GetPointer<uint32_t>();
+  const UnalignedUint32T* ptr = source_.GetPointer<UnalignedUint32T>();
   EXPECT_NE(nullptr, ptr);
-  EXPECT_EQ(uint32_t(0x76543210), *ptr);
+  EXPECT_EQ(uint32_t(0x76543210), ptr->value);
   EXPECT_EQ(size_t(6), source_.Remaining());
 
-  ptr = source_.GetPointer<uint32_t>();
+  ptr = source_.GetPointer<UnalignedUint32T>();
   EXPECT_NE(nullptr, ptr);
-  EXPECT_EQ(uint32_t(0xFEDCBA98), *ptr);
+  EXPECT_EQ(uint32_t(0xFEDCBA98), ptr->value);
   EXPECT_EQ(size_t(2), source_.Remaining());
 
-  EXPECT_EQ(nullptr, source_.GetPointer<uint32_t>());
+  EXPECT_EQ(nullptr, source_.GetPointer<UnalignedUint32T>());
   EXPECT_EQ(size_t(2), source_.Remaining());
+}
+
+TEST_F(BufferSourceTest, GetPointerIntegralMisaligned) {
+  source_.Skip(1);
+  EXPECT_EQ(size_t(9), source_.Remaining());
+  const UnalignedUint32T* ptr = source_.GetPointer<UnalignedUint32T>();
+  EXPECT_NE(nullptr, ptr);
+  EXPECT_EQ(uint32_t(0x98765432), ptr->value);
+  EXPECT_EQ(size_t(5), source_.Remaining());
+
+  source_.Skip(1);
+  EXPECT_EQ(size_t(4), source_.Remaining());
+  ptr = source_.GetPointer<UnalignedUint32T>();
+  EXPECT_NE(nullptr, ptr);
+  EXPECT_EQ(uint32_t(0x0010FEDC), ptr->value);
+  EXPECT_EQ(size_t(0), source_.Remaining());
 }
 
 TEST_F(BufferSourceTest, GetPointerAggregate) {
@@ -149,13 +218,24 @@ TEST_F(BufferSourceTest, GetPointerAggregate) {
 }
 
 TEST_F(BufferSourceTest, GetArrayIntegral) {
-  EXPECT_EQ(nullptr, source_.GetArray<uint32_t>(3));
+  EXPECT_EQ(nullptr, source_.GetArray<UnalignedUint32T>(3));
 
-  const uint32_t* ptr = source_.GetArray<uint32_t>(2);
+  const UnalignedUint32T* ptr = source_.GetArray<UnalignedUint32T>(2);
   EXPECT_NE(nullptr, ptr);
-  EXPECT_EQ(uint32_t(0x76543210), ptr[0]);
-  EXPECT_EQ(uint32_t(0xFEDCBA98), ptr[1]);
+  EXPECT_EQ(uint32_t(0x76543210), ptr[0].value);
+  EXPECT_EQ(uint32_t(0xFEDCBA98), ptr[1].value);
   EXPECT_EQ(size_t(2), source_.Remaining());
+}
+
+TEST_F(BufferSourceTest, GetArrayIntegralMisaligned) {
+  source_.Skip(1);
+  EXPECT_EQ(nullptr, source_.GetArray<UnalignedUint32T>(3));
+
+  const UnalignedUint32T* ptr = source_.GetArray<UnalignedUint32T>(2);
+  EXPECT_NE(nullptr, ptr);
+  EXPECT_EQ(uint32_t(0x98765432), ptr[0].value);
+  EXPECT_EQ(uint32_t(0x10FEDCBA), ptr[1].value);
+  EXPECT_EQ(size_t(1), source_.Remaining());
 }
 
 TEST_F(BufferSourceTest, GetArrayAggregate) {
@@ -279,7 +359,8 @@ TEST_F(BufferSourceTest, GetSleb128) {
   EXPECT_EQ(good(0x10000000, 5U), run("80 80 80 80 01"));
   EXPECT_EQ(good(0x10204081, 5U), run("81 81 81 81 01"));
   EXPECT_EQ(good(0x7FFFFFFF, 5U), run("FF FF FF FF 07"));
-  EXPECT_EQ(good(-static_cast<int32_t>(0x80000000), 5U), run("80 80 80 80 08"));
+  // Signed 0x80000000 is already negative.
+  EXPECT_EQ(good(static_cast<int32_t>(0x80000000), 5U), run("80 80 80 80 08"));
   EXPECT_EQ(good(-0x1, 5U), run("FF FF FF FF 0F"));  // Redundant code.
   EXPECT_EQ(kBad, run("FF FF FF FF 80"));            // Too long / out of data.
   EXPECT_EQ(good(0x0FFFFFFF, 5U), run("FF FF FF FF 10"));   // "1" discarded.

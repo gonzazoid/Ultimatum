@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ namespace IPC {
 
 template <>
 struct ParamTraits<extensions::mojom::ExtraResponseDataPtr> {
-  typedef extensions::mojom::ExtraResponseDataPtr param_type;
+  using param_type = extensions::mojom::ExtraResponseDataPtr;
   static void Write(base::Pickle* m, const param_type& p);
   static bool Read(const base::Pickle* m,
                    base::PickleIterator* iter,

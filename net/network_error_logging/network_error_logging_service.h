@@ -44,7 +44,7 @@ class NET_EXPORT NetworkErrorLoggingService {
  public:
   class PersistentNelStore;
 
-  // Every (NIK, origin) pair can have at most one policy.
+  // Every (NAK, origin) pair can have at most one policy.
   struct NET_EXPORT NelPolicyKey {
     NelPolicyKey();
     NelPolicyKey(const NetworkAnonymizationKey& network_anonymization_key,
@@ -56,7 +56,7 @@ class NET_EXPORT NetworkErrorLoggingService {
     bool operator==(const NelPolicyKey& other) const;
     bool operator!=(const NelPolicyKey& other) const;
 
-    // The NIK of the request this policy was received from. This will be used
+    // The NAK of the request this policy was received from. This will be used
     // for any requests uploading reports according to this policy. (Not
     // included in the report itself.)
     NetworkAnonymizationKey network_anonymization_key;
@@ -77,7 +77,7 @@ class NET_EXPORT NetworkErrorLoggingService {
 
     bool operator<(const WildcardNelPolicyKey& other) const;
 
-    // The NIK of the request this policy was received from. This will be used
+    // The NAK of the request this policy was received from. This will be used
     // for any requests uploading reports according to this policy. (Not
     // included in the report itself.)
     NetworkAnonymizationKey network_anonymization_key;
@@ -282,7 +282,7 @@ class NET_EXPORT NetworkErrorLoggingService {
   // Used to display information about NEL policies on the NetLog Reporting tab.
   virtual base::Value StatusAsValue() const;
 
-  // Gets the (NIK, origin) keys of all currently stored policies, including
+  // Gets the (NAK, origin) keys of all currently stored policies, including
   // expired ones.
   virtual std::set<NelPolicyKey> GetPolicyKeysForTesting();
 
@@ -294,7 +294,7 @@ class NET_EXPORT NetworkErrorLoggingService {
 
   // Unowned:
   raw_ptr<const base::Clock> clock_;
-  raw_ptr<ReportingService> reporting_service_ = nullptr;
+  raw_ptr<ReportingService, DanglingUntriaged> reporting_service_ = nullptr;
   bool shut_down_ = false;
 };
 

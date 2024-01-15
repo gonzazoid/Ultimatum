@@ -8,10 +8,10 @@
 #include <memory>
 #include <vector>
 
-#include "base/task/task_runner.h"
-#include "chrome/browser/policy/messaging_layer/upload/dm_server_upload_service.h"
+#include "base/task/sequenced_task_runner.h"
+#include "chrome/browser/policy/messaging_layer/upload/server_uploader.h"
 #include "components/reporting/proto/synced/record.pb.h"
-#include "components/reporting/resources/resource_interface.h"
+#include "components/reporting/resources/resource_manager.h"
 #include "components/reporting/util/status.h"
 #include "components/reporting/util/statusor.h"
 
@@ -21,15 +21,21 @@ namespace reporting {
 class UploadClient {
  public:
   // ReportSuccessfulUploadCallback is used to pass server responses back to
-  // the owner of |this| (the respone consists of sequencing information and
+  // the owner of |this| (the response consists of sequencing information and
   // forceConfirm flag).
   using ReportSuccessfulUploadCallback =
-      DmServerUploadService::ReportSuccessfulUploadCallback;
+      ::reporting::ReportSuccessfulUploadCallback;
 
   // ReceivedEncryptionKeyCallback is called if server attached encryption key
   // to the response.
   using EncryptionKeyAttachedCallback =
-      DmServerUploadService::EncryptionKeyAttachedCallback;
+      ::reporting::EncryptionKeyAttachedCallback;
+
+  // UpdateConfigInMissiveCallback is called if the configuration file obtained
+  // from the server is different from the one that was sent previously using
+  // this callback.
+  using UpdateConfigInMissiveCallback =
+      ::reporting::UpdateConfigInMissiveCallback;
 
   // CreatedCallback gets a result of Upload client creation (unique pointer or
   // error status).
@@ -44,6 +50,7 @@ class UploadClient {
 
   virtual Status EnqueueUpload(
       bool need_encryption_key,
+      int config_file_version,
       std::vector<EncryptedRecord> record,
       ScopedReservation scoped_reservation,
       ReportSuccessfulUploadCallback report_upload_success_cb,
@@ -53,7 +60,7 @@ class UploadClient {
   UploadClient();
 
  private:
-  std::unique_ptr<DmServerUploadService> dm_server_upload_service_;
+  const scoped_refptr<base::SequencedTaskRunner> sequenced_task_runner_;
 };
 
 }  // namespace reporting

@@ -8,6 +8,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/timer/timer.h"
 #include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/color/color_id.h"
 #include "ui/views/view.h"
 
 namespace media_session {
@@ -36,8 +37,11 @@ class COMPONENT_EXPORT(MEDIA_MESSAGE_CENTER) MediaControlsProgressView
   void UpdateProgress(const media_session::MediaPosition& media_position);
 
   void SetForegroundColor(SkColor color);
+  void SetForegroundColorId(ui::ColorId color_id);
   void SetBackgroundColor(SkColor color);
+  void SetBackgroundColorId(ui::ColorId color_id);
   void SetTextColor(SkColor color);
+  void SetTextColorId(ui::ColorId color_id);
 
   // views::View:
   bool OnMousePressed(const ui::MouseEvent& event) override;
@@ -46,6 +50,7 @@ class COMPONENT_EXPORT(MEDIA_MESSAGE_CENTER) MediaControlsProgressView
   const views::ProgressBar* progress_bar_for_testing() const;
   const std::u16string& progress_time_for_testing() const;
   const std::u16string& duration_for_testing() const;
+  bool is_duration_visible_for_testing() const;
 
  private:
   void SetBarProgress(double progress);
@@ -64,6 +69,9 @@ class COMPONENT_EXPORT(MEDIA_MESSAGE_CENTER) MediaControlsProgressView
   base::RepeatingTimer update_progress_timer_;
 
   const base::RepeatingCallback<void(double)> seek_callback_;
+
+  // Used to track if the media is a live stream. i.e. Has an infinite duration.
+  bool is_live_ = false;
 };
 
 }  // namespace media_message_center

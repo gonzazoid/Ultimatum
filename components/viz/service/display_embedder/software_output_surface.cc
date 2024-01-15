@@ -6,16 +6,19 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
+#include "base/trace_event/trace_event.h"
+#include "base/trace_event/typed_macros.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/viz/common/frame_sinks/begin_frame_source.h"
 #include "components/viz/service/display/output_surface_client.h"
 #include "components/viz/service/display/output_surface_frame.h"
 #include "components/viz/service/display/software_output_device.h"
+#include "gpu/command_buffer/common/swap_buffers_complete_params.h"
 #include "ui/gfx/presentation_feedback.h"
 #include "ui/gfx/swap_result.h"
 #include "ui/gfx/vsync_provider.h"
@@ -64,9 +67,22 @@ void SoftwareOutputSurface::SwapBuffers(OutputSurfaceFrame frame) {
 
   stored_latency_info_.emplace(std::move(frame.latency_info));
 
+  TRACE_EVENT(
+      "viz,benchmark,graphics.pipeline", "Graphics.Pipeline",
+      perfetto::Flow::Global(frame.data.swap_trace_id),
+      [swap_trace_id = frame.data.swap_trace_id](perfetto::EventContext ctx) {
+        auto* event = ctx.event<perfetto::protos::pbzero::ChromeTrackEvent>();
+        auto* data = event->set_chrome_graphics_pipeline();
+        data->set_step(perfetto::protos::pbzero::ChromeGraphicsPipeline::
+                           StepName::STEP_BUFFER_SWAP_POST_SUBMIT);
+        data->set_display_trace_id(swap_trace_id);
+      });
+
   software_device()->OnSwapBuffers(
       base::BindOnce(&SoftwareOutputSurface::SwapBuffersCallback,
-                     weak_factory_.GetWeakPtr(), swap_time));
+                     weak_factory_.GetWeakPtr(), swap_time,
+                     frame.data.swap_trace_id),
+      frame.data);
 
   gfx::VSyncProvider* vsync_provider = software_device()->GetVSyncProvider();
   if (vsync_provider && update_vsync_parameters_callback_) {
@@ -81,11 +97,26 @@ bool SoftwareOutputSurface::IsDisplayedAsOverlayPlane() const {
 }
 
 void SoftwareOutputSurface::SwapBuffersCallback(base::TimeTicks swap_time,
+                                                int64_t swap_trace_id,
                                                 const gfx::Size& pixel_size) {
+  TRACE_EVENT(
+      "viz,benchmark,graphics.pipeline", "Graphics.Pipeline",
+      perfetto::Flow::Global(swap_trace_id), [&](perfetto::EventContext ctx) {
+        auto* event = ctx.event<perfetto::protos::pbzero::ChromeTrackEvent>();
+        auto* data = event->set_chrome_graphics_pipeline();
+        data->set_step(perfetto::protos::pbzero::ChromeGraphicsPipeline::
+                           StepName::STEP_FINISH_BUFFER_SWAP);
+        data->set_display_trace_id(swap_trace_id);
+      });
+
   latency_tracker_.OnGpuSwapBuffersCompleted(
       std::move(stored_latency_info_.front()));
   stored_latency_info_.pop();
-  client_->DidReceiveSwapBuffersAck({swap_time, swap_time},
+  gpu::SwapBuffersCompleteParams params;
+  params.swap_response.timings = {swap_time, swap_time};
+  params.swap_response.result = gfx::SwapResult::SWAP_ACK;
+  params.swap_trace_id = swap_trace_id;
+  client_->DidReceiveSwapBuffersAck(params,
                                     /*release_fence=*/gfx::GpuFenceHandle());
 
   base::TimeTicks now = base::TimeTicks::Now();
@@ -105,8 +136,10 @@ void SoftwareOutputSurface::UpdateVSyncParameters(base::TimeTicks timebase,
                                                   base::TimeDelta interval) {
   DCHECK(update_vsync_parameters_callback_);
   refresh_timebase_ = timebase;
-  refresh_interval_ = interval;
-  update_vsync_parameters_callback_.Run(timebase, interval);
+  // We should not be receiving 0 intervals.
+  refresh_interval_ =
+      interval.is_zero() ? BeginFrameArgs::DefaultInterval() : interval;
+  update_vsync_parameters_callback_.Run(timebase, refresh_interval_);
 }
 
 void SoftwareOutputSurface::SetUpdateVSyncParametersCallback(

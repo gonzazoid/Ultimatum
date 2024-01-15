@@ -26,9 +26,9 @@ import org.robolectric.annotation.Config;
 
 import org.chromium.base.ContextUtils;
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.MockTab;
 import org.chromium.chrome.browser.tab.Tab;
-import org.chromium.chrome.browser.tab.state.CriticalPersistedTabData;
 import org.chromium.chrome.browser.tabmodel.TabModel;
 
 import java.util.ArrayList;
@@ -36,21 +36,17 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Unit tests for {@link HistoricalTabModelObserver}.
- */
+/** Unit tests for {@link HistoricalTabModelObserver}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class HistoricalTabModelObserverUnitTest {
     private static final String TAB_GROUP_TITLES_FILE_NAME = "tab_group_titles";
 
     private Context mContext;
-    @Mock
-    private SharedPreferences mSharedPreferences;
-    @Mock
-    private TabModel mTabModel;
-    @Mock
-    private HistoricalTabSaver mHistoricalTabSaver;
+    @Mock private SharedPreferences mSharedPreferences;
+    @Mock private TabModel mTabModel;
+    @Mock private Profile mProfile;
+    @Mock private HistoricalTabSaver mHistoricalTabSaver;
 
     private HistoricalTabModelObserver mObserver;
 
@@ -224,10 +220,8 @@ public class HistoricalTabModelObserverUnitTest {
     }
 
     private MockTab createMockTab(int id) {
-        MockTab mockTab = new MockTab(id, false);
-        CriticalPersistedTabData mockTabData = new CriticalPersistedTabData(mockTab);
-        mockTabData.setRootId(id);
-        mockTab.getUserDataHost().setUserData(CriticalPersistedTabData.class, mockTabData);
+        MockTab mockTab = new MockTab(id, mProfile);
+        mockTab.setRootId(id);
         return mockTab;
     }
 
@@ -243,9 +237,7 @@ public class HistoricalTabModelObserverUnitTest {
         final int groupId = tabList[0].getId();
         when(mSharedPreferences.getString(String.valueOf(groupId), null)).thenReturn(title);
         for (MockTab tab : tabList) {
-            CriticalPersistedTabData mockTabData = new CriticalPersistedTabData(tab);
-            mockTabData.setRootId(groupId);
-            tab.getUserDataHost().setUserData(CriticalPersistedTabData.class, mockTabData);
+            tab.setRootId(groupId);
         }
         return groupId;
     }

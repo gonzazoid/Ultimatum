@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <ostream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -108,12 +109,12 @@ sqlite3_vfs SqliteVfsFor(SandboxedVfs* sandboxed_vfs, const char* name) {
 
 // SQLite measures time according to the Julian calendar.
 base::Time SqliteEpoch() {
-  constexpr const double kMicroSecondsPerDay = 24 * 60 * 60 * 1000;
   // The ".5" is intentional -- days in the Julian calendar start at noon.
   // The offset is in the SQLite source code (os_unix.c) multiplied by 10.
   constexpr const double kUnixEpochAsJulianDay = 2440587.5;
 
-  return base::Time::FromJsTime(-kUnixEpochAsJulianDay * kMicroSecondsPerDay);
+  return base::Time::FromMillisecondsSinceUnixEpoch(
+      -kUnixEpochAsJulianDay * base::Time::kMillisecondsPerDay);
 }
 
 #if DCHECK_IS_ON()
@@ -194,7 +195,7 @@ int SandboxedVfs::Delete(const char* full_path, int sync_dir) {
 
 int SandboxedVfs::Access(const char* full_path, int flags, int& result) {
   DCHECK(full_path);
-  absl::optional<PathAccessInfo> access =
+  std::optional<PathAccessInfo> access =
       delegate_->GetPathAccess(base::FilePath::FromUTF8Unsafe(full_path));
   if (!access) {
     result = 0;
@@ -257,7 +258,7 @@ int SandboxedVfs::GetLastError(int message_size, char* message) const {
   size_t error_string_size = error_string.length() + 1;
   size_t copy_length =
       std::min(static_cast<size_t>(message_size), error_string_size);
-  std::memcpy(message, error_string.c_str(), copy_length);
+  std::copy_n(error_string.c_str(), copy_length, message);
   // The return value is zero if the message fits in the buffer, and non-zero if
   // it does not fit.
   return copy_length != error_string_size;

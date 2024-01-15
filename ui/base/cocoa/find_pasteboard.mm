@@ -10,7 +10,9 @@
 NSString* kFindPasteboardChangedNotification =
     @"kFindPasteboardChangedNotification_Chrome";
 
-@implementation FindPasteboard
+@implementation FindPasteboard {
+  NSString* _findText;
+}
 
 + (FindPasteboard*)sharedInstance {
   static FindPasteboard* instance = nil;
@@ -22,10 +24,10 @@ NSString* kFindPasteboardChangedNotification =
 
 - (instancetype)init {
   if ((self = [super init])) {
-    _findText.reset([[NSString alloc] init]);
+    _findText = @"";
 
-    // Check if the text in the findboard has changed on app activate.
-    [[NSNotificationCenter defaultCenter]
+    // Check if the text in the find pasteboard has changed on app activate.
+    [NSNotificationCenter.defaultCenter
         addObserver:self
            selector:@selector(loadTextFromPasteboard:)
                name:NSApplicationDidBecomeActiveNotification
@@ -37,18 +39,20 @@ NSString* kFindPasteboardChangedNotification =
 
 - (void)dealloc {
   // Since this is a singleton, this should only be executed in test code.
-  [[NSNotificationCenter defaultCenter] removeObserver:self];
-  [super dealloc];
+  [NSNotificationCenter.defaultCenter removeObserver:self];
 }
 
-- (NSPasteboard*)findPboard {
+- (NSPasteboard*)findPasteboard {
   return [NSPasteboard pasteboardWithName:NSPasteboardNameFind];
 }
 
 - (void)loadTextFromPasteboard:(NSNotification*)notification {
-  NSPasteboard* findPboard = [self findPboard];
-  if ([[findPboard types] containsObject:NSStringPboardType])
-    [self setFindText:[findPboard stringForType:NSStringPboardType]];
+  NSPasteboard* findPasteboard = [self findPasteboard];
+  NSArray* objects = [findPasteboard readObjectsForClasses:@[ [NSString class] ]
+                                                   options:nil];
+  if (objects.count) {
+    [self setFindText:objects.firstObject];
+  }
 }
 
 - (NSString*)findText {
@@ -57,18 +61,21 @@ NSString* kFindPasteboardChangedNotification =
 
 - (void)setFindText:(NSString*)newText {
   DCHECK(newText);
-  if (!newText)
+  if (!newText) {
     return;
+  }
 
-  DCHECK([NSThread isMainThread]);
+  DCHECK(NSThread.isMainThread);
 
-  BOOL needToSendNotification = ![_findText.get() isEqualToString:newText];
-  if (needToSendNotification) {
-    _findText.reset([newText copy]);
-    NSPasteboard* findPboard = [self findPboard];
-    [findPboard declareTypes:@[ NSStringPboardType ] owner:nil];
-    [findPboard setString:_findText.get() forType:NSStringPboardType];
-    [[NSNotificationCenter defaultCenter]
+  BOOL textChanged = ![_findText isEqualToString:newText];
+  if (textChanged) {
+    _findText = [newText copy];
+
+    NSPasteboard* findPasteboard = [self findPasteboard];
+    [findPasteboard clearContents];
+    [findPasteboard writeObjects:@[ _findText ]];
+
+    [NSNotificationCenter.defaultCenter
         postNotificationName:kFindPasteboardChangedNotification
                       object:self];
   }

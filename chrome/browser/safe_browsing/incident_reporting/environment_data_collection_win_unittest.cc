@@ -61,7 +61,13 @@ bool DllEntryContainsLspFeature(
 
 }  // namespace
 
-TEST(SafeBrowsingEnvironmentDataCollectionWinTest, CollectDlls) {
+// TODO(crbug.com/1471177) Disabled due to flakiness on Win10 dbg builders.
+#ifndef NDEBUG
+#define MAYBE_CollectDlls DISABLED_CollectDlls
+#else
+#define MAYBE_CollectDlls CollectDlls
+#endif
+TEST(SafeBrowsingEnvironmentDataCollectionWinTest, MAYBE_CollectDlls) {
   // This test will check if the CollectDlls method works by loading
   // a dll and then checking if we can find it within the process report.
   // Pick msvidc32.dll as it is present from WinXP to Win8 and yet rarely used.
@@ -84,7 +90,13 @@ TEST(SafeBrowsingEnvironmentDataCollectionWinTest, CollectDlls) {
   ASSERT_TRUE(dll.has_image_headers());
 }
 
-TEST(SafeBrowsingEnvironmentDataCollectionWinTest, RecordLspFeature) {
+// TODO(crbug.com/1471177) Disabled due to flakiness on Win10 dbg builders.
+#ifndef NDEBUG
+#define MAYBE_RecordLspFeature DISABLED_RecordLspFeature
+#else
+#define MAYBE_RecordLspFeature RecordLspFeature
+#endif
+TEST(SafeBrowsingEnvironmentDataCollectionWinTest, MAYBE_RecordLspFeature) {
   net::EnsureWinsockInit();
 
   // Populate our incident report with loaded modules.

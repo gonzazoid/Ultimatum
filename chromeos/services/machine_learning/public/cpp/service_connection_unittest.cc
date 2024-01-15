@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
@@ -170,6 +170,28 @@ TEST_F(ServiceConnectionTest, LoadGrammarModel) {
                           base::BindOnce([](mojom::LoadModelResult result) {}));
 }
 
+// Tests that LoadImageAnnotator runs OK (no crash) in a basic Mojo
+// environment.
+TEST_F(ServiceConnectionTest, LoadImageAnnotator) {
+  mojo::Remote<mojom::MachineLearningService> ml_service;
+  ServiceConnection::GetInstance()->BindMachineLearningService(
+      ml_service.BindNewPipeAndPassReceiver());
+
+  auto config = mojom::ImageAnnotatorConfig::New();
+  mojo::Remote<mojom::ImageContentAnnotator> image_content_annotator;
+  ml_service->LoadImageAnnotator(
+      std::move(config), image_content_annotator.BindNewPipeAndPassReceiver(),
+      base::BindOnce([](mojom::LoadModelResult result) {}));
+
+  config = mojom::ImageAnnotatorConfig::New();
+  image_content_annotator.reset();
+  ServiceConnection::GetInstance()
+      ->GetMachineLearningService()
+      .LoadImageAnnotator(std::move(config),
+                          image_content_annotator.BindNewPipeAndPassReceiver(),
+                          base::BindOnce([](mojom::LoadModelResult result) {}));
+}
+
 // Tests the fake ML service for binding ml_service receiver.
 TEST_F(ServiceConnectionTest, BindMachineLearningService) {
   FakeServiceConnectionImpl fake_service_connection;
@@ -298,7 +320,7 @@ TEST_F(ServiceConnectionTest, FakeServiceConnectionForBuiltinModel) {
                  base::BindOnce(
                      [](bool* callback_done, double expected_value,
                         const mojom::ExecuteResult result,
-                        absl::optional<std::vector<mojom::TensorPtr>> outputs) {
+                        std::optional<std::vector<mojom::TensorPtr>> outputs) {
                        EXPECT_EQ(result, mojom::ExecuteResult::OK);
                        ASSERT_TRUE(outputs.has_value());
                        ASSERT_EQ(outputs->size(), 1LU);
@@ -368,7 +390,7 @@ TEST_F(ServiceConnectionTest, FakeServiceConnectionForFlatBufferModel) {
                  base::BindOnce(
                      [](bool* callback_done, double expected_value,
                         const mojom::ExecuteResult result,
-                        absl::optional<std::vector<mojom::TensorPtr>> outputs) {
+                        std::optional<std::vector<mojom::TensorPtr>> outputs) {
                        EXPECT_EQ(result, mojom::ExecuteResult::OK);
                        ASSERT_TRUE(outputs.has_value());
                        ASSERT_EQ(outputs->size(), 1LU);
@@ -600,7 +622,7 @@ TEST_F(ServiceConnectionTest, FakeWebPlatformHandWritingRecognizer) {
       std::move(strokes), std::move(hints),
       base::BindOnce(
           [](bool* infer_callback_done,
-             absl::optional<std::vector<
+             std::optional<std::vector<
                  web_platform::mojom::HandwritingPredictionPtr>> predictions) {
             *infer_callback_done = true;
             ASSERT_TRUE(predictions.has_value());
@@ -794,6 +816,116 @@ TEST_F(ServiceConnectionTest, FakeDocumentScanner) {
   ASSERT_TRUE(infer_callback_done);
 }
 
+// Tests the fake ML service for image content annotator.
+TEST_F(ServiceConnectionTest, FakAnnotateEncodedImage) {
+  mojo::Remote<mojom::ImageContentAnnotator> image_annotator;
+  bool callback_done = false;
+  FakeServiceConnectionImpl fake_service_connection;
+  ServiceConnection::UseFakeServiceConnectionForTesting(
+      &fake_service_connection);
+  ServiceConnection::GetInstance()->Initialize();
+
+  std::unique_ptr<base::RunLoop> run_loop = std::make_unique<base::RunLoop>();
+  auto config = mojom::ImageAnnotatorConfig::New();
+  ServiceConnection::GetInstance()
+      ->GetMachineLearningService()
+      .LoadImageAnnotator(
+          std::move(config), image_annotator.BindNewPipeAndPassReceiver(),
+          base::BindOnce(
+              [](bool* callback_done, mojom::LoadModelResult result) {
+                EXPECT_EQ(result, mojom::LoadModelResult::OK);
+                *callback_done = true;
+              },
+              &callback_done)
+              .Then(run_loop->QuitClosure()));
+  run_loop->Run();
+  ASSERT_TRUE(callback_done);
+  ASSERT_TRUE(image_annotator.is_bound());
+
+  constexpr int kImageSize = 256 * 256;
+  std::vector<uint8_t> fake_data(kImageSize, 0);
+  base::MappedReadOnlyRegion memory =
+      base::ReadOnlySharedMemoryRegion::Create(fake_data.size());
+  memcpy(memory.mapping.memory(), fake_data.data(), fake_data.size());
+
+  mojom::ImageAnnotationResultPtr result = mojom::ImageAnnotationResult::New();
+  result->status = mojom::ImageAnnotationResult_Status::OK;
+  fake_service_connection.SetOutputImageContentAnnotationResult(
+      std::move(result));
+
+  bool infer_callback_done = false;
+  run_loop = std::make_unique<base::RunLoop>();
+  image_annotator->AnnotateEncodedImage(
+      std::move(memory.region),
+      base::BindOnce(
+          [](bool* infer_callback_done,
+             mojom::ImageAnnotationResultPtr result) {
+            *infer_callback_done = true;
+            ASSERT_EQ(result->status, mojom::ImageAnnotationResult_Status::OK);
+            ASSERT_TRUE(result->annotations.size() == 0);
+          },
+          &infer_callback_done)
+          .Then(run_loop->QuitClosure()));
+  run_loop->Run();
+  ASSERT_TRUE(infer_callback_done);
+}
+
+TEST_F(ServiceConnectionTest, FakAnnotateRawImage) {
+  mojo::Remote<mojom::ImageContentAnnotator> image_annotator;
+  bool callback_done = false;
+  FakeServiceConnectionImpl fake_service_connection;
+  ServiceConnection::UseFakeServiceConnectionForTesting(
+      &fake_service_connection);
+  ServiceConnection::GetInstance()->Initialize();
+
+  std::unique_ptr<base::RunLoop> run_loop = std::make_unique<base::RunLoop>();
+  auto config = mojom::ImageAnnotatorConfig::New();
+  ServiceConnection::GetInstance()
+      ->GetMachineLearningService()
+      .LoadImageAnnotator(
+          std::move(config), image_annotator.BindNewPipeAndPassReceiver(),
+          base::BindOnce(
+              [](bool* callback_done, mojom::LoadModelResult result) {
+                EXPECT_EQ(result, mojom::LoadModelResult::OK);
+                *callback_done = true;
+              },
+              &callback_done)
+              .Then(run_loop->QuitClosure()));
+  run_loop->Run();
+  ASSERT_TRUE(callback_done);
+  ASSERT_TRUE(image_annotator.is_bound());
+
+  constexpr int kImageSize = 256 * 256;
+  std::vector<uint8_t> fake_data(kImageSize, 0);
+  base::MappedReadOnlyRegion memory =
+      base::ReadOnlySharedMemoryRegion::Create(fake_data.size());
+  memcpy(memory.mapping.memory(), fake_data.data(), fake_data.size());
+
+  mojom::ImageAnnotationResultPtr result = mojom::ImageAnnotationResult::New();
+  result->status = mojom::ImageAnnotationResult_Status::OK;
+  fake_service_connection.SetOutputImageContentAnnotationResult(
+      std::move(result));
+
+  bool infer_callback_done = false;
+  run_loop = std::make_unique<base::RunLoop>();
+  image_annotator->AnnotateRawImage(
+      std::move(memory.region),
+      /*width*/ 256,
+      /*height*/ 256,
+      /* line_stride */ 10,
+      base::BindOnce(
+          [](bool* infer_callback_done,
+             mojom::ImageAnnotationResultPtr result) {
+            *infer_callback_done = true;
+            ASSERT_EQ(result->status, mojom::ImageAnnotationResult_Status::OK);
+            ASSERT_TRUE(result->annotations.size() == 0);
+          },
+          &infer_callback_done)
+          .Then(run_loop->QuitClosure()));
+  run_loop->Run();
+  ASSERT_TRUE(infer_callback_done);
+}
+
 // Tests the fake ML service for web platform model loader.
 TEST_F(ServiceConnectionTest,
        FakeServiceConnectionForLoadingWebPlatformModelLoader) {
@@ -918,7 +1050,7 @@ TEST_F(ServiceConnectionTest,
       std::move(input_tensors),
       base::BindOnce(
           [](bool* callback_done, ml::model_loader::mojom::ComputeResult result,
-             const absl::optional<base::flat_map<
+             const std::optional<base::flat_map<
                  std::string, std::vector<uint8_t>>>& output_tensors) {
             ASSERT_TRUE(output_tensors.has_value());
             ASSERT_EQ(output_tensors->size(), 1u);

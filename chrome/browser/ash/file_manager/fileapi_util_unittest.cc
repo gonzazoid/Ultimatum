@@ -7,8 +7,9 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/files/file_error_or.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
@@ -17,6 +18,7 @@
 #include "chrome/browser/ash/file_system_provider/fake_provided_file_system.h"
 #include "chrome/browser/ash/file_system_provider/service.h"
 #include "chrome/browser/ash/file_system_provider/service_factory.h"
+#include "chrome/browser/ash/fileapi/file_system_backend.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
@@ -64,8 +66,8 @@ class TempFileSystem {
 
     // Grant the test extension the ability to access the just created
     // file system.
-    file_system_context_->external_backend()->GrantFileAccessToOrigin(
-        origin_, base::FilePath(name_));
+    ash::FileSystemBackend::Get(*file_system_context_)
+        ->GrantFileAccessToOrigin(origin_, base::FilePath(name_));
     return true;
   }
 
@@ -88,7 +90,8 @@ class TempFileSystem {
   // Creates an external file system URL for the given path.
   storage::FileSystemURL CreateFileSystemURL(const std::string& path) {
     return file_system_context_->CreateCrackedFileSystemURL(
-        blink::StorageKey(origin_), storage::kFileSystemTypeExternal,
+        blink::StorageKey::CreateFirstParty(origin_),
+        storage::kFileSystemTypeExternal,
         base::FilePath().Append(name_).Append(
             base::FilePath::FromUTF8Unsafe(path)));
   }
@@ -97,7 +100,7 @@ class TempFileSystem {
   const std::string name_;
   const GURL appURL_;
   const url::Origin origin_;
-  storage::FileSystemContext* const file_system_context_;
+  const raw_ptr<storage::FileSystemContext> file_system_context_;
   base::ScopedTempDir temp_dir_;
 };
 
@@ -149,7 +152,7 @@ class FileManagerFileAPIUtilTest : public ::testing::Test {
         errors.push_back(base::File::FILE_OK);
       } else {
         fs_url = storage::FileSystemURL::CreateForTest(
-            blink::StorageKey(url::Origin::Create(appURL)),
+            blink::StorageKey::CreateFirstParty(url::Origin::Create(appURL)),
             storage::kFileSystemTypeExternal, base::FilePath(order.file_name));
         errors.push_back(base::File::FILE_ERROR_NOT_FOUND);
       }
@@ -189,14 +192,15 @@ class FileManagerFileAPIUtilTest : public ::testing::Test {
   base::test::ScopedFeatureList feature_list_;
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfileManager> profile_manager_;
-  TestingProfile* profile_;
+  raw_ptr<TestingProfile, DanglingUntriaged> profile_;
 };
 
 // Passes the |result| to the |output| pointer.
 void PassFileChooserFileInfoList(FileChooserFileInfoList* output,
                                  FileChooserFileInfoList result) {
-  for (const auto& file : result)
+  for (const auto& file : result) {
     output->push_back(file->Clone());
+  }
 }
 
 TEST_F(FileManagerFileAPIUtilTest,
@@ -525,7 +529,7 @@ TEST_F(FileManagerFileAPIUtilTest, GenerateUnusedFilenameFileSystemProvider) {
   ASSERT_TRUE(context);
 
   // Make sure we can access the filesystem from the above origin.
-  context->external_backend()->GrantFileAccessToOrigin(
+  ash::FileSystemBackend::Get(*context)->GrantFileAccessToOrigin(
       url::Origin::Create(GURL(origin)), base::FilePath(mount_point_name));
 
   const storage::ExternalMountPoints* const mount_points =

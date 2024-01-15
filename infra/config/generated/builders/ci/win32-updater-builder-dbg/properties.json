@@ -1,6 +1,9 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/ci/win32-updater-builder-dbg/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
@@ -16,7 +19,7 @@
                 "apply_configs": [
                   "mb"
                 ],
-                "build_config": "Release",
+                "build_config": "Debug",
                 "config": "chromium",
                 "target_bits": 32,
                 "target_platform": "win"
@@ -44,7 +47,7 @@
                 "apply_configs": [
                   "mb"
                 ],
-                "build_config": "Release",
+                "build_config": "Debug",
                 "config": "chromium",
                 "target_bits": 64,
                 "target_platform": "win"
@@ -75,7 +78,8 @@
   "$build/reclient": {
     "instance": "rbe-chromium-trusted",
     "jobs": 80,
-    "metrics_project": "chromium-reclient-metrics"
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],

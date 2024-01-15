@@ -38,6 +38,10 @@ void DeviceSettingsHost::Bind(
   receiver_.Bind(std::move(pending_receiver));
 }
 
+void DeviceSettingsHost::Stop() {
+  receiver_.reset();
+}
+
 void DeviceSettingsHost::GetScreenBrightnessLevel(
     GetScreenBrightnessLevelCallback callback) {
   device_actions().GetScreenBrightnessLevel(
@@ -79,14 +83,14 @@ void DeviceSettingsHost::reset_has_setting_changed() {
 }
 
 DeviceActions& DeviceSettingsHost::device_actions() {
-  auto* result = context_.device_actions();
+  auto* result = context_->device_actions();
   DCHECK(result);
   return *result;
 }
 
 AssistantNotificationController&
 DeviceSettingsHost::assistant_notification_controller() {
-  auto* result = context_.assistant_notification_controller();
+  auto* result = context_->assistant_notification_controller();
   DCHECK(result);
   return *result;
 }

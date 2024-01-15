@@ -13,9 +13,11 @@
 #include "base/component_export.h"
 #include "base/containers/flat_map.h"
 #include "base/observer_list.h"
+#include "base/scoped_observation_traits.h"
 #include "build/buildflag.h"
 #include "build/chromecast_buildflags.h"
 #include "printing/buildflags/buildflags.h"
+#include "ui/gfx/geometry/rect.h"
 
 // The main entrypoint into Linux toolkit specific code. GTK/QT code should only
 // be executed behind this interface.
@@ -58,6 +60,37 @@ class SelectFilePolicy;
 class TextEditCommandAuraLinux;
 class WindowButtonOrderObserver;
 class WindowFrameProvider;
+
+struct DisplayGeometry {
+  bool operator==(const DisplayGeometry& other) const {
+    return bounds_px == other.bounds_px && scale == other.scale;
+  }
+
+  gfx::Rect bounds_px;
+  float scale;
+};
+
+struct DisplayConfig {
+  explicit DisplayConfig(float primary_scale);
+  DisplayConfig();
+  DisplayConfig(DisplayConfig&& other);
+  DisplayConfig& operator=(DisplayConfig&& other);
+  ~DisplayConfig();
+
+  std::vector<DisplayGeometry> display_geometries;
+  float primary_scale = 1.0f;
+
+  bool operator==(const DisplayConfig& other) const {
+    return display_geometries == other.display_geometries &&
+           primary_scale == other.primary_scale;
+  }
+};
+inline DisplayConfig::DisplayConfig(float primary_scale)
+    : primary_scale(primary_scale) {}
+inline DisplayConfig::DisplayConfig() = default;
+inline DisplayConfig::DisplayConfig(DisplayConfig&& other) = default;
+inline DisplayConfig& DisplayConfig::operator=(DisplayConfig&& other) = default;
+inline DisplayConfig::~DisplayConfig() = default;
 
 // Adapter class with targets to render like different toolkits. Set by any
 // project that wants to do linux desktop native rendering.
@@ -109,6 +142,9 @@ class COMPONENT_EXPORT(LINUX_UI) LinuxUi {
 
   void RemoveCursorThemeObserver(CursorThemeManagerObserver* observer);
 
+  // Determines the device scale factor for all screens.
+  const DisplayConfig& display_config() const { return display_config_; }
+
   // Returns true on success.  If false is returned, this instance shouldn't
   // be used and the behavior of all functions is undefined.
   [[nodiscard]] virtual bool Initialize() = 0;
@@ -121,9 +157,6 @@ class COMPONENT_EXPORT(LINUX_UI) LinuxUi {
   virtual gfx::Image GetIconForContentType(const std::string& content_type,
                                            int size,
                                            float scale) const = 0;
-
-  // Determines the device scale factor of the primary screen.
-  virtual float GetDeviceScaleFactor() const = 0;
 
   // Returns a map of KeyboardEvent code to KeyboardEvent key values.
   virtual base::flat_map<std::string, std::string> GetKeyboardLayoutMap() = 0;
@@ -159,8 +192,11 @@ class COMPONENT_EXPORT(LINUX_UI) LinuxUi {
   // false will be returned if the key event doesn't correspond to a predefined
   // key binding.  Edit commands matched with |event| will be stored in
   // |edit_commands|, if |edit_commands| is non-nullptr.
+  //
+  // |text_falgs| is the current ui::TextInputFlags if available.
   virtual bool GetTextEditCommandsForEvent(
       const ui::Event& event,
+      int text_flags,
       std::vector<TextEditCommandAuraLinux>* commands) = 0;
 
   // Returns the default font rendering settings.
@@ -223,6 +259,8 @@ class COMPONENT_EXPORT(LINUX_UI) LinuxUi {
     return cursor_theme_observer_list_;
   }
 
+  DisplayConfig& display_config() { return display_config_; }
+
  private:
   // Objects to notify when the device scale factor changes.
   base::ObserverList<DeviceScaleFactorObserver>::Unchecked
@@ -230,6 +268,8 @@ class COMPONENT_EXPORT(LINUX_UI) LinuxUi {
 
   // Objects to notify when the cursor theme or size changes.
   base::ObserverList<CursorThemeManagerObserver> cursor_theme_observer_list_;
+
+  DisplayConfig display_config_;
 };
 
 class COMPONENT_EXPORT(LINUX_UI) LinuxUiTheme {
@@ -253,15 +293,19 @@ class COMPONENT_EXPORT(LINUX_UI) LinuxUiTheme {
   virtual bool GetDisplayProperty(int id, int* result) const = 0;
 
   // Returns the preferences that we pass to Blink.
-  virtual SkColor GetFocusRingColor() const = 0;
-  virtual SkColor GetActiveSelectionBgColor() const = 0;
-  virtual SkColor GetActiveSelectionFgColor() const = 0;
-  virtual SkColor GetInactiveSelectionBgColor() const = 0;
-  virtual SkColor GetInactiveSelectionFgColor() const = 0;
+  virtual void GetFocusRingColor(SkColor* color) const = 0;
+  virtual void GetActiveSelectionBgColor(SkColor* color) const = 0;
+  virtual void GetActiveSelectionFgColor(SkColor* color) const = 0;
+  virtual void GetInactiveSelectionBgColor(SkColor* color) const = 0;
+  virtual void GetInactiveSelectionFgColor(SkColor* color) const = 0;
 
   // Only used on GTK to indicate if the dark GTK theme variant is
   // preferred.
   virtual bool PreferDarkTheme() const = 0;
+
+  // Override the toolkit's dark mode preference.  Used when the dark mode
+  // setting is provided by org.freedesktop.appearance instead of the toolkit.
+  virtual void SetDarkTheme(bool dark) = 0;
 
   // Returns a new NavButtonProvider, or nullptr if the underlying
   // toolkit does not support drawing client-side navigation buttons.
@@ -272,7 +316,8 @@ class COMPONENT_EXPORT(LINUX_UI) LinuxUiTheme {
   // if transparency is unsupported and the frame should be rendered opaque.
   // The returned object is not owned by the caller and will remain alive until
   // the process ends.
-  virtual WindowFrameProvider* GetWindowFrameProvider(bool solid_frame) = 0;
+  virtual WindowFrameProvider* GetWindowFrameProvider(bool solid_frame,
+                                                      bool tiled) = 0;
 
  protected:
   LinuxUiTheme();
@@ -287,5 +332,45 @@ class LinuxUiAndTheme : public LinuxUi, public LinuxUiTheme {
 };
 
 }  // namespace ui
+
+namespace base {
+
+template <>
+struct ScopedObservationTraits<ui::LinuxUi, ui::CursorThemeManagerObserver> {
+  static void AddObserver(ui::LinuxUi* source,
+                          ui::CursorThemeManagerObserver* observer) {
+    source->AddCursorThemeObserver(observer);
+  }
+  static void RemoveObserver(ui::LinuxUi* source,
+                             ui::CursorThemeManagerObserver* observer) {
+    source->RemoveCursorThemeObserver(observer);
+  }
+};
+
+template <>
+struct ScopedObservationTraits<ui::LinuxUi, ui::DeviceScaleFactorObserver> {
+  static void AddObserver(ui::LinuxUi* source,
+                          ui::DeviceScaleFactorObserver* observer) {
+    source->AddDeviceScaleFactorObserver(observer);
+  }
+  static void RemoveObserver(ui::LinuxUi* source,
+                             ui::DeviceScaleFactorObserver* observer) {
+    source->RemoveDeviceScaleFactorObserver(observer);
+  }
+};
+
+template <>
+struct ScopedObservationTraits<ui::LinuxUi, ui::WindowButtonOrderObserver> {
+  static void AddObserver(ui::LinuxUi* source,
+                          ui::WindowButtonOrderObserver* observer) {
+    source->AddWindowButtonOrderObserver(observer);
+  }
+  static void RemoveObserver(ui::LinuxUi* source,
+                             ui::WindowButtonOrderObserver* observer) {
+    source->RemoveWindowButtonOrderObserver(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // UI_LINUX_LINUX_UI_H_

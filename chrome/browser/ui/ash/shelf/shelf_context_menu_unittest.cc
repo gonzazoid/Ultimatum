@@ -13,9 +13,10 @@
 #include "ash/public/cpp/app_menu_constants.h"
 #include "ash/public/cpp/shelf_item.h"
 #include "ash/public/cpp/shelf_model.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -23,26 +24,25 @@
 #include "base/test/scoped_command_line.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/apps/app_service/app_service_test.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_icon.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_test.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_utils.h"
+#include "chrome/browser/ash/app_list/internal_app/internal_app_metadata.h"
+#include "chrome/browser/ash/arc/icon_decode_request.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
-#include "chrome/browser/ash/crostini/crostini_shelf_utils.h"
 #include "chrome/browser/ash/crostini/crostini_test_helper.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
 #include "chrome/browser/ash/guest_os/guest_os_registry_service.h"
 #include "chrome/browser/ash/guest_os/guest_os_registry_service_factory.h"
-#include "chrome/browser/chromeos/arc/icon_decode_request.h"
+#include "chrome/browser/ash/guest_os/guest_os_shelf_utils.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/test_extension_system.h"
 #include "chrome/browser/prefs/incognito_mode_prefs.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_icon.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_test.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
-#include "chrome/browser/ui/app_list/internal_app/internal_app_metadata.h"
 #include "chrome/browser/ui/ash/shelf/arc_app_shelf_id.h"
 #include "chrome/browser/ui/ash/shelf/browser_shortcut_shelf_item_controller.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller_util.h"
-#include "chrome/browser/ui/ash/shelf/chrome_shelf_item_factory.h"
 #include "chrome/browser/ui/ash/shelf/extension_shelf_context_menu.h"
 #include "chrome/browser/ui/ash/shelf/shelf_controller_helper.h"
 #include "chrome/browser/web_applications/test/fake_web_app_provider.h"
@@ -55,6 +55,7 @@
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
 #include "chromeos/ash/components/dbus/seneschal/seneschal_client.h"
 #include "components/exo/shell_surface_util.h"
+#include "components/policy/core/common/policy_pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/viz/test/test_gpu_service_holder.h"
 #include "ui/aura/window_event_dispatcher.h"
@@ -132,10 +133,8 @@ class ShelfContextMenuTest : public ChromeAshTestBase {
     arc_test_.SetUp(profile());
 
     model_ = std::make_unique<ash::ShelfModel>();
-    shelf_item_factory_ = std::make_unique<ChromeShelfItemFactory>();
-    model_->SetShelfItemFactory(shelf_item_factory_.get());
-    shelf_controller_ = std::make_unique<ChromeShelfController>(
-        profile(), model_.get(), shelf_item_factory_.get());
+    shelf_controller_ =
+        std::make_unique<ChromeShelfController>(profile(), model_.get());
     shelf_controller_->SetProfileForTest(profile());
     shelf_controller_->SetShelfControllerHelperForTest(
         std::make_unique<ShelfControllerHelper>(profile()));
@@ -198,7 +197,6 @@ class ShelfContextMenuTest : public ChromeAshTestBase {
 
   void TearDown() override {
     shelf_controller_.reset();
-    shelf_item_factory_.reset();
 
     arc_test_.TearDown();
 
@@ -250,9 +248,9 @@ class ShelfContextMenuTest : public ChromeAshTestBase {
   ArcAppTest arc_test_;
   apps::AppServiceTest app_service_test_;
   std::unique_ptr<ash::ShelfModel> model_;
-  std::unique_ptr<ChromeShelfItemFactory> shelf_item_factory_;
   std::unique_ptr<ChromeShelfController> shelf_controller_;
-  extensions::ExtensionService* extension_service_ = nullptr;
+  raw_ptr<extensions::ExtensionService, DanglingUntriaged> extension_service_ =
+      nullptr;
 };
 
 // Verifies that "New Incognito window" menu item in the launcher context
@@ -271,7 +269,7 @@ TEST_F(ShelfContextMenuTest,
 
   // Disable Incognito mode.
   IncognitoModePrefs::SetAvailability(
-      profile()->GetPrefs(), IncognitoModePrefs::Availability::kDisabled);
+      profile()->GetPrefs(), policy::IncognitoModeAvailability::kDisabled);
   shelf_context_menu =
       CreateShelfContextMenu(ash::TYPE_BROWSER_SHORTCUT, display_id);
   menu = GetMenuModel(shelf_context_menu.get());
@@ -297,7 +295,7 @@ TEST_F(ShelfContextMenuTest, NewWindowMenuIsDisabledWhenIncognitoModeForced) {
 
   // Disable Incognito mode.
   IncognitoModePrefs::SetAvailability(
-      profile()->GetPrefs(), IncognitoModePrefs::Availability::kForced);
+      profile()->GetPrefs(), policy::IncognitoModeAvailability::kForced);
   shelf_context_menu =
       CreateShelfContextMenu(ash::TYPE_BROWSER_SHORTCUT, display_id);
   menu = GetMenuModel(shelf_context_menu.get());
@@ -540,9 +538,9 @@ TEST_F(ShelfContextMenuTest, CommandIdsMatchEnumsForHistograms) {
   EXPECT_EQ(101, ash::TOGGLE_PIN);
   EXPECT_EQ(106, ash::APP_CONTEXT_MENU_NEW_WINDOW);
   EXPECT_EQ(107, ash::APP_CONTEXT_MENU_NEW_INCOGNITO_WINDOW);
-  EXPECT_EQ(200, ash::USE_LAUNCH_TYPE_PINNED);
+  EXPECT_EQ(200, ash::DEPRECATED_USE_LAUNCH_TYPE_PINNED);
   EXPECT_EQ(201, ash::USE_LAUNCH_TYPE_REGULAR);
-  EXPECT_EQ(202, ash::USE_LAUNCH_TYPE_FULLSCREEN);
+  EXPECT_EQ(202, ash::DEPRECATED_USE_LAUNCH_TYPE_FULLSCREEN);
   EXPECT_EQ(203, ash::USE_LAUNCH_TYPE_WINDOW);
   EXPECT_EQ(204, ash::USE_LAUNCH_TYPE_TABBED_WINDOW);
 }
@@ -672,7 +670,7 @@ TEST_F(ShelfContextMenuTest, CrostiniNormalApp) {
 TEST_F(ShelfContextMenuTest, CrostiniUnregisteredApps) {
   const std::string fake_window_app_id = "foo";
   const std::string fake_window_startup_id = "bar";
-  const std::string app_id = crostini::GetCrostiniShelfAppId(
+  const std::string app_id = guest_os::GetGuestOsShelfAppId(
       profile(), &fake_window_app_id, &fake_window_startup_id);
   PinAppWithIDToShelf(app_id);
   const ash::ShelfItem* item = controller()->GetItem(ash::ShelfID(app_id));
@@ -694,7 +692,7 @@ TEST_F(ShelfContextMenuTest, WebApp) {
   constexpr char kWebAppUrl[] = "https://webappone.com/";
   constexpr char kWebAppName[] = "WebApp1";
 
-  const web_app::AppId app_id = web_app::test::InstallDummyWebApp(
+  const webapps::AppId app_id = web_app::test::InstallDummyWebApp(
       profile(), kWebAppName, GURL(kWebAppUrl));
 
   PinAppWithIDToShelf(app_id);

@@ -15,6 +15,7 @@
 #include "ash/assistant/ui/base/assistant_button_listener.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/button.h"
@@ -79,8 +80,8 @@ class ASH_EXPORT AssistantDialogPlate
   void OnUiVisibilityChanged(
       AssistantVisibility new_visibility,
       AssistantVisibility old_visibility,
-      absl::optional<AssistantEntryPoint> entry_point,
-      absl::optional<AssistantExitPoint> exit_point) override;
+      std::optional<AssistantEntryPoint> entry_point,
+      std::optional<AssistantExitPoint> exit_point) override;
 
   // Returns the first focusable view or nullptr to defer to views::FocusSearch.
   views::View* FindFirstFocusableView();
@@ -98,17 +99,17 @@ class ASH_EXPORT AssistantDialogPlate
 
   InputModality input_modality() const;
 
-  AssistantViewDelegate* const delegate_;
+  const raw_ptr<AssistantViewDelegate> delegate_;
 
   // The following views are all owned by the view hierarchy
-  views::ImageView* molecule_icon_ = nullptr;
-  views::View* input_modality_layout_container_ = nullptr;
-  views::View* keyboard_layout_container_ = nullptr;
-  views::View* voice_layout_container_ = nullptr;
-  views::ImageButton* keyboard_input_toggle_ = nullptr;
-  views::ImageButton* voice_input_toggle_ = nullptr;
-  MicView* animated_voice_input_toggle_ = nullptr;
-  views::Textfield* textfield_ = nullptr;
+  raw_ptr<views::ImageView> molecule_icon_ = nullptr;
+  raw_ptr<views::View> input_modality_layout_container_ = nullptr;
+  raw_ptr<views::View> keyboard_layout_container_ = nullptr;
+  raw_ptr<views::View> voice_layout_container_ = nullptr;
+  raw_ptr<views::ImageButton> keyboard_input_toggle_ = nullptr;
+  raw_ptr<views::ImageButton> voice_input_toggle_ = nullptr;
+  raw_ptr<MicView> animated_voice_input_toggle_ = nullptr;
+  raw_ptr<views::Textfield> textfield_ = nullptr;
 
   std::unique_ptr<ui::CallbackLayerAnimationObserver> animation_observer_;
   std::unique_ptr<AssistantQueryHistory::Iterator> query_history_iterator_;

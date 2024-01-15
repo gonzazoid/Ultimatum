@@ -16,17 +16,26 @@ import "services/network/public/mojom/url_request.mojom";
 import "services/network/public/mojom/url_response_head.mojom";
 import "services/network/public/mojom/web_client_hints_types.mojom";
 import "services/network/public/mojom/web_sandbox_flags.mojom";
+import "third_party/blink/public/mojom/back_forward_cache_not_restored_reasons.mojom";
 import "third_party/blink/public/mojom/fetch/fetch_api_request.mojom";
-import "third_party/blink/public/mojom/fenced_frame/fenced_frame.mojom";
+import "third_party/blink/public/mojom/navigation/navigation_initiator_activation_and_ad_status.mojom";
+import "third_party/blink/public/mojom/frame/view_transition_state.mojom";
+import "third_party/blink/public/mojom/fenced_frame/fenced_frame_config.mojom";
 import "third_party/blink/public/mojom/frame/frame_policy.mojom";
+import "third_party/blink/public/mojom/lcp_critical_path_predictor/lcp_critical_path_predictor.mojom";
 import "third_party/blink/public/mojom/loader/mixed_content.mojom";
 import "third_party/blink/public/mojom/loader/referrer.mojom";
+import "third_party/blink/public/mojom/messaging/task_attribution_id.mojom";
 import "third_party/blink/public/mojom/navigation/navigation_api_history_entry_arrays.mojom";
 import "third_party/blink/public/mojom/navigation/navigation_policy.mojom";
 import "third_party/blink/public/mojom/navigation/prefetched_signed_exchange_info.mojom";
+import "third_party/blink/public/mojom/navigation/renderer_content_settings.mojom";
+import "third_party/blink/public/mojom/navigation/system_entropy.mojom";
 import "third_party/blink/public/mojom/navigation/was_activated_option.mojom";
+import "third_party/blink/public/mojom/page/browsing_context_group_info.mojom";
 import "third_party/blink/public/mojom/page/page.mojom";
 import "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom";
+import "third_party/blink/public/mojom/runtime_feature_state/runtime_feature.mojom";
 import "third_party/blink/public/mojom/storage_key/storage_key.mojom";
 import "third_party/blink/public/mojom/tokens/tokens.mojom";
 import "url/mojom/origin.mojom";
@@ -39,9 +48,6 @@ enum NavigationType {
 
   // Reload the page, bypassing any cache entries.
   RELOAD_BYPASSING_CACHE,
-
-  // Reload the page using the original request URL.
-  RELOAD_ORIGINAL_REQUEST_URL,
 
   // The navigation is the result of session restore and should honor the
   // page's cache policy while restoring form state. This is set to true if
@@ -65,6 +71,15 @@ enum NavigationType {
 
   // Navigation to another document.
   DIFFERENT_DOCUMENT,
+};
+
+// Used by the renderer to indicate a case where a standard navigation that
+// pushes a history entry must not be implicity converted to replace the current
+// history entry. Ignored if the current NavigationEntry is the initial entry,
+// which must always be replaced.
+enum ForceHistoryPush {
+  kYes,
+  kNo,
 };
 
 // Provided by the renderer ----------------------------------------------------
@@ -100,6 +115,12 @@ struct BeginNavigationParams {
   // Whether or not the navigation has been initiated by a link click.
   bool was_initiated_by_link_click = false;
 
+  // If true, override cases where a WebFrameLoadType::kStandard navigation
+  // is implicitly converted to a kReplaceCurrentItem navigation. Ignored if
+  // the current NavigationEntry is the initial entry, which must always be
+  // replaced.
+  ForceHistoryPush force_history_push = ForceHistoryPush.kNo;
+
   // See WebSearchableFormData for a description of these.
   url.mojom.Url searchable_form_url;
   string searchable_form_encoding;
@@ -130,9 +151,30 @@ struct BeginNavigationParams {
   mojo_base.mojom.TimeTicks before_unload_start;
   mojo_base.mojom.TimeTicks before_unload_end;
 
-  // Token to identify a WebBundle. Set on navigation to a resource in a
-  // WebBundle.
-  network.mojom.WebBundleTokenParams? web_bundle_token;
+  // The navigation initiator's user activation and ad status.
+  blink.mojom.NavigationInitiatorActivationAndAdStatus
+      initiator_activation_and_ad_status;
+
+  // Whether this navigation was container initiated (e.g. iframe changed src).
+  // This is currently partially specified in
+  // https://html.spec.whatwg.org/#create-navigation-params-by-fetching
+  // "If sourceSnapshotParams's fetch client is navigable's container document's
+  // relevant settings object, then set request's initiator type to navigable's
+  // container's local name." This means that only container initiated
+  // navigations should create a resource timing entry.
+  // TODO(https://github.com/whatwg/html/issues/8846): clarify this further.
+  bool is_container_initiated = false;
+
+  // True if the initiator requested the tab become fullscreen after navigation.
+  // See: https://chromestatus.com/feature/6002307972464640
+  bool is_fullscreen_requested = false;
+
+  // Whether this navigation can include cookies via the Storage Access API,
+  // according to the renderer. Note that this is not trusted; cookies will not
+  // actually be attached unless there is also a matching permission grant
+  // created by the browser process. (Also note that the Storage Access API is
+  // only relevant when third-party cookies are blocked.)
+  bool has_storage_access = false;
 };
 
 // Provided by the browser or the renderer -------------------------------------
@@ -147,6 +189,11 @@ struct CommonNavigationParams {
   // which initiated the navigation. This parameter can be null for
   // browser-initiated navigations.
   url.mojom.Origin? initiator_origin;
+
+  // For navigations to about:blank and srcdoc frames, we require the base url
+  // of the frame initiating the navigation. As with `initiator_origin`, this
+  // parameter can be null.
+  url.mojom.Url? initiator_base_url;
 
   // The URL to send in the "Referer" header field. Can be empty if there is
   // no referrer.
@@ -222,7 +269,8 @@ struct CommonNavigationParams {
   // Whether this is a history navigation in a newly created child frame, in
   // which case the browser process is instructing the renderer process to load
   // a URL from a session history item.  Defaults to false.
-  // TODO(ahemery): Move this to BeginNavigationParams.
+  // TODO(https://crbug.com/962518, https://crbug.com/1467502): Move this to
+  // BeginNavigationParams.
   bool is_history_navigation_in_new_child_frame = false;
 
   // The time the input event leading to the navigation occurred. This will
@@ -233,9 +281,25 @@ struct CommonNavigationParams {
   // Indicates the request destination.
   network.mojom.RequestDestination request_destination =
       network.mojom.RequestDestination.kEmpty;
+
 };
 
 // Provided by the browser -----------------------------------------------------
+
+// Only container-initiated navigations report resource timing to the parent.
+// See https://github.com/whatwg/fetch/pull/1579
+enum ParentResourceTimingAccess {
+  kDoNotReport,
+
+  // See https://fetch.spec.whatwg.org/#response-has-cross-origin-redirects
+  // Whether response info (status code, content-type) can be exposed to
+  // resource timing. True for CORS same-origin subresource responses and for
+  // same-origin navigations without cross-origin redirects.
+  // TODO(https://github.com/whatwg/fetch/issues/1602) clarify the spec around
+  // this.
+  kReportWithoutResponseDetails,
+  kReportWithResponseDetails
+};
 
 // Timings collected in the browser during navigation for the
 // Navigation Timing API. Sent to Blink in CommitNavigationParams when
@@ -244,6 +308,12 @@ struct NavigationTiming {
   mojo_base.mojom.TimeTicks redirect_start;
   mojo_base.mojom.TimeTicks redirect_end;
   mojo_base.mojom.TimeTicks fetch_start;
+
+  // Indicates the entropy state of the user agent at the time the navigation
+  // begins.
+  SystemEntropy system_entropy_at_navigation_start = kEmpty;
+
+  ParentResourceTimingAccess parent_resource_timing_access = ParentResourceTimingAccess.kDoNotReport;
 };
 
 // Sent with CommitNavigationParams and should only be set for main-frame
@@ -267,20 +337,29 @@ struct OldPageInfo {
 // commit a navigation besides those in CommonNavigationParams.
 struct CommitNavigationParams {
   // The origin to be used for committing the navigation, if specified.
-  // This will be an origin that's compatible with the |url| in the
-  // CommonNavigationParams; if |url| is data: or about:blank, or the frame has
-  // sandbox attributes, this determines the origin of the resulting document.
-  // It is specified for session history navigations, for which the origin is
-  // known and saved in the FrameNavigationEntry.
+  // It is currently only specified on error document navigations, where the
+  // origin should be an opaque origin based on the URL that failed to load.
+  // TODO(https://crbug.com/888079): Always provide origin_to_commit.
   url.mojom.Origin? origin_to_commit;
 
   // The storage key of the document that will be created by the navigation.
-  // This is compatible with the `origin_to_commit`. Until the browser will be
-  // able to compute the `origin_to_commit` in all cases
-  // (https://crbug.com/888079), this is actually just a provisional
+  // This is compatible with the origin that the browser calculates for this
+  // navigation. Currently, the final origin used by a navigation is still
+  // determined by the renderer, except when `origin_to_commit` above is set.
+  // Until the browser is able to compute the origin accurately in all cases
+  // (see https://crbug.com/888079), this is actually just a provisional
   // `storage_key`. The final storage key is computed by the document loader
   // taking into account the origin computed by the renderer.
   blink.mojom.StorageKey storage_key;
+
+  // The storage key here is the one the browser process believes the renderer
+  // should use when binding session storage. This may differ from `storage_key`
+  // as a deprecation trial can prevent the partitioning of session storage.
+  // The document loader should verify this storage key is (1) the same as
+  // `storage_key` or (2) a first-party storage key at `storage_key.origin`.
+  //
+  // TODO(crbug.com/1407150): Remove this when deprecation trial is complete.
+  blink.mojom.StorageKey session_storage_key;
 
   // Whether or not the user agent override string should be used.
   bool is_overriding_user_agent = false;
@@ -388,13 +467,6 @@ struct CommitNavigationParams {
   // Whether this navigation was browser initiated.
   bool is_browser_initiated = false;
 
-  // The physical URL of Web Bundle from which the document is loaded.
-  // Used as an additional identifier for MemoryCache.
-  url.mojom.Url web_bundle_physical_url;
-
-  // The claimed URL inside Web Bundle from which the document is loaded.
-  url.mojom.Url web_bundle_claimed_url;
-
   // UKM source id to be associated with the Document that will be installed
   // in the current frame. This could be an invalid id for empty Document. Only
   // Documents that will emit UKM events need valid ids.
@@ -454,34 +526,11 @@ struct CommitNavigationParams {
 
   array<url.mojom.Url> early_hints_preloaded_resources;
 
-  // If this is a navigation to the result of an InterestGroup auction, this
-  // is a list of URNs that map to auction component URLs. Null, otherwise.
-  // When non-null, always contains exactly kMaxAdAuctionAdComponents=20 URNs
-  // to avoid use as a data sidechannel between auction worklets and the
-  // fenced frames their results are loaded in.
-  //
-  // Mojo doesn't allow using symbolic constants as array lengths, so hard-code
-  // the length here directly.
-  array<url.mojom.Url, 20>? ad_auction_components;
-
-  // If this is an "opaque-ads" mode fenced frame, there might be an associated
-  // reporting metadata. This is a map from destination type to reporting
-  // metadata which in turn is a map from the event type to the reporting url.
-  // https://github.com/WICG/turtledove/blob/main/Fenced_Frames_Ads_Reporting.md
-  FencedFrameReporting? fenced_frame_reporting_metadata;
-
   // The time the commit was sent from the browser.
   mojo_base.mojom.TimeTicks commit_sent;
 
   // When URL is about:srcdoc, this carries the srcdoc attribute's value.
   string srcdoc_value;
-
-  // When URL is about:srcdoc, this carries the srcdoc's fallback baseurl value
-  // from the parent.
-  // TODO(wjmaclean): modify this to carry the base url value for about:blank as
-  // well. That will require some renaming.
-  // Note: this is currently only used when IsolateSandboxedIframes is enabled.
-  url.mojom.Url fallback_srcdoc_baseurl;
 
   // Whether the navigation should be treated as a "loadDataWithBaseURL"
   // navigation, where the "document URL" is set to the supplied base URL
@@ -491,12 +540,12 @@ struct CommitNavigationParams {
   bool is_load_data_with_base_url = false;
 
   // Whether a CSPEE policy exists in any of the frame's ancestors or on the
-  // frame itself. Used to determine if an opaque-ads fenced frame is allowed
-  // to be created in the current context. See
-  // `HTMLFencedFrameElement::canLoadOpaqueURL` for usage. At the moment, this
-  // is just sending CSPEE. But this can be expanded (and renamed) in the future
-  // if we need to send more information about whether a fenced frame can load
-  // from the browser.
+  // frame itself. Used to determine if an opaque-ads fenced frame is allowed to
+  // be created in the current context. See
+  // `NavigatorAuction::canLoadAdAuctionFencedFrame` for usage. At the moment,
+  // this is just sending CSPEE. But this can be expanded (and renamed) in the
+  // future if we need to send more information about whether a fenced frame can
+  // load from the browser.
   bool ancestor_or_self_has_cspee = false;
 
   // Reduced Accept-Language negotiates the language when navigating to a new
@@ -516,4 +565,53 @@ struct CommitNavigationParams {
   // Indicates how the response is served for this navigation. Observed from
   // `PerformanceNavigationTiming` APIs.
   network.mojom.NavigationDeliveryType navigation_delivery_type = kDefault;
+
+  // Holds texture references (stored in the GPU process), geometry state, and
+  // select CSS property values from the previous Document displayed by this
+  // frame. This is used to support transitions when navigating between
+  // same-origin Documents. Note that this is only set and used for same-origin
+  // navigations. See https://drafts.csswg.org/css-view-transitions-2/ for
+  // details.
+  blink.mojom.ViewTransitionState? view_transition_state;
+
+  // If any, the task ID of the initiator of the navigation. This is restricted
+  // to same-document main-frame navigation initiated by the top-level document.
+  // Used by SoftNavigationHeuristics to trace back the chain of events.
+  TaskAttributionId? soft_navigation_heuristics_task_id;
+
+  // Maps the blink runtime-enabled features modified in the browser process to
+  // their new enabled/disabled status:
+  // <enum_representing_runtime_enabled_feature, enabled/disabled>
+  map<blink.mojom.RuntimeFeature, bool> modified_runtime_features;
+
+  // A collection of properties that determines the behavior of a fenced frame.
+  // Only non-null for embedder-initiated navigations of a fenced frame root,
+  // and urn navigations in iframes while they're supported.
+  FencedFrameProperties? fenced_frame_properties;
+
+  // `not_restored_reasons` contains the reasons why this navigation is not
+  // served from back/forward cache if applicable. This is only sent for
+  // cross-document main frame history navigations.
+  blink.mojom.BackForwardCacheNotRestoredReasons? not_restored_reasons;
+
+  // Indicates whether the target document of this navigation should load with
+  // the `has_storage_access` bit set.
+  bool load_with_storage_access = false;
+
+  // Indicates which browsing context group this frame belongs to. This starts
+  // as nullopt and is only set when we commit a main frame in another browsing
+  // context group. Same browsing context group navigations never set this
+  // because no update is required. Subframes navigations never set this,
+  // because they cannot change browsing context group.
+  blink.mojom.BrowsingContextGroupInfo? browsing_context_group_info;
+
+  // LCP Critical Path Predictor hint data available at navigation timing.
+  blink.mojom.LCPCriticalPathPredictorNavigationTimeHint? lcpp_hint;
+
+  // Some content settings must be enforced by the renderer. See
+  // ContentSettingsType for more details.
+  RendererContentSettings content_settings;
+
+  // The cookie deprecation label for cookie deprecation facilitated testing.
+  string? cookie_deprecation_label;
 };

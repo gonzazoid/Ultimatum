@@ -7,14 +7,14 @@ package org.chromium.chrome.browser.media.router;
 import static org.chromium.base.test.util.Restriction.RESTRICTION_TYPE_NON_LOW_END_DEVICE;
 
 import android.app.Dialog;
-import android.support.test.InstrumentationRegistry;
 import android.view.View;
 
+import androidx.test.core.app.ApplicationProvider;
 import androidx.test.filters.LargeTest;
+import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.hamcrest.Matchers;
 import org.json.JSONObject;
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -44,12 +44,12 @@ import org.chromium.ui.test.util.UiRestriction;
 
 import java.io.StringWriter;
 
-/**
- * Integration tests for MediaRouter.
- */
+/** Integration tests for MediaRouter. */
 @RunWith(ChromeJUnit4ClassRunner.class)
-@CommandLineFlags.Add({ContentSwitches.DISABLE_GESTURE_REQUIREMENT_FOR_PRESENTATION,
-        ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
+@CommandLineFlags.Add({
+    ContentSwitches.DISABLE_GESTURE_REQUIREMENT_FOR_PRESENTATION,
+    ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE
+})
 public class MediaRouterIntegrationTest {
     @Rule
     public ChromeTabbedActivityTestRule mActivityTestRule = new ChromeTabbedActivityTestRule();
@@ -83,12 +83,9 @@ public class MediaRouterIntegrationTest {
     public void setUp() throws Exception {
         BrowserMediaRouter.setRouteProviderFactoryForTest(new MockMediaRouteProvider.Factory());
         mActivityTestRule.startMainActivityOnBlankPage();
-        mTestServer = EmbeddedTestServer.createAndStartServer(InstrumentationRegistry.getContext());
-    }
-
-    @After
-    public void tearDown() {
-        mTestServer.stopAndDestroyServer();
+        mTestServer =
+                EmbeddedTestServer.createAndStartServer(
+                        ApplicationProvider.getApplicationContext());
     }
 
     // TODO(zqzhang): Move this to a util class?
@@ -145,18 +142,23 @@ public class MediaRouterIntegrationTest {
         try {
             JavaScriptUtils.executeJavaScriptAndWaitForResult(webContents, UNSET_RESULT_SCRIPT);
             JavaScriptUtils.executeJavaScriptAndWaitForResult(webContents, script);
-            CriteriaHelper.pollInstrumentationThread(() -> {
-                try {
-                    String result = JavaScriptUtils.executeJavaScriptAndWaitForResult(
-                            webContents, GET_RESULT_SCRIPT);
-                    Criteria.checkThat(result, Matchers.not("null"));
-                } catch (Exception e) {
-                    throw new CriteriaNotSatisfiedException(e);
-                }
-            }, maxTimeoutMs, intervalMs);
+            CriteriaHelper.pollInstrumentationThread(
+                    () -> {
+                        try {
+                            String result =
+                                    JavaScriptUtils.executeJavaScriptAndWaitForResult(
+                                            webContents, GET_RESULT_SCRIPT);
+                            Criteria.checkThat(result, Matchers.not("null"));
+                        } catch (Exception e) {
+                            throw new CriteriaNotSatisfiedException(e);
+                        }
+                    },
+                    maxTimeoutMs,
+                    intervalMs);
             String unescapedResult =
-                    unescapeString(JavaScriptUtils.executeJavaScriptAndWaitForResult(
-                            webContents, GET_RESULT_SCRIPT));
+                    unescapeString(
+                            JavaScriptUtils.executeJavaScriptAndWaitForResult(
+                                    webContents, GET_RESULT_SCRIPT));
             JSONObject jsonResult = new JSONObject(unescapedResult);
             Assert.assertTrue(
                     jsonResult.getString("errorMessage"), jsonResult.getBoolean("passed"));
@@ -335,10 +337,14 @@ public class MediaRouterIntegrationTest {
         WebContents webContents = mActivityTestRule.getWebContents();
         executeJavaScriptApi(webContents, WAIT_DEVICE_SCRIPT);
         executeJavaScriptApi(webContents, START_SESSION_SCRIPT);
-        final Dialog routeSelectionDialog = RouterTestUtils.waitForDialog(
-                mActivityTestRule.getActivity().getSupportFragmentManager());
+        final Dialog routeSelectionDialog =
+                RouterTestUtils.waitForDialog(
+                        mActivityTestRule.getActivity().getSupportFragmentManager());
         Assert.assertNotNull(routeSelectionDialog);
-        TestThreadUtils.runOnUiThreadBlocking(() -> { routeSelectionDialog.cancel(); });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    routeSelectionDialog.cancel();
+                });
         checkStartFailed(webContents, "NotAllowedError", "Dialog closed.");
     }
 

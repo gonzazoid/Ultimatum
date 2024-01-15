@@ -7,23 +7,14 @@
 
 #import <UIKit/UIKit.h>
 
-// Type of popup menus.
-typedef NS_ENUM(NSInteger, PopupMenuType) {
-  PopupMenuTypeToolsMenu,
-  PopupMenuTypeNavigationBackward,
-  PopupMenuTypeNavigationForward,
-  PopupMenuTypeTabGrid,
-  PopupMenuTypeNewTab,
-  PopupMenuTypeTabStripTabGrid,
-};
-
 // Protocol for a class updating the UI to reflect the presentation of a popup
 // menu.
 @protocol PopupMenuUIUpdating
-// Updates the UI for the presentation of the popup menu of type `popupType`.
-- (void)updateUIForMenuDisplayed:(PopupMenuType)popupType;
-// Update the UI for the dismissal of the popup menu.
-- (void)updateUIForMenuDismissed;
+// Updates the UI for the presentation of an in-product help for the overflow
+// menu.
+- (void)updateUIForOverflowMenuIPHDisplayed;
+// Updates the UI for the dismissal of an in-product help.
+- (void)updateUIForIPHDismissed;
 @end
 
 #endif  // IOS_CHROME_BROWSER_UI_POPUP_MENU_PUBLIC_POPUP_MENU_UI_UPDATING_H_

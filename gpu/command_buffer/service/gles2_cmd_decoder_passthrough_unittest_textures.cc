@@ -4,9 +4,9 @@
 
 #include <stdint.h>
 
-#include "components/viz/common/resources/resource_format_utils.h"
 #include "gpu/command_buffer/service/gles2_cmd_decoder.h"
 #include "gpu/command_buffer/service/gles2_cmd_decoder_unittest.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_format_service_utils.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_representation.h"
 #include "gpu/command_buffer/service/shared_image/test_image_backing.h"
 
@@ -25,9 +25,11 @@ std::unique_ptr<TestImageBacking> AllocateTextureAndCreateSharedImage(
   GLuint service_id;
   glGenTextures(1, &service_id);
   glBindTexture(GL_TEXTURE_2D, service_id);
-  glTexImage2D(GL_TEXTURE_2D, 0, GLInternalFormat(format), size.width(),
-               size.height(), 0, GLDataFormat(format), GLDataType(format),
-               nullptr /* data */);
+  GLFormatDesc format_desc =
+      GLFormatCaps().ToGLFormatDesc(format, /*plane_index=*/0);
+  glTexImage2D(GL_TEXTURE_2D, 0, format_desc.image_internal_format,
+               size.width(), size.height(), 0, format_desc.data_format,
+               format_desc.data_type, nullptr /* data */);
   return std::make_unique<TestImageBacking>(mailbox, format, size, color_space,
                                             surface_origin, alpha_type, usage,
                                             0 /* estimated_size */, service_id);
@@ -38,7 +40,7 @@ std::unique_ptr<TestImageBacking> AllocateTextureAndCreateSharedImage(
 TEST_F(GLES2DecoderPassthroughTest, CreateAndTexStorage2DSharedImageCHROMIUM) {
   MemoryTypeTracker memory_tracker(nullptr);
   Mailbox mailbox = Mailbox::GenerateForSharedImage();
-  auto format = viz::SharedImageFormat::kRGBA_8888;
+  auto format = viz::SinglePlaneFormat::kRGBA_8888;
   auto backing = AllocateTextureAndCreateSharedImage(
       mailbox, format, gfx::Size(10, 10), gfx::ColorSpace(),
       kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType, 0);
@@ -102,7 +104,7 @@ TEST_F(GLES2DecoderPassthroughTest,
   MemoryTypeTracker memory_tracker(nullptr);
   // Create a texture with kNewClientId.
   Mailbox mailbox = Mailbox::GenerateForSharedImage();
-  auto format = viz::SharedImageFormat::kRGBA_8888;
+  auto format = viz::SinglePlaneFormat::kRGBA_8888;
   std::unique_ptr<SharedImageRepresentationFactoryRef> shared_image =
       GetSharedImageManager()->Register(
           AllocateTextureAndCreateSharedImage(
@@ -138,7 +140,7 @@ TEST_F(GLES2DecoderPassthroughTest, BeginEndSharedImageAccessCRHOMIUM) {
       shared_images;
   for (int i = 0; i < 40; i++) {
     Mailbox mailbox = Mailbox::GenerateForSharedImage();
-    auto format = viz::SharedImageFormat::kRGBA_8888;
+    auto format = viz::SinglePlaneFormat::kRGBA_8888;
     std::unique_ptr<SharedImageRepresentationFactoryRef> shared_image =
         GetSharedImageManager()->Register(
             AllocateTextureAndCreateSharedImage(
@@ -206,7 +208,7 @@ TEST_F(GLES2DecoderPassthroughTest,
   // Create a shared image.
   MemoryTypeTracker memory_tracker(nullptr);
   Mailbox mailbox = Mailbox::GenerateForSharedImage();
-  auto format = viz::SharedImageFormat::kRGBA_8888;
+  auto format = viz::SinglePlaneFormat::kRGBA_8888;
   auto shared_image_backing = AllocateTextureAndCreateSharedImage(
       mailbox, format, gfx::Size(10, 10), gfx::ColorSpace(),
       kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType, 0);
@@ -248,7 +250,7 @@ TEST_F(GLES2DecoderPassthroughTest,
   // Create an uncleared shared image.
   MemoryTypeTracker memory_tracker(nullptr);
   Mailbox mailbox = Mailbox::GenerateForSharedImage();
-  auto format = viz::SharedImageFormat::kRGBA_8888;
+  auto format = viz::SinglePlaneFormat::kRGBA_8888;
   std::unique_ptr<SharedImageRepresentationFactoryRef> shared_image =
       GetSharedImageManager()->Register(
           AllocateTextureAndCreateSharedImage(

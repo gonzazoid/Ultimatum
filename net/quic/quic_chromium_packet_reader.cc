@@ -4,11 +4,10 @@
 
 #include "net/quic/quic_chromium_packet_reader.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/net_errors.h"
 #include "net/quic/address_utils.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_clock.h"
@@ -23,13 +22,13 @@ const size_t kReadBufferSize =
 }  // namespace
 
 QuicChromiumPacketReader::QuicChromiumPacketReader(
-    DatagramClientSocket* socket,
+    std::unique_ptr<DatagramClientSocket> socket,
     const quic::QuicClock* clock,
     Visitor* visitor,
     int yield_after_packets,
     quic::QuicTime::Delta yield_after_duration,
     const NetLogWithSource& net_log)
-    : socket_(socket),
+    : socket_(std::move(socket)),
       visitor_(visitor),
       clock_(clock),
       yield_after_packets_(yield_after_packets),
@@ -66,7 +65,7 @@ void QuicChromiumPacketReader::StartReading() {
       // Data was read, process it.
       // Schedule the work through the message loop to 1) prevent infinite
       // recursion and 2) avoid blocking the thread for too long.
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(&QuicChromiumPacketReader::OnReadComplete,
                                     weak_factory_.GetWeakPtr(), rv));
     } else {
@@ -75,6 +74,10 @@ void QuicChromiumPacketReader::StartReading() {
       }
     }
   }
+}
+
+void QuicChromiumPacketReader::CloseSocket() {
+  socket_->Close();
 }
 
 bool QuicChromiumPacketReader::ProcessReadResult(int result) {
@@ -94,7 +97,7 @@ bool QuicChromiumPacketReader::ProcessReadResult(int result) {
   }
   if (result < 0) {
     // Report all other errors to the visitor.
-    return visitor_->OnReadError(result, socket_);
+    return visitor_->OnReadError(result, socket_.get());
   }
 
   quic::QuicReceivedPacket packet(read_buffer_->data(), result, clock_->Now());

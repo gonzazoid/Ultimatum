@@ -7,7 +7,8 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
@@ -90,20 +91,6 @@ class AppManagerImpl : public AppManager,
     kAppUnavailable,
   };
 
-  // The lock screen note taking app state when a note action launch is
-  // requested.
-  // Used to report UMA histograms - the values should map to
-  // LockScreenNoteAppStatusOnLaunch UMA enum values, and the values assigned to
-  // enum states should NOT be changed.
-  enum class AppStatus {
-    kEnabled = 0,
-    kAppReloaded = 1,
-    kAppReloadFailed = 2,
-    kTerminatedReloadLimitExceeded = 3,
-    kNotLoadedNotTerminated = 4,
-    kCount = 5
-  };
-
   // Called when lock screen apps profile is ready to be used. Calling this will
   // cause app availability re-calculation.
   void OnLockScreenProfileLoaded();
@@ -149,10 +136,6 @@ class AppManagerImpl : public AppManager,
   // a web app is the current lock screen app.
   const extensions::Extension* GetChromeAppForLockScreenAppLaunch();
 
-  // Reports UMA for the app status when lock screen note action launch is
-  // attempted.
-  void ReportAppStatusOnAppLaunch(AppStatus status);
-
   // Updates internal state, and reports relevant metrics when the lock screen
   // app gets unloaded from the lock screen profile.
   void HandleLockScreenChromeAppUnload(
@@ -163,15 +146,15 @@ class AppManagerImpl : public AppManager,
   // the lock screen apps profile.
   void RemoveLockScreenAppDueToError();
 
-  Profile* primary_profile_ = nullptr;
-  Profile* lock_screen_profile_ = nullptr;
-  LockScreenProfileCreator* lock_screen_profile_creator_ = nullptr;
+  raw_ptr<Profile> primary_profile_ = nullptr;
+  raw_ptr<Profile> lock_screen_profile_ = nullptr;
+  raw_ptr<LockScreenProfileCreator> lock_screen_profile_creator_ = nullptr;
 
   State state_ = State::kNotInitialized;
   // ID may refer to a Chrome app or a web app.
   std::string lock_screen_app_id_;
 
-  const base::TickClock* tick_clock_;
+  raw_ptr<const base::TickClock> tick_clock_;
 
   base::ScopedObservation<extensions::ExtensionRegistry,
                           extensions::ExtensionRegistryObserver>

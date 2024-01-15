@@ -10,10 +10,11 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "third_party/webrtc/api/video/encoded_image.h"
 #include "third_party/webrtc/api/video/video_codec_type.h"
+#include "third_party/webrtc/modules/desktop_capture/desktop_capture_types.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_geometry.h"
 
 namespace webrtc {
@@ -69,6 +70,9 @@ class WebrtcVideoEncoder {
     base::TimeDelta send_pending_delay{base::TimeDelta::Max()};
     base::TimeDelta rtt_estimate{base::TimeDelta::Max()};
     int bandwidth_estimate_kbps = -1;
+
+    // The screen that this frame was captured from.
+    webrtc::ScreenId screen_id = webrtc::kInvalidScreenId;
   };
 
   struct EncodedFrame {
@@ -84,9 +88,13 @@ class WebrtcVideoEncoder {
     bool key_frame;
     int quantizer;
     webrtc::VideoCodecType codec;
+    int32_t profile = 0;
 
     uint32_t rtp_timestamp;
     std::unique_ptr<FrameStats> stats;
+    // This rectangle in the input frame will be encoded by the encoder.
+    int32_t encoded_rect_width = 0;
+    int32_t encoded_rect_height = 0;
   };
 
   enum class EncodeResult {

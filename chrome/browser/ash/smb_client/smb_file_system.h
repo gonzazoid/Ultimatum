@@ -11,8 +11,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/file_system_provider/abort_callback.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_info.h"
@@ -31,7 +31,7 @@ class IOBuffer;
 namespace ash {
 
 namespace file_system_manager {
-class RequestManager;
+class OperationRequestManager;
 }  // namespace file_system_manager
 
 namespace smb_client {
@@ -40,8 +40,7 @@ namespace smb_client {
 // filesystems.
 // SMB is an application level protocol used by Windows and Samba fileservers.
 // Allows Files App to mount SMB filesystems.
-class SmbFileSystem : public file_system_provider::ProvidedFileSystemInterface,
-                      public base::SupportsWeakPtr<SmbFileSystem> {
+class SmbFileSystem : public file_system_provider::ProvidedFileSystemInterface {
  public:
   SmbFileSystem(
       const file_system_provider::ProvidedFileSystemInfo& file_system_info);
@@ -123,6 +122,10 @@ class SmbFileSystem : public file_system_provider::ProvidedFileSystemInterface,
       int length,
       storage::AsyncFileUtil::StatusCallback callback) override;
 
+  file_system_provider::AbortCallback FlushFile(
+      int file_handle,
+      storage::AsyncFileUtil::StatusCallback callback) override;
+
   file_system_provider::AbortCallback AddWatcher(
       const GURL& origin,
       const base::FilePath& entry_path,
@@ -140,7 +143,7 @@ class SmbFileSystem : public file_system_provider::ProvidedFileSystemInterface,
   const file_system_provider::ProvidedFileSystemInfo& GetFileSystemInfo()
       const override;
 
-  file_system_provider::RequestManager* GetRequestManager() override;
+  file_system_provider::OperationRequestManager* GetRequestManager() override;
 
   file_system_provider::Watchers* GetWatchers() override;
 
@@ -164,11 +167,14 @@ class SmbFileSystem : public file_system_provider::ProvidedFileSystemInterface,
   void Configure(storage::AsyncFileUtil::StatusCallback callback) override;
 
   base::WeakPtr<ProvidedFileSystemInterface> GetWeakPtr() override;
+  std::unique_ptr<file_system_provider::ScopedUserInteraction>
+  StartUserInteraction() override;
 
  private:
   const file_system_provider::ProvidedFileSystemInfo file_system_info_;
   // opened_files_ is marked const since is currently unsupported.
   const file_system_provider::OpenedFiles opened_files_;
+  base::WeakPtrFactory<SmbFileSystem> weak_ptr_factory_{this};
 };
 
 }  // namespace smb_client

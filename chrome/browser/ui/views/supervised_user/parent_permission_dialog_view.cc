@@ -7,15 +7,15 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/extensions/extension_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
-#include "chrome/browser/supervised_user/supervised_user_service.h"
+#include "chrome/browser/supervised_user/supervised_user_browser_utils.h"
 #include "chrome/browser/supervised_user/supervised_user_service_factory.h"
 #include "chrome/browser/ui/supervised_user/parent_permission_dialog.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
@@ -26,10 +26,10 @@
 #include "components/signin/public/identity_manager/access_token_fetcher.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/scope_set.h"
-#include "components/user_manager/user_manager.h"
+#include "components/supervised_user/core/browser/supervised_user_service.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
-#include "extensions/browser/image_loader.h"
+#include "extensions/browser/extension_util.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_icon_set.h"
@@ -59,6 +59,7 @@
 #include "ui/views/layout/box_layout_view.h"
 #include "ui/views/layout/table_layout_view.h"
 #include "ui/views/metadata/view_factory.h"
+#include "ui/views/view_class_properties.h"
 
 namespace {
 constexpr int kPermissionSectionPaddingTop = 20;
@@ -69,9 +70,9 @@ constexpr int kInvalidCredentialLabelTopPadding = 3;
 // Label that may contain empty text.
 // Override is needed to configure accessibility node for an empty name.
 class MaybeEmptyLabel : public views::Label {
- public:
-  METADATA_HEADER(MaybeEmptyLabel);
+  METADATA_HEADER(MaybeEmptyLabel, views::Label)
 
+ public:
   MaybeEmptyLabel(const std::string& text, const CustomFont& font)
       : views::Label(base::UTF8ToUTF16(text), font) {}
 
@@ -89,19 +90,15 @@ class MaybeEmptyLabel : public views::Label {
   }
 };
 
-BEGIN_METADATA(MaybeEmptyLabel, views::Label)
+BEGIN_METADATA(MaybeEmptyLabel)
 END_METADATA
-
-// Returns bitmap for the default icon with size equal to the default icon's
-// pixel size under maximal supported scale factor.
-const gfx::ImageSkia& GetDefaultIconBitmapForMaxScaleFactor(bool is_app) {
-  return is_app ? extensions::util::GetDefaultAppIcon()
-                : extensions::util::GetDefaultExtensionIcon();
-}
 
 TestParentPermissionDialogViewObserver* test_view_observer = nullptr;
 
 }  // namespace
+
+DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(ParentPermissionDialogView,
+                                      kDialogViewIdForTesting);
 
 // Create the parent permission input section of the dialog and
 // listens for updates to its controls.
@@ -259,13 +256,14 @@ struct ParentPermissionDialogView::Params {
   std::u16string message;
 
   // An optional extension whose permissions should be displayed
-  raw_ptr<const extensions::Extension> extension = nullptr;
+  raw_ptr<const extensions::Extension, AcrossTasksDanglingUntriaged> extension =
+      nullptr;
 
   // The user's profile
   raw_ptr<Profile> profile = nullptr;
 
   // The parent window to this window. This member may be nullptr.
-  gfx::NativeWindow window = nullptr;
+  gfx::NativeWindow window = gfx::NativeWindow();
 
   // The callback to call on completion.
   ParentPermissionDialog::DoneCallback done_callback;
@@ -288,11 +286,10 @@ ParentPermissionDialogView::ParentPermissionDialogView(
       l10n_util::GetStringUTF16(IDS_PARENT_PERMISSION_PROMPT_CANCEL_BUTTON));
 
   SetModalType(ui::MODAL_TYPE_WINDOW);
-  SetShowCloseButton(true);
-  SetCloseCallback(base::BindOnce(&ParentPermissionDialogView::OnDialogClose,
-                                  base::Unretained(this)));
+  SetShowCloseButton(false);
   set_fixed_width(views::LayoutProvider::Get()->GetDistanceMetric(
       views::DISTANCE_MODAL_DIALOG_PREFERRED_WIDTH));
+  SetProperty(views::kElementIdentifierKey, kDialogViewIdForTesting);
 
   identity_manager_ = IdentityManagerFactory::GetForProfile(params_->profile);
 }
@@ -328,18 +325,6 @@ bool ParentPermissionDialogView::GetRepromptAfterIncorrectCredential() const {
   return reprompt_after_incorrect_credential_;
 }
 
-std::u16string ParentPermissionDialogView::GetActiveUserFirstName() const {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  user_manager::UserManager* manager = user_manager::UserManager::Get();
-  const user_manager::User* user = manager->GetActiveUser();
-  return user->GetGivenName();
-#else
-  // TODO(https://crbug.com/1218633): Implement support for parent approved
-  // extensions in LaCrOS.
-  return std::u16string();
-#endif
-}
-
 void ParentPermissionDialogView::AddedToWidget() {
   ChromeLayoutProvider* provider = ChromeLayoutProvider::Get();
   constexpr int icon_size = extension_misc::EXTENSION_ICON_SMALL;
@@ -367,7 +352,8 @@ void ParentPermissionDialogView::AddedToWidget() {
     auto icon = std::make_unique<views::ImageView>();
     size.SetToMin(gfx::Size(icon_size, icon_size));
     message_container.AddChild(
-        views::Builder<views::ImageView>().SetImageSize(size).SetImage(image));
+        views::Builder<views::ImageView>().SetImageSize(size).SetImage(
+            ui::ImageModel::FromImageSkia(image)));
   } else {
     // Add an empty view if there is no icon. This is required to ensure the
     // the label below still lands in the correct TableLayout column.
@@ -392,24 +378,12 @@ void ParentPermissionDialogView::OnThemeChanged() {
       GetColorProvider()->GetColor(ui::kColorAlertHighSeverity));
 }
 
-void ParentPermissionDialogView::OnDialogClose() {
-  // If the dialog is closed without the user clicking "approve" consider this
-  // as ParentPermissionCanceled to avoid showing an error message. If the
-  // user clicked "accept", then that async process will send the result, or if
-  // that doesn't complete, eventually the destructor will send a failure
-  // result.
-  if (!is_approve_clicked_) {
-    SendResultOnce(ParentPermissionDialog::Result::kParentPermissionCanceled);
-  }
-}
-
 bool ParentPermissionDialogView::Cancel() {
   SendResultOnce(ParentPermissionDialog::Result::kParentPermissionCanceled);
   return true;
 }
 
 bool ParentPermissionDialogView::Accept() {
-  is_approve_clicked_ = true;
   // Disable the dialog temporarily while we validate the parent's credentials,
   // which can take some time because it involves a series of async network
   // requests.
@@ -466,7 +440,9 @@ void ParentPermissionDialogView::CreateContents() {
     }
     std::u16string permission_header_label = l10n_util::GetStringFUTF16(
         IDS_PARENT_PERMISSION_PROMPT_CHILD_WANTS_TO_INSTALL_LABEL,
-        GetActiveUserFirstName(), extension_type);
+        base::UTF8ToUTF16(
+            supervised_user::GetAccountGivenName(*params_->profile)),
+        extension_type);
 
     views::Label* permissions_header = new views::Label(
         permission_header_label, views::style::CONTEXT_DIALOG_BODY_TEXT);
@@ -603,7 +579,7 @@ void ParentPermissionDialogView::ShowDialogInternal() {
 void ParentPermissionDialogView::LoadParentEmailAddresses() {
   // Get the parents' email addresses.  There can be a max of 2 parent email
   // addresses, the primary and the secondary.
-  SupervisedUserService* service =
+  supervised_user::SupervisedUserService* service =
       SupervisedUserServiceFactory::GetForProfile(params_->profile);
 
   std::u16string primary_parent_email =
@@ -624,39 +600,6 @@ void ParentPermissionDialogView::LoadParentEmailAddresses() {
   }
 }
 
-void ParentPermissionDialogView::OnExtensionIconLoaded(
-    const gfx::Image& image) {
-  // The order of preference for the icon to use is:
-  //  1. Icon loaded from extension, if not empty.
-  //  2. Icon passed in params, if not empty.
-  //  3. Default Icon.
-  if (!image.IsEmpty()) {
-    // Use the image that was loaded from the extension if it's not empty
-    params_->icon = *image.ToImageSkia();
-  } else if (params_->icon.isNull()) {
-    // If icon is empty, use a default icon.:
-    params_->icon =
-        GetDefaultIconBitmapForMaxScaleFactor(params_->extension->is_app());
-  }
-
-  ShowDialogInternal();
-}
-
-void ParentPermissionDialogView::LoadExtensionIcon() {
-  DCHECK(params_->extension);
-
-  // Load the image asynchronously. The response will be sent to
-  // OnExtensionIconLoaded.
-  extensions::ImageLoader* loader =
-      extensions::ImageLoader::Get(params_->profile);
-  loader->LoadImageAtEveryScaleFactorAsync(
-      params_->extension,
-      gfx::Size(extension_misc::EXTENSION_ICON_LARGE,
-                extension_misc::EXTENSION_ICON_LARGE),
-      base::BindOnce(&ParentPermissionDialogView::OnExtensionIconLoaded,
-                     weak_factory_.GetWeakPtr()));
-}
-
 void ParentPermissionDialogView::CloseWithReason(
     views::Widget::ClosedReason reason) {
   views::Widget* widget = GetWidget();
@@ -670,20 +613,16 @@ void ParentPermissionDialogView::CloseWithReason(
 
 std::string ParentPermissionDialogView::GetParentObfuscatedGaiaID(
     const std::u16string& parent_email) const {
-  SupervisedUserService* service =
+  supervised_user::SupervisedUserService* service =
       SupervisedUserServiceFactory::GetForProfile(params_->profile);
 
   if (service->GetCustodianEmailAddress() == base::UTF16ToUTF8(parent_email))
     return service->GetCustodianObfuscatedGaiaId();
 
-  if (service->GetSecondCustodianEmailAddress() ==
-      base::UTF16ToUTF8(parent_email)) {
-    return service->GetSecondCustodianObfuscatedGaiaId();
-  }
-
-  NOTREACHED()
+  CHECK_EQ(service->GetSecondCustodianEmailAddress(),
+           base::UTF16ToUTF8(parent_email))
       << "Tried to get obfuscated gaia id for a non-custodian email address";
-  return std::string();
+  return service->GetSecondCustodianObfuscatedGaiaId();
 }
 
 void ParentPermissionDialogView::StartReauthAccessTokenFetch(
@@ -695,7 +634,7 @@ void ParentPermissionDialogView::StartReauthAccessTokenFetch(
   scopes.insert(GaiaConstants::kAccountsReauthOAuth2Scope);
   oauth2_access_token_fetcher_ =
       identity_manager_->CreateAccessTokenFetcherForAccount(
-          identity_manager_->GetPrimaryAccountId(signin::ConsentLevel::kSync),
+          identity_manager_->GetPrimaryAccountId(signin::ConsentLevel::kSignin),
           "chrome_webstore_private_api", scopes,
           base::BindOnce(
               &ParentPermissionDialogView::OnAccessTokenFetchComplete,
@@ -808,15 +747,14 @@ void ParentPermissionDialogView::InitializeExtensionData(
       IDS_PARENT_PERMISSION_PROMPT_GO_GET_A_PARENT_FOR_EXTENSION_LABEL,
       base::UTF8ToUTF16(extension->name()));
 
-  LoadExtensionIcon();
+  ShowDialogInternal();
 }
 
-BEGIN_METADATA(ParentPermissionDialogView, views::DialogDelegateView)
+BEGIN_METADATA(ParentPermissionDialogView)
 ADD_PROPERTY_METADATA(std::u16string, SelectedParentPermissionEmail)
 ADD_PROPERTY_METADATA(std::u16string, ParentPermissionCredential)
 ADD_READONLY_PROPERTY_METADATA(bool, InvalidCredentialReceived)
 ADD_PROPERTY_METADATA(bool, RepromptAfterIncorrectCredential)
-ADD_READONLY_PROPERTY_METADATA(std::u16string, ActiveUserFirstName)
 END_METADATA
 
 class ParentPermissionDialogImpl : public ParentPermissionDialog,

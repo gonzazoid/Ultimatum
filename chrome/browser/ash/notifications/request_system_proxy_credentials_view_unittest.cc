@@ -7,13 +7,16 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_dialogs.h"
+#include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
+#include "ui/base/l10n/l10n_util.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/textfield/textfield.h"
 
@@ -64,11 +67,12 @@ class RequestSystemProxyCredentialsViewTest : public BrowserWithTestWindowTest {
   bool accepted_ = false;
   bool canceled_ = false;
   // Owned by |active_widget_|.
-  RequestSystemProxyCredentialsView* system_proxy_dialog_ = nullptr;
+  raw_ptr<RequestSystemProxyCredentialsView, DanglingUntriaged>
+      system_proxy_dialog_ = nullptr;
 
  private:
   // Owned by the UI code (NativeWidget).
-  views::Widget* active_widget_ = nullptr;
+  raw_ptr<views::Widget, DanglingUntriaged> active_widget_ = nullptr;
 };
 
 // Tests that clicking "OK" in the UI will result in calling the
@@ -112,6 +116,48 @@ TEST_F(RequestSystemProxyCredentialsViewTest, ErrorLabelHidden) {
 TEST_F(RequestSystemProxyCredentialsViewTest, ErrorLabelVisible) {
   CreateDialog(/*show_error=*/true);
   EXPECT_TRUE(system_proxy_dialog_->error_label_for_testing()->GetVisible());
+}
+
+TEST_F(RequestSystemProxyCredentialsViewTest, TextfieldAccessibility) {
+  CreateDialog(/*show_error=*/false);
+
+  ui::AXNodeData username_data;
+  auto* username_field = system_proxy_dialog_->username_textfield_for_testing();
+  username_field->GetAccessibleNodeData(&username_data);
+  EXPECT_EQ(username_data.role, ax::mojom::Role::kTextField);
+  EXPECT_EQ(username_field->GetAccessibleRole(), ax::mojom::Role::kTextField);
+  EXPECT_EQ(
+      username_data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+      l10n_util::GetStringUTF16(IDS_SYSTEM_PROXY_AUTH_DIALOG_USERNAME_LABEL));
+  EXPECT_EQ(
+      username_field->GetAccessibleName(),
+      l10n_util::GetStringUTF16(IDS_SYSTEM_PROXY_AUTH_DIALOG_USERNAME_LABEL));
+  EXPECT_EQ(username_data.GetNameFrom(), ax::mojom::NameFrom::kRelatedElement);
+  EXPECT_TRUE(username_data.HasIntListAttribute(
+      ax::mojom::IntListAttribute::kLabelledbyIds));
+  EXPECT_TRUE(username_data.HasState(ax::mojom::State::kEditable));
+  EXPECT_FALSE(username_data.HasState(ax::mojom::State::kProtected));
+  EXPECT_EQ(username_data.GetDefaultActionVerb(),
+            ax::mojom::DefaultActionVerb::kActivate);
+
+  ui::AXNodeData password_data;
+  auto* password_field = system_proxy_dialog_->password_textfield_for_testing();
+  password_field->GetAccessibleNodeData(&password_data);
+  EXPECT_EQ(password_data.role, ax::mojom::Role::kTextField);
+  EXPECT_EQ(password_field->GetAccessibleRole(), ax::mojom::Role::kTextField);
+  EXPECT_EQ(
+      password_data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+      l10n_util::GetStringUTF16(IDS_SYSTEM_PROXY_AUTH_DIALOG_PASSWORD_LABEL));
+  EXPECT_EQ(
+      password_field->GetAccessibleName(),
+      l10n_util::GetStringUTF16(IDS_SYSTEM_PROXY_AUTH_DIALOG_PASSWORD_LABEL));
+  EXPECT_EQ(password_data.GetNameFrom(), ax::mojom::NameFrom::kRelatedElement);
+  EXPECT_TRUE(password_data.HasIntListAttribute(
+      ax::mojom::IntListAttribute::kLabelledbyIds));
+  EXPECT_TRUE(password_data.HasState(ax::mojom::State::kEditable));
+  EXPECT_TRUE(password_data.HasState(ax::mojom::State::kProtected));
+  EXPECT_EQ(password_data.GetDefaultActionVerb(),
+            ax::mojom::DefaultActionVerb::kActivate);
 }
 
 }  // namespace ash

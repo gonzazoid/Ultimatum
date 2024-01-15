@@ -6,39 +6,66 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
+#include "base/strings/string_util.h"
 #include "base/task/sequenced_task_runner.h"
 #include "chromeos/dbus/missive/fake_missive_client.h"
+#include "chromeos/dbus/missive/history_tracker.h"
 #include "components/reporting/proto/synced/interface.pb.h"
 #include "components/reporting/proto/synced/record.pb.h"
 #include "components/reporting/proto/synced/record_constants.pb.h"
 #include "components/reporting/util/disconnectable_client.h"
 #include "components/reporting/util/status.h"
-#include "components/reporting/util/statusor.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
 #include "dbus/object_proxy.h"
+#include "google_apis/google_api_keys.h"
+#include "third_party/cros_system_api/dbus/missive/dbus-constants.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
+using std::literals::string_view_literals::operator""sv;
+
+using ::reporting::Priority;
+using ::reporting::Record;
+using ::reporting::SequenceInformation;
+using ::reporting::SignedEncryptionInfo;
+using ::reporting::Status;
+
 namespace chromeos {
-
-using reporting::Priority;
-using reporting::Record;
-using reporting::SequenceInformation;
-using reporting::SignedEncryptionInfo;
-using reporting::Status;
-
 namespace {
 
 MissiveClient* g_instance = nullptr;
+
+// Returns `false` if the api_key is empty or known to be used for testing
+// purposes, or by devices that are running unofficial builds.
+bool IsApiKeyAccepted(std::string_view api_key) {
+  static constexpr std::string_view kBlockListedKeys[] = {
+      "dummykey"sv, "dummytoken"sv,
+      // More keys or key fragments can be added.
+  };
+  if (api_key.empty()) {
+    LOG(ERROR) << "API Key is empty";
+    return false;
+  }
+  const std::string lowercase_api_key = base::ToLowerASCII(api_key);
+  for (auto key : kBlockListedKeys) {
+    if (base::Contains(lowercase_api_key, key)) {
+      LOG(ERROR) << "API Key is block-listed: " << api_key;
+      return false;
+    }
+  }
+  return true;
+}
 
 class MissiveClientImpl : public MissiveClient {
  public:
@@ -51,6 +78,12 @@ class MissiveClientImpl : public MissiveClient {
     DCHECK(bus);
     origin_task_runner_ = bus->GetOriginTaskRunner();
 
+    // Never changes after this moment.
+    has_valid_api_key_ = IsApiKeyAccepted(google_apis::GetAPIKey());
+
+    // Never changes back to `false`.
+    is_initialized_ = true;
+
     DCHECK(!missive_service_proxy_);
     missive_service_proxy_ =
         bus->GetObjectProxy(missive::kMissiveServiceName,
@@ -58,7 +91,7 @@ class MissiveClientImpl : public MissiveClient {
     missive_service_proxy_->SetNameOwnerChangedCallback(base::BindRepeating(
         &MissiveClientImpl::OwnerChanged, weak_ptr_factory_.GetWeakPtr()));
     missive_service_proxy_->WaitForServiceToBeAvailable(base::BindOnce(
-        &MissiveClientImpl::ServerAvailable, weak_ptr_factory_.GetWeakPtr()));
+        &MissiveClientImpl::ServiceAvailable, weak_ptr_factory_.GetWeakPtr()));
   }
 
   void EnqueueRecord(const reporting::Priority priority,
@@ -66,6 +99,18 @@ class MissiveClientImpl : public MissiveClient {
                      base::OnceCallback<void(reporting::Status)>
                          completion_callback) override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(origin_checker_);
+    if (!is_initialized_) {
+      std::move(completion_callback)
+          .Run(reporting::Status(reporting::error::FAILED_PRECONDITION,
+                                 "Reporting not started yet"));
+      return;
+    }
+    if (!has_valid_api_key()) {
+      std::move(completion_callback)
+          .Run(reporting::Status(reporting::error::FAILED_PRECONDITION,
+                                 "Cannot report with unsupported API Key"));
+      return;
+    }
     auto delegate = std::make_unique<EnqueueRecordDelegate>(
         priority, std::move(record), this, std::move(completion_callback));
     client_.MaybeMakeCall(std::move(delegate));
@@ -75,14 +120,40 @@ class MissiveClientImpl : public MissiveClient {
              base::OnceCallback<void(reporting::Status)> completion_callback)
       override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(origin_checker_);
+    if (!is_initialized_) {
+      std::move(completion_callback)
+          .Run(reporting::Status(reporting::error::FAILED_PRECONDITION,
+                                 "Reporting not started yet"));
+      return;
+    }
+    if (!has_valid_api_key()) {
+      std::move(completion_callback)
+          .Run(reporting::Status(reporting::error::FAILED_PRECONDITION,
+                                 "Cannot report with unsupported API Key"));
+      return;
+    }
     auto delegate = std::make_unique<FlushDelegate>(
         priority, this, std::move(completion_callback));
+    client_.MaybeMakeCall(std::move(delegate));
+  }
+
+  void UpdateConfigInMissive(
+      const reporting::ListOfBlockedDestinations& destinations) override {
+    DCHECK_CALLED_ON_VALID_SEQUENCE(origin_checker_);
+    if (!is_initialized_ || !has_valid_api_key()) {
+      return;
+    }
+    auto delegate =
+        std::make_unique<UpdateConfigInMissiveDelegate>(destinations, this);
     client_.MaybeMakeCall(std::move(delegate));
   }
 
   void UpdateEncryptionKey(
       const reporting::SignedEncryptionInfo& encryption_info) override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(origin_checker_);
+    if (!is_initialized_ || !has_valid_api_key()) {
+      return;
+    }
     auto delegate =
         std::make_unique<UpdateEncryptionKeyDelegate>(encryption_info, this);
     client_.MaybeMakeCall(std::move(delegate));
@@ -91,6 +162,9 @@ class MissiveClientImpl : public MissiveClient {
   void ReportSuccess(const reporting::SequenceInformation& sequence_information,
                      bool force_confirm) override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(origin_checker_);
+    if (!is_initialized_ || !has_valid_api_key()) {
+      return;
+    }
     auto delegate = std::make_unique<ReportSuccessDelegate>(
         sequence_information, force_confirm, this);
     client_.MaybeMakeCall(std::move(delegate));
@@ -201,6 +275,12 @@ class MissiveClientImpl : public MissiveClient {
                        std::move(completion_callback)) {
       *request_.mutable_record() = std::move(record);
       request_.set_priority(priority);
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+      // Turn on/off the debug state flag (for Ash only).
+      request_.set_health_data_logging_enabled(
+          ::reporting::HistoryTracker::Get()->debug_state());
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
     }
 
     bool WriteRequest(dbus::MessageWriter* writer) override {
@@ -213,6 +293,15 @@ class MissiveClientImpl : public MissiveClient {
         return reporting::Status(reporting::error::INTERNAL,
                                  "Response was not parsable.");
       }
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+      // Accept health data if present (ChromeOS only)
+      if (response_body.has_health_data()) {
+        ::reporting::HistoryTracker::Get()->set_data(
+            std::move(response_body.health_data()), base::DoNothing());
+      }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
       reporting::Status status;
       status.RestoreFrom(response_body.status());
       return status;
@@ -232,6 +321,12 @@ class MissiveClientImpl : public MissiveClient {
                        owner,
                        std::move(completion_callback)) {
       request_.set_priority(priority);
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+      // Turn on/off the debug state flag (for Ash only).
+      request_.set_health_data_logging_enabled(
+          ::reporting::HistoryTracker::Get()->debug_state());
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
     }
 
     bool WriteRequest(dbus::MessageWriter* writer) override {
@@ -244,6 +339,15 @@ class MissiveClientImpl : public MissiveClient {
         return reporting::Status(reporting::error::INTERNAL,
                                  "Response was not parsable.");
       }
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+      // Accept health data if present (ChromeOS only)
+      if (response_body.has_health_data()) {
+        ::reporting::HistoryTracker::Get()->set_data(
+            std::move(response_body.health_data()), base::DoNothing());
+      }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
       reporting::Status status;
       status.RestoreFrom(response_body.status());
       return status;
@@ -251,6 +355,25 @@ class MissiveClientImpl : public MissiveClient {
 
    private:
     reporting::FlushPriorityRequest request_;
+  };
+
+  class UpdateConfigInMissiveDelegate : public DBusDelegate {
+   public:
+    UpdateConfigInMissiveDelegate(
+        const reporting::ListOfBlockedDestinations& destinations,
+        MissiveClientImpl* owner)
+        : DBusDelegate(missive::kUpdateConfigInMissive,
+                       owner,
+                       base::DoNothing()) {
+      *request_.mutable_list_of_blocked_destinations() = destinations;
+    }
+
+    bool WriteRequest(dbus::MessageWriter* writer) override {
+      return writer->AppendProtoAsArrayOfBytes(request_);
+    }
+
+   private:
+    reporting::UpdateConfigInMissiveRequest request_;
   };
 
   class UpdateEncryptionKeyDelegate : public DBusDelegate {
@@ -283,10 +406,36 @@ class MissiveClientImpl : public MissiveClient {
                        base::DoNothing()) {
       *request_.mutable_sequence_information() = sequence_information;
       request_.set_force_confirm(force_confirm);
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+      // Turn on/off the debug state flag (for Ash only).
+      request_.set_health_data_logging_enabled(
+          ::reporting::HistoryTracker::Get()->debug_state());
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
     }
 
     bool WriteRequest(dbus::MessageWriter* writer) override {
       return writer->AppendProtoAsArrayOfBytes(request_);
+    }
+
+    reporting::Status ParseResponse(dbus::MessageReader* reader) override {
+      reporting::ConfirmRecordUploadResponse response_body;
+      if (!reader->PopArrayOfBytesAsProto(&response_body)) {
+        return reporting::Status(reporting::error::INTERNAL,
+                                 "Response was not parsable.");
+      }
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+      // Accept health data if present (ChromeOS only)
+      if (response_body.has_health_data()) {
+        ::reporting::HistoryTracker::Get()->set_data(
+            std::move(response_body.health_data()), base::DoNothing());
+      }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+      reporting::Status status;
+      status.RestoreFrom(response_body.status());
+      return status;
     }
 
    private:
@@ -296,10 +445,10 @@ class MissiveClientImpl : public MissiveClient {
   void OwnerChanged(const std::string& old_owner,
                     const std::string& new_owner) {
     DCHECK_CALLED_ON_VALID_SEQUENCE(origin_checker_);
-    client_.SetAvailability(/*is_available=*/!new_owner.empty());
+    ServiceAvailable(/*service_is_available=*/!new_owner.empty());
   }
 
-  void ServerAvailable(bool service_is_available) {
+  void ServiceAvailable(bool service_is_available) {
     DCHECK_CALLED_ON_VALID_SEQUENCE(origin_checker_);
     client_.SetAvailability(/*is_available=*/service_is_available);
   }
@@ -322,6 +471,10 @@ MissiveClient::MissiveClient() {
 MissiveClient::~MissiveClient() {
   DCHECK_EQ(this, g_instance);
   g_instance = nullptr;
+}
+
+bool MissiveClient::has_valid_api_key() const {
+  return has_valid_api_key_;
 }
 
 scoped_refptr<base::SequencedTaskRunner> MissiveClient::origin_task_runner()

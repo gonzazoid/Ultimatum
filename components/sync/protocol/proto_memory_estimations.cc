@@ -13,6 +13,7 @@
 #include "components/sync/protocol/entity_metadata.pb.h"
 #include "components/sync/protocol/entity_specifics.pb.h"
 #include "components/sync/protocol/model_type_state.pb.h"
+#include "components/sync/protocol/nigori_specifics.pb.h"
 #include "components/sync/protocol/persisted_entity_data.pb.h"
 #include "components/sync/protocol/proto_visitors.h"
 #include "components/sync/protocol/sync_entity.pb.h"
@@ -37,6 +38,23 @@ class MemoryUsageVisitor {
   void VisitBytes(const P& parent_proto,
                   const char* field_name,
                   const std::string& field) {
+    // Delegate to Visit(..., const std::string&) below.
+    Visit(parent_proto, field_name, field);
+  }
+
+  template <class P>
+  void VisitBytes(
+      const P& parent_proto,
+      const char* field_name,
+      const google::protobuf::RepeatedPtrField<std::string>& fields) {
+    // Delegate to Visit(..., const std::string&) below.
+    Visit(parent_proto, field_name, fields);
+  }
+
+  template <class P>
+  void VisitSecret(const P& parent_proto,
+                   const char* field_name,
+                   const std::string& field) {
     // Delegate to Visit(..., const std::string&) below.
     Visit(parent_proto, field_name, field);
   }
@@ -128,6 +146,7 @@ size_t EstimateMemoryUsage(const P& proto) {
 #define INSTANTIATE(Proto) \
   template size_t EstimateMemoryUsage<Proto>(const Proto&);
 
+INSTANTIATE(CrossUserSharingPublicKey)
 INSTANTIATE(DataTypeContext)
 INSTANTIATE(DataTypeProgressMarker)
 INSTANTIATE(EntityMetadata)

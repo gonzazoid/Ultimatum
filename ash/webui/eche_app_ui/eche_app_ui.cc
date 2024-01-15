@@ -2,10 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "ash/webui/eche_app_ui/eche_app_ui.h"
+
 #include <memory>
 
 #include "ash/webui/eche_app_ui/eche_app_manager.h"
-#include "ash/webui/eche_app_ui/eche_app_ui.h"
 #include "ash/webui/eche_app_ui/mojom/eche_app.mojom.h"
 #include "ash/webui/eche_app_ui/url_constants.h"
 #include "ash/webui/grit/ash_eche_app_resources.h"
@@ -18,21 +19,10 @@
 #include "third_party/blink/public/common/web_preferences/web_preferences.h"
 #include "ui/webui/webui_allowlist.h"
 
-namespace ash {
-namespace eche_app {
+namespace ash::eche_app {
 
-EcheAppUI::EcheAppUI(content::WebUI* web_ui,
-                     BindSignalingMessageExchangerCallback exchanger_callback,
-                     BindSystemInfoProviderCallback system_info_callback,
-                     BindUidGeneratorCallback generator_callback,
-                     BindNotificationGeneratorCallback notification_callback,
-                     BindDisplayStreamHandlerCallback stream_handler_callback)
-    : ui::MojoWebUIController(web_ui),
-      bind_exchanger_callback_(std::move(exchanger_callback)),
-      bind_system_info_callback_(std::move(system_info_callback)),
-      bind_generator_callback_(std::move(generator_callback)),
-      bind_notification_callback_(std::move(notification_callback)),
-      bind_stream_handler_callback_(std::move(stream_handler_callback)) {
+EcheAppUI::EcheAppUI(content::WebUI* web_ui, EcheAppManager* manager)
+    : ui::MojoWebUIController(web_ui), manager_(manager) {
   auto* browser_context = web_ui->GetWebContents()->GetBrowserContext();
   content::WebUIDataSource* html_source =
       content::WebUIDataSource::CreateAndAdd(browser_context,
@@ -53,9 +43,8 @@ EcheAppUI::EcheAppUI(content::WebUI* web_ui,
   html_source->AddResourcePath(
       "eche_app.mojom-lite.js",
       IDR_ASH_ECHE_APP_ASH_WEBUI_ECHE_APP_UI_MOJOM_ECHE_APP_MOJOM_LITE_JS);
-  html_source->AddResourcePath(
-      "message_pipe.js",
-      IDR_ASH_ECHE_APP_______SYSTEM_APPS_PUBLIC_JS_MESSAGE_PIPE_JS);
+  html_source->AddResourcePath("message_pipe.js",
+                               IDR_ASH_ECHE_APP_MESSAGE_PIPE_JS);
   html_source->AddResourcePath("message_types.js",
                                IDR_ASH_ECHE_APP_MESSAGE_TYPES_JS);
   html_source->AddResourcePath("browser_proxy.js",
@@ -102,30 +91,67 @@ EcheAppUI::~EcheAppUI() = default;
 
 void EcheAppUI::BindInterface(
     mojo::PendingReceiver<mojom::SignalingMessageExchanger> receiver) {
-  bind_exchanger_callback_.Run(std::move(receiver));
+  if (manager_) {
+    manager_->BindSignalingMessageExchangerInterface(std::move(receiver));
+  }
 }
 
 void EcheAppUI::BindInterface(
     mojo::PendingReceiver<mojom::SystemInfoProvider> receiver) {
-  bind_system_info_callback_.Run(std::move(receiver));
+  if (manager_) {
+    manager_->BindSystemInfoProviderInterface(std::move(receiver));
+  }
+}
+
+void EcheAppUI::BindInterface(
+    mojo::PendingReceiver<mojom::AccessibilityProvider> receiver) {
+  if (manager_) {
+    manager_->BindAccessibilityProviderInterface(std::move(receiver));
+  }
 }
 
 void EcheAppUI::BindInterface(
     mojo::PendingReceiver<mojom::UidGenerator> receiver) {
-  bind_generator_callback_.Run(std::move(receiver));
+  if (manager_) {
+    manager_->BindUidGeneratorInterface(std::move(receiver));
+  }
 }
 
 void EcheAppUI::BindInterface(
     mojo::PendingReceiver<mojom::NotificationGenerator> receiver) {
-  bind_notification_callback_.Run(std::move(receiver));
+  if (manager_) {
+    manager_->BindNotificationGeneratorInterface(std::move(receiver));
+  }
 }
 
 void EcheAppUI::BindInterface(
     mojo::PendingReceiver<mojom::DisplayStreamHandler> receiver) {
-  bind_stream_handler_callback_.Run(std::move(receiver));
+  if (manager_) {
+    manager_->BindDisplayStreamHandlerInterface(std::move(receiver));
+  }
+}
+
+void EcheAppUI::BindInterface(
+    mojo::PendingReceiver<mojom::StreamOrientationObserver> receiver) {
+  if (manager_) {
+    manager_->BindStreamOrientationObserverInterface(std::move(receiver));
+  }
+}
+
+void EcheAppUI::BindInterface(
+    mojo::PendingReceiver<mojom::ConnectionStatusObserver> receiver) {
+  if (manager_) {
+    manager_->BindConnectionStatusObserverInterface(std::move(receiver));
+  }
+}
+
+void EcheAppUI::BindInterface(
+    mojo::PendingReceiver<mojom::KeyboardLayoutHandler> receiver) {
+  if (manager_) {
+    manager_->BindKeyboardLayoutHandlerInterface(std::move(receiver));
+  }
 }
 
 WEB_UI_CONTROLLER_TYPE_IMPL(EcheAppUI)
 
-}  // namespace eche_app
-}  // namespace ash
+}  // namespace ash::eche_app

@@ -16,6 +16,21 @@ extension Color {
     return Color(kTextPrimaryColor)
   }
 
+  /// The secondary text color.
+  public static var textSecondary: Color {
+    return Color(kTextSecondaryColor)
+  }
+
+  /// The tertiary text color.
+  public static var textTertiary: Color {
+    return Color(kTextTertiaryColor)
+  }
+
+  /// The quaternary text color.
+  public static var textQuaternary: Color {
+    return Color(kTextQuaternaryColor)
+  }
+
   /// The tertiary background color
   public static var tertiaryBackground: Color {
     return Color(kTertiaryBackgroundColor)
@@ -84,6 +99,11 @@ extension Color {
   /// The blue600 color.
   public static var blue600: Color {
     return Color(kBlue600Color)
+  }
+
+  /// The red500 color.
+  public static var red500: Color {
+    return Color(kRed500Color)
   }
 
   /// The table row view highlight color.

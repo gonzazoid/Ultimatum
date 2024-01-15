@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
 import 'chrome://resources/cr_elements/cr_input/cr_input.js';
 import 'chrome://resources/cr_elements/cr_slider/cr_slider.js';
 import 'chrome://resources/cr_elements/cr_radio_group/cr_radio_group.js';
@@ -11,13 +12,13 @@ import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 import 'chrome://resources/polymer/v3_0/paper-progress/paper-progress.js';
 import 'chrome://crostini-installer/strings.m.js';
-import 'chrome://resources/cros_elements/button/button.js';
-import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
 
 import {BrowserProxy} from 'chrome://crostini-installer/browser_proxy.js';
-import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {html, Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {assert, assertNotReached} from 'chrome://resources/ash/common/assert.js';
+import {loadTimeData} from 'chrome://resources/ash/common/load_time_data.m.js';
+import {Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {getTemplate} from './app.html.js';
 
 /**
  * Enum for the state of `crostini-installer-app`. Not to confused with
@@ -73,7 +74,7 @@ const UNAVAILABLE_USERNAMES = [
 Polymer({
   is: 'crostini-installer-app',
 
-  _template: html`{__html_template__}`,
+  _template: getTemplate(),
 
   properties: {
     /** @private {!State} */
@@ -201,7 +202,7 @@ Polymer({
       }
     });
 
-    this.$$('[primary]:not([hidden])').focus();
+    this.$$('.action-button:not([hidden])').focus();
   },
 
   /** @override */
@@ -254,13 +255,11 @@ Polymer({
   /** @private */
   onInstallButtonClick_() {
     assert(this.showInstallButton_(this.state_, this.error_));
-    var diskSize = 0;
-    if (loadTimeData.getBoolean('diskResizingEnabled')) {
-      if (this.showDiskSlider_) {
-        diskSize = this.diskSizeTicks_[this.$$('#diskSlider').value].value;
-      } else {
-        diskSize = this.diskSizeTicks_[this.defaultDiskSizeTick_].value;
-      }
+    let diskSize = 0;
+    if (this.showDiskSlider_) {
+      diskSize = this.diskSizeTicks_[this.$$('#diskSlider').value].value;
+    } else {
+      diskSize = this.diskSizeTicks_[this.defaultDiskSizeTick_].value;
     }
     this.installerState_ = InstallerState.kStart;
     this.installerProgress_ = 0;
@@ -508,25 +507,6 @@ Polymer({
     }
 
     return messageId ? loadTimeData.getString(messageId) : '';
-  },
-
-  /**
-   * @private
-   */
-  showDiskResizing_() {
-    return loadTimeData.getBoolean('diskResizingEnabled');
-  },
-
-  /**
-   * @private
-   */
-  getConfigureMessageTitle_() {
-    // If the flags only allow username config, then we show a username specific
-    // subtitle instead of a generic configure subtitle.
-    if (!this.showDiskResizing_()) {
-      return loadTimeData.getString('usernameMessage');
-    }
-    return loadTimeData.getString('configureMessage');
   },
 
   /** @private */

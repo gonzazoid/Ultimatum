@@ -8,11 +8,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/observer_list.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/performance_manager/public/graph/frame_node.h"
 #include "components/performance_manager/public/graph/graph.h"
 #include "components/performance_manager/public/graph/process_node.h"
@@ -89,7 +89,8 @@ V8DetailedMemoryRequest::V8DetailedMemoryRequest(
     : V8DetailedMemoryRequest(min_time_between_requests, mode) {
   DETACH_FROM_SEQUENCE(sequence_checker_);
   off_sequence_request_ = std::move(off_sequence_request);
-  off_sequence_request_sequence_ = base::SequencedTaskRunnerHandle::Get();
+  off_sequence_request_sequence_ =
+      base::SequencedTaskRunner::GetCurrentDefault();
   // Unretained is safe since |this| will be destroyed on the graph sequence
   // from an async task posted after this.
   PerformanceManager::CallOnGraph(
@@ -166,19 +167,17 @@ void V8DetailedMemoryRequest::NotifyObserversOnMeasurementAvailable(
     using FrameAndData = std::pair<content::GlobalRenderFrameHostId,
                                    V8DetailedMemoryExecutionContextData>;
     std::vector<FrameAndData> all_frame_data;
-    process_node->VisitFrameNodes(base::BindRepeating(
-        [](std::vector<FrameAndData>* all_frame_data,
-           const FrameNode* frame_node) {
+    process_node->VisitFrameNodes(
+        [&all_frame_data](const FrameNode* frame_node) {
           const auto* frame_data =
               V8DetailedMemoryExecutionContextData::ForFrameNode(frame_node);
           if (frame_data) {
-            all_frame_data->push_back(std::make_pair(
+            all_frame_data.push_back(std::make_pair(
                 frame_node->GetRenderFrameHostProxy().global_frame_routing_id(),
                 *frame_data));
           }
           return true;
-        },
-        base::Unretained(&all_frame_data)));
+        });
     off_sequence_request_sequence_->PostTask(
         FROM_HERE,
         base::BindOnce(&V8DetailedMemoryRequestAnySeq::

@@ -6,7 +6,8 @@
 
 #include <limits>
 
-#include "base/bind.h"
+#include "ash/public/cpp/ambient/ambient_ui_model.h"
+#include "base/functional/bind.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/geometry/vector2d.h"
@@ -37,12 +38,11 @@ class JitterCalculatorTest : public ::testing::Test {
 };
 
 TEST_F(JitterCalculatorTest, CalculateHonorsConfig) {
-  JitterCalculator::Config config;
-  config.step_size = 2;
-  config.x_min_translation = -10;
-  config.x_max_translation = 10;
-  config.y_min_translation = -20;
-  config.y_max_translation = 20;
+  AmbientJitterConfig config{.step_size = 2,
+                             .x_min_translation = -10,
+                             .x_max_translation = 10,
+                             .y_min_translation = -20,
+                             .y_max_translation = 20};
 
   JitterCalculator calculator(config, GetRandomBinaryGenerator());
   int max_x_translation_observed = std::numeric_limits<int>::min();
@@ -76,12 +76,11 @@ TEST_F(JitterCalculatorTest, CalculateHonorsConfig) {
 }
 
 TEST_F(JitterCalculatorTest, AllowsFor0MinMaxTranslation) {
-  JitterCalculator::Config config;
-  config.step_size = 2;
-  config.x_min_translation = 0;
-  config.x_max_translation = 10;
-  config.y_min_translation = -20;
-  config.y_max_translation = 0;
+  AmbientJitterConfig config{.step_size = 2,
+                             .x_min_translation = 0,
+                             .x_max_translation = 10,
+                             .y_min_translation = -20,
+                             .y_max_translation = 0};
 
   JitterCalculator calculator(config, GetRandomBinaryGenerator());
   int min_x_translation_observed = std::numeric_limits<int>::max();
@@ -96,6 +95,14 @@ TEST_F(JitterCalculatorTest, AllowsFor0MinMaxTranslation) {
   }
   EXPECT_THAT(min_x_translation_observed, Eq(0));
   EXPECT_THAT(max_y_translation_observed, Eq(0));
+}
+
+TEST_F(JitterCalculatorTest, SetConfigToZero) {
+  AmbientJitterConfig config{.step_size = 0};
+  JitterCalculator jitter_calculator_(config);
+  for (int i = 0; i < 200; ++i) {
+    ASSERT_TRUE(jitter_calculator_.Calculate().IsZero());
+  }
 }
 
 }  // namespace ash

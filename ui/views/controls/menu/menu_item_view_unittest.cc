@@ -13,6 +13,8 @@
 #include "base/test/bind.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/themed_vector_icon.h"
 #include "ui/compositor/canvas_painter.h"
 #include "ui/gfx/canvas.h"
@@ -27,6 +29,7 @@
 #include "ui/views/vector_icons.h"
 #include "ui/views/view_class_properties.h"
 #include "ui/views/view_test_api.h"
+#include "ui/views/view_utils.h"
 
 namespace views {
 
@@ -52,6 +55,8 @@ namespace {
 
 // A simple View class that will match its height to the available width.
 class SquareView : public views::View {
+  METADATA_HEADER(SquareView, views::View)
+
  public:
   SquareView() = default;
   ~SquareView() override = default;
@@ -60,6 +65,9 @@ class SquareView : public views::View {
   gfx::Size CalculatePreferredSize() const override { return gfx::Size(1, 1); }
   int GetHeightForWidth(int width) const override { return width; }
 };
+
+BEGIN_METADATA(SquareView)
+END_METADATA
 
 }  // namespace
 
@@ -73,7 +81,7 @@ TEST_F(MenuItemViewUnitTest, TestMenuItemViewWithFlexibleWidthChild) {
   views::MenuItemView* flexible_view = root_menu.AppendMenuItem(2);
   flexible_view->AddChildView(new SquareView());
   // Set margins to 0 so that we know width should match height.
-  flexible_view->SetMargins(0, 0);
+  flexible_view->set_vertical_margin(0);
 
   views::SubmenuView* submenu = root_menu.GetSubmenu();
 
@@ -92,14 +100,15 @@ TEST_F(MenuItemViewUnitTest, TestMenuItemViewWithFlexibleWidthChild) {
   EXPECT_EQ(label_size.width(), flex_height);
 
   // The submenu should be tall enough to allow for both menu items at the
-  // given width.
-  EXPECT_EQ(label_size.height() + flex_height,
-            submenu->GetPreferredSize().height());
+  // given width. (It may be taller if there is padding between/around the
+  // items.)
+  EXPECT_GE(submenu->GetPreferredSize().height(),
+            label_size.height() + flex_height);
 }
 
-// Tests that the top-level menu item with hidden children should contain the
-// "(empty)" menu item to display.
-TEST_F(MenuItemViewUnitTest, TestEmptyTopLevelWhenAllItemsAreHidden) {
+// Tests that a menu item with hidden children should contain the "(empty)" menu
+// item to display.
+TEST_F(MenuItemViewUnitTest, TestEmptyWhenAllItemsAreHidden) {
   views::TestMenuItemView root_menu;
   views::MenuItemView* item1 = root_menu.AppendMenuItem(1, u"item 1");
   views::MenuItemView* item2 = root_menu.AppendMenuItem(2, u"item 2");
@@ -114,49 +123,14 @@ TEST_F(MenuItemViewUnitTest, TestEmptyTopLevelWhenAllItemsAreHidden) {
   EXPECT_EQ(2u, submenu->children().size());
 
   // Adds any empty menu items to the menu, if needed.
-  root_menu.AddEmptyMenus();
+  root_menu.UpdateEmptyMenusAndMetrics();
 
   // Because all of the submenu's children are hidden, an empty menu item should
   // have been added.
   ASSERT_EQ(3u, submenu->children().size());
-  auto* empty_item = static_cast<MenuItemView*>(submenu->children().front());
+  const auto* empty_item =
+      AsViewClass<EmptyMenuMenuItem>(submenu->children().front());
   ASSERT_TRUE(empty_item);
-  ASSERT_EQ(MenuItemView::kEmptyMenuItemViewID, empty_item->GetID());
-  EXPECT_EQ(l10n_util::GetStringUTF16(IDS_APP_MENU_EMPTY_SUBMENU),
-            empty_item->title());
-}
-
-// Tests that submenu with hidden children should contain the "(empty)" menu
-// item to display.
-TEST_F(MenuItemViewUnitTest, TestEmptySubmenuWhenAllChildItemsAreHidden) {
-  views::TestMenuItemView root_menu;
-  MenuItemView* submenu_item = root_menu.AppendSubMenu(1, u"My Submenu");
-  MenuItemView* child1 = submenu_item->AppendMenuItem(1, u"submenu item 1");
-  MenuItemView* child2 = submenu_item->AppendMenuItem(2, u"submenu item 2");
-
-  // Set submenu children to hidden.
-  child1->SetVisible(false);
-  child2->SetVisible(false);
-
-  SubmenuView* submenu = submenu_item->GetSubmenu();
-  ASSERT_TRUE(submenu);
-
-  EXPECT_EQ(2u, submenu->children().size());
-
-  // Adds any empty menu items to the menu, if needed.
-  EXPECT_FALSE(submenu->HasEmptyMenuItemView());
-  root_menu.AddEmptyMenus();
-  EXPECT_TRUE(submenu->HasEmptyMenuItemView());
-  // Because all of the submenu's children are hidden, an empty menu item should
-  // have been added.
-  ASSERT_EQ(3u, submenu->children().size());
-  auto* empty_item = static_cast<MenuItemView*>(submenu->children().front());
-  ASSERT_TRUE(empty_item);
-  // Not allowed to add an duplicated empty menu item
-  // if it already has an empty menu item.
-  root_menu.AddEmptyMenus();
-  ASSERT_EQ(3u, submenu->children().size());
-  ASSERT_EQ(MenuItemView::kEmptyMenuItemViewID, empty_item->GetID());
   EXPECT_EQ(l10n_util::GetStringUTF16(IDS_APP_MENU_EMPTY_SUBMENU),
             empty_item->title());
 }
@@ -212,9 +186,11 @@ class TouchableMenuItemViewTest : public ViewsTestBase {
     widget_->Show();
 
     menu_delegate_ = std::make_unique<test::TestMenuDelegate>();
-    menu_item_view_ = new TestMenuItemView(menu_delegate_.get());
+    auto menu_item_view_owning =
+        std::make_unique<TestMenuItemView>(menu_delegate_.get());
+    menu_item_view_ = menu_item_view_owning.get();
     menu_runner_ = std::make_unique<MenuRunner>(
-        menu_item_view_, MenuRunner::USE_ASH_SYS_UI_LAYOUT);
+        std::move(menu_item_view_owning), MenuRunner::USE_ASH_SYS_UI_LAYOUT);
     menu_runner_->RunMenuAt(widget_.get(), nullptr, gfx::Rect(),
                             MenuAnchorPosition::kTopLeft,
                             ui::MENU_SOURCE_KEYBOARD);
@@ -251,8 +227,8 @@ TEST_F(TouchableMenuItemViewTest, MinAndMaxWidth) {
   // Test a title which is between the min and max allowed widths.
   gfx::Size item2_size =
       AppendItemAndGetSize(2, u"Item2 bigger than min less than max");
-  EXPECT_GT(item2_size.width(), min_menu_width);
-  EXPECT_LT(item2_size.width(), max_menu_width);
+  EXPECT_GE(item2_size.width(), min_menu_width);
+  EXPECT_LE(item2_size.width(), max_menu_width);
 
   // Test a title which is longer than the max touchable menu width.
   gfx::Size item3_size =
@@ -327,6 +303,8 @@ namespace {
 // A fake View to check if GetHeightForWidth() is called with the appropriate
 // width value.
 class FakeView : public View {
+  METADATA_HEADER(FakeView, View)
+
  public:
   explicit FakeView(int expected_width) : expected_width_(expected_width) {}
   ~FakeView() override = default;
@@ -341,6 +319,9 @@ class FakeView : public View {
  private:
   const int expected_width_;
 };
+
+BEGIN_METADATA(FakeView)
+END_METADATA
 
 }  // namespace
 
@@ -384,7 +365,9 @@ class MenuItemViewPaintUnitTest : public ViewsTestBase {
   void SetUp() override {
     ViewsTestBase::SetUp();
     menu_delegate_ = CreateMenuDelegate();
-    menu_item_view_ = new MenuItemView(menu_delegate_.get());
+    auto menu_item_view_owning =
+        std::make_unique<MenuItemView>(menu_delegate_.get());
+    menu_item_view_ = menu_item_view_owning.get();
 
     widget_ = std::make_unique<Widget>();
     Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_POPUP);
@@ -392,10 +375,12 @@ class MenuItemViewPaintUnitTest : public ViewsTestBase {
     widget_->Init(std::move(params));
     widget_->Show();
 
-    menu_runner_ = std::make_unique<MenuRunner>(menu_item_view_, 0);
+    menu_runner_ =
+        std::make_unique<MenuRunner>(std::move(menu_item_view_owning), 0);
   }
 
   void TearDown() override {
+    menu_item_view_ = nullptr;
     widget_->CloseNow();
     ViewsTestBase::TearDown();
   }
@@ -407,7 +392,7 @@ class MenuItemViewPaintUnitTest : public ViewsTestBase {
 
  private:
   // Owned by MenuRunner.
-  raw_ptr<MenuItemView> menu_item_view_;
+  raw_ptr<MenuItemView> menu_item_view_ = nullptr;
 
   std::unique_ptr<test::TestMenuDelegate> menu_delegate_;
   std::unique_ptr<MenuRunner> menu_runner_;
@@ -442,6 +427,47 @@ TEST_F(MenuItemViewPaintUnitTest, MinorTextAndIconAssertionCoverage) {
           ui::ImageModel::FromVectorIcon(views::kMenuCheckIcon));
   AddItem(u"Secondary label, minor text and icon", u"secondary label",
           u"minor text", ui::ImageModel::FromVectorIcon(views::kMenuCheckIcon));
+
+  menu_runner()->RunMenuAt(widget(), nullptr, gfx::Rect(),
+                           MenuAnchorPosition::kTopLeft,
+                           ui::MENU_SOURCE_KEYBOARD);
+
+  SkBitmap bitmap;
+  gfx::Size size = menu_item_view()->GetMirroredBounds().size();
+  ui::CanvasPainter canvas_painter(&bitmap, size, 1.f, SK_ColorTRANSPARENT,
+                                   false);
+  menu_item_view()->GetSubmenu()->Paint(
+      PaintInfo::CreateRootPaintInfo(canvas_painter.context(), size));
+}
+
+// Provides assertion coverage for painting with custom colors.
+// icons.
+TEST_F(MenuItemViewPaintUnitTest, CustomColorAssertionCoverage) {
+  auto AddItem = [this](auto label, auto submenu_background_color,
+                        auto foreground_color, auto selected_color) {
+    menu_item_view()->AddMenuItemAt(
+        0, 1000, label, std::u16string(), std::u16string(), ui::ImageModel(),
+        ui::ImageModel(), views::MenuItemView::Type::kNormal,
+        ui::NORMAL_SEPARATOR, submenu_background_color, foreground_color,
+        selected_color);
+  };
+  ui::ColorId background_color = ui::kColorComboboxBackground;
+  ui::ColorId foreground_color = ui::kColorDropdownForeground;
+  ui::ColorId selected_color = ui::kColorMenuItemForegroundHighlighted;
+  AddItem(u"No custom colors", absl::nullopt, absl::nullopt, absl::nullopt);
+  AddItem(u"No selected color", background_color, foreground_color,
+          absl::nullopt);
+  AddItem(u"No foreground color", background_color, absl::nullopt,
+          selected_color);
+  AddItem(u"No background color", absl::nullopt, foreground_color,
+          selected_color);
+  AddItem(u"No background or foreground", absl::nullopt, absl::nullopt,
+          selected_color);
+  AddItem(u"No background or selected", absl::nullopt, foreground_color,
+          absl::nullopt);
+  AddItem(u"No foreground or selected", background_color, absl::nullopt,
+          absl::nullopt);
+  AddItem(u"All colors", background_color, foreground_color, selected_color);
 
   menu_runner()->RunMenuAt(widget(), nullptr, gfx::Rect(),
                            MenuAnchorPosition::kTopLeft,
@@ -607,11 +633,6 @@ class MenuItemViewAccessTest : public MenuItemViewPaintUnitTest {
  private:
   class DisallowMenuDelegate : public test::TestMenuDelegate {
    public:
-    const gfx::FontList* GetLabelFontList(int command_id) const override {
-      EXPECT_NE(1, command_id);
-      return nullptr;
-    }
-
     absl::optional<SkColor> GetLabelColor(int command_id) const override {
       EXPECT_NE(1, command_id);
       return absl::nullopt;

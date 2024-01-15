@@ -16,17 +16,18 @@ class DummyUkmDataManager : public UkmDataManager {
   DummyUkmDataManager();
   ~DummyUkmDataManager() override;
 
-  DummyUkmDataManager(DummyUkmDataManager&) = delete;
-  DummyUkmDataManager& operator=(DummyUkmDataManager&) = delete;
+  DummyUkmDataManager(const DummyUkmDataManager&) = delete;
+  DummyUkmDataManager& operator=(const DummyUkmDataManager&) = delete;
 
   // UkmDataManager implementation:
-  void Initialize(const base::FilePath& database_path,
-                  UkmObserver* ukm_observer) override;
+  void Initialize(const base::FilePath& database_path, bool in_memory) override;
+  void StartObservation(UkmObserver* ukm_observer) override;
   bool IsUkmEngineEnabled() override;
   void StartObservingUkm(const UkmConfig& config) override;
   void PauseOrResumeObservation(bool pause) override;
   UrlSignalHandler* GetOrCreateUrlHandler() override;
   UkmDatabase* GetUkmDatabase() override;
+  bool HasUkmDatabase() override;
   void OnEntryAdded(ukm::mojom::UkmEntryPtr entry) override;
   void OnUkmSourceUpdated(ukm::SourceId source_id,
                           const std::vector<GURL>& urls) override;

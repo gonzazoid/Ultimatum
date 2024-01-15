@@ -4,11 +4,9 @@
 
 #include "gpu/ipc/common/gpu_memory_buffer_impl_native_pixmap.h"
 
-#include <vulkan/vulkan.h>
-
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "gpu/ipc/common/gpu_memory_buffer_support.h"
 #include "ui/gfx/buffer_format_util.h"
@@ -67,8 +65,8 @@ base::OnceClosure GpuMemoryBufferImplNativePixmap::AllocateForTesting(
   scoped_refptr<gfx::NativePixmap> pixmap;
   pixmap = ui::OzonePlatform::GetInstance()
                ->GetSurfaceFactoryOzone()
-               ->CreateNativePixmap(gfx::kNullAcceleratedWidget, VK_NULL_HANDLE,
-                                    size, format, usage);
+               ->CreateNativePixmap(gfx::kNullAcceleratedWidget, nullptr, size,
+                                    format, usage);
   if (!pixmap) {
     // TODO(j.isorce): use gbm_bo_create / gbm_bo_get_fd from system libgbm.
     NOTIMPLEMENTED();

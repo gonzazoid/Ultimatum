@@ -94,8 +94,6 @@ class SubresourceFilterBrowserTest : public PlatformBrowserTest {
   ~SubresourceFilterBrowserTest() override;
 
   // Names of DocumentLoad histograms.
-  static constexpr const char kDocumentLoadActivationLevel[] =
-      "SubresourceFilter.DocumentLoad.ActivationState";
 
   static constexpr const char kSubresourceLoadsTotalForPage[] =
       "SubresourceFilter.PageLoad.NumSubresourceLoads.Total";
@@ -211,7 +209,8 @@ class SubresourceFilterBrowserTest : public PlatformBrowserTest {
   std::unique_ptr<TestSafeBrowsingDatabaseHelper> database_helper_;
 
   // Owned by the profile.
-  raw_ptr<SubresourceFilterProfileContext, DanglingUntriaged> profile_context_;
+  raw_ptr<SubresourceFilterProfileContext, AcrossTasksDanglingUntriaged>
+      profile_context_;
 };
 
 // This class automatically syncs the SubresourceFilter SafeBrowsing list

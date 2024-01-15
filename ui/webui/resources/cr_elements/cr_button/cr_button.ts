@@ -5,18 +5,25 @@
 /**
  * @fileoverview 'cr-button' is a button which displays slotted elements. It can
  * be interacted with like a normal button using click as well as space and
- * enter to effectively click the button and fire a 'click' event.
+ * enter to effectively click the button and fire a 'click' event. It can also
+ * style an icon inside of the button with the [has-icon] attribute.
  */
-import '//resources/polymer/v3_0/paper-styles/color.js';
 import '../cr_hidden_style.css.js';
 import '../cr_shared_vars.css.js';
+import '//resources/polymer/v3_0/paper-styles/color.js';
 
+import {FocusOutlineManager} from '//resources/js/focus_outline_manager.js';
 import {PaperRippleBehavior} from '//resources/polymer/v3_0/paper-behaviors/paper-ripple-behavior.js';
 import {mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {FocusOutlineManager} from '../../js/focus_outline_manager.js';
-
 import {getTemplate} from './cr_button.html.js';
+
+export interface CrButtonElement {
+  $: {
+    prefixIcon: HTMLSlotElement,
+    suffixIcon: HTMLSlotElement,
+  };
+}
 
 const CrButtonElementBase =
     mixinBehaviors([PaperRippleBehavior], PolymerElement) as {
@@ -57,12 +64,26 @@ export class CrButtonElement extends CrButtonElementBase {
         type: Boolean,
         value: false,
       },
+
+      hasPrefixIcon_: {
+        type: Boolean,
+        reflectToAttribute: true,
+        value: false,
+      },
+
+      hasSuffixIcon_: {
+        type: Boolean,
+        reflectToAttribute: true,
+        value: false,
+      },
     };
   }
 
   disabled: boolean;
   customTabIndex: number;
   circleRipple: boolean;
+  private hasPrefixIcon_: boolean;
+  private hasSuffixIcon_: boolean;
 
   /**
    * It is possible to activate a tab when the space key is pressed down. When
@@ -143,12 +164,24 @@ export class CrButtonElement extends CrButtonElementBase {
 
   private onBlur_() {
     this.spaceKeyDown_ = false;
+    // If a keyup event is never fired (e.g. after keydown the focus is moved to
+    // another element), we need to clear the ripple here. 100ms delay was
+    // chosen manually as a good time period for the ripple to be visible.
+    this.setTimeout_(() => this.getRipple().uiUpAction(), 100);
   }
 
   private onClick_(e: Event) {
     if (this.disabled) {
       e.stopImmediatePropagation();
     }
+  }
+
+  private onPrefixIconSlotChanged_() {
+    this.hasPrefixIcon_ = this.$.prefixIcon.assignedElements().length > 0;
+  }
+
+  private onSuffixIconSlotChanged_() {
+    this.hasSuffixIcon_ = this.$.suffixIcon.assignedElements().length > 0;
   }
 
   private onKeyDown_(e: KeyboardEvent) {

@@ -7,6 +7,7 @@
 
 #include "ash/components/arc/mojom/media_session.mojom.h"
 #include "ash/components/arc/session/connection_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 namespace content {
@@ -44,10 +45,13 @@ class ArcMediaSessionBridge
   void OnConnectionReady() override;
   void OnConnectionClosed() override;
 
+  static void EnsureFactoryBuilt();
+
  private:
   void SetupAudioFocus();
 
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 };
 
 }  // namespace arc

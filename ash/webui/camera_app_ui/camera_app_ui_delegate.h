@@ -7,14 +7,21 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/files/file_path.h"
+#include "base/functional/callback.h"
 
 namespace content {
+class BrowserContext;
 class WebContents;
 class WebUIDataSource;
 }  // namespace content
 
+namespace media_device_salt {
+class MediaDeviceSaltService;
+}  // namespace media_device_salt
+
 namespace ash {
+class HoldingSpaceClient;
 
 // A delegate which exposes browser functionality from //chrome to the camera
 // app ui page handler.
@@ -31,7 +38,27 @@ class CameraAppUIDelegate {
     ERROR = 2,
   };
 
+  enum class StorageMonitorStatus {
+    // Storage has enough space to operate CCA functions.
+    NORMAL = 0,
+
+    // Storage is getting low, display warning to users.
+    LOW = 1,
+
+    // Storage is almost full. Should stop ongoing recording and don't allow new
+    // recording.
+    CRITICALLY_LOW = 2,
+
+    // Monitoring got canceled since there is another monitor request.
+    CANCELED = 3,
+
+    // Monitoring get errors.
+    ERROR = 4,
+  };
+
   virtual ~CameraAppUIDelegate() = default;
+
+  virtual HoldingSpaceClient* GetHoldingSpaceClient() = 0;
 
   // Sets Downloads folder as launch directory by File Handling API so that we
   // can get the handle on the app side.
@@ -40,8 +67,7 @@ class CameraAppUIDelegate {
   // Takes a WebUIDataSource, and adds load time data into it.
   virtual void PopulateLoadTimeData(content::WebUIDataSource* source) = 0;
 
-  // TODO(crbug.com/1113567): Remove this method once we migrate to use UMA to
-  // collect metrics. Checks if the logging consent option is enabled.
+  // Checks if the logging consent option is enabled.
   virtual bool IsMetricsAndCrashReportingEnabled() = 0;
 
   // Opens the file in Downloads folder by its |name| in gallery.
@@ -66,6 +92,25 @@ class CameraAppUIDelegate {
 
   // Maybe triggers HaTS survey for the camera app if all the conditions match.
   virtual void MaybeTriggerSurvey() = 0;
+
+  // Start monitor storage status, |monitor_callback| will be called at initial
+  // time and every time the status is changed.
+  virtual void StartStorageMonitor(
+      base::RepeatingCallback<void(StorageMonitorStatus)> monitor_callback) = 0;
+
+  // Stop ongoing storage monitoring, if there is one, otherwise no-ops.
+  virtual void StopStorageMonitor() = 0;
+
+  // Open "Storage management" page in system's Settings app.
+  virtual void OpenStorageManagement() = 0;
+
+  // Gets the file path by given file |name|.
+  virtual base::FilePath GetFilePathByName(const std::string& name) = 0;
+
+  // Returns a service that provides persistent salts for generating media
+  // device IDs. Can be null if the embedder does not support persistent salts.
+  virtual media_device_salt::MediaDeviceSaltService* GetMediaDeviceSaltService(
+      content::BrowserContext* context) = 0;
 };
 
 }  // namespace ash

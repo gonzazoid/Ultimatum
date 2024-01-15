@@ -9,10 +9,6 @@ import("//build/config/chromeos/ui_mode.gni")
 import("//rlz/buildflags/buildflags.gni")
 import("//testing/test.gni")
 
-config("rlz_lib_config") {
-  defines = [ "RLZ_NETWORK_IMPLEMENTATION_CHROME_NET" ]
-}
-
 source_set("rlz_utils") {
   sources = [
     "lib/assert.cc",
@@ -87,7 +83,7 @@ if (enable_rlz_support) {
       deps += [
         "//chromeos/ash/components/dbus",
         "//chromeos/ash/components/dbus/debug_daemon",
-        "//chromeos/system",
+        "//chromeos/ash/components/system",
       ]
     }
 
@@ -143,11 +139,9 @@ if (enable_rlz_support) {
     if (is_chromeos_ash) {
       deps += [
         "//chromeos/ash/components/dbus",
-        "//chromeos/system",
+        "//chromeos/ash/components/system",
       ]
     }
-
-    public_configs = [ ":rlz_lib_config" ]
   }
 
   source_set("test_support") {
@@ -166,7 +160,7 @@ if (enable_rlz_support) {
       "//build:chromeos_buildflags",
     ]
     if (is_chromeos_ash) {
-      public_deps += [ "//chromeos/system" ]
+      public_deps += [ "//chromeos/ash/components/system" ]
     }
   }
 
@@ -203,7 +197,7 @@ if (enable_rlz_support) {
       deps += [
         "//chromeos/ash/components/dbus:test_support",
         "//chromeos/ash/components/dbus/debug_daemon",
-        "//chromeos/system",
+        "//chromeos/ash/components/system",
       ]
     }
   }
@@ -215,20 +209,6 @@ if (!is_ios && !is_android) {
     deps = [
       ":rlz_lib",
       "//build/win:default_exe_manifest",
-    ]
-  }
-}
-
-if (is_win) {
-  shared_library("rlz") {
-    sources = [
-      "win/dll/dll_main.cc",
-      "win/dll/exports.cc",
-    ]
-    deps = [
-      ":rlz_lib",
-      ":rlz_utils",
-      "//third_party/zlib",
     ]
   }
 }

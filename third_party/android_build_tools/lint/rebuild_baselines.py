@@ -8,22 +8,25 @@ import argparse
 import logging
 import pathlib
 import subprocess
+import sys
 from typing import List, Optional
 
-_SRC_PATH = pathlib.Path(__file__).parents[3].resolve()
+_SRC_PATH = pathlib.Path(__file__).resolve().parents[3]
 _CLANK_PATH = _SRC_PATH / 'clank'
 _OUTPUT_DIR_ROOT = _SRC_PATH / 'out'
-_AUTONINJA_PATH = _SRC_PATH / 'third_party' / 'depot_tools' / 'autoninja'
-_NINJA_PATH = _SRC_PATH / 'third_party' / 'depot_tools' / 'ninja'
-_GN_PATH = _SRC_PATH / 'third_party' / 'depot_tools' / 'gn'
+_NINJA_PATH = _SRC_PATH / 'third_party' / 'ninja' / 'ninja'
+_GN_PATH = _SRC_PATH / 'buildtools' / 'linux64' / 'gn'
+
+sys.path.insert(1, str(_SRC_PATH / 'build'))
+import gn_helpers
 
 
-def build_all_lint_targets(out_dir: pathlib.Path,
-                           args_list: List[str],
-                           *,
-                           verbose: bool,
-                           built_targets: Optional[List[str]] = None
-                           ) -> List[str]:
+def build_all_lint_targets(
+        out_dir: pathlib.Path,
+        args_list: List[str],
+        *,
+        verbose: bool,
+        built_targets: Optional[List[str]] = None) -> List[str]:
     logging.info(f'Create output directory: {out_dir}')
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -61,11 +64,45 @@ def build_all_lint_targets(out_dir: pathlib.Path,
         logging.info('Did not find any targets to build.')
     else:
         logging.info(f'Re-building lint targets: {target_names}')
-        subprocess.run([_AUTONINJA_PATH, '-C', out_dir] + target_names,
-                       check=True,
-                       capture_output=not verbose)
+        cmd = gn_helpers.CreateBuildCommand(str(out_dir)) + target_names
+        # Do not show output by default since all lint warnings are printed.
+        result = subprocess.run(cmd, check=False, capture_output=not verbose)
+        if result.returncode:
+            print('Build failed.')
+            print(result.stdout)
+            print(result.stderr)
+            sys.exit(1)
 
     return built_targets + target_names
+
+
+def _remove_redundant_lint_error(path: pathlib.Path):
+    with open(path) as f:
+        original_content = f.read()
+
+    # Lint error is always the first issue.
+    first_issue_idx = original_content.find('    <issue\n')
+    if first_issue_idx == -1:
+        return
+
+    lint_error_idx = original_content.find('id="LintError"', first_issue_idx)
+    if lint_error_idx == -1:
+        return
+
+    # If the lint error isn't the first issue, we should keep it.
+    if lint_error_idx - first_issue_idx > 20:
+        return
+
+    issue_end_idx = original_content.find('</issue>\n', lint_error_idx)
+    if issue_end_idx == -1:
+        return
+
+    # Replace 10 characters past the start of </issue> to remove extra newlines.
+    replaced_content = original_content[:first_issue_idx] + original_content[
+        issue_end_idx + 10:]
+
+    with open(path, 'w') as f:
+        f.write(replaced_content)
 
 
 def main():
@@ -119,7 +156,7 @@ def main():
 
     out_dir = _OUTPUT_DIR_ROOT / 'Lint-Default'
     gn_args = [
-        'use_goma=true',
+        'use_remoteexec=true',
         'target_os="android"',
         'treat_warnings_as_errors=false',
         'is_component_build=false',
@@ -132,7 +169,7 @@ def main():
     if include_clank:
         out_dir = _OUTPUT_DIR_ROOT / 'Lint-Clank'
         gn_args = [
-            'use_goma=true',
+            'use_remoteexec=true',
             'target_os="android"',
             'treat_warnings_as_errors=false',
             'is_component_build=false',
@@ -144,7 +181,7 @@ def main():
 
     out_dir = _OUTPUT_DIR_ROOT / 'Lint-Cast'
     gn_args = [
-        'use_goma=true',
+        'use_remoteexec=true',
         'target_os="android"',
         'treat_warnings_as_errors=false',
         'is_component_build=false',
@@ -157,13 +194,25 @@ def main():
                                            verbose=args.verbose,
                                            built_targets=built_targets)
 
-    logging.info('Adding new lint-baseline.xml files to git.')
+    out_dir = _OUTPUT_DIR_ROOT / 'Lint-Cronet'
+    gn_args = [
+        'use_remoteexec=true',
+        'target_os="android"',
+        'treat_warnings_as_errors=false',
+        'is_component_build=false',
+        'is_cronet_build = true',
+    ]
+    built_targets = build_all_lint_targets(out_dir,
+                                           gn_args,
+                                           verbose=args.verbose,
+                                           built_targets=built_targets)
+
+    logging.info('Cleaning up new lint-baseline.xml files.')
     for git_root, repo_path in repo_file_paths:
         path = git_root / repo_path
         if path.name == 'lint-baseline.xml':
-            # Since we are passing -C to git, the relative path is needed
-            logging.info(f'> Adding to git: {repo_path}')
-            subprocess.run(['git', '-C', str(git_root), 'add', repo_path])
+            logging.info(f'> Removing redundant LintError: {path}')
+            _remove_redundant_lint_error(path)
 
 
 if __name__ == '__main__':

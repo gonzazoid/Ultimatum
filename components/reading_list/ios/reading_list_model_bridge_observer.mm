@@ -7,10 +7,6 @@
 #include "components/reading_list/core/reading_list_entry.h"
 #include "components/reading_list/core/reading_list_model.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 ReadingListModelBridge::ReadingListModelBridge(
     id<ReadingListModelBridgeObserver> observer,
     ReadingListModel* model)
@@ -77,7 +73,10 @@ void ReadingListModelBridge::ReadingListDidAddEntry(
 
 void ReadingListModelBridge::ReadingListDidApplyChanges(
     ReadingListModel* model) {
-  [observer_ readingListModelDidApplyChanges:model];
+  if ([observer_
+          respondsToSelector:@selector(readingListModelDidApplyChanges:)]) {
+    [observer_ readingListModelDidApplyChanges:model];
+  }
 }
 
 void ReadingListModelBridge::ReadingListModelBeganBatchUpdates(
@@ -112,5 +111,14 @@ void ReadingListModelBridge::ReadingListWillUpdateEntry(
   if ([observer_
           respondsToSelector:@selector(readingListModel:willUpdateEntry:)]) {
     [observer_ readingListModel:model willUpdateEntry:url];
+  }
+}
+
+void ReadingListModelBridge::ReadingListDidUpdateEntry(
+    const ReadingListModel* model,
+    const GURL& url) {
+  if ([observer_ respondsToSelector:@selector(readingListModel:
+                                                didUpdateEntry:)]) {
+    [observer_ readingListModel:model didUpdateEntry:url];
   }
 }

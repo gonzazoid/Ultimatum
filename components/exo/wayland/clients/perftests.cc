@@ -4,14 +4,29 @@
 
 #include "base/command_line.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/scoped_feature_list.h"
 #include "components/exo/wayland/clients/blur.h"
 #include "components/exo/wayland/clients/simple.h"
 #include "components/exo/wayland/clients/test/wayland_client_test.h"
+#include "components/viz/common/features.h"
 #include "testing/perf/perf_result_reporter.h"
 
 namespace {
 
-using WaylandClientPerfTests = exo::WaylandClientTest;
+class WaylandClientPerfTests : public exo::WaylandClientTest {
+ public:
+  WaylandClientPerfTests();
+  ~WaylandClientPerfTests() override = default;
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+WaylandClientPerfTests::WaylandClientPerfTests() {
+  // TODO(crbug.com/1399591): Figure out the missing/misordered
+  // PresentationFeedback when using this feature.
+  scoped_feature_list_.InitAndDisableFeature(features::kOnBeginFrameAcks);
+}
 
 constexpr char kMetricPrefixWaylandClient[] = "WaylandClient.";
 constexpr char kMetricFramerate[] = "framerate";
@@ -40,11 +55,13 @@ TEST_F(WaylandClientPerfTests, Simple) {
   exo::wayland::clients::Simple client;
   EXPECT_TRUE(client.Init(params));
 
-  client.Run(kWarmUpFrames, false, nullptr);
+  const exo::wayland::clients::Simple::RunParam run_params = {false, false};
+
+  client.Run(kWarmUpFrames, run_params, nullptr);
 
   exo::wayland::clients::Simple::PresentationFeedback feedback;
   auto start_time = base::Time::Now();
-  client.Run(kTestFrames, false, &feedback);
+  client.Run(kTestFrames, run_params, &feedback);
   auto time_delta = base::Time::Now() - start_time;
   float fps = kTestFrames / time_delta.InSecondsF();
   auto reporter = SetUpReporter(kStorySimple);

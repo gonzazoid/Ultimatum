@@ -2,11 +2,14 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/config/chromeos/ui_mode.gni")
+
 static_library("browser") {
   public = [
     "base_signals_collector.h",
     "file_system_signals_collector.h",
     "metrics_utils.h",
+    "pref_names.h",
     "settings_client.h",
     "settings_signals_collector.h",
     "signals_aggregator.h",
@@ -24,6 +27,7 @@ static_library("browser") {
     "base_signals_collector.cc",
     "file_system_signals_collector.cc",
     "metrics_utils.cc",
+    "pref_names.cc",
     "settings_signals_collector.cc",
     "signals_aggregator_impl.cc",
     "signals_types.cc",
@@ -40,6 +44,7 @@ static_library("browser") {
 
   deps = [
     "//components/device_signals/core/common",
+    "//components/device_signals/core/common:features",
     "//components/policy/core/common",
     "//components/prefs",
     "//components/signin/public/identity_manager",
@@ -49,9 +54,17 @@ static_library("browser") {
     public_deps += [ "//components/device_signals/core/common/win" ]
   }
 
-  if (is_win || is_linux || is_mac) {
-    public += [ "pref_names.h" ]
-    sources += [ "pref_names.cc" ]
+  if (is_win || is_mac) {
+    public += [
+      "agent_signals_collector.h",
+      "crowdstrike_client.h",
+    ]
+    sources += [
+      "agent_signals_collector.cc",
+      "crowdstrike_client.cc",
+    ]
+
+    deps += [ "//services/data_decoder/public/cpp" ]
   }
 }
 
@@ -95,12 +108,23 @@ source_set("unit_tests") {
     ":test_support",
     "//base/test:test_support",
     "//components/device_signals/core/common",
+    "//components/device_signals/core/common:features",
     "//components/policy/core/common",
     "//components/policy/core/common:test_support",
+    "//components/prefs",
+    "//components/prefs:test_support",
     "//components/signin/public/identity_manager",
     "//components/signin/public/identity_manager:test_support",
     "//testing/gtest",
   ]
+
+  if (is_win || is_mac) {
+    sources += [
+      "agent_signals_collector_unittest.cc",
+      "crowdstrike_client_unittest.cc",
+    ]
+    deps += [ "//services/data_decoder/public/cpp:test_support" ]
+  }
 
   if (is_win) {
     deps += [ "//components/device_signals/core/browser/win:unit_tests" ]
@@ -108,5 +132,9 @@ source_set("unit_tests") {
 
   if (is_mac) {
     deps += [ "//components/device_signals/core/browser/mac:unit_tests" ]
+  }
+
+  if (is_chromeos_ash) {
+    deps += [ "//components/device_signals/core/browser/ash:unit_tests" ]
   }
 }

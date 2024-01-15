@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "ui/base/models/combobox_model.h"
 
 namespace autofill {
@@ -31,6 +31,7 @@ class CountryComboboxModel : public ui::ComboboxModel {
 
   // |filter| is passed each known country's country code. If |filter| returns
   // true, an item for that country is added to the model (else it's omitted).
+  // Empty callback can be used to retain all countries.
   // |manager| determines the default choice.
   void SetCountries(
       const PersonalDataManager& manager,

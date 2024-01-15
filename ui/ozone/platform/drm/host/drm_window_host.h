@@ -9,6 +9,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "ui/display/types/display_snapshot.h"
 #include "ui/events/platform/platform_event_dispatcher.h"
 #include "ui/gfx/geometry/rect.h"
@@ -72,7 +73,7 @@ class DrmWindowHost : public PlatformWindow,
   void SetCapture() override;
   void ReleaseCapture() override;
   bool HasCapture() const override;
-  void ToggleFullscreen() override;
+  void SetFullscreen(bool fullscreen, int64_t target_display_id) override;
   void Maximize() override;
   void Minimize() override;
   void Restore() override;
@@ -104,12 +105,12 @@ class DrmWindowHost : public PlatformWindow,
  private:
   void SendBoundsChange();
 
-  PlatformWindowDelegate* const delegate_;        // Not owned.
-  GpuThreadAdapter* const sender_;                // Not owned.
-  EventFactoryEvdev* const event_factory_;        // Not owned.
-  DrmCursor* const cursor_;                       // Not owned.
-  DrmWindowHostManager* const window_manager_;    // Not owned.
-  DrmDisplayHostManager* const display_manager_;  // Not owned.
+  const raw_ptr<PlatformWindowDelegate> delegate_;        // Not owned.
+  const raw_ptr<GpuThreadAdapter> sender_;                // Not owned.
+  const raw_ptr<EventFactoryEvdev> event_factory_;        // Not owned.
+  const raw_ptr<DrmCursor> cursor_;                       // Not owned.
+  const raw_ptr<DrmWindowHostManager> window_manager_;    // Not owned.
+  const raw_ptr<DrmDisplayHostManager> display_manager_;  // Not owned.
 
   gfx::Rect bounds_;
   const gfx::AcceleratedWidget widget_;

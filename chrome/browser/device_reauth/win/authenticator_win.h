@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/functional/callback_forward.h"
 
 // Enum specifying possible states of biometric authentication availability on
@@ -34,6 +34,7 @@ class AuthenticatorWinInterface {
   virtual void AuthenticateUser(const std::u16string& message,
                                 base::OnceCallback<void(bool)> callback) = 0;
   virtual void CheckIfBiometricsAvailable(AvailabilityCallback callback) = 0;
+  virtual bool CanAuthenticateWithScreenLock() = 0;
 };
 
 // Implementation of the interface that handles communication with the OS.
@@ -52,6 +53,10 @@ class AuthenticatorWin : public AuthenticatorWinInterface {
   // Runs `callback` with a biometrics availability as a parameter. Check
   // happens on the background thread as it is expensive.
   void CheckIfBiometricsAvailable(AvailabilityCallback callback) override;
+
+  // Returns true if there is screen lock present on the machine, false
+  // otherwise.
+  bool CanAuthenticateWithScreenLock() override;
 };
 
 #endif  // CHROME_BROWSER_DEVICE_REAUTH_WIN_AUTHENTICATOR_WIN_H_

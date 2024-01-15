@@ -9,27 +9,31 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
 #include "base/feature_list.h"
 #include "base/files/file.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/ref_counted_delete_on_sequence.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/strings/string_piece.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/thread_annotations.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/timer/timer.h"
 #include "components/reporting/compression/compression_module.h"
 #include "components/reporting/encryption/encryption_module_interface.h"
 #include "components/reporting/proto/synced/record.pb.h"
+#include "components/reporting/resources/resource_managed_buffer.h"
 #include "components/reporting/storage/storage_configuration.h"
 #include "components/reporting/storage/storage_uploader_interface.h"
+#include "components/reporting/util/refcounted_closure_list.h"
 #include "components/reporting/util/status.h"
 #include "components/reporting/util/statusor.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -45,8 +49,14 @@ namespace test {
 enum class StorageQueueOperationKind {
   kReadBlock,
   kWriteBlock,
-  kWriteMetadata
+  kWriteMetadata,
+  kWrappedRecordLowMemory,
+  kEncryptedRecordLowMemory,
+  kWriteLowDiskSpace,
 };
+
+using ErrorInjectionHandlerType =
+    base::RepeatingCallback<Status(test::StorageQueueOperationKind, int64_t)>;
 
 }  // namespace test
 
@@ -128,13 +138,26 @@ class StorageQueue : public base::RefCountedDeleteOnSequence<StorageQueue> {
   void AssignDegradationQueues(
       const std::vector<scoped_refptr<StorageQueue>>& degradation_queues);
 
-  // Test only: makes specified records fail on specified operation kind.
+  // Registers completion notification callback. Thread-safe.
+  // All registered callbacks are called when the queue destruction comes
+  // to its completion.
+  void RegisterCompletionCallback(base::OnceClosure callback);
+
+  // Test only: provides an injection handler that would receive operation kind
+  // and seq id, and then return Status. Non-OK Status injects the error and
+  // can be returned as a resulting operation status too.
+  // If `handler` is null, error injections is disabled.
   void TestInjectErrorsForOperation(
-      const test::StorageQueueOperationKind operation_kind,
-      std::initializer_list<int64_t> sequencing_ids);
+      test::ErrorInjectionHandlerType handler = base::NullCallback());
 
   // Access queue options.
   const QueueOptions& options() const { return options_; }
+
+  // Returns the file sequence ID (the first sequence ID in the file) if the
+  // sequence ID can be extracted from the extension. Otherwise, returns an
+  // error status.
+  static StatusOr<int64_t> GetFileSequenceIdFromPath(
+      const base::FilePath& file_name);
 
  protected:
   virtual ~StorageQueue();
@@ -158,14 +181,9 @@ class StorageQueue : public base::RefCountedDeleteOnSequence<StorageQueue> {
     static StatusOr<scoped_refptr<SingleFile>> Create(
         const base::FilePath& filename,
         int64_t size,
-        scoped_refptr<ResourceInterface> memory_resource,
-        scoped_refptr<ResourceInterface> disk_space_resource);
-
-    // Returns the file sequence ID (the first sequence ID in the file) if the
-    // sequence ID can be extracted from the extension. Otherwise, returns an
-    // error status.
-    static StatusOr<int64_t> GetFileSequenceIdFromPath(
-        const base::FilePath& file_name);
+        scoped_refptr<ResourceManager> memory_resource,
+        scoped_refptr<ResourceManager> disk_space_resource,
+        scoped_refptr<RefCountedClosureList> completion_closure_list);
 
     Status Open(bool read_only);  // No-op if already opened.
     void Close();                 // No-op if not opened.
@@ -181,17 +199,18 @@ class StorageQueue : public base::RefCountedDeleteOnSequence<StorageQueue> {
     // |expect_readonly| must match to is_readonly() (when set to false,
     // the file is expected to be writeable; this only happens when scanning
     // files restarting the queue).
-    StatusOr<base::StringPiece> Read(uint32_t pos,
-                                     uint32_t size,
-                                     size_t max_buffer_size,
-                                     bool expect_readonly = true);
+    StatusOr<std::string_view> Read(uint32_t pos,
+                                    uint32_t size,
+                                    size_t max_buffer_size,
+                                    bool expect_readonly = true);
 
     // Appends data to the file.
-    StatusOr<uint32_t> Append(base::StringPiece data);
+    StatusOr<uint32_t> Append(std::string_view data);
 
     bool is_opened() const { return handle_.get() != nullptr; }
     bool is_readonly() const {
-      DCHECK(is_opened());
+      DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+      CHECK(is_opened());
       return is_readonly_.value();
     }
     uint64_t size() const { return size_; }
@@ -206,31 +225,37 @@ class StorageQueue : public base::RefCountedDeleteOnSequence<StorageQueue> {
     // Private constructor, called by factory method only.
     SingleFile(const base::FilePath& filename,
                int64_t size,
-               scoped_refptr<ResourceInterface> memory_resource,
-               scoped_refptr<ResourceInterface> disk_space_resource);
+               scoped_refptr<ResourceManager> memory_resource,
+               scoped_refptr<ResourceManager> disk_space_resource,
+               scoped_refptr<RefCountedClosureList> completion_closure_list);
+
+    SEQUENCE_CHECKER(sequence_checker_);
+
+    // Completion closure list reference. Dropped last, when `ReadContext` is
+    // destructed.
+    const scoped_refptr<RefCountedClosureList> completion_closure_list_;
 
     // Flag (valid for opened file only): true if file was opened for reading
     // only, false otherwise.
-    absl::optional<bool> is_readonly_;
+    absl::optional<bool> is_readonly_ GUARDED_BY_CONTEXT(sequence_checker_);
 
     const base::FilePath filename_;  // relative to the StorageQueue directory
     uint64_t size_ = 0;  // tracked internally rather than by filesystem
 
     std::unique_ptr<base::File> handle_;  // Set only when opened/created.
 
-    scoped_refptr<ResourceInterface> memory_resource_;
-    scoped_refptr<ResourceInterface> disk_space_resource_;
+    const scoped_refptr<ResourceManager> memory_resource_;
+    const scoped_refptr<ResourceManager> disk_space_resource_;
 
     // When reading the file, this is the buffer and data positions.
     // If the data is read sequentially, buffered portions are reused
     // improving performance. When the sequential order is broken (e.g.
     // we start reading the same file in parallel from different position),
     // the buffer is reset.
-    size_t data_start_ = 0;
-    size_t data_end_ = 0;
-    uint64_t file_position_ = 0;
-    size_t buffer_size_ = 0;
-    std::unique_ptr<char[]> buffer_;
+    size_t data_start_ GUARDED_BY_CONTEXT(sequence_checker_) = 0;
+    size_t data_end_ GUARDED_BY_CONTEXT(sequence_checker_) = 0;
+    uint64_t file_position_ GUARDED_BY_CONTEXT(sequence_checker_) = 0;
+    ResourceManagedBuffer buffer_ GUARDED_BY_CONTEXT(sequence_checker_);
   };
 
   // Private constructor, to be called by Create factory method only.
@@ -260,7 +285,7 @@ class StorageQueue : public base::RefCountedDeleteOnSequence<StorageQueue> {
 
   // Helper method for Init(): sets generation id based on data file name.
   // For backwards compatibility, accepts file name without generation too.
-  Status SetGenerationId(const base::FilePath& full_name);
+  Status SetOrConfirmGenerationId(const base::FilePath& full_name);
 
   // Helper method for Init(): enumerates all data files in the directory.
   // Valid file names are <prefix>.<sequencing_id>, any other names are ignored.
@@ -290,7 +315,7 @@ class StorageQueue : public base::RefCountedDeleteOnSequence<StorageQueue> {
   // asynchronously deletes all other files with lower sequencing id
   // (multiple Writes can see the same files and attempt to delete them, and
   // that is not an error).
-  Status WriteMetadata(base::StringPiece current_record_digest);
+  Status WriteMetadata(std::string_view current_record_digest);
 
   // Helper method for RestoreMetadata(): loads and verifies metadata file
   // contents. If accepted, adds the file to the set.
@@ -315,8 +340,8 @@ class StorageQueue : public base::RefCountedDeleteOnSequence<StorageQueue> {
   // Helper method for Write(): composes record header and writes it to the
   // file, followed by data. Stores record digest in the queue, increments
   // next sequencing id.
-  Status WriteHeaderAndBlock(base::StringPiece data,
-                             base::StringPiece current_record_digest,
+  Status WriteHeaderAndBlock(std::string_view data,
+                             std::string_view current_record_digest,
                              scoped_refptr<SingleFile> file);
 
   // Helper method for Upload: if the last file is not empty (has at least one
@@ -387,6 +412,10 @@ class StorageQueue : public base::RefCountedDeleteOnSequence<StorageQueue> {
   const scoped_refptr<base::SequencedTaskRunner> sequenced_task_runner_;
   SEQUENCE_CHECKER(storage_queue_sequence_checker_);
 
+  // Completion closure list reference. Dropped when `StorageQueue` is
+  // destructed.
+  const scoped_refptr<RefCountedClosureList> completion_closure_list_;
+
   // Dedicated sequence task runner for low priority actions (which make
   // no impact on the main activity - e.g., deletion of the outdated metafiles).
   // Serializeing them should reduce their impact.
@@ -416,7 +445,9 @@ class StorageQueue : public base::RefCountedDeleteOnSequence<StorageQueue> {
   // being destructed. We use std::list rather than std::queue, because
   // if the write fails, it needs to be removed from the queue regardless of
   // whether it is at the head, tail or middle.
-  std::list<WriteContext*> write_contexts_queue_;
+  // Weak pointer allows to detect premature destruction of a context.
+  std::list<base::WeakPtr<WriteContext>> write_contexts_queue_
+      GUARDED_BY_CONTEXT(storage_queue_sequence_checker_);
 
   // Reflects reservation for the head of the write contexts queue. Will return
   // to 0 after each writing process is finished. It helps keep disk space usage
@@ -438,9 +469,6 @@ class StorageQueue : public base::RefCountedDeleteOnSequence<StorageQueue> {
   // that cannot be filled in and is uploaded as such.
   absl::optional<int64_t> first_unconfirmed_sequencing_id_;
 
-  // Latest metafile. May be null.
-  scoped_refptr<SingleFile> meta_file_;
-
   // Ordered map of the files by ascending sequencing id.
   std::map<int64_t, scoped_refptr<SingleFile>> files_;
 
@@ -450,8 +478,14 @@ class StorageQueue : public base::RefCountedDeleteOnSequence<StorageQueue> {
   // All accesses take place on sequenced_task_runner_.
   int32_t active_read_operations_ = 0;
 
-  // Upload timer (active only if options_.upload_period() is not 0).
+  // Upload timer (active only if options_.upload_period() is not 0 and not
+  // infinity).
   base::RepeatingTimer upload_timer_;
+
+  // Check back after upload timer (activated after upload has been started
+  // and options_.upload_retry_delay() is not 0). If already started, it will
+  // be reset to the new delay.
+  base::RetainingOneShotTimer check_back_timer_;
 
   // Upload provider callback.
   const UploaderInterface::AsyncStartUploaderCb async_start_upload_cb_;
@@ -462,9 +496,10 @@ class StorageQueue : public base::RefCountedDeleteOnSequence<StorageQueue> {
   // Compression module.
   scoped_refptr<CompressionModule> compression_module_;
 
-  // Test only: records specified to fail for a given operation kind.
-  base::flat_map<test::StorageQueueOperationKind, base::flat_set<int64_t>>
-      test_injected_failures_;
+  // Test only: records callback to be invoked. It will be called with operation
+  // kind and seq id, and will return Status (non-OK status indicates the
+  // failure to be injected). In production code must be null.
+  test::ErrorInjectionHandlerType test_injection_handler_{base::NullCallback()};
 
   // Weak pointer factory (must be last member in class).
   base::WeakPtrFactory<StorageQueue> weakptr_factory_{this};

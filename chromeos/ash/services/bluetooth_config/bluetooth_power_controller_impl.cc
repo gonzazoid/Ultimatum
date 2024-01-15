@@ -22,8 +22,7 @@ namespace {
 // Bluetooth setting instead.
 bool ShouldApplyUserBluetoothSetting(user_manager::UserType user_type) {
   return user_type == user_manager::USER_TYPE_REGULAR ||
-         user_type == user_manager::USER_TYPE_CHILD ||
-         user_type == user_manager::USER_TYPE_ACTIVE_DIRECTORY;
+         user_type == user_manager::USER_TYPE_CHILD;
 }
 
 }  // namespace
@@ -45,7 +44,8 @@ void BluetoothPowerControllerImpl::RegisterProfilePrefs(
 BluetoothPowerControllerImpl::BluetoothPowerControllerImpl(
     AdapterStateController* adapter_state_controller)
     : adapter_state_controller_(adapter_state_controller) {
-  adapter_state_controller_observation_.Observe(adapter_state_controller_);
+  adapter_state_controller_observation_.Observe(
+      adapter_state_controller_.get());
 }
 
 BluetoothPowerControllerImpl::~BluetoothPowerControllerImpl() = default;
@@ -185,7 +185,7 @@ void BluetoothPowerControllerImpl::InitPrimaryUserPrefService(
 }
 
 void BluetoothPowerControllerImpl::ApplyBluetoothPrimaryUserPref() {
-  absl::optional<user_manager::UserType> user_type =
+  std::optional<user_manager::UserType> user_type =
       user_manager::UserManager::Get()->GetActiveUser()->GetType();
 
   // Apply the Bluetooth pref only for regular users (i.e. users representing

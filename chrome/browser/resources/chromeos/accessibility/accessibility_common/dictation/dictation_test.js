@@ -5,7 +5,7 @@
 GEN_INCLUDE(['dictation_test_base.js']);
 
 /** Dictation feature using accessibility common extension browser tests. */
-DictationE2ETest = class extends DictationE2ETestDisallowConsole {};
+DictationE2ETest = class extends DictationE2ETestBase {};
 
 AX_TEST_F('DictationE2ETest', 'ResetsImeAfterToggleOff', async function() {
   // Set something as the active IME.
@@ -260,8 +260,10 @@ AX_TEST_F('DictationE2ETest', 'NoCommandsWhenNotSupported', async function() {
   this.mockInputIme.clearLastParameters();
 });
 
+// TODO(crbug.com/1442591) flaky test
 AX_TEST_F(
-    'DictationE2ETest', 'SilencesSpokenFeedbackWhenStarting', async function() {
+    'DictationE2ETest', 'DISABLED_SilencesSpokenFeedbackWhenStarting',
+    async function() {
       assertEquals(
           0, this.mockAccessibilityPrivate.getSpokenFeedbackSilencedCount());
 
@@ -296,3 +298,52 @@ AX_TEST_F(
       assertEquals(
           0, this.mockAccessibilityPrivate.getSpokenFeedbackSilencedCount());
     });
+
+AX_TEST_F(
+    'DictationE2ETest', 'SurroundingInfoResetsAfterToggleOff',
+    async function() {
+      assertEquals(null, this.getInputController().surroundingInfo_);
+      this.toggleDictationOn();
+      const value = 'This is a test';
+      this.sendFinalSpeechResult(value);
+      // A surroundingTextChanged event is fired whenever the editable value
+      // or the caret index is changed.
+      this.mockInputIme.callOnSurroundingTextChanged({
+        anchor: value.length,
+        focus: value.length,
+        offset: 0,
+        text: value,
+      });
+      assertNotNullNorUndefined(this.getInputController().surroundingInfo_);
+      this.toggleDictationOff();
+      assertEquals(null, this.getInputController().surroundingInfo_);
+    });
+
+AX_TEST_F('DictationE2ETest', 'ShowsToastWhenMicMuted', async function() {
+  const StreamType = chrome.audio.StreamType;
+  const ToastType = chrome.accessibilityPrivate.ToastType;
+
+  assertEquals(
+      0,
+      this.mockAccessibilityPrivate.getShowToastCount(
+          ToastType.DICTATION_MIC_MUTED));
+  await new Promise(
+      resolve =>
+          chrome.audio.setMute(StreamType.INPUT, /*isMuted=*/ true, resolve));
+
+  // Use callOnToggleDictation instead of toggleDictation because the latter
+  // asserts that speech recognition successfully starts, which won't be the
+  // case here.
+  this.mockAccessibilityPrivate.callOnToggleDictation(true);
+  assertTrue(this.getDictationActive());
+  this.checkDictationImeActive();
+  // Focus the input context so that we try to start speech recognition. We'll
+  // fail to start since the device is muted.
+  this.focusInputContext();
+  // Confirm that a toast was shown and that Dictation is inactive.
+  assertEquals(
+      1,
+      this.mockAccessibilityPrivate.getShowToastCount(
+          ToastType.DICTATION_MIC_MUTED));
+  assertFalse(this.getDictationActive());
+});

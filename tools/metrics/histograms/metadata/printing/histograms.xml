@@ -23,7 +23,7 @@ chromium-metrics-reviews@google.com.
 <histograms>
 
 <histogram name="Printing.ConversionSize.Emf" units="KB"
-    expires_after="2023-09-10">
+    expires_after="2024-05-19">
   <owner>thestig@chromium.org</owner>
   <owner>awscreen@chromium.org</owner>
   <summary>
@@ -33,7 +33,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.ConversionSize.EmfWithReducedRasterization"
-    units="KB" expires_after="2023-09-10">
+    units="KB" expires_after="2024-05-05">
   <owner>thestig@chromium.org</owner>
   <owner>awscreen@chromium.org</owner>
   <summary>
@@ -43,7 +43,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.ConversionSize.PostScript2" units="KB"
-    expires_after="2023-09-10">
+    expires_after="2024-09-10">
   <owner>thestig@chromium.org</owner>
   <owner>awscreen@chromium.org</owner>
   <summary>
@@ -53,7 +53,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.ConversionSize.PostScript3" units="KB"
-    expires_after="2023-09-10">
+    expires_after="2024-09-10">
   <owner>thestig@chromium.org</owner>
   <owner>awscreen@chromium.org</owner>
   <summary>
@@ -63,7 +63,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.ConversionSize.PostScript3WithType42Fonts" units="KB"
-    expires_after="2023-09-10">
+    expires_after="2024-09-10">
   <owner>thestig@chromium.org</owner>
   <owner>awscreen@chromium.org</owner>
   <summary>
@@ -73,7 +73,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.ConversionSize.Pwg" units="KB"
-    expires_after="2023-09-10">
+    expires_after="2024-09-10">
   <owner>thestig@chromium.org</owner>
   <owner>awscreen@chromium.org</owner>
   <summary>
@@ -83,12 +83,41 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.CUPS.AddressResolutionResult" enum="BooleanSuccess"
-    expires_after="2023-04-09">
+    expires_after="2024-06-30">
   <owner>bmgordon@chromium.org</owner>
   <owner>cros-printing-dev@chromium.org</owner>
   <summary>
     Records whether resolution of a .local address via mDNS was successful. The
     metric is recorded during attempted setup of a printer discovered via mDNS.
+  </summary>
+</histogram>
+
+<histogram name="Printing.CUPS.AutomaticIppSetupResultOfUsbPrinterWithPpd"
+    enum="PrinterSetupResult" expires_after="2024-06-02">
+  <owner>pawliczek@chromium.org</owner>
+  <owner>bmgordon@chromium.org</owner>
+  <owner>project-bolton@google.com</owner>
+  <summary>
+    The success or error code for the Ipp Everywhere setup of a USB printer. The
+    result is recorded only if all the following conditions are fulfilled: 1.
+    The setup procedure was initiated automatically when a USB printer was
+    physically connected to the device. 2. There is a matching PPD file that can
+    be used to setup the printer. 3. The printer supports IPP over USB protocol.
+  </summary>
+</histogram>
+
+<histogram
+    name="Printing.CUPS.AutomaticPpdSetupResultOfUsbPrinterSupportingIpp"
+    enum="PrinterSetupResult" expires_after="2024-06-02">
+  <owner>pawliczek@chromium.org</owner>
+  <owner>bmgordon@chromium.org</owner>
+  <owner>project-bolton@google.com</owner>
+  <summary>
+    The success or error code for the PPD-based setup of a USB printer. The
+    result is recorded only if all the following conditions are fulfilled: 1.
+    The setup procedure was initiated automatically when a USB printer was
+    physically connected to the device. 2. There is a matching PPD file that can
+    be used to setup the printer. 3. The printer supports IPP over USB protocol.
   </summary>
 </histogram>
 
@@ -105,7 +134,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.CUPS.IppAttributesSuccess" enum="BooleanSuccess"
-    expires_after="2023-04-16">
+    expires_after="2024-05-12">
   <owner>bmgordon@chromium.org</owner>
   <owner>cros-printing-dev@chromium.org</owner>
   <summary>
@@ -118,7 +147,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.CUPS.IppDeviceReachable" enum="BooleanSuccess"
-    expires_after="2023-02-26">
+    expires_after="2024-05-12">
   <owner>bmgordon@chromium.org</owner>
   <owner>cros-printing-dev@chromium.org</owner>
   <summary>
@@ -128,7 +157,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.CUPS.JobDuration.JobCancelled" units="ms"
-    expires_after="2023-03-05">
+    expires_after="2024-06-30">
   <owner>bmgordon@chromium.org</owner>
   <owner>project-bolton@google.com</owner>
   <summary>
@@ -138,7 +167,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.CUPS.JobDuration.JobDone" units="ms"
-    expires_after="2023-03-26">
+    expires_after="2024-06-30">
   <owner>bmgordon@chromium.org</owner>
   <owner>project-bolton@google.com</owner>
   <summary>
@@ -161,19 +190,45 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Printing.CUPS.MigratedMakeAndModel" enum="BooleanMigrated"
-    expires_after="2023-04-16">
-  <owner>luum@chromium.org</owner>
-  <owner>cros-printing-dev@chromium.org</owner>
+<histogram name="Printing.CUPS.JobResultForUsbPrintersWithIppAndPpd"
+    enum="PrintJobResult" expires_after="2024-06-02">
+  <owner>pawliczek@chromium.org</owner>
+  <owner>bmgordon@chromium.org</owner>
+  <owner>project-bolton@google.com</owner>
   <summary>
-    Records when a synced printer's outdated separate make and model strings
-    have been migrated to the new merged form. Recorded during initial sync
-    across PrintersSyncBridge.
+    The final status of every print job that was succesfully queued for a USB
+    printer that meets all of the following conditions: 1. The setup procedure
+    of the printer was initiated automatically when the printer was physically
+    connected to the device. 2. There is a matching PPD file that can be used to
+    setup the printer. 3. The printer supports IPP over USB protocol. 4. The
+    printer was setup in the first attempt.
+  </summary>
+</histogram>
+
+<histogram name="Printing.CUPS.NearbyNetworkAutomaticPrintersCount"
+    units="printers" expires_after="2024-06-30">
+  <owner>bmgordon@chromium.org</owner>
+  <owner>project-bolton@google.com</owner>
+  <summary>
+    The number of detected network printers classified as Automatic, excluding
+    Saved printers. Recorded when the user navigates to the OS Settings Printing
+    page to set up printers. Only recorded on Chrome OS.
+  </summary>
+</histogram>
+
+<histogram name="Printing.CUPS.NearbyNetworkDiscoveredPrintersCount"
+    units="printers" expires_after="2024-06-30">
+  <owner>bmgordon@chromium.org</owner>
+  <owner>project-bolton@google.com</owner>
+  <summary>
+    The number of detected network printers classified as Discovered, excluding
+    Saved printers. Recorded when the user navigates to the OS Settings Printing
+    page to set up printers. Only recorded on Chrome OS.
   </summary>
 </histogram>
 
 <histogram name="Printing.CUPS.NearbyNetworkPrintersCount" units="printers"
-    expires_after="2023-04-23">
+    expires_after="2024-05-19">
   <owner>bmgordon@chromium.org</owner>
   <owner>project-bolton@google.com</owner>
   <summary>
@@ -184,7 +239,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.CUPS.PrintDocumentSize" units="KB"
-    expires_after="2023-04-23">
+    expires_after="2024-05-19">
   <owner>bmgordon@chromium.org</owner>
   <owner>project-bolton@google.com</owner>
   <summary>
@@ -194,7 +249,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.CUPS.PrinterAdded" enum="PrinterProtocol"
-    expires_after="2023-02-26">
+    expires_after="2024-05-19">
   <owner>bmgordon@chromium.org</owner>
   <owner>src/chromeos/printing/OWNERS</owner>
   <summary>
@@ -204,7 +259,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.CUPS.PrinterEditDialogActions"
-    enum="PrinterEditDialogActions" expires_after="2023-09-26">
+    enum="PrinterEditDialogActions" expires_after="2024-02-26">
   <owner>nmuggli@google.com</owner>
   <owner>project-bolton@google.com</owner>
   <summary>
@@ -218,7 +273,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.CUPS.PrinterRemoved" enum="PrinterProtocol"
-    expires_after="2023-02-26">
+    expires_after="2024-07-02">
   <owner>bmgordon@chromium.org</owner>
   <owner>src/chromeos/printing/OWNERS</owner>
   <summary>
@@ -228,7 +283,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.CUPS.PrintersDiscovered" units="printers"
-    expires_after="2023-03-05">
+    expires_after="2024-05-19">
   <owner>bmgordon@chromium.org</owner>
   <owner>src/chromeos/printing/OWNERS</owner>
   <summary>
@@ -252,7 +307,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.CUPS.PrinterSetupResult.PrintPreview"
-    enum="PrinterSetupResult" expires_after="2023-02-26">
+    enum="PrinterSetupResult" expires_after="2024-05-19">
   <owner>bmgordon@chromium.org</owner>
   <owner>cros-printing-dev@chromium.org</owner>
   <summary>
@@ -263,8 +318,21 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="Printing.CUPS.PrinterSetupResult.SettingsDiscoveredPrinters"
+    enum="PrinterSetupResult" expires_after="2024-06-30">
+  <owner>gavinwill@chromium.org</owner>
+  <owner>bmgordon@chromium.org</owner>
+  <owner>src/chromeos/printing/OWNERS</owner>
+  <summary>
+    The success or error code for the setup of printers classified as
+    &quot;Discovered&quot;. Recorded when the user clicks the Setup button in OS
+    Printer Settings when attempting to save a printer. Only recorded on Chrome
+    OS.
+  </summary>
+</histogram>
+
 <histogram name="Printing.CUPS.PrinterStatusQueryResult"
-    enum="PrinterStatusQueryResult" expires_after="2023-03-05">
+    enum="PrinterStatusQueryResult" expires_after="2024-01-14">
   <owner>gavinwill@chromium.org</owner>
   <owner>cros-peripherals@google.com</owner>
   <summary>
@@ -273,7 +341,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.CUPS.PrinterStatusReasons"
-    enum="PrinterStatusReasons" expires_after="2023-04-16">
+    enum="PrinterStatusReasons" expires_after="2024-06-30">
   <owner>gavinwill@chromium.org</owner>
   <owner>cros-peripherals@google.com</owner>
   <summary>
@@ -296,7 +364,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.CUPS.ProtocolUsed" enum="PrinterProtocol"
-    expires_after="2023-04-23">
+    expires_after="2024-05-19">
   <owner>bmgordon@chromium.org</owner>
   <owner>cros-printing-dev@chromium.org</owner>
   <summary>
@@ -307,8 +375,42 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Printing.CUPS.TotalNetworkPrintersCount" units="printers"
-    expires_after="2023-03-05">
+<histogram name="Printing.CUPS.SavedPrintersCount" units="printers"
+    expires_after="2024-06-02">
+  <owner>gavinwill@chromium.org</owner>
+  <owner>cros-peripherals@google.com</owner>
+  <summary>
+    Records the number of saved printers when the user launches or refreshes the
+    OS Settings Printing page.
+  </summary>
+</histogram>
+
+<histogram name="Printing.CUPS.SettingsUserAction"
+    enum="PrinterSettingsUserAction" expires_after="2024-05-30">
+  <owner>gavinwill@chromium.org</owner>
+  <owner>cros-peripherals@google.com</owner>
+  <summary>
+    Records the action a user takes on the OS Printer settings page.
+  </summary>
+</histogram>
+
+<histogram name="Printing.CUPS.TotalNetworkPrintersCount2" units="printers"
+    expires_after="2024-05-26">
+  <owner>bmgordon@chromium.org</owner>
+  <owner>project-bolton@google.com</owner>
+  <summary>
+    The total number of detected network printers. Recorded whenever the
+    background running mDNS detector reports detected printers. The mDNS
+    detector reports more often when printers are detected on the network, so
+    the &quot;0 printers&quot; case might be underrepresented in this metric.
+    Look to &quot;Printing.CUPS.TotalNetworkPrintersCount2.SettingsOpened&quot;
+    for more accurate &quot;0 printers&quot; representation. Only recorded on
+    Chrome OS.
+  </summary>
+</histogram>
+
+<histogram name="Printing.CUPS.TotalNetworkPrintersCount2.SettingsOpened"
+    units="printers" expires_after="2024-05-26">
   <owner>bmgordon@chromium.org</owner>
   <owner>project-bolton@google.com</owner>
   <summary>
@@ -319,8 +421,8 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.CUPS.UnknownPpdColorModel" enum="Boolean"
-    expires_after="2023-08-07">
-  <owner>dhoss@chromium.org</owner>
+    expires_after="2024-08-07">
+  <owner>awscreen@chromium.org</owner>
   <owner>thestig@chromium.org</owner>
   <summary>
     Records instances in which print preview encounters an unknown PPD color
@@ -356,7 +458,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.CUPS.ZeroconfPrinterSetupResult.PrintPreview"
-    enum="PrinterSetupResult" expires_after="2023-02-26">
+    enum="PrinterSetupResult" expires_after="2024-05-19">
   <owner>bmgordon@chromium.org</owner>
   <owner>cros-printing-dev@chromium.org</owner>
   <summary>
@@ -368,7 +470,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Printing.Oop.PrintResult" enum="PrintOopResult"
-    expires_after="2023-03-19">
+    expires_after="2024-05-26">
   <owner>awscreen@chromium.org</owner>
   <owner>thestig@chromium.org</owner>
   <summary>
@@ -385,7 +487,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="Printing.PrintBackend.DriversRequiringElevatedPrivilegeEncountered"
-    enum="BooleanFound" expires_after="2023-02-12">
+    enum="BooleanFound" expires_after="2023-05-14">
   <owner>awscreen@chromium.org</owner>
   <owner>thestig@chromium.org</owner>
   <summary>
@@ -396,8 +498,26 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="Printing.PrintDuration.Success" units="seconds"
+    expires_after="2024-08-14">
+  <owner>awscreen@chromium.org</owner>
+  <owner>thestig@chromium.org</owner>
+  <summary>
+    Records the time to successfully print a document to a local printer. All
+    print job settings are determined before the start of the measurement. This
+    time represents the period from when a print job is started until a document
+    done completes successfully, after the document has been fully spooled to
+    the platform for transmission to the printer. This includes the time for any
+    required data format conversions, such as from PDF to another format like
+    EMF, PostScript, or XPS. Specifically excluded from collection for this
+    metric are Windows print jobs which use a printer driver that prompts the
+    user with a &quot;Save Print Output As&quot; dialog, since such print jobs
+    could be arbitrarily long waiting for data entry by users.
+  </summary>
+</histogram>
+
 <histogram name="Printing.PrintServers.ServersToQuery" units="servers"
-    expires_after="2023-03-05">
+    expires_after="2024-09-01">
   <owner>pawliczek@chromium.org</owner>
   <owner>bmgordon@chromium.org</owner>
   <summary>

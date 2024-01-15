@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/ranges/algorithm.h"
 #include "chrome/browser/android/resource_mapper.h"
 #include "chrome/browser/ui/android/infobars/autofill_offer_notification_infobar.h"
 #include "components/autofill/core/browser/data_model/autofill_offer_data.h"
@@ -55,7 +56,7 @@ void OfferNotificationControllerAndroid::ShowIfNecessary(
         l10n_util::GetStringUTF16(IDS_AUTOFILL_OFFERS_MESSAGE_TITLE));
     message_->SetDescription(l10n_util::GetStringFUTF16(
         IDS_AUTOFILL_OFFERS_REMINDER_DESCRIPTION_TEXT,
-        card->CardIdentifierStringForAutofillDisplay()));
+        card->CardNameAndLastFourDigits()));
     message_->SetIconResourceId(
         ResourceMapper::MapToJavaDrawableId(IDR_AUTOFILL_GOOGLE_PAY));
     message_->DisableIconTint();
@@ -81,15 +82,12 @@ void OfferNotificationControllerAndroid::Dismiss() {
         infobars::ContentInfoBarManager::FromWebContents(&GetWebContents());
     if (!content_infobar_manager)
       return;
-
-    for (size_t i = 0; i < content_infobar_manager->infobar_count(); ++i) {
-      infobars::InfoBar* infobar = content_infobar_manager->infobar_at(i);
-      if (infobar->delegate()->GetIdentifier() ==
-          infobars::InfoBarDelegate::
-              AUTOFILL_OFFER_NOTIFICATION_INFOBAR_DELEGATE) {
-        content_infobar_manager->RemoveInfoBar(infobar);
-        return;
-      }
+    const auto it = base::ranges::find(
+        content_infobar_manager->infobars(),
+        infobars::InfoBarDelegate::AUTOFILL_OFFER_NOTIFICATION_INFOBAR_DELEGATE,
+        &infobars::InfoBar::GetIdentifier);
+    if (it != content_infobar_manager->infobars().cend()) {
+      content_infobar_manager->RemoveInfoBar(*it);
     }
   }
 }

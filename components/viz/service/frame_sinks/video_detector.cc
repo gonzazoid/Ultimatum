@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "components/viz/common/features.h"
 #include "components/viz/common/quads/compositor_frame.h"
@@ -166,7 +167,8 @@ void VideoDetector::OnFrameSinkIdInvalidated(const FrameSinkId& frame_sink_id) {
 }
 
 bool VideoDetector::OnSurfaceDamaged(const SurfaceId& surface_id,
-                                     const BeginFrameAck& ack) {
+                                     const BeginFrameAck& ack,
+                                     HandleInteraction handle_interaction) {
   return false;
 }
 

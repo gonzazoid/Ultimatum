@@ -13,7 +13,7 @@ h2 {
 table {
   border-collapse: collapse;
   table-layout: fixed;
-  width: 100%;
+  width: 95%;
 }
 
 th,
@@ -24,12 +24,17 @@ td {
   padding: 1px 4px;
 }
 
+cr-tab-box {
+  width: inherit;
+}
+
 div[slot='panel'] {
   padding-bottom: 10px;
 }
 
 div[slot='panel'] > div {
   display: flex;
+  width: 100vw;
 }
 
 div[slot='panel'] > div > div {
@@ -43,7 +48,7 @@ div[slot='panel'] > div > div {
 
 #tabpanel-prefs ul {
   list-style-type: none;
-  padding-left: 0;
+  padding-inline-start: 0;
 }
 
 #tabpanel-prefs ul li {
@@ -57,35 +62,36 @@ div[slot='panel'] > div > div {
   color: #666;
   cursor: pointer;
   font-size: 110%;
-  margin-left: 1em;
+  margin-inline-start: 1em;
 }
 
 .detection-logs-time {
-  width: 10%;
+  width: 7%;
 }
 
 .detection-logs-url {
-  width: 20%;
+  width: 15%;
 }
 
 td.detection-logs-url {
+  max-width: 25em;
   word-wrap: break-word;
 }
 
 .detection-logs-content-language {
-  width: 10%;
+  width: 7%;
 }
 
 .detection-logs-cld-language {
-  width: 10%;
+  width: 7%;
 }
 
 .detection-logs-detection-model-version {
-  width: 10%;
+  width: 5%;
 }
 
 .detection-logs-model-reliability {
-  width: 10%;
+  width: 5%;
 }
 
 .detection-logs-is-cld-reliable {
@@ -97,15 +103,15 @@ td.detection-logs-url {
 }
 
 .detection-logs-html-root-language {
-  width: 10%;
+  width: 7%;
 }
 
 .detection-logs-adopted-language {
-  width: 10%;
+  width: 7%;
 }
 
 .detection-logs-content {
-  width: 20%;
+  width: 30%;
 }
 
 td.detection-logs-content div {

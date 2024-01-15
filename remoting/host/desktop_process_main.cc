@@ -8,9 +8,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_executor.h"
@@ -63,10 +63,12 @@ int DesktopProcessMain() {
   mojo::PlatformChannelEndpoint endpoint =
       mojo::PlatformChannel::RecoverPassedEndpointFromCommandLine(
           *command_line);
-  if (!endpoint.is_valid())
+  if (!endpoint.is_valid()) {
     endpoint = mojo::NamedPlatformChannel::ConnectToServer(*command_line);
-  if (!endpoint.is_valid())
+  }
+  if (!endpoint.is_valid()) {
     return kInvalidCommandLineExitCode;
+  }
 
   auto invitation = mojo::IncomingInvitation::Accept(std::move(endpoint));
   mojo::ScopedMessagePipeHandle message_pipe = invitation.ExtractMessagePipe(
@@ -93,8 +95,9 @@ int DesktopProcessMain() {
       ui_task_runner));
 #endif  // !BUILDFLAG(IS_WIN)
 
-  if (!desktop_process.Start(std::move(desktop_environment_factory)))
+  if (!desktop_process.Start(std::move(desktop_environment_factory))) {
     return kInitializationFailed;
+  }
 
   // Run the UI message loop.
   ui_task_runner = nullptr;

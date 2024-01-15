@@ -5,8 +5,8 @@
 #ifndef CHROMEOS_ASH_COMPONENTS_DBUS_PATCHPANEL_PATCHPANEL_CLIENT_H_
 #define CHROMEOS_ASH_COMPONENTS_DBUS_PATCHPANEL_PATCHPANEL_CLIENT_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/observer_list_types.h"
 #include "chromeos/ash/components/dbus/patchpanel/patchpanel_service.pb.h"
 #include "chromeos/dbus/common/dbus_client.h"
@@ -48,6 +48,22 @@ class COMPONENT_EXPORT(PATCHPANEL) PatchPanelClient
   // Obtains a list of virtual network interfaces configured and managed by
   // patchpanel.
   virtual void GetDevices(GetDevicesCallback callback) = 0;
+
+  // Called when power status of device is changed.
+  virtual void NotifyAndroidInteractiveState(bool interactive) = 0;
+
+  // Called when the status of Android WiFi multicast lock changes from held
+  // to not held or vice versa.
+  virtual void NotifyAndroidWifiMulticastLockChange(bool is_held) = 0;
+
+  // Called when notified of a new socket connection event.
+  virtual void NotifySocketConnectionEvent(
+      const patchpanel::SocketConnectionEvent& msg) = 0;
+
+  // Called when sending feature enabled flag to patchpanel.
+  virtual void SetFeatureFlag(
+      patchpanel::SetFeatureFlagRequest::FeatureFlag flag,
+      bool enabled) = 0;
 
   // Adds an observer.
   virtual void AddObserver(Observer* observer) = 0;

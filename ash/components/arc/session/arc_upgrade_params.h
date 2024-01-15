@@ -71,6 +71,10 @@ struct UpgradeParams {
   // The constructor automatically populates this from command-line.
   bool skip_tts_cache;
 
+  // Option to disable DexOpt cache.
+  // The constructor automatically populates this from command-line.
+  bool skip_dexopt_cache;
+
   // The supervision transition state for this account. Indicates whether
   // child account should become regular, regular account should become child
   // or neither.
@@ -94,6 +98,24 @@ struct UpgradeParams {
 
   // Flag to enable ARC Nearby Share support.
   bool enable_arc_nearby_share = true;
+
+  // Flag to enable a delay for killing high priority app under memory pressure.
+  bool enable_priority_app_lmk_delay = false;
+
+  // Delay time in second until a high priority app can be considered to be
+  // killed.
+  uint32_t priority_app_lmk_delay_second = 0;
+
+  // Comma separated list of high priority apps that would have a delay before
+  // considered to be killed.
+  std::string priority_app_lmk_delay_list;
+
+  // Flag to enable update for minimum Android process state to be considered to
+  // be killed under perceptible memory pressure
+  bool enable_lmk_perceptible_min_state_update = false;
+
+  // Whether to run post boot dex opt without device idle requirement
+  bool force_post_boot_dex_opt = false;
 };
 
 }  // namespace arc

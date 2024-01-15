@@ -77,14 +77,6 @@ class ContentIndexTest : public InProcessBrowserTest,
         switches::kEnableExperimentalWebPlatformFeatures);
   }
 
-  // Runs |script| and expects it to complete successfully. |script| must
-  // result in a Promise. Returns the resolved contents of the Promise.
-  std::string RunScript(const std::string& script) {
-    std::string result;
-    RunScript(script, &result);
-    return result.substr(5);  // Ignore the trailing `ok - `.
-  }
-
   // OfflineContentProvider::Observer implementation:
   void OnItemsAdded(const std::vector<OfflineItem>& items) override {
     ASSERT_EQ(items.size(), 1u);
@@ -145,19 +137,21 @@ class ContentIndexTest : public InProcessBrowserTest,
   std::map<std::string, OfflineItem>& offline_items() { return offline_items_; }
   ContentIndexProviderImpl* provider() { return provider_; }
 
- private:
-  void RunScript(const std::string& script, std::string* result) {
-    ASSERT_TRUE(content::ExecuteScriptAndExtractString(
-        browser()
-            ->tab_strip_model()
-            ->GetActiveWebContents()
-            ->GetPrimaryMainFrame(),
-        "WrapFunction(async () => " + script + ")", result));
-    ASSERT_TRUE(
-        base::StartsWith(*result, "ok - ", base::CompareCase::SENSITIVE))
-        << "Unexpected result: " << *result;
+  std::string RunScript(const std::string& script) {
+    std::string result =
+        content::EvalJs(browser()
+                            ->tab_strip_model()
+                            ->GetActiveWebContents()
+                            ->GetPrimaryMainFrame(),
+                        "WrapFunction(async () => " + script + ")")
+            .ExtractString();
+    EXPECT_TRUE(base::StartsWith(result, "ok - ", base::CompareCase::SENSITIVE))
+        << "Unexpected result: " << result;
+
+    return result.substr(5);  // Ignore the leading "ok - ".
   }
 
+ private:
   std::map<std::string, OfflineItem> offline_items_;
   raw_ptr<ContentIndexProviderImpl, DanglingUntriaged> provider_;
   std::unique_ptr<net::EmbeddedTestServer> https_server_;
@@ -293,14 +287,6 @@ IN_PROC_BROWSER_TEST_F(ContentIndexTest, UserDeletedEntryDispatchesEvent) {
 
 // TODO(crbug.com/1080922): flaky.
 IN_PROC_BROWSER_TEST_F(ContentIndexTest, DISABLED_MetricsCollected) {
-  // Inititally there is no content.
-  {
-    base::HistogramTester histogram_tester;
-    EXPECT_TRUE(GetAllItems().empty());
-    histogram_tester.ExpectUniqueSample("ContentIndex.NumEntriesAvailable", 0,
-                                        1);
-  }
-
   // Record that two articles were added.
   {
     base::HistogramTester histogram_tester;
@@ -323,9 +309,6 @@ IN_PROC_BROWSER_TEST_F(ContentIndexTest, DISABLED_MetricsCollected) {
       run_loop.Run();
     }
 
-    histogram_tester.ExpectBucketCount(
-        "ContentIndex.ContentAdded", blink::mojom::ContentCategory::ARTICLE, 2);
-
     EXPECT_EQ(
         ukm_recorder
             .GetEntriesByName(ukm::builders::ContentIndex_Added::kEntryName)
@@ -333,17 +316,8 @@ IN_PROC_BROWSER_TEST_F(ContentIndexTest, DISABLED_MetricsCollected) {
         2u);
   }
 
-  // Querying the items should record that there are 2 entries available.
-  {
-    base::HistogramTester histogram_tester;
-    EXPECT_EQ(GetAllItems().size(), 2u);
-    histogram_tester.ExpectUniqueSample("ContentIndex.NumEntriesAvailable", 2,
-                                        1);
-  }
-
   // User deletion will dispatch an event.
   {
-    base::HistogramTester histogram_tester;
     ukm::TestAutoSetUkmRecorder ukm_recorder;
 
     base::RunLoop run_loop;
@@ -353,14 +327,6 @@ IN_PROC_BROWSER_TEST_F(ContentIndexTest, DISABLED_MetricsCollected) {
     provider()->RemoveItem(offline_items().at("my-id-1").id);
     EXPECT_EQ(RunScript("waitForMessageFromServiceWorker()"), "my-id-1");
     run_loop.Run();
-
-    histogram_tester.ExpectBucketCount("ContentIndex.ContentDeleteEvent.Find",
-                                       blink::ServiceWorkerStatusCode::kOk, 1);
-    histogram_tester.ExpectBucketCount("ContentIndex.ContentDeleteEvent.Start",
-                                       blink::ServiceWorkerStatusCode::kOk, 1);
-    histogram_tester.ExpectBucketCount(
-        "ContentIndex.ContentDeleteEvent.Dispatch",
-        blink::ServiceWorkerStatusCode::kOk, 1);
     EXPECT_EQ(ukm_recorder
                   .GetEntriesByName(
                       ukm::builders::ContentIndex_DeletedByUser::kEntryName)
@@ -382,10 +348,6 @@ IN_PROC_BROWSER_TEST_F(ContentIndexTest, DISABLED_MetricsCollected) {
     base::RunLoop run_loop;
     SetTabChangeQuitClosure(run_loop.QuitClosure());
     run_loop.Run();
-
-    histogram_tester.ExpectBucketCount("ContentIndex.ContentOpened",
-                                       blink::mojom::ContentCategory::ARTICLE,
-                                       1);
 
     EXPECT_EQ(
         ukm_recorder

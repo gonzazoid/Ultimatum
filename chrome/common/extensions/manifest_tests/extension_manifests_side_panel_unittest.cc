@@ -4,11 +4,12 @@
 
 #include "chrome/common/extensions/api/side_panel/side_panel_info.h"
 
+#include "base/command_line.h"
 #include "base/strings/stringprintf.h"
-#include "base/test/values_test_util.h"
 #include "chrome/common/extensions/manifest_tests/chrome_manifest_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "extensions/common/manifest.h"
+#include "extensions/common/switches.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace extensions {
@@ -24,10 +25,8 @@ class SidePanelManifestTest : public ChromeManifestTest {
         "manifest_version": %d,
         "side_panel": %s
       })";
-    base::Value manifest_value = base::test::ParseJson(base::StringPrintf(
+    return ManifestData::FromJSON(base::StringPrintf(
         kManifestStub, manifest_version, side_panel.c_str()));
-    EXPECT_EQ(base::Value::Type::DICTIONARY, manifest_value.type());
-    return ManifestData(std::move(manifest_value), "test");
   }
 };
 
@@ -69,11 +68,9 @@ class SidePanelExtensionsTest : public testing::Test {
     manifest_base.Set("version", "1.0");
     manifest_base.Set("manifest_version", 3);
     manifest_base.Merge(manifest.Clone());
-    auto value = base::Value(std::move(manifest_base));
-    auto& manifest_dict = std::move(base::Value::AsDictionaryValue(value));
     std::string error;
     scoped_refptr<Extension> extension = Extension::Create(
-        temp_dir_.GetPath(), mojom::ManifestLocation::kUnpacked, manifest_dict,
+        temp_dir_.GetPath(), mojom::ManifestLocation::kUnpacked, manifest_base,
         Extension::NO_FLAGS, "", &error);
     if (!extension.get())
       return nullptr;
@@ -84,13 +81,13 @@ class SidePanelExtensionsTest : public testing::Test {
   base::ScopedTempDir temp_dir_;
 };
 
-#if defined(OFFICIAL_BUILD)
-#define MAYBE_FileDoesntExist DISABLED_FileDoesntExist
-#else
-#define MAYBE_FileDoesntExist FileDoesntExist
-#endif  // defined(OFFICIAL_BUILD)
 // Error loading extension when filepath doesn't exist or is empty.
-TEST_F(SidePanelExtensionsTest, MAYBE_FileDoesntExist) {
+TEST_F(SidePanelExtensionsTest, FileDoesntExist) {
+  // This switch is required to make this test pass on official build bots.
+  // TODO(crbug.com/1413908): Remove once side panel is not experimental.
+  base::CommandLine::ForCurrentProcess()->AppendSwitch(
+      extensions::switches::kEnableExperimentalExtensionApis);
+
   for (const auto* default_path : {"", "error"}) {
     std::string error;
     std::vector<InstallWarning> warnings;

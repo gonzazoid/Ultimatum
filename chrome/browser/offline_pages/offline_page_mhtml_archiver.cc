@@ -7,16 +7,16 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/uuid.h"
 #include "chrome/browser/offline_pages/offline_page_utils.h"
 #include "components/offline_pages/core/archive_validator.h"
 #include "components/offline_pages/core/model/offline_page_model_utils.h"
@@ -94,13 +94,11 @@ void OfflinePageMHTMLArchiver::GenerateMHTML(
   GURL url(web_contents->GetLastCommittedURL());
   std::u16string title(web_contents->GetTitle());
   base::FilePath file_path(
-      archives_dir.Append(base::GenerateGUID())
+      archives_dir.Append(base::Uuid::GenerateRandomV4().AsLowercaseString())
           .AddExtension(OfflinePageUtils::kMHTMLExtension));
   content::MHTMLGenerationParams params(file_path);
   params.use_binary_encoding = true;
   params.remove_popup_overlay = create_archive_params.remove_popup_overlay;
-  params.use_page_problem_detectors =
-      create_archive_params.use_page_problem_detectors;
 
   web_contents->GenerateMHTMLWithResult(
       params,
@@ -122,16 +120,11 @@ void OfflinePageMHTMLArchiver::OnGenerateMHTMLDone(
     return;
   }
 
-  const base::Time digest_start_time = OfflineTimeNow();
-  base::UmaHistogramTimes(
-      model_utils::AddHistogramSuffix(
-          name_space, "OfflinePages.SavePage.CreateArchiveTime"),
-      digest_start_time - mhtml_start_time);
-
   if (result.file_digest) {
     OnComputeDigestDone(url, file_path, title, name_space, base::Time(),
                         result.file_size, result.file_digest.value());
   } else {
+    const base::Time digest_start_time = OfflineTimeNow();
     ComputeDigestOnFileThread(
         file_path,
         base::BindOnce(&OfflinePageMHTMLArchiver::OnComputeDigestDone,
@@ -154,14 +147,7 @@ void OfflinePageMHTMLArchiver::OnComputeDigestDone(
     return;
   }
 
-  if (!digest_start_time.is_null()) {
-    base::UmaHistogramTimes(
-        model_utils::AddHistogramSuffix(
-            name_space, "OfflinePages.SavePage.ComputeDigestTime"),
-        OfflineTimeNow() - digest_start_time);
-  }
-
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback_), ArchiverResult::SUCCESSFULLY_CREATED,
                      url, file_path, title, file_size, digest));
@@ -177,7 +163,7 @@ void OfflinePageMHTMLArchiver::DeleteFileAndReportFailure(
 
 void OfflinePageMHTMLArchiver::ReportFailure(ArchiverResult result) {
   DCHECK(result != ArchiverResult::SUCCESSFULLY_CREATED);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback_), result, GURL(), base::FilePath(),
                      std::u16string(), 0, std::string()));

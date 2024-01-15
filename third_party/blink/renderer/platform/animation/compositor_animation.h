@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "cc/animation/animation.h"
 #include "cc/animation/animation_delegate.h"
@@ -27,7 +28,11 @@ class CompositorAnimationDelegate;
 // A compositor representation for Animation.
 class PLATFORM_EXPORT CompositorAnimation : public cc::AnimationDelegate {
  public:
-  static std::unique_ptr<CompositorAnimation> Create();
+  // If this CompositorAnimation is being created to replace an
+  // existing cc::Animation, the existing Animation's id should be
+  // passed in to ensure the same id is used.
+  static std::unique_ptr<CompositorAnimation> Create(
+      absl::optional<int> replaced_cc_animation_id = absl::nullopt);
   static std::unique_ptr<CompositorAnimation> CreateWorkletAnimation(
       cc::WorkletAnimationId,
       const String& name,
@@ -41,6 +46,7 @@ class PLATFORM_EXPORT CompositorAnimation : public cc::AnimationDelegate {
   ~CompositorAnimation() override;
 
   cc::Animation* CcAnimation() const;
+  int CcAnimationId() const;
 
   // An animation delegate is notified when animations are started and stopped.
   // The CompositorAnimation does not take ownership of the delegate, and
@@ -49,14 +55,7 @@ class PLATFORM_EXPORT CompositorAnimation : public cc::AnimationDelegate {
   void SetAnimationDelegate(CompositorAnimationDelegate*);
 
   void AttachElement(const CompositorElementId&);
-  // Specially designed for a custom property animation on a paint worklet
-  // element. It doesn't require an element id to run on the compositor thread.
-  // However, our compositor animation system requires the element to be on the
-  // property tree in order to keep ticking the animation. Therefore, we give a
-  // very special element id for this animation so that the compositor animation
-  // system recognize it. We do not use 0 as the element id because 0 is
-  // kInvalidElementId.
-  void AttachNoElement();
+  void AttachPaintWorkletElement();
   void DetachElement();
   bool IsElementAttached() const;
 
@@ -86,7 +85,7 @@ class PLATFORM_EXPORT CompositorAnimation : public cc::AnimationDelegate {
       absl::optional<base::TimeDelta> local_time) override;
 
   scoped_refptr<cc::Animation> animation_;
-  CompositorAnimationDelegate* delegate_;
+  raw_ptr<CompositorAnimationDelegate, ExperimentalRenderer> delegate_;
 };
 
 }  // namespace blink

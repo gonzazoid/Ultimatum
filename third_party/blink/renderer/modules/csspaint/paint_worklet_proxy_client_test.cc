@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/synchronization/waitable_event.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_simple_task_runner.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/bindings/core/v8/worker_or_worklet_script_controller.h"
@@ -227,8 +228,8 @@ void RunPaintTestOnWorklet(WorkerThread* thread,
       base::MakeRefCounted<CSSPaintWorkletInput>(
           "foo", gfx::SizeF(100, 100), 1.0f, 1, std::move(data),
           std::move(input_arguments), std::move(property_keys));
-  sk_sp<PaintRecord> record = proxy_client->Paint(input.get(), {});
-  EXPECT_NE(record, nullptr);
+  PaintRecord record = proxy_client->Paint(input.get(), {});
+  EXPECT_FALSE(record.empty());
 
   waitable_event->Signal();
 }

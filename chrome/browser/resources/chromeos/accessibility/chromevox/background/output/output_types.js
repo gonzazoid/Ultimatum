@@ -6,7 +6,7 @@
  * @fileoverview Definitions of all types related to output.
  */
 
-import {Earcon} from '../../common/abstract_earcons.js';
+import {EarconId} from '../../common/earcon_id.js';
 import {Spannable} from '../../common/spannable.js';
 import {ChromeVox} from '../chromevox.js';
 
@@ -73,26 +73,26 @@ export class OutputAction {
  */
 export class OutputEarconAction extends OutputAction {
   /**
-   * @param {string} earconId
+   * @param {!EarconId} earcon
    * @param {chrome.automation.Rect=} opt_location
    */
-  constructor(earconId, opt_location) {
+  constructor(earcon, opt_location) {
     super();
 
-    /** @type {string} */
-    this.earconId = earconId;
+    /** @type {!EarconId} */
+    this.earcon = earcon;
     /** @type {chrome.automation.Rect|undefined} */
     this.location = opt_location;
   }
 
   /** @override */
   run() {
-    ChromeVox.earcons.playEarcon(Earcon[this.earconId], this.location);
+    ChromeVox.earcons.playEarcon(this.earcon, this.location);
   }
 
   /** @override */
   toJSON() {
-    return {earconId: this.earconId};
+    return {earcon: this.earcon};
   }
 }
 
@@ -131,13 +131,12 @@ export class OutputNodeSpan {
  * Possible events handled by ChromeVox internally.
  * @enum {string}
  */
-export const OutputEventType = {
-  ALERT: 'alert',
-  MENU_END: 'menuEnd',
-  MENU_LIST_VALUE_CHANGED: 'menuListValueChanged',
-  MENU_START: 'menuStart',
+export const OutputCustomEvent = {
   NAVIGATE: 'navigate',
 };
+
+/** @typedef {!chrome.automation.EventType|!OutputCustomEvent} */
+export let OutputEventType;
 
 /**
  * Rules for mapping properties to a msg id
@@ -170,8 +169,8 @@ export const OutputPropertyMap = {
 
 /**
  * Metadata about supported automation states.
- * @const {!Object<string, {on: {msgId: string, earconId: string},
- *                          off: {msgId: string, earconId: string},
+ * @const {!Object<string, {on: {msgId: string, earcon: !EarconId},
+ *                          off: {msgId: string, earcon: !EarconId},
  *                          isRoleSpecific: (boolean|undefined)}>}
  *     on: info used to describe a state that is set to true.
  *     off: info used to describe a state that is set to undefined.
@@ -202,7 +201,7 @@ export const INPUT_TYPE_MESSAGE_IDS = {
 
 /**
  * @typedef {{
- *    node: chrome.automation.AutomationNode,
+ *    node: ?chrome.automation.AutomationNode,
  *    outputFormat: (string|!OutputFormatTree),
  *    outputBuffer: !Array<Spannable>,
  *    outputFormatLogger: !OutputFormatLogger,
@@ -221,3 +220,17 @@ export const INPUT_TYPE_MESSAGE_IDS = {
  *     verbalized; can specify pitch, rate, language, etc.
  */
 export let OutputFormattingData;
+
+/** @enum {string} */
+export const OutputFormatType = {
+  BRAILLE: 'braille',
+  SPEAK: 'speak',
+};
+
+/** @enum {string} */
+export const OutputNavigationType = {
+  END_OF: 'endOf',
+  ENTER: 'enter',
+  LEAVE: 'leave',
+  START_OF: 'startOf',
+};

@@ -10,6 +10,7 @@
 #include <set>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
@@ -73,6 +74,7 @@ class UserImageManagerImpl : public UserImageManager,
 
   static void IgnoreProfileDataDownloadDelayForTesting();
   static void SkipProfileImageDownloadForTesting();
+  static void SkipDefaultUserImageDownloadForTesting();
 
   // Key for a dictionary that maps user IDs to user image data with images
   // stored in JPEG format.
@@ -160,8 +162,12 @@ class UserImageManagerImpl : public UserImageManager,
   // Returns true if user with `user_id_` is logged in and has gaia account.
   bool IsUserLoggedInAndHasGaiaAccount() const;
 
+  // Returns true if user avatar customization selectors are enabled. Profile
+  // image download will only occur if this returns true
+  bool IsCustomizationSelectorsPrefEnabled() const;
+
   // The user manager.
-  user_manager::UserManager* user_manager_;
+  raw_ptr<user_manager::UserManager> user_manager_;
 
   // Whether the `profile_downloader_` is downloading the profile image for the
   // currently logged-in user (and not just the full name). Only valid when a

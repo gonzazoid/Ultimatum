@@ -4,10 +4,6 @@
 
 #import "ios/chrome/browser/ui/settings/password/password_settings/password_settings_constants.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 NSString* const kPasswordSettingsExportConfirmViewId =
     @"PasswordSettingsExportConfirmViewId";
 
@@ -16,6 +12,17 @@ NSString* const kPasswordSettingsSavePasswordSwitchTableViewId =
 
 NSString* const kPasswordSettingsManagedSavePasswordSwitchTableViewId =
     @"PasswordSettingsManagedSavePasswordSwitchTableViewId";
+
+NSString* const kPasswordSettingsAccountStorageSwitchTableViewId =
+    @"PasswordSettingsAccountStorageSwitchTableViewId";
+
+NSString* const
+    kPasswordSettingsBulkMovePasswordsToAccountDescriptionTableViewId =
+        @"PasswordSettingsBulkMovePasswordsToAccountDescriptionTableViewId";
+NSString* const kPasswordSettingsBulkMovePasswordsToAccountButtonTableViewId =
+    @"PasswordSettingsBulkMovePasswordsToAccountButtonTableViewId";
+NSString* const kPasswordSettingsBulkMovePasswordsToAccountAlertViewId =
+    @"PasswordSettingsBulkMovePasswordsToAccountAlertViewId";
 
 NSString* const kPasswordsSettingsTableViewId = @"PasswordsSettingsTableViewId";
 

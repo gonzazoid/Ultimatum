@@ -8,7 +8,7 @@
 #include <map>
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
@@ -22,7 +22,6 @@
 #include "media/gpu/chromeos/fourcc.h"
 #include "media/gpu/chromeos/vda_video_frame_pool.h"
 #include "media/gpu/chromeos/video_decoder_pipeline.h"
-#include "media/gpu/chromeos/video_frame_converter.h"
 #include "media/gpu/media_gpu_export.h"
 #include "media/mojo/mojom/stable/stable_video_decoder.mojom.h"
 #include "media/video/video_decode_accelerator.h"
@@ -57,10 +56,14 @@ class MEDIA_GPU_EXPORT VdVideoDecodeAccelerator
       CreateVideoDecoderCb create_vd_cb,
       Client* client,
       const Config& config,
+      bool low_delay,
       scoped_refptr<base::SequencedTaskRunner> task_runner);
   VdVideoDecodeAccelerator(const VdVideoDecodeAccelerator&) = delete;
   VdVideoDecodeAccelerator& operator=(const VdVideoDecodeAccelerator&) = delete;
   ~VdVideoDecodeAccelerator() override;
+
+  // Initializer to set the |low_delay| pipeline.
+  bool Initialize(const Config& config, Client* client, bool low_delay);
 
   // Implementation of VideoDecodeAccelerator.
   bool Initialize(const Config& config, Client* client) override;
@@ -151,6 +154,12 @@ class MEDIA_GPU_EXPORT VdVideoDecodeAccelerator
   // to see if it is a secure buffer format.
   bool is_encrypted_ = false;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+  // Value of |low_delay| from the most recent initialization (via either Create
+  // or Initialize(const Config&, Client*, bool). When re-initialization happens
+  // via the VideoDecodeAccelerator interface (where we cannot pass
+  // |low_delay|), we use this value.
+  bool low_delay_ = false;
 
   // Main task runner and its sequence checker. All methods should be called
   // on it.

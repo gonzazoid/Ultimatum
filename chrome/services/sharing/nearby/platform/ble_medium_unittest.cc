@@ -6,7 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -18,7 +19,6 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace location {
 namespace nearby {
 namespace chrome {
 
@@ -82,9 +82,19 @@ class BleMediumTest : public testing::Test {
     EXPECT_EQ(!scanning_service_ids_set_.empty(),
               fake_adapter_->IsDiscoverySessionActive());
     scanning_service_ids_set_.insert(service_id);
-    EXPECT_TRUE(ble_medium_->StartScanning(service_id,
-                                           fast_advertisement_service_uuid,
-                                           discovered_peripheral_callback_));
+    EXPECT_TRUE(ble_medium_->StartScanning(
+        service_id, fast_advertisement_service_uuid,
+        {.peripheral_discovered_cb =
+             [this](api::BlePeripheral& peripheral,
+                    const std::string& service_id, bool fast_advertisement) {
+               EXPECT_TRUE(fast_advertisement);
+               OnPeripheralDiscovered(peripheral, service_id);
+             },
+         .peripheral_lost_cb =
+             [this](api::BlePeripheral& peripheral,
+                    const std::string& service_id) {
+               OnPeripheralLost(peripheral, service_id);
+             }}));
     EXPECT_TRUE(fake_adapter_->IsDiscoverySessionActive());
   }
 
@@ -148,7 +158,7 @@ class BleMediumTest : public testing::Test {
               std::string(byte_array.data(), byte_array.size()));
   }
 
-  bluetooth::FakeAdapter* fake_adapter_;
+  raw_ptr<bluetooth::FakeAdapter> fake_adapter_;
   mojo::SharedRemote<bluetooth::mojom::Adapter> remote_adapter_;
   std::unique_ptr<BleMedium> ble_medium_;
 
@@ -365,4 +375,3 @@ TEST_F(BleMediumTest, TestConnect) {
 
 }  // namespace chrome
 }  // namespace nearby
-}  // namespace location

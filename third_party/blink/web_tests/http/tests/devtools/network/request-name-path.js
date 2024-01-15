@@ -2,6 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Tests name() and path() methods of NetworkRequest.\n`);
   await TestRunner.showPanel('network');
@@ -11,24 +15,24 @@
      * @param {string=} targetUrl
      */
   function createNetworkRequestForURLAndDumpNameAndPath(url, targetUrl) {
-    var mainTarget = SDK.targetManager.mainTarget();
-    var currentTargetURL = mainTarget.inspectedURL();
+    var rootTarget = SDK.TargetManager.TargetManager.instance().rootTarget();
+    var currentTargetURL = rootTarget.inspectedURL();
     var dispatcher = TestRunner.networkManager.dispatcher;
     if (targetUrl)
-      mainTarget.setInspectedURL(targetUrl);
+      rootTarget.setInspectedURL(targetUrl);
     TestRunner.addResult('Dumping request name and path for url: ' + url);
     var request = dispatcher.createNetworkRequest(0, '', '', url);
     TestRunner.addResult('    name = ' + request.name());
     TestRunner.addResult('    path = ' + request.path());
     TestRunner.addResult('    targetUrl = ' + (targetUrl ? targetUrl : currentTargetURL));
     if (targetUrl !== currentTargetURL)
-      mainTarget.setInspectedURL(currentTargetURL);
+      rootTarget.setInspectedURL(currentTargetURL);
   }
 
   // Save the target URL to ensure test works well with other tests.
-  var mainTarget = SDK.targetManager.mainTarget();
-  var originalTargetURL = mainTarget.inspectedURL();
-  mainTarget.setInspectedURL('http://127.0.0.1/aFolder/aTest.html');
+  var rootTarget = SDK.TargetManager.TargetManager.instance().rootTarget();
+  var originalTargetURL = rootTarget.inspectedURL();
+  rootTarget.setInspectedURL('http://127.0.0.1/aFolder/aTest.html');
 
   createNetworkRequestForURLAndDumpNameAndPath('http://www.example.com/foo/bar/baz?key=value');
   createNetworkRequestForURLAndDumpNameAndPath('http://www.example.com/foo/bar/?key=value');
@@ -58,7 +62,7 @@
       'data:text/html,<html><body><img src="data:,foobar" /></body></html>', 'http://127.0.0.1/');
 
   // Restore the target URL to ensure test works well with other tests.
-  mainTarget.setInspectedURL(originalTargetURL);
+  rootTarget.setInspectedURL(originalTargetURL);
 
   TestRunner.completeTest();
 })();

@@ -11,6 +11,15 @@
 
 #include "chrome/browser/chrome_browser_main.h"
 #include "chrome/common/conflicts/module_watcher_win.h"
+#include "chrome/install_static/buildflags.h"
+
+#if BUILDFLAG(USE_GOOGLE_UPDATE_INTEGRATION)
+#include <optional>
+
+#include "chrome/browser/google/did_run_updater_win.h"
+#endif
+
+class PlatformAuthPolicyObserver;
 
 namespace base {
 class CommandLine;
@@ -80,8 +89,16 @@ class ChromeBrowserMainPartsWin : public ChromeBrowserMainParts {
   void OnModuleEvent(const ModuleWatcher::ModuleEvent& event);
   void SetupModuleDatabase(std::unique_ptr<ModuleWatcher>* module_watcher);
 
+#if BUILDFLAG(USE_GOOGLE_UPDATE_INTEGRATION)
+  // Updates Chrome's "did run" state periodically when the process is in use.
+  std::optional<DidRunUpdater> did_run_updater_;
+#endif
+
   // Watches module load events and forwards them to the ModuleDatabase.
   std::unique_ptr<ModuleWatcher> module_watcher_;
+
+  // Applies enterprise policies for platform auth SSO.
+  std::unique_ptr<PlatformAuthPolicyObserver> platform_auth_policy_observer_;
 };
 
 #endif  // CHROME_BROWSER_CHROME_BROWSER_MAIN_WIN_H_

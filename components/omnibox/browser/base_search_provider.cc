@@ -10,17 +10,22 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
 #include "base/containers/cxx20_erase.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/i18n/case_conversion.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "components/omnibox/browser/actions/omnibox_action_in_suggest.h"
 #include "components/omnibox/browser/autocomplete_provider_client.h"
 #include "components/omnibox/browser/autocomplete_provider_listener.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
+#include "components/omnibox/browser/page_classification_functions.h"
+#include "components/omnibox/browser/remote_suggestions_service.h"
 #include "components/omnibox/browser/suggestion_answer.h"
 #include "components/omnibox/common/omnibox_features.h"
+#include "components/search/search.h"
 #include "components/search_engines/template_url.h"
 #include "components/search_engines/template_url_service.h"
 #include "components/variations/net/variations_http_headers.h"
@@ -35,124 +40,54 @@
 #include "url/origin.h"
 
 namespace {
+constexpr bool is_android = !!BUILDFLAG(IS_ANDROID);
 
 bool MatchTypeAndContentsAreEqual(const AutocompleteMatch& lhs,
                                   const AutocompleteMatch& rhs) {
   return lhs.contents == rhs.contents && lhs.type == rhs.type;
 }
 
+std::u16string GetMatchContentsForOnDeviceTailSuggestion(
+    const std::u16string& input_text,
+    const std::u16string& sanitized_suggestion) {
+  std::u16string sanitized_input;
+
+  base::TrimWhitespace(input_text, base::TRIM_TRAILING, &sanitized_input);
+  sanitized_input = AutocompleteMatch::SanitizeString(sanitized_input);
+
+  if (!base::StartsWith(sanitized_suggestion, sanitized_input,
+                        base::CompareCase::SENSITIVE)) {
+    return sanitized_suggestion;
+  }
+
+  // If there is no space inside the suggestion, show the entire suggestion in
+  // UI. Otherwise replace the completed prefix of the suggestion with tail UI
+  // symbols e.g. "...".
+  // Examples (input/suggestion -> result):
+  // 1. [googl]/[google] -> [google]
+  // 2. [google]/[google map] -> [google map]
+  // 3. [google ma]/[google map login] -> [...map login]
+  // 4. [google map ]/[google map login] -> [...map login]
+  size_t suggestion_last_space_index =
+      sanitized_suggestion.find_last_of(base::kWhitespaceUTF16);
+  size_t input_last_space_index =
+      sanitized_input.find_last_of(base::kWhitespaceUTF16);
+  if (suggestion_last_space_index == std::u16string::npos ||
+      input_last_space_index == std::u16string::npos) {
+    return sanitized_suggestion;
+  }
+  size_t start_index = input_last_space_index + 1;
+
+  return sanitized_suggestion.substr(start_index);
+}
+
 }  // namespace
 
 using OEP = metrics::OmniboxEventProto;
 
-// SuggestionDeletionHandler -------------------------------------------------
-
-// This class handles making requests to the server in order to delete
-// personalized suggestions.
-class SuggestionDeletionHandler {
- public:
-  typedef base::OnceCallback<void(bool, SuggestionDeletionHandler*)>
-      DeletionCompletedCallback;
-
-  SuggestionDeletionHandler(AutocompleteProviderClient* client,
-                            const std::string& deletion_url,
-                            DeletionCompletedCallback callback);
-
-  ~SuggestionDeletionHandler();
-
-  SuggestionDeletionHandler(const SuggestionDeletionHandler&) = delete;
-  SuggestionDeletionHandler& operator=(const SuggestionDeletionHandler&) =
-      delete;
-
- private:
-  // Callback from SimpleURLLoader
-  void OnURLLoadComplete(const network::SimpleURLLoader* source,
-                         std::unique_ptr<std::string> response_body);
-
-  std::unique_ptr<network::SimpleURLLoader> deletion_fetcher_;
-  DeletionCompletedCallback callback_;
-};
-
-SuggestionDeletionHandler::SuggestionDeletionHandler(
-    AutocompleteProviderClient* client,
-    const std::string& deletion_url,
-    DeletionCompletedCallback callback)
-    : callback_(std::move(callback)) {
-  GURL url(deletion_url);
-  DCHECK(url.is_valid());
-
-  net::NetworkTrafficAnnotationTag traffic_annotation =
-      net::DefineNetworkTrafficAnnotation("omnibox_suggest_deletion", R"(
-        semantics {
-          sender: "Omnibox"
-          description:
-            "When users attempt to delete server-provided personalized search "
-            "or navigation suggestions from the omnibox dropdown, Chrome sends "
-            "a message to the server requesting deletion of the suggestion."
-          trigger:
-            "A user attempt to delete a server-provided omnibox suggestion, "
-            "for which the server provided a custom deletion URL."
-          data:
-            "No user data is explicitly sent with the request, but because the "
-            "requested URL is provided by the server for each specific "
-            "suggestion, it necessarily uniquely identifies the suggestion the "
-            "user is attempting to delete."
-          destination: WEBSITE
-        }
-        policy {
-          cookies_allowed: YES
-          cookies_store: "user"
-          setting:
-            "Since this can only be triggered on seeing server-provided "
-            "suggestions in the omnibox dropdown, whether it is enabled is the "
-            "same as whether those suggestions are enabled.\n"
-            "Users can control this feature via the 'Use a prediction service "
-            "to help complete searches and URLs typed in the address bar' "
-            "setting under 'Privacy'. The feature is enabled by default."
-          chrome_policy {
-            SearchSuggestEnabled {
-                policy_options {mode: MANDATORY}
-                SearchSuggestEnabled: false
-            }
-          }
-        })");
-  auto request = std::make_unique<network::ResourceRequest>();
-  request->url = url;
-  variations::AppendVariationsHeaderUnknownSignedIn(
-      request->url,
-      client->IsOffTheRecord() ? variations::InIncognito::kYes
-                               : variations::InIncognito::kNo,
-      request.get());
-  deletion_fetcher_ =
-      network::SimpleURLLoader::Create(std::move(request), traffic_annotation);
-  deletion_fetcher_->DownloadToStringOfUnboundedSizeUntilCrashAndDie(
-      client->GetURLLoaderFactory().get(),
-      base::BindOnce(&SuggestionDeletionHandler::OnURLLoadComplete,
-                     base::Unretained(this), deletion_fetcher_.get()));
-}
-
-SuggestionDeletionHandler::~SuggestionDeletionHandler() {
-}
-
-void SuggestionDeletionHandler::OnURLLoadComplete(
-    const network::SimpleURLLoader* source,
-    std::unique_ptr<std::string> response_body) {
-  DCHECK(source == deletion_fetcher_.get());
-  const bool ok = source->NetError() == net::OK &&
-                  (source->ResponseInfo() && source->ResponseInfo()->headers &&
-                   source->ResponseInfo()->headers->response_code() == 200);
-  std::move(callback_).Run(ok, this);
-}
-
-// BaseSearchProvider ---------------------------------------------------------
-
 BaseSearchProvider::BaseSearchProvider(AutocompleteProvider::Type type,
                                        AutocompleteProviderClient* client)
-    : AutocompleteProvider(type),
-      client_(client),
-      field_trial_triggered_(false),
-      field_trial_triggered_in_session_(false) {
-}
+    : AutocompleteProvider(type), client_(client) {}
 
 // static
 bool BaseSearchProvider::ShouldPrefetch(const AutocompleteMatch& match) {
@@ -166,6 +101,145 @@ bool BaseSearchProvider::ShouldPrerender(const AutocompleteMatch& match) {
 
 // static
 AutocompleteMatch BaseSearchProvider::CreateSearchSuggestion(
+    AutocompleteProvider* autocomplete_provider,
+    const AutocompleteInput& input,
+    const bool in_keyword_mode,
+    const SearchSuggestionParser::SuggestResult& suggestion,
+    const TemplateURL* template_url,
+    const SearchTermsData& search_terms_data,
+    int accepted_suggestion,
+    bool append_extra_query_params_from_command_line) {
+  AutocompleteMatch match(autocomplete_provider, suggestion.relevance(), false,
+                          suggestion.type());
+
+  if (!template_url)
+    return match;
+  match.keyword = template_url->keyword();
+  match.image_dominant_color = suggestion.entity_info().dominant_color();
+  match.image_url = GURL(suggestion.entity_info().image_url());
+  match.entity_id = suggestion.entity_info().entity_id();
+  match.website_uri = suggestion.entity_info().website_uri();
+
+  match.contents = suggestion.match_contents();
+  match.contents_class = suggestion.match_contents_class();
+  match.suggestion_group_id = suggestion.suggestion_group_id();
+  match.answer = suggestion.answer();
+  match.suggest_type = suggestion.suggest_type();
+  for (const int subtype : suggestion.subtypes()) {
+    match.subtypes.insert(SuggestSubtypeForNumber(subtype));
+  }
+  if (suggestion.type() == AutocompleteMatchType::SEARCH_SUGGEST_TAIL) {
+    match.RecordAdditionalInfo(kACMatchPropertySuggestionText,
+                               suggestion.suggestion());
+    match.RecordAdditionalInfo(kACMatchPropertyContentsPrefix,
+                               suggestion.match_contents_prefix());
+    match.RecordAdditionalInfo(
+        kACMatchPropertyContentsStartIndex,
+        static_cast<int>(suggestion.suggestion().length() -
+                         match.contents.length()));
+  }
+
+  if (!suggestion.annotation().empty()) {
+    match.description = suggestion.annotation();
+    AutocompleteMatch::AddLastClassificationIfNecessary(
+        &match.description_class, 0, ACMatchClassification::NONE);
+  }
+
+  const std::u16string input_text = input.IsZeroSuggest() ? u"" : input.text();
+  const std::u16string input_lower = base::i18n::ToLower(input_text);
+  // suggestion.match_contents() should have already been collapsed.
+  match.allowed_to_be_default_match =
+      (!in_keyword_mode || suggestion.from_keyword()) &&
+      (base::CollapseWhitespace(input_lower, false) ==
+       base::i18n::ToLower(suggestion.match_contents()));
+
+  if (suggestion.from_keyword())
+    match.from_keyword = true;
+
+  // We only allow inlinable navsuggestions that were received before the
+  // last keystroke because we don't want asynchronous inline autocompletions.
+  if (!input.prevent_inline_autocomplete() &&
+      !suggestion.received_after_last_keystroke() &&
+      (!in_keyword_mode || suggestion.from_keyword()) &&
+      !input.IsZeroSuggest() &&
+      base::StartsWith(base::i18n::ToLower(suggestion.suggestion()),
+                       input_lower, base::CompareCase::SENSITIVE)) {
+    match.inline_autocompletion =
+        suggestion.suggestion().substr(input_text.length());
+    match.allowed_to_be_default_match = true;
+  }
+
+  const TemplateURLRef& search_url = template_url->url_ref();
+  DCHECK(search_url.SupportsReplacement(search_terms_data));
+  std::u16string query(suggestion.suggestion());
+  std::u16string original_query(input_text);
+  if (suggestion.type() == AutocompleteMatchType::CALCULATOR) {
+    // Use query text, rather than the calculator answer suggestion, to search.
+    query = original_query;
+    original_query.clear();
+  }
+  match.fill_into_edit = GetFillIntoEdit(suggestion, template_url);
+  match.search_terms_args =
+      std::make_unique<TemplateURLRef::SearchTermsArgs>(query);
+  match.search_terms_args->original_query = original_query;
+  match.search_terms_args->accepted_suggestion = accepted_suggestion;
+  match.search_terms_args->additional_query_params =
+      suggestion.entity_info().suggest_search_parameters();
+  match.search_terms_args->append_extra_query_params_from_command_line =
+      append_extra_query_params_from_command_line;
+  // Must be set for deduplication and navigation. AutocompleteController will
+  // ultimately overwrite this with the searchbox stats before navigation.
+  match.destination_url = GURL(search_url.ReplaceSearchTerms(
+      *match.search_terms_args, search_terms_data));
+
+  // Search results don't look like URLs.
+  match.transition = suggestion.from_keyword() ? ui::PAGE_TRANSITION_KEYWORD
+                                               : ui::PAGE_TRANSITION_GENERATED;
+
+  // Attach Actions in Suggest to the newly created match on Android if Google
+  // is the default search engine.
+  if (is_android &&
+      search::TemplateURLIsGoogle(template_url, search_terms_data)) {
+    for (const omnibox::ActionInfo& action_info :
+         suggestion.entity_info().action_suggestions()) {
+      match.actions.emplace_back(CreateActionInSuggest(action_info, search_url,
+                                                       *match.search_terms_args,
+                                                       search_terms_data));
+    }
+  }
+
+  return match;
+}
+
+scoped_refptr<OmniboxAction> BaseSearchProvider::CreateActionInSuggest(
+    omnibox::ActionInfo action_info,
+    const TemplateURLRef& search_url,
+    const TemplateURLRef::SearchTermsArgs& original_search_terms_args,
+    const SearchTermsData& search_terms_data) {
+  absl::optional<TemplateURLRef::SearchTermsArgs> action_search_terms_args;
+  // If the Action's URL is empty, but the Action supplies additional search
+  // parameters, compute new URL based on the base URL (that is specific to
+  // the entire suggestion).
+  if (action_info.action_uri().empty() &&
+      !action_info.search_parameters().empty()) {
+    action_search_terms_args = original_search_terms_args;
+    std::string query_params;
+    for (const auto& param : action_info.search_parameters()) {
+      // Supply additional Query Parameters as instructed by the provider.
+      if (!query_params.empty()) {
+        query_params += '&';
+      }
+      query_params += param.first + "=" + param.second;
+    }
+    action_search_terms_args->additional_query_params = query_params;
+  }
+
+  return base::MakeRefCounted<OmniboxActionInSuggest>(
+      std::move(action_info), std::move(action_search_terms_args));
+}
+
+// static
+AutocompleteMatch BaseSearchProvider::CreateShortcutSearchSuggestion(
     const std::u16string& suggestion,
     AutocompleteMatchType::Type type,
     bool from_keyword,
@@ -176,7 +250,8 @@ AutocompleteMatch BaseSearchProvider::CreateSearchSuggestion(
   // mode.  They also assume the caller knows what it's doing and we set
   // this match to look as if it was received/created synchronously.
   SearchSuggestionParser::SuggestResult suggest_result(
-      suggestion, type, /*subtypes=*/{}, from_keyword,
+      suggestion, type, /*suggest_type=*/omnibox::TYPE_NATIVE_CHROME,
+      /*subtypes=*/{}, from_keyword,
       /*relevance=*/0, /*relevance_from_server=*/false,
       /*input_text=*/std::u16string());
   suggest_result.set_received_after_last_keystroke(false);
@@ -193,12 +268,40 @@ AutocompleteMatch BaseSearchProvider::CreateOnDeviceSearchSuggestion(
     int relevance,
     const TemplateURL* template_url,
     const SearchTermsData& search_terms_data,
-    int accepted_suggestion) {
+    int accepted_suggestion,
+    bool is_tail_suggestion) {
+  AutocompleteMatchType::Type match_type;
+  omnibox::SuggestType suggest_type = omnibox::TYPE_NATIVE_CHROME;
+  std::u16string match_contents, match_contents_prefix;
+
+  if (is_tail_suggestion) {
+    match_type = AutocompleteMatchType::SEARCH_SUGGEST_TAIL;
+    suggest_type = omnibox::TYPE_TAIL;
+    std::u16string sanitized_suggestion =
+        AutocompleteMatch::SanitizeString(suggestion);
+    match_contents = GetMatchContentsForOnDeviceTailSuggestion(
+        input.text(), sanitized_suggestion);
+
+    DCHECK_GE(sanitized_suggestion.size(), match_contents.size());
+    match_contents_prefix = sanitized_suggestion.substr(
+        0, sanitized_suggestion.size() - match_contents.size());
+  } else {
+    match_type = AutocompleteMatchType::SEARCH_SUGGEST;
+    suggest_type = omnibox::TYPE_QUERY;
+    match_contents = suggestion;
+  }
+
   SearchSuggestionParser::SuggestResult suggest_result(
-      suggestion, AutocompleteMatchType::SEARCH_SUGGEST,
-      /*subtypes=*/{omnibox::SUBTYPE_SUGGEST_2G_LITE},
+      suggestion, match_type, suggest_type,
+      /*subtypes=*/{omnibox::SUBTYPE_SUGGEST_2G_LITE}, match_contents,
+      match_contents_prefix,
+      /*annotation=*/std::u16string(),
+      /*entity_info=*/omnibox::EntityInfo(),
+      /*deletion_url=*/"",
       /*from_keyword=*/false, relevance,
       /*relevance_from_server=*/false,
+      /*should_prefetch=*/false,
+      /*should_prerender=*/false,
       base::CollapseWhitespace(input.text(), false));
   // On device providers are asynchronous.
   suggest_result.set_received_after_last_keystroke(true);
@@ -215,43 +318,15 @@ void BaseSearchProvider::AppendSuggestClientToAdditionalQueryParams(
     metrics::OmniboxEventProto::PageClassification page_classification,
     TemplateURLRef::SearchTermsArgs* search_terms_args) {
   // Only append the suggest client query param for Google template URL.
-  if (template_url->GetEngineType(search_terms_data) != SEARCH_ENGINE_GOOGLE)
+  if (!search::TemplateURLIsGoogle(template_url, search_terms_data)) {
     return;
+  }
 
   if (page_classification == metrics::OmniboxEventProto::CHROMEOS_APP_LIST) {
     if (!search_terms_args->additional_query_params.empty())
       search_terms_args->additional_query_params.append("&");
     search_terms_args->additional_query_params.append("sclient=cros-launcher");
   }
-}
-
-// static
-bool BaseSearchProvider::IsNTPPage(
-    metrics::OmniboxEventProto::PageClassification classification) {
-  return (classification == OEP::NTP) ||
-         (classification == OEP::OBSOLETE_INSTANT_NTP) ||
-         (classification == OEP::INSTANT_NTP_WITH_FAKEBOX_AS_STARTING_FOCUS) ||
-         (classification == OEP::INSTANT_NTP_WITH_OMNIBOX_AS_STARTING_FOCUS) ||
-         (classification == OEP::NTP_REALBOX) ||
-         (classification == OEP::ANDROID_SHORTCUTS_WIDGET) ||
-         (classification == OEP::NTP_ZPS_PREFETCH);
-}
-
-// static
-bool BaseSearchProvider::IsSearchResultsPage(
-    metrics::OmniboxEventProto::PageClassification classification) {
-  return (classification ==
-          OEP::SEARCH_RESULT_PAGE_NO_SEARCH_TERM_REPLACEMENT) ||
-         (classification ==
-          OEP::SEARCH_RESULT_PAGE_DOING_SEARCH_TERM_REPLACEMENT) ||
-         (classification == OEP::SRP_ZPS_PREFETCH);
-}
-
-// static
-bool BaseSearchProvider::IsOtherWebPage(
-    metrics::OmniboxEventProto::PageClassification classification) {
-  return (classification == OEP::OTHER) ||
-         (classification == OEP::OTHER_ZPS_PREFETCH);
 }
 
 // static
@@ -287,9 +362,7 @@ bool BaseSearchProvider::CanSendZeroSuggestRequest(
   // Note that currently only the pre-populated Google search provider supports
   // zero-prefix suggestions. If other pre-populated search engines decide to
   // support it, revise this test accordingly.
-  if (template_url == nullptr ||
-      !template_url->SupportsReplacement(search_terms_data) ||
-      template_url->GetEngineType(search_terms_data) != SEARCH_ENGINE_GOOGLE) {
+  if (!search::TemplateURLIsGoogle(template_url, search_terms_data)) {
     return false;
   }
 
@@ -316,10 +389,13 @@ bool BaseSearchProvider::CanSendSuggestRequestWithURL(
 void BaseSearchProvider::DeleteMatch(const AutocompleteMatch& match) {
   DCHECK(match.deletable);
   if (!match.GetAdditionalInfo(BaseSearchProvider::kDeletionUrlKey).empty()) {
-    deletion_handlers_.push_back(std::make_unique<SuggestionDeletionHandler>(
-        client(), match.GetAdditionalInfo(BaseSearchProvider::kDeletionUrlKey),
-        base::BindOnce(&BaseSearchProvider::OnDeletionComplete,
-                       base::Unretained(this))));
+    deletion_loaders_.push_back(
+        client()
+            ->GetRemoteSuggestionsService(/*create_if_necessary=*/true)
+            ->StartDeletionRequest(
+                match.GetAdditionalInfo(BaseSearchProvider::kDeletionUrlKey),
+                base::BindOnce(&BaseSearchProvider::OnDeletionComplete,
+                               base::Unretained(this))));
   }
 
   const TemplateURL* template_url =
@@ -341,16 +417,6 @@ void BaseSearchProvider::AddProviderInfo(ProvidersInfo* provider_info) const {
   metrics::OmniboxEventProto_ProviderInfo& new_entry = provider_info->back();
   new_entry.set_provider(AsOmniboxEventProviderType());
   new_entry.set_provider_done(done_);
-  std::vector<uint32_t> field_trial_hashes;
-  OmniboxFieldTrial::GetActiveSuggestFieldTrialHashes(&field_trial_hashes);
-  for (size_t i = 0; i < field_trial_hashes.size(); ++i) {
-    if (field_trial_triggered_)
-      new_entry.mutable_field_trial_triggered()->Add(field_trial_hashes[i]);
-    if (field_trial_triggered_in_session_) {
-      new_entry.mutable_field_trial_triggered_in_session()->Add(
-          field_trial_hashes[i]);
-    }
-  }
 }
 
 // static
@@ -364,102 +430,6 @@ const char BaseSearchProvider::kTrue[] = "true";
 const char BaseSearchProvider::kFalse[] = "false";
 
 BaseSearchProvider::~BaseSearchProvider() {}
-
-// static
-AutocompleteMatch BaseSearchProvider::CreateSearchSuggestion(
-    AutocompleteProvider* autocomplete_provider,
-    const AutocompleteInput& input,
-    const bool in_keyword_mode,
-    const SearchSuggestionParser::SuggestResult& suggestion,
-    const TemplateURL* template_url,
-    const SearchTermsData& search_terms_data,
-    int accepted_suggestion,
-    bool append_extra_query_params_from_command_line) {
-  AutocompleteMatch match(autocomplete_provider, suggestion.relevance(), false,
-                          suggestion.type());
-
-  if (!template_url)
-    return match;
-  match.keyword = template_url->keyword();
-  match.image_dominant_color = suggestion.image_dominant_color();
-  match.image_url = suggestion.image_url();
-  match.entity_id = suggestion.entity_id();
-  match.contents = suggestion.match_contents();
-  match.contents_class = suggestion.match_contents_class();
-  match.suggestion_group_id = suggestion.suggestion_group_id();
-  match.answer = suggestion.answer();
-  for (const int subtype : suggestion.subtypes()) {
-    match.subtypes.insert(SuggestSubtypeForNumber(subtype));
-  }
-  if (suggestion.type() == AutocompleteMatchType::SEARCH_SUGGEST_TAIL) {
-    match.RecordAdditionalInfo(kACMatchPropertySuggestionText,
-                               suggestion.suggestion());
-    match.RecordAdditionalInfo(kACMatchPropertyContentsPrefix,
-                               suggestion.match_contents_prefix());
-    match.RecordAdditionalInfo(
-        kACMatchPropertyContentsStartIndex,
-        static_cast<int>(
-            suggestion.suggestion().length() - match.contents.length()));
-  }
-
-  if (!suggestion.annotation().empty()) {
-    match.description = suggestion.annotation();
-    AutocompleteMatch::AddLastClassificationIfNecessary(
-        &match.description_class, 0, ACMatchClassification::NONE);
-  }
-
-  const std::u16string input_lower = base::i18n::ToLower(input.text());
-  // suggestion.match_contents() should have already been collapsed.
-  match.allowed_to_be_default_match =
-      (!in_keyword_mode || suggestion.from_keyword()) &&
-      (base::CollapseWhitespace(input_lower, false) ==
-       base::i18n::ToLower(suggestion.match_contents()));
-
-  if (suggestion.from_keyword())
-    match.from_keyword = true;
-
-  // We only allow inlinable navsuggestions that were received before the
-  // last keystroke because we don't want asynchronous inline autocompletions.
-  if (!input.prevent_inline_autocomplete() &&
-      !suggestion.received_after_last_keystroke() &&
-      (!in_keyword_mode || suggestion.from_keyword()) &&
-      base::StartsWith(
-          base::i18n::ToLower(suggestion.suggestion()), input_lower,
-          base::CompareCase::SENSITIVE)) {
-    match.inline_autocompletion =
-        suggestion.suggestion().substr(input.text().length());
-    match.allowed_to_be_default_match = true;
-  }
-
-  const TemplateURLRef& search_url = template_url->url_ref();
-  DCHECK(search_url.SupportsReplacement(search_terms_data));
-  std::u16string query(suggestion.suggestion());
-  std::u16string original_query(input.text());
-  if (suggestion.type() == AutocompleteMatchType::CALCULATOR) {
-    // Use query text, rather than the calculator answer suggestion, to search.
-    query = original_query;
-    original_query.clear();
-  }
-  match.fill_into_edit = GetFillIntoEdit(suggestion, template_url);
-  match.search_terms_args =
-      std::make_unique<TemplateURLRef::SearchTermsArgs>(query);
-  match.search_terms_args->original_query = original_query;
-  match.search_terms_args->accepted_suggestion = accepted_suggestion;
-  match.search_terms_args->additional_query_params =
-      suggestion.additional_query_params();
-  match.search_terms_args->append_extra_query_params_from_command_line =
-      append_extra_query_params_from_command_line;
-  // Must be set for deduplication and navigation. AutocompleteController will
-  // ultimately overwrite this with the searchbox stats before navigation.
-  match.destination_url = GURL(search_url.ReplaceSearchTerms(
-      *match.search_terms_args, search_terms_data));
-
-  // Search results don't look like URLs.
-  match.transition = suggestion.from_keyword() ? ui::PAGE_TRANSITION_KEYWORD
-                                               : ui::PAGE_TRANSITION_GENERATED;
-
-  return match;
-}
 
 // static
 std::u16string BaseSearchProvider::GetFillIntoEdit(
@@ -546,8 +516,7 @@ void BaseSearchProvider::AddMatchToMap(
     // plain-text matches (i.e., with no additional query params) as expected.
     const auto& added_match_query = match_key.first;
     const auto& added_match_query_params = match_key.second;
-    if (base::FeatureList::IsEnabled(omnibox::kDisambiguateEntitySuggestions) &&
-        !added_match_query_params.empty()) {
+    if (!added_match_query_params.empty()) {
       for (const auto& entry : *map) {
         const auto& existing_match_query = entry.first.first;
         const auto& existing_match_query_params = entry.first.second;
@@ -607,14 +576,54 @@ void BaseSearchProvider::AddMatchToMap(
       existing_match.duplicate_matches.push_back(std::move(match));
     }
 
-    // Copy over `answer` and `stripped_destination_url` from the lower-ranking
-    // duplicate, if necessary. Note that this requires the lower-ranking
-    // duplicate being added last. See the use of push_back above.
+    // Copy over necessary fields from the lower-ranking duplicate. Note that
+    // this requires the lower-ranking duplicate being added last. See the use
+    // of push_back above:
+
+    // This is to avoid losing the Answers in Suggest information.
     const auto& less_relevant_duplicate_match =
         existing_match.duplicate_matches.back();
     if (less_relevant_duplicate_match.answer && !existing_match.answer) {
       existing_match.answer = less_relevant_duplicate_match.answer;
     }
+    // This is to avoid having shopping categorical queries lose their images to
+    // higher-relevance local history and verbatim matches. This works for the
+    // shopping categorical queries because they only provide images at the
+    // moment. That assumption may not hold in the future.
+    // Ideally the entire `entity_info`, when available on a suggestion, should
+    // be copied over. However `entity_info` is broken down to its constituents
+    // in the constructor of SearchSuggestionParser::SuggestResult and used to
+    // set individual fields on the AutocompleteMatch. This is in contrast to
+    // Answers in Suggest which is kept on the match in its entirety. This is
+    // partly because the entity name is used to set and classify the match
+    // contents. Ideally `entity_info` should also be kept on the match in its
+    // entirety so it can be carried over when deduplicating the matches here or
+    // later in the Autocomplete process.
+    // TODO(crbug.com/1467002): rework how `entity_info` is used in the match.
+    if (base::FeatureList::IsEnabled(omnibox::kCategoricalSuggestions)) {
+      if (!less_relevant_duplicate_match.image_url.is_empty() &&
+          existing_match.image_url.is_empty()) {
+        existing_match.image_url = less_relevant_duplicate_match.image_url;
+      }
+    }
+    // This is to avoid having shopping categorical queries lose their subtypes
+    // to higher-relevance local history and verbatim matches. The subtypes are
+    // sent to the backend in the ChromeSearchboxStats proto via the gs_lcrp=
+    // param when the user selects a suggestion. The subtypes may be used to
+    // identify what the user selected so they can be suggested the next time,
+    // i.e., if the user selects a decorated suggestion - which is accompanied
+    // by specific subtypes - we want to show a decorated suggestion next time.
+    if (base::FeatureList::IsEnabled(omnibox::kCategoricalSuggestions) &&
+        base::FeatureList::IsEnabled(omnibox::kMergeSubtypes)) {
+      existing_match.subtypes.insert(
+          less_relevant_duplicate_match.subtypes.begin(),
+          less_relevant_duplicate_match.subtypes.end());
+    }
+    // This is to avoid having `stripped_destination_url` being later set by
+    // `AutocompleteResult::ComputeStrippedDestinationURL()` which strips away
+    // the additional query params from `destination_url` leaving only the
+    // search terms. That would result in these matches to be erroneously
+    // deduped despite having unique additional query params.
     if (!less_relevant_duplicate_match.stripped_destination_url.is_empty() &&
         existing_match.stripped_destination_url.is_empty()) {
       existing_match.stripped_destination_url =
@@ -653,11 +662,13 @@ void BaseSearchProvider::DeleteMatchFromMatches(
 }
 
 void BaseSearchProvider::OnDeletionComplete(
-    bool success, SuggestionDeletionHandler* handler) {
-  RecordDeletionResult(success);
+    const network::SimpleURLLoader* source,
+    const int response_code,
+    std::unique_ptr<std::string> response_body) {
+  RecordDeletionResult(response_code == 200);
   base::EraseIf(
-      deletion_handlers_,
-      [handler](const std::unique_ptr<SuggestionDeletionHandler>& elem) {
-        return elem.get() == handler;
+      deletion_loaders_,
+      [source](const std::unique_ptr<network::SimpleURLLoader>& loader) {
+        return loader.get() == source;
       });
 }

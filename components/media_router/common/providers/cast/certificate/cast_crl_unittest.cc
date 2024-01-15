@@ -9,9 +9,9 @@
 #include "components/media_router/common/providers/cast/certificate/cast_cert_reader.h"
 #include "components/media_router/common/providers/cast/certificate/cast_cert_test_helpers.h"
 #include "components/media_router/common/providers/cast/certificate/cast_cert_validator.h"
-#include "net/cert/pki/cert_errors.h"
-#include "net/cert/pki/trust_store_in_memory.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/boringssl/src/pki/cert_errors.h"
+#include "third_party/boringssl/src/pki/trust_store_in_memory.h"
 #include "third_party/openscreen/src/cast/common/certificate/proto/test_suite.pb.h"
 
 using cast::certificate::DeviceCertTest;
@@ -31,11 +31,11 @@ enum TestStepResult {
 bool TestVerifyCertificate(TestStepResult expected_result,
                            const std::vector<std::string>& certificate_chain,
                            const base::Time& time,
-                           net::TrustStore* cast_trust_store) {
+                           bssl::TrustStore* cast_trust_store) {
   std::unique_ptr<CertVerificationContext> context;
   CastDeviceCertPolicy policy;
   CastCertError result = VerifyDeviceCertUsingCustomTrustStore(
-      certificate_chain, time, &context, &policy, nullptr,
+      certificate_chain, time, &context, &policy, nullptr, nullptr,
       CRLPolicy::CRL_OPTIONAL, cast_trust_store);
   bool success = result == CastCertError::OK;
   if (expected_result != RESULT_SUCCESS) {
@@ -51,9 +51,9 @@ bool TestVerifyCertificate(TestStepResult expected_result,
 bool TestVerifyCRL(TestStepResult expected_result,
                    const std::string& crl_bundle,
                    const base::Time& time,
-                   net::TrustStore* crl_trust_store) {
-  std::unique_ptr<CastCRL> crl =
-      ParseAndVerifyCRLUsingCustomTrustStore(crl_bundle, time, crl_trust_store);
+                   bssl::TrustStore* crl_trust_store) {
+  std::unique_ptr<CastCRL> crl = ParseAndVerifyCRLUsingCustomTrustStore(
+      crl_bundle, time, crl_trust_store, false /* is_fallback_crl */);
 
   bool success = crl != nullptr;
   if (expected_result != RESULT_SUCCESS) {
@@ -66,42 +66,39 @@ bool TestVerifyCRL(TestStepResult expected_result,
 // Verifies that the certificate chain provided is not revoked according to
 // the provided Cast CRL at |cert_time|.
 // The provided CRL is verified at |crl_time|.
-// If |crl_required| is set, then a valid Cast CRL must be provided.
-// Otherwise, a missing CRL is be ignored.
+// If |crl_policy| is set to CRL_REQUIRED, then a valid Cast CRL must be
+// provided. Otherwise, a missing CRL is be ignored.
 bool TestVerifyRevocation(CastCertError expected_result,
                           const std::vector<std::string>& certificate_chain,
                           const std::string& crl_bundle,
                           const base::Time& crl_time,
                           const base::Time& cert_time,
-                          bool crl_required,
-                          net::TrustStore* cast_trust_store,
-                          net::TrustStore* crl_trust_store) {
+                          CRLPolicy crl_policy,
+                          bssl::TrustStore* cast_trust_store,
+                          bssl::TrustStore* crl_trust_store) {
   std::unique_ptr<CastCRL> crl;
   if (!crl_bundle.empty()) {
-    crl = ParseAndVerifyCRLUsingCustomTrustStore(crl_bundle, crl_time,
-                                                 crl_trust_store);
+    crl = ParseAndVerifyCRLUsingCustomTrustStore(
+        crl_bundle, crl_time, crl_trust_store, false /* is_fallback_crl */);
     EXPECT_NE(crl.get(), nullptr);
   }
 
   std::unique_ptr<CertVerificationContext> context;
   CastDeviceCertPolicy policy;
-  CRLPolicy crl_policy = CRLPolicy::CRL_REQUIRED;
-  if (!crl_required)
-    crl_policy = CRLPolicy::CRL_OPTIONAL;
   CastCertError result = VerifyDeviceCertUsingCustomTrustStore(
-      certificate_chain, cert_time, &context, &policy, crl.get(), crl_policy,
-      cast_trust_store);
+      certificate_chain, cert_time, &context, &policy, crl.get(), nullptr,
+      crl_policy, cast_trust_store);
   EXPECT_EQ(expected_result, result);
   return expected_result == result;
 }
 
 // Runs a single test case.
 bool RunTest(const DeviceCertTest& test_case) {
-  std::unique_ptr<net::TrustStoreInMemory> cast_trust_store =
+  std::unique_ptr<bssl::TrustStoreInMemory> cast_trust_store =
       test_case.use_test_trust_anchors()
           ? cast_certificate::testing::LoadTestCert("cast_test_root_ca.pem")
           : nullptr;
-  std::unique_ptr<net::TrustStoreInMemory> crl_trust_store =
+  std::unique_ptr<bssl::TrustStoreInMemory> crl_trust_store =
       test_case.use_test_trust_anchors()
           ? cast_certificate::testing::LoadTestCert("cast_crl_test_root_ca.pem")
           : nullptr;
@@ -137,8 +134,9 @@ bool RunTest(const DeviceCertTest& test_case) {
                            crl_trust_store.get()) &&
              TestVerifyRevocation(
                  CastCertError::ERR_CRL_INVALID, certificate_chain, crl_bundle,
-                 crl_verification_time, cert_verification_time, true,
-                 cast_trust_store.get(), crl_trust_store.get());
+                 crl_verification_time, cert_verification_time,
+                 CRLPolicy::CRL_REQUIRED, cast_trust_store.get(),
+                 crl_trust_store.get());
     case cast::certificate::CRL_EXPIRED_AFTER_INITIAL_VERIFICATION:
     // Fall-through intended.
     case cast::certificate::REVOCATION_CHECK_FAILED:
@@ -150,7 +148,8 @@ bool RunTest(const DeviceCertTest& test_case) {
              TestVerifyRevocation(
                  CastCertError::ERR_CERTS_REVOKED, certificate_chain,
                  crl_bundle, crl_verification_time, cert_verification_time,
-                 false, cast_trust_store.get(), crl_trust_store.get());
+                 CRLPolicy::CRL_OPTIONAL, cast_trust_store.get(),
+                 crl_trust_store.get());
     case cast::certificate::SUCCESS:
       return (crl_bundle.empty() ||
               TestVerifyCRL(RESULT_SUCCESS, crl_bundle, crl_verification_time,
@@ -158,11 +157,12 @@ bool RunTest(const DeviceCertTest& test_case) {
              TestVerifyCertificate(RESULT_SUCCESS, certificate_chain,
                                    cert_verification_time,
                                    cast_trust_store.get()) &&
-             TestVerifyRevocation(CastCertError::OK, certificate_chain,
-                                  crl_bundle, crl_verification_time,
-                                  cert_verification_time, !crl_bundle.empty(),
-                                  cast_trust_store.get(),
-                                  crl_trust_store.get());
+             TestVerifyRevocation(
+                 CastCertError::OK, certificate_chain, crl_bundle,
+                 crl_verification_time, cert_verification_time,
+                 !crl_bundle.empty() ? CRLPolicy::CRL_REQUIRED
+                                     : CRLPolicy::CRL_OPTIONAL,
+                 cast_trust_store.get(), crl_trust_store.get());
     case cast::certificate::UNSPECIFIED:
       return false;
   }

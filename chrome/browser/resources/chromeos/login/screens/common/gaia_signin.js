@@ -9,29 +9,32 @@
 import '//resources/cr_elements/icons.html.js';
 import '//resources/js/action_link.js';
 import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
-import '../../components/notification_card.js';
 import '../../components/security_token_pin.js';
 import '../../components/gaia_dialog.js';
-import '../../components/oobe_icons.m.js';
-import '../../components/buttons/oobe_back_button.m.js';
+import '../../components/oobe_icons.html.js';
+import '../../components/buttons/oobe_back_button.js';
 import '../../components/buttons/oobe_next_button.js';
-import '../../components/common_styles/common_styles.m.js';
-import '../../components/common_styles/oobe_dialog_host_styles.m.js';
-import '../../components/dialogs/oobe_adaptive_dialog.m.js';
-import '../../components/dialogs/oobe_loading_dialog.m.js';
+import '../../components/common_styles/oobe_common_styles.css.js';
+import '../../components/common_styles/oobe_dialog_host_styles.css.js';
+import '../../components/dialogs/oobe_adaptive_dialog.js';
+import '../../components/dialogs/oobe_loading_dialog.js';
 import '../../components/throbber_notice.js';
 
-import {assert} from '//resources/js/assert.js';
+import {assert} from '//resources/ash/common/assert.js';
+import {sendWithPromise} from '//resources/ash/common/cr.m.js';
 import {afterNextRender, html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {AuthFlow, AuthMode, SUPPORTED_PARAMS} from '../../../../gaia_auth_host/authenticator.js';
-import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.m.js';
-import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.m.js';
-import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.m.js';
-import {OOBE_UI_STATE} from '../../components/display_manager_types.m.js';
-import {OobeTypes} from '../../components/oobe_types.m.js';
-import {Oobe} from '../../cr_ui.m.js';
-import {invokePolymerMethod} from '../../display_manager.m.js';
+import {LoginScreenBehavior, LoginScreenBehaviorInterface} from '../../components/behaviors/login_screen_behavior.js';
+import {MultiStepBehavior, MultiStepBehaviorInterface} from '../../components/behaviors/multi_step_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from '../../components/behaviors/oobe_i18n_behavior.js';
+import {OobeModalDialog} from '../../components/dialogs/oobe_modal_dialog.js';
+import {OOBE_UI_STATE} from '../../components/display_manager_types.js';
+import {OobeTypes} from '../../components/oobe_types.js';
+import {Oobe} from '../../cr_ui.js';
+import {invokePolymerMethod} from '../../display_manager.js';
+
+import {getTemplate} from './gaia_signin.html.js';
 
 
 // GAIA animation guard timer. Started when GAIA page is loaded (Authenticator
@@ -41,9 +44,6 @@ const GAIA_ANIMATION_GUARD_MILLISEC = 300;
 
 // Maximum Gaia loading time in seconds.
 const MAX_GAIA_LOADING_TIME_SEC = 60;
-
-// The help topic regarding user not being in the allowlist.
-const HELP_CANT_ACCESS_ACCOUNT = 188036;
 
 // Amount of time allowed for video based SAML logins, to prevent a site from
 // keeping the camera on indefinitely.  This is a hard deadline and it will
@@ -67,13 +67,29 @@ const DialogMode = {
   GAIA: 'online-gaia',
   LOADING: 'loading',
   PIN_DIALOG: 'pin',
-  GAIA_ALLOWLIST_ERROR: 'allowlist-error',
 };
 
 /**
  * Steps that could be the first one in the flow.
  */
 const POSSIBLE_FIRST_SIGNIN_STEPS = [DialogMode.GAIA, DialogMode.LOADING];
+
+
+/**
+ * This enum is tied directly to the `EnrollmentNudgeUserAction` UMA enum
+ * defined in //tools/metrics/histograms/enums.xml, and to the
+ * `EnrollmentNudgeTest::UserAction` enum defined in
+ * //chrome/browser/ash/login/enrollment_nudge_browsertest.cc.
+ * Do not change one without changing the others.
+ * These values are persisted to logs. Entries should not be renumbered and
+ * numeric values should never be reused.
+ * @enum {number}
+ */
+const EnrollmentNudgeUserAction = {
+  ENTERPRISE_ENROLLMENT_BUTTON: 0,
+  USE_ANOTHER_ACCOUNT_BUTTON: 1,
+  MAX: 2,
+};
 
 /**
  * @constructor
@@ -86,6 +102,21 @@ const GaiaSigninElementBase = mixinBehaviors(
     [OobeI18nBehavior, LoginScreenBehavior, MultiStepBehavior], PolymerElement);
 
 /**
+ * @typedef {{
+ *   enrollmentNudge: OobeModalDialog
+ * }}
+ */
+GaiaSigninElementBase.$;
+
+/**
+ * Data that is passed to the screen during onBeforeShow.
+ * @typedef {{
+ *   hasUserPods: boolean,
+ * }}
+ */
+let GaiaSigninScreenData;
+
+/**
  * @polymer
  */
 class GaiaSigninElement extends GaiaSigninElementBase {
@@ -94,7 +125,7 @@ class GaiaSigninElement extends GaiaSigninElementBase {
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -115,16 +146,7 @@ class GaiaSigninElement extends GaiaSigninElementBase {
       isLoadingUiShown_: {
         type: Boolean,
         computed: 'computeIsLoadingUiShown_(loadingFrameContents_, ' +
-            'isAllowlistErrorShown_, authCompleted_)',
-      },
-
-      /**
-       * Whether the loading allowlist error UI is shown.
-       * @private
-       */
-      isAllowlistErrorShown_: {
-        type: Boolean,
-        value: false,
+            'authCompleted_)',
       },
 
       /**
@@ -271,11 +293,11 @@ class GaiaSigninElement extends GaiaSigninElementBase {
       },
 
       /**
-       * @private {string}
+       * Domain extracted from user's email.
+       * @private
        */
-      allowlistError_: {
+      emailDomain_: {
         type: String,
-        value: 'allowlistErrorConsumer',
       },
     };
   }
@@ -340,25 +362,38 @@ class GaiaSigninElement extends GaiaSigninElementBase {
      * @private
      */
     this.pinDialogResultReported_ = false;
+
+    /**
+     * Gaia path which can serve as a fallback in reloading scenarios. Expected
+     * to correspond to editable Gaia username page.
+     * TODO(b/259181755): this should no longer be needed once we change the
+     * implementation of the "Enter Google Account info" button to fully reload
+     * the flow through cpp code.
+     * @type {string}
+     * @private
+     */
+    this.fallbackGaiaPath_ = '';
   }
 
   get EXTERNAL_API() {
     return [
-      'loadAuthExtension',
+      'loadAuthenticator',
       'doReload',
-      'showAllowlistCheckFailedError',
+      'showEnrollmentNudge',
       'showPinDialog',
       'closePinDialog',
       'clickPrimaryButtonForTesting',
       'onBeforeLoad',
       'reset',
+      'toggleLoadingUI',
+      'setQuickStartEnabled',
     ];
   }
 
   static get observers() {
     return [
       'refreshDialogStep_(isShown_, pinDialogParameters_,' +
-          'isLoadingUiShown_, isAllowlistErrorShown_)',
+          'isLoadingUiShown_)',
     ];
   }
 
@@ -384,6 +419,10 @@ class GaiaSigninElement extends GaiaSigninElementBase {
     this.authenticator_.samlApiUsedCallback = this.samlApiUsed_.bind(this);
     this.authenticator_.recordSAMLProviderCallback =
         this.recordSAMLProvider_.bind(this);
+    this.authenticator_.addEventListener('getDeviceId', (e) => {
+      sendWithPromise('getDeviceIdForLogin')
+          .then(deviceId => this.authenticator_.getDeviceIdResponse(deviceId));
+    });
 
     this.initializeLoginScreen('GaiaSigninScreen');
   }
@@ -437,7 +476,6 @@ class GaiaSigninElement extends GaiaSigninElementBase {
    */
   loadAuthenticator_(doSamlRedirect) {
     this.loadingFrameContents_ = true;
-    this.isAllowlistErrorShown_ = false;
     this.isDefaultSsoProvider_ = doSamlRedirect;
     this.startLoadingTimer_();
 
@@ -472,7 +510,7 @@ class GaiaSigninElement extends GaiaSigninElementBase {
     if (Oobe.getInstance().currentScreen.id != 'gaia-signin') {
       return;
     }
-    this.loadingTimer_ = undefined;
+    this.clearLoadingTimer_();
     chrome.send('showLoadingTimeoutError');
   }
 
@@ -576,15 +614,16 @@ class GaiaSigninElement extends GaiaSigninElementBase {
   }
 
   /**
-   * Loads the authentication extension into the iframe.
-   * @param {!Object} data Extension parameters bag.
+   * Loads authenticator.
+   * @param {!Object} data Input for authenticator parameters.
    * @suppress {missingProperties}
    */
-  loadAuthExtension(data) {
+  loadAuthenticator(data) {
     this.authenticator_.setWebviewPartition(data.webviewPartitionName);
 
     this.authCompleted_ = false;
     this.navigationButtonsHidden_ = false;
+    this.fallbackGaiaPath_ = data.fallbackGaiaPath;
 
     // Reset SAML
     this.isSaml_ = false;
@@ -611,7 +650,7 @@ class GaiaSigninElement extends GaiaSigninElementBase {
     this.authenticatorParams_ = params;
 
     this.loadAuthenticator_(params.doSamlRedirect);
-    chrome.send('authExtensionLoaded');
+    chrome.send('authenticatorLoaded');
   }
 
   /**
@@ -648,11 +687,11 @@ class GaiaSigninElement extends GaiaSigninElementBase {
   reset() {
     this.clearLoadingTimer_();
     this.clearVideoTimer_();
-    this.isAllowlistErrorShown_ = false;
     this.authCompleted_ = false;
     // Reset webview to prevent calls from authenticator.
     this.authenticator_.resetWebview();
     this.authenticator_.resetStates();
+    this.navigationButtonsHidden_ = true;
     // Explicitly disable video here to let `onVideoEnabledChange_()` handle
     // timer start next time when `videoEnabled_` will be set to true on SAML
     // page.
@@ -778,11 +817,13 @@ class GaiaSigninElement extends GaiaSigninElementBase {
   }
 
   /**
-   * Invoked when auth is completed successfully.
-   * @param {!Object} credentials Credentials of the completed authentication.
+   * Invoked when onAuthCompleted message received.
+   * @param {!CustomEvent<!Object>} e Event with the credentials object as the
+   *     payload.
    * @private
    */
-  onAuthCompleted_(credentials) {
+  onAuthCompletedMessage_(e) {
+    const credentials = e.detail;
     if (credentials.publicSAML) {
       this.email_ = credentials.email;
       chrome.send('launchSAMLPublicSession', [credentials.email]);
@@ -809,16 +850,6 @@ class GaiaSigninElement extends GaiaSigninElementBase {
   }
 
   /**
-   * Invoked when onAuthCompleted message received.
-   * @param {!CustomEvent<!Object>} e Event with the credentials object as the
-   *     payload.
-   * @private
-   */
-  onAuthCompletedMessage_(e) {
-    this.onAuthCompleted_(e.detail);
-  }
-
-  /**
    * Invoked when onLoadAbort message received.
    * @param {!CustomEvent<!Object>} e Event with the payload containing
    *     additional information about error event like:
@@ -827,7 +858,7 @@ class GaiaSigninElement extends GaiaSigninElementBase {
    * @private
    */
   onLoadAbortMessage_(e) {
-    this.onWebviewError_(e.detail);
+    chrome.send('webviewLoadAborted', [e.detail.error_code]);
   }
 
   /**
@@ -846,7 +877,7 @@ class GaiaSigninElement extends GaiaSigninElementBase {
    * @private
    */
   onIdentifierEnteredMessage_(e) {
-    this.onIdentifierEntered_(e.detail);
+    this.userActed(['identifierEntered', e.detail.accountIdentifier]);
   }
 
   /**
@@ -856,18 +887,19 @@ class GaiaSigninElement extends GaiaSigninElementBase {
    * @private
    */
   onRemoveUserByEmailMessage_(e) {
-    this.onRemoveUserByEmail_(e.detail);
+    chrome.send('removeUserByEmail', [e.detail]);
+    this.cancel();
   }
 
   /**
-   * Reloads extension frame.
+   * Reloads authenticator.
    */
   doReload() {
     this.authenticator_.reload();
     this.loadingFrameContents_ = true;
-    this.isAllowlistErrorShown_ = false;
     this.startLoadingTimer_();
     this.authCompleted_ = false;
+    this.navigationButtonsHidden_ = false;
   }
 
   /**
@@ -880,7 +912,7 @@ class GaiaSigninElement extends GaiaSigninElementBase {
 
     // TODO(crbug.com/470893): Figure out whether/which of these exit conditions
     // are useful.
-    if (this.isAllowlistErrorShown_ || this.authCompleted_) {
+    if (this.authCompleted_) {
       return;
     }
 
@@ -895,60 +927,58 @@ class GaiaSigninElement extends GaiaSigninElementBase {
   }
 
   /**
-   * Handler for webview error handling.
-   * @param {!Object} data Additional information about error event like:
-   *     {number} error_code Error code such as net::ERR_INTERNET_DISCONNECTED.
-   *     {string} src The URL that failed to load.
-   * @private
+   * Show enrollment nudge pop-up.
+   * @param {string} domain User's email domain.
    */
-  onWebviewError_(data) {
-    chrome.send('webviewLoadAborted', [data.error_code]);
-  }
-
-  /**
-   * Handler for identifierEntered event.
-   * @param {!Object} data The identifier entered by user:
-   *     {string} accountIdentifier User identifier.
-   * @private
-   */
-  onIdentifierEntered_(data) {
-    chrome.send('identifierEntered', [data.accountIdentifier]);
-  }
-
-  /**
-   * Handler for removeUserByEmail event.
-   * @param {!Object} data The user email:
-   *     {string} email User email.
-   * @private
-   */
-  onRemoveUserByEmail_(data) {
-    chrome.send('removeUserByEmail', [data]);
-    this.cancel();
-  }
-
-  /**
-   * Show/Hide error when user is not in allowlist. When UI is hidden GAIA is
-   * reloaded.
-   * @param {!Object=} opt_data Optional additional information.
-   */
-  showAllowlistCheckFailedError(opt_data) {
-    const isManaged = opt_data && opt_data.enterpriseManaged;
-    const isFamilyLinkAllowed = opt_data && opt_data.familyLinkAllowed;
-    if (isManaged && isFamilyLinkAllowed) {
-      this.allowlistError_ = 'allowlistErrorEnterpriseAndFamilyLink';
-    } else if (isManaged) {
-      this.allowlistError_ = 'allowlistErrorEnterprise';
-    } else {
-      this.allowlistError_ = 'allowlistErrorConsumer';
-    }
-
-    // Reset the state when allowlist error is shown to prevent any loading
-    // glitches during the retry.
+  showEnrollmentNudge(domain) {
     this.reset();
-
-    this.$['gaia-allowlist-error'].submitButton.focus();
-    this.isAllowlistErrorShown_ = true;
+    this.emailDomain_ = domain;
+    this.$.enrollmentNudge.showDialog();
+    afterNextRender(this, () => this.$.enterpriseEnrollment.focus());
   }
+
+  /**
+   * @param {boolean} isShown
+   */
+  toggleLoadingUI(isShown) {
+    this.loadingFrameContents_ = isShown;
+  }
+
+  /**
+   * Build localized message to display on enrollment nudge pop-up.
+   * @param {string} locale i18n locale data
+   * @param {string} domain User's email domain.
+   * @return {string}
+   * @private
+   */
+  getEnrollmentNudgeMessage_(locale, domain) {
+    return this.i18n('enrollmentNudgeMessage', domain);
+  }
+
+  /**
+   * Handler for a button on enrollment nudge pop-up. Should lead the user to
+   * reloaded sign in screen.
+   * @private
+   */
+  onEnrollmentNudgeUseAnotherAccount_() {
+    this.RecordUMAHistogramForEnrollmentNudgeUserAction_(
+        EnrollmentNudgeUserAction.USE_ANOTHER_ACCOUNT_BUTTON);
+    this.$.enrollmentNudge.hideDialog();
+    this.doReload();
+  }
+
+  /**
+   * Handler for a button on enrollment nudge pop-up. Should switch to
+   * enrollment screen.
+   * @private
+   */
+  onEnrollmentNudgeEnroll_() {
+    this.RecordUMAHistogramForEnrollmentNudgeUserAction_(
+        EnrollmentNudgeUserAction.ENTERPRISE_ENROLLMENT_BUTTON);
+    this.$.enrollmentNudge.hideDialog();
+    this.userActed('startEnrollment');
+  }
+
 
   /**
    * Shows the PIN dialog according to the given parameters.
@@ -1034,10 +1064,9 @@ class GaiaSigninElement extends GaiaSigninElementBase {
    * @param {boolean} isScreenShown
    * @param {OobeTypes.SecurityTokenPinDialogParameters} pinParams
    * @param {boolean} isLoading
-   * @param {boolean} isAllowlistError
    * @private
    */
-  refreshDialogStep_(isScreenShown, pinParams, isLoading, isAllowlistError) {
+  refreshDialogStep_(isScreenShown, pinParams, isLoading) {
     if (!isScreenShown) {
       return;
     }
@@ -1047,10 +1076,6 @@ class GaiaSigninElement extends GaiaSigninElementBase {
     }
     if (isLoading) {
       this.setUIStep(DialogMode.LOADING);
-      return;
-    }
-    if (isAllowlistError) {
-      this.setUIStep(DialogMode.GAIA_ALLOWLIST_ERROR);
       return;
     }
     this.setUIStep(DialogMode.GAIA);
@@ -1066,20 +1091,23 @@ class GaiaSigninElement extends GaiaSigninElementBase {
     // field of the auth params.
     this.videoEnabled_ = false;
     this.authenticatorParams_.email = '';
+    // Replace Gaia path with a fallback path to land on Gaia username page.
+    assert(
+        this.fallbackGaiaPath_,
+        'fallback Gaia path needed when trying to switch from SAML to Gaia');
+    this.authenticatorParams_.gaiaPath = this.fallbackGaiaPath_;
     this.loadAuthenticator_(false /* doSamlRedirect */);
   }
 
   /**
    * Computes the value of the isLoadingUiShown_ property.
    * @param {boolean} loadingFrameContents
-   * @param {boolean} isAllowlistErrorShown
    * @param {boolean} authCompleted
    * @return {boolean}
    * @private
    */
-  computeIsLoadingUiShown_(
-      loadingFrameContents, isAllowlistErrorShown, authCompleted) {
-    return (loadingFrameContents || authCompleted) && !isAllowlistErrorShown;
+  computeIsLoadingUiShown_(loadingFrameContents, authCompleted) {
+    return (loadingFrameContents || authCompleted);
   }
 
   /**
@@ -1099,7 +1127,6 @@ class GaiaSigninElement extends GaiaSigninElementBase {
     // TODO(https://crbug.com/1317991): Investigate why the call is making Gaia
     // loading slowly.
     // this.loadingFrameContents_ = true;
-    // this.isAllowlistErrorShown_ = false;
   }
 
   /**
@@ -1117,12 +1144,29 @@ class GaiaSigninElement extends GaiaSigninElementBase {
     return '';
   }
 
-  onAllowlistErrorTryAgainClick_() {
-    this.userActed('retry');
+  /**
+   * Handle "Quick Start" button for "Signin" screen.
+   *
+   * @private
+   */
+  onQuickStartButtonClicked_() {
+    this.userActed('activateQuickStart');
   }
 
-  onAllowlistErrorLinkClick_() {
-    chrome.send('launchHelpApp', [HELP_CANT_ACCESS_ACCOUNT]);
+  setQuickStartEnabled() {
+    this.$['signin-frame-dialog'].isQuickStartEnabled_ = true;
+  }
+
+  /**
+   * @param {EnrollmentNudgeUserAction} user_action
+   * @private
+   */
+  RecordUMAHistogramForEnrollmentNudgeUserAction_(user_action) {
+    chrome.send('metricsHandler:recordInHistogram', [
+      'Enterprise.EnrollmentNudge.UserAction',
+      user_action,
+      EnrollmentNudgeUserAction.MAX,
+    ]);
   }
 }
 

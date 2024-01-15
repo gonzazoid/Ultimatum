@@ -10,25 +10,23 @@
 #include <vector>
 
 #include "base/barrier_callback.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/time/default_clock.h"
 #include "base/time/time.h"
 #include "base/trace_event/base_tracing.h"
 #include "base/values.h"
-#include "components/services/storage/filesystem_proxy_factory.h"
 #include "components/services/storage/indexed_db/leveldb/leveldb_factory.h"
 #include "components/services/storage/indexed_db/scopes/varint_coding.h"
 #include "components/services/storage/indexed_db/transactional_leveldb/transactional_leveldb_database.h"
@@ -41,17 +39,17 @@
 #include "components/services/storage/public/cpp/quota_error_or.h"
 #include "components/services/storage/public/mojom/quota_client.mojom.h"
 #include "components/services/storage/public/mojom/storage_usage_info.mojom.h"
-#include "content/browser/indexed_db/indexed_db_bucket_state.h"
-#include "content/browser/indexed_db/indexed_db_bucket_state_handle.h"
+#include "content/browser/indexed_db/indexed_db_bucket_context.h"
+#include "content/browser/indexed_db/indexed_db_bucket_context_handle.h"
 #include "content/browser/indexed_db/indexed_db_class_factory.h"
 #include "content/browser/indexed_db/indexed_db_connection.h"
 #include "content/browser/indexed_db/indexed_db_database.h"
-#include "content/browser/indexed_db/indexed_db_dispatcher_host.h"
-#include "content/browser/indexed_db/indexed_db_factory_impl.h"
+#include "content/browser/indexed_db/indexed_db_factory.h"
 #include "content/browser/indexed_db/indexed_db_leveldb_operations.h"
 #include "content/browser/indexed_db/indexed_db_quota_client.h"
 #include "content/browser/indexed_db/indexed_db_transaction.h"
 #include "content/browser/indexed_db/mock_browsertest_indexed_db_class_factory.h"
+#include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "storage/browser/database/database_util.h"
@@ -63,10 +61,6 @@
 #include "third_party/zlib/google/zip.h"
 #include "url/origin.h"
 
-using base::DictionaryValue;
-using base::ListValue;
-using storage::DatabaseUtil;
-
 namespace content {
 
 namespace {
@@ -75,10 +69,6 @@ static MockBrowserTestIndexedDBClassFactory* GetTestClassFactory() {
   static ::base::LazyInstance<MockBrowserTestIndexedDBClassFactory>::Leaky
       s_factory = LAZY_INSTANCE_INITIALIZER;
   return s_factory.Pointer();
-}
-
-static IndexedDBClassFactory* GetTestIDBClassFactory() {
-  return GetTestClassFactory();
 }
 
 bool IsAllowedPath(const std::vector<base::FilePath>& allowed_paths,
@@ -90,21 +80,20 @@ bool IsAllowedPath(const std::vector<base::FilePath>& allowed_paths,
   return false;
 }
 
-}  // namespace
-
-// static
-void IndexedDBContextImpl::ReleaseOnIDBSequence(
-    scoped_refptr<IndexedDBContextImpl>&& context) {
-  if (!context->IDBTaskRunner()->RunsTasksInCurrentSequence()) {
-    IndexedDBContextImpl* context_ptr = context.get();
-    context_ptr->IDBTaskRunner()->ReleaseSoon(FROM_HERE, std::move(context));
-  }
+storage::BucketInfo ToBucketInfoForTesting(
+    const storage::BucketLocator& bucket_locator) {
+  storage::BucketInfo bucket_info;
+  bucket_info.id = bucket_locator.id;
+  bucket_info.storage_key = bucket_locator.storage_key;
+  bucket_info.name = storage::kDefaultBucketName;
+  return bucket_info;
 }
+
+}  // namespace
 
 IndexedDBContextImpl::IndexedDBContextImpl(
     const base::FilePath& base_data_path,
     scoped_refptr<storage::QuotaManagerProxy> quota_manager_proxy,
-    base::Clock* clock,
     mojo::PendingRemote<storage::mojom::BlobStorageContext>
         blob_storage_context,
     mojo::PendingRemote<storage::mojom::FileSystemAccessContext>
@@ -119,18 +108,16 @@ IndexedDBContextImpl::IndexedDBContextImpl(
                      base::TaskPriority::USER_VISIBLE,
                      // BLOCK_SHUTDOWN to support clearing session-only storage.
                      base::TaskShutdownBehavior::BLOCK_SHUTDOWN}))),
-      dispatcher_host_(this, std::move(io_task_runner)),
+      io_task_runner_(std::move(io_task_runner)),
       base_data_path_(base_data_path.empty() ? base::FilePath()
                                              : base_data_path),
       force_keep_session_state_(false),
       quota_manager_proxy_(std::move(quota_manager_proxy)),
-      clock_(clock),
       quota_client_(std::make_unique<IndexedDBQuotaClient>(*this)),
       quota_client_wrapper_(
           std::make_unique<storage::QuotaClientCallbackWrapper>(
               quota_client_.get())),
-      quota_client_receiver_(quota_client_wrapper_.get()),
-      filesystem_proxy_(storage::CreateFilesystemProxy()) {
+      quota_client_receiver_(quota_client_wrapper_.get()) {
   TRACE_EVENT0("IndexedDB", "init");
 
   // QuotaManagerProxy::RegisterClient() must be called during construction
@@ -170,71 +157,56 @@ void IndexedDBContextImpl::BindPipesOnIDBSequence(
   }
 }
 
-void IndexedDBContextImpl::Bind(
+void IndexedDBContextImpl::BindControlOnIDBSequence(
     mojo::PendingReceiver<storage::mojom::IndexedDBControl> control) {
+  DCHECK(IDBTaskRunner()->RunsTasksInCurrentSequence());
   // We cannot run this in the constructor it needs to be async, but the async
   // tasks might not finish before the destructor runs.
   InitializeFromFilesIfNeeded(base::DoNothing());
   receivers_.Add(this, std::move(control));
 }
 
-void IndexedDBContextImpl::BindIndexedDB(
-    const blink::StorageKey& storage_key,
-    mojo::PendingReceiver<blink::mojom::IDBFactory> receiver) {
-  quota_manager_proxy()->UpdateOrCreateBucket(
-      storage::BucketInitParams::ForDefaultBucket(storage_key),
-      idb_task_runner_,
-      base::BindOnce(&IndexedDBContextImpl::BindIndexedDBImpl,
-                     weak_factory_.GetWeakPtr(), std::move(receiver)));
+void IndexedDBContextImpl::BindControl(
+    mojo::PendingReceiver<storage::mojom::IndexedDBControl> control) {
+  IDBTaskRunner()->PostTask(
+      FROM_HERE,
+      base::BindOnce(&IndexedDBContextImpl::BindControlOnIDBSequence,
+                     weak_factory_.GetWeakPtr(), std::move(control)));
 }
 
-void IndexedDBContextImpl::BindIndexedDBForBucket(
+void IndexedDBContextImpl::BindIndexedDB(
     const storage::BucketLocator& bucket_locator,
+    mojo::PendingRemote<storage::mojom::IndexedDBClientStateChecker>
+        client_state_checker_remote,
     mojo::PendingReceiver<blink::mojom::IDBFactory> receiver) {
-  // Query the database to make sure the bucket still exists.
-  quota_manager_proxy()->GetBucketById(
-      bucket_locator.id, idb_task_runner_,
-      base::BindOnce(&IndexedDBContextImpl::BindIndexedDBImpl,
-                     weak_factory_.GetWeakPtr(), std::move(receiver)));
+  auto on_got_bucket = base::BindOnce(
+      &IndexedDBContextImpl::BindIndexedDBImpl, weak_factory_.GetWeakPtr(),
+      std::move(client_state_checker_remote), std::move(receiver));
+
+  if (bucket_locator.is_default) {
+    // If it's for a default bucket, `bucket_locator` will be a placeholder
+    // without an ID, meaning the bucket still needs to be created.
+    quota_manager_proxy()->UpdateOrCreateBucket(
+        storage::BucketInitParams::ForDefaultBucket(bucket_locator.storage_key),
+        idb_task_runner_, std::move(on_got_bucket));
+  } else {
+    // Query the database to make sure the bucket still exists.
+    quota_manager_proxy()->GetBucketById(bucket_locator.id, idb_task_runner_,
+                                         std::move(on_got_bucket));
+  }
 }
 
 void IndexedDBContextImpl::BindIndexedDBImpl(
+    mojo::PendingRemote<storage::mojom::IndexedDBClientStateChecker>
+        client_state_checker_remote,
     mojo::PendingReceiver<blink::mojom::IDBFactory> receiver,
     storage::QuotaErrorOr<storage::BucketInfo> bucket_info) {
-  absl::optional<storage::BucketLocator> bucket_locator;
-  if (bucket_info.ok())
-    bucket_locator = bucket_info->ToBucketLocator();
-  dispatcher_host_.AddReceiver(bucket_locator, std::move(receiver));
-}
-
-void IndexedDBContextImpl::GetUsage(GetUsageCallback usage_callback) {
-  InitializeFromFilesIfNeeded(
-      base::BindOnce(&IndexedDBContextImpl::GetUsageImpl,
-                     weak_factory_.GetWeakPtr(), std::move(usage_callback)));
-}
-
-void IndexedDBContextImpl::GetUsageImpl(GetUsageCallback usage_callback) {
-  std::map<blink::StorageKey, storage::mojom::StorageUsageInfoPtr> usage_map;
-  for (const auto& bucket_locator : GetAllBuckets()) {
-    const auto& it = usage_map.find(bucket_locator.storage_key);
-    if (it != usage_map.end()) {
-      it->second->total_size_bytes += GetBucketDiskUsage(bucket_locator);
-      const auto& last_modified = GetBucketLastModified(bucket_locator);
-      if (it->second->last_modified < last_modified) {
-        it->second->last_modified = last_modified;
-      }
-    } else {
-      usage_map[bucket_locator.storage_key] =
-          storage::mojom::StorageUsageInfo::New(
-              bucket_locator.storage_key, GetBucketDiskUsage(bucket_locator),
-              GetBucketLastModified(bucket_locator));
-    }
+  std::optional<storage::BucketInfo> bucket;
+  if (bucket_info.has_value()) {
+    bucket = bucket_info.value();
   }
-  std::vector<storage::mojom::StorageUsageInfoPtr> result;
-  for (const auto& it : usage_map) {
-    result.emplace_back(it.second->Clone());
-  }
-  std::move(usage_callback).Run(std::move(result));
+  GetIDBFactory()->AddReceiver(bucket, std::move(client_state_checker_remote),
+                               std::move(receiver));
 }
 
 // Note - this is being kept async (instead of having a 'sync' version) to allow
@@ -253,8 +225,8 @@ void IndexedDBContextImpl::DeleteForStorageKey(
 void IndexedDBContextImpl::OnGotBucketsForDeletion(
     base::OnceCallback<void(bool)> callback,
     storage::QuotaErrorOr<std::set<storage::BucketInfo>> buckets) {
-  if (!buckets.ok() || buckets.value().empty()) {
-    std::move(callback).Run(buckets.ok());
+  if (!buckets.has_value() || buckets.value().empty()) {
+    std::move(callback).Run(buckets.has_value());
     return;
   }
 
@@ -300,18 +272,16 @@ void IndexedDBContextImpl::DoDeleteBucketData(
   }
 
   base::FilePath idb_file_path = GetLevelDBPath(bucket_locator);
-  EnsureDiskUsageCacheInitialized(bucket_locator);
 
   leveldb::Status s =
       IndexedDBClassFactory::Get()->leveldb_factory().DestroyLevelDB(
           idb_file_path);
   bool success = s.ok();
   if (success) {
-    success = filesystem_proxy_->DeletePathRecursively(
-        GetBlobStorePath(bucket_locator));
+    success = base::DeletePathRecursively(GetBlobStorePath(bucket_locator));
   }
 
-  QueryDiskAndUpdateQuotaUsage(bucket_locator);
+  NotifyOfBucketModification(bucket_locator);
   if (success) {
     bucket_set_.erase(bucket_locator);
     bucket_size_map_.erase(bucket_locator);
@@ -337,30 +307,9 @@ void IndexedDBContextImpl::ForceClose(storage::BucketId bucket_id,
   // Make a copy of storage_key, as the ref might go away here during the close.
   indexeddb_factory_->ForceClose(
       bucket_id,
-      reason == storage::mojom::ForceCloseReason::FORCE_CLOSE_DELETE_ORIGIN);
-  DCHECK_EQ(0UL, GetConnectionCountSync(bucket_id));
+      /*will_be_deleted=*/reason ==
+          storage::mojom::ForceCloseReason::FORCE_CLOSE_DELETE_ORIGIN);
   std::move(closure).Run();
-}
-
-void IndexedDBContextImpl::GetConnectionCount(
-    storage::BucketId bucket_id,
-    GetConnectionCountCallback callback) {
-  GetConnectionCountImpl(std::move(callback), bucket_id);
-}
-
-void IndexedDBContextImpl::GetConnectionCountImpl(
-    GetConnectionCountCallback callback,
-    storage::BucketId bucket_id) {
-  std::move(callback).Run(GetConnectionCountSync(bucket_id));
-}
-
-size_t IndexedDBContextImpl::GetConnectionCountSync(
-    storage::BucketId bucket_id) {
-  size_t count = 0;
-  if (LookUpBucket(bucket_id) && indexeddb_factory_.get()) {
-    count = indexeddb_factory_->GetConnectionCount(bucket_id);
-  }
-  return count;
 }
 
 void IndexedDBContextImpl::DownloadBucketData(
@@ -437,8 +386,13 @@ void IndexedDBContextImpl::OnBucketInfoReady(
                     std::vector<storage::mojom::IdbBucketMetadataPtr>>>
       bucket_map;
 
+  if (!indexeddb_factory_) {
+    std::move(callback).Run(is_incognito(), {});
+    return;
+  }
+
   for (const auto& quota_error_or_bucket_info : bucket_infos) {
-    if (!quota_error_or_bucket_info.ok()) {
+    if (!quota_error_or_bucket_info.has_value()) {
       continue;
     }
     const storage::BucketInfo& bucket_info = quota_error_or_bucket_info.value();
@@ -454,98 +408,22 @@ void IndexedDBContextImpl::OnBucketInfoReady(
     if (!is_incognito()) {
       info->paths = GetStoragePaths(bucket_locator);
     }
-    info->connection_count = GetConnectionCountSync(bucket_info.id);
-
-    // This ends up being O(NlogN), where N = number of open databases. We
-    // iterate over all open databases to extract just those in the
-    // bucket_locator, and we're iterating over all bucket_locators in the outer
-    // loop.
-
-    if (!indexeddb_factory_.get()) {
-      bucket_map[bucket_info.storage_key.origin()][bucket_info.storage_key]
-          .push_back(std::move(info));
-      continue;
-    }
-    std::vector<IndexedDBDatabase*> databases =
-        indexeddb_factory_->GetOpenDatabasesForBucket(bucket_locator);
-    // TODO(jsbell): Sort by name?
-    std::vector<storage::mojom::IdbDatabaseMetadataPtr> database_list;
-
-    for (IndexedDBDatabase* db : databases) {
-      storage::mojom::IdbDatabaseMetadataPtr db_info =
-          storage::mojom::IdbDatabaseMetadata::New();
-
-      db_info->name = db->name();
-      db_info->connection_count = db->ConnectionCount();
-      db_info->active_open_delete = db->ActiveOpenDeleteCount();
-      db_info->pending_open_delete = db->PendingOpenDeleteCount();
-
-      std::vector<storage::mojom::IdbTransactionMetadataPtr> transaction_list;
-
-      for (IndexedDBConnection* connection : db->connections()) {
-        for (const auto& transaction_id_pair : connection->transactions()) {
-          const content::IndexedDBTransaction* transaction =
-              transaction_id_pair.second.get();
-          storage::mojom::IdbTransactionMetadataPtr transaction_info =
-              storage::mojom::IdbTransactionMetadata::New();
-
-          transaction_info->mode =
-              static_cast<storage::mojom::IdbTransactionMode>(
-                  transaction->mode());
-
-          switch (transaction->state()) {
-            case IndexedDBTransaction::CREATED:
-              transaction_info->status =
-                  storage::mojom::IdbTransactionState::kBlocked;
-              break;
-            case IndexedDBTransaction::STARTED:
-              if (transaction->diagnostics().tasks_scheduled > 0) {
-                transaction_info->status =
-                    storage::mojom::IdbTransactionState::kRunning;
-              } else {
-                transaction_info->status =
-                    storage::mojom::IdbTransactionState::kStarted;
-              }
-              break;
-            case IndexedDBTransaction::COMMITTING:
-              transaction_info->status =
-                  storage::mojom::IdbTransactionState::kCommitting;
-              break;
-            case IndexedDBTransaction::FINISHED:
-              transaction_info->status =
-                  storage::mojom::IdbTransactionState::kFinished;
-              break;
-          }
-
-          transaction_info->tid = transaction->id();
-          transaction_info->age =
-              (base::Time::Now() - transaction->diagnostics().creation_time)
-                  .InMillisecondsF();
-          transaction_info->runtime =
-              (base::Time::Now() - transaction->diagnostics().start_time)
-                  .InMillisecondsF();
-          transaction_info->tasks_scheduled =
-              transaction->diagnostics().tasks_scheduled;
-          transaction_info->tasks_completed =
-              transaction->diagnostics().tasks_completed;
-
-          for (const int64_t& id : transaction->scope()) {
-            auto stores_it = db->metadata().object_stores.find(id);
-            if (stores_it != db->metadata().object_stores.end()) {
-              transaction_info->scope.emplace_back(stores_it->second.name);
-            }
-          }
-
-          transaction_list.push_back(std::move(transaction_info));
-        }
-      }
-      db_info->transactions = std::move(transaction_list);
-
-      database_list.push_back(std::move(db_info));
-    }
-    info->databases = std::move(database_list);
-    bucket_map[bucket_info.storage_key.origin()][bucket_info.storage_key]
-        .push_back(std::move(info));
+    // TODO(crbug.com/1474996): This executes synchronously for now, but will
+    // need to handle delayed responses.
+    indexeddb_factory_->FillInBucketMetadata(
+        std::move(info),
+        base::BindOnce(
+            [](std::map<
+                   url::Origin,
+                   std::map<blink::StorageKey,
+                            std::vector<storage::mojom::IdbBucketMetadataPtr>>>&
+                   bucket_map,
+               storage::mojom::IdbBucketMetadataPtr info) {
+              blink::StorageKey storage_key = info->bucket_locator.storage_key;
+              bucket_map[storage_key.origin()][storage_key].push_back(
+                  std::move(info));
+            },
+            std::ref(bucket_map)));
   }
 
   std::vector<storage::mojom::IdbOriginMetadataPtr> origins;
@@ -582,18 +460,12 @@ void IndexedDBContextImpl::OnBucketInfoReady(
   }
 
   std::sort(origins.begin(), origins.end());
-
   std::move(callback).Run(is_incognito(), std::move(origins));
 }
 
 void IndexedDBContextImpl::SetForceKeepSessionState() {
-  IDBTaskRunner()->PostTask(
-      FROM_HERE, base::BindOnce(
-                     [](base::WeakPtr<IndexedDBContextImpl> context) {
-                       if (context)
-                         context->force_keep_session_state_ = true;
-                     },
-                     weak_factory_.GetWeakPtr()));
+  DCHECK(IDBTaskRunner()->RunsTasksInCurrentSequence());
+  force_keep_session_state_ = true;
 }
 
 void IndexedDBContextImpl::ApplyPolicyUpdates(
@@ -601,9 +473,9 @@ void IndexedDBContextImpl::ApplyPolicyUpdates(
   DCHECK(IDBTaskRunner()->RunsTasksInCurrentSequence());
   for (const auto& update : policy_updates) {
     if (!update->purge_on_shutdown) {
-      sites_to_purge_on_shutdown_.erase(net::SchemefulSite(update->origin));
+      origins_to_purge_on_shutdown_.erase(update->origin);
     } else {
-      sites_to_purge_on_shutdown_.insert(net::SchemefulSite(update->origin));
+      origins_to_purge_on_shutdown_.insert(update->origin);
     }
   }
 }
@@ -692,17 +564,16 @@ void IndexedDBContextImpl::WriteToIndexedDBForTesting(
     const std::string& key,
     const std::string& value,
     base::OnceClosure callback) {
-  IndexedDBBucketStateHandle handle;
+  IndexedDBBucketContextHandle handle;
   leveldb::Status s;
   std::tie(handle, s, std::ignore, std::ignore, std::ignore) =
-      GetIDBFactory()->GetOrOpenBucketFactory(bucket_locator,
-                                              GetDataPath(bucket_locator),
-                                              /*create_if_missing=*/true);
+      GetIDBFactory()->GetOrCreateBucketContext(
+          ToBucketInfoForTesting(bucket_locator), GetDataPath(bucket_locator),
+          /*create_if_missing=*/true);
   CHECK(s.ok()) << s.ToString();
   CHECK(handle.IsHeld());
 
-  TransactionalLevelDBDatabase* db =
-      handle.bucket_state()->backing_store()->db();
+  TransactionalLevelDBDatabase* db = handle->backing_store()->db();
   std::string value_copy = value;
   s = db->Put(key, &value_copy);
   CHECK(s.ok()) << s.ToString();
@@ -721,17 +592,16 @@ void IndexedDBContextImpl::GetNextBlobNumberForTesting(
     const storage::BucketLocator& bucket_locator,
     int64_t database_id,
     GetNextBlobNumberForTestingCallback callback) {
-  IndexedDBBucketStateHandle handle;
+  IndexedDBBucketContextHandle handle;
   leveldb::Status s;
   std::tie(handle, s, std::ignore, std::ignore, std::ignore) =
-      GetIDBFactory()->GetOrOpenBucketFactory(bucket_locator,
-                                              GetDataPath(bucket_locator),
-                                              /*create_if_missing=*/true);
+      GetIDBFactory()->GetOrCreateBucketContext(
+          ToBucketInfoForTesting(bucket_locator), GetDataPath(bucket_locator),
+          /*create_if_missing=*/true);
   CHECK(s.ok()) << s.ToString();
   CHECK(handle.IsHeld());
 
-  TransactionalLevelDBDatabase* db =
-      handle.bucket_state()->backing_store()->db();
+  TransactionalLevelDBDatabase* db = handle->backing_store()->db();
 
   const std::string key_gen_key = DatabaseMetaDataKey::Encode(
       database_id, DatabaseMetaDataKey::BLOB_KEY_GENERATOR_CURRENT_NUMBER);
@@ -753,16 +623,16 @@ void IndexedDBContextImpl::GetPathForBlobForTesting(
     int64_t database_id,
     int64_t blob_number,
     GetPathForBlobForTestingCallback callback) {
-  IndexedDBBucketStateHandle handle;
+  IndexedDBBucketContextHandle handle;
   leveldb::Status s;
   std::tie(handle, s, std::ignore, std::ignore, std::ignore) =
-      GetIDBFactory()->GetOrOpenBucketFactory(bucket_locator,
-                                              GetDataPath(bucket_locator),
-                                              /*create_if_missing=*/true);
+      GetIDBFactory()->GetOrCreateBucketContext(
+          ToBucketInfoForTesting(bucket_locator), GetDataPath(bucket_locator),
+          /*create_if_missing=*/true);
   CHECK(s.ok()) << s.ToString();
   CHECK(handle.IsHeld());
 
-  IndexedDBBackingStore* backing_store = handle.bucket_state()->backing_store();
+  IndexedDBBackingStore* backing_store = handle->backing_store();
   base::FilePath path =
       backing_store->GetBlobFileName(database_id, blob_number);
   std::move(callback).Run(path);
@@ -771,23 +641,22 @@ void IndexedDBContextImpl::GetPathForBlobForTesting(
 void IndexedDBContextImpl::CompactBackingStoreForTesting(
     const storage::BucketLocator& bucket_locator,
     base::OnceClosure callback) {
-  IndexedDBFactoryImpl* factory = GetIDBFactory();
-
-  std::vector<IndexedDBDatabase*> databases =
-      factory->GetOpenDatabasesForBucket(bucket_locator);
-
-  if (!databases.empty()) {
-    // Compact the first db's backing store since all the db's are in the same
-    // backing store.
-    IndexedDBDatabase* db = databases[0];
-    IndexedDBBackingStore* backing_store = db->backing_store();
-    backing_store->Compact();
-  }
+  GetIDBFactory()->CompactBackingStoreForTesting(bucket_locator);  // IN-TEST
   std::move(callback).Run();
+}
+
+void IndexedDBContextImpl::GetUsageForTesting(
+    GetUsageForTestingCallback callback) {
+  int64_t total_size = 0;
+  for (const storage::BucketLocator& bucket : bucket_set_) {
+    total_size += GetBucketDiskUsage(bucket);
+  }
+  std::move(callback).Run(total_size);
 }
 
 void IndexedDBContextImpl::BindMockFailureSingletonForTesting(
     mojo::PendingReceiver<storage::mojom::MockFailureInjector> receiver) {
+  IndexedDBTransaction::DisableInactivityTimeoutForTesting();  // IN-TEST
   // Lazily instantiate the GetTestClassFactory.
   if (!mock_failure_injector_.has_value())
     mock_failure_injector_.emplace(GetTestClassFactory());
@@ -795,12 +664,11 @@ void IndexedDBContextImpl::BindMockFailureSingletonForTesting(
   // TODO(enne): this should really not be a static setter.
   CHECK(!mock_failure_injector_->is_bound());
   GetTestClassFactory()->Reset();
-  IndexedDBClassFactory::SetIndexedDBClassFactoryGetter(GetTestIDBClassFactory);
+  IndexedDBClassFactory::Get()
+      ->SetTransactionalLevelDBFactoryForTesting(  // IN-TEST
+          GetTestClassFactory());
 
   mock_failure_injector_->Bind(std::move(receiver));
-  mock_failure_injector_->set_disconnect_handler(base::BindOnce([]() {
-    IndexedDBClassFactory::SetIndexedDBClassFactoryGetter(nullptr);
-  }));
 }
 
 void IndexedDBContextImpl::GetDatabaseKeysForTesting(
@@ -808,11 +676,10 @@ void IndexedDBContextImpl::GetDatabaseKeysForTesting(
   std::move(callback).Run(SchemaVersionKey::Encode(), DataVersionKey::Encode());
 }
 
-IndexedDBFactoryImpl* IndexedDBContextImpl::GetIDBFactory() {
+IndexedDBFactory* IndexedDBContextImpl::GetIDBFactory() {
   DCHECK(IDBTaskRunner()->RunsTasksInCurrentSequence());
   if (!indexeddb_factory_.get()) {
-    indexeddb_factory_ = std::make_unique<IndexedDBFactoryImpl>(
-        this, IndexedDBClassFactory::Get(), clock_);
+    indexeddb_factory_ = std::make_unique<IndexedDBFactory>(this);
   }
   return indexeddb_factory_.get();
 }
@@ -823,13 +690,13 @@ std::vector<storage::BucketLocator> IndexedDBContextImpl::GetAllBuckets() {
                                              bucket_set_.end());
 }
 
-absl::optional<storage::BucketLocator> IndexedDBContextImpl::LookUpBucket(
+std::optional<storage::BucketLocator> IndexedDBContextImpl::LookUpBucket(
     storage::BucketId bucket_id) {
   DCHECK(IDBTaskRunner()->RunsTasksInCurrentSequence());
   auto bucket_locator =
       base::ranges::find(bucket_set_, bucket_id, &storage::BucketLocator::id);
   if (bucket_locator == bucket_set_.end())
-    return absl::nullopt;
+    return std::nullopt;
 
   return *bucket_locator;
 }
@@ -852,8 +719,20 @@ int64_t IndexedDBContextImpl::GetBucketDiskUsage(
   DCHECK(IDBTaskRunner()->RunsTasksInCurrentSequence());
   if (!LookUpBucket(bucket_locator.id))
     return 0;
-  EnsureDiskUsageCacheInitialized(bucket_locator);
-  return bucket_size_map_[bucket_locator];
+
+  bool write_in_progress = false;
+  const auto iter = bucket_size_map_.find(bucket_locator);
+  if (iter != bucket_size_map_.end()) {
+    if (iter->second >= 0) {
+      return iter->second;
+    }
+    write_in_progress = true;
+  }
+
+  const int64_t value = ReadUsageFromDisk(bucket_locator, write_in_progress);
+  CHECK_GE(value, 0);
+  bucket_size_map_[bucket_locator] = value;
+  return value;
 }
 
 base::Time IndexedDBContextImpl::GetBucketLastModified(
@@ -862,18 +741,17 @@ base::Time IndexedDBContextImpl::GetBucketLastModified(
   if (!LookUpBucket(bucket_locator.id))
     return base::Time();
 
+  // Only used by indexeddb-internals; not worth the complexity to implement.
   if (is_incognito()) {
-    if (!indexeddb_factory_)
-      return base::Time();
-    return indexeddb_factory_->GetLastModified(bucket_locator);
+    return base::Time();
   }
 
   base::FilePath idb_directory = GetLevelDBPath(bucket_locator);
-  absl::optional<base::File::Info> info =
-      filesystem_proxy_->GetFileInfo(idb_directory);
-  if (!info.has_value())
-    return base::Time();
-  return info->last_modified;
+  base::File::Info info;
+  if (base::GetFileInfo(idb_directory, &info)) {
+    return info.last_modified;
+  }
+  return base::Time();
 }
 
 std::vector<base::FilePath> IndexedDBContextImpl::GetStoragePaths(
@@ -883,8 +761,12 @@ std::vector<base::FilePath> IndexedDBContextImpl::GetStoragePaths(
   return paths;
 }
 
-const base::FilePath IndexedDBContextImpl::GetDataPath(
+base::FilePath IndexedDBContextImpl::GetDataPath(
     const storage::BucketLocator& bucket_locator) const {
+  if (is_incognito()) {
+    return base::FilePath();
+  }
+
   if (indexed_db::ShouldUseLegacyFilePath(bucket_locator)) {
     // First-party idb files for the default, for legacy reasons, are stored at:
     // {{storage_partition_path}}/IndexedDB/
@@ -914,53 +796,30 @@ void IndexedDBContextImpl::FactoryOpened(
   DCHECK(IDBTaskRunner()->RunsTasksInCurrentSequence());
   if (bucket_set_.insert(bucket_locator).second) {
     // A newly created db, notify the quota system.
-    QueryDiskAndUpdateQuotaUsage(bucket_locator);
-  } else {
-    EnsureDiskUsageCacheInitialized(bucket_locator);
+    NotifyOfBucketModification(bucket_locator);
   }
 }
 
-void IndexedDBContextImpl::ConnectionOpened(
+void IndexedDBContextImpl::WritingTransactionComplete(
     const storage::BucketLocator& bucket_locator,
-    IndexedDBConnection* connection) {
-  DCHECK(IDBTaskRunner()->RunsTasksInCurrentSequence());
-  quota_manager_proxy()->NotifyBucketAccessed(bucket_locator.id,
-                                              base::Time::Now());
-  if (bucket_set_.insert(bucket_locator).second) {
-    // A newly created db, notify the quota system.
-    QueryDiskAndUpdateQuotaUsage(bucket_locator);
-  } else {
-    EnsureDiskUsageCacheInitialized(bucket_locator);
+    bool flushed) {
+  NotifyOfBucketModification(bucket_locator);
+  if (!flushed) {
+    // A negative value indicates "not cached, and LevelDB file write is
+    // potentially in progress". See `bucket_size_map_` docs.
+    bucket_size_map_[bucket_locator] = -1;
   }
-}
-
-void IndexedDBContextImpl::ConnectionClosed(
-    const storage::BucketLocator& bucket_locator,
-    IndexedDBConnection* connection) {
-  DCHECK(IDBTaskRunner()->RunsTasksInCurrentSequence());
-  quota_manager_proxy()->NotifyBucketAccessed(bucket_locator.id,
-                                              base::Time::Now());
-  if (indexeddb_factory_.get() &&
-      indexeddb_factory_->GetConnectionCount(bucket_locator.id) == 0)
-    QueryDiskAndUpdateQuotaUsage(bucket_locator);
-}
-
-void IndexedDBContextImpl::TransactionComplete(
-    const storage::BucketLocator& bucket_locator) {
-  DCHECK(!indexeddb_factory_.get() ||
-         indexeddb_factory_->GetConnectionCount(bucket_locator.id) > 0);
-  QueryDiskAndUpdateQuotaUsage(bucket_locator);
 }
 
 void IndexedDBContextImpl::DatabaseDeleted(
     const storage::BucketLocator& bucket_locator) {
   bucket_set_.insert(bucket_locator);
-  QueryDiskAndUpdateQuotaUsage(bucket_locator);
+  NotifyOfBucketModification(bucket_locator);
 }
 
 void IndexedDBContextImpl::BlobFilesCleaned(
     const storage::BucketLocator& bucket_locator) {
-  QueryDiskAndUpdateQuotaUsage(bucket_locator);
+  NotifyOfBucketModification(bucket_locator);
 }
 
 void IndexedDBContextImpl::NotifyIndexedDBListChanged(
@@ -987,63 +846,59 @@ IndexedDBContextImpl::~IndexedDBContextImpl() {
 }
 
 void IndexedDBContextImpl::ShutdownOnIDBSequence() {
+  // `this` will be destroyed when this method returns.
   DCHECK(IDBTaskRunner()->RunsTasksInCurrentSequence());
 
   if (force_keep_session_state_)
     return;
 
   // Clear session-only databases.
-  if (sites_to_purge_on_shutdown_.empty())
+  if (origins_to_purge_on_shutdown_.empty()) {
     return;
+  }
 
-  IndexedDBFactoryImpl* factory = GetIDBFactory();
-  const auto& storage_key_to_file_path = FindLegacyIndexedDBFiles();
-  const auto& bucket_id_to_file_path = FindIndexedDBFiles();
-  for (const auto& bucket_locator : bucket_set_) {
-    const auto& origin_it = sites_to_purge_on_shutdown_.find(
-        net::SchemefulSite(bucket_locator.storage_key.origin()));
-    const auto& top_site_it = sites_to_purge_on_shutdown_.find(
-        bucket_locator.storage_key.top_level_site());
-    if (origin_it == sites_to_purge_on_shutdown_.end() &&
-        top_site_it == sites_to_purge_on_shutdown_.end()) {
-      // No match for a site we want to clear in this bucket locator.
-      continue;
+  for (const storage::BucketLocator& bucket_locator : bucket_set_) {
+    // Delete the storage if its origin matches one of the origins to purge, or
+    // if it is third-party and the top-level site is same-site with one of
+    // those origins.
+    bool delete_bucket = base::Contains(origins_to_purge_on_shutdown_,
+                                        bucket_locator.storage_key.origin());
+
+    if (!delete_bucket && bucket_locator.storage_key.IsThirdPartyContext()) {
+      delete_bucket = base::ranges::any_of(
+          origins_to_purge_on_shutdown_, [&](const url::Origin& origin) {
+            return net::SchemefulSite(origin) ==
+                   bucket_locator.storage_key.top_level_site();
+          });
     }
-    base::FilePath path;
-    const auto& legacy_it =
-        storage_key_to_file_path.find(bucket_locator.storage_key);
-    const auto& bucket_path_it = bucket_id_to_file_path.find(bucket_locator.id);
-    // If the bucket exists on the file system, it is in one of two possible
-    // locations.
-    if (legacy_it != storage_key_to_file_path.end()) {
-      DCHECK(bucket_path_it == bucket_id_to_file_path.end());
-      DCHECK(bucket_locator.storage_key.IsFirstPartyContext());
-      DCHECK(bucket_locator.is_default);
-      path = legacy_it->second;
-    } else if (bucket_path_it != bucket_id_to_file_path.end()) {
-      DCHECK(legacy_it == storage_key_to_file_path.end());
-      path = bucket_path_it->second;
-    }
-    if (!path.empty()) {
-      factory->ForceClose(bucket_locator.id, false);
-      filesystem_proxy_->DeletePathRecursively(path);
+
+    if (delete_bucket) {
+      GetIDBFactory()->ForceClose(bucket_locator.id, false);
+      base::DeletePathRecursively(GetLevelDBPath(bucket_locator));
+      base::DeletePathRecursively(GetBlobStorePath(bucket_locator));
     }
   }
 }
 
-void IndexedDBContextImpl::Shutdown() {
+// static
+void IndexedDBContextImpl::Shutdown(
+    std::unique_ptr<IndexedDBContextImpl> context) {
+  IndexedDBContextImpl* context_ptr = context.get();
+
   // Important: This function is NOT called on the IDB Task Runner. All variable
   // access must be thread-safe.
-  if (is_incognito())
+  if (context->is_incognito()) {
+    context_ptr->IDBTaskRunner()->DeleteSoon(FROM_HERE, std::move(context));
     return;
+  }
 
-  IDBTaskRunner()->PostTask(
+  context_ptr->IDBTaskRunner()->PostTask(
       FROM_HERE,
       base::BindOnce(
           &IndexedDBContextImpl::InitializeFromFilesIfNeeded,
-          weak_factory_.GetWeakPtr(),
+          base::Unretained(context_ptr),
           base::BindOnce(&IndexedDBContextImpl::ShutdownOnIDBSequence,
-                         base::WrapRefCounted(this))));
+                         std::move(context))));
 }
 
 base::FilePath IndexedDBContextImpl::GetBlobStorePath(
@@ -1066,38 +921,48 @@ base::FilePath IndexedDBContextImpl::GetLevelDBPathForTesting(
 }
 
 int64_t IndexedDBContextImpl::ReadUsageFromDisk(
-    const storage::BucketLocator& bucket_locator) const {
+    const storage::BucketLocator& bucket_locator,
+    bool write_in_progress) const {
   if (is_incognito()) {
     if (!indexeddb_factory_)
       return 0;
     return indexeddb_factory_->GetInMemoryDBSize(bucket_locator);
   }
 
+#if BUILDFLAG(IS_WIN)
+  // Touch all files in the LevelDB directory to update directory entry
+  // metadata. See note for `bucket_size_map_` about why this is necessary.
+  if (write_in_progress) {
+    const base::FilePath leveldb_dir = GetLevelDBPath(bucket_locator);
+    base::FileEnumerator file_iter(leveldb_dir, /*recursive=*/true,
+                                   base::FileEnumerator::FILES);
+    for (base::FilePath file_path = file_iter.Next(); !file_path.empty();
+         file_path = file_iter.Next()) {
+      base::File file(
+          file_path, base::File::FLAG_OPEN | base::File::FLAG_WIN_SHARE_DELETE);
+    }
+  }
+#endif
+
   int64_t total_size = 0;
   for (const base::FilePath& path : GetStoragePaths(bucket_locator))
-    total_size += filesystem_proxy_->ComputeDirectorySize(path);
+    total_size += base::ComputeDirectorySize(path);
   return total_size;
 }
 
-void IndexedDBContextImpl::EnsureDiskUsageCacheInitialized(
+void IndexedDBContextImpl::NotifyOfBucketModification(
     const storage::BucketLocator& bucket_locator) {
-  if (bucket_size_map_.find(bucket_locator) == bucket_size_map_.end())
-    bucket_size_map_[bucket_locator] = ReadUsageFromDisk(bucket_locator);
-}
-
-void IndexedDBContextImpl::QueryDiskAndUpdateQuotaUsage(
-    const storage::BucketLocator& bucket_locator) {
-  int64_t former_disk_usage = bucket_size_map_[bucket_locator];
-  int64_t current_disk_usage = ReadUsageFromDisk(bucket_locator);
-  int64_t difference = current_disk_usage - former_disk_usage;
-  if (difference) {
-    bucket_size_map_[bucket_locator] = current_disk_usage;
-    quota_manager_proxy()->NotifyBucketModified(
-        storage::QuotaClientType::kIndexedDatabase, bucket_locator.id,
-        difference, base::Time::Now(), base::SequencedTaskRunnerHandle::Get(),
-        base::DoNothing());
-    NotifyIndexedDBListChanged(bucket_locator);
-  }
+  // This method is called very frequently, for example after every transaction
+  // commits. Recalculating disk usage is expensive and often unnecessary (e.g.
+  // when many transactions commit in a row). Therefore, use a null delta to
+  // notify the quota system to invalidate its cache but defer updates to
+  // `bucket_size_map_`.
+  bucket_size_map_.erase(bucket_locator);
+  quota_manager_proxy()->NotifyBucketModified(
+      storage::QuotaClientType::kIndexedDatabase, bucket_locator,
+      /*delta=*/std::nullopt, base::Time::Now(),
+      base::SequencedTaskRunner::GetCurrentDefault(), base::DoNothing());
+  NotifyIndexedDBListChanged(bucket_locator);
 }
 
 void IndexedDBContextImpl::InitializeFromFilesIfNeeded(
@@ -1107,8 +972,10 @@ void IndexedDBContextImpl::InitializeFromFilesIfNeeded(
     std::move(callback).Run();
     return;
   }
-  const auto& storage_key_to_file_path = FindLegacyIndexedDBFiles();
-  const auto& bucket_id_to_file_path = FindIndexedDBFiles();
+  std::map<blink::StorageKey, base::FilePath> storage_key_to_file_path =
+      FindLegacyIndexedDBFiles();
+  std::map<storage::BucketId, base::FilePath> bucket_id_to_file_path =
+      FindIndexedDBFiles();
   if (storage_key_to_file_path.empty() && bucket_id_to_file_path.empty()) {
     did_initialize_from_files_ = true;
     std::move(callback).Run();
@@ -1123,13 +990,13 @@ void IndexedDBContextImpl::InitializeFromFilesIfNeeded(
   }
 
   using Barrier =
-      base::RepeatingCallback<void(absl::optional<storage::BucketLocator>)>;
+      base::RepeatingCallback<void(std::optional<storage::BucketLocator>)>;
   Barrier barrier =
-      base::BarrierCallback<absl::optional<storage::BucketLocator>>(
+      base::BarrierCallback<std::optional<storage::BucketLocator>>(
           storage_key_to_file_path.size() + bucket_id_to_file_path.size(),
           base::BindOnce(
               [](base::WeakPtr<IndexedDBContextImpl> context,
-                 const std::vector<absl::optional<storage::BucketLocator>>&
+                 const std::vector<std::optional<storage::BucketLocator>>&
                      bucket_locators) {
                 DCHECK(context);
                 for (auto& locator : bucket_locators) {
@@ -1151,10 +1018,9 @@ void IndexedDBContextImpl::InitializeFromFilesIfNeeded(
   auto on_lookup_done = base::BindRepeating(
       [](Barrier barrier,
          storage::QuotaErrorOr<storage::BucketInfo> bucket_info) {
-        if (bucket_info.ok())
-          barrier.Run(bucket_info->ToBucketLocator());
-        else
-          barrier.Run(absl::nullopt);
+        barrier.Run(bucket_info.has_value()
+                        ? std::make_optional(bucket_info->ToBucketLocator())
+                        : std::nullopt);
       },
       barrier);
 
@@ -1176,8 +1042,8 @@ void IndexedDBContextImpl::ForceInitializeFromFilesForTesting(
   InitializeFromFilesIfNeeded(std::move(callback));
 }
 
-const std::map<blink::StorageKey, base::FilePath>
-IndexedDBContextImpl::FindLegacyIndexedDBFiles() {
+std::map<blink::StorageKey, base::FilePath>
+IndexedDBContextImpl::FindLegacyIndexedDBFiles() const {
   DCHECK(IDBTaskRunner()->RunsTasksInCurrentSequence());
 
   base::FilePath data_path = GetLegacyDataPath();
@@ -1188,22 +1054,26 @@ IndexedDBContextImpl::FindLegacyIndexedDBFiles() {
                                        base::FileEnumerator::DIRECTORIES);
   for (base::FilePath file_path = file_enumerator.Next(); !file_path.empty();
        file_path = file_enumerator.Next()) {
-    if (file_path.Extension() == indexed_db::kLevelDBExtension &&
-        file_path.RemoveExtension().Extension() ==
+    if (file_path.Extension() != indexed_db::kLevelDBExtension ||
+        file_path.RemoveExtension().Extension() !=
             indexed_db::kIndexedDBExtension) {
-      std::string storage_key_id = file_path.BaseName()
-                                       .RemoveExtension()
-                                       .RemoveExtension()
-                                       .MaybeAsASCII();
-      storage_key_to_file_path[blink::StorageKey(
-          storage::GetOriginFromIdentifier(storage_key_id))] = file_path;
+      continue;
     }
+
+    std::string origin_id =
+        file_path.BaseName().RemoveExtension().RemoveExtension().MaybeAsASCII();
+    url::Origin origin = storage::GetOriginFromIdentifier(origin_id);
+    if (origin.opaque()) {
+      continue;
+    }
+    storage_key_to_file_path[blink::StorageKey::CreateFirstParty(origin)] =
+        file_path;
   }
   return storage_key_to_file_path;
 }
 
-const std::map<storage::BucketId, base::FilePath>
-IndexedDBContextImpl::FindIndexedDBFiles() {
+std::map<storage::BucketId, base::FilePath>
+IndexedDBContextImpl::FindIndexedDBFiles() const {
   DCHECK(IDBTaskRunner()->RunsTasksInCurrentSequence());
 
   std::map<storage::BucketId, base::FilePath> bucket_id_to_file_path;

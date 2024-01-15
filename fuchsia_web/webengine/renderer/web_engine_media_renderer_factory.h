@@ -8,7 +8,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/task/sequenced_task_runner.h"
 #include "fuchsia_web/webengine/mojom/web_engine_media_resource_provider.mojom.h"
 #include "media/base/renderer_factory.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -23,7 +24,7 @@ class VideoRendererSink;
 }  // namespace media
 
 // RendererFactory implementation used on Fuchsia. It works the same as
-// DefaultRendererFactory, except that it uses WebEngineAudioRenderer for audio.
+// RendererImplFactory, except that it uses WebEngineAudioRenderer for audio.
 class WebEngineMediaRendererFactory final : public media::RendererFactory {
  public:
   using GetGpuFactoriesCB =

@@ -18,7 +18,7 @@
 #include "chrome/browser/ash/platform_keys/mock_platform_keys_service.h"
 #include "chrome/browser/ash/platform_keys/platform_keys_service.h"
 #include "chrome/browser/ash/platform_keys/platform_keys_service_test_util.h"
-#include "chrome/browser/platform_keys/platform_keys.h"
+#include "chrome/browser/chromeos/platform_keys/platform_keys.h"
 #include "chrome/test/base/testing_profile.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -67,8 +67,8 @@ class KeyPermissionsServiceImplTest : public ::testing::Test {
     // by default unless specified.
     EXPECT_CALL(*user_token_key_permissions_manager_,
                 IsKeyAllowedForUsage(_, _, _))
-        .WillRepeatedly(base::test::RunOnceCallback<0>(/*allowed=*/false,
-                                                       Status::kSuccess));
+        .WillRepeatedly(base::test::RunOnceCallbackRepeatedly<0>(
+            /*allowed=*/false, Status::kSuccess));
 
     system_token_key_permissions_manager_ =
         std::make_unique<platform_keys::MockKeyPermissionsManager>();
@@ -77,8 +77,8 @@ class KeyPermissionsServiceImplTest : public ::testing::Test {
     // by default unless specified.
     EXPECT_CALL(*system_token_key_permissions_manager_,
                 IsKeyAllowedForUsage(_, _, _))
-        .WillRepeatedly(
-            base::test::RunOnceCallback<0>(/*allowed=*/true, Status::kSuccess));
+        .WillRepeatedly(base::test::RunOnceCallbackRepeatedly<0>(
+            /*allowed=*/true, Status::kSuccess));
 
     platform_keys::KeyPermissionsManagerImpl::
         SetSystemTokenKeyPermissionsManagerForTesting(
@@ -88,11 +88,9 @@ class KeyPermissionsServiceImplTest : public ::testing::Test {
  protected:
   void SetKeyLocations(const std::vector<uint8_t>& public_key,
                        const std::vector<TokenId>& key_locations) {
-    std::string public_key_str(public_key.begin(), public_key.end());
-    ON_CALL(*platform_keys_service_,
-            GetKeyLocations(std::move(public_key_str), _))
+    ON_CALL(*platform_keys_service_, GetKeyLocations(public_key, _))
         .WillByDefault(testing::Invoke(
-            [key_locations](const std::string& public_key_spki_der,
+            [key_locations](std::vector<uint8_t> public_key_spki_der,
                             GetKeyLocationsCallback callback) {
               std::move(callback).Run(std::move(key_locations),
                                       Status::kSuccess);

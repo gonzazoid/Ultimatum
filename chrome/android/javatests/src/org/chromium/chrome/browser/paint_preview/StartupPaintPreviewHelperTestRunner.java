@@ -6,8 +6,9 @@ package org.chromium.chrome.browser.paint_preview;
 
 import android.content.Context;
 import android.provider.Settings;
-import android.support.test.InstrumentationRegistry;
 import android.text.TextUtils;
+
+import androidx.test.core.app.ApplicationProvider;
 
 import org.junit.runners.model.InitializationError;
 
@@ -17,9 +18,7 @@ import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 
 import java.util.List;
 
-/**
- * Test runner class that handles a custom {@link Restriction} type.
- */
+/** Test runner class that handles a custom {@link Restriction} type. */
 public class StartupPaintPreviewHelperTestRunner extends ChromeJUnit4ClassRunner {
     /**
      * The test is only valid if Settings.Global.ALWAYS_FINISH_ACTIVITIES on device settings is
@@ -33,8 +32,9 @@ public class StartupPaintPreviewHelperTestRunner extends ChromeJUnit4ClassRunner
 
     @Override
     protected List<SkipCheck> getSkipChecks() {
-        return addToList(super.getSkipChecks(),
-                new StartupPaintPreviewSkipCheck(InstrumentationRegistry.getTargetContext()));
+        return addToList(
+                super.getSkipChecks(),
+                new StartupPaintPreviewSkipCheck(ApplicationProvider.getApplicationContext()));
     }
 
     private static class StartupPaintPreviewSkipCheck extends RestrictionSkipCheck {
@@ -46,8 +46,10 @@ public class StartupPaintPreviewHelperTestRunner extends ChromeJUnit4ClassRunner
         protected boolean restrictionApplies(String restriction) {
             if (TextUtils.equals(restriction, RESTRICTION_TYPE_KEEP_ACTIVITIES)) {
                 int alwaysFinishActivities =
-                        Settings.System.getInt(getTargetContext().getContentResolver(),
-                                Settings.Global.ALWAYS_FINISH_ACTIVITIES, 0);
+                        Settings.System.getInt(
+                                getTargetContext().getContentResolver(),
+                                Settings.Global.ALWAYS_FINISH_ACTIVITIES,
+                                0);
                 return alwaysFinishActivities != 0;
             }
             return super.restrictionApplies(restriction);

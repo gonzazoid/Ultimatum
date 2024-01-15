@@ -5,12 +5,12 @@
 #ifndef IOS_CHROME_BROWSER_UI_SETTINGS_PASSPHRASE_TABLE_VIEW_CONTROLLER_TEST_H_
 #define IOS_CHROME_BROWSER_UI_SETTINGS_PASSPHRASE_TABLE_VIEW_CONTROLLER_TEST_H_
 
-#include "ios/chrome/browser/ui/table_view/chrome_table_view_controller_test.h"
+#include "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_controller_test.h"
 
-#include "base/compiler_specific.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/sync/engine/cycle/sync_cycle_snapshot.h"
 #include "google_apis/gaia/google_service_auth_error.h"
+#include "ios/chrome/browser/shared/model/browser_state/test_chrome_browser_state.h"
 #import "ios/chrome/test/ios_chrome_scoped_testing_local_state.h"
 #include "ios/web/public/test/web_task_environment.h"
 #include "testing/platform_test.h"
@@ -19,13 +19,10 @@ namespace syncer {
 class MockSyncService;
 }  // namespace syncer
 
-namespace web {
-class BrowserState;
-}  // namespace web
-
 @class AppState;
 class Browser;
 @class SceneState;
+@class SettingsNavigationController;
 class TestChromeBrowserState;
 @class UINavigationController;
 @class UIViewController;
@@ -33,17 +30,20 @@ class TestChromeBrowserState;
 // Base class for PassphraseTableViewController tests.
 // Sets up a testing profile and a mock profile sync service, along with the
 // supporting structure they require.
-class PassphraseTableViewControllerTest : public ChromeTableViewControllerTest {
+class PassphraseTableViewControllerTest
+    : public LegacyChromeTableViewControllerTest {
  public:
-  static std::unique_ptr<KeyedService> CreateNiceMockSyncService(
-      web::BrowserState* context);
-
   PassphraseTableViewControllerTest();
   ~PassphraseTableViewControllerTest() override;
 
  protected:
   void SetUp() override;
   void TearDown() override;
+
+  // Allow sub-classes to register testing factories in the builder for the
+  // new TestChromeBrowserState.
+  virtual void RegisterTestingFactories(
+      TestChromeBrowserState::Builder& builder);
 
   void SetUpNavigationController(UIViewController* test_controller);
 
@@ -62,7 +62,7 @@ class PassphraseTableViewControllerTest : public ChromeTableViewControllerTest {
   // Dummy navigation stack for testing self-removal.
   // Only valid when SetUpNavigationController has been called.
   UIViewController* dummy_controller_;
-  UINavigationController* nav_controller_;
+  SettingsNavigationController* nav_controller_;
 
   // Dummy scene state.
   SceneState* scene_state_;

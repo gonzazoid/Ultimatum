@@ -2,11 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ui/snapshot/snapshot_win.h"
+#include "ui/snapshot/snapshot.h"
 
 #include <memory>
+#include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/win/windows_version.h"
 #include "skia/ext/platform_canvas.h"
 #include "skia/ext/skia_utils_win.h"
@@ -17,23 +18,10 @@
 #include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/image/image.h"
-#include "ui/snapshot/snapshot.h"
-#include "ui/snapshot/snapshot_aura.h"
-
-namespace {
-
-// Windows 8.1 is the first version that supports PW_RENDERFULLCONTENT.
-// Without that flag PrintWindow may not correctly capture what's actually
-// onscreen.
-bool UseAuraSnapshot() {
-  return (base::win::GetVersion() < base::win::Version::WIN8_1);
-}
-
-}  // namespace
 
 namespace ui {
 
-namespace internal {
+namespace {
 
 bool GrabHwndSnapshot(HWND window_handle,
                       const gfx::Rect& snapshot_bounds_in_pixels,
@@ -84,22 +72,9 @@ bool GrabHwndSnapshot(HWND window_handle,
   return true;
 }
 
-}  // namespace internal
-
-bool GrabViewSnapshot(gfx::NativeView view_handle,
-                      const gfx::Rect& snapshot_bounds,
-                      gfx::Image* image) {
-  return GrabWindowSnapshot(view_handle, snapshot_bounds, image);
-}
-
 bool GrabWindowSnapshot(gfx::NativeWindow window_handle,
                         const gfx::Rect& snapshot_bounds,
                         gfx::Image* image) {
-  if (UseAuraSnapshot()) {
-    // Not supported in Aura.  Callers should fall back to the async version.
-    return false;
-  }
-
   DCHECK(window_handle);
   gfx::Rect window_bounds = window_handle->GetBoundsInRootWindow();
   aura::WindowTreeHost* host = window_handle->GetHost();
@@ -117,17 +92,21 @@ bool GrabWindowSnapshot(gfx::NativeWindow window_handle,
 
   expanded_window_bounds_in_pixels.Intersect(client_area_rect);
 
-  return internal::GrabHwndSnapshot(hwnd, snapshot_bounds_in_pixels,
-                                    expanded_window_bounds_in_pixels, image);
+  return GrabHwndSnapshot(hwnd, snapshot_bounds_in_pixels,
+                          expanded_window_bounds_in_pixels, image);
+}
+
+}  // namespace
+
+bool GrabViewSnapshot(gfx::NativeView view_handle,
+                      const gfx::Rect& snapshot_bounds,
+                      gfx::Image* image) {
+  return GrabWindowSnapshot(view_handle, snapshot_bounds, image);
 }
 
 void GrabWindowSnapshotAsync(gfx::NativeWindow window,
                              const gfx::Rect& source_rect,
-                             GrabWindowSnapshotAsyncCallback callback) {
-  if (UseAuraSnapshot()) {
-    GrabWindowSnapshotAsyncAura(window, source_rect, std::move(callback));
-    return;
-  }
+                             GrabSnapshotImageCallback callback) {
   gfx::Image image;
   GrabWindowSnapshot(window, source_rect, &image);
   std::move(callback).Run(image);
@@ -135,26 +114,10 @@ void GrabWindowSnapshotAsync(gfx::NativeWindow window,
 
 void GrabViewSnapshotAsync(gfx::NativeView view,
                            const gfx::Rect& source_rect,
-                           GrabWindowSnapshotAsyncCallback callback) {
-  if (UseAuraSnapshot()) {
-    GrabWindowSnapshotAsyncAura(view, source_rect, std::move(callback));
-    return;
-  }
-  NOTIMPLEMENTED();
-  std::move(callback).Run(gfx::Image());
-}
-
-void GrabWindowSnapshotAndScaleAsync(gfx::NativeWindow window,
-                                     const gfx::Rect& source_rect,
-                                     const gfx::Size& target_size,
-                                     GrabWindowSnapshotAsyncCallback callback) {
-  if (UseAuraSnapshot()) {
-    GrabWindowSnapshotAndScaleAsyncAura(window, source_rect, target_size,
-                                        std::move(callback));
-    return;
-  }
-  NOTIMPLEMENTED();
-  std::move(callback).Run(gfx::Image());
+                           GrabSnapshotImageCallback callback) {
+  gfx::Image image;
+  GrabViewSnapshot(view, source_rect, &image);
+  std::move(callback).Run(image);
 }
 
 }  // namespace ui

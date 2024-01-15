@@ -6,17 +6,17 @@
 
 #include <stddef.h>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/process/launch.h"
 #include "base/strings/string_util.h"
 #include "base/task/thread_pool.h"
-#include "chromeos/login/login_state/login_state.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "content/public/browser/browser_thread.h"
 #include "ui/ozone/public/input_controller.h"
 #include "ui/ozone/public/ozone_platform.h"
@@ -157,7 +157,7 @@ void OnStatusLogCollected(
   // Collect touch event logs.
   // The user-specific log directory will not exist if we are not logged in
   // yet, so choose the location based on that.
-  base::FilePath base_log_path(chromeos::LoginState::Get()->IsUserLoggedIn()
+  base::FilePath base_log_path(ash::LoginState::Get()->IsUserLoggedIn()
                                    ? kTouchEventLogDir
                                    : kNotLoggedInTouchEventLogDir);
   ui::InputController* input_controller =

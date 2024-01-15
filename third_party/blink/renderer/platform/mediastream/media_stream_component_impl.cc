@@ -67,39 +67,31 @@ int MediaStreamComponentImpl::GenerateUniqueId() {
   return ++g_unique_media_stream_component_id;
 }
 
-MediaStreamComponentImpl::MediaStreamComponentImpl(MediaStreamSource* source)
-    : MediaStreamComponentImpl(WTF::CreateCanonicalUUIDString(), source) {}
-
-MediaStreamComponentImpl::MediaStreamComponentImpl(const String& id,
-                                                   MediaStreamSource* source)
-    : source_(source), id_(id), unique_id_(GenerateUniqueId()) {
-  DCHECK(id_.length());
-  DCHECK(source_);
-}
-
 MediaStreamComponentImpl::MediaStreamComponentImpl(
     const String& id,
     MediaStreamSource* source,
     std::unique_ptr<MediaStreamTrackPlatform> platform_track)
-    : MediaStreamComponentImpl(id, source) {
-  DCHECK(platform_track);
-  CheckSourceAndTrackSameType(source, platform_track.get());
-  platform_track_ = std::move(platform_track);
+    : source_(source),
+      id_(id),
+      unique_id_(GenerateUniqueId()),
+      platform_track_(std::move(platform_track)) {
+  DCHECK(platform_track_);
+  CheckSourceAndTrackSameType(source, platform_track_.get());
 }
 
 MediaStreamComponentImpl::MediaStreamComponentImpl(
     MediaStreamSource* source,
     std::unique_ptr<MediaStreamTrackPlatform> platform_track)
-    : MediaStreamComponentImpl(source) {
-  DCHECK(platform_track);
-  CheckSourceAndTrackSameType(source, platform_track.get());
-  platform_track_ = std::move(platform_track);
-}
+    : MediaStreamComponentImpl(WTF::CreateCanonicalUUIDString(),
+                               source,
+                               std::move(platform_track)) {}
 
-MediaStreamComponentImpl* MediaStreamComponentImpl::Clone(
-    std::unique_ptr<MediaStreamTrackPlatform> cloned_platform_track) const {
+MediaStreamComponentImpl* MediaStreamComponentImpl::Clone() const {
+  const String id = WTF::CreateCanonicalUUIDString();
+  std::unique_ptr<MediaStreamTrackPlatform> cloned_platform_track =
+      platform_track_->CreateFromComponent(this, id);
   auto* cloned_component = MakeGarbageCollected<MediaStreamComponentImpl>(
-      Source(), std::move(cloned_platform_track));
+      id, Source(), std::move(cloned_platform_track));
   cloned_component->SetEnabled(enabled_);
   cloned_component->SetContentHint(content_hint_);
   return cloned_component;

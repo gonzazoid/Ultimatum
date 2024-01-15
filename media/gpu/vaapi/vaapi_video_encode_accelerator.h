@@ -24,6 +24,11 @@
 #include "media/gpu/vaapi/vaapi_wrapper.h"
 #include "media/video/video_encode_accelerator.h"
 
+namespace base {
+class SequencedTaskRunner;
+class SingleThreadTaskRunner;
+}  // namespace base
+
 namespace media {
 
 // A VideoEncodeAccelerator implementation that uses VA-API
@@ -48,11 +53,14 @@ class MEDIA_GPU_EXPORT VaapiVideoEncodeAccelerator
                   std::unique_ptr<MediaLog> media_log) override;
   void Encode(scoped_refptr<VideoFrame> frame, bool force_keyframe) override;
   void UseOutputBitstreamBuffer(BitstreamBuffer buffer) override;
-  void RequestEncodingParametersChange(const Bitrate& bitrate,
-                                       uint32_t framerate) override;
+  void RequestEncodingParametersChange(
+      const Bitrate& bitrate,
+      uint32_t framerate,
+      const absl::optional<gfx::Size>& size) override;
   void RequestEncodingParametersChange(
       const VideoBitrateAllocation& bitrate_allocation,
-      uint32_t framerate) override;
+      uint32_t framerate,
+      const absl::optional<gfx::Size>& size) override;
   void Destroy() override;
   void Flush(FlushCallback flush_callback) override;
   bool IsFlushSupported() override;
@@ -99,8 +107,6 @@ class MEDIA_GPU_EXPORT VaapiVideoEncodeAccelerator
 
   // Holds input frames coming from the client ready to be encoded.
   struct InputFrameRef;
-  // Holds output buffers coming from the client ready to be filled.
-  struct BitstreamBufferRef;
 
   //
   // Tasks for each of the VEA interface calls to be executed on
@@ -114,14 +120,14 @@ class MEDIA_GPU_EXPORT VaapiVideoEncodeAccelerator
   // encoding.
   void EncodeTask(scoped_refptr<VideoFrame> frame, bool force_keyframe);
 
-  // Maps |buffer_ref|, push it onto the available_bitstream_buffers_, and
-  // attempts to return any pending encoded data in it, if any.
-  void UseOutputBitstreamBufferTask(
-      std::unique_ptr<BitstreamBufferRef> buffer_ref);
+  // Push |buffer| into |available_bitstream_buffers_|, and attempts to return
+  // any pending encoded data in it, if any.
+  void UseOutputBitstreamBufferTask(BitstreamBuffer buffer);
 
   void RequestEncodingParametersChangeTask(
       VideoBitrateAllocation bitrate_allocation,
-      uint32_t framerate);
+      uint32_t framerate,
+      const absl::optional<gfx::Size>& size);
 
   void DestroyTask();
   void FlushTask(FlushCallback flush_callback);
@@ -201,12 +207,12 @@ class MEDIA_GPU_EXPORT VaapiVideoEncodeAccelerator
 
   // Downloads encoded data produced as a result of running |encode_result| into
   // |buffer|, and returns it to the client.
-  void ReturnBitstreamBuffer(std::unique_ptr<EncodeResult> encode_result,
-                             std::unique_ptr<BitstreamBufferRef> buffer);
+  void ReturnBitstreamBuffer(const EncodeResult& encode_result,
+                             const BitstreamBuffer& buffer);
 
   // Puts the encoder into en error state and notifies the client
   // about the error.
-  void NotifyError(Error error);
+  void NotifyError(EncoderStatus status);
 
   // Sets the encoder state to |state| on the correct thread.
   void SetState(State state);
@@ -243,7 +249,9 @@ class MEDIA_GPU_EXPORT VaapiVideoEncodeAccelerator
   gfx::Rect visible_rect_;
 
   // Size in bytes required for output bitstream buffers.
-  size_t output_buffer_byte_size_;
+  size_t output_buffer_byte_size_ = 0;
+  // Size of the max size of |pending_encode_results_|.
+  size_t max_pending_results_size_ = 0;
 
   // This flag signals when the client is sending NV12 + DmaBuf-backed
   // VideoFrames to encode, which allows for skipping a copy-adaptation on
@@ -251,13 +259,13 @@ class MEDIA_GPU_EXPORT VaapiVideoEncodeAccelerator
   bool native_input_mode_ = false;
 
   // The number of frames that needs to be held on encoding.
-  size_t num_frames_in_flight_;
+  size_t num_frames_in_flight_ = 0;
 
   // All of the members below must be accessed on the encoder_task_runner_,
   // while it is running.
 
   // Encoder state. Encode tasks will only run in kEncoding state.
-  State state_;
+  State state_ = State::kUninitialized;
 
   // Encoder instance managing video codec state and preparing encode jobs.
   // Should only be used on |encoder_task_runner_|.
@@ -279,17 +287,17 @@ class MEDIA_GPU_EXPORT VaapiVideoEncodeAccelerator
   EncodeSurfacesCountMap encode_surfaces_count_;
 
   // Queue of input frames to be encoded.
-  base::queue<std::unique_ptr<InputFrameRef>> input_queue_;
+  base::queue<InputFrameRef> input_queue_;
 
   // BitstreamBuffers mapped, ready to be filled with encoded stream data.
-  base::queue<std::unique_ptr<BitstreamBufferRef>> available_bitstream_buffers_;
+  base::queue<BitstreamBuffer> available_bitstream_buffers_;
 
   // VASurfaces already encoded and waiting for the bitstream buffer to
   // be downloaded.
-  base::queue<std::unique_ptr<EncodeResult>> pending_encode_results_;
+  base::queue<absl::optional<EncodeResult>> pending_encode_results_;
 
   // Task runner for interacting with the client, and its checker.
-  const scoped_refptr<base::SingleThreadTaskRunner> child_task_runner_;
+  const scoped_refptr<base::SequencedTaskRunner> child_task_runner_;
   SEQUENCE_CHECKER(child_sequence_checker_);
 
   // Encoder sequence and its checker. All tasks are executed on it.

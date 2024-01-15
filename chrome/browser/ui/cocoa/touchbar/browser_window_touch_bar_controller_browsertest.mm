@@ -2,9 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#import "base/mac/foundation_util.h"
-#include "base/mac/scoped_objc_class_swizzler.h"
+#import "base/apple/foundation_util.h"
+#include "base/apple/scoped_objc_class_swizzler.h"
 #include "chrome/app/chrome_command_ids.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/bookmarks/bookmark_tab_helper.h"
 #include "chrome/browser/ui/bookmarks/bookmark_tab_helper_observer.h"
 #include "chrome/browser/ui/browser.h"
@@ -65,9 +66,10 @@
   return touchBarInvalidFlag;
 }
 
-+ (std::unique_ptr<base::mac::ScopedObjCClassSwizzler>&)setTouchBarSwizzler {
-  static base::NoDestructor<std::unique_ptr<base::mac::ScopedObjCClassSwizzler>>
-      setTouchBarSwizzler(new base::mac::ScopedObjCClassSwizzler(
++ (std::unique_ptr<base::apple::ScopedObjCClassSwizzler>&)setTouchBarSwizzler {
+  static base::NoDestructor<
+      std::unique_ptr<base::apple::ScopedObjCClassSwizzler>>
+      setTouchBarSwizzler(new base::apple::ScopedObjCClassSwizzler(
           [NSWindow class], [TouchBarInvalidationWatcher class],
           @selector(setTouchBar:)));
 
@@ -83,7 +85,6 @@
 
 - (void)dealloc {
   [TouchBarInvalidationWatcher setTouchBarSwizzler].reset();
-  [super dealloc];
 }
 
 - (void)setTouchBar:(NSTouchBar*)aTouchBar {
@@ -117,10 +118,11 @@
   return pageIsLoadingFlag;
 }
 
-+ (std::unique_ptr<base::mac::ScopedObjCClassSwizzler>&)
++ (std::unique_ptr<base::apple::ScopedObjCClassSwizzler>&)
     setPageIsLoadingSwizzler {
-  static base::NoDestructor<std::unique_ptr<base::mac::ScopedObjCClassSwizzler>>
-      setPageIsLoadingSwizzler(new base::mac::ScopedObjCClassSwizzler(
+  static base::NoDestructor<
+      std::unique_ptr<base::apple::ScopedObjCClassSwizzler>>
+      setPageIsLoadingSwizzler(new base::apple::ScopedObjCClassSwizzler(
           [BrowserWindowDefaultTouchBar class], [PageReloadWatcher class],
           @selector(setIsPageLoading:)));
 
@@ -136,7 +138,6 @@
 
 - (void)dealloc {
   [PageReloadWatcher setPageIsLoadingSwizzler].reset();
-  [super dealloc];
 }
 
 - (void)setIsPageLoading:(BOOL)flag {
@@ -152,7 +153,7 @@
 
 class BrowserWindowTouchBarControllerTest : public InProcessBrowserTest {
  public:
-  BrowserWindowTouchBarControllerTest() : InProcessBrowserTest() {}
+  BrowserWindowTouchBarControllerTest() = default;
 
   BrowserWindowTouchBarControllerTest(
       const BrowserWindowTouchBarControllerTest&) = delete;
@@ -184,8 +185,8 @@ class BrowserWindowTouchBarControllerTest : public InProcessBrowserTest {
 
 // Test if the touch bar gets invalidated when the active tab is changed.
 IN_PROC_BROWSER_TEST_F(BrowserWindowTouchBarControllerTest, TabChanges) {
-  base::scoped_nsobject<TouchBarInvalidationWatcher> invalidationWatcher(
-      [TouchBarInvalidationWatcher newWatcher]);
+  [[maybe_unused]] TouchBarInvalidationWatcher* invalidationWatcher =
+      [TouchBarInvalidationWatcher newWatcher];
 
   EXPECT_FALSE(browser_touch_bar_controller());
   MakeTouchBar();
@@ -218,8 +219,8 @@ IN_PROC_BROWSER_TEST_F(BrowserWindowTouchBarControllerTest, TabChanges) {
 // Test if the touch bar receives a notification that the current tab is
 // loading.
 IN_PROC_BROWSER_TEST_F(BrowserWindowTouchBarControllerTest, PageReload) {
-  base::scoped_nsobject<PageReloadWatcher> pageReloadWatcher(
-      [PageReloadWatcher newWatcher]);
+  [[maybe_unused]] PageReloadWatcher* pageReloadWatcher =
+      [PageReloadWatcher newWatcher];
 
   EXPECT_FALSE(browser_touch_bar_controller());
   MakeTouchBar();
@@ -254,7 +255,7 @@ IN_PROC_BROWSER_TEST_F(BrowserWindowTouchBarControllerTest,
   auto* current_touch_bar = [native_window() touchBar];
   EXPECT_TRUE(current_touch_bar);
   BrowserWindowDefaultTouchBar* touch_bar_delegate =
-      base::mac::ObjCCastStrict<BrowserWindowDefaultTouchBar>(
+      base::apple::ObjCCastStrict<BrowserWindowDefaultTouchBar>(
           [current_touch_bar delegate]);
   EXPECT_FALSE([touch_bar_delegate isStarred]);
 
@@ -267,8 +268,8 @@ IN_PROC_BROWSER_TEST_F(BrowserWindowTouchBarControllerTest,
 // has changed.
 IN_PROC_BROWSER_TEST_F(BrowserWindowTouchBarControllerTest,
                        SearchEngineChanges) {
-  base::scoped_nsobject<TouchBarInvalidationWatcher> invalidationWatcher(
-      [TouchBarInvalidationWatcher newWatcher]);
+  [[maybe_unused]] TouchBarInvalidationWatcher* invalidationWatcher =
+      [TouchBarInvalidationWatcher newWatcher];
 
   PrefService* prefs = browser()->profile()->GetPrefs();
   DCHECK(prefs);
@@ -287,8 +288,8 @@ IN_PROC_BROWSER_TEST_F(BrowserWindowTouchBarControllerTest,
   ASSERT_FALSE([TouchBarInvalidationWatcher touchBarInvalidFlag]);
   std::unique_ptr<TemplateURLData> data =
       GenerateDummyTemplateURLData("poutine");
-  prefs->Set(DefaultSearchManager::kDefaultSearchProviderDataPrefName,
-             *TemplateURLDataToDictionary(*data));
+  prefs->SetDict(DefaultSearchManager::kDefaultSearchProviderDataPrefName,
+                 TemplateURLDataToDictionary(*data));
 
   // Confirm the touch bar was invalidated.
   EXPECT_TRUE([TouchBarInvalidationWatcher touchBarInvalidFlag]);

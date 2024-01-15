@@ -5,6 +5,7 @@
 #include "ui/gtk/native_theme_gtk.h"
 
 #include "base/no_destructor.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/strcat.h"
 #include "cc/paint/paint_canvas.h"
 #include "third_party/skia/include/core/SkBitmap.h"
@@ -46,6 +47,10 @@ SkBitmap GetWidgetBitmap(const gfx::Size& size,
   CairoSurface surface(bitmap);
   cairo_t* cr = surface.cairo();
 
+  double opacity = GetOpacityFromContext(context);
+  if (opacity < 1)
+    cairo_push_group(cr);
+
   switch (bg_mode) {
     case BG_RENDER_NORMAL:
       gtk_render_background(context, cr, 0, 0, size.width(), size.height());
@@ -56,8 +61,16 @@ SkBitmap GetWidgetBitmap(const gfx::Size& size,
     case BG_RENDER_NONE:
       break;
   }
-  if (render_frame)
+  if (render_frame) {
     gtk_render_frame(context, cr, 0, 0, size.width(), size.height());
+  }
+
+  if (opacity < 1) {
+    cairo_pop_group_to_source(cr);
+    cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+    cairo_paint_with_alpha(cr, opacity);
+  }
+
   bitmap.setImmutable();
   return bitmap;
 }
@@ -83,40 +96,6 @@ NativeThemeGtk* NativeThemeGtk::instance() {
 NativeThemeGtk::NativeThemeGtk()
     : NativeThemeBase(/*should_only_use_dark_colors=*/false,
                       ui::SystemTheme::kGtk) {
-  // g_type_from_name() is only used in GTK3.
-  if (!GtkCheckVersion(4)) {
-    // These types are needed by g_type_from_name(), but may not be registered
-    // at this point.  We need the g_type_class magic to make sure the compiler
-    // doesn't optimize away this code.
-    g_type_class_unref(g_type_class_ref(gtk_button_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_entry_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_frame_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_header_bar_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_image_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_info_bar_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_label_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_menu_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_menu_bar_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_menu_item_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_range_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_scrollbar_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_scrolled_window_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_separator_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_spinner_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_text_view_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_toggle_button_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_tree_view_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_window_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_combo_box_text_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_cell_view_get_type()));
-    g_type_class_unref(g_type_class_ref(gtk_scale_get_type()));
-
-    // Initialize the GtkTreeMenu type.  _gtk_tree_menu_get_type() is private,
-    // so we need to initialize it indirectly.
-    auto model = TakeGObject(GTK_TREE_MODEL(GtkTreeStoreNew(G_TYPE_STRING)));
-    auto combo = TakeGObject(gtk_combo_box_new_with_model(model));
-  }
-
   ui::ColorProviderManager::Get().AppendColorProviderInitializer(
       base::BindRepeating(AddGtkNativeColorMixer));
 
@@ -160,31 +139,24 @@ void NativeThemeGtk::NotifyOnNativeThemeUpdated() {
 
   // Update the preferred contrast settings for the NativeThemeAura instance and
   // notify its observers about the change.
-  ui::NativeTheme* native_theme = ui::NativeTheme::GetInstanceForNativeUi();
-  native_theme->SetPreferredContrast(
-      UserHasContrastPreference()
-          ? ui::NativeThemeBase::PreferredContrast::kMore
-          : ui::NativeThemeBase::PreferredContrast::kNoPreference);
-  native_theme->NotifyOnNativeThemeUpdated();
+  for (ui::NativeTheme* native_theme :
+       {ui::NativeTheme::GetInstanceForNativeUi(),
+        ui::NativeTheme::GetInstanceForWeb()}) {
+    native_theme->SetPreferredContrast(
+        UserHasContrastPreference()
+            ? ui::NativeThemeBase::PreferredContrast::kMore
+            : ui::NativeThemeBase::PreferredContrast::kNoPreference);
+    native_theme->set_prefers_reduced_transparency(UserHasContrastPreference());
+    native_theme->NotifyOnNativeThemeUpdated();
+  }
 }
 
 void NativeThemeGtk::OnThemeChanged(GtkSettings* settings,
                                     GtkParamSpec* param) {
   SetThemeCssOverride(ScopedCssProvider());
 
-  // Hack to workaround a bug on GNOME standard themes which would
-  // cause black patches to be rendered on GtkFileChooser dialogs.
   std::string theme_name =
       GetGtkSettingsStringProperty(settings, "gtk-theme-name");
-  if (!GtkCheckVersion(3, 14)) {
-    if (theme_name == "Adwaita") {
-      SetThemeCssOverride(GetCssProvider(
-          "GtkFileChooser GtkPaned { background-color: @theme_bg_color; }"));
-    } else if (theme_name == "HighContrast") {
-      SetThemeCssOverride(GetCssProvider(
-          "GtkFileChooser GtkPaned { background-color: @theme_base_color; }"));
-    }
-  }
 
   // GTK has a dark mode setting called "gtk-application-prefer-dark-theme", but
   // this is really only used for themes that have a dark or light variant that
@@ -202,8 +174,7 @@ void NativeThemeGtk::OnThemeChanged(GtkSettings* settings,
   // HighContrast (GNOME) and ContrastHighInverse (MATE).  So infer the contrast
   // based on if the theme name contains both "high" and "contrast",
   // case-insensitive.
-  std::transform(theme_name.begin(), theme_name.end(), theme_name.begin(),
-                 ::tolower);
+  base::ranges::transform(theme_name, theme_name.begin(), ::tolower);
   bool high_contrast = theme_name.find("high") != std::string::npos &&
                        theme_name.find("contrast") != std::string::npos;
   SetPreferredContrast(
@@ -265,48 +236,24 @@ void NativeThemeGtk::PaintMenuSeparator(
         return (rect.height() - separator_thickness) / 2;
     }
   };
-  if (GtkCheckVersion(3, 20)) {
-    auto context = GetStyleContextFromCss(
-        StrCat({GtkCssMenu(), " GtkSeparator#separator.horizontal"}));
-    int min_height = 1;
-    auto margin = GtkStyleContextGetMargin(context);
-    auto border = GtkStyleContextGetBorder(context);
-    auto padding = GtkStyleContextGetPadding(context);
-    if (GtkCheckVersion(4))
-      min_height = GetSeparatorSize(true).height();
-    else
-      GtkStyleContextGet(context, "min-height", &min_height, nullptr);
-    int w = rect.width() - margin.left() - margin.right();
-    int h = std::max(min_height + padding.top() + padding.bottom() +
-                         border.top() + border.bottom(),
-                     1);
-    int x = margin.left();
-    int y = separator_offset(h);
-    PaintWidget(canvas, gfx::Rect(x, y, w, h), context, BG_RENDER_NORMAL, true);
+  auto context =
+      GetStyleContextFromCss(StrCat({GtkCssMenu(), " separator.horizontal"}));
+  int min_height = 1;
+  auto margin = GtkStyleContextGetMargin(context);
+  auto border = GtkStyleContextGetBorder(context);
+  auto padding = GtkStyleContextGetPadding(context);
+  if (GtkCheckVersion(4)) {
+    min_height = GetSeparatorSize(true).height();
   } else {
-    auto context = GetStyleContextFromCss(
-        StrCat({GtkCssMenu(), " ", GtkCssMenuItem(), ".separator.horizontal"}));
-    gboolean wide_separators = false;
-    gint separator_height = 0;
-    GtkStyleContextGetStyle(context, "wide-separators", &wide_separators,
-                            "separator-height", &separator_height, nullptr);
-    // This code was adapted from gtk/gtkmenuitem.c.  For some reason,
-    // padding is used as the margin.
-    auto padding = GtkStyleContextGetPadding(context);
-    int w = rect.width() - padding.left() - padding.right();
-    int x = rect.x() + padding.left();
-    int h = wide_separators ? separator_height : 1;
-    int y = rect.y() + separator_offset(h);
-    if (wide_separators) {
-      PaintWidget(canvas, gfx::Rect(x, y, w, h), context, BG_RENDER_NONE, true);
-    } else {
-      cc::PaintFlags flags;
-      flags.setColor(GtkStyleContextGetColor(context));
-      flags.setAntiAlias(true);
-      flags.setStrokeWidth(1);
-      canvas->drawLine(x + 0.5f, y + 0.5f, x + w + 0.5f, y + 0.5f, flags);
-    }
+    GtkStyleContextGet(context, "min-height", &min_height, nullptr);
   }
+  int w = rect.width() - margin.left() - margin.right();
+  int h = std::max(min_height + padding.top() + padding.bottom() +
+                       border.top() + border.bottom(),
+                   1);
+  int x = margin.left();
+  int y = separator_offset(h);
+  PaintWidget(canvas, gfx::Rect(x, y, w, h), context, BG_RENDER_NORMAL, true);
 }
 
 void NativeThemeGtk::PaintFrameTopArea(
@@ -316,15 +263,17 @@ void NativeThemeGtk::PaintFrameTopArea(
     const FrameTopAreaExtraParams& frame_top_area,
     ColorScheme color_scheme) const {
   auto context = GetStyleContextFromCss(frame_top_area.use_custom_frame
-                                            ? "#headerbar.header-bar.titlebar"
-                                            : "GtkMenuBar#menubar");
+                                            ? "headerbar.header-bar.titlebar"
+                                            : "menubar");
   ApplyCssToContext(context, "* { border-radius: 0px; border-style: none; }");
   gtk_style_context_set_state(context, frame_top_area.is_active
                                            ? GTK_STATE_FLAG_NORMAL
                                            : GTK_STATE_FLAG_BACKDROP);
 
-  SkBitmap bitmap =
-      GetWidgetBitmap(rect.size(), context, BG_RENDER_RECURSIVE, false);
+  SkBitmap bitmap = GetWidgetBitmap(
+      rect.size(), context,
+      frame_top_area.use_custom_frame ? BG_RENDER_NORMAL : BG_RENDER_RECURSIVE,
+      false);
   bitmap.setImmutable();
   canvas->drawImage(cc::PaintImage::CreateFromBitmap(std::move(bitmap)),
                     rect.x(), rect.y());

@@ -23,10 +23,6 @@ bool StructTraits<blink::mojom::WebPreferencesDataView,
       !data.ReadCursiveFontFamilyMap(&out->cursive_font_family_map) ||
       !data.ReadFantasyFontFamilyMap(&out->fantasy_font_family_map) ||
       !data.ReadMathFontFamilyMap(&out->math_font_family_map) ||
-      !data.ReadLazyFrameLoadingDistanceThresholdsPx(
-          &out->lazy_frame_loading_distance_thresholds_px) ||
-      !data.ReadLazyImageLoadingDistanceThresholdsPx(
-          &out->lazy_image_loading_distance_thresholds_px) ||
       !data.ReadDefaultEncoding(&out->default_encoding) ||
       !data.ReadHashNetPublicKey(&out->hash_net_public_key) ||
       !data.ReadTextTrackBackgroundColor(&out->text_track_background_color) ||
@@ -39,6 +35,8 @@ bool StructTraits<blink::mojom::WebPreferencesDataView,
       !data.ReadTextTrackWindowColor(&out->text_track_window_color) ||
       !data.ReadTextTrackWindowRadius(&out->text_track_window_radius) ||
       !data.ReadPrimaryPointerType(&out->primary_pointer_type) ||
+      !data.ReadOutputDeviceUpdateAbilityType(
+          &out->output_device_update_ability_type) ||
       !data.ReadPrimaryHoverType(&out->primary_hover_type) ||
       !data.ReadViewportStyle(&out->viewport_style) ||
       !data.ReadAnimationPolicy(&out->animation_policy) ||
@@ -112,13 +110,16 @@ bool StructTraits<blink::mojom::WebPreferencesDataView,
   out->should_clear_document_background =
       data.should_clear_document_background();
   out->enable_scroll_animator = data.enable_scroll_animator();
-  out->threaded_scrolling_enabled = data.threaded_scrolling_enabled();
   out->prefers_reduced_motion = data.prefers_reduced_motion();
+  out->prefers_reduced_transparency = data.prefers_reduced_transparency();
+  out->inverted_colors = data.inverted_colors();
   out->touch_event_feature_detection_enabled =
       data.touch_event_feature_detection_enabled();
   out->pointer_events_max_touch_points = data.pointer_events_max_touch_points();
   out->available_pointer_types = data.available_pointer_types();
   out->available_hover_types = data.available_hover_types();
+  out->output_device_update_ability_type =
+      data.output_device_update_ability_type();
   out->dont_send_key_events_to_javascript =
       data.dont_send_key_events_to_javascript();
   out->barrel_button_for_drag_enabled = data.barrel_button_for_drag_enabled();
@@ -143,7 +144,6 @@ bool StructTraits<blink::mojom::WebPreferencesDataView,
       data.initialize_at_minimum_page_scale();
   out->smart_insert_delete_enabled = data.smart_insert_delete_enabled();
   out->spatial_navigation_enabled = data.spatial_navigation_enabled();
-  out->navigate_on_drag_drop = data.navigate_on_drag_drop();
   out->fake_no_alloc_direct_call_for_testing_enabled =
       data.fake_no_alloc_direct_call_for_testing_enabled();
   out->v8_cache_options = data.v8_cache_options();
@@ -162,12 +162,12 @@ bool StructTraits<blink::mojom::WebPreferencesDataView,
   out->text_autosizing_enabled = data.text_autosizing_enabled();
 #if BUILDFLAG(IS_ANDROID)
   out->font_scale_factor = data.font_scale_factor();
+  out->font_weight_adjustment = data.font_weight_adjustment();
+  out->text_size_contrast_factor = data.text_size_contrast_factor();
   out->device_scale_adjustment = data.device_scale_adjustment();
   out->force_enable_zoom = data.force_enable_zoom();
   out->support_deprecated_target_density_dpi =
       data.support_deprecated_target_density_dpi();
-  out->use_legacy_background_size_shorthand_behavior =
-      data.use_legacy_background_size_shorthand_behavior();
   out->wide_viewport_quirk = data.wide_viewport_quirk();
   out->use_wide_viewport = data.use_wide_viewport();
   out->force_zero_layout_height = data.force_zero_layout_height();
@@ -195,8 +195,12 @@ bool StructTraits<blink::mojom::WebPreferencesDataView,
   out->scroll_top_left_interop_enabled = data.scroll_top_left_interop_enabled();
   out->disable_accelerated_small_canvases =
       data.disable_accelerated_small_canvases();
+#endif  // BUILDFLAG(IS_ANDROID)
+
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_FUCHSIA)
   out->disable_webauthn = data.disable_webauthn();
-#endif
+#endif  // BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_FUCHSIA)
+
   out->force_dark_mode_enabled = data.force_dark_mode_enabled();
   out->default_minimum_page_scale_factor =
       data.default_minimum_page_scale_factor();
@@ -208,6 +212,10 @@ bool StructTraits<blink::mojom::WebPreferencesDataView,
   out->do_not_update_selection_on_mutating_selection_range =
       data.do_not_update_selection_on_mutating_selection_range();
   out->autoplay_policy = data.autoplay_policy();
+  out->require_transient_activation_for_get_display_media =
+      data.require_transient_activation_for_get_display_media();
+  out->require_transient_activation_for_show_file_or_directory_picker =
+      data.require_transient_activation_for_show_file_or_directory_picker();
   out->preferred_color_scheme = data.preferred_color_scheme();
   out->preferred_contrast = data.preferred_contrast();
   out->picture_in_picture_enabled = data.picture_in_picture_enabled();

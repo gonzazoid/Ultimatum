@@ -4,7 +4,7 @@
 
 import os
 
-from code import Code
+from code_util import Code
 from model import PropertyType, Type, Property
 import cpp_util
 import schema_util
@@ -55,11 +55,14 @@ class _Generator(object):
       .Append()
       .Append('#include <map>')
       .Append('#include <memory>')
+      .Append('#include <optional>')
       .Append('#include <string>')
       .Append('#include <vector>')
       .Append()
       .Append('#include "base/values.h"')
-      .Cblock(self._type_helper.GenerateIncludes(include_soft=include_soft))
+      .Cblock(self._type_helper.GenerateIncludes(
+        include_soft=include_soft,
+        generate_error_messages=self._generate_error_messages))
       .Append()
     )
 
@@ -148,13 +151,24 @@ class _Generator(object):
     """Generate a code object with the  declaration of a C++ enum.
     """
     c = Code()
-    c.Sblock('enum %s {' % enum_name)
-    c.Append(self._type_helper.GetEnumNoneValue(type_) + ',')
+    c.Sblock('enum class {name} {{'.format(
+      name=enum_name))
+
+    # Explicitly initialize kNone to 0, since we rely on default initialization
+    # for enum members. Otherwise, default initialization will always set a
+    # value to 0, even if it's not a valid enum entry.
+    c.Append(
+      self._type_helper.GetEnumNoneValue(type_, full_name=False) + ' = 0,')
+
     for value in type_.enum_values:
-      current_enum_string = self._type_helper.GetEnumValue(type_, value)
+      current_enum_string = (
+        self._type_helper.GetEnumValue(type_, value, full_name=False))
       c.Append(current_enum_string + ',')
-    c.Append('%s = %s,' % (
-        self._type_helper.GetEnumLastValue(type_), current_enum_string))
+
+    # Adding kMaxValue, which is friendly to enumaration histogram macros.
+    c.Append('kMaxValue = {last_key_value},'.format(
+              last_key_value=current_enum_string))
+
     c.Eblock('};')
     return c
 
@@ -201,15 +215,19 @@ class _Generator(object):
         c.Comment(type_.description)
       c.Cblock(self._GenerateType(type_.item_type, is_toplevel=is_toplevel))
       if generate_typedefs:
-        (c.Append('typedef std::vector<%s > %s;' % (
-                       self._type_helper.GetCppType(type_.item_type),
-                       classname))
-        )
+        item_cpp_type = self._type_helper.GetCppType(type_.item_type)
+        if item_cpp_type != 'base::Value':
+          (c.Append('using %s = std::vector<%s >;' % (
+                        classname,
+                        item_cpp_type))
+          )
+        else:
+          c.Append('using %s = base::Value::List;' % classname)
     elif type_.property_type == PropertyType.STRING:
       if generate_typedefs:
         if type_.description:
           c.Comment(type_.description)
-        c.Append('typedef std::string %(classname)s;')
+        c.Append('using %(classname)s = std::string;')
     elif type_.property_type == PropertyType.ENUM:
       if type_.description:
         c.Comment(type_.description)
@@ -220,8 +238,11 @@ class _Generator(object):
       (c.Append()
         .Append('%sconst char* ToString(%s as_enum);' %
                 (maybe_static, classname))
-        .Append('%s%s Parse%s(const std::string& as_string);' %
+        .Append('%s%s Parse%s(base::StringPiece as_string);' %
                 (maybe_static, classname, classname))
+        .Append(
+            '%sstd::u16string Get%sParseError(base::StringPiece as_string);' %
+            (maybe_static, classname))
       )
     elif type_.property_type in (PropertyType.CHOICES,
                                  PropertyType.OBJECT):
@@ -233,8 +254,8 @@ class _Generator(object):
         .Append('~%(classname)s();')
         .Append('%(classname)s(const %(classname)s&) = delete;')
         .Append('%(classname)s& operator=(const %(classname)s&) = delete;')
-        .Append('%(classname)s(%(classname)s&& rhs);')
-        .Append('%(classname)s& operator=(%(classname)s&& rhs);')
+        .Append('%(classname)s(%(classname)s&& rhs) noexcept;')
+        .Append('%(classname)s& operator=(%(classname)s&& rhs) noexcept;')
       )
 
       if type_.origin.from_manifest_keys:
@@ -242,24 +263,56 @@ class _Generator(object):
         c.Comment('Manifest key constants.')
         c.Concat(self._GenerateManifestKeyConstants(type_.properties.values()))
 
+      value_type = ('base::Value'
+                    if type_.property_type is PropertyType.CHOICES else
+                    'base::Value::Dict')
+
       if type_.origin.from_json:
         (c.Append()
-          .Comment('Populates a %s object from a base::Value. Returns'
-                   ' whether |out| was successfully populated.' % classname)
+          .Comment('Populates a %s object from a base::Value& instance. Returns'
+                   ' whether |out| was successfully populated.' %  classname)
           .Append('static bool Populate(%s);' % self._GenerateParams(
-              ('const base::Value& value', '%s* out' % classname)))
+              ('const base::Value& value', '%s& out' % classname)))
         )
-        if is_toplevel:
+        if type_.property_type is not PropertyType.CHOICES:
           (c.Append()
-            .Comment('Creates a %s object from a base::Value, or NULL on '
-                     'failure.' % classname)
-            .Append('static std::unique_ptr<%s> FromValue(%s);' % (
-                classname, self._GenerateParams(('const base::Value& value',))))
+            .Comment('Populates a %s object from a Dict& instance. Returns'
+                    ' whether |out| was successfully populated.' %  classname)
+            .Append('static bool Populate(%s);' % self._GenerateParams(
+                ('const base::Value::Dict& value', '%s& out' % classname)))
           )
+        (c.Append()
+          .Comment('Creates a deep copy of %s.' % classname)
+          .Append('%s Clone() const;' % classname)
+        )
+
+        return_type = self._type_helper.GetOptionalReturnType(
+            classname, support_errors=self._generate_error_messages)
+
+        if type_.property_type is not PropertyType.CHOICES:
+          (c.Append()
+            .Comment('Creates a {classname} object from a base::Value::Dict,'
+                      ' or {failure} on failure.'.format(
+                        classname=classname,
+                        failure=('unexpected'
+                          if self._generate_error_messages else 'nullopt')))
+            .Append('static {return_type} '
+                    'FromValue(const base::Value::Dict& value);'.format(
+                      return_type=return_type))
+          )
+
+        (c.Append()
+            .Comment('Creates a {classname} object from a base::Value,'
+                      ' or {failure} on failure.'.format(
+                        classname=classname,
+                        failure=('unexpected'
+                          if self._generate_error_messages else 'nullopt')))
+          .Append('static {return_type} '
+                  'FromValue(const base::Value& value);'.format(
+                    return_type=return_type))
+        )
+
       if type_.origin.from_client:
-        value_type = ('base::Value'
-                      if type_.property_type is PropertyType.CHOICES else
-                      'base::Value::Dict')
         (c.Append()
           .Comment('Returns a new %s representing the serialized form of this'
                    '%s object.' % (value_type, classname))
@@ -336,12 +389,21 @@ class _Generator(object):
       return Code()
 
     c = Code()
-    (c.Sblock('struct Params {')
-      .Append('static std::unique_ptr<Params> Create(%s);' %
-                  self._GenerateParams(
-                      ('const base::Value::List& args',)))
+    (c.Sblock('struct Params {'))
+    if self._generate_error_messages:
+      (c.Append('static base::expected<Params, std::u16string> '
+        'Create(const base::Value::List& args);')
+        .Comment('DEPRECATED: prefer the variant of this function '
+          'returning errors with `base::expected`.')
+      )
+
+    (c.Append('static std::optional<Params> Create(%s);' %
+                self._GenerateParams(
+                    ('const base::Value::List& args',)))
       .Append('Params(const Params&) = delete;')
       .Append('Params& operator=(const Params&) = delete;')
+      .Append('Params(Params&& rhs) noexcept;')
+      .Append('Params& operator=(Params&& rhs) noexcept;')
       .Append('~Params();')
       .Append()
       .Cblock(self._GenerateTypes(p.type_ for p in function.params))
@@ -383,8 +445,8 @@ class _Generator(object):
     if type_.IsRootManifestKeyType():
       params = [
         'const base::Value::Dict& root_dict',
-        '%s* out' % classname,
-        'std::u16string* error'
+        '%s& out' % classname,
+        'std::u16string& error'
       ]
       comment = (
         'Parses manifest keys for this namespace. Any keys not available to the'
@@ -394,9 +456,9 @@ class _Generator(object):
       params = [
         'const base::Value::Dict& root_dict',
         'base::StringPiece key',
-        '%s* out' % classname,
-        'std::u16string* error',
-        'std::vector<base::StringPiece>* error_path_reversed'
+        '%s& out' % classname,
+        'std::u16string& error',
+        'std::vector<base::StringPiece>& error_path_reversed'
       ]
       comment = (
         'Parses the given |key| from |root_dict|. Any keys not available to the'
@@ -461,7 +523,8 @@ class _Generator(object):
     )
     return c
 
-  def _GenerateParams(self, params, generate_error_messages=None):
+  def _GenerateParams(
+        self, params, generate_error_messages=None):
     """Builds the parameter list for a function, given an array of parameters.
     If |generate_error_messages| is specified, it overrides
     |self._generate_error_messages|.
@@ -474,5 +537,5 @@ class _Generator(object):
     if generate_error_messages is None:
       generate_error_messages = self._generate_error_messages
     if generate_error_messages:
-      params += ('std::u16string* error',)
+      params += ('std::u16string& error',)
     return ', '.join(str(p) for p in params)

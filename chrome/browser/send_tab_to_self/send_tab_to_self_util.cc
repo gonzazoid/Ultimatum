@@ -13,7 +13,7 @@
 #include "components/send_tab_to_self/send_tab_to_self_sync_service.h"
 #include "components/signin/public/base/signin_pref_names.h"
 #include "components/signin/public/identity_manager/account_info.h"
-#include "components/sync/driver/sync_service.h"
+#include "components/sync/service/sync_service.h"
 #include "content/public/browser/web_contents.h"
 #include "url/gurl.h"
 
@@ -25,13 +25,12 @@ absl::optional<EntryPointDisplayReason> GetEntryPointDisplayReason(
   if (!web_contents)
     return absl::nullopt;
 
-  auto* profile =
-      Profile::FromBrowserContext(web_contents->GetBrowserContext());
-  return GetEntryPointDisplayReason(
-      web_contents->GetLastCommittedURL(),
-      SyncServiceFactory::GetForProfile(profile),
-      SendTabToSelfSyncServiceFactory::GetForProfile(profile),
-      profile->GetPrefs());
+  send_tab_to_self::SendTabToSelfSyncService* service =
+      SendTabToSelfSyncServiceFactory::GetForProfile(
+          Profile::FromBrowserContext(web_contents->GetBrowserContext()));
+  return service ? service->GetEntryPointDisplayReason(
+                       web_contents->GetLastCommittedURL())
+                 : absl::nullopt;
 }
 
 bool ShouldDisplayEntryPoint(content::WebContents* web_contents) {

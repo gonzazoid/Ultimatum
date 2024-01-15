@@ -9,15 +9,13 @@
 #include <string>
 
 #include "ash/public/cpp/login_accelerators.h"
-#include "ash/public/cpp/system_tray_observer.h"
-#include "base/memory/ref_counted.h"
+#include "ash/system/tray/system_tray_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/ui/chrome_web_modal_dialog_manager_delegate.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/session_manager/core/session_manager_observer.h"
-// TODO(https://crbug.com/1164001): use forward declaration.
-#include "chrome/browser/ui/webui/ash/login/oobe_ui.h"
 #include "components/web_modal/web_contents_modal_dialog_host.h"
 #include "content/public/browser/web_contents_delegate.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -38,6 +36,7 @@ class Widget;
 
 namespace ash {
 class LoginDisplayHostWebUI;
+class OobeUI;
 
 // View used to render a WebUI supporting Widget. This widget is used for the
 // WebUI based start up and lock screens. It contains a WebView.
@@ -107,8 +106,9 @@ class WebUILoginView : public views::View,
   // Toggles status area visibility.
   void SetStatusAreaVisible(bool visible);
 
-  // Sets whether UI should be enabled.
-  void SetUIEnabled(bool enabled);
+  // Sets whether keyboard events can be forwarded from the WebUI and the system
+  // tray is available.
+  void SetKeyboardEventsAndSystemTrayEnabled(bool enabled);
 
   void set_is_hidden(bool hidden) { is_hidden_ = hidden; }
 
@@ -130,7 +130,6 @@ class WebUILoginView : public views::View,
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
 
   // session_manager::SessionManagerObserver:
-  void OnNetworkErrorScreenShown() override;
   void OnLoginOrLockScreenVisible() override;
 
  private:
@@ -151,7 +150,7 @@ class WebUILoginView : public views::View,
       const content::MediaStreamRequest& request,
       content::MediaResponseCallback callback) override;
   bool CheckMediaAccessPermission(content::RenderFrameHost* render_frame_host,
-                                  const GURL& security_origin,
+                                  const url::Origin& security_origin,
                                   blink::mojom::MediaStreamType type) override;
   bool PreHandleGestureEvent(content::WebContents* source,
                              const blink::WebGestureEvent& event) override;
@@ -177,7 +176,7 @@ class WebUILoginView : public views::View,
   base::WeakPtr<LoginDisplayHostWebUI> controller_;
 
   // WebView for rendering a webpage as a webui login.
-  views::WebView* web_view_ = nullptr;
+  raw_ptr<views::WebView> web_view_ = nullptr;
 
   // Converts keyboard events on the WebContents to accelerators.
   views::UnhandledKeyboardEventHandler unhandled_keyboard_event_handler_;
@@ -207,11 +206,5 @@ class WebUILoginView : public views::View,
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::WebUILoginView;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_UI_WEBUI_LOGIN_VIEW_H_

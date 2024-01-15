@@ -5,21 +5,19 @@
 #include "chrome/browser/ash/browser_accelerator_configuration.h"
 
 #include "ash/public/cpp/accelerator_configuration.h"
+#include "ash/public/mojom/accelerator_configuration.mojom.h"
 #include "ash/public/mojom/accelerator_keys.mojom.h"
 
 namespace ash {
 
+using ::ash::mojom::AcceleratorConfigResult;
+
 BrowserAcceleratorConfiguration::BrowserAcceleratorConfiguration()
-    : AcceleratorConfiguration(ash::mojom::AcceleratorSource::kBrowser) {}
+    : AcceleratorConfiguration(mojom::AcceleratorSource::kBrowser) {}
 
 BrowserAcceleratorConfiguration::~BrowserAcceleratorConfiguration() = default;
 
-const std::vector<mojom::AcceleratorLayoutInfoPtr>&
-BrowserAcceleratorConfiguration::GetAcceleratorLayoutInfos() {
-  return layout_infos_;
-}
-
-const std::vector<ui::Accelerator>&
+base::optional_ref<const std::vector<ui::Accelerator>>
 BrowserAcceleratorConfiguration::GetAcceleratorsForAction(
     AcceleratorActionId action_id) {
   // TODO(jimmyxgong): Implement stub.

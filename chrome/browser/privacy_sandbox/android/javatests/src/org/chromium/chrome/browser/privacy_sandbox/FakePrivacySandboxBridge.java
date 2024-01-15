@@ -8,30 +8,22 @@ import org.chromium.base.Callback;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
-/**
- * Java implementation of PrivacySandboxBridge for testing.
- */
+/** Java implementation of PrivacySandboxBridge for testing. */
 public class FakePrivacySandboxBridge implements PrivacySandboxBridge.Natives {
-    private boolean mIsPrivacySandboxEnabled = true;
     private boolean mIsPrivacySandboxRestricted /* = false*/;
+    private boolean mIsRestrictedNoticeEnabled /* = false*/;
 
     private final HashMap<String, Topic> mTopics = new HashMap<>();
-    private final Set<Topic> mCurrentTopTopics = new HashSet<>();
-    private final Set<Topic> mBlockedTopics = new HashSet<>();
-    private final Set<String> mCurrentFledgeSites = new HashSet<>();
-    private final Set<String> mBlockedFledgeSites = new HashSet<>();
+    private final Set<Topic> mCurrentTopTopics = new LinkedHashSet<>();
+    private final Set<Topic> mBlockedTopics = new LinkedHashSet<>();
+    private final Set<String> mCurrentFledgeSites = new LinkedHashSet<>();
+    private final Set<String> mBlockedFledgeSites = new LinkedHashSet<>();
     private @PromptType int mPromptType = PromptType.NONE;
     private Integer mLastPromptAction;
-
-    public FakePrivacySandboxBridge() {
-        setCurrentTopTopics("Foo", "Bar");
-        setBlockedTopics("BlockedFoo", "BlockedBar");
-        setCurrentFledgeSites("example.com", "example2.com");
-        setBlockedFledgeSites("blocked.com", "blocked2.com");
-    }
+    private boolean mLastTopicsToggleValue;
 
     public void setCurrentTopTopics(String... topics) {
         mCurrentTopTopics.clear();
@@ -67,18 +59,13 @@ public class FakePrivacySandboxBridge implements PrivacySandboxBridge.Natives {
     }
 
     @Override
-    public boolean isPrivacySandboxEnabled() {
-        return mIsPrivacySandboxEnabled;
-    }
-
-    @Override
-    public boolean isPrivacySandboxManaged() {
-        return false;
-    }
-
-    @Override
     public boolean isPrivacySandboxRestricted() {
         return mIsPrivacySandboxRestricted;
+    }
+
+    @Override
+    public boolean isRestrictedNoticeEnabled() {
+        return mIsRestrictedNoticeEnabled;
     }
 
     @Override
@@ -97,11 +84,6 @@ public class FakePrivacySandboxBridge implements PrivacySandboxBridge.Natives {
     }
 
     @Override
-    public void setPrivacySandboxEnabled(boolean enabled) {
-        mIsPrivacySandboxEnabled = enabled;
-    }
-
-    @Override
     public void setFirstPartySetsDataAccessEnabled(boolean enabled) {}
 
     @Override
@@ -113,29 +95,8 @@ public class FakePrivacySandboxBridge implements PrivacySandboxBridge.Natives {
         mIsPrivacySandboxRestricted = restricted;
     }
 
-    @Override
-    public String getFlocStatusString() {
-        return null;
-    }
-
-    @Override
-    public String getFlocGroupString() {
-        return null;
-    }
-
-    @Override
-    public String getFlocUpdateString() {
-        return null;
-    }
-
-    @Override
-    public String getFlocDescriptionString() {
-        return null;
-    }
-
-    @Override
-    public String getFlocResetExplanationString() {
-        return null;
+    public void setRestrictedNoticeEnabled(boolean restrictedNoticeEnabled) {
+        mIsRestrictedNoticeEnabled = restrictedNoticeEnabled;
     }
 
     @Override
@@ -207,4 +168,16 @@ public class FakePrivacySandboxBridge implements PrivacySandboxBridge.Natives {
     public void resetLastPromptAction() {
         mLastPromptAction = null;
     }
+
+    @Override
+    public void topicsToggleChanged(boolean newValue) {
+        mLastTopicsToggleValue = newValue;
+    }
+
+    public boolean getLastTopicsToggleValue() {
+        return mLastTopicsToggleValue;
+    }
+
+    @Override
+    public void setAllPrivacySandboxAllowedForTesting() {}
 }

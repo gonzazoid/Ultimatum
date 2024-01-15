@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
@@ -27,14 +27,6 @@
 #endif
 
 namespace net {
-
-namespace {
-
-void LogReadSize(int read_size) {
-  UMA_HISTOGRAM_COUNTS_10M("Net.TCPClientSocketReadSize", read_size);
-}
-
-}  // namespace
 
 class NetLogWithSource;
 
@@ -69,11 +61,12 @@ TCPClientSocket::TCPClientSocket(std::unique_ptr<TCPSocket> connected_socket,
 TCPClientSocket::TCPClientSocket(
     std::unique_ptr<TCPSocket> unconnected_socket,
     const AddressList& addresses,
+    std::unique_ptr<IPEndPoint> bound_address,
     NetworkQualityEstimator* network_quality_estimator)
     : TCPClientSocket(std::move(unconnected_socket),
                       addresses,
                       -1 /* current_address_index */,
-                      nullptr /* bind_address */,
+                      std::move(bound_address),
                       network_quality_estimator,
                       handles::kInvalidNetworkHandle) {}
 
@@ -208,7 +201,6 @@ int TCPClientSocket::ReadCommon(IOBuffer* buf,
   } else if (result > 0) {
     was_ever_used_ = true;
     total_received_bytes_ += result;
-    LogReadSize(result);
   }
 
   return result;
@@ -355,7 +347,6 @@ void TCPClientSocket::DoDisconnect() {
   }
 
   total_received_bytes_ = 0;
-  EmitTCPMetricsHistogramsOnDisconnect();
 
   // If connecting or already connected, record that the socket has been
   // disconnected.
@@ -401,10 +392,6 @@ bool TCPClientSocket::WasEverUsed() const {
   return was_ever_used_;
 }
 
-bool TCPClientSocket::WasAlpnNegotiated() const {
-  return false;
-}
-
 NextProto TCPClientSocket::GetNegotiatedProtocol() const {
   return kProtoUnknown;
 }
@@ -441,8 +428,6 @@ int TCPClientSocket::Write(
 
   if (was_disconnected_on_suspend_)
     return ERR_NETWORK_IO_SUSPENDED;
-
-  UMA_HISTOGRAM_COUNTS_10M("Net.TCPClientSocketWriteSize", buf_len);
 
   // |socket_| is owned by this class and the callback won't be run once
   // |socket_| is gone. Therefore, it is safe to use base::Unretained() here.
@@ -536,10 +521,8 @@ void TCPClientSocket::DidCompleteConnect(int result) {
 void TCPClientSocket::DidCompleteRead(int result) {
   DCHECK(!read_callback_.is_null());
 
-  if (result > 0) {
+  if (result > 0)
     total_received_bytes_ += result;
-    LogReadSize(result);
-  }
   DidCompleteReadWrite(std::move(read_callback_), result);
 }
 
@@ -574,14 +557,6 @@ int TCPClientSocket::OpenSocket(AddressFamily family) {
   socket_->SetDefaultOptionsForClient();
 
   return OK;
-}
-
-void TCPClientSocket::EmitTCPMetricsHistogramsOnDisconnect() {
-  base::TimeDelta rtt;
-  if (socket_->GetEstimatedRoundTripTime(&rtt)) {
-    UMA_HISTOGRAM_CUSTOM_TIMES("Net.TcpRtt.AtDisconnect", rtt,
-                               base::Milliseconds(1), base::Minutes(10), 100);
-  }
 }
 
 void TCPClientSocket::EmitConnectAttemptHistograms(int result) {

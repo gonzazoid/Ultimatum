@@ -7,9 +7,11 @@
 
 #include "ash/ash_export.h"
 #include "ash/public/cpp/metrics_util.h"
+#include "ash/wm/desks/desk.h"
 #include "ash/wm/desks/desks_histogram_enums.h"
 #include "ash/wm/desks/root_window_desk_switch_animator.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "ui/compositor/throughput_tracker.h"
 
@@ -54,6 +56,10 @@ class ASH_EXPORT DeskAnimationBase
   // implementation. Returns false if the animation does not support ending.
   virtual bool EndSwipeAnimation();
 
+  // Returns true if entering/exiting overview during the animation is allowed.
+  virtual bool CanEnterOverview() const;
+  virtual bool CanEndOverview() const;
+
   // RootWindowDeskSwitchAnimator::Delegate:
   void OnStartingDeskScreenshotTaken(int ending_desk_index) override;
   void OnEndingDeskScreenshotTaken() override;
@@ -72,6 +78,21 @@ class ASH_EXPORT DeskAnimationBase
       size_t index) const;
 
  protected:
+  // This will set `is_overview_toggle_allowed_` before and after calling
+  // `ActivateDeskInternal()`, allowing exiting/entering overview during the
+  // animation.
+  void ActivateDeskDuringAnimation(const Desk* desk,
+                                   bool update_window_activation);
+
+  // Immediately switches to the target desk and notifies the desk controller
+  // that the animation is done, which will end up deleting `this`.
+  void ActivateTargetDeskWithoutAnimation();
+
+  // Returns true if any of the animators have failed, for any reason. In this
+  // case, we will abort what we're doing and switch to the target desk without
+  // animation.
+  bool AnimatorFailed() const;
+
   // Abstract functions that can be overridden by child classes to do different
   // things when phase (1), and phase (3) completes. Note that
   // `OnDeskSwitchAnimationFinishedInternal()` will be called before the desks
@@ -88,7 +109,7 @@ class ASH_EXPORT DeskAnimationBase
   virtual LatencyReportCallback GetLatencyReportCallback() const = 0;
   virtual metrics_util::ReportCallback GetSmoothnessReportCallback() const = 0;
 
-  DesksController* const controller_;
+  const raw_ptr<DesksController> controller_;
 
   // An animator object per each root. Once all the animations are complete,
   // this list is cleared.
@@ -120,13 +141,21 @@ class ASH_EXPORT DeskAnimationBase
   // remove animation.
   int visible_desk_changes_ = 0;
 
+  // Used for allowing us to enter or exit overview during a desk animation. If
+  // there is an ongoing desk animation, we want to prevent unwanted exit or
+  // enter overview toggling so that we don't end up in a strange or unexpected
+  // state. Toggling overview is only allowed when we are doing an internal desk
+  // activation, where we manually set the overview states of the old active
+  // desk and the new active desk.
+  bool is_overview_toggle_allowed_ = false;
+
   // Used for the Ash.Desks.AnimationLatency.* histograms. Null if no animation
   // is being prepared. In a continuous desk animation, the latency is reported
   // only for the first desk switch, and `launch_time_` is null thereafter.
   base::TimeTicks launch_time_;
 
   // ThroughputTracker used for measuring this animation smoothness.
-  ui::ThroughputTracker throughput_tracker_;
+  std::optional<ui::ThroughputTracker> throughput_tracker_;
 
   // If true, do not notify |controller_| when
   // OnDeskSwitchAnimationFinished() is called. This class and

@@ -193,9 +193,11 @@ ipcz_source_set("util") {
   public = [
     "util/log.h",
     "util/multi_mutex_lock.h",
+    "util/overloaded.h",
     "util/ref_counted.h",
     "util/stack_trace.h",
     "util/strong_alias.h",
+    "util/unique_ptr_comparator.h",
   ]
 
   sources = [ "util/ref_counted.cc" ]
@@ -208,8 +210,10 @@ ipcz_source_set("impl") {
   visibility = [ ":*" ]
   public = [
     "ipcz/api_object.h",
+    "ipcz/application_object.h",
     "ipcz/block_allocator.h",
     "ipcz/box.h",
+    "ipcz/buffer_id.h",
     "ipcz/buffer_pool.h",
     "ipcz/driver_memory.h",
     "ipcz/driver_memory_mapping.h",
@@ -232,7 +236,7 @@ ipcz_source_set("impl") {
     "ipcz/operation_context.h",
     "ipcz/parcel.h",
     "ipcz/parcel_queue.h",
-    "ipcz/portal.h",
+    "ipcz/parcel_wrapper.h",
     "ipcz/ref_counted_fragment.h",
     "ipcz/remote_router_link.h",
     "ipcz/route_edge.h",
@@ -243,24 +247,20 @@ ipcz_source_set("impl") {
     "ipcz/sequenced_queue.h",
     "ipcz/sublink_id.h",
     "ipcz/test_messages.h",
-    "ipcz/validator.h",
   ]
   sources = [
     "ipcz/api_object.cc",
-    "ipcz/atomic_queue_state.cc",
-    "ipcz/atomic_queue_state.h",
+    "ipcz/application_object.cc",
     "ipcz/block_allocator.cc",
     "ipcz/block_allocator_pool.cc",
     "ipcz/block_allocator_pool.h",
     "ipcz/box.cc",
-    "ipcz/buffer_id.h",
     "ipcz/buffer_pool.cc",
     "ipcz/driver_memory.cc",
     "ipcz/driver_memory_mapping.cc",
     "ipcz/driver_object.cc",
     "ipcz/driver_transport.cc",
     "ipcz/fragment.cc",
-    "ipcz/fragment_descriptor.cc",
     "ipcz/fragment_ref.cc",
     "ipcz/handle_type.h",
     "ipcz/link_side.cc",
@@ -273,9 +273,7 @@ ipcz_source_set("impl") {
     "ipcz/message_macros/message_listener_definition_macros.h",
     "ipcz/message_macros/message_listener_dispatch_macros.h",
     "ipcz/message_macros/message_params_declaration_macros.h",
-    "ipcz/message_macros/message_params_declaration_macros.h",
     "ipcz/message_macros/undef_message_macros.h",
-    "ipcz/monitored_atomic.h",
     "ipcz/node.cc",
     "ipcz/node_connector.cc",
     "ipcz/node_link.cc",
@@ -284,13 +282,13 @@ ipcz_source_set("impl") {
     "ipcz/node_messages_generator.h",
     "ipcz/node_name.cc",
     "ipcz/parcel.cc",
-    "ipcz/parcel_queue.cc",
-    "ipcz/portal.cc",
+    "ipcz/parcel_wrapper.cc",
+    "ipcz/pending_transaction_set.cc",
+    "ipcz/pending_transaction_set.h",
     "ipcz/ref_counted_fragment.cc",
     "ipcz/remote_router_link.cc",
     "ipcz/route_edge.cc",
     "ipcz/router.cc",
-    "ipcz/router_descriptor.cc",
     "ipcz/router_descriptor.h",
     "ipcz/router_link_state.cc",
     "ipcz/test_messages.cc",
@@ -299,7 +297,6 @@ ipcz_source_set("impl") {
     "ipcz/trap_event_dispatcher.h",
     "ipcz/trap_set.cc",
     "ipcz/trap_set.h",
-    "ipcz/validator.cc",
   ]
   public_deps = [
     ":ipcz_header",
@@ -325,7 +322,10 @@ config("ipcz_include_dir") {
 }
 
 config("ipcz_include_src_dir") {
-  include_dirs = [ "${ipcz_src_root}" ]
+  include_dirs = [
+    "${ipcz_src_root}",
+    get_path_info("${ipcz_src_root}/", "gen_dir"),
+  ]
 }
 
 ipcz_source_set("ipcz_test_support") {
@@ -370,30 +370,32 @@ ipcz_source_set("ipcz_tests_sources") {
   sources = [
     "api_test.cc",
     "box_test.cc",
+    "compile_c_test.c",
     "connect_test.cc",
     "ipcz/block_allocator_test.cc",
     "ipcz/buffer_pool_test.cc",
     "ipcz/driver_memory_test.cc",
     "ipcz/driver_object_test.cc",
     "ipcz/driver_transport_test.cc",
+    "ipcz/fragment_test.cc",
     "ipcz/message_test.cc",
     "ipcz/node_connector_test.cc",
     "ipcz/node_link_memory_test.cc",
     "ipcz/node_link_test.cc",
     "ipcz/node_test.cc",
-    "ipcz/parcel_queue_test.cc",
     "ipcz/ref_counted_fragment_test.cc",
     "ipcz/route_edge_test.cc",
     "ipcz/router_link_test.cc",
     "ipcz/sequenced_queue_test.cc",
     "merge_portals_test.cc",
-    "queueing_test.cc",
+    "parcel_test.cc",
     "reference_drivers/sync_reference_driver_test.cc",
     "remote_portal_test.cc",
     "trap_test.cc",
     "util/ref_counted_test.cc",
     "util/safe_math_test.cc",
     "util/stack_trace_test.cc",
+    "util/unique_ptr_comparator_test.cc",
   ]
 
   if (enable_multiprocess_tests) {

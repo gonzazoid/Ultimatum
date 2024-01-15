@@ -2,19 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://webui-test/mojo_webui_test_support.js';
-
-import {ModuleDescriptor, ModuleDescriptorV2, ModuleHeight} from 'chrome://new-tab-page/lazy_load.js';
+import {ModuleDescriptor} from 'chrome://new-tab-page/lazy_load.js';
 import {WindowProxy} from 'chrome://new-tab-page/new_tab_page.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {assertEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {assertEquals} from 'chrome://webui-test/chai_assert.js';
+import {fakeMetricsPrivate, MetricsTracker} from 'chrome://webui-test/metrics_test_support.js';
+import {TestMock} from 'chrome://webui-test/test_mock.js';
 
-import {fakeMetricsPrivate, MetricsTracker} from '../metrics_test_support.js';
 import {createElement, initNullModule, installMock} from '../test_support.js';
 
 suite('NewTabPageModulesModuleDescriptorTest', () => {
-  let windowProxy: TestBrowserProxy;
+  let windowProxy: TestMock<WindowProxy>;
   let metrics: MetricsTracker;
 
   setup(() => {
@@ -29,7 +27,7 @@ suite('NewTabPageModulesModuleDescriptorTest', () => {
   test('instantiate module with data', async () => {
     // Arrange.
     const element = createElement();
-    const moduleDescriptor = new ModuleDescriptor('foo', 'bar', () => {
+    const moduleDescriptor = new ModuleDescriptor('foo', () => {
       // Move time forward to simulate delay instantiating module.
       windowProxy.setResultFor('now', 128);
       return Promise.resolve(element);
@@ -53,7 +51,7 @@ suite('NewTabPageModulesModuleDescriptorTest', () => {
 
   test('instantiate module without data', async () => {
     // Arrange.
-    const moduleDescriptor = new ModuleDescriptor('foo', 'bar', initNullModule);
+    const moduleDescriptor = new ModuleDescriptor('foo', initNullModule);
 
     // Act.
     const moduleElement = await moduleDescriptor.initialize(0);
@@ -69,7 +67,7 @@ suite('NewTabPageModulesModuleDescriptorTest', () => {
   test('module load times out', async () => {
     // Arrange.
     const moduleDescriptor = new ModuleDescriptor(
-        'foo', 'bar', () => new Promise(() => {}) /* Never resolves. */);
+        'foo', () => new Promise(() => {}) /* Never resolves. */);
 
     // Act.
     const initializePromise = moduleDescriptor.initialize(123);
@@ -80,23 +78,5 @@ suite('NewTabPageModulesModuleDescriptorTest', () => {
     // Assert.
     assertEquals(null, moduleElement);
     assertEquals(123, timeout);
-  });
-
-  suite('V2', () => {
-    test('creates element on timeout', async () => {
-      // Arrange.
-      const moduleDescriptor = new ModuleDescriptorV2(
-          'foo', 'bar', ModuleHeight.SHORT,
-          () => new Promise(() => {}) /* Never resolves. */);
-
-      // Act.
-      const initializePromise = moduleDescriptor.initialize(123);
-      const [callback] = await windowProxy.whenCalled('setTimeout');
-      callback();
-      const moduleElement = await initializePromise;
-
-      // Assert.
-      assertTrue(!!moduleElement);
-    });
   });
 });

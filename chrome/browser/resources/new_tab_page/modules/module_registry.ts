@@ -2,11 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {loadTimeData} from '../i18n_setup.js';
+import {ModuleIdName} from '../new_tab_page.mojom-webui.js';
 import {NewTabPageProxy} from '../new_tab_page_proxy.js';
 
 import {Module, ModuleDescriptor} from './module_descriptor.js';
-import {descriptors, descriptorsV2} from './module_descriptors.js';
+import {descriptors} from './module_descriptors.js';
 
 /**
  * @fileoverview The module registry holds the descriptors of NTP modules and
@@ -17,11 +17,7 @@ let instance: ModuleRegistry|null = null;
 
 export class ModuleRegistry {
   static getInstance(): ModuleRegistry {
-    return instance ||
-        (instance = new ModuleRegistry(
-             loadTimeData.getBoolean('modulesRedesignedEnabled') ?
-                 descriptorsV2 :
-                 descriptors));
+    return instance || (instance = new ModuleRegistry(descriptors));
   }
 
   static setInstance(newInstance: ModuleRegistry) {
@@ -35,17 +31,32 @@ export class ModuleRegistry {
     this.descriptors_ = descriptors;
   }
 
-  getDescriptors(): ModuleDescriptor[] {
-    return this.descriptors_;
-  }
-
   /**
-   * Initializes enabled modules previously set via |registerModules| and
-   * returns the initialized modules.
+   * Initializes enabled modules as reported by `getModulesIdNames` excluding
+   * those that have been disabled for the current profile and returns the
+   * initialized modules.
    * @param timeout Timeout in milliseconds after which initialization of a
    *     particular module aborts.
    */
   async initializeModules(timeout: number): Promise<Module[]> {
+    const modulesIdNames: ModuleIdName[] =
+        (await NewTabPageProxy.getInstance().handler.getModulesIdNames()).data;
+    return this.initializeModulesHavingIds(
+        modulesIdNames.map(m => m.id), timeout);
+  }
+
+  /**
+   * Initializes a given list of modules based on the provided module ids.
+   * Serves as a convenience method for cases where the caller already knows the
+   * desired list of module ids to load.
+   *
+   * @param moduleIds A list of module ids to be leveraged when determining the
+   *     modules to be initialized.
+   * @param timeout Timeout in milliseconds after which initialization of a
+   *     particular module aborts.
+   */
+  async initializeModulesHavingIds(modulesIds: string[], timeout: number):
+      Promise<Module[]> {
     // Capture updateDisabledModules -> setDisabledModules round trip in a
     // promise for convenience.
     const disabledIds = await new Promise<string[]>((resolve, _) => {
@@ -57,8 +68,12 @@ export class ModuleRegistry {
           });
       NewTabPageProxy.getInstance().handler.updateDisabledModules();
     });
-    const descriptors =
-        this.descriptors_.filter(d => !disabledIds.includes(d.id));
+
+    const descriptorsMap: Map<string, ModuleDescriptor> =
+        new Map(this.descriptors_.map(d => [d.id, d]));
+    const descriptors: ModuleDescriptor[] =
+        modulesIds.filter(id => !disabledIds.includes(id))
+            .map(id => descriptorsMap.get(id)!);
 
     // Modules may have an updated order, e.g. because of drag&drop or a Finch
     // param. Apply the updated order such that modules without a specified
@@ -87,7 +102,13 @@ export class ModuleRegistry {
 
     const elements =
         await Promise.all(descriptors.map(d => d.initialize(timeout)));
-    return elements.map((e, i) => ({element: e, descriptor: descriptors[i]}))
-               .filter(m => !!m.element) as Module[];
+    return elements.map((e, i) => ({elements: e, descriptor: descriptors[i]}))
+        .filter(m => !!m.elements)
+        .map(m => ({
+                    elements: Array.isArray(m.elements) ? m.elements :
+                                                          [m.elements],
+                    descriptor: m.descriptor,
+                  }) as Module)
+        .filter(m => m.elements.length !== 0);
   }
 }

@@ -7,8 +7,9 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/core/common/cloud/device_management_service.h"
@@ -17,7 +18,7 @@
 
 namespace policy {
 
-class CloudPolicyClient;
+class DMAuth;
 
 // Base for common elements in JobConfigurations for the Reporting pipeline.
 // Ensures the following elements are added to each request.
@@ -64,7 +65,7 @@ class POLICY_EXPORT ReportingJobConfigurationBase
     static std::string GetNamePath();
 
    private:
-    static std::string GetStringPath(base::StringPiece leaf_name);
+    static std::string GetStringPath(std::string_view leaf_name);
 
     // Keys used in Device dictionary.
     static const char kDMToken[];
@@ -81,7 +82,7 @@ class POLICY_EXPORT ReportingJobConfigurationBase
     // Dictionary Key Name
     static const char kBrowserKey[];
 
-    static base::Value BuildBrowserDictionary(bool include_device_info);
+    static base::Value::Dict BuildBrowserDictionary(bool include_device_info);
 
     static std::string GetBrowserIdPath();
     static std::string GetUserAgentPath();
@@ -89,7 +90,7 @@ class POLICY_EXPORT ReportingJobConfigurationBase
     static std::string GetChromeVersionPath();
 
    private:
-    static std::string GetStringPath(base::StringPiece leaf_name);
+    static std::string GetStringPath(std::string_view leaf_name);
 
     // Keys used in Browser dictionary.
     static const char kBrowserId[];
@@ -122,9 +123,8 @@ class POLICY_EXPORT ReportingJobConfigurationBase
   ReportingJobConfigurationBase(
       JobType type,
       scoped_refptr<network::SharedURLLoaderFactory> factory,
-      CloudPolicyClient* client,
+      DMAuth auth_data,
       const std::string& server_url,
-      bool include_device_info,
       UploadCompleteCallback callback);
   ~ReportingJobConfigurationBase() override;
 
@@ -144,6 +144,15 @@ class POLICY_EXPORT ReportingJobConfigurationBase
   // Returns an identifying string for UMA.
   virtual std::string GetUmaString() const = 0;
 
+  // Initializes request payload including the "device" and
+  // "browser.machineUser" fields (see comment at the top of the file).
+  void InitializePayloadWithDeviceInfo(const std::string& dm_token,
+                                       const std::string& client_id);
+
+  // Initializes request payload without the "device" and "browser.machineUser"
+  // fields.
+  void InitializePayloadWithoutDeviceInfo();
+
   base::Value::Dict payload_;
 
   // Available to set additional fields by the child. An example of a context
@@ -155,10 +164,10 @@ class POLICY_EXPORT ReportingJobConfigurationBase
   UploadCompleteCallback callback_;
 
  private:
-  // Initializes request payload. If |include_device_info| is false, the
-  // "device" and "browser.machineUser" fields (see comment at the top of the
-  // file) are excluded from the payload.
-  void InitializePayload(CloudPolicyClient* client, bool include_device_info);
+  // Initializes request payload except for the "device" field. If
+  // |include_device_info| is false, the "browser.machineUser" field (see
+  // comment at the top of the file) is excluded from the payload.
+  void InitializePayload(bool include_device_info);
 
   const std::string server_url_;
 };

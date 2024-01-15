@@ -5,37 +5,59 @@
 package org.chromium.chrome.browser.ui.fast_checkout.data;
 
 import android.content.Context;
+import android.util.ArrayMap;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
+
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.ui.fast_checkout.R;
+import org.chromium.chrome.browser.ui.suggestion.Icon;
 import org.chromium.components.autofill.VirtualCardEnrollmentState;
 import org.chromium.url.GURL;
 
-import java.util.HashMap;
 import java.util.Map;
 
-/**
- * A credit card, similar to the one used by the PersonalDataManager.
- */
+/** A credit card, similar to the one used by the PersonalDataManager. */
 public class FastCheckoutCreditCard {
     // Mappings from name: chrome/browser/ui/autofill/autofill_popup_controller_utils.cc
     // Mappings to resource: chrome/browser/android/resource_id.h
-    private static final Map<String, Integer> sResourceMap = new HashMap<String, Integer>() {
-        {
-            put("americanExpressCC", R.drawable.amex_card);
-            put("dinersCC", R.drawable.diners_card);
-            put("discoverCC", R.drawable.discover_card);
-            put("eloCC", R.drawable.elo_card);
-            put("genericCC", R.drawable.ic_credit_card_black);
-            put("jcbCC", R.drawable.jcb_card);
-            put("masterCardCC", R.drawable.mc_card);
-            put("mirCC", R.drawable.mir_card);
-            put("troyCC", R.drawable.troy_card);
-            put("unionPayCC", R.drawable.unionpay_card);
-            put("visaCC", R.drawable.visa_card);
-            put("googlePay", R.drawable.google_pay);
-        }
-    };
+    private static final Map<Integer, Integer> sResourceMap;
+    private static final Map<Integer, Integer> sResourceMetadataMap;
+
+    static {
+        Map<Integer, Integer> map = new ArrayMap<>();
+        Map<Integer, Integer> metadataMap = new ArrayMap<>();
+
+        map.put(Icon.CARD_AMERICAN_EXPRESS, R.drawable.amex_card);
+        map.put(Icon.CARD_DINERS, R.drawable.diners_card);
+        map.put(Icon.CARD_DISCOVER, R.drawable.discover_card);
+        map.put(Icon.CARD_ELO, R.drawable.elo_card);
+        map.put(Icon.CARD_GENERIC, R.drawable.ic_credit_card_black);
+        map.put(Icon.CARD_JCB, R.drawable.jcb_card);
+        map.put(Icon.CARD_MASTER_CARD, R.drawable.mc_card);
+        map.put(Icon.CARD_MIR, R.drawable.mir_card);
+        map.put(Icon.CARD_TROY, R.drawable.troy_card);
+        map.put(Icon.CARD_UNION_PAY, R.drawable.unionpay_card);
+        map.put(Icon.CARD_VISA, R.drawable.visa_card);
+        map.put(Icon.GOOGLE_PAY, R.drawable.google_pay);
+
+        metadataMap.put(Icon.CARD_AMERICAN_EXPRESS, R.drawable.amex_metadata_card);
+        metadataMap.put(Icon.CARD_DINERS, R.drawable.diners_metadata_card);
+        metadataMap.put(Icon.CARD_DISCOVER, R.drawable.discover_metadata_card);
+        metadataMap.put(Icon.CARD_ELO, R.drawable.elo_metadata_card);
+        metadataMap.put(Icon.CARD_GENERIC, R.drawable.ic_metadata_credit_card);
+        metadataMap.put(Icon.CARD_JCB, R.drawable.jcb_metadata_card);
+        metadataMap.put(Icon.CARD_MASTER_CARD, R.drawable.mc_metadata_card);
+        metadataMap.put(Icon.CARD_MIR, R.drawable.mir_metadata_card);
+        metadataMap.put(Icon.CARD_TROY, R.drawable.troy_metadata_card);
+        metadataMap.put(Icon.CARD_UNION_PAY, R.drawable.unionpay_metadata_card);
+        metadataMap.put(Icon.CARD_VISA, R.drawable.visa_metadata_card);
+        metadataMap.put(Icon.GOOGLE_PAY, R.drawable.google_pay);
+
+        sResourceMap = map;
+        sResourceMetadataMap = metadataMap;
+    }
+
     private final String mGUID;
     private final String mOrigin;
     private final boolean mIsLocal;
@@ -46,7 +68,7 @@ public class FastCheckoutCreditCard {
     private final String mMonth;
     private final String mYear;
     private final String mBasicCardIssuerNetwork;
-    private final String mIssuerIconString;
+    private final @Icon int mIssuerIcon;
     private final String mBillingAddressId;
     private final String mServerId;
     private final long mInstrumentId;
@@ -56,11 +78,25 @@ public class FastCheckoutCreditCard {
     private final String mProductDescription;
 
     @CalledByNative
-    public FastCheckoutCreditCard(String guid, String origin, boolean isLocal, boolean isCached,
-            String name, String number, String obfuscatedNumber, String month, String year,
-            String basicCardIssuerNetwork, String issuerIconString, String billingAddressId,
-            String serverId, long instrumentId, String nickname, GURL cardArtUrl,
-            @VirtualCardEnrollmentState int virtualCardEnrollmentState, String productDescription) {
+    public FastCheckoutCreditCard(
+            String guid,
+            String origin,
+            boolean isLocal,
+            boolean isCached,
+            String name,
+            String number,
+            String obfuscatedNumber,
+            String month,
+            String year,
+            String basicCardIssuerNetwork,
+            @Icon int issuerIcon,
+            String billingAddressId,
+            String serverId,
+            long instrumentId,
+            String nickname,
+            GURL cardArtUrl,
+            @VirtualCardEnrollmentState int virtualCardEnrollmentState,
+            String productDescription) {
         mGUID = guid;
         mOrigin = origin;
         mIsLocal = isLocal;
@@ -71,7 +107,7 @@ public class FastCheckoutCreditCard {
         mMonth = month;
         mYear = year;
         mBasicCardIssuerNetwork = basicCardIssuerNetwork;
-        mIssuerIconString = issuerIconString;
+        mIssuerIcon = issuerIcon;
         mBillingAddressId = billingAddressId;
         mServerId = serverId;
         mInstrumentId = instrumentId;
@@ -130,8 +166,8 @@ public class FastCheckoutCreditCard {
         return mBasicCardIssuerNetwork;
     }
 
-    public String getIssuerIconString() {
-        return mIssuerIconString;
+    public @Icon int getIssuerIcon() {
+        return mIssuerIcon;
     }
 
     @CalledByNative
@@ -176,11 +212,17 @@ public class FastCheckoutCreditCard {
     }
 
     public int getIssuerIconDrawableId() {
-        String issuerIconDrawable = getIssuerIconString();
-        if (sResourceMap.containsKey(issuerIconDrawable)) {
-            return sResourceMap.get(issuerIconDrawable);
+        @Icon int issuerIconDrawable = getIssuerIcon();
+        if (ChromeFeatureList.isEnabled(
+                ChromeFeatureList.AUTOFILL_ENABLE_NEW_CARD_ART_AND_NETWORK_IMAGES)) {
+            if (sResourceMetadataMap.containsKey(issuerIconDrawable)) {
+                return sResourceMetadataMap.get(issuerIconDrawable);
+            }
         } else {
-            return R.drawable.ic_credit_card_black;
+            if (sResourceMap.containsKey(issuerIconDrawable)) {
+                return sResourceMap.get(issuerIconDrawable);
+            }
         }
+        return R.drawable.ic_credit_card_black;
     }
 }

@@ -15,18 +15,18 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
+import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowBinder;
 
-import org.chromium.testing.local.LocalRobolectricTestRunner;
 import org.chromium.webapk.lib.runtime_library.IWebApkApi;
 import org.chromium.webapk.lib.runtime_library.WebApkServiceImpl;
 
 import java.lang.reflect.Field;
 
 /** Tests for WebApkServiceImplWrapper. */
-@RunWith(LocalRobolectricTestRunner.class)
+@RunWith(RobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class WebApkServiceImplWrapperTest {
     private static final String FUNCTION_NAME_NOTIFY_NOTIFICATION =
@@ -99,14 +99,15 @@ public class WebApkServiceImplWrapperTest {
         ShadowBinder.setCallingUid(HOST_BROWSER_UID);
     }
 
-    /**
-     * Tests that {@link WebApkServiceImplWrapper#notifyNotification()} is called.
-     */
+    /** Tests that {@link WebApkServiceImplWrapper#notifyNotification()} is called. */
     @Test
     public void testNotifyNotificationMethodIsCalledOnWrapper() {
         try {
-            mWrapper.onTransact(getApiCodeHelper(FUNCTION_NAME_NOTIFY_NOTIFICATION),
-                    Mockito.mock(Parcel.class), Mockito.mock(Parcel.class), 0);
+            mWrapper.onTransact(
+                    getApiCodeHelper(FUNCTION_NAME_NOTIFY_NOTIFICATION),
+                    Mockito.mock(Parcel.class),
+                    Mockito.mock(Parcel.class),
+                    0);
             Assert.assertTrue(mWrapper.mIsCalled);
             Assert.assertFalse(mMockWebApkServiceImpl.mIsCalled);
         } catch (Exception e) {
@@ -122,8 +123,11 @@ public class WebApkServiceImplWrapperTest {
     @Test
     public void testCancelNotificationMethodIsNotCalledOnWrapper() {
         try {
-            mWrapper.onTransact(getApiCodeHelper(FUNCTION_NAME_CANCEL_NOTIFICATION),
-                    Mockito.mock(Parcel.class), Mockito.mock(Parcel.class), 0);
+            mWrapper.onTransact(
+                    getApiCodeHelper(FUNCTION_NAME_CANCEL_NOTIFICATION),
+                    Mockito.mock(Parcel.class),
+                    Mockito.mock(Parcel.class),
+                    0);
             Assert.assertFalse(mWrapper.mIsCalled);
             Assert.assertTrue(mMockWebApkServiceImpl.mIsCalled);
         } catch (Exception e) {

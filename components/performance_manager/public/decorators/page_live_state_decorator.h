@@ -41,11 +41,20 @@ class PageLiveStateDecorator : public GraphOwnedDefaultImpl,
   class Delegate {
    public:
     virtual ~Delegate() = default;
+
     // Invoked on the main thread. Returns the relevant content settings for
     // `url` in the web contents' profile.
     virtual std::map<ContentSettingsType, ContentSetting>
-    GetContentSettingsForUrl(WebContentsProxy web_contents_proxy,
+    GetContentSettingsForUrl(content::WebContents* web_contents,
                              const GURL& url) = 0;
+
+    using GetContentSettingsForUrlCallback = base::OnceCallback<void(
+        base::WeakPtr<const PageNode>,
+        const std::map<ContentSettingsType, ContentSetting>&)>;
+
+    void GetContentSettingsAndReply(WebContentsProxy web_contents_proxy,
+                                    const GURL& url,
+                                    GetContentSettingsForUrlCallback callback);
   };
 
   // This object should only be used via its static methods.
@@ -86,9 +95,15 @@ class PageLiveStateDecorator : public GraphOwnedDefaultImpl,
   static void SetIsActiveTab(content::WebContents* contents,
                              bool is_active_tab);
 
+  static void SetIsPinnedTab(content::WebContents* contents,
+                             bool is_pinned_tab);
+
   static void SetContentSettings(
       content::WebContents* contents,
       std::map<ContentSettingsType, ContentSetting> settings);
+
+  static void SetIsDevToolsOpen(content::WebContents* contents,
+                                bool is_dev_tools_open);
 
  private:
   friend class PageLiveStateDecoratorTest;
@@ -98,14 +113,16 @@ class PageLiveStateDecorator : public GraphOwnedDefaultImpl,
   void OnTakenFromGraph(Graph* graph) override;
 
   // NodeDataDescriber implementation:
-  base::Value DescribePageNodeData(const PageNode* node) const override;
+  base::Value::Dict DescribePageNodeData(const PageNode* node) const override;
 
   // PageNode::ObserverDefaultImpl implementation:
   void OnMainFrameUrlChanged(const PageNode* page_node) override;
+  void OnTitleUpdated(const PageNode* page_node) override;
+  void OnFaviconUpdated(const PageNode* page_node) override;
 
   void OnContentSettingsReceived(
-      base::WeakPtr<const PageNode> page_node,
       const GURL& url,
+      base::WeakPtr<const PageNode> page_node,
       const std::map<ContentSettingsType, ContentSetting>& settings);
 
   base::SequenceBound<Delegate> delegate_;
@@ -133,7 +150,13 @@ class PageLiveStateDecorator::Data {
   virtual bool IsAutoDiscardable() const = 0;
   virtual bool WasDiscarded() const = 0;
   virtual bool IsActiveTab() const = 0;
+  virtual bool IsPinnedTab() const = 0;
   virtual bool IsContentSettingTypeAllowed(ContentSettingsType type) const = 0;
+  virtual bool IsDevToolsOpen() const = 0;
+
+  // TODO(https://crbug.com/1418410): Add a notifier for this to
+  // PageLiveStateObserver.
+  virtual bool UpdatedTitleOrFaviconInBackground() const = 0;
 
   static const Data* FromPageNode(const PageNode* page_node);
   static Data* GetOrCreateForPageNode(const PageNode* page_node);
@@ -148,8 +171,11 @@ class PageLiveStateDecorator::Data {
   virtual void SetIsAutoDiscardableForTesting(bool value) = 0;
   virtual void SetWasDiscardedForTesting(bool value) = 0;
   virtual void SetIsActiveTabForTesting(bool value) = 0;
+  virtual void SetIsPinnedTabForTesting(bool value) = 0;
   virtual void SetContentSettingsForTesting(
       const std::map<ContentSettingsType, ContentSetting>& settings) = 0;
+  virtual void SetIsDevToolsOpenForTesting(bool value) = 0;
+  virtual void SetUpdatedTitleOrFaviconInBackgroundForTesting(bool value) = 0;
 
  protected:
   base::ObserverList<PageLiveStateObserver> observers_
@@ -176,7 +202,35 @@ class PageLiveStateObserver : public base::CheckedObserver {
   virtual void OnIsAutoDiscardableChanged(const PageNode* page_node) = 0;
   virtual void OnWasDiscardedChanged(const PageNode* page_node) = 0;
   virtual void OnIsActiveTabChanged(const PageNode* page_node) = 0;
+  virtual void OnIsPinnedTabChanged(const PageNode* page_node) = 0;
   virtual void OnContentSettingsChanged(const PageNode* page_node) = 0;
+  virtual void OnIsDevToolsOpenChanged(const PageNode* page_node) = 0;
+};
+
+class PageLiveStateObserverDefaultImpl : public PageLiveStateObserver {
+ public:
+  PageLiveStateObserverDefaultImpl();
+  ~PageLiveStateObserverDefaultImpl() override;
+  PageLiveStateObserverDefaultImpl(
+      const PageLiveStateObserverDefaultImpl& other) = delete;
+  PageLiveStateObserverDefaultImpl& operator=(
+      const PageLiveStateObserverDefaultImpl&) = delete;
+
+  // PageLiveStateObserver:
+  void OnIsConnectedToUSBDeviceChanged(const PageNode* page_node) override {}
+  void OnIsConnectedToBluetoothDeviceChanged(
+      const PageNode* page_node) override {}
+  void OnIsCapturingVideoChanged(const PageNode* page_node) override {}
+  void OnIsCapturingAudioChanged(const PageNode* page_node) override {}
+  void OnIsBeingMirroredChanged(const PageNode* page_node) override {}
+  void OnIsCapturingWindowChanged(const PageNode* page_node) override {}
+  void OnIsCapturingDisplayChanged(const PageNode* page_node) override {}
+  void OnIsAutoDiscardableChanged(const PageNode* page_node) override {}
+  void OnWasDiscardedChanged(const PageNode* page_node) override {}
+  void OnIsActiveTabChanged(const PageNode* page_node) override {}
+  void OnIsPinnedTabChanged(const PageNode* page_node) override {}
+  void OnContentSettingsChanged(const PageNode* page_node) override {}
+  void OnIsDevToolsOpenChanged(const PageNode* page_node) override {}
 };
 
 }  // namespace performance_manager

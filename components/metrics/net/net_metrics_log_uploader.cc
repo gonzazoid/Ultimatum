@@ -7,14 +7,15 @@
 #include <sstream>
 
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/statistics_recorder.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "components/encrypted_messages/encrypted_message.pb.h"
 #include "components/encrypted_messages/message_encrypter.h"
+#include "components/metrics/metrics_log.h"
 #include "components/metrics/metrics_log_uploader.h"
 #include "net/base/load_flags.h"
 #include "net/base/url_util.h"
@@ -22,7 +23,6 @@
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
-#include "services/network/public/cpp/simple_url_loader_throttle.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "third_party/metrics_proto/chrome_user_metrics_extension.pb.h"
 #include "third_party/metrics_proto/reporting_info.pb.h"
@@ -42,11 +42,17 @@ const uint8_t kServerPublicKey[] = {
 
 const uint32_t kServerPublicKeyVersion = 1;
 
+constexpr char kNoUploadUrlsReasonMsg[] =
+    "No server upload URLs specified. Will not attempt to retransmit.";
+
 net::NetworkTrafficAnnotationTag GetNetworkTrafficAnnotation(
-    const metrics::MetricsLogUploader::MetricServiceType& service_type) {
+    const metrics::MetricsLogUploader::MetricServiceType& service_type,
+    const metrics::LogMetadata& log_metadata) {
   // The code in this function should remain so that we won't need a default
   // case that does not have meaningful annotation.
-  if (service_type == metrics::MetricsLogUploader::UMA) {
+  // Structured Metrics is an UMA consented metric service.
+  if (service_type == metrics::MetricsLogUploader::UMA ||
+      service_type == metrics::MetricsLogUploader::STRUCTURED_METRICS) {
     return net::DefineNetworkTrafficAnnotation("metrics_report_uma", R"(
         semantics {
           sender: "Metrics UMA Log Uploader"
@@ -81,6 +87,9 @@ net::NetworkTrafficAnnotationTag GetNetworkTrafficAnnotation(
         })");
   }
   DCHECK_EQ(service_type, metrics::MetricsLogUploader::UKM);
+
+  // TODO(b/308003806) Create an annotation for AppKM.
+
   return net::DefineNetworkTrafficAnnotation("metrics_report_ukm", R"(
       semantics {
         sender: "Metrics UKM Log Uploader"
@@ -154,8 +163,9 @@ bool EncryptString(const std::string& plaintext, std::string* encrypted) {
 bool EncryptAndBase64EncodeString(const std::string& plaintext,
                                   std::string* encoded) {
   std::string encrypted_text;
-  if (!EncryptString(plaintext, &encrypted_text))
+  if (!EncryptString(plaintext, &encrypted_text)) {
     return false;
+  }
 
   base::Base64Encode(encrypted_text, encoded);
   return true;
@@ -163,8 +173,9 @@ bool EncryptAndBase64EncodeString(const std::string& plaintext,
 
 #ifndef NDEBUG
 void LogUploadingHistograms(const std::string& compressed_log_data) {
-  if (!VLOG_IS_ON(2))
+  if (!VLOG_IS_ON(2)) {
     return;
+  }
 
   std::string uncompressed;
   if (!compression::GzipUncompress(compressed_log_data, &uncompressed)) {
@@ -182,8 +193,9 @@ void LogUploadingHistograms(const std::string& compressed_log_data) {
       base::StatisticsRecorder::GetHistograms();
   auto get_histogram_name = [&](uint64_t name_hash) -> std::string {
     for (base::HistogramBase* histogram : histograms) {
-      if (histogram->name_hash() == name_hash)
+      if (histogram->name_hash() == name_hash) {
         return histogram->histogram_name();
+      }
     }
     return base::StrCat({"unnamed ", base::NumberToString(name_hash)});
   };
@@ -217,11 +229,12 @@ NetMetricsLogUploader::NetMetricsLogUploader(
     base::StringPiece mime_type,
     MetricsLogUploader::MetricServiceType service_type,
     const MetricsLogUploader::UploadCallback& on_upload_complete)
-    : url_loader_factory_(std::move(url_loader_factory)),
-      server_url_(server_url),
-      mime_type_(mime_type.data(), mime_type.size()),
-      service_type_(service_type),
-      on_upload_complete_(on_upload_complete) {}
+    : NetMetricsLogUploader(url_loader_factory,
+                            server_url,
+                            /*insecure_server_url=*/GURL(),
+                            mime_type,
+                            service_type,
+                            on_upload_complete) {}
 
 NetMetricsLogUploader::NetMetricsLogUploader(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
@@ -240,6 +253,7 @@ NetMetricsLogUploader::NetMetricsLogUploader(
 NetMetricsLogUploader::~NetMetricsLogUploader() = default;
 
 void NetMetricsLogUploader::UploadLog(const std::string& compressed_log_data,
+                                      const LogMetadata& log_metadata,
                                       const std::string& log_hash,
                                       const std::string& log_signature,
                                       const ReportingInfo& reporting_info) {
@@ -250,16 +264,17 @@ void NetMetricsLogUploader::UploadLog(const std::string& compressed_log_data,
       reporting_info.last_error_code() != 0 &&
       reporting_info.last_attempt_was_https() &&
       !insecure_server_url_.is_empty()) {
-    UploadLogToURL(compressed_log_data, log_hash, log_signature, reporting_info,
-                   insecure_server_url_);
+    UploadLogToURL(compressed_log_data, log_metadata, log_hash, log_signature,
+                   reporting_info, insecure_server_url_);
     return;
   }
-  UploadLogToURL(compressed_log_data, log_hash, log_signature, reporting_info,
-                 server_url_);
+  UploadLogToURL(compressed_log_data, log_metadata, log_hash, log_signature,
+                 reporting_info, server_url_);
 }
 
 void NetMetricsLogUploader::UploadLogToURL(
     const std::string& compressed_log_data,
+    const LogMetadata& log_metadata,
     const std::string& log_hash,
     const std::string& log_signature,
     const ReportingInfo& reporting_info,
@@ -324,12 +339,9 @@ void NetMetricsLogUploader::UploadLogToURL(
   }
 
   net::NetworkTrafficAnnotationTag traffic_annotation =
-      GetNetworkTrafficAnnotation(service_type_);
+      GetNetworkTrafficAnnotation(service_type_, log_metadata);
   url_loader_ = network::SimpleURLLoader::Create(std::move(resource_request),
                                                  traffic_annotation);
-
-  if (network::SimpleURLLoaderThrottle::IsBatchingEnabled(traffic_annotation))
-    url_loader_->SetAllowBatching();
 
   if (should_encrypt) {
     std::string encrypted_message;
@@ -353,24 +365,40 @@ void NetMetricsLogUploader::UploadLogToURL(
 }
 
 void NetMetricsLogUploader::HTTPFallbackAborted() {
-  // The callbark is called with: a response code of 0 to indicate no upload was
+  // The callback is called with: a response code of 0 to indicate no upload was
   // attempted, a generic net error, and false to indicate it wasn't a secure
-  // connection.
-  on_upload_complete_.Run(0, net::ERR_FAILED, false);
+  // connection. If no server URLs were specified, discard the log and do not
+  // attempt retransmission.
+  bool force_discard =
+      server_url_.is_empty() && insecure_server_url_.is_empty();
+  base::StringPiece force_discard_reason =
+      force_discard ? kNoUploadUrlsReasonMsg : "";
+  on_upload_complete_.Run(/*response_code=*/0, net::ERR_FAILED,
+                          /*was_https=*/false, force_discard,
+                          force_discard_reason);
 }
 
 // The callback is only invoked if |url_loader_| it was bound against is alive.
 void NetMetricsLogUploader::OnURLLoadComplete(
     std::unique_ptr<std::string> response_body) {
   int response_code = -1;
-  if (url_loader_->ResponseInfo() && url_loader_->ResponseInfo()->headers)
+  if (url_loader_->ResponseInfo() && url_loader_->ResponseInfo()->headers) {
     response_code = url_loader_->ResponseInfo()->headers->response_code();
+  }
 
   int error_code = url_loader_->NetError();
 
   bool was_https = url_loader_->GetFinalURL().SchemeIs(url::kHttpsScheme);
   url_loader_.reset();
-  on_upload_complete_.Run(response_code, error_code, was_https);
+
+  // If no server URLs were specified, discard the log and do not attempt
+  // retransmission.
+  bool force_discard =
+      server_url_.is_empty() && insecure_server_url_.is_empty();
+  base::StringPiece force_discard_reason =
+      force_discard ? kNoUploadUrlsReasonMsg : "";
+  on_upload_complete_.Run(response_code, error_code, was_https, force_discard,
+                          force_discard_reason);
 }
 
 }  // namespace metrics

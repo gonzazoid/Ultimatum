@@ -1,31 +1,20 @@
-// Copyright 2019 The Chromium Authors
+// Copyright 2023 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_WEB_FIND_IN_PAGE_FIND_IN_PAGE_MANAGER_IMPL_H_
 #define IOS_WEB_FIND_IN_PAGE_FIND_IN_PAGE_MANAGER_IMPL_H_
 
-#include <string>
-
-#include "base/memory/weak_ptr.h"
-#import "ios/web/find_in_page/find_in_page_request.h"
+#import "base/timer/timer.h"
 #import "ios/web/public/find_in_page/find_in_page_manager.h"
-#include "ios/web/public/web_state_observer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#import "ios/web/public/web_state_observer.h"
 
-@class NSString;
+#import "base/memory/weak_ptr.h"
 
-namespace {
-// Find in Page UserAction keys.
-const char kFindActionName[] = "Find";
-const char kFindNextActionName[] = "FindNext";
-const char kFindPreviousActionName[] = "FindPrevious";
-}  // namespace
+@protocol CRWFindInteraction;
+@protocol CRWFindSession;
 
 namespace web {
-
-class WebState;
-class WebFrame;
 
 class FindInPageManagerImpl : public FindInPageManager,
                               public web::WebStateObserver {
@@ -33,12 +22,7 @@ class FindInPageManagerImpl : public FindInPageManager,
   explicit FindInPageManagerImpl(web::WebState* web_state);
   ~FindInPageManagerImpl() override;
 
-  // Need to overload FindInPageManager::CreateForWebState() as the default
-  // implementation inherited from WebStateUserData<FindInPageManager> would
-  // create a FindInPageManager which is a pure abstract class.
-  static void CreateForWebState(WebState* web_state);
-
-  // FindInPageManager overrides
+  // AbstractFindInPageManager:
   void Find(NSString* query, FindInPageOptions options) override;
   void StopFinding() override;
   bool CanSearchContent() override;
@@ -47,45 +31,67 @@ class FindInPageManagerImpl : public FindInPageManager,
 
  private:
   friend class web::WebStateUserData<FindInPageManagerImpl>;
+  friend class FindInPageManagerImplTest;
+
+  // Lazily creates the Find interaction in the web state and returns it. Should
+  // only be called if `use_find_interaction_`.
+  id<CRWFindInteraction> GetOrCreateFindInteraction() API_AVAILABLE(ios(16));
 
   // Executes find logic for `FindInPageSearch` option.
-  void StartSearch(NSString* query);
+  void StartSearch(NSString* query) API_AVAILABLE(ios(16));
   // Executes find logic for `FindInPageNext` option.
-  void SelectNextMatch();
+  void SelectNextMatch() API_AVAILABLE(ios(16));
   // Executes find logic for `FindInPagePrevious` option.
-  void SelectPreviousMatch();
-  // Determines whether find is finished. If not, calls pumpSearch to
-  // continue. If it is, calls UpdateFrameMatchesCount(). If find returned
-  // null, then does nothing more.
-  void ProcessFindInPageResult(const std::string& frame_id,
-                               const int request_id,
-                               absl::optional<int> result);
-  // Calls delegate DidHighlightMatches() method if `delegate_` is set and
-  // starts a FindInPageNext find. Called when the last frame returns results
-  // from a Find request.
-  void LastFindRequestCompleted();
-  // Calls delegate DidSelectMatch() method to pass back index selected if
-  // `delegate_` is set. `result` is a byproduct of using base::BindOnce() to
-  // call this method after making a web_frame->CallJavaScriptFunction() call.
-  void SelectDidFinish(const base::Value* result);
-  // Executes highlightResult() JavaScript function in frame which contains the
-  // currently selected match.
-  void SelectCurrentMatch();
+  void SelectPreviousMatch() API_AVAILABLE(ios(16));
+  // Executes `StopFinding` logic.
+  void StopSearch() API_AVAILABLE(ios(16));
+
+  // Returns the currently active Find session if any. If there is a Find
+  // interaction in the web state, then its active Find session is returned. If
+  // not, `find_session_` is returned.
+  id<CRWFindSession> GetActiveFindSession() API_AVAILABLE(ios(16));
+  // Start calling `PollActiveFindSession` repeatedly to report Find session
+  // results to `delegate_` using `find_session_polling_timer_`.
+  void StartPollingActiveFindSession() API_AVAILABLE(ios(16));
+  // Stop calling `PollActiveFindSession` repeatedly using
+  // `find_session_polling_timer_`.
+  void StopPollingActiveFindSession() API_AVAILABLE(ios(16));
+  // Report the current Find session's results to `delegate_`.
+  void PollActiveFindSession() API_AVAILABLE(ios(16));
 
   // WebStateObserver overrides
-  void WebFrameDidBecomeAvailable(WebState* web_state,
-                                  WebFrame* web_frame) override;
-  void WebFrameWillBecomeUnavailable(WebState* web_state,
-                                     WebFrame* web_frame) override;
+  void WasShown(WebState* web_state) override;
+  void WasHidden(WebState* web_state) override;
   void WebStateDestroyed(WebState* web_state) override;
 
  protected:
-  // Holds the state of the most recent find in page request.
-  FindInPageRequest last_find_request_;
+  // Last value given to `StartSearch`. This is used in `PollActiveFindSession`
+  // so a query value can be provided to the delegate.
+  NSString* current_query_ = nil;
+  // Last result count reported to the delegate through `DidHighlightMatches`.
+  // This is used to ensure nothing is reported if the value has not changed.
+  NSInteger current_result_count_ = -1;
+  // Last highlighted result index reported to the delegate through
+  // `DidSelectMatch`. This is used to ensure nothing is reported if the value
+  // has not changed.
+  NSInteger current_highlighted_result_index_ = NSNotFound;
+  // Timer started in `StartPollingActiveFindSession()` and stopped in
+  // `StopPollingActiveFindSession()` to periodically call
+  // `PollActiveFindSession()` so as to report any changes in the state of the
+  // active Find session to the delegate.
+  base::RepeatingTimer find_session_polling_timer_;
+  // Delay between each call to `PollActiveFindSession()`.
+  base::TimeDelta poll_active_find_session_delay_;
+
+  // Current Find session if `use_find_interaction_` is not `true`. Instantiated
+  // in `StartSearch` and set back to `nil` in `StopSearch`.
+  id<CRWFindSession> find_session_ API_AVAILABLE(ios(16)) = nil;
+
   FindInPageManagerDelegate* delegate_ = nullptr;
   web::WebState* web_state_ = nullptr;
   base::WeakPtrFactory<FindInPageManagerImpl> weak_factory_;
 };
+
 }  // namespace web
 
 #endif  // IOS_WEB_FIND_IN_PAGE_FIND_IN_PAGE_MANAGER_IMPL_H_

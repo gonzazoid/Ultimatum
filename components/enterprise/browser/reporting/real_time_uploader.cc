@@ -8,7 +8,8 @@
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/task/bind_post_task.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "components/prefs/pref_service.h"
 
@@ -27,9 +28,9 @@ std::unique_ptr<RealTimeUploader> RealTimeUploader::Create(
 }
 
 RealTimeUploader::RealTimeUploader(reporting::Priority priority)
-    : report_queue_(
-          nullptr,
-          base::OnTaskRunnerDeleter(base::SequencedTaskRunnerHandle::Get())),
+    : report_queue_(nullptr,
+                    base::OnTaskRunnerDeleter(
+                        base::SequencedTaskRunner::GetCurrentDefault())),
       report_priority_(priority) {}
 
 RealTimeUploader::~RealTimeUploader() = default;
@@ -48,7 +49,7 @@ void RealTimeUploader::Upload(
   report_queue_->Enqueue(
       std::move(report), report_priority_,
       base::BindPostTask(
-          base::ThreadTaskRunnerHandle::Get(),
+          base::SingleThreadTaskRunner::GetCurrentDefault(),
           base::BindOnce(&RealTimeUploader::OnReportEnqueued,
                          weak_factory_.GetWeakPtr(), std::move(callback))));
 }
@@ -67,23 +68,23 @@ void RealTimeUploader::CreateReportQueue(const std::string& dm_token,
       dm_token, destination,
       base::BindRepeating([]() { return reporting::Status::StatusOK(); }));
 
-  if (!config.ok()) {
+  if (!config.has_value()) {
     // No special handler as we never record reporting queue config creation
     // failure.
     LOG(ERROR) << "Failed to create CBCM reporting queue config: "
-               << config.status();
+               << config.error();
     return;
   }
 
   auto report_queue = reporting::ReportQueueProvider::CreateSpeculativeQueue(
-      std::move(config.ValueOrDie()));
-  if (!report_queue.ok()) {
+      std::move(config.value()));
+  if (!report_queue.has_value()) {
     // No special handler as we never record reporting queue creation failure.
     LOG(ERROR) << "Failed to create CBCM reporting queue. "
-               << report_queue.status();
+               << report_queue.error();
     return;
   }
-  report_queue_ = std::move(report_queue.ValueOrDie());
+  report_queue_ = std::move(report_queue.value());
 #else
   NOTREACHED();
 #endif  // !BUILDFLAG(IS_IOS)

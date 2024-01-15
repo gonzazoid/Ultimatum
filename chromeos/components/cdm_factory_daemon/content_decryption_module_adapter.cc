@@ -6,9 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "chromeos/components/cdm_factory_daemon/chromeos_cdm_factory.h"
 #include "media/base/cdm_promise.h"
@@ -45,7 +46,7 @@ ContentDecryptionModuleAdapter::ContentDecryptionModuleAdapter(
       session_closed_cb_(session_closed_cb),
       session_keys_change_cb_(session_keys_change_cb),
       session_expiration_update_cb_(session_expiration_update_cb),
-      mojo_task_runner_(base::SequencedTaskRunnerHandle::Get()) {
+      mojo_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {
   DVLOG(1) << "Created ContentDecryptionModuleAdapter";
   cros_cdm_remote_.set_disconnect_handler(
       base::BindOnce(&ContentDecryptionModuleAdapter::OnConnectionError,
@@ -263,6 +264,21 @@ bool ContentDecryptionModuleAdapter::IsRemoteCdm() const {
   return false;
 }
 
+void ContentDecryptionModuleAdapter::AllocateSecureBuffer(
+    uint32_t size,
+    AllocateSecureBufferCB callback) {
+  ChromeOsCdmFactory::AllocateSecureBuffer(size, std::move(callback));
+}
+
+void ContentDecryptionModuleAdapter::ParseEncryptedSliceHeader(
+    uint64_t secure_handle,
+    uint32_t offset,
+    const std::vector<uint8_t>& stream_data,
+    ParseEncryptedSliceHeaderCB callback) {
+  ChromeOsCdmFactory::ParseEncryptedSliceHeader(
+      secure_handle, offset, stream_data, std::move(callback));
+}
+
 void ContentDecryptionModuleAdapter::OnSessionMessage(
     const std::string& session_id,
     media::CdmMessageType message_type,
@@ -302,7 +318,7 @@ void ContentDecryptionModuleAdapter::OnSessionExpirationUpdate(
     double new_expiry_time_sec) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   session_expiration_update_cb_.Run(
-      session_id, base::Time::FromDoubleT(new_expiry_time_sec));
+      session_id, base::Time::FromSecondsSinceUnixEpoch(new_expiry_time_sec));
 }
 
 void ContentDecryptionModuleAdapter::Decrypt(
@@ -335,6 +351,7 @@ void ContentDecryptionModuleAdapter::Decrypt(
         std::vector<uint8_t>(encrypted->data(),
                              encrypted->data() + encrypted->data_size()),
         nullptr, true,
+        encrypted->has_side_data() ? encrypted->side_data()->secure_handle : 0,
         base::BindOnce(&ContentDecryptionModuleAdapter::OnDecrypt,
                        base::Unretained(this), stream_type, encrypted,
                        std::move(decrypt_cb)));
@@ -358,6 +375,7 @@ void ContentDecryptionModuleAdapter::Decrypt(
       std::vector<uint8_t>(encrypted->data(),
                            encrypted->data() + encrypted->data_size()),
       decrypt_config->Clone(), stream_type == Decryptor::kVideo,
+      encrypted->has_side_data() ? encrypted->side_data()->secure_handle : 0,
       base::BindOnce(&ContentDecryptionModuleAdapter::OnDecrypt,
                      base::Unretained(this), stream_type, encrypted,
                      std::move(decrypt_cb)));
@@ -499,6 +517,13 @@ void ContentDecryptionModuleAdapter::OnDecrypt(
     return;
   }
 
+  // If we decrypted to secure memory, then just send the original buffer back
+  // because the result is stored in the secure world.
+  if (encrypted->has_side_data() && encrypted->side_data()->secure_handle) {
+    std::move(decrypt_cb).Run(media::Decryptor::kSuccess, std::move(encrypted));
+    return;
+  }
+
   scoped_refptr<media::DecoderBuffer> decrypted =
       media::DecoderBuffer::CopyFrom(decrypted_data.data(),
                                      decrypted_data.size());
@@ -506,8 +531,7 @@ void ContentDecryptionModuleAdapter::OnDecrypt(
   decrypted->set_timestamp(encrypted->timestamp());
   decrypted->set_duration(encrypted->duration());
   decrypted->set_is_key_frame(encrypted->is_key_frame());
-  decrypted->CopySideDataFrom(encrypted->side_data(),
-                              encrypted->side_data_size());
+  decrypted->set_side_data(encrypted->side_data());
 
   if (decrypt_config_out)
     decrypted->set_decrypt_config(std::move(decrypt_config_out));

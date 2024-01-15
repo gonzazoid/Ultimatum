@@ -4,12 +4,14 @@
 
 import("//build/config/android/config.gni")
 import("//build/config/android/rules.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 android_library("java") {
   visibility = [
     ":*",
     "//chrome/android:chrome_all_java",
   ]
+  srcjar_deps = [ ":jni_headers" ]
   sources = [
     "java/src/org/chromium/chrome/browser/ui/autofill/AuthenticatorOptionsAdapter.java",
     "java/src/org/chromium/chrome/browser/ui/autofill/AuthenticatorSelectionDialog.java",
@@ -23,20 +25,21 @@ android_library("java") {
     "java/src/org/chromium/chrome/browser/ui/autofill/OtpVerificationDialogView.java",
     "java/src/org/chromium/chrome/browser/ui/autofill/OtpVerificationDialogViewBinder.java",
     "java/src/org/chromium/chrome/browser/ui/autofill/data/AuthenticatorOption.java",
-    "java/src/org/chromium/chrome/browser/ui/autofill/data/CardUnmaskChallengeOptionType.java",
   ]
   deps = [
     ":java_resources",
     ":jni_headers",
     "//base:base_java",
-    "//base:jni_java",
     "//build/android:build_java",
+    "//chrome/browser/flags:java",
+    "//components/autofill/android:main_autofill_java",
     "//third_party/androidx:androidx_annotation_annotation_java",
     "//third_party/androidx:androidx_core_core_java",
     "//third_party/androidx:androidx_recyclerview_recyclerview_java",
+    "//third_party/jni_zero:jni_zero_java",
     "//ui/android:ui_java",
   ]
-  annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
+
   resources_package = "org.chromium.chrome.browser.ui.autofill.internal"
 }
 
@@ -54,6 +57,7 @@ generate_jni("jni_headers") {
 }
 
 robolectric_library("junit") {
+  resources_package = "org.chromium.chrome.browser.ui.autofill.internal"
   sources = [
     "java/src/org/chromium/chrome/browser/ui/autofill/AuthenticatorSelectionDialogBridgeTest.java",
     "java/src/org/chromium/chrome/browser/ui/autofill/AuthenticatorSelectionDialogTest.java",
@@ -63,13 +67,19 @@ robolectric_library("junit") {
   ]
   deps = [
     ":java",
+    ":java_resources",
     "//base:base_java_test_support",
     "//base:base_junit_test_support",
     "//base/test:test_support_java",
+    "//chrome/browser/flags:java",
+    "//chrome/test/android:chrome_java_test_support_common",
+    "//components/autofill/android:main_autofill_java",
+    "//third_party/androidx:androidx_core_core_java",
     "//third_party/androidx:androidx_recyclerview_recyclerview_java",
     "//third_party/androidx:androidx_test_core_java",
     "//third_party/androidx:androidx_test_runner_java",
     "//third_party/google-truth:google_truth_java",
+    "//third_party/jni_zero:jni_zero_java",
     "//third_party/junit:junit",
     "//third_party/mockito:mockito_java",
     "//ui/android:ui_full_java",

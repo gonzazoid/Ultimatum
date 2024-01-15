@@ -6,14 +6,14 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "chrome/browser/ui/views/crostini/crostini_dialogue_browser_test_util.h"
 #include "components/exo/shell_surface.h"
-#include "components/exo/test/exo_test_base_views.h"
 #include "components/exo/test/shell_surface_builder.h"
-#include "components/exo/wm_helper_chromeos.h"
+#include "components/exo/wm_helper.h"
 #include "content/public/test/browser_test.h"
 #include "ui/views/controls/button/label_button.h"
 
@@ -29,7 +29,7 @@ class CrostiniForceCloseViewTest : public DialogBrowserTest {
       delete;
 
   void ShowUi(const std::string& name) override {
-    wm_helper_ = std::make_unique<exo::WMHelperChromeOS>();
+    wm_helper_ = std::make_unique<exo::WMHelper>();
     closable_surface_ =
         exo::test::ShellSurfaceBuilder({10, 10}).BuildShellSurface();
     closable_surface_->root_surface()->Commit();
@@ -56,9 +56,9 @@ class CrostiniForceCloseViewTest : public DialogBrowserTest {
   std::unique_ptr<exo::WMHelper> wm_helper_;
 
   std::unique_ptr<exo::ShellSurface> closable_surface_;
-  views::Widget* closable_widget_;
+  raw_ptr<views::Widget, DanglingUntriaged> closable_widget_;
 
-  views::Widget* dialog_widget_ = nullptr;
+  raw_ptr<views::Widget, DanglingUntriaged> dialog_widget_ = nullptr;
 
   int force_close_invocations_ = 0;
 

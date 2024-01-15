@@ -7,6 +7,7 @@
 
 #include "base/base64url.h"
 #include "base/command_line.h"
+#include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/memory/raw_ptr.h"
@@ -21,9 +22,11 @@
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/signin/signin_features.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/common/chrome_paths.h"
 #include "components/policy/core/browser/browser_policy_connector.h"
+#include "components/policy/core/browser/cloud/user_policy_signin_service_base.h"
 #include "components/policy/core/common/cloud/cloud_policy_client.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/core/common/cloud/mock_cloud_policy_client.h"
@@ -206,7 +209,7 @@ class ComponentCloudPolicyTest : public extensions::ExtensionBrowserTest {
         PolicyBuilder::GetFakeAccountIdForTesting());
     policy_manager->Connect(
         g_browser_process->local_state(),
-        UserCloudPolicyManager::CreateCloudPolicyClient(
+        UserPolicySigninServiceBase::CreateCloudPolicyClient(
             connector->device_management_service(),
             g_browser_process->shared_url_loader_factory()));
 
@@ -234,7 +237,7 @@ class ComponentCloudPolicyTest : public extensions::ExtensionBrowserTest {
         IdentityManagerFactory::GetForProfile(browser()->profile())
             ->GetPrimaryAccountMutator();
     primary_account_mutator->ClearPrimaryAccount(
-        signin_metrics::SIGNOUT_TEST,
+        signin_metrics::ProfileSignout::kTest,
         signin_metrics::SignoutDelete::kIgnoreMetric);
   }
 #endif
@@ -244,7 +247,8 @@ class ComponentCloudPolicyTest : public extensions::ExtensionBrowserTest {
         browser()->profile()->GetProfilePolicyConnector();
     PolicyService* policy_service = profile_connector->policy_service();
     base::RunLoop run_loop;
-    policy_service->RefreshPolicies(run_loop.QuitClosure());
+    policy_service->RefreshPolicies(run_loop.QuitClosure(),
+                                    PolicyFetchReason::kTest);
     run_loop.Run();
   }
 
@@ -344,6 +348,12 @@ IN_PROC_BROWSER_TEST_F(ComponentCloudPolicyTest, MAYBE_InstallNewExtension) {
 // Signing out on Lacros is not possible.
 #if !BUILDFLAG(IS_CHROMEOS)
 IN_PROC_BROWSER_TEST_F(ComponentCloudPolicyTest, SignOutAndBackIn) {
+  // Signout is not enabled when this feature is enabled.
+  if (base::FeatureList::IsEnabled(kDisallowManagedProfileSignout)) {
+    event_listener_->Reply("idle");
+    event_listener_.reset();
+    return;
+  }
   // Read the initial policy.
   ExtensionTestMessageListener initial_policy_listener(
       kTestPolicyJSON, ReplyBehavior::kWillReply);

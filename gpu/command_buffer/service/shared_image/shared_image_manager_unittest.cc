@@ -4,9 +4,11 @@
 
 #include "gpu/command_buffer/service/shared_image/shared_image_manager.h"
 
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
+#include "base/trace_event/memory_allocator_dump.h"
 #include "base/trace_event/process_memory_dump.h"
 #include "gpu/command_buffer/common/mailbox.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
@@ -22,12 +24,12 @@ namespace {
 
 std::unique_ptr<TestImageBacking> CreateImageBacking(size_t size_in_bytes) {
   auto mailbox = Mailbox::GenerateForSharedImage();
-  auto format = viz::SharedImageFormat::kRGBA_8888;
+  auto format = viz::SinglePlaneFormat::kRGBA_8888;
   gfx::Size size(256, 256);
   auto color_space = gfx::ColorSpace::CreateSRGB();
   auto surface_origin = kTopLeft_GrSurfaceOrigin;
   auto alpha_type = kPremul_SkAlphaType;
-  uint32_t usage = SHARED_IMAGE_USAGE_GLES2;
+  uint32_t usage = SHARED_IMAGE_USAGE_GLES2_READ;
 
   return std::make_unique<TestImageBacking>(mailbox, format, size, color_space,
                                             surface_origin, alpha_type, usage,
@@ -40,12 +42,12 @@ TEST(SharedImageManagerTest, BasicRefCounting) {
   auto tracker = std::make_unique<MemoryTypeTracker>(nullptr);
 
   auto mailbox = Mailbox::GenerateForSharedImage();
-  auto format = viz::SharedImageFormat::kRGBA_8888;
+  auto format = viz::SinglePlaneFormat::kRGBA_8888;
   gfx::Size size(256, 256);
   auto color_space = gfx::ColorSpace::CreateSRGB();
   auto surface_origin = kTopLeft_GrSurfaceOrigin;
   auto alpha_type = kPremul_SkAlphaType;
-  uint32_t usage = SHARED_IMAGE_USAGE_GLES2;
+  uint32_t usage = SHARED_IMAGE_USAGE_GLES2_READ;
 
   auto backing = std::make_unique<TestImageBacking>(
       mailbox, format, size, color_space, surface_origin, alpha_type, usage,
@@ -87,23 +89,33 @@ TEST(SharedImageManagerTest, MemoryDumps) {
       manager.Register(CreateImageBacking(kSizeBytes2), tracker.get());
 
   base::trace_event::MemoryDumpArgs args = {
-      base::trace_event::MemoryDumpLevelOfDetail::BACKGROUND};
+      base::trace_event::MemoryDumpLevelOfDetail::kBackground};
   base::trace_event::ProcessMemoryDump pmd(args);
 
   manager.OnMemoryDump(args, &pmd);
 
   auto* dump = pmd.GetAllocatorDump("gpu/shared_images");
   ASSERT_NE(nullptr, dump);
-  ASSERT_EQ(dump->entries().size(), 1u);
+  ASSERT_EQ(dump->entries().size(), 2u);
 
-  // There should be a single memory dump entry with total size of both
-  // backings.
-  auto& entry = dump->entries()[0];
-  DCHECK_EQ(entry.name, base::trace_event::MemoryAllocatorDump::kNameSize);
-  DCHECK_EQ(entry.units, base::trace_event::MemoryAllocatorDump::kUnitsBytes);
-  DCHECK_EQ(entry.entry_type,
-            base::trace_event::MemoryAllocatorDump::Entry::kUint64);
-  DCHECK_EQ(entry.value_uint64, kSizeBytes1 + kSizeBytes2);
+  for (const auto& entry : dump->entries()) {
+    if (entry.name == "size") {
+      EXPECT_EQ(entry.name, base::trace_event::MemoryAllocatorDump::kNameSize);
+      EXPECT_EQ(entry.units,
+                base::trace_event::MemoryAllocatorDump::kUnitsBytes);
+      EXPECT_EQ(entry.entry_type,
+                base::trace_event::MemoryAllocatorDump::Entry::kUint64);
+      EXPECT_EQ(entry.value_uint64, kSizeBytes1 + kSizeBytes2);
+    } else {
+      EXPECT_EQ(entry.name, "purgeable_size");
+      EXPECT_EQ(entry.units,
+                base::trace_event::MemoryAllocatorDump::kUnitsBytes);
+      EXPECT_EQ(entry.entry_type,
+                base::trace_event::MemoryAllocatorDump::Entry::kUint64);
+      // Nothing is purgeable.
+      EXPECT_EQ(entry.value_uint64, 0u);
+    }
+  }
 }
 
 TEST(SharedImageManagerTest, TransferRefSameTracker) {
@@ -112,12 +124,12 @@ TEST(SharedImageManagerTest, TransferRefSameTracker) {
   auto tracker = std::make_unique<MemoryTypeTracker>(nullptr);
 
   auto mailbox = Mailbox::GenerateForSharedImage();
-  auto format = viz::SharedImageFormat::kRGBA_8888;
+  auto format = viz::SinglePlaneFormat::kRGBA_8888;
   gfx::Size size(256, 256);
   auto color_space = gfx::ColorSpace::CreateSRGB();
   auto surface_origin = kTopLeft_GrSurfaceOrigin;
   auto alpha_type = kPremul_SkAlphaType;
-  uint32_t usage = SHARED_IMAGE_USAGE_GLES2;
+  uint32_t usage = SHARED_IMAGE_USAGE_GLES2_READ;
 
   auto backing = std::make_unique<TestImageBacking>(
       mailbox, format, size, color_space, surface_origin, alpha_type, usage,
@@ -144,12 +156,12 @@ TEST(SharedImageManagerTest, TransferRefNewTracker) {
   auto tracker2 = std::make_unique<MemoryTypeTracker>(nullptr);
 
   auto mailbox = Mailbox::GenerateForSharedImage();
-  auto format = viz::SharedImageFormat::kRGBA_8888;
+  auto format = viz::SinglePlaneFormat::kRGBA_8888;
   gfx::Size size(256, 256);
   auto color_space = gfx::ColorSpace::CreateSRGB();
   auto surface_origin = kTopLeft_GrSurfaceOrigin;
   auto alpha_type = kPremul_SkAlphaType;
-  uint32_t usage = SHARED_IMAGE_USAGE_GLES2;
+  uint32_t usage = SHARED_IMAGE_USAGE_GLES2_READ;
 
   auto backing = std::make_unique<TestImageBacking>(
       mailbox, format, size, color_space, surface_origin, alpha_type, usage,
@@ -214,12 +226,12 @@ TEST(SharedImageManagerTest, TransferRefCrossThread) {
       &memory_tracker2, memory_tracker2.task_runner());
 
   auto mailbox = Mailbox::GenerateForSharedImage();
-  auto format = viz::SharedImageFormat::kRGBA_8888;
+  auto format = viz::SinglePlaneFormat::kRGBA_8888;
   gfx::Size size(256, 256);
   auto color_space = gfx::ColorSpace::CreateSRGB();
   auto surface_origin = kTopLeft_GrSurfaceOrigin;
   auto alpha_type = kPremul_SkAlphaType;
-  uint32_t usage = SHARED_IMAGE_USAGE_GLES2;
+  uint32_t usage = SHARED_IMAGE_USAGE_GLES2_READ;
 
   auto backing = std::make_unique<TestImageBacking>(
       mailbox, format, size, color_space, surface_origin, alpha_type, usage,

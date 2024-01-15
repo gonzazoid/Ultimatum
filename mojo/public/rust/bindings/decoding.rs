@@ -2,18 +2,20 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use crate::bindings::encoding::{
-    Bits, Context, DataHeader, DataHeaderValue, MojomNumeric, DATA_HEADER_SIZE,
+chromium::import! {
+    "//mojo/public/rust:mojo_system" as system;
+}
+
+use crate::encoding::{
+    Bits, Context, DataHeader, DataHeaderValue, MojomPrimitive, DATA_HEADER_SIZE,
 };
-use crate::bindings::mojom::{MojomEncodable, MOJOM_NULL_POINTER, UNION_SIZE};
-use crate::bindings::util;
+use crate::mojom::{MojomEncodable, MOJOM_NULL_POINTER, UNION_SIZE};
 
 use std::mem;
 use std::ptr;
 use std::vec::Vec;
 
-use crate::system;
-use crate::system::{CastHandle, Handle, UntypedHandle};
+use system::{CastHandle, Handle, UntypedHandle};
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum ValidationError {
@@ -94,28 +96,26 @@ impl<'slice> DecodingState<'slice> {
 
     /// Align the decoding state to the next 'bytes' boundary.
     pub fn align_to_bytes(&mut self, bytes: usize) {
-        if self.offset != 0 {
-            self.offset = util::align_bytes(self.offset, bytes);
-        }
+        debug_assert!(bytes.is_power_of_two());
+        self.offset = self.offset.next_multiple_of(bytes);
     }
 
     /// Read a primitive from the buffer without incrementing the offset.
-    fn read_in_place<T: MojomNumeric>(&mut self) -> T {
-        let mut value: T = Default::default();
-        debug_assert!(mem::size_of::<T>() + self.offset <= self.data.len());
-        let ptr = (&self.data[self.offset..]).as_ptr();
-        unsafe {
-            ptr::copy_nonoverlapping(
-                mem::transmute::<*const u8, *const T>(ptr),
-                &mut value as *mut T,
-                1,
-            );
-        }
-        value
+    fn read_in_place<T: MojomPrimitive>(&mut self) -> T {
+        assert!(mem::size_of::<T::Repr>() + self.offset <= self.data.len());
+        let ptr = self.data[self.offset..].as_ptr() as *const T::Repr;
+
+        // SAFETY:
+        // * `T::Repr: Copy` meaning we can safely read in-place without worring about
+        //   doing it only once.
+        // * We asserted that the offset + size of T::Repr is in-bounds, so the pointer
+        //   is valid.
+        let repr: T::Repr = unsafe { *ptr };
+        <T as MojomPrimitive>::from_repr(repr)
     }
 
     /// Read a primitive from the buffer and increment the offset.
-    fn read<T: MojomNumeric>(&mut self) -> T {
+    fn read<T: MojomPrimitive>(&mut self) -> T {
         let value = self.read_in_place::<T>();
         self.bit_offset = Bits(0);
         self.offset += mem::size_of::<T>();
@@ -123,7 +123,7 @@ impl<'slice> DecodingState<'slice> {
     }
 
     /// Decode a primitive from the buffer, naturally aligning before we read.
-    pub fn decode<T: MojomNumeric>(&mut self) -> T {
+    pub fn decode<T: MojomPrimitive>(&mut self) -> T {
         self.align_to_byte();
         self.align_to_bytes(mem::size_of::<T>());
         self.read::<T>()
@@ -195,18 +195,19 @@ impl<'slice> DecodingState<'slice> {
 
     /// Decode a pointer from the buffer as a global offset into the buffer.
     ///
-    /// The pointer in the buffer is an offset relative to the pointer to another
-    /// location in the buffer. We convert that to an absolute offset with respect
-    /// to the buffer before returning. This is our defintion of a pointer.
-    pub fn decode_pointer(&mut self) -> Option<u64> {
+    /// The pointer in the buffer is an offset relative to the pointer to
+    /// another location in the buffer. We convert that to an absolute
+    /// offset with respect to the buffer before returning. This is our
+    /// definition of a pointer.
+    pub fn decode_pointer(&mut self) -> Result<u64, ValidationError> {
         self.align_to_byte();
         self.align_to_bytes(8);
         let current_location = (self.global_offset + self.offset) as u64;
         let offset = self.read::<u64>();
         if offset == MOJOM_NULL_POINTER {
-            Some(MOJOM_NULL_POINTER)
+            Ok(MOJOM_NULL_POINTER)
         } else {
-            offset.checked_add(current_location)
+            offset.checked_add(current_location).ok_or(ValidationError::IllegalPointer)
         }
     }
 
@@ -228,13 +229,11 @@ impl<'slice> DecodingState<'slice> {
             return Err(ValidationError::UnexpectedArrayHeader);
         }
         let elems = self.decode::<u32>();
-        match T::embed_size(&Default::default()).checked_mul(elems as usize) {
-            Some(value) => {
-                if (bytes as usize) < value.as_bytes() + DATA_HEADER_SIZE {
-                    return Err(ValidationError::UnexpectedArrayHeader);
-                }
-            }
-            None => return Err(ValidationError::UnexpectedArrayHeader),
+        let req_size = T::embed_size(&Default::default())
+            .checked_mul(elems as usize)
+            .ok_or(ValidationError::UnexpectedArrayHeader)?;
+        if (bytes as usize) < req_size.as_bytes() + DATA_HEADER_SIZE {
+            return Err(ValidationError::UnexpectedArrayHeader);
         }
         Ok(DataHeader::new(bytes as usize, DataHeaderValue::Elements(elems)))
     }
@@ -279,8 +278,9 @@ impl<'slice> DecodingState<'slice> {
                 let len = versions.len();
                 let (latest_version, _) = versions[len - 1];
                 let (_, size) = versions[idx - 1];
-                // If this is higher than any version we know, its okay for the size to be bigger,
-                // but if its a version we know about, it must match the size.
+                // If this is higher than any version we know, its okay for the size to be
+                // bigger, but if its a version we know about, it must match the
+                // size.
                 if (version > latest_version && bytes < size)
                     || (version <= latest_version && bytes != size)
                 {
@@ -326,7 +326,7 @@ impl<'slice> Decoder<'slice> {
             return Err(ValidationError::IllegalMemoryRange);
         }
         // Check for 8-byte alignment
-        if offset & 7 != 0 {
+        if offset % 8 != 0 {
             return Err(ValidationError::MisalignedObject);
         }
         // Bounds check on offset
@@ -374,7 +374,8 @@ impl<'slice> Decoder<'slice> {
         } else {
             return Err(ValidationError::UnexpectedInvalidHandle);
         };
-        // If the index exceeds our number of handles or if we have already claimed that handle
+        // If the index exceeds our number of handles or if we have already claimed that
+        // handle
         if real_index >= self.handles.len() || real_index < self.handles_claimed {
             return Err(ValidationError::IllegalHandle);
         }

@@ -5,13 +5,13 @@
 // https://wicg.github.io/navigation-api/
 [
   Exposed=Window,
-  RuntimeEnabled=NavigationApi,
   ImplementedAs=NavigationApi
 ] interface Navigation : EventTarget {
   readonly attribute NavigationHistoryEntry? currentEntry;
   sequence<NavigationHistoryEntry> entries();
   [RaisesException, MeasureAs=AppHistory] void updateCurrentEntry(NavigationUpdateCurrentEntryOptions options);
   readonly attribute NavigationTransition? transition;
+  [RuntimeEnabled=NavigationActivation] readonly attribute NavigationActivation? activation;
 
   readonly attribute boolean canGoBack;
   readonly attribute boolean canGoForward;

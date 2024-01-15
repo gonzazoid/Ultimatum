@@ -4,12 +4,16 @@
 
 #include "components/exo/wayland/wayland_display_observer.h"
 
+#include <aura-shell-server-protocol.h>
 #include <sys/socket.h>
 #include <wayland-server-protocol-core.h>
 #include <xdg-output-unstable-v1-server-protocol.h>
 
+#include "base/memory/raw_ptr.h"
 #include "components/exo/test/exo_test_base.h"
+#include "components/exo/wayland/server_util.h"
 #include "components/exo/wayland/wayland_display_output.h"
+#include "components/exo/wayland/zaura_output_manager.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -42,6 +46,12 @@ class WaylandDisplayObserverTest : public test::ExoTestBase {
     ASSERT_EQ(socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, fds_), 0);
     wayland_display_ = wl_display_create();
     client_ = wl_client_create(wayland_display_, fds_[0]);
+    aura_output_manager_resource_ =
+        wl_resource_create(client_, &zaura_output_manager_interface,
+                           kZAuraOutputManagerVersion, 0);
+    SetImplementation(
+        aura_output_manager_resource_, nullptr,
+        std::make_unique<AuraOutputManager>(aura_output_manager_resource_));
     wl_output_resource_ =
         wl_resource_create(client_, &wl_output_interface, 2, 0);
     xdg_output_resource_ =
@@ -55,20 +65,39 @@ class WaylandDisplayObserverTest : public test::ExoTestBase {
 
   void TearDown() override {
     handler_->UnsetXdgOutputResource();
-    wl_resource_destroy(xdg_output_resource_);
-    wl_resource_destroy(wl_output_resource_);
-    wl_client_destroy(client_);
+    // Reset `handler_` before `wl_output_resource_` is destroyed.
+    handler_.reset();
+
+    // If client has not yet been destroyed clean it up here.
+    if (client_) {
+      DestroyClient();
+    }
+
     wl_display_destroy(wayland_display_);
     close(fds_[1]);
+    output_.reset();
 
     test::ExoTestBase::TearDown();
   }
 
+  // Destroys the client and all of its associated resources.
+  void DestroyClient() {
+    if (client_) {
+      wl_client_destroy(client_);
+      client_ = nullptr;
+      aura_output_manager_resource_ = nullptr;
+      xdg_output_resource_ = nullptr;
+      wl_output_resource_ = nullptr;
+    }
+  }
+
   int fds_[2] = {0, 0};
-  wl_display* wayland_display_ = nullptr;
-  wl_client* client_ = nullptr;
-  wl_resource* wl_output_resource_ = nullptr;
-  wl_resource* xdg_output_resource_ = nullptr;
+  raw_ptr<wl_display, DanglingUntriaged> wayland_display_ = nullptr;
+  raw_ptr<wl_client, DanglingUntriaged> client_ = nullptr;
+  raw_ptr<wl_resource, DanglingUntriaged> aura_output_manager_resource_ =
+      nullptr;
+  raw_ptr<wl_resource, DanglingUntriaged> wl_output_resource_ = nullptr;
+  raw_ptr<wl_resource, DanglingUntriaged> xdg_output_resource_ = nullptr;
   std::unique_ptr<WaylandDisplayOutput> output_;
   std::unique_ptr<MockWaylandDisplayHandler> handler_;
 };

@@ -25,6 +25,7 @@ struct AXTreeUpdate;
 
 namespace content {
 
+class WebContents;
 class WebContentsImpl;
 
 // Android wrapper around WebContents that provides safer passage from java and
@@ -59,6 +60,7 @@ class CONTENT_EXPORT WebContentsAndroid {
       const base::android::JavaParamRef<jobject>& jview_delegate);
   base::android::ScopedJavaLocalRef<jobject> GetMainFrame(JNIEnv* env) const;
   base::android::ScopedJavaLocalRef<jobject> GetFocusedFrame(JNIEnv* env) const;
+  bool IsFocusedElementEditable(JNIEnv* env);
   base::android::ScopedJavaLocalRef<jobject> GetRenderFrameHostFromId(
       JNIEnv* env,
       jint render_process_id,
@@ -102,7 +104,10 @@ class CONTENT_EXPORT WebContentsAndroid {
   void SelectAroundCaret(JNIEnv* env,
                          jint granularity,
                          jboolean should_show_handle,
-                         jboolean should_show_context_menu);
+                         jboolean should_show_context_menu,
+                         jint startOffset,
+                         jint endOffset,
+                         jint surroundingTextLength);
   void AdjustSelectionByCharacterOffset(JNIEnv* env,
                                         jint start_adjust,
                                         jint end_adjust,
@@ -195,6 +200,8 @@ class CONTENT_EXPORT WebContentsAndroid {
 
   void NotifyBrowserControlsHeightChanged(JNIEnv* env);
 
+  bool NeedToFireBeforeUnloadOrUnloadEvents(JNIEnv* env);
+
   base::android::ScopedJavaLocalRef<jobject> GetRenderWidgetHostView(
       JNIEnv* env);
 
@@ -202,6 +209,8 @@ class CONTENT_EXPORT WebContentsAndroid {
       JNIEnv* env);
 
   jint GetVisibility(JNIEnv* env);
+
+  void UpdateWebContentsVisibility(JNIEnv* env, jint visibiity);
 
   RenderWidgetHostViewAndroid* GetRenderWidgetHostViewAndroid();
 
@@ -215,6 +224,12 @@ class CONTENT_EXPORT WebContentsAndroid {
   void AddDestructionObserver(DestructionObserver* observer);
   void RemoveDestructionObserver(DestructionObserver* observer);
 
+  // Adds a crash report, like DumpWithoutCrashing(), including the Java stack
+  // trace from which `web_contents` was created. This is meant to help debug
+  // cases where BrowserContext is destroyed before its WebContents.
+  static void ReportDanglingPtrToBrowserContext(JNIEnv* env,
+                                                WebContents* web_contents);
+
  private:
   void OnFinishDownloadImage(const base::android::JavaRef<jobject>& obj,
                              const base::android::JavaRef<jobject>& callback,
@@ -223,7 +238,10 @@ class CONTENT_EXPORT WebContentsAndroid {
                              const GURL& url,
                              const std::vector<SkBitmap>& bitmaps,
                              const std::vector<gfx::Size>& sizes);
-  void SelectAroundCaretAck(blink::mojom::SelectAroundCaretResultPtr result);
+  void SelectAroundCaretAck(int startOffset,
+                            int endOffset,
+                            int surroundingTextLength,
+                            blink::mojom::SelectAroundCaretResultPtr result);
   // Walks over the AXTreeUpdate and creates a light weight snapshot.
   void AXTreeSnapshotCallback(
       const base::android::JavaRef<jobject>& view_structure_root,

@@ -120,6 +120,7 @@ class TargetHandler : public DevToolsDomainHandler,
                         Maybe<bool> enable_begin_frame_control,
                         Maybe<bool> new_window,
                         Maybe<bool> background,
+                        Maybe<bool> for_tab,
                         std::string* out_target_id) override;
   Response GetTargets(
       Maybe<protocol::Array<protocol::Target::FilterEntry>> filter,
@@ -181,6 +182,7 @@ class TargetHandler : public DevToolsDomainHandler,
   void DevToolsAgentHostCrashed(DevToolsAgentHost* agent_host,
                                 base::TerminationStatus status) override;
   bool discover() const { return !!discover_target_filter_; }
+  Session* FindWaitingSession(DevToolsAgentHost* host);
 
   const AccessMode access_mode_;
   const std::string owner_target_id_;
@@ -208,7 +210,7 @@ class TargetHandler : public DevToolsDomainHandler,
   base::flat_set<std::string> dispose_on_detach_context_ids_;
   base::flat_map<std::string, net::ProxyConfig> contexts_with_overridden_proxy_;
   base::flat_set<Throttle*> throttles_;
-  absl::optional<net::ProxyConfig> pending_proxy_config_;
+  std::optional<net::ProxyConfig> pending_proxy_config_;
   base::WeakPtrFactory<TargetHandler> weak_factory_{this};
 };
 

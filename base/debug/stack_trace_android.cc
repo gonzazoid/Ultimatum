@@ -31,7 +31,7 @@ struct StackCrawlState {
         max_depth(max_depth),
         have_skipped_self(false) {}
 
-  raw_ptr<uintptr_t> frames;
+  raw_ptr<uintptr_t, AllowPtrArithmetic> frames;
   size_t frame_count;
   size_t max_depth;
   bool have_skipped_self;
@@ -75,7 +75,7 @@ bool EnableInProcessStackDumping() {
   return (sigaction(SIGPIPE, &action, NULL) == 0);
 }
 
-size_t CollectStackTrace(void** trace, size_t count) {
+size_t CollectStackTrace(const void** trace, size_t count) {
   StackCrawlState state(reinterpret_cast<uintptr_t*>(trace), count);
   _Unwind_Backtrace(&TraceStackFrame, &state);
   return state.frame_count;
@@ -98,7 +98,7 @@ void StackTrace::OutputToStreamWithPrefix(std::ostream* os,
   // on fatal log messages in debug builds only. If the restriction is enabled
   // then it will recursively trigger fatal failures when this enters on the
   // UI thread.
-  base::ThreadRestrictions::ScopedAllowIO allow_io;
+  base::ScopedAllowBlocking scoped_allow_blocking;
   if (!ReadProcMaps(&proc_maps)) {
     __android_log_write(
         ANDROID_LOG_ERROR, "chromium", "Failed to read /proc/self/maps");

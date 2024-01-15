@@ -2,7 +2,9 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-assert(!is_ios)
+import("//build/config/features.gni")
+
+assert(use_blink)
 
 import("//build/buildflag_header.gni")
 import("//build/config/compiler/compiler.gni")
@@ -36,13 +38,14 @@ config("wtf_config") {
 }
 
 component("wtf") {
+  output_name = "blink_platform_wtf"
+
   sources = [
     "allocator/allocator.h",
     "allocator/partition_allocator.cc",
     "allocator/partition_allocator.h",
     "allocator/partitions.cc",
     "allocator/partitions.h",
-    "assertions.cc",
     "assertions.h",
     "atomic_operations.cc",
     "atomic_operations.h",
@@ -74,17 +77,17 @@ component("wtf") {
     "dynamic_annotations.h",
     "forward.h",
     "functional.h",
-    "gc_plugin_ignore.h",
+    "gc_plugin.h",
     "get_ptr.h",
     "hash_counted_set.h",
     "hash_functions.h",
-    "hash_iterators.h",
     "hash_map.h",
     "hash_set.h",
     "hash_table.cc",
     "hash_table.h",
     "hash_table_deleted_value_type.h",
     "hash_traits.h",
+    "key_value_pair.h",
     "leak_annotations.h",
     "linked_hash_set.h",
     "math_extras.h",
@@ -95,8 +98,6 @@ component("wtf") {
     "pod_red_black_tree.h",
     "ref_counted.h",
     "sanitizers.h",
-    "scoped_logger.cc",
-    "scoped_logger.h",
     "sequence_bound.h",
     "shared_buffer.cc",
     "shared_buffer.h",
@@ -111,7 +112,6 @@ component("wtf") {
     "text/ascii_fast_path.h",
     "text/atomic_string.cc",
     "text/atomic_string.h",
-    "text/atomic_string_cf.cc",
     "text/atomic_string_encoding.h",
     "text/atomic_string_hash.h",
     "text/atomic_string_table.cc",
@@ -221,6 +221,7 @@ component("wtf") {
     "//base/allocator:buildflags",
     "//build:chromeos_buildflags",
     "//third_party/blink/public/common:common",
+    "//third_party/modp_b64",
 
     # TODO(tkent): WTF should not depend on it.
     "//third_party/blink/public/common:headers",
@@ -238,15 +239,12 @@ component("wtf") {
   # Rules changing the |sources| list are temporarily commented out, until
   # those files are actually moved to here.
 
-  if (is_mac) {
+  if (is_apple) {
     sources += [
-      "text/string_impl_mac.mm",
-      "text/string_mac.mm",
+      "text/atomic_string_cf.cc",
+      "text/string_apple.mm",
+      "text/string_impl_apple.mm",
     ]
-  }
-
-  if (!is_mac && (current_cpu == "x86" || current_cpu == "x64")) {
-    sources += [ "text/copy_lchars_from_uchar_source.cc" ]
   }
 
   if (is_win) {
@@ -267,13 +265,11 @@ component("wtf") {
     libs = [ "log" ]
   }
 
-  if (is_mac) {
+  if (is_apple) {
     frameworks = [
       "CoreFoundation.framework",
       "Foundation.framework",
     ]
-  } else {
-    sources -= [ "text/atomic_string_cf.cc" ]
   }
 
   if (using_mismatched_sample_profile) {
@@ -296,7 +292,6 @@ source_set("wtf_unittests_sources") {
   sources = [
     "allocator/allocator_test.cc",
     "allocator/partitions_test.cc",
-    "ascii_ctype_test.cc",
     "assertions_test.cc",
     "atomic_operations_test.cc",
     "bit_field_test.cc",
@@ -318,12 +313,13 @@ source_set("wtf_unittests_sources") {
     "pod_red_black_tree_test.cc",
     "pod_tree_test_helpers.cc",
     "pod_tree_test_helpers.h",
-    "scoped_logger_test.cc",
     "sequence_bound_test.cc",
     "shared_buffer_test.cc",
     "testing/run_all_tests.cc",
+    "text/ascii_ctype_test.cc",
     "text/atomic_string_table_test.cc",
     "text/atomic_string_test.cc",
+    "text/base64_test.cc",
     "text/case_map_test.cc",
     "text/code_point_iterator_test.cc",
     "text/encoding_tables_test.cc",
@@ -342,6 +338,7 @@ source_set("wtf_unittests_sources") {
     "text/text_codec_test.cc",
     "text/text_codec_utf8_test.cc",
     "text/text_encoding_test.cc",
+    "text/text_offset_map_test.cc",
     "text/wtf_string_test.cc",
     "threading_primitives_test.cc",
     "type_traits_test.cc",

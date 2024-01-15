@@ -4,7 +4,7 @@
 
 #include "chrome/browser/subresource_filter/subresource_filter_profile_context_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
@@ -22,13 +22,19 @@ SubresourceFilterProfileContextFactory::GetForProfile(Profile* profile) {
 // static
 SubresourceFilterProfileContextFactory*
 SubresourceFilterProfileContextFactory::GetInstance() {
-  return base::Singleton<SubresourceFilterProfileContextFactory>::get();
+  static base::NoDestructor<SubresourceFilterProfileContextFactory> instance;
+  return instance.get();
 }
 
 SubresourceFilterProfileContextFactory::SubresourceFilterProfileContextFactory()
     : ProfileKeyedServiceFactory(
           "SubresourceFilterProfileContext",
-          ProfileSelections::BuildForRegularAndIncognito()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {
   DependsOn(HostContentSettingsMapFactory::GetInstance());
   DependsOn(HistoryServiceFactory::GetInstance());
 }

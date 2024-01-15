@@ -6,8 +6,8 @@
 
 #include <string>
 
-#include "base/bind.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
@@ -75,9 +75,9 @@ class HintCacheTest : public ProtoDatabaseProviderTestBase,
   }
 
   void DestroyHintCache() {
+    loaded_hint_ = nullptr;
     hint_cache_.reset();
     optimization_guide_store_.reset();
-    loaded_hint_ = nullptr;
     is_store_initialized_ = false;
     are_component_hints_updated_ = false;
     on_load_hint_callback_called_ = false;
@@ -85,6 +85,8 @@ class HintCacheTest : public ProtoDatabaseProviderTestBase,
 
     RunUntilIdle();
   }
+
+  void ResetLoadedHint() { loaded_hint_ = nullptr; }
 
   HintCache* hint_cache() { return hint_cache_.get(); }
 
@@ -836,6 +838,7 @@ TEST_P(HintCacheTest, ClearFetchedHints) {
   EXPECT_TRUE(hint_cache()->GetURLKeyedHint(url));
   EXPECT_TRUE(hint_cache()->GetHostKeyedHintIfLoaded(host));
 
+  ResetLoadedHint();
   hint_cache()->ClearFetchedHints();
   EXPECT_FALSE(hint_cache()->GetURLKeyedHint(url));
   EXPECT_FALSE(hint_cache()->GetHostKeyedHintIfLoaded(host));
@@ -883,6 +886,7 @@ TEST_P(HintCacheTest, URLsWithNoURLKeyedHints) {
   ASSERT_EQ(update_data != nullptr, IsBackedByPersistentStore());
 
   GURL https_url_without_hint("https://whatever.com/r/nohint");
+  GURL https_url_without_hint_has_fragment("https://whatever.com/r/nohint#123");
   GURL https_url_with_hint("https://whatever.com/r/hint");
   GURL https_url_unseen("https://unseen.com/new");
   GURL file_url("file://dog.png");
@@ -913,7 +917,8 @@ TEST_P(HintCacheTest, URLsWithNoURLKeyedHints) {
                             {"host.com"}, {https_url_without_hint});
 
   EXPECT_TRUE(hint_cache()->HasURLKeyedEntryForURL(https_url_with_hint));
-  EXPECT_TRUE(hint_cache()->HasURLKeyedEntryForURL(https_url_with_hint));
+  EXPECT_TRUE(hint_cache()->HasURLKeyedEntryForURL(
+      https_url_without_hint_has_fragment));
   EXPECT_FALSE(hint_cache()->HasURLKeyedEntryForURL(file_url));
   EXPECT_FALSE(hint_cache()->HasURLKeyedEntryForURL(chrome_url));
   EXPECT_FALSE(hint_cache()->HasURLKeyedEntryForURL(auth_url));
@@ -1077,6 +1082,54 @@ TEST_P(HintCacheTest, RemoveHintsForHosts) {
 
   EXPECT_FALSE(hint_cache()->HasHint(host));
   EXPECT_TRUE(hint_cache()->HasURLKeyedEntryForURL(url));
+}
+
+TEST_P(HintCacheTest, URLsWithNoURLKeyedHintsFetchedURLWasFragment) {
+  const int kMemoryCacheSize = 5;
+  CreateAndInitializeHintCache(kMemoryCacheSize);
+
+  std::unique_ptr<StoreUpdateData> update_data =
+      hint_cache()->CreateUpdateDataForFetchedHints(base::Time());
+  ASSERT_EQ(update_data != nullptr, IsBackedByPersistentStore());
+
+  GURL https_url_without_hint("https://whatever.com/r/nohint");
+  GURL https_url_without_hint_has_fragment("https://whatever.com/r/nohint#123");
+  GURL https_url_unseen("https://unseen.com/new");
+  GURL file_url("file://dog.png");
+  GURL chrome_url("chrome://dog.png");
+  GURL auth_url("https://username:password@www.example.com/");
+
+  google::protobuf::RepeatedPtrField<proto::Hint> hints;
+  *(hints.Add()) = CreateHintForURL(https_url_without_hint_has_fragment);
+
+  // Only URL-keyed hint included so there are no hints to store within the
+  // update data.
+  EXPECT_FALSE(hint_cache()->ProcessAndCacheHints(
+      &hints, IsBackedByPersistentStore() ? update_data.get() : nullptr));
+
+  // Add the url without hint to the url-keyed cache via UpdateFetchedHints.
+  std::unique_ptr<proto::GetHintsResponse> get_hints_response =
+      std::make_unique<proto::GetHintsResponse>();
+
+  std::string host = "host.com";
+  proto::Hint* hint = get_hints_response->add_hints();
+  hint->set_key_representation(proto::HOST);
+  hint->set_key(host);
+  proto::PageHint* page_hint = hint->add_page_hints();
+  page_hint->set_page_pattern("page pattern");
+
+  base::Time stored_time = base::Time().Now();
+  UpdateFetchedHintsAndWait(std::move(get_hints_response), stored_time,
+                            {"host.com"},
+                            {https_url_without_hint_has_fragment});
+
+  EXPECT_TRUE(hint_cache()->HasURLKeyedEntryForURL(https_url_without_hint));
+  EXPECT_TRUE(hint_cache()->HasURLKeyedEntryForURL(
+      https_url_without_hint_has_fragment));
+  EXPECT_FALSE(hint_cache()->HasURLKeyedEntryForURL(file_url));
+  EXPECT_FALSE(hint_cache()->HasURLKeyedEntryForURL(chrome_url));
+  EXPECT_FALSE(hint_cache()->HasURLKeyedEntryForURL(auth_url));
+  EXPECT_FALSE(hint_cache()->HasURLKeyedEntryForURL(https_url_unseen));
 }
 
 }  // namespace

@@ -16,6 +16,7 @@
 // numeric values should never be reused.
 //
 // Keep this in sync with ProfileKeepAliveOrigin in enums.xml.
+// LINT.IfChange
 enum class ProfileKeepAliveOrigin {
   // When a Profile gets created by ProfileManager, it initially has this type
   // of keep-alive. This ensures that the Profile has a refcount >=1, at least
@@ -86,6 +87,9 @@ enum class ProfileKeepAliveOrigin {
   kExtensionUpdater = 18,
 
   // This profile is being created (and is used to render GAIA sign-in flow).
+  // The profile creation flow either opens a browser window before
+  // kProfileCreationFlow keep alive is released or gets aborted without opening
+  // a browser window and in that case the profile should be removed.
   kProfileCreationFlow = 19,
 
   // The user just closed a notification. This might cause writing to the
@@ -131,8 +135,39 @@ enum class ProfileKeepAliveOrigin {
   // finish signin in the user's account.
   kProfileCreationSamlFlow = 30,
 
-  kMaxValue = kProfileCreationSamlFlow,
+  // Used when DriveFS on ChromeOS wants to connect to an extension in Lacros.
+  // This keeps the profile alive while the connection is active.
+  kDriveFsNativeMessageHostLacros = 31,
+
+  // Used during the deletion process for the respective profile. Avoids the
+  // profile from being randomly unloaded. Useful to keep an ephemeral profile
+  // alive until their deletion is completed, after releasing its last keep
+  // alive.
+  kProfileDeletionProcess = 32,
+
+  // Used when displaying the statistics for a profile in the Profile Picker,
+  // when deleting this profile.
+  kProfileStatistics = 33,
+
+  // Used during installation of an Isolated Web App.
+  kIsolatedWebAppInstall = 34,
+
+  // Used during update of an Isolated Web App.
+  kIsolatedWebAppUpdate = 35,
+
+  // A web app is being uninstalled.
+  kWebAppUninstall = 36,
+
+  // Used during ForceUnregistration of OsIntegrationManger's sub managers.
+  kOsIntegrationForceUnregistration = 37,
+
+  // Used for remote debugging to keep a profile alive when all pages are
+  // closed.
+  kRemoteDebugging = 38,
+
+  kMaxValue = kRemoteDebugging,
 };
+// LINT.ThenChange(/tools/metrics/histograms/enums.xml)
 
 std::ostream& operator<<(std::ostream& out,
                          const ProfileKeepAliveOrigin& origin);

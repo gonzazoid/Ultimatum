@@ -6,7 +6,7 @@
 
 #include <algorithm>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/rand_util.h"
 #include "base/time/time.h"
@@ -134,7 +134,8 @@ SCTAuditingCache::MaybeGenerateReportEntry(
   }
   RecordSCTAuditingReportDeduplicatedMetrics(false);
 
-  report->set_user_agent(version_info::GetProductNameAndVersionForUserAgent());
+  report->set_user_agent(
+      std::string(version_info::GetProductNameAndVersionForUserAgent()));
 
   // Add `cache_key` to the dedupe cache. The cache value is not used.
   dedupe_cache_.Put(cache_key, true);

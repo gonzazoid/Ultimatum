@@ -7,10 +7,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -22,7 +22,6 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/threading/platform_thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "net/base/features.h"
@@ -32,7 +31,7 @@
 #include "net/base/net_errors.h"
 #include "net/base/network_anonymization_key.h"
 #include "net/base/privacy_mode.h"
-#include "net/base/proxy_server.h"
+#include "net/base/proxy_chain.h"
 #include "net/base/proxy_string_util.h"
 #include "net/base/request_priority.h"
 #include "net/base/schemeful_site.h"
@@ -206,7 +205,6 @@ class MockClientSocket : public StreamSocket {
   const NetLogWithSource& NetLog() const override { return net_log_; }
 
   bool WasEverUsed() const override { return was_used_to_convey_data_; }
-  bool WasAlpnNegotiated() const override { return false; }
   NextProto GetNegotiatedProtocol() const override { return kProtoUnknown; }
   bool GetSSLInfo(SSLInfo* ssl_info) override { return false; }
   int64_t GetTotalReceivedBytes() const override {
@@ -272,7 +270,7 @@ class MockClientSocketFactory : public ClientSocketFactory {
 
  private:
   int allocation_count_ = 0;
-  std::vector<TestConnectJob*> waiting_jobs_;
+  std::vector<raw_ptr<TestConnectJob, VectorExperimental>> waiting_jobs_;
 };
 
 class TestConnectJob : public ConnectJob {
@@ -382,7 +380,7 @@ class TestConnectJob : public ConnectJob {
         // abstract time for the purpose of unittests. Unfortunately, we have
         // a lot of third-party components that directly call the various
         // time functions, so this change would be rather invasive.
-        base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
             FROM_HERE,
             base::BindOnce(base::IgnoreResult(&TestConnectJob::DoConnect),
                            weak_factory_.GetWeakPtr(), true /* successful */,
@@ -391,7 +389,7 @@ class TestConnectJob : public ConnectJob {
         return ERR_IO_PENDING;
       case kMockPendingFailingJob:
         set_load_state(LOAD_STATE_CONNECTING);
-        base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
             FROM_HERE,
             base::BindOnce(base::IgnoreResult(&TestConnectJob::DoConnect),
                            weak_factory_.GetWeakPtr(), false /* error */,
@@ -408,7 +406,7 @@ class TestConnectJob : public ConnectJob {
                          true /* cert_error */);
       case kMockPendingCertErrorJob:
         set_load_state(LOAD_STATE_CONNECTING);
-        base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
             FROM_HERE,
             base::BindOnce(base::IgnoreResult(&TestConnectJob::DoConnect),
                            weak_factory_.GetWeakPtr(), false /* error */,
@@ -422,7 +420,7 @@ class TestConnectJob : public ConnectJob {
       case kMockPendingAdditionalErrorStateJob:
         set_load_state(LOAD_STATE_CONNECTING);
         store_additional_error_state_ = true;
-        base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
             FROM_HERE,
             base::BindOnce(base::IgnoreResult(&TestConnectJob::DoConnect),
                            weak_factory_.GetWeakPtr(), false /* error */,
@@ -483,7 +481,7 @@ class TestConnectJob : public ConnectJob {
 
   void DoAdvanceAuthChallenge(int remaining_challenges,
                               bool succeed_after_last_challenge) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&TestConnectJob::InvokeNextProxyAuthCallback,
                        weak_factory_.GetWeakPtr(), remaining_challenges,
@@ -544,10 +542,10 @@ class TestConnectJobFactory : public ConnectJobFactory {
 
   std::unique_ptr<ConnectJob> CreateConnectJob(
       Endpoint endpoint,
-      const ProxyServer& proxy_server,
+      const ProxyChain& proxy_chain,
       const absl::optional<NetworkTrafficAnnotationTag>& proxy_annotation_tag,
       const SSLConfig* ssl_config_for_origin,
-      const SSLConfig* ssl_config_for_proxy,
+      ConnectJobFactory::AlpnMode alpn_mode,
       bool force_tunnel,
       PrivacyMode privacy_mode,
       const OnHostResolutionCallback& resolution_callback,
@@ -580,7 +578,7 @@ class TestConnectJobFactory : public ConnectJobFactory {
 namespace {
 
 void MockClientSocketFactory::SignalJobs() {
-  for (auto* waiting_job : waiting_jobs_) {
+  for (TestConnectJob* waiting_job : waiting_jobs_) {
     waiting_job->Signal();
   }
   waiting_jobs_.clear();
@@ -634,14 +632,14 @@ class ClientSocketPoolBaseTest : public TestWithTaskEnvironment {
       base::TimeDelta unused_idle_socket_timeout,
       base::TimeDelta used_idle_socket_timeout,
       bool enable_backup_connect_jobs = false,
-      ProxyServer proxy_server = ProxyServer::Direct()) {
+      ProxyChain proxy_chain = ProxyChain::Direct()) {
     DCHECK(!pool_.get());
     std::unique_ptr<TestConnectJobFactory> connect_job_factory =
         std::make_unique<TestConnectJobFactory>(&client_socket_factory_);
     connect_job_factory_ = connect_job_factory.get();
     pool_ = TransportClientSocketPool::CreateForTesting(
         max_sockets, max_sockets_per_group, unused_idle_socket_timeout,
-        used_idle_socket_timeout, proxy_server, /*is_for_websockets=*/false,
+        used_idle_socket_timeout, proxy_chain, /*is_for_websockets=*/false,
         &common_connect_job_params_, std::move(connect_job_factory),
         nullptr /* ssl_config_service */, enable_backup_connect_jobs);
   }
@@ -681,9 +679,7 @@ class ClientSocketPoolBaseTest : public TestWithTaskEnvironment {
         NetLogEventPhase::NONE);
     ASSERT_EQ(1u, entries.size());
     ASSERT_TRUE(entries[0].HasParams());
-    ASSERT_TRUE(entries[0].params.is_dict());
-    const std::string* reason =
-        entries[0].params.GetDict().FindString("reason");
+    const std::string* reason = entries[0].params.FindString("reason");
     ASSERT_TRUE(reason);
     EXPECT_EQ(expected_reason, *reason);
   }
@@ -698,27 +694,35 @@ class ClientSocketPoolBaseTest : public TestWithTaskEnvironment {
   size_t completion_count() const { return test_base_.completion_count(); }
 
   const CommonConnectJobParams common_connect_job_params_{
-      nullptr /* client_socket_factory */,
-      nullptr /* host_resolver */,
-      nullptr /* http_auth_cache */,
-      nullptr /* http_auth_handler_factory */,
-      nullptr /* spdy_session_pool */,
-      nullptr /* quic_supported_versions */,
-      nullptr /* quic_stream_factory */,
-      nullptr /* proxy_delegate */,
-      nullptr /* http_user_agent_settings */,
-      nullptr /* ssl_client_context */,
-      nullptr /* socket_performance_watcher_factory */,
-      nullptr /* network_quality_estimator */,
+      /*client_socket_factory=*/nullptr,
+      /*host_resolver=*/nullptr,
+      /*http_auth_cache=*/nullptr,
+      /*http_auth_handler_factory=*/nullptr,
+      /*spdy_session_pool=*/nullptr,
+      /*quic_supported_versions=*/nullptr,
+      /*quic_stream_factory=*/nullptr,
+      /*proxy_delegate=*/nullptr,
+      /*http_user_agent_settings=*/nullptr,
+      /*ssl_client_context=*/nullptr,
+      /*socket_performance_watcher_factory=*/nullptr,
+      /*network_quality_estimator=*/nullptr,
       NetLog::Get(),
-      nullptr /* websocket_endpoint_lock_manager */};
+      /*websocket_endpoint_lock_manager=*/nullptr,
+      /*http_server_properties=*/nullptr,
+      /*alpn_protos=*/nullptr,
+      /*application_settings=*/nullptr,
+      /*ignore_certificate_errors=*/nullptr};
   bool connect_backup_jobs_enabled_;
   MockClientSocketFactory client_socket_factory_;
-  raw_ptr<TestConnectJobFactory> connect_job_factory_;
   RecordingNetLogObserver net_log_observer_;
+
   // These parameters are never actually used to create a TransportConnectJob.
   scoped_refptr<ClientSocketPool::SocketParams> params_;
+
+  // Must outlive `connect_job_factory_`
   std::unique_ptr<TransportClientSocketPool> pool_;
+
+  raw_ptr<TestConnectJobFactory> connect_job_factory_;
   ClientSocketPoolTest test_base_;
 };
 
@@ -858,8 +862,8 @@ TEST_F(ClientSocketPoolBaseTest, GroupSeparation) {
   const SchemefulSite kSiteA(GURL("http://a.test/"));
   const SchemefulSite kSiteB(GURL("http://b.test/"));
   const NetworkAnonymizationKey kNetworkAnonymizationKeys[] = {
-      NetworkAnonymizationKey(kSiteA, kSiteA, /*is_cross_site=*/false),
-      NetworkAnonymizationKey(kSiteB, kSiteB, /*is_cross_site=*/false),
+      NetworkAnonymizationKey::CreateSameSite(kSiteA),
+      NetworkAnonymizationKey::CreateSameSite(kSiteB),
   };
 
   const SecureDnsPolicy kSecureDnsPolicys[] = {SecureDnsPolicy::kAllow,
@@ -2240,7 +2244,7 @@ TEST_F(ClientSocketPoolBaseTest, ReleaseSockets) {
   // Start job 1 (async OK)
   connect_job_factory_->set_job_type(TestConnectJob::kMockPendingJob);
 
-  std::vector<TestSocketRequest*> request_order;
+  std::vector<raw_ptr<TestSocketRequest, VectorExperimental>> request_order;
   size_t completion_count;  // unused
   TestSocketRequest req1(&request_order, &completion_count);
   int rv = req1.handle()->Init(
@@ -2295,7 +2299,7 @@ TEST_F(ClientSocketPoolBaseTest, PendingJobCompletionOrder) {
   // First two jobs are async.
   connect_job_factory_->set_job_type(TestConnectJob::kMockPendingFailingJob);
 
-  std::vector<TestSocketRequest*> request_order;
+  std::vector<raw_ptr<TestSocketRequest, VectorExperimental>> request_order;
   size_t completion_count;  // unused
   TestSocketRequest req1(&request_order, &completion_count);
   int rv = req1.handle()->Init(
@@ -4303,7 +4307,7 @@ TEST_F(ClientSocketPoolBaseTest, PreconnectWithoutBackupJob) {
   // *would* complete if it were created.
   base::RunLoop loop;
   connect_job_factory_->set_job_type(TestConnectJob::kMockPendingJob);
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, loop.QuitClosure(), base::Seconds(1));
   loop.Run();
   EXPECT_FALSE(pool_->HasGroupForTesting(TestGroupId("a")));
@@ -5707,7 +5711,7 @@ enum class RefreshType {
 };
 
 // Common base class to test RefreshGroup() when called from either
-// OnSSLConfigForServerChanged() matching a specific group or the pool's proxy.
+// OnSSLConfigForServersChanged() matching a specific group or the pool's proxy.
 //
 // Tests which test behavior specific to one or the other case should use
 // ClientSocketPoolBaseTest directly. In particular, there is no "other group"
@@ -5729,7 +5733,7 @@ class ClientSocketPoolBaseRefreshTest
             max_sockets, max_sockets_per_group, kUnusedIdleSocketTimeout,
             ClientSocketPool::used_idle_socket_timeout(),
             enable_backup_connect_jobs,
-            PacResultElementToProxyServer("HTTPS myproxy:70"));
+            PacResultElementToProxyChain("HTTPS myproxy:70"));
         break;
     }
   }
@@ -5742,20 +5746,20 @@ class ClientSocketPoolBaseRefreshTest
     // Note this GroupId will match GetGroupId() unless
     // kPartitionConnectionsByNetworkAnonymizationKey is enabled.
     const SchemefulSite kSite(GURL("https://b/"));
-    const NetworkAnonymizationKey kNetworkAnonymizationKey(
-        kSite, kSite, /*is_cross_site=*/false);
+    const auto kNetworkAnonymizationKey =
+        NetworkAnonymizationKey::CreateSameSite(kSite);
     return TestGroupId("a", 443, url::kHttpsScheme,
                        PrivacyMode::PRIVACY_MODE_DISABLED,
                        kNetworkAnonymizationKey);
   }
 
-  void OnSSLConfigForServerChanged() {
+  void OnSSLConfigForServersChanged() {
     switch (GetParam()) {
       case RefreshType::kServer:
-        pool_->OnSSLConfigForServerChanged(HostPortPair("a", 443));
+        pool_->OnSSLConfigForServersChanged({HostPortPair("a", 443)});
         break;
       case RefreshType::kProxy:
-        pool_->OnSSLConfigForServerChanged(HostPortPair("myproxy", 70));
+        pool_->OnSSLConfigForServersChanged({HostPortPair("myproxy", 70)});
         break;
     }
   }
@@ -5786,7 +5790,7 @@ TEST_P(ClientSocketPoolBaseRefreshTest, RefreshGroupCreatesNewConnectJobs) {
   // success.
   connect_job_factory_->set_job_type(TestConnectJob::kMockJob);
 
-  OnSSLConfigForServerChanged();
+  OnSSLConfigForServersChanged();
   EXPECT_EQ(OK, callback.WaitForResult());
   ASSERT_TRUE(handle.socket());
   EXPECT_EQ(0, pool_->IdleSocketCount());
@@ -5818,7 +5822,7 @@ TEST_P(ClientSocketPoolBaseRefreshTest, RefreshGroupClosesIdleConnectJobs) {
   EXPECT_EQ(2u, pool_->IdleSocketCountInGroup(kGroupId));
   EXPECT_EQ(2u, pool_->IdleSocketCountInGroup(kGroupIdInPartition));
 
-  OnSSLConfigForServerChanged();
+  OnSSLConfigForServersChanged();
   EXPECT_EQ(0, pool_->IdleSocketCount());
   EXPECT_FALSE(pool_->HasGroupForTesting(kGroupId));
   EXPECT_FALSE(pool_->HasGroupForTesting(kGroupIdInPartition));
@@ -5839,7 +5843,7 @@ TEST_F(ClientSocketPoolBaseTest,
   EXPECT_EQ(2, pool_->IdleSocketCount());
   EXPECT_EQ(2u, pool_->IdleSocketCountInGroup(kOtherGroupId));
 
-  pool_->OnSSLConfigForServerChanged(HostPortPair("a", 443));
+  pool_->OnSSLConfigForServersChanged({HostPortPair("a", 443)});
   ASSERT_TRUE(pool_->HasGroupForTesting(kOtherGroupId));
   EXPECT_EQ(2, pool_->IdleSocketCount());
   EXPECT_EQ(2u, pool_->IdleSocketCountInGroup(kOtherGroupId));
@@ -5860,7 +5864,7 @@ TEST_P(ClientSocketPoolBaseRefreshTest, RefreshGroupPreventsSocketReuse) {
   ASSERT_TRUE(pool_->HasGroupForTesting(kGroupId));
   EXPECT_EQ(1, pool_->NumActiveSocketsInGroupForTesting(kGroupId));
 
-  OnSSLConfigForServerChanged();
+  OnSSLConfigForServersChanged();
 
   handle.Reset();
   EXPECT_EQ(0, pool_->IdleSocketCount());
@@ -5886,7 +5890,7 @@ TEST_F(ClientSocketPoolBaseTest,
   ASSERT_TRUE(pool_->HasGroupForTesting(kOtherGroupId));
   EXPECT_EQ(1, pool_->NumActiveSocketsInGroupForTesting(kOtherGroupId));
 
-  pool_->OnSSLConfigForServerChanged(HostPortPair("a", 443));
+  pool_->OnSSLConfigForServersChanged({HostPortPair("a", 443)});
 
   handle.Reset();
   EXPECT_EQ(1, pool_->IdleSocketCount());
@@ -5909,7 +5913,7 @@ TEST_P(ClientSocketPoolBaseRefreshTest,
 
   // This should update the generation, but not cancel the old ConnectJob - it's
   // not safe to do anything while waiting on the original ConnectJob.
-  OnSSLConfigForServerChanged();
+  OnSSLConfigForServersChanged();
 
   // Providing auth credentials and restarting the request with them will cause
   // the ConnectJob to complete successfully, but the result will be discarded
@@ -5934,11 +5938,17 @@ TEST_P(ClientSocketPoolBaseRefreshTest,
 }
 
 TEST_F(ClientSocketPoolBaseTest, RefreshProxyRefreshesAllGroups) {
+  // Create a proxy chain containing `myproxy` (which is refreshed) and
+  // nonrefreshedproxy (which is not), verifying that if any proxy in a chain is
+  // refreshed, all groups are refreshed.
+  ProxyChain proxy_chain({
+      PacResultElementToProxyServer("HTTPS myproxy:70"),
+      PacResultElementToProxyServer("HTTPS nonrefreshedproxy:70"),
+  });
   CreatePoolWithIdleTimeouts(kDefaultMaxSockets, kDefaultMaxSocketsPerGroup,
                              kUnusedIdleSocketTimeout,
                              ClientSocketPool::used_idle_socket_timeout(),
-                             false /* no backup connect jobs */,
-                             PacResultElementToProxyServer("HTTPS myproxy:70"));
+                             false /* no backup connect jobs */, proxy_chain);
 
   const ClientSocketPool::GroupId kGroupId1 =
       TestGroupId("a", 443, url::kHttpsScheme);
@@ -5979,7 +5989,7 @@ TEST_F(ClientSocketPoolBaseTest, RefreshProxyRefreshesAllGroups) {
 
   // Changes to some other proxy do not affect the pool. The idle socket remains
   // alive and closing |handle2| makes the socket available for the pool.
-  pool_->OnSSLConfigForServerChanged(HostPortPair("someotherproxy", 70));
+  pool_->OnSSLConfigForServersChanged({HostPortPair("someotherproxy", 70)});
 
   ASSERT_TRUE(pool_->HasGroupForTesting(kGroupId1));
   EXPECT_EQ(1, pool_->NumActiveSocketsInGroupForTesting(kGroupId1));
@@ -5993,7 +6003,7 @@ TEST_F(ClientSocketPoolBaseTest, RefreshProxyRefreshesAllGroups) {
   EXPECT_EQ(1u, pool_->IdleSocketCountInGroup(kGroupId2));
 
   // Changes to the matching proxy refreshes all groups.
-  pool_->OnSSLConfigForServerChanged(HostPortPair("myproxy", 70));
+  pool_->OnSSLConfigForServersChanged({HostPortPair("myproxy", 70)});
 
   // Idle sockets are closed.
   EXPECT_EQ(0, pool_->IdleSocketCount());
@@ -6048,7 +6058,7 @@ TEST_F(ClientSocketPoolBaseTest, RefreshBothPrivacyAndNormalSockets) {
   ASSERT_TRUE(pool_->HasGroupForTesting(kOtherGroupId));
   EXPECT_EQ(1, pool_->NumActiveSocketsInGroupForTesting(kOtherGroupId));
 
-  pool_->OnSSLConfigForServerChanged(HostPortPair("a", 443));
+  pool_->OnSSLConfigForServersChanged({HostPortPair("a", 443)});
 
   // Active sockets continue to be active.
   ASSERT_TRUE(pool_->HasGroupForTesting(kGroupId));

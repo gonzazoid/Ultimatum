@@ -58,7 +58,7 @@ void NativeEventObserver::OnWindowEventDispatcherStartedProcessing(
 void NativeEventObserver::OnWindowEventDispatcherFinishedProcessingEvent(
     aura::WindowEventDispatcher* dispatcher) {
   EventInfo& info = events_being_processed_.back();
-  did_run_event_callback_.Run(info.unique_id);
+  did_run_event_callback_.Run(info.unique_id.get());
   events_being_processed_.pop_back();
 }
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
@@ -78,7 +78,7 @@ void NativeEventObserver::DidDispatchMSG(const MSG& msg) {
 }
 #endif  // BUILDFLAG(IS_WIN)
 
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_FUCHSIA)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_IOS)
 void NativeEventObserver::RegisterObserver() {}
 void NativeEventObserver::DeregisterObserver() {}
 #endif  // BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_FUCHSIA)

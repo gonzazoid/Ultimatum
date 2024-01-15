@@ -11,7 +11,6 @@
 
 #include "base/files/file_path.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 
 namespace chrome {
 
@@ -21,6 +20,11 @@ extern const base::FilePath::CharType kHelperProcessExecutableName[];
 extern const base::FilePath::CharType kBrowserProcessExecutablePath[];
 extern const base::FilePath::CharType kHelperProcessExecutablePath[];
 #if BUILDFLAG(IS_MAC)
+extern const base::FilePath::CharType
+    kGoogleChromeForTestingBrowserProcessExecutablePath[];
+extern const base::FilePath::CharType
+    kGoogleChromeBrowserProcessExecutablePath[];
+extern const base::FilePath::CharType kChromiumBrowserProcessExecutablePath[];
 // NOTE: if you change the value of kFrameworkName, please don't forget to
 // update components/test/run_all_unittests.cc as well.
 // TODO(tfarina): Remove the comment above, when you fix components to use plist
@@ -43,6 +47,7 @@ extern const base::FilePath::CharType kGuestProfileDir[];
 extern const base::FilePath::CharType kSystemProfileDir[];
 
 // filenames
+extern const base::FilePath::CharType kAccountPreferencesFilename[];
 extern const base::FilePath::CharType kCacheDirname[];
 extern const base::FilePath::CharType kCookieFilename[];
 extern const base::FilePath::CharType kCRLSetFilename[];
@@ -74,7 +79,6 @@ extern const base::FilePath::CharType kServiceStateFileName[];
 extern const base::FilePath::CharType kSingletonCookieFilename[];
 extern const base::FilePath::CharType kSingletonLockFilename[];
 extern const base::FilePath::CharType kSingletonSocketFilename[];
-extern const base::FilePath::CharType kSupervisedUserSettingsFilename[];
 extern const base::FilePath::CharType kThemePackFilename[];
 extern const base::FilePath::CharType kTransportSecurityPersisterFilename[];
 extern const base::FilePath::CharType kTrustTokenFilename[];
@@ -99,14 +103,6 @@ extern const wchar_t kUserDataDirname[];
 // one-process-per-site mode for all tabs (with poor responsiveness), while
 // still securely isolating each extension in its own process.
 extern const float kMaxShareOfExtensionProcesses;
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-// An anonymous profile that is used for lock screen apps.
-extern const char kLockScreenAppProfile[];
-
-// An incognito profile that is used for user authentication on lock screen.
-extern const char kLockScreenProfile[];
-#endif
 
 // Used to identify the application to the system AV function in Windows.
 extern const char kApplicationClientIDStringForAVScanning[];

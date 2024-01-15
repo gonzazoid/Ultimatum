@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "cc/metrics/event_metrics.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -54,8 +54,13 @@ class EventsMetricsManagerTest : public testing::Test {
   std::unique_ptr<EventMetrics> CreateEventMetrics(ui::EventType type) {
     test_tick_clock_.Advance(base::Microseconds(10));
     base::TimeTicks event_time = test_tick_clock_.NowTicks();
+    test_tick_clock_.Advance(base::Microseconds(5));
+    base::TimeTicks arrived_in_browser_main_timestamp =
+        test_tick_clock_.NowTicks();
     test_tick_clock_.Advance(base::Microseconds(10));
-    return EventMetrics::CreateForTesting(type, event_time, &test_tick_clock_);
+    return EventMetrics::CreateForTesting(type, event_time,
+                                          arrived_in_browser_main_timestamp,
+                                          &test_tick_clock_, std::nullopt);
   }
 
   EventsMetricsManager manager_;
@@ -87,7 +92,7 @@ TEST_F(EventsMetricsManagerTest, EventsMetricsSaved) {
 
       // A non-interesting event type for which SaveActiveEventMetrics() is
       // called inside its monitor scope.
-      {CreateEventMetrics(ui::ET_MOUSE_MOVED), Behavior::kSaveInsideScope},
+      {CreateEventMetrics(ui::ET_MOUSE_ENTERED), Behavior::kSaveInsideScope},
   };
   EXPECT_NE(events[0].first, nullptr);
   EXPECT_NE(events[1].first, nullptr);

@@ -3,9 +3,11 @@
 // found in the LICENSE file.
 
 import {OncMojo} from 'chrome://resources/ash/common/network/onc_mojo.js';
+import {NetworkStateProperties as Network} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/cros_network_config.mojom-webui.js';
 import {NetworkType} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/network_types.mojom-webui.js';
 
-import {CalibrationComponentStatus, CalibrationStatus, Component, ComponentRepairStatus, ComponentType, Network, QrCode, RmadErrorCode, State, StateResult} from './shimless_rma_types.js';
+import {CalibrationComponentStatus, CalibrationStatus, Component, ComponentRepairStatus, ComponentType, QrCode, RmadErrorCode, State, StateResult} from './shimless_rma.mojom-webui.js';
+
 
 /** @type {!Array<!StateResult>} */
 export const fakeStates = [
@@ -160,11 +162,9 @@ export const fakeChromeVersion = [
 export const fakeRsuChallengeCode =
     'HRBXHV84NSTHT25WJECYQKB8SARWFTMSWNGFT2FVEEPX69VE99USV3QFBEANDVXGQVL93QK2M6P3DNV4';
 
-/** @type {!QrCode} */
-export const fakeRsuChallengeQrCode = {
-  size: 4,
-  data: [0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0],
-};
+/** @type {!Array<number>} */
+export const fakeRsuChallengeQrCode =
+    [0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0];
 
 /** @type {!Array<!Component>} */
 export const fakeComponents = [
@@ -240,7 +240,7 @@ export const fakeComponentsForRepairStateTest = [
 export const fakeCalibrationComponentsWithFails = [
   {
     component: ComponentType.kCamera,
-    status: CalibrationStatus.kCalibrationWaiting,
+    status: CalibrationStatus.kCalibrationFailed,
     progress: 0.0,
   },
   {
@@ -250,17 +250,17 @@ export const fakeCalibrationComponentsWithFails = [
   },
   {
     component: ComponentType.kLidAccelerometer,
-    status: CalibrationStatus.kCalibrationFailed,
+    status: CalibrationStatus.kCalibrationComplete,
     progress: 1.0,
   },
   {
     component: ComponentType.kBaseAccelerometer,
-    status: CalibrationStatus.kCalibrationInProgress,
+    status: CalibrationStatus.kCalibrationComplete,
     progress: 1.0,
   },
   {
     component: ComponentType.kTouchpad,
-    status: CalibrationStatus.kCalibrationSkip,
+    status: CalibrationStatus.kCalibrationComplete,
     progress: 0.0,
   },
   {
@@ -269,7 +269,7 @@ export const fakeCalibrationComponentsWithFails = [
     progress: 1.0,
   },
   {
-    component: ComponentType.kScreen,
+    component: ComponentType.kBaseGyroscope,
     status: CalibrationStatus.kCalibrationFailed,
     progress: 1.0,
   },
@@ -316,8 +316,11 @@ export const fakeDeviceRegions = ['EMEA', 'APAC', 'AMER'];
 export const fakeDeviceSkus = [1, 2, 3];
 
 /** @type {!Array<string>} */
-export const fakeDeviceWhiteLabels =
-    ['White-label 1', 'White-label 2', 'White-label 3', ''];
+export const fakeDeviceCustomLabels =
+    ['Custom-label 1', 'Custom-label 2', 'Custom-label 3', ''];
+
+/** @type {!Array<string>} */
+export const fakeDeviceSkuDescriptions = ['SKU 1', 'SKU 2', 'SKU 3'];
 
 /** @type {string} */
 export const fakeLog =

@@ -15,13 +15,13 @@
 #include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/side_search/default_search_icon_source.h"
-#include "chrome/browser/ui/views/side_search/side_search_browser_controller.h"
 #include "chrome/browser/ui/views/side_search/side_search_views_utils.h"
 #include "chrome/browser/ui/views/side_search/unified_side_search_controller.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/feature_engagement/public/event_constants.h"
 #include "components/feature_engagement/public/feature_constants.h"
 #include "components/feature_engagement/public/tracker.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -51,6 +51,10 @@ SideSearchIconView::SideSearchIconView(
   SetUpForInOutAnimation();
   SetPaintLabelOverSolidBackground(true);
   browser_->tab_strip_model()->AddObserver(this);
+  SetAccessibilityProperties(
+      /*role*/ std::nullopt,
+      l10n_util::GetStringUTF16(
+          IDS_TOOLTIP_SIDE_SEARCH_TOOLBAR_BUTTON_NOT_ACTIVATED));
 }
 
 SideSearchIconView::~SideSearchIconView() {
@@ -101,20 +105,22 @@ void SideSearchIconView::UpdateImpl() {
   const bool was_visible = GetVisible();
   const bool should_show =
       tab_contents_helper->CanShowSidePanelForCommittedNavigation() &&
-      !side_search::IsSideSearchToggleOpen(browser_view);
+      !side_search::IsSideSearchToggleOpen(browser_);
   SetVisible(should_show);
 
-  if (should_show && !was_visible && !MaybeShowPageActionLabel() &&
-      tab_contents_helper->returned_to_previous_srp_count() > 0) {
-    // If we are not animating-in the label text make a request to show the
-    // IPH if we detect the user may be engaging in a pogo-sticking journey.
+  if (should_show && !was_visible) {
+    // Now IPH and action label share the same frontend triggering condition.
+    // Make sure we show IPH first if possible.
     browser_view->MaybeShowFeaturePromo(
         feature_engagement::kIPHSideSearchFeature);
+    MaybeShowPageActionLabel();
   }
 
   if (!should_show) {
     HidePageActionLabel();
-    browser_view->CloseFeaturePromo(feature_engagement::kIPHSideSearchFeature);
+    browser_view->CloseFeaturePromo(
+        feature_engagement::kIPHSideSearchFeature,
+        user_education::EndFeaturePromoReason::kAbortPromo);
   }
 }
 
@@ -126,21 +132,18 @@ void SideSearchIconView::OnExecuting(PageActionIconView::ExecuteSource source) {
   // Reset the slide animation if in progress.
   HidePageActionLabel();
 
-  BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser_);
+  SidePanelUI* side_panel_ui = SidePanelUI::GetSidePanelUIForBrowser(browser_);
 
   // TODO(crbug.com/1339789): BrowserView should never be null here, investigate
   // why GetBrowserViewForBrowser() is returning null in certain circumstances
   // and remove this check.
-  if (!browser_view)
+  if (!side_panel_ui) {
     return;
-
-  if (base::FeatureList::IsEnabled(features::kUnifiedSidePanel)) {
-    browser_view->side_panel_coordinator()->Show(
-        SidePanelEntry::Id::kSideSearch,
-        SidePanelUtil::SidePanelOpenTrigger::kSideSearchPageAction);
-  } else {
-    browser_view->side_search_controller()->ToggleSidePanel();
   }
+
+  side_panel_ui->Show(
+      SidePanelEntry::Id::kSideSearch,
+      SidePanelUtil::SidePanelOpenTrigger::kSideSearchPageAction);
   auto* tracker = feature_engagement::TrackerFactory::GetForBrowserContext(
       browser_->profile());
   if (tracker)
@@ -153,17 +156,14 @@ views::BubbleDialogDelegate* SideSearchIconView::GetBubble() const {
 
 const gfx::VectorIcon& SideSearchIconView::GetVectorIcon() const {
   // Default to the kSearchIcon if the DSE icon image is not available.
-  return vector_icons::kSearchIcon;
+  return OmniboxFieldTrial::IsChromeRefreshIconsEnabled()
+             ? vector_icons::kSearchChromeRefreshIcon
+             : vector_icons::kSearchIcon;
 }
 
 ui::ImageModel SideSearchIconView::GetSizedIconImage(int size) const {
   return DefaultSearchIconSource::GetOrCreateForBrowser(browser_)
       ->GetSizedIconImage(size);
-}
-
-std::u16string SideSearchIconView::GetTextForTooltipAndAccessibleName() const {
-  return l10n_util::GetStringUTF16(
-      IDS_TOOLTIP_SIDE_SEARCH_TOOLBAR_BUTTON_NOT_ACTIVATED);
 }
 
 void SideSearchIconView::AnimationProgressed(const gfx::Animation* animation) {
@@ -200,7 +200,7 @@ bool SideSearchIconView::MaybeShowPageActionLabel() {
   }
 
   should_extend_label_shown_duration_ = true;
-  AnimateIn(absl::nullopt);
+  AnimateIn(std::nullopt);
 
   // Note that `Dismiss()` in this case does not dismiss the UI. It's telling
   // the FE backend that the promo is done so that other promos can run. The
@@ -216,5 +216,5 @@ void SideSearchIconView::HidePageActionLabel() {
   ResetSlideAnimation(false);
 }
 
-BEGIN_METADATA(SideSearchIconView, PageActionIconView)
+BEGIN_METADATA(SideSearchIconView)
 END_METADATA

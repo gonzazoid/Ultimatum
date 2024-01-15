@@ -1,5 +1,5 @@
-# crbug.com/1188310
--IcuUtilTest.InitializeExtraIcuFromFdSucceeds
+# crbug.com/1260521
+-ModuleCacheTest.CheckAgainstProcMaps
 
-# crbug.com/1191029
--ProcessMetricsTestLinux.GetPerThreadCumulativeCPUTimeInState
+# crbug.com/1399972
+-CheckExitCodeAfterSignalHandlerDeathTest.CheckSIGSEGVNonCanonicalAddress

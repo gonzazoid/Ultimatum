@@ -5,9 +5,10 @@
 #ifndef CHROME_BROWSER_ASH_LOGIN_SAML_LOCKSCREEN_REAUTH_DIALOG_TEST_HELPER_H_
 #define CHROME_BROWSER_ASH_LOGIN_SAML_LOCKSCREEN_REAUTH_DIALOG_TEST_HELPER_H_
 
+#include <optional>
+
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 class WebContents;
@@ -15,7 +16,6 @@ class WebContents;
 
 namespace ash {
 
-class InSessionPasswordSyncManager;
 class LockScreenStartReauthDialog;
 class LockScreenStartReauthUI;
 class LockScreenReauthHandler;
@@ -30,13 +30,13 @@ class LockScreenReauthDialogTestHelper {
  public:
   // Triggers the online re-authentication dialog.
   // Precondition: A user is logged in and the lock screen is shown.
-  // Returns an empty `absl::optional` if the operation fails.
-  static absl::optional<LockScreenReauthDialogTestHelper> ShowDialogAndWait();
+  // Returns an empty `std::optional` if the operation fails.
+  static std::optional<LockScreenReauthDialogTestHelper> ShowDialogAndWait();
 
   // Triggers the online re-authentication dialog, clicks through VerifyAccount
-  // screen and waits for IdP page to load. Returns an empty `absl::optional` if
+  // screen and waits for IdP page to load. Returns an empty `std::optional` if
   // the operation fails.
-  static absl::optional<LockScreenReauthDialogTestHelper>
+  static std::optional<LockScreenReauthDialogTestHelper>
   StartSamlAndWaitForIdpPageLoad();
 
   ~LockScreenReauthDialogTestHelper();
@@ -72,16 +72,23 @@ class LockScreenReauthDialogTestHelper {
   // Clicks the 'Cancel' button on the 'Saml Account' screen.
   void ClickCancelButtonOnSamlScreen();
 
-  // Waits for a screen with the `saml-container` element to be shown.
-  void WaitForSamlScreen();
+  // Clicks the 'Enter Google Account Info' button on the SAML screen.
+  void ClickChangeIdPButtonOnSamlScreen();
 
-  // Next members allow to check visibility for some screens ('verify account',
-  // ' error screen' and 'saml screen')
+  // Check visibility of native Gaia button on online re-authentication dialog.
+  void ExpectGaiaButtonsVisible();
+  void ExpectGaiaButtonsHidden();
+
+  // Waits for sign-in webview to be shown.
+  void WaitForSigninWebview();
+
   void ExpectVerifyAccountScreenVisible();
   void ExpectVerifyAccountScreenHidden();
   void ExpectErrorScreenVisible();
-  void ExpectSamlScreenVisible();
-  void ExpectSamlScreenHidden();
+  void ExpectSigninWebviewVisible();
+  void ExpectSigninWebviewHidden();
+
+  void ExpectGaiaScreenVisible();
 
   // Next members allow to check visibility of some elements on 'confirm
   // password screen' and also help to fill forms. Precondition: 'confirm
@@ -145,18 +152,24 @@ class LockScreenReauthDialogTestHelper {
   void WaitForNetworkDialogToLoad();
 
   // Main Dialog
-  base::raw_ptr<InSessionPasswordSyncManager> password_sync_manager_ = nullptr;
-  base::raw_ptr<LockScreenStartReauthDialog> reauth_dialog_ = nullptr;
-  base::raw_ptr<LockScreenStartReauthUI> reauth_webui_controller_ = nullptr;
-  base::raw_ptr<LockScreenReauthHandler> main_handler_ = nullptr;
+  raw_ptr<LockScreenStartReauthDialog, AcrossTasksDanglingUntriaged>
+      reauth_dialog_ = nullptr;
+  raw_ptr<LockScreenStartReauthUI, AcrossTasksDanglingUntriaged>
+      reauth_webui_controller_ = nullptr;
+  raw_ptr<LockScreenReauthHandler, AcrossTasksDanglingUntriaged> main_handler_ =
+      nullptr;
 
   // Network dialog which is owned by the main dialog.
-  base::raw_ptr<LockScreenNetworkDialog> network_dialog_ = nullptr;
-  base::raw_ptr<LockScreenNetworkUI> network_webui_controller_ = nullptr;
-  base::raw_ptr<NetworkConfigMessageHandler> network_handler_ = nullptr;
+  raw_ptr<LockScreenNetworkDialog, AcrossTasksDanglingUntriaged>
+      network_dialog_ = nullptr;
+  raw_ptr<LockScreenNetworkUI, AcrossTasksDanglingUntriaged>
+      network_webui_controller_ = nullptr;
+  raw_ptr<NetworkConfigMessageHandler, AcrossTasksDanglingUntriaged>
+      network_handler_ = nullptr;
 
   // Captive portal dialog which is owned by the main dialog.
-  base::raw_ptr<LockScreenCaptivePortalDialog> captive_portal_dialog_ = nullptr;
+  raw_ptr<LockScreenCaptivePortalDialog, AcrossTasksDanglingUntriaged>
+      captive_portal_dialog_ = nullptr;
 };
 
 }  // namespace ash

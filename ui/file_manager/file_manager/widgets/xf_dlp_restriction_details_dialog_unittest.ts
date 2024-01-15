@@ -5,55 +5,21 @@
 import './xf_dlp_restriction_details_dialog.js';
 
 import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {assertEquals, assertFalse, assertNotEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
-
-import {installMockChrome} from '../common/js/mock_chrome.js';
+import {getTrustedHTML} from 'chrome://resources/js/static_types.js';
+import {assertEquals, assertFalse, assertNotEquals, assertTrue} from 'chrome://webui-test/chromeos/chai_assert.js';
 
 import {XfDlpRestrictionDetailsDialog} from './xf_dlp_restriction_details_dialog.js';
+
+const drive = chrome.fileManagerPrivate.VolumeType.DRIVE;
+const removable = chrome.fileManagerPrivate.VolumeType.REMOVABLE;
 
 /**
  * Creates new <xf-dlp-restriction-details-dialog> element for each test.
  */
 export function setUp() {
-  document.body.innerHTML = '<xf-dlp-restriction-details-dialog>' +
-      '</xf-dlp-restriction-details-dialog>';
-
-  // Mock LoadTimeData strings.
-  loadTimeData.resetForTesting({
-    'DLP_RESTRICTION_DETAILS_TITLE': 'Administrator policy',
-    'DLP_RESTRICTION_DETAILS_MESSAGE': 'This file is confidential and subject' +
-        'to administrator policy.',
-    'DLP_RESTRICTION_DETAILS_BLOCK': 'Administrator policy prevents:',
-    'DLP_RESTRICTION_DETAILS_WARN': 'Administrator policy doesn\'t recommend:',
-    'DLP_RESTRICTION_DETAILS_REPORT': 'Administrator monitors:',
-    'DLP_RESTRICTION_DETAILS_FILE_ACCESS': 'File access by $1',
-    'DLP_RESTRICTION_DETAILS_FILE_ACCESS_ALL': 'File access by all urls',
-    'DLP_RESTRICTION_DETAILS_FILE_ACCESS_ALL_EXCEPT':
-        'File access by all urls except $1',
-    'DLP_RESTRICTION_DETAILS_FILE_TRANSFER': 'File transfer to $1',
-    'DRIVE_DIRECTORY_LABEL': 'Google Drive',
-    'DLP_COMPONENT_REMOVABLE': 'removable storage',
-    'DLP_COMPONENT_LINUX': 'Linux',
-    'DLP_COMPONENT_PLAY': 'Play',
-    'DLP_COMPONENT_VM': 'virtual machine',
-  });
-
-  const mockChrome = {
-    fileManagerPrivate: {
-      DlpLevel:
-          {BLOCK: 'block', WARN: 'warn', REPORT: 'report', ALLOW: 'allow'},
-      VolumeType: {
-        DRIVE: 'drive',
-        REMOVABLE: 'removable',
-        CROSTINI: 'crostini',
-        ANDROID_FILES: 'android_files',
-        GUEST_OS: 'guest_os',
-      },
-    },
-    runtime: {},
-  };
-  installMockChrome(mockChrome);
+  document.body.innerHTML = getTrustedHTML`
+    <xf-dlp-restriction-details-dialog></xf-dlp-restriction-details-dialog>
+  `;
 }
 
 /** Returns the <xf-dlp-restriction-details-dialog> element. */
@@ -204,11 +170,12 @@ export async function testBlockAllUrls(done: () => void) {
   const details: chrome.fileManagerPrivate.DlpRestrictionDetails[] = [{
     level: chrome.fileManagerPrivate.DlpLevel.BLOCK,
     urls: ['https://external.com', '*'],
-    components: ['drive'],
+    components: [drive],
   }];
   dialog.showDlpRestrictionDetailsDialog(details);
   assertFalse(blockDetails.hasAttribute('hidden'));
-  assertEquals(getBlockUrls().textContent, 'File access by all urls');
+  assertEquals(
+      getBlockUrls().textContent, 'File access by all websites and URLs');
   assertEquals(
       getBlockComponents().textContent, 'File transfer to Google Drive');
 
@@ -244,7 +211,7 @@ export async function testBlockAllUrlsExcept(done: () => void) {
   assertFalse(blockDetails.hasAttribute('hidden'));
   assertEquals(
       getBlockUrls().textContent,
-      'File access by all urls except https://internal.com');
+      'File access by all websites and URLs except https://internal.com');
   // Components should still be hidden.
   assertTrue(blockDetails.querySelector('#block-li-components')!.hasAttribute(
       'hidden'));
@@ -267,7 +234,7 @@ export async function testBlockComponents(done: () => void) {
   const details: chrome.fileManagerPrivate.DlpRestrictionDetails[] = [{
     level: chrome.fileManagerPrivate.DlpLevel.BLOCK,
     urls: [],
-    components: ['drive', 'removable'],
+    components: [drive, removable],
   }];
   dialog.showDlpRestrictionDetailsDialog(details);
   assertFalse(blockDetails.hasAttribute('hidden'));
@@ -300,7 +267,7 @@ export async function testMultipleDialogs(done: () => void) {
   const details1: chrome.fileManagerPrivate.DlpRestrictionDetails[] = [{
     level: chrome.fileManagerPrivate.DlpLevel.BLOCK,
     urls: ['https://external.com'],
-    components: ['drive'],
+    components: [drive],
   }];
   dialog.showDlpRestrictionDetailsDialog(details1);
   assertFalse(blockDetails.hasAttribute('hidden'));
@@ -319,7 +286,7 @@ export async function testMultipleDialogs(done: () => void) {
     {
       level: chrome.fileManagerPrivate.DlpLevel.WARN,
       urls: ['https://example.com'],
-      components: ['drive', 'removable'],
+      components: [drive, removable],
     },
     {
       level: chrome.fileManagerPrivate.DlpLevel.REPORT,
@@ -348,7 +315,7 @@ export async function testMultipleDialogs(done: () => void) {
     {
       level: chrome.fileManagerPrivate.DlpLevel.REPORT,
       urls: [],
-      components: ['drive', 'removable'],
+      components: [drive, removable],
     },
   ];
   dialog.showDlpRestrictionDetailsDialog(details3);

@@ -6,10 +6,12 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/test/base/testing_profile.h"
-#include "chromeos/ash/components/dbus/concierge/concierge_service.pb.h"
 #include "chromeos/ash/components/dbus/concierge/fake_concierge_client.h"
+#include "chromeos/ash/components/dbus/vm_concierge/concierge_service.pb.h"
 #include "content/public/test/browser_task_environment.h"
 #include "dbus/bus.h"
 #include "dbus/object_proxy.h"
@@ -42,7 +44,7 @@ class TestConciergeClient : public FakeConciergeClient {
     if (!service_is_available_) {
       callbacks_.push_back(std::move(callback));
     } else {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(std::move(callback), service_is_available_));
     }
@@ -106,7 +108,7 @@ class ConciergeHelperServiceTest : public testing::Test {
  private:
   content::BrowserTaskEnvironment task_environment_;
   TestingProfile profile_;
-  ConciergeHelperService* service_;
+  raw_ptr<ConciergeHelperService> service_;
 };
 
 // Tests that ConciergeHelperService makes cpu restriction requests correctly.

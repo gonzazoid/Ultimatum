@@ -66,10 +66,13 @@ class MockCastDialogController : public media_router::CastDialogController {
                     media_router::MediaCastMode cast_mode) override {}
   void StopCasting(const media_router::MediaRoute::Id& route_id) override {}
   void ClearIssue(const media_router::Issue::Id& issue_id) override {}
+  void FreezeRoute(const media_router::MediaRoute::Id& route_id) override {}
+  void UnfreezeRoute(const media_router::MediaRoute::Id& route_id) override {}
   std::unique_ptr<media_router::MediaRouteStarter> TakeMediaRouteStarter()
       override {
     return nullptr;
   }
+  void RegisterDestructor(base::OnceClosure destructor) override {}
 };
 
 }  // namespace
@@ -104,10 +107,9 @@ class CastDialogViewBrowserTest : public DialogBrowserTest {
           CreateConnectedSink(),
           CreateUnavailableSink(),
       });
-    } else if (name == "NoSinks") {
-      model = CreateModelWithSinks({});
     } else {
-      NOTREACHED() << "Unexpected test name " << name;
+      CHECK_EQ(name, "NoSinks");
+      model = CreateModelWithSinks({});
     }
     media_router::CastDialogView* dialog =
         cast_dialog_coordinator_.GetCastDialogView();

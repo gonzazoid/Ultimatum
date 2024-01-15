@@ -38,8 +38,6 @@ enum class NameForm {
   kGaiaAndLocalName,
 };
 
-enum class AccountCategory { kConsumer, kEnterprise };
-
 class ProfileAttributesEntry {
  public:
   static void RegisterLocalStatePrefs(PrefRegistrySimple* registry);
@@ -153,6 +151,14 @@ class ProfileAttributesEntry {
   // standard gmail.com account). Unlike for other string getters, the returned
   // value is UTF8 encoded.
   std::string GetHostedDomain() const;
+
+  // Returns the enrollment token to get policies for a profile.
+  std::string GetProfileManagementEnrollmentToken() const;
+
+  // Returns the signin id for a profile managed by a token. This may be empty
+  // even if there is an enrollment token.
+  std::string GetProfileManagementId() const;
+
   // Returns an account id key of the user of the profile. Empty if the profile
   // doesn't have any associated `user_manager::User`.
   std::string GetAccountIdKey() const;
@@ -192,6 +198,9 @@ class ProfileAttributesEntry {
   // encoded.
   void SetHostedDomain(std::string hosted_domain);
 
+  void SetProfileManagementEnrollmentToken(const std::string& enrollment_token);
+  void SetProfileManagementId(const std::string& id);
+
   void SetAuthInfo(const std::string& gaia_id,
                    const std::u16string& user_name,
                    bool is_consented_primary_account);
@@ -199,19 +208,16 @@ class ProfileAttributesEntry {
   // Update info about accounts. These functions are idempotent, only the first
   // call for a given input matters.
   void AddAccountName(const std::string& name);
-  void AddAccountCategory(AccountCategory category);
 
   // Clears info about all accounts that have been added in the past via
-  // AddAccountName() and AddAccountCategory().
+  // AddAccountName().
   void ClearAccountNames();
-  void ClearAccountCategories();
 
   // Lock/Unlock the profile, should be called only if force-sign-in is enabled.
   void LockForceSigninProfile(bool is_lock);
 
-  // Records aggregate metrics about all accounts used in this profile (added
-  // via AddAccount* functions).
-  void RecordAccountMetrics() const;
+  // Records aggregate metrics about all accounts used in this profile.
+  void RecordAccountNamesMetric() const;
 
   // TODO(crbug/1155729): Check it is not used anymore for deprecated supervised
   // users and remove it.
@@ -230,7 +236,6 @@ class ProfileAttributesEntry {
 
  private:
   friend class ProfileAttributesStorage;
-  friend class ProfileThemeUpdateServiceBrowserTest;
   FRIEND_TEST_ALL_PREFIXES(ProfileAttributesStorageTest,
                            EntryInternalAccessors);
   FRIEND_TEST_ALL_PREFIXES(ProfileAttributesStorageTest, ProfileActiveTime);
@@ -275,13 +280,6 @@ class ProfileAttributesEntry {
   // different account names. This is approximate as only a short hash of an
   // account name is stored so there can be false negatives.
   bool HasMultipleAccountNames() const;
-  // Returns if this profile has both consumer and enterprise accounts
-  // (regarding both signed-in and signed-out accounts).
-  bool HasBothAccountCategories() const;
-
-  // Records aggregate metrics about all accounts used in this profile.
-  void RecordAccountCategoriesMetric() const;
-  void RecordAccountNamesMetric() const;
 
   // Loads and saves the data to the local state.
   const base::Value::Dict* GetEntryData() const;

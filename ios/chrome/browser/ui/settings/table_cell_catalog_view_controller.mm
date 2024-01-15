@@ -4,49 +4,48 @@
 
 #import "ios/chrome/browser/ui/settings/table_cell_catalog_view_controller.h"
 
-#import "base/mac/foundation_util.h"
-#import "ios/chrome/browser/net/crurl.h"
-#import "ios/chrome/browser/signin/constants.h"
-#import "ios/chrome/browser/signin/signin_util.h"
+#import "base/apple/foundation_util.h"
+#import "ios/chrome/browser/net/model/crurl.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/symbols/chrome_icon.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_detail_icon_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_detail_text_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_image_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_info_button_cell.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_info_button_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_link_header_footer_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_multi_detail_text_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_multi_line_text_edit_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_switch_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_tabs_search_suggested_history_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_button_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_header_footer_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_text_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/cells/table_view_url_item.h"
+#import "ios/chrome/browser/shared/ui/table_view/legacy_chrome_table_view_styler.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_model.h"
+#import "ios/chrome/browser/shared/ui/table_view/table_view_utils.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/signin/model/constants.h"
+#import "ios/chrome/browser/signin/model/signin_util.h"
 #import "ios/chrome/browser/ui/authentication/cells/signin_promo_view_configurator.h"
 #import "ios/chrome/browser/ui/authentication/cells/table_view_account_item.h"
 #import "ios/chrome/browser/ui/authentication/cells/table_view_signin_promo_item.h"
 #import "ios/chrome/browser/ui/autofill/cells/autofill_edit_item.h"
-#import "ios/chrome/browser/ui/icons/chrome_icon.h"
-#import "ios/chrome/browser/ui/icons/symbols.h"
+#import "ios/chrome/browser/ui/settings/address_bar_preference/cells/address_bar_options_item.h"
 #import "ios/chrome/browser/ui/settings/cells/account_sign_in_item.h"
 #import "ios/chrome/browser/ui/settings/cells/copied_to_chrome_item.h"
+#import "ios/chrome/browser/ui/settings/cells/inline_promo_item.h"
 #import "ios/chrome/browser/ui/settings/cells/settings_check_cell.h"
 #import "ios/chrome/browser/ui/settings/cells/settings_check_item.h"
 #import "ios/chrome/browser/ui/settings/cells/settings_image_detail_text_item.h"
 #import "ios/chrome/browser/ui/settings/cells/sync_switch_item.h"
 #import "ios/chrome/browser/ui/settings/elements/enterprise_info_popover_view_controller.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_detail_icon_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_detail_text_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_image_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_info_button_cell.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_info_button_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_link_header_footer_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_multi_detail_text_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_switch_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_tabs_search_suggested_history_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_button_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_header_footer_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_text_item.h"
-#import "ios/chrome/browser/ui/table_view/cells/table_view_url_item.h"
-#import "ios/chrome/browser/ui/table_view/chrome_table_view_styler.h"
-#import "ios/chrome/browser/ui/table_view/table_view_model.h"
-#import "ios/chrome/browser/ui/table_view/table_view_utils.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/image_util.h"
 #import "ios/public/provider/chrome/browser/signin/signin_resources_api.h"
 #import "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -68,15 +67,20 @@ typedef NS_ENUM(NSInteger, ItemType) {
   ItemTypeSearchHistorySuggestedItem,
   ItemTypeTextAccessoryNoImage,
   ItemTypeTextEditItem,
+  ItemTypeTextMultiLineEditItem,
   ItemTypeURLWithActivityIndicator,
   ItemTypeURLWithActivityIndicatorStopped,
   ItemTypeURLWithTimestamp,
   ItemTypeURLWithSize,
   ItemTypeURLWithSupplementalText,
   ItemTypeURLWithThirdRowText,
+  ItemTypeURLWithMetadata,
+  ItemTypeURLWithMetadataImage,
   ItemTypeURLWithBadgeImage,
   ItemTypeTextSettingsDetail,
+  ItemTypeTableViewWithBlueDot,
   ItemTypeLinkFooter,
+  ItemAddressBarOptions,
   ItemTypeDetailText,
   ItemTypeMultiDetailText,
   ItemTypeAccountSignInItem,
@@ -95,6 +99,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
   ItemTypeCheck4,
   ItemTypeCheck5,
   ItemTypeCheck6,
+  ItemTypeInlinePromo,
 };
 }
 
@@ -141,6 +146,16 @@ typedef NS_ENUM(NSInteger, ItemType) {
   symbolItem.iconCornerRadius = 7;
   [model addItem:symbolItem toSectionWithIdentifier:SectionIdentifierText];
 
+  TableViewDetailIconItem* tableViewBlueDotItem =
+      [[TableViewDetailIconItem alloc]
+          initWithType:ItemTypeTableViewWithBlueDot];
+  tableViewBlueDotItem.badgeType = BadgeType::kNotificationDot;
+  tableViewBlueDotItem.text = @"I have a blue dot badge!";
+  tableViewBlueDotItem.iconImage =
+      DefaultSettingsRootSymbol(kDefaultBrowserSymbol);
+  [model addItem:tableViewBlueDotItem
+      toSectionWithIdentifier:SectionIdentifierText];
+
   TableViewTextItem* textItem =
       [[TableViewTextItem alloc] initWithType:ItemTypeText];
   textItem.text = @"Simple Text Cell";
@@ -156,7 +171,8 @@ typedef NS_ENUM(NSInteger, ItemType) {
   TableViewImageItem* textImageItem =
       [[TableViewImageItem alloc] initWithType:ItemTypeTextAccessoryImage];
   textImageItem.title = @"Image Item with History Image";
-  textImageItem.image = [UIImage imageNamed:@"show_history"];
+  textImageItem.image =
+      DefaultSymbolWithPointSize(kHistorySymbol, kSymbolActionPointSize);
   [model addItem:textImageItem toSectionWithIdentifier:SectionIdentifierText];
 
   TableViewTabsSearchSuggestedHistoryItem* searchHistorySuggestedItem =
@@ -229,7 +245,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
   textActionButtonColorItem.disableButtonIntrinsicWidth = YES;
   textActionButtonColorItem.buttonBackgroundColor = [UIColor lightGrayColor];
   textActionButtonColorItem.buttonTextColor =
-    [UIColor colorNamed:@"settings_catalog_example_text"];
+      [UIColor colorNamed:kSolidBlackColor];
   textActionButtonColorItem.buttonText = @"Do something, different Colors";
   [model addItem:textActionButtonColorItem
       toSectionWithIdentifier:SectionIdentifierText];
@@ -267,15 +283,14 @@ typedef NS_ENUM(NSInteger, ItemType) {
   TableViewDetailIconItem* detailIconItem =
       [[TableViewDetailIconItem alloc] initWithType:ItemTypeTextSettingsDetail];
   detailIconItem.text = @"Detail Icon Item Cell";
-  detailIconItem.iconImage =
-      [UIImage imageNamed:@"settings_article_suggestions"];
+  detailIconItem.iconImage = DefaultSettingsRootSymbol(kDiscoverSymbol);
   detailIconItem.detailText = @"Short";
   [model addItem:detailIconItem toSectionWithIdentifier:SectionIdentifierText];
 
   TableViewDetailIconItem* detailIconItemVerticalTextLayout =
       [[TableViewDetailIconItem alloc] initWithType:ItemTypeTextSettingsDetail];
   detailIconItemVerticalTextLayout.iconImage =
-      [UIImage imageNamed:@"settings_article_suggestions"];
+      DefaultSettingsRootSymbol(kDiscoverSymbol);
   detailIconItemVerticalTextLayout.text = @"Detail Icon Item Cell";
   detailIconItemVerticalTextLayout.detailText = @"Short subtitle";
   detailIconItemVerticalTextLayout.textLayoutConstraintAxis =
@@ -308,7 +323,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
   TableViewTextEditItem* textEditItem =
       [[TableViewTextEditItem alloc] initWithType:ItemTypeTextEditItem];
-  textEditItem.textFieldName = @"Edit Text Item";
+  textEditItem.fieldNameLabelText = @"Edit Text Item";
   textEditItem.textFieldValue = @" with no icons";
   textEditItem.hideIcon = YES;
   textEditItem.textFieldEnabled = YES;
@@ -316,7 +331,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
   TableViewTextEditItem* textEditItemEditIcon =
       [[TableViewTextEditItem alloc] initWithType:ItemTypeTextEditItem];
-  textEditItemEditIcon.textFieldName = @"Edit Text Item";
+  textEditItemEditIcon.fieldNameLabelText = @"Edit Text Item";
   textEditItemEditIcon.textFieldValue = @" with edit icon";
   textEditItemEditIcon.textFieldEnabled = YES;
   [model addItem:textEditItemEditIcon
@@ -324,20 +339,20 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
   TableViewTextEditItem* textEditItemBothIcons =
       [[TableViewTextEditItem alloc] initWithType:ItemTypeTextEditItem];
-  textEditItemBothIcons.textFieldName = @"Edit Text Item";
+  textEditItemBothIcons.fieldNameLabelText = @"Edit Text Item";
   textEditItemBothIcons.textFieldValue = @" with edit and custom icons";
   textEditItemBothIcons.identifyingIcon =
-      [UIImage imageNamed:@"table_view_cell_check_mark"];
+      DefaultSymbolTemplateWithPointSize(kCheckmarkCircleFillSymbol, 13);
   textEditItemBothIcons.textFieldEnabled = YES;
   [model addItem:textEditItemBothIcons
       toSectionWithIdentifier:SectionIdentifierText];
 
   TableViewTextEditItem* textEditItemIconButton =
       [[TableViewTextEditItem alloc] initWithType:ItemTypeTextEditItem];
-  textEditItemIconButton.textFieldName = @"Edit Text Item";
+  textEditItemIconButton.fieldNameLabelText = @"Edit Text Item";
   textEditItemIconButton.textFieldValue = @" icon is a button.";
   textEditItemIconButton.identifyingIcon =
-      [UIImage imageNamed:@"table_view_cell_check_mark"];
+      DefaultSymbolTemplateWithPointSize(kCheckmarkCircleFillSymbol, 13);
   textEditItemIconButton.identifyingIconEnabled = YES;
   textEditItemIconButton.textFieldEnabled = NO;
   [model addItem:textEditItemIconButton
@@ -368,6 +383,15 @@ typedef NS_ENUM(NSInteger, ItemType) {
   tableViewMultiDetailTextItem.accessoryType =
       UITableViewCellAccessoryDisclosureIndicator;
   [model addItem:tableViewMultiDetailTextItem
+      toSectionWithIdentifier:SectionIdentifierText];
+
+  TableViewMultiLineTextEditItem* tableViewMultiLineTextEditItem =
+      [[TableViewMultiLineTextEditItem alloc]
+          initWithType:ItemTypeTextMultiLineEditItem];
+  tableViewMultiLineTextEditItem.label = @"Multi Line Edit Text Item";
+  tableViewMultiLineTextEditItem.text =
+      @"This is possibly a very very very very very very long multi line text";
+  [model addItem:tableViewMultiLineTextEditItem
       toSectionWithIdentifier:SectionIdentifierText];
 
   TableViewSwitchItem* tableViewSwitchItem =
@@ -430,7 +454,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
   tableViewInfoButtonItemWithLeadingImage.text = @"Info button item";
   tableViewInfoButtonItemWithLeadingImage.statusText = @"Status";
   tableViewInfoButtonItemWithLeadingImage.iconImage =
-      [UIImage imageNamed:@"settings_article_suggestions"];
+      DefaultSettingsRootSymbol(kDiscoverSymbol);
   [model addItem:tableViewInfoButtonItemWithLeadingImage
       toSectionWithIdentifier:SectionIdentifierSettings];
 
@@ -465,7 +489,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
   checkFinished.enabled = YES;
   checkFinished.indicatorHidden = YES;
   checkFinished.trailingImage =
-      [UIImage imageNamed:@"table_view_cell_check_mark"];
+      DefaultSymbolTemplateWithPointSize(kCheckmarkCircleFillSymbol, 13);
   [model addItem:checkFinished
       toSectionWithIdentifier:SectionIdentifierSettings];
 
@@ -480,7 +504,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
   checkFinishedWithLeadingImage.enabled = YES;
   checkFinishedWithLeadingImage.indicatorHidden = YES;
   checkFinishedWithLeadingImage.trailingImage =
-      [UIImage imageNamed:@"table_view_cell_check_mark"];
+      DefaultSymbolTemplateWithPointSize(kCheckmarkCircleFillSymbol, 13);
   [model addItem:checkFinishedWithLeadingImage
       toSectionWithIdentifier:SectionIdentifierSettings];
 
@@ -518,6 +542,22 @@ typedef NS_ENUM(NSInteger, ItemType) {
   [model addItem:checkWithInfoButton
       toSectionWithIdentifier:SectionIdentifierSettings];
 
+  AddressBarOptionsItem* addressBarOptions =
+      [[AddressBarOptionsItem alloc] initWithType:ItemAddressBarOptions];
+  addressBarOptions.bottomAddressBarOptionSelected = YES;
+  [model addItem:addressBarOptions
+      toSectionWithIdentifier:SectionIdentifierSettings];
+
+  InlinePromoItem* inlinePromoItem =
+      [[InlinePromoItem alloc] initWithType:ItemTypeInlinePromo];
+  inlinePromoItem.promoImage =
+      [UIImage imageNamed:@"password_manager_widget_promo"];
+  inlinePromoItem.promoText =
+      @"Text to promote some cool stuff in Settings. Can be on multiple lines.";
+  inlinePromoItem.moreInfoButtonTitle = @"Show Me How";
+  [model addItem:inlinePromoItem
+      toSectionWithIdentifier:SectionIdentifierSettings];
+
   TableViewLinkHeaderFooterItem* linkFooter =
       [[TableViewLinkHeaderFooterItem alloc] initWithType:ItemTypeLinkFooter];
   linkFooter.text =
@@ -545,6 +585,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
       GetSizeForIdentityAvatarSize(IdentityAvatarSize::SmallSize);
   signinPromoAvatar =
       ResizeImage(signinPromoAvatar, avatarSize, ProjectionMode::kFill);
+  // Sign-in promo with an email and a name.
   TableViewSigninPromoItem* signinPromo =
       [[TableViewSigninPromoItem alloc] initWithType:ItemTypeAccount];
   signinPromo.configurator = [[SigninPromoViewConfigurator alloc]
@@ -552,18 +593,31 @@ typedef NS_ENUM(NSInteger, ItemType) {
                         userEmail:@"jonhdoe@example.com"
                     userGivenName:@"John Doe"
                         userImage:signinPromoAvatar
-                   hasCloseButton:NO];
+                   hasCloseButton:NO
+                 hasSignInSpinner:NO];
   signinPromo.text = @"Signin promo text example";
   [model addItem:signinPromo toSectionWithIdentifier:SectionIdentifierAccount];
-
+  // Sign-in promo without an email and name.
   signinPromo = [[TableViewSigninPromoItem alloc] initWithType:ItemTypeAccount];
   signinPromo.configurator = [[SigninPromoViewConfigurator alloc]
       initWithSigninPromoViewMode:SigninPromoViewModeNoAccounts
                         userEmail:nil
                     userGivenName:nil
                         userImage:nil
-                   hasCloseButton:YES];
+                   hasCloseButton:YES
+                 hasSignInSpinner:NO];
   signinPromo.text = @"Signin promo text example";
+  [model addItem:signinPromo toSectionWithIdentifier:SectionIdentifierAccount];
+  // Sign-in promo with spinner.
+  signinPromo = [[TableViewSigninPromoItem alloc] initWithType:ItemTypeAccount];
+  signinPromo.configurator = [[SigninPromoViewConfigurator alloc]
+      initWithSigninPromoViewMode:SigninPromoViewModeSigninWithAccount
+                        userEmail:@"jonhdoe@example.com"
+                    userGivenName:@"John Doe"
+                        userImage:signinPromoAvatar
+                   hasCloseButton:NO
+                 hasSignInSpinner:YES];
+  signinPromo.text = @"Signin promo with spinner";
   [model addItem:signinPromo toSectionWithIdentifier:SectionIdentifierAccount];
 
   UIImage* defaultAvatar = ios::provider::GetSigninDefaultAvatar();
@@ -627,7 +681,8 @@ typedef NS_ENUM(NSInteger, ItemType) {
   item = [[TableViewURLItem alloc] initWithType:ItemTypeURLWithBadgeImage];
   item.title = @"Photos - Google Photos";
   item.URL = [[CrURL alloc] initWithGURL:GURL("https://photos.google.com/")];
-  item.badgeImage = [UIImage imageNamed:@"table_view_cell_check_mark"];
+  item.badgeImage =
+      DefaultSymbolTemplateWithPointSize(kCheckmarkCircleFillSymbol, 13);
   [model addItem:item toSectionWithIdentifier:SectionIdentifierURL];
 
   item =
@@ -655,6 +710,23 @@ typedef NS_ENUM(NSInteger, ItemType) {
       [[CrURL alloc] initWithGURL:GURL("https://blog.google/products/chrome/")];
   item.thirdRowText = @"Unavailable";
   item.thirdRowTextColor = UIColor.redColor;
+  [model addItem:item toSectionWithIdentifier:SectionIdentifierURL];
+
+  item = [[TableViewURLItem alloc] initWithType:ItemTypeURLWithMetadata];
+  item.title = @"Web Channel with metadata image and label";
+  item.URL =
+      [[CrURL alloc] initWithGURL:GURL("https://blog.google/products/chrome/")];
+  item.metadata = @"176 KB";
+  item.metadataImage = CustomSymbolTemplateWithPointSize(kCloudSlashSymbol, 18);
+  item.metadataImageColor = [UIColor colorNamed:kTextSecondaryColor];
+  [model addItem:item toSectionWithIdentifier:SectionIdentifierURL];
+
+  item = [[TableViewURLItem alloc] initWithType:ItemTypeURLWithMetadataImage];
+  item.title = @"Web Channel with metadata image";
+  item.URL =
+      [[CrURL alloc] initWithGURL:GURL("https://blog.google/products/chrome/")];
+  item.metadataImage = CustomSymbolTemplateWithPointSize(kCloudSlashSymbol, 18);
+  item.metadataImageColor = [UIColor colorNamed:kTextSecondaryColor];
   [model addItem:item toSectionWithIdentifier:SectionIdentifierURL];
 }
 
@@ -710,28 +782,28 @@ typedef NS_ENUM(NSInteger, ItemType) {
       itemType == ItemTypeTableViewInfoButtonWithDetailText ||
       itemType == ItemTypeTableViewInfoButtonWithImage) {
     TableViewInfoButtonCell* managedCell =
-        base::mac::ObjCCastStrict<TableViewInfoButtonCell>(cell);
+        base::apple::ObjCCastStrict<TableViewInfoButtonCell>(cell);
     [managedCell.trailingButton addTarget:self
                                    action:@selector(didTapManagedUIInfoButton:)
                          forControlEvents:UIControlEventTouchUpInside];
   } else if (itemType == ItemTypeCheck6) {
     SettingsCheckCell* checkCell =
-        base::mac::ObjCCastStrict<SettingsCheckCell>(cell);
+        base::apple::ObjCCastStrict<SettingsCheckCell>(cell);
     [checkCell.infoButton addTarget:self
                              action:@selector(didTapCheckInfoButton:)
                    forControlEvents:UIControlEventTouchUpInside];
   } else if (itemType == ItemTypeSearchHistorySuggestedItem) {
     TableViewTabsSearchSuggestedHistoryCell* searchHistoryCell =
-        base::mac::ObjCCastStrict<TableViewTabsSearchSuggestedHistoryCell>(
+        base::apple::ObjCCastStrict<TableViewTabsSearchSuggestedHistoryCell>(
             cell);
     [searchHistoryCell updateHistoryResultsCount:7];
   } else if (itemType == ItemTypeURLWithActivityIndicator) {
     TableViewURLCell* URLCell =
-        base::mac::ObjCCastStrict<TableViewURLCell>(cell);
+        base::apple::ObjCCastStrict<TableViewURLCell>(cell);
     [URLCell startAnimatingActivityIndicator];
   } else if (itemType == ItemTypeURLWithActivityIndicatorStopped) {
     TableViewURLCell* URLCell =
-        base::mac::ObjCCastStrict<TableViewURLCell>(cell);
+        base::apple::ObjCCastStrict<TableViewURLCell>(cell);
     [URLCell startAnimatingActivityIndicator];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 4 * NSEC_PER_SEC),
                    dispatch_get_main_queue(), ^{

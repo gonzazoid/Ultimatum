@@ -4,14 +4,16 @@
 
 #include "chrome/browser/ash/arc/fileapi/file_stream_forwarder.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/rand_util.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "content/public/test/browser_task_environment.h"
 #include "storage/browser/file_system/file_system_context.h"
 #include "storage/browser/file_system/file_system_url.h"
@@ -22,7 +24,6 @@
 #include "storage/browser/test/mock_special_storage_policy.h"
 #include "storage/browser/test/test_file_system_context.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 
 namespace arc {
@@ -45,10 +46,12 @@ class FileStreamForwarderTest : public testing::Test {
 
     base::FilePath temp_path = temp_dir_.GetPath();
     quota_manager_ = base::MakeRefCounted<storage::MockQuotaManager>(
-        /*is_incognito=*/false, temp_path, base::ThreadTaskRunnerHandle::Get(),
+        /*is_incognito=*/false, temp_path,
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
         base::MakeRefCounted<storage::MockSpecialStoragePolicy>());
     quota_manager_proxy_ = base::MakeRefCounted<storage::MockQuotaManagerProxy>(
-        quota_manager_.get(), base::ThreadTaskRunnerHandle::Get());
+        quota_manager_.get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     context_ = storage::CreateFileSystemContextForTesting(
         quota_manager_proxy_.get(), temp_path);
 
@@ -57,7 +60,7 @@ class FileStreamForwarderTest : public testing::Test {
 
     context_->OpenFileSystem(
         blink::StorageKey::CreateFromStringForTesting(kURLOrigin),
-        /*bucket=*/absl::nullopt, storage::kFileSystemTypeTemporary,
+        /*bucket=*/std::nullopt, storage::kFileSystemTypeTemporary,
         storage::OPEN_FILE_SYSTEM_CREATE_IF_NONEXISTENT,
         base::BindOnce([](const storage::FileSystemURL& root_url,
                           const std::string& name, base::File::Error result) {
@@ -76,7 +79,7 @@ class FileStreamForwarderTest : public testing::Test {
 
     ASSERT_EQ(base::File::FILE_OK,
               storage::AsyncFileTestHelper::CreateFileWithData(
-                  context_.get(), url_, test_data_.data(), test_data_.size()));
+                  context_.get(), url_, test_data_));
   }
 
  protected:

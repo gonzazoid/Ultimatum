@@ -5,10 +5,12 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_WEB_GRAPHICS_CONTEXT_3D_PROVIDER_UTIL_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_WEB_GRAPHICS_CONTEXT_3D_PROVIDER_UTIL_H_
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/web_graphics_context_3d_provider.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
 
@@ -36,6 +38,13 @@ CreateOffscreenGraphicsContext3DProvider(
 // for the main thread to allocated an offscreen context provider.
 PLATFORM_EXPORT std::unique_ptr<WebGraphicsContext3DProvider>
 CreateWebGPUGraphicsContext3DProvider(const KURL& url);
+
+// Asynchronously creates a WebGPUGraphicsContext3DProvider on any thread.
+PLATFORM_EXPORT void CreateWebGPUGraphicsContext3DProviderAsync(
+    const KURL& url,
+    scoped_refptr<base::SingleThreadTaskRunner> current_thread_task_runner,
+    WTF::CrossThreadOnceFunction<
+        void(std::unique_ptr<WebGraphicsContext3DProvider>)> callback);
 
 }  // namespace blink
 

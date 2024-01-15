@@ -54,9 +54,7 @@ class SVGAnimatedPropertyBase : public GarbageCollectedMixin {
   virtual const SVGPropertyBase& BaseValueBase() const = 0;
   virtual bool IsAnimating() const = 0;
 
-  virtual SVGPropertyBase* CreateAnimatedValue() = 0;
   virtual void SetAnimatedValue(SVGPropertyBase*) = 0;
-  virtual void AnimationEnded() = 0;
 
   virtual SVGParsingError AttributeChanged(const String&) = 0;
   virtual bool NeedsSynchronizeAttribute() const;
@@ -66,7 +64,7 @@ class SVGAnimatedPropertyBase : public GarbageCollectedMixin {
     return static_cast<AnimatedPropertyType>(type_);
   }
 
-  SVGElement* ContextElement() const { return context_element_; }
+  SVGElement* ContextElement() const { return context_element_.Get(); }
 
   const QualifiedName& AttributeName() const { return attribute_name_; }
 
@@ -142,17 +140,9 @@ class SVGAnimatedPropertyCommon : public SVGAnimatedPropertyBase {
     return parse_status;
   }
 
-  SVGPropertyBase* CreateAnimatedValue() override {
-    return base_value_->Clone();
-  }
-
   void SetAnimatedValue(SVGPropertyBase* value) override {
-    DCHECK_EQ(value->GetType(), Property::ClassType());
-    current_value_ = static_cast<Property*>(value);
-  }
-
-  void AnimationEnded() override {
-    current_value_ = base_value_;
+    DCHECK(!value || value->GetType() == Property::ClassType());
+    current_value_ = value ? static_cast<Property*>(value) : BaseValue();
   }
 
   void Trace(Visitor* visitor) const override {
@@ -242,11 +232,6 @@ class SVGAnimatedProperty<Property, TearOffType, void>
     UpdateAnimValTearOffIfNeeded();
   }
 
-  void AnimationEnded() override {
-    SVGAnimatedPropertyCommon<Property>::AnimationEnded();
-    UpdateAnimValTearOffIfNeeded();
-  }
-
   // SVGAnimated* DOM Spec implementations:
 
   // baseVal()/animVal() are only to be used from SVG DOM implementation.
@@ -256,7 +241,7 @@ class SVGAnimatedProperty<Property, TearOffType, void>
       base_val_tear_off_ = MakeGarbageCollected<TearOffType>(
           this->BaseValue(), this, kPropertyIsNotAnimVal);
     }
-    return base_val_tear_off_;
+    return base_val_tear_off_.Get();
   }
 
   TearOffType* animVal() {
@@ -264,7 +249,7 @@ class SVGAnimatedProperty<Property, TearOffType, void>
       anim_val_tear_off_ = MakeGarbageCollected<TearOffType>(
           this->CurrentValue(), this, kPropertyIsAnimVal);
     }
-    return anim_val_tear_off_;
+    return anim_val_tear_off_.Get();
   }
 
   void Trace(Visitor* visitor) const override {

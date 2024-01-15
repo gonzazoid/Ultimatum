@@ -8,6 +8,7 @@
 
 #include "base/memory/ref_counted_memory.h"
 #include "base/test/bind.h"
+#include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/grit/browser_resources.h"
 #include "chrome/grit/chrome_unscaled_resources.h"
 #include "content/public/browser/web_ui_data_source.h"
@@ -65,8 +66,8 @@ constexpr char kSwJs[] = "globalThis.addEventListener('fetch', event => {});";
 void AddTestURLDataSource(const std::string& source_name,
                           content::BrowserContext* browser_context) {
   content::WebUIDataSource* data_source =
-      content::WebUIDataSource::Create(source_name);
-  data_source->DisableTrustedTypesCSP();
+      content::WebUIDataSource::CreateAndAdd(browser_context, source_name);
+  webui::EnableTrustedTypesCSP(data_source);
   data_source->AddResourcePath("icon-256.png", IDR_PRODUCT_LOGO_256);
   data_source->SetRequestFilter(
       base::BindLambdaForTesting([](const std::string& path) {
@@ -91,7 +92,6 @@ void AddTestURLDataSource(const std::string& source_name,
 
             std::move(callback).Run(ref_contents);
           }));
-  content::WebUIDataSource::Add(browser_context, data_source);
 }
 
 }  // namespace ash

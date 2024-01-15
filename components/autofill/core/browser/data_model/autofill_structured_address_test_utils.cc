@@ -10,7 +10,6 @@
 #include "components/autofill/core/browser/autofill_type.h"
 
 namespace autofill {
-namespace structured_address {
 
 using AddressComponentTestValues = std::vector<AddressComponentTestValue>;
 
@@ -19,7 +18,7 @@ std::ostream& operator<<(std::ostream& out, const AddressComponent& component) {
       << ", value=" << base::UTF16ToUTF8(component.GetValue())
       << ", status=" << static_cast<int>(component.GetVerificationStatus())
       << std::endl;
-  for (const auto* sub_component : component.Subcomponents()) {
+  for (const auto& sub_component : component.Subcomponents()) {
     out << "\t" << *sub_component;
   }
   return out;
@@ -50,9 +49,9 @@ void SetTestValues(AddressComponent* component,
                    const AddressComponentTestValues& test_values,
                    bool finalize) {
   for (const auto& test_value : test_values) {
-    component->SetValueForTypeIfPossible(test_value.type,
-                                         base::UTF8ToUTF16(test_value.value),
-                                         test_value.status);
+    component->SetValueForType(test_value.type,
+                               base::UTF8ToUTF16(test_value.value),
+                               test_value.status);
   }
   if (finalize)
     component->CompleteFullTree();
@@ -61,10 +60,10 @@ void SetTestValues(AddressComponent* component,
 void VerifyTestValues(AddressComponent* component,
                       const AddressComponentTestValues test_values) {
   for (const auto& test_value : test_values) {
-    SCOPED_TRACE(base::StringPrintf(
-        "Failed type=%s, value=%s, status=%d",
-        AutofillType(test_value.type).ToString().c_str(),
-        test_value.value.c_str(), static_cast<int>(test_value.status)));
+    SCOPED_TRACE(base::StringPrintf("Failed type=%s, value=%s, status=%d",
+                                    FieldTypeToString(test_value.type).c_str(),
+                                    test_value.value.c_str(),
+                                    static_cast<int>(test_value.status)));
 
     EXPECT_EQ(base::UTF16ToUTF8(component->GetValueForType(test_value.type)),
               test_value.value);
@@ -77,5 +76,4 @@ void VerifyTestValues(AddressComponent* component,
   }
 }
 
-}  // namespace structured_address
 }  // namespace autofill

@@ -11,6 +11,8 @@
 #include "content/public/browser/web_contents_observer.h"
 
 namespace android_webview {
+
+// Lifetime: WebView
 class AwDarkMode : public content::WebContentsObserver,
                    public base::SupportsUserData::Data {
  public:
@@ -29,13 +31,14 @@ class AwDarkMode : public content::WebContentsObserver,
       const base::android::JavaParamRef<jobject>& jcaller);
 
   bool is_force_dark_applied() const { return is_force_dark_applied_; }
+  bool prefers_dark_from_theme() const { return prefers_dark_from_theme_; }
 
  private:
   // content::WebContentsObserver
   void NavigationEntryCommitted(
       const content::LoadCommittedDetails& load_details) override;
   void InferredColorSchemeUpdated(
-      absl::optional<blink::mojom::PreferredColorScheme> color_scheme) override;
+      std::optional<blink::mojom::PreferredColorScheme> color_scheme) override;
 
   void PopulateWebPreferencesForPreT(blink::web_pref::WebPreferences* web_prefs,
                                      int force_dark_mode,

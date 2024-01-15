@@ -5,15 +5,17 @@
 #include "chrome/browser/ash/crosapi/local_printer_ash.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "ash/webui/settings/public/constants/routes.mojom.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
@@ -25,6 +27,7 @@
 #include "chrome/browser/ash/printing/cups_printers_manager.h"
 #include "chrome/browser/ash/printing/cups_printers_manager_factory.h"
 #include "chrome/browser/ash/printing/history/print_job_info.pb.h"
+#include "chrome/browser/ash/printing/ipp_client_info_calculator.h"
 #include "chrome/browser/ash/printing/oauth2/authorization_zones_manager.h"
 #include "chrome/browser/ash/printing/oauth2/authorization_zones_manager_factory.h"
 #include "chrome/browser/ash/printing/oauth2/status_code.h"
@@ -34,17 +37,18 @@
 #include "chrome/browser/ash/printing/print_server.h"
 #include "chrome/browser/ash/printing/print_servers_manager.h"
 #include "chrome/browser/ash/printing/printer_authenticator.h"
-#include "chrome/browser/ash/printing/printer_configurer.h"
 #include "chrome/browser/ash/printing/printer_setup_util.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/printing/local_printer_utils_chromeos.h"
 #include "chrome/browser/printing/prefs_util.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/common/pref_names.h"
 #include "chromeos/crosapi/mojom/local_printer.mojom.h"
 #include "chromeos/printing/ppd_provider.h"
+#include "chromeos/printing/printer_configuration.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
@@ -56,7 +60,6 @@
 #include "printing/print_settings.h"
 #include "printing/printing_features.h"
 #include "printing/printing_utils.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace crosapi {
@@ -78,21 +81,33 @@ GURL GenerateEulaUrl(scoped_refptr<chromeos::PpdProvider>,
   return ash::PrinterConfigurer::GeneratePrinterEulaUrl(license);
 }
 
-// Destroys the PrinterConfigurer object once the callback has finished
-// running.
 mojom::CapabilitiesResponsePtr OnSetUpPrinter(
-    std::unique_ptr<ash::PrinterConfigurer>,
-    PrefService* prefs,
     const chromeos::Printer& printer,
-    const absl::optional<printing::PrinterSemanticCapsAndDefaults>& caps) {
-  return mojom::CapabilitiesResponse::New(
-      LocalPrinterAsh::PrinterToMojom(printer), printer.HasSecureProtocol(),
-      caps,     // comment to prevent git cl format
-      0, 0, 0,  // deprecated
-      printing::mojom::PinModeRestriction::kUnset,     // deprecated
-      printing::mojom::ColorModeRestriction::kUnset,   // deprecated
-      printing::mojom::DuplexModeRestriction::kUnset,  // deprecated
-      printing::mojom::PinModeRestriction::kUnset);    // deprecated
+    const std::optional<printing::PrinterSemanticCapsAndDefaults>& caps) {
+  return printing::PrinterWithCapabilitiesToMojom(printer, caps);
+}
+
+void SetUpPrinter(ash::CupsPrintersManager* printers_manager,
+                  const chromeos::Printer& printer,
+                  mojom::LocalPrinter::GetCapabilityCallback callback) {
+  ash::printing::SetUpPrinter(
+      printers_manager, printer,
+      base::BindOnce(OnSetUpPrinter, printer).Then(std::move(callback)));
+}
+
+// Mark if a not yet installed printer is autoconf then continue with setup.
+void OnPrinterQueriedForAutoConf(
+    ash::CupsPrintersManager* printers_manager,
+    mojom::LocalPrinter::GetCapabilityCallback callback,
+    chromeos::Printer printer,
+    bool is_printer_autoconf) {
+  if (!is_printer_autoconf) {
+    std::move(callback).Run(nullptr);
+    return;
+  }
+
+  printer.mutable_ppd_reference()->autoconf = true;
+  SetUpPrinter(printers_manager, printer, std::move(callback));
 }
 
 // This function is called when user's rights to access the printer were
@@ -103,8 +118,6 @@ mojom::CapabilitiesResponsePtr OnSetUpPrinter(
 // this callback is executed.
 void OnPrinterAuthenticated(
     std::unique_ptr<ash::printing::PrinterAuthenticator> /* authenticator */,
-    std::unique_ptr<ash::PrinterConfigurer> printer_configurer,
-    Profile* profile,
     ash::CupsPrintersManager* printers_manager,
     const chromeos::Printer& printer,
     mojom::LocalPrinter::GetCapabilityCallback callback,
@@ -115,26 +128,129 @@ void OnPrinterAuthenticated(
     std::move(callback).Run(nullptr);
     return;
   }
-  ash::PrinterConfigurer* ptr = printer_configurer.get();
-  ash::printing::SetUpPrinter(
-      printers_manager, ptr, printer,
-      base::BindOnce(OnSetUpPrinter, std::move(printer_configurer),
-                     profile->GetPrefs(), printer)
-          .Then(std::move(callback)));
+
+  // In order for an IPP printer to be valid for set up, it needs to either be
+  // previously installed, be autoconf compatible, or have a valid PPD
+  // reference. If necessary, the printer is queried to determine its autoconf
+  // compatibility.
+  if (ash::features::IsPrintPreviewDiscoveredPrintersEnabled() &&
+      !printers_manager->IsPrinterInstalled(printer)) {
+    if (!printer.HasUri()) {
+      std::move(callback).Run(nullptr);
+      return;
+    }
+
+    // If the printer is autoconf compatible or has a valid PPD reference then
+    // continue with normal setup.
+    if (printer.ppd_reference().IsFilled()) {
+      SetUpPrinter(printers_manager, printer, std::move(callback));
+      return;
+    }
+
+    // CupsPrintersManager should have marked compatible USB printers as having
+    // a valid PPD reference or autoconf, so this USB printer is incompatible.
+    if (printer.IsUsbProtocol()) {
+      std::move(callback).Run(nullptr);
+      return;
+    }
+
+    printers_manager->QueryPrinterForAutoConf(
+        printer, base::BindOnce(OnPrinterQueriedForAutoConf, printers_manager,
+                                std::move(callback), printer));
+    return;
+  }
+
+  SetUpPrinter(printers_manager, printer, std::move(callback));
+}
+
+void OnOAuthAccessTokenObtained(
+    std::unique_ptr<ash::printing::PrinterAuthenticator> /* authenticator */,
+    mojom::LocalPrinter::GetOAuthAccessTokenCallback callback,
+    ash::printing::oauth2::StatusCode status,
+    std::string access_token) {
+  if (status != ash::printing::oauth2::StatusCode::kOK) {
+    // An error occurred.
+    std::move(callback).Run(
+        mojom::GetOAuthAccessTokenResult::NewError(mojom::OAuthError::New()));
+    return;
+  }
+  if (access_token.empty()) {
+    std::move(callback).Run(mojom::GetOAuthAccessTokenResult::NewNone(
+        mojom::OAuthNotNeeded::New()));
+  } else {
+    std::move(callback).Run(mojom::GetOAuthAccessTokenResult::NewToken(
+        mojom::OAuthAccessToken::New(std::move(access_token))));
+  }
+}
+
+bool IsActiveUserAffiliated() {
+  // TODO(b/265832837): Figure out if we can rely on `UserManager` always being
+  // initialized at this point. Currently it is initialized before
+  // `LocalPrinterAsh` so `UserManager::IsInitialized()` may be unnecessary.
+  // Also figure out if `GetActiveUser()` can return nullptr. This could happen
+  // if this function is called before login.
+  const user_manager::User* user =
+      user_manager::UserManager::IsInitialized()
+          ? user_manager::UserManager::Get()->GetActiveUser()
+          : nullptr;
+  return user ? user->IsAffiliated() : false;
+}
+
+bool IsManagedPrinter(const chromeos::Printer& printer) {
+  return printer.source() == chromeos::Printer::SRC_POLICY;
+}
+
+bool IsSecureIppPrinter(const chromeos::Printer& printer) {
+  return printer.GetProtocol() == chromeos::Printer::PrinterProtocol::kIpps ||
+         printer.GetProtocol() == chromeos::Printer::PrinterProtocol::kIppUsb;
+}
+
+std::vector<chromeos::Printer> GetLocalPrinters(Profile* profile) {
+  CHECK(profile);
+  std::vector<chromeos::PrinterClass> printer_classes_to_fetch = {
+      chromeos::PrinterClass::kSaved, chromeos::PrinterClass::kEnterprise,
+      chromeos::PrinterClass::kAutomatic};
+  // TODO(b/278621575): Add chromeos::PrinterClass::kDiscovered to
+  // `printer_classes_to_fetch` once the feature flag is removed.
+  if (ash::features::IsPrintPreviewDiscoveredPrintersEnabled()) {
+    printer_classes_to_fetch.push_back(chromeos::PrinterClass::kDiscovered);
+  }
+
+  // Printing is not allowed during OOBE.
+  DCHECK(!ash::ProfileHelper::IsSigninProfile(profile));
+  ash::CupsPrintersManager* printers_manager =
+      ash::CupsPrintersManagerFactory::GetForBrowserContext(profile);
+  std::vector<chromeos::Printer> printers;
+  for (chromeos::PrinterClass pc : printer_classes_to_fetch) {
+    for (const chromeos::Printer& p : printers_manager->GetPrinters(pc)) {
+      VLOG(1) << "Found printer " << p.display_name() << " with device name "
+              << p.id();
+      printers.push_back(p);
+    }
+  }
+
+  return printers;
+}
+
+std::vector<mojom::LocalDestinationInfoPtr> ConvertPrintersToMojom(
+    const std::vector<chromeos::Printer>& printers) {
+  std::vector<mojom::LocalDestinationInfoPtr> mojom_printers;
+  for (const auto& printer : printers) {
+    mojom_printers.push_back(printing::PrinterToMojom(printer));
+  }
+  return mojom_printers;
 }
 
 }  // namespace
 
-LocalPrinterAsh::LocalPrinterAsh()
-    : profile_manager_(g_browser_process->profile_manager()) {
-  if (profile_manager_)
-    profile_manager_->AddObserver(this);
+LocalPrinterAsh::LocalPrinterAsh() {
+  auto* profile_manager = g_browser_process->profile_manager();
+  if (profile_manager) {
+    profile_manager_observer_.Observe(profile_manager);
+  }
 }
 
-LocalPrinterAsh::~LocalPrinterAsh() {
-  if (profile_manager_)
-    profile_manager_->RemoveObserver(this);
-}
+LocalPrinterAsh::~LocalPrinterAsh() = default;
 
 // static
 mojom::PrintServersConfigPtr LocalPrinterAsh::ConfigToMojom(
@@ -144,30 +260,6 @@ mojom::PrintServersConfigPtr LocalPrinterAsh::ConfigToMojom(
   for (const ash::PrintServer& server : config.print_servers) {
     ptr->print_servers.push_back(mojom::PrintServer::New(
         server.GetId(), server.GetUrl(), server.GetName()));
-  }
-  return ptr;
-}
-
-// static
-mojom::LocalDestinationInfoPtr LocalPrinterAsh::PrinterToMojom(
-    const chromeos::Printer& printer) {
-  return mojom::LocalDestinationInfo::New(
-      printer.id(), printer.display_name(), printer.description(),
-      printer.source() == chromeos::Printer::SRC_POLICY,
-      printer.uri().GetNormalized(/*always_print_port=*/true));
-}
-
-// static
-mojom::PrinterStatusPtr LocalPrinterAsh::StatusToMojom(
-    const chromeos::CupsPrinterStatus& status) {
-  mojom::PrinterStatusPtr ptr = mojom::PrinterStatus::New();
-  ptr->printer_id = status.GetPrinterId();
-  ptr->timestamp = status.GetTimestamp();
-  for (const auto& reason : status.GetStatusReasons()) {
-    if (reason.GetReason() == mojom::StatusReason::Reason::kNoError)
-      continue;
-    ptr->status_reasons.push_back(
-        mojom::StatusReason::New(reason.GetReason(), reason.GetSeverity()));
   }
   return ptr;
 }
@@ -209,8 +301,7 @@ void LocalPrinterAsh::OnProfileAdded(Profile* profile) {
 }
 
 void LocalPrinterAsh::OnProfileManagerDestroying() {
-  profile_manager_->RemoveObserver(this);
-  profile_manager_ = nullptr;
+  profile_manager_observer_.Reset();
 }
 
 void LocalPrinterAsh::OnPrintJobCreated(base::WeakPtr<ash::CupsPrintJob> job) {
@@ -253,44 +344,56 @@ void LocalPrinterAsh::NotifyPrintJobUpdate(base::WeakPtr<ash::CupsPrintJob> job,
     LOG(WARNING) << "Ignoring invalid print job";
     return;
   }
-  for (auto& remote : print_job_remotes_)
-    remote->OnPrintJobUpdate(job->printer().id(), job->job_id(), status);
-  if (job->source() != mojom::PrintJob::Source::EXTENSION)
-    return;
-  for (auto& remote : extension_print_job_remotes_)
-    remote->OnPrintJobUpdate(job->printer().id(), job->job_id(), status);
+  const auto& printer_id = job->printer().id();
+  const auto& job_id = job->job_id();
+  for (auto& remote : print_job_remotes_) {
+    remote->OnPrintJobUpdate(printer_id, job_id, status);
+  }
+  switch (job->source()) {
+    case mojom::PrintJob::Source::kExtension:
+      for (auto& remote : extension_print_job_remotes_) {
+        remote->OnPrintJobUpdate(printer_id, job_id, status);
+      }
+      break;
+    case mojom::PrintJob::Source::kIsolatedWebApp:
+      for (auto& remote : iwa_print_job_remotes_) {
+        remote->OnPrintJobUpdate(printer_id, job_id, status);
+      }
+      break;
+    default:
+      break;
+  }
 }
 
 void LocalPrinterAsh::OnPrintServersChanged(
     const ash::PrintServersConfig& config) {
-  for (auto& remote : print_server_remotes_)
+  for (auto& remote : print_server_remotes_) {
     remote->OnPrintServersChanged(LocalPrinterAsh::ConfigToMojom(config));
+  }
 }
 
 void LocalPrinterAsh::OnServerPrintersChanged(
     const std::vector<ash::PrinterDetector::DetectedPrinter>&) {
-  for (auto& remote : print_server_remotes_)
+  for (auto& remote : print_server_remotes_) {
     remote->OnServerPrintersChanged();
+  }
+}
+
+void LocalPrinterAsh::OnLocalPrintersUpdated() {
+  CHECK(base::FeatureList::IsEnabled(::features::kLocalPrinterObserving));
+
+  Profile* profile = GetProfile();
+  DCHECK(profile);
+  const std::vector<mojom::LocalDestinationInfoPtr> printers =
+      ConvertPrintersToMojom(GetLocalPrinters(profile));
+  for (const auto& remote : local_printers_observer_remotes_) {
+    remote->OnLocalPrintersUpdated(mojo::Clone(printers));
+  }
 }
 
 void LocalPrinterAsh::GetPrinters(GetPrintersCallback callback) {
-  Profile* profile = GetProfile();
-  DCHECK(profile);
-  // Printing is not allowed during OOBE.
-  DCHECK(!ash::ProfileHelper::IsSigninProfile(profile));
-  ash::CupsPrintersManager* printers_manager =
-      ash::CupsPrintersManagerFactory::GetForBrowserContext(profile);
-  std::vector<mojom::LocalDestinationInfoPtr> printers;
-  for (chromeos::PrinterClass pc :
-       {chromeos::PrinterClass::kSaved, chromeos::PrinterClass::kEnterprise,
-        chromeos::PrinterClass::kAutomatic}) {
-    for (const chromeos::Printer& p : printers_manager->GetPrinters(pc)) {
-      VLOG(1) << "Found printer " << p.display_name() << " with device name "
-              << p.id();
-      printers.push_back(PrinterToMojom(p));
-    }
-  }
-  std::move(callback).Run(std::move(printers));
+  std::move(callback).Run(
+      ConvertPrintersToMojom(GetLocalPrinters(GetProfile())));
 }
 
 void LocalPrinterAsh::GetCapability(const std::string& printer_id,
@@ -300,17 +403,15 @@ void LocalPrinterAsh::GetCapability(const std::string& printer_id,
   ash::CupsPrintersManager* printers_manager =
       ash::CupsPrintersManagerFactory::GetForBrowserContext(profile);
   DCHECK(printers_manager);
-  absl::optional<chromeos::Printer> printer =
+  std::optional<chromeos::Printer> printer =
       printers_manager->GetPrinter(printer_id);
   if (!printer) {
     // If the printer was removed, the lookup will fail.
     std::move(callback).Run(nullptr);
     return;
   }
-  std::unique_ptr<ash::PrinterConfigurer> printer_configurer =
-      CreatePrinterConfigurer(profile);
 
-  if (chromeos::features::IsOAuthIppEnabled()) {
+  if (ash::features::IsOAuthIppEnabled()) {
     ash::printing::oauth2::AuthorizationZonesManager* auth_manager =
         ash::printing::oauth2::AuthorizationZonesManagerFactory::
             GetForBrowserContext(profile);
@@ -321,11 +422,10 @@ void LocalPrinterAsh::GetCapability(const std::string& printer_id,
         authenticator.get();
     authenticator_ptr->ObtainAccessTokenIfNeeded(
         base::BindOnce(OnPrinterAuthenticated, std::move(authenticator),
-                       std::move(printer_configurer), profile, printers_manager,
-                       *printer, std::move(callback)));
+                       printers_manager, *printer, std::move(callback)));
   } else {
-    OnPrinterAuthenticated(nullptr, std::move(printer_configurer), profile,
-                           printers_manager, *printer, std::move(callback),
+    OnPrinterAuthenticated(nullptr, printers_manager, *printer,
+                           std::move(callback),
                            ash::printing::oauth2::StatusCode::kOK, "");
   }
 }
@@ -336,7 +436,7 @@ void LocalPrinterAsh::GetEulaUrl(const std::string& printer_id,
   DCHECK(profile);
   ash::CupsPrintersManager* printers_manager =
       ash::CupsPrintersManagerFactory::GetForBrowserContext(profile);
-  absl::optional<chromeos::Printer> printer =
+  std::optional<chromeos::Printer> printer =
       printers_manager->GetPrinter(printer_id);
   if (!printer) {
     // If the printer does not exist, fetching for the license will fail.
@@ -357,7 +457,8 @@ void LocalPrinterAsh::GetStatus(const std::string& printer_id,
   ash::CupsPrintersManager* printers_manager =
       ash::CupsPrintersManagerFactory::GetForBrowserContext(profile);
   printers_manager->FetchPrinterStatus(
-      printer_id, base::BindOnce(StatusToMojom).Then(std::move(callback)));
+      printer_id,
+      base::BindOnce(printing::StatusToMojom).Then(std::move(callback)));
 }
 
 void LocalPrinterAsh::ShowSystemPrintSettings(
@@ -377,7 +478,7 @@ void LocalPrinterAsh::CreatePrintJob(mojom::PrintJobPtr job,
       ash::CupsPrintJobManagerFactory::GetForBrowserContext(profile);
   ash::printing::proto::PrintSettings settings;
   settings.set_color(
-      printing::IsColorModelSelected(job->color_mode)
+      printing::IsColorModelSelected(job->color_mode).value()
           ? ash::printing::proto::PrintSettings_ColorMode_COLOR
           : ash::printing::proto::PrintSettings_ColorMode_BLACK_AND_WHITE);
   settings.set_duplex(
@@ -470,28 +571,34 @@ void LocalPrinterAsh::GetPolicies(GetPoliciesCallback callback) {
     }
   }
 
-  if (prefs->HasPrefPath(prefs::kPrintingAllowedColorModes))
+  if (prefs->HasPrefPath(prefs::kPrintingAllowedColorModes)) {
     policies->allowed_color_modes =
         prefs->GetInteger(prefs::kPrintingAllowedColorModes);
-  if (prefs->HasPrefPath(prefs::kPrintingAllowedDuplexModes))
+  }
+  if (prefs->HasPrefPath(prefs::kPrintingAllowedDuplexModes)) {
     policies->allowed_duplex_modes =
         prefs->GetInteger(prefs::kPrintingAllowedDuplexModes);
-  if (prefs->HasPrefPath(prefs::kPrintingAllowedPinModes))
+  }
+  if (prefs->HasPrefPath(prefs::kPrintingAllowedPinModes)) {
     policies->allowed_pin_modes =
         static_cast<printing::mojom::PinModeRestriction>(
             prefs->GetInteger(prefs::kPrintingAllowedPinModes));
-  if (prefs->HasPrefPath(prefs::kPrintingColorDefault))
+  }
+  if (prefs->HasPrefPath(prefs::kPrintingColorDefault)) {
     policies->default_color_mode =
         static_cast<printing::mojom::ColorModeRestriction>(
             prefs->GetInteger(prefs::kPrintingColorDefault));
-  if (prefs->HasPrefPath(prefs::kPrintingDuplexDefault))
+  }
+  if (prefs->HasPrefPath(prefs::kPrintingDuplexDefault)) {
     policies->default_duplex_mode =
         static_cast<printing::mojom::DuplexModeRestriction>(
             prefs->GetInteger(prefs::kPrintingDuplexDefault));
-  if (prefs->HasPrefPath(prefs::kPrintingPinDefault))
+  }
+  if (prefs->HasPrefPath(prefs::kPrintingPinDefault)) {
     policies->default_pin_mode =
         static_cast<printing::mojom::PinModeRestriction>(
             prefs->GetInteger(prefs::kPrintingPinDefault));
+  }
 
   if (prefs->HasPrefPath(prefs::kPrintPdfAsImageDefault)) {
     policies->default_print_pdf_as_image =
@@ -510,8 +617,8 @@ void LocalPrinterAsh::GetUsernamePerPolicy(
       ash::ProfileHelper::Get()->GetUserByProfile(profile)->display_email();
   std::move(callback).Run(profile->GetPrefs()->GetBoolean(
                               prefs::kPrintingSendUsernameAndFilenameEnabled)
-                              ? absl::make_optional(username)
-                              : absl::nullopt);
+                              ? std::make_optional(username)
+                              : std::nullopt);
 }
 
 void LocalPrinterAsh::GetPrinterTypeDenyList(
@@ -532,14 +639,15 @@ void LocalPrinterAsh::GetPrinterTypeDenyList(
   for (const base::Value& deny_list_value : deny_list_from_prefs.GetList()) {
     const std::string& deny_list_str = deny_list_value.GetString();
     printing::mojom::PrinterType printer_type;
-    if (deny_list_str == "extension")
+    if (deny_list_str == "extension") {
       printer_type = printing::mojom::PrinterType::kExtension;
-    else if (deny_list_str == "pdf")
+    } else if (deny_list_str == "pdf") {
       printer_type = printing::mojom::PrinterType::kPdf;
-    else if (deny_list_str == "local")
+    } else if (deny_list_str == "local") {
       printer_type = printing::mojom::PrinterType::kLocal;
-    else
+    } else {
       continue;
+    }
 
     deny_list.push_back(printer_type);
   }
@@ -562,6 +670,9 @@ void LocalPrinterAsh::AddPrintJobObserver(
     case mojom::PrintJobSource::kExtension:
       extension_print_job_remotes_.Add(std::move(remote));
       break;
+    case mojom::PrintJobSource::kIsolatedWebApp:
+      iwa_print_job_remotes_.Add(std::move(remote));
+      break;
     case mojom::PrintJobSource::kAny:
       print_job_remotes_.Add(std::move(remote));
       break;
@@ -569,14 +680,97 @@ void LocalPrinterAsh::AddPrintJobObserver(
   std::move(callback).Run();
 }
 
+void LocalPrinterAsh::AddLocalPrintersObserver(
+    mojo::PendingRemote<mojom::LocalPrintersObserver> remote,
+    AddLocalPrintersObserverCallback callback) {
+  CHECK(base::FeatureList::IsEnabled(::features::kLocalPrinterObserving));
+
+  Profile* profile = GetProfile();
+  DCHECK(profile);
+  ash::CupsPrintersManager* printers_manager =
+      ash::CupsPrintersManagerFactory::GetForBrowserContext(profile);
+  printers_manager->AddLocalPrintersObserver(this);
+
+  local_printers_observer_remotes_.Add(std::move(remote));
+  std::move(callback).Run(ConvertPrintersToMojom(GetLocalPrinters(profile)));
+}
+
+void LocalPrinterAsh::GetOAuthAccessToken(
+    const std::string& printer_id,
+    GetOAuthAccessTokenCallback callback) {
+  if (!ash::features::IsOAuthIppEnabled()) {
+    std::move(callback).Run(mojom::GetOAuthAccessTokenResult::NewNone(
+        mojom::OAuthNotNeeded::New()));
+    return;
+  }
+  Profile* profile = GetProfile();
+  DCHECK(profile);
+  ash::CupsPrintersManager* printers_manager =
+      ash::CupsPrintersManagerFactory::GetForBrowserContext(profile);
+  DCHECK(printers_manager);
+  std::optional<chromeos::Printer> printer =
+      printers_manager->GetPrinter(printer_id);
+  if (!printer) {
+    // If the printer was removed, the lookup will fail.
+    std::move(callback).Run(
+        mojom::GetOAuthAccessTokenResult::NewError(mojom::OAuthError::New()));
+    return;
+  }
+  ash::printing::oauth2::AuthorizationZonesManager* auth_manager =
+      ash::printing::oauth2::AuthorizationZonesManagerFactory::
+          GetForBrowserContext(profile);
+  DCHECK(auth_manager);
+  auto authenticator = std::make_unique<ash::printing::PrinterAuthenticator>(
+      printers_manager, auth_manager, *printer);
+  ash::printing::PrinterAuthenticator* authenticator_ptr = authenticator.get();
+  authenticator_ptr->ObtainAccessTokenIfNeeded(
+      base::BindOnce(OnOAuthAccessTokenObtained, std::move(authenticator),
+                     std::move(callback)));
+}
+
+void LocalPrinterAsh::GetIppClientInfo(const std::string& printer_id,
+                                       GetIppClientInfoCallback callback) {
+  if (!ash::features::IsIppClientInfoEnabled()) {
+    std::move(callback).Run({});
+    return;
+  }
+  Profile* profile = GetProfile();
+  DCHECK(profile);
+  ash::CupsPrintersManager* printers_manager =
+      ash::CupsPrintersManagerFactory::GetForBrowserContext(profile);
+  DCHECK(printers_manager);
+  std::optional<chromeos::Printer> printer =
+      printers_manager->GetPrinter(printer_id);
+  if (!printer) {
+    std::move(callback).Run({});
+    return;
+  }
+  std::vector<printing::mojom::IppClientInfoPtr> result;
+  result.emplace_back(GetIppClientInfoCalculator()->GetOsInfo());
+  if (IsManagedPrinter(*printer) && IsSecureIppPrinter(*printer) &&
+      IsActiveUserAffiliated()) {
+    printing::mojom::IppClientInfoPtr device_info =
+        GetIppClientInfoCalculator()->GetDeviceInfo();
+    if (device_info) {
+      result.push_back(std::move(device_info));
+    }
+  }
+
+  std::move(callback).Run(std::move(result));
+}
+
 scoped_refptr<chromeos::PpdProvider> LocalPrinterAsh::CreatePpdProvider(
     Profile* profile) {
   return ash::CreatePpdProvider(profile);
 }
 
-std::unique_ptr<ash::PrinterConfigurer>
-LocalPrinterAsh::CreatePrinterConfigurer(Profile* profile) {
-  return ash::PrinterConfigurer::Create(profile);
+ash::printing::IppClientInfoCalculator*
+LocalPrinterAsh::GetIppClientInfoCalculator() {
+  if (!ipp_client_info_calculator_) {
+    ipp_client_info_calculator_ =
+        ash::printing::IppClientInfoCalculator::Create();
+  }
+  return ipp_client_info_calculator_.get();
 }
 
 }  // namespace crosapi

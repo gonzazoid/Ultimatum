@@ -58,12 +58,16 @@ class FeatureCompilerTest(unittest.TestCase):
       'internal': True,
       'matches': ['*://*/*'],
       'max_manifest_version': 1,
+      'requires_delegated_availability_check': True,
       'noparent': True,
       'platforms': ['mac', 'win'],
       'session_types': ['kiosk', 'regular'],
       'allowlist': [
         '0123456789ABCDEF0123456789ABCDEF01234567',
         '76543210FEDCBA9876543210FEDCBA9876543210'
+      ],
+      'required_buildflags': [
+        'use_cups'
       ]
     })
     self.assertFalse(f.GetErrors())
@@ -369,6 +373,21 @@ class FeatureCompilerTest(unittest.TestCase):
                                 'No default parent found for bookmarks'):
       c._CompileFeature('bookmarks.export', { "allowlist": ["asdf"] })
 
+  def testComplexFeatureWithSinglePropertyBlock(self):
+    compiler = self._createTestFeatureCompiler('APIFeature')
+
+    error = ('Error parsing feature "feature_alpha": A complex feature '
+             'definition is only needed when there are multiple objects '
+             'specifying different groups of properties for feature '
+             'availability. You can reduce it down to a single object on the '
+             'feature key instead of a list.')
+    with self.assertRaisesRegex(AssertionError, error):
+      compiler._CompileFeature('feature_alpha',
+        [{
+          'contexts': ['blessed_extension'],
+          'channel': 'stable',
+        }])
+
   def testRealIdsDisallowedInAllowlist(self):
     fake_id = 'a' * 32;
     f = self._parseFeature({'allowlist': [fake_id],
@@ -467,6 +486,32 @@ class FeatureCompilerTest(unittest.TestCase):
     feature = compiler._features.get('empty_contexts')
     self.assertTrue(feature)
     self.assertFalse(feature.GetErrors())
+
+  def testFeatureHiddenBehindBuildflag(self):
+    compiler = self._createTestFeatureCompiler('APIFeature')
+
+    compiler._json = {
+      'feature_cups': {
+        'channel': 'beta',
+        'contexts': ['blessed_extension'],
+        'extension_types': ['extension'],
+        'required_buildflags': ['use_cups']
+      }
+    }
+    compiler.Compile()
+    cc_code = compiler.Render()
+
+    # The code below is formatted correctly!
+    self.assertEqual(cc_code.Render(), '''  {
+    #if BUILDFLAG(USE_CUPS)
+    SimpleFeature* feature = new SimpleFeature();
+    feature->set_name("feature_cups");
+    feature->set_channel(version_info::Channel::BETA);
+    feature->set_contexts({mojom::ContextType::kPrivilegedExtension});
+    feature->set_extension_types({Manifest::TYPE_EXTENSION});
+    provider->AddFeature("feature_cups", feature);
+    #endif
+  }''')
 
 if __name__ == '__main__':
   unittest.main()

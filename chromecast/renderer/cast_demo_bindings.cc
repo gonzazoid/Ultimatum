@@ -7,10 +7,11 @@
 #include <tuple>
 
 #include "base/check.h"
+#include "base/task/sequenced_task_runner.h"
 #include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/v8_value_converter.h"
 #include "third_party/blink/public/common/browser_interface_broker_proxy.h"
-#include "third_party/blink/public/web/blink.h"
+#include "third_party/blink/public/platform/scheduler/web_agent_group_scheduler.h"
 #include "third_party/blink/public/web/web_local_frame.h"
 
 namespace chromecast {
@@ -87,9 +88,9 @@ void CastDemoBindings::Install(v8::Local<v8::Object> cast_platform,
 
 void CastDemoBindings::RecordEvent(const std::string& event_name,
                                    v8::Local<v8::Value> v8_data) {
-  v8::Isolate* v8_isolate = blink::MainThreadIsolate();
-  v8::HandleScope v8_handle_scope(v8_isolate);
   blink::WebLocalFrame* web_frame = render_frame()->GetWebFrame();
+  v8::Isolate* v8_isolate = web_frame->GetAgentGroupScheduler()->Isolate();
+  v8::HandleScope v8_handle_scope(v8_isolate);
   v8::Local<v8::Context> v8_context = web_frame->MainWorldScriptContext();
   v8::Context::Scope v8_context_scope(v8_context);
 
@@ -116,7 +117,8 @@ void CastDemoBindings::SetStoreId(const std::string& store_id) {
 }
 
 v8::Local<v8::Value> CastDemoBindings::GetRetailerName() {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  v8::Isolate* isolate =
+      render_frame()->GetWebFrame()->GetAgentGroupScheduler()->Isolate();
   auto context = isolate->GetCurrentContext();
   v8::Local<v8::Promise::Resolver> resolver =
       v8::Promise::Resolver::New(context).ToLocalChecked();
@@ -135,7 +137,8 @@ void CastDemoBindings::OnGetRetailerName(
     v8::Global<v8::Promise::Resolver> resolver,
     v8::Global<v8::Context> original_context,
     const std::string& retailer_name) {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  v8::Isolate* isolate =
+      render_frame()->GetWebFrame()->GetAgentGroupScheduler()->Isolate();
   v8::MicrotasksScope microtasks_scope(
       isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
   v8::HandleScope handle_scope(isolate);
@@ -148,7 +151,8 @@ void CastDemoBindings::OnGetRetailerName(
 }
 
 v8::Local<v8::Value> CastDemoBindings::GetStoreId() {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  v8::Isolate* isolate =
+      render_frame()->GetWebFrame()->GetAgentGroupScheduler()->Isolate();
   auto context = isolate->GetCurrentContext();
   v8::Local<v8::Promise::Resolver> resolver =
       v8::Promise::Resolver::New(context).ToLocalChecked();
@@ -166,11 +170,12 @@ v8::Local<v8::Value> CastDemoBindings::GetStoreId() {
 void CastDemoBindings::OnGetStoreId(v8::Global<v8::Promise::Resolver> resolver,
                                     v8::Global<v8::Context> original_context,
                                     const std::string& store_id) {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
-  v8::MicrotasksScope microtasks_scope(
-      isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
+  v8::Isolate* isolate =
+      render_frame()->GetWebFrame()->GetAgentGroupScheduler()->Isolate();
   v8::HandleScope handle_scope(isolate);
   v8::Local<v8::Context> context = original_context.Get(isolate);
+  v8::MicrotasksScope microtasks_scope(
+      context, v8::MicrotasksScope::kDoNotRunMicrotasks);
   v8::Context::Scope context_scope(context);
 
   resolver.Get(isolate)
@@ -190,7 +195,8 @@ void CastDemoBindings::SetDefaultVolumeLevel(float level) {
 }
 
 v8::Local<v8::Value> CastDemoBindings::GetDefaultVolumeLevel() {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  v8::Isolate* isolate =
+      render_frame()->GetWebFrame()->GetAgentGroupScheduler()->Isolate();
   auto context = isolate->GetCurrentContext();
   v8::Local<v8::Promise::Resolver> resolver =
       v8::Promise::Resolver::New(context).ToLocalChecked();
@@ -209,11 +215,12 @@ void CastDemoBindings::OnGetDefaultVolumeLevel(
     v8::Global<v8::Promise::Resolver> resolver,
     v8::Global<v8::Context> original_context,
     float level) {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
-  v8::MicrotasksScope microtasks_scope(
-      isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
+  v8::Isolate* isolate =
+      render_frame()->GetWebFrame()->GetAgentGroupScheduler()->Isolate();
   v8::HandleScope handle_scope(isolate);
   v8::Local<v8::Context> context = original_context.Get(isolate);
+  v8::MicrotasksScope microtasks_scope(
+      context, v8::MicrotasksScope::kDoNotRunMicrotasks);
   v8::Context::Scope context_scope(context);
 
   resolver.Get(isolate)
@@ -231,7 +238,8 @@ void CastDemoBindings::SetWifiCredentials(const std::string& ssid,
 }
 
 v8::Local<v8::Value> CastDemoBindings::GetAvailableWifiNetworks() {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  v8::Isolate* isolate =
+      render_frame()->GetWebFrame()->GetAgentGroupScheduler()->Isolate();
   auto context = isolate->GetCurrentContext();
   v8::Local<v8::Promise::Resolver> resolver =
       v8::Promise::Resolver::New(context).ToLocalChecked();
@@ -250,11 +258,12 @@ void CastDemoBindings::OnGetAvailableWifiNetworks(
     v8::Global<v8::Promise::Resolver> resolver,
     v8::Global<v8::Context> original_context,
     base::Value network_list) {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
-  v8::MicrotasksScope microtasks_scope(
-      isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
+  v8::Isolate* isolate =
+      render_frame()->GetWebFrame()->GetAgentGroupScheduler()->Isolate();
   v8::HandleScope handle_scope(isolate);
   v8::Local<v8::Context> context = original_context.Get(isolate);
+  v8::MicrotasksScope microtasks_scope(
+      context, v8::MicrotasksScope::kDoNotRunMicrotasks);
   v8::Context::Scope context_scope(context);
 
   std::unique_ptr<content::V8ValueConverter> v8_converter =
@@ -268,7 +277,8 @@ void CastDemoBindings::OnGetAvailableWifiNetworks(
 }
 
 v8::Local<v8::Value> CastDemoBindings::GetConnectionStatus() {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  v8::Isolate* isolate =
+      render_frame()->GetWebFrame()->GetAgentGroupScheduler()->Isolate();
   auto context = isolate->GetCurrentContext();
   v8::Local<v8::Promise::Resolver> resolver =
       v8::Promise::Resolver::New(context).ToLocalChecked();
@@ -287,11 +297,12 @@ void CastDemoBindings::OnGetConnectionStatus(
     v8::Global<v8::Promise::Resolver> resolver,
     v8::Global<v8::Context> original_context,
     base::Value status) {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
-  v8::MicrotasksScope microtasks_scope(
-      isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
+  v8::Isolate* isolate =
+      render_frame()->GetWebFrame()->GetAgentGroupScheduler()->Isolate();
   v8::HandleScope handle_scope(isolate);
   v8::Local<v8::Context> context = original_context.Get(isolate);
+  v8::MicrotasksScope microtasks_scope(
+      context, v8::MicrotasksScope::kDoNotRunMicrotasks);
   v8::Context::Scope context_scope(context);
 
   std::unique_ptr<content::V8ValueConverter> v8_converter =
@@ -305,7 +316,8 @@ void CastDemoBindings::OnGetConnectionStatus(
 
 void CastDemoBindings::SetVolumeChangeHandler(
     v8::Local<v8::Function> volume_change_handler) {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  v8::Isolate* isolate =
+      render_frame()->GetWebFrame()->GetAgentGroupScheduler()->Isolate();
   volume_change_handler_ =
       v8::UniquePersistent<v8::Function>(isolate, volume_change_handler);
 }
@@ -315,15 +327,16 @@ void CastDemoBindings::VolumeChanged(float level) {
     return;
   }
 
-  v8::Isolate* isolate = blink::MainThreadIsolate();
-  v8::HandleScope handle_scope(isolate);
   blink::WebLocalFrame* web_frame = render_frame()->GetWebFrame();
+  v8::Isolate* isolate = web_frame->GetAgentGroupScheduler()->Isolate();
+  v8::HandleScope handle_scope(isolate);
   v8::Local<v8::Context> context = web_frame->MainWorldScriptContext();
   v8::Context::Scope context_scope(context);
   v8::Local<v8::Function> handler =
       v8::Local<v8::Function>::New(isolate, std::move(volume_change_handler_));
 
-  std::vector<v8::Local<v8::Value>> args{gin::ConvertToV8(isolate, level)};
+  auto args =
+      v8::to_array<v8::Local<v8::Value>>({gin::ConvertToV8(isolate, level)});
 
   v8::MaybeLocal<v8::Value> maybe_result =
       handler->Call(context, context->Global(), args.size(), args.data());
@@ -357,7 +370,7 @@ void CastDemoBindings::ReconnectMojo() {
 void CastDemoBindings::OnMojoConnectionError() {
   LOG(WARNING) << "Disconnected from Demo Mojo. Will retry every "
                << kDelayBetweenReconnectionInMillis << " milliseconds.";
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&CastDemoBindings::ReconnectMojo,
                      weak_factory_.GetWeakPtr()),

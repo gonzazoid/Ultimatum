@@ -4,8 +4,8 @@
 
 #include "ios/web_view/internal/app/application_context.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/path_service.h"
 #include "components/autofill/core/common/autofill_features.h"
@@ -13,11 +13,13 @@
 #include "components/component_updater/installer_policies/autofill_states_component_installer.h"
 #include "components/component_updater/timer_update_scheduler.h"
 #include "components/flags_ui/pref_service_flags_storage.h"
+#import "components/metrics/demographics/user_demographics.h"
 #include "components/prefs/json_pref_store.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/pref_service_factory.h"
 #include "components/proxy_config/pref_proxy_config_tracker_impl.h"
+#import "components/sessions/core/session_id_generator.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/translate/core/browser/translate_download_manager.h"
 #include "components/update_client/update_client.h"
@@ -37,10 +39,6 @@
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "ui/base/device_form_factor.h"
 #include "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace ios_web_view {
 namespace {
@@ -71,10 +69,18 @@ void ApplicationContext::PreCreateThreads() {
       std::make_unique<WebViewIOThread>(GetLocalState(), GetNetLog());
 }
 
+void ApplicationContext::PostCreateThreads() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  web::GetIOThreadTaskRunner({})->PostTask(
+      FROM_HERE, base::BindOnce(&WebViewIOThread::InitOnIO,
+                                base::Unretained(web_view_io_thread_.get())));
+}
+
 void ApplicationContext::SaveState() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (local_state_) {
     local_state_->CommitPendingWrite();
+    sessions::SessionIdGenerator::GetInstance()->Shutdown();
   }
 
   if (shared_url_loader_factory_)
@@ -110,6 +116,8 @@ PrefService* ApplicationContext::GetLocalState() {
     update_client::RegisterPrefs(pref_registry.get());
     component_updater::AutofillStatesComponentInstallerPolicy::RegisterPrefs(
         pref_registry.get());
+    metrics::RegisterDemographicsLocalStatePrefs(pref_registry.get());
+    sessions::SessionIdGenerator::RegisterPrefs(pref_registry.get());
 
     base::FilePath local_state_path;
     base::PathService::Get(base::DIR_APP_DATA, &local_state_path);
@@ -123,12 +131,14 @@ PrefService* ApplicationContext::GetLocalState() {
     factory.set_user_prefs(user_pref_store);
     local_state_ = factory.Create(pref_registry.get());
 
+    sessions::SessionIdGenerator::GetInstance()->Init(local_state_.get());
+
     int max_normal_socket_pool_count =
         net::ClientSocketPoolManager::max_sockets_per_group(
             net::HttpNetworkSession::NORMAL_SOCKET_POOL);
-    int socket_count = std::max<int>(net::kDefaultMaxSocketsPerProxyServer,
+    int socket_count = std::max<int>(net::kDefaultMaxSocketsPerProxyChain,
                                      max_normal_socket_pool_count);
-    net::ClientSocketPoolManager::set_max_sockets_per_proxy_server(
+    net::ClientSocketPoolManager::set_max_sockets_per_proxy_chain(
         net::HttpNetworkSession::NORMAL_SOCKET_POOL, socket_count);
   }
   return local_state_.get();

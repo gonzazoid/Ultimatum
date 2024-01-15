@@ -11,14 +11,13 @@
 #include <utility>
 
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/ash/policy/core/device_policy_builder.h"
 #include "chrome/browser/ash/policy/invalidation/fake_affiliated_invalidation_service_provider.h"
 #include "chrome/browser/policy/cloud/cloud_policy_invalidator.h"
 #include "components/invalidation/impl/fake_invalidation_service.h"
 #include "components/invalidation/public/invalidation.h"
 #include "components/invalidation/public/invalidation_util.h"
-#include "components/invalidation/public/topic_invalidation_map.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/core/common/cloud/cloud_policy_core.h"
 #include "components/policy/core/common/cloud/cloud_policy_store.h"
@@ -33,6 +32,7 @@
 
 namespace em = enterprise_management;
 
+using testing::_;
 using testing::Invoke;
 using testing::Mock;
 using testing::WithArgs;
@@ -67,7 +67,8 @@ TEST(AffiliatedCloudPolicyInvalidatorTest, CreateUseDestroy) {
       });
 
   CloudPolicyCore core(dm_protocol::kChromeDevicePolicyType, std::string(),
-                       &store, base::ThreadTaskRunnerHandle::Get(),
+                       &store,
+                       base::SingleThreadTaskRunner::GetCurrentDefault(),
                        network::TestNetworkConnectionTracker::CreateGetter());
 
   // Connect |core|. Expect it to send a registration request. Let the
@@ -117,12 +118,10 @@ TEST(AffiliatedCloudPolicyInvalidatorTest, CreateUseDestroy) {
   // timestamp in microseconds. The policy blob contains a timestamp in
   // milliseconds. Convert from one to the other by multiplying by 1000.
   const int64_t invalidation_version = policy.policy_data().timestamp() * 1000;
-  invalidation::Invalidation invalidation = invalidation::Invalidation::Init(
+  invalidation::Invalidation invalidation = invalidation::Invalidation(
       kPolicyInvalidationTopic, invalidation_version, "dummy payload");
 
-  invalidation::TopicInvalidationMap invalidation_map;
-  invalidation_map.Insert(invalidation);
-  invalidator->OnIncomingInvalidation(invalidation_map);
+  invalidator->OnIncomingInvalidation(invalidation);
 
   // Allow the invalidation to be handled.
   policy_client->SetFetchedInvalidationVersion(invalidation_version);
@@ -130,7 +129,9 @@ TEST(AffiliatedCloudPolicyInvalidatorTest, CreateUseDestroy) {
   policy.Build();
   policy_client->SetPolicy(dm_protocol::kChromeDevicePolicyType, std::string(),
                            policy.policy());
-  EXPECT_CALL(*policy_client, FetchPolicy())
+  // TODO(b/298336121) Adjust expected argument once an appropriate
+  // PolicyFetchReason can be passed through.
+  EXPECT_CALL(*policy_client, FetchPolicy(_))
       .WillOnce(
           Invoke(policy_client, &MockCloudPolicyClient::NotifyPolicyFetched));
   base::RunLoop().RunUntilIdle();

@@ -5,6 +5,7 @@
 #ifndef COMPONENTS_VIZ_TEST_DRAW_QUAD_MATCHERS_H_
 #define COMPONENTS_VIZ_TEST_DRAW_QUAD_MATCHERS_H_
 
+#include "components/viz/common/quads/compositor_render_pass.h"
 #include "components/viz/common/quads/draw_quad.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "third_party/skia/include/core/SkColor.h"
@@ -45,6 +46,10 @@ testing::Matcher<const DrawQuad*> IsYuvVideoQuad();
 // Matches a SurfaceDrawQuad.
 testing::Matcher<const DrawQuad*> IsSurfaceQuad();
 
+// Matches an CompositorRenderPassQuad with matching `id`.
+testing::Matcher<const DrawQuad*> IsCompositorRenderPassQuad(
+    CompositorRenderPassId id);
+
 // Matches an AggregatedRenderPassQuad.
 testing::Matcher<const DrawQuad*> IsAggregatedRenderPassQuad();
 
@@ -56,6 +61,23 @@ testing::Matcher<const DrawQuad*> HasVisibleRect(const gfx::Rect& visible_rect);
 
 // Matches a DrawQuad with expected SharedQuadState::quad_to_target_transform.
 testing::Matcher<const DrawQuad*> HasTransform(const gfx::Transform& transform);
+
+// Matches a DrawQuad with expected SharedQuadState::opacity.
+testing::Matcher<const DrawQuad*> HasOpacity(float opacity);
+
+// Matches a DrawQuad with expected SharedQuadState::are_contents_opaque.
+testing::Matcher<const DrawQuad*> AreContentsOpaque(bool opaque);
+
+// Matches a DrawQuad with expected SharedQuadState::layer_id.
+testing::Matcher<const DrawQuad*> HasLayerId(uint32_t layer_id);
+
+// Matches a DrawQuad with expected SharedQuadState::layer_namespace_id.
+testing::Matcher<const DrawQuad*> HasLayerNamespaceId(
+    uint32_t layer_namespace_id);
+
+// Matches a DrawQuad with expected SharedQuadState::mask_filter_info.
+testing::Matcher<const DrawQuad*> HasMaskFilterInfo(
+    const gfx::MaskFilterInfo& mask_filter_info);
 
 }  // namespace viz
 

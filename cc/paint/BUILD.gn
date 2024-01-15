@@ -11,6 +11,8 @@ cc_component("paint") {
   sources = [
     "clear_for_opaque_raster.cc",
     "clear_for_opaque_raster.h",
+    "color_filter.cc",
+    "color_filter.h",
     "decode_stashing_image_provider.cc",
     "decode_stashing_image_provider.h",
     "decoded_draw_image.cc",
@@ -49,8 +51,12 @@ cc_component("paint") {
     "paint_image_builder.h",
     "paint_image_generator.cc",
     "paint_image_generator.h",
+    "paint_op.cc",
+    "paint_op.h",
     "paint_op_buffer.cc",
     "paint_op_buffer.h",
+    "paint_op_buffer_iterator.cc",
+    "paint_op_buffer_iterator.h",
     "paint_op_buffer_serializer.cc",
     "paint_op_buffer_serializer.h",
     "paint_op_reader.cc",
@@ -72,6 +78,7 @@ cc_component("paint") {
     "raw_memory_transfer_cache_entry.h",
     "record_paint_canvas.cc",
     "record_paint_canvas.h",
+    "refcounted_buffer.h",
     "render_surface_filters.cc",
     "render_surface_filters.h",
     "scoped_raster_flags.cc",
@@ -83,7 +90,6 @@ cc_component("paint") {
     "skia_paint_image_generator.cc",
     "skia_paint_image_generator.h",
     "skottie_color_map.h",
-    "skottie_frame_data.cc",
     "skottie_frame_data.h",
     "skottie_frame_data_provider.h",
     "skottie_marker.h",
@@ -125,6 +131,7 @@ cc_component("paint") {
     "//ui/gfx:color_space",
     "//ui/gfx/geometry",
     "//ui/gfx/geometry:geometry_skia",
+    "//ui/gfx/mojom:hdr_metadata",
   ]
 
   deps = [
@@ -132,7 +139,6 @@ cc_component("paint") {
     "//components/crash/core/common:crash_key",
     "//gpu/command_buffer/common:mailbox",
     "//ui/gfx/animation",
-    "//ui/gfx/ipc/color",
   ]
 
   if (skia_support_skottie) {

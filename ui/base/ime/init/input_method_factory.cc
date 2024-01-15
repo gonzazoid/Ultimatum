@@ -13,12 +13,11 @@
 #include "ui/gfx/switches.h"
 
 #if BUILDFLAG(IS_WIN)
-#include "base/win/windows_version.h"
 #include "ui/base/ime/win/input_method_win_imm32.h"
 #include "ui/base/ime/win/input_method_win_tsf.h"
 #elif BUILDFLAG(IS_APPLE)
 #include "ui/base/ime/mac/input_method_mac.h"
-#elif defined(USE_OZONE)
+#elif BUILDFLAG(IS_OZONE)
 #include "ui/ozone/public/ozone_platform.h"
 #else
 #include "ui/base/ime/input_method_minimal.h"
@@ -55,8 +54,7 @@ std::unique_ptr<InputMethod> CreateInputMethod(
     return base::WrapUnique(new MockInputMethod(ime_key_event_dispatcher));
 
 #if BUILDFLAG(IS_WIN)
-  if (base::FeatureList::IsEnabled(features::kTSFImeSupport) &&
-      base::win::GetVersion() > base::win::Version::WIN7) {
+  if (base::FeatureList::IsEnabled(features::kTSFImeSupport)) {
     return std::make_unique<InputMethodWinTSF>(ime_key_event_dispatcher,
                                                widget);
   }
@@ -64,7 +62,7 @@ std::unique_ptr<InputMethod> CreateInputMethod(
                                                widget);
 #elif BUILDFLAG(IS_APPLE)
   return std::make_unique<InputMethodMac>(ime_key_event_dispatcher);
-#elif defined(USE_OZONE)
+#elif BUILDFLAG(IS_OZONE)
   return ui::OzonePlatform::GetInstance()->CreateInputMethod(
       ime_key_event_dispatcher, widget);
 #else

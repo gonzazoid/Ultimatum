@@ -12,7 +12,6 @@
 #include "chrome/browser/favicon/favicon_utils.h"
 #include "chrome/browser/prefs/incognito_mode_prefs.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/bookmarks/bookmark_utils_desktop.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/cocoa/bookmarks/bookmark_menu_bridge.h"
@@ -53,7 +52,7 @@ NSString* MenuTitleForNode(const BookmarkNode* node) {
 BookmarkMenuBridge::BookmarkMenuBridge(Profile* profile, NSMenu* menu_root)
     : profile_(profile),
       controller_([[BookmarkMenuCocoaController alloc] initWithBridge:this]),
-      menu_root_([menu_root retain]) {
+      menu_root_(menu_root) {
   DCHECK(profile_);
   profile_dir_ = profile->GetPath();
   DCHECK(menu_root_);
@@ -78,7 +77,7 @@ void BookmarkMenuBridge::UpdateMenu(NSMenu* menu,
                                     bool recurse) {
   DCHECK(menu);
   DCHECK(controller_);
-  DCHECK_EQ([menu delegate], controller_.get());
+  DCHECK_EQ([menu delegate], controller_);
 
   if (menu == menu_root_) {
     if (!IsMenuValid())
@@ -99,8 +98,7 @@ void BookmarkMenuBridge::BuildRootMenu(bool recurse) {
 
   if (!folder_image_) {
     ui::ResourceBundle& rb = ui::ResourceBundle::GetSharedInstance();
-    folder_image_.reset(
-        [rb.GetNativeImageNamed(IDR_FOLDER_CLOSED).ToNSImage() retain]);
+    folder_image_ = rb.GetNativeImageNamed(IDR_FOLDER_CLOSED).ToNSImage();
     [folder_image_ setTemplate:YES];
   }
 
@@ -260,10 +258,11 @@ void BookmarkMenuBridge::AddNodeAsSubmenu(NSMenu* menu,
                                           NSImage* image,
                                           bool recurse) {
   NSString* title = MenuTitleForNode(node);
-  base::scoped_nsobject<NSMenuItem> items(
-      [[NSMenuItem alloc] initWithTitle:title action:nil keyEquivalent:@""]);
+  NSMenuItem* items = [[NSMenuItem alloc] initWithTitle:title
+                                                 action:nil
+                                          keyEquivalent:@""];
   [items setImage:image];
-  base::scoped_nsobject<NSMenu> submenu([[NSMenu alloc] initWithTitle:title]);
+  NSMenu* submenu = [[NSMenu alloc] initWithTitle:title];
   [menu setSubmenu:submenu forItem:items];
 
   // Set a delegate and a tag on the item so that the submenu can be populated
@@ -271,7 +270,7 @@ void BookmarkMenuBridge::AddNodeAsSubmenu(NSMenu* menu,
   if (!recurse)
     [submenu setDelegate:controller_];
   [items setTag:node->id()];
-  tag_to_guid_[node->id()] = node->guid();
+  tag_to_guid_[node->id()] = node->uuid();
 
   [menu addItem:items];
 
@@ -285,10 +284,9 @@ void BookmarkMenuBridge::AddNodeToMenu(const BookmarkNode* node,
                                        bool recurse) {
   if (node->children().empty()) {
     NSString* empty_string = l10n_util::GetNSString(IDS_MENU_EMPTY_SUBMENU);
-    base::scoped_nsobject<NSMenuItem> item([[NSMenuItem alloc]
-        initWithTitle:empty_string
-               action:nil
-        keyEquivalent:@""]);
+    NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:empty_string
+                                                  action:nil
+                                           keyEquivalent:@""];
     [menu addItem:item];
     return;
   }
@@ -297,12 +295,12 @@ void BookmarkMenuBridge::AddNodeToMenu(const BookmarkNode* node,
     if (child->is_folder()) {
       AddNodeAsSubmenu(menu, child.get(), folder_image_, recurse);
     } else {
-      base::scoped_nsobject<NSMenuItem> item([[NSMenuItem alloc]
-          initWithTitle:MenuTitleForNode(child.get())
-                 action:nil
-          keyEquivalent:@""]);
+      NSMenuItem* item =
+          [[NSMenuItem alloc] initWithTitle:MenuTitleForNode(child.get())
+                                     action:nil
+                              keyEquivalent:@""];
       bookmark_nodes_[child.get()] = item;
-      tag_to_guid_[child->id()] = child->guid();
+      tag_to_guid_[child->id()] = child->uuid();
       ConfigureMenuItem(child.get(), item, false);
       [menu addItem:item];
     }
@@ -317,7 +315,7 @@ void BookmarkMenuBridge::ConfigureMenuItem(const BookmarkNode* node,
   [item setTarget:controller_];
   [item setAction:@selector(openBookmarkMenuItem:)];
   [item setTag:node->id()];
-  tag_to_guid_[node->id()] = node->guid();
+  tag_to_guid_[node->id()] = node->uuid();
   if (node->is_url())
     [item setToolTip:[BookmarkMenuCocoaController tooltipForNode:node]];
   // Check to see if we have a favicon.
@@ -354,7 +352,7 @@ void BookmarkMenuBridge::OnProfileWillBeDestroyed() {
   bookmark_nodes_.clear();
 }
 
-base::GUID BookmarkMenuBridge::TagToGUID(int64_t tag) const {
+base::Uuid BookmarkMenuBridge::TagToGUID(int64_t tag) const {
   const auto& it = tag_to_guid_.find(tag);
-  return it == tag_to_guid_.end() ? base::GUID() : it->second;
+  return it == tag_to_guid_.end() ? base::Uuid() : it->second;
 }

@@ -5,13 +5,15 @@
 #ifndef UI_VIEWS_TEST_CAPTURE_TRACKING_VIEW_H_
 #define UI_VIEWS_TEST_CAPTURE_TRACKING_VIEW_H_
 
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 // Used to track OnMousePressed() and OnMouseCaptureLost().
 class CaptureTrackingView : public views::View {
+  METADATA_HEADER(CaptureTrackingView, views::View)
+
  public:
   CaptureTrackingView();
 
@@ -38,7 +40,6 @@ class CaptureTrackingView : public views::View {
   bool got_capture_lost_ = false;
 };
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test
 
 #endif  // UI_VIEWS_TEST_CAPTURE_TRACKING_VIEW_H_

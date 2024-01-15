@@ -10,11 +10,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
@@ -22,10 +23,10 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/web_applications/external_install_options.h"
+#include "chrome/browser/web_applications/mojom/user_display_mode.mojom.h"
 #include "chrome/browser/web_applications/test/fake_externally_managed_app_manager.h"
 #include "chrome/browser/web_applications/test/fake_web_app_provider.h"
 #include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
-#include "chrome/browser/web_applications/user_display_mode.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
@@ -46,10 +47,9 @@ const char kTestUrl2[] = "https://test-url-2.com/";
 
 web_app::ExternalInstallOptions GetInstallOptionsForUrl(const GURL& url) {
   web_app::ExternalInstallOptions options(
-      url, web_app::UserDisplayMode::kStandalone,
+      url, web_app::mojom::UserDisplayMode::kStandalone,
       web_app::ExternalInstallSource::kInternalDefault);
   options.override_previous_user_uninstall = true;
-  options.bypass_service_worker_check = true;
   options.require_manifest = true;
   return options;
 }
@@ -151,14 +151,14 @@ class AndroidSmsAppSetupControllerImplTest : public testing::Test {
         return;
 
       url_to_pwa_map_[url] =
-          web_app::GenerateAppId(/*manifest_id=*/absl::nullopt, url);
+          web_app::GenerateAppId(/*manifest_id=*/std::nullopt, url);
     }
 
     // AndroidSmsAppSetupControllerImpl::PwaDelegate:
-    absl::optional<web_app::AppId> GetPwaForUrl(const GURL& install_url,
-                                                Profile* profile) override {
+    std::optional<webapps::AppId> GetPwaForUrl(const GURL& install_url,
+                                               Profile* profile) override {
       if (!base::Contains(url_to_pwa_map_, install_url))
-        return absl::nullopt;
+        return std::nullopt;
 
       return url_to_pwa_map_[install_url];
     }
@@ -168,7 +168,7 @@ class AndroidSmsAppSetupControllerImplTest : public testing::Test {
     }
 
     void RemovePwa(
-        const web_app::AppId& app_id,
+        const webapps::AppId& app_id,
         Profile* profile,
         AndroidSmsAppSetupController::SuccessCallback callback) override {
       for (const auto& url_pwa_pair : url_to_pwa_map_) {
@@ -183,8 +183,8 @@ class AndroidSmsAppSetupControllerImplTest : public testing::Test {
     }
 
    private:
-    FakeCookieManager* fake_cookie_manager_;
-    base::flat_map<GURL, web_app::AppId> url_to_pwa_map_;
+    raw_ptr<FakeCookieManager> fake_cookie_manager_;
+    base::flat_map<GURL, webapps::AppId> url_to_pwa_map_;
   };
 
   AndroidSmsAppSetupControllerImplTest()
@@ -447,16 +447,16 @@ class AndroidSmsAppSetupControllerImplTest : public testing::Test {
 
   content::BrowserTaskEnvironment task_environment_;
 
-  absl::optional<bool> last_set_up_app_result_;
-  absl::optional<bool> last_delete_cookie_result_;
-  absl::optional<bool> last_remove_app_result_;
+  std::optional<bool> last_set_up_app_result_;
+  std::optional<bool> last_delete_cookie_result_;
+  std::optional<bool> last_remove_app_result_;
 
-  raw_ptr<web_app::FakeWebAppProvider> provider_;
+  raw_ptr<web_app::FakeWebAppProvider, DanglingUntriaged> provider_;
 
   TestingProfile profile_;
-  HostContentSettingsMap* host_content_settings_map_;
+  raw_ptr<HostContentSettingsMap> host_content_settings_map_;
   std::unique_ptr<FakeCookieManager> fake_cookie_manager_;
-  TestPwaDelegate* test_pwa_delegate_;
+  raw_ptr<TestPwaDelegate, DanglingUntriaged> test_pwa_delegate_;
   std::unique_ptr<AndroidSmsAppSetupController> setup_controller_;
 };
 

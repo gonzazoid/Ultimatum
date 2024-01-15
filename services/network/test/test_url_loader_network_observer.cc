@@ -18,6 +18,10 @@ TestURLLoaderNetworkObserver::Bind() {
   return remote;
 }
 
+void TestURLLoaderNetworkObserver::FlushReceivers() {
+  receivers_.FlushForTesting();
+}
+
 void TestURLLoaderNetworkObserver::OnSSLCertificateError(
     const GURL& url,
     int net_error,
@@ -43,11 +47,21 @@ void TestURLLoaderNetworkObserver::OnAuthRequired(
     mojo::PendingRemote<mojom::AuthChallengeResponder>
         auth_challenge_responder) {}
 
+void TestURLLoaderNetworkObserver::OnPrivateNetworkAccessPermissionRequired(
+    const GURL& url,
+    const net::IPAddress& ip_address,
+    const absl::optional<std::string>& private_network_device_id,
+    const absl::optional<std::string>& private_network_device_name,
+    OnPrivateNetworkAccessPermissionRequiredCallback callback) {
+  std::move(callback).Run(false);
+}
+
 void TestURLLoaderNetworkObserver::OnClearSiteData(
     const GURL& url,
     const std::string& header_value,
     int32_t load_flags,
     const absl::optional<net::CookiePartitionKey>& cookie_partition_key,
+    bool partitioned_state_allowed_only,
     OnClearSiteDataCallback callback) {
   std::move(callback).Run();
 }
@@ -62,6 +76,13 @@ void TestURLLoaderNetworkObserver::OnDataUseUpdate(
     int32_t network_traffic_annotation_id_hash,
     int64_t recv_bytes,
     int64_t sent_bytes) {}
+
+void TestURLLoaderNetworkObserver::OnSharedStorageHeaderReceived(
+    const url::Origin& request_origin,
+    std::vector<network::mojom::SharedStorageOperationPtr> operations,
+    OnSharedStorageHeaderReceivedCallback callback) {
+  std::move(callback).Run();
+}
 
 void TestURLLoaderNetworkObserver::Clone(
     mojo::PendingReceiver<URLLoaderNetworkServiceObserver> observer) {

@@ -40,9 +40,9 @@ class HoldingSpaceDownloadsDelegate
   ~HoldingSpaceDownloadsDelegate() override;
 
   // Attempts to mark the download underlying the given `item` to open when
-  // complete. Returns `absl::nullopt` on success or the reason if the attempt
+  // complete. Returns `std::nullopt` on success or the reason if the attempt
   // was not successful.
-  absl::optional<holding_space_metrics::ItemFailureToLaunchReason>
+  std::optional<holding_space_metrics::ItemLaunchFailureReason>
   OpenWhenComplete(const HoldingSpaceItem* item);
 
  private:
@@ -82,8 +82,7 @@ class HoldingSpaceDownloadsDelegate
   // Invoked when the specified `in_progress_download` is updated. If
   // `invalidate_image` is `true`, the image for the associated holding space
   // item will be explicitly invalidated. This is necessary if, for example, the
-  // underlying download is transitioning to/from a dangerous or mixed content
-  // state.
+  // underlying download is transitioning to/from a dangerous or insecure state.
   void OnDownloadUpdated(InProgressDownload* in_progress_download,
                          bool invalidate_image);
 
@@ -102,7 +101,7 @@ class HoldingSpaceDownloadsDelegate
   // specified `in_progress_download`. If `invalidate_image` is `true`, the
   // image for the holding space item will be explicitly invalidated. This is
   // necessary if, for example, the underlying download is transitioning to/from
-  // a dangerous or mixed content state.
+  // a dangerous or insecure state.
   void CreateOrUpdateHoldingSpaceItem(InProgressDownload* in_progress_download,
                                       bool invalidate_image);
 

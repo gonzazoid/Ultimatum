@@ -20,26 +20,25 @@ class CORE_EXPORT LargestContentfulPaint final : public PerformanceEntry {
 
  public:
   LargestContentfulPaint(double start_time,
-                         base::TimeDelta render_time,
+                         DOMHighResTimeStamp render_time,
                          uint64_t size,
-                         base::TimeDelta load_time,
-                         base::TimeDelta first_animated_frame_time,
+                         DOMHighResTimeStamp load_time,
+                         DOMHighResTimeStamp first_animated_frame_time,
                          const AtomicString& id,
                          const String& url,
                          Element* element,
-                         uint32_t navigation_id);
+                         DOMWindow* source,
+                         bool is_triggered_by_soft_navigation);
   ~LargestContentfulPaint() override;
 
-  AtomicString entryType() const override;
+  const AtomicString& entryType() const override;
   PerformanceEntryType EntryTypeEnum() const override;
 
   uint64_t size() const { return size_; }
-  DOMHighResTimeStamp renderTime() const {
-    return render_time_.InMillisecondsF();
-  }
-  DOMHighResTimeStamp loadTime() const { return load_time_.InMillisecondsF(); }
+  DOMHighResTimeStamp renderTime() const { return render_time_; }
+  DOMHighResTimeStamp loadTime() const { return load_time_; }
   DOMHighResTimeStamp firstAnimatedFrameTime() const {
-    return first_animated_frame_time_.InMillisecondsF();
+    return first_animated_frame_time_;
   }
   const AtomicString& id() const { return id_; }
   const String& url() const { return url_; }
@@ -51,9 +50,9 @@ class CORE_EXPORT LargestContentfulPaint final : public PerformanceEntry {
   void BuildJSONValue(V8ObjectBuilder&) const override;
 
   uint64_t size_;
-  base::TimeDelta render_time_;
-  base::TimeDelta load_time_;
-  base::TimeDelta first_animated_frame_time_;
+  DOMHighResTimeStamp render_time_;
+  DOMHighResTimeStamp load_time_;
+  DOMHighResTimeStamp first_animated_frame_time_;
   AtomicString id_;
   String url_;
   WeakMember<Element> element_;

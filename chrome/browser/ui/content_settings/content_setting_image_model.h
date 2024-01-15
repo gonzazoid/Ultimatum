@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_UI_CONTENT_SETTINGS_CONTENT_SETTING_IMAGE_MODEL_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -49,6 +50,8 @@ class ContentSettingImageModel {
     SENSORS = 16,
     NOTIFICATIONS_QUIET_PROMPT = 17,
     CLIPBOARD_READ_WRITE = 18,
+    STORAGE_ACCESS = 19,
+    MIDI = 20,
 
     NUM_IMAGE_TYPES
   };
@@ -56,7 +59,7 @@ class ContentSettingImageModel {
   ContentSettingImageModel(const ContentSettingImageModel&) = delete;
   ContentSettingImageModel& operator=(const ContentSettingImageModel&) = delete;
 
-  virtual ~ContentSettingImageModel() {}
+  virtual ~ContentSettingImageModel() = default;
 
   // Generates a vector of all image models to be used within one window.
   static std::vector<std::unique_ptr<ContentSettingImageModel>>
@@ -94,9 +97,14 @@ class ContentSettingImageModel {
 
   bool is_visible() const { return is_visible_; }
 
+  bool is_blocked() const { return is_blocked_; }
+
   // Retrieve the icon that represents this content setting. Blocked content
   // settings icons will have a blocked badge.
   gfx::Image GetIcon(SkColor icon_color) const;
+
+  // Allows overriding the default icon size.
+  void SetIconSize(int icon_size);
 
   // Returns the resource ID of a string to show when the icon appears, or 0 if
   // we don't wish to show anything.
@@ -120,6 +128,8 @@ class ContentSettingImageModel {
 
   bool IsMacRestoreLocationPermissionExperimentActive();
 
+  const gfx::VectorIcon* icon() const { return icon_; }
+
  protected:
   // Note: image_type_should_notify_accessibility by itself does not guarantee
   // the item will be read; it also needs a valid explanatory_text_id or
@@ -138,11 +148,6 @@ class ContentSettingImageModel {
       ContentSettingBubbleModel::Delegate* delegate,
       content::WebContents* web_contents) = 0;
 
-  void set_icon(const gfx::VectorIcon& icon, const gfx::VectorIcon& badge) {
-    icon_ = &icon;
-    icon_badge_ = &badge;
-  }
-
   void set_accessibility_string_id(int id) { accessibility_string_id_ = id; }
 
   void set_tooltip(const std::u16string& tooltip) { tooltip_ = tooltip; }
@@ -153,8 +158,18 @@ class ContentSettingImageModel {
     should_show_promo_ = should_show_promo;
   }
 
+  // Sets an icon based on the content setting type, and whether the setting is
+  // blocked. We use ContentSettingsType rather than ImageType because some
+  // ImageTypes may have multiple icons.
+  void SetIcon(ContentSettingsType type, bool blocked);
+
+  // A special case for framebusting since that does not have a
+  // ContentSettingsType.
+  void SetFramebustBlockedIcon();
+
  private:
   bool is_visible_ = false;
+  bool is_blocked_ = false;
 
   raw_ptr<const gfx::VectorIcon> icon_;
   raw_ptr<const gfx::VectorIcon> icon_badge_;
@@ -165,6 +180,7 @@ class ContentSettingImageModel {
   const bool image_type_should_notify_accessibility_;
   bool should_auto_open_bubble_ = false;
   bool should_show_promo_ = false;
+  std::optional<int> icon_size_;
 };
 
 // A subclass for an image model tied to a single content type.

@@ -9,10 +9,11 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/observer_list.h"
 #include "base/rand_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "google_apis/gaia/gaia_urls.h"
+#include "google_apis/gaia/google_service_auth_error.h"
 #include "google_apis/gaia/oauth2_access_token_fetcher.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
@@ -208,7 +209,7 @@ class OAuth2AccessTokenManager::Fetcher : public OAuth2AccessTokenConsumer {
   // Fetcher, since this Fetcher is destructed in the dtor of the
   // OAuth2AccessTokenManager or is scheduled for deletion at the end of
   // OnGetTokenFailure/OnGetTokenSuccess (whichever comes first).
-  const raw_ptr<OAuth2AccessTokenManager, DanglingUntriaged>
+  const raw_ptr<OAuth2AccessTokenManager, AcrossTasksDanglingUntriaged>
       oauth2_access_token_manager_;
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
   const CoreAccountId account_id_;
@@ -219,6 +220,11 @@ class OAuth2AccessTokenManager::Fetcher : public OAuth2AccessTokenConsumer {
   int retry_number_;
   base::OneShotTimer retry_timer_;
   std::unique_ptr<OAuth2AccessTokenFetcher> fetcher_;
+
+  // Token binding challenge from the last server response or an empty string if
+  // the response didn't contain any challenge.
+  bool seen_token_binding_challenge_ = false;
+  std::string token_binding_challenge_;
 
   // Variables that store fetch results.
   // Initialized to be GoogleServiceAuthError::SERVICE_UNAVAILABLE to handle
@@ -284,7 +290,7 @@ OAuth2AccessTokenManager::Fetcher::~Fetcher() {
 
 void OAuth2AccessTokenManager::Fetcher::Start() {
   fetcher_ = oauth2_access_token_manager_->CreateAccessTokenFetcher(
-      account_id_, url_loader_factory_, this);
+      account_id_, url_loader_factory_, this, token_binding_challenge_);
   DCHECK(fetcher_);
 
   // Stop the timer before starting the fetch, as defense in depth against the
@@ -345,6 +351,19 @@ OAuth2AccessTokenManager::Fetcher::ComputeExponentialBackOffMilliseconds(
 
 bool OAuth2AccessTokenManager::Fetcher::RetryIfPossible(
     const GoogleServiceAuthError& error) {
+  if (error.state() == GoogleServiceAuthError::CHALLENGE_RESPONSE_REQUIRED) {
+    token_binding_challenge_ = error.GetTokenBindingChallenge();
+    if (!seen_token_binding_challenge_) {
+      seen_token_binding_challenge_ = true;
+      // The server wants us to sign a challenge. Retry immediately if this is
+      // the first attempt to pass a challenge.
+      Start();
+      return true;
+    }
+  } else {
+    token_binding_challenge_.clear();
+  }
+
   if (retry_number_ < oauth2_access_token_manager_->max_fetch_retry_num_) {
     base::TimeDelta backoff = base::Milliseconds(
         ComputeExponentialBackOffMilliseconds(retry_number_));
@@ -362,16 +381,10 @@ bool OAuth2AccessTokenManager::Fetcher::RetryIfPossible(
 
 bool OAuth2AccessTokenManager::Fetcher::ShouldRetry(
     const GoogleServiceAuthError& error) const {
-  GoogleServiceAuthError::State error_state = error.state();
-  bool should_retry =
-      error_state == GoogleServiceAuthError::CONNECTION_FAILED ||
-      error_state == GoogleServiceAuthError::REQUEST_CANCELED ||
-      error_state == GoogleServiceAuthError::SERVICE_UNAVAILABLE;
-
-  // Give the delegate a chance to correct the error first.  This is a best
+  // Give the delegate a chance to correct the error first. This is a best
   // effort only.
-  return should_retry || oauth2_access_token_manager_->GetDelegate()
-                             ->FixRequestErrorIfPossible();
+  return error.IsTransientError() || oauth2_access_token_manager_->GetDelegate()
+                                         ->FixRequestErrorIfPossible();
 }
 
 void OAuth2AccessTokenManager::Fetcher::InformWaitingRequests() {
@@ -390,7 +403,8 @@ void OAuth2AccessTokenManager::Fetcher::InformWaitingRequestsAndDelete() {
   // be added when it calls back the waiting requests.
   oauth2_access_token_manager_->OnFetchComplete(this);
   InformWaitingRequests();
-  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, this);
+  base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                this);
 }
 
 void OAuth2AccessTokenManager::Fetcher::AddWaitingRequest(
@@ -629,9 +643,10 @@ std::unique_ptr<OAuth2AccessTokenFetcher>
 OAuth2AccessTokenManager::CreateAccessTokenFetcher(
     const CoreAccountId& account_id,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-    OAuth2AccessTokenConsumer* consumer) {
+    OAuth2AccessTokenConsumer* consumer,
+    const std::string& token_binding_challenge) {
   return delegate_->CreateAccessTokenFetcher(account_id, url_loader_factory,
-                                             consumer);
+                                             consumer, token_binding_challenge);
 }
 
 std::unique_ptr<OAuth2AccessTokenManager::Request>
@@ -656,7 +671,7 @@ OAuth2AccessTokenManager::StartRequestForClientWithContext(
                                           error, base::Time());
     }
 
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&RequestImpl::InformConsumer, request->AsWeakPtr(),
                        error, OAuth2AccessTokenConsumer::TokenResponse()));
@@ -694,7 +709,7 @@ void OAuth2AccessTokenManager::InformConsumerWithCachedTokenResponse(
         request_parameters.scopes, GoogleServiceAuthError::AuthErrorNone(),
         cache_token_response->expiration_time);
   }
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&RequestImpl::InformConsumer, request->AsWeakPtr(),
                      GoogleServiceAuthError(GoogleServiceAuthError::NONE),

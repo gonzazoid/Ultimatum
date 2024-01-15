@@ -6,7 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/strcat.h"
 #include "chromeos/ash/components/disks/mount_point.h"
@@ -70,7 +71,7 @@ class DiskMounterImpl : public DiskMounter {
     std::move(callback_).Run(mount_point_->mount_path());
   }
 
-  ash::disks::DiskMountManager* const disk_mount_manager_;
+  const raw_ptr<ash::disks::DiskMountManager> disk_mount_manager_;
   base::OnceCallback<void(base::FilePath)> callback_;
   // The path passed to cros-disks to mount.
   std::string source_path_;
@@ -162,7 +163,7 @@ void DriveFsSession::MaybeNotifyOnMounted() {
 
 void DriveFsSession::NotifyFailed(
     MountFailure failure,
-    absl::optional<base::TimeDelta> remount_delay) {
+    std::optional<base::TimeDelta> remount_delay) {
   // May delete |this|.
   auto connection = std::move(connection_);
   if (connection) {
@@ -171,7 +172,7 @@ void DriveFsSession::NotifyFailed(
 }
 
 void DriveFsSession::NotifyUnmounted(
-    absl::optional<base::TimeDelta> remount_delay) {
+    std::optional<base::TimeDelta> remount_delay) {
   // May delete |this|.
   auto connection = std::move(connection_);
   if (connection) {
@@ -190,7 +191,7 @@ void DriveFsSession::OnMounted() {
 }
 
 void DriveFsSession::OnMountFailed(
-    absl::optional<base::TimeDelta> remount_delay) {
+    std::optional<base::TimeDelta> remount_delay) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!drivefs_has_started_);
   DCHECK(!is_mounted_);
@@ -203,8 +204,7 @@ void DriveFsSession::OnMountFailed(
   }
 }
 
-void DriveFsSession::OnUnmounted(
-    absl::optional<base::TimeDelta> remount_delay) {
+void DriveFsSession::OnUnmounted(std::optional<base::TimeDelta> remount_delay) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(drivefs_has_started_);
   DCHECK(!drivefs_has_terminated_);

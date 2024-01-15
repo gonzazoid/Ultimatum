@@ -17,9 +17,9 @@ import android.view.ViewGroup;
 import androidx.core.graphics.drawable.RoundedBitmapDrawable;
 import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory;
 
-/**
- * A utility class that has helper methods for Android view.
- */
+import org.chromium.base.TraceEvent;
+
+/** A utility class that has helper methods for Android view. */
 public final class ViewUtils {
     private static final int[] sLocationTmp = new int[2];
 
@@ -48,9 +48,7 @@ public final class ViewUtils {
         return view.isInTouchMode() ? view.isFocusableInTouchMode() : view.isFocusable();
     }
 
-    /**
-     * Invalidates a view and all of its descendants.
-     */
+    /** Invalidates a view and all of its descendants. */
     private static void recursiveInvalidate(View view) {
         view.invalidate();
         if (view instanceof ViewGroup) {
@@ -65,9 +63,7 @@ public final class ViewUtils {
         }
     }
 
-    /**
-     * Sets the enabled property of a View and all of its descendants.
-     */
+    /** Sets the enabled property of a View and all of its descendants. */
     public static void setEnabledRecursive(View view, boolean enabled) {
         view.setEnabled(enabled);
         if (view instanceof ViewGroup) {
@@ -78,9 +74,7 @@ public final class ViewUtils {
         }
     }
 
-    /**
-     * Captures a bitmap of a View and draws it to a Canvas.
-     */
+    /** Captures a bitmap of a View and draws it to a Canvas. */
     public static void captureBitmap(View view, Canvas canvas) {
         // Invalidate all the descendants of view, before calling view.draw(). Otherwise, some of
         // the descendant views may optimize away their drawing. http://crbug.com/415251
@@ -138,9 +132,12 @@ public final class ViewUtils {
      */
     public static void gatherTransparentRegionsForOpaqueView(View view, Region region) {
         view.getLocationInWindow(sLocationTmp);
-        region.op(sLocationTmp[0], sLocationTmp[1],
+        region.op(
+                sLocationTmp[0],
+                sLocationTmp[1],
                 sLocationTmp[0] + view.getRight() - view.getLeft(),
-                sLocationTmp[1] + view.getBottom() - view.getTop(), Region.Op.DIFFERENCE);
+                sLocationTmp[1] + view.getBottom() - view.getTop(),
+                Region.Op.DIFFERENCE);
     }
 
     /**
@@ -214,5 +211,33 @@ public final class ViewUtils {
             }
             to = (View) to.getParent();
         }
+    }
+
+    /**
+     * A wrapper that calls android.view.requestLayout() immediately after emitting an instant trace
+     * event with information about the caller. This helps jank investigations, as there are traces
+     * with lots of re-layouts, but we don't know where these layouts are coming from.
+     *
+     * Do not include any identifying information in {@code caller}! Only constant string literals
+     * about code execution should be included.
+     *
+     * Examples of useful {@code caller} values:
+     * "MyClass.myMethod" when requestLayout is called in myMethod in MyClass.
+     * "MyClass.MyInnerClass.myMethod" when requestLayout is called in an inner class.
+     * "MyClass.myMethod.MyInnerClass.innerMethod" when requestLayout is called in an inner class
+     * defined in a method.
+     * "MyClass.myMethod other_helpful_information" when requestLayout is called more than once in
+     * the same method.
+     * "MyClass.myMethod Runnable" when requestLayout is posted somewhere to be executed later.
+     *
+     * @param view The view to call requestLayout on.
+     * @param caller Some queryable information about the caller.
+     */
+    // The trace event name is always a method/class name literal.
+    @SuppressWarnings("NoDynamicStringsInTraceEventCheck")
+    public static void requestLayout(View view, String caller) {
+        assert view != null;
+        TraceEvent.instant("requestLayout caller: " + caller);
+        view.requestLayout();
     }
 }

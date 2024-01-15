@@ -10,6 +10,7 @@
 
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/i18n/time_formatting.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_frame.h"
@@ -24,9 +25,6 @@ const base::FilePath::CharType kRemotingFolder[] =
     FILE_PATH_LITERAL("remoting");
 const base::FilePath::CharType kDumpFrameFolder[] =
     FILE_PATH_LITERAL("dumped_images");
-
-// Used to create a unique folder path.
-const char kDateAndTimeFormatString[] = "%d-%d-%d_%d-%d-%d";
 
 }  // namespace
 
@@ -54,10 +52,7 @@ void VideoFrameWriter::WriteFrameToPath(const webrtc::DesktopFrame& frame,
   }
 
   // Dump contents (unsigned chars) to a file as a sequence of chars.
-  int write_bytes = base::WriteFile(
-      image_path, reinterpret_cast<char*>(&*png_encoded_data.begin()),
-      static_cast<int>(png_encoded_data.size()));
-  if (write_bytes != static_cast<int>(png_encoded_data.size())) {
+  if (!base::WriteFile(image_path, png_encoded_data)) {
     LOG(WARNING) << "Failed to write frame to disk";
   }
 }
@@ -117,18 +112,8 @@ void VideoFrameWriter::HighlightRectInFrame(webrtc::DesktopFrame* frame,
 
 base::FilePath VideoFrameWriter::AppendCreationDateAndTime(
     const base::FilePath& file_path) {
-  base::Time::Exploded exploded_time;
-  instance_creation_time_.LocalExplode(&exploded_time);
-
-  int year = exploded_time.year;
-  int month = exploded_time.month;
-  int day = exploded_time.day_of_month;
-  int hour = exploded_time.hour;
-  int minute = exploded_time.minute;
-  int second = exploded_time.second;
-
-  return file_path.AppendASCII(base::StringPrintf(
-      kDateAndTimeFormatString, year, month, day, hour, minute, second));
+  return file_path.AppendASCII(base::UnlocalizedTimeFormatWithPattern(
+      instance_creation_time_, "y-M-d_H-m-s"));
 }
 
 bool VideoFrameWriter::CreateDirectoryIfNotExists(

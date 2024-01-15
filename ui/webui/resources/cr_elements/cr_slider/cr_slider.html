@@ -16,6 +16,7 @@
         -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
         cursor: default;
         height: 32px;
+        isolation: isolate;
         outline: none;
         padding: 0 16px;
         user-select: none;
@@ -39,12 +40,14 @@
         }
       }
 
+      /* Disable browser touch actions so that dragging via touch works
+         correctly. */
       /* TODO(crbug/1068914): For reasons I don't understand we need to set
          touch-action: none on the container for sliders inside dialogs and on
          the host for sliders not in dialogs. If we don't, then you can't drag
          the slider via touch (mouse works fine).*/
-      :host([dragging]),
-      :host([dragging]) > #container {
+      :host,
+      :host > #container {
         touch-action: none;
       }
 
@@ -129,6 +132,7 @@
         box-shadow: 0 1px 3px 0 rgba(0, 0, 0, .4);
         height: 10px;
         outline: none;
+        position: relative;
         transform: translate(-50%, -50%);
         width: 10px;
       }
@@ -165,19 +169,16 @@
       }
 
       paper-ripple {
-        --paper-ripple-opacity: 1;  /* Opacity in each color's alpha. */
+        --paper-ripple-opacity: var(--cr-slider-ripple-opacity, 1);
         color: var(--cr-slider-ripple-color);
-        height: 32px;
-        left: -11px;
+        height: var(--cr-slider-ripple-size, 32px);
         pointer-events: none;
-        top: -11px;
         transition: color linear 80ms;
-        width: 32px;
-      }
-
-      :host([is-rtl_]) paper-ripple {
-        left: auto;
-        right: -11px;
+        transform: translate(-50%, -50%);
+        top: 50%;
+        left: 50%;
+        width: var(--cr-slider-ripple-size, 32px);
+        z-index: var(--cr-slider-ripple-z-index, auto);
       }
 
       :host([disabled_]) {
@@ -203,7 +204,7 @@
         box-shadow: unset;
       }
     </style>
-    <div id="container" hidden>
+    <div id="container" hidden part="container">
       <div id="bar"></div>
       <div id="markers" hidden$="[[!markerCount]]">
         <template is="dom-repeat" items="[[getMarkers_(markerCount)]]">
@@ -212,7 +213,7 @@
         </template>
       </div>
       <div id="knobAndLabel" on-transitionend="onTransitionEnd_">
-        <div id="knob"></div>
-        <div id="label">[[label_]]</div>
+        <div id="knob" part="knob"></div>
+        <div id="label" part="label">[[label_]]</div>
       </div>
     </div>

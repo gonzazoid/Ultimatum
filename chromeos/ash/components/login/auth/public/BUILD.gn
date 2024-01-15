@@ -11,6 +11,7 @@ component("authpublic") {
   public_deps = [
     ":challenge_response_key",
     "//components/password_manager/core/browser:password_hash_data",
+    "//google_apis",  # due to AuthFailure.
   ]
   deps = [
     "//ash/constants",
@@ -21,7 +22,6 @@ component("authpublic") {
     "//components/prefs",
     "//components/user_manager",
     "//crypto",
-    "//google_apis",
     "//net",
     "//third_party/abseil-cpp:absl",
   ]
@@ -33,6 +33,7 @@ component("authpublic") {
     "auth_failure.h",
     "auth_session_intent.h",
     "auth_session_status.h",
+    "auth_types.h",
     "authentication_error.cc",
     "authentication_error.h",
     "cryptohome_key_constants.cc",
@@ -41,6 +42,7 @@ component("authpublic") {
     "key.h",
     "operation_chain_runner.cc",
     "operation_chain_runner.h",
+    "recovery_types.h",
     "saml_password_attributes.cc",
     "saml_password_attributes.h",
     "session_auth_factors.cc",

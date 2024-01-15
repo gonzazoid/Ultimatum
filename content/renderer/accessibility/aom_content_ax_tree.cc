@@ -129,10 +129,13 @@ AomContentAxTree::AomContentAxTree(RenderFrameImpl* render_frame)
 bool AomContentAxTree::ComputeAccessibilityTree() {
   ui::AXTreeUpdate tree_update;
   AXTreeSnapshotterImpl snapshotter(render_frame_, ui::kAXModeComplete);
-  snapshotter.Snapshot(/* exclude_offscreen= */ false,
-                       /* max_node_count= */ 0,
+  snapshotter.Snapshot(/* max_node_count= */ 0,
                        /* timeout= */ {}, &tree_update);
+  // Computed AOM trees/updates do not use a tree id.
+  DCHECK(tree_.data().tree_id == ui::AXTreeIDUnknown());
+  tree_update.tree_data.tree_id = ui::AXTreeIDUnknown();
   CHECK(tree_.Unserialize(tree_update)) << tree_.error();
+  DCHECK(tree_.data().tree_id == ui::AXTreeIDUnknown());
   return true;
 }
 

@@ -9,9 +9,7 @@
 
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/win/win_util.h"
-#include "base/win/windows_version.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/base/win/window_event_target.h"
 #include "ui/compositor/compositor.h"
@@ -29,10 +27,6 @@ DirectManipulationHelper::CreateInstance(HWND window,
   if (!::IsWindow(window) || !compositor || !event_target)
     return nullptr;
 
-  // DM_POINTERHITTEST supported since Win10.
-  if (base::win::GetVersion() < base::win::Version::WIN10)
-    return nullptr;
-
   std::unique_ptr<DirectManipulationHelper> instance =
       base::WrapUnique(new DirectManipulationHelper(window, compositor));
 
@@ -47,10 +41,6 @@ std::unique_ptr<DirectManipulationHelper>
 DirectManipulationHelper::CreateInstanceForTesting(
     ui::WindowEventTarget* event_target,
     Microsoft::WRL::ComPtr<IDirectManipulationViewport> viewport) {
-  // DM_POINTERHITTEST supported since Win10.
-  if (base::win::GetVersion() < base::win::Version::WIN10)
-    return nullptr;
-
   std::unique_ptr<DirectManipulationHelper> instance =
       base::WrapUnique(new DirectManipulationHelper(0, nullptr));
 
@@ -183,12 +173,9 @@ void DirectManipulationHelper::OnPointerHitTest(WPARAM w_param) {
   // For WM_POINTER, the pointer type will show the event from mouse.
   // For WM_POINTERACTIVATE, the pointer id will be different with the following
   // message.
-  using GetPointerTypeFn = BOOL(WINAPI*)(UINT32, POINTER_INPUT_TYPE*);
   UINT32 pointer_id = GET_POINTERID_WPARAM(w_param);
   POINTER_INPUT_TYPE pointer_type;
-  static const auto get_pointer_type = reinterpret_cast<GetPointerTypeFn>(
-      base::win::GetUser32FunctionPointer("GetPointerType"));
-  if (get_pointer_type && get_pointer_type(pointer_id, &pointer_type) &&
+  if (::GetPointerType(pointer_id, &pointer_type) &&
       pointer_type == PT_TOUCHPAD) {
     viewport_->SetContact(pointer_id);
   }

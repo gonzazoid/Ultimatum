@@ -7,10 +7,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
@@ -565,11 +565,11 @@ DownloadInterruptReason QuarantineFileResultToReason(
   return DOWNLOAD_INTERRUPT_REASON_FILE_FAILED;
 }
 
-// Given a source and a referrer, determines the "safest" URL that can be used
-// to determine the authority of the download source. Returns an empty URL if no
-// HTTP/S URL can be determined for the <|source_url|, |referrer_url|> pair.
-GURL GetEffectiveAuthorityURL(const GURL& source_url,
-                              const GURL& referrer_url) {
+}  // namespace
+
+// static
+GURL BaseFile::GetEffectiveAuthorityURL(const GURL& source_url,
+                                        const GURL& referrer_url) {
   if (source_url.is_valid()) {
     // http{,s} has an authority and are supported.
     if (source_url.SchemeIsHTTPOrHTTPS())
@@ -597,14 +597,8 @@ GURL GetEffectiveAuthorityURL(const GURL& source_url,
   return GURL();
 }
 
-}  // namespace
-
 void BaseFile::OnFileQuarantined(
-    bool connection_error,
     quarantine::mojom::QuarantineFileResult result) {
-  base::UmaHistogramBoolean("Download.QuarantineService.ConnectionError",
-                            connection_error);
-
   DCHECK(on_annotation_done_callback_);
   quarantine_service_.reset();
   std::move(on_annotation_done_callback_)
@@ -614,9 +608,8 @@ void BaseFile::OnFileQuarantined(
 void BaseFile::OnQuarantineServiceError(const GURL& source_url,
                                         const GURL& referrer_url) {
 #if BUILDFLAG(IS_WIN)
-  OnFileQuarantined(/*connection_error=*/true,
-                    quarantine::SetInternetZoneIdentifierDirectly(
-                        full_path_, source_url, referrer_url));
+  OnFileQuarantined(quarantine::SetInternetZoneIdentifierDirectly(
+      full_path_, source_url, referrer_url));
 #else   // !BUILDFLAG(IS_WIN)
   CHECK(false) << "In-process quarantine service should not have failed.";
 #endif  // !BUILDFLAG(IS_WIN)
@@ -651,8 +644,8 @@ void BaseFile::AnnotateWithSourceInformation(
 
     quarantine_service_->QuarantineFile(
         full_path_, authority_url, referrer_url, client_guid,
-        base::BindOnce(&BaseFile::OnFileQuarantined, weak_factory_.GetWeakPtr(),
-                       false));
+        base::BindOnce(&BaseFile::OnFileQuarantined,
+                       weak_factory_.GetWeakPtr()));
   }
 }
 

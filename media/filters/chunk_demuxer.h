@@ -58,7 +58,7 @@ class MEDIA_EXPORT ChunkDemuxerStream : public DemuxerStream {
   void Seek(base::TimeDelta time);
   bool IsSeekWaitingForData() const;
 
-  // Add buffers to this stream.  Buffers are stored in SourceBufferStreams,
+  // Add buffers to this stream. Buffers are stored in SourceBufferStreams,
   // which handle ordering and overlap resolution.
   // Returns true if buffers were successfully added.
   bool Append(const StreamParser::BufferQueue& buffers);
@@ -90,6 +90,10 @@ class MEDIA_EXPORT ChunkDemuxerStream : public DemuxerStream {
   // Returns the range of buffered data in this stream, capped at |duration|.
   Ranges<base::TimeDelta> GetBufferedRanges(base::TimeDelta duration) const;
 
+  // Returns the lowest PTS of the buffered data.
+  // Returns base::TimeDelta() if the stream has no buffered data.
+  base::TimeDelta GetLowestPresentationTimestamp() const;
+
   // Returns the highest PTS of the buffered data.
   // Returns base::TimeDelta() if the stream has no buffered data.
   base::TimeDelta GetHighestPresentationTimestamp() const;
@@ -120,13 +124,12 @@ class MEDIA_EXPORT ChunkDemuxerStream : public DemuxerStream {
   bool UpdateVideoConfig(const VideoDecoderConfig& config,
                          bool allow_codec_change,
                          MediaLog* media_log);
-  void UpdateTextConfig(const TextTrackConfig& config, MediaLog* media_log);
 
   void MarkEndOfStream();
   void UnmarkEndOfStream();
 
   // DemuxerStream methods.
-  void Read(ReadCB read_cb) override;
+  void Read(uint32_t count, ReadCB read_cb) override;
   Type type() const override;
   StreamLiveness liveness() const override;
   AudioDecoderConfig audio_decoder_config() override;
@@ -135,10 +138,6 @@ class MEDIA_EXPORT ChunkDemuxerStream : public DemuxerStream {
 
   bool IsEnabled() const;
   void SetEnabled(bool enabled, base::TimeDelta timestamp);
-
-  // Returns the text track configuration.  It is an error to call this method
-  // if type() != TEXT.
-  TextTrackConfig text_track_config();
 
   // Sets the memory limit, in bytes, on the SourceBufferStream.
   void SetStreamMemoryLimit(size_t memory_limit);
@@ -174,6 +173,9 @@ class MEDIA_EXPORT ChunkDemuxerStream : public DemuxerStream {
 
   void CompletePendingReadIfPossible_Locked() EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
+  std::pair<SourceBufferStreamStatus, DemuxerStream::DecoderBufferVector>
+  GetPendingBuffers_Locked() EXCLUSIVE_LOCKS_REQUIRED(lock_);
+
   // Specifies the type of the stream.
   const Type type_;
 
@@ -187,6 +189,10 @@ class MEDIA_EXPORT ChunkDemuxerStream : public DemuxerStream {
   // OnStartOfCodedFrameGroup() calls, respectively.
   AppendObserverCB append_observer_cb_;
   GroupStartObserverCB group_start_observer_cb_;
+
+  // Requested buffer count. The actual returned buffer count could be less
+  // according to DemuxerStream::Read() API.
+  uint32_t requested_buffer_count_ = 0;
 
   mutable base::Lock lock_;
   State state_ GUARDED_BY(lock_);
@@ -224,13 +230,13 @@ class MEDIA_EXPORT ChunkDemuxer : public Demuxer {
   std::string GetDisplayName() const override;
   DemuxerType GetDemuxerType() const override;
 
-  // |enable_text| Process inband text tracks in the normal way when true,
-  //   otherwise ignore them.
   void Initialize(DemuxerHost* host, PipelineStatusCallback init_cb) override;
   void Stop() override;
   void Seek(base::TimeDelta time, PipelineStatusCallback cb) override;
+  bool IsSeekable() const override;
   base::Time GetTimelineOffset() const override;
-  std::vector<DemuxerStream*> GetAllStreams() override;
+  std::vector<raw_ptr<DemuxerStream, VectorExperimental>> GetAllStreams()
+      override;
   base::TimeDelta GetStartTime() const override;
   int64_t GetMemoryUsage() const override;
   absl::optional<container_names::MediaContainerName> GetContainerForMetrics()
@@ -283,6 +289,10 @@ class MEDIA_EXPORT ChunkDemuxer : public Demuxer {
   // Gets the currently buffered ranges for the specified ID.
   Ranges<base::TimeDelta> GetBufferedRanges(const std::string& id) const;
 
+  // Gets the lowest buffered PTS for the specified |id|. If there is nothing
+  // buffered, returns base::TimeDelta().
+  base::TimeDelta GetLowestPresentationTimestamp(const std::string& id) const;
+
   // Gets the highest buffered PTS for the specified |id|. If there is nothing
   // buffered, returns base::TimeDelta().
   base::TimeDelta GetHighestPresentationTimestamp(const std::string& id) const;
@@ -295,6 +305,10 @@ class MEDIA_EXPORT ChunkDemuxer : public Demuxer {
                                    base::TimeDelta curr_time,
                                    TrackChangeCB change_completed_cb) override;
 
+  void SetPlaybackRate(double rate) override {}
+
+  void DisableCanChangeType() override;
+
   // Appends media data to the source buffer's stream parser associated with
   // `id`. No parsing is done, just buffering the media data for future parsing
   // via RunSegmentParserLoop calls. Returns true on success. Returns false if
@@ -305,9 +319,6 @@ class MEDIA_EXPORT ChunkDemuxer : public Demuxer {
   // per the MSE specification. App could use a back-off and retry strategy or
   // otherwise alter their behavior to attempt to buffer media for further
   // playback.
-  // TODO(crbug.com/1286810): Update resource allocation paths in the
-  // StreamParser implementations eventually executed within this method to
-  // recognize and report allocation failure.
   [[nodiscard]] bool AppendToParseBuffer(const std::string& id,
                                          const uint8_t* data,
                                          size_t length);
@@ -336,7 +347,7 @@ class MEDIA_EXPORT ChunkDemuxer : public Demuxer {
   // Appends webcodecs encoded chunks (already converted by caller into a
   // BufferQueue of StreamParserBuffers) to the source buffer associated with
   // |id|, with same semantic for other parameters and return value as
-  // AppendData().
+  // RunSegmentParserLoop().
   [[nodiscard]] bool AppendChunks(
       const std::string& id,
       std::unique_ptr<StreamParser::BufferQueue> buffer_queue,
@@ -489,11 +500,8 @@ class MEDIA_EXPORT ChunkDemuxer : public Demuxer {
   ChunkDemuxerStream* CreateDemuxerStream(const std::string& source_id,
                                           DemuxerStream::Type type);
 
-  void OnNewTextTrack(ChunkDemuxerStream* text_stream,
-                      const TextTrackConfig& config);
-
   // Returns true if |source_id| is valid, false otherwise.
-  bool IsValidId(const std::string& source_id) const;
+  bool IsValidId_Locked(const std::string& source_id) const;
 
   // Increases |duration_| to |new_duration|, if |new_duration| is higher.
   void IncreaseDurationIfNecessary(base::TimeDelta new_duration);
@@ -537,7 +545,10 @@ class MEDIA_EXPORT ChunkDemuxer : public Demuxer {
   State state_ = WAITING_FOR_INIT;
   bool cancel_next_seek_ = false;
 
-  raw_ptr<DemuxerHost> host_ = nullptr;
+  // Found dangling on `linux-rel` in
+  // `benchmarks.system_health_smoke_test.SystemHealthBenchmarkSmokeTest.
+  // system_health.memory_desktop/browse:media:youtubetv:2019`.
+  raw_ptr<DemuxerHost, DanglingUntriaged> host_ = nullptr;
   base::OnceClosure open_cb_;
   const base::RepeatingClosure progress_cb_;
   EncryptedMediaInitDataCB encrypted_media_init_data_cb_;
@@ -556,7 +567,6 @@ class MEDIA_EXPORT ChunkDemuxer : public Demuxer {
       std::vector<std::unique_ptr<ChunkDemuxerStream>>;
   OwnedChunkDemuxerStreamVector audio_streams_;
   OwnedChunkDemuxerStreamVector video_streams_;
-  OwnedChunkDemuxerStreamVector text_streams_;
 
   // Keep track of which ids still remain uninitialized so that we transition
   // into the INITIALIZED only after all ids/SourceBuffers got init segment.
@@ -576,7 +586,9 @@ class MEDIA_EXPORT ChunkDemuxer : public Demuxer {
 
   std::map<std::string, std::unique_ptr<SourceBufferState>> source_state_map_;
 
-  std::map<std::string, std::vector<ChunkDemuxerStream*>> id_to_streams_map_;
+  std::map<std::string,
+           std::vector<raw_ptr<ChunkDemuxerStream, VectorExperimental>>>
+      id_to_streams_map_;
   // Used to hold alive the demuxer streams that were created for removed /
   // released SourceBufferState objects. Demuxer clients might still have
   // references to these streams, so we need to keep them alive. But they'll be
@@ -584,6 +596,8 @@ class MEDIA_EXPORT ChunkDemuxer : public Demuxer {
   std::vector<std::unique_ptr<ChunkDemuxerStream>> removed_streams_;
 
   std::map<MediaTrack::Id, ChunkDemuxerStream*> track_id_to_demux_stream_map_;
+
+  bool supports_change_type_ = true;
 };
 
 }  // namespace media

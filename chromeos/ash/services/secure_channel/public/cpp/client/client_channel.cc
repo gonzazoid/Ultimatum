@@ -4,8 +4,7 @@
 
 #include "chromeos/ash/services/secure_channel/public/cpp/client/client_channel.h"
 
-#include "base/callback.h"
-#include "base/guid.h"
+#include "base/functional/callback.h"
 #include "chromeos/ash/services/secure_channel/public/mojom/secure_channel_types.mojom.h"
 
 namespace ash::secure_channel {

@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -53,8 +54,8 @@ class FileUtilsTest : public ::testing::Test {
     ASSERT_TRUE(
         storage::ExternalMountPoints::GetSystemInstance()->RevokeFileSystem(
             mount_name_));
-    profile_manager_->DeleteAllTestingProfiles();
     profile_ = nullptr;
+    profile_manager_->DeleteAllTestingProfiles();
     profile_manager_.reset();
   }
 
@@ -71,7 +72,7 @@ class FileUtilsTest : public ::testing::Test {
   // system type.
   storage::FileSystemURL ToTestFileSystemURL(const std::string& path) {
     return storage::FileSystemURL::CreateForTest(
-        blink::StorageKey(GetFileManagerOrigin()),
+        blink::StorageKey::CreateFirstParty(GetFileManagerOrigin()),
         storage::FileSystemType::kFileSystemTypeTest, base::FilePath(path));
   }
 
@@ -90,7 +91,7 @@ class FileUtilsTest : public ::testing::Test {
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfileManager> profile_manager_;
   base::ScopedTempDir scoped_temp_dir_;
-  TestingProfile* profile_;
+  raw_ptr<TestingProfile> profile_ = nullptr;
 };
 
 TEST_F(FileUtilsTest, GetFileSystemURL) {

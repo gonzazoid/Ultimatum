@@ -100,13 +100,14 @@ viz::CompositorFrame DemoClient::CreateFrame(const viz::BeginFrameArgs& args) {
     viz::SharedQuadState* quad_state =
         render_pass->CreateAndAppendSharedQuadState();
     quad_state->SetAll(transform,
-                       /*quad_layer_rect=*/child_bounds,
+                       /*layer_rect=*/child_bounds,
                        /*visible_layer_rect=*/child_bounds,
-                       /*mask_filter_info=*/gfx::MaskFilterInfo(),
-                       /*clip_rect=*/absl::nullopt,
-                       /*are_contents_opaque=*/false, /*opacity=*/1.f,
-                       /*blend_mode=*/SkBlendMode::kSrcOver,
-                       /*sorting_context_id=*/0);
+                       /*filter_info=*/gfx::MaskFilterInfo(),
+                       /*clip=*/absl::nullopt,
+                       /*contents_opaque=*/false, /*opacity_f=*/1.f,
+                       /*blend=*/SkBlendMode::kSrcOver,
+                       /*sorting_context=*/0,
+                       /*layer_id=*/0u, /*fast_rounded_corner=*/false);
 
     viz::SurfaceDrawQuad* embed =
         render_pass->CreateAndAppendDrawQuad<viz::SurfaceDrawQuad>();
@@ -131,7 +132,9 @@ viz::CompositorFrame DemoClient::CreateFrame(const viz::BeginFrameArgs& args) {
                      /*clip_rect=*/absl::nullopt, /*are_contents_opaque=*/false,
                      /*opacity=*/1.f,
                      /*blend_mode=*/SkBlendMode::kSrcOver,
-                     /*sorting_context_id=*/0);
+                     /*sorting_context=*/0,
+                     /*layer_id=*/0u,
+                     /*fast_rounded_corner=*/false);
 
   viz::SolidColorDrawQuad* color_quad =
       render_pass->CreateAndAppendDrawQuad<viz::SolidColorDrawQuad>();
@@ -168,9 +171,10 @@ void DemoClient::DidReceiveCompositorFrameAck(
   // See documentation in mojom for how this can be used.
 }
 
-void DemoClient::OnBeginFrame(
-    const viz::BeginFrameArgs& args,
-    const viz::FrameTimingDetailsMap& timing_details) {
+void DemoClient::OnBeginFrame(const viz::BeginFrameArgs& args,
+                              const viz::FrameTimingDetailsMap& timing_details,
+                              bool frame_ack,
+                              std::vector<viz::ReturnedResource> resources) {
   // Generate a new compositor-frame for each begin-frame. This demo client
   // generates and submits the compositor-frame immediately. But it is possible
   // for the client to delay sending the compositor-frame. |args| includes the

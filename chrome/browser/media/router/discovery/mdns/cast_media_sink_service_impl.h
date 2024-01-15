@@ -229,7 +229,7 @@ class CastMediaSinkServiceImpl : public MediaSinkServiceBase,
 
   // MediaSinkServiceBase implementation.
   void RecordDeviceCounts() override;
-  void OnUserGesture() override;
+  void DiscoverSinksNow() override;
 
   // MediaSinkServiceBase::Observer implementation.
   void OnSinkAddedOrUpdated(const MediaSinkInternal& sink) override;
@@ -248,6 +248,7 @@ class CastMediaSinkServiceImpl : public MediaSinkServiceBase,
                cast_channel::ChannelError error_state) override;
   void OnMessage(const cast_channel::CastSocket& socket,
                  const cast::channel::CastMessage& message) override;
+  void OnReadyStateChanged(const cast_channel::CastSocket& socket) override;
 
   // DiscoveryNetworkMonitor::Observer implementation
   void OnNetworksChanged(const std::string& network_id) override;

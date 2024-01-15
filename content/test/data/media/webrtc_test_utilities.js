@@ -9,41 +9,9 @@ const VIDEO_TAG_HEIGHT = 240;
 // Fake video capture background green is of value 135.
 const COLOR_BACKGROUND_GREEN = 135;
 
-var gPendingTimeout;
-
-// Tells the C++ code we succeeded, which will generally exit the test.
-function reportTestSuccess() {
+// Logs a success message to the console.
+function logSuccess() {
   console.log('Test Success');
-  window.domAutomationController.send('OK');
-}
-
-// Returns a custom return value to the test.
-function sendValueToTest(value) {
-  window.domAutomationController.send(value);
-}
-
-// Immediately fails the test on the C++ side.
-function failTest(reason) {
-  if (reason instanceof Error) {
-    var error = reason;
-  } else {
-    var error = new Error(reason);
-  }
-  window.domAutomationController.send(error.stack);
-}
-
-// Fail a test on the C++ side after a timeout. Will cancel any pending timeout.
-function failTestAfterTimeout(reason, timeout_ms) {
-  cancelTestTimeout();
-  gPendingTimeout = setTimeout(function() {
-    failTest(reason);
-  }, timeout_ms);
-}
-
-// Cancels the current test timeout.
-function cancelTestTimeout() {
-  clearTimeout(gPendingTimeout);
-  gPendingTimeout = null;
 }
 
 function detectVideoPlayingWithExpectedResolution(
@@ -210,7 +178,7 @@ function isVideoBlack(pixels) {
 // |pixels| is in RGBA (i.e. pixels[0] is the R value for the first pixel).
 function arePixelsUniformColor(pixels) {
   if (pixels.length < 4) {
-    failTest('expected at least one pixel');
+    throw new Error('expected at least one pixel');
   }
   var reference_r = pixels[0];
   var reference_g = pixels[1];
@@ -255,24 +223,24 @@ function rec709Luma_(r, g, b) {
 // types of the operands aren't checked).
 function assertEquals(expected, actual) {
   if (actual != expected) {
-    failTest('expected \'' + expected + '\', got \'' + actual + '\'.');
+    throw new Error('expected \'' + expected + '\', got \'' + actual + '\'.');
   }
 }
 
 function assertNotEquals(expected, actual) {
   if (actual === expected) {
-    failTest('expected \'' + expected + '\', got \'' + actual + '\'.');
+    throw new Error('expected \'' + expected + '\', got \'' + actual + '\'.');
   }
 }
 
 function assertTrue(booleanExpression, description) {
   if (!booleanExpression) {
-    failTest(description);
+    throw new Error(description);
   }
 }
 
 function assertFalse(booleanExpression, description) {
   if (!!booleanExpression) {
-    failTest(description);
+    throw new Error(description);
   }
 }

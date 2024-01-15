@@ -30,7 +30,8 @@ namespace {
 
 class AXSystemCaretWinTest : public test::DesktopWidgetTest {
  public:
-  AXSystemCaretWinTest() : self_(CHILDID_SELF) {}
+  AXSystemCaretWinTest()
+      : widget_(nullptr), textfield_(nullptr), self_(CHILDID_SELF) {}
   AXSystemCaretWinTest(const AXSystemCaretWinTest&) = delete;
   AXSystemCaretWinTest& operator=(const AXSystemCaretWinTest&) = delete;
   ~AXSystemCaretWinTest() override = default;
@@ -56,7 +57,10 @@ class AXSystemCaretWinTest : public test::DesktopWidgetTest {
   }
 
   void TearDown() override {
-    widget_->CloseNow();
+    DCHECK(!textfield_->owned_by_client());
+    textfield_ = nullptr;
+    // Calling CloseNow() will destroy the Widget.
+    widget_.ExtractAsDangling()->CloseNow();
     test::DesktopWidgetTest::TearDown();
     ui::ResourceBundle::CleanupSharedInstance();
   }

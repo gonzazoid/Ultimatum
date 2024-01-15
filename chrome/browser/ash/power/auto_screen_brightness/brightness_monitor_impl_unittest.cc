@@ -10,7 +10,6 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "chromeos/dbus/power_manager/backlight.pb.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -32,7 +31,7 @@ class TestObserver : public BrightnessMonitor::Observer {
 
   // BrightnessMonitor::Observer overrides:
   void OnBrightnessMonitorInitialized(bool success) override {
-    status_ = absl::optional<BrightnessMonitor::Status>(
+    status_ = std::optional<BrightnessMonitor::Status>(
         success ? BrightnessMonitor::Status::kSuccess
                 : BrightnessMonitor::Status::kDisabled);
   }
@@ -65,7 +64,7 @@ class TestObserver : public BrightnessMonitor::Observer {
   double new_brightness_percent_ = -1;
   int num_brightness_changes_ = 0;
   int num_user_brightness_change_requested_ = 0;
-  absl::optional<BrightnessMonitor::Status> status_;
+  std::optional<BrightnessMonitor::Status> status_;
 };
 }  // namespace
 

@@ -1,11 +1,11 @@
-// Copyright (c) 2022 The Chromium Authors. All rights reserved.
+// Copyright (c) 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef GPU_COMMAND_BUFFER_SERVICE_ISOLATION_KEY_PROVIDER_H_
 #define GPU_COMMAND_BUFFER_SERVICE_ISOLATION_KEY_PROVIDER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "gpu/gpu_gles2_export.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 

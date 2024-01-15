@@ -28,6 +28,7 @@
 import re
 import six
 from six.moves import cPickle
+from typing import ClassVar
 
 from blinkpy.web_tests.controllers import repaint_overlay
 from blinkpy.web_tests.models.typ_types import ResultType
@@ -35,71 +36,21 @@ from blinkpy.web_tests.models.failure_reason import FailureReason
 from blinkpy.common.html_diff import html_diff
 from blinkpy.common.unified_diff import unified_diff
 
-# TODO(rmhasan) Create a unit test for each Failure type and make
+# TODO(weizhong) Create a unit test for each Failure type and make
 # sure each artifact is written to the correct path
-
-# FIXME: old-run-webkit-tests shows the diff percentage as the text
-#   contents of the "diff" link.
-# FIXME: old-run-webkit-tests include a link to the test file.
-_image_diff_html_template = """<!DOCTYPE HTML>
-<html>
-<head>
-<title>%(title)s</title>
-<style>.label{font-weight:bold}</style>
-</head>
-<body>
-Difference between images: <a href="%(diff_filename)s">diff</a><br>
-<div class=imageText></div>
-<div class=imageContainer data-prefix="%(prefix)s">Loading...</div>
-<script>
-(function() {
-var preloadedImageCount = 0;
-function preloadComplete() {
-++preloadedImageCount;
-if (preloadedImageCount < 2)
-    return;
-toggleImages();
-setInterval(toggleImages, 2000)
-}
-
-function preloadImage(url) {
-image = new Image();
-image.addEventListener('load', preloadComplete);
-image.src = url;
-return image;
-}
-
-function toggleImages() {
-if (text.textContent == 'Expected Image') {
-    text.textContent = 'Actual Image';
-    container.replaceChild(actualImage, container.firstChild);
-} else {
-    text.textContent = 'Expected Image';
-    container.replaceChild(expectedImage, container.firstChild);
-}
-}
-
-var text = document.querySelector('.imageText');
-var container = document.querySelector('.imageContainer');
-var actualImage = preloadImage(container.getAttribute('data-prefix') + '-actual.png');
-var expectedImage = preloadImage(container.getAttribute('data-prefix') + '-expected.png');
-})();
-</script>
-</body>
-</html>"""
 
 # Filename pieces when writing failures to the test results directory.
 FILENAME_SUFFIX_ACTUAL = "-actual"
 FILENAME_SUFFIX_EXPECTED = "-expected"
 FILENAME_SUFFIX_CMD = "-command"
 FILENAME_SUFFIX_DIFF = "-diff"
-FILENAME_SUFFIX_DIFFS = "-diffs"
 FILENAME_SUFFIX_STDERR = "-stderr"
 FILENAME_SUFFIX_CRASH_LOG = "-crash-log"
 FILENAME_SUFFIX_SAMPLE = "-sample"
 FILENAME_SUFFIX_LEAK_LOG = "-leak-log"
 FILENAME_SUFFIX_HTML_DIFF = "-pretty-diff"
 FILENAME_SUFFIX_OVERLAY = "-overlay"
+FILENAME_SUFFIX_TRACE = "-trace"
 
 _ext_to_file_type = {'.txt': 'text', '.png': 'image', '.wav': 'audio'}
 
@@ -114,6 +65,8 @@ TESTHARNESS_JS_FAILURE_RE = re.compile(r'\+(?:FAIL|Harness Error\.) (.*)$')
 FATAL_MESSAGE_RE = re.compile(
     r'^.*FATAL.*?([a-zA-Z0-9_.]+\.[a-zA-Z0-9_]+\([0-9]+\))\]? (.*)$',
     re.MULTILINE)
+
+IGNORE_RESULT = 'IGNORE'
 
 
 def has_failure_type(failure_type, failure_list):
@@ -242,16 +195,13 @@ class AbstractTestResultType(object):
         """Returns True if we should kill the driver before the next test."""
         return False
 
-    def message(self):
-        raise NotImplementedError
-
     def text_mismatch_category(self):
         raise NotImplementedError
 
 
 class PassWithStderr(AbstractTestResultType):
     def __init__(self, driver_output):
-        # TODO (rmhasan): Should we write out the reference driver standard
+        # TODO (weizhong): Should we write out the reference driver standard
         # error
         super(PassWithStderr, self).__init__(driver_output, None)
 
@@ -414,7 +364,7 @@ class FailureText(ActualAndBaselineArtifacts):
         return ''
 
     def create_artifacts(self, typ_artifacts, force_overwrite=False):
-        # TODO (rmhasan): See if you can can only output diff files for
+        # TODO (weizhong): See if you can can only output diff files for
         # non empty text.
         super(FailureText, self).create_artifacts(typ_artifacts,
                                                   force_overwrite)
@@ -589,6 +539,9 @@ class FailureSpaceTabLineBreakTextMismatch(FailureTextMismatch):
 
 
 class FailureImage(ActualAndBaselineArtifacts):
+    # Tag key used to report the actual image's hash to ResultDB.
+    ACTUAL_HASH_RDB_TAG: ClassVar[str] = 'web_tests_actual_image_hash'
+
     def __init__(self, actual_driver_output, expected_driver_output):
         super(FailureImage, self).__init__(actual_driver_output,
                                            expected_driver_output)
@@ -625,17 +578,6 @@ class FailureImageHashMismatch(FailureImage):
             diff = self.actual_driver_output.image_diff
             self._write_to_artifacts(typ_artifacts, 'image_diff',
                                      diff_filename, diff, force_overwrite)
-            diffs_html_filename = self.port.output_filename(
-                self.test_name, FILENAME_SUFFIX_DIFFS, '.html')
-            diffs_html = _image_diff_html_template % {
-                'title': self.test_name,
-                'diff_filename': diff_filename,
-                'prefix': self.port.output_filename(self.test_name, '', '')
-            }
-            self._write_to_artifacts(typ_artifacts, 'pretty_image_diff',
-                                     diffs_html_filename,
-                                     diffs_html.encode('utf8', 'replace'),
-                                     force_overwrite)
 
         super(FailureImageHashMismatch, self).create_artifacts(
             typ_artifacts, force_overwrite)
@@ -753,6 +695,37 @@ class FailureEarlyExit(AbstractTestResultType):
 
     def message(self):
         return 'skipped due to early exit'
+
+
+class TraceFileArtifact(AbstractTestResultType):
+    result = IGNORE_RESULT
+
+    def __init__(self, actual_driver_output, trace_file, suffix):
+        super(TraceFileArtifact, self).__init__(actual_driver_output, None)
+        self._trace_file = trace_file
+        self._suffix = suffix
+
+    def create_artifacts(self, typ_artifacts, force_overwrite=False):
+        typ_artifacts_dir = self.filesystem.join(
+            self.result_directory, typ_artifacts.ArtifactsSubDirectory())
+        trace_file = self._trace_file
+        if (trace_file and self.filesystem.exists(trace_file)):
+            artifact_filename = self.port.output_filename(
+                self.test_name, self._suffix, '.pftrace')
+            artifacts_abspath = self.filesystem.join(typ_artifacts_dir,
+                                                     artifact_filename)
+            if (force_overwrite
+                    or not self.filesystem.exists(artifacts_abspath)):
+                with self.filesystem.open_binary_file_for_reading(
+                        trace_file) as trace_fh:
+                    typ_artifacts.CreateArtifact(
+                        'trace',
+                        artifact_filename,
+                        trace_fh.read(),
+                        force_overwrite=force_overwrite)
+
+    def message(self):
+        return 'test produced a trace file'
 
 
 # Convenient collection of all failure classes for anything that might

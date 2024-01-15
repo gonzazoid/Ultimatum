@@ -4,14 +4,10 @@
 
 #import "ios/chrome/browser/ui/infobars/modals/infobar_modal_view_controller.h"
 
-#import "ios/chrome/browser/ui/icons/symbols.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
 #import "ios/chrome/browser/ui/infobars/modals/infobar_modal_constants.h"
 #import "ios/chrome/browser/ui/infobars/modals/infobar_modal_delegate.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface InfobarModalViewController ()
 
@@ -43,12 +39,8 @@
                            target:self.infobarModalDelegate
                            action:@selector(dismissInfobarModal:)];
   cancelButton.accessibilityIdentifier = kInfobarModalCancelButton;
-  UIImage* gearImage = UseSymbols()
-                           ? DefaultSymbolWithPointSize(kSettingsFilledSymbol,
-                                                        kInfobarSymbolPointSize)
-                           : [UIImage imageNamed:@"infobar_settings_icon"];
-  gearImage =
-      [gearImage imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+  UIImage* gearImage = DefaultSymbolWithPointSize(kSettingsFilledSymbol,
+                                                  kInfobarSymbolPointSize);
   UIBarButtonItem* settingsButton =
       [[UIBarButtonItem alloc] initWithImage:gearImage
                                        style:UIBarButtonItemStylePlain

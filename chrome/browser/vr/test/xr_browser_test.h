@@ -7,8 +7,8 @@
 
 #include <unordered_set>
 
-#include "base/callback.h"
 #include "base/environment.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
@@ -17,7 +17,7 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/vr/test/conditional_skipping.h"
 #include "chrome/test/base/in_process_browser_test.h"
-#include "device/base/features.h"
+#include "device/vr/public/cpp/features.h"
 #include "device/vr/test/test_hook.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "url/gurl.h"
@@ -93,15 +93,11 @@ class XrBrowserTestBase : public InProcessBrowserTest {
   void RunJavaScriptOrFail(const std::string& js_expression,
                            content::WebContents* web_contents);
 
-  // Convenience function for ensuring ExecuteScriptAndExtractBool runs
-  // successfully and for directly getting the result instead of needing to pass
-  // a pointer to be filled.
+  // Convenience function for ensuring EvalJs runs successfully.
   bool RunJavaScriptAndExtractBoolOrFail(const std::string& js_expression,
                                          content::WebContents* web_contents);
 
-  // Convenience function for ensuring ExecuteScripteAndExtractString runs
-  // successfully and for directly getting the result instead of needing to pass
-  // a pointer to be filled.
+  // Convenience function for ensuring EvalJs runs successfully.
   std::string RunJavaScriptAndExtractStringOrFail(
       const std::string& js_expression,
       content::WebContents* web_contents);
@@ -234,7 +230,7 @@ class XrBrowserTestBase : public InProcessBrowserTest {
   // HTML files, initializing and starting the server if necessary.
   net::EmbeddedTestServer* GetEmbeddedServer();
 
-  raw_ptr<Browser> browser_ = nullptr;
+  raw_ptr<Browser, AcrossTasksDanglingUntriaged> browser_ = nullptr;
   std::unique_ptr<net::EmbeddedTestServer> server_;
   base::test::ScopedFeatureList scoped_feature_list_;
   bool test_skipped_at_startup_ = false;

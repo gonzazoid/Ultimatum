@@ -4,13 +4,16 @@
 #ifndef CHROME_BROWSER_ASH_INPUT_METHOD_NATIVE_INPUT_METHOD_ENGINE_OBSERVER_H_
 #define CHROME_BROWSER_ASH_INPUT_METHOD_NATIVE_INPUT_METHOD_ENGINE_OBSERVER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/ash/input_method/assistive_suggester.h"
 #include "chrome/browser/ash/input_method/assistive_suggester_switch.h"
 #include "chrome/browser/ash/input_method/autocorrect_manager.h"
+#include "chrome/browser/ash/input_method/editor_event_sink.h"
 #include "chrome/browser/ash/input_method/grammar_manager.h"
 #include "chrome/browser/ash/input_method/input_method_engine.h"
+#include "chrome/browser/ash/input_method/pref_change_recorder.h"
 #include "chrome/browser/ash/input_method/suggestions_collector.h"
 #include "chrome/browser/ui/ash/keyboard/chrome_keyboard_controller_client.h"
 #include "chromeos/ash/services/ime/public/cpp/assistive_suggestions.h"
@@ -18,6 +21,7 @@
 #include "chromeos/ash/services/ime/public/mojom/input_engine.mojom.h"
 #include "chromeos/ash/services/ime/public/mojom/input_method.mojom.h"
 #include "chromeos/ash/services/ime/public/mojom/input_method_host.mojom.h"
+#include "chromeos/ash/services/ime/public/mojom/japanese_settings.mojom.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
@@ -29,8 +33,6 @@
 
 namespace ash {
 namespace input_method {
-
-using ui::TextInputMethod;
 
 bool CanRouteToNativeMojoEngine(const std::string& engine_id);
 
@@ -47,6 +49,7 @@ class NativeInputMethodEngineObserver : public InputMethodEngineObserver,
   // to e2e Tast tests and unit tests, then dismantle this for-test-only flag.
   NativeInputMethodEngineObserver(
       PrefService* prefs,
+      EditorEventSink* editor_event_sink,
       std::unique_ptr<InputMethodEngineObserver> ime_base_observer,
       std::unique_ptr<AssistiveSuggester> assistive_suggester,
       std::unique_ptr<AutocorrectManager> autocorrect_manager,
@@ -60,20 +63,16 @@ class NativeInputMethodEngineObserver : public InputMethodEngineObserver,
   void OnFocus(const std::string& engine_id,
                int context_id,
                const TextInputMethod::InputContext& context) override;
-  void OnTouch(ui::EventPointerType pointerType) override;
   void OnBlur(const std::string& engine_id, int context_id) override;
   void OnKeyEvent(const std::string& engine_id,
                   const ui::KeyEvent& event,
-                  ui::TextInputMethod::KeyEventDoneCallback callback) override;
+                  TextInputMethod::KeyEventDoneCallback callback) override;
   void OnReset(const std::string& engine_id) override;
   void OnDeactivated(const std::string& engine_id) override;
-  void OnCompositionBoundsChanged(
-      const std::vector<gfx::Rect>& bounds) override;
   void OnCaretBoundsChanged(const gfx::Rect& caret_bounds) override;
   void OnSurroundingTextChanged(const std::string& engine_id,
                                 const std::u16string& text,
-                                int cursor_pos,
-                                int anchor_pos,
+                                gfx::Range selection_range,
                                 int offset_pos) override;
   void OnCandidateClicked(const std::string& component_id,
                           int candidate_id,
@@ -103,17 +102,25 @@ class NativeInputMethodEngineObserver : public InputMethodEngineObserver,
   void FinishComposition() override;
   void DeleteSurroundingText(uint32_t num_before_cursor,
                              uint32_t num_after_cursor) override;
+  void ReplaceSurroundingText(uint32_t num_before_cursor,
+                              uint32_t num_after_cursor,
+                              const std::u16string& text) override;
   void HandleAutocorrect(
       ime::mojom::AutocorrectSpanPtr autocorrect_span) override;
   void RequestSuggestions(ime::mojom::SuggestionsRequestPtr request,
                           RequestSuggestionsCallback callback) override;
   void DisplaySuggestions(
-      const std::vector<ime::AssistiveSuggestion>& suggestions) override;
+      const std::vector<ime::AssistiveSuggestion>& suggestions,
+      const absl::optional<ime::SuggestionsTextContext>& context) override;
   void UpdateCandidatesWindow(ime::mojom::CandidatesWindowPtr window) override;
   void RecordUkm(ime::mojom::UkmEntryPtr entry) override;
-  void ReportKoreanAction(ime::mojom::KoreanAction action) override;
-  void ReportKoreanSettings(ime::mojom::KoreanSettingsPtr settings) override;
-  void ReportSuggestionOpportunity(ime::AssistiveSuggestionMode mode) override;
+  void DEPRECATED_ReportKoreanAction(ime::mojom::KoreanAction action) override;
+  void DEPRECATED_ReportKoreanSettings(
+      ime::mojom::KoreanSettingsPtr settings) override;
+  void DEPRECATED_ReportSuggestionOpportunity(
+      ime::AssistiveSuggestionMode mode) override;
+  void ReportHistogramSample(base::Histogram* histogram,
+                             uint16_t value) override;
   void UpdateQuickSettings(
       ime::mojom::InputMethodQuickSettingsPtr quick_settings) override;
 
@@ -135,8 +142,7 @@ class NativeInputMethodEngineObserver : public InputMethodEngineObserver,
  private:
   struct SurroundingText {
     std::u16string text;
-    int cursor_pos = 0;
-    int anchor_pos = 0;
+    gfx::Range selection_range;
     int offset_pos = 0;
   };
 
@@ -157,8 +163,10 @@ class NativeInputMethodEngineObserver : public InputMethodEngineObserver,
   bool ShouldRouteToNativeMojoEngine(const std::string& engine_id) const;
 
   void OnConnectionFactoryBound(bool bound);
-  void ConnectToImeService(ime::mojom::ConnectionTarget connection_target,
-                           const std::string& engine_id);
+
+  void OnJapaneseSettingsReceived(ime::mojom::JapaneseConfigPtr config);
+  void OnJapaneseDecoderConnected(bool bound);
+  void ConnectToImeService(const std::string& engine_id);
 
   void HandleOnFocusAsyncForNativeMojoEngine(
       const std::string& engine_id,
@@ -169,20 +177,29 @@ class NativeInputMethodEngineObserver : public InputMethodEngineObserver,
   bool IsInputMethodBound();
   bool IsInputMethodConnected();
   bool IsTextClientActive();
-  void ActivateTextClient(int context_id, bool on_focus_success);
+  void OnFocusAck(int context_id,
+                  bool on_focus_success,
+                  ime::mojom::InputMethodMetadataPtr metadata);
 
-  PrefService* prefs_ = nullptr;
+  // Not owned by this class.
+  raw_ptr<PrefService> prefs_ = nullptr;
+  raw_ptr<EditorEventSink> editor_event_sink_;
 
   std::unique_ptr<InputMethodEngineObserver> ime_base_observer_;
   mojo::Remote<ime::mojom::InputEngineManager> remote_manager_;
   mojo::Remote<ime::mojom::ConnectionFactory> connection_factory_;
   mojo::AssociatedRemote<ime::mojom::InputMethod> input_method_;
+  // TODO(b/232341104): Delete this connection once Japanese settings have been
+  // migrated completely
+  mojo::AssociatedRemote<ime::mojom::JapaneseDecoder> japanese_decoder_;
   mojo::AssociatedReceiver<ime::mojom::InputMethodHost> host_receiver_{this};
 
   std::unique_ptr<AssistiveSuggester> assistive_suggester_;
   std::unique_ptr<AutocorrectManager> autocorrect_manager_;
   std::unique_ptr<SuggestionsCollector> suggestions_collector_;
   std::unique_ptr<GrammarManager> grammar_manager_;
+
+  absl::optional<PrefChangeRecorder> pref_change_recorder_;
 
   ui::CharacterComposer character_composer_;
 

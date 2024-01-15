@@ -8,7 +8,7 @@
 #include <string>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/icu_util.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_executor.h"
@@ -16,6 +16,7 @@
 #include "components/web_package/web_bundle_parser_factory.h"
 #include "mojo/core/embedder/embedder.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
@@ -47,6 +48,8 @@ class DataSource : public web_package::mojom::BundleDataSource {
     receivers_.Add(this, std::move(receiver));
   }
 
+  void Close(CloseCallback callback) override { std::move(callback).Run(); }
+
  private:
   bool is_random_access_context_;
   const std::string data_;
@@ -70,6 +73,7 @@ class WebBundleParserFuzzer {
     web_package::WebBundleParserFactory factory_impl;
     web_package::mojom::WebBundleParserFactory& factory = factory_impl;
     factory.GetParserForDataSource(parser_.BindNewPipeAndPassReceiver(),
+                                   /*base_url=*/absl::nullopt,
                                    std::move(data_source_remote));
 
     quit_loop_ = run_loop->QuitClosure();
@@ -80,8 +84,9 @@ class WebBundleParserFuzzer {
       return;
     } else {
       parser_->ParseMetadata(
-          /*offset=*/-1, base::BindOnce(&WebBundleParserFuzzer::OnParseMetadata,
-                                        base::Unretained(this)));
+          /*offset=*/absl::nullopt,
+          base::BindOnce(&WebBundleParserFuzzer::OnParseMetadata,
+                         base::Unretained(this)));
     }
   }
 
@@ -104,8 +109,9 @@ class WebBundleParserFuzzer {
       std::move(quit_loop_).Run();
       return;
     }
-    for (auto& item : metadata->requests)
+    for (auto& item : metadata->requests) {
       locations_.push_back(std::move(item.second));
+    }
     ParseResponses(0);
   }
 

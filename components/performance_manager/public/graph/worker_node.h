@@ -7,11 +7,13 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/function_ref.h"
 #include "base/types/token_type.h"
 #include "components/performance_manager/public/execution_context_priority/execution_context_priority.h"
 #include "components/performance_manager/public/graph/node.h"
+#include "components/performance_manager/public/resource_attribution/worker_context.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 
 class GURL;
@@ -48,7 +50,8 @@ using execution_context_priority::PriorityAndReason;
 // or a service worker is registered to handle their network requests.
 class WorkerNode : public Node {
  public:
-  using WorkerNodeVisitor = base::RepeatingCallback<bool(const WorkerNode*)>;
+  using FrameNodeVisitor = base::FunctionRef<bool(const FrameNode*)>;
+  using WorkerNodeVisitor = base::FunctionRef<bool(const WorkerNode*)>;
 
   // The different possible worker types.
   enum class WorkerType {
@@ -80,12 +83,25 @@ class WorkerNode : public Node {
   // Returns the unique token identifying this worker.
   virtual const blink::WorkerToken& GetWorkerToken() const = 0;
 
+  // Gets the unique token identifying this node for resource attribution. This
+  // token will not be reused after the node is destroyed.
+  virtual resource_attribution::WorkerContext GetResourceContext() const = 0;
+
   // Returns the URL of the worker script. This is the final response URL which
   // takes into account redirections.
   virtual const GURL& GetURL() const = 0;
 
+  // Returns the current priority of the worker, and the reason for the worker
+  // having that particular priority.
+  virtual const PriorityAndReason& GetPriorityAndReason() const = 0;
+
   // Returns the frames that are clients of this worker.
   virtual const base::flat_set<const FrameNode*> GetClientFrames() const = 0;
+
+  // Visits the frames that are clients of this worker. The iteration is halted
+  // if the visitor returns false. Returns true if every call to the visitor
+  // returned true, false otherwise.
+  virtual bool VisitClientFrames(const FrameNodeVisitor& visitor) const = 0;
 
   // Returns the workers that are clients of this worker.
   // There are 2 cases where this is possible:
@@ -94,6 +110,11 @@ class WorkerNode : public Node {
   // - A dedicated worker or a shared worker will become a client of the service
   //   worker that handles their network requests.
   virtual const base::flat_set<const WorkerNode*> GetClientWorkers() const = 0;
+
+  // Visits the workers that are clients of this worker. (See GetClientWorkers()
+  // for details.) The iteration is halted if the visitor returns false. Returns
+  // true if every call to the visitor returned true, false otherwise.
+  virtual bool VisitClientWorkers(const WorkerNodeVisitor& visitor) const = 0;
 
   // Returns the child workers of this worker.
   // There are 2 cases where a worker can be the child of another worker:
@@ -113,14 +134,18 @@ class WorkerNode : public Node {
   virtual bool VisitChildDedicatedWorkers(
       const WorkerNodeVisitor& visitor) const = 0;
 
-  // Returns the current priority of the worker, and the reason for the worker
-  // having that particular priority.
-  virtual const PriorityAndReason& GetPriorityAndReason() const = 0;
+  // TODO(joenotcharles): Move the resource usage estimates to a separate
+  // class.
 
   // Returns the most recently estimated resident set of the worker, in
   // kilobytes. This is an estimate because RSS is computed by process, and a
   // process can host multiple workers.
   virtual uint64_t GetResidentSetKbEstimate() const = 0;
+
+  // Returns the most recently estimated private footprint of the worker, in
+  // kilobytes. This is an estimate because PMF is computed by process, and a
+  // process can host multiple workers.
+  virtual uint64_t GetPrivateFootprintKbEstimate() const = 0;
 };
 
 // Pure virtual observer interface. Derive from this if you want to be forced to

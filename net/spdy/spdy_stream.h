@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "net/base/io_buffer.h"
@@ -24,7 +24,6 @@
 #include "net/socket/next_proto.h"
 #include "net/socket/ssl_client_socket.h"
 #include "net/spdy/spdy_buffer.h"
-#include "net/ssl/ssl_client_cert_type.h"
 #include "net/third_party/quiche/src/quiche/spdy/core/http2_header_block.h"
 #include "net/third_party/quiche/src/quiche/spdy/core/spdy_framer.h"
 #include "net/third_party/quiche/src/quiche/spdy/core/spdy_protocol.h"
@@ -49,9 +48,6 @@ enum SpdyStreamType {
   // A stream where the client sends a request with possibly a body,
   // and the server then sends a response with a body.
   SPDY_REQUEST_RESPONSE_STREAM,
-  // A server-initiated stream where the server just sends a response
-  // with a body and the client does not send anything.
-  SPDY_PUSH_STREAM
 };
 
 // Passed to some SpdyStream functions to indicate whether there's
@@ -95,11 +91,9 @@ class NET_EXPORT_PRIVATE SpdyStream {
     virtual void OnEarlyHintsReceived(
         const spdy::Http2HeaderBlock& headers) = 0;
 
-    // Called when response headers have been received.  In case of a pushed
-    // stream, the pushed request headers are also passed.
+    // Called when response headers have been received.
     virtual void OnHeadersReceived(
-        const spdy::Http2HeaderBlock& response_headers,
-        const spdy::Http2HeaderBlock* pushed_request_headers) = 0;
+        const spdy::Http2HeaderBlock& response_headers) = 0;
 
     // Called when data is received.  |buffer| may be NULL, which signals EOF.
     // May cause the stream to be closed.
@@ -271,10 +265,6 @@ class NET_EXPORT_PRIVATE SpdyStream {
                          base::Time response_time,
                          base::TimeTicks recv_first_byte_time);
 
-  // Called by the SpdySession when a frame carrying request headers opening a
-  // push stream is received. Stream transits to STATE_RESERVED_REMOTE state.
-  void OnPushPromiseHeadersReceived(spdy::Http2HeaderBlock headers, GURL url);
-
   // Called by the SpdySession when response data has been received
   // for this stream.  This callback may be called multiple times as
   // data arrives from the network, and will never be called prior to
@@ -352,9 +342,6 @@ class NET_EXPORT_PRIVATE SpdyStream {
   // Fills SSL info in |ssl_info| and returns true when SSL is in use.
   bool GetSSLInfo(SSLInfo* ssl_info) const;
 
-  // Returns true if ALPN was negotiated for the underlying socket.
-  bool WasAlpnNegotiated() const;
-
   // Returns the protocol negotiated via ALPN for the underlying socket.
   NextProto GetNegotiatedProtocol() const;
 
@@ -394,7 +381,6 @@ class NET_EXPORT_PRIVATE SpdyStream {
   int64_t raw_received_bytes() const { return raw_received_bytes_; }
   int64_t raw_sent_bytes() const { return raw_sent_bytes_; }
   int recv_bytes() const { return recv_bytes_; }
-  bool ShouldRetryRSTPushStream() const;
 
   bool GetLoadTimingInfo(LoadTimingInfo* load_timing_info) const;
 
@@ -424,7 +410,6 @@ class NET_EXPORT_PRIVATE SpdyStream {
   enum State {
     STATE_IDLE,
     STATE_OPEN,
-    STATE_HALF_CLOSED_LOCAL_UNCLAIMED,
     STATE_HALF_CLOSED_LOCAL,
     STATE_HALF_CLOSED_REMOTE,
     STATE_RESERVED_REMOTE,
@@ -443,15 +428,6 @@ class NET_EXPORT_PRIVATE SpdyStream {
     READY_FOR_DATA_OR_TRAILERS,
     TRAILERS_RECEIVED
   };
-
-  // When a server-push stream is claimed by SetDelegate(), this function is
-  // posted on the current MessageLoop to replay everything the server has sent.
-  // From the perspective of SpdyStream's state machine, headers, data, and
-  // FIN states received prior to the delegate being attached have not yet been
-  // read. While buffered by |pending_recv_data_| it's not until
-  // PushedStreamReplay() is invoked that reads are considered
-  // to have occurred, driving the state machine forward.
-  void PushedStreamReplay();
 
   // Produces the HEADERS frame for the stream. The stream must
   // already be activated.

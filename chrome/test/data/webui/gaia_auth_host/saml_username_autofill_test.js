@@ -2,8 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {maybeAutofillUsername} from 'chrome://chrome-signin/gaia_auth_host/saml_username_autofill.js';
 import {appendParam} from 'chrome://resources/js/util.js';
-import {maybeAutofillUsername} from 'chrome://webui-test/gaia_auth_host/saml_username_autofill.js';
+import {assertEquals} from 'chrome://webui-test/chai_assert.js';
 
 const IDP_URL_FOR_TESTS = 'https://login.corp.example.com/example';
 const IDP_URL_FOR_TESTS_WITH_PARAMETER =
@@ -45,6 +46,22 @@ suite('SamlUsernameAutofillSuite', function() {
         EMAIL_FOR_TESTS);
 
     assertEquals(newUrl, null);
+  });
+
+  // Test that our protection against repeated parameters isn't triggered if
+  // url contains the same substring but not as a parameter.
+  test('UrlCollisionWithParameterName', () => {
+    const urlParameterNameToAutofillUsername = 'login_hint';
+    // Make `login_hint` appear in IdP url, but not as a parameter.
+    const IdpUrlCollidingWithParameterName = IDP_URL_FOR_TESTS + '/login_hint';
+    const expectedResult = appendParam(
+        IdpUrlCollidingWithParameterName, urlParameterNameToAutofillUsername,
+        EMAIL_FOR_TESTS);
+    const newUrl = maybeAutofillUsername(
+        IdpUrlCollidingWithParameterName, urlParameterNameToAutofillUsername,
+        EMAIL_FOR_TESTS);
+
+    assertEquals(newUrl, expectedResult);
   });
 
   // Test that we don't autofill the username when user's email is absent.

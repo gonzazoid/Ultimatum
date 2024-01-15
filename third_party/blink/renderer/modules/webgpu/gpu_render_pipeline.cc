@@ -10,7 +10,6 @@
 #include "third_party/blink/renderer/bindings/modules/v8/v8_gpu_color_state_descriptor.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_gpu_color_target_state.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_gpu_depth_stencil_state.h"
-#include "third_party/blink/renderer/bindings/modules/v8/v8_gpu_depth_stencil_state_descriptor.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_gpu_fragment_state.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_gpu_multisample_state.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_gpu_primitive_state.h"
@@ -31,13 +30,20 @@ namespace blink {
 
 namespace {
 
+const char kGPUBlendComponentPartiallySpecifiedMessage[] =
+    "fragment.targets[%u].blend.%s has a mix of explicit and defaulted "
+    "members, which is unusual. Did you mean to specify other members?";
+
 WGPUBlendComponent AsDawnType(const GPUBlendComponent* webgpu_desc) {
   DCHECK(webgpu_desc);
 
   WGPUBlendComponent dawn_desc = {};
-  dawn_desc.dstFactor = AsDawnEnum(webgpu_desc->dstFactor());
-  dawn_desc.srcFactor = AsDawnEnum(webgpu_desc->srcFactor());
-  dawn_desc.operation = AsDawnEnum(webgpu_desc->operation());
+  dawn_desc.dstFactor = AsDawnEnum(webgpu_desc->getDstFactorOr(
+      V8GPUBlendFactor(V8GPUBlendFactor::Enum::kZero)));
+  dawn_desc.srcFactor = AsDawnEnum(webgpu_desc->getSrcFactorOr(
+      V8GPUBlendFactor(V8GPUBlendFactor::Enum::kOne)));
+  dawn_desc.operation = AsDawnEnum(webgpu_desc->getOperationOr(
+      V8GPUBlendOperation(V8GPUBlendOperation::Enum::kAdd)));
 
   return dawn_desc;
 }
@@ -129,30 +135,49 @@ void GPUPrimitiveStateAsWGPUPrimitiveState(
   }
 }
 
-WGPUDepthStencilState AsDawnType(GPUDevice* device,
-                                 const GPUDepthStencilState* webgpu_desc,
-                                 ExceptionState& exception_state) {
+void GPUDepthStencilStateAsWGPUDepthStencilState(
+    GPUDevice* device,
+    const GPUDepthStencilState* webgpu_desc,
+    OwnedDepthStencilState* dawn_state,
+    ExceptionState& exception_state) {
   DCHECK(webgpu_desc);
+  DCHECK(dawn_state);
 
   if (!device->ValidateTextureFormatUsage(webgpu_desc->format(),
                                           exception_state)) {
-    return {};
+    return;
   }
 
-  WGPUDepthStencilState dawn_desc = {};
-  dawn_desc.nextInChain = nullptr;
-  dawn_desc.format = AsDawnEnum(webgpu_desc->format());
-  dawn_desc.depthWriteEnabled = webgpu_desc->depthWriteEnabled();
-  dawn_desc.depthCompare = AsDawnEnum(webgpu_desc->depthCompare());
-  dawn_desc.stencilFront = AsDawnType(webgpu_desc->stencilFront());
-  dawn_desc.stencilBack = AsDawnType(webgpu_desc->stencilBack());
-  dawn_desc.stencilReadMask = webgpu_desc->stencilReadMask();
-  dawn_desc.stencilWriteMask = webgpu_desc->stencilWriteMask();
-  dawn_desc.depthBias = webgpu_desc->depthBias();
-  dawn_desc.depthBiasSlopeScale = webgpu_desc->depthBiasSlopeScale();
-  dawn_desc.depthBiasClamp = webgpu_desc->depthBiasClamp();
+  dawn_state->dawn_desc.nextInChain = nullptr;
+  dawn_state->dawn_desc.format = AsDawnEnum(webgpu_desc->format());
 
-  return dawn_desc;
+  // This extension struct is required so that the Dawn C API can differentiate
+  // whether depthWriteEnabled was provided or not. The Dawn C API will assume
+  // the boolean is defined, unless the extension struct is added and
+  // depthWriteDefined is true.
+  auto* depth_write_defined = &dawn_state->depth_write_defined;
+  depth_write_defined->chain.sType =
+      WGPUSType_DepthStencilStateDepthWriteDefinedDawn;
+  depth_write_defined->depthWriteDefined = webgpu_desc->hasDepthWriteEnabled();
+  dawn_state->dawn_desc.nextInChain =
+      reinterpret_cast<WGPUChainedStruct*>(depth_write_defined);
+  dawn_state->dawn_desc.depthWriteEnabled =
+      webgpu_desc->hasDepthWriteEnabled() && webgpu_desc->depthWriteEnabled();
+
+  WGPUCompareFunction depthCompare = WGPUCompareFunction_Undefined;
+  if (webgpu_desc->hasDepthCompare()) {
+    depthCompare = AsDawnEnum(webgpu_desc->depthCompare());
+  }
+  dawn_state->dawn_desc.depthCompare = depthCompare;
+
+  dawn_state->dawn_desc.stencilFront = AsDawnType(webgpu_desc->stencilFront());
+  dawn_state->dawn_desc.stencilBack = AsDawnType(webgpu_desc->stencilBack());
+  dawn_state->dawn_desc.stencilReadMask = webgpu_desc->stencilReadMask();
+  dawn_state->dawn_desc.stencilWriteMask = webgpu_desc->stencilWriteMask();
+  dawn_state->dawn_desc.depthBias = webgpu_desc->depthBias();
+  dawn_state->dawn_desc.depthBiasSlopeScale =
+      webgpu_desc->depthBiasSlopeScale();
+  dawn_state->dawn_desc.depthBiasClamp = webgpu_desc->depthBiasClamp();
 }
 
 WGPUMultisampleState AsDawnType(const GPUMultisampleState* webgpu_desc) {
@@ -221,11 +246,24 @@ void GPUVertexStateAsWGPUVertexState(GPUDevice* device,
   dawn_vertex->dawn_desc->constantCount = dawn_vertex->constantCount;
   dawn_vertex->dawn_desc->constants = dawn_vertex->constants.get();
   dawn_vertex->dawn_desc->module = descriptor->module()->GetHandle();
-  dawn_vertex->dawn_desc->entryPoint = dawn_vertex->entry_point.c_str();
+  dawn_vertex->dawn_desc->entryPoint =
+      dawn_vertex->entry_point ? dawn_vertex->entry_point->c_str() : nullptr;
 
   if (descriptor->hasBuffers()) {
     AsDawnVertexBufferLayouts(device, descriptor, dawn_vertex);
   }
+}
+
+bool IsGPUBlendComponentPartiallySpecified(
+    const GPUBlendComponent* webgpu_desc) {
+  DCHECK(webgpu_desc);
+  // GPUBlendComponent is considered partially specified when:
+  // - srcFactor is missing but operation or dstFactor is provided
+  // - dstFactor is missing but operation or srcFactor is provided
+  return ((!webgpu_desc->hasSrcFactor() &&
+           (webgpu_desc->hasDstFactor() || webgpu_desc->hasOperation())) ||
+          (!webgpu_desc->hasDstFactor() &&
+           (webgpu_desc->hasSrcFactor() || webgpu_desc->hasOperation())));
 }
 
 void GPUFragmentStateAsWGPUFragmentState(GPUDevice* device,
@@ -242,11 +280,12 @@ void GPUFragmentStateAsWGPUFragmentState(GPUDevice* device,
   dawn_fragment->dawn_desc.constantCount = dawn_fragment->constantCount;
   dawn_fragment->dawn_desc.constants = dawn_fragment->constants.get();
   dawn_fragment->dawn_desc.module = descriptor->module()->GetHandle();
-  dawn_fragment->dawn_desc.entryPoint = dawn_fragment->entry_point.c_str();
+  dawn_fragment->dawn_desc.entryPoint =
+      dawn_fragment->entry_point ? dawn_fragment->entry_point->c_str()
+                                 : nullptr;
 
   dawn_fragment->dawn_desc.targets = nullptr;
-  dawn_fragment->dawn_desc.targetCount =
-      static_cast<uint32_t>(descriptor->targets().size());
+  dawn_fragment->dawn_desc.targetCount = descriptor->targets().size();
   if (dawn_fragment->dawn_desc.targetCount > 0) {
     dawn_fragment->targets = AsDawnType(descriptor->targets());
     dawn_fragment->dawn_desc.targets = dawn_fragment->targets.get();
@@ -268,7 +307,16 @@ void GPUFragmentStateAsWGPUFragmentState(GPUDevice* device,
       return;
     }
     if (color_target->hasBlend()) {
-      dawn_fragment->blend_states[i] = AsDawnType(color_target->blend());
+      const GPUBlendState* blend_state = color_target->blend();
+      if (IsGPUBlendComponentPartiallySpecified(blend_state->color())) {
+        device->AddConsoleWarning(String::Format(
+            kGPUBlendComponentPartiallySpecifiedMessage, i, "color"));
+      }
+      if (IsGPUBlendComponentPartiallySpecified(blend_state->alpha())) {
+        device->AddConsoleWarning(String::Format(
+            kGPUBlendComponentPartiallySpecifiedMessage, i, "alpha"));
+      }
+      dawn_fragment->blend_states[i] = AsDawnType(blend_state);
       dawn_fragment->targets[i].blend = &dawn_fragment->blend_states[i];
     }
   }
@@ -292,15 +340,7 @@ void ConvertToDawnType(v8::Isolate* isolate,
   }
 
   // Layout
-  if (webgpu_desc->hasLayout()) {
-    dawn_desc_info->dawn_desc.layout = AsDawnType(webgpu_desc->layout());
-  } else {
-    // TODO(crbug.com/1069302): Remove this branch after the deprecation period.
-    device->AddConsoleWarning(
-        "Leaving the layout of a render pipeline undefined has been "
-        "deprecated, and specifying a pipeline layout will soon be required. "
-        "Set layout to 'auto' if an implicit pipeline layout is desired.");
-  }
+  dawn_desc_info->dawn_desc.layout = AsDawnType(webgpu_desc->layout());
 
   // Vertex
   const GPUVertexState* vertex = webgpu_desc->vertex();
@@ -315,9 +355,11 @@ void ConvertToDawnType(v8::Isolate* isolate,
 
   // DepthStencil
   if (webgpu_desc->hasDepthStencil()) {
-    dawn_desc_info->depth_stencil =
-        AsDawnType(device, webgpu_desc->depthStencil(), exception_state);
-    dawn_desc_info->dawn_desc.depthStencil = &dawn_desc_info->depth_stencil;
+    GPUDepthStencilStateAsWGPUDepthStencilState(
+        device, webgpu_desc->depthStencil(), &dawn_desc_info->depth_stencil,
+        exception_state);
+    dawn_desc_info->dawn_desc.depthStencil =
+        &dawn_desc_info->depth_stencil.dawn_desc;
   }
 
   // Multisample
@@ -342,8 +384,9 @@ GPURenderPipeline* GPURenderPipeline::Create(
   DCHECK(webgpu_desc);
 
   v8::Isolate* isolate = script_state->GetIsolate();
-  ExceptionState exception_state(isolate, ExceptionState::kConstructionContext,
-                                 "GPURenderPipeline");
+  ExceptionState exception_state(
+      isolate, ExceptionContextType::kConstructorOperationInvoke,
+      "GPURenderPipeline");
 
   GPURenderPipeline* pipeline;
   OwnedRenderPipelineDescriptor dawn_desc_info;

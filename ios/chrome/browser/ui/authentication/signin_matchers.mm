@@ -7,12 +7,12 @@
 #import "ios/chrome/browser/ui/authentication/signin/advanced_settings_signin/advanced_settings_signin_constants.h"
 #import "ios/chrome/browser/ui/authentication/signin/signin_constants.h"
 #import "ios/chrome/browser/ui/authentication/unified_consent/unified_consent_constants.h"
+#import "ios/chrome/browser/ui/first_run/first_run_constants.h"
 #import "ios/chrome/browser/ui/settings/settings_table_view_controller_constants.h"
+#import "ios/chrome/common/ui/promo_style/constants.h"
+#import "ios/chrome/grit/ios_strings.h"
 #import "ios/testing/earl_grey/earl_grey_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/l10n/l10n_util.h"
 
 namespace chrome_test_util {
 
@@ -38,9 +38,9 @@ id<GREYMatcher> WebSigninSkipButtonMatcher() {
       grey_sufficientlyVisible(), nil);
 }
 
-id<GREYMatcher> WebSigninContinueButtonMatcher() {
+id<GREYMatcher> WebSigninPrimaryButtonMatcher() {
   return grey_allOf(
-      grey_accessibilityID(kWebSigninContinueAsButtonAccessibilityIdentifier),
+      grey_accessibilityID(kWebSigninPrimaryButtonAccessibilityIdentifier),
       grey_sufficientlyVisible(), nil);
 }
 
@@ -50,8 +50,36 @@ id<GREYMatcher> GoogleSyncSettingsButton() {
                     grey_sufficientlyVisible(), nil);
 }
 
-id<GREYMatcher> UpgradeSigninPromoMatcher() {
-  return grey_accessibilityID(kUnifiedConsentScrollViewIdentifier);
+id<GREYMatcher> SigninScreenPromoMatcher() {
+  return grey_accessibilityID(
+      first_run::kFirstRunSignInScreenAccessibilityIdentifier);
+}
+
+id<GREYMatcher> SigninScreenPromoPrimaryButtonMatcher() {
+  return grey_allOf(
+      grey_accessibilityID(kPromoStylePrimaryActionAccessibilityIdentifier),
+      grey_sufficientlyVisible(), nil);
+}
+
+id<GREYMatcher> SigninScreenPromoSecondaryButtonMatcher() {
+  return grey_allOf(
+      grey_accessibilityID(kPromoStyleSecondaryActionAccessibilityIdentifier),
+      grey_sufficientlyVisible(), nil);
+}
+
+id<GREYMatcher> SettingsSignInRowMatcher() {
+  return grey_allOf(grey_accessibilityID(kSettingsSignInCellId),
+                    grey_sufficientlyVisible(), nil);
+}
+
+id<GREYMatcher> HistoryOptInPromoMatcher() {
+  return grey_allOf(
+      grey_accessibilityID(kHistorySyncViewAccessibilityIdentifier),
+      grey_sufficientlyVisible(), nil);
+}
+
+id<GREYAction> HistoryOptInScrollDown() {
+  return grey_scrollInDirection(kGREYDirectionDown, 200);
 }
 
 }  // namespace chrome_test_util

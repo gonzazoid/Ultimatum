@@ -35,6 +35,7 @@ schema:
   - 2
   type: integer
 supported_on:
+- android:112-
 - chrome.*:83-
 - ios:88-
 tags: []

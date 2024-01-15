@@ -6,12 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/escape.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "google_apis/google_api_keys.h"
 #include "remoting/base/fake_oauth_token_getter.h"
 #include "remoting/base/oauth_token_getter_impl.h"
@@ -62,7 +63,7 @@ constexpr char TestOAuthTokenGetter::kSwitchNameAuthCode[];
 
 // static
 bool TestOAuthTokenGetter::IsServiceAccount(const std::string& email) {
-  return email.find("@chromoting.gserviceaccount.com") != std::string::npos;
+  return base::Contains(email, "@chromoting.gserviceaccount.com");
 }
 
 TestOAuthTokenGetter::TestOAuthTokenGetter(TestTokenStorage* token_storage) {
@@ -70,7 +71,7 @@ TestOAuthTokenGetter::TestOAuthTokenGetter(TestTokenStorage* token_storage) {
   token_storage_ = token_storage;
   auto url_request_context_getter =
       base::MakeRefCounted<URLRequestContextGetter>(
-          base::ThreadTaskRunnerHandle::Get());
+          base::SingleThreadTaskRunner::GetCurrentDefault());
   url_loader_factory_owner_ =
       std::make_unique<network::TransitionalURLLoaderFactoryOwner>(
           url_request_context_getter);

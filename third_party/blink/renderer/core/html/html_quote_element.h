@@ -29,17 +29,18 @@
 
 namespace blink {
 
+class ComputedStyleBuilder;
+
 class HTMLQuoteElement final : public HTMLElement {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
   HTMLQuoteElement(const QualifiedName&, Document&);
-  void AdjustPseudoStyleLocale(scoped_refptr<ComputedStyle> pseudo_style);
+  void AdjustPseudoStyleLocale(ComputedStyleBuilder& pseudo_style_builder);
 
  private:
   bool IsURLAttribute(const Attribute&) const override;
   bool HasLegalLinkAttribute(const QualifiedName&) const override;
-  const QualifiedName& SubResourceAttributeName() const override;
 };
 
 inline bool IsHTMLQuoteElement(const HTMLElement& element) {

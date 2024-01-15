@@ -4,10 +4,9 @@
 
 #include "extensions/renderer/gc_callback.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "extensions/renderer/script_context.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/public/web/web_local_frame.h"
@@ -59,11 +58,11 @@ GCCallback::GCCallback(ScriptContext* context,
     task_runner_ = frame->GetTaskRunner(blink::TaskType::kInternalDefault);
   } else {
     // |frame| can be null on tests.
-    task_runner_ = base::ThreadTaskRunnerHandle::Get();
+    task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
   }
 }
 
-GCCallback::~GCCallback() {}
+GCCallback::~GCCallback() = default;
 
 // static
 void GCCallback::OnObjectGC(const v8::WeakCallbackInfo<GCCallback>& data) {

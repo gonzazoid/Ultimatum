@@ -5,6 +5,8 @@
 #include "chrome/browser/ash/sync/sync_explicit_passphrase_client_ash.h"
 
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
+#include "chromeos/crosapi/mojom/sync.mojom-forward.h"
 #include "chromeos/crosapi/mojom/sync.mojom-test-utils.h"
 #include "components/sync/chromeos/explicit_passphrase_mojo_utils.h"
 #include "components/sync/engine/nigori/key_derivation_params.h"
@@ -92,15 +94,16 @@ class SyncExplicitPassphraseClientAshTest : public testing::Test {
     ON_CALL(sync_service_, GetAccountInfo())
         .WillByDefault(Return(sync_account_info_));
     client_.BindReceiver(client_remote_.BindNewPipeAndPassReceiver());
-    client_async_waiter_ = std::make_unique<
-        crosapi::mojom::SyncExplicitPassphraseClientAsyncWaiter>(&client_);
   }
 
   SyncExplicitPassphraseClientAsh* client() { return &client_; }
 
-  crosapi::mojom::SyncExplicitPassphraseClientAsyncWaiter*
-  client_async_waiter() {
-    return client_async_waiter_.get();
+  crosapi::mojom::NigoriKeyPtr GetDecryptionNigoriKey(
+      crosapi::mojom::AccountKeyPtr key) const {
+    base::test::TestFuture<crosapi::mojom::NigoriKeyPtr> future;
+    client_remote_->GetDecryptionNigoriKey(std::move(key),
+                                           future.GetCallback());
+    return future.Take();
   }
 
   syncer::MockSyncService* sync_service() { return &sync_service_; }
@@ -128,19 +131,16 @@ class SyncExplicitPassphraseClientAshTest : public testing::Test {
 
   SyncExplicitPassphraseClientAsh client_;
   mojo::Remote<crosapi::mojom::SyncExplicitPassphraseClient> client_remote_;
-  std::unique_ptr<crosapi::mojom::SyncExplicitPassphraseClientAsyncWaiter>
-      client_async_waiter_;
 
   CoreAccountInfo sync_account_info_;
 };
 
 TEST_F(SyncExplicitPassphraseClientAshTest, ShouldGetDecryptionKey) {
-  ON_CALL(*sync_user_settings(), GetDecryptionNigoriKey())
+  ON_CALL(*sync_user_settings(), GetExplicitPassphraseDecryptionNigoriKey())
       .WillByDefault(MakeTestNigoriKey);
 
-  crosapi::mojom::NigoriKeyPtr nigori_key;
-  client_async_waiter()->GetDecryptionNigoriKey(GetSyncingAccountKey(),
-                                                &nigori_key);
+  crosapi::mojom::NigoriKeyPtr nigori_key =
+      GetDecryptionNigoriKey(GetSyncingAccountKey());
   ASSERT_FALSE(nigori_key.is_null());
 
   crosapi::mojom::NigoriKeyPtr expected_nigori_key = MakeTestMojoNigoriKey();
@@ -156,22 +156,21 @@ TEST_F(SyncExplicitPassphraseClientAshTest,
   wrong_account_key->id = "user2";
   wrong_account_key->account_type = crosapi::mojom::AccountType::kGaia;
 
-  crosapi::mojom::NigoriKeyPtr nigori_key;
-  client_async_waiter()->GetDecryptionNigoriKey(std::move(wrong_account_key),
-                                                &nigori_key);
+  crosapi::mojom::NigoriKeyPtr nigori_key =
+      GetDecryptionNigoriKey(std::move(wrong_account_key));
   EXPECT_TRUE(nigori_key.is_null());
 }
 
 TEST_F(SyncExplicitPassphraseClientAshTest,
        ShouldHandleAbsenseOfKeyWhenGettingDecryptionKey) {
-  crosapi::mojom::NigoriKeyPtr nigori_key;
-  client_async_waiter()->GetDecryptionNigoriKey(GetSyncingAccountKey(),
-                                                &nigori_key);
+  crosapi::mojom::NigoriKeyPtr nigori_key =
+      GetDecryptionNigoriKey(GetSyncingAccountKey());
   EXPECT_TRUE(nigori_key.is_null());
 }
 
 TEST_F(SyncExplicitPassphraseClientAshTest, ShouldSetDecryptionKey) {
-  EXPECT_CALL(*sync_user_settings(), SetDecryptionNigoriKey(NotNull()));
+  EXPECT_CALL(*sync_user_settings(),
+              SetExplicitPassphraseDecryptionNigoriKey(NotNull()));
   client()->SetDecryptionNigoriKey(GetSyncingAccountKey(),
                                    MakeTestMojoNigoriKey());
 }
@@ -183,20 +182,23 @@ TEST_F(SyncExplicitPassphraseClientAshTest,
   wrong_account_key->id = "user2";
   wrong_account_key->account_type = crosapi::mojom::AccountType::kGaia;
 
-  EXPECT_CALL(*sync_user_settings(), SetDecryptionNigoriKey).Times(0);
+  EXPECT_CALL(*sync_user_settings(), SetExplicitPassphraseDecryptionNigoriKey)
+      .Times(0);
   client()->SetDecryptionNigoriKey(std::move(wrong_account_key),
                                    MakeTestMojoNigoriKey());
 }
 
 TEST_F(SyncExplicitPassphraseClientAshTest,
        ShouldHandleNullKeyWhenSettingDecryptionKey) {
-  EXPECT_CALL(*sync_user_settings(), SetDecryptionNigoriKey).Times(0);
+  EXPECT_CALL(*sync_user_settings(), SetExplicitPassphraseDecryptionNigoriKey)
+      .Times(0);
   client()->SetDecryptionNigoriKey(GetSyncingAccountKey(), nullptr);
 }
 
 TEST_F(SyncExplicitPassphraseClientAshTest,
        ShouldHandleInvalidKeyWhenSettingDecryptionKey) {
-  EXPECT_CALL(*sync_user_settings(), SetDecryptionNigoriKey).Times(0);
+  EXPECT_CALL(*sync_user_settings(), SetExplicitPassphraseDecryptionNigoriKey)
+      .Times(0);
 
   crosapi::mojom::NigoriKeyPtr mojo_nigori_key =
       crosapi::mojom::NigoriKey::New();
@@ -204,7 +206,8 @@ TEST_F(SyncExplicitPassphraseClientAshTest,
   mojo_nigori_key->encryption_key = {1, 2, 3};
   mojo_nigori_key->mac_key = {1, 2, 3};
 
-  EXPECT_CALL(*sync_user_settings(), SetDecryptionNigoriKey).Times(0);
+  EXPECT_CALL(*sync_user_settings(), SetExplicitPassphraseDecryptionNigoriKey)
+      .Times(0);
   client()->SetDecryptionNigoriKey(GetSyncingAccountKey(),
                                    std::move(mojo_nigori_key));
 }

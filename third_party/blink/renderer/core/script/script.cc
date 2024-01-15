@@ -27,6 +27,7 @@ void Script::RunScriptOnScriptState(
     V8ScriptRunner::RethrowErrorsOption rethrow_errors) {
   if (!script_state)
     return;
+
   v8::HandleScope scope(script_state->GetIsolate());
   std::ignore = RunScriptOnScriptStateAndReturnValue(
       script_state, execute_script_policy, std::move(rethrow_errors));

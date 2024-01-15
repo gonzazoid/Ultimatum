@@ -37,8 +37,8 @@ class MockCastSessionClient : public CastSessionClient {
   MOCK_METHOD0(Init, mojom::RoutePresentationConnectionPtr());
   MOCK_METHOD1(SendMessageToClient,
                void(blink::mojom::PresentationConnectionMessagePtr message));
-  MOCK_METHOD2(SendMediaStatusToClient,
-               void(const base::Value::Dict& media_status,
+  MOCK_METHOD2(SendMediaMessageToClient,
+               void(const base::Value::Dict& payload,
                     absl::optional<int> request_id));
   MOCK_METHOD1(
       CloseConnection,
@@ -106,7 +106,8 @@ class CastActivityTestBase : public testing::Test,
 
   // TODO(crbug.com/954797): Factor out members also present in
   // CastActivityManagerTest.
-  content::BrowserTaskEnvironment task_environment_;
+  content::BrowserTaskEnvironment task_environment_{
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   data_decoder::test::InProcessDataDecoder in_process_data_decoder_;
   TestMediaSinkService media_sink_service_;
   cast_channel::MockCastSocketService socket_service_{

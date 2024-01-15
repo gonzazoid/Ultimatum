@@ -60,6 +60,9 @@ SharingHubIconView::SharingHubIconView(
   SetLabel(
       l10n_util::GetStringUTF16(IDS_BROWSER_SHARING_OMNIBOX_SENDING_LABEL));
   SetUpForInOutAnimation();
+  SetAccessibilityProperties(
+      /*role*/ std::nullopt,
+      l10n_util::GetStringUTF16(IDS_SHARING_HUB_TOOLTIP));
 }
 
 SharingHubIconView::~SharingHubIconView() = default;
@@ -104,10 +107,6 @@ const gfx::VectorIcon& SharingHubIconView::GetVectorIcon() const {
   return GetSharingHubVectorIcon();
 }
 
-std::u16string SharingHubIconView::GetTextForTooltipAndAccessibleName() const {
-  return l10n_util::GetStringUTF16(IDS_SHARING_HUB_TOOLTIP);
-}
-
 SharingHubBubbleController* SharingHubIconView::GetController() const {
   content::WebContents* web_contents = GetWebContents();
   if (!web_contents) {
@@ -126,11 +125,11 @@ void SharingHubIconView::MaybeAnimateSendingToast() {
 
   if (controller && controller->show_message()) {
     controller->set_show_message(false);
-    AnimateIn(absl::nullopt);
+    AnimateIn(std::nullopt);
   }
 }
 
-BEGIN_METADATA(SharingHubIconView, PageActionIconView)
+BEGIN_METADATA(SharingHubIconView)
 END_METADATA
 
 }  // namespace sharing_hub

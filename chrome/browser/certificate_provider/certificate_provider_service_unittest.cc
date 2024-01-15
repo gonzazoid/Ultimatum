@@ -9,13 +9,13 @@
 #include <utility>
 
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/containers/span.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/string_piece.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_mock_time_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/certificate_provider/certificate_provider.h"
 #include "net/base/net_errors.h"
 #include "net/cert/asn1_util.h"
@@ -153,7 +153,7 @@ class CertificateProviderServiceTest : public testing::Test {
  public:
   CertificateProviderServiceTest()
       : task_runner_(new base::TestMockTimeTaskRunner()),
-        task_runner_handle_(task_runner_),
+        task_runner_current_default_handle_(task_runner_),
         service_(new CertificateProviderService()),
         cert_info1_(CreateCertInfo("client_1.pem")),
         cert_info2_(CreateCertInfo("client_2.pem")) {
@@ -249,8 +249,9 @@ class CertificateProviderServiceTest : public testing::Test {
   }
 
   scoped_refptr<base::TestMockTimeTaskRunner> task_runner_;
-  base::ThreadTaskRunnerHandle task_runner_handle_;
-  raw_ptr<TestDelegate> test_delegate_ = nullptr;
+  base::SingleThreadTaskRunner::CurrentDefaultHandle
+      task_runner_current_default_handle_;
+  raw_ptr<TestDelegate, DanglingUntriaged> test_delegate_ = nullptr;
   testing::StrictMock<MockObserver> observer_;
   std::unique_ptr<CertificateProvider> certificate_provider_;
   std::unique_ptr<CertificateProviderService> service_;

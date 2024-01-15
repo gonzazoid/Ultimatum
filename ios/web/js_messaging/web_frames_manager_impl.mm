@@ -9,11 +9,9 @@
 #import "base/strings/utf_string_conversions.h"
 #import "ios/web/public/js_messaging/web_frame.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace web {
+
+#pragma mark - WebFramesManagerImpl
 
 WebFramesManagerImpl::WebFramesManagerImpl() : weak_factory_(this) {}
 
@@ -32,11 +30,20 @@ bool WebFramesManagerImpl::AddFrame(std::unique_ptr<WebFrame> frame) {
   }
   DCHECK(web_frames_.count(frame->GetFrameId()) == 0);
   std::string frame_id = frame->GetFrameId();
+  WebFrame* added_frame = frame.get();
   web_frames_[frame_id] = std::move(frame);
+
+  for (auto& observer : observers_) {
+    observer.WebFrameBecameAvailable(this, added_frame);
+  }
   return true;
 }
 
 void WebFramesManagerImpl::RemoveFrameWithId(const std::string& frame_id) {
+  for (auto& observer : observers_) {
+    observer.WebFrameBecameUnavailable(this, frame_id);
+  }
+
   DCHECK(!frame_id.empty());
   // If the removed frame is a main frame, it should be the current one.
   DCHECK(web_frames_.count(frame_id) == 0 ||
@@ -57,7 +64,25 @@ void WebFramesManagerImpl::RemoveFrameWithId(const std::string& frame_id) {
   web_frames_.erase(frame_id);
 }
 
+void WebFramesManagerImpl::RemoveAllWebFrames() {
+  std::set<std::string> frame_ids;
+  for (const auto& it : web_frames_) {
+    frame_ids.insert(it.first);
+  }
+  for (std::string frame_id : frame_ids) {
+    RemoveFrameWithId(frame_id);
+  }
+}
+
 #pragma mark - WebFramesManager
+
+void WebFramesManagerImpl::AddObserver(Observer* observer) {
+  observers_.AddObserver(observer);
+}
+
+void WebFramesManagerImpl::RemoveObserver(Observer* observer) {
+  observers_.RemoveObserver(observer);
+}
 
 std::set<WebFrame*> WebFramesManagerImpl::GetAllWebFrames() {
   std::set<WebFrame*> frames;
@@ -72,8 +97,11 @@ WebFrame* WebFramesManagerImpl::GetMainWebFrame() {
 }
 
 WebFrame* WebFramesManagerImpl::GetFrameWithId(const std::string& frame_id) {
-  DCHECK(!frame_id.empty());
-  auto web_frames_it = web_frames_.find(frame_id);
+  if (frame_id.empty()) {
+    return nullptr;
+  }
+
+  auto web_frames_it = web_frames_.find(base::ToLowerASCII(frame_id));
   return web_frames_it == web_frames_.end() ? nullptr
                                             : web_frames_it->second.get();
 }

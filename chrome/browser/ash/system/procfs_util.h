@@ -5,8 +5,9 @@
 #ifndef CHROME_BROWSER_ASH_SYSTEM_PROCFS_UTIL_H_
 #define CHROME_BROWSER_ASH_SYSTEM_PROCFS_UTIL_H_
 
+#include <optional>
+
 #include "base/files/file_path.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 namespace system {
@@ -44,25 +45,15 @@ struct SingleProcStat {
 };
 
 // Returns a single process information by reading a /proc/[pid]stat file.
-absl::optional<SingleProcStat> GetSingleProcStat(
+std::optional<SingleProcStat> GetSingleProcStat(
     const base::FilePath& stat_file);
 
 // Returns the total CPU time used in jiffies by reading /proc/stat file.
 // The input |stat_file| is used for testing.
-absl::optional<int64_t> GetCpuTimeJiffies(
+std::optional<int64_t> GetCpuTimeJiffies(
     const base::FilePath& stat_file = base::FilePath("/proc/stat"));
 
 }  // namespace system
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when Chrome OS code migration is
-// done.
-namespace chromeos {
-namespace system {
-using ::ash::system::GetCpuTimeJiffies;
-using ::ash::system::GetSingleProcStat;
-using ::ash::system::SingleProcStat;
-}  // namespace system
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_SYSTEM_PROCFS_UTIL_H_

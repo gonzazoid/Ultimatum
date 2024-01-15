@@ -9,15 +9,16 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/callback_list.h"
 #include "base/containers/linked_list.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "net/cookies/cookie_change_dispatcher.h"
+#include "net/cookies/cookie_partition_key_collection.h"
 #include "url/gurl.h"
 
 namespace net {
@@ -32,8 +33,7 @@ class CookieMonsterChangeDispatcher : public CookieChangeDispatcher {
       base::RepeatingCallbackList<void(const CookieChangeInfo&)>;
 
   // Expects |cookie_monster| to outlive this.
-  CookieMonsterChangeDispatcher(const CookieMonster* cookie_monster,
-                                bool same_party_attribute_enabled);
+  explicit CookieMonsterChangeDispatcher(const CookieMonster* cookie_monster);
 
   CookieMonsterChangeDispatcher(const CookieMonsterChangeDispatcher&) = delete;
   CookieMonsterChangeDispatcher& operator=(
@@ -77,8 +77,7 @@ class CookieMonsterChangeDispatcher : public CookieChangeDispatcher {
                  std::string domain_key,
                  std::string name_key,
                  GURL url,
-                 absl::optional<CookiePartitionKey> cookie_partition_key,
-                 bool same_party_attribute_enabled,
+                 CookiePartitionKeyCollection cookie_partition_key_collection,
                  net::CookieChangeCallback callback);
 
     Subscription(const Subscription&) = delete;
@@ -104,10 +103,8 @@ class CookieMonsterChangeDispatcher : public CookieChangeDispatcher {
     const std::string domain_key_;  // kGlobalDomainKey means no filtering.
     const std::string name_key_;    // kGlobalNameKey means no filtering.
     const GURL url_;                // empty() means no URL-based filtering.
-    // nullopt means all Partitioned cookies will be ignored.
-    const absl::optional<CookiePartitionKey> cookie_partition_key_;
+    const CookiePartitionKeyCollection cookie_partition_key_collection_;
     const net::CookieChangeCallback callback_;
-    bool same_party_attribute_enabled_;
 
     void DoDispatchChange(const CookieChangeInfo& change) const;
 
@@ -156,8 +153,6 @@ class CookieMonsterChangeDispatcher : public CookieChangeDispatcher {
   raw_ptr<const CookieMonster> cookie_monster_;
 
   CookieDomainMap cookie_domain_map_;
-
-  const bool same_party_attribute_enabled_;
 
   THREAD_CHECKER(thread_checker_);
 

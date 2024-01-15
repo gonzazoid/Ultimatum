@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "ash/root_window_controller.h"
+#include "base/memory/raw_ptr.h"
 
 #include <memory>
 
@@ -18,7 +19,7 @@
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/wm/system_modal_container_layout_manager.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
+#include "ash/wm/tablet_mode/tablet_mode_controller_test_api.h"
 #include "ash/wm/window_properties.h"
 #include "ash/wm/window_state.h"
 #include "ash/wm/window_util.h"
@@ -54,7 +55,7 @@ namespace {
 class DeleteOnBlurDelegate : public aura::test::TestWindowDelegate,
                              public aura::client::FocusChangeObserver {
  public:
-  DeleteOnBlurDelegate() : window_(nullptr) {}
+  DeleteOnBlurDelegate() = default;
 
   DeleteOnBlurDelegate(const DeleteOnBlurDelegate&) = delete;
   DeleteOnBlurDelegate& operator=(const DeleteOnBlurDelegate&) = delete;
@@ -73,11 +74,12 @@ class DeleteOnBlurDelegate : public aura::test::TestWindowDelegate,
   // aura::client::FocusChangeObserver implementation:
   void OnWindowFocused(aura::Window* gained_focus,
                        aura::Window* lost_focus) override {
-    if (window_ == lost_focus)
+    if (window_ == lost_focus) {
       delete window_;
+    }
   }
 
-  aura::Window* window_;
+  raw_ptr<aura::Window, DanglingUntriaged> window_{nullptr};
 };
 
 aura::LayoutManager* GetLayoutManager(RootWindowController* controller,
@@ -309,7 +311,7 @@ TEST_F(RootWindowControllerTest, MoveWindows_LockWindowsInUnified) {
   EXPECT_EQ("0,0 500x400", lock_screen->GetNativeWindow()->bounds().ToString());
 
   // Switch to mirror.
-  display_manager()->SetMirrorMode(display::MirrorMode::kNormal, absl::nullopt);
+  display_manager()->SetMirrorMode(display::MirrorMode::kNormal, std::nullopt);
   EXPECT_TRUE(display_manager()->IsInMirrorMode());
 
   controller = Shell::GetPrimaryRootWindowController();
@@ -318,7 +320,7 @@ TEST_F(RootWindowControllerTest, MoveWindows_LockWindowsInUnified) {
   EXPECT_EQ("0,0 500x400", lock_screen->GetNativeWindow()->bounds().ToString());
 
   // Switch to unified.
-  display_manager()->SetMirrorMode(display::MirrorMode::kOff, absl::nullopt);
+  display_manager()->SetMirrorMode(display::MirrorMode::kOff, std::nullopt);
   EXPECT_TRUE(display_manager()->IsInUnifiedMode());
 
   controller = Shell::GetPrimaryRootWindowController();
@@ -374,9 +376,9 @@ TEST_F(RootWindowControllerTest, MoveWindows_MaintainMRUordering) {
   // ordering.
   aura::Window* parent = moved->GetNativeWindow()->parent();
   ASSERT_EQ(parent, existing1->GetNativeWindow()->parent());
-  const std::vector<aura::Window*> expected_order = {
-      existing1->GetNativeWindow(), moved->GetNativeWindow(),
-      existing2->GetNativeWindow(), active->GetNativeWindow()};
+  const std::vector<raw_ptr<aura::Window, VectorExperimental>> expected_order =
+      {existing1->GetNativeWindow(), moved->GetNativeWindow(),
+       existing2->GetNativeWindow(), active->GetNativeWindow()};
   EXPECT_EQ(expected_order, parent->children());
 }
 
@@ -617,7 +619,7 @@ TEST_F(RootWindowControllerTest, FocusBlockedWindow) {
 // Tracks whether OnWindowDestroying() has been invoked.
 class DestroyedWindowObserver : public aura::WindowObserver {
  public:
-  DestroyedWindowObserver() : destroyed_(false), window_(nullptr) {}
+  DestroyedWindowObserver() = default;
 
   DestroyedWindowObserver(const DestroyedWindowObserver&) = delete;
   DestroyedWindowObserver& operator=(const DestroyedWindowObserver&) = delete;
@@ -639,14 +641,15 @@ class DestroyedWindowObserver : public aura::WindowObserver {
 
  private:
   void Shutdown() {
-    if (!window_)
+    if (!window_) {
       return;
+    }
     window_->RemoveObserver(this);
     window_ = nullptr;
   }
 
-  bool destroyed_;
-  Window* window_;
+  bool destroyed_ = false;
+  raw_ptr<Window> window_{nullptr};
 };
 
 // Verifies shutdown doesn't delete windows that are not owned by the parent.
@@ -659,7 +662,8 @@ TEST_F(RootWindowControllerTest, DontDeleteWindowsNotOwnedByParent) {
   observer1.SetWindow(window1.get());
   window1->Init(ui::LAYER_NOT_DRAWN);
   aura::client::ParentWindowWithContext(
-      window1.get(), Shell::GetPrimaryRootWindow(), gfx::Rect());
+      window1.get(), Shell::GetPrimaryRootWindow(), gfx::Rect(),
+      display::kInvalidDisplayId);
 
   DestroyedWindowObserver observer2;
   std::unique_ptr<aura::Window> window2 =
@@ -690,7 +694,7 @@ TEST_F(RootWindowControllerTest, ContextMenuDisappearsInTabletMode) {
   EXPECT_TRUE(controller->root_window_menu_model_adapter_);
 
   // Verify menu closes on entering tablet mode.
-  Shell::Get()->tablet_mode_controller()->SetEnabledForTest(true);
+  ash::TabletModeControllerTestApi().EnterTabletMode();
   EXPECT_FALSE(controller->root_window_menu_model_adapter_);
 
   // Open context menu.
@@ -699,7 +703,7 @@ TEST_F(RootWindowControllerTest, ContextMenuDisappearsInTabletMode) {
   EXPECT_TRUE(controller->root_window_menu_model_adapter_);
 
   // Verify menu closes on exiting tablet mode.
-  Shell::Get()->tablet_mode_controller()->SetEnabledForTest(false);
+  ash::TabletModeControllerTestApi().LeaveTabletMode();
   EXPECT_FALSE(controller->root_window_menu_model_adapter_);
 }
 
@@ -758,8 +762,9 @@ class TargetHitTestEventHandler : public ui::test::TestEventHandler {
 
   // ui::test::TestEventHandler overrides.
   void OnMouseEvent(ui::MouseEvent* event) override {
-    if (event->type() == ui::ET_MOUSE_PRESSED)
+    if (event->type() == ui::ET_MOUSE_PRESSED) {
       ui::test::TestEventHandler::OnMouseEvent(event);
+    }
     event->StopPropagation();
   }
 };

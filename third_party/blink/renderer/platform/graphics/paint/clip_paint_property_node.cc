@@ -26,33 +26,55 @@ PaintPropertyChangeType ClipPaintPropertyNode::State::ComputeChange(
 }
 
 const ClipPaintPropertyNode& ClipPaintPropertyNode::Root() {
-  DEFINE_STATIC_REF(
-      ClipPaintPropertyNode, root,
-      base::AdoptRef(new ClipPaintPropertyNode(
-          nullptr, State(&TransformPaintPropertyNode::Root(),
-                         gfx::RectF(LayoutRect::InfiniteIntRect()),
-                         FloatRoundedRect(LayoutRect::InfiniteIntRect())))));
+  DEFINE_STATIC_REF(ClipPaintPropertyNode, root,
+                    base::AdoptRef(new ClipPaintPropertyNode(
+                        nullptr, State(&TransformPaintPropertyNode::Root(),
+                                       gfx::RectF(InfiniteIntRect()),
+                                       FloatRoundedRect(InfiniteIntRect())))));
   return *root;
+}
+
+template <bool (TransformPaintPropertyNodeOrAlias::*ChangedMethod)(
+    PaintPropertyChangeType,
+    const TransformPaintPropertyNodeOrAlias&) const>
+bool ClipPaintPropertyNodeOrAlias::ChangedInternal(
+    PaintPropertyChangeType change,
+    const PropertyTreeState& relative_to_state,
+    const TransformPaintPropertyNodeOrAlias* transform_not_to_check) const {
+  for (const auto* node = this; node && node != &relative_to_state.Clip();
+       node = node->Parent()) {
+    if (node->NodeChanged() >= change) {
+      return true;
+    }
+    if (node->IsParentAlias()) {
+      continue;
+    }
+    const auto* unaliased = static_cast<const ClipPaintPropertyNode*>(node);
+    if (&unaliased->LocalTransformSpace() != transform_not_to_check &&
+        (unaliased->LocalTransformSpace().*ChangedMethod)(
+            change, relative_to_state.Transform())) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 bool ClipPaintPropertyNodeOrAlias::Changed(
     PaintPropertyChangeType change,
     const PropertyTreeState& relative_to_state,
     const TransformPaintPropertyNodeOrAlias* transform_not_to_check) const {
-  for (const auto* node = this; node && node != &relative_to_state.Clip();
-       node = node->Parent()) {
-    if (node->NodeChanged() >= change)
-      return true;
-    if (node->IsParentAlias())
-      continue;
-    const auto* unaliased = static_cast<const ClipPaintPropertyNode*>(node);
-    if (&unaliased->LocalTransformSpace() != transform_not_to_check &&
-        unaliased->LocalTransformSpace().Changed(change,
-                                                 relative_to_state.Transform()))
-      return true;
-  }
+  return ChangedInternal<&TransformPaintPropertyNodeOrAlias::Changed>(
+      change, relative_to_state, transform_not_to_check);
+}
 
-  return false;
+bool ClipPaintPropertyNodeOrAlias::ChangedExceptScroll(
+    PaintPropertyChangeType change,
+    const PropertyTreeState& relative_to_state,
+    const TransformPaintPropertyNodeOrAlias* transform_not_to_check) const {
+  return ChangedInternal<
+      &TransformPaintPropertyNodeOrAlias::ChangedExceptScroll>(
+      change, relative_to_state, transform_not_to_check);
 }
 
 void ClipPaintPropertyNodeOrAlias::ClearChangedToRoot(

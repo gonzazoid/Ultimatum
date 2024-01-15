@@ -6,7 +6,6 @@ package org.chromium.ui.base;
 
 import android.content.ClipData;
 import android.graphics.Bitmap;
-import android.os.Build;
 import android.os.Bundle;
 import android.view.MotionEvent;
 import android.view.PointerIcon;
@@ -18,26 +17,25 @@ import android.view.inputmethod.InputConnection;
 
 import androidx.annotation.CallSuper;
 import androidx.annotation.Nullable;
-import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
 import androidx.core.view.MarginLayoutParamsCompat;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+
+import org.chromium.base.Callback;
 import org.chromium.base.ObserverList;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.compat.ApiHelperForN;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.ui.dragdrop.DragAndDropDelegate;
 import org.chromium.ui.dragdrop.DragAndDropDelegateImpl;
 import org.chromium.ui.dragdrop.DragStateTracker;
 import org.chromium.ui.dragdrop.DropDataAndroid;
 import org.chromium.ui.mojom.CursorType;
 
-/**
- * Class to acquire, position, and remove anchor views from the implementing View.
- */
+/** Class to acquire, position, and remove anchor views from the implementing View. */
 @JNINamespace("ui")
 public class ViewAndroidDelegate {
-    private static DragAndDropDelegate sDragAndDropTestDelegate;
+    private static DragAndDropDelegate sDragAndDropDelegateForTesting;
     private final DragAndDropDelegateImpl mDragAndDropDelegateImpl;
 
     /**
@@ -49,16 +47,14 @@ public class ViewAndroidDelegate {
     // Temporary storage for use as a parameter of getLocationOnScreen().
     private int[] mTemporaryContainerLocation = new int[2];
 
-    /**
-     * Notifies the observer when container view is updated.
-     */
-    public interface ContainerViewObserver { void onUpdateContainerView(ViewGroup view); }
+    /** Notifies the observer when container view is updated. */
+    public interface ContainerViewObserver {
+        void onUpdateContainerView(ViewGroup view);
+    }
 
     private ObserverList<ContainerViewObserver> mContainerViewObservers = new ObserverList<>();
 
-    /**
-     * Notifies the listener of vertical scroll direction changes.
-     */
+    /** Notifies the listener of vertical scroll direction changes. */
     public interface VerticalScrollDirectionChangeListener {
         /**
          * Called when the vertical scroll direction changes.
@@ -71,29 +67,15 @@ public class ViewAndroidDelegate {
     private final ObserverList<VerticalScrollDirectionChangeListener>
             mVerticalScrollDirectionChangeListeners = new ObserverList<>();
 
-    /**
-     * Handles cursor updates for stylus writing.
-     */
-    public interface StylusWritingCursorHandler {
-        /**
-         * @param currentView the current view to set the cursor.
-         * @return true if cursor update was handled.
-         */
-        boolean didHandleCursorUpdate(View currentView);
-    }
-
-    private StylusWritingCursorHandler mStylusWritingCursorHandler;
-
-    // Whether the current hovered element's action is stylus writable or not.
-    private boolean mHoverActionStylusWritable;
+    private Callback<Boolean> mUpdateShouldShowStylusHoverIcon;
 
     /**
-     * Sets a handler to handle the stylus writing cursor updates.
-     *
-     * @param handler the handler object.
+     * Sets a callback which should be called with the latest value of whether the element being
+     * hovered over is editable.
+     * @param callback the callback object.
      */
-    public void setStylusWritingCursorHandler(StylusWritingCursorHandler handler) {
-        mStylusWritingCursorHandler = handler;
+    public void setShouldShowStylusHoverIconCallback(Callback<Boolean> callback) {
+        mUpdateShouldShowStylusHoverIcon = callback;
     }
 
     /**
@@ -161,8 +143,9 @@ public class ViewAndroidDelegate {
     }
 
     protected DragAndDropDelegate getDragAndDropDelegate() {
-        return sDragAndDropTestDelegate != null ? sDragAndDropTestDelegate
-                                                : mDragAndDropDelegateImpl;
+        return sDragAndDropDelegateForTesting != null
+                ? sDragAndDropDelegateForTesting
+                : mDragAndDropDelegateImpl;
     }
 
     /**
@@ -210,16 +193,23 @@ public class ViewAndroidDelegate {
 
     /**
      * Set the anchor view to specified position and size (all units in px).
+     *
      * @param anchorView The view that needs to be positioned. This must be the result of a previous
-     *         call to {@link acquireView} which has not yet been removed via {@link removeView}.
+     *     call to {@link acquireView} which has not yet been removed via {@link removeView}.
      * @param x X coordinate of the top left corner of the anchor view.
      * @param y Y coordinate of the top left corner of the anchor view.
      * @param width The width of the anchor view.
      * @param height The height of the anchor view.
      */
     @CalledByNative
-    public void setViewPosition(View anchorView, float x, float y, float width, float height,
-            int leftMargin, int topMargin) {
+    public void setViewPosition(
+            View anchorView,
+            float x,
+            float y,
+            float width,
+            float height,
+            int leftMargin,
+            int topMargin) {
         ViewGroup containerView = getContainerViewGroup();
         if (containerView == null) return;
         assert anchorView.getParent() == containerView;
@@ -245,45 +235,49 @@ public class ViewAndroidDelegate {
     }
 
     /**
-     * Start {@link View#startDragAndDrop(ClipData, DragShadowBuilder, Object, int)} with
-     * {@link DropDataAndroid} from the web content.
+     * Start {@link View#startDragAndDrop(ClipData, DragShadowBuilder, Object, int)} with {@link
+     * DropDataAndroid} from the web content.
      *
-     * @param shadowImage The shadow image for the dragged text.
+     * @param shadowImage The shadow image for the dragged object.
      * @param dropData The drop data presenting the drag target.
+     * @param cursorOffsetX The x offset of the cursor w.r.t. to top-left corner of the drag-image.
+     * @param cursorOffsetY The y offset of the cursor w.r.t. to top-left corner of the drag-image.
+     * @param dragObjRectWidth The width of the drag object.
+     * @param dragObjRectHeight The height of the drag object.
      */
-    @SuppressWarnings("deprecation")
-    @RequiresApi(Build.VERSION_CODES.N)
     @CalledByNative
-    private boolean startDragAndDrop(Bitmap shadowImage, DropDataAndroid dropData) {
-        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.M) return false;
-
+    private boolean startDragAndDrop(
+            Bitmap shadowImage,
+            DropDataAndroid dropData,
+            int cursorOffsetX,
+            int cursorOffsetY,
+            int dragObjRectWidth,
+            int dragObjRectHeight) {
         ViewGroup containerView = getContainerViewGroup();
         if (containerView == null) return false;
 
-        return getDragAndDropDelegate().startDragAndDrop(containerView, shadowImage, dropData);
+        return getDragAndDropDelegate()
+                .startDragAndDrop(
+                        containerView,
+                        shadowImage,
+                        dropData,
+                        cursorOffsetX,
+                        cursorOffsetY,
+                        dragObjRectWidth,
+                        dragObjRectHeight);
     }
 
     @VisibleForTesting
     @CalledByNative
     public void onCursorChangedToCustom(Bitmap customCursorBitmap, int hotspotX, int hotspotY) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            PointerIcon icon =
-                    ApiHelperForN.createPointerIcon(customCursorBitmap, hotspotX, hotspotY);
-            ApiHelperForN.setPointerIcon(getContainerViewGroup(), icon);
-        }
+        PointerIcon icon = PointerIcon.create(customCursorBitmap, hotspotX, hotspotY);
+
+        getContainerViewGroup().setPointerIcon(icon);
     }
 
     @VisibleForTesting
     @CalledByNative
     public void onCursorChanged(int cursorType) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return;
-
-        // Allow stylus writing handler to override the cursor.
-        if (mHoverActionStylusWritable && mStylusWritingCursorHandler != null
-                && mStylusWritingCursorHandler.didHandleCursorUpdate(getContainerViewGroup())) {
-            return;
-        }
-
         int pointerIconType = PointerIcon.TYPE_ARROW;
         switch (cursorType) {
             case CursorType.NONE:
@@ -349,8 +343,7 @@ public class ViewAndroidDelegate {
             case CursorType.GRABBING:
                 pointerIconType = PointerIcon.TYPE_GRABBING;
                 break;
-            // TODO(jaebaek): set types correctly
-            // after fixing http://crbug.com/584424.
+                // TODO(jaebaek): set types correctly after fixing http://crbug.com/584424.
             case CursorType.EAST_WEST_RESIZE:
                 pointerIconType = PointerIcon.TYPE_HORIZONTAL_DOUBLE_ARROW;
                 break;
@@ -407,12 +400,16 @@ public class ViewAndroidDelegate {
         }
         ViewGroup containerView = getContainerViewGroup();
         PointerIcon icon = PointerIcon.getSystemIcon(containerView.getContext(), pointerIconType);
-        ApiHelperForN.setPointerIcon(containerView, icon);
+
+        containerView.setPointerIcon(icon);
     }
 
+    @VisibleForTesting
     @CalledByNative
-    private void setHoverActionStylusWritable(boolean stylusWritable) {
-        mHoverActionStylusWritable = stylusWritable;
+    public void notifyHoverActionStylusWritable(boolean stylusWritable) {
+        if (mUpdateShouldShowStylusHoverIcon != null) {
+            mUpdateShouldShowStylusHoverIcon.onResult(stylusWritable);
+        }
     }
 
     /**
@@ -480,9 +477,7 @@ public class ViewAndroidDelegate {
         return mContainerView;
     }
 
-    /**
-     * Return the X location of our container view.
-     */
+    /** Return the X location of our container view. */
     @CalledByNative
     private int getXLocationOfContainerViewInWindow() {
         View container = getContainerView();
@@ -492,9 +487,7 @@ public class ViewAndroidDelegate {
         return mTemporaryContainerLocation[0];
     }
 
-    /**
-     * Return the Y location of our container view.
-     */
+    /** Return the Y location of our container view. */
     @CalledByNative
     private int getYLocationOfContainerViewInWindow() {
         View container = getContainerView();
@@ -504,9 +497,7 @@ public class ViewAndroidDelegate {
         return mTemporaryContainerLocation[1];
     }
 
-    /**
-     * Return the X location of our container view on screen.
-     */
+    /** Return the X location of our container view on screen. */
     @CalledByNative
     private int getXLocationOnScreen() {
         View container = getContainerView();
@@ -516,9 +507,7 @@ public class ViewAndroidDelegate {
         return mTemporaryContainerLocation[0];
     }
 
-    /**
-     * Return the Y location of our container view on screen.
-     */
+    /** Return the Y location of our container view on screen. */
     @CalledByNative
     private int getYLocationOnScreen() {
         View container = getContainerView();
@@ -593,8 +582,8 @@ public class ViewAndroidDelegate {
         mDragAndDropDelegateImpl.destroy();
     }
 
-    @VisibleForTesting
     public static void setDragAndDropDelegateForTest(DragAndDropDelegate testDelegate) {
-        sDragAndDropTestDelegate = testDelegate;
+        sDragAndDropDelegateForTesting = testDelegate;
+        ResettersForTesting.register(() -> sDragAndDropDelegateForTesting = null);
     }
 }

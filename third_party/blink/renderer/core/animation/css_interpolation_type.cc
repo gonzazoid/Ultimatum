@@ -26,7 +26,6 @@
 #include "third_party/blink/renderer/core/css/resolver/style_builder.h"
 #include "third_party/blink/renderer/core/css/resolver/style_cascade.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver_state.h"
-#include "third_party/blink/renderer/core/css/scoped_css_value.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/core/style_property_shorthand.h"
 
@@ -124,8 +123,7 @@ class RevertChecker : public CSSInterpolationType::ConversionChecker {
 
   RevertChecker(const PropertyHandle& property_handle,
                 const CSSValue* resolved_value)
-      : property_handle_(property_handle), resolved_value_(resolved_value) {
-  }
+      : property_handle_(property_handle), resolved_value_(resolved_value) {}
 
  private:
   bool IsValid(const InterpolationEnvironment& environment,
@@ -259,7 +257,8 @@ InterpolationValue CSSInterpolationType::MaybeConvertCustomPropertyDeclaration(
   // CSSCustomPropertyDeclaration. Expand those keywords into real CSSValues
   // if present.
   bool is_inherited = Registration().Inherits();
-  const StyleInitialData* initial_data = state.StyleRef().InitialData().get();
+  const StyleInitialData* initial_data =
+      state.StyleBuilder().InitialData().get();
   DCHECK(initial_data);
   const CSSValue* initial_value = initial_data->GetVariableValue(name);
 
@@ -296,7 +295,7 @@ InterpolationValue CSSInterpolationType::MaybeConvertCustomPropertyDeclaration(
 InterpolationValue CSSInterpolationType::MaybeConvertUnderlyingValue(
     const InterpolationEnvironment& environment) const {
   const ComputedStyle& style =
-      To<CSSInterpolationEnvironment>(environment).Style();
+      To<CSSInterpolationEnvironment>(environment).BaseStyle();
   if (!GetProperty().IsCSSCustomProperty()) {
     return MaybeConvertStandardPropertyUnderlyingValue(style);
   }
@@ -336,24 +335,8 @@ void CSSInterpolationType::ApplyCustomPropertyValue(
   const CSSValue* css_value =
       CreateCSSValue(interpolable_value, non_interpolable_value, state);
   DCHECK(!css_value->IsCustomPropertyDeclaration());
-
-  // TODO(alancutter): Defer tokenization of the CSSValue until it is needed.
-  String string_value = css_value->CssText();
-  CSSTokenizer tokenizer(string_value);
-  const auto tokens = tokenizer.TokenizeToEOF();
-  bool is_animation_tainted = true;
-  bool needs_variable_resolution = false;
-  scoped_refptr<CSSVariableData> variable_data = CSSVariableData::Create(
-      {CSSParserTokenRange(tokens), StringView(string_value)},
-      is_animation_tainted, needs_variable_resolution);
-  const PropertyHandle property = GetProperty();
-
-  // TODO(andruud): Avoid making the CSSCustomPropertyDeclaration by allowing
-  // any CSSValue in CustomProperty::ApplyValue.
-  const CSSValue* value = MakeGarbageCollected<CSSCustomPropertyDeclaration>(
-      std::move(variable_data), /* parser_context */ nullptr);
   StyleBuilder::ApplyProperty(GetProperty().GetCSSPropertyName(), state,
-                              ScopedCSSValue(*value, nullptr));
+                              *css_value, StyleBuilder::ValueMode::kAnimated);
 }
 
 }  // namespace blink

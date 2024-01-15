@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/peerconnection/rtc_encoded_video_underlying_source.h"
+
 #include <memory>
 
 #include "base/test/mock_callback.h"
@@ -12,13 +13,16 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
 #include "third_party/blink/renderer/core/streams/readable_stream.h"
 #include "third_party/blink/renderer/core/streams/readable_stream_default_controller_with_script_scope.h"
-#include "third_party/blink/renderer/modules/peerconnection/testing/mock_transformable_video_frame.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/webrtc/api/frame_transformer_interface.h"
+#include "third_party/webrtc/api/test/mock_transformable_video_frame.h"
 
 namespace blink {
+
+using webrtc::MockTransformableVideoFrame;
 
 class RTCEncodedVideoUnderlyingSourceTest : public testing::Test {
  public:
@@ -28,6 +32,7 @@ class RTCEncodedVideoUnderlyingSourceTest : public testing::Test {
   }
 
  protected:
+  test::TaskEnvironment task_environment_;
   base::MockOnceClosure disconnect_callback_;
 };
 

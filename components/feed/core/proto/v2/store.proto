@@ -20,16 +20,17 @@ option optimize_for = LITE_RUNTIME;
 // This is the 'value' in the key/value store.
 // Keys are defined as:
 // [Key format]                     -> [Record field]
-// S/<stream-id>                    -> stream_data
-// T/<stream-id>/<sequence-number>  -> stream_structures
-// c/<stream-id>/<content-id>       -> content
-// s/<stream-id>/<content-id>       -> shared_state
+// S/<stream-key>                   -> stream_data
+// T/<stream-key>/<sequence-number> -> stream_structures
+// c/<stream-key>/<content-id>      -> content
+// s/<stream-key>/<content-id>      -> shared_state
 // a/<action-id>                    -> action
 // m                                -> metadata
 // subs                             -> subscribed_web_feeds
 // recommendedIndex                 -> recommended_web_feed_index
 // R/<web_feed_id>                  -> recommended_web_feed
 // W/<operation-id>                 -> pending_web_feed_operation
+// v/<docid>/<timestamp>            -> docview
 message Record {
   oneof data {
     StreamData stream_data = 1;
@@ -42,6 +43,7 @@ message Record {
     WebFeedInfo recommended_web_feed = 8;
     RecommendedWebFeedIndex recommended_web_feed_index = 9;
     PendingWebFeedOperation pending_web_feed_operation = 10;
+    DocView doc_view = 11;
   }
 }
 
@@ -74,7 +76,7 @@ message StreamData {
   // Has the privacy notice been fulfilled?
   bool privacy_notice_fulfilled = 9;
   // Stream ID. Should match the id value stored in the record's key.
-  string stream_id = 10;
+  string stream_key = 10;
   // List of hashes for all the contents contained in the stream.
   repeated StreamContentHashList content_hashes = 11;
   // Root EventID provided by the server.
@@ -114,6 +116,10 @@ message Metadata {
     // the server. This is returned from the server and based on server clock.
     int64 last_server_response_time_millis = 7;
 
+    // List of IDs of contents that have been viewed by the user. A content is
+    // viewed if 2/3rds of it is in the viewport.
+    repeated uint32 viewed_content_hashes = 8;
+
     reserved 2;
   }
 
@@ -125,7 +131,7 @@ message Metadata {
   SessionID session_id = 3;
   // Schema version number. Schema versions:
   // 0: Initial version.
-  // 1: Current version. Added <stream-id> to the key patterns of "content" and
+  // 1: Current version. Added <stream-key> to the key patterns of "content" and
   // "shared_state"
   //    records.
   int32 stream_schema_version = 4;
@@ -141,17 +147,19 @@ message Metadata {
   // Count of how many times the user has followed from the main menu, so we
   // can show appropriate user education help for the following feed.
   int32 followed_from_web_page_menu_count = 9;
-  // The list of IDs representing the most recent contents received from the.
-  // server. The size of the list is capped to
+  // The list of IDs representing the most recent contents viewed by the user.
+  // The size of the list is capped to
   // feedstore_util::kMaxMostRecentContentHashes. The IDs are stored in the
-  // ascending order of the time when the content is received from the server.
-  repeated uint32 most_recent_content_hashes = 10;
+  // ascending order of the time when the content is viewed by the user.
+  repeated uint32 most_recent_viewed_content_hashes = 11;
+
+  reserved 10;
 }
 
 // A set of StreamStructures that should be applied to a stream.
 message StreamStructureSet {
   // Stream ID. Should match the id value stored in the record's key.
-  string stream_id = 1;
+  string stream_key = 1;
   int32 sequence_number = 2;
   repeated StreamStructure structures = 3;
 }
@@ -219,7 +227,7 @@ message Content {
   bytes frame = 2;
   repeated feedwire.PrefetchMetadata prefetch_metadata = 3;
   // Stream ID. Should match the id value stored in the record's key.
-  string stream_id = 4;
+  string stream_key = 4;
 }
 
 // This represents a shared state item.
@@ -228,7 +236,7 @@ message StreamSharedState {
   // Opaque data required to render content.
   bytes shared_state_data = 2;
   // Stream ID. Should match the id value stored in the record's key.
-  string stream_id = 3;
+  string stream_key = 3;
 }
 
 // A stored action awaiting upload.
@@ -303,4 +311,11 @@ message PendingWebFeedOperation {
   int32 attempts = 4;
   // Reason for this change.
   feedwire.webfeed.WebFeedChangeReason change_reason = 5;
+}
+
+message DocView {
+  // Unique ID for the content that was viewed.
+  uint64 docid = 1;
+  // Unix timestamp when the view occurred.
+  int64 view_time_millis = 4;
 }

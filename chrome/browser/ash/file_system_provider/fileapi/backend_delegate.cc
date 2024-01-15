@@ -19,8 +19,7 @@
 
 using content::BrowserThread;
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 namespace {
 
 // Size of the stream reader internal buffer. At most this number of bytes will
@@ -38,7 +37,7 @@ BackendDelegate::BackendDelegate()
       watcher_manager_(new WatcherManager) {
 }
 
-BackendDelegate::~BackendDelegate() {}
+BackendDelegate::~BackendDelegate() = default;
 
 storage::AsyncFileUtil* BackendDelegate::GetAsyncFileUtil(
     storage::FileSystemType type) {
@@ -92,5 +91,4 @@ void BackendDelegate::GetRedirectURLForContents(
   std::move(callback).Run(GURL());
 }
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider

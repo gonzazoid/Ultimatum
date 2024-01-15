@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "media/audio/audio_system_test_util.h"
@@ -43,7 +43,7 @@ class ServiceTestHelper {
       DCHECK(!service_);
       service_ = std::make_unique<audio::Service>(
           std::make_unique<InProcessAudioManagerAccessor>(audio_manager_),
-          false /* device_notifications_enabled */, std::move(receiver));
+          /*device_notifications_enabled=*/false, std::move(receiver));
     }
 
     void QuitOnAudioThread() {

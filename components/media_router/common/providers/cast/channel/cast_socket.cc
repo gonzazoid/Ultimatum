@@ -10,9 +10,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/lazy_instance.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
@@ -21,7 +21,6 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/sys_byteorder.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "components/media_router/common/providers/cast/channel/cast_auth_util.h"
 #include "components/media_router/common/providers/cast/channel/cast_framer.h"
@@ -89,7 +88,9 @@ void ConnectOnUIThread(
 
 }  // namespace
 
-void CastSocket::Observer::OnReadyStateChanged(const CastSocket& socket) {}
+CastSocket::Observer::~Observer() {
+  CHECK(!IsInObserverList());
+}
 
 CastSocketImpl::CastSocketImpl(NetworkContextGetter network_context_getter,
                                const CastSocketOpenParams& open_params,
@@ -137,6 +138,10 @@ ChannelError CastSocketImpl::error_state() const {
   return error_state_;
 }
 
+CastChannelFlags CastSocketImpl::flags() const {
+  return flags_;
+}
+
 const net::IPEndPoint& CastSocketImpl::ip_endpoint() const {
   return open_params_.ip_endpoint;
 }
@@ -159,8 +164,8 @@ bool CastSocketImpl::audio_only() const {
 
 bool CastSocketImpl::VerifyChannelPolicy(const AuthResult& result) {
   audio_only_ = (result.channel_policies & AuthResult::POLICY_AUDIO_ONLY) != 0;
-  if (audio_only_ && (open_params_.device_capabilities &
-                      CastDeviceCapability::VIDEO_OUT) != 0) {
+  if (audio_only_ &&
+      open_params_.device_capabilities.Has(CastDeviceCapability::kVideoOut)) {
     LOG_WITH_CONNECTION(ERROR)
         << "Audio only channel policy enforced for video out capable device";
     return false;
@@ -172,6 +177,7 @@ bool CastSocketImpl::VerifyChallengeReply() {
   DCHECK(peer_cert_);
   AuthResult result =
       AuthenticateChallengeReply(*challenge_reply_, *peer_cert_, auth_context_);
+  flags_ = result.flags;
   logger_->LogSocketChallengeReplyEvent(channel_id_, result);
   if (result.success()) {
     VLOG(1) << result.error_message;
@@ -282,9 +288,13 @@ CastSocketImpl::GetNetworkTrafficAnnotationTag() {
         policy {
           cookies_allowed: NO
           setting:
-            "This request cannot be disabled, but it would not be sent if user "
-            "does not connect a Cast device to the local network."
-          policy_exception_justification: "Not implemented."
+            "This request cannot be disabled in settings, but it would not be "
+            "sent if user does not connect a Cast device to the local network."
+          chrome_policy {
+            EnableMediaRouter {
+              EnableMediaRouter: false
+            }
+          }
         })");
 }
 
@@ -307,7 +317,7 @@ void CastSocketImpl::PostTaskToStartConnectLoop(int result) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
   ResetConnectLoopCallback();
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(connect_loop_callback_.callback(), result));
 }
 
@@ -616,10 +626,10 @@ void CastSocketImpl::CloseInternal() {
                           << ReadyStateToString(ready_state_);
   observers_.Clear();
   delegate_.reset();
-  mojo_data_pump_.reset();
   transport_.reset();
-  tcp_socket_.reset();
+  mojo_data_pump_.reset();
   socket_.reset();
+  tcp_socket_.reset();
   if (GetTimer()) {
     GetTimer()->Stop();
   }
@@ -682,15 +692,14 @@ void CastSocketImpl::CastSocketMessageDelegate::Start() {}
 
 CastSocketOpenParams::CastSocketOpenParams(const net::IPEndPoint& ip_endpoint,
                                            base::TimeDelta connect_timeout)
-    : ip_endpoint(ip_endpoint),
-      connect_timeout(connect_timeout),
-      device_capabilities(cast_channel::CastDeviceCapability::NONE) {}
+    : ip_endpoint(ip_endpoint), connect_timeout(connect_timeout) {}
 
-CastSocketOpenParams::CastSocketOpenParams(const net::IPEndPoint& ip_endpoint,
-                                           base::TimeDelta connect_timeout,
-                                           base::TimeDelta liveness_timeout,
-                                           base::TimeDelta ping_interval,
-                                           uint64_t device_capabilities)
+CastSocketOpenParams::CastSocketOpenParams(
+    const net::IPEndPoint& ip_endpoint,
+    base::TimeDelta connect_timeout,
+    base::TimeDelta liveness_timeout,
+    base::TimeDelta ping_interval,
+    CastDeviceCapabilitySet device_capabilities)
     : ip_endpoint(ip_endpoint),
       connect_timeout(connect_timeout),
       liveness_timeout(liveness_timeout),

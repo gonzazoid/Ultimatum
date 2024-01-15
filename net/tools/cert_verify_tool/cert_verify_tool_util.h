@@ -10,10 +10,7 @@
 #include "third_party/boringssl/src/include/openssl/base.h"
 
 #include "base/files/file_path.h"
-
-namespace base {
-class SupportsUserData;
-}
+#include "third_party/boringssl/src/pki/trust_store.h"
 
 namespace net {
 class X509Certificate;
@@ -33,6 +30,13 @@ struct CertInput {
   // For example, if the |source_file_path| contained multiple certificates,
   // this might indicate which part of the file |der_cert| came from.
   std::string source_details;
+};
+
+// Stores DER certificate bytes as well as a trust setting that should be
+// applied to them.
+struct CertInputWithTrustSetting {
+  CertInput cert_input;
+  bssl::CertificateTrust trust;
 };
 
 // Parses |file_path| as a single DER cert or a PEM certificate list.
@@ -57,9 +61,6 @@ bool WriteToFile(const base::FilePath& file_path, const std::string& data);
 // Prints an error about the input |cert|. This will include the file the cert
 // was read from, as well as which block in the file if it was a PEM file.
 void PrintCertError(const std::string& error, const CertInput& cert);
-
-// Prints any known debug information from |debug_data|.
-void PrintDebugData(const base::SupportsUserData* debug_data);
 
 // Returns a hex-encoded sha256 of the DER-encoding of |cert_handle|.
 std::string FingerPrintCryptoBuffer(const CRYPTO_BUFFER* cert_handle);

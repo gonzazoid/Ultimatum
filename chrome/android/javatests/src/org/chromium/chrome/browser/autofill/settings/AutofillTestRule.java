@@ -7,44 +7,58 @@ package org.chromium.chrome.browser.autofill.settings;
 import android.view.KeyEvent;
 import android.widget.EditText;
 
+import androidx.fragment.app.Fragment;
+
+import org.chromium.base.Callback;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.util.CallbackHelper;
-import org.chromium.chrome.browser.autofill.prefeditor.EditorDialog;
+import org.chromium.chrome.browser.autofill.editors.EditorDialogView;
+import org.chromium.chrome.browser.autofill.editors.EditorObserverForTest;
 import org.chromium.chrome.test.ChromeBrowserTestRule;
-import org.chromium.components.autofill.prefeditor.EditorObserverForTest;
 import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 
-/**
- * Custom ChromeBrowserTestRule to test Autofill.
- */
-class AutofillTestRule extends ChromeBrowserTestRule implements EditorObserverForTest {
+/** Custom ChromeBrowserTestRule to test Autofill. */
+class AutofillTestRule extends ChromeBrowserTestRule
+        implements EditorObserverForTest, Callback<Fragment> {
     final CallbackHelper mClickUpdate;
     final CallbackHelper mEditorTextUpdate;
     final CallbackHelper mPreferenceUpdate;
     final CallbackHelper mValidationUpdate;
+    final CallbackHelper mConfirmationDialogUpdate;
+    final CallbackHelper mFragmentShown;
 
-    private EditorDialog mEditorDialog;
+    private EditorDialogView mEditorDialog;
+    private Fragment mLastestShownFragment;
 
     AutofillTestRule() {
         mClickUpdate = new CallbackHelper();
         mEditorTextUpdate = new CallbackHelper();
         mPreferenceUpdate = new CallbackHelper();
         mValidationUpdate = new CallbackHelper();
+        mConfirmationDialogUpdate = new CallbackHelper();
+        mFragmentShown = new CallbackHelper();
         AutofillProfilesFragment.setObserverForTest(AutofillTestRule.this);
+        AutofillLocalCardEditor.setObserverForTest(AutofillTestRule.this);
     }
 
     protected void setTextInEditorAndWait(final String[] values) throws TimeoutException {
         int callCount = mEditorTextUpdate.getCallCount();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            List<EditText> fields = mEditorDialog.getEditableTextFieldsForTest();
-            for (int i = 0; i < values.length; i++) {
-                fields.get(i).setText(values[i]);
-            }
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    List<EditText> fields = mEditorDialog.getEditableTextFieldsForTest();
+                    for (int i = 0; i < values.length; i++) {
+                        fields.get(i).setText(values[i]);
+                    }
+                });
         mEditorTextUpdate.waitForCallback(callCount);
+    }
+
+    protected void waitForFragmentToBeShown() throws TimeoutException {
+        int callCount = mFragmentShown.getCallCount();
+        mFragmentShown.waitForCallback(callCount);
     }
 
     protected void clickInEditorAndWait(final int resourceId) throws TimeoutException {
@@ -52,6 +66,22 @@ class AutofillTestRule extends ChromeBrowserTestRule implements EditorObserverFo
         TestThreadUtils.runOnUiThreadBlockingNoException(
                 () -> mEditorDialog.findViewById(resourceId).performClick());
         mClickUpdate.waitForCallback(callCount);
+    }
+
+    /**
+     * @param button see {@link android.content.DialogInterface} for button int constants.
+     */
+    protected void clickInConfirmationDialogAndWait(final int button) throws TimeoutException {
+        if (mEditorDialog.getConfirmationDialogForTest() != null) {
+            int callCount = mClickUpdate.getCallCount();
+            TestThreadUtils.runOnUiThreadBlockingNoException(
+                    () ->
+                            mEditorDialog
+                                    .getConfirmationDialogForTest()
+                                    .getButton(button)
+                                    .performClick());
+            mClickUpdate.waitForCallback(callCount);
+        }
     }
 
     protected void clickInEditorAndWaitForValidationError(final int resourceId)
@@ -62,15 +92,25 @@ class AutofillTestRule extends ChromeBrowserTestRule implements EditorObserverFo
         mValidationUpdate.waitForCallback(callCount);
     }
 
+    protected void clickInEditorAndWaitForConfirmationDialog(final int resourceId)
+            throws TimeoutException {
+        int callCount = mConfirmationDialogUpdate.getCallCount();
+        TestThreadUtils.runOnUiThreadBlockingNoException(
+                () -> mEditorDialog.findViewById(resourceId).performClick());
+        mConfirmationDialogUpdate.waitForCallback(callCount);
+    }
+
     protected void sendKeycodeToTextFieldInEditorAndWait(
             final int keycode, final int textFieldIndex) throws TimeoutException {
         int callCount = mClickUpdate.getCallCount();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            List<EditText> fields = mEditorDialog.getEditableTextFieldsForTest();
-            fields.get(textFieldIndex)
-                    .dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, keycode));
-            fields.get(textFieldIndex).dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, keycode));
-        });
+        TestThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    List<EditText> fields = mEditorDialog.getEditableTextFieldsForTest();
+                    fields.get(textFieldIndex)
+                            .dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, keycode));
+                    fields.get(textFieldIndex)
+                            .dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, keycode));
+                });
         mClickUpdate.waitForCallback(callCount);
     }
 
@@ -79,10 +119,14 @@ class AutofillTestRule extends ChromeBrowserTestRule implements EditorObserverFo
         mPreferenceUpdate.waitForCallback(callCount);
     }
 
-    protected void setEditorDialogAndWait(EditorDialog editorDialog) throws TimeoutException {
+    protected void setEditorDialogAndWait(EditorDialogView editorDialog) throws TimeoutException {
         int callCount = mClickUpdate.getCallCount();
         mEditorDialog = editorDialog;
         mClickUpdate.waitForCallback(callCount);
+    }
+
+    protected Fragment getLastestShownFragment() {
+        return mLastestShownFragment;
     }
 
     @Override
@@ -96,6 +140,7 @@ class AutofillTestRule extends ChromeBrowserTestRule implements EditorObserverFo
         ThreadUtils.assertOnUiThread();
         mEditorTextUpdate.notifyCalled();
     }
+
     @Override
     public void onEditorReadyToEdit() {
         ThreadUtils.assertOnUiThread();
@@ -106,5 +151,19 @@ class AutofillTestRule extends ChromeBrowserTestRule implements EditorObserverFo
     public void onEditorValidationError() {
         ThreadUtils.assertOnUiThread();
         mValidationUpdate.notifyCalled();
+    }
+
+    @Override
+    public void onEditorConfirmationDialogShown() {
+        ThreadUtils.assertOnUiThread();
+        mConfirmationDialogUpdate.notifyCalled();
+    }
+
+    // Callback<Fragment>
+    @Override
+    public void onResult(Fragment fragment) {
+        ThreadUtils.assertOnUiThread();
+        mLastestShownFragment = fragment;
+        mFragmentShown.notifyCalled();
     }
 }

@@ -31,7 +31,7 @@ class TaskQueueImplForTest : public internal::TaskQueueImpl {
                        WakeUpQueue* wake_up_queue,
                        const TaskQueue::Spec& spec)
       : TaskQueueImpl(sequence_manager, wake_up_queue, spec) {}
-  ~TaskQueueImplForTest() = default;
+  ~TaskQueueImplForTest() override = default;
 
   using TaskQueueImpl::SetNextWakeUp;
 };
@@ -77,6 +77,8 @@ class MockWakeUpQueue : public WakeUpQueue {
 class WakeUpQueueTest : public testing::Test {
  public:
   void SetUp() final {
+    // A null clock triggers some assertions.
+    tick_clock_.Advance(Milliseconds(1));
     wake_up_queue_ = std::make_unique<MockWakeUpQueue>();
     task_queue_ = std::make_unique<TaskQueueImplForTest>(
         nullptr, wake_up_queue_.get(), TaskQueue::Spec(QueueName::TEST_TQ));
@@ -476,19 +478,25 @@ TEST_F(WakeUpQueueTest, HighResolutionWakeUps) {
 TEST_F(WakeUpQueueTest, SetNextWakeUpForQueueInThePast) {
   constexpr auto kType = MessagePumpType::DEFAULT;
   constexpr auto kDelay = Milliseconds(20);
+  constexpr TaskQueue::QueuePriority kHighestPriority = 0;
+  constexpr TaskQueue::QueuePriority kDefaultPriority = 1;
+  constexpr TaskQueue::QueuePriority kLowestPriority = 2;
+  constexpr TaskQueue::QueuePriority kPriorityCount = 3;
   auto sequence_manager = sequence_manager::CreateUnboundSequenceManager(
       SequenceManager::Settings::Builder()
           .SetMessagePumpType(kType)
           .SetTickClock(&tick_clock_)
+          .SetPrioritySettings(SequenceManager::PrioritySettings(
+              kPriorityCount, kDefaultPriority))
           .Build());
   sequence_manager->BindToMessagePump(MessagePump::Create(kType));
   auto high_prio_queue =
       sequence_manager->CreateTaskQueue(TaskQueue::Spec(QueueName::TEST_TQ));
-  high_prio_queue->SetQueuePriority(TaskQueue::kHighestPriority);
+  high_prio_queue->SetQueuePriority(kHighestPriority);
   auto high_prio_runner = high_prio_queue->CreateTaskRunner(kTaskTypeNone);
   auto low_prio_queue =
       sequence_manager->CreateTaskQueue(TaskQueue::Spec(QueueName::TEST2_TQ));
-  low_prio_queue->SetQueuePriority(TaskQueue::kBestEffortPriority);
+  low_prio_queue->SetQueuePriority(kLowestPriority);
   auto low_prio_runner = low_prio_queue->CreateTaskRunner(kTaskTypeNone);
   sequence_manager->SetDefaultTaskRunner(high_prio_runner);
   base::MockCallback<base::OnceCallback<void()>> task_1, task_2;

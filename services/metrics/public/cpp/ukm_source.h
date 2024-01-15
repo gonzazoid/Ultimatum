@@ -49,8 +49,8 @@ class METRICS_EXPORT UkmSource {
     // - For navigation sources, this will only contain at most two elements,
     //   one for the first URL in the redirect chain and one for the final URL
     //   that committed.
-    //   TODO(crbug.com/869123): This may end up containing all the URLs in the
-    //   redirect chain for navigation sources.
+    // TODO(crbug.com/869123): This may end up containing all the URLs in the
+    // redirect chain for navigation sources.
     std::vector<GURL> urls;
 
     // The previous source id for this tab.
@@ -77,10 +77,10 @@ class METRICS_EXPORT UkmSource {
 
     // Represents the same origin status of the navigation compared to the
     // previous document.
-    enum SameOriginStatus {
-      UNSET = 0,
-      SAME_ORIGIN,
-      CROSS_ORIGIN,
+    enum SourceSameOriginStatus {
+      SOURCE_SAME_ORIGIN_STATUS_UNSET = 0,
+      SOURCE_SAME_ORIGIN,
+      SOURCE_CROSS_ORIGIN,
     };
 
     // Whether this is the same origin as the previous document.
@@ -88,7 +88,8 @@ class METRICS_EXPORT UkmSource {
     // This is set to the NavigationHandle's same origin state when the
     // navigation is committed, is not a same document navigation and is not
     // committed as an error page. Otherwise, this remains unset.
-    SameOriginStatus same_origin_status = SameOriginStatus::UNSET;
+    SourceSameOriginStatus same_origin_status =
+        SourceSameOriginStatus::SOURCE_SAME_ORIGIN_STATUS_UNSET;
 
     // Whether this navigation is initiated by the renderer.
     bool is_renderer_initiated = false;

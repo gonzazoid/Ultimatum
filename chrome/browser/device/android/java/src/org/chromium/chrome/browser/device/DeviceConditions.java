@@ -11,13 +11,12 @@ import android.content.IntentFilter;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.BatteryManager;
-import android.os.Build;
 import android.os.PowerManager;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
 
+import org.chromium.base.ContextUtils;
 import org.chromium.base.compat.ApiHelperForM;
 import org.chromium.net.ConnectionType;
 import org.chromium.net.NetworkChangeNotifier;
@@ -38,8 +37,8 @@ public class DeviceConditions {
     private boolean mActiveNetworkMetered;
 
     // If true, getCurrentNetConnectionType() will always return CONNECTION_NONE.
-    @VisibleForTesting
-    public static boolean sForceConnectionTypeForTesting;
+    @VisibleForTesting public static boolean sForceConnectionTypeForTesting;
+
     @VisibleForTesting
     public static @ConnectionType int mConnectionTypeForTesting = ConnectionType.CONNECTION_NONE;
 
@@ -48,8 +47,13 @@ public class DeviceConditions {
      * network and power conditions. Also used when setting up tests simulating specific conditions.
      */
     @VisibleForTesting
-    public DeviceConditions(boolean powerConnected, int batteryPercentage, int netConnectionType,
-            boolean powerSaveOn, boolean activeNetworkMetered, boolean screenOnAndUnlocked) {
+    public DeviceConditions(
+            boolean powerConnected,
+            int batteryPercentage,
+            int netConnectionType,
+            boolean powerSaveOn,
+            boolean activeNetworkMetered,
+            boolean screenOnAndUnlocked) {
         mPowerConnected = powerConnected;
         mBatteryPercentage = batteryPercentage;
         mPowerSaveOn = powerSaveOn;
@@ -76,10 +80,13 @@ public class DeviceConditions {
             return new DeviceConditions();
         }
 
-        return new DeviceConditions(isCurrentlyPowerConnected(context, batteryStatus),
+        return new DeviceConditions(
+                isCurrentlyPowerConnected(context, batteryStatus),
                 getCurrentBatteryPercentage(context, batteryStatus),
-                getCurrentNetConnectionType(context), isCurrentlyInPowerSaveMode(context),
-                isCurrentActiveNetworkMetered(context), isCurrentlyScreenOnAndUnlocked(context));
+                getCurrentNetConnectionType(context),
+                isCurrentlyInPowerSaveMode(context),
+                isCurrentActiveNetworkMetered(context),
+                isCurrentlyScreenOnAndUnlocked(context));
     }
 
     /** @return Whether the device is connected to a power source. */
@@ -92,8 +99,9 @@ public class DeviceConditions {
 
     private static boolean isCurrentlyPowerConnected(Context context, Intent batteryStatus) {
         int status = batteryStatus.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
-        boolean isConnected = (status == BatteryManager.BATTERY_STATUS_CHARGING
-                || status == BatteryManager.BATTERY_STATUS_FULL);
+        boolean isConnected =
+                (status == BatteryManager.BATTERY_STATUS_CHARGING
+                        || status == BatteryManager.BATTERY_STATUS_FULL);
         return isConnected;
     }
 
@@ -123,18 +131,9 @@ public class DeviceConditions {
     }
 
     /**
-     * @return Whether the device is in idle / doze mode. This feature is only available in M and
-     * later versions of Android devices so it will return false for earlier versions.
+     * @return Whether the device is in idle / doze mode.
      */
     public static boolean isCurrentlyInIdleMode(Context context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            return false;
-        }
-        return isCurrentlyInIdleModeM(context);
-    }
-
-    @RequiresApi(Build.VERSION_CODES.M)
-    private static boolean isCurrentlyInIdleModeM(Context context) {
         return ApiHelperForM.isDeviceIdleMode(
                 (PowerManager) context.getSystemService(Context.POWER_SERVICE));
     }
@@ -195,7 +194,7 @@ public class DeviceConditions {
         IntentFilter filter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
         // Note this is a sticky intent, so we aren't really registering a receiver, just getting
         // the sticky intent.  That means that we don't need to unregister the filter later.
-        return context.registerReceiver(null, filter);
+        return ContextUtils.registerProtectedBroadcastReceiver(context, null, filter);
     }
 
     /** Returns the NCN network type corresponding to the connectivity manager network type */
@@ -238,9 +237,7 @@ public class DeviceConditions {
         return mNetConnectionType;
     }
 
-    /**
-     * Sets the network connection type.
-     */
+    /** Sets the network connection type. */
     @VisibleForTesting
     void setNetworkConnectionType(@ConnectionType int netConnectionType) {
         mNetConnectionType = netConnectionType;

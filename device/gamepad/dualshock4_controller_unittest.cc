@@ -6,10 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "device/gamepad/hid_writer.h"
 #include "device/gamepad/public/mojom/gamepad.mojom.h"
@@ -155,14 +156,14 @@ class Dualshock4ControllerTest : public testing::Test {
         mojom::GamepadEffectParameters::New(
             kDurationMillis, start_delay, strong_magnitude, weak_magnitude,
             /*left_trigger=*/0, /*right_trigger=*/0),
-        std::move(callback), base::ThreadTaskRunnerHandle::Get());
+        std::move(callback), base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 
   void PostResetVibration(
       Dualshock4Controller* gamepad,
       mojom::GamepadHapticsManager::ResetVibrationActuatorCallback callback) {
     gamepad->ResetVibration(std::move(callback),
-                            base::ThreadTaskRunnerHandle::Get());
+                            base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 
   // Callback for PlayEffect or ResetVibration.
@@ -177,8 +178,8 @@ class Dualshock4ControllerTest : public testing::Test {
   const std::vector<uint8_t> bluetooth_stop_vibration_report_;
   int callback_count_;
   mojom::GamepadHapticsResult callback_result_;
-  raw_ptr<FakeHidWriter> usb_writer_;
-  raw_ptr<FakeHidWriter> bluetooth_writer_;
+  raw_ptr<FakeHidWriter, DanglingUntriaged> usb_writer_;
+  raw_ptr<FakeHidWriter, DanglingUntriaged> bluetooth_writer_;
   std::unique_ptr<Dualshock4Controller> ds4_usb_;
   std::unique_ptr<Dualshock4Controller> ds4_bluetooth_;
   base::test::TaskEnvironment task_environment_{

@@ -6,10 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "media/base/audio_glitch_info.h"
 #include "media/base/audio_hash.h"
 #include "media/base/fake_audio_worker.h"
 
@@ -88,7 +89,7 @@ OutputDeviceInfo NullAudioSink::GetOutputDeviceInfo() {
 }
 
 void NullAudioSink::GetOutputDeviceInfoAsync(OutputDeviceInfoCB info_cb) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(info_cb), GetOutputDeviceInfo()));
 }
 
@@ -114,7 +115,7 @@ void NullAudioSink::CallRender(base::TimeTicks ideal_time,
   // smoothest playback (since video is sync'ed to audio). See
   // content::AudioRendererImpl and media::AudioClock for further details.
   int frames_received =
-      callback_->Render(fixed_data_delay_, ideal_time, 0, audio_bus_.get());
+      callback_->Render(fixed_data_delay_, ideal_time, {}, audio_bus_.get());
   if (!audio_hash_ || frames_received <= 0)
     return;
 
@@ -126,8 +127,8 @@ void NullAudioSink::StartAudioHashForTesting() {
   audio_hash_ = std::make_unique<AudioHash>();
 }
 
-std::string NullAudioSink::GetAudioHashForTesting() {
-  return audio_hash_ ? audio_hash_->ToString() : std::string();
+const AudioHash& NullAudioSink::GetAudioHashForTesting() const {
+  return *audio_hash_;
 }
 
 }  // namespace media

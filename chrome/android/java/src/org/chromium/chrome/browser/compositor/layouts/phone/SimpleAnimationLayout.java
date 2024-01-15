@@ -10,7 +10,6 @@ import android.animation.AnimatorSet;
 import android.content.Context;
 import android.graphics.RectF;
 
-import org.chromium.base.MathUtils;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
 import org.chromium.chrome.browser.compositor.layouts.Layout;
 import org.chromium.chrome.browser.compositor.layouts.LayoutRenderHost;
@@ -25,8 +24,10 @@ import org.chromium.chrome.browser.layouts.animation.CompositorAnimationHandler;
 import org.chromium.chrome.browser.layouts.animation.CompositorAnimator;
 import org.chromium.chrome.browser.layouts.scene_layer.SceneLayer;
 import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.chrome.browser.tab.TabSelectionType;
 import org.chromium.chrome.browser.tabmodel.TabModel;
-import org.chromium.ui.interpolators.BakedBezierInterpolator;
+import org.chromium.chrome.browser.tabmodel.TabModelUtils;
+import org.chromium.ui.interpolators.Interpolators;
 import org.chromium.ui.resources.ResourceManager;
 
 import java.util.ArrayList;
@@ -34,13 +35,8 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedList;
 
-/**
- * This class handles animating the opening of new tabs.
- */
+/** This class handles animating the opening of new tabs. */
 public class SimpleAnimationLayout extends Layout {
-    /** Animation for discarding a tab. */
-    private CompositorAnimator mDiscardAnimator;
-
     /** The animation for a tab being created in the foreground. */
     private AnimatorSet mTabCreatedForegroundAnimation;
 
@@ -52,38 +48,24 @@ public class SimpleAnimationLayout extends Layout {
 
     /** Duration of the first step of the background animation: zooming out, rotating in */
     private static final long BACKGROUND_STEP1_DURATION = 300;
+
     /** Duration of the second step of the background animation: pause */
     private static final long BACKGROUND_STEP2_DURATION = 150;
+
     /** Duration of the third step of the background animation: zooming in, sliding out */
     private static final long BACKGROUND_STEP3_DURATION = 300;
+
     /** Percentage of the screen covered by the new tab */
     private static final float BACKGROUND_COVER_PCTG = 0.5f;
 
     /** The time duration of the animation */
     protected static final int FOREGROUND_ANIMATION_DURATION = 300;
 
-    /** The time duration of the animation */
-    protected static final int TAB_CLOSED_ANIMATION_DURATION = 250;
-
-    /** The percentage of the screen to cover for the discarded tab to be fully transparent. */
-    public static final float DISCARD_RANGE_SCREEN = 0.7f;
-
-    /** The minimum scale the tab can reach when being discarded by a click. */
-    private static final float DISCARD_END_SCALE_CLICK = 0.7f;
-
-    /** The minimum scale the tab can reach when being discarded by a swipe. */
-    private static final float DISCARD_END_SCALE_SWIPE = 0.5f;
-
-    /**
-     * A cached {@link LayoutTab} representation of the currently closing tab. If it's not
-     * null, it means tabClosing() has been called to start animation setup but
-     * tabClosed() has not yet been called to finish animation startup
-     */
-    private LayoutTab mClosedTab;
-
-    private LayoutTab mAnimatedTab;
     private final TabListSceneLayer mSceneLayer;
     private final BlackHoleEventFilter mBlackHoleEventFilter;
+
+    // The tab to select on finishing the animation.
+    private int mNextTabId;
 
     /**
      * Creates an instance of the {@link SimpleAnimationLayout}.
@@ -104,8 +86,17 @@ public class SimpleAnimationLayout extends Layout {
     }
 
     @Override
+    public void doneHiding() {
+        TabModelUtils.selectTabById(
+                mTabModelSelector, mNextTabId, TabSelectionType.FROM_USER, false);
+        super.doneHiding();
+    }
+
+    @Override
     public void show(long time, boolean animate) {
         super.show(time, animate);
+
+        mNextTabId = Tab.INVALID_TAB_ID;
 
         if (mTabModelSelector != null && mTabContentManager != null) {
             Tab tab = mTabModelSelector.getCurrentTab();
@@ -122,7 +113,7 @@ public class SimpleAnimationLayout extends Layout {
 
     @Override
     public boolean handlesTabClosing() {
-        return true;
+        return false;
     }
 
     @Override
@@ -148,7 +139,8 @@ public class SimpleAnimationLayout extends Layout {
     }
 
     private void ensureSourceTabCreated(int sourceTabId) {
-        if (mLayoutTabs != null && mLayoutTabs.length == 1
+        if (mLayoutTabs != null
+                && mLayoutTabs.length == 1
                 && mLayoutTabs[0].getId() == sourceTabId) {
             return;
         }
@@ -163,8 +155,15 @@ public class SimpleAnimationLayout extends Layout {
     }
 
     @Override
-    public void onTabCreated(long time, int id, int index, int sourceId, boolean newIsIncognito,
-            boolean background, float originX, float originY) {
+    public void onTabCreated(
+            long time,
+            int id,
+            int index,
+            int sourceId,
+            boolean newIsIncognito,
+            boolean background,
+            float originX,
+            float originY) {
         super.onTabCreated(time, id, index, sourceId, newIsIncognito, background, originX, originY);
         ensureSourceTabCreated(sourceId);
         if (background && mLayoutTabs != null && mLayoutTabs.length > 0) {
@@ -199,25 +198,50 @@ public class SimpleAnimationLayout extends Layout {
         forceAnimationToFinish();
 
         CompositorAnimationHandler handler = getAnimationHandler();
-        CompositorAnimator scaleAnimation = CompositorAnimator.ofWritableFloatPropertyKey(
-                handler, newLayoutTab, LayoutTab.SCALE, 0f, 1f, FOREGROUND_ANIMATION_DURATION);
+        CompositorAnimator scaleAnimation =
+                CompositorAnimator.ofWritableFloatPropertyKey(
+                        handler,
+                        newLayoutTab,
+                        LayoutTab.SCALE,
+                        0f,
+                        1f,
+                        FOREGROUND_ANIMATION_DURATION);
 
-        CompositorAnimator alphaAnimation = CompositorAnimator.ofWritableFloatPropertyKey(
-                handler, newLayoutTab, LayoutTab.ALPHA, 0f, 1f, FOREGROUND_ANIMATION_DURATION);
+        CompositorAnimator alphaAnimation =
+                CompositorAnimator.ofWritableFloatPropertyKey(
+                        handler,
+                        newLayoutTab,
+                        LayoutTab.ALPHA,
+                        0f,
+                        1f,
+                        FOREGROUND_ANIMATION_DURATION);
 
-        CompositorAnimator xAnimation = CompositorAnimator.ofWritableFloatPropertyKey(
-                handler, newLayoutTab, LayoutTab.X, originX, 0f, FOREGROUND_ANIMATION_DURATION);
-        CompositorAnimator yAnimation = CompositorAnimator.ofWritableFloatPropertyKey(
-                handler, newLayoutTab, LayoutTab.Y, originY, 0f, FOREGROUND_ANIMATION_DURATION);
+        CompositorAnimator xAnimation =
+                CompositorAnimator.ofWritableFloatPropertyKey(
+                        handler,
+                        newLayoutTab,
+                        LayoutTab.X,
+                        originX,
+                        0f,
+                        FOREGROUND_ANIMATION_DURATION);
+        CompositorAnimator yAnimation =
+                CompositorAnimator.ofWritableFloatPropertyKey(
+                        handler,
+                        newLayoutTab,
+                        LayoutTab.Y,
+                        originY,
+                        0f,
+                        FOREGROUND_ANIMATION_DURATION);
 
         mTabCreatedForegroundAnimation = new AnimatorSet();
-        mTabCreatedForegroundAnimation.setInterpolator(BakedBezierInterpolator.TRANSFORM_CURVE);
+        mTabCreatedForegroundAnimation.setInterpolator(Interpolators.STANDARD_INTERPOLATOR);
         mTabCreatedForegroundAnimation.playTogether(
                 scaleAnimation, alphaAnimation, xAnimation, yAnimation);
         mTabCreatedForegroundAnimation.start();
 
         mTabModelSelector.selectModel(newIsIncognito);
-        startHiding(id, false);
+        mNextTabId = id;
+        startHiding();
     }
 
     /**
@@ -250,19 +274,49 @@ public class SimpleAnimationLayout extends Layout {
         Collection<Animator> animationList = new ArrayList<>(5);
 
         // Step 1: zoom out the source tab and bring in the new tab
-        animationList.add(CompositorAnimator.ofWritableFloatPropertyKey(
-                handler, sourceLayoutTab, LayoutTab.SCALE, 1f, scale, BACKGROUND_STEP1_DURATION));
-        animationList.add(CompositorAnimator.ofWritableFloatPropertyKey(
-                handler, sourceLayoutTab, LayoutTab.X, 0f, margin, BACKGROUND_STEP1_DURATION));
-        animationList.add(CompositorAnimator.ofWritableFloatPropertyKey(
-                handler, sourceLayoutTab, LayoutTab.Y, 0f, margin, BACKGROUND_STEP1_DURATION));
-        animationList.add(CompositorAnimator.ofWritableFloatPropertyKey(handler, sourceLayoutTab,
-                LayoutTab.BORDER_SCALE, 1f / scale, 1f, BACKGROUND_STEP1_DURATION));
-        animationList.add(CompositorAnimator.ofWritableFloatPropertyKey(handler, sourceLayoutTab,
-                LayoutTab.BORDER_ALPHA, 0f, 1f, BACKGROUND_STEP1_DURATION));
+        animationList.add(
+                CompositorAnimator.ofWritableFloatPropertyKey(
+                        handler,
+                        sourceLayoutTab,
+                        LayoutTab.SCALE,
+                        1f,
+                        scale,
+                        BACKGROUND_STEP1_DURATION));
+        animationList.add(
+                CompositorAnimator.ofWritableFloatPropertyKey(
+                        handler,
+                        sourceLayoutTab,
+                        LayoutTab.X,
+                        0f,
+                        margin,
+                        BACKGROUND_STEP1_DURATION));
+        animationList.add(
+                CompositorAnimator.ofWritableFloatPropertyKey(
+                        handler,
+                        sourceLayoutTab,
+                        LayoutTab.Y,
+                        0f,
+                        margin,
+                        BACKGROUND_STEP1_DURATION));
+        animationList.add(
+                CompositorAnimator.ofWritableFloatPropertyKey(
+                        handler,
+                        sourceLayoutTab,
+                        LayoutTab.BORDER_SCALE,
+                        1f / scale,
+                        1f,
+                        BACKGROUND_STEP1_DURATION));
+        animationList.add(
+                CompositorAnimator.ofWritableFloatPropertyKey(
+                        handler,
+                        sourceLayoutTab,
+                        LayoutTab.BORDER_ALPHA,
+                        0f,
+                        1f,
+                        BACKGROUND_STEP1_DURATION));
 
         AnimatorSet step1Source = new AnimatorSet();
-        step1Source.setInterpolator(BakedBezierInterpolator.TRANSFORM_CURVE);
+        step1Source.setInterpolator(Interpolators.FAST_OUT_SLOW_IN_INTERPOLATOR);
         step1Source.playTogether(animationList);
 
         float pauseX = margin;
@@ -275,18 +329,42 @@ public class SimpleAnimationLayout extends Layout {
 
         animationList = new ArrayList<>(4);
 
-        animationList.add(CompositorAnimator.ofWritableFloatPropertyKey(
-                handler, newLayoutTab, LayoutTab.ALPHA, 0f, 1f, BACKGROUND_STEP1_DURATION / 2));
+        animationList.add(
+                CompositorAnimator.ofWritableFloatPropertyKey(
+                        handler,
+                        newLayoutTab,
+                        LayoutTab.ALPHA,
+                        0f,
+                        1f,
+                        BACKGROUND_STEP1_DURATION / 2));
 
-        animationList.add(CompositorAnimator.ofWritableFloatPropertyKey(
-                handler, newLayoutTab, LayoutTab.SCALE, 0f, scale, BACKGROUND_STEP1_DURATION));
-        animationList.add(CompositorAnimator.ofWritableFloatPropertyKey(
-                handler, newLayoutTab, LayoutTab.X, originX, pauseX, BACKGROUND_STEP1_DURATION));
-        animationList.add(CompositorAnimator.ofWritableFloatPropertyKey(
-                handler, newLayoutTab, LayoutTab.Y, originY, pauseY, BACKGROUND_STEP1_DURATION));
+        animationList.add(
+                CompositorAnimator.ofWritableFloatPropertyKey(
+                        handler,
+                        newLayoutTab,
+                        LayoutTab.SCALE,
+                        0f,
+                        scale,
+                        BACKGROUND_STEP1_DURATION));
+        animationList.add(
+                CompositorAnimator.ofWritableFloatPropertyKey(
+                        handler,
+                        newLayoutTab,
+                        LayoutTab.X,
+                        originX,
+                        pauseX,
+                        BACKGROUND_STEP1_DURATION));
+        animationList.add(
+                CompositorAnimator.ofWritableFloatPropertyKey(
+                        handler,
+                        newLayoutTab,
+                        LayoutTab.Y,
+                        originY,
+                        pauseY,
+                        BACKGROUND_STEP1_DURATION));
 
         AnimatorSet step1New = new AnimatorSet();
-        step1New.setInterpolator(BakedBezierInterpolator.FADE_IN_CURVE);
+        step1New.setInterpolator(Interpolators.LINEAR_OUT_SLOW_IN_INTERPOLATOR);
         step1New.playTogether(animationList);
 
         AnimatorSet step1 = new AnimatorSet();
@@ -296,44 +374,89 @@ public class SimpleAnimationLayout extends Layout {
 
         // step 3: zoom in the source tab and slide down the new tab
         animationList = new ArrayList<>(7);
-        animationList.add(CompositorAnimator.ofWritableFloatPropertyKey(handler, sourceLayoutTab,
-                LayoutTab.SCALE, scale, 1f, BACKGROUND_STEP3_DURATION,
-                BakedBezierInterpolator.TRANSFORM_CURVE));
-        animationList.add(CompositorAnimator.ofWritableFloatPropertyKey(handler, sourceLayoutTab,
-                LayoutTab.X, margin, 0f, BACKGROUND_STEP3_DURATION,
-                BakedBezierInterpolator.TRANSFORM_CURVE));
-        animationList.add(CompositorAnimator.ofWritableFloatPropertyKey(handler, sourceLayoutTab,
-                LayoutTab.Y, margin, 0f, BACKGROUND_STEP3_DURATION,
-                BakedBezierInterpolator.TRANSFORM_CURVE));
-        animationList.add(CompositorAnimator.ofWritableFloatPropertyKey(handler, sourceLayoutTab,
-                LayoutTab.BORDER_SCALE, 1f, 1f / scale, BACKGROUND_STEP3_DURATION,
-                BakedBezierInterpolator.TRANSFORM_CURVE));
-        animationList.add(CompositorAnimator.ofWritableFloatPropertyKey(handler, sourceLayoutTab,
-                LayoutTab.BORDER_ALPHA, 1f, 0f, BACKGROUND_STEP3_DURATION,
-                BakedBezierInterpolator.TRANSFORM_CURVE));
+        animationList.add(
+                CompositorAnimator.ofWritableFloatPropertyKey(
+                        handler,
+                        sourceLayoutTab,
+                        LayoutTab.SCALE,
+                        scale,
+                        1f,
+                        BACKGROUND_STEP3_DURATION,
+                        Interpolators.FAST_OUT_SLOW_IN_INTERPOLATOR));
+        animationList.add(
+                CompositorAnimator.ofWritableFloatPropertyKey(
+                        handler,
+                        sourceLayoutTab,
+                        LayoutTab.X,
+                        margin,
+                        0f,
+                        BACKGROUND_STEP3_DURATION,
+                        Interpolators.FAST_OUT_SLOW_IN_INTERPOLATOR));
+        animationList.add(
+                CompositorAnimator.ofWritableFloatPropertyKey(
+                        handler,
+                        sourceLayoutTab,
+                        LayoutTab.Y,
+                        margin,
+                        0f,
+                        BACKGROUND_STEP3_DURATION,
+                        Interpolators.FAST_OUT_SLOW_IN_INTERPOLATOR));
+        animationList.add(
+                CompositorAnimator.ofWritableFloatPropertyKey(
+                        handler,
+                        sourceLayoutTab,
+                        LayoutTab.BORDER_SCALE,
+                        1f,
+                        1f / scale,
+                        BACKGROUND_STEP3_DURATION,
+                        Interpolators.FAST_OUT_SLOW_IN_INTERPOLATOR));
+        animationList.add(
+                CompositorAnimator.ofWritableFloatPropertyKey(
+                        handler,
+                        sourceLayoutTab,
+                        LayoutTab.BORDER_ALPHA,
+                        1f,
+                        0f,
+                        BACKGROUND_STEP3_DURATION,
+                        Interpolators.FAST_OUT_SLOW_IN_INTERPOLATOR));
 
-        animationList.add(CompositorAnimator.ofWritableFloatPropertyKey(
-                handler, newLayoutTab, LayoutTab.ALPHA, 1f, 0f, BACKGROUND_STEP3_DURATION));
+        animationList.add(
+                CompositorAnimator.ofWritableFloatPropertyKey(
+                        handler, newLayoutTab, LayoutTab.ALPHA, 1f, 0f, BACKGROUND_STEP3_DURATION));
 
         if (getOrientation() == Orientation.PORTRAIT) {
-            animationList.add(CompositorAnimator.ofWritableFloatPropertyKey(handler, newLayoutTab,
-                    LayoutTab.Y, pauseY, getHeight(), BACKGROUND_STEP3_DURATION,
-                    BakedBezierInterpolator.FADE_OUT_CURVE));
+            animationList.add(
+                    CompositorAnimator.ofWritableFloatPropertyKey(
+                            handler,
+                            newLayoutTab,
+                            LayoutTab.Y,
+                            pauseY,
+                            getHeight(),
+                            BACKGROUND_STEP3_DURATION,
+                            Interpolators.FAST_OUT_LINEAR_IN_INTERPOLATOR));
         } else {
-            animationList.add(CompositorAnimator.ofWritableFloatPropertyKey(handler, newLayoutTab,
-                    LayoutTab.X, pauseX, getWidth(), BACKGROUND_STEP3_DURATION,
-                    BakedBezierInterpolator.FADE_OUT_CURVE));
+            animationList.add(
+                    CompositorAnimator.ofWritableFloatPropertyKey(
+                            handler,
+                            newLayoutTab,
+                            LayoutTab.X,
+                            pauseX,
+                            getWidth(),
+                            BACKGROUND_STEP3_DURATION,
+                            Interpolators.FAST_OUT_LINEAR_IN_INTERPOLATOR));
         }
 
         AnimatorSet step3 = new AnimatorSet();
         step3.setStartDelay(BACKGROUND_STEP2_DURATION);
-        step3.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                // Once the animation has finished, we can switch layouts.
-                startHiding(sourceId, false);
-            }
-        });
+        step3.addListener(
+                new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        // Once the animation has finished, we can switch layouts.
+                        mNextTabId = sourceId;
+                        startHiding();
+                    }
+                });
         step3.playTogether(animationList);
 
         mTabCreatedBackgroundAnimation = new AnimatorSet();
@@ -343,140 +466,16 @@ public class SimpleAnimationLayout extends Layout {
         mTabModelSelector.selectModel(newIsIncognito);
     }
 
-    /**
-     * Set up for the tab closing animation
-     */
-    @Override
-    public void onTabClosing(long time, int id) {
-        reset();
-
-        // Make sure any currently running animations can't influence tab if we are reusing it.
-        forceAnimationToFinish();
-
-        // Create the {@link LayoutTab} for the tab before it is destroyed.
-        TabModel model = mTabModelSelector.getModelForTabId(id);
-        if (model != null) {
-            mClosedTab = createLayoutTab(id, model.isIncognito());
-            mClosedTab.setBorderAlpha(0.0f);
-            mLayoutTabs = new LayoutTab[] {mClosedTab};
-            updateCacheVisibleIds(new LinkedList<Integer>(Arrays.asList(id)));
-        } else {
-            mLayoutTabs = null;
-            mClosedTab = null;
-        }
-        // Only close the id at the end when we are done querying the model.
-        super.onTabClosing(time, id);
-    }
-
-    /**
-     * Animate the closing of a tab
-     */
-    @Override
-    public void onTabClosed(long time, int id, int nextId, boolean incognito) {
-        super.onTabClosed(time, id, nextId, incognito);
-
-        if (mClosedTab != null) {
-            TabModel nextModel = mTabModelSelector.getModelForTabId(nextId);
-            if (nextModel != null) {
-                LayoutTab nextLayoutTab = createLayoutTab(nextId, nextModel.isIncognito());
-                nextLayoutTab.setDrawDecoration(false);
-
-                mLayoutTabs = new LayoutTab[] {nextLayoutTab, mClosedTab};
-                updateCacheVisibleIds(
-                        new LinkedList<Integer>(Arrays.asList(nextId, mClosedTab.getId())));
-            } else {
-                mLayoutTabs = new LayoutTab[] {mClosedTab};
-            }
-
-            forceAnimationToFinish();
-            mAnimatedTab = mClosedTab;
-            mDiscardAnimator = CompositorAnimator.ofFloat(getAnimationHandler(), 0,
-                    getDiscardRange(), TAB_CLOSED_ANIMATION_DURATION,
-                    (CompositorAnimator a) -> setDiscardAmount(a.getAnimatedValue()));
-            mDiscardAnimator.setInterpolator(BakedBezierInterpolator.FADE_OUT_CURVE);
-            mDiscardAnimator.start();
-
-            mClosedTab = null;
-            if (nextModel != null) {
-                mTabModelSelector.selectModel(nextModel.isIncognito());
-            }
-        }
-        startHiding(nextId, false);
-    }
-
-    /**
-     * Updates the position, scale, rotation and alpha values of mAnimatedTab.
-     *
-     * @param discard The value that specify how far along are we in the discard animation. 0 is
-     *                filling the screen. Valid values are [-range .. range] where range is
-     *                computed by {@link SimpleAnimationLayout#getDiscardRange()}.
-     */
-    private void setDiscardAmount(float discard) {
-        if (mAnimatedTab != null) {
-            final float range = getDiscardRange();
-            final float scale = computeDiscardScale(discard, range, true);
-
-            final float deltaX = mAnimatedTab.getOriginalContentWidth();
-            final float deltaY = mAnimatedTab.getOriginalContentHeight() / 2.f;
-            mAnimatedTab.setX(deltaX * (1.f - scale));
-            mAnimatedTab.setY(deltaY * (1.f - scale));
-            mAnimatedTab.setScale(scale);
-            mAnimatedTab.setBorderScale(scale);
-            mAnimatedTab.setAlpha(computeDiscardAlpha(discard, range));
-        }
-    }
-
-    /**
-     * Computes the scale of the tab based on its discard status.
-     *
-     * @param amount    The discard amount.
-     * @param range     The range of the absolute value of discard amount.
-     * @param fromClick Whether or not the discard was from a click or a swipe.
-     * @return          The scale of the tab to use to draw the tab.
-     */
-    public static float computeDiscardScale(float amount, float range, boolean fromClick) {
-        if (Math.abs(amount) < 1.0f) return 1.0f;
-        float t = amount / range;
-        float endScale = fromClick ? DISCARD_END_SCALE_CLICK : DISCARD_END_SCALE_SWIPE;
-        return MathUtils.interpolate(1.0f, endScale, Math.abs(t));
-    }
-
-    /**
-     * Computes the alpha value of the tab based on its discard status.
-     *
-     * @param amount The discard amount.
-     * @param range  The range of the absolute value of discard amount.
-     * @return       The alpha value that need to be applied on the tab.
-     */
-    public static float computeDiscardAlpha(float amount, float range) {
-        if (Math.abs(amount) < 1.0f) return 1.0f;
-        float t = amount / range;
-        t = MathUtils.clamp(t, -1.0f, 1.0f);
-        return 1.f - Math.abs(t);
-    }
-
-    /**
-     * @return The range of the discard amount.
-     */
-    private float getDiscardRange() {
-        return Math.min(getWidth(), getHeight()) * DISCARD_RANGE_SCREEN;
-    }
-
     @Override
     protected void forceAnimationToFinish() {
         super.forceAnimationToFinish();
-        if (mDiscardAnimator != null) mDiscardAnimator.end();
         if (mTabCreatedForegroundAnimation != null) mTabCreatedForegroundAnimation.end();
         if (mTabCreatedBackgroundAnimation != null) mTabCreatedBackgroundAnimation.end();
     }
 
-    /**
-     * Resets the internal state.
-     */
+    /** Resets the internal state. */
     private void reset() {
         mLayoutTabs = null;
-        mAnimatedTab = null;
-        mClosedTab = null;
     }
 
     @Override
@@ -490,16 +489,27 @@ public class SimpleAnimationLayout extends Layout {
     }
 
     @Override
-    protected void updateSceneLayer(RectF viewport, RectF contentViewport,
-            TabContentManager tabContentManager, ResourceManager resourceManager,
+    protected void updateSceneLayer(
+            RectF viewport,
+            RectF contentViewport,
+            TabContentManager tabContentManager,
+            ResourceManager resourceManager,
             BrowserControlsStateProvider browserControls) {
         super.updateSceneLayer(
                 viewport, contentViewport, tabContentManager, resourceManager, browserControls);
         assert mSceneLayer != null;
         // The content viewport is intentionally sent as both params below.
-        mSceneLayer.pushLayers(getContext(), contentViewport, contentViewport, this,
-                tabContentManager, resourceManager, browserControls, SceneLayer.INVALID_RESOURCE_ID,
-                0, 0);
+        mSceneLayer.pushLayers(
+                getContext(),
+                contentViewport,
+                contentViewport,
+                this,
+                tabContentManager,
+                resourceManager,
+                browserControls,
+                SceneLayer.INVALID_RESOURCE_ID,
+                0,
+                0);
     }
 
     @Override

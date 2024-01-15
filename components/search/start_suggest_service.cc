@@ -7,8 +7,8 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/rand_util.h"
 #include "base/stl_util.h"
 #include "base/strings/sys_string_conversions.h"
@@ -133,8 +133,11 @@ void StartSuggestService::SearchProviderChanged() {
 
 GURL StartSuggestService::GetRequestURL(
     const TemplateURLRef::SearchTermsArgs& search_terms_args) {
+  const TemplateURL* default_provider =
+      template_url_service_->GetDefaultSearchProvider();
+  DCHECK(default_provider);
   const TemplateURLRef& suggestion_url_ref =
-      template_url_service_->GetDefaultSearchProvider()->suggestions_url_ref();
+      default_provider->suggestions_url_ref();
   const SearchTermsData& search_terms_data =
       template_url_service_->search_terms_data();
   DCHECK(suggestion_url_ref.SupportsReplacement(search_terms_data));
@@ -158,6 +161,7 @@ GURL StartSuggestService::GetQueryDestinationURL(
     const std::u16string& query,
     const TemplateURL* search_provider) {
   TemplateURLRef::SearchTermsArgs search_terms_args(query);
+  DCHECK(search_provider);
   const TemplateURLRef& search_url_ref = search_provider->url_ref();
   const SearchTermsData& search_terms_data =
       template_url_service_->search_terms_data();
@@ -199,28 +203,27 @@ void StartSuggestService::SuggestResponseLoaded(
 void StartSuggestService::SuggestionsParsed(
     SuggestResultCallback callback,
     data_decoder::DataDecoder::ValueOrError result) {
-  if (!result.has_value()) {
-    std::move(callback).Run(QuerySuggestions());
-    return;
-  }
-
-  SearchSuggestionParser::Results results;
-  AutocompleteInput input;
-  const bool results_parsed = SearchSuggestionParser::ParseSuggestResults(
-      *result, input, *scheme_classifier_, -1, false, &results);
-  if (!results_parsed) {
-    std::move(callback).Run(QuerySuggestions());
-    return;
-  }
-  QuerySuggestions query_suggestions;
-  for (SearchSuggestionParser::SuggestResult suggest :
-       results.suggest_results) {
-    QuerySuggestion query;
-    query.query = suggest.suggestion();
-    query.destination_url = GetQueryDestinationURL(
-        query.query, template_url_service_->GetDefaultSearchProvider());
-    query_suggestions.push_back(query);
-  }
-  suggestions_cache_[kTrendingQuerySuggestionCachedResults] = query_suggestions;
-  std::move(callback).Run(std::move(query_suggestions));
+  std::move(callback).Run([&] {
+    QuerySuggestions query_suggestions;
+    if (result.has_value() && result.value().is_list()) {
+      SearchSuggestionParser::Results results;
+      AutocompleteInput input;
+      if (SearchSuggestionParser::ParseSuggestResults(
+              result->GetList(), input, *scheme_classifier_,
+              /*default_result_relevance=*/-1, /*is_keyword_result=*/false,
+              &results)) {
+        for (SearchSuggestionParser::SuggestResult suggest :
+             results.suggest_results) {
+          QuerySuggestion query;
+          query.query = suggest.suggestion();
+          query.destination_url = GetQueryDestinationURL(
+              query.query, template_url_service_->GetDefaultSearchProvider());
+          query_suggestions.push_back(std::move(query));
+        }
+        suggestions_cache_[kTrendingQuerySuggestionCachedResults] =
+            query_suggestions;
+      }
+    }
+    return query_suggestions;
+  }());
 }

@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/sys_string_conversions.h"
 #include "components/autofill/core/browser/payments/legal_message_line.h"
 #include "ios/web/public/thread/web_task_traits.h"
@@ -14,10 +14,6 @@
 #import "ios/web_view/internal/autofill/cwv_credit_card_internal.h"
 #import "net/base/mac/url_conversions.h"
 #include "ui/gfx/range/range.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 NS_ASSUME_NONNULL_BEGIN
 

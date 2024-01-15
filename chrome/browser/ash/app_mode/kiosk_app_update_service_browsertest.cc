@@ -8,21 +8,24 @@
 #include <string>
 
 #include "ash/constants/ash_paths.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_path_override.h"
+#include "base/test/test_future.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
 #include "chrome/browser/apps/platform_apps/app_browsertest_util.h"
@@ -41,6 +44,8 @@
 #include "extensions/test/extension_test_message_listener.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
+using base::test::TestFuture;
+
 namespace ash {
 
 namespace {
@@ -49,9 +54,9 @@ namespace {
 constexpr base::TimeDelta kAutomaticRebootManagerInitTimeout =
     base::Seconds(60);
 
-// Blocks until |manager| is initialized and then sets |success_out| to true and
-// runs |quit_closure|. If initialization does not occur within |timeout|, sets
-// |success_out| to false and runs |quit_closure|.
+// Blocks until `manager` is initialized and then sets `success_out` to true and
+// runs `quit_closure`. If initialization does not occur within `timeout`, sets
+// `success_out` to false and runs `quit_closure`.
 void WaitForAutomaticRebootManagerInit(system::AutomaticRebootManager* manager,
                                        const base::TimeDelta& timeout,
                                        base::OnceClosure quit_closure,
@@ -61,20 +66,17 @@ void WaitForAutomaticRebootManagerInit(system::AutomaticRebootManager* manager,
   std::move(quit_closure).Run();
 }
 
-} // namespace
+}  // namespace
 
 class KioskAppUpdateServiceTest
     : public extensions::PlatformAppBrowserTest,
       public system::AutomaticRebootManagerObserver {
  public:
-  KioskAppUpdateServiceTest()
-      : app_(nullptr),
-        update_service_(nullptr),
-        automatic_reboot_manager_(nullptr) {}
+  KioskAppUpdateServiceTest() = default;
   KioskAppUpdateServiceTest(const KioskAppUpdateServiceTest&) = delete;
   KioskAppUpdateServiceTest& operator=(const KioskAppUpdateServiceTest&) =
       delete;
-  ~KioskAppUpdateServiceTest() override {}
+  ~KioskAppUpdateServiceTest() override = default;
 
   // extensions::PlatformAppBrowserTest overrides:
   void SetUpInProcessBrowserTestFixture() override {
@@ -88,8 +90,8 @@ class KioskAppUpdateServiceTest
         base::NumberToString(uptime.InSecondsF());
     const base::FilePath uptime_file = temp_dir.Append("uptime");
     ASSERT_TRUE(base::WriteFile(uptime_file, uptime_seconds));
-    uptime_file_override_ =
-        std::make_unique<base::ScopedPathOverride>(FILE_UPTIME, uptime_file);
+    uptime_file_override_ = std::make_unique<base::ScopedPathOverride>(
+        FILE_UPTIME, uptime_file, /*is_absolute=*/false, /*create=*/false);
   }
 
   void SetUpOnMainThread() override {
@@ -106,7 +108,7 @@ class KioskAppUpdateServiceTest
     automatic_reboot_manager_ =
         g_browser_process->platform_part()->automatic_reboot_manager();
 
-    // Wait for |automatic_reboot_manager_| to finish initializing.
+    // Wait for `automatic_reboot_manager_` to finish initializing.
     bool initialized = false;
     base::RunLoop run_loop;
     base::ThreadPool::PostTask(
@@ -126,8 +128,9 @@ class KioskAppUpdateServiceTest
   // system::AutomaticRebootManagerObserver:
   void OnRebootRequested(
       system::AutomaticRebootManagerObserver::Reason) override {
-    if (run_loop_)
-      run_loop_->Quit();
+    if (test_waiter_) {
+      test_waiter_->SetValue();
+    }
   }
 
   void WillDestroyAutomaticRebootManager() override {
@@ -140,42 +143,48 @@ class KioskAppUpdateServiceTest
     update_service_->Init(app_->id());
   }
 
-  void FireAppUpdateAvailable() {
-    update_service_->OnAppUpdateAvailable(app_);
-  }
+  void FireAppUpdateAvailable() { update_service_->OnAppUpdateAvailable(app_); }
 
   void FireUpdatedNeedReboot() {
     update_engine::StatusResult status;
     status.set_current_operation(update_engine::Operation::UPDATED_NEED_REBOOT);
-    run_loop_ = std::make_unique<base::RunLoop>();
+    test_waiter_ = std::make_unique<TestFuture<void>>();
     automatic_reboot_manager_->UpdateStatusChanged(status);
-    run_loop_->Run();
+    EXPECT_TRUE(test_waiter_->Wait());
   }
 
   void RequestPeriodicReboot() {
-    run_loop_ = std::make_unique<base::RunLoop>();
+    test_waiter_ = std::make_unique<TestFuture<void>>();
     g_browser_process->local_state()->SetInteger(prefs::kUptimeLimit,
                                                  base::Hours(2).InSeconds());
-    run_loop_->Run();
+    EXPECT_TRUE(test_waiter_->Wait());
   }
 
  private:
   base::ScopedTempDir temp_dir_;
   std::unique_ptr<base::ScopedPathOverride> uptime_file_override_;
-  const extensions::Extension* app_;  // Not owned.
-  KioskAppUpdateService* update_service_;  // Not owned.
-  system::AutomaticRebootManager* automatic_reboot_manager_;  // Not owned.
-  std::unique_ptr<base::RunLoop> run_loop_;
+  raw_ptr<const extensions::Extension> app_ = nullptr;  // Not owned.
+  raw_ptr<KioskAppUpdateService, DanglingUntriaged> update_service_ =
+      nullptr;  // Not owned.
+  raw_ptr<system::AutomaticRebootManager, DanglingUntriaged>
+      automatic_reboot_manager_ = nullptr;  // Not owned.
+  std::unique_ptr<TestFuture<void>> test_waiter_;
 };
 
 // Verifies that the app is notified a reboot is required when an app update
 // becomes available.
 IN_PROC_BROWSER_TEST_F(KioskAppUpdateServiceTest, AppUpdate) {
+  base::HistogramTester histogram;
+
   CreateKioskAppUpdateService();
 
   ExtensionTestMessageListener listener("app_update");
   FireAppUpdateAvailable();
   EXPECT_TRUE(listener.WaitUntilSatisfied());
+
+  histogram.ExpectUniqueSample(kKioskPrimaryAppInSessionUpdateHistogram,
+                               /*sample=*/1,
+                               /*expected_bucket_count=*/1);
 }
 
 // Verifies that the app is notified a reboot is required when an OS update is

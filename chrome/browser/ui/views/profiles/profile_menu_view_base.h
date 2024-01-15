@@ -13,16 +13,19 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/profiles/profile_metrics.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/views/close_bubble_on_tab_activation_helper.h"
 #include "content/public/browser/web_contents_delegate.h"
 #include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 #include "ui/views/layout/box_layout.h"
+#include "ui/views/layout/flex_layout_view.h"
 #include "ui/views/style/typography.h"
 
 class Browser;
@@ -40,6 +43,8 @@ class ImageModel;
 // clicking the avatar button.
 class ProfileMenuViewBase : public content::WebContentsDelegate,
                             public views::BubbleDialogDelegateView {
+  METADATA_HEADER(ProfileMenuViewBase, views::BubbleDialogDelegateView)
+
  public:
   // Enumeration of all actionable items in the profile menu.
   // These values are persisted to logs. Entries should not be renumbered and
@@ -66,7 +71,8 @@ class ProfileMenuViewBase : public content::WebContentsDelegate,
     kSyncSettingsButton = 16,
     kEditProfileButton = 17,
     // DEPRECATED: kCreateIncognitoShortcutButton = 18,
-    kMaxValue = kEditProfileButton,
+    kEnableSyncForWebOnlyAccountButton = 19,
+    kMaxValue = kEnableSyncForWebOnlyAccountButton,
   };
 
   struct EditButtonParams {
@@ -76,7 +82,9 @@ class ProfileMenuViewBase : public content::WebContentsDelegate,
     EditButtonParams(const EditButtonParams&);
     ~EditButtonParams();
 
-    const gfx::VectorIcon* edit_icon;
+    // This field is not a raw_ptr<> because it was filtered by the rewriter
+    // for: #union
+    RAW_PTR_EXCLUSION const gfx::VectorIcon* edit_icon;
     std::u16string edit_tooltip_text;
     base::RepeatingClosure edit_action;
   };
@@ -101,7 +109,7 @@ class ProfileMenuViewBase : public content::WebContentsDelegate,
   void SetProfileIdentityInfo(
       const std::u16string& profile_name,
       SkColor profile_background_color,
-      absl::optional<EditButtonParams> edit_button_params,
+      std::optional<EditButtonParams> edit_button_params,
       const ui::ImageModel& image_model,
       const std::u16string& title,
       const std::u16string& subtitle = std::u16string(),
@@ -170,6 +178,15 @@ class ProfileMenuViewBase : public content::WebContentsDelegate,
   // exists).
   void FocusFirstProfileButton();
 
+  void BuildIdentityInfoColorCallback(const ui::ColorProvider* color_provider);
+
+  void BuildProfileBackgroundContainer(
+      std::unique_ptr<views::View> heading_label,
+      SkColor background_color,
+      std::unique_ptr<views::View> avatar_image_view,
+      std::unique_ptr<views::View> edit_button,
+      const ui::ThemedVectorIcon& avatar_header_art);
+
   void BuildSyncInfoCallToActionBackground(
       ui::ColorId background_color_id,
       const ui::ColorProvider* color_provider);
@@ -201,6 +218,10 @@ class ProfileMenuViewBase : public content::WebContentsDelegate,
   raw_ptr<views::View> profile_mgmt_shortcut_features_container_ = nullptr;
   raw_ptr<views::View> profile_mgmt_features_container_ = nullptr;
 
+  // Child components of `identity_info_container_`.
+  raw_ptr<views::FlexLayoutView> profile_background_container_ = nullptr;
+  raw_ptr<views::Label> heading_label_ = nullptr;
+
   // The first profile button that should be focused when the menu is opened
   // using a key accelerator.
   raw_ptr<views::Button> first_profile_button_ = nullptr;
@@ -210,6 +231,13 @@ class ProfileMenuViewBase : public content::WebContentsDelegate,
   bool perform_menu_actions_ = true;
 
   CloseBubbleOnTabActivationHelper close_bubble_helper_;
+
+  // Builds the colors for `profile_background_container_` and `heading_label_`
+  // in `identity_info_container_`. This requires ui::ColorProvider, which is
+  // only available once OnThemeChanged() is called, so the class caches this
+  // callback and calls it afterwards.
+  base::RepeatingCallback<void(const ui::ColorProvider*)>
+      identity_info_color_callback_ = base::DoNothing();
 
   // Builds the background for |sync_info_container_|. This requires
   // ui::ColorProvider, which is only available once OnThemeChanged() is called,

@@ -8,16 +8,7 @@
 #include "base/feature_list.h"
 #include "build/build_config.h"
 
-namespace reading_list {
-namespace switches {
-
-// Feature flag used for enabling Read later on desktop and Android.
-BASE_DECLARE_FEATURE(kReadLater);
-
-// Whether Reading List is enabled on this device. On iOS this is true if the
-// buildflag for Reading List is enabled (no experiment). On Desktop it is also
-// true if `kSidePanel` is enabled as it assumes a reading list.
-bool IsReadingListEnabled();
+namespace reading_list::switches {
 
 // Feature flag used for enabling the reading list backend migration.
 // When enabled, reading list data will also be stored in the Bookmarks backend.
@@ -28,12 +19,6 @@ bool IsReadingListEnabled();
 // details.
 BASE_DECLARE_FEATURE(kReadLaterBackendMigration);
 
-#if BUILDFLAG(IS_ANDROID)
-// Feature flag used for enabling read later reminder notification.
-BASE_DECLARE_FEATURE(kReadLaterReminderNotification);
-#endif
-
-}  // namespace switches
-}  // namespace reading_list
+}  // namespace reading_list::switches
 
 #endif  // COMPONENTS_READING_LIST_FEATURES_READING_LIST_SWITCHES_H_

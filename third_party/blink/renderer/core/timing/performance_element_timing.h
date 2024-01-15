@@ -32,7 +32,7 @@ class CORE_EXPORT PerformanceElementTiming final : public PerformanceEntry {
                                           int naturalHeight,
                                           const AtomicString& id,
                                           Element*,
-                                          uint32_t navigation_id);
+                                          DOMWindow* source);
   PerformanceElementTiming(const AtomicString& name,
                            DOMHighResTimeStamp start_time,
                            const String& url,
@@ -44,14 +44,14 @@ class CORE_EXPORT PerformanceElementTiming final : public PerformanceEntry {
                            int naturalHeight,
                            const AtomicString& id,
                            Element*,
-                           uint32_t navigation_id);
+                           DOMWindow* source);
 
   ~PerformanceElementTiming() override;
 
-  AtomicString entryType() const override;
+  const AtomicString& entryType() const override;
   PerformanceEntryType EntryTypeEnum() const override;
 
-  DOMRectReadOnly* intersectionRect() const { return intersection_rect_; }
+  DOMRectReadOnly* intersectionRect() const { return intersection_rect_.Get(); }
   DOMHighResTimeStamp renderTime() const { return render_time_; }
   DOMHighResTimeStamp loadTime() const { return load_time_; }
   AtomicString identifier() const { return identifier_; }

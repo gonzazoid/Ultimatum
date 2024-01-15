@@ -4,8 +4,9 @@
 
 #include "components/reporting/metrics/metric_report_queue.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "components/reporting/client/report_queue.h"
 #include "components/reporting/metrics/metric_rate_controller.h"
 #include "components/reporting/metrics/reporting_settings.h"
 #include "components/reporting/proto/synced/metric_data.pb.h"
@@ -34,10 +35,19 @@ MetricReportQueue::MetricReportQueue(
 
 MetricReportQueue::~MetricReportQueue() = default;
 
-void MetricReportQueue::Enqueue(std::unique_ptr<const MetricData> metric_data,
+void MetricReportQueue::Enqueue(MetricData metric_data,
                                 ReportQueue::EnqueueCallback callback) {
-  report_queue_->Enqueue(std::move(metric_data), priority_,
-                         std::move(callback));
+  auto enqueue_cb = base::BindOnce(
+      [](ReportQueue::EnqueueCallback callback, Status status) {
+        if (!status.ok()) {
+          DVLOG(1) << "Could not enqueue to reporting queue because of: "
+                   << status;
+        }
+        std::move(callback).Run(std::move(status));
+      },
+      std::move(callback));
+  report_queue_->Enqueue(std::make_unique<MetricData>(std::move(metric_data)),
+                         priority_, std::move(enqueue_cb));
 }
 
 void MetricReportQueue::Upload() {
@@ -47,6 +57,11 @@ void MetricReportQueue::Upload() {
     rate_controller_->Stop();
     rate_controller_->Start();
   }
+}
+
+Destination MetricReportQueue::GetDestination() const {
+  CHECK(report_queue_);
+  return report_queue_->GetDestination();
 }
 
 void MetricReportQueue::Flush() {

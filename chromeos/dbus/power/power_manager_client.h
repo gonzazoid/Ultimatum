@@ -6,23 +6,25 @@
 #define CHROMEOS_DBUS_POWER_POWER_MANAGER_CLIENT_H_
 
 #include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/power_monitor/power_observer.h"
 #include "base/time/time.h"
 #include "chromeos/dbus/common/dbus_method_call_status.h"
+#include "chromeos/dbus/power_manager/battery_saver.pb.h"
 #include "chromeos/dbus/power_manager/charge_history_state.pb.h"
 #include "chromeos/dbus/power_manager/peripheral_battery_status.pb.h"
 #include "chromeos/dbus/power_manager/policy.pb.h"
 #include "chromeos/dbus/power_manager/power_supply_properties.pb.h"
 #include "chromeos/dbus/power_manager/suspend.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/cros_system_api/dbus/power_manager/dbus-constants.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
 namespace base {
@@ -100,6 +102,11 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerManagerClient {
     virtual void InactivityDelaysChanged(
         const power_manager::PowerManagementPolicy::Delays& delays) {}
 
+    // Called when the state of Battery Saver Mode has changed, and on powerd
+    // startup.
+    virtual void BatterySaverModeStateChanged(
+        const power_manager::BatterySaverModeState& state) {}
+
     // Called when peripheral device battery status is received.
     // |path| is the sysfs path for the battery of the peripheral device.
     // |name| is the human-readable name of the device.
@@ -157,6 +164,11 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerManagerClient {
     // from within this method.  UnblockSuspend() must be called once the
     // observer is ready for suspend.
     virtual void DarkSuspendImminent() {}
+
+    // Called when the browser is about to request system restart. Restart is
+    // deferred until all observers' implementations of this method have
+    // finished running.
+    virtual void RestartRequested(power_manager::RequestRestartReason reason) {}
 
     // Called when the browser is about to request shutdown. Shutdown is
     // deferred until all observers' implementations of this method have
@@ -240,15 +252,15 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerManagerClient {
   virtual void GetKeyboardBrightnessPercent(
       DBusMethodCallback<double> callback) = 0;
 
-  // Set the toggled-off state of the keyboard backlight.
-  virtual void SetKeyboardBacklightToggledOff(bool toggled_off) = 0;
+  // Sets the keyboard backlight brightness per |request|.
+  virtual void SetKeyboardBrightness(
+      const power_manager::SetBacklightBrightnessRequest& request) = 0;
 
-  // Get the toggled-off state of the keyboard backlight.
-  virtual void GetKeyboardBacklightToggledOff(
-      DBusMethodCallback<bool> callback) = 0;
+  // Toggle the keyboard backlight on or off.
+  virtual void ToggleKeyboardBacklight() = 0;
 
   // Returns the last power status that was received from D-Bus, if any.
-  virtual const absl::optional<power_manager::PowerSupplyProperties>&
+  virtual const std::optional<power_manager::PowerSupplyProperties>&
   GetLastStatus() = 0;
 
   // Requests an updated copy of the power status. Observer::PowerChanged()
@@ -310,6 +322,15 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerManagerClient {
   // error (e.g. powerd not running), |callback| will be called with nullopt.
   virtual void GetBacklightsForcedOff(DBusMethodCallback<bool> callback) = 0;
 
+  // Gets the current state of Battery Saver Mode. On error (e.g. powerd not
+  // running), |callback| will be called with nullopt.
+  virtual void GetBatterySaverModeState(
+      DBusMethodCallback<power_manager::BatterySaverModeState> callback) = 0;
+
+  // Updates the state of Battery Saver Mode.
+  virtual void SetBatterySaverModeState(
+      const power_manager::SetBatterySaverModeStateRequest& request) = 0;
+
   // Asynchronously fetches the current state of various hardware switches (e.g.
   // the lid switch and the tablet-mode switch). On error (e.g. powerd not
   // running), |callback| will be called with nullopt.
@@ -333,17 +354,14 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerManagerClient {
   // ready for a suspend.
   virtual void UnblockSuspend(const base::UnguessableToken& token) = 0;
 
-  // Whether the device supports Ambient color.
-  virtual bool SupportsAmbientColor() = 0;
-
   // Creates timers corresponding to clocks present in |arc_timer_requests|.
   // ScopedFDs are used to indicate timer expiration as described in
   // |StartArcTimer|. Aysnchronously runs |callback| with the created timers'
   // ids corresponding to all clocks in the arguments i.e timer id at index 0
   // corresponds to the clock id at position 0 in |arc_timer_requests|. Only one
   // timer per clock is allowed per tag, asynchronously runs |callback| with
-  // absl::nullopt if the same clock is present more than once in the arguments.
-  // Also, runs |callback| with absl::nullopt if timers are already created for
+  // std::nullopt if the same clock is present more than once in the arguments.
+  // Also, runs |callback| with std::nullopt if timers are already created for
   // |tag|.
   virtual void CreateArcTimers(
       const std::string& tag,
@@ -368,10 +386,6 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerManagerClient {
 
   // The time power manager will wait before resuspending from a dark resume.
   virtual base::TimeDelta GetDarkSuspendDelayTimeout() = 0;
-
-  // Refreshes the battery signal of the specified Bluetooth device.
-  // TODO(b/166543531): Remove after migrating to BlueZ Battery Provider API.
-  virtual void RefreshBluetoothBattery(const std::string& address) = 0;
 
   // On devices that support external displays with ambient light sensors, this
   // enables/disables the ALS-based brightness adjustment on those displays.

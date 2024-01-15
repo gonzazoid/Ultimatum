@@ -4,17 +4,12 @@
 
 #include "v4l2_video_decoder_delegate_vp8.h"
 
-// ChromeOS specific header; does not exist upstream
-#if BUILDFLAG(IS_CHROMEOS)
-#define __LINUX_MEDIA_VP8_CTRLS_LEGACY_H
-#include <linux/media/vp8-ctrls-upstream.h>
-#endif
-
+#include <linux/v4l2-controls.h>
 #include <linux/videodev2.h>
 
+#include <algorithm>
 #include <type_traits>
 
-#include "base/cxx17_backports.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
 #include "media/gpu/macros.h"
@@ -37,12 +32,9 @@ void FillV4L2SegmentationHeader(const Vp8SegmentationHeader& vp8_sgmnt_hdr,
                              V4L2_VP8_SEGMENT_FLAG_UPDATE_MAP);
   SET_V4L2_SGMNT_HDR_FLAG_IF(update_segment_feature_data,
                              V4L2_VP8_SEGMENT_FLAG_UPDATE_FEATURE_DATA);
-  // TODO not sure about this one?
   SET_V4L2_SGMNT_HDR_FLAG_IF(
       segment_feature_mode == Vp8SegmentationHeader::FEATURE_MODE_DELTA,
       V4L2_VP8_SEGMENT_FLAG_DELTA_VALUE_MODE);
-  SET_V4L2_SGMNT_HDR_FLAG_IF(segment_feature_mode,
-                             V4L2_VP8_SEGMENT_FLAG_UPDATE_FEATURE_DATA);
 #undef SET_V4L2_SGMNT_HDR_FLAG_IF
 
   SafeArrayMemcpy(v4l2_sgmnt_hdr->quant_update,
@@ -229,6 +221,7 @@ bool V4L2VideoDecoderDelegateVP8::SubmitDecode(
   ext_ctrls.controls = &ctrl;
   dec_surface->PrepareSetCtrls(&ext_ctrls);
   if (device_->Ioctl(VIDIOC_S_EXT_CTRLS, &ext_ctrls) != 0) {
+    RecordVidiocIoctlErrorUMA(VidiocIoctlRequests::kVidiocSExtCtrls);
     VPLOGF(1) << "ioctl() failed: VIDIOC_S_EXT_CTRLS";
     return false;
   }

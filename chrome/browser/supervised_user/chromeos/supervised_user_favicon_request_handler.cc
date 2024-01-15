@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ constexpr int kDesiredIconSize = 24;
 constexpr int kMonogramSize = 20;
 
 const char kFaviconAvailabilityHistogramName[] =
-    "SupervisedUsers.FaviconAvailability";
+    "ChromeOS.FamilyLinkUser.FaviconAvailability";
 }  // namespace
 
 // static
@@ -37,9 +37,9 @@ SupervisedUserFaviconRequestHandler::~SupervisedUserFaviconRequestHandler() =
     default;
 
 void SupervisedUserFaviconRequestHandler::StartFaviconFetch(
-    base::OnceCallback<void(const gfx::ImageSkia&)> callback) {
+    base::OnceClosure on_fetched_callback) {
   DCHECK(!network_request_completed_);
-  favicon_fetched_callback_ = std::move(callback);
+  on_fetched_callback_ = std::move(on_fetched_callback);
   FetchFaviconFromCache();
 }
 
@@ -70,14 +70,13 @@ void SupervisedUserFaviconRequestHandler::OnGetFaviconFromCacheFinished(
   if (!result.image.IsEmpty()) {
     large_icon_service_->TouchIconFromGoogleServer(result.icon_url);
     favicon_ = result.image.AsImageSkia();
-    std::move(favicon_fetched_callback_).Run(GetFaviconOrFallback());
+    std::move(on_fetched_callback_).Run();
     return;
   }
 
-  // Do not make another network request if one has already been made. Run the
-  // favicon fetched callback with the favicon or its fallback icon.
+  // Do not make another network request if one has already been made.
   if (network_request_completed_) {
-    std::move(favicon_fetched_callback_).Run(GetFaviconOrFallback());
+    std::move(on_fetched_callback_).Run();
     return;
   }
 
@@ -118,7 +117,7 @@ void SupervisedUserFaviconRequestHandler::OnGetFaviconFromGoogleServerFinished(
   network_request_completed_ = true;
   if (status != favicon_base::GoogleFaviconServerRequestStatus::SUCCESS) {
     LOG(WARNING) << "Favicon fetch failed, using fallback favicon.";
-    std::move(favicon_fetched_callback_).Run(GetFaviconOrFallback());
+    std::move(on_fetched_callback_).Run();
     return;
   }
   FetchFaviconFromCache();

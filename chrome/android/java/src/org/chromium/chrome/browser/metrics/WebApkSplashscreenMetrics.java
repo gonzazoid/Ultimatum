@@ -26,17 +26,16 @@ public class WebApkSplashscreenMetrics implements SplashscreenObserver {
 
     @Override
     public void onSplashscreenHidden(long startTimestamp, long endTimestamp) {
-        if (!UmaUtils.hasComeToForeground() || UmaUtils.hasComeToBackground()
+        if (!UmaUtils.hasComeToForegroundWithNative()
+                || UmaUtils.hasComeToBackgroundWithNative()
                 || mShellApkLaunchTimestamp == -1) {
             return;
         }
 
-        // commit both shown/hidden histograms here because native may not be loaded when the
+        // commit shown histograms here because native may not be loaded when the
         // splashscreen is shown.
         WebApkUmaRecorder.recordShellApkLaunchToSplashVisible(
                 startTimestamp - mShellApkLaunchTimestamp);
-        WebApkUmaRecorder.recordShellApkLaunchToSplashHidden(
-                endTimestamp - mShellApkLaunchTimestamp);
 
         if (mNewStyleSplashShownTimestamp != -1) {
             WebApkUmaRecorder.recordNewStyleShellApkLaunchToSplashVisible(

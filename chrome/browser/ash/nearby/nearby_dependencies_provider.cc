@@ -4,11 +4,16 @@
 
 #include "chrome/browser/ash/nearby/nearby_dependencies_provider.h"
 
+#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/network_config_service.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/singleton.h"
 #include "chrome/browser/ash/nearby/bluetooth_adapter_manager.h"
+#include "chrome/browser/ash/nearby/nearby_dependencies_provider_factory.h"
+#include "chrome/browser/ash/nearby/presence/credential_storage/credential_storage_initializer.h"
 #include "chrome/browser/nearby_sharing/common/nearby_share_features.h"
 #include "chrome/browser/nearby_sharing/common/nearby_share_switches.h"
 #include "chrome/browser/nearby_sharing/firewall_hole/nearby_connections_firewall_hole_factory.h"
@@ -22,6 +27,8 @@
 #include "chromeos/ash/services/nearby/public/mojom/sharing.mojom.h"
 #include "chromeos/ash/services/nearby/public/mojom/tcp_socket_factory.mojom.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
+#include "components/keyed_service/content/browser_context_keyed_service_shutdown_notifier_factory.h"
+#include "components/keyed_service/core/keyed_service_shutdown_notifier.h"
 #include "content/public/browser/network_service_instance.h"
 #include "content/public/browser/storage_partition.h"
 #include "device/bluetooth/bluetooth_adapter_factory.h"
@@ -60,12 +67,55 @@ class P2PTrustedSocketManagerClientImpl
   mojo::Remote<network::mojom::P2PTrustedSocketManager> socket_manager_;
 };
 
+// Allows observers to be notified when NearbyDependenciesProvider is shut down.
+class NearbyDependenciesProviderShutdownNotifierFactory
+    : public BrowserContextKeyedServiceShutdownNotifierFactory {
+ public:
+  static NearbyDependenciesProviderShutdownNotifierFactory* GetInstance() {
+    return base::Singleton<
+        NearbyDependenciesProviderShutdownNotifierFactory>::get();
+  }
+
+  NearbyDependenciesProviderShutdownNotifierFactory(
+      const NearbyDependenciesProviderShutdownNotifierFactory&) = delete;
+  NearbyDependenciesProviderShutdownNotifierFactory& operator=(
+      const NearbyDependenciesProviderShutdownNotifierFactory&) = delete;
+
+ private:
+  friend struct base::DefaultSingletonTraits<
+      NearbyDependenciesProviderShutdownNotifierFactory>;
+
+  NearbyDependenciesProviderShutdownNotifierFactory()
+      : BrowserContextKeyedServiceShutdownNotifierFactory(
+            "NearbyDependenciesProvider") {
+    DependsOn(NearbyDependenciesProviderFactory::GetInstance());
+  }
+  ~NearbyDependenciesProviderShutdownNotifierFactory() override = default;
+};
+
 class MdnsResponderFactory : public sharing::mojom::MdnsResponderFactory {
  public:
-  explicit MdnsResponderFactory(Profile* profile) : profile_(profile) {}
+  explicit MdnsResponderFactory(Profile* profile) : profile_(profile) {
+    // Subscribe to be notified when NearbyDependenciesProvider shuts down.
+    // NearbyDependenciesProvider is a KeyedService bound to |profile_|, so the
+    // destruction of NearbyDependenciesProvider means that |profile_| is
+    // invalid. This lets us return early from CreateMdnsResponder() to avoid
+    // the risk of using |profile_| after it has been destroyed. Using
+    // base::Unretained() is safe here because the MdnsResponderFactory is
+    // guaranteed to outlive |shutdown_subscription_|.
+    shutdown_subscription_ =
+        NearbyDependenciesProviderShutdownNotifierFactory::GetInstance()
+            ->Get(profile_)
+            ->Subscribe(base::BindRepeating(&MdnsResponderFactory::Shutdown,
+                                            base::Unretained(this)));
+  }
 
   void CreateMdnsResponder(mojo::PendingReceiver<network::mojom::MdnsResponder>
                                responder_receiver) override {
+    if (is_shutdown_) {
+      return;
+    }
+
     auto* partition = profile_->GetDefaultStoragePartition();
     if (!partition) {
       LOG(ERROR) << "MdnsResponderFactory::" << __func__
@@ -86,7 +136,11 @@ class MdnsResponderFactory : public sharing::mojom::MdnsResponderFactory {
   }
 
  private:
-  Profile* profile_;
+  void Shutdown() { is_shutdown_ = true; }
+
+  bool is_shutdown_ = false;
+  raw_ptr<Profile, LeakedDanglingUntriaged> profile_;
+  base::CallbackListSubscription shutdown_subscription_;
 };
 
 }  // namespace
@@ -96,7 +150,6 @@ NearbyDependenciesProvider::NearbyDependenciesProvider(
     signin::IdentityManager* identity_manager)
     : profile_(profile), identity_manager_(identity_manager) {
   DCHECK(profile_);
-  DCHECK(identity_manager_);
   bluetooth_manager_ = std::make_unique<BluetoothAdapterManager>();
 }
 
@@ -106,15 +159,26 @@ NearbyDependenciesProvider::~NearbyDependenciesProvider() = default;
 
 sharing::mojom::NearbyDependenciesPtr
 NearbyDependenciesProvider::GetDependencies() {
-  if (shut_down_)
+  if (shut_down_) {
     return nullptr;
+  }
 
   auto dependencies = sharing::mojom::NearbyDependencies::New();
 
-  if (device::BluetoothAdapterFactory::IsBluetoothSupported())
+  if (device::BluetoothAdapterFactory::IsBluetoothSupported()) {
     dependencies->bluetooth_adapter = GetBluetoothAdapterPendingRemote();
-  else
+  } else {
     dependencies->bluetooth_adapter = mojo::NullRemote();
+  }
+
+  // TOOD(b/317307931): Re-visit security considerations before enabling
+  // this feature by default/ramping up via Finch.
+  if (ash::features::IsNearbyPresenceEnabled()) {
+    dependencies->nearby_presence_credential_storage =
+        GetNearbyPresenceCredentialStoragePendingRemote();
+  } else {
+    dependencies->nearby_presence_credential_storage = mojo::NullRemote();
+  }
 
   dependencies->webrtc_dependencies = GetWebRtcDependencies();
   dependencies->wifilan_dependencies = GetWifiLanDependencies();
@@ -122,7 +186,7 @@ NearbyDependenciesProvider::GetDependencies() {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   if (command_line->HasSwitch(switches::kNearbyShareVerboseLogging)) {
     dependencies->min_log_severity =
-        location::nearby::api::LogMessage::Severity::kVerbose;
+        ::nearby::api::LogMessage::Severity::kVerbose;
   }
 
   return dependencies;
@@ -132,6 +196,8 @@ void NearbyDependenciesProvider::PrepareForShutdown() {
   if (bluetooth_manager_) {
     bluetooth_manager_->Shutdown();
   }
+
+  presence_credential_storage_initializer_.reset();
 }
 
 void NearbyDependenciesProvider::Shutdown() {
@@ -146,6 +212,21 @@ NearbyDependenciesProvider::GetBluetoothAdapterPendingRemote() {
   device::BluetoothAdapterFactory::Get()->GetAdapter(base::BindOnce(
       &BluetoothAdapterManager::Initialize, bluetooth_manager_->GetWeakPtr(),
       std::move(pending_receiver)));
+  return pending_remote;
+}
+
+mojo::PendingRemote<presence::mojom::NearbyPresenceCredentialStorage>
+NearbyDependenciesProvider::GetNearbyPresenceCredentialStoragePendingRemote() {
+  mojo::PendingReceiver<presence::mojom::NearbyPresenceCredentialStorage>
+      pending_receiver;
+  mojo::PendingRemote<presence::mojom::NearbyPresenceCredentialStorage>
+      pending_remote = pending_receiver.InitWithNewPipeAndPassRemote();
+
+  presence_credential_storage_initializer_ =
+      std::make_unique<presence::CredentialStorageInitializer>(
+          std::move(pending_receiver), profile_);
+  presence_credential_storage_initializer_->Initialize();
+
   return pending_remote;
 }
 
@@ -191,8 +272,9 @@ NearbyDependenciesProvider::GetWebRtcDependencies() {
 
 sharing::mojom::WifiLanDependenciesPtr
 NearbyDependenciesProvider::GetWifiLanDependencies() {
-  if (!base::FeatureList::IsEnabled(features::kNearbySharingWifiLan))
+  if (!base::FeatureList::IsEnabled(::features::kNearbySharingWifiLan)) {
     return nullptr;
+  }
 
   MojoPipe<chromeos::network_config::mojom::CrosNetworkConfig>
       cros_network_config;
@@ -219,6 +301,11 @@ NearbyDependenciesProvider::GetWifiLanDependencies() {
 network::mojom::NetworkContext*
 NearbyDependenciesProvider::GetNetworkContext() {
   return profile_->GetDefaultStoragePartition()->GetNetworkContext();
+}
+
+// static
+void NearbyDependenciesProvider::EnsureFactoryBuilt() {
+  NearbyDependenciesProviderShutdownNotifierFactory::GetInstance();
 }
 
 }  // namespace nearby

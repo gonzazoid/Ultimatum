@@ -23,6 +23,7 @@
 #include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/time/time.h"
 #include "services/network/public/mojom/content_security_policy.mojom-blink-forward.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/frame/fenced_frame_sandbox_flags.h"
@@ -31,6 +32,7 @@
 #include "third_party/blink/public/mojom/frame/frame.mojom-blink.h"
 #include "third_party/blink/public/mojom/frame/frame_owner_properties.mojom-blink.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom-blink.h"
+#include "third_party/blink/public/mojom/timing/resource_timing.mojom-blink-forward.h"
 #include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 #include "third_party/blink/renderer/core/css/style_change_reason.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
@@ -63,6 +65,8 @@
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/instrumentation/resource_coordinator/renderer_resource_coordinator.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
+#include "third_party/blink/renderer/platform/loader/fetch/fetch_initiator_type_names.h"
+#include "third_party/blink/renderer/platform/loader/fetch/resource_timing_utils.h"
 #include "third_party/blink/renderer/platform/network/network_state_notifier.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
@@ -97,11 +101,6 @@ bool IsFrameLazyLoadable(ExecutionContext* context,
                          const KURL& url,
                          bool is_loading_attr_lazy,
                          bool should_lazy_load_children) {
-  if (!RuntimeEnabledFeatures::LazyFrameLoadingEnabled() &&
-      !RuntimeEnabledFeatures::LazyFrameVisibleLoadTimeMetricsEnabled()) {
-    return false;
-  }
-
   // Only http:// or https:// URLs are eligible for lazy loading, excluding
   // URLs like invalid or empty URLs, "about:blank", local file URLs, etc.
   // that it doesn't make sense to lazily load.
@@ -159,8 +158,7 @@ bool CheckAndRecordIfShouldLazilyLoadFrame(const Document& document,
                                            bool is_eligible_for_lazy_ads,
                                            bool record_uma) {
   DCHECK(document.GetSettings());
-  if (!RuntimeEnabledFeatures::LazyFrameLoadingEnabled() ||
-      !document.GetSettings()->GetLazyLoadEnabled()) {
+  if (!document.GetSettings()->GetLazyLoadEnabled()) {
     return false;
   }
 
@@ -271,6 +269,16 @@ HTMLFrameOwnerElement::HTMLFrameOwnerElement(const QualifiedName& tag_name,
   document.IncrementImmediateChildFrameCreationCount();
 }
 
+const QualifiedName& HTMLFrameOwnerElement::SubResourceAttributeName() const {
+  // This doesn't really make sense, but it preserves existing behavior
+  // that may or may not matter for the one caller of this method.
+
+  // It might make more sense for this to be pure virtual and the
+  // remaining subclasses that don't override this (frame, iframe,
+  // fenced frame) to do so.
+  return QualifiedName::Null();
+}
+
 LayoutEmbeddedContent* HTMLFrameOwnerElement::GetLayoutEmbeddedContent() const {
   // HTMLObjectElement and HTMLEmbedElement may return arbitrary layoutObjects
   // when using fallback content.
@@ -357,6 +365,10 @@ void HTMLFrameOwnerElement::DisconnectContentFrame() {
   // Check if removing the subframe caused |parent_doc| to finish loading.
   if (have_to_check_if_parent_is_completed)
     parent_doc.CheckCompleted();
+
+  // Reset the collapsed state. The frame element will be collapsed again if it
+  // is blocked again in the future.
+  SetCollapsed(false);
 }
 
 HTMLFrameOwnerElement::~HTMLFrameOwnerElement() {
@@ -389,8 +401,9 @@ void HTMLFrameOwnerElement::SetSandboxFlags(
   }
 }
 
-bool HTMLFrameOwnerElement::IsKeyboardFocusable() const {
-  return content_frame_ && HTMLElement::IsKeyboardFocusable();
+bool HTMLFrameOwnerElement::IsKeyboardFocusable(
+    UpdateBehavior update_behavior) const {
+  return content_frame_ && HTMLElement::IsKeyboardFocusable(update_behavior);
 }
 
 void HTMLFrameOwnerElement::DisposePluginSoon(WebPluginContainerImpl* plugin) {
@@ -403,6 +416,10 @@ void HTMLFrameOwnerElement::DisposePluginSoon(WebPluginContainerImpl* plugin) {
 
 void HTMLFrameOwnerElement::UpdateContainerPolicy() {
   frame_policy_.container_policy = ConstructContainerPolicy();
+  DidChangeContainerPolicy();
+}
+
+void HTMLFrameOwnerElement::DidChangeContainerPolicy() {
   // Don't notify about updates if ContentFrame() is null, for example when
   // the subframe hasn't been created yet.
   if (ContentFrame()) {
@@ -472,17 +489,56 @@ void HTMLFrameOwnerElement::FrameOwnerPropertiesChanged() {
                                      std::move(properties));
 }
 
-void HTMLFrameOwnerElement::AddResourceTiming(const ResourceTimingInfo& info) {
+void HTMLFrameOwnerElement::AddResourceTiming(
+    mojom::blink::ResourceTimingInfoPtr info) {
   // Resource timing info should only be reported if the subframe is attached.
-  DCHECK(ContentFrame() && ContentFrame()->IsLocalFrame());
+  DCHECK(ContentFrame());
+
+  // Make sure we don't double-report, e.g. in the case of restored iframes.
+  if (!HasPendingFallbackTimingInfo()) {
+    return;
+  }
+
+  // This would only happen in rare cases, where the frame is navigated from the
+  // outside, e.g. by a web extension or window.open() with target, and that
+  // navigation would cancel the container-initiated navigation. This safeguard
+  // would make this type of race harmless.
+  // TODO(crbug.com/1410705): fix this properly by moving IFrame reporting to
+  // the browser side.
+  if (fallback_timing_info_->name != info->name) {
+    return;
+  }
+
   DOMWindowPerformance::performance(*GetDocument().domWindow())
-      ->GenerateAndAddResourceTiming(info, localName());
+      ->AddResourceTiming(std::move(info), localName());
+  DidReportResourceTiming();
+}
+
+bool HTMLFrameOwnerElement::HasPendingFallbackTimingInfo() const {
+  return !!fallback_timing_info_;
+}
+
+void HTMLFrameOwnerElement::DidReportResourceTiming() {
+  fallback_timing_info_.reset();
+}
+
+// This will report fallback timing only if the "real" resource timing had not
+// been previously reported: e.g. a cross-origin iframe without TAO.
+void HTMLFrameOwnerElement::ReportFallbackResourceTimingIfNeeded() {
+  if (!fallback_timing_info_) {
+    return;
+  }
+
+  mojom::blink::ResourceTimingInfoPtr resource_timing_info;
+  resource_timing_info.Swap(&fallback_timing_info_);
+  resource_timing_info->response_end = base::TimeTicks::Now();
+
+  DOMWindowPerformance::performance(*GetDocument().domWindow())
+      ->AddResourceTiming(std::move(resource_timing_info), localName());
 }
 
 void HTMLFrameOwnerElement::DispatchLoad() {
-  if (lazy_load_frame_observer_)
-    lazy_load_frame_observer_->RecordMetricsOnLoadFinished();
-
+  ReportFallbackResourceTimingIfNeeded();
   DispatchScopedEvent(*Event::Create(event_type_names::kLoad));
 }
 
@@ -595,9 +651,6 @@ bool HTMLFrameOwnerElement::LazyLoadIfPossible(
   lazy_load_frame_observer_ = MakeGarbageCollected<LazyLoadFrameObserver>(
       *this, LazyLoadFrameObserver::LoadType::kSubsequent);
 
-  if (RuntimeEnabledFeatures::LazyFrameVisibleLoadTimeMetricsEnabled())
-    lazy_load_frame_observer_->StartTrackingVisibilityMetrics();
-
   // TODO(crbug.com/1341892) Remove having multiple booleans here. We eventually
   // select one reason to decide the timeout, so essentially we don't have to
   // keep them. But currently we need these two booleans separately to record
@@ -650,29 +703,12 @@ bool HTMLFrameOwnerElement::LoadOrRedirectSubframe(
     bool replace_current_item) {
   TRACE_EVENT0("navigation", "HTMLFrameOwnerElement::LoadOrRedirectSubframe");
 
-  // TODO(crbug.com/1123606): Remove this once we move to the MPArch
-  // implementation. If this is the "top-level" internal <iframe> hosted within
-  // a <fencedframe> element using the ShadowDOM implementation, then we need to
-  // mark |frame_policy_| as `is_fenced=true`, so that the LocalFrame inside
-  // this frame can react accordingly. See
-  // https://docs.google.com/document/d/1ijTZJT3DHQ1ljp4QQe4E4XCCRaYAxmInNzN1SzeJM8s/edit.
-  if (ContainingShadowRoot() && ContainingShadowRoot()->IsUserAgent() &&
-      IsA<HTMLFencedFrameElement>(ContainingShadowRoot()->host())) {
-    // Note that if a fenced frame's `is_fenced`, `mode`, or `sandbox_flags`
-    // attribute ever changes, the browser process will terminate the renderer
-    // since this should never happen. Therefore it is safe to just naively
-    // always set it here because:
-    //   - A fenced frame always has `is_fenced = true`
-    //   - A fenced frame's mode is only settable once, enforced by
-    //     `HTMLFencedFrameElement::ParseAttribute()` as well as the browser
-    //     process
-    //   - A fenced frame's sandbox flags must be set to
-    //     kFencedFrameForcedSandboxFlags
-    frame_policy_.is_fenced = true;
-    frame_policy_.fenced_frame_mode =
-        DynamicTo<HTMLFencedFrameElement>(ContainingShadowRoot()->host())
-            ->GetMode();
-    frame_policy_.sandbox_flags = blink::kFencedFrameForcedSandboxFlags;
+  // If the subframe navigation is aborted or TAO fails, we report a "fallback"
+  // entry that starts at navigation and ends at load/error event.
+  if (url.ProtocolIsInHTTPFamily()) {
+    fallback_timing_info_ =
+        CreateResourceTimingInfo(base::TimeTicks::Now(), url,
+                                 /*response=*/nullptr);
   }
 
   // Update the |should_lazy_load_children_| value according to the "loading"
@@ -691,6 +727,8 @@ bool HTMLFrameOwnerElement::LoadOrRedirectSubframe(
   KURL url_to_request = url.IsNull() ? BlankURL() : url;
   ResourceRequestHead request(url_to_request);
   request.SetReferrerPolicy(ReferrerPolicyAttribute());
+  request.SetHasUserGesture(
+      LocalFrame::HasTransientUserActivation(GetDocument().GetFrame()));
 
   network::mojom::blink::TrustTokenParamsPtr trust_token_params =
       ConstructTrustTokenParams();
@@ -699,20 +737,7 @@ bool HTMLFrameOwnerElement::LoadOrRedirectSubframe(
 
   if (ContentFrame()) {
     FrameLoadRequest frame_load_request(GetDocument().domWindow(), request);
-    // TODO(crbug.com/1123606): This is how we're temporarily restricting the
-    // referrer string on top-level frenced frame requests initiated from
-    // outside of the frame. The intention here is to redact the ultimate value
-    // of `document.referrer` so that it is consistent with what the MPArch
-    // version of fenced frames will show. We'll remove this after we've moved
-    // to the MPArch version and away from the ShadowDOM implementation. The
-    // reason we have this check here is because we only want to take this
-    // action for navigations initiated by the fenced frame's embedder. We don't
-    // need this for the initial about:blank document (i.e., when
-    // `ContentFrame()` is null) because that is taken care of for us with the
-    // shadow DOM.
-    if (frame_policy_.is_fenced) {
-      frame_load_request.GetResourceRequest().SetReferrerString("");
-    }
+    frame_load_request.SetIsContainerInitiated(true);
     frame_load_request.SetClientRedirectReason(
         ClientNavigationReason::kFrameNavigation);
     WebFrameLoadType frame_load_type = WebFrameLoadType::kStandard;
@@ -773,6 +798,7 @@ bool HTMLFrameOwnerElement::LoadOrRedirectSubframe(
   }
 
   FrameLoadRequest frame_load_request(GetDocument().domWindow(), request);
+  frame_load_request.SetIsContainerInitiated(true);
   child_frame->Loader().StartNavigation(frame_load_request, child_load_type);
 
   return true;

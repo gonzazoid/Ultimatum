@@ -126,14 +126,53 @@
 
         </LinearLayout>
 
-        <Button
-            android:id="@+id/launch_button"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_margin="3dp"
-            android:textAllCaps="false"
-            android:text="@string/launch_button_text"
-            android:enabled="true" />
+            android:orientation="horizontal">
+            <Button
+                android:id="@+id/launch_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="3dp"
+                android:textAllCaps="false"
+                android:text="@string/launch_button_text"
+                android:enabled="true" />
+
+            <Button
+                android:id="@+id/result_launch_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="3dp"
+                android:textAllCaps="false"
+                android:text="@string/result_launch_button_text"
+                android:enabled="true" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="3dp"
+            android:orientation="horizontal">
+            <Button
+                android:id="@+id/test_asm_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="3dp"
+                android:textAllCaps="false"
+                android:text="@string/test_asm_text"
+                android:enabled="true" />
+
+            <Button
+                android:id="@+id/engagement_signals_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="3dp"
+                android:textAllCaps="false"
+                android:text="@string/engagement_signals_button_text"
+                android:enabled="false" />
+        </LinearLayout>
 
         <View
             android:layout_width="match_parent"
@@ -295,6 +334,88 @@
             </com.google.android.material.button.MaterialButtonToggleGroup>
         </LinearLayout>
 
+        <!-- Side sheet position -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginStart="3dp"
+            android:layout_marginBottom="16dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical|start"
+                android:text="@string/side_sheet_position_text"
+                android:layout_marginEnd="16dp"
+                style="?attr/textAppearanceLabelLarge" />
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/side_sheet_position_toggle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:layout_weight="1"
+                android:gravity="center_horizontal"
+                app:singleSelection="true"
+                app:selectionRequired="true">
+                <Button
+                    android:id="@+id/side_sheet_start_button"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/side_sheet_start_text"
+                    style="?attr/materialButtonOutlinedStyle" />
+                <Button
+                    android:id="@+id/side_sheet_end_button"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/side_sheet_end_text"
+                    style="?attr/materialButtonOutlinedStyle" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+        </LinearLayout>
+
+        <!-- Decoration type -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginStart="3dp"
+            android:layout_marginBottom="16dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical|start"
+                android:text="@string/decoration_type_text"
+                android:layout_marginEnd="16dp"
+                style="?attr/textAppearanceLabelLarge" />
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/decoration_type_toggle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:layout_weight="1"
+                android:gravity="center_horizontal"
+                app:singleSelection="true"
+                app:selectionRequired="true">
+                <Button
+                    android:id="@+id/decoration_type_shadow_button"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/decoration_type_shadow_text"
+                    style="?attr/materialButtonOutlinedStyle" />
+                <Button
+                    android:id="@+id/decoration_type_divider_button"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/decoration_type_divider_text"
+                    style="?attr/materialButtonOutlinedStyle" />
+                <Button
+                    android:id="@+id/decoration_type_none_button"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/decoration_type_none_text"
+                    style="?attr/materialButtonOutlinedStyle" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+        </LinearLayout>
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -366,13 +487,75 @@
             android:gravity="center_vertical"
             android:layout_marginStart="3dp"
             android:layout_marginBottom="16dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/pcct_initial_width_text"
+                android:layout_marginEnd="8dp"
+                android:maxWidth="160sp"
+                style="?attr/textAppearanceLabelLarge" />
+            <TextView
+                android:id="@+id/pcct_initial_width_slider_label"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical|end"
+                android:minWidth="40sp"
+                android:labelFor="@+id/pcct_initial_width_slider"
+                android:contentDescription="@string/pcct_initial_width_slider_label_desc"
+                style="?attr/textAppearanceLabelLarge" />
+            <SeekBar
+                android:id="@+id/pcct_initial_width_slider"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:layout_weight="1"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginStart="3dp"
+            android:layout_marginBottom="16dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/pcct_breakpoint_text"
+                android:layout_marginEnd="8dp"
+                android:maxWidth="160sp"
+                style="?attr/textAppearanceLabelLarge" />
+            <TextView
+                android:id="@+id/pcct_breakpoint_slider_label"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical|end"
+                android:minWidth="40sp"
+                android:labelFor="@+id/pcct_breakpoint_slider"
+                android:contentDescription="@string/pcct_breakpoint_slider_label_desc"
+                style="?attr/textAppearanceLabelLarge" />
+            <SeekBar
+                android:id="@+id/pcct_breakpoint_slider"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:layout_weight="1"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginStart="3dp"
+            android:layout_marginBottom="16dp">
 
             <CheckBox
-                android:id="@+id/pcct_resizable_checkbox"
+                android:id="@+id/pcct_height_resizable_checkbox"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:checked = "true"
-                android:text="@string/pcct_resizable_text" />
+                android:text="@string/pcct_height_resizable_text" />
 
             <CheckBox
                 android:id="@+id/bottom_toolbar_checkbox"
@@ -410,5 +593,27 @@
             android:layout_height="wrap_content"
             android:checked = "true"
             android:text="@string/background_interact_text" />
+
+        <CheckBox
+            android:id="@+id/side_sheet_max_button_checkbox"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked = "true"
+            android:text="@string/side_sheet_max_button_text" />
+
+        <CheckBox
+            android:id="@+id/side_sheet_rounded_corner_checkbox"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked = "true"
+            android:text="@string/side_sheet_rounded_corner_text" />
+
+        <CheckBox
+            android:id="@+id/content_scroll_checkbox"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked = "false"
+            android:text="@string/content_scroll_text" />
+
     </LinearLayout>
 </ScrollView>

@@ -12,6 +12,7 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "services/tracing/public/cpp/tracing_features.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -23,12 +24,14 @@ namespace tracing {
 
 namespace {
 
+constexpr size_t kChunkSize = 4096;
+
 // For sequences/threads other than our own, we just want to ignore
 // any events coming in.
 class DummyTraceWriter : public perfetto::TraceWriter {
  public:
   DummyTraceWriter()
-      : delegate_(perfetto::base::kPageSize), stream_(&delegate_) {}
+      : delegate_(kChunkSize), stream_(&delegate_) {}
 
   perfetto::TraceWriter::TracePacketHandle NewTracePacket() override {
     stream_.Reset(delegate_.GetNewBuffer());
@@ -59,7 +62,7 @@ TestProducerClient::TestProducerClient(
     std::unique_ptr<base::tracing::PerfettoTaskRunner> main_thread_task_runner,
     bool log_only_main_thread)
     : ProducerClient(main_thread_task_runner.get()),
-      delegate_(perfetto::base::kPageSize),
+      delegate_(kChunkSize),
       stream_(&delegate_),
       main_thread_task_runner_(std::move(main_thread_task_runner)),
       log_only_main_thread_(log_only_main_thread) {}
@@ -206,7 +209,7 @@ DataSourceTester::DataSourceTester(
   features_.InitAndDisableFeature(features::kEnablePerfettoSystemTracing);
 #if !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
   auto perfetto_wrapper = std::make_unique<base::tracing::PerfettoTaskRunner>(
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
 
   producer_ = std::make_unique<tracing::TestProducerClient>(
       std::move(perfetto_wrapper));
@@ -222,6 +225,7 @@ void DataSourceTester::BeginTrace(
   perfetto::TraceConfig perfetto_config(
       tracing::GetDefaultPerfettoConfig(trace_config));
   trace_log->SetEnabled(trace_config, perfetto_config);
+  base::RunLoop().RunUntilIdle();
 #else   // !BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
   trace_log->SetEnabled(trace_config,
                         base::trace_event::TraceLog::RECORDING_MODE);

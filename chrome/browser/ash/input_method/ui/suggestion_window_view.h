@@ -10,8 +10,10 @@
 #include <memory>
 
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/input_method/ui/indexed_suggestion_candidate_button.h"
 #include "chrome/browser/ash/input_method/ui/suggestion_accessibility_label.h"
+#include "chromeos/ash/services/ime/public/cpp/assistive_suggestions.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/chromeos/ui_chromeos_export.h"
 #include "ui/gfx/native_widget_types.h"
@@ -83,6 +85,8 @@ class UI_CHROMEOS_EXPORT SuggestionWindowView
   // views::BubbleDialogDelegateView:
   gfx::Rect GetBubbleBounds() override;
   void OnThemeChanged() override;
+  void LearnMoreClicked();
+  raw_ptr<views::ImageButton> getLearnMoreButton();
 
  private:
   SuggestionWindowView(gfx::NativeView parent,
@@ -97,7 +101,7 @@ class UI_CHROMEOS_EXPORT SuggestionWindowView
   void ResizeCandidateArea(const std::vector<std::u16string>& new_candidates,
                            bool use_legacy_candidate = false);
 
-  void Reorient(Orientation orientation);
+  void Reorient(Orientation orientation, bool extra_padding_on_right = true);
 
   void MakeVisible();
 
@@ -107,27 +111,28 @@ class UI_CHROMEOS_EXPORT SuggestionWindowView
                                bool highlighted);
 
   // The delegate to handle events from this class.
-  AssistiveDelegate* const delegate_;
+  const raw_ptr<AssistiveDelegate, DanglingUntriaged> delegate_;
 
   // The view containing all the suggestions if multiple candidates are
   // visible.
-  views::View* multiple_candidate_area_;
+  raw_ptr<views::View> multiple_candidate_area_;
 
   // The view containing the completion view. If this is visible then there is
   // only one suggestion to show.
-  CompletionSuggestionView* completion_view_;
+  raw_ptr<CompletionSuggestionView> completion_view_;
 
   // The setting link, positioned below candidate_area_.
   // TODO(crbug/1102175): Rename setting to settings since there can be multiple
   // things to set.
-  views::Link* setting_link_;
+  raw_ptr<views::Link> setting_link_;
 
-  views::ImageButton* learn_more_button_;
+  raw_ptr<views::ImageButton> learn_more_button_;
 
   // TODO(crbug/1099062): Add tests for mouse hovered and pressed.
   base::flat_map<views::View*, base::CallbackListSubscription> subscriptions_;
 
   std::unique_ptr<base::OneShotTimer> delay_timer_;
+  ash::ime::AssistiveWindowType type_ = ash::ime::AssistiveWindowType::kNone;
 };
 
 }  // namespace ime

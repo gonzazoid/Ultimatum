@@ -32,7 +32,7 @@ ImeControllerClientImpl::ImeControllerClientImpl(InputMethodManager* manager)
   input_method_manager_->AddObserver(this);
   input_method_manager_->AddImeMenuObserver(this);
   if (input_method_manager_->GetImeKeyboard())
-    input_method_manager_->GetImeKeyboard()->AddObserver(this);
+    observation_.Observe(input_method_manager_->GetImeKeyboard());
   InputMethodMenuManager::GetInstance()->AddObserver(this);
 
   // This does not need to send the initial state to ash because that happens
@@ -50,8 +50,6 @@ ImeControllerClientImpl::~ImeControllerClientImpl() {
   InputMethodMenuManager::GetInstance()->RemoveObserver(this);
   input_method_manager_->RemoveImeMenuObserver(this);
   input_method_manager_->RemoveObserver(this);
-  if (input_method_manager_->GetImeKeyboard())
-    input_method_manager_->GetImeKeyboard()->RemoveObserver(this);
 }
 
 void ImeControllerClientImpl::Init() {
@@ -104,20 +102,6 @@ void ImeControllerClientImpl::SetCapsLockEnabled(bool caps_enabled) {
     keyboard->SetCapsLockEnabled(caps_enabled);
 }
 
-void ImeControllerClientImpl::UpdateMirroringState(bool mirroring_enabled) {
-  ui::TextInputMethod* ime_engine =
-      ui::IMEBridge::Get()->GetCurrentEngineHandler();
-  if (ime_engine)
-    ime_engine->SetMirroringEnabled(mirroring_enabled);
-}
-
-void ImeControllerClientImpl::UpdateCastingState(bool casting_enabled) {
-  ui::TextInputMethod* ime_engine =
-      ui::IMEBridge::Get()->GetCurrentEngineHandler();
-  if (ime_engine)
-    ime_engine->SetCastingEnabled(casting_enabled);
-}
-
 void ImeControllerClientImpl::OverrideKeyboardKeyset(
     ash::input_method::ImeKeyset keyset,
     OverrideKeyboardKeysetCallback callback) {
@@ -132,7 +116,7 @@ void ImeControllerClientImpl::ShowModeIndicator() {
   const std::u16string short_name = descriptor.GetIndicator();
 
   ash::IMECandidateWindowHandlerInterface* cw_handler =
-      ui::IMEBridge::Get()->GetCandidateWindowHandler();
+      ash::IMEBridge::Get()->GetCandidateWindowHandler();
   if (!cw_handler)
     return;
 
@@ -225,9 +209,9 @@ void ImeControllerClientImpl::RefreshIme() {
   const std::string current_ime_id = state->GetCurrentInputMethod().id();
 
   std::vector<ash::ImeInfo> available_imes;
-  std::unique_ptr<std::vector<InputMethodDescriptor>> enabled_ime_descriptors =
+  std::vector<InputMethodDescriptor> enabled_ime_descriptors =
       state->GetEnabledInputMethodsSortedByLocalizedDisplayNames();
-  for (const InputMethodDescriptor& descriptor : *enabled_ime_descriptors) {
+  for (const InputMethodDescriptor& descriptor : enabled_ime_descriptors) {
     ash::ImeInfo info = GetAshImeInfo(descriptor);
     available_imes.push_back(std::move(info));
   }

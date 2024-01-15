@@ -981,10 +981,6 @@ static const GLES2Util::EnumToString enum_to_string_table[] = {
         "GL_ASYNC_PIXEL_PACK_COMPLETED_CHROMIUM",
     },
     {
-        0x6007,
-        "GL_LATENCY_QUERY_CHROMIUM",
-    },
-    {
         0x6009,
         "GL_PROGRAM_COMPLETION_QUERY_CHROMIUM",
     },
@@ -2653,20 +2649,12 @@ static const GLES2Util::EnumToString enum_to_string_table[] = {
         "GL_COMPRESSED_SRGB_ALPHA_PVRTC_4BPPV1_EXT",
     },
     {
-        0x8AF0,
-        "GL_TEXTURE_FILTERING_HINT_CHROMIUM",
-    },
-    {
         0x8AF6,
         "GL_SHARED_IMAGE_ACCESS_MODE_READ_CHROMIUM",
     },
     {
         0x8AF7,
         "GL_SHARED_IMAGE_ACCESS_MODE_READWRITE_CHROMIUM",
-    },
-    {
-        0x8AF8,
-        "GL_SHARED_IMAGE_ACCESS_MODE_OVERLAY_CHROMIUM",
     },
     {
         0x8B30,
@@ -3887,6 +3875,10 @@ static const GLES2Util::EnumToString enum_to_string_table[] = {
     {
         0x8E4E,
         "GL_LAST_VERTEX_CONVENTION_OES",
+    },
+    {
+        0x8E4F,
+        "GL_PROVOKING_VERTEX_ANGLE",
     },
     {
         0x8E50,
@@ -6750,6 +6742,66 @@ static const GLES2Util::EnumToString enum_to_string_table[] = {
         "GL_RGBX8_ANGLE",
     },
     {
+        0x96E0,
+        "GL_MAX_PIXEL_LOCAL_STORAGE_PLANES_ANGLE",
+    },
+    {
+        0x96E1,
+        "GL_MAX_COLOR_ATTACHMENTS_WITH_ACTIVE_PIXEL_LOCAL_STORAGE_ANGLE",
+    },
+    {
+        0x96E2,
+        "GL_MAX_COMBINED_DRAW_BUFFERS_AND_PIXEL_LOCAL_STORAGE_PLANES_ANGLE",
+    },
+    {
+        0x96E3,
+        "GL_PIXEL_LOCAL_STORAGE_ACTIVE_PLANES_ANGLE",
+    },
+    {
+        0x96E4,
+        "GL_LOAD_OP_ZERO_ANGLE",
+    },
+    {
+        0x96E5,
+        "GL_LOAD_OP_CLEAR_ANGLE",
+    },
+    {
+        0x96E6,
+        "GL_LOAD_OP_LOAD_ANGLE",
+    },
+    {
+        0x96E7,
+        "GL_STORE_OP_STORE_ANGLE",
+    },
+    {
+        0x96E8,
+        "GL_PIXEL_LOCAL_FORMAT_ANGLE",
+    },
+    {
+        0x96E9,
+        "GL_PIXEL_LOCAL_TEXTURE_NAME_ANGLE",
+    },
+    {
+        0x96EA,
+        "GL_PIXEL_LOCAL_TEXTURE_LEVEL_ANGLE",
+    },
+    {
+        0x96EB,
+        "GL_PIXEL_LOCAL_TEXTURE_LAYER_ANGLE",
+    },
+    {
+        0x96EC,
+        "GL_PIXEL_LOCAL_CLEAR_VALUE_FLOAT_ANGLE",
+    },
+    {
+        0x96ED,
+        "GL_PIXEL_LOCAL_CLEAR_VALUE_INT_ANGLE",
+    },
+    {
+        0x96EE,
+        "GL_PIXEL_LOCAL_CLEAR_VALUE_UNSIGNED_INT_ANGLE",
+    },
+    {
         0xC0,
         "GL_SHARED_EDGE_NV",
     },
@@ -7008,17 +7060,6 @@ std::string GLES2Util::GetStringCompressedTextureFormat(uint32_t value) {
   return GLES2Util::GetQualifiedEnumString(nullptr, 0, value);
 }
 
-std::string GLES2Util::GetStringCoverageModulationComponents(uint32_t value) {
-  static const EnumToString string_table[] = {
-      {GL_RGB, "GL_RGB"},
-      {GL_RGBA, "GL_RGBA"},
-      {GL_ALPHA, "GL_ALPHA"},
-      {GL_NONE, "GL_NONE"},
-  };
-  return GLES2Util::GetQualifiedEnumString(string_table,
-                                           std::size(string_table), value);
-}
-
 std::string GLES2Util::GetStringDrawMode(uint32_t value) {
   static const EnumToString string_table[] = {
       {GL_POINTS, "GL_POINTS"},
@@ -7180,8 +7221,6 @@ std::string GLES2Util::GetStringGLState(uint32_t value) {
       {GL_STENCIL_BITS, "GL_STENCIL_BITS"},
       {GL_TEXTURE_BINDING_2D, "GL_TEXTURE_BINDING_2D"},
       {GL_TEXTURE_BINDING_CUBE_MAP, "GL_TEXTURE_BINDING_CUBE_MAP"},
-      {GL_TEXTURE_FILTERING_HINT_CHROMIUM,
-       "GL_TEXTURE_FILTERING_HINT_CHROMIUM"},
       {GL_UNPACK_ALIGNMENT, "GL_UNPACK_ALIGNMENT"},
       {GL_BIND_GENERATES_RESOURCE_CHROMIUM,
        "GL_BIND_GENERATES_RESOURCE_CHROMIUM"},
@@ -7353,8 +7392,6 @@ std::string GLES2Util::GetStringHintMode(uint32_t value) {
 std::string GLES2Util::GetStringHintTarget(uint32_t value) {
   static const EnumToString string_table[] = {
       {GL_GENERATE_MIPMAP_HINT, "GL_GENERATE_MIPMAP_HINT"},
-      {GL_TEXTURE_FILTERING_HINT_CHROMIUM,
-       "GL_TEXTURE_FILTERING_HINT_CHROMIUM"},
       {GL_FRAGMENT_SHADER_DERIVATIVE_HINT,
        "GL_FRAGMENT_SHADER_DERIVATIVE_HINT"},
   };
@@ -7537,7 +7574,6 @@ std::string GLES2Util::GetStringQueryTarget(uint32_t value) {
       {GL_COMMANDS_ISSUED_CHROMIUM, "GL_COMMANDS_ISSUED_CHROMIUM"},
       {GL_COMMANDS_ISSUED_TIMESTAMP_CHROMIUM,
        "GL_COMMANDS_ISSUED_TIMESTAMP_CHROMIUM"},
-      {GL_LATENCY_QUERY_CHROMIUM, "GL_LATENCY_QUERY_CHROMIUM"},
       {GL_ASYNC_PIXEL_PACK_COMPLETED_CHROMIUM,
        "GL_ASYNC_PIXEL_PACK_COMPLETED_CHROMIUM"},
       {GL_COMMANDS_COMPLETED_CHROMIUM, "GL_COMMANDS_COMPLETED_CHROMIUM"},
@@ -7741,8 +7777,6 @@ std::string GLES2Util::GetStringShaderType(uint32_t value) {
 
 std::string GLES2Util::GetStringSharedImageAccessMode(uint32_t value) {
   static const EnumToString string_table[] = {
-      {GL_SHARED_IMAGE_ACCESS_MODE_OVERLAY_CHROMIUM,
-       "GL_SHARED_IMAGE_ACCESS_MODE_OVERLAY_CHROMIUM"},
       {GL_SHARED_IMAGE_ACCESS_MODE_READWRITE_CHROMIUM,
        "GL_SHARED_IMAGE_ACCESS_MODE_READWRITE_CHROMIUM"},
       {GL_SHARED_IMAGE_ACCESS_MODE_READ_CHROMIUM,

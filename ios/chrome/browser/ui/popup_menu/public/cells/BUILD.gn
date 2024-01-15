@@ -3,7 +3,6 @@
 # found in the LICENSE file.
 
 source_set("cells") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "popup_menu_footer_item.h",
     "popup_menu_footer_item.mm",
@@ -11,7 +10,7 @@ source_set("cells") {
   ]
   deps = [
     "resources:popup_menu_separator_color",
-    "//ios/chrome/browser/ui/table_view/cells",
+    "//ios/chrome/browser/shared/ui/table_view/cells",
   ]
   frameworks = [ "UIKit.framework" ]
 }

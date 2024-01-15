@@ -1,6 +1,6 @@
 <style>
 #container > * {
-  background-color: var(--cros-nudge-background-color);
+  background-color: var(--cros-sys-primary);
   z-index: 999;
 }
 
@@ -15,6 +15,7 @@
 #bubble {
   align-items: center;
   border-radius: 16px;
+  color: var(--cros-sys-on_primary);
   display: flex;
   left: -296px;
   max-width: calc(296px - 2 * 16px);
@@ -31,15 +32,21 @@
   -webkit-mask-image: url(/foreground/images/files/ui/nudge_star_icon.svg);
   -webkit-mask-position: center;
   -webkit-mask-repeat: no-repeat;
-  background-color: var(--cros-button-icon-color-primary);
+  background-color: currentColor;
   height: 20px;
   margin-inline-end: 12px;
   width: 20px;
 }
 
 #bubble > span {
-  color: var(--cros-button-label-color-primary);
-  font: var(--cros-body-2-font);
+  font: var(--cros-body-1-font);
+}
+
+#dismiss {
+  --focus-shadow-color: var(--cros-sys-inverse_primary);
+  align-self: center;
+  border-radius: 8px;
+  color: var(--cros-sys-on_primary);
 }
 </style>
 <div aria-hidden="true" id="container">
@@ -47,5 +54,6 @@
   <div id="bubble">
     <span class="icon"></span>
     <span id="text"></span>
+    <cr-button id="dismiss" aria-describedby="text" hidden></cr-button>
   </div>
 </div>

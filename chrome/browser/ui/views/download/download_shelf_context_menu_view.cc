@@ -4,11 +4,11 @@
 
 #include "chrome/browser/ui/views/download/download_shelf_context_menu_view.h"
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
 #include "base/metrics/histogram_functions.h"
-#include "chrome/browser/download/bubble/download_bubble_controller.h"
+#include "chrome/browser/download/bubble/download_bubble_ui_controller.h"
 #include "chrome/browser/download/download_item_model.h"
 #include "chrome/browser/download/download_stats.h"
 #include "chrome/browser/ui/views/download/download_item_view.h"
@@ -28,9 +28,9 @@ DownloadShelfContextMenuView::DownloadShelfContextMenuView(
 
 DownloadShelfContextMenuView::DownloadShelfContextMenuView(
     base::WeakPtr<DownloadUIModel> download_ui_model,
-    DownloadBubbleUIController* bubble_controller)
+    base::WeakPtr<DownloadBubbleUIController> bubble_controller)
     : DownloadShelfContextMenu(download_ui_model),
-      bubble_controller_(bubble_controller) {}
+      bubble_controller_(std::move(bubble_controller)) {}
 
 DownloadShelfContextMenuView::~DownloadShelfContextMenuView() = default;
 
@@ -84,34 +84,15 @@ void DownloadShelfContextMenuView::OnMenuWillShow(ui::SimpleMenuModel* source) {
 
 void DownloadShelfContextMenuView::ExecuteCommand(int command_id,
                                                   int event_flags) {
-  DownloadCommands::Command command =
-      static_cast<DownloadCommands::Command>(command_id);
-
-  bool command_executed = false;
-  if (command == DownloadCommands::KEEP) {
-    if (bubble_controller_) {
-      bubble_controller_->MaybeSubmitDownloadToFeedbackService(
-          GetDownload(), DownloadCommands::KEEP);
-      command_executed = true;
-    } else if (download_item_view_) {
-      // TODO(kerenzhu): We will need SBER in WebUI download shelf.
-      // Refactor this feature out of DownloadItemView so that it can be used in
-      // WebUI.
-      download_item_view_->MaybeSubmitDownloadToFeedbackService(
-          DownloadCommands::KEEP);
-      command_executed = true;
-    }
-  }
-
-  if (!command_executed) {
-    DownloadShelfContextMenu::ExecuteCommand(command_id, event_flags);
-  }
-
   if (!download_commands_executed_recorded_[command_id]) {
     base::UmaHistogramEnumeration(
         "Download.ShelfContextMenuAction",
-        DownloadCommandToShelfAction(command,
-                                     /*clicked=*/true));
+        DownloadCommandToShelfAction(
+            static_cast<DownloadCommands::Command>(command_id),
+            /*clicked=*/true));
     download_commands_executed_recorded_[command_id] = true;
   }
+
+  DownloadShelfContextMenu::ExecuteCommand(command_id, event_flags);
+  // ExecuteCommand can delete `this`.
 }

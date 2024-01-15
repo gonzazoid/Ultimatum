@@ -8,10 +8,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 
 namespace remoting {
 
@@ -93,7 +93,7 @@ FakeFileOperations::OutputFile::~OutputFile() = default;
 FakeFileOperations::InputFile::InputFile(
     base::FilePath filename,
     std::vector<std::uint8_t> data,
-    absl::optional<protocol::FileTransfer_Error> io_error)
+    std::optional<protocol::FileTransfer_Error> io_error)
     : filename(std::move(filename)),
       data(std::move(data)),
       io_error(std::move(io_error)) {}
@@ -121,7 +121,7 @@ void FakeFileOperations::FakeFileReader::Open(
   CHECK_EQ(kCreated, state_) << "Open called twice";
   state_ = kBusy;
   input_file_ = test_io_->input_file;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeFileReader::DoOpen, weak_ptr_factory_.GetWeakPtr(),
                      std::move(callback)));
@@ -132,7 +132,7 @@ void FakeFileOperations::FakeFileReader::ReadChunk(
     FileOperations::Reader::ReadCallback callback) {
   CHECK_EQ(kReady, state_) << "ReadChunk called when writer not ready";
   state_ = kBusy;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&FakeFileReader::DoReadChunk,
                                 weak_ptr_factory_.GetWeakPtr(), size,
                                 std::move(callback)));
@@ -212,7 +212,7 @@ void FakeFileOperations::FakeFileWriter::Open(const base::FilePath& filename,
   CHECK_EQ(kCreated, state_) << "Open called twice";
   state_ = kBusy;
   filename_ = filename;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeFileWriter::DoOpen, weak_ptr_factory_.GetWeakPtr(),
                      std::move(callback)));
@@ -223,7 +223,7 @@ void FakeFileOperations::FakeFileWriter::WriteChunk(
     Callback callback) {
   CHECK_EQ(kReady, state_) << "WriteChunk called when writer not ready";
   state_ = kBusy;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeFileWriter::DoWrite, weak_ptr_factory_.GetWeakPtr(),
                      std::move(data), std::move(callback)));
@@ -232,7 +232,7 @@ void FakeFileOperations::FakeFileWriter::WriteChunk(
 void FakeFileOperations::FakeFileWriter::Close(Callback callback) {
   CHECK_EQ(kReady, state_) << "Close called when writer not ready";
   state_ = kBusy;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeFileWriter::DoClose, weak_ptr_factory_.GetWeakPtr(),
                      std::move(callback)));

@@ -4,62 +4,13 @@
  * found in the LICENSE file.
  */
 
-let methodName = window.location.origin + '/pay';
+let methodName = window.location.origin;
 let request = undefined;
 
-/**
- * Installs the payment handler.
- * @param {String} swApp The name of the service worker based payment app to
- *     install.
- */
-function install(swApp) {
-  navigator.serviceWorker.getRegistration(swApp)
-      .then((registration) => {
-        if (registration) {
-          output(
-              'serviceWorker.getRegistration()',
-              'The ServiceWorker is already installed.');
-          return;
-        }
-        navigator.serviceWorker.register(swApp)
-            .then(() => {
-              return navigator.serviceWorker.ready;
-            })
-            .then((registration) => {
-              if (!registration.paymentManager) {
-                output(
-                    'serviceWorker.register()',
-                    'PaymentManager API not found.');
-                return;
-              }
-
-              registration.paymentManager.enableDelegations(['shippingAddress'])
-                  .then(() => {
-                    registration.paymentManager.instruments
-                        .set('instrument-id', {
-                          name: 'Instrument Name',
-                          method: methodName,
-                        })
-                        .then(() => {
-                          output(
-                              'instruments.set()',
-                              'Payment handler installed.');
-                        })
-                        .catch((error) => {
-                          output('instruments.set() rejected with', error);
-                        });
-                  })
-                  .catch((error) => {
-                    output('enableDelegations() rejected with', error);
-                  });
-            })
-            .catch((error) => {
-              output('serviceWorker.register() rejected with', error);
-            });
-      })
-      .catch((error) => {
-        output('serviceWorker.getRegistration() rejected with', error);
-      });
+/** Delegates handling of shipping address to the installed payment handler. */
+async function delegateShippingAddressToPaymentHandler() {
+  const registration = await navigator.serviceWorker.ready;
+  await registration.paymentManager.enableDelegations(['shippingAddress']);
 }
 
 /**
@@ -67,19 +18,21 @@ function install(swApp) {
  * PaymentRequestEvent.changeShippingOption().
  * @param {PaymentRequest} request The PaymentRequest object for showing the
  *     payment sheet.
+ * @return {Promise<String>} The return value of
+ *     PaymentRequestEvent.changeShippingOption.
  */
 function outputChangeShippingAddressOptionReturnValue(request) {
-  request.show()
+  return request.show()
       .then((response) => {
-        response.complete('success').then(() => {
-          output(
+        return response.complete('success').then(() => {
+          return output(
               'PaymentRequest.show()',
               'changeShipping[Address|Option]() returned: ' +
                   JSON.stringify(response.details.changeShippingReturnedValue));
         });
       })
       .catch((error) => {
-        output('PaymentRequest.show() rejected with', error);
+        return output('PaymentRequest.show() rejected with', error);
       });
 }
 
@@ -160,7 +113,7 @@ function initTestDetails(eventType) {
           ],
         },
         {
-          supportedMethods: methodName + '2',
+          supportedMethods: methodName + '/other',
           data: {soup: 'tomato'},
           total: {
             label: 'Modified total #2',

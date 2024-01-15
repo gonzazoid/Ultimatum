@@ -10,6 +10,7 @@
 #include "ash/ambient/ui/ambient_view_ids.h"
 #include "ash/ambient/ui/glanceable_info_view.h"
 #include "ash/ambient/util/ambient_util.h"
+#include "ash/style/ash_color_id.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/geometry/insets.h"
@@ -30,13 +31,16 @@ constexpr int kDefaultFontSizeDip = 64;
 constexpr int kDetailsFontSizeDip = 13;
 constexpr int kTimeFontSizeDip = 64;
 
+// Returns the fontlist used for the details label text.
+gfx::FontList GetDetailsLabelFontList() {
+  return ambient::util::GetDefaultFontlist().DeriveWithSizeDelta(
+      kDetailsFontSizeDip - kDefaultFontSizeDip);
+}
+
 views::Label* AddLabel(views::View* parent) {
   auto* label = parent->AddChildView(std::make_unique<views::Label>());
   label->SetAutoColorReadabilityEnabled(false);
-  label->SetEnabledColor(ambient::util::GetContentLayerColor(
-      AshColorProvider::ContentLayerType::kTextColorSecondary));
-  label->SetFontList(ambient::util::GetDefaultFontlist().DeriveWithSizeDelta(
-      kDetailsFontSizeDip - kDefaultFontSizeDip));
+  label->SetFontList(GetDetailsLabelFontList());
   label->SetPaintToLayer();
   label->layer()->SetFillsBoundsOpaquely(false);
 
@@ -58,8 +62,16 @@ void AmbientInfoView::OnThemeChanged() {
   const auto* color_provider = GetColorProvider();
   details_label_->SetShadows(
       ambient::util::GetTextShadowValues(color_provider));
+  details_label_->SetEnabledColor(
+      ambient::util::GetColor(color_provider, kColorAshTextColorSecondary));
   related_details_label_->SetShadows(
       ambient::util::GetTextShadowValues(color_provider));
+  related_details_label_->SetEnabledColor(
+      ambient::util::GetColor(color_provider, kColorAshTextColorSecondary));
+}
+
+SkColor AmbientInfoView::GetTimeTemperatureFontColor() {
+  return ambient::util::GetColor(GetColorProvider(), kColorAshTextColorPrimary);
 }
 
 void AmbientInfoView::UpdateImageDetails(
@@ -97,13 +109,22 @@ void AmbientInfoView::InitLayout() {
                                     shadow_insets.bottom());
 
   glanceable_info_view_ = AddChildView(std::make_unique<GlanceableInfoView>(
-      delegate_, kTimeFontSizeDip, /*time_temperature_font_color=*/
-      ambient::util::GetContentLayerColor(
-          AshColorProvider::ContentLayerType::kTextColorPrimary)));
+      delegate_, this, kTimeFontSizeDip, /*add_text_shadow=*/true));
   glanceable_info_view_->SetPaintToLayer();
 
   details_label_ = AddLabel(this);
   related_details_label_ = AddLabel(this);
+}
+
+// To make the distance from the time/weather to the bottom same as to the left,
+// an extra padding of the time font descent and the height of the details label
+// is needed. If the details label info is not empty, need to consider line
+// height distance too.
+int AmbientInfoView::GetAdjustedLeftPaddingToMatchBottom() {
+  auto details_label_font_list = GetDetailsLabelFontList();
+  int adjusted_left_padding = details_label_font_list.GetHeight() +
+                              glanceable_info_view_->GetTimeFontDescent();
+  return adjusted_left_padding;
 }
 
 BEGIN_METADATA(AmbientInfoView, views::View)

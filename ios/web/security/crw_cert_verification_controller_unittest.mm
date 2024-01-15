@@ -4,8 +4,12 @@
 
 #import "ios/web/security/crw_cert_verification_controller.h"
 
-#import "base/mac/bridging.h"
+#import "base/apple/bridging.h"
+#import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
+#import "base/test/test_timeouts.h"
+#import "ios/web/public/session/session_certificate_policy_cache.h"
+#import "ios/web/public/test/fakes/fake_web_state.h"
 #import "ios/web/public/test/web_test.h"
 #import "ios/web/public/thread/web_thread.h"
 #import "ios/web/security/wk_web_view_security_util.h"
@@ -14,10 +18,6 @@
 #import "net/cert/x509_util_apple.h"
 #import "net/test/cert_test_util.h"
 #import "net/test/test_data_directory.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace web {
 
@@ -40,20 +40,20 @@ class CRWCertVerificationControllerTest : public web::WebTest {
         net::ImportCertFromFile(net::GetTestCertsDirectory(), kCertFileName);
     ASSERT_TRUE(cert_);
 
-    base::ScopedCFTypeRef<CFMutableArrayRef> chain(
+    base::apple::ScopedCFTypeRef<CFMutableArrayRef> chain(
         net::x509_util::CreateSecCertificateArrayForX509Certificate(
             cert_.get()));
     ASSERT_TRUE(chain);
     valid_trust_ = web::CreateServerTrustFromChain(
-        base::mac::CFToNSPtrCast(chain.get()), kHostName);
+        base::apple::CFToNSPtrCast(chain.get()), kHostName);
     web::EnsureFutureTrustEvaluationSucceeds(valid_trust_.get());
     invalid_trust_ = web::CreateServerTrustFromChain(
-        base::mac::CFToNSPtrCast(chain.get()), kHostName);
+        base::apple::CFToNSPtrCast(chain.get()), kHostName);
   }
 
   // Synchronously returns result of
   // decideLoadPolicyForTrust:host:completionHandler: call.
-  void DecidePolicy(const base::ScopedCFTypeRef<SecTrustRef>& trust,
+  void DecidePolicy(const base::apple::ScopedCFTypeRef<SecTrustRef>& trust,
                     NSString* host,
                     web::CertAcceptPolicy* policy,
                     net::CertStatus* status) {
@@ -67,16 +67,15 @@ class CRWCertVerificationControllerTest : public web::WebTest {
                  *status = callback_status;
                  completion_handler_called = true;
                }];
-    base::test::ios::WaitUntilCondition(
-        ^{
+    ASSERT_TRUE(base::test::ios::WaitUntilConditionOrTimeout(
+        TestTimeouts::action_timeout(), true, ^{
           return completion_handler_called;
-        },
-        true, base::TimeDelta());
+        }));
   }
 
   // Synchronously returns result of
   // querySSLStatusForTrust:host:completionHandler: call.
-  void QueryStatus(const base::ScopedCFTypeRef<SecTrustRef>& trust,
+  void QueryStatus(const base::apple::ScopedCFTypeRef<SecTrustRef>& trust,
                    NSString* host,
                    SecurityStyle* style,
                    net::CertStatus* status) {
@@ -89,16 +88,15 @@ class CRWCertVerificationControllerTest : public web::WebTest {
                         *status = callback_status;
                         completion_handler_called = true;
                       }];
-    base::test::ios::WaitUntilCondition(
-        ^{
+    ASSERT_TRUE(base::test::ios::WaitUntilConditionOrTimeout(
+        TestTimeouts::action_timeout(), true, ^{
           return completion_handler_called;
-        },
-        true, base::TimeDelta());
+        }));
   }
 
   scoped_refptr<net::X509Certificate> cert_;
-  base::ScopedCFTypeRef<SecTrustRef> valid_trust_;
-  base::ScopedCFTypeRef<SecTrustRef> invalid_trust_;
+  base::apple::ScopedCFTypeRef<SecTrustRef> valid_trust_;
+  base::apple::ScopedCFTypeRef<SecTrustRef> invalid_trust_;
   CRWCertVerificationController* controller_;
 };
 
@@ -122,27 +120,12 @@ TEST_F(CRWCertVerificationControllerTest, PolicyForInvalidTrust) {
 
 // Tests cert policy with an invalid trust accepted by user.
 TEST_F(CRWCertVerificationControllerTest, PolicyForInvalidTrustAcceptedByUser) {
-  [controller_ allowCert:cert_.get()
-                 forHost:kHostName
-                  status:net::CERT_STATUS_ALL_ERRORS];
-  web::CertAcceptPolicy policy = CERT_ACCEPT_POLICY_NON_RECOVERABLE_ERROR;
-  net::CertStatus status;
-  DecidePolicy(invalid_trust_, kHostName, &policy, &status);
-  EXPECT_EQ(CERT_ACCEPT_POLICY_RECOVERABLE_ERROR_ACCEPTED_BY_USER, policy);
-  EXPECT_TRUE(net::CERT_STATUS_AUTHORITY_INVALID & status);
-}
-
-// Tests that allowCert:forHost:status: strips all intermediate certs.
-TEST_F(CRWCertVerificationControllerTest, AllowCertIgnoresIntermediateCerts) {
-  std::vector<bssl::UniquePtr<CRYPTO_BUFFER>> intermediates;
-  intermediates.push_back(bssl::UpRef(cert_->cert_buffer()));
-  scoped_refptr<net::X509Certificate> cert(
-      net::X509Certificate::CreateFromBuffer(bssl::UpRef(cert_->cert_buffer()),
-                                             std::move(intermediates)));
-  ASSERT_TRUE(cert);
-  [controller_ allowCert:cert.get()
-                 forHost:kHostName
-                  status:net::CERT_STATUS_ALL_ERRORS];
+  auto test_web_state =
+      std::make_unique<web::FakeWebStateWithPolicyCache>(GetBrowserState());
+  test_web_state->GetSessionCertificatePolicyCache()
+      ->RegisterAllowedCertificate(cert_.get(),
+                                   base::SysNSStringToUTF8(kHostName),
+                                   net::CERT_STATUS_ALL_ERRORS);
   web::CertAcceptPolicy policy = CERT_ACCEPT_POLICY_NON_RECOVERABLE_ERROR;
   net::CertStatus status;
   DecidePolicy(invalid_trust_, kHostName, &policy, &status);
@@ -154,7 +137,7 @@ TEST_F(CRWCertVerificationControllerTest, AllowCertIgnoresIntermediateCerts) {
 TEST_F(CRWCertVerificationControllerTest, PolicyForNullTrust) {
   web::CertAcceptPolicy policy = CERT_ACCEPT_POLICY_ALLOW;
   net::CertStatus status;
-  base::ScopedCFTypeRef<SecTrustRef> null_trust;
+  base::apple::ScopedCFTypeRef<SecTrustRef> null_trust;
   DecidePolicy(null_trust, kHostName, &policy, &status);
   EXPECT_EQ(CERT_ACCEPT_POLICY_NON_RECOVERABLE_ERROR, policy);
   EXPECT_EQ(net::CERT_STATUS_INVALID, status);

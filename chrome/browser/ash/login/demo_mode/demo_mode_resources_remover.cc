@@ -7,10 +7,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
@@ -234,8 +234,8 @@ void DemoModeResourcesRemover::OverrideTimeForTesting(
     const UsageAccumulationConfig& config) {
   tick_clock_ = tick_clock;
 
-  usage_start_ = absl::nullopt;
-  usage_end_ = absl::nullopt;
+  usage_start_ = std::nullopt;
+  usage_end_ = std::nullopt;
 
   usage_accumulation_config_ = config;
 }
@@ -260,8 +260,8 @@ void DemoModeResourcesRemover::UpdateDeviceUsage(
 
   local_state_->SetInteger(kAccumulatedUsagePref, accumulated_activity);
 
-  usage_start_ = absl::nullopt;
-  usage_end_ = absl::nullopt;
+  usage_start_ = std::nullopt;
+  usage_end_ = std::nullopt;
 }
 
 bool DemoModeResourcesRemover::AttemptRemovalIfUsageOverThreshold() {
@@ -291,8 +291,8 @@ void DemoModeResourcesRemover::OnRemovalDone(RemovalReason reason,
     ChromeUserManager::Get()->RemoveSessionStateObserver(this);
 
     user_activity_observation_.Reset();
-    usage_start_ = absl::nullopt;
-    usage_end_ = absl::nullopt;
+    usage_start_ = std::nullopt;
+    usage_end_ = std::nullopt;
   }
 
   // Only report metrics when the resources were found; otherwise this is

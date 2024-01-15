@@ -30,6 +30,7 @@
 #include "third_party/blink/renderer/core/css/style_color.h"
 #include "ui/gfx/geometry/outsets_f.h"
 #include "ui/gfx/geometry/point_f.h"
+#include "ui/gfx/geometry/vector2d_f.h"
 
 namespace blink {
 
@@ -41,42 +42,57 @@ class CORE_EXPORT ShadowData {
   USING_FAST_MALLOC(ShadowData);
 
  public:
-  ShadowData(const gfx::PointF& location,
+  ShadowData(gfx::Vector2dF offset,
              float blur,
              float spread,
              ShadowStyle style,
-             StyleColor color)
-      : location_(location),
+             StyleColor color,
+             float opacity = 1.0f)
+      : offset_(offset),
+        blur_(blur, blur),
+        spread_(spread),
+        color_(color),
+        style_(style),
+        opacity_(opacity) {}
+
+  ShadowData(gfx::Vector2dF offset,
+             gfx::PointF blur,
+             float spread,
+             ShadowStyle style,
+             StyleColor color,
+             float opacity = 1.0f)
+      : offset_(offset),
         blur_(blur),
         spread_(spread),
         color_(color),
-        style_(style) {}
+        style_(style),
+        opacity_(opacity) {}
 
-  bool operator==(const ShadowData&) const;
-  bool operator!=(const ShadowData& o) const { return !(*this == o); }
+  bool operator==(const ShadowData&) const = default;
 
   static ShadowData NeutralValue();
 
-  float X() const { return location_.x(); }
-  float Y() const { return location_.y(); }
-  gfx::PointF Location() const { return location_; }
-  float Blur() const { return blur_; }
+  float X() const { return offset_.x(); }
+  float Y() const { return offset_.y(); }
+  gfx::Vector2dF Offset() const { return offset_; }
+  float Blur() const { return blur_.x(); }
+  gfx::PointF BlurXY() const { return blur_; }
   float Spread() const { return spread_; }
   ShadowStyle Style() const { return style_; }
   StyleColor GetColor() const { return color_; }
-
-  void OverrideColor(Color color) { color_ = StyleColor(color); }
+  float Opacity() const { return opacity_; }
 
   // Outsets needed to adjust a source rectangle to the one cast by this
   // shadow.
   gfx::OutsetsF RectOutsets() const;
 
  private:
-  gfx::PointF location_;
-  float blur_;
+  gfx::Vector2dF offset_;
+  gfx::PointF blur_;
   float spread_;
   StyleColor color_;
   ShadowStyle style_;
+  float opacity_;
 };
 
 }  // namespace blink

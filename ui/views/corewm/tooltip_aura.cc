@@ -8,14 +8,14 @@
 #include <utility>
 
 #include "base/feature_list.h"
+#include "base/i18n/rtl.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_split.h"
-#include "base/strings/string_util.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "ui/accessibility/ax_enums.mojom.h"
-#include "ui/accessibility/ax_node_data.h"
 #include "ui/aura/client/aura_constants.h"
+#include "ui/aura/client/screen_position_client.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -26,28 +26,13 @@
 #include "ui/color/color_provider.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
-#include "ui/gfx/canvas.h"
 #include "ui/gfx/color_utils.h"
-#include "ui/gfx/render_text.h"
-#include "ui/gfx/text_elider.h"
 #include "ui/gfx/text_utils.h"
-#include "ui/views/background.h"
-#include "ui/views/border.h"
-#include "ui/views/painter.h"
-#include "ui/views/view.h"
 #include "ui/views/views_features.h"
 #include "ui/views/widget/widget.h"
+#include "ui/wm/public/tooltip_observer.h"
 
 namespace {
-
-// Max visual tooltip width. If a tooltip is greater than this width, it will
-// be wrapped.
-constexpr int kTooltipMaxWidthPixels = 800;
-
-// Paddings
-constexpr int kHorizontalPadding = 8;
-constexpr int kVerticalPaddingTop = 4;
-constexpr int kVerticalPaddingBottom = 5;
 
 // TODO(varkha): Update if native widget can be transparent on Linux.
 bool CanUseTranslucentTooltipWidget() {
@@ -60,106 +45,6 @@ bool CanUseTranslucentTooltipWidget() {
 #endif
 }
 
-// TODO(oshima): Consider to use views::Label.
-class TooltipView : public views::View {
- public:
-  METADATA_HEADER(TooltipView);
-  TooltipView() : render_text_(gfx::RenderText::CreateRenderText()) {
-    SetBorder(views::CreateEmptyBorder(
-        gfx::Insets::TLBR(kVerticalPaddingTop, kHorizontalPadding,
-                          kVerticalPaddingBottom, kHorizontalPadding)));
-
-    render_text_->SetWordWrapBehavior(gfx::WRAP_LONG_WORDS);
-    render_text_->SetMultiline(true);
-
-    ResetDisplayRect();
-  }
-
-  TooltipView(const TooltipView&) = delete;
-  TooltipView& operator=(const TooltipView&) = delete;
-  ~TooltipView() override = default;
-
-  // views:View:
-  void OnPaint(gfx::Canvas* canvas) override {
-    OnPaintBackground(canvas);
-    gfx::Size text_size = size();
-    gfx::Insets insets = GetInsets();
-    text_size.Enlarge(-insets.width(), -insets.height());
-    render_text_->SetDisplayRect(gfx::Rect(text_size));
-    canvas->Save();
-    canvas->Translate(gfx::Vector2d(insets.left(), insets.top()));
-    render_text_->Draw(canvas);
-    canvas->Restore();
-    OnPaintBorder(canvas);
-  }
-
-  gfx::Size CalculatePreferredSize() const override {
-    gfx::Size view_size = render_text_->GetStringSize();
-    gfx::Insets insets = GetInsets();
-    view_size.Enlarge(insets.width(), insets.height());
-    return view_size;
-  }
-
-  void SetText(const std::u16string& text) {
-    render_text_->SetHorizontalAlignment(gfx::ALIGN_TO_HEAD);
-
-    // Replace tabs with whitespace to avoid placeholder character rendering
-    // where previously it did not. crbug.com/993100
-    std::u16string newText(text);
-    base::ReplaceChars(newText, u"\t", u"        ", &newText);
-    render_text_->SetText(newText);
-    SchedulePaint();
-  }
-
-  void SetForegroundColor(SkColor color) { render_text_->SetColor(color); }
-
-  void SetBackgroundColor(SkColor background_color, SkColor border_color) {
-    if (CanUseTranslucentTooltipWidget()) {
-      // Corner radius of tooltip background.
-      const float kTooltipCornerRadius = 2.f;
-      SetBackground(views::CreateBackgroundFromPainter(
-          views::Painter::CreateRoundRectWith1PxBorderPainter(
-              background_color, border_color, kTooltipCornerRadius)));
-    } else {
-      SetBackground(views::CreateSolidBackground(background_color));
-
-      SetBorder(views::CreatePaddedBorder(
-          views::CreateSolidBorder(1, border_color),
-          gfx::Insets::TLBR(kVerticalPaddingTop - 1, kHorizontalPadding - 1,
-                            kVerticalPaddingBottom - 1,
-                            kHorizontalPadding - 1)));
-    }
-
-    // Force the text color to be readable when |background_color| is not
-    // opaque.
-    render_text_->set_subpixel_rendering_suppressed(
-        SkColorGetA(background_color) != 0xFF);
-  }
-
-  void SetMaxWidth(int width) {
-    max_width_ = width;
-    ResetDisplayRect();
-  }
-
-  gfx::RenderText* render_text_for_test() { return render_text_.get(); }
-
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override {
-    node_data->role = ax::mojom::Role::kTooltip;
-    node_data->SetNameChecked(render_text_->GetDisplayText());
-  }
-
- private:
-  void ResetDisplayRect() {
-    render_text_->SetDisplayRect(gfx::Rect(0, 0, max_width_, 100000));
-  }
-
-  std::unique_ptr<gfx::RenderText> render_text_;
-  int max_width_ = 0;
-};
-
-BEGIN_METADATA(TooltipView, views::View)
-END_METADATA
-
 }  // namespace
 
 namespace views::corewm {
@@ -167,9 +52,31 @@ namespace views::corewm {
 // static
 const char TooltipAura::kWidgetName[] = "TooltipAura";
 
+TooltipAura::TooltipAura()
+    : TooltipAura(base::BindRepeating(
+          []() { return std::make_unique<TooltipViewAura>(); })) {}
+
+TooltipAura::TooltipAura(
+    const TooltipAura::TooltipViewFactory& tooltip_view_factory)
+    : tooltip_view_factory_(tooltip_view_factory) {}
+
 TooltipAura::~TooltipAura() {
   DestroyWidget();
   CHECK(!IsInObserverList());
+}
+
+void TooltipAura::AddObserver(wm::TooltipObserver* observer) {
+  observers_.AddObserver(observer);
+}
+
+void TooltipAura::RemoveObserver(wm::TooltipObserver* observer) {
+  observers_.RemoveObserver(observer);
+}
+
+// static
+void TooltipAura::AdjustToCursor(gfx::Rect* anchor_point) {
+  // TODO(crbug.com/1410707): Should adjust with actual cursor size.
+  anchor_point->Offset(kCursorOffsetX, kCursorOffsetY);
 }
 
 class TooltipAura::TooltipWidget : public Widget {
@@ -177,19 +84,19 @@ class TooltipAura::TooltipWidget : public Widget {
   TooltipWidget() = default;
   ~TooltipWidget() override = default;
 
-  TooltipView* GetTooltipView() { return tooltip_view_; }
+  TooltipViewAura* GetTooltipView() { return tooltip_view_; }
 
-  void SetTooltipView(std::unique_ptr<TooltipView> tooltip_view) {
+  void SetTooltipView(std::unique_ptr<TooltipViewAura> tooltip_view) {
     tooltip_view_ = SetContentsView(std::move(tooltip_view));
   }
 
  private:
-  raw_ptr<TooltipView> tooltip_view_ = nullptr;
+  raw_ptr<TooltipViewAura> tooltip_view_ = nullptr;
 };
 
-gfx::RenderText* TooltipAura::GetRenderTextForTest() {
+const gfx::RenderText* TooltipAura::GetRenderTextForTest() const {
   DCHECK(widget_);
-  return widget_->GetTooltipView()->render_text_for_test();
+  return widget_->GetTooltipView()->render_text();
 }
 
 void TooltipAura::GetAccessibleNodeDataForTest(ui::AXNodeData* node_data) {
@@ -292,7 +199,7 @@ void TooltipAura::DestroyWidget() {
 int TooltipAura::GetMaxWidth(const gfx::Point& location) const {
   display::Screen* screen = display::Screen::GetScreen();
   gfx::Rect display_bounds(screen->GetDisplayNearestPoint(location).bounds());
-  return std::min(kTooltipMaxWidthPixels, (display_bounds.width() + 1) / 2);
+  return std::min(kTooltipMaxWidth, (display_bounds.width() + 1) / 2);
 }
 
 void TooltipAura::Update(aura::Window* window,
@@ -305,9 +212,14 @@ void TooltipAura::Update(aura::Window* window,
 
   tooltip_window_ = window;
 
-  auto new_tooltip_view = std::make_unique<TooltipView>();
-  gfx::Point anchor_point =
-      position + window->GetBoundsInScreen().OffsetFromOrigin();
+  auto new_tooltip_view = tooltip_view_factory_.Run();
+
+  // Convert `position` to screen coordinates.
+  gfx::Point anchor_point = position;
+  aura::client::ScreenPositionClient* screen_position_client =
+      aura::client::GetScreenPositionClient(window->GetRootWindow());
+  screen_position_client->ConvertPointToScreen(window, &anchor_point);
+
   new_tooltip_view->SetMaxWidth(GetMaxWidth(anchor_point));
   new_tooltip_view->SetText(tooltip_text);
   ui::OwnedWindowAnchor anchor;
@@ -316,20 +228,6 @@ void TooltipAura::Update(aura::Window* window,
   CreateTooltipWidget(bounds, anchor);
   widget_->SetTooltipView(std::move(new_tooltip_view));
   widget_->AddObserver(this);
-
-  const ui::ColorProvider* color_provider = widget_->GetColorProvider();
-  auto background_color = color_provider->GetColor(ui::kColorTooltipBackground);
-  if (!CanUseTranslucentTooltipWidget()) {
-    background_color = color_utils::GetResultingPaintColor(
-        background_color, color_provider->GetColor(ui::kColorWindowBackground));
-  }
-  auto foreground_color = color_provider->GetColor(ui::kColorTooltipForeground);
-  if (!CanUseTranslucentTooltipWidget())
-    foreground_color =
-        color_utils::GetResultingPaintColor(foreground_color, background_color);
-  TooltipView* tooltip_view = widget_->GetTooltipView();
-  tooltip_view->SetBackgroundColor(background_color, foreground_color);
-  tooltip_view->SetForegroundColor(foreground_color);
 }
 
 void TooltipAura::Show() {
@@ -341,11 +239,28 @@ void TooltipAura::Show() {
 
     widget_->GetTooltipView()->NotifyAccessibilityEvent(
         ax::mojom::Event::kTooltipOpened, true);
+
+    // Add distance between `tooltip_window_` and its toplevel window to bounds
+    // to pass via NotifyTooltipShown() since client will use this bounds as
+    // relative to wayland toplevel window.
+    // TODO(crbug.com/1385219): Use `tooltip_window_` instead of its toplevel
+    // window when WaylandWindow on ozone becomes available.
+    aura::Window* toplevel_window = tooltip_window_->GetToplevelWindow();
+    // `tooltip_window_`'s toplevel window may be null for testing.
+    if (toplevel_window) {
+      gfx::Rect bounds = widget_->GetWindowBoundsInScreen();
+      aura::Window::ConvertRectToTarget(tooltip_window_, toplevel_window,
+                                        &bounds);
+      for (auto& observer : observers_) {
+        observer.OnTooltipShown(
+            toplevel_window, widget_->GetTooltipView()->render_text()->text(),
+            bounds);
+      }
+    }
   }
 }
 
 void TooltipAura::Hide() {
-  tooltip_window_ = nullptr;
   if (widget_) {
     // If we simply hide the widget there's a chance to briefly show outdated
     // information on the next Show() because the text isn't updated until
@@ -356,8 +271,18 @@ void TooltipAura::Hide() {
     // displayed despite the size change.
     widget_->GetTooltipView()->NotifyAccessibilityEvent(
         ax::mojom::Event::kTooltipClosed, true);
+
+    // TODO(crbug.com/1385219): Use `tooltip_window_` instead of its toplevel
+    // window when WaylandWindow on ozone becomes available.
+    aura::Window* toplevel_window = tooltip_window_->GetToplevelWindow();
+    // `tooltip_window_`'s toplevel window may be null for testing.
+    if (toplevel_window) {
+      for (auto& observer : observers_)
+        observer.OnTooltipHidden(toplevel_window);
+    }
     DestroyWidget();
   }
+  tooltip_window_ = nullptr;
 }
 
 bool TooltipAura::IsVisible() {

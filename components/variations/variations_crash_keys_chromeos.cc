@@ -10,6 +10,7 @@
 #include "base/path_service.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 
 namespace variations {
@@ -17,7 +18,12 @@ namespace variations {
 namespace {
 
 // Path where we put variations in cryptohome.
+#if BUILDFLAG(IS_CHROMEOS_ASH)
 constexpr char kCrashVariationsFileName[] = ".variations-list.txt";
+#endif  // IS_CHROMEOS_ASH
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+constexpr char kCrashVariationsFileName[] = ".variations-list-lacros.txt";
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
 
 void WriteVariationsToFile(ExperimentListInfo info) {
   std::string combined_string = base::StrCat(

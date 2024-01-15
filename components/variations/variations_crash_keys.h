@@ -13,6 +13,7 @@
 namespace variations {
 
 class SyntheticTrialGroup;
+struct ActiveGroupId;
 
 // The key used in crash reports to indicate the number of active experiments.
 // Should match the number of entries in kExperimentListKey.
@@ -22,6 +23,8 @@ COMPONENT_EXPORT(VARIATIONS) extern const char kNumExperimentsKey[];
 // experiment is listed as two hex numbers: trial ID and group ID, separated by
 // a dash. The experiments are separated by a comma.
 COMPONENT_EXPORT(VARIATIONS) extern const char kExperimentListKey[];
+
+COMPONENT_EXPORT(VARIATIONS) extern const char kVariationsSeedVersionKey[];
 
 // Initializes crash keys that report the current set of active FieldTrial
 // groups (aka variations) for crash reports. After initialization, an observer
@@ -52,6 +55,10 @@ struct COMPONENT_EXPORT(VARIATIONS) ExperimentListInfo {
 // groups + the synthetic trials in |experiment_list| and the number of elements
 // in that list in |num_experiments|. Must be called on the UI thread.
 COMPONENT_EXPORT(VARIATIONS) ExperimentListInfo GetExperimentListInfo();
+
+// Gets the hash code of the experiment.
+COMPONENT_EXPORT(VARIATIONS)
+std::string ActiveGroupToString(const ActiveGroupId& active_group);
 
 }  // namespace variations
 

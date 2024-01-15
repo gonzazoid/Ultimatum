@@ -5,6 +5,7 @@
 #include <memory>
 
 #include "ash/public/cpp/login_screen_test_api.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/test_mock_time_task_runner.h"
@@ -20,13 +21,11 @@
 #include "chrome/browser/ash/login/test/logged_in_user_mixin.h"
 #include "chrome/browser/ash/policy/core/user_policy_test_helper.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "components/prefs/pref_service.h"
 #include "components/session_manager/core/session_manager.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -141,7 +140,7 @@ class ScreenTimeControllerTest : public MixinBasedInProcessBrowserTest {
 
   scoped_refptr<base::TestMockTimeTaskRunner> task_runner_;
 
-  Profile* child_profile_ = nullptr;
+  raw_ptr<Profile, DanglingUntriaged> child_profile_ = nullptr;
 
  private:
   LoggedInUserMixin logged_in_user_mixin_{&mixin_host_,
@@ -149,7 +148,7 @@ class ScreenTimeControllerTest : public MixinBasedInProcessBrowserTest {
                                           embedded_test_server(),
                                           this,
                                           true /*should_launch_browser*/,
-                                          absl::nullopt /*account_id*/,
+                                          std::nullopt /*account_id*/,
                                           false /*include_initial_user*/};
 };
 
@@ -434,7 +433,7 @@ IN_PROC_BROWSER_TEST_F(ScreenTimeControllerTest, UnlockDailyLimitWithDuration) {
 
 // Tests the default time window limit.
 // TODO(crbug.com/1358216): Flaky on Linux
-#if BUILDFLAG(IS_LINUX)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
 #define MAYBE_DefaultBedtime DISABLED_DefaultBedtime
 #else
 #define MAYBE_DefaultBedtime DefaultBedtime
@@ -678,7 +677,7 @@ IN_PROC_BROWSER_TEST_F(ScreenTimeControllerTest, BedtimeLockScreen24HourClock) {
   EXPECT_FALSE(IsAuthEnabled());
 
   EXPECT_EQ(u"Come back at 17:00.",
-            ash::LoginScreenTestApi::GetDisabledAuthMessage(GetAccountId()));
+            LoginScreenTestApi::GetDisabledAuthMessage(GetAccountId()));
 }
 
 // Tests bedtime during timezone changes that make the clock go back in time.

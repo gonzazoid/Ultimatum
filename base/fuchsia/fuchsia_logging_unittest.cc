@@ -4,15 +4,17 @@
 
 #include "base/fuchsia/scoped_fx_logger.h"
 
-#include <fuchsia/logger/cpp/fidl.h>
+#include <fidl/base.testfidl/cpp/fidl.h>
+#include <fidl/fuchsia.logger/cpp/fidl.h>
+#include <lib/async/default.h>
 #include <lib/fidl/cpp/binding.h>
 #include <lib/sys/cpp/component_context.h>
 
+#include "base/fuchsia/fuchsia_component_connect.h"
 #include "base/fuchsia/fuchsia_logging.h"
-#include "base/fuchsia/process_context.h"
+#include "base/fuchsia/test_component_context_for_process.h"
 #include "base/fuchsia/test_log_listener_safe.h"
 #include "base/logging.h"
-#include "base/process/process.h"
 #include "base/test/scoped_logging_settings.h"
 #include "base/test/task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -27,19 +29,6 @@ class MockLogSource {
   MOCK_METHOD0(Log, const char*());
 };
 
-// Configures |listener| to listen for messages from the current process.
-void ListenFilteredByPid(SimpleTestLogListener& listener) {
-  // Connect the test LogListenerSafe to the Log.
-  std::unique_ptr<fuchsia::logger::LogFilterOptions> options =
-      std::make_unique<fuchsia::logger::LogFilterOptions>();
-  options->filter_by_pid = true;
-  options->pid = Process::Current().Pid();
-  options->min_severity = fuchsia::logger::LogLevelFilter::INFO;
-  fuchsia::logger::LogPtr log =
-      ComponentContextForProcess()->svc()->Connect<fuchsia::logger::Log>();
-  listener.ListenToLog(log.get(), std::move(options));
-}
-
 }  // namespace
 
 // Verifies that calling the log macro goes to the Fuchsia system logs, by
@@ -50,7 +39,7 @@ TEST(FuchsiaLoggingTest, SystemLogging) {
   test::SingleThreadTaskEnvironment task_environment_{
       test::SingleThreadTaskEnvironment::MainThreadType::IO};
   SimpleTestLogListener listener;
-  ListenFilteredByPid(listener);
+  ListenFilteredByCurrentProcessId(listener);
 
   // Ensure that logging is directed to the system debug log.
   logging::ScopedLoggingSettings scoped_logging_settings;
@@ -60,15 +49,15 @@ TEST(FuchsiaLoggingTest, SystemLogging) {
   // test listener.
   LOG(ERROR) << kLogMessage;
 
-  absl::optional<fuchsia::logger::LogMessage> logged_message =
+  absl::optional<fuchsia_logger::LogMessage> logged_message =
       listener.RunUntilMessageReceived(kLogMessage);
 
   ASSERT_TRUE(logged_message.has_value());
-  EXPECT_EQ(logged_message->severity,
-            static_cast<int32_t>(fuchsia::logger::LogLevelFilter::ERROR));
-  ASSERT_EQ(logged_message->tags.size(), 1u);
+  EXPECT_EQ(logged_message->severity(),
+            static_cast<int32_t>(fuchsia_logger::LogLevelFilter::kError));
+  ASSERT_EQ(logged_message->tags().size(), 1u);
 
-  EXPECT_EQ(logged_message->tags[0], "base_unittests__exec");
+  EXPECT_EQ(logged_message->tags()[0], "base_unittests__exec");
 }
 
 // Verifies that configuring a system logger with multiple tags works.
@@ -80,20 +69,25 @@ TEST(FuchsiaLoggingTest, SystemLoggingMultipleTags) {
   test::SingleThreadTaskEnvironment task_environment_{
       test::SingleThreadTaskEnvironment::MainThreadType::IO};
   SimpleTestLogListener listener;
-  ListenFilteredByPid(listener);
+  ListenFilteredByCurrentProcessId(listener);
+
+  // Connect the test LogListenerSafe to the Log.
+  auto log_sink_client_end =
+      fuchsia_component::Connect<fuchsia_logger::LogSink>();
+  EXPECT_TRUE(log_sink_client_end.is_ok())
+      << FidlConnectionErrorMessage(log_sink_client_end);
 
   // Create a logger with multiple tags and emit a message to it.
   ScopedFxLogger logger = ScopedFxLogger::CreateFromLogSink(
-      ComponentContextForProcess()->svc()->Connect<fuchsia::logger::LogSink>(),
-      kTags);
+      std::move(log_sink_client_end.value()), kTags);
   logger.LogMessage("", 0, kLogMessage, FUCHSIA_LOG_ERROR);
 
-  absl::optional<fuchsia::logger::LogMessage> logged_message =
+  absl::optional<fuchsia_logger::LogMessage> logged_message =
       listener.RunUntilMessageReceived(kLogMessage);
 
   ASSERT_TRUE(logged_message.has_value());
-  auto tags = std::vector<StringPiece>(logged_message->tags.begin(),
-                                       logged_message->tags.end());
+  auto tags = std::vector<StringPiece>(logged_message->tags().begin(),
+                                       logged_message->tags().end());
   EXPECT_EQ(tags, kTags);
 }
 
@@ -115,6 +109,61 @@ TEST(FuchsiaLoggingTest, FuchsiaLogging) {
 
   ZX_CHECK(true, ZX_ERR_INTERNAL);
   ZX_DCHECK(true, ZX_ERR_INTERNAL);
+}
+
+TEST(FuchsiaLoggingTest, ConnectionErrorMessage) {
+  zx::result<fidl::ClientEnd<base_testfidl::TestInterface>> result =
+      zx::error_result{ZX_ERR_PEER_CLOSED};
+
+  EXPECT_EQ(
+      "Failed to connect to base.testfidl.TestInterface: "
+      "ZX_ERR_PEER_CLOSED",
+      base::FidlConnectionErrorMessage(result));
+}
+
+TEST(FuchsiaLoggingTest, FidlMethodErrorMessage_TwoWay) {
+  fidl::Result<base_testfidl::TestInterface::Add> result =
+      fit::error(fidl::Status::Unbound());
+
+  EXPECT_EQ(
+      "Error calling Add: FIDL operation failed due to user initiated unbind, "
+      "status: ZX_ERR_CANCELED (-23), detail: unbound endpoint",
+      base::FidlMethodResultErrorMessage(result, "Add"));
+}
+
+TEST(FuchsiaLoggingTest, FidlMethodErrorMessage_OneWay) {
+  fit::result<fidl::OneWayError> result = fit::error(fidl::Status::Unbound());
+
+  EXPECT_EQ(
+      "Error calling Add: FIDL operation failed due to user initiated unbind, "
+      "status: ZX_ERR_CANCELED (-23), detail: unbound endpoint",
+      base::FidlMethodResultErrorMessage(result, "Add"));
+}
+
+TEST(FuchsiaLoggingTest, FidlBindingClosureWarningLogger) {
+  test::SingleThreadTaskEnvironment task_environment{
+      test::SingleThreadTaskEnvironment::MainThreadType::IO};
+  SimpleTestLogListener listener;
+
+  // Ensure that logging is directed to the system debug log.
+  logging::ScopedLoggingSettings scoped_logging_settings;
+  TestComponentContextForProcess test_context;
+  test_context.AddService(fidl::DiscoverableProtocolName<fuchsia_logger::Log>);
+  ListenFilteredByCurrentProcessId(listener);
+
+  // Initialize logging in the `scoped_logging_settings_`.
+  CHECK(logging::InitLogging({.logging_dest = logging::LOG_DEFAULT}));
+
+  base::FidlBindingClosureWarningLogger<base_testfidl::TestInterface>()(
+      fidl::UnbindInfo::PeerClosed(ZX_ERR_PEER_CLOSED));
+
+  absl::optional<fuchsia_logger::LogMessage> logged_message =
+      listener.RunUntilMessageReceived(
+          "base.testfidl.TestInterface unbound: ZX_ERR_PEER_CLOSED (-24)");
+
+  ASSERT_TRUE(logged_message.has_value());
+  EXPECT_EQ(logged_message->severity(),
+            static_cast<int32_t>(fuchsia_logger::LogLevelFilter::kWarn));
 }
 
 }  // namespace base

@@ -8,9 +8,13 @@
 #include <utility>
 
 #include "chrome/app/vector_icons/vector_icons.h"
-#include "chrome/browser/ui/views/side_panel/read_anything/read_anything_constants.h"
+#include "chrome/browser/ui/color/chrome_color_id.h"
+#include "chrome/browser/ui/views/side_panel/read_anything/read_anything_menu_button.h"
+#include "chrome/common/accessibility/read_anything_constants.h"
 #include "chrome/grit/generated_resources.h"
+#include "ui/accessibility/accessibility_features.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/color_palette.h"
@@ -23,83 +27,100 @@
 #include "ui/views/controls/highlight_path_generator.h"
 #include "ui/views/controls/separator.h"
 #include "ui/views/layout/box_layout.h"
-#include "ui/views/layout/layout_types.h"
+#include "ui/views/layout/flex_layout.h"
 
+// TODO(crbug.com/1439905): Remove unused constructor when the
+// ReadAnythingLocalSidePanel flag is removed.
 ReadAnythingToolbarView::ReadAnythingToolbarView(
     ReadAnythingCoordinator* coordinator,
     ReadAnythingToolbarView::Delegate* toolbar_delegate,
     ReadAnythingFontCombobox::Delegate* font_combobox_delegate)
     : delegate_(toolbar_delegate), coordinator_(std::move(coordinator)) {
   coordinator_->AddObserver(this);
+  Init(toolbar_delegate, font_combobox_delegate);
+  // Start observing model after views creation so initial theme is applied.
+  coordinator_->AddModelObserver(this);
+}
 
-  // Create and set a BoxLayout LayoutManager for this view.
-  auto layout = std::make_unique<views::BoxLayout>(
-      views::BoxLayout::Orientation::kHorizontal);
-  layout->set_main_axis_alignment(views::BoxLayout::MainAxisAlignment::kStart);
-  layout->set_cross_axis_alignment(
-      views::BoxLayout::CrossAxisAlignment::kStretch);
-  layout->set_inside_border_insets(gfx::Insets(kInternalInsets));
+ReadAnythingToolbarView::ReadAnythingToolbarView(
+    ReadAnythingSidePanelController* controller,
+    ReadAnythingToolbarView::Delegate* toolbar_delegate,
+    ReadAnythingFontCombobox::Delegate* font_combobox_delegate)
+    : delegate_(toolbar_delegate), controller_(std::move(controller)) {
+  controller_->AddObserver(this);
+  Init(toolbar_delegate, font_combobox_delegate);
+  // Start observing model after views creation so initial theme is applied.
+  controller_->AddModelObserver(this);
+}
 
-  SetLayoutManager(std::move(layout));
+void ReadAnythingToolbarView::Init(
+    ReadAnythingToolbarView::Delegate* toolbar_delegate,
+    ReadAnythingFontCombobox::Delegate* font_combobox_delegate) {
+  // Set a FlexLayout LayoutManager for this view.
+  SetLayoutManager(std::make_unique<views::FlexLayout>())
+      ->SetOrientation(views::LayoutOrientation::kHorizontal)
+      .SetDefault(views::kMarginsKey, gfx::Insets::VH(0, kButtonPadding))
+      .SetMainAxisAlignment(views::LayoutAlignment::kStart)
+      .SetInteriorMargin(gfx::Insets(kInternalInsets));
 
   // Create a font selection combobox for the toolbar. The font combobox uses
   // a custom MenuModel, so we have a separate View for it for convenience.
   auto combobox =
       std::make_unique<ReadAnythingFontCombobox>(font_combobox_delegate);
 
+  // Font combobox should shrink as panel gets smaller.
+  combobox->SetProperty(
+      views::kFlexBehaviorKey,
+      views::FlexSpecification(views::MinimumFlexSizeRule::kScaleToMinimum));
+  combobox->SetGroup(kToolbarGroupId);
+
   // Create the decrease/increase text size buttons.
   auto decrease_size_button = std::make_unique<ReadAnythingButtonView>(
       base::BindRepeating(&ReadAnythingToolbarView::DecreaseFontSizeCallback,
                           weak_pointer_factory_.GetWeakPtr()),
-      gfx::CreateVectorIcon(kTextDecreaseIcon, kSmallIconSize,
-                            gfx::kPlaceholderColor),
+      kTextDecreaseIcon, kIconSize, gfx::kPlaceholderColor,
       l10n_util::GetStringUTF16(
-          IDS_READ_ANYTHING_DECREASE_FONT_SIZE_BUTTON_LABEL));
+          IDS_READING_MODE_DECREASE_FONT_SIZE_BUTTON_LABEL));
+  decrease_size_button->SetProperty(views::kCrossAxisAlignmentKey,
+                                    views::LayoutAlignment::kCenter);
+  decrease_size_button->SetGroup(kToolbarGroupId);
 
   auto increase_size_button = std::make_unique<ReadAnythingButtonView>(
       base::BindRepeating(&ReadAnythingToolbarView::IncreaseFontSizeCallback,
                           weak_pointer_factory_.GetWeakPtr()),
-      gfx::CreateVectorIcon(kTextIncreaseIcon, kLargeIconSize,
-                            gfx::kPlaceholderColor),
+      kTextIncreaseIcon, kIconSize, gfx::kPlaceholderColor,
       l10n_util::GetStringUTF16(
-          IDS_READ_ANYTHING_INCREASE_FONT_SIZE_BUTTON_LABEL));
+          IDS_READING_MODE_INCREASE_FONT_SIZE_BUTTON_LABEL));
+  increase_size_button->SetProperty(views::kCrossAxisAlignmentKey,
+                                    views::LayoutAlignment::kCenter);
+  increase_size_button->SetGroup(kToolbarGroupId);
 
-  // Create theme selection combobox.
-  auto colors_combobox = std::make_unique<views::Combobox>();
-  colors_combobox->SetModel(delegate_->GetColorsModel());
-  colors_combobox->SetTooltipTextAndAccessibleName(
-      l10n_util::GetStringUTF16(IDS_READ_ANYTHING_COLORS_COMBOBOX_LABEL));
-  colors_combobox->SetSizeToLargestLabel(false);
-  colors_combobox->SetCallback(
+  // Create theme selection menubutton.
+  auto colors_button = std::make_unique<ReadAnythingMenuButton>(
       base::BindRepeating(&ReadAnythingToolbarView::ChangeColorsCallback,
-                          weak_pointer_factory_.GetWeakPtr()));
-  colors_combobox->SetShouldShowArrow(false);
-  colors_combobox->SetBorderColorId(ui::kColorSidePanelComboboxBorder);
+                          weak_pointer_factory_.GetWeakPtr()),
+      kPaletteIcon,
+      l10n_util::GetStringUTF16(IDS_READING_MODE_COLORS_COMBOBOX_LABEL),
+      delegate_->GetColorsModel());
+  colors_button->SetGroup(kToolbarGroupId);
 
-  // Create line spacing combobox
-  auto lines_combobox = std::make_unique<views::Combobox>();
-  lines_combobox->SetModel(delegate_->GetLineSpacingModel());
-  lines_combobox->SetTooltipTextAndAccessibleName(
-      l10n_util::GetStringUTF16(IDS_READ_ANYTHING_LINE_SPACING_COMBOBOX_LABEL));
-  lines_combobox->SetSizeToLargestLabel(false);
-  lines_combobox->SetCallback(
+  // Create line spacing menubutton.
+  auto line_spacing_button = std::make_unique<ReadAnythingMenuButton>(
       base::BindRepeating(&ReadAnythingToolbarView::ChangeLineSpacingCallback,
-                          weak_pointer_factory_.GetWeakPtr()));
-  lines_combobox->SetShouldShowArrow(false);
-  lines_combobox->SetBorderColorId(ui::kColorSidePanelComboboxBorder);
+                          weak_pointer_factory_.GetWeakPtr()),
+      kReadAnythingLineSpacingIcon,
+      l10n_util::GetStringUTF16(IDS_READING_MODE_LINE_SPACING_COMBOBOX_LABEL),
+      delegate_->GetLineSpacingModel());
+  line_spacing_button->SetGroup(kToolbarGroupId);
 
-  // Create letter spacing selection combobox.
-  auto letter_spacing_combobox = std::make_unique<views::Combobox>();
-  letter_spacing_combobox->SetModel(delegate_->GetLetterSpacingModel());
-  letter_spacing_combobox->SetTooltipTextAndAccessibleName(
-      l10n_util::GetStringUTF16(
-          IDS_READ_ANYTHING_LETTER_SPACING_COMBOBOX_LABEL));
-  letter_spacing_combobox->SetSizeToLargestLabel(false);
-  letter_spacing_combobox->SetCallback(
+  // Create letter spacing menubutton.
+  auto letter_spacing_button = std::make_unique<ReadAnythingMenuButton>(
       base::BindRepeating(&ReadAnythingToolbarView::ChangeLetterSpacingCallback,
-                          weak_pointer_factory_.GetWeakPtr()));
-  letter_spacing_combobox->SetShouldShowArrow(false);
-  letter_spacing_combobox->SetBorderColorId(ui::kColorSidePanelComboboxBorder);
+                          weak_pointer_factory_.GetWeakPtr()),
+      kReadAnythingLetterSpacingIcon,
+      l10n_util::GetStringUTF16(IDS_READING_MODE_LETTER_SPACING_COMBOBOX_LABEL),
+      delegate_->GetLetterSpacingModel());
+  letter_spacing_button->SetGroup(kToolbarGroupId);
 
   // Add all views as children.
   font_combobox_ = AddChildView(std::move(combobox));
@@ -107,70 +128,144 @@ ReadAnythingToolbarView::ReadAnythingToolbarView(
   decrease_text_size_button_ = AddChildView(std::move(decrease_size_button));
   increase_text_size_button_ = AddChildView(std::move(increase_size_button));
   AddChildView(Separator());
-  colors_combobox_ = AddChildView(std::move(colors_combobox));
-  lines_combobox_ = AddChildView(std::move(lines_combobox));
-  letter_spacing_combobox_ = AddChildView(std::move(letter_spacing_combobox));
+  colors_button_ = AddChildView(std::move(colors_button));
+  line_spacing_button_ = AddChildView(std::move(line_spacing_button));
+  letter_spacing_button_ = AddChildView(std::move(letter_spacing_button));
+}
 
-  // Start observing model after views creation so initial theme is applied.
-  coordinator_->AddModelObserver(this);
+void ReadAnythingToolbarView::OnThemeChanged() {
+  views::View::OnThemeChanged();
+  if (delegate_) {
+    delegate_->OnSystemThemeChanged();
+  }
+}
+
+// After this view is added to the widget, we have access to the color provider
+// to apply the initial theme skcolors.
+void ReadAnythingToolbarView::AddedToWidget() {
+  ChangeColorsCallback();
 }
 
 void ReadAnythingToolbarView::DecreaseFontSizeCallback() {
-  if (delegate_)
+  if (delegate_) {
     delegate_->OnFontSizeChanged(/* increase = */ false);
+  }
 }
 
 void ReadAnythingToolbarView::IncreaseFontSizeCallback() {
-  if (delegate_)
+  if (delegate_) {
     delegate_->OnFontSizeChanged(/* increase = */ true);
+  }
 }
 
 void ReadAnythingToolbarView::ChangeColorsCallback() {
-  if (delegate_)
-    delegate_->OnColorsChanged(
-        colors_combobox_->GetSelectedIndex().value_or(0));
+  if (delegate_) {
+    delegate_->OnColorsChanged(colors_button_->GetSelectedIndex().value_or(0));
+  }
 }
 
 void ReadAnythingToolbarView::ChangeLineSpacingCallback() {
-  if (delegate_)
+  if (delegate_) {
     delegate_->OnLineSpacingChanged(
-        lines_combobox_->GetSelectedIndex().value_or(1));
+        line_spacing_button_->GetSelectedIndex().value_or(1));
+  }
 }
 
 void ReadAnythingToolbarView::ChangeLetterSpacingCallback() {
-  if (delegate_)
+  if (delegate_) {
     delegate_->OnLetterSpacingChanged(
-        letter_spacing_combobox_->GetSelectedIndex().value_or(1));
+        letter_spacing_button_->GetSelectedIndex().value_or(0));
+  }
 }
 
 void ReadAnythingToolbarView::OnCoordinatorDestroyed() {
   // When the coordinator that created |this| is destroyed, clean up pointers.
   coordinator_ = nullptr;
+  CleanUp();
+}
+
+void ReadAnythingToolbarView::OnSidePanelControllerDestroyed() {
+  // When the side panel controller that created |this| is destroyed, clean up
+  // pointers.
+  controller_ = nullptr;
+  CleanUp();
+}
+
+void ReadAnythingToolbarView::CleanUp() {
   delegate_ = nullptr;
   font_combobox_->SetModel(nullptr);
+  colors_button_->SetMenuModel(nullptr);
+  line_spacing_button_->SetMenuModel(nullptr);
+  letter_spacing_button_->SetMenuModel(nullptr);
 }
 
 void ReadAnythingToolbarView::OnReadAnythingThemeChanged(
-    read_anything::mojom::ReadAnythingThemePtr new_theme) {
-  SetBackground(views::CreateSolidBackground(new_theme->background_color));
-  font_combobox_->SetBackground(
-      views::CreateSolidBackground(new_theme->background_color));
-  colors_combobox_->SetBackground(
-      views::CreateSolidBackground(new_theme->background_color));
-  lines_combobox_->SetBackground(
-      views::CreateSolidBackground(new_theme->background_color));
-  letter_spacing_combobox_->SetBackground(
-      views::CreateSolidBackground(new_theme->background_color));
+    const std::string& font_name,
+    double font_scale,
+    ui::ColorId foreground_color_id,
+    ui::ColorId background_color_id,
+    ui::ColorId separator_color_id,
+    ui::ColorId dropdown_color_id,
+    ui::ColorId selected_dropdown_color_id,
+    ui::ColorId focus_ring_color_id,
+    read_anything::mojom::LineSpacing line_spacing,
+    read_anything::mojom::LetterSpacing letter_spacing) {
+  if (font_scale > kReadAnythingMinimumFontScale) {
+    decrease_text_size_button_->Enable();
+  } else {
+    decrease_text_size_button_->Disable();
+  }
+  if (font_scale < kReadAnythingMaximumFontScale) {
+    increase_text_size_button_->Enable();
+  } else {
+    increase_text_size_button_->Disable();
+  }
 
-  decrease_text_size_button_->UpdateIcon(gfx::CreateVectorIcon(
-      kTextDecreaseIcon, kSmallIconSize, new_theme->foreground_color));
+  if (!GetColorProvider()) {
+    return;
+  }
 
-  increase_text_size_button_->UpdateIcon(gfx::CreateVectorIcon(
-      kTextIncreaseIcon, kLargeIconSize, new_theme->foreground_color));
+  SetBackground(views::CreateThemedSolidBackground(background_color_id));
+  font_combobox_->SetBackgroundColorId(background_color_id);
+  font_combobox_->SetFocusRingColorId(focus_ring_color_id);
+  colors_button_->SetBackground(
+      views::CreateThemedSolidBackground(background_color_id));
+  line_spacing_button_->SetBackground(
+      views::CreateThemedSolidBackground(background_color_id));
+  letter_spacing_button_->SetBackground(
+      views::CreateThemedSolidBackground(background_color_id));
+
+  decrease_text_size_button_->UpdateIcon(kTextDecreaseIcon, kFontSizeIconSize,
+                                         foreground_color_id,
+                                         focus_ring_color_id);
+
+  increase_text_size_button_->UpdateIcon(kTextIncreaseIcon, kFontSizeIconSize,
+                                         foreground_color_id,
+                                         focus_ring_color_id);
+
+  colors_button_->SetIcon(kPaletteIcon, kIconSize, foreground_color_id,
+                          focus_ring_color_id);
+
+  line_spacing_button_->SetIcon(kReadAnythingLineSpacingIcon, kIconSize,
+                                foreground_color_id, focus_ring_color_id);
+  letter_spacing_button_->SetIcon(kReadAnythingLetterSpacingIcon, kIconSize,
+                                  foreground_color_id, focus_ring_color_id);
+
+  // Update the background colors for the dropdowns.
+  colors_button_->SetDropdownColorIds(dropdown_color_id, foreground_color_id,
+                                      selected_dropdown_color_id);
+  letter_spacing_button_->SetDropdownColorIds(
+      dropdown_color_id, foreground_color_id, selected_dropdown_color_id);
+  line_spacing_button_->SetDropdownColorIds(
+      dropdown_color_id, foreground_color_id, selected_dropdown_color_id);
+  font_combobox_->SetDropdownColorIds(dropdown_color_id, foreground_color_id,
+                                      selected_dropdown_color_id);
 
   for (views::Separator* separator : separators_) {
-    separator->SetColorId(delegate_->GetForegroundColorId());
+    separator->SetColorId(separator_color_id);
   }
+
+  font_combobox_->SetForegroundColorId(foreground_color_id);
 }
 
 std::unique_ptr<views::View> ReadAnythingToolbarView::Separator() {
@@ -187,7 +282,6 @@ std::unique_ptr<views::View> ReadAnythingToolbarView::Separator() {
   separator_container->SetLayoutManager(std::move(separator_layout_manager));
 
   auto separator = std::make_unique<views::Separator>();
-  separator->SetColorId(delegate_->GetForegroundColorId());
   separators_.push_back(
       separator_container->AddChildView(std::move(separator)));
 
@@ -196,15 +290,21 @@ std::unique_ptr<views::View> ReadAnythingToolbarView::Separator() {
 
 void ReadAnythingToolbarView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
   node_data->role = ax::mojom::Role::kToolbar;
-  node_data->SetDescription(
-      l10n_util::GetStringUTF16(IDS_READ_ANYTHING_TOOLBAR_LABEL));
+  node_data->SetNameChecked(
+      l10n_util::GetStringUTF16(IDS_READING_MODE_TOOLBAR_LABEL));
 }
 
 ReadAnythingToolbarView::~ReadAnythingToolbarView() {
-  // If |this| is being destroyed before the associated coordinator, then
-  // remove |this| as an observer.
-  if (coordinator_) {
+  // If |this| is being destroyed before the associated coordinator or side
+  // panel controller, then remove |this| as an observer.
+  if (features::IsReadAnythingLocalSidePanelEnabled() && controller_) {
+    controller_->RemoveObserver(this);
+    controller_->RemoveModelObserver(this);
+  } else if (coordinator_) {
     coordinator_->RemoveObserver(this);
     coordinator_->RemoveModelObserver(this);
   }
 }
+
+BEGIN_METADATA(ReadAnythingToolbarView)
+END_METADATA

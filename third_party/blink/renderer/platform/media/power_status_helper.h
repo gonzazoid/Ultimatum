@@ -5,7 +5,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_MEDIA_POWER_STATUS_HELPER_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_MEDIA_POWER_STATUS_HELPER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
 #include "media/base/video_codecs.h"
@@ -97,10 +97,6 @@ class PLATFORM_EXPORT PowerStatusHelper {
                                        gfx::Size natural_size,
                                        bool is_fullscreen,
                                        absl::optional<int> average_fps);
-
-  // Return the histogram names.  Here so that tests can find them too.
-  static const char* BatteryDeltaHistogram();
-  static const char* ElapsedTimeHistogram();
 
   // Recompute everything when playback state or power experiment state changes.
   void OnAnyStateChange();

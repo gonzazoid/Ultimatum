@@ -5,9 +5,11 @@
 #ifndef UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_SCREEN_H_
 #define UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_SCREEN_H_
 
+#include <ostream>
 #include <set>
 #include <vector>
 
+#include "base/containers/flat_map.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -19,6 +21,7 @@
 #include "ui/gfx/buffer_types.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
+#include "ui/ozone/platform/wayland/host/wayland_output.h"
 #include "ui/ozone/public/platform_screen.h"
 
 namespace gfx {
@@ -41,18 +44,14 @@ class WaylandScreen : public PlatformScreen {
   WaylandScreen& operator=(const WaylandScreen&) = delete;
   ~WaylandScreen() override;
 
-  void OnOutputAddedOrUpdated(uint32_t output_id,
-                              const gfx::Point& origin,
-                              const gfx::Size& logical_size,
-                              const gfx::Size& physical_size,
-                              const gfx::Insets& insets,
-                              float scale,
-                              int32_t panel_transform,
-                              int32_t logical_transform,
-                              const std::string& label);
+  void OnOutputAddedOrUpdated(const WaylandOutput::Metrics& metrics);
   void OnOutputRemoved(uint32_t output_id);
 
-  void OnTabletStateChanged(display::TabletState tablet_state);
+  WaylandOutput::Id GetOutputIdForDisplayId(int64_t display_id);
+  WaylandOutput* GetWaylandOutputForDisplayId(int64_t display_id);
+
+  // Returns id of the output that matches the bounds in screen coordinates.
+  WaylandOutput::Id GetOutputIdMatching(const gfx::Rect& match_rect);
 
   base::WeakPtr<WaylandScreen> GetWeakPtr();
 
@@ -80,8 +79,15 @@ class WaylandScreen : public PlatformScreen {
   base::Value::List GetGpuExtraInfo(
       const gfx::GpuExtraInfo& gpu_extra_info) override;
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
+  void OnTabletStateChanged(display::TabletState tablet_state) override;
   display::TabletState GetTabletState() const override;
 #endif
+
+  void DumpState(std::ostream& out) const;
+
+  // True if the internal representations for output objects is consistent for
+  // the screen.
+  bool VerifyOutputStateConsistentForTesting() const;
 
  protected:
   // Suspends or un-suspends the platform-specific screensaver, and returns
@@ -110,20 +116,10 @@ class WaylandScreen : public PlatformScreen {
     bool is_suspending_ = false;
   };
 
-  // All parameters are in DIP screen coordinates/units except |physical_size|,
-  // which is in physical pixels.
-  void AddOrUpdateDisplay(uint32_t output_id,
-                          const gfx::Point& origin,
-                          const gfx::Size& logical_size,
-                          const gfx::Size& physical_size,
-                          const gfx::Insets& insets,
-                          float scale,
-                          int32_t panel_transform,
-                          int32_t logical_transform,
-                          const std::string& label);
-
+  void AddOrUpdateDisplay(const WaylandOutput::Metrics& metrics);
   raw_ptr<WaylandConnection> connection_ = nullptr;
 
+  base::flat_map<WaylandOutput::Id, int64_t> display_id_map_;
   display::DisplayList display_list_;
 
   base::ObserverList<display::DisplayObserver> observers_;

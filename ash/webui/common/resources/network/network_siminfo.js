@@ -17,8 +17,8 @@ import './network_shared.css.js';
 import './sim_lock_dialogs.js';
 
 import {I18nBehavior} from '//resources/ash/common/i18n_behavior.js';
+import {loadTimeData} from '//resources/ash/common/load_time_data.m.js';
 import {isActiveSim} from '//resources/ash/common/network/cellular_utils.js';
-import {loadTimeData} from '//resources/js/load_time_data.m.js';
 import {Polymer} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {GlobalPolicy} from 'chrome://resources/mojo/chromeos/services/network_config/public/mojom/cros_network_config.mojom-webui.js';
 
@@ -119,20 +119,19 @@ Polymer({
     },
 
     /** @private {boolean} */
-    isSimLockPolicyEnabled_: {
-      type: Boolean,
-      value() {
-        return loadTimeData.valueExists('isSimLockPolicyEnabled') &&
-            loadTimeData.getBoolean('isSimLockPolicyEnabled');
-      },
-    },
-
-    /** @private {boolean} */
     isSimPinLockRestricted_: {
       type: Boolean,
       value: false,
-      computed: 'computeIsSimPinLockRestricted_(isSimLockPolicyEnabled_,' +
-          'globalPolicy, globalPolicy.*, lockEnabled_)',
+      computed: 'computeIsSimPinLockRestricted_(globalPolicy,' +
+          'globalPolicy.*, lockEnabled_)',
+    },
+
+    isCellularCarrierLockEnabled_: {
+      type: Boolean,
+      value() {
+        return loadTimeData.valueExists('isCellularCarrierLockEnabled') &&
+            loadTimeData.getBoolean('isCellularCarrierLockEnabled');
+      },
     },
   },
 
@@ -337,6 +336,25 @@ Polymer({
    * @return {boolean}
    * @private
    */
+  isSimCarrierLocked_() {
+    if (!this.isCellularCarrierLockEnabled_) {
+      return false;
+    }
+
+    const simLockStatus = this.deviceState && this.deviceState.simLockStatus;
+
+    if (this.isActiveSim_ && simLockStatus &&
+        simLockStatus.lockType === 'network-pin') {
+      return true;
+    }
+
+    return false;
+  },
+
+  /**
+   * @return {boolean}
+   * @private
+   */
   shouldShowPolicyIndicator_() {
     return this.isSimPinLockRestricted_ && this.isActiveSim_;
   },
@@ -346,8 +364,7 @@ Polymer({
    * @private
    */
   computeIsSimPinLockRestricted_() {
-    return this.isSimLockPolicyEnabled_ && !!this.globalPolicy &&
-        !this.globalPolicy.allowCellularSimLock;
+    return !!this.globalPolicy && !this.globalPolicy.allowCellularSimLock;
   },
 
   /**

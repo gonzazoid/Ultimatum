@@ -15,7 +15,7 @@
 #include <vector>
 
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/platform_keys/platform_keys.h"
+#include "chrome/browser/chromeos/platform_keys/platform_keys.h"
 #include "chromeos/crosapi/mojom/keystore_service.mojom.h"
 #include "extensions/browser/extension_function.h"
 #include "extensions/browser/extension_function_histogram_value.h"
@@ -63,8 +63,7 @@ class PlatformKeysInternalGetPublicKeyFunction : public ExtensionFunction {
   ~PlatformKeysInternalGetPublicKeyFunction() override;
   ResponseAction Run() override;
 
-  void OnGetPublicKey(
-      crosapi::mojom::DEPRECATED_GetPublicKeyResultPtr result_ptr);
+  void OnGetPublicKey(crosapi::mojom::GetPublicKeyResultPtr result_ptr);
 
   DECLARE_EXTENSION_FUNCTION("platformKeysInternal.getPublicKey",
                              PLATFORMKEYSINTERNAL_GETPUBLICKEY)

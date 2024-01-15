@@ -9,11 +9,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback.h"
+#include <optional>
 #include "base/compiler_specific.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr_exclusion.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
@@ -23,16 +24,12 @@
 #include "mojo/public/cpp/system/handle_signal_tracker.h"
 #include "mojo/public/cpp/system/message_pipe.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class Lock;
 }
 
 namespace mojo {
-namespace internal {
-class MessageQuotaChecker;
-}
 
 class SyncHandleWatcher;
 
@@ -224,10 +221,6 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) Connector : public MessageReceiver {
 
   base::SequencedTaskRunner* task_runner() const { return task_runner_.get(); }
 
-  // Sets the quota checker.
-  void SetMessageQuotaChecker(
-      scoped_refptr<internal::MessageQuotaChecker> checker);
-
   // Allows testing environments to override the default serialization behavior
   // of newly constructed Connector instances. Must be called before any
   // Connector instances are constructed.
@@ -243,10 +236,21 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) Connector : public MessageReceiver {
   class ActiveDispatchTracker;
   class RunLoopNestingObserver;
 
-  // Callback of mojo::SimpleWatcher.
-  void OnWatcherHandleReady(MojoResult result);
-  // Callback of SyncHandleWatcher.
-  void OnSyncHandleWatcherHandleReady(MojoResult result);
+  // Callback given to SimpleWatcher to dispatch events for pipe activity.
+  //
+  // We pass the Connector's static interface name here as a parameter, ensuring
+  // that if Chrome crashes within this method, the crash dump will include the
+  // address of the interface name string in some accessible place such as a
+  // register or nearby stack location. We do this to help pinpoint application
+  // bugs which destroy bindings endpoints from the wrong thread, as this can
+  // result in Connector destruction racing with execution of a WeakPtr-bound
+  // OnWatcherHandleReady task.
+  void OnWatcherHandleReady(const char* interface_name, MojoResult result);
+
+  // Callback of SyncHandleWatcher. See notes on OnWatcherHandleReady()
+  // regarding the `interface_name` argument.
+  void OnSyncHandleWatcherHandleReady(const char* interface_name,
+                                      MojoResult result);
 
   void OnHandleReadyInternal(MojoResult result);
 
@@ -307,7 +311,7 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) Connector : public MessageReceiver {
 
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
   std::unique_ptr<SimpleWatcher> handle_watcher_;
-  absl::optional<HandleSignalTracker> peer_remoteness_tracker_;
+  std::optional<HandleSignalTracker> peer_remoteness_tracker_;
 
   std::atomic<bool> error_;
   bool drop_writes_ = false;
@@ -323,7 +327,7 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) Connector : public MessageReceiver {
 
   // If sending messages is allowed from multiple sequences, |lock_| is used to
   // protect modifications to |message_pipe_| and |drop_writes_|.
-  absl::optional<base::Lock> lock_;
+  std::optional<base::Lock> lock_;
 
   std::unique_ptr<SyncHandleWatcher> sync_watcher_;
 
@@ -333,9 +337,6 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) Connector : public MessageReceiver {
   size_t sync_handle_watcher_callback_count_ = 0;
 
   SEQUENCE_CHECKER(sequence_checker_);
-
-  // The quota checker associate with this connector, if any.
-  scoped_refptr<internal::MessageQuotaChecker> quota_checker_;
 
   // Indicates whether the Connector is configured to actively read from its
   // message pipe. As long as this is true, the Connector is only safe to

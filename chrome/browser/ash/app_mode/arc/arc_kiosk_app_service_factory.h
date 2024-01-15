@@ -5,7 +5,7 @@
 #ifndef CHROME_BROWSER_ASH_APP_MODE_ARC_ARC_KIOSK_APP_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_ASH_APP_MODE_ARC_ARC_KIOSK_APP_SERVICE_FACTORY_H_
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace ash {
@@ -22,13 +22,14 @@ class ArcKioskAppServiceFactory : public ProfileKeyedServiceFactory {
 
   static ArcKioskAppServiceFactory* GetInstance();
 
- private:
-  friend struct base::DefaultSingletonTraits<ArcKioskAppServiceFactory>;
-
-  ArcKioskAppServiceFactory();
   ArcKioskAppServiceFactory(const ArcKioskAppServiceFactory&) = delete;
   ArcKioskAppServiceFactory& operator=(const ArcKioskAppServiceFactory&) =
       delete;
+
+ private:
+  friend base::NoDestructor<ArcKioskAppServiceFactory>;
+
+  ArcKioskAppServiceFactory();
   ~ArcKioskAppServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory overrides.
@@ -37,11 +38,5 @@ class ArcKioskAppServiceFactory : public ProfileKeyedServiceFactory {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the //chrome/browser/chromeos
-// source code migration is finished.
-namespace chromeos {
-using ::ash::ArcKioskAppServiceFactory;
-}
 
 #endif  // CHROME_BROWSER_ASH_APP_MODE_ARC_ARC_KIOSK_APP_SERVICE_FACTORY_H_

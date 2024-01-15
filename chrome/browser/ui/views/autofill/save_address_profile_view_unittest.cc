@@ -4,6 +4,8 @@
 
 #include "chrome/browser/ui/views/autofill/save_address_profile_view.h"
 
+#include <utility>
+
 #include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/ui/autofill/save_update_address_profile_bubble_controller.h"
@@ -19,10 +21,27 @@
 
 namespace autofill {
 
+using profile_ref = base::optional_ref<const AutofillProfile>;
+using ::testing::Property;
+
 class MockSaveUpdateAddressProfileBubbleController
     : public SaveUpdateAddressProfileBubbleController {
  public:
   MOCK_METHOD(std::u16string, GetWindowTitle, (), (const, override));
+  MOCK_METHOD(std::optional<HeaderImages>,
+              GetHeaderImages,
+              (),
+              (const, override));
+  MOCK_METHOD(std::u16string, GetBodyText, (), (const, override));
+  MOCK_METHOD(std::u16string, GetAddressSummary, (), (const, override));
+  MOCK_METHOD(std::u16string, GetProfileEmail, (), (const, override));
+  MOCK_METHOD(std::u16string, GetProfilePhone, (), (const, override));
+  MOCK_METHOD(std::u16string, GetOkButtonLabel, (), (const, override));
+  MOCK_METHOD(AutofillClient::SaveAddressProfileOfferUserDecision,
+              GetCancelCallbackValue,
+              (),
+              (const, override));
+  MOCK_METHOD(std::u16string, GetFooterMessage, (), (const, override));
   MOCK_METHOD(const AutofillProfile&, GetProfileToSave, (), (const, override));
   MOCK_METHOD(const AutofillProfile*,
               GetOriginalProfile,
@@ -30,7 +49,8 @@ class MockSaveUpdateAddressProfileBubbleController
               (const, override));
   MOCK_METHOD(void,
               OnUserDecision,
-              (AutofillClient::SaveAddressProfileOfferUserDecision decision),
+              (AutofillClient::SaveAddressProfileOfferUserDecision,
+               base::optional_ref<const AutofillProfile>),
               (override));
   MOCK_METHOD(void, OnEditButtonClicked, (), (override));
   MOCK_METHOD(void, OnBubbleClosed, (), (override));
@@ -44,18 +64,21 @@ class SaveAddressProfileViewTest : public ChromeViewsTestBase {
   void CreateViewAndShow();
 
   void SetUp() override {
-    feature_list_.InitAndEnableFeature(
-        features::kAutofillAddressProfileSavePrompt);
     ChromeViewsTestBase::SetUp();
 
     address_profile_to_save_ = test::GetFullProfile();
     test_web_contents_ =
         content::WebContentsTester::CreateTestWebContents(&profile_, nullptr);
+
+    ON_CALL(*mock_controller(), GetCancelCallbackValue)
+        .WillByDefault(::testing::Return(
+            AutofillClient::SaveAddressProfileOfferUserDecision::kDeclined));
   }
 
   void TearDown() override {
-    view_->GetWidget()->CloseWithReason(
-        views::Widget::ClosedReason::kCloseButtonClicked);
+    std::exchange(view_, nullptr)
+        ->GetWidget()
+        ->CloseWithReason(views::Widget::ClosedReason::kCloseButtonClicked);
     anchor_widget_.reset();
 
     ChromeViewsTestBase::TearDown();
@@ -72,12 +95,13 @@ class SaveAddressProfileViewTest : public ChromeViewsTestBase {
  private:
   base::test::ScopedFeatureList feature_list_;
   TestingProfile profile_;
-  AutofillProfile address_profile_to_save_;
+  AutofillProfile address_profile_to_save_{
+      i18n_model_definition::kLegacyHierarchyCountryCode};
   // This enables uses of TestWebContents.
   content::RenderViewHostTestEnabler test_render_host_factories_;
   std::unique_ptr<content::WebContents> test_web_contents_;
   std::unique_ptr<views::Widget> anchor_widget_;
-  raw_ptr<SaveAddressProfileView> view_;
+  raw_ptr<SaveAddressProfileView> view_ = nullptr;
   testing::NiceMock<MockSaveUpdateAddressProfileBubbleController>
       mock_controller_;
 };
@@ -113,7 +137,8 @@ TEST_F(SaveAddressProfileViewTest, AcceptInvokesTheController) {
   EXPECT_CALL(
       *mock_controller(),
       OnUserDecision(
-          AutofillClient::SaveAddressProfileOfferUserDecision::kAccepted));
+          AutofillClient::SaveAddressProfileOfferUserDecision::kAccepted,
+          Property(&profile_ref::has_value, false)));
   view()->AcceptDialog();
 }
 
@@ -122,7 +147,8 @@ TEST_F(SaveAddressProfileViewTest, CancelInvokesTheController) {
   EXPECT_CALL(
       *mock_controller(),
       OnUserDecision(
-          AutofillClient::SaveAddressProfileOfferUserDecision::kDeclined));
+          AutofillClient::SaveAddressProfileOfferUserDecision::kDeclined,
+          Property(&profile_ref::has_value, false)));
   view()->CancelDialog();
 }
 

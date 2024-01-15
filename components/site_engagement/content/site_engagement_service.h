@@ -29,11 +29,6 @@ namespace webapps {
 FORWARD_DECLARE_TEST(AppBannerManagerBrowserTest, WebAppBannerNeedsEngagement);
 }
 
-namespace settings {
-FORWARD_DECLARE_TEST(SiteSettingsHandlerTest,
-                     PopulateNotificationPermissionReviewData);
-}
-
 namespace content {
 class BrowserContext;
 class WebContents;
@@ -46,6 +41,7 @@ class WebAppEngagementBrowserTest;
 class GURL;
 class HostContentSettingsMap;
 class PrefRegistrySimple;
+class NotificationPermissionReviewServiceTest;
 
 namespace site_engagement {
 
@@ -155,14 +151,6 @@ class SiteEngagementService : public KeyedService,
   // performance-critical code.
   std::vector<mojom::SiteEngagementDetails> GetAllDetails() const;
 
-  // Return an array of engagement score details for all origins which have
-  // had engagement since the specified time.
-  //
-  // Note that this method is quite expensive, so try to avoid calling it in
-  // performance-critical code.
-  std::vector<mojom::SiteEngagementDetails> GetAllDetailsEngagedInTimePeriod(
-      browsing_data::TimePeriod time_period) const;
-
   // Update the engagement score of |url| for a notification interaction.
   void HandleNotificationInteraction(const GURL& url);
 
@@ -206,6 +194,7 @@ class SiteEngagementService : public KeyedService,
   friend class SiteEngagementObserver;
   friend class SiteEngagementServiceTest;
   friend class web_app::WebAppEngagementBrowserTest;
+  friend class ::NotificationPermissionReviewServiceTest;
   FRIEND_TEST_ALL_PREFIXES(SiteEngagementServiceTest, CheckHistograms);
   FRIEND_TEST_ALL_PREFIXES(SiteEngagementServiceTest, CleanupEngagementScores);
   FRIEND_TEST_ALL_PREFIXES(SiteEngagementServiceTest,
@@ -225,8 +214,6 @@ class SiteEngagementService : public KeyedService,
                            WebAppBannerNeedsEngagement);
   FRIEND_TEST_ALL_PREFIXES(AppBannerSettingsHelperTest, SiteEngagementTrigger);
   FRIEND_TEST_ALL_PREFIXES(HostedAppPWAOnlyTest, EngagementHistogram);
-  FRIEND_TEST_ALL_PREFIXES(settings::SiteSettingsHandlerTest,
-                           PopulateNotificationPermissionReviewData);
 
 #if BUILDFLAG(IS_ANDROID)
   // Shim class to expose the service to Java.
@@ -310,7 +297,8 @@ class SiteEngagementService : public KeyedService,
   void AddObserver(SiteEngagementObserver* observer);
   void RemoveObserver(SiteEngagementObserver* observer);
 
-  raw_ptr<content::BrowserContext> browser_context_;
+  raw_ptr<content::BrowserContext, AcrossTasksDanglingUntriaged>
+      browser_context_;
 
   // The clock used to vend times.
   raw_ptr<base::Clock> clock_;

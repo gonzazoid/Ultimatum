@@ -4,13 +4,12 @@
 
 #include "chrome/browser/extensions/api/content_settings/content_settings_api.h"
 
-#include <memory>
 #include <set>
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
@@ -22,18 +21,20 @@
 #include "chrome/common/extensions/api/content_settings.h"
 #include "components/content_settings/core/browser/content_settings_info.h"
 #include "components/content_settings/core/browser/content_settings_registry.h"
+#include "components/content_settings/core/browser/content_settings_uma_util.h"
 #include "components/content_settings/core/browser/content_settings_utils.h"
 #include "components/content_settings/core/browser/cookie_settings.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/content_settings.h"
+#include "components/content_settings/core/common/content_settings_types.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/common/webplugininfo.h"
 #include "extensions/browser/api/content_settings/content_settings_helpers.h"
 #include "extensions/browser/api/content_settings/content_settings_service.h"
 #include "extensions/browser/api/content_settings/content_settings_store.h"
-#include "extensions/browser/extension_prefs_scope.h"
 #include "extensions/browser/extension_util.h"
+#include "extensions/common/api/extension_types.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/error_utils.h"
 
@@ -45,6 +46,8 @@ namespace Set = extensions::api::content_settings::ContentSetting::Set;
 namespace pref_helpers = extensions::preference_helpers;
 
 namespace {
+
+using extensions::api::types::ChromeSettingScope;
 
 bool RemoveContentType(base::Value::List& args,
                        ContentSettingsType* content_type) {
@@ -80,19 +83,19 @@ ContentSettingsContentSettingClearFunction::Run() {
   ContentSettingsType content_type;
   EXTENSION_FUNCTION_VALIDATE(RemoveContentType(mutable_args(), &content_type));
 
-  std::unique_ptr<Clear::Params> params(Clear::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<Clear::Params> params = Clear::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   if (content_type == ContentSettingsType::DEPRECATED_PPAPI_BROKER) {
     NOTREACHED();
     return RespondNow(Error(kUnknownErrorDoNotUse));
   }
 
-  ExtensionPrefsScope scope = kExtensionPrefsScopeRegular;
+  ChromeSettingScope scope = ChromeSettingScope::kRegular;
   bool incognito = false;
   if (params->details.scope ==
-      api::content_settings::SCOPE_INCOGNITO_SESSION_ONLY) {
-    scope = kExtensionPrefsScopeIncognitoSessionOnly;
+      api::content_settings::Scope::kIncognitoSessionOnly) {
+    scope = ChromeSettingScope::kIncognitoSessionOnly;
     incognito = true;
   }
 
@@ -110,7 +113,7 @@ ContentSettingsContentSettingClearFunction::Run() {
   store->ClearContentSettingsForExtensionAndContentType(extension_id(), scope,
                                                         content_type);
 
-  return RespondNow(WithArguments());
+  return RespondNow(NoArguments());
 }
 
 ExtensionFunction::ResponseAction
@@ -118,8 +121,8 @@ ContentSettingsContentSettingGetFunction::Run() {
   ContentSettingsType content_type;
   EXTENSION_FUNCTION_VALIDATE(RemoveContentType(mutable_args(), &content_type));
 
-  std::unique_ptr<Get::Params> params(Get::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<Get::Params> params = Get::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   if (content_type == ContentSettingsType::DEPRECATED_PPAPI_BROKER) {
     NOTREACHED();
@@ -147,7 +150,7 @@ ContentSettingsContentSettingGetFunction::Run() {
     return RespondNow(Error(extension_misc::kIncognitoErrorMessage));
 
   HostContentSettingsMap* map;
-  content_settings::CookieSettings* cookie_settings;
+  scoped_refptr<content_settings::CookieSettings> cookie_settings;
   Profile* profile = Profile::FromBrowserContext(browser_context());
   if (incognito) {
     if (!profile->HasPrimaryOTRProfile()) {
@@ -157,20 +160,20 @@ ContentSettingsContentSettingGetFunction::Run() {
     }
     map = HostContentSettingsMapFactory::GetForProfile(
         profile->GetPrimaryOTRProfile(/*create_if_needed=*/true));
-    cookie_settings =
-        CookieSettingsFactory::GetForProfile(
-            profile->GetPrimaryOTRProfile(/*create_if_needed=*/true))
-            .get();
+    cookie_settings = CookieSettingsFactory::GetForProfile(
+        profile->GetPrimaryOTRProfile(/*create_if_needed=*/true));
   } else {
     map = HostContentSettingsMapFactory::GetForProfile(profile);
-    cookie_settings = CookieSettingsFactory::GetForProfile(profile).get();
+    cookie_settings = CookieSettingsFactory::GetForProfile(profile);
   }
 
+  // TODO(crbug.com/1386190): Consider whether the following check should
+  // somehow determine real CookieSettingOverrides rather than default to none.
   ContentSetting setting =
       content_type == ContentSettingsType::COOKIES
-          ? cookie_settings->GetCookieSetting(
-                primary_url, secondary_url, nullptr,
-                content_settings::CookieSettings::QueryReason::kSetting)
+          ? cookie_settings->GetCookieSetting(primary_url, secondary_url,
+                                              net::CookieSettingOverrides(),
+                                              nullptr)
           : map->GetContentSetting(primary_url, secondary_url, content_type);
 
   base::Value::Dict result;
@@ -187,8 +190,8 @@ ContentSettingsContentSettingSetFunction::Run() {
   ContentSettingsType content_type;
   EXTENSION_FUNCTION_VALIDATE(RemoveContentType(mutable_args(), &content_type));
 
-  std::unique_ptr<Set::Params> params(Set::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  absl::optional<Set::Params> params = Set::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   if (content_type == ContentSettingsType::DEPRECATED_PPAPI_BROKER) {
     NOTREACHED();
@@ -228,6 +231,15 @@ ContentSettingsContentSettingSetFunction::Run() {
       content_settings::ContentSettingsRegistry::GetInstance()->Get(
           content_type);
 
+  // The ANTI_ABUSE content setting does not support site-specific settings.
+  if (content_type == ContentSettingsType::ANTI_ABUSE &&
+      (primary_pattern != ContentSettingsPattern::Wildcard() ||
+       secondary_pattern != ContentSettingsPattern::Wildcard())) {
+    return RespondNow(
+        Error("Site-specific settings are not allowed for this type. The URL "
+              "pattern must be '<all_urls>'."));
+  }
+
   // Some content setting types support the full set of values listed in
   // content_settings.json only for exceptions. For the default setting,
   // some values might not be supported.
@@ -255,16 +267,13 @@ ContentSettingsContentSettingSetFunction::Run() {
                                                readable_type_name.c_str())));
   }
 
-  size_t num_values = 0;
-  int histogram_value =
-      ContentSettingTypeToHistogramValue(content_type, &num_values);
   if (primary_pattern != secondary_pattern &&
       secondary_pattern != ContentSettingsPattern::Wildcard()) {
-    UMA_HISTOGRAM_EXACT_LINEAR("ContentSettings.ExtensionEmbeddedSettingSet",
-                               histogram_value, num_values);
+    content_settings_uma_util::RecordContentSettingsHistogram(
+        "ContentSettings.ExtensionEmbeddedSettingSet", content_type);
   } else {
-    UMA_HISTOGRAM_EXACT_LINEAR("ContentSettings.ExtensionNonEmbeddedSettingSet",
-                               histogram_value, num_values);
+    content_settings_uma_util::RecordContentSettingsHistogram(
+        "ContentSettings.ExtensionNonEmbeddedSettingSet", content_type);
   }
 
   if (primary_pattern != secondary_pattern &&
@@ -275,11 +284,11 @@ ContentSettingsContentSettingSetFunction::Run() {
     return RespondNow(Error(kUnsupportedEmbeddedException));
   }
 
-  ExtensionPrefsScope scope = kExtensionPrefsScopeRegular;
+  ChromeSettingScope scope = ChromeSettingScope::kRegular;
   bool incognito = false;
   if (params->details.scope ==
-      api::content_settings::SCOPE_INCOGNITO_SESSION_ONLY) {
-    scope = kExtensionPrefsScopeIncognitoSessionOnly;
+      api::content_settings::Scope::kIncognitoSessionOnly) {
+    scope = ChromeSettingScope::kIncognitoSessionOnly;
     incognito = true;
   }
 
@@ -298,7 +307,7 @@ ContentSettingsContentSettingSetFunction::Run() {
       return RespondNow(Error(kIncognitoContextError));
   }
 
-  if (scope == kExtensionPrefsScopeIncognitoSessionOnly &&
+  if (scope == ChromeSettingScope::kIncognitoSessionOnly &&
       !Profile::FromBrowserContext(browser_context())->HasPrimaryOTRProfile()) {
     return RespondNow(Error(extension_misc::kIncognitoSessionOnlyErrorMessage));
   }
@@ -309,7 +318,7 @@ ContentSettingsContentSettingSetFunction::Run() {
                                     secondary_pattern, content_type, setting,
                                     scope);
 
-  return RespondNow(WithArguments());
+  return RespondNow(NoArguments());
 }
 
 ExtensionFunction::ResponseAction
@@ -318,7 +327,7 @@ ContentSettingsContentSettingGetResourceIdentifiersFunction::Run() {
   // plugins have been deprecated since Chrome 87, there are no resource
   // identifiers for existing settings (but we retain the function for
   // backwards and potential forwards compatibility).
-  return RespondNow(WithArguments());
+  return RespondNow(NoArguments());
 }
 
 }  // namespace extensions

@@ -13,8 +13,6 @@
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
-class PrefService;
-
 namespace enterprise_connectors {
 
 namespace test {
@@ -26,15 +24,23 @@ class ScopedKeyRotationCommandFactory : public KeyRotationCommandFactory {
   ScopedKeyRotationCommandFactory();
   ~ScopedKeyRotationCommandFactory() override;
 
+  // Will set `mock_key_rotation_command` to be the next value returned by the
+  // KeyRotationCommandFactory. If nullptr, will clear all settings and default
+  // to the original implementation.
   void SetMock(
       std::unique_ptr<test::MockKeyRotationCommand> mock_key_rotation_command);
 
+  // Will force the factory to return nullptr as the next commands.
+  void ReturnInvalidCommand();
+
   // KeyRotationCommandFactory:
   std::unique_ptr<KeyRotationCommand> CreateCommand(
-      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-      PrefService* local_prefs) override;
+      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory)
+      override;
 
  private:
+  bool return_invalid_command = false;
+
   std::unique_ptr<test::MockKeyRotationCommand> mock_key_rotation_command_;
 };
 

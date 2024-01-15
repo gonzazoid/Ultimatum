@@ -2,13 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <iostream>
-
 #include "base/base_paths.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/command_line.h"
+#include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/process/process.h"
 #include "base/test/launcher/unit_test_launcher.h"
@@ -17,21 +16,21 @@
 #include "build/build_config.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/updater/test/integration_test_commands.h"
-#include "chrome/updater/unittest_util.h"
+#include "chrome/updater/test_scope.h"
+#include "chrome/updater/updater_scope.h"
+#include "chrome/updater/util/unit_test_util.h"
 
 #if BUILDFLAG(IS_WIN)
 #include <shlobj.h>
 
 #include <memory>
+#include <string>
 
-#include "base/base_paths.h"
-#include "base/files/file_path.h"
-#include "base/files/file_util.h"
 #include "base/path_service.h"
 #include "base/win/registry.h"
 #include "base/win/scoped_com_initializer.h"
 #include "chrome/installer/util/scoped_token_privilege.h"
-#include "chrome/updater/win/win_util.h"
+#include "chrome/updater/util/win_util.h"
 
 namespace {
 
@@ -42,15 +41,17 @@ namespace {
 void FixExecutionPriorities() {
   const HANDLE process = ::GetCurrentProcess();
   const DWORD priority_class = ::GetPriorityClass(process);
-  if (priority_class == NORMAL_PRIORITY_CLASS)
+  if (priority_class == NORMAL_PRIORITY_CLASS) {
     return;
+  }
   ::SetPriorityClass(process, NORMAL_PRIORITY_CLASS);
 
   static const auto set_process_information_fn =
       reinterpret_cast<decltype(&::SetProcessInformation)>(::GetProcAddress(
           ::GetModuleHandle(L"Kernel32.dll"), "SetProcessInformation"));
-  if (!set_process_information_fn)
+  if (!set_process_information_fn) {
     return;
+  }
   MEMORY_PRIORITY_INFORMATION memory_priority = {};
   memory_priority.MemoryPriority = MEMORY_PRIORITY_NORMAL;
   set_process_information_fn(process, ProcessMemoryPriority, &memory_priority,
@@ -88,17 +89,19 @@ class ScopedSymbolPath {
     if (reg_key.Valid() && !reg_key.HasValue(kNtSymbolPathEnVar)) {
       is_owned = reg_key.WriteValue(kNtSymbolPathEnVar, symbol_path.c_str()) ==
                  ERROR_SUCCESS;
-      if (!is_owned)
+      if (!is_owned) {
         return;
+      }
       BroadcastEnvironmentChange();
-      std::wcerr << "Symbol path for " << (is_system_ ? "system" : "user")
-                 << " set to: " << symbol_path << std::endl;
+      VLOG(0) << "Symbol path for " << (is_system_ ? "system" : "user")
+              << " set to: " << symbol_path;
     }
   }
 
   ~ScopedSymbolPath() {
-    if (!is_owned)
+    if (!is_owned) {
       return;
+    }
     base::win::RegKey reg_key(rootkey_, subkey_.c_str(), KEY_WRITE);
     if (reg_key.Valid()) {
       reg_key.DeleteValue(kNtSymbolPathEnVar);
@@ -165,28 +168,27 @@ int main(int argc, char** argv) {
   MaybeIncreaseTestTimeouts(argc, argv);
 
 #if BUILDFLAG(IS_WIN)
-  std::cerr << "Process priority: " << base::Process::Current().GetPriority()
-            << std::endl;
-  std::cerr << updater::GetUACState() << std::endl;
+  updater::test::MaybeExcludePathsFromWindowsDefender();
 
-  // TODO(crbug.com/1245429): remove when the bug is fixed.
-  // Typically, the test suite runner expects the swarming task to run with
-  // normal priority but for some reason, on the updater bots with UAC on, the
-  // swarming task runs with a priority below normal.
+  VLOG(0) << "Process priority: " << base::Process::Current().GetOSPriority();
+  VLOG(0) << updater::GetUACState();
+
+  // The test suite runner expects the swarming task to run with normal priority
+  // but for some reason, on the updater bots with UAC on, the swarming task
+  // runs with a priority below normal (see crbug.com/1245429).
   FixExecutionPriorities();
 
   auto scoped_com_initializer =
       std::make_unique<base::win::ScopedCOMInitializer>(
           base::win::ScopedCOMInitializer::kMTA);
-  if (FAILED(updater::DisableCOMExceptionHandling())) {
-    // Failing to disable COM exception handling is a critical error.
-    CHECK(false) << "Failed to disable COM exception handling.";
-  }
+
+  // Failing to disable COM exception handling is a critical error.
+  CHECK(SUCCEEDED(updater::DisableCOMExceptionHandling()))
+      << "Failed to disable COM exception handling.";
 
   installer::ScopedTokenPrivilege token_se_debug(SE_DEBUG_NAME);
   if (::IsUserAnAdmin() && !token_se_debug.is_enabled()) {
-    std::cerr << "Running as administrator but can't enable SE_DEBUG_NAME."
-              << std::endl;
+    LOG(ERROR) << "Running as administrator but can't enable SE_DEBUG_NAME.";
   }
 
   // Set up the _NT_ALT_SYMBOL_PATH to get symbolized stack traces in logs.
@@ -194,20 +196,21 @@ int main(int argc, char** argv) {
   ScopedSymbolPath scoped_symbol_path_user(/*is_system=*/false);
 #endif
 
+  // Use the {ISOLATED_OUTDIR} as a log destination for the test suite.
   base::TestSuite test_suite(argc, argv);
+  updater::test::InitLoggingForUnitTest(base::FilePath([] {
+    switch (updater::GetTestScope()) {
+      case updater::UpdaterScope::kSystem:
+        return FILE_PATH_LITERAL("updater_test_system.log");
+      case updater::UpdaterScope::kUser:
+        return FILE_PATH_LITERAL("updater_test.log");
+    }
+  }()));
   chrome::RegisterPathProvider();
   return base::LaunchUnitTestsWithOptions(
-      argc, argv, 1, 10, true, base::BindRepeating([]() {
-        logging::SetLogItems(true,    // enable_process_id
-                             true,    // enable_thread_id
-                             true,    // enable_timestamp
-                             false);  // enable_tickcount
+      argc, argv, 1, 10, true, base::BindRepeating([] {
         LOG(ERROR) << "A test timeout has occured in "
                    << updater::test::GetTestName();
-#if BUILDFLAG(IS_WIN)
-        const base::FilePath updater_test = updater::test::GetUpdaterTestPath();
-        PLOG_IF(0, !base::PathExists(updater_test)) << ", " << updater_test;
-#endif
         updater::test::CreateIntegrationTestCommands()->PrintLog();
       }),
       base::BindOnce(&base::TestSuite::Run, base::Unretained(&test_suite)));

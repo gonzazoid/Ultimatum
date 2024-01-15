@@ -8,59 +8,59 @@ import android.app.Dialog;
 import android.content.Context;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 
-import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.components.browser_ui.settings.SettingsLauncher;
 
 import java.lang.ref.WeakReference;
 
-/**
- * Controller for the dialog shown for the Privacy Sandbox.
- */
+/** Controller for the dialog shown for the Privacy Sandbox. */
 public class PrivacySandboxDialogController {
     private static WeakReference<Dialog> sDialog;
-    private static Boolean sShowNew;
-    private static Boolean sDisableAnimations;
+    private static boolean sDisableAnimations;
+    private static boolean sDisableEEANoticeForTesting;
 
-    /**
-     * Launches an appropriate dialog if necessary and returns whether that happened.
-     */
-    public static boolean maybeLaunchPrivacySandboxDialog(
-            @PrivacySandboxDialogLaunchContext int launchContext, Context context,
-            @NonNull SettingsLauncher settingsLauncher, boolean isIncognito,
-            @Nullable BottomSheetController bottomSheetController) {
+    public static boolean shouldShowPrivacySandboxDialog(boolean isIncognito) {
         if (isIncognito) {
             return false;
         }
-        @PromptType
-        int promptType = PrivacySandboxBridge.getRequiredPromptType();
+        @PromptType int promptType = PrivacySandboxBridge.getRequiredPromptType();
+        if (promptType != PromptType.M1_CONSENT
+                && promptType != PromptType.M1_NOTICE_EEA
+                && promptType != PromptType.M1_NOTICE_ROW
+                && promptType != PromptType.M1_NOTICE_RESTRICTED) {
+            return false;
+        }
+        return true;
+    }
+
+    /** Launches an appropriate dialog if necessary and returns whether that happened. */
+    public static boolean maybeLaunchPrivacySandboxDialog(
+            Context context, @NonNull SettingsLauncher settingsLauncher, boolean isIncognito) {
+        if (isIncognito) {
+            return false;
+        }
+        @PromptType int promptType = PrivacySandboxBridge.getRequiredPromptType();
         Dialog dialog = null;
         switch (promptType) {
             case PromptType.NONE:
                 return false;
-            case PromptType.NOTICE:
-                boolean newNotice = showNewNotice();
-                if (launchContext == PrivacySandboxDialogLaunchContext.NEW_TAB_PAGE && newNotice) {
-                    // Invoked in the NTP context and the new notice should be shown; show it.
-                    if (bottomSheetController == null) return false;
-                    new PrivacySandboxBottomSheetNotice(
-                            context, bottomSheetController, settingsLauncher)
-                            .showNotice(/*animate = */ sDisableAnimations == null);
-                } else if (launchContext == PrivacySandboxDialogLaunchContext.BROWSER_START
-                        && !newNotice) {
-                    // Invoked at browser start without the new notice; show it.
-                    dialog = new PrivacySandboxDialogNotice(context, settingsLauncher);
-                    dialog.show();
-                    sDialog = new WeakReference<>(dialog);
-                } else {
-                    // The launch context doesn't match the notice type; do not show anything.
-                    return false;
-                }
+            case PromptType.M1_CONSENT:
+                dialog =
+                        new PrivacySandboxDialogConsentEEA(
+                                context, settingsLauncher, sDisableAnimations);
+                dialog.show();
+                sDialog = new WeakReference<>(dialog);
                 return true;
-            case PromptType.CONSENT:
-                dialog = new PrivacySandboxDialogConsent(context);
+            case PromptType.M1_NOTICE_EEA:
+                showNoticeEEA(context, settingsLauncher);
+                return true;
+            case PromptType.M1_NOTICE_ROW:
+                dialog = new PrivacySandboxDialogNoticeROW(context, settingsLauncher);
+                dialog.show();
+                sDialog = new WeakReference<>(dialog);
+                return true;
+            case PromptType.M1_NOTICE_RESTRICTED:
+                dialog = new PrivacySandboxDialogNoticeRestricted(context, settingsLauncher);
                 dialog.show();
                 sDialog = new WeakReference<>(dialog);
                 return true;
@@ -71,30 +71,25 @@ public class PrivacySandboxDialogController {
         }
     }
 
-    static boolean showNewNotice() {
-        // Unless overridden for testing, a new notice should always be shown.
-        // TODO(crbug.com/1375230) Remove this code path if the ability to
-        // differentiate notice types is no longer required.
-        return (sShowNew != null) ? sShowNew : true;
+    /** Shows the NoticeEEA dialog. */
+    public static void showNoticeEEA(Context context, SettingsLauncher settingsLauncher) {
+        if (!sDisableEEANoticeForTesting) {
+            Dialog dialog;
+            dialog = new PrivacySandboxDialogNoticeEEA(context, settingsLauncher);
+            dialog.show();
+            sDialog = new WeakReference<>(dialog);
+        }
     }
 
-    @VisibleForTesting
     static Dialog getDialogForTesting() {
         return sDialog != null ? sDialog.get() : null;
     }
 
-    @VisibleForTesting
-    static void resetShowNewNoticeForTesting() {
-        sShowNew = null;
+    static void disableAnimationsForTesting(boolean disable) {
+        sDisableAnimations = disable;
     }
 
-    @VisibleForTesting
-    static void setShowNewNoticeForTesting(boolean showNew) {
-        sShowNew = showNew;
-    }
-
-    @VisibleForTesting
-    static void disableAnimationsForTesting() {
-        sDisableAnimations = true;
+    static void disableEEANoticeForTesting(boolean disable) {
+        sDisableEEANoticeForTesting = disable;
     }
 }

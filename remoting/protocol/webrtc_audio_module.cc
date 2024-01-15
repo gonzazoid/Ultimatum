@@ -6,9 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/timer/timer.h"
 
 namespace remoting::protocol {
@@ -365,8 +364,9 @@ void WebrtcAudioModule::PollFromSource() {
   DCHECK(audio_task_runner_->BelongsToCurrentThread());
 
   base::AutoLock lock(lock_);
-  if (!audio_transport_)
+  if (!audio_transport_) {
     return;
+  }
 
   for (int i = 0; i < kPollInterval.InMilliseconds() / kFrameLengthMs; i++) {
     int64_t elapsed_time_ms = -1;

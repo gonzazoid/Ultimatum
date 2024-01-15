@@ -12,6 +12,7 @@
 #include "components/feed/core/proto/v2/wire/feed_query.pb.h"
 #include "components/feed/core/v2/public/feed_api.h"
 #include "components/feed/core/v2/types.h"
+#include "components/feed/core/v2/view_demotion.h"
 
 namespace feedwire {
 class Request;
@@ -53,7 +54,9 @@ feedwire::Request CreateFeedQueryRefreshRequest(
     const StreamType& stream_type,
     feedwire::FeedQuery::RequestReason request_reason,
     const RequestMetadata& request_metadata,
-    const std::string& consistency_token);
+    const std::string& consistency_token,
+    const SingleWebFeedEntryPoint single_feed_entry_point,
+    const std::vector<DocViewCount> doc_view_counts);
 
 feedwire::Request CreateFeedQueryLoadMoreRequest(
     const RequestMetadata& request_metadata,

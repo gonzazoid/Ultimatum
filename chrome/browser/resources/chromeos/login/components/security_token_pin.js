@@ -10,18 +10,18 @@
 import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
 import '//resources/ash/common/quick_unlock/pin_keyboard.js';
 import '//resources/cr_elements/icons.html.js';
-import './oobe_icons.m.js';
-import './buttons/oobe_back_button.m.js';
+import './oobe_icons.html.js';
+import './buttons/oobe_back_button.js';
 import './buttons/oobe_next_button.js';
-import './common_styles/common_styles.m.js';
-import './common_styles/oobe_dialog_host_styles.m.js';
-import './dialogs/oobe_adaptive_dialog.m.js';
+import './common_styles/oobe_common_styles.css.js';
+import './common_styles/oobe_dialog_host_styles.css.js';
+import './dialogs/oobe_adaptive_dialog.js';
 
 import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {OobeDialogHostBehavior} from './behaviors/oobe_dialog_host_behavior.m.js';
-import {OobeI18nBehavior, OobeI18nBehaviorInterface} from './behaviors/oobe_i18n_behavior.m.js';
-import {OobeTypes} from './oobe_types.m.js';
+import {OobeDialogHostBehavior} from './behaviors/oobe_dialog_host_behavior.js';
+import {OobeI18nBehavior, OobeI18nBehaviorInterface} from './behaviors/oobe_i18n_behavior.js';
+import {OobeTypes} from './oobe_types.js';
 
 
 /**

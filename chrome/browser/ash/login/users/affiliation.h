@@ -9,28 +9,11 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 
 class AccountId;
 
 namespace ash {
-
-typedef std::set<std::string> AffiliationIDSet;
-
-// Returns true if there is at least one common element in two sets.
-// Complexity: O(n + m), where n - size of the first set, m - size of
-// the second set.
-bool HaveCommonElement(const std::set<std::string>& set1,
-                       const std::set<std::string>& set2);
-
-// TODO(peletskyi): Remove email after affiliation based implementation will
-// fully work. http://crbug.com/515476
-// The function makes a decision if user with `user_affiliation_ids` and
-// `email` is affiliated on the device with `device_affiliation_ids` and
-// `enterprise_domain`.
-bool IsUserAffiliated(const AffiliationIDSet& user_affiliation_ids,
-                      const AffiliationIDSet& device_affiliation_ids,
-                      const std::string& email);
 
 // Returns a callback to retrieve device DMToken if the user with
 // given `account_id` is affiliated on the device.

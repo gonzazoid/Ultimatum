@@ -7,25 +7,24 @@
 #include <utility>
 
 #include "base/android/orderfile/orderfile_buildflags.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/process/process_handle.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/timer/timer.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/viz/host/gpu_host_impl.h"
+#include "content/browser/child_process_host_impl.h"
 #include "content/browser/gpu/gpu_data_manager_impl.h"
 #include "content/browser/gpu/gpu_disk_cache_factory.h"
 #include "content/browser/gpu/gpu_memory_buffer_manager_singleton.h"
 #include "content/browser/gpu/gpu_process_host.h"
-#include "content/common/child_process_host_impl.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/content_browser_client.h"
@@ -105,10 +104,12 @@ class BrowserGpuChannelHostFactory::EstablishRequest
   // that case we make the sync mojo call since we're on the UI thread and
   // therefore can't wait for an async mojo reply on the same thread.
   void Establish(bool sync);
-  void OnEstablished(mojo::ScopedMessagePipeHandle channel_handle,
-                     const gpu::GPUInfo& gpu_info,
-                     const gpu::GpuFeatureInfo& gpu_feature_info,
-                     viz::GpuHostImpl::EstablishChannelStatus status);
+  void OnEstablished(
+      mojo::ScopedMessagePipeHandle channel_handle,
+      const gpu::GPUInfo& gpu_info,
+      const gpu::GpuFeatureInfo& gpu_feature_info,
+      const gpu::SharedImageCapabilities& shared_image_capabilities,
+      viz::GpuHostImpl::EstablishChannelStatus status);
   void Finish();
   void FinishAndRunCallbacksOnMain();
   void FinishOnMain();
@@ -148,7 +149,7 @@ BrowserGpuChannelHostFactory::EstablishRequest::EstablishRequest(
 #if BUILDFLAG(IS_MAC)
       main_task_runner_(ui::WindowResizeHelperMac::Get()->task_runner())
 #else
-      main_task_runner_(base::ThreadTaskRunnerHandle::Get())
+      main_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault())
 #endif
 {
 }
@@ -182,6 +183,7 @@ void BrowserGpuChannelHostFactory::EstablishRequest::OnEstablished(
     mojo::ScopedMessagePipeHandle channel_handle,
     const gpu::GPUInfo& gpu_info,
     const gpu::GpuFeatureInfo& gpu_feature_info,
+    const gpu::SharedImageCapabilities& shared_image_capabilities,
     viz::GpuHostImpl::EstablishChannelStatus status) {
   if (!channel_handle.is_valid() &&
       status == viz::GpuHostImpl::EstablishChannelStatus::kGpuHostInvalid &&
@@ -206,8 +208,8 @@ void BrowserGpuChannelHostFactory::EstablishRequest::OnEstablished(
 
   if (channel_handle.is_valid()) {
     gpu_channel_ = base::MakeRefCounted<gpu::GpuChannelHost>(
-        gpu_client_id_, gpu_info, gpu_feature_info, std::move(channel_handle),
-        GetIOThreadTaskRunner({}));
+        gpu_client_id_, gpu_info, gpu_feature_info, shared_image_capabilities,
+        std::move(channel_handle), GetIOThreadTaskRunner({}));
   }
   Finish();
 }

@@ -17,6 +17,7 @@ import org.chromium.base.Callback;
 import org.chromium.base.CommandLine;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.task.AsyncTask;
@@ -79,11 +80,11 @@ public class EnterpriseInfoImpl extends EnterpriseInfo {
                     boolean hasDeviceOwnerApp = false;
                     PackageManager packageManager = context.getPackageManager();
                     DevicePolicyManager devicePolicyManager =
-                            (DevicePolicyManager) context.getSystemService(
-                                    Context.DEVICE_POLICY_SERVICE);
+                            (DevicePolicyManager)
+                                    context.getSystemService(Context.DEVICE_POLICY_SERVICE);
 
-                    if (CommandLine.getInstance().hasSwitch(
-                                ChromeSwitches.FORCE_DEVICE_OWNERSHIP)) {
+                    if (CommandLine.getInstance()
+                            .hasSwitch(ChromeSwitches.FORCE_DEVICE_OWNERSHIP)) {
                         hasDeviceOwnerApp = true;
                     }
 
@@ -130,6 +131,12 @@ public class EnterpriseInfoImpl extends EnterpriseInfo {
         ThreadUtils.assertOnUiThread();
         assert result != null;
         mOwnedState = result;
+        Log.i(
+                TAG,
+                "#setCacheResult() deviceOwned:"
+                        + result.mDeviceOwned
+                        + " profileOwned:"
+                        + result.mProfileOwned);
     }
 
     @VisibleForTesting
@@ -143,9 +150,10 @@ public class EnterpriseInfoImpl extends EnterpriseInfo {
 
     @Override
     public void logDeviceEnterpriseInfo() {
-        Callback<OwnedState> callback = (result) -> {
-            recordManagementHistograms(result);
-        };
+        Callback<OwnedState> callback =
+                (result) -> {
+                    recordManagementHistograms(result);
+                };
         getDeviceEnterpriseInfo(callback);
     }
 
@@ -165,8 +173,8 @@ public class EnterpriseInfoImpl extends EnterpriseInfo {
      * If mOwnedState != null then this function has no effect and a task to service the
      * callback will be posted immediately.
      */
-    @VisibleForTesting
     void setSkipAsyncCheckForTesting(boolean skip) {
         mSkipAsyncCheckForTesting = skip;
+        ResettersForTesting.register(() -> mSkipAsyncCheckForTesting = false);
     }
 }

@@ -27,9 +27,6 @@
       name: "descent-override",
     },
     {
-      name: "end",
-    },
-    {
       name: "font-display",
     },
     {
@@ -79,19 +76,16 @@
       name: "range",
     },
     {
-      name: "size-adjust",
+      name: "navigation",
     },
     {
-      name: "source",
+      name: "size-adjust",
     },
     {
       name: "speak-as",
     },
     {
       name: "src",
-    },
-    {
-      name: "start",
     },
     {
       name: "suffix",

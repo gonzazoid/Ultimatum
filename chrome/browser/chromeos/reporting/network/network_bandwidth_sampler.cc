@@ -6,26 +6,50 @@
 
 #include <limits>
 
+#include "base/feature_list.h"
+#include "base/memory/weak_ptr.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/reporting/metrics/sampler.h"
 #include "components/reporting/proto/synced/metric_data.pb.h"
+#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "services/network/public/cpp/network_quality_tracker.h"
 
 namespace reporting {
 
+// static
+BASE_FEATURE(kEnableNetworkBandwidthReporting,
+             "EnableNetworkBandwidthReporting",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
 NetworkBandwidthSampler::NetworkBandwidthSampler(
     ::network::NetworkQualityTracker* network_quality_tracker,
-    Profile* profile)
+    base::WeakPtr<Profile> profile)
     : network_quality_tracker_(network_quality_tracker), profile_(profile) {
-  DCHECK(network_quality_tracker_);
+  CHECK(network_quality_tracker_);
+  CHECK(profile_);
 }
 
+NetworkBandwidthSampler::~NetworkBandwidthSampler() = default;
+
 void NetworkBandwidthSampler::MaybeCollect(OptionalMetricCallback callback) {
-  DCHECK(profile_);
-  if (!profile_->GetPrefs()->GetBoolean(::prefs::kInsightsExtensionEnabled)) {
-    // Policy not set, so we return.
+  if (!::content::BrowserThread::CurrentlyOn(::content::BrowserThread::UI)) {
+    ::content::GetUIThreadTaskRunner({})->PostTask(
+        FROM_HERE,
+        base::BindOnce(&NetworkBandwidthSampler::MaybeCollect,
+                       weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+    return;
+  }
+  if (!profile_) {
+    // Profile destructed so we collect no data.
+    std::move(callback).Run(absl::nullopt);
+    return;
+  }
+  if (!profile_->GetPrefs()->GetBoolean(::prefs::kInsightsExtensionEnabled) &&
+      !base::FeatureList::IsEnabled(kEnableNetworkBandwidthReporting)) {
+    // Both policy and feature flag not set, so we return.
     std::move(callback).Run(absl::nullopt);
     return;
   }

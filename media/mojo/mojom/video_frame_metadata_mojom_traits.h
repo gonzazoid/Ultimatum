@@ -5,7 +5,6 @@
 #ifndef MEDIA_MOJO_MOJOM_VIDEO_FRAME_METADATA_MOJOM_TRAITS_H_
 #define MEDIA_MOJO_MOJOM_VIDEO_FRAME_METADATA_MOJOM_TRAITS_H_
 
-#include "base/memory/ref_counted.h"
 #include "media/base/ipc/media_param_traits_macros.h"
 #include "media/base/video_frame_metadata.h"
 #include "media/base/video_transformation.h"
@@ -80,8 +79,9 @@ struct StructTraits<media::mojom::VideoFrameMetadataDataView,
     return input.texture_origin_is_top_left;
   }
 
-  static uint32_t crop_version(const media::VideoFrameMetadata& input) {
-    return input.crop_version;
+  static uint32_t sub_capture_target_version(
+      const media::VideoFrameMetadata& input) {
+    return input.sub_capture_target_version;
   }
 
   GENERATE_OPT_SERIALIZATION(int, capture_counter, 0)
@@ -162,6 +162,11 @@ struct StructTraits<media::mojom::VideoFrameMetadataDataView,
   static absl::optional<base::TimeDelta> wallclock_frame_duration(
       const media::VideoFrameMetadata& input) {
     return input.wallclock_frame_duration;
+  }
+
+  static absl::optional<uint64_t> frame_sequence(
+      const media::VideoFrameMetadata& input) {
+    return input.frame_sequence;
   }
 
   static bool Read(media::mojom::VideoFrameMetadataDataView input,

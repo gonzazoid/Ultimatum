@@ -4,16 +4,14 @@
 
 #import "cvc_header_item.h"
 
-#import "base/mac/foundation_util.h"
+#import "base/apple/foundation_util.h"
 #import "build/branding_buildflags.h"
 #import "components/grit/components_scaled_resources.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "components/strings/grit/components_strings.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ui/base/l10n/l10n_util.h"
 
 namespace {
 // Spacing between elements.
@@ -56,6 +54,11 @@ const CGFloat kGooglePayBadgeHeight = 16;
 
     _googlePayBadgeImageView = [self createGooglePayBadge];
     _googlePayBadgeImageView.image = [self googlePayBadgeImage];
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+    _googlePayBadgeImageView.isAccessibilityElement = YES;
+    _googlePayBadgeImageView.accessibilityLabel =
+        l10n_util::GetNSString(IDS_AUTOFILL_GOOGLE_PAY_LOGO_ACCESSIBLE_NAME);
+#endif
     [self.contentView addSubview:_googlePayBadgeImageView];
 
     // Badge image aspect ratio (width / height).
@@ -112,7 +115,7 @@ const CGFloat kGooglePayBadgeHeight = 16;
 // Returns a new UILabel to be used as the view's instruction label.
 - (UILabel*)createInstructionsLabel {
   UILabel* label = [[UILabel alloc] init];
-  label.font = [UIFont preferredFontForTextStyle:kTableViewSublabelFontStyle];
+  label.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
   label.textColor = [UIColor colorNamed:kTextSecondaryColor];
   label.numberOfLines = 0;
   label.lineBreakMode = NSLineBreakByWordWrapping;

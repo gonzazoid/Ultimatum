@@ -34,6 +34,8 @@ LOGCAT_FILTERS = [
   'StrictMode:D',
 ]
 
+SYSTEM_USER_ID = 0
+
 
 def _DeviceCachePath(device):
   file_name = 'device_cache_%s.json' % device.adb.GetDeviceSerial()
@@ -84,26 +86,6 @@ def handle_shard_failures_with(on_failure):
   return decorator
 
 
-def place_nomedia_on_device(dev, device_root, run_as=None, as_root=False):
-  """Places .nomedia file in test data root.
-
-  This helps to prevent system from scanning media files inside test data.
-
-  Args:
-    dev: Device to place .nomedia file.
-    device_root: Base path on device to place .nomedia file.
-  """
-
-  dev.RunShellCommand(['mkdir', '-p', device_root],
-                      run_as=run_as,
-                      as_root=as_root,
-                      check_return=True)
-  dev.WriteFile('%s/.nomedia' % device_root,
-                'https://crbug.com/796640',
-                run_as=run_as,
-                as_root=as_root)
-
-
 # TODO(1262303): After Telemetry is supported by python3 we can re-add
 # super without arguments in this script.
 # pylint: disable=super-with-arguments
@@ -128,16 +110,26 @@ class LocalDeviceEnvironment(environment.Environment):
     self._skip_clear_data = args.skip_clear_data
     self._tool_name = args.tool
     self._trace_output = None
+    # Must check if arg exist because this class is used by
+    # //third_party/catapult's browser_options.py
     if hasattr(args, 'trace_output'):
       self._trace_output = args.trace_output
     self._trace_all = None
     if hasattr(args, 'trace_all'):
       self._trace_all = args.trace_all
+    self._force_main_user = False
+    if hasattr(args, 'force_main_user'):
+      self._force_main_user = args.force_main_user
     self._use_persistent_shell = args.use_persistent_shell
+    self._disable_test_server = args.disable_test_server
 
-    devil_chromium.Initialize(
-        output_directory=constants.GetOutDirectory(),
-        adb_path=args.adb_path)
+    use_local_devil_tools = False
+    if hasattr(args, 'use_local_devil_tools'):
+      use_local_devil_tools = args.use_local_devil_tools
+
+    devil_chromium.Initialize(output_directory=constants.GetOutDirectory(),
+                              adb_path=args.adb_path,
+                              use_local_devil_tools=use_local_devil_tools)
 
     # Some things such as Forwarder require ADB to be in the environment path,
     # while others like Devil's bundletool.py require Java on the path.
@@ -183,6 +175,21 @@ class LocalDeviceEnvironment(environment.Environment):
     def prepare_device(d):
       d.WaitUntilFullyBooted()
 
+      if self._force_main_user:
+        # Ensure the current user is the main user (the first real human user).
+        main_user = d.GetMainUser()
+        if d.GetCurrentUser() != main_user:
+          logging.info('Switching to the main user with id %s', main_user)
+          d.SwitchUser(main_user)
+        d.target_user = main_user
+      elif d.GetCurrentUser() != SYSTEM_USER_ID:
+        # TODO(b/293175593): Remove this after "force_main_user" works fine.
+        # Use system user to run tasks to avoid "/sdcard "accessing issue
+        # due to multiple-users. For details, see
+        # https://source.android.com/docs/devices/admin/multi-user-testing
+        logging.info('Switching to user with id %s', SYSTEM_USER_ID)
+        d.SwitchUser(SYSTEM_USER_ID)
+
       if self._enable_device_cache:
         cache_path = _DeviceCachePath(d)
         if os.path.exists(cache_path):
@@ -197,8 +204,10 @@ class LocalDeviceEnvironment(environment.Environment):
             self._logcat_output_dir,
             '%s_%s' % (d.adb.GetDeviceSerial(),
                        datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%S')))
-        monitor = logcat_monitor.LogcatMonitor(
-            d.adb, clear=True, output_file=logcat_file)
+        monitor = logcat_monitor.LogcatMonitor(d.adb,
+                                               clear=True,
+                                               output_file=logcat_file,
+                                               check_error=False)
         self._logcat_monitors.append(monitor)
         monitor.Start()
 
@@ -253,6 +262,14 @@ class LocalDeviceEnvironment(environment.Environment):
   @property
   def trace_output(self):
     return self._trace_output
+
+  @property
+  def disable_test_server(self):
+    return self._disable_test_server
+
+  @property
+  def force_main_user(self):
+    return self._force_main_user
 
   #override
   def TearDown(self):

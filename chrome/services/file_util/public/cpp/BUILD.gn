@@ -8,6 +8,7 @@ import("//components/safe_browsing/buildflags.gni")
 import("//printing/buildflags/buildflags.gni")
 
 source_set("cpp") {
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
   deps = [ "//chrome/common/safe_browsing:archive_analyzer_results" ]
   public_deps = [ "//chrome/services/file_util/public/mojom" ]
 
@@ -19,6 +20,8 @@ source_set("cpp") {
       "sandboxed_seven_zip_analyzer.h",
       "sandboxed_zip_analyzer.cc",
       "sandboxed_zip_analyzer.h",
+      "temporary_file_getter.cc",
+      "temporary_file_getter.h",
     ]
     if (is_mac) {
       sources += [
@@ -57,6 +60,7 @@ if (safe_browsing_mode == 1) {
       "sandboxed_rar_analyzer_unittest.cc",
       "sandboxed_seven_zip_analyzer_unittest.cc",
       "sandboxed_zip_analyzer_unittest.cc",
+      "temporary_file_getter_unittest.cc",
     ]
     if (is_mac) {
       sources += [ "sandboxed_dmg_analyzer_mac_unittest.cc" ]
@@ -72,6 +76,7 @@ if (safe_browsing_mode == 1) {
       "//chrome/common:constants",
       "//chrome/common/safe_browsing:archive_analyzer_results",
       "//chrome/services/file_util",
+      "//chrome/services/file_util:test_support",
       "//components/safe_browsing/content/common:file_type_policies",
       "//components/safe_browsing/core/common",
       "//content/test:test_support",

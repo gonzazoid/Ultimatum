@@ -18,6 +18,7 @@
 #include "components/services/storage/shared_storage/shared_storage_database.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
+#include "net/base/schemeful_site.h"
 #include "url/origin.h"
 
 namespace base {
@@ -71,17 +72,22 @@ class TestDatabaseOperationReceiver {
       DB_GET_REMAINING_BUDGET = 15,
       DB_IS_OPEN = 16,
       DB_STATUS = 17,
-      DB_OVERRIDE_TIME = 18,
-      DB_GET_NUM_BUDGET = 19,
-      DB_GET_TOTAL_NUM_BUDGET = 20,
-      DB_GET_CREATION_TIME = 21,
+      DB_OVERRIDE_TIME_ORIGIN = 18,
+      DB_OVERRIDE_TIME_ENTRY = 19,
+      DB_GET_NUM_BUDGET = 20,
+      DB_GET_TOTAL_NUM_BUDGET = 21,
+      DB_GET_CREATION_TIME = 22,
     } type;
     url::Origin origin;
     std::vector<std::u16string> params;
     explicit DBOperation(Type type);
     DBOperation(Type type, url::Origin origin);
+    DBOperation(Type type, net::SchemefulSite site);
     DBOperation(Type type,
                 url::Origin origin,
+                std::vector<std::u16string> params);
+    DBOperation(Type type,
+                net::SchemefulSite site,
                 std::vector<std::u16string> params);
     DBOperation(Type type, std::vector<std::u16string> params);
     DBOperation(const DBOperation&);
@@ -211,7 +217,7 @@ class StorageKeyPolicyMatcherFunctionUtility {
 };
 
 class TestSharedStorageEntriesListener
-    : public shared_storage_worklet::mojom::SharedStorageEntriesListener {
+    : public blink::mojom::SharedStorageEntriesListener {
  public:
   explicit TestSharedStorageEntriesListener(
       scoped_refptr<base::SequencedTaskRunner> task_runner);
@@ -220,13 +226,11 @@ class TestSharedStorageEntriesListener
   void DidReadEntries(
       bool success,
       const std::string& error_message,
-      std::vector<shared_storage_worklet::mojom::SharedStorageKeyAndOrValuePtr>
-          entries,
+      std::vector<blink::mojom::SharedStorageKeyAndOrValuePtr> entries,
       bool has_more_entries,
       int total_queued_to_send) override;
 
-  [[nodiscard]] mojo::PendingRemote<
-      shared_storage_worklet::mojom::SharedStorageEntriesListener>
+  [[nodiscard]] mojo::PendingRemote<blink::mojom::SharedStorageEntriesListener>
   BindNewPipeAndPassRemote();
 
   void Flush();
@@ -243,12 +247,10 @@ class TestSharedStorageEntriesListener
   TakeEntries();
 
  private:
-  mojo::Receiver<shared_storage_worklet::mojom::SharedStorageEntriesListener>
-      receiver_{this};
+  mojo::Receiver<blink::mojom::SharedStorageEntriesListener> receiver_{this};
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
   std::string error_message_;
-  std::deque<shared_storage_worklet::mojom::SharedStorageKeyAndOrValuePtr>
-      entries_;
+  std::deque<blink::mojom::SharedStorageKeyAndOrValuePtr> entries_;
   std::vector<bool> has_more_;
 };
 
@@ -260,8 +262,7 @@ class TestSharedStorageEntriesListenerUtility {
 
   [[nodiscard]] size_t RegisterListener();
 
-  [[nodiscard]] mojo::PendingRemote<
-      shared_storage_worklet::mojom::SharedStorageEntriesListener>
+  [[nodiscard]] mojo::PendingRemote<blink::mojom::SharedStorageEntriesListener>
   BindNewPipeAndPassRemoteForId(size_t id);
 
   void FlushForId(size_t id);
@@ -327,11 +328,17 @@ void VerifySharedStorageTablesAndColumns(sql::Database& db);
 [[nodiscard]] bool GetTestDataSharedStorageDir(base::FilePath* dir);
 
 [[nodiscard]] bool CreateDatabaseFromSQL(const base::FilePath& db_path,
-                                         const char* ascii_path);
+                                         std::string ascii_path);
 
 [[nodiscard]] std::string TimeDeltaToString(base::TimeDelta delta);
 
 [[nodiscard]] BudgetResult MakeBudgetResultForSqlError();
+
+[[nodiscard]] std::string GetTestFileNameForVersion(int version_number);
+
+[[nodiscard]] std::string GetTestFileNameForCurrentVersion();
+
+[[nodiscard]] std::string GetTestFileNameForLatestDeprecatedVersion();
 
 }  // namespace storage
 

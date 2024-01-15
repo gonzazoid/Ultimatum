@@ -2,13 +2,16 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#import <TestLib/EarlGreyImpl/EarlGrey.h>
 #import <UIKit/UIKit.h>
 
 #import "base/ios/ios_util.h"
-#import "ios/chrome/browser/prefs/pref_names.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/ui/bookmarks/bookmark_earl_grey.h"
+#import "ios/chrome/browser/ui/settings/password/password_settings/password_settings_constants.h"
+#import "ios/chrome/browser/ui/settings/password/password_settings_app_interface.h"
 #import "ios/chrome/browser/ui/settings/password/passwords_table_view_constants.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
+#import "ios/chrome/browser/ui/settings/settings_root_table_constants.h"
 #import "ios/chrome/grit/ios_strings.h"
 #import "ios/chrome/test/earl_grey/chrome_actions.h"
 #import "ios/chrome/test/earl_grey/chrome_earl_grey.h"
@@ -20,10 +23,6 @@
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #import "ios/web/common/features.h"
 #import "ui/base/l10n/l10n_util_mac.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 // Test case to verify that EarlGrey tests can be launched and perform basic
 // UI interactions.
@@ -58,24 +57,46 @@
 
 // Tests that helpers from chrome_actions.h are available for use in tests.
 - (void)testToggleSettingsSwitch {
+  AppLaunchConfiguration config = [self appConfigurationForTestCase];
+  config.relaunch_policy = ForceRelaunchByCleanShutdown;
+  [[AppLaunchManager sharedManager] ensureAppLaunchedWithConfiguration:config];
+
   [ChromeEarlGreyUI openSettingsMenu];
+
+  // Mock successful reauth when opening the Password Manager.
+  [PasswordSettingsAppInterface setUpMockReauthenticationModule];
+  [PasswordSettingsAppInterface mockReauthenticationModuleExpectedResult:
+                                    ReauthenticationResult::kSuccess];
   [ChromeEarlGreyUI
       tapSettingsMenuButton:chrome_test_util::SettingsMenuPasswordsButton()];
 
+  // Open password settings.
+  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
+                                          kSettingsToolbarSettingsButtonId)]
+      performAction:grey_tap()];
+
   // Toggle the passwords switch off and on.
-  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
-                                          kSavePasswordSwitchTableViewId)]
+  [[EarlGrey
+      selectElementWithMatcher:
+          grey_accessibilityID(kPasswordSettingsSavePasswordSwitchTableViewId)]
       performAction:chrome_test_util::TurnTableViewSwitchOn(NO)];
-  [[EarlGrey selectElementWithMatcher:grey_accessibilityID(
-                                          kSavePasswordSwitchTableViewId)]
+  [[EarlGrey
+      selectElementWithMatcher:
+          grey_accessibilityID(kPasswordSettingsSavePasswordSwitchTableViewId)]
       performAction:chrome_test_util::TurnTableViewSwitchOn(YES)];
 
   // Close the settings menu.
   [[EarlGrey
-      selectElementWithMatcher:chrome_test_util::SettingsMenuBackButton()]
+      selectElementWithMatcher:grey_allOf(
+                                   chrome_test_util::SettingsDoneButton(),
+                                   grey_sufficientlyVisible(), nil)]
       performAction:grey_tap()];
+  // Close Password Manager.
   [[EarlGrey selectElementWithMatcher:chrome_test_util::SettingsDoneButton()]
       performAction:grey_tap()];
+
+  // Remove mock to keep the app in the same state as before running the test.
+  [PasswordSettingsAppInterface removeMockReauthenticationModule];
 }
 
 // Tests that helpers from chrome_earl_grey.h are available for use in tests.
@@ -126,8 +147,8 @@
 
 // Tests bookmark converted helpers in chrome_earl_grey.h.
 - (void)testBookmarkHelpers {
-  [ChromeEarlGrey waitForBookmarksToFinishLoading];
-  [ChromeEarlGrey clearBookmarks];
+  [BookmarkEarlGrey waitForBookmarkModelsLoaded];
+  [BookmarkEarlGrey clearBookmarks];
 }
 
 // Tests helpers involving fake sync servers and autofill profiles in
@@ -150,13 +171,6 @@
       performAction:grey_tap()];
   [ChromeEarlGrey
       waitForSufficientlyVisibleElementWithMatcher:chrome_test_util::Omnibox()];
-}
-
-// Tests sync server converted helpers in chrome_earl_grey.h.
-- (void)testSyncServerHelpers {
-  [ChromeEarlGrey startSync];
-  [ChromeEarlGrey waitForSyncInitialized:NO syncTimeout:base::Seconds(10)];
-  [ChromeEarlGrey clearSyncServerData];
 }
 
 // Tests executeJavaScript:error: in chrome_earl_grey.h
@@ -249,13 +263,17 @@
 
 // Tests hard kill(crash) through AppLaunchManager.
 - (void)testAppLaunchManagerForceRelaunchByKilling {
+  [ChromeEarlGrey loadURL:GURL("chrome://version")];
+  [ChromeEarlGrey openNewIncognitoTab];
   [ChromeEarlGrey openNewTab];
+  [ChromeEarlGrey loadURL:GURL("chrome://about")];
   [[AppLaunchManager sharedManager] ensureAppLaunchedWithFeaturesEnabled:{}
       disabled:{}
       relaunchPolicy:ForceRelaunchByKilling];
-  [ChromeEarlGrey
-      waitForSufficientlyVisibleElementWithMatcher:grey_text(@"Restore")];
-  [ChromeEarlGrey waitForMainTabCount:1];
+  [ChromeEarlGrey waitForMainTabCount:2];
+  [ChromeEarlGrey waitForIncognitoTabCount:1];
+  [[EarlGrey selectElementWithMatcher:grey_text(@"Restore")]
+      assertWithMatcher:grey_notVisible()];
 }
 
 // Tests running resets after relaunch through AppLaunchManager.

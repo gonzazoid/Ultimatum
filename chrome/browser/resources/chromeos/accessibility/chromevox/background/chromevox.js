@@ -3,58 +3,69 @@
 // found in the LICENSE file.
 
 /**
- * @fileoverview Defines a global object.
+ * @fileoverview Defines a global object that holds references to the three
+ * different output engines.
  */
+import {NavBraille} from '../common/braille/nav_braille.js';
+import {BridgeConstants} from '../common/bridge_constants.js';
+import {BridgeHelper} from '../common/bridge_helper.js';
+import {Spannable} from '../common/spannable.js';
 
-import {constants} from '../../common/constants.js';
-import {AbstractEarcons} from '../common/abstract_earcons.js';
-import {BrailleInterface} from '../common/braille/braille_interface.js';
-import {TtsInterface} from '../common/tts_interface.js';
+import {AbstractEarcons} from './abstract_earcons.js';
+import {BrailleCommandHandler} from './braille/braille_command_handler.js';
+import {BrailleInterface} from './braille/braille_interface.js';
+import {ChromeVoxState} from './chromevox_state.js';
+import {TtsInterface} from './tts_interface.js';
 
-export class ChromeVox {
-  /**
-   * Returns whether sticky mode is on, taking both the global sticky mode
-   * pref and the temporary sticky mode override into account.
-   *
-   * @return {boolean} Whether sticky mode is on.
-   */
-  static isStickyModeOn() {
-    if (ChromeVox.stickyOverride !== null) {
-      return ChromeVox.stickyOverride;
-    } else {
-      return ChromeVox.isStickyPrefOn;
-    }
-  }
-}
+/** A central access point for the different modes of output. */
+export const ChromeVox = {
+  /** @type {BrailleInterface} */
+  braille: null,
+  /** @type {AbstractEarcons} */
+  earcons: null,
+  /** @type {TtsInterface} */
+  tts: null,
+};
 
-// Constants
-/**
- * @type {TtsInterface}
- */
-ChromeVox.tts;
-/**
- * @type {BrailleInterface}
- */
-ChromeVox.braille;
-/**
- * @type {AbstractEarcons}
- */
-ChromeVox.earcons = null;
-/**
- * This indicates whether or not the sticky mode pref is toggled on.
- * Use ChromeVox.isStickyModeOn() to test if sticky mode is enabled
- * either through the pref or due to being temporarily toggled on.
- * @type {boolean}
- */
-ChromeVox.isStickyPrefOn = false;
-/**
- * If set to true or false, this value overrides ChromeVox.isStickyPrefOn
- * temporarily - in order to temporarily enable sticky mode while doing
- * 'read from here' or to temporarily disable it while using a widget.
- * @type {?boolean}
- */
-ChromeVox.stickyOverride = null;
-/**
- * @type {Object<string, constants.Point>}
- */
-ChromeVox.position = {};
+// Braille bridge functions.
+BridgeHelper.registerHandler(
+    BridgeConstants.Braille.TARGET,
+    BridgeConstants.Braille.Action.BACK_TRANSLATE,
+    cells => Promise.resolve(ChromeVox.braille?.backTranslate(cells)));
+
+BridgeHelper.registerHandler(
+    BridgeConstants.Braille.TARGET, BridgeConstants.Braille.Action.SET_BYPASS,
+    async bypass => {
+      await ChromeVoxState.ready();
+      BrailleCommandHandler.setBypass(bypass);
+    });
+
+BridgeHelper.registerHandler(
+    BridgeConstants.Braille.TARGET, BridgeConstants.Braille.Action.PAN_LEFT,
+    () => ChromeVox.braille?.panLeft());
+
+BridgeHelper.registerHandler(
+    BridgeConstants.Braille.TARGET, BridgeConstants.Braille.Action.PAN_RIGHT,
+    () => ChromeVox.braille?.panRight());
+
+BridgeHelper.registerHandler(
+    BridgeConstants.Braille.TARGET, BridgeConstants.Braille.Action.WRITE,
+    text =>
+        ChromeVox.braille?.write(new NavBraille({text: new Spannable(text)})));
+
+// Earcon bridge functions.
+BridgeHelper.registerHandler(
+    BridgeConstants.Earcons.TARGET,
+    BridgeConstants.Earcons.Action.CANCEL_EARCON,
+    earconId => ChromeVox.earcons?.cancelEarcon(earconId));
+
+BridgeHelper.registerHandler(
+    BridgeConstants.Earcons.TARGET, BridgeConstants.Earcons.Action.PLAY_EARCON,
+    earconId => ChromeVox.earcons?.playEarcon(earconId));
+
+// TTS bridge functions.
+BridgeHelper.registerHandler(
+    BridgeConstants.TtsBackground.TARGET,
+    BridgeConstants.TtsBackground.Action.SPEAK,
+    (text, queueMode, properties) =>
+        ChromeVox.tts?.speak(text, queueMode, properties));

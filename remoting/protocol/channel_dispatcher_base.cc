@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "remoting/base/compound_buffer.h"
 #include "remoting/protocol/message_channel_factory.h"
 #include "remoting/protocol/message_pipe.h"
@@ -17,8 +17,9 @@ ChannelDispatcherBase::ChannelDispatcherBase(const std::string& channel_name)
     : channel_name_(channel_name) {}
 
 ChannelDispatcherBase::~ChannelDispatcherBase() {
-  if (channel_factory_)
+  if (channel_factory_) {
     channel_factory_->CancelChannelCreation(channel_name_);
+  }
 }
 
 void ChannelDispatcherBase::Init(MessageChannelFactory* channel_factory,

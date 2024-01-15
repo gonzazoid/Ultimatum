@@ -1,10 +1,9 @@
 {
-  "$build/chromium_orchestrator": {
-    "compilator": "mac12-arm64-rel-compilator",
-    "compilator_watcher_git_revision": "7809a690bbd935bcb3b4d922e24cabe168aaabc8"
-  },
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/try/mac12-arm64-rel/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
@@ -78,8 +77,10 @@
       ]
     }
   },
-  "$build/flakiness": {
-    "check_for_flakiness": true
+  "$build/reclient": {
+    "instance": "rbe-chromium-untrusted",
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],
@@ -89,5 +90,5 @@
     ]
   },
   "builder_group": "tryserver.chromium.mac",
-  "recipe": "chromium/orchestrator"
+  "recipe": "chromium_trybot"
 }

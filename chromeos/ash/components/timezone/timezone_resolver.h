@@ -7,9 +7,11 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/threading/thread_checker.h"
+#include "chromeos/ash/components/geolocation/simple_geolocation_provider.h"
 #include "url/gurl.h"
 
 class PrefRegistrySimple;
@@ -38,18 +40,18 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_TIMEZONE) TimeZoneResolver {
 
   class Delegate {
    public:
-    Delegate();
+    Delegate() = default;
 
     Delegate(const Delegate&) = delete;
     Delegate& operator=(const Delegate&) = delete;
 
-    virtual ~Delegate();
+    virtual ~Delegate() = default;
 
     // Returns true if TimeZoneResolver should include WiFi data in request.
-    virtual bool ShouldSendWiFiGeolocationData() = 0;
+    virtual bool ShouldSendWiFiGeolocationData() const = 0;
 
     // Returns true if TimeZoneResolver should include Cellular data in request.
-    virtual bool ShouldSendCellularGeolocationData() = 0;
+    virtual bool ShouldSendCellularGeolocationData() const = 0;
   };
 
   // This is a LocalState preference to store base::Time value of the last
@@ -57,8 +59,8 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_TIMEZONE) TimeZoneResolver {
   static const char kLastTimeZoneRefreshTime[];
 
   TimeZoneResolver(Delegate* delegate,
+                   SimpleGeolocationProvider* geolocation_provider_,
                    scoped_refptr<network::SharedURLLoaderFactory> factory,
-                   const GURL& url,
                    const ApplyTimeZoneCallback& apply_timezone,
                    const DelayNetworkCallClosure& delay_network_call,
                    PrefService* local_state);
@@ -73,6 +75,10 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_TIMEZONE) TimeZoneResolver {
 
   // Cancels current request and stops periodic timezone refresh.
   void Stop();
+
+  // Return true if the periodic timezone scheduler is running (Stop() not
+  // called).
+  bool IsRunning();
 
   // Register prefs to LocalState.
   static void RegisterPrefs(PrefRegistrySimple* registry);
@@ -100,14 +106,18 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_TIMEZONE) TimeZoneResolver {
   static int IntervalForNextRequestForTesting(const int requests);
 
  private:
-  Delegate* delegate_;
+  bool is_running_ = false;
+  const raw_ptr<const Delegate> delegate_;
+
+  // Points to the `SimpleGeolocationProvider::GetInstance()` throughout the
+  // object lifecycle. Overridden in unit tests.
+  raw_ptr<SimpleGeolocationProvider> geolocation_provider_ = nullptr;
 
   scoped_refptr<network::SharedURLLoaderFactory> shared_url_loader_factory_;
-  const GURL url_;
 
   const ApplyTimeZoneCallback apply_timezone_;
   const DelayNetworkCallClosure delay_network_call_;
-  PrefService* local_state_;
+  raw_ptr<PrefService> local_state_;
 
   std::unique_ptr<TimeZoneResolverImpl> implementation_;
 
@@ -115,10 +125,5 @@ class COMPONENT_EXPORT(CHROMEOS_ASH_COMPONENTS_TIMEZONE) TimeZoneResolver {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-using ::ash::TimeZoneResolver;
-}  // namespace chromeos
 
 #endif  // CHROMEOS_ASH_COMPONENTS_TIMEZONE_TIMEZONE_RESOLVER_H_

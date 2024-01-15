@@ -45,6 +45,10 @@
       },
       "wow_key": "KEY_WOW64_32KEY"
     },
+    "HKEY_CURRENT_USER\\$CHROME_UPDATE_REGISTRY_SUBKEY\\Commands\\cmd": {
+      "exists": "forbidden",
+      "wow_key": "KEY_WOW64_32KEY"
+    },
     "HKEY_CURRENT_USER\\$BINARIES_UPDATE_REGISTRY_SUBKEY": {
       "exists": "forbidden",
       "wow_key": "KEY_WOW64_32KEY"

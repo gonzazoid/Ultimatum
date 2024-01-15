@@ -8,8 +8,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
@@ -31,8 +31,8 @@ namespace device {
 BluetoothAdapter::ServiceOptions::ServiceOptions() = default;
 BluetoothAdapter::ServiceOptions::~ServiceOptions() = default;
 
-#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS) && !BUILDFLAG(IS_MAC) && \
-    !BUILDFLAG(IS_WIN) && !BUILDFLAG(IS_LINUX)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS) && \
+    !BUILDFLAG(IS_APPLE) && !BUILDFLAG(IS_WIN) && !BUILDFLAG(IS_LINUX)
 // static
 scoped_refptr<BluetoothAdapter> BluetoothAdapter::CreateAdapter() {
   return nullptr;
@@ -225,7 +225,7 @@ BluetoothAdapter::DeviceList BluetoothAdapter::GetDevices() {
   DeviceList devices;
   for (ConstDeviceList::const_iterator i = const_devices.begin();
        i != const_devices.end(); ++i)
-    devices.push_back(const_cast<BluetoothDevice*>(*i));
+    devices.push_back(const_cast<BluetoothDevice*>(i->get()));
 
   return devices;
 }
@@ -347,6 +347,12 @@ void BluetoothAdapter::NotifyDeviceBatteryChanged(
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS)
+void BluetoothAdapter::NotifyDeviceBondedChanged(BluetoothDevice* device,
+                                                 bool new_bonded_status) {
+  for (auto& observer : observers_)
+    observer.DeviceBondedChanged(this, device, new_bonded_status);
+}
+
 void BluetoothAdapter::NotifyDeviceIsBlockedByPolicyChanged(
     BluetoothDevice* device,
     bool new_blocked_status) {
@@ -354,6 +360,12 @@ void BluetoothAdapter::NotifyDeviceIsBlockedByPolicyChanged(
 
   for (auto& observer : observers_)
     observer.DeviceBlockedByPolicyChanged(this, device, new_blocked_status);
+}
+
+void BluetoothAdapter::NotifyGattNeedsDiscovery(BluetoothDevice* device) {
+  for (auto& observer : observers_) {
+    observer.GattNeedsDiscovery(device);
+  }
 }
 #endif
 

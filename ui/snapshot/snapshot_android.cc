@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/android/view_android.h"
@@ -25,12 +25,6 @@ namespace ui {
 bool GrabViewSnapshot(gfx::NativeView view,
                       const gfx::Rect& snapshot_bounds,
                       gfx::Image* image) {
-  return GrabWindowSnapshot(view->GetWindowAndroid(), snapshot_bounds, image);
-}
-
-bool GrabWindowSnapshot(gfx::NativeWindow window,
-                        const gfx::Rect& snapshot_bounds,
-                        gfx::Image* image) {
   return false;
 }
 
@@ -61,7 +55,7 @@ static void MakeAsyncCopyRequest(
 void GrabWindowSnapshotAndScaleAsync(gfx::NativeWindow window,
                                      const gfx::Rect& source_rect,
                                      const gfx::Size& target_size,
-                                     GrabWindowSnapshotAsyncCallback callback) {
+                                     GrabSnapshotImageCallback callback) {
   MakeAsyncCopyRequest(
       window, source_rect,
       CreateCopyRequest(window, source_rect,
@@ -71,7 +65,7 @@ void GrabWindowSnapshotAndScaleAsync(gfx::NativeWindow window,
 
 void GrabWindowSnapshotAsync(gfx::NativeWindow window,
                              const gfx::Rect& source_rect,
-                             GrabWindowSnapshotAsyncCallback callback) {
+                             GrabSnapshotImageCallback callback) {
   MakeAsyncCopyRequest(
       window, source_rect,
       CreateCopyRequest(
@@ -82,7 +76,7 @@ void GrabWindowSnapshotAsync(gfx::NativeWindow window,
 
 void GrabViewSnapshotAsync(gfx::NativeView view,
                            const gfx::Rect& source_rect,
-                           GrabWindowSnapshotAsyncCallback callback) {
+                           GrabSnapshotImageCallback callback) {
   std::unique_ptr<viz::CopyOutputRequest> copy_request =
       view->MaybeRequestCopyOfView(CreateCopyRequest(
           view, source_rect,

@@ -5,7 +5,7 @@
 #ifndef UI_GL_GL_SURFACE_OVERLAY_H_
 #define UI_GL_GL_SURFACE_OVERLAY_H_
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "ui/gfx/gpu_fence.h"
 #include "ui/gfx/native_pixmap.h"
 #include "ui/gfx/native_widget_types.h"
@@ -18,7 +18,7 @@ class GpuFence;
 
 namespace gl {
 
-// For saving the properties of a GLImage overlay plane and scheduling it later.
+// For saving the properties of an overlay plane and scheduling it later.
 class GL_EXPORT GLSurfaceOverlay {
  public:
   GLSurfaceOverlay(scoped_refptr<gfx::NativePixmap> pixmap,

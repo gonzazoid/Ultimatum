@@ -5,13 +5,9 @@
 #import "ios/chrome/browser/ui/settings/cells/settings_image_detail_text_cell.h"
 
 #import "base/check.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/table_view/table_view_cells_constants.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -87,7 +83,7 @@ const CGFloat kImageXCenterAlignmentOffset = 14;
   _detailTextLabel = [[UILabel alloc] init];
   _detailTextLabel.numberOfLines = 0;
   _detailTextLabel.font =
-      [UIFont preferredFontForTextStyle:kTableViewSublabelFontStyle];
+      [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
   _detailTextLabel.adjustsFontForContentSizeCategory = YES;
 }
 
@@ -184,6 +180,10 @@ const CGFloat kImageXCenterAlignmentOffset = 14;
   return self.imageView.image;
 }
 
+- (void)setImageViewAlpha:(CGFloat)alpha {
+  _imageView.alpha = alpha;
+}
+
 - (void)setImageViewTintColor:(UIColor*)color {
   _imageView.tintColor = color;
 }
@@ -200,6 +200,7 @@ const CGFloat kImageXCenterAlignmentOffset = 14;
 - (void)prepareForReuse {
   [super prepareForReuse];
   [self alignImageWithFirstLineOfText:NO];
+  _imageView.alpha = 1.0f;
 }
 
 #pragma mark - UIAccessibility

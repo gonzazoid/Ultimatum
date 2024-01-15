@@ -7,16 +7,15 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/mac/scoped_nsobject.h"
+#include "base/functional/bind.h"
 #include "content/app_shim_remote_cocoa/render_widget_host_ns_view_bridge.h"
 #include "content/app_shim_remote_cocoa/render_widget_host_ns_view_host_helper.h"
 #include "content/app_shim_remote_cocoa/web_contents_ns_view_bridge.h"
-#include "content/browser/renderer_host/input/web_input_event_builders_mac.h"
+#include "content/common/input/web_input_event_builders_mac.h"
 #include "content/common/render_widget_host_ns_view.mojom.h"
 #include "content/common/web_contents_ns_view_bridge.mojom.h"
-#include "content/public/browser/native_web_keyboard_event.h"
 #include "content/public/browser/render_widget_host_view_mac_delegate.h"
+#include "content/public/common/input/native_web_keyboard_event.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
@@ -53,9 +52,9 @@ class RenderWidgetHostNSViewBridgeOwner
                        base::Unretained(this)));
 
     if (responder_delegate_creation_callback) {
-      base::scoped_nsobject<NSObject<RenderWidgetHostViewMacDelegate>>
-          rw_delegate(std::move(responder_delegate_creation_callback).Run());
-      [bridge_->GetNSView() setResponderDelegate:rw_delegate.get()];
+      [bridge_->GetNSView()
+          setResponderDelegate:std::move(responder_delegate_creation_callback)
+                                   .Run()];
     }
   }
 
@@ -76,19 +75,6 @@ class RenderWidgetHostNSViewBridgeOwner
   }
 
   // RenderWidgetHostNSViewHostHelper implementation.
-  id GetAccessibilityElement() override {
-    if (!remote_accessibility_element_) {
-      base::ProcessId browser_pid = base::kNullProcessId;
-      std::vector<uint8_t> element_token;
-      host_->GetRenderWidgetAccessibilityToken(&browser_pid, &element_token);
-      [NSAccessibilityRemoteUIElement
-          registerRemoteUIProcessIdentifier:browser_pid];
-      remote_accessibility_element_ =
-          ui::RemoteAccessibility::GetRemoteElementFromToken(element_token);
-    }
-    return remote_accessibility_element_.get();
-  }
-
   id GetRootBrowserAccessibilityElement() override {
     // The RenderWidgetHostViewCocoa in the app shim process does not
     // participate in the accessibility tree. Only the instance in the browser
@@ -121,9 +107,9 @@ class RenderWidgetHostNSViewBridgeOwner
             std::vector<std::unique_ptr<blink::WebInputEvent>>{},
             std::vector<std::unique_ptr<blink::WebInputEvent>>{}, latency_info);
     std::vector<uint8_t> native_event_data =
-        ui::EventToData(key_event.os_event);
+        ui::EventToData(key_event.os_event.Get());
     host_->ForwardKeyboardEventWithCommands(
-        std::move(input_event), native_event_data, key_event.skip_in_browser,
+        std::move(input_event), native_event_data, key_event.skip_if_unhandled,
         std::move(edit_commands));
   }
   void RouteOrProcessMouseEvent(
@@ -163,8 +149,6 @@ class RenderWidgetHostNSViewBridgeOwner
 
   mojo::AssociatedRemote<mojom::RenderWidgetHostNSViewHost> host_;
   std::unique_ptr<RenderWidgetHostNSViewBridge> bridge_;
-  base::scoped_nsobject<NSAccessibilityRemoteUIElement>
-      remote_accessibility_element_;
 };
 }
 

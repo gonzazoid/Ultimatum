@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <memory>
+#include <utility>
+
 #include "ui/views/view_targeter.h"
 
 #include "ui/events/event_target.h"
@@ -13,6 +16,11 @@ namespace views {
 
 ViewTargeter::ViewTargeter(ViewTargeterDelegate* delegate)
     : delegate_(delegate) {
+  DCHECK(delegate_);
+}
+
+ViewTargeter::ViewTargeter(std::unique_ptr<ViewTargeterDelegate> delegate)
+    : owned_delegate_(std::move(delegate)), delegate_(owned_delegate_.get()) {
   DCHECK(delegate_);
 }
 
@@ -29,7 +37,7 @@ View* ViewTargeter::TargetForRect(View* root, const gfx::Rect& rect) const {
 
 ui::EventTarget* ViewTargeter::FindTargetForEvent(ui::EventTarget* root,
                                                   ui::Event* event) {
-  View* view = static_cast<View*>(root);
+  View* const view = static_cast<View*>(root);
 
   if (event->IsKeyEvent())
     return FindTargetForKeyEvent(view, *event->AsKeyEvent());
@@ -37,15 +45,13 @@ ui::EventTarget* ViewTargeter::FindTargetForEvent(ui::EventTarget* root,
   if (event->IsScrollEvent())
     return FindTargetForScrollEvent(view, *event->AsScrollEvent());
 
-  if (event->IsGestureEvent()) {
-    ui::GestureEvent* gesture = event->AsGestureEvent();
-    View* gesture_target = FindTargetForGestureEvent(view, *gesture);
-    root->ConvertEventToTarget(gesture_target, gesture);
-    return gesture_target;
-  }
+  CHECK(event->IsGestureEvent())
+      << "ViewTargeter does not yet support this event type.";
 
-  NOTREACHED() << "ViewTargeter does not yet support this event type.";
-  return nullptr;
+  ui::GestureEvent* gesture = event->AsGestureEvent();
+  View* gesture_target = FindTargetForGestureEvent(view, *gesture);
+  root->ConvertEventToTarget(gesture_target, gesture);
+  return gesture_target;
 }
 
 ui::EventTarget* ViewTargeter::FindNextBestTarget(
@@ -84,15 +90,13 @@ View* ViewTargeter::FindTargetForGestureEvent(View* root,
   //                   a RootViewTargeter). Provide a default implementation
   //                   here if we need to be able to perform gesture targeting
   //                   starting at an arbitrary node in a Views tree.
-  NOTREACHED();
-  return nullptr;
+  NOTREACHED_NORETURN();
 }
 
 ui::EventTarget* ViewTargeter::FindNextBestTargetForGestureEvent(
     ui::EventTarget* previous_target,
     const ui::GestureEvent& gesture) {
-  NOTREACHED();
-  return nullptr;
+  NOTREACHED_NORETURN();
 }
 
 }  // namespace views

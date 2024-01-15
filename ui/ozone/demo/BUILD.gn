@@ -35,8 +35,8 @@ source_set("ozone_demo_lib") {
     "//ui/platform_window",
   ]
 
-  if (is_fuchsia) {
-    deps += [ "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.policy" ]
+  if (is_chromeos) {
+    deps += [ "//ui/gfx/linux:gbm" ]
   }
 }
 
@@ -96,4 +96,8 @@ executable("skia_demo") {
     "//ui/gl/init",
     "//ui/ozone",
   ]
+
+  if (is_chromeos) {
+    deps += [ "//ui/gfx/linux:gbm" ]
+  }
 }

@@ -17,26 +17,28 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/unguessable_token.h"
 #include "build/build_config.h"
 #include "chrome/browser/download/download_completion_blocker.h"
 #include "chrome/browser/download/download_target_determiner_delegate.h"
 #include "chrome/browser/download/download_target_info.h"
-#include "chrome/browser/safe_browsing/download_protection/download_protection_service.h"
-#include "chrome/browser/safe_browsing/download_protection/download_protection_util.h"
 #include "components/download/public/common/download_danger_type.h"
 #include "components/download/public/common/download_item.h"
 #include "components/download/public/common/download_path_reservation_tracker.h"
 #include "components/safe_browsing/buildflags.h"
 #include "content/public/browser/download_manager.h"
 #include "content/public/browser/download_manager_delegate.h"
-#include "content/public/browser/notification_observer.h"
-#include "content/public/browser/notification_registrar.h"
 #include "extensions/buildflags/buildflags.h"
 #include "ui/gfx/native_widget_types.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/download/android/download_dialog_bridge.h"
 #include "chrome/browser/download/android/download_message_bridge.h"
+#endif
+
+#if BUILDFLAG(FULL_SAFE_BROWSING)
+#include "chrome/browser/safe_browsing/download_protection/download_protection_service.h"
+#include "chrome/browser/safe_browsing/download_protection/download_protection_util.h"
 #endif
 
 class DownloadPrefs;
@@ -46,14 +48,16 @@ namespace content {
 class DownloadManager;
 }
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
 namespace extensions {
 class CrxInstaller;
+class CrxInstallError;
 }
+#endif
 
 // This is the Chrome side helper for the download system.
 class ChromeDownloadManagerDelegate
     : public content::DownloadManagerDelegate,
-      public content::NotificationObserver,
       public DownloadTargetDeterminerDelegate,
       public content::DownloadManager::Observer {
  public:
@@ -83,6 +87,7 @@ class ChromeDownloadManagerDelegate
                           DownloadDialogBridge::DialogCallback callback);
 
   void SetDownloadDialogBridgeForTesting(DownloadDialogBridge* bridge);
+  void SetDownloadMessageBridgeForTesting(DownloadMessageBridge* bridge);
 #endif
 
   // Callbacks passed to GetNextId() will not be called until the returned
@@ -142,6 +147,11 @@ class ChromeDownloadManagerDelegate
       download::DownloadItem* download_item,
       base::flat_map<base::FilePath, base::FilePath> save_package_files,
       content::SavePackageAllowedCallback callback) override;
+#if BUILDFLAG(IS_ANDROID)
+  bool IsFromExternalApp(download::DownloadItem* item) override;
+#else
+  void AttachExtraInfo(download::DownloadItem* item) override;
+#endif  // BUILDFLAG(IS_ANRDOID)
 
   // Opens a download using the platform handler. DownloadItem::OpenDownload,
   // which ends up being handled by OpenDownload(), will open a download in the
@@ -165,7 +175,6 @@ class ChromeDownloadManagerDelegate
     // a download item.
     static const char kSafeBrowsingUserDataKey[];
   };
-#endif  // FULL_SAFE_BROWSING
 
   // Callback function after the DownloadProtectionService completes.
   void CheckClientDownloadDone(uint32_t download_id,
@@ -174,6 +183,7 @@ class ChromeDownloadManagerDelegate
   // Callback function after scanning completes for a save package.
   void CheckSavePackageScanningDone(uint32_t download_id,
                                     safe_browsing::DownloadCheckResult result);
+#endif  // FULL_SAFE_BROWSING
 
   base::WeakPtr<ChromeDownloadManagerDelegate> GetWeakPtr();
 
@@ -196,8 +206,10 @@ class ChromeDownloadManagerDelegate
   virtual bool IsOpenInBrowserPreferreredForFile(const base::FilePath& path);
 
  protected:
+#if BUILDFLAG(FULL_SAFE_BROWSING)
   virtual safe_browsing::DownloadProtectionService*
       GetDownloadProtectionService();
+#endif
 
   // Show file picker for |download|.
   virtual void ShowFilePickerForDownload(
@@ -206,9 +218,10 @@ class ChromeDownloadManagerDelegate
       DownloadTargetDeterminerDelegate::ConfirmationCallback callback);
 
   // DownloadTargetDeterminerDelegate. Protected for testing.
-  void GetMixedContentStatus(download::DownloadItem* download,
-                             const base::FilePath& virtual_path,
-                             GetMixedContentStatusCallback callback) override;
+  void GetInsecureDownloadStatus(
+      download::DownloadItem* download,
+      const base::FilePath& virtual_path,
+      GetInsecureDownloadStatusCallback callback) override;
   void NotifyExtensions(download::DownloadItem* download,
                         const base::FilePath& suggested_virtual_path,
                         NotifyExtensionsCallback callback) override;
@@ -266,10 +279,13 @@ class ChromeDownloadManagerDelegate
       const base::FilePath& suggested_path,
       DownloadTargetDeterminerDelegate::ConfirmationCallback callback);
 
-  // content::NotificationObserver implementation.
-  void Observe(int type,
-               const content::NotificationSource& source,
-               const content::NotificationDetails& details) override;
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+  // Called when CrxInstaller in running_crx_installs_ finishes installation.
+  void OnInstallerDone(
+      const base::UnguessableToken& token,
+      content::DownloadOpenDelayedCallback callback,
+      const absl::optional<extensions::CrxInstallError>& error);
+#endif
 
   // Internal gateways for ShouldCompleteDownload().
   bool IsDownloadReadyForCompletion(
@@ -319,13 +335,13 @@ class ChromeDownloadManagerDelegate
   // Called after a unique file name is generated in the case that there is a
   // TARGET_CONFLICT and the new file name should be displayed to the user.
   void GenerateUniqueFileNameDone(
-      gfx::NativeWindow native_window,
+      const std::string& download_guid,
       DownloadTargetDeterminerDelegate::ConfirmationCallback callback,
       download::PathValidationResult result,
       const base::FilePath& target_path);
 #endif
 
-  raw_ptr<Profile> profile_;
+  raw_ptr<Profile, DanglingUntriaged> profile_;
 
 #if BUILDFLAG(IS_ANDROID)
   std::unique_ptr<DownloadDialogBridge> download_dialog_bridge_;
@@ -346,11 +362,9 @@ class ChromeDownloadManagerDelegate
   std::unique_ptr<DownloadPrefs> download_prefs_;
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
-  // Maps from pending extension installations to DownloadItem IDs.
-  typedef base::flat_map<extensions::CrxInstaller*,
-                         content::DownloadOpenDelayedCallback>
-      CrxInstallerMap;
-  CrxInstallerMap crx_installers_;
+  // CRX installs that are currently in progress.
+  std::map<base::UnguessableToken, scoped_refptr<extensions::CrxInstaller>>
+      running_crx_installs_;
 #endif
 
   // Outstanding callbacks to open file selection dialog.
@@ -358,8 +372,6 @@ class ChromeDownloadManagerDelegate
 
   // Whether a file picker dialog is showing.
   bool is_file_picker_showing_;
-
-  content::NotificationRegistrar registrar_;
 
   base::WeakPtrFactory<ChromeDownloadManagerDelegate> weak_ptr_factory_{this};
 };

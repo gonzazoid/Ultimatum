@@ -5,8 +5,6 @@
 #ifndef CHROME_BROWSER_UI_VIEWS_READER_MODE_READER_MODE_ICON_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_READER_MODE_READER_MODE_ICON_VIEW_H_
 
-#include <string>
-
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/page_action/page_action_icon_view.h"
 #include "components/dom_distiller/content/browser/distillable_page_utils.h"
@@ -20,8 +18,9 @@ class PrefService;
 class ReaderModeIconView : public PageActionIconView,
                            public dom_distiller::DistillabilityObserver,
                            public content::WebContentsObserver {
+  METADATA_HEADER(ReaderModeIconView, PageActionIconView)
+
  public:
-  METADATA_HEADER(ReaderModeIconView);
   ReaderModeIconView(CommandUpdater* command_updater,
                      IconLabelBubbleView::Delegate* icon_label_bubble_delegate,
                      PageActionIconView::Delegate* page_action_icon_delegate,
@@ -42,7 +41,6 @@ class ReaderModeIconView : public PageActionIconView,
   // PageActionIconView overrides:
   void UpdateImpl() override;
   const gfx::VectorIcon& GetVectorIcon() const override;
-  std::u16string GetTextForTooltipAndAccessibleName() const override;
   void OnExecuting(PageActionIconView::ExecuteSource execute_source) override;
 
   // GetBubble() is required by PageActionIconView; however, the icon

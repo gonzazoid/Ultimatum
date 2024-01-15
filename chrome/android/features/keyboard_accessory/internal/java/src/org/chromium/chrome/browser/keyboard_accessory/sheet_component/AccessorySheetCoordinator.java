@@ -4,12 +4,6 @@
 
 package org.chromium.chrome.browser.keyboard_accessory.sheet_component;
 
-import static org.chromium.chrome.browser.keyboard_accessory.sheet_component.AccessorySheetProperties.ACTIVE_TAB_INDEX;
-import static org.chromium.chrome.browser.keyboard_accessory.sheet_component.AccessorySheetProperties.HEIGHT;
-import static org.chromium.chrome.browser.keyboard_accessory.sheet_component.AccessorySheetProperties.NO_ACTIVE_TAB;
-import static org.chromium.chrome.browser.keyboard_accessory.sheet_component.AccessorySheetProperties.PAGE_CHANGE_LISTENER;
-import static org.chromium.chrome.browser.keyboard_accessory.sheet_component.AccessorySheetProperties.TABS;
-import static org.chromium.chrome.browser.keyboard_accessory.sheet_component.AccessorySheetProperties.TOP_SHADOW_VISIBLE;
 import static org.chromium.chrome.browser.keyboard_accessory.sheet_component.AccessorySheetProperties.VISIBLE;
 
 import androidx.annotation.Nullable;
@@ -40,12 +34,31 @@ public class AccessorySheetCoordinator {
     private final AccessorySheetMediator mMediator;
 
     /**
+     * Describes the events that are emitted when an accessory sheet is closed / changed. A class
+     * implementing this interface takes the responsibility control the sheet, i.e.
+     * ManualFillingCoordinator.
+     */
+    public interface SheetVisibilityDelegate {
+        /**
+         * Is triggered when a tab in the accessory was selected and the sheet needs to change.
+         * @param sheetIndex The index of the selected sheet in the sheet openers / tab bar.
+         */
+        void onChangeAccessorySheet(int sheetIndex);
+
+        /** Called when the sheet needs to be hidden. */
+        void onCloseAccessorySheet();
+    }
+
+    /**
      * Creates the sheet component by instantiating Model, View and Controller before wiring these
      * parts up.
      * @param sheetStub A {@link AsyncViewStub} for the accessory sheet layout.
      */
-    public AccessorySheetCoordinator(AsyncViewStub sheetStub) {
-        this(AsyncViewProvider.of(sheetStub, R.id.keyboard_accessory_sheet_container));
+    public AccessorySheetCoordinator(
+            AsyncViewStub sheetStub, SheetVisibilityDelegate sheetVisibilityDelegate) {
+        this(
+                AsyncViewProvider.of(sheetStub, R.id.keyboard_accessory_sheet_container),
+                sheetVisibilityDelegate);
     }
 
     /**
@@ -53,21 +66,16 @@ public class AccessorySheetCoordinator {
      * @param viewProvider A provider for the accessory.
      */
     @VisibleForTesting
-    AccessorySheetCoordinator(ViewProvider<AccessorySheetView> viewProvider) {
-        PropertyModel model = new PropertyModel
-                                      .Builder(TABS, ACTIVE_TAB_INDEX, VISIBLE, HEIGHT,
-                                              TOP_SHADOW_VISIBLE, PAGE_CHANGE_LISTENER)
-                                      .with(TABS, new ListModel<>())
-                                      .with(ACTIVE_TAB_INDEX, NO_ACTIVE_TAB)
-                                      .with(VISIBLE, false)
-                                      .with(TOP_SHADOW_VISIBLE, false)
-                                      .build();
+    AccessorySheetCoordinator(
+            ViewProvider<AccessorySheetView> viewProvider,
+            SheetVisibilityDelegate sheetVisibilityDelegate) {
+        PropertyModel model = AccessorySheetProperties.defaultPropertyModel().build();
 
         LazyConstructionPropertyMcp.create(
                 model, VISIBLE, viewProvider, AccessorySheetViewBinder::bind);
 
         AccessorySheetMetricsRecorder.registerAccessorySheetModelMetricsObserver(model);
-        mMediator = new AccessorySheetMediator(model);
+        mMediator = new AccessorySheetMediator(model, sheetVisibilityDelegate);
     }
 
     /**
@@ -117,18 +125,14 @@ public class AccessorySheetCoordinator {
         return mMediator.getHeight();
     }
 
-    /**
-     * Shows the Accessory Sheet.
-     */
+    /** Shows the Accessory Sheet. */
     public void show() {
         TraceEvent.begin("AccessorySheetCoordinator#show");
         mMediator.show();
         TraceEvent.end("AccessorySheetCoordinator#show");
     }
 
-    /**
-     * Hides the Accessory Sheet.
-     */
+    /** Hides the Accessory Sheet. */
     public void hide() {
         mMediator.hide();
     }
@@ -153,7 +157,6 @@ public class AccessorySheetCoordinator {
         mMediator.setOnPageChangeListener(onPageChangeListener);
     }
 
-    @VisibleForTesting
     AccessorySheetMediator getMediatorForTesting() {
         return mMediator;
     }

@@ -7,8 +7,8 @@
 #include <cmath>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_util.h"
 #include "extensions/browser/guest_view/mime_handler_view/mime_handler_view_guest.h"
@@ -53,7 +53,7 @@ MimeHandlerServiceImpl::MimeHandlerServiceImpl(
     base::WeakPtr<StreamContainer> stream_container)
     : stream_(stream_container) {}
 
-MimeHandlerServiceImpl::~MimeHandlerServiceImpl() {}
+MimeHandlerServiceImpl::~MimeHandlerServiceImpl() = default;
 
 // static
 void MimeHandlerServiceImpl::Create(

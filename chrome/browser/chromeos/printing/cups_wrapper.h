@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "printing/backend/cups_connection.h"
 
 namespace chromeos {
@@ -29,6 +29,9 @@ class CupsWrapper {
   };
 
   static std::unique_ptr<CupsWrapper> Create();
+
+  using CupsWrapperFactory = base::RepeatingCallback<decltype(Create)>;
+  static void SetCupsWrapperFactoryForTesting(CupsWrapperFactory factory);
 
   virtual ~CupsWrapper();
 

@@ -1,50 +1,72 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_ASH_NETWORK_NETWORK_PORTAL_SIGNIN_CONTROLLER_H_
 #define CHROME_BROWSER_UI_ASH_NETWORK_NETWORK_PORTAL_SIGNIN_CONTROLLER_H_
 
-#include "chrome/browser/ash/net/network_portal_web_dialog.h"
+#include "base/memory/raw_ptr.h"
+#include "base/no_destructor.h"
+#include "base/scoped_observation.h"
+#include "base/time/time.h"
+#include "chromeos/ash/components/network/network_state_handler_observer.h"
+#include "ui/views/widget/widget_observer.h"
+#include "url/gurl.h"
 
 class Profile;
 
 namespace ash {
 
-class NetworkPortalSigninController : public NetworkPortalWebDialog::Delegate {
+class NetworkPortalSigninController : public views::WidgetObserver,
+                                      public NetworkStateHandlerObserver {
  public:
   // Keep this in sync with the NetworkPortalSigninMode enum in
   // tools/metrics/histograms/enums.xml.
   enum class SigninMode {
     // Show in a dialog window using the signin (oobe/login) profile.
     kSigninDialog = 1,
-    // Show in a singleton tab (i.e. reuse a tab with the same URL if it exists)
-    // using the active user profile. In practice since the signin page will
-    // immediately redirect, this will behave the same as kNormalTab unless
-    // the probe URL fails to redirect.
-    kSingletonTab = 2,
+    // kSingletonTab (2) was deprecated in M110
     // Show in a new tab using the active user profile.
     kNormalTab = 3,
-    // Show in a new tab in an incognito window.
+    // Show in a new tab in an OTR window with the portal signin profile.
     kIncognitoTab = 4,
-    // Show in a dialog window using an incognito profile.
-    kIncognitoDialog = 5,
-    kMaxValue = 5,
+    // DEPRECATED: kIncognitoDialog = 5,
+    // Show in a dialog window using the portal signin profile due to Incognito
+    // browsing disabled.
+    kIncognitoDialogDisabled = 6,
+    // Show in a dialog window using the portal signin profile due to parential
+    // controls disabling incognito browsing.
+    kIncognitoDialogParental = 7,
+    kMaxValue = 7,
   };
   friend std::ostream& operator<<(std::ostream& stream,
                                   const SigninMode& signin_mode);
 
-  NetworkPortalSigninController();
+  // Keep this in sync with the NetworkPortalSigninSource enum in
+  // tools/metrics/histograms/enums.xml.
+  enum class SigninSource {
+    // Opened from a notification.
+    kNotification = 1,
+    // Opened from the Settings UI.
+    kSettings = 2,
+    // Opened from the QuickSettings UI.
+    kQuickSettings = 3,
+    // Opened from the Chrome error page.
+    kErrorPage = 4,
+    kMaxValue = 4,
+  };
+  friend std::ostream& operator<<(std::ostream& stream,
+                                  const SigninSource& signin_mode);
+
+  static NetworkPortalSigninController* Get();
+
   NetworkPortalSigninController(const NetworkPortalSigninController&) = delete;
   NetworkPortalSigninController& operator=(
       const NetworkPortalSigninController&) = delete;
   ~NetworkPortalSigninController() override;
 
-  // Returns a weak ptr to pass to the notification delegate.
-  virtual base::WeakPtr<NetworkPortalSigninController> GetWeakPtr();
-
   // Shows the signin UI.
-  void ShowSignin();
+  void ShowSignin(SigninSource source);
 
   // Closes the signin UI if appropriate.
   void CloseSignin();
@@ -52,22 +74,31 @@ class NetworkPortalSigninController : public NetworkPortalWebDialog::Delegate {
   // Returns whether the sigin UI is show.
   bool DialogIsShown();
 
-  // NetworkPortalWebDialog::Delegate
-  void OnDialogDestroyed(const NetworkPortalWebDialog* dialog) override;
+  // views::WidgetObserver:
+  void OnWidgetDestroying(views::Widget* widget) override;
+
+  // NetworkStateHandlerObserver:
+  void PortalStateChanged(const NetworkState* default_network,
+                          NetworkState::PortalState portal_state) override;
+  void OnShuttingDown() override;
 
  protected:
+  friend class base::NoDestructor<NetworkPortalSigninController>;
+  NetworkPortalSigninController();
+
   // May be overridden in tests.
   virtual void ShowDialog(Profile* profile, const GURL& url);
   virtual void ShowTab(Profile* profile, const GURL& url);
-  virtual void ShowSingletonTab(Profile* profile, const GURL& url);
 
   SigninMode GetSigninMode() const;
 
  private:
-  NetworkPortalWebDialog* dialog_ = nullptr;
-  base::WeakPtrFactory<NetworkPortalWebDialog::Delegate>
-      web_dialog_weak_factory_{this};
-  base::WeakPtrFactory<NetworkPortalSigninController> weak_factory_{this};
+  raw_ptr<views::Widget> dialog_widget_ = nullptr;
+  base::ScopedObservation<views::Widget, views::WidgetObserver>
+      dialog_widget_observation_{this};
+  NetworkStateHandlerScopedObservation network_state_handler_observation_{this};
+  std::string signin_network_guid_;
+  base::TimeTicks signin_start_time_;
 };
 
 }  // namespace ash

@@ -2,26 +2,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {Time} from 'chrome://resources/mojo/mojo/public/mojom/base/time.mojom-webui.js';
 import {Origin} from 'chrome://resources/mojo/url/mojom/origin.mojom-webui.js';
 
-import {QuotaInternalsHandler} from './quota_internals.mojom-webui.js';
+import {BucketTableEntry, QuotaInternalsHandler} from './quota_internals.mojom-webui.js';
 
 export enum StorageType {
   TEMPORARY = 0,
-  PERSISTENT = 1,
+  // PERSISTENT = 1, DEPRECATED
   SYNCABLE = 2,
-}
-
-export interface BucketTableEntry {
-  'bucketId': bigint;
-  'storageKey': string;
-  'type': StorageType;
-  'name': string;
-  'usage': bigint;
-  'useCount': bigint;
-  'lastAccessed': Time;
-  'lastModified': Time;
 }
 
 interface GetDiskAvailabilityAndTempPoolSizeResult {
@@ -35,15 +23,9 @@ interface GetGlobalUsageResult {
   unlimitedUsage: bigint;
 }
 
-interface GetStatisticsResult {
-  evictionStatistics: {
-    'errors-on-getting-usage-and-quota': string,
-    'evicted-buckets': string,
-    'eviction-rounds': string,
-    'skipped-eviction-rounds': string,
-  };
+interface SimulateStoragePressureAvailableResult {
+  available: boolean;
 }
-
 export interface RetrieveBucketsTableResult {
   entries: BucketTableEntry[];
 }
@@ -73,7 +55,7 @@ export class QuotaInternalsBrowserProxy {
     return this.handler.getGlobalUsageForInternals(storageType);
   }
 
-  getStatistics(): Promise<GetStatisticsResult> {
+  getStatistics(): Promise<{evictionStatistics: {[key: string]: string}}> {
     return this.handler.getStatistics();
   }
 
@@ -81,12 +63,18 @@ export class QuotaInternalsBrowserProxy {
     const originToTest = (document.body.querySelector<HTMLInputElement>(
         '#origin-to-test'))!.value;
     const originUrl = new URL(originToTest);
-    const newOrigin = new Origin();
-    newOrigin.scheme = originUrl.protocol.replace(/:$/, '');
-    newOrigin.host = originUrl.host;
-    newOrigin.port = urlPort(originUrl);
+    const newOrigin: Origin = {
+      scheme: originUrl.protocol.replace(/:$/, ''),
+      host: originUrl.host,
+      port: urlPort(originUrl),
+    };
 
     this.handler.simulateStoragePressure(newOrigin);
+  }
+
+  isSimulateStoragePressureAvailable():
+      Promise<SimulateStoragePressureAvailableResult> {
+    return this.handler.isSimulateStoragePressureAvailable();
   }
 
   retrieveBucketsTable(): Promise<RetrieveBucketsTableResult> {

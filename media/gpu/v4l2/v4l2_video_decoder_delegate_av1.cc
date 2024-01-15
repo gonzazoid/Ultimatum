@@ -4,7 +4,8 @@
 
 #include "media/gpu/v4l2/v4l2_video_decoder_delegate_av1.h"
 
-#include <linux/media/av1-ctrls.h>
+#include <linux/v4l2-controls.h>
+#include <linux/videodev2.h>
 
 #include "media/gpu/macros.h"
 #include "media/gpu/v4l2/v4l2_decode_surface.h"
@@ -177,11 +178,11 @@ void FillQuantizationParams(v4l2_av1_quantization& v4l2_quant,
   v4l2_quant.qm_v = base::checked_cast<uint8_t>(quant.matrix_level[2]);
 }
 
-}  // namespace
-
 // Section 5.9.14. Segmentation params syntax
-void FillSegmentationParams(struct v4l2_av1_segmentation& v4l2_seg,
-                            const libgav1::Segmentation& seg) {
+struct v4l2_av1_segmentation FillSegmentationParams(
+    const libgav1::Segmentation& seg) {
+  struct v4l2_av1_segmentation v4l2_seg = {};
+
   if (seg.enabled)
     v4l2_seg.flags |= V4L2_AV1_SEGMENTATION_FLAG_ENABLED;
 
@@ -216,10 +217,14 @@ void FillSegmentationParams(struct v4l2_av1_segmentation& v4l2_seg,
   }
 
   v4l2_seg.last_active_seg_id = seg.last_active_segment_id;
+
+  return v4l2_seg;
 }
 
 // Section 5.9.15. Tile info syntax
-void FillTileInfo(v4l2_av1_tile_info& v4l2_ti, const libgav1::TileInfo& ti) {
+struct v4l2_av1_tile_info FillTileInfo(const libgav1::TileInfo& ti) {
+  struct v4l2_av1_tile_info v4l2_ti = {};
+
   if (ti.uniform_spacing)
     v4l2_ti.flags |= V4L2_AV1_TILE_INFO_FLAG_UNIFORM_TILE_SPACING;
 
@@ -275,6 +280,8 @@ void FillTileInfo(v4l2_av1_tile_info& v4l2_ti, const libgav1::TileInfo& ti) {
   v4l2_ti.context_update_tile_id = ti.context_update_id;
   v4l2_ti.tile_cols = ti.tile_columns;
   v4l2_ti.tile_rows = ti.tile_rows;
+
+  return v4l2_ti;
 }
 
 // Section 5.9.17. Quantizer index delta parameters syntax
@@ -313,12 +320,11 @@ void FillLoopFilterDeltaParams(struct v4l2_av1_loop_filter& v4l2_lf,
 }
 
 // Section 5.9.19. CDEF params syntax
-void FillCdefParams(struct v4l2_av1_cdef& v4l2_cdef,
-                    const libgav1::Cdef& cdef,
-                    uint8_t color_bitdepth) {
-  // Damping value parsed in libgav1 is from the spec + (bitdepth - 8).
-  // All the strength values parsed in libgav1 are from the spec and left
-  // shifted by (bitdepth - 8).
+struct v4l2_av1_cdef FillCdefParams(const libgav1::Cdef& cdef,
+                                    uint8_t color_bitdepth) {
+  struct v4l2_av1_cdef v4l2_cdef = {};
+
+  // Damping value parsed in libgav1 is from the spec + (|color_bitdepth| - 8).
   CHECK_GE(color_bitdepth, 8u);
   const uint8_t coeff_shift = color_bitdepth - 8u;
 
@@ -347,11 +353,25 @@ void FillCdefParams(struct v4l2_av1_cdef& v4l2_cdef,
   SafeArrayMemcpy(v4l2_cdef.y_sec_strength, cdef.y_secondary_strength);
   SafeArrayMemcpy(v4l2_cdef.uv_pri_strength, cdef.uv_primary_strength);
   SafeArrayMemcpy(v4l2_cdef.uv_sec_strength, cdef.uv_secondary_strength);
+
+  // All the strength values parsed in libgav1 are from the AV1 spec and left
+  // shifted by (|color_bitdepth| - 8). So these values need to be right shifted
+  // by (|color_bitdepth| - 8) before passing to a driver.
+  for (size_t i = 0; i < libgav1::kMaxCdefStrengths; i++) {
+    v4l2_cdef.y_pri_strength[i] >>= coeff_shift;
+    v4l2_cdef.y_sec_strength[i] >>= coeff_shift;
+    v4l2_cdef.uv_pri_strength[i] >>= coeff_shift;
+    v4l2_cdef.uv_sec_strength[i] >>= coeff_shift;
+  }
+
+  return v4l2_cdef;
 }
 
 // 5.9.20. Loop restoration params syntax
-void FillLoopRestorationParams(v4l2_av1_loop_restoration& v4l2_lr,
-                               const libgav1::LoopRestoration& lr) {
+struct v4l2_av1_loop_restoration FillLoopRestorationParams(
+    const libgav1::LoopRestoration& lr) {
+  struct v4l2_av1_loop_restoration v4l2_lr = {};
+
   for (size_t i = 0; i < V4L2_AV1_NUM_PLANES_MAX; i++) {
     switch (lr.type[i]) {
       case libgav1::LoopRestorationType::kLoopRestorationTypeNone:
@@ -386,22 +406,23 @@ void FillLoopRestorationParams(v4l2_av1_loop_restoration& v4l2_lr,
                      return type != libgav1::kLoopRestorationTypeNone;
                    }) != (lr.type + libgav1::kMaxPlanes);
 
-  if (!use_loop_restoration)
-    return;
+  if (use_loop_restoration) {
+    DCHECK_GE(lr.unit_size_log2[0], lr.unit_size_log2[1]);
+    DCHECK_LE(lr.unit_size_log2[0] - lr.unit_size_log2[1], 1);
+    v4l2_lr.lr_unit_shift = lr.unit_size_log2[0] - 6;
+    v4l2_lr.lr_uv_shift = lr.unit_size_log2[0] - lr.unit_size_log2[1];
 
-  DCHECK_GE(lr.unit_size_log2[0], lr.unit_size_log2[1]);
-  DCHECK_LE(lr.unit_size_log2[0] - lr.unit_size_log2[1], 1);
-  v4l2_lr.lr_unit_shift = lr.unit_size_log2[0] - 6;
-  v4l2_lr.lr_uv_shift = lr.unit_size_log2[0] - lr.unit_size_log2[1];
+    // AV1 spec (p.52) uses this formula with hard coded value 2.
+    // https://aomediacodec.github.io/av1-spec/#loop-restoration-params-syntax
+    v4l2_lr.loop_restoration_size[0] =
+        V4L2_AV1_RESTORATION_TILESIZE_MAX >> (2 - v4l2_lr.lr_unit_shift);
+    v4l2_lr.loop_restoration_size[1] =
+        v4l2_lr.loop_restoration_size[0] >> v4l2_lr.lr_uv_shift;
+    v4l2_lr.loop_restoration_size[2] =
+        v4l2_lr.loop_restoration_size[0] >> v4l2_lr.lr_uv_shift;
+  }
 
-  // AV1 spec (p.52) uses this formula with hard coded value 2.
-  // https://aomediacodec.github.io/av1-spec/#loop-restoration-params-syntax
-  v4l2_lr.loop_restoration_size[0] =
-      V4L2_AV1_RESTORATION_TILESIZE_MAX >> (2 - v4l2_lr.lr_unit_shift);
-  v4l2_lr.loop_restoration_size[1] =
-      v4l2_lr.loop_restoration_size[0] >> v4l2_lr.lr_uv_shift;
-  v4l2_lr.loop_restoration_size[2] =
-      v4l2_lr.loop_restoration_size[0] >> v4l2_lr.lr_uv_shift;
+  return v4l2_lr;
 }
 
 // Section 5.9.24. Global motion params syntax
@@ -441,14 +462,11 @@ struct v4l2_av1_global_motion FillGlobalMotionParams(
     constexpr auto kNumGlobalMotionParams = std::size(decltype(gm.params){});
 
     for (size_t j = 0; j < kNumGlobalMotionParams; ++j) {
-      // TODO(b/247611513): Remove separate handling when gm.params[j] < 0 if
-      // V4L2 AV1 uAPI decides to make an update to make this param consistent
-      // with definition in libgav1 parser
-      if (gm.params[j] < 0) {
-        v4l2_gm.params[i][j] =
-            base::checked_cast<uint32_t>(UINT32_MAX + gm.params[j] + 1);
-      } else
-        v4l2_gm.params[i][j] = base::checked_cast<uint32_t>(gm.params[j]);
+      static_assert(
+          std::is_same<decltype(v4l2_gm.params[0][0]), int32_t&>::value,
+          "|v4l2_av1_global_motion::params|'s data type must be int32_t "
+          "starting from AV1 uAPI v4");
+      v4l2_gm.params[i][j] = gm.params[j];
     }
 
     if (!libgav1::SetupShear(&gm))
@@ -465,29 +483,26 @@ struct v4l2_ctrl_av1_frame SetupFrameParams(
     const AV1ReferenceFrameVector& ref_frames) {
   struct v4l2_ctrl_av1_frame v4l2_frame_params = {};
 
-  struct v4l2_av1_loop_filter v4l2_lf = {};
-  FillLoopFilterParams(v4l2_lf, frame_header.loop_filter);
+  FillLoopFilterParams(v4l2_frame_params.loop_filter, frame_header.loop_filter);
+  FillLoopFilterDeltaParams(v4l2_frame_params.loop_filter,
+                            frame_header.delta_lf);
 
-  FillLoopFilterDeltaParams(v4l2_lf, frame_header.delta_lf);
+  FillQuantizationParams(v4l2_frame_params.quantization,
+                         frame_header.quantizer);
+  FillQuantizerIndexDeltaParams(v4l2_frame_params.quantization, sequence_header,
+                                frame_header);
 
-  struct v4l2_av1_quantization v4l2_quant = {};
-  FillQuantizationParams(v4l2_quant, frame_header.quantizer);
-
-  FillQuantizerIndexDeltaParams(v4l2_quant, sequence_header, frame_header);
-
-  struct v4l2_av1_segmentation v4l2_seg = {};
-  FillSegmentationParams(v4l2_seg, frame_header.segmentation);
+  v4l2_frame_params.segmentation =
+      FillSegmentationParams(frame_header.segmentation);
 
   const auto color_bitdepth = sequence_header.color_config.bitdepth;
-  struct v4l2_av1_cdef v4l2_cdef = {};
-  FillCdefParams(v4l2_cdef, frame_header.cdef,
-                 base::strict_cast<int8_t>(color_bitdepth));
+  v4l2_frame_params.cdef = FillCdefParams(
+      frame_header.cdef, base::strict_cast<int8_t>(color_bitdepth));
 
-  struct v4l2_av1_loop_restoration v4l2_lr = {};
-  FillLoopRestorationParams(v4l2_lr, frame_header.loop_restoration);
+  v4l2_frame_params.loop_restoration =
+      FillLoopRestorationParams(frame_header.loop_restoration);
 
-  struct v4l2_av1_tile_info v4l2_ti = {};
-  FillTileInfo(v4l2_ti, frame_header.tile_info);
+  v4l2_frame_params.tile_info = FillTileInfo(frame_header.tile_info);
 
   v4l2_frame_params.global_motion =
       FillGlobalMotionParams(frame_header.global_motion);
@@ -516,8 +531,6 @@ struct v4l2_ctrl_av1_frame SetupFrameParams(
     v4l2_frame_params.flags |= V4L2_AV1_FRAME_FLAG_USE_REF_FRAME_MVS;
   if (frame_header.enable_frame_end_update_cdf == false)
     v4l2_frame_params.flags |= V4L2_AV1_FRAME_FLAG_DISABLE_FRAME_END_UPDATE_CDF;
-  if (frame_header.tile_info.uniform_spacing)
-    v4l2_frame_params.flags |= V4L2_AV1_FRAME_FLAG_UNIFORM_TILE_SPACING;
   if (frame_header.allow_warped_motion)
     v4l2_frame_params.flags |= V4L2_AV1_FRAME_FLAG_ALLOW_WARPED_MOTION;
   if (frame_header.reference_mode_select)
@@ -608,22 +621,21 @@ struct v4l2_ctrl_av1_frame SetupFrameParams(
                   frame_header.buffer_removal_time);
   v4l2_frame_params.refresh_frame_flags = frame_header.refresh_frame_flags;
 
-  static_assert(std::size(decltype(v4l2_frame_params.order_hints){}) ==
-                    libgav1::kNumReferenceFrameTypes,
-                "Invalid size of |order_hints| array");
-
   // |reference_frame_index| indicates which reference frame slot is used for
   // different reference frame types: L(1), L2(2), L3(3), G(4), BWD(5), A2(6),
   // A(7). As |ref_frames[i]| is a |AV1Picture| with frame header info, we can
   // extract |order_hint| directly for each reference frame type instead of
   // maintaining |RefOrderHint| array in the AV1 spec.
-  if (frame_header.frame_type != libgav1::kFrameKey) {
+  static_assert(std::size(decltype(v4l2_frame_params.order_hints){}) ==
+                    libgav1::kNumInterReferenceFrameTypes + 1,
+                "Invalid size of |order_hints| array");
+  if (!libgav1::IsIntraFrame(frame_header.frame_type)) {
     for (size_t i = 0; i < libgav1::kNumInterReferenceFrameTypes; ++i) {
       const int8_t reference_frame_index =
           frame_header.reference_frame_index[i];
 
-      // TODO(b/253676775): Add safety check to guarantee DCHECK()s
-      // in AV1Decoder::CheckAndCleanUpReferenceFrames()
+      // The DCHECK()s are guaranteed by
+      // AV1Decoder::CheckAndCleanUpReferenceFrames().
       DCHECK_GE(reference_frame_index, 0);
       DCHECK_LT(reference_frame_index, libgav1::kNumReferenceFrameTypes);
       DCHECK(ref_frames[reference_frame_index]);
@@ -635,7 +647,15 @@ struct v4l2_ctrl_av1_frame SetupFrameParams(
     }
   }
 
+  // TODO(b/230891887): use uint64_t when v4l2_timeval_to_ns() function is used.
+  constexpr uint32_t kInvalidSurface = std::numeric_limits<uint32_t>::max();
+
   for (size_t i = 0; i < libgav1::kNumReferenceFrameTypes; ++i) {
+    if (!ref_frames[i]) {
+      v4l2_frame_params.reference_frame_ts[i] = kInvalidSurface;
+      continue;
+    }
+
     const auto* v4l2_ref_pic =
         static_cast<const V4L2AV1Picture*>(ref_frames[i].get());
 
@@ -652,16 +672,12 @@ struct v4l2_ctrl_av1_frame SetupFrameParams(
         << "|reference_frame_index| from the frame header is not 0 for the "
            "intra frame";
 
-    v4l2_frame_params.ref_frame_idx[i] =
-        base::checked_cast<__u8>(frame_header.reference_frame_index[i]);
+    static_assert(std::is_same<decltype(v4l2_frame_params.ref_frame_idx[0]),
+                               int8_t&>::value,
+                  "|v4l2_ctrl_av1_frame::ref_frame_idx|'s data type must be "
+                  "int8_t starting from AV1 uAPI v4");
+    v4l2_frame_params.ref_frame_idx[i] = frame_header.reference_frame_index[i];
   }
-
-  // These params are duplicated with |ref_frame_idx|, and they are trending to
-  // be removed in AV1 uAPI RFC v4.
-  v4l2_frame_params.last_frame_idx =
-      frame_header.reference_frame_index[libgav1::kReferenceFrameLast];
-  v4l2_frame_params.gold_frame_idx =
-      frame_header.reference_frame_index[libgav1::kReferenceFrameGolden];
 
   v4l2_frame_params.skip_mode_frame[0] =
       base::checked_cast<__u8>(frame_header.skip_mode_frame[0]);
@@ -722,6 +738,8 @@ std::vector<struct v4l2_ctrl_av1_tile_group_entry> FillTileGroupParams(
   return tile_group_entry_vector;
 }
 
+}  // namespace
+
 V4L2VideoDecoderDelegateAV1::V4L2VideoDecoderDelegateAV1(
     V4L2DecodeSurfaceHandler* surface_handler,
     V4L2Device* device)
@@ -739,6 +757,18 @@ scoped_refptr<AV1Picture> V4L2VideoDecoderDelegateAV1::CreateAV1Picture(
       surface_handler_->CreateSurface();
   if (!dec_surface)
     return nullptr;
+
+  return new V4L2AV1Picture(std::move(dec_surface));
+}
+
+scoped_refptr<AV1Picture> V4L2VideoDecoderDelegateAV1::CreateAV1PictureSecure(
+    bool apply_grain,
+    uint64_t secure_handle) {
+  scoped_refptr<V4L2DecodeSurface> dec_surface =
+      surface_handler_->CreateSecureSurface(secure_handle);
+  if (!dec_surface) {
+    return nullptr;
+  }
 
   return new V4L2AV1Picture(std::move(dec_surface));
 }
@@ -783,8 +813,10 @@ DecodeStatus V4L2VideoDecoderDelegateAV1::SubmitDecode(
       .controls = ext_ctrl_array};
 
   const auto* v4l2_pic = static_cast<const V4L2AV1Picture*>(&pic);
-  v4l2_pic->dec_surface()->PrepareSetCtrls(&ext_ctrls);
+  auto dec_surface = v4l2_pic->dec_surface();
+  dec_surface->PrepareSetCtrls(&ext_ctrls);
   if (device_->Ioctl(VIDIOC_S_EXT_CTRLS, &ext_ctrls) != 0) {
+    RecordVidiocIoctlErrorUMA(VidiocIoctlRequests::kVidiocSExtCtrls);
     VPLOGF(1) << "ioctl() failed: VIDIOC_S_EXT_CTRLS";
     return DecodeStatus::kFail;
   }
@@ -798,11 +830,13 @@ DecodeStatus V4L2VideoDecoderDelegateAV1::SubmitDecode(
       ref_surfaces.emplace_back(std::move(v4l2_ref_pic->dec_surface()));
     }
   }
-  v4l2_pic->dec_surface()->SetReferenceSurfaces(std::move(ref_surfaces));
+  dec_surface->SetReferenceSurfaces(std::move(ref_surfaces));
 
   // Copies the frame data into the V4L2 buffer.
-  if (!surface_handler_->SubmitSlice(v4l2_pic->dec_surface().get(),
-                                     stream.data(), stream.size())) {
+  if (!surface_handler_->SubmitSlice(
+          dec_surface.get(),
+          dec_surface->secure_handle() ? nullptr : stream.data(),
+          stream.size())) {
     return DecodeStatus::kFail;
   }
 
@@ -811,7 +845,7 @@ DecodeStatus V4L2VideoDecoderDelegateAV1::SubmitDecode(
             << v4l2_pic->dec_surface()->ToString();
   surface_handler_->DecodeSurface(v4l2_pic->dec_surface());
 
-  return DecodeStatus::kFail;
+  return DecodeStatus::kOk;
 }
 
 bool V4L2VideoDecoderDelegateAV1::OutputPicture(const AV1Picture& pic) {

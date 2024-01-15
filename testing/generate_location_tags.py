@@ -12,12 +12,13 @@
 # pylint: enable=line-too-long
 
 import argparse
+import logging
 import os
 import subprocess
 import sys
 
 THIS_DIR = os.path.dirname(__file__)
-SRC_DIR = os.path.dirname(THIS_DIR)
+SRC_DIR = os.path.abspath(os.path.dirname(THIS_DIR))
 BUILD_DIR = os.path.join(SRC_DIR, 'build')
 sys.path.insert(0, BUILD_DIR)
 import find_depot_tools
@@ -27,6 +28,12 @@ def main():
   parser.add_argument('-o', '--out', required=True,
                       help='path to write location tag metadata to')
   args = parser.parse_args()
+
+  logging.basicConfig(level=logging.WARNING)
+  if not os.path.isdir(os.path.join(SRC_DIR, '.git')):
+    logging.warning('Skip generating location tags because the script is not '
+                    'running in a git repository')
+    return 0
 
   exe = os.path.join(find_depot_tools.DEPOT_TOOLS_PATH, 'dirmd')
   if sys.platform == 'win32':

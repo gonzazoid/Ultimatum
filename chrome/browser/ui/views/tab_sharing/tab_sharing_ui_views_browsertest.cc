@@ -7,8 +7,12 @@
 #include <map>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "base/run_loop.h"
+#include "base/test/scoped_feature_list.h"
 #include "build/chromeos_buildflags.h"
+#include "chrome/browser/browser_features.h"
 #include "chrome/browser/favicon/favicon_utils.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/ui/browser.h"
@@ -18,6 +22,7 @@
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_user_gesture_details.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -40,7 +45,7 @@
 
 #if BUILDFLAG(IS_CHROMEOS)
 #include "chrome/browser/chromeos/policy/dlp/dlp_content_tab_helper.h"
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 namespace {
 
@@ -63,7 +68,7 @@ infobars::ContentInfoBarManager* GetInfoBarManager(Browser* browser, int tab) {
 
 ConfirmInfoBarDelegate* GetDelegate(Browser* browser, int tab) {
   return static_cast<ConfirmInfoBarDelegate*>(
-      GetInfoBarManager(browser, tab)->infobar_at(0)->delegate());
+      GetInfoBarManager(browser, tab)->infobars()[0]->delegate());
 }
 
 std::u16string GetInfobarMessageText(Browser* browser, int tab) {
@@ -91,6 +96,17 @@ bool SecondaryButtonIsEnabled(Browser* browser, int tab) {
   DCHECK(HasSecondaryButton(browser, tab));  // Test error otherwise.
   return GetDelegate(browser, tab)
       ->GetButtonEnabled(ConfirmInfoBarDelegate::InfoBarButton::BUTTON_CANCEL);
+}
+
+bool HasTertiaryButton(Browser* browser, int tab) {
+  return GetDelegate(browser, tab)->GetButtons() &
+         ConfirmInfoBarDelegate::InfoBarButton::BUTTON_EXTRA;
+}
+
+std::u16string GetTertiaryButtonLabel(Browser* browser, int tab) {
+  DCHECK(HasTertiaryButton(browser, tab));  // Test error otherwise.
+  return GetDelegate(browser, tab)
+      ->GetButtonLabel(ConfirmInfoBarDelegate::InfoBarButton::BUTTON_EXTRA);
 }
 
 std::u16string GetExpectedSwitchToMessage(Browser* browser, int tab) {
@@ -127,17 +143,19 @@ void ActivateTab(Browser* browser, int tab) {
   browser->tab_strip_model()->ActivateTabAt(
       tab, TabStripUserGestureDetails(
                TabStripUserGestureDetails::GestureType::kMouse));
+  base::RunLoop().RunUntilIdle();
 }
 
 constexpr int kNullTabIndex = -1;
 const std::u16string kShareThisTabInsteadMessage = u"Share this tab instead";
+const std::u16string kViewTabMessage = u"View tab:";
 
 #if BUILDFLAG(IS_CHROMEOS)
 const policy::DlpContentRestrictionSet kEmptyRestrictionSet;
 const policy::DlpContentRestrictionSet kScreenshareRestrictionSet(
     policy::DlpContentRestriction::kScreenShare,
     policy::DlpRulesManager::Level::kBlock);
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace
 
@@ -146,7 +164,16 @@ class TabSharingUIViewsBrowserTest
       public ::testing::WithParamInterface<bool> {
  public:
   TabSharingUIViewsBrowserTest()
-      : favicons_used_for_switch_to_tab_button_(GetParam()) {}
+      : favicons_used_for_switch_to_tab_button_(GetParam()) {
+    // TODO(crbug.com/1394910): Use HTTPS URLs in tests to avoid having to
+    // disable kHttpsUpgrades feature.
+#if BUILDFLAG(IS_CHROMEOS)
+    features_.InitWithFeatures({features::kTabCaptureBlueBorderCrOS},
+                               {features::kHttpsUpgrades});
+#else
+    features_.InitAndDisableFeature(features::kHttpsUpgrades);
+#endif  // BUILDFLAG(IS_CHROMEOS)
+  }
 
   void SetUpOnMainThread() override {
     InProcessBrowserTest::SetUpOnMainThread();
@@ -154,6 +181,14 @@ class TabSharingUIViewsBrowserTest
     CreateUniqueFaviconFor(browser()->tab_strip_model()->GetWebContentsAt(0));
     embedded_test_server()->ServeFilesFromSourceDirectory("chrome/test/data");
     host_resolver()->AddRule("*", "127.0.0.1");
+  }
+
+  Browser* CreateBrowser(Profile* profile) {
+    Browser* const browser = InProcessBrowserTest::CreateBrowser(profile);
+    TabStripModel* const tab_strip_model = browser->tab_strip_model();
+    EXPECT_EQ(tab_strip_model->count(), 1);  // Treat as an assertion.
+    CreateUniqueFaviconFor(tab_strip_model->GetWebContentsAt(0));
+    return browser;
   }
 
   void CreateUiAndStartSharing(Browser* browser,
@@ -165,12 +200,15 @@ class TabSharingUIViewsBrowserTest
     tab_sharing_ui_ = TabSharingUI::Create(
         GetGlobalId(browser, capturing_tab),
         GetDesktopMediaID(browser, captured_tab), u"example-sharing.com",
-        favicons_used_for_switch_to_tab_button_);
+        favicons_used_for_switch_to_tab_button_,
+        /*app_preferred_current_tab=*/false,
+        TabSharingInfoBarDelegate::TabShareType::CAPTURE);
 
     if (favicons_used_for_switch_to_tab_button_) {
       for (int i = 0; i < browser->tab_strip_model()->count(); ++i) {
         content::WebContents* const web_contents =
             browser->tab_strip_model()->GetWebContentsAt(i);
+        CHECK(favicons_.find(web_contents) != favicons_.end());
         tab_sharing_ui_views()->SetTabFaviconForTesting(
             web_contents, favicons_.find(web_contents)->second);
       }
@@ -181,25 +219,34 @@ class TabSharingUIViewsBrowserTest
         base::BindRepeating(&TabSharingUIViewsBrowserTest::OnStartSharing,
                             base::Unretained(this)),
         std::vector<content::DesktopMediaID>{});
+
+    base::RunLoop().RunUntilIdle();
   }
+
+  struct UiExpectations {
+    raw_ptr<Browser> browser;
+    int capturing_tab;
+    int captured_tab;
+    size_t infobar_count = 1;
+    bool has_border = true;
+    int tab_with_disabled_button = kNullTabIndex;
+  };
 
   // Verify that tab sharing infobars are displayed on all tabs, and content
   // border and tab capture indicator are only visible on the shared tab. Pass
   // |kNullTabIndex| for |captured_tab| to indicate the shared tab is
   // not in |browser|.
-  void VerifyUi(Browser* browser,
-                int capturing_tab,
-                int captured_tab,
-                size_t infobar_count = 1,
-                bool has_border = true,
-                int tab_with_disabled_button = kNullTabIndex) {
+  void VerifyUi(const UiExpectations& expectations) {
+    Browser* const browser = expectations.browser;
+    const int capturing_tab = expectations.capturing_tab;
+    const int captured_tab = expectations.captured_tab;
+    const size_t infobar_count = expectations.infobar_count;
+    const bool has_border = expectations.has_border;
+    const int tab_with_disabled_button = expectations.tab_with_disabled_button;
+
     DCHECK((capturing_tab != kNullTabIndex && captured_tab != kNullTabIndex) ||
            (capturing_tab == kNullTabIndex && captured_tab == kNullTabIndex));
 
-#if BUILDFLAG(IS_CHROMEOS)
-    // TODO(https://crbug.com/1030925): Fix contents border on ChromeOS.
-    has_border = false;
-#endif
     views::Widget* contents_border = GetContentsBorder(browser);
     EXPECT_EQ(has_border, contents_border != nullptr);
     auto capture_indicator = GetCaptureIndicator();
@@ -207,10 +254,10 @@ class TabSharingUIViewsBrowserTest
       // All tabs have |infobar_count| tab sharing infobars.
       infobars::ContentInfoBarManager* infobar_manager =
           GetInfoBarManager(browser, i);
-      EXPECT_EQ(infobar_count, infobar_manager->infobar_count());
+      EXPECT_EQ(infobar_count, infobar_manager->infobars().size());
       for (size_t j = 0; j < infobar_count; ++j) {
         EXPECT_EQ(infobars::InfoBarDelegate::TAB_SHARING_INFOBAR_DELEGATE,
-                  infobar_manager->infobar_at(j)->delegate()->GetIdentifier());
+                  infobar_manager->infobars()[j]->delegate()->GetIdentifier());
       }
 
       // Content border is only visible on the shared tab.
@@ -240,7 +287,7 @@ class TabSharingUIViewsBrowserTest
                   GetExpectedSwitchToMessage(browser, capturing_tab));
         EXPECT_EQ(GetSecondaryButtonImage(browser, i),
                   GetFaviconAssociatedWith(browser, capturing_tab));
-      } else if (infobar_manager->infobar_count() > 0) {
+      } else if (infobar_manager->infobars().size() > 0) {
         // Any other infobar.
         ASSERT_TRUE(HasSecondaryButton(browser, i));
         EXPECT_EQ(GetSecondaryButtonLabel(browser, i),
@@ -262,6 +309,8 @@ class TabSharingUIViewsBrowserTest
       CreateUniqueFaviconFor(
           browser->tab_strip_model()->GetWebContentsAt(next_index));
     }
+
+    base::RunLoop().RunUntilIdle();
   }
 
   void CreateUniqueFaviconFor(content::WebContents* web_contents) {
@@ -316,7 +365,7 @@ class TabSharingUIViewsBrowserTest
   void ApplyDlpForAllUsers() {
     TabSharingUIViews::ApplyDlpForAllUsersForTesting();
   }
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
  private:
   void OnStartSharing(const content::DesktopMediaID& media_id) {
@@ -326,6 +375,8 @@ class TabSharingUIViewsBrowserTest
                             base::Unretained(this)),
         std::vector<content::DesktopMediaID>{});
   }
+
+  base::test::ScopedFeatureList features_;
 
   const bool favicons_used_for_switch_to_tab_button_;
 
@@ -343,16 +394,19 @@ IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest, StartSharing) {
 
   // Test that before sharing there are no infobars, content border or tab
   // capture indicator.
-  VerifyUi(browser(), /*capturing_tab=*/kNullTabIndex,
-           /*captured_tab=*/kNullTabIndex, /*infobar_count=*/0,
-           /*has_border=*/false);
+  VerifyUi(UiExpectations{.browser = browser(),
+                          .capturing_tab = kNullTabIndex,
+                          .captured_tab = kNullTabIndex,
+                          .infobar_count = 0,
+                          .has_border = false});
 
   // Create UI and start sharing the tab at index 1.
   CreateUiAndStartSharing(browser(), /*capturing_tab=*/0, /*captured_tab=*/1);
 
   // Test that infobars were created, and contents border and tab capture
   // indicator are displayed on the shared tab.
-  VerifyUi(browser(), /*capturing_tab=*/0, /*captured_tab=*/1);
+  VerifyUi(UiExpectations{
+      .browser = browser(), .capturing_tab = 0, .captured_tab = 1});
 }
 
 IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest, SwitchSharedTab) {
@@ -366,7 +420,8 @@ IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest, SwitchSharedTab) {
   CreateUiAndStartSharing(browser(), /*capturing_tab=*/0, /*captured_tab=*/2);
 
   // Test that the UI has been updated.
-  VerifyUi(browser(), /*capturing_tab=*/0, /*captured_tab=*/2);
+  VerifyUi(UiExpectations{
+      .browser = browser(), .capturing_tab = 0, .captured_tab = 2});
 }
 
 IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest,
@@ -378,12 +433,16 @@ IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest,
   AddTabs(browser(), 2);
   ASSERT_EQ(browser()->tab_strip_model()->count(), 3);
   CreateUiAndStartSharing(browser(), /*capturing_tab=*/0, /*captured_tab=*/1);
-  VerifyUi(browser(), kCapturingTab, kCapturedTab);  // Sanity.
+  VerifyUi(UiExpectations{.browser = browser(),
+                          .capturing_tab = kCapturingTab,
+                          .captured_tab = kCapturedTab});  // Sanity.
 
   // Simulate changing the tab favicon to a unique new favicon, then waiting
   // until the change is picked up by the next periodic update.
   UpdateTabFavicon(browser(), kCapturingTab);
-  VerifyUi(browser(), kCapturingTab, kCapturedTab);
+  VerifyUi(UiExpectations{.browser = browser(),
+                          .capturing_tab = kCapturingTab,
+                          .captured_tab = kCapturedTab});
 }
 
 IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest, ChangeCapturedTabFavicon) {
@@ -394,12 +453,16 @@ IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest, ChangeCapturedTabFavicon) {
   AddTabs(browser(), 2);
   ASSERT_EQ(browser()->tab_strip_model()->count(), 3);
   CreateUiAndStartSharing(browser(), /*capturing_tab=*/0, /*captured_tab=*/1);
-  VerifyUi(browser(), kCapturingTab, kCapturedTab);  // Sanity.
+  VerifyUi(UiExpectations{.browser = browser(),
+                          .capturing_tab = kCapturingTab,
+                          .captured_tab = kCapturedTab});  // Sanity.
 
   // Simulate changing the tab favicon to a unique new favicon, then waiting
   // until the change is picked up by the next periodic update.
   UpdateTabFavicon(browser(), kCapturedTab);
-  VerifyUi(browser(), kCapturingTab, kCapturedTab);
+  VerifyUi(UiExpectations{.browser = browser(),
+                          .capturing_tab = kCapturingTab,
+                          .captured_tab = kCapturedTab});
 }
 
 IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest, ChangeOtherTabFavicon) {
@@ -411,12 +474,16 @@ IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest, ChangeOtherTabFavicon) {
   AddTabs(browser(), 2);
   ASSERT_EQ(browser()->tab_strip_model()->count(), 3);
   CreateUiAndStartSharing(browser(), /*capturing_tab=*/0, /*captured_tab=*/1);
-  VerifyUi(browser(), kCapturingTab, kCapturedTab);  // Sanity.
+  VerifyUi(UiExpectations{.browser = browser(),
+                          .capturing_tab = kCapturingTab,
+                          .captured_tab = kCapturedTab});  // Sanity.
 
   // Simulate changing the tab favicon to a unique new favicon, then waiting
   // until the change is picked up by the next periodic update.
   UpdateTabFavicon(browser(), kOtherTab);
-  VerifyUi(browser(), kCapturingTab, kCapturedTab);
+  VerifyUi(UiExpectations{.browser = browser(),
+                          .capturing_tab = kCapturingTab,
+                          .captured_tab = kCapturedTab});
 }
 
 IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest, StopSharing) {
@@ -428,8 +495,10 @@ IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest, StopSharing) {
 
   // Test that the infobars have been removed, and the contents border and tab
   // capture indicator are no longer visible.
-  VerifyUi(browser(), /*capturing_tab=*/kNullTabIndex,
-           /*captured_tab=*/kNullTabIndex, /*infobar_count=*/0);
+  VerifyUi(UiExpectations{.browser = browser(),
+                          .capturing_tab = kNullTabIndex,
+                          .captured_tab = kNullTabIndex,
+                          .infobar_count = 0});
 }
 
 IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest, CloseTab) {
@@ -444,7 +513,8 @@ IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest, CloseTab) {
       tab_strip_model->GetWebContentsAt(2));
   tab_strip_model->CloseWebContentsAt(2, TabCloseTypes::CLOSE_NONE);
   tab_2_destroyed_watcher.Wait();
-  VerifyUi(browser(), /*capturing_tab=*/0, /*captured_tab=*/1);
+  VerifyUi(UiExpectations{
+      .browser = browser(), .capturing_tab = 0, .captured_tab = 1});
 
   // Close the shared tab and wait until it's actually closed, then verify that
   // sharing is stopped, i.e. the UI is removed.
@@ -452,12 +522,12 @@ IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest, CloseTab) {
       tab_strip_model->GetWebContentsAt(1));
   tab_strip_model->CloseWebContentsAt(1, TabCloseTypes::CLOSE_NONE);
   tab_1_destroyed_watcher.Wait();
-  VerifyUi(browser(), /*capturing_tab=*/kNullTabIndex,
-           /*captured_tab=*/kNullTabIndex, /*infobar_count=*/0);
+  VerifyUi(UiExpectations{.browser = browser(),
+                          .capturing_tab = kNullTabIndex,
+                          .captured_tab = kNullTabIndex,
+                          .infobar_count = 0});
 }
 
-// TODO(https://crbug.com/1030925): Fix contents border on ChromeOS.
-#if !BUILDFLAG(IS_CHROMEOS)
 IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest,
                        BorderWidgetShouldCloseWhenBrowserCloses) {
   Browser* new_browser = CreateBrowser(browser()->profile());
@@ -472,13 +542,13 @@ IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest,
   CreateUiAndStartSharing(new_browser, /*capturing_tab=*/0, /*captured_tab=*/2);
 
   // Test that the UI has been updated.
-  VerifyUi(new_browser, /*capturing_tab=*/0, /*captured_tab=*/2);
+  VerifyUi(UiExpectations{
+      .browser = new_browser, .capturing_tab = 0, .captured_tab = 2});
 
   auto contents_border_weakptr = GetContentsBorder(new_browser)->GetWeakPtr();
   CloseBrowserSynchronously(new_browser);
   EXPECT_FALSE(contents_border_weakptr);
 }
-#endif  // !BUILDFLAG(IS_CHROMEOS)
 
 IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest,
                        CloseTabInIncognitoBrowser) {
@@ -495,29 +565,39 @@ IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest,
   ASSERT_EQ(incognito_browser->tab_strip_model()->count(), 4);
   CreateUiAndStartSharing(incognito_browser, /*capturing_tab=*/0,
                           /*captured_tab=*/1);
-  VerifyUi(incognito_browser, /*capturing_tab=*/0, /*captured_tab=*/1);
-  VerifyUi(browser(), /*capturing_tab=*/kNullTabIndex,
-           /*captured_tab=*/kNullTabIndex, /*infobar_count=*/1,
-           /*has_border=*/false);
+  VerifyUi(UiExpectations{
+      .browser = incognito_browser, .capturing_tab = 0, .captured_tab = 1});
+  VerifyUi(UiExpectations{.browser = browser(),
+                          .capturing_tab = kNullTabIndex,
+                          .captured_tab = kNullTabIndex,
+                          .infobar_count = 1,
+                          .has_border = false});
 
   // Close a tab different than the shared one and test that the UI has not
   // changed.
   TabStripModel* tab_strip_model = incognito_browser->tab_strip_model();
   tab_strip_model->CloseWebContentsAt(2, TabCloseTypes::CLOSE_NONE);
-  VerifyUi(incognito_browser, /*capturing_tab=*/0, /*captured_tab=*/1);
-  VerifyUi(browser(), /*capturing_tab=*/kNullTabIndex,
-           /*captured_tab=*/kNullTabIndex, /*infobar_count=*/1,
-           /*has_border=*/false);
+  VerifyUi(UiExpectations{
+      .browser = incognito_browser, .capturing_tab = 0, .captured_tab = 1});
+  VerifyUi(UiExpectations{.browser = browser(),
+                          .capturing_tab = kNullTabIndex,
+                          .captured_tab = kNullTabIndex,
+                          .infobar_count = 1,
+                          .has_border = false});
 
   // Close the shared tab in the incognito browser and test that the UI is
   // removed.
   incognito_browser->tab_strip_model()->CloseWebContentsAt(
       1, TabCloseTypes::CLOSE_NONE);
-  VerifyUi(incognito_browser, /*capturing_tab=*/kNullTabIndex,
-           /*captured_tab=*/kNullTabIndex, /*infobar_count=*/0);
-  VerifyUi(browser(), /*capturing_tab=*/kNullTabIndex,
-           /*captured_tab=*/kNullTabIndex, /*infobar_count=*/0,
-           /*has_border=*/false);
+  VerifyUi(UiExpectations{.browser = incognito_browser,
+                          .capturing_tab = kNullTabIndex,
+                          .captured_tab = kNullTabIndex,
+                          .infobar_count = 0});
+  VerifyUi(UiExpectations{.browser = browser(),
+                          .capturing_tab = kNullTabIndex,
+                          .captured_tab = kNullTabIndex,
+                          .infobar_count = 0,
+                          .has_border = false});
 }
 
 IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest, KillTab) {
@@ -537,7 +617,7 @@ IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest, KillTab) {
   // Verify that the sad tab does not have an infobar.
   infobars::ContentInfoBarManager* infobar_manager =
       GetInfoBarManager(browser(), 0);
-  EXPECT_EQ(0u, infobar_manager->infobar_count());
+  EXPECT_EQ(0u, infobar_manager->infobars().size());
 
   // Stop sharing should not result in a crash.
   tab_sharing_ui_views()->StopSharing();
@@ -559,8 +639,10 @@ IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest, KillSharedTab) {
   shared_tab_crash_observer.Wait();
 
   // Verify that killing the shared tab stopped sharing.
-  VerifyUi(browser(), /*capturing_tab=*/kNullTabIndex,
-           /*captured_tab=*/kNullTabIndex, /*infobar_count=*/0);
+  VerifyUi(UiExpectations{.browser = browser(),
+                          .capturing_tab = kNullTabIndex,
+                          .captured_tab = kNullTabIndex,
+                          .infobar_count = 0});
 }
 
 IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest,
@@ -617,9 +699,12 @@ IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest,
 
   // Test that infobars were created, and contents border and tab capture
   // indicator are displayed on the shared tab.
-  VerifyUi(browser(), /*capturing_tab=*/0, /*captured_tab=*/1,
-           /*infobar_count=*/1, /*has_border=*/true,
-           /*tab_with_disabled_button=*/kNullTabIndex);
+  VerifyUi(UiExpectations{.browser = browser(),
+                          .capturing_tab = 0,
+                          .captured_tab = 1,
+                          .infobar_count = 1,
+                          .has_border = true,
+                          .tab_with_disabled_button = kNullTabIndex});
 
   constexpr int kRestrictedTab = 2;
   content::WebContents* web_contents =
@@ -628,28 +713,41 @@ IN_PROC_BROWSER_TEST_P(TabSharingUIViewsBrowserTest,
   ASSERT_TRUE(content::NavigateToURL(web_contents, kUrlRestricted));
 
   // Test that button on tab 2 is now disabled.
-  VerifyUi(browser(), /*capturing_tab=*/0, /*captured_tab=*/1,
-           /*infobar_count=*/1, /*has_border=*/true,
-           /*tab_with_disabled_button=*/kRestrictedTab);
+  VerifyUi(UiExpectations{.browser = browser(),
+                          .capturing_tab = 0,
+                          .captured_tab = 1,
+                          .infobar_count = 1,
+                          .has_border = true,
+                          .tab_with_disabled_button = kRestrictedTab});
 
   // Navigate to unrestricted URL.
   ASSERT_TRUE(content::NavigateToURL(web_contents, kUrlUnrestricted));
 
   // Verify that button on tab 2 is re-enabled.
-  VerifyUi(browser(), /*capturing_tab=*/0, /*captured_tab=*/1,
-           /*infobar_count=*/1, /*has_border=*/true,
-           /*tab_with_disabled_button=*/kNullTabIndex);
+  VerifyUi(UiExpectations{.browser = browser(),
+                          .capturing_tab = 0,
+                          .captured_tab = 1,
+                          .infobar_count = 1,
+                          .has_border = true,
+                          .tab_with_disabled_button = kNullTabIndex});
 }
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 class MultipleTabSharingUIViewsBrowserTest : public InProcessBrowserTest {
  public:
-  MultipleTabSharingUIViewsBrowserTest() {}
+#if BUILDFLAG(IS_CHROMEOS)
+  MultipleTabSharingUIViewsBrowserTest() {
+    features_.InitAndEnableFeature(features::kTabCaptureBlueBorderCrOS);
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   void CreateUIsAndStartSharing(Browser* browser,
                                 int capturing_tab,
                                 int captured_tab_first,
-                                int captured_tab_last) {
+                                int captured_tab_last = -1) {
+    if (captured_tab_last < 0) {
+      captured_tab_last = captured_tab_first;
+    }
     for (int captured_tab = captured_tab_first;
          captured_tab <= captured_tab_last; ++captured_tab) {
       DCHECK_NE(captured_tab, capturing_tab);
@@ -657,7 +755,9 @@ class MultipleTabSharingUIViewsBrowserTest : public InProcessBrowserTest {
       tab_sharing_ui_views_.push_back(TabSharingUI::Create(
           GetGlobalId(browser, capturing_tab),
           GetDesktopMediaID(browser, captured_tab), u"example-sharing.com",
-          /*favicons_used_for_switch_to_tab_button=*/false));
+          /*favicons_used_for_switch_to_tab_button=*/false,
+          /*app_preferred_current_tab=*/false,
+          TabSharingInfoBarDelegate::TabShareType::CAPTURE));
       tab_sharing_ui_views_[tab_sharing_ui_views_.size() - 1]->OnStarted(
           base::OnceClosure(), content::MediaStreamUI::SourceCallback(),
           std::vector<content::DesktopMediaID>{});
@@ -674,6 +774,10 @@ class MultipleTabSharingUIViewsBrowserTest : public InProcessBrowserTest {
   }
 
  private:
+#if BUILDFLAG(IS_CHROMEOS)
+  base::test::ScopedFeatureList features_;
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
   std::vector<std::unique_ptr<TabSharingUI>> tab_sharing_ui_views_;
 };
 
@@ -687,7 +791,7 @@ IN_PROC_BROWSER_TEST_F(MultipleTabSharingUIViewsBrowserTest, VerifyUi) {
   // sessions.
   int tab_count = browser()->tab_strip_model()->count();
   for (int i = 0; i < tab_count; ++i)
-    EXPECT_EQ(3u, GetInfoBarManager(browser(), i)->infobar_count());
+    EXPECT_EQ(3u, GetInfoBarManager(browser(), i)->infobars().size());
 
   // Check that all shared tabs display a tab capture indicator.
   auto capture_indicator = GetCaptureIndicator();
@@ -696,10 +800,6 @@ IN_PROC_BROWSER_TEST_F(MultipleTabSharingUIViewsBrowserTest, VerifyUi) {
         capture_indicator->IsBeingMirrored(GetWebContents(browser(), i)));
 
   views::Widget* contents_border = GetContentsBorder(browser());
-#if BUILDFLAG(IS_CHROMEOS)
-  // TODO(https://crbug.com/1030925): Fix contents border on ChromeOS.
-  EXPECT_EQ(nullptr, contents_border);
-#else
   // The capturing tab, which is not itself being captured, does not have
   // the contents-border.
   ActivateTab(browser(), 0);
@@ -710,7 +810,6 @@ IN_PROC_BROWSER_TEST_F(MultipleTabSharingUIViewsBrowserTest, VerifyUi) {
     ActivateTab(browser(), i);
     ASSERT_TRUE(contents_border->IsVisible());
   }
-#endif
 }
 
 IN_PROC_BROWSER_TEST_F(MultipleTabSharingUIViewsBrowserTest, StopSharing) {
@@ -725,7 +824,7 @@ IN_PROC_BROWSER_TEST_F(MultipleTabSharingUIViewsBrowserTest, StopSharing) {
     tab_sharing_ui_views(--shared_tab_count)->StopSharing();
     for (int j = 0; j < browser()->tab_strip_model()->count(); ++j)
       ASSERT_EQ(shared_tab_count,
-                GetInfoBarManager(browser(), j)->infobar_count());
+                GetInfoBarManager(browser(), j)->infobars().size());
   }
 }
 
@@ -741,6 +840,224 @@ IN_PROC_BROWSER_TEST_F(MultipleTabSharingUIViewsBrowserTest, CloseTabs) {
     tab_strip_model->CloseWebContentsAt(1, TabCloseTypes::CLOSE_NONE);
     for (int i = 0; i < tab_strip_model->count(); ++i)
       ASSERT_EQ(tab_strip_model->count() - 1u,
-                GetInfoBarManager(browser(), i)->infobar_count());
+                GetInfoBarManager(browser(), i)->infobars().size());
   }
+}
+
+// TODO(crbug.com/1444732): Enable on CrOS.
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS_ASH) && \
+    !BUILDFLAG(IS_CHROMEOS_LACROS)
+IN_PROC_BROWSER_TEST_F(
+    MultipleTabSharingUIViewsBrowserTest,
+    NormalModeCapturerDoesNotProduceInfobarInGuestModeTabOpenedBeforeCapture) {
+  // Create a guest-mode browser.
+  Browser* const guest_browser = CreateGuestBrowser();
+  AddTabs(guest_browser, 1);
+  ASSERT_EQ(guest_browser->tab_strip_model()->count(), 2);
+
+  // Create a normal-mode browser.
+  Browser* const main_browser = CreateBrowser(browser()->profile());
+  AddTabs(main_browser, 1);
+  ASSERT_EQ(main_browser->tab_strip_model()->count(), 2);
+
+  // Start a capture in the normal-mode capture.
+  CreateUIsAndStartSharing(main_browser, /*capturing_tab=*/0,
+                           /*captured_tab=*/1);
+
+  // Expectation #1: The capture infobar is created in the profile
+  // where capture is happening.
+  EXPECT_EQ(GetInfoBarManager(main_browser, /*tab=*/0)->infobars().size(), 1u);
+  EXPECT_EQ(GetInfoBarManager(main_browser, /*tab=*/1)->infobars().size(), 1u);
+
+  // Expectation #2: The capture infobar is NOT created in the profile
+  // where capture is NOT happening.
+  EXPECT_EQ(GetInfoBarManager(guest_browser, /*tab=*/0)->infobars().size(), 0u);
+  EXPECT_EQ(GetInfoBarManager(guest_browser, /*tab=*/1)->infobars().size(), 0u);
+}
+
+IN_PROC_BROWSER_TEST_F(
+    MultipleTabSharingUIViewsBrowserTest,
+    NormalModeCapturerDoesNotProduceInfobarInGuestModeTabOpenedAfterCapture) {
+  // Create a normal-mode browser.
+  Browser* const main_browser = CreateBrowser(browser()->profile());
+  AddTabs(main_browser, 1);
+  ASSERT_EQ(main_browser->tab_strip_model()->count(), 2);
+
+  // Start a capture in the normal-mode capture.
+  CreateUIsAndStartSharing(main_browser, /*capturing_tab=*/0,
+                           /*captured_tab=*/1);
+
+  // Create a guest-mode browser.
+  Browser* const guest_browser = CreateGuestBrowser();
+  AddTabs(guest_browser, 1);
+  ASSERT_EQ(guest_browser->tab_strip_model()->count(), 2);
+
+  // Expectation #1: The capture infobar is created in the profile
+  // where capture is happening.
+  EXPECT_EQ(GetInfoBarManager(main_browser, /*tab=*/0)->infobars().size(), 1u);
+  EXPECT_EQ(GetInfoBarManager(main_browser, /*tab=*/1)->infobars().size(), 1u);
+
+  // Expectation #2: The capture infobar is NOT created in the profile
+  // where capture is NOT happening.
+  EXPECT_EQ(GetInfoBarManager(guest_browser, /*tab=*/0)->infobars().size(), 0u);
+  EXPECT_EQ(GetInfoBarManager(guest_browser, /*tab=*/1)->infobars().size(), 0u);
+}
+
+IN_PROC_BROWSER_TEST_F(
+    MultipleTabSharingUIViewsBrowserTest,
+    GuestModeCapturerDoesNotProduceInfobarInNormalModeTabOpenedBeforeCapture) {
+  // Create a normal-mode browser.
+  Browser* const main_browser = CreateBrowser(browser()->profile());
+  AddTabs(main_browser, 1);
+  ASSERT_EQ(main_browser->tab_strip_model()->count(), 2);
+
+  // Create a guest-mode browser.
+  Browser* const guest_browser = CreateGuestBrowser();
+  AddTabs(guest_browser, 1);
+  ASSERT_EQ(guest_browser->tab_strip_model()->count(), 2);
+
+  // Start a capture in the guest-mode browser.
+  CreateUIsAndStartSharing(guest_browser, /*capturing_tab=*/0,
+                           /*captured_tab=*/1);
+
+  // Expectation #1: The capture infobar is created in the profile
+  // where capture is happening.
+  EXPECT_EQ(GetInfoBarManager(guest_browser, /*tab=*/0)->infobars().size(), 1u);
+  EXPECT_EQ(GetInfoBarManager(guest_browser, /*tab=*/1)->infobars().size(), 1u);
+
+  // Expectation #2: The capture infobar is NOT created in the profile
+  // where capture is NOT happening.
+  EXPECT_EQ(GetInfoBarManager(main_browser, /*tab=*/0)->infobars().size(), 0u);
+  EXPECT_EQ(GetInfoBarManager(main_browser, /*tab=*/1)->infobars().size(), 0u);
+}
+
+IN_PROC_BROWSER_TEST_F(
+    MultipleTabSharingUIViewsBrowserTest,
+    GuestModeCapturerDoesNotProduceInfobarInNormalModeTabOpenedAfterCapture) {
+  // Create a guest-mode browser.
+  Browser* const guest_browser = CreateGuestBrowser();
+  AddTabs(guest_browser, 1);
+  ASSERT_EQ(guest_browser->tab_strip_model()->count(), 2);
+
+  // Start a capture in the guest-mode browser.
+  CreateUIsAndStartSharing(guest_browser, /*capturing_tab=*/0,
+                           /*captured_tab=*/1);
+
+  // Create a normal-mode browser.
+  Browser* const main_browser = CreateBrowser(browser()->profile());
+  AddTabs(main_browser, 1);
+  ASSERT_EQ(main_browser->tab_strip_model()->count(), 2);
+
+  // Expectation #1: The capture infobar is created in the profile
+  // where capture is happening.
+  EXPECT_EQ(GetInfoBarManager(guest_browser, /*tab=*/0)->infobars().size(), 1u);
+  EXPECT_EQ(GetInfoBarManager(guest_browser, /*tab=*/1)->infobars().size(), 1u);
+
+  // Expectation #2: The capture infobar is NOT created in the profile
+  // where capture is NOT happening.
+  EXPECT_EQ(GetInfoBarManager(main_browser, /*tab=*/0)->infobars().size(), 0u);
+  EXPECT_EQ(GetInfoBarManager(main_browser, /*tab=*/1)->infobars().size(), 0u);
+}
+
+IN_PROC_BROWSER_TEST_F(MultipleTabSharingUIViewsBrowserTest,
+                       TabsAddedInGuestModeHaveInfobarIfGuestModeCapture) {
+  // Create a guest-mode browser.
+  Browser* const guest_browser = CreateGuestBrowser();
+  AddTabs(guest_browser, 1);
+  ASSERT_EQ(guest_browser->tab_strip_model()->count(), 2);
+
+  // Start a capture in the guest-mode browser.
+  CreateUIsAndStartSharing(guest_browser, /*capturing_tab=*/0,
+                           /*captured_tab=*/1);
+
+  // Sanity - existing tabs have an infobar.
+  ASSERT_EQ(GetInfoBarManager(guest_browser, /*tab=*/0)->infobars().size(), 1u);
+  ASSERT_EQ(GetInfoBarManager(guest_browser, /*tab=*/1)->infobars().size(), 1u);
+
+  // Test focus - when adding a tab in guest mode, that tab has an infobar.
+  AddTabs(guest_browser, 1);
+  ASSERT_EQ(guest_browser->tab_strip_model()->count(), 3);
+  EXPECT_EQ(GetInfoBarManager(guest_browser, /*tab=*/2)->infobars().size(), 1u);
+}
+#endif
+
+class TabSharingUIViewsPreferCurrentTabBrowserTest
+    : public InProcessBrowserTest {
+ public:
+#if BUILDFLAG(IS_CHROMEOS)
+  TabSharingUIViewsPreferCurrentTabBrowserTest() {
+    features_.InitAndEnableFeature(features::kTabCaptureBlueBorderCrOS);
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
+  ~TabSharingUIViewsPreferCurrentTabBrowserTest() override = default;
+
+  void ManualSetUp(int captured_tab) {
+    auto source_change_cb = base::BindRepeating(
+        &TabSharingUIViewsPreferCurrentTabBrowserTest::SourceChange,
+        base::Unretained(this));
+
+    AddTabs(browser(), 1);  // Starts at 1, so we're up to 2.
+
+    ActivateTab(browser(), kTab0);
+    tab_sharing_ui_views_ = TabSharingUI::Create(
+        GetGlobalId(browser(), kTab0),
+        GetDesktopMediaID(browser(), captured_tab), u"example-sharing.com",
+        /*favicons_used_for_switch_to_tab_button=*/false,
+        /*app_preferred_current_tab=*/true,
+        TabSharingInfoBarDelegate::TabShareType::CAPTURE);
+    tab_sharing_ui_views_->OnStarted(base::OnceClosure(), source_change_cb,
+                                     std::vector<content::DesktopMediaID>{});
+  }
+
+  void AddTabs(Browser* browser, int tab_count) {
+    for (int i = 0; i < tab_count; ++i)
+      AddBlankTabAndShow(browser);
+  }
+
+  void SourceChange(const content::DesktopMediaID& media_id) {}
+
+ protected:
+  const int kTab0 = 0;
+  const int kTab1 = 1;
+
+#if BUILDFLAG(IS_CHROMEOS)
+  base::test::ScopedFeatureList features_;
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
+  std::unique_ptr<TabSharingUI> tab_sharing_ui_views_;
+};
+
+IN_PROC_BROWSER_TEST_F(TabSharingUIViewsPreferCurrentTabBrowserTest,
+                       VerifyUiWhenSelfCapturing) {
+  ManualSetUp(/*captured_tab=*/kTab0);
+
+  // The tab which is capturing itself: [Stop]
+  EXPECT_FALSE(HasSecondaryButton(browser(), kTab0));
+  EXPECT_FALSE(HasTertiaryButton(browser(), kTab0));
+
+  // Any other tab: [Stop] [Share this tab instead]
+  EXPECT_TRUE(HasSecondaryButton(browser(), kTab1));
+  EXPECT_EQ(GetSecondaryButtonLabel(browser(), kTab1),
+            kShareThisTabInsteadMessage);
+  EXPECT_FALSE(HasTertiaryButton(browser(), kTab1));
+}
+
+IN_PROC_BROWSER_TEST_F(TabSharingUIViewsPreferCurrentTabBrowserTest,
+                       VerifyUiWhenCapturingAnotherTab) {
+  ManualSetUp(/*captured_tab=*/kTab1);
+
+  // The capturing tab: [Stop] [Share this tab instead] [View tab: ...]
+  EXPECT_TRUE(HasSecondaryButton(browser(), kTab0));
+  EXPECT_EQ(GetSecondaryButtonLabel(browser(), kTab0),
+            kShareThisTabInsteadMessage);
+  EXPECT_TRUE(HasTertiaryButton(browser(), kTab0));
+  EXPECT_TRUE(base::StartsWith(GetTertiaryButtonLabel(browser(), kTab0),
+                               kViewTabMessage));
+
+  // The capturing tab: [Stop] [View tab: ...]
+  EXPECT_TRUE(HasSecondaryButton(browser(), kTab1));
+  EXPECT_TRUE(base::StartsWith(GetSecondaryButtonLabel(browser(), kTab1),
+                               kViewTabMessage));
+  EXPECT_FALSE(HasTertiaryButton(browser(), kTab1));
 }

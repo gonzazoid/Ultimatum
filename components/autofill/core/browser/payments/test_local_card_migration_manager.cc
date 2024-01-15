@@ -6,7 +6,6 @@
 
 #include "components/autofill/core/browser/metrics/autofill_metrics.h"
 #include "components/autofill/core/browser/payments/payments_util.h"
-#include "components/autofill/core/browser/payments/test_payments_client.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
 
 namespace autofill {
@@ -14,15 +13,13 @@ namespace autofill {
 TestLocalCardMigrationManager::TestLocalCardMigrationManager(
     AutofillDriver* driver,
     AutofillClient* client,
-    payments::TestPaymentsClient* payments_client,
     TestPersonalDataManager* personal_data_manager)
     : LocalCardMigrationManager(client,
-                                payments_client,
                                 "en-US",
                                 personal_data_manager),
       personal_data_manager_(personal_data_manager) {}
 
-TestLocalCardMigrationManager::~TestLocalCardMigrationManager() {}
+TestLocalCardMigrationManager::~TestLocalCardMigrationManager() = default;
 
 bool TestLocalCardMigrationManager::IsCreditCardMigrationEnabled() {
   return payments::GetBillingCustomerId(personal_data_manager_) != 0;
@@ -52,16 +49,15 @@ void TestLocalCardMigrationManager::OnUserAcceptedMainMigrationDialog(
   LocalCardMigrationManager::OnUserAcceptedMainMigrationDialog(selected_cards);
 }
 
-void TestLocalCardMigrationManager::ResetSyncState(
-    AutofillSyncSigninState sync_state) {
-  personal_data_manager_->SetSyncAndSignInState(sync_state);
+void TestLocalCardMigrationManager::EnablePaymentsWalletSyncInTransportMode() {
+  personal_data_manager_->SetIsPaymentsWalletSyncTransportEnabled(true);
 }
 
 void TestLocalCardMigrationManager::OnDidGetUploadDetails(
     bool is_from_settings_page,
     AutofillClient::PaymentsRpcResult result,
     const std::u16string& context_token,
-    std::unique_ptr<base::Value> legal_message,
+    std::unique_ptr<base::Value::Dict> legal_message,
     std::vector<std::pair<int, int>> supported_bin_ranges) {
   if (result == AutofillClient::PaymentsRpcResult::kSuccess) {
     local_card_migration_was_triggered_ = true;

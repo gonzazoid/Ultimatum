@@ -9,6 +9,7 @@
 #include <set>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "media/capture/video/chromeos/camera_device_delegate.h"
 #include "media/capture/video/chromeos/mojom/camera3.mojom.h"
 #include "media/capture/video_capture_types.h"
@@ -26,45 +27,50 @@ struct BufferInfo {
   gfx::GpuMemoryBufferHandle gpu_memory_buffer_handle;
   uint32_t drm_format;
   cros::mojom::HalPixelFormat hal_pixel_format;
+  uint64_t modifier;
 };
 
 // RequestBuilder is used to build capture request that will be sent to camera
 // HAL process.
 class CAPTURE_EXPORT RequestBuilder {
  public:
-  using RequestBufferCallback = base::RepeatingCallback<
-      absl::optional<BufferInfo>(StreamType, absl::optional<uint64_t>)>;
+  using RequestBufferCallback =
+      base::RepeatingCallback<absl::optional<BufferInfo>(StreamType)>;
 
   RequestBuilder(CameraDeviceContext* device_context,
                  // Callback to request buffer from StreamBufferManager. Having
                  // this callback, we do not need to include StreamBufferManager
                  // when requesting buffer.
-                 RequestBufferCallback request_buffer_callback);
+                 RequestBufferCallback request_buffer_callback,
+                 bool use_buffer_management_apis);
   ~RequestBuilder();
 
-  // Builds a capture request by given streams and settings. The
-  // |input_buffer_id| is used for reprocess request.
+  // Builds a capture request by given streams and settings.
   cros::mojom::Camera3CaptureRequestPtr BuildRequest(
       std::set<StreamType> stream_types,
-      cros::mojom::CameraMetadataPtr settings,
-      absl::optional<uint64_t> input_buffer_id);
+      cros::mojom::CameraMetadataPtr settings);
+
+  // Used to create Camera3StreamBuffer for Camera3CaptureRequest or
+  // Camera3StreamBufferRet.
+  cros::mojom::Camera3StreamBufferPtr CreateStreamBuffer(
+      StreamType stream_type,
+      absl::optional<BufferInfo> buffer_info);
 
  private:
   cros::mojom::CameraBufferHandlePtr CreateCameraBufferHandle(
       StreamType stream_type,
       BufferInfo buffer_info);
 
-  cros::mojom::Camera3StreamBufferPtr CreateStreamBuffer(
-      StreamType stream_type,
-      uint64_t buffer_id,
-      cros::mojom::CameraBufferHandlePtr buffer_handle);
-
-  CameraDeviceContext* device_context_;
+  raw_ptr<CameraDeviceContext> device_context_;
 
   // The frame number. Increased by one for each capture request sent.
   uint32_t frame_number_;
 
   RequestBufferCallback request_buffer_callback_;
+
+  // Set true if the buffer management APIs are enabled. If true, capture
+  // requests do not contain buffer handles.
+  bool use_buffer_management_apis_;
 };
 }  // namespace media
 

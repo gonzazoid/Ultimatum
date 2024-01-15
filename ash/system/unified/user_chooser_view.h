@@ -5,7 +5,10 @@
 #ifndef ASH_SYSTEM_UNIFIED_USER_CHOOSER_VIEW_H_
 #define ASH_SYSTEM_UNIFIED_USER_CHOOSER_VIEW_H_
 
+#include "ash/ash_export.h"
 #include "ash/media/media_controller_impl.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/view.h"
 
@@ -27,6 +30,7 @@ std::u16string GetUserItemAccessibleString(int user_index);
 // A button item of a switchable user.
 class UserItemButton : public views::Button {
  public:
+  METADATA_HEADER(UserItemButton);
   UserItemButton(PressedCallback callback,
                  UserChooserDetailedViewController* controller,
                  int user_index,
@@ -46,14 +50,16 @@ class UserItemButton : public views::Button {
 
  private:
   const int user_index_;
-  views::ImageView* const capture_icon_;
-  views::Label* const name_;
-  views::Label* const email_;
+  const raw_ptr<views::ImageView> capture_icon_;
+  const raw_ptr<views::Label> name_;
+  const raw_ptr<views::Label> email_;
 };
 
 // A detailed view of user chooser.
-class UserChooserView : public views::View, public MediaCaptureObserver {
+class ASH_EXPORT UserChooserView : public views::View,
+                                   public MediaCaptureObserver {
  public:
+  METADATA_HEADER(UserChooserView);
   explicit UserChooserView(UserChooserDetailedViewController* controller);
 
   UserChooserView(const UserChooserView&) = delete;
@@ -65,11 +71,8 @@ class UserChooserView : public views::View, public MediaCaptureObserver {
   void OnMediaCaptureChanged(const base::flat_map<AccountId, MediaCaptureState>&
                                  capture_states) override;
 
-  // views::View:
-  const char* GetClassName() const override;
-
  private:
-  std::vector<UserItemButton*> user_item_buttons_;
+  std::vector<raw_ptr<UserItemButton, VectorExperimental>> user_item_buttons_;
 };
 
 }  // namespace ash

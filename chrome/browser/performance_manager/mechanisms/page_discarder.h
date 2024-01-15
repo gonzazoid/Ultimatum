@@ -7,7 +7,8 @@
 
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "chrome/browser/resource_coordinator/lifecycle_unit_state.mojom.h"
 
 namespace performance_manager {
 
@@ -26,10 +27,18 @@ class PageDiscarder {
   // When invoked, DiscardPageNodes() becomes a no-op.
   static void DisableForTesting();
 
+  struct DiscardEvent {
+    base::TimeTicks discard_time;
+    uint64_t estimated_memory_freed_kb = 0;
+  };
+
   // Discards |page_nodes| and runs |post_discard_cb| on the origin sequence
   // once this is done.
-  virtual void DiscardPageNodes(const std::vector<const PageNode*>& page_nodes,
-                                base::OnceCallback<void(bool)> post_discard_cb);
+  virtual void DiscardPageNodes(
+      const std::vector<const PageNode*>& page_nodes,
+      ::mojom::LifecycleUnitDiscardReason discard_reason,
+      base::OnceCallback<void(const std::vector<DiscardEvent>&)>
+          post_discard_cb);
 };
 
 }  // namespace mechanism

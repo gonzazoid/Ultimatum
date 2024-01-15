@@ -13,10 +13,10 @@
 #include <vector>
 
 #include "base/base_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/path_service.h"
@@ -31,7 +31,6 @@
 #include "base/sys_byteorder.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/nacl/browser/nacl_browser.h"
@@ -47,10 +46,10 @@
 #include "content/public/browser/browser_child_process_host.h"
 #include "content/public/browser/browser_ppapi_host.h"
 #include "content/public/browser/child_process_data.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/plugin_service.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
-#include "content/public/common/child_process_host.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/common/process_type.h"
 #include "content/public/common/sandboxed_process_launcher_delegate.h"
@@ -65,9 +64,9 @@
 #include "sandbox/policy/mojom/sandbox.mojom.h"
 #include "sandbox/policy/switches.h"
 
-#if BUILDFLAG(USE_ZYGOTE_HANDLE)
+#if BUILDFLAG(USE_ZYGOTE)
 #include "content/public/common/zygote/zygote_handle.h"  // nogncheck
-#endif  // BUILDFLAG(USE_ZYGOTE_HANDLE)
+#endif  // BUILDFLAG(USE_ZYGOTE)
 
 #if BUILDFLAG(IS_POSIX)
 
@@ -76,16 +75,6 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
-#elif BUILDFLAG(IS_WIN)
-#include <windows.h>
-#include <winsock2.h>
-
-#include "base/threading/thread.h"
-#include "base/win/scoped_handle.h"
-#include "base/win/windows_version.h"
-#include "components/nacl/browser/nacl_broker_service_win.h"
-#include "components/nacl/common/nacl_debug_exception_handler_win.h"
-#include "sandbox/policy/win/sandbox_win.h"
 #endif
 
 using content::BrowserThread;
@@ -94,72 +83,6 @@ using content::ChildProcessHost;
 using ppapi::proxy::SerializedHandle;
 
 namespace nacl {
-
-#if BUILDFLAG(IS_WIN)
-namespace {
-
-// Looks for the largest contiguous unallocated region of address
-// space and returns it via |*out_addr| and |*out_size|.
-void FindAddressSpace(base::ProcessHandle process,
-                      char** out_addr, size_t* out_size) {
-  *out_addr = nullptr;
-  *out_size = 0;
-  char* addr = 0;
-  while (true) {
-    MEMORY_BASIC_INFORMATION info;
-    size_t result = VirtualQueryEx(process, static_cast<void*>(addr),
-                                   &info, sizeof(info));
-    if (result < sizeof(info))
-      break;
-    if (info.State == MEM_FREE && info.RegionSize > *out_size) {
-      *out_addr = addr;
-      *out_size = info.RegionSize;
-    }
-    addr += info.RegionSize;
-  }
-}
-
-#ifdef _DLL
-
-bool IsInPath(const std::string& path_env_var, const std::string& dir) {
-  for (const base::StringPiece& cur : base::SplitStringPiece(
-           path_env_var, ";", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL)) {
-    if (cur == dir)
-      return true;
-  }
-  return false;
-}
-
-#endif  // _DLL
-
-}  // namespace
-
-// Allocates |size| bytes of address space in the given process at a
-// randomised address.
-void* AllocateAddressSpaceASLR(base::ProcessHandle process, size_t size) {
-  char* addr;
-  size_t avail_size;
-  FindAddressSpace(process, &addr, &avail_size);
-  if (avail_size < size)
-    return nullptr;
-  size_t offset = base::RandGenerator(avail_size - size);
-  const int kPageSize = 0x10000;
-  void* request_addr = reinterpret_cast<void*>(
-      reinterpret_cast<uint64_t>(addr + offset) & ~(kPageSize - 1));
-  return VirtualAllocEx(process, request_addr, size,
-                        MEM_RESERVE, PAGE_NOACCESS);
-}
-
-namespace {
-
-bool RunningOnWOW64() {
-  return base::win::OSInfo::GetInstance()->IsWowX86OnAMD64();
-}
-
-}  // namespace
-
-#endif  // BUILDFLAG(IS_WIN)
-
 namespace {
 
 // NOTE: changes to this class need to be reviewed by the security team.
@@ -168,38 +91,11 @@ class NaClSandboxedProcessLauncherDelegate
  public:
   NaClSandboxedProcessLauncherDelegate() {}
 
-#if BUILDFLAG(IS_WIN)
-  void PostSpawnTarget(base::ProcessHandle process) override {
-    // For Native Client sel_ldr processes on 32-bit Windows, reserve 1 GB of
-    // address space to prevent later failure due to address space fragmentation
-    // from .dll loading. The NaCl process will attempt to locate this space by
-    // scanning the address space using VirtualQuery.
-    // TODO(bbudge) Handle the --no-sandbox case.
-    // http://code.google.com/p/nativeclient/issues/detail?id=2131
-    const SIZE_T kNaClSandboxSize = 1 << 30;
-    if (!nacl::AllocateAddressSpaceASLR(process, kNaClSandboxSize)) {
-      DLOG(WARNING) << "Failed to reserve address space for Native Client";
-    }
-  }
-
-  std::string GetSandboxTag() override {
-    return sandbox::policy::SandboxWin::GetSandboxTagForDelegate(
-        "nacl-process-host", GetSandboxType());
-  }
-
-  bool CetCompatible() override {
-    // Disable CET for NaCl loader processes as x86 NaCl sandboxes are not CET
-    // compatible. NaCl untrusted code is allowed to switch stacks within the
-    // sandbox.
-    return false;
-  }
-#endif  // BUILDFLAG(IS_WIN)
-
-#if BUILDFLAG(USE_ZYGOTE_HANDLE)
-  content::ZygoteHandle GetZygote() override {
+#if BUILDFLAG(USE_ZYGOTE)
+  content::ZygoteCommunication* GetZygote() override {
     return content::GetGenericZygote();
   }
-#endif  // BUILDFLAG(USE_ZYGOTE_HANDLE)
+#endif  // BUILDFLAG(USE_ZYGOTE)
 
   sandbox::mojom::Sandbox GetSandboxType() override {
     return sandbox::mojom::Sandbox::kPpapi;
@@ -227,13 +123,7 @@ NaClProcessHost::NaClProcessHost(
       nexe_token_(nexe_token),
       prefetched_resource_files_(prefetched_resource_files),
       permissions_(permissions),
-#if BUILDFLAG(IS_WIN)
-      process_launched_by_broker_(false),
-#endif
       reply_msg_(nullptr),
-#if BUILDFLAG(IS_WIN)
-      debug_exception_handler_requested_(false),
-#endif
       enable_debug_stub_(false),
       enable_crash_throttling_(false),
       off_the_record_(off_the_record),
@@ -272,11 +162,6 @@ NaClProcessHost::~NaClProcessHost() {
     NaClBrowser::GetInstance()->OnProcessEnd(process_->GetData().id);
   }
 
-  // Note: this does not work on Windows, though we currently support this
-  // prefetching feature only on POSIX platforms, so it should be ok.
-#if BUILDFLAG(IS_WIN)
-  DCHECK(prefetched_resource_files_.empty());
-#else
   for (size_t i = 0; i < prefetched_resource_files_.size(); ++i) {
     // The process failed to launch for some reason. Close resource file
     // handles.
@@ -286,7 +171,6 @@ NaClProcessHost::~NaClProcessHost() {
         FROM_HERE, {base::TaskPriority::BEST_EFFORT, base::MayBlock()},
         base::BindOnce(&CloseFile, std::move(file)));
   }
-#endif
   // Open files need to be closed on the blocking pool.
   if (nexe_file_.IsValid()) {
     base::ThreadPool::PostTask(
@@ -300,11 +184,6 @@ NaClProcessHost::~NaClProcessHost() {
     reply_msg_->set_reply_error();
     nacl_host_message_filter_->Send(reply_msg_);
   }
-#if BUILDFLAG(IS_WIN)
-  if (process_launched_by_broker_) {
-    NaClBrokerService::GetInstance()->OnLoaderDied();
-  }
-#endif
 }
 
 void NaClProcessHost::OnProcessCrashed(int exit_status) {
@@ -360,16 +239,6 @@ void NaClProcessHost::Launch(
   }
 
   const base::CommandLine* cmd = base::CommandLine::ForCurrentProcess();
-#if BUILDFLAG(IS_WIN)
-  if (cmd->HasSwitch(switches::kEnableNaClDebug) &&
-      !cmd->HasSwitch(sandbox::policy::switches::kNoSandbox)) {
-    // We don't switch off sandbox automatically for security reasons.
-    SendErrorToRenderer("NaCl's GDB debug stub requires --no-sandbox flag"
-                        " on Windows. See crbug.com/265624.");
-    delete this;
-    return;
-  }
-#endif
   if (cmd->HasSwitch(switches::kNaClGdb) &&
       !cmd->HasSwitch(switches::kEnableNaClDebug)) {
     LOG(WARNING) << "--nacl-gdb flag requires --enable-nacl-debug flag";
@@ -399,22 +268,6 @@ void NaClProcessHost::OnChannelConnected(int32_t peer_pid) {
   }
 }
 
-#if BUILDFLAG(IS_WIN)
-void NaClProcessHost::OnProcessLaunchedByBroker(base::Process process) {
-  process_launched_by_broker_ = true;
-  process_->SetProcess(std::move(process));
-  SetDebugStubPort(nacl::kGdbDebugStubPortUnknown);
-  if (!StartWithLaunchedProcess())
-    delete this;
-}
-
-void NaClProcessHost::OnDebugExceptionHandlerLaunchedByBroker(bool success) {
-  IPC::Message* reply = attach_debug_exception_handler_reply_msg_.release();
-  NaClProcessMsg_AttachDebugExceptionHandler::WriteReplyParams(reply, success);
-  Send(reply);
-}
-#endif
-
 // Needed to handle sync messages in OnMessageReceived.
 bool NaClProcessHost::Send(IPC::Message* msg) {
   return process_->Send(msg);
@@ -423,18 +276,12 @@ bool NaClProcessHost::Send(IPC::Message* msg) {
 void NaClProcessHost::LaunchNaClGdb() {
   const base::CommandLine& command_line =
       *base::CommandLine::ForCurrentProcess();
-#if BUILDFLAG(IS_WIN)
-  base::FilePath nacl_gdb =
-      command_line.GetSwitchValuePath(switches::kNaClGdb);
-  base::CommandLine cmd_line(nacl_gdb);
-#else
   base::CommandLine::StringType nacl_gdb =
       command_line.GetSwitchValueNative(switches::kNaClGdb);
   // We don't support spaces inside arguments in --nacl-gdb switch.
   base::CommandLine cmd_line(base::SplitString(
       nacl_gdb, base::CommandLine::StringType(1, ' '),
       base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL));
-#endif
   cmd_line.AppendArg("--eval-command");
   base::FilePath::StringType irt_path(
       NaClBrowser::GetInstance()->GetIrtFilePath().value());
@@ -469,8 +316,6 @@ bool NaClProcessHost::LaunchSelLdr() {
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   int flags = ChildProcessHost::CHILD_ALLOW_SELF;
-#elif BUILDFLAG(IS_APPLE)
-  int flags = ChildProcessHost::CHILD_PLUGIN;
 #else
   int flags = ChildProcessHost::CHILD_NORMAL;
 #endif
@@ -478,43 +323,6 @@ bool NaClProcessHost::LaunchSelLdr() {
   base::FilePath exe_path = ChildProcessHost::GetChildPath(flags);
   if (exe_path.empty())
     return false;
-
-#if BUILDFLAG(IS_WIN)
-  // On Windows 64-bit NaCl loader is called nacl64.exe instead of chrome.exe
-  if (RunningOnWOW64()) {
-    if (!NaClBrowser::GetInstance()->GetNaCl64ExePath(&exe_path)) {
-      SendErrorToRenderer("could not get path to nacl64.exe");
-      return false;
-    }
-
-#ifdef _DLL
-    // When using the DLL CRT on Windows, we need to amend the PATH to include
-    // the location of the x64 CRT DLLs. This is only the case when using a
-    // component=shared_library build (i.e. generally dev debug builds). The
-    // x86 CRT DLLs are in e.g. out\Debug for chrome.exe etc., so the x64 ones
-    // are put in out\Debug\x64 which we add to the PATH here so that loader
-    // can find them. See http://crbug.com/346034.
-    std::unique_ptr<base::Environment> env(base::Environment::Create());
-    static const char kPath[] = "PATH";
-    std::string old_path;
-    base::FilePath module_path;
-    if (!base::PathService::Get(base::FILE_MODULE, &module_path)) {
-      SendErrorToRenderer("could not get path to current module");
-      return false;
-    }
-    std::string x64_crt_path =
-        base::WideToUTF8(module_path.DirName().Append(L"x64").value());
-    if (!env->GetVar(kPath, &old_path)) {
-      env->SetVar(kPath, x64_crt_path);
-    } else if (!IsInPath(old_path, x64_crt_path)) {
-      std::string new_path(old_path);
-      new_path.append(";");
-      new_path.append(x64_crt_path);
-      env->SetVar(kPath, new_path);
-    }
-#endif  // _DLL
-  }
-#endif
 
   std::unique_ptr<base::CommandLine> cmd_line(new base::CommandLine(exe_path));
   CopyNaClCommandLineArguments(cmd_line.get());
@@ -524,22 +332,6 @@ bool NaClProcessHost::LaunchSelLdr() {
   if (NaClBrowser::GetDelegate()->DialogsAreSuppressed())
     cmd_line->AppendSwitch(switches::kNoErrorDialogs);
 
-#if BUILDFLAG(IS_WIN)
-  cmd_line->AppendArg(switches::kPrefetchArgumentOther);
-#endif  // BUILDFLAG(IS_WIN)
-
-// On Windows we might need to start the broker process to launch a new loader
-#if BUILDFLAG(IS_WIN)
-  if (RunningOnWOW64()) {
-    if (!NaClBrokerService::GetInstance()->LaunchLoader(
-            weak_factory_.GetWeakPtr(),
-            process_->GetHost()->GetMojoInvitation()->ExtractMessagePipe(0))) {
-      SendErrorToRenderer("broker service did not launch process");
-      return false;
-    }
-    return true;
-  }
-#endif
   process_->Launch(std::make_unique<NaClSandboxedProcessLauncherDelegate>(),
                    std::move(cmd_line), true);
   return true;
@@ -554,14 +346,6 @@ bool NaClProcessHost::OnMessageReceived(const IPC::Message& msg) {
                         OnSetKnownToValidate)
     IPC_MESSAGE_HANDLER(NaClProcessMsg_ResolveFileToken,
                         OnResolveFileToken)
-
-#if BUILDFLAG(IS_WIN)
-    IPC_MESSAGE_HANDLER_DELAY_REPLY(
-        NaClProcessMsg_AttachDebugExceptionHandler,
-        OnAttachDebugExceptionHandler)
-    IPC_MESSAGE_HANDLER(NaClProcessHostMsg_DebugStubPortSelected,
-                        OnDebugStubPortSelected)
-#endif
     IPC_MESSAGE_HANDLER(NaClProcessHostMsg_PpapiChannelsCreated,
                         OnPpapiChannelsCreated)
     IPC_MESSAGE_UNHANDLED(handled = false)
@@ -704,12 +488,6 @@ net::SocketDescriptor NaClProcessHost::GetDebugStubSocketHandle() {
 }
 #endif
 
-#if BUILDFLAG(IS_WIN)
-void NaClProcessHost::OnDebugStubPortSelected(uint16_t debug_stub_port) {
-  SetDebugStubPort(debug_stub_port);
-}
-#endif
-
 bool NaClProcessHost::StartNaClExecution() {
   NaClBrowser* nacl_browser = NaClBrowser::GetInstance();
 
@@ -818,8 +596,8 @@ bool NaClProcessHost::StartPPAPIProxy(
 
   ipc_proxy_channel_ = IPC::ChannelProxy::Create(
       channel_handle.release(), IPC::Channel::MODE_CLIENT, nullptr,
-      base::ThreadTaskRunnerHandle::Get().get(),
-      base::ThreadTaskRunnerHandle::Get().get());
+      base::SingleThreadTaskRunner::GetCurrentDefault().get(),
+      base::SingleThreadTaskRunner::GetCurrentDefault().get());
   // Create the browser ppapi host and enable PPAPI message dispatching to the
   // browser process.
   ppapi_host_.reset(content::BrowserPpapiHost::CreateExternalPluginProcess(
@@ -992,74 +770,5 @@ void NaClProcessHost::FileResolved(
            out_handle,
            out_file_path));
 }
-
-#if BUILDFLAG(IS_WIN)
-void NaClProcessHost::OnAttachDebugExceptionHandler(const std::string& info,
-                                                    IPC::Message* reply_msg) {
-  if (!AttachDebugExceptionHandler(info, reply_msg)) {
-    // Send failure message.
-    NaClProcessMsg_AttachDebugExceptionHandler::WriteReplyParams(reply_msg,
-                                                                 false);
-    Send(reply_msg);
-  }
-}
-
-bool NaClProcessHost::AttachDebugExceptionHandler(const std::string& info,
-                                                  IPC::Message* reply_msg) {
-  bool enable_exception_handling = process_type_ == kNativeNaClProcessType;
-  if (!enable_exception_handling && !enable_debug_stub_) {
-    DLOG(ERROR) <<
-        "Debug exception handler requested by NaCl process when not enabled";
-    return false;
-  }
-  if (debug_exception_handler_requested_) {
-    // The NaCl process should not request this multiple times.
-    DLOG(ERROR) << "Multiple AttachDebugExceptionHandler requests received";
-    return false;
-  }
-  debug_exception_handler_requested_ = true;
-
-  base::ProcessId nacl_pid = process_->GetData().GetProcess().Pid();
-  // We cannot use process_->GetData().handle because it does not have
-  // the necessary access rights.  We open the new handle here rather
-  // than in the NaCl broker process in case the NaCl loader process
-  // dies before the NaCl broker process receives the message we send.
-  // The debug exception handler uses DebugActiveProcess() to attach,
-  // but this takes a PID.  We need to prevent the NaCl loader's PID
-  // from being reused before DebugActiveProcess() is called, and
-  // holding a process handle open achieves this.
-  base::Process process =
-      base::Process::OpenWithAccess(nacl_pid,
-                                    PROCESS_QUERY_INFORMATION |
-                                    PROCESS_SUSPEND_RESUME |
-                                    PROCESS_TERMINATE |
-                                    PROCESS_VM_OPERATION |
-                                    PROCESS_VM_READ |
-                                    PROCESS_VM_WRITE |
-                                    PROCESS_DUP_HANDLE |
-                                    SYNCHRONIZE);
-  if (!process.IsValid()) {
-    LOG(ERROR) << "Failed to get process handle";
-    return false;
-  }
-
-  attach_debug_exception_handler_reply_msg_.reset(reply_msg);
-  // If the NaCl loader is 64-bit, the process running its debug
-  // exception handler must be 64-bit too, so we use the 64-bit NaCl
-  // broker process for this.  Otherwise, on a 32-bit system, we use
-  // the 32-bit browser process to run the debug exception handler.
-  if (RunningOnWOW64()) {
-    return NaClBrokerService::GetInstance()->LaunchDebugExceptionHandler(
-               weak_factory_.GetWeakPtr(), nacl_pid, process.Handle(),
-               info);
-  }
-  NaClStartDebugExceptionHandlerThread(
-      std::move(process), info, base::ThreadTaskRunnerHandle::Get(),
-      base::BindRepeating(
-          &NaClProcessHost::OnDebugExceptionHandlerLaunchedByBroker,
-          weak_factory_.GetWeakPtr()));
-  return true;
-}
-#endif
 
 }  // namespace nacl

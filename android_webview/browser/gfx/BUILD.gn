@@ -36,8 +36,6 @@ source_set("gfx") {
     "gpu_service_webview.h",
     "hardware_renderer.cc",
     "hardware_renderer.h",
-    "hardware_renderer_viz.cc",
-    "hardware_renderer_viz.h",
     "java_browser_view_renderer_helper.cc",
     "java_browser_view_renderer_helper.h",
     "output_surface_provider_webview.cc",
@@ -66,8 +64,6 @@ source_set("gfx") {
     "task_queue_webview.h",
     "viz_compositor_thread_runner_webview.cc",
     "viz_compositor_thread_runner_webview.h",
-    "vulkan_gl_interop.cc",
-    "vulkan_gl_interop.h",
   ]
 
   deps = [
@@ -75,7 +71,6 @@ source_set("gfx") {
     "//android_webview/common",
     "//android_webview/public",
     "//base",
-    "//components/power_scheduler",
     "//components/viz/service",
     "//components/viz/service/main",
     "//content/public/browser",

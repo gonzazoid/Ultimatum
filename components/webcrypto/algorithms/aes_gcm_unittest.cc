@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "base/test/gmock_expected_support.h"
 #include "base/types/expected.h"
 #include "components/webcrypto/algorithm_dispatch.h"
 #include "components/webcrypto/algorithms/test_helpers.h"
@@ -47,9 +48,8 @@ base::expected<std::vector<uint8_t>, Status> AesGcmEncrypt(
   Status status = Encrypt(algorithm, key, plain_text, &output);
   if (status.IsError()) {
     return base::unexpected(status);
-  } else {
-    return output;
   }
+  return output;
 }
 
 base::expected<std::vector<uint8_t>, Status> AesGcmDecrypt(
@@ -65,9 +65,8 @@ base::expected<std::vector<uint8_t>, Status> AesGcmDecrypt(
   Status status = Decrypt(algorithm, key, ciphertext, &output);
   if (status.IsError()) {
     return base::unexpected(status);
-  } else {
-    return output;
   }
+  return output;
 }
 
 class WebCryptoAesGcmTest : public WebCryptoTestBase {};
@@ -164,36 +163,34 @@ TEST_F(WebCryptoAesGcmTest, KnownAnswers) {
       EXPECT_BYTES_EQ(key_bytes, exported_key);
     }
 
-    auto encrypt_result = AesGcmEncrypt(key, iv_bytes, additional_bytes,
-                                        test.tagbits, plaintext_bytes);
-    ASSERT_TRUE(encrypt_result.has_value())
-        << encrypt_result.error().error_details();
-    EXPECT_BYTES_EQ(encrypt_result.value(), ciphertext_bytes);
+    ASSERT_OK_AND_ASSIGN(auto encrypt_result,
+                         AesGcmEncrypt(key, iv_bytes, additional_bytes,
+                                       test.tagbits, plaintext_bytes));
+    EXPECT_BYTES_EQ(encrypt_result, ciphertext_bytes);
 
-    auto decrypt_result = AesGcmDecrypt(key, iv_bytes, additional_bytes,
-                                        test.tagbits, ciphertext_bytes);
-    ASSERT_TRUE(decrypt_result.has_value())
-        << decrypt_result.error().error_details();
-    EXPECT_BYTES_EQ(decrypt_result.value(), plaintext_bytes);
+    ASSERT_OK_AND_ASSIGN(auto decrypt_result,
+                         AesGcmDecrypt(key, iv_bytes, additional_bytes,
+                                       test.tagbits, ciphertext_bytes));
+    EXPECT_BYTES_EQ(decrypt_result, plaintext_bytes);
 
     // Decryption should fail if any of the inputs are tampered with.
-    EXPECT_EQ(base::unexpected(Status::OperationError()),
-              AesGcmDecrypt(key, Corrupted(iv_bytes), additional_bytes,
-                            test.tagbits, ciphertext_bytes));
-    EXPECT_EQ(base::unexpected(Status::OperationError()),
-              AesGcmDecrypt(key, iv_bytes, Corrupted(additional_bytes),
-                            test.tagbits, ciphertext_bytes));
-    EXPECT_EQ(base::unexpected(Status::OperationError()),
-              AesGcmDecrypt(key, iv_bytes, additional_bytes, test.tagbits,
-                            Corrupted(ciphertext_bytes)));
+    EXPECT_THAT(AesGcmDecrypt(key, Corrupted(iv_bytes), additional_bytes,
+                              test.tagbits, ciphertext_bytes),
+                base::test::ErrorIs(Status::OperationError()));
+    EXPECT_THAT(AesGcmDecrypt(key, iv_bytes, Corrupted(additional_bytes),
+                              test.tagbits, ciphertext_bytes),
+                base::test::ErrorIs(Status::OperationError()));
+    EXPECT_THAT(AesGcmDecrypt(key, iv_bytes, additional_bytes, test.tagbits,
+                              Corrupted(ciphertext_bytes)),
+                base::test::ErrorIs(Status::OperationError()));
 
     // Try different incorrect tag lengths
     for (unsigned int length : {0, 8, 96, 120, 128, 160, 255}) {
       if (test.tagbits == length)
         continue;
-      auto result = AesGcmDecrypt(key, iv_bytes, additional_bytes, length,
-                                  ciphertext_bytes);
-      EXPECT_FALSE(result.has_value());
+      EXPECT_FALSE(AesGcmDecrypt(key, iv_bytes, additional_bytes, length,
+                                 ciphertext_bytes)
+                       .has_value());
     }
   }
 }

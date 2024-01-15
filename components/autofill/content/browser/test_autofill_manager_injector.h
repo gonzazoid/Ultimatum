@@ -5,132 +5,185 @@
 #ifndef COMPONENTS_AUTOFILL_CONTENT_BROWSER_TEST_AUTOFILL_MANAGER_INJECTOR_H_
 #define COMPONENTS_AUTOFILL_CONTENT_BROWSER_TEST_AUTOFILL_MANAGER_INJECTOR_H_
 
+#include "components/autofill/content/browser/content_autofill_client.h"
 #include "components/autofill/content/browser/content_autofill_driver.h"
 #include "components/autofill/content/browser/content_autofill_driver_factory.h"
-#include "components/autofill/core/browser/autofill_client.h"
-#include "content/public/browser/navigation_handle.h"
+#include "components/autofill/content/browser/content_autofill_driver_factory_test_api.h"
+#include "components/autofill/content/browser/test_autofill_driver_injector.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/test/browser_test_utils.h"
 
 namespace autofill {
 
-// RAII type that installs new AutofillManagers of type `T`
-// - in the primary main frame of the given WebContents,
-// - in any frame of the WebContetns when a navigation is committed.
+// Asserts that at construction time, no other TestAutofillManagerInjector is
+// alive.
+class TestAutofillManagerInjectorBase {
+ public:
+  static bool some_instance_is_alive() { return num_instances_ > 0; }
+
+  TestAutofillManagerInjectorBase(const TestAutofillManagerInjectorBase&) =
+      delete;
+  TestAutofillManagerInjectorBase& operator=(
+      const TestAutofillManagerInjectorBase&) = delete;
+
+ protected:
+  TestAutofillManagerInjectorBase();
+  ~TestAutofillManagerInjectorBase();
+
+ private:
+  static size_t num_instances_;
+};
+
+// RAII type that installs new AutofillManagers of type `T` in all newly
+// navigated frames in all newly created WebContents.
+//
+// The injector only injects an AutofillManager if a driver is created.
+// Especially in unit tests it may be necessary to do a navigation to create the
+// driver, for example with
+//   NavigateAndCommit(GURL("about:blank"))
+// or force-create the driver manually with
+//   client->GetAutofillDriverFactory()->DriverForFrame(rfh).
+//
+// To prevent hard-to-find bugs, only one TestAutofillManagerInjector may be
+// alive at a time. It must not be created before a TestAutofillClientInjector.
+// These conditions are CHECKed.
 //
 // Usage:
 //
-//   class MockAutofillManager : BrowserAutofillManager {
+//   class AutofillFooTest : public ... {
 //    public:
-//     MockAutofillManager(ContentAutofillDriver* driver,
-//                         AutofillClient* client)
-//         : BrowserAutofillManager(driver, client, "en-US",
-//                                  EnableDownloadManager(true)) {}
-//     MOCK_METHOD(...);
-//     ...
+//     class MockAutofillManager : BrowserAutofillManager {
+//      public:
+//       MockAutofillManager(ContentAutofillDriver* driver,
+//                           ContentAutofillClient* client)
+//           : BrowserAutofillManager(driver, client, "en-US") {}
+//       MOCK_METHOD(...);
+//       ...
+//     };
+//
+//     MockAutofillManager* autofill_manager(content::RenderFrameHost* rfh) {
+//       return autofill_manager_injector_[rfh];
+//     }
+//
+//    private:
+//     TestAutofillManagerInjector<MockAutofillManager>
+//         autofill_manager_injector_;
 //   };
-//
-//   TestAutofillManagerInjector<MockAutofillManager> injector(web_contents());
-//   ui_test_utils::NavigateToURL(...);
-//   injector.GetForPrimaryMainFrame()->Foo();
-//
-// To inject into not-yet-created WebContents, see
-// TestAutofillManagerFutureInjectors.
 template <typename T>
-class TestAutofillManagerInjector : public content::WebContentsObserver {
+class TestAutofillManagerInjector : public TestAutofillManagerInjectorBase {
  public:
-  // Builds the managers using `T(ContentAutofillDriver*, AutofillClient*)`.
-  explicit TestAutofillManagerInjector(content::WebContents* web_contents)
-      : WebContentsObserver(web_contents) {
-    Inject(web_contents->GetPrimaryMainFrame());
-  }
+  static_assert(std::is_base_of_v<AutofillManager, T>);
 
+  TestAutofillManagerInjector() = default;
   TestAutofillManagerInjector(const TestAutofillManagerInjector&) = delete;
   TestAutofillManagerInjector& operator=(const TestAutofillManagerInjector&) =
       delete;
+  ~TestAutofillManagerInjector() = default;
 
-  ~TestAutofillManagerInjector() override = default;
-
-  T* GetForPrimaryMainFrame() {
-    return GetForFrame(web_contents()->GetPrimaryMainFrame());
+  T* operator[](content::WebContents* web_contents) const {
+    return (*this)[web_contents->GetPrimaryMainFrame()];
   }
 
-  T* GetForFrame(content::RenderFrameHost* rfh) {
-    ContentAutofillDriverFactory* driver_factory =
-        ContentAutofillDriverFactory::FromWebContents(web_contents());
-    return static_cast<T*>(
-        driver_factory->DriverForFrame(rfh)->autofill_manager());
+  T* operator[](content::RenderFrameHost* rfh) const {
+    auto it = managers_.find(rfh);
+    return it != managers_.end() ? it->second : nullptr;
   }
 
  private:
-  // content::WebContentsObserver:
-  void ReadyToCommitNavigation(
-      content::NavigationHandle* navigation_handle) override {
-    if (!navigation_handle->IsPrerenderedPageActivation() &&
-        !navigation_handle->IsSameDocument()) {
-      Inject(navigation_handle->GetRenderFrameHost());
+  // Creates an AutofillManager using `T(ContentAutofillDriver*,
+  // ContentAutofillClient*)` for every navigated frame in a given
+  // `WebContents`.
+  //
+  // One challenge is that the ContentAutofillClient may not exist yet at the
+  // time the Injector is created. (Because TabHelpers::AttachTabHelpers() is
+  // run later.)
+  //
+  // We therefore defer registering the ContentAutofillDriverFactory::Observer
+  // until the first RenderFrameCreated() event. This event comes late enough
+  // that ContentAutofillClient has been created but no ContentAutofillDriver
+  // has been created yet.
+  class Injector : public content::WebContentsObserver,
+                   public ContentAutofillDriverFactory::Observer {
+   public:
+    Injector(TestAutofillManagerInjector* owner,
+             content::WebContents* web_contents)
+        : WebContentsObserver(web_contents), owner_(owner) {}
+    Injector(const Injector&) = delete;
+    Injector& operator=(const Injector&) = delete;
+    ~Injector() override {
+      if (factory_) {
+        factory_->RemoveObserver(this);
+      }
     }
+
+    void RenderFrameCreated(content::RenderFrameHost* rfh) override {
+      if (factory_) {
+        return;
+      }
+      auto* client = ContentAutofillClient::FromWebContents(web_contents());
+      if (!client) {
+        return;
+      }
+      factory_ = client->GetAutofillDriverFactory();
+      // The injectors' observers should come first so that production-code
+      // observers affect the injected objects.
+      // The AutofillManager injector should come right after the
+      // ContentAutofillDriver injector, if one exists.
+      test_api(*factory_).AddObserverAtIndex(
+          this,
+          TestAutofillDriverInjectorBase::some_instance_is_alive() ? 1 : 0);
+    }
+
+    void OnContentAutofillDriverFactoryDestroyed(
+        ContentAutofillDriverFactory& factory) override {
+      if (factory_) {
+        factory_->RemoveObserver(this);
+        factory_ = nullptr;
+      }
+    }
+
+    // Replaces the just created `driver`'s manager with a new test manager.
+    void OnContentAutofillDriverCreated(
+        ContentAutofillDriverFactory& factory,
+        ContentAutofillDriver& driver) override {
+      std::unique_ptr<T> new_manager = CreateManager(&driver);
+      owner_->managers_[driver.render_frame_host()] = new_manager.get();
+      driver.set_autofill_manager(std::move(new_manager));
+    }
+
+    void OnContentAutofillDriverWillBeDeleted(
+        ContentAutofillDriverFactory& factory,
+        ContentAutofillDriver& driver) override {
+      owner_->managers_.erase(driver.render_frame_host());
+    }
+
+   private:
+    std::unique_ptr<T> CreateManager(ContentAutofillDriver* driver) {
+      auto* client = ContentAutofillClient::FromWebContents(web_contents());
+      DCHECK(client);
+      return std::make_unique<T>(driver, client);
+    }
+
+    raw_ptr<TestAutofillManagerInjector> owner_;
+
+    // Observed source. We can't use a ScopedObservation because we use
+    // ContentAutofillDriverFactoryTestApi::AddObserverAtIndex() instead of
+    // ContentAutofillDriverFactory::AddObserver().
+    raw_ptr<ContentAutofillDriverFactory> factory_ = nullptr;
+  };
+
+  void ObserveWebContentsAndInjectManager(content::WebContents* web_contents) {
+    injectors_.push_back(std::make_unique<Injector>(this, web_contents));
   }
 
-  void Inject(content::RenderFrameHost* rfh) {
-    auto* driver_factory =
-        ContentAutofillDriverFactory::FromWebContents(web_contents());
-    // The ContentAutofillDriverFactory doesn't exist yet if the WebContents is
-    // currently being created. Not injecting a driver in this case is correct:
-    // it'll be injected on ReadyToCommitNavigation().
-    if (!driver_factory)
-      return;
-    AutofillClient* client = driver_factory->client();
-    ContentAutofillDriver* driver = driver_factory->DriverForFrame(rfh);
-    driver->set_autofill_manager(CreateManager(driver, client));
-  }
-
-  std::unique_ptr<T> CreateManager(ContentAutofillDriver* driver,
-                                   AutofillClient* client) {
-    return std::make_unique<T>(driver, client);
-  }
-};
-
-// RAII type that sets up TestAutofillManagerInjectors for every newly created
-// WebContents.
-//
-// Usage:
-//
-//   TestAutofillManagerInjectors<MockAutofillManager> injectors;
-//   NavigateParams params(...);
-//   params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
-//   ui_test_utils::NavigateToURL(&params);
-//   injectors[0].GetForPrimaryMainFrame()->Foo();
-template <typename T>
-class TestAutofillManagerFutureInjectors {
- public:
-  TestAutofillManagerFutureInjectors() = default;
-  TestAutofillManagerFutureInjectors(
-      const TestAutofillManagerFutureInjectors&) = delete;
-  TestAutofillManagerFutureInjectors& operator=(
-      const TestAutofillManagerFutureInjectors&) = delete;
-  ~TestAutofillManagerFutureInjectors() = default;
-
-  bool empty() const { return injectors_.empty(); }
-  size_t size() const { return injectors_.size(); }
-
-  TestAutofillManagerInjector<T>& operator[](size_t i) {
-    return *injectors_[i];
-  }
-
- private:
-  // Holds the injectors created by the lambda below.
-  std::vector<std::unique_ptr<TestAutofillManagerInjector<T>>> injectors_;
+  std::vector<std::unique_ptr<Injector>> injectors_;
+  std::map<content::RenderFrameHost*, T*> managers_;
 
   // Registers the lambda for the lifetime of `subscription_`.
   base::CallbackListSubscription subscription_ =
       content::RegisterWebContentsCreationCallback(base::BindRepeating(
-          [](TestAutofillManagerFutureInjectors* self,
-             content::WebContents* web_contents) {
-            self->injectors_.push_back(
-                std::make_unique<TestAutofillManagerInjector<T>>(web_contents));
-          },
+          &TestAutofillManagerInjector::ObserveWebContentsAndInjectManager,
           base::Unretained(this)));
 };
 

@@ -8,12 +8,8 @@
 #import "components/bookmarks/browser/bookmark_node.h"
 #import "components/pref_registry/pref_registry_syncable.h"
 #import "components/prefs/pref_service.h"
-#import "ios/chrome/browser/prefs/pref_names.h"
+#import "ios/chrome/browser/shared/model/prefs/pref_names.h"
 #import "ios/chrome/browser/ui/bookmarks/bookmark_utils_ios.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using bookmarks::BookmarkModel;
 using bookmarks::BookmarkNode;
@@ -44,15 +40,17 @@ const int64_t kFolderNone = -1;
   *folderId = prefService->GetInt64(prefs::kIosBookmarkCachedFolderId);
 
   // If the cache was at root node, consider it as nothing was cached.
-  if (*folderId == kFolderNone || *folderId == model->root_node()->id())
+  if (*folderId == kFolderNone || *folderId == model->root_node()->id()) {
     return NO;
+  }
 
   // Create bookmark Path.
   const BookmarkNode* bookmark =
       bookmark_utils_ios::FindFolderById(model, *folderId);
   // The bookmark node is gone from model, maybe deleted remotely.
-  if (!bookmark)
+  if (!bookmark) {
     return NO;
+  }
 
   *topMostRow = prefService->GetInteger(prefs::kIosBookmarkCachedTopMostRow);
   return YES;

@@ -4,15 +4,11 @@
 
 #import "ios/web_view/internal/translate/web_view_translate_service.h"
 
-#import "base/bind.h"
+#import "base/functional/bind.h"
 #import "base/memory/ptr_util.h"
 #import "base/no_destructor.h"
 #import "components/translate/core/browser/translate_download_manager.h"
 #import "ios/web_view/internal/app/application_context.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace ios_web_view {
 
@@ -49,8 +45,10 @@ WebViewTranslateService::WebViewTranslateService() {}
 WebViewTranslateService::~WebViewTranslateService() = default;
 
 void WebViewTranslateService::Initialize() {
+  translate_requests_allowed_listener_ =
+      std::make_unique<TranslateRequestsAllowedListener>();
   // Initialize the allowed state for resource requests.
-  translate_requests_allowed_listener_.OnResourceRequestsAllowed();
+  translate_requests_allowed_listener_->OnResourceRequestsAllowed();
 
   // Initialize translate.
   translate::TranslateDownloadManager* download_manager =
@@ -67,6 +65,7 @@ void WebViewTranslateService::Shutdown() {
   translate::TranslateDownloadManager* download_manager =
       translate::TranslateDownloadManager::GetInstance();
   download_manager->Shutdown();
+  translate_requests_allowed_listener_.reset();
 }
 
 }  // namespace ios_web_view

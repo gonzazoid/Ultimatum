@@ -15,12 +15,13 @@
 #include "base/debug/leak_annotations.h"
 #include "base/lazy_instance.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/notreached.h"
 #include "base/strings/string_tokenizer.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/lock.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "gin/array_buffer.h"
 #include "gin/public/isolate_holder.h"
 #include "gin/v8_initializer.h"
@@ -29,6 +30,7 @@
 #include "net/proxy_resolution/pac_file_data.h"
 #include "net/proxy_resolution/proxy_info.h"
 #include "services/proxy_resolver/pac_js_library.h"
+#include "tools/v8_context_snapshot/buildflags.h"
 #include "url/gurl.h"
 #include "url/url_canon.h"
 #include "v8/include/v8.h"
@@ -242,8 +244,7 @@ bool GetHostnameArgument(const v8::FunctionCallbackInfo<v8::Value>& args,
   // Otherwise try to convert it from IDN to punycode.
   const int kInitialBufferSize = 256;
   url::RawCanonOutputT<char16_t, kInitialBufferSize> punycode_output;
-  if (!url::IDNToASCII(hostname_utf16.data(), hostname_utf16.length(),
-                       &punycode_output)) {
+  if (!url::IDNToASCII(hostname_utf16, &punycode_output)) {
     return false;
   }
 
@@ -382,7 +383,7 @@ class SharedIsolateFactory {
       // Do one-time initialization for V8.
       if (!has_initialized_v8_) {
 #if defined(V8_USE_EXTERNAL_STARTUP_DATA)
-#if defined(USE_V8_CONTEXT_SNAPSHOT)
+#if BUILDFLAG(USE_V8_CONTEXT_SNAPSHOT)
         gin::V8Initializer::LoadV8Snapshot(
             gin::V8SnapshotFileType::kWithAdditionalContext);
 #else
@@ -413,7 +414,8 @@ class SharedIsolateFactory {
       }
 
       holder_ = std::make_unique<gin::IsolateHolder>(
-          base::ThreadTaskRunnerHandle::Get(), gin::IsolateHolder::kUseLocker,
+          base::SingleThreadTaskRunner::GetCurrentDefault(),
+          gin::IsolateHolder::kUseLocker,
           gin::IsolateHolder::IsolateType::kUtility);
     }
 
@@ -759,10 +761,12 @@ class ProxyResolverV8::Context {
     bool terminate = false;
 
     {
+      args.GetIsolate()->Exit();
       v8::Unlocker unlocker(args.GetIsolate());
       success =
           context->js_bindings()->ResolveDns(hostname, op, &result, &terminate);
     }
+    args.GetIsolate()->Enter();
 
     if (terminate)
       args.GetIsolate()->TerminateExecution();
@@ -860,7 +864,9 @@ class ProxyResolverV8::Context {
   }
 
   mutable base::Lock lock_;
-  ProxyResolverV8::JSBindings* js_bindings_;
+  // This field is not a raw_ptr<> because it was filtered by the rewriter for:
+  // #addr-of
+  RAW_PTR_EXCLUSION ProxyResolverV8::JSBindings* js_bindings_;
   raw_ptr<v8::Isolate> isolate_;
   v8::Persistent<v8::External> v8_this_;
   v8::Persistent<v8::Context> v8_context_;

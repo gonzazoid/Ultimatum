@@ -18,10 +18,14 @@ class COMPONENT_EXPORT(PLATFORM_WINDOW) PinnedModeExtension {
   // Pins/locks a window to the screen so that the user cannot do anything
   // else before the mode is released. If trusted is set, it is an invocation
   // from a trusted app like a school test mode app.
-  virtual void Pin(bool trusted) const = 0;
+  virtual void Pin(bool trusted) = 0;
 
   // Releases the pinned mode and allows the user to do other things again.
-  virtual void Unpin() const = 0;
+  virtual void Unpin() = 0;
+
+  // Returns true if the configure event can handle
+  // PlatformWindowState::kPinnedFullscreen/kTrustedPinnedFullscreen.
+  virtual bool SupportsConfigurePinnedState() const = 0;
 
  protected:
   virtual ~PinnedModeExtension();

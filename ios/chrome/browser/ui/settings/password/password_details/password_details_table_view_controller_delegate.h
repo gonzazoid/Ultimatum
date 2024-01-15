@@ -13,7 +13,14 @@
 // Called when user finished editing a password.
 - (void)passwordDetailsViewController:
             (PasswordDetailsTableViewController*)viewController
-               didEditPasswordDetails:(PasswordDetails*)password;
+               didEditPasswordDetails:(PasswordDetails*)password
+                      withOldUsername:(NSString*)oldUsername
+                          oldPassword:(NSString*)oldPassword
+                              oldNote:(NSString*)oldNote;
+
+// Called when we finish treating all the passwords changes in the password
+// details view.
+- (void)didFinishEditingPasswordDetails;
 
 // Called when user finished adding a new password credential.
 - (void)passwordDetailsViewController:
@@ -42,7 +49,15 @@
 - (BOOL)isTLDMissing;
 
 // Checks if the username is reused for the same domain.
-- (BOOL)isUsernameReused:(NSString*)newUsername;
+- (BOOL)isUsernameReused:(NSString*)newUsername forDomain:(NSString*)domain;
+
+// Called by the view controller when the user wants to dismiss a compromised
+// password warning.
+- (void)dismissWarningForPassword:(PasswordDetails*)password;
+
+// Called by the view controller when the user wants to restore a dismissed
+// compromised password warning.
+- (void)restoreWarningForCurrentPassword;
 
 @end
 

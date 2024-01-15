@@ -8,18 +8,22 @@
 #import <UIKit/UIKit.h>
 
 #import "base/time/time.h"
-#import "ios/chrome/browser/discover_feed/feed_constants.h"
+#import "components/feed/core/v2/public/common_enums.h"
+#import "ios/chrome/browser/discover_feed/model/feed_constants.h"
 #import "ios/chrome/browser/ui/ntp/metrics/feed_metrics_constants.h"
+#import "ios/chrome/browser/ui/ntp/metrics/feed_refresh_state_tracker.h"
 
 @protocol FeedControlDelegate;
 @protocol NewTabPageFollowDelegate;
+@protocol NewTabPageMetricsDelegate;
+class PrefService;
 
 namespace base {
 class Time;
-}
+}  // namespace base
 
 // Records different metrics for the NTP feeds.
-@interface FeedMetricsRecorder : NSObject
+@interface FeedMetricsRecorder : NSObject <FeedRefreshStateTracker>
 
 // Delegate to get the currently selected feed.
 @property(nonatomic, weak) id<FeedControlDelegate> feedControlDelegate;
@@ -30,6 +34,17 @@ class Time;
 // Whether or not the feed is currently being shown on the Start Surface.
 @property(nonatomic, assign) BOOL isShownOnStartSurface;
 
+// Delegate for reporting feed actions to the NTP metrics recorder.
+@property(nonatomic, weak) id<NewTabPageMetricsDelegate> NTPMetricsDelegate;
+
+- (instancetype)initWithPrefService:(PrefService*)prefService
+    NS_DESIGNATED_INITIALIZER;
+
+- (instancetype)init NS_UNAVAILABLE;
+
+// Records the trigger where a feed refresh is requested.
++ (void)recordFeedRefreshTrigger:(FeedRefreshTrigger)trigger;
+
 // Record metrics for when the user has scrolled `scrollDistance` in the Feed.
 - (void)recordFeedScrolled:(int)scrollDistance;
 
@@ -37,8 +52,11 @@ class Time;
 // visible.
 - (void)recordDeviceOrientationChanged:(UIDeviceOrientation)orientation;
 
-// Record when the NTP was is displayed.
-- (void)recordNTPBecameVisible;
+// Tracks time spent in a specific Feed for a Good Visit.
+- (void)recordFeedTypeChangedFromFeed:(FeedType)previousFeed;
+
+// Record when the NTP changes visibility.
+- (void)recordNTPDidChangeVisibility:(BOOL)visible;
 
 // Record metrics for when the user has tapped on the feed preview.
 - (void)recordDiscoverFeedPreviewTapped;
@@ -122,10 +140,10 @@ class Time;
 - (void)recordCommandID:(int)commandID;
 
 // Records that a card was shown at `index`.
-- (void)recordCardShownAtIndex:(int)index;
+- (void)recordCardShownAtIndex:(NSUInteger)index;
 
 // Records that a card was opened at `index`.
-- (void)recordCardTappedAtIndex:(int)index;
+- (void)recordCardTappedAtIndex:(NSUInteger)index;
 
 // Records if a notice card was presented at the time the feed was initially
 // loaded. e.g. Launch time, user refreshes, and account switches.
@@ -187,8 +205,10 @@ class Time;
 // Records that the feed is about to be refreshed.
 - (void)recordFeedWillRefresh;
 
-// Records that a given `feedType` was selected.
-- (void)recordFeedSelected:(FeedType)feedType;
+// Records that a given `feedType` was explicitly selected. Logs position in
+// previous feed as `index`.
+- (void)recordFeedSelected:(FeedType)feedType
+    fromPreviousFeedPosition:(NSUInteger)index;
 
 // Records the user's current follow count after a given event `logReason`.
 - (void)recordFollowCount:(NSUInteger)followCount
@@ -257,6 +277,30 @@ class Time;
 // A follow Recommendation IPH is a textual bublle that tells users that they
 // are able to follow a website.
 - (void)recordFollowRecommendationIPHShown;
+
+#pragma mark - Sign-in Promo
+
+// Record metrics for when a user tapped on "Continue" of the Sign-in promo
+// UI.
+- (void)recordSignInPromoUIContinueTapped;
+
+// Record metrics for when a user tapped on "Cancel" of the Sign-in promo UI.
+- (void)recordSignInPromoUICancelTapped;
+
+// Record metrics for when a user triggered a sign-in only flow from Discover
+// feed. `hasUserId` is YES when the user has one or more device-level
+// identities.
+- (void)recordShowSignInOnlyUIWithUserId:(BOOL)hasUserId;
+
+// Record metrics for sign-in related UI from Discover feed personalization
+// controls.
+- (void)recordShowSignInRelatedUIWithType:(feed::FeedSignInUI)type;
+
+#pragma mark - Sync Promo
+
+// Record metrics for when a user triggered a sync related UI from Discover
+// feed sync promo entry point.
+- (void)recordShowSyncnRelatedUIWithType:(feed::FeedSyncPromo)type;
 
 @end
 

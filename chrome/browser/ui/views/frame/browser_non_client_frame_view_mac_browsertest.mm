@@ -9,6 +9,7 @@
 #include "base/test/bind.h"
 #include "build/build_config.h"
 #include "chrome/app/chrome_command_ids.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -86,7 +87,7 @@ IN_PROC_BROWSER_TEST_F(BrowserNonClientFrameViewMacBrowserTestTitlePrefixed,
   ui::test::ScopedFakeNSWindowFullscreen fake_fullscreen;
 
   const GURL start_url = GetInstallableAppURL();
-  const web_app::AppId app_id = InstallPWA(start_url);
+  const webapps::AppId app_id = InstallPWA(start_url);
   Browser* const browser = LaunchWebAppBrowser(app_id);
   content::WebContents* const web_contents =
       browser->tab_strip_model()->GetActiveWebContents();
@@ -141,7 +142,7 @@ IN_PROC_BROWSER_TEST_F(BrowserNonClientFrameViewMacBrowserTest,
   ui::test::ScopedFakeNSWindowFullscreen fake_fullscreen;
 
   const GURL start_url = GetInstallableAppURL();
-  const web_app::AppId app_id = InstallPWA(start_url);
+  const webapps::AppId app_id = InstallPWA(start_url);
   Browser* const browser = LaunchWebAppBrowser(app_id);
 
   BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser);

@@ -12,7 +12,7 @@ import {ActivationDelegateReceiver, ActivationResult, CarrierPortalStatus, Cellu
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
-import {assertTrue} from '../../../chai_assert.js';
+import {assertTrue} from '../../../chromeos/chai_assert.js';
 
 import {FakeCellularSetupDelegate} from './fake_cellular_setup_delegate.js';
 import {FakeCarrierPortalHandlerRemote, FakeCellularSetupRemote} from './fake_cellular_setup_remote.js';
@@ -98,7 +98,8 @@ suite('CrComponentsPsimFlowUiTest', function() {
     cellularActivationDelegate =
         cellularSetupRemote.getLastActivationDelegate();
 
-    const provisioningPage = pSimPage.$$('#provisioningPage');
+    const provisioningPage =
+        pSimPage.shadowRoot.querySelector('#provisioningPage');
     assertTrue(!!provisioningPage);
     assertFalse(
         pSimPage.selectedPSimPageName_ === PSimPageName.provisioningPage);
@@ -222,7 +223,8 @@ suite('CrComponentsPsimFlowUiTest', function() {
     cellularActivationDelegate =
         cellularSetupRemote.getLastActivationDelegate();
 
-    const provisioningPage = pSimPage.$$('#provisioningPage');
+    const provisioningPage =
+        pSimPage.shadowRoot.querySelector('#provisioningPage');
     assertTrue(!!provisioningPage);
     assertFalse(
         pSimPage.selectedPSimPageName_ === PSimPageName.provisioningPage);
@@ -235,7 +237,8 @@ suite('CrComponentsPsimFlowUiTest', function() {
   });
 
   test('Portal error metric logged', () => {
-    const provisioningPage = pSimPage.$$('#provisioningPage');
+    const provisioningPage =
+        pSimPage.shadowRoot.querySelector('#provisioningPage');
     provisioningPage.fire('carrier-portal-result', false);
 
     endFlowAndVerifyResult(PSimSetupFlowResult.CANCELLED_PORTAL_ERROR);

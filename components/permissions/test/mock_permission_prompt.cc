@@ -4,9 +4,10 @@
 
 #include "components/permissions/test/mock_permission_prompt.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
+#include "components/permissions/features.h"
 #include "components/permissions/permission_uma_util.h"
 #include "components/permissions/request_type.h"
 #include "components/permissions/test/mock_permission_prompt_factory.h"
@@ -44,6 +45,14 @@ PermissionPromptDisposition MockPermissionPrompt::GetPromptDisposition() const {
 #endif
 }
 
+absl::optional<gfx::Rect> MockPermissionPrompt::GetViewBoundsInScreen() const {
+  return absl::make_optional<gfx::Rect>(100, 100, 100, 100);
+}
+
+bool MockPermissionPrompt::ShouldFinalizeRequestAfterDecided() const {
+  return true;
+}
+
 MockPermissionPrompt::MockPermissionPrompt(MockPermissionPromptFactory* factory,
                                            Delegate* delegate)
     : factory_(factory), delegate_(delegate) {
@@ -52,13 +61,18 @@ MockPermissionPrompt::MockPermissionPrompt(MockPermissionPromptFactory* factory,
     // The actual prompt will call these, so test they're sane.
 #if BUILDFLAG(IS_ANDROID)
     // For kStorageAccess, the prompt itself calculates the message text.
-    if (request_type != permissions::RequestType::kStorageAccess)
+    if (request_type != permissions::RequestType::kStorageAccess) {
       EXPECT_FALSE(request->GetDialogMessageText().empty());
+    }
     EXPECT_NE(0, permissions::GetIconId(request_type));
 #else
     EXPECT_FALSE(request->GetMessageTextFragment().empty());
     EXPECT_FALSE(permissions::GetIconId(request_type).is_empty());
 #endif
+    EXPECT_EQ(request->ShouldUseTwoOriginPrompt(),
+              request_type == permissions::RequestType::kStorageAccess &&
+                  base::FeatureList::IsEnabled(
+                      permissions::features::kPermissionStorageAccessAPI));
   }
 }
 

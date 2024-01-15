@@ -5,13 +5,15 @@
 #ifndef COMPONENTS_VIZ_COMMON_QUADS_TEXTURE_DRAW_QUAD_H_
 #define COMPONENTS_VIZ_COMMON_QUADS_TEXTURE_DRAW_QUAD_H_
 
+#include <array>
+
+#include "base/containers/span.h"
 #include "components/viz/common/quads/draw_quad.h"
 #include "components/viz/common/resources/resource_id.h"
 #include "components/viz/common/viz_common_export.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/rect.h"
-#include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/hdr_metadata.h"
 #include "ui/gfx/video_types.h"
 
@@ -23,6 +25,7 @@ enum class OverlayPriority { kLow, kRegular, kRequired };
 class VIZ_COMMON_EXPORT TextureDrawQuad : public DrawQuad {
  public:
   static const size_t kResourceIdIndex = 0;
+  static constexpr Material kMaterial = Material::kTextureContent;
 
   TextureDrawQuad();
   TextureDrawQuad(const TextureDrawQuad& other);
@@ -38,7 +41,6 @@ class VIZ_COMMON_EXPORT TextureDrawQuad : public DrawQuad {
               const gfx::PointF& top_left,
               const gfx::PointF& bottom_right,
               SkColor4f background,
-              const float opacity[4],
               bool flipped,
               bool nearest,
               bool secure_output,
@@ -54,7 +56,6 @@ class VIZ_COMMON_EXPORT TextureDrawQuad : public DrawQuad {
               const gfx::PointF& top_left,
               const gfx::PointF& bottom_right,
               SkColor4f background,
-              const float opacity[4],
               bool flipped,
               bool nearest,
               bool secure_output,
@@ -63,7 +64,7 @@ class VIZ_COMMON_EXPORT TextureDrawQuad : public DrawQuad {
   gfx::PointF uv_top_left;
   gfx::PointF uv_bottom_right;
   SkColor4f background_color = SkColors::kTransparent;
-  float vertex_opacity[4] = {0, 0, 0, 0};
+  std::array<float, 4> vertex_opacity = {1, 1, 1, 1};
   bool y_flipped : 1;
   bool nearest_neighbor : 1;
   bool premultiplied_alpha : 1;
@@ -79,7 +80,11 @@ class VIZ_COMMON_EXPORT TextureDrawQuad : public DrawQuad {
   // creation (e.g. color space, protection type).
   bool is_stream_video : 1;
 
-  absl::optional<gfx::HDRMetadata> hdr_metadata;
+  // If true we will treat the alpha in the texture as 1. This works like rgbx
+  // and not like blend mode 'kSrc' which would copy the alpha.
+  bool force_rgbx : 1 = false;
+
+  gfx::HDRMetadata hdr_metadata;
 
   // kClear if the contents do not require any special protection. See enum of a
   // list of protected content types. Protected contents cannot be displayed via
@@ -91,6 +96,41 @@ class VIZ_COMMON_EXPORT TextureDrawQuad : public DrawQuad {
 
   // This optional damage is in target render pass coordinate space.
   absl::optional<gfx::Rect> damage_rect;
+
+  struct VIZ_COMMON_EXPORT RoundedDisplayMasksInfo {
+    static constexpr size_t kMaxRoundedDisplayMasksCount = 2;
+    static constexpr size_t kOriginRoundedDisplayMaskIndex = 0;
+    static constexpr size_t kOtherRoundedDisplayMaskIndex = 1;
+
+    static RoundedDisplayMasksInfo CreateRoundedDisplayMasksInfo(
+        int origin_rounded_display_mask_radius,
+        int other_rounded_display_mask_radius,
+        bool is_horizontally_positioned = true);
+
+    RoundedDisplayMasksInfo();
+
+    bool IsEmpty() const;
+
+    bool is_horizontally_positioned = true;
+
+    // Radii of display's rounded corners masks in pixels.
+    uint8_t radii[kMaxRoundedDisplayMasksCount] = {0, 0};
+  };
+
+  // Encodes the radii(in pixels) and position of rounded-display mask textures
+  // in target space.
+  //
+  // Radius at index `kOriginRoundedDisplayMaskIndex` is always drawn at origin,
+  // whereas radius at index `kOtherRoundedDisplayMaskIndex` is drawn either at
+  // the upper right corner or lower left corner based on
+  // `is_horizontally_positioned`.
+  //
+  // For example: If the resource in target space has dimensions of (10, 10,
+  // 100, 50) and both radii has value of 15, the masks are drawn at bounds (10,
+  // 10, 15, 15) and (95, 10, 15, 15) if `is_horizontally_positioned` is true
+  // otherwise the masks are drawn at bounds (10, 10, 15, 15) and (10, 45, 15,
+  // 15).
+  RoundedDisplayMasksInfo rounded_display_masks_info;
 
   struct OverlayResources {
     OverlayResources();
@@ -106,6 +146,14 @@ class VIZ_COMMON_EXPORT TextureDrawQuad : public DrawQuad {
   void set_resource_size_in_pixels(const gfx::Size& size_in_pixels) {
     overlay_resources.size_in_pixels = size_in_pixels;
   }
+
+  void set_force_rgbx(bool force_rgbx_value = true) {
+    force_rgbx = force_rgbx_value;
+  }
+
+  void set_vertex_opacity(float opacity);
+
+  void set_vertex_opacity(base::span<const float, 4> opacity);
 
   static const TextureDrawQuad* MaterialCast(const DrawQuad*);
 

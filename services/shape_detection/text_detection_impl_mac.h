@@ -5,9 +5,6 @@
 #ifndef SERVICES_SHAPE_DETECTION_TEXT_DETECTION_IMPL_MAC_H_
 #define SERVICES_SHAPE_DETECTION_TEXT_DETECTION_IMPL_MAC_H_
 
-#import <os/availability.h>
-
-#include "base/mac/scoped_nsobject.h"
 #include "services/shape_detection/public/mojom/textdetection.mojom.h"
 
 @class CIDetector;
@@ -27,7 +24,7 @@ class TextDetectionImplMac : public mojom::TextDetection {
               mojom::TextDetection::DetectCallback callback) override;
 
  private:
-  base::scoped_nsobject<CIDetector> detector_;
+  CIDetector* __strong detector_;
 };
 
 }  // namespace shape_detection

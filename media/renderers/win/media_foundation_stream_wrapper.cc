@@ -6,7 +6,10 @@
 
 #include <mferror.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/trace_event/base_tracing.h"
+#include "media/base/media_switches.h"
 #include "media/base/video_codecs.h"
 #include "media/base/win/mf_helpers.h"
 #include "media/renderers/win/media_foundation_audio_stream.h"
@@ -18,99 +21,18 @@ namespace media {
 using Microsoft::WRL::ComPtr;
 
 namespace {
-// |guid_string| is a binary serialization of a GUID in network byte order
-// format.
-GUID GetGUIDFromString(const std::string& guid_string) {
-  DCHECK_EQ(guid_string.length(), sizeof(GUID));
 
-  GUID guid = *(reinterpret_cast<UNALIGNED const GUID*>(guid_string.c_str()));
-  guid.Data1 = _byteswap_ulong(guid.Data1);
-  guid.Data2 = _byteswap_ushort(guid.Data2);
-  guid.Data3 = _byteswap_ushort(guid.Data3);
-  return guid;
-}
+PendingInputBuffer::PendingInputBuffer(DemuxerStream::Status status,
+                                       scoped_refptr<DecoderBuffer> buffer)
+    : status(status), buffer(std::move(buffer)) {}
 
-bool AreLowIVBytesZero(const std::string& iv) {
-  if (iv.length() != 16)
-    return false;
+PendingInputBuffer::PendingInputBuffer(DemuxerStream::Status status)
+    : status(status) {}
 
-  for (size_t i = 8; i < iv.length(); i++) {
-    if (iv[i] != '\0') {
-      return false;
-    }
-  }
-  return true;
-}
+PendingInputBuffer::PendingInputBuffer(const PendingInputBuffer& other) =
+    default;
 
-// Add encryption related attributes to |mf_sample| and update |last_key_id|.
-HRESULT AddEncryptAttributes(const DecryptConfig& decrypt_config,
-                             IMFSample* mf_sample,
-                             GUID* last_key_id) {
-  DVLOG(3) << __func__;
-
-  MFSampleEncryptionProtectionScheme mf_protection_scheme;
-  if (decrypt_config.encryption_scheme() == EncryptionScheme::kCenc) {
-    mf_protection_scheme = MFSampleEncryptionProtectionScheme::
-        MF_SAMPLE_ENCRYPTION_PROTECTION_SCHEME_AES_CTR;
-  } else if (decrypt_config.encryption_scheme() == EncryptionScheme::kCbcs) {
-    mf_protection_scheme = MFSampleEncryptionProtectionScheme::
-        MF_SAMPLE_ENCRYPTION_PROTECTION_SCHEME_AES_CBC;
-  } else {
-    NOTREACHED() << "Unexpected encryption scheme";
-    return MF_E_UNEXPECTED;
-  }
-  RETURN_IF_FAILED(mf_sample->SetUINT32(
-      MFSampleExtension_Encryption_ProtectionScheme, mf_protection_scheme));
-
-  // KID
-  // https://matroska.org/technical/specs/index.html#ContentEncKeyID
-  // For WebM case, key ID size is not specified.
-  if (decrypt_config.key_id().length() != sizeof(GUID)) {
-    DLOG(ERROR) << __func__ << ": Unsupported key ID size";
-    return MF_E_UNEXPECTED;
-  }
-  GUID key_id = GetGUIDFromString(decrypt_config.key_id());
-  RETURN_IF_FAILED(mf_sample->SetGUID(MFSampleExtension_Content_KeyID, key_id));
-  *last_key_id = key_id;
-
-  // IV
-  size_t iv_length = decrypt_config.iv().length();
-  DCHECK(iv_length == 16);
-  // For cases where a 16-byte IV is specified, but the low 8-bytes are all
-  // 0, ensure that a 8-byte IV is set (this allows HWDRM to work on
-  // hardware / drivers which don't support CTR decryption with 16-byte IVs)
-  if (AreLowIVBytesZero(decrypt_config.iv()))
-    iv_length = 8;
-  RETURN_IF_FAILED(mf_sample->SetBlob(
-      MFSampleExtension_Encryption_SampleID,
-      reinterpret_cast<const uint8_t*>(decrypt_config.iv().c_str()),
-      iv_length));
-
-  // Handle subsample entries.
-  const auto& subsample_entries = decrypt_config.subsamples();
-  if (subsample_entries.empty())
-    return S_OK;
-
-  std::vector<MediaFoundationSubsampleEntry> mf_subsample_entries(
-      subsample_entries.size());
-  for (size_t i = 0; i < subsample_entries.size(); i++) {
-    mf_subsample_entries[i] =
-        MediaFoundationSubsampleEntry(subsample_entries[i]);
-  }
-  const uint32_t mf_sample_entries_size =
-      sizeof(MediaFoundationSubsampleEntry) * mf_subsample_entries.size();
-  RETURN_IF_FAILED(mf_sample->SetBlob(
-      MFSampleExtension_Encryption_SubSample_Mapping,
-      reinterpret_cast<const uint8_t*>(mf_subsample_entries.data()),
-      mf_sample_entries_size));
-
-  return S_OK;
-}
-
-// MFTIME defines units of 100 nanoseconds.
-MFTIME TimeDeltaToMfTime(base::TimeDelta time) {
-  return time.InNanoseconds() / 100;
-}
+PendingInputBuffer::~PendingInputBuffer() = default;
 
 }  // namespace
 
@@ -166,6 +88,21 @@ HRESULT MediaFoundationStreamWrapper::RuntimeClassInitialize(
                 << ", stream_type=" << DemuxerStream::GetTypeName(stream_type_);
 
   media_log_ = std::move(media_log);
+  if (base::FeatureList::IsEnabled(kMediaFoundationBatchRead)) {
+    if (kBatchReadCount.Get() < 1 || kBatchReadCount.Get() > 500) {
+      DLOG(WARNING) << "batch_read_count_=" << kBatchReadCount.Get()
+                    << " is out of range [1,500], "
+                    << (kBatchReadCount.Get() < 1
+                            ? "it shouldn't be negative or 0"
+                            : "it will spend more time "
+                              "on writing and reading and maybe impacts UX")
+                    << "; setting batch_read_count_=1";
+      batch_read_count_ = 1;
+    } else {
+      batch_read_count_ = kBatchReadCount.Get();
+    }
+  }
+  DVLOG_FUNC(1) << "batch_read_count_=" << batch_read_count_;
 
   RETURN_IF_FAILED(GenerateStreamDescriptor());
   RETURN_IF_FAILED(MFCreateEventQueue(&mf_media_event_queue_));
@@ -233,6 +170,8 @@ void MediaFoundationStreamWrapper::SetFlushed(bool flushed) {
   base::AutoLock auto_lock(lock_);
   flushed_ = flushed;
   if (flushed_) {
+    DVLOG_FUNC(2) << "flush buffer_queue_";
+    buffer_queue_.clear();
     while (!post_flush_buffers_.empty()) {
       post_flush_buffers_.pop();
     }
@@ -245,9 +184,24 @@ bool MediaFoundationStreamWrapper::HasEnded() const {
   return stream_ended_;
 }
 
+void MediaFoundationStreamWrapper::SetLastStartPosition(
+    const PROPVARIANT* start_position) {
+  // Events such as MF_MEDIA_ENGINE_EVENT_SEEKED may send a start position
+  // with VT_EMPTY, this event should be ignored since it is not a valid start
+  // time. Only VT_I8 will be used based on start of presentation:
+  // https://learn.microsoft.com/en-us/windows/win32/api/mfidl/nf-mfidl-imfmediasession-start
+  if (start_position->vt == VT_I8) {
+    base::AutoLock auto_lock(lock_);
+    last_start_time_ = start_position->hVal.QuadPart;
+  }
+}
+
 HRESULT MediaFoundationStreamWrapper::QueueStartedEvent(
     const PROPVARIANT* start_position) {
   DVLOG_FUNC(2);
+
+  // Save the new start position in the stream.
+  SetLastStartPosition(start_position);
 
   state_ = State::kStarted;
   RETURN_IF_FAILED(mf_media_event_queue_->QueueEventParamVar(
@@ -258,6 +212,9 @@ HRESULT MediaFoundationStreamWrapper::QueueStartedEvent(
 HRESULT MediaFoundationStreamWrapper::QueueSeekedEvent(
     const PROPVARIANT* start_position) {
   DVLOG_FUNC(2);
+
+  // Save the new start position in the stream.
+  SetLastStartPosition(start_position);
 
   state_ = State::kStarted;
   RETURN_IF_FAILED(mf_media_event_queue_->QueueEventParamVar(
@@ -307,13 +264,63 @@ void MediaFoundationStreamWrapper::ProcessRequestsIfPossible() {
     return;
   }
 
-  if (!demuxer_stream_ || pending_stream_read_)
+  if (!demuxer_stream_) {
     return;
+  }
 
-  demuxer_stream_->Read(
-      base::BindOnce(&MediaFoundationStreamWrapper::OnDemuxerStreamRead,
-                     weak_factory_.GetWeakPtr()));
-  pending_stream_read_ = true;
+  base::AutoLock auto_lock(lock_);
+  if (!buffer_queue_.empty()) {
+    // Using queued buffer for multi buffers read from Renderer process. If
+    // a valid buffer already exists in queued buffer, return the buffer
+    // directly without IPC calls for buffer requested from MediaEngine.
+    OnDemuxerStreamRead(buffer_queue_.front().status,
+                        std::move(buffer_queue_.front().buffer));
+    buffer_queue_.pop_front();
+    return;
+  }
+
+  // Request multi buffers by sending IPC to 'MojoDemuxerStreamImpl'.
+  if (!pending_stream_read_) {
+    DVLOG_FUNC(3) << " IPC send, batch_read_count_=" << batch_read_count_;
+    TRACE_EVENT2("media", "MFGetBuffersFromRendererByIPC",
+                 "StreamType:", DemuxerStream::GetTypeName(stream_type_),
+                 "batch_read_count_:", batch_read_count_);
+    pending_stream_read_ = true;
+    demuxer_stream_->Read(
+        batch_read_count_,
+        base::BindOnce(
+            &MediaFoundationStreamWrapper::OnDemuxerStreamReadBuffers,
+            weak_factory_.GetWeakPtr()));
+  }
+}
+
+void MediaFoundationStreamWrapper::OnDemuxerStreamReadBuffers(
+    DemuxerStream::Status status,
+    DemuxerStream::DecoderBufferVector buffers) {
+  DCHECK(task_runner_->RunsTasksInCurrentSequence());
+  DVLOG_FUNC(3) << "receive data, status="
+                << DemuxerStream::GetStatusName(status)
+                << ", buffer count= " << buffers.size()
+                << ", stream type=" << DemuxerStream::GetTypeName(stream_type_);
+  {
+    base::AutoLock auto_lock(lock_);
+    DCHECK(pending_stream_read_);
+    pending_stream_read_ = false;
+
+    DemuxerStream::DecoderBufferVector pending_buffers =
+        (status == DemuxerStream::Status::kOk)
+            ? std::move(buffers)
+            : DemuxerStream::DecoderBufferVector{nullptr};
+    for (auto& buffer : pending_buffers) {
+      DVLOG_FUNC(3) << "push buffer to buffer_queue_, status="
+                    << DemuxerStream::GetStatusName(status) << ", buffer="
+                    << (buffer ? buffer->AsHumanReadableString(false) : "null");
+      buffer_queue_.emplace_back(PendingInputBuffer(status, std::move(buffer)));
+    }
+  }
+
+  // Restart processing of queued requests when we receive buffers.
+  ProcessRequestsIfPossible();
 }
 
 HRESULT MediaFoundationStreamWrapper::ServiceSampleRequest(
@@ -323,7 +330,14 @@ HRESULT MediaFoundationStreamWrapper::ServiceSampleRequest(
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
   lock_.AssertAcquired();
 
-  if (buffer->end_of_stream()) {
+  const bool is_end_of_stream = buffer->end_of_stream();
+  const bool is_encrypted = !is_end_of_stream && buffer->decrypt_config();
+  const auto timestamp_us =
+      is_end_of_stream ? 0 : buffer->timestamp().InMicroseconds();
+  TRACE_EVENT2("media", "MediaFoundationStreamWrapper::ServiceSampleRequest",
+               "is_encrypted", is_encrypted, "timestamp_us", timestamp_us);
+
+  if (is_end_of_stream) {
     if (!enabled_) {
       DVLOG_FUNC(2) << "Ignoring EOS for disabled stream";
       // token not dropped to reflect an outstanding request that stream wrapper
@@ -342,7 +356,10 @@ HRESULT MediaFoundationStreamWrapper::ServiceSampleRequest(
     DVLOG_FUNC(3) << "buffer ts=" << buffer->timestamp()
                   << ", is_key_frame=" << buffer->is_key_frame();
     ComPtr<IMFSample> mf_sample;
-    RETURN_IF_FAILED(GenerateSampleFromDecoderBuffer(buffer, &mf_sample));
+    RETURN_IF_FAILED(GenerateSampleFromDecoderBuffer(
+        buffer, &mf_sample, &last_key_id_,
+        base::BindOnce(&MediaFoundationStreamWrapper::TransformSample,
+                       base::Unretained(this))));
     if (token) {
       RETURN_IF_FAILED(mf_sample->SetUnknown(MFSampleExtension_Token, token));
     }
@@ -359,16 +376,46 @@ HRESULT MediaFoundationStreamWrapper::ServiceSampleRequest(
 bool MediaFoundationStreamWrapper::ServicePostFlushSampleRequest() {
   DVLOG_FUNC(3);
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
+  HRESULT hr = S_OK;
 
   base::AutoLock auto_lock(lock_);
-  if ((flushed_ && state_ != State::kStarted) || post_flush_buffers_.empty()) {
+  if (flushed_ && state_ == State::kStarted &&
+      last_start_time_ != kInvalidTime) {
+    // Video may freeze during consecutive backward seek since MF does not
+    // cancel previous pending seek, while Chromium's source starts new seek
+    // immediately. MF's seek finishes when a sample's timestamp is equal to
+    // or greater than seek time. Thus it would cause video to freeze until
+    // source send samples with timestamps matching the previous pending seek.
+
+    // MEStreamTick event notifies a gap in data and notify downstream
+    // components not to expect any data at the specified time, allowing
+    // downstream components to cancel the first seek
+    // https://learn.microsoft.com/en-us/windows/win32/medfound/mestreamtick
+
+    // Stream ticks are continuously sent until flush completes to make sure
+    // all downsteam components have been rid of stale samples.
+    PROPVARIANT var;
+    PropVariantInit(&var);
+    var.vt = VT_I8;
+    var.hVal.QuadPart = last_start_time_;
+    hr = mf_media_event_queue_->QueueEventParamVar(MEStreamTick, GUID_NULL,
+                                                   S_OK, &var);
+    if (FAILED(hr)) {
+      // Failure would indicate mf no longer accepts events, such as when
+      // shutdown is called, thus stream ticks should no longer be needed.
+      DLOG(WARNING) << "Failed to queue stream tick: " << PrintHr(hr);
+    }
+    return false;
+
+  } else if ((flushed_ && state_ != State::kStarted) ||
+             post_flush_buffers_.empty()) {
     return false;
   }
 
   DCHECK(!pending_sample_request_tokens_.empty());
   ComPtr<IUnknown> request_token = pending_sample_request_tokens_.front();
-  HRESULT hr = ServiceSampleRequest(request_token.Get(),
-                                    post_flush_buffers_.front().get());
+  hr = ServiceSampleRequest(request_token.Get(),
+                            post_flush_buffers_.front().get());
   if (FAILED(hr)) {
     DLOG(WARNING) << "Failed to service post flush sample: " << PrintHr(hr);
     return false;
@@ -394,12 +441,8 @@ void MediaFoundationStreamWrapper::OnDemuxerStreamRead(
   DVLOG_FUNC(3) << "status=" << status
                 << (buffer ? " buffer=" + buffer->AsHumanReadableString(true)
                            : "");
-
   {
-    base::AutoLock auto_lock(lock_);
-    DCHECK(pending_stream_read_);
-    pending_stream_read_ = false;
-
+    lock_.AssertAcquired();
     ComPtr<IUnknown> token = pending_sample_request_tokens_.front();
     HRESULT hr = S_OK;
 
@@ -407,6 +450,13 @@ void MediaFoundationStreamWrapper::OnDemuxerStreamRead(
       if (!encryption_type_reported_) {
         encryption_type_reported_ = true;
         ReportEncryptionType(buffer);
+      }
+
+      if (has_clear_lead_ && !switched_clear_to_encrypted_ &&
+          !buffer->end_of_stream() && buffer->is_encrypted()) {
+        MEDIA_LOG(INFO, media_log_)
+            << "Stream switched from clear to encrypted buffers.";
+        switched_clear_to_encrypted_ = true;
       }
 
       // Push |buffer| to process later if needed. Otherwise, process it
@@ -452,54 +502,18 @@ void MediaFoundationStreamWrapper::OnDemuxerStreamRead(
       // Continue to ProcessRequestsIfPossible() to satisfy pending sample
       // request by issuing DemuxerStream::Read() if necessary.
     } else {
-      NOTREACHED() << "Unexpected demuxer stream status. status=" << status
-                   << ", this=" << this;
+      NOTREACHED_NORETURN()
+          << "Unexpected demuxer stream status. status=" << status
+          << ", this=" << this;
     }
   }
 
-  ProcessRequestsIfPossible();
-}
-
-HRESULT MediaFoundationStreamWrapper::GenerateSampleFromDecoderBuffer(
-    DecoderBuffer* buffer,
-    IMFSample** sample_out) {
-  DVLOG_FUNC(3);
-
-  ComPtr<IMFSample> mf_sample;
-  RETURN_IF_FAILED(MFCreateSample(&mf_sample));
-
-  if (buffer->is_key_frame()) {
-    RETURN_IF_FAILED(mf_sample->SetUINT32(MFSampleExtension_CleanPoint, 1));
-  }
-
-  MFTIME sample_time = TimeDeltaToMfTime(buffer->timestamp());
-  RETURN_IF_FAILED(mf_sample->SetSampleTime(sample_time));
-
-  MFTIME sample_duration = TimeDeltaToMfTime(buffer->duration());
-  RETURN_IF_FAILED(mf_sample->SetSampleDuration(sample_duration));
-
-  ComPtr<IMFMediaBuffer> mf_buffer;
-  size_t data_size = buffer->data_size();
-  RETURN_IF_FAILED(MFCreateMemoryBuffer(buffer->data_size(), &mf_buffer));
-
-  BYTE* mf_buffer_data = nullptr;
-  DWORD max_length = 0;
-  RETURN_IF_FAILED(mf_buffer->Lock(&mf_buffer_data, &max_length, 0));
-  memcpy(mf_buffer_data, buffer->data(), data_size);
-  RETURN_IF_FAILED(mf_buffer->SetCurrentLength(data_size));
-  RETURN_IF_FAILED(mf_buffer->Unlock());
-
-  RETURN_IF_FAILED(mf_sample->AddBuffer(mf_buffer.Get()));
-
-  if (buffer->decrypt_config()) {
-    RETURN_IF_FAILED(AddEncryptAttributes(*(buffer->decrypt_config()),
-                                          mf_sample.Get(), &last_key_id_));
-  }
-
-  RETURN_IF_FAILED(TransformSample(mf_sample));
-
-  *sample_out = mf_sample.Detach();
-  return S_OK;
+  // ProcessRequestsIfPossible calls OnDemuxerStreamRead, OnDemuxerStreamRead
+  // calls ProcessRequestsIfPossible, so use PostTask to avoid deadlock here.
+  task_runner_->PostTask(
+      FROM_HERE,
+      base::BindOnce(&MediaFoundationStreamWrapper::ProcessRequestsIfPossible,
+                     weak_factory_.GetWeakPtr()));
 }
 
 HRESULT MediaFoundationStreamWrapper::TransformSample(
@@ -619,7 +633,9 @@ void MediaFoundationStreamWrapper::ReportEncryptionType(
     const scoped_refptr<DecoderBuffer>& buffer) {
   auto encryption_type = EncryptionType::kClear;
   if (IsEncrypted()) {
-    bool is_buffer_encrypted = buffer->decrypt_config();
+    // Treat EOS as clear buffer which should be rare.
+    bool is_buffer_encrypted =
+        !buffer->end_of_stream() && buffer->decrypt_config();
     encryption_type = !is_buffer_encrypted
                           ? EncryptionType::kEncryptedWithClearLead
                           : EncryptionType::kEncrypted;
@@ -629,6 +645,7 @@ void MediaFoundationStreamWrapper::ReportEncryptionType(
     MEDIA_LOG(INFO, media_log_) << "MediaFoundationStreamWrapper: "
                                 << DemuxerStream::GetTypeName(stream_type_)
                                 << " stream is encrypted with clear lead";
+    has_clear_lead_ = true;
   }
 
   // TODO(xhwang): Report `encryption_type` to `PipelineStatistics` so it's

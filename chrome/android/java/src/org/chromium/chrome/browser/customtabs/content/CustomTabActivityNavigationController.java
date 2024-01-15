@@ -12,15 +12,20 @@ import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.SystemClock;
 import android.text.TextUtils;
 
 import androidx.annotation.IntDef;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.ActivityOptionsCompat;
 
+import dagger.Lazy;
+
 import org.chromium.base.metrics.RecordUserAction;
+import org.chromium.base.supplier.ObservableSupplier;
+import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.task.PostTask;
+import org.chromium.base.task.TaskTraits;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.IntentHandler;
 import org.chromium.chrome.browser.back_press.BackPressManager;
@@ -41,30 +46,35 @@ import org.chromium.components.browser_ui.widget.gesture.BackPressHandler;
 import org.chromium.components.dom_distiller.core.DomDistillerUrlUtils;
 import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.content_public.browser.RenderFrameHost;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.PageTransition;
 import org.chromium.url.GURL;
+import org.chromium.url.Origin;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.function.Predicate;
 
 import javax.inject.Inject;
 
-import dagger.Lazy;
-
-/**
- * Responsible for navigating to new pages and going back to previous pages.
- */
+/** Responsible for navigating to new pages and going back to previous pages. */
 @ActivityScope
-public class CustomTabActivityNavigationController implements StartStopWithNativeObserver {
-
-    @IntDef({USER_NAVIGATION, REPARENTING, OTHER})
+public class CustomTabActivityNavigationController
+        implements StartStopWithNativeObserver, BackPressHandler {
+    @IntDef({
+        FinishReason.USER_NAVIGATION,
+        FinishReason.REPARENTING,
+        FinishReason.OTHER,
+        FinishReason.OPEN_IN_BROWSER
+    })
     @Retention(RetentionPolicy.SOURCE)
     public @interface FinishReason {
         int USER_NAVIGATION = 0;
+        // The web page is opened in the same browser by reparenting the tab into the browser.
         int REPARENTING = 1;
         int OTHER = 2;
+        // The web page is opened in the default browser by starting a new activity.
+        int OPEN_IN_BROWSER = 3;
     }
 
     /** A handler of back presses. */
@@ -101,12 +111,12 @@ public class CustomTabActivityNavigationController implements StartStopWithNativ
     private final ChromeBrowserInitializer mChromeBrowserInitializer;
     private final Activity mActivity;
     private final DefaultBrowserProvider mDefaultBrowserProvider;
+    private final ObservableSupplierImpl<Boolean> mBackPressStateSupplier =
+            new ObservableSupplierImpl<>(false);
 
-    @Nullable
-    private ToolbarManager mToolbarManager;
+    @Nullable private ToolbarManager mToolbarManager;
 
-    @Nullable
-    private FinishHandler mFinishHandler;
+    @Nullable private FinishHandler mFinishHandler;
 
     private boolean mIsFinishing;
 
@@ -116,19 +126,38 @@ public class CustomTabActivityNavigationController implements StartStopWithNativ
 
     private final CustomTabActivityTabProvider.Observer mTabObserver =
             new CustomTabActivityTabProvider.Observer() {
+                @Override
+                public void onInitialTabCreated(@NonNull Tab tab, int mode) {
+                    mBackPressStateSupplier.set(shouldInterceptBackPress());
+                }
 
-        @Override
-        public void onAllTabsClosed() {
-            finish(mIsHandlingUserNavigation ? USER_NAVIGATION : OTHER);
-        }
-    };
+                @Override
+                public void onTabSwapped(@NonNull Tab tab) {
+                    mBackPressStateSupplier.set(shouldInterceptBackPress());
+                }
+
+                @Override
+                public void onAllTabsClosed() {
+                    mBackPressStateSupplier.set(shouldInterceptBackPress());
+                    finish(mIsHandlingUserNavigation ? USER_NAVIGATION : OTHER);
+                }
+
+                private boolean shouldInterceptBackPress() {
+                    return mTabProvider.getTab() != null
+                            && mChromeBrowserInitializer.isFullBrowserInitialized();
+                }
+            };
 
     @Inject
-    public CustomTabActivityNavigationController(CustomTabActivityTabController tabController,
+    public CustomTabActivityNavigationController(
+            CustomTabActivityTabController tabController,
             CustomTabActivityTabProvider tabProvider,
-            BrowserServicesIntentDataProvider intentDataProvider, CustomTabsConnection connection,
-            Lazy<CustomTabObserver> customTabObserver, CloseButtonNavigator closeButtonNavigator,
-            ChromeBrowserInitializer chromeBrowserInitializer, Activity activity,
+            BrowserServicesIntentDataProvider intentDataProvider,
+            CustomTabsConnection connection,
+            Lazy<CustomTabObserver> customTabObserver,
+            CloseButtonNavigator closeButtonNavigator,
+            ChromeBrowserInitializer chromeBrowserInitializer,
+            Activity activity,
             ActivityLifecycleDispatcher lifecycleDispatcher,
             DefaultBrowserProvider customTabsDefaultBrowserProvider) {
         mTabController = tabController;
@@ -143,6 +172,10 @@ public class CustomTabActivityNavigationController implements StartStopWithNativ
 
         lifecycleDispatcher.register(this);
         mTabProvider.addObserver(mTabObserver);
+        mChromeBrowserInitializer.runNowOrAfterFullBrowserStarted(
+                () -> {
+                    mBackPressStateSupplier.set(mTabProvider.getTab() != null);
+                });
     }
 
     /**
@@ -156,18 +189,10 @@ public class CustomTabActivityNavigationController implements StartStopWithNativ
     }
 
     /**
-     * Navigates to given url.
-     */
-    public void navigate(String url) {
-        navigate(new LoadUrlParams(url), SystemClock.elapsedRealtime());
-    }
-
-    /**
      * Performs navigation using given {@link LoadUrlParams}.
-     * Uses provided timestamp as the initial time for tracking page loading times
-     * (see {@link CustomTabObserver}).
+     * The source Intent is used for tracking page loading times (see {@link CustomTabObserver}).
      */
-    public void navigate(final LoadUrlParams params, long timeStamp) {
+    public void navigate(final LoadUrlParams params, Intent sourceIntent) {
         Tab tab = mTabProvider.getTab();
         if (tab == null) {
             assert false;
@@ -182,7 +207,7 @@ public class CustomTabActivityNavigationController implements StartStopWithNativ
 
         // TODO(pkotwicz): Figure out whether we want to record these metrics for WebAPKs.
         if (mIntentDataProvider.getWebappExtras() == null) {
-            mCustomTabObserver.get().trackNextPageLoadFromTimestamp(tab, timeStamp);
+            mCustomTabObserver.get().trackNextPageLoadForLaunch(tab, sourceIntent);
         }
 
         IntentHandler.addReferrerAndHeaders(params, mIntentDataProvider.getIntent());
@@ -198,15 +223,18 @@ public class CustomTabActivityNavigationController implements StartStopWithNativ
             transition = PageTransition.LINK | PageTransition.FROM_API;
         }
 
-        params.setTransitionType(IntentHandler.getTransitionTypeFromIntent(
-                mIntentDataProvider.getIntent(), transition));
+        params.setTransitionType(
+                IntentHandler.getTransitionTypeFromIntent(
+                        mIntentDataProvider.getIntent(), transition));
+
+        // The sender of an intent can't be trusted, so we navigate from an opaque Origin to
+        // avoid sending same-site cookies.
+        params.setInitiatorOrigin(Origin.createOpaqueOrigin());
 
         tab.loadUrl(params);
     }
 
-    /**
-     * Handles back button navigation.
-     */
+    /** Handles back button navigation. */
     public boolean navigateOnBack() {
         if (!mChromeBrowserInitializer.isFullBrowserInitialized()) return false;
 
@@ -225,16 +253,27 @@ public class CustomTabActivityNavigationController implements StartStopWithNativ
             }
 
             if (mToolbarManager != null && mToolbarManager.back()) {
-                BackPressManager.record(BackPressHandler.Type.TOOLBAR_TAB_CONTROLLER);
+                BackPressManager.record(BackPressHandler.Type.TAB_HISTORY);
                 return true;
             }
+            // If enabled, BackPressManager will record this internally. Otherwise, this should
+            // be recorded manually.
+            BackPressManager.record(BackPressHandler.Type.MINIMIZE_APP_AND_CLOSE_TAB);
+        } else if (BackPressManager.correctTabNavigationOnFallback()) {
+            if (mTabProvider.getTab().canGoBack()) {
+                return false;
+            }
+        }
+        if (mTabController.dispatchBeforeUnloadIfNeeded()) {
+            MinimizeAppAndCloseTabBackPressHandler.record(MinimizeAppAndCloseTabType.CLOSE_TAB);
+            return true;
         }
 
-        BackPressManager.record(BackPressHandler.Type.MINIMIZE_APP_AND_CLOSE_TAB);
         if (mTabController.onlyOneTabRemaining()) {
-            // If we're closing the last tab, just finish the Activity manually. If we had called
-            // mTabController.closeTab() and waited for the Activity to close as a result we would
-            // have a visual glitch: https://crbug.com/1087108.
+            // If we're closing the last tab and it it doesn't have beforeunload, just finish
+            // the Activity manually. If we had called mTabController.closeTab() and waited for
+            // the Activity to close as a result we would have a visual glitch:
+            // https://crbug.com/1087108.
             MinimizeAppAndCloseTabBackPressHandler.record(MinimizeAppAndCloseTabType.MINIMIZE_APP);
             finish(USER_NAVIGATION);
         } else {
@@ -244,9 +283,18 @@ public class CustomTabActivityNavigationController implements StartStopWithNativ
 
         return true;
     }
-    /**
-     * Handles close button navigation.
-     */
+
+    @Override
+    public int handleBackPress() {
+        return navigateOnBack() ? BackPressResult.SUCCESS : BackPressResult.FAILURE;
+    }
+
+    @Override
+    public ObservableSupplier<Boolean> getHandleBackPressChangedSupplier() {
+        return mBackPressStateSupplier;
+    }
+
+    /** Handles close button navigation. */
     public void navigateOnClose() {
         mIsHandlingUserNavigation = true;
         mCloseButtonNavigator.navigateOnClose();
@@ -255,11 +303,10 @@ public class CustomTabActivityNavigationController implements StartStopWithNativ
 
     /**
      * Opens the URL currently being displayed in the Custom Tab in the regular browser.
-     * @param forceReparenting Whether tab reparenting should be forced for testing.
      *
      * @return Whether or not the tab was sent over successfully.
      */
-    public boolean openCurrentUrlInBrowser(boolean forceReparenting) {
+    public boolean openCurrentUrlInBrowser() {
         Tab tab = mTabProvider.getTab();
         if (tab == null) return false;
 
@@ -286,26 +333,30 @@ public class CustomTabActivityNavigationController implements StartStopWithNativ
 
         // If the tab is opened by TWA or Webapp, do not reparent and finish the Custom Tab
         // activity because we still want to keep the app alive.
-        boolean canFinishActivity = !mIntentDataProvider.isTrustedWebActivity()
-                && !mIntentDataProvider.isWebappOrWebApkActivity();
+        boolean canFinishActivity =
+                !mIntentDataProvider.isTrustedWebActivity()
+                        && !mIntentDataProvider.isWebappOrWebApkActivity();
 
         willChromeHandleIntent |=
                 ExternalNavigationDelegateImpl.willChromeHandleIntent(intent, true);
 
-        Bundle startActivityOptions = ActivityOptionsCompat.makeCustomAnimation(
-                mActivity, R.anim.abc_fade_in, R.anim.abc_fade_out).toBundle();
+        Bundle startActivityOptions =
+                ActivityOptionsCompat.makeCustomAnimation(
+                                mActivity, R.anim.abc_fade_in, R.anim.abc_fade_out)
+                        .toBundle();
 
-        if (canFinishActivity && willChromeHandleIntent || forceReparenting) {
+        if (canFinishActivity && willChromeHandleIntent) {
             // Remove observer to not trigger finishing in onAllTabsClosed() callback - we'll use
             // reparenting finish callback instead.
             mTabProvider.removeObserver(mTabObserver);
-            mTabController.detachAndStartReparenting(intent, startActivityOptions,
-                    () -> finish(REPARENTING));
+            mTabController.detachAndStartReparenting(
+                    intent, startActivityOptions, () -> finish(FinishReason.REPARENTING));
         } else {
             if (mIntentDataProvider.isInfoPage()) {
                 IntentHandler.startChromeLauncherActivityForTrustedIntent(intent);
             } else {
                 mActivity.startActivity(intent, startActivityOptions);
+                finish(FinishReason.OPEN_IN_BROWSER);
             }
         }
         return true;
@@ -327,8 +378,8 @@ public class CustomTabActivityNavigationController implements StartStopWithNativ
             // memory consumption, as the current renderer goes away. We create a renderer as a lot
             // of users open several Custom Tabs in a row. The delay is there to avoid jank in the
             // transition animation when closing the tab.
-            PostTask.postDelayedTask(UiThreadTaskTraits.DEFAULT,
-                    CustomTabsConnection::createSpareWebContents, 500);
+            PostTask.postDelayedTask(
+                    TaskTraits.UI_DEFAULT, CustomTabsConnection::createSpareWebContents, 500);
         }
 
         if (mFinishHandler != null) {
@@ -340,12 +391,10 @@ public class CustomTabActivityNavigationController implements StartStopWithNativ
         return mFinishReason;
     }
 
-    /**
-     * Sets a {@link FinishHandler} to be notified when the custom tab is being closed.
-     */
+    /** Sets a {@link FinishHandler} to be notified when the custom tab is being closed. */
     public void setFinishHandler(FinishHandler finishHandler) {
-        assert mFinishHandler == null :
-                "Multiple FinishedHandlers not supported, replace with ObserverList if necessary";
+        assert mFinishHandler == null
+                : "Multiple FinishedHandlers not supported, replace with ObserverList if necessary";
         mFinishHandler = finishHandler;
     }
 
@@ -355,7 +404,7 @@ public class CustomTabActivityNavigationController implements StartStopWithNativ
      * If no page in the navigation history meets the criterion, or there is no criterion, then
      * pressing close button will finish the Custom Tab activity.
      */
-    public void setLandingPageOnCloseCriterion(CloseButtonNavigator.PageCriteria criterion) {
+    public void setLandingPageOnCloseCriterion(Predicate<String> criterion) {
         mCloseButtonNavigator.setLandingPageCriteria(criterion);
     }
 

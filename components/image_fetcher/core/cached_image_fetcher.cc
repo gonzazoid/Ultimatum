@@ -6,11 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/timer/elapsed_timer.h"
 #include "components/image_fetcher/core/cache/image_cache.h"
@@ -64,7 +64,8 @@ std::string EncodeSkBitmapToPNG(const std::string& uma_client_name,
   std::vector<unsigned char> encoded_data;
   bool result = gfx::PNGCodec::Encode(
       static_cast<const unsigned char*>(bitmap.getPixels()),
-      gfx::PNGCodec::FORMAT_RGBA, gfx::Size(bitmap.width(), bitmap.height()),
+      gfx::PNGCodec::FORMAT_SkBitmap,
+      gfx::Size(bitmap.width(), bitmap.height()),
       static_cast<int>(bitmap.rowBytes()), /* discard_transparency */ false,
       std::vector<gfx::PNGCodec::Comment>(), &encoded_data);
   if (!result) {
@@ -199,7 +200,7 @@ void CachedImageFetcher::EnqueueFetchImageFromNetwork(
     CachedImageFetcherRequest request,
     ImageDataFetcherCallback image_data_callback,
     ImageFetcherCallback image_callback) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&CachedImageFetcher::FetchImageFromNetwork,
                      weak_ptr_factory_.GetWeakPtr(), std::move(request),

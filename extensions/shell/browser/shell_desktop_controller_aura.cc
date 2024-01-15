@@ -76,9 +76,9 @@ class ShellNativeCursorManager : public wm::NativeCursorManager {
   // wm::NativeCursorManager overrides.
   void SetDisplay(const display::Display& display,
                   wm::NativeCursorManagerDelegate* delegate) override {
-    if (cursor_loader_.SetDisplayData(display.panel_rotation(),
-                                      display.device_scale_factor()))
+    if (cursor_loader_.SetDisplay(display)) {
       SetCursor(delegate->GetCursor(), delegate);
+    }
   }
 
   void SetCursor(gfx::NativeCursor cursor,
@@ -121,8 +121,9 @@ class ShellNativeCursorManager : public wm::NativeCursorManager {
  private:
   // Sets |cursor| as the active cursor within Aura.
   void SetCursorOnAllRootWindows(gfx::NativeCursor cursor) {
-    for (auto* window : desktop_controller_->GetAllRootWindows())
+    for (aura::Window* window : desktop_controller_->GetAllRootWindows()) {
       window->GetHost()->SetCursor(cursor);
+    }
   }
 
   raw_ptr<ShellDesktopControllerAura> desktop_controller_;  // Not owned.

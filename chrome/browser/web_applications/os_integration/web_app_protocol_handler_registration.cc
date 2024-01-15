@@ -4,9 +4,10 @@
 
 #include "chrome/browser/web_applications/os_integration/web_app_protocol_handler_registration.h"
 
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/files/file_path.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
-#include "chrome/browser/web_applications/web_app_id.h"
+#include "components/webapps/common/web_app_id.h"
 
 namespace web_app {
 
@@ -16,20 +17,20 @@ namespace web_app {
 #if !BUILDFLAG(IS_WIN) && !BUILDFLAG(IS_MAC)
 // Registers a protocol handler for the web app with the OS.
 void RegisterProtocolHandlersWithOs(
-    const AppId& app_id,
+    const webapps::AppId& app_id,
     const std::string& app_name,
-    Profile* profile,
+    const base::FilePath profile_path,
     std::vector<apps::ProtocolHandlerInfo> protocol_handlers,
     ResultCallback callback) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), Result::kOk));
 }
 
 // Unregisters protocol handlers for a web app with the OS.
-void UnregisterProtocolHandlersWithOs(const AppId& app_id,
-                                      Profile* profile,
+void UnregisterProtocolHandlersWithOs(const webapps::AppId& app_id,
+                                      const base::FilePath profile_path,
                                       ResultCallback callback) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), Result::kOk));
 }
 #endif

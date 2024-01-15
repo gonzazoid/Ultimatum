@@ -7,12 +7,15 @@ import("//mojo/public/tools/bindings/mojom.gni")
 mojom("mojom") {
   sources = [ "event.mojom" ]
 
+  public_deps = [ "//mojo/public/mojom/base" ]
+
   cpp_typemaps = [
     {
       types = [
         {
           mojom = "metrics.structured.mojom.Event"
           cpp = "::metrics::structured::Event"
+          move_only = true
         },
       ]
       traits_headers = [ "event_mojom_traits.h" ]

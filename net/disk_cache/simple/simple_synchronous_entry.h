@@ -19,8 +19,8 @@
 #include "base/files/file_path.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "net/base/cache_type.h"
 #include "net/base/net_errors.h"
@@ -28,6 +28,7 @@
 #include "net/disk_cache/simple/simple_entry_format.h"
 #include "net/disk_cache/simple/simple_file_tracker.h"
 #include "net/disk_cache/simple/simple_histogram_enums.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
 class GrowableIOBuffer;
@@ -104,7 +105,11 @@ struct SimpleEntryCreationResults {
   explicit SimpleEntryCreationResults(SimpleEntryStat entry_stat);
   ~SimpleEntryCreationResults();
 
-  raw_ptr<SimpleSynchronousEntry> sync_entry;
+  // This dangling raw_ptr occurred in:
+  // content_unittests:
+  // GeneratedCodeCacheTest/GeneratedCodeCacheTest.StressVeryLargeEntries/1
+  // https://ci.chromium.org/ui/p/chromium/builders/try/linux-rel/1425125/test-results?q=ExactID%3Aninja%3A%2F%2Fcontent%2Ftest%3Acontent_unittests%2FGeneratedCodeCacheTest.StressVeryLargeEntries%2FGeneratedCodeCacheTest.1+VHash%3Ab3ba0803668e9981&sortby=&groupby=
+  raw_ptr<SimpleSynchronousEntry, FlakyDanglingUntriaged> sync_entry;
   // This is set when `sync_entry` is null.
   std::unique_ptr<UnboundBackendFileOperations> unbound_file_operations;
 
@@ -190,7 +195,7 @@ class SimpleSynchronousEntry {
   NET_EXPORT_PRIVATE SimpleSynchronousEntry(
       net::CacheType cache_type,
       const base::FilePath& path,
-      const std::string& key,
+      const absl::optional<std::string>& key,
       uint64_t entry_hash,
       SimpleFileTracker* simple_file_tracker,
       std::unique_ptr<UnboundBackendFileOperations> file_operations,
@@ -205,7 +210,7 @@ class SimpleSynchronousEntry {
   static void OpenEntry(
       net::CacheType cache_type,
       const base::FilePath& path,
-      const std::string& key,
+      const absl::optional<std::string>& key,
       uint64_t entry_hash,
       SimpleFileTracker* file_tracker,
       std::unique_ptr<UnboundBackendFileOperations> file_operations,
@@ -304,7 +309,7 @@ class SimpleSynchronousEntry {
              SimpleEntryCloseResults* out_results);
 
   const base::FilePath& path() const { return path_; }
-  std::string key() const { return key_; }
+  absl::optional<std::string> key() const { return key_; }
   const SimpleFileTracker::EntryFileKey& entry_file_key() const {
     return entry_file_key_;
   }
@@ -496,7 +501,7 @@ class SimpleSynchronousEntry {
   const net::CacheType cache_type_;
   const base::FilePath path_;
   SimpleFileTracker::EntryFileKey entry_file_key_;
-  std::string key_;
+  absl::optional<std::string> key_;
 
   bool have_open_files_ = false;
   bool initialized_ = false;

@@ -8,8 +8,8 @@
 #import <string>
 #import <utility>
 
-#import "base/bind.h"
-#import "base/callback_helpers.h"
+#import "base/functional/bind.h"
+#import "base/functional/callback_helpers.h"
 #import "base/memory/ptr_util.h"
 #import "base/strings/utf_string_conversions.h"
 #import "base/values.h"
@@ -17,39 +17,38 @@
 #import "components/flags_ui/flags_ui_constants.h"
 #import "components/flags_ui/flags_ui_pref_names.h"
 #import "components/flags_ui/pref_service_flags_storage.h"
-#import "components/grit/components_resources.h"
+#import "components/grit/flags_ui_resources.h"
+#import "components/grit/flags_ui_resources_map.h"
 #import "components/prefs/pref_registry_simple.h"
 #import "components/prefs/pref_service.h"
-#import "components/strings/grit/components_chromium_strings.h"
+#import "components/strings/grit/components_branded_strings.h"
 #import "components/strings/grit/components_strings.h"
 #import "components/version_info/version_info.h"
-#import "ios/chrome/browser/application_context/application_context.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
 #import "ios/chrome/browser/flags/about_flags.h"
-#import "ios/chrome/browser/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/model/application_context/application_context.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
 #import "ios/web/public/webui/web_ui_ios.h"
 #import "ios/web/public/webui/web_ui_ios_data_source.h"
 #import "ios/web/public/webui/web_ui_ios_message_handler.h"
 #import "ui/base/l10n/l10n_util.h"
 #import "ui/base/resource/resource_bundle.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace {
 
 web::WebUIIOSDataSource* CreateFlagsUIHTMLSource() {
   web::WebUIIOSDataSource* source =
       web::WebUIIOSDataSource::Create(kChromeUIFlagsHost);
-  source->AddString(flags_ui::kVersion, version_info::GetVersionNumber());
+  source->AddString(flags_ui::kVersion,
+                    std::string(version_info::GetVersionNumber()));
 
   source->UseStringsJs();
   FlagsUI::AddFlagsIOSStrings(source);
-  source->AddResourcePath(flags_ui::kFlagsJS, IDR_FLAGS_UI_FLAGS_JS);
-  source->AddResourcePath(flags_ui::kFlagsCSS, IDR_FLAGS_UI_FLAGS_CSS);
+  source->AddResourcePaths(
+      base::make_span(kFlagsUiResources, kFlagsUiResourcesSize));
   source->SetDefaultResource(IDR_FLAGS_UI_FLAGS_HTML);
   source->UseStringsJs();
+  source->EnableReplaceI18nInJS();
   return source;
 }
 
@@ -137,8 +136,7 @@ void FlagsDOMHandler::HandleRequestExperimentalFeatures(
   results.Set(flags_ui::kSupportedFeatures, std::move(supported_features));
   results.Set(flags_ui::kUnsupportedFeatures, std::move(unsupported_features));
 
-  // Cannot restart the browser on iOS.
-  results.Set(flags_ui::kNeedsRestart, false);
+  results.Set(flags_ui::kNeedsRestart, IsRestartNeededToCommitChanges());
   results.Set(flags_ui::kShowOwnerWarning,
               access_ == flags_ui::kGeneralAccessFlagsOnly);
 

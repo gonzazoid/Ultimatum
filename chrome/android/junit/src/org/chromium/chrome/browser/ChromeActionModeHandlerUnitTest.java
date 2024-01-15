@@ -4,6 +4,10 @@
 
 package org.chromium.chrome.browser;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
@@ -32,6 +36,8 @@ import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.browser.firstrun.FirstRunStatus;
 import org.chromium.chrome.browser.locale.LocaleManager;
 import org.chromium.chrome.browser.locale.LocaleManagerDelegate;
+import org.chromium.chrome.browser.share.ShareDelegate;
+import org.chromium.chrome.browser.share.ShareDelegate.ShareOrigin;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.content.R;
 import org.chromium.content_public.browser.ActionModeCallbackHelper;
@@ -43,24 +49,20 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 
-/**
- * Unit tests for the {@link ChromeActionModeHandler}.
- */
+/** Unit tests for the {@link ChromeActionModeHandler}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class ChromeActionModeHandlerUnitTest {
-    @Mock
-    private Tab mTab;
-    @Mock
-    private ActionModeCallbackHelper mActionModeCallbackHelper;
-    @Mock
-    private ActionMode mActionMode;
-    @Mock
-    private Menu mMenu;
+    @Mock private Tab mTab;
+    @Mock private ActionModeCallbackHelper mActionModeCallbackHelper;
+    @Mock private ActionMode mActionMode;
+    @Mock private Menu mMenu;
+    @Mock private ShareDelegate mShareDelegate;
 
-    private class TestChromeActionModeCallback extends ChromeActionModeHandler.ActionModeCallback {
+    private class TestChromeActionModeCallback
+            extends ChromeActionModeHandler.ChromeActionModeCallback {
         TestChromeActionModeCallback(Tab tab, ActionModeCallbackHelper helper) {
-            super(tab, null, urlParams -> {}, null);
+            super(tab, null, urlParams -> {}, () -> mShareDelegate);
         }
 
         @Override
@@ -91,8 +93,9 @@ public class ChromeActionModeHandlerUnitTest {
         mActionModeCallback.onCreateActionMode(mActionMode, mMenu);
 
         Mockito.verify(mActionModeCallbackHelper)
-                .setAllowedMenuItems(ActionModeCallbackHelper.MENU_ITEM_PROCESS_TEXT
-                        | ActionModeCallbackHelper.MENU_ITEM_SHARE);
+                .setAllowedMenuItems(
+                        ActionModeCallbackHelper.MENU_ITEM_PROCESS_TEXT
+                                | ActionModeCallbackHelper.MENU_ITEM_SHARE);
     }
 
     @Test
@@ -102,9 +105,10 @@ public class ChromeActionModeHandlerUnitTest {
         mActionModeCallback.onCreateActionMode(mActionMode, mMenu);
 
         Mockito.verify(mActionModeCallbackHelper)
-                .setAllowedMenuItems(ActionModeCallbackHelper.MENU_ITEM_PROCESS_TEXT
-                        | ActionModeCallbackHelper.MENU_ITEM_SHARE
-                        | ActionModeCallbackHelper.MENU_ITEM_WEB_SEARCH);
+                .setAllowedMenuItems(
+                        ActionModeCallbackHelper.MENU_ITEM_PROCESS_TEXT
+                                | ActionModeCallbackHelper.MENU_ITEM_SHARE
+                                | ActionModeCallbackHelper.MENU_ITEM_WEB_SEARCH);
     }
 
     @Test
@@ -114,13 +118,15 @@ public class ChromeActionModeHandlerUnitTest {
         Mockito.when(mActionModeCallbackHelper.isActionModeValid()).thenReturn(true);
         Mockito.when(mActionModeCallbackHelper.getSelectedText()).thenReturn("OhHai");
 
-        LocaleManagerDelegate delegate = Mockito.spy(new LocaleManagerDelegate() {
-            @Override
-            public void showSearchEnginePromoIfNeeded(
-                    Activity activity, Callback<Boolean> onSearchEngineFinalized) {
-                onSearchEngineFinalized.onResult(true);
-            }
-        });
+        LocaleManagerDelegate delegate =
+                Mockito.spy(
+                        new LocaleManagerDelegate() {
+                            @Override
+                            public void showSearchEnginePromoIfNeeded(
+                                    Activity activity, Callback<Boolean> onSearchEngineFinalized) {
+                                onSearchEngineFinalized.onResult(true);
+                            }
+                        });
 
         LocaleManager.getInstance().setDelegateForTest(delegate);
 
@@ -176,7 +182,8 @@ public class ChromeActionModeHandlerUnitTest {
             String packageName = item.getIntent().getComponent().getPackageName();
             if (browserPackageNames.contains(packageName)
                     || launcherPackageNames.contains(packageName)) {
-                Assert.assertFalse("Browser or home launcher application should be filtered out",
+                Assert.assertFalse(
+                        "Browser or home launcher application should be filtered out",
                         item.isVisible());
             } else {
                 Assert.assertTrue(
@@ -184,6 +191,29 @@ public class ChromeActionModeHandlerUnitTest {
                         item.isVisible());
             }
         }
+    }
+
+    @Test
+    public void testShare() {
+        Mockito.when(mActionModeCallbackHelper.isActionModeValid()).thenReturn(true);
+        MenuItem shareItem = Mockito.mock(MenuItem.class);
+        Mockito.when(shareItem.getItemId()).thenReturn(R.id.select_action_menu_share);
+        mActionModeCallback.onActionItemClicked(mActionMode, shareItem);
+
+        Mockito.verify(mShareDelegate).share(any(), any(), eq(ShareOrigin.MOBILE_ACTION_MODE));
+        Mockito.verify(mActionModeCallbackHelper, times(0)).onActionItemClicked(any(), any());
+    }
+
+    @Test
+    public void testShareWithoutShareDelegate() {
+        mShareDelegate = null;
+
+        Mockito.when(mActionModeCallbackHelper.isActionModeValid()).thenReturn(true);
+        MenuItem shareItem = Mockito.mock(MenuItem.class);
+        Mockito.when(shareItem.getItemId()).thenReturn(R.id.select_action_menu_share);
+        mActionModeCallback.onActionItemClicked(mActionMode, shareItem);
+
+        Mockito.verify(mActionModeCallbackHelper).onActionItemClicked(any(), eq(shareItem));
     }
 
     private ResolveInfo createResolveInfo(String packageName) {
@@ -195,11 +225,12 @@ public class ChromeActionModeHandlerUnitTest {
     }
 
     private void addMenuItem(Menu menu, int order, String packageName) {
-        menu.add(R.id.select_action_menu_text_processing_menus, Menu.NONE, order, "title")
-                .setIntent(new Intent()
-                                   .setAction(Intent.ACTION_PROCESS_TEXT)
-                                   .setType("text/plain")
-                                   .putExtra(Intent.EXTRA_PROCESS_TEXT_READONLY, true)
-                                   .setClassName(packageName, "foo"));
+        menu.add(R.id.select_action_menu_text_processing_items, Menu.NONE, order, "title")
+                .setIntent(
+                        new Intent()
+                                .setAction(Intent.ACTION_PROCESS_TEXT)
+                                .setType("text/plain")
+                                .putExtra(Intent.EXTRA_PROCESS_TEXT_READONLY, true)
+                                .setClassName(packageName, "foo"));
     }
 }

@@ -5,11 +5,12 @@
 #ifndef COMPONENTS_POLICY_CORE_COMMON_POLICY_LOADER_MAC_H_
 #define COMPONENTS_POLICY_CORE_COMMON_POLICY_LOADER_MAC_H_
 
+#include <memory>
 #include <string>
 
+#include "base/apple/scoped_cftyperef.h"
 #include "base/files/file_path.h"
 #include "base/files/file_path_watcher.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "base/memory/ref_counted.h"
 #include "build/build_config.h"
 #include "components/policy/core/common/async_policy_loader.h"
@@ -34,13 +35,13 @@ class POLICY_EXPORT PolicyLoaderMac : public AsyncPolicyLoader {
  public:
   PolicyLoaderMac(scoped_refptr<base::SequencedTaskRunner> task_runner,
                   const base::FilePath& managed_policy_path,
-                  MacPreferences* preferences);
+                  std::unique_ptr<MacPreferences> preferences);
 
   // |application_id| will be passed into Mac's Preference Utilities API
   // instead of the default value of kCFPreferencesCurrentApplication.
   PolicyLoaderMac(scoped_refptr<base::SequencedTaskRunner> task_runner,
                   const base::FilePath& managed_policy_path,
-                  MacPreferences* preferences,
+                  std::unique_ptr<MacPreferences> preferences,
                   CFStringRef application_id);
   PolicyLoaderMac(const PolicyLoaderMac&) = delete;
   PolicyLoaderMac& operator=(const PolicyLoaderMac&) = delete;
@@ -76,7 +77,7 @@ class POLICY_EXPORT PolicyLoaderMac : public AsyncPolicyLoader {
                               const Schema& schema,
                               PolicyMap* policy);
 
-  std::unique_ptr<MacPreferences> preferences_;
+  const std::unique_ptr<MacPreferences> preferences_;
 
   // Path to the managed preferences file for the current user, if it could
   // be found. Updates of this file trigger a policy reload.
@@ -86,7 +87,7 @@ class POLICY_EXPORT PolicyLoaderMac : public AsyncPolicyLoader {
   base::FilePathWatcher watcher_;
 
   // Application ID to pass into Mac's Preference Utilities API.
-  base::ScopedCFTypeRef<CFStringRef> application_id_;
+  base::apple::ScopedCFTypeRef<CFStringRef> application_id_;
 };
 
 }  // namespace policy

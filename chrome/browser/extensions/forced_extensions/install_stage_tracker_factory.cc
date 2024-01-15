@@ -23,13 +23,21 @@ InstallStageTrackerFactory* InstallStageTrackerFactory::GetInstance() {
 }
 
 InstallStageTrackerFactory::InstallStageTrackerFactory()
-    : ProfileKeyedServiceFactory("InstallStageTracker") {}
+    : ProfileKeyedServiceFactory(
+          "InstallStageTracker",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/1418376): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 InstallStageTrackerFactory::~InstallStageTrackerFactory() = default;
 
-KeyedService* InstallStageTrackerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+InstallStageTrackerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new InstallStageTracker(context);
+  return std::make_unique<InstallStageTracker>(context);
 }
 
 }  // namespace extensions

@@ -5,7 +5,11 @@
 /**
  * @fileoverview 'cr-lottie' is a wrapper around the player for lottie
  * animations. Since the player runs on a worker thread, 'cr-lottie' requires
- * the document CSP to be set to "worker-src blob: 'self';".
+ * the document CSP to be set to "worker-src blob: chrome://resources 'self';".
+ *
+ * For documents that have TrustedTypes CSP checks enabled, it also requires the
+ * document CSP to be set to "trusted-types lottie-worker-script-loader;".
+ *
  * Fires a 'cr-lottie-initialized' event when the animation was successfully
  * initialized.
  * Fires a 'cr-lottie-playing' event when the animation starts playing.
@@ -15,20 +19,33 @@
  * drawn on is resized.
  */
 
+import {assert, assertNotReached} from '//resources/js/assert.js';
 import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
-import {assert} from '../../js/assert_ts.js';
 
 import {getTemplate} from './cr_lottie.html.js';
 
-/**
- * The resource url for the lottier web worker script.
- */
-export const LOTTIE_JS_URL = 'chrome://resources/lottie/lottie_worker.min.js';
+let workerLoaderPolicy: TrustedTypePolicy|null = null;
 
-interface OffscreenCanvas {
-  width: number;
-  height: number;
+function getLottieWorkerURL(): TrustedScriptURL {
+  if (workerLoaderPolicy === null) {
+    workerLoaderPolicy =
+        window.trustedTypes!.createPolicy('lottie-worker-script-loader', {
+          createScriptURL: (_ignore: string) => {
+            const script =
+                `import 'chrome://resources/lottie/lottie_worker.min.js';`;
+            // CORS blocks loading worker script from a different origin, even
+            // if chrome://resources/ is added in the 'worker-src' CSP header.
+            // (see https://crbug.com/1385477). Loading scripts as blob and then
+            // instantiating it as web worker is possible.
+            const blob = new Blob([script], {type: 'text/javascript'});
+            return URL.createObjectURL(blob);
+          },
+          createHTML: () => assertNotReached(),
+          createScript: () => assertNotReached(),
+        });
+  }
+
+  return workerLoaderPolicy.createScriptURL('');
 }
 
 interface MessageData {
@@ -128,18 +145,10 @@ export class CrLottieElement extends PolymerElement {
   override connectedCallback() {
     super.connectedCallback();
 
-    // CORS blocks loading worker script from a different origin but
-    // loading scripts as blob and then instantiating it as web worker
-    // is possible.
-    this.sendXmlHttpRequest_(
-        LOTTIE_JS_URL, 'blob', (response: Blob|MediaSource|object|null) => {
-          if (this.isConnected) {
-            this.worker_ =
-                new Worker(URL.createObjectURL(response as Blob | MediaSource));
-            this.worker_.onmessage = this.onMessage_.bind(this);
-            this.initialize_();
-          }
-        });
+    this.worker_ =
+        new Worker(getLottieWorkerURL() as unknown as URL, {type: 'module'});
+    this.worker_.onmessage = this.onMessage_.bind(this);
+    this.initialize_();
   }
 
   override disconnectedCallback() {

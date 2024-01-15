@@ -19,6 +19,8 @@ source_set("soda") {
     "soda_test_paths.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
     ":soda_api_proto",
     "//base",
@@ -41,7 +43,7 @@ source_set("soda") {
 source_set("unit_tests") {
   testonly = true
 
-  if (enable_soda) {
+  if (enable_soda_integration_tests) {
     sources = [ "soda_client_unittest.cc" ]
 
     if (is_mac) {

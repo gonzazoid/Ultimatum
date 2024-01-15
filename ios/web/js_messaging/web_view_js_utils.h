@@ -35,6 +35,9 @@ enum JSEvaluationErrorCode {
 // Converts result of WKWebView script evaluation to base::Value.
 std::unique_ptr<base::Value> ValueResultFromWKResult(id result);
 
+// Converts base::Value to an equivalent Foundation object.
+id NSObjectFromValueResult(const base::Value* value_result);
+
 // Executes JavaScript on WKWebView. If the web view cannot execute JS at the
 // moment, `completion_handler` is called with an NSError.
 void ExecuteJavaScript(WKWebView* web_view,
@@ -42,15 +45,21 @@ void ExecuteJavaScript(WKWebView* web_view,
                        void (^completion_handler)(id, NSError*));
 
 // Executes JavaScript for `web_view` in `frame_info` within `content_world` and
-// calls `completion_handler` with the result. `content_world` is optional,
-// however, if specified and not equal to WKContentWorld.pageWorld, `frame_info`
-// is required. If the web view cannot execute JS at the moment,
+// calls `completion_handler` with the result. `content_world` and `frame_info`
+// are required. If the web view cannot execute JS at the moment,
 // `completion_handler` is called with an NSError.
 void ExecuteJavaScript(WKWebView* web_view,
                        WKContentWorld* content_world,
                        WKFrameInfo* frame_info,
                        NSString* script,
                        void (^completion_handler)(id, NSError*));
+
+// Calls into the JavaScript in `content_world` to trigger the registration of
+// all web frames.
+// NOTE: This call is sent to the WKWebView directly, because the result of this
+// call will create the WebFrames. (Thus, the WebFrames do not yet exist and
+// the ExecuteJavaScript variant above requiring `frame_info` can not be used.)
+void RegisterExistingFrames(WKWebView* web_view, WKContentWorld* content_world);
 
 }  // namespace web
 

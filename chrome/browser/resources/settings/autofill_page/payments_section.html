@@ -5,6 +5,18 @@
     flex: 1;
   }
 
+  .arrow-icon-down {
+    fill: var(--text-color);
+    flex-shrink: 0;
+    margin-inline-start: 6px;
+    margin-inline-end: -6px;
+    width: var(--cr-icon-size);
+  }
+
+  .payment-list-margin-start {
+    padding-inline-start: 20px;
+  }
+
   #migrateCreditCards {
     border-bottom: var(--cr-separator-line);
     border-top: none;
@@ -19,6 +31,27 @@
     sub-label="$i18n{enableCreditCardsSublabel}"
     pref="{{prefs.autofill.credit_card_enabled}}">
 </settings-toggle-button>
+<if expr="is_win or is_macosx">
+  <template is="dom-if" if="[[mandatoryReauthFeatureEnabled_]]">
+    <settings-toggle-button id="mandatoryAuthToggle"
+        no-extension-indicator label="$i18n{enableMandatoryAuthToggleLabel}"
+        sub-label="$i18n{enableMandatoryAuthToggleSublabel}"
+        pref="{{prefs.autofill.payment_methods_mandatory_reauth}}"
+        disabled="[[shouldDisableAuthToggle_(
+                  prefs.autofill.credit_card_enabled.value, deviceAuthAvailable_)]]"
+        on-settings-boolean-control-change="onMandatoryAuthToggleChange_">
+    </settings-toggle-button>
+  </template>
+</if>
+<template is="dom-if" if="[[cvcStorageAvailable_]]">
+  <settings-toggle-button id="cvcStorageToggle"
+        no-extension-indicator label="$i18n{enableCvcStorageLabel}"
+        sub-label-with-link="[[getCvcStorageSublabel_(creditCards)]]"
+        disabled="[[!prefs.autofill.credit_card_enabled.value]]"
+        on-sub-label-link-clicked="onBulkRemoveCvcClick_"
+        pref="{{prefs.autofill.payment_cvc_storage}}">
+    </settings-toggle-button>
+</template>
 <settings-toggle-button id="canMakePaymentToggle"
     aria-label="$i18n{canMakePaymentToggleLabel}"
     label="$i18n{canMakePaymentToggleLabel}"
@@ -28,14 +61,14 @@
 <template is="dom-if"
     if="[[shouldShowFidoToggle_(
         prefs.autofill.credit_card_enabled.value,
-        userIsFidoVerifiable_)]]">
+        userIsFidoVerifiable_, mandatoryReauthFeatureEnabled_)]]">
   <settings-toggle-button
       id="autofillCreditCardFIDOAuthToggle"
       aria-label="$i18n{creditCards}" no-extension-indicator
       label="$i18n{enableCreditCardFIDOAuthLabel}"
       sub-label="$i18n{enableCreditCardFIDOAuthSublabel}"
       pref="{{prefs.autofill.credit_card_fido_auth_enabled}}"
-      on-change="setFIDOAuthenticationEnabledState_">
+      on-change="setFidoAuthenticationEnabledState_">
   </settings-toggle-button>
 </template>
 <template is="dom-if"
@@ -59,11 +92,38 @@
 
 <div class="cr-row continuation">
   <h2 class="flex">$i18n{creditCards}</h2>
-  <cr-button id="addCreditCard" class="header-aligned-button"
-      on-click="onAddCreditCardClick_" aria-label="$i18n{addCreditCardTitle}"
-      hidden$="[[!prefs.autofill.credit_card_enabled.value]]">
-    $i18n{add}
-  </cr-button>
+  <template is="dom-if"
+      if="[[!shouldShowIbanSettings_(showIbanSettingsEnabled_)]]">
+    <cr-button id="addCreditCard" class="header-aligned-button"
+        on-click="onAddCreditCardClick_" aria-label="$i18n{addCreditCardTitle}"
+        hidden$="[[!prefs.autofill.credit_card_enabled.value]]">
+      $i18n{add}
+    </cr-button>
+  </template>
+  <template is="dom-if"
+      if="[[shouldShowIbanSettings_(showIbanSettingsEnabled_)]]">
+    <cr-button class="header-aligned-button"
+        id="addPaymentMethods" on-click="onAddPaymentMethodClick_"
+        aria-label="$i18n{addPaymentMethods}"
+        hidden$="[[!prefs.autofill.credit_card_enabled.value]]">
+      $i18n{add}
+      <iron-icon icon="cr:arrow-drop-down" class="arrow-icon-down"></iron-icon>
+    </cr-button>
+    <cr-lazy-render id="paymentMethodsActionMenu">
+      <template>
+        <cr-action-menu role-description="$i18n{menu}">
+          <button id="addCreditCard" class="dropdown-item"
+              on-click="onAddCreditCardClick_">
+            $i18n{addPaymentMethodCreditOrDebitCard}
+          </button>
+          <button id="addIban" class="dropdown-item"
+              on-click="onAddIbanClick_">
+            $i18n{addPaymentMethodIban}
+          </button>
+        </cr-action-menu>
+      </template>
+    </cr-lazy-render>
+  </template>
 </div>
 <cr-link-row id="migrateCreditCards"
     hidden$="[[!checkIfMigratable_(creditCards,
@@ -71,8 +131,14 @@
     on-click="onMigrateCreditCardsClick_"
     label="$i18n{migrateCreditCardsLabel}"
     sub-label="[[migratableCreditCardsInfo_]]"></cr-link-row>
-<settings-payments-list id="paymentsList" class="list-frame"
-    credit-cards="[[creditCards]]" upi-ids="[[upiIds]]">
+<settings-payments-list id="paymentsList"
+    class="list-frame payment-list-margin-start"
+    credit-cards="[[creditCards]]" ibans="[[ibans]]"
+    on-dots-iban-menu-click="onDotsIbanMenuClick_"
+    on-remote-iban-menu-click="onRemoteEditIbanMenuClick_"
+    on-dots-card-menu-click="onCreditCardDotsMenuClick_"
+    on-remote-card-menu-click="onRemoteEditCreditCardClick_"
+    aria-label="$i18n{paymentsMethodsTableAriaLabel}">
 </settings-payments-list>
 
 <cr-action-menu id="creditCardSharedMenu" role-description="$i18n{menu}">
@@ -83,7 +149,7 @@
 
   <button id="menuRemoveCreditCard" class="dropdown-item"
       hidden$="[[!activeCreditCard_.metadata.isLocal]]"
-      on-click="onMenuRemoveCreditCardClick_">$i18n{removeCreditCard}</button>
+      on-click="onMenuRemoveCreditCardClick_">$i18n{delete}</button>
   <button id="menuClearCreditCard" class="dropdown-item"
       on-click="onMenuClearCreditCardClick_"
       hidden$="[[!activeCreditCard_.metadata.isCached]]">
@@ -102,14 +168,64 @@
   </button>
 </cr-action-menu>
 
+<cr-lazy-render id="ibanSharedActionMenu">
+  <template>
+    <cr-action-menu id="ibanSharedMenu" role-description="$i18n{menu}">
+      <button id="menuEditIban" class="dropdown-item"
+          on-click="onMenuEditIbanClick_">
+        $i18n{editIban}
+      </button>
+      <button id="menuRemoveIban" class="dropdown-item"
+          on-click="onMenuRemoveIbanClick_">
+        $i18n{delete}
+      </button>
+    </cr-action-menu>
+  </template>
+</cr-lazy-render>
+
 <template is="dom-if" if="[[showCreditCardDialog_]]" restamp>
   <settings-credit-card-edit-dialog credit-card="[[activeCreditCard_]]"
-      on-close="onCreditCardDialogClose_">
+      on-close="onCreditCardDialogClose_" on-save-credit-card="saveCreditCard_"
+      prefs="{{prefs}}">
   </settings-credit-card-edit-dialog>
+</template>
+<template is="dom-if" if="[[showIbanDialog_]]" restamp>
+  <settings-iban-edit-dialog iban="[[activeIban_]]"
+      on-close="onIbanDialogClose_" on-save-iban="onSaveIban_">
+  </settings-iban-edit-dialog>
 </template>
 
 <template is="dom-if" if="[[showVirtualCardUnenrollDialog_]]" restamp>
   <settings-virtual-card-unenroll-dialog credit-card="[[activeCreditCard_]]"
-      on-close="onVirtualCardUnenrollDialogClose_">
+      on-close="onVirtualCardUnenrollDialogClose_"
+      on-unenroll-virtual-card="unenrollVirtualCard_">
   </settings-virtual-card-unenroll-dialog>
+</template>
+
+<template is="dom-if" if="[[showLocalCreditCardRemoveConfirmationDialog_]]"
+    restamp>
+  <settings-simple-confirmation-dialog id="localCardDeleteConfirmDialog"
+      title-text="$i18n{removeLocalCreditCardConfirmationTitle}"
+      body-text="$i18n{removeLocalPaymentMethodConfirmationDescription}"
+      confirm-text="$i18n{delete}"
+      on-close="onLocalCreditCardRemoveConfirmationDialogClose_">
+  </settings-simple-confirmation-dialog>
+</template>
+
+<template is="dom-if" if="[[showLocalIbanRemoveConfirmationDialog_]]" restamp>
+  <settings-simple-confirmation-dialog id="localIbanDeleteConfirmationDialog"
+      title-text="$i18n{removeLocalIbanConfirmationTitle}"
+      body-text="$i18n{removeLocalPaymentMethodConfirmationDescription}"
+      confirm-text="$i18n{delete}"
+      on-close="onLocalIbanRemoveConfirmationDialogClose_">
+  </settings-simple-confirmation-dialog>
+</template>
+
+<template is="dom-if" if="[[showBulkRemoveCvcConfirmationDialog_]]" restamp>
+  <settings-simple-confirmation-dialog id="bulkDeleteCvcConfirmDialog"
+      title-text="$i18n{bulkRemoveCvcConfirmationTitle}"
+      body-text="$i18n{bulkRemoveCvcConfirmationDescription}"
+      confirm-text="$i18n{delete}"
+      on-close="onShowBulkRemoveCvcConfirmationDialogClose_">
+  </settings-simple-confirmation-dialog>
 </template>

@@ -4,12 +4,13 @@
 
 #include "chrome/browser/new_tab_page/modules/recipes/recipes_service.h"
 
+#include <list>
+
 #include "base/containers/contains.h"
-#include "base/containers/cxx20_erase.h"
+#include "base/hash/hash.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/new_tab_page/modules/recipes/time_format_util.h"
 #include "chrome/browser/profiles/profile.h"
@@ -170,7 +171,7 @@ void RecipesService::OnDataLoaded(network::SimpleURLLoader* loader,
                                   std::unique_ptr<std::string> response) {
   auto net_error = loader->NetError();
   bool loaded_from_cache = loader->LoadedFromCache();
-  base::EraseIf(loaders_, [loader](const auto& target) {
+  std::erase_if(loaders_, [loader](const auto& target) {
     return loader == target.get();
   });
 

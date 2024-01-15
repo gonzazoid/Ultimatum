@@ -4,134 +4,103 @@
 
 #include "ash/wm/desks/desk_button_base.h"
 
-#include "ash/style/ash_color_provider.h"
-#include "ash/style/color_util.h"
-#include "ash/style/style_util.h"
+#include "ash/wm/desks/desk_bar_view_base.h"
 #include "ash/wm/overview/overview_utils.h"
-#include "ash/wm/wm_highlight_item_border.h"
+#include "ash/wm/wm_constants.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
-#include "ui/gfx/canvas.h"
-#include "ui/gfx/text_constants.h"
+#include "ui/views/border.h"
+#include "ui/views/controls/focus_ring.h"
 #include "ui/views/controls/highlight_path_generator.h"
+#include "ui/views/view_utils.h"
 
 namespace ash {
 
+namespace {
+
+constexpr int kFocusRingRadius = 16;
+
+}  // namespace
+
 DeskButtonBase::DeskButtonBase(const std::u16string& text,
                                bool set_text,
-                               base::RepeatingClosure pressed_callback,
-                               int border_corner_radius,
-                               int corner_radius)
-    : LabelButton(pressed_callback, std::u16string()),
-      corner_radius_(corner_radius),
+                               DeskBarViewBase* bar_view,
+                               base::RepeatingClosure pressed_callback)
+    : LabelButton(pressed_callback),
+      bar_view_(bar_view),
       pressed_callback_(pressed_callback) {
   DCHECK(!text.empty());
-  if (set_text)
+  if (set_text) {
     SetText(text);
+  }
+
+  // Call `SetPaintToLayer` explicitly here since we need to do the layer
+  // animations on `this`.
   SetPaintToLayer();
   layer()->SetFillsBoundsOpaquely(false);
-  SetHorizontalAlignment(gfx::ALIGN_CENTER);
 
-  // Do not show highlight on hover and focus. Since the button will be painted
-  // with a background, see `should_paint_background_` for more details.
-  StyleUtil::SetUpInkDropForButton(this, gfx::Insets(),
-                                   /*highlight_on_hover=*/false,
-                                   /*highlight_on_focus=*/false);
-  SetFocusPainter(nullptr);
-  SetFocusBehavior(views::View::FocusBehavior::ALWAYS);
+  SetHorizontalAlignment(gfx::ALIGN_CENTER);
 
   SetAccessibleName(text);
   SetTooltipText(text);
 
-  SetBorder(std::make_unique<WmHighlightItemBorder>(border_corner_radius));
-  views::InstallRoundRectHighlightPathGenerator(this, GetInsets(),
-                                                corner_radius);
-  SetInstallFocusRingOnFocus(false);
+  // Create an empty border, otherwise in `LabelButton` a default border with
+  // non-empty insets will be created.
+  SetBorder(views::CreateEmptyBorder(gfx::Insets()));
 
-  UpdateBorderState();
+  views::InstallRoundRectHighlightPathGenerator(
+      this, gfx::Insets(kWindowMiniViewFocusRingHaloInset), kFocusRingRadius);
+  views::FocusRing* focus_ring = views::FocusRing::Get(this);
+  focus_ring->SetOutsetFocusRingDisabled(true);
+  focus_ring->SetColorId(ui::kColorAshFocusRing);
+  if (bar_view_->type() == DeskBarViewBase::Type::kOverview) {
+    focus_ring->SetHasFocusPredicate(
+        base::BindRepeating([](const views::View* view) {
+          const auto* v = views::AsViewClass<DeskButtonBase>(view);
+          CHECK(v);
+          return v->is_focused();
+        }));
+  }
 }
 
 DeskButtonBase::~DeskButtonBase() = default;
 
-WmHighlightItemBorder* DeskButtonBase::GetBorderPtr() {
-  return static_cast<WmHighlightItemBorder*>(GetBorder());
-}
-
 void DeskButtonBase::OnFocus() {
-  UpdateOverviewHighlightForFocusAndSpokenFeedback(this);
-  UpdateBorderState();
+  if (bar_view_->type() == DeskBarViewBase::Type::kOverview) {
+    MoveFocusToView(this);
+  }
+  UpdateFocusState();
   View::OnFocus();
 }
 
 void DeskButtonBase::OnBlur() {
-  UpdateBorderState();
+  UpdateFocusState();
   View::OnBlur();
-}
-
-void DeskButtonBase::OnPaintBackground(gfx::Canvas* canvas) {
-  if (should_paint_background_) {
-    cc::PaintFlags flags;
-    flags.setAntiAlias(true);
-    flags.setStyle(cc::PaintFlags::kFill_Style);
-    flags.setColor(background_color_);
-    canvas->DrawRoundRect(gfx::RectF(paint_contents_only_ ? GetContentsBounds()
-                                                          : GetLocalBounds()),
-                          corner_radius_, flags);
-  }
-}
-
-void DeskButtonBase::OnThemeChanged() {
-  LabelButton::OnThemeChanged();
-  background_color_ = AshColorProvider::Get()->GetControlsLayerColor(
-      AshColorProvider::ControlsLayerType::kControlBackgroundColorInactive);
-  StyleUtil::ConfigureInkDropAttributes(this, StyleUtil::kBaseColor);
-  UpdateBorderState();
-  SchedulePaint();
 }
 
 views::View* DeskButtonBase::GetView() {
   return this;
 }
 
-void DeskButtonBase::MaybeActivateHighlightedView() {
+void DeskButtonBase::MaybeActivateFocusedView() {
   pressed_callback_.Run();
 }
 
-void DeskButtonBase::MaybeCloseHighlightedView(bool primary_action) {}
+void DeskButtonBase::MaybeCloseFocusedView(bool primary_action) {}
 
-void DeskButtonBase::MaybeSwapHighlightedView(bool right) {}
+void DeskButtonBase::MaybeSwapFocusedView(bool right) {}
 
-void DeskButtonBase::OnViewHighlighted() {
-  UpdateBorderState();
+void DeskButtonBase::OnFocusableViewFocused() {
+  UpdateFocusState();
+  bar_view_->ScrollToShowViewIfNecessary(this);
 }
 
-void DeskButtonBase::OnViewUnhighlighted() {
-  UpdateBorderState();
+void DeskButtonBase::OnFocusableViewBlurred() {
+  UpdateFocusState();
 }
 
-void DeskButtonBase::SetShouldPaintBackground(bool should_paint_background) {
-  if (should_paint_background_ == should_paint_background)
-    return;
-
-  should_paint_background_ = should_paint_background;
-  SchedulePaint();
-}
-
-void DeskButtonBase::UpdateBorderState() {
-  GetBorderPtr()->SetFocused(IsViewHighlighted() && GetEnabled());
-  SchedulePaint();
-}
-
-void DeskButtonBase::set_paint_contents_only(bool paint_contents_only) {
-  paint_contents_only_ = paint_contents_only;
-}
-
-void DeskButtonBase::UpdateBackgroundColor() {
-  const auto* color_provider = AshColorProvider::Get();
-  background_color_ = color_provider->GetControlsLayerColor(
-      AshColorProvider::ControlsLayerType::kControlBackgroundColorInactive);
-  if (!GetEnabled())
-    background_color_ = ColorUtil::GetDisabledColor(background_color_);
+void DeskButtonBase::UpdateFocusState() {
+  views::FocusRing::Get(this)->SchedulePaint();
 }
 
 BEGIN_METADATA(DeskButtonBase, views::LabelButton)

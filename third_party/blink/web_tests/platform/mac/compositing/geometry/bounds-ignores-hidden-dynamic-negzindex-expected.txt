@@ -8,11 +8,10 @@
     },
     {
       "name": "LayoutNGBlockFlow (positioned) DIV class='composited'",
-      "bounds": [150, 150],
-      "contentsOpaqueForText": true
+      "bounds": [150, 150]
     },
     {
-      "name": "LayoutImage (positioned) IMG class='to-visible'",
+      "name": "LayoutImage (positioned, block) IMG class='to-visible'",
       "position": [400, 150],
       "bounds": [100, 100],
       "contentsOpaque": true,
@@ -21,11 +20,10 @@
     {
       "name": "LayoutNGBlockFlow (positioned) DIV class='composited'",
       "bounds": [150, 150],
-      "contentsOpaqueForText": true,
       "transform": 1
     },
     {
-      "name": "LayoutNGBlockFlow PRE id='layers'",
+      "name": "LayoutNGBlockFlow (children-inline) PRE id='layers'",
       "position": [8, 8],
       "bounds": [784, 15],
       "drawsContent": false

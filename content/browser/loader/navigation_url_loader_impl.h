@@ -5,11 +5,13 @@
 #ifndef CONTENT_BROWSER_LOADER_NAVIGATION_URL_LOADER_IMPL_H_
 #define CONTENT_BROWSER_LOADER_NAVIGATION_URL_LOADER_IMPL_H_
 
+#include <optional>
+
+#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "content/browser/loader/navigation_url_loader.h"
-#include "content/browser/loader/single_request_url_loader_factory.h"
 #include "content/browser/navigation_subresource_loader_params.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/content_browser_client.h"
@@ -18,15 +20,20 @@
 #include "content/public/browser/weak_document_ptr.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
+#include "net/base/load_timing_info.h"
 #include "net/url_request/url_request.h"
 #include "ppapi/buildflags/buildflags.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
+#include "services/network/public/cpp/record_ontransfersizeupdate_utils.h"
+#include "services/network/public/cpp/single_request_url_loader_factory.h"
 #include "services/network/public/mojom/accept_ch_frame_observer.mojom.h"
+#include "services/network/public/mojom/service_worker_router_info.mojom-forward.h"
+#include "services/network/public/mojom/shared_dictionary_access_observer.mojom.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
 #include "services/network/public/mojom/url_loader_factory.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/navigation/navigation_policy.h"
+#include "third_party/blink/public/common/tokens/tokens.h"
 
 namespace net {
 struct RedirectInfo;
@@ -35,10 +42,10 @@ struct RedirectInfo;
 namespace content {
 
 class BrowserContext;
+class FrameTreeNode;
 class NavigationEarlyHintsManager;
 class NavigationLoaderInterceptor;
 class PrefetchedSignedExchangeCache;
-class SignedExchangePrefetchMetricRecorder;
 class SignedExchangeRequestHandler;
 class StoragePartition;
 class StoragePartitionImpl;
@@ -60,6 +67,10 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
           prefetched_signed_exchange_cache,
       NavigationURLLoaderDelegate* delegate,
       mojo::PendingRemote<network::mojom::CookieAccessObserver> cookie_observer,
+      mojo::PendingRemote<network::mojom::TrustTokenAccessObserver>
+          trust_token_observer,
+      mojo::PendingRemote<network::mojom::SharedDictionaryAccessObserver>
+          shared_dictionary_observer,
       mojo::PendingRemote<network::mojom::URLLoaderNetworkServiceObserver>
           url_loader_network_observer,
       mojo::PendingRemote<network::mojom::DevToolsObserver> devtools_observer,
@@ -93,6 +104,17 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
       StoragePartitionImpl* partition);
 
  private:
+  FRIEND_TEST_ALL_PREFIXES(NavigationURLLoaderImplTest,
+                           OnAcceptCHFrameReceivedUKM);
+
+  // Creates a SharedURLLoaderFactory for network-service-bound requests.
+  static scoped_refptr<network::SharedURLLoaderFactory>
+  CreateNetworkLoaderFactory(BrowserContext* browser_context,
+                             StoragePartitionImpl* storage_partition,
+                             FrameTreeNode* frame_tree_node,
+                             const ukm::SourceIdObj& ukm_id,
+                             bool* bypass_redirect_checks);
+
   // Starts the loader by finalizing loader factories initialization and
   // calling Restart().
   // This is called only once (while Restart can be called multiple times).
@@ -100,8 +122,6 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
   void StartImpl(
       scoped_refptr<PrefetchedSignedExchangeCache>
           prefetched_signed_exchange_cache,
-      scoped_refptr<SignedExchangePrefetchMetricRecorder>
-          signed_exchange_prefetch_metric_recorder,
       mojo::PendingRemote<network::mojom::URLLoaderFactory> factory_for_webui,
       std::string accept_langs);
 
@@ -114,8 +134,6 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
 
   void CreateInterceptors(scoped_refptr<PrefetchedSignedExchangeCache>
                               prefetched_signed_exchange_cache,
-                          scoped_refptr<SignedExchangePrefetchMetricRecorder>
-                              signed_exchange_prefetch_metric_recorder,
                           const std::string& accept_langs);
 
   // This could be called multiple times to follow a chain of redirects.
@@ -136,11 +154,12 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
   // to initially elect to handle a request, and later decide to fallback to
   // the default behavior. This is needed for service worker network fallback
   // and signed exchange (SXG) fallback redirect.
-  void FallbackToNonInterceptedRequest(bool reset_subresource_loader_params);
+  void FallbackToNonInterceptedRequest(
+      bool reset_subresource_loader_params,
+      const ResponseHeadUpdateParams& head_update_params);
 
   scoped_refptr<network::SharedURLLoaderFactory>
-  PrepareForNonInterceptedRequest(uint32_t* out_options);
-
+  PrepareForNonInterceptedRequest();
 
 #if BUILDFLAG(ENABLE_PLUGINS)
   void CheckPluginAndContinueOnReceiveResponse(
@@ -156,6 +175,7 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
       bool is_download);
 
   bool MaybeCreateLoaderForResponse(
+      const network::URLLoaderCompletionStatus& status,
       network::mojom::URLResponseHeadPtr* response);
 
   std::vector<std::unique_ptr<blink::URLLoaderThrottle>>
@@ -165,8 +185,6 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
   CreateSignedExchangeRequestHandler(
       const NavigationRequestInfo& request_info,
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-      scoped_refptr<SignedExchangePrefetchMetricRecorder>
-          signed_exchange_prefetch_metric_recorder,
       std::string accept_langs);
 
   void ParseHeaders(const GURL& url,
@@ -190,13 +208,13 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
   void OnReceiveResponse(
       network::mojom::URLResponseHeadPtr head,
       mojo::ScopedDataPipeConsumerHandle response_body,
-      absl::optional<mojo_base::BigBuffer> cached_metadata) override;
+      std::optional<mojo_base::BigBuffer> cached_metadata) override;
   void OnReceiveRedirect(const net::RedirectInfo& redirect_info,
                          network::mojom::URLResponseHeadPtr head) override;
   void OnUploadProgress(int64_t current_position,
                         int64_t total_size,
                         OnUploadProgressCallback callback) override;
-  void OnTransferSizeUpdated(int32_t transfer_size_diff) override {}
+  void OnTransferSizeUpdated(int32_t transfer_size_diff) override;
   void OnComplete(const network::URLLoaderCompletionStatus& status) override;
 
   // network::mojom::AcceptCHFrameObserver implementation
@@ -221,8 +239,7 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
   raw_ptr<NavigationURLLoaderDelegate, DanglingUntriaged> delegate_;
   raw_ptr<BrowserContext> browser_context_;
   raw_ptr<StoragePartitionImpl> storage_partition_;
-  raw_ptr<ServiceWorkerMainResourceHandle, DanglingUntriaged>
-      service_worker_handle_;
+  raw_ptr<ServiceWorkerMainResourceHandle> service_worker_handle_;
 
   std::unique_ptr<network::ResourceRequest> resource_request_;
   std::unique_ptr<NavigationRequestInfo> request_info_;
@@ -235,7 +252,6 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
 
   const int frame_tree_node_id_;
   const GlobalRequestID global_request_id_;
-  const WeakDocumentPtr initiator_document_;
   net::RedirectInfo redirect_info_;
   int redirect_limit_ = net::URLRequest::kMaxRedirects;
   int accept_ch_restart_limit_ = net::URLRequest::kMaxRedirects;
@@ -250,7 +266,7 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
   net::HttpRequestHeaders url_loader_modified_headers_;
   net::HttpRequestHeaders url_loader_modified_cors_exempt_headers_;
 
-  absl::optional<SubresourceLoaderParams> subresource_loader_params_;
+  std::optional<SubresourceLoaderParams> subresource_loader_params_;
 
   std::vector<std::unique_ptr<NavigationLoaderInterceptor>> interceptors_;
   size_t interceptor_index_ = 0;
@@ -278,20 +294,7 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
   // the case that the response is intercepted by download, and OnComplete()
   // is already called while we are transferring the `url_loader_` and
   // response body to download code.
-  absl::optional<network::URLLoaderCompletionStatus> status_;
-
-  // Before creating this URLLoaderRequestController on UI thread, the
-  // embedder may have elected to proxy the URLLoaderFactory receiver, in
-  // which case these fields will contain input (remote) and output (receiver)
-  // endpoints for the proxy. If this controller is handling a receiver for
-  // which proxying is supported, receivers will be plumbed through these
-  // endpoints.
-  //
-  // Note that these are only used for receivers that go to the Network
-  // Service.
-  mojo::PendingReceiver<network::mojom::URLLoaderFactory>
-      proxied_factory_receiver_;
-  mojo::PendingRemote<network::mojom::URLLoaderFactory> proxied_factory_remote_;
+  std::optional<network::URLLoaderCompletionStatus> status_;
 
   // The schemes that this loader can use. For anything else we'll try
   // external protocol handlers.
@@ -302,10 +305,7 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
   // (eg: NavigationLoaderInterceptor for loading a local Web Bundle file).
   bool bypass_redirect_checks_ = false;
 
-  network::mojom::URLResponseHeadPtr head_;
   mojo::ScopedDataPipeConsumerHandle response_body_;
-
-  blink::NavigationDownloadPolicy download_policy_;
 
   // Factories to handle navigation requests for non-network resources.
   ContentBrowserClient::NonNetworkURLLoaderFactoryMap
@@ -347,6 +347,13 @@ class CONTENT_EXPORT NavigationURLLoaderImpl
 
   // UKM source id used for recording events associated with navigation loading.
   const ukm::SourceId ukm_source_id_;
+
+  // If this navigation was intercepted by a worker but the worker didn't handle
+  // it, we still expose the worker timing as part of the response.
+  base::TimeTicks intercepting_worker_start_time_;
+  base::TimeTicks intercepting_worker_ready_time_;
+
+  network::mojom::ServiceWorkerRouterInfoPtr intercepting_worker_router_info_;
 
   base::WeakPtrFactory<NavigationURLLoaderImpl> weak_factory_{this};
 };

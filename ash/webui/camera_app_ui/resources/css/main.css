@@ -3,21 +3,6 @@
  * found in the LICENSE file. */
 
 :root {
-  /* Standard CrOS styles */
-  --blue-300-rgb: 138, 180, 248;
-  --blue-300: rgb(var(--blue-300-rgb));
-  --blue-500: rgb(66, 133, 244);
-  --blue-600: rgb(26, 115, 232);
-  --grey-100: rgb(241, 243, 244);
-  --grey-200-rgb: 233, 234, 237;
-  --grey-200: rgb(var(--grey-200-rgb));
-  --grey-400: rgb(189, 193, 198);
-  --grey-500: rgb(154, 160, 166);
-  --grey-700: rgb(95, 99, 104);
-  --grey-900-rgb: 32, 33, 36;
-  --grey-900: rgb(var(--grey-900-rgb));
-  --yellow-300: rgb(253, 214, 99);
-
   --fast1-duration: 100ms;
   --fast2-duration: 200ms;
   --moderate1-duration: 250ms;
@@ -30,26 +15,33 @@
   --exit-easing: cubic-bezier(0.4, 0, 1, 1);
 
   /* App specific settings */
+  --big-icon: 48px;
   --bottom-line: 44px;
   --default-font-family: 'Google Sans', sans-serif;
   --fixed-width-font-family: 'Cousine', monospace;
   --left-line: 44px;
   --right-line: 50px;
+  --small-icon: 40px;
+  --top-line: 48px;
 
   /* From https://www.w3.org/TR/css-backgrounds-3/#corner-overlap. */
   --border-radius-rounded-with-short-side: 9999999px;
+
+  /* These are calculated and overridden at runtime in views/camera/layout.ts */
+  --preview-content-height: 0;
+  --preview-content-left: 0;
+  --preview-content-top: 0;
+  --preview-content-width: 0;
+  --preview-viewport-height: 0;
+  --preview-viewport-width: 0;
 }
 
 html {
   height: 100%;  /* Required for printing. */
 }
 
-audio {
-  display: none;
-}
-
 body {
-  background: var(--grey-900);
+  background: var(--cros-sys-app_base);
   bottom: 0;
   font-family: var(--default-font-family);
   height: 100%;
@@ -80,21 +72,8 @@ input[type=checkbox] {
   -webkit-appearance: none;
 }
 
-[tabindex] {
-  outline: none; /* Prevent default focus ring style. */
-}
-
 [i18n-text] {
   user-select: none;
-}
-
-.cancel-animate {
-  animation: none !important;
-  transition: none !important;
-}
-
-.circle button {
-  border-radius: 50%;
 }
 
 .buttons {
@@ -104,8 +83,7 @@ input[type=checkbox] {
   pointer-events: none;
 }
 
-.buttons button:active,
-.buttons input:active {
+.buttons :is(button, input):enabled:active {
   transform: scale(1.07);
 }
 
@@ -114,10 +92,15 @@ input[type=checkbox] {
 .menu-header .icon,
 .menu-item .icon,
 .menu-item.expandable::after {
+  align-items: center;
+  /* TODO(pihsun): Remove these two after all background image
+   * usage are removed. */
   background-position: center;
   background-repeat: no-repeat;
+  display: flex;
   flex-shrink: 0;
   height: 40px;
+  justify-content: center;
   width: 40px;
 }
 
@@ -145,7 +128,7 @@ input[type=radio].icon {
 
 .top-stripe {
   position: absolute;
-  top: 48px;
+  top: var(--top-line);
   transform: translateY(-50%);
 }
 
@@ -177,12 +160,6 @@ body.taking.video #options-group :not(#open-ptz-panel) {
   transform: translateX(50%);
 }
 
-.horizontal-center-stripe {
-  left: 50%;
-  position: absolute;
-  transform: translateX(-50%);
-}
-
 .vertical-center-stripe {
   position: absolute;
   top: 50%;
@@ -194,10 +171,6 @@ body.taking.video #options-group :not(#open-ptz-panel) {
 }
 
 .top-stripe.left-stripe {
-  transform: translate(-50%, -50%);
-}
-
-.top-stripe.horizontal-center-stripe {
   transform: translate(-50%, -50%);
 }
 
@@ -220,132 +193,22 @@ body.tablet-landscape .actions-group {
   flex-direction: column-reverse;
 }
 
-body.doc-mode-reviewing #mode-selector {
-  visibility: hidden;
-}
-
-#mode-selector {
-  --fade-padding: 24px;
-  --scrollbar-height: 4px;
-
+mode-selector {
   left: calc(var(--left-line) * 2);
   right: calc(var(--right-line) * 2);
+
+  body:is(.taking.video, .should-handle-intent-result, .doc-mode-reviewing) & {
+    display: none;
+  }
 }
 
-#mode-selector::before,
-#mode-selector::after {
-  background: linear-gradient(to right, var(--grey-900), transparent);
-  content: '';
-  display: block;
-  height: calc(100% - var(--scrollbar-height));
-  pointer-events: none;
-  position: absolute;
-  top: 0;
-  width: var(--fade-padding);
-  z-index: 2;
-}
-
-#mode-selector::before {
-  left: 0;
-}
-
-#mode-selector::after {
-  right: 0;
-  transform: scaleX(-1);
-}
-
-#modes-group {
-  display: block;
-  overflow: auto;
-  padding: 10px 0;
-  pointer-events: auto;
-  text-align: center;
-  user-select: none;
-  white-space: nowrap;
-}
-
-body:not(.streaming) #modes-group,
-body.taking #modes-group,
-body.taking:not(.video) #shutters-group,
-body.snapshotting #video-snapshot {
+:is(#start-takephoto, #recordvideo, #video-snapshot):disabled {
   opacity: 0.38;
-}
-
-#modes-group::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 2px;
-  height: auto;
-  width: auto;
-}
-
-#modes-group::-webkit-scrollbar {
-  height: var(--scrollbar-height);
-  width: auto;
-}
-
-body:is(.taking.video, .should-handle-intent-result) #modes-group {
-  display: none;
-}
-
-#modes-group .mode-item {
-  display: inline-block;
-  font-size: 0; /* Remove space between inline-block. */
-  margin: 0 8px;
-  position: relative;
-}
-
-#modes-group .mode-item.hide {
-  display: none;
-}
-
-#modes-group .mode-item.first {
-  margin-inline-start: var(--fade-padding);
-}
-
-#modes-group .mode-item.last {
-  margin-inline-end: var(--fade-padding);
-}
-
-#modes-group .mode-item input:active {
-  /* Don't scale when active to prevent twitching. See b/197583162. */
-  transform: none;
-}
-
-div.mode-item>input {
-  border-radius: 16px/50%;
-}
-
-div.mode-item>span {
-  border-radius: 16px/50%;
-  color: white;
-  display: inline-block;
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 16px;
-  padding: 8px 12px;
-  position: relative;
-  z-index: 0;
-}
-
-.mode-item>input {
-  height: 100%;
-  outline-offset: 7px;
-  position: absolute;
-  width: 100%;
-  z-index: 1;
-}
-
-.mode-item>input:checked + span {
-  background: white;
-  box-shadow: 0 2px 3px rgba(32, 33, 36, 0.3);
-  color: black;
-  text-shadow: none;
 }
 
 button.shutter {
   display: none;
   height: 60px;
-  outline-offset: 9px;
   width: 60px;
   z-index: 1;  /* On top of transforming switch-mode buttons. */
 }
@@ -367,36 +230,51 @@ body:is(:not(.recording), .enable-gif-recording, .should-handle-intent-result) :
 }
 
 #video-snapshot {
-  background-size: 44px 44px;
-  height: 44px;
-  width: 44px;
+  height: 46px;
+  width: 46px;
 }
 
 #start-takephoto,
 #video-snapshot {
-  background-image: url(/images/camera_shutter_photo_start.svg);
+  position: relative;
 }
 
-body:not(.taking) #start-takephoto:hover,
-#video-snapshot:hover {
-  background-image: url(/images/camera_shutter_photo_start_hover.svg);
+:is(#start-takephoto, #video-snapshot) svg-wrapper {
+  color: var(--cros-sys-inverse_surface);
+  --secondary-color: var(--cros-sys-white);
 }
 
-body:not(.taking) #start-takephoto:active,
-#video-snapshot:active {
-  background-image: url(/images/camera_shutter_photo_start_active.svg);
+:is(#start-takephoto, #video-snapshot, #stop-takephoto):enabled:hover::after {
+  background: var(--cros-sys-hover_on_prominent);
+  border-radius: 50%;
+  content: '';
+  display: block;
+  inset: 0;
+  position: absolute;
+}
+
+:is(#start-takephoto, #video-snapshot, #stop-takephoto):enabled:active
+  svg-wrapper {
+  color: var(--cros-sys-secondary);
 }
 
 body.taking #start-takephoto:active {
   transform: unset;
 }
 
-#stop-takephoto {
-  background-image: url(/images/camera_shutter_photo_stop.svg);
+#stop-takephoto svg-wrapper {
+  color: var(--cros-sys-inverse_surface);
+  --secondary-color: var(--cros-sys-secondary_container);
 }
 
-#stop-takephoto:hover {
-  background-image: url(/images/camera_shutter_photo_stop_hover.svg);
+#recordvideo-container {
+  display: relative;
+  /*
+   * overflow: visible is needed since the progress bar for gif mode is larger
+   * than the button. This can't be set on the button itself since the ripple
+   * effect should be contained inside the button.
+   */
+  overflow: visible;
 }
 
 #recordvideo {
@@ -409,39 +287,40 @@ body.taking #start-takephoto:active {
 }
 
 #pause-recordvideo {
-  --size: 44px;
+  --size: 46px;
 }
 
 #recordvideo,
 #pause-recordvideo {
   --dot-size: 25%;
-  --durtaion: 180ms;
-  --red: #f44336;
+  --duration: 180ms;
   --square-delay: 45ms;
   --square-size: calc(100% / 3);
-  --white: #ffffff;
 
-  background: var(--white);
+  background: var(--cros-sys-white);
   border-radius: 50%;
   height: var(--size);
   position: relative;
-  transition: var(--durtaion) var(--standard-easing);
+  transition: var(--duration) var(--standard-easing);
   width: var(--size);
 }
 
-#recordvideo:hover,
-#pause-recordvideo:hover {
-  --red: #f44336;
-  --white: #e8eaed;
+:is(#recordvideo, #pause-recordvideo):hover::after {
+  background: var(--cros-sys-hover_on_prominent);
+  border-radius: 50%;
+  content: '';
+  display: block;
+  inset: 0;
+  position: absolute;
 }
 
-body.taking.video #recordvideo:hover {
-  --red: #d93025;
+body.taking.video #recordvideo:hover::after {
+  background: var(--cros-sys-hover_on_subtle);
 }
 
 #recordvideo .red-dot,
 #pause-recordvideo .red-dot {
-  background: var(--red);
+  background: var(--cros-ref-error40);
   border-radius: 50%;
   box-sizing: border-box;
   height: var(--dot-size);
@@ -449,7 +328,7 @@ body.taking.video #recordvideo:hover {
   position: absolute;
   top: 50%;
   transform: translate(-50%, -50%);
-  transition: var(--durtaion) var(--standard-easing);
+  transition: var(--duration) var(--standard-easing);
   width: var(--dot-size);
 }
 
@@ -463,14 +342,14 @@ body:not(.recording-ui-paused).video #pause-recordvideo .red-dot {
 }
 
 #recordvideo .white-square {
-  background: var(--white);
+  background: var(--cros-sys-white);
   border-radius: 2px;
   height: 0;
   left: 50%;
   opacity: 0;
   position: absolute;
   top: 50%;
-  transition: var(--durtaion) var(--square-delay) var(--standard-easing);
+  transition: var(--duration) var(--square-delay) var(--standard-easing);
   width: 0;
 }
 
@@ -485,16 +364,20 @@ body.taking.video #recordvideo .white-square {
 #pause-recordvideo .two-bars {
   --bar-size: 20px;
 
-  background-image: url(/images/camera_shutter_video_pause.svg);
   height: var(--bar-size);
   left: calc(50% - var(--bar-size) / 2);
+  overflow: hidden;
   position: absolute;
   top: calc(50% - var(--bar-size) / 2);
   width: var(--bar-size);
 }
 
+#pause-recordvideo .two-bars svg-wrapper {
+  color: var(--cros-sys-secondary_container);
+}
+
 body.video.recording.recording-ui-paused #recordvideo {
-  --size: 44px;
+  --size: 46px;
 }
 
 body.video.recording-ui-paused #pause-recordvideo {
@@ -502,7 +385,7 @@ body.video.recording-ui-paused #pause-recordvideo {
 }
 
 body.video.recording-ui-paused #pause-recordvideo .two-bars {
-  --bar-size: 0px;
+  --bar-size: 0;
 }
 
 body.video.taking #recordvideo {
@@ -510,24 +393,26 @@ body.video.taking #recordvideo {
   background: transparent;
 }
 
-body:is(:not(.video), .record-type-gif) #toggle-mic,
-body:not(.multi-camera) #switch-device {
+body:is(:not(.video), .record-type-gif, .record-type-time-lapse) #toggle-mic,
+body:not(.multi-camera) switch-device-button {
   visibility: hidden;
 }
 
 #camera-mode {
-  background-image: url(/images/camera_mode_photo.svg);
   height: 40px;
   visibility: hidden;
   width: 40px;
+
+  :is(svg-wrapper) {
+    display: none;
+  }
 }
 
-body.video #camera-mode {
-  background-image: url(/images/camera_mode_video.svg);
-}
-
-body.portrait #camera-mode {
-  background-image: url(/images/camera_mode_portrait.svg);
+body:not(.scan):not(.video):not(.portrait) #camera-mode svg-wrapper.photo,
+body.scan #camera-mode svg-wrapper.scan,
+body.video #camera-mode svg-wrapper.video,
+body.portrait #camera-mode svg-wrapper.portrait {
+  display: unset;
 }
 
 body.mode-switching:not(.streaming) #camera-mode {
@@ -535,7 +420,7 @@ body.mode-switching:not(.streaming) #camera-mode {
 }
 
 #timer-tick-msg {
-  color: white;
+  color: var(--cros-sys-on_surface);
   font-size: 72px;
   visibility: hidden;
 }
@@ -548,48 +433,7 @@ body.mode-switching:not(.streaming) #camera-mode {
   visibility: visible;
 }
 
-#switch-device {
-  background-image: url(/images/camera_button_switch_device.svg);
-  height: var(--big-icon);
-  outline-offset: 8px;
-  width: var(--big-icon);
-}
-
-#switch-device.animate {
-  animation: switch-device-rotate 350ms ease-out;
-}
-
-@keyframes switch-device-rotate {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(-180deg);
-  }
-}
-
-body.doc-mode-reviewing #gallery-enter {
-  visibility: hidden;
-}
-
-#gallery-enter {
-  background-color: rgba(24, 24, 24, 1);
-  height: var(--big-icon);
-  overflow: hidden;
-  width: var(--big-icon);
-}
-
-#gallery-enter>img {
-  height: 100%;
-  object-fit: cover;
-  width: 100%;
-}
-
-#gallery-enter>img:not(.draggable) {
-  pointer-events: none;
-}
-
-body:is(.taking.video, .should-handle-intent-result) #gallery-enter {
+body:is(.taking.video, .should-handle-intent-result, .doc-mode-reviewing) gallery-button {
   display: none;
 }
 
@@ -627,35 +471,70 @@ body:not(.enable-ptz) #open-ptz-panel {
   display: none;
 }
 
-#open-ptz-panel {
-  --ripple-spread-ratio: 2;
-  --ripple-start-radius: 18px;
-
-  background-image: url(/images/camera_button_ptz_panel_off.svg);
+#open-mirror-panel,
+#open-grid-panel,
+#open-timer-panel,
+#open-ptz-panel,
+#toggle-mic {
+  border-radius: 12px;
 }
 
+#open-mirror-panel,
+#open-grid-panel,
+#toggle-mic {
+  .on-icon {
+    display: none;
+  }
+}
+
+body:not(.mic) #toggle-mic {
+  background: var(--cros-sys-error_container);
+  .off-icon {
+    color: var(--cros-sys-on_error_container);
+  }
+}
+
+body.mirror #open-mirror-panel,
+body.grid #open-grid-panel,
+body:is(.timer-3s, .timer-10s) #open-timer-panel,
 body.view-ptz-panel #open-ptz-panel {
-  background-image: url(/images/camera_button_ptz_panel_on.svg);
+  background: var(--cros-sys-primary_container);
 }
 
-body.timer-3s #open-timer-panel {
-  background-image: url(/images/camera_button_timer_on_3s.svg);
-}
-
-body.timer-10s #open-timer-panel {
-  background-image: url(/images/camera_button_timer_on_10s.svg);
+body.mirror #open-mirror-panel,
+body.grid #open-grid-panel,
+body.mic #toggle-mic {
+  .off-icon {
+    display: none;
+  }
+  .on-icon {
+    display: block;
+  }
 }
 
 #open-timer-panel {
-  background-image: url(/images/camera_button_timer_off.svg);
+  .on-3s-icon,
+  .on-10s-icon {
+    display: none;
+  }
 }
 
-body.grid #open-grid-panel {
-  background-image: url(/images/camera_button_grid_on.svg);
+body.timer-3s #open-timer-panel {
+  .off-icon {
+    display: none;
+  }
+  .on-3s-icon {
+    display: block;
+  }
 }
 
-#open-grid-panel {
-  background-image: url(/images/camera_button_grid_off.svg);
+body.timer-10s #open-timer-panel {
+  .off-icon {
+    display: none;
+  }
+  .on-10s-icon {
+    display: block;
+  }
 }
 
 body.scan #open-grid-panel,
@@ -668,26 +547,6 @@ body.scan #preview-grid {
   display: none;
 }
 
-body.mirror #open-mirror-panel {
-  background-image: url(/images/camera_button_mirror_on.svg);
-}
-
-#open-mirror-panel {
-  background-image: url(/images/camera_button_mirror_off.svg);
-}
-
-#toggle-mic:checked {
-  background-image: url(/images/camera_button_mic_on.svg);
-}
-
-#toggle-mic {
-  background-image: url(/images/camera_button_mic_off.svg);
-}
-
-#open-settings {
-  background-image: url(/images/camera_button_settings.svg);
-}
-
 body.should-handle-intent-result #open-settings {
   display: none;
 }
@@ -697,8 +556,6 @@ body.doc-mode-reviewing #open-settings {
 }
 
 #view-camera,
-#view-crop-document,
-#view-document-mode-dialog,
 #view-document-review,
 #view-option-panel,
 #view-ptz-panel,
@@ -710,7 +567,6 @@ body.doc-mode-reviewing #open-settings {
 #view-photo-resolution-settings,
 #view-video-resolution-settings,
 #view-expert-settings,
-#view-message-dialog,
 #view-warning,
 #view-splash {
   bottom: 0;
@@ -727,8 +583,6 @@ body.doc-mode-reviewing #open-settings {
 }
 
 body.view-camera #view-camera,
-body.view-crop-document #view-crop-document,
-body.view-document-mode-dialog #view-document-mode-dialog,
 body.view-document-review #view-document-review,
 body.view-option-panel #view-option-panel,
 body.view-ptz-panel #view-ptz-panel,
@@ -740,7 +594,6 @@ body.view-photo-aspect-ratio-settings #view-photo-aspect-ratio-settings,
 body.view-photo-resolution-settings #view-photo-resolution-settings,
 body.view-video-resolution-settings #view-video-resolution-settings,
 body.view-expert-settings #view-expert-settings,
-body.view-message-dialog #view-message-dialog,
 body.view-warning #view-warning,
 body.view-splash #view-splash {
   opacity: 1;
@@ -775,8 +628,6 @@ html[dir=rtl] body.view-expert-settings .right-stripe {
 }
 
 #view-camera {
-  --big-icon: 48px;
-  --small-icon: 40px;
   --shutter-vertical-center: 180px;
 
   align-items: center;
@@ -798,18 +649,18 @@ html[dir=rtl] body.view-expert-settings .right-stripe {
 }
 
 #preview-viewport {
-  height: 0; /* Calculate at runtime. */
+  height: var(--preview-viewport-height);
   overflow: hidden;
   position: relative;
-  width: 0; /* Calculate at runtime. */
+  width: var(--preview-viewport-width);
 }
 
 .preview-content {
-  height: 0; /* Calculate at runtime. */
-  left: 0; /* Calculate at runtime. */
+  height: var(--preview-content-height);
+  left: var(--preview-content-left);
   position: relative;
-  top: 0; /* Calculate at runtime. */
-  width: 0; /* Calculate at runtime. */
+  top: var(--preview-content-top);
+  width: var(--preview-content-width);
 }
 
 body.streaming .preview-content {
@@ -832,6 +683,8 @@ body.mirror #preview-document-corner-overlay .corner-container {
 }
 
 #preview-focus-aim {
+  color: var(--cros-sys-ripple_primary);
+  --secondary-color: var(--cros-sys-focus_ring);
   position: absolute;
   transform: translate(-50%, -50%);
 }
@@ -864,7 +717,7 @@ body.use-fake-camera #view-expert-settings label.require-chromeos-vcd {
 }
 
 #expert-controls {
-  font-size: 14px;
+  font: var(--cros-body-1-font);
   left: 60px;
   position: absolute;
   text-align: left;  /* csschecker-disable-line left-right */
@@ -880,9 +733,9 @@ body.use-fake-camera #view-expert-settings label.require-chromeos-vcd {
 }
 
 #expert-controls .title {
-  background-color: rgb(0, 128, 0);
+  background-color: var(--cros-sys-primary);
   border-radius: 3px;
-  color: white;
+  color: var(--cros-sys-on_primary);
   display: inline;
   font-weight: bold;
   padding: 1px 3px 1px 3px;
@@ -894,23 +747,24 @@ body.use-fake-camera #view-expert-settings label.require-chromeos-vcd {
 }
 
 #expert-controls .metadata-row:not(.mode-on) .title {
-  background-color: rgba(255, 255, 255, 0.7);
-  color: grey;
+  background: var(--cros-sys-inverse_surface);
+  color: var(--cros-sys-inverse_on_surface);
 }
 
 #expert-controls .value {
-  background-color: rgba(255, 255, 255, 0.3);
+  background: var(--cros-sys-base_elevated);
   border-radius: 3px;
+  color: var(--cros-sys-on_surface);
   display: inline;
   padding: 1px 3px 1px 3px;
 }
 
-#preview-wb-gain-red {
-  color: red;
+#expert-controls #preview-wb-gain-red {
+  background: var(--cros-ref-red40);
 }
 
-#preview-wb-gain-blue {
-  color: blue;
+#expert-controls #preview-wb-gain-blue {
+  background: var(--cros-ref-blue40);
 }
 
 #preview-grid {
@@ -920,15 +774,20 @@ body.use-fake-camera #view-expert-settings label.require-chromeos-vcd {
   position: absolute;
   right: 0;
   top: 0;
+  transition: visibility 500ms;
+  visibility: hidden;
 }
 
 body:not(.streaming) #expert-controls,
 body:not(.streaming) #open-settings,
 body:not(.streaming) #options-group,
 body:not(.streaming) #preview-focus,
-body:not(.streaming) #preview-grid,
 body:not(.streaming) #toggle-mic {
   visibility: hidden;
+}
+
+body:not(.streaming) #preview-grid {
+  display: none;
 }
 
 body:not(.expert) #settings-expert,
@@ -940,8 +799,8 @@ body:not(.custom-video-parameters) #expert-controls>.video-option-row {
 }
 
 #preview-grid-horizontal {
-  border-bottom: 1px solid white;
-  border-top: 1px solid white;
+  border-bottom: 1px solid var(--cros-sys-white);
+  border-top: 1px solid var(--cros-sys-white);
   height: 100%;
   left: 0;
   position: absolute;
@@ -950,8 +809,12 @@ body:not(.custom-video-parameters) #expert-controls>.video-option-row {
   transform: translateY(-50%);
 }
 
+body.grid #preview-grid {
+  visibility: visible;
+}
+
 body.grid.grid-4x4 #preview-grid-horizontal::before {
-  border-bottom: 1px solid white;
+  border-bottom: 1px solid var(--cros-sys-white);
   content: '';
   height: 0;
   left: 0;
@@ -974,8 +837,8 @@ body.grid.grid-4x4 #preview-grid-horizontal::before {
 }
 
 #preview-grid-vertical {
-  border-inline-end: 1px solid white;
-  border-inline-start: 1px solid white;
+  border-inline-end: 1px solid var(--cros-sys-white);
+  border-inline-start: 1px solid var(--cros-sys-white);
   bottom: 0;
   left: 50%;
   position: absolute;
@@ -985,7 +848,8 @@ body.grid.grid-4x4 #preview-grid-horizontal::before {
 }
 
 body.grid-4x4 #preview-grid-vertical::before {
-  border-right: 1px solid white;  /* csschecker-disable-line left-right */
+  border-right:  /* csschecker-disable-line left-right */
+      1px solid var(--cros-sys-white);
   bottom: 0;
   content: '';
   left: 0;
@@ -1009,115 +873,46 @@ body.grid.grid-4x4 #preview-grid-vertical::before {
 
 #preview-grid-horizontal,
 #preview-grid-horizontal::before {
-  transition: height 500ms, visibility 500ms;
+  transition: height 500ms;
 }
 
 #preview-grid-vertical,
 #preview-grid-vertical::before {
-  transition: width 500ms, visibility 500ms;
+  transition: width 500ms;
 }
 
-#record-time {
-  align-items: center;
-  backdrop-filter: blur(10px);
-  background-color: rgba(var(--grey-900-rgb), 0.6);
-  border-radius: 18px;
-  display: flex;
-  font-size: 13px;  /* TODO(b/189087290): Follow the carbon spec. */
-  font-variant-numeric: tabular-nums;
-  height: 32px;
-  justify-content: flex-start;
-  line-height: 20px;
-  padding-inline-end: 10px;
-  padding-inline-start: 8px;
+record-time-chip {
+  left: 50%;
   pointer-events: none;
+  position: absolute;
+  top: var(--top-line);
+  transform: translate(-50%, -50%);
 }
 
-#record-time[hidden],
-.menu-item[hidden],
-#nudge[hidden] {
-  display: none;  /* Required for flexbox hidden. */
-}
-
-#record-time .icon {
-  background-color: rgb(234, 67, 53);
-  border-radius: 50%;
-  flex-shrink: 0;
-  height: 6px;
-  width: 6px;
-}
-
-body.recording-ui-paused #record-time .icon,
-body:not(.recording-ui-paused) #record-time [i18n-text=record_video_paused_msg] {
-  display: none;
-}
-
-#record-time #record-time-msg,
-#record-time [i18n-text=record_video_paused_msg] {
-  color: white;
-  flex-shrink: 0;
-}
-
-#record-time #record-time-msg {
-  margin-inline-start: 8px;
-}
-
-@media print {
-  html {
-    height: 100%;  /* Required for printing. */
-  }
-
-  body {
-    height: auto;
-    overflow: visible;
-    position: static;
-    width: 100%;
-  }
-
-  /* Reset background colors. */
-  body {
-    background: transparent;
-  }
-
-  /* Hide the buttons. */
-  .buttons {
-    display: none;
-  }
+/*
+ * Since the [hidden] attribute is done by user agent style, and any change to
+ * `display` will override it, add a rule to force `display: none` to element
+ * with hidden attribute. Note that there's another possible value of
+ * 'until-found' but we're not using it in CCA.
+ *
+ * See https://css-tricks.com/the-hidden-attribute-is-visibly-weak/
+ */
+[hidden] {
+  display: none !important;
 }
 
 #spoken_msg {
   opacity: 0;
 }
 
-#tooltip {
-  background: rgba(241, 243, 244, 0.8);
-  border-radius: 2px;
-  color: var(--grey-900);
-  font-size: 12px;
-  left: 0;
-  line-height: 22px;
-  opacity: 0;
-  padding: 0 8px;
-  pointer-events: none;
-  position: absolute;
-  top: 0;
-  white-space: nowrap;
-  z-index: 100;
-}
-
-#tooltip.visible {
-  opacity: 1;
-  transition: opacity 350ms ease-out 1500ms;
-}
-
 #toast {
-  background: rgb(30, 30, 35);
+  background: var(--cros-sys-base_elevated);
   border-radius: 16px;
-  color: white;
-  font-size: 16px;
-  line-height: 32px;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.1), 0 4px 4px rgba(0, 0, 0, 0.2);
+  color: var(--cros-sys-on_surface);
+  font: var(--cros-body-0-font);
   opacity: 0;
-  padding: 0 16px;
+  padding: 8px 16px;
   pointer-events: none;
   z-index: 100;
 }
@@ -1140,13 +935,11 @@ body:not(.recording-ui-paused) #record-time [i18n-text=record_video_paused_msg] 
 }
 
 .menu {
-  backdrop-filter: blur(10px);
-  background: rgba(0, 0, 0, 0.75);
+  background: var(--cros-sys-base_elevated);
   display: flex;
   flex-direction: column;
   height: 100vh;
   min-width: 360px;
-  opacity: 0.9;
   overflow-y: scroll;
   position: absolute;
   top: 0;
@@ -1159,21 +952,21 @@ body:not(.recording-ui-paused) #record-time [i18n-text=record_video_paused_msg] 
 
 .menu-header,
 .menu-item {
-  --hover-color: rgba(255, 255, 255, 0.06);
-  --toggled-color: rgb(140, 180, 245);
-
   align-items: center;
-  color: var(--grey-100);
+  color: var(--cros-sys-on_surface);
   display: flex;
   flex-shrink: 0;
-  font-size: 13px;
   justify-content: flex-start;
   text-align: initial;
 }
 
+.menu-item {
+  font: var(--cros-body-2-font);
+}
+
 button.menu-item:hover,
 label.menu-item:hover {
-  background-color: var(--hover-color);
+  background: var(--cros-sys-hover_on_subtle);
 }
 
 .settings .menu-item {
@@ -1181,9 +974,9 @@ label.menu-item:hover {
 }
 
 .menu-header {
-  color: white;
+  color: var(--cros-sys-on_surface);
   cursor: default;
-  font-size: 20px;
+  font: var(--cros-title-1-font);
   height: 72px;
   padding-inline-start: 16px;
   user-select: none;
@@ -1194,7 +987,7 @@ label.menu-item:hover {
 }
 
 .menu-item .description {
-  color: rgb(189, 193, 198);
+  color: var(--cros-sys-secondary);
   margin-top: 5px;
 }
 
@@ -1213,7 +1006,7 @@ body:not(.has-front-camera):not(.has-back-camera) #builtin-video-header {
 
 .menu-item input::before {
   bottom: 13px;
-  box-shadow: 0 0 0 2px var(--grey-100);
+  box-shadow: 0 0 0 2px var(--cros-sys-on_surface);
   content: '';
   left: 13px;
   position: absolute;
@@ -1227,10 +1020,10 @@ body:not(.has-front-camera):not(.has-back-camera) #builtin-video-header {
 
 .menu-item input:checked::before {
   background-clip: padding-box;
-  background-color: var(--toggled-color);
+  background-color: var(--cros-sys-primary);
   border: 4px solid transparent;
   bottom: 12px;
-  box-shadow: 0 0 0 1px var(--toggled-color);
+  box-shadow: 0 0 0 1px var(--cros-sys-primary);
   left: 12px;
   right: 12px;
   top: 12px;
@@ -1243,7 +1036,6 @@ button.menu-item {
 
 .menu-header button.icon {
   /* Icon image is small enough and won't be covered by -1px */
-  background-image: url(/images/settings_button_back.svg);
   outline-offset: -1px;
 }
 
@@ -1252,36 +1044,7 @@ html[dir=rtl] .menu-header .icon {
 }
 
 .menu-header .icon:hover {
-  background-color: var(--hover-color);
-}
-
-#settings-gridtype .icon {
-  background-image: url(/images/settings_grid_type.svg);
-}
-
-#settings-timerdur .icon {
-  background-image: url(/images/settings_timer_duration.svg);
-}
-
-#settings-photo-resolution .icon,
-#settings-video-resolution .icon {
-  background-image: url(/images/settings_resolution.svg);
-}
-
-#settings-photo-aspect-ratio .icon {
-  background-image: url(/images/settings_aspect_ratio.svg);
-}
-
-#settings-expert .icon {
-  background-image: url(/images/settings_expert.svg);
-}
-
-#settings-feedback .icon {
-  background-image: url(/images/settings_feedback.svg);
-}
-
-#settings-help .icon {
-  background-image: url(/images/settings_help.svg);
+  background-color: var(--cros-sys-hover_on_subtle);
 }
 
 #view-warning,
@@ -1292,103 +1055,46 @@ html[dir=rtl] .menu-header .icon {
 }
 
 #view-warning {
-  background: var(--grey-900);
-  color: white;
+  background: var(--cros-sys-app_base);
+  color: var(--cros-sys-on_surface);
 }
 
 #view-warning #error-msg {
-  font-size: 18px;
-  line-height: 32px;
+  font: var(--cros-body-0-font);
   text-align: center;
   white-space: pre-wrap;
 }
 
 .dialog {
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--cros-sys-scrim);
 }
 
-.dialog-popup {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px 0 rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
-  display: flex;
-  flex-direction: column;
-  padding: 20px;
-  transform: translateY(20px);
-  transition: transform var(--fast2-duration);
-}
-
-.dialog .dialog-popup {
-  transform: translateY(0);
-}
-
-.dialog .dialog-msg {
-  color: var(--grey-900);
-  cursor: text;
-  font-size: 14px;
-  max-height: 320px;
-  max-width: 472px;
-  overflow: auto;
-  padding: 20px 0;
-  user-select: text;  /* Allow copying the message. */
-  white-space: pre-wrap;
-}
-
-.dialog .dialog-msg::-webkit-scrollbar {
-  height: 6px;
-  width: 6px;
-}
-
-.dialog .dialog-msg::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.dialog .dialog-msg::-webkit-scrollbar-thumb {
-  background: gray;
-  height: 6px;
-  width: 6px;
-}
-
-.dialog-buttons {
-  align-items: center;
-  display: flex;
-  justify-content: flex-end;
-  margin: 0 -2px;
-}
-
-.dialog-buttons button {
-  background-color: white;
-  border-style: solid;
-  color: var(--blue-600-dark);
-  font-size: 12px;
-  margin: 4px;
-  padding: 6px 18px;
-}
-
-body.keyboard-navigation .dialog-buttons button:focus {
-  background-color: var(--blue-300);
-  border-color: var(--blue-300);
-  color: white;
-}
-
-body.keyboard-navigation .dialog-buttons button:focus::after {
-  border: none;
-}
-
-.spinner {
-  background-image: url(/images/spinner.svg);
-  height: 32px;
-  visibility: hidden;
-  width: 32px;
-  z-index: 1;
-}
-
-body:not(.mode-switching):not(.streaming).view-expert-settings .spinner {
-  visibility: visible;
-}
-
+/*
+ * The icon on the splash screen is not using either data-svg or
+ * svg-wrapper, and is done with pure CSS, to avoid waiting on JS,
+ * and minimize the time before app load and the icon is displayed.
+ *
+ * We also provide fallback value for the background colors to
+ * minimize the flicker when JS is load, since the definition CSS
+ * of dynamic color tokens is also loaded by JS.
+ *
+ * TODO(pihsun): Remove background color fallback when dynamic color is default
+ * on, and the colors.css is moved into HTML.
+ */
 #view-splash {
-  background: no-repeat center url(/images/camera_mode_photo.svg), var(--grey-900);
+  align-items: center;
+  /* color-token-disable-next-line */
+  background: var(--cros-sys-app_base, rgb(32, 33, 36));
+  display: flex;
+  justify-content: center;
+}
+
+#view-splash .icon {
+  -webkit-mask: url(/images/camera_mode_photo.svg);
+  /* color-token-disable-next-line */
+  background: var(--cros-sys-on_surface, rgb(233, 234, 237));
+  height: 40px;
+  width: 40px;
 }
 
 .hidden {
@@ -1405,8 +1111,8 @@ body:not(.mode-switching):not(.streaming).view-expert-settings .spinner {
 
 .panel {
   backdrop-filter: blur(10px);
-  background: rgba(var(--grey-900-rgb), 0.9);
-  box-shadow: 0 4px 4px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.3);
+  background: var(--cros-sys-base_elevated);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.1), 0 4px 4px rgba(0, 0, 0, 0.2);
   overflow: hidden;
 }
 
@@ -1414,18 +1120,16 @@ body:not(.mode-switching):not(.streaming).view-expert-settings .spinner {
   border-radius: 8px;
   display: flex;
   flex-direction: column;
-  padding: 8px;
+  padding: 8px 0;
   position: absolute;
   width: 225px;
 }
 
 #option-title {
-  color: var(--grey-500);
-  font-family: var(--default-font-family);
-  font-size: 13px;
-  font-weight: 400;
-  height: 28px;
-  padding: 8px 8px 0 8px;
+  color: var(--cros-sys-secondary);
+  font: var(--cros-button-2-font);
+  height: 20px;
+  padding: 8px 20px;
 }
 
 #options-container {
@@ -1439,7 +1143,7 @@ body:not(.mode-switching):not(.streaming).view-expert-settings .spinner {
 }
 
 #options-container .menu-item span {
-  color: var(--grey-100);
+  color: var(--cros-sys-on_surface);
   margin-inline-start: 4px;
 }
 
@@ -1453,8 +1157,8 @@ body:not(.video) #settings-video-resolution {
 }
 
 .label-item {
-  color: var(--grey-500);
-  font: 500 13px/20px var(--default-font-family);
+  color: var(--cros-sys-secondary);
+  font: var(--cros-button-2-font);
   margin: 9px 0 3px 0;
   padding-inline-start: 26px;
 }
@@ -1465,11 +1169,11 @@ body:not(.video) #settings-video-resolution {
 
 .text-item {
   align-items: center;
-  color: var(--grey-500);
+  color: var(--cros-sys-secondary);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  font: 400 13px var(--default-font-family);
+  font: var(--cros-body-2-font);
   height: 64px;
   justify-content: center;
   padding-inline-end: 60px;
@@ -1484,35 +1188,27 @@ body:not(.video) #settings-video-resolution {
 }
 
 .fps-button {
+  border-radius: 12px;
   height: 40px;
   margin-inline-end: 8px;
   margin-inline-start: 8px;
   width: 40px;
 }
 
-#view-video-resolution-settings .fps-30 {
-  background-image: url(/images/camera_button_fps_30_unchecked.svg);
+.fps-button.checked {
+  background: var(--cros-sys-primary_container);
 }
 
-#view-video-resolution-settings .fps-30.checked {
-  background-image: url(/images/camera_button_fps_30_checked.svg);
-}
-
-#view-video-resolution-settings .fps-60 {
-  background-image: url(/images/camera_button_fps_60_unchecked.svg);
-}
-
-#view-video-resolution-settings .fps-60.checked {
-  background-image: url(/images/camera_button_fps_60_checked.svg);
+[tabindex] {
+  outline: none; /* Prevent default focus ring style. */
 }
 
 [tabindex='0'] {
-  outline: none;
   outline-offset: 3px;
 }
 
 [tabindex='0']:focus-visible {
-  outline: 2px solid var(--blue-300);
+  outline: 2px solid var(--cros-sys-focus_ring);
 }
 
 .circle :is(button, input) {
@@ -1521,31 +1217,33 @@ body:not(.video) #settings-video-resolution {
 
 #nudge {
   align-items: center;
-  background: var(--grey-900);
-  border-radius: 6px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px rgba(0, 0, 0, 0.15);
+  background: var(--cros-sys-base_elevated);
+  border-radius: var(--border-radius-rounded-with-short-side);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.1), 0 4px 4px rgba(0, 0, 0, 0.2);
   display: flex;
   gap: 8px;
-  opacity: 0.8;
-  padding: 8px 10px;
+  padding: 8px 16px;
   position: absolute;
   top: 68px;  /* 8px below |record_time| element */
   z-index: 2;
 }
 
 #nudge .warning-icon {
-  background: url(/images/circle_warning_icon.svg);
   height: 20px;
   width: 20px;
+
+  :is(svg-wrapper) {
+    color: var(--cros-sys-warning);
+  }
 }
 
 #nudge .warning-msg {
-  color: var(--grey-400);
-  font: 400 14px/20px Roboto;
+  color: var(--cros-sys-on_surface);
+  font: var(--cros-body-2-font);
 }
 
 .low-storage-dialog-popup {
-  background: var(--grey-900);
+  background: var(--cros-sys-base_elevated);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
@@ -1555,13 +1253,13 @@ body:not(.video) #settings-video-resolution {
 }
 
 .low-storage-dialog-popup .dialog-title {
-  color: white;
-  font: 500 16px/24px var(--default-font-family);
+  color: var(--cros-sys-on_surface);
+  font: var(--cros-title-1-font);
 }
 
 .low-storage-dialog-popup .dialog-description {
-  color: var(--grey-400);
-  font: 400 14px/20px var(--default-font-family);
+  color: var(--cros-sys-secondary);
+  font: var(--cros-body-2-font);
 }
 
 .low-storage-dialog-buttons {
@@ -1579,7 +1277,16 @@ body:not(.video) #settings-video-resolution {
 }
 
 .low-storage-dialog-buttons .external-link-icon {
-  background: url(/images/external_link_icon.svg);
   height: 20px;
   width: 20px;
+}
+
+#view-settings {
+  background: var(--cros-sys-scrim);
+}
+
+body.hide-floating-ui-for-testing
+  :is(#nudge, #toast, text-tooltip, .custom-toast, .no-document-toast) {
+  /* TODO(b/289342383): Use CSS layering so we don't need to use !important. */
+  display: none !important;
 }

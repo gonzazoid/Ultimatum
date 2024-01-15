@@ -1,0 +1,11 @@
+include_rules = [
+  "+content/public/browser",
+  "+components/crash/core/common",
+  "+components/js_injection",
+]
+specific_include_rules = {
+  "content_web_state\.mm": [
+    "+third_party/blink/public/mojom/favicon/favicon_url.mojom.h",
+    "+skia/ext/skia_utils_ios.h",
+  ],
+}

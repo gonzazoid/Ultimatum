@@ -37,13 +37,12 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkPortalDetector {
   // Returns true if portal detection is enabled.
   virtual bool IsEnabled() = 0;
 
-  // Enable portal detection. This will do nothing if the EULA has not been
-  // accepted (i.e. OOBE has not completed) since we do not want to show a
-  // captive portal signin page until the user accepts the EULA. Once accepted,
-  // Enable() should be called again.
-  // Once enabled, portal detection for the default network will be handled any
-  // time the default network state changes.
+  // Enable portal detection. Once enabled, portal detection for the default
+  // network will be handled any time the default network state changes.
   virtual void Enable() = 0;
+
+  // Request captive portal detection after a navigation event or proy signin.
+  virtual void RequestCaptivePortalDetection() = 0;
 
   // Returns non-localized string representation of |status|.
   static std::string CaptivePortalStatusString(CaptivePortalStatus status);
@@ -82,14 +81,5 @@ COMPONENT_EXPORT(CHROMEOS_NETWORK) bool SetForTesting();
 }  // namespace network_portal_detector
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::NetworkPortalDetector;
-namespace network_portal_detector {
-using ::ash::network_portal_detector::GetInstance;
-using ::ash::network_portal_detector::InitializeForTesting;
-}  // namespace network_portal_detector
-}  // namespace chromeos
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_PORTAL_DETECTOR_NETWORK_PORTAL_DETECTOR_H_

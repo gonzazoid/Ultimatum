@@ -8,8 +8,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -67,7 +67,8 @@ class DEVICE_BLUETOOTH_EXPORT FakeBluetoothAdvertisementMonitorManagerClient
   void OnPropertyChanged(const dbus::ObjectPath& object_path,
                          const std::string& property_name);
 
-  raw_ptr<FakeBluetoothAdvertisementMonitorApplicationServiceProvider>
+  raw_ptr<FakeBluetoothAdvertisementMonitorApplicationServiceProvider,
+          AcrossTasksDanglingUntriaged>
       application_provider_ = nullptr;
   std::unique_ptr<Properties> properties_;
 

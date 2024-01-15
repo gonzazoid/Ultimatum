@@ -15,6 +15,7 @@
 
 #include "base/check_op.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/ref_counted.h"
 #include "gpu/command_buffer/service/common_decoder.h"
 #include "gpu/command_buffer/service/gl_utils.h"
@@ -74,8 +75,6 @@ inline constexpr UniformApiType operator&(UniformApiType a, UniformApiType b) {
 class GPU_GLES2_EXPORT Program : public base::RefCounted<Program> {
  public:
   static const int kMaxAttachedShaders = 2;
-
-  enum VaryingsPackingOption { kCountOnlyStaticallyUsed, kCountAll };
 
   struct ProgramOutputInfo {
     ProgramOutputInfo(GLuint _color_name,
@@ -318,7 +317,6 @@ class GPU_GLES2_EXPORT Program : public base::RefCounted<Program> {
 
   // Performs glLinkProgram and related activities.
   bool Link(ShaderManager* manager,
-            VaryingsPackingOption varyings_packing_option,
             DecoderClient* client);
 
   // Performs glValidateProgram and related activities.
@@ -392,7 +390,7 @@ class GPU_GLES2_EXPORT Program : public base::RefCounted<Program> {
 
   // Return false if varyings can't be packed into the max available
   // varying registers.
-  bool CheckVaryingsPacking(VaryingsPackingOption option) const;
+  bool CheckVaryingsPacking() const;
 
   void TransformFeedbackVaryings(GLsizei count, const char* const* varyings,
       GLenum buffer_mode);
@@ -497,9 +495,6 @@ class GPU_GLES2_EXPORT Program : public base::RefCounted<Program> {
 
   // Updates the program log info from GL
   void UpdateLogInfo();
-
-  // Clears all the uniforms.
-  void ClearUniforms(std::vector<uint8_t>* zero_buffer);
 
   // Updates the draw id uniform location used by ANGLE_multi_draw
   void UpdateDrawIDUniformLocation();
@@ -683,9 +678,6 @@ class GPU_GLES2_EXPORT ProgramManager {
   // Makes a program as unused. If deleted the program will be removed.
   void UnuseProgram(ShaderManager* shader_manager, Program* program);
 
-  // Clears the uniforms for this program.
-  void ClearUniforms(Program* program);
-
   // Updates the draw id location for this program for ANGLE_multi_draw
   void UpdateDrawIDUniformLocation(Program* program);
 
@@ -749,7 +741,7 @@ class GPU_GLES2_EXPORT ProgramManager {
   uint32_t max_dual_source_draw_buffers_;
   uint32_t max_vertex_attribs_;
 
-  const GpuPreferences& gpu_preferences_;
+  const raw_ref<const GpuPreferences> gpu_preferences_;
   scoped_refptr<FeatureInfo> feature_info_;
 
   // Used to notify the watchdog thread of progress during destruction,

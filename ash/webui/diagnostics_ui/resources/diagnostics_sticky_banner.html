@@ -1,4 +1,8 @@
 <style include="cr-shared-style diagnostics-shared">
+  :host-context(body.jelly-enabled) #banner {
+    background-color: var(--cros-sys-primary_container);
+  }
+
   #banner {
     align-items: center;
     background-color: var(--cros-highlight-color);
@@ -22,7 +26,7 @@
     box-shadow: var(--diagnostics-box-shadow-elevation-2);
   }
 </style>
-<div id="banner" hidden$="[[!bannerMessage]]" class$="[[scrollingClass_]]">
+<div id="banner" hidden$="[[!bannerMessage]]" class$="[[scrollingClass]]">
   <iron-icon icon="diagnostics:info" id="bannerIcon"></iron-icon>
   <span id="bannerMsg" class="diagnostics-caution-banner-font">[[bannerMessage]]</span>
 </div>

@@ -8,19 +8,14 @@ source_set("ios") {
     "ios_image_data_fetcher_wrapper.mm",
     "ios_image_decoder_impl.h",
     "ios_image_decoder_impl.mm",
-    "webp_decoder.h",
-    "webp_decoder.mm",
   ]
   deps = [
     "//base",
     "//components/image_fetcher/core",
     "//ios/web",
     "//net",
-    "//third_party/libwebp:libwebp_dec",
-    "//third_party/libwebp:libwebp_webp",
     "//ui/gfx",
   ]
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("unit_tests") {
@@ -28,7 +23,6 @@ source_set("unit_tests") {
   sources = [
     "ios_image_data_fetcher_wrapper_unittest.mm",
     "ios_image_decoder_impl_unittest.mm",
-    "webp_decoder_unittest.mm",
   ]
   deps = [
     ":ios",
@@ -42,7 +36,6 @@ source_set("unit_tests") {
     "//testing/gtest",
     "//ui/gfx",
   ]
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 bundle_data("webp_transcode_unit_tests_bundle_data") {

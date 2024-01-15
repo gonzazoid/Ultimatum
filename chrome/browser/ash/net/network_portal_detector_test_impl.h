@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "chromeos/ash/components/network/portal_detector/network_portal_detector.h"
 
 namespace ash {
@@ -39,6 +39,7 @@ class NetworkPortalDetectorTestImpl : public NetworkPortalDetector {
   CaptivePortalStatus GetCaptivePortalStatus() override;
   bool IsEnabled() override;
   void Enable() override;
+  void RequestCaptivePortalDetection() override;
 
  private:
   bool enabled_ = false;
@@ -47,10 +48,5 @@ class NetworkPortalDetectorTestImpl : public NetworkPortalDetector {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace chromeos {
-using ::ash::NetworkPortalDetectorTestImpl;
-}
 
 #endif  // CHROME_BROWSER_ASH_NET_NETWORK_PORTAL_DETECTOR_TEST_IMPL_H_

@@ -42,10 +42,10 @@
 // Importantly, insertions and deletions may invalidate outstanding iterators,
 // pointers, and references to elements. Such invalidations are typically only
 // an issue if insertion and deletion operations are interleaved with the use of
-// more than one iterator, pointer, or reference simultaneously. For this
-// reason, `insert()` and `erase()` return a valid iterator at the current
-// position. Another important difference is that key-types must be
-// copy-constructible.
+// more than one iterator, pointer, or reference simultaneously.  For this
+// reason, `insert()`, `erase()`, and `extract_and_get_next()` return a valid
+// iterator at the current position. Another important difference is that
+// key-types must be copy-constructible.
 //
 // Another API difference is that btree iterators can be subtracted, and this
 // is faster than using std::distance.
@@ -53,6 +53,7 @@
 #ifndef ABSL_CONTAINER_BTREE_MAP_H_
 #define ABSL_CONTAINER_BTREE_MAP_H_
 
+#include "absl/base/attributes.h"
 #include "absl/container/internal/btree.h"  // IWYU pragma: export
 #include "absl/container/internal/btree_container.h"  // IWYU pragma: export
 
@@ -325,7 +326,8 @@ class btree_map
   // btree_map::extract()
   //
   // Extracts the indicated element, erasing it in the process, and returns it
-  // as a C++17-compatible node handle. Overloads are listed below.
+  // as a C++17-compatible node handle. Any references, pointers, or iterators
+  // are invalidated. Overloads are listed below.
   //
   // node_type extract(const_iterator position):
   //
@@ -349,6 +351,21 @@ class btree_map
   // containers (https://en.cppreference.com/w/cpp/container/node_handle).
   // It does NOT refer to the data layout of the underlying btree.
   using Base::extract;
+
+  // btree_map::extract_and_get_next()
+  //
+  // Extracts the indicated element, erasing it in the process, and returns it
+  // as a C++17-compatible node handle along with an iterator to the next
+  // element.
+  //
+  // extract_and_get_next_return_type extract_and_get_next(
+  //     const_iterator position):
+  //
+  //   Extracts the element at the indicated position, returns a struct
+  //   containing a member named `node`: a node handle owning that extracted
+  //   data and a member named `next`: an iterator pointing to the next element
+  //   in the btree.
+  using Base::extract_and_get_next;
 
   // btree_map::merge()
   //
@@ -701,6 +718,21 @@ class btree_multimap
   // It does NOT refer to the data layout of the underlying btree.
   using Base::extract;
 
+  // btree_multimap::extract_and_get_next()
+  //
+  // Extracts the indicated element, erasing it in the process, and returns it
+  // as a C++17-compatible node handle along with an iterator to the next
+  // element.
+  //
+  // extract_and_get_next_return_type extract_and_get_next(
+  //     const_iterator position):
+  //
+  //   Extracts the element at the indicated position, returns a struct
+  //   containing a member named `node`: a node handle owning that extracted
+  //   data and a member named `next`: an iterator pointing to the next element
+  //   in the btree.
+  using Base::extract_and_get_next;
+
   // btree_multimap::merge()
   //
   // Extracts all elements from a given `source` btree_multimap into this
@@ -833,7 +865,8 @@ struct map_params : common_params<Key, Compare, Alloc, TargetNodeSize, IsMulti,
   using init_type = typename super_type::init_type;
 
   template <typename V>
-  static auto key(const V &value) -> decltype(value.first) {
+  static auto key(const V &value ABSL_ATTRIBUTE_LIFETIME_BOUND)
+      -> decltype((value.first)) {
     return value.first;
   }
   static const Key &key(const slot_type *s) { return slot_policy::key(s); }

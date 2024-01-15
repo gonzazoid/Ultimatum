@@ -9,17 +9,18 @@
 #include <vector>
 
 #include "base/metrics/histogram_macros.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_piece.h"
-#include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "components/password_manager/core/browser/android_affiliation/affiliation_utils.h"
+#include "components/password_manager/core/browser/affiliation/affiliation_utils.h"
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_form_manager_for_ui.h"
 #include "components/password_manager/core/browser/password_form_metrics_recorder.h"
 #include "components/password_manager/core/browser/ui/credential_ui_entry.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/url_formatter/elide_url.h"
+#include "ui/base/l10n/l10n_util.h"
 
 namespace password_manager {
 
@@ -35,9 +36,8 @@ std::string GetShownOrigin(const FacetURI& facet_uri,
                            const std::string& app_display_name,
                            const GURL& url) {
   if (facet_uri.IsValidAndroidFacetURI()) {
-    return app_display_name.empty()
-               ? SplitByDotAndReverse(facet_uri.android_package_name())
-               : app_display_name;
+    return app_display_name.empty() ? facet_uri.GetAndroidPackageDisplayName()
+                                    : app_display_name;
   } else {
     return password_manager::GetShownOrigin(url::Origin::Create(url));
   }
@@ -52,22 +52,6 @@ GURL GetShownURL(const FacetURI& facet_uri, const GURL& url) {
 }
 
 }  // namespace
-
-std::string SplitByDotAndReverse(base::StringPiece host) {
-  std::vector<base::StringPiece> parts = base::SplitStringPiece(
-      host, ".", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
-  std::reverse(parts.begin(), parts.end());
-  return base::JoinString(parts, ".");
-}
-
-std::pair<std::string, GURL> GetShownOriginAndLinkUrl(
-    const PasswordForm& password_form) {
-  FacetURI facet_uri =
-      FacetURI::FromPotentiallyInvalidSpec(password_form.signon_realm);
-  return {GetShownOrigin(facet_uri, password_form.app_display_name,
-                         password_form.url),
-          GetShownURL(facet_uri, password_form.url)};
-}
 
 std::string GetShownOrigin(const CredentialUIEntry& credential) {
   FacetURI facet_uri =
@@ -150,16 +134,15 @@ std::vector<std::u16string> GetUsernamesForRealm(
   return usernames;
 }
 
-int GetPlatformAuthenticatorLabel() {
-#if BUILDFLAG(IS_WIN)
-  return IDS_PASSWORD_MANAGER_USE_WINDOWS_HELLO;
-#elif BUILDFLAG(IS_MAC)
-  return IDS_PASSWORD_MANAGER_USE_TOUCH_ID;
-#elif BUILDFLAG(IS_ANDROID)
-  return IDS_PASSWORD_MANAGER_USE_SCREEN_LOCK;
-#else
-  return IDS_PASSWORD_MANAGER_USE_GENERIC_DEVICE;
-#endif
+std::u16string ToUsernameString(const std::u16string& username) {
+  if (!username.empty()) {
+    return username;
+  }
+  return l10n_util::GetStringUTF16(IDS_PASSWORD_MANAGER_EMPTY_LOGIN);
+}
+
+std::u16string ToUsernameString(const std::string& username) {
+  return ToUsernameString(base::UTF8ToUTF16(username));
 }
 
 }  // namespace password_manager

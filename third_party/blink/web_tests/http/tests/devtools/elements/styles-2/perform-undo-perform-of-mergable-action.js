@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
+
 (async function() {
   TestRunner.addResult(`Tests that perform-undo-perform of the mergeable action does not crash.\n`);
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
       <style>
@@ -31,7 +35,7 @@
     TestRunner.addResult('After changing property');
     await ElementsTestRunner.dumpSelectedElementStyles(true);
 
-    SDK.domModelUndoStack.undo();
+    SDK.DOMModel.DOMModelUndoStack.instance().undo();
     ElementsTestRunner.waitForStyles('container', step3);
   }
 

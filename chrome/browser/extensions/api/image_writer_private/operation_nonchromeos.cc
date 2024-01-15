@@ -5,8 +5,8 @@
 #include <stdint.h>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/extensions/api/image_writer_private/error_constants.h"
 #include "chrome/browser/extensions/api/image_writer_private/operation.h"
 #include "chrome/browser/extensions/api/image_writer_private/operation_manager.h"
@@ -23,7 +23,7 @@ void Operation::Write(base::OnceClosure continuation) {
     return;
   }
 
-  SetStage(image_writer_api::STAGE_WRITE);
+  SetStage(image_writer_api::Stage::kWrite);
   StartUtilityClient();
 
   int64_t file_size;
@@ -46,7 +46,7 @@ void Operation::VerifyWrite(base::OnceClosure continuation) {
     return;
   }
 
-  SetStage(image_writer_api::STAGE_VERIFYWRITE);
+  SetStage(image_writer_api::Stage::kVerifyWrite);
   StartUtilityClient();
 
   int64_t file_size;

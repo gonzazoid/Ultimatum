@@ -50,8 +50,6 @@ class CAPTURE_EXPORT VideoCaptureBufferPool
   // create regions.
   virtual base::UnsafeSharedMemoryRegion DuplicateAsUnsafeRegion(
       int buffer_id) = 0;
-  virtual mojo::ScopedSharedBufferHandle DuplicateAsMojoBuffer(
-      int buffer_id) = 0;
 
   // Try and obtain a read/write access to the buffer.
   virtual std::unique_ptr<VideoCaptureBufferHandle> GetHandleForInProcessAccess(
@@ -59,6 +57,10 @@ class CAPTURE_EXPORT VideoCaptureBufferPool
 
   virtual gfx::GpuMemoryBufferHandle GetGpuMemoryBufferHandle(
       int buffer_id) = 0;
+
+  // Returns the buffer type of the buffer. Useful when deciding whether to
+  // serialize the buffer for IPC either as shared memory or GMB.
+  virtual VideoCaptureBufferType GetBufferType(int buffer_id) = 0;
 
   // Reserve or allocate a buffer to support a packed frame of |dimensions| of
   // pixel |format| and return its id. If the pool is already at maximum
@@ -87,13 +89,25 @@ class CAPTURE_EXPORT VideoCaptureBufferPool
   virtual void RelinquishProducerReservation(int buffer_id) = 0;
 
   // Reserve a buffer id to use for a buffer specified by |handle| (which was
-  // allocated by some external source). This call cannot fail (no allocation is
-  // done). It may return a new id, or may reuse an existing id, if the buffer
-  // represented by |handle| is already being tracked. The behavior of
-  // |buffer_id_to_drop| is the same as ReserveForProducer.
-  virtual int ReserveIdForExternalBuffer(
-      const gfx::GpuMemoryBufferHandle& handle,
-      int* buffer_id_to_drop) = 0;
+  // allocated by some external source).
+
+  // |buffer.handle| is used to create buffer on windows, mac doesn't create
+  // buffer but holds io_surface. |buffer.format| is the source texture format,
+  // currently it should be NV12. Buffer tracker will hold |buffer.imf_buffer|
+  // for reusing the texture in right timing on Windows since once the
+  // imf_buffer is released, Windows capture pipeline assumes the application
+  // has finished reading from the texture and the capture pipeline will perform
+  // the write operation(i.e. reusing texture). |dimensions| is used for
+  // creating buffer on Windows.
+
+  // If the pool is already at maximum capacity, return the reused ID based on
+  // LRU strategy. Otherwise, return a new tracker ID via |buffer_id|. The
+  // behavior of |buffer_id_to_drop| is the same as ReserveForProducer.
+  virtual VideoCaptureDevice::Client::ReserveResult ReserveIdForExternalBuffer(
+      CapturedExternalVideoBuffer buffer,
+      const gfx::Size& dimensions,
+      int* buffer_id_to_drop,
+      int* buffer_id) = 0;
 
   // Returns a snapshot of the current number of buffers in-use divided by the
   // maximum |count_|.

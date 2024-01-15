@@ -7,59 +7,66 @@
 #include "base/system/sys_info.h"
 #include "chrome/common/chrome_version.h"
 #include "chrome/common/url_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace {
 
 enum class Obsoleteness {
-  MacOS1011Obsolete,
-  MacOS1012Obsolete,
+  MacOS1013Obsolete,
+  MacOS1014Obsolete,
   NotObsolete,
 };
 
 Obsoleteness OsObsoleteness() {
-  // Use base::SysInfo::OperatingSystemVersionNumbers() here rather than the
-  // preferred base::mac::IsOS*() function because the IsOS functions for
-  // obsolete system versions are removed to help prevent obsolete code from
-  // existing in the Chromium codebase.
+#if CHROME_VERSION_MAJOR >= 114
+  // Use base::SysInfo::OperatingSystemVersionNumbers() here because
+  // base::mac::MacOSVersion() didn't exist at the time that this code was
+  // written. The next time this is reused for the next obsolete OS, use
+  // base::mac::MacOSMajorVersion() instead.
   int32_t major, minor, bugfix;
   base::SysInfo::OperatingSystemVersionNumbers(&major, &minor, &bugfix);
 
-  if (major < 10 || (major == 10 && minor <= 11))
-    return Obsoleteness::MacOS1011Obsolete;
+  if (major < 10 || (major == 10 && minor <= 13)) {
+    return Obsoleteness::MacOS1013Obsolete;
+  }
 
-  if (major == 10 && minor == 12)
-    return Obsoleteness::MacOS1012Obsolete;
+  if (major == 10 && minor == 14) {
+    return Obsoleteness::MacOS1014Obsolete;
+  }
 
   return Obsoleteness::NotObsolete;
+#else
+  return Obsoleteness::NotObsolete;
+#endif
 }
 
 }  // namespace
 
-// static
-bool ObsoleteSystem::IsObsoleteNowOrSoon() {
+namespace ObsoleteSystem {
+
+bool IsObsoleteNowOrSoon() {
   return OsObsoleteness() != Obsoleteness::NotObsolete;
 }
 
-// static
-std::u16string ObsoleteSystem::LocalizedObsoleteString() {
+std::u16string LocalizedObsoleteString() {
   switch (OsObsoleteness()) {
-    case Obsoleteness::MacOS1011Obsolete:
-      return l10n_util::GetStringUTF16(IDS_MAC_10_11_OBSOLETE);
-    case Obsoleteness::MacOS1012Obsolete:
-      return l10n_util::GetStringUTF16(IDS_MAC_10_12_OBSOLETE);
+    case Obsoleteness::MacOS1013Obsolete:
+      return l10n_util::GetStringUTF16(IDS_MAC_10_13_OBSOLETE);
+    case Obsoleteness::MacOS1014Obsolete:
+      return l10n_util::GetStringUTF16(IDS_MAC_10_14_OBSOLETE);
     default:
       return std::u16string();
   }
 }
 
-// static
-bool ObsoleteSystem::IsEndOfTheLine() {
-  return CHROME_VERSION_MAJOR >= 103;
+bool IsEndOfTheLine() {
+  // M116 is the last milestone supporting macOS 10.13 and macOS 10.14.
+  return CHROME_VERSION_MAJOR >= 116;
 }
 
-// static
-const char* ObsoleteSystem::GetLinkURL() {
+const char* GetLinkURL() {
   return chrome::kMacOsObsoleteURL;
 }
+
+}  // namespace ObsoleteSystem

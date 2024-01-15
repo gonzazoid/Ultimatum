@@ -25,11 +25,12 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.StrictMode;
-import android.support.test.InstrumentationRegistry;
 import android.telephony.TelephonyManager;
 
+import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.MediumTest;
 
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -57,15 +58,11 @@ import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.concurrent.FutureTask;
 
-/**
- * Tests for org.chromium.net.NetworkChangeNotifier.
- */
+/** Tests for org.chromium.net.NetworkChangeNotifier. */
 @RunWith(BaseJUnit4ClassRunner.class)
 @SuppressLint("NewApi")
 public class NetworkChangeNotifierTest {
-    /**
-     * Listens for alerts fired by the NetworkChangeNotifier when network status changes.
-     */
+    /** Listens for alerts fired by the NetworkChangeNotifier when network status changes. */
     private static class NetworkChangeNotifierTestObserver
             implements NetworkChangeNotifier.ConnectionTypeObserver {
         private boolean mReceivedNotification;
@@ -84,9 +81,7 @@ public class NetworkChangeNotifierTest {
         }
     }
 
-    /**
-      * Listens for native notifications of max bandwidth change.
-      */
+    /** Listens for native notifications of max bandwidth change. */
     private static class TestNetworkChangeNotifier extends NetworkChangeNotifier {
         @Override
         void notifyObserversOfConnectionSubtypeChange(int newConnectionSubtype) {
@@ -109,9 +104,10 @@ public class NetworkChangeNotifierTest {
 
         static {
             try {
-                sNetworkConstructor = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
-                        ? Network.class.getConstructor(Integer.TYPE)
-                        : null;
+                sNetworkConstructor =
+                        (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+                                ? Network.class.getConstructor(Integer.TYPE)
+                                : null;
             } catch (NoSuchMethodException | SecurityException e) {
                 throw new RuntimeException("Unable to get Network constructor", e);
             }
@@ -119,25 +115,27 @@ public class NetworkChangeNotifierTest {
 
         static NetworkCapabilities getCapabilities(int transport) {
             // Create a NetworkRequest with corresponding capabilities
-            NetworkRequest request = new NetworkRequest.Builder()
-                                             .addCapability(NET_CAPABILITY_INTERNET)
-                                             .addTransportType(transport)
-                                             .build();
+            NetworkRequest request =
+                    new NetworkRequest.Builder()
+                            .addCapability(NET_CAPABILITY_INTERNET)
+                            .addTransportType(transport)
+                            .build();
             // Extract the NetworkCapabilities from the NetworkRequest.
             try {
-                return (NetworkCapabilities) request.getClass()
-                        .getDeclaredField("networkCapabilities")
-                        .get(request);
+                return (NetworkCapabilities)
+                        request.getClass().getDeclaredField("networkCapabilities").get(request);
             } catch (NoSuchFieldException | IllegalAccessException e) {
                 return null;
             }
         }
+
         // Create Network object given a NetID.
         static Network netIdToNetwork(int netId) {
             try {
                 return sNetworkConstructor.newInstance(netId);
-            } catch (
-            InstantiationException | InvocationTargetException | IllegalAccessException e) {
+            } catch (InstantiationException
+                    | InvocationTargetException
+                    | IllegalAccessException e) {
                 throw new IllegalStateException("Trying to create Network when not allowed");
             }
         }
@@ -145,18 +143,17 @@ public class NetworkChangeNotifierTest {
 
     private static void triggerApplicationStateChange(
             final RegistrationPolicyApplicationStatus policy, final int applicationState) {
-        ThreadUtils.runOnUiThreadBlocking(new Runnable() {
-            @Override
-            public void run() {
-                setApplicationHasVisibleActivities(
-                        applicationState == ApplicationState.HAS_RUNNING_ACTIVITIES);
-            }
-        });
+        ThreadUtils.runOnUiThreadBlocking(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        setApplicationHasVisibleActivities(
+                                applicationState == ApplicationState.HAS_RUNNING_ACTIVITIES);
+                    }
+                });
     }
 
-    /**
-     * Mocks out calls to the ConnectivityManager.
-     */
+    /** Mocks out calls to the ConnectivityManager. */
     private class MockConnectivityManagerDelegate extends ConnectivityManagerDelegate {
         // A network we're pretending is currently connected.
         private class MockNetwork {
@@ -197,11 +194,16 @@ public class NetworkChangeNotifierTest {
 
         @Override
         public NetworkState getNetworkState(WifiManagerDelegate wifiManagerDelegate) {
-            return new NetworkState(mActiveNetworkExists, mNetworkType, mNetworkSubtype, mIsMetered,
+            return new NetworkState(
+                    mActiveNetworkExists,
+                    mNetworkType,
+                    mNetworkSubtype,
+                    mIsMetered,
                     mNetworkType == ConnectivityManager.TYPE_WIFI
                             ? wifiManagerDelegate.getWifiSsid()
                             : null,
-                    mIsPrivateDnsActive, mPrivateDnsServerName);
+                    mIsPrivateDnsActive,
+                    mPrivateDnsServerName);
         }
 
         @Override
@@ -322,9 +324,7 @@ public class NetworkChangeNotifierTest {
         }
     }
 
-    /**
-     * Mocks out calls to the WifiManager.
-     */
+    /** Mocks out calls to the WifiManager. */
     private static class MockWifiManagerDelegate extends WifiManagerDelegate {
         private String mWifiSSID;
 
@@ -350,7 +350,13 @@ public class NetworkChangeNotifierTest {
 
     // Types of network changes. Each is associated with a NetworkChangeNotifierAutoDetect.Observer
     // callback, and NONE is provided to indicate no callback observed.
-    private static enum ChangeType { NONE, CONNECT, SOON_TO_DISCONNECT, DISCONNECT, PURGE_LIST }
+    private static enum ChangeType {
+        NONE,
+        CONNECT,
+        SOON_TO_DISCONNECT,
+        DISCONNECT,
+        PURGE_LIST
+    }
 
     // Recorded information about a network change that took place.
     private static class ChangeInfo {
@@ -378,8 +384,10 @@ public class NetworkChangeNotifierTest {
 
         @Override
         public void onConnectionTypeChanged(int newConnectionType) {}
+
         @Override
         public void onConnectionCostChanged(int newConnectionCost) {}
+
         @Override
         public void onConnectionSubtypeChanged(int newConnectionSubtype) {}
 
@@ -443,26 +451,42 @@ public class NetworkChangeNotifierTest {
      *            it is in the foreground.
      */
     private void createTestNotifier(WatchForChanges watchForChanges) {
-        Context context = new ContextWrapper(InstrumentationRegistry.getInstrumentation()
-                                                     .getTargetContext()
-                                                     .getApplicationContext()) {
-            // Mock out to avoid unintended system interaction.
-            @Override
-            public Intent registerReceiver(BroadcastReceiver receiver, IntentFilter filter) {
-                // Should not be used starting with Pie.
-                Assert.assertFalse(Build.VERSION.SDK_INT >= Build.VERSION_CODES.P);
-                return null;
-            }
+        Context context =
+                new ContextWrapper(
+                        InstrumentationRegistry.getInstrumentation()
+                                .getTargetContext()
+                                .getApplicationContext()) {
+                    // Mock out to avoid unintended system interaction.
+                    @Override
+                    public Intent registerReceiver(
+                            BroadcastReceiver receiver,
+                            IntentFilter filter,
+                            String permission,
+                            Handler scheduler,
+                            int flags) {
+                        // Should not be used starting with Pie.
+                        Assert.assertFalse(Build.VERSION.SDK_INT >= Build.VERSION_CODES.P);
+                        return null;
+                    }
 
-            @Override
-            public void unregisterReceiver(BroadcastReceiver receiver) {}
+                    @Override
+                    public Intent registerReceiver(
+                            BroadcastReceiver receiver,
+                            IntentFilter filter,
+                            String permission,
+                            Handler scheduler) {
+                        return registerReceiver(receiver, filter, permission, scheduler, 0);
+                    }
 
-            // Don't allow escaping the mock via the application context.
-            @Override
-            public Context getApplicationContext() {
-                return this;
-            }
-        };
+                    @Override
+                    public void unregisterReceiver(BroadcastReceiver receiver) {}
+
+                    // Don't allow escaping the mock via the application context.
+                    @Override
+                    public Context getApplicationContext() {
+                        return this;
+                    }
+                };
         ContextUtils.initApplicationContextForTests(context);
         mNotifier = new TestNetworkChangeNotifier();
         NetworkChangeNotifier.resetInstanceForTests(mNotifier);
@@ -474,8 +498,7 @@ public class NetworkChangeNotifierTest {
         mReceiver = NetworkChangeNotifier.getAutoDetectorForTest();
         Assert.assertNotNull(mReceiver);
 
-        mConnectivityDelegate =
-                new MockConnectivityManagerDelegate();
+        mConnectivityDelegate = new MockConnectivityManagerDelegate();
         mConnectivityDelegate.setActiveNetworkExists(true);
         mReceiver.setConnectivityManagerDelegateForTests(mConnectivityDelegate);
 
@@ -501,22 +524,27 @@ public class NetworkChangeNotifierTest {
         LibraryLoader.getInstance().setLibraryProcessType(LibraryProcessType.PROCESS_BROWSER);
         LibraryLoader.getInstance().ensureInitialized();
 
-        ThreadUtils.runOnUiThreadBlocking(() -> {
-            if (sActivity == null) {
-                sActivity = new Activity();
-                if (!ApplicationStatus.isInitialized()) {
-                    ApplicationStatus.initialize(BaseJUnit4ClassRunner.getApplication());
-                }
-                ApplicationStatus.onStateChangeForTesting(sActivity, ActivityState.CREATED);
-            }
-            setApplicationHasVisibleActivities(false);
-            createTestNotifier(WatchForChanges.ONLY_WHEN_APP_IN_FOREGROUND);
-        });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    if (sActivity == null) {
+                        sActivity = new Activity();
+                        if (!ApplicationStatus.isInitialized()) {
+                            ApplicationStatus.initialize(BaseJUnit4ClassRunner.getApplication());
+                        }
+                        ApplicationStatus.onStateChangeForTesting(sActivity, ActivityState.CREATED);
+                    }
+                    setApplicationHasVisibleActivities(false);
+                    createTestNotifier(WatchForChanges.ONLY_WHEN_APP_IN_FOREGROUND);
+                });
     }
 
-    /**
-     * Allow tests to simulate the application being foregrounded or backgrounded.
-     */
+    @After
+    public void tearDown() {
+        // Reset the network change notifier.
+        NetworkChangeNotifier.resetInstanceForTests();
+    }
+
+    /** Allow tests to simulate the application being foregrounded or backgrounded. */
     private static void setApplicationHasVisibleActivities(boolean hasVisibleActivities) {
         ThreadUtils.assertOnUiThread();
         ApplicationStatus.onStateChangeForTesting(
@@ -536,14 +564,16 @@ public class NetworkChangeNotifierTest {
                 new TestNetworkChangeNotifierAutoDetectObserver();
 
         setApplicationHasVisibleActivities(true);
-        NetworkChangeNotifierAutoDetect receiver = new NetworkChangeNotifierAutoDetect(
-                observer, new RegistrationPolicyApplicationStatus());
+        NetworkChangeNotifierAutoDetect receiver =
+                new NetworkChangeNotifierAutoDetect(
+                        observer, new RegistrationPolicyApplicationStatus());
 
         Assert.assertTrue(receiver.isReceiverRegisteredForTesting());
 
         setApplicationHasVisibleActivities(false);
-        receiver = new NetworkChangeNotifierAutoDetect(
-                observer, new RegistrationPolicyApplicationStatus());
+        receiver =
+                new NetworkChangeNotifierAutoDetect(
+                        observer, new RegistrationPolicyApplicationStatus());
 
         Assert.assertFalse(receiver.isReceiverRegisteredForTesting());
     }
@@ -569,9 +599,7 @@ public class NetworkChangeNotifierTest {
         Assert.assertTrue(mReceiver.isReceiverRegisteredForTesting());
     }
 
-    /**
-     * Tests that getCurrentConnectionCost() returns the correct result.
-     */
+    /** Tests that getCurrentConnectionCost() returns the correct result. */
     @Test
     @UiThreadTest
     @MediumTest
@@ -583,9 +611,7 @@ public class NetworkChangeNotifierTest {
         Assert.assertEquals(ConnectionCost.UNMETERED, getCurrentConnectionCost());
     }
 
-    /**
-     * Tests that changing the network type changes the connection subtype.
-     */
+    /** Tests that changing the network type changes the connection subtype. */
     @Test
     @UiThreadTest
     @MediumTest
@@ -849,8 +875,9 @@ public class NetworkChangeNotifierTest {
     public void testQueryableAPIsDoNotCrash() {
         NetworkChangeNotifierAutoDetect.Observer observer =
                 new TestNetworkChangeNotifierAutoDetectObserver();
-        NetworkChangeNotifierAutoDetect ncn = new NetworkChangeNotifierAutoDetect(observer,
-                new RegistrationPolicyAlwaysRegister());
+        NetworkChangeNotifierAutoDetect ncn =
+                new NetworkChangeNotifierAutoDetect(
+                        observer, new RegistrationPolicyAlwaysRegister());
         ncn.getNetworksAndTypes();
         ncn.getDefaultNetId();
     }
@@ -868,8 +895,9 @@ public class NetworkChangeNotifierTest {
                 new TestNetworkChangeNotifierAutoDetectObserver();
 
         setApplicationHasVisibleActivities(false);
-        NetworkChangeNotifierAutoDetect ncn = new NetworkChangeNotifierAutoDetect(
-                observer, new RegistrationPolicyApplicationStatus());
+        NetworkChangeNotifierAutoDetect ncn =
+                new NetworkChangeNotifierAutoDetect(
+                        observer, new RegistrationPolicyApplicationStatus());
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
             Assert.assertEquals(0, ncn.getNetworksAndTypes().length);
@@ -878,30 +906,31 @@ public class NetworkChangeNotifierTest {
         }
 
         // Insert a mocked dummy implementation for the ConnectivityDelegate.
-        ncn.setConnectivityManagerDelegateForTests(new ConnectivityManagerDelegate() {
-            public final Network[] mNetworks =
-                    new Network[] {Helper.netIdToNetwork(111), Helper.netIdToNetwork(333)};
+        ncn.setConnectivityManagerDelegateForTests(
+                new ConnectivityManagerDelegate() {
+                    public final Network[] mNetworks =
+                            new Network[] {Helper.netIdToNetwork(111), Helper.netIdToNetwork(333)};
 
-            @Override
-            protected Network[] getAllNetworksUnfiltered() {
-                return mNetworks;
-            }
+                    @Override
+                    protected Network[] getAllNetworksUnfiltered() {
+                        return mNetworks;
+                    }
 
-            @Override
-            Network getDefaultNetwork() {
-                return mNetworks[1];
-            }
+                    @Override
+                    Network getDefaultNetwork() {
+                        return mNetworks[1];
+                    }
 
-            @Override
-            protected NetworkCapabilities getNetworkCapabilities(Network network) {
-                return Helper.getCapabilities(TRANSPORT_WIFI);
-            }
+                    @Override
+                    protected NetworkCapabilities getNetworkCapabilities(Network network) {
+                        return Helper.getCapabilities(TRANSPORT_WIFI);
+                    }
 
-            @Override
-            public int getConnectionType(Network network) {
-                return ConnectionType.CONNECTION_NONE;
-            }
-        });
+                    @Override
+                    public int getConnectionType(Network network) {
+                        return ConnectionType.CONNECTION_NONE;
+                    }
+                });
 
         // Verify that the mock delegate connectivity manager is being used
         // by the network change notifier auto-detector.
@@ -1030,9 +1059,7 @@ public class NetworkChangeNotifierTest {
         Assert.assertEquals(101, observer.mChanges.get(2).mNetId);
     }
 
-    /**
-     * Tests that isOnline() returns the correct result.
-     */
+    /** Tests that isOnline() returns the correct result. */
     @Test
     @UiThreadTest
     @MediumTest
@@ -1060,14 +1087,16 @@ public class NetworkChangeNotifierTest {
     @MediumTest
     @MinAndroidSdkLevel(Build.VERSION_CODES.LOLLIPOP) // android.net.Network available in L+.
     public void testVpnAccessibleDoesNotLeak() {
-        ConnectivityManagerDelegate connectivityManagerDelegate = new ConnectivityManagerDelegate(
-                InstrumentationRegistry.getInstrumentation().getTargetContext());
+        ConnectivityManagerDelegate connectivityManagerDelegate =
+                new ConnectivityManagerDelegate(
+                        InstrumentationRegistry.getInstrumentation().getTargetContext());
         StrictMode.VmPolicy oldPolicy = StrictMode.getVmPolicy();
-        StrictMode.setVmPolicy(new StrictMode.VmPolicy.Builder()
-                                       .detectLeakedClosableObjects()
-                                       .penaltyDeath()
-                                       .penaltyLog()
-                                       .build());
+        StrictMode.setVmPolicy(
+                new StrictMode.VmPolicy.Builder()
+                        .detectLeakedClosableObjects()
+                        .penaltyDeath()
+                        .penaltyLog()
+                        .build());
         try {
             // Test non-existent Network (NetIds only go to 65535).
             connectivityManagerDelegate.vpnAccessible(Helper.netIdToNetwork(65537));
@@ -1096,14 +1125,16 @@ public class NetworkChangeNotifierTest {
     @MediumTest
     @MinAndroidSdkLevel(Build.VERSION_CODES.O) // detectUntaggedSockets added in Oreo.
     public void testVpnAccessibleDoesNotCreateUntaggedSockets() {
-        ConnectivityManagerDelegate connectivityManagerDelegate = new ConnectivityManagerDelegate(
-                InstrumentationRegistry.getInstrumentation().getTargetContext());
+        ConnectivityManagerDelegate connectivityManagerDelegate =
+                new ConnectivityManagerDelegate(
+                        InstrumentationRegistry.getInstrumentation().getTargetContext());
         StrictMode.VmPolicy oldPolicy = StrictMode.getVmPolicy();
-        StrictMode.setVmPolicy(new StrictMode.VmPolicy.Builder()
-                                       .detectUntaggedSockets()
-                                       .penaltyDeath()
-                                       .penaltyLog()
-                                       .build());
+        StrictMode.setVmPolicy(
+                new StrictMode.VmPolicy.Builder()
+                        .detectUntaggedSockets()
+                        .penaltyDeath()
+                        .penaltyLog()
+                        .build());
         try {
             // Test non-existent Network (NetIds only go to 65535).
             connectivityManagerDelegate.vpnAccessible(Helper.netIdToNetwork(65537));

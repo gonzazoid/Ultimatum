@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "base/location.h"
-#include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "components/viz/common/viz_common_export.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -62,14 +61,14 @@ struct VIZ_COMMON_EXPORT BeginFrameId {
   // Creates an invalid set of values.
   BeginFrameId();
   BeginFrameId(const BeginFrameId& id);
+  BeginFrameId& operator=(const BeginFrameId& id);
   BeginFrameId(uint64_t source_id, uint64_t sequence_number);
 
-  bool operator<(const BeginFrameId& other) const;
-  bool operator==(const BeginFrameId& other) const;
-  bool operator!=(const BeginFrameId& other) const;
+  friend std::strong_ordering operator<=>(const BeginFrameId&,
+                                          const BeginFrameId&) = default;
+
   bool IsNextInSequenceTo(const BeginFrameId& previous) const;
   bool IsSequenceValid() const;
-  BeginFrameId& operator=(const BeginFrameId& id);
   std::string ToString() const;
 };
 
@@ -212,6 +211,11 @@ struct VIZ_COMMON_EXPORT BeginFrameArgs {
   // the client and service as the id for trace-events.
   int64_t trace_id = -1;
 
+  // The time when viz dispatched this to a client.
+  base::TimeTicks dispatch_time;
+  // For clients to denote when they received this being dispatched.
+  base::TimeTicks client_arrival_time;
+
   BeginFrameArgsType type = INVALID;
   bool on_critical_path = true;
 
@@ -259,6 +263,9 @@ struct VIZ_COMMON_EXPORT BeginFrameAck {
                 uint64_t sequence_number,
                 bool has_damage,
                 int64_t trace_id = -1);
+
+  BeginFrameAck(const BeginFrameAck& other) = default;
+  BeginFrameAck& operator=(const BeginFrameAck& other) = default;
 
   // Creates a BeginFrameAck for a manual BeginFrame. Used when clients produce
   // a CompositorFrame without prior BeginFrame, e.g. for synchronous drawing.

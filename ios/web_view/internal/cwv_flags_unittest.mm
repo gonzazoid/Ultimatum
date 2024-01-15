@@ -7,6 +7,7 @@
 #include <memory>
 #include <set>
 
+#import "base/containers/contains.h"
 #include "base/test/task_environment.h"
 #include "components/flags_ui/pref_service_flags_storage.h"
 #include "components/prefs/in_memory_pref_store.h"
@@ -15,10 +16,6 @@
 #include "components/prefs/pref_service_factory.h"
 #import "testing/gtest_mac.h"
 #include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace ios_web_view {
 
@@ -47,15 +44,13 @@ class CWVFlagsTest : public PlatformTest {
 TEST_F(CWVFlagsTest, SetUsesSyncAndWalletSandbox) {
   flags_.usesSyncAndWalletSandbox = YES;
   std::set<std::string> stored_flags = flags_storage_->GetFlags();
-  EXPECT_NE(stored_flags.end(), stored_flags.find(kUseSyncSandboxFlagName));
-  EXPECT_NE(stored_flags.end(),
-            stored_flags.find(kUseWalletSandboxFlagNameEnabled));
+  EXPECT_TRUE(base::Contains(stored_flags, kUseSyncSandboxFlagName));
+  EXPECT_TRUE(base::Contains(stored_flags, kUseWalletSandboxFlagNameEnabled));
 
   flags_.usesSyncAndWalletSandbox = NO;
   stored_flags = flags_storage_->GetFlags();
-  EXPECT_EQ(stored_flags.end(), stored_flags.find(kUseSyncSandboxFlagName));
-  EXPECT_EQ(stored_flags.end(),
-            stored_flags.find(kUseWalletSandboxFlagNameEnabled));
+  EXPECT_FALSE(base::Contains(stored_flags, kUseSyncSandboxFlagName));
+  EXPECT_FALSE(base::Contains(stored_flags, kUseWalletSandboxFlagNameEnabled));
 }
 
 // Tests CWVFlag's usesSyncAndWalletSandbox getter.

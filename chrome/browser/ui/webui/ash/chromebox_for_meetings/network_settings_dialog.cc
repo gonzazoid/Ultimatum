@@ -5,9 +5,9 @@
 #include "chrome/browser/ui/webui/ash/chromebox_for_meetings/network_settings_dialog.h"
 
 #include "ash/public/cpp/network_config_service.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "chrome/browser/ash/app_mode/certificate_manager_dialog.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "chrome/browser/ash/login/ui/login_web_dialog.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/webui/ash/cellular_setup/cellular_setup_localized_strings_provider.h"
@@ -71,8 +71,13 @@ class NetworkSettingsMessageHandler : public content::WebUIMessageHandler {
 
   void ShowManageCerts() {
     // Dialogs manage their own lifecycle and will delete themselves.
-    CertificateManagerDialog* dialog = new CertificateManagerDialog(
-        ProfileManager::GetActiveUserProfile(), nullptr);
+    LoginWebDialog* dialog = new LoginWebDialog(
+        ProfileManager::GetActiveUserProfile(), nullptr,
+        l10n_util::GetStringUTF16(IDS_CERTIFICATE_MANAGER_TITLE),
+        GURL(chrome::kChromeUICertificateManagerDialogURL));
+    // TODO: is this the right size to use? this was the old default size of
+    // CertificateManagerDialog before it was removed.
+    dialog->set_dialog_size(gfx::Size{640, 480});
     dialog->Show();
   }
 };
@@ -110,8 +115,8 @@ void NetworkSettingsDialog::OnDialogClosed(const std::string& json_retval) {
 
 NetworkSettingsDialogUi::NetworkSettingsDialogUi(content::WebUI* web_ui)
     : ui::MojoWebDialogUI(web_ui) {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kCfmNetworkSettingsHost);
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      Profile::FromWebUI(web_ui), chrome::kCfmNetworkSettingsHost);
 
   source->AddLocalizedString("headTitle", IDS_CFM_NETWORK_SETTINGS_TITLE);
   source->AddLocalizedString("availableNetworks",
@@ -133,8 +138,6 @@ NetworkSettingsDialogUi::NetworkSettingsDialogUi(content::WebUI* web_ui)
       IDR_CFM_NETWORK_SETTINGS_CFM_NETWORK_SETTINGS_CONTAINER_HTML);
 
   web_ui->AddMessageHandler(std::make_unique<NetworkSettingsMessageHandler>());
-
-  content::WebUIDataSource::Add(Profile::FromWebUI(web_ui), source);
 }
 
 void NetworkSettingsDialogUi::BindInterface(

@@ -6,12 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/ranges/algorithm.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/scoped_async_trace.h"
 #include "media/capture/video/video_capture_device_factory.h"
 #include "media/capture/video/video_capture_metrics.h"
@@ -108,8 +107,7 @@ VideoCaptureErrorOrDevice VideoCaptureSystemImpl::CreateDevice(
   const VideoCaptureDeviceInfo* device_info = LookupDeviceInfoFromId(device_id);
   if (!device_info) {
     return VideoCaptureErrorOrDevice(
-        VideoCaptureError::
-            kVideoCaptureControllerInvalidOrUnsupportedVideoCaptureParametersRequested);
+        VideoCaptureError::kVideoCaptureSystemDeviceIdNotFound);
   }
   return factory_->CreateDevice(device_info->descriptor);
 }

@@ -44,7 +44,7 @@
 // code, there exists an additional layer, in file_manager_private_internal.idl,
 // that provides translation from or to W3C Entry objects.
 [platforms=("chromeos"),
- implemented_in="chrome/browser/chromeos/extensions/file_manager/file_manager_private_api_functions.h"]
+ implemented_in="chrome/browser/ash/extensions/file_manager/file_manager_private_api_functions.h"]
 namespace fileManagerPrivate {
 // Type of the mounted volume.
 enum VolumeType { drive, downloads, removable, archive, provided, mtp,
@@ -54,15 +54,14 @@ enum VolumeType { drive, downloads, removable, archive, provided, mtp,
 // Device type. Available if this is removable volume.
 enum DeviceType { usb, sd, optical, mobile, unknown };
 
+// List of device connection statuses.
+enum DeviceConnectionState {OFFLINE, ONLINE};
+
 // List of connection types of drive.
 enum DriveConnectionStateType {OFFLINE, METERED, ONLINE};
 
 // List of reasons of DriveConnectionStateType.
 enum DriveOfflineReason {NOT_READY, NO_NETWORK, NO_SERVICE};
-
-// Additional data about mount, for example, that the filesystem is not
-// supported.
-enum MountCondition { unknown, unsupported, in_progress };
 
 // Additional information of the context the volume was mounted.
 enum MountContext { user, auto };
@@ -72,75 +71,36 @@ enum MountCompletedEventType { mount, unmount };
 
 // Event type that tells listeners if mount was successful or an error
 // occurred. It also specifies the error.
-enum MountCompletedStatus {
+enum MountError {
   success,
-  error_unknown,
-  error_internal,
-  error_invalid_argument,
-  error_invalid_path,
-  error_path_already_mounted,
-  error_path_not_mounted,
-  error_directory_creation_failed,
-  error_invalid_mount_options,
-  error_invalid_unmount_options,
-  error_insufficient_permissions,
-  error_mount_program_not_found,
-  error_mount_program_failed,
-  error_invalid_device_path,
-  error_unknown_filesystem,
-  error_unsupported_filesystem,
-  error_invalid_archive,
-  error_need_password,
-  error_in_progress,
-  error_cancelled,
-  error_busy
+  in_progress,
+  unknown_error,
+  internal_error,
+  invalid_argument,
+  invalid_path,
+  path_already_mounted,
+  path_not_mounted,
+  directory_creation_failed,
+  invalid_mount_options,
+  insufficient_permissions,
+  mount_program_not_found,
+  mount_program_failed,
+  invalid_device_path,
+  unknown_filesystem,
+  unsupported_filesystem,
+  need_password,
+  cancelled,
+  busy
 };
 
 // Filesystem to format to.
 enum FormatFileSystemType { vfat, exfat, ntfs };
 
 // File transfer progress state.
-enum TransferState { in_progress, completed, failed };
-
-// The type of the progress event for copy or move operations.
-// A copy or a cross-filesystem move happens recursively: these events are
-// expected for each single entry (file or directory) being moved.
-// A local (same-filesystem) move only requires the top-level entries to be
-// renamed: if we move entries 'a.txt', 'b/c.txt', 'b/d.txt' (relative paths),
-// events will be received for only for 'a.txt' and 'b'.
-enum CopyOrMoveProgressStatusType {
-  // "begin" is fired for each entry (file or directory) before
-  // starting the copy or move operation.
-  begin,
-
-  // "progress" is fired periodically to report progress of a file copy or move
-  // (not directory).
-  progress,
-
-  // "end_copy" is fired for each entry (file or directory) that has been
-  // successfully copied to its destination. This event is expected both both
-  // copies and cross-filesystem moves (implemented as copy + delete).
-  end_copy,
-
-  // "end_move" is fired for each entry (file or directory) that has been
-  // successfully moved to its destination, in the case of a "same-filesystem"
-  // move.
-  end_move,
-
-  // "end_remove_source" is fired for each entry (file or directory) that has
-  // been successfully removed from its source location as part of a
-  // "cross-filesystem" move operation.
-  end_remove_source,
-
-  // "success" is fired after all entries have been copied or moved.
-  success,
-
-  // "error" is fired when an error occurs.
-  error
-};
+enum TransferState { in_progress, queued, completed, failed };
 
 // The response when starting installing a Linux package.
-enum InstallLinuxPackageResponse {
+enum InstallLinuxPackageStatus {
   started,
   failed,
   install_already_active
@@ -211,6 +171,8 @@ enum DriveSyncErrorType {
   no_server_space_organization,
   // There is no local space to sync a file.
   no_local_space,
+  // There is no space left on a shared drive.
+  no_shared_drive_space,
   // Miscellaneous errors other than listed above.
   misc
 };
@@ -293,7 +255,10 @@ enum EntryPropertyName {
   isMachineRoot,
   isExternalMedia,
   isArbitrarySyncFolder,
-  syncStatus
+  syncStatus,
+  progress,
+  shortcut,
+  syncCompletedTime
 };
 
 // Source of the volume data.
@@ -313,8 +278,8 @@ enum SourceRestriction {
   native_source
 };
 
-// Recent file types to filter results from getRecentFiles().
-enum RecentFileType {
+// File categories to filter results from getRecentFiles().
+enum FileCategory {
   all,
   audio,
   image,
@@ -346,6 +311,7 @@ enum IOTaskState {
   queued,
   scanning,
   in_progress,
+  paused,
   success,
   error,
   need_password,
@@ -364,6 +330,17 @@ enum IOTaskType {
   zip
 };
 
+enum PolicyErrorType {
+  dlp,
+  enterprise_connectors,
+  dlp_warning_timeout
+};
+
+enum PolicyDialogType {
+  warning,
+  error
+};
+
 enum RecentDateBucket {
   today,
   yesterday,
@@ -377,9 +354,9 @@ enum VmType { termina, plugin_vm, borealis, bruschetta, arcvm };
 
 enum UserType {
   // User doesn't belong to any organization.
-  kUnmanaged,
+  unmanaged,
   // User is a member of an organization.
-  kOrganization
+  organization
 };
 
 enum DlpLevel {
@@ -396,8 +373,12 @@ enum DlpLevel {
 enum SyncStatus {
   // No sync status available for file.
   not_found,
+  // File is queued up for syncing.
+  queued,
   // File is currently being synced.
   in_progress,
+  // File is done syncing.
+  completed,
   // There was an error syncing the file.
   error
 };
@@ -407,6 +388,32 @@ enum SyncStatus {
 enum PolicyDefaultHandlerStatus {
   default_handler_assigned_by_policy,
   incorrect_assignment
+};
+
+// Describes the stage the bulk pinning manager is in. This enum should be kept
+// in sync with chromeos/ash/components/drivefs/mojom/pin_manager_types.mojom.
+enum BulkPinStage {
+  // Initial stage.
+  stopped,
+
+  // Paused because of unfavorable network conditions.
+  paused_offline,
+  // Paused due to battery saver mode active.
+  paused_battery_saver,
+
+  // In-progress stages.
+  getting_free_space,
+  listing_files,
+  syncing,
+
+  // Final success stage.
+  success,
+
+  // Final error stages.
+  not_enough_space,
+  cannot_get_free_space,
+  cannot_list_files,
+  cannot_enable_docs_offline
 };
 
 // These three fields together uniquely identify a task.
@@ -427,16 +434,19 @@ dictionary FileTask {
   DOMString title;
 
   // Task icon url (from chrome://extension-icon/...)
-  DOMString iconUrl;
+  DOMString? iconUrl;
 
   // True if this task is a default task for the selected files.
-  boolean isDefault;
+  boolean? isDefault;
 
   // True if this task is from generic file handler. Generic file handler is a
   // file handler which handles any type of files (e.g. extensions: ["*"],
   // types: ["*/*"]). Partial wild card (e.g. types: ["image/*"]) is not
   // generic file handler.
-  boolean isGenericFileHandler;
+  boolean? isGenericFileHandler;
+
+  // True if this is task is blocked by Data Leak Prevention (DLP).
+  boolean? isDlpBlocked;
 };
 
 // Represents a set of tasks capable of handling file entries.
@@ -552,6 +562,18 @@ dictionary EntryProperties {
 
   // Sync status for files tracked by different cloud filesystem providers.
   SyncStatus? syncStatus;
+
+  // Progress representing some ongoing operation with the file.
+  // E.g., pasting, syncing. Note: currently, this is exclusively being used
+  // for Drive syncing.
+  double? progress;
+
+  // Time in milliseconds since the epoch when the file last received a
+  // "completed" sync status.
+  double? syncCompletedTime;
+
+  // True if the entry is a shortcut.
+  boolean? shortcut;
 };
 
 // Information about total and remaining size on the mount point.
@@ -563,15 +585,25 @@ dictionary MountPointSizeStats {
   double remainingSize;
 };
 
+dictionary SearchDriveResponse {
+  // Search results.
+  [instanceOf=Entry] object[] entries;
+
+  // ID of the feed that contains next chunk of the search result.
+  // Should be sent to the next searchDrive request to perform
+  // incremental search.
+  DOMString nextFeed;
+};
+
 // Free and total space available in Drive relative to both the user and their
 // organization, if they belong to one.
 dictionary DriveQuotaMetadata {
   UserType userType;
 
-  // How much space the individual user has used.
-  double usedUserBytes;
-  // The individual limit of a user. -1 means infinite.
-  double totalUserBytes;
+  // How much space the individual user, or shared drive has used.
+  double usedBytes;
+  // The individual user, or shared drive limit. -1 means infinite.
+  double totalBytes;
 
   // The following two fields only have meaning if user_type is kOrganization.
   // Whether the organization has exceeded its storage limit.
@@ -592,6 +624,18 @@ dictionary ProfileInfo {
   // TODO(hirono): Remove the property because of the design change of
   // multi-profile suuport.
   boolean isCurrentProfile;
+};
+
+// The return data for getProfiles() API.
+dictionary ProfilesResponse {
+  // List of profile information.
+  ProfileInfo[] profiles;
+
+  // ID of the profile that runs the application instance.
+  DOMString currentProfileId;
+
+  // ID of the profile that shows the application window.
+  DOMString displayedProfileId;
 };
 
 // Represents an icon in multiple dimensions. All are optional.
@@ -656,7 +700,7 @@ dictionary VolumeMetadata {
 
   // Additional data about mount, for example, that the filesystem is not
   // supported.
-  MountCondition? mountCondition;
+  MountError? mountCondition;
 
   // Context in which the volume has been mounted.
   MountContext? mountContext;
@@ -689,7 +733,7 @@ dictionary MountCompletedEvent {
 
   // Event type that tells listeners if mount was successful or an error
   // occurred. It also specifies the error.
-  MountCompletedStatus status;
+  MountError status;
 
   // Metadata of the mounted volume.
   VolumeMetadata volumeMetadata;
@@ -698,9 +742,9 @@ dictionary MountCompletedEvent {
   boolean shouldNotify;
 };
 
-// Payload data for file transfer status updates.
+// Payload data for aggregate file transfer status updates.
 dictionary FileTransferStatus {
-  // URL of file that is being transfered.
+  // URL of file that is being transferred.
   DOMString fileUrl;
 
   // File transfer progress state.
@@ -723,6 +767,18 @@ dictionary FileTransferStatus {
   boolean hideWhenZeroJobs;
 };
 
+// Information about the syncing state of an individual file.
+dictionary SyncState {
+  // URL of file that is being transferred.
+  DOMString fileUrl;
+
+  // File transfer progress state.
+  SyncStatus syncStatus;
+
+  // Transfer progress so far. Ranges from 0 to 1.
+  double progress;
+};
+
 // Error during the drive sync.
 dictionary DriveSyncErrorEvent {
   // Error type.
@@ -730,6 +786,9 @@ dictionary DriveSyncErrorEvent {
 
   // File URL of the entry that the error happens to.
   DOMString fileUrl;
+
+  // Shared drive name if the error relates to a shared drive.
+  DOMString? sharedDrive;
 };
 
 // Confirmation dialog from Drive asking the user to accept or reject an
@@ -740,31 +799,6 @@ dictionary DriveConfirmDialogEvent {
 
   // File URL of the entry associated with the dialog.
   DOMString fileUrl;
-};
-
-// Payload data for copy or move status progress updates.
-dictionary CopyOrMoveProgressStatus {
-  // The type of the progress event.
-  CopyOrMoveProgressStatusType type;
-
-  // URL for the entry currently being copied. This field is particularly useful
-  // when a directory copy is initiated with startCopy(). The field tells what
-  // file/directory in that directory is now being copied.
-  DOMString? sourceUrl;
-
-  // URL for the entry currently being created. This field is particularly
-  // useful when a directory copy is initiated with startCopy(). The field tells
-  // what file/directory in that directory is being created. Available only for
-  // end_copy_entry and success.
-  DOMString? destinationUrl;
-
-  // Number of processed bytes for the file currently being copied. Available
-  // only for "progress" event. To show the progress bar, a caller needs to
-  // pre-compute the size of files being copied for the file (not directory).
-  double? size;
-
-  // DOMError's name. Available only for ERROR event.
-  DOMString? error;
 };
 
 // Detailed information of change.
@@ -806,7 +840,7 @@ dictionary GetVolumeRootOptions {
 
 dictionary Preferences {
   boolean driveEnabled;
-  boolean cellularDisabled;
+  boolean driveSyncEnabledOnMeteredNetwork;
   boolean searchSuggestEnabled;
   boolean use24hourClock;
   DOMString timezone;
@@ -814,18 +848,29 @@ dictionary Preferences {
   boolean arcRemovableMediaAccessEnabled;
   DOMString[] folderShortcuts;
   boolean trashEnabled;
+  double officeFileMovedOneDrive;
+  double officeFileMovedGoogleDrive;
+  boolean driveFsBulkPinningAvailable;
+  boolean driveFsBulkPinningEnabled;
 };
 
 dictionary PreferencesChange {
-  boolean? cellularDisabled;
+  boolean? driveSyncEnabledOnMeteredNetwork;
   boolean? arcEnabled;
   boolean? arcRemovableMediaAccessEnabled;
   DOMString[]? folderShortcuts;
+  boolean? driveFsBulkPinningEnabled;
 };
 
 dictionary SearchParams {
   // Search query.
   DOMString query;
+
+  // The category of files to which the search is limited.
+  FileCategory? category;
+
+  // The minimum modified time of the files to be returned
+  double? modifiedTimestamp;
 
   // ID of the search feed that should be fetched next. Value passed here should
   // be gotten from previous searchDrive call. It can be empty for the initial
@@ -834,6 +879,10 @@ dictionary SearchParams {
 };
 
 dictionary SearchMetadataParams {
+  // Optional root directory from which to start the search. If not present,
+  // the search begins at the local root.
+  [instanceOf=DirectoryEntry] object? rootDir;
+
   // Search query. It can be empty. Any filename matches to an empty query.
   DOMString query;
 
@@ -842,6 +891,13 @@ dictionary SearchMetadataParams {
 
   // Maximum number of results.
   long maxResults;
+
+  // Modified timestamp. The file must have modified timestamp more recent
+  // than this to be included in results.
+  double? modifiedTimestamp;
+
+  // The category of files to which the search is limited.
+  FileCategory? category;
 };
 
 // Entry and Drive-related properties representing a search result.
@@ -869,13 +925,6 @@ dictionary DriveConnectionState {
 
   // Reasons of offline.
   DriveOfflineReason? reason;
-
-  // Whether the device has a cellular network access or not. i.e. the |type|
-  // can be 'metered' or not.
-  boolean hasCellularNetworkAccess;
-
-  // Whether or not hosted files can be pinned.
-  boolean canPinHostedFiles;
 };
 
 // Device event dispatched to listeners of onDeviceChaged.  See also
@@ -913,6 +962,17 @@ dictionary Provider {
   ProviderSource source;
 };
 
+// chrome/common/extensions/api/file_system_provider.idl:Action
+// Information about an action for an entry.
+dictionary FileSystemProviderAction {
+  // The identifier of the action. Any string or $(ref:CommonActionId) for
+  // common actions.
+  DOMString id;
+
+  // The title of the action. It may be ignored for common actions.
+  DOMString? title;
+};
+
 // Information about a Linux package in response to GetLinuxPackageInfo.
 dictionary LinuxPackageInfo {
   DOMString name;
@@ -932,8 +992,19 @@ dictionary CrostiniEvent {
   // VM that this event relates to.
   DOMString vmName;
 
+  // Name of the container this event relates to.
+  DOMString containerName;
+
   // Paths that have been shared or unshared.
   [instanceOf=Entry] object[] entries;
+};
+
+dictionary CrostiniSharedPathResponse {
+  // Entries shared with crostini container.
+  [instanceOf=Entry] object[] entries;
+
+  // true the first time this is called for the session.
+  boolean firstForSession;
 };
 
 // Represents an Android app (activity).
@@ -1019,7 +1090,7 @@ dictionary OpenWindowParams {
 dictionary IOTaskParams {
   // Destination folder for tasks that require one. Not required by |delete|
   // task.
-  [instanceof=DirectoryEntry] object? destinationFolder;
+  [instanceOf=DirectoryEntry] object? destinationFolder;
 
   // Password used for unpacking encrypted archives.
   DOMString? password;
@@ -1030,6 +1101,78 @@ dictionary IOTaskParams {
   boolean? showNotification;
 };
 
+// Holds information about data protection policy errors, see file_manager::io_task::PolicyError.
+dictionary PolicyError {
+  // Type of the error.
+  PolicyErrorType type;
+  // The number of files blocked by the policy.
+  long policyFileCount;
+  // The name of the first blocked file. Used for notifications.
+  DOMString fileName;
+  // Normally the review button is only shown when `policyFileCount` is >1, this option allows to force
+  // the display of the review button irrespective of other conditions.
+  boolean alwaysShowReview;
+};
+
+// IO task state::PAUSED name conflict parameters, see file_manager::io_task::ConflictPauseParams.
+dictionary ConflictPauseParams {
+  // The conflict file name.
+  DOMString? conflictName;
+
+  // True if the conflict file name is a directory.
+  boolean? conflictIsDirectory;
+
+  // Set true if there are potentially multiple conflicted file names.
+  boolean? conflictMultiple;
+
+  // The conflict copy or move target URL.
+  DOMString? conflictTargetUrl;
+};
+
+// IO task state::PAUSED policy parameters, see file_manager::io_task::PolicyPauseParams.
+dictionary PolicyPauseParams {
+  // One of DLP or Enterprise Connectors.
+  PolicyErrorType type;
+  // The number of files under warning restriction.
+  long policyFileCount;
+  // The name of the first file under warning restriction. Used for notifications.
+  DOMString fileName;
+  // Normally the review button is only shown when `policyFileCount` is >1, this option allows to force
+  // the display of the review button irrespective of other conditions.
+  boolean alwaysShowReview;
+};
+
+// IO task state::PAUSED parameters, see file_manager::io_task::PauseParams.
+dictionary PauseParams {
+  // Set iff pausing due to name conflict.
+  ConflictPauseParams? conflictParams;
+  // Set iff pausing due to policy.
+  PolicyPauseParams? policyParams;
+};
+
+// Resume IO Task parameters, see file_manager::io_task::ConflictResumeParams.
+dictionary ConflictResumeParams {
+  // How to resolve a CopyOrMoveIOTask file name conflict: either 'keepboth'
+  // or 'replace'.
+  DOMString? conflictResolve;
+
+  // Set true if conflictResolve should apply to future file name conflicts.
+  boolean? conflictApplyToAll;
+};
+
+// Resume IO Task parameters, see file_manager::io_task::PolicyResumeParams.
+dictionary PolicyResumeParams {
+  PolicyErrorType type;
+};
+
+// Resume IO Task parameters, see file_manager::io_task::ResumeParams.
+dictionary ResumeParams {
+  // Set iff paused due to name conflict.
+  ConflictResumeParams? conflictParams;
+  // Set iff paused due to policy.
+  PolicyResumeParams? policyParams;
+};
+
 // IO Task Progress status, see file_manager::io_task::ProgressStatus.
 dictionary ProgressStatus {
 
@@ -1038,6 +1181,10 @@ dictionary ProgressStatus {
 
   // Current state of the task sending the progress.
   IOTaskState state;
+
+  // Type of policy error that occurred, if any.
+  // Used only if Data Leak Prevention or Enterprise Connectors policies apply.
+  PolicyError? policyError;
 
   // Name of the first source entry.
   DOMString sourceName;
@@ -1064,14 +1211,33 @@ dictionary ProgressStatus {
   // The estimate time to finish the operation.
   double remainingSeconds;
 
+  // Number of sources scanned. Only used when in SCANNING state.
+  // When scanning files, the progress is roughly the percentage of the
+  // number of scanned items out of the total items. This isn't always
+  // accurate, e.g. when uploading entire folders or because some items
+  // are not scanned at all. The goal is to show the user that some
+  // progress is happening.
+  long sourcesScanned;
+
   // Whether notifications should be shown on progress status.
   boolean showNotification;
 
   // The name of the last error that happened.
   DOMString errorName;
 
+  // I/O task state::PAUSED parameters.
+  PauseParams? pauseParams;
+
   // The files affected by the IOTask. Currently only returned for TrashIOTask.
   [instanceOf=Entry] object[]? outputs;
+
+  // List of files skipped during the operation because we couldn't decrypt
+  // them.
+  DOMString[] skippedEncryptedFiles;
+
+  // Volume id of the destination for operations that transfer files to a
+  // directory (e.g. copy or move).
+  DOMString destinationVolumeId;
 };
 
 dictionary DlpMetadata {
@@ -1080,6 +1246,10 @@ dictionary DlpMetadata {
 
   // True if there is any DLP policy on the file, false otherwise.
   boolean isDlpRestricted;
+
+  // True if the file cannot be accessed by a specific destination,
+  // which is passed when collecting the metadata.
+  boolean isRestrictedForDestination;
 };
 
 dictionary DlpRestrictionDetails {
@@ -1125,6 +1295,43 @@ dictionary ParsedTrashInfoFile {
 
   // The date the file was originally deleted.
   double deletionDate;
+};
+
+// The current progress of the bulk pinning manager. This is a subset of the
+// Progress struct in chromeos/ash/components/drivefs/drivefs_pinning_manager.h
+dictionary BulkPinProgress {
+  // The stage the bulk pin manager is in.
+  BulkPinStage stage;
+
+  // Estimated amount of free space on the stateful partition in bytes.
+  double freeSpaceBytes;
+
+  // Estimated amount of free space required in order to successfully complete
+  // pinning.
+  double requiredSpaceBytes;
+
+  // Estimated amount of bytes remaining to be downloaded in order to
+  // successfully complete pinning.
+  double bytesToPin;
+
+  // Bytes that have been downloaded so far.
+  double pinnedBytes;
+
+  // Total number of files to pin.
+  long filesToPin;
+
+  // Show the total number of files enumerated during the Listing files stage.
+  long listedFiles;
+
+  // Estimated time remaining to pin all the `bytesToPin`.
+  double remainingSeconds;
+
+  // Should the bulk-pinning manager actually pin files, or should it stop after
+  // checking the space requirements?
+  boolean shouldPin;
+
+  // Has the bulk-pinning manager ever emptied its set of tracked items?
+  boolean emptiedQueue;
 };
 
 // Callback that does not take arguments.
@@ -1191,10 +1398,6 @@ callback GetDlpBlockedComponentsCallback = void(VolumeType[] blockedComponents);
 // the caller that created the dialog (Save As/File Picker).
 callback GetDialogCallerCallback = void(DialogCallerInformation caller);
 
-// |copyId| ID of the copy task. Can be used to identify the progress, and to
-// cancel the task.
-callback StartCopyCallback = void(long copyId);
-
 // |taskId| ID of the task that was started. Can be used to cancel ongoing task.
 callback IOTaskIdCallback = void(long taskId);
 
@@ -1212,8 +1415,7 @@ callback GetPreferencesCallback = void(Preferences result);
 // |nextFeed| ID of the feed that contains next chunk of the search result.
 //     Should be sent to the next searchDrive request to perform
 //     incremental search.
-callback SearchDriveCallback =
-    void([instanceOf=Entry] object[] entries, DOMString nextFeed);
+callback SearchDriveCallback = void(SearchDriveResponse response);
 
 callback SearchDriveMetadataCallback =
     void(DriveMetadataSearchResult[] results);
@@ -1225,33 +1427,14 @@ callback SearchFilesCallback = void([instanceOf=Entry] object[] entries);
 // contain at most one path per hash.
 callback SearchFilesByHashesCallback = void(object paths);
 
-// |zipId| The ID of the ZIP operation.
-// |totalBytes| Total number of bytes to be zipped.
-callback ZipSelectionCallback = void(long zipId, double totalBytes);
-
-// |result| Less than 0 if the operation is still in progress, 0 if the
-// operation finished successfully, or greater than 0 if the operation finished
-// with an error.
-// |bytes| Total number of bytes having been zipped so far.
-callback ZipProgressCallback = void(long result, double bytes);
+callback GetDeviceConnectionStateCallback = void(DeviceConnectionState result);
 
 callback GetDriveConnectionStateCallback = void(DriveConnectionState result);
 
 // |result| true if the length is in the valid range, false otherwise.
 callback ValidatePathNameLengthCallback = void(boolean result);
 
-// |accessToken| OAuth2 access token, or an empty string if failed to fetch.
-callback RequestWebStoreAccessTokenCallback = void(DOMString accessToken);
-
-// |url| Result url.
-callback GetUrlCallback = void(DOMString url);
-
-// |profiles| List of profile information.
-// |runningProfile| ID of the profile that runs the application instance.
-// |showingProfile| ID of the profile that shows the application window.
-callback GetProfilesCallback = void(ProfileInfo[] profiles,
-                                    DOMString runningProfile,
-                                    DOMString displayProfile);
+callback GetProfilesCallback = void(ProfilesResponse response);
 
 // |entries| External entries.
 callback ResolveEntriesCallback =
@@ -1264,7 +1447,7 @@ callback ComputeChecksumCallback = void(DOMString checksum);
 callback GetProvidersCallback = void(Provider[] extensions);
 
 // |actions| List of actions.
-callback GetCustomActionsCallback = void(fileSystemProvider.Action[] actions);
+callback GetCustomActionsCallback = void(FileSystemProviderAction[] actions);
 
 // |size| result size.
 callback GetDirectorySizeCallback = void(double size);
@@ -1274,25 +1457,16 @@ callback GetRecentFilesCallback = void([instanceOf=Entry] object[] entries);
 
 // |rootDir| The root directory of the volume to which access was requested.
 callback GetVolumeRootCallback =
-    void([instanceof=DirectoryEntry] object rootDir);
+    void([instanceOf=DirectoryEntry] object rootDir);
 
-// |entries| Entries shared with crostini container.
-// |firstForSession| true the first time this is called for the session.
 callback GetCrostiniSharedPathsCallback =
-    void([instanceOf = Entry] object[] entries, boolean firstForSession);
+    void(CrostiniSharedPathResponse response);
 
 // |linux_package_info| Package info for the queried package.
 callback GetLinuxPackageInfoCallback =
     void(LinuxPackageInfo linux_package_info);
 
-// |status| Result of starting the install
-// |failure_reason| Reason for failure for a 'failed' status
-callback InstallLinuxPackageCallback = void(
-    InstallLinuxPackageResponse response, DOMString failure_reason);
-
-// |thumbnailDataUrl| A data URL for the thumbnail; |thumbnailDataUrl| is empty
-// if no thumbnail was available.
-callback GetThumbnailCallback = void(DOMString thumbnailDataUrl);
+callback InstallLinuxPackageCallback = void(InstallLinuxPackageStatus status);
 
 // |apps| List of Android picker apps.
 callback GetAndroidPickerAppsCallback = void(AndroidApp[] apps);
@@ -1305,11 +1479,9 @@ callback ListMountableGuestsCallback = void(MountableGuest[] guest);
 
 callback ParseTrashInfoFilesCallback = void(ParsedTrashInfoFile[] files);
 
-interface Functions {
-  // Logout the current user for navigating to the re-authentication screen for
-  // the Google account.
-  static void logoutUserForReauthentication();
+callback GetBulkPinProgressCallback = void(BulkPinProgress progress);
 
+interface Functions {
   // Cancels file selection.
   static void cancelDialog();
 
@@ -1317,9 +1489,9 @@ interface Functions {
   // |descriptor| The unique identifier of task to execute.
   // |entries| Array of entries
   // |callback|
-  [nocompile]
+  [nocompile, supportsPromises]
   static void executeTask(FileTaskDescriptor descriptor,
-                          [instanceof=Entry] object[] entries,
+                          [instanceOf=Entry] object[] entries,
                           ExecuteTaskCallback callback);
 
   // Sets the default task for the supplied MIME types and path extensions.
@@ -1329,31 +1501,34 @@ interface Functions {
   // |entries| Array of selected entries to extract path extensions from.
   // |mimeTypes| Array of selected file MIME types.
   // |callback|
-  [nocompile]
+  [nocompile, supportsPromises]
   static void setDefaultTask(FileTaskDescriptor descriptor,
-                             [instanceof=Entry] object[] entries,
+                             [instanceOf=Entry] object[] entries,
                              DOMString[] mimeTypes,
                              SimpleCallback callback);
 
   // Gets the list of tasks that can be performed over selected files.
   // |entries| Array of selected entries
+  // |dlpSourceUrls| Array of source URLs corresponding to the entries, used to
+  // check Data Leak Prevention (DLP) restrictions
   // |callback|
-  [nocompile]
-  static void getFileTasks([instanceof=Entry] object[] entries,
+  [nocompile, supportsPromises]
+  static void getFileTasks([instanceOf=Entry] object[] entries,
+                           DOMString[] dlpSourceUrls,
                            GetFileTasksCallback callback);
 
   // Gets the MIME type of an entry.
   // |entry| The entry to be checked.
   // |callback|
-  [nocompile]
-  static void getMimeType([instanceof=Entry] object entry,
+  [nocompile, supportsPromises]
+  static void getMimeType([instanceOf=Entry] object entry,
                           GetMimeTypeCallback callback);
 
   // Gets the content sniffed MIME type of a file.
   // |fileEntry| The file entry to be checked.
   // |callback|
-  [nocompile]
-  static void getContentMimeType([instanceof=FileEntry] object fileEntry,
+  [nocompile, supportsPromises]
+  static void getContentMimeType([instanceOf=FileEntry] object fileEntry,
                                  GetContentMimeTypeCallback callback);
 
   // Gets metadata from an Audio or Video file.
@@ -1362,28 +1537,29 @@ interface Functions {
   // |includeImages| False returns metadata tags only. True returns
   //     metadata tags and metadata (thumbnail) images.
   // |callback|
-  [nocompile]
-  static void getContentMetadata([instanceof=FileEntry] object fileEntry,
+  [nocompile, supportsPromises]
+  static void getContentMetadata([instanceOf=FileEntry] object fileEntry,
                                  DOMString mimeType,
                                  boolean includeImages,
                                  GetContentMetadataCallback callback);
 
   // Gets localized strings and initialization data.
   // |callback|
+  [supportsPromises]
   static void getStrings(GetStringsCallback callback);
 
   // Adds file watch.
   // |entry| Entry to watch
   // |callback|
-  [nocompile]
-  static void addFileWatch([instanceof=Entry] object entry,
+  [nocompile, supportsPromises]
+  static void addFileWatch([instanceOf=Entry] object entry,
                            AddFileWatchCallback callback);
 
   // Removes file watch.
   // |entry| Watched entry
   // |callback|
-  [nocompile]
-  static void removeFileWatch([instanceof=Entry] object entry,
+  [nocompile, supportsPromises]
+  static void removeFileWatch([instanceOf=Entry] object entry,
                               RemoveFileWatchCallback callback);
 
   // Enables the extenal file scheme necessary to initiate drags to the browser
@@ -1395,12 +1571,14 @@ interface Functions {
   // invalid or not backed by the external file system.
   // |entryUrls| Urls for the entries to be accessed.
   // |callback|
+  [supportsPromises]
   static void grantAccess(DOMString[] entryUrls, SimpleCallback callback);
 
   // Selects multiple files.
   // |selectedPaths| Array of selected paths
   // |shouldReturnLocalPath| true if paths need to be resolved to local paths.
   // |callback|
+  [supportsPromises]
   static void selectFiles(DOMString[] selectedPaths,
                           boolean shouldReturnLocalPath,
                           SimpleCallback callback);
@@ -1411,6 +1589,7 @@ interface Functions {
   // |forOpening| true if paths are selected for opening. false if for saving.
   // |shouldReturnLocalPath| true if paths need to be resolved to local paths.
   // |callback|
+  [supportsPromises]
   static void selectFile(DOMString selectedPath,
                          long index,
                          boolean forOpening,
@@ -1423,7 +1602,7 @@ interface Functions {
   // |callback| Completion callback. May return less than requested properties
   //     if some are not available. In the same time, it can return properties
   //     which were not requested (if it's cheap to compute them).
-  [nocompile]
+  [nocompile, supportsPromises]
   static void getEntryProperties(
       [instanceOf=Entry] object[] entries,
       EntryPropertyName[] names,
@@ -1434,8 +1613,8 @@ interface Functions {
   // |pin| Pass true to pin the file.
   // |callback| Completion callback. $(ref:runtime.lastError) will be set if
   //     there was an error.
-  [nocompile]
-  static void pinDriveFile([instanceof=Entry] object entry,
+  [nocompile, supportsPromises]
+  static void pinDriveFile([instanceOf=Entry] object entry,
                            boolean pin,
                            SimpleCallback callback);
 
@@ -1443,7 +1622,7 @@ interface Functions {
   // entries in the external file system mounted to Chrome OS file manager
   // backend. If resolving entry fails, the entry will be just ignored and the
   // corresponding entry does not appear in the result.
-  [nocompile]
+  [nocompile, supportsPromises]
   static void resolveIsolatedEntries(
       [instanceOf=Entry] object[] entries,
       ResolveEntriesCallback callback);
@@ -1452,20 +1631,24 @@ interface Functions {
   // |fileUrl| Mount point source.
   // |password| Optional password to decrypt the archive.
   // |callback| Callback called with the source path of the mount.
+  [supportsPromises]
   static void addMount(DOMString fileUrl, optional DOMString password,
                        AddMountCallback callback);
 
   // Cancels an archive mounting operation.
   // |fileUrl| Mount point source. Should be same as the one passed to addMount.
   // |callback|
+  [supportsPromises]
   static void cancelMounting(DOMString fileUrl, SimpleCallback callback);
 
   // Unmounts a mounted resource.
   // |volumeId| An ID of the volume.
+  [supportsPromises]
   static void removeMount(DOMString volumeId, SimpleCallback callback);
 
   // Get the list of mounted volumes.
   // |callback|
+  [supportsPromises]
   static void getVolumeMetadataList(GetVolumeMetadataListCallback callback);
 
   // Returns the list of files not allowed to be transfered.
@@ -1473,7 +1656,7 @@ interface Functions {
   // |destinationEntry| Entry for the destination (parent) directory.
   // |isMove| True if the operation is move, false otherwise.
   // |callback| Result callback.
-  [nocompile]
+  [nocompile, supportsPromises]
   static void getDisallowedTransfers(
       [instanceOf=Entry] object[] entries,
       [instanceOf=DirectoryEntry] object destinationEntry,
@@ -1484,7 +1667,7 @@ interface Functions {
   // about the entries.
   // |entries| List of the source entries to be checked.
   // |callback| Result callback.
-  [nocompile]
+  [nocompile, supportsPromises]
   static void getDlpMetadata(
       [instanceOf=Entry] object[] entries,
       GetDlpMetadataCallback callback);
@@ -1492,6 +1675,7 @@ interface Functions {
   // Retrieves Data Leak Prevention (DLP) restriction details.
   // |sourceUrl| Source URL of the Entry for which the details should be shown.
   // |callback| Result callback.
+  [supportsPromises]
   static void getDlpRestrictionDetails(
       DOMString sourceUrl,
       GetDlpRestrictionDetailsCallback callback);
@@ -1500,40 +1684,30 @@ interface Functions {
   // is blocked by Data Leak Prevention (DLP) policy.
   // |sourceUrl| Source URL of the Entry that should be checked.
   // |callback| Result callback.
+  [supportsPromises]
   static void getDlpBlockedComponents(
       DOMString sourceUrl,
       GetDlpBlockedComponentsCallback callback);
 
   // Retrieves the caller that created the dialog (Save As/File Picker).
   // |callback| Result callback.
+  [supportsPromises]
   static void getDialogCaller(GetDialogCallerCallback callback);
-
-  // Starts to copy an entry. If the source is a directory, the copy is done
-  // recursively.
-  // |entry| Entry of the source entry to be copied.
-  // |parentEntry| Entry for the destination (parent) directory.
-  // |newName| Name of the new entry. It must not contain '/'.
-  // |callback| Completion callback.
-  [nocompile]
-  static void startCopy([instanceof=Entry] object entry,
-                        [instanceof=DirectoryEntry] object parentEntry,
-                        DOMString newName,
-                        StartCopyCallback callback);
-
-  // Cancels the running copy task.
-  // |copyId| ID of the copy task to be cancelled.
-  // |callback| Completion callback of the cancel.
-  static void cancelCopy(long copyId, SimpleCallback callback);
 
   // Retrieves total and remaining size of a mount point.
   // |volumeId| ID of the volume to be checked.
   // |callback|
+  [supportsPromises]
   static void getSizeStats(DOMString volumeId, GetSizeStatsCallback callback);
 
 
   // Retrieves metadata about the user's Drive volume's quota.
+  // |entry| If entry is within a Shared Drive, then the applicable shared
+  // drive quota is returned, else the overall Drive quota is returned.
   // |callback|
-  static void getDriveQuotaMetadata(GetDriveQuotaMetadataCallback callback);
+  [nocompile, supportsPromises]
+  static void getDriveQuotaMetadata([instanceOf=Entry] object entry,
+                                    GetDriveQuotaMetadataCallback callback);
 
   // Formats a mounted volume.
   // |volumeId| ID of the volume to be formatted.
@@ -1559,6 +1733,7 @@ interface Functions {
 
   // Retrieves file manager preferences.
   // |callback|
+  [supportsPromises]
   static void getPreferences(GetPreferencesCallback callback);
 
   // Sets file manager preferences.
@@ -1568,60 +1743,44 @@ interface Functions {
   // Performs drive content search.
   // |searchParams|
   // |callback|
+  [supportsPromises]
   static void searchDrive(SearchParams searchParams,
                           SearchDriveCallback callback);
 
   // Performs drive metadata search.
   // |searchParams|
   // |callback|
+  [supportsPromises]
   static void searchDriveMetadata(SearchMetadataParams searchParams,
                                   SearchDriveMetadataCallback callback);
 
   // Search files in the volume having |volumeId| by using |hashList|.
+  [supportsPromises]
   static void searchFilesByHashes(DOMString volumeId,
                                   DOMString[] hashList,
                                   SearchFilesByHashesCallback callback);
 
   // Search files in My Files.
+  [nocompile, supportsPromises]
   static void searchFiles(SearchMetadataParams searchParams,
                           SearchFilesCallback callback);
 
-  // Creates a ZIP file for the selected files and folders. Folders are
-  // recursively explored and zipped. Hidden files and folders (with names
-  // starting with a dot) found during recursive exploration are included too.
-  // |entries| Entries of the selected files and folders to zip. They must be
-  //     under the |parentEntry| directory.
-  // |parentEntry| Entry of the directory containing the selected files and
-  //     folders. This is where the ZIP file will be created, too.
-  // |destName| Name of the destination ZIP file. The ZIP file will be created
-  //     in the directory specified by |parentEntry|.
-  // |callback| Callback called on completion.
-  [nocompile]
-  static void zipSelection([instanceof=Entry] object[] entries,
-                           [instanceof=DirectoryEntry] object parentEntry,
-                           DOMString destName,
-                           ZipSelectionCallback callback);
-
-  // Cancels an ongoing ZIP operation.
-  // Does nothing if there is no matching ongoing ZIP operation.
-  // |zipId| ID of the ZIP operation.
-  static void cancelZip(long zipId);
-
-  // Gets the progress of an ongoing ZIP operation.
-  // |zipId| ID of the ZIP operation.
-  static void getZipProgress(long zipId, ZipProgressCallback callback);
+  // Retrieves the current device connection status.
+  // |callback|
+  static void getDeviceConnectionState(GetDeviceConnectionStateCallback callback);
 
   // Retrieves the state of the current drive connection.
   // |callback|
+  [supportsPromises]
   static void getDriveConnectionState(GetDriveConnectionStateCallback callback);
 
   // Checks whether the path name length fits in the limit of the filesystem.
   // |parentEntry| The entry of the parent directory entry.
   // |name| The name of the file.
   // |callback| Called back when the check is finished.
-  [nocompile]
+  [nocompile, supportsPromises]
   static void validatePathNameLength(
-      [instanceof=DirectoryEntry] object parentEntry,
+      [instanceOf=DirectoryEntry] object parentEntry,
       DOMString name,
       ValidatePathNameLengthCallback callback);
 
@@ -1629,19 +1788,8 @@ interface Functions {
   // |operation| Zooming mode.
   static void zoom(ZoomOperationType operation);
 
-  // Requests a Webstore API OAuth2 access token.
-  // |callback|
-  static void requestWebStoreAccessToken(
-      RequestWebStoreAccessTokenCallback callback);
-
-  // Requests a download url to download the file contents.
-  // |entry| The entry to download.
-  // |callback|
-  [nocompile]
-  static void getDownloadUrl([instanceof=Entry] object entry,
-                             GetUrlCallback callback);
-
   // Obtains a list of profiles that are logged-in.
+  [supportsPromises]
   static void getProfiles(GetProfilesCallback callback);
 
   // Opens inspector window.
@@ -1655,60 +1803,68 @@ interface Functions {
   // Computes an MD5 checksum for the given file.
   // |entry| The entry of the file to checksum.
   // |callback|
-  [nocompile]
-  static void computeChecksum([instanceof=Entry] object entry,
+  [nocompile, supportsPromises]
+  static void computeChecksum([instanceOf=Entry] object entry,
                               ComputeChecksumCallback callback);
 
   // Returns list of available providers.
+  [supportsPromises]
   static void getProviders(GetProvidersCallback callback);
 
   // Requests adding a new provided file system. On failure, sets
   // $(ref:runtime.lastError).
-  static void addProvidedFileSystem(DOMString provider_id,
+  [supportsPromises]
+  static void addProvidedFileSystem(DOMString providerId,
                                     SimpleCallback callback);
 
   // Requests configuring an existing volume. On failure, sets
   // $(ref:runtime.lastError).
+  [supportsPromises]
   static void configureVolume(DOMString volumeId, SimpleCallback callback);
 
   // Requests list of custom actions for the specified entries. On failure, sets
   // $(ref:runtime.lastError).
-  [nocompile]
-  static void getCustomActions([instanceof=Entry] object[] entries,
+  [nocompile, supportsPromises]
+  static void getCustomActions([instanceOf=Entry] object[] entries,
                                GetCustomActionsCallback callback);
 
   // Executes a custom action for a set of entries. On failure, sets
   // $(ref:runtime.lastError).
-  [nocompile]
-  static void executeCustomAction([instanceof=Entry] object[] entries,
+  [nocompile, supportsPromises]
+  static void executeCustomAction([instanceOf=Entry] object[] entries,
                                   DOMString actionId,
                                   SimpleCallback callback);
 
   // Get the total size of a directory.
   // |entry| Entry of the target directory.
   // |callback|
-  [nocompile]
-  static void getDirectorySize([instanceof=DirectoryEntry] object entry,
+  [nocompile, supportsPromises]
+  static void getDirectorySize([instanceOf=DirectoryEntry] object entry,
                                GetDirectorySizeCallback callback);
 
   // Gets recently modified files across file systems.
   // |restriction| Flag to restrict sources of recent files.
   // |fileType| Requested file type to filter recent files.
-  // |callback|
-  [nocompile]
+  // |query| When not empty, removes files with non-matching names.
+  // |cutoffDays| Specifies oldest modification time.
+  // |callback| Called with zero or more matched files.
+  [nocompile, supportsPromises]
   static void getRecentFiles(SourceRestriction restriction,
-                             RecentFileType fileType,
+                             DOMString query,
+                             long cutoffDays,
+                             FileCategory fileCategory,
                              boolean invalidateCache,
                              GetRecentFilesCallback callback);
 
   // Requests the root directory of the volume with the ID specified in
   // |options.volumeId|.
-  [nocompile]
+  [nocompile, supportsPromises]
   static void getVolumeRoot(GetVolumeRootOptions options,
                             GetVolumeRootCallback callback);
 
   // Starts and mounts crostini container.
   // |callback|
+  [supportsPromises]
   static void mountCrostini(SimpleCallback callback);
 
   // Shares paths with crostini container.
@@ -1716,75 +1872,52 @@ interface Functions {
   // |entries| Entries of the files or directories to share.
   // |persist| If true, shares will persist across restarts.
   // |callback|
-  [nocompile] static void sharePathsWithCrostini(
-      DOMString vmName, [ instanceof = Entry] object[] entries, boolean persist,
-      SimpleCallback callback);
+  [nocompile, supportsPromises]
+  static void sharePathsWithCrostini(DOMString vmName,
+                                     [instanceOf=Entry] object[] entries,
+                                     boolean persist,
+                                     SimpleCallback callback);
 
   // Unshares path with crostini container.
   // |vmName| VM to unshare path from.
   // |entry| Entry of the file or directory to unshare.
   // |callback|
-  [nocompile] static void unsharePathWithCrostini(
-      DOMString vmName, [ instanceof = Entry] object entry,
-      SimpleCallback callback);
+  [nocompile, supportsPromises]
+  static void unsharePathWithCrostini(DOMString vmName,
+                                      [instanceOf=Entry] object entry,
+                                      SimpleCallback callback);
 
   // Returns list of paths shared with crostini container.
   // |observeFirstForSession| If true, callback provides whether this is the
   // |vmName| VM to get shared paths of.
   // first time this function has been called with observeFirstForSession true.
-  [nocompile] static void getCrostiniSharedPaths(
-      boolean observeFirstForSession, DOMString vmName,
-      GetCrostiniSharedPathsCallback callback);
+  [nocompile, supportsPromises]
+  static void getCrostiniSharedPaths(boolean observeFirstForSession,
+                                     DOMString vmName,
+                                     GetCrostiniSharedPathsCallback callback);
 
   // Requests information about a Linux package. |entry| is a .deb file.
-  [nocompile]
-  static void getLinuxPackageInfo([instanceof=Entry] object entry,
+  [nocompile, supportsPromises]
+  static void getLinuxPackageInfo([instanceOf=Entry] object entry,
                                   GetLinuxPackageInfoCallback callback);
 
   // Starts installation of a Linux package.
-  [nocompile]
-  static void installLinuxPackage([instanceof=Entry] object entry,
+  [nocompile, supportsPromises]
+  static void installLinuxPackage([instanceOf=Entry] object entry,
                                   InstallLinuxPackageCallback callback);
 
   // Imports a Crostini Image File (.tini). This overrides the existing Linux
   // apps and files.
   [nocompile]
-  static void importCrostiniImage([instanceof=Entry] object entry);
-
-  // For a file in DriveFS, retrieves its thumbnail. If |cropToSquare| is true,
-  // returns a thumbnail appropriate for file list or grid views; otherwise,
-  // returns a thumbnail appropriate for quickview.
-  [nocompile]
-  static void getDriveThumbnail([instanceof=FileEntry] object entry,
-                                boolean cropToSquare,
-                                GetThumbnailCallback callback);
-
-  // For a local PDF file, retrieves its thumbnail with a given |width| and
-  // |height|.
-  [nocompile]
-  static void getPdfThumbnail([instanceof=FileEntry] object entry,
-                              long width,
-                              long height,
-                              GetThumbnailCallback callback);
-
-  // Retrieves a thumbnail of an ARC DocumentsProvider file, closely matching
-  // the hinted size specified by |widthHint| and |heightHint|, but not
-  // necessarily the exact size. |callback| is called with thumbnail data
-  // encoded as a data URL. If the document does not support thumbnails,
-  // |callback| is called with an empty string.
-  // Note: The thumbnail data may originate from third-party application code,
-  // and is untrustworthy (Security).
-  [nocompile]
-  static void getArcDocumentsProviderThumbnail([instanceof=FileEntry] object entry,
-                                               long widthHint,
-                                               long heightHint,
-                                               GetThumbnailCallback callback);
+  static void importCrostiniImage([instanceOf=Entry] object entry);
 
   // Returns a list of Android picker apps to be shown in file selector.
+  [supportsPromises]
   static void getAndroidPickerApps(DOMString[] extensions,
                                    GetAndroidPickerAppsCallback callback);
 
   // Called when the user selects an Android picker app in file selector.
+  [supportsPromises]
   static void selectAndroidPickerApp(AndroidApp androidApp,
                                      SimpleCallback callback);
 
@@ -1793,17 +1926,20 @@ interface Functions {
   // |callback| is called with error in case of failure and with no arguments
   // if successfully launched the Sharesheet dialog, but before user has
   // finished the sharing.
-  [nocompile]
-  static void sharesheetHasTargets([instanceof=Entry] object[] entries,
+  [nocompile, supportsPromises]
+  static void sharesheetHasTargets([instanceOf=Entry] object[] entries,
                            BooleanCallback callback);
 
   // Invoke Sharesheet for selected files.
   // |entries| Array of selected entries.
   // |launchSource| Source from which sharesheet was invoked.
+  // |dlpSourceUrls| Array of source URLs corresponding to the entries, used to
+  // check Data Leak Prevention (DLP) restrictions
   // |callback|
-  [nocompile]
-  static void invokeSharesheet([instanceof=Entry] object[] entries,
+  [nocompile, supportsPromises]
+  static void invokeSharesheet([instanceOf=Entry] object[] entries,
                                SharesheetLaunchSource launchSource,
+                               DOMString[] dlpSourceUrls,
                                SimpleCallback callback);
 
   // Adds or removes a list of entries to temporary holding space. Any entries
@@ -1812,7 +1948,7 @@ interface Functions {
   // |entries| The list of entries whose holding space needs to be updated.
   // |add| Whether items should be added or removed from the holding space.
   // |callback| Completion callback.
-  [nocompile]
+  [nocompile, supportsPromises]
   static void toggleAddedToHoldingSpace([instanceOf=Entry] object[] entries,
                                         boolean added,
                                         optional SimpleCallback callback);
@@ -1820,9 +1956,11 @@ interface Functions {
   // Retrieves the current holding space state, for example the list of items
   // the holding space currently contains.
   // |callback| The result callback.
+  [supportsPromises]
   static void getHoldingSpaceState(HoldingSpaceStateCallback callback);
 
   // Returns true via `callback` if tablet mode is enabled, false otherwise.
+  [supportsPromises]
   static void isTabletModeEnabled(BooleanCallback callback);
 
   // Notifies the browser of the result of a dialog displayed earlier as a
@@ -1833,6 +1971,7 @@ interface Functions {
   static void openURL(DOMString url);
 
   // Creates a new Files app window in the directory provided in `params`.
+  [supportsPromises]
   static void openWindow(OpenWindowParams params, BooleanCallback callback);
 
   // Opens the feedback report window.
@@ -1840,10 +1979,10 @@ interface Functions {
 
   // Starts an I/O task of type |type| on |entries|. Task type specific
   // parameters are passed via |params|.
-  [nocompile]
+  [nocompile, supportsPromises]
   static void startIOTask(
       IOTaskType type,
-      [instanceof=Entry] object[] entries,
+      [instanceOf=Entry] object[] entries,
       IOTaskParams params,
       optional IOTaskIdCallback callback);
 
@@ -1851,11 +1990,35 @@ interface Functions {
   // each I/O task's progress status.
   static void cancelIOTask(long taskId);
 
+  // Resumes an I/O task by id. Task ids are communicated to the Files App in
+  // each I/O task's progress status.
+  static void resumeIOTask(long taskId, ResumeParams params);
+
+  // Notifies the browser that any info still stored about an already completed
+  // I/O task identified by |taskId| can be cleared.
+  [supportsPromises]
+  static void dismissIOTask(long taskId, SimpleCallback callback);
+
+  // Shows a policy dialog for a task. Task ids are communicated to the Files
+  // App in each I/O task's progress status.
+  [supportsPromises]
+  static void showPolicyDialog(
+      long taskId,
+      PolicyDialogType type,
+      SimpleCallback callback);
+
+  // Makes I/O tasks in state::PAUSED emit (broadcast) their current I/O task
+  // progress status.
+  [supportsPromises]
+  static void progressPausedTasks(SimpleCallback callback);
+
   // Lists mountable Guest OSs.
+  [supportsPromises]
   static void listMountableGuests(ListMountableGuestsCallback callback);
 
   // Starts and mounts the target Guest OS.
   // |callback|
+  [supportsPromises]
   static void mountGuest(long id, SimpleCallback callback);
 
   // Tells DriveFS to update its cached pin states of hosted files (once).
@@ -1865,9 +2028,18 @@ interface Functions {
   static void openManageSyncSettings();
 
   // Validates and parses the supplied `entries` as .trashinfo files.
-  [nocompile]
+  [nocompile, supportsPromises]
   static void parseTrashInfoFiles([instanceOf=Entry] object[] entries,
                                   ParseTrashInfoFilesCallback callback);
+
+  // Returns the current progress of the bulk pinning manager.
+  [supportsPromises]
+  static void getBulkPinProgress(GetBulkPinProgressCallback callback);
+
+  // Starts calculating the space required to pin all the items in a users My
+  // drive.
+  [supportsPromises]
+  static void calculateBulkPinRequiredSpace(SimpleCallback callback);
 };
 
 // Events supported by fileManagerPrivate API. These events are broadcasted.
@@ -1880,11 +2052,13 @@ interface Events {
 
   static void onPinTransfersUpdated(FileTransferStatus event);
 
-  static void onCopyProgress(long copyId, CopyOrMoveProgressStatus status);
+  static void onIndividualFileTransfersUpdated(SyncState[] event);
 
   static void onDirectoryChanged(FileWatchEvent event);
 
   static void onPreferencesChanged();
+
+  static void onDeviceConnectionStatusChanged(DeviceConnectionState state);
 
   static void onDriveConnectionStatusChanged();
 
@@ -1905,5 +2079,7 @@ interface Events {
   // Event broadcast when the list of Guest OSs that support Guest->Host file
   // sharing changes.
   static void onMountableGuestsChanged(MountableGuest[] guests);
+
+  static void onBulkPinProgress(BulkPinProgress progress);
 };
 };

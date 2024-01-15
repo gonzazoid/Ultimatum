@@ -52,10 +52,9 @@ void TransferredMediaStreamComponent::SetImplementation(
   add_audio_sink_calls_.clear();
 }
 
-MediaStreamComponent* TransferredMediaStreamComponent::Clone(
-    std::unique_ptr<MediaStreamTrackPlatform> cloned_platform_track) const {
+MediaStreamComponent* TransferredMediaStreamComponent::Clone() const {
   if (component_) {
-    return component_->Clone(std::move(cloned_platform_track));
+    return component_->Clone();
   }
   // TODO(crbug.com/1288839): Implement Clone() for when component_ is not set
   return nullptr;
@@ -99,8 +98,7 @@ const String& TransferredMediaStreamComponent::GetSourceName() const {
     return component_->GetSourceName();
   }
   // TODO(crbug.com/1288839): Return the transferred value
-  static String name;
-  return name;
+  return g_empty_string;
 }
 
 MediaStreamSource::ReadyState TransferredMediaStreamComponent::GetReadyState()
@@ -248,6 +246,7 @@ String TransferredMediaStreamComponent::ToString() const {
 
 void TransferredMediaStreamComponent::Trace(Visitor* visitor) const {
   visitor->Trace(component_);
+  visitor->Trace(observers_);
   MediaStreamComponent::Trace(visitor);
 }
 

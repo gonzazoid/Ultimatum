@@ -9,6 +9,7 @@
 #include "chrome/browser/media/router/providers/cast/cast_session_client.h"
 #include "components/media_router/common/providers/cast/cast_media_source.h"
 #include "components/media_router/common/providers/cast/channel/cast_message_handler.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "services/data_decoder/public/cpp/data_decoder.h"
 
 namespace media_router {
@@ -31,8 +32,8 @@ class CastSessionClientImpl : public CastSessionClient,
   // and other methods.
   void SendMessageToClient(
       blink::mojom::PresentationConnectionMessagePtr message) override;
-  void SendMediaStatusToClient(const base::Value::Dict& media_status,
-                               absl::optional<int> request_id) override;
+  void SendMediaMessageToClient(const base::Value::Dict& payload,
+                                absl::optional<int> request_id) override;
   void CloseConnection(
       blink::mojom::PresentationConnectionCloseReason close_reason) override;
   void TerminateConnection() override;

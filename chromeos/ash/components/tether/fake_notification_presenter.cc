@@ -4,7 +4,7 @@
 
 #include "chromeos/ash/components/tether/fake_notification_presenter.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -22,7 +22,7 @@ FakeNotificationPresenter::FakeNotificationPresenter()
 
 FakeNotificationPresenter::~FakeNotificationPresenter() = default;
 
-absl::optional<multidevice::RemoteDeviceRef>
+std::optional<multidevice::RemoteDeviceRef>
 FakeNotificationPresenter::GetPotentialHotspotRemoteDevice() {
   EXPECT_EQ(potential_hotspot_state_,
             NotificationPresenter::PotentialHotspotNotificationState::

@@ -11,11 +11,12 @@
 
 #include "base/base_paths.h"
 #include "base/base_switches.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/memory/ref_counted.h"
 #include "base/notreached.h"
@@ -26,7 +27,6 @@
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/platform/platform_channel.h"
 #include "mojo/public/cpp/platform/platform_channel_endpoint.h"
@@ -113,8 +113,9 @@ ScopedMessagePipeHandle MultiprocessTestHelper::StartChildWithExtraSwitch(
   // clients to spawn other test clients.
   for (const auto& entry :
        base::CommandLine::ForCurrentProcess()->GetSwitches()) {
-    if (uninherited_args.find(entry.first) == uninherited_args.end())
+    if (!base::Contains(uninherited_args, entry.first)) {
       command_line.AppendSwitchNative(entry.first, entry.second);
+    }
   }
 
 #if !BUILDFLAG(IS_FUCHSIA)
@@ -129,7 +130,7 @@ ScopedMessagePipeHandle MultiprocessTestHelper::StartChildWithExtraSwitch(
     case LaunchType::ASYNC:
       channel.PrepareToPassRemoteEndpoint(&options, &command_line);
       break;
-#if !BUILDFLAG(IS_FUCHSIA)
+#if !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_IOS)
     case LaunchType::NAMED_CHILD:
     case LaunchType::NAMED_PEER: {
 #if BUILDFLAG(IS_MAC)
@@ -176,7 +177,7 @@ ScopedMessagePipeHandle MultiprocessTestHelper::StartChildWithExtraSwitch(
     case LaunchType::ASYNC:
       local_channel_endpoint = channel.TakeLocalEndpoint();
       break;
-#if !BUILDFLAG(IS_FUCHSIA)
+#if !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_IOS)
     case LaunchType::NAMED_CHILD:
     case LaunchType::NAMED_PEER: {
       NamedPlatformChannel::Options channel_options;
@@ -185,7 +186,7 @@ ScopedMessagePipeHandle MultiprocessTestHelper::StartChildWithExtraSwitch(
       server_endpoint = named_channel.TakeServerEndpoint();
       break;
     }
-#endif  // !BUILDFLAG(IS_FUCHSIA)
+#endif  // !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_IOS)
   };
 
   OutgoingInvitation child_invitation;
@@ -199,14 +200,14 @@ ScopedMessagePipeHandle MultiprocessTestHelper::StartChildWithExtraSwitch(
                                     : kDisableAllCapabilities);
       [[fallthrough]];
     case LaunchType::CHILD:
-#if !BUILDFLAG(IS_FUCHSIA)
+#if !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_IOS)
     case LaunchType::NAMED_CHILD:
 #endif
       pipe = child_invitation.AttachMessagePipe(kTestChildMessagePipeName);
       command_line.AppendSwitch(kRunAsBrokerClient);
       break;
     case LaunchType::PEER:
-#if !BUILDFLAG(IS_FUCHSIA)
+#if !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_IOS)
     case LaunchType::NAMED_PEER:
 #endif
       isolated_connection_ = std::make_unique<IsolatedConnection>();
@@ -244,14 +245,14 @@ ScopedMessagePipeHandle MultiprocessTestHelper::StartChildWithExtraSwitch(
         std::move(child_invitation), test_child_.Handle(),
         std::move(local_channel_endpoint), ProcessErrorCallback());
   }
-#if !BUILDFLAG(IS_FUCHSIA)
+#if !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_IOS)
   else if (launch_type == LaunchType::NAMED_CHILD) {
     DCHECK(server_endpoint.is_valid());
     OutgoingInvitation::Send(std::move(child_invitation), test_child_.Handle(),
                              std::move(server_endpoint),
                              ProcessErrorCallback());
   }
-#endif  //  !BUILDFLAG(IS_FUCHSIA)
+#endif  //  !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_IOS)
 
   CHECK(test_child_.IsValid());
   return pipe;

@@ -5,6 +5,7 @@
 #include "content/renderer/mhtml_handle_writer.h"
 
 #include "base/metrics/histogram_macros.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/trace_event/trace_event.h"
@@ -27,28 +28,18 @@ void MHTMLHandleWriter::WriteContents(
   TRACE_EVENT_NESTABLE_ASYNC_BEGIN0("page-serialization",
                                     "Writing MHTML contents to handle",
                                     TRACE_ID_LOCAL(this));
-  DCHECK(mhtml_write_start_time_.is_null());
-  mhtml_write_start_time_ = base::TimeTicks::Now();
-
+  is_writing_ = true;
   WriteContentsImpl(std::move(mhtml_contents));
 }
 
 void MHTMLHandleWriter::Finish(mojom::MhtmlSaveStatus save_status) {
   DCHECK(!RenderThread::IsMainThread())
       << "Should not run in the main renderer thread";
-
-  // Only record UMA if WriteContents has been called.
-  if (!mhtml_write_start_time_.is_null()) {
+  if (is_writing_) {
     TRACE_EVENT_NESTABLE_ASYNC_END0("page-serialization",
                                     "WriteContentsImpl (MHTMLHandleWriter)",
                                     TRACE_ID_LOCAL(this));
-    base::TimeDelta mhtml_write_time =
-        base::TimeTicks::Now() - mhtml_write_start_time_;
-    UMA_HISTOGRAM_TIMES(
-        "PageSerialization.MhtmlGeneration.WriteToDiskTime.SingleFrame",
-        mhtml_write_time);
   }
-
   Close();
 
   main_thread_task_runner_->PostTask(

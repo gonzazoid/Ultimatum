@@ -5,8 +5,7 @@
 #include "content/browser/background_fetch/storage/mark_request_complete_task.h"
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/observer_list.h"
 #include "base/trace_event/trace_event.h"
 #include "content/browser/background_fetch/background_fetch_cross_origin_filter.h"
@@ -316,14 +315,9 @@ void MarkRequestCompleteTask::FinishWithError(
     blink::mojom::BackgroundFetchError error) {
   if (HasStorageError())
     error = blink::mojom::BackgroundFetchError::STORAGE_ERROR;
-  ReportStorageError();
 
   std::move(callback_).Run(error);
   Finished();
-}
-
-std::string MarkRequestCompleteTask::HistogramName() const {
-  return "MarkRequestCompleteTask";
 }
 
 }  // namespace background_fetch

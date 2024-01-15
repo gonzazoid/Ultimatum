@@ -13,11 +13,13 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.LayerDrawable;
 import android.graphics.drawable.TransitionDrawable;
 import android.graphics.drawable.VectorDrawable;
-import android.support.annotation.NonNull;
-import android.util.Property;
+import android.util.IntProperty;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.VisibleForTesting;
 
 import org.chromium.components.browser_ui.widget.animation.CancelAwareAnimatorListener;
-import org.chromium.components.browser_ui.widget.animation.Interpolators;
+import org.chromium.ui.interpolators.Interpolators;
 
 /**
  * Re-implementation of {@link TransitionDrawable} that works with {@link VectorDrawable} and uses
@@ -51,36 +53,33 @@ public class ChromeTransitionDrawable extends LayerDrawable {
          */
         public TransitionHandle withEndAction(@NonNull Runnable endAction) {
             mAnimator.removeAllListeners();
-            mAnimator.addListener(new CancelAwareAnimatorListener() {
-                @Override
-                public void onEnd(Animator animator) {
-                    endAction.run();
-                }
-            });
+            mAnimator.addListener(
+                    new CancelAwareAnimatorListener() {
+                        @Override
+                        public void onEnd(Animator animator) {
+                            endAction.run();
+                        }
+                    });
             return this;
         }
     }
 
-    private final Property<ChromeTransitionDrawable, Integer> mTransitionProgressProperty =
-            new Property<ChromeTransitionDrawable, Integer>(
-                    Integer.class, "ChromeTransitionDrawableProgress") {
+    private final IntProperty<ChromeTransitionDrawable> mTransitionProgressProperty =
+            new IntProperty<ChromeTransitionDrawable>("ChromeTransitionDrawableProgress") {
                 @Override
                 public Integer get(ChromeTransitionDrawable target) {
                     return target.mProgress;
                 }
 
                 @Override
-                public void set(ChromeTransitionDrawable target, Integer value) {
+                public void setValue(ChromeTransitionDrawable target, int value) {
                     target.setProgress(value);
                 }
             };
 
-    @NonNull
-    private final Drawable mInitialDrawable;
-    @NonNull
-    private final Drawable mFinalDrawable;
-    @NonNull
-    private ObjectAnimator mAnimator;
+    @NonNull private final Drawable mInitialDrawable;
+    @NonNull private final Drawable mFinalDrawable;
+    @NonNull private ObjectAnimator mAnimator;
 
     private boolean mCrossFade;
     private int mProgress;
@@ -139,13 +138,13 @@ public class ChromeTransitionDrawable extends LayerDrawable {
         return new TransitionHandle(mAnimator);
     }
 
-    /** Reset to showing only the initial drawable. */
-    public void resetTransition() {
+    /** Reset to showing only either the initial or final drawable, cancelling any animation. */
+    public void finishTransition(boolean resolveToFinalDrawable) {
         if (mAnimator.isRunning()) {
             mAnimator.cancel();
         }
 
-        setProgress(MIN_PROGRESS_ALPHA);
+        setProgress(resolveToFinalDrawable ? MAX_PROGRESS_ALPHA : MIN_PROGRESS_ALPHA);
     }
 
     public Drawable getInitialDrawable() {
@@ -154,6 +153,12 @@ public class ChromeTransitionDrawable extends LayerDrawable {
 
     public Drawable getFinalDrawable() {
         return mFinalDrawable;
+    }
+
+    @VisibleForTesting
+    @NonNull
+    public Animator getAnimatorForTesting() {
+        return mAnimator;
     }
 
     @Override

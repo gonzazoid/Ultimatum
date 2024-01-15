@@ -77,6 +77,7 @@ union ProxySettings {
     ProxySettingsWpad wpad;
 };
 
+// TODO(crbug.com/1491092): Add support for proxy chains.
 [Stable]
 struct ProxyConfig {
     ProxySettings proxy_settings;
@@ -93,21 +94,52 @@ interface NetworkSettingsObserver {
     // - the proxy configuration in Ash is updated;
     // - the WPAD URL on the default network is updated.
     OnProxyChanged@0(ProxyConfig proxy_config);
+
+    // Enforcement of the `AlwaysOnVpnPreConnectUrlAllowlist` pref in the
+    // browser is determined by the network configuration and preference
+    // settings. This method is called when updates of the network and/or
+    // prefs settings change whether the `AlwaysOnVpnPreConnectUrlAllowlist`
+    // pref should be applied or not.
+    [MinVersion=1]
+    OnAlwaysOnVpnPreConnectUrlAllowlistEnforcedChanged@1(bool enfoced);
 };
 
 // Implemented by Ash-Chrome.
 [Stable, Uuid="e8916037-b993-454a-96ef-20f269cace54"]
 interface NetworkSettingsService {
-    // Add an Ash network settings service observer.
+    // Adds an Ash network settings service observer.
+    // If a proxy is configured in Ash, the observer will be notified of the
+    // current proxy configuration as part of this call.
     AddNetworkSettingsObserver@0(
         pending_remote<NetworkSettingsObserver> observer);
+    // DEPRECATED. The proxy pref set by a Lacros extension is synced via the
+    // Prefs mojo service. Please use `SetExtensionControllingProxyMetadata` to
+    // set the extension metadata.
     // Used by the Lacros browser to forward proxy configurations set via
     // extensions in the primary profile to Ash. `proxy_config` must specify the
     // extension setting the proxy.
     [MinVersion=1]
     SetExtensionProxy@1(ProxyConfig proxy_config);
+    // DEPRECATED. The proxy pref set by a Lacros extension is cleared via the
+    // Prefs mojo service. Please use `ClearExtensionControllingProxyMetadata`
+    // to clear the extension metadata.
     // Used by the Lacros browser to clear proxy configurations set via
     // extensions in the primary profile to Ash.
     [MinVersion=1]
     ClearExtensionProxy@2();
+    // Used by the Lacros browser to forward metadata about the extension which
+    // is controlling the proxy settings in the Lacros primary profile.
+    // TODO(b/268607394): When the Prefs mojo service carries source metadata
+    // along with the pref value, deprecate this method and rely on the Prefs
+    // mojo service for this information.
+    [MinVersion=2]
+    SetExtensionControllingProxyMetadata@3(ExtensionControllingProxy extension);
+    // Used by the Lacros browser to clear metadata about the extension which
+    // used to control the proxy settings in the Lacros primary profile.
+    [MinVersion=2]
+    ClearExtensionControllingProxyMetadata@4();
+    // Returns a boolean which indicates if user traffic should be restricted to
+    // URL filters configured via the `AlwaysOnVpnPreConnectUrlAllowlist` pref.
+    [MinVersion=3]
+    IsAlwaysOnVpnPreConnectUrlAllowlistEnforced@5() => (bool enabled);
 };

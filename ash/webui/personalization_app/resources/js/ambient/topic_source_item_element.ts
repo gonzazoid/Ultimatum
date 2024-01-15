@@ -12,8 +12,8 @@ import 'chrome://resources/cr_elements/cr_shared_style.css.js';
 import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 
-import {TopicSource} from '../personalization_app.mojom-webui.js';
-import {PersonalizationRouter} from '../personalization_router_element.js';
+import {TopicSource} from '../../personalization_app.mojom-webui.js';
+import {PersonalizationRouterElement} from '../personalization_router_element.js';
 import {WithPersonalizationStore} from '../personalization_store.js';
 import {isSelectionEvent} from '../utils.js';
 
@@ -22,7 +22,7 @@ import {getAmbientProvider} from './ambient_interface_provider.js';
 import {getTemplate} from './topic_source_item_element.html.js';
 import {getTopicSourceName} from './utils.js';
 
-export class TopicSourceItem extends WithPersonalizationStore {
+export class TopicSourceItemElement extends WithPersonalizationStore {
   static get is() {
     return 'topic-source-item';
   }
@@ -44,6 +44,12 @@ export class TopicSourceItem extends WithPersonalizationStore {
         observer: 'onCheckedChanged_',
       },
 
+      disabled: {
+        type: Boolean,
+        value: false,
+        reflectToAttribute: true,
+      },
+
       topicSource: TopicSource,
 
       hasGooglePhotosAlbums: {
@@ -60,6 +66,7 @@ export class TopicSourceItem extends WithPersonalizationStore {
   }
 
   checked: boolean;
+  disabled: boolean;
   topicSource: TopicSource;
   hasGooglePhotosAlbums: boolean|null;
   override ariaLabel: string;
@@ -83,7 +90,8 @@ export class TopicSourceItem extends WithPersonalizationStore {
     event.preventDefault();
     event.stopPropagation();
     setTopicSource(this.topicSource, getAmbientProvider(), this.getStore());
-    PersonalizationRouter.instance().selectAmbientAlbums(this.topicSource);
+    PersonalizationRouterElement.instance().selectAmbientAlbums(
+        this.topicSource);
   }
 
   private getItemName_(): string {
@@ -103,6 +111,8 @@ export class TopicSourceItem extends WithPersonalizationStore {
       }
     } else if (this.topicSource === TopicSource.kArtGallery) {
       return this.i18n('ambientModeTopicSourceArtGalleryDescription');
+    } else if (this.topicSource === TopicSource.kVideo) {
+      return this.i18n('ambientModeTopicSourceVideoDescription');
     } else {
       return '';
     }
@@ -124,4 +134,10 @@ export class TopicSourceItem extends WithPersonalizationStore {
   }
 }
 
-customElements.define(TopicSourceItem.is, TopicSourceItem);
+declare global {
+  interface HTMLElementTagNameMap {
+    'topic-source-item': TopicSourceItemElement;
+  }
+}
+
+customElements.define(TopicSourceItemElement.is, TopicSourceItemElement);

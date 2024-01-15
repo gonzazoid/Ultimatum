@@ -6,31 +6,30 @@
 #define ASH_WEBUI_ECHE_APP_UI_ECHE_APP_UI_H_
 
 #include "ash/webui/eche_app_ui/mojom/eche_app.mojom-forward.h"
+#include "ash/webui/eche_app_ui/mojom/eche_app.mojom.h"
+#include "ash/webui/eche_app_ui/url_constants.h"
+#include "ash/webui/system_apps/public/system_web_app_ui_config.h"
 #include "ui/webui/mojo_web_ui_controller.h"
 
-namespace ash {
-namespace eche_app {
+namespace ash::eche_app {
+
+class EcheAppManager;
+class EcheAppUI;
+
+// The WebUIConfig for chrome://eche-app/.
+class EcheAppUIConfig : public SystemWebAppUIConfig<EcheAppUI> {
+ public:
+  explicit EcheAppUIConfig(
+      SystemWebAppUIConfig::CreateWebUIControllerFunc create_controller_func)
+      : SystemWebAppUIConfig(ash::eche_app::kChromeUIEcheAppHost,
+                             SystemWebAppType::ECHE,
+                             create_controller_func) {}
+};
 
 // The WebUI for chrome://eche-app/.
 class EcheAppUI : public ui::MojoWebUIController {
  public:
-  using BindSignalingMessageExchangerCallback = base::RepeatingCallback<void(
-      mojo::PendingReceiver<mojom::SignalingMessageExchanger>)>;
-  using BindSystemInfoProviderCallback = base::RepeatingCallback<void(
-      mojo::PendingReceiver<mojom::SystemInfoProvider>)>;
-  using BindUidGeneratorCallback =
-      base::RepeatingCallback<void(mojo::PendingReceiver<mojom::UidGenerator>)>;
-  using BindNotificationGeneratorCallback = base::RepeatingCallback<void(
-      mojo::PendingReceiver<mojom::NotificationGenerator>)>;
-  using BindDisplayStreamHandlerCallback = base::RepeatingCallback<void(
-      mojo::PendingReceiver<mojom::DisplayStreamHandler>)>;
-
-  EcheAppUI(content::WebUI* web_ui,
-            BindSignalingMessageExchangerCallback exchanger_callback,
-            BindSystemInfoProviderCallback system_info_callback,
-            BindUidGeneratorCallback generator_callback,
-            BindNotificationGeneratorCallback notification_callback,
-            BindDisplayStreamHandlerCallback stream_handler_callback);
+  EcheAppUI(content::WebUI* web_ui, EcheAppManager* manager);
   EcheAppUI(const EcheAppUI&) = delete;
   EcheAppUI& operator=(const EcheAppUI&) = delete;
   ~EcheAppUI() override;
@@ -40,6 +39,9 @@ class EcheAppUI : public ui::MojoWebUIController {
 
   void BindInterface(mojo::PendingReceiver<mojom::SystemInfoProvider> receiver);
 
+  void BindInterface(
+      mojo::PendingReceiver<mojom::AccessibilityProvider> receiver);
+
   void BindInterface(mojo::PendingReceiver<mojom::UidGenerator> receiver);
 
   void BindInterface(
@@ -48,17 +50,21 @@ class EcheAppUI : public ui::MojoWebUIController {
   void BindInterface(
       mojo::PendingReceiver<mojom::DisplayStreamHandler> receiver);
 
+  void BindInterface(
+      mojo::PendingReceiver<mojom::StreamOrientationObserver> receiver);
+
+  void BindInterface(
+      mojo::PendingReceiver<mojom::ConnectionStatusObserver> receiver);
+
+  void BindInterface(
+      mojo::PendingReceiver<mojom::KeyboardLayoutHandler> receiver);
+
  private:
-  const BindSignalingMessageExchangerCallback bind_exchanger_callback_;
-  const BindSystemInfoProviderCallback bind_system_info_callback_;
-  const BindUidGeneratorCallback bind_generator_callback_;
-  const BindNotificationGeneratorCallback bind_notification_callback_;
-  const BindDisplayStreamHandlerCallback bind_stream_handler_callback_;
+  raw_ptr<EcheAppManager> manager_;
 
   WEB_UI_CONTROLLER_TYPE_DECL();
 };
 
-}  // namespace eche_app
-}  // namespace ash
+}  // namespace ash::eche_app
 
 #endif  // ASH_WEBUI_ECHE_APP_UI_ECHE_APP_UI_H_

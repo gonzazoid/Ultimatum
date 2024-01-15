@@ -11,9 +11,13 @@
 #include "base/callback_list.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/profiles/profile.h"
+#include "components/sync_sessions/open_tabs_ui_delegate.h"
+#include "content/public/browser/web_contents.h"
 
 using base::android::ScopedJavaLocalRef;
 
+// TODO(crbug.com/1426935): Move this class to chrome/browser/recent_tabs module
+// once dependency issues have been resolved.
 class ForeignSessionHelper {
  public:
   explicit ForeignSessionHelper(Profile* profile);
@@ -32,6 +36,9 @@ class ForeignSessionHelper {
   jboolean GetForeignSessions(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& result);
+  jboolean GetMobileAndTabletForeignSessions(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>& result);
   jboolean OpenForeignSessionTab(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& j_tab,
@@ -41,13 +48,26 @@ class ForeignSessionHelper {
   void DeleteForeignSession(
       JNIEnv* env,
       const base::android::JavaParamRef<jstring>& session_tag);
-  void SetInvalidationsForSessionsEnabled(
+  void SetInvalidationsForSessionsEnabled(JNIEnv* env, jboolean enabled);
+  jint OpenForeignSessionTabsAsBackgroundTabs(
       JNIEnv* env,
-      jboolean enabled);
+      const base::android::JavaParamRef<jobject>& j_tab,
+      const base::android::JavaParamRef<jintArray>& j_session_tab_ids,
+      const base::android::JavaParamRef<jstring>& session_tag);
 
  private:
   // Fires |callback_| if it is not null.
   void FireForeignSessionCallback();
+  // Returns whether a foreground tab with renderer was restored.
+  bool RestoreTabWithRenderer(
+      const base::android::JavaParamRef<jstring>& session_tag,
+      const base::android::JavaParamRef<jobject>& j_tab,
+      int session_tab_id);
+  // Returns whether a background tab with no renderer was restored.
+  bool RestoreTabNoRenderer(
+      const base::android::JavaParamRef<jstring>& session_tag,
+      int session_tab_id,
+      content::WebContents* web_contents);
 
   raw_ptr<Profile> profile_;  // weak
   base::android::ScopedJavaGlobalRef<jobject> callback_;

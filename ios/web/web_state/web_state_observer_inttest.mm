@@ -5,18 +5,22 @@
 #import <memory>
 #import <string>
 
+#import "base/apple/foundation_util.h"
 #import "base/base_paths.h"
-#import "base/bind.h"
 #import "base/files/file_path.h"
+#import "base/functional/bind.h"
 #import "base/ios/ios_util.h"
 #import "base/ios/ns_error_util.h"
-#import "base/mac/foundation_util.h"
 #import "base/path_service.h"
 #import "base/scoped_observation.h"
+#import "base/strings/string_number_conversions.h"
 #import "base/strings/sys_string_conversions.h"
 #import "base/strings/utf_string_conversions.h"
+#import "base/task/sequenced_task_runner.h"
+#import "base/task/single_thread_task_runner.h"
 #import "base/test/gmock_callback_support.h"
 #import "base/test/ios/wait_util.h"
+#import "components/sessions/core/session_id.h"
 #import "ios/net/protocol_handler_util.h"
 #import "ios/testing/embedded_test_server_handlers.h"
 #import "ios/web/common/features.h"
@@ -25,13 +29,12 @@
 #import "ios/web/public/navigation/navigation_item.h"
 #import "ios/web/public/navigation/navigation_manager.h"
 #import "ios/web/public/navigation/web_state_policy_decider.h"
-#import "ios/web/public/session/crw_navigation_item_storage.h"
-#import "ios/web/public/session/crw_session_storage.h"
 #import "ios/web/public/test/error_test_util.h"
 #import "ios/web/public/test/fakes/async_web_state_policy_decider.h"
 #import "ios/web/public/test/fakes/fake_web_client.h"
 #import "ios/web/public/test/fakes/fake_web_state_observer.h"
 #import "ios/web/public/test/navigation_test_util.h"
+#import "ios/web/public/test/web_state_test_util.h"
 #import "ios/web/public/test/web_view_content_test_util.h"
 #import "ios/web/public/test/web_view_interaction_test_util.h"
 #import "ios/web/public/web_client.h"
@@ -56,16 +59,11 @@
 #import "url/gurl.h"
 #import "url/scheme_host_port.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace web {
 
 namespace {
 
 using base::test::RunOnceCallback;
-using wk_navigation_util::CreateRedirectUrl;
 using ::testing::WithArgs;
 
 const char kExpectedMimeType[] = "text/html";
@@ -78,25 +76,13 @@ const char kTestPageURL[] = "/pony.html";
 // A text string from the test HTML page at `kTestPageURL`.
 const char kTestSessionStoragePageText[] = "pony";
 
-// Returns a session storage with a single committed entry of a test HTML page.
-CRWSessionStorage* GetTestSessionStorage(const GURL& testUrl) {
-  CRWSessionStorage* result = [[CRWSessionStorage alloc] init];
-  result.stableIdentifier = [[NSUUID UUID] UUIDString];
-  result.lastCommittedItemIndex = 0;
-  CRWNavigationItemStorage* item = [[CRWNavigationItemStorage alloc] init];
-  [item setURL:testUrl];
-  [result setItemStorages:@[ item ]];
-  result.userAgentType = UserAgentType::MOBILE;
-  return result;
-}
-
 // Calls Stop() on the given WebState and returns a PolicyDecision which
 // allows the request to continue.
 ACTION_P(ReturnAllowRequestAndStopNavigation, web_state) {
   dispatch_async(dispatch_get_main_queue(), ^{
     web_state->Stop();
   });
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(arg0),
                      WebStatePolicyDecider::PolicyDecision::Allow()));
@@ -272,7 +258,6 @@ ACTION_P6(VerifyNewPageFinishedContext,
     std::string actual_mime_type;
     (*context)->GetResponseHeaders()->GetMimeType(&actual_mime_type);
     EXPECT_EQ(mime_type, actual_mime_type);
-    EXPECT_EQ(mime_type, actual_mime_type);
   }
   ASSERT_TRUE(web_state->IsLoading());
   ASSERT_EQ(content_is_html, web_state->ContentIsHTML());
@@ -378,7 +363,7 @@ ACTION_P6(VerifyErrorFinishedContext,
   EXPECT_FALSE((*context)->IsRendererInitiated());
   EXPECT_FALSE((*context)->GetResponseHeaders());
   ASSERT_TRUE(!web_state->IsLoading());
-  ASSERT_FALSE(web_state->ContentIsHTML());
+  ASSERT_TRUE(web_state->ContentIsHTML());
   NavigationManager* navigation_manager = web_state->GetNavigationManager();
   NavigationItem* item = navigation_manager->GetLastCommittedItem();
   if (committed) {
@@ -817,6 +802,9 @@ class WebStateObserverTestBase : public WebIntTest {
     test_server_->RegisterRequestHandler(base::BindRepeating(
         &net::test_server::HandlePrefixedRequest, "/download",
         base::BindRepeating(::testing::HandleDownload)));
+    test_server_->RegisterRequestHandler(base::BindRepeating(
+        &net::test_server::HandlePrefixedRequest, "/slow-response",
+        base::BindRepeating(::testing::HandleSlow)));
     RegisterDefaultHandlers(test_server_.get());
     test_server_->ServeFilesFromSourceDirectory(
         base::FilePath("ios/testing/data/http_server_files/"));
@@ -947,13 +935,13 @@ TEST_F(WebStateObserverTest, NewPageNavigation) {
   ASSERT_TRUE(LoadUrl(url));
 }
 
-// Tests loading about://newtab and immediately loading another web page without
-// waiting until about://newtab navigation finishes.
+// Tests loading about://newtab/ and immediately loading another web page
+// without waiting until about://newtab/ navigation finishes.
 TEST_F(WebStateObserverTest, AboutNewTabNavigation) {
   GURL first_url("about://newtab/");
   const GURL second_url = test_server_->GetURL("/echoall");
 
-  // Perform about://newtab navigation and immediately perform the second
+  // Perform about://newtab/ navigation and immediately perform the second
   // navigation without waiting until the first navigation finishes.
 
   // Load `first_url`.
@@ -1378,8 +1366,7 @@ TEST_F(WebStateObserverTest, WebPageReloadNavigation) {
 }
 
 // Tests web page reload with user agent override.
-// TODO(crbug.com/851119): temporarily disable this failing test.
-TEST_F(WebStateObserverTest, DISABLED_ReloadWithUserAgentType) {
+TEST_F(WebStateObserverTest, ReloadWithUserAgentType) {
   const GURL url = test_server_->GetURL("/echo");
 
   // Perform new page navigation.
@@ -2102,10 +2089,8 @@ TEST_F(WebStateObserverTest, DownloadNavigation) {
 }
 
 // Tests failed load after the navigation is sucessfully finished.
-// TODO(crbug.com/954232): this test is flaky on device, and as of iOS14
-// simulator as well.
-TEST_F(WebStateObserverTest, DISABLED_FailedLoad) {
-  GURL url = test_server_->GetURL("/exabyte_response");
+TEST_F(WebStateObserverTest, FailedLoad) {
+  GURL url = test_server_->GetURL("/slow-response");
 
   NavigationContext* context = nullptr;
   int32_t nav_id = 0;
@@ -2129,23 +2114,29 @@ TEST_F(WebStateObserverTest, DISABLED_FailedLoad) {
       .WillOnce(
           RunOnceCallback<2>(WebStatePolicyDecider::PolicyDecision::Allow()));
   EXPECT_CALL(observer_, DidFinishNavigation(web_state(), _))
-      .WillOnce(VerifyNewPageFinishedContext(web_state(), url, /*mime_type=*/"",
+      .WillOnce(VerifyNewPageFinishedContext(web_state(), url, "text/plain",
                                              /*content_is_html=*/false,
                                              &context, &nav_id));
   EXPECT_CALL(observer_, DidStopLoading(web_state()));
+
+  // Load error page for failed navigation.
+  EXPECT_CALL(observer_, DidStartLoading(web_state()));
+  EXPECT_CALL(observer_, DidStopLoading(web_state()));
+  EXPECT_CALL(observer_, DidFinishNavigation(web_state(), _));
 
   EXPECT_CALL(observer_,
               PageLoaded(web_state(), PageLoadCompletionStatus::FAILURE));
 
   test::LoadUrl(web_state(), url);
 
-  // Server will never stop responding. Wait until the navigation is committed.
+  // Server will never stop responding. Wait only until the navigation is
+  // committed.
   EXPECT_FALSE(WaitUntilConditionOrTimeout(kWaitForPageLoadTimeout, ^{
     return context && context->HasCommitted();
   }));
 
   // At this point the navigation should be finished. Shutdown the server and
-  // wait until web state stop loading.
+  // wait until web state stops loading.
   ASSERT_TRUE(test_server_->ShutdownAndWaitUntilComplete());
   ASSERT_TRUE(test::WaitForPageToFinishLoading(web_state()));
 }
@@ -2381,6 +2372,7 @@ TEST_F(WebStateObserverTest, ImmediatelyStopNavigation) {
       /*has_user_gesture=*/false);
   EXPECT_CALL(*decider_, MockShouldAllowRequest(
                              _, RequestInfoMatch(expected_request_info), _))
+      .Times(::testing::AtMost(1))
       .WillOnce(
           RunOnceCallback<2>(WebStatePolicyDecider::PolicyDecision::Allow()));
   test::LoadUrl(web_state(), test_server_->GetURL("/hung"));
@@ -2430,19 +2422,6 @@ TEST_F(WebStateObserverTest, StopFinishedNavigation) {
   // Stop the loading.
   web_state()->Stop();
   ASSERT_TRUE(test::WaitForPageToFinishLoading(web_state()));
-
-  // This test will create an unresponsive WebProcess. WebIntTest::TearDown will
-  // call ClearBrowingData, which can take a very long time with an unresponsive
-  // WebProcess. Work around this problem by force closing WKWebView via a
-  // private API.
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wundeclared-selector"
-  web::WebStateImpl* web_state_impl =
-      static_cast<web::WebStateImpl*>(web_state());
-  WKWebView* web_view = base::mac::ObjCCast<WKWebView>(
-      web_state_impl->GetWebViewNavigationProxy());
-  [web_view performSelector:@selector(_close)];
-#pragma clang diagnostic pop
 }
 
 // Tests that iframe navigation triggers DidChangeBackForwardState.
@@ -2737,147 +2716,12 @@ TEST_F(WebStateObserverTest, NewPageLoadDestroysForwardItems) {
   ASSERT_TRUE(LoadUrl(url));
 }
 
-// Tests callbacks for restoring session and subsequently going back to
-// about:blank.
-TEST_F(WebStateObserverTest, RestoreSessionOnline) {
-  if (@available(iOS 15, *)) {
-    // The bulk of this test is for managing the various client side redirects
-    // in legacy session restore, which is now deprecated in iOS15.
-    return;
-  }
-  // Create a session of 3 items. Current item is at index 1.
-  const GURL url0("about:blank");
-  auto item0 = std::make_unique<NavigationItemImpl>();
-  item0->SetURL(url0);
-
-  const GURL url1 = test_server_->GetURL("/echo?1");
-  auto item1 = std::make_unique<NavigationItemImpl>();
-  item1->SetURL(url1);
-
-  const GURL url2 = test_server_->GetURL("/echo?2");
-  auto item2 = std::make_unique<NavigationItemImpl>();
-  item2->SetURL(url2);
-
-  __block std::vector<std::unique_ptr<NavigationItem>> restored_items;
-  restored_items.push_back(std::move(item0));
-  restored_items.push_back(std::move(item1));
-  restored_items.push_back(std::move(item2));
-
-  const WebStatePolicyDecider::ResponseInfo expected_response_info(
-      /*for_main_frame=*/true);
-
-  // Initiate session restoration.
-
-  EXPECT_CALL(observer_, DidStartLoading(web_state()));
-
-  EXPECT_CALL(*decider_, MockShouldAllowRequest(_, _, _))
-      .WillOnce(
-          RunOnceCallback<2>(WebStatePolicyDecider::PolicyDecision::Allow()));
-  EXPECT_CALL(*decider_, ShouldAllowResponse(
-                             _, ResponseInfoMatch(expected_response_info), _))
-      .WillOnce(
-          RunOnceCallback<2>(WebStatePolicyDecider::PolicyDecision::Allow()));
-
-  // Back/forward state changes due to History API calls during session
-  // restoration. Called once each for CanGoBack and CanGoForward.
-  EXPECT_CALL(observer_, DidChangeBackForwardState(web_state()));
-
-  EXPECT_CALL(observer_, DidStopLoading(web_state()));
-
-  EXPECT_CALL(observer_, DidChangeBackForwardState(web_state()));
-
-  // Client-side redirect to restore_session.html?targetUrl=url1.
-  EXPECT_CALL(*decider_,
-              MockShouldAllowRequest(URLMatch(CreateRedirectUrl(url1)), _, _))
-      .WillOnce(
-          RunOnceCallback<2>(WebStatePolicyDecider::PolicyDecision::Allow()));
-
-  EXPECT_CALL(observer_, DidStartLoading(web_state()));
-
-  EXPECT_CALL(*decider_,
-              ShouldAllowResponse(URLMatch(CreateRedirectUrl(url1)),
-                                  ResponseInfoMatch(expected_response_info), _))
-      .WillOnce(
-          RunOnceCallback<2>(WebStatePolicyDecider::PolicyDecision::Allow()));
-
-  EXPECT_CALL(observer_, DidStopLoading(web_state()));
-
-  // Client-side redirect to `url1`.
-  EXPECT_CALL(*decider_, MockShouldAllowRequest(URLMatch(url1), _, _))
-      .WillOnce(
-          RunOnceCallback<2>(WebStatePolicyDecider::PolicyDecision::Allow()));
-  EXPECT_CALL(observer_, DidStartLoading(web_state()));
-
-  EXPECT_CALL(observer_, DidStartNavigation(web_state(), _));
-  EXPECT_CALL(*decider_,
-              ShouldAllowResponse(URLMatch(url1),
-                                  ResponseInfoMatch(expected_response_info), _))
-      .WillOnce(
-          RunOnceCallback<2>(WebStatePolicyDecider::PolicyDecision::Allow()));
-
-  EXPECT_CALL(observer_, DidFinishNavigation(web_state(), _));
-  EXPECT_CALL(observer_, DidStopLoading(web_state()));
-  EXPECT_CALL(observer_,
-              PageLoaded(web_state(), PageLoadCompletionStatus::SUCCESS));
-
-  ASSERT_TRUE(ExecuteBlockAndWaitForLoad(url1, ^{
-    navigation_manager()->Restore(/*last_committed_item_index=*/1,
-                                  std::move(restored_items));
-  }));
-  ASSERT_EQ(url1, navigation_manager()->GetLastCommittedItem()->GetURL());
-  EXPECT_EQ(1, navigation_manager()->GetLastCommittedItemIndex());
-  ASSERT_EQ(3, navigation_manager()->GetItemCount());
-  ASSERT_TRUE(navigation_manager()->CanGoBack());
-  ASSERT_TRUE(navigation_manager()->CanGoForward());
-
-  // Go back to `item0`.
-
-  EXPECT_CALL(observer_, DidStartLoading(web_state()));
-  // Only CanGoBackward changes state on this navigation.
-  EXPECT_CALL(observer_, DidChangeBackForwardState(web_state())).Times(1);
-
-  // Load restore_session.html?targetUrl=url0.
-  EXPECT_CALL(*decider_,
-              MockShouldAllowRequest(URLMatch(CreateRedirectUrl(url0)), _, _))
-      .WillOnce(
-          RunOnceCallback<2>(WebStatePolicyDecider::PolicyDecision::Allow()));
-  EXPECT_CALL(*decider_,
-              ShouldAllowResponse(URLMatch(CreateRedirectUrl(url0)),
-                                  ResponseInfoMatch(expected_response_info), _))
-      .WillOnce(
-          RunOnceCallback<2>(WebStatePolicyDecider::PolicyDecision::Allow()));
-
-  EXPECT_CALL(observer_, DidStopLoading(web_state()));
-
-  // Client-side redirect to `url0`.
-  EXPECT_CALL(*decider_, MockShouldAllowRequest(URLMatch(url0), _, _))
-      .WillOnce(
-          RunOnceCallback<2>(WebStatePolicyDecider::PolicyDecision::Allow()));
-
-  EXPECT_CALL(observer_, DidStartLoading(web_state()));
-
-  EXPECT_CALL(observer_, DidStartNavigation(web_state(), _));
-  // No ShouldAllowResponse call because about:blank has no response.
-  EXPECT_CALL(observer_, DidFinishNavigation(web_state(), _));
-  EXPECT_CALL(observer_, DidStopLoading(web_state()));
-  EXPECT_CALL(observer_,
-              PageLoaded(web_state(), PageLoadCompletionStatus::SUCCESS));
-
-  ASSERT_TRUE(ExecuteBlockAndWaitForLoad(url0, ^{
-    navigation_manager()->GoBack();
-  }));
-  ASSERT_EQ(url0, navigation_manager()->GetLastCommittedItem()->GetURL());
-  EXPECT_EQ(0, navigation_manager()->GetLastCommittedItemIndex());
-  ASSERT_TRUE(navigation_manager()->CanGoForward());
-  ASSERT_FALSE(navigation_manager()->CanGoBack());
-}
-
 // Tests that if a saved session is provided when creating a new WebState, it is
 // restored after the first NavigationManager::LoadIfNecessary() call.
 TEST_F(WebStateObserverTest, RestoredFromHistory) {
-  auto web_state = WebState::CreateWithStorageSession(
-      WebState::CreateParams(GetBrowserState()),
-      GetTestSessionStorage(test_server_->GetURL(kTestPageURL)));
+  std::unique_ptr<WebState> web_state = test::CreateUnrealizedWebStateWithItems(
+      GetBrowserState(), /* last_committed_item_index= */ 0,
+      {test::PageInfo{.url = test_server_->GetURL(kTestPageURL)}});
 
   ASSERT_FALSE(test::IsWebViewContainingText(web_state.get(),
                                              kTestSessionStoragePageText));
@@ -2889,9 +2733,10 @@ TEST_F(WebStateObserverTest, RestoredFromHistory) {
 // Tests that NavigationManager::LoadIfNecessary() restores the page after
 // disabling and re-enabling web usage.
 TEST_F(WebStateObserverTest, DisableAndReenableWebUsage) {
-  auto web_state = WebState::CreateWithStorageSession(
-      WebState::CreateParams(GetBrowserState()),
-      GetTestSessionStorage(test_server_->GetURL(kTestPageURL)));
+  std::unique_ptr<WebState> web_state = test::CreateUnrealizedWebStateWithItems(
+      GetBrowserState(), /* last_committed_item_index= */ 0,
+      {test::PageInfo{.url = test_server_->GetURL(kTestPageURL)}});
+
   web_state->GetNavigationManager()->LoadIfNecessary();
   ASSERT_TRUE(test::WaitForWebViewContainingText(web_state.get(),
                                                  kTestSessionStoragePageText));
@@ -2911,7 +2756,7 @@ TEST_F(WebStateObserverTest, DisableAndReenableWebUsage) {
 TEST_F(WebStateObserverTest, PdfFileUrlNavigation) {
   // Construct a valid file:// URL.
   base::FilePath path;
-  base::PathService::Get(base::DIR_MODULE, &path);
+  base::PathService::Get(base::DIR_ASSETS, &path);
   path = path.Append(
       FILE_PATH_LITERAL("ios/testing/data/http_server_files/testpage.pdf"));
 

@@ -30,19 +30,22 @@ Most targets produce two separate `.jar` files:
 
 ### Step 1: Create interface .jar with turbine or ijar
 
-For prebuilt `.jar` files, use [//third_party/ijar] to create interface `.jar`
-from prebuilt `.jar`.
-
-For non-prebuilt targets, use [//third_party/turbine] to create interface `.jar`
-from `.java` source files. Turbine is much faster than javac, and so enables
-full compilation to happen more concurrently.
-
 What are interface jars?:
 
-* The contain `.class` files with all non-public symbols and function bodies
+* They contain `.class` files with all private symbols and all method bodies
   removed.
 * Dependant targets use interface `.jar` files to skip having to be rebuilt
   when only private implementation details change.
+
+For prebuilt `.jar` files: we use [//third_party/ijar] to create interface
+`.jar` files from the prebuilt ones.
+
+For non-prebuilt `.jar` files`: we use [//third_party/turbine] to create
+interface `.jar` files directly from `.java` source files. Turbine is faster
+than javac because it does not compile method bodies. Although Turbine causes
+us to compile files twice, it speeds up builds by allowing `javac` compilation
+of targets to happen concurrently with their dependencies. We also use Turbine
+to run our annotation processors.
 
 [//third_party/ijar]: /third_party/ijar/README.chromium
 [//third_party/turbine]: /third_party/turbine/README.chromium
@@ -108,7 +111,7 @@ This step happens only when targets that have `jar_excluded_patterns` or
   * E.g.: `AppHooksImpl.class` - how `chrome_java` wires up different
     implementations for [non-public builds][apphooks].
 
-[JNI]: /base/android/jni_generator/README.md
+[JNI]: /third_party/jni_zero/README.md
 [Android Resources]: life_of_a_resource.md
 [apphooks]: /chrome/android/java/src/org/chromium/chrome/browser/AppHooksImpl.java
 
@@ -137,7 +140,7 @@ This step happens only when targets have `supports_android = true`.
   * Final `GEN_JNI.java` for [JNI glue].
   * `BuildConfig.java` and `NativeLibraries.java` (//base dependencies).
 
-[JNI glue]: /base/android/jni_generator/README.md
+[JNI glue]: /third_party/jni_zero/README.md
 
 ### Step 8: Final Dexing
 
@@ -217,70 +220,4 @@ and custom build steps.
 
 ## Static Analysis & Code Checks
 
-We use several tools for static analysis.
-
-### [ErrorProne](https://errorprone.info/)
-* Runs as part of normal compilation. Controlled by GN arg: `use_errorprone_java_compiler`.
-* Most useful check:
-  * Enforcement of `@GuardedBy` annotations.
-* List of enabled / disabled checks exists [within compile_java.py](https://cs.chromium.org/chromium/src/build/android/gyp/compile_java.py?l=30)
-  * Many checks are currently disabled because there is work involved in fixing
-    violations they introduce. Please help!
-* Custom checks for Chrome:
-  * [//tools/android/errorprone_plugin/src/org/chromium/tools/errorprone/plugin/](/tools/android/errorprone_plugin/src/org/chromium/tools/errorprone/plugin/)
-* Use ErrorProne checks when you need something more sophisticated than pattern
-  matching.
-* Checks run on the entire codebase, not only on changed lines.
-* Does not run when `chromium_code = false` (e.g. for //third_party).
-
-### [Android Lint](https://developer.android.com/studio/write/lint)
-* Runs as part of normal compilation. Controlled by GN arg: `disable_android_lint` 
-* Most useful check:
-  * Enforcing `@TargetApi` annotations (ensure you don't call a function that
-    does not exist on all versions of Android unless guarded by an version
-    check).
-* List of disabled checks:
-  * [//build/android/lint/suppressions.xml](/build/android/lint/suppressions.xml)
-* Custom lint checks [are possible](lint_plugins), but we don't have any.
-* Checks run on the entire codebase, not only on changed lines.
-* Does not run when `chromium_code = false` (e.g. for //third_party).
-
-[lint_plugins]: http://tools.android.com/tips/lint-custom-rules
-
-### [Bytecode Processor](/build/android/bytecode/)
-* Performs a single check:
-  * That target `deps` are not missing any entries.
-  * In other words: Enforces that targets do not rely on indirect dependencies
-    to populate their classpath.
-* Checks run on the entire codebase, not only on changed lines.
-* This is the only static analysis that runs on prebuilt .jar files.
-* The same tool is also used for [bytecode rewriting](/docs/ui/android/bytecode_rewriting.md).
-
-### [PRESUBMIT.py](/PRESUBMIT.py):
-* Checks for banned patterns via `_BANNED_JAVA_FUNCTIONS`.
-  * (These should likely be moved to checkstyle).
-* Checks for a random set of things in `ChecksAndroidSpecificOnUpload()`.
-  * Including running Checkstyle.
-  * (Some of these other checks should likely also be moved to checkstyle).
-* Checks run only on changed lines.
-
-### [Checkstyle](https://checkstyle.sourceforge.io/)
-* Checks Java style rules that are not covered by clang-format.
-  * E.g.: Unused imports and naming conventions.
-* Allows custom checks to be added via XML. Here [is ours].
-* Preferred over adding checks directly in PRESUBMIT.py because the tool
-  understands `@SuppressWarnings` annotations.
-* Checks run only on changed lines.
-
-[is ours]:  /tools/android/checkstyle/chromium-style-5.0.xml
-
-### [clang-format](https://clang.llvm.org/docs/ClangFormat.html)
-* Formats `.java` files via `git cl format`.
-* Can be toggle on/off with code comments.
-  ```java
-  // clang-format off
-  ... non-formatted code here ...
-  // clang-format on
-  ```
-* Does not work great for multiple annotations or on some lambda expressions,
-  but is generally agreed it is better than not having it at all.
+See [static_analysis.md](static_analysis.md)

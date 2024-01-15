@@ -15,7 +15,6 @@
     {
       "name": "LayoutNGBlockFlow DIV id='outerDiv'",
       "bounds": [769, 700],
-      "contentsOpaqueForText": true,
       "transform": 2
     },
     {

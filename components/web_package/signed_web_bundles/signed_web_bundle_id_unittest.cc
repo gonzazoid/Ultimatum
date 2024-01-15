@@ -12,6 +12,7 @@
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_piece.h"
 #include "base/test/bind.h"
+#include "base/test/gmock_expected_support.h"
 #include "components/web_package/signed_web_bundles/ed25519_public_key.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
@@ -58,9 +59,9 @@ class SignedWebBundleIdValidTest
 };
 
 TEST_P(SignedWebBundleIdValidTest, ParseValidIDs) {
-  const auto parsed_id = SignedWebBundleId::Create(raw_id_);
-  EXPECT_TRUE(parsed_id.has_value());
-  EXPECT_EQ(parsed_id->type(), type_);
+  EXPECT_THAT(SignedWebBundleId::Create(raw_id_),
+              base::test::ValueIs(
+                  ::testing::Property(&SignedWebBundleId::type, type_)));
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -152,9 +153,9 @@ TEST(SignedWebBundleIdTest, CreateRandomForDevelopmentDefaultGenerator) {
 
 TEST(SignedWebBundleIdTest, CreateRandomForDevelopmentCustomGenerator) {
   auto custom_callback =
-      base::BindLambdaForTesting([](void* ptr, size_t len) -> void {
-        DCHECK_EQ(len, kDevelopmentBytes.size());
-        base::ranges::copy(kDevelopmentBytes, static_cast<uint8_t*>(ptr));
+      base::BindLambdaForTesting([](base::span<uint8_t> buffer) -> void {
+        DCHECK_EQ(buffer.size(), kDevelopmentBytes.size());
+        base::ranges::copy(kDevelopmentBytes, buffer.begin());
       });
 
   SignedWebBundleId id =

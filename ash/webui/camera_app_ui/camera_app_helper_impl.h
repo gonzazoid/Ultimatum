@@ -5,26 +5,30 @@
 #ifndef ASH_WEBUI_CAMERA_APP_UI_CAMERA_APP_HELPER_IMPL_H_
 #define ASH_WEBUI_CAMERA_APP_UI_CAMERA_APP_HELPER_IMPL_H_
 
+#include <optional>
 #include <vector>
 
 #include "ash/public/cpp/screen_backlight.h"
-#include "ash/public/cpp/tablet_mode_observer.h"
 #include "ash/webui/camera_app_ui/camera_app_helper.mojom.h"
 #include "ash/webui/camera_app_ui/camera_app_ui.h"
 #include "ash/webui/camera_app_ui/camera_app_window_state_controller.h"
 #include "ash/webui/camera_app_ui/document_scanner_service_client.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "chromeos/services/machine_learning/public/mojom/document_scanner.mojom.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/window.h"
 #include "ui/display/display_observer.h"
 #include "ui/display/screen.h"
 
+namespace display {
+enum class TabletState;
+}  // namespace display
+
 namespace ash {
 
-class CameraAppHelperImpl : public TabletModeObserver,
-                            public ScreenBacklightObserver,
+class CameraAppHelperImpl : public ScreenBacklightObserver,
                             public display::DisplayObserver,
                             public camera_app::mojom::CameraAppHelper {
  public:
@@ -40,11 +44,13 @@ class CameraAppHelperImpl : public TabletModeObserver,
   using ExternalScreenMonitor = camera_app::mojom::ExternalScreenMonitor;
   using CameraUsageOwnershipMonitor =
       camera_app::mojom::CameraUsageOwnershipMonitor;
+  using StorageMonitor = camera_app::mojom::StorageMonitor;
 
   CameraAppHelperImpl(CameraAppUI* camera_app_ui,
                       CameraResultCallback camera_result_callback,
                       SendBroadcastCallback send_broadcast_callback,
-                      aura::Window* window);
+                      aura::Window* window,
+                      HoldingSpaceClient* holding_space_client);
 
   CameraAppHelperImpl(const CameraAppHelperImpl&) = delete;
   CameraAppHelperImpl& operator=(const CameraAppHelperImpl&) = delete;
@@ -72,16 +78,15 @@ class CameraAppHelperImpl : public TabletModeObserver,
   void OpenFileInGallery(const std::string& name) override;
   void OpenFeedbackDialog(const std::string& placeholder) override;
   void OpenUrlInBrowser(const GURL& url) override;
-  void SetCameraUsageMonitor(
-      mojo::PendingRemote<CameraUsageOwnershipMonitor> usage_monitor,
-      SetCameraUsageMonitorCallback callback) override;
   void GetWindowStateController(
       GetWindowStateControllerCallback callback) override;
   void SendNewCaptureBroadcast(bool is_video, const std::string& name) override;
+  void NotifyTote(const camera_app::mojom::ToteMetricFormat format,
+                  const std::string& name) override;
   void MonitorFileDeletion(const std::string& name,
                            MonitorFileDeletionCallback callback) override;
-  void GetDocumentScannerReadyState(
-      GetDocumentScannerReadyStateCallback callback) override;
+  void IsDocumentScannerSupported(
+      IsDocumentScannerSupportedCallback callback) override;
   void CheckDocumentModeReadiness(
       CheckDocumentModeReadinessCallback callback) override;
   void ScanDocumentCorners(const std::vector<uint8_t>& jpeg_data,
@@ -94,6 +99,10 @@ class CameraAppHelperImpl : public TabletModeObserver,
   void ConvertToPdf(const std::vector<std::vector<uint8_t>>& jpegs_data,
                     ConvertToPdfCallback callback) override;
   void MaybeTriggerSurvey() override;
+  void StartStorageMonitor(mojo::PendingRemote<StorageMonitor> monitor,
+                           StartStorageMonitorCallback callback) override;
+  void StopStorageMonitor() override;
+  void OpenStorageManagement() override;
 
  private:
   void CheckExternalScreenState();
@@ -107,9 +116,8 @@ class CameraAppHelperImpl : public TabletModeObserver,
       bool success,
       const std::vector<uint8_t>& processed_jpeg_data);
 
-  // TabletModeObserver overrides;
-  void OnTabletModeStarted() override;
-  void OnTabletModeEnded() override;
+  // callback for storage monitor status update
+  void OnStorageStatusUpdated(CameraAppUIDelegate::StorageMonitorStatus status);
 
   // ScreenBacklightObserver overrides;
   void OnScreenBacklightStateChanged(
@@ -118,12 +126,13 @@ class CameraAppHelperImpl : public TabletModeObserver,
   // display::DisplayObserver overrides;
   void OnDisplayAdded(const display::Display& new_display) override;
   void OnDisplayRemoved(const display::Display& old_display) override;
+  void OnDisplayTabletStateChanged(display::TabletState state) override;
 
   // For platform app, we set |camera_app_ui_| to nullptr and should not use
   // it. For SWA, since CameraAppUI owns CameraAppHelperImpl, it is safe to
   // assume that the |camera_app_ui_| is always valid during the whole lifetime
   // of CameraAppHelperImpl.
-  CameraAppUI* camera_app_ui_;
+  raw_ptr<CameraAppUI> camera_app_ui_;
 
   CameraResultCallback camera_result_callback_;
 
@@ -131,13 +140,15 @@ class CameraAppHelperImpl : public TabletModeObserver,
 
   bool has_external_screen_;
 
-  absl::optional<uint32_t> pending_intent_id_;
+  std::optional<uint32_t> pending_intent_id_;
 
-  aura::Window* window_;
+  raw_ptr<aura::Window> window_;
 
   mojo::Remote<TabletModeMonitor> tablet_mode_monitor_;
   mojo::Remote<ScreenStateMonitor> screen_state_monitor_;
   mojo::Remote<ExternalScreenMonitor> external_screen_monitor_;
+  mojo::Remote<StorageMonitor> storage_monitor_;
+  StartStorageMonitorCallback storage_callback_;
 
   mojo::Receiver<camera_app::mojom::CameraAppHelper> receiver_{this};
 
@@ -147,6 +158,10 @@ class CameraAppHelperImpl : public TabletModeObserver,
 
   // Client to connect to document detection service.
   std::unique_ptr<DocumentScannerServiceClient> document_scanner_service_;
+
+  raw_ptr<HoldingSpaceClient> const holding_space_client_;
+
+  base::WeakPtrFactory<CameraAppHelperImpl> weak_factory_{this};
 };
 
 }  // namespace ash

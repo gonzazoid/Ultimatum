@@ -4,11 +4,14 @@
 
 #include "components/update_client/utils.h"
 
-#include <iterator>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "base/files/file_path.h"
+#include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
-#include "base/path_service.h"
+#include "components/update_client/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 
@@ -16,42 +19,29 @@
 #include <shlobj.h>
 #endif  // BUILDFLAG(IS_WIN)
 
-using std::string;
-
-namespace {
-
-base::FilePath MakeTestFilePath(const char* file) {
-  base::FilePath path;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &path);
-  return path.AppendASCII("components/test/data/update_client")
-      .AppendASCII(file);
-}
-
-}  // namespace
-
 namespace update_client {
 
 TEST(UpdateClientUtils, VerifyFileHash256) {
   EXPECT_TRUE(VerifyFileHash256(
-      MakeTestFilePath("jebgalgnebhfojomionfpkfelancnnkf.crx"),
+      GetTestFilePath("jebgalgnebhfojomionfpkfelancnnkf.crx"),
       std::string(
           "7ab32f071cd9b5ef8e0d7913be161f532d98b3e9fa284a7cd8059c3409ce0498")));
 
   EXPECT_TRUE(VerifyFileHash256(
-      MakeTestFilePath("empty_file"),
+      GetTestFilePath("empty_file"),
       std::string(
           "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")));
 
-  EXPECT_FALSE(VerifyFileHash256(
-      MakeTestFilePath("jebgalgnebhfojomionfpkfelancnnkf.crx"),
-      std::string("")));
+  EXPECT_FALSE(
+      VerifyFileHash256(GetTestFilePath("jebgalgnebhfojomionfpkfelancnnkf.crx"),
+                        std::string("")));
+
+  EXPECT_FALSE(
+      VerifyFileHash256(GetTestFilePath("jebgalgnebhfojomionfpkfelancnnkf.crx"),
+                        std::string("abcd")));
 
   EXPECT_FALSE(VerifyFileHash256(
-      MakeTestFilePath("jebgalgnebhfojomionfpkfelancnnkf.crx"),
-      std::string("abcd")));
-
-  EXPECT_FALSE(VerifyFileHash256(
-      MakeTestFilePath("jebgalgnebhfojomionfpkfelancnnkf.crx"),
+      GetTestFilePath("jebgalgnebhfojomionfpkfelancnnkf.crx"),
       std::string(
           "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")));
 }
@@ -115,16 +105,18 @@ TEST(UpdateClientUtils, IsValidInstallerAttributeName) {
 
   const char* const valid_names[] = {"A", "Z", "a", "a-b", "A_B",
                                      "z", "0", "9", "-_"};
-  for (const char* name : valid_names)
+  for (const char* name : valid_names) {
     EXPECT_TRUE(IsValidInstallerAttribute(
         make_pair(std::string(name), std::string("value"))));
+  }
 
   const char* const invalid_names[] = {
       "",   "a=1", " name", "name ", "na me", "<name", "name>",
       "\"", "\\",  "\xaa",  ".",     ",",     ";",     "+"};
-  for (const char* name : invalid_names)
+  for (const char* name : invalid_names) {
     EXPECT_FALSE(IsValidInstallerAttribute(
         make_pair(std::string(name), std::string("value"))));
+  }
 }
 
 // Tests that the value of an InstallerAttribute matches
@@ -140,15 +132,17 @@ TEST(UpdateClientUtils, IsValidInstallerAttributeValue) {
 
   const char* const valid_values[] = {"",  "a=1", "A", "Z",       "a",
                                       "z", "0",   "9", "-.,;+_=$"};
-  for (const char* value : valid_values)
+  for (const char* value : valid_values) {
     EXPECT_TRUE(IsValidInstallerAttribute(
         make_pair(std::string("name"), std::string(value))));
+  }
 
   const char* const invalid_values[] = {" ap", "ap ", "a p", "<ap",
                                         "ap>", "\"",  "\\",  "\xaa"};
-  for (const char* value : invalid_values)
+  for (const char* value : invalid_values) {
     EXPECT_FALSE(IsValidInstallerAttribute(
         make_pair(std::string("name"), std::string(value))));
+  }
 }
 
 TEST(UpdateClientUtils, RemoveUnsecureUrls) {
@@ -210,27 +204,12 @@ TEST(UpdateClientUtils, ToInstallerResult) {
   EXPECT_EQ(20000, result4.extended_error);
 }
 
-TEST(UpdateClientUtils, CreateSecureTempDirectory) {
-  base::FilePath temp_dir;
-  EXPECT_TRUE(
-      CreateSecureTempDirectory(FILE_PATH_LITERAL("update_client"), &temp_dir));
-
-  base::ScopedTempDir temp_dir_owner;
-  EXPECT_TRUE(temp_dir_owner.Set(temp_dir));
-
-#if BUILDFLAG(IS_WIN)
-  base::FilePath program_files_dir;
-  EXPECT_TRUE(
-      base::PathService::Get(base::DIR_PROGRAM_FILES, &program_files_dir));
-  EXPECT_EQ(program_files_dir.IsParent(temp_dir), !!::IsUserAnAdmin());
-#endif  // BUILDFLAG(IS_WIN)
-}
-
 TEST(UpdateClientUtils, GetArchitecture) {
   const std::string arch = GetArchitecture();
 
 #if BUILDFLAG(IS_WIN)
-  EXPECT_TRUE(arch == kArchIntel || arch == kArchAmd64) << arch;
+  EXPECT_TRUE(arch == kArchIntel || arch == kArchAmd64 || arch == kArchArm64)
+      << arch;
 #endif  // BUILDFLAG(IS_WIN)
 }
 

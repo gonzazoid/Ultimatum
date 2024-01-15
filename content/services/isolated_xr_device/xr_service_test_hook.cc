@@ -4,7 +4,7 @@
 
 #include "content/services/isolated_xr_device/xr_service_test_hook.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/process/process.h"
 #include "content/services/isolated_xr_device/xr_test_hook_wrapper.h"
 #include "device/vr/buildflags/buildflags.h"
@@ -54,8 +54,12 @@ XRServiceTestHook::~XRServiceTestHook() {
   // to destroy it on that thread.
   if (wrapper_) {
     auto runner = wrapper_->GetBoundTaskRunner();
-    runner->PostTask(FROM_HERE,
-                     base::BindOnce(UnsetTestHook, std::move(wrapper_)));
+    if (runner) {
+      runner->PostTask(FROM_HERE,
+                       base::BindOnce(UnsetTestHook, std::move(wrapper_)));
+    } else {
+      UnsetTestHook(std::move(wrapper_));
+    }
   }
 }
 

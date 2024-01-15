@@ -24,9 +24,7 @@
 
 using content::BrowserThread;
 
-namespace ash {
-namespace file_system_provider {
-namespace util {
+namespace ash::file_system_provider::util {
 
 namespace {
 
@@ -85,8 +83,7 @@ bool IsFileSystemProviderLocalPath(const base::FilePath& local_path) {
 FileSystemURLParser::FileSystemURLParser(const storage::FileSystemURL& url)
     : url_(url), file_system_(nullptr) {}
 
-FileSystemURLParser::~FileSystemURLParser() {
-}
+FileSystemURLParser::~FileSystemURLParser() = default;
 
 bool FileSystemURLParser::Parse() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -159,8 +156,7 @@ LocalPathParser::LocalPathParser(Profile* profile,
                                  const base::FilePath& local_path)
     : profile_(profile), local_path_(local_path), file_system_(nullptr) {}
 
-LocalPathParser::~LocalPathParser() {
-}
+LocalPathParser::~LocalPathParser() = default;
 
 bool LocalPathParser::Parse() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -196,6 +192,4 @@ bool LocalPathParser::Parse() {
   return true;
 }
 
-}  // namespace util
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::util

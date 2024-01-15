@@ -8,34 +8,48 @@
 #import <memory>
 #import <vector>
 
+#import "base/apple/bundle_locations.h"
+#import "base/apple/foundation_util.h"
 #import "base/i18n/rtl.h"
-#import "base/mac/bundle_locations.h"
-#import "base/mac/foundation_util.h"
+#import "base/ios/ios_util.h"
+#import "base/metrics/histogram_functions.h"
 #import "base/metrics/user_metrics.h"
 #import "base/metrics/user_metrics_action.h"
 #import "base/numerics/safe_conversions.h"
 #import "base/strings/sys_string_conversions.h"
+#import "components/bookmarks/browser/bookmark_model.h"
 #import "components/favicon/ios/web_favicon_driver.h"
-#import "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#import "ios/chrome/browser/drag_and_drop/drag_item_util.h"
-#import "ios/chrome/browser/drag_and_drop/url_drag_drop_handler.h"
-#import "ios/chrome/browser/flags/system_flags.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/snapshots/snapshot_tab_helper.h"
-#import "ios/chrome/browser/tabs/tab_title_util.h"
-#import "ios/chrome/browser/ui/bubble/bubble_util.h"
-#import "ios/chrome/browser/ui/bubble/bubble_view.h"
-#import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/command_dispatcher.h"
-#import "ios/chrome/browser/ui/commands/open_new_tab_command.h"
-#import "ios/chrome/browser/ui/commands/popup_menu_commands.h"
-#import "ios/chrome/browser/ui/fullscreen/fullscreen_controller.h"
+#import "components/feature_engagement/public/event_constants.h"
+#import "components/feature_engagement/public/tracker.h"
+#import "ios/chrome/browser/bookmarks/model/local_or_syncable_bookmark_model_factory.h"
+#import "ios/chrome/browser/drag_and_drop/model/drag_item_util.h"
+#import "ios/chrome/browser/drag_and_drop/model/url_drag_drop_handler.h"
+#import "ios/chrome/browser/feature_engagement/model/tracker_factory.h"
+#import "ios/chrome/browser/ntp/model/new_tab_page_util.h"
+#import "ios/chrome/browser/shared/coordinator/scene/scene_state.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/shared/model/web_state_list/all_web_state_observation_forwarder.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list_observer_bridge.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_opener.h"
+#import "ios/chrome/browser/shared/public/commands/application_commands.h"
+#import "ios/chrome/browser/shared/public/commands/bookmarks_commands.h"
+#import "ios/chrome/browser/shared/public/commands/command_dispatcher.h"
+#import "ios/chrome/browser/shared/public/commands/open_new_tab_command.h"
+#import "ios/chrome/browser/shared/public/commands/popup_menu_commands.h"
+#import "ios/chrome/browser/shared/public/commands/reading_list_add_command.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/public/features/system_flags.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/util/layout_guide_names.h"
+#import "ios/chrome/browser/shared/ui/util/rtl_geometry.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/shared/ui/util/util_swift.h"
+#import "ios/chrome/browser/snapshots/model/snapshot_tab_helper.h"
+#import "ios/chrome/browser/tabs/model/tab_title_util.h"
 #import "ios/chrome/browser/ui/fullscreen/scoped_fullscreen_disabler.h"
-#import "ios/chrome/browser/ui/gestures/view_revealing_vertical_pan_handler.h"
-#import "ios/chrome/browser/ui/main/scene_state.h"
-#import "ios/chrome/browser/ui/main/scene_state_browser_agent.h"
-#import "ios/chrome/browser/ui/ntp/ntp_util.h"
-#import "ios/chrome/browser/ui/popup_menu/public/popup_menu_long_press_delegate.h"
+#import "ios/chrome/browser/ui/tab_switcher/tab_utils.h"
 #import "ios/chrome/browser/ui/tabs/requirements/tab_strip_constants.h"
 #import "ios/chrome/browser/ui/tabs/requirements/tab_strip_presentation.h"
 #import "ios/chrome/browser/ui/tabs/tab_strip_constants.h"
@@ -43,17 +57,10 @@
 #import "ios/chrome/browser/ui/tabs/tab_strip_view.h"
 #import "ios/chrome/browser/ui/tabs/tab_view.h"
 #import "ios/chrome/browser/ui/tabs/target_frame_cache.h"
-#import "ios/chrome/browser/ui/ui_feature_flags.h"
-#import "ios/chrome/browser/ui/util/named_guide.h"
-#import "ios/chrome/browser/ui/util/rtl_geometry.h"
-#import "ios/chrome/browser/ui/util/uikit_ui_util.h"
-#import "ios/chrome/browser/url_loading/url_loading_browser_agent.h"
-#import "ios/chrome/browser/url_loading/url_loading_params.h"
-#import "ios/chrome/browser/web_state_list/all_web_state_observation_forwarder.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
-#import "ios/chrome/browser/web_state_list/web_state_list_favicon_driver_observer.h"
-#import "ios/chrome/browser/web_state_list/web_state_list_observer_bridge.h"
-#import "ios/chrome/browser/web_state_list/web_state_opener.h"
+#import "ios/chrome/browser/url_loading/model/url_loading_browser_agent.h"
+#import "ios/chrome/browser/url_loading/model/url_loading_params.h"
+#import "ios/chrome/browser/web_state_list/model/web_state_list_favicon_driver_observer.h"
+#import "ios/chrome/common/button_configuration_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/ui_util.h"
 #import "ios/chrome/grit/ios_strings.h"
@@ -64,13 +71,15 @@
 #import "ui/base/device_form_factor.h"
 #import "ui/gfx/image/image.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using base::UserMetricsAction;
 
 namespace {
+
+// Keys of the UMA IOS.TabStrip histograms.
+const char kUMATabStripDragInteractionHistogram[] =
+    "IOS.TabStrip.DragInteraction";
+const char kUMATabStripTapInteractionHistogram[] =
+    "IOS.TabStrip.TapInteraction";
 
 // Animation duration for tab animations.
 const NSTimeInterval kTabAnimationDuration = 0.25;
@@ -108,25 +117,24 @@ const CGFloat kAutoscrollDecrementWidth = 10.0;
 
 // The size of the new tab button.
 const CGFloat kNewTabButtonWidth = 44;
+const CGFloat kNewTabButtonSpotlightViewCornerRadius = 7;
 
-// Default image insets for the new tab button.
+// Default image insets for the new tab button. The negative value for leading
+// inset is shifting the image view to the left from the center.
 const CGFloat kNewTabButtonLeadingImageInset = -10.0;
+// The negative value for bottom inset is shifting the image view to the bottom
+// from the center.
 const CGFloat kNewTabButtonBottomImageInset = -2.0;
+
+// Identifier of the action that displays the UIMenu.
+NSString* const kMenuActionIdentifier = @"kMenuActionIdentifier";
 
 // Returns the background color.
 UIColor* BackgroundColor() {
-  if (base::FeatureList::IsEnabled(kExpandedTabStrip)) {
-    // The background needs to be clear to allow the thumb strip to be seen
-    // from behind the tab strip during the enter/exit thumb strip animation.
-    // However, when using the fullscreen provider, the WKWebView extends behind
-    // the tab strip. In this case, a clear background would lead to seeing the
-    // WKWebView instead of the thumb strip.
-    return ios::provider::IsFullscreenSmoothScrollingSupported()
-               ? UIColor.blackColor
-               : UIColor.clearColor;
-  }
   return UIColor.blackColor;
 }
+
+const CGFloat kSymbolSize = 18;
 
 }  // namespace
 
@@ -167,9 +175,8 @@ UIColor* BackgroundColor() {
 @interface TabStripController () <CRWWebStateObserver,
                                   TabStripViewLayoutDelegate,
                                   TabViewDelegate,
-                                  ViewRevealingAnimatee,
-                                  WebStateListObserving,
                                   WebStateFaviconDriverObserver,
+                                  WebStateListObserving,
                                   UIGestureRecognizerDelegate,
                                   UIScrollViewDelegate,
                                   URLDropDelegate> {
@@ -178,8 +185,14 @@ UIColor* BackgroundColor() {
   TabStripContainerView* _view;
   TabStripView* _tabStripView;
   UIButton* _buttonNewTab;
+  // The spotlight view contained in the new tab button, serving for the
+  // highlighted effect.
+  UIView* _buttonNewTabSpotlightView;
 
   TabStripStyle _style;
+
+  // Layout guide center to reference the New Tab button.
+  LayoutGuideCenter* _layoutGuideCenter;
 
   // Array of TabViews.  There is a one-to-one correspondence between this array
   // and the set of Tabs in the WebStateList.
@@ -200,7 +213,7 @@ UIColor* BackgroundColor() {
   // and cleared in layoutSubviews.
   BOOL _animateLayout;
 
-  // The current tab width.  Recomputed whenever a tab is added or removed.
+  // The current tab width. Recomputed whenever a tab is added or removed.
   CGFloat _currentTabWidth;
 
   // View used to dim unselected tabs when in reordering mode.  Nil when not
@@ -264,6 +277,9 @@ UIColor* BackgroundColor() {
 // YES if the controller has been disconnected.
 @property(nonatomic) BOOL disconnected;
 
+// The base view controller from which to present UI.
+@property(nonatomic, readwrite, weak) UIViewController* baseViewController;
+
 // If set to `YES`, tabs at either end of the tabstrip are "collapsed" into a
 // stack, such that the visible width of the tabstrip is constant.  If set to
 // `NO`, tabs are never collapsed and the tabstrip scrolls horizontally as a
@@ -274,15 +290,10 @@ UIColor* BackgroundColor() {
 // Handler for URL drop interactions.
 @property(nonatomic, strong) URLDragDropHandler* dragDropHandler;
 
-// Pan gesture recognizer for the view revealing pan gesture handler.
-@property(nonatomic, weak) UIPanGestureRecognizer* panGestureRecognizer;
-
 // The tab strip view can be hidden for multiple reasons, which should be
 // tracked independently.
 // Tracks view hiding from external sources.
 @property(nonatomic, assign) BOOL viewHidden;
-// Tracks view hiding from thumb strip revealing.
-@property(nonatomic, assign) BOOL viewHiddenForThumbStrip;
 
 // Initializes the tab array based on the the entries in the `_webStateList`'s.
 // Creates one TabView per Tab and adds it to the tabstrip.  A later call to
@@ -419,17 +430,19 @@ UIColor* BackgroundColor() {
 @synthesize highlightsSelectedTab = _highlightsSelectedTab;
 @synthesize tabStripView = _tabStripView;
 @synthesize view = _view;
-@synthesize longPressDelegate = _longPressDelegate;
 @synthesize presentationProvider = _presentationProvider;
 @synthesize animationWaitDuration = _animationWaitDuration;
-@synthesize panGestureHandler = _panGestureHandler;
 
-- (instancetype)initWithBrowser:(Browser*)browser style:(TabStripStyle)style {
+- (instancetype)initWithBaseViewController:(UIViewController*)baseViewController
+                                   browser:(Browser*)browser
+                                     style:(TabStripStyle)style
+                         layoutGuideCenter:
+                             (LayoutGuideCenter*)layoutGuideCenter {
   if ((self = [super init])) {
     _tabArray = [[NSMutableArray alloc] initWithCapacity:10];
     _closingTabs = [[NSMutableSet alloc] initWithCapacity:5];
     DCHECK(browser);
-
+    _baseViewController = baseViewController;
     _browser = browser;
     _webStateList = _browser->GetWebStateList();
     _webStateListObserver = std::make_unique<WebStateListObserverBridge>(self);
@@ -444,11 +457,12 @@ UIColor* BackgroundColor() {
             _webStateList, _webStateObserver.get());
     _style = style;
 
+    CHECK(layoutGuideCenter);
+    _layoutGuideCenter = layoutGuideCenter;
+
     // `self.view` setup.
     _useTabStacking = [self shouldUseTabStacking];
-    CGRect tabStripFrame = SceneStateBrowserAgent::FromBrowser(browser)
-                               ->GetSceneState()
-                               .window.bounds;
+    CGRect tabStripFrame = browser->GetSceneState().window.bounds;
     tabStripFrame.size.height = kTabStripHeight;
     _view = [[TabStripContainerView alloc] initWithFrame:tabStripFrame];
     _view.autoresizingMask = (UIViewAutoresizingFlexibleWidth |
@@ -462,6 +476,7 @@ UIColor* BackgroundColor() {
     _tabStripView.autoresizingMask =
         (UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight);
     _tabStripView.backgroundColor = _view.backgroundColor;
+    _tabStripView.delegate = self;
     _tabStripView.layoutDelegate = self;
     _tabStripView.accessibilityIdentifier =
         style == INCOGNITO ? kIncognitoTabStripId : kRegularTabStripId;
@@ -472,6 +487,9 @@ UIColor* BackgroundColor() {
     CGRect buttonNewTabFrame = tabStripFrame;
     buttonNewTabFrame.size.width = kNewTabButtonWidth;
     _buttonNewTab = [[UIButton alloc] initWithFrame:buttonNewTabFrame];
+    [_layoutGuideCenter referenceView:_buttonNewTab
+                            underName:kNewTabButtonGuide];
+
     _isIncognito = _browser->GetBrowserState()->IsOffTheRecord();
     // TODO(crbug.com/600829): Rewrite layout code and convert these masks to
     // to trailing and leading margins rather than right and bottom.
@@ -479,15 +497,53 @@ UIColor* BackgroundColor() {
                                       UIViewAutoresizingFlexibleBottomMargin);
     _buttonNewTab.imageView.contentMode = UIViewContentModeCenter;
 
-    UIImage* buttonNewTabImage = [UIImage imageNamed:@"tabstrip_new_tab"];
-    buttonNewTabImage = [buttonNewTabImage
-        imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-    [_buttonNewTab setImage:buttonNewTabImage forState:UIControlStateNormal];
-    [_buttonNewTab.imageView setTintColor:[UIColor colorNamed:kGrey500Color]];
+    UIImage* buttonNewTabImage =
+        DefaultSymbolWithPointSize(kPlusSymbol, kSymbolSize);
 
-    UIEdgeInsets imageInsets = UIEdgeInsetsMake(
+    UIButtonConfiguration* buttonConfiguration =
+        [UIButtonConfiguration plainButtonConfiguration];
+    buttonConfiguration.contentInsets = NSDirectionalEdgeInsetsMake(
         0, kNewTabButtonLeadingImageInset, kNewTabButtonBottomImageInset, 0);
-    _buttonNewTab.imageEdgeInsets = imageInsets;
+    buttonConfiguration.image = buttonNewTabImage;
+    buttonConfiguration.baseForegroundColor =
+        [UIColor colorNamed:kGrey500Color];
+    _buttonNewTab.configurationUpdateHandler = ^(UIButton* incomingButton) {
+      UIButtonConfiguration* updatedConfig = incomingButton.configuration;
+      switch (incomingButton.state) {
+        case UIControlStateHighlighted: {
+          updatedConfig.baseForegroundColor =
+              [UIColor colorNamed:kGrey700Color];
+          break;
+        }
+        case UIControlStateNormal:
+          updatedConfig.baseForegroundColor =
+              [UIColor colorNamed:kGrey500Color];
+          break;
+        default:
+          break;
+      }
+      incomingButton.configuration = updatedConfig;
+    };
+    _buttonNewTab.configuration = buttonConfiguration;
+
+    _buttonNewTabSpotlightView = [[UIView alloc] init];
+    _buttonNewTabSpotlightView.hidden = YES;
+    _buttonNewTabSpotlightView.userInteractionEnabled = NO;
+    _buttonNewTabSpotlightView.layer.cornerRadius =
+        kNewTabButtonSpotlightViewCornerRadius;
+    // Position the spotlight view so that the image view is in its center.
+    // Cannot use the button's `backgroundColor` because the image view is not
+    // centered in the button by kNewTabButtonLeadingImageInset and
+    // kNewTabButtonBottomImageInset.
+    [_buttonNewTabSpotlightView
+        setFrame:CGRectMake(0, -kNewTabButtonBottomImageInset,
+                            kNewTabButtonWidth + kNewTabButtonLeadingImageInset,
+                            kTabStripHeight + kNewTabButtonBottomImageInset)];
+    // Make sure that the spotlightView is below the image to avoid changing the
+    // color of the image.
+    [_buttonNewTab insertSubview:_buttonNewTabSpotlightView
+                    belowSubview:_buttonNewTab.imageView];
+
     SetA11yLabelAndUiAutomationName(
         _buttonNewTab,
         _isIncognito ? IDS_IOS_TOOLS_MENU_NEW_INCOGNITO_TAB
@@ -536,10 +592,15 @@ UIColor* BackgroundColor() {
 - (void)disconnect {
   [_tabStripView setDelegate:nil];
   [_tabStripView setLayoutDelegate:nil];
+
+  self.presentationProvider = nil;
+  self.baseViewController = nil;
+
   _allWebStateObservationForwarder.reset();
   _webStateListFaviconObserver.reset();
   _webStateList->RemoveObserver(_webStateListObserver.get());
   [[NSNotificationCenter defaultCenter] removeObserver:self];
+
   self.disconnected = YES;
 }
 
@@ -550,7 +611,7 @@ UIColor* BackgroundColor() {
 
 // Updates the view's hidden property using all sources of visibility.
 - (void)updateViewHidden {
-  self.view.hidden = self.viewHidden || self.viewHiddenForThumbStrip;
+  self.view.hidden = self.viewHidden;
 }
 
 - (void)tabStripSizeDidChange {
@@ -558,22 +619,15 @@ UIColor* BackgroundColor() {
   [self layoutTabStripSubviews];
 }
 
-- (void)setPanGestureHandler:
-    (ViewRevealingVerticalPanHandler*)panGestureHandler {
-  _panGestureHandler = panGestureHandler;
+#pragma mark - TabStripCommands
 
-  [self.view removeGestureRecognizer:self.panGestureRecognizer];
-
-  UIPanGestureRecognizer* panGestureRecognizer =
-      [[ViewRevealingPanGestureRecognizer alloc]
-          initWithTarget:panGestureHandler
-                  action:@selector(handlePanGesture:)
-                 trigger:ViewRevealTrigger::TabStrip];
-  panGestureRecognizer.delegate = panGestureHandler;
-  panGestureRecognizer.maximumNumberOfTouches = 1;
-  [self.view addGestureRecognizer:panGestureRecognizer];
-
-  self.panGestureRecognizer = panGestureRecognizer;
+- (void)setNewTabButtonOnTabStripIPHHighlighted:(BOOL)IPHHighlighted {
+  _buttonNewTab.tintColor = IPHHighlighted
+                                ? [UIColor colorNamed:kSolidWhiteColor]
+                                : [UIColor colorNamed:kGrey500Color];
+  _buttonNewTabSpotlightView.backgroundColor =
+      IPHHighlighted ? [UIColor colorNamed:kBlueColor] : nil;
+  _buttonNewTabSpotlightView.hidden = !IPHHighlighted;
 }
 
 #pragma mark - Private
@@ -700,14 +754,22 @@ UIColor* BackgroundColor() {
 }
 
 - (void)recordUserMetrics:(id)sender {
-  if (sender == _buttonNewTab)
+  if (sender == _buttonNewTab) {
     base::RecordAction(UserMetricsAction("MobileTabStripNewTab"));
-  else
+    base::RecordAction(UserMetricsAction("MobileTabNewTab"));
+  } else {
     LOG(WARNING) << "Trying to record metrics for unknown sender "
                  << base::SysNSStringToUTF8([sender description]);
+  }
 }
 
 - (void)sendNewTabCommand {
+  feature_engagement::Tracker* engagementTracker =
+      feature_engagement::TrackerFactory::GetForBrowserState(
+          _browser->GetBrowserState());
+  engagementTracker->NotifyEvent(
+      feature_engagement::events::kNewTabToolbarItemUsed);
+
   CGPoint center = [_buttonNewTab.superview convertPoint:_buttonNewTab.center
                                                   toView:_buttonNewTab.window];
   OpenNewTabCommand* command =
@@ -815,8 +877,14 @@ UIColor* BackgroundColor() {
   UrlLoadingBrowserAgent::FromBrowser(_browser)->Load(params);
 }
 
-#pragma mark -
-#pragma mark Tab Drag and Drop methods
+#pragma mark - UIScrollViewDelegate
+
+- (void)scrollViewDidEndDragging:(UIScrollView*)scrollView
+                  willDecelerate:(BOOL)decelerate {
+  base::RecordAction(UserMetricsAction("MobileTabStripScrollDidEnd"));
+}
+
+#pragma mark - Tab Drag and Drop methods
 
 - (void)beginDrag:(UILongPressGestureRecognizer*)gesture {
   DCHECK([[gesture view] isKindOfClass:[TabView class]]);
@@ -896,6 +964,8 @@ UIColor* BackgroundColor() {
   int toIndex = _placeholderGapWebStateListIndex;
   DCHECK_NE(WebStateList::kInvalidIndex, toIndex);
   DCHECK_LT(toIndex, _webStateList->count());
+  base::UmaHistogramBoolean(kUMATabStripDragInteractionHistogram,
+                            fromIndex != toIndex);
 
   // Reset drag state variables before notifying the model that the tab moved.
   [self resetDragState];
@@ -962,8 +1032,7 @@ UIColor* BackgroundColor() {
   [self insertNewItemAtIndex:_webStateList->count() withURL:URL];
 }
 
-#pragma mark -
-#pragma mark Autoscroll methods
+#pragma mark - Autoscroll methods
 
 - (void)installAutoscrollTimerIfNeeded {
   if (_autoscrollTimer)
@@ -1053,12 +1122,11 @@ UIColor* BackgroundColor() {
     _autoscrollDistance = -offset.x;
 }
 
-#pragma mark -
 #pragma mark - CRWWebStateObserver methods
 
 - (void)webStateDidStartLoading:(web::WebState*)webState {
-  // webState can start loading before  didInsertWebState is called, in that
-  // case early return as there is no view to update yet.
+  // webState can start loading before didChangeWebStateList with kInsert is
+  // called, in that case early return as there is no view to update yet.
   if (static_cast<NSUInteger>(_webStateList->count()) >
       _tabArray.count - _closingTabs.count)
     return;
@@ -1102,81 +1170,104 @@ UIColor* BackgroundColor() {
   [view setNeedsDisplay];
 }
 
-#pragma mark -
-#pragma mark WebStateListObserving methods
+#pragma mark - WebStateListObserving methods
 
-// Observer method, active WebState changed.
-- (void)webStateList:(WebStateList*)webStateList
-    didChangeActiveWebState:(web::WebState*)newWebState
-                oldWebState:(web::WebState*)oldWebState
-                    atIndex:(int)atIndex
-                     reason:(ActiveWebStateChangeReason)reason {
-  if (!newWebState)
-    return;
+- (void)didChangeWebStateList:(WebStateList*)webStateList
+                       change:(const WebStateListChange&)change
+                       status:(const WebStateListStatus&)status {
+  switch (change.type()) {
+    case WebStateListChange::Type::kStatusOnly:
+      // The activation is handled after this switch statement.
+      break;
+    case WebStateListChange::Type::kDetach: {
+      // Keep the actual view around while it is animating out.  Once the
+      // animation is done, remove the view.
+      NSUInteger index = [self indexForWebStateListIndex:status.index];
+      TabView* view = [_tabArray objectAtIndex:index];
+      [_closingTabs addObject:view];
+      _targetFrames.RemoveFrame(view);
 
-  for (TabView* view in _tabArray) {
-    [view setSelected:NO];
+      // Adjust the content size now that the tab has been removed from the
+      // model.
+      [self updateContentSizeAndRepositionViews];
+
+      // Signal the FullscreenController that the toolbar needs to stay on
+      // screen for a bit, so the animation is visible.
+      [[NSNotificationCenter defaultCenter]
+          postNotificationName:kWillStartTabStripTabAnimation
+                        object:nil];
+
+      // Leave the view where it is horizontally and animate it downwards out of
+      // sight.
+      CGRect frame = [view frame];
+      frame = CGRectOffset(frame, 0, CGRectGetHeight(frame));
+      __weak TabStripController* weakSelf = self;
+      [UIView animateWithDuration:kTabAnimationDuration
+          animations:^{
+            [view setFrame:frame];
+          }
+          completion:^(BOOL finished) {
+            [weakSelf tabViewAnimationCompletion:view];
+          }];
+
+      [self setNeedsLayoutWithAnimation];
+      break;
+    }
+    case WebStateListChange::Type::kMove: {
+      DCHECK(!_isReordering);
+
+      // Reorder the objects in _tabArray to keep in sync with the model
+      // ordering.
+      const WebStateListChangeMove& moveChange =
+          change.As<WebStateListChangeMove>();
+      NSUInteger arrayIndex =
+          [self indexForWebStateListIndex:moveChange.moved_from_index()];
+      TabView* view = [_tabArray objectAtIndex:arrayIndex];
+      [_tabArray removeObject:view];
+      [_tabArray insertObject:view atIndex:status.index];
+      [self setNeedsLayoutWithAnimation];
+      break;
+    }
+    case WebStateListChange::Type::kReplace: {
+      const WebStateListChangeReplace& replaceChange =
+          change.As<WebStateListChangeReplace>();
+      web::WebState* insertedWebState = replaceChange.inserted_web_state();
+      TabView* view = [self tabViewForWebState:insertedWebState];
+      [self updateTabView:view withWebState:insertedWebState];
+      break;
+    }
+    case WebStateListChange::Type::kInsert: {
+      const WebStateListChangeInsert& insertChange =
+          change.As<WebStateListChangeInsert>();
+      TabView* view =
+          [self createTabViewForWebState:insertChange.inserted_web_state()
+                              isSelected:status.active_web_state_change()];
+      [_tabArray insertObject:view
+                      atIndex:[self indexForWebStateListIndex:status.index]];
+      [[self tabStripView] addSubview:view];
+
+      [self updateContentSizeAndRepositionViews];
+      [self setNeedsLayoutWithAnimation];
+      [self updateContentOffsetForWebStateIndex:status.index isNewWebState:YES];
+      break;
+    }
   }
 
-  NSUInteger index = [self indexForWebStateListIndex:atIndex];
-  TabView* activeView = [_tabArray objectAtIndex:index];
-  [activeView setSelected:YES];
+  if (status.active_web_state_change() && status.new_active_web_state) {
+    for (TabView* view in _tabArray) {
+      [view setSelected:NO];
+    }
 
-  // No need to animate this change, as selecting a new tab simply changes the
-  // z-ordering of the TabViews.  If a new tab was selected as a result of a tab
-  // closure, then the animated layout has already been scheduled.
-  [_tabStripView setNeedsLayout];
-}
+    NSUInteger index =
+        [self indexForWebStateListIndex:webStateList->active_index()];
+    TabView* activeView = [_tabArray objectAtIndex:index];
+    [activeView setSelected:YES];
 
-// Observer method. `webState` moved in `webStateList`.
-- (void)webStateList:(WebStateList*)webStateList
-     didMoveWebState:(web::WebState*)webState
-           fromIndex:(int)fromIndex
-             toIndex:(int)toIndex {
-  DCHECK(!_isReordering);
-
-  // Reorder the objects in _tabArray to keep in sync with the model ordering.
-  NSUInteger arrayIndex = [self indexForWebStateListIndex:fromIndex];
-  TabView* view = [_tabArray objectAtIndex:arrayIndex];
-  [_tabArray removeObject:view];
-  [_tabArray insertObject:view atIndex:toIndex];
-  [self setNeedsLayoutWithAnimation];
-}
-
-// Observer method, `webState` removed from `webStateList`.
-- (void)webStateList:(WebStateList*)webStateList
-    didDetachWebState:(web::WebState*)webState
-              atIndex:(int)atIndex {
-  // Keep the actual view around while it is animating out.  Once the animation
-  // is done, remove the view.
-  NSUInteger index = [self indexForWebStateListIndex:atIndex];
-  TabView* view = [_tabArray objectAtIndex:index];
-  [_closingTabs addObject:view];
-  _targetFrames.RemoveFrame(view);
-
-  // Adjust the content size now that the tab has been removed from the model.
-  [self updateContentSizeAndRepositionViews];
-
-  // Signal the FullscreenController that the toolbar needs to stay on
-  // screen for a bit, so the animation is visible.
-  [[NSNotificationCenter defaultCenter]
-      postNotificationName:kWillStartTabStripTabAnimation
-                    object:nil];
-
-  // Leave the view where it is horizontally and animate it downwards out of
-  // sight.
-  CGRect frame = [view frame];
-  frame = CGRectOffset(frame, 0, CGRectGetHeight(frame));
-  __weak TabStripController* weakSelf = self;
-  [UIView animateWithDuration:kTabAnimationDuration
-      animations:^{
-        [view setFrame:frame];
-      }
-      completion:^(BOOL finished) {
-        [weakSelf tabViewAnimationCompletion:view];
-      }];
-
-  [self setNeedsLayoutWithAnimation];
+    // No need to animate this change, as selecting a new tab simply changes the
+    // z-ordering of the TabViews.  If a new tab was selected as a result of a
+    // tab closure, then the animated layout has already been scheduled.
+    [_tabStripView setNeedsLayout];
+  }
 }
 
 - (void)tabViewAnimationCompletion:(UIView*)view {
@@ -1185,32 +1276,7 @@ UIColor* BackgroundColor() {
   [_closingTabs removeObject:view];
 }
 
-// Observer method. `webState` inserted on `webStateList`.
-- (void)webStateList:(WebStateList*)webStateList
-    didInsertWebState:(web::WebState*)webState
-              atIndex:(int)index
-           activating:(BOOL)activating {
-  TabView* view = [self createTabViewForWebState:webState
-                                      isSelected:activating];
-  [_tabArray insertObject:view atIndex:[self indexForWebStateListIndex:index]];
-  [[self tabStripView] addSubview:view];
-
-  [self updateContentSizeAndRepositionViews];
-  [self setNeedsLayoutWithAnimation];
-  [self updateContentOffsetForWebStateIndex:index isNewWebState:YES];
-}
-
-// Observer method, WebState replaced in `webStateList`.
-- (void)webStateList:(WebStateList*)webStateList
-    didReplaceWebState:(web::WebState*)oldWebState
-          withWebState:(web::WebState*)newWebState
-               atIndex:(int)atIndex {
-  TabView* view = [self tabViewForWebState:newWebState];
-  [self updateTabView:view withWebState:newWebState];
-}
-
-#pragma mark -
-#pragma mark WebStateFaviconDriverObserver
+#pragma mark - WebStateFaviconDriverObserver
 
 // Observer method. `webState` got a favicon update.
 - (void)faviconDriver:(favicon::FaviconDriver*)driver
@@ -1236,8 +1302,7 @@ UIColor* BackgroundColor() {
   }
 }
 
-#pragma mark -
-#pragma mark Views and Layout
+#pragma mark - Views and Layout
 
 - (TabView*)tabViewForWebState:(web::WebState*)webState {
   int listIndex = _webStateList->GetIndexOfWebState(webState);
@@ -1280,7 +1345,7 @@ UIColor* BackgroundColor() {
   // Set the content size to be large enough to contain all the tabs at the
   // desired width, with the standard overlap, plus the new tab button.
   CGSize contentSize = CGSizeMake(
-      _currentTabWidth * tabCount - ([self tabOverlap] * (tabCount - 1)) +
+      (_currentTabWidth * tabCount) - ([self tabOverlap] * (tabCount - 1)) +
           CGRectGetWidth([_buttonNewTab frame]) - kNewTabOverlap,
       tabHeight);
   if (CGSizeEqualToSize([_tabStripView contentSize], contentSize))
@@ -1299,11 +1364,12 @@ UIColor* BackgroundColor() {
 }
 
 - (CGRect)scrollViewFrameForTab:(TabView*)view {
-  int index = [self webStateListIndexForTabView:view];
+  NSUInteger index = [self webStateListIndexForTabView:view];
 
   CGRect frame = [view frame];
   frame.origin.x =
       (_currentTabWidth * index) - ([self tabOverlap] * (index - 1));
+
   return frame;
 }
 
@@ -1322,7 +1388,6 @@ UIColor* BackgroundColor() {
   return frame;
 }
 
-#pragma mark -
 #pragma mark - Unstacked layout
 
 - (int)maxNumCollapsedTabs {
@@ -1368,21 +1433,23 @@ UIColor* BackgroundColor() {
   }
 
   NSUInteger numNonClosingTabsToLeft = 0;
+
   int i = 0;
   for (TabView* tab in _tabArray) {
     if ([_closingTabs containsObject:tab])
       ++i;
 
-    if (i == tabIndex)
+    if (i == static_cast<int>(tabIndex)) {
       break;
-
-    ++numNonClosingTabsToLeft;
+    } else {
+      ++numNonClosingTabsToLeft;
+    }
     ++i;
   }
 
   const CGFloat tabHeight = CGRectGetHeight([_tabStripView bounds]);
   CGRect scrollRect =
-      CGRectMake(_currentTabWidth * numNonClosingTabsToLeft -
+      CGRectMake((_currentTabWidth * numNonClosingTabsToLeft) -
                      ([self tabOverlap] * (numNonClosingTabsToLeft - 1)),
                  0, _currentTabWidth, tabHeight);
   [_tabStripView scrollRectToVisible:scrollRect animated:YES];
@@ -1392,7 +1459,15 @@ UIColor* BackgroundColor() {
 
 - (void)updateContentOffsetForWebStateIndex:(int)webStateIndex
                               isNewWebState:(BOOL)isNewWebState {
-  DCHECK_NE(WebStateList::kInvalidIndex, webStateIndex);
+  // Avoid the out-of-range access to `_tabArray`. The `webStateIndex` can be
+  // invalid when traitCollectionDidChange: is called before a TabView is
+  // inserted to `_tabArray` in didChangeWebStateList:change:selection:. In
+  // particular, this occurs when exiting from the fullscreen because it
+  // changes UI and triggers [TabStripView traitCollectionDidChange:], which
+  // reaches here and is called before calling the WebStateListObserver API.
+  if (webStateIndex < 0 || (NSUInteger)webStateIndex >= [_tabArray count]) {
+    return;
+  }
 
   if (isNewWebState) {
     [self scrollTabToVisible:webStateIndex];
@@ -1437,8 +1512,9 @@ UIColor* BackgroundColor() {
   BOOL animate = _animateLayout;
   _animateLayout = NO;
   // Disable the animation if the tab count is changing from 0 to 1.
-  if (tabCount == 1 && [_closingTabs count] == 0)
+  if (tabCount == 1 && [_closingTabs count] == 0) {
     animate = NO;
+  }
 
   const CGFloat tabHeight = CGRectGetHeight([_tabStripView bounds]);
 
@@ -1475,9 +1551,7 @@ UIColor* BackgroundColor() {
   CGFloat virtualMaxX = 0;
   CGFloat offset = self.useTabStacking ? [_tabStripView contentOffset].x : 0;
 
-  // Keeps track of which tabs need to be animated.  Using an autoreleased array
-  // instead of scoped_nsobject because scoped_nsobject doesn't seem to work
-  // well with blocks.
+  // Keeps track of which tabs need to be animated.
   NSMutableArray* tabsNeedingAnimation =
       [NSMutableArray arrayWithCapacity:tabCount];
 
@@ -1552,6 +1626,7 @@ UIColor* BackgroundColor() {
           std::min(currentListIndex - selectedListIndex,
                    [self maxNumCollapsedTabs]);
     }
+
     CGFloat realMinX =
         offset + (numPossibleCollapsedTabsToLeft * kCollapsedTabOverlap);
 
@@ -1594,29 +1669,14 @@ UIColor* BackgroundColor() {
     // by trying to place the tab at the computed `virtualMinX`, then constrain
     // that by `realMinX` and `realMaxX`.
     CGFloat tabX = MAX(virtualMinX, realMinX);
-    if (tabX + _currentTabWidth > realMaxX)
+    if (tabX + _currentTabWidth > realMaxX) {
       tabX = realMaxX - _currentTabWidth;
+    }
 
     CGRect frame = CGRectMake(AlignValueToPixel(tabX), 0,
                               AlignValueToPixel(_currentTabWidth), tabHeight);
     virtualMinX += (_currentTabWidth - [self tabOverlap]);
     virtualMaxX = CGRectGetMaxX(frame);
-
-// TODO(rohitrao): Temporarily disabled this logic as it does not play well with
-// tab scrolling.
-#if 0
-    // If this tab is completely hidden by the previous tab, remove it from the
-    // scroll view.  Otherwise, add it back in if needed.
-    if (selectedArrayIndex != arrayIndex &&
-        CGRectEqualToRect(frame, previousTabFrame)) {
-      [view removeFromSuperview];
-    } else if (![view superview]) {
-      // TODO(rohitrao): Find a way to move the z-ordering code from the top of
-      // the function to down here, so we can consolidate the logic.
-      [_tabStripView insertSubview:view atIndex:
-                       (zOrderedAbove ? [[_tabStripView subviews] count] : 0)];
-    }
-#endif
 
     // Update the tab's collapsed state based on overlap with the previous tab.
     if (zOrderedAbove) {
@@ -1681,6 +1741,8 @@ UIColor* BackgroundColor() {
   if (!animate && moveNewTab)
     [_buttonNewTab setFrame:newTabFrame];
 
+  [_buttonNewTab setNeedsUpdateConfiguration];
+
   if (animate) {
     float delay = 0.0;
     if (![self.presentationProvider isTabStripFullyVisible]) {
@@ -1735,6 +1797,9 @@ UIColor* BackgroundColor() {
   DCHECK_NE(WebStateList::kInvalidIndex, index);
   if (index == WebStateList::kInvalidIndex)
     return;
+
+  base::UmaHistogramBoolean(kUMATabStripTapInteractionHistogram,
+                            index != _webStateList->active_index());
 
   if ((ui::GetDeviceFormFactor() == ui::DEVICE_FORM_FACTOR_TABLET) &&
       (_webStateList->active_index() != static_cast<int>(index))) {
@@ -1791,11 +1856,8 @@ UIColor* BackgroundColor() {
   _useTabStacking = useTabStacking;
   [self updateScrollViewFrameForTabSwitcherButton];
   [self updateContentSizeAndRepositionViews];
-  int selectedModelIndex = _webStateList->active_index();
-  if (selectedModelIndex != WebStateList::kInvalidIndex) {
-    [self updateContentOffsetForWebStateIndex:selectedModelIndex
-                                isNewWebState:NO];
-  }
+  [self updateContentOffsetForWebStateIndex:_webStateList->active_index()
+                              isNewWebState:NO];
 }
 
 - (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
@@ -1804,37 +1866,6 @@ UIColor* BackgroundColor() {
 
 - (void)voiceOverStatusDidChange {
   self.useTabStacking = [self shouldUseTabStacking];
-}
-
-#pragma mark - ViewRevealingAnimatee
-
-- (id<ViewRevealingAnimatee>)animatee {
-  return self;
-}
-
-- (void)willAnimateViewRevealFromState:(ViewRevealState)currentViewRevealState
-                               toState:(ViewRevealState)nextViewRevealState {
-  // Specifically when Smooth Scrolling is on, the background of the view
-  // is non-clear to cover the WKWebView. In this case, make the tab strip
-  // background clear as soon as view revealing begins so any animations that
-  // should be visible behind the tab strip are visible. See the comment on
-  // `BackgroundColor()` for more details.
-  self.view.backgroundColor = UIColor.clearColor;
-  self.viewHiddenForThumbStrip = YES;
-  [self updateViewHidden];
-}
-
-- (void)didAnimateViewRevealFromState:(ViewRevealState)startViewRevealState
-                              toState:(ViewRevealState)currentViewRevealState
-                              trigger:(ViewRevealTrigger)trigger {
-  if (currentViewRevealState == ViewRevealState::Hidden) {
-    // Reset the background color to cover up the WKWebView if it is behind
-    // the tab strip.
-    self.view.backgroundColor = BackgroundColor();
-  }
-  self.viewHiddenForThumbStrip =
-      currentViewRevealState != ViewRevealState::Hidden;
-  [self updateViewHidden];
 }
 
 @end

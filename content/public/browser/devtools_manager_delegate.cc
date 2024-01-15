@@ -28,12 +28,14 @@ bool DevToolsManagerDelegate::AllowInspectingRenderFrameHost(
   return true;
 }
 
-DevToolsAgentHost::List DevToolsManagerDelegate::RemoteDebuggingTargets() {
+DevToolsAgentHost::List DevToolsManagerDelegate::RemoteDebuggingTargets(
+    DevToolsManagerDelegate::TargetType target_type) {
   return DevToolsAgentHost::GetOrCreateAll();
 }
 
 scoped_refptr<DevToolsAgentHost> DevToolsManagerDelegate::CreateNewTarget(
-    const GURL& url) {
+    const GURL& url,
+    DevToolsManagerDelegate::TargetType target_type) {
   return nullptr;
 }
 

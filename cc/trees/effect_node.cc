@@ -3,8 +3,10 @@
 // found in the LICENSE file.
 
 #include "cc/trees/effect_node.h"
+
 #include "base/notreached.h"
 #include "base/trace_event/traced_value.h"
+#include "cc/base/math_util.h"
 #include "cc/layers/layer.h"
 #include "cc/trees/property_tree.h"
 
@@ -13,7 +15,6 @@ namespace cc {
 EffectNode::EffectNode()
     : id(kInvalidPropertyNodeId),
       parent_id(kInvalidPropertyNodeId),
-      stable_id(INVALID_STABLE_ID),
       opacity(1.f),
       screen_space_opacity(1.f),
       backdrop_filter_quality(1.f),
@@ -54,7 +55,7 @@ EffectNode::~EffectNode() = default;
 #if DCHECK_IS_ON()
 bool EffectNode::operator==(const EffectNode& other) const {
   return id == other.id && parent_id == other.parent_id &&
-         stable_id == other.stable_id && opacity == other.opacity &&
+         element_id == other.element_id && opacity == other.opacity &&
          screen_space_opacity == other.screen_space_opacity &&
          backdrop_filter_quality == other.backdrop_filter_quality &&
          subtree_capture_id == other.subtree_capture_id &&
@@ -153,8 +154,8 @@ const char* RenderSurfaceReasonToString(RenderSurfaceReason reason) {
       return "mirrored";
     case RenderSurfaceReason::kSubtreeIsBeingCaptured:
       return "subtree being captured";
-    case RenderSurfaceReason::kDocumentTransitionParticipant:
-      return "document transition participant";
+    case RenderSurfaceReason::kViewTransitionParticipant:
+      return "view transition participant";
     case RenderSurfaceReason::kTest:
       return "test";
     default:
@@ -164,11 +165,11 @@ const char* RenderSurfaceReasonToString(RenderSurfaceReason reason) {
 }
 
 void EffectNode::AsValueInto(base::trace_event::TracedValue* value) const {
-  value->SetInteger("backdrop_mask_element_id",
-                    backdrop_mask_element_id.GetStableId());
+  value->SetString("backdrop_mask_element_id",
+                   backdrop_mask_element_id.ToString());
   value->SetInteger("id", id);
   value->SetInteger("parent_id", parent_id);
-  value->SetInteger("stable_id", stable_id);
+  value->SetString("element_id", element_id.ToString());
   value->SetDouble("opacity", opacity);
   if (!filters.IsEmpty())
     value->SetString("filters", filters.ToString());
@@ -226,6 +227,14 @@ void EffectNode::AsValueInto(base::trace_event::TracedValue* value) const {
                     closest_ancestor_with_copy_request_id);
   value->SetInteger("closest_ancestor_being_captured_id",
                     closest_ancestor_being_captured_id);
+  if (view_transition_shared_element_id.valid()) {
+    value->SetString("view_transition_shared_element_id",
+                     view_transition_shared_element_id.ToString());
+  }
+  if (view_transition_element_resource_id.IsValid()) {
+    value->SetInteger("view_transition_element_resource_id",
+                      view_transition_element_resource_id.id());
+  }
 }
 
 }  // namespace cc

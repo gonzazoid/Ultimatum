@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "chrome/test/base/chrome_test_utils.h"
+#include "chrome/test/payments/payment_app_install_util.h"
 #include "components/network_session_configurator/common/network_switches.h"
 #include "components/payments/content/service_worker_payment_app_finder.h"
 #include "components/payments/core/test_payment_manifest_downloader.h"
@@ -20,6 +21,7 @@
 #include "content/public/browser/storage_partition.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "third_party/re2/src/re2/re2.h"
+#include "url/origin.h"
 
 namespace payments {
 
@@ -33,14 +35,13 @@ PaymentRequestPlatformBrowserTestBase::
 
 void PaymentRequestPlatformBrowserTestBase::SetUpCommandLine(
     base::CommandLine* command_line) {
-  // HTTPS server only serves a valid cert for localhost, so this is needed to
-  // load pages from "a.com" without an interstitial.
-  command_line->AppendSwitch(switches::kIgnoreCertificateErrors);
+  mock_cert_verifier_.SetUpCommandLine(command_line);
 }
 
 void PaymentRequestPlatformBrowserTestBase::SetUpOnMainThread() {
-  // Map all out-going DNS lookups to the local server. This must be used in
-  // conjunction with switches::kIgnoreCertificateErrors to work.
+  mock_cert_verifier_.mock_cert_verifier()->set_default_result(net::OK);
+
+  // Map all out-going DNS lookups to the local server.
   host_resolver()->AddRule("*", "127.0.0.1");
 
   // Setup the https server.
@@ -49,6 +50,15 @@ void PaymentRequestPlatformBrowserTestBase::SetUpOnMainThread() {
 
   test_controller_.SetUpOnMainThread();
   PlatformBrowserTest::SetUpOnMainThread();
+}
+
+void PaymentRequestPlatformBrowserTestBase::SetUpInProcessBrowserTestFixture() {
+  mock_cert_verifier_.SetUpInProcessBrowserTestFixture();
+}
+
+void PaymentRequestPlatformBrowserTestBase::
+    TearDownInProcessBrowserTestFixture() {
+  mock_cert_verifier_.TearDownInProcessBrowserTestFixture();
 }
 
 void PaymentRequestPlatformBrowserTestBase::NavigateTo(
@@ -68,18 +78,10 @@ void PaymentRequestPlatformBrowserTestBase::InstallPaymentApp(
     const std::string& hostname,
     const std::string& service_worker_filename,
     std::string* url_method_output) {
-  NavigateTo(hostname, "/payment_handler_installer.html");
-  *url_method_output = https_server()->GetURL(hostname, "/").spec();
-  *url_method_output =
-      url_method_output->substr(0, url_method_output->length() - 1);
-  ASSERT_NE('/', (*url_method_output)[url_method_output->length() - 1]);
-  ASSERT_EQ("success",
-            content::EvalJs(GetActiveWebContents(),
-                            content::JsReplace("install($1, [$2], false)",
-                                               service_worker_filename,
-                                               *url_method_output)));
-  // Can't output `url_method_output` by return because the ASSERTs require the
-  // method to return void.
+  *url_method_output = PaymentAppInstallUtil::InstallPaymentApp(
+      *GetActiveWebContents(), *https_server(), hostname,
+      service_worker_filename, PaymentAppInstallUtil::IconInstall::kWithIcon);
+  ASSERT_FALSE(url_method_output->empty()) << "Failed to install payment app";
 }
 
 void PaymentRequestPlatformBrowserTestBase::ExpectBodyContains(
@@ -236,7 +238,10 @@ std::string PaymentRequestPlatformBrowserTestBase::ClearPortNumber(
              may_contain_method_url,
              "(.*\"supportedMethods\":\")(https://.*)(\",\"total\".*)", &before,
              &method, &after)
-             ? before + GURL(method).ReplaceComponents(port).spec() + after
+             ? before +
+                   url::Origin::Create(GURL(method).ReplaceComponents(port))
+                       .Serialize() +
+                   after
              : may_contain_method_url;
 }
 

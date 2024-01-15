@@ -6,10 +6,11 @@ import os
 import sys
 import json
 import itertools
-from typing import Any, List
+from typing import Any, List, Set
 import unittest
 
 import gpu_path_util
+from gpu_tests import common_browser_args as cba
 from gpu_tests import common_typing as ct
 from gpu_tests import gpu_integration_test
 
@@ -22,7 +23,9 @@ four_colors_img_path = os.path.join(data_path, 'four-colors.y4m')
 frame_sources = [
     'camera', 'capture', 'offscreen', 'arraybuffer', 'hw_decoder', 'sw_decoder'
 ]
-video_codecs = ['avc1.42001E', 'vp8', 'vp09.00.10.08', 'av01.0.04M.08']
+video_codecs = [
+    'avc1.42001E', 'hvc1.1.6.L123.00', 'vp8', 'vp09.00.10.08', 'av01.0.04M.08'
+]
 accelerations = ['prefer-hardware', 'prefer-software']
 
 
@@ -31,12 +34,26 @@ class WebCodecsIntegrationTest(gpu_integration_test.GpuIntegrationTest):
   def Name(cls) -> str:
     return 'webcodecs'
 
+  @classmethod
+  def _SuiteSupportsParallelTests(cls) -> bool:
+    return True
+
+  def _GetSerialGlobs(self) -> Set[str]:
+    serial_globs = set()
+    if sys.platform == 'win32':
+      serial_globs |= {
+          # crbug.com/1473480. Windows + NVIDIA has a maximum parallel encode
+          # limit of 2, so serialize hardware encoding tests on Windows.
+          'WebCodecs_*prefer-hardware*',
+      }
+    return serial_globs
+
 # pylint: disable=too-many-branches
 
   @classmethod
   def GenerateGpuTests(cls, options: ct.ParsedCmdArgs) -> ct.TestGenerator:
     tests = itertools.chain(cls.GenerateFrameTests(), cls.GenerateVideoTests(),
-                            cls.GenerateAudioTests())
+                            cls.GenerateAudioTests(), cls.BitrateTests())
     for test in tests:
       yield test
 
@@ -55,30 +72,10 @@ class WebCodecsIntegrationTest(gpu_integration_test.GpuIntegrationTest):
           'source_type':
           source_type
       }])
-      yield ('WebCodecs_GPUExternalTexture_expired_' + source_type,
-             'gpu-external-texture-expired.html', [{
-                 'source_type': source_type,
-                 'use_worker': False
-             }])
-      yield ('WebCodecs_GPUExternalTexture_expired_worker_' + source_type,
-             'gpu-external-texture-expired.html', [{
-                 'source_type': source_type,
-                 'use_worker': True
-             }])
-      yield ('WebCodecs_device_destroy_expired_texture_' + source_type,
-             'gpu-device-destroy-expire-active-external-texture.html', [{
-                 'source_type':
-                 source_type,
-                 'device_destroyed_before_import':
-                 False
-             }])
-      yield ('WebCodecs_texture_expired_from_destroyed_device_' + source_type,
-             'gpu-device-destroy-expire-active-external-texture.html', [{
-                 'source_type':
-                 source_type,
-                 'device_destroyed_before_import':
-                 True
-             }])
+      yield ('WebCodecs_convertToRGB_' + source_type, 'convert-to-rgb.html', [{
+          'source_type':
+          source_type
+      }])
 
   @classmethod
   def GenerateAudioTests(cls) -> ct.TestGenerator:
@@ -88,8 +85,39 @@ class WebCodecsIntegrationTest(gpu_integration_test.GpuIntegrationTest):
         'sample_rate':
         48000,
         'channels':
-        2
+        2,
+        'aac_format':
+        'aac'
     }])
+    yield ('WebCodecs_AudioEncoding_AAC_LC_ADTS', 'audio-encode-decode.html', [{
+        'codec':
+        'mp4a.67',
+        'sample_rate':
+        48000,
+        'channels':
+        2,
+        'aac_format':
+        'adts'
+    }])
+
+  @classmethod
+  def BitrateTests(cls) -> ct.TestGenerator:
+    high_res_codecs = [
+        'avc1.420034', 'hvc1.1.6.L123.00', 'vp8', 'vp09.00.10.08',
+        'av01.0.04M.08'
+    ]
+    for codec in high_res_codecs:
+      for acc in accelerations:
+        for bitrate_mode in ['constant', 'variable']:
+          for bitrate in [1500000, 2000000, 3000000]:
+            args = (codec, acc, bitrate_mode, bitrate)
+            yield ('WebCodecs_EncodingRateControl_%s_%s_%s_%s' % args,
+                   'encoding-rate-control.html', [{
+                       'codec': codec,
+                       'acceleration': acc,
+                       'bitrate_mode': bitrate_mode,
+                       'bitrate': bitrate
+                   }])
 
   @classmethod
   def GenerateVideoTests(cls) -> ct.TestGenerator:
@@ -100,6 +128,17 @@ class WebCodecsIntegrationTest(gpu_integration_test.GpuIntegrationTest):
     yield ('WebCodecs_WebRTCPeerConnection_Worker',
            'webrtc-peer-connection.html', [{
                'use_worker': True
+           }])
+
+    source_type = 'offscreen'
+    codec = 'avc1.42001E'
+    acc = 'prefer-hardware'
+    args = (source_type, codec, acc)
+    yield ('WebCodecs_PerFrameQpEncoding_%s_%s_%s' % args,
+           'frame-qp-encoding.html', [{
+               'source_type': source_type,
+               'codec': codec,
+               'acceleration': acc
            }])
 
     for source_type in ['offscreen', 'arraybuffer']:
@@ -114,7 +153,9 @@ class WebCodecsIntegrationTest(gpu_integration_test.GpuIntegrationTest):
                  }])
 
     for source_type in frame_sources:
-      for codec in video_codecs:
+      # Also verify we can deal with the encoder's frame delay that we can
+      # encounter for the AVC High profile (avc1.64).
+      for codec in video_codecs + ['avc1.64001E']:
         for acc in accelerations:
           args = (source_type, codec, acc)
           yield ('WebCodecs_Encode_%s_%s_%s' % args, 'encode.html', [{
@@ -142,14 +183,17 @@ class WebCodecsIntegrationTest(gpu_integration_test.GpuIntegrationTest):
                    }])
 
     for codec in video_codecs:
-      for layers in [2, 3]:
-        args = (codec, layers)
-        yield ('WebCodecs_SVC_%s_layers_%d' % args, 'svc.html', [{
-            'codec':
-            codec,
-            'layers':
-            layers
-        }])
+      for acc in accelerations:
+        for layers in [2, 3]:
+          args = (codec, acc, layers)
+          yield ('WebCodecs_SVC_%s_%s_layers_%d' % args, 'svc.html', [{
+              'codec':
+              codec,
+              'acceleration':
+              acc,
+              'layers':
+              layers
+          }])
 
     for codec in video_codecs:
       for acc in accelerations:
@@ -158,6 +202,15 @@ class WebCodecsIntegrationTest(gpu_integration_test.GpuIntegrationTest):
                'encode-color-space.html', [{
                    'codec': codec,
                    'acceleration': acc
+               }])
+
+    for codec in video_codecs:
+      for source_type in frame_sources:
+        args = (codec, source_type)
+        yield ('WebCodecs_FrameSizeChange_%s_%s' % args,
+               'frame-size-change.html', [{
+                   'codec': codec,
+                   'source_type': source_type
                }])
 # pylint: enable=too-many-branches
 
@@ -185,9 +238,12 @@ class WebCodecsIntegrationTest(gpu_integration_test.GpuIntegrationTest):
   def SetUpProcess(cls) -> None:
     super(WebCodecsIntegrationTest, cls).SetUpProcess()
     args = [
-        '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream',
-        '--enable-unsafe-webgpu'
-    ]
+        '--use-fake-device-for-media-stream',
+        '--use-fake-ui-for-media-stream',
+        '--enable-blink-features=SharedArrayBuffer',
+        cba.ENABLE_PLATFORM_HEVC_ENCODER_SUPPORT,
+        cba.ENABLE_EXPERIMENTAL_WEB_PLATFORM_FEATURES,
+    ] + cba.ENABLE_WEBGPU_FOR_TESTING
 
     # If we don't call CustomizeBrowserArgs cls.platform is None
     cls.CustomizeBrowserArgs(args)

@@ -5,17 +5,13 @@
 
 '''Unit tests for grit.gather.tr_html'''
 
-from __future__ import print_function
-
+import io
 import os
 import sys
-if __name__ == '__main__':
-  sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
-
 import unittest
 
-import six
-from six import StringIO
+if __name__ == '__main__':
+  sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
 from grit.gather import tr_html
 from grit import clique
@@ -50,19 +46,19 @@ class ParserUnittest(unittest.TestCase):
     p = tr_html.HtmlChunks()
     chunks = p.Parse('<p>Hello <b>dear</b> how <i>are</i>you?<p>Fine!',
                      fold_whitespace)
-    self.failUnlessEqual(chunks, [
+    self.assertEqual(chunks, [
       (False, '<p>', ''), (True, 'Hello <b>dear</b> how <i>are</i>you?', ''),
       (False, '<p>', ''), (True, 'Fine!', '')])
 
     chunks = p.Parse('<p> Hello <b>dear</b> how <i>are</i>you? <p>Fine!',
                      fold_whitespace)
-    self.failUnlessEqual(chunks, [
+    self.assertEqual(chunks, [
       (False, '<p> ', ''), (True, 'Hello <b>dear</b> how <i>are</i>you?', ''),
       (False, ' <p>', ''), (True, 'Fine!', '')])
 
     chunks = p.Parse('<p> Hello <b>dear how <i>are you? <p> Fine!',
                      fold_whitespace)
-    self.failUnlessEqual(chunks, [
+    self.assertEqual(chunks, [
       (False, '<p> ', ''), (True, 'Hello <b>dear how <i>are you?', ''),
       (False, ' <p> ', ''), (True, 'Fine!', '')])
 
@@ -70,7 +66,7 @@ class ParserUnittest(unittest.TestCase):
     # the starting inline tag.
     chunks = p.Parse('<b>Hello!</b> how are you?<p><i>I am fine.</i>',
                      fold_whitespace)
-    self.failUnlessEqual(chunks, [
+    self.assertEqual(chunks, [
       (True, '<b>Hello!</b> how are you?', ''), (False, '<p>', ''),
       (True, '<i>I am fine.</i>', '')])
 
@@ -78,7 +74,7 @@ class ParserUnittest(unittest.TestCase):
     # the ending inline tag.
     chunks = p.Parse("Hello! How are <b>you?</b><p><i>I'm fine!</i>",
                      fold_whitespace)
-    self.failUnlessEqual(chunks, [
+    self.assertEqual(chunks, [
       (True, 'Hello! How are <b>you?</b>', ''), (False, '<p>', ''),
       (True, "<i>I'm fine!</i>", '')])
 
@@ -87,18 +83,18 @@ class ParserUnittest(unittest.TestCase):
     # Check capitals and explicit descriptions
     chunks = p.Parse('<!-- desc=bingo! --><B>Hello!</B> how are you?<P>'
                      '<I>I am fine.</I>', fold_whitespace)
-    self.failUnlessEqual(chunks, [
+    self.assertEqual(chunks, [
       (True, '<B>Hello!</B> how are you?', 'bingo!'), (False, '<P>', ''),
       (True, '<I>I am fine.</I>', '')])
     chunks = p.Parse('<B><!-- desc=bingo! -->Hello!</B> how are you?<P>'
                      '<I>I am fine.</I>', fold_whitespace)
-    self.failUnlessEqual(chunks, [
+    self.assertEqual(chunks, [
       (True, '<B>Hello!</B> how are you?', 'bingo!'), (False, '<P>', ''),
       (True, '<I>I am fine.</I>', '')])
     # Linebreaks get handled by the tclib message.
     chunks = p.Parse('<B>Hello!</B> <!-- desc=bi\nngo\n! -->how are you?<P>'
                      '<I>I am fine.</I>', fold_whitespace)
-    self.failUnlessEqual(chunks, [
+    self.assertEqual(chunks, [
       (True, '<B>Hello!</B> how are you?', 'bi\nngo\n!'), (False, '<P>', ''),
       (True, '<I>I am fine.</I>', '')])
 
@@ -106,7 +102,7 @@ class ParserUnittest(unittest.TestCase):
     # translateable, it will actually apply to the second translateable.
     chunks = p.Parse('<B>Hello!</B> how are you?<!-- desc=bingo! --><P>'
                      '<I>I am fine.</I>', fold_whitespace)
-    self.failUnlessEqual(chunks, [
+    self.assertEqual(chunks, [
       (True, '<B>Hello!</B> how are you?', ''), (False, '<P>', ''),
       (True, '<I>I am fine.</I>', 'bingo!')])
 
@@ -116,7 +112,7 @@ class ParserUnittest(unittest.TestCase):
     p = tr_html.HtmlChunks()
     chunks = p.Parse('<b>Hello!</b> how are you?<p [BINGO] [$~BONGO~$]>'
                      '<i>I am fine.</i>', fold_whitespace)
-    self.failUnlessEqual(chunks, [
+    self.assertEqual(chunks, [
       (True, '<b>Hello!</b> how are you?', ''),
       (False, '<p [BINGO] [$~BONGO~$]>', ''),
       (True, '<i>I am fine.</i>', '')])
@@ -126,12 +122,12 @@ class ParserUnittest(unittest.TestCase):
     p = tr_html.HtmlChunks()
     chunks = p.Parse('<textarea>Hello\nthere\nhow\nare\nyou?</textarea>',
                      fold_whitespace)
-    self.failUnlessEqual(chunks, [(False, '<textarea>', ''),
+    self.assertEqual(chunks, [(False, '<textarea>', ''),
       (True, 'Hello\nthere\nhow\nare\nyou?', ''), (False, '</textarea>', '')])
 
     # ...and that other tags' line breaks are converted to spaces
     chunks = p.Parse('<p>Hello\nthere\nhow\nare\nyou?</p>', fold_whitespace)
-    self.failUnlessEqual(chunks, [(False, '<p>', ''),
+    self.assertEqual(chunks, [(False, '<p>', ''),
       (True, 'Hello there how are you?', ''), (False, '</p>', '')])
 
   def VerifyChunkingMessageBreak(self, fold_whitespace):
@@ -139,7 +135,7 @@ class ParserUnittest(unittest.TestCase):
     # Make sure that message-break comments work properly.
     chunks = p.Parse('Break<!-- message-break --> apart '
                      '<!--message-break-->messages', fold_whitespace)
-    self.failUnlessEqual(chunks, [(True, 'Break', ''),
+    self.assertEqual(chunks, [(True, 'Break', ''),
                                   (False, ' ', ''),
                                   (True, 'apart', ''),
                                   (False, ' ', ''),
@@ -148,7 +144,7 @@ class ParserUnittest(unittest.TestCase):
     # Make sure message-break comments work in an inline tag.
     chunks = p.Parse('<a href=\'google.com\'><!-- message-break -->Google'
                      '<!--message-break--></a>', fold_whitespace)
-    self.failUnlessEqual(chunks, [(False, '<a href=\'google.com\'>', ''),
+    self.assertEqual(chunks, [(False, '<a href=\'google.com\'>', ''),
                                   (True, 'Google', ''),
                                   (False, '</a>', '')])
 
@@ -157,12 +153,12 @@ class ParserUnittest(unittest.TestCase):
     # Make sure that message-no-break comments work properly.
     chunks = p.Parse('Please <!-- message-no-break --> <br />don\'t break',
                      fold_whitespace)
-    self.failUnlessEqual(chunks, [(True, 'Please <!-- message-no-break --> '
+    self.assertEqual(chunks, [(True, 'Please <!-- message-no-break --> '
                          '<br />don\'t break', '')])
 
     chunks = p.Parse('Please <br /> break. <!-- message-no-break --> <br /> '
                      'But not this time.', fold_whitespace)
-    self.failUnlessEqual(chunks, [(True, 'Please', ''),
+    self.assertEqual(chunks, [(True, 'Please', ''),
                                   (False, ' <br /> ', ''),
                                   (True, 'break. <!-- message-no-break --> '
                                          '<br /> But not this time.', '')])
@@ -176,7 +172,7 @@ class ParserUnittest(unittest.TestCase):
                      '<input type=submit value="hello">'
                      '<input type="button" value="hello">'
                      '<input type=\'text\' value=\'Howdie\'>', False)
-    self.failUnlessEqual(chunks, [
+    self.assertEqual(chunks, [
       (False, '<img src=bingo.jpg alt="', ''), (True, 'hello there', ''),
       (False, '"><input type=submit value="', ''), (True, 'hello', ''),
       (False, '"><input type="button" value="', ''), (True, 'hello', ''),
@@ -188,13 +184,13 @@ class ParserUnittest(unittest.TestCase):
     msg = tr_html.HtmlToMessage(
       'Hello <b>[USERNAME]</b>, &lt;how&gt;&nbsp;<i>are</i> you?')
     pres = msg.GetPresentableContent()
-    self.failUnless(pres ==
+    self.assertTrue(pres ==
                     'Hello BEGIN_BOLDX_USERNAME_XEND_BOLD, '
                     '<how>&nbsp;BEGIN_ITALICareEND_ITALIC you?')
 
     msg = tr_html.HtmlToMessage('<b>Hello</b><I>Hello</I><b>Hello</b>')
     pres = msg.GetPresentableContent()
-    self.failUnless(pres ==
+    self.assertTrue(pres ==
                     'BEGIN_BOLD_1HelloEND_BOLD_1BEGIN_ITALICHelloEND_ITALIC'
                     'BEGIN_BOLD_2HelloEND_BOLD_2')
 
@@ -206,34 +202,34 @@ class ParserUnittest(unittest.TestCase):
       '''New Features</a>: Now search PDFs, MP3s, Firefox web history, and '''
       '''more</font>''')
     pres = msg.GetPresentableContent()
-    self.failUnless(pres ==
+    self.assertTrue(pres ==
                     'BEGIN_FONT_1BEGIN_FONT_2Update!END_FONT_2 BEGIN_LINK'
                     'New FeaturesEND_LINK: Now search PDFs, MP3s, Firefox '
                     'web history, and moreEND_FONT_1')
 
     msg = tr_html.HtmlToMessage('''<a href='[$~URL~$]'><b>[NUM][CAT]</b></a>''')
     pres = msg.GetPresentableContent()
-    self.failUnless(pres == 'BEGIN_LINKBEGIN_BOLDX_NUM_XX_CAT_XEND_BOLDEND_LINK')
+    self.assertTrue(pres == 'BEGIN_LINKBEGIN_BOLDX_NUM_XX_CAT_XEND_BOLDEND_LINK')
 
     msg = tr_html.HtmlToMessage(
       '''<font size=-1><a class=q onClick='return window.qs?qs(this):1' '''
       '''href='http://[WEBSERVER][SEARCH_URI]'>Desktop</a></font>&nbsp;&nbsp;'''
       '''&nbsp;&nbsp;''')
     pres = msg.GetPresentableContent()
-    self.failUnless(pres ==
+    self.assertTrue(pres ==
                     '''BEGIN_FONTBEGIN_LINKDesktopEND_LINKEND_FONTSPACE''')
 
     msg = tr_html.HtmlToMessage(
       '''<br><br><center><font size=-2>&copy;2005 Google </font></center>''', 1)
     pres = msg.GetPresentableContent()
-    self.failUnless(pres ==
-                    u'BEGIN_BREAK_1BEGIN_BREAK_2BEGIN_CENTERBEGIN_FONT\xa92005'
-                    u' Google END_FONTEND_CENTER')
+    self.assertTrue(pres ==
+                    'BEGIN_BREAK_1BEGIN_BREAK_2BEGIN_CENTERBEGIN_FONT\xa92005'
+                    ' Google END_FONTEND_CENTER')
 
     msg = tr_html.HtmlToMessage(
       '''&nbsp;-&nbsp;<a class=c href=[$~CACHE~$]>Cached</a>''')
     pres = msg.GetPresentableContent()
-    self.failUnless(pres ==
+    self.assertTrue(pres ==
                     '&nbsp;-&nbsp;BEGIN_LINKCachedEND_LINK')
 
     # Check that upper-case tags are handled correctly.
@@ -242,7 +238,7 @@ class ParserUnittest(unittest.TestCase):
       '''html?hl=[LANG_CODE]'>Privacy Policy</A> and <A HREF='http://desktop'''
       '''.google.com/privacyfaq.html?hl=[LANG_CODE]'>Privacy FAQ</A> online.''')
     pres = msg.GetPresentableContent()
-    self.failUnless(pres ==
+    self.assertTrue(pres ==
                     'You can read the BEGIN_LINK_1Privacy PolicyEND_LINK_1 and '
                     'BEGIN_LINK_2Privacy FAQEND_LINK_2 online.')
 
@@ -253,58 +249,60 @@ class ParserUnittest(unittest.TestCase):
 <A HREF='http://desktop.google.com/privacypolicy.html?hl=[LANG_CODE]'>Privacy Policy</A>
 and <A HREF='http://desktop.google.com/privacyfaq.html?hl=[LANG_CODE]'>Privacy FAQ</A> online.''')
     pres = msg.GetPresentableContent()
-    self.failUnless(pres == '''You can read the
+    self.assertTrue(pres == '''You can read the
 BEGIN_LINK_1Privacy PolicyEND_LINK_1
 and BEGIN_LINK_2Privacy FAQEND_LINK_2 online.''')
 
     # Check that message-no-break comments are handled correctly.
     msg = tr_html.HtmlToMessage('''Please <!-- message-no-break --><br /> don't break''')
     pres = msg.GetPresentableContent()
-    self.failUnlessEqual(pres, '''Please BREAK don't break''')
+    self.assertEqual(pres, '''Please BREAK don't break''')
 
 class TrHtmlUnittest(unittest.TestCase):
   def testSetAttributes(self):
-    html = tr_html.TrHtml(StringIO(''))
-    self.failUnlessEqual(html.fold_whitespace_, False)
+    html = tr_html.TrHtml(io.StringIO(''))
+    self.assertEqual(html.fold_whitespace_, False)
     html.SetAttributes({})
-    self.failUnlessEqual(html.fold_whitespace_, False)
+    self.assertEqual(html.fold_whitespace_, False)
     html.SetAttributes({'fold_whitespace': 'false'})
-    self.failUnlessEqual(html.fold_whitespace_, False)
+    self.assertEqual(html.fold_whitespace_, False)
     html.SetAttributes({'fold_whitespace': 'true'})
-    self.failUnlessEqual(html.fold_whitespace_, True)
+    self.assertEqual(html.fold_whitespace_, True)
 
   def testFoldWhitespace(self):
     text = '<td>   Test     Message   </td>'
 
-    html = tr_html.TrHtml(StringIO(text))
+    html = tr_html.TrHtml(io.StringIO(text))
     html.Parse()
-    self.failUnlessEqual(html.skeleton_[1].GetMessage().GetPresentableContent(),
+    self.assertEqual(html.skeleton_[1].GetMessage().GetPresentableContent(),
                          'Test  Message')
 
-    html = tr_html.TrHtml(StringIO(text))
+    html = tr_html.TrHtml(io.StringIO(text))
     html.fold_whitespace_ = True
     html.Parse()
-    self.failUnlessEqual(html.skeleton_[1].GetMessage().GetPresentableContent(),
+    self.assertEqual(html.skeleton_[1].GetMessage().GetPresentableContent(),
                          'Test Message')
 
   def testTable(self):
-    html = tr_html.TrHtml(StringIO('''<table class="shaded-header"><tr>
+    html = tr_html.TrHtml(
+        io.StringIO('''<table class="shaded-header"><tr>
 <td class="header-element b expand">Preferences</td>
 <td class="header-element s">
 <a href="http://desktop.google.com/preferences.html">Preferences&nbsp;Help</a>
 </td>
 </tr></table>'''))
     html.Parse()
-    self.failUnless(html.skeleton_[3].GetMessage().GetPresentableContent() ==
+    self.assertTrue(html.skeleton_[3].GetMessage().GetPresentableContent() ==
                     'BEGIN_LINKPreferences&nbsp;HelpEND_LINK')
 
   def testSubmitAttribute(self):
-    html = tr_html.TrHtml(StringIO('''</td>
+    html = tr_html.TrHtml(
+        io.StringIO('''</td>
 <td class="header-element"><input type=submit value="Save Preferences"
 name=submit2></td>
 </tr></table>'''))
     html.Parse()
-    self.failUnless(html.skeleton_[1].GetMessage().GetPresentableContent() ==
+    self.assertTrue(html.skeleton_[1].GetMessage().GetPresentableContent() ==
                     'Save Preferences')
 
   def testWhitespaceAfterInlineTag(self):
@@ -312,13 +310,14 @@ name=submit2></td>
     of a translateable section the inline tag will be included.
     '''
     html = tr_html.TrHtml(
-        StringIO('''<label for=DISPLAYNONE><font size=-1> Hello</font>'''))
+        io.StringIO('''<label for=DISPLAYNONE><font size=-1> Hello</font>'''))
     html.Parse()
-    self.failUnless(html.skeleton_[1].GetMessage().GetRealContent() ==
+    self.assertTrue(html.skeleton_[1].GetMessage().GetRealContent() ==
                     '<font size=-1> Hello</font>')
 
   def testSillyHeader(self):
-    html = tr_html.TrHtml(StringIO('''[!]
+    html = tr_html.TrHtml(
+        io.StringIO('''[!]
 title\tHello
 bingo
 bongo
@@ -327,29 +326,29 @@ bla
 <p>Other stuff</p>'''))
     html.Parse()
     content = html.skeleton_[1].GetMessage().GetRealContent()
-    self.failUnless(content == 'Hello')
-    self.failUnless(html.skeleton_[-1] == '</p>')
+    self.assertTrue(content == 'Hello')
+    self.assertTrue(html.skeleton_[-1] == '</p>')
     # Right after the translateable the nontranslateable should start with
     # a linebreak (this catches a bug we had).
-    self.failUnless(html.skeleton_[2][0] == '\n')
+    self.assertTrue(html.skeleton_[2][0] == '\n')
 
 
   def testExplicitDescriptions(self):
     html = tr_html.TrHtml(
-        StringIO('Hello [USER]<br/><!-- desc=explicit -->'
-                          '<input type="button">Go!</input>'))
+        io.StringIO('Hello [USER]<br/><!-- desc=explicit -->'
+                    '<input type="button">Go!</input>'))
     html.Parse()
     msg = html.GetCliques()[1].GetMessage()
-    self.failUnlessEqual(msg.GetDescription(), 'explicit')
-    self.failUnlessEqual(msg.GetRealContent(), 'Go!')
+    self.assertEqual(msg.GetDescription(), 'explicit')
+    self.assertEqual(msg.GetRealContent(), 'Go!')
 
     html = tr_html.TrHtml(
-        StringIO('Hello [USER]<br/><!-- desc=explicit\nmultiline -->'
-                          '<input type="button">Go!</input>'))
+        io.StringIO('Hello [USER]<br/><!-- desc=explicit\nmultiline -->'
+                    '<input type="button">Go!</input>'))
     html.Parse()
     msg = html.GetCliques()[1].GetMessage()
-    self.failUnlessEqual(msg.GetDescription(), 'explicit multiline')
-    self.failUnlessEqual(msg.GetRealContent(), 'Go!')
+    self.assertEqual(msg.GetDescription(), 'explicit multiline')
+    self.assertEqual(msg.GetRealContent(), 'Go!')
 
 
   def testRegressionInToolbarAbout(self):
@@ -359,7 +358,7 @@ bla
     for cl in cliques:
       content = cl.GetMessage().GetRealContent()
       if content.count('De parvis grandis acervus erit'):
-        self.failIf(content.count('$/translate'))
+        self.assertFalse(content.count('$/translate'))
 
 
   def HtmlFromFileWithManualCheck(self, f):
@@ -369,7 +368,7 @@ bla
     # For manual results inspection only...
     list = []
     for item in html.skeleton_:
-      if isinstance(item, six.string_types):
+      if isinstance(item, str):
         list.append(item)
       else:
         list.append(item.GetMessage().GetPresentableContent())
@@ -381,10 +380,10 @@ bla
     html = self.HtmlFromFileWithManualCheck(
       util.PathFromRoot(r'grit/testdata/privacy.html'))
 
-    self.failUnless(html.skeleton_[1].GetMessage().GetRealContent() ==
+    self.assertTrue(html.skeleton_[1].GetMessage().GetRealContent() ==
                     'Privacy and Google Desktop Search')
-    self.failUnless(html.skeleton_[3].startswith('<'))
-    self.failUnless(len(html.skeleton_) > 10)
+    self.assertTrue(html.skeleton_[3].startswith('<'))
+    self.assertTrue(len(html.skeleton_) > 10)
 
 
   def testPreferencesHtml(self):
@@ -401,7 +400,7 @@ bla
           item.GetMessage().GetRealContent() == '[ADDIN-DO] [ADDIN-OPTIONS]'):
         self.fail()
 
-    self.failUnless(len(html.skeleton_) > 100)
+    self.assertTrue(len(html.skeleton_) > 100)
 
   def AssertNumberOfTranslateables(self, files, num):
     '''Fails if any of the files in files don't have exactly
@@ -414,7 +413,7 @@ bla
     for f in files:
       f = util.PathFromRoot(r'grit/testdata/%s' % f)
       html = self.HtmlFromFileWithManualCheck(f)
-      self.failUnless(len(html.GetCliques()) == num)
+      self.assertTrue(len(html.GetCliques()) == num)
 
   def testFewTranslateables(self):
     self.AssertNumberOfTranslateables(['browser.html', 'email_thread.html',
@@ -446,7 +445,8 @@ bla
     # character itself.  So for this test we choose some relatively complex
     # HTML without character entities (but with &nbsp; because that's handled
     # specially).
-    html = tr_html.TrHtml(StringIO('''  <script>
+    html = tr_html.TrHtml(
+        io.StringIO('''  <script>
       <!--
       function checkOffice() { var w = document.getElementById("h7");
       var e = document.getElementById("h8"); var o = document.getElementById("h10");
@@ -481,29 +481,29 @@ bla
     msg = tr_html.HtmlToMessage(
       'Hello<p>Howdie<img alt="bingo" src="image.gif">', True)
     result = msg.GetPresentableContent()
-    self.failUnless(
+    self.assertTrue(
       result == 'HelloBEGIN_PARAGRAPHHowdieBEGIN_BLOCKbingoEND_BLOCK')
 
     msg = tr_html.HtmlToMessage(
       'Hello<p>Howdie<input type="button" value="bingo">', True)
     result = msg.GetPresentableContent()
-    self.failUnless(
+    self.assertTrue(
       result == 'HelloBEGIN_PARAGRAPHHowdieBEGIN_BLOCKbingoEND_BLOCK')
 
 
   def testHtmlToMessageRegressions(self):
     msg = tr_html.HtmlToMessage(' - ', True)
     result = msg.GetPresentableContent()
-    self.failUnless(result == ' - ')
+    self.assertTrue(result == ' - ')
 
 
   def testEscapeUnescaped(self):
     text = '&copy;&nbsp; & &quot;&lt;hello&gt;&quot;'
     unescaped = util.UnescapeHtml(text)
-    self.failUnless(unescaped == u'\u00a9\u00a0 & "<hello>"')
+    self.assertTrue(unescaped == '\u00a9\u00a0 & "<hello>"')
     escaped_unescaped = util.EscapeHtml(unescaped, True)
-    self.failUnless(escaped_unescaped ==
-                    u'\u00a9\u00a0 &amp; &quot;&lt;hello&gt;&quot;')
+    self.assertTrue(escaped_unescaped ==
+                    '\u00a9\u00a0 &amp; &quot;&lt;hello&gt;&quot;')
 
   def testRegressionCjkHtmlFile(self):
     # TODO(joi) Fix this problem where unquoted attributes that
@@ -512,12 +512,14 @@ bla
     if False:
       html = self.HtmlFromFileWithManualCheck(util.PathFromRoot(
         r'grit/testdata/ko_oem_enable_bug.html'))
-      self.failUnless(True)
+      self.assertTrue(True)
 
   def testRegressionCpuHang(self):
     # If this regression occurs, the unit test will never return
-    html = tr_html.TrHtml(StringIO(
-      '''<input type=text size=12 id=advFileTypeEntry [~SHOW-FILETYPE-BOX~] value="[EXT]" name=ext>'''))
+    html = tr_html.TrHtml(
+        io.StringIO(
+            '''<input type=text size=12 id=advFileTypeEntry [~SHOW-FILETYPE-BOX~] value="[EXT]" name=ext>'''
+        ))
     html.Parse()
 
 if __name__ == '__main__':

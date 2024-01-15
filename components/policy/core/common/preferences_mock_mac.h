@@ -5,7 +5,7 @@
 #ifndef COMPONENTS_POLICY_CORE_COMMON_PREFERENCES_MOCK_MAC_H_
 #define COMPONENTS_POLICY_CORE_COMMON_PREFERENCES_MOCK_MAC_H_
 
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "components/policy/core/common/preferences_mac.h"
 #include "components/policy/policy_export.h"
 
@@ -30,9 +30,9 @@ class POLICY_EXPORT MockPreferences : public MacPreferences {
                    bool is_machine);
 
  private:
-  base::ScopedCFTypeRef<CFMutableDictionaryRef> values_;
-  base::ScopedCFTypeRef<CFMutableSetRef> forced_;
-  base::ScopedCFTypeRef<CFMutableSetRef> machine_;
+  base::apple::ScopedCFTypeRef<CFMutableDictionaryRef> values_;
+  base::apple::ScopedCFTypeRef<CFMutableSetRef> forced_;
+  base::apple::ScopedCFTypeRef<CFMutableSetRef> machine_;
 };
 
 #endif  // COMPONENTS_POLICY_CORE_COMMON_PREFERENCES_MOCK_MAC_H_

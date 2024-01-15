@@ -15,9 +15,9 @@ class IntentPickerTabHelper;
 
 // A chip-style button which allows opening the current URL in an installed app.
 class IntentChipButton : public OmniboxChipButton {
- public:
-  METADATA_HEADER(IntentChipButton);
+  METADATA_HEADER(IntentChipButton, OmniboxChipButton)
 
+ public:
   // TODO(crbug.com/1295932): Consider creating a more appropriate Delegate
   // interface.
   explicit IntentChipButton(Browser* browser,
@@ -39,9 +39,9 @@ class IntentChipButton : public OmniboxChipButton {
   // OmniboxChipButton:
   ui::ImageModel GetIconImageModel() const override;
   const gfx::VectorIcon& GetIcon() const override;
-  void OnBoundsChanged(const gfx::Rect& previous_bounds) override;
+  SkColor GetForegroundColor() const override;
+  SkColor GetBackgroundColor() const override;
 
-  bool pending_promo_ = false;
   const raw_ptr<Browser> browser_;
   const raw_ptr<PageActionIconView::Delegate> delegate_;
 };

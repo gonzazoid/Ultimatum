@@ -9,22 +9,19 @@
 #include "chrome/common/extensions/api/file_system_provider.h"
 #include "chrome/common/extensions/api/file_system_provider_internal.h"
 
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 
-Truncate::Truncate(extensions::EventRouter* event_router,
+Truncate::Truncate(RequestDispatcher* dispatcher,
                    const ProvidedFileSystemInfo& file_system_info,
                    const base::FilePath& file_path,
                    int64_t length,
                    storage::AsyncFileUtil::StatusCallback callback)
-    : Operation(event_router, file_system_info),
+    : Operation(dispatcher, file_system_info),
       file_path_(file_path),
       length_(length),
       callback_(std::move(callback)) {}
 
-Truncate::~Truncate() {
-}
+Truncate::~Truncate() = default;
 
 bool Truncate::Execute(int request_id) {
   using extensions::api::file_system_provider::TruncateRequestedOptions;
@@ -47,19 +44,17 @@ bool Truncate::Execute(int request_id) {
 }
 
 void Truncate::OnSuccess(int /* request_id */,
-                         std::unique_ptr<RequestValue> /* result */,
+                         const RequestValue& /* result */,
                          bool has_more) {
   DCHECK(callback_);
   std::move(callback_).Run(base::File::FILE_OK);
 }
 
 void Truncate::OnError(int /* request_id */,
-                       std::unique_ptr<RequestValue> /* result */,
+                       const RequestValue& /* result */,
                        base::File::Error error) {
   DCHECK(callback_);
   std::move(callback_).Run(error);
 }
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations

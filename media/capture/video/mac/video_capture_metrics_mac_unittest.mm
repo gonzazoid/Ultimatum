@@ -8,7 +8,7 @@
 #include <CoreMedia/CoreMedia.h>
 #import <Foundation/Foundation.h>
 
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "media/base/video_types.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -18,7 +18,7 @@
 
 namespace media {
 
-namespace {}  // namespace
+namespace {
 
 TEST(VideoCaptureMetricsMacTest, NoMetricsLoggedIfNullRequestedCaptureFormat) {
   base::HistogramTester histogram_tester;
@@ -30,7 +30,7 @@ TEST(VideoCaptureMetricsMacTest, NoMetricsLoggedIfNullRequestedCaptureFormat) {
 TEST(VideoCaptureMetricsMacTest, LogRequestedPixelFormat) {
   base::HistogramTester histogram_tester;
 
-  base::ScopedCFTypeRef<CMFormatDescriptionRef> requested_format;
+  base::apple::ScopedCFTypeRef<CMFormatDescriptionRef> requested_format;
   OSStatus status = CMVideoFormatDescriptionCreate(
       kCFAllocatorDefault,
       kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange /*NV12*/, 320, 180,
@@ -49,7 +49,7 @@ TEST(VideoCaptureMetricsMacTest, LogRequestedPixelFormat) {
 TEST(VideoCaptureMetricsMacTest, LogFirstFrameWhenAsRequested) {
   base::HistogramTester histogram_tester;
 
-  base::ScopedCFTypeRef<CMFormatDescriptionRef> requested_format;
+  base::apple::ScopedCFTypeRef<CMFormatDescriptionRef> requested_format;
   OSStatus status = CMVideoFormatDescriptionCreate(
       kCFAllocatorDefault,
       kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange /*NV12*/, 320, 180,
@@ -59,13 +59,13 @@ TEST(VideoCaptureMetricsMacTest, LogFirstFrameWhenAsRequested) {
   OCMStub([capture_format formatDescription]).andReturn(requested_format.get());
 
   // First frame equal.
-  base::ScopedCFTypeRef<CMSampleBufferRef> first_frame;
+  base::apple::ScopedCFTypeRef<CMSampleBufferRef> first_frame;
   status = CMSampleBufferCreate(kCFAllocatorDefault, nullptr, false, nullptr,
-                                nullptr, requested_format, 0, 0, nullptr, 0,
-                                nullptr, first_frame.InitializeInto());
+                                nullptr, requested_format.get(), 0, 0, nullptr,
+                                0, nullptr, first_frame.InitializeInto());
   ASSERT_EQ(0, status);
 
-  LogFirstCapturedVideoFrame(capture_format, first_frame);
+  LogFirstCapturedVideoFrame(capture_format, first_frame.get());
 
   EXPECT_THAT(histogram_tester.GetAllSamples(
                   "Media.VideoCapture.Mac.Device.RequestedPixelFormat"),
@@ -83,5 +83,7 @@ TEST(VideoCaptureMetricsMacTest, LogFirstFrameWhenAsRequested) {
                   "Media.VideoCapture.Mac.Device.CapturedIOSurface"),
               testing::UnorderedElementsAre(base::Bucket(0, 1)));
 }
+
+}  // namespace
 
 }  // namespace media

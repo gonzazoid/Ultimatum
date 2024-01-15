@@ -15,7 +15,6 @@
 #include "base/containers/flat_set.h"
 #include "base/debug/crash_logging.h"
 #include "base/debug/dump_without_crashing.h"
-#include "base/strings/stringprintf.h"
 #include "base/trace_event/trace_event.h"
 #include "cc/layers/layer.h"
 #include "cc/layers/layer_collections.h"
@@ -186,7 +185,7 @@ static void PushLayerPropertiesInternal(Iterator source_layers_begin,
                                         Iterator source_layers_end,
                                         LayerTreeImpl* target_impl_tree) {
   for (Iterator it = source_layers_begin; it != source_layers_end; ++it) {
-    auto* source_layer = *it;
+    auto source_layer = *it;
     LayerImpl* target_layer = target_impl_tree->LayerById(source_layer->id());
     DCHECK(target_layer);
     source_layer->PushPropertiesTo(target_layer);
